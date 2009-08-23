@@ -1,8 +1,8 @@
 (if (not (top-level-bound? 'open-input-string))
-    (load "aliases.scm"))
+    (load (string *install-dir* "/aliases.scm")))
 
 (define (delete-duplicates lst)
-  (if (atom? lst)
+  (if (null? lst)
       lst
       (let ((elt  (car lst))
 	    (tail (cdr lst)))
@@ -39,7 +39,7 @@
   (let ((chrs (string->list "0123456789.")))
     (lambda (c) (memv c chrs))))
 (define special-char?
-  (let ((chrs (string->list "()[]{},")))
+  (let ((chrs (string->list "()[]{},;")))
     (lambda (c) (memv c chrs))))
 (define (identifier-char? c) (or (and (char>=? c #\A)
 				      (char<=? c #\Z))
@@ -123,6 +123,8 @@
 
 	  ((special-char? c) (read-char port))
 
+	  ; TODO: strings
+
 	  (else (error "Invalid character" (read-char port))))))
 
 (define (tokenize port)
@@ -130,8 +132,8 @@
 
 ; --- parser ---
 
-(define peek-token)
-(define take-token)
+(define peek-token #f)
+(define take-token #f)
 
 (let ((last-tok #f))
   (set! peek-token
@@ -212,7 +214,7 @@
 )
 
 (define (parse-arglist s closer)
-  (let loop ((lst ()))
+  (let loop ((lst '()))
     (let ((t (peek-token s)))
       (if (equal? t closer)
 	  (begin (take-token) (reverse! lst))
@@ -222,6 +224,28 @@
 		     (begin (take-token) (loop (cons nxt lst))))
 		    ((equal? c closer)   (loop (cons nxt lst)))
 		    (else (error "Comma expected")))))))))
+
+(define (parse-vector s)
+  (define (fix v) (cons 'cat (reverse v)))
+  (let loop ((vec '())
+	     (outer '()))
+    (let ((t (peek-token s)))
+      (cond ((equal? t #\])
+	     (take-token)
+	     (if (pair? outer)
+		 (fix (cons (fix vec) outer))
+		 (fix vec)))
+
+	    ((equal? t #\;)
+	     (take-token)
+	     (loop '() (cons (fix vec) outer)))
+
+	    ((equal? t #\,)
+	     (take-token)
+	     (loop vec outer))
+
+	    (else
+	     (loop (cons (parse-eq s) vec) outer))))))
 
 (define (parse-atom s)
   (let ((t (peek-token s)))
@@ -235,6 +259,14 @@
 		 (cons 'tuple ex)
 		 (car ex))))
 
-	  ; TODO: vector syntax, etc.
+	  ((eqv? t #\{ )
+	   (take-token)
+	   (cons 'list (parse-arglist s #\})))
+
+	  ((eqv? t #\[ )
+	   (take-token)
+	   (parse-vector s))
+
+	  ; TODO: prefix keywords, various quoting/escaping
 
 	  (else (take-token)))))
