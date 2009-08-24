@@ -1,5 +1,5 @@
-(if (not (top-level-bound? 'open-input-string))
-    (load (string *install-dir* "/aliases.scm")))
+;(if (not (top-level-bound? 'open-input-string))
+;    (load (string *install-dir* "/aliases.scm")))
 
 (define (delete-duplicates lst)
   (if (null? lst)
@@ -107,7 +107,7 @@
 (define (next-token port)
   (skip-ws port)
   (let ((c (peek-char port)))
-    (cond ((eof-object? c) (read-char port) c)
+    (cond ((eof-object? c) c)
 
 	  ((eqv? c #\#) (read-to-eol port) (next-token port))
 	  
@@ -133,6 +133,7 @@
 ; --- parser ---
 
 (define peek-token #f)
+(define require-token #f)
 (define take-token #f)
 
 (let ((last-tok #f))
@@ -140,6 +141,13 @@
 	(lambda (s) (if last-tok last-tok
 			(begin (set! last-tok (next-token s))
 			       last-tok))))
+  (set! require-token
+	(lambda (s) (if (and last-tok (not (eof-object? last-tok))) last-tok
+			(let ((t (next-token s)))
+			  (if (eof-object? t)
+			      (error "Premature end of input")
+			      (begin (set! last-tok t)
+				     last-tok))))))
   (set! take-token
 	(lambda () (let ((t last-tok)) (set! last-tok #f) t))))
 
@@ -178,7 +186,7 @@
       (error "Unexpected token" (string tok))))
 
 (define (parse-unary s)
-  (let ((t (peek-token s)))
+  (let ((t (require-token s)))
     (check-unexpected t)
     (if (memq t unary-ops)
 	(list (take-token) (parse-unary s))
@@ -215,7 +223,7 @@
 
 (define (parse-arglist s closer)
   (let loop ((lst '()))
-    (let ((t (peek-token s)))
+    (let ((t (require-token s)))
       (if (equal? t closer)
 	  (begin (take-token) (reverse! lst))
 	  (let ((nxt (parse-eq s)))
@@ -229,7 +237,7 @@
   (define (fix v) (cons 'cat (reverse v)))
   (let loop ((vec '())
 	     (outer '()))
-    (let ((t (peek-token s)))
+    (let ((t (require-token s)))
       (cond ((equal? t #\])
 	     (take-token)
 	     (if (pair? outer)
@@ -248,7 +256,7 @@
 	     (loop (cons (parse-eq s) vec) outer))))))
 
 (define (parse-atom s)
-  (let ((t (peek-token s)))
+  (let ((t (require-token s)))
     (cond ((or (string? t) (number? t)) (take-token))
 
 	  ((eqv? t #\( )
