@@ -12,20 +12,24 @@
 		  (delete-duplicates tail))))))
 
 (define ops-by-prec
-  '((= := += -= *= /= ^= %= \|= &= $= => |:|)
-    (\|\|)
+  '((= := += -= *= /= ^= %= |= &= $= => <<= >>=)
+    (||)
     (&&)
     (-> <-)
     (> < >= <= == != .> .< .>= .<= .== .!=)
-    (.. <<)
-    (+ - \| $)
-    (* / ./ % & .* \\ .\\)
+    (<< >>)
+    (: ..)
+    (+ - | $)
+    (* / ./ % & .* \ .\)
     (^ .^)
     (::)))
 
 (define unary-ops '(- + ! ~))
 
-(define operators (list* '~
+(define trans-op (string->symbol ".'"))
+(define ctrans-op (string->symbol "'"))
+
+(define operators (list* '~ ctrans-op trans-op
 			 (delete-duplicates (apply append ops-by-prec))))
 
 (define op-chars
@@ -67,13 +71,15 @@
 ;         a valid token?
 (define (accum-tok c pred valid port)
   (let ((str (open-output-string)))
-    (let loop ((c c))
+    (let loop ((c c)
+	       (first? #t))
       (if (and (not (eof-object? c)) (pred c)
-	       (valid (string-append (get-output-string str)
-				     (string c))))
+	       (or first?
+		   (valid (string-append (get-output-string str)
+					 (string c)))))
 	  (begin (write-char c str)
 		 (read-char port)
-		 (loop (peek-char port)))
+		 (loop (peek-char port) #f))
 	  (get-output-string str)))))
 
 (define (yes x) #t)
@@ -102,7 +108,7 @@
       (if n n
 	  (error "Invalid numeric constant " s)))))
 
-(define (prn x) (print x) (newline) x)
+(define (prn x) (display x) (newline) x)
 
 (define (next-token port)
   (skip-ws port)
@@ -111,8 +117,15 @@
 
 	  ((eqv? c #\#) (read-to-eol port) (next-token port))
 	  
-	  ((num-start-char? c) (read-number port))
-
+	  ((char-numeric? c) (read-number port))
+	  
+	  ((and (num-start-char? c)
+		(let ((c (read-char port))
+		      (nextc (peek-char port)))
+		  (unread-char c port)
+		  (and (char-numeric? nextc)
+		       (read-number port)))))
+	  
 	  ((opchar? c)  (string->symbol
 			 (accum-tok c opchar?
 				    (lambda (x) (operator? (string->symbol x)))
@@ -126,6 +139,14 @@
 	  ; TODO: strings
 
 	  (else (error "Invalid character" (read-char port))))))
+
+; call f on a stream until the stream runs out of data
+(define (read-all-of f s)
+  (let loop ((lines '())
+	     (curr  (f s)))
+    (if (eof-object? curr)
+	(reverse! lines)
+	(loop (cons curr lines) (f s)))))
 
 (define (tokenize port)
   (read-all-of next-token port))
@@ -172,14 +193,27 @@
 	  ex
 	  (list (take-token) ex (parse-RtoL s down ops))))))
 
+(define (parse-range s)
+  (let loop ((ex (parse-expr s))
+	     (first? #t))
+    (let ((t (peek-token s)))
+      (cond ((not (eq? t ':))
+	     ex)
+	    (first?
+	     (loop (list (take-token) ex (parse-expr s)) #f))
+	    (else
+	     (take-token)
+	     (loop (append ex (list (parse-expr s))) #t))))))
+
 (define (parse-eq s)    (parse-RtoL s parse-or    (list-ref ops-by-prec 0)))
 (define (parse-or s)    (parse-LtoR s parse-and   (list-ref ops-by-prec 1)))
 (define (parse-and s)   (parse-LtoR s parse-arrow (list-ref ops-by-prec 2)))
 (define (parse-arrow s) (parse-RtoL s parse-ineq  (list-ref ops-by-prec 3)))
-(define (parse-ineq s)  (parse-RtoL s parse-range (list-ref ops-by-prec 4)))
-(define (parse-range s) (parse-LtoR s parse-expr  (list-ref ops-by-prec 5)))
-(define (parse-expr s)  (parse-LtoR s parse-term  (list-ref ops-by-prec 6)))
-(define (parse-term s)  (parse-LtoR s parse-unary (list-ref ops-by-prec 7)))
+(define (parse-ineq s)  (parse-LtoR s parse-shift (list-ref ops-by-prec 4)))
+(define (parse-shift s) (parse-LtoR s parse-range (list-ref ops-by-prec 5)))
+;(define (parse-range s) (parse-LtoR s parse-expr  (list-ref ops-by-prec 6)))
+(define (parse-expr s)  (parse-LtoR s parse-term  (list-ref ops-by-prec 7)))
+(define (parse-term s)  (parse-LtoR s parse-unary (list-ref ops-by-prec 8)))
 
 (define (check-unexpected tok)
   (if (memv tok '(#\, #\) #\] #\} #\;))
@@ -195,12 +229,19 @@
 (define (parse-factor-h s down ops)
   (let ((ex (down s)))
     (let ((t (peek-token s)))
-      (if (not (memq t ops))
-	  ex
-	  (list (take-token) ex (parse-factor-h s parse-unary ops))))))
+      (cond ((eq? t ctrans-op)
+	     (take-token)
+	     (list 'ctranspose ex))
+	    ((eq? t trans-op)
+	     (take-token)
+	     (list 'transpose ex))
+	    ((not (memq t ops))
+	     ex)
+	    (else
+	     (list (take-token) ex (parse-factor-h s parse-unary ops)))))))
 
 (define (parse-factor s)
-  (parse-factor-h s parse-call (list-ref ops-by-prec 8)))
+  (parse-factor-h s parse-call (list-ref ops-by-prec 9)))
 
 (define (parse-call s)
   (define (loop ex)
