@@ -16,7 +16,7 @@
     (||)
     (&&)
     (-> <-)
-    (> < >= <= == != .> .< .>= .<= .== .!=)
+    (> < >= <= == != .> .< .>= .<= .== .!= .= .!)
     (<< >>)
     (: ..)
     (+ - | $)
@@ -319,3 +319,17 @@
 	  ; TODO: prefix keywords, various quoting/escaping
 
 	  (else (take-token)))))
+
+(define-macro (assert expr) `(if ,expr #t (error "Assertion failed:" ',expr)))
+(define-macro (tst str expr) `(assert (equal? (julia-parse ,str) ',expr)))
+
+(tst "1+2" (+ 1 2))
+(tst "[1 2].*[3 4].'" (.* (cat 1 2) (transpose (cat 3 4))))
+(tst "[1,2;3,4]" (cat (cat 1 2) (cat 3 4)))
+(tst "1:2:3:4" (: (: 1 2 3) 4))
+(tst "1+2*3^-4-10" (- (+ 1 (* 2 (^ 3 (- 4)))) 10))
+(tst "b = [[2]].^2" (= b (.^ (cat (cat 2)) 2)))
+(tst "f(x+1)[i*2]-1" (- (ref (call f (+ x 1)) (* i 2)) 1))
+(tst "A[i^2] = b'" (= (ref A (^ i 2)) (ctranspose b)))
+(tst "A[i^2].==b'" (.== (ref A (^ i 2)) (ctranspose b)))
+(tst "{f(x),g(x)}" (list (call f x) (call g x)))
