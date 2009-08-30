@@ -237,9 +237,11 @@
 
 ; the principal non-terminals follow, in increasing precedence order
 
-(define (parse-block s) (parse-Nary s parse-stmts #\newline 'block
+(define (parse-block s) (parse-Nary s parse-block-stmts #\newline 'block
 				    '(end else elseif)))
-(define (parse-stmts s) (parse-Nary s parse-eq    #\; 'block '()))
+(define (parse-block-stmts s) (parse-Nary s parse-eq #\; 'block
+					  '(end else elseif #\newline)))
+(define (parse-stmts s) (parse-Nary s parse-eq    #\; 'block '(#\newline)))
 
 (define (parse-eq s)    (parse-RtoL s parse-comma (list-ref ops-by-prec 0)))
 ; parse-eq* is used where commas are special and not used for tuples,
@@ -258,7 +260,7 @@
 ; flag an error for tokens that cannot begin an expression
 (define (check-unexpected tok)
   (if (memv tok '(#\, #\) #\] #\} #\; end else elseif))
-      (error "Unexpected token" (string tok))))
+      (error "Unexpected token" tok)))
 
 (define (parse-unary s)
   (let ((t (require-token s)))
