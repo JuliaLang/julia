@@ -63,11 +63,12 @@
 (define (opchar? c) (memv c op-chars))
 (define (operator? c) (memq c operators))
 
-(define (skip-ws port)
+(define (skip-ws port newlines?)
   (let ((c (peek-char port)))
-    (if (and (not (eof-object? c)) (char-whitespace? c) (not (newline? c)))
+    (if (and (not (eof-object? c)) (char-whitespace? c)
+	     (or newlines? (not (newline? c))))
 	(begin (read-char port)
-	       (skip-ws port)))))
+	       (skip-ws port newlines?)))))
 
 (define (skip-to-eol port)
   (let ((c (read-char port)))
@@ -127,7 +128,7 @@
       (string->symbol s)))
 
 (define (next-token port)
-  (skip-ws port)
+  (skip-ws port #f)
   (let ((c (peek-char port)))
     (cond ((or (eof-object? c) (newline? c) (special-char? c))
 	   (read-char port))
@@ -157,32 +158,36 @@
 
 ; --- parser ---
 
-(define peek-token #f)
-(define require-token #f)
-(define take-token #f)
+(define (make-token-stream s) (cons #f s))
 
-(let ((last-tok #f))
+(define (peek-token s)
+  (let ((port     (cdr s))
+	(last-tok (car s)))
+    (if last-tok last-tok
+	(begin (set-car! s (next-token port))
+	       (car s)))))
+
+(define (require-token s)
   (define (req-token s)
-    (if (and last-tok (not (eof-object? last-tok)))
-	last-tok
-	(let ((t (next-token s)))
-	  (if (eof-object? t)
-	      (error "Premature end of input")
-	      (begin (set! last-tok t)
-		     last-tok)))))
-  (set! peek-token
-	(lambda (s) (if last-tok last-tok
-			(begin (set! last-tok (next-token s))
-			       last-tok))))
-  (set! require-token
-	(lambda (s) (let ((t (req-token s)))
-		      ; when an actual token is needed, skip newlines
-		      (if (newline? t)
-			  (begin (take-token)
-				 (require-token s))
-			  t))))
-  (set! take-token
-	(lambda () (let ((t last-tok)) (set! last-tok #f) t))))
+    (let ((port     (cdr s))
+	  (last-tok (car s)))
+      (if (and last-tok (not (eof-object? last-tok)))
+	  last-tok
+	  (let ((t (next-token port)))
+	    (if (eof-object? t)
+		(error "Premature end of input")
+		(begin (set-car! s t)
+		       (car s)))))))
+  (let ((t (req-token s)))
+    ; when an actual token is needed, skip newlines
+    (if (newline? t)
+	(begin (take-token s)
+	       (require-token s))
+	t)))
+
+(define (take-token s)
+  (begin0 (car s)
+	  (set-car! s #f)))
 
 ; parse left-to-right binary operator
 ; produces structures like (+ (+ (+ 2 3) 4) 5)
@@ -191,7 +196,7 @@
     (let ((t (peek-token s)))
       (if (not (memq t ops))
 	  ex
-	  (loop (list (take-token) ex (down s)))))))
+	  (loop (list (take-token s) ex (down s)))))))
 
 ; parse right-to-left binary operator
 ; produces structures like (= a (= b (= c d)))
@@ -200,7 +205,7 @@
     (let ((t (peek-token s)))
       (if (not (memq t ops))
 	  ex
-	  (list (take-token) ex (parse-RtoL s down ops))))))
+	  (list (take-token s) ex (parse-RtoL s down ops))))))
 
 ; parse a@b@c@... as (@ a b c ...) for some operator @
 ; closers is a list of tokens that will stop the process
@@ -212,7 +217,7 @@
 	  (if (or (pair? (cdr ex)) (not first?))
 	      (cons head (reverse ex))
 	      (car ex))
-	  (begin (take-token)
+	  (begin (take-token s)
 		 ; allow input to end with the operator, as in a;b; or (x,)
 		 (if (or (eof-object? (peek-token s))
 			 (memv (peek-token s) closers))
@@ -230,9 +235,9 @@
       (cond ((not (eq? t ':))
 	     ex)
 	    (first?
-	     (loop (list (take-token) ex (parse-expr s)) #f))
+	     (loop (list (take-token s) ex (parse-expr s)) #f))
 	    (else
-	     (take-token)
+	     (take-token s)
 	     (loop (append ex (list (parse-expr s))) #t))))))
 
 ; the principal non-terminals follow, in increasing precedence order
@@ -266,7 +271,7 @@
   (let ((t (require-token s)))
     (check-unexpected t)
     (if (memq t unary-ops)
-	(list (take-token) (parse-unary s))
+	(list (take-token s) (parse-unary s))
 	(parse-factor s))))
 
 ; handle ^, .^, and postfix transpose operator
@@ -274,15 +279,15 @@
   (let ((ex (down s)))
     (let ((t (peek-token s)))
       (cond ((eq? t ctrans-op)
-	     (take-token)
+	     (take-token s)
 	     (list 'ctranspose ex))
 	    ((eq? t trans-op)
-	     (take-token)
+	     (take-token s)
 	     (list 'transpose ex))
 	    ((not (memq t ops))
 	     ex)
 	    (else
-	     (list (take-token) ex (parse-factor-h s parse-unary ops)))))))
+	     (list (take-token s) ex (parse-factor-h s parse-unary ops)))))))
 
 ; -2^3 is parsed as -(2^3), so call parse-call for the first argument,
 ; and parse-unary from then on (to handle 2^-3)
@@ -295,9 +300,9 @@
   (define (loop ex)
     (let ((t (peek-token s)))
       (case t
-	((:: #\.)              (loop (list  (take-token) ex (parse-atom s))))
-	((#\( )   (take-token) (loop (list* 'call ex (parse-arglist s #\) ))))
-	((#\[ )   (take-token) (loop (list* 'ref  ex (parse-arglist s #\] ))))
+	((:: #\.)                (loop (list (take-token s) ex (parse-atom s))))
+	((#\( )   (take-token s) (loop (list* 'call ex (parse-arglist s #\) ))))
+	((#\[ )   (take-token s) (loop (list* 'ref  ex (parse-arglist s #\] ))))
 	(else ex))))
   
   (let ((ex (parse-atom s)))
@@ -310,7 +315,7 @@
   (define (expect-end s)
     (let ((t (peek-token s)))
       (if (eq? t 'end)
-	  (take-token)
+	  (take-token s)
 	  (error "Expected end"))))
   (case word
     ((begin)  (begin0 (parse-block s)
@@ -323,7 +328,7 @@
      (let* ((test (parse-or s))
 	    (then (parse-block s))
 	    (nxt  (require-token s)))
-       (take-token)
+       (take-token s)
        (case nxt
 	 ((end)     (list 'if test then))
 	 ((elseif)  (list 'if test then (parse-keyword s 'if)))
@@ -337,12 +342,12 @@
   (let loop ((lst '()))
     (let ((t (require-token s)))
       (if (equal? t closer)
-	  (begin (take-token) (reverse! lst))
+	  (begin (take-token s) (reverse! lst))
 	  (let ((nxt (parse-eq* s)))
 	    (let ((c (peek-token s)))
 	      (cond ((equal? c #\,)
-		     (begin (take-token) (loop (cons nxt lst))))
-		    ((equal? c closer)   (loop (cons nxt lst)))
+		     (begin (take-token s) (loop (cons nxt lst))))
+		    ((equal? c closer)     (loop (cons nxt lst)))
 		    (else (error "Comma expected")))))))))
 
 ; parse [] concatenation expressions
@@ -351,18 +356,18 @@
   (let loop ((vec '())
 	     (outer '()))
     (let ((t (require-token s)))
-      (cond ((equal? t #\])
-	     (take-token)
+      (cond ((eqv? t #\])
+	     (take-token s)
 	     (if (pair? outer)
 		 (fix (cons (fix vec) outer))
 		 (fix vec)))
 
-	    ((equal? t #\;)
-	     (take-token)
+	    ((eqv? t #\;)
+	     (take-token s)
 	     (loop '() (cons (fix vec) outer)))
 
-	    ((equal? t #\,)
-	     (take-token)
+	    ((eqv? t #\,)
+	     (take-token s)
 	     (loop vec outer))
 
 	    (else
@@ -371,36 +376,44 @@
 ; parse numbers, identifiers, parenthesized expressions, lists, vectors, etc.
 (define (parse-atom s)
   (let ((t (require-token s)))
-    (cond ((or (string? t) (number? t)) (take-token))
+    (cond ((or (string? t) (number? t)) (take-token s))
 
 	  ((eqv? t #\( )
-	   (take-token)
+	   (take-token s)
 	   (let* ((ex (parse-eq s))
 		  (t (require-token s)))
 	     (if (eqv? t #\) )
-		 (begin (take-token) ex)
+		 (begin (take-token s) ex)
 		 (error "Expected )"))))
 
 	  ((eqv? t #\{ )
-	   (take-token)
+	   (take-token s)
 	   (cons 'list (parse-arglist s #\})))
 
 	  ((eqv? t #\[ )
-	   (take-token)
+	   (take-token s)
 	   (parse-vector s))
 
 	  ; TODO: prefix keywords, various quoting/escaping
 
-	  (else (take-token)))))
+	  (else (take-token s)))))
 
 ; --- main entry point ---
 
 (define (julia-parse s)
-  (if (string? s)
-      (julia-parse (open-input-string s))
-      (begin
-	(take-token)
-	(parse-stmts s))))
+  (cond ((string? s)
+	 (julia-parse (make-token-stream (open-input-string s))))
+	((port? s)
+	 (julia-parse (make-token-stream s)))
+	(else
+	 ; as a special case, allow early end of input if there is
+	 ; nothing left but whitespace
+	 (if (eqv? (peek-token s) #\newline) (take-token s))
+	 (skip-ws (cdr s) #t)
+	 (let ((t (peek-token s)))
+	   (if (eof-object? t)
+	       t
+	       (parse-stmts s))))))
 
 ; --- tests ---
 
@@ -419,18 +432,17 @@
 (tst "{f(x),g(x)}" (list (call f x) (call g x)))
 
 ; test newline as optional statement separator
-(define s (open-input-string "2\n-3"))
-(take-token)
+(define s (make-token-stream (open-input-string "2\n-3")))
 (assert (equal? (parse-eq s) 2))
 (assert (equal? (parse-eq s) '(- 3)))
-(define s (open-input-string "(2+\n3)"))
-(take-token)
+(define s (make-token-stream (open-input-string "(2+\n3)")))
 (assert (equal? (parse-eq s) '(+ 2 3)))
 
 ; tuples
 (tst "2," (tuple 2))
 (tst "(2,)" (tuple 2))
 (tst "2,3" (tuple 2 3))
+(tst "2,3," (tuple 2 3))
 (tst "(2,3)" (tuple 2 3))
 (tst "(2,3,)" (tuple 2 3))
 
@@ -445,3 +457,6 @@
 ; for testing. generally no need to tokenize a whole stream in advance.
 (define (julia-tokenize port)
   (read-all-of next-token port))
+
+(define (julia-parse-file filename)
+  (read-all-of julia-parse (make-token-stream (open-input-file filename))))
