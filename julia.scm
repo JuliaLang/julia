@@ -30,6 +30,8 @@
     (^ .^)
     (::)))
 
+; unused characters: @ $ ` " ?
+
 (define unary-ops '(- + ! ~))
 
 (define trans-op (string->symbol ".'"))
@@ -208,19 +210,33 @@
 	  (list (take-token s) ex (parse-RtoL s down ops))))))
 
 ; parse a@b@c@... as (@ a b c ...) for some operator @
-; closers is a list of tokens that will stop the process
-(define (parse-Nary s down op head closers)
-  (let loop ((ex (list (down s)))
+; op: the operator to look for
+; head: the expression head to yield in the result, e.g. "a;b" => (block a b)
+; closers: a list of tokens that will stop the process
+; allow-empty: if true will ignore runs of the operator, like a@@@@b
+; ow, my eyes!!
+(define (parse-Nary s down op head closers allow-empty)
+  (let loop ((ex
+              ; in allow-empty mode skip leading runs of operator
+	      (if (and allow-empty (eqv? (require-token s) op))
+		  '()
+		  (list (down s))))
 	     (first? #t))
     (let ((t (peek-token s)))
       (if (not (eqv? t op))
-	  (if (or (pair? (cdr ex)) (not first?))
+	  (if (or (null? ex) (pair? (cdr ex)) (not first?))
+	      ; () => (head)
+	      ; (ex2 ex1) => (head ex1 ex2)
+              ; (ex1) ** if operator appeared => (head ex1) (handles "(x,)")
 	      (cons head (reverse ex))
+	      ; (ex1) => ex1
 	      (car ex))
 	  (begin (take-token s)
 		 ; allow input to end with the operator, as in a;b; or (x,)
 		 (if (or (eof-object? (peek-token s))
-			 (memv (peek-token s) closers))
+			 (memv (peek-token s) closers)
+			 (and allow-empty
+			      (eqv? (peek-token s) op)))
 		     (loop ex #f)
 		     (loop (cons (down s) ex) #f)))))))
 
@@ -243,16 +259,16 @@
 ; the principal non-terminals follow, in increasing precedence order
 
 (define (parse-block s) (parse-Nary s parse-block-stmts #\newline 'block
-				    '(end else elseif)))
+				    '(end else elseif) #t))
 (define (parse-block-stmts s) (parse-Nary s parse-eq #\; 'block
-					  '(end else elseif #\newline)))
-(define (parse-stmts s) (parse-Nary s parse-eq    #\; 'block '(#\newline)))
+					  '(end else elseif #\newline) #t))
+(define (parse-stmts s) (parse-Nary s parse-eq    #\; 'block '(#\newline) #t))
 
 (define (parse-eq s)    (parse-RtoL s parse-comma (list-ref ops-by-prec 0)))
 ; parse-eq* is used where commas are special and not used for tuples,
 ; for example in an argument list
 (define (parse-eq* s)   (parse-RtoL s parse-or    (list-ref ops-by-prec 0)))
-(define (parse-comma s) (parse-Nary s parse-or    #\, 'tuple '(#\) )))
+(define (parse-comma s) (parse-Nary s parse-or    #\, 'tuple '( #\) ) #f))
 (define (parse-or s)    (parse-LtoR s parse-and   (list-ref ops-by-prec 1)))
 (define (parse-and s)   (parse-LtoR s parse-arrow (list-ref ops-by-prec 2)))
 (define (parse-arrow s) (parse-RtoL s parse-ineq  (list-ref ops-by-prec 3)))
@@ -338,6 +354,8 @@
      )
     (else (error "Unhandled keyword"))))
 
+; handle function call argument list, or any comma-delimited list
+; that's not a tuple
 (define (parse-arglist s closer)
   (let loop ((lst '()))
     (let ((t (require-token s)))
@@ -380,11 +398,13 @@
 
 	  ((eqv? t #\( )
 	   (take-token s)
-	   (let* ((ex (parse-eq s))
-		  (t (require-token s)))
-	     (if (eqv? t #\) )
-		 (begin (take-token s) ex)
-		 (error "Expected )"))))
+	   (if (eqv? (peek-token s) #\) )
+	       (begin (take-token s) '(tuple))
+	       (let* ((ex (parse-eq s))
+		      (t (require-token s)))
+		 (if (eqv? t #\) )
+		     (begin (take-token s) ex)
+		     (error "Expected )")))))
 
 	  ((eqv? t #\{ )
 	   (take-token s)
@@ -408,8 +428,8 @@
 	(else
 	 ; as a special case, allow early end of input if there is
 	 ; nothing left but whitespace
-	 (if (eqv? (peek-token s) #\newline) (take-token s))
 	 (skip-ws (cdr s) #t)
+	 (if (eqv? (peek-token s) #\newline) (take-token s))
 	 (let ((t (peek-token s)))
 	   (if (eof-object? t)
 	       t
@@ -430,6 +450,7 @@
 (tst "A[i^2] = b'" (= (ref A (^ i 2)) (ctranspose b)))
 (tst "A[i^2].==b'" (.== (ref A (^ i 2)) (ctranspose b)))
 (tst "{f(x),g(x)}" (list (call f x) (call g x)))
+(tst "a::b.c" (#\. (:: a b) c))
 
 ; test newline as optional statement separator
 (define s (make-token-stream (open-input-string "2\n-3")))
@@ -445,6 +466,48 @@
 (tst "2,3," (tuple 2 3))
 (tst "(2,3)" (tuple 2 3))
 (tst "(2,3,)" (tuple 2 3))
+(tst "()" (tuple))
+(tst "( )" (tuple))
+
+; statements
+(define s (make-token-stream (open-input-string ";\n;;a;;;b;;\n;")))
+(assert (equal? (julia-parse s) '(block)))
+(assert (equal? (julia-parse s) '(block a b)))
+(assert (equal? (julia-parse s) '(block)))
+(assert (eof-object? (julia-parse s)))
+
+(tst
+"if a < b
+  thing1;;;
+
+
+  thing2;
+elseif c < d
+  # this is a comment
+  #
+  maybe
+
+ #
+
+#
+
+
+else
+    whatever
+end"
+
+(if (< a b)
+    (block (block thing1) (block thing2))
+    (if (< c d)
+	(block maybe)
+	(block whatever))))
+
+(tst
+"while x < n
+  x += 1
+end
+"
+(while (< x n) (block (+= x 1))))
 
 ; call f on a stream until the stream runs out of data
 (define (read-all-of f s)
