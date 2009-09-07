@@ -1,44 +1,28 @@
-;(if (not (top-level-bound? 'open-input-string))
-;    (load (string *install-dir* "/aliases.scm")))
-
-(define (delete-duplicates lst)
-  (if (null? lst)
-      lst
-      (let ((elt  (car lst))
-	    (tail (cdr lst)))
-	(if (member elt tail)
-	    (delete-duplicates tail)
-	    (cons elt
-		  (delete-duplicates tail))))))
-
-(define-macro (begin0 first . rest)
-  (let ((g (gensym)))
-    `(let ((,g ,first))
-       ,@rest
-       ,g)))
-
 (define ops-by-prec
-  '((= := += -= *= /= ^= %= |= &= $= => <<= >>=)
-    (||)
+  '((= := += -= *= /= ^= %= |\|=| &= $= => <<= >>=)
+    (|\|\||)
     (&&)
     (-> <-)
-    (> < >= <= == != .> .< .>= .<= .== .!= .= .!)
+    (> < >= <= == != |.>| |.<| |.>=| |.<=| |.==| |.!=| |.=| |.!|)
     (<< >>)
     (: ..)
-    (+ - | $)
-    (* / ./ % & .* \ .\)
-    (^ .^)
-    (::)))
+    (+ - |\|| $)
+    (* / |./| % & |.*| |\\| |.\\|)
+    (^ |.^|)
+    (|::| |.|)))
 
-; unused characters: @ $ ` " ?
+; unused characters: @ ` ? prefix'
+; possible: use ` for quoting and escaping, $ for unquote
+;           leave @ as an operator
+; no character literals; unicode kind of makes them obsolete. strings instead.
+; decide what to do about true, false, and null
 
 (define unary-ops '(- + ! ~))
 
 (define trans-op (string->symbol ".'"))
 (define ctrans-op (string->symbol "'"))
-(define dot-op (string->symbol "."))
 
-(define operators (list* '~ ctrans-op trans-op dot-op
+(define operators (list* '~ ctrans-op trans-op
 			 (delete-duplicates (apply append ops-by-prec))))
 
 (define op-chars
@@ -48,9 +32,6 @@
 
 ; --- lexer ---
 
-(define num-start-char?
-  (let ((chrs (string->list "0123456789.")))
-    (lambda (c) (memv c chrs))))
 (define special-char?
   (let ((chrs (string->list "()[]{},;")))
     (lambda (c) (memv c chrs))))
@@ -73,30 +54,30 @@
 	       (skip-ws port newlines?)))))
 
 (define (skip-to-eol port)
-  (let ((c (read-char port)))
+  (let ((c (peek-char port)))
     (cond ((eof-object? c)    c)
-	  ((eqv? c #\newline) (unread-char c port) c)
-	  (else               (skip-to-eol port)))))
+	  ((eqv? c #\newline) c)
+	  (else               (read-char port)
+			      (skip-to-eol port)))))
 
 ; pred - should we consider a character?
 ; valid - does adding the next character to the token produce
 ;         a valid token?
 (define (accum-tok c pred valid port)
-  (let ((str (open-output-string)))
-    (let loop ((c c)
-	       (first? #t))
-      (if (and (not (eof-object? c)) (pred c)
-	       (or first?
-		   (valid (string-append (get-output-string str)
-					 (string c)))))
-	  (begin (write-char c str)
-		 (read-char port)
-		 (loop (peek-char port) #f))
-	  (get-output-string str)))))
+  (let loop ((str '())
+	     (c c)
+	     (first? #t))
+    (if (and (not (eof-object? c)) (pred c)
+	     (or first?
+		 (valid (string-append (list->string (reverse str))
+				       (string c)))))
+	(begin (read-char port)
+	       (loop (cons c str) (peek-char port) #f))
+	(list->string (reverse str)))))
 
 (define (yes x) #t)
 
-(define (read-number port)
+(define (read-number port . leadingdot)
   (let ((str (open-output-string)))
     (define (allow ch)
       (let ((c (peek-char port)))
@@ -108,7 +89,9 @@
 	     (not (eof-object? d))
 	     (display d str)
 	     #t)))
-    (allow #\.)
+    (if (pair? leadingdot)
+	(write-char #\. str)
+	(allow #\.))
     (read-digs)
     (allow #\.)
     (read-digs)
@@ -120,14 +103,11 @@
       (if n n
 	  (error "Invalid numeric constant " s)))))
 
-(define (prn x) (display x) (newline) x)
-
-(define (string->op s)
-  ; . needs to be handled specially because guile does not
-  ; implement symbol escaping. arrrrgh!!
-  (if (string=? s ".")
-      #\.
-      (string->symbol s)))
+(define (read-operator port c)
+  (string->symbol
+   (accum-tok c opchar?
+	      (lambda (x) (operator? (string->symbol x)))
+	      port)))
 
 (define (next-token port)
   (skip-ws port #f)
@@ -139,22 +119,25 @@
 	  
 	  ((char-numeric? c) (read-number port))
 	  
-	  ((and (num-start-char? c)
+	  ; . is difficult to handle; it could start a number or operator
+	  ((and (eqv? c #\.)
 		(let ((c (read-char port))
 		      (nextc (peek-char port)))
-		  (unread-char c port)
-		  (and (char-numeric? nextc)
-		       (read-number port)))))
+		  (cond ((char-numeric? nextc)
+			 (read-number port c))
+			((opchar? nextc)
+			 (string->symbol
+			  (string-append (string c)
+					 (symbol->string
+					  (read-operator port nextc)))))
+			(else '|.|)))))
 	  
-	  ((opchar? c)  (string->op
-			 (accum-tok c opchar?
-				    (lambda (x) (operator? (string->symbol x)))
-				    port)))
+	  ((opchar? c)  (read-operator port c))
 
 	  ((identifier-char? c) (string->symbol (accum-tok c identifier-char?
 							   yes port)))
 
-	  ; TODO: strings
+	  ((eqv? c #\")  (read port))
 
 	  (else (error "Invalid character" (read-char port))))))
 
@@ -316,7 +299,7 @@
   (define (loop ex)
     (let ((t (peek-token s)))
       (case t
-	((:: #\.)                (loop (list (take-token s) ex (parse-atom s))))
+	((|::| |.|)              (loop (list (take-token s) ex (parse-atom s))))
 	((#\( )   (take-token s) (loop (list* 'call ex (parse-arglist s #\) ))))
 	((#\[ )   (take-token s) (loop (list* 'ref  ex (parse-arglist s #\] ))))
 	(else ex))))
@@ -360,7 +343,7 @@
   (let loop ((lst '()))
     (let ((t (require-token s)))
       (if (equal? t closer)
-	  (begin (take-token s) (reverse! lst))
+	  (begin (take-token s) (reverse lst))
 	  (let ((nxt (parse-eq* s)))
 	    (let ((c (peek-token s)))
 	      (cond ((equal? c #\,)
@@ -435,86 +418,12 @@
 	       t
 	       (parse-stmts s))))))
 
-; --- tests ---
-
-(define-macro (assert expr) `(if ,expr #t (error "Assertion failed:" ',expr)))
-(define-macro (tst str expr) `(assert (equal? (julia-parse ,str) ',expr)))
-
-(tst "1+2" (+ 1 2))
-(tst "[1 2].*[3 4].'" (.* (cat 1 2) (transpose (cat 3 4))))
-(tst "[1,2;3,4]" (cat (cat 1 2) (cat 3 4)))
-(tst "1:2:3:4" (: (: 1 2 3) 4))
-(tst "1+2*3^-4-10" (- (+ 1 (* 2 (^ 3 (- 4)))) 10))
-(tst "b = [[2]].^2" (= b (.^ (cat (cat 2)) 2)))
-(tst "f(x+1)[i*2]-1" (- (ref (call f (+ x 1)) (* i 2)) 1))
-(tst "A[i^2] = b'" (= (ref A (^ i 2)) (ctranspose b)))
-(tst "A[i^2].==b'" (.== (ref A (^ i 2)) (ctranspose b)))
-(tst "{f(x),g(x)}" (list (call f x) (call g x)))
-(tst "a::b.c" (#\. (:: a b) c))
-
-; test newline as optional statement separator
-(define s (make-token-stream (open-input-string "2\n-3")))
-(assert (equal? (parse-eq s) 2))
-(assert (equal? (parse-eq s) '(- 3)))
-(define s (make-token-stream (open-input-string "(2+\n3)")))
-(assert (equal? (parse-eq s) '(+ 2 3)))
-
-; tuples
-(tst "2," (tuple 2))
-(tst "(2,)" (tuple 2))
-(tst "2,3" (tuple 2 3))
-(tst "2,3," (tuple 2 3))
-(tst "(2,3)" (tuple 2 3))
-(tst "(2,3,)" (tuple 2 3))
-(tst "()" (tuple))
-(tst "( )" (tuple))
-
-; statements
-(define s (make-token-stream (open-input-string ";\n;;a;;;b;;\n;")))
-(assert (equal? (julia-parse s) '(block)))
-(assert (equal? (julia-parse s) '(block a b)))
-(assert (equal? (julia-parse s) '(block)))
-(assert (eof-object? (julia-parse s)))
-
-(tst
-"if a < b
-  thing1;;;
-
-
-  thing2;
-elseif c < d
-  # this is a comment
-  #
-  maybe
-
- #
-
-#
-
-
-else
-    whatever
-end"
-
-(if (< a b)
-    (block (block thing1) (block thing2))
-    (if (< c d)
-	(block maybe)
-	(block whatever))))
-
-(tst
-"while x < n
-  x += 1
-end
-"
-(while (< x n) (block (+= x 1))))
-
 ; call f on a stream until the stream runs out of data
 (define (read-all-of f s)
   (let loop ((lines '())
 	     (curr  (f s)))
     (if (eof-object? curr)
-	(reverse! lines)
+	(reverse lines)
 	(loop (cons curr lines) (f s)))))
 
 ; for testing. generally no need to tokenize a whole stream in advance.
