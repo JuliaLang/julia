@@ -26,7 +26,7 @@
 
 (define any-type (vector 'Type 'any 'any julia-null julia-null))
 
-(define Type-type (vector 'Type any-type julia-null
+(define Type-type (vector 'Type 'Type any-type julia-null
 			  (julia-tuple
 			   (julia-tuple 'name 'symbol)
 			   (julia-tuple 'super 'Type)
@@ -134,35 +134,6 @@
 			     (map list->tuple
 				  (map list fnames mapped-ftypes)))))))))))
 
-(define (type-ex-name t)
-  (cond ((symbol? t) t)
-	((eq? (car t) 'type) (cadr t))
-	((eq? (car t) 'call) (cadr t))
-	(else (error "Invalid type expression" t))))
-(define (type-ex-params t)
-  (cond ((symbol? t) '())
-	((eq? (car t) 'type) (cddr t))
-	((eq? (car t) 'call) (cddr t))
-	(else (error "Invalid type expression" t))))
-
-; handles form (type name . params), giving a type object
-(define (resolve-type name params . nested?)
-  (cond ((or (eq? name 'tuple) (eq? name 'union))
-	 (make-type name any-type
-		    (list->tuple
-		     (map (lambda (t)
-			    (resolve-type (type-ex-name t)
-					  (type-ex-params t) #t))
-			  params))
-		    julia-null))
-	#;((assq name type-env) => (lambda (x)
-				   (instantiate-type (cdr x) params)))
-	((table-ref julia-types name #f) => (lambda (x)
-					      (instantiate-type x params)))
-	((pair? nested?) name)
-	(else
-	 (error "Unknown type" name))))
-
 (define (type-generic? t)
   (and (type? t)
        (any symbol? (type-params-list t))))
@@ -227,3 +198,99 @@
 
 	; otherwise walk up the type hierarchy
 	(else (subtype? (type-super child) parent))))
+
+; --- processing type-related syntax ---
+
+(define (type-ex-name t)
+  (cond ((symbol? t) t)
+	((eq? (car t) 'type) (cadr t))
+	((eq? (car t) 'call) (cadr t))
+	(else (error "Invalid type expression" t))))
+(define (type-ex-params t)
+  (cond ((symbol? t) '())
+	((eq? (car t) 'type) (cddr t))
+	((eq? (car t) 'call) (cddr t))
+	(else (error "Invalid type expression" t))))
+
+; handles form (type name . params), giving a type object
+(define (resolve-type name params . nested?)
+  (cond ((or (eq? name 'tuple) (eq? name 'union))
+	 (make-type name any-type
+		    (list->tuple
+		     (map (lambda (t)
+			    (resolve-type (type-ex-name t)
+					  (type-ex-params t) #t))
+			  params))
+		    julia-null))
+	#;((assq name type-env) => (lambda (x)
+				   (instantiate-type (cdr x) params)))
+	((table-ref julia-types name #f) => (lambda (x)
+					      (instantiate-type x params)))
+	((pair? nested?) name)
+	(else
+	 (error "Unknown type" name))))
+
+(define (type-def signature fields)
+  (let ((tname (type-ex-name signature))
+	(tpara (type-ex-params signature))
+	; fields looks like (block (: n t) (: n t) ...)
+	(fnames (map cadr (cdr fields)))
+	(ftypes (map (lambda (fld)
+		       (resolve-type (type-ex-name (caddr fld))
+				     (type-ex-params (caddr fld))))
+		     (cdr fields))))
+    (let ((T
+	   (make-type tname any-type tpara
+		      (list->tuple
+		       (map list->tuple
+			    (map list fnames ftypes))))))
+      (table-set! julia-types tname T)
+      T)))
+
+(define (type-alias name type)
+  (table-set! julia-types name (resolve-type (type-ex-name type)
+					     (type-ex-params type))))
+
+; --- builtin functions ---
+
+(define (field-offset obj fld)
+  (let ((fl (type-fields (type-of obj))))
+    (let loop ((i 0)
+	       (L (tuple-length fl)))
+      (if (< i L)
+	  (if (eq? fld (tuple-ref (tuple-ref fl i) 0))
+	      (+ i 1)
+	      (loop (+ i 1) L))
+	  (error "Type" (type-name (type-of obj)) "has no field" fld)))))
+
+(define (j-get-field obj fld)
+  (vector-ref obj (field-offset obj fld)))
+
+(define (j-set-field obj fld v)
+  (vector-set! obj (field-offset obj fld) v))
+
+(define (j-ref v i) (vector-ref v (+ i 1)))
+
+(define (j-set v i rhs) (vector-set! v (+ i 1) rhs))
+
+(define (j-vector-length v) (- (vector-length v) 1))
+
+(define (j-not x) (if (eq? x julia-false) julia-true julia-false))
+
+(define (j-new type args)
+  (let* ((L (if (memq (type-name type) '(tuple vector))
+		(length args)
+		(tuple-length (type-fields type))))
+	 (v (make-vector (+ 1 L))))
+    (vector-set! v 0 type)
+    (let loop ((i 0)
+	       (args args))
+      (if (< i L)
+	  (if (null? args)
+	      (error "Too few arguments to type constructor" (type-name type))
+	      (begin (vector-set! v (+ 1 i) (car args))
+		     (loop (+ i 1) (cdr args))))
+	  (if (pair? args)
+	      (error "Too many arguments to type constructor"
+		     (type-name type))
+	      v)))))

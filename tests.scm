@@ -4,24 +4,24 @@
 
 (define-macro (tst str expr) `(assert (equal? (julia-parse ,str) ',expr)))
 
-(tst "1+2" (+ 1 2))
-(tst "[1 2].*[3 4].'" (.* (cat 1 2) (transpose (cat 3 4))))
+(tst "1+2" (call + 1 2))
+(tst "[1 2].*[3 4].'" (call .* (cat 1 2) (call transpose (cat 3 4))))
 (tst "[1,2;3,4]" (cat (cat 1 2) (cat 3 4)))
 (tst "1:2:3:4" (: (: 1 2 3) 4))
-(tst "1+2*3^-4-10" (- (+ 1 (* 2 (^ 3 (- 4)))) 10))
-(tst "b = [[2]].^2" (= b (.^ (cat (cat 2)) 2)))
-(tst "f(x+1)[i*2]-1" (- (ref (call f (+ x 1)) (* i 2)) 1))
-(tst "A[i^2] = b'" (= (ref A (^ i 2)) (ctranspose b)))
-(tst "A[i^2].==b'" (.== (ref A (^ i 2)) (ctranspose b)))
+(tst "1+2*3^-4-10" (call - (call + 1 (call * 2 (call ^ 3 (call - 4)))) 10))
+(tst "b = [[2]].^2" (= b (call .^ (cat (cat 2)) 2)))
+(tst "f(x+1)[i*2]-1" (call - (call ref (call f (call + x 1)) (call * i 2)) 1))
+(tst "A[i^2] = b'" (= (call ref A (call ^ i 2)) (call ctranspose b)))
+(tst "A[i^2].==b'" (call .== (call ref A (call ^ i 2)) (call ctranspose b)))
 (tst "{f(x),g(x)}" (list (call f x) (call g x)))
 (tst "a::b.c" (|.| (|::| a b) c))
 
 ; test newline as optional statement separator
 (define s (make-token-stream (open-input-string "2\n-3")))
 (assert (equal? (parse-eq s) 2))
-(assert (equal? (parse-eq s) '(- 3)))
+(assert (equal? (parse-eq s) '(call - 3)))
 (define s (make-token-stream (open-input-string "(2+\n3)")))
-(assert (equal? (parse-eq s) '(+ 2 3)))
+(assert (equal? (parse-eq s) '(call + 2 3)))
 
 ; tuples
 (tst "2," (tuple 2))
@@ -60,9 +60,9 @@ else
     whatever
 end"
 
-(if (< a b)
+(if (call < a b)
     (block (block thing1) (block thing2))
-    (if (< c d)
+    (if (call < c d)
 	(block maybe)
 	(block whatever))))
 
@@ -71,7 +71,7 @@ end"
   x += 1
 end
 "
-(while (< x n) (block (+= x 1))))
+(while (call < x n) (block (+= x 1))))
 
 
 ; --- pattern matcher tests ---

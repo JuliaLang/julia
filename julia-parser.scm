@@ -19,6 +19,13 @@
 
 (define unary-ops '(- + ! ~))
 
+; operators that are special forms, not function names
+(define syntactic-operators
+  '(= := += -= *= /= ^= %= |\|=| &= $= => <<= >>=
+      -> |\|\|| && : |::| |.|))
+
+(define (syntactic-op? op) (memq op syntactic-operators))
+
 (define trans-op (string->symbol ".'"))
 (define ctrans-op (string->symbol "'"))
 
@@ -181,7 +188,10 @@
     (let ((t (peek-token s)))
       (if (not (memq t ops))
 	  ex
-	  (loop (list (take-token s) ex (down s)))))))
+	  (begin (take-token s)
+		 (if (syntactic-op? t)
+		     (loop (list t ex (down s)))
+		     (loop (list 'call t ex (down s)))))))))
 
 ; parse right-to-left binary operator
 ; produces structures like (= a (= b (= c d)))
@@ -190,7 +200,10 @@
     (let ((t (peek-token s)))
       (if (not (memq t ops))
 	  ex
-	  (list (take-token s) ex (parse-RtoL s down ops))))))
+	  (begin (take-token s)
+		 (if (syntactic-op? t)
+		     (list t ex (parse-RtoL s down ops))
+		     (list 'call t ex (parse-RtoL s down ops))))))))
 
 ; parse a@b@c@... as (@ a b c ...) for some operator @
 ; op: the operator to look for
@@ -227,6 +240,8 @@
 ; 1:2   => (: 1 2)
 ; 1:2:3 => (: 1 2 3)
 ; a simple state machine is up to the task.
+; we will leave : expressions as a syntax form, not a call to ':',
+; so they can be processed into either ranges or declarations
 (define (parse-range s)
   (let loop ((ex (parse-expr s))
 	     (first? #t))
@@ -270,7 +285,7 @@
   (let ((t (require-token s)))
     (check-unexpected t)
     (if (memq t unary-ops)
-	(list (take-token s) (parse-unary s))
+	(list 'call (take-token s) (parse-unary s))
 	(parse-factor s))))
 
 ; handle ^, .^, and postfix transpose operator
@@ -279,14 +294,15 @@
     (let ((t (peek-token s)))
       (cond ((eq? t ctrans-op)
 	     (take-token s)
-	     (list 'ctranspose ex))
+	     (list 'call 'ctranspose ex))
 	    ((eq? t trans-op)
 	     (take-token s)
-	     (list 'transpose ex))
+	     (list 'call 'transpose ex))
 	    ((not (memq t ops))
 	     ex)
 	    (else
-	     (list (take-token s) ex (parse-factor-h s parse-unary ops)))))))
+	     (list 'call
+		   (take-token s) ex (parse-factor-h s parse-unary ops)))))))
 
 ; -2^3 is parsed as -(2^3), so call parse-call for the first argument,
 ; and parse-unary from then on (to handle 2^-3)
@@ -299,9 +315,12 @@
   (define (loop ex)
     (let ((t (peek-token s)))
       (case t
-	((|::| |.|)              (loop (list (take-token s) ex (parse-atom s))))
-	((#\( )   (take-token s) (loop (list* 'call ex (parse-arglist s #\) ))))
-	((#\[ )   (take-token s) (loop (list* 'ref  ex (parse-arglist s #\] ))))
+	((|::| |.|)
+	 (loop (list (take-token s) ex (parse-atom s))))
+	((#\( )   (take-token s)
+	 (loop (list* 'call ex (parse-arglist s #\) ))))
+	((#\[ )   (take-token s)
+	 (loop (list* 'call 'ref  ex (parse-arglist s #\] ))))
 	(else ex))))
   
   (let ((ex (parse-atom s)))
