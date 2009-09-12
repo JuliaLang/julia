@@ -564,7 +564,7 @@
 	 (meths (matching-methods gf types subtype?)))
     (if (null? meths)
 	(error "No method for function" (vector-ref gf 2)
-	       "matching types" types)
+	       "matching types" (map type-name types))
 	(j-apply-closure (cdr (most-specific meths)) args))))
 
 (define (j-toplevel-eval e)
