@@ -15,7 +15,9 @@
 	   (if (eq? (car arglist) 'tuple)
 	       (cdr arglist)
 	       arglist))
-      arglist))
+      (if (symbol? arglist)
+	  (list arglist)
+	  arglist)))
 
 (define (formal-arg-types arglist)
   (if (pair? arglist)
@@ -26,7 +28,9 @@
 	   (if (eq? (car arglist) 'tuple)
 	       (cdr arglist)
 	       arglist))
-      (list 'any)))
+      (if (null? arglist)
+	  arglist
+	  (list 'any))))
 
 (define patterns
   (list
