@@ -1,3 +1,11 @@
+#|
+TODO:
+- parsing try/catch
+- parsing typealias
+- omitted indexes, a[i,,k]
+- semicolons in argument lists, for keywords
+|#
+
 (define ops-by-prec
   '((= := += -= *= /= ^= %= |\|=| &= $= => <<= >>=)
     (|\|\||)
@@ -40,7 +48,7 @@
 ; --- lexer ---
 
 (define special-char?
-  (let ((chrs (string->list "()[]{},;")))
+  (let ((chrs (string->list "()[]{},;`")))
     (lambda (c) (memv c chrs))))
 (define (newline? c) (eqv? c #\newline))
 (define (identifier-char? c) (or (and (char>=? c #\A)
@@ -318,13 +326,18 @@
 	((|::| |.|)
 	 (loop (list (take-token s) ex (parse-atom s))))
 	((#\( )   (take-token s)
-	 (loop (list* 'call ex (parse-arglist s #\) ))))
+	 (if (memq ex '(new block quote typename))
+	     ; some names are syntactic and not function calls
+	     (loop (list* ex       (parse-arglist s #\) )))
+	     (loop (list* 'call ex (parse-arglist s #\) )))))
 	((#\[ )   (take-token s)
 	 (loop (list* 'call 'ref  ex (parse-arglist s #\] ))))
 	(else ex))))
   
-  (let ((ex (parse-atom s)))
-    (if (memq ex '(begin while if for try))
+  (let* ((do-kw? (not (eqv? (peek-token s) #\`)))
+	 (ex (parse-atom s)))
+    (if (and do-kw?
+	     (memq ex '(begin while if for try function type typealias)))
 	(parse-keyword s ex)
 	(loop ex))))
 
@@ -352,6 +365,12 @@
 	 ((elseif)  (list 'if test then (parse-keyword s 'if)))
 	 ((else)    (list 'if test then (parse-keyword s 'begin)))
 	 (else (error "Improperly terminated if statement")))))
+    ((function type)
+     (let ((sig (parse-call s)))
+       (begin0 (list word sig (parse-block s))
+	       (expect-end s))))
+    ((typealias) #f ; TODO
+     )
     ((try) #f ; TODO
      )
     (else (error "Unhandled keyword"))))
@@ -416,6 +435,20 @@
 	   (take-token s)
 	   (parse-vector s))
 
+	  ((eqv? t #\` )
+	   (take-token s)
+	   (let ((op (peek-token s)))
+	     (take-token s)
+	     (if (eqv? op #\`)
+		 (error "Expected token in ``")
+		 (if (not (eqv? (peek-token s) #\`))
+		     (error "Expected closing `")))
+	     (take-token s)
+	     op))
+
+	  ((eq? t 'return)
+	   (take-token s)
+	   (list 'return (parse-eq s)))
 	  ; TODO: prefix keywords, various quoting/escaping
 
 	  (else (take-token s)))))

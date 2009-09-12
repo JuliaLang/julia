@@ -1,0 +1,164 @@
+;
+; Emacs mode for Julia
+;
+
+(defvar julia-mode-hook nil)
+
+(add-to-list 'auto-mode-alist '("\\.j\\'\\|\\.jl\\'" . julia-mode))
+
+(defvar julia-mode-syntax-table
+  (let ((table (make-syntax-table)))
+    (modify-syntax-entry ?_ "w" table)   ; underscores in words
+    (modify-syntax-entry ?? "w" table)   ; ? in words
+    (modify-syntax-entry ?\\ "w" table)  ; \ is a symbol char outside quotes
+    (modify-syntax-entry ?# "<" table)   ; #  single-line comment start
+    (modify-syntax-entry ?\n ">" table)  ; \n single-line comment end
+    (modify-syntax-entry ?\{ "(} " table)
+    (modify-syntax-entry ?\} "){ " table)
+    (modify-syntax-entry ?\[ "(] " table)
+    (modify-syntax-entry ?\] ")[ " table)
+    (modify-syntax-entry ?\( "() " table)
+    (modify-syntax-entry ?\) ")( " table)
+    (modify-syntax-entry ?$ "." table)
+    (modify-syntax-entry ?& "." table)
+    (modify-syntax-entry ?* "." table)
+    (modify-syntax-entry ?+ "." table)
+    (modify-syntax-entry ?- "." table)
+    (modify-syntax-entry ?< "." table)
+    (modify-syntax-entry ?> "." table)
+    (modify-syntax-entry ?= "." table)
+    (modify-syntax-entry ?% "." table)
+    table)
+  "Syntax table for julia-mode")
+
+; syntax table that holds within strings (uses default emacs behavior)
+(defvar julia-mode-string-syntax-table
+  (let ((table (make-syntax-table)))
+    table)
+  "Syntax table for julia-mode")
+
+(defconst julia-font-lock-keywords
+  (list '("\\<\\(null\\|true\\|false\\|\\(c?\\(u?int\\(8\\|16\\|32\\)\\|float\\|double\\|bool\\|uint1\\)\\)\\)\\>" .
+      font-lock-type-face)
+    (cons
+     (concat "\\<\\("
+         (mapconcat
+          'identity
+          '("if" "else" "elseif" "while" "for" "begin" "end" "block"
+            "try" "return" "local" "type" "function" "new" "quote" "typename"
+	    "typealias")
+          "\\|") "\\)\\>")
+     'font-lock-keyword-face)
+    '("\\\\\\s-*\".*?\"" . font-lock-string-face)))
+
+(defconst julia-block-start-keywords
+  (list "if" "while" "for" "begin" "try" "type" "function"))
+
+(defconst julia-block-other-keywords
+  (list "else" "elseif"))
+
+(defun member (item lst)
+  (if (null lst)
+      nil
+    (or (equal item (car lst))
+	(member item (cdr lst)))))
+
+; get the column of the last open block
+(defun last-open-block (min count)
+  (cond ((> count 0) (+ 4 (current-indentation)))
+        ((<= (point) min) nil)
+        (t (backward-word 1)
+           (cond ((member (current-word) julia-block-start-keywords)
+                  (last-open-block min (+ count 1)))
+                 ((equal (current-word) "end")
+                  (last-open-block min (- count 1)))
+                 (t (last-open-block min count))))))
+
+; return indent implied by a special form opening on the previous line, if any
+(defun form-indent ()
+  (forward-line -1)
+  (end-of-line)
+  (backward-sexp)
+  (if (member (current-word) julia-block-other-keywords)
+      (+ 4 (current-indentation))
+    (if (char-equal (char-after (point)) ?\()
+        (progn
+          (backward-word 1)
+          (let ((cur (current-indentation))
+                (cw (current-word)))
+            (if (member cw julia-block-start-keywords)
+                (+ 4 cur)
+              nil)))
+      nil)))
+
+;(defun far-back ()
+;  (max (point-min) (- (point) 2000)))
+
+(defmacro error2nil (body) `(condition-case nil ,body (error nil)))
+
+(defun paren-indent ()
+  (let* ((p (parse-partial-sexp (point-min) (progn (beginning-of-line)
+                                                   (point))))
+         (pos (cadr p)))
+    (if (or (= 0 (car p)) (null pos))
+        nil
+      (progn (goto-char pos) (+ 1 (current-column))))))
+;  (forward-line -1)
+;  (end-of-line)
+;  (let ((pos (condition-case nil
+;                (scan-lists (point) -1 1)
+;              (error nil))))
+;   (if pos
+;       (progn (goto-char pos) (+ 1 (current-column)))
+;     nil)))
+
+(defun julia-indent-line ()
+  "Indent current line of julia code"
+  (interactive)
+;  (save-excursion
+    (end-of-line)
+    (indent-line-to
+     (or (save-excursion (error2nil (form-indent)))
+         (save-excursion (error2nil (paren-indent)))
+         (save-excursion
+           (let ((endtok (progn
+                           (beginning-of-line)
+                           (forward-to-indentation 0)
+                           (equal (current-word) "end"))))
+             (error2nil (+ (last-open-block (point-min) 0)
+                           (if endtok -4 0)))))
+; take same indentation as previous line
+;      (save-excursion (beginning-of-line)
+;                      (forward-line -1)
+;                      (forward-to-indentation 0)
+;                      (current-column))
+		 (save-excursion
+		   (if (and (not (equal (point-min) (line-beginning-position)))
+					(progn
+					  (forward-line -1)
+					  (end-of-line) (backward-char 1)
+					  (equal (char-after (point)) ?=)))
+			   4 nil))
+         0))
+	(when (equal (current-word) "end") (forward-word 1)))
+
+(defun julia-mode ()
+  "Major mode for editing julia code"
+  (interactive)
+  (kill-all-local-variables)
+  (set-syntax-table julia-mode-syntax-table)
+  (set (make-local-variable 'font-lock-defaults) '(julia-font-lock-keywords))
+;  (set (make-local-variable 'font-lock-syntactic-keywords)
+;      (list
+;       (list "\\(\\\\\\)\\s-*\".*?\"" 1 julia-mode-char-syntax-table)))
+  (set (make-local-variable 'font-lock-syntactic-keywords)
+       (list
+        (list "\\(\"\\(.\\|\\s-\\)*?[^\\\\]\"\\|\"\"\\)" 0
+              julia-mode-string-syntax-table)))
+  (set (make-local-variable 'indent-line-function) 'julia-indent-line)
+  (setq indent-tabs-mode nil)
+  (setq major-mode 'julia-mode)
+  (setq mode-name "julia")
+  (run-hooks 'julia-mode-hook))
+
+(provide 'julia-mode)
