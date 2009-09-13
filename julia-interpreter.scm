@@ -56,6 +56,9 @@
 	 Type-type)
 	((eq? v julia-null)
 	 julia-null) ; again to avoid circular references
+	; for now, allow scheme symbols to act as julia symbols
+	((symbol? v)
+	 symbol-type)
 	((eq? (vector-ref v 0) 'tuple)
 	 (let ((tt (make-type 'tuple any-type
 			      (list->tuple
@@ -84,10 +87,10 @@
 (define size-type (make-type 'size any-type julia-null julia-null))
 
 (define symbol-type (make-type 'symbol any-type julia-null julia-null))
-(define buffer-type (make-type 'buffer any-type (julia-tuple 'T) julia-null))
-(define function-type (make-type 'function any-type julia-null
-				 (julia-tuple
-				  (julia-tuple 'methods any-type))))
+(define buffer-type (make-type 'buffer any-type (julia-tuple 'T)
+			       (julia-tuple
+				(julia-tuple 'length size-type)
+				(julia-tuple 'data any-type))))
 
 (table-set! julia-types 'any any-type)
 (table-set! julia-types 'boolean boolean-type)
@@ -106,7 +109,6 @@
 
 (table-set! julia-types 'symbol symbol-type)
 (table-set! julia-types 'buffer buffer-type)
-(table-set! julia-types 'function function-type)
 
 ; --- singleton true and false values ---
 
@@ -186,7 +188,9 @@
 		    (pp (type-params-list parent))
 		    (env '()))
 	   (cond ((null? cp) (if (null? pp) (if (null? env) #t env) #f))
-		 ((null? pp) #f)
+		 ; make longer tuples subtypes of shorter tuples,
+		 ; so (a,b) = (c,d,e) is valid (dropping values)
+		 ((null? pp) (eq? (type-name parent) 'tuple))
 		 ((symbol? (car pp))
 		  (let ((u (assq (car pp) env)))
 		    (if u
@@ -213,29 +217,32 @@
 
 (define (type-ex-name t)
   (cond ((symbol? t) t)
-	((eq? (car t) 'type) (cadr t))
-	((eq? (car t) 'call) (cadr t))
+	((eq? (car t) 'tuple) 'tuple)
+	((eq? (car t) 'call)  (cadr t))
 	(else (error "Invalid type expression" t))))
 (define (type-ex-params t)
   (cond ((symbol? t) '())
-	((eq? (car t) 'type) (cddr t))
-	((eq? (car t) 'call) (cddr t))
+	((eq? (car t) 'tuple) (cdr t))
+	((eq? (car t) 'call)  (cddr t))
 	(else (error "Invalid type expression" t))))
 
-; handles form (type name . params), giving a type object
+; handles form (typename name . params), giving a type object
 (define (resolve-type name params . nested?)
+  (define (resolve-params p)
+    (map (lambda (t)
+	   (resolve-type (type-ex-name t)
+			 (type-ex-params t) #t))
+	 p))
   (cond ((or (eq? name 'tuple) (eq? name 'union))
 	 (make-type name any-type
-		    (list->tuple
-		     (map (lambda (t)
-			    (resolve-type (type-ex-name t)
-					  (type-ex-params t) #t))
-			  params))
+		    (list->tuple (resolve-params params))
 		    julia-null))
 	#;((assq name type-env) => (lambda (x)
 				   (instantiate-type (cdr x) params)))
 	((table-ref julia-types name #f) => (lambda (x)
-					      (instantiate-type x params)))
+					      (instantiate-type
+					       x
+					       (resolve-params params))))
 	((pair? nested?) name)
 	(else
 	 (error "Unknown type" name))))
@@ -332,38 +339,55 @@
 	      (loop (+ i 1) L))
 	  (error "Type" (type-name (type-of obj)) "has no field" fld)))))
 
+(define (to-symbol x)
+  (if (symbol? x) x
+      (if (not (eq? (type-of x) symbol-type))
+	  (error "Expected symbol")
+	  (vector-ref x 1))))
+
 (define (j-get-field obj fld)
-  (vector-ref obj (field-offset obj fld)))
+  (vector-ref obj (field-offset obj (to-symbol fld))))
 
 (define (j-set-field obj fld v)
   ; TODO: type check
-  (vector-set! obj (field-offset obj fld) v))
+  (vector-set! obj (field-offset obj (to-symbol fld)) v))
 
 (define (j-ref v i) (vector-ref v (+ i 1)))
 
 (define (j-set v i rhs) (vector-set! v (+ i 1) rhs))
 
-(define (j-buffer-length v) (- (vector-length v) 1))
+(define (j-buffer-length v) (j-unbox (j-get-field v 'length)))
+
+(define (j-buffer-ref v i)
+  (vector-ref (j-get-field v 'data) i))
+
+(define (j-buffer-set v i rhs)
+  ; TODO: type check/convert
+  (vector-set! (j-get-field v 'data) i (j-unbox rhs)))
 
 (define (j-not x) (if (eq? x julia-false) julia-true julia-false))
 
 (define (j-new type args)
-  (let* ((L (if (memq (type-name type) '(tuple buffer))
+  (let* ((tn (type-name type))
+	 (L (if (eq? tn 'tuple)
 		(length args)
 		(tuple-length (type-fields type))))
 	 (v (make-vector (+ 1 L))))
     (vector-set! v 0 type)
-    (let loop ((i 0)
-	       (args args))
-      (if (< i L)
-	  (if (null? args)
-	      (error "Too few arguments to type constructor" (type-name type))
-	      (begin (vector-set! v (+ 1 i) (car args))
-		     (loop (+ i 1) (cdr args))))
-	  (if (pair? args)
-	      (error "Too many arguments to type constructor"
-		     (type-name type))
-	      v)))))
+    (if (eq? tn 'buffer)
+	(begin (j-set-field v 'length (car args))
+	       (j-set-field v 'data (make-vector (j-unbox (car args)) 0))
+	       v)
+	(let loop ((i 0)
+		   (args args))
+	  (if (< i L)
+	      (if (null? args)
+		  (error "Too few arguments to type constructor" tn)
+		  (begin (vector-set! v (+ 1 i) (car args))
+			 (loop (+ i 1) (cdr args))))
+	      (if (pair? args)
+		  (error "Too many arguments to type constructor" tn)
+		  v))))))
 
 (define (j-typeof x) (type-of x))
 
@@ -377,10 +401,9 @@
 
 (make-builtin 'getfield j-get-field)
 (make-builtin 'setfield j-set-field)
-(make-builtin 'refany j-ref)
+(make-builtin 'bufferref j-buffer-ref)
 (make-builtin 'tupleref j-ref)
-(make-builtin 'setany j-set)
-(make-builtin 'bufferlength j-buffer-length)
+(make-builtin 'bufferset j-buffer-set)
 (make-builtin 'not j-not)
 (make-builtin 'typeof j-typeof)
 (make-builtin 'is j-is)
@@ -431,7 +454,7 @@
 
 (define (scm->julia x)
   (if (symbol? x)
-      (vector 'symbol x)
+      (vector symbol-type x)
       x))
 
 (define (eval-sym s env)
@@ -525,6 +548,8 @@
 	   ((local)
 	    (set! env (cons (cons (cadr e) julia-null) env)))
 	   ((=)
+	    (if (not (symbol? (cadr e)))
+		(error "Invalid lvalue in ="))
 	    (let ((v (j-eval (caddr e) env))
 		  (a (assq (cadr e) env)))
 	      (if a (set-cdr! a v)
@@ -595,18 +620,24 @@
 (define (julia-print x)
   (cond
    ((not (vector? x))  (display x))
-   ((or (eq? (vector-ref x 0) 'closure)
-	(eq? (vector-ref x 0) 'function)
-	(eq? (vector-ref x 0) 'symbol))
+   ((eq? (vector-ref x 0) 'closure)
     (display x))
+   ((eq? (vector-ref x 0) 'generic-function)
+    (display "#<generic-function ")
+    (display (vector-ref x 2))
+    (display ">"))
+   ((number? (vector-ref x 0))
+    (display "#<primitive-buffer ")
+    (display x)
+    (display ">"))    
    ((or (eq? (vector-ref x 0) 'tuple)
 	(eq? (type-name (type-of x)) 'tuple))
     (print-tuple x))
    ((eq? (type-name (type-of x)) 'buffer)
     (display "buffer(")
-    (display (tuple-ref (type-params (type-of x)) 0))
+    (display (type-name (tuple-ref (type-params (type-of x)) 0)))
     (display "):")
-    (print-tuple x))
+    (display (j-get-field x 'data)))
    (else
     (let* ((t (type-of x))
 	   (tn (type-name t)))
@@ -615,6 +646,7 @@
 	((boolean) (if (eq? x julia-false)
 		       (display "false")
 		       (display "true")))
+	((symbol) (display (vector-ref x 1)))
 	(else
 	 (let ((fields (type-fields t))
 	       (vals (cdr (vector->list x))))
@@ -631,6 +663,8 @@
 			(loop L (+ i 1)))
 		 (display ")"))))))))))
 
+(make-builtin '_print julia-print)
+
 (define (julia-repl)
   (display "julia> ")
   (let ((line (read-line)))
@@ -639,6 +673,7 @@
 	(begin 
 	  (with-exception-catcher
 	   (lambda (e)
+	     (raise e)
 	     (display (error-exception-message e))
 	     (for-each (lambda (x)
 			 (display " ") (display x))

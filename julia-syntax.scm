@@ -38,6 +38,15 @@
 		   `(lambda ,(formal-arg-names a)
 		      ,b))
 
+   (pattern-lambda (|.| a b)
+		   `(call getfield ,a (quote ,b)))
+
+   (pattern-lambda (= (|.| a b) rhs)
+		   `(call setfield ,a (quote ,b) ,rhs))
+
+   (pattern-lambda (= (call (-/ ref) a (-- idxs ...)) rhs)
+		   `(call set ,a ,@idxs ,rhs))
+
    (pattern-lambda (function (call name (-- argl ...)) body)
 		   `(= ,name
 		       (addmethod ,name
