@@ -331,7 +331,10 @@ TODO:
 	     (loop (list* ex       (parse-arglist s #\) )))
 	     (loop (list* 'call ex (parse-arglist s #\) )))))
 	((#\[ )   (take-token s)
-	 (loop (list* 'call 'ref  ex (parse-arglist s #\] ))))
+	 ; ref is syntax, so we can distinguish
+	 ; a[i] = x  from
+	 ; ref(a,i) = x  which is invalid
+	 (loop (list* 'ref  ex (parse-arglist s #\] ))))
 	(else ex))))
   
   (let* ((do-kw? (not (eqv? (peek-token s) #\`)))

@@ -44,8 +44,11 @@
    (pattern-lambda (= (|.| a b) rhs)
 		   `(call setfield ,a (quote ,b) ,rhs))
 
-   (pattern-lambda (= (call (-/ ref) a (-- idxs ...)) rhs)
+   (pattern-lambda (= (ref a (-- idxs ...)) rhs)
 		   `(call set ,a ,@idxs ,rhs))
+
+   (pattern-lambda (ref a (-- idxs ...))
+		   `(call ref ,a ,@idxs))
 
    (pattern-lambda (function (call name (-- argl ...)) body)
 		   `(= ,name

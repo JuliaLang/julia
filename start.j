@@ -10,7 +10,7 @@ function print(x:any)
     return ()
 end
 
-function ref(t:tuple, i:int32)
+function ref(t:Tuple, i:int32)
     return tupleref(t, unbox(i))
 end
 

@@ -27,17 +27,22 @@
 ; in any-type and Type-type we take pains to avoid circular references
 ; because gambit can't deal with them well, so there are symbols where
 ; type objects should go.
-(define any-type (vector 'Type 'any 'any julia-null julia-null))
+(define any-type (vector 'Type 'any 'any julia-null julia-null #t))
 
 (define Type-type (vector 'Type 'Type any-type julia-null
 			  (julia-tuple
 			   (julia-tuple 'name 'symbol)
 			   (julia-tuple 'super 'Type)
 			   (julia-tuple 'parameters 'tuple)
-			   (julia-tuple 'fields 'tuple))))
+			   (julia-tuple 'fields 'tuple)
+			   (julia-tuple 'abstract 'boolean))
+			  #f))
 
 (define (make-type name super params fields)
-  (vector Type-type name super params fields))
+  (vector Type-type name super params fields #f))
+
+(define (make-abstract-type name super params fields)
+  (vector Type-type name super params fields #t))
 
 (define (type-name t) (vector-ref t 1))
 (define (type-super t)
@@ -47,6 +52,9 @@
 (define (type-params t) (vector-ref t 3))
 (define (type-params-list t) (tuple->list (type-params t)))
 (define (type-fields t) (vector-ref t 4))
+
+(define tuple-type (make-abstract-type 'Tuple any-type julia-null julia-null))
+(table-set! julia-types 'Tuple tuple-type)
 
 ; get the type of a value
 (define (type-of v)
@@ -60,7 +68,7 @@
 	((symbol? v)
 	 symbol-type)
 	((eq? (vector-ref v 0) 'tuple)
-	 (let ((tt (make-type 'tuple any-type
+	 (let ((tt (make-type 'tuple tuple-type
 			      (list->tuple
 			       (map type-of (tuple->list v)))
 			      julia-null)))
@@ -150,6 +158,10 @@
   (and (type? t)
        (any symbol? (type-params-list t))))
 
+(define (type-abstract? t)
+  (or (vector-ref t 5)
+      (type-generic? t)))
+
 (define (type-equal? a b)
   (and (subtype? a b)
        (subtype? b a)))
@@ -233,10 +245,14 @@
 	   (resolve-type (type-ex-name t)
 			 (type-ex-params t) #t))
 	 p))
-  (cond ((or (eq? name 'tuple) (eq? name 'union))
-	 (make-type name any-type
+  (cond ((eq? name 'tuple)
+	 (make-type name tuple-type
 		    (list->tuple (resolve-params params))
 		    julia-null))
+	((eq? name 'union)
+	 (make-abstract-type name any-type
+			     (list->tuple (resolve-params params))
+			     julia-null))
 	#;((assq name type-env) => (lambda (x)
 				   (instantiate-type (cdr x) params)))
 	((table-ref julia-types name #f) => (lambda (x)
@@ -352,9 +368,7 @@
   ; TODO: type check
   (vector-set! obj (field-offset obj (to-symbol fld)) v))
 
-(define (j-ref v i) (vector-ref v (+ i 1)))
-
-(define (j-set v i rhs) (vector-set! v (+ i 1) rhs))
+(define (j-tupleref v i) (vector-ref v (+ i 1)))
 
 (define (j-buffer-length v) (j-unbox (j-get-field v 'length)))
 
@@ -368,6 +382,8 @@
 (define (j-not x) (if (eq? x julia-false) julia-true julia-false))
 
 (define (j-new type args)
+  (if (type-abstract? type)
+      (error "Cannot instantiate abstract type" (type-name type)))
   (let* ((tn (type-name type))
 	 (L (if (eq? tn 'tuple)
 		(length args)
@@ -402,7 +418,8 @@
 (make-builtin 'getfield j-get-field)
 (make-builtin 'setfield j-set-field)
 (make-builtin 'bufferref j-buffer-ref)
-(make-builtin 'tupleref j-ref)
+(make-builtin 'tupleref j-tupleref)
+(make-builtin 'tuplelen tuple-length)
 (make-builtin 'bufferset j-buffer-set)
 (make-builtin 'not j-not)
 (make-builtin 'typeof j-typeof)
@@ -673,7 +690,7 @@
 	(begin 
 	  (with-exception-catcher
 	   (lambda (e)
-	     (raise e)
+	     ;(raise e)
 	     (display (error-exception-message e))
 	     (for-each (lambda (x)
 			 (display " ") (display x))

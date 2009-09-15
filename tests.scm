@@ -10,9 +10,9 @@
 (tst "1:2:3:4" (: (: 1 2 3) 4))
 (tst "1+2*3^-4-10" (call - (call + 1 (call * 2 (call ^ 3 (call - 4)))) 10))
 (tst "b = [[2]].^2" (= b (call .^ (cat (cat 2)) 2)))
-(tst "f(x+1)[i*2]-1" (call - (call ref (call f (call + x 1)) (call * i 2)) 1))
-(tst "A[i^2] = b'" (= (call ref A (call ^ i 2)) (call ctranspose b)))
-(tst "A[i^2].==b'" (call .== (call ref A (call ^ i 2)) (call ctranspose b)))
+(tst "f(x+1)[i*2]-1" (call - (ref (call f (call + x 1)) (call * i 2)) 1))
+(tst "A[i^2] = b'" (= (ref A (call ^ i 2)) (call ctranspose b)))
+(tst "A[i^2].==b'" (call .== (ref A (call ^ i 2)) (call ctranspose b)))
 (tst "{f(x),g(x)}" (list (call f x) (call g x)))
 (tst "a::b.c" (|.| (|::| a b) c))
 
