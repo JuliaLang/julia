@@ -47,3 +47,17 @@ function `<=`(x:int32, y:int32)
     return lt_int32(unbox(x),unbox(y)) || eq_int32(unbox(x),unbox(y))
 end
 
+function `<`(x:int32, y:int32)
+    return lt_int32(unbox(x),unbox(y))
+end
+
+function `==`(x:int32, y:int32)
+    return eq_int32(unbox(x),unbox(y))
+end
+
+function fib(n)
+    if n < 2
+        return n
+    end
+    return fib(n-1) + fib(n-2)
+end

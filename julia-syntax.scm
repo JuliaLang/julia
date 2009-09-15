@@ -59,9 +59,9 @@
 				  (lambda ,(formal-arg-names argl)
 				    ,body))))
 
-   (pattern-lambda (while cond body)
+   (pattern-lambda (while cnd body)
 		   `(break-block loop-exit
-				 (_while ,cond
+				 (_while ,cnd
 					 (break-block loop-cont
 						      ,body))))
 
@@ -94,6 +94,8 @@
 				  (break-block loop-cont
 					       ,body)
 				  (= ,var (call + 1 ,var)))))))))
+
+   (pattern-lambda (call (-/ Time) expr) `(time ,expr))
 
    ))
 

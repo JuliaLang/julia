@@ -128,21 +128,6 @@
 
 (define (match p expr) (match- p expr (list (cons '__ expr))))
 
-; given a pattern p, return the list of capturing variables it uses
-(define (patargs- p)
-  (cond ((and (symbol? p)
-              (not (member p metasymbols)))
-         (list p))
-        
-        ((pair? p)
-         (if (eq? (car p) '-/)
-             '()
-	     (unique (apply append (map patargs- (cdr p))))))
-        
-        (else '())))
-(define (patargs p)
-  (cons '__ (patargs- p)))
-
 ; try to transform expr using a pattern-lambda from plist
 ; returns the new expression, or expr if no matches
 (define (apply-patterns plist expr)
@@ -179,6 +164,37 @@
 	    (pattern-expand plist enew)))))
 
 (define-macro (pattern-lambda pat body)
+  ; for some moronic reason gsc fails unless this code is pasted here
+  (define (filter pred lis)
+    (let recur ((lis lis))
+      (if (null? lis) lis
+	  (let ((head (car lis))
+		(tail (cdr lis)))
+	    (if (pred head)
+		(let ((new-tail (recur tail)))
+		  (if (eq? tail new-tail) lis
+		      (cons head new-tail)))
+		(recur tail))))))
+  (define (unique lst)
+    (if (null? lst)
+	'()
+	(cons (car lst)
+	      (filter (lambda (x) (not (eq? x (car lst))))
+		      (unique (cdr lst))))))
+  ; given a pattern p, return the list of capturing variables it uses
+  (define (patargs- p)
+    (cond ((and (symbol? p)
+		(not (memq p '(_ ...))))
+	   (list p))
+	  
+	  ((pair? p)
+	   (if (eq? (car p) '-/)
+	       '()
+	       (unique (apply append (map patargs- (cdr p))))))
+	  
+	  (else '())))
+  (define (patargs p)
+    (cons '__ (patargs- p)))
   (let* ((args (patargs pat))
          (expander `(lambda ,args ,body)))
     `(lambda (expr)

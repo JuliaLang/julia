@@ -557,6 +557,7 @@ TODO:
 			      (lambda ()
 				(j-eval (caddr e) env)))))
 	   ((break)  (raise (cdr e)))
+	   ((time)   (time (j-eval (cadr e) env)))
 
 	   ((type)
 	    (type-def (cadr e) (caddr e)))
@@ -606,7 +607,7 @@ TODO:
 			  (eq? (vector-ref f 0) 'closure))
 		     (j-apply-closure f args))
 		    (else
-		     (assert (generic-function? f))
+		     ;(assert (generic-function? f))
 		     (j-apply-generic f args)))))
 	   (else
 	    (error "Unhandled tree type" (car e)))))))

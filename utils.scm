@@ -41,7 +41,7 @@
 		    (unique (cdr lst))))))
 
 (define (every pred lst)
-  (or (atom? lst)
+  (or (null? lst)
       (and (pred (car lst))
            (every pred (cdr lst)))))
 
