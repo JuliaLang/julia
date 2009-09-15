@@ -26,3 +26,24 @@ end
 function `+`(x:int32, y:int32)
     return box(typename(int32), add_int32(unbox(x), unbox(y)))
 end
+
+function `-`(x:int32, y:int32)
+    return box(typename(int32), sub_int32(unbox(x), unbox(y)))
+end
+
+function `-`(x:int32)
+    return box(typename(int32), neg_int32(unbox(x)))
+end
+
+function `*`(x:int32, y:int32)
+    return box(typename(int32), mul_int32(unbox(x), unbox(y)))
+end
+
+function `/`(x:int32, y:int32)
+    return box(typename(int32), div_int32(unbox(x), unbox(y)))
+end
+
+function `<=`(x:int32, y:int32)
+    return lt_int32(unbox(x),unbox(y)) || eq_int32(unbox(x),unbox(y))
+end
+

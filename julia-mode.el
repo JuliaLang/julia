@@ -46,7 +46,7 @@
           'identity
           '("if" "else" "elseif" "while" "for" "begin" "end" "block"
             "try" "return" "local" "type" "function" "new" "quote" "typename"
-	    "typealias")
+	    "typealias" "break" "continue")
           "\\|") "\\)\\>")
      'font-lock-keyword-face)
     '("\\\\\\s-*\".*?\"" . font-lock-string-face)))

@@ -452,6 +452,10 @@ TODO:
 	  ((eq? t 'return)
 	   (take-token s)
 	   (list 'return (parse-eq s)))
+
+	  ((or (eq? t 'break) (eq? t 'continue))
+	   (list (take-token s)))
+
 	  ; TODO: prefix keywords, various quoting/escaping
 
 	  (else (take-token s)))))

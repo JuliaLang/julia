@@ -86,9 +86,10 @@
                          L))
    ; case 2: must match at least 1
    ((> min 0)
-    (and (match- p (car expr) state)
-         (match-star- p prest (cdr expr) state var (- min 1) (- max 1) (- L 1)
-                      (cons (car expr) sofar))))
+    (let ((subma (match- p (car expr) state)))
+      (and subma
+	   (match-star- p prest (cdr expr) subma var (- min 1) (- max 1) (- L 1)
+			(cons (car expr) sofar)))))
    ; otherwise, must match either 0 or between 1 and max subexpressions
    (else
     (or (match-star- p prest expr state var 0 0   L sofar)

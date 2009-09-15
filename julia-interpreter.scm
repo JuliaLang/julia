@@ -1,3 +1,16 @@
+#|
+TODO:
+- local variable identification pass
+- varargs and keywords
+- apply, splat
+- type builder like maketype(...)
+- try/catch
+- more builtin functions (shifts, bitwise ops, conversions, primitive i/o)
+- quote, expr, and symbol types, user-level macros
+- more type checks
+- modules
+|#
+
 (define julia-types (make-table))
 (define julia-globals (make-table))
 
@@ -505,10 +518,11 @@
 			    (if (pair? (cdddr e))
 				(j-eval (cadddr e) env)
 				julia-false))))
-	   ((while)   (let loop ((v julia-false))
-			(if (not (eq? (j-eval (cadr e) env) julia-false))
-			    (loop (j-eval (caddr e) env))
-			    v)))
+	   ((_while)   (let loop ()
+			 (if (not (eq? (j-eval (cadr e) env) julia-false))
+			     (begin (j-eval (caddr e) env)
+				    (loop)))
+			 julia-null))
 	   ((return)  (raise `(julia-return ,(if (pair? (cdr e))
 						 (j-eval (cadr e) env)
 						 julia-null))))
@@ -533,6 +547,16 @@
 			    (if (null? (cdr x))
 				(j-eval (car x) env)
 				(loop (j-eval (car x) env) (cdr x))))))
+	   ((break-block)  (let ((bname (cadr e)))
+			     (with-exception-catcher
+			      (lambda (e)
+				(if (and (pair? e)
+					 (eq? (car e) bname))
+				    julia-null
+				    (raise e)))
+			      (lambda ()
+				(j-eval (caddr e) env)))))
+	   ((break)  (raise (cdr e)))
 
 	   ((type)
 	    (type-def (cadr e) (caddr e)))

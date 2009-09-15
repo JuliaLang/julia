@@ -1,10 +1,12 @@
 ; first passes:
-; - expand lvalues, e.g. (= (call ref A i) x) => (= A (call assign A i x))
+; * expand lvalues, e.g. (= (call ref A i) x) => (= A (call assign A i x))
 ; - expand operators like +=
 ; - identify type name contexts and sort out ranges from declarations
 ; - expand for into while
-; - expand -> and function into lambda/addmethod
-; - replace (. a b) with (call get a (quote b))
+; * expand -> and function into lambda/addmethod
+; * replace (. a b) with (call get a (quote b))
+; - cat
+; - tuple destructuring
 
 (define (formal-arg-names arglist)
   (if (pair? arglist)
@@ -56,6 +58,43 @@
 				  ,(formal-arg-types argl)
 				  (lambda ,(formal-arg-names argl)
 				    ,body))))
+
+   (pattern-lambda (while cond body)
+		   `(break-block loop-exit
+				 (_while ,cond
+					 (break-block loop-cont
+						      ,body))))
+
+   (pattern-lambda (break) '(break loop-exit))
+   (pattern-lambda (continue) '(break loop-cont))
+
+   (pattern-lambda
+    (for (= var (: a b (-? c))) body)
+    (begin
+      (if (not (symbol? var))
+	  (error "Invalid for loop syntax: expected symbol"))
+      (if c
+	  (let ((cnt (gensym))
+		(lim (gensym)))
+	    `(block
+	      (= ,cnt 0)
+	      (= ,lim (call / (call - ,c ,a) ,b))
+	      (break-block loop-exit
+			   (_while (call <= ,cnt ,lim)
+				   (block
+				    (= ,var (call + ,a (call * ,cnt ,b)))
+				    (break-block loop-cont
+						 ,body)
+				    (= ,cnt (call + 1 ,cnt)))))))
+	  `(block
+	    (= ,var ,a)
+	    (break-block loop-exit
+			 (_while (call <= ,var ,b)
+				 (block
+				  (break-block loop-cont
+					       ,body)
+				  (= ,var (call + 1 ,var)))))))))
+
    ))
 
 (define (julia-expand ex)
