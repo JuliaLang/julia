@@ -289,7 +289,7 @@ TODO:
 		       (resolve-type-ex (caddr fld)))
 		     (cdr fields))))
     (let ((T
-	   (make-type tname any-type tpara
+	   (make-type tname any-type (list->tuple tpara)
 		      (list->tuple
 		       (map list->tuple
 			    (map list fnames ftypes))))))

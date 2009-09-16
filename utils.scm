@@ -1,5 +1,5 @@
 (define (delete-duplicates lst)
-  (if (null? lst)
+  (if (not (pair? lst))
       lst
       (let ((elt  (car lst))
 	    (tail (cdr lst)))
@@ -24,7 +24,7 @@
 
 (define (filter pred lis)
   (let recur ((lis lis))
-    (if (null? lis) lis
+    (if (not (pair? lis)) lis
 	(let ((head (car lis))
 	      (tail (cdr lis)))
 	  (if (pred head)
@@ -41,7 +41,7 @@
 		    (unique (cdr lst))))))
 
 (define (every pred lst)
-  (or (null? lst)
+  (or (not (pair? lst))
       (and (pred (car lst))
            (every pred (cdr lst)))))
 
