@@ -1,9 +1,3 @@
-type Array(a)
-    dims: buffer(size)
-    strides: buffer(size)
-    data: buffer(a)
-end
-
 function print(x:any)
     # default print function, call builtin
     _print(x)
@@ -53,11 +47,4 @@ end
 
 function `==`(x:int32, y:int32)
     return eq_int32(unbox(x),unbox(y))
-end
-
-function fib(n)
-    if n < 2
-        return n
-    end
-    return fib(n-1) + fib(n-2)
 end

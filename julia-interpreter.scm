@@ -708,6 +708,10 @@ TODO:
 (make-builtin '_print julia-print)
 
 (define (julia-repl)
+  (j-load "start.j")
+  (j-load "array.j")
+  (j-load "examples.j")
+
   (display "julia> ")
   (let ((line (read-line)))
     (if (eof-object? line)
