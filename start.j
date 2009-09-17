@@ -21,6 +21,10 @@ function `+`(x:int32, y:int32)
     return box(typename(int32), add_int32(unbox(x), unbox(y)))
 end
 
+function `+`(x:double, y:double)
+    return box(typename(double), add_double(unbox(x), unbox(y)))
+end
+
 function `-`(x:int32, y:int32)
     return box(typename(int32), sub_int32(unbox(x), unbox(y)))
 end
