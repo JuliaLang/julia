@@ -31,7 +31,7 @@ function `+`(x:Array(t), y:Array(t))
     numel = x.data.length
     b = make_array(numel)
     for i=1:numel
-        b.data[i] = x.data[i] + y.data[i];
+        b[i] = x[i] + y[i]
     end
     return b
 end
