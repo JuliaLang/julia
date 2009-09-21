@@ -23,6 +23,10 @@ TODO:
 
 (define (tuple->list t) (cdr (vector->list t)))
 (define (list->tuple l) (apply julia-tuple l))
+(define (tuples->alist t)
+  (map tuple->list (tuple->list t)))
+(define (alist->tuples l)
+  (list->tuple (map list->tuple l)))
 
 (define (tuple-append t1 t2)
   (list->tuple (append (tuple->list t1)
@@ -66,9 +70,6 @@ TODO:
 (define (type-params-list t) (tuple->list (type-params t)))
 (define (type-fields t) (vector-ref t 4))
 
-(define tuple-type (make-abstract-type 'Tuple any-type julia-null julia-null))
-(table-set! julia-types 'Tuple tuple-type)
-
 ; get the type of a value
 (define (type-of v)
   (cond ((eq? v Type-type)
@@ -94,18 +95,185 @@ TODO:
 
 ; --- define primitive types ---
 
-(define boolean-type (make-type 'boolean any-type julia-null julia-null))
-(define int8-type (make-type 'int8 any-type julia-null julia-null))
-(define uint8-type (make-type 'uint8 any-type julia-null julia-null))
-(define int16-type (make-type 'int16 any-type julia-null julia-null))
-(define uint16-type (make-type 'uint16 any-type julia-null julia-null))
-(define int32-type (make-type 'int32 any-type julia-null julia-null))
-(define uint32-type (make-type 'uint32 any-type julia-null julia-null))
-(define int64-type (make-type 'int64 any-type julia-null julia-null))
-(define uint64-type (make-type 'uint64 any-type julia-null julia-null))
-(define float-type (make-type 'float any-type julia-null julia-null))
-(define double-type (make-type 'double any-type julia-null julia-null))
-(define size-type (make-type 'size any-type julia-null julia-null))
+(define tuple-type (make-abstract-type 'Tuple any-type julia-null julia-null))
+(table-set! julia-types 'Tuple tuple-type)
+
+(define bottom-type (make-abstract-type 'bottom '* julia-null julia-null))
+(table-set! julia-types 'bottom bottom-type)
+
+(define Tensor-type (make-abstract-type 'Tensor any-type
+					(julia-tuple 'T 'n)
+					julia-null))
+(table-set! julia-types 'Tensor Tensor-type)
+
+; --- type functions ---
+
+(define (instantiate-type type params)
+  (define (copy-type type super params fields)
+    (if (vector-ref type 5)
+	(make-abstract-type (type-name type)
+			    super
+			    params fields)
+	(make-type (type-name type)
+		   super
+		   params fields)))
+  
+  ; create parameter list for the instantiated type
+  ; tp - parameters of the incoming type
+  ; sp - type template arguments ('params' argument)
+  ; this fills in values from sp into slots in tp that are currently
+  ; open (i.e. are symbols). concrete types already in tp are left
+  ; in place. this allows partial specialization, for example:
+  ; type foo(x,y,z,t) end
+  ; typealias bar foo(int,y,int,t)
+  ; bar(double,double)  fills in remaining y and t parameters
+  (define (new-params-list tp sp)
+    (cond ((null? tp)
+	   (if (null? sp) tp
+	       (error "Too many parameters for type" (type-name type))))
+	  ((symbol? (car tp))
+	   (if (null? sp)
+	       (error "Too few parameters for type" (type-name type)))
+	   (cons (car sp) (new-params-list (cdr tp) (cdr sp))))
+	  (else
+	   (new-params-list (cdr tp) sp))))
+  
+  (let* ((tp  (type-params-list type))
+	 (ts  (filter symbol? tp)))
+    (cond ((null? params)
+	   type)
+	  (else
+	   (let* ((flds (tuples->alist (type-fields type)))
+		  (env  (map cons ts params))
+		  ; the following function fills in type parameters
+		  ; for field types and our super type, by supplying
+		  ; values that correspond to parameters with the same
+		  ; names as ours.
+		  (instantiate-inner-type
+		   (lambda (t)
+		     (instantiate-type
+		      t
+		      (map (lambda (p)
+			     (let ((u (assq p env)))
+			       (if u (cdr u) p)))
+			   (filter symbol?
+				   (type-params-list t)))))))
+	     (copy-type type
+			(instantiate-inner-type (type-super type))
+		      
+			(list->tuple (new-params-list tp params))
+		      
+			(let ((fnames (map car flds))
+			      (ftypes (map cadr flds)))
+			  ; replace type parameters with their values
+			  ; in the types of all fields
+			  (let ((mapped-ftypes
+				 (map instantiate-inner-type
+				      ftypes)))
+			    (alist->tuples
+			     (map list fnames mapped-ftypes))))))))))
+
+(define (type-generic? t)
+  (and (type? t)
+       (any symbol? (type-params-list t))))
+
+(define (type-abstract? t)
+  (or (vector-ref t 5)
+      (type-generic? t)))
+
+(define (type-equal? a b)
+  (and (subtype? a b)
+       (subtype? b a)))
+
+; tells whether child is assignable to parent
+; returns #t, #f, or an assoc list witness showing the assignment of
+; type parameters that makes the relation hold
+(define (subtype? child parent)
+  (cond ; see if the answer is obvious
+        ((eq? child parent)       #t)
+	((eq? parent any-type)    #t)
+	((eq? child any-type)     #f)
+	((eq? child bottom-type)  #t)
+	((eq? parent bottom-type) #f)
+
+	; see if the child is an instantiation of the parent
+	((eq? parent (table-ref julia-types (type-name child) (list)))
+	 (map cons (type-params-list parent) (type-params-list child)))
+
+	; recursively handle union types
+	((eq? (type-name child) 'union)
+	 (every (lambda (t) (subtype? t parent))
+		(type-params-list child)))
+	((eq? (type-name parent) 'union)
+	 (any   (lambda (t) (subtype? child t))
+	        (type-params-list parent)))
+
+	; handle tuple types, or any sibling instantiations of the same
+	; generic type. parameters must be consistent.
+        ; examples:
+        ; (a, a)  subtype  (b, c)  YES
+	; (a, b)  subtype  (c, c)  NO
+        ; (int8, int8)  subtype  (integer, integer)  YES
+        ; (a, a)  subtype  (int8, int8)  NO
+	((eq? (type-name child)
+	      (type-name parent))
+	 (let loop ((cp (type-params-list child))
+		    (pp (type-params-list parent))
+		    (env '()))
+	   (cond ((null? cp) (if (null? pp) (if (null? env) #t env) #f))
+		 ((null? pp) #f)
+		 ((symbol? (car pp))
+		  (let ((u (assq (car pp) env)))
+		    (if u
+			(and (or (eq? (cdr u)
+				      (car cp))
+				 (and (not (symbol? (car cp)))
+				      (type-equal? (car cp) (cdr u))))
+			     env)
+			(loop (cdr cp)
+			      (cdr pp)
+			      (cons (cons (car pp) (car cp)) env)))))
+		 ((symbol? (car cp)) #f)
+		 ((or (number? (car cp))
+		      (number? (car pp)))
+		  (if (eqv? (car cp) (car pp))
+		      env #f))
+		 ((subtype? (car cp) (car pp)) =>
+		  (lambda (w)
+		    (loop (cdr cp) (cdr pp) (if (pair? w)
+						(append w env)
+						env))))
+		 (else #f))))
+
+	; otherwise walk up the type hierarchy
+	(else (subtype? (type-super child) parent))))
+
+; --- define some key builtin types ---
+
+(define scalar-type (make-abstract-type
+		     'scalar
+		     (instantiate-type Tensor-type
+				       (list bottom-type 0))
+		     julia-null julia-null))
+(table-set! julia-types 'scalar scalar-type)
+
+(define real-type (make-abstract-type 'real scalar-type julia-null julia-null))
+(table-set! julia-types 'real real-type)
+(define int-type (make-abstract-type 'int real-type julia-null julia-null))
+(table-set! julia-types 'int int-type)
+
+(define boolean-type (make-type 'boolean scalar-type julia-null julia-null))
+(define int8-type (make-type 'int8 int-type julia-null julia-null))
+(define uint8-type (make-type 'uint8 int-type julia-null julia-null))
+(define int16-type (make-type 'int16 int-type julia-null julia-null))
+(define uint16-type (make-type 'uint16 int-type julia-null julia-null))
+(define int32-type (make-type 'int32 int-type julia-null julia-null))
+(define uint32-type (make-type 'uint32 int-type julia-null julia-null))
+(define int64-type (make-type 'int64 int-type julia-null julia-null))
+(define uint64-type (make-type 'uint64 int-type julia-null julia-null))
+(define size-type (make-type 'size int-type julia-null julia-null))
+(define float-type (make-type 'float real-type julia-null julia-null))
+(define double-type (make-type 'double real-type julia-null julia-null))
 
 (define symbol-type (make-type 'symbol any-type julia-null julia-null))
 (define buffer-type (make-type 'buffer any-type (julia-tuple 'T)
@@ -136,117 +304,15 @@ TODO:
 (define julia-true (vector boolean-type 1))
 (define julia-false (vector boolean-type 0))
 
-; --- type functions ---
-
-(define (instantiate-type type params)
-  (let ((tp  (type-params-list type)))
-    (cond ((not (= (length tp)
-		   (length params)))
-	   (error "Wrong number of parameters for type" (type-name type)))
-	  ((null? params)
-	   type)
-	  (else
-	   (make-type (type-name type)
-		      (type-super type)
-		      (list->tuple params)
-		      (let ((flds (map tuple->list
-				       (tuple->list (type-fields type))))
-			    (env  (map cons tp params)))
-			(let ((fnames (map car flds))
-			      (ftypes (map cadr flds)))
-			  (let ((mapped-ftypes
-				 (map (lambda (t)
-					(instantiate-type
-					 t
-					 (map (lambda (p)
-						(let ((u (assq p env)))
-						  (if u (cdr u) p)))
-					      (type-params-list t))))
-				      ftypes)))
-			    (list->tuple
-			     (map list->tuple
-				  (map list fnames mapped-ftypes)))))))))))
-
-(define (type-generic? t)
-  (and (type? t)
-       (any symbol? (type-params-list t))))
-
-(define (type-abstract? t)
-  (or (vector-ref t 5)
-      (type-generic? t)))
-
-(define (type-equal? a b)
-  (and (subtype? a b)
-       (subtype? b a)))
-
-; tells whether child is assignable to parent
-; returns #t, #f, or an assoc list witness showing the assignment of
-; type parameters that makes the relation hold
-(define (subtype? child parent)
-  (cond ; see if the answer is obvious
-        ((eq? child parent)    #t)
-	((eq? parent any-type) #t)
-	((eq? child any-type)  #f)
-
-	; see if the child is an instantiation of the parent
-	((eq? parent (table-ref julia-types (type-name child) (list)))
-	 (map cons (type-params-list parent) (type-params-list child)))
-
-	; recursively handle union types
-	((eq? (type-name child) 'union)
-	 (every (lambda (t) (subtype? t parent))
-		(type-params-list child)))
-	((eq? (type-name parent) 'union)
-	 (any   (lambda (t) (subtype? child t))
-	        (type-params-list parent)))
-
-	; handle tuple types, or any sibling instantiations of the same
-	; generic type. parameters must be consistent.
-        ; examples:
-        ; (a, a)  subtype  (b, c)  YES
-	; (a, b)  subtype  (c, c)  NO
-        ; (int8, int8)  subtype  (integer, integer)  YES
-        ; (a, a)  subtype  (int8, int8)  NO
-	((eq? (type-name child)
-	      (type-name parent))
-	 (let loop ((cp (type-params-list child))
-		    (pp (type-params-list parent))
-		    (env '()))
-	   (cond ((null? cp) (if (null? pp) (if (null? env) #t env) #f))
-		 ; make longer tuples subtypes of shorter tuples,
-		 ; so (a,b) = (c,d,e) is valid (dropping values)
-		 ((null? pp) (eq? (type-name parent) 'tuple))
-		 ((symbol? (car pp))
-		  (let ((u (assq (car pp) env)))
-		    (if u
-			(and (or (eq? (cdr u)
-				      (car cp))
-				 (and (not (symbol? (car cp)))
-				      (type-equal? (car cp) (cdr u))))
-			     env)
-			(loop (cdr cp)
-			      (cdr pp)
-			      (cons (cons (car pp) (car cp)) env)))))
-		 ((symbol? (car cp)) #f)
-		 ((subtype? (car cp) (car pp)) =>
-		  (lambda (w)
-		    (loop (cdr cp) (cdr pp) (if (pair? w)
-						(append w env)
-						env))))
-		 (else #f))))
-
-	; otherwise walk up the type hierarchy
-	(else (subtype? (type-super child) parent))))
-
 ; --- processing type-related syntax ---
 
 (define (type-ex-name t)
-  (cond ((symbol? t) t)
+  (cond ((not (pair? t)) t)
 	((eq? (car t) 'tuple) 'tuple)
 	((eq? (car t) 'call)  (cadr t))
 	(else (error "Invalid type expression" t))))
 (define (type-ex-params t)
-  (cond ((symbol? t) '())
+  (cond ((not (pair? t)) '())
 	((eq? (car t) 'tuple) (cdr t))
 	((eq? (car t) 'call)  (cddr t))
 	(else (error "Invalid type expression" t))))
@@ -280,7 +346,19 @@ TODO:
   (resolve-type (type-ex-name e)
 		(type-ex-params e)))
 
+; look for type < supertype
 (define (type-def signature fields)
+  (let ((parented?  (and (pair? signature) (eq? (car signature) 'call)
+			 (pair? (cdr signature)) (eq? (cadr signature) '<))))
+    (let ((sig (if parented?
+		   (caddr signature)
+		   signature))
+	  (super (if parented?
+		     (resolve-type-ex (cadddr signature))
+		     any-type)))
+      (type-def- sig fields super))))
+
+(define (type-def- signature fields super)
   (let ((tname (type-ex-name signature))
 	(tpara (type-ex-params signature))
 	; fields looks like (block (: n t) (: n t) ...)
@@ -289,14 +367,18 @@ TODO:
 		       (resolve-type-ex (caddr fld)))
 		     (cdr fields))))
     (let ((T
-	   (make-type tname any-type (list->tuple tpara)
-		      (list->tuple
-		       (map list->tuple
-			    (map list fnames ftypes))))))
+	   (make-type tname super (list->tuple tpara)
+		      ; TODO: check for duplicate fields
+		      (tuple-append
+		       (type-fields super)
+		       (alist->tuples
+			(map list fnames ftypes))))))
       (table-set! julia-types tname T)
       T)))
 
 (define (type-alias name type)
+  (if (not (symbol? name))
+      (error "typealias: type name must be a symbol"))
   (table-set! julia-types name (resolve-type-ex type)))
 
 ; --- function objects ---
@@ -440,6 +522,8 @@ TODO:
 (make-builtin 'tuple julia-tuple)
 (make-builtin 'box j-box)
 (make-builtin 'unbox j-unbox)
+(make-builtin 'istype (lambda (x y) (if (subtype? (type-of x) y)
+					julia-true julia-false)))
 
 (make-builtin 'add_int32 +)
 (make-builtin 'add_double +)

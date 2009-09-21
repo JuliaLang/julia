@@ -7,6 +7,7 @@
 ; * replace (. a b) with (call get a (quote b))
 ; - cat
 ; - tuple destructuring
+; - validate argument lists, replace a=b in arg lists with keyword exprs
 
 (define (formal-arg-names arglist)
   (if (pair? arglist)

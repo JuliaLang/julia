@@ -8,11 +8,11 @@ function ref(t:Tuple, i:int32)
     return tupleref(t, unbox(i))
 end
 
-function ref(b:buffer(a), i:int32)
+function ref(b:buffer, i:int32)
     return box(typeof(b).parameters[0], bufferref(b, unbox(i)))
 end
 
-function set(b:buffer(a), i:int32, x)
+function set(b:buffer, i:int32, x)
     bufferset(b, unbox(i), x)
     return x
 end

@@ -1,9 +1,8 @@
 #|
 TODO:
 - parsing try/catch
-- parsing typealias
-- omitted indexes, a[i,,k]
-- semicolons in argument lists, for keywords
+* parsing typealias
+* semicolons in argument lists, for keywords
 |#
 
 (define ops-by-prec
@@ -36,8 +35,9 @@ TODO:
 
 (define trans-op (string->symbol ".'"))
 (define ctrans-op (string->symbol "'"))
+(define vararg-op (string->symbol "..."))
 
-(define operators (list* '~ ctrans-op trans-op
+(define operators (list* '~ ctrans-op trans-op vararg-op
 			 (delete-duplicates (apply append ops-by-prec))))
 
 (define op-chars
@@ -231,12 +231,12 @@ TODO:
 	  (if (or (null? ex) (pair? (cdr ex)) (not first?))
 	      ; () => (head)
 	      ; (ex2 ex1) => (head ex1 ex2)
-              ; (ex1) ** if operator appeared => (head ex1) (handles "(x,)")
+	      ; (ex1) ** if operator appeared => (head ex1) (handles "x;")
 	      (cons head (reverse ex))
 	      ; (ex1) => ex1
 	      (car ex))
 	  (begin (take-token s)
-		 ; allow input to end with the operator, as in a;b; or (x,)
+		 ; allow input to end with the operator, as in a;b;
 		 (if (or (eof-object? (peek-token s))
 			 (memv (peek-token s) closers)
 			 (and allow-empty
@@ -271,9 +271,9 @@ TODO:
 (define (parse-stmts s) (parse-Nary s parse-eq    #\; 'block '(#\newline) #t))
 
 (define (parse-eq s)    (parse-RtoL s parse-comma (list-ref ops-by-prec 0)))
-; parse-eq* is used where commas are special and not used for tuples,
-; for example in an argument list
+; parse-eq* is used where commas are special, for example in an argument list
 (define (parse-eq* s)   (parse-RtoL s parse-or    (list-ref ops-by-prec 0)))
+; parse-comma is needed for commas outside parens, for example a = b,c
 (define (parse-comma s) (parse-Nary s parse-or    #\, 'tuple '( #\) ) #f))
 (define (parse-or s)    (parse-LtoR s parse-and   (list-ref ops-by-prec 1)))
 (define (parse-and s)   (parse-LtoR s parse-arrow (list-ref ops-by-prec 2)))
@@ -368,29 +368,52 @@ TODO:
 	 ((elseif)  (list 'if test then (parse-keyword s 'if)))
 	 ((else)    (list 'if test then (parse-keyword s 'begin)))
 	 (else (error "Improperly terminated if statement")))))
-    ((function type)
+    ((function)
      (let ((sig (parse-call s)))
        (begin0 (list word sig (parse-block s))
 	       (expect-end s))))
-    ((typealias) #f ; TODO
-     )
+    ((type)
+     (let ((sig (parse-ineq s)))
+       (begin0 (list word sig (parse-block s))
+	       (expect-end s))))
+    ((typealias)
+     (list 'typealias (parse-call s) (parse-call s)))
     ((try) #f ; TODO
      )
     (else (error "Unhandled keyword"))))
 
-; handle function call argument list, or any comma-delimited list
-; that's not a tuple
+; handle function call argument list, or any comma-delimited list.
+; . an extra comma at the end is allowed
+; . expressions after a ; are enclosed in (parameters ...)
+; . an expression followed by ... becomes (... x)
 (define (parse-arglist s closer)
   (let loop ((lst '()))
     (let ((t (require-token s)))
       (if (equal? t closer)
-	  (begin (take-token s) (reverse lst))
-	  (let ((nxt (parse-eq* s)))
-	    (let ((c (peek-token s)))
-	      (cond ((equal? c #\,)
-		     (begin (take-token s) (loop (cons nxt lst))))
-		    ((equal? c closer)     (loop (cons nxt lst)))
-		    (else (error "Comma expected")))))))))
+	  (begin (take-token s)
+		 (reverse lst))
+	  (if (equal? t #\;)
+	      (begin (take-token s)
+		     (if (equal? (peek-token s) closer)
+			 ; allow f(a, b; )
+			 (begin (take-token s)
+				(reverse lst))
+			 (reverse (cons (cons 'parameters (loop '()))
+					lst))))
+	      (let* ((nxt (parse-eq* s))
+		     (c (peek-token s))
+		     (nxt (if (eq? c '...)
+			      (list '... nxt)
+			      nxt))
+		     (c (if (eq? c '...)
+			    (begin (take-token s)
+				   (peek-token s))
+			    c)))
+		(cond ((equal? c #\,)
+		       (begin (take-token s) (loop (cons nxt lst))))
+		      ((equal? c #\;)        (loop (cons nxt lst)))
+		      ((equal? c closer)     (loop (cons nxt lst)))
+		      (else (error "Comma expected")))))))))
 
 ; parse [] concatenation expressions
 (define (parse-vector s)
@@ -424,11 +447,19 @@ TODO:
 	   (take-token s)
 	   (if (eqv? (peek-token s) #\) )
 	       (begin (take-token s) '(tuple))
-	       (let* ((ex (parse-eq s))
+	       ; here we parse the first subexpression separately, so
+	       ; we can look for a comma to see if it's a tuple. if we
+	       ; just called parse-arglist instead, we couldn't distinguish
+	       ; (x) from (x,)
+	       (let* ((ex (parse-eq* s))
 		      (t (require-token s)))
-		 (if (eqv? t #\) )
-		     (begin (take-token s) ex)
-		     (error "Expected )")))))
+		 (cond ((eqv? t #\) )
+			(begin (take-token s) ex))
+		       ((eqv? t #\, )
+			(begin (take-token s)
+			       (list* 'tuple ex (parse-arglist s #\) ))))
+		       (else
+			(error "Expected )"))))))
 
 	  ((eqv? t #\{ )
 	   (take-token s)

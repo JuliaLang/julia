@@ -73,6 +73,19 @@ end
 "
 (while (call < x n) (block (+= x 1))))
 
+(tst "f(;)" (call f))
+(tst "f(a;)" (call f a))
+(tst "f(;a)" (call f (parameters a)))
+(tst "f(a,b;)" (call f a b))
+(tst "f(;b,c)" (call f (parameters b c)))
+(tst "f(b,c;a)" (call f b c (parameters a)))
+(tst "f(c;a,b)" (call f c (parameters a b)))
+(tst "f(b,c;a,d)" (call f b c (parameters a d)))
+
+(tst "f(b...)" (call f (... b)))
+(tst "f(b,c...;)" (call f b (... c)))
+(tst "f(b,c:int...;)" (call f b (... (: c int))))
+(tst "f(b,c...;a,)" (call f b (... c) (parameters a)))
 
 ; --- pattern matcher tests ---
 
