@@ -1,6 +1,6 @@
 #|
 TODO:
-- local variable identification pass
+* local variable identification pass
 - varargs and keywords
 - apply, splat
 - type builder like maketype(...)
@@ -640,6 +640,20 @@ TODO:
 				    (raise e)))
 			      (lambda ()
 				(j-eval (caddr e) env)))))
+	   ((scope-block)
+	    (let loop ((v julia-null)
+		       (x (cdr e)))
+	      (if (null? x)
+		  v
+		  (cond ((null? (cdr x))
+			 (j-eval (car x) env))
+			((and (pair? (car x))
+			      (eq? (caar x) 'local))
+			 (set! env (cons (cons (cadr (car x)) julia-null) env))
+			 (loop v (cdr x)))
+			(else
+			 (loop (j-eval (car x) env) (cdr x)))))))
+
 	   ((break)  (raise (cdr e)))
 	   ((time)   (time (j-eval (cadr e) env)))
 
@@ -671,8 +685,7 @@ TODO:
 			      (j-eval (cadddr e) env)))
 	      gf))
 
-	   ((local)
-	    (set! env (cons (cons (cadr e) julia-null) env)))
+	   ((local)  julia-null)
 	   ((=)
 	    (if (not (symbol? (cadr e)))
 		(error "Invalid lvalue in ="))

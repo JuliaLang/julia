@@ -340,7 +340,7 @@ TODO:
   (let* ((do-kw? (not (eqv? (peek-token s) #\`)))
 	 (ex (parse-atom s)))
     (if (and do-kw?
-	     (memq ex '(begin while if for try function type typealias)))
+	     (memq ex '(begin while if for try function type typealias local)))
 	(parse-keyword s ex)
 	(loop ex))))
 
@@ -368,6 +368,7 @@ TODO:
 	 ((elseif)  (list 'if test then (parse-keyword s 'if)))
 	 ((else)    (list 'if test then (parse-keyword s 'begin)))
 	 (else (error "Improperly terminated if statement")))))
+    ((local)  (list 'local (parse-eq s)))
     ((function)
      (let ((sig (parse-call s)))
        (begin0 (list word sig (parse-block s))

@@ -8,6 +8,7 @@ typealias Matrix Tensor(T,2)
 
 function make_array(m:int32)
     dims = new(buffer(int32), 1)
+    dims[0] = m
     data = new(buffer(double), m)
     array = new(Array(double,1), dims, data)
     return array

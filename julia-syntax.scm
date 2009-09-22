@@ -35,11 +35,16 @@
 	  arglist
 	  (list 'any))))
 
+(define (decl-var v)
+  (if (and (pair? v) (eq? (car v) '|:|))
+      (cadr v)
+      v))
+
 (define patterns
   (list
    (pattern-lambda (-> a b)
 		   `(lambda ,(formal-arg-names a)
-		      ,b))
+		      (scope-block ,b)))
 
    (pattern-lambda (|.| a b)
 		   `(call getfield ,a (quote ,b)))
@@ -58,8 +63,19 @@
 		       (addmethod ,name
 				  ,(formal-arg-types argl)
 				  (lambda ,(formal-arg-names argl)
-				    ,body))))
+				    (scope-block ,body)))))
 
+   ; local x,y,z => local x;local y;local z
+   (pattern-lambda (local (tuple (-- vars ...)))
+		   `(block
+		     ,@(map (lambda (x) `(local ,x)) vars)))
+
+   ; local x:int=2 => local x:int; x=2
+   (pattern-lambda (local (= var rhs))
+		   `(block (local ,var)
+			   (= ,(decl-var var) ,rhs)))
+
+   ; adding break/continue support to while loop
    (pattern-lambda (while cnd body)
 		   `(break-block loop-exit
 				 (_while ,cnd
@@ -69,6 +85,7 @@
    (pattern-lambda (break) '(break loop-exit))
    (pattern-lambda (continue) '(break loop-cont))
 
+   ; for loops
    (pattern-lambda
     (for (= var (: a b (-? c))) body)
     (begin
@@ -96,9 +113,51 @@
 					       ,body)
 				  (= ,var (call + 1 ,var)))))))))
 
+   ; macro for timing evaluation
    (pattern-lambda (call (-/ Time) expr) `(time ,expr))
 
    ))
 
+; local variable identification
+; convert (scope-block x) to `(scope-block ,@locals ,x)
+; where locals is a list of (local x) expressions, derived from two sources:
+; 1. (local x) expressions inside this scope-block and lambda
+; 2. variables assigned inside this scope-block that don't exist in outer
+;    scopes
+(define (identify-locals e)
+  (define (find-assigned-vars e env)
+    (if (not (pair? e))
+	'()
+	(case (car e)
+	  ((lambda scope-block)  '())
+	  ((local)  (list (decl-var (cadr e))))
+	  ((=)
+	   (let ((others (find-assigned-vars (caddr e) env))
+		 (v (decl-var (cadr e))))
+	     (if (memq v env)
+		 others
+		 (cons v others))))
+	  (else
+	   (apply append (map (lambda (x) (find-assigned-vars x env))
+			      e))))))
+  (define (identify-locals- e env)
+    (if (not (pair? e)) e
+	(cond ((eq? (car e) 'lambda)
+	       (list 'lambda (cadr e)
+		     (identify-locals- (caddr e)
+				       (append (cadr e) env))))
+	      ((eq? (car e) 'scope-block)
+	       (let* ((vars (delete-duplicates
+			     (find-assigned-vars (cadr e) env)))
+		      (body (identify-locals- (cadr e) (append vars env))))
+		 `(scope-block ,@(map (lambda (v) `(local ,v))
+				      vars)
+			       ,body)))
+	      (else (map (lambda (x)
+			   (identify-locals- x env))
+			 e)))))
+  (identify-locals- e '()))
+
 (define (julia-expand ex)
-  (pattern-expand patterns ex))
+  (identify-locals
+   (pattern-expand patterns ex)))
