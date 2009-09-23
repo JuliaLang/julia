@@ -1,6 +1,6 @@
 ; first passes:
 ; * expand lvalues, e.g. (= (call ref A i) x) => (= A (call assign A i x))
-; - expand operators like +=
+; * expand operators like +=
 ; - identify type name contexts and sort out ranges from declarations
 ; - expand for into while
 ; * expand -> and function into lambda/addmethod
@@ -35,10 +35,32 @@
 	  arglist
 	  (list 'any))))
 
+; get the variable name part of a declaration, x:int => x
 (define (decl-var v)
   (if (and (pair? v) (eq? (car v) '|:|))
       (cadr v)
       v))
+
+; make an expression safe for multiple evaluation
+; for example a[f(x)] => block(temp=f(x), a[temp])
+; retuns a pair (expr . assignments)
+; where 'assignments' is a list of needed assignment statements
+(define (remove-argument-side-effects e)
+  (let ((a '()))
+    (if (not (pair? e))
+	(cons e '())
+	(cons (map (lambda (x)
+		     (if (pair? x)
+			 (let ((g (gensym)))
+			   (set! a (cons `(= ,g ,x) a))
+			   g)
+			 x))
+		   e)
+	      (reverse a)))))
+
+(define (expand-update-operator op lhs rhs)
+  (let ((e (remove-argument-side-effects lhs)))
+    `(block ,@(cdr e) (= ,(car e) (call ,op ,(car e) ,rhs)))))
 
 (define patterns
   (list
@@ -116,6 +138,19 @@
    ; macro for timing evaluation
    (pattern-lambda (call (-/ Time) expr) `(time ,expr))
 
+   ; update operators
+   (pattern-lambda (+= a b) (expand-update-operator '+ a b))
+   (pattern-lambda (-= a b) (expand-update-operator '- a b))
+   (pattern-lambda (*= a b) (expand-update-operator '* a b))
+   (pattern-lambda (/= a b) (expand-update-operator '/ a b))
+   (pattern-lambda (^= a b) (expand-update-operator '^ a b))
+   (pattern-lambda (%= a b) (expand-update-operator '% a b))
+   (pattern-lambda (|\|=| a b) (expand-update-operator '|\|| a b))
+   (pattern-lambda (&= a b) (expand-update-operator '& a b))
+   (pattern-lambda ($= a b) (expand-update-operator '$ a b))
+   (pattern-lambda (<<= a b) (expand-update-operator '<< a b))
+   (pattern-lambda (>>= a b) (expand-update-operator '>> a b))
+
    ))
 
 ; local variable identification
@@ -140,23 +175,23 @@
 	  (else
 	   (apply append (map (lambda (x) (find-assigned-vars x env))
 			      e))))))
-  (define (identify-locals- e env)
+  (define (add-local-decls e env)
     (if (not (pair? e)) e
 	(cond ((eq? (car e) 'lambda)
 	       (list 'lambda (cadr e)
-		     (identify-locals- (caddr e)
-				       (append (cadr e) env))))
+		     (add-local-decls (caddr e)
+				      (append (cadr e) env))))
 	      ((eq? (car e) 'scope-block)
 	       (let* ((vars (delete-duplicates
 			     (find-assigned-vars (cadr e) env)))
-		      (body (identify-locals- (cadr e) (append vars env))))
+		      (body (add-local-decls (cadr e) (append vars env))))
 		 `(scope-block ,@(map (lambda (v) `(local ,v))
 				      vars)
 			       ,body)))
 	      (else (map (lambda (x)
-			   (identify-locals- x env))
+			   (add-local-decls x env))
 			 e)))))
-  (identify-locals- e '()))
+  (add-local-decls e '()))
 
 (define (julia-expand ex)
   (identify-locals

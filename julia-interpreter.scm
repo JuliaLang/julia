@@ -4,11 +4,11 @@ TODO:
 - varargs and keywords
 - apply, splat
 - type builder like maketype(...)
-- try/catch
 - more builtin functions (shifts, bitwise ops, conversions, primitive i/o)
 - quote, expr, and symbol types, user-level macros
-- more type checks
 - modules
+- more type checks
+- try/catch
 |#
 
 (define julia-types (make-table))
@@ -77,7 +77,7 @@ TODO:
 	((eq? v any-type)
 	 Type-type)
 	((eq? v julia-null)
-	 julia-null) ; again to avoid circular references
+	 empty-tuple-type) ; again to avoid circular references
 	; for now, allow scheme symbols to act as julia symbols
 	((symbol? v)
 	 symbol-type)
@@ -97,6 +97,9 @@ TODO:
 
 (define tuple-type (make-abstract-type 'Tuple any-type julia-null julia-null))
 (table-set! julia-types 'Tuple tuple-type)
+
+(define empty-tuple-type
+  (make-type 'tuple tuple-type julia-null julia-null))
 
 (define bottom-type (make-abstract-type 'bottom '* julia-null julia-null))
 (table-set! julia-types 'bottom bottom-type)
@@ -278,8 +281,7 @@ TODO:
 (define symbol-type (make-type 'symbol any-type julia-null julia-null))
 (define buffer-type (make-type 'buffer any-type (julia-tuple 'T)
 			       (julia-tuple
-				(julia-tuple 'length size-type)
-				(julia-tuple 'data any-type))))
+				(julia-tuple 'length size-type))))
 
 (table-set! julia-types 'any any-type)
 (table-set! julia-types 'boolean boolean-type)
@@ -428,6 +430,19 @@ TODO:
 		  curr)
 	      (cdr ml)))))
 
+(define (best-method gf types)
+  (let loop ((m (vector-ref gf 1))
+	     (current #f))
+    (if (null? m)
+	current
+	(if (and (method-matches? (caar m) types subtype?)
+		 (or (not current)
+		     (more-specific? (caar m) (car current))))
+	    (loop (cdr m)
+		  (car m))
+	    (loop (cdr m)
+		  current)))))
+
 (define (add-method gf types m)
   (let ((matches (matching-methods gf types type-equal?)))
     (if (null? matches)
@@ -467,12 +482,14 @@ TODO:
 
 (define (j-buffer-length v) (j-unbox (j-get-field v 'length)))
 
+(define (buffer-data v) (vector-ref v 2))
+
 (define (j-buffer-ref v i)
-  (vector-ref (j-get-field v 'data) i))
+  (vector-ref (buffer-data v) i))
 
 (define (j-buffer-set v i rhs)
   ; TODO: type check/convert
-  (vector-set! (j-get-field v 'data) i (j-unbox rhs)))
+  (vector-set! (buffer-data v) i (j-unbox rhs)))
 
 (define (j-not x) (if (eq? x julia-false) julia-true julia-false))
 
@@ -482,12 +499,14 @@ TODO:
   (let* ((tn (type-name type))
 	 (L (if (eq? tn 'tuple)
 		(length args)
-		(tuple-length (type-fields type))))
+		(if (eq? tn 'buffer)
+		    3
+		    (tuple-length (type-fields type)))))
 	 (v (make-vector (+ 1 L))))
     (vector-set! v 0 type)
     (if (eq? tn 'buffer)
 	(begin (j-set-field v 'length (car args))
-	       (j-set-field v 'data (make-vector (j-unbox (car args)) 0))
+	       (vector-set! v 2 (make-vector (j-unbox (car args)) 0))
 	       v)
 	(let loop ((i 0)
 		   (args args))
@@ -607,9 +626,9 @@ TODO:
 			     (begin (j-eval (caddr e) env)
 				    (loop)))
 			 julia-null))
-	   ((return)  (raise `(julia-return ,(if (pair? (cdr e))
-						 (j-eval (cadr e) env)
-						 julia-null))))
+	   ((return)  (raise `(julia-return . ,(if (pair? (cdr e))
+						   (j-eval (cadr e) env)
+						   julia-null))))
 	   ((&&)      (let loop ((clauses (cdr e)))
 			(cond ((null? clauses) julia-true)
 			      ((null? (cdr clauses)) (j-eval (car clauses) env))
@@ -714,22 +733,25 @@ TODO:
    (lambda (e)
      (if (and (pair? e)
 	      (eq? (car e) 'julia-return))
-	 (cadr e)
+	 (cdr e)
 	 (raise e)))
    (lambda ()
      (j-eval (vector-ref f 2)
-	     (append (map cons
-			  (vector-ref f 1)
-			  args)
-		     (vector-ref f 3))))))
+	     (letrec ((mkenv (lambda (syms args)
+			       (if (null? syms)
+				   (vector-ref f 3)
+				   (cons (cons (car syms) (car args))
+					 (mkenv (cdr syms) (cdr args)))))))
+	       (mkenv (vector-ref f 1)
+		      args))))))
 
 (define (j-apply-generic gf args)
   (let* ((types (map type-of args))
-	 (meths (matching-methods gf types subtype?)))
-    (if (null? meths)
+	 (meth  (best-method gf types)))
+    (if (not meth)
 	(error "No method for function" (vector-ref gf 2)
 	       "matching types" (map type-name types))
-	(j-apply-closure (cdr (most-specific meths)) args))))
+	(j-apply-closure (cdr meth) args))))
 
 (define (j-toplevel-eval e)
   (j-eval (julia-expand e) '()))
@@ -776,7 +798,7 @@ TODO:
     (display "buffer(")
     (display (type-name (tuple-ref (type-params (type-of x)) 0)))
     (display "):")
-    (display (j-get-field x 'data)))
+    (display (buffer-data x)))
    (else
     (let* ((t (type-of x))
 	   (tn (type-name t)))
