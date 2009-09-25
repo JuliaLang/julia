@@ -70,6 +70,9 @@ TODO:
 (define (type-params-list t) (tuple->list (type-params t)))
 (define (type-fields t) (vector-ref t 4))
 
+(define (make-tuple-type typelist)
+  (make-type 'tuple tuple-type (list->tuple typelist) julia-null))
+
 ; get the type of a value
 (define (type-of v)
   (cond ((eq? v Type-type)
@@ -82,10 +85,7 @@ TODO:
 	((symbol? v)
 	 symbol-type)
 	((eq? (vector-ref v 0) 'tuple)
-	 (let ((tt (make-type 'tuple tuple-type
-			      (list->tuple
-			       (map type-of (tuple->list v)))
-			      julia-null)))
+	 (let ((tt (make-tuple-type (map type-of (tuple->list v)))))
 	   (vector-set! v 0 tt)
 	   tt))
 	(else
@@ -397,60 +397,34 @@ TODO:
 (define (generic-function? x) (and (vector? x)
 				   (eq? (vector-ref x 0) 'generic-function)))
 
-(define (method-matches? mtypes types pred)
-  (cond ((null? mtypes) (null? types))
-	((null? types)  #f)
-	((pred (car types) (car mtypes))
-	 (method-matches? (cdr mtypes) (cdr types) pred))
-	(else #f)))
-
-; is type signature ta more specific than tb?
-; assumes ta and tb are the same length
-(define (more-specific? ta tb)
-  (if (null? ta) #f
-      (or
-       (and (subtype? (car ta) (car tb))
-	    (not (subtype? (car tb) (car ta))))
-       (more-specific? (cdr ta) (cdr tb)))))
-
-(define (matching-methods gf types pred)
-  (let ((meths (vector-ref gf 1)))
-    (filter (lambda (a)
-	      (method-matches? (car a) types pred))
-	    meths)))
-
-(define (most-specific ml)
-  (let loop ((curr (car ml))
-	     (ml   (cdr ml)))
-    (if (null? ml)
-	curr
-	(loop (if (more-specific? (caar ml)
-				  (car curr))
-		  (car ml)
-		  curr)
-	      (cdr ml)))))
-
-(define (best-method gf types)
-  (let loop ((m (vector-ref gf 1))
-	     (current #f))
+(define (best-method gf argtype)
+  (let loop ((m (vector-ref gf 1)))
     (if (null? m)
-	current
-	(if (and (method-matches? (caar m) types subtype?)
-		 (or (not current)
-		     (more-specific? (caar m) (car current))))
-	    (loop (cdr m)
-		  (car m))
-	    (loop (cdr m)
-		  current)))))
+	#f
+	(if (subtype? argtype (caar m))
+	    (car m)
+	    (loop (cdr m))))))
 
-(define (add-method gf types m)
-  (let ((matches (matching-methods gf types type-equal?)))
+(define (cons-in-order item lst key <)
+  (if (null? lst)
+      (list item)
+      (if (< (key item) (key (car lst)))
+	  (cons item lst)
+	  (cons (car lst) (cons-in-order item (cdr lst) key <)))))
+
+(define (add-method gf argtype m)
+  (let ((matches (filter (lambda (x)
+			   (type-equal? (car x) argtype))
+			 (vector-ref gf 1))))
     (if (null? matches)
-	(vector-set! gf 1 (cons (cons types m) (vector-ref gf 1)))
-	(let ((match (most-specific matches)))
+	(vector-set! gf 1
+		     (cons-in-order (cons argtype m) (vector-ref gf 1)
+				    car subtype?))
+	(if (null? (cdr matches))
 	  ; overwrite existing exactly matching method
-	  (begin (set-car! match types)
-		 (set-cdr! match m)))))
+	  (begin (set-car! (car matches) argtype)
+		 (set-cdr! (car matches) m))
+	  (error "Function had multiple methods with the same type"))))
   #t)
 
 ; --- builtin functions ---
@@ -552,11 +526,14 @@ TODO:
 (make-builtin 'neg_double -)
 (make-builtin 'mul_int32 *)
 (make-builtin 'mul_double *)
-(make-builtin 'div_int32 (lambda (x y)
-			   (let ((q (/ x y)))
-			     (if (< q 0)
-				 (ceiling q)
-				 (floor q)))))
+(define (div-int32 x y)
+  (let ((q (/ x y)))
+    (if (< q 0)
+	(ceiling q)
+	(floor q))))
+(make-builtin 'div_int32 div-int32)
+(make-builtin 'mod_int32 (lambda (x y)
+			   (- x (* (div-int32 x y) y))))
 (make-builtin 'div_double (lambda (x y) (exact->inexact (/ x y))))
 (make-builtin 'eq_int32 (lambda (x y) (if (= x y)
 					  julia-true
@@ -579,6 +556,10 @@ TODO:
 					   julia-true
 					   julia-false)))
 (make-builtin 'isnan (lambda (x) (if (not (= x x))
+				     julia-true
+				     julia-false)))
+(make-builtin 'isinf (lambda (x) (if (or (equal? x +inf.0)
+					 (equal? x -inf.0))
 				     julia-true
 				     julia-false)))
 
@@ -700,7 +681,8 @@ TODO:
 	      (if (not (generic-function? gf))
 		  (error "Variable" name "does not name a function")
 		  (add-method gf
-			      (map resolve-type-ex (caddr e))
+			      (make-tuple-type
+			       (map resolve-type-ex (caddr e)))
 			      (j-eval (cadddr e) env)))
 	      gf))
 
@@ -746,11 +728,11 @@ TODO:
 		      args))))))
 
 (define (j-apply-generic gf args)
-  (let* ((types (map type-of args))
-	 (meth  (best-method gf types)))
+  (let* ((argtype (make-tuple-type (map type-of args)))
+	 (meth  (best-method gf argtype)))
     (if (not meth)
 	(error "No method for function" (vector-ref gf 2)
-	       "matching types" (map type-name types))
+	       "matching types" (map type-name (type-params-list argtype)))
 	(j-apply-closure (cdr meth) args))))
 
 (define (j-toplevel-eval e)
