@@ -151,7 +151,29 @@
    (pattern-lambda (<<= a b) (expand-update-operator '<< a b))
    (pattern-lambda (>>= a b) (expand-update-operator '>> a b))
 
-   ))
+   ;; Comprehensions
+   
+   ; Compute length of ranges
+   (pattern-lambda (call numel (: x z)) `(call + 1 (call - ,z ,x)) )
+   (pattern-lambda (call numel (: x y z)) `(call / (call + 1 (call - ,z ,x)) ,y) )
+
+   ; 1d comprehensions
+   (pattern-lambda (cat (call (-/ |\||) expr (= i range)) )
+		   (let ((result (gensym)))
+		     `(block (= ,result (call zeros (call numel ,range))) 
+			     (for (= ,i ,range) (block (call set ,result ,i ,expr)))
+			     ,result )))
+   
+   ; 2d comprehensions
+   (pattern-lambda (cat (call (-/ |\||) expr (= i range1)) (= j range2) )
+		   (let ((result (gensym)))
+		     `(block (= ,result (call zeros (call numel ,range1) (call numel ,range2)))
+			     (for (= ,i ,range1)
+				  (block (for (= ,j ,range2) 
+					      (block (call set ,result ,i ,j ,expr)))))
+			     ,result )))
+
+   )) ; patterns
 
 ; local variable identification
 ; convert (scope-block x) to `(scope-block ,@locals ,x)
