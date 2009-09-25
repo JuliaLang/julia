@@ -30,7 +30,7 @@ function make_array(m:int32, n:int32)
     dims[0] = m
     dims[1] = n
     data = new(buffer(double), m*n)
-    array = new(Array(double,1), dims, data)
+    array = new(Array(double,2), dims, data)
     return array
 end
 
@@ -42,7 +42,7 @@ end
 
 function ref(a:Array, i:int32, j:int32)
     m = a.dims[0]
-    return a.data[(i-1)*m + (j-1)] 
+    return a.data[(j-1)*m + (i-1)] 
 end
 
 function set(a:Array, i:int32, x)
@@ -52,7 +52,7 @@ end
 
 function set(a:Array, i:int32, j:int32, x)
     m = a.dims[0]
-    pos = (i-1)*m + (j-1)
+    pos = (j-1)*m + (i-1)
     bufferset(a.data, unbox(pos), x)
     return x
 end
