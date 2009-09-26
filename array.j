@@ -6,15 +6,21 @@ end
 typealias Vector Tensor(T,1)
 typealias Matrix Tensor(T,2)
 
-function print(a:Array)
+function print(a:Array(T,1))
+    for i=1:a.dims[0]
+        print(a[i])
+        _print("\n")
+    end
+end
+
+function print(a:Array(T,2))
     for i=1:a.dims[0]
         for j=1:a.dims[1]
             print(a[i,j])
-            print(" ")
+            _print(" ")
         end
-        print("\n")
+        _print("\n")
     end
-    return ()
 end
 
 function make_array(m:int32)
@@ -87,6 +93,5 @@ end
 function `+`(x:Array(T,2), y:Array(T,2))
     m = x.dims[0]
     n = x.dims[1]
-    return [ x[i] + y[i] | (i=1:m), (j=1:n) ]
+    return [ x[i,j] + y[i,j] | (i=1:m), (j=1:n) ]
 end
-
