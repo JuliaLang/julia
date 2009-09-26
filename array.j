@@ -46,6 +46,10 @@ function ref(a:Array, i:int32)
     return a.data[i-1] 
 end
 
+function ref(a:Array, I:Array)
+    return [ a[i] | (i=I) ]
+end
+
 function ref(a:Array, i:int32, j:int32)
     m = a.dims[0]
     return a.data[(j-1)*m + (i-1)] 

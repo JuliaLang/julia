@@ -107,7 +107,9 @@
    (pattern-lambda (break) '(break loop-exit))
    (pattern-lambda (continue) '(break loop-cont))
 
-   ; for loops
+   ;; for loops
+
+   ; for loop over ranges
    (pattern-lambda
     (for (= var (: a b (-? c))) body)
     (begin
@@ -135,6 +137,12 @@
 					       ,body)
 				  (= ,var (call + 1 ,var)))))))))
 
+   ; for loop over arbitrary vectors
+   (pattern-lambda 
+    (for (= x list) body)
+    (let ((i (gensym)))
+      `(for (= ,i (: 1 (call numel ,list))) (block (= ,x (ref ,list ,i)) ,body)) ))
+
    ; macro for timing evaluation
    (pattern-lambda (call (-/ Time) expr) `(time ,expr))
 
@@ -158,20 +166,22 @@
    (pattern-lambda (call numel (: x y z)) `(call / (call + 1 (call - ,z ,x)) ,y) )
 
    ; 1d comprehensions
-   (pattern-lambda (cat (call (-/ |\||) expr (= i range)) )
-		   (let ((result (gensym)))
-		     `(block (= ,result (call zeros (call numel ,range))) 
-			     (for (= ,i ,range) (block (call set ,result ,i ,expr)))
-			     ,result )))
+   (pattern-lambda 
+    (cat (call (-/ |\||) expr (= i range)) )
+    (let ((result (gensym)))
+      `(block (= ,result (call zeros (call numel ,range))) 
+	      (for (= ,i ,range) (block (call set ,result ,i ,expr)))
+	      ,result )))
    
    ; 2d comprehensions
-   (pattern-lambda (cat (call (-/ |\||) expr (= i range1)) (= j range2) )
-		   (let ((result (gensym)))
-		     `(block (= ,result (call zeros (call numel ,range1) (call numel ,range2)))
-			     (for (= ,i ,range1)
-				  (block (for (= ,j ,range2) 
-					      (block (call set ,result ,i ,j ,expr)))))
-			     ,result )))
+   (pattern-lambda 
+    (cat (call (-/ |\||) expr (= i range1)) (= j range2) )
+    (let ((result (gensym)))
+      `(block (= ,result (call zeros (call numel ,range1) (call numel ,range2)))
+	      (for (= ,i ,range1)
+		   (block (for (= ,j ,range2) 
+			       (block (call set ,result ,i ,j ,expr)))))
+	      ,result )))
 
    )) ; patterns
 
