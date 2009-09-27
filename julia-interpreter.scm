@@ -91,12 +91,16 @@ TODO:
 	(else
 	 (vector-ref v 0))))
 
-(define (type? v) (eq? (type-of v) Type-type))
+(define (type? v) (and (vector? v) (eq? (type-of v) Type-type)))
 
 ; --- define primitive types ---
 
 (define tuple-type (make-abstract-type 'Tuple any-type julia-null julia-null))
 (table-set! julia-types 'Tuple tuple-type)
+
+(define sequence-type (make-abstract-type '... any-type (julia-tuple 'T)
+					  julia-null))
+(table-set! julia-types '... sequence-type)
 
 (define empty-tuple-type
   (make-type 'tuple tuple-type julia-null julia-null))
@@ -184,6 +188,13 @@ TODO:
   (or (vector-ref t 5)
       (type-generic? t)))
 
+(define (sequence-type? t)
+  (and (type? t)
+       (eq? (type-name t) '...)))
+
+(define (type-param0 t)
+  (tuple-ref (type-params t) 0))
+
 (define (type-equal? a b)
   (and (subtype? a b)
        (subtype? b a)))
@@ -220,34 +231,59 @@ TODO:
         ; (a, a)  subtype  (int8, int8)  NO
 	((eq? (type-name child)
 	      (type-name parent))
-	 (let loop ((cp (type-params-list child))
-		    (pp (type-params-list parent))
+	 (let loop ((cp (type-params-list child))  ; child parameters
+		    (pp (type-params-list parent)) ; parent parameters
 		    (env '()))
-	   (cond ((null? cp) (if (null? pp) (if (null? env) #t env) #f))
-		 ((null? pp) #f)
-		 ((symbol? (car pp))
-		  (let ((u (assq (car pp) env)))
-		    (if u
-			(and (or (eq? (cdr u)
-				      (car cp))
-				 (and (not (symbol? (car cp)))
-				      (type-equal? (car cp) (cdr u))))
-			     env)
-			(loop (cdr cp)
-			      (cdr pp)
-			      (cons (cons (car pp) (car cp)) env)))))
-		 ((symbol? (car cp)) #f)
-		 ((or (number? (car cp))
-		      (number? (car pp)))
-		  (if (eqv? (car cp) (car pp))
-		      env #f))
-		 ((subtype? (car cp) (car pp)) =>
-		  (lambda (w)
-		    (loop (cdr cp) (cdr pp) (if (pair? w)
-						(append w env)
-						env))))
-		 (else #f))))
-
+	   (let ((seq (and (pair? pp) (sequence-type? (car pp)))))
+	     (cond
+	      ((null? cp) (if (or (null? pp)
+				  seq)
+			      (if (null? env) #t env)
+			      #f))
+	      ((null? pp) #f)
+	      (else
+	       (let ((cp0 (if (sequence-type? (car cp))
+			      (type-param0 (car cp))
+			      (car cp)))
+		     (pp0 (if seq
+			      (type-param0 (car pp))
+			      (car pp)))
+		     (crest (if (sequence-type? (car cp))
+				cp
+				(cdr cp)))
+		     (prest (if seq
+				pp
+				(cdr pp))))
+		 (let ((continue
+			(lambda (env)
+			  (if (and seq
+				   (sequence-type? (car cp)))
+			      ; both ended up on sequence types, and
+			      ; parameter matched. stop with "yes" now,
+			      ; otherwise we'd start looping forever
+			      env
+			      (loop crest prest env)))))
+		   (cond ((symbol? pp0)
+			  (let ((u (assq pp0 env)))
+			    (if u
+				(and (or (eq? (cdr u) cp0)
+					 (and (not (symbol? cp0))
+					      (type-equal? cp0 (cdr u))))
+				     env)
+				(continue (cons (cons pp0 cp0) env)))))
+			 ((symbol? cp0) #f)
+			 ((or (number? cp0)
+			      (number? pp0))
+			  (if (eqv? cp0 pp0)
+			      (continue env)
+			      #f))
+			 ((subtype? cp0 pp0) =>
+			  (lambda (w)
+			    (continue (if (pair? w)
+					  (append w env)
+					  env))))
+			 (else #f)))))))))
+	   
 	; otherwise walk up the type hierarchy
 	(else (subtype? (type-super child) parent))))
 
@@ -311,11 +347,13 @@ TODO:
 (define (type-ex-name t)
   (cond ((not (pair? t)) t)
 	((eq? (car t) 'tuple) 'tuple)
+	((eq? (car t) '...)   '...)
 	((eq? (car t) 'call)  (cadr t))
 	(else (error "Invalid type expression" t))))
 (define (type-ex-params t)
   (cond ((not (pair? t)) '())
 	((eq? (car t) 'tuple) (cdr t))
+	((eq? (car t) '...)   (cdr t))
 	((eq? (car t) 'call)  (cddr t))
 	(else (error "Invalid type expression" t))))
 
@@ -710,6 +748,20 @@ TODO:
 	   (else
 	    (error "Unhandled tree type" (car e)))))))
 
+; create an environment with actual args bound to formal args
+(define (bind-args names args cloenv)
+  (if (null? names)
+      cloenv
+      (let ((formal (car names)))
+	(let ((bind
+	       (if (and (pair? formal) (eq? (car formal) '...))
+		   (cons (cadr formal)
+			 (apply julia-tuple args))
+		   (cons formal
+			 (car args)))))
+	  (cons bind
+		(bind-args (cdr names) (cdr args) cloenv))))))
+
 (define (j-apply-closure f args)
   (with-exception-catcher
    (lambda (e)
@@ -719,13 +771,7 @@ TODO:
 	 (raise e)))
    (lambda ()
      (j-eval (vector-ref f 2)
-	     (letrec ((mkenv (lambda (syms args)
-			       (if (null? syms)
-				   (vector-ref f 3)
-				   (cons (cons (car syms) (car args))
-					 (mkenv (cdr syms) (cdr args)))))))
-	       (mkenv (vector-ref f 1)
-		      args))))))
+	     (bind-args (vector-ref f 1) args (vector-ref f 3))))))
 
 (define (j-apply-generic gf args)
   (let* ((argtype (make-tuple-type (map type-of args)))

@@ -87,6 +87,14 @@ end
 (tst "f(b,c:int...;)" (call f b (... (: c int))))
 (tst "f(b,c...;a,)" (call f b (... c) (parameters a)))
 
+(tst "(s...)" (tuple (... s)))
+(tst "(s...,)" (tuple (... s)))
+(tst "(s...;)" (tuple (... s)))
+(tst "(a,s...)" (tuple a (... s)))
+(tst "(a,s...,)" (tuple a (... s)))
+(tst "(s...,b)" (tuple (... s) b))
+(tst "(s...;b)" (tuple (... s) (parameters b)))
+
 ; --- pattern matcher tests ---
 
 (assert (equal? (pattern-expand (list (pattern-lambda (+ x x) `(* 2 ,x)))
@@ -102,3 +110,28 @@ end
 
 (assert (equal? (flatten-op + '(+ (+ 1 2) (+ (+ (+ 3) 4) (+ 5))))
 		'(+ 1 2 3 4 5)))
+
+; --- type system tests ---
+
+(define-macro (assert-subtype t1 t2)
+  `(assert (subtype? ',(resolve-type-ex (julia-parse t1))
+		     ',(resolve-type-ex (julia-parse t2)))))
+
+(define-macro (assert-!subtype t1 t2)
+  `(assert (not (subtype? ',(resolve-type-ex (julia-parse t1))
+			  ',(resolve-type-ex (julia-parse t2))))))
+
+(assert-subtype "int8" "int")
+(assert-subtype "int32" "int")
+(assert-subtype "(a, a)" "(b, c)")
+(assert-!subtype "(a, b)" "(c, c)")
+(assert-subtype "(int8,int8)" "(int, int)")
+(assert-subtype "Tensor(double,2)" "Tensor(scalar,2)")
+(assert-!subtype "Tensor(double,1)" "Tensor(scalar,2)")
+(assert-subtype "(int, int...)" "(int, scalar...)")
+(assert-subtype "(int, double, int...)" "(int, scalar...)")
+(assert-subtype "(int, double)" "(int, scalar...)")
+(assert-subtype "(int32,)" "(scalar...)")
+(assert-subtype "()" "(scalar...)")
+(assert-!subtype "(int32...)" "(int32,)")
+(assert-!subtype "(int32...)" "(scalar,int,)")

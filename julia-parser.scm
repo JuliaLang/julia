@@ -459,6 +459,12 @@ TODO:
 		       ((eqv? t #\, )
 			(begin (take-token s)
 			       (list* 'tuple ex (parse-arglist s #\) ))))
+		       ((eq? t '...)
+			(begin (take-token s)
+			       (if (eqv? (peek-token s) #\,)
+				   (take-token s))
+			       (list* 'tuple (list '... ex)
+				      (parse-arglist s #\) ))))
 		       (else
 			(error "Expected )"))))))
 

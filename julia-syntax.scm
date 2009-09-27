@@ -12,9 +12,9 @@
 (define (formal-arg-names arglist)
   (if (pair? arglist)
       (map (lambda (x)
-	     (if (pair? x)
-		 (cadr x)
-		 x))
+	     (if (and (pair? x) (eq? (car x) '...))
+		 (list '... (decl-var (cadr x)))
+		 (decl-var x)))
 	   (if (eq? (car arglist) 'tuple)
 	       (cdr arglist)
 	       arglist))
@@ -25,9 +25,9 @@
 (define (formal-arg-types arglist)
   (if (pair? arglist)
       (map (lambda (x)
-	     (if (and (pair? x) (eq? (car x) '|:|))
-		 (caddr x)
-		 'any))
+	     (if (and (pair? x) (eq? (car x) '...))
+		 (list '... (decl-type (cadr x)))
+		 (decl-type x)))
 	   (if (eq? (car arglist) 'tuple)
 	       (cdr arglist)
 	       arglist))
@@ -40,6 +40,11 @@
   (if (and (pair? v) (eq? (car v) '|:|))
       (cadr v)
       v))
+
+(define (decl-type v)
+  (if (and (pair? v) (eq? (car v) '|:|))
+      (caddr v)
+      'any))
 
 ; make an expression safe for multiple evaluation
 ; for example a[f(x)] => block(temp=f(x), a[temp])
@@ -128,20 +133,23 @@
 				    (break-block loop-cont
 						 ,body)
 				    (= ,cnt (call + 1 ,cnt)))))))
-	  `(block
-	    (= ,var ,a)
-	    (break-block loop-exit
-			 (_while (call <= ,var ,b)
-				 (block
-				  (break-block loop-cont
-					       ,body)
-				  (= ,var (call + 1 ,var)))))))))
+	  (let ((lim (gensym)))
+	    `(block
+	      (= ,var ,a)
+	      (= ,lim ,b)
+	      (break-block loop-exit
+			   (_while (call <= ,var ,lim)
+				   (block
+				    (break-block loop-cont
+						 ,body)
+				    (= ,var (call + 1 ,var))))))))))
 
    ; for loop over arbitrary vectors
    (pattern-lambda 
     (for (= x list) body)
     (let ((i (gensym)))
-      `(for (= ,i (: 1 (call numel ,list))) (block (= ,x (ref ,list ,i)) ,body)) ))
+      `(for (= ,i (: 1 (call numel ,list)))
+	    (block (= ,x (ref ,list ,i)) ,body)) ))
 
    ; macro for timing evaluation
    (pattern-lambda (call (-/ Time) expr) `(time ,expr))
