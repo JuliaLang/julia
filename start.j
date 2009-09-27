@@ -17,6 +17,14 @@ function set(b:buffer, i:int32, x)
     return x
 end
 
+function length(t:Tuple)
+    return box(typename(int32), tuplelen(t))
+end
+
+function length(b:buffer)
+    return b.length
+end
+
 function `+`(x:int32, y:int32)
     return box(typename(int32), add_int32(unbox(x), unbox(y)))
 end
