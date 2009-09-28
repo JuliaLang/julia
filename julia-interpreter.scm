@@ -497,11 +497,11 @@ TODO:
 (define (buffer-data v) (vector-ref v 2))
 
 (define (j-buffer-ref v i)
-  (vector-ref (buffer-data v) i))
+  (vector-ref (buffer-data v) (- i 1)))
 
 (define (j-buffer-set v i rhs)
   ; TODO: type check/convert
-  (vector-set! (buffer-data v) i (j-unbox rhs)))
+  (vector-set! (buffer-data v) (- i 1) (j-unbox rhs)))
 
 (define (j-not x) (if (eq? x julia-false) julia-true julia-false))
 
