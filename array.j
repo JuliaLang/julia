@@ -137,3 +137,13 @@ function `+`(x:Array(T,2), y:Array(T,2))
     n = x.dims[2]
     return [ x[i,j] + y[i,j] | (i=1:m), (j=1:n) ]
 end
+
+function transpose(x:Array(T,2))
+    m = x.dims[1]
+    n = x.dims[2]
+    return [ x[j,i] | (i=1:n), (j=1:m) ]
+end
+
+function ctranspose(x:Array(T,2))
+    return transpose(x)
+end
