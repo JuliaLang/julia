@@ -7,20 +7,58 @@ typealias Vector Tensor(T,1)
 typealias Matrix Tensor(T,2)
 
 function print(a:Array(T,1))
-    for i=1:a.dims[1]
-        print(a[i])
-        _print("\n")
+    n = a.dims[1]
+
+    if n < 10
+        for i=1:n; print(a[i]); _print("\n"); end
+    else
+        for i=1:3; print(a[i]); _print("\n"); end
+        for i=1:3; _print(".\n"); end
+        for i=n-2:n; print(a[i]); _print("\n"); end
     end
 end
 
 function print(a:Array(T,2))
-    for i=1:a.dims[1]
-        for j=1:a.dims[2]
-            print(a[i,j])
-            _print(" ")
+    m = a.dims[1]
+    n = a.dims[2]
+
+    if m < 10
+        for i=1:m
+            if n < 10
+                for j=1:n; print(a[i,j]); _print(" "); end
+            else
+                for j=1:3; print(a[j]); _print(" "); end
+                _print(". . . ");
+                for j=n-2:n; print(a[j]); _print(" "); end
+            end
+            _print("\n")
         end
-        _print("\n")
+    else
+        for i=1:3
+            if n < 10
+                for j=1:n; print(a[i,j]); _print(" "); end
+            else
+                for j=1:3; print(a[j]); _print(" "); end
+                _print(". . . ");
+                for j=n-2:n; print(a[j]); _print(" "); end
+            end
+            _print("\n")
+        end
+
+        for i=1:3; _print("  .           .\n"); end
+
+        for i=m-2:m
+            if n < 10
+                for j=1:n; print(a[i,j]); _print(" "); end
+            else
+                for j=1:3; print(a[j]); _print(" "); end
+                _print(". . . ");
+                for j=n-2:n; print(a[j]); _print(" "); end
+            end
+            _print("\n")
+        end
     end
+
 end
 
 function make_array(m:int32)
