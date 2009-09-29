@@ -875,7 +875,7 @@ TODO:
 	     (newline)
 	     (julia-repl))
 	   (lambda ()
-	     (j-toplevel-eval (julia-parse (string-append "print (" line ")") ))
+	     (j-toplevel-eval `(call print (quote ,(j-toplevel-eval (julia-parse line)))))
 	     (newline)
 	     (newline)
 	     (julia-repl)))))))
