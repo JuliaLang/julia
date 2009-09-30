@@ -11,7 +11,6 @@ TODO:
 - try/catch
 |#
 
-(define julia-types (make-table))
 (define julia-globals (make-table))
 
 ; --- tuples ---
@@ -35,24 +34,33 @@ TODO:
 (define (tuple-ref t i) (vector-ref t (+ i 1)))
 (define (tuple-length t) (- (vector-length t) 1))
 
+(define (tuple? x) (and (vector? x)
+			(or (eq? (vector-ref x 0) 'tuple)
+			    (tuple? (vector-ref x 0)))))
+
 ; --- singleton null value ---
 
 (define julia-null (julia-tuple))
 
 ; --- type objects, reflection ---
 
+(define (put-type name t) (table-set! julia-globals name t))
+(define (get-type name)
+  (let ((t (table-ref julia-globals name #f)))
+    (and (type? t) t)))
+
 ; in any-type and Type-type we take pains to avoid circular references
 ; because gambit can't deal with them well, so there are symbols where
 ; type objects should go.
-(define any-type (vector 'Type 'any 'any julia-null julia-null #t))
+(define any-type (vector 'Type 'Any 'Any julia-null julia-null #t))
 
 (define Type-type (vector 'Type 'Type any-type julia-null
 			  (julia-tuple
-			   (julia-tuple 'name 'symbol)
+			   (julia-tuple 'name 'Symbol)
 			   (julia-tuple 'super 'Type)
-			   (julia-tuple 'parameters 'tuple)
-			   (julia-tuple 'fields 'tuple)
-			   (julia-tuple 'abstract 'boolean))
+			   (julia-tuple 'parameters 'Tuple)
+			   (julia-tuple 'fields 'Tuple)
+			   (julia-tuple 'abstract 'Boolean))
 			  #f))
 
 (define (make-type name super params fields)
@@ -61,17 +69,25 @@ TODO:
 (define (make-abstract-type name super params fields)
   (vector Type-type name super params fields #t))
 
-(define (type-name t) (vector-ref t 1))
+(define (type-name t) (if (tuple? t) 'Tuple (vector-ref t 1)))
 (define (type-super t)
   (if (eq? t any-type)
       any-type
-      (vector-ref t 2)))
-(define (type-params t) (vector-ref t 3))
-(define (type-params-list t) (tuple->list (type-params t)))
-(define (type-fields t) (vector-ref t 4))
+      (if (tuple? t)
+	  tuple-type
+	  (vector-ref t 2))))
+(define (type-params t) (if (tuple? t) t (vector-ref t 3)))
+(define (type-params-list t)
+  (tuple->list (type-params t)))
+(define (type-fields t) (if (tuple? t) julia-null (vector-ref t 4)))
 
-(define (make-tuple-type typelist)
-  (make-type 'tuple tuple-type (list->tuple typelist) julia-null))
+(define (make-tuple-type typelist) (list->tuple typelist))
+
+(define (j-closure? x) (and (vector? x)
+			    (eq? (vector-ref x 0) 'closure)))
+
+(define (generic-function? x) (and (vector? x)
+				   (eq? (vector-ref x 0) 'generic-function)))
 
 ; get the type of a value
 (define (type-of v)
@@ -80,10 +96,16 @@ TODO:
 	((eq? v any-type)
 	 Type-type)
 	((eq? v julia-null)
-	 empty-tuple-type) ; again to avoid circular references
+	 julia-null) ; again to avoid circular references
 	; for now, allow scheme symbols to act as julia symbols
 	((symbol? v)
 	 symbol-type)
+	((string? v)
+	 any-type)
+	((generic-function? v)
+	 any-type)
+	((j-closure? v)
+	 any-type)
 	((eq? (vector-ref v 0) 'tuple)
 	 (let ((tt (make-tuple-type (map type-of (tuple->list v)))))
 	   (vector-set! v 0 tt)
@@ -91,39 +113,42 @@ TODO:
 	(else
 	 (vector-ref v 0))))
 
-(define (type? v) (and (vector? v) (eq? (type-of v) Type-type)))
+(define (type? v) (and (vector? v) (or (tuple? v)
+				       (eq? (type-of v) Type-type))))
 
 ; --- define primitive types ---
 
 (define tuple-type (make-abstract-type 'Tuple any-type julia-null julia-null))
-(table-set! julia-types 'Tuple tuple-type)
+(put-type 'Tuple tuple-type)
 
 (define sequence-type (make-abstract-type '... any-type (julia-tuple 'T)
 					  julia-null))
-(table-set! julia-types '... sequence-type)
+(put-type '... sequence-type)
 
 (define empty-tuple-type
-  (make-type 'tuple tuple-type julia-null julia-null))
+  (make-type 'Tuple tuple-type julia-null julia-null))
 
-(define bottom-type (make-abstract-type 'bottom '* julia-null julia-null))
-(table-set! julia-types 'bottom bottom-type)
+(define bottom-type (make-abstract-type 'Bottom '* julia-null julia-null))
+(put-type 'Bottom bottom-type)
 
 (define Tensor-type (make-abstract-type 'Tensor any-type
 					(julia-tuple 'T 'n)
 					julia-null))
-(table-set! julia-types 'Tensor Tensor-type)
+(put-type 'Tensor Tensor-type)
 
 ; --- type functions ---
 
 (define (instantiate-type type params)
   (define (copy-type type super params fields)
-    (if (vector-ref type 5)
-	(make-abstract-type (type-name type)
-			    super
-			    params fields)
-	(make-type (type-name type)
-		   super
-		   params fields)))
+    (if (tuple? type)
+	params
+	(if (vector-ref type 5)
+	    (make-abstract-type (type-name type)
+				super
+				params fields)
+	    (make-type (type-name type)
+		       super
+		       params fields))))
   
   ; create parameter list for the instantiated type
   ; tp - parameters of the incoming type
@@ -135,13 +160,18 @@ TODO:
   ; typealias bar foo(int,y,int,t)
   ; bar(double,double)  fills in remaining y and t parameters
   (define (new-params-list tp sp)
+    (define (normalize x)
+      (if (and (vector? x) (eq? (type-name (type-of x)) 'Int32))
+	  (j-unbox x)
+	  x))
     (cond ((null? tp)
 	   (if (null? sp) tp
 	       (error "Too many parameters for type" (type-name type))))
 	  ((symbol? (car tp))
 	   (if (null? sp)
 	       (error "Too few parameters for type" (type-name type)))
-	   (cons (car sp) (new-params-list (cdr tp) (cdr sp))))
+	   (cons (normalize (car sp))
+		 (new-params-list (cdr tp) (cdr sp))))
 	  (else
 	   (new-params-list (cdr tp) sp))))
   
@@ -210,15 +240,17 @@ TODO:
 	((eq? child bottom-type)  #t)
 	((eq? parent bottom-type) #f)
 
+	((eq? parent tuple-type)  (tuple? child))
+
 	; see if the child is an instantiation of the parent
-	((eq? parent (table-ref julia-types (type-name child) (list)))
+	((eq? parent (get-type (type-name child)))
 	 (map cons (type-params-list parent) (type-params-list child)))
 
 	; recursively handle union types
-	((eq? (type-name child) 'union)
+	((eq? (type-name child) 'Union)
 	 (every (lambda (t) (subtype? t parent))
 		(type-params-list child)))
-	((eq? (type-name parent) 'union)
+	((eq? (type-name parent) 'Union)
 	 (any   (lambda (t) (subtype? child t))
 	        (type-params-list parent)))
 
@@ -290,52 +322,52 @@ TODO:
 ; --- define some key builtin types ---
 
 (define scalar-type (make-abstract-type
-		     'scalar
+		     'Scalar
 		     (instantiate-type Tensor-type
 				       (list bottom-type 0))
 		     julia-null julia-null))
-(table-set! julia-types 'scalar scalar-type)
+(put-type 'Scalar scalar-type)
 
-(define real-type (make-abstract-type 'real scalar-type julia-null julia-null))
-(table-set! julia-types 'real real-type)
-(define int-type (make-abstract-type 'int real-type julia-null julia-null))
-(table-set! julia-types 'int int-type)
+(define real-type (make-abstract-type 'Real scalar-type julia-null julia-null))
+(put-type 'Real real-type)
+(define int-type (make-abstract-type 'Int real-type julia-null julia-null))
+(put-type 'Int int-type)
 
-(define boolean-type (make-type 'boolean scalar-type julia-null julia-null))
-(define int8-type (make-type 'int8 int-type julia-null julia-null))
-(define uint8-type (make-type 'uint8 int-type julia-null julia-null))
-(define int16-type (make-type 'int16 int-type julia-null julia-null))
-(define uint16-type (make-type 'uint16 int-type julia-null julia-null))
-(define int32-type (make-type 'int32 int-type julia-null julia-null))
-(define uint32-type (make-type 'uint32 int-type julia-null julia-null))
-(define int64-type (make-type 'int64 int-type julia-null julia-null))
-(define uint64-type (make-type 'uint64 int-type julia-null julia-null))
-(define size-type (make-type 'size int-type julia-null julia-null))
-(define float-type (make-type 'float real-type julia-null julia-null))
-(define double-type (make-type 'double real-type julia-null julia-null))
+(define boolean-type (make-type 'Boolean scalar-type julia-null julia-null))
+(define int8-type (make-type 'Int8 int-type julia-null julia-null))
+(define uint8-type (make-type 'Uint8 int-type julia-null julia-null))
+(define int16-type (make-type 'Int16 int-type julia-null julia-null))
+(define uint16-type (make-type 'Uint16 int-type julia-null julia-null))
+(define int32-type (make-type 'Int32 int-type julia-null julia-null))
+(define uint32-type (make-type 'Uint32 int-type julia-null julia-null))
+(define int64-type (make-type 'Int64 int-type julia-null julia-null))
+(define uint64-type (make-type 'Uint64 int-type julia-null julia-null))
+(define size-type (make-type 'Size int-type julia-null julia-null))
+(define float-type (make-type 'Float real-type julia-null julia-null))
+(define double-type (make-type 'Double real-type julia-null julia-null))
 
-(define symbol-type (make-type 'symbol any-type julia-null julia-null))
-(define buffer-type (make-type 'buffer any-type (julia-tuple 'T)
+(define symbol-type (make-type 'Symbol any-type julia-null julia-null))
+(define buffer-type (make-type 'Buffer any-type (julia-tuple 'T)
 			       (julia-tuple
 				(julia-tuple 'length size-type))))
 
-(table-set! julia-types 'any any-type)
-(table-set! julia-types 'boolean boolean-type)
-(table-set! julia-types 'int8 int8-type)
-(table-set! julia-types 'uint8 uint8-type)
-(table-set! julia-types 'int16 int16-type)
-(table-set! julia-types 'uint16 uint16-type)
-(table-set! julia-types 'int32 int32-type)
-(table-set! julia-types 'uint32 uint32-type)
-(table-set! julia-types 'int64 int64-type)
-(table-set! julia-types 'uint64 uint64-type)
-(table-set! julia-types 'float float-type)
-(table-set! julia-types 'double double-type)
-(table-set! julia-types 'size size-type)
-(table-set! julia-types 'Type Type-type)
+(put-type 'Any any-type)
+(put-type 'Boolean boolean-type)
+(put-type 'Int8 int8-type)
+(put-type 'Uint8 uint8-type)
+(put-type 'Int16 int16-type)
+(put-type 'Uint16 uint16-type)
+(put-type 'Int32 int32-type)
+(put-type 'Uint32 uint32-type)
+(put-type 'Int64 int64-type)
+(put-type 'Uint64 uint64-type)
+(put-type 'Float float-type)
+(put-type 'Double double-type)
+(put-type 'Size size-type)
+(put-type 'Type Type-type)
 
-(table-set! julia-types 'symbol symbol-type)
-(table-set! julia-types 'buffer buffer-type)
+(put-type 'Symbol symbol-type)
+(put-type 'Buffer buffer-type)
 
 ; --- singleton true and false values ---
 
@@ -348,13 +380,19 @@ TODO:
   (cond ((not (pair? t)) t)
 	((eq? (car t) 'tuple) 'tuple)
 	((eq? (car t) '...)   '...)
-	((eq? (car t) 'call)  (cadr t))
+	((eq? (car t) 'ref) (cadr t))
+	((and (eq? (car t) 'call)
+	      (eq? (cadr t) 'ref))
+	 (caddr t))
 	(else (error "Invalid type expression" t))))
 (define (type-ex-params t)
   (cond ((not (pair? t)) '())
 	((eq? (car t) 'tuple) (cdr t))
 	((eq? (car t) '...)   (cdr t))
-	((eq? (car t) 'call)  (cddr t))
+	((eq? (car t) 'ref)   (cddr t))
+	((and (eq? (car t) 'call)
+	      (eq? (cadr t) 'ref))
+	 (cdddr t))
 	(else (error "Invalid type expression" t))))
 
 ; handles form (typename name . params), giving a type object
@@ -365,19 +403,15 @@ TODO:
 			 (type-ex-params t) #t))
 	 p))
   (cond ((eq? name 'tuple)
-	 (make-type name tuple-type
-		    (list->tuple (resolve-params params))
-		    julia-null))
-	((eq? name 'union)
+	 (list->tuple (resolve-params params)))
+	((eq? name 'Union)
 	 (make-abstract-type name any-type
 			     (list->tuple (resolve-params params))
 			     julia-null))
-	#;((assq name type-env) => (lambda (x)
-				   (instantiate-type (cdr x) params)))
-	((table-ref julia-types name #f) => (lambda (x)
-					      (instantiate-type
-					       x
-					       (resolve-params params))))
+	((get-type name) => (lambda (x)
+			      (instantiate-type
+			       x
+			       (resolve-params params))))
 	((pair? nested?) name)
 	(else
 	 (error "Unknown type" name))))
@@ -413,27 +447,21 @@ TODO:
 		       (type-fields super)
 		       (alist->tuples
 			(map list fnames ftypes))))))
-      (table-set! julia-types tname T)
+      (put-type tname T)
       T)))
 
 (define (type-alias name type)
   (if (not (symbol? name))
       (error "typealias: type name must be a symbol"))
-  (table-set! julia-types name (resolve-type-ex type)))
+  (put-type name (resolve-type-ex type)))
 
 ; --- function objects ---
 
 (define (make-closure formals body env)
   (vector 'closure formals body env))
 
-(define (j-closure? x) (and (vector? x)
-			    (eq? (vector-ref x 0) 'closure)))
-
 (define (make-generic-function name)
   (vector 'generic-function '() name))
-
-(define (generic-function? x) (and (vector? x)
-				   (eq? (vector-ref x 0) 'generic-function)))
 
 (define (best-method gf argtype)
   (let loop ((m (vector-ref gf 1)))
@@ -509,14 +537,14 @@ TODO:
   (if (type-abstract? type)
       (error "Cannot instantiate abstract type" (type-name type)))
   (let* ((tn (type-name type))
-	 (L (if (eq? tn 'tuple)
+	 (L (if (eq? tn 'Tuple)
 		(length args)
-		(if (eq? tn 'buffer)
+		(if (eq? tn 'Buffer)
 		    3
 		    (tuple-length (type-fields type)))))
 	 (v (make-vector (+ 1 L))))
     (vector-set! v 0 type)
-    (if (eq? tn 'buffer)
+    (if (eq? tn 'Buffer)
 	(begin (j-set-field v 'length (car args))
 	       (vector-set! v 2 (make-vector (j-unbox (car args)) 0))
 	       v)
@@ -555,6 +583,9 @@ TODO:
 (make-builtin 'unbox j-unbox)
 (make-builtin 'istype (lambda (x y) (if (subtype? (type-of x) y)
 					julia-true julia-false)))
+(make-builtin 'instantiate_type (lambda (t p)
+				  (instantiate-type t (tuple->list p))))
+(make-builtin 'new (lambda (t . args) (j-new t args)))
 
 (make-builtin 'add_int32 +)
 (make-builtin 'add_double +)
@@ -697,18 +728,12 @@ TODO:
 
 	   ((type)
 	    (type-def (cadr e) (caddr e)))
-	   ((typename)
-	    (resolve-type-ex (cadr e)))
 	   ((typealias)
 	    (type-alias (cadr e) (caddr e)))
 	   ((tuple)
 	    (if (null? (cdr e)) julia-null
 		(apply julia-tuple (map (lambda (x) (j-eval x env))
 					(cdr e)))))
-	   ((new)
-	    (j-new (resolve-type-ex (cadr e))
-		   (map (lambda (x) (j-eval x env))
-			(cddr e))))
 	   ((lambda)
 	    (make-closure (cadr e) (caddr e) env))
 	   ((addmethod)
@@ -819,11 +844,10 @@ TODO:
     (display "#<primitive-buffer ")
     (display x)
     (display ">"))    
-   ((or (eq? (vector-ref x 0) 'tuple)
-	(eq? (type-name (type-of x)) 'tuple))
+   ((tuple? x)
     (print-tuple x))
-   ((eq? (type-name (type-of x)) 'buffer)
-    (display "buffer(")
+   ((eq? (type-name (type-of x)) 'Buffer)
+    (display "Buffer(")
     (display (type-name (tuple-ref (type-params (type-of x)) 0)))
     (display "):")
     (display (buffer-data x)))
@@ -831,11 +855,11 @@ TODO:
     (let* ((t (type-of x))
 	   (tn (type-name t)))
       (case tn
-	((int32 double) (display (j-unbox x)))
-	((boolean) (if (eq? x julia-false)
+	((Int32 Double) (display (j-unbox x)))
+	((Boolean) (if (eq? x julia-false)
 		       (display "false")
 		       (display "true")))
-	((symbol) (display (vector-ref x 1)))
+	((Symbol) (display (vector-ref x 1)))
 	(else
 	 (let ((fields (type-fields t))
 	       (vals (cdr (vector->list x))))
@@ -875,7 +899,8 @@ TODO:
 	     (newline)
 	     (julia-repl))
 	   (lambda ()
-	     (j-toplevel-eval `(call print (quote ,(j-toplevel-eval (julia-parse line)))))
+	     (j-toplevel-eval
+	      `(call print (quote ,(j-toplevel-eval (julia-parse line)))))
 	     (newline)
 	     (newline)
 	     (julia-repl)))))))

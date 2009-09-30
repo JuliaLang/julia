@@ -38,14 +38,14 @@
   "Syntax table for julia-mode")
 
 (defconst julia-font-lock-keywords
-  (list '("\\<\\(null\\|true\\|false\\|\\(c?\\(u?int\\(8\\|16\\|32\\)\\|float\\|double\\|bool\\|uint1\\)\\)\\)\\>" .
+  (list '("\\<\\(true\\|false\\|\\|Uint\\(8\\|16\\|32\\|64\\)\\|Int\\(8\\|16\\|32\\|64\\)\\|Float\\|Double\\|Boolean\\|Scalar\\|Real\\|Int\\|Tensor\\|Array\\|Tuple\\|Buffer\\|Size\\|Symbol\\|Function\\|Vector\\|Matrix\\|Union\\|Type\\|Any\\|Bottom\\)\\>" .
       font-lock-type-face)
     (cons
      (concat "\\<\\("
          (mapconcat
           'identity
           '("if" "else" "elseif" "while" "for" "begin" "end" "block"
-            "try" "return" "local" "type" "function" "new" "quote" "typename"
+            "try" "return" "local" "type" "function" "new" "quote"
 	    "typealias" "break" "continue")
           "\\|") "\\)\\>")
      'font-lock-keyword-face)

@@ -33,7 +33,7 @@
 	       arglist))
       (if (null? arglist)
 	  arglist
-	  (list 'any))))
+	  (list 'Any))))
 
 ; get the variable name part of a declaration, x:int => x
 (define (decl-var v)
@@ -44,7 +44,7 @@
 (define (decl-type v)
   (if (and (pair? v) (eq? (car v) '|:|))
       (caddr v)
-      'any))
+      'Any))
 
 ; make an expression safe for multiple evaluation
 ; for example a[f(x)] => block(temp=f(x), a[temp])
