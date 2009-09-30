@@ -326,7 +326,7 @@ TODO:
 	((|::| |.|)
 	 (loop (list (take-token s) ex (parse-atom s))))
 	((#\( )   (take-token s)
-	 (if (memq ex '(new block quote typename))
+	 (if (memq ex '(block quote))
 	     ; some names are syntactic and not function calls
 	     (loop (list* ex       (parse-arglist s #\) )))
 	     (loop (list* 'call ex (parse-arglist s #\) )))))
