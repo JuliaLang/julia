@@ -496,7 +496,7 @@ TODO:
   ; TODO: type check
   (vector-set! obj (field-offset obj (to-symbol fld)) v))
 
-(define (j-tupleref v i) (vector-ref v (+ i 1)))
+(define (j-tupleref v i) (if (eq? i 0) (raise e) (vector-ref v i)))
 
 (define (j-buffer-length v) (j-unbox (j-get-field v 'length)))
 

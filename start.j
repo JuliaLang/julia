@@ -9,7 +9,7 @@ function ref(t:Tuple, i:int32)
 end
 
 function ref(b:buffer, i:int32)
-    return box(typeof(b).parameters[0], bufferref(b, unbox(i)))
+    return box(typeof(b).parameters[1], bufferref(b, unbox(i)))
 end
 
 function set(b:buffer, i:int32, x)
