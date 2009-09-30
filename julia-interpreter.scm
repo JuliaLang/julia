@@ -35,6 +35,10 @@ TODO:
 (define (tuple-ref t i) (vector-ref t (+ i 1)))
 (define (tuple-length t) (- (vector-length t) 1))
 
+(define (tuple? x) (and (vector? x)
+			(or (eq? (vector-ref x 0) 'tuple)
+			    (eq? (type-name (type-of x)) 'tuple))))
+
 ; --- singleton null value ---
 
 (define julia-null (julia-tuple))
@@ -84,6 +88,8 @@ TODO:
 	; for now, allow scheme symbols to act as julia symbols
 	((symbol? v)
 	 symbol-type)
+	((string? v)  ; temporary
+	 any-type)
 	((eq? (vector-ref v 0) 'tuple)
 	 (let ((tt (make-tuple-type (map type-of (tuple->list v)))))
 	   (vector-set! v 0 tt)
@@ -875,7 +881,8 @@ TODO:
 	     (newline)
 	     (julia-repl))
 	   (lambda ()
-	     (j-toplevel-eval (julia-parse (string-append "print (" line ")") ))
+	     (j-toplevel-eval
+	      `(call print (quote ,(j-toplevel-eval (julia-parse line)))))
 	     (newline)
 	     (newline)
 	     (julia-repl)))))))
