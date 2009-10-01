@@ -1,3 +1,5 @@
+(define (atom? x) (not (pair? x)))
+
 (define (delete-duplicates lst)
   (if (not (pair? lst))
       lst
@@ -49,3 +51,9 @@
   (and (pair? lst)
        (or (pred (car lst))
            (any pred (cdr lst)))))
+
+(define (length= lst n)
+  (cond ((< n 0)     #f)
+	((= n 0)     (atom? lst))
+	((atom? lst) (= n 0))
+	(else        (length= (cdr lst) (- n 1)))))

@@ -1,10 +1,14 @@
 #|
 TODO:
 * local variable identification pass
-- varargs and keywords
-- apply, splat
-- more builtin functions (shifts, bitwise ops, conversions, primitive i/o)
+* varargs
+* apply, splat
+- builtin scalar conversions, implicit conversion mechanism
 - quote, expr, and symbol types, user-level macros
+
+not likely to be implemented in interpreter:
+- more builtin functions (shifts, bitwise ops, primitive i/o)
+- keywords
 - modules
 - more type checks
 - try/catch
@@ -594,6 +598,7 @@ TODO:
 (make-builtin 'instantiate_type (lambda (t p)
 				  (instantiate-type t (tuple->list p))))
 (make-builtin 'new (lambda (t . args) (j-new t args)))
+(make-builtin 'apply (lambda (f argt) (j-apply f (tuple->list argt))))
 
 (make-builtin 'add_int32 +)
 (make-builtin 'add_double +)
@@ -767,19 +772,27 @@ TODO:
 		  (table-set! julia-globals (cadr e) v))
 	      v))
 
+	   ; conceptually, move a bunch of tuples onto the stack in order
+	   ((build-args)
+	    (let ((args (map (lambda (x) (j-eval x env)) (cdr e))))
+	      (apply julia-tuple
+		     (apply append (map tuple->list args)))))
+
 	   ((call)
 	    (let ((f (j-eval (cadr e) env))
 		  (args (map (lambda (x) (j-eval x env))
 			     (cddr e))))
-	      (cond ((procedure? f)  (apply f args))
-		    ((and (vector? f)
-			  (eq? (vector-ref f 0) 'closure))
-		     (j-apply-closure f args))
-		    (else
-		     ;(assert (generic-function? f))
-		     (j-apply-generic f args)))))
+	      (j-apply f args)))
 	   (else
 	    (error "Unhandled tree type" (car e)))))))
+
+(define (j-apply f args)
+  (cond ((procedure? f)  (apply f args))
+	((and (vector? f)
+	      (eq? (vector-ref f 0) 'closure))
+	 (j-apply-closure f args))
+	(else
+	 (j-apply-generic f args))))
 
 ; create an environment with actual args bound to formal args
 (define (bind-args names args cloenv)

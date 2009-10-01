@@ -24,14 +24,16 @@ TODO:
 ; no character literals; unicode kind of makes them obsolete. strings instead.
 ; decide what to do about true, false, and null
 
-(define unary-ops '(- + ! ~))
+(define unary-ops '(- + ! ~ *))
 
 ; operators that are special forms, not function names
 (define syntactic-operators
   '(= := += -= *= /= ^= %= |\|=| &= $= => <<= >>=
       -> |\|\|| && : |::| |.|))
+(define syntactic-unary-operators '(*))
 
 (define (syntactic-op? op) (memq op syntactic-operators))
+(define (syntactic-unary-op? op) (memq op syntactic-unary-operators))
 
 (define trans-op (string->symbol ".'"))
 (define ctrans-op (string->symbol "'"))
@@ -293,7 +295,9 @@ TODO:
   (let ((t (require-token s)))
     (check-unexpected t)
     (if (memq t unary-ops)
-	(list 'call (take-token s) (parse-unary s))
+	(if (syntactic-unary-op? t)
+	    (list (take-token s) (parse-unary s))
+	    (list 'call (take-token s) (parse-unary s)))
 	(parse-factor s))))
 
 ; handle ^, .^, and postfix transpose operator

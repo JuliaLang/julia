@@ -15,6 +15,8 @@
 (tst "A[i^2].==b'" (call .== (ref A (call ^ i 2)) (call ctranspose b)))
 (tst "{f(x),g(x)}" (list (call f x) (call g x)))
 (tst "a::b.c" (|.| (|::| a b) c))
+(tst "*a" (* a))
+(tst "f(b,*a,c)" (call f b (* a) c))
 
 ; test newline as optional statement separator
 (define s (make-token-stream (open-input-string "2\n-3")))

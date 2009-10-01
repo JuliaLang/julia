@@ -91,7 +91,20 @@
 				  ,(formal-arg-types argl)
 				  (lambda ,(formal-arg-names argl)
 				    (scope-block ,body)))))
-
+   
+   ; call with splat
+   (pattern-lambda (call f ... (* _) ...)
+		   (let ((argl (cddr __)))
+		     (if (length= argl 1)
+			 `(call apply ,f ,(cadar argl))
+			 `(call apply ,f (build-args
+					  ,@(map (lambda (x)
+						   (if (and (length= x 2)
+							    (eq? (car x) '*))
+						       (cadr x)
+						       `(tuple ,x)))
+						 argl))))))
+   
    ; local x,y,z => local x;local y;local z
    (pattern-lambda (local (tuple (-- vars ...)))
 		   `(block
