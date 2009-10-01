@@ -818,8 +818,8 @@ TODO:
 
 ; --- print and repl ---
 
-(define (print-tuple x)
-  (display "(")
+(define (print-tuple x opn cls)
+  (display opn)
   (let loop ((L (tuple-length x))
 	     (i 0))
     (if (< i L)
@@ -829,7 +829,13 @@ TODO:
 		   (if (= L 1)
 		       (display ",")))
 	       (loop L (+ i 1)))
-	(display ")"))))
+	(display cls))))
+
+(define (print-type t)
+  (display (type-name t))
+  (let ((p (type-params t)))
+    (if (> (tuple-length p) 0)
+	(print-tuple p "[" "]"))))
 
 (define (julia-print x)
   (cond
@@ -845,7 +851,9 @@ TODO:
     (display x)
     (display ">"))    
    ((tuple? x)
-    (print-tuple x))
+    (print-tuple x "(" ")"))
+   ((type? x)
+    (print-type x))
    ((eq? (type-name (type-of x)) 'Buffer)
     (display "Buffer(")
     (display (type-name (tuple-ref (type-params (type-of x)) 0)))
