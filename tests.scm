@@ -135,3 +135,5 @@ end
 (assert-subtype "()" "(Scalar...)")
 (assert-!subtype "(Int32...)" "(Int32,)")
 (assert-!subtype "(Int32...)" "(Scalar,Int,)")
+(assert-subtype "(Buffer[Int8], Buffer[Int8])" "(Buffer[T], Buffer[T])")
+(assert-!subtype "(Buffer[Int8], Buffer[Int16])" "(Buffer[T], Buffer[T])")

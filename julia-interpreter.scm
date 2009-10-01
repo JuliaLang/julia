@@ -3,7 +3,6 @@ TODO:
 * local variable identification pass
 - varargs and keywords
 - apply, splat
-- type builder like maketype(...)
 - more builtin functions (shifts, bitwise ops, conversions, primitive i/o)
 - quote, expr, and symbol types, user-level macros
 - modules
@@ -91,21 +90,16 @@ TODO:
 
 ; get the type of a value
 (define (type-of v)
-  (cond ((eq? v Type-type)
-	 Type-type)
-	((eq? v any-type)
-	 Type-type)
-	((eq? v julia-null)
-	 julia-null) ; again to avoid circular references
+  (cond ((eq? v Type-type)   Type-type)
+	((eq? v any-type)    Type-type)
+	((eq? v julia-null)  julia-null) ; again to avoid circular references
 	; for now, allow scheme symbols to act as julia symbols
-	((symbol? v)
-	 symbol-type)
-	((string? v)  ; temporary
-	 any-type)
-	((generic-function? v)
-	 any-type)
-	((j-closure? v)
-	 any-type)
+	((symbol? v)             symbol-type)
+	((string? v)             any-type)  ; temporary
+	((procedure? v)   	 any-type)
+	((number? v)   	         any-type)
+	((generic-function? v)	 any-type)
+	((j-closure? v)   	 any-type)
 	((eq? (vector-ref v 0) 'tuple)
 	 (let ((tt (make-tuple-type (map type-of (tuple->list v)))))
 	   (vector-set! v 0 tt)
@@ -138,6 +132,9 @@ TODO:
 
 ; --- type functions ---
 
+(define (j-int32? x)
+  (and (vector? x) (eq? (type-name (type-of x)) 'Int32)))
+
 (define (instantiate-type type params)
   (define (copy-type type super params fields)
     (if (tuple? type)
@@ -160,17 +157,18 @@ TODO:
   ; typealias bar foo(int,y,int,t)
   ; bar(double,double)  fills in remaining y and t parameters
   (define (new-params-list tp sp)
-    (define (normalize x)
-      (if (and (vector? x) (eq? (type-name (type-of x)) 'Int32))
-	  (j-unbox x)
-	  x))
+    (define (check x)
+      (if (or (symbol? x) (j-int32? x) (type? x)
+	      (number? x))
+	  x
+	  (error "Invalid type parameter" x)))
     (cond ((null? tp)
 	   (if (null? sp) tp
 	       (error "Too many parameters for type" (type-name type))))
 	  ((symbol? (car tp))
 	   (if (null? sp)
 	       (error "Too few parameters for type" (type-name type)))
-	   (cons (normalize (car sp))
+	   (cons (check (car sp))
 		 (new-params-list (cdr tp) (cdr sp))))
 	  (else
 	   (new-params-list (cdr tp) sp))))
@@ -232,7 +230,9 @@ TODO:
 ; tells whether child is assignable to parent
 ; returns #t, #f, or an assoc list witness showing the assignment of
 ; type parameters that makes the relation hold
-(define (subtype? child parent)
+(define (subtype? child parent) (subtype?- child parent '()))
+
+(define (subtype?- child parent env)
   (cond ; see if the answer is obvious
         ((eq? child parent)       #t)
 	((eq? parent any-type)    #t)
@@ -248,10 +248,10 @@ TODO:
 
 	; recursively handle union types
 	((eq? (type-name child) 'Union)
-	 (every (lambda (t) (subtype? t parent))
+	 (every (lambda (t) (subtype?- t parent env))
 		(type-params-list child)))
 	((eq? (type-name parent) 'Union)
-	 (any   (lambda (t) (subtype? child t))
+	 (any   (lambda (t) (subtype?- child t env))
 	        (type-params-list parent)))
 
 	; handle tuple types, or any sibling instantiations of the same
@@ -265,7 +265,7 @@ TODO:
 	      (type-name parent))
 	 (let loop ((cp (type-params-list child))  ; child parameters
 		    (pp (type-params-list parent)) ; parent parameters
-		    (env '()))
+		    (env env))
 	   (let ((seq (and (pair? pp) (sequence-type? (car pp)))))
 	     (cond
 	      ((null? cp) (if (or (null? pp)
@@ -304,20 +304,19 @@ TODO:
 				     env)
 				(continue (cons (cons pp0 cp0) env)))))
 			 ((symbol? cp0) #f)
-			 ((or (number? cp0)
-			      (number? pp0))
-			  (if (eqv? cp0 pp0)
+			 ((and (j-int32? cp0) (j-int32? pp0))
+			  (if (= (j-unbox cp0) (j-unbox pp0))
 			      (continue env)
 			      #f))
-			 ((subtype? cp0 pp0) =>
+			 ((subtype?- cp0 pp0 env) =>
 			  (lambda (w)
 			    (continue (if (pair? w)
 					  (append w env)
 					  env))))
 			 (else #f)))))))))
-	   
+	
 	; otherwise walk up the type hierarchy
-	(else (subtype? (type-super child) parent))))
+	(else (subtype?- (type-super child) parent env))))
 
 ; --- define some key builtin types ---
 
@@ -412,7 +411,9 @@ TODO:
 			      (instantiate-type
 			       x
 			       (resolve-params params))))
-	((pair? nested?) name)
+	((pair? nested?) (if (number? name)
+			     (j-box int32-type name)
+			     name))
 	(else
 	 (error "Unknown type" name))))
 
@@ -518,7 +519,8 @@ TODO:
   ; TODO: type check
   (vector-set! obj (field-offset obj (to-symbol fld)) v))
 
-(define (j-tupleref v i) (if (eq? i 0) (raise e) (vector-ref v i)))
+(define (j-tuple-ref v i) (if (= i 0) (error "Tuple index out of range")
+			      (vector-ref v i)))
 
 (define (j-buffer-length v) (j-unbox (j-get-field v 'length)))
 
@@ -569,18 +571,24 @@ TODO:
 (define (j-box type v) (vector type v))
 (define (j-unbox v) (vector-ref v 1))
 
+; fix scalar type to include a proper int32(0)
+; this creates a circular reference
+(vector-set! (vector-ref (type-super scalar-type) 3) 2 (j-box int32-type 0))
+
 (make-builtin 'getfield j-get-field)
 (make-builtin 'setfield j-set-field)
 (make-builtin 'bufferref j-buffer-ref)
-(make-builtin 'tupleref j-tupleref)
-(make-builtin 'tuplelen tuple-length)
 (make-builtin 'bufferset j-buffer-set)
+(make-builtin 'tupleref j-tuple-ref)
+(make-builtin 'tuplelen tuple-length)
 (make-builtin 'not j-not)
 (make-builtin 'typeof j-typeof)
 (make-builtin 'is j-is)
 (make-builtin 'tuple julia-tuple)
 (make-builtin 'box j-box)
 (make-builtin 'unbox j-unbox)
+(make-builtin 'subtype (lambda (x y) (if (subtype? x y)
+					 julia-true julia-false)))
 (make-builtin 'istype (lambda (x y) (if (subtype? (type-of x) y)
 					julia-true julia-false)))
 (make-builtin 'instantiate_type (lambda (t p)
@@ -595,14 +603,14 @@ TODO:
 (make-builtin 'neg_double -)
 (make-builtin 'mul_int32 *)
 (make-builtin 'mul_double *)
-(define (div-int32 x y)
+(define (div-int x y)
   (let ((q (/ x y)))
     (if (< q 0)
 	(ceiling q)
 	(floor q))))
-(make-builtin 'div_int32 div-int32)
-(make-builtin 'mod_int32 (lambda (x y)
-			   (- x (* (div-int32 x y) y))))
+(define (mod-int x y) (- x (* (div-int x y) y)))
+(make-builtin 'div_int32 div-int)
+(make-builtin 'mod_int32 mod-int)
 (make-builtin 'div_double (lambda (x y) (exact->inexact (/ x y))))
 (make-builtin 'eq_int32 (lambda (x y) (if (= x y)
 					  julia-true
@@ -839,6 +847,9 @@ TODO:
 
 (define (julia-print x)
   (cond
+   ((number? x) (begin (display "#<unboxed number ")
+		       (display x)
+		       (display ">")))
    ((not (vector? x))  (display x))
    ((eq? (vector-ref x 0) 'closure)
     (display x))
