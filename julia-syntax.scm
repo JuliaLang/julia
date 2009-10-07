@@ -85,6 +85,9 @@
    (pattern-lambda (ref a (-- idxs ...))
 		   `(call ref ,a ,@idxs))
 
+   (pattern-lambda (list (-- elts ...))
+		   `(call list ,@elts))
+
    (pattern-lambda (function (call name (-- argl ...)) body)
 		   `(= ,name
 		       (addmethod ,name

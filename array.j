@@ -66,16 +66,16 @@ function print(a:Array[T,2])
 
 end
 
-function make_array(m:Int32)
-    dims = new(Buffer[Int32], 1)
+function make_array(m:Size)
+    dims = new(Buffer[Size], 1)
     dims[1] = m
     data = new(Buffer[Double], m)
     array = new(Array[Double,1], dims, data)
     return array
 end
 
-function make_array(m:Int32, n:Int32)
-    dims = new(Buffer[Int32], 2)
+function make_array(m:Size, n:Size)
+    dims = new(Buffer[Size], 2)
     dims[1] = m
     dims[2] = n
     data = new(Buffer[Double], m*n)
@@ -89,7 +89,7 @@ end
 
 ## One based indexing
 
-function ref(a:Array, i:Int32)
+function ref(a:Array, i:Index)
     return a.data[i] 
 end
 
@@ -97,20 +97,19 @@ function ref(a:Array, I:Array)
     return [ a[i] | (i=I) ]
 end
 
-function ref(a:Array, i:Int32, j:Int32)
+function ref(a:Array, i:Index, j:Index)
     m = a.dims[1]
     return a.data[(j-1)*m + i] 
 end
 
-function set(a:Array, i:Int32, x)
-    bufferset(a.data, unbox(i), x) 
+function set(a:Array, i:Index, x)
+    a.data[i] = x
     return x
 end
 
-function set(a:Array, i:Int32, j:Int32, x)
+function set(a:Array, i:Index, j:Index, x)
     m = a.dims[1]
-    pos = (j-1)*m + i
-    bufferset(a.data, unbox(pos), x)
+    a.data[(j-1)*m + i] = x
     return x
 end
 
@@ -118,21 +117,21 @@ function numel(a:Array)
     return a.data.length
 end
 
-function zeros(m:Int32)
+function zeros(m:Size)
     a = make_array(m)
     return a
 end
 
-function zeros(m:Int32, n:Int32)
+function zeros(m:Size, n:Size)
     a = make_array(m, n)
     return a
 end
 
-function ones(m:Int32)
+function ones(m:Size)
     return [ 1 | (i=1:m) ]
 end
 
-function ones(m:Int32, n:Int32)
+function ones(m:Size, n:Size)
     return [ 1 | (i=1:m), (j=1:n) ]
 end
 

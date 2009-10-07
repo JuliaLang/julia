@@ -4,6 +4,7 @@ TODO:
 * varargs
 * apply, splat
 - builtin scalar conversions, implicit conversion mechanism
+  . separate type for literals
 - quote, expr, and symbol types, user-level macros
 
 not likely to be implemented in interpreter:
@@ -238,10 +239,10 @@ not likely to be implemented in interpreter:
 
 (define (subtype?- child parent env)
   (cond ; see if the answer is obvious
-        ((eq? child parent)       #t)
-	((eq? parent any-type)    #t)
+        ((eq? child parent)       env)
+	((eq? parent any-type)    env)
 	((eq? child any-type)     #f)
-	((eq? child bottom-type)  #t)
+	((eq? child bottom-type)  env)
 	((eq? parent bottom-type) #f)
 
 	((eq? parent tuple-type)  (tuple? child))
@@ -274,7 +275,7 @@ not likely to be implemented in interpreter:
 	     (cond
 	      ((null? cp) (if (or (null? pp)
 				  seq)
-			      (if (null? env) #t env)
+			      env
 			      #f))
 	      ((null? pp) #f)
 	      (else
@@ -303,6 +304,8 @@ not likely to be implemented in interpreter:
 			  (let ((u (assq pp0 env)))
 			    (if u
 				(and (or (eq? (cdr u) cp0)
+					 ; multiple occurrences of the same
+					 ; open parameter must be type-equal
 					 (and (not (symbol? cp0))
 					      (type-equal? cp0 (cdr u))))
 				     env)
@@ -312,11 +315,16 @@ not likely to be implemented in interpreter:
 			  (if (= (j-unbox cp0) (j-unbox pp0))
 			      (continue env)
 			      #f))
-			 ((subtype?- cp0 pp0 env) =>
-			  (lambda (w)
-			    (continue (if (pair? w)
-					  (append w env)
-					  env))))
+			 ((if (eq? (type-name child) 'Buffer)
+			      ; Buffers are invariant, params must be equal
+			      (and (subtype?- pp0 cp0 env)
+				   (subtype?- cp0 pp0 env))
+			      ; default to covariant, params must be subtype
+			      (subtype?- cp0 pp0 env)) =>
+			      (lambda (w)
+				(continue (if (pair? w)
+					      (append w env)
+					      env))))
 			 (else #f)))))))))
 	
 	; otherwise walk up the type hierarchy
@@ -324,11 +332,7 @@ not likely to be implemented in interpreter:
 
 ; --- define some key builtin types ---
 
-(define scalar-type (make-abstract-type
-		     'Scalar
-		     (instantiate-type Tensor-type
-				       (list bottom-type 0))
-		     julia-null julia-null))
+(define scalar-type (instantiate-type Tensor-type (list bottom-type 0)))
 (put-type 'Scalar scalar-type)
 
 (define real-type (make-abstract-type 'Real scalar-type julia-null julia-null))
@@ -345,14 +349,13 @@ not likely to be implemented in interpreter:
 (define uint32-type (make-type 'Uint32 int-type julia-null julia-null))
 (define int64-type (make-type 'Int64 int-type julia-null julia-null))
 (define uint64-type (make-type 'Uint64 int-type julia-null julia-null))
-(define size-type (make-type 'Size int-type julia-null julia-null))
 (define float-type (make-type 'Float real-type julia-null julia-null))
 (define double-type (make-type 'Double real-type julia-null julia-null))
 
 (define symbol-type (make-type 'Symbol any-type julia-null julia-null))
 (define buffer-type (make-type 'Buffer any-type (julia-tuple 'T)
 			       (julia-tuple
-				(julia-tuple 'length size-type))))
+				(julia-tuple 'length int32-type))))
 
 (put-type 'Any any-type)
 (put-type 'Boolean boolean-type)
@@ -366,13 +369,12 @@ not likely to be implemented in interpreter:
 (put-type 'Uint64 uint64-type)
 (put-type 'Float float-type)
 (put-type 'Double double-type)
-(put-type 'Size size-type)
 (put-type 'Type Type-type)
 
 (put-type 'Symbol symbol-type)
 (put-type 'Buffer buffer-type)
 
-; --- singleton true and false values ---
+; --- true and false values ---
 
 (define julia-true (vector boolean-type 1))
 (define julia-false (vector boolean-type 0))
@@ -535,7 +537,7 @@ not likely to be implemented in interpreter:
 
 (define (j-buffer-set v i rhs)
   ; TODO: type check/convert
-  (vector-set! (buffer-data v) (- i 1) (j-unbox rhs)))
+  (vector-set! (buffer-data v) (- i 1) rhs))
 
 (define (j-not x) (if (eq? x julia-false) julia-true julia-false))
 
@@ -577,7 +579,9 @@ not likely to be implemented in interpreter:
 
 ; fix scalar type to include a proper int32(0)
 ; this creates a circular reference
-(vector-set! (vector-ref (type-super scalar-type) 3) 2 (j-box int32-type 0))
+(vector-set! (vector-ref scalar-type 3) 2 (j-box int32-type 0))
+; set element type of scalar to scalar
+(vector-set! (vector-ref scalar-type 3) 1 scalar-type)
 
 (make-builtin 'getfield j-get-field)
 (make-builtin 'setfield j-set-field)
@@ -806,7 +810,9 @@ not likely to be implemented in interpreter:
 		   (cons formal
 			 (car args)))))
 	  (cons bind
-		(bind-args (cdr names) (cdr args) cloenv))))))
+		(bind-args (cdr names)
+			   (if (pair? args) (cdr args) args)
+			   cloenv))))))
 
 (define (j-apply-closure f args)
   (with-exception-catcher
@@ -853,10 +859,13 @@ not likely to be implemented in interpreter:
 	(display cls))))
 
 (define (print-type t)
-  (display (type-name t))
-  (let ((p (type-params t)))
-    (if (> (tuple-length p) 0)
-	(print-tuple p "[" "]"))))
+  (if (eq? t scalar-type)
+      (display "Tensor[Scalar, 0]")
+      (begin
+	(display (type-name t))
+	(let ((p (type-params t)))
+	  (if (> (tuple-length p) 0)
+	      (print-tuple p "[" "]"))))))
 
 (define (julia-print x)
   (cond

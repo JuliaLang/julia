@@ -219,32 +219,35 @@ TODO:
 ; op: the operator to look for
 ; head: the expression head to yield in the result, e.g. "a;b" => (block a b)
 ; closers: a list of tokens that will stop the process
+;          however, this doesn't consume the closing token, just looks at it
 ; allow-empty: if true will ignore runs of the operator, like a@@@@b
 ; ow, my eyes!!
 (define (parse-Nary s down op head closers allow-empty)
-  (let loop ((ex
-              ; in allow-empty mode skip leading runs of operator
-	      (if (and allow-empty (eqv? (require-token s) op))
-		  '()
-		  (list (down s))))
-	     (first? #t))
-    (let ((t (peek-token s)))
-      (if (not (eqv? t op))
-	  (if (or (null? ex) (pair? (cdr ex)) (not first?))
-	      ; () => (head)
-	      ; (ex2 ex1) => (head ex1 ex2)
-	      ; (ex1) ** if operator appeared => (head ex1) (handles "x;")
-	      (cons head (reverse ex))
-	      ; (ex1) => ex1
-	      (car ex))
-	  (begin (take-token s)
-		 ; allow input to end with the operator, as in a;b;
-		 (if (or (eof-object? (peek-token s))
-			 (memv (peek-token s) closers)
-			 (and allow-empty
-			      (eqv? (peek-token s) op)))
-		     (loop ex #f)
-		     (loop (cons (down s) ex) #f)))))))
+  (if (memv (require-token s) closers)
+      (list head)  ; empty block
+      (let loop ((ex
+                  ; in allow-empty mode skip leading runs of operator
+		  (if (and allow-empty (eqv? (require-token s) op))
+		      '()
+		      (list (down s))))
+		 (first? #t))
+	(let ((t (peek-token s)))
+	  (if (not (eqv? t op))
+	      (if (or (null? ex) (pair? (cdr ex)) (not first?))
+	          ; () => (head)
+	          ; (ex2 ex1) => (head ex1 ex2)
+	          ; (ex1) ** if operator appeared => (head ex1) (handles "x;")
+		  (cons head (reverse ex))
+	          ; (ex1) => ex1
+		  (car ex))
+	      (begin (take-token s)
+		     ; allow input to end with the operator, as in a;b;
+		     (if (or (eof-object? (peek-token s))
+			     (memv (peek-token s) closers)
+			     (and allow-empty
+				  (eqv? (peek-token s) op)))
+			 (loop ex #f)
+			 (loop (cons (down s) ex) #f))))))))
 
 ; colon is strange; 3 arguments with 2 colons yields one call:
 ; 1:2   => (: 1 2)
