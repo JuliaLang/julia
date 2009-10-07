@@ -209,6 +209,17 @@
 
    )) ; patterns
 
+; convert a lambda list into a list of just symbols
+(define (lambda-vars lst)
+  (map (lambda (v)
+	 (if (symbol? v)
+	     v
+	     (case (car v)
+	       ((...)         (cadr v))
+	       ((= keyword)   (caddr v))
+	       (else (error "Malformed function arguments" lst)))))
+       lst))
+
 ; local variable identification
 ; convert (scope-block x) to `(scope-block ,@locals ,x)
 ; where locals is a list of (local x) expressions, derived from two sources:
@@ -236,7 +247,7 @@
 	(cond ((eq? (car e) 'lambda)
 	       (list 'lambda (cadr e)
 		     (add-local-decls (caddr e)
-				      (append (cadr e) env))))
+				      (append (lambda-vars (cadr e)) env))))
 	      ((eq? (car e) 'scope-block)
 	       (let* ((vars (delete-duplicates
 			     (find-assigned-vars (cadr e) env)))
@@ -248,6 +259,35 @@
 			   (add-local-decls x env))
 			 e)))))
   (add-local-decls e '()))
+
+; e - expression
+; renames - assoc list of (oldname . newname)
+; this works on any tree format after identify-locals
+(define (rename-vars e renames)
+  (define (without alst remove)
+    (if (null? remove)
+	alst
+	(filter (lambda (ren)
+		  (not (memq (car ren) remove)))
+		alst)))
+  (cond ((null? renames)  e)
+	((symbol? e)      (lookup e renames e))
+	((atom? e)        e)
+	(else
+	 (let* ((bound-vars  ; compute vars bound by current expr
+		 (case (car e)
+		   ((lambda)      (lambda-vars (cadr e)))
+		   ((scope-block) (map (lambda (x) (decl-var (cadr x)))
+				       (filter (lambda (x)
+						 (and (pair? x)
+						      (eq? (car x) 'local)))
+					       (cdr e))))
+		   (else '())))
+		(new-renames (without renames bound-vars)))
+	   (cons (car e)
+		 (map (lambda (x)
+			(rename-vars x new-renames))
+		      (cdr e)))))))
 
 (define (julia-expand ex)
   (identify-locals

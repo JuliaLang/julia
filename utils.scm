@@ -57,3 +57,7 @@
 	((= n 0)     (atom? lst))
 	((atom? lst) (= n 0))
 	(else        (length= (cdr lst) (- n 1)))))
+
+(define (lookup elt alst default)
+  (let ((a (assq elt alst)))
+    (if a (cdr a) default)))

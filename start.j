@@ -108,14 +108,14 @@ end
 
 function ref(l:List, i:Index)
     if i > l.size
-        # todo: error
+        error("Out of bounds")
     end
     return l.data[i+l.offset]
 end
 
 function set(l:List, i:Index, elt)
     if i > l.size
-        # todo: error
+        error("Out of bounds")
     end
     l.data[i+l.offset] = elt
 end
@@ -159,7 +159,7 @@ end
 
 function pop(a:List)
     if (a.size == 0)
-        return ()
+        error("pop: List is empty")
     end
     item = a[a.size]
     a[a.size] = ()

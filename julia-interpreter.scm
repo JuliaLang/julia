@@ -91,7 +91,8 @@ not likely to be implemented in interpreter:
 			    (eq? (vector-ref x 0) 'closure)))
 
 (define (generic-function? x) (and (vector? x)
-				   (eq? (vector-ref x 0) 'generic-function)))
+				   (eq? (vector-ref x 0) 'closure)
+				   (eq? (vector-ref x 1) j-apply-generic)))
 
 ; get the type of a value
 (define (type-of v)
@@ -193,9 +194,7 @@ not likely to be implemented in interpreter:
 		   (lambda (t)
 		     (instantiate-type
 		      t
-		      (map (lambda (p)
-			     (let ((u (assq p env)))
-			       (if u (cdr u) p)))
+		      (map (lambda (p) (lookup p env p))
 			   (filter symbol?
 				   (type-params-list t)))))))
 	     (copy-type type
@@ -464,14 +463,22 @@ not likely to be implemented in interpreter:
 
 ; --- function objects ---
 
-(define (make-closure formals body env)
-  (vector 'closure formals body env))
+(define (make-closure proc env)
+  (vector 'closure proc env))
+
+(define (j-apply-generic ce args)
+  (let* ((argtype (make-tuple-type (map type-of args)))
+	 (meth  (best-method (car ce) argtype)))
+    (if (not meth)
+	(error "No method for function" (cdr ce)
+	       "matching types" (map type-name (type-params-list argtype)))
+	((vector-ref (cdr meth) 1) (vector-ref (cdr meth) 2) args))))
 
 (define (make-generic-function name)
-  (vector 'generic-function '() name))
+  (make-closure j-apply-generic (cons '() name)))
 
-(define (best-method gf argtype)
-  (let loop ((m (vector-ref gf 1)))
+(define (best-method methtable argtype)
+  (let loop ((m methtable))
     (if (null? m)
 	#f
 	(if (subtype? argtype (caar m))
@@ -485,14 +492,18 @@ not likely to be implemented in interpreter:
 	  (cons item lst)
 	  (cons (car lst) (cons-in-order item (cdr lst) key <)))))
 
+(define (gf-mtable gf) (car (vector-ref gf 2)))
+(define (gf-set-mtable! gf mt) (set-car! (vector-ref gf 2) mt))
+(define (gf-name gf) (cdr (vector-ref gf 2)))
+
 (define (add-method gf argtype m)
   (let ((matches (filter (lambda (x)
 			   (type-equal? (car x) argtype))
-			 (vector-ref gf 1))))
+			 (gf-mtable gf))))
     (if (null? matches)
-	(vector-set! gf 1
-		     (cons-in-order (cons argtype m) (vector-ref gf 1)
-				    car subtype?))
+	(gf-set-mtable! gf
+			(cons-in-order (cons argtype m) (gf-mtable gf)
+				       car subtype?))
 	(if (null? (cdr matches))
 	  ; overwrite existing exactly matching method
 	  (begin (set-car! (car matches) argtype)
@@ -522,7 +533,7 @@ not likely to be implemented in interpreter:
   (vector-ref obj (field-offset obj (to-symbol fld))))
 
 (define (j-set-field obj fld v)
-  ; TODO: type check
+  ; TODO: type check/convert
   (vector-set! obj (field-offset obj (to-symbol fld)) v))
 
 (define (j-tuple-ref v i) (if (= i 0) (error "Tuple index out of range")
@@ -572,7 +583,9 @@ not likely to be implemented in interpreter:
 (define (j-is x y) (eq? x y))
 
 (define (make-builtin name impl)
-  (table-set! julia-globals name impl))
+  (table-set! julia-globals name
+	      (make-closure (lambda (ce args) (apply impl args))
+			    #f)))
 
 (define (j-box type v) (vector type v))
 (define (j-unbox v) (vector-ref v 1))
@@ -595,6 +608,7 @@ not likely to be implemented in interpreter:
 (make-builtin 'tuple julia-tuple)
 (make-builtin 'box j-box)
 (make-builtin 'unbox j-unbox)
+(make-builtin 'error error)
 (make-builtin 'subtype (lambda (x y) (if (subtype? x y)
 					 julia-true julia-false)))
 (make-builtin 'istype (lambda (x y) (if (subtype? (type-of x) y)
@@ -752,7 +766,9 @@ not likely to be implemented in interpreter:
 		(apply julia-tuple (map (lambda (x) (j-eval x env))
 					(cdr e)))))
 	   ((lambda)
-	    (make-closure (cadr e) (caddr e) env))
+	    (make-closure (lambda (ce args)
+			    (j-eval-body (cadr e) (caddr e) ce args))
+			  env))
 	   ((addmethod)
 	    (let* ((name (cadr e))
 		   (gf (if (j-bound? name env)
@@ -781,22 +797,20 @@ not likely to be implemented in interpreter:
 	    (let ((args (map (lambda (x) (j-eval x env)) (cdr e))))
 	      (apply julia-tuple
 		     (apply append (map tuple->list args)))))
-
+	   
 	   ((call)
-	    (let ((f (j-eval (cadr e) env))
-		  (args (map (lambda (x) (j-eval x env))
-			     (cddr e))))
-	      (j-apply f args)))
+	    (j-apply (j-eval (cadr e) env)
+		     (map (lambda (x) (j-eval x env))
+			  (cddr e))))
+	   
 	   (else
 	    (error "Unhandled tree type" (car e)))))))
 
 (define (j-apply f args)
-  (cond ((procedure? f)  (apply f args))
-	((and (vector? f)
-	      (eq? (vector-ref f 0) 'closure))
-	 (j-apply-closure f args))
-	(else
-	 (j-apply-generic f args))))
+  (if (and (vector? f)
+	   (eq? (vector-ref f 0) 'closure))
+      ((vector-ref f 1) (vector-ref f 2) args)
+      (error "call: expected function")))
 
 ; create an environment with actual args bound to formal args
 (define (bind-args names args cloenv)
@@ -814,7 +828,7 @@ not likely to be implemented in interpreter:
 			   (if (pair? args) (cdr args) args)
 			   cloenv))))))
 
-(define (j-apply-closure f args)
+(define (j-eval-body formals body cenv args)
   (with-exception-catcher
    (lambda (e)
      (if (and (pair? e)
@@ -822,16 +836,8 @@ not likely to be implemented in interpreter:
 	 (cdr e)
 	 (raise e)))
    (lambda ()
-     (j-eval (vector-ref f 2)
-	     (bind-args (vector-ref f 1) args (vector-ref f 3))))))
-
-(define (j-apply-generic gf args)
-  (let* ((argtype (make-tuple-type (map type-of args)))
-	 (meth  (best-method gf argtype)))
-    (if (not meth)
-	(error "No method for function" (vector-ref gf 2)
-	       "matching types" (map type-name (type-params-list argtype)))
-	(j-apply-closure (cdr meth) args))))
+     (j-eval body
+	     (bind-args formals args cenv)))))
 
 (define (j-toplevel-eval e)
   (j-eval (julia-expand e) '()))
