@@ -2,6 +2,8 @@ function ref(t:Type, params...)
     return instantiate_type(t, params)
 end
 
+typealias Nullable Union[T,()]
+
 function print(x:Any)
     # default print function, call builtin
     _print(x)

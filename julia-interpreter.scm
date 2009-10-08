@@ -910,29 +910,72 @@ not likely to be implemented in interpreter:
 
 (make-builtin '_print julia-print)
 
+(define (detect-color)
+  (let ((tput (shell-command "tput setaf 9 >&/dev/null")))
+    (if (= tput 0)
+	#t
+	(if (= tput 1)
+	    #f
+	    (let ((Tenv (with-exception-catcher
+			 (lambda (e) #f)
+			 (lambda () (getenv "TERM")))))
+	      (or (equal? Tenv "xterm")
+		  (equal? Tenv "xterm-color")))))))
+
+(define COLOR? (detect-color))
+
+(define banner
+(if COLOR?
+"\033[1m               \033[32m_\033[37m      
+   \033[36m_\033[37m       _ \033[31m_\033[32m(_)\033[35m_\033[37m     |
+  \033[36m(_)\033[37m     | \033[31m(_) \033[35m(_)\033[37m    |  pre-release version
+   _ _   _| |_  __ _ 2 |
+  | | | | | | |/ _` |  |
+  | | |_| | | | (_| |  |  \302\2512009 contributors
+ _/ |\\__'_|_|_|\\__'_|  |  
+|__/                   |\033[0m
+
+"
+
+"               _      
+   _       _ _(_)_     |
+  (_)     | (_) (_)    |  pre-release version
+   _ _   _| |_  __ _ 2 |
+  | | | | | | |/ _` |  |
+  | | |_| | | | (_| |  |  \302\2512009 contributors
+ _/ |\\__'_|_|_|\\__'_|  |  
+|__/                   |
+
+"
+))
+
 (define (julia-repl)
   (j-load "start.j")
   (j-load "array.j")
   (j-load "examples.j")
+  (display banner)
 
-  (display "julia> ")
-  (let ((line (read-line)))
-    (if (eof-object? line)
-	(newline)
-	(begin 
-	  (with-exception-catcher
-	   (lambda (e)
-	     ;(raise e)
-	     (display (error-exception-message e))
-	     (for-each (lambda (x)
-			 (display " ") (display x))
-		       (error-exception-parameters e))
-	     (newline)
-	     (newline)
-	     (julia-repl))
-	   (lambda ()
-	     (j-toplevel-eval
-	      `(call print (quote ,(j-toplevel-eval (julia-parse line)))))
-	     (newline)
-	     (newline)
-	     (julia-repl)))))))
+  (let prompt ()
+    (display "julia> ")
+    (let ((line (read-line)))
+      (if (eof-object? line)
+	  (newline)
+	  (begin 
+	    (with-exception-catcher
+	     (lambda (e)
+	       ;(raise e)
+	       (display (error-exception-message e))
+	       (for-each (lambda (x)
+			   (display " ") (display x))
+			 (error-exception-parameters e))
+	       (newline)
+	       (newline)
+	       (prompt))
+	     (lambda ()
+	       (if COLOR? (display "\033[1m\033[36m"))
+	       (j-toplevel-eval
+		`(call print (quote ,(j-toplevel-eval (julia-parse line)))))
+	       (if COLOR? (display "\033[0m"))
+	       (newline)
+	       (newline)
+	       (prompt))))))))
