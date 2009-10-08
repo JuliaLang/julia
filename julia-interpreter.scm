@@ -685,7 +685,7 @@ not likely to be implemented in interpreter:
 
 (define (j-eval e env)
   (cond ((number? e)
-	 (if (integer? e)
+	 (if (not (flonum? e))
 	     (j-box int32-type e)
 	     (j-box double-type e)))
 	((eq? e 'false) julia-false)

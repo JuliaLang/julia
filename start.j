@@ -47,10 +47,6 @@ function `+`(x:Int32, y:Int32)
     return box(Int32, add_int32(unbox(x), unbox(y)))
 end
 
-function `+`(x:Double, y:Double)
-    return box(Double, add_double(unbox(x), unbox(y)))
-end
-
 function `-`(x:Int32, y:Int32)
     return box(Int32, sub_int32(unbox(x), unbox(y)))
 end
@@ -86,6 +82,47 @@ end
 function `==`(x:Int32, y:Int32)
     return eq_int32(unbox(x),unbox(y))
 end
+
+function `+`(x:Double, y:Double)
+    return box(Double, add_double(unbox(x), unbox(y)))
+end
+
+function `-`(x:Double, y:Double)
+    return box(Double, sub_double(unbox(x), unbox(y)))
+end
+
+function `-`(x:Double)
+    return box(Double, neg_double(unbox(x)))
+end
+
+function `*`(x:Double, y:Double)
+    return box(Double, mul_double(unbox(x), unbox(y)))
+end
+
+function `/`(x:Double, y:Double)
+    return box(Double, div_double(unbox(x), unbox(y)))
+end
+
+function `<=`(x:Double, y:Double)
+    return lt_double(unbox(x),unbox(y)) || eq_double(unbox(x),unbox(y))
+end
+
+function `<`(x:Double, y:Double)
+    return lt_double(unbox(x),unbox(y))
+end
+
+function `>`(x:Double, y:Double)
+    return lt_double(unbox(y),unbox(x))
+end
+
+function `>=`(x:Double, y:Double)
+    return (x>y) || eq_double(unbox(x),unbox(y))
+end
+
+function `==`(x:Double, y:Double)
+    return eq_double(unbox(x),unbox(y))
+end
+
 
 type List[T]
     maxsize: Size
