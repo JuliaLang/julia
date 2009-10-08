@@ -38,7 +38,7 @@
   "Syntax table for julia-mode")
 
 (defconst julia-font-lock-keywords
-  (list '("\\<\\(true\\|false\\|\\|Uint\\(8\\|16\\|32\\|64\\)\\|Int\\(8\\|16\\|32\\|64\\)\\|Float\\|Double\\|Boolean\\|Scalar\\|Real\\|Int\\|Tensor\\|Array\\|Tuple\\|Buffer\\|Size\\|Symbol\\|Function\\|Vector\\|Matrix\\|Union\\|Type\\|Any\\|Bottom\\)\\>" .
+  (list '("\\<\\(true\\|false\\|\\|Uint\\(8\\|16\\|32\\|64\\)\\|Int\\(8\\|16\\|32\\|64\\)\\|Float\\|Double\\|Boolean\\|Scalar\\|Real\\|Int\\|Tensor\\|Array\\|Tuple\\|Buffer\\|Size\\|Index\\|Symbol\\|Function\\|Vector\\|Matrix\\|Union\\|Type\\|Any\\|Bottom\\)\\>" .
       font-lock-type-face)
     (cons
      (concat "\\<\\("
@@ -56,6 +56,9 @@
 
 (defconst julia-block-other-keywords
   (list "else" "elseif"))
+
+(defconst julia-block-end-keywords
+  (list "end" "else" "elseif"))
 
 (defun member (item lst)
   (if (null lst)
@@ -124,7 +127,7 @@
            (let ((endtok (progn
                            (beginning-of-line)
                            (forward-to-indentation 0)
-                           (equal (current-word) "end"))))
+                           (member (current-word) julia-block-end-keywords))))
              (error2nil (+ (last-open-block (point-min) 0)
                            (if endtok -4 0)))))
 ; take same indentation as previous line
@@ -140,7 +143,8 @@
 					  (equal (char-after (point)) ?=)))
 			   4 nil))
          0))
-	(when (equal (current-word) "end") (forward-word 1)))
+	(when (member (current-word) julia-block-end-keywords)
+	  (forward-word 1)))
 
 (defun julia-mode ()
   "Major mode for editing julia code"
