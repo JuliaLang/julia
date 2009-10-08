@@ -553,7 +553,10 @@ not likely to be implemented in interpreter:
   ; TODO: type check/convert
   (vector-set! (buffer-data v) (- i 1) rhs))
 
-(define (j-not x) (if (eq? x julia-false) julia-true julia-false))
+(define (j-false? x)
+  (and (vector? x)
+       (eq? (vector-ref x 0) boolean-type)
+       (= (vector-ref x 1) 0)))
 
 (define (j-new type args)
   (if (type-abstract? type)
@@ -599,28 +602,33 @@ not likely to be implemented in interpreter:
 ; set element type of scalar to scalar
 (vector-set! (vector-ref scalar-type 3) 1 scalar-type)
 
+; the following builtin functions are ordinary first-class functions,
+; and can be directly employed by the user.
+(make-builtin 'new (lambda (t . args) (j-new t args)))
 (make-builtin 'getfield j-get-field)
 (make-builtin 'setfield j-set-field)
-(make-builtin 'bufferref j-buffer-ref)
-(make-builtin 'bufferset j-buffer-set)
-(make-builtin 'tupleref j-tuple-ref)
-(make-builtin 'tuplelen tuple-length)
-(make-builtin 'not j-not)
-(make-builtin 'typeof j-typeof)
 (make-builtin 'is j-is)
-(make-builtin 'tuple julia-tuple)
-(make-builtin 'box j-box)
-(make-builtin 'unbox j-unbox)
-(make-builtin 'error error)
+(make-builtin 'typeof j-typeof)
 (make-builtin 'subtype (lambda (x y) (if (subtype? x y)
 					 julia-true julia-false)))
 (make-builtin 'istype (lambda (x y) (if (subtype? (type-of x) y)
 					julia-true julia-false)))
 (make-builtin 'instantiate_type (lambda (t p)
 				  (instantiate-type t (tuple->list p))))
-(make-builtin 'new (lambda (t . args) (j-new t args)))
+(make-builtin 'tuple julia-tuple)
 (make-builtin 'apply (lambda (f argt) (j-apply f (tuple->list argt))))
+(make-builtin 'error error)
 
+; the following functions are compiler intrinsics, meaning that users
+; should generally avoid them. they basically always expand to inline code,
+; and may not be available as first-class functions in the final system.
+; some require unboxed arguments, which are tricky to deal with.
+(make-builtin 'bufferref j-buffer-ref)
+(make-builtin 'bufferset j-buffer-set)
+(make-builtin 'tupleref j-tuple-ref)
+(make-builtin 'tuplelen tuple-length)
+(make-builtin 'box j-box)
+(make-builtin 'unbox j-unbox)
 (make-builtin 'add_int32 +)
 (make-builtin 'add_double +)
 (make-builtin 'sub_int32 -)
@@ -658,13 +666,13 @@ not likely to be implemented in interpreter:
 						(not (= x y)))
 					   julia-true
 					   julia-false)))
-(make-builtin 'isnan (lambda (x) (if (not (= x x))
-				     julia-true
-				     julia-false)))
-(make-builtin 'isinf (lambda (x) (if (or (equal? x +inf.0)
-					 (equal? x -inf.0))
-				     julia-true
-				     julia-false)))
+(make-builtin 'isnan_double (lambda (x) (if (not (= x x))
+					    julia-true
+					    julia-false)))
+(make-builtin 'isinf_double (lambda (x) (if (or (equal? x +inf.0)
+						(equal? x -inf.0))
+					    julia-true
+					    julia-false)))
 
 
 ; --- evaluator ---
@@ -700,13 +708,13 @@ not likely to be implemented in interpreter:
 	 (case (car e)
 	   ((quote)   (scm->julia (cadr e)))
 	   ((if)      (let ((c (j-eval (cadr e) env)))
-			(if (not (eq? c julia-false))
+			(if (not (j-false? c))
 			    (j-eval (caddr e) env)
 			    (if (pair? (cdddr e))
 				(j-eval (cadddr e) env)
 				julia-false))))
 	   ((_while)   (let loop ()
-			 (if (not (eq? (j-eval (cadr e) env) julia-false))
+			 (if (not (j-false? (j-eval (cadr e) env)))
 			     (begin (j-eval (caddr e) env)
 				    (loop)))
 			 julia-null))
@@ -716,15 +724,14 @@ not likely to be implemented in interpreter:
 	   ((&&)      (let loop ((clauses (cdr e)))
 			(cond ((null? clauses) julia-true)
 			      ((null? (cdr clauses)) (j-eval (car clauses) env))
-			      ((not (eq? (j-eval (car clauses) env)
-					 julia-false))
+			      ((not (j-false? (j-eval (car clauses) env)))
 			       (loop (cdr clauses)))
 			      (else julia-false))))
 	   ((|\|\||)  (let loop ((clauses (cdr e)))
 			(cond ((null? clauses) julia-false)
 			      ((null? (cdr clauses)) (j-eval (car clauses) env))
 			      (else (let ((v (j-eval (car clauses) env)))
-				      (if (eq? v julia-false)
+				      (if (j-false? v)
 					  (loop (cdr clauses))
 					  v))))))
 	   ((block)   (let loop ((v julia-null)
@@ -906,7 +913,7 @@ not likely to be implemented in interpreter:
 	   (tn (type-name t)))
       (case tn
 	((Int32 Double) (display (j-unbox x)))
-	((Boolean) (if (eq? x julia-false)
+	((Boolean) (if (j-false? x)
 		       (display "false")
 		       (display "true")))
 	((Symbol) (display (vector-ref x 1)))
@@ -974,6 +981,7 @@ not likely to be implemented in interpreter:
   (display banner)
 
   (let prompt ()
+    (if COLOR? (display "\033[0m"))
     (display "julia> ")
     (let ((line (read-line)))
       (if (eof-object? line)
@@ -993,7 +1001,6 @@ not likely to be implemented in interpreter:
 	       (if COLOR? (display "\033[1m\033[36m"))
 	       (j-toplevel-eval
 		`(call print (quote ,(j-toplevel-eval (julia-parse line)))))
-	       (if COLOR? (display "\033[0m"))
 	       (newline)
 	       (newline)
 	       (prompt))))))))

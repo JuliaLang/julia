@@ -3,15 +3,14 @@ function ref(t:Type, params...)
 end
 
 typealias Nullable Union[T,()]
+typealias Index Int32
+typealias Size  Int32
 
 function print(x:Any)
     # default print function, call builtin
     _print(x)
     return ()
 end
-
-typealias Index Int32
-typealias Size  Int32
 
 function ref(t:Tuple, i:Index)
     return tupleref(t, unbox(i))
@@ -41,6 +40,14 @@ end
 
 function length(b:Buffer)
     return b.length
+end
+
+function `!`(x:Boolean)
+    return eq_int32(unbox(x),unbox(0))
+end
+
+function `!`(x)
+    return false
 end
 
 function `+`(x:Int32, y:Int32)
