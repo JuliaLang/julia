@@ -106,8 +106,8 @@ end
 ; a powerful pattern -- flatten all nested uses of an operator into one call
 (define-macro (flatten-op op e)
   `(pattern-expand
-    (pattern-lambda (,op (-- l ...) (-- inner (,op ...)) (-- r ...))
-                    (cons ',op (append l (cdr inner) r)))
+    (list (pattern-lambda (,op (-- l ...) (-- inner (,op ...)) (-- r ...))
+			  (cons ',op (append l (cdr inner) r))))
     ,e))
 
 (assert (equal? (flatten-op + '(+ (+ 1 2) (+ (+ (+ 3) 4) (+ 5))))
@@ -142,3 +142,29 @@ end
 (assert-!subtype "Buffer[Int8]" "Buffer[Any]")
 (assert-!subtype "Buffer[Any]" "Buffer[Int8]")
 (assert-subtype "Buffer[Int8]" "Buffer[Int8]")
+
+; --- lowering tests ---
+
+; use match to compare, because symbol names will not be equal due to gensyms
+(assert (match
+	 '(lambda (x y)
+	    (locals n f size g6 g7)
+	    (block (= n 0)
+		   (= f (lambda (x n) (+ x n)))
+		   (block (= y 1) (= g7 10) (= g6 12)
+			  (call * g6 (call + y g7)))))
+	 (flatten-scopes '(lambda (x y)
+			    (scope-block
+			     (local n)
+			     (local f)
+			     (local size)
+			     (block (= n 0)
+				    (= f (lambda (x n) (+ x n)))
+				    (scope-block
+				     (local z)
+				     (local n)
+				     (block
+				      (= y 1)
+				      (= n 10)
+				      (= z 12)
+				      (call * z (call + y n))))))))))

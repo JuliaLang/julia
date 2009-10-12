@@ -21,6 +21,7 @@
 ; (-/ <ex>)  match <ex> literally
 ; (-^ <p>)   complement of pattern <p>
 ; (-- <var> <p>)  match <p> and capture as <var> if match succeeds
+; (<pat...> . <var>) match prefix and bind tail to <var>
 ;
 ; regular match constructs:
 ; ...                 match any number of anything
@@ -100,6 +101,7 @@
 ; match sequences of expressions
 (define (match-seq p expr state L)
   (cond ((not state) #f)
+	((symbol? p) (cons (cons p expr) state))
 	((null? p) (if (null? expr) state #f))
 	(else
 	 (let ((subp (car p))
@@ -132,15 +134,10 @@
 ; returns the new expression, or expr if no matches
 (define (apply-patterns plist expr)
   (if (null? plist) expr
-      (if (procedure? plist)
-	  (let ((enew (plist expr)))
-	    (if (not enew)
-		expr
-		enew))
-	  (let ((enew ((car plist) expr)))
-	    (if (not enew)
-		(apply-patterns (cdr plist) expr)
-		enew)))))
+      (let ((enew ((car plist) expr)))
+	(if (not enew)
+	    (apply-patterns (cdr plist) expr)
+	    enew))))
 
 ; top-down fixed-point macroexpansion. this is a typical algorithm,
 ; but it may leave some structure that matches a pattern unexpanded.
@@ -181,6 +178,10 @@
 	(cons (car lst)
 	      (filter (lambda (x) (not (eq? x (car lst))))
 		      (unique (cdr lst))))))
+  (define (to-proper l)
+    (cond ((null? l) l)
+	  ((not (pair? l)) (list l))
+	  (else (cons (car l) (to-proper (cdr l))))))
   ; given a pattern p, return the list of capturing variables it uses
   (define (patargs- p)
     (cond ((and (symbol? p)
@@ -190,7 +191,7 @@
 	  ((pair? p)
 	   (if (eq? (car p) '-/)
 	       '()
-	       (unique (apply append (map patargs- (cdr p))))))
+	       (unique (apply append (map patargs- (to-proper (cdr p)))))))
 	  
 	  (else '())))
   (define (patargs p)
