@@ -11,8 +11,8 @@ function fibnorecur(n)
     f2 = 1
     for i=2:n
         f = f1 + f2
-        _print(f)
-        _print(" ")
+        print(f)
+        print(" ")
         tmp = f2
         f2 = f
         f1 = tmp

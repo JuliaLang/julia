@@ -6,6 +6,7 @@ TODO:
 - builtin scalar conversions, implicit conversion mechanism
   . separate type for literals
 - quote, expr, and symbol types, user-level macros
+- global var declaration
 
 not likely to be implemented in interpreter:
 - more builtin functions (shifts, bitwise ops, primitive i/o)

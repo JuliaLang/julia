@@ -10,16 +10,16 @@ function print(a:Array[T,1])
     n = a.dims[1]
 
     if n < 10
-        for i=1:n; print(a[i]); _print("\n"); end
+        for i=1:n; print(a[i]); print("\n"); end
     else
-        for i=1:3; print(a[i]); _print("\n"); end
-        _print(":\n");
-        for i=n-2:n; print(a[i]); _print("\n"); end
+        for i=1:3; print(a[i]); print("\n"); end
+        print(":\n");
+        for i=n-2:n; print(a[i]); print("\n"); end
     end
 end
 
 function printcols(a, start, stop, i)
-    for j=start:stop; print(a[i,j]); _print(" "); end
+    for j=start:stop; print(a[i,j]); print(" "); end
 end
 
 function print(a:Array[T,2])
@@ -35,19 +35,19 @@ function print(a:Array[T,2])
     for i=1:3
         if print_hdots
             printcols (a, 1, 3, i)
-            if i == 1; _print(": "); else; _print("  "); end
+            if i == 1; print(": "); else; print("  "); end
             printcols (a, n-2, n, i)
         else
             printcols (a, 1, n, i)
         end
-        _print("\n")
+        print("\n")
     end
     
     if print_vdots
         if print_hdots 
-            _print(":           :\n")
+            print(":           :\n")
         else
-            _print(":\n")
+            print(":\n")
         end
     else
         for i=4:m-3; printcols (a, 1, n, i); end
@@ -56,12 +56,12 @@ function print(a:Array[T,2])
     for i=m-2:m
         if print_hdots
             printcols (a, 1, 3, i)
-            if i == m; _print(": "); else; _print("  "); end
+            if i == m; print(": "); else; print("  "); end
             printcols (a, n-2, n, i)
         else
             printcols (a, 1, n, i)
         end
-        _print("\n")
+        print("\n")
     end
 
 end
