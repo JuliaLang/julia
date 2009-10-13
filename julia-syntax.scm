@@ -79,16 +79,16 @@
    (pattern-lambda (= (|.| a b) rhs)
 		   `(call setfield ,a (quote ,b) ,rhs))
 
-   (pattern-lambda (= (ref a (-- idxs ...)) rhs)
+   (pattern-lambda (= (ref a . idxs) rhs)
 		   `(call set ,a ,@idxs ,rhs))
 
-   (pattern-lambda (ref a (-- idxs ...))
+   (pattern-lambda (ref a . idxs)
 		   `(call ref ,a ,@idxs))
 
-   (pattern-lambda (list (-- elts ...))
+   (pattern-lambda (list . elts)
 		   `(call list ,@elts))
 
-   (pattern-lambda (function (call name (-- argl ...)) body)
+   (pattern-lambda (function (call name . argl) body)
 		   `(= ,name
 		       (addmethod ,name
 				  ,(formal-arg-types argl)
@@ -109,7 +109,7 @@
 						 argl))))))
    
    ; local x,y,z => local x;local y;local z
-   (pattern-lambda (local (tuple (-- vars ...)))
+   (pattern-lambda (local (tuple . vars))
 		   `(block
 		     ,@(map (lambda (x) `(local ,x)) vars)))
 
@@ -120,10 +120,11 @@
 
    ; adding break/continue support to while loop
    (pattern-lambda (while cnd body)
-		   `(break-block loop-exit
-				 (_while ,cnd
-					 (break-block loop-cont
-						      ,body))))
+		   `(scope-block
+		     (break-block loop-exit
+				  (_while ,cnd
+					  (break-block loop-cont
+						       ,body)))))
 
    (pattern-lambda (break) '(break loop-exit))
    (pattern-lambda (continue) '(break loop-cont))
@@ -139,7 +140,8 @@
       (if c
 	  (let ((cnt (gensym))
 		(lim (gensym)))
-	    `(block
+	    `(scope-block
+	     (block
 	      (= ,cnt 0)
 	      (= ,lim (call / (call - ,c ,a) ,b))
 	      (break-block loop-exit
@@ -148,9 +150,10 @@
 				    (= ,var (call + ,a (call * ,cnt ,b)))
 				    (break-block loop-cont
 						 ,body)
-				    (= ,cnt (call + 1 ,cnt)))))))
+				    (= ,cnt (call + 1 ,cnt))))))))
 	  (let ((lim (gensym)))
-	    `(block
+	    `(scope-block
+	     (block
 	      (= ,var ,a)
 	      (= ,lim ,b)
 	      (break-block loop-exit
@@ -158,7 +161,7 @@
 				   (block
 				    (break-block loop-cont
 						 ,body)
-				    (= ,var (call + 1 ,var))))))))))
+				    (= ,var (call + 1 ,var)))))))))))
 
    ; for loop over arbitrary vectors
    (pattern-lambda 
@@ -260,6 +263,13 @@
 			 e)))))
   (add-local-decls e '()))
 
+(define (scope-block-vars e)
+  (map (lambda (x) (decl-var (cadr x)))
+       (filter (lambda (x)
+		 (and (pair? x)
+		      (eq? (car x) 'local)))
+	       (cdr e))))
+
 ; e - expression
 ; renames - assoc list of (oldname . newname)
 ; this works on any tree format after identify-locals
@@ -277,11 +287,7 @@
 	 (let* ((bound-vars  ; compute vars bound by current expr
 		 (case (car e)
 		   ((lambda)      (lambda-vars (cadr e)))
-		   ((scope-block) (map (lambda (x) (decl-var (cadr x)))
-				       (filter (lambda (x)
-						 (and (pair? x)
-						      (eq? (car x) 'local)))
-					       (cdr e))))
+		   ((scope-block) (scope-block-vars e))
 		   (else '())))
 		(new-renames (without renames bound-vars)))
 	   (cons (car e)
@@ -289,6 +295,46 @@
 			(rename-vars x new-renames))
 		      (cdr e)))))))
 
+; remove (scope-block) and (local), convert lambdas to the form
+; (lambda (argname...) (locals var...) body)
+(define (flatten-scopes e)
+  ; returns (expr . all-locals)
+  (define (remove-scope-blocks e)
+    (cond ((atom? e) (cons e '()))
+	  ((eq? (car e) 'lambda) (cons e '()))
+	  ((eq? (car e) 'scope-block)
+	   (let ((vars (scope-block-vars e))
+		 (body (car (last-pair e))))
+	     (let ((newnames (map (lambda (x) (gensym)) vars))
+		   (rec (remove-scope-blocks body)))
+	       (cons
+		(rename-vars (car rec) (map cons vars newnames))
+		(append newnames (cdr rec))))))
+	  (else
+	   (let ((rec (map remove-scope-blocks e)))
+	     (cons (map car rec)
+		   (apply append (map cdr rec)))))))
+  
+  (cond ((atom? e) e)
+	((eq? (car e) 'lambda)
+	 (let* ((argnames  (lambda-vars (cadr e)))
+		(body0     (caddr e))
+		(body      (if (eq? (car body0) 'scope-block)
+			       (car (last-pair body0))
+			       body0))
+		(l0
+		 (if (eq? (car body0) 'scope-block)
+		     (filter   ; remove locals conflicting with arg names
+		      (lambda (v) (not (memq v argnames)))
+		      (scope-block-vars body0))
+		     '()))
+		(r-s-b (remove-scope-blocks body)))
+	   `(lambda ,(cadr e)
+	      (locals ,@l0 ,@(cdr r-s-b))
+	      ,(car r-s-b))))
+	(else (map flatten-scopes e))))
+
 (define (julia-expand ex)
-  (identify-locals
-   (pattern-expand patterns ex)))
+  (flatten-scopes
+   (identify-locals
+    (pattern-expand patterns ex))))

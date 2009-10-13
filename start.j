@@ -50,6 +50,13 @@ function `!`(x)
     return false
 end
 
+function assert(c)
+    if !c
+        error("Assertion failed.")
+    end
+    true
+end
+
 function `+`(x:Int32, y:Int32)
     return box(Int32, add_int32(unbox(x), unbox(y)))
 end

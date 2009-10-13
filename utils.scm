@@ -1,5 +1,10 @@
 (define (atom? x) (not (pair? x)))
 
+(define (last-pair l)
+  (if (atom? (cdr l))
+      l
+      (last-pair (cdr l))))
+
 (define (delete-duplicates lst)
   (if (not (pair? lst))
       lst

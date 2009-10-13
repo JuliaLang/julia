@@ -751,19 +751,6 @@ not likely to be implemented in interpreter:
 				    (raise e)))
 			      (lambda ()
 				(j-eval (caddr e) env)))))
-	   ((scope-block)
-	    (let loop ((v julia-null)
-		       (x (cdr e)))
-	      (if (null? x)
-		  v
-		  (cond ((null? (cdr x))
-			 (j-eval (car x) env))
-			((and (pair? (car x))
-			      (eq? (caar x) 'local))
-			 (set! env (cons (cons (cadr (car x)) julia-null) env))
-			 (loop v (cdr x)))
-			(else
-			 (loop (j-eval (car x) env) (cdr x)))))))
 
 	   ((break)  (raise (cdr e)))
 	   ((time)   (time (j-eval (cadr e) env)))
@@ -778,7 +765,7 @@ not likely to be implemented in interpreter:
 					(cdr e)))))
 	   ((lambda)
 	    (make-closure (lambda (ce args)
-			    (j-eval-body (cadr e) (caddr e) ce args))
+			    (j-eval-body (cadr e) (cddr e) ce args))
 			  env))
 	   ((addmethod)
 	    (let* ((name (cadr e))
@@ -847,8 +834,10 @@ not likely to be implemented in interpreter:
 	 (cdr e)
 	 (raise e)))
    (lambda ()
-     (j-eval body
-	     (bind-args formals args cenv)))))
+     (j-eval (cadr body)
+	     (append (map (lambda (local) (cons local julia-null))
+			  (cdar body))
+		     (bind-args formals args cenv))))))
 
 (define (j-toplevel-eval e)
   (j-eval (julia-expand e) '()))
@@ -856,7 +845,8 @@ not likely to be implemented in interpreter:
 ; --- load ---
 
 (define (j-load fname)
-  (for-each j-toplevel-eval (julia-parse-file fname)))
+  (for-each j-toplevel-eval (julia-parse-file fname))
+  julia-null)
 
 (make-builtin 'load j-load)
 
