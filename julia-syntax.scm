@@ -212,6 +212,200 @@
 
    )) ; patterns
 
+; (op (op a b) c) => (op a b c) etc.
+(define (flatten-op op e)
+  (if (atom? e) e
+      (if (eq? (car e) op)
+	  (apply append (map (lambda (x)
+			       (let ((x (flatten-op op x)))
+				 (if (and (pair? x)
+					  (eq? (car x) op))
+				     (cdr x)
+				     (list x))))
+			     e))
+	  (map (lambda (x) (flatten-op op x)) e))))
+
+(define (expand-and-or e)
+  (if (atom? e) e
+      (case (car e)
+	((&&) (let ((e (flatten-op '&& e)))
+		(let loop ((tail (cdr e)))
+		  (if (null? tail)
+		      true
+		      (if (null? (cdr tail))
+			  (expand-and-or (car tail))
+			  `(if ,(expand-and-or (car tail))
+			       ,(loop (cdr tail))
+			       false))))))
+	((|\|\||) (let ((e (flatten-op '|\|\|| e)))
+		    (let loop ((tail (cdr e)))
+		      (if (null? tail)
+			  false
+			  (if (null? (cdr tail))
+			      (expand-and-or (car tail))
+			      (if (symbol? (car tail))
+				  `(if ,(car tail) ,(car tail)
+				       ,(loop (cdr tail)))
+				  (let ((g (gensym)))
+				    `(block (= ,g ,(expand-and-or (car tail)))
+					    (if ,g ,g
+						,(loop (cdr tail)))))))))))
+	(else (map expand-and-or e)))))
+
+; remove unnecessary nested blocks
+(define (splice-blocks e)
+  (define (splice-blocks- body)
+    (cond ((atom? body) body)
+	  ((equal? body '((block)))  ; leave empty block in value pos.
+	   body)
+	  ((and (pair? (car body))
+		(eq? (caar body) 'block))
+	   (append (splice-blocks- (cdar body))
+		   (splice-blocks- (cdr body))))
+	  (else
+	   (cons (splice-blocks (car body)) (splice-blocks- (cdr body))))))
+  (if (atom? e) e
+      (if (eq? (car e) 'block)
+	  (cons 'block (splice-blocks- (cdr e)))
+	  (map splice-blocks e))))
+
+; remove control flow constructs from value position
+;  (block ... (value-expr ... control-expr ...) ...) =>
+;  (block ... (= var control-expr) (value-expr ... var ...) ...)
+; except the assignment is incorporated into control-expr, so that
+; control exprs are only in statement position
+; these include if, block, break-block, scope-block
+; the following don't yield values, so it's an error if they are ever
+; found in expression position: _while, return, break
+; everything else is not considered a control form, and is left in place
+(define (unnest-control- e val?)
+  (define (control? e)
+    (and (pair? e)
+	 (memq (car e) '(= if block break-block scope-block _while break))))
+  ; returns (new-e . alist) where alist has entries of the form
+  ; (var . expr), where in new-e expr has been replaced with var
+  ; val? - are we in value position?
+  (define (extract-ctl-forms e val?)
+    (if (atom? e) (cons e '())
+	(if (control? e)
+	    (let ((result
+		   (case (car e)
+		     ((=)  (let ((r (extract-ctl-forms (caddr e) #t)))
+			     (if (and (pair? (cdr r))
+				      (control? (caddr e)))
+				 (cons (cadr e)
+				       (cons (cons (cadr e)
+						   (cdar (cdr r)))
+					     (cddr r)))
+				 (cons `(= ,(cadr e) ,(car r))
+				       (cdr r)))))
+
+		     ((if) (let ((r (extract-ctl-forms (cadr e) #t)))
+			     (cons `(if ,(car r)
+					,(unnest-control- (caddr e) val?)
+					,(if (pair? (cdddr e))
+					     (unnest-control- (cadddr e) val?)
+					     'false))
+				   (cdr r))))
+
+		     ((block break-block scope-block)
+		      (cons (unnest-control- e val?) '()))
+		     
+		     ((_while)
+		      (cons `(_while ,(unnest-control- (cadr e) #t)
+				     ,(unnest-control- (caddr e) #f))
+			    '()))
+		     
+		     ((break)
+		      (if val? (error "Misplaced break or continue")
+			  (cons e '())))
+
+		     (else #f) ; not reached
+		     )))
+	      (if val?
+		  (cond ((eq? (car e) '=)
+			 (cons (cadr e) (cons (cons (cadr e) (car result))
+					      (cdr result))))
+			(else
+			 (let ((g (gensym)))
+			   (cons g (cons (cons g (car result))
+					 (cdr result))))))
+		  result))
+	    
+	    (case (car e)
+	      ((type typealias quote time local)
+	       (cons e '()))
+	      ((lambda)
+	       (cons (list 'lambda (cadr e) (unnest-control (caddr e)))
+		     '()))
+	      ((addmethod)
+	       (cons (list 'addmethod (cadr e) (caddr e)
+			   (unnest-control (cadddr e)))
+		     '()))
+	      (else	      
+	       (let ((rec (map (lambda (x) (extract-ctl-forms x #t)) e)))
+		 (cons (map car rec)
+		       (apply append (map cdr rec)))))))))
+  
+  ; convert form expr so that it assigns its result to the given variable
+  (define (result-convert e var)
+    (if (atom? e) (if (eq? e var) e `(= ,var ,e))
+	(case (car e)
+	  ((=)  e)
+	  ((if) `(if ,(cadr e)
+		     ,(result-convert (caddr e)  var)
+		     ,(result-convert (cadddr e) var)))
+	  ((_while) `(block ,e (= ,var (tuple))))
+	  ((break-block)
+	   (list 'break-block (cadr e) (result-convert (caddr e) var)))
+	  ((scope-block)
+	   (list 'scope-block (result-convert (cadr e) var)))
+	  ((block) (if (null? (cdr e)) `(= ,var (tuple))
+		       (cons 'block
+			     (let loop ((tl (cdr e)))
+			       (if (null? tl) '()
+				   (if (null? (cdr tl))
+				       (cons (result-convert (car tl) var)
+					     (loop (cdr tl)))
+				       (cons (car tl) (loop (cdr tl)))))))))
+	  (else `(= ,var ,e)))))
+  
+  ; convert the result of extract-ctl-forms to a list of executable forms
+  (define (result-convert-all e val?)
+    (let ((r (extract-ctl-forms e val?)))
+      (append (map (lambda (p)
+		     (result-convert (cdr p) (car p)))
+		   (reverse (cdr r)))
+	      (list (car r)))))
+  
+  (if (atom? e) e
+      (case (car e)
+	((type typealias quote time local)
+	 e)
+	((break-block)
+	 (list 'break-block (cadr e) (unnest-control- (caddr e) val?)))
+	((scope-block)
+	 (list 'scope-block (unnest-control- (cadr e) val?)))
+	((addmethod)
+	 (list 'addmethod (cadr e) (caddr e)
+	       (unnest-control (cadddr e))))
+	((lambda)
+	 (list 'lambda (cadr e) (unnest-control (caddr e))))
+	((block)
+	 (cons 'block
+	       (let loop ((tl (cdr e)))
+		 (if (null? tl) '()
+		     (append (result-convert-all (car tl)
+						 (and val? (null? (cdr tl))))
+			     (loop (cdr tl)))))))
+	(else
+	 (let ((rc (result-convert-all e val?)))
+	   (if (length= rc 1)
+	       (car rc)
+	       (cons 'block rc)))))))
+
+(define (unnest-control e) (unnest-control- e #t))
+
 ; convert a lambda list into a list of just symbols
 (define (lambda-vars lst)
   (map (lambda (v)
@@ -335,6 +529,9 @@
 	(else (map flatten-scopes e))))
 
 (define (julia-expand ex)
-  (flatten-scopes
-   (identify-locals
-    (pattern-expand patterns ex))))
+  ;(splice-blocks
+   (flatten-scopes
+    (identify-locals
+     ;(unnest-control
+      (expand-and-or
+       (pattern-expand patterns ex)))));))
