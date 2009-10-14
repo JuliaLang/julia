@@ -290,8 +290,7 @@
 	    (car r)
 	    (cons 'block (reverse r)))))
   (define (to-scope-blk r)
-    (if (null? r) '(scope-block (block))
-	(cons 'scope-block (reverse r))))
+    (list 'scope-block (cons 'block (reverse r))))
   (define (blk-tail r)
     (reverse r))
   ; to-lff returns (new-ex . stmts) where stmts is a list of statements that
