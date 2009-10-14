@@ -262,11 +262,17 @@
 		(eq? (caar body) 'block))
 	   (append (splice-blocks- (cdar body))
 		   (splice-blocks- (cdr body))))
+	  ((and (pair? (car body))   ; remove (local ...) forms
+		(eq? (caar body) 'local))
+	   (splice-blocks- (cdr body)))
 	  (else
 	   (cons (splice-blocks (car body)) (splice-blocks- (cdr body))))))
   (if (atom? e) e
       (if (eq? (car e) 'block)
-	  (cons 'block (splice-blocks- (cdr e)))
+	  (let ((tl (splice-blocks- (cdr e))))
+	    (if (length= tl 1)
+		(car tl)
+		(cons 'block tl)))
 	  (map splice-blocks e))))
 
 ; conversion to "linear flow form"
@@ -289,13 +295,25 @@
 	(if (null? (cdr r))
 	    (car r)
 	    (cons 'block (reverse r)))))
-  (define (to-scope-blk r)
-    (list 'scope-block (cons 'block (reverse r))))
   (define (blk-tail r)
     (reverse r))
+  (define (returns? b)
+    (if (or (null? b) (null? (cdr b))) #f
+	(let ((p (car (last-pair b))))
+	  (or (and (pair? p)
+		   (eq? (car p) 'return))
+	      (and (pair? p)
+		   (eq? (car p) 'block)
+		   (returns? p))))))
   ; to-lff returns (new-ex . stmts) where stmts is a list of statements that
   ; must run before new-ex is valid.
-  ; if dest is a symbol, new-ex can be a statement.
+  ;
+  ; If the input expression needed to be removed from its original context,
+  ; like the 'if' in "1+if(a,b,c)", then new-ex is a symbol holding the
+  ; result of the expression.
+  ;
+  ; If dest is a symbol or #f, new-ex can be a statement.
+  ;
   ; We essentially maintain a stack of control-flow constructs that need to be
   ; run in statement position as we walk around an expression. If we hit
   ; statement context, we can dump the control-flow stuff there.
@@ -331,6 +349,7 @@
 	  
 	  ((block)
 	   (let* ((g (gensym))
+		  (R (returns? e))
 		  (stmts
 		   (let loop ((tl (cdr e)))
 		     (if (null? tl) '()
@@ -341,9 +360,13 @@
 				    (blk-tail (to-lff (car tl) g))))
 			     (cons (to-blk (to-lff (car tl) #f))
 				   (loop (cdr tl))))))))
-	     (if (eq? dest #t)
+	     (if (and (not R) (eq? dest #t))
 		 (cons g (reverse stmts))
 		 (cons (cons 'block stmts) '()))))
+	  
+	  ((return) (let ((r (to-lff (cadr e) #t)))
+		      (cons `(return ,(car r))
+			    (cdr r))))
 	  
 	  ((_while) (cond ((eq? dest #t)
 			   (cons '(tuple)
@@ -368,20 +391,15 @@
 		       (cdr r)))))
 	  
 	  ((scope-block)
-	   (let ((r (to-lff (cadr e) dest)))
-	     (cond ((symbol? dest)
-		    (cons (car r)
-			  (list `(scope-block ,(to-blk (cdr r))))))
-		   (dest
-		    (cons (car r)
-			  (if (symbol? (car r))
-			      (list `(block
-				      (local ,(car r))
-				      (scope-block ,(to-blk (cdr r)))))
-			      (list `(scope-block ,(to-blk (cdr r)))))))
-		   (else
-		    (cons `(scope-block ,(car r))
-			  (cdr r))))))
+	   (if (and (not (returns? e)) (eq? dest #t))
+	       (let* ((g (gensym))
+		      (r (to-lff (cadr e) g)))
+		 (cons g
+		       `((scope-block ,(to-blk r))
+			 (local ,g))))
+	       (let ((r (to-lff (cadr e) dest)))
+		 (cons `(scope-block ,(to-blk r))
+		       '()))))
 	  
 	  ((break) (if dest
 		       (error "Misplaced break or continue")
@@ -389,7 +407,8 @@
 	  
 	  ((lambda)
 	   (let ((l `(lambda ,(cadr e)
-		       ,(to-scope-blk (to-lff (caddr e) #t)))))
+		       (scope-block
+			(block ,@(reverse (to-lff (caddr e) #t)))))))
 	     (if (symbol? dest)
 		 (cons `(= ,dest ,l) '())
 		 (cons l '()))))
@@ -455,9 +474,10 @@
   (define (add-local-decls e env)
     (if (not (pair? e)) e
 	(cond ((eq? (car e) 'lambda)
-	       (list 'lambda (cadr e)
-		     (add-local-decls (caddr e)
-				      (append (lambda-vars (cadr e)) env))))
+	       (let* ((env (append (lambda-vars (cadr e)) env))
+		      (body (add-local-decls (caddr e) env)))
+		 (list 'lambda (cadr e) body)))
+	      
 	      ((eq? (car e) 'scope-block)
 	       (let* ((vars (delete-duplicates
 			     (find-assigned-vars (cadr e) env)))
@@ -545,6 +565,6 @@
   (splice-blocks
    (flatten-scopes
     (identify-locals
-     ;(to-LFF
+     (to-LFF
       (expand-and-or
-       (pattern-expand patterns ex))))));)
+       (pattern-expand patterns ex)))))))

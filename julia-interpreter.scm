@@ -713,7 +713,7 @@ not likely to be implemented in interpreter:
 			    (j-eval (caddr e) env)
 			    (if (pair? (cdddr e))
 				(j-eval (cadddr e) env)
-				julia-false))))
+				julia-null))))
 	   ((_while)   (let loop ()
 			 (if (not (j-false? (j-eval (cadr e) env)))
 			     (begin (j-eval (caddr e) env)
