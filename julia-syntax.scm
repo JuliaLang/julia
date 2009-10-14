@@ -269,142 +269,156 @@
 	  (cons 'block (splice-blocks- (cdr e)))
 	  (map splice-blocks e))))
 
-; remove control flow constructs from value position
+; conversion to "linear flow form"
+;
+; This pass removes control flow constructs from value position.
+; A "control flow construct" is anything that would require a branch.
 ;  (block ... (value-expr ... control-expr ...) ...) =>
 ;  (block ... (= var control-expr) (value-expr ... var ...) ...)
 ; except the assignment is incorporated into control-expr, so that
-; control exprs are only in statement position
-; these include if, block, break-block, scope-block
-; the following don't yield values, so it's an error if they are ever
-; found in expression position: _while, return, break
-; everything else is not considered a control form, and is left in place
-(define (unnest-control- e val?)
-  (define (control? e)
-    (and (pair? e)
-	 (memq (car e) '(= if block break-block scope-block _while break))))
-  ; returns (new-e . alist) where alist has entries of the form
-  ; (var . expr), where in new-e expr has been replaced with var
-  ; val? - are we in value position?
-  (define (extract-ctl-forms e val?)
-    (if (atom? e) (cons e '())
-	(if (control? e)
-	    (let ((result
-		   (case (car e)
-		     ((=)  (let ((r (extract-ctl-forms (caddr e) #t)))
-			     (if (and (pair? (cdr r))
-				      (control? (caddr e)))
-				 (cons (cadr e)
-				       (cons (cons (cadr e)
-						   (cdar (cdr r)))
-					     (cddr r)))
-				 (cons `(= ,(cadr e) ,(car r))
-				       (cdr r)))))
-
-		     ((if) (let ((r (extract-ctl-forms (cadr e) #t)))
-			     (cons `(if ,(car r)
-					,(unnest-control- (caddr e) val?)
-					,(if (pair? (cdddr e))
-					     (unnest-control- (cadddr e) val?)
-					     'false))
-				   (cdr r))))
-
-		     ((block break-block scope-block)
-		      (cons (unnest-control- e val?) '()))
-		     
-		     ((_while)
-		      (cons `(_while ,(unnest-control- (cadr e) #t)
-				     ,(unnest-control- (caddr e) #f))
-			    '()))
-		     
-		     ((break)
-		      (if val? (error "Misplaced break or continue")
-			  (cons e '())))
-
-		     (else #f) ; not reached
-		     )))
-	      (if val?
-		  (cond ((eq? (car e) '=)
-			 (cons (cadr e) (cons (cons (cadr e) (car result))
-					      (cdr result))))
-			(else
-			 (let ((g (gensym)))
-			   (cons g (cons (cons g (car result))
-					 (cdr result))))))
-		  result))
-	    
-	    (case (car e)
-	      ((type typealias quote time local)
-	       (cons e '()))
-	      ((lambda)
-	       (cons (list 'lambda (cadr e) (unnest-control (caddr e)))
-		     '()))
-	      ((addmethod)
-	       (cons (list 'addmethod (cadr e) (caddr e)
-			   (unnest-control (cadddr e)))
-		     '()))
-	      (else	      
-	       (let ((rec (map (lambda (x) (extract-ctl-forms x #t)) e)))
-		 (cons (map car rec)
-		       (apply append (map cdr rec)))))))))
-  
-  ; convert form expr so that it assigns its result to the given variable
-  (define (result-convert e var)
-    (if (atom? e) (if (eq? e var) e `(= ,var ,e))
+; control exprs only occur in statement position.
+;
+; The conversion works by passing around the intended destination of
+; the value being computed: #f for statement position, #t for value position,
+; or a symbol if the value needs to be assigned to a particular variable.
+; This is the "dest" argument to to-lff.
+;
+(define (to-LFF e)
+  (define (to-blk r)
+    (if (null? r) '(block)
+	(if (null? (cdr r))
+	    (car r)
+	    (cons 'block (reverse r)))))
+  (define (to-scope-blk r)
+    (if (null? r) '(scope-block (block))
+	(cons 'scope-block (reverse r))))
+  (define (blk-tail r)
+    (reverse r))
+  ; to-lff returns (new-ex . stmts) where stmts is a list of statements that
+  ; must run before new-ex is valid.
+  ; if dest is a symbol, new-ex can be a statement.
+  ; We essentially maintain a stack of control-flow constructs that need to be
+  ; run in statement position as we walk around an expression. If we hit
+  ; statement context, we can dump the control-flow stuff there.
+  ; This expression walk is entirely within the "else" clause of the giant
+  ; case expression. Everything else deals with special forms.
+  (define (to-lff e dest)
+    (if (atom? e)
+	(cond ((symbol? dest) (cons `(= ,dest ,e) '()))
+	      (dest (cons e '()))
+	      (else (cons e '())))
+	
 	(case (car e)
-	  ((=)  e)
-	  ((if) `(if ,(cadr e)
-		     ,(result-convert (caddr e)  var)
-		     ,(result-convert (cadddr e) var)))
-	  ((_while) `(block ,e (= ,var (tuple))))
+	  ((=)  (let ((r (to-lff (caddr e) (cadr e))))
+		  (cond ((symbol? dest)
+			 (cons `(block ,(car r)
+				       (= ,dest ,(cadr e)))
+			       (cdr r)))
+			(dest
+			 (cons (cadr e) r))
+			(else r))))
+	  
+	  ((if) (cond ((or (eq? dest #f) (symbol? dest))
+		       (let ((r (to-lff (cadr e) #t)))
+			 (cons `(if ,(car r)
+				    ,(to-blk (to-lff (caddr e)  dest))
+				    ,(if (length= e 4)
+					 (to-blk (to-lff (cadddr e) dest))
+					 '(tuple)))
+			       (cdr r))))
+		      (else (let ((g (gensym)))
+			      (cons g
+				    (to-lff e g))))))
+	  
+	  ((block)
+	   (let* ((g (gensym))
+		  (stmts
+		   (let loop ((tl (cdr e)))
+		     (if (null? tl) '()
+			 (if (null? (cdr tl))
+			     (cond ((or (eq? dest #f) (symbol? dest))
+				    (blk-tail (to-lff (car tl) dest)))
+				   (else
+				    (blk-tail (to-lff (car tl) g))))
+			     (cons (to-blk (to-lff (car tl) #f))
+				   (loop (cdr tl))))))))
+	     (if (eq? dest #t)
+		 (cons g (reverse stmts))
+		 (cons (cons 'block stmts) '()))))
+	  
+	  ((_while) (cond ((eq? dest #t)
+			   (cons '(tuple)
+				 (list (to-lff e #f))))
+			  (else
+			   (let* ((r (to-lff (cadr e) #t))
+				  (w (cons `(_while ,(car r)
+						    ,(to-blk
+						      (to-lff (caddr e) #f)))
+					   (cdr r))))
+			     (if (symbol? dest)
+				 (cons `(= ,dest (tuple)) w)
+				 w)))))
+	  
 	  ((break-block)
-	   (list 'break-block (cadr e) (result-convert (caddr e) var)))
-	  ((scope-block)
-	   (list 'scope-block (result-convert (cadr e) var)))
-	  ((block) (if (null? (cdr e)) `(= ,var (tuple))
-		       (cons 'block
-			     (let loop ((tl (cdr e)))
-			       (if (null? tl) '()
-				   (if (null? (cdr tl))
-				       (cons (result-convert (car tl) var)
-					     (loop (cdr tl)))
-				       (cons (car tl) (loop (cdr tl)))))))))
-	  (else `(= ,var ,e)))))
-  
-  ; convert the result of extract-ctl-forms to a list of executable forms
-  (define (result-convert-all e val?)
-    (let ((r (extract-ctl-forms e val?)))
-      (append (map (lambda (p)
-		     (result-convert (cdr p) (car p)))
-		   (reverse (cdr r)))
-	      (list (car r)))))
-  
-  (if (atom? e) e
-      (case (car e)
-	((type typealias quote time local)
-	 e)
-	((break-block)
-	 (list 'break-block (cadr e) (unnest-control- (caddr e) val?)))
-	((scope-block)
-	 (list 'scope-block (unnest-control- (cadr e) val?)))
-	((addmethod)
-	 (list 'addmethod (cadr e) (caddr e)
-	       (unnest-control (cadddr e))))
-	((lambda)
-	 (list 'lambda (cadr e) (unnest-control (caddr e))))
-	((block)
-	 (cons 'block
-	       (let loop ((tl (cdr e)))
-		 (if (null? tl) '()
-		     (append (result-convert-all (car tl)
-						 (and val? (null? (cdr tl))))
-			     (loop (cdr tl)))))))
-	(else
-	 (let ((rc (result-convert-all e val?)))
-	   (if (length= rc 1)
-	       (car rc)
-	       (cons 'block rc)))))))
+	   (let ((r (to-lff (caddr e) dest)))
+	     (if dest
+		 (cons (car r)
+		       (list `(break-block ,(cadr e) ,(to-blk (cdr r)))))
 
-(define (unnest-control e) (unnest-control- e #t))
+		 (cons `(break-block ,(cadr e) ,(car r))
+		       (cdr r)))))
+	  
+	  ((scope-block)
+	   (let ((r (to-lff (cadr e) dest)))
+	     (cond ((symbol? dest)
+		    (cons (car r)
+			  (list `(scope-block ,(to-blk (cdr r))))))
+		   (dest
+		    (cons (car r)
+			  (if (symbol? (car r))
+			      (list `(block
+				      (local ,(car r))
+				      (scope-block ,(to-blk (cdr r)))))
+			      (list `(scope-block ,(to-blk (cdr r)))))))
+		   (else
+		    (cons `(scope-block ,(car r))
+			  (cdr r))))))
+	  
+	  ((break) (if dest
+		       (error "Misplaced break or continue")
+		       (cons e '())))
+	  
+	  ((lambda)
+	   (let ((l `(lambda ,(cadr e)
+		       ,(to-scope-blk (to-lff (caddr e) #t)))))
+	     (if (symbol? dest)
+		 (cons `(= ,dest ,l) '())
+		 (cons l '()))))
+	  
+	  ((quote) (if (symbol? dest)
+		       (cons `(= ,dest ,e) '())
+		       (cons e '())))
+	  
+	  ((type typealias time local)
+	   (cons e '()))
+	  
+	  ((addmethod)
+	   (let ((l (list 'addmethod (cadr e) (caddr e)
+			  (to-LFF (cadddr e)))))
+	     (if (symbol? dest)
+		 (cons `(= ,dest ,l) '())
+		 (cons l '()))))
+	  
+	  (else
+	   (let ((r (map (lambda (arg) (to-lff arg #t))
+			 e)))
+	     (cond ((symbol? dest)
+		    (cons `(= ,dest ,(map car r))
+			  (apply append (map cdr r))))
+		   (else
+		    (cons (map car r)
+			  (apply append (map cdr r))))))))))
+  (to-blk (to-lff e #t)))
 
 ; convert a lambda list into a list of just symbols
 (define (lambda-vars lst)
@@ -529,9 +543,9 @@
 	(else (map flatten-scopes e))))
 
 (define (julia-expand ex)
-  ;(splice-blocks
+  (splice-blocks
    (flatten-scopes
     (identify-locals
-     ;(unnest-control
+     ;(to-LFF
       (expand-and-or
-       (pattern-expand patterns ex)))));))
+       (pattern-expand patterns ex))))));)
