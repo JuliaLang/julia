@@ -1,8 +1,8 @@
 ; first passes:
 ; * expand lvalues, e.g. (= (call ref A i) x) => (= A (call assign A i x))
 ; * expand operators like +=
-; - identify type name contexts and sort out ranges from declarations
-; - expand for into while
+; - sort out ranges from declarations (maybe use :: ?)
+; * expand for into while
 ; * expand -> and function into lambda/addmethod
 ; * replace (. a b) with (call get a (quote b))
 ; - cat
@@ -270,7 +270,7 @@
   (if (atom? e) e
       (if (eq? (car e) 'block)
 	  (let ((tl (splice-blocks- (cdr e))))
-	    (if (length= tl 1)
+	    (if (length= tl 1)       ; unwrap length-1 blocks
 		(car tl)
 		(cons 'block tl)))
 	  (map splice-blocks e))))
@@ -289,22 +289,21 @@
 ; or a symbol if the value needs to be assigned to a particular variable.
 ; This is the "dest" argument to to-lff.
 ;
+; This also keeps track of tail position, and converts the code so that
+; everything in tail position is returned explicitly.
+;
+; The result is that every expression whose value is needed is either
+; a function argument, an assignment RHS, or returned explicitly.
+; In this form, expressions can be analyzed freely without fear of
+; intervening branches. Similarly, control flow can be analyzed without
+; worrying about implicit value locations (the "evaluation stack").
 (define (to-LFF e)
   (define (to-blk r)
-    (if (null? r) '(block)
-	(if (null? (cdr r))
-	    (car r)
-	    (cons 'block (reverse r)))))
+    (if (length= r 1)
+	(car r)
+	(cons 'block (reverse r))))
   (define (blk-tail r)
     (reverse r))
-  (define (returns? b)
-    (if (or (null? b) (null? (cdr b))) #f
-	(let ((p (car (last-pair b))))
-	  (or (and (pair? p)
-		   (eq? (car p) 'return))
-	      (and (pair? p)
-		   (eq? (car p) 'block)
-		   (returns? p))))))
   ; to-lff returns (new-ex . stmts) where stmts is a list of statements that
   ; must run before new-ex is valid.
   ;
@@ -319,85 +318,95 @@
   ; statement context, we can dump the control-flow stuff there.
   ; This expression walk is entirely within the "else" clause of the giant
   ; case expression. Everything else deals with special forms.
-  (define (to-lff e dest)
+  (define (to-lff e dest tail)
     (if (atom? e)
 	(cond ((symbol? dest) (cons `(= ,dest ,e) '()))
-	      (dest (cons e '()))
+	      (dest (cons (if tail `(return ,e) e)
+			  '()))
 	      (else (cons e '())))
 	
 	(case (car e)
-	  ((=)  (let ((r (to-lff (caddr e) (cadr e))))
+	  ((=)  (let ((r (to-lff (caddr e) (cadr e) #f)))
 		  (cond ((symbol? dest)
 			 (cons `(block ,(car r)
 				       (= ,dest ,(cadr e)))
 			       (cdr r)))
 			(dest
-			 (cons (cadr e) r))
+			 (cons (if tail `(return ,(cadr e)) (cadr e)) r))
 			(else r))))
 	  
-	  ((if) (cond ((or (eq? dest #f) (symbol? dest))
-		       (let ((r (to-lff (cadr e) #t)))
-			 (cons `(if ,(car r)
-				    ,(to-blk (to-lff (caddr e)  dest))
-				    ,(if (length= e 4)
-					 (to-blk (to-lff (cadddr e) dest))
-					 '(tuple)))
-			       (cdr r))))
-		      (else (let ((g (gensym)))
-			      (cons g
-				    (to-lff e g))))))
+	  ((if)
+	   (cond ((or tail (eq? dest #f) (symbol? dest))
+		  (let ((r (to-lff (cadr e) #t #f)))
+		    (cons `(if
+			    ,(car r)
+			    ,(to-blk (to-lff (caddr e) dest tail))
+			    ,(if (length= e 4)
+				 (to-blk (to-lff (cadddr e) dest tail))
+				 (to-blk (to-lff '(tuple) dest tail))))
+			  (cdr r))))
+		 (else (let ((g (gensym)))
+			 (cons g
+			       (to-lff e g #f))))))
 	  
 	  ((block)
 	   (let* ((g (gensym))
-		  (R (returns? e))
 		  (stmts
 		   (let loop ((tl (cdr e)))
 		     (if (null? tl) '()
 			 (if (null? (cdr tl))
-			     (cond ((or (eq? dest #f) (symbol? dest))
-				    (blk-tail (to-lff (car tl) dest)))
+			     (cond ((or tail (eq? dest #f) (symbol? dest))
+				    (blk-tail (to-lff (car tl) dest tail)))
 				   (else
-				    (blk-tail (to-lff (car tl) g))))
-			     (cons (to-blk (to-lff (car tl) #f))
+				    (blk-tail (to-lff (car tl) g tail))))
+			     (cons (to-blk (to-lff (car tl) #f #f))
 				   (loop (cdr tl))))))))
-	     (if (and (not R) (eq? dest #t))
+	     (if (and (eq? dest #t) (not tail))
 		 (cons g (reverse stmts))
-		 (cons (cons 'block stmts) '()))))
+		 (if (and tail (null? stmts))
+		     (cons '(return (tuple))
+			   '())
+		     (cons (cons 'block stmts)
+			   '())))))
 	  
-	  ((return) (let ((r (to-lff (cadr e) #t)))
-		      (cons `(return ,(car r))
-			    (cdr r))))
+	  ((return)
+	   (if (and dest (not tail))
+	       (error "Misplaced return statement")
+	       (to-lff (cadr e) #t #t)))
 	  
 	  ((_while) (cond ((eq? dest #t)
-			   (cons '(tuple)
-				 (list (to-lff e #f))))
+			   (cons (if tail '(return (tuple)) '(tuple))
+				 (to-lff e #f #f)))
 			  (else
-			   (let* ((r (to-lff (cadr e) #t))
+			   (let* ((r (to-lff (cadr e) #t #f))
 				  (w (cons `(_while ,(car r)
 						    ,(to-blk
-						      (to-lff (caddr e) #f)))
+						      (to-lff (caddr e) #f #f)))
 					   (cdr r))))
 			     (if (symbol? dest)
 				 (cons `(= ,dest (tuple)) w)
 				 w)))))
 	  
 	  ((break-block)
-	   (let ((r (to-lff (caddr e) dest)))
+	   (let ((r (to-lff (caddr e) dest tail)))
 	     (if dest
 		 (cons (car r)
 		       (list `(break-block ,(cadr e) ,(to-blk (cdr r)))))
-
 		 (cons `(break-block ,(cadr e) ,(car r))
 		       (cdr r)))))
 	  
 	  ((scope-block)
-	   (if (and (not (returns? e)) (eq? dest #t))
+	   (if (and (eq? dest #t) (not tail))
 	       (let* ((g (gensym))
-		      (r (to-lff (cadr e) g)))
+		      (r (to-lff (cadr e) g tail)))
 		 (cons g
+		       ; tricky: need to introduce a new local outside the
+		       ; scope-block so the scope-block's value can propagate
+		       ; out. otherwise the value could be inaccessible due
+		       ; to being wrapped inside a scope.
 		       `((scope-block ,(to-blk r))
 			 (local ,g))))
-	       (let ((r (to-lff (cadr e) dest)))
+	       (let ((r (to-lff (cadr e) dest tail)))
 		 (cons `(scope-block ,(to-blk r))
 		       '()))))
 	  
@@ -408,35 +417,36 @@
 	  ((lambda)
 	   (let ((l `(lambda ,(cadr e)
 		       (scope-block
-			(block ,@(reverse (to-lff (caddr e) #t)))))))
+			,(to-blk (to-lff (caddr e) #t #t))))))
 	     (if (symbol? dest)
 		 (cons `(= ,dest ,l) '())
-		 (cons l '()))))
+		 (cons (if tail `(return ,l) l) '()))))
 	  
 	  ((quote) (if (symbol? dest)
 		       (cons `(= ,dest ,e) '())
-		       (cons e '())))
+		       (cons (if tail `(return ,e) e) '())))
 	  
 	  ((type typealias time local)
 	   (cons e '()))
 	  
 	  ((addmethod)
 	   (let ((l (list 'addmethod (cadr e) (caddr e)
-			  (to-LFF (cadddr e)))))
+			  (to-blk (to-lff (cadddr e) #t #f)))))
 	     (if (symbol? dest)
 		 (cons `(= ,dest ,l) '())
 		 (cons l '()))))
 	  
 	  (else
-	   (let ((r (map (lambda (arg) (to-lff arg #t))
+	   (let ((r (map (lambda (arg) (to-lff arg #t #f))
 			 e)))
 	     (cond ((symbol? dest)
 		    (cons `(= ,dest ,(map car r))
 			  (apply append (map cdr r))))
 		   (else
-		    (cons (map car r)
-			  (apply append (map cdr r))))))))))
-  (to-blk (to-lff e #t)))
+		    (let ((ex (map car r)))
+		      (cons (if tail `(return ,ex) ex)
+			    (apply append (map cdr r)))))))))))
+  (to-blk (to-lff e #t #t)))
 
 ; convert a lambda list into a list of just symbols
 (define (lambda-vars lst)

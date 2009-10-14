@@ -5,8 +5,9 @@ TODO:
 * apply, splat
 - builtin scalar conversions, implicit conversion mechanism
   . separate type for literals
-- quote, expr, and symbol types, user-level macros
 - global var declaration
+- optional arguments
+- quote, expr, and symbol types, user-level macros
 
 not likely to be implemented in interpreter:
 - more builtin functions (shifts, bitwise ops, primitive i/o)
@@ -840,7 +841,14 @@ not likely to be implemented in interpreter:
 		     (bind-args formals args cenv))))))
 
 (define (j-toplevel-eval e)
-  (j-eval (julia-expand e) '()))
+  (with-exception-catcher
+   (lambda (e)
+     (if (and (pair? e)
+	      (eq? (car e) 'julia-return))
+	 (cdr e)
+	 (raise e)))
+   (lambda ()
+     (j-eval (julia-expand e) '()))))
 
 ; --- load ---
 
