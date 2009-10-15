@@ -18,11 +18,10 @@ TODO:
     (^ |.^|)
     (|::| |.|)))
 
-; unused characters: @ ` ? prefix'
+; unused characters: @ ? prefix'
 ; possible: use ` for quoting and escaping, $ for unquote
 ;           leave @ as an operator
 ; no character literals; unicode kind of makes them obsolete. strings instead.
-; decide what to do about true, false, and null
 
 (define unary-ops '(- + ! ~ *))
 
@@ -425,26 +424,24 @@ TODO:
 
 ; parse [] concatenation expressions
 (define (parse-vector s)
-  (define (fix v) (cons 'cat (reverse v)))
+  (define (fix head v) (cons head (reverse v)))
   (let loop ((vec '())
 	     (outer '()))
-    (let ((t (require-token s)))
-      (cond ((eqv? t #\])
-	     (take-token s)
-	     (if (pair? outer)
-		 (fix (cons (fix vec) outer))
-		 (fix vec)))
-
-	    ((eqv? t #\;)
-	     (take-token s)
-	     (loop '() (cons (fix vec) outer)))
-
-	    ((eqv? t #\,)
-	     (take-token s)
-	     (loop vec outer))
-
-	    (else
-	     (loop (cons (parse-eq* s) vec) outer))))))
+    (let ((update-outer (lambda (v)
+			  (cond ((null? v)       outer)
+				((null? (cdr v)) (cons (car v) outer))
+				(else            (cons (fix 'hcat v) outer))))))
+      (if (eqv? (require-token s) #\])
+	  (begin (take-token s)
+		 (if (pair? outer)
+		     (fix 'vcat (update-outer vec))
+		     (fix 'hcat vec)))
+	  (let ((nv (cons (parse-eq* s) vec)))
+	    (case (require-token s)
+	      ((#\]) (loop nv outer))
+	      ((#\;) (begin (take-token s) (loop '() (update-outer nv))))
+	      ((#\,) (begin (take-token s) (loop  nv outer)))
+	      (else  (error "Comma expected"))))))))
 
 ; parse numbers, identifiers, parenthesized expressions, lists, vectors, etc.
 (define (parse-atom s)

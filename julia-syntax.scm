@@ -79,6 +79,19 @@
    (pattern-lambda (= (|.| a b) rhs)
 		   `(call setfield ,a (quote ,b) ,rhs))
 
+   ; multiple value assignment
+   (pattern-lambda (= (tuple . lhss) x)
+		   (let ((t (gensym)))
+		     `(block (= ,t ,x)
+			     ,@(let loop ((lhs lhss)
+					  (i   0))
+				 (if (null? lhs) '((tuple))
+				     (cons `(= ,(car lhs)
+					       (call tupleref
+						     ,t (call unbox ,i)))
+					   (loop (cdr lhs)
+						 (+ i 1))))))))
+
    (pattern-lambda (= (ref a . idxs) rhs)
 		   `(call set ,a ,@idxs ,rhs))
 
@@ -194,7 +207,7 @@
 
    ; 1d comprehensions
    (pattern-lambda 
-    (cat (call (-/ |\||) expr (= i range)) )
+    (hcat (call (-/ |\||) expr (= i range)) )
     (let ((result (gensym)))
       `(block (= ,result (call zeros (call numel ,range))) 
 	      (for (= ,i ,range) (block (call set ,result ,i ,expr)))
@@ -202,7 +215,7 @@
    
    ; 2d comprehensions
    (pattern-lambda 
-    (cat (call (-/ |\||) expr (= i range1)) (= j range2) )
+    (hcat (call (-/ |\||) expr (= i range1)) (= j range2) )
     (let ((result (gensym)))
       `(block (= ,result (call zeros (call numel ,range1) (call numel ,range2)))
 	      (for (= ,i ,range1)
@@ -447,6 +460,23 @@
 		      (cons (if tail `(return ,ex) ex)
 			    (apply append (map cdr r)))))))))))
   (to-blk (to-lff e #t #t)))
+#|
+future issue:
+right now scope blocks need to be inside functions:
+
+> (julia-expand '(block (call + 1 (scope-block (block (= a b) c)))))     
+(block (scope-block (local a) (local #:g13) (block (= a b) (= #:g13 c)))
+       (return (call + 1 #:g13)))
+
+> (julia-expand '(scope-block (call + 1 (scope-block (block (= a b) c)))))
+(scope-block
+ (local #:g15)
+ (block (scope-block (local a) (block (= a b) (= #:g15 c)))
+        (return (call + 1 #:g15))))
+
+The first one gave something broken, but the second case works.
+So far only the second case can actually occur.
+|#
 
 ; convert a lambda list into a list of just symbols
 (define (lambda-vars lst)
