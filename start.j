@@ -173,9 +173,13 @@ function set(l:List, i:Index, elt)
     l.data[i+l.offset] = elt
 end
 
+function length(l:List)
+    return l.size
+end
+
 function print(l:List)
     print("{")
-    for i=1:l.size
+    for i=1:length(l)
         if i > 1
             print(", ")
         end

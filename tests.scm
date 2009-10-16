@@ -172,3 +172,11 @@ end
 				      (= n 10)
 				      (= z 12)
 				      (call * z (call + y n))))))))))
+
+(assert (match
+	 '(scope-block
+	   (block (local g9)
+		  (scope-block (= g9 b))
+		  (return (call + 1 g9))))
+	 (to-LFF
+	  '(scope-block (call + 1 (scope-block b))))))
