@@ -568,7 +568,7 @@ So far only the second case can actually occur.
   ; returns (expr . all-locals)
   (define (remove-scope-blocks e)
     (cond ((atom? e) (cons e '()))
-	  ((eq? (car e) 'lambda) (cons e '()))
+	  ((eq? (car e) 'lambda) (cons (flatten-scopes e) '()))
 	  ((eq? (car e) 'scope-block)
 	   (let ((vars (scope-block-vars e))
 		 (body (car (last-pair e))))
