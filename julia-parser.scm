@@ -9,7 +9,10 @@ TODO:
   '((= := += -= *= /= ^= %= |\|=| &= $= => <<= >>=)
     (|\|\||)
     (&&)
-    (-> <-)
+    ; note: there are some strange-looking things in here because
+    ; the way the lexer works, every prefix of an operator must also
+    ; be an operator.
+    (-> <- -- -->)
     (> < >= <= == != |.>| |.<| |.>=| |.<=| |.==| |.!=| |.=| |.!|)
     (<< >>)
     (: ..)

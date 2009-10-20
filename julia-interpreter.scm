@@ -89,12 +89,17 @@ not likely to be implemented in interpreter:
 
 (define (make-tuple-type typelist) (list->tuple typelist))
 
+(define (make-closure proc env)
+  (vector 'closure proc env))
+
+(define (closure-proc c) (vector-ref c 1))
+(define (closure-env c)  (vector-ref c 2))
+
 (define (j-closure? x) (and (vector? x)
 			    (eq? (vector-ref x 0) 'closure)))
 
-(define (generic-function? x) (and (vector? x)
-				   (eq? (vector-ref x 0) 'closure)
-				   (eq? (vector-ref x 1) j-apply-generic)))
+(define (generic-function? x) (and (j-closure? x)
+				   (eq? (closure-proc x) j-apply-generic)))
 
 ; get the type of a value
 (define (type-of v)
@@ -126,9 +131,6 @@ not likely to be implemented in interpreter:
 (define sequence-type (make-abstract-type '... any-type (julia-tuple 'T)
 					  julia-null))
 (put-type '... sequence-type)
-
-(define empty-tuple-type
-  (make-type 'Tuple tuple-type julia-null julia-null))
 
 (define bottom-type (make-abstract-type 'Bottom '* julia-null julia-null))
 (put-type 'Bottom bottom-type)
@@ -245,13 +247,13 @@ not likely to be implemented in interpreter:
 	((eq? child any-type)     #f)
 	((eq? child bottom-type)  env)
 	((eq? parent bottom-type) #f)
-
+	
 	((eq? parent tuple-type)  (tuple? child))
-
+	
 	; see if the child is an instantiation of the parent
 	((eq? parent (get-type (type-name child)))
 	 (map cons (type-params-list parent) (type-params-list child)))
-
+	
 	; recursively handle union types
 	((eq? (type-name child) 'Union)
 	 (every (lambda (t) (subtype?- t parent env))
@@ -259,7 +261,7 @@ not likely to be implemented in interpreter:
 	((eq? (type-name parent) 'Union)
 	 (any   (lambda (t) (subtype?- child t env))
 	        (type-params-list parent)))
-
+	
 	; handle tuple types, or any sibling instantiations of the same
 	; generic type. parameters must be consistent.
         ; examples:
@@ -271,7 +273,8 @@ not likely to be implemented in interpreter:
 	      (type-name parent))
 	 (let loop ((cp (type-params-list child))  ; child parameters
 		    (pp (type-params-list parent)) ; parent parameters
-		    (env env))
+		    (env env)
+		    (first #t))
 	   (let ((seq (and (pair? pp) (sequence-type? (car pp)))))
 	     (cond
 	      ((null? cp) (if (or (null? pp)
@@ -300,7 +303,7 @@ not likely to be implemented in interpreter:
 			      ; parameter matched. stop with "yes" now,
 			      ; otherwise we'd start looping forever
 			      env
-			      (loop crest prest env)))))
+			      (loop crest prest env #f)))))
 		   (cond ((symbol? pp0)
 			  (let ((u (assq pp0 env)))
 			    (if u
@@ -316,16 +319,21 @@ not likely to be implemented in interpreter:
 			  (if (= (j-unbox cp0) (j-unbox pp0))
 			      (continue env)
 			      #f))
-			 ((if (eq? (type-name child) 'Buffer)
-			      ; Buffers are invariant, params must be equal
-			      (and (subtype?- pp0 cp0 env)
-				   (subtype?- cp0 pp0 env))
-			      ; default to covariant, params must be subtype
-			      (subtype?- cp0 pp0 env)) =>
-			      (lambda (w)
-				(continue (if (pair? w)
-					      (append w env)
-					      env))))
+			 ((cond ((and first
+				      (eq? (type-name child) 'Function))
+			         ; functions contravariant in first parameter
+				 (subtype?- pp0 cp0 env))
+				((eq? (type-name child) 'Buffer)
+				 ; Buffers are invariant, params must be equal
+				 (and (subtype?- pp0 cp0 env)
+				      (subtype?- cp0 pp0 env)))
+				(else
+			         ; default to covariant, params must be subtype
+				 (subtype?- cp0 pp0 env))) =>
+			  (lambda (w)
+			    (continue (if (pair? w)
+					  (append w env)
+					  env))))
 			 (else #f)))))))))
 	
 	; otherwise walk up the type hierarchy
@@ -357,6 +365,8 @@ not likely to be implemented in interpreter:
 (define buffer-type (make-type 'Buffer any-type (julia-tuple 'T)
 			       (julia-tuple
 				(julia-tuple 'length int32-type))))
+(define function-type (make-type 'Function any-type
+				 (julia-tuple 'A 'B) julia-null))
 
 (put-type 'Any any-type)
 (put-type 'Boolean boolean-type)
@@ -371,6 +381,7 @@ not likely to be implemented in interpreter:
 (put-type 'Float float-type)
 (put-type 'Double double-type)
 (put-type 'Type Type-type)
+(put-type 'Function function-type)
 
 (put-type 'Symbol symbol-type)
 (put-type 'Buffer buffer-type)
@@ -388,8 +399,9 @@ not likely to be implemented in interpreter:
 	((eq? (car t) '...)   '...)
 	((eq? (car t) 'ref) (cadr t))
 	((and (eq? (car t) 'call)
-	      (eq? (cadr t) 'ref))
-	 (caddr t))
+	      (eq? (cadr t) '-->))  'Function)
+	((and (eq? (car t) 'call)
+	      (eq? (cadr t) 'ref))  (caddr t))
 	(else (error "Invalid type expression" t))))
 (define (type-ex-params t)
   (cond ((not (pair? t)) '())
@@ -397,8 +409,9 @@ not likely to be implemented in interpreter:
 	((eq? (car t) '...)   (cdr t))
 	((eq? (car t) 'ref)   (cddr t))
 	((and (eq? (car t) 'call)
-	      (eq? (cadr t) 'ref))
-	 (cdddr t))
+	      (eq? (cadr t) '-->))  (cddr t))
+	((and (eq? (car t) 'call)
+	      (eq? (cadr t) 'ref))  (cdddr t))
 	(else (error "Invalid type expression" t))))
 
 ; handles form (typename name . params), giving a type object
@@ -464,12 +477,6 @@ not likely to be implemented in interpreter:
   (put-type name (resolve-type-ex type)))
 
 ; --- function objects ---
-
-(define (make-closure proc env)
-  (vector 'closure proc env))
-
-(define (closure-proc c) (vector-ref c 1))
-(define (closure-env c)  (vector-ref c 2))
 
 (define (j-apply-generic ce args)
   (let* ((argtype (make-tuple-type (map type-of args)))
@@ -806,8 +813,7 @@ not likely to be implemented in interpreter:
 	    (error "Unhandled tree type" (car e)))))))
 
 (define (j-apply f args)
-  (if (and (vector? f)
-	   (eq? (vector-ref f 0) 'closure))
+  (if (j-closure? f)
       ((closure-proc f) (closure-env f) args)
       (error "call: expected function")))
 
@@ -874,13 +880,18 @@ not likely to be implemented in interpreter:
 	(display cls))))
 
 (define (print-type t)
-  (if (eq? t scalar-type)
-      (display "Tensor[Scalar, 0]")
-      (begin
-	(display (type-name t))
-	(let ((p (type-params t)))
-	  (if (> (tuple-length p) 0)
-	      (print-tuple p "[" "]"))))))
+  (cond ((eq? t scalar-type)
+	 (display "Tensor[Scalar, 0]"))
+	((subtype? t function-type)
+	 (print-type (tuple-ref (type-params t) 0))
+	 (display "-->")
+	 (print-type (tuple-ref (type-params t) 1)))
+	(else
+	 (begin
+	   (display (type-name t))
+	   (let ((p (type-params t)))
+	     (if (> (tuple-length p) 0)
+		 (print-tuple p "[" "]")))))))
 
 (define (julia-print x)
   (cond
@@ -892,7 +903,7 @@ not likely to be implemented in interpreter:
     (display "#<generic-function ")
     (display (gf-name x))
     (display ">"))
-   ((eq? (vector-ref x 0) 'closure)
+   ((j-closure? x)
     (display "#<closure>"))
    ((number? (vector-ref x 0))
     (display "#<primitive-buffer ")

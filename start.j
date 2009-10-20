@@ -6,6 +6,8 @@ typealias Nullable Union[T,()]
 typealias Index Int32
 typealias Size  Int32
 
+`-->` = (a,b)->Function[a,b]
+
 function print(x:Any)
     # default print function, call builtin
     _print(x)
