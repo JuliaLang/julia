@@ -71,8 +71,6 @@ function print(a:Array[T,2])
             print("\n")
         end 
     end
-
-
 end # print()
 
 function make_array(dim...)
@@ -119,7 +117,7 @@ function numel(a:Array)
 end
 
 function zeros(sz...)
-    a = make_array(*sz)
+    a = make_array(sz...)
 end
 
 function ones(m:Size)
