@@ -32,55 +32,54 @@ function print(a:Array[T,2])
     if 10 < m; print_vdots = true; end
     if 10 < n; print_hdots = true; end
 
-    for i=1:3
-        if print_hdots
+    if !print_vdots && !print_hdots
+        for i=1:m
+            printcols(a, 1, n, i)
+            print("\n")
+        end
+        return ()
+    elseif print_vdots && !print_hdots
+        for i=1:3
+            printcols(a, 1, n, i)
+            print("\n")
+        end
+        print(":\n")
+        for i=m-2:m
+            printcols(a, 1, n, i)
+            print("\n")
+        end
+        return ()
+    elseif !print_vdots && print_hdots
+        for i=1:m
+            printcols (a, 1, 3, i)
+            if i == 1 || i == m; print(": "); else; print("  "); end
+            printcols (a, n-2, n, i)
+            print("\n")
+        end
+    else
+        for i=1:3
             printcols (a, 1, 3, i)
             if i == 1; print(": "); else; print("  "); end
             printcols (a, n-2, n, i)
-        else
-            printcols (a, 1, n, i)
+            print("\n")
         end
-        print("\n")
-    end
-    
-    if print_vdots
-        if print_hdots 
-            print(":           :\n")
-        else
-            print(":\n")
-        end
-    else
-        for i=4:m-3; printcols (a, 1, n, i); end
-    end
-    
-    for i=m-2:m
-        if print_hdots
+        print(":\n")
+        for i=m-2:m
             printcols (a, 1, 3, i)
             if i == m; print(": "); else; print("  "); end
             printcols (a, n-2, n, i)
-        else
-            printcols (a, 1, n, i)
-        end
-        print("\n")
+            print("\n")
+        end 
     end
+end # print()
 
-end
-
-function make_array(m:Size)
-    dims = new(Buffer[Size], 1)
-    dims[1] = m
-    data = new(Buffer[Double], m)
-    array = new(Array[Double,1], dims, data)
-    return array
-end
-
-function make_array(m:Size, n:Size)
-    dims = new(Buffer[Size], 2)
-    dims[1] = m
-    dims[2] = n
-    data = new(Buffer[Double], m*n)
-    array = new(Array[Double,2], dims, data)
-    return array
+function make_array(dim...)
+    ndims = length(dim)
+    dims = new(Buffer[Size], ndims)
+    numel = 1
+    for i=1:ndims; dims[i] = dim[i]; numel = numel*dim[i]; end
+    data = new(Buffer[Double], numel)
+    array = new(Array[Double,ndims], dims, data)
 end
 
 function size(a:Array)
@@ -117,22 +116,24 @@ function numel(a:Array)
     return a.data.length
 end
 
-function zeros(m:Size)
-    a = make_array(m)
-    return a
-end
-
-function zeros(m:Size, n:Size)
-    a = make_array(m, n)
-    return a
+function zeros(sz...)
+    a = make_array(sz...)
 end
 
 function ones(m:Size)
-    return [ 1 | (i=1:m) ]
+    [ 1 | (i=1:m) ]
 end
 
 function ones(m:Size, n:Size)
-    return [ 1 | (i=1:m), (j=1:n) ]
+    [ 1 | (i=1:m), (j=1:n) ]
+end
+
+function rand(m:Size)
+    [ rand() | (i=1:m) ]
+end
+
+function rand(m:Size, n:Size)
+    [ rand() | (i=1:m), (j=1:n) ]
 end
 
 function `+`(x:Array[T,1], y:Array[T,1])
@@ -154,4 +155,8 @@ end
 
 function ctranspose(x:Array[T,2])
     return transpose(x)
+end
+
+function hcat(A:Array[T,1]...)
+    print(nargin)
 end

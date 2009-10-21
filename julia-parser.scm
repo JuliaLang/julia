@@ -6,33 +6,36 @@ TODO:
 |#
 
 (define ops-by-prec
-  '((= := += -= *= /= ^= %= |\|=| &= $= => <<= >>=)
-    (|\|\||)
-    (&&)
-    ; note: there are some strange-looking things in here because
-    ; the way the lexer works, every prefix of an operator must also
-    ; be an operator.
-    (-> <- -- -->)
-    (> < >= <= == != |.>| |.<| |.>=| |.<=| |.==| |.!=| |.=| |.!|)
-    (<< >>)
-    (: ..)
-    (+ - |\|| $)
-    (* / |./| % & |.*| |\\| |.\\|)
-    (^ |.^|)
-    (|::| |.|)))
+  '#((= := += -= *= /= ^= %= |\|=| &= $= => <<= >>=)
+     (|\|\||)
+     (&&)
+     ; note: there are some strange-looking things in here because
+     ; the way the lexer works, every prefix of an operator must also
+     ; be an operator.
+     (-> <- -- -->)
+     (> < >= <= == != |.>| |.<| |.>=| |.<=| |.==| |.!=| |.=| |.!|)
+     (<< >>)
+     (: ..)
+     (+ - |\|| $)
+     (* / |./| % & |.*| |\\| |.\\|)
+     (^ |.^|)
+     (|::|)
+     (|.|)))
+
+(define (prec-ops n) (vector-ref ops-by-prec n))
 
 ; unused characters: @ ? prefix'
 ; possible: use ` for quoting and escaping, $ for unquote
 ;           leave @ as an operator
 ; no character literals; unicode kind of makes them obsolete. strings instead.
 
-(define unary-ops '(- + ! ~ *))
+(define unary-ops '(- + ! ~))
 
 ; operators that are special forms, not function names
 (define syntactic-operators
   '(= := += -= *= /= ^= %= |\|=| &= $= => <<= >>=
       -> |\|\|| && : |::| |.|))
-(define syntactic-unary-operators '(*))
+(define syntactic-unary-operators '())
 
 (define (syntactic-op? op) (memq op syntactic-operators))
 (define (syntactic-unary-op? op) (memq op syntactic-unary-operators))
@@ -42,7 +45,8 @@ TODO:
 (define vararg-op (string->symbol "..."))
 
 (define operators (list* '~ ctrans-op trans-op vararg-op
-			 (delete-duplicates (apply append ops-by-prec))))
+			 (delete-duplicates
+			  (apply append (vector->list ops-by-prec)))))
 
 (define op-chars
   (delete-duplicates
@@ -277,19 +281,19 @@ TODO:
 					  '(end else elseif #\newline) #t))
 (define (parse-stmts s) (parse-Nary s parse-eq    #\; 'block '(#\newline) #t))
 
-(define (parse-eq s)    (parse-RtoL s parse-comma (list-ref ops-by-prec 0)))
+(define (parse-eq s)    (parse-RtoL s parse-comma (prec-ops 0)))
 ; parse-eq* is used where commas are special, for example in an argument list
-(define (parse-eq* s)   (parse-RtoL s parse-or    (list-ref ops-by-prec 0)))
+(define (parse-eq* s)   (parse-RtoL s parse-or    (prec-ops 0)))
 ; parse-comma is needed for commas outside parens, for example a = b,c
 (define (parse-comma s) (parse-Nary s parse-or    #\, 'tuple '( #\) ) #f))
-(define (parse-or s)    (parse-LtoR s parse-and   (list-ref ops-by-prec 1)))
-(define (parse-and s)   (parse-LtoR s parse-arrow (list-ref ops-by-prec 2)))
-(define (parse-arrow s) (parse-RtoL s parse-ineq  (list-ref ops-by-prec 3)))
-(define (parse-ineq s)  (parse-LtoR s parse-shift (list-ref ops-by-prec 4)))
-(define (parse-shift s) (parse-LtoR s parse-range (list-ref ops-by-prec 5)))
-;(define (parse-range s) (parse-LtoR s parse-expr  (list-ref ops-by-prec 6)))
-(define (parse-expr s)  (parse-LtoR s parse-term  (list-ref ops-by-prec 7)))
-(define (parse-term s)  (parse-LtoR s parse-unary (list-ref ops-by-prec 8)))
+(define (parse-or s)    (parse-LtoR s parse-and   (prec-ops 1)))
+(define (parse-and s)   (parse-LtoR s parse-arrow (prec-ops 2)))
+(define (parse-arrow s) (parse-RtoL s parse-ineq  (prec-ops 3)))
+(define (parse-ineq s)  (parse-LtoR s parse-shift (prec-ops 4)))
+(define (parse-shift s) (parse-LtoR s parse-range (prec-ops 5)))
+;(define (parse-range s) (parse-LtoR s parse-expr  (prec-ops 6)))
+(define (parse-expr s)  (parse-LtoR s parse-term  (prec-ops 7)))
+(define (parse-term s)  (parse-LtoR s parse-unary (prec-ops 8)))
 
 ; flag an error for tokens that cannot begin an expression
 (define (check-unexpected tok)
@@ -324,7 +328,9 @@ TODO:
 ; -2^3 is parsed as -(2^3), so call parse-call for the first argument,
 ; and parse-unary from then on (to handle 2^-3)
 (define (parse-factor s)
-  (parse-factor-h s parse-call (list-ref ops-by-prec 9)))
+  (parse-factor-h s parse-decl (prec-ops 9)))
+
+(define (parse-decl s) (parse-LtoR s parse-call (prec-ops 10)))
 
 ; parse function call, indexing, dot, and :: expressions
 ; also handles looking for syntactic reserved words
@@ -332,7 +338,7 @@ TODO:
   (define (loop ex)
     (let ((t (peek-token s)))
       (case t
-	((|::| |.|)
+	((|.|)
 	 (loop (list (take-token s) ex (parse-atom s))))
 	((#\( )   (take-token s)
 	 (if (memq ex '(block quote))
@@ -352,6 +358,8 @@ TODO:
 	     (memq ex '(begin while if for try function type typealias local)))
 	(parse-keyword s ex)
 	(loop ex))))
+
+;(define (parse-dot s)  (parse-LtoR s parse-atom (prec-ops 11)))
 
 ; parse block structures
 (define (parse-keyword s word)

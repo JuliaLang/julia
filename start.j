@@ -44,7 +44,7 @@ function length(b:Buffer)
     return b.length
 end
 
-function `!`(x:Boolean)
+function `!`(x:Bool)
     return eq_int32(unbox(x),unbox(0))
 end
 
@@ -77,6 +77,10 @@ end
 
 function `/`(x:Int32, y:Int32)
     return box(Int32, div_int32(unbox(x), unbox(y)))
+end
+
+function `%`(x:Int32, y:Int32)
+    return box(Int32, mod_int32(unbox(x), unbox(y)))
 end
 
 function `<=`(x:Int32, y:Int32)
@@ -225,3 +229,16 @@ function pop(a:List)
     a.size -= 1
     return item
 end
+
+# http://en.wikipedia.org/wiki/Linear_congruential_generator
+function make_rand(seed)
+    seed = 0
+    function rand()
+        seed = (22695477*seed + 1) % 4294967296
+        #interval_01 = seed / 4294967296.0
+    end
+    return rand
+end
+
+rand = make_rand(0)
+

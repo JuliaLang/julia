@@ -9,31 +9,39 @@
 ; - tuple destructuring
 ; - validate argument lists, replace a=b in arg lists with keyword exprs
 
-(define (formal-arg-names arglist)
+(define (arrow-args-to-lambda-list arglist)
   (if (pair? arglist)
-      (map (lambda (x)
-	     (if (and (pair? x) (eq? (car x) '...))
-		 (list '... (decl-var (cadr x)))
-		 (decl-var x)))
-	   (if (eq? (car arglist) 'tuple)
-	       (cdr arglist)
-	       arglist))
+      (if (eq? (car arglist) 'tuple)
+	  (cdr arglist)
+	  arglist)
       (if (symbol? arglist)
 	  (list arglist)
 	  arglist)))
 
-(define (formal-arg-types arglist)
-  (if (pair? arglist)
-      (map (lambda (x)
-	     (if (and (pair? x) (eq? (car x) '...))
-		 (list '... (decl-type (cadr x)))
-		 (decl-type x)))
-	   (if (eq? (car arglist) 'tuple)
-	       (cdr arglist)
-	       arglist))
-      (if (null? arglist)
-	  arglist
-	  (list 'Any))))
+(define (arg-name v)
+  (if (symbol? v)
+      v
+      (case (car v)
+	((...)         (decl-var (cadr v)))
+	((= keyword)   (decl-var (caddr v)))
+	((|:|)         (decl-var v))
+	(else (error "Malformed function argument" v)))))
+
+; convert a lambda list into a list of just symbols
+(define (lambda-vars lst)
+  (map arg-name lst))
+
+; get just argument types
+(define (lambda-types lst)
+  (map (lambda (v)
+	 (if (symbol? v)
+	     'Any
+	     (case (car v)
+	       ((...)         (list '... (decl-type (cadr v))))
+	       ((= keyword)   (decl-type (caddr v)))
+	       ((|:|)         (decl-type v))
+	       (else (error "Malformed function arguments" lst)))))
+       lst))
 
 ; get the variable name part of a declaration, x:int => x
 (define (decl-var v)
@@ -70,7 +78,7 @@
 (define patterns
   (list
    (pattern-lambda (-> a b)
-		   `(lambda ,(formal-arg-names a)
+		   `(lambda ,(arrow-args-to-lambda-list a)
 		      (scope-block ,b)))
 
    (pattern-lambda (|.| a b)
@@ -104,19 +112,18 @@
    (pattern-lambda (function (call name . argl) body)
 		   `(= ,name
 		       (addmethod ,name
-				  ,(formal-arg-types argl)
-				  (lambda ,(formal-arg-names argl)
+				  (lambda ,argl
 				    (scope-block ,body)))))
    
    ; call with splat
-   (pattern-lambda (call f ... (* _) ...)
+   (pattern-lambda (call f ... (... _) ...)
 		   (let ((argl (cddr __)))
 		     (if (length= argl 1)
 			 `(call apply ,f ,(cadar argl))
 			 `(call apply ,f (build-args
 					  ,@(map (lambda (x)
 						   (if (and (length= x 2)
-							    (eq? (car x) '*))
+							    (eq? (car x) '...))
 						       (cadr x)
 						       `(tuple ,x)))
 						 argl))))))
@@ -125,7 +132,7 @@
    (pattern-lambda (local (tuple . vars))
 		   `(block
 		     ,@(map (lambda (x) `(local ,x)) vars)))
-
+   
    ; local x:int=2 => local x:int; x=2
    (pattern-lambda (local (= var rhs))
 		   `(block (local ,var)
@@ -442,8 +449,8 @@
 	   (cons e '()))
 	  
 	  ((addmethod)
-	   (let ((l (list 'addmethod (cadr e) (caddr e)
-			  (to-blk (to-lff (cadddr e) #t #f)))))
+	   (let ((l (list 'addmethod (cadr e)
+			  (to-blk (to-lff (caddr e) #t #f)))))
 	     (if (symbol? dest)
 		 (cons `(= ,dest ,l) '())
 		 (cons l '()))))
@@ -476,17 +483,6 @@ right now scope blocks need to be inside functions:
 The first one gave something broken, but the second case works.
 So far only the second case can actually occur.
 |#
-
-; convert a lambda list into a list of just symbols
-(define (lambda-vars lst)
-  (map (lambda (v)
-	 (if (symbol? v)
-	     v
-	     (case (car v)
-	       ((...)         (cadr v))
-	       ((= keyword)   (caddr v))
-	       (else (error "Malformed function arguments" lst)))))
-       lst))
 
 ; local variable identification
 ; convert (scope-block x) to `(scope-block ,@locals ,x)
