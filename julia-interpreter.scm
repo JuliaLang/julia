@@ -267,8 +267,8 @@ not likely to be implemented in interpreter:
         ; examples:
         ; (a, a)  subtype  (b, c)  YES
 	; (a, b)  subtype  (c, c)  NO
-        ; (int8, int8)  subtype  (integer, integer)  YES
-        ; (a, a)  subtype  (int8, int8)  NO
+        ; (Int8, Int8)  subtype  (Int, Int)  YES
+        ; (a, a)  subtype  (Int8, Int8)  NO
 	((eq? (type-name child)
 	      (type-name parent))
 	 (let loop ((cp (type-params-list child))  ; child parameters

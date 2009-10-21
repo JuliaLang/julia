@@ -429,8 +429,7 @@
 	  
 	  ((lambda)
 	   (let ((l `(lambda ,(cadr e)
-		       (scope-block
-			,(to-blk (to-lff (caddr e) #t #t))))))
+		       ,(to-blk (to-lff (caddr e) #t #t)))))
 	     (if (symbol? dest)
 		 (cons `(= ,dest ,l) '())
 		 (cons (if tail `(return ,l) l) '()))))

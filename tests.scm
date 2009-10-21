@@ -154,7 +154,7 @@ end
 	 '(lambda (x y)
 	    (locals n f size g6 g7)
 	    (block (= n 0)
-		   (= f (lambda (x n) (+ x n)))
+		   (= f (lambda (x n) (locals) (+ x n)))
 		   (block (= y 1) (= g7 10) (= g6 12)
 			  (call * g6 (call + y g7)))))
 	 (flatten-scopes '(lambda (x y)
