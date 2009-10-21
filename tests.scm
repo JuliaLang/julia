@@ -18,9 +18,8 @@
 (tst "A[i^2] = b'" (= (ref A (call ^ i 2)) (call ctranspose b)))
 (tst "A[i^2].==b'" (call .== (ref A (call ^ i 2)) (call ctranspose b)))
 (tst "{f(x),g(x)}" (list (call f x) (call g x)))
-(tst "a::b.c" (|.| (|::| a b) c))
-(tst "*a" (* a))
-(tst "f(b,*a,c)" (call f b (* a) c))
+(tst "a::b.c" (|::| a (|.| b c)))
+(tst "f(b,a...,c)" (call f b (... a) c))
 
 ; test newline as optional statement separator
 (define s (make-token-stream (open-input-string "2\n-3")))
@@ -154,7 +153,7 @@ end
 	 '(lambda (x y)
 	    (locals n f size g6 g7)
 	    (block (= n 0)
-		   (= f (lambda (x n) (+ x n)))
+		   (= f (lambda (x n) (locals) (+ x n)))
 		   (block (= y 1) (= g7 10) (= g6 12)
 			  (call * g6 (call + y g7)))))
 	 (flatten-scopes '(lambda (x y)

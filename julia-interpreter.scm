@@ -437,6 +437,7 @@ not likely to be implemented in interpreter:
 	(else
 	 (error "Unknown type" name))))
 
+; convert a symbolic type expression to a type object
 (define (resolve-type-ex e)
   (resolve-type (type-ex-name e)
 		(type-ex-params e)))
