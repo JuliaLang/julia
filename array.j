@@ -75,21 +75,13 @@ function print(a:Array[T,2])
 
 end # print()
 
-function make_array(m:Size)
-    dims = new(Buffer[Size], 1)
-    dims[1] = m
-    data = new(Buffer[Double], m)
-    array = new(Array[Double,1], dims, data)
-    return array
-end
-
-function make_array(m:Size, n:Size)
-    dims = new(Buffer[Size], 2)
-    dims[1] = m
-    dims[2] = n
-    data = new(Buffer[Double], m*n)
-    array = new(Array[Double,2], dims, data)
-    return array
+function make_array(dim...)
+    ndims = length(dim)
+    dims = new(Buffer[Size], ndims)
+    numel = 1
+    for i=1:ndims; dims[i] = dim[i]; numel = numel*dim[i]; end
+    data = new(Buffer[Double], numel)
+    array = new(Array[Double,ndims], dims, data)
 end
 
 function size(a:Array)
@@ -126,14 +118,8 @@ function numel(a:Array)
     return a.data.length
 end
 
-function zeros(m:Size)
-    a = make_array(m)
-    return a
-end
-
-function zeros(m:Size, n:Size)
-    a = make_array(m, n)
-    return a
+function zeros(sz...)
+    a = make_array(*sz)
 end
 
 function ones(m:Size)
