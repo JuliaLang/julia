@@ -32,39 +32,48 @@ function print(a:Array[T,2])
     if 10 < m; print_vdots = true; end
     if 10 < n; print_hdots = true; end
 
-    for i=1:3
-        if print_hdots
+    if !print_vdots && !print_hdots
+        for i=1:m
+            printcols(a, 1, n, i)
+            print("\n")
+        end
+        return ()
+    elseif print_vdots && !print_hdots
+        for i=1:3
+            printcols(a, 1, n, i)
+            print("\n")
+        end
+        print(":\n")
+        for i=m-2:m
+            printcols(a, 1, n, i)
+            print("\n")
+        end
+        return ()
+    elseif !print_vdots && print_hdots
+        for i=1:m
+            printcols (a, 1, 3, i)
+            if i == 1 || i == m; print(": "); else; print("  "); end
+            printcols (a, n-2, n, i)
+            print("\n")
+        end
+    else
+        for i=1:3
             printcols (a, 1, 3, i)
             if i == 1; print(": "); else; print("  "); end
             printcols (a, n-2, n, i)
-        else
-            printcols (a, 1, n, i)
+            print("\n")
         end
-        print("\n")
-    end
-    
-    if print_vdots
-        if print_hdots 
-            print(":           :\n")
-        else
-            print(":\n")
-        end
-    else
-        for i=4:m-3; printcols (a, 1, n, i); end
-    end
-    
-    for i=m-2:m
-        if print_hdots
+        print(":\n")
+        for i=m-2:m
             printcols (a, 1, 3, i)
             if i == m; print(": "); else; print("  "); end
             printcols (a, n-2, n, i)
-        else
-            printcols (a, 1, n, i)
-        end
-        print("\n")
+            print("\n")
+        end 
     end
 
-end
+
+end # print()
 
 function make_array(m:Size)
     dims = new(Buffer[Size], 1)
