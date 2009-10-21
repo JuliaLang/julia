@@ -137,11 +137,19 @@ function zeros(m:Size, n:Size)
 end
 
 function ones(m:Size)
-    return [ 1 | (i=1:m) ]
+    [ 1 | (i=1:m) ]
 end
 
 function ones(m:Size, n:Size)
-    return [ 1 | (i=1:m), (j=1:n) ]
+    [ 1 | (i=1:m), (j=1:n) ]
+end
+
+function rand(m:Size)
+    [ rand() | (i=1:m) ]
+end
+
+function rand(m:Size, n:Size)
+    [ rand() | (i=1:m), (j=1:n) ]
 end
 
 function `+`(x:Array[T,1], y:Array[T,1])
@@ -163,4 +171,8 @@ end
 
 function ctranspose(x:Array[T,2])
     return transpose(x)
+end
+
+function hcat(A:Array[T,1]...)
+    print(nargin)
 end
