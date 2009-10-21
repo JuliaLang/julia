@@ -66,7 +66,7 @@ not likely to be implemented in interpreter:
 			   (julia-tuple 'super 'Type)
 			   (julia-tuple 'parameters 'Tuple)
 			   (julia-tuple 'fields 'Tuple)
-			   (julia-tuple 'abstract 'Boolean))
+			   (julia-tuple 'abstract 'Bool))
 			  #f))
 
 (define (make-type name super params fields)
@@ -89,14 +89,12 @@ not likely to be implemented in interpreter:
 
 (define (make-tuple-type typelist) (list->tuple typelist))
 
-(define (make-closure proc env)
-  (vector 'closure proc env))
-
 (define (closure-proc c) (vector-ref c 1))
 (define (closure-env c)  (vector-ref c 2))
 
 (define (j-closure? x) (and (vector? x)
-			    (eq? (vector-ref x 0) 'closure)))
+			    (vector? (vector-ref x 0))
+			    (eq? (type-name (vector-ref x 0)) 'Function)))
 
 (define (generic-function? x) (and (j-closure? x)
 				   (eq? (closure-proc x) j-apply-generic)))
@@ -111,8 +109,6 @@ not likely to be implemented in interpreter:
 	((string? v)             any-type)  ; temporary
 	((procedure? v)   	 any-type)
 	((number? v)   	         any-type)
-	((generic-function? v)	 any-type)
-	((j-closure? v)   	 any-type)
 	((eq? (vector-ref v 0) 'tuple)
 	 (let ((tt (make-tuple-type (map type-of (tuple->list v)))))
 	   (vector-set! v 0 tt)
@@ -349,7 +345,7 @@ not likely to be implemented in interpreter:
 (define int-type (make-abstract-type 'Int real-type julia-null julia-null))
 (put-type 'Int int-type)
 
-(define boolean-type (make-type 'Boolean scalar-type julia-null julia-null))
+(define bool-type (make-type 'Bool scalar-type julia-null julia-null))
 (define int8-type (make-type 'Int8 int-type julia-null julia-null))
 (define uint8-type (make-type 'Uint8 int-type julia-null julia-null))
 (define int16-type (make-type 'Int16 int-type julia-null julia-null))
@@ -369,7 +365,7 @@ not likely to be implemented in interpreter:
 				 (julia-tuple 'A 'B) julia-null))
 
 (put-type 'Any any-type)
-(put-type 'Boolean boolean-type)
+(put-type 'Bool bool-type)
 (put-type 'Int8 int8-type)
 (put-type 'Uint8 uint8-type)
 (put-type 'Int16 int16-type)
@@ -388,8 +384,8 @@ not likely to be implemented in interpreter:
 
 ; --- true and false values ---
 
-(define julia-true (vector boolean-type 1))
-(define julia-false (vector boolean-type 0))
+(define julia-true (vector bool-type 1))
+(define julia-false (vector bool-type 0))
 
 ; --- processing type-related syntax ---
 
@@ -479,22 +475,32 @@ not likely to be implemented in interpreter:
 
 ; --- function objects ---
 
+(define (make-closure ft proc env)
+  (if (not (subtype? ft function-type))
+      (error "make-closure: not a function type"))
+  (vector ft proc env))
+
+(define gf-type (resolve-type-ex (julia-parse "Any-->Any")))
+
 (define (j-apply-generic ce args)
   (let* ((argtype (make-tuple-type (map type-of args)))
 	 (meth  (best-method (vector-ref ce 0) argtype)))
     (if (not meth)
 	(error "No method for function" (vector-ref ce 1)
 	       "matching types" (map type-name (type-params-list argtype)))
-	((closure-proc (cdr meth)) (closure-env (cdr meth)) args))))
+	((closure-proc meth) (closure-env meth) args))))
 
 (define (make-generic-function name)
-  (make-closure j-apply-generic (vector '() name)))
+  (make-closure gf-type j-apply-generic (vector '() name)))
+
+(define (function-arg-type f)
+  (type-param0 (type-of f)))
 
 (define (best-method methtable argtype)
   (let loop ((m methtable))
     (if (null? m)
 	#f
-	(if (subtype? argtype (caar m))
+	(if (subtype? argtype (function-arg-type (car m)))
 	    (car m)
 	    (loop (cdr m))))))
 
@@ -509,19 +515,19 @@ not likely to be implemented in interpreter:
 (define (gf-set-mtable! gf mt) (vector-set! (closure-env gf) 0 mt))
 (define (gf-name gf) (vector-ref (closure-env gf) 1))
 
-(define (add-method gf argtype m)
-  (let ((matches (filter (lambda (x)
-			   (type-equal? (car x) argtype))
-			 (gf-mtable gf))))
+(define (add-method gf meth)
+  (let* ((argtype (function-arg-type meth))
+	 (matches (filter (lambda (x)
+			    (type-equal? (function-arg-type x) argtype))
+			  (gf-mtable gf))))
     (if (null? matches)
 	(gf-set-mtable! gf
-			(cons-in-order (cons argtype m) (gf-mtable gf)
-				       car subtype?))
+			(cons-in-order meth (gf-mtable gf)
+				       function-arg-type subtype?))
 	(if (null? (cdr matches))
-	  ; overwrite existing exactly matching method
-	  (begin (set-car! (car matches) argtype)
-		 (set-cdr! (car matches) m))
-	  (error "Function had multiple methods with the same type"))))
+	    ; overwrite existing exactly matching method
+	    (gf-set-mtable! gf (replaceq (car matches) meth (gf-mtable gf)))
+	    (error "Function had multiple methods with the same type"))))
   #t)
 
 ; --- builtin functions ---
@@ -565,7 +571,7 @@ not likely to be implemented in interpreter:
 
 (define (j-false? x)
   (and (vector? x)
-       (eq? (vector-ref x 0) boolean-type)
+       (eq? (vector-ref x 0) bool-type)
        (= (vector-ref x 1) 0)))
 
 (define (j-new type args)
@@ -598,10 +604,12 @@ not likely to be implemented in interpreter:
 
 (define (j-is x y) (eq? x y))
 
-(define (make-builtin name impl)
+(define (make-builtin name T impl)
   (table-set! julia-globals name
-	      (make-closure (lambda (ce args) (apply impl args))
-			    #f)))
+	      (make-closure
+	       (resolve-type-ex (julia-parse T))
+	       (lambda (ce args) (apply impl args))
+	       #f)))
 
 (define (j-box type v) (vector type v))
 (define (j-unbox v) (vector-ref v 1))
@@ -614,75 +622,88 @@ not likely to be implemented in interpreter:
 
 ; the following builtin functions are ordinary first-class functions,
 ; and can be directly employed by the user.
-(make-builtin 'new (lambda (t . args) (j-new t args)))
-(make-builtin 'getfield j-get-field)
-(make-builtin 'setfield j-set-field)
-(make-builtin 'is j-is)
-(make-builtin 'typeof j-typeof)
-(make-builtin 'subtype (lambda (x y) (if (subtype? x y)
-					 julia-true julia-false)))
-(make-builtin 'istype (lambda (x y) (if (subtype? (type-of x) y)
-					julia-true julia-false)))
-(make-builtin 'instantiate_type (lambda (t p)
-				  (instantiate-type t (tuple->list p))))
-(make-builtin 'tuple julia-tuple)
-(make-builtin 'apply (lambda (f argt) (j-apply f (tuple->list argt))))
-(make-builtin 'error error)
+(make-builtin 'new "(Type,Any...)-->Any" (lambda (t . args) (j-new t args)))
+(make-builtin 'getfield "(Any,Symbol)-->Any" j-get-field)
+(make-builtin 'setfield "(Any,Symbol,Any)-->Any" j-set-field)
+(make-builtin 'is "(Any,Any)-->Bool" j-is)
+(make-builtin 'typeof "(Any,)-->Type" j-typeof)
+(make-builtin 'subtype "(Type,Type)-->Bool"
+	      (lambda (x y) (if (subtype? x y)
+				julia-true julia-false)))
+(make-builtin 'istype "(Any,Type)-->Bool"
+	      (lambda (x y) (if (subtype? (type-of x) y)
+				julia-true julia-false)))
+(make-builtin 'instantiate_type "(Type,Tuple)-->Type"
+	      (lambda (t p)
+		(instantiate-type t (tuple->list p))))
+(make-builtin 'tuple "(Any...)-->Tuple" julia-tuple)
+(make-builtin 'apply "(Function[A,T],Tuple)-->T"
+	      (lambda (f argt) (j-apply f (tuple->list argt))))
+(make-builtin 'error "Any-->Bottom" error)
 
 ; the following functions are compiler intrinsics, meaning that users
 ; should generally avoid them. they basically always expand to inline code,
 ; and may not be available as first-class functions in the final system.
 ; some require unboxed arguments, which are tricky to deal with.
-(make-builtin 'bufferref j-buffer-ref)
-(make-builtin 'bufferset j-buffer-set)
-(make-builtin 'tupleref j-tuple-ref)
-(make-builtin 'tuplelen tuple-length)
-(make-builtin 'box j-box)
-(make-builtin 'unbox j-unbox)
-(make-builtin 'add_int32 +)
-(make-builtin 'add_double +)
-(make-builtin 'sub_int32 -)
-(make-builtin 'sub_double -)
-(make-builtin 'neg_int32 -)
-(make-builtin 'neg_double -)
-(make-builtin 'mul_int32 *)
-(make-builtin 'mul_double *)
+(make-builtin 'bufferref "(Buffer[T],Int)-->T" j-buffer-ref)
+(make-builtin 'bufferset "(Buffer[T],Int,T)-->T" j-buffer-set)
+(make-builtin 'tupleref "(Tuple,Int)-->Any" j-tuple-ref)
+(make-builtin 'tuplelen "(Tuple,)-->Int" tuple-length)
+(make-builtin 'box "(Type,T)-->T" j-box)
+(make-builtin 'unbox "(T,)-->T" j-unbox)
+(make-builtin 'add_int32 "(Int32,Int32)-->Int32" +)
+(make-builtin 'add_double "(Double,Double)-->Double" +)
+(make-builtin 'sub_int32 "(Int32,Int32)-->Int32" -)
+(make-builtin 'sub_double "(Double,Double)-->Double" -)
+(make-builtin 'neg_int32 "(Int32,)-->Int32" -)
+(make-builtin 'neg_double "(Double,)-->Double" -)
+(make-builtin 'mul_int32 "(Int32,Int32)-->Int32" *)
+(make-builtin 'mul_double "(Double,Double)-->Double" *)
 (define (div-int x y)
   (let ((q (/ x y)))
     (if (< q 0)
 	(ceiling q)
 	(floor q))))
 (define (mod-int x y) (- x (* (div-int x y) y)))
-(make-builtin 'div_int32 div-int)
-(make-builtin 'mod_int32 mod-int)
-(make-builtin 'div_double (lambda (x y) (exact->inexact (/ x y))))
-(make-builtin 'eq_int32 (lambda (x y) (if (= x y)
-					  julia-true
-					  julia-false)))
-(make-builtin 'eq_double (lambda (x y) (if (= x y)
-					  julia-true
-					  julia-false)))
-(make-builtin 'lt_int32 (lambda (x y) (if (< x y)
-					  julia-true
-					  julia-false)))
-(make-builtin 'lt_double (lambda (x y) (if (< x y)
-					   julia-true
-					   julia-false)))
-(make-builtin 'ne_int32 (lambda (x y) (if (not (= x y))
-					  julia-true
-					  julia-false)))
-(make-builtin 'ne_double (lambda (x y) (if (and (= x x)
-						(= y y)
-						(not (= x y)))
-					   julia-true
-					   julia-false)))
-(make-builtin 'isnan_double (lambda (x) (if (not (= x x))
-					    julia-true
-					    julia-false)))
-(make-builtin 'isinf_double (lambda (x) (if (or (equal? x +inf.0)
-						(equal? x -inf.0))
-					    julia-true
-					    julia-false)))
+(make-builtin 'div_int32 "(Int32,Int32)-->Int32" div-int)
+(make-builtin 'mod_int32 "(Int32,Int32)-->Int32" mod-int)
+(make-builtin 'div_double "(Double,Double)-->Double"
+	      (lambda (x y) (exact->inexact (/ x y))))
+(make-builtin 'eq_int32 "(Int32,Int32)-->Bool"
+	      (lambda (x y) (if (= x y)
+				julia-true
+				julia-false)))
+(make-builtin 'eq_double "(Double,Double)-->Bool"
+	      (lambda (x y) (if (= x y)
+				julia-true
+				julia-false)))
+(make-builtin 'lt_int32 "(Int32,Int32)-->Bool"
+	      (lambda (x y) (if (< x y)
+				julia-true
+				julia-false)))
+(make-builtin 'lt_double "(Double,Double)-->Bool"
+	      (lambda (x y) (if (< x y)
+				julia-true
+				julia-false)))
+(make-builtin 'ne_int32 "(Int32,Int32)-->Bool"
+	      (lambda (x y) (if (not (= x y))
+				julia-true
+				julia-false)))
+(make-builtin 'ne_double "(Double,Double)-->Bool"
+	      (lambda (x y) (if (and (= x x)
+				     (= y y)
+				     (not (= x y)))
+				julia-true
+				julia-false)))
+(make-builtin 'isnan_double "(Double,)-->Bool"
+	      (lambda (x) (if (not (= x x))
+			      julia-true
+			      julia-false)))
+(make-builtin 'isinf_double "(Double,)-->Bool"
+	      (lambda (x) (if (or (equal? x +inf.0)
+				  (equal? x -inf.0))
+			      julia-true
+			      julia-false)))
 
 
 ; --- evaluator ---
@@ -773,9 +794,14 @@ not likely to be implemented in interpreter:
 		(apply julia-tuple (map (lambda (x) (j-eval x env))
 					(cdr e)))))
 	   ((lambda)
-	    (make-closure (lambda (ce args)
-			    (j-eval-body (cadr e) (cddr e) ce args))
-			  env))
+	    (let ((types (lambda-types (cadr e))))
+	      (make-closure (instantiate-type
+			     function-type
+			     (list (resolve-type-ex (cons 'tuple types))
+				   any-type))
+			    (lambda (ce args)
+			      (j-eval-body (cadr e) (cddr e) ce args))
+			    env)))
 	   ((addmethod)
 	    (let* ((name (cadr e))
 		   (gf (or (and (j-bound? name env)
@@ -784,10 +810,7 @@ not likely to be implemented in interpreter:
 			   (make-generic-function name))))
 	      (if (not (generic-function? gf))
 		  (error "Variable" name "does not name a function")
-		  (add-method gf
-			      (make-tuple-type
-			       (map resolve-type-ex (caddr e)))
-			      (j-eval (cadddr e) env)))
+		  (add-method gf (j-eval (caddr e) env)))
 	      gf))
 
 	   ((local)  julia-null)
@@ -823,17 +846,18 @@ not likely to be implemented in interpreter:
 (define (bind-args names args cloenv)
   (if (null? names)
       cloenv
-      (let ((formal (car names)))
-	(let ((bind
-	       (if (and (pair? formal) (eq? (car formal) '...))
-		   (cons (cadr formal)
-			 (apply julia-tuple args))
-		   (cons formal
-			 (car args)))))
-	  (cons bind
-		(bind-args (cdr names)
-			   (if (pair? args) (cdr args) args)
-			   cloenv))))))
+      (let* ((formal (car names))
+	     (name   (arg-name formal))
+	     (bind
+	      (if (and (pair? formal) (eq? (car formal) '...))
+		  (cons name
+			(apply julia-tuple args))
+		  (cons name
+			(car args)))))
+	(cons bind
+	      (bind-args (cdr names)
+			 (if (pair? args) (cdr args) args)
+			 cloenv)))))
 
 (define (j-eval-body formals body cenv args)
   (with-exception-catcher
@@ -864,7 +888,7 @@ not likely to be implemented in interpreter:
   (for-each j-toplevel-eval (julia-parse-file fname))
   julia-null)
 
-(make-builtin 'load j-load)
+(make-builtin 'load "(Any,)-->()" j-load)
 
 ; --- print and repl ---
 
@@ -885,9 +909,9 @@ not likely to be implemented in interpreter:
   (cond ((eq? t scalar-type)
 	 (display "Tensor[Scalar, 0]"))
 	((subtype? t function-type)
-	 (print-type (tuple-ref (type-params t) 0))
+	 (julia-print (tuple-ref (type-params t) 0))
 	 (display "-->")
-	 (print-type (tuple-ref (type-params t) 1)))
+	 (julia-print (tuple-ref (type-params t) 1)))
 	(else
 	 (begin
 	   (display (type-name t))
@@ -925,9 +949,9 @@ not likely to be implemented in interpreter:
 	   (tn (type-name t)))
       (case tn
 	((Int32 Double) (display (j-unbox x)))
-	((Boolean) (if (j-false? x)
-		       (display "false")
-		       (display "true")))
+	((Bool) (if (j-false? x)
+		    (display "false")
+		    (display "true")))
 	((Symbol) (display (vector-ref x 1)))
 	(else
 	 (let ((fields (type-fields t))
@@ -945,7 +969,7 @@ not likely to be implemented in interpreter:
 			(loop L (+ i 1)))
 		 (display ")"))))))))))
 
-(make-builtin '_print julia-print)
+(make-builtin '_print "(Any,)-->()" julia-print)
 
 (define (detect-color)
   (let ((tput (shell-command "tput setaf 9 >&/dev/null")))

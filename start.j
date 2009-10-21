@@ -44,7 +44,7 @@ function length(b:Buffer)
     return b.length
 end
 
-function `!`(x:Boolean)
+function `!`(x:Bool)
     return eq_int32(unbox(x),unbox(0))
 end
 
