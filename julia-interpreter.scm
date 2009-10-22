@@ -453,7 +453,7 @@ not likely to be implemented in interpreter:
 (define (type-def- signature fields super)
   (let ((tname (type-ex-name signature))
 	(tpara (type-ex-params signature))
-	; fields looks like (block (: n t) (: n t) ...)
+	; fields looks like (block (:: n t) (:: n t) ...)
 	(fnames (map cadr (cdr fields)))
 	(ftypes (map (lambda (fld)
 		       (resolve-type-ex (caddr fld)))

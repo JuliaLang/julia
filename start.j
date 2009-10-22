@@ -1,4 +1,4 @@
-function ref(t:Type, params...)
+function ref(t::Type, params...)
     return instantiate_type(t, params)
 end
 
@@ -8,43 +8,43 @@ typealias Size  Int32
 
 `-->` = (a,b)->Function[a,b]
 
-function print(x:Any)
+function print(x::Any)
     # default print function, call builtin
     _print(x)
     return ()
 end
 
-function ref(t:Tuple, i:Index)
+function ref(t::Tuple, i::Index)
     return tupleref(t, unbox(i))
 end
 
-function ref(b:Buffer, i:Index)
+function ref(b::Buffer, i::Index)
     return box(typeof(b).parameters[1], bufferref(b, unbox(i)))
 end
 
-function ref(b:Buffer[Any], i:Index)
+function ref(b::Buffer[Any], i::Index)
     return bufferref(b, unbox(i))
 end
 
-function set(b:Buffer, i:Index, x)
+function set(b::Buffer, i::Index, x)
     bufferset(b, unbox(i), unbox(x))
     return x
 end
 
-function set(b:Buffer[Any], i:Index, x)
+function set(b::Buffer[Any], i::Index, x)
     bufferset(b, unbox(i), x)
     return x
 end
 
-function length(t:Tuple)
+function length(t::Tuple)
     return box(Size, tuplelen(t))
 end
 
-function length(b:Buffer)
+function length(b::Buffer)
     return b.length
 end
 
-function `!`(x:Bool)
+function `!`(x::Bool)
     return eq_int32(unbox(x),unbox(0))
 end
 
@@ -59,96 +59,96 @@ function assert(c)
     true
 end
 
-function `+`(x:Int32, y:Int32)
+function `+`(x::Int32, y::Int32)
     return box(Int32, add_int32(unbox(x), unbox(y)))
 end
 
-function `-`(x:Int32, y:Int32)
+function `-`(x::Int32, y::Int32)
     return box(Int32, sub_int32(unbox(x), unbox(y)))
 end
 
-function `-`(x:Int32)
+function `-`(x::Int32)
     return box(Int32, neg_int32(unbox(x)))
 end
 
-function `*`(x:Int32, y:Int32)
+function `*`(x::Int32, y::Int32)
     return box(Int32, mul_int32(unbox(x), unbox(y)))
 end
 
-function `/`(x:Int32, y:Int32)
+function `/`(x::Int32, y::Int32)
     return box(Int32, div_int32(unbox(x), unbox(y)))
 end
 
-function `%`(x:Int32, y:Int32)
+function `%`(x::Int32, y::Int32)
     return box(Int32, mod_int32(unbox(x), unbox(y)))
 end
 
-function `<=`(x:Int32, y:Int32)
+function `<=`(x::Int32, y::Int32)
     return lt_int32(unbox(x),unbox(y)) || eq_int32(unbox(x),unbox(y))
 end
 
-function `<`(x:Int32, y:Int32)
+function `<`(x::Int32, y::Int32)
     return lt_int32(unbox(x),unbox(y))
 end
 
-function `>`(x:Int32, y:Int32)
+function `>`(x::Int32, y::Int32)
     return lt_int32(unbox(y),unbox(x))
 end
 
-function `>=`(x:Int32, y:Int32)
+function `>=`(x::Int32, y::Int32)
     return (x>y) || eq_int32(unbox(x),unbox(y))
 end
 
-function `==`(x:Int32, y:Int32)
+function `==`(x::Int32, y::Int32)
     return eq_int32(unbox(x),unbox(y))
 end
 
-function `+`(x:Double, y:Double)
+function `+`(x::Double, y::Double)
     return box(Double, add_double(unbox(x), unbox(y)))
 end
 
-function `-`(x:Double, y:Double)
+function `-`(x::Double, y::Double)
     return box(Double, sub_double(unbox(x), unbox(y)))
 end
 
-function `-`(x:Double)
+function `-`(x::Double)
     return box(Double, neg_double(unbox(x)))
 end
 
-function `*`(x:Double, y:Double)
+function `*`(x::Double, y::Double)
     return box(Double, mul_double(unbox(x), unbox(y)))
 end
 
-function `/`(x:Double, y:Double)
+function `/`(x::Double, y::Double)
     return box(Double, div_double(unbox(x), unbox(y)))
 end
 
-function `<=`(x:Double, y:Double)
+function `<=`(x::Double, y::Double)
     return lt_double(unbox(x),unbox(y)) || eq_double(unbox(x),unbox(y))
 end
 
-function `<`(x:Double, y:Double)
+function `<`(x::Double, y::Double)
     return lt_double(unbox(x),unbox(y))
 end
 
-function `>`(x:Double, y:Double)
+function `>`(x::Double, y::Double)
     return lt_double(unbox(y),unbox(x))
 end
 
-function `>=`(x:Double, y:Double)
+function `>=`(x::Double, y::Double)
     return (x>y) || eq_double(unbox(x),unbox(y))
 end
 
-function `==`(x:Double, y:Double)
+function `==`(x::Double, y::Double)
     return eq_double(unbox(x),unbox(y))
 end
 
 
 type List[T]
-    maxsize: Size
-    size: Size
-    offset: Size
-    data: Buffer[T]
+    maxsize:: Size
+    size:: Size
+    offset:: Size
+    data:: Buffer[T]
 end
 
 function list(elts...)
@@ -165,25 +165,25 @@ function list(elts...)
     return new(List[Any], maxsize, n, 0, data)
 end
 
-function ref(l:List, i:Index)
+function ref(l::List, i::Index)
     if i > l.size
         error("Out of bounds")
     end
     return l.data[i+l.offset]
 end
 
-function set(l:List, i:Index, elt)
+function set(l::List, i::Index, elt)
     if i > l.size
         error("Out of bounds")
     end
     l.data[i+l.offset] = elt
 end
 
-function length(l:List)
+function length(l::List)
     return l.size
 end
 
-function print(l:List)
+function print(l::List)
     print("{")
     for i=1:length(l)
         if i > 1
@@ -194,7 +194,7 @@ function print(l:List)
     print("}")
 end
 
-function grow(a:List, inc:Size)
+function grow(a::List, inc::Size)
     if (inc == 0)
         return a
     end
@@ -214,13 +214,13 @@ function grow(a:List, inc:Size)
     return a
 end
 
-function push(a:List, item)
+function push(a::List, item)
     grow(a, 1)
     a[a.size] = item
     return a
 end
 
-function pop(a:List)
+function pop(a::List)
     if (a.size == 0)
         error("pop: List is empty")
     end

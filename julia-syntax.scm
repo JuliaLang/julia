@@ -1,7 +1,6 @@
 ; first passes:
 ; * expand lvalues, e.g. (= (call ref A i) x) => (= A (call assign A i x))
 ; * expand operators like +=
-; - sort out ranges from declarations (maybe use :: ?)
 ; * expand for into while
 ; * expand -> and function into lambda/addmethod
 ; * replace (. a b) with (call get a (quote b))
@@ -24,7 +23,7 @@
       (case (car v)
 	((...)         (decl-var (cadr v)))
 	((= keyword)   (decl-var (caddr v)))
-	((|:|)         (decl-var v))
+	((|::|)        (decl-var v))
 	(else (error "Malformed function argument" v)))))
 
 ; convert a lambda list into a list of just symbols
@@ -39,18 +38,18 @@
 	     (case (car v)
 	       ((...)         (list '... (decl-type (cadr v))))
 	       ((= keyword)   (decl-type (caddr v)))
-	       ((|:|)         (decl-type v))
+	       ((|::|)        (decl-type v))
 	       (else (error "Malformed function arguments" lst)))))
        lst))
 
-; get the variable name part of a declaration, x:int => x
+; get the variable name part of a declaration, x::int => x
 (define (decl-var v)
-  (if (and (pair? v) (eq? (car v) '|:|))
+  (if (and (pair? v) (eq? (car v) '|::|))
       (cadr v)
       v))
 
 (define (decl-type v)
-  (if (and (pair? v) (eq? (car v) '|:|))
+  (if (and (pair? v) (eq? (car v) '|::|))
       (caddr v)
       'Any))
 
@@ -133,7 +132,7 @@
 		   `(block
 		     ,@(map (lambda (x) `(local ,x)) vars)))
    
-   ; local x:int=2 => local x:int; x=2
+   ; local x::int=2 => local x::int; x=2
    (pattern-lambda (local (= var rhs))
 		   `(block (local ,var)
 			   (= ,(decl-var var) ,rhs)))
