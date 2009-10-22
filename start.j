@@ -141,6 +141,19 @@ function `==`(x::Double, y::Double)
     return eq_double(unbox(x),unbox(y))
 end
 
+# explicit scalar conversions
+function int32(x::Scalar)
+    return box(Int32,to_int32(unbox(x)))
+end
+
+function uint32(x::Scalar)
+    return box(Uint32,to_uint32(unbox(x)))
+end
+
+function double(x::Scalar)
+    return box(Double,to_double(unbox(x)))
+end
+
 
 type List[T]
     maxsize:: Size
@@ -230,7 +243,6 @@ end
 
 # http://en.wikipedia.org/wiki/Linear_congruential_generator
 function make_rand(seed)
-    seed = 0
     function rand()
         seed = (22695477*seed + 1) % 4294967296
         #interval_01 = seed / 4294967296.0
@@ -238,5 +250,4 @@ function make_rand(seed)
     return rand
 end
 
-rand = make_rand(0)
-
+rand = make_rand(12345)
