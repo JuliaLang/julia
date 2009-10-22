@@ -80,6 +80,9 @@
 		   `(lambda ,(arrow-args-to-lambda-list a)
 		      (scope-block ,b)))
 
+   (pattern-lambda (--> a b)
+		   `(call ref Function ,a ,b))
+
    (pattern-lambda (|.| a b)
 		   `(call getfield ,a (quote ,b)))
 

@@ -34,7 +34,7 @@ TODO:
 ; operators that are special forms, not function names
 (define syntactic-operators
   '(= := += -= *= /= ^= %= |\|=| &= $= => <<= >>=
-      -> |\|\|| && : |::| |.|))
+      -> --> |\|\|| && : |::| |.|))
 (define syntactic-unary-operators '())
 
 (define (syntactic-op? op) (memq op syntactic-operators))
@@ -395,7 +395,7 @@ TODO:
        (begin0 (list word sig (parse-block s))
 	       (expect-end s))))
     ((typealias)
-     (list 'typealias (parse-call s) (parse-call s)))
+     (list 'typealias (parse-atom s) (parse-arrow s)))
     ((try) #f ; TODO
      )
     (else (error "Unhandled keyword"))))

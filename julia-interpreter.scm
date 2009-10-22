@@ -136,12 +136,29 @@ not likely to be implemented in interpreter:
 					julia-null))
 (put-type 'Tensor Tensor-type)
 
+(define function-type (make-type 'Function any-type
+				 (julia-tuple 'A 'B) julia-null))
+(put-type 'Function function-type)
+
 ; --- type functions ---
 
 (define (j-int32? x)
   (and (vector? x) (eq? (type-name (type-of x)) 'Int32)))
 
 (define (instantiate-type type params)
+  ; convert X-->Y to (X,)-->Y if X is not already a tuple or symbol
+  (instantiate-type-
+   type
+   (if (and (pair? params)
+	    (subtype? type function-type)
+	    (symbol? (type-param0 type))
+	    (not (tuple? (car params)))
+	    (not (symbol? (car params))))
+       (cons (julia-tuple (car params))
+	     (cdr params))
+       params)))
+
+(define (instantiate-type- type params)
   (define (copy-type type super params fields)
     (if (tuple? type)
 	params
@@ -199,9 +216,9 @@ not likely to be implemented in interpreter:
 				   (type-params-list t)))))))
 	     (copy-type type
 			(instantiate-inner-type (type-super type))
-		      
+			
 			(list->tuple (new-params-list tp params))
-		      
+			
 			(let ((fnames (map car flds))
 			      (ftypes (map cadr flds)))
 			  ; replace type parameters with their values
@@ -361,8 +378,6 @@ not likely to be implemented in interpreter:
 (define buffer-type (make-type 'Buffer any-type (julia-tuple 'T)
 			       (julia-tuple
 				(julia-tuple 'length int32-type))))
-(define function-type (make-type 'Function any-type
-				 (julia-tuple 'A 'B) julia-null))
 
 (put-type 'Any any-type)
 (put-type 'Bool bool-type)
@@ -377,7 +392,6 @@ not likely to be implemented in interpreter:
 (put-type 'Float float-type)
 (put-type 'Double double-type)
 (put-type 'Type Type-type)
-(put-type 'Function function-type)
 
 (put-type 'Symbol symbol-type)
 (put-type 'Buffer buffer-type)
@@ -394,8 +408,7 @@ not likely to be implemented in interpreter:
 	((eq? (car t) 'tuple) 'tuple)
 	((eq? (car t) '...)   '...)
 	((eq? (car t) 'ref) (cadr t))
-	((and (eq? (car t) 'call)
-	      (eq? (cadr t) '-->))  'Function)
+	((eq? (car t) '-->) 'Function)
 	((and (eq? (car t) 'call)
 	      (eq? (cadr t) 'ref))  (caddr t))
 	(else (error "Invalid type expression" t))))
@@ -404,8 +417,7 @@ not likely to be implemented in interpreter:
 	((eq? (car t) 'tuple) (cdr t))
 	((eq? (car t) '...)   (cdr t))
 	((eq? (car t) 'ref)   (cddr t))
-	((and (eq? (car t) 'call)
-	      (eq? (cadr t) '-->))  (cddr t))
+	((eq? (car t) '-->)   (cdr t))
 	((and (eq? (car t) 'call)
 	      (eq? (cadr t) 'ref))  (cdddr t))
 	(else (error "Invalid type expression" t))))
@@ -471,7 +483,8 @@ not likely to be implemented in interpreter:
 (define (type-alias name type)
   (if (not (symbol? name))
       (error "typealias: type name must be a symbol"))
-  (put-type name (resolve-type-ex type)))
+  (put-type name (resolve-type-ex type))
+  julia-null)
 
 ; --- function objects ---
 
@@ -600,8 +613,6 @@ not likely to be implemented in interpreter:
 		  (error "Too many arguments to type constructor" tn)
 		  v))))))
 
-(define (j-typeof x) (type-of x))
-
 (define (j-is x y) (eq? x y))
 
 (define (make-builtin name T impl)
@@ -626,7 +637,7 @@ not likely to be implemented in interpreter:
 (make-builtin 'getfield "(Any,Symbol)-->Any" j-get-field)
 (make-builtin 'setfield "(Any,Symbol,Any)-->Any" j-set-field)
 (make-builtin 'is "(Any,Any)-->Bool" j-is)
-(make-builtin 'typeof "(Any,)-->Type" j-typeof)
+(make-builtin 'typeof "(Any,)-->Type" type-of)
 (make-builtin 'subtype "(Type,Type)-->Bool"
 	      (lambda (x y) (if (subtype? x y)
 				julia-true julia-false)))
