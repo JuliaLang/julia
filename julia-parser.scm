@@ -296,17 +296,23 @@ TODO:
 (define (parse-term s)  (parse-LtoR s parse-unary (prec-ops 8)))
 
 ; flag an error for tokens that cannot begin an expression
-(define (check-unexpected tok)
-  (if (memv tok '(#\, #\) #\] #\} #\; end else elseif))
-      (error "Unexpected token" tok)))
+(define (closing-token? tok)
+  (or (eof-object? tok)
+      (memv tok '(#\, #\) #\] #\} #\; end else elseif))))
 
 (define (parse-unary s)
   (let ((t (require-token s)))
-    (check-unexpected t)
+    (if (closing-token? t)
+	(error "Unexpected token" t))
     (if (memq t unary-ops)
-	(if (syntactic-unary-op? t)
-	    (list (take-token s) (parse-unary s))
-	    (list 'call (take-token s) (parse-unary s)))
+	(let ((op (take-token s))
+	      (next (peek-token s)))
+	  (if (closing-token? next)
+	      ; return operator by itself, as in (+)
+	      op
+	      (if (syntactic-unary-op? op)
+		  (list op (parse-unary s))
+		  (list 'call op (parse-unary s)))))
 	(parse-factor s))))
 
 ; handle ^, .^, and postfix transpose operator
@@ -352,10 +358,11 @@ TODO:
 	 (loop (list* 'ref  ex (parse-arglist s #\] ))))
 	(else ex))))
   
-  (let* ((do-kw? (not (eqv? (peek-token s) #\`)))
+  (let* (#;(do-kw? (not (eqv? (peek-token s) #\`)))
 	 (ex (parse-atom s)))
-    (if (and do-kw?
-	     (memq ex '(begin while if for try function type typealias local)))
+    (if (and #;do-kw?
+	 (memq ex '(begin while if for try function type typealias local
+			  return break continue)))
 	(parse-keyword s ex)
 	(loop ex))))
 
@@ -398,6 +405,8 @@ TODO:
      (list 'typealias (parse-atom s) (parse-arrow s)))
     ((try) #f ; TODO
      )
+    ((return)          (list 'return (parse-eq s)))
+    ((break continue)  (list word))
     (else (error "Unhandled keyword"))))
 
 ; handle function call argument list, or any comma-delimited list.
@@ -493,21 +502,7 @@ TODO:
 
 	  ((eqv? t #\` )
 	   (take-token s)
-	   (let ((op (peek-token s)))
-	     (take-token s)
-	     (if (eqv? op #\`)
-		 (error "Expected token in ``")
-		 (if (not (eqv? (peek-token s) #\`))
-		     (error "Expected closing `")))
-	     (take-token s)
-	     op))
-
-	  ((eq? t 'return)
-	   (take-token s)
-	   (list 'return (parse-eq s)))
-
-	  ((or (eq? t 'break) (eq? t 'continue))
-	   (list (take-token s)))
+	   (list 'quote (parse-call s)))
 
 	  ; TODO: prefix keywords, various quoting/escaping
 

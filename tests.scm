@@ -20,6 +20,9 @@
 (tst "{f(x),g(x)}" (list (call f x) (call g x)))
 (tst "a::b.c" (|::| a (|.| b c)))
 (tst "f(b,a...,c)" (call f b (... a) c))
+(tst "(+)" +)
+(tst "f(+,3)" (call f + 3))
+(tst "f(3,+)" (call f 3 +))
 
 ; test newline as optional statement separator
 (define s (make-token-stream (open-input-string "2\n-3")))

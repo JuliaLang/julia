@@ -8,7 +8,9 @@
 ; - tuple destructuring
 ; - validate argument lists, replace a=b in arg lists with keyword exprs
 
-(define (arrow-args-to-lambda-list arglist)
+; convert x => (x), (tuple x y) => (x y)
+; used to normalize function signatures like "x->y" and "function +(a,b)"
+(define (fsig-to-lambda-list arglist)
   (if (pair? arglist)
       (if (eq? (car arglist) 'tuple)
 	  (cdr arglist)
@@ -77,7 +79,7 @@
 (define patterns
   (list
    (pattern-lambda (-> a b)
-		   `(lambda ,(arrow-args-to-lambda-list a)
+		   `(lambda ,(fsig-to-lambda-list a)
 		      (scope-block ,b)))
 
    (pattern-lambda (--> a b)
@@ -114,7 +116,7 @@
    (pattern-lambda (function (call name . argl) body)
 		   `(= ,name
 		       (addmethod ,name
-				  (lambda ,argl
+				  (lambda ,(fsig-to-lambda-list argl)
 				    (scope-block ,body)))))
    
    ; call with splat

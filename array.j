@@ -136,12 +136,12 @@ function rand(m::Size, n::Size)
     [ rand() | (i=1:m), (j=1:n) ]
 end
 
-function `+`(x::Array[T,1], y::Array[T,1])
+function +(x::Array[T,1], y::Array[T,1])
     n = numel(x)
     return [ x[i] + y[i] | (i=1:n) ]
 end
 
-function `+`(x::Array[T,2], y::Array[T,2])
+function +(x::Array[T,2], y::Array[T,2])
     m = x.dims[1]
     n = x.dims[2]
     return [ x[i,j] + y[i,j] | (i=1:m), (j=1:n) ]
