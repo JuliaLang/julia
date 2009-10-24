@@ -1,12 +1,12 @@
-type Array[T,ndims] < Tensor[T,ndims]
+type Array[`T,`ndims] < Tensor[`T,`ndims]
     dims:: Buffer[Size]
-    data:: Buffer[T]
+    data:: Buffer[`T]
 end
 
-typealias Vector Tensor[T,1]
-typealias Matrix Tensor[T,2]
+typealias Vector Tensor[`T,1]
+typealias Matrix Tensor[`T,2]
 
-function print(a::Array[T,1])
+function print(a::Array[`T,1])
     n = a.dims[1]
 
     if n < 10
@@ -22,7 +22,7 @@ function printcols(a, start, stop, i)
     for j=start:stop; print(a[i,j]); print(" "); end
 end
 
-function print(a::Array[T,2])
+function print(a::Array[`T,2])
 
     m = a.dims[1]
     n = a.dims[2]
@@ -136,27 +136,27 @@ function rand(m::Size, n::Size)
     [ rand() | (i=1:m), (j=1:n) ]
 end
 
-function +(x::Array[T,1], y::Array[T,1])
+function +(x::Array[`T,1], y::Array[`T,1])
     n = numel(x)
     return [ x[i] + y[i] | (i=1:n) ]
 end
 
-function +(x::Array[T,2], y::Array[T,2])
+function +(x::Array[`T,2], y::Array[`T,2])
     m = x.dims[1]
     n = x.dims[2]
     return [ x[i,j] + y[i,j] | (i=1:m), (j=1:n) ]
 end
 
-function transpose(x::Array[T,2])
+function transpose(x::Array[`T,2])
     m = x.dims[1]
     n = x.dims[2]
     return [ x[j,i] | (i=1:n), (j=1:m) ]
 end
 
-function ctranspose(x::Array[T,2])
+function ctranspose(x::Array[`T,2])
     return transpose(x)
 end
 
-function hcat(A::Array[T,1]...)
+function hcat(A::Array[`T,1]...)
     print(nargin)
 end

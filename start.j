@@ -2,7 +2,7 @@ function ref(t::Type, params...)
     return instantiate_type(t, params)
 end
 
-typealias Nullable Union[T,()]
+typealias Nullable Union[`T,()]
 typealias Index Int32
 typealias Size  Int32
 
@@ -155,11 +155,11 @@ function double(x::Scalar)
 end
 
 
-type List[T]
+type List[`T]
     maxsize:: Size
     size:: Size
     offset:: Size
-    data:: Buffer[T]
+    data:: Buffer[`T]
 end
 
 function list(elts...)

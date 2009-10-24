@@ -119,6 +119,8 @@ not likely to be implemented in interpreter:
 (define (type? v) (and (vector? v) (or (tuple? v)
 				       (eq? (type-of v) Type-type))))
 
+(define (j-symbol? v) (and (vector? v) (eq? (vector-ref v 0) symbol-type)))
+
 ; --- define primitive types ---
 
 (define tuple-type (make-abstract-type 'Tuple any-type julia-null julia-null))
@@ -181,9 +183,10 @@ not likely to be implemented in interpreter:
   ; bar(double,double)  fills in remaining y and t parameters
   (define (new-params-list tp sp)
     (define (check x)
-      (if (or (symbol? x) (j-int32? x) (type? x)
-	      (number? x))
-	  x
+      (or (and (or (symbol? x) (j-int32? x) (type? x) (number? x))
+	       x)
+	  (and (j-symbol? x)
+	       (j-unbox x))
 	  (error "Invalid type parameter" x)))
     (cond ((null? tp)
 	   (if (null? sp) tp
@@ -407,6 +410,7 @@ not likely to be implemented in interpreter:
   (cond ((not (pair? t)) t)
 	((eq? (car t) 'tuple) 'tuple)
 	((eq? (car t) '...)   '...)
+	((eq? (car t) 'quote) 'quote)
 	((eq? (car t) 'ref) (cadr t))
 	((eq? (car t) '-->) 'Function)
 	((and (eq? (car t) 'call)
@@ -416,6 +420,7 @@ not likely to be implemented in interpreter:
   (cond ((not (pair? t)) '())
 	((eq? (car t) 'tuple) (cdr t))
 	((eq? (car t) '...)   (cdr t))
+	((eq? (car t) 'quote) (cdr t))
 	((eq? (car t) 'ref)   (cddr t))
 	((eq? (car t) '-->)   (cdr t))
 	((and (eq? (car t) 'call)
@@ -423,25 +428,21 @@ not likely to be implemented in interpreter:
 	(else (error "Invalid type expression" t))))
 
 ; handles form (typename name . params), giving a type object
-(define (resolve-type name params . nested?)
+(define (resolve-type name params)
   (define (resolve-params p)
-    (map (lambda (t)
-	   (resolve-type (type-ex-name t)
-			 (type-ex-params t) #t))
-	 p))
+    (map resolve-type-ex p))
   (cond ((eq? name 'tuple)
 	 (list->tuple (resolve-params params)))
 	((eq? name 'Union)
-	 (make-abstract-type name any-type
+	 (make-abstract-type 'Union any-type
 			     (list->tuple (resolve-params params))
 			     julia-null))
+	((eq? name 'quote) (car params))
+	((number? name)    (j-box int32-type name))
 	((get-type name) => (lambda (x)
 			      (instantiate-type
 			       x
 			       (resolve-params params))))
-	((pair? nested?) (if (number? name)
-			     (j-box int32-type name)
-			     name))
 	(else
 	 (error "Unknown type" name))))
 
@@ -464,7 +465,14 @@ not likely to be implemented in interpreter:
 
 (define (type-def- signature fields super)
   (let ((tname (type-ex-name signature))
-	(tpara (type-ex-params signature))
+	; convert `T to T, since for a type def all parameters are
+	; generic so ` does nothing.
+	(tpara (map (lambda (x)
+		      (if (and (pair? x)
+			       (eq? (car x) 'quote))
+			  (cadr x)
+			  x))
+		    (type-ex-params signature)))
 	; fields looks like (block (:: n t) (:: n t) ...)
 	(fnames (map cadr (cdr fields)))
 	(ftypes (map (lambda (fld)
@@ -648,7 +656,7 @@ not likely to be implemented in interpreter:
 	      (lambda (t p)
 		(instantiate-type t (tuple->list p))))
 (make-builtin 'tuple "(Any...)-->Tuple" julia-tuple)
-(make-builtin 'apply "(Function[A,T],Tuple)-->T"
+(make-builtin 'apply "(Function[`A,`T],Tuple)-->`T"
 	      (lambda (f argt) (j-apply f (tuple->list argt))))
 (make-builtin 'error "Any-->Bottom" error)
 
@@ -656,12 +664,12 @@ not likely to be implemented in interpreter:
 ; should generally avoid them. they basically always expand to inline code,
 ; and may not be available as first-class functions in the final system.
 ; some require unboxed arguments, which are tricky to deal with.
-(make-builtin 'bufferref "(Buffer[T],Int)-->T" j-buffer-ref)
-(make-builtin 'bufferset "(Buffer[T],Int,T)-->T" j-buffer-set)
+(make-builtin 'bufferref "(Buffer[`T],Int)-->`T" j-buffer-ref)
+(make-builtin 'bufferset "(Buffer[`T],Int,`T)-->`T" j-buffer-set)
 (make-builtin 'tupleref "(Tuple,Int)-->Any" j-tuple-ref)
 (make-builtin 'tuplelen "(Tuple,)-->Int" tuple-length)
-(make-builtin 'box "(Type,T)-->T" j-box)
-(make-builtin 'unbox "(T,)-->T" j-unbox)
+(make-builtin 'box "(Type,`T)-->`T" j-box)
+(make-builtin 'unbox "(`T,)-->`T" j-unbox)
 (define (div-int x y)
   (let ((q (/ x y)))
     (if (< q 0)
