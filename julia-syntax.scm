@@ -76,6 +76,18 @@
   (let ((e (remove-argument-side-effects lhs)))
     `(block ,@(cdr e) (= ,(car e) (call ,op ,(car e) ,rhs)))))
 
+; (a > b > c) => (&& (call > a b) (call > b c))
+(define (expand-compare-chain e)
+  (if (length> e 3)
+      (let ((arg2 (caddr e)))
+	(if (pair? arg2)
+	    (let ((g (gensym)))
+	      `(&& (call ,(cadr e) ,(car e) (= ,g ,arg2))
+		   ,(expand-compare-chain (cons g (cdddr e)))))
+	    `(&& (call ,(cadr e) ,(car e) ,arg2)
+		 ,(expand-compare-chain (cddr e)))))
+      `(call ,(cadr e) ,(car e) ,(caddr e))))
+
 (define patterns
   (list
    (pattern-lambda (-> a b)
@@ -90,6 +102,8 @@
 
    (pattern-lambda (= (|.| a b) rhs)
 		   `(call setfield ,a (quote ,b) ,rhs))
+
+   (pattern-lambda (comparison . chain) (expand-compare-chain chain))
 
    ; multiple value assignment
    (pattern-lambda (= (tuple . lhss) x)

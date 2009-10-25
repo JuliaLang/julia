@@ -14,8 +14,8 @@ TODO:
      ; be an operator.
      (-> <- -- -->)
      (> < >= <= == != |.>| |.<| |.>=| |.<=| |.==| |.!=| |.=| |.!|)
-     (<< >>)
      (: ..)
+     (<< >>)
      (+ - |\|| $)
      (* / |./| % & |.*| |\\| |.\\|)
      (^ |.^|)
@@ -258,20 +258,31 @@ TODO:
 ; colon is strange; 3 arguments with 2 colons yields one call:
 ; 1:2   => (: 1 2)
 ; 1:2:3 => (: 1 2 3)
+; 1:    => (: 1 :)
+; :2    => (: 2)
+; 1:2:  => (: 1 2 :)
+; :1:2  => (: (: 1 2))
+; :1:   => (: (: 1 :))
 ; a simple state machine is up to the task.
 ; we will leave : expressions as a syntax form, not a call to ':',
-; so they can be processed into either ranges or declarations
+; so they can be processed by syntax passes.
 (define (parse-range s)
-  (let loop ((ex (parse-expr s))
-	     (first? #t))
-    (let ((t (peek-token s)))
-      (cond ((not (eq? t ':))
-	     ex)
-	    (first?
-	     (loop (list (take-token s) ex (parse-expr s)) #f))
-	    (else
-	     (take-token s)
-	     (loop (append ex (list (parse-expr s))) #t))))))
+  (if (eq? (peek-token s) ':)
+      (begin (take-token s)
+	     (list ': (parse-range s)))
+      (let loop ((ex (parse-shift s))
+		 (first? #t))
+	(let ((t (peek-token s)))
+	  (if (not (eq? t ':))
+	      ex
+	      (begin (take-token s)
+		     (let ((argument
+			    (if (closing-token? (peek-token s))
+				':
+				(parse-shift s))))
+		       (if first?
+			   (loop (list t ex argument) #f)
+			   (loop (append ex (list argument)) #t)))))))))
 
 ; the principal non-terminals follow, in increasing precedence order
 
@@ -289,11 +300,23 @@ TODO:
 (define (parse-or s)    (parse-LtoR s parse-and   (prec-ops 1)))
 (define (parse-and s)   (parse-LtoR s parse-arrow (prec-ops 2)))
 (define (parse-arrow s) (parse-RtoL s parse-ineq  (prec-ops 3)))
-(define (parse-ineq s)  (parse-LtoR s parse-shift (prec-ops 4)))
-(define (parse-shift s) (parse-LtoR s parse-range (prec-ops 5)))
-;(define (parse-range s) (parse-LtoR s parse-expr  (prec-ops 6)))
+(define (parse-ineq s)  (parse-comparison s (prec-ops 4)))
+		      ; (parse-LtoR s parse-range (prec-ops 4)))
+;(define (parse-range s) (parse-LtoR s parse-shift  (prec-ops 5)))
+(define (parse-shift s) (parse-LtoR s parse-expr (prec-ops 6)))
 (define (parse-expr s)  (parse-LtoR s parse-term  (prec-ops 7)))
 (define (parse-term s)  (parse-LtoR s parse-unary (prec-ops 8)))
+
+(define (parse-comparison s ops)
+  (let loop ((ex (parse-range s))
+	     (first #t))
+    (let ((t (peek-token s)))
+      (if (not (memq t ops))
+	  ex
+	  (begin (take-token s)
+		 (if first
+		     (loop (list 'comparison ex t (parse-range s)) #f)
+		     (loop (append ex (list t (parse-range s))) #f)))))))
 
 ; flag an error for tokens that cannot begin an expression
 (define (closing-token? tok)

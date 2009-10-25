@@ -11,18 +11,28 @@
 (tst "[[]]" (hcat (hcat)))
 (tst "[a,]" (hcat a))
 (tst "[a;]" (vcat a))
+(tst "1:2" (: 1 2))
+(tst "1:2:3" (: 1 2 3))
+(tst "1:" (: 1 :))
+(tst ":2" (: 2))
+(tst "1:2:" (: 1 2 :))
+(tst ":1:2" (: (: 1 2)))
+(tst ":1:" (: (: 1 :)))
 (tst "1:2:3:4" (: (: 1 2 3) 4))
 (tst "1+2*3^-4-10" (call - (call + 1 (call * 2 (call ^ 3 (call - 4)))) 10))
 (tst "b = [[2]].^2" (= b (call .^ (hcat (hcat 2)) 2)))
 (tst "f(x+1)[i*2]-1" (call - (ref (call f (call + x 1)) (call * i 2)) 1))
 (tst "A[i^2] = b'" (= (ref A (call ^ i 2)) (call ctranspose b)))
-(tst "A[i^2].==b'" (call .== (ref A (call ^ i 2)) (call ctranspose b)))
+(tst "A[i^2].==b'" (comparison (ref A (call ^ i 2)) .== (call ctranspose b)))
 (tst "{f(x),g(x)}" (list (call f x) (call g x)))
 (tst "a::b.c" (|::| a (|.| b c)))
 (tst "f(b,a...,c)" (call f b (... a) c))
 (tst "(+)" +)
 (tst "f(+,3)" (call f + 3))
 (tst "f(3,+)" (call f 3 +))
+(tst "a<b<c" (comparison a < b < c))
+(tst "a<b>=c" (comparison a < b >= c))
+(tst "a<(b<c)==d" (comparison a < (comparison b < c) == d))
 
 ; test newline as optional statement separator
 (define s (make-token-stream (open-input-string "2\n-3")))
@@ -68,9 +78,9 @@ else
     whatever
 end"
 
-(if (call < a b)
+(if (comparison a < b)
     (block (block thing1) (block thing2))
-    (if (call < c d)
+    (if (comparison c < d)
 	(block maybe)
 	(block whatever))))
 
@@ -79,7 +89,7 @@ end"
   x += 1
 end
 "
-(while (call < x n) (block (+= x 1))))
+(while (comparison x < n) (block (+= x 1))))
 
 (tst "f(;)" (call f))
 (tst "f(a;)" (call f a))
@@ -92,7 +102,8 @@ end
 
 (tst "f(b...)" (call f (... b)))
 (tst "f(b,c...;)" (call f b (... c)))
-(tst "f(b,c:int...;)" (call f b (... (: c int))))
+(tst "f(b,c:int...;)" (call f b (... (|:| c int))))
+(tst "f(b,c::int...;)" (call f b (... (|::| c int))))
 (tst "f(b,c...;a,)" (call f b (... c) (parameters a)))
 
 (tst "(s...)" (tuple (... s)))
