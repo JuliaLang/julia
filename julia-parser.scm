@@ -258,18 +258,20 @@ TODO:
 ; colon is strange; 3 arguments with 2 colons yields one call:
 ; 1:2   => (: 1 2)
 ; 1:2:3 => (: 1 2 3)
-; 1:    => (: 1 :)
+; 1:    => (: 1 (quote :))
 ; :2    => (: 2)
-; 1:2:  => (: 1 2 :)
+; 1:2:  => (: 1 2 (quote :))
 ; :1:2  => (: (: 1 2))
-; :1:   => (: (: 1 :))
+; :1:   => (: (: 1 (quote :)))
 ; a simple state machine is up to the task.
 ; we will leave : expressions as a syntax form, not a call to ':',
 ; so they can be processed by syntax passes.
 (define (parse-range s)
   (if (eq? (peek-token s) ':)
       (begin (take-token s)
-	     (list ': (parse-range s)))
+	     (if (closing-token? (peek-token s))
+		 ':
+		 (list ': (parse-range s))))
       (let loop ((ex (parse-shift s))
 		 (first? #t))
 	(let ((t (peek-token s)))
@@ -278,7 +280,7 @@ TODO:
 	      (begin (take-token s)
 		     (let ((argument
 			    (if (closing-token? (peek-token s))
-				':
+				'(quote :)  ; missing last argument
 				(parse-shift s))))
 		       (if first?
 			   (loop (list t ex argument) #f)

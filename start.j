@@ -20,7 +20,7 @@ function ref(b::Buffer, i::Index)
     return box(typeof(b).parameters[1], bufferref(b, unbox(i)))
 end
 
-function ref(b::Buffer, i::Index)
+function ref(b::Buffer[Any], i::Index)
     return bufferref(b, unbox(i))
 end
 
@@ -29,7 +29,7 @@ function set(b::Buffer, i::Index, x)
     return x
 end
 
-function set(b::Buffer, i::Index, x)
+function set(b::Buffer[Any], i::Index, x)
     bufferset(b, unbox(i), x)
     return x
 end

@@ -88,6 +88,9 @@
 		 ,(expand-compare-chain (cddr e)))))
       `(call ,(cadr e) ,(car e) ,(caddr e))))
 
+(define (process-indexes i)
+  (map (lambda (x) (if (eq? x ':) '(quote :) x)) i))
+
 (define patterns
   (list
    (pattern-lambda (-> a b)
@@ -119,10 +122,10 @@
 						 (+ i 1))))))))
 
    (pattern-lambda (= (ref a . idxs) rhs)
-		   `(call set ,a ,@idxs ,rhs))
+		   `(call set ,a ,@(process-indexes idxs) ,rhs))
 
    (pattern-lambda (ref a . idxs)
-		   `(call ref ,a ,@idxs))
+		   `(call ref ,a ,@(process-indexes idxs)))
 
    (pattern-lambda (list . elts)
 		   `(call list ,@elts))
