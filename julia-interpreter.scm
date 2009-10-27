@@ -291,30 +291,30 @@ not likely to be implemented in interpreter:
 		    (pp (type-params-list parent)) ; parent parameters
 		    (env env)
 		    (first #t))
-	   (let ((seq (and (pair? pp) (sequence-type? (car pp)))))
+	   (let ((cseq (and (pair? cp) (sequence-type? (car cp))))
+		 (pseq (and (pair? pp) (sequence-type? (car pp)))))
 	     (cond
-	      ((null? cp) (if (or (null? pp)
-				  seq)
+	      ((null? cp) (if (or (null? pp) pseq)
 			      env
 			      #f))
+	      ((and cseq (not pseq)) #f)
 	      ((null? pp) #f)
 	      (else
-	       (let ((cp0 (if (sequence-type? (car cp))
+	       (let ((cp0 (if cseq
 			      (type-param0 (car cp))
 			      (car cp)))
-		     (pp0 (if seq
+		     (pp0 (if pseq
 			      (type-param0 (car pp))
 			      (car pp)))
-		     (crest (if (sequence-type? (car cp))
+		     (crest (if cseq
 				cp
 				(cdr cp)))
-		     (prest (if seq
+		     (prest (if pseq
 				pp
 				(cdr pp))))
 		 (let ((continue
 			(lambda (env)
-			  (if (and seq
-				   (sequence-type? (car cp)))
+			  (if (and pseq cseq)
 			      ; both ended up on sequence types, and
 			      ; parameter matched. stop with "yes" now,
 			      ; otherwise we'd start looping forever
