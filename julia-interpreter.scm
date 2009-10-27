@@ -925,7 +925,10 @@ not likely to be implemented in interpreter:
 	 (cdr e)
 	 (raise e)))
    (lambda ()
-     (j-eval (julia-expand e) '()))))
+     ; lambda with no scope-block means variables assigned to in the
+     ; expression stay global.
+     (j-apply (j-eval (cadr (julia-expand `(lambda () ,e))) '())
+	      '()))))
 
 ; --- load ---
 
