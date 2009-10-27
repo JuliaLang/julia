@@ -197,7 +197,8 @@ not likely to be implemented in interpreter:
 	   (cons (check (car sp))
 		 (new-params-list (cdr tp) (cdr sp))))
 	  (else
-	   (new-params-list (cdr tp) sp))))
+	   (cons (car tp)
+		 (new-params-list (cdr tp) sp)))))
   
   (let* ((tp  (type-params-list type))
 	 (ts  (filter symbol? tp)))
@@ -261,8 +262,8 @@ not likely to be implemented in interpreter:
         ((eq? child parent)       env)
 	((eq? parent any-type)    env)
 	((eq? child any-type)     #f)
-	((eq? child bottom-type)  env)
 	((eq? parent bottom-type) #f)
+	((eq? child bottom-type)  env)
 	
 	((eq? parent tuple-type)  (tuple? child))
 	
