@@ -33,6 +33,10 @@
 (tst "a<b<c" (comparison a < b < c))
 (tst "a<b>=c" (comparison a < b >= c))
 (tst "a<(b<c)==d" (comparison a < (comparison b < c) == d))
+(tst "a?b:c" (if a b c))
+(tst "a||b ? (1 : 2) : 3" (if (|\|\|| a b) (: 1 2) 3))
+(tst "a||b ? 1 : (2 : 3)" (if (|\|\|| a b) 1 (: 2 3)))
+(tst "f(x, a?b:c, y)" (call f x (if a b c) y))
 
 ; test newline as optional statement separator
 (define s (make-token-stream (open-input-string "2\n-3")))
@@ -133,12 +137,10 @@ end
 ; --- type system tests ---
 
 (define-macro (assert-subtype t1 t2)
-  `(assert (subtype? ',(resolve-type-ex (julia-parse t1))
-		     ',(resolve-type-ex (julia-parse t2)))))
+  `(assert (subtype? ',(ty t1) ',(ty t2))))
 
 (define-macro (assert-!subtype t1 t2)
-  `(assert (not (subtype? ',(resolve-type-ex (julia-parse t1))
-			  ',(resolve-type-ex (julia-parse t2))))))
+  `(assert (not (subtype? ',(ty t1) ',(ty t2)))))
 
 (assert-subtype "Int8" "Int")
 (assert-subtype "Int32" "Int")

@@ -57,11 +57,11 @@ function assert(c)
     true
 end
 
-function +(x::Int32, y::Int32)
+function (+)(x::Int32, y::Int32)
     return box(Int32, add_int32(unbox(x), unbox(y)))
 end
 
-function -(x::Int32, y::Int32)
+function (-)(x::Int32, y::Int32)
     return box(Int32, sub_int32(unbox(x), unbox(y)))
 end
 
@@ -101,11 +101,11 @@ function ==(x::Int32, y::Int32)
     return eq_int32(unbox(x),unbox(y))
 end
 
-function +(x::Double, y::Double)
+function (+)(x::Double, y::Double)
     return box(Double, add_double(unbox(x), unbox(y)))
 end
 
-function -(x::Double, y::Double)
+function (-)(x::Double, y::Double)
     return box(Double, sub_double(unbox(x), unbox(y)))
 end
 

@@ -7,6 +7,7 @@ TODO:
 
 (define ops-by-prec
   '#((= := += -= *= /= ^= %= |\|=| &= $= => <<= >>=)
+     (?)
      (|\|\||)
      (&&)
      ; note: there are some strange-looking things in here because
@@ -24,9 +25,7 @@ TODO:
 
 (define (prec-ops n) (vector-ref ops-by-prec n))
 
-; unused characters: @ ? prefix'
-; possible: use ` for quoting and escaping, $ for unquote
-;           leave @ as an operator
+; unused characters: @ prefix'
 ; no character literals; unicode kind of makes them obsolete. strings instead.
 
 (define unary-ops '(- + ! ~))
@@ -221,6 +220,19 @@ TODO:
 		     (list t ex (parse-RtoL s down ops))
 		     (list 'call t ex (parse-RtoL s down ops))))))))
 
+(define (parse-cond s)
+  (let ((ex (parse-or s)))
+    (if (not (eq? (peek-token s) '?))
+	ex
+	(begin (take-token s)
+	       (let ((then (parse-shift s)))
+		 (if (not (eq? (take-token s) ':))
+		     (error "colon expected in ? expression")
+		     (let ((els  (parse-shift s)))
+		       (if (eq? (peek-token s) ':)
+			   (error "ambiguous use of colon in ? expression")
+			   (list 'if ex then els)))))))))
+
 ; parse a@b@c@... as (@ a b c ...) for some operator @
 ; op: the operator to look for
 ; head: the expression head to yield in the result, e.g. "a;b" => (block a b)
@@ -296,18 +308,18 @@ TODO:
 
 (define (parse-eq s)    (parse-RtoL s parse-comma (prec-ops 0)))
 ; parse-eq* is used where commas are special, for example in an argument list
-(define (parse-eq* s)   (parse-RtoL s parse-or    (prec-ops 0)))
+(define (parse-eq* s)   (parse-RtoL s parse-cond  (prec-ops 0)))
 ; parse-comma is needed for commas outside parens, for example a = b,c
-(define (parse-comma s) (parse-Nary s parse-or    #\, 'tuple '( #\) ) #f))
-(define (parse-or s)    (parse-LtoR s parse-and   (prec-ops 1)))
-(define (parse-and s)   (parse-LtoR s parse-arrow (prec-ops 2)))
-(define (parse-arrow s) (parse-RtoL s parse-ineq  (prec-ops 3)))
-(define (parse-ineq s)  (parse-comparison s (prec-ops 4)))
-		      ; (parse-LtoR s parse-range (prec-ops 4)))
-;(define (parse-range s) (parse-LtoR s parse-shift  (prec-ops 5)))
-(define (parse-shift s) (parse-LtoR s parse-expr (prec-ops 6)))
-(define (parse-expr s)  (parse-LtoR s parse-term  (prec-ops 7)))
-(define (parse-term s)  (parse-LtoR s parse-unary (prec-ops 8)))
+(define (parse-comma s) (parse-Nary s parse-cond  #\, 'tuple '( #\) ) #f))
+(define (parse-or s)    (parse-LtoR s parse-and   (prec-ops 2)))
+(define (parse-and s)   (parse-LtoR s parse-arrow (prec-ops 3)))
+(define (parse-arrow s) (parse-RtoL s parse-ineq  (prec-ops 4)))
+(define (parse-ineq s)  (parse-comparison s (prec-ops 5)))
+		      ; (parse-LtoR s parse-range (prec-ops 5)))
+;(define (parse-range s) (parse-LtoR s parse-shift  (prec-ops 6)))
+(define (parse-shift s) (parse-LtoR s parse-expr (prec-ops 7)))
+(define (parse-expr s)  (parse-LtoR s parse-term  (prec-ops 8)))
+(define (parse-term s)  (parse-LtoR s parse-unary (prec-ops 9)))
 
 (define (parse-comparison s ops)
   (let loop ((ex (parse-range s))
@@ -359,9 +371,9 @@ TODO:
 ; -2^3 is parsed as -(2^3), so call parse-call for the first argument,
 ; and parse-unary from then on (to handle 2^-3)
 (define (parse-factor s)
-  (parse-factor-h s parse-decl (prec-ops 9)))
+  (parse-factor-h s parse-decl (prec-ops 10)))
 
-(define (parse-decl s) (parse-LtoR s parse-call (prec-ops 10)))
+(define (parse-decl s) (parse-LtoR s parse-call (prec-ops 11)))
 
 ; parse function call, indexing, dot, and :: expressions
 ; also handles looking for syntactic reserved words
@@ -391,7 +403,7 @@ TODO:
 	(parse-keyword s ex)
 	(loop ex))))
 
-;(define (parse-dot s)  (parse-LtoR s parse-atom (prec-ops 11)))
+;(define (parse-dot s)  (parse-LtoR s parse-atom (prec-ops 12)))
 
 ; parse block structures
 (define (parse-keyword s word)
@@ -403,12 +415,12 @@ TODO:
   (case word
     ((begin)  (begin0 (parse-block s)
 		      (expect-end s)))
-    ((while)  (begin0 (list 'while (parse-or s) (parse-block s))
+    ((while)  (begin0 (list 'while (parse-cond s) (parse-block s))
 		      (expect-end s)))
     ((for)    (begin0 (list 'for (parse-eq* s) (parse-block s))
 		      (expect-end s)))
     ((if)
-     (let* ((test (parse-or s))
+     (let* ((test (parse-cond s))
 	    (then (parse-block s))
 	    (nxt  (require-token s)))
        (take-token s)

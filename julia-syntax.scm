@@ -4,8 +4,7 @@
 ; * expand for into while
 ; * expand -> and function into lambda/addmethod
 ; * replace (. a b) with (call get a (quote b))
-; - cat
-; - tuple destructuring
+; * tuple destructuring
 ; - validate argument lists, replace a=b in arg lists with keyword exprs
 
 ; convert x => (x), (tuple x y) => (x y)

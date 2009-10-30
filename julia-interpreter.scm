@@ -6,6 +6,8 @@ TODO:
 - builtin scalar conversions, implicit conversion mechanism
   . separate type for literals
 - global var declaration
+- range objects
+- indexing
 - optional arguments
 - quote, expr, and symbol types, user-level macros
 
@@ -248,6 +250,9 @@ not likely to be implemented in interpreter:
 (define (type-param0 t)
   (tuple-ref (type-params t) 0))
 
+(define (type-param t n)
+  (tuple-ref (type-params t) n))
+
 (define (type-equal? a b)
   (and (subtype? a b)
        (subtype? b a)))
@@ -258,26 +263,57 @@ not likely to be implemented in interpreter:
 (define (subtype? child parent) (subtype?- child parent '()))
 
 (define (subtype?- child parent env)
-  (cond ; see if the answer is obvious
-        ((eq? child parent)       env)
+  (cond ((eq? child parent)       env)
+	((eq? parent tuple-type)  (and (tuple? child) env))
+	
+	((symbol? parent)
+	 (let ((u (assq parent env)))
+	   (if u
+	       (and (or (eq? (cdr u) child)
+			; multiple occurrences of the same
+			; open parameter must be type-equal
+			(and (not (symbol? child))
+			     (type-equal? child (cdr u))))
+		    env)
+	       (cons (cons parent child) env))))
+	
+	((symbol? child) #f)
 	((eq? parent any-type)    env)
-	((eq? child any-type)     #f)
 	((eq? parent bottom-type) #f)
+	((eq? child any-type)     #f)
 	((eq? child bottom-type)  env)
 	
-	((eq? parent tuple-type)  (tuple? child))
-	
-	; see if the child is an instantiation of the parent
-	((eq? parent (get-type (type-name child)))
-	 (map cons (type-params-list parent) (type-params-list child)))
+	((and (j-int32? child) (j-int32? parent))
+	 (and (= (j-unbox child) (j-unbox parent))
+	      env))
 	
 	; recursively handle union types
 	((eq? (type-name child) 'Union)
-	 (every (lambda (t) (subtype?- t parent env))
-		(type-params-list child)))
+	 (and
+	  (every (lambda (t) (subtype?- t parent env))
+		 (type-params-list child))
+	  env))
 	((eq? (type-name parent) 'Union)
 	 (any   (lambda (t) (subtype?- child t env))
 	        (type-params-list parent)))
+	
+	; buffers are invariant
+	((and (eq? (type-name child) 'Buffer)
+	      (eq? (type-name parent) 'Buffer))
+	 (let ((cp0 (type-param0 child))
+	       (pp0 (type-param0 parent)))
+	   (and (or (symbol? pp0) (subtype?- pp0 cp0 env))
+		(subtype?- cp0 pp0 env))))
+	
+	; functions are contravariant in first parameter
+	((and (eq? (type-name child) 'Function)
+	      (eq? (type-name parent) 'Function))
+	 (let* ((p (type-param0 parent))
+		(e (if (symbol? p)
+		       (subtype?- (type-param0 child) p env)
+		       (subtype?- p (type-param0 child) env))))
+	   (and e
+		(subtype?- (type-param child 1) (type-param parent 1) e))))
 	
 	; handle tuple types, or any sibling instantiations of the same
 	; generic type. parameters must be consistent.
@@ -290,8 +326,7 @@ not likely to be implemented in interpreter:
 	      (type-name parent))
 	 (let loop ((cp (type-params-list child))  ; child parameters
 		    (pp (type-params-list parent)) ; parent parameters
-		    (env env)
-		    (first #t))
+		    (env env))
 	   (let ((cseq (and (pair? cp) (sequence-type? (car cp))))
 		 (pseq (and (pair? pp) (sequence-type? (car pp)))))
 	     (cond
@@ -299,59 +334,25 @@ not likely to be implemented in interpreter:
 			      env
 			      #f))
 	      ((and cseq (not pseq)) #f)
-	      ((null? pp) #f)
+	      ((null? pp)            #f)
 	      (else
-	       (let ((cp0 (if cseq
-			      (type-param0 (car cp))
-			      (car cp)))
-		     (pp0 (if pseq
-			      (type-param0 (car pp))
-			      (car pp)))
-		     (crest (if cseq
-				cp
-				(cdr cp)))
-		     (prest (if pseq
-				pp
-				(cdr pp))))
-		 (let ((continue
-			(lambda (env)
-			  (if (and pseq cseq)
-			      ; both ended up on sequence types, and
-			      ; parameter matched. stop with "yes" now,
-			      ; otherwise we'd start looping forever
-			      env
-			      (loop crest prest env #f)))))
-		   (cond ((symbol? pp0)
-			  (let ((u (assq pp0 env)))
-			    (if u
-				(and (or (eq? (cdr u) cp0)
-					 ; multiple occurrences of the same
-					 ; open parameter must be type-equal
-					 (and (not (symbol? cp0))
-					      (type-equal? cp0 (cdr u))))
-				     env)
-				(continue (cons (cons pp0 cp0) env)))))
-			 ((symbol? cp0) #f)
-			 ((and (j-int32? cp0) (j-int32? pp0))
-			  (if (= (j-unbox cp0) (j-unbox pp0))
-			      (continue env)
-			      #f))
-			 ((cond ((and first
-				      (eq? (type-name child) 'Function))
-			         ; functions contravariant in first parameter
-				 (subtype?- pp0 cp0 env))
-				((eq? (type-name child) 'Buffer)
-				 ; Buffers are invariant, params must be equal
-				 (and (subtype?- pp0 cp0 env)
-				      (subtype?- cp0 pp0 env)))
-				(else
-			         ; default to covariant, params must be subtype
-				 (subtype?- cp0 pp0 env))) =>
-			  (lambda (w)
-			    (continue (if (pair? w)
-					  (append w env)
-					  env))))
-			 (else #f)))))))))
+	       ; default to covariance
+	       (let ((w (subtype?- (if cseq
+				       (type-param0 (car cp))
+				       (car cp))
+				   (if pseq
+				       (type-param0 (car pp))
+				       (car pp))
+				   env)))
+		 (and w
+		      ; if both end up on sequence types, and
+		      ; parameter matched. stop with "yes" now,
+		      ; otherwise we'd start looping forever
+		      (if (and pseq cseq)
+			  (append w env)
+			  (loop (if cseq cp (cdr cp))
+				(if pseq pp (cdr pp))
+				(append w env))))))))))
 	
 	; otherwise walk up the type hierarchy
 	(else (subtype?- (type-super child) parent env))))
@@ -451,6 +452,8 @@ not likely to be implemented in interpreter:
 (define (resolve-type-ex e)
   (resolve-type (type-ex-name e)
 		(type-ex-params e)))
+
+(define (ty s) (resolve-type-ex (julia-parse s)))
 
 ; look for type < supertype
 (define (type-def signature fields)
@@ -795,19 +798,6 @@ not likely to be implemented in interpreter:
 	   ((return)  (raise `(julia-return . ,(if (pair? (cdr e))
 						   (j-eval (cadr e) env)
 						   julia-null))))
-	   ((&&)      (let loop ((clauses (cdr e)))
-			(cond ((null? clauses) julia-true)
-			      ((null? (cdr clauses)) (j-eval (car clauses) env))
-			      ((not (j-false? (j-eval (car clauses) env)))
-			       (loop (cdr clauses)))
-			      (else julia-false))))
-	   ((|\|\||)  (let loop ((clauses (cdr e)))
-			(cond ((null? clauses) julia-false)
-			      ((null? (cdr clauses)) (j-eval (car clauses) env))
-			      (else (let ((v (j-eval (car clauses) env)))
-				      (if (j-false? v)
-					  (loop (cdr clauses))
-					  v))))))
 	   ((block)   (let loop ((v julia-null)
 				 (x (cdr e)))
 			(if (null? x)
@@ -855,7 +845,6 @@ not likely to be implemented in interpreter:
 		  (add-method gf (j-eval (caddr e) env)))
 	      gf))
 
-	   ((local)  julia-null)
 	   ((=)
 	    (if (not (symbol? (cadr e)))
 		(error "Invalid lvalue in ="))
@@ -918,17 +907,10 @@ not likely to be implemented in interpreter:
 		       (bind-args formals args cenv)))))))
 
 (define (j-toplevel-eval e)
-  (with-exception-catcher
-   (lambda (e)
-     (if (and (pair? e)
-	      (eq? (car e) 'julia-return))
-	 (cdr e)
-	 (raise e)))
-   (lambda ()
-     ; lambda with no scope-block means variables assigned to in the
-     ; expression stay global.
-     (j-apply (j-eval (cadr (julia-expand `(lambda () ,e))) '())
-	      '()))))
+  ; lambda with no scope-block means variables assigned to in the
+  ; expression stay global.
+  (j-apply (j-eval (cadr (julia-expand `(lambda () ,e))) '())
+	   '()))
 
 ; --- load ---
 
