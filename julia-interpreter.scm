@@ -131,9 +131,9 @@ not likely to be implemented in interpreter:
 (define sequence-type (make-abstract-type '... any-type (julia-tuple 'T)
 					  julia-null))
 (put-type '... sequence-type)
-
-(define bottom-type (make-abstract-type 'Bottom '* julia-null julia-null))
-(put-type 'Bottom bottom-type)
+(define (sequence-type? t)
+  (and (type? t)
+       (eq? (type-name t) '...)))
 
 (define Tensor-type (make-abstract-type 'Tensor any-type
 					(julia-tuple 'T 'n)
@@ -143,6 +143,12 @@ not likely to be implemented in interpreter:
 (define function-type (make-type 'Function any-type
 				 (julia-tuple 'A 'B) julia-null))
 (put-type 'Function function-type)
+
+(define (make-union-type params)
+  (make-abstract-type 'Union any-type (list->tuple params) julia-null))
+
+(define union-type (make-union-type '()))
+(put-type 'Union union-type)
 
 ; --- type functions ---
 
@@ -154,7 +160,7 @@ not likely to be implemented in interpreter:
   (instantiate-type-
    type
    (if (and (pair? params)
-	    (subtype? type function-type)
+	    (eq? (type-name type) 'Function)
 	    (symbol? (type-param0 type))
 	    (not (tuple? (car params)))
 	    (not (symbol? (car params))))
@@ -185,7 +191,8 @@ not likely to be implemented in interpreter:
   ; bar(double,double)  fills in remaining y and t parameters
   (define (new-params-list tp sp)
     (define (check x)
-      (or (and (or (symbol? x) (j-int32? x) (type? x) (number? x))
+      (or (and (or (symbol? x) (j-int32? x) (number? x)
+		   (and (type? x) (not (sequence-type? x))))
 	       x)
 	  (and (j-symbol? x)
 	       (j-unbox x))
@@ -206,6 +213,8 @@ not likely to be implemented in interpreter:
 	 (ts  (filter symbol? tp)))
     (cond ((null? params)
 	   type)
+	  ((eq? (type-name type) 'Union)
+	   (make-union-type params))
 	  (else
 	   (let* ((flds (tuples->alist (type-fields type)))
 		  (env  (map cons ts params))
@@ -243,10 +252,6 @@ not likely to be implemented in interpreter:
   (or (vector-ref t 5)
       (type-generic? t)))
 
-(define (sequence-type? t)
-  (and (type? t)
-       (eq? (type-name t) '...)))
-
 (define (type-param0 t)
   (tuple-ref (type-params t) 0))
 
@@ -279,9 +284,7 @@ not likely to be implemented in interpreter:
 	
 	((symbol? child) #f)
 	((eq? parent any-type)    env)
-	((eq? parent bottom-type) #f)
 	((eq? child any-type)     #f)
-	((eq? child bottom-type)  env)
 	
 	((and (j-int32? child) (j-int32? parent))
 	 (and (= (j-unbox child) (j-unbox parent))
@@ -359,7 +362,7 @@ not likely to be implemented in interpreter:
 
 ; --- define some key builtin types ---
 
-(define scalar-type (instantiate-type Tensor-type (list bottom-type 0)))
+(define scalar-type (instantiate-type Tensor-type (list union-type 0)))
 (put-type 'Scalar scalar-type)
 
 (define real-type (make-abstract-type 'Real scalar-type julia-null julia-null))
@@ -417,6 +420,8 @@ not likely to be implemented in interpreter:
 	((eq? (car t) '-->) 'Function)
 	((and (eq? (car t) 'call)
 	      (eq? (cadr t) 'ref))  (caddr t))
+	((and (eq? (car t) 'call)
+	      (eq? (cadr t) 'tuple))  'tuple)
 	(else (error "Invalid type expression" t))))
 (define (type-ex-params t)
   (cond ((not (pair? t)) '())
@@ -427,6 +432,8 @@ not likely to be implemented in interpreter:
 	((eq? (car t) '-->)   (cdr t))
 	((and (eq? (car t) 'call)
 	      (eq? (cadr t) 'ref))  (cdddr t))
+	((and (eq? (car t) 'call)
+	      (eq? (cadr t) 'tuple))  (cddr t))
 	(else (error "Invalid type expression" t))))
 
 ; handles form (typename name . params), giving a type object
@@ -435,10 +442,6 @@ not likely to be implemented in interpreter:
     (map resolve-type-ex p))
   (cond ((eq? name 'tuple)
 	 (list->tuple (resolve-params params)))
-	((eq? name 'Union)
-	 (make-abstract-type 'Union any-type
-			     (list->tuple (resolve-params params))
-			     julia-null))
 	((eq? name 'quote) (car params))
 	((number? name)    (j-box int32-type name))
 	((get-type name) => (lambda (x)
@@ -492,18 +495,47 @@ not likely to be implemented in interpreter:
       (put-type tname T)
       T)))
 
-(define (type-alias name type)
-  (if (not (symbol? name))
-      (error "typealias: type name must be a symbol"))
-  (put-type name (resolve-type-ex type))
-  julia-null)
-
 ; --- function objects ---
 
 (define (make-closure ft proc env)
   (if (not (subtype? ft function-type))
       (error "make-closure: not a function type"))
   (vector ft proc env))
+
+(define (function-arg-type f)
+  (type-param0 (type-of f)))
+
+(define (make-function-type argtype rettype)
+  (instantiate-type function-type (list argtype rettype)))
+
+; --- type-keyed hash table ---
+
+(define (make-method-table) '())
+
+(define (method-table-assoc methtable type)
+  (let loop ((m methtable))
+    (if (null? m)
+	#f
+	(if (subtype? type (caar m))
+	    (car m)
+	    (loop (cdr m))))))
+
+(define (cons-in-order item lst key <)
+  (if (null? lst)
+      (list item)
+      (if (< (key item) (key (car lst)))
+	  (cons item lst)
+	  (cons (car lst) (cons-in-order item (cdr lst) key <)))))
+
+(define (method-table-insert mt type method)
+  (let ((m (method-table-assoc mt type)))
+    (if (and m (type-equal? type (car m)))
+	(begin (set-car! m type)   ; replace existing key
+	       (set-cdr! m method)
+	       mt)
+	(cons-in-order (cons type method) mt car subtype?))))
+
+; --- generic functions ---
 
 (define gf-type (resolve-type-ex (julia-parse "Any-->Any")))
 
@@ -516,44 +548,54 @@ not likely to be implemented in interpreter:
 	((closure-proc meth) (closure-env meth) args))))
 
 (define (make-generic-function name)
-  (make-closure gf-type j-apply-generic (vector '() name)))
-
-(define (function-arg-type f)
-  (type-param0 (type-of f)))
+  (make-closure gf-type j-apply-generic (vector (make-method-table) name)))
 
 (define (best-method methtable argtype)
-  (let loop ((m methtable))
-    (if (null? m)
-	#f
-	(if (subtype? argtype (function-arg-type (car m)))
-	    (car m)
-	    (loop (cdr m))))))
-
-(define (cons-in-order item lst key <)
-  (if (null? lst)
-      (list item)
-      (if (< (key item) (key (car lst)))
-	  (cons item lst)
-	  (cons (car lst) (cons-in-order item (cdr lst) key <)))))
+  (let ((m (method-table-assoc methtable argtype)))
+    (and m (cdr m))))
 
 (define (gf-mtable gf) (vector-ref (closure-env gf) 0))
 (define (gf-set-mtable! gf mt) (vector-set! (closure-env gf) 0 mt))
 (define (gf-name gf) (vector-ref (closure-env gf) 1))
 
-(define (add-method gf meth)
-  (let* ((argtype (function-arg-type meth))
-	 (matches (filter (lambda (x)
-			    (type-equal? (function-arg-type x) argtype))
-			  (gf-mtable gf))))
-    (if (null? matches)
-	(gf-set-mtable! gf
-			(cons-in-order meth (gf-mtable gf)
-				       function-arg-type subtype?))
-	(if (null? (cdr matches))
-	    ; overwrite existing exactly matching method
-	    (gf-set-mtable! gf (replaceq (car matches) meth (gf-mtable gf)))
-	    (error "Function had multiple methods with the same type"))))
+; add a method for certain types
+(define (add-method-for gf types meth)
+  (gf-set-mtable! gf (method-table-insert (gf-mtable gf) types meth))
   #t)
+
+; add a method based on its function type
+(define (add-method gf meth)
+  (add-method-for gf (function-arg-type meth) meth))
+
+; --- implicit conversions ---
+
+(define conversion-table (make-method-table))
+
+(define (add-conversion from to method)
+  (set! conversion-table
+	(method-table-insert conversion-table
+			     ; NOTE the "flipped" function type, "to-->from"
+			     ; is necessary because method-table looks for
+			     ; a method supporting a superset of the needed
+			     ; behavior, and for conversions we need a type
+			     ; providing a subset of the requested behavior.
+			     (make-function-type to from)
+			     method)))
+
+(define (get-conversion from to)
+  (let ((m (method-table-assoc conversion-table
+			       (make-function-type to from))))
+    (and m (cdr m))))
+
+(define (j-convert x to-type)
+  (let* ((t (type-of x))
+	 (m (get-conversion t to-type)))
+    (if m
+	(let ((result (j-apply m (list x))))
+	  (if (subtype? (type-of result) to-type)
+	      result
+	      (error "Conversion to" (type-name to-type) "failed")))
+	(error "No conversion from" (type-name t) "to" (type-name to-type)))))
 
 ; --- builtin functions ---
 
@@ -579,6 +621,9 @@ not likely to be implemented in interpreter:
 (define (j-set-field obj fld v)
   ; TODO: type check/convert
   (vector-set! obj (field-offset obj (to-symbol fld)) v))
+
+(define (j-tuple . args) (if (null? args) julia-null
+			     (apply julia-tuple args)))
 
 (define (j-tuple-ref v i) (if (= i 0) (error "Tuple index out of range")
 			      (vector-ref v i)))
@@ -659,10 +704,11 @@ not likely to be implemented in interpreter:
 (make-builtin 'instantiate_type "(Type,Tuple)-->Type"
 	      (lambda (t p)
 		(instantiate-type t (tuple->list p))))
-(make-builtin 'tuple "(Any...)-->Tuple" julia-tuple)
-(make-builtin 'apply "(Function[`A,`T],Tuple)-->`T"
-	      (lambda (f argt) (j-apply f (tuple->list argt))))
-(make-builtin 'error "Any-->Bottom" error)
+(make-builtin 'tuple "(Any...)-->Tuple" j-tuple)
+(make-builtin 'apply "(Function[`A,`T],Tuple...)-->`T"
+	      (lambda (f . argt)
+		(j-apply f (apply append (map tuple->list argt)))))
+(make-builtin 'error "Any-->Union" error)
 
 ; the following functions are compiler intrinsics, meaning that users
 ; should generally avoid them. they basically always expand to inline code,
@@ -814,24 +860,19 @@ not likely to be implemented in interpreter:
 				    (raise e)))
 			      (lambda ()
 				(j-eval (caddr e) env)))))
-
 	   ((break)  (raise (cdr e)))
+
+	   ((null)   julia-null)
+
 	   ((time)   (time (j-eval (cadr e) env)))
 
-	   ((type)
-	    (type-def (cadr e) (caddr e)))
-	   ((typealias)
-	    (type-alias (cadr e) (caddr e)))
-	   ((tuple)
-	    (if (null? (cdr e)) julia-null
-		(apply julia-tuple (map (lambda (x) (j-eval x env))
-					(cdr e)))))
+	   ((type)      (type-def (cadr e) (caddr e)))
+
 	   ((lambda)
 	    (let ((types (lambda-types (cadr e))))
-	      (make-closure (instantiate-type
-			     function-type
-			     (list (resolve-type-ex (cons 'tuple types))
-				   any-type))
+	      (make-closure (make-function-type
+			     (resolve-type-ex (cons 'tuple types))
+			     any-type)
 			    j-eval-body
 			    (cons e env))))
 	   ((addmethod)
@@ -854,12 +895,6 @@ not likely to be implemented in interpreter:
 		  (table-set! julia-globals (cadr e) v))
 	      v))
 
-	   ; conceptually, move a bunch of tuples onto the stack in order
-	   ((build-args)
-	    (let ((args (map (lambda (x) (j-eval x env)) (cdr e))))
-	      (apply julia-tuple
-		     (apply append (map tuple->list args)))))
-	   
 	   ((call)
 	    (j-apply (j-eval (cadr e) env)
 		     (map (lambda (x) (j-eval x env))
@@ -938,7 +973,7 @@ not likely to be implemented in interpreter:
 (define (print-type t)
   (cond ((eq? t scalar-type)
 	 (display "Tensor[Scalar, 0]"))
-	((subtype? t function-type)
+	((eq? (type-name t) 'Function)
 	 (julia-print (tuple-ref (type-params t) 0))
 	 (display "-->")
 	 (julia-print (tuple-ref (type-params t) 1)))

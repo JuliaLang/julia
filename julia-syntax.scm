@@ -105,6 +105,12 @@
    (pattern-lambda (= (|.| a b) rhs)
 		   `(call setfield ,a (quote ,b) ,rhs))
 
+   ; typealias is an assignment; should be const when that exists
+   (pattern-lambda (typealias name type-ex)
+		   (if (not (symbol? name))
+		       (error "typealias: type name must be a symbol")
+		       `(= ,name ,type-ex)))
+
    (pattern-lambda (comparison . chain) (expand-compare-chain chain))
 
    ; multiple value assignment
@@ -113,7 +119,7 @@
 		     `(block (= ,t ,x)
 			     ,@(let loop ((lhs lhss)
 					  (i   0))
-				 (if (null? lhs) '((tuple))
+				 (if (null? lhs) '((null))
 				     (cons `(= ,(car lhs)
 					       (call tupleref
 						     ,t (call unbox ,i)))
@@ -138,16 +144,22 @@
    ; call with splat
    (pattern-lambda (call f ... (... _) ...)
 		   (let ((argl (cddr __)))
-		     (if (length= argl 1)
-			 `(call apply ,f ,(cadar argl))
-			 `(call apply ,f (build-args
-					  ,@(map (lambda (x)
-						   (if (and (length= x 2)
-							    (eq? (car x) '...))
-						       (cadr x)
-						       `(tuple ,x)))
-						 argl))))))
-   
+		     `(call apply ,f ,@(map (lambda (x)
+					      (if (and (length= x 2)
+						       (eq? (car x) '...))
+						  (cadr x)
+						  `(tuple ,x)))
+					    argl))))
+
+   ; tuple syntax (a, b...)
+   (pattern-lambda (tuple . args)
+		   `(call tuple ,@(map (lambda (x)
+					 (if (and (length= x 2)
+						  (eq? (car x) '...))
+					     `(call ref ... ,(cadr x))
+					     x))
+				       args)))
+
    ; local x,y,z => local x;local y;local z
    (pattern-lambda (local (tuple . vars))
 		   `(block
@@ -383,7 +395,7 @@
 			    ,(to-blk (to-lff (caddr e) dest tail))
 			    ,(if (length= e 4)
 				 (to-blk (to-lff (cadddr e) dest tail))
-				 (to-blk (to-lff '(tuple) dest tail))))
+				 (to-blk (to-lff '(null)  dest tail))))
 			  (cdr r))))
 		 (else (let ((g (gensym)))
 			 (cons g
@@ -404,7 +416,7 @@
 	     (if (and (eq? dest #t) (not tail))
 		 (cons g (reverse stmts))
 		 (if (and tail (null? stmts))
-		     (cons '(return (tuple))
+		     (cons '(return (null))
 			   '())
 		     (cons (cons 'block stmts)
 			   '())))))
@@ -415,7 +427,7 @@
 	       (to-lff (cadr e) #t #t)))
 	  
 	  ((_while) (cond ((eq? dest #t)
-			   (cons (if tail '(return (tuple)) '(tuple))
+			   (cons (if tail '(return (null)) '(null))
 				 (to-lff e #f #f)))
 			  (else
 			   (let* ((r (to-lff (cadr e) #t #f))
@@ -424,7 +436,7 @@
 						      (to-lff (caddr e) #f #f)))
 					   (cdr r))))
 			     (if (symbol? dest)
-				 (cons `(= ,dest (tuple)) w)
+				 (cons `(= ,dest (null)) w)
 				 w)))))
 	  
 	  ((break-block)
@@ -465,7 +477,7 @@
 		       (cons `(= ,dest ,e) '())
 		       (cons (if tail `(return ,e) e) '())))
 	  
-	  ((type typealias time local)
+	  ((type time local)
 	   (cons e '()))
 	  
 	  ((addmethod)

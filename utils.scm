@@ -72,10 +72,3 @@
 (define (lookup elt alst default)
   (let ((a (assq elt alst)))
     (if a (cdr a) default)))
-
-(define (replaceq from to lst)
-  (cond ((null? lst) lst)
-	((eq? (car lst) from)
-	 (cons to (replaceq from to (cdr lst))))
-	(else
-	 (cons (car lst) (replaceq from to (cdr lst))))))
