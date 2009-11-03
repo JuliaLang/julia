@@ -262,6 +262,13 @@
 			       (block (call set ,result ,i ,j ,expr)))))
 	      ,result )))
 
+   ;; colon
+   (pattern-lambda
+    (: a b (-? c))
+    (if c
+        `(call colon ,a ,c ,b)
+        `(call colon ,a ,b 1)))
+
    )) ; patterns
 
 ; (op (op a b) c) => (op a b c) etc.

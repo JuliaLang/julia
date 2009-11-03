@@ -86,6 +86,19 @@ function size(a::Array)
     return a.dims
 end
 
+# colon
+
+function colon(start::Int32, stop::Int32, stride::Int32)
+    len = (stop-start)/stride + 1
+    x = zeros(1, len)
+    ind = 1
+    for i=start:stride:stop
+        x[ind] = i
+        ind = ind+1
+    end
+    return x
+end
+
 ## One based indexing
 
 function ref(a::Array, i::Index)
