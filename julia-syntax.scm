@@ -499,7 +499,11 @@
 		       (cons `(= ,dest ,e) '())
 		       (cons (if tail `(return ,e) e) '())))
 	  
-	  ((type time local)
+	  ((time type)
+	   (cons (if tail `(return ,e) e)
+		 '()))
+
+	  ((local)
 	   (cons e '()))
 	  
 	  ((addmethod)
@@ -650,12 +654,60 @@ So far only the second case can actually occur.
 	      ,(car r-s-b))))
 	(else (map flatten-scopes e))))
 
+(define (goto-form e)
+  (let ((code '())
+	(ip   0))
+    (let ((emit
+	   (lambda (c)
+	     (set! code (cons c code))
+	     (set! ip (+ ip 1))))
+	  (make-label
+	   (lambda () (list #f)))
+	  (mark-label
+	   (lambda (l) (set-car! l ip))))
+      (define (compile e break-labels)
+	(if (atom? e) (emit e)
+	    (case (car e)
+	      ((if) (let ((elsel (make-label))
+			  (endl  (make-label)))
+		      (emit `(goto-ifnot ,(goto-form (cadr e)) ,elsel))
+		      (compile (caddr e) break-labels)
+		      (emit `(goto ,endl))
+		      (mark-label elsel)
+		      (compile (cadddr e) break-labels)
+		      (mark-label endl)))
+	      ((_while) (let ((topl (make-label))
+			      (endl (make-label)))
+			  (mark-label topl)
+			  (emit `(goto-ifnot ,(goto-form (cadr e)) ,endl))
+			  (compile (caddr e) break-labels)
+			  (emit `(goto ,topl))
+			  (mark-label endl)))
+	      ((block) (for-each (lambda (x) (compile x break-labels))
+				 (cdr e)))
+	      ((break-block) (let ((endl (make-label)))
+			       (compile (caddr e)
+					(cons (cons (cadr e) endl)
+					      break-labels))
+			       (mark-label endl)))
+	      ((break) (let ((labl (assq (cadr e) break-labels)))
+			 (if (not labl)
+			     (error "break or continue outside loop")
+			     (emit `(goto ,(cdr labl))))))
+	      (else  (emit (goto-form e))))))
+      (cond ((atom? e) e)
+	    ((eq? (car e) 'lambda)
+	     (let ((body (compile (cadddr e) '())))
+	       `(lambda ,(cadr e) ,(caddr e) ,(list->vector (reverse code)))))
+	    (else (map goto-form e))))))
+
 (define (julia-expand ex)
-  (splice-blocks
-   (flatten-scopes
-    (identify-locals
-     (to-LFF
-      (expand-and-or
-       (pattern-expand patterns 
-        (pattern-expand lower-comprehensions
-         (pattern-expand identify-comprehensions ex)))))))))
+  (goto-form
+   (splice-blocks
+    (flatten-scopes
+     (identify-locals
+      (to-LFF
+       (expand-and-or
+	(pattern-expand patterns 
+	 (pattern-expand lower-comprehensions
+	  (pattern-expand identify-comprehensions ex))))))))))

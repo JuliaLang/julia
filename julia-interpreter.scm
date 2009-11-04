@@ -830,44 +830,12 @@ not likely to be implemented in interpreter:
 	(else
 	 (case (car e)
 	   ((quote)   (scm->julia (cadr e)))
-	   ((if)      (let ((c (j-eval (cadr e) env)))
-			(if (not (j-false? c))
-			    (j-eval (caddr e) env)
-			    (if (pair? (cdddr e))
-				(j-eval (cadddr e) env)
-				julia-null))))
-	   ((_while)   (let loop ()
-			 (if (not (j-false? (j-eval (cadr e) env)))
-			     (begin (j-eval (caddr e) env)
-				    (loop)))
-			 julia-null))
-	   ((return)  (raise `(julia-return . ,(if (pair? (cdr e))
-						   (j-eval (cadr e) env)
-						   julia-null))))
-	   ((block)   (let loop ((v julia-null)
-				 (x (cdr e)))
-			(if (null? x)
-			    v
-			    (if (null? (cdr x))
-				(j-eval (car x) env)
-				(loop (j-eval (car x) env) (cdr x))))))
-	   ((break-block)  (let ((bname (cadr e)))
-			     (with-exception-catcher
-			      (lambda (e)
-				(if (and (pair? e)
-					 (eq? (car e) bname))
-				    julia-null
-				    (raise e)))
-			      (lambda ()
-				(j-eval (caddr e) env)))))
-	   ((break)  (raise (cdr e)))
-
 	   ((null)   julia-null)
-
+	   
 	   ((time)   (time (j-eval (cadr e) env)))
-
+	   
 	   ((type)      (type-def (cadr e) (caddr e)))
-
+	   
 	   ((lambda)
 	    (let ((types (lambda-types (cadr e))))
 	      (make-closure (make-function-type
@@ -885,7 +853,7 @@ not likely to be implemented in interpreter:
 		  (error "Variable" name "does not name a function")
 		  (add-method gf (j-eval (caddr e) env)))
 	      gf))
-
+	   
 	   ((=)
 	    (if (not (symbol? (cadr e)))
 		(error "Invalid lvalue in ="))
@@ -894,7 +862,7 @@ not likely to be implemented in interpreter:
 	      (if a (set-cdr! a v)
 		  (table-set! julia-globals (cadr e) v))
 	      v))
-
+	   
 	   ((call)
 	    (j-apply (j-eval (cadr e) env)
 		     (map (lambda (x) (j-eval x env))
@@ -926,20 +894,31 @@ not likely to be implemented in interpreter:
 			 cloenv)))))
 
 (define (j-eval-body ce args)
-  (let ((cenv (cdr ce))
-	(formals (cadr (car ce)))
-	(body (cddr (car ce))))
-    (with-exception-catcher
-     (lambda (e)
-       (if (and (pair? e)
-		(eq? (car e) 'julia-return))
-	   (cdr e)
-	   (raise e)))
-     (lambda ()
-       (j-eval (cadr body)
-	       (append (map (lambda (local) (cons local julia-null))
-			    (cdar body))
-		       (bind-args formals args cenv)))))))
+  (let* ((cenv (cdr ce))
+	 (formals (cadr (car ce)))
+	 (body (cddr (car ce)))
+	 (locl (cdar body))
+	 (code (cadr body))
+	 (env  (append (map (lambda (local) (cons local julia-null))
+			    locl)
+		       (bind-args formals args cenv)))
+	 (L    (vector-length code)))
+    (let loop ((ip 0))
+      (let ((I (vector-ref code ip)))
+	(if (atom? I)
+	    (begin (j-eval I env) (loop (+ ip 1)))
+	    (case (car I)
+	      ((goto)
+	       (loop (caadr I)))
+	      ((goto-ifnot)
+	       (if (j-false? (j-eval (cadr I) env))
+		   (loop (caaddr I))
+		   (loop (+ ip 1))))
+	      ((return)
+	       (j-eval (cadr I) env))
+	      (else
+	       (j-eval I env)
+	       (loop (+ ip 1)))))))))
 
 (define (j-toplevel-eval e)
   ; lambda with no scope-block means variables assigned to in the
