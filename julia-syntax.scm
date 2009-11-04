@@ -238,30 +238,6 @@
    (pattern-lambda (<<= a b) (expand-update-operator '<< a b))
    (pattern-lambda (>>= a b) (expand-update-operator '>> a b))
 
-   ;; Comprehensions
-   
-   ; Compute length of ranges
-   (pattern-lambda (call numel (: x z)) `(call + 1 (call - ,z ,x)) )
-   (pattern-lambda (call numel (: x y z)) `(call / (call + 1 (call - ,z ,x)) ,y) )
-
-   ; 1d comprehensions
-   (pattern-lambda 
-    (hcat (call (-/ |\||) expr (= i range)) )
-    (let ((result (gensym)))
-      `(block (= ,result (call zeros (call numel ,range))) 
-	      (for (= ,i ,range) (block (call set ,result ,i ,expr)))
-	      ,result )))
-   
-   ; 2d comprehensions
-   (pattern-lambda 
-    (hcat (call (-/ |\||) expr (= i range1)) (= j range2) )
-    (let ((result (gensym)))
-      `(block (= ,result (call zeros (call numel ,range1) (call numel ,range2)))
-	      (for (= ,i ,range1)
-		   (block (for (= ,j ,range2) 
-			       (block (call set ,result ,i ,j ,expr)))))
-	      ,result )))
-
    ;; colon
    (pattern-lambda
     (: a b (-? c))
@@ -270,6 +246,45 @@
         `(call colon ,a ,b 1)))
 
    )) ; patterns
+
+
+(define identify-comprehensions
+  (list
+   
+   ;; Comprehensions
+   ;; This is really ugly. Comprehension is interpreted as
+   ;; hcat where the first variable is a | b followed by
+   ;; other expressions
+   (pattern-lambda 
+    (hcat (call (-/ |\||) expr (= i range)) . rest)
+    `(comp ,expr (= ,i ,range) ,@rest))
+
+)) ;; identify-comprehensions
+
+
+(define lower-comprehensions
+  (list
+
+   ; 1d comprehensions
+   (pattern-lambda 
+    (comp expr (= i range))
+    (let ((result (gensym)))
+      `(block (= ,result (call zeros (call numel ,range)))
+	      (for (= ,i ,range) (block (= (ref ,result ,i) ,expr)))
+	      ,result )))
+   
+   ; 2d comprehensions
+   (pattern-lambda 
+    (comp expr (= i range1) (= j range2))
+    (let ((result (gensym)))
+      `(block (= ,result (call zeros (call numel ,range1) (call numel ,range2)))
+              (for (= ,i ,range1)
+                   (block (for (= ,j ,range2) 
+                               (block (call set ,result ,i ,j ,expr)))))
+              ,result )))
+
+)) ;; lower-comprehensions
+
 
 ; (op (op a b) c) => (op a b c) etc.
 (define (flatten-op op e)
@@ -641,4 +656,6 @@ So far only the second case can actually occur.
     (identify-locals
      (to-LFF
       (expand-and-or
-       (pattern-expand patterns ex)))))))
+       (pattern-expand patterns 
+        (pattern-expand lower-comprehensions
+         (pattern-expand identify-comprehensions ex)))))))))

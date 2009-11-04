@@ -82,6 +82,17 @@ function make_array(dim...)
     array = new(Array[Double,ndims], dims, data)
 end
 
+# This is a temp version to get an integer array of zeros
+# until convert() is in place
+function zeros_int(dim...)
+    ndims = length(dim)
+    dims = new(Buffer[Size], ndims)
+    numel = 1
+    for i=1:ndims; dims[i] = dim[i]; numel = numel*dim[i]; end
+    data = new(Buffer[Int32], numel)
+    array = new(Array[Int32,ndims], dims, data)
+end
+
 function size(a::Array)
     return a.dims
 end
@@ -90,7 +101,7 @@ end
 
 function colon(start::Int32, stop::Int32, stride::Int32)
     len = (stop-start)/stride + 1
-    x = zeros(1, len)
+    x = zeros_int(1, len)
     ind = 1
     for i=start:stride:stop
         x[ind] = i
