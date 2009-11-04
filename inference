@@ -7,33 +7,32 @@ Input: data-flow problem (DFP) (P, L, exec⟦code⟧(state), a₀)
        where a lattice is a value domain with meet and join operators
 
 Output: s[0]..s[n] ∈ A
-        where each s[i] gives the lattice bounds for all variables, at
-          that point in the program
-        s[0:n, 1:nvars, 0:1]  (3rd dim is lower/upper)
+        where each s[i] gives the abstract value of each variable as
+        preconditions for step #i
 
 s[0] := a₀
-for i := 1 to n do s[i,:,upper] := ⊤, s[i,:,lower] := ⊥
+for i := 1 to n do s[i] := ⊤
 W := {0,...,n}
 while W ≠ ∅ do
   choose pc ∈ W
   repeat
     W := W - pc
     new := exec⟦I[pc]⟧(s[pc])
-    if I[pc] = (goto l) then pc' := l
+    if I[pc] == (goto l) then pc´ := l
     else
-      pc' := pc+1
-      if I[pc] = (if ψ goto l) and new ⊲ s[l] then
+      pc´ := pc+1
+      if I[pc] == (if ψ goto l) and new ⊲ s[l] then
          W := W + l
  	 s[l] := update(s[l], new)
       end
     end
-    if new ⊲ s[pc'] then
-       s[pc'] := update(s[pc'], new)
-       pc := pc'
+    if new ⊲ s[pc´] then
+       s[pc´] := update(s[pc´], new)
+       pc := pc´
     else
-       pc := n + 1
+       pc := n+1
     end
-  until pc = n+1
+  until pc == n+1
 end
 
 final type assignment for variable v is fold(⊔, ⊥, { s[i,v] | i=0..n })
@@ -62,8 +61,8 @@ where tf⟦f⟧ is the t-function for f
 
 from NTI algorithm:
 
-s[U] = (join all successor upper bounds) ⊓ s[U]
-s[L] = (join all successor lower bounds) ⊓ s[U]
+s[U] = (join all predecessor upper bounds) ⊓ s[U]
+s[L] = (join all predecessor lower bounds) ⊓ s[U]
 
 F = diagonal matrix of functions, Fii = exec⟦I[i]⟧, off-diag Fij = ⊥
 C = square matrix, Cij = (I[j] is a successor to I[i])
@@ -81,3 +80,59 @@ repeat {
   U := L;
   L := ⊥; repeat {oldL := L; L := (C^t*B*L) meet U} until L=oldL;
   U := L; } until U=oldU;
+
+-------------------------------------------------------------------------------
+
+jeff's version: the above MFP algorithm combined with K-U for dynamic
+type inference
+
+Input: same as above
+Output: s[0]..s[n], where each s[i] is a State record
+        {pred::Set, before::List[Bounds], after::List[Bounds]}
+        where Bounds is a record {upper::Type, lower::Type}
+
+s[0] := {pred=∅, before=after={{upper=a₀.upper, lower=a₀.lower} ∀ vars}}
+for i := 1 to n do s[i] := {pred=∅, before=after={{upper=⊤, lower=⊥} ∀ vars}}
+W := {0,...,n}
+while W ≠ ∅ do
+  choose pc ∈ W
+  repeat
+    W := W - pc
+    new := s[pc].after := exec⟦I[pc]⟧(s[pc].before)
+    if I[pc] == (goto l) then
+      pc´ := l
+    else
+      pc´ := pc+1
+      if I[pc] == (if ψ goto l) then
+         s[l].pred ∪= {pc}
+         if new ⊲ s[l].before then
+            W := W ∪ {l}
+ 	    update(s, l)
+         end
+      end
+    end
+    s[pc´].pred ∪= {pc}
+    if new ⊲ s[pc´].before then
+       update(s, pc´)
+       pc := pc´
+    else
+       pc := n+1
+    end
+  until pc == n+1
+end
+
+NOTE: ψ must not affect type assignments, so it must be a variable
+
+define ⊲(new::List[Bounds], s::List[Bounds])
+
+define update(s::List[State], p::Int)
+  s0 = s[p]
+  U = ⊥
+  L = ⊥
+  for i in s0.pred
+    U = U ⊔ s[i].after.upper
+    L = L ⊔ s[i].after.lower
+  end
+  s0.before.upper = U ⊓ s0.before.upper
+  s0.before.lower = L ⊓ s0.before.upper
+end
