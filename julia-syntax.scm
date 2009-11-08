@@ -232,7 +232,8 @@
 	    (block (= ,x (ref ,list ,i)) ,body)) ))
 
    ; macro for timing evaluation
-   (pattern-lambda (call (-/ Time) expr) `(time ,expr))
+   (pattern-lambda (call (-/ Time) expr)
+		   `(call time_thunk (-> (tuple) ,expr)))
 
    ; update operators
    (pattern-lambda (+= a b) (expand-update-operator '+ a b))
@@ -523,7 +524,7 @@
 		       (cons `(= ,dest ,e) '())
 		       (cons (if tail `(return ,e) e) '())))
 	  
-	  ((time type)
+	  ((type)
 	   (cons (if tail `(return ,e) e)
 		 '()))
 

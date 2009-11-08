@@ -722,6 +722,10 @@ not likely to be implemented in interpreter:
 (make-builtin 'error "Any-->Union" error)
 (make-builtin 'convert "(Any,Type)-->Any" j-convert)
 
+; for timing
+(make-builtin 'time_thunk "(()-->Any)-->Any"
+	      (lambda (f) (time (j-apply f '()))))
+
 ; the following functions are compiler intrinsics, meaning that users
 ; should generally avoid them. they basically always expand to inline code,
 ; and may not be available as first-class functions in the final system.
@@ -818,6 +822,11 @@ not likely to be implemented in interpreter:
       (vector symbol-type x)
       x))
 
+(define (make-numeric-literal n)
+  (if (not (flonum? n))
+      (j-box int32-type n)
+      (j-box double-type n)))
+
 (define (eval-sym s env)
   (let ((a (assq s env)))
     (if a (cdr a)
@@ -828,26 +837,17 @@ not likely to be implemented in interpreter:
   (or (assq s env) (table-ref julia-globals s #f)))
 
 (define (j-eval e env)
-  (cond ((number? e)
-	 (if (not (flonum? e))
-	     (j-box int32-type e)
-	     (j-box double-type e)))
-	((eq? e 'false) julia-false)
-	((eq? e 'true) julia-true)
-	((symbol? e)
-	 (eval-sym e env))
-	((string? e)
-	 e)
-	((not (pair? e))
-	 (error "I don't know how to handle" e))
+  (cond ((eq? e 'false)                julia-false)
+	((eq? e 'true)                 julia-true)
+        ((symbol? e)                   (eval-sym e env))
+	((number? e)                   (make-numeric-literal e))
+	((or (vector? e) (string? e))  e)
 	(else
 	 (case (car e)
 	   ((quote)   (scm->julia (cadr e)))
-	   ((null)   julia-null)
+	   ((null)    julia-null)
 	   
-	   ((time)   (time (j-eval (cadr e) env)))
-	   
-	   ((type)      (type-def (cadr e) (caddr e)))
+	   ((type)    (type-def (cadr e) (caddr e)))
 	   
 	   ((lambda)
 	    (let ((types (lambda-types (cadr e))))
