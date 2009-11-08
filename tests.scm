@@ -198,3 +198,7 @@ end
 		  (return (call + 1 g9))))
 	 (to-LFF
 	  '(scope-block (call + 1 (scope-block b))))))
+
+(assert (equal?
+	 '(lambda ((|::| x Int8)) (scope-block x))
+	 (pattern-expand patterns (julia-parse "x::Int8->x"))))

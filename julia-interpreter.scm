@@ -572,6 +572,16 @@ not likely to be implemented in interpreter:
 (define conversion-table (make-method-table))
 
 (define (add-conversion from to method)
+  (define (non-convertible? t)
+    (or (tuple? t)
+	(sequence-type? t)
+	(eq? (type-name t) 'Union)
+	(eq? (type-name t) 'Function)))
+  (if (or (non-convertible? from)
+	  (non-convertible? to))
+      (error "Conversions may not be defined for the specified type(s)"))
+  (if (type-equal? from to)
+      (error "Cannot define a conversion from a type to itself"))
   (set! conversion-table
 	(method-table-insert conversion-table
 			     ; NOTE the "flipped" function type, "to-->from"
@@ -580,7 +590,8 @@ not likely to be implemented in interpreter:
 			     ; behavior, and for conversions we need a type
 			     ; providing a subset of the requested behavior.
 			     (make-function-type to from)
-			     method)))
+			     method))
+  julia-null)
 
 (define (get-conversion from to)
   (let ((m (method-table-assoc conversion-table
@@ -709,6 +720,7 @@ not likely to be implemented in interpreter:
 	      (lambda (f . argt)
 		(j-apply f (apply append (map tuple->list argt)))))
 (make-builtin 'error "Any-->Union" error)
+(make-builtin 'convert "(Any,Type)-->Any" j-convert)
 
 ; the following functions are compiler intrinsics, meaning that users
 ; should generally avoid them. they basically always expand to inline code,
@@ -720,6 +732,7 @@ not likely to be implemented in interpreter:
 (make-builtin 'tuplelen "(Tuple,)-->Int" tuple-length)
 (make-builtin 'box "(Type,`T)-->`T" j-box)
 (make-builtin 'unbox "(`T,)-->`T" j-unbox)
+(make-builtin 'add_conversion "(Type,Type,Function)-->()" add-conversion)
 (define (div-int x y)
   (let ((q (/ x y)))
     (if (< q 0)
@@ -903,6 +916,7 @@ not likely to be implemented in interpreter:
 			    locl)
 		       (bind-args formals args cenv)))
 	 (L    (vector-length code)))
+    ; interpret the body of a function, handling control flow
     (let loop ((ip 0))
       (let ((I (vector-ref code ip)))
 	(if (atom? I)

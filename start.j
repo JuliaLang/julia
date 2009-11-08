@@ -154,6 +154,14 @@ function double(x::Scalar)
     return box(Double,to_double(unbox(x)))
 end
 
+conversion x::Int8-->Double
+    return double(x)
+end
+
+conversion x::Int32-->Double
+    return double(x)
+end
+
 
 type List[`T]
     maxsize:: Size

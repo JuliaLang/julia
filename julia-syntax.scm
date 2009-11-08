@@ -93,8 +93,12 @@
 (define patterns
   (list
    (pattern-lambda (-> a b)
-		   `(lambda ,(fsig-to-lambda-list a)
-		      (scope-block ,b)))
+		   (let ((a (if (and (pair? a)
+				     (eq? (car a) 'tuple))
+				(cdr a)
+				(list a))))
+		     `(lambda ,a
+			(scope-block ,b))))
 
    (pattern-lambda (--> a b)
 		   `(call ref Function ,a ,b))
@@ -135,11 +139,16 @@
    (pattern-lambda (list . elts)
 		   `(call list ,@elts))
 
+   ; function definition
    (pattern-lambda (function (call name . argl) body)
 		   `(= ,name
 		       (addmethod ,name
 				  (lambda ,(fsig-to-lambda-list argl)
 				    (scope-block ,body)))))
+
+   (pattern-lambda (conversion (--> (|::| var from) to) body)
+		   `(call add_conversion ,from ,to
+			  (-> (|::| ,var ,from) ,body)))
    
    ; call with splat
    (pattern-lambda (call f ... (... _) ...)
@@ -247,6 +256,21 @@
 
    )) ; patterns
 
+; patterns that verify all syntactic sugar was well-formed
+; if any sugary forms remain after the above patterns, it means the
+; patterns didn't match, which implies a syntax error.
+(define check-desugared
+  (list
+   (pattern-lambda (function . any)
+		   (error "Invalid function definition"))
+
+   (pattern-lambda (for . any)
+		   (error "Invalid for loop syntax"))
+
+   (pattern-lambda (conversion . any)
+		   (error "Invalid conversion definition"))
+
+   ))
 
 (define identify-comprehensions
   (list
@@ -654,6 +678,8 @@ So far only the second case can actually occur.
 	      ,(car r-s-b))))
 	(else (map flatten-scopes e))))
 
+; remove if, _while, block, break-block, and break
+; replaced with goto and goto-ifnot
 (define (goto-form e)
   (let ((code '())
 	(ip   0))

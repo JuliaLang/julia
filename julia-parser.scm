@@ -36,6 +36,9 @@ TODO:
       -> --> |\|\|| && : |::| |.|))
 (define syntactic-unary-operators '())
 
+(define reserved-words '(begin while if for try function type typealias local
+			       return break continue conversion global))
+
 (define (syntactic-op? op) (memq op syntactic-operators))
 (define (syntactic-unary-op? op) (memq op syntactic-unary-operators))
 
@@ -398,15 +401,14 @@ TODO:
   (let* (#;(do-kw? (not (eqv? (peek-token s) #\`)))
 	 (ex (parse-atom s)))
     (if (and #;do-kw?
-	 (memq ex '(begin while if for try function type typealias local
-			  return break continue)))
-	(parse-keyword s ex)
+	 (memq ex reserved-words))
+	(parse-resword s ex)
 	(loop ex))))
 
 ;(define (parse-dot s)  (parse-LtoR s parse-atom (prec-ops 12)))
 
-; parse block structures
-(define (parse-keyword s word)
+; parse block structures that begin with reserved words
+(define (parse-resword s word)
   (define (expect-end s)
     (let ((t (peek-token s)))
       (if (eq? t 'end)
@@ -426,12 +428,16 @@ TODO:
        (take-token s)
        (case nxt
 	 ((end)     (list 'if test then))
-	 ((elseif)  (list 'if test then (parse-keyword s 'if)))
-	 ((else)    (list 'if test then (parse-keyword s 'begin)))
+	 ((elseif)  (list 'if test then (parse-resword s 'if)))
+	 ((else)    (list 'if test then (parse-resword s 'begin)))
 	 (else (error "Improperly terminated if statement")))))
     ((local)  (list 'local (parse-eq s)))
     ((function)
      (let ((sig (parse-call s)))
+       (begin0 (list word sig (parse-block s))
+	       (expect-end s))))
+    ((conversion)
+     (let ((sig (parse-eq s)))
        (begin0 (list word sig (parse-block s))
 	       (expect-end s))))
     ((type)
@@ -444,7 +450,7 @@ TODO:
      )
     ((return)          (list 'return (parse-eq s)))
     ((break continue)  (list word))
-    (else (error "Unhandled keyword"))))
+    (else (error "Unhandled reserved word"))))
 
 ; handle function call argument list, or any comma-delimited list.
 ; . an extra comma at the end is allowed
@@ -540,8 +546,6 @@ TODO:
 	  ((eqv? t #\` )
 	   (take-token s)
 	   (list 'quote (parse-call s)))
-
-	  ; TODO: prefix keywords, various quoting/escaping
 
 	  (else (take-token s)))))
 
