@@ -409,92 +409,6 @@ not likely to be implemented in interpreter:
 (define julia-true (vector bool-type 1))
 (define julia-false (vector bool-type 0))
 
-; --- processing type-related syntax ---
-
-(define (type-ex-name t)
-  (cond ((not (pair? t)) t)
-	((eq? (car t) 'tuple) 'tuple)
-	((eq? (car t) '...)   '...)
-	((eq? (car t) 'quote) 'quote)
-	((eq? (car t) 'ref) (cadr t))
-	((eq? (car t) '-->) 'Function)
-	((and (eq? (car t) 'call)
-	      (eq? (cadr t) 'ref))  (caddr t))
-	((and (eq? (car t) 'call)
-	      (eq? (cadr t) 'tuple))  'tuple)
-	(else (error "Invalid type expression" t))))
-(define (type-ex-params t)
-  (cond ((not (pair? t)) '())
-	((eq? (car t) 'tuple) (cdr t))
-	((eq? (car t) '...)   (cdr t))
-	((eq? (car t) 'quote) (cdr t))
-	((eq? (car t) 'ref)   (cddr t))
-	((eq? (car t) '-->)   (cdr t))
-	((and (eq? (car t) 'call)
-	      (eq? (cadr t) 'ref))  (cdddr t))
-	((and (eq? (car t) 'call)
-	      (eq? (cadr t) 'tuple))  (cddr t))
-	(else (error "Invalid type expression" t))))
-
-; handles form (typename name . params), giving a type object
-(define (resolve-type name params)
-  (define (resolve-params p)
-    (map resolve-type-ex p))
-  (cond ((eq? name 'tuple)
-	 (list->tuple (resolve-params params)))
-	((eq? name 'quote) (car params))
-	((number? name)    (j-box int32-type name))
-	((get-type name) => (lambda (x)
-			      (instantiate-type
-			       x
-			       (resolve-params params))))
-	(else
-	 (error "Unknown type" name))))
-
-; convert a symbolic type expression to a type object
-(define (resolve-type-ex e)
-  (resolve-type (type-ex-name e)
-		(type-ex-params e)))
-
-(define (ty s) (resolve-type-ex (julia-parse s)))
-
-; look for type < supertype
-(define (type-def signature fields)
-  (let ((parented?  (and (pair? signature) (eq? (car signature) 'call)
-			 (pair? (cdr signature)) (eq? (cadr signature) '<))))
-    (let ((sig (if parented?
-		   (caddr signature)
-		   signature))
-	  (super (if parented?
-		     (resolve-type-ex (cadddr signature))
-		     any-type)))
-      (type-def- sig fields super))))
-
-(define (type-def- signature fields super)
-  (let ((tname (type-ex-name signature))
-	; convert `T to T, since for a type def all parameters are
-	; generic so ` does nothing.
-	(tpara (map (lambda (x)
-		      (if (and (pair? x)
-			       (eq? (car x) 'quote))
-			  (cadr x)
-			  x))
-		    (type-ex-params signature)))
-	; fields looks like (block (:: n t) (:: n t) ...)
-	(fnames (map cadr (cdr fields)))
-	(ftypes (map (lambda (fld)
-		       (resolve-type-ex (caddr fld)))
-		     (cdr fields))))
-    (let ((T
-	   (make-type tname super (list->tuple tpara)
-		      ; TODO: check for duplicate fields
-		      (tuple-append
-		       (type-fields super)
-		       (alist->tuples
-			(map list fnames ftypes))))))
-      (put-type tname T)
-      T)))
-
 ; --- function objects ---
 
 (define (make-closure ft proc env)
@@ -683,10 +597,12 @@ not likely to be implemented in interpreter:
 
 (define (j-is x y) (eq? x y))
 
+(define (ty s) (j-toplevel-eval (julia-parse s)))
+
 (define (make-builtin name T impl)
   (table-set! julia-globals name
 	      (make-closure
-	       (resolve-type-ex (julia-parse T))
+	       (if (string? T) (ty T) T)
 	       (lambda (ce args) (apply impl args))
 	       #f)))
 
@@ -718,129 +634,10 @@ end
 			(instantiate-type (car args) (cdr args)))
 		      #f)))
 
-; the following builtin functions are ordinary first-class functions,
-; and can be directly employed by the user.
-(make-builtin 'new "(Type,Any...)-->Any" (lambda (t . args) (j-new t args)))
-(make-builtin 'getfield "(Any,Symbol)-->Any" j-get-field)
-(make-builtin 'setfield "(Any,Symbol,Any)-->Any" j-set-field)
-(make-builtin 'is "(Any,Any)-->Bool" j-is)
-(make-builtin 'typeof "(Any,)-->Type" type-of)
-(make-builtin 'subtype "(Type,Type)-->Bool"
-	      (lambda (x y) (if (subtype? x y)
-				julia-true julia-false)))
-(make-builtin 'istype "(Any,Type)-->Bool"
-	      (lambda (x y) (if (subtype? (type-of x) y)
-				julia-true julia-false)))
-(make-builtin 'tuple "(Any...)-->Tuple" j-tuple)
-(make-builtin 'apply "(Function[`A,`T],Tuple...)-->`T"
-	      (lambda (f . argt)
-		(j-apply f (apply append (map tuple->list argt)))))
-(make-builtin 'error "Any-->Union" error)
-(make-builtin 'convert "(Any,Type)-->Any" j-convert)
-
-; for timing
-(make-builtin 'time_thunk "(()-->Any)-->Any"
-	      (lambda (f) (time (j-apply f '()))))
-
-; the following functions are compiler intrinsics, meaning that users
-; should generally avoid them. they basically always expand to inline code,
-; and may not be available as first-class functions in the final system.
-; some require unboxed arguments, which are tricky to deal with.
-(make-builtin 'bufferref "(Buffer[`T],Int)-->`T" j-buffer-ref)
-(make-builtin 'bufferset "(Buffer[`T],Int,`T)-->`T" j-buffer-set)
-(make-builtin 'tupleref "(Tuple,Int)-->Any" j-tuple-ref)
-(make-builtin 'tuplelen "(Tuple,)-->Int" tuple-length)
-(make-builtin 'box "(Type,`T)-->`T" j-box)
-(make-builtin 'unbox "(`T,)-->`T" j-unbox)
-(make-builtin 'boxset "(Any,Any)-->()" j-box-set)
-(make-builtin 'add_conversion "(Type,Type,Function)-->()" add-conversion)
-(make-builtin 'new_closure "(Type,Any,Tuple)-->Function"
-	      (lambda (t e clo)
-		(make-closure t j-eval-body (cons e clo))))
-(define (div-int x y)
-  (let ((q (/ x y)))
-    (if (< q 0)
-	(ceiling q)
-	(floor q))))
-(define (mod-int x y) (- x (* (div-int x y) y)))
-; round to n bits in 2's complement, evaluating constants at compile time
-(define-macro (ui b n) `(bitwise-and ,n ,(- (arithmetic-shift 1 b) 1)))
-(define-macro (si b n)
-  (let ((g (gensym)))
-    `(let ((,g ,n))
-       (if (= (bitwise-and ,g ,(arithmetic-shift 1 (- b 1))) 0)
-	   (bitwise-and ,g ,(- (arithmetic-shift 1 b) 1))
-	   (- (bitwise-and (- ,g) ,(- (arithmetic-shift 1 b) 1)))))))
-(define-macro (uif1 b f) `(lambda (x) (ui ,b (,f x))))
-(define-macro (sif1 b f) `(lambda (x) (si ,b (,f x))))
-(define-macro (uif2 b f) `(lambda (x y) (ui ,b (,f x y))))
-(define-macro (sif2 b f) `(lambda (x y) (si ,b (,f x y))))
-(make-builtin 'add_int32 "(Int32,Int32)-->Int32" (sif2 32 +))
-(make-builtin 'sub_int32 "(Int32,Int32)-->Int32" (sif2 32 -))
-(make-builtin 'neg_int32 "(Int32,)-->Int32"      (sif1 32 -))
-(make-builtin 'mul_int32 "(Int32,Int32)-->Int32" (sif2 32 *))
-(make-builtin 'div_int32 "(Int32,Int32)-->Int32" (sif2 32 div-int))
-(make-builtin 'mod_int32 "(Int32,Int32)-->Int32" (sif2 32 mod-int))
-(make-builtin 'add_double "(Double,Double)-->Double" +)
-(make-builtin 'sub_double "(Double,Double)-->Double" -)
-(make-builtin 'neg_double "(Double,)-->Double" -)
-(make-builtin 'mul_double "(Double,Double)-->Double" *)
-(make-builtin 'div_double "(Double,Double)-->Double"
-	      (lambda (x y) (exact->inexact (/ x y))))
-(make-builtin 'eq_int32 "(Int32,Int32)-->Bool"
-	      (lambda (x y) (if (= x y)
-				julia-true
-				julia-false)))
-(make-builtin 'eq_double "(Double,Double)-->Bool"
-	      (lambda (x y) (if (= x y)
-				julia-true
-				julia-false)))
-(make-builtin 'lt_int32 "(Int32,Int32)-->Bool"
-	      (lambda (x y) (if (< x y)
-				julia-true
-				julia-false)))
-(make-builtin 'lt_double "(Double,Double)-->Bool"
-	      (lambda (x y) (if (< x y)
-				julia-true
-				julia-false)))
-(make-builtin 'ne_int32 "(Int32,Int32)-->Bool"
-	      (lambda (x y) (if (not (= x y))
-				julia-true
-				julia-false)))
-(make-builtin 'ne_double "(Double,Double)-->Bool"
-	      (lambda (x y) (if (and (= x x)
-				     (= y y)
-				     (not (= x y)))
-				julia-true
-				julia-false)))
-(make-builtin 'isnan_double "(Double,)-->Bool"
-	      (lambda (x) (if (not (= x x))
-			      julia-true
-			      julia-false)))
-(make-builtin 'isinf_double "(Double,)-->Bool"
-	      (lambda (x) (if (or (equal? x +inf.0)
-				  (equal? x -inf.0))
-			      julia-true
-			      julia-false)))
-(define (to-int x) (inexact->exact (truncate x)))
-(make-builtin 'to_bool "Scalar-->Bool"     (lambda (x) (if (= x 0) 0 1)))
-(make-builtin 'to_int8 "Scalar-->Int8"     (lambda (x) (si  8 (to-int x))))
-(make-builtin 'to_uint8 "Scalar-->Uint8"   (lambda (x) (ui  8 (to-int x))))
-(make-builtin 'to_int16 "Scalar-->Int16"   (lambda (x) (si 16 (to-int x))))
-(make-builtin 'to_uint16 "Scalar-->Uint16" (lambda (x) (ui 16 (to-int x))))
-(make-builtin 'to_int32 "Scalar-->Int32"   (lambda (x) (si 32 (to-int x))))
-(make-builtin 'to_uint32 "Scalar-->Uint32" (lambda (x) (ui 32 (to-int x))))
-(make-builtin 'to_int64 "Scalar-->Int64"   (lambda (x) (si 64 (to-int x))))
-(make-builtin 'to_uint64 "Scalar-->Uint64" (lambda (x) (ui 64 (to-int x))))
-(make-builtin 'to_double "Scalar-->Double" exact->inexact)
-
-
 ; --- evaluator ---
 
 (define (scm->julia x)
-  (if (symbol? x)
-      (vector symbol-type x)
-      x))
+  x)
 
 (define (make-numeric-literal n)
   (if (not (flonum? n))
@@ -867,8 +664,6 @@ end
 	   ((quote)   (scm->julia (cadr e)))
 	   ((null)    julia-null)
 	   ((top)     (eval-sym (cadr e) '(())))
-	   
-	   ((type)    (type-def (cadr e) (caddr e)))
 	   
 	   ((closure-ref) (tuple-ref (cdr env) (cadr e)))
 	   
@@ -955,6 +750,146 @@ end
   ; expression stay global.
   (j-apply (j-eval (cadr (julia-expand `(lambda () ,e))) '(()))
 	   '()))
+
+; --- initialize builtins ---
+
+; low-level intrinsics needed for bootstrapping
+; the other builtins' type expressions cannot be evaluated without these
+(make-builtin 'new_closure
+	      ;"(Type,Any,Tuple)-->Function"
+	      (instantiate-type function-type
+				(list (julia-tuple Type-type
+						   any-type
+						   tuple-type)
+				      function-type))
+	      (lambda (t e clo)
+		(make-closure t j-eval-body (cons e clo))))
+(make-builtin 'tuple
+	      ;"(Any...)-->Tuple"
+	      (instantiate-type function-type
+				(list (julia-tuple (instantiate-type
+						    sequence-type
+						    (list any-type)))
+				      tuple-type))
+	      j-tuple)
+
+; the following functions are compiler intrinsics, meaning that users
+; should generally avoid them. they basically always expand to inline code,
+; and may not be available as first-class functions in the final system.
+; some require unboxed arguments, which are tricky to deal with.
+(make-builtin 'bufferref "(Buffer[`T],Int)-->`T" j-buffer-ref)
+(make-builtin 'bufferset "(Buffer[`T],Int,`T)-->`T" j-buffer-set)
+(make-builtin 'tupleref "(Tuple,Int)-->Any" j-tuple-ref)
+(make-builtin 'tuplelen "(Tuple,)-->Int" tuple-length)
+(make-builtin 'box "(Type,`T)-->`T" j-box)
+(make-builtin 'unbox "(`T,)-->`T" j-unbox)
+(make-builtin 'boxset "(Any,Any)-->()" j-box-set)
+(make-builtin 'add_conversion "(Type,Type,Function)-->()" add-conversion)
+(make-builtin 'new_type
+	      "(Symbol,(Symbol...),Type,((Symbol,Type)...))-->Type"
+	      (lambda (name params super fields)
+		(make-type name super params
+			   (tuple-append (type-fields super) fields))))
+
+(define (div-int x y)
+  (let ((q (/ x y)))
+    (if (< q 0)
+	(ceiling q)
+	(floor q))))
+(define (mod-int x y) (- x (* (div-int x y) y)))
+; round to n bits in 2's complement, evaluating constants at compile time
+(define-macro (ui b n) `(bitwise-and ,n ,(- (arithmetic-shift 1 b) 1)))
+(define-macro (si b n)
+  (let ((g (gensym)))
+    `(let ((,g ,n))
+       (if (= (bitwise-and ,g ,(arithmetic-shift 1 (- b 1))) 0)
+	   (bitwise-and ,g ,(- (arithmetic-shift 1 b) 1))
+	   (- (bitwise-and (- ,g) ,(- (arithmetic-shift 1 b) 1)))))))
+(define-macro (uif1 b f) `(lambda (x) (ui ,b (,f x))))
+(define-macro (sif1 b f) `(lambda (x) (si ,b (,f x))))
+(define-macro (uif2 b f) `(lambda (x y) (ui ,b (,f x y))))
+(define-macro (sif2 b f) `(lambda (x y) (si ,b (,f x y))))
+(make-builtin 'add_int32 "(Int32,Int32)-->Int32" (sif2 32 +))
+(make-builtin 'sub_int32 "(Int32,Int32)-->Int32" (sif2 32 -))
+(make-builtin 'neg_int32 "(Int32,)-->Int32"      (sif1 32 -))
+(make-builtin 'mul_int32 "(Int32,Int32)-->Int32" (sif2 32 *))
+(make-builtin 'div_int32 "(Int32,Int32)-->Int32" (sif2 32 div-int))
+(make-builtin 'mod_int32 "(Int32,Int32)-->Int32" (sif2 32 mod-int))
+(make-builtin 'add_double "(Double,Double)-->Double" +)
+(make-builtin 'sub_double "(Double,Double)-->Double" -)
+(make-builtin 'neg_double "(Double,)-->Double" -)
+(make-builtin 'mul_double "(Double,Double)-->Double" *)
+(make-builtin 'div_double "(Double,Double)-->Double"
+	      (lambda (x y) (exact->inexact (/ x y))))
+(make-builtin 'eq_int32 "(Int32,Int32)-->Bool"
+	      (lambda (x y) (if (= x y)
+				julia-true
+				julia-false)))
+(make-builtin 'eq_double "(Double,Double)-->Bool"
+	      (lambda (x y) (if (= x y)
+				julia-true
+				julia-false)))
+(make-builtin 'lt_int32 "(Int32,Int32)-->Bool"
+	      (lambda (x y) (if (< x y)
+				julia-true
+				julia-false)))
+(make-builtin 'lt_double "(Double,Double)-->Bool"
+	      (lambda (x y) (if (< x y)
+				julia-true
+				julia-false)))
+(make-builtin 'ne_int32 "(Int32,Int32)-->Bool"
+	      (lambda (x y) (if (not (= x y))
+				julia-true
+				julia-false)))
+(make-builtin 'ne_double "(Double,Double)-->Bool"
+	      (lambda (x y) (if (and (= x x)
+				     (= y y)
+				     (not (= x y)))
+				julia-true
+				julia-false)))
+(make-builtin 'isnan_double "(Double,)-->Bool"
+	      (lambda (x) (if (not (= x x))
+			      julia-true
+			      julia-false)))
+(make-builtin 'isinf_double "(Double,)-->Bool"
+	      (lambda (x) (if (or (equal? x +inf.0)
+				  (equal? x -inf.0))
+			      julia-true
+			      julia-false)))
+(define (to-int x) (inexact->exact (truncate x)))
+(make-builtin 'to_bool "Scalar-->Bool"     (lambda (x) (if (= x 0) 0 1)))
+(make-builtin 'to_int8 "Scalar-->Int8"     (lambda (x) (si  8 (to-int x))))
+(make-builtin 'to_uint8 "Scalar-->Uint8"   (lambda (x) (ui  8 (to-int x))))
+(make-builtin 'to_int16 "Scalar-->Int16"   (lambda (x) (si 16 (to-int x))))
+(make-builtin 'to_uint16 "Scalar-->Uint16" (lambda (x) (ui 16 (to-int x))))
+(make-builtin 'to_int32 "Scalar-->Int32"   (lambda (x) (si 32 (to-int x))))
+(make-builtin 'to_uint32 "Scalar-->Uint32" (lambda (x) (ui 32 (to-int x))))
+(make-builtin 'to_int64 "Scalar-->Int64"   (lambda (x) (si 64 (to-int x))))
+(make-builtin 'to_uint64 "Scalar-->Uint64" (lambda (x) (ui 64 (to-int x))))
+(make-builtin 'to_double "Scalar-->Double" exact->inexact)
+
+; the following builtin functions are ordinary first-class functions,
+; and can be directly employed by the user.
+(make-builtin 'new "(Type,Any...)-->Any" (lambda (t . args) (j-new t args)))
+(make-builtin 'getfield "(Any,Symbol)-->Any" j-get-field)
+(make-builtin 'setfield "(Any,Symbol,Any)-->Any" j-set-field)
+(make-builtin 'is "(Any,Any)-->Bool" j-is)
+(make-builtin 'typeof "(Any,)-->Type" type-of)
+(make-builtin 'subtype "(Type,Type)-->Bool"
+	      (lambda (x y) (if (subtype? x y)
+				julia-true julia-false)))
+(make-builtin 'istype "(Any,Type)-->Bool"
+	      (lambda (x y) (if (subtype? (type-of x) y)
+				julia-true julia-false)))
+(make-builtin 'apply "(Function[`A,`T],Tuple...)-->`T"
+	      (lambda (f . argt)
+		(j-apply f (apply append (map tuple->list argt)))))
+(make-builtin 'error "Any-->Union" error)
+(make-builtin 'convert "(Any,Type)-->Any" j-convert)
+
+; for timing
+(make-builtin 'time_thunk "(()-->Any)-->Any"
+	      (lambda (f) (time (j-apply f '()))))
 
 ; --- load ---
 

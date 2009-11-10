@@ -90,6 +90,24 @@
 (define (process-indexes i)
   (map (lambda (x) (if (eq? x ':) '(quote :) x)) i))
 
+(define (unquote-type-params params)
+  (map (lambda (p)
+	 (if (and (pair? p)
+		  (eq? (car p) 'quote))
+	     (cadr p)
+	     p))
+       params))
+
+(define (typedef-expr name params super fields)
+  (let ((field-names (map decl-var fields))
+	(field-types (map decl-type fields)))
+    `(= ,name
+	(call new_type (quote ,name)
+	      (tuple ,@(map (lambda (x) `',x) params))
+	      ,super
+	      (tuple ,@(map (lambda (n t) `(tuple ',n ,t))
+			    field-names field-types))))))
+
 (define patterns
   (list
    (pattern-lambda (-> a b)
@@ -109,11 +127,26 @@
    (pattern-lambda (= (|.| a b) rhs)
 		   `(call setfield ,a (quote ,b) ,rhs))
 
+   ; type definition
+   (pattern-lambda (type (-- name (-s)) (block . fields))
+		   (typedef-expr name '() 'Any fields))
+
+   (pattern-lambda (type (ref (-- name (-s)) . params) (block . fields))
+		   (typedef-expr name (unquote-type-params params)
+				 'Any fields))
+
+   (pattern-lambda (type (comparison (-- name (-s)) (-/ <) super)
+			 (block . fields))
+		   (typedef-expr name '() super fields))
+
+   (pattern-lambda (type (comparison (ref (-- name (-s)) . params) (-/ <) super)
+			 (block . fields))
+		   (typedef-expr name (unquote-type-params params)
+				 super fields))
+
    ; typealias is an assignment; should be const when that exists
-   (pattern-lambda (typealias name type-ex)
-		   (if (not (symbol? name))
-		       (error "typealias: type name must be a symbol")
-		       `(= ,name ,type-ex)))
+   (pattern-lambda (typealias (-- name (-s)) type-ex)
+		   `(= ,name ,type-ex))
 
    (pattern-lambda (comparison . chain) (expand-compare-chain chain))
 
@@ -271,6 +304,12 @@
 
    (pattern-lambda (conversion . any)
 		   (error "Invalid conversion definition"))
+
+   (pattern-lambda (type . any)
+		   (error "Invalid type definition"))
+
+   (pattern-lambda (typealias . any)
+		   (error "Invalid typealias statement"))
 
    ))
 
@@ -525,10 +564,6 @@
 		       (cons `(= ,dest ,e) '())
 		       (cons (if tail `(return ,e) e) '())))
 	  
-	  ((type)
-	   (cons (if tail `(return ,e) e)
-		 '()))
-
 	  ((local)
 	   (cons e '()))
 	  

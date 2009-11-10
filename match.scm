@@ -21,6 +21,7 @@
 ; (-/ <ex>)  match <ex> literally
 ; (-^ <p>)   complement of pattern <p>
 ; (-- <var> <p>)  match <p> and capture as <var> if match succeeds
+; (-s)       match any symbol
 ; (<pat...> . <var>) match prefix and bind tail to <var>
 ;
 ; regular match constructs:
@@ -54,6 +55,8 @@
 		     (cons (cons (cadr p) expr) state)))
 	       ((eq? (car p) '-$)  ; greedy alternation for toplevel pattern
 		(match-alt (cdr p) '() (list expr) state #f 1))
+	       ((eq? (car p) '-s)
+		(and (symbol? expr) state))
 	       (else
 		(and (pair? expr)
 		     (equal? (car p) (car expr))
