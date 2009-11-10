@@ -692,6 +692,7 @@ not likely to be implemented in interpreter:
 
 (define (j-box type v) (vector type v))
 (define (j-unbox v) (vector-ref v 1))
+(define (j-box-set b v) (begin (vector-set! b 1 v) julia-null))
 
 ; fix scalar type to include a proper int32(0)
 ; this creates a circular reference
@@ -736,6 +737,7 @@ not likely to be implemented in interpreter:
 (make-builtin 'tuplelen "(Tuple,)-->Int" tuple-length)
 (make-builtin 'box "(Type,`T)-->`T" j-box)
 (make-builtin 'unbox "(`T,)-->`T" j-unbox)
+(make-builtin 'boxset "(Any,Any)-->()" j-box-set)
 (make-builtin 'add_conversion "(Type,Type,Function)-->()" add-conversion)
 (define (div-int x y)
   (let ((q (/ x y)))
@@ -846,11 +848,12 @@ not likely to be implemented in interpreter:
 	 (case (car e)
 	   ((quote)   (scm->julia (cadr e)))
 	   ((null)    julia-null)
+	   ((top)     (eval-sym (cadr e) '()))
 	   
 	   ((type)    (type-def (cadr e) (caddr e)))
 	   
 	   ((lambda)
-	    (let ((types (lambda-types (cadr e))))
+	    (let ((types (llist-types (cadr e))))
 	      (make-closure (make-function-type
 			     (resolve-type-ex (cons 'tuple types))
 			     any-type)

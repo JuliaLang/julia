@@ -28,11 +28,11 @@
 	(else (error "Malformed function argument" v)))))
 
 ; convert a lambda list into a list of just symbols
-(define (lambda-vars lst)
+(define (llist-vars lst)
   (map arg-name lst))
 
 ; get just argument types
-(define (lambda-types lst)
+(define (llist-types lst)
   (map (lambda (v)
 	 (if (symbol? v)
 	     'Any
@@ -153,12 +153,13 @@
    ; call with splat
    (pattern-lambda (call f ... (... _) ...)
 		   (let ((argl (cddr __)))
-		     `(call apply ,f ,@(map (lambda (x)
-					      (if (and (length= x 2)
-						       (eq? (car x) '...))
-						  (cadr x)
-						  `(tuple ,x)))
-					    argl))))
+		     `(call apply ,f
+			    ,@(map (lambda (x)
+				     (if (and (length= x 2)
+					      (eq? (car x) '...))
+					 (cadr x)
+					 `(tuple ,x)))
+				   argl))))
 
    ; tuple syntax (a, b...)
    (pattern-lambda (tuple . args)
@@ -418,7 +419,7 @@
   ; This expression walk is entirely within the "else" clause of the giant
   ; case expression. Everything else deals with special forms.
   (define (to-lff e dest tail)
-    (if (atom? e)
+    (if (or (atom? e) (and (pair? e) (eq? (car e) 'top)))
 	(cond ((symbol? dest) (cons `(= ,dest ,e) '()))
 	      (dest (cons (if tail `(return ,e) e)
 			  '()))
@@ -592,7 +593,7 @@ So far only the second case can actually occur.
   (define (add-local-decls e env)
     (if (not (pair? e)) e
 	(cond ((eq? (car e) 'lambda)
-	       (let* ((env (append (lambda-vars (cadr e)) env))
+	       (let* ((env (append (llist-vars (cadr e)) env))
 		      (body (add-local-decls (caddr e) env)))
 		 (list 'lambda (cadr e) body)))
 	      
@@ -628,10 +629,11 @@ So far only the second case can actually occur.
   (cond ((null? renames)  e)
 	((symbol? e)      (lookup e renames e))
 	((atom? e)        e)
+	((and (pair? e) (eq? (car e) 'top))  e)
 	(else
 	 (let* ((bound-vars  ; compute vars bound by current expr
 		 (case (car e)
-		   ((lambda)      (lambda-vars (cadr e)))
+		   ((lambda)      (llist-vars (cadr e)))
 		   ((scope-block) (scope-block-vars e))
 		   (else '())))
 		(new-renames (without renames bound-vars)))
@@ -662,7 +664,7 @@ So far only the second case can actually occur.
   
   (cond ((atom? e) e)
 	((eq? (car e) 'lambda)
-	 (let* ((argnames  (lambda-vars (cadr e)))
+	 (let* ((argnames  (llist-vars (cadr e)))
 		(body0     (caddr e))
 		(body      (if (eq? (car body0) 'scope-block)
 			       (car (last-pair body0))
@@ -679,8 +681,142 @@ So far only the second case can actually occur.
 	      ,(car r-s-b))))
 	(else (map flatten-scopes e))))
 
+(define (make-var-info name) (vector name 'Any #f))
+(define (vinfo:name v) (vector-ref v 0))
+(define (vinfo:type v) (vector-ref v 1))
+(define (vinfo:capt v) (vector-ref v 2))
+(define (vinfo:set-type! v t) (vector-set! v 1 t))
+(define (vinfo:set-capt! v c) (vector-set! v 2 c))
+(define (var-info-for name vinfo)
+  (and (pair? vinfo)
+       (or (and (eq? (vinfo:name (car vinfo)) name)
+		(car vinfo))
+	   (var-info-for name (cdr vinfo)))))
+
+(define (lambda-all-vars e)
+  (append (llist-vars (cadr e))
+	  (cdr (caddr e))))
+
+; convert each lambda's (locals ...) to
+;   (var-info (locals ...) var-info-lst captured-var-names)
+; where var-info-lst is a list of var-info records
+; returns (expr . captured-vars), where captured-vars is a list of
+; (var-info . frame) records.
+(define (analyze-vars e env)
+  ; returns #f or (var-info . frame)
+  (define (var-lookup v env)
+    (if (atom? env) #f
+	(let ((vi (var-info-for v (car env))))
+	  (if vi
+	      (cons vi (car env))
+	      (var-lookup v (cdr env))))))
+  
+  (cond ((symbol? e)
+	 (let ((v (var-lookup e env)))
+	   (if (and v (not (eq? (cdr v) (car env))))
+	       (begin (vinfo:set-capt! (car v) #t)
+		      (cons e (list v)))
+	       (cons e '()))))
+	((atom? e) e)
+	((eq? (car e) 'lambda)
+	 (let* ((lvars (lambda-all-vars e))
+		(vi    (map make-var-info lvars))
+		(rec   (analyze-vars (cadddr e) (cons vi env)))
+		; from this inner function's captured variables, select
+		; those that come from frames above ours. we need to
+		; capture those variables too, in order to pass them on
+		; to this inner function.
+		(cv    (filter (lambda (vi)
+				 (member-p vi (cdr env)
+					   (lambda (v e) (eq? (cdr v) e))))
+			       (cdr rec))))
+	   (cons `(lambda ,(cadr e)
+		    (var-info ,(caddr e) ,vi ,(map (lambda (x)
+						     (vinfo:name (car x)))
+						   (cdr rec)))
+		    ,(car rec))
+		 cv)))
+	(else (let ((rec (map (lambda (x) (analyze-vars x env))
+			      (cdr e))))
+		(cons (cons (car e) (map car rec))
+		      (delete-duplicates-p
+		       (apply append (map cdr rec))
+		       (lambda (a b) (eq? (car a) (car b)))))))))
+
+(define (analyze-variables e) (car (analyze-vars e '())))
+
+; lower closures, using the results of analyze-vars
+; . for each captured var v, initialize with v = box(Any,())
+; . uses of v change to unbox(v)
+; . assignments to v change to boxset(v, value)
+; . lambda expressions change to
+;   make_closure(type, `expr, (capt-var1, capt-var2, ...))
+; . for each closed var v, uses change to (call unbox (closure-ref idx))
+; . assignments to closed var v change to (call boxset (closure-ref idx) rhs)
+(define (closure-convert- e vinfo)
+  (define (lookup v vinfo)
+    (let ((vi (var-info-for v (caddr vinfo))))
+	   (if vi
+	       (if (vinfo:capt vi) 'boxed 'local)
+	       (let ((i (index-of v (cadddr vinfo) 0)))
+		 (or i 'global)))))
+  
+  (cond ((symbol? e)
+	 (let ((l (lookup e vinfo)))
+	   (cond ((eq? l 'boxed) `(call (top unbox) ,e))
+		 ((number? l)    `(call (top unbox) (closure-ref ,l)))
+		 (else e))))
+	((atom? e) e)
+	(else
+	 (case (car e)
+	   ((=)
+	    (let ((l (lookup (cadr e) vinfo))
+		  (rhs (closure-convert- (caddr e) vinfo)))
+	      (cond ((eq? l 'boxed)
+		     `(call (top boxset) ,(cadr e) ,rhs))
+		    ((number? l)
+		     `(call (top boxset) (closure-ref ,l) ,rhs))
+		    (else
+		     `(= ,(cadr e) ,rhs)))))
+	   ((lambda)
+	    (let ((vinf  (caddr e))
+		  (body0 (cadddr e))
+		  (capt  (map vinfo:name
+			      (filter vinfo:capt (caddr (caddr e))))))
+	      (let ((body
+		     `(block ,@(map (lambda (v)
+				      `(= ,v (call (top box) (top Any) (null))))
+				    capt)
+			     ,(closure-convert- body0 vinf))))
+		`(call make_closure
+		       (call ref Function
+			     (call tuple ,@(llist-types (cadr e)))
+			     Any)
+		       (quote (lambda ,(cadr e) ,(caddr e) ,body))
+		       (call tuple
+			     ; NOTE: to pass captured variables on to other
+			     ; closures we must pass the box, not the value
+			     ,@(map (lambda (x)
+				      (let ((i (index-of x (cadddr vinfo) 0)))
+					(if i
+					    `(closure-ref ,i)
+					    x)))
+				    (cadddr vinf)))))))
+	   (else
+	    (cons (car e)
+		  (map (lambda (x) (closure-convert- x vinfo))
+		       (cdr e))))))))
+
+(define (closure-convert e)
+  (closure-convert- (analyze-variables e) '(var-info (locals) () ())))
+
 ; remove if, _while, block, break-block, and break
 ; replaced with goto and goto-ifnot
+; TODO: remove type-assignment-affecting expressions from conditional branch.
+;       needed because there's no program location after the condition
+;       is evaluated but before the branch's successors.
+;       pulling a complex condition out to a temporary variable creates
+;       such a location (the assignment to the variable).
 (define (goto-form e)
   (let ((code '())
 	(ip   0))
