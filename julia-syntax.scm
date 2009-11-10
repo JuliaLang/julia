@@ -37,7 +37,7 @@
 	 (if (symbol? v)
 	     'Any
 	     (case (car v)
-	       ((...)         (list '... (decl-type (cadr v))))
+	       ((...)         `(call ref ... ,(decl-type (cadr v))))
 	       ((= keyword)   (decl-type (caddr v)))
 	       ((|::|)        (decl-type v))
 	       (else (error "Malformed function arguments" lst)))))
@@ -717,7 +717,7 @@ So far only the second case can actually occur.
 	       (begin (vinfo:set-capt! (car v) #t)
 		      (cons e (list v)))
 	       (cons e '()))))
-	((atom? e) e)
+	((atom? e) (cons e '()))
 	((eq? (car e) 'lambda)
 	 (let* ((lvars (lambda-all-vars e))
 		(vi    (map make-var-info lvars))
@@ -750,7 +750,7 @@ So far only the second case can actually occur.
 ; . uses of v change to unbox(v)
 ; . assignments to v change to boxset(v, value)
 ; . lambda expressions change to
-;   make_closure(type, `expr, (capt-var1, capt-var2, ...))
+;   new_closure(type, `expr, (capt-var1, capt-var2, ...))
 ; . for each closed var v, uses change to (call unbox (closure-ref idx))
 ; . assignments to closed var v change to (call boxset (closure-ref idx) rhs)
 (define (closure-convert- e vinfo)
@@ -780,15 +780,20 @@ So far only the second case can actually occur.
 		     `(= ,(cadr e) ,rhs)))))
 	   ((lambda)
 	    (let ((vinf  (caddr e))
+		  (args  (llist-vars (cadr e)))
 		  (body0 (cadddr e))
 		  (capt  (map vinfo:name
 			      (filter vinfo:capt (caddr (caddr e))))))
 	      (let ((body
 		     `(block ,@(map (lambda (v)
-				      `(= ,v (call (top box) (top Any) (null))))
+				      `(= ,v
+					  (call (top box) (top Any)
+						,(if (memq v args)
+						     v
+						     '(null)))))
 				    capt)
 			     ,(closure-convert- body0 vinf))))
-		`(call make_closure
+		`(call new_closure
 		       (call ref Function
 			     (call tuple ,@(llist-types (cadr e)))
 			     Any)
@@ -867,10 +872,11 @@ So far only the second case can actually occur.
 (define (julia-expand ex)
   (goto-form
    (splice-blocks
-    (flatten-scopes
-     (identify-locals
-      (to-LFF
-       (expand-and-or
-	(pattern-expand patterns 
-	 (pattern-expand lower-comprehensions
-	  (pattern-expand identify-comprehensions ex))))))))))
+    (closure-convert
+     (flatten-scopes
+      (identify-locals
+       (to-LFF
+	(expand-and-or
+	 (pattern-expand patterns 
+	  (pattern-expand lower-comprehensions
+	   (pattern-expand identify-comprehensions ex)))))))))))

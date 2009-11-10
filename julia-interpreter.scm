@@ -537,7 +537,7 @@ not likely to be implemented in interpreter:
 
 ; --- generic functions ---
 
-(define gf-type (resolve-type-ex (julia-parse "Any-->Any")))
+(define gf-type (instantiate-type function-type (list any-type any-type)))
 
 (define (j-apply-generic ce args)
   (let* ((argtype (make-tuple-type (map type-of args)))
@@ -700,6 +700,24 @@ not likely to be implemented in interpreter:
 ; set element type of scalar to scalar
 (vector-set! (vector-ref scalar-type 3) 1 scalar-type)
 
+#|
+function ref(t::Type, params...)
+    return instantiate_type(t, params)
+end
+|#
+(let ((ref-gf (make-generic-function 'ref)))
+  (table-set! julia-globals 'ref ref-gf)
+  (add-method ref-gf (make-closure
+		      (instantiate-type
+		       function-type
+		       (list (julia-tuple Type-type
+					  (instantiate-type
+					   sequence-type (list any-type)))
+			     Type-type))
+		      (lambda (ce args)
+			(instantiate-type (car args) (cdr args)))
+		      #f)))
+
 ; the following builtin functions are ordinary first-class functions,
 ; and can be directly employed by the user.
 (make-builtin 'new "(Type,Any...)-->Any" (lambda (t . args) (j-new t args)))
@@ -713,9 +731,6 @@ not likely to be implemented in interpreter:
 (make-builtin 'istype "(Any,Type)-->Bool"
 	      (lambda (x y) (if (subtype? (type-of x) y)
 				julia-true julia-false)))
-(make-builtin 'instantiate_type "(Type,Tuple)-->Type"
-	      (lambda (t p)
-		(instantiate-type t (tuple->list p))))
 (make-builtin 'tuple "(Any...)-->Tuple" j-tuple)
 (make-builtin 'apply "(Function[`A,`T],Tuple...)-->`T"
 	      (lambda (f . argt)
@@ -739,6 +754,9 @@ not likely to be implemented in interpreter:
 (make-builtin 'unbox "(`T,)-->`T" j-unbox)
 (make-builtin 'boxset "(Any,Any)-->()" j-box-set)
 (make-builtin 'add_conversion "(Type,Type,Function)-->()" add-conversion)
+(make-builtin 'new_closure "(Type,Any,Tuple)-->Function"
+	      (lambda (t e clo)
+		(make-closure t j-eval-body (cons e clo))))
 (define (div-int x y)
   (let ((q (/ x y)))
     (if (< q 0)
@@ -830,13 +848,13 @@ not likely to be implemented in interpreter:
       (j-box double-type n)))
 
 (define (eval-sym s env)
-  (let ((a (assq s env)))
+  (let ((a (assq s (car env))))
     (if a (cdr a)
 	(or (table-ref julia-globals s #f)
 	    (error "Undefined variable" s)))))
 
 (define (j-bound? s env)
-  (or (assq s env) (table-ref julia-globals s #f)))
+  (or (assq s (car env)) (table-ref julia-globals s #f)))
 
 (define (j-eval e env)
   (cond ((eq? e 'false)                julia-false)
@@ -848,17 +866,12 @@ not likely to be implemented in interpreter:
 	 (case (car e)
 	   ((quote)   (scm->julia (cadr e)))
 	   ((null)    julia-null)
-	   ((top)     (eval-sym (cadr e) '()))
+	   ((top)     (eval-sym (cadr e) '(())))
 	   
 	   ((type)    (type-def (cadr e) (caddr e)))
 	   
-	   ((lambda)
-	    (let ((types (llist-types (cadr e))))
-	      (make-closure (make-function-type
-			     (resolve-type-ex (cons 'tuple types))
-			     any-type)
-			    j-eval-body
-			    (cons e env))))
+	   ((closure-ref) (tuple-ref (cdr env) (cadr e)))
+	   
 	   ((addmethod)
 	    (let* ((name (cadr e))
 		   (gf (or (and (j-bound? name env)
@@ -874,7 +887,7 @@ not likely to be implemented in interpreter:
 	    (if (not (symbol? (cadr e)))
 		(error "Invalid lvalue in ="))
 	    (let ((v (j-eval (caddr e) env))
-		  (a (assq (cadr e) env)))
+		  (a (assq (cadr e) (car env))))
 	      (if a (set-cdr! a v)
 		  (table-set! julia-globals (cadr e) v))
 	      v))
@@ -893,9 +906,9 @@ not likely to be implemented in interpreter:
       (error "call: expected function")))
 
 ; create an environment with actual args bound to formal args
-(define (bind-args names args cloenv)
+(define (bind-args names args)
   (if (null? names)
-      cloenv
+      '()
       (let* ((formal (car names))
 	     (name   (arg-name formal))
 	     (bind
@@ -906,18 +919,18 @@ not likely to be implemented in interpreter:
 			(car args)))))
 	(cons bind
 	      (bind-args (cdr names)
-			 (if (pair? args) (cdr args) args)
-			 cloenv)))))
+			 (if (pair? args) (cdr args) args))))))
 
 (define (j-eval-body ce args)
   (let* ((cenv (cdr ce))
 	 (formals (cadr (car ce)))
 	 (body (cddr (car ce)))
-	 (locl (cdar body))
+	 (locl (cdadr (car body)))
 	 (code (cadr body))
-	 (env  (append (map (lambda (local) (cons local julia-null))
-			    locl)
-		       (bind-args formals args cenv)))
+	 (env  (cons (append (map (lambda (local) (cons local julia-null))
+				  locl)
+			     (bind-args formals args))
+		     cenv))
 	 (L    (vector-length code)))
     ; interpret the body of a function, handling control flow
     (let loop ((ip 0))
@@ -940,7 +953,7 @@ not likely to be implemented in interpreter:
 (define (j-toplevel-eval e)
   ; lambda with no scope-block means variables assigned to in the
   ; expression stay global.
-  (j-apply (j-eval (cadr (julia-expand `(lambda () ,e))) '())
+  (j-apply (j-eval (cadr (julia-expand `(lambda () ,e))) '(()))
 	   '()))
 
 ; --- load ---

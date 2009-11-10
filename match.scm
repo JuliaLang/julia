@@ -154,9 +154,8 @@
       (let ((enew (apply-patterns plist expr)))
 	(if (eq? enew expr)
             ; expr didn't change; move to subexpressions
-	    (cons (car expr)
-		  (map (lambda (subex) (pattern-expand plist subex))
-		       (cdr expr)))
+	    (map (lambda (subex) (pattern-expand plist subex))
+		 expr)
 	    ; expr changed; iterate
 	    (pattern-expand plist enew)))))
 

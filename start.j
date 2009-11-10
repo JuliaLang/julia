@@ -1,7 +1,3 @@
-function ref(t::Type, params...)
-    return instantiate_type(t, params)
-end
-
 typealias Nullable Union[`T,()]
 typealias Index Int32
 typealias Size  Int32
@@ -101,6 +97,10 @@ function ==(x::Int32, y::Int32)
     return eq_int32(unbox(x),unbox(y))
 end
 
+function !=(x, y)
+    return !(x == y)
+end
+
 function (+)(x::Double, y::Double)
     return box(Double, add_double(unbox(x), unbox(y)))
 end
@@ -139,6 +139,10 @@ end
 
 function ==(x::Double, y::Double)
     return eq_double(unbox(x),unbox(y))
+end
+
+function !=(x::Double, y::Double)
+    return ne_double(unbox(x),unbox(y))
 end
 
 # explicit scalar conversions

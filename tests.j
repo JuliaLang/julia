@@ -39,3 +39,7 @@ assert(b[1,1] == 1. && b[2,1] == 2. &&
 
 x = (2,3)
 assert((+)(x...) == 5)
+
+a = rand()
+b = rand()
+assert(a != b)
