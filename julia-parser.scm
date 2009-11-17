@@ -556,6 +556,8 @@ TODO:
 	 (julia-parse (make-token-stream (open-input-string s))))
 	((port? s)
 	 (julia-parse (make-token-stream s)))
+	((eof-object? s)
+	 s)
 	(else
 	 ; as a special case, allow early end of input if there is
 	 ; nothing left but whitespace

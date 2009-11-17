@@ -144,8 +144,6 @@ end
 
 (assert-subtype "Int8" "Int")
 (assert-subtype "Int32" "Int")
-(assert-subtype "(`a, `a)" "(`b, `c)")
-(assert-!subtype "(`a, `b)" "(`c, `c)")
 (assert-subtype "(Int8,Int8)" "(Int, Int)")
 (assert-subtype "Tensor[Double,2]" "Tensor[Scalar,2]")
 (assert-!subtype "Tensor[Double,1]" "Tensor[Scalar,2]")
@@ -157,13 +155,22 @@ end
 (assert-!subtype "(Int32...)" "(Int32,)")
 (assert-!subtype "(Int32...)" "(Scalar,Int,)")
 (assert-!subtype "(Int...,)" "(Int, Int, Int...)")
-(assert-subtype "(Int32,Int32,Int32)" "(`T...,)")
-(assert-!subtype "(Int32,Int8,Int32)" "(`T...,)")
-(assert-subtype "(Buffer[Int8], Buffer[Int8])" "(Buffer[`T], Buffer[`T])")
-(assert-!subtype "(Buffer[Int8], Buffer[Int16])" "(Buffer[`T], Buffer[`T])")
 (assert-!subtype "Buffer[Int8]" "Buffer[Any]")
 (assert-!subtype "Buffer[Any]" "Buffer[Int8]")
 (assert-subtype "Buffer[Int8]" "Buffer[Int8]")
+
+(define-macro (assert-conform t1 t2)
+  `(assert (conform ',(ty t1) ',(ty t2))))
+
+(define-macro (assert-!conform t1 t2)
+  `(assert (not (conform ',(ty t1) ',(ty t2)))))
+
+(assert-conform "(`a, `a)" "(`b, `c)")
+(assert-!conform "(`a, `b)" "(`c, `c)")
+(assert-conform "(Int32,Int32,Int32)" "(`T...,)")
+(assert-!conform "(Int32,Int8,Int32)" "(`T...,)")
+(assert-conform "(Buffer[Int8], Buffer[Int8])" "(Buffer[`T], Buffer[`T])")
+(assert-!conform "(Buffer[Int8], Buffer[Int16])" "(Buffer[`T], Buffer[`T])")
 
 ; --- lowering tests ---
 

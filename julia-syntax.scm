@@ -260,10 +260,10 @@
 
    ; for loop over arbitrary vectors
    (pattern-lambda 
-    (for (= x list) body)
+    (for (= x vec) body)
     (let ((i (gensym)))
-      `(for (= ,i (: 1 (call numel ,list)))
-	    (block (= ,x (ref ,list ,i)) ,body)) ))
+      `(for (= ,i (: 1 (call numel ,vec)))
+	    (block (= ,x (ref ,vec ,i)) ,body)) ))
 
    ; macro for timing evaluation
    (pattern-lambda (call (-/ Time) expr)

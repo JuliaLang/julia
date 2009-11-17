@@ -46,7 +46,7 @@
 
 (define (filter pred lis)
   (let recur ((lis lis))
-    (if (not (pair? lis)) lis
+    (if (not (pair? lis)) '()
 	(let ((head (car lis))
 	      (tail (cdr lis)))
 	  (if (pred head)
@@ -54,13 +54,6 @@
 		(if (eq? tail new-tail) lis
 		    (cons head new-tail)))
 	      (recur tail))))))
-
-(define (unique lst)
-  (if (null? lst)
-      '()
-      (cons (car lst)
-	    (filter (lambda (x) (not (eq? x (car lst))))
-		    (unique (cdr lst))))))
 
 (define (every pred lst)
   (or (not (pair? lst))
@@ -92,3 +85,20 @@
   (cond ((null? lst) #f)
 	((eqv? item (car lst)) start)
 	(else (index-of item (cdr lst) (+ start 1)))))
+
+(define (foldl f zero lst)
+  (if (null? lst) zero
+      (foldl f (f (car lst) zero) (cdr lst))))
+
+(define (check-same-length a b aShort bShort)
+  (cond ((and (pair? a) (pair? b))
+	 (check-same-length (cdr a) (cdr b) aShort bShort))
+	((null? a) (if (null? b) #t (aShort)))
+	(else      (bShort))))
+
+(define (cons-in-order item lst key <)
+  (if (null? lst)
+      (list item)
+      (if (< (key item) (key (car lst)))
+	  (cons item lst)
+	  (cons (car lst) (cons-in-order item (cdr lst) key <)))))

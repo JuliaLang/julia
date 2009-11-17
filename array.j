@@ -73,13 +73,17 @@ function print(a::Array[`T,2])
     end
 end # print()
 
-function make_array(dim...)
+function make_array(eltype::Type, dim...)
     ndims = length(dim)
     dims = new(Buffer[Size], ndims)
     numel = 1
     for i=1:ndims; dims[i] = dim[i]; numel = numel*dim[i]; end
-    data = new(Buffer[Double], numel)
-    array = new(Array[Double,ndims], dims, data)
+    data = new(Buffer[eltype], numel)
+    new(Array[eltype,ndims], dims, data)
+end
+
+function make_array(dim...)
+    return make_array(Double, dim...)
 end
 
 # This is a temp version to get an integer array of zeros
@@ -181,6 +185,15 @@ function ctranspose(x::Array[`T,2])
     return transpose(x)
 end
 
-function hcat(A::Array[`T,1]...)
-    print(nargin)
+function hcat(elts::`T...)
+    n = length(elts)
+    if n == 0
+        return make_array(0)
+    end
+    T = typeof(elts[1])  # todo: eventually not necessary
+    a = make_array(T, n)
+    for i=1:n
+        a[i] = elts[i]
+    end
+    a
 end

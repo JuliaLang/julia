@@ -152,23 +152,60 @@ not likely to be implemented in interpreter:
 
 ; --- type functions ---
 
+(define (type-generic? t)
+  (or (symbol? t)
+      (and (type? t)
+	   (not (eq? t scalar-type)) ; circular reference problem
+	   (any (lambda (x) (or (symbol? x)
+				(type-generic? x)))
+		(type-params-list t)))))
+
+(define (type-abstract? t)
+  (or (vector-ref t 5)
+      (type-generic? t)))
+
+(define (has-params? t)
+  (< 0 (tuple-length (type-params t))))
+
+(define (type-param0 t)
+  (tuple-ref (type-params t) 0))
+
+(define (type-param t n)
+  (tuple-ref (type-params t) n))
+
 (define (j-int32? x)
   (and (vector? x) (eq? (type-name (type-of x)) 'Int32)))
 
-(define (instantiate-type type params)
-  ; convert X-->Y to (X,)-->Y if X is not already a tuple or symbol
-  (instantiate-type-
-   type
-   (if (and (pair? params)
-	    (eq? (type-name type) 'Function)
-	    (symbol? (type-param0 type))
-	    (not (tuple? (car params)))
-	    (not (symbol? (car params))))
-       (cons (julia-tuple (car params))
-	     (cdr params))
-       params)))
+(define (all-type-params t)
+  (if (symbol? t) (list t)
+      (if (not (type? t)) '()
+	  (delete-duplicates (apply append (map all-type-params
+						(type-params-list t)))))))
 
-(define (instantiate-type- type params)
+(define (instantiate-type type params)
+  (if (eq? type union-type)
+      (make-union-type params)
+      ; convert X-->Y to (X,)-->Y if X is not already a tuple or symbol
+      (let ((params (if (and (pair? params)
+			     (eq? (type-name type) 'Function)
+			     (symbol? (type-param0 type))
+			     (not (tuple? (car params)))
+			     (not (symbol? (car params))))
+			(cons (julia-tuple (car params))
+			      (cdr params))
+			params))
+	    (tp  (all-type-params type)))
+	
+	(check-same-length
+	 params tp
+	 (lambda () (error "Too few parameters for type" (type-name type)))
+	 (lambda () (error "Too many parameters for type" (type-name type))))
+	
+	(instantiate-type- type (map cons tp params)))))
+
+; instantiate a type using the bindings in the given type environment
+; (an assoc list from names to types)
+(define (instantiate-type- type env)
   (define (copy-type type super params fields)
     (if (tuple? type)
 	params
@@ -180,151 +217,200 @@ not likely to be implemented in interpreter:
 		       super
 		       params fields))))
   
-  ; create parameter list for the instantiated type
-  ; tp - parameters of the incoming type
-  ; sp - type template arguments ('params' argument)
-  ; this fills in values from sp into slots in tp that are currently
-  ; open (i.e. are symbols). concrete types already in tp are left
-  ; in place. this allows partial specialization, for example:
-  ; type foo(x,y,z,t) end
-  ; typealias bar foo(int,y,int,t)
-  ; bar(double,double)  fills in remaining y and t parameters
-  (define (new-params-list tp sp)
-    (define (check x)
-      (or (and (or (symbol? x) (j-int32? x) (number? x)
-		   (and (type? x) (not (sequence-type? x))))
-	       x)
-	  (and (j-symbol? x)
-	       (j-unbox x))
-	  (error "Invalid type parameter" x)))
-    (cond ((null? tp)
-	   (if (null? sp) tp
-	       (error "Too many parameters for type" (type-name type))))
-	  ((symbol? (car tp))
-	   (if (null? sp)
-	       (error "Too few parameters for type" (type-name type)))
-	   (cons (check (car sp))
-		 (new-params-list (cdr tp) (cdr sp))))
-	  (else
-	   (cons (car tp)
-		 (new-params-list (cdr tp) sp)))))
-  
-  (let* ((tp  (type-params-list type))
-	 (ts  (filter symbol? tp)))
-    (cond ((null? params)
-	   type)
-	  ((eq? (type-name type) 'Union)
-	   (make-union-type params))
-	  (else
-	   (let* ((flds (tuples->alist (type-fields type)))
-		  (env  (map cons ts params))
-		  ; the following function fills in type parameters
-		  ; for field types and our super type, by supplying
-		  ; values that correspond to parameters with the same
-		  ; names as ours.
-		  (instantiate-inner-type
-		   (lambda (t)
-		     (instantiate-type
-		      t
-		      (map (lambda (p) (lookup p env p))
-			   (filter symbol?
-				   (type-params-list t)))))))
-	     (copy-type type
-			(instantiate-inner-type (type-super type))
-			
-			(list->tuple (new-params-list tp params))
-			
-			(let ((fnames (map car flds))
-			      (ftypes (map cadr flds)))
-			  ; replace type parameters with their values
-			  ; in the types of all fields
-			  (let ((mapped-ftypes
-				 (map instantiate-inner-type
-				      ftypes)))
-			    (alist->tuples
-			     (map list fnames mapped-ftypes))))))))))
+  (cond
+   ((symbol? type)      (lookup type env type))
+   ((not (type? type))  type)
+   ((null? env)         type)
+   ((= 0 (tuple-length (type-params type)))  type)
+   (else
+    (copy-type type
+	       (instantiate-type- (type-super type) env)
+	       
+	       (list->tuple
+		(map (lambda (t)
+		       (instantiate-type- t env))
+		     (type-params-list type)))
+	       
+	       (alist->tuples
+		(map (lambda (a)
+		       (list (car a)
+			     (instantiate-type- (cadr a) env)))
+		     (tuples->alist (type-fields type))))))))
 
-(define (type-generic? t)
-  (and (type? t)
-       (any symbol? (type-params-list t))))
-
-(define (type-abstract? t)
-  (or (vector-ref t 5)
-      (type-generic? t)))
-
-(define (type-param0 t)
-  (tuple-ref (type-params t) 0))
-
-(define (type-param t n)
-  (tuple-ref (type-params t) n))
+(define (rename-type-params t)
+  (let* ((p (all-type-params t)))
+    (instantiate-type- t (map (lambda (x) (cons x (gensym))) p))))
 
 (define (type-equal? a b)
   (and (subtype? a b)
        (subtype? b a)))
 
-; tells whether child is assignable to parent
-; returns #t, #f, or an assoc list witness showing the assignment of
-; type parameters that makes the relation hold
-(define (subtype? child parent) (subtype?- child parent '()))
+(define (tuple-elementwise? pred child parent)
+  (let loop ((cp (type-params-list child))   ; child parameters
+	     (pp (type-params-list parent))) ; parent parameters
+    (let ((cseq (and (pair? cp) (sequence-type? (car cp))))
+	  (pseq (and (pair? pp) (sequence-type? (car pp)))))
+      (cond
+       ((null? cp)            (or (null? pp) pseq))
+       ((and cseq (not pseq)) #f)
+       ((null? pp)            #f)
+       (else
+	(and (pred (if cseq
+		       (type-param0 (car cp))
+		       (car cp))
+		   (if pseq
+		       (type-param0 (car pp))
+		       (car pp)))
+	     ; if both end up on sequence types, and
+	     ; parameter matched. stop with "yes" now,
+	     ; otherwise we'd start looping forever
+	     (or (and pseq cseq)
+		 (loop (if cseq cp (cdr cp))
+		       (if pseq pp (cdr pp))))))))))
 
-(define (subtype?- child parent env)
-  (cond ((eq? child parent)       env)
-	((eq? parent tuple-type)  (and (tuple? child) env))
-	
-	((symbol? parent)
-	 (let ((u (assq parent env)))
-	   (if u
-	       (and (or (eq? (cdr u) child)
-			; multiple occurrences of the same
-			; open parameter must be type-equal
-			(and (not (symbol? child))
-			     (type-equal? child (cdr u))))
-		    env)
-	       (cons (cons parent child) env))))
-	
-	((symbol? child) #f)
-	((eq? parent any-type)    env)
+(define (tuple-subtype? child parent)
+  (tuple-elementwise? subtype? child parent))
+
+(define (subtype? child parent)
+  (cond ((eq? child parent)       #t)
+	((symbol? parent)         #t)
+	((symbol? child)          #f)
+	((eq? parent tuple-type)  (tuple? child))
+	((eq? parent any-type)    #t)
 	((eq? child any-type)     #f)
+	
+	((and (j-int32? child) (j-int32? parent))
+	 (= (j-unbox child) (j-unbox parent)))
+	
+	; recursively handle union types
+	((eq? (type-name child) 'Union)
+	 (every (lambda (t) (subtype? t parent))
+		(type-params-list child)))
+	((eq? (type-name parent) 'Union)
+	 (any   (lambda (t) (subtype? child t))
+	        (type-params-list parent)))
+	
+	((and (tuple? child) (tuple? parent))
+	 (tuple-subtype? child parent))
+	
+	; buffers are invariant
+	((and (eq? (type-name child) 'Buffer)
+	      (eq? (type-name parent) 'Buffer))
+	 (type-equal? (type-param0 child)
+		      (type-param0 parent)))
+	
+	; functions are contravariant in first parameter
+	((and (eq? (type-name child) 'Function)
+	      (eq? (type-name parent) 'Function))
+	 (and (or (symbol? (type-param0 parent))
+		  (subtype? (type-param0 parent)
+			    (type-param0 child)))
+	      (subtype? (type-param child 1)
+			(type-param parent 1))))
+	
+	; handle sibling instantiations of the same generic type.
+	((eq? (type-name child)
+	      (type-name parent))
+	 (let loop ((cp (type-params-list child))   ; child parameters
+		    (pp (type-params-list parent))) ; parent parameters
+	     (cond
+	      ((null? cp)  (null? pp))
+	      ((null? pp)  #f)
+	      (else
+	       ; default to covariance
+	       (and (subtype? (car cp) (car pp))
+		    (loop (cdr cp) (cdr pp)))))))
+	
+	; otherwise walk up the type hierarchy
+	(else (subtype? (type-super child) parent))))
+
+(define (tuple-convertible? from to)
+  (tuple-elementwise? convertible? from to))
+
+(define (convertible? from to)
+  (if (and (type? from) (type? to))
+      (or (subtype? from to)
+	  (if (and (eq? (type-name from) 'Function)
+		   (eq? (type-name to)   'Function))
+	      (and (convertible? (type-param to 0)
+				 (type-param from 0))
+		   (convertible? (type-param from 1)
+				 (type-param to 1)))
+	      (if (and (tuple? from) (tuple? to))
+		  (tuple-convertible? from to)
+		  (not (not (get-conversion from to))))))
+      (equal? from to)))
+
+; tells whether a type conforms to a given generic type
+; returns #f or an assoc list showing the assignment of
+; type parameters that makes the relation hold
+(define (conform t gt)
+  (define (param-search t gt p options env)
+    (if (null? p)
+	(let ((super (instantiate-type- gt env)))
+	  (and (convertible? t super)
+	       env))
+	; make sure all parameters in t that this parameter might match
+	; are the same symbol, otherwise there's a conflict. e.g.
+	; (A, B) doesn't conform to (T, T)
+	(and (not (length> (delete-duplicates (filter symbol? (car options)))
+			   1))
+	     (let try-assignment ((opts (car options)))
+	       (and (pair? opts)
+		    (or (param-search t gt (cdr p) (cdr options)
+				      (cons (cons (car p) (car opts)) env))
+			(try-assignment (cdr opts))))))))
+  
+  (let ((t  (rename-type-params t)))
+    (let ((pairs (conform- t gt '()))
+	  #;(cp (all-type-params t))
+	  (pp (all-type-params gt)))
+      ; post-process to see if all the possible types for a given
+      ; parameter can be reconciled
+      (and
+       pairs
+       (let ((options
+	      (map (lambda (p)
+		     (map car
+			  (filter (lambda (c) (eq? (cdr c) p))
+				  pairs)))
+		   pp)))
+	 (param-search t gt pp options '()))))))
+
+; generate list of corresponding type components, (type . T) if parameter
+; T might correspond to type
+(define (conform- child parent env)
+  (cond ((symbol? parent)
+	 (cons (cons child parent) env))
+	((symbol? child) #f)
 	
 	((and (j-int32? child) (j-int32? parent))
 	 (and (= (j-unbox child) (j-unbox parent))
 	      env))
 	
-	; recursively handle union types
+	((eq? parent any-type)    env)
+	((eq? child any-type)     #f)
+	((not (has-params? parent))
+	 (and (not (type-generic? child))
+	      (subtype? child parent)
+	      env))
+	
 	((eq? (type-name child) 'Union)
-	 (and
-	  (every (lambda (t) (subtype?- t parent env))
-		 (type-params-list child))
-	  env))
+	 (foldl (lambda (t env)
+		  (and env
+		       (conform- t parent env)))
+		(type-params-list child)))
 	((eq? (type-name parent) 'Union)
-	 (any   (lambda (t) (subtype?- child t env))
+	 (any   (lambda (t) (conform- child t env))
 	        (type-params-list parent)))
-	
-	; buffers are invariant
-	((and (eq? (type-name child) 'Buffer)
-	      (eq? (type-name parent) 'Buffer))
-	 (let ((cp0 (type-param0 child))
-	       (pp0 (type-param0 parent)))
-	   (and (or (symbol? pp0) (subtype?- pp0 cp0 env))
-		(subtype?- cp0 pp0 env))))
-	
-	; functions are contravariant in first parameter
-	((and (eq? (type-name child) 'Function)
-	      (eq? (type-name parent) 'Function))
-	 (let* ((p (type-param0 parent))
-		(e (if (symbol? p)
-		       (subtype?- (type-param0 child) p env)
-		       (subtype?- p (type-param0 child) env))))
-	   (and e
-		(subtype?- (type-param child 1) (type-param parent 1) e))))
 	
 	; handle tuple types, or any sibling instantiations of the same
 	; generic type. parameters must be consistent.
         ; examples:
-        ; (a, a)  subtype  (b, c)  YES
-	; (a, b)  subtype  (c, c)  NO
-        ; (Int8, Int8)  subtype  (Int, Int)  YES
-        ; (a, a)  subtype  (Int8, Int8)  NO
+        ; (a, a)  conforms  (b, c)  YES
+	; (a, b)  conforms  (c, c)  NO
+        ; (Int8, Int8)  conforms  (Int, Int)  YES
+        ; (a, a)  conforms  (Int8, Int8)  NO
 	((eq? (type-name child)
 	      (type-name parent))
 	 (let loop ((cp (type-params-list child))  ; child parameters
@@ -340,25 +426,25 @@ not likely to be implemented in interpreter:
 	      ((null? pp)            #f)
 	      (else
 	       ; default to covariance
-	       (let ((w (subtype?- (if cseq
-				       (type-param0 (car cp))
-				       (car cp))
-				   (if pseq
-				       (type-param0 (car pp))
-				       (car pp))
-				   env)))
-		 (and w
+	       (let ((newenv (conform- (if cseq
+					   (type-param0 (car cp))
+					   (car cp))
+				       (if pseq
+					   (type-param0 (car pp))
+					   (car pp))
+				       env)))
+		 (and newenv
 		      ; if both end up on sequence types, and
 		      ; parameter matched. stop with "yes" now,
 		      ; otherwise we'd start looping forever
 		      (if (and pseq cseq)
-			  (append w env)
+			  newenv
 			  (loop (if cseq cp (cdr cp))
 				(if pseq pp (cdr pp))
-				(append w env))))))))))
+				newenv)))))))))
 	
 	; otherwise walk up the type hierarchy
-	(else (subtype?- (type-super child) parent env))))
+	(else (conform- (type-super child) parent env))))
 
 ; --- define some key builtin types ---
 
@@ -424,30 +510,71 @@ not likely to be implemented in interpreter:
 
 ; --- type-keyed hash table ---
 
-(define (make-method-table) '())
+(define (make-method-table) (vector '()))
+(define (mt:mlist mt) (vector-ref mt 0))
 
-(define (method-table-assoc methtable type)
-  (let loop ((m methtable))
+(define (method-table-assoc-p methlist type pred)
+  (let loop ((m methlist))
     (if (null? m)
 	#f
-	(if (subtype? type (caar m))
+	(if (pred type (caar m))
 	    (car m)
 	    (loop (cdr m))))))
 
-(define (cons-in-order item lst key <)
-  (if (null? lst)
-      (list item)
-      (if (< (key item) (key (car lst)))
-	  (cons item lst)
-	  (cons (car lst) (cons-in-order item (cdr lst) key <)))))
+(define (instantiate-method f env)
+  ; env contains static parameter assignments
+  ; compilation goes here
+  f)
 
-(define (method-table-insert mt type method)
-  (let ((m (method-table-assoc mt type)))
+(define (method-table-assoc methtable type cnvt?)
+  (let ((m (method-table-assoc-p (mt:mlist methtable) type
+				 (if cnvt?
+				     (lambda (t mt)
+				       (if (type-generic? mt)
+					   (conform t mt)
+					   (convertible? t mt)))
+				     (lambda (t mt)
+				       (if (type-generic? mt)
+					   (conform t mt)
+					   (subtype? t mt)))))))
+    (and m
+	 (if (type-generic? (car m))
+	     (let* ((env     (conform type (car m)))
+		    (newtype (instantiate-type- (car m) env))
+		    (newmeth (instantiate-method (cdr m) env)))
+	       ; cache result in concrete method table
+	       (method-table-insert! methtable newtype newmeth)
+	       ; we know the newly-instantiated method is at least applicable
+	       ; under conversion, so if cnvt? is true we can always return it
+	       (if (or cnvt? (subtype? type newtype))
+		   (cons newtype newmeth)
+		   #f))
+	     m))))
+
+(define (method-table-insert-p mlist type method pred)
+  (let ((m (method-table-assoc-p mlist type pred)))
     (if (and m (type-equal? type (car m)))
 	(begin (set-car! m type)   ; replace existing key
 	       (set-cdr! m method)
-	       mt)
-	(cons-in-order (cons type method) mt car subtype?))))
+	       mlist)
+	(cons-in-order (cons type method) mlist car pred))))
+
+; test whether a type is not more general than another
+; this defines the method search order. note it has nothing to do with
+; whether a and b are compatible in any way (e.g. assignable, convertible)
+(define (type<=? a b)
+  (if (type-generic? a)
+      (if (type-generic? b)
+	  (not (not (conform a b)))
+	  (subtype? a b))
+      (or (subtype? a b)
+	  (and (not (subtype? b a))
+	       (type-generic? b)))))
+
+(define (method-table-insert! mt type method)
+  (vector-set! mt 0
+	       (method-table-insert-p (mt:mlist mt)
+				      type method type<=?)))
 
 ; --- generic functions ---
 
@@ -455,26 +582,33 @@ not likely to be implemented in interpreter:
 
 (define (j-apply-generic ce args)
   (let* ((argtype (make-tuple-type (map type-of args)))
-	 (meth  (best-method (vector-ref ce 0) argtype)))
-    (if (not meth)
-	(error "No method for function" (vector-ref ce 1)
-	       "matching types" (map type-name (type-params-list argtype)))
-	((closure-proc meth) (closure-env meth) args))))
+	 (meth    (best-method (vector-ref ce 0) argtype #f)))
+    (if meth
+	; applicable without conversion
+	((closure-proc (cdr meth)) (closure-env (cdr meth)) args)
+	(let ((meth  (best-method (vector-ref ce 0) argtype #t)))
+	  (if (not meth)
+	      (error "No method for function" (vector-ref ce 1)
+		     "matching types"
+		     (map type-name (type-params-list argtype)))
+	      ; applicable with conversion
+	      ((closure-proc (cdr meth)) (closure-env (cdr meth))
+	       (tuple->list
+		(j-convert (list->tuple args)
+			   (car meth)))))))))
 
 (define (make-generic-function name)
   (make-closure gf-type j-apply-generic (vector (make-method-table) name)))
 
-(define (best-method methtable argtype)
-  (let ((m (method-table-assoc methtable argtype)))
-    (and m (cdr m))))
+(define (best-method methtable argtype cnvt?)
+  (method-table-assoc methtable argtype cnvt?))
 
 (define (gf-mtable gf) (vector-ref (closure-env gf) 0))
-(define (gf-set-mtable! gf mt) (vector-set! (closure-env gf) 0 mt))
-(define (gf-name gf) (vector-ref (closure-env gf) 1))
+(define (gf-name gf)   (vector-ref (closure-env gf) 1))
 
 ; add a method for certain types
 (define (add-method-for gf types meth)
-  (gf-set-mtable! gf (method-table-insert (gf-mtable gf) types meth))
+  (method-table-insert! (gf-mtable gf) types meth)
   #t)
 
 ; add a method based on its function type
@@ -496,31 +630,53 @@ not likely to be implemented in interpreter:
       (error "Conversions may not be defined for the specified type(s)"))
   (if (type-equal? from to)
       (error "Cannot define a conversion from a type to itself"))
-  (set! conversion-table
-	(method-table-insert conversion-table
-			     ; NOTE the "flipped" function type, "to-->from"
-			     ; is necessary because method-table looks for
-			     ; a method supporting a superset of the needed
-			     ; behavior, and for conversions we need a type
-			     ; providing a subset of the requested behavior.
-			     (make-function-type to from)
-			     method))
+  (method-table-insert! conversion-table
+			; NOTE the "flipped" function type, "to-->from"
+			; is necessary because method-table looks for
+			; a method supporting a superset of the needed
+			; behavior, and for conversions we need a type
+			; providing a subset of the requested behavior.
+			(make-function-type to from)
+			method)
   julia-null)
 
 (define (get-conversion from to)
   (let ((m (method-table-assoc conversion-table
-			       (make-function-type to from))))
+			       (make-function-type to from) #f)))
     (and m (cdr m))))
 
+(define (convert-tuple x to)
+  (let loop ((cp (tuple->list x))
+	     (pp (type-params-list to))
+	     (result '()))
+    (let ((pseq (and (pair? pp) (sequence-type? (car pp)))))
+      (cond
+       ((null? cp)            (and (or (null? pp) pseq)
+				   (list->tuple (reverse result))))
+       ((null? pp)            #f)
+       (else
+	(loop (cdr cp) (if pseq pp (cdr pp))
+	      (cons (j-convert (car cp)
+			       (if pseq
+				   (type-param0 (car pp))
+				   (car pp)))
+		    result)))))))
+
 (define (j-convert x to-type)
-  (let* ((t (type-of x))
-	 (m (get-conversion t to-type)))
-    (if m
-	(let ((result (j-apply m (list x))))
-	  (if (subtype? (type-of result) to-type)
-	      result
-	      (error "Conversion to" (type-name to-type) "failed")))
-	(error "No conversion from" (type-name t) "to" (type-name to-type)))))
+  (if (and (tuple? x) (tuple? to-type))
+      (or (convert-tuple x to-type)
+	  (error "Invalid tuple conversion"))
+      (let ((t (type-of x)))
+	(if (subtype? t to-type)
+	    x
+	    (let ((m (get-conversion t to-type)))
+	      (if m
+		  (let ((result (j-apply m (list x))))
+		    (if (subtype? (type-of result) to-type)
+			result
+			(error "Conversion to" (type-name to-type) "failed")))
+		  (error "No conversion from" (type-name t) "to"
+			 (type-name to-type))))))))
 
 ; --- builtin functions ---
 
@@ -596,15 +752,6 @@ not likely to be implemented in interpreter:
 		  v))))))
 
 (define (j-is x y) (eq? x y))
-
-(define (ty s) (j-toplevel-eval (julia-parse s)))
-
-(define (make-builtin name T impl)
-  (table-set! julia-globals name
-	      (make-closure
-	       (if (string? T) (ty T) T)
-	       (lambda (ce args) (apply impl args))
-	       #f)))
 
 (define (j-box type v) (vector type v))
 (define (j-unbox v) (vector-ref v 1))
@@ -753,6 +900,15 @@ end
 
 ; --- initialize builtins ---
 
+(define (ty s) (j-toplevel-eval (julia-parse s)))
+
+(define (make-builtin name T impl)
+  (table-set! julia-globals name
+	      (make-closure
+	       (if (string? T) (ty T) T)
+	       (lambda (ce args) (apply impl args))
+	       #f)))
+
 ; low-level intrinsics needed for bootstrapping
 ; the other builtins' type expressions cannot be evaluated without these
 (make-builtin 'new_closure
@@ -788,6 +944,18 @@ end
 (make-builtin 'new_type
 	      "(Symbol,(Symbol...),Type,((Symbol,Type)...))-->Type"
 	      (lambda (name params super fields)
+		(if (or (subtype? super tuple-type)
+			(subtype? super function-type)
+			(subtype? super buffer-type))
+		    (error "Invalid subtyping in definition of" name))
+		(let ((pl (tuple->list params))
+		      (sp (all-type-params super)))
+		  (if (not (every symbol? pl))
+		      (error "Invalid type parameter list for" name))
+		  (if (not (every (lambda (p) (memq p pl))
+				  sp))
+		      (error "Supertype has unbound parameters in definition of"
+			     name)))
 		(make-type name super params
 			   (tuple-append (type-fields super) fields))))
 
@@ -1029,7 +1197,8 @@ end
   (let prompt ()
     (if COLOR? (display "\033[0m"))
     (display "julia> ")
-    (let ((line (read-line)))
+    (let* ((line (read-line))
+	   (expr (julia-parse line)))
       (if (eof-object? line)
 	  (newline)
 	  (begin 
@@ -1045,8 +1214,9 @@ end
 	       (prompt))
 	     (lambda ()
 	       (if COLOR? (display "\033[1m\033[36m"))
-	       (j-toplevel-eval
-		`(call print (quote ,(j-toplevel-eval (julia-parse line)))))
+	       (if (not (eof-object? expr))
+		   (j-toplevel-eval
+		    `(call print (quote ,(j-toplevel-eval expr)))))
 	       (newline)
 	       (newline)
 	       (prompt))))))))
