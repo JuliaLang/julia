@@ -190,7 +190,6 @@ function hcat(elts::`T...)
     if n == 0
         return make_array(0)
     end
-    T = typeof(elts[1])  # todo: eventually not necessary
     a = make_array(T, n)
     for i=1:n
         a[i] = elts[i]

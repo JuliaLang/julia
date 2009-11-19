@@ -7,6 +7,12 @@
 ; * tuple destructuring
 ; - validate argument lists, replace a=b in arg lists with keyword exprs
 
+(define (quoted? e)
+  (and (pair? e)
+       (or (eq? (car e) 'quote)
+	   (eq? (car e) 'top)
+	   (eq? (car e) 'value-or-null))))
+
 ; convert x => (x), (tuple x y) => (x y)
 ; used to normalize function signatures like "x->y" and "function +(a,b)"
 (define (fsig-to-lambda-list arglist)
@@ -37,7 +43,7 @@
 	 (if (symbol? v)
 	     'Any
 	     (case (car v)
-	       ((...)         `(call ref ... ,(decl-type (cadr v))))
+	       ((...)         `(... ,(decl-type (cadr v))))
 	       ((= keyword)   (decl-type (caddr v)))
 	       ((|::|)        (decl-type v))
 	       (else (error "Malformed function arguments" lst)))))
@@ -98,6 +104,68 @@
 	     p))
        params))
 
+(define (find-quoted-syms e)
+  (if (atom? e)
+      '()
+      (if (and (eq? (car e) 'quote)
+	       (symbol? (cadr e)))
+	  (cdr e)
+	  (delete-duplicates (apply append (map find-quoted-syms e))))))
+
+; build an expression that evaluates to the requested static parameter,
+; given a list of types and argument names
+(define (find-static-param p t names)
+  (define (expr-search p ex where)
+    (cond ((atom? ex) #f)
+	  ((and (eq? (car ex) 'quote)
+		(eq? (cadr ex) p))
+	   where)
+	  ((eq? (car ex) 'tuple)
+	   (let loop ((elts (cdr ex))
+		      (i    1))
+	     (and (pair? elts)
+		  (or (expr-search p (car elts) `(ref ,where ,i)))
+		  (loop (cdr elts)
+			(+ i 1)))))
+	  ((eq? (car ex) 'ref)
+	   (let loop ((elts (cddr ex))
+		      (i    1))
+	     (and (pair? elts)
+		  (or (expr-search p (car elts) `(ref (|.| ,where parameters)
+						      ,i))
+		      (loop (cdr elts)
+			    (+ i 1))))))
+	  (else #f)))
+  (let ((a (map cons t names)))
+    (any (lambda (a)
+	   (if (and (pair? (car a))
+		    (eq? (caar a) '...))
+	       (let ((loc
+		      (expr-search p (cadr (car a))
+				   `(call typeof (ref ,(cdr a) 1)))))
+		 (and loc
+		      `(if (call (top isnull) ,(cdr a))
+			   (ref Union)
+			   ,loc)))
+	       (expr-search p (car a) `(call typeof ,(cdr a)))))
+	 a)))
+
+(define (function-expr argl body)
+  (let ((static-params (find-quoted-syms argl))
+	(t (llist-types argl))
+	(n (llist-vars argl)))
+    (let ((argl (map (lambda (n t) `(|::| ,n ,t))
+		     n t))
+	  (static-param-inits
+	   (map (lambda (p)
+		  `(= ,p ,(or (find-static-param p t n)
+			      `(ref Union))))
+		static-params)))
+      `(lambda ,argl
+	 (scope-block ,(if (null? static-params)
+			   body
+			   `(block ,@static-param-inits ,body)))))))
+
 (define (typedef-expr name params super fields)
   (let ((field-names (map decl-var fields))
 	(field-types (map decl-type fields)))
@@ -108,16 +176,13 @@
 	      (tuple ,@(map (lambda (n t) `(tuple ',n ,t))
 			    field-names field-types))))))
 
+(define *anonymous-generic-function-name* (gensym))
+
+(define dotdotdotpattern (pattern-lambda (... a)
+					 `(call (top ref) ... ,a)))
+
 (define patterns
   (list
-   (pattern-lambda (-> a b)
-		   (let ((a (if (and (pair? a)
-				     (eq? (car a) 'tuple))
-				(cdr a)
-				(list a))))
-		     `(lambda ,a
-			(scope-block ,b))))
-
    (pattern-lambda (--> a b)
 		   `(call ref Function ,a ,b))
 
@@ -174,10 +239,21 @@
 
    ; function definition
    (pattern-lambda (function (call name . argl) body)
-		   `(= ,name
-		       (addmethod ,name
-				  (lambda ,(fsig-to-lambda-list argl)
-				    (scope-block ,body)))))
+		   (let ((argl (fsig-to-lambda-list argl)))
+		     `(= ,name
+			 (call (top add_method)
+			       (quote ,name)
+			       (value-or-null ,name)
+			       (tuple ,@(llist-types argl))
+			       ,(function-expr argl body)))))
+
+   (pattern-lambda (-> a b)
+		   (let ((a (if (and (pair? a)
+				     (eq? (car a) 'tuple))
+				(cdr a)
+				(list a))))
+					; TODO: anonymous generic function
+		     (function-expr a b)))
 
    (pattern-lambda (conversion (--> (|::| var from) to) body)
 		   `(call add_conversion ,from ,to
@@ -195,13 +271,12 @@
 				   argl))))
 
    ; tuple syntax (a, b...)
+   ; note, inside tuple ... means sequence type
    (pattern-lambda (tuple . args)
-		   `(call tuple ,@(map (lambda (x)
-					 (if (and (length= x 2)
-						  (eq? (car x) '...))
-					     `(call ref ... ,(cadr x))
-					     x))
-				       args)))
+		   (pattern-expand (list dotdotdotpattern)
+				   `(call tuple ,@args)))
+
+   dotdotdotpattern
 
    ; local x,y,z => local x;local y;local z
    (pattern-lambda (local (tuple . vars))
@@ -365,7 +440,7 @@
 	  (map (lambda (x) (flatten-op op x)) e))))
 
 (define (expand-and-or e)
-  (if (atom? e) e
+  (if (or (atom? e) (quoted? e)) e
       (case (car e)
 	((&&) (let ((e (flatten-op '&& e)))
 		(let loop ((tail (cdr e)))
@@ -406,7 +481,7 @@
 	   (splice-blocks- (cdr body)))
 	  (else
 	   (cons (splice-blocks (car body)) (splice-blocks- (cdr body))))))
-  (if (atom? e) e
+  (if (or (atom? e) (quoted? e)) e
       (if (eq? (car e) 'block)
 	  (let ((tl (splice-blocks- (cdr e))))
 	    (if (length= tl 1)       ; unwrap length-1 blocks
@@ -458,7 +533,7 @@
   ; This expression walk is entirely within the "else" clause of the giant
   ; case expression. Everything else deals with special forms.
   (define (to-lff e dest tail)
-    (if (or (atom? e) (and (pair? e) (eq? (car e) 'top)))
+    (if (or (atom? e) (quoted? e))
 	(cond ((symbol? dest) (cons `(= ,dest ,e) '()))
 	      (dest (cons (if tail `(return ,e) e)
 			  '()))
@@ -560,19 +635,8 @@
 		 (cons `(= ,dest ,l) '())
 		 (cons (if tail `(return ,l) l) '()))))
 	  
-	  ((quote) (if (symbol? dest)
-		       (cons `(= ,dest ,e) '())
-		       (cons (if tail `(return ,e) e) '())))
-	  
 	  ((local)
 	   (cons e '()))
-	  
-	  ((addmethod)
-	   (let ((l (list 'addmethod (cadr e)
-			  (to-blk (to-lff (caddr e) #t #f)))))
-	     (if (symbol? dest)
-		 (cons `(= ,dest ,l) '())
-		 (cons l '()))))
 	  
 	  (else
 	   (let ((r (map (lambda (arg) (to-lff arg #t #f))
@@ -611,7 +675,7 @@ So far only the second case can actually occur.
 ;    scopes
 (define (identify-locals e)
   (define (find-assigned-vars e env)
-    (if (not (pair? e))
+    (if (or (atom? e) (quoted? e))
 	'()
 	(case (car e)
 	  ((lambda scope-block)  '())
@@ -626,7 +690,7 @@ So far only the second case can actually occur.
 	   (apply append (map (lambda (x) (find-assigned-vars x env))
 			      e))))))
   (define (add-local-decls e env)
-    (if (not (pair? e)) e
+    (if (or (atom? e) (quoted? e)) e
 	(cond ((eq? (car e) 'lambda)
 	       (let* ((env (append (llist-vars (cadr e)) env))
 		      (body (add-local-decls (caddr e) env)))
@@ -664,7 +728,7 @@ So far only the second case can actually occur.
   (cond ((null? renames)  e)
 	((symbol? e)      (lookup e renames e))
 	((atom? e)        e)
-	((and (pair? e) (eq? (car e) 'top))  e)
+	((quoted? e)      e)
 	(else
 	 (let* ((bound-vars  ; compute vars bound by current expr
 		 (case (car e)
@@ -682,7 +746,7 @@ So far only the second case can actually occur.
 (define (flatten-scopes e)
   ; returns (expr . all-locals)
   (define (remove-scope-blocks e)
-    (cond ((atom? e) (cons e '()))
+    (cond ((or (atom? e) (quoted? e)) (cons e '()))
 	  ((eq? (car e) 'lambda) (cons (flatten-scopes e) '()))
 	  ((eq? (car e) 'scope-block)
 	   (let ((vars (scope-block-vars e))
@@ -697,7 +761,8 @@ So far only the second case can actually occur.
 	     (cons (map car rec)
 		   (apply append (map cdr rec)))))))
   
-  (cond ((atom? e) e)
+  (cond ((atom? e)   e)
+	((quoted? e) e)
 	((eq? (car e) 'lambda)
 	 (let* ((argnames  (llist-vars (cadr e)))
 		(body0     (caddr e))
@@ -752,7 +817,7 @@ So far only the second case can actually occur.
 	       (begin (vinfo:set-capt! (car v) #t)
 		      (cons e (list v)))
 	       (cons e '()))))
-	((atom? e) (cons e '()))
+	((or (atom? e) (quoted? e)) (cons e '()))
 	((eq? (car e) 'lambda)
 	 (let* ((lvars (lambda-all-vars e))
 		(vi    (map make-var-info lvars))
@@ -801,7 +866,7 @@ So far only the second case can actually occur.
 	   (cond ((eq? l 'boxed) `(call (top unbox) ,e))
 		 ((number? l)    `(call (top unbox) (closure-ref ,l)))
 		 (else e))))
-	((atom? e) e)
+	((or (atom? e) (quoted? e)) e)
 	(else
 	 (case (car e)
 	   ((=)
@@ -832,7 +897,7 @@ So far only the second case can actually occur.
 		       (call ref Function
 			     (call tuple ,@(llist-types (cadr e)))
 			     Any)
-		       (quote (lambda ,(cadr e) ,(caddr e) ,body))
+		       (lambda ,(cadr e) ,(caddr e) ,body)
 		       (call tuple
 			     ; NOTE: to pass captured variables on to other
 			     ; closures we must pass the box, not the value
@@ -898,7 +963,7 @@ So far only the second case can actually occur.
 			     (error "break or continue outside loop")
 			     (emit `(goto ,(cdr labl))))))
 	      (else  (emit (goto-form e))))))
-      (cond ((atom? e) e)
+      (cond ((or (atom? e) (quoted? e)) e)
 	    ((eq? (car e) 'lambda)
 	     (let ((body (compile (cadddr e) '())))
 	       `(lambda ,(cadr e) ,(caddr e) ,(list->vector (reverse code)))))

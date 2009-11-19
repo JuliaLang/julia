@@ -150,9 +150,8 @@
 ; terminates. pattern sets that violate this should be easier to detect,
 ; for example
 ; (pattern-lambda (/ 2 3) '(/ 3 2)), (pattern-lambda (/ 3 2) '(/ 2 3))
-; TODO: ignore quoted expressions
 (define (pattern-expand plist expr)
-  (if (not (pair? expr))
+  (if (or (atom? expr) (eq? (car expr) 'quote))
       expr
       (let ((enew (apply-patterns plist expr)))
 	(if (eq? enew expr)

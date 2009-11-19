@@ -149,6 +149,7 @@ not likely to be implemented in interpreter:
 
 (define union-type (make-union-type '()))
 (put-type 'Union union-type)
+(define bottom-type union-type)
 
 ; --- type functions ---
 
@@ -356,26 +357,27 @@ not likely to be implemented in interpreter:
 	(and (not (length> (delete-duplicates (filter symbol? (car options)))
 			   1))
 	     (let try-assignment ((opts (car options)))
-	       (and (pair? opts)
-		    (or (param-search t gt (cdr p) (cdr options)
-				      (cons (cons (car p) (car opts)) env))
-			(try-assignment (cdr opts))))))))
+	       (if (pair? opts)
+		   (or (param-search t gt (cdr p) (cdr options)
+				     (cons (cons (car p) (car opts)) env))
+		       (try-assignment (cdr opts)))
+		   ; no possibilities for p; set it to bottom
+		   (param-search t gt (cdr p) (cdr options)
+				 (cons (cons (car p) bottom-type) env)))))))
   
-  (let ((t  (rename-type-params t)))
-    (let ((pairs (conform- t gt '()))
-	  #;(cp (all-type-params t))
-	  (pp (all-type-params gt)))
-      ; post-process to see if all the possible types for a given
-      ; parameter can be reconciled
-      (and
-       pairs
-       (let ((options
-	      (map (lambda (p)
-		     (map car
-			  (filter (lambda (c) (eq? (cdr c) p))
-				  pairs)))
-		   pp)))
-	 (param-search t gt pp options '()))))))
+  (let ((pairs (conform- t gt '()))
+	(pp (all-type-params gt)))
+    ; post-process to see if all the possible types for a given
+    ; parameter can be reconciled
+    (and
+     pairs
+     (let ((options
+	    (map (lambda (p)
+		   (map car
+			(filter (lambda (c) (eq? (cdr c) p))
+				pairs)))
+		 pp)))
+       (param-search t gt pp options '())))))
 
 ; generate list of corresponding type components, (type . T) if parameter
 ; T might correspond to type
@@ -448,7 +450,7 @@ not likely to be implemented in interpreter:
 
 ; --- define some key builtin types ---
 
-(define scalar-type (instantiate-type Tensor-type (list union-type 0)))
+(define scalar-type (instantiate-type Tensor-type (list bottom-type 0)))
 (put-type 'Scalar scalar-type)
 
 (define real-type (make-abstract-type 'Real scalar-type julia-null julia-null))
@@ -811,19 +813,13 @@ end
 	   ((quote)   (scm->julia (cadr e)))
 	   ((null)    julia-null)
 	   ((top)     (eval-sym (cadr e) '(())))
-	   
+	   ((lambda)  e)  ; remaining lambdas are data
+	   ((value-or-null)  ; variable value or null if undefined
+	    (let ((sym (cadr e)))
+	      (if (j-bound? sym env)
+		  (eval-sym sym env)
+		  julia-null)))
 	   ((closure-ref) (tuple-ref (cdr env) (cadr e)))
-	   
-	   ((addmethod)
-	    (let* ((name (cadr e))
-		   (gf (or (and (j-bound? name env)
-				(not (eq? (eval-sym name env) julia-null))
-				(eval-sym name env))
-			   (make-generic-function name))))
-	      (if (not (generic-function? gf))
-		  (error "Variable" name "does not name a function")
-		  (add-method gf (j-eval (caddr e) env)))
-	      gf))
 	   
 	   ((=)
 	    (if (not (symbol? (cadr e)))
@@ -847,6 +843,12 @@ end
       ((closure-proc f) (closure-env f) args)
       (error "call: expected function")))
 
+(define (sequence-type-ex? e)
+  (and (length= e 4)
+       (eq? (car e) 'call)
+       (equal? (cadr e) '(top ref))
+       (eq? (caddr e) '...)))
+
 ; create an environment with actual args bound to formal args
 (define (bind-args names args)
   (if (null? names)
@@ -854,7 +856,8 @@ end
       (let* ((formal (car names))
 	     (name   (arg-name formal))
 	     (bind
-	      (if (and (pair? formal) (eq? (car formal) '...))
+	      (if (and (pair? formal) (eq? (car formal) '|::|)
+		       (sequence-type-ex? (caddr formal)))
 		  (cons name
 			(apply julia-tuple args))
 		  (cons name
@@ -958,6 +961,16 @@ end
 			     name)))
 		(make-type name super params
 			   (tuple-append (type-fields super) fields))))
+(make-builtin 'add_method
+	      "(Symbol, Any, Type, Any)-->Function"
+	      (lambda (name gf type meth)
+		(let ((gf (if (eq? gf julia-null)
+			      (make-generic-function name)
+			      gf)))
+		  (if (not (generic-function? gf))
+		      (error "Variable" name "does not name a function")
+		      (add-method-for gf type meth))
+		  gf)))
 
 (define (div-int x y)
   (let ((q (/ x y)))
@@ -1042,6 +1055,10 @@ end
 (make-builtin 'getfield "(Any,Symbol)-->Any" j-get-field)
 (make-builtin 'setfield "(Any,Symbol,Any)-->Any" j-set-field)
 (make-builtin 'is "(Any,Any)-->Bool" j-is)
+(make-builtin 'isnull "Any-->Bool" (lambda (x)
+				     (if (and (tuple? x)
+					      (= 0 (tuple-length x)))
+					 julia-true julia-false)))
 (make-builtin 'typeof "(Any,)-->Type" type-of)
 (make-builtin 'subtype "(Type,Type)-->Bool"
 	      (lambda (x y) (if (subtype? x y)
