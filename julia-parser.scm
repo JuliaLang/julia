@@ -134,6 +134,13 @@ TODO:
 	      (lambda (x) (operator? (string->symbol x)))
 	      port)))
 
+(define (skip-ws-and-comments port)
+  (skip-ws port #t)
+  (if (eqv? (peek-char port) #\#)
+      (begin (skip-to-eol port)
+	     (skip-ws-and-comments port)))
+  #t)
+
 (define (next-token port)
   (skip-ws port #f)
   (let ((c (peek-char port)))
@@ -561,7 +568,7 @@ TODO:
 	(else
 	 ; as a special case, allow early end of input if there is
 	 ; nothing left but whitespace
-	 (skip-ws (cdr s) #t)
+	 (skip-ws-and-comments (cdr s))
 	 (if (eqv? (peek-token s) #\newline) (take-token s))
 	 (let ((t (peek-token s)))
 	   (if (eof-object? t)

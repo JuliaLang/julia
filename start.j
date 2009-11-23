@@ -145,6 +145,26 @@ function !=(x::Double, y::Double)
     return ne_double(unbox(x),unbox(y))
 end
 
+function sign(x::Real)
+    if 1.0/x < 0
+        return -1
+    elseif x == 0
+        return 0
+    else
+        return 1
+    end
+end
+
+function sign(x::Scalar)
+    if x < 0
+        return -1
+    elseif x == 0
+        return 0
+    else
+        return 1
+    end
+end
+
 # explicit scalar conversions
 function int32(x::Scalar)
     return box(Int32,to_int32(unbox(x)))
@@ -163,6 +183,10 @@ conversion x::Int8-->Double
 end
 
 conversion x::Int32-->Double
+    return double(x)
+end
+
+conversion x::Uint32-->Double
     return double(x)
 end
 
@@ -263,3 +287,33 @@ function make_rand(seed)
 end
 
 rand = make_rand(12345)
+
+type Complex[`T] < Scalar
+    re::T
+    im::T
+end
+
+function complex(re::`T, im::`T)
+    return new(Complex[T], re, im)
+end
+
+function re(c::Complex)
+    return c.re
+end
+
+function im(c::Complex)
+    return c.im
+end
+
+function print(c::Complex)
+    print(re(c))
+    i = im(c)
+    if sign(i) == -1
+        i = -i
+        print(" - ")
+    else
+        print(" + ")
+    end
+    print(i)
+    print("i")
+end

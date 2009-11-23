@@ -1,4 +1,4 @@
-; first passes:
+; TODO:
 ; * expand lvalues, e.g. (= (call ref A i) x) => (= A (call assign A i x))
 ; * expand operators like +=
 ; * expand for into while
@@ -6,6 +6,9 @@
 ; * replace (. a b) with (call get a (quote b))
 ; * tuple destructuring
 ; - validate argument lists, replace a=b in arg lists with keyword exprs
+; - type parameter renaming stuff
+; - use (top x) more consistently
+; - make goto-form safe for inlining (delay label to index mapping)
 
 (define (quoted? e)
   (and (pair? e)
@@ -96,14 +99,6 @@
 (define (process-indexes i)
   (map (lambda (x) (if (eq? x ':) '(quote :) x)) i))
 
-(define (unquote-type-params params)
-  (map (lambda (p)
-	 (if (and (pair? p)
-		  (eq? (car p) 'quote))
-	     (cadr p)
-	     p))
-       params))
-
 (define (find-quoted-syms e)
   (if (atom? e)
       '()
@@ -166,6 +161,23 @@
 			   body
 			   `(block ,@static-param-inits ,body)))))))
 
+(define (unquote-type-params params)
+  (map (lambda (p)
+	 (if (and (pair? p)
+		  (eq? (car p) 'quote))
+	     (cadr p)
+	     p))
+       params))
+
+; quote symbols in e that appear in list params
+(define (quote-type-params e params)
+  (cond ((and (symbol? e) (memq e params)) `(quote ,e))
+	((atom? e) e)
+	((eq? (car e) 'quote) e)
+	(else (cons (car e)
+		    (map (lambda (x) (quote-type-params x params))
+			 (cdr e))))))
+
 (define (typedef-expr name params super fields)
   (let ((field-names (map decl-var fields))
 	(field-types (map decl-type fields)))
@@ -173,7 +185,8 @@
 	(call new_type (quote ,name)
 	      (tuple ,@(map (lambda (x) `',x) params))
 	      ,super
-	      (tuple ,@(map (lambda (n t) `(tuple ',n ,t))
+	      (tuple ,@(map (lambda (n t)
+			      `(tuple ',n ,(quote-type-params t params)))
 			    field-names field-types))))))
 
 (define *anonymous-generic-function-name* (gensym))

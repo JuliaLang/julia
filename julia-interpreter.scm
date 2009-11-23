@@ -3,19 +3,15 @@ TODO:
 * local variable identification pass
 * varargs
 * apply, splat
-- builtin scalar conversions, implicit conversion mechanism
-  . separate type for literals
+* builtin scalar conversions, implicit conversion mechanism
+- separate type for literals
 - global var declaration
-- range objects
-- indexing
 - optional arguments
 - quote, expr, and symbol types, user-level macros
-
-not likely to be implemented in interpreter:
+- where clauses
 - more builtin functions (shifts, bitwise ops, primitive i/o)
-- keywords
+- keyword arguments
 - modules
-- more type checks
 - try/catch
 |#
 
@@ -178,10 +174,14 @@ not likely to be implemented in interpreter:
   (and (vector? x) (eq? (type-name (type-of x)) 'Int32)))
 
 (define (all-type-params t)
-  (if (symbol? t) (list t)
-      (if (not (type? t)) '()
-	  (delete-duplicates (apply append (map all-type-params
-						(type-params-list t)))))))
+  (cond ((symbol? t)     (list t))
+	((not (type? t)) '())
+	(else
+	 (delete-duplicates
+	  (apply append (map (lambda (p)
+			       (if (eq? p t) '() ; avoid self pointers
+				   (all-type-params p)))
+			     (type-params-list t)))))))
 
 (define (instantiate-type type params)
   (if (eq? type union-type)
@@ -229,7 +229,8 @@ not likely to be implemented in interpreter:
 	       
 	       (list->tuple
 		(map (lambda (t)
-		       (instantiate-type- t env))
+		       (if (eq? t type) type
+			   (instantiate-type- t env)))
 		     (type-params-list type)))
 	       
 	       (alist->tuples
