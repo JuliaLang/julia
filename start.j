@@ -12,20 +12,26 @@ function ref(t::Tuple, i::Index)
     return tupleref(t, unbox(i))
 end
 
-function ref(b::Buffer, i::Index)
+typealias Unboxable Union[Int8,Uint8,Int16,Uint16,Int32,Uint32,Float,Double]
+typealias UnboxedBuffer Union[Buffer[Int8],Buffer[Uint8],
+                              Buffer[Int16],Buffer[Uint16],
+                              Buffer[Int32],Buffer[Uint32],
+                              Buffer[Float],Buffer[Double]]
+
+function ref(b::UnboxedBuffer, i::Index)
     return box(typeof(b).parameters[1], bufferref(b, unbox(i)))
 end
 
-function ref(b::Buffer[Any], i::Index)
+function ref(b::Buffer[`T], i::Index)
     return bufferref(b, unbox(i))
 end
 
-function set(b::Buffer, i::Index, x)
+function set(b::UnboxedBuffer, i::Index, x::Unboxable)
     bufferset(b, unbox(i), unbox(x))
     return x
 end
 
-function set(b::Buffer[Any], i::Index, x)
+function set(b::Buffer[`T], i::Index, x)
     bufferset(b, unbox(i), x)
     return x
 end
