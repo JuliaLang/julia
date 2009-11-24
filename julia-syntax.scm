@@ -181,13 +181,17 @@
 (define (typedef-expr name params super fields)
   (let ((field-names (map decl-var fields))
 	(field-types (map decl-type fields)))
-    `(= ,name
-	(call new_type (quote ,name)
-	      (tuple ,@(map (lambda (x) `',x) params))
-	      ,super
-	      (tuple ,@(map (lambda (n t)
-			      `(tuple ',n ,(quote-type-params t params)))
-			    field-names field-types))))))
+    `(block
+      (= ,name
+	 (call (top new_type)
+	       (quote ,name)
+	       (tuple ,@(map (lambda (x) `',x) params))
+	       ,super))
+      (call (top new_type_fields)
+	    ,name ,super
+	    (tuple ,@(map (lambda (n t)
+			    `(tuple ',n ,(quote-type-params t params)))
+			  field-names field-types))))))
 
 (define *anonymous-generic-function-name* (gensym))
 

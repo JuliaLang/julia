@@ -207,6 +207,23 @@ TODO:
 ; instantiate a type using the bindings in the given type environment
 ; (an assoc list from names to types)
 (define (instantiate-type- type env)
+  (instantiate-type-- type env '()))
+
+; create a non-circular symbolic representation of a type, suitable
+; for use as a lookup key
+(define (type-lookup-key t)
+  (cond ((eq? t (get-type 'Scalar)) 'Scalar)
+	((type? t)
+	 (let ((p (type-params-list t)))
+	   (if (null? p)
+	       (type-name t)
+	       (cons (type-name t)
+		     (map type-lookup-key p)))))
+	((j-int32? t) (j-unbox t))
+	((symbol? t)  `(quote ,t))
+	(else         t)))
+
+(define (instantiate-type-- type env stack)
   (define (copy-type type super params fields)
     (if (tuple? type)
 	params
@@ -224,20 +241,28 @@ TODO:
    ((null? env)         type)
    ((= 0 (tuple-length (type-params type)))  type)
    (else
-    (copy-type type
-	       (instantiate-type- (type-super type) env)
-	       
-	       (list->tuple
-		(map (lambda (t)
-		       (if (eq? t type) type
-			   (instantiate-type- t env)))
-		     (type-params-list type)))
-	       
-	       (alist->tuples
-		(map (lambda (a)
-		       (list (car a)
-			     (instantiate-type- (cadr a) env)))
-		     (tuples->alist (type-fields type))))))))
+    (let ((i-super  (instantiate-type-- (type-super type) env stack))
+	  (i-params (map (lambda (t)
+			   (if (eq? t type) type
+			       (instantiate-type-- t env stack)))
+			 (type-params-list type))))
+      (let* ((key  (cons (type-name type)
+			 (map type-lookup-key i-params)))
+	     (back (assoc key stack)))
+	(if back (cdr back)
+	    (let* ((newtype
+		    (copy-type type i-super (list->tuple i-params) julia-null))
+		   (newstack (cons (cons key newtype) stack)))
+	      (if (and (not (tuple? newtype))
+		       (not (eq? #f (type-fields type))))
+		  (vector-set!
+		   newtype 4
+		   (alist->tuples
+		    (map (lambda (a)
+			   (list (car a)
+				 (instantiate-type-- (cadr a) env newstack)))
+			 (tuples->alist (type-fields type))))))
+	      newtype)))))))
 
 (define (rename-type-params t)
   (let* ((p (all-type-params t)))
@@ -946,8 +971,8 @@ end
 (make-builtin 'boxset "(Any,Any)-->()" j-box-set)
 (make-builtin 'add_conversion "(Type,Type,Function)-->()" add-conversion)
 (make-builtin 'new_type
-	      "(Symbol,(Symbol...),Type,((Symbol,Type)...))-->Type"
-	      (lambda (name params super fields)
+	      "(Symbol,(Symbol...),Type)-->Type"
+	      (lambda (name params super)
 		(if (or (subtype? super tuple-type)
 			(subtype? super function-type)
 			(subtype? super buffer-type))
@@ -960,8 +985,14 @@ end
 				  sp))
 		      (error "Supertype has unbound parameters in definition of"
 			     name)))
-		(make-type name super params
-			   (tuple-append (type-fields super) fields))))
+		(make-type name super params #f)))
+(make-builtin 'new_type_fields
+	      "(Type,Type,((Symbol,Type)...))-->()"
+	      (lambda (t super fields)
+		(if (type-fields t)
+		    (error "You can't do that.")
+		    (vector-set! t 4
+				 (tuple-append (type-fields super) fields)))))
 (make-builtin 'add_method
 	      "(Symbol, Any, Type, Any)-->Function"
 	      (lambda (name gf type meth)
