@@ -22,29 +22,25 @@ TODO:
 ; note: every julia value is represented as a vector whose first
 ;       element is the type of the value
 
-(define (julia-tuple . args) (apply vector 'tuple args))
+(define (julia-tuple . args) args)
 
-(define (tuple->list t) (cdr (vector->list t)))
-(define (list->tuple l) (apply julia-tuple l))
-(define (tuples->alist t)
-  (map tuple->list (tuple->list t)))
-(define (alist->tuples l)
-  (list->tuple (map list->tuple l)))
+(define (tuple->list t) t)
+(define (list->tuple l) l)
+(define (tuples->alist t) t)
+(define (alist->tuples l) l)
 
-(define (tuple-append t1 t2)
-  (list->tuple (append (tuple->list t1)
-		       (tuple->list t2))))
+(define (tuple-append t1 t2) (append t1 t2))
 
-(define (tuple-ref t i) (vector-ref t (+ i 1)))
-(define (tuple-length t) (- (vector-length t) 1))
+(define (tuple-ref t i) (list-ref t i))
+(define (tuple-set! t i x) (set-car! (list-tail t i) x))
+(define (tuple-length t) (length t))
 
-(define (tuple? x) (and (vector? x)
-			(or (eq? (vector-ref x 0) 'tuple)
-			    (tuple? (vector-ref x 0)))))
+(define (tuple? x) (or (pair? x) (null? x)))
 
 ; --- singleton null value ---
 
 (define julia-null (julia-tuple))
+(define (j-null? x) (null? x))
 
 ; --- type objects, reflection ---
 
@@ -81,8 +77,6 @@ TODO:
 	  tuple-type
 	  (vector-ref t 2))))
 (define (type-params t) (if (tuple? t) t (vector-ref t 3)))
-(define (type-params-list t)
-  (tuple->list (type-params t)))
 (define (type-fields t) (if (tuple? t) julia-null (vector-ref t 4)))
 
 (define (make-tuple-type typelist) (list->tuple typelist))
@@ -107,15 +101,16 @@ TODO:
 	((string? v)             any-type)  ; temporary
 	((procedure? v)   	 any-type)
 	((number? v)   	         any-type)
-	((eq? (vector-ref v 0) 'tuple)
-	 (let ((tt (make-tuple-type (map type-of (tuple->list v)))))
-	   (vector-set! v 0 tt)
-	   tt))
-	(else
-	 (vector-ref v 0))))
+	((tuple? v)              (make-tuple-type
+				  (map type-of (tuple->list v))))
+	(else                    (vector-ref v 0))))
 
-(define (type? v) (and (vector? v) (or (tuple? v)
-				       (eq? (type-of v) Type-type))))
+(define (type? v) (or (and (tuple? v)
+			   (every (lambda (x)
+				    (or (symbol? x)
+					(type? x))) v))
+		      (and (vector? v)
+			   (eq? (type-of v) Type-type))))
 
 (define (j-symbol? v) (and (vector? v) (eq? (vector-ref v 0) symbol-type)))
 
@@ -155,14 +150,14 @@ TODO:
 	   (not (eq? t scalar-type)) ; circular reference problem
 	   (any (lambda (x) (or (symbol? x)
 				(type-generic? x)))
-		(type-params-list t)))))
+		(type-params t)))))
 
 (define (type-abstract? t)
   (or (vector-ref t 5)
       (type-generic? t)))
 
 (define (has-params? t)
-  (< 0 (tuple-length (type-params t))))
+  (not (j-null? (type-params t))))
 
 (define (type-param0 t)
   (tuple-ref (type-params t) 0))
@@ -181,7 +176,7 @@ TODO:
 	  (apply append (map (lambda (p)
 			       (if (eq? p t) '() ; avoid self pointers
 				   (all-type-params p)))
-			     (type-params-list t)))))))
+			     (type-params t)))))))
 
 (define (instantiate-type type params)
   (if (eq? type union-type)
@@ -214,7 +209,7 @@ TODO:
 (define (type-lookup-key t)
   (cond ((eq? t (get-type 'Scalar)) 'Scalar)
 	((type? t)
-	 (let ((p (type-params-list t)))
+	 (let ((p (type-params t)))
 	   (if (null? p)
 	       (type-name t)
 	       (cons (type-name t)
@@ -245,7 +240,7 @@ TODO:
 	  (i-params (map (lambda (t)
 			   (if (eq? t type) type
 			       (instantiate-type-- t env stack)))
-			 (type-params-list type))))
+			 (type-params type))))
       (let* ((key  (cons (type-name type)
 			 (map type-lookup-key i-params)))
 	     (back (assoc key stack)))
@@ -273,8 +268,8 @@ TODO:
        (subtype? b a)))
 
 (define (tuple-elementwise? pred child parent)
-  (let loop ((cp (type-params-list child))   ; child parameters
-	     (pp (type-params-list parent))) ; parent parameters
+  (let loop ((cp (type-params child))   ; child parameters
+	     (pp (type-params parent))) ; parent parameters
     (let ((cseq (and (pair? cp) (sequence-type? (car cp))))
 	  (pseq (and (pair? pp) (sequence-type? (car pp)))))
       (cond
@@ -312,10 +307,10 @@ TODO:
 	; recursively handle union types
 	((eq? (type-name child) 'Union)
 	 (every (lambda (t) (subtype? t parent))
-		(type-params-list child)))
+		(type-params child)))
 	((eq? (type-name parent) 'Union)
 	 (any   (lambda (t) (subtype? child t))
-	        (type-params-list parent)))
+	        (type-params parent)))
 	
 	((and (tuple? child) (tuple? parent))
 	 (tuple-subtype? child parent))
@@ -338,8 +333,8 @@ TODO:
 	; handle sibling instantiations of the same generic type.
 	((eq? (type-name child)
 	      (type-name parent))
-	 (let loop ((cp (type-params-list child))   ; child parameters
-		    (pp (type-params-list parent))) ; parent parameters
+	 (let loop ((cp (type-params child))   ; child parameters
+		    (pp (type-params parent))) ; parent parameters
 	     (cond
 	      ((null? cp)  (null? pp))
 	      ((null? pp)  #f)
@@ -427,10 +422,10 @@ TODO:
 	 (foldl (lambda (t env)
 		  (and env
 		       (conform- t parent env)))
-		(type-params-list child)))
+		(type-params child)))
 	((eq? (type-name parent) 'Union)
 	 (any   (lambda (t) (conform- child t env))
-	        (type-params-list parent)))
+	        (type-params parent)))
 	
 	; handle tuple types, or any sibling instantiations of the same
 	; generic type. parameters must be consistent.
@@ -441,8 +436,8 @@ TODO:
         ; (a, a)  conforms  (Int8, Int8)  NO
 	((eq? (type-name child)
 	      (type-name parent))
-	 (let loop ((cp (type-params-list child))  ; child parameters
-		    (pp (type-params-list parent)) ; parent parameters
+	 (let loop ((cp (type-params child))  ; child parameters
+		    (pp (type-params parent)) ; parent parameters
 		    (env env))
 	   (let ((cseq (and (pair? cp) (sequence-type? (car cp))))
 		 (pseq (and (pair? pp) (sequence-type? (car pp)))))
@@ -618,7 +613,7 @@ TODO:
 	  (if (not meth)
 	      (error "No method for function" (vector-ref ce 1)
 		     "matching types"
-		     (map type-name (type-params-list argtype)))
+		     (map type-name (type-params argtype)))
 	      ; applicable with conversion
 	      ((closure-proc (cdr meth)) (closure-env (cdr meth))
 	       (tuple->list
@@ -675,7 +670,7 @@ TODO:
 
 (define (convert-tuple x to)
   (let loop ((cp (tuple->list x))
-	     (pp (type-params-list to))
+	     (pp (type-params to))
 	     (result '()))
     (let ((pseq (and (pair? pp) (sequence-type? (car pp)))))
       (cond
@@ -735,7 +730,7 @@ TODO:
 			     (apply julia-tuple args)))
 
 (define (j-tuple-ref v i) (if (= i 0) (error "Tuple index out of range")
-			      (vector-ref v i)))
+			      (tuple-ref v (- i 1))))
 
 (define (j-buffer-length v) (j-unbox (j-get-field v 'length)))
 
@@ -787,9 +782,9 @@ TODO:
 
 ; fix scalar type to include a proper int32(0)
 ; this creates a circular reference
-(vector-set! (vector-ref scalar-type 3) 2 (j-box int32-type 0))
+(tuple-set! (vector-ref scalar-type 3) 1 (j-box int32-type 0))
 ; set element type of scalar to scalar
-(vector-set! (vector-ref scalar-type 3) 1 scalar-type)
+(tuple-set! (vector-ref scalar-type 3) 0 scalar-type)
 
 #|
 function ref(t::Type, params...)
@@ -1166,9 +1161,9 @@ end
    ((type? x)
     (print-type x))
    ((eq? (type-name (type-of x)) 'Buffer)
-    (display "Buffer(")
-    (display (type-name (tuple-ref (type-params (type-of x)) 0)))
-    (display "):")
+    (display "Buffer[")
+    (display (type-name (type-param0 (type-of x))))
+    (display "]:")
     (display (buffer-data x)))
    (else
     (let* ((t (type-of x))
