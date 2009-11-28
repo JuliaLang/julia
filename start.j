@@ -78,7 +78,7 @@ function *(x::Int32, y::Int32)
 end
 
 function /(x::Int32, y::Int32)
-    return box(Int32, div_int32(unbox(x), unbox(y)))
+    return double(x)/double(y)
 end
 
 function %(x::Int32, y::Int32)
