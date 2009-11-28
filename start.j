@@ -341,6 +341,10 @@ function /(z::Complex, w::Complex)
     return z*w'/(w.re*w.re + w.im*w.im)
 end
 
+conversion x::Real-->Complex
+    return complex(x,0)
+end
+
 function print(c::Complex)
     print(re(c))
     i = im(c)
