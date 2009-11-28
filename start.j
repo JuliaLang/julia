@@ -305,12 +305,40 @@ function complex(re::`T, im::`T)
     return new(Complex[T], re, im)
 end
 
-function re(c::Complex)
-    return c.re
+function re(z::Complex)
+    return z.re
 end
 
-function im(c::Complex)
-    return c.im
+function im(z::Complex)
+    return z.im
+end
+
+function (+)(z::Complex, w::Complex)
+    return complex(z.re + w.re, z.im + w.im)
+end
+
+function (-)(z::Complex, w::Complex)
+    return complex(z.re - w.re, z.im - w.im)
+end
+
+function -(z::Complex)
+    return complex(-z.re, -z.im)
+end
+
+function *(z::Complex, w::Complex)
+    return complex(z.re*w.re - z.im*w.im, z.re*w.im + z.im*w.re)
+end
+
+function /(z::Complex, x::Real)
+    return complex(z.re/x, z.im/x)
+end
+
+function ctranspose(z::Complex)
+    return complex(z.re,-z.im)
+end
+
+function /(z::Complex, w::Complex)
+    return z*w'/(w.re*w.re + w.im*w.im)
 end
 
 function print(c::Complex)
