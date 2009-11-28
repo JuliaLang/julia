@@ -18,6 +18,10 @@ function /(x::Int32, y::Int32)
     return double(x)/double(y)
 end
 
+function div(x::Int32, y::Int32)
+    return box(Int32, div_int32(unbox(x), unbox(y)))
+end
+
 function %(x::Int32, y::Int32)
     return box(Int32, mod_int32(unbox(x), unbox(y)))
 end
@@ -48,4 +52,13 @@ end
 
 function uint32(x::Scalar)
     return box(Uint32,to_uint32(unbox(x)))
+end
+
+function gcd(a::Int32, b::Int32)
+    while b != 0
+        t = b
+        b = a % b
+        a = t
+    end
+    return a
 end

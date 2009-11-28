@@ -3,6 +3,19 @@ type Complex[`T] < Scalar
     im::T
 end
 
+function print(c::Complex)
+    print(re(c))
+    i = im(c)
+    if sign(i) == -1
+        i = -i
+        print(" - ")
+    else
+        print(" + ")
+    end
+    print(i)
+    print("i")
+end
+
 function complex(re::`T, im::`T)
     return new(Complex[T], re, im)
 end
@@ -45,17 +58,4 @@ end
 
 conversion x::Real-->Complex
     return complex(x,0)
-end
-
-function print(c::Complex)
-    print(re(c))
-    i = im(c)
-    if sign(i) == -1
-        i = -i
-        print(" - ")
-    else
-        print(" + ")
-    end
-    print(i)
-    print("i")
 end
