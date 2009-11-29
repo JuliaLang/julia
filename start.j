@@ -65,24 +65,33 @@ function !=(x, y)
     return !(x == y)
 end
 
-function sign(x::Real)
-    if 1.0/x < 0
+function signbit(x::Real)
+    if x < 0
         return -1
-    elseif x == 0
-        return 0
-    else
+    elseif x > 0
+        return 1
+    elseif 1.0/x < 0
+        return -1
+    end
+    return 1
+end
+
+function signbit(x)
+    if x < 0
+        return -1
+    elseif x > 0
         return 1
     end
+    return 1
 end
 
 function sign(x::Scalar)
     if x < 0
         return -1
-    elseif x == 0
-        return 0
-    else
+    elseif x > 0
         return 1
     end
+    return 0
 end
 
 function conjugate(x::Scalar)

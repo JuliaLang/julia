@@ -4,6 +4,7 @@ TODO:
 * varargs
 * apply, splat
 * builtin scalar conversions, implicit conversion mechanism
+- modules
 - separate type for literals
 - global var declaration
 - optional arguments
@@ -11,7 +12,6 @@ TODO:
 - where clauses
 - more builtin functions (shifts, bitwise ops, primitive i/o)
 - keyword arguments
-- modules
 - try/catch
 |#
 
@@ -1075,6 +1075,7 @@ end
 (make-builtin 'to_int64 "Scalar-->Int64"   (lambda (x) (si 64 (to-int x))))
 (make-builtin 'to_uint64 "Scalar-->Uint64" (lambda (x) (ui 64 (to-int x))))
 (make-builtin 'to_double "Scalar-->Double" exact->inexact)
+(make-builtin '_truncate "Scalar-->Int" to-int)
 
 ; the following builtin functions are ordinary first-class functions,
 ; and can be directly employed by the user.
@@ -1083,8 +1084,7 @@ end
 (make-builtin 'setfield "(Any,Symbol,Any)-->Any" j-set-field)
 (make-builtin 'is "(Any,Any)-->Bool" j-is)
 (make-builtin 'isnull "Any-->Bool" (lambda (x)
-				     (if (and (tuple? x)
-					      (= 0 (tuple-length x)))
+				     (if (null? x)
 					 julia-true julia-false)))
 (make-builtin 'typeof "(Any,)-->Type" type-of)
 (make-builtin 'subtype "(Type,Type)-->Bool"

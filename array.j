@@ -104,7 +104,7 @@ end
 # colon
 
 function colon(start::Int32, stop::Int32, stride::Int32)
-    len = (stop-start)/stride + 1
+    len = div((stop-start),stride) + 1
     x = zeros_int(1, len)
     ind = 1
     for i=start:stride:stop
