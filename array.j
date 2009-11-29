@@ -204,3 +204,7 @@ function vector(elts::`T...)
     end
     return v
 end
+
+function ==(x::Array, y::Array)
+    x.dims == y.dims && x.data == y.data
+end

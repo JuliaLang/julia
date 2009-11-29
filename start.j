@@ -46,6 +46,26 @@ function length(b::Buffer)
     return b.length
 end
 
+function buffer(elts::`T...)
+    b = new(Buffer[T],length(elts))
+    for i = 1:length(elts)
+        b[i] = elts[i]
+    end
+    return b
+end
+
+function ==(b1::Buffer, b2::Buffer)
+    if length(b1) != length(b2)
+        return false
+    end
+    for i = 1:length(b1)
+        if b1[i] != b2[i]
+            return false
+        end
+    end
+    return true
+end
+
 function !(x::Bool)
     return eq_int32(unbox(x),unbox(0))
 end
