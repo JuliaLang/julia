@@ -3,23 +3,18 @@ type Rational[`T] < Real
     den::T
 end
 
-function reduce(x::Rational)
-    g = gcd(x.num, x.den)
-    x.num = div(x.num, g)
-    x.den = div(x.den, g)
-    x.num = sign(x.den) * x.num
-    x.den = sign(x.den) * x.den
-    return x
-end
-
 function print(x::Rational)
-    reduce(x)
     print(num(x))
     print("/")
     print(den(x))
 end
 
 function rational(num::`T, den::`T)
+    g = gcd(num, den)
+    num = div(num, g)
+    den = div(den, g)
+    num = sign(den) * num
+    den = sign(den) * den
     return new(Rational[T], num, den)
 end
 
