@@ -85,6 +85,14 @@ function sign(x::Scalar)
     end
 end
 
+function conjugate(x::Scalar)
+    return x
+end
+
+function ctranspose(x::Scalar)
+    return conjugate(x)
+end
+
 load("int32.j")
 load("double.j")
 load("complex.j")

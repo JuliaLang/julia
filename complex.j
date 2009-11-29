@@ -48,7 +48,7 @@ function /(z::Complex, x::Real)
     return complex(z.re/x, z.im/x)
 end
 
-function ctranspose(z::Complex)
+function conjugate(z::Complex)
     return complex(z.re,-z.im)
 end
 
