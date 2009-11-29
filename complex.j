@@ -52,8 +52,20 @@ function conjugate(z::Complex)
     return complex(z.re,-z.im)
 end
 
+function norm(z::Complex)
+    return z.re*z.re + z.im*z.im
+end
+
+function abs(z::Complex)
+    return sqrt(norm(z))
+end
+
+function inv(z::Complex)
+    return conjugate(z)/norm(z)
+end
+
 function /(z::Complex, w::Complex)
-    return z*w'/(w.re*w.re + w.im*w.im)
+    return z*inv(w)
 end
 
 conversion x::Real-->Complex
