@@ -36,6 +36,6 @@ inv(z::Complex) = conj(z)/norm(z)
                                                 z.re*w.im + z.im*w.re)
 (/)(z::Complex[`T1], w::Complex[`T2]) = z*inv(w)
 
-conversion x::Real-->Complex
-    return complex(x,0)
+conversion x::Real-->Complex[`T]
+    return complex(convert(x,T),0)
 end

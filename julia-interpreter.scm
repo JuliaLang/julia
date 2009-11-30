@@ -350,6 +350,9 @@ TODO:
   (tuple-elementwise? convertible? from to))
 
 (define (convertible? from to)
+  ;(display "convert? ")
+  ;(julia-print from) (display " ")
+  ;(julia-print to) (newline)
   (if (and (type? from) (type? to))
       (or (subtype? from to)
 	  (if (and (eq? (type-name from) 'Function)
@@ -392,6 +395,9 @@ TODO:
 		       ; no possibilities left for p
 		       #f))))))
   
+  ;(display "conform? ")
+  ;(julia-print t) (display " ")
+  ;(julia-print gt) (newline)
   (let ((pairs (conform- t gt '() pred))
 	(pp (all-type-params gt)))
     ; post-process to see if all the possible types for a given
@@ -411,6 +417,9 @@ TODO:
 ; pred is either subtype? or convertible? depending on whether conversion
 ; is allowed for this lookup.
 (define (conform- child parent env pred)
+  ;(display "conform- ")
+  ;(julia-print child) (display " ")
+  ;(julia-print parent) (newline)
   (cond ((symbol? parent)
 	 (cons (cons child parent) env))
 	((symbol? child) #f)
@@ -574,7 +583,9 @@ TODO:
 					   (subtype? t mt)))))))
     (and m
 	 (if (type-generic? (car m))
-	     (let* ((env     (conform type (car m)))
+	     (let* ((env     (conform-p type (car m) (if cnvt?
+							 convertible?
+							 subtype?)))
 		    (newtype (instantiate-type- (car m) env))
 		    (newmeth (instantiate-method (cdr m) env)))
 	       ; cache result in concrete method table
@@ -600,7 +611,7 @@ TODO:
 (define (type<=? a b)
   (if (type-generic? a)
       (if (type-generic? b)
-	  (not (not (conform a b)))
+	  (not (not (conform-p a b subtype?)))
 	  (subtype? a b))
       (or (subtype? a b)
 	  (and (not (subtype? b a))
@@ -707,7 +718,7 @@ TODO:
 	    x
 	    (let ((m (get-conversion t to-type)))
 	      (if m
-		  (let ((result (j-apply m (list x))))
+		  (let ((result (j-apply m (list x to-type))))
 		    (if (subtype? (type-of result) to-type)
 			result
 			(error "Conversion to" (julia->string to-type)

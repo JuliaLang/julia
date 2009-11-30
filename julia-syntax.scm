@@ -109,7 +109,13 @@
 
 ; build an expression that evaluates to the requested static parameter,
 ; given a list of types and argument names
-(define (find-static-param p t names)
+; iff typeof is #t, look at types of arguments. otherwise it will use
+; the argument itself.
+(define (find-static-param p t names typeof)
+  (define (type-ref e)
+    (if typeof
+	`(call (top typeof) ,e)
+	e))
   (define (expr-search p ex where)
     (cond ((atom? ex) #f)
 	  ((and (eq? (car ex) 'quote)
@@ -137,13 +143,19 @@
 		    (eq? (caar a) '...))
 	       (let ((loc
 		      (expr-search p (cadr (car a))
-				   `(call typeof (ref ,(cdr a) 1)))))
+				   (type-ref `(ref ,(cdr a) 1)))))
 		 (and loc
 		      `(if (call (top isnull) ,(cdr a))
 			   (ref Union)
 			   ,loc)))
-	       (expr-search p (car a) `(call typeof ,(cdr a)))))
+	       (expr-search p (car a) (type-ref (cdr a)))))
 	 a)))
+
+(define (generate-static-param-inits s-params t n typeof)
+  (map (lambda (p)
+	 `(= ,p ,(or (find-static-param p t n typeof)
+		     `(ref Union))))
+       s-params))
 
 (define (function-expr argl body)
   (let ((static-params (find-quoted-syms argl))
@@ -152,10 +164,7 @@
     (let ((argl (map (lambda (n t) `(|::| ,n ,t))
 		     n t))
 	  (static-param-inits
-	   (map (lambda (p)
-		  `(= ,p ,(or (find-static-param p t n)
-			      `(ref Union))))
-		static-params)))
+	   (generate-static-param-inits static-params t n #t)))
       `(lambda ,argl
 	 (scope-block ,(if (null? static-params)
 			   body
@@ -277,8 +286,16 @@
 		     (function-expr a b)))
 
    (pattern-lambda (conversion (--> (|::| var from) to) body)
+		   (let* ((targ (gensym))
+			  (sp  (find-quoted-syms to))
+			  (spi (generate-static-param-inits
+				sp (list to) (list targ) #f)))
 		   `(call add_conversion ,from ,to
-			  (-> (|::| ,var ,from) ,body)))
+			  (-> (tuple (|::| ,var ,from)
+				     (|::| ,targ Type))
+			      ,(if (null? sp)
+				   body
+				   `(block ,@spi ,body))))))
    
    ; call with splat
    (pattern-lambda (call f ... (... _) ...)
