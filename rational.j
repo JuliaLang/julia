@@ -49,7 +49,3 @@ end
 conversion x::Int32-->Rational
     return rational(x,1)
 end
-
-conversion x::Rational-->Double
-    return double(x.num/x.den)
-end
