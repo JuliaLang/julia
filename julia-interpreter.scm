@@ -380,14 +380,17 @@ TODO:
 	; (A, B) doesn't conform to (T, T)
 	(and (not (length> (delete-duplicates (filter symbol? (car options)))
 			   1))
-	     (let try-assignment ((opts (car options)))
-	       (if (pair? opts)
-		   (or (param-search t gt (cdr p) (cdr options)
-				     (cons (cons (car p) (car opts)) env))
-		       (try-assignment (cdr opts)))
-		   ; no possibilities for p; set it to bottom
-		   (param-search t gt (cdr p) (cdr options)
-				 (cons (cons (car p) bottom-type) env)))))))
+	     (if (null? (car options))
+		 ; p is unconstrained
+		 (param-search t gt (cdr p) (cdr options)
+			       (cons (cons (car p) any-type) env))
+		 (let try-assignment ((opts (car options)))
+		   (if (pair? opts)
+		       (or (param-search t gt (cdr p) (cdr options)
+					 (cons (cons (car p) (car opts)) env))
+			   (try-assignment (cdr opts)))
+		       ; no possibilities left for p
+		       #f))))))
   
   (let ((pairs (conform- t gt '() pred))
 	(pp (all-type-params gt)))
@@ -707,9 +710,10 @@ TODO:
 		  (let ((result (j-apply m (list x))))
 		    (if (subtype? (type-of result) to-type)
 			result
-			(error "Conversion to" (type-name to-type) "failed")))
-		  (error "No conversion from" (type-name t) "to"
-			 (type-name to-type))))))))
+			(error "Conversion to" (julia->string to-type)
+			       "failed")))
+		  (error "No conversion from" (julia->string t) "to"
+			 (julia->string to-type))))))))
 
 ; --- builtin functions ---
 

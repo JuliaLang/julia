@@ -64,7 +64,7 @@ function inv(z::Complex)
     return conj(z)/norm(z)
 end
 
-function /(z::Complex, w::Complex)
+function /(z::Complex[`T1], w::Complex[`T2])
     return z*inv(w)
 end
 

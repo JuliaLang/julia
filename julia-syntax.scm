@@ -264,6 +264,10 @@
 			       (tuple ,@(llist-types argl))
 			       ,(function-expr argl body)))))
 
+   ; expression form function definition
+   (pattern-lambda (= (call name . argl) body)
+		   `(function (call ,name ,@argl) ,body))
+
    (pattern-lambda (-> a b)
 		   (let ((a (if (and (pair? a)
 				     (eq? (car a) 'tuple))

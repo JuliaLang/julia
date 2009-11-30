@@ -169,6 +169,8 @@ end
 (assert-!conform "(`a, `b)" "(`c, `c)")
 (assert-conform "(Int32,Int32,Int32)" "(`T...,)")
 (assert-!conform "(Int32,Int8,Int32)" "(`T...,)")
+(assert-conform "(Int32,)" "(Scalar,`T...)")
+(assert-!conform "(Int32,`T...)" "(Scalar,)")
 (assert-conform "(Buffer[Int8], Buffer[Int8])" "(Buffer[`T], Buffer[`T])")
 (assert-!conform "(Buffer[Int8], Buffer[Int16])" "(Buffer[`T], Buffer[`T])")
 
