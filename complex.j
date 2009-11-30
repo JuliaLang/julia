@@ -28,7 +28,7 @@ function im(z::Complex)
     return z.im
 end
 
-function (+)(z::Complex, w::Complex)
+function (+)(z::Complex[`T1], w::Complex[`T2])
     return complex(z.re + w.re, z.im + w.im)
 end
 

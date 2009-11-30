@@ -200,9 +200,13 @@ function hcat(elts::`T...)
 end
 
 function vector(elts::`T...)
-    v = make_array(T,1,length(elts))
+    v = make_array(T,length(elts))
     for i = 1:length(elts)
         v[i] = elts[i]
     end
     return v
+end
+
+function ==(x::Array, y::Array)
+    x.dims == y.dims && x.data == y.data
 end
