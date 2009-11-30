@@ -137,6 +137,8 @@ rand(m::Size, n::Size) = [ rand() | (i=1:m), (j=1:n) ]
 (+)(x::Array[`T,1], y::Array[`T,1]) = [ x[i] + y[i] | (i=1:numel(x)) ]
 (+)(x::Array[`T,2], y::Array[`T,2]) = [ x[i,j] + y[i,j] | (i=1:x.dims[1]), (j=1:x.dims[2]) ]
 
+(==)(x::Array, y::Array) = x.dims == y.dims && x.data == y.data
+
 transpose(x::Array[`T,2]) = [ x[j,i] | (i=1:x.dims[2]), (j=1:x.dims[1]) ]
 ctranspose(x::Array[`T,2]) = [ conj(x[j,i]) | (i=1:x.dims[2]), (j=1:x.dims[1]) ]
 
@@ -159,7 +161,3 @@ function vector(elts::`T...)
     end
     return v
 end
-
-(==)(x::Array, y::Array) = x.dims == y.dims && x.data == y.data
-
-

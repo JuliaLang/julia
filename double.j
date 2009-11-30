@@ -25,4 +25,3 @@ end
 conversion x::Uint32-->Double
     return double(x)
 end
-
