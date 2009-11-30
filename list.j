@@ -33,9 +33,7 @@ function set(l::List, i::Index, elt)
     l.data[i+l.offset] = elt
 end
 
-function length(l::List)
-    return l.size
-end
+length(l::List) = l.size
 
 function print(l::List)
     print("{")

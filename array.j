@@ -82,9 +82,7 @@ function make_array(eltype::Type, dim...)
     new(Array[eltype,ndims], dims, data)
 end
 
-function make_array(dim...)
-    return make_array(Double, dim...)
-end
+make_array(dim...) = make_array(Double, dim...)
 
 # This is a temp version to get an integer array of zeros
 # until convert() is in place
@@ -97,9 +95,7 @@ function zeros_int(dim...)
     array = new(Array[Int32,ndims], dims, data)
 end
 
-function size(a::Array)
-    return a.dims
-end
+size(a::Array) = a.dims
 
 # colon
 
@@ -116,18 +112,9 @@ end
 
 ## One based indexing
 
-function ref(a::Array, i::Index)
-    return a.data[i] 
-end
-
-function ref(a::Array, I::Array)
-    return [ a[i] | (i=I) ]
-end
-
-function ref(a::Array, i::Index, j::Index)
-    m = a.dims[1]
-    return a.data[(j-1)*m + i] 
-end
+ref(a::Array, i::Index) = a.data[i]
+ref(a::Array, I::Array) = [ a[i] | (i=I) ]
+ref(a::Array, i::Index, j::Index) = a.data[(j-1)*a.dims[1] + i]
 
 function set(a::Array, i::Index, x)
     a.data[i] = x
@@ -140,52 +127,18 @@ function set(a::Array, i::Index, j::Index, x)
     return x
 end
 
-function numel(a::Array)
-    return a.data.length
-end
+numel(a::Array) = a.data.length
+zeros(sz...) = a = make_array(sz...)
+ones(m::Size) = [ 1 | (i=1:m) ]
+ones(m::Size, n::Size) = [ 1 | (i=1:m), (j=1:n) ]
+rand(m::Size) = [ rand() | (i=1:m) ]
+rand(m::Size, n::Size) = [ rand() | (i=1:m), (j=1:n) ]
 
-function zeros(sz...)
-    a = make_array(sz...)
-end
+(+)(x::Array[`T,1], y::Array[`T,1]) = [ x[i] + y[i] | (i=1:numel(x)) ]
+(+)(x::Array[`T,2], y::Array[`T,2]) = [ x[i,j] + y[i,j] | (i=1:x.dims[1]), (j=1:x.dims[2]) ]
 
-function ones(m::Size)
-    [ 1 | (i=1:m) ]
-end
-
-function ones(m::Size, n::Size)
-    [ 1 | (i=1:m), (j=1:n) ]
-end
-
-function rand(m::Size)
-    [ rand() | (i=1:m) ]
-end
-
-function rand(m::Size, n::Size)
-    [ rand() | (i=1:m), (j=1:n) ]
-end
-
-function +(x::Array[`T,1], y::Array[`T,1])
-    n = numel(x)
-    return [ x[i] + y[i] | (i=1:n) ]
-end
-
-function +(x::Array[`T,2], y::Array[`T,2])
-    m = x.dims[1]
-    n = x.dims[2]
-    return [ x[i,j] + y[i,j] | (i=1:m), (j=1:n) ]
-end
-
-function transpose(x::Array[`T,2])
-    m = x.dims[1]
-    n = x.dims[2]
-    return [ x[j,i] | (i=1:n), (j=1:m) ]
-end
-
-function ctranspose(x::Array[`T,2])
-    m = x.dims[1]
-    n = x.dims[2]
-    return [ conj(x[j,i]) | (i=1:n), (j=1:m) ]
-end
+transpose(x::Array[`T,2]) = [ x[j,i] | (i=1:x.dims[2]), (j=1:x.dims[1]) ]
+ctranspose(x::Array[`T,2]) = [ conj(x[j,i]) | (i=1:x.dims[2]), (j=1:x.dims[1]) ]
 
 function hcat(elts::`T...)
     n = length(elts)
@@ -207,6 +160,6 @@ function vector(elts::`T...)
     return v
 end
 
-function ==(x::Array, y::Array)
-    x.dims == y.dims && x.data == y.data
-end
+(==)(x::Array, y::Array) = x.dims == y.dims && x.data == y.data
+
+

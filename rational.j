@@ -18,33 +18,15 @@ function rational(num::`T, den::`T)
     return new(Rational[T], num, den)
 end
 
-function num(x::Rational)
-    return x.num
-end
+num(x::Rational) = x.num
+den(x::Rational) = x.den
 
-function den(x::Rational)
-    return x.den
-end
+(-)(x::Rational) = rational(-x.num, x.den)
 
-function (+)(x::Rational, y::Rational)
-    return rational(x.num*y.den + x.den*y.num, x.den*y.den)
-end
-
-function (-)(x::Rational, y::Rational)
-    return rational(x.num*y.den - x.den*y.num, x.den*y.den)
-end
-
-function -(x::Rational)
-    return rational(-x.num, x.den)
-end
-
-function *(x::Rational, y::Rational)
-    return rational(x.num*y.num, x.den*y.den)
-end
-
-function /(x::Rational, y::Rational)
-    return rational(x.num*y.den, x.den*y.num)
-end
+(+)(x::Rational, y::Rational) = rational(x.num*y.den + x.den*y.num, x.den*y.den)
+(-)(x::Rational, y::Rational) = rational(x.num*y.den - x.den*y.num, x.den*y.den)
+(*)(x::Rational, y::Rational) = rational(x.num*y.num, x.den*y.den)
+(/)(x::Rational, y::Rational) = rational(x.num*y.den, x.den*y.num)
 
 conversion x::Int32-->Rational
     return rational(x,1)

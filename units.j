@@ -31,9 +31,7 @@ end
 meters = make_unit(1)
 seconds = make_unit(2)
 
-function ==(u1::Units, u2::Units)
-    u1.powers == u2.powers
-end
+==(u1::Units, u2::Units) = u1.powers == u2.powers
 
 function (+)(u1::Units, u2::Units)
     if u1 != u2
@@ -56,34 +54,19 @@ function (-)(u1::Units, u2::Units)
     return u1
 end
 
-function *(u1::Units, u2::Units)
-    new(Units, apply_op((+), u1.powers, u2.powers))
-end
-
-function /(u1::Units, u2::Units)
-    new(Units, apply_op((-), u1.powers, u2.powers))
-end
+*(u1::Units, u2::Units) = new(Units, apply_op((+), u1.powers, u2.powers))
+/(u1::Units, u2::Units) = new(Units, apply_op((-), u1.powers, u2.powers))
 
 type ValueWithUnits[`T]
     value::T
     units::Units
 end
 
-function value_with_units(value::`T, units::Units)
-    new(ValueWithUnits[T], value, units)
-end
+value_with_units(value::`T, units::Units) = new(ValueWithUnits[T], value, units)
 
-function *(value::Any, units::Units)
-    value_with_units(value, units)
-end
-
-function *(x::ValueWithUnits, units::Units)
-    value_with_units(x.value, x.units*units)
-end
-
-function /(x::ValueWithUnits, units::Units)
-    value_with_units(x.value, x.units/units)
-end
+*(value::Any, units::Units) = value_with_units(value, units)
+*(x::ValueWithUnits, units::Units) = value_with_units(x.value, x.units*units)
+/(x::ValueWithUnits, units::Units) = value_with_units(x.value, x.units/units)
 
 function +(x::ValueWithUnits, y::ValueWithUnits)
     if x.units != y.units

@@ -8,9 +8,7 @@ function print(x::Any)
     return ()
 end
 
-function ref(t::Tuple, i::Index)
-    return tupleref(t, unbox(i))
-end
+ref(t::Tuple, i::Index) = tupleref(t, unbox(i))
 
 typealias Unboxable Union[Bool,
                           Int8,Uint8,Int16,Uint16,Int32,Uint32,Float,Double]
@@ -20,13 +18,8 @@ typealias UnboxedBuffer Union[Buffer[Bool],
                               Buffer[Int32],Buffer[Uint32],
                               Buffer[Float],Buffer[Double]]
 
-function ref(b::UnboxedBuffer, i::Index)
-    return box(typeof(b).parameters[1], bufferref(b, unbox(i)))
-end
-
-function ref(b::Buffer[`T], i::Index)
-    return bufferref(b, unbox(i))
-end
+ref(b::UnboxedBuffer, i::Index) = box(typeof(b).parameters[1], bufferref(b, unbox(i)))
+ref(b::Buffer[`T], i::Index) = bufferref(b, unbox(i))
 
 function set(b::UnboxedBuffer, i::Index, x::Unboxable)
     bufferset(b, unbox(i), unbox(x))
@@ -38,13 +31,8 @@ function set(b::Buffer[`T], i::Index, x)
     return x
 end
 
-function length(t::Tuple)
-    return box(Size, tuplelen(t))
-end
-
-function length(b::Buffer)
-    return b.length
-end
+length(t::Tuple) = box(Size, tuplelen(t))
+length(b::Buffer) = b.length
 
 function buffer(elts::`T...)
     b = new(Buffer[T],length(elts))
@@ -76,13 +64,8 @@ function ==(b1::Buffer, b2::Buffer)
     return true
 end
 
-function !(x::Bool)
-    return eq_int32(unbox(x),unbox(0))
-end
-
-function !(x)
-    return false
-end
+!(x::Bool) = eq_int32(unbox(x),unbox(0))
+!(x) = false
 
 function assert(c)
     if !c
@@ -91,9 +74,7 @@ function assert(c)
     true
 end
 
-function !=(x, y)
-    return !(x == y)
-end
+!=(x, y) = !(x == y)
 
 function signbit(x::Real)
     if x < 0
@@ -124,17 +105,9 @@ function sign(x::Scalar)
     return 0
 end
 
-function conj(x::Scalar)
-    return x
-end
-
-function ctranspose(x::Scalar)
-    return conj(x)
-end
-
-function transpose(x::Scalar)
-    return x
-end
+conj(x::Scalar) = x
+transpose(x::Scalar) = x
+ctranspose(x::Scalar) = conj(x)
 
 load("int32.j")
 load("double.j")
