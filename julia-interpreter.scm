@@ -411,12 +411,9 @@ TODO:
 	 (and (= (j-unbox child) (j-unbox parent))
 	      env))
 	
+	((eq? child parent)       env)
 	((eq? parent any-type)    env)
 	((eq? child any-type)     #f)
-	((not (has-params? parent))
-	 (and (not (type-generic? child))
-	      (subtype? child parent)
-	      env))
 	
 	((eq? (type-name child) 'Union)
 	 (foldl (lambda (t env)
@@ -426,6 +423,11 @@ TODO:
 	((eq? (type-name parent) 'Union)
 	 (any   (lambda (t) (conform- child t env))
 	        (type-params parent)))
+	
+	((or (not (has-params? parent))
+	     #;(not (has-params? child)))
+	 (and (convertible? child parent)
+	      env))
 	
 	; handle tuple types, or any sibling instantiations of the same
 	; generic type. parameters must be consistent.
@@ -1145,6 +1147,8 @@ end
    ((number? x) (begin (display "#<unboxed number ")
 		       (display x)
 		       (display ">")))
+   ((tuple? x)
+    (print-tuple x "(" ")"))
    ((not (vector? x))  (display x))
    ((generic-function? x)
     (display "#<generic-function ")
@@ -1156,8 +1160,6 @@ end
     (display "#<primitive-buffer ")
     (display x)
     (display ">"))
-   ((tuple? x)
-    (print-tuple x "(" ")"))
    ((type? x)
     (print-type x))
    ((eq? (type-name (type-of x)) 'Buffer)

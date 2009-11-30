@@ -94,12 +94,16 @@ function sign(x::Scalar)
     return 0
 end
 
-function conjugate(x::Scalar)
+function conj(x::Scalar)
     return x
 end
 
 function ctranspose(x::Scalar)
-    return conjugate(x)
+    return conj(x)
+end
+
+function transpose(x::Scalar)
+    return x
 end
 
 load("int32.j")

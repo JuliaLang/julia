@@ -182,7 +182,9 @@ function transpose(x::Array[`T,2])
 end
 
 function ctranspose(x::Array[`T,2])
-    return transpose(x)
+    m = x.dims[1]
+    n = x.dims[2]
+    return [ conj(x[j,i]) | (i=1:n), (j=1:m) ]
 end
 
 function hcat(elts::`T...)

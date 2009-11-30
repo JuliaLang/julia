@@ -79,7 +79,7 @@ function /(z::Quaternion, x::Real)
     return quaternion(z.q0/x, z.q1/x, z.q2/x, z.q3/x)
 end
 
-function conjugate(z::Quaternion)
+function conj(z::Quaternion)
     return quaternion(z.q0, -z.q1, -z.q2, -z.q3)
 end
 
@@ -88,7 +88,7 @@ function norm(z::Quaternion)
 end
 
 function inv(z::Quaternion)
-    return conjugate(z)/norm(z)
+    return conj(z)/norm(z)
 end
 
 function /(z::Quaternion, w::Quaternion)

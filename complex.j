@@ -48,7 +48,7 @@ function /(z::Complex, x::Real)
     return complex(z.re/x, z.im/x)
 end
 
-function conjugate(z::Complex)
+function conj(z::Complex)
     return complex(z.re,-z.im)
 end
 
@@ -61,7 +61,7 @@ function abs(z::Complex)
 end
 
 function inv(z::Complex)
-    return conjugate(z)/norm(z)
+    return conj(z)/norm(z)
 end
 
 function /(z::Complex, w::Complex)
