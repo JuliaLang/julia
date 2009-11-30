@@ -46,6 +46,10 @@ function double(x::Scalar)
     return box(Double,to_double(unbox(x)))
 end
 
+function truncate(x::Real)
+    return box(Int32,_truncate(unbox(x)))
+end
+
 conversion x::Int8-->Double
     return double(x)
 end
