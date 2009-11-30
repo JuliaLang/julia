@@ -367,10 +367,13 @@ TODO:
 ; returns #f or an assoc list showing the assignment of
 ; type parameters that makes the relation hold
 (define (conform t gt)
+  (conform-p t gt convertible?))
+
+(define (conform-p t gt pred)
   (define (param-search t gt p options env)
     (if (null? p)
 	(let ((super (instantiate-type- gt env)))
-	  (and (convertible? t super)
+	  (and (pred t super)
 	       env))
 	; make sure all parameters in t that this parameter might match
 	; are the same symbol, otherwise there's a conflict. e.g.
@@ -386,7 +389,7 @@ TODO:
 		   (param-search t gt (cdr p) (cdr options)
 				 (cons (cons (car p) bottom-type) env)))))))
   
-  (let ((pairs (conform- t gt '()))
+  (let ((pairs (conform- t gt '() pred))
 	(pp (all-type-params gt)))
     ; post-process to see if all the possible types for a given
     ; parameter can be reconciled
@@ -402,7 +405,9 @@ TODO:
 
 ; generate list of corresponding type components, (type . T) if parameter
 ; T might correspond to type
-(define (conform- child parent env)
+; pred is either subtype? or convertible? depending on whether conversion
+; is allowed for this lookup.
+(define (conform- child parent env pred)
   (cond ((symbol? parent)
 	 (cons (cons child parent) env))
 	((symbol? child) #f)
@@ -418,15 +423,17 @@ TODO:
 	((eq? (type-name child) 'Union)
 	 (foldl (lambda (t env)
 		  (and env
-		       (conform- t parent env)))
+		       (conform- t parent env pred)))
+		env
 		(type-params child)))
 	((eq? (type-name parent) 'Union)
-	 (any   (lambda (t) (conform- child t env))
+	 ; todo: maybe union all corresponding components together
+	 (any   (lambda (t) (conform- child t env pred))
 	        (type-params parent)))
 	
 	((or (not (has-params? parent))
-	     #;(not (has-params? child)))
-	 (and (convertible? child parent)
+	     (not (has-params? child)))
+	 (and (pred child parent)
 	      env))
 	
 	; handle tuple types, or any sibling instantiations of the same
@@ -457,7 +464,7 @@ TODO:
 				       (if pseq
 					   (type-param0 (car pp))
 					   (car pp))
-				       env)))
+				       env pred)))
 		 (and newenv
 		      ; if both end up on sequence types, and
 		      ; parameter matched. stop with "yes" now,
@@ -469,7 +476,7 @@ TODO:
 				newenv)))))))))
 	
 	; otherwise walk up the type hierarchy
-	(else (conform- (type-super child) parent env))))
+	(else (conform- (type-super child) parent env pred))))
 
 ; --- define some key builtin types ---
 
@@ -560,7 +567,7 @@ TODO:
 					   (convertible? t mt)))
 				     (lambda (t mt)
 				       (if (type-generic? mt)
-					   (conform t mt)
+					   (conform-p t mt subtype?)
 					   (subtype? t mt)))))))
     (and m
 	 (if (type-generic? (car m))
@@ -615,7 +622,7 @@ TODO:
 	  (if (not meth)
 	      (error "No method for function" (vector-ref ce 1)
 		     "matching types"
-		     (map type-name (type-params argtype)))
+		     (map julia->string (type-params argtype)))
 	      ; applicable with conversion
 	      ((closure-proc (cdr meth)) (closure-env (cdr meth))
 	       (tuple->list
@@ -648,8 +655,9 @@ TODO:
   (define (non-convertible? t)
     (or (tuple? t)
 	(sequence-type? t)
-	(eq? (type-name t) 'Union)
-	(eq? (type-name t) 'Function)))
+	(and (type? t)
+	     (or (eq? (type-name t) 'Union)
+		 (eq? (type-name t) 'Function)))))
   (if (or (non-convertible? from)
 	  (non-convertible? to))
       (error "Conversions may not be defined for the specified type(s)"))
@@ -1114,6 +1122,9 @@ end
 (make-builtin 'load "(Any,)-->()" j-load)
 
 ; --- print and repl ---
+
+(define (julia->string x)
+  (with-output-to-string '() (lambda () (julia-print x))))
 
 (define (print-tuple x opn cls)
   (display opn)

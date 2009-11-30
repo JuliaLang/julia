@@ -40,7 +40,7 @@ function -(z::Complex)
     return complex(-z.re, -z.im)
 end
 
-function *(z::Complex, w::Complex)
+function *(z::Complex[`T1], w::Complex[`T2])
     return complex(z.re*w.re - z.im*w.im, z.re*w.im + z.im*w.re)
 end
 
