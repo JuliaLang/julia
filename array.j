@@ -198,7 +198,7 @@ function hcat(elts::`T...)
 end
 
 function vector(elts::`T...)
-    v = make_array(T,1,length(elts))
+    v = make_array(T,length(elts))
     for i = 1:length(elts)
         v[i] = elts[i]
     end
