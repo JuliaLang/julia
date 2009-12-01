@@ -13,7 +13,7 @@ typealias UnboxedBuffer Union[Buffer[Bool],
 ref(t::Tuple, i::Index) = tupleref(t, unbox(i))
 length(t::Tuple) = box(Size, tuplelen(t))
 
-function print(x::Any)
+function print(x)
     # default print function, call builtin
     _print(x)
     return ()
