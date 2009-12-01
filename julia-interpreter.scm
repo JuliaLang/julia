@@ -499,6 +499,8 @@ TODO:
 (put-type 'Real real-type)
 (define int-type (make-abstract-type 'Int real-type julia-null julia-null))
 (put-type 'Int int-type)
+(define float-type (make-abstract-type 'Float real-type julia-null julia-null))
+(put-type 'Float float-type)
 
 (define bool-type (make-type 'Bool scalar-type julia-null julia-null))
 (define int8-type (make-type 'Int8 int-type julia-null julia-null))
@@ -509,7 +511,7 @@ TODO:
 (define uint32-type (make-type 'Uint32 int-type julia-null julia-null))
 (define int64-type (make-type 'Int64 int-type julia-null julia-null))
 (define uint64-type (make-type 'Uint64 int-type julia-null julia-null))
-(define float-type (make-type 'Float real-type julia-null julia-null))
+(define single-type (make-type 'Single real-type julia-null julia-null))
 (define double-type (make-type 'Double real-type julia-null julia-null))
 
 (define symbol-type (make-type 'Symbol any-type julia-null julia-null))
@@ -527,7 +529,7 @@ TODO:
 (put-type 'Uint32 uint32-type)
 (put-type 'Int64 int64-type)
 (put-type 'Uint64 uint64-type)
-(put-type 'Float float-type)
+(put-type 'Single single-type)
 (put-type 'Double double-type)
 (put-type 'Type Type-type)
 
@@ -1197,7 +1199,7 @@ end
     (let* ((t (type-of x))
 	   (tn (type-name t)))
       (case tn
-	((Int8 Uint8 Int16 Uint16 Int32 Uint32 Int64 Uint64 Double Float)
+	((Int8 Uint8 Int16 Uint16 Int32 Uint32 Int64 Uint64 Single Double)
 	 (display (j-unbox x)))
 	((Bool) (if (j-false? x)
 		    (display "false")

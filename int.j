@@ -15,7 +15,7 @@ div(x::Int32, y::Int32) = box(Int32, div_int32(unbox(x), unbox(y)))
 >=(x::Int32, y::Int32) = (x>y) || eq_int32(unbox(x),unbox(y))
 ==(x::Int32, y::Int32) = eq_int32(unbox(x),unbox(y))
 
-function gcd(a::Int32, b::Int32)
+function gcd(a::Int, b::Int)
     while b != 0
         t = b
         b = a % b

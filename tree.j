@@ -1,7 +1,10 @@
-type Node[`T]
-    data::T
-    left::Nullable[Node[T]]
-    right::Nullable[Node[T]]
+type EmptyTree
 end
 
-typealias Tree Nullable[Node[`T]]
+type TreeNode[`T]
+    data:: T
+    left:: Union[EmptyTree,TreeNode[T]]
+    right::Union[EmptyTree,TreeNode[T]]
+end
+
+typealias Tree Union[EmptyTree,TreeNode[`T]]
