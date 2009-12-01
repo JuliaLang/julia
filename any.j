@@ -1,5 +1,4 @@
-function print(x::Any)
-    # default print function, call builtin
+function print(x)
     _print(x)
     return ()
 end
