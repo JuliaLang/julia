@@ -28,6 +28,8 @@ den(x::Rational) = x.den
 (*)(x::Rational, y::Rational) = rational(x.num*y.num, x.den*y.den)
 (/)(x::Rational, y::Rational) = rational(x.num*y.den, x.den*y.num)
 
+==(x::Rational, y::Rational) = (x.num == y.num && x.den == y.den)
+
 conversion x::Int32-->Rational
     return rational(x,1)
 end

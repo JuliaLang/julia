@@ -63,3 +63,6 @@ assert(signbit(0.0) == 1)
 assert(signbit(-0.0) == -1)
 assert(signbit( 1.0/0) == 1)
 assert(signbit(-1.0/0) == -1)
+
+assert(1+rational(1,2) == rational(3,2))
+assert(1./complex(2.,2.) == complex(.25, -.25))

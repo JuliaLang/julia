@@ -153,8 +153,8 @@ TODO:
 		(type-params t)))))
 
 (define (type-abstract? t)
-  (or (vector-ref t 5)
-      (type-generic? t)))
+  (or (type-generic? t)
+      (vector-ref t 5)))
 
 (define (has-params? t)
   (not (j-null? (type-params t))))
@@ -369,37 +369,35 @@ TODO:
 ; tells whether a type conforms to a given generic type
 ; returns #f or an assoc list showing the assignment of
 ; type parameters that makes the relation hold
-(define (conform t gt)
-  (conform-p t gt convertible?))
-
-(define (conform-p t gt pred)
+(define (conform t gt cnvt?)
   (define (param-search t gt p options env)
     (if (null? p)
 	(let ((super (instantiate-type- gt env)))
-	  (and (pred t super)
+	  (and (if cnvt?
+		   (or (subtype? t super)
+		       (and (not (any (lambda (e) (type-abstract? (cdr e)))
+				      env))
+			    (convertible? t super)))
+		   (subtype? t super))
 	       env))
 	; make sure all parameters in t that this parameter might match
 	; are the same symbol, otherwise there's a conflict. e.g.
 	; (A, B) doesn't conform to (T, T)
 	(and (not (length> (delete-duplicates (filter symbol? (car options)))
 			   1))
-	     (if (null? (car options))
-		 ; p is unconstrained
-		 (param-search t gt (cdr p) (cdr options)
-			       (cons (cons (car p) any-type) env))
-		 (let try-assignment ((opts (car options)))
-		   (if (pair? opts)
-		       (or (param-search t gt (cdr p) (cdr options)
-					 (cons (cons (car p) (car opts)) env))
-			   (try-assignment (cdr opts)))
-		       ; no possibilities left for p
-		       #f))))))
+	     (let try-assignment ((opts (car options)))
+	       (if (pair? opts)
+		   (or (param-search t gt (cdr p) (cdr options)
+				     (cons (cons (car p) (car opts)) env))
+		       (try-assignment (cdr opts)))
+		   ; no possibilities left for p
+		   #f)))))
   
   ;(display "conform? ")
   ;(julia-print t) (display " ")
   ;(julia-print gt) (newline)
-  (let ((pairs (conform- t gt '() pred))
-	(pp (all-type-params gt)))
+  (let ((pairs (conform- t gt '() (if cnvt? convertible? subtype?)))
+	(tp    (all-type-params gt)))
     ; post-process to see if all the possible types for a given
     ; parameter can be reconciled
     (and
@@ -409,8 +407,8 @@ TODO:
 		   (map car
 			(filter (lambda (c) (eq? (cdr c) p))
 				pairs)))
-		 pp)))
-       (param-search t gt pp options '())))))
+		 tp)))
+       (param-search t gt tp options '())))))
 
 ; generate list of corresponding type components, (type . T) if parameter
 ; T might correspond to type
@@ -443,9 +441,10 @@ TODO:
 	 (any   (lambda (t) (conform- child t env pred))
 	        (type-params parent)))
 	
-	((or (not (has-params? parent))
-	     (not (has-params? child)))
-	 (and (pred child parent)
+	((and (or (not (has-params? parent))
+		  (not (has-params? child)))
+	      (eq? pred subtype?))
+	 (and (subtype? child parent)
 	      env))
 	
 	; handle tuple types, or any sibling instantiations of the same
@@ -463,9 +462,11 @@ TODO:
 	   (let ((cseq (and (pair? cp) (sequence-type? (car cp))))
 		 (pseq (and (pair? pp) (sequence-type? (car pp)))))
 	     (cond
-	      ((null? cp) (if (or (null? pp) pseq)
-			      env
-			      #f))
+	      ((null? cp) (cond ((null? pp)  env)
+				(pseq
+				 (conform- bottom-type (type-param0 (car pp))
+					   env pred))
+				(else #f)))
 	      ((and cseq (not pseq)) #f)
 	      ((null? pp)            #f)
 	      (else
@@ -488,7 +489,19 @@ TODO:
 				newenv)))))))))
 	
 	; otherwise walk up the type hierarchy
-	(else (conform- (type-super child) parent env pred))))
+	(else
+	 (let ((super (conform- (type-super child) parent env pred)))
+	   (if (eq? pred subtype?)
+	       super
+	       (let ((temp
+		      (cons super
+			    (map (lambda (q)
+				   (conform- q parent env subtype?))
+				 (possible-conversions child)))))
+		 (and (not (every not temp))
+		      (delete-duplicates-p
+		       (apply append (map (lambda (x) (or x '())) temp))
+		       eq?))))))))
 
 ; --- define some key builtin types ---
 
@@ -511,8 +524,8 @@ TODO:
 (define uint32-type (make-type 'Uint32 int-type julia-null julia-null))
 (define int64-type (make-type 'Int64 int-type julia-null julia-null))
 (define uint64-type (make-type 'Uint64 int-type julia-null julia-null))
-(define single-type (make-type 'Single real-type julia-null julia-null))
-(define double-type (make-type 'Double real-type julia-null julia-null))
+(define single-type (make-type 'Single float-type julia-null julia-null))
+(define double-type (make-type 'Double float-type julia-null julia-null))
 
 (define symbol-type (make-type 'Symbol any-type julia-null julia-null))
 (define buffer-type (make-type 'Buffer any-type (julia-tuple 'T)
@@ -577,17 +590,15 @@ TODO:
 				 (if cnvt?
 				     (lambda (t mt)
 				       (if (type-generic? mt)
-					   (conform t mt)
+					   (conform t mt #t)
 					   (convertible? t mt)))
 				     (lambda (t mt)
 				       (if (type-generic? mt)
-					   (conform-p t mt subtype?)
+					   (conform t mt #f)
 					   (subtype? t mt)))))))
     (and m
 	 (if (type-generic? (car m))
-	     (let* ((env     (conform-p type (car m) (if cnvt?
-							 convertible?
-							 subtype?)))
+	     (let* ((env     (conform type (car m) cnvt?))
 		    (newtype (instantiate-type- (car m) env))
 		    (newmeth (instantiate-method (cdr m) env)))
 	       ; cache result in concrete method table
@@ -613,7 +624,7 @@ TODO:
 (define (type<=? a b)
   (if (type-generic? a)
       (if (type-generic? b)
-	  (not (not (conform-p a b subtype?)))
+	  (not (not (conform a b #f)))
 	  (subtype? a b))
       (or (subtype? a b)
 	  (and (not (subtype? b a))
@@ -674,10 +685,11 @@ TODO:
 	(and (type? t)
 	     (or (eq? (type-name t) 'Union)
 		 (eq? (type-name t) 'Function)))))
-  (if (or (non-convertible? from)
-	  (non-convertible? to))
-      (error "Conversions may not be defined for the specified type(s)"))
-  (if (type-equal? from to)
+  (if (non-convertible? from)
+      (error "Conversions may not be defined from type" (julia->string from)))
+  (if (non-convertible? to)
+      (error "Conversions may not be defined to type" (julia->string to)))
+  (if (subtype? from to)
       (error "Cannot define a conversion from a type to itself"))
   (method-table-insert! conversion-table
 			; NOTE the "flipped" function type, "to-->from"
@@ -693,6 +705,25 @@ TODO:
   (let ((m (method-table-assoc conversion-table
 			       (make-function-type to from) #f)))
     (and m (cdr m))))
+
+; get a list of types t can be converted to
+(define (possible-conversions t)
+  (foldl (lambda (te lst)
+	   (let ((to-type
+		  (let* ((ft   (car te))
+			 (from (type-param ft 1))
+			 (to   (type-param0 (type-param ft 0))))
+		    (if (type-generic? from)
+			(let ((env (conform t from #f)))
+			  (and env
+			       (instantiate-type- to env)))
+			(and (subtype? t from)
+			     to)))))
+	     (if to-type
+		 (cons to-type lst)
+		 lst)))
+	 '()
+	 (mt:mlist conversion-table)))
 
 (define (convert-tuple x to)
   (let loop ((cp (tuple->list x))
@@ -1264,10 +1295,9 @@ end
 
 (define (julia-repl)
   (j-load "start.j")
-  (j-load "array.j")
   (j-load "examples.j")
   (display banner)
-
+  
   (let prompt ()
     (if COLOR? (display "\033[0m"))
     (display "julia> ")
