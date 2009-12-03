@@ -125,13 +125,13 @@ end
 		'(begin (a) (* 2 (f)) (b))))
 
 ; a powerful pattern -- flatten all nested uses of an operator into one call
-(define-macro (flatten-op op e)
+(define-macro (flatten-op-pat op e)
   `(pattern-expand
     (list (pattern-lambda (,op (-- l ...) (-- inner (,op ...)) (-- r ...))
 			  (cons ',op (append l (cdr inner) r))))
     ,e))
 
-(assert (equal? (flatten-op + '(+ (+ 1 2) (+ (+ (+ 3) 4) (+ 5))))
+(assert (equal? (flatten-op-pat + '(+ (+ 1 2) (+ (+ (+ 3) 4) (+ 5))))
 		'(+ 1 2 3 4 5)))
 
 ; --- type system tests ---

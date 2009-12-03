@@ -6,7 +6,7 @@ TODO:
 |#
 
 (define ops-by-prec
-  '#((= := += -= *= /= ^= %= |\|=| &= $= => <<= >>=)
+  '#((= := += -= *= /= .*= ./= |\\=| |.\\=| ^= .^= %= |\|=| &= $= => <<= >>=)
      (?)
      (|\|\||)
      (&&)
@@ -243,6 +243,10 @@ TODO:
 			   (error "ambiguous use of colon in ? expression")
 			   (list 'if ex then els)))))))))
 
+(define (invalid-initial-token? tok)
+  (or (eof-object? tok)
+      (memv tok '(#\) #\] #\} else elseif catch))))
+
 ; parse a@b@c@... as (@ a b c ...) for some operator @
 ; op: the operator to look for
 ; head: the expression head to yield in the result, e.g. "a;b" => (block a b)
@@ -251,6 +255,8 @@ TODO:
 ; allow-empty: if true will ignore runs of the operator, like a@@@@b
 ; ow, my eyes!!
 (define (parse-Nary s down op head closers allow-empty)
+  (if (invalid-initial-token? (require-token s))
+      (error "Unexpected token" (peek-token s)))
   (if (memv (require-token s) closers)
       (list head)  ; empty block
       (let loop ((ex
@@ -311,9 +317,10 @@ TODO:
 ; the principal non-terminals follow, in increasing precedence order
 
 (define (parse-block s) (parse-Nary s parse-block-stmts #\newline 'block
-				    '(end else elseif) #t))
+				    '(end else elseif catch) #t))
 (define (parse-block-stmts s) (parse-Nary s parse-eq #\; 'block
-					  '(end else elseif #\newline) #t))
+					  '(end else elseif catch #\newline)
+					  #t))
 (define (parse-stmts s) (parse-Nary s parse-eq    #\; 'block '(#\newline) #t))
 
 (define (parse-eq s)    (parse-RtoL s parse-comma (prec-ops 0)))
@@ -345,7 +352,7 @@ TODO:
 ; flag an error for tokens that cannot begin an expression
 (define (closing-token? tok)
   (or (eof-object? tok)
-      (memv tok '(#\, #\) #\] #\} #\; end else elseif))))
+      (memv tok '(#\, #\) #\] #\} #\; end else elseif catch))))
 
 (define (parse-unary s)
   (let ((t (require-token s)))
@@ -574,6 +581,13 @@ TODO:
 	   (if (eof-object? t)
 	       t
 	       (parse-stmts s))))))
+
+(define (check-end-of-input s)
+  (skip-ws-and-comments (cdr s))
+  (if (eqv? (peek-token s) #\newline) (take-token s))
+  (if (not (eof-object? (peek-token s)))
+      (error "Extra input after end of expression:"
+	     (peek-token s))))
 
 ; call f on a stream until the stream runs out of data
 (define (read-all-of f s)

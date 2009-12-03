@@ -383,17 +383,22 @@
 		   `(call time_thunk (-> (tuple) ,expr)))
 
    ; update operators
-   (pattern-lambda (+= a b) (expand-update-operator '+ a b))
-   (pattern-lambda (-= a b) (expand-update-operator '- a b))
-   (pattern-lambda (*= a b) (expand-update-operator '* a b))
-   (pattern-lambda (/= a b) (expand-update-operator '/ a b))
-   (pattern-lambda (^= a b) (expand-update-operator '^ a b))
-   (pattern-lambda (%= a b) (expand-update-operator '% a b))
-   (pattern-lambda (|\|=| a b) (expand-update-operator '|\|| a b))
-   (pattern-lambda (&= a b) (expand-update-operator '& a b))
-   (pattern-lambda ($= a b) (expand-update-operator '$ a b))
-   (pattern-lambda (<<= a b) (expand-update-operator '<< a b))
-   (pattern-lambda (>>= a b) (expand-update-operator '>> a b))
+   (pattern-lambda (+= a b)     (expand-update-operator '+ a b))
+   (pattern-lambda (-= a b)     (expand-update-operator '- a b))
+   (pattern-lambda (*= a b)     (expand-update-operator '* a b))
+   (pattern-lambda (/= a b)     (expand-update-operator '/ a b))
+   (pattern-lambda (.*= a b)    (expand-update-operator '.* a b))
+   (pattern-lambda (./= a b)    (expand-update-operator './ a b))
+   (pattern-lambda (|\\=| a b)  (expand-update-operator '|\\| a b))
+   (pattern-lambda (|.\\=| a b) (expand-update-operator '|.\\| a b))
+   (pattern-lambda (^= a b)     (expand-update-operator '^ a b))
+   (pattern-lambda (.^= a b)    (expand-update-operator '.^ a b))
+   (pattern-lambda (%= a b)     (expand-update-operator '% a b))
+   (pattern-lambda (|\|=| a b)  (expand-update-operator '|\|| a b))
+   (pattern-lambda (&= a b)     (expand-update-operator '& a b))
+   (pattern-lambda ($= a b)     (expand-update-operator '$ a b))
+   (pattern-lambda (<<= a b)    (expand-update-operator '<< a b))
+   (pattern-lambda (>>= a b)    (expand-update-operator '>> a b))
 
    ;; colon
    (pattern-lambda
