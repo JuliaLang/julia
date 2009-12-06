@@ -1,0 +1,41 @@
+digraph Types {
+
+  Int [label="Int[`I]"]
+  Float [label="Float[`F]"]
+  Rational [label="Rational[`Q]"]
+  Real [label="Real[`R]"]
+  Numeric [label="Numeric[`N]"]
+  Scalar [label="Scalar[`S]"]
+  Complex [label="Complex[`C]"]
+  List [label="List[`L]"]
+  Any [label="Any[`A]"]
+
+  subgraph Scalars {
+    subgraph Numerics {
+      subgraph Reals { 
+        subgraph Ints {
+          Int1  -> Int;
+          Int8  -> Int;
+          Int16 -> Int;
+          Int32 -> Int;
+          Int64 -> Int;
+        }
+        subgraph Floats {
+          Single -> Float;
+          Double -> Float;
+        }
+        Int -> Real;
+        Float -> Real;
+        Rational -> Real;
+      }
+      Real -> Numeric;
+      Complex -> Numeric;
+    }
+    Numeric -> Scalar;
+    String -> Scalar;
+    Symbol -> Scalar;
+  }
+  Scalar -> Any;
+  List -> Any;
+
+}
