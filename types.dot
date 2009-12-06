@@ -14,28 +14,28 @@ digraph Types {
     subgraph Numerics {
       subgraph Reals { 
         subgraph Ints {
-          Int1  -> Int;
-          Int8  -> Int;
-          Int16 -> Int;
-          Int32 -> Int;
-          Int64 -> Int;
+          Int1  -> Int [label="I=Int1"];
+          Int8  -> Int [label="I=Int8"];
+          Int16 -> Int [label="I=Int16"];
+          Int32 -> Int [label="I=Int32"];
+          Int64 -> Int [label="I=Int64"];
         }
         subgraph Floats {
-          Single -> Float;
-          Double -> Float;
+          Single -> Float [label="F=Single"];
+          Double -> Float [label="F=Double"];
         }
-        Int -> Real;
-        Float -> Real;
-        Rational -> Real;
+        Int -> Real [label="R=Int"];
+        Float -> Real [label="R=Float"];
+        Rational -> Real [label="R=Rational"];
       }
-      Real -> Numeric;
-      Complex -> Numeric;
+      Real -> Numeric [label="N=Real"];
+      Complex -> Numeric [label="N=Complex"];
     }
-    Numeric -> Scalar;
-    String -> Scalar;
-    Symbol -> Scalar;
+    Numeric -> Scalar [label="S=Numeric"];
+    String -> Scalar [label="S=String"];
+    Symbol -> Scalar [label="S=Symbol"];
   }
-  Scalar -> Any;
-  List -> Any;
+  Scalar -> Any [label="A=Scalar"];
+  List -> Any [label="A=List"];
 
 }
