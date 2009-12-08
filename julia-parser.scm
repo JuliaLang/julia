@@ -28,13 +28,13 @@ TODO:
 ; unused characters: @ prefix'
 ; no character literals; unicode kind of makes them obsolete. strings instead.
 
-(define unary-ops '(- + ! ~))
+(define unary-ops '(- + ! ~ $))
 
 ; operators that are special forms, not function names
 (define syntactic-operators
   '(= := += -= *= /= ^= %= |\|=| &= $= => <<= >>=
       -> --> |\|\|| && : |::| |.|))
-(define syntactic-unary-operators '())
+(define syntactic-unary-operators '($))
 
 (define reserved-words '(begin while if for try function type typealias local
 			       return break continue conversion global))
@@ -559,7 +559,7 @@ TODO:
 
 	  ((eqv? t #\` )
 	   (take-token s)
-	   (list 'quote (parse-call s)))
+	   (list 'quote (parse-decl s)))
 
 	  (else (take-token s)))))
 

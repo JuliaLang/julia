@@ -1294,38 +1294,38 @@ end
 ))
 
 (define (julia-repl)
+  (j-load "start.j")
+  (j-load "examples.j")
+  (display banner)
+  (julia-prompt))
+
+(define (julia-prompt)
   (define (display-error-exception e)
     (display (error-exception-message e))
     (for-each (lambda (x)
 		(display " ") (display x))
 	      (error-exception-parameters e)))
   
-  (j-load "start.j")
-  (j-load "examples.j")
-  (display banner)
-  
-  (let prompt ()
-    (if COLOR? (display "\033[0m"))
-    (display "julia> ")
-    (let* ((line (read-line))
-	   (str  (make-token-stream (open-input-string (if (eof-object? line)
-							   ""
-							   line))))
-	   (continue?
-	    (with-exception-catcher
-	     (lambda (e)
-	       (display-error-exception e)
-	       #t)
-	     (lambda ()
-	       (let ((expr (julia-parse str)))
-		 (check-end-of-input str)
-		 (and
-		  (not (eq? expr 'Quit))
-		  (not (eof-object? expr))
-		  (begin
-		    (if COLOR? (display "\033[1m\033[36m"))
-		    (j-toplevel-eval
-		     `(call print (quote ,(j-toplevel-eval expr)))))))))))
-      (newline)
-      (if continue?
-	  (begin (newline) (prompt))))))
+  (if COLOR? (display "\033[0m"))
+  (display "julia> ")
+  (let* ((line (read-line))
+	 (str  (make-token-stream (open-input-string (if (eof-object? line)
+							 ""
+							 line))))
+	 (continue?
+	  (with-exception-catcher
+	   (lambda (e)
+	     (display-error-exception e)
+	     #t)
+	   (lambda ()
+	     (let ((expr (julia-parse str)))
+	       (check-end-of-input str)
+	       (and
+		(not (eq? expr 'Quit))
+		(not (eof-object? expr))
+		(if COLOR? (display "\033[1m\033[36m"))
+		(j-toplevel-eval
+		 `(call print (quote ,(j-toplevel-eval expr))))))))))
+    (newline)
+    (if continue?
+	(begin (newline) (julia-prompt)))))
