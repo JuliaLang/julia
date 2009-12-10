@@ -507,8 +507,11 @@ TODO:
 
 (define scalar-type (instantiate-type Tensor-type (list bottom-type 0)))
 (put-type 'Scalar scalar-type)
+(define number-type (make-abstract-type 'Number scalar-type julia-null
+					julia-null))
+(put-type 'Number number-type)
 
-(define real-type (make-abstract-type 'Real scalar-type julia-null julia-null))
+(define real-type (make-abstract-type 'Real number-type julia-null julia-null))
 (put-type 'Real real-type)
 (define int-type (make-abstract-type 'Int real-type julia-null julia-null))
 (put-type 'Int int-type)
@@ -781,8 +784,11 @@ TODO:
   (vector-ref obj (field-offset obj (to-symbol fld))))
 
 (define (j-set-field obj fld v)
-  ; TODO: type check/convert
-  (vector-set! obj (field-offset obj (to-symbol fld)) v))
+  (let ((i (field-offset obj (to-symbol fld))))
+    (vector-set! obj i
+		 (j-convert v (tuple-ref (tuple-ref
+					  (type-fields (type-of obj))
+					  (- i 1)) 1)))))
 
 (define (j-tuple . args) (if (null? args) julia-null
 			     (apply julia-tuple args)))
@@ -798,7 +804,6 @@ TODO:
   (vector-ref (buffer-data v) (- i 1)))
 
 (define (j-buffer-set v i rhs)
-  ; TODO: type check/convert
   (vector-set! (buffer-data v) (- i 1) rhs))
 
 (define (j-false? x)
@@ -1146,11 +1151,16 @@ end
 					 julia-true julia-false)))
 (make-builtin 'typeof "(Any,)-->Type" type-of)
 (make-builtin 'subtype "(Type,Type)-->Bool"
-	      (lambda (x y) (if (subtype? x y)
+	      (lambda (x t) (if (subtype? x t)
 				julia-true julia-false)))
 (make-builtin 'istype "(Any,Type)-->Bool"
-	      (lambda (x y) (if (subtype? (type-of x) y)
+	      (lambda (x t) (if (subtype? (type-of x) t)
 				julia-true julia-false)))
+(make-builtin 'typeassert "(Any,Type)-->Any"
+	      (lambda (x t) (if (not (subtype? (type-of x) t))
+				(error "Type assertion failed:"
+				       (julia->string t)))
+		      x))
 (make-builtin 'apply "(Function[`A,`T],Tuple...)-->`T"
 	      (lambda (f . argt)
 		(j-apply f (apply append (map tuple->list argt)))))

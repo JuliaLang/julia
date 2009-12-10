@@ -2,12 +2,12 @@ ref(b::UnboxedBuffer, i::Index) = box(typeof(b).parameters[1], bufferref(b, unbo
 ref(b::Buffer[`T], i::Index) = bufferref(b, unbox(i))
 
 function set(b::UnboxedBuffer, i::Index, x::Unboxable)
-    bufferset(b, unbox(i), unbox(x))
+    bufferset(b, unbox(i), unbox(convert(x,typeof(b).parameters[1])))
     return x
 end
 
 function set(b::Buffer[`T], i::Index, x)
-    bufferset(b, unbox(i), x)
+    bufferset(b, unbox(i), convert(x,T))
     return x
 end
 

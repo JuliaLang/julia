@@ -326,6 +326,13 @@
 		   `(block (local ,var)
 			   (= ,(decl-var var) ,rhs)))
 
+   ; x::T = rhs => x::T; x = rhs
+   (pattern-lambda (= (|::| x T) rhs)
+		   (let ((e (remove-argument-side-effects x)))
+		     `(block ,@(cdr e)
+			     (|::| ,(car e) ,T)
+			     (= ,(car e) ,rhs))))
+
    ; adding break/continue support to while loop
    (pattern-lambda (while cnd body)
 		   `(scope-block
@@ -509,29 +516,6 @@
 						,(loop (cdr tail)))))))))))
 	(else (map expand-and-or e)))))
 
-; remove unnecessary nested blocks
-(define (splice-blocks e)
-  (define (splice-blocks- body)
-    (cond ((atom? body) body)
-	  ((equal? body '((block)))  ; leave empty block in value pos.
-	   body)
-	  ((and (pair? (car body))
-		(eq? (caar body) 'block))
-	   (append (splice-blocks- (cdar body))
-		   (splice-blocks- (cdr body))))
-	  ((and (pair? (car body))   ; remove (local ...) forms
-		(eq? (caar body) 'local))
-	   (splice-blocks- (cdr body)))
-	  (else
-	   (cons (splice-blocks (car body)) (splice-blocks- (cdr body))))))
-  (if (or (atom? e) (quoted? e)) e
-      (if (eq? (car e) 'block)
-	  (let ((tl (splice-blocks- (cdr e))))
-	    (if (length= tl 1)       ; unwrap length-1 blocks
-		(car tl)
-		(cons 'block tl)))
-	  (map splice-blocks e))))
-
 ; conversion to "linear flow form"
 ;
 ; This pass removes control flow constructs from value position.
@@ -576,7 +560,7 @@
   ; This expression walk is entirely within the "else" clause of the giant
   ; case expression. Everything else deals with special forms.
   (define (to-lff e dest tail)
-    (if (or (atom? e) (quoted? e))
+    (if (or (atom? e) (quoted? e) (equal? e '(null)))
 	(cond ((symbol? dest) (cons `(= ,dest ,e) '()))
 	      (dest (cons (if tail `(return ,e) e)
 			  '()))
@@ -679,7 +663,10 @@
 		 (cons (if tail `(return ,l) l) '()))))
 	  
 	  ((local)
-	   (cons e '()))
+	   (if (symbol? dest)
+	       (error "Misplaced local declaration"))
+	   (cons (to-blk (to-lff '(null) dest tail))
+		 (list e)))
 	  
 	  (else
 	   (let ((r (map (lambda (arg) (to-lff arg #t #f))
@@ -791,6 +778,7 @@ So far only the second case can actually occur.
   (define (remove-scope-blocks e)
     (cond ((or (atom? e) (quoted? e)) (cons e '()))
 	  ((eq? (car e) 'lambda) (cons (flatten-scopes e) '()))
+	  ((eq? (car e) 'local)  (cons (cadr e) '()))
 	  ((eq? (car e) 'scope-block)
 	   (let ((vars (scope-block-vars e))
 		 (body (car (last-pair e))))
@@ -861,6 +849,16 @@ So far only the second case can actually occur.
 		      (cons e (list v)))
 	       (cons e '()))))
 	((or (atom? e) (quoted? e)) (cons e '()))
+	((eq? (car e) '|::|)
+	 (let ((inner (analyze-vars (cadr e) env)))
+	   (if (symbol? (cadr e))
+	       (let ((v (var-lookup (cadr e) env)))
+		 (if v
+		     (vinfo:set-type! (car v) (caddr e)))
+		 inner)
+	       (cons `(call (top typeassert)
+			    ,(car inner) ,(caddr e))
+		     (cdr inner)))))
 	((eq? (car e) 'lambda)
 	 (let* ((lvars (lambda-all-vars e))
 		(vi    (map make-var-info lvars))
@@ -874,9 +872,7 @@ So far only the second case can actually occur.
 					   (lambda (v e) (eq? (cdr v) e))))
 			       (cdr rec))))
 	   (cons `(lambda ,(cadr e)
-		    (var-info ,(caddr e) ,vi ,(map (lambda (x)
-						     (vinfo:name (car x)))
-						   (cdr rec)))
+		    (var-info ,(caddr e) ,vi ,(map car (cdr rec)))
 		    ,(car rec))
 		 cv)))
 	(else (let ((rec (map (lambda (x) (analyze-vars x env))
@@ -901,8 +897,18 @@ So far only the second case can actually occur.
     (let ((vi (var-info-for v (caddr vinfo))))
 	   (if vi
 	       (if (vinfo:capt vi) 'boxed 'local)
-	       (let ((i (index-of v (cadddr vinfo) 0)))
+	       (let ((i (index-p (lambda (xx)
+				   (eq? v (vinfo:name xx)))
+				 (cadddr vinfo) 0)))
 		 (or i 'global)))))
+  (define (lookup-var-type v vinfo)
+    (let ((vi (var-info-for v (caddr vinfo))))
+	   (if vi
+	       (vinfo:type vi)
+	       (let ((vl (member-p v (cadddr vinfo)
+				   (lambda (x y) (eq? x (vinfo:name y))))))
+		 (or (and vl (vinfo:type (car vl)))
+		     'Any)))))  ; TODO: types of globals?
   
   (cond ((symbol? e)
 	 (let ((l (lookup e vinfo)))
@@ -914,13 +920,17 @@ So far only the second case can actually occur.
 	 (case (car e)
 	   ((=)
 	    (let ((l (lookup (cadr e) vinfo))
+		  (t (lookup-var-type (cadr e) vinfo))
 		  (rhs (closure-convert- (caddr e) vinfo)))
-	      (cond ((eq? l 'boxed)
-		     `(call (top boxset) ,(cadr e) ,rhs))
-		    ((number? l)
-		     `(call (top boxset) (closure-ref ,l) ,rhs))
-		    (else
-		     `(= ,(cadr e) ,rhs)))))
+	      (let ((rhs (if (eq? t 'Any)
+			     rhs
+			     `(call (top convert) ,rhs ,t))))
+		(cond ((eq? l 'boxed)
+		       `(call (top boxset) ,(cadr e) ,rhs))
+		      ((number? l)
+		       `(call (top boxset) (closure-ref ,l) ,rhs))
+		      (else
+		       `(= ,(cadr e) ,rhs))))))
 	   ((lambda)
 	    (let ((vinf  (caddr e))
 		  (args  (llist-vars (cadr e)))
@@ -948,7 +958,7 @@ So far only the second case can actually occur.
 				      (let ((i (index-of x (cadddr vinfo) 0)))
 					(if i
 					    `(closure-ref ,i)
-					    x)))
+					    (vinfo:name x))))
 				    (cadddr vinf)))))))
 	   (else
 	    (cons (car e)
@@ -977,7 +987,7 @@ So far only the second case can actually occur.
 	  (mark-label
 	   (lambda (l) (set-car! l ip))))
       (define (compile e break-labels)
-	(if (atom? e) (emit e)
+	(if (atom? e) #f  ; atom has no effect
 	    (case (car e)
 	      ((if) (let ((elsel (make-label))
 			  (endl  (make-label)))
@@ -1008,18 +1018,17 @@ So far only the second case can actually occur.
 	      (else  (emit (goto-form e))))))
       (cond ((or (atom? e) (quoted? e)) e)
 	    ((eq? (car e) 'lambda)
-	     (let ((body (compile (cadddr e) '())))
-	       `(lambda ,(cadr e) ,(caddr e) ,(list->vector (reverse code)))))
+	     (compile (cadddr e) '())
+	     `(lambda ,(cadr e) ,(caddr e) ,(list->vector (reverse code))))
 	    (else (map goto-form e))))))
 
 (define (julia-expand ex)
   (goto-form
-   (splice-blocks
-    (closure-convert
-     (flatten-scopes
-      (identify-locals
-       (to-LFF
-	(expand-and-or
-	 (pattern-expand patterns 
-	  (pattern-expand lower-comprehensions
-	   (pattern-expand identify-comprehensions ex)))))))))))
+   (closure-convert
+    (flatten-scopes
+     (identify-locals
+      (to-LFF
+       (expand-and-or
+	(pattern-expand patterns 
+	 (pattern-expand lower-comprehensions
+	  (pattern-expand identify-comprehensions ex))))))))))

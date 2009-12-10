@@ -86,6 +86,11 @@
 	((eqv? item (car lst)) start)
 	(else (index-of item (cdr lst) (+ start 1)))))
 
+(define (index-p pred lst start)
+  (cond ((null? lst) #f)
+	((pred (car lst)) start)
+	(else (index-p pred (cdr lst) (+ start 1)))))
+
 (define (foldl f zero lst)
   (if (null? lst) zero
       (foldl f (f (car lst) zero) (cdr lst))))

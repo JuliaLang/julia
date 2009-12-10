@@ -32,7 +32,7 @@ TODO:
 
 ; operators that are special forms, not function names
 (define syntactic-operators
-  '(= := += -= *= /= ^= %= |\|=| &= $= => <<= >>=
+  '(= := += -= *= /= .*= ./= |\\=| |.\\=| ^= .^= %= |\|=| &= $= => <<= >>=
       -> --> |\|\|| && : |::| |.|))
 (define syntactic-unary-operators '($))
 

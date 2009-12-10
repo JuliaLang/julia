@@ -1,4 +1,4 @@
-type Complex[`T] < Scalar
+type Complex[`T] < Number
     re::T
     im::T
 end
