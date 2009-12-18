@@ -1100,8 +1100,8 @@ end
 (define (j-eq x y) (if (= x y) julia-true julia-false))
 (define (j-lt x y) (if (< x y) julia-true julia-false))
 (make-builtin 'eq_int32 "(Int32,Int32)-->Bool" j-eq)
-(make-builtin 'eq_double "(Double,Double)-->Bool" j-eq)
 (make-builtin 'lt_int32 "(Int32,Int32)-->Bool" j-lt)
+(make-builtin 'eq_double "(Double,Double)-->Bool" j-eq)
 (make-builtin 'lt_double "(Double,Double)-->Bool" j-lt)
 (make-builtin 'ne_double "(Double,Double)-->Bool"
 	      (lambda (x y) (if (and (= x x)

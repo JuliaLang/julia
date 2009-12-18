@@ -31,12 +31,23 @@ inv(z::Complex) = conj(z)/norm(z)
 (/)(z::Complex, x::Real) = complex(z.re/x, z.im/x)
 
 (+)(z::Complex[`T], w::Complex[`T]) = complex(z.re + w.re, z.im + w.im)
+(+)(z::Complex[`T], w::Real)        = complex(z.re + w   , z.im)
+(+)(w::Real, z::Complex[`T])        = complex(w + z.re   , z.im)
+
 (-)(z::Complex[`T], w::Complex[`T]) = complex(z.re - w.re, z.im - w.im)
+(-)(z::Complex[`T], w::Real)        = complex(z.re - w   , z.im)
+(-)(w::Real, z::Complex[`T])        = complex(w - z.re   , -z.im)
+
 (*)(z::Complex[`T], w::Complex[`T]) = complex(z.re*w.re - z.im*w.im,
-                                                z.re*w.im + z.im*w.re)
-(/)(z::Complex[`T], w::Complex[`T]) = z*inv(w)
+                                              z.re*w.im + z.im*w.re)
+(*)(z::Complex, w::Real) = complex(z.re*w, z.im*w)
+(*)(w::Real, z::Complex) = complex(w*z.re, w*z.im)
+
+(/)(z::Number, w::Complex[`T]) = z*inv(w)
 
 ==(z::Complex[`T], w::Complex[`T]) = (z.re == w.re && z.im == w.im)
+==(z::Complex[`T], w::Real)        = (z.re == w    && z.im == 0)
+==(w::Real, z::Complex[`T])        = (z.re == w    && z.im == 0)
 
 #conversion x::Real-->Complex[`T]
 #    return complex(convert(x,T),0)
