@@ -14,7 +14,7 @@ TODO:
      ; the way the lexer works, every prefix of an operator must also
      ; be an operator.
      (-> <- -- -->)
-     (> < >= <= == != |.>| |.<| |.>=| |.<=| |.==| |.!=| |.=| |.!|)
+     (> < >= <= == != |.>| |.<| |.>=| |.<=| |.==| |.!=| |.=| |.!| |<:| |:>|)
      (: ..)
      (<< >>)
      (+ - |\|| $)
@@ -37,7 +37,7 @@ TODO:
 (define syntactic-unary-operators '($))
 
 (define reserved-words '(begin while if for try function type typealias local
-			       return break continue conversion global))
+			       return break continue conversion global macro))
 
 (define (syntactic-op? op) (memq op syntactic-operators))
 (define (syntactic-unary-op? op) (memq op syntactic-unary-operators))
@@ -446,7 +446,7 @@ TODO:
 	 ((else)    (list 'if test then (parse-resword s 'begin)))
 	 (else (error "Improperly terminated if statement")))))
     ((local)  (list 'local (parse-eq s)))
-    ((function)
+    ((function macro)
      (let ((sig (parse-call s)))
        (begin0 (list word sig (parse-block s))
 	       (expect-end s))))

@@ -1,83 +1,81 @@
-type List[`T]
-    maxsize:: Size
-    size:: Size
-    offset:: Size
-    data:: Buffer[`T]
+type EmptyList
+end
+
+type Cons
+    head::Any
+    tail::Union[EmptyList, Cons]
+end
+
+typealias List Union[EmptyList, Cons]
+
+nil = new(EmptyList)
+
+head(x::Cons) = x.head
+tail(x::Cons) = x.tail
+cons(x, y::List) = new(Cons,x,y)
+
+function print(l::List)
+    if istype(l,EmptyList)
+        print("{}")
+    else
+        print("{")
+        while true
+            print(head(l))
+            l = tail(l)
+            if istype(l,Cons)
+                print(", ")
+            else
+                break
+            end
+        end
+        print("}")
+    end
+end
+
+function list()
+    return nil
 end
 
 function list(elts...)
     n = length(elts)
-    if n < 4
-        maxsize = 4
-    else
-        maxsize = n
+    first = cons(elts[1], nil)
+    c = first
+    for i = 2:n
+        c.tail = cons(elts[i], nil)
+        c = c.tail
     end
-    data = new(Buffer[Any], maxsize)
-    for i = 1:n
-        data[i] = elts[i]
-    end
-    return new(List[Any], maxsize, n, 0, data)
+    return first
 end
 
-function ref(l::List, i::Index)
-    if i > l.size
-        error("Out of bounds")
-    end
-    return l.data[i+l.offset]
-end
+length(l::EmptyList) = 0
+length(l::Cons) = 1 + length(tail(l))
 
-function set(l::List, i::Index, elt)
-    if i > l.size
-        error("Out of bounds")
-    end
-    l.data[i+l.offset] = elt
-end
+map(f, l::EmptyList) = nil
+map(f, l::Cons) = cons(f(head(l)), map(f, tail(l)))
 
-length(l::List) = l.size
+copylist(l::EmptyList) = nil
+copylist(l::Cons) = cons(head(l), copylist(tail(l)))
 
-function print(l::List)
-    print("{")
-    for i=1:length(l)
-        if i > 1
-            print(", ")
+function append(lsts...)
+    function append2(a, b)
+        if istype(a,EmptyList)
+            b
+        else
+            cons(head(a), append2(tail(a), b))
         end
-        print(l[i])
     end
-    print("}")
+    n = length(lsts)
+    l = nil
+    for i = n:-1:1
+        l = append2(lsts[i], l)
+    end
+    return l
 end
 
-function grow(a::List, inc::Size)
-    if (inc == 0)
-        return a
-    end
-    if (a.size + inc > a.maxsize - a.offset)
-        newsize = a.maxsize*2
-        while (a.size+inc > newsize-a.offset)
-            newsize *= 2
-        end
-        newlist = new(Buffer[Any], newsize)
-        a.maxsize = newsize
-        for i=1:a.size
-            newlist[i+a.offset] = a.data[i+a.offset]
-        end
-        a.data = newlist
-    end
-    a.size += inc
-    return a
+type Expr
+    head::Symbol
+    args::List
 end
 
-function push(a::List, item)
-    grow(a, 1)
-    a[a.size] = item
-    return a
-end
-
-function pop(a::List)
-    if (a.size == 0)
-        error("pop: List is empty")
-    end
-    item = a[a.size]
-    a[a.size] = ()
-    a.size -= 1
-    return item
-end
+expr(hd, args...)  = new(Expr, hd, list(args...))
+exprl(hd, arglist) = new(Expr, hd, arglist)

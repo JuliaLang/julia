@@ -10,11 +10,54 @@
 ; - use (top x) more consistently
 ; - make goto-form safe for inlining (delay label to index mapping)
 
+(define macro-env (make-table))
+
 (define (quoted? e)
   (and (pair? e)
        (or (eq? (car e) 'quote)
 	   (eq? (car e) 'top)
 	   (eq? (car e) 'value-or-null))))
+
+(define (expand-backquote e)
+  (cond ((symbol? e)          `(quote ,e))
+	((atom? e)            e)
+	((eq? (car e) '$)     (cadr e))
+	((eq? (car e) 'quote)
+	 (if (symbol? (cadr e))
+	     e
+	     (expand-backquote (expand-backquote (cadr e)))))
+	((not (any (lambda (x)
+		     (match '($ (tuple (... x))) x))
+		   e))
+	 `(call (top expr) ,@(map expand-backquote e)))
+	(else
+	 (let loop ((p (cdr e)) (q '()))
+	   (if (null? p)
+	       (let ((forms (reverse q)))
+		 `(call (top exprl) ,(expand-backquote (car e))
+			(call (top append) ,@forms)))
+	       ; look for splice inside backquote, e.g. (a,$(x...),b)
+	       (if (match '($ (tuple (... x))) (car p))
+		   (loop (cdr p)
+			 (cons (cadr (cadr (cadr (car p)))) q))
+		   (loop (cdr p)
+			 (cons `(call (top list) ,(expand-backquote (car p)))
+			       q))))))))
+
+(define (julia-macroexpand e)
+  (cond ((atom? e) e)
+	((eq? (car e) 'quote)
+	 (if (symbol? (cadr e))
+	     e
+	     (julia-macroexpand (expand-backquote (cadr e)))))
+	((and (eq? (car e) 'call)
+	      (pair? (cdr e))
+	      (table-ref macro-env (cadr e) #f)) =>
+	 (lambda (m)
+	   (julia-macroexpand
+	    (julia->scm (j-apply m (map scm->julia (cddr e)))))))
+	(else
+	 (map julia-macroexpand e))))
 
 ; convert x => (x), (tuple x y) => (x y)
 ; used to normalize function signatures like "x->y" and "function +(a,b)"
@@ -435,6 +478,9 @@
 
    (pattern-lambda (typealias . any)
 		   (error "Invalid typealias statement"))
+
+   (pattern-lambda (macro . any)
+		   (error "Macros must be defined at the top level"))
 
    ))
 
@@ -915,7 +961,13 @@ So far only the second case can actually occur.
 	   (cond ((eq? l 'boxed) `(call (top unbox) ,e))
 		 ((number? l)    `(call (top unbox) (closure-ref ,l)))
 		 (else e))))
-	((or (atom? e) (quoted? e)) e)
+	((atom? e) e)
+	((eq? (car e) 'value-or-null)
+	 (let ((v (closure-convert- (cadr e) vinfo)))
+	   (if (pair? v)
+	       v
+	       e)))
+	((quoted? e) e)
 	(else
 	 (case (car e)
 	   ((=)
@@ -1031,4 +1083,5 @@ So far only the second case can actually occur.
        (expand-and-or
 	(pattern-expand patterns 
 	 (pattern-expand lower-comprehensions
-	  (pattern-expand identify-comprehensions ex))))))))))
+	  (pattern-expand identify-comprehensions
+			  (julia-macroexpand ex)))))))))))

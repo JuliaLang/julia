@@ -9,8 +9,6 @@
 (defvar julia-mode-syntax-table
   (let ((table (make-syntax-table)))
     (modify-syntax-entry ?_ "w" table)   ; underscores in words
-    (modify-syntax-entry ?? "w" table)   ; ? in words
-    (modify-syntax-entry ?\\ "w" table)  ; \ is a symbol char outside quotes
     (modify-syntax-entry ?# "<" table)   ; #  single-line comment start
     (modify-syntax-entry ?\n ">" table)  ; \n single-line comment end
     (modify-syntax-entry ?\{ "(} " table)
@@ -19,6 +17,8 @@
     (modify-syntax-entry ?\] ")[ " table)
     (modify-syntax-entry ?\( "() " table)
     (modify-syntax-entry ?\) ")( " table)
+    (modify-syntax-entry ?\\ "." table)  ; \ is an operator outside quotes
+    (modify-syntax-entry ?? "." table)
     (modify-syntax-entry ?$ "." table)
     (modify-syntax-entry ?& "." table)
     (modify-syntax-entry ?* "." table)
@@ -46,13 +46,15 @@
           'identity
           '("if" "else" "elseif" "while" "for" "begin" "end" "block"
             "try" "catch" "return" "local" "type" "function" "new" "quote"
-	    "typealias" "break" "continue" "conversion" "global")
+	    "typealias" "break" "continue" "conversion" "global" "macro"
+	    "module" "import" "export" "const")
           "\\|") "\\)\\>")
      'font-lock-keyword-face)
     '("\\\\\\s-*\".*?\"" . font-lock-string-face)))
 
 (defconst julia-block-start-keywords
-  (list "if" "while" "for" "begin" "try" "type" "function" "conversion"))
+  (list "if" "while" "for" "begin" "try" "type" "function" "conversion"
+	"macro"))
 
 (defconst julia-block-other-keywords
   (list "else" "elseif"))

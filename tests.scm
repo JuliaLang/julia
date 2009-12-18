@@ -160,10 +160,10 @@ end
 (assert-subtype "Buffer[Int8]" "Buffer[Int8]")
 
 (define-macro (assert-conform t1 t2)
-  `(assert (conform ',(ty t1) ',(ty t2) #t)))
+  `(assert (conform ',(ty t1) ',(ty t2))))
 
 (define-macro (assert-!conform t1 t2)
-  `(assert (not (conform ',(ty t1) ',(ty t2) #t))))
+  `(assert (not (conform ',(ty t1) ',(ty t2)))))
 
 (assert-conform "(`a, `a)" "(`b, `c)")
 (assert-!conform "(`a, `b)" "(`c, `c)")

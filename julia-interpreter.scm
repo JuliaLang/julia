@@ -369,16 +369,11 @@ TODO:
 ; tells whether a type conforms to a given generic type
 ; returns #f or an assoc list showing the assignment of
 ; type parameters that makes the relation hold
-(define (conform t gt cnvt?)
+(define (conform t gt)
   (define (param-search t gt p options env)
     (if (null? p)
 	(let ((super (instantiate-type- gt env)))
-	  (and (if cnvt?
-		   (or (subtype? t super)
-		       (and (not (any (lambda (e) (type-abstract? (cdr e)))
-				      env))
-			    (convertible? t super)))
-		   (subtype? t super))
+	  (and (subtype? t super)
 	       env))
 	; make sure all parameters in t that this parameter might match
 	; are the same symbol, otherwise there's a conflict. e.g.
@@ -396,7 +391,7 @@ TODO:
   ;(display "conform? ")
   ;(julia-print t) (display " ")
   ;(julia-print gt) (newline)
-  (let ((pairs (conform- t gt '() (if cnvt? convertible? subtype?)))
+  (let ((pairs (conform- t gt '()))
 	(tp    (all-type-params gt)))
     ; post-process to see if all the possible types for a given
     ; parameter can be reconciled
@@ -412,9 +407,7 @@ TODO:
 
 ; generate list of corresponding type components, (type . T) if parameter
 ; T might correspond to type
-; pred is either subtype? or convertible? depending on whether conversion
-; is allowed for this lookup.
-(define (conform- child parent env pred)
+(define (conform- child parent env)
   ;(display "conform- ")
   ;(julia-print child) (display " ")
   ;(julia-print parent) (newline)
@@ -433,17 +426,16 @@ TODO:
 	((eq? (type-name child) 'Union)
 	 (foldl (lambda (t env)
 		  (and env
-		       (conform- t parent env pred)))
+		       (conform- t parent env)))
 		env
 		(type-params child)))
 	((eq? (type-name parent) 'Union)
 	 ; todo: maybe union all corresponding components together
-	 (any   (lambda (t) (conform- child t env pred))
+	 (any   (lambda (t) (conform- child t env))
 	        (type-params parent)))
 	
 	((and (or (not (has-params? parent))
-		  (not (has-params? child)))
-	      (eq? pred subtype?))
+		  (not (has-params? child))))
 	 (and (subtype? child parent)
 	      env))
 	
@@ -465,7 +457,7 @@ TODO:
 	      ((null? cp) (cond ((null? pp)  env)
 				(pseq
 				 (conform- bottom-type (type-param0 (car pp))
-					   env pred))
+					   env))
 				(else #f)))
 	      ((and cseq (not pseq)) #f)
 	      ((null? pp)            #f)
@@ -477,7 +469,7 @@ TODO:
 				       (if pseq
 					   (type-param0 (car pp))
 					   (car pp))
-				       env pred)))
+				       env)))
 		 (and newenv
 		      ; if both end up on sequence types, and
 		      ; parameter matched. stop with "yes" now,
@@ -490,18 +482,7 @@ TODO:
 	
 	; otherwise walk up the type hierarchy
 	(else
-	 (let ((super (conform- (type-super child) parent env pred)))
-	   (if (eq? pred subtype?)
-	       super
-	       (let ((temp
-		      (cons super
-			    (map (lambda (q)
-				   (conform- q parent env subtype?))
-				 (possible-conversions child)))))
-		 (and (not (every not temp))
-		      (delete-duplicates-p
-		       (apply append (map (lambda (x) (or x '())) temp))
-		       eq?))))))))
+	 (conform- (type-super child) parent env))))
 
 ; --- define some key builtin types ---
 
@@ -588,27 +569,20 @@ TODO:
   ; compilation goes here
   f)
 
-(define (method-table-assoc methtable type cnvt?)
+(define (method-table-assoc methtable type)
   (let ((m (method-table-assoc-p (mt:mlist methtable) type
-				 (if cnvt?
-				     (lambda (t mt)
-				       (if (type-generic? mt)
-					   (conform t mt #t)
-					   (convertible? t mt)))
-				     (lambda (t mt)
-				       (if (type-generic? mt)
-					   (conform t mt #f)
-					   (subtype? t mt)))))))
+				 (lambda (t mt)
+				   (if (type-generic? mt)
+				       (conform t mt)
+				       (subtype? t mt))))))
     (and m
 	 (if (type-generic? (car m))
-	     (let* ((env     (conform type (car m) cnvt?))
+	     (let* ((env     (conform type (car m)))
 		    (newtype (instantiate-type- (car m) env))
 		    (newmeth (instantiate-method (cdr m) env)))
 	       ; cache result in concrete method table
 	       (method-table-insert! methtable newtype newmeth)
-	       ; we know the newly-instantiated method is at least applicable
-	       ; under conversion, so if cnvt? is true we can always return it
-	       (if (or cnvt? (subtype? type newtype))
+	       (if (subtype? type newtype)
 		   (cons newtype newmeth)
 		   #f))
 	     m))))
@@ -627,7 +601,7 @@ TODO:
 (define (type<=? a b)
   (if (type-generic? a)
       (if (type-generic? b)
-	  (not (not (conform a b #f)))
+	  (not (not (conform a b)))
 	  (subtype? a b))
       (or (subtype? a b)
 	  (and (not (subtype? b a))
@@ -644,26 +618,18 @@ TODO:
 
 (define (j-apply-generic ce args)
   (let* ((argtype (make-tuple-type (map type-of args)))
-	 (meth    (best-method (vector-ref ce 0) argtype #f)))
+	 (meth    (best-method (vector-ref ce 0) argtype)))
     (if meth
 	; applicable without conversion
 	((closure-proc (cdr meth)) (closure-env (cdr meth)) args)
-	(let ((meth  (best-method (vector-ref ce 0) argtype #t)))
-	  (if (not meth)
-	      (error "No method for function" (vector-ref ce 1)
-		     "matching types"
-		     (map julia->string (type-params argtype)))
-	      ; applicable with conversion
-	      ((closure-proc (cdr meth)) (closure-env (cdr meth))
-	       (tuple->list
-		(j-convert (list->tuple args)
-			   (car meth)))))))))
+	(error "No method for function" (vector-ref ce 1) "matching types"
+	       (map julia->string (type-params argtype))))))
 
 (define (make-generic-function name)
   (make-closure gf-type j-apply-generic (vector (make-method-table) name)))
 
-(define (best-method methtable argtype cnvt?)
-  (method-table-assoc methtable argtype cnvt?))
+(define (best-method methtable argtype)
+  (method-table-assoc methtable argtype))
 
 (define (gf-mtable gf) (vector-ref (closure-env gf) 0))
 (define (gf-name gf)   (vector-ref (closure-env gf) 1))
@@ -706,27 +672,8 @@ TODO:
 
 (define (get-conversion from to)
   (let ((m (method-table-assoc conversion-table
-			       (make-function-type to from) #f)))
+			       (make-function-type to from))))
     (and m (cdr m))))
-
-; get a list of types t can be converted to
-(define (possible-conversions t)
-  (foldl (lambda (te lst)
-	   (let ((to-type
-		  (let* ((ft   (car te))
-			 (from (type-param ft 1))
-			 (to   (type-param0 (type-param ft 0))))
-		    (if (type-generic? from)
-			(let ((env (conform t from #f)))
-			  (and env
-			       (instantiate-type- to env)))
-			(and (subtype? t from)
-			     to)))))
-	     (if to-type
-		 (cons to-type lst)
-		 lst)))
-	 '()
-	 (mt:mlist conversion-table)))
 
 (define (convert-tuple x to)
   (let loop ((cp (tuple->list x))
@@ -869,13 +816,40 @@ end
 
 ; --- evaluator ---
 
-(define (scm->julia x)
-  x)
+(define *empty-env* '(()))
 
 (define (make-numeric-literal n)
   (if (not (flonum? n))
       (j-box int32-type n)
       (j-box double-type n)))
+
+(define (scm->julia x)
+  (cond ((symbol? x)  x)
+	((null?   x)  x)
+	((number? x)  (make-numeric-literal x))
+	((or (vector? x) (string? x))  x)
+	((atom? x)    (error "cannot quote" x))
+	(else
+	 (j-apply (eval-sym 'expr *empty-env*)
+		  (map scm->julia x)))))
+
+(define (julia->scm x)
+  (cond ((symbol? x)  x)
+	((string? x)  x)
+	((pair? x) (map julia->scm x))
+	((eq? (type-of x) bool-type) (if (j-false? x) 'false 'true))
+	((subtype? (type-of x) number-type) (j-unbox x))
+	((eq? (type-name (type-of x)) 'Expr)
+	 (cons (julia->scm (j-get-field x 'head))
+	       (map julia->scm (julialist->scmlist (j-get-field x 'args)))))
+	(else
+	 (error "invalid syntax: " (julia->string x)))))
+
+(define (julialist->scmlist l)
+  (if (eq? (type-name (type-of l)) 'EmptyList)
+      '()
+      (cons (j-get-field l 'head)
+	    (julialist->scmlist (j-get-field l 'tail)))))
 
 (define (eval-sym s env)
   (let ((a (assq s (car env))))
@@ -896,7 +870,7 @@ end
 	 (case (car e)
 	   ((quote)   (scm->julia (cadr e)))
 	   ((null)    julia-null)
-	   ((top)     (eval-sym (cadr e) '(())))
+	   ((top)     (eval-sym (cadr e) *empty-env*))
 	   ((lambda)  e)  ; remaining lambdas are data
 	   ((value-or-null)  ; variable value or null if undefined
 	    (let ((sym (cadr e)))
@@ -979,11 +953,24 @@ end
 	       (j-eval I env)
 	       (loop (+ ip 1)))))))))
 
+(define (process-macro-def e)
+  (let ((fexp
+	 ((pattern-lambda (macro (call name . argl) body)
+			  (let ((argl (fsig-to-lambda-list argl)))
+			    (function-expr argl body)))
+	  e)))
+    (if (not fexp)
+	(error "Invalid macro definition")
+	(table-set! macro-env (cadr (cadr e))
+		    (j-eval (cadr (julia-expand fexp)) *empty-env*)))))
+
 (define (j-toplevel-eval e)
-  ; lambda with no scope-block means variables assigned to in the
-  ; expression stay global.
-  (j-apply (j-eval (cadr (julia-expand `(lambda () ,e))) '(()))
-	   '()))
+  (if (and (pair? e) (eq? (car e) 'macro))
+      (process-macro-def e)
+      ; lambda with no scope-block means variables assigned to in the
+      ; expression stay global.
+      (j-apply (j-eval (cadr (julia-expand `(lambda () ,e))) *empty-env*)
+	       '())))
 
 ; --- initialize builtins ---
 
@@ -1080,38 +1067,42 @@ end
 (define-macro (sif1 b f) `(lambda (x) (si ,b (,f x))))
 (define-macro (uif2 b f) `(lambda (x y) (ui ,b (,f x y))))
 (define-macro (sif2 b f) `(lambda (x y) (si ,b (,f x y))))
+(make-builtin 'neg_int64 "(Int64,)-->Int64"      (sif1 64 -))
+(make-builtin 'add_int64 "(Int64,Int64)-->Int64" (sif2 64 +))
+(make-builtin 'sub_int64 "(Int64,Int64)-->Int64" (sif2 64 -))
+(make-builtin 'mul_int64 "(Int64,Int64)-->Int64" (sif2 64 *))
+(make-builtin 'div_int64 "(Int64,Int64)-->Int64" (sif2 64 div-int))
+(make-builtin 'mod_int64 "(Int64,Int64)-->Int64" (sif2 64 mod-int))
+(make-builtin 'neg_int32 "(Int32,)-->Int32"      (sif1 32 -))
 (make-builtin 'add_int32 "(Int32,Int32)-->Int32" (sif2 32 +))
 (make-builtin 'sub_int32 "(Int32,Int32)-->Int32" (sif2 32 -))
-(make-builtin 'neg_int32 "(Int32,)-->Int32"      (sif1 32 -))
 (make-builtin 'mul_int32 "(Int32,Int32)-->Int32" (sif2 32 *))
 (make-builtin 'div_int32 "(Int32,Int32)-->Int32" (sif2 32 div-int))
 (make-builtin 'mod_int32 "(Int32,Int32)-->Int32" (sif2 32 mod-int))
+(make-builtin 'neg_int16 "(Int16,)-->Int16"      (sif1 16 -))
+(make-builtin 'add_int16 "(Int16,Int16)-->Int16" (sif2 16 +))
+(make-builtin 'sub_int16 "(Int16,Int16)-->Int16" (sif2 16 -))
+(make-builtin 'mul_int16 "(Int16,Int16)-->Int16" (sif2 16 *))
+(make-builtin 'div_int16 "(Int16,Int16)-->Int16" (sif2 16 div-int))
+(make-builtin 'mod_int16 "(Int16,Int16)-->Int16" (sif2 16 mod-int))
+(make-builtin 'neg_int8  "(Int8,)-->Int8"      (sif1 8 -))
+(make-builtin 'add_int8  "(Int8,Int8)-->Int8"  (sif2 8 +))
+(make-builtin 'sub_int8  "(Int8,Int8)-->Int8"  (sif2 8 -))
+(make-builtin 'mul_int8  "(Int8,Int8)-->Int8"  (sif2 8 *))
+(make-builtin 'div_int8  "(Int8,Int8)-->Int8"  (sif2 8 div-int))
+(make-builtin 'mod_int8  "(Int8,Int8)-->Int8"  (sif2 8 mod-int))
 (make-builtin 'add_double "(Double,Double)-->Double" +)
 (make-builtin 'sub_double "(Double,Double)-->Double" -)
 (make-builtin 'neg_double "(Double,)-->Double" -)
 (make-builtin 'mul_double "(Double,Double)-->Double" *)
 (make-builtin 'div_double "(Double,Double)-->Double"
 	      (lambda (x y) (exact->inexact (/ x y))))
-(make-builtin 'eq_int32 "(Int32,Int32)-->Bool"
-	      (lambda (x y) (if (= x y)
-				julia-true
-				julia-false)))
-(make-builtin 'eq_double "(Double,Double)-->Bool"
-	      (lambda (x y) (if (= x y)
-				julia-true
-				julia-false)))
-(make-builtin 'lt_int32 "(Int32,Int32)-->Bool"
-	      (lambda (x y) (if (< x y)
-				julia-true
-				julia-false)))
-(make-builtin 'lt_double "(Double,Double)-->Bool"
-	      (lambda (x y) (if (< x y)
-				julia-true
-				julia-false)))
-(make-builtin 'ne_int32 "(Int32,Int32)-->Bool"
-	      (lambda (x y) (if (not (= x y))
-				julia-true
-				julia-false)))
+(define (j-eq x y) (if (= x y) julia-true julia-false))
+(define (j-lt x y) (if (< x y) julia-true julia-false))
+(make-builtin 'eq_int32 "(Int32,Int32)-->Bool" j-eq)
+(make-builtin 'eq_double "(Double,Double)-->Bool" j-eq)
+(make-builtin 'lt_int32 "(Int32,Int32)-->Bool" j-lt)
+(make-builtin 'lt_double "(Double,Double)-->Bool" j-lt)
 (make-builtin 'ne_double "(Double,Double)-->Bool"
 	      (lambda (x y) (if (and (= x x)
 				     (= y y)
@@ -1182,14 +1173,17 @@ end
 ; --- print and repl ---
 
 (define (julia->string x)
-  (with-output-to-string '() (lambda () (julia-print x))))
+  (with-output-to-string '() (lambda () (call-print x))))
+
+(define (call-print x)
+  (j-apply (eval-sym 'print *empty-env*) (list x)))
 
 (define (print-tuple x opn cls)
   (display opn)
   (let loop ((L (tuple-length x))
 	     (i 0))
     (if (< i L)
-	(begin (julia-print (tuple-ref x i))
+	(begin (call-print (tuple-ref x i))
 	       (if (< i (- L 1))
 		   (display ", ")
 		   (if (= L 1)
@@ -1251,12 +1245,12 @@ end
 	       (vals (cdr (vector->list x))))
 	   (display tn)
 	   (display "(")
-	   (let loop ((L (tuple-length x))
+	   (let loop ((L (- (vector-length x) 1))
 		      (i 0))
 	     (if (< i L)
 		 (begin (display (tuple-ref (tuple-ref fields i) 0))
-			(display ":")
-			(julia-print (vector-ref x (+ i 1)))
+			(display "=")
+			(call-print (vector-ref x (+ i 1)))
 			(if (< i (- L 1))
 			    (display ", "))
 			(loop L (+ i 1)))
@@ -1334,8 +1328,7 @@ end
 		(not (eq? expr 'Quit))
 		(not (eof-object? expr))
 		(if COLOR? (display "\033[1m\033[36m"))
-		(j-toplevel-eval
-		 `(call print (quote ,(j-toplevel-eval expr))))))))))
+		(call-print (j-toplevel-eval expr))))))))
     (newline)
     (if continue?
 	(begin (newline) (julia-prompt)))))
