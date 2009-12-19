@@ -39,6 +39,7 @@ def_binary_op(Int8, {}, %,   mod_int8)
 (-)(x::Int8 ) = box(Int8 , neg_int8 (unbox(x)))
 #(*)(x::Int32, y::Int32) = box(Int32, mul_int32(unbox(x), unbox(y)))
 (/)(x::Int32, y::Int32) = double(x)/double(y)
+(//)(x::Int32, y::Int32) = rational(x,y)
 #div(x::Int32, y::Int32) = box(Int32, div_int32(unbox(x), unbox(y)))
 #(%)(x::Int32, y::Int32) = box(Int32, mod_int32(unbox(x), unbox(y)))
 
