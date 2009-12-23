@@ -161,3 +161,8 @@ function vector(elts::`T...)
     end
     return v
 end
+
+# iterating over vectors
+start(v::Vector) = 1
+done(v::Vector, i) = (i > numel(v))
+next(v::Vector, i) = (v[i], i+1)

@@ -43,6 +43,8 @@ den(x::Rational) = x.den
 ==(x::Rational, y::Int)      = (x.num == y     && x.den == 1)
 ==(y::Int, x::Rational)      = (x.num == y     && x.den == 1)
 
+double(x::Rational) = double(x.num)/double(x.den)
+
 conversion x::Int32-->Rational
     return rational(x,1)
 end

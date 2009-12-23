@@ -139,8 +139,9 @@
 		 ,(expand-compare-chain (cddr e)))))
       `(call ,(cadr e) ,(car e) ,(caddr e))))
 
+; : inside indexing means :1:
 (define (process-indexes i)
-  (map (lambda (x) (if (eq? x ':) '(quote :) x)) i))
+  (map (lambda (x) (if (eq? x ':) '(: (: 1 :)) x)) i))
 
 (define (find-quoted-syms e)
   (if (atom? e)
@@ -289,7 +290,7 @@
 		   (let ((t (gensym)))
 		     `(block (= ,t ,x)
 			     ,@(let loop ((lhs lhss)
-					  (i   0))
+					  (i   1))
 				 (if (null? lhs) '((null))
 				     (cons `(= ,(car lhs)
 					       (call tupleref
@@ -423,10 +424,16 @@
 
    ; for loop over arbitrary vectors
    (pattern-lambda 
-    (for (= x vec) body)
-    (let ((i (gensym)))
-      `(for (= ,i (: 1 (call numel ,vec)))
-	    (block (= ,x (ref ,vec ,i)) ,body)) ))
+    (for (= i X) body)
+    (let ((coll  (gensym))
+	  (state (gensym)))
+      `(scope-block
+	(block (= ,coll ,X)
+	       (= ,state (call (top start) ,coll))
+	       (while (call (top !) (call (top done) ,coll ,state))
+		      (block
+		       (= (tuple ,i ,state) (call (top next) ,coll ,state))
+		       ,body))))))
 
    ; macro for timing evaluation
    (pattern-lambda (call (-/ Time) expr)
@@ -436,11 +443,11 @@
    (pattern-lambda (+= a b)     (expand-update-operator '+ a b))
    (pattern-lambda (-= a b)     (expand-update-operator '- a b))
    (pattern-lambda (*= a b)     (expand-update-operator '* a b))
+   (pattern-lambda (.*= a b)    (expand-update-operator '.* a b))
    (pattern-lambda (/= a b)     (expand-update-operator '/ a b))
+   (pattern-lambda (./= a b)    (expand-update-operator './ a b))
    (pattern-lambda (//= a b)    (expand-update-operator '// a b))
    (pattern-lambda (.//= a b)   (expand-update-operator '.// a b))
-   (pattern-lambda (.*= a b)    (expand-update-operator '.* a b))
-   (pattern-lambda (./= a b)    (expand-update-operator './ a b))
    (pattern-lambda (|\\=| a b)  (expand-update-operator '|\\| a b))
    (pattern-lambda (|.\\=| a b) (expand-update-operator '|.\\| a b))
    (pattern-lambda (^= a b)     (expand-update-operator '^ a b))
@@ -453,6 +460,17 @@
    (pattern-lambda (>>= a b)    (expand-update-operator '>> a b))
 
    ;; colon
+   (pattern-lambda (: a (-/ :))
+		   `(call (top rangefrom) ,a 1))
+   (pattern-lambda (: a b (-/ :))
+		   `(call (top rangefrom) ,a ,b))
+   (pattern-lambda (: (: b (-/ :)))
+		   `(call (top rangeby) ,b))
+   (pattern-lambda (: (: b c))
+		   `(call (top rangeto) ,b ,c))
+   (pattern-lambda (: c)
+		   `(call (top rangeto) 1 ,c))
+
    (pattern-lambda
     (: a b (-? c))
     (if c
