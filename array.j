@@ -128,6 +128,7 @@ function set(a::Array, i::Index, j::Index, x)
 end
 
 numel(a::Array) = a.data.length
+length(v::Array[`T,1]) = v.data.length
 zeros(sz...) = a = make_array(sz...)
 ones(m::Size) = [ 1 | (i=1:m) ]
 ones(m::Size, n::Size) = [ 1 | (i=1:m), (j=1:n) ]

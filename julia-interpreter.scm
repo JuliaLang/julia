@@ -540,10 +540,8 @@ TODO:
 
 ; --- function objects ---
 
-(define (make-closure ft proc env)
-  (if (not (subtype? ft function-type))
-      (error "make-closure: not a function type"))
-  (vector ft proc env))
+(define (make-closure proc env)
+  (vector function-type proc env))
 
 (define (function-arg-type f)
   (type-param0 (type-of f)))
@@ -626,7 +624,7 @@ TODO:
 	       (map julia->string (type-params argtype))))))
 
 (define (make-generic-function name)
-  (make-closure gf-type j-apply-generic (vector (make-method-table) name)))
+  (make-closure j-apply-generic (vector (make-method-table) name)))
 
 (define (best-method methtable argtype)
   (method-table-assoc methtable argtype))
@@ -638,10 +636,6 @@ TODO:
 (define (add-method-for gf types meth)
   (method-table-insert! (gf-mtable gf) types meth)
   #t)
-
-; add a method based on its function type
-(define (add-method gf meth)
-  (add-method-for gf (function-arg-type meth) meth))
 
 ; --- implicit conversions ---
 
@@ -803,16 +797,14 @@ end
 |#
 (let ((ref-gf (make-generic-function 'ref)))
   (table-set! julia-globals 'ref ref-gf)
-  (add-method ref-gf (make-closure
-		      (instantiate-type
-		       function-type
-		       (list (julia-tuple Type-type
-					  (instantiate-type
-					   sequence-type (list any-type)))
-			     Type-type))
-		      (lambda (ce args)
-			(instantiate-type (car args) (cdr args)))
-		      #f)))
+  (add-method-for ref-gf
+		  (julia-tuple Type-type
+			       (instantiate-type
+				sequence-type (list any-type)))
+		  (make-closure
+		   (lambda (ce args)
+		     (instantiate-type (car args) (cdr args)))
+		   #f)))
 
 ; --- evaluator ---
 
@@ -938,20 +930,19 @@ end
     ; interpret the body of a function, handling control flow
     (let loop ((ip 0))
       (let ((I (vector-ref code ip)))
-	(if (atom? I)
-	    (begin (j-eval I env) (loop (+ ip 1)))
-	    (case (car I)
-	      ((goto)
-	       (loop (caadr I)))
-	      ((goto-ifnot)
-	       (if (j-false? (j-eval (cadr I) env))
-		   (loop (caaddr I))
-		   (loop (+ ip 1))))
-	      ((return)
-	       (j-eval (cadr I) env))
-	      (else
-	       (j-eval I env)
-	       (loop (+ ip 1)))))))))
+	(case (car I)
+	  ((label) (loop (+ ip 1)))
+	  ((goto)
+	   (loop (cadr I)))
+	  ((goto-ifnot)
+	   (if (j-false? (j-eval (cadr I) env))
+	       (loop (caddr I))
+	       (loop (+ ip 1))))
+	  ((return)
+	   (j-eval (cadr I) env))
+	  (else
+	   (j-eval I env)
+	   (loop (+ ip 1))))))))
 
 (define (process-macro-def e)
   (let ((fexp
@@ -979,21 +970,20 @@ end
 (define (make-builtin name T impl)
   (table-set! julia-globals name
 	      (make-closure
-	       (if (string? T) (ty T) T)
+	       ;(if (string? T) (ty T) T)
 	       (lambda (ce args) (apply impl args))
 	       #f)))
 
 ; low-level intrinsics needed for bootstrapping
 ; the other builtins' type expressions cannot be evaluated without these
 (make-builtin 'new_closure
-	      ;"(Type,Any,Tuple)-->Function"
+	      ;"(Any,Tuple)-->Function"
 	      (instantiate-type function-type
-				(list (julia-tuple Type-type
-						   any-type
+				(list (julia-tuple any-type
 						   tuple-type)
 				      function-type))
-	      (lambda (t e clo)
-		(make-closure t j-eval-body (cons e clo))))
+	      (lambda (e clo)
+		(make-closure j-eval-body (cons e clo))))
 (make-builtin 'tuple
 	      ;"(Any...)-->Tuple"
 	      (instantiate-type function-type

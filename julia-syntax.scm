@@ -59,6 +59,11 @@
 	(else
 	 (map julia-macroexpand e))))
 
+(define (lam:args x) (cadr x))
+(define (lam:vars x) (llist-vars (lam:args x)))
+(define (lam:vinfo x) (caddr x))
+(define (lam:body x) (cadddr x))
+
 ; convert x => (x), (tuple x y) => (x y)
 ; used to normalize function signatures like "x->y" and "function +(a,b)"
 (define (fsig-to-lambda-list arglist)
@@ -788,7 +793,7 @@ So far only the second case can actually occur.
   (define (add-local-decls e env)
     (if (or (atom? e) (quoted? e)) e
 	(cond ((eq? (car e) 'lambda)
-	       (let* ((env (append (llist-vars (cadr e)) env))
+	       (let* ((env (append (lam:vars e) env))
 		      (body (add-local-decls (caddr e) env)))
 		 (list 'lambda (cadr e) body)))
 	      
@@ -828,7 +833,7 @@ So far only the second case can actually occur.
 	(else
 	 (let* ((bound-vars  ; compute vars bound by current expr
 		 (case (car e)
-		   ((lambda)      (llist-vars (cadr e)))
+		   ((lambda)      (lam:vars e))
 		   ((scope-block) (scope-block-vars e))
 		   (else '())))
 		(new-renames (without renames bound-vars)))
@@ -861,7 +866,7 @@ So far only the second case can actually occur.
   (cond ((atom? e)   e)
 	((quoted? e) e)
 	((eq? (car e) 'lambda)
-	 (let* ((argnames  (llist-vars (cadr e)))
+	 (let* ((argnames  (lam:vars e))
 		(body0     (caddr e))
 		(body      (if (eq? (car body0) 'scope-block)
 			       (car (last-pair body0))
@@ -891,7 +896,7 @@ So far only the second case can actually occur.
 	   (var-info-for name (cdr vinfo)))))
 
 (define (lambda-all-vars e)
-  (append (llist-vars (cadr e))
+  (append (lam:vars e)
 	  (cdr (caddr e))))
 
 ; convert each lambda's (locals ...) to
@@ -928,7 +933,7 @@ So far only the second case can actually occur.
 	((eq? (car e) 'lambda)
 	 (let* ((lvars (lambda-all-vars e))
 		(vi    (map make-var-info lvars))
-		(rec   (analyze-vars (cadddr e) (cons vi env)))
+		(rec   (analyze-vars (lam:body e) (cons vi env)))
 		; from this inner function's captured variables, select
 		; those that come from frames above ours. we need to
 		; capture those variables too, in order to pass them on
@@ -937,7 +942,7 @@ So far only the second case can actually occur.
 				 (member-p vi (cdr env)
 					   (lambda (v e) (eq? (cdr v) e))))
 			       (cdr rec))))
-	   (cons `(lambda ,(cadr e)
+	   (cons `(lambda ,(lam:args e)
 		    (var-info ,(caddr e) ,vi ,(map car (cdr rec)))
 		    ,(car rec))
 		 cv)))
@@ -955,7 +960,7 @@ So far only the second case can actually occur.
 ; . uses of v change to unbox(v)
 ; . assignments to v change to boxset(v, value)
 ; . lambda expressions change to
-;   new_closure(type, `expr, (capt-var1, capt-var2, ...))
+;   new_closure(lambda-expr, (capt-var1, capt-var2, ...))
 ; . for each closed var v, uses change to (call unbox (closure-ref idx))
 ; . assignments to closed var v change to (call boxset (closure-ref idx) rhs)
 (define (closure-convert- e vinfo)
@@ -1004,11 +1009,11 @@ So far only the second case can actually occur.
 		      (else
 		       `(= ,(cadr e) ,rhs))))))
 	   ((lambda)
-	    (let ((vinf  (caddr e))
+	    (let ((vinf  (lam:vinfo e))
 		  (args  (llist-vars (cadr e)))
-		  (body0 (cadddr e))
+		  (body0 (lam:body e))
 		  (capt  (map vinfo:name
-			      (filter vinfo:capt (caddr (caddr e))))))
+			      (filter vinfo:capt (caddr (lam:vinfo e))))))
 	      (let ((body
 		     `(block ,@(map (lambda (v)
 				      `(= ,v
@@ -1019,10 +1024,7 @@ So far only the second case can actually occur.
 				    capt)
 			     ,(closure-convert- body0 vinf))))
 		`(call new_closure
-		       (call ref Function
-			     (call tuple ,@(llist-types (cadr e)))
-			     Any)
-		       (lambda ,(cadr e) ,(caddr e) ,body)
+		       (lambda ,(lam:args e) ,(lam:vinfo e) ,body)
 		       (call tuple
 			     ; NOTE: to pass captured variables on to other
 			     ; closures we must pass the box, not the value
@@ -1050,52 +1052,82 @@ So far only the second case can actually occur.
 (define (goto-form e)
   (let ((code '())
 	(ip   0))
-    (let ((emit
-	   (lambda (c)
-	     (set! code (cons c code))
-	     (set! ip (+ ip 1))))
-	  (make-label
-	   (lambda () (list #f)))
-	  (mark-label
-	   (lambda (l) (set-car! l ip))))
-      (define (compile e break-labels)
-	(if (atom? e) #f  ; atom has no effect
-	    (case (car e)
-	      ((if) (let ((elsel (make-label))
-			  (endl  (make-label)))
-		      (emit `(goto-ifnot ,(goto-form (cadr e)) ,elsel))
-		      (compile (caddr e) break-labels)
-		      (emit `(goto ,endl))
-		      (mark-label elsel)
-		      (compile (cadddr e) break-labels)
-		      (mark-label endl)))
-	      ((_while) (let ((topl (make-label))
-			      (endl (make-label)))
-			  (mark-label topl)
-			  (emit `(goto-ifnot ,(goto-form (cadr e)) ,endl))
-			  (compile (caddr e) break-labels)
-			  (emit `(goto ,topl))
-			  (mark-label endl)))
-	      ((block) (for-each (lambda (x) (compile x break-labels))
-				 (cdr e)))
-	      ((break-block) (let ((endl (make-label)))
-			       (compile (caddr e)
-					(cons (cons (cadr e) endl)
-					      break-labels))
-			       (mark-label endl)))
-	      ((break) (let ((labl (assq (cadr e) break-labels)))
-			 (if (not labl)
-			     (error "break or continue outside loop")
-			     (emit `(goto ,(cdr labl))))))
-	      (else  (emit (goto-form e))))))
-      (cond ((or (atom? e) (quoted? e)) e)
-	    ((eq? (car e) 'lambda)
-	     (compile (cadddr e) '())
-	     `(lambda ,(cadr e) ,(caddr e) ,(list->vector (reverse code))))
-	    (else (map goto-form e))))))
+    (define (emit c)
+      (set! code (cons c code))
+      (set! ip (+ ip 1)))
+    (define (make-label)   (gensym))
+    (define (mark-label l) (emit `(label ,l)))
+    (define (compile e break-labels)
+      (if (atom? e) #f  ; atom has no effect
+	  (case (car e)
+	    ((if) (let ((elsel (make-label))
+			(endl  (make-label)))
+		    (emit `(goto-ifnot ,(goto-form (cadr e)) ,elsel))
+		    (compile (caddr e) break-labels)
+		    (emit `(goto ,endl))
+		    (mark-label elsel)
+		    (compile (cadddr e) break-labels)
+		    (mark-label endl)))
+	    ((_while) (let ((topl (make-label))
+			    (endl (make-label)))
+			(mark-label topl)
+			(emit `(goto-ifnot ,(goto-form (cadr e)) ,endl))
+			(compile (caddr e) break-labels)
+			(emit `(goto ,topl))
+			(mark-label endl)))
+	    ((block) (for-each (lambda (x) (compile x break-labels))
+			       (cdr e)))
+	    ((break-block) (let ((endl (make-label)))
+			     (compile (caddr e)
+				      (cons (cons (cadr e) endl)
+					    break-labels))
+			     (mark-label endl)))
+	    ((break) (let ((labl (assq (cadr e) break-labels)))
+		       (if (not labl)
+			   (error "break or continue outside loop")
+			   (emit `(goto ,(cdr labl))))))
+	    (else  (emit (goto-form e))))))
+    (cond ((or (atom? e) (quoted? e)) e)
+	  ((eq? (car e) 'lambda)
+	   (compile (cadddr e) '())
+	   `(lambda ,(cadr e) ,(caddr e) ,(list->vector (reverse code))))
+	  (else (map goto-form e)))))
+
+; replace symbolic label references with indexes, for the interpreter
+; needed for interpreter only!
+(define (resolve-labels e)
+  (define (label-addrs v)
+    (let ((n (vector-length v)))
+      (let loop ((i 0)
+		 (a '()))
+	(if (>= i n)
+	    a
+	    (let ((item (vector-ref v i)))
+	      (if (and (pair? item)
+		       (eq? (car item) 'label))
+		  (loop (+ i 1)
+			(cons (cons (cadr item) i) a))
+		  (loop (+ i 1) a)))))))
+  (define (fix-gotos v labels)
+    (vector-map (lambda (e)
+		  (cond ((and (pair? e) (eq? (car e) 'goto))
+			 `(goto ,(lookup (cadr e) labels (cadr e))))
+			((and (pair? e) (eq? (car e) 'goto-ifnot))
+			 `(goto-ifnot ,(resolve-labels (cadr e))
+				      ,(lookup (caddr e) labels (caddr e))))
+			(else (resolve-labels e))))
+		v))
+  (cond ((atom? e) e)
+	((eq? (car e) 'lambda)
+	 `(lambda ,(cadr e) ,(caddr e)
+		  ,(fix-gotos (lam:body e) (label-addrs (lam:body e)))))
+	(else (map resolve-labels e))))
+
+(define (interpreter-goto-form e)
+  (resolve-labels (goto-form e)))
 
 (define (julia-expand ex)
-  (goto-form
+  (interpreter-goto-form
    (closure-convert
     (flatten-scopes
      (identify-locals
