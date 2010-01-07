@@ -729,7 +729,8 @@ TODO:
     (vector-set! obj i
 		 (j-convert v (tuple-ref (tuple-ref
 					  (type-fields (type-of obj))
-					  (- i 1)) 1)))))
+					  (- i 1)) 1))))
+  obj)
 
 (define (j-tuple . args) (if (null? args) julia-null
 			     (apply julia-tuple args)))

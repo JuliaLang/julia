@@ -1,0 +1,145 @@
+* some kind of macros as an alternative to auto conversion
+* convert when assigning to typed locations
+- architecture of real implementation
+-------------------------------------------------------------------------------
+
+fixes
+* fix method cache bug
+* fix ctranspose
+- provide default unique generic type parameters if none given
+* for conversions, make generic parameters present in destination type
+  available in the function body
+- only skip generic matching if an existing method matches exactly
+- update wiki
+-------------------------------------------------------------------------------
+
+features
+* f(x) = x syntax
+* write up module design ideas
+- switch open type parameters to TypeVars
+- next_method
+- common_supertype
+- improve the situation with numeric literals somehow
+
+- where clauses
+? allow chains of conversions
+? extend search space used by (conform )
+  . conform (Rational[Int32],Double) (Complex[`T],Complex[`T])
+? coerce()
+-------------------------------------------------------------------------------
+
+speculation
+* i wish we could write an elementwise() macro to generate operators
+- complex number syntax?
+- declaring abstract types
+- a type with plain-old-data fields can be treated as a value type if it
+  is immutable. a mutable value type is just a thing that's allowed to behave
+  confusingly. the immutability is key, "value type" is an optimization
+  the user doesn't have to worry about.
+  to handle immutable-element-in-mutable-container, we need a special meaning
+  for "a[i].re = x". it means a[i] = complex(x, a[i].im)...
+  most plausible implementation is to translate it to
+  a[i] = setfield(a[i], 're, x)
+  and have setfield copy value types
+
+- recursive types (tree.j) are too verbose. we should be able to say something
+  like:
+  type EmptyTree = ()
+  type Tree[`T] = Union[EmptyTree, (data=T,left=Tree[T],right=Tree[T])]
+- maybe make everything invariant, use where clauses instead
+- implicit constructors instead of needing to define boilerplate functions
+  like complex() and rational()
+- use {} for type parameters, e.g. Complex{Double}
+-------------------------------------------------------------------------------
+
+conversion/dispatch test cases:
+
+1+rational(1,2)
+rational(1,2)+0.5
+1./complex(2.,2.)
+1/complex(2.,2.)
+
+-------------------------------------------------------------------------------
+
+notes from "Using category theory to design implicit conversions and
+generic operators"
+
+conversions must commute:
+OP(convert(x,T),convert(y,T)) == convert(OP(x,y),T)
+if A->B and B->C, then A->C must be the composition of these two conversions
+
+define operators for "key sorts", like (int,int) (real,real) and let
+conversions handle the rest (this was our idea too!)
+
+"one can never use the same operator for the equality relation on different
+data types when the data types are connected by an implicit conversion
+function which is not an injection"
+
+-------------------------------------------------------------------------------
+
+functions needed to port colorimetry library:
+
+construct matrix,vector from scalars
+persistent constant matrices
+1d,2d scalar indexing
+2d indexing with colon
+elementwise mat,vec ops
+matrix multiply
+dot product
+min,max
+transpose
+1d comprehension
+-------------------------------------------------------------------------------
+
+invariance vs. covariance
+
+what does Array[Number] mean in various contexts?
+
+new(Array[Number,n],...)
+make an array that can hold various kinds of numbers, but only numbers
+
+as a typed location, e.g. "local x::Array[Number]"
+doesn't really matter. both the user & compiler don't know exactly
+what kind of numbers will come out of there. user doesn't care whether
+it is actually an Array[Double], etc., but compiler does.
+
+matching argument types, foo(x::Array[Number])
+would you want to write a function just for arrays created with element
+type number? sometimes a function works differently on cell arrays vs.
+numeric arrays. do you need to ensure that foo(x::Array[Any]) is only
+called on an actual cell array, or would it be ok to substitute any
+sort of array?
+
+with invariance, you can express this. only actual cell arrays will match.
+otherwise you can write Array[T <: Any], Array[T <: Number], etc.
+under covariance, the compiler effectively treats Array[Any] as Array[T]
+because it needs to specialize it anyway.
+
+-------------------------------------------------------------------------------
+
+paper/thesis ideas:
+
+design recommendations for technical computing languages
+
+the design and implementation of julia
+
+reinventing the repl: language support for interactive use
+
+improving numeric type systems
+
+eliminating array allocations in loops
+
+-------------------------------------------------------------------------------
+
+implementation plan:
+
+* set up core types
+- define all builtin types
+? hash consing types
+- print for primitive types
+- lambda-info struct, currently the lambda expression in calls to new_closure
+- be able to call julia-parser.scm
+- real versions of scm->julia and julia->scm
+- interface for querying environment/modules and fetching ASTs so various
+  passes can still be written in scheme
+- start code generation
