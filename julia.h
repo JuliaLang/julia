@@ -12,7 +12,7 @@ typedef struct _jl_sym_t {
     JL_VALUE_STRUCT
     struct _jl_sym_t *left;
     struct _jl_sym_t *right;
-    uint32_t hash;     // precomputed hash value
+    uptrint_t hash;    // precomputed hash value
     union {
         char name[1];
         void *_pad;    // ensure field aligned to pointer size
@@ -43,7 +43,7 @@ typedef struct _jl_type_t {
     jl_tuple_t *parameters;
     jl_tuple_t *fields;
     // hidden fields:
-    int abstract;
+    ptrint_t abstract;
     size_t nw;      // # of words
     numerictype_t numtype;
     size_t nbytes;  // # of bytes for unboxed, plain-old-data types
@@ -77,7 +77,7 @@ typedef struct {
 typedef struct _jl_module_t {
     // not first-class
     jl_sym_t *name;
-    ptrhash_t bindings;
+    htable_t bindings;
     int nimports;
     struct _jl_module_t **imports;
 } jl_module_t;

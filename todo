@@ -49,7 +49,45 @@ speculation
 - maybe make everything invariant, use where clauses instead
 - implicit constructors instead of needing to define boilerplate functions
   like complex() and rational()
+- explicit different kinds of types. e.g. StructType, NumericType
+  . conceptually helpful, because you can only use new(T,...) on struct types.
+    new(Int8) doesn't work, and new(Symbol) doesn't work...
 - use {} for type parameters, e.g. Complex{Double}
+
+-------------------------------------------------------------------------------
+
+a perpetual question is "where do objects come from?"
+there are two views: user-defined constructors (C++,java,etc.), and builtin
+functions (C,scheme,matlab,etc.)
+
+constructor view:
+. there is a hook to run code every time a type is instantiated
+. you can have uninitialized instances
+. the "actual" allocation routine is hidden, and the special form "new" is
+  used. "new T()" means roughly
+    x = magic_allocate<T>()
+    call T's constructor with this==x
+    return x
+. constructor is "inside" the type, so type parameters naturally and easily
+  parameterize the constructor as well.
+
+function view:
+. the magic_allocate function is exposed, anybody can make any object
+. our new(T,...) forces you to provide values of correct types for all
+  fields, eliminating null references ("RAII")
+. consistent with our design of not encapsulating functions with types
+. BUT no way to enforce invariants other than field types. for example
+  you can make an Array where the dims is the wrong length!
+
+C++-style constructor is actually an initializer; it doesn't return a value.
+
+if we have constructors that return values, they might return nonsense.
+
+if not, we need special syntax like new, and to magically deliver the
+actual object to the constructor. but how to enforce that it gets
+initialized? do we require DFA to show that all fields are set and none
+are accessed before being set? this constrains the programming style.
+
 -------------------------------------------------------------------------------
 
 conversion/dispatch test cases:

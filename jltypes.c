@@ -7,8 +7,8 @@
 #include <limits.h>
 #include <errno.h>
 #include <math.h>
+#include <gc.h>
 #include "llt.h"
-#include "gc.h"
 #include "julia.h"
 
 jl_module_t *jl_system;
@@ -90,13 +90,13 @@ JL_CALLABLE(jl_tuple)
     return (jl_value_t*)t;
 }
 
-jl_value_t *jltuple(size_t n, ...)
+jl_tuple_t *jltuple(size_t n, ...)
 {
     va_list args;
     size_t i;
     va_start(args, n);
-    jl_value_t *jv = newobj(jl_tuple_type, n+1);
-    ((jl_tuple_t*)jv)->length = n;
+    jl_tuple_t *jv = (jl_tuple_t*)newobj(jl_tuple_type, n+1);
+    jv->length = n;
     for(i=0; i < n; i++) {
         ((jl_value_t**)jv)[i+2] = va_arg(args, jl_value_t*);
     }
@@ -135,14 +135,14 @@ static jl_sym_t **symtab_lookup(jl_sym_t **ptree, char *str)
     return ptree;
 }
 
-jl_value_t *jl_symbol(char *str)
+jl_sym_t *jl_symbol(char *str)
 {
     jl_sym_t **pnode;
 
     pnode = symtab_lookup(&symtab, str);
     if (*pnode == NULL)
         *pnode = mk_symbol(str);
-    return (jl_value_t*)*pnode;
+    return *pnode;
 }
 
 #define jl_tupleref(t,i) (((jl_value_t**)(t))[2+(i)])
@@ -151,8 +151,9 @@ jl_value_t *jl_symbol(char *str)
 
 #define jl_tuplep(v) (((jl_value_t*)(v))->type->name==jl_tuple_type->name)
 
-jl_value_t *jl_new_buffer(jl_type_t *buftype, size_t nel)
+jl_buffer_t *jl_new_buffer(jl_type_t *buftype, size_t nel)
 {
+    assert(buftype->name == jl_buffer_type->name);
     jl_type_t *eltype = (jl_type_t*)jl_tparam0(buftype);
     void *data;
     if (eltype->nbytes) {
@@ -161,25 +162,25 @@ jl_value_t *jl_new_buffer(jl_type_t *buftype, size_t nel)
     else {
         data = allocb(sizeof(void*) * nel);
     }
-    jl_value_t *b = newobj(buftype, 2);
-    ((jl_buffer_t*)b)->length = nel;
-    ((jl_buffer_t*)b)->data = data;
+    jl_buffer_t *b = (jl_buffer_t*)newobj(buftype, 2);
+    b->length = nel;
+    b->data = data;
     return b;
 }
 
-jl_value_t *jl_new_typename(jl_sym_t *name)
+jl_typename_t *jl_new_typename(jl_sym_t *name)
 {
-    return jl_new_struct(jl_typename_type, name);
+    return (jl_typename_t*)jl_new_struct(jl_typename_type, name);
 }
 
 #define TYPE_NW 9
 static int t_uid_ctr = 0;  // TODO: lock
 
-jl_value_t *jl_new_type(jl_sym_t *name, jl_type_t *super,
-                        jl_tuple_t *parameters,
-                        jl_tuple_t *fields, int abstract)
+jl_type_t *jl_new_type(jl_sym_t *name, jl_type_t *super,
+                       jl_tuple_t *parameters,
+                       jl_tuple_t *fields, int abstract)
 {
-    jl_type_t *t = newobj(jl_type_type, TYPE_NW);
+    jl_type_t *t = (jl_type_t*)newobj(jl_type_type, TYPE_NW);
     t->name = jl_new_typename(name);
     t->super = super;
     t->parameters = parameters;
@@ -203,7 +204,7 @@ jl_value_t *jl_box_##type(ctype x)                                      \
 {                                                                       \
     jl_value_t *v = newobj(jl_##type##_type,                            \
                            NWORDS(LLT_ALIGN(sizeof(ctype),sizeof(void*)))); \
-    (ctype*)(&((void**)v)[1]) = x;                                      \
+    *(ctype*)(&((void**)v)[1]) = x;                                     \
     return v;                                                           \
 }
 BOX_FUNC(int8,   int8_t)
@@ -238,7 +239,7 @@ UNBOX_FUNC(double, double)
 
 void jl_init_types()
 {
-    jl_type_type = newobj(NULL, TYPE_NW);
+    jl_type_type = (jl_type_t*)newobj(NULL, TYPE_NW);
     jl_type_type->type = jl_type_type;
     jl_type_type->nw = TYPE_NW;
     jl_type_type->numtype = N_NUMTYPES;
@@ -246,12 +247,12 @@ void jl_init_types()
     jl_type_type->uid = t_uid_ctr++;
     jl_type_type->abstract = 0;
 
-    jl_tuple_type = newobj(jl_type_type, TYPE_NW);
-    jl_null = jltuple(0);
+    jl_tuple_type = (jl_type_t*)newobj(jl_type_type, TYPE_NW);
+    jl_null = (jl_value_t*)jltuple(0);
 
-    jl_sym_type = newobj(jl_type_type, TYPE_NW);
+    jl_sym_type = (jl_type_t*)newobj(jl_type_type, TYPE_NW);
 
-    jl_typename_type = newobj(jl_type_type, TYPE_NW);
+    jl_typename_type = (jl_type_t*)newobj(jl_type_type, TYPE_NW);
     jl_typename_type->name = jl_new_typename(jl_symbol("Typename"));
     jl_typename_type->parameters = jl_null;
     jl_typename_type->fields = jltuple(1, jltuple(2, jl_symbol("name"),
