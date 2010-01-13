@@ -44,6 +44,7 @@ typedef struct _jl_type_t {
     jl_tuple_t *fields;
     // hidden fields:
     ptrint_t abstract;
+    ptrint_t generic;
     size_t nw;      // # of words
     numerictype_t numtype;
     size_t nbytes;  // # of bytes for unboxed, plain-old-data types

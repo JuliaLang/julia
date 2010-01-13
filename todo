@@ -46,7 +46,11 @@ speculation
   like:
   type EmptyTree = ()
   type Tree[`T] = Union[EmptyTree, (data=T,left=Tree[T],right=Tree[T])]
-- maybe make everything invariant, use where clauses instead
+- maybe make everything invariant, use where-clauses instead
+  where-clauses create a constraint environment, sufficient to
+  express "field types". For example
+  Array[dims, data] where dims<:Buffer[Size], data<:Buffer
+
 - implicit constructors instead of needing to define boilerplate functions
   like complex() and rational()
 - explicit different kinds of types. e.g. StructType, NumericType
