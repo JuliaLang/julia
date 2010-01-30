@@ -32,9 +32,7 @@ function print(l::List)
     end
 end
 
-function list()
-    return nil
-end
+list() = nil
 
 function list(elts...)
     n = length(elts)
@@ -80,3 +78,4 @@ end
 
 expr(hd, args...)  = Expr.new(hd, list(args...))
 exprl(hd, arglist) = Expr.new(hd, arglist)
+

@@ -67,9 +67,7 @@ assert(signbit(-1.0/0) == -1)
 assert(1+rational(1,2) == rational(3,2))
 assert(1./complex(2.,2.) == complex(.25, -.25))
 
-function Int8.convert(x::Real)
-    return int8(x)
-end
+Int8.convert(x::Real) = int8(x)
 
 function foo()
     local x::Int8
@@ -80,3 +78,4 @@ function foo()
     x
 end
 assert(int32(foo()) == -24)
+

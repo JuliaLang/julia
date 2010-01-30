@@ -2,9 +2,7 @@ struct Complex[T] <: Number
     re::T
     im::T
 
-    function convert(x::Real)
-      return complex(T.convert(x), T.convert(0))
-    end
+    convert(x::Real) = complex(T.convert(x), T.convert(0))
 end
 
 function print(c::Complex)
@@ -52,3 +50,4 @@ inv(z::Complex) = conj(z)/norm(z)
 ==[T](z::Complex[T], w::Complex[T])  = (z.re == w.re && z.im == w.im)
 ==[T](z::Complex[T], w::Real)        = (z.re == w    && z.im == 0)
 ==[T](w::Real, z::Complex[T])        = (z.re == w    && z.im == 0)
+

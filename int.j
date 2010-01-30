@@ -59,39 +59,16 @@ function gcd(a::Int, b::Int)
     return a
 end
 
-function Int64.convert(x::Int8)
-    return int64(x)
-end
-function Int64.convert(x::Uint8)
-    return int64(x)
-end
-function Int64.convert(x::Int16)
-    return int64(x)
-end
-function Int64.convert(x::Uint16)
-    return int64(x)
-end
-function Int64.convert(x::Int32)
-    return int64(x)
-end
-function Int64.convert(x::Uint32)
-    return int64(x)
-end
-function Int32.convert(x::Int8)
-    return int32(x)
-end
-function Int32.convert(x::Uint8)
-    return int32(x)
-end
-function Int32.convert(x::Int16)
-    return int32(x)
-end
-function Int32.convert(x::Uint16)
-    return int32(x)
-end
-function Int16.convert(x::Int8)
-    return int16(x)
-end
-function Int16.convert(x::Uint8)
-    return int16(x)
-end
+Int64.convert(x::Int8) = int64(x)
+Int64.convert(x::Uint8) = int64(x)
+Int64.convert(x::Int16) = int64(x)
+Int64.convert(x::Uint16) = int64(x)
+Int64.convert(x::Int32) = int64(x)
+Int64.convert(x::Uint32) = int64(x)
+Int32.convert(x::Int8) = int32(x)
+Int32.convert(x::Uint8) = int32(x)
+Int32.convert(x::Int16) = int32(x)
+Int32.convert(x::Uint16) = int32(x)
+Int16.convert(x::Int8) = int16(x)
+Int16.convert(x::Uint8) = int16(x)
+
