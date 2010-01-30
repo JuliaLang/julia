@@ -1,8 +1,12 @@
-type Quaternion[`T] < Number
+struct Quaternion[T] <: Number
     q0::T
     q1::T
     q2::T
     q3::T
+
+    function convert(z::Complex)
+        return quaternion(re(z),im(z),0,0)
+    end
 end
 
 function print(z::Quaternion)
@@ -36,7 +40,7 @@ function print(z::Quaternion)
     print("k")
 end
 
-quaternion(q0::`T, q1::`T, q2::`T, q3::`T) = new(Quaternion[T], q0, q1, q2, q3)
+quaternion[T](q0::T, q1::T, q2::T, q3::T) = Quaternion[T].new(q0, q1, q2, q3)
 
 re(z::Quaternion) = z.q0
 im(z::Quaternion) = z.q1
@@ -61,7 +65,3 @@ inv(z::Quaternion) = conj(z)/norm(z)
                                                z.q0*w.q2 - z.q1*w.q3 + z.q2*w.q0 + z.q3*w.q1,
                                                z.q0*w.q3 + z.q1*w.q2 - z.q2*w.q1 + z.q3*w.q0)
 (/)(z::Quaternion, w::Quaternion) = z*inv(w)
-
-conversion z::Complex-->Quaternion
-    return quaternion(re(z),im(z),0,0)
-end

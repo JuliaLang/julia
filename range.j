@@ -1,28 +1,28 @@
-type Range
+struct Range
     step
     start
     stop
 end
 
-type RangeFrom
+struct RangeFrom
     step
     start
 end
 
-type RangeTo
+struct RangeTo
     step
     stop
 end
 
-type RangeBy
+struct RangeBy
     step
 end
 
 # arguments always in the order start,step,stop
-range(a,b,c) = new(Range,b,a,c)
-rangefrom(a,b) = new(RangeFrom,b,a)
-rangeto(b,c) = new(RangeTo,b,c)
-rangeby(b) = new(RangeBy,b)
+range(a,b,c) = Range.new(b,a,c)
+rangefrom(a,b) = RangeFrom.new(b,a)
+rangeto(b,c) = RangeTo.new(b,c)
+rangeby(b) = RangeBy.new(b)
 
 start(r::Range) = r.start
 done(r::Range, i) = ((r.step <  0 && i < r.stop) ||

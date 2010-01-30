@@ -1,6 +1,10 @@
-type Rational[`T] < Real
+struct Rational[T] <: Real
     num::T
     den::T
+
+    function convert(x::Int32)
+        return rational(T.convert(x),T.convert(1))
+    end
 end
 
 function print(x::Rational)
@@ -9,13 +13,13 @@ function print(x::Rational)
     print(den(x))
 end
 
-function rational(num::`T, den::`T)
+function rational[T](num::T, den::T)
     g = gcd(num, den)
     num = div(num, g)
     den = div(den, g)
     num = sign(den) * num
     den = sign(den) * den
-    return new(Rational[T], num, den)
+    return Rational[T].new(num, den)
 end
 
 num(x::Rational) = x.num
@@ -44,7 +48,3 @@ den(x::Rational) = x.den
 ==(y::Int, x::Rational)      = (x.num == y     && x.den == 1)
 
 double(x::Rational) = double(x.num)/double(x.den)
-
-conversion x::Int32-->Rational
-    return rational(x,1)
-end

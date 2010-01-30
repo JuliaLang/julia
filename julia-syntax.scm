@@ -54,6 +54,7 @@
 	      (pair? (cdr e))
 	      (table-ref macro-env (cadr e) #f)) =>
 	 (lambda (m)
+	   ;(display (cadr e)) (newline)
 	   (julia-macroexpand
 	    (julia->scm (j-apply m (map scm->julia (cddr e)))))))
 	(else
@@ -148,108 +149,122 @@
 (define (process-indexes i)
   (map (lambda (x) (if (eq? x ':) '(: (: 1 :)) x)) i))
 
-(define (find-quoted-syms e)
-  (if (atom? e)
-      '()
-      (if (and (eq? (car e) 'quote)
-	       (symbol? (cadr e)))
-	  (cdr e)
-	  (delete-duplicates (apply append (map find-quoted-syms e))))))
-
-; build an expression that evaluates to the requested static parameter,
-; given a list of types and argument names
-; iff typeof is #t, look at types of arguments. otherwise it will use
-; the argument itself.
-(define (find-static-param p t names typeof)
-  (define (type-ref e)
-    (if typeof
-	`(call (top typeof) ,e)
-	e))
-  (define (expr-search p ex where)
-    (cond ((atom? ex) #f)
-	  ((and (eq? (car ex) 'quote)
-		(eq? (cadr ex) p))
-	   where)
-	  ((eq? (car ex) 'tuple)
-	   (let loop ((elts (cdr ex))
-		      (i    1))
-	     (and (pair? elts)
-		  (or (expr-search p (car elts) `(ref ,where ,i)))
-		  (loop (cdr elts)
-			(+ i 1)))))
-	  ((eq? (car ex) 'ref)
-	   (let loop ((elts (cddr ex))
-		      (i    1))
-	     (and (pair? elts)
-		  (or (expr-search p (car elts) `(ref (|.| ,where parameters)
-						      ,i))
-		      (loop (cdr elts)
-			    (+ i 1))))))
-	  (else #f)))
-  (let ((a (map cons t names)))
-    (any (lambda (a)
-	   (if (and (pair? (car a))
-		    (eq? (caar a) '...))
-	       (let ((loc
-		      (expr-search p (cadr (car a))
-				   (type-ref `(ref ,(cdr a) 1)))))
-		 (and loc
-		      `(if (call (top isnull) ,(cdr a))
-			   (ref Union)
-			   ,loc)))
-	       (expr-search p (car a) (type-ref (cdr a)))))
-	 a)))
-
-(define (generate-static-param-inits s-params t n typeof)
-  (map (lambda (p)
-	 `(= ,p ,(or (find-static-param p t n typeof)
-		     `(ref Union))))
-       s-params))
-
 (define (function-expr argl body)
-  (let ((static-params (find-quoted-syms argl))
-	(t (llist-types argl))
+  (let ((t (llist-types argl))
 	(n (llist-vars argl)))
     (let ((argl (map (lambda (n t) `(|::| ,n ,t))
-		     n t))
-	  (static-param-inits
-	   (generate-static-param-inits static-params t n #t)))
+		     n t)))
       `(lambda ,argl
-	 (scope-block ,(if (null? static-params)
-			   body
-			   `(block ,@static-param-inits ,body)))))))
+	 (scope-block ,body)))))
 
-(define (unquote-type-params params)
-  (map (lambda (p)
-	 (if (and (pair? p)
-		  (eq? (car p) 'quote))
-	     (cadr p)
-	     p))
-       params))
+(define (symbols->typevars sl)
+  (map (lambda (x) `(call (top typevar) ',x)) sl))
 
-; quote symbols in e that appear in list params
-(define (quote-type-params e params)
-  (cond ((and (symbol? e) (memq e params)) `(quote ,e))
-	((atom? e) e)
-	((eq? (car e) 'quote) e)
-	(else (cons (car e)
-		    (map (lambda (x) (quote-type-params x params))
-			 (cdr e))))))
+(define (gf-def-expr- name argl argtypes body)
+  `(= ,name
+      (call (top add_method)
+	    ,(if (symbol? name)
+		 `(quote ,name)
+		 `(quote ,(caddr name)))
+	    ,(if (symbol? name)
+		 `(value-or-null ,name)
+		 name)
+	    ,argtypes
+	    ,(function-expr argl body))))
 
-(define (typedef-expr name params super fields)
-  (let ((field-names (map decl-var fields))
-	(field-types (map decl-type fields)))
-    `(block
-      (= ,name
-	 (call (top new_type)
-	       (quote ,name)
-	       (tuple ,@(map (lambda (x) `',x) params))
-	       ,super))
-      (call (top new_type_fields)
-	    ,name ,super
-	    (tuple ,@(map (lambda (n t)
-			    `(tuple ',n ,(quote-type-params t params)))
-			  field-names field-types))))))
+(define (generic-function-def-expr name sparams argl body)
+  (let ((argl (fsig-to-lambda-list argl)))
+    (gf-def-expr-
+     name argl
+     `(call (lambda ,sparams
+	      (tuple ,@(llist-types argl)))
+	    ,@(symbols->typevars sparams))
+     body)))
+
+(define (struct-def-expr name params super fields)
+  ; extract the name from a function def expr
+  (define (f-exp-name e)
+    (let ((head (cadadr e)))
+      (if (symbol? head) head
+	  (cadr head))))
+  
+  (receive
+   (funcs fields) (separate
+		   (lambda (x)
+		     (and (pair? x)
+			  (or (eq? (car x) 'function)
+			      (and (length= x 3)
+				   (eq? (car x) '=)
+				   (pair? (cadr x))
+				   (eq? (caadr x) 'call))
+			      (not (or (eq? (car x) '|::|)
+				       (error "Invalid struct syntax:" x))))))
+		   fields)
+   (let ((field-names (map decl-var fields))
+	 (field-types (map decl-type fields))
+	 (func-names  (delete-duplicates (map f-exp-name funcs)))
+	 (func-args   (map (lambda (fexp)
+			     (fsig-to-lambda-list (cddadr fexp))) funcs))
+	 (func-types  (map (lambda (x) (gensym)) funcs))
+	 (tvars       (gensym))
+	 (proto       (gensym)))
+     `(call
+       (lambda (,@func-names ,@func-types ,tvars ,proto)
+	 (block
+	  (call
+	   (lambda (,@params)
+	     ; the static parameters are bound to new TypeVars in here,
+	     ; so everything that sees the TypeVars is evaluated here.
+	     (block
+	      (= ,tvars (tuple ,@params))
+	      (= ,proto
+		 (call (top new_struct_type)
+		       (quote ,name)
+		       ,super
+		       ,tvars
+		       (tuple ,@(map (lambda (x) `',x) field-names))))
+	      ; wrap type prototype in a type constructor if ∃ parameters
+	      ,(if (null? params)
+		   `(= ,name ,proto)
+		   `(= ,name (call (top new_type_constructor)
+				   ,tvars ,proto)))
+	      ; now add the type fields, which might reference the type
+	      ; itself. tie the recursive knot.
+	      (call (top new_struct_fields)
+		    ,name (tuple ,@field-types))
+	      ,@(map (lambda (type argl)
+		       `(= ,type (tuple ,@(llist-types argl))))
+		     func-types func-args)))
+	   ,@(symbols->typevars params))
+	  ; build method definitions
+	  ,@(map (lambda (fdef fargs ftype)
+		   (gf-def-expr- (f-exp-name fdef)
+				 fargs
+				 ftype
+				 (caddr fdef)))
+		 funcs func-args func-types)
+	  ; assign methods to type fields
+	  ,@(map (lambda (fname)
+		   `(= (|.| ,proto ,fname) ,fname))
+		 func-names)))
+       ,@(map (lambda (x) '(null))
+	      (append '(tvars proto) func-names func-types))))))
+
+(define (type-def-expr name params super)
+  `(block
+    (call
+     (lambda ,params
+       (block
+	(= ,name
+	   (call (top new_tag_type)
+		 (quote ,name)
+		 ,super
+		 (tuple ,@params)))
+	,(if (null? params)
+	     `(null)
+	     `(= ,name (call (top new_type_constructor)
+			     (tuple ,@params) ,name)))))
+     ,@(symbols->typevars params))))
 
 (define *anonymous-generic-function-name* (gensym))
 
@@ -268,25 +283,39 @@
 		   `(call setfield ,a (quote ,b) ,rhs))
 
    ; type definition
-   (pattern-lambda (type (-- name (-s)) (block . fields))
-		   (typedef-expr name '() 'Any fields))
+   (pattern-lambda (struct (-- name (-s)) (block . fields))
+		   (struct-def-expr name '() 'Any fields))
 
-   (pattern-lambda (type (ref (-- name (-s)) . params) (block . fields))
-		   (typedef-expr name (unquote-type-params params)
-				 'Any fields))
+   (pattern-lambda (struct (ref (-- name (-s)) . params) (block . fields))
+		   (struct-def-expr name params 'Any fields))
 
-   (pattern-lambda (type (comparison (-- name (-s)) (-/ <) super)
-			 (block . fields))
-		   (typedef-expr name '() super fields))
+   (pattern-lambda (struct (comparison (-- name (-s)) (-/ |<:|) super)
+			   (block . fields))
+		   (struct-def-expr name '() super fields))
 
-   (pattern-lambda (type (comparison (ref (-- name (-s)) . params) (-/ <) super)
-			 (block . fields))
-		   (typedef-expr name (unquote-type-params params)
-				 super fields))
+   (pattern-lambda (struct (comparison (ref (-- name (-s)) . params)
+				       (-/ |<:|) super)
+			   (block . fields))
+		   (struct-def-expr name params super fields))
+   
+   (pattern-lambda (type (-- name (-s)))
+		   (type-def-expr name '() 'Any))
+   (pattern-lambda (type (ref (-- name (-s)) . params))
+		   (type-def-expr name params 'Any))
+   (pattern-lambda (type (comparison (-- name (-s)) (-/ |<:|) super))
+		   (type-def-expr name '() super))
+   (pattern-lambda (type (comparison (ref (-- name (-s)) . params)
+				     (-/ |<:|) super))
+		   (type-def-expr name params super))
 
    ; typealias is an assignment; should be const when that exists
    (pattern-lambda (typealias (-- name (-s)) type-ex)
 		   `(= ,name ,type-ex))
+   (pattern-lambda (typealias (ref (-- name (-s)) . params) type-ex)
+		   `(call (lambda ,params
+			    (= ,name (call (top new_type_constructor)
+					   (tuple ,@params) ,type-ex)))
+			  ,@(symbols->typevars params)))
 
    (pattern-lambda (comparison . chain) (expand-compare-chain chain))
 
@@ -312,17 +341,17 @@
    (pattern-lambda (list . elts)
 		   `(call list ,@elts))
 
+   ; function with static parameters
+   (pattern-lambda (function (call (ref name . sparams) . argl) body)
+		   (generic-function-def-expr name sparams argl body))
+
    ; function definition
    (pattern-lambda (function (call name . argl) body)
-		   (let ((argl (fsig-to-lambda-list argl)))
-		     `(= ,name
-			 (call (top add_method)
-			       (quote ,name)
-			       (value-or-null ,name)
-			       (tuple ,@(llist-types argl))
-			       ,(function-expr argl body)))))
+		   (generic-function-def-expr name '() argl body))
 
    ; expression form function definition
+   (pattern-lambda (= (call (ref name . sparams) . argl) body)
+		   `(function (call (ref ,name . ,sparams) . ,argl) ,body))
    (pattern-lambda (= (call name . argl) body)
 		   `(function (call ,name ,@argl) ,body))
 
@@ -334,18 +363,6 @@
 					; TODO: anonymous generic function
 		     (function-expr a b)))
 
-   (pattern-lambda (conversion (--> (|::| var from) to) body)
-		   (let* ((targ (gensym))
-			  (sp  (find-quoted-syms to))
-			  (spi (generate-static-param-inits
-				sp (list to) (list targ) #f)))
-		   `(call add_conversion ,from ,to
-			  (-> (tuple (|::| ,var ,from)
-				     (|::| ,targ Type))
-			      ,(if (null? sp)
-				   body
-				   `(block ,@spi ,body))))))
-   
    ; call with splat
    (pattern-lambda (call f ... (... _) ...)
 		   (let ((argl (cddr __)))
@@ -494,9 +511,6 @@
 
    (pattern-lambda (for . any)
 		   (error "Invalid for loop syntax"))
-
-   (pattern-lambda (conversion . any)
-		   (error "Invalid conversion definition"))
 
    (pattern-lambda (type . any)
 		   (error "Invalid type definition"))
@@ -943,7 +957,7 @@ So far only the second case can actually occur.
 					   (lambda (v e) (eq? (cdr v) e))))
 			       (cdr rec))))
 	   (cons `(lambda ,(lam:args e)
-		    (var-info ,(caddr e) ,vi ,(map car (cdr rec)))
+		    (var-info ,(caddr e) ,vi ,(map car (cdr rec)) ())
 		    ,(car rec))
 		 cv)))
 	(else (let ((rec (map (lambda (x) (analyze-vars x env))
@@ -1040,7 +1054,7 @@ So far only the second case can actually occur.
 		       (cdr e))))))))
 
 (define (closure-convert e)
-  (closure-convert- (analyze-variables e) '(var-info (locals) () ())))
+  (closure-convert- (analyze-variables e) '(var-info (locals) () () ())))
 
 ; remove if, _while, block, break-block, and break
 ; replaced with goto and goto-ifnot

@@ -5,6 +5,11 @@
       l
       (last-pair (cdr l))))
 
+(define (list-head lst n)
+  (if (<= n 0) '()
+      (cons (car lst)
+	    (list-head (cdr lst) (- n 1)))))
+
 (define (delete-duplicates lst)
   (if (not (pair? lst))
       lst
@@ -29,6 +34,11 @@
 	    (delete-duplicates-p tail test)
 	    (cons elt
 		  (delete-duplicates-p tail test))))))
+
+(define (assoc-p item lst test)
+  (cond ((atom? lst) #f)
+	((test       (caar lst) item) (car lst))
+	(else        (assoc-p item (cdr lst) test))))
 
 (define (list* first . rest)
   (let recur ((x first) (rest rest))
@@ -55,6 +65,15 @@
 		    (cons head new-tail)))
 	      (recur tail))))))
 
+(define (separate pred lst)
+  (define (separate- pred lst yes no)
+    (cond ((null? lst) (values (reverse yes) (reverse no)))
+	  ((pred (car lst))
+	   (separate- pred (cdr lst) (cons (car lst) yes) no))
+	  (else
+	   (separate- pred (cdr lst) yes (cons (car lst) no)))))
+  (separate- pred lst '() '()))
+
 (define (every pred lst)
   (or (not (pair? lst))
       (and (pred (car lst))
@@ -64,6 +83,11 @@
   (and (pair? lst)
        (or (pred (car lst))
            (any pred (cdr lst)))))
+
+(define (andmap proc l . ls)
+  (or (null? l)
+      (and (apply proc (car l) (map car ls))
+           (apply andmap proc (cdr l) (map cdr ls)))))
 
 (define (length= lst n)
   (cond ((< n 0)     #f)

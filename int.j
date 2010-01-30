@@ -59,39 +59,39 @@ function gcd(a::Int, b::Int)
     return a
 end
 
-conversion x::Int8-->Int64
+function Int64.convert(x::Int8)
     return int64(x)
 end
-conversion x::Uint8-->Int64
+function Int64.convert(x::Uint8)
     return int64(x)
 end
-conversion x::Int16-->Int64
+function Int64.convert(x::Int16)
     return int64(x)
 end
-conversion x::Uint16-->Int64
+function Int64.convert(x::Uint16)
     return int64(x)
 end
-conversion x::Int32-->Int64
+function Int64.convert(x::Int32)
     return int64(x)
 end
-conversion x::Uint32-->Int64
+function Int64.convert(x::Uint32)
     return int64(x)
 end
-conversion x::Int8-->Int32
+function Int32.convert(x::Int8)
     return int32(x)
 end
-conversion x::Uint8-->Int32
+function Int32.convert(x::Uint8)
     return int32(x)
 end
-conversion x::Int16-->Int32
+function Int32.convert(x::Int16)
     return int32(x)
 end
-conversion x::Uint16-->Int32
+function Int32.convert(x::Uint16)
     return int32(x)
 end
-conversion x::Int8-->Int16
+function Int16.convert(x::Int8)
     return int16(x)
 end
-conversion x::Uint8-->Int16
+function Int16.convert(x::Uint8)
     return int16(x)
 end

@@ -46,6 +46,24 @@ speculation
   like:
   type EmptyTree = ()
   type Tree[`T] = Union[EmptyTree, (data=T,left=Tree[T],right=Tree[T])]
+
+syntax idea:
+
+typeunion Tree[T]
+  struct EmptyTree
+  end
+
+  struct TreeNode[T]
+    data::T
+    left::Tree[T]
+    right::Tree[T]
+  end
+end
+
+Much better way to do recursive types without fiddly syntax!!
+Means the exact same thing as what we have now in tree.j with Union(),
+except permits the required nesting!
+
 - maybe make everything invariant, use where-clauses instead
   where-clauses create a constraint environment, sufficient to
   express "field types". For example
@@ -185,3 +203,67 @@ implementation plan:
 - interface for querying environment/modules and fetching ASTs so various
   passes can still be written in scheme
 - start code generation
+
+-------------------------------------------------------------------------------
+
+function representation
+-----------------------
+
+new functions are created in many ways:
+- new (empty) generic function
+- copy closure
+- adding a template method to a generic function
+  . any function can have static parameters, but automatic
+    instantiation based on argument types is done by generic functions
+- creating a new specialization inside a generic function.
+  . type-specific (non-template) method is added manually by the user,
+    compiled on first call
+  . a more general method matches, compile for new types
+  . a template method matches; apply static lambda and compile
+  . *** We need a way to create the generic function and cache all
+    generated code for an inner function only once, but still be able to
+    add new closure environments.
+
+  important optimization: sharing generated code for generic inner functions
+  . must lift generic method creation to the top level, then when
+    we enter the enclosing function, shallow copy the GF and replace
+    all the closure environments with new ones. hard case is when an
+    inner function has multiple definitions, each one needs a different
+    closure environment. or we could combine all definitions for
+    inner functions into a single one (since we can see the full set of
+    definitions statically), and have a special inner-generic-function
+    that can share an entire method table. on each call to the encl.
+    function we just make a new IGF object with a new cloenv, and the IGF
+    passes this cloenv onto any method that's actually invoked.
+
+  . for now we will just have to make a new GF on each call to the enclosing
+    function
+
+closure ::=
+    <
+    type tag - a function type
+    code pointer
+    closure data
+    static data
+    >
+
+new_closure copies this, with new closure data field
+
+static data ::=
+    <
+    name
+    AST
+    static parameter env
+    >
+
+
+a GF looks like <Any-->Any, apply_generic, (methtable,), ()>
+
+in the "let over lambda" case, a top-level GF method might have a closure
+environment.
+
+(lambda args (var-info (locals ...) vinfo-list capt-list static-params)
+             #(body statements))
+
+so in the interpreter the static parameters are inside the AST, but no
+big deal.

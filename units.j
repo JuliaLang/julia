@@ -1,13 +1,13 @@
 UNITS = buffer("meters","seconds")
 
-type Units
+struct Units
     powers::Buffer[Double]
 end
 
 function make_unit(index::Int32)
-    powers = new(Buffer[Double],length(UNITS))
+    powers = Buffer[Double].new(length(UNITS))
     powers[index] = 1
-    new(Units,powers)
+    Units.new(powers)
 end
 
 function print(units::Units)
@@ -54,15 +54,15 @@ function (-)(u1::Units, u2::Units)
     return u1
 end
 
-*(u1::Units, u2::Units) = new(Units, apply_op((+), u1.powers, u2.powers))
-/(u1::Units, u2::Units) = new(Units, apply_op((-), u1.powers, u2.powers))
+*(u1::Units, u2::Units) = Units.new(apply_op((+), u1.powers, u2.powers))
+/(u1::Units, u2::Units) = Units.new(apply_op((-), u1.powers, u2.powers))
 
-type ValueWithUnits[`T]
+struct ValueWithUnits[T]
     value::T
     units::Units
 end
 
-value_with_units(value::`T, units::Units) = new(ValueWithUnits[T], value, units)
+value_with_units[T](value::T, units::Units) = ValueWithUnits[T].new(value, units)
 
 *(value::Any, units::Units) = value_with_units(value, units)
 *(x::ValueWithUnits, units::Units) = value_with_units(x.value, x.units*units)

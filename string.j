@@ -1,8 +1,8 @@
-type String < Any
+struct String <: Any
     str
 end
 
-string(s) = new(String, s)
+string(s) = String.new(s)
 str(s::String) = s.str
 
 function print(s::String)

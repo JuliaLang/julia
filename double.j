@@ -21,21 +21,21 @@ def_compare_ops(Double, {Int8, Uint8, Int16, Uint16, Int32, Uint32}, lt_double, 
 
 !=(x::Double, y::Double) = ne_double(unbox(x),unbox(y))
 
-conversion x::Int8-->Double
+function Double.convert(x::Int8)
     return double(x)
 end
-conversion x::Uint8-->Double
+function Double.convert(x::Uint8)
     return double(x)
 end
-conversion x::Int16-->Double
+function Double.convert(x::Int16)
     return double(x)
 end
-conversion x::Uint16-->Double
+function Double.convert(x::Uint16)
     return double(x)
 end
-conversion x::Int32-->Double
+function Double.convert(x::Int32)
     return double(x)
 end
-conversion x::Uint32-->Double
+function Double.convert(x::Uint32)
     return double(x)
 end

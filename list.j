@@ -1,18 +1,18 @@
-type EmptyList
+struct EmptyList
 end
 
-type Cons
+struct Cons
     head::Any
-    tail::Union[EmptyList, Cons]
+    tail::Union(EmptyList, Cons)
 end
 
-typealias List Union[EmptyList, Cons]
+typealias List Union(EmptyList, Cons)
 
-nil = new(EmptyList)
+nil = EmptyList.new()
 
 head(x::Cons) = x.head
 tail(x::Cons) = x.tail
-cons(x, y::List) = new(Cons,x,y)
+cons(x, y::List) = Cons.new(x,y)
 
 function print(l::List)
     if istype(l,EmptyList)
@@ -56,14 +56,15 @@ map(f, l::Cons) = cons(f(head(l)), map(f, tail(l)))
 copylist(l::EmptyList) = nil
 copylist(l::Cons) = cons(head(l), copylist(tail(l)))
 
-function append(lsts...)
-    function append2(a, b)
-        if istype(a,EmptyList)
-            b
-        else
-            cons(head(a), append2(tail(a), b))
-        end
+function append2(a, b)
+    if istype(a,EmptyList)
+        b
+    else
+        cons(head(a), append2(tail(a), b))
     end
+end
+
+function append(lsts...)
     n = length(lsts)
     l = nil
     for i = n:-1:1
@@ -72,10 +73,10 @@ function append(lsts...)
     return l
 end
 
-type Expr
+struct Expr
     head::Symbol
     args::List
 end
 
-expr(hd, args...)  = new(Expr, hd, list(args...))
-exprl(hd, arglist) = new(Expr, hd, arglist)
+expr(hd, args...)  = Expr.new(hd, list(args...))
+exprl(hd, arglist) = Expr.new(hd, arglist)

@@ -1,12 +1,12 @@
-type Array[`T,`ndims] < Tensor[`T,`ndims]
+struct Array[T,ndims] <: Tensor[T,ndims]
     dims:: Buffer[Size]
-    data:: Buffer[`T]
+    data:: Buffer[T]
 end
 
-typealias Vector Tensor[`T,1]
-typealias Matrix Tensor[`T,2]
+typealias Vector[T] Tensor[T,1]
+typealias Matrix[T] Tensor[T,2]
 
-function print(a::Array[`T,1])
+function print[T](a::Array[T,1])
     n = a.dims[1]
 
     if n < 10
@@ -22,7 +22,7 @@ function printcols(a, start, stop, i)
     for j=start:stop; print(a[i,j]); print(" "); end
 end
 
-function print(a::Array[`T,2])
+function print[T](a::Array[T,2])
 
     m = a.dims[1]
     n = a.dims[2]
@@ -75,11 +75,11 @@ end # print()
 
 function make_array(eltype::Type, dim...)
     ndims = length(dim)
-    dims = new(Buffer[Size], ndims)
+    dims = Buffer[Size].new(ndims)
     numel = 1
     for i=1:ndims; dims[i] = dim[i]; numel = numel*dim[i]; end
-    data = new(Buffer[eltype], numel)
-    new(Array[eltype,ndims], dims, data)
+    data = Buffer[eltype].new(numel)
+    Array[eltype,ndims].new(dims, data)
 end
 
 make_array(dim...) = make_array(Double, dim...)
@@ -88,11 +88,11 @@ make_array(dim...) = make_array(Double, dim...)
 # until convert() is in place
 function zeros_int(dim...)
     ndims = length(dim)
-    dims = new(Buffer[Size], ndims)
+    dims = Buffer[Size].new(ndims)
     numel = 1
     for i=1:ndims; dims[i] = dim[i]; numel = numel*dim[i]; end
-    data = new(Buffer[Int32], numel)
-    array = new(Array[Int32,ndims], dims, data)
+    data = Buffer[Int32].new(numel)
+    array = Array[Int32,ndims].new(dims, data)
 end
 
 size(a::Array) = a.dims
@@ -128,22 +128,22 @@ function set(a::Array, i::Index, j::Index, x)
 end
 
 numel(a::Array) = a.data.length
-length(v::Array[`T,1]) = v.data.length
+length[T](v::Array[T,1]) = v.data.length
 zeros(sz...) = a = make_array(sz...)
 ones(m::Size) = [ 1 | (i=1:m) ]
 ones(m::Size, n::Size) = [ 1 | (i=1:m), (j=1:n) ]
 rand(m::Size) = [ rand() | (i=1:m) ]
 rand(m::Size, n::Size) = [ rand() | (i=1:m), (j=1:n) ]
 
-(+)(x::Array[`T,1], y::Array[`T,1]) = [ x[i] + y[i] | (i=1:numel(x)) ]
-(+)(x::Array[`T,2], y::Array[`T,2]) = [ x[i,j] + y[i,j] | (i=1:x.dims[1]), (j=1:x.dims[2]) ]
+(+)[T](x::Array[T,1], y::Array[T,1]) = [ x[i] + y[i] | (i=1:numel(x)) ]
+(+)[T](x::Array[T,2], y::Array[T,2]) = [ x[i,j] + y[i,j] | (i=1:x.dims[1]), (j=1:x.dims[2]) ]
 
 (==)(x::Array, y::Array) = x.dims == y.dims && x.data == y.data
 
-transpose(x::Array[`T,2]) = [ x[j,i] | (i=1:x.dims[2]), (j=1:x.dims[1]) ]
-ctranspose(x::Array[`T,2]) = [ conj(x[j,i]) | (i=1:x.dims[2]), (j=1:x.dims[1]) ]
+transpose[T](x::Array[T,2]) = [ x[j,i] | (i=1:x.dims[2]), (j=1:x.dims[1]) ]
+ctranspose[T](x::Array[T,2]) = [ conj(x[j,i]) | (i=1:x.dims[2]), (j=1:x.dims[1]) ]
 
-function hcat(elts::`T...)
+function hcat[T](elts::T...)
     n = length(elts)
     if n == 0
         return make_array(0)
@@ -155,7 +155,7 @@ function hcat(elts::`T...)
     a
 end
 
-function vector(elts::`T...)
+function vector[T](elts::T...)
     v = make_array(T,length(elts))
     for i = 1:length(elts)
         v[i] = elts[i]

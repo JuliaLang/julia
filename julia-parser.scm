@@ -37,7 +37,7 @@ TODO:
 (define syntactic-unary-operators '($))
 
 (define reserved-words '(begin while if for try function type typealias local
-			       return break continue conversion global macro))
+			       return break continue struct global macro))
 
 (define (syntactic-op? op) (memq op syntactic-operators))
 (define (syntactic-unary-op? op) (memq op syntactic-unary-operators))
@@ -450,16 +450,14 @@ TODO:
      (let ((sig (parse-call s)))
        (begin0 (list word sig (parse-block s))
 	       (expect-end s))))
-    ((conversion)
-     (let ((sig (parse-eq s)))
-       (begin0 (list word sig (parse-block s))
-	       (expect-end s))))
-    ((type)
+    ((struct)
      (let ((sig (parse-ineq s)))
        (begin0 (list word sig (parse-block s))
 	       (expect-end s))))
+    ((type)
+     (list 'type (parse-ineq s)))
     ((typealias)
-     (list 'typealias (parse-atom s) (parse-arrow s)))
+     (list 'typealias (parse-call s) (parse-arrow s)))
     ((try) #f ; TODO
      )
     ((return)          (list 'return (parse-eq s)))
