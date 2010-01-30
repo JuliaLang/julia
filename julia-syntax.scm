@@ -206,6 +206,11 @@
 	 (func-args   (map (lambda (fexp)
 			     (fsig-to-lambda-list (cddadr fexp))) funcs))
 	 (func-types  (map (lambda (x) (gensym)) funcs))
+	 (func-sparms (map (lambda (fexp)
+			     (let ((head (cadadr fexp)))
+			       (if (symbol? head) '()
+				   (cddr head))))
+			   funcs))
 	 (tvars       (gensym))
 	 (proto       (gensym)))
      `(call
@@ -232,9 +237,12 @@
 	      ; itself. tie the recursive knot.
 	      (call (top new_struct_fields)
 		    ,name (tuple ,@field-types))
-	      ,@(map (lambda (type argl)
-		       `(= ,type (tuple ,@(llist-types argl))))
-		     func-types func-args)))
+	      ,@(map (lambda (type argl sp)
+		       `(= ,type
+			   (call (lambda ,sp
+				   (tuple ,@(llist-types argl)))
+				 ,@(symbols->typevars sp))))
+		     func-types func-args func-sparms)))
 	   ,@(symbols->typevars params))
 	  ; build method definitions
 	  ,@(map (lambda (fdef fargs ftype)
