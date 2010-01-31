@@ -75,7 +75,7 @@ TODO:
 			     (julia-tuple Type-type Type-type)
 			     #f #f))
 
-(define (type-var? a) #f)
+(define (type-var? a) #f) ; forward decl
 
 (define (make-function-type a b)
   ; convert X-->Y to (X,)-->Y if X is not already a tuple or typevar
@@ -105,9 +105,13 @@ TODO:
 					any-func any-func)
 			   #f #f))
 
+(define (make-generic-function name) julia-null) ; forward decl
+(define (add-method-for gf types meth) #t)       ; forward decl
+
 (define (make-struct-type name super params fnames ftypes . ctor)
-  (let ((T (vector StructKind name super params fnames ftypes
-		   #f julia-null)))
+  (let* ((cnvt (make-generic-function 'convert))
+	 (T (vector StructKind name super params fnames ftypes
+		    #f cnvt)))
     (vector-set! T 6
 		 (make-closure
 		  (if (pair? ctor)
@@ -115,6 +119,9 @@ TODO:
 		      (lambda (ce args)
 			(apply vector ce args)))
 		  T))
+    ; add the identity conversion
+    (add-method-for cnvt (julia-tuple T) (make-closure (lambda (ce args)
+							 (car args)) #f))
     T))
 
 (vector-set! TagKind 0 StructKind)
@@ -375,7 +382,8 @@ TODO:
 	       (if (generic-function? (vector-ref type 7))
 		   (vector-set!
 		    newstruct 7
-		    (instantiate-generic-function (vector-ref type 7) env)))
+		    (instantiate-generic-function (vector-ref type 7) env
+						  newstack)))
 	       (cache-type! key newstruct)
 	       newstruct))
 	    (else (make-tag-type (tag-type-name type)
@@ -599,6 +607,151 @@ TODO:
 	   (not (eq? t scalar-type)) ; circular reference problem
 	   (any has-typevars? (type-params t)))))
 
+; --- function objects ---
+
+(define (make-lambda-closure lambda-expr cloenv)
+  (make-closure j-eval-body (cons lambda-expr cloenv)))
+
+(define (lambda-closure-expr c)
+  (let ((e (car (closure-env c))))
+    (if (and (pair? e)
+	     (eq? (car e) 'lambda))
+	e
+	(error "Not a lambda closure"))))
+
+(define (lambda-closure-env c)
+  (lambda-closure-expr c)  ; for the error check
+  (cdr (closure-env c)))
+
+(define (lambda-closure? x)
+  (let ((e (closure-env x)))
+    (and (pair? e)
+	 (pair? (car e))
+	 (eq? (caar e) 'lambda))))
+
+; --- type-keyed hash table ---
+
+(define (make-method-table) (vector '()))
+(define (mt:mlist mt) (vector-ref mt 0))
+
+(define (method-table-assoc-p methlist type pred)
+  (let loop ((m methlist))
+    (if (null? m)
+	#f
+	(if (pred type (caar m))
+	    (car m)
+	    (loop (cdr m))))))
+
+(define (instantiate-method f env)
+  ; env contains static parameter assignments
+  ; compilation goes here
+  (if (lambda-closure? f)
+      (make-lambda-closure
+       (let ((e (lambda-closure-expr f)))
+	 `(lambda ,(cadr e)
+	    ; insert the static parameter values!
+	    ,(append (list-head (caddr e) 4)
+		     (list (append (map (lambda (p)
+					  (cons (type-var-name (car p))
+						(cdr p)))
+					env)
+				   (list-ref (caddr e) 4))))
+	    ,(cadddr e)))
+       (lambda-closure-env f))
+      f))
+
+(define (method-table-assoc methtable type)
+  (let ((m (method-table-assoc-p (mt:mlist methtable) type
+				 (lambda (t mt)
+				   (if (has-typevars? mt)
+				       (conform t mt)
+				       (subtype? t mt))))))
+    (and m
+	 (if (has-typevars? (car m))
+	     (let* ((env     (conform type (car m)))
+		    (newtype (instantiate-type- (car m) env))
+		    (newmeth (instantiate-method (cdr m) env)))
+	       ; cache result in concrete method table
+	       (method-table-insert! methtable newtype newmeth)
+	       (if (subtype? type newtype)
+		   (cons newtype newmeth)
+		   #f))
+	     m))))
+
+(define (method-table-insert-p mlist type method pred)
+  (let ((m (method-table-assoc-p mlist type pred)))
+    (if (and m (type-equal? type (car m)))
+	(begin (set-car! m type)   ; replace existing key
+	       (set-cdr! m method)
+	       mlist)
+	(cons-in-order (cons type method) mlist car pred))))
+
+; test whether a type is not more general than another
+; this defines the method search order. note it has nothing to do with
+; whether a and b are compatible in any way (e.g. assignable, convertible)
+(define (type<=? a b)
+  (if (has-typevars? a)
+      (if (has-typevars? b)
+	  (not (not (conform a b)))
+	  (subtype? a b))
+      (or (subtype? a b)
+	  (and (not (subtype? b a))
+	       (has-typevars? b)))))
+
+(define (method-table-insert! mt type method)
+  (vector-set! mt 0
+	       (method-table-insert-p (mt:mlist mt)
+				      type method type<=?)))
+
+; --- generic functions ---
+
+(define gf-type any-func)
+
+(define (j-apply-generic ce args)
+  (let* ((argtype (make-tuple-type (map type-of args)))
+	 (meth    (best-method (vector-ref ce 0) argtype)))
+    (if meth
+	; applicable without conversion
+	((closure-proc (cdr meth)) (closure-env (cdr meth)) args)
+	(error "No method for function" (vector-ref ce 1) "matching types"
+	       (map julia->string (type-params argtype))))))
+
+(define (make-generic-function name)
+  ;(display name) (newline)
+  (make-closure j-apply-generic (vector (make-method-table) name)))
+
+(define (instantiate-generic-function gf env stack)
+  (let ((meths (map (lambda (p)
+		      (cons (instantiate-type--  (car p) env stack)
+			    (instantiate-method  (cdr p) env)))
+		    (mt:mlist (gf-mtable gf))))
+	(newgf (make-generic-function (gf-name gf))))
+    (for-each (lambda (p) (add-method-for newgf (car p) (cdr p)))
+	      meths)
+    newgf))
+
+(define (best-method methtable argtype)
+  (method-table-assoc methtable argtype))
+
+(define (gf-mtable gf) (vector-ref (closure-env gf) 0))
+(define (gf-name gf)   (vector-ref (closure-env gf) 1))
+
+; add a method for certain types
+(define (add-method-for gf types meth)
+  (define (add-dummy-type-params t)
+    (cond ((type-ctor? t) (tc->type t))
+	  ((tuple? t) (map add-dummy-type-params t))
+	  ((union-type? t) (make-union-type (map add-dummy-type-params
+						 (union-type-types t))))
+	  ((func-type? t) (make-function-type
+			   (add-dummy-type-params (func-fromtype t))
+			   (add-dummy-type-params (func-totype   t))))
+	  (else t)))
+  (method-table-insert! (gf-mtable gf)
+			(add-dummy-type-params types)
+			meth)
+  #t)
+
 ; --- define some key builtin types ---
 
 (define scalar-type (instantiate-type Tensor-type (list Bottom-type
@@ -664,143 +817,6 @@ TODO:
 
 (define julia-true (vector bool-type 1))
 (define julia-false (vector bool-type 0))
-
-; --- function objects ---
-
-(define (make-lambda-closure lambda-expr cloenv)
-  (make-closure j-eval-body (cons lambda-expr cloenv)))
-
-(define (lambda-closure-expr c)
-  (let ((e (car (closure-env c))))
-    (if (and (pair? e)
-	     (eq? (car e) 'lambda))
-	e
-	(error "Not a lambda closure"))))
-
-(define (lambda-closure-env c)
-  (lambda-closure-expr c)  ; for the error check
-  (cdr (closure-env c)))
-
-; --- type-keyed hash table ---
-
-(define (make-method-table) (vector '()))
-(define (mt:mlist mt) (vector-ref mt 0))
-
-(define (method-table-assoc-p methlist type pred)
-  (let loop ((m methlist))
-    (if (null? m)
-	#f
-	(if (pred type (caar m))
-	    (car m)
-	    (loop (cdr m))))))
-
-(define (instantiate-method f env)
-  ; env contains static parameter assignments
-  ; compilation goes here
-  (make-lambda-closure
-   (let ((e (lambda-closure-expr f)))
-     `(lambda ,(cadr e)
-	; insert the static parameter values!
-	,(append (list-head (caddr e) 4)
-		 (list (append (map (lambda (p)
-				      (cons (type-var-name (car p))
-					    (cdr p)))
-				    env)
-			       (list-ref (caddr e) 4))))
-	,(cadddr e)))
-   (lambda-closure-env f)))
-
-(define (method-table-assoc methtable type)
-  (let ((m (method-table-assoc-p (mt:mlist methtable) type
-				 (lambda (t mt)
-				   (if (has-typevars? mt)
-				       (conform t mt)
-				       (subtype? t mt))))))
-    (and m
-	 (if (has-typevars? (car m))
-	     (let* ((env     (conform type (car m)))
-		    (newtype (instantiate-type- (car m) env))
-		    (newmeth (instantiate-method (cdr m) env)))
-	       ; cache result in concrete method table
-	       (method-table-insert! methtable newtype newmeth)
-	       (if (subtype? type newtype)
-		   (cons newtype newmeth)
-		   #f))
-	     m))))
-
-(define (method-table-insert-p mlist type method pred)
-  (let ((m (method-table-assoc-p mlist type pred)))
-    (if (and m (type-equal? type (car m)))
-	(begin (set-car! m type)   ; replace existing key
-	       (set-cdr! m method)
-	       mlist)
-	(cons-in-order (cons type method) mlist car pred))))
-
-; test whether a type is not more general than another
-; this defines the method search order. note it has nothing to do with
-; whether a and b are compatible in any way (e.g. assignable, convertible)
-(define (type<=? a b)
-  (if (has-typevars? a)
-      (if (has-typevars? b)
-	  (not (not (conform a b)))
-	  (subtype? a b))
-      (or (subtype? a b)
-	  (and (not (subtype? b a))
-	       (has-typevars? b)))))
-
-(define (method-table-insert! mt type method)
-  (vector-set! mt 0
-	       (method-table-insert-p (mt:mlist mt)
-				      type method type<=?)))
-
-; --- generic functions ---
-
-(define gf-type any-func)
-
-(define (j-apply-generic ce args)
-  (let* ((argtype (make-tuple-type (map type-of args)))
-	 (meth    (best-method (vector-ref ce 0) argtype)))
-    (if meth
-	; applicable without conversion
-	((closure-proc (cdr meth)) (closure-env (cdr meth)) args)
-	(error "No method for function" (vector-ref ce 1) "matching types"
-	       (map julia->string (type-params argtype))))))
-
-(define (make-generic-function name)
-  ;(display name) (newline)
-  (make-closure j-apply-generic (vector (make-method-table) name)))
-
-(define (instantiate-generic-function gf env)
-  (let ((meths (map (lambda (p)
-		      (cons (instantiate-type-  (car p) env)
-			    (instantiate-method (cdr p) env)))
-		    (mt:mlist (gf-mtable gf))))
-	(newgf (make-generic-function (gf-name gf))))
-    (for-each (lambda (p) (add-method-for newgf (car p) (cdr p)))
-	      meths)
-    newgf))
-
-(define (best-method methtable argtype)
-  (method-table-assoc methtable argtype))
-
-(define (gf-mtable gf) (vector-ref (closure-env gf) 0))
-(define (gf-name gf)   (vector-ref (closure-env gf) 1))
-
-; add a method for certain types
-(define (add-method-for gf types meth)
-  (define (add-dummy-type-params t)
-    (cond ((type-ctor? t) (tc->type t))
-	  ((tuple? t) (map add-dummy-type-params t))
-	  ((union-type? t) (make-union-type (map add-dummy-type-params
-						 (union-type-types t))))
-	  ((func-type? t) (make-function-type
-			   (add-dummy-type-params (func-fromtype t))
-			   (add-dummy-type-params (func-totype   t))))
-	  (else t)))
-  (method-table-insert! (gf-mtable gf)
-			(add-dummy-type-params types)
-			meth)
-  #t)
 
 ; --- type conversions ---
 (define (convert-tuple x to)
