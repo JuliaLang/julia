@@ -141,7 +141,30 @@ TODO:
 			  (julia-tuple Tuple-type)
 			  #f #f))
 
-(define (make-union-type params) (vector UnionKind (list->tuple params)))
+(define (all-pairs? pred lst)
+  (every (lambda (first)
+	   (every (lambda (second) (pred first second))
+		  (filter (lambda (x) (not (eq? x first))) lst)))
+	 lst))
+
+(define (make-union-type params)
+  ; avoid constructing union types that would force the conform procedure
+  ; to perform an exponential search. this would happen if a union contained
+  ; two types A and B such that there exists a type X that could match either,
+  ; but potentially with different type parameter assignments. For example:
+  ; (Union(Complex[T],Complex[S]), T)
+  ; This should match (Complex[Int32], Double), but we can only determine that
+  ; by trying the rest of the pattern with both T=Int32 and S=Int32.
+  ; Of course this *could* be implemented, but it's way more complex than
+  ; what is needed, which is combining disjoint types like () and Int, or
+  ; EmptyTree and TreeNode.
+  (define (non-overlapping? a b)
+    (not (and (has-typevars? a)
+	      (has-typevars? b)
+	      (conform a b))))
+  (if (all-pairs? non-overlapping? params)
+      (vector UnionKind (list->tuple params))
+      (error "Type pattern too complex")))
 
 (define (union-type? t) (and (vector? t) (eq? (vector-ref t 0) UnionKind)))
 
@@ -266,11 +289,6 @@ TODO:
 (define (sequence-type? t)
   (and (type? t)
        (eq? (type-name t) '...)))
-
-(define Tensor-type
-  (let ((v (type-vars '(T n))))
-    (make-type-constructor v (make-tag-type 'Tensor Any-type v))))
-(put-type 'Tensor Tensor-type)
 
 (put-type 'Function
 	  (let ((v (type-vars '(A B))))
@@ -474,53 +492,7 @@ TODO:
 ; containing TypeVars)
 ; returns #f or an assoc list showing the assignment of
 ; type parameters that makes the relation hold
-(define (conform t pat)
-  (define (find-typevars t)
-    (cond ((type-var? t)     (list t))
-	  ((not (type? t))   '())
-	  (else
-	   (delete-duplicates-p
-	    (apply append (map (lambda (p)
-				 (if (eq? p t) '() ; avoid self pointers
-				     (find-typevars p)))
-			       (type-params t)))
-	    eq?))))
-  
-  (define (param-search t pat p options env)
-    (if (null? p)
-	(let ((super (instantiate-type- pat env)))
-	  (and (subtype? t super)
-	       env))
-	; make sure all parameters in t that this parameter might match
-	; are the same typevar, otherwise there's a conflict. e.g.
-	; (A, B) doesn't conform to (T, T)
-	(and (not (length> (delete-duplicates
-			    (filter type-var? (car options)))
-			   1))
-	     (let try-assignment ((opts (car options)))
-	       (if (pair? opts)
-		   (or (param-search t pat (cdr p) (cdr options)
-				     (cons (cons (car p) (car opts)) env))
-		       (try-assignment (cdr opts)))
-		   ; no possibilities left for p
-		   #f)))))
-  
-  ;(display "conform? ")
-  ;(julia-print t) (display " ")
-  ;(julia-print pat) (newline)
-  (let ((pairs (conform- t pat '()))
-	(tp    (find-typevars pat)))
-    ; post-process to see if all the possible types for a given
-    ; parameter can be reconciled
-    (and
-     pairs
-     (let ((options
-	    (map (lambda (p)
-		   (map car
-			(filter (lambda (c) (eq? (cdr c) p))
-				pairs)))
-		 tp)))
-       (param-search t pat tp options '())))))
+(define (conform t pat) (conform- t pat '()))
 
 ; generate list of corresponding type components, (type . T) if parameter
 ; T might correspond to type
@@ -529,7 +501,11 @@ TODO:
   ;(julia-print child) (display " ")
   ;(julia-print parent) (newline)
   (cond ((type-var? parent)
-	 (cons (cons child parent) env))
+	 (let ((val (lookup parent env #f)))
+	   (if val
+	       (and (type-eqv? child val)
+		    env)
+	       (cons (cons parent child) env))))
 	((type-var? child) #f)
 	
 	((and (j-int32? child) (j-int32? parent))
@@ -572,10 +548,8 @@ TODO:
 		 (pseq (and (pair? pp) (sequence-type? (car pp)))))
 	     (cond
 	      ((null? cp) (cond ((null? pp)  env)
-				(pseq
-				 (conform- Bottom-type (type-param0 (car pp))
-					   env))
-				(else #f)))
+				(pseq        env)
+				(else        #f)))
 	      ((and cseq (not pseq)) #f)
 	      ((null? pp)            #f)
 	      (else
@@ -753,6 +727,11 @@ TODO:
   #t)
 
 ; --- define some key builtin types ---
+
+(define Tensor-type
+  (let ((v (type-vars '(T n))))
+    (make-type-constructor v (make-tag-type 'Tensor Any-type v))))
+(put-type 'Tensor Tensor-type)
 
 (define scalar-type (instantiate-type Tensor-type (list Bottom-type
 							Bottom-type)))
