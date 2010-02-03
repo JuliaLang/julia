@@ -762,7 +762,7 @@ TODO:
 (define uint32-type (make-scalar-type 'Uint32 int-type))
 (define int64-type  (make-scalar-type 'Int64  int-type))
 (define uint64-type (make-scalar-type 'Uint64 int-type))
-(define single-type (make-scalar-type 'Single float-type))
+(define float32-type (make-scalar-type 'Float32 float-type))
 (define double-type (make-scalar-type 'Double float-type))
 
 (define buffer-type
@@ -787,7 +787,7 @@ TODO:
 (put-type 'Uint32 uint32-type)
 (put-type 'Int64  int64-type)
 (put-type 'Uint64 uint64-type)
-(put-type 'Single single-type)
+(put-type 'Float32 float32-type)
 (put-type 'Double double-type)
 
 (put-type 'Buffer buffer-type)
@@ -1345,7 +1345,7 @@ end
     (let* ((t (type-of x))
 	   (tn (type-name t)))
       (case tn
-	((Int8 Uint8 Int16 Uint16 Int32 Uint32 Int64 Uint64 Single Double)
+	((Int8 Uint8 Int16 Uint16 Int32 Uint32 Int64 Uint64 Float32 Double)
 	 (display (j-unbox x)))
 	((Bool) (if (j-false? x)
 		    (display "false")
