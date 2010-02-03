@@ -82,7 +82,7 @@ function make_array(eltype::Type, dim...)
     Array[eltype,ndims].new(dims, data)
 end
 
-make_array(dim...) = make_array(Double, dim...)
+make_array(dim...) = make_array(Float64, dim...)
 
 # This is a temp version to get an integer array of zeros
 # until convert() is in place

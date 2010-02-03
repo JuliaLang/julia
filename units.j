@@ -1,11 +1,11 @@
 UNITS = buffer("meters","seconds")
 
 struct Units
-    powers::Buffer[Double]
+    powers::Buffer[Float64]
 end
 
 function make_unit(index::Int32)
-    powers = Buffer[Double].new(length(UNITS))
+    powers = Buffer[Float64].new(length(UNITS))
     powers[index] = 1
     Units.new(powers)
 end

@@ -153,7 +153,7 @@ TODO:
   ; two types A and B such that there exists a type X that could match either,
   ; but potentially with different type parameter assignments. For example:
   ; (Union(Complex[T],Complex[S]), T)
-  ; This should match (Complex[Int32], Double), but we can only determine that
+  ; This should match (Complex[Int32], Float64), but we can only determine that
   ; by trying the rest of the pattern with both T=Int32 and S=Int32.
   ; Of course this *could* be implemented, but it's way more complex than
   ; what is needed, which is combining disjoint types like () and Int, or
@@ -763,7 +763,7 @@ TODO:
 (define int64-type  (make-scalar-type 'Int64  int-type))
 (define uint64-type (make-scalar-type 'Uint64 int-type))
 (define float32-type (make-scalar-type 'Float32 float-type))
-(define double-type (make-scalar-type 'Double float-type))
+(define float64-type (make-scalar-type 'Float64 float-type))
 
 (define buffer-type
   (let ((v (type-vars '(T))))
@@ -788,7 +788,7 @@ TODO:
 (put-type 'Int64  int64-type)
 (put-type 'Uint64 uint64-type)
 (put-type 'Float32 float32-type)
-(put-type 'Double double-type)
+(put-type 'Float64 float64-type)
 
 (put-type 'Buffer buffer-type)
 
@@ -913,7 +913,7 @@ end
 (define (make-numeric-literal n)
   (if (not (flonum? n))
       (j-box int32-type n)
-      (j-box double-type n)))
+      (j-box float64-type n)))
 
 (define (scm->julia x)
   (cond ((symbol? x)  x)
@@ -1196,29 +1196,29 @@ end
 (make-builtin 'mul_int8  "(Int8,Int8)-->Int8"  (sif2 8 *))
 (make-builtin 'div_int8  "(Int8,Int8)-->Int8"  (sif2 8 div-int))
 (make-builtin 'mod_int8  "(Int8,Int8)-->Int8"  (sif2 8 mod-int))
-(make-builtin 'add_double "(Double,Double)-->Double" +)
-(make-builtin 'sub_double "(Double,Double)-->Double" -)
-(make-builtin 'neg_double "(Double,)-->Double" -)
-(make-builtin 'mul_double "(Double,Double)-->Double" *)
-(make-builtin 'div_double "(Double,Double)-->Double"
+(make-builtin 'add_float64 "(Float64,Float64)-->Float64" +)
+(make-builtin 'sub_float64 "(Float64,Float64)-->Float64" -)
+(make-builtin 'neg_float64 "(Float64,)-->Float64" -)
+(make-builtin 'mul_float64 "(Float64,Float64)-->Float64" *)
+(make-builtin 'div_float64 "(Float64,Float64)-->Float64"
 	      (lambda (x y) (exact->inexact (/ x y))))
 (define (j-eq x y) (if (= x y) julia-true julia-false))
 (define (j-lt x y) (if (< x y) julia-true julia-false))
 (make-builtin 'eq_int32 "(Int32,Int32)-->Bool" j-eq)
 (make-builtin 'lt_int32 "(Int32,Int32)-->Bool" j-lt)
-(make-builtin 'eq_double "(Double,Double)-->Bool" j-eq)
-(make-builtin 'lt_double "(Double,Double)-->Bool" j-lt)
-(make-builtin 'ne_double "(Double,Double)-->Bool"
+(make-builtin 'eq_float64 "(Float64,Float64)-->Bool" j-eq)
+(make-builtin 'lt_float64 "(Float64,Float64)-->Bool" j-lt)
+(make-builtin 'ne_float64 "(Float64,Float64)-->Bool"
 	      (lambda (x y) (if (and (= x x)
 				     (= y y)
 				     (not (= x y)))
 				julia-true
 				julia-false)))
-(make-builtin 'isnan_double "(Double,)-->Bool"
+(make-builtin 'isnan_float64 "(Float64,)-->Bool"
 	      (lambda (x) (if (not (= x x))
 			      julia-true
 			      julia-false)))
-(make-builtin 'isinf_double "(Double,)-->Bool"
+(make-builtin 'isinf_float64 "(Float64,)-->Bool"
 	      (lambda (x) (if (or (equal? x +inf.0)
 				  (equal? x -inf.0))
 			      julia-true
@@ -1233,7 +1233,7 @@ end
 (make-builtin 'to_uint32 "Scalar-->Uint32" (lambda (x) (ui 32 (to-int x))))
 (make-builtin 'to_int64 "Scalar-->Int64"   (lambda (x) (si 64 (to-int x))))
 (make-builtin 'to_uint64 "Scalar-->Uint64" (lambda (x) (ui 64 (to-int x))))
-(make-builtin 'to_double "Scalar-->Double" exact->inexact)
+(make-builtin 'to_float64 "Scalar-->Float64" exact->inexact)
 (make-builtin '_truncate "Scalar-->Int" to-int)
 
 ; the following builtin functions are ordinary first-class functions,
@@ -1345,7 +1345,7 @@ end
     (let* ((t (type-of x))
 	   (tn (type-name t)))
       (case tn
-	((Int8 Uint8 Int16 Uint16 Int32 Uint32 Int64 Uint64 Float32 Double)
+	((Int8 Uint8 Int16 Uint16 Int32 Uint32 Int64 Uint64 Float32 Float64)
 	 (display (j-unbox x)))
 	((Bool) (if (j-false? x)
 		    (display "false")

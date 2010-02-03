@@ -24,7 +24,7 @@ features
 - where clauses
 ? allow chains of conversions
 ? extend search space used by (conform )
-  . conform (Rational[Int32],Double) (Complex[`T],Complex[`T])
+  . conform (Rational[Int32],Float64) (Complex[`T],Complex[`T])
 ? coerce()
 -------------------------------------------------------------------------------
 
@@ -74,7 +74,7 @@ except permits the required nesting!
 - explicit different kinds of types. e.g. StructType, NumericType
   . conceptually helpful, because you can only use new(T,...) on struct types.
     new(Int8) doesn't work, and new(Symbol) doesn't work...
-- use {} for type parameters, e.g. Complex{Double}
+- use {} for type parameters, e.g. Complex{Float64}
 
 -------------------------------------------------------------------------------
 
@@ -161,7 +161,7 @@ make an array that can hold various kinds of numbers, but only numbers
 as a typed location, e.g. "local x::Array[Number]"
 doesn't really matter. both the user & compiler don't know exactly
 what kind of numbers will come out of there. user doesn't care whether
-it is actually an Array[Double], etc., but compiler does.
+it is actually an Array[Float64], etc., but compiler does.
 
 matching argument types, foo(x::Array[Number])
 would you want to write a function just for arrays created with element

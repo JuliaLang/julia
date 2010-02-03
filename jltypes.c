@@ -43,7 +43,7 @@ jl_type_t *jl_uint32_type;
 jl_type_t *jl_int64_type;
 jl_type_t *jl_uint64_type;
 jl_type_t *jl_float32_type;
-jl_type_t *jl_double_type;
+jl_type_t *jl_float64_type;
 
 jl_value_t *jl_null;
 jl_value_t *jl_true;
@@ -336,7 +336,7 @@ BOX_FUNC(int64,  int64_t)
 BOX_FUNC(uint64, uint64_t)
 BOX_FUNC(bool,   int32_t)
 BOX_FUNC(float32, float)
-BOX_FUNC(double, double)
+BOX_FUNC(float64, double)
 
 #define UNBOX_FUNC(type,ctype)                  \
 ctype jl_unbox_##type(jl_value_t *v)            \
@@ -354,7 +354,7 @@ UNBOX_FUNC(int64,  int64_t)
 UNBOX_FUNC(uint64, uint64_t)
 UNBOX_FUNC(bool,   int32_t)
 UNBOX_FUNC(float32, float)
-UNBOX_FUNC(double, double)
+UNBOX_FUNC(float64, double)
 
 jl_buffer_t *jl_new_buffer(jl_type_t *buftype, size_t nel)
 {

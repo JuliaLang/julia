@@ -47,4 +47,4 @@ den(x::Rational) = x.den
 ==(x::Rational, y::Int)      = (x.num == y     && x.den == 1)
 ==(y::Int, x::Rational)      = (x.num == y     && x.den == 1)
 
-double(x::Rational) = double(x.num)/double(x.den)
+float64(x::Rational) = float64(x.num)/float64(x.den)

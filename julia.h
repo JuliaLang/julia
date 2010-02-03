@@ -115,7 +115,7 @@ extern jl_type_t *jl_uint32_type;
 extern jl_type_t *jl_int64_type;
 extern jl_type_t *jl_uint64_type;
 extern jl_type_t *jl_float32_type;
-extern jl_type_t *jl_double_type;
+extern jl_type_t *jl_float64_type;
 
 extern jl_value_t *jl_null;
 extern jl_value_t *jl_true;
