@@ -185,16 +185,16 @@ jl_typename_t *jl_new_typename(jl_sym_t *name)
     return (jl_typename_t*)jl_new_struct(jl_typename_type, name);
 }
 
-#define TAGTYPE_NW (NWORDS(sizeof(jl_tag_type_t))-1)
-#define STRUCTTYPE_NW (NWORDS(sizeof(jl_struct_type_t))-1)
-#define BITSTYPE_NW (NWORDS(sizeof(jl_bits_type_t))-1)
+#define TAG_TYPE_NW (NWORDS(sizeof(jl_tag_type_t))-1)
+#define STRUCT_TYPE_NW (NWORDS(sizeof(jl_struct_type_t))-1)
+#define BITS_TYPE_NW (NWORDS(sizeof(jl_bits_type_t))-1)
 static int t_uid_ctr = 0;  // TODO: lock
 
 jl_tag_type_t *jl_new_tagtype(jl_sym_t *name, jl_tag_type_t *super,
                              jl_tuple_t *parameters)
 {
     jl_tag_type_t *t = (jl_tag_type_t*)newobj((jl_type_t*)jl_tag_kind,
-                                            TAGTYPE_NW);
+                                            TAG_TYPE_NW);
     t->name = jl_new_typename(name);
     t->super = super;
     t->parameters = parameters;
@@ -246,7 +246,7 @@ jl_struct_type_t *jl_new_struct_type(jl_sym_t *name, jl_tag_type_t *super,
                                    jl_tuple_t *fnames, jl_tuple_t *ftypes)
 {
     jl_struct_type_t *t = (jl_struct_type_t*)newobj((jl_type_t*)jl_struct_kind,
-                                                  STRUCTTYPE_NW);
+                                                  STRUCT_TYPE_NW);
     t->name = jl_new_typename(name);
     t->super = super;
     t->parameters = parameters;
@@ -262,7 +262,7 @@ jl_bits_type_t *jl_new_bitstype(jl_sym_t *name, jl_tag_type_t *super,
                                jl_tuple_t *parameters, size_t nbits)
 {
     jl_bits_type_t *t = (jl_bits_type_t*)newobj((jl_type_t*)jl_bits_kind,
-                                              BITSTYPE_NW);
+                                              BITS_TYPE_NW);
     t->name = jl_new_typename(name);
     t->super = super;
     t->parameters = parameters;
@@ -494,17 +494,17 @@ jl_buffer_t *jl_new_buffer(jl_struct_type_t *buf_type, size_t nel)
 void jl_init_types()
 {
     // create base objects
-    jl_struct_kind = (jl_struct_type_t*)newobj(NULL, STRUCTTYPE_NW);
+    jl_struct_kind = (jl_struct_type_t*)newobj(NULL, STRUCT_TYPE_NW);
     jl_struct_kind->type = (jl_type_t*)jl_struct_kind;
-    jl_tag_kind = (jl_struct_type_t*)newobj((jl_type_t*)jl_struct_kind, STRUCTTYPE_NW);
-    jl_func_kind = (jl_struct_type_t*)newobj((jl_type_t*)jl_struct_kind, STRUCTTYPE_NW);
+    jl_tag_kind = (jl_struct_type_t*)newobj((jl_type_t*)jl_struct_kind, STRUCT_TYPE_NW);
+    jl_func_kind = (jl_struct_type_t*)newobj((jl_type_t*)jl_struct_kind, STRUCT_TYPE_NW);
 
-    jl_typename_type = (jl_struct_type_t*)newobj((jl_type_t*)jl_struct_kind, STRUCTTYPE_NW);
-    jl_sym_type = (jl_struct_type_t*)newobj((jl_type_t*)jl_struct_kind, STRUCTTYPE_NW);
+    jl_typename_type = (jl_struct_type_t*)newobj((jl_type_t*)jl_struct_kind, STRUCT_TYPE_NW);
+    jl_sym_type = (jl_struct_type_t*)newobj((jl_type_t*)jl_struct_kind, STRUCT_TYPE_NW);
 
-    jl_any_type = (jl_tag_type_t*)newobj((jl_type_t*)jl_tag_kind, TAGTYPE_NW);
-    jl_type_type = (jl_tag_type_t*)newobj((jl_type_t*)jl_tag_kind, TAGTYPE_NW);
-    jl_tuple_type = (jl_tag_type_t*)newobj((jl_type_t*)jl_tag_kind, TAGTYPE_NW);
+    jl_any_type = (jl_tag_type_t*)newobj((jl_type_t*)jl_tag_kind, TAG_TYPE_NW);
+    jl_type_type = (jl_tag_type_t*)newobj((jl_type_t*)jl_tag_kind, TAG_TYPE_NW);
+    jl_tuple_type = (jl_tag_type_t*)newobj((jl_type_t*)jl_tag_kind, TAG_TYPE_NW);
 
     jl_null = jl_tuple(0);
 
