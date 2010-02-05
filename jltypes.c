@@ -89,7 +89,7 @@ jl_value_t *jl_new_struct(jl_struct_type_t *type, ...)
 JL_CALLABLE(jl_f_tuple)
 {
     size_t i;
-    if (nargs == 0) return jl_null;
+    if (nargs == 0) return (jl_value_t*)jl_null;
     jl_tuple_t *t = (jl_tuple_t*)newobj((jl_type_t*)jl_tuple_type, nargs+1);
     t->length = nargs;
     for(i=0; i < nargs; i++) {
@@ -185,12 +185,13 @@ jl_sym_t *jl_gensym()
 
 #define jl_is_null(v) (((jl_value_t*)(v)) == ((jl_value_t*)jl_null))
 
-#define jl_is_tuple(v) jl_typeis(jl_tuple_type)
-#define jl_is_tag_type(v)    jl_typeis(jl_tag_kind)
-#define jl_is_bits_type(v)   jl_typeis(jl_bits_kind)
-#define jl_is_struct_type(v) jl_typeis(jl_struct_kind)
-#define jl_is_func_type(v)   jl_typeis(jl_func_kind)
-#define jl_is_union_type(v)  jl_typeis(jl_union_kind)
+#define jl_is_tuple(v)       jl_typeis(v,jl_tuple_type)
+
+#define jl_is_tag_type(v)    jl_typeis(v,jl_tag_kind)
+#define jl_is_bits_type(v)   jl_typeis(v,jl_bits_kind)
+#define jl_is_struct_type(v) jl_typeis(v,jl_struct_kind)
+#define jl_is_func_type(v)   jl_typeis(v,jl_func_kind)
+#define jl_is_union_type(v)  jl_typeis(v,jl_union_kind)
 
 #define jl_is_typevar(v)  (((jl_value_t*)(v))->type==(jl_type_t*)jl_tvar_type)
 #define jl_is_typector(v) (((jl_value_t*)(v))->type==(jl_type_t*)jl_typector_type)
@@ -397,8 +398,8 @@ int jl_has_typevarsp(jl_value_t *v)
     return jl_has_typevarsp((jl_value_t*)jl_tparams(v));
 }
 
-#define jl_is_int32(v) (((jl_value_t*)(v))->type == jl_int32_type)
-#define jl_is_bool(v) (((jl_value_t*)(v))->type == jl_bool_type)
+#define jl_is_int32(v) (((jl_value_t*)(v))->type == (jl_type_t*)jl_int32_type)
+#define jl_is_bool(v) (((jl_value_t*)(v))->type == (jl_type_t*)jl_bool_type)
 
 static int tuple_memq(jl_tuple_t *t, int n, jl_value_t *v)
 {
@@ -525,7 +526,7 @@ JL_CALLABLE(jl_new_buffer_internal)
     jl_buffer_t *b = (jl_buffer_t*)newobj((jl_type_t*)buf_type, 2);
     b->length = nel;
     b->data = data;
-    return b;
+    return (jl_value_t*)b;
 }
 
 void jl_init_types()
@@ -645,12 +646,12 @@ void jl_init_types()
     jl_tuple_t *tv;
     tv = typevars(1, "T");
     jl_seq_type =
-        jl_new_type_ctor(tv, jl_new_tagtype(jl_symbol("..."), jl_any_type, tv));
+        jl_new_type_ctor(tv, (jl_type_t*)jl_new_tagtype(jl_symbol("..."), jl_any_type, tv));
 
     tv = typevars(2, "T", "n");
     jl_tensor_type =
         jl_new_type_ctor(tv,
-                         jl_new_tagtype(jl_symbol("Tensor"), jl_any_type, tv));
+                         (jl_type_t*)jl_new_tagtype(jl_symbol("Tensor"), jl_any_type, tv));
 
     // TODO: scalar types here
 
@@ -661,5 +662,5 @@ void jl_init_types()
                            jl_tuple(1, jl_symbol("length")),
                            jl_tuple(1, jl_int32_type));
     bufstruct->fnew->fptr = jl_new_buffer_internal;
-    jl_buffer_type = jl_new_type_ctor(tv, bufstruct);
+    jl_buffer_type = jl_new_type_ctor(tv, (jl_type_t*)bufstruct);
 }

@@ -52,24 +52,24 @@ typedef struct {
     JL_VALUE_STRUCT
     jl_type_t *from;
     jl_type_t *to;
-} jl_functype_t;
+} jl_func_type_t;
 
 typedef struct {
     JL_VALUE_STRUCT
     jl_tuple_t *types;
 } jl_uniontype_t;
 
-typedef struct _jl_tagtype_t {
+typedef struct _jl_tag_type_t {
     JL_VALUE_STRUCT
     jl_typename_t *name;
-    struct _jl_tagtype_t *super;
+    struct _jl_tag_type_t *super;
     jl_tuple_t *parameters;
-} jl_tagtype_t;
+} jl_tag_type_t;
 
 typedef struct {
     JL_VALUE_STRUCT
     jl_typename_t *name;
-    jl_tagtype_t *super;
+    jl_tag_type_t *super;
     jl_tuple_t *parameters;
     jl_tuple_t *names;
     jl_tuple_t *types;
@@ -77,18 +77,18 @@ typedef struct {
     jl_function_t *fconvert;
     // hidden fields:
     uptrint_t uid;
-} jl_structtype_t;
+} jl_struct_type_t;
 
 typedef struct {
     JL_VALUE_STRUCT
     jl_typename_t *name;
-    jl_tagtype_t *super;
+    jl_tag_type_t *super;
     jl_tuple_t *parameters;
     jl_function_t *fconvert;
     // hidden fields:
     size_t nbits;
     uptrint_t uid;
-} jl_bitstype_t;
+} jl_bits_type_t;
 
 typedef struct {
     JL_VALUE_STRUCT
@@ -123,47 +123,47 @@ typedef struct _jl_module_t {
 extern jl_module_t *jl_system;
 extern jl_module_t *jl_user;
 
-extern jl_tagtype_t *jl_any_type;
-extern jl_tagtype_t *jl_type_type;
-extern jl_structtype_t *jl_typename_type;
-extern jl_structtype_t *jl_sym_type;
-extern jl_tagtype_t *jl_tuple_type;
-extern jl_structtype_t *jl_tvar_type;
-extern jl_structtype_t *jl_typector_type;
+extern jl_tag_type_t *jl_any_type;
+extern jl_tag_type_t *jl_type_type;
+extern jl_struct_type_t *jl_typename_type;
+extern jl_struct_type_t *jl_sym_type;
+extern jl_tag_type_t *jl_tuple_type;
+extern jl_struct_type_t *jl_tvar_type;
+extern jl_struct_type_t *jl_typector_type;
 
-extern jl_structtype_t *jl_func_kind;
-extern jl_structtype_t *jl_union_kind;
-extern jl_structtype_t *jl_tag_kind;
-extern jl_structtype_t *jl_struct_kind;
-extern jl_structtype_t *jl_bits_kind;
+extern jl_struct_type_t *jl_func_kind;
+extern jl_struct_type_t *jl_union_kind;
+extern jl_struct_type_t *jl_tag_kind;
+extern jl_struct_type_t *jl_struct_kind;
+extern jl_struct_type_t *jl_bits_kind;
 
 extern jl_type_t *jl_bottom_type;
 extern jl_typector_t *jl_buffer_type;
 extern jl_typector_t *jl_seq_type;
 extern jl_typector_t *jl_tensor_type;
-extern jl_tagtype_t *jl_scalar_type;
-extern jl_tagtype_t *jl_number_type;
-extern jl_tagtype_t *jl_real_type;
-extern jl_tagtype_t *jl_int_type;
-extern jl_tagtype_t *jl_float_type;
+extern jl_tag_type_t *jl_scalar_type;
+extern jl_tag_type_t *jl_number_type;
+extern jl_tag_type_t *jl_real_type;
+extern jl_tag_type_t *jl_int_type;
+extern jl_tag_type_t *jl_float_type;
 
-extern jl_bitstype_t *jl_bool_type;
-extern jl_bitstype_t *jl_int8_type;
-extern jl_bitstype_t *jl_uint8_type;
-extern jl_bitstype_t *jl_int16_type;
-extern jl_bitstype_t *jl_uint16_type;
-extern jl_bitstype_t *jl_int32_type;
-extern jl_bitstype_t *jl_uint32_type;
-extern jl_bitstype_t *jl_int64_type;
-extern jl_bitstype_t *jl_uint64_type;
-extern jl_bitstype_t *jl_float32_type;
-extern jl_bitstype_t *jl_float64_type;
+extern jl_bits_type_t *jl_bool_type;
+extern jl_bits_type_t *jl_int8_type;
+extern jl_bits_type_t *jl_uint8_type;
+extern jl_bits_type_t *jl_int16_type;
+extern jl_bits_type_t *jl_uint16_type;
+extern jl_bits_type_t *jl_int32_type;
+extern jl_bits_type_t *jl_uint32_type;
+extern jl_bits_type_t *jl_int64_type;
+extern jl_bits_type_t *jl_uint64_type;
+extern jl_bits_type_t *jl_float32_type;
+extern jl_bits_type_t *jl_float64_type;
 
 extern jl_tuple_t *jl_null;
 extern jl_value_t *jl_true;
 extern jl_value_t *jl_false;
 
-extern jl_functype_t *jl_any_func;
+extern jl_func_type_t *jl_any_func;
 
 #define JL_CALLABLE(name) \
     jl_value_t *name(jl_value_t *clo, jl_value_t **args, uint32_t nargs)
