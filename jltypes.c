@@ -28,10 +28,10 @@ jl_struct_type_t *jl_tag_kind;
 jl_struct_type_t *jl_struct_kind;
 jl_struct_type_t *jl_bits_kind;
 
-jl_struct_type_t *jl_buffer_type;
-jl_tag_type_t *jl_seq_type;
 jl_type_t *jl_bottom_type;
-jl_tag_type_t *jl_tensor_type;
+jl_typector_t *jl_buffer_type;
+jl_typector_t *jl_seq_type;
+jl_typector_t *jl_tensor_type;
 jl_tag_type_t *jl_scalar_type;
 jl_tag_type_t *jl_number_type;
 jl_tag_type_t *jl_real_type;
@@ -162,6 +162,17 @@ jl_sym_t *jl_symbol(char *str)
     return *pnode;
 }
 
+jl_sym_t *jl_gensym()
+{
+    static uint32_t gs_ctr = 0;  // TODO: per-thread
+    char name[32];
+    char *n;
+    n = uint2str(name, sizeof(name)-1, gs_ctr, 10);
+    *(--n) = 'g';
+    gs_ctr++;
+    return mk_symbol(n);
+}
+
 #define jl_tupleref(t,i) (((jl_value_t**)(t))[2+(i)])
 #define jl_tupleset(t,i,x) ((((jl_value_t**)(t))[2+(i)])=(x))
 
@@ -183,6 +194,8 @@ jl_sym_t *jl_symbol(char *str)
 
 #define jl_is_typevar(v)  (((jl_value_t*)(v))->type==(jl_type_t*)jl_tvar_type)
 #define jl_is_typector(v) (((jl_value_t*)(v))->type==(jl_type_t*)jl_typector_type)
+
+#define jl_is_func(v) (jl_is_func_type(jl_typeof(v)))
 
 jl_typename_t *jl_new_typename(jl_sym_t *name)
 {
@@ -296,6 +309,19 @@ static jl_value_t *tvar(char *name)
 {
     return jl_new_struct(jl_tvar_type, jl_symbol(name),
                          jl_bottom_type, jl_any_type);
+}
+
+static jl_tuple_t *typevars(size_t n, ...)
+{
+    va_list args;
+    va_start(args, n);
+    jl_tuple_t *t = jl_alloc_tuple(n);
+    size_t i;
+    for(i=0; i < n; i++) {
+        jl_tupleset(t, i, tvar(va_arg(args, char*)));
+    }
+    va_end(args);
+    return t;
 }
 
 // --- type properties and predicates ---
@@ -478,9 +504,16 @@ UNBOX_FUNC(bool,   int32_t)
 UNBOX_FUNC(float32, float)
 UNBOX_FUNC(float64, double)
 
-jl_buffer_t *jl_new_buffer(jl_struct_type_t *buf_type, size_t nel)
+JL_CALLABLE(jl_new_buffer_internal)
 {
-    assert(buf_type->name == jl_buffer_type->name);
+    jl_struct_type_t *buf_type = (jl_struct_type_t*)clo;
+    if (nargs != 1)
+        jl_error("Buffer.new: Wrong number of arguments");
+    size_t nel=0;
+    if (jl_is_int32(args[0]))
+        nel = (size_t)jl_unbox_int32(args[0]);
+    else
+        jl_error("Bufer.new: Expected integer");
     jl_type_t *el_type = (jl_type_t*)jl_tparam0(buf_type);
     void *data;
     if (jl_is_bits_type(el_type)) {
@@ -608,5 +641,25 @@ void jl_init_types()
                                                   jl_symbol("body")),
                                          jl_tuple(2, jl_tuple_type,
                                                   jl_type_type));
-    
+
+    jl_tuple_t *tv;
+    tv = typevars(1, "T");
+    jl_seq_type =
+        jl_new_type_ctor(tv, jl_new_tagtype(jl_symbol("..."), jl_any_type, tv));
+
+    tv = typevars(2, "T", "n");
+    jl_tensor_type =
+        jl_new_type_ctor(tv,
+                         jl_new_tagtype(jl_symbol("Tensor"), jl_any_type, tv));
+
+    // TODO: scalar types here
+
+    tv = typevars(1, "T");
+    jl_struct_type_t *bufstruct = 
+        jl_new_struct_type(jl_symbol("Buffer"),
+                           jl_any_type, tv,
+                           jl_tuple(1, jl_symbol("length")),
+                           jl_tuple(1, jl_int32_type));
+    bufstruct->fnew->fptr = jl_new_buffer_internal;
+    jl_buffer_type = jl_new_type_ctor(tv, bufstruct);
 }

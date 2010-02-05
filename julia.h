@@ -137,10 +137,10 @@ extern jl_structtype_t *jl_tag_kind;
 extern jl_structtype_t *jl_struct_kind;
 extern jl_structtype_t *jl_bits_kind;
 
-extern jl_structtype_t *jl_buffer_type;
-extern jl_tagtype_t *jl_seq_type;
 extern jl_type_t *jl_bottom_type;
-extern jl_tagtype_t *jl_tensor_type;
+extern jl_typector_t *jl_buffer_type;
+extern jl_typector_t *jl_seq_type;
+extern jl_typector_t *jl_tensor_type;
 extern jl_tagtype_t *jl_scalar_type;
 extern jl_tagtype_t *jl_number_type;
 extern jl_tagtype_t *jl_real_type;
