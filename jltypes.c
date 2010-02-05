@@ -14,47 +14,47 @@
 jl_module_t *jl_system;
 jl_module_t *jl_user;
 
-jl_tagtype_t *jl_any_type;
-jl_tagtype_t *jl_type_type;
-jl_structtype_t *jl_typename_type;
-jl_structtype_t *jl_sym_type;
-jl_tagtype_t *jl_tuple_type;
-jl_structtype_t *jl_tvar_type;
-jl_structtype_t *jl_typector_type;
+jl_tag_type_t *jl_any_type;
+jl_tag_type_t *jl_type_type;
+jl_struct_type_t *jl_typename_type;
+jl_struct_type_t *jl_sym_type;
+jl_tag_type_t *jl_tuple_type;
+jl_struct_type_t *jl_tvar_type;
+jl_struct_type_t *jl_typector_type;
 
-jl_structtype_t *jl_func_kind;
-jl_structtype_t *jl_union_kind;
-jl_structtype_t *jl_tag_kind;
-jl_structtype_t *jl_struct_kind;
-jl_structtype_t *jl_bits_kind;
+jl_struct_type_t *jl_func_kind;
+jl_struct_type_t *jl_union_kind;
+jl_struct_type_t *jl_tag_kind;
+jl_struct_type_t *jl_struct_kind;
+jl_struct_type_t *jl_bits_kind;
 
-jl_structtype_t *jl_buffer_type;
-jl_tagtype_t *jl_seq_type;
+jl_struct_type_t *jl_buffer_type;
+jl_tag_type_t *jl_seq_type;
 jl_type_t *jl_bottom_type;
-jl_tagtype_t *jl_tensor_type;
-jl_tagtype_t *jl_scalar_type;
-jl_tagtype_t *jl_number_type;
-jl_tagtype_t *jl_real_type;
-jl_tagtype_t *jl_int_type;
-jl_tagtype_t *jl_float_type;
+jl_tag_type_t *jl_tensor_type;
+jl_tag_type_t *jl_scalar_type;
+jl_tag_type_t *jl_number_type;
+jl_tag_type_t *jl_real_type;
+jl_tag_type_t *jl_int_type;
+jl_tag_type_t *jl_float_type;
 
-jl_bitstype_t *jl_bool_type;
-jl_bitstype_t *jl_int8_type;
-jl_bitstype_t *jl_uint8_type;
-jl_bitstype_t *jl_int16_type;
-jl_bitstype_t *jl_uint16_type;
-jl_bitstype_t *jl_int32_type;
-jl_bitstype_t *jl_uint32_type;
-jl_bitstype_t *jl_int64_type;
-jl_bitstype_t *jl_uint64_type;
-jl_bitstype_t *jl_float32_type;
-jl_bitstype_t *jl_float64_type;
+jl_bits_type_t *jl_bool_type;
+jl_bits_type_t *jl_int8_type;
+jl_bits_type_t *jl_uint8_type;
+jl_bits_type_t *jl_int16_type;
+jl_bits_type_t *jl_uint16_type;
+jl_bits_type_t *jl_int32_type;
+jl_bits_type_t *jl_uint32_type;
+jl_bits_type_t *jl_int64_type;
+jl_bits_type_t *jl_uint64_type;
+jl_bits_type_t *jl_float32_type;
+jl_bits_type_t *jl_float64_type;
 
 jl_tuple_t *jl_null;
 jl_value_t *jl_true;
 jl_value_t *jl_false;
 
-jl_functype_t *jl_any_func;
+jl_func_type_t *jl_any_func;
 
 #ifdef BITS64
 #define NWORDS(sz) (((sz)+7)>>3)
@@ -72,7 +72,7 @@ static inline jl_value_t *newobj(jl_type_t *type, size_t nfields)
     return jv;
 }
 
-jl_value_t *jl_new_struct(jl_structtype_t *type, ...)
+jl_value_t *jl_new_struct(jl_struct_type_t *type, ...)
 {
     va_list args;
     size_t nf = type->names->length;
@@ -164,7 +164,7 @@ jl_sym_t *jl_symbol(char *str)
 
 // the Type type --------------------------------------------------------------
 
-#define jl_tparam0(t) jl_tupleref(((jl_tagtype_t*)(t))->parameters, 0)
+#define jl_tparam0(t) jl_tupleref(((jl_tag_type_t*)(t))->parameters, 0)
 
 #define jl_typeof(v) (((jl_value_t*)(v))->type)
 #define jl_typeis(v,t) (jl_typeof(v)==(jl_type_t*)(t))
@@ -185,15 +185,15 @@ jl_typename_t *jl_new_typename(jl_sym_t *name)
     return (jl_typename_t*)jl_new_struct(jl_typename_type, name);
 }
 
-#define TAGTYPE_NW (NWORDS(sizeof(jl_tagtype_t))-1)
-#define STRUCTTYPE_NW (NWORDS(sizeof(jl_structtype_t))-1)
-#define BITSTYPE_NW (NWORDS(sizeof(jl_bitstype_t))-1)
+#define TAGTYPE_NW (NWORDS(sizeof(jl_tag_type_t))-1)
+#define STRUCTTYPE_NW (NWORDS(sizeof(jl_struct_type_t))-1)
+#define BITSTYPE_NW (NWORDS(sizeof(jl_bits_type_t))-1)
 static int t_uid_ctr = 0;  // TODO: lock
 
-jl_tagtype_t *jl_new_tagtype(jl_sym_t *name, jl_tagtype_t *super,
+jl_tag_type_t *jl_new_tagtype(jl_sym_t *name, jl_tag_type_t *super,
                              jl_tuple_t *parameters)
 {
-    jl_tagtype_t *t = (jl_tagtype_t*)newobj((jl_type_t*)jl_tag_kind,
+    jl_tag_type_t *t = (jl_tag_type_t*)newobj((jl_type_t*)jl_tag_kind,
                                             TAGTYPE_NW);
     t->name = jl_new_typename(name);
     t->super = super;
@@ -201,9 +201,9 @@ jl_tagtype_t *jl_new_tagtype(jl_sym_t *name, jl_tagtype_t *super,
     return t;
 }
 
-jl_functype_t *jl_new_functype(jl_type_t *a, jl_type_t *b)
+jl_func_type_t *jl_new_functype(jl_type_t *a, jl_type_t *b)
 {
-    jl_functype_t *t = (jl_functype_t*)newobj((jl_type_t*)jl_func_kind, 2);
+    jl_func_type_t *t = (jl_func_type_t*)newobj((jl_type_t*)jl_func_kind, 2);
     if (!jl_tuplep(a) && !jl_typevarp(a))
         a = (jl_type_t*)jl_tuple(1, a);
     t->from = a;
@@ -227,7 +227,7 @@ void jl_error(char *str)
 
 JL_CALLABLE(jl_new_struct_internal)
 {
-    jl_structtype_t *t = (jl_structtype_t*)clo;
+    jl_struct_type_t *t = (jl_struct_type_t*)clo;
     size_t nf = t->names->length;
     if (nargs < nf)
         jl_error("Too few arguments to constructor");
@@ -241,11 +241,11 @@ JL_CALLABLE(jl_new_struct_internal)
     return v;
 }
 
-jl_structtype_t *jl_new_structtype(jl_sym_t *name, jl_tagtype_t *super,
+jl_struct_type_t *jl_new_struct_type(jl_sym_t *name, jl_tag_type_t *super,
                                    jl_tuple_t *parameters,
                                    jl_tuple_t *fnames, jl_tuple_t *ftypes)
 {
-    jl_structtype_t *t = (jl_structtype_t*)newobj((jl_type_t*)jl_struct_kind,
+    jl_struct_type_t *t = (jl_struct_type_t*)newobj((jl_type_t*)jl_struct_kind,
                                                   STRUCTTYPE_NW);
     t->name = jl_new_typename(name);
     t->super = super;
@@ -258,10 +258,10 @@ jl_structtype_t *jl_new_structtype(jl_sym_t *name, jl_tagtype_t *super,
     return t;
 }
 
-jl_bitstype_t *jl_new_bitstype(jl_sym_t *name, jl_tagtype_t *super,
+jl_bits_type_t *jl_new_bitstype(jl_sym_t *name, jl_tag_type_t *super,
                                jl_tuple_t *parameters, size_t nbits)
 {
-    jl_bitstype_t *t = (jl_bitstype_t*)newobj((jl_type_t*)jl_bits_kind,
+    jl_bits_type_t *t = (jl_bits_type_t*)newobj((jl_type_t*)jl_bits_kind,
                                               BITSTYPE_NW);
     t->name = jl_new_typename(name);
     t->super = super;
@@ -320,18 +320,18 @@ jl_typename_t *jl_tname(jl_value_t *v)
     if (jl_tuplep(v))
         return jl_tuple_type->name;
     if (jl_tagtypep(v) || jl_structtypep(v) || jl_bitstypep(v))
-        return ((jl_tagtype_t*)v)->name;
+        return ((jl_tag_type_t*)v)->name;
     if (jl_typectorp(v))
         return jl_tname((jl_value_t*)((jl_typector_t*)v)->body);
-    return ((jl_tagtype_t*)(v->type))->name;
+    return ((jl_tag_type_t*)(v->type))->name;
 }
 
-jl_tagtype_t *jl_tsuper(jl_value_t *v)
+jl_tag_type_t *jl_tsuper(jl_value_t *v)
 {
     if (jl_tuplep(v))
         return jl_tuple_type;
     if (jl_tagtypep(v) || jl_structtypep(v) || jl_bitstypep(v))
-        return ((jl_tagtype_t*)v)->super;
+        return ((jl_tag_type_t*)v)->super;
     return jl_any_type;
 }
 
@@ -340,7 +340,7 @@ jl_tuple_t *jl_tparams(jl_value_t *v)
     if (jl_tuplep(v))
         return (jl_tuple_t*)v;
     if (jl_tagtypep(v) || jl_structtypep(v) || jl_bitstypep(v))
-        return ((jl_tagtype_t*)v)->parameters;
+        return ((jl_tag_type_t*)v)->parameters;
     if (jl_uniontypep(v))
         return ((jl_uniontype_t*)v)->types;
     return jl_null;
@@ -362,8 +362,8 @@ int jl_has_typevarsp(jl_value_t *v)
     if (v == (jl_value_t*)jl_scalar_type || jl_tsuper(v) == jl_scalar_type)
         return 0;
     if (jl_functypep(v))
-        return jl_has_typevarsp((jl_value_t*)((jl_functype_t*)v)->from) ||
-            jl_has_typevarsp((jl_value_t*)((jl_functype_t*)v)->to);
+        return jl_has_typevarsp((jl_value_t*)((jl_func_type_t*)v)->from) ||
+            jl_has_typevarsp((jl_value_t*)((jl_func_type_t*)v)->to);
     return jl_has_typevarsp((jl_value_t*)jl_tparams(v));
 }
 
@@ -407,8 +407,8 @@ static jl_tuple_t *find_tvars(jl_tuple_t *dest, jl_value_t *v, int *pos)
     if (jl_typeis(v, jl_tvar_type))
         return tuple_adjoinq(dest, pos, v);
     if (jl_functypep(v)) {
-        dest = find_tvars(dest, (jl_value_t*)((jl_functype_t*)v)->from, pos);
-        dest = find_tvars(dest, (jl_value_t*)((jl_functype_t*)v)->to  , pos);
+        dest = find_tvars(dest, (jl_value_t*)((jl_func_type_t*)v)->from, pos);
+        dest = find_tvars(dest, (jl_value_t*)((jl_func_type_t*)v)->to  , pos);
         return dest;
     }
     jl_tuple_t *params = jl_tparams(v);
@@ -436,12 +436,12 @@ jl_tuple_t *jl_find_tvars(jl_value_t *v)
 
 // constructors for some normal types -----------------------------------------
 
-#define BOX_FUNC(type,ctype)                                            \
-jl_value_t *jl_box_##type(ctype x)                                      \
+#define BOX_FUNC(type,c_type)                                            \
+jl_value_t *jl_box_##type(c_type x)                                      \
 {                                                                       \
     jl_value_t *v = newobj((jl_type_t*)jl_##type##_type,                \
-                           NWORDS(LLT_ALIGN(sizeof(ctype),sizeof(void*)))); \
-    *(ctype*)(&((void**)v)[1]) = x;                                     \
+                           NWORDS(LLT_ALIGN(sizeof(c_type),sizeof(void*)))); \
+    *(c_type*)(&((void**)v)[1]) = x;                                     \
     return v;                                                           \
 }
 BOX_FUNC(int8,   int8_t)
@@ -456,11 +456,11 @@ BOX_FUNC(bool,   int32_t)
 BOX_FUNC(float32, float)
 BOX_FUNC(float64, double)
 
-#define UNBOX_FUNC(type,ctype)                  \
-ctype jl_unbox_##type(jl_value_t *v)            \
+#define UNBOX_FUNC(type,c_type)                  \
+c_type jl_unbox_##type(jl_value_t *v)            \
 {                                               \
     assert(v->type == jl_##type##_type);        \
-    return *(ctype*)(&((void**)v)[1]);          \
+    return *(c_type*)(&((void**)v)[1]);          \
 }
 UNBOX_FUNC(int8,   int8_t)
 UNBOX_FUNC(uint8,  uint8_t)
@@ -474,18 +474,18 @@ UNBOX_FUNC(bool,   int32_t)
 UNBOX_FUNC(float32, float)
 UNBOX_FUNC(float64, double)
 
-jl_buffer_t *jl_new_buffer(jl_structtype_t *buftype, size_t nel)
+jl_buffer_t *jl_new_buffer(jl_struct_type_t *buf_type, size_t nel)
 {
-    assert(buftype->name == jl_buffer_type->name);
-    jl_type_t *eltype = (jl_type_t*)jl_tparam0(buftype);
+    assert(buf_type->name == jl_buffer_type->name);
+    jl_type_t *el_type = (jl_type_t*)jl_tparam0(buf_type);
     void *data;
-    if (jl_bitstypep(eltype)) {
-        data = alloc_pod(((jl_bitstype_t*)eltype)->nbits/8 * nel);
+    if (jl_bitstypep(el_type)) {
+        data = alloc_pod(((jl_bits_type_t*)el_type)->nbits/8 * nel);
     }
     else {
         data = allocb(sizeof(void*) * nel);
     }
-    jl_buffer_t *b = (jl_buffer_t*)newobj((jl_type_t*)buftype, 2);
+    jl_buffer_t *b = (jl_buffer_t*)newobj((jl_type_t*)buf_type, 2);
     b->length = nel;
     b->data = data;
     return b;
@@ -494,17 +494,17 @@ jl_buffer_t *jl_new_buffer(jl_structtype_t *buftype, size_t nel)
 void jl_init_types()
 {
     // create base objects
-    jl_struct_kind = (jl_structtype_t*)newobj(NULL, STRUCTTYPE_NW);
+    jl_struct_kind = (jl_struct_type_t*)newobj(NULL, STRUCTTYPE_NW);
     jl_struct_kind->type = (jl_type_t*)jl_struct_kind;
-    jl_tag_kind = (jl_structtype_t*)newobj((jl_type_t*)jl_struct_kind, STRUCTTYPE_NW);
-    jl_func_kind = (jl_structtype_t*)newobj((jl_type_t*)jl_struct_kind, STRUCTTYPE_NW);
+    jl_tag_kind = (jl_struct_type_t*)newobj((jl_type_t*)jl_struct_kind, STRUCTTYPE_NW);
+    jl_func_kind = (jl_struct_type_t*)newobj((jl_type_t*)jl_struct_kind, STRUCTTYPE_NW);
 
-    jl_typename_type = (jl_structtype_t*)newobj((jl_type_t*)jl_struct_kind, STRUCTTYPE_NW);
-    jl_sym_type = (jl_structtype_t*)newobj((jl_type_t*)jl_struct_kind, STRUCTTYPE_NW);
+    jl_typename_type = (jl_struct_type_t*)newobj((jl_type_t*)jl_struct_kind, STRUCTTYPE_NW);
+    jl_sym_type = (jl_struct_type_t*)newobj((jl_type_t*)jl_struct_kind, STRUCTTYPE_NW);
 
-    jl_any_type = (jl_tagtype_t*)newobj((jl_type_t*)jl_tag_kind, TAGTYPE_NW);
-    jl_type_type = (jl_tagtype_t*)newobj((jl_type_t*)jl_tag_kind, TAGTYPE_NW);
-    jl_tuple_type = (jl_tagtype_t*)newobj((jl_type_t*)jl_tag_kind, TAGTYPE_NW);
+    jl_any_type = (jl_tag_type_t*)newobj((jl_type_t*)jl_tag_kind, TAGTYPE_NW);
+    jl_type_type = (jl_tag_type_t*)newobj((jl_type_t*)jl_tag_kind, TAGTYPE_NW);
+    jl_tuple_type = (jl_tag_type_t*)newobj((jl_type_t*)jl_tag_kind, TAGTYPE_NW);
 
     jl_null = jl_tuple(0);
 
@@ -512,7 +512,7 @@ void jl_init_types()
 
     // initialize them. lots of cycles.
     jl_struct_kind->name = jl_new_typename(jl_symbol("StructKind"));
-    jl_struct_kind->super = (jl_tagtype_t*)jl_tag_kind;
+    jl_struct_kind->super = (jl_tag_type_t*)jl_tag_kind;
     jl_struct_kind->parameters = jl_null;
     jl_struct_kind->names = jl_tuple(7, jl_symbol("name"), jl_symbol("super"),
                                      jl_symbol("parameters"),
@@ -571,7 +571,7 @@ void jl_init_types()
     jl_tuple_type->parameters = jl_null;
 
     // now they can be used to create the remaining base kinds and types
-    jl_union_kind = jl_new_structtype(jl_symbol("Union"),
+    jl_union_kind = jl_new_struct_type(jl_symbol("Union"),
                                       jl_type_type, jl_null,
                                       jl_tuple(1, jl_symbol("types")),
                                       jl_tuple(1, jl_tuple_type));
@@ -579,7 +579,7 @@ void jl_init_types()
     jl_bottom_type = (jl_type_t*)jl_new_struct(jl_union_kind, jl_null);
 
     jl_bits_kind =
-        jl_new_structtype(jl_symbol("BitsKind"), (jl_tagtype_t*)jl_tag_kind,
+        jl_new_struct_type(jl_symbol("BitsKind"), (jl_tag_type_t*)jl_tag_kind,
                           jl_null,
                           jl_tuple(4, jl_symbol("name"), jl_symbol("super"),
                                    jl_symbol("parameters"),
@@ -589,7 +589,7 @@ void jl_init_types()
     // cannot be created with normal constructor due to hidden fields
     jl_bits_kind->fnew = NULL;
     
-    jl_tvar_type = jl_new_structtype(jl_symbol("TypeVar"),
+    jl_tvar_type = jl_new_struct_type(jl_symbol("TypeVar"),
                                      jl_any_type, jl_null,
                                      jl_tuple(3, jl_symbol("name"),
                                               jl_symbol("lb"),
@@ -597,7 +597,7 @@ void jl_init_types()
                                      jl_tuple(3, jl_sym_type, jl_type_type,
                                               jl_type_type));
 
-    jl_typector_type = jl_new_structtype(jl_symbol("TypeConstructor"),
+    jl_typector_type = jl_new_struct_type(jl_symbol("TypeConstructor"),
                                          jl_any_type, jl_null,
                                          jl_tuple(2, jl_symbol("parameters"),
                                                   jl_symbol("body")),
