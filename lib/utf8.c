@@ -17,7 +17,7 @@
 #include <string.h>
 #include <stdarg.h>
 #include <wchar.h>
-#include <wc_type.h>
+#include <wctype.h>
 
 #include "dtypes.h"
 

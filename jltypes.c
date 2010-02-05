@@ -89,6 +89,7 @@ jl_value_t *jl_new_struct(jl_struct_type_t *type, ...)
 JL_CALLABLE(jl_f_tuple)
 {
     size_t i;
+    if (nargs == 0) return jl_null;
     jl_tuple_t *t = (jl_tuple_t*)newobj((jl_type_t*)jl_tuple_type, nargs+1);
     t->length = nargs;
     for(i=0; i < nargs; i++) {
@@ -101,6 +102,7 @@ jl_tuple_t *jl_tuple(size_t n, ...)
 {
     va_list args;
     size_t i;
+    if (n == 0) return jl_null;
     va_start(args, n);
     jl_tuple_t *jv = (jl_tuple_t*)newobj((jl_type_t*)jl_tuple_type, n+1);
     jv->length = n;
@@ -113,6 +115,7 @@ jl_tuple_t *jl_tuple(size_t n, ...)
 
 jl_tuple_t *jl_alloc_tuple(size_t n)
 {
+    if (n == 0) return jl_null;
     jl_tuple_t *jv = (jl_tuple_t*)newobj((jl_type_t*)jl_tuple_type, n+1);
     jv->length = n;
     return jv;
@@ -170,6 +173,7 @@ jl_sym_t *jl_symbol(char *str)
 #define jl_typeis(v,t) (jl_typeof(v)==(jl_type_t*)(t))
 
 #define jl_is_tuple(v) (((jl_value_t*)(v))->type == (jl_type_t*)jl_tuple_type)
+#define jl_is_null(v) (((jl_value_t*)(v)) == ((jl_value_t*)jl_null))
 
 #define jl_is_tag_type(v)    (((jl_value_t*)(v))->type==(jl_type_t*)jl_tag_kind)
 #define jl_is_bits_type(v)   (((jl_value_t*)(v))->type==(jl_type_t*)jl_bits_kind)
@@ -506,7 +510,8 @@ void jl_init_types()
     jl_type_type = (jl_tag_type_t*)newobj((jl_type_t*)jl_tag_kind, TAG_TYPE_NW);
     jl_tuple_type = (jl_tag_type_t*)newobj((jl_type_t*)jl_tag_kind, TAG_TYPE_NW);
 
-    jl_null = jl_tuple(0);
+    jl_null = (jl_tuple_t*)newobj((jl_type_t*)jl_tuple_type, 1);
+    jl_null->length = 0;
 
     jl_any_func = jl_new_functype((jl_type_t*)jl_any_type, (jl_type_t*)jl_any_type);
 
