@@ -171,11 +171,11 @@ jl_sym_t *jl_symbol(char *str)
 
 #define jl_tuplep(v) (((jl_value_t*)(v))->type == (jl_type_t*)jl_tuple_type)
 
-#define jl_tagtypep(v)    (((jl_value_t*)(v))->type==(jl_type_t*)jl_tag_kind)
-#define jl_bitstypep(v)   (((jl_value_t*)(v))->type==(jl_type_t*)jl_bits_kind)
-#define jl_structtypep(v) (((jl_value_t*)(v))->type==(jl_type_t*)jl_struct_kind)
-#define jl_functypep(v)   (((jl_value_t*)(v))->type==(jl_type_t*)jl_func_kind)
-#define jl_uniontypep(v)  (((jl_value_t*)(v))->type==(jl_type_t*)jl_union_kind)
+#define jl_is_tag_type(v)    (((jl_value_t*)(v))->type==(jl_type_t*)jl_tag_kind)
+#define jl_is_bits_type(v)   (((jl_value_t*)(v))->type==(jl_type_t*)jl_bits_kind)
+#define jl_is_struct_type(v) (((jl_value_t*)(v))->type==(jl_type_t*)jl_struct_kind)
+#define jl_is_func_type(v)   (((jl_value_t*)(v))->type==(jl_type_t*)jl_func_kind)
+#define jl_is_union_type(v)  (((jl_value_t*)(v))->type==(jl_type_t*)jl_union_kind)
 
 #define jl_typevarp(v)  (((jl_value_t*)(v))->type==(jl_type_t*)jl_tvar_type)
 #define jl_typectorp(v) (((jl_value_t*)(v))->type==(jl_type_t*)jl_typector_type)
@@ -319,7 +319,7 @@ jl_typename_t *jl_tname(jl_value_t *v)
 {
     if (jl_tuplep(v))
         return jl_tuple_type->name;
-    if (jl_tagtypep(v) || jl_structtypep(v) || jl_bitstypep(v))
+    if (jl_is_tag_type(v) || jl_is_struct_type(v) || jl_is_bits_type(v))
         return ((jl_tag_type_t*)v)->name;
     if (jl_typectorp(v))
         return jl_tname((jl_value_t*)((jl_typector_t*)v)->body);
@@ -330,7 +330,7 @@ jl_tag_type_t *jl_tsuper(jl_value_t *v)
 {
     if (jl_tuplep(v))
         return jl_tuple_type;
-    if (jl_tagtypep(v) || jl_structtypep(v) || jl_bitstypep(v))
+    if (jl_is_tag_type(v) || jl_is_struct_type(v) || jl_is_bits_type(v))
         return ((jl_tag_type_t*)v)->super;
     return jl_any_type;
 }
@@ -339,9 +339,9 @@ jl_tuple_t *jl_tparams(jl_value_t *v)
 {
     if (jl_tuplep(v))
         return (jl_tuple_t*)v;
-    if (jl_tagtypep(v) || jl_structtypep(v) || jl_bitstypep(v))
+    if (jl_is_tag_type(v) || jl_is_struct_type(v) || jl_is_bits_type(v))
         return ((jl_tag_type_t*)v)->parameters;
-    if (jl_uniontypep(v))
+    if (jl_is_union_type(v))
         return ((jl_uniontype_t*)v)->types;
     return jl_null;
 }
@@ -361,7 +361,7 @@ int jl_has_typevarsp(jl_value_t *v)
     }
     if (v == (jl_value_t*)jl_scalar_type || jl_tsuper(v) == jl_scalar_type)
         return 0;
-    if (jl_functypep(v))
+    if (jl_is_func_type(v))
         return jl_has_typevarsp((jl_value_t*)((jl_func_type_t*)v)->from) ||
             jl_has_typevarsp((jl_value_t*)((jl_func_type_t*)v)->to);
     return jl_has_typevarsp((jl_value_t*)jl_tparams(v));
@@ -406,7 +406,7 @@ static jl_tuple_t *find_tvars(jl_tuple_t *dest, jl_value_t *v, int *pos)
 {
     if (jl_typeis(v, jl_tvar_type))
         return tuple_adjoinq(dest, pos, v);
-    if (jl_functypep(v)) {
+    if (jl_is_func_type(v)) {
         dest = find_tvars(dest, (jl_value_t*)((jl_func_type_t*)v)->from, pos);
         dest = find_tvars(dest, (jl_value_t*)((jl_func_type_t*)v)->to  , pos);
         return dest;
@@ -479,7 +479,7 @@ jl_buffer_t *jl_new_buffer(jl_struct_type_t *buf_type, size_t nel)
     assert(buf_type->name == jl_buffer_type->name);
     jl_type_t *el_type = (jl_type_t*)jl_tparam0(buf_type);
     void *data;
-    if (jl_bitstypep(el_type)) {
+    if (jl_is_bits_type(el_type)) {
         data = alloc_pod(((jl_bits_type_t*)el_type)->nbits/8 * nel);
     }
     else {
