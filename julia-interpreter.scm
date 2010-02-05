@@ -523,7 +523,6 @@ TODO:
 		env
 		(type-params child)))
 	((union-type? parent)
-	 ; todo: maybe union all corresponding components together
 	 (any   (lambda (t) (conform- child t env))
 	        (type-params parent)))
 	
