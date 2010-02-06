@@ -31,7 +31,7 @@
 
 /* OS-level primitive wrappers */
 
-#if defined(MACOSX) || defined(MACINTEL)
+#if defined(MACOSX)
 void *memrchr(const void *s, int c, size_t n)
 {
     const unsigned char *src = s + n;

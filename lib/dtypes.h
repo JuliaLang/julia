@@ -16,8 +16,6 @@
   We assume the LP64 convention for 64-bit platforms.
 */
 
-#include "config.h"
-
 typedef int bool_t;
 
 #if defined(__INTEL_COMPILER) && defined(WIN32)

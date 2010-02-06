@@ -1,7 +1,7 @@
 #ifndef __UTF8_H_
 #define __UTF8_H_
 
-#if !defined(MACOSX) && !defined(MACINTEL)
+#if !defined(MACOSX)
 #if !defined(__DTYPES_H_) && !defined(_SYS_TYPES_H)
 typedef char int8_t;
 typedef short int16_t;
