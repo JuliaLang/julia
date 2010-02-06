@@ -7,8 +7,8 @@ DOBJS = $(SRCS:%.c=%.do)
 EXENAME = $(NAME)
 LLTDIR = lib
 LLT = $(LLTDIR)/libllt.a
-HFILEDIRS = /usr/local/include
-LIBDIRS = /usr/local/lib
+HFILEDIRS = /opt/local/include
+LIBDIRS = /opt/local/lib
 
 FLAGS = -falign-functions -Wall -Wno-strict-aliasing -I$(LLTDIR) -I$(HFILEDIRS) -L$(LIBDIRS) $(CFLAGS)
 LIBFILES = $(LLT)
