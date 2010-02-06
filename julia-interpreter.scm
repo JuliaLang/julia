@@ -689,9 +689,10 @@ TODO:
 	(error "No method for function" (vector-ref ce 1) "matching types"
 	       (map julia->string (type-params argtype))))))
 
-(define (make-generic-function name)
-  ;(display name) (newline)
-  (make-closure j-apply-generic (vector (make-method-table) name)))
+(set! make-generic-function
+      (lambda (name)
+        ;(display name) (newline)
+	(make-closure j-apply-generic (vector (make-method-table) name))))
 
 (define (instantiate-generic-function gf env stack)
   (let ((meths (map (lambda (p)
@@ -710,20 +711,21 @@ TODO:
 (define (gf-name gf)   (vector-ref (closure-env gf) 1))
 
 ; add a method for certain types
-(define (add-method-for gf types meth)
-  (define (add-dummy-type-params t)
-    (cond ((type-ctor? t) (tc->type t))
-	  ((tuple? t) (map add-dummy-type-params t))
-	  ((union-type? t) (make-union-type (map add-dummy-type-params
-						 (union-type-types t))))
-	  ((func-type? t) (make-function-type
-			   (add-dummy-type-params (func-fromtype t))
-			   (add-dummy-type-params (func-totype   t))))
-	  (else t)))
-  (method-table-insert! (gf-mtable gf)
-			(add-dummy-type-params types)
-			meth)
-  #t)
+(set! add-method-for
+      (lambda (gf types meth)
+	(define (add-dummy-type-params t)
+	  (cond ((type-ctor? t) (tc->type t))
+		((tuple? t) (map add-dummy-type-params t))
+		((union-type? t) (make-union-type (map add-dummy-type-params
+						       (union-type-types t))))
+		((func-type? t) (make-function-type
+				 (add-dummy-type-params (func-fromtype t))
+				 (add-dummy-type-params (func-totype   t))))
+		(else t)))
+	(method-table-insert! (gf-mtable gf)
+			      (add-dummy-type-params types)
+			      meth)
+	#t))
 
 ; --- define some key builtin types ---
 
