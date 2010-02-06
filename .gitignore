@@ -1,2 +1,4 @@
 /types.png
 Makefile
+*.o
+*.a
