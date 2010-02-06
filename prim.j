@@ -2,8 +2,7 @@ typealias Nullable[T] Union(T,())
 typealias Index Int32
 typealias Size  Int32
 
-typealias Unboxable Union(Bool,
-                          Int8,Uint8,Int16,Uint16,Int32,Uint32,Float32,Float64)
+typealias Unboxable Union(Bool,Int8,Uint8,Int16,Uint16,Int32,Uint32,Float32,Float64)
 typealias UnboxedBuffer Union(Buffer[Bool],
                               Buffer[Int8],Buffer[Uint8],
                               Buffer[Int16],Buffer[Uint16],
