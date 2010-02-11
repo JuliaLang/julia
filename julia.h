@@ -34,6 +34,11 @@ typedef struct {
 typedef struct {
     JL_VALUE_STRUCT
     jl_sym_t *name;
+    // if this is the name of a parametric type, ctor points to the
+    // original typector for the type.
+    // a type alias, for example, might make a type constructor that is
+    // not the original.
+    struct _jl_typector_t *ctor;
 } jl_typename_t;
 
 typedef struct _jl_type_t {
@@ -90,7 +95,7 @@ typedef struct {
     uptrint_t uid;
 } jl_bits_type_t;
 
-typedef struct {
+typedef struct _jl_typector_t {
     JL_VALUE_STRUCT
     jl_tuple_t *parameters;
     jl_type_t *body;
@@ -167,5 +172,7 @@ extern jl_func_type_t *jl_any_func;
 
 #define JL_CALLABLE(name) \
     jl_value_t *name(jl_value_t *clo, jl_value_t **args, uint32_t nargs)
+
+jl_typename_t *jl_tname(jl_value_t *v);
 
 #endif
