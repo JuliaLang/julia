@@ -125,6 +125,12 @@ typedef struct _jl_module_t {
     struct _jl_module_t **imports;
 } jl_module_t;
 
+typedef struct _jl_value_pair_t {
+    jl_value_t *a;
+    jl_value_t *b;
+    struct _jl_value_pair_t *next;
+} jl_value_pair_t;
+
 extern jl_module_t *jl_system;
 extern jl_module_t *jl_user;
 
@@ -203,5 +209,8 @@ static inline int jl_is_seq_type(jl_value_t *v)
 }
 
 jl_typename_t *jl_tname(jl_value_t *v);
+
+int jl_subtype(jl_value_t *a, jl_value_t *b, int ta, int tb);
+jl_value_pair_t *type_conform(jl_type_t *a, jl_type_t *b);
 
 #endif
