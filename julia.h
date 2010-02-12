@@ -173,6 +173,35 @@ extern jl_func_type_t *jl_any_func;
 #define JL_CALLABLE(name) \
     jl_value_t *name(jl_value_t *clo, jl_value_t **args, uint32_t nargs)
 
+#define jl_tupleref(t,i) (((jl_value_t**)(t))[2+(i)])
+#define jl_tupleset(t,i,x) ((((jl_value_t**)(t))[2+(i)])=(x))
+
+#define jl_tparam0(t) jl_tupleref(((jl_tag_type_t*)(t))->parameters, 0)
+
+#define jl_typeof(v) (((jl_value_t*)(v))->type)
+#define jl_typeis(v,t) (jl_typeof(v)==(jl_type_t*)(t))
+
+#define jl_is_null(v) (((jl_value_t*)(v)) == ((jl_value_t*)jl_null))
+
+#define jl_is_tuple(v)       jl_typeis(v,jl_tuple_type)
+
+#define jl_is_tag_type(v)    jl_typeis(v,jl_tag_kind)
+#define jl_is_bits_type(v)   jl_typeis(v,jl_bits_kind)
+#define jl_is_struct_type(v) jl_typeis(v,jl_struct_kind)
+#define jl_is_func_type(v)   jl_typeis(v,jl_func_kind)
+#define jl_is_union_type(v)  jl_typeis(v,jl_union_kind)
+
+#define jl_is_typevar(v)  (((jl_value_t*)(v))->type==(jl_type_t*)jl_tvar_type)
+#define jl_is_typector(v) (((jl_value_t*)(v))->type==(jl_type_t*)jl_typector_type)
+#define jl_is_func(v) (jl_is_func_type(jl_typeof(v)))
+
+static inline int jl_is_seq_type(jl_value_t *v)
+{
+    return (jl_is_tag_type(v) &&
+            ((jl_tag_type_t*)jl_typeof(v))->name ==
+            ((jl_tag_type_t*)jl_seq_type->body)->name);
+}
+
 jl_typename_t *jl_tname(jl_value_t *v);
 
 #endif

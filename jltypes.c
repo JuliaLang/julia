@@ -173,30 +173,8 @@ jl_sym_t *jl_gensym()
     return mk_symbol(n);
 }
 
-#define jl_tupleref(t,i) (((jl_value_t**)(t))[2+(i)])
-#define jl_tupleset(t,i,x) ((((jl_value_t**)(t))[2+(i)])=(x))
-
 // the Type type --------------------------------------------------------------
 
-#define jl_tparam0(t) jl_tupleref(((jl_tag_type_t*)(t))->parameters, 0)
-
-#define jl_typeof(v) (((jl_value_t*)(v))->type)
-#define jl_typeis(v,t) (jl_typeof(v)==(jl_type_t*)(t))
-
-#define jl_is_null(v) (((jl_value_t*)(v)) == ((jl_value_t*)jl_null))
-
-#define jl_is_tuple(v)       jl_typeis(v,jl_tuple_type)
-
-#define jl_is_tag_type(v)    jl_typeis(v,jl_tag_kind)
-#define jl_is_bits_type(v)   jl_typeis(v,jl_bits_kind)
-#define jl_is_struct_type(v) jl_typeis(v,jl_struct_kind)
-#define jl_is_func_type(v)   jl_typeis(v,jl_func_kind)
-#define jl_is_union_type(v)  jl_typeis(v,jl_union_kind)
-
-#define jl_is_typevar(v)  (((jl_value_t*)(v))->type==(jl_type_t*)jl_tvar_type)
-#define jl_is_typector(v) (((jl_value_t*)(v))->type==(jl_type_t*)jl_typector_type)
-
-#define jl_is_func(v) (jl_is_func_type(jl_typeof(v)))
 
 jl_typename_t *jl_new_typename(jl_sym_t *name)
 {
@@ -795,6 +773,103 @@ static jl_type_t *inst_type_w_(jl_value_t *t, jl_value_t **env, size_t n,
 jl_type_t *jl_instantiate_type_with(jl_type_t *t, jl_value_t **env, size_t n)
 {
     return inst_type_w_((jl_value_t*)t, env, n, NULL);
+}
+
+int jl_subtype(jl_value_t *a, jl_value_t *b, int ta, int tb);
+
+static int tuple_subtype(jl_tuple_t *child, jl_tuple_t *parent, int ta, int tb)
+{
+    size_t ci=0, pi=0;
+    size_t cl = child->length;
+    size_t pl = parent->length;
+    while(1) {
+        int cseq = (ci<cl) && jl_is_seq_type(jl_tupleref(child,ci));
+        int pseq = (pi<pl) && jl_is_seq_type(jl_tupleref(parent,pi));
+        if (ci >= cl)
+            return (pi>=pl || pseq);
+        if (cseq && !pseq)
+            return 0;
+        if (pi >= pl)
+            return 0;
+        jl_value_t *ce = jl_tupleref(child,ci);
+        jl_value_t *pe = jl_tupleref(parent,pi);
+        if (cseq) ce = jl_tparam0(ce);
+        if (pseq) pe = jl_tparam0(pe);
+        if (!jl_subtype(ta ? jl_typeof(ce) : ce,
+                        tb ? jl_typeof(pe) : pe, 0, 0))
+            return 0;
+        if (cseq && pseq) return 1;
+        if (!cseq) ci++;
+        if (!pseq) pi++;
+    }
+    return 0;
+}
+
+/*
+  ta and tb specify whether typeof() should be implicitly applied
+  to the arguments a and b. this is used for tuple types to avoid
+  allocating them explicitly.
+*/
+int jl_subtype(jl_value_t *a, jl_value_t *b, int ta, int tb)
+{
+    size_t i;
+    if (jl_is_tuple(a)) {
+        if (b == jl_tuple_type) return 1;
+        if (jl_is_tuple(b)) {
+            return tuple_subtype(a, b, ta, tb);
+        }
+    }
+    if (jl_is_union_type(a)) {
+        assert(!ta);
+        jl_tuple_t *ap = ((jl_uniontype_t*)a)->types;
+        for(i=0; i < ap->length; i++) {
+            if (!jl_subtype(jl_tupleref(ap,i), b, 0, tb))
+                return 0;
+        }
+        return 1;
+    }
+    if (jl_is_union_type(b)) {
+        assert(!tb);
+        jl_tuple_t *bp = ((jl_uniontype_t*)b)->types;
+        for(i=0; i < bp->length; i++) {
+            if (jl_subtype(a, jl_tupleref(bp,i), ta, 0))
+                return 1;
+        }
+        return 0;
+    }
+
+    if (jl_is_tuple(a)) return 0;
+    assert(!ta && !tb);
+    if (a == b) return 1;
+    if (jl_is_typevar(b)) return 1;
+    if (jl_is_typevar(a)) return 0;
+    if (b == jl_any_type) return 1;
+    if (a == jl_any_type) return 0;
+    if (jl_is_int32(a) && jl_is_int32(b))
+        return (jl_unbox_int32(a)==jl_unbox_int32(b));
+
+    if (jl_is_func_type(a) && jl_is_func_type(b)) {
+        jl_func_type_t *fa = (jl_func_type_t*)a;
+        jl_func_type_t *fb = (jl_func_type_t*)b;
+        return ( (jl_is_typevar(fb->from) ||
+                  jl_subtype(fb->from, fa->from, 0, 0)) &&
+                 jl_subtype(fa->to, fb->to, 0, 0) );
+    }
+
+    jl_tag_type_t *tta = (jl_tag_type_t*)a;
+    jl_tag_type_t *ttb = (jl_tag_type_t*)b;
+
+    if (tta->name == ttb->name) {
+        assert(tta->parameters->length == ttb->parameters->length);
+        for(i=0; i < tta->parameters->length; i++) {
+            if (!jl_types_equal(jl_tupleref(tta->parameters,i),
+                                jl_tupleref(ttb->parameters,i)))
+                return 0;
+        }
+        return 1;
+    }
+
+    return jl_subtype(tta->super, ttb, 0, 0);
 }
 
 void jl_init_types()
