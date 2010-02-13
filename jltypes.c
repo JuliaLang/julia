@@ -262,20 +262,26 @@ jl_struct_type_t *jl_new_struct_type(jl_sym_t *name, jl_tag_type_t *super,
     t->types = ftypes;
     t->fnew = jl_new_closure(jl_new_struct_internal, (jl_value_t*)t);
     t->fconvert = NULL; //TODO
-    t->uid = 0;
+    if (jl_has_typevars(parameters))
+        t->uid = 0;
+    else
+        t->uid = t_uid_ctr++;
     return t;
 }
 
 jl_bits_type_t *jl_new_bitstype(jl_sym_t *name, jl_tag_type_t *super,
-                               jl_tuple_t *parameters, size_t nbits)
+                                jl_tuple_t *parameters, size_t nbits)
 {
     jl_bits_type_t *t = (jl_bits_type_t*)newobj((jl_type_t*)jl_bits_kind,
-                                              BITS_TYPE_NW);
+                                                BITS_TYPE_NW);
     t->name = jl_new_typename(name);
     t->super = super;
     t->parameters = parameters;
     t->nbits = nbits;
-    t->uid = 0;
+    if (jl_has_typevars(parameters))
+        t->uid = 0;
+    else
+        t->uid = t_uid_ctr++;
     return t;
 }
 
@@ -377,92 +383,32 @@ jl_tuple_t *jl_tparams(jl_value_t *v)
     return jl_null;
 }
 
-int jl_has_typevarsp(jl_value_t *v)
+int jl_has_typevars(jl_value_t *v)
 {
+    size_t i;
     if (jl_typeis(v, jl_tvar_type))
         return 1;
     if (jl_is_tuple(v)) {
         jl_tuple_t *t = (jl_tuple_t*)v;
-        int i;
         for(i=0; i < t->length; i++) {
-            if (jl_has_typevarsp(jl_tupleref(t, i)))
+            if (jl_has_typevars(jl_tupleref(t, i)))
                 return 1;
         }
         return 0;
     }
-    if (v == (jl_value_t*)jl_scalar_type || jl_tsuper(v) == jl_scalar_type)
-        return 0;
     if (jl_is_func_type(v))
-        return jl_has_typevarsp((jl_value_t*)((jl_func_type_t*)v)->from) ||
-            jl_has_typevarsp((jl_value_t*)((jl_func_type_t*)v)->to);
-    return jl_has_typevarsp((jl_value_t*)jl_tparams(v));
-}
+        return jl_has_typevars((jl_value_t*)((jl_func_type_t*)v)->from) ||
+            jl_has_typevars((jl_value_t*)((jl_func_type_t*)v)->to);
 
-#define jl_is_int32(v) (((jl_value_t*)(v))->type == (jl_type_t*)jl_int32_type)
-#define jl_is_bool(v) (((jl_value_t*)(v))->type == (jl_type_t*)jl_bool_type)
-
-static int tuple_memq(jl_tuple_t *t, int n, jl_value_t *v)
-{
-    int i;
-    for(i=0; i < t->length && i < n; i++) {
-        if (jl_tupleref(t, i) == v)
-            return 1;
+    jl_tuple_t *t = jl_tparams(v);
+    for(i=0; i < t->length; i++) {
+        jl_value_t *elt = jl_tupleref(t, i);
+        if (elt != v) {
+            if (jl_has_typevars(elt))
+                return 1;
+        }
     }
     return 0;
-}
-
-static void tuple_copy(jl_tuple_t *dest, jl_tuple_t *src, int n)
-{
-    int i;
-    for(i=0; i < n; i++) {
-        jl_tupleset(dest, i, jl_tupleref(src, i));
-    }
-}
-
-static jl_tuple_t *tuple_adjoinq(jl_tuple_t *t, int *n, jl_value_t *v)
-{
-    if (tuple_memq(t, *n, v))
-        return t;
-    if (*n >= t->length) {
-        jl_tuple_t *nt = jl_alloc_tuple((*n)*2);
-        tuple_copy(nt, t, t->length);
-        t = nt;
-    }
-    jl_tupleset(t, *n, v);
-    (*n)++;
-    return t;
-}
-
-static jl_tuple_t *find_tvars(jl_tuple_t *dest, jl_value_t *v, int *pos)
-{
-    if (jl_typeis(v, jl_tvar_type))
-        return tuple_adjoinq(dest, pos, v);
-    if (jl_is_func_type(v)) {
-        dest = find_tvars(dest, (jl_value_t*)((jl_func_type_t*)v)->from, pos);
-        dest = find_tvars(dest, (jl_value_t*)((jl_func_type_t*)v)->to  , pos);
-        return dest;
-    }
-    jl_tuple_t *params = jl_tparams(v);
-    int i;
-    for(i=0; i < params->length; i++) {
-        jl_value_t *p = jl_tupleref(params, i);
-        if (p != v)
-            dest = find_tvars(dest, p, pos);
-    }
-    return dest;
-}
-
-jl_tuple_t *jl_find_tvars(jl_value_t *v)
-{
-    jl_tuple_t *t = jl_alloc_tuple(2);
-    int pos=0;
-    t = find_tvars(t, v, &pos);
-    if (pos != t->length) {
-        jl_tuple_t *nt = jl_alloc_tuple(pos);
-        tuple_copy(nt, t, pos);
-        return nt;
-    }
-    return t;
 }
 
 // constructors for some normal types -----------------------------------------
@@ -645,7 +591,7 @@ static typekey_stack_t *Type_Cache = NULL;
 static void cache_type_(jl_value_t **key, size_t n, jl_type_t *type)
 {
     // only cache concrete types
-    if (jl_has_typevarsp((jl_value_t*)type))
+    if (jl_has_typevars((jl_value_t*)type))
         return;
     // assign uid
     if (jl_is_struct_type(type))
@@ -1008,6 +954,12 @@ jl_value_pair_t *type_conform(jl_type_t *a, jl_type_t *b)
     return type_conform_(a, b, &Empty_Env);
 }
 
+static jl_bits_type_t *make_scalar_type(char *name, jl_tag_type_t *super,
+                                        int nbits)
+{
+    return jl_new_bitstype(jl_symbol(name), super, jl_null, nbits);
+}
+
 void jl_init_types()
 {
     // create base objects
@@ -1132,7 +1084,34 @@ void jl_init_types()
         jl_new_type_ctor(tv,
                          (jl_type_t*)jl_new_tagtype(jl_symbol("Tensor"), jl_any_type, tv));
 
-    // TODO: scalar types here
+    jl_scalar_type = jl_apply_type_ctor(jl_tensor_type,
+                                        jl_tuple(2, jl_bottom_type,
+                                                 jl_bottom_type));
+
+    jl_number_type = jl_new_tagtype(jl_symbol("Number"), jl_scalar_type,
+                                    jl_null);
+    jl_real_type = jl_new_tagtype(jl_symbol("Real"), jl_number_type, jl_null);
+    jl_int_type = jl_new_tagtype(jl_symbol("Int"), jl_real_type, jl_null);
+    jl_float_type = jl_new_tagtype(jl_symbol("Float"), jl_real_type, jl_null);
+
+    jl_bool_type    = make_scalar_type("Bool"  , jl_scalar_type, 32);
+    jl_int8_type    = make_scalar_type("Int8"  , jl_int_type, 8);
+    jl_uint8_type   = make_scalar_type("Uint8" , jl_int_type, 8);
+    jl_int16_type   = make_scalar_type("Int16" , jl_int_type, 16);
+    jl_uint16_type  = make_scalar_type("Uint16", jl_int_type, 16);
+    jl_int32_type   = make_scalar_type("Int32" , jl_int_type, 32);
+    jl_uint32_type  = make_scalar_type("Uint32", jl_int_type, 32);
+    jl_int64_type   = make_scalar_type("Int64" , jl_int_type, 64);
+    jl_uint64_type  = make_scalar_type("Uint64", jl_int_type, 64);
+
+    jl_float32_type = make_scalar_type("Float32", jl_float_type, 32);
+    jl_float64_type = make_scalar_type("Float64", jl_float_type, 64);
+
+    jl_tupleset(jl_scalar_type->parameters, 0, jl_scalar_type);
+    jl_tupleset(jl_scalar_type->parameters, 1, jl_box_int32(0));
+
+    jl_false = jl_box_bool(0);
+    jl_true = jl_box_bool(1);
 
     tv = typevars(1, "T");
     jl_struct_type_t *bufstruct = 

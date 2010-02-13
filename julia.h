@@ -200,6 +200,8 @@ extern jl_func_type_t *jl_any_func;
 #define jl_is_typevar(v)  (((jl_value_t*)(v))->type==(jl_type_t*)jl_tvar_type)
 #define jl_is_typector(v) (((jl_value_t*)(v))->type==(jl_type_t*)jl_typector_type)
 #define jl_is_func(v) (jl_is_func_type(jl_typeof(v)))
+#define jl_is_int32(v) (((jl_value_t*)(v))->type == (jl_type_t*)jl_int32_type)
+#define jl_is_bool(v) (((jl_value_t*)(v))->type == (jl_type_t*)jl_bool_type)
 
 static inline int jl_is_seq_type(jl_value_t *v)
 {
@@ -208,7 +210,11 @@ static inline int jl_is_seq_type(jl_value_t *v)
             ((jl_tag_type_t*)jl_seq_type->body)->name);
 }
 
+int jl_is_type(jl_value_t *v);
 jl_typename_t *jl_tname(jl_value_t *v);
+jl_tag_type_t *jl_tsuper(jl_value_t *v);
+jl_tuple_t *jl_tparams(jl_value_t *v);
+int jl_has_typevars(jl_value_t *v);
 
 int jl_subtype(jl_value_t *a, jl_value_t *b, int ta, int tb);
 jl_value_pair_t *type_conform(jl_type_t *a, jl_type_t *b);
