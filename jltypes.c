@@ -345,11 +345,11 @@ int jl_is_type(jl_value_t *v)
         }
         return 1;
     }
-    return (jl_is_type(v, jl_union_kind) ||
-            jl_is_type(v, jl_struct_kind) ||
-            jl_is_type(v, jl_func_kind) ||
-            jl_is_type(v, jl_tag_kind) ||
-            jl_is_type(v, jl_bits_kind));
+    return (jl_typeis(v, jl_union_kind) ||
+            jl_typeis(v, jl_struct_kind) ||
+            jl_typeis(v, jl_func_kind) ||
+            jl_typeis(v, jl_tag_kind) ||
+            jl_typeis(v, jl_bits_kind));
 }
 
 jl_typename_t *jl_tname(jl_value_t *v)
@@ -386,7 +386,7 @@ jl_tuple_t *jl_tparams(jl_value_t *v)
 int jl_has_typevars(jl_value_t *v)
 {
     size_t i;
-    if (jl_is_type(v, jl_tvar_type))
+    if (jl_typeis(v, jl_tvar_type))
         return 1;
     if (jl_is_tuple(v)) {
         jl_tuple_t *t = (jl_tuple_t*)v;
