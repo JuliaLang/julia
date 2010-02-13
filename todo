@@ -212,7 +212,7 @@ goals for Weeks ending
 2/5:  base type constructors and object model in C (scheme lines 1-296)
 2/12: type instantiation, subtype, conform predicates (lines 296-582)
 2/19: method table, generic function (lines 582-798)
-2/26: simple builtins (lines 798-907,1079-1269)
+2/26: global environment, simple builtins (lines 798-907,1079-1269)
 3/5:  scm parser/frontend interface, print, RPL (read-print loop)
 3/12: finish parser interface, start llvm interface
 3/19: llvm bootcamp and experiments

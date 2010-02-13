@@ -34,6 +34,11 @@ typedef struct {
 typedef struct {
     JL_VALUE_STRUCT
     jl_sym_t *name;
+    // if this is the name of a parametric type, ctor points to the
+    // original typector for the type.
+    // a type alias, for example, might make a type constructor that is
+    // not the original.
+    struct _jl_typector_t *ctor;
 } jl_typename_t;
 
 typedef struct _jl_type_t {
@@ -90,7 +95,7 @@ typedef struct {
     uptrint_t uid;
 } jl_bits_type_t;
 
-typedef struct {
+typedef struct _jl_typector_t {
     JL_VALUE_STRUCT
     jl_tuple_t *parameters;
     jl_type_t *body;
@@ -119,6 +124,12 @@ typedef struct _jl_module_t {
     int nimports;
     struct _jl_module_t **imports;
 } jl_module_t;
+
+typedef struct _jl_value_pair_t {
+    jl_value_t *a;
+    jl_value_t *b;
+    struct _jl_value_pair_t *next;
+} jl_value_pair_t;
 
 extern jl_module_t *jl_system;
 extern jl_module_t *jl_user;
@@ -167,5 +178,45 @@ extern jl_func_type_t *jl_any_func;
 
 #define JL_CALLABLE(name) \
     jl_value_t *name(jl_value_t *clo, jl_value_t **args, uint32_t nargs)
+
+#define jl_tupleref(t,i) (((jl_value_t**)(t))[2+(i)])
+#define jl_tupleset(t,i,x) ((((jl_value_t**)(t))[2+(i)])=(x))
+
+#define jl_tparam0(t) jl_tupleref(((jl_tag_type_t*)(t))->parameters, 0)
+
+#define jl_typeof(v) (((jl_value_t*)(v))->type)
+#define jl_typeis(v,t) (jl_typeof(v)==(jl_type_t*)(t))
+
+#define jl_is_null(v) (((jl_value_t*)(v)) == ((jl_value_t*)jl_null))
+
+#define jl_is_tuple(v)       jl_typeis(v,jl_tuple_type)
+
+#define jl_is_tag_type(v)    jl_typeis(v,jl_tag_kind)
+#define jl_is_bits_type(v)   jl_typeis(v,jl_bits_kind)
+#define jl_is_struct_type(v) jl_typeis(v,jl_struct_kind)
+#define jl_is_func_type(v)   jl_typeis(v,jl_func_kind)
+#define jl_is_union_type(v)  jl_typeis(v,jl_union_kind)
+
+#define jl_is_typevar(v)  (((jl_value_t*)(v))->type==(jl_type_t*)jl_tvar_type)
+#define jl_is_typector(v) (((jl_value_t*)(v))->type==(jl_type_t*)jl_typector_type)
+#define jl_is_func(v) (jl_is_func_type(jl_typeof(v)))
+#define jl_is_int32(v) (((jl_value_t*)(v))->type == (jl_type_t*)jl_int32_type)
+#define jl_is_bool(v) (((jl_value_t*)(v))->type == (jl_type_t*)jl_bool_type)
+
+static inline int jl_is_seq_type(jl_value_t *v)
+{
+    return (jl_is_tag_type(v) &&
+            ((jl_tag_type_t*)jl_typeof(v))->name ==
+            ((jl_tag_type_t*)jl_seq_type->body)->name);
+}
+
+int jl_is_type(jl_value_t *v);
+jl_typename_t *jl_tname(jl_value_t *v);
+jl_tag_type_t *jl_tsuper(jl_value_t *v);
+jl_tuple_t *jl_tparams(jl_value_t *v);
+int jl_has_typevars(jl_value_t *v);
+
+int jl_subtype(jl_value_t *a, jl_value_t *b, int ta, int tb);
+jl_value_pair_t *type_conform(jl_type_t *a, jl_type_t *b);
 
 #endif

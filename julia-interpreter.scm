@@ -210,15 +210,6 @@ TODO:
 
 (define (type-vars l) (map (lambda (n) (make-type-var n)) l))
 
-; "convert" a type constructor to a type pattern by passing new
-; typevars for all its parameters.
-(define (tc->type tc)
-  (instantiate-type tc (map (lambda (tv)
-			      (make-type-var (gensym)
-					     (type-var-lb tv)
-					     (type-var-ub tv)))
-			    (type-ctor-params tc))))
-
 ; --- general type accessors and predicates ---
 
 (define (type-name t)
@@ -709,6 +700,15 @@ TODO:
 
 (define (gf-mtable gf) (vector-ref (closure-env gf) 0))
 (define (gf-name gf)   (vector-ref (closure-env gf) 1))
+
+; "convert" a type constructor to a type pattern by passing new
+; typevars for all its parameters.
+(define (tc->type tc)
+  (instantiate-type tc (map (lambda (tv)
+			      (make-type-var (gensym)
+					     (type-var-lb tv)
+					     (type-var-ub tv)))
+			    (type-ctor-params tc))))
 
 ; add a method for certain types
 (set! add-method-for
