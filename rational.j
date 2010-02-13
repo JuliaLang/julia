@@ -2,14 +2,12 @@ struct Rational[T] <: Real
     num::T
     den::T
 
-    function convert(x::Int32)
-        return rational(T.convert(x),T.convert(1))
-    end
+    convert(x::Int32) = rational(T.convert(x),T.convert(1))
 end
 
 function print(x::Rational)
     print(num(x))
-    print("/")
+    print("//")
     print(den(x))
 end
 
