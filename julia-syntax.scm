@@ -544,6 +544,10 @@
 
 )) ;; identify-comprehensions
 
+(define (compute-dims expr)
+  (if (null? expr) (list)
+      (cons `(call numel ,(car expr)) (compute-dims (cdr expr))))
+)
 
 (define lower-comprehensions
   (list
@@ -565,6 +569,13 @@
                    (block (for (= ,j ,range2) 
                                (block (call set ,result ,i ,j ,expr)))))
               ,result )))
+
+   ; nd comprehensions
+   (pattern-lambda
+    (comp expr . ranges)
+    (let ((result (gensym)))
+      `(block (= ,result (call zeros ,@(compute-dims ranges)))
+	      ,result )))
 
 )) ;; lower-comprehensions
 
