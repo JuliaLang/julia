@@ -101,7 +101,7 @@ size(a::Array) = a.dims
 
 function colon(start::Int32, stop::Int32, stride::Int32)
     len = div((stop-start),stride) + 1
-    x = zeros_int(1, len)
+    x = zeros_int(len)
     ind = 1
     for i=start:stride:stop
         x[ind] = i
@@ -127,11 +127,23 @@ function set(a::Array, i::Index, j::Index, x)
     return x
 end
 
+function set(a::Array, i::Index, j::Index, k::Index, x)
+    data = a.data
+    m = a.dims[1]
+    n = a.dims[2]
+    data[(k-1)*m*n + (j-1)*m  + i] = x
+    return x
+end
+
+
+
 numel(a::Array) = a.data.length
 length[T](v::Array[T,1]) = v.data.length
+length[T](v::Array[T,2]) = v.data.length
 zeros(sz...) = a = make_array(sz...)
 ones(m::Size) = [ 1 | (i=1:m) ]
 ones(m::Size, n::Size) = [ 1 | (i=1:m), (j=1:n) ]
+ones(m::Size, n::Size, o::Size) = [ 1 | (i=1:m), (j=1:n), (k=1:o) ]
 rand(m::Size) = [ rand() | (i=1:m) ]
 rand(m::Size, n::Size) = [ rand() | (i=1:m), (j=1:n) ]
 
@@ -161,6 +173,13 @@ function vector[T](elts::T...)
         v[i] = elts[i]
     end
     return v
+end
+
+function compute_dims(r...)
+    n = length(r)
+    for i=1:n
+        print(length(r[i]))
+    end
 end
 
 # iterating over vectors

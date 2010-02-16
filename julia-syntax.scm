@@ -549,33 +549,42 @@
       (cons `(call numel ,(car expr)) (compute-dims (cdr expr))))
 )
 
+(define (construct-loops result expr ranges iterators)
+  (if (null? ranges) `(call set ,result ,@(reverse iterators) ,expr)
+      (let ((i (gensym)))
+	`(block (for (= ,i ,(car ranges))
+		     ,(construct-loops result expr (cdr ranges) (cons i iterators) ))
+		,result )))
+)
+
 (define lower-comprehensions
   (list
-
-   ; 1d comprehensions
-   (pattern-lambda 
-    (comp expr (= i range))
-    (let ((result (gensym)))
-      `(block (= ,result (call zeros (call numel ,range)))
-	      (for (= ,i ,range) (block (= (ref ,result ,i) ,expr)))
-	      ,result )))
-   
-   ; 2d comprehensions
-   (pattern-lambda 
-    (comp expr (= i range1) (= j range2))
-    (let ((result (gensym)))
-      `(block (= ,result (call zeros (call numel ,range1) (call numel ,range2)))
-              (for (= ,i ,range1)
-                   (block (for (= ,j ,range2) 
-                               (block (call set ,result ,i ,j ,expr)))))
-              ,result )))
 
    ; nd comprehensions
    (pattern-lambda
     (comp expr . ranges)
-    (let ((result (gensym)))
-      `(block (= ,result (call zeros ,@(compute-dims ranges)))
+    (let ((result (gensym)) (dims (compute-dims ranges)) )
+      `(block (= ,result (call zeros ,@dims))
+	      ,@(construct-loops result expr ranges (list))
 	      ,result )))
+
+;;    ; 1d comprehensions
+;;    (pattern-lambda 
+;;     (comp expr (= i range))
+;;     (let ((result (gensym)))
+;;       `(block (= ,result (call zeros (call numel ,range)))
+;; 	      (for (= ,i ,range) (block (= (ref ,result ,i) ,expr)))
+;; 	      ,result )))
+   
+;;    ; 2d comprehensions
+;;    (pattern-lambda 
+;;     (comp expr (= i range1) (= j range2))
+;;     (let ((result (gensym)))
+;;       `(block (= ,result (call zeros (call numel ,range1) (call numel ,range2)))
+;;               (for (= ,i ,range1)
+;;                    (block (for (= ,j ,range2) 
+;;                                (block (call set ,result ,i ,j ,expr)))))
+;;               ,result )))
 
 )) ;; lower-comprehensions
 
