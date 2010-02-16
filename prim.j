@@ -31,3 +31,29 @@ div(x::Int32, y::Int32) = box(Int32, div_int32(unbox(x), unbox(y)))
 < (x::Int32, y::Int32) = lt_int32(unbox(x),unbox(y))
 ==(x::Int32, y::Int32) = eq_int32(unbox(x),unbox(y))
 <=(x::Int32, y::Int32) = lt_int32(unbox(x),unbox(y)) || eq_int32(unbox(x),unbox(y))
+
+# fallback definitions for emulating N-arg operators with 2-arg definitions
+
+(*)() = 1
+(*)(x::Tensor) = x
+(*)(x,y) = error("No matching method for function *")
+function (*)(x1, x2, xs...)
+    accum = x1*x2
+    n = length(xs)
+    for i=1:n
+        accum = accum * xs[i]
+    end
+    accum
+end
+
+(+)() = 0
+(+)(x::Tensor) = x
+(+)(x,y) = error("No matching method for function +")
+function (+)(x1, x2, xs...)
+    accum = x1+x2
+    n = length(xs)
+    for i=1:n
+        accum = accum * xs[i]
+    end
+    accum
+end

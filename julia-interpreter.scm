@@ -517,11 +517,6 @@ TODO:
 	 (any   (lambda (t) (conform- child t env))
 	        (type-params parent)))
 	
-	((and (or (not (has-params? parent))
-		  (not (has-params? child))))
-	 (and (subtype? child parent)
-	      env))
-	
 	; handle tuple types, or any sibling instantiations of the same
 	; generic type. parameters must be consistent.
         ; examples:

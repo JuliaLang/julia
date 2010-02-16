@@ -32,8 +32,8 @@ TODO:
 
 ; operators that are special forms, not function names
 (define syntactic-operators
-  '(= := += -= *= /= //= .//= .*= ./= |\\=| |.\\=| ^= .^= %= |\|=| &= $= => <<= >>=
-      -> --> |\|\|| && : |::| |.|))
+  '(= := += -= *= /= //= .//= .*= ./= |\\=| |.\\=| ^= .^= %= |\|=| &= $= =>
+      <<= >>= -> --> |\|\|| && : |::| |.|))
 (define syntactic-unary-operators '($))
 
 (define reserved-words '(begin while if for try function type typealias local
@@ -335,8 +335,56 @@ TODO:
 		      ; (parse-LtoR s parse-range (prec-ops 5)))
 ;(define (parse-range s) (parse-LtoR s parse-shift  (prec-ops 6)))
 (define (parse-shift s) (parse-LtoR s parse-expr (prec-ops 7)))
-(define (parse-expr s)  (parse-LtoR s parse-term  (prec-ops 8)))
-(define (parse-term s)  (parse-LtoR s parse-unary (prec-ops 9)))
+(define (parse-expr s)  (parse-LtoR/chains s parse-term  (prec-ops 8) '(+)))
+;(define (parse-term s)  (parse-LtoR/chains s parse-unary (prec-ops 9) '(*)))
+
+; parse left to right, combining chains of certain operators into 1 call
+; e.g. a+b+c => (call + a b c)
+(define (parse-LtoR/chains s down ops chain-ops)
+  (let loop ((ex       (down s))
+	     (chain-op #f))
+    (let ((t (peek-token s)))
+      (cond ((not (memq t ops))
+	     ex)
+	    ((eq? t chain-op)
+	     (begin (take-token s)
+		    (loop (append ex (list (down s)))
+			  chain-op)))
+	    (else
+	     (begin (take-token s)
+		    (loop (list 'call t ex (down s))
+			  (and (memq t chain-ops) t))))))))
+
+; given an expression and the next token, is there a juxtaposition
+; operator between them?
+(define (juxtapose? expr t)
+  (and (not (operator? t))
+       (not (closing-token? t))
+       (not (newline? t))
+       (or (number? expr)
+	   (not (memv t '(#\( #\[ #\{))))))
+
+(define (parse-term s)
+  (let ((ops (prec-ops 9)))
+    (let loop ((ex       (parse-unary s))
+	       (chain-op #f))
+      (let ((t (peek-token s)))
+	(cond ((juxtapose? ex t)
+	       (if (eq? chain-op '*)
+		   (loop (append ex (list (parse-unary s)))
+			 chain-op)
+		   (loop (list 'call '* ex (parse-unary s))
+			 '*)))
+	      ((not (memq t ops))
+	       ex)
+	      ((eq? t chain-op)
+	       (begin (take-token s)
+		      (loop (append ex (list (parse-unary s)))
+			    chain-op)))
+	      (else
+	       (begin (take-token s)
+		      (loop (list 'call t ex (parse-unary s))
+			    (and (memq t '(*)) t)))))))))
 
 (define (parse-comparison s ops)
   (let loop ((ex (parse-range s))
@@ -401,7 +449,7 @@ TODO:
 	((|.|)
 	 (loop (list (take-token s) ex (parse-atom s))))
 	((#\( )   (take-token s)
-	 (if (memq ex '(block quote))
+	 (if (memq ex '(do quote))
 	     ; some names are syntactic and not function calls
 	     (loop (list* ex       (parse-arglist s #\) )))
 	     (loop (list* 'call ex (parse-arglist s #\) )))))
