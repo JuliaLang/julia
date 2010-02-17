@@ -1,7 +1,7 @@
 CC = gcc
 
 NAME = julia
-SRCS = jltypes.c
+SRCS = jltypes.c gf.c
 OBJS = $(SRCS:%.c=%.o)
 DOBJS = $(SRCS:%.c=%.do)
 EXENAME = $(NAME)

@@ -113,7 +113,7 @@
       'Any))
 
 ; make an expression safe for multiple evaluation
-; for example a[f(x)] => block(temp=f(x), a[temp])
+; for example a[f(x)] => do(temp=f(x), a[temp])
 ; retuns a pair (expr . assignments)
 ; where 'assignments' is a list of needed assignment statements
 (define (remove-argument-side-effects e)

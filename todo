@@ -6,7 +6,7 @@
 fixes
 * fix method cache bug
 * fix ctranspose
-- provide default unique generic type parameters if none given
+* provide default unique generic type parameters if none given
 * for conversions, make generic parameters present in destination type
   available in the function body
 - only skip generic matching if an existing method matches exactly
@@ -16,7 +16,7 @@ fixes
 features
 * f(x) = x syntax
 * write up module design ideas
-- switch open type parameters to TypeVars
+* switch open type parameters to TypeVars
 - next_method
 - common_supertype
 - improve the situation with numeric literals somehow
@@ -31,7 +31,7 @@ features
 speculation
 * i wish we could write an elementwise() macro to generate operators
 - complex number syntax?
-- declaring abstract types
+* declaring abstract types
 - a type with plain-old-data fields can be treated as a value type if it
   is immutable. a mutable value type is just a thing that's allowed to behave
   confusingly. the immutability is key, "value type" is an optimization
@@ -71,7 +71,7 @@ except permits the required nesting!
 
 - implicit constructors instead of needing to define boilerplate functions
   like complex() and rational()
-- explicit different kinds of types. e.g. StructType, NumericType
+* explicit different kinds of types. e.g. StructType, NumericType
   . conceptually helpful, because you can only use new(T,...) on struct types.
     new(Int8) doesn't work, and new(Symbol) doesn't work...
 - use {} for type parameters, e.g. Complex{Float64}
@@ -194,15 +194,9 @@ eliminating array allocations in loops
 implementation plan:
 
 * set up core types
-- define all builtin types
-? hash consing types
-- print for primitive types
+* define all builtin types
+* hash consing types
 - lambda-info struct, currently the lambda expression in calls to new_closure
-- be able to call julia-parser.scm
-- real versions of scm->julia and julia->scm
-- interface for querying environment/modules and fetching ASTs so various
-  passes can still be written in scheme
-- start code generation
 
 schedule:
 
