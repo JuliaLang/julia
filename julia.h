@@ -131,6 +131,17 @@ typedef struct _jl_value_pair_t {
     struct _jl_value_pair_t *next;
 } jl_value_pair_t;
 
+typedef struct _jl_methlist_t {
+    jl_type_t *sig;
+    jl_function_t *func;
+    struct _jl_methlist_t *next;
+} jl_methlist_t;
+
+typedef struct _jl_methtable_t {
+    jl_methlist_t *mlist;
+    jl_methlist_t *generics;
+} jl_methtable_t;
+
 extern jl_module_t *jl_system;
 extern jl_module_t *jl_user;
 
@@ -176,6 +187,15 @@ extern jl_value_t *jl_false;
 
 extern jl_func_type_t *jl_any_func;
 
+#ifdef BITS64
+#define NWORDS(sz) (((sz)+7)>>3)
+#else
+#define NWORDS(sz) (((sz)+3)>>2)
+#endif
+
+#define allocb(nb)    GC_MALLOC(nb)
+#define alloc_pod(nb) GC_MALLOC_ATOMIC(nb)
+
 #define JL_CALLABLE(name) \
     jl_value_t *name(jl_value_t *clo, jl_value_t **args, uint32_t nargs)
 
@@ -217,6 +237,6 @@ jl_tuple_t *jl_tparams(jl_value_t *v);
 int jl_has_typevars(jl_value_t *v);
 
 int jl_subtype(jl_value_t *a, jl_value_t *b, int ta, int tb);
-jl_value_pair_t *type_conform(jl_type_t *a, jl_type_t *b);
+jl_value_pair_t *jl_type_conform(jl_type_t *a, jl_type_t *b);
 
 #endif

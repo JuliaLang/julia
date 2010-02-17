@@ -1,3 +1,10 @@
+/*
+  Types
+  . type constructors
+  . type predicates (subtype)
+  . constructors
+  . builtin type definitions
+*/
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
@@ -55,15 +62,6 @@ jl_value_t *jl_true;
 jl_value_t *jl_false;
 
 jl_func_type_t *jl_any_func;
-
-#ifdef BITS64
-#define NWORDS(sz) (((sz)+7)>>3)
-#else
-#define NWORDS(sz) (((sz)+3)>>2)
-#endif
-
-#define allocb(nb) GC_MALLOC(nb)
-#define alloc_pod(nb) GC_MALLOC_ATOMIC(nb)
 
 static inline jl_value_t *newobj(jl_type_t *type, size_t nfields)
 {
@@ -949,7 +947,7 @@ static jl_value_pair_t *type_conform_(jl_type_t *child, jl_type_t *parent,
 
 static jl_value_pair_t Empty_Env = {NULL,NULL,NULL};
 
-jl_value_pair_t *type_conform(jl_type_t *a, jl_type_t *b)
+jl_value_pair_t *jl_type_conform(jl_type_t *a, jl_type_t *b)
 {
     return type_conform_(a, b, &Empty_Env);
 }
