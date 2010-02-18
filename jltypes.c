@@ -233,7 +233,7 @@ void jl_errorf(char *fmt, ...)
 
 JL_CALLABLE(jl_new_struct_internal)
 {
-    jl_struct_type_t *t = (jl_struct_type_t*)clo;
+    jl_struct_type_t *t = (jl_struct_type_t*)env;
     size_t nf = t->names->length;
     if (nargs < nf)
         jl_error("Too few arguments to constructor");
@@ -451,7 +451,7 @@ UNBOX_FUNC(float64, double)
 
 JL_CALLABLE(jl_new_buffer_internal)
 {
-    jl_struct_type_t *buf_type = (jl_struct_type_t*)clo;
+    jl_struct_type_t *buf_type = (jl_struct_type_t*)env;
     if (nargs != 1)
         jl_error("Buffer.new: Wrong number of arguments");
     size_t nel=0;
@@ -726,22 +726,21 @@ jl_type_t *jl_instantiate_type_with(jl_type_t *t, jl_value_t **env, size_t n)
     return inst_type_w_((jl_value_t*)t, env, n, NULL);
 }
 
-static int tuple_subtype(jl_tuple_t *child, jl_tuple_t *parent, int ta, int tb)
+int jl_tuple_subtype(jl_value_t **child, size_t cl,
+                     jl_value_t **parent, size_t pl, int ta, int tb)
 {
     size_t ci=0, pi=0;
-    size_t cl = child->length;
-    size_t pl = parent->length;
     while(1) {
-        int cseq = (ci<cl) && jl_is_seq_type(jl_tupleref(child,ci));
-        int pseq = (pi<pl) && jl_is_seq_type(jl_tupleref(parent,pi));
+        int cseq = (ci<cl) && jl_is_seq_type(child[ci]);
+        int pseq = (pi<pl) && jl_is_seq_type(parent[pi]);
         if (ci >= cl)
             return (pi>=pl || pseq);
         if (cseq && !pseq)
             return 0;
         if (pi >= pl)
             return 0;
-        jl_value_t *ce = jl_tupleref(child,ci);
-        jl_value_t *pe = jl_tupleref(parent,pi);
+        jl_value_t *ce = child[ci];
+        jl_value_t *pe = parent[pi];
         if (cseq) ce = jl_tparam0(ce);
         if (pseq) pe = jl_tparam0(pe);
 
@@ -769,7 +768,9 @@ int jl_subtype(jl_value_t *a, jl_value_t *b, int ta, int tb)
     if (jl_is_tuple(a)) {
         if (b == jl_tuple_type) return 1;
         if (jl_is_tuple(b)) {
-            return tuple_subtype(a, b, ta, tb);
+            return jl_tuple_subtype(&jl_tupleref(a,0), ((jl_tuple_t*)a)->length,
+                                    &jl_tupleref(b,0), ((jl_tuple_t*)b)->length,
+                                    ta, tb);
         }
     }
     if (jl_is_union_type(a)) {
@@ -840,11 +841,11 @@ static jl_value_pair_t *tuple_conform(jl_tuple_t *child, jl_tuple_t *parent,
         int cseq = (ci<cl) && jl_is_seq_type(jl_tupleref(child,ci));
         int pseq = (pi<pl) && jl_is_seq_type(jl_tupleref(parent,pi));
         if (ci >= cl)
-            return (pi>=pl || pseq);
+            return (pi>=pl || pseq) ? env : NULL;
         if (cseq && !pseq)
-            return 0;
+            return NULL;
         if (pi >= pl)
-            return 0;
+            return NULL;
         jl_value_t *ce = jl_tupleref(child,ci);
         jl_value_t *pe = jl_tupleref(parent,pi);
         if (cseq) ce = jl_tparam0(ce);
