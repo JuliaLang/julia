@@ -65,7 +65,7 @@ static int exact_arg_match(jl_value_t **args, size_t n, jl_tuple_t *sig)
     if (sig->length != n) return 0;
     size_t i;
     for(i=0; i < n; i++) {
-        if (!jl_types_equal(jl_typeof(args[i]), jl_tupleref(sig,i)))
+        if (!jl_types_equal((jl_value_t*)jl_typeof(args[i]), jl_tupleref(sig,i)))
             return 0;
     }
     return 1;
@@ -101,10 +101,10 @@ jl_methlist_t *jl_method_table_assoc(jl_methtable_t *mt,
     jl_value_pair_t *env = NULL;
     size_t i;
     for(i=0; i < tt->length; i++) {
-        jl_tupleset(tt, i, jl_typeof(args[i]));
+        jl_tupleset(tt, i, (jl_value_t*)jl_typeof(args[i]));
     }
     while (gm != NULL) {
-        env = jl_type_conform(tt, gm->sig);
+        env = jl_type_conform((jl_type_t*)tt, gm->sig);
         if (env != NULL) break;
         gm = gm->next;
     }
@@ -131,9 +131,9 @@ jl_methlist_t *jl_method_table_assoc(jl_methtable_t *mt,
     }
     jl_type_t *newtype = jl_instantiate_type_with(gm->sig, tenv, n);
 
-    assert(jl_subtype(tt, newtype, 0, 0));
+    assert(jl_subtype((jl_value_t*)tt, (jl_value_t*)newtype, 0, 0));
 
-    if (m!=NULL && jl_subtype(m->sig, newtype, 0, 0)) {
+    if (m!=NULL && jl_subtype((jl_value_t*)m->sig, (jl_value_t*)newtype,0,0)) {
         // the inexact concrete method we found earlier is actually
         // more specific than this one
         return m;
@@ -151,7 +151,7 @@ static int args_match_generic(jl_type_t *a, jl_type_t *b)
 
 static int args_match(jl_type_t *a, jl_type_t *b)
 {
-    return jl_subtype(a,b,0,0);
+    return jl_subtype((jl_value_t*)a,(jl_value_t*)b,0,0);
 }
 
 static int sigs_match(jl_value_t **a, size_t n, jl_type_t *b)
@@ -209,7 +209,7 @@ jl_methlist_t *jl_method_table_insert(jl_methtable_t *mt, jl_type_t *type,
       since Foo and Bar are disjoint, so there would be no confusion over
       which one to call.
     */
-    if (jl_has_typevars(type)) {
+    if (jl_has_typevars((jl_value_t*)type)) {
         return jl_method_list_insert_p(&mt->generics, type, method,
                                        args_match_generic);
     }
@@ -239,4 +239,50 @@ jl_function_t *jl_new_generic_function(jl_sym_t *name)
     vp->b = (jl_value_t*)name;
 
     return jl_new_closure(jl_apply_generic, (jl_value_t*)vp);
+}
+
+static jl_value_t *dummy_tvar(jl_type_t *lb, jl_type_t *ub)
+{
+    return jl_new_struct(jl_tvar_type, jl_gensym(), lb, ub);
+}
+
+static jl_value_t *add_dummy_type_vars(jl_value_t *t)
+{
+    size_t i;
+    if (jl_is_typector(t)) {
+        jl_typector_t *tc = (jl_typector_t*)t;
+        jl_tuple_t *p = jl_alloc_tuple(tc->parameters->length);
+        for(i=0; i < p->length; i++) {
+            jl_tvar_t *tv = (jl_tvar_t*)jl_tupleref(tc->parameters,i);
+            jl_tupleset(p, i, dummy_tvar(tv->lb, tv->ub));
+        }
+        return (jl_value_t*)jl_apply_type_ctor(tc, p);
+    }
+    else if (jl_is_tuple(t)) {
+        jl_tuple_t *p = (jl_tuple_t*)t;
+        jl_tuple_t *np = jl_alloc_tuple(p->length);
+        for(i=0; i < p->length; i++)
+            jl_tupleset(np, i, add_dummy_type_vars(jl_tupleref(p,i)));
+        return (jl_value_t*)np;
+    }
+    else if (jl_is_union_type(t)) {
+        return jl_new_uniontype((jl_tuple_t*)add_dummy_type_vars(((jl_uniontype_t*)t)->types));
+    }
+    else if (jl_is_func_type(t)) {
+        return jl_new_functype((jl_type_t*)add_dummy_type_vars(((jl_func_type_t*)t)->from),
+                               (jl_type_t*)add_dummy_type_vars(((jl_func_type_t*)t)->to));
+    }
+    return t;
+}
+
+#define jl_is_gf(f)     (((jl_function_t*)(f))->fptr==jl_apply_generic)
+#define jl_gf_mtable(f) ((jl_methtable_t*)(((jl_value_pair_t*)((jl_function_t*)(f))->env)->a))
+
+void jl_add_method(jl_function_t *gf, jl_tuple_t *types, jl_function_t *meth)
+{
+    assert(jl_is_gf(gf));
+    assert(jl_is_tuple(types));
+    assert(jl_is_func(meth));
+    types = (jl_tuple_t*)add_dummy_type_vars((jl_value_t*)types);
+    (void)jl_method_table_insert(jl_gf_mtable(gf), (jl_type_t*)types, meth);
 }

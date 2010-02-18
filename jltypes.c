@@ -260,7 +260,7 @@ jl_struct_type_t *jl_new_struct_type(jl_sym_t *name, jl_tag_type_t *super,
     t->types = ftypes;
     t->fnew = jl_new_closure(jl_new_struct_internal, (jl_value_t*)t);
     t->fconvert = NULL; //TODO
-    if (jl_has_typevars(parameters))
+    if (jl_has_typevars((jl_value_t*)parameters))
         t->uid = 0;
     else
         t->uid = t_uid_ctr++;
@@ -276,7 +276,7 @@ jl_bits_type_t *jl_new_bitstype(jl_sym_t *name, jl_tag_type_t *super,
     t->super = super;
     t->parameters = parameters;
     t->nbits = nbits;
-    if (jl_has_typevars(parameters))
+    if (jl_has_typevars((jl_value_t*)parameters))
         t->uid = 0;
     else
         t->uid = t_uid_ctr++;
@@ -303,7 +303,7 @@ jl_typector_t *jl_new_type_ctor(jl_tuple_t *params, jl_type_t *body)
     tc->body = body;
     if (jl_is_tag_type(body) || jl_is_struct_type(body) ||
         jl_is_bits_type(body)) {
-        jl_typename_t *tn = jl_tname(body);
+        jl_typename_t *tn = jl_tname((jl_value_t*)body);
         if (tn->ctor == NULL)
             tn->ctor = tc;
     }
@@ -411,12 +411,12 @@ int jl_has_typevars(jl_value_t *v)
 
 // constructors for some normal types -----------------------------------------
 
-#define BOX_FUNC(type,c_type)                                            \
-jl_value_t *jl_box_##type(c_type x)                                      \
+#define BOX_FUNC(type,c_type)                                           \
+jl_value_t *jl_box_##type(c_type x)                                     \
 {                                                                       \
     jl_value_t *v = newobj((jl_type_t*)jl_##type##_type,                \
                            NWORDS(LLT_ALIGN(sizeof(c_type),sizeof(void*)))); \
-    *(c_type*)(&((void**)v)[1]) = x;                                     \
+    *(c_type*)(&((void**)v)[1]) = x;                                    \
     return v;                                                           \
 }
 BOX_FUNC(int8,   int8_t)
@@ -431,11 +431,11 @@ BOX_FUNC(bool,   int32_t)
 BOX_FUNC(float32, float)
 BOX_FUNC(float64, double)
 
-#define UNBOX_FUNC(type,c_type)                  \
-c_type jl_unbox_##type(jl_value_t *v)            \
-{                                               \
-    assert(v->type == jl_##type##_type);        \
-    return *(c_type*)(&((void**)v)[1]);          \
+#define UNBOX_FUNC(j_type,c_type)                       \
+c_type jl_unbox_##j_type(jl_value_t *v)                 \
+{                                                       \
+    assert(v->type == (jl_type_t*)jl_##j_type##_type);  \
+    return *(c_type*)(&((void**)v)[1]);                 \
 }
 UNBOX_FUNC(int8,   int8_t)
 UNBOX_FUNC(uint8,  uint8_t)
@@ -526,8 +526,6 @@ int jl_types_equal(jl_value_t *a, jl_value_t *b)
 {
     return type_eqv_(a, b, NULL);
 }
-
-jl_type_t *jl_instantiate_type_with(jl_type_t *t, jl_value_t **env, size_t n);
 
 static jl_type_t *apply_type_ctor_(jl_typector_t *tc, jl_value_t **params,
                                    size_t n)
@@ -744,8 +742,8 @@ int jl_tuple_subtype(jl_value_t **child, size_t cl,
         if (cseq) ce = jl_tparam0(ce);
         if (pseq) pe = jl_tparam0(pe);
 
-        if (!jl_subtype(ta ? jl_typeof(ce) : ce,
-                        tb ? jl_typeof(pe) : pe, 0, 0))
+        if (!jl_subtype(ta ? (jl_value_t*)jl_typeof(ce) : ce,
+                        tb ? (jl_value_t*)jl_typeof(pe) : pe, 0, 0))
             return 0;
 
         if (cseq && pseq) return 1;
@@ -889,8 +887,8 @@ static jl_value_pair_t *type_conform_(jl_type_t *child, jl_type_t *parent,
         return NULL;
     }
     if (child == parent) return env;
-    if (parent == jl_any_type) return env;
-    if (child == jl_any_type) return env;
+    if (parent == (jl_type_t*)jl_any_type) return env;
+    if (child  == (jl_type_t*)jl_any_type) return env;
 
     if (jl_is_union_type(child)) {
         jl_tuple_t *t = ((jl_uniontype_t*)child)->types;
@@ -1083,9 +1081,10 @@ void jl_init_types()
         jl_new_type_ctor(tv,
                          (jl_type_t*)jl_new_tagtype(jl_symbol("Tensor"), jl_any_type, tv));
 
-    jl_scalar_type = jl_apply_type_ctor(jl_tensor_type,
-                                        jl_tuple(2, jl_bottom_type,
-                                                 jl_bottom_type));
+    jl_scalar_type =
+        (jl_tag_type_t*)jl_apply_type_ctor(jl_tensor_type,
+                                           jl_tuple(2, jl_bottom_type,
+                                                    jl_bottom_type));
 
     jl_number_type = jl_new_tagtype(jl_symbol("Number"), jl_scalar_type,
                                     jl_null);
@@ -1106,7 +1105,7 @@ void jl_init_types()
     jl_float32_type = make_scalar_type("Float32", jl_float_type, 32);
     jl_float64_type = make_scalar_type("Float64", jl_float_type, 64);
 
-    jl_tupleset(jl_scalar_type->parameters, 0, jl_scalar_type);
+    jl_tupleset(jl_scalar_type->parameters, 0, (jl_value_t*)jl_scalar_type);
     jl_tupleset(jl_scalar_type->parameters, 1, jl_box_int32(0));
 
     jl_false = jl_box_bool(0);
