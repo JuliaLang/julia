@@ -17,7 +17,7 @@ LIBS = $(LIBFILES) -lm -lgc
 DEBUGFLAGS = -g -DDEBUG $(FLAGS)
 SHIPFLAGS = -O2 -DNDEBUG $(FLAGS)
 
-default: release
+default: debug
 
 %.o: %.c
 	$(CC) $(SHIPFLAGS) -c $< -o $@

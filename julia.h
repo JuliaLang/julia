@@ -197,7 +197,7 @@ extern jl_func_type_t *jl_any_func;
 #define alloc_pod(nb) GC_MALLOC_ATOMIC(nb)
 
 #define JL_CALLABLE(name) \
-    jl_value_t *name(jl_value_t *clo, jl_value_t **args, uint32_t nargs)
+    jl_value_t *name(jl_value_t *env, jl_value_t **args, uint32_t nargs)
 
 #define jl_tupleref(t,i) (((jl_value_t**)(t))[2+(i)])
 #define jl_tupleset(t,i,x) ((((jl_value_t**)(t))[2+(i)])=(x))
@@ -230,13 +230,34 @@ static inline int jl_is_seq_type(jl_value_t *v)
             ((jl_tag_type_t*)jl_seq_type->body)->name);
 }
 
-int jl_is_type(jl_value_t *v);
+// type info accessors
 jl_typename_t *jl_tname(jl_value_t *v);
 jl_tag_type_t *jl_tsuper(jl_value_t *v);
 jl_tuple_t *jl_tparams(jl_value_t *v);
-int jl_has_typevars(jl_value_t *v);
 
+// type predicates
+int jl_is_type(jl_value_t *v);
+int jl_has_typevars(jl_value_t *v);
+int jl_tuple_subtype(jl_value_t **child, size_t cl,
+                     jl_value_t **parent, size_t pl, int ta, int tb);
 int jl_subtype(jl_value_t *a, jl_value_t *b, int ta, int tb);
 jl_value_pair_t *jl_type_conform(jl_type_t *a, jl_type_t *b);
+int jl_types_equal(jl_value_t *a, jl_value_t *b);
+
+// type constructors
+jl_type_t *jl_apply_type_ctor(jl_typector_t *tc, jl_tuple_t *params);
+jl_type_t *jl_instantiate_type_with(jl_type_t *t, jl_value_t **env, size_t n);
+jl_uniontype_t *jl_new_uniontype(jl_tuple_t *types);
+jl_func_type_t *jl_new_functype(jl_type_t *a, jl_type_t *b);
+
+// constructors
+jl_value_t *jl_new_struct(jl_struct_type_t *type, ...);
+jl_function_t *jl_new_closure(jl_fptr_t proc, jl_value_t *env);
+jl_tuple_t *jl_alloc_tuple(size_t n);
+jl_sym_t *jl_gensym();
+
+// exceptions
+void jl_error(char *str);
+void jl_errorf(char *fmt, ...);
 
 #endif
