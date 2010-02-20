@@ -110,11 +110,28 @@ function colon(start::Int32, stop::Int32, stride::Int32)
     return x
 end
 
-## One based indexing
+## Scalar indexing
 
 ref(a::Array, i::Index) = a.data[i]
-ref(a::Array, I::Array) = [ a[i] | (i=I) ]
+
 ref(a::Array, i::Index, j::Index) = a.data[(j-1)*a.dims[1] + i]
+
+# TODO: Need out-of-bounds checks
+function ref(a::Array, I::Index...)
+    data = a.data
+    dims = a.dims
+    ndims = length(I) - 1
+
+    index = I[1]
+    stride = 1
+    for k=2:ndims
+        stride = stride * dims[k-1]
+        index += (I[k]-1) * stride
+    end
+
+    return data[index]
+end
+
 
 function set(a::Array, i::Index, x)
     a.data[i] = x
@@ -127,16 +144,28 @@ function set(a::Array, i::Index, j::Index, x)
     return x
 end
 
-function set(a::Array, i::Index, j::Index, k::Index, x)
+function set(a::Array, I::Index...)
     data = a.data
-    m = a.dims[1]
-    n = a.dims[2]
-    data[(k-1)*m*n + (j-1)*m  + i] = x
+    dims = a.dims
+    ndims = length(I) - 1
+    x = I[ndims+1]
+
+    index = I[1]
+    stride = 1
+    for k=2:ndims
+        stride = stride * dims[k-1]
+        index += (I[k]-1) * stride
+    end
+
+    data[index] = x
     return x
 end
 
+## Vector indexing
+ref(a::Array, I::Array) = [ a[i] | (i=I) ]
 
 
+## Other functions
 numel(a::Array) = a.data.length
 length[T](v::Array[T,1]) = v.data.length
 length[T](v::Array[T,2]) = v.data.length
