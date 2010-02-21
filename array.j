@@ -144,7 +144,7 @@ function set(a::Array, i::Index, j::Index, x)
     return x
 end
 
-function set(a::Array, I::Index...)
+function set(a::Array, I...)
     data = a.data
     dims = a.dims
     ndims = length(I) - 1
@@ -178,6 +178,7 @@ rand(m::Size, n::Size) = [ rand() | (i=1:m), (j=1:n) ]
 
 (+)[T](x::Array[T,1], y::Array[T,1]) = [ x[i] + y[i] | (i=1:numel(x)) ]
 (+)[T](x::Array[T,2], y::Array[T,2]) = [ x[i,j] + y[i,j] | (i=1:x.dims[1]), (j=1:x.dims[2]) ]
+(+)[T](x::Array[T,3], y::Array[T,3]) = [ x[i,j,k] + y[i,j,k]  | (i=1:x.dims[1]), (j=1:x.dims[2]), (k=1:x.dims[3]) ]
 
 (==)(x::Array, y::Array) = x.dims == y.dims && x.data == y.data
 

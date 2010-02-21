@@ -550,10 +550,13 @@
 )
 
 (define (construct-loops result expr ranges iterators)
-  (if (null? ranges) `(call set ,result ,@(reverse iterators) ,expr)
-      (let ((i (gensym)))
-	`(block (for (= ,i ,(car ranges))
-		     ,(construct-loops result expr (cdr ranges) (cons i iterators) ))
+  (if (null? ranges) `(block (call set ,result ,@(reverse iterators) ,expr))
+      (let ((this_range (car ranges)))
+	`(block (for ,this_range
+		     (block ,(construct-loops result 
+					      expr 
+					      (cdr ranges) 
+					      (cons (car (cdr this_range)) iterators) )))
 		,result )))
 )
 
@@ -563,8 +566,8 @@
    ; nd comprehensions
    (pattern-lambda
     (comp expr . ranges)
-    (let ((result (gensym)) (dims (compute-dims ranges)) )
-      `(block (= ,result (call zeros ,@dims))
+    (let ((result (gensym)))
+      `(block (= ,result (call zeros ,@(compute-dims ranges) ))
 	      ,@(construct-loops result expr ranges (list))
 	      ,result )))
 
