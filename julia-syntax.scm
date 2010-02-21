@@ -556,8 +556,7 @@
 		     (block ,(construct-loops result 
 					      expr 
 					      (cdr ranges) 
-					      (cons (car (cdr this_range)) iterators) )))
-		,result )))
+					      (cons (car (cdr this_range)) iterators) ))))))
 )
 
 (define lower-comprehensions
