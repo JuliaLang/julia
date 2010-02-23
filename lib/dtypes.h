@@ -16,6 +16,19 @@
   We assume the LP64 convention for 64-bit platforms.
 */
 
+#if 1
+// boehm GC allocator
+#include <gc.h>
+#define LLT_ALLOC(n) GC_MALLOC(n)
+#define LLT_REALLOC(p,n) GC_REALLOC((p),(n))
+#define LLT_FREE(x) ((void)(x))
+#else
+// standard allocator
+#define LLT_ALLOC(n) malloc(n)
+#define LLT_REALLOC(p,n) realloc((p),(n))
+#define LLT_FREE(x) free(x)
+#endif
+
 typedef int bool_t;
 
 #if defined(__INTEL_COMPILER) && defined(WIN32)

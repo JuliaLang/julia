@@ -256,7 +256,7 @@ new functions are created in many ways:
     add new closure environments.
 
   important optimization: sharing generated code for generic inner functions
-  . must lift generic method creation to the top level, then when
+  . must lift generic function creation to the top level, then when
     we enter the enclosing function, shallow copy the GF and replace
     all the closure environments with new ones. hard case is when an
     inner function has multiple definitions, each one needs a different

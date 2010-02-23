@@ -1,5 +1,8 @@
 /types.png
 Makefile
+jlfrontend.c
+jlfrontend_.c
 *.o
+*.do
 *.a
 /julia

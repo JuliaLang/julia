@@ -260,4 +260,9 @@ jl_sym_t *jl_gensym();
 void jl_error(char *str);
 void jl_errorf(char *fmt, ...);
 
+// initialization functions
+void jl_init_types();
+void jl_init_frontend();
+void jl_shutdown_frontend();
+
 #endif

@@ -138,3 +138,11 @@
     (do ((i 0 (+ 1 i)))
 	((>= i n) nv)
       (vector-set! nv i (f (vector-ref v i))))))
+
+(define-macro (gambit-only . forms)
+  (if (with-exception-catcher
+       (lambda (e) #f)
+       ; try a procedure that only exists in gambit
+       (lambda () (or (uninterned-keyword? 0) #t)))
+      `(begin ,@forms)
+      #f))

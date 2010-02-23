@@ -1,18 +1,19 @@
 CC = gcc
 
 NAME = julia
-SRCS = jltypes.c gf.c
+SRCS = jltypes.c gf.c ast.c repl.c jlfrontend.c jlfrontend_.c
 OBJS = $(SRCS:%.c=%.o)
 DOBJS = $(SRCS:%.c=%.do)
 EXENAME = $(NAME)
 LLTDIR = lib
 LLT = $(LLTDIR)/libllt.a
-HFILEDIRS = /opt/local/include
+GAMBIT = /usr/local/Gambit-C
+HFILEDIRS = /opt/local/include $(GAMBIT)/include
 LIBDIRS = /opt/local/lib
 
-FLAGS = -falign-functions -Wall -Wno-strict-aliasing -I$(LLTDIR) -I$(HFILEDIRS) -L$(LIBDIRS) $(CFLAGS)
-LIBFILES = $(LLT)
-LIBS = $(LIBFILES) -lm -lgc -framework ApplicationServices
+FLAGS = -falign-functions -Wall -Wno-strict-aliasing -I$(LLTDIR) $(HFILEDIRS:%=-I%) $(LIBDIRS:%=-L%) $(CFLAGS) -D___LIBRARY
+LIBFILES = $(LLT) $(GAMBIT)/lib/libgambc.a
+LIBS = $(LIBFILES) -lutil -ldl -lm -lgc -framework ApplicationServices
 
 DEBUGFLAGS = -g -DDEBUG $(FLAGS)
 SHIPFLAGS = -O2 -DNDEBUG $(FLAGS)
@@ -24,6 +25,11 @@ default: debug
 %.do: %.c
 	$(CC) $(DEBUGFLAGS) -c $< -o $@
 
+jlfrontend.c: jlfrontend.scm
+	gsc -c $<
+
+jlfrontend_.c: jlfrontend.c
+	gsc -link -o $@ $<
 
 $(LLT):
 	cd $(LLTDIR) && make -f Makefile.macosx
@@ -38,3 +44,5 @@ clean:
 	rm -f *.o
 	rm -f *.do
 	rm -f $(EXENAME)
+	rm -f jlfrontend.c
+	rm -f jlfrontend_.c
