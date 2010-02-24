@@ -133,22 +133,21 @@ function ref(a::Array, I::Index...)
 end
 
 
-function set(a::Array, i::Index, x)
+function set(a::Array, x, i::Index)
     a.data[i] = x
     return x
 end
 
-function set(a::Array, i::Index, j::Index, x)
+function set(a::Array, x, i::Index, j::Index)
     m = a.dims[1]
     a.data[(j-1)*m + i] = x
     return x
 end
 
-function set(a::Array, I...)
+function set(a::Array, x, I::Index...)
     data = a.data
     dims = a.dims
-    ndims = length(I) - 1
-    x = I[ndims+1]
+    ndims = length(I)
 
     index = I[1]
     stride = 1

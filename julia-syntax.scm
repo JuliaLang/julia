@@ -341,7 +341,7 @@
 						 (+ i 1))))))))
 
    (pattern-lambda (= (ref a . idxs) rhs)
-		   `(call set ,a ,@(process-indexes idxs) ,rhs))
+		   `(call set ,a ,rhs ,@(process-indexes idxs)))
 
    (pattern-lambda (ref a . idxs)
 		   `(call ref ,a ,@(process-indexes idxs)))
@@ -550,7 +550,7 @@
 )
 
 (define (construct-loops result expr ranges iterators)
-  (if (null? ranges) `(block (call set ,result ,@(reverse iterators) ,expr))
+  (if (null? ranges) `(block (call set ,result ,expr ,@(reverse iterators)))
       (let ((this_range (car ranges)))
 	`(block (for ,this_range
 		     (block ,(construct-loops result 
@@ -585,7 +585,7 @@
 ;;       `(block (= ,result (call zeros (call numel ,range1) (call numel ,range2)))
 ;;               (for (= ,i ,range1)
 ;;                    (block (for (= ,j ,range2) 
-;;                                (block (call set ,result ,i ,j ,expr)))))
+;;                                (block (call set ,result ,expr ,i ,j)))))
 ;;               ,result )))
 
 )) ;; lower-comprehensions
