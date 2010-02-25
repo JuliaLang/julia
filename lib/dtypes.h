@@ -109,6 +109,9 @@ typedef u_ptrint_t uptrint_t;
 #define S64_MAX    9223372036854775807LL
 #define S64_MIN    (-S64_MAX - 1LL)
 #define BIT63      0x8000000000000000LL
+#define U32_MAX    4294967295L
+#define S32_MAX    2147483647L
+#define S32_MIN    (-S32_MAX - 1L)
 #define BIT31      0x80000000
 
 #define DBL_EPSILON      2.2204460492503131e-16

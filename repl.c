@@ -83,16 +83,18 @@ int main(int argc, char *argv[])
         char *input = ios_readline(ios_stdin);
         ios_purge(ios_stdin);
         
-        if (!strcmp(input, "Quit\n") || ios_eof(ios_stdin))
+        if (!strcmp(input, "Quit\n") || ios_eof(ios_stdin)) {
+            ios_printf(ios_stdout, "\n");
             break;
+        }
         
         if (have_color)
             ios_printf(ios_stdout, "\033[1m\033[36m");
         
         // process input
-        ios_printf(ios_stdout, "you said: %s", input);
+        (void)jl_parse_input_line(input);
         
-        ios_printf(ios_stdout, "\n");
+        ios_printf(ios_stdout, "\n\n");
     }
     
     return 0;

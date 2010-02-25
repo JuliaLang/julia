@@ -57,6 +57,8 @@ jl_bits_type_t *jl_uint64_type;
 jl_bits_type_t *jl_float32_type;
 jl_bits_type_t *jl_float64_type;
 
+jl_type_t *jl_buffer_uint8_type;
+
 jl_tuple_t *jl_null;
 jl_value_t *jl_true;
 jl_value_t *jl_false;
@@ -218,7 +220,7 @@ jl_function_t *jl_new_closure(jl_fptr_t proc, jl_value_t *env)
 
 void jl_error(char *str)
 {
-    fprintf(stderr, "%s", str);
+    ios_printf(ios_stderr, "%s\n", str);
     exit(1);
 }
 
@@ -226,7 +228,8 @@ void jl_errorf(char *fmt, ...)
 {
     va_list args;
     va_start(args, fmt);
-    fprintf(stderr, fmt, args);
+    ios_vprintf(ios_stderr, fmt, args);
+    ios_printf(ios_stderr, "\n");
     va_end(args);
     exit(1);
 }
@@ -449,16 +452,8 @@ UNBOX_FUNC(bool,   int32_t)
 UNBOX_FUNC(float32, float)
 UNBOX_FUNC(float64, double)
 
-JL_CALLABLE(jl_new_buffer_internal)
+jl_buffer_t *jl_new_buffer(jl_type_t *buf_type, size_t nel)
 {
-    jl_struct_type_t *buf_type = (jl_struct_type_t*)env;
-    if (nargs != 1)
-        jl_error("Buffer.new: Wrong number of arguments");
-    size_t nel=0;
-    if (jl_is_int32(args[0]))
-        nel = (size_t)jl_unbox_int32(args[0]);
-    else
-        jl_error("Bufer.new: Expected integer");
     jl_type_t *el_type = (jl_type_t*)jl_tparam0(buf_type);
     void *data;
     if (jl_is_bits_type(el_type)) {
@@ -471,6 +466,29 @@ JL_CALLABLE(jl_new_buffer_internal)
     b->length = nel;
     b->data = data;
     return (jl_value_t*)b;
+}
+
+JL_CALLABLE(jl_new_buffer_internal)
+{
+    jl_struct_type_t *buf_type = (jl_struct_type_t*)env;
+    if (nargs != 1)
+        jl_error("Buffer.new: Wrong number of arguments");
+    size_t nel=0;
+    if (jl_is_int32(args[0]))
+        nel = (size_t)jl_unbox_int32(args[0]);
+    else
+        jl_error("Bufer.new: Expected integer");
+    return jl_new_buffer(buf_type, nel);
+}
+
+jl_buffer_t *jl_cstr_to_buffer(char *str)
+{
+    size_t n = strlen(str);
+    jl_buffer_t *b = jl_new_buffer(jl_buffer_uint8_type, n+1);
+    strcpy(b->data, str);
+    // '\0' terminator is there, but hidden from julia
+    b->length--;
+    return b;
 }
 
 // --- type instantiation and cache ---
@@ -1119,4 +1137,8 @@ void jl_init_types()
                            jl_tuple(1, jl_int32_type));
     bufstruct->fnew->fptr = jl_new_buffer_internal;
     jl_buffer_type = jl_new_type_ctor(tv, (jl_type_t*)bufstruct);
+
+    jl_buffer_uint8_type =
+        (jl_type_t*)jl_apply_type_ctor(jl_buffer_type,
+                                       jl_tuple(1, jl_uint8_type));
 }

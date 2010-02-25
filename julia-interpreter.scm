@@ -15,6 +15,8 @@ TODO:
 - try/catch
 |#
 
+(define *julia-interpreter* #t)
+
 (define julia-globals (make-table))
 
 ; --- tuples ---
@@ -1044,6 +1046,51 @@ end
 	   (j-eval I env)
 	   (loop (+ ip 1))))))))
 
+(define (expand-backquote e)
+  (cond ((symbol? e)          `(quote ,e))
+	((atom? e)            e)
+	((eq? (car e) '$)     (cadr e))
+	((eq? (car e) 'quote)
+	 (if (symbol? (cadr e))
+	     e
+	     (expand-backquote (expand-backquote (cadr e)))))
+	((not (any (lambda (x)
+		     (match '($ (tuple (... x))) x))
+		   e))
+	 `(call (top expr) ,@(map expand-backquote e)))
+	(else
+	 (let loop ((p (cdr e)) (q '()))
+	   (if (null? p)
+	       (let ((forms (reverse q)))
+		 `(call (top exprl) ,(expand-backquote (car e))
+			(call (top append) ,@forms)))
+	       ; look for splice inside backquote, e.g. (a,$(x...),b)
+	       (if (match '($ (tuple (... x))) (car p))
+		   (loop (cdr p)
+			 (cons (cadr (cadr (cadr (car p)))) q))
+		   (loop (cdr p)
+			 (cons `(call (top list) ,(expand-backquote (car p)))
+			       q))))))))
+
+(define (julia-macroexpand e)
+  (cond ((atom? e) e)
+	((eq? (car e) 'quote)
+	 (if (symbol? (cadr e))
+	     e
+	     (julia-macroexpand (expand-backquote (cadr e)))))
+	((and (eq? (car e) 'call)
+	      (pair? (cdr e))
+	      (table-ref macro-env (cadr e) #f)) =>
+	 (lambda (m)
+	   ;(display (cadr e)) (newline)
+	   (julia-macroexpand
+	    (julia->scm (j-apply m (map scm->julia (cddr e)))))))
+	(else
+	 (map julia-macroexpand e))))
+
+(define (julia-m-expand e)
+  (julia-expand (julia-macroexpand e)))
+
 (define (process-macro-def e)
   (let ((fexp
 	 ((pattern-lambda (macro (call name . argl) body)
@@ -1053,14 +1100,14 @@ end
     (if (not fexp)
 	(error "Invalid macro definition")
 	(table-set! macro-env (cadr (cadr e))
-		    (j-eval (cadr (julia-expand fexp)) *empty-env*)))))
+		    (j-eval (cadr (julia-m-expand fexp)) *empty-env*)))))
 
 (define (j-toplevel-eval e)
   (if (and (pair? e) (eq? (car e) 'macro))
       (process-macro-def e)
       ; lambda with no scope-block means variables assigned to in the
       ; expression stay global.
-      (j-apply (j-eval (cadr (julia-expand `(lambda () ,e))) *empty-env*)
+      (j-apply (j-eval (cadr (julia-m-expand `(lambda () ,e))) *empty-env*)
 	       '())))
 
 ; --- initialize builtins ---
