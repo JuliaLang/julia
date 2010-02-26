@@ -184,6 +184,25 @@ rand(m::Size, n::Size) = [ rand() | (i=1:m), (j=1:n) ]
 transpose[T](x::Array[T,2]) = [ x[j,i] | (i=1:x.dims[2]), (j=1:x.dims[1]) ]
 ctranspose[T](x::Array[T,2]) = [ conj(x[j,i]) | (i=1:x.dims[2]), (j=1:x.dims[1]) ]
 
+macro def_reduce_op(op)
+    `begin
+        function ($op)(V::Vector)
+            m = V[1]; 
+            for x=V
+                m = ($op)(m, x)
+            end
+            return m
+        end
+    end
+end
+
+def_reduce_op(max)
+def_reduce_op(min)
+def_reduce_op(sum)
+def_reduce_op(prod)
+def_reduce_op(any)
+def_reduce_op(all)
+
 function hcat[T](elts::T...)
     n = length(elts)
     if n == 0

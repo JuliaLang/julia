@@ -145,7 +145,7 @@
     (let ((head (cadadr e)))
       (if (symbol? head) head
 	  (cadr head))))
-  
+
   (receive
    (funcs fields) (separate
 		   (lambda (x)
@@ -263,7 +263,7 @@
 				       (-/ |<:|) super)
 			   (block . fields))
 		   (struct-def-expr name params super fields))
-   
+
    (pattern-lambda (type (-- name (-s)))
 		   (type-def-expr name '() 'Any))
    (pattern-lambda (type (ref (-- name (-s)) . params))
@@ -352,7 +352,7 @@
    (pattern-lambda (local (tuple . vars))
 		   `(block
 		     ,@(map (lambda (x) `(local ,x)) vars)))
-   
+
    ; local x::int=2 => local x::int; x=2
    (pattern-lambda (local (= var rhs))
 		   `(block (local ,var)
@@ -411,7 +411,7 @@
 				    (= ,var (call + 1 ,var)))))))))))
 
    ; for loop over arbitrary vectors
-   (pattern-lambda 
+   (pattern-lambda
     (for (= i X) body)
     (let ((coll  (gensym))
 	  (state (gensym)))
@@ -462,8 +462,8 @@
    (pattern-lambda
     (: a b (-? c))
     (if c
-        `(call colon ,a ,c ,b)
-        `(call colon ,a ,b 1)))
+	`(call colon ,a ,c ,b)
+	`(call colon ,a ,b 1)))
 
    )) ; patterns
 
@@ -489,32 +489,60 @@
 
    ))
 
+;; TODO: Special cases of comprehensions must be detected to simplify
+;; array indexing inside loop expressions.
+
 (define identify-comprehensions
   (list
-   
-   ;; Comprehensions
-   ;; This is really ugly. Comprehension is interpreted as
-   ;; hcat where the first variable is a | b followed by
-   ;; other expressions
-   (pattern-lambda 
+
+   (pattern-lambda
     (hcat (call (-/ |\||) expr (= i range)) . rest)
-    `(comp ,expr (= ,i ,range) ,@rest))
+    `(comprehension ,expr (= ,i ,range) ,@rest))
+
+   (pattern-lambda
+    (hcat (= (call (-/ |\||) expr i) range) . rest)
+    `(comprehension ,expr (= ,i ,range) ,@rest))
 
 )) ;; identify-comprehensions
 
+;; compute the dimensions where expr is a list of ranges
 (define (compute-dims expr)
   (if (null? expr) (list)
       (cons `(call numel ,(car expr)) (compute-dims (cdr expr))))
 )
 
-(define (construct-loops result expr ranges iterators)
-  (if (null? ranges) `(block (call set ,result ,expr ,@(reverse iterators)))
-      (let ((this_range (car ranges)))
-	`(block (for ,this_range
-		     (block ,(construct-loops result 
-					      expr 
-					      (cdr ranges) 
-					      (cons (car (cdr this_range)) iterators) ))))))
+;; substitute every occurence of x with y in expr
+(define (subst x y expr)
+  (if (atom? expr)
+      (if (eq? x expr) y expr)
+      (cons (subst x y (car expr)) (subst x y (cdr expr)) ))
+)
+
+;; Transform comprehension expression indices
+(define (subst-expr expr result_iters expr_iters)
+  (if (null? result_iters) expr
+      (let ((ri (car result_iters))
+	    (ei (car expr_iters)) )
+	(subst-expr (subst ei `(ref ,ei ,ri) expr)
+		    (cdr result_iters)
+		    (cdr expr_iters) )))
+)
+
+;; construct loops to cycle over all dimensions for an n-d comprehension
+(define (construct-loops result expr ranges result_iters expr_iters)
+  (if (null? ranges)
+      `(block (call set
+		    ,result
+		    ,(subst-expr expr result_iters expr_iters)
+		    ,@(reverse result_iters)))
+      (let ((ri (gensym))
+	    (ei (car (cdr (car ranges)))) )
+	`(block (for (= ,ri (: 1 (call numel ,ei)))
+		     (block ,(construct-loops result
+					      expr
+					      (cdr ranges)
+					      (cons ri result_iters)
+					      (cons ei expr_iters) ))))))
 )
 
 (define lower-comprehensions
@@ -522,29 +550,11 @@
 
    ; nd comprehensions
    (pattern-lambda
-    (comp expr . ranges)
+    (comprehension expr . ranges)
     (let ((result (gensym)))
       `(block (= ,result (call zeros ,@(compute-dims ranges) ))
-	      ,@(construct-loops result expr ranges (list))
+	      ,@(construct-loops result expr ranges (list) (list))
 	      ,result )))
-
-;;    ; 1d comprehensions
-;;    (pattern-lambda 
-;;     (comp expr (= i range))
-;;     (let ((result (gensym)))
-;;       `(block (= ,result (call zeros (call numel ,range)))
-;; 	      (for (= ,i ,range) (block (= (ref ,result ,i) ,expr)))
-;; 	      ,result )))
-   
-;;    ; 2d comprehensions
-;;    (pattern-lambda 
-;;     (comp expr (= i range1) (= j range2))
-;;     (let ((result (gensym)))
-;;       `(block (= ,result (call zeros (call numel ,range1) (call numel ,range2)))
-;;               (for (= ,i ,range1)
-;;                    (block (for (= ,j ,range2) 
-;;                                (block (call set ,result ,expr ,i ,j)))))
-;;               ,result )))
 
 )) ;; lower-comprehensions
 
@@ -638,7 +648,7 @@
 	      (dest (cons (if tail `(return ,e) e)
 			  '()))
 	      (else (cons e '())))
-	
+
 	(case (car e)
 	  ((=)  (let ((r (to-lff (caddr e) (cadr e) #f)))
 		  (cond ((symbol? dest)
@@ -648,7 +658,7 @@
 			(dest
 			 (cons (if tail `(return ,(cadr e)) (cadr e)) r))
 			(else r))))
-	  
+
 	  ((if)
 	   (cond ((or tail (eq? dest #f) (symbol? dest))
 		  (let ((r (to-lff (cadr e) #t #f)))
@@ -662,7 +672,7 @@
 		 (else (let ((g (gensym)))
 			 (cons g
 			       (to-lff e g #f))))))
-	  
+
 	  ((block)
 	   (let* ((g (gensym))
 		  (stmts
@@ -682,12 +692,12 @@
 			   '())
 		     (cons (cons 'block stmts)
 			   '())))))
-	  
+
 	  ((return)
 	   (if (and dest (not tail))
 	       (error "Misplaced return statement")
 	       (to-lff (cadr e) #t #t)))
-	  
+
 	  ((_while) (cond ((eq? dest #t)
 			   (cons (if tail '(return (null)) '(null))
 				 (to-lff e #f #f)))
@@ -700,7 +710,7 @@
 			     (if (symbol? dest)
 				 (cons `(= ,dest (null)) w)
 				 w)))))
-	  
+
 	  ((break-block)
 	   (let ((r (to-lff (caddr e) dest tail)))
 	     (if dest
@@ -708,7 +718,7 @@
 		       (list `(break-block ,(cadr e) ,(to-blk (cdr r)))))
 		 (cons `(break-block ,(cadr e) ,(car r))
 		       (cdr r)))))
-	  
+
 	  ((scope-block)
 	   (if (and (eq? dest #t) (not tail))
 	       (let* ((g (gensym))
@@ -723,24 +733,24 @@
 	       (let ((r (to-lff (cadr e) dest tail)))
 		 (cons `(scope-block ,(to-blk r))
 		       '()))))
-	  
+
 	  ((break) (if dest
 		       (error "Misplaced break or continue")
 		       (cons e '())))
-	  
+
 	  ((lambda)
 	   (let ((l `(lambda ,(cadr e)
 		       ,(to-blk (to-lff (caddr e) #t #t)))))
 	     (if (symbol? dest)
 		 (cons `(= ,dest ,l) '())
 		 (cons (if tail `(return ,l) l) '()))))
-	  
+
 	  ((local)
 	   (if (symbol? dest)
 	       (error "Misplaced local declaration"))
 	   (cons (to-blk (to-lff '(null) dest tail))
 		 (list e)))
-	  
+
 	  (else
 	   (let ((r (map (lambda (arg) (to-lff arg #t #f))
 			 e)))
@@ -756,7 +766,7 @@
 future issue:
 right now scope blocks need to be inside functions:
 
-> (julia-expand '(block (call + 1 (scope-block (block (= a b) c)))))     
+> (julia-expand '(block (call + 1 (scope-block (block (= a b) c)))))
 (block (scope-block (local a) (local #:g13) (block (= a b) (= #:g13 c)))
        (return (call + 1 #:g13)))
 
@@ -764,7 +774,7 @@ right now scope blocks need to be inside functions:
 (scope-block
  (local #:g15)
  (block (scope-block (local a) (block (= a b) (= #:g15 c)))
-        (return (call + 1 #:g15))))
+	(return (call + 1 #:g15))))
 
 The first one gave something broken, but the second case works.
 So far only the second case can actually occur.
@@ -798,7 +808,7 @@ So far only the second case can actually occur.
 	       (let* ((env (append (lam:vars e) env))
 		      (body (add-local-decls (caddr e) env)))
 		 (list 'lambda (cadr e) body)))
-	      
+
 	      ((eq? (car e) 'scope-block)
 	       (let* ((vars (delete-duplicates
 			     (find-assigned-vars (cadr e) env)))
@@ -864,7 +874,7 @@ So far only the second case can actually occur.
 	   (let ((rec (map remove-scope-blocks e)))
 	     (cons (map car rec)
 		   (apply append (map cdr rec)))))))
-  
+
   (cond ((atom? e)   e)
 	((quoted? e) e)
 	((eq? (car e) 'lambda)
@@ -914,7 +924,7 @@ So far only the second case can actually occur.
 	  (if vi
 	      (cons vi (car env))
 	      (var-lookup v (cdr env))))))
-  
+
   (cond ((symbol? e)
 	 (let ((v (var-lookup e env)))
 	   (if (and v (not (eq? (cdr v) (car env))))
@@ -982,7 +992,7 @@ So far only the second case can actually occur.
 				   (lambda (x y) (eq? x (vinfo:name y))))))
 		 (or (and vl (vinfo:type (car vl)))
 		     'Any)))))  ; TODO: types of globals?
-  
+
   (cond ((symbol? e)
 	 (let ((l (lookup e vinfo)))
 	   (cond ((eq? l 'boxed) `(call (top unbox) ,e))
@@ -1140,7 +1150,7 @@ So far only the second case can actually occur.
      (identify-locals
       (to-LFF
        (expand-and-or
-	(pattern-expand patterns 
+	(pattern-expand patterns
 	 (pattern-expand lower-comprehensions
 	  (pattern-expand identify-comprehensions
 			  ex))))))))))
