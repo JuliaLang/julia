@@ -25,8 +25,7 @@ rangeto(b,c) = RangeTo.new(b,c)
 rangeby(b) = RangeBy.new(b)
 
 start(r::Range) = r.start
-done(r::Range, i) = ((r.step <  0 && i < r.stop) ||
-                     (r.step >= 0 && i > r.stop))
+done(r::Range, i) = (r.step < 0 ? (i < r.stop) : (i > r.stop))
 next(r::Range, i) = (i, i+r.step)
 
 start(r::RangeFrom) = r.start

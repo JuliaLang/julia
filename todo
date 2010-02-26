@@ -11,6 +11,7 @@ fixes
   available in the function body
 - only skip generic matching if an existing method matches exactly
 - update wiki
+- make Buffer a kind of Vector
 -------------------------------------------------------------------------------
 
 features
