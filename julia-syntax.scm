@@ -489,32 +489,59 @@
 
    ))
 
+;; TODO: Special cases of comprehensions must be detected to simplify
+;; array indexing inside loop expressions.
+
 (define identify-comprehensions
   (list
    
-   ;; Comprehensions
-   ;; This is really ugly. Comprehension is interpreted as
-   ;; hcat where the first variable is a | b followed by
-   ;; other expressions
    (pattern-lambda 
     (hcat (call (-/ |\||) expr (= i range)) . rest)
-    `(comp ,expr (= ,i ,range) ,@rest))
+    `(comprehension ,expr (= ,i ,range) ,@rest))
+
+   (pattern-lambda
+    (hcat (= (call (-/ |\||) expr i) range) . rest)
+    `(comprehension ,expr (= ,i ,range) ,@rest))
 
 )) ;; identify-comprehensions
 
+;; compute the dimensions where expr is a list of ranges
 (define (compute-dims expr)
   (if (null? expr) (list)
       (cons `(call numel ,(car expr)) (compute-dims (cdr expr))))
 )
 
-(define (construct-loops result expr ranges iterators)
-  (if (null? ranges) `(block (call set ,result ,expr ,@(reverse iterators)))
-      (let ((this_range (car ranges)))
-	`(block (for ,this_range
+;; substitute every occurence of x with y in expr
+(define (subst x y expr)
+  (if (atom? expr)
+      (if (eq? x expr) y expr)
+      (cons (subst x y (car expr)) (subst x y (cdr expr)) ))
+)
+
+;; Transform comprehension expression indices
+(define (subst-expr expr result_iters expr_iters)
+  (if (null? result_iters) expr
+      (let ((ri (car result_iters))
+	    (ei (car expr_iters)) )
+	(subst-expr (subst ei `(ref ,ei ,ri) expr) 
+		    (cdr result_iters)
+		    (cdr expr_iters) )))
+)
+
+;; construct loops to cycle over all dimensions for an n-d comprehension
+(define (construct-loops result expr ranges result_iters expr_iters)
+  (if (null? ranges) 
+      `(block (call set ,result 
+		    ,(subst-expr expr result_iters expr_iters)
+		    ,@(reverse result_iters)))
+      (let ((ri (gensym))
+	    (ei (car (cdr (car ranges)))) )
+	`(block (for (= ,ri (: 1 (call numel ,ei)))
 		     (block ,(construct-loops result 
 					      expr 
 					      (cdr ranges) 
-					      (cons (car (cdr this_range)) iterators) ))))))
+					      (cons ri result_iters)
+					      (cons ei expr_iters) ))))))
 )
 
 (define lower-comprehensions
@@ -522,29 +549,11 @@
 
    ; nd comprehensions
    (pattern-lambda
-    (comp expr . ranges)
+    (comprehension expr . ranges)
     (let ((result (gensym)))
       `(block (= ,result (call zeros ,@(compute-dims ranges) ))
-	      ,@(construct-loops result expr ranges (list))
+	      ,@(construct-loops result expr ranges (list) (list))
 	      ,result )))
-
-;;    ; 1d comprehensions
-;;    (pattern-lambda 
-;;     (comp expr (= i range))
-;;     (let ((result (gensym)))
-;;       `(block (= ,result (call zeros (call numel ,range)))
-;; 	      (for (= ,i ,range) (block (= (ref ,result ,i) ,expr)))
-;; 	      ,result )))
-   
-;;    ; 2d comprehensions
-;;    (pattern-lambda 
-;;     (comp expr (= i range1) (= j range2))
-;;     (let ((result (gensym)))
-;;       `(block (= ,result (call zeros (call numel ,range1) (call numel ,range2)))
-;;               (for (= ,i ,range1)
-;;                    (block (for (= ,j ,range2) 
-;;                                (block (call set ,result ,expr ,i ,j)))))
-;;               ,result )))
 
 )) ;; lower-comprehensions
 
