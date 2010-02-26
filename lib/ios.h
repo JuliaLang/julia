@@ -1,6 +1,8 @@
 #ifndef __IOS_H_
 #define __IOS_H_
 
+#include <stdarg.h>
+
 // this flag controls when data actually moves out to the underlying I/O
 // channel. memory streams are a special case of this where the data
 // never moves out.

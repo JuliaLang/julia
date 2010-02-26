@@ -7,12 +7,12 @@ DOBJS = $(SRCS:%.c=%.do)
 EXENAME = $(NAME)
 LLTDIR = lib
 LLT = $(LLTDIR)/libllt.a
-GAMBIT = /usr/local/Gambit-C
+GAMBIT = /opt/local
 HFILEDIRS = /opt/local/include $(GAMBIT)/include
 LIBDIRS = /opt/local/lib
 
 FLAGS = -falign-functions -Wall -Wno-strict-aliasing -I$(LLTDIR) $(HFILEDIRS:%=-I%) $(LIBDIRS:%=-L%) $(CFLAGS) -D___LIBRARY
-LIBFILES = $(LLT) $(GAMBIT)/lib/libgambc.a
+LIBFILES = $(LLT) $(GAMBIT)/lib/gambit-c/libgambc.a
 LIBS = $(LIBFILES) -lutil -ldl -lm -lgc -framework ApplicationServices
 
 DEBUGFLAGS = -g -DDEBUG $(FLAGS)
@@ -26,13 +26,13 @@ default: debug
 	$(CC) $(DEBUGFLAGS) -c $< -o $@
 
 jlfrontend.c: jlfrontend.scm
-	gsc -c $<
+	gambit-gsc -c $<
 
 jlfrontend_.c: jlfrontend.c
-	gsc -link -o $@ $<
+	gambit-gsc -link -o $@ $<
 
 $(LLT):
-	cd $(LLTDIR) && make -f Makefile.macosx
+	cd $(LLTDIR) && make -f Makefile.$(shell uname)
 
 debug: $(DOBJS) $(LIBFILES)
 	$(CC) $(DEBUGFLAGS) $(DOBJS) -o $(EXENAME) $(LIBS)

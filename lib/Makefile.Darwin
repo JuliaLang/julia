@@ -1,4 +1,4 @@
-CC = gcc
+CC = gcc -I /opt/local/include
 
 SRCS = hashing.c timefuncs.c dblprint.c ptrhash.c \
 	utf8.c ios.c cplxprint.c dirpath.c htable.c \
