@@ -15,7 +15,11 @@
 #include "llt.h"
 #include "julia.h"
 
+#ifdef linux
 #define ___VERSION 405001
+#else
+#define ___VERSION 406000
+#endif
 #include "gambit.h"
 
 #include "jlfrontend.h"
