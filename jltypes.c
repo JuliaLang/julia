@@ -58,6 +58,8 @@ jl_bits_type_t *jl_float32_type;
 jl_bits_type_t *jl_float64_type;
 
 jl_type_t *jl_buffer_uint8_type;
+jl_type_t *jl_buffer_any_type;
+jl_struct_type_t *jl_expr_type;;
 
 jl_tuple_t *jl_null;
 jl_value_t *jl_true;
@@ -175,7 +177,6 @@ jl_sym_t *jl_gensym()
 
 // the Type type --------------------------------------------------------------
 
-
 jl_typename_t *jl_new_typename(jl_sym_t *name)
 {
     jl_typename_t *tn=(jl_typename_t*)newobj((jl_type_t*)jl_typename_type, 3);
@@ -216,22 +217,6 @@ jl_function_t *jl_new_closure(jl_fptr_t proc, jl_value_t *env)
     f->fptr = proc;
     f->env = env;
     return f;
-}
-
-void jl_error(char *str)
-{
-    ios_printf(ios_stderr, "%s\n", str);
-    exit(1);
-}
-
-void jl_errorf(char *fmt, ...)
-{
-    va_list args;
-    va_start(args, fmt);
-    ios_vprintf(ios_stderr, fmt, args);
-    ios_printf(ios_stderr, "\n");
-    va_end(args);
-    exit(1);
 }
 
 JL_CALLABLE(jl_new_struct_internal)
@@ -456,11 +441,16 @@ jl_buffer_t *jl_new_buffer(jl_type_t *buf_type, size_t nel)
 {
     jl_type_t *el_type = (jl_type_t*)jl_tparam0(buf_type);
     void *data;
-    if (jl_is_bits_type(el_type)) {
-        data = alloc_pod(((jl_bits_type_t*)el_type)->nbits/8 * nel);
+    if (nel > 0) {
+        if (jl_is_bits_type(el_type)) {
+            data = alloc_pod(((jl_bits_type_t*)el_type)->nbits/8 * nel);
+        }
+        else {
+            data = allocb(sizeof(void*) * nel);
+        }
     }
     else {
-        data = allocb(sizeof(void*) * nel);
+        data = NULL;
     }
     jl_buffer_t *b = (jl_buffer_t*)newobj((jl_type_t*)buf_type, 2);
     b->length = nel;
@@ -1132,13 +1122,21 @@ void jl_init_types()
     tv = typevars(1, "T");
     jl_struct_type_t *bufstruct = 
         jl_new_struct_type(jl_symbol("Buffer"),
-                           jl_any_type, tv,
-                           jl_tuple(1, jl_symbol("length")),
-                           jl_tuple(1, jl_int32_type));
+                           jl_any_type, tv, jl_null, jl_null);
     bufstruct->fnew->fptr = jl_new_buffer_internal;
     jl_buffer_type = jl_new_type_ctor(tv, (jl_type_t*)bufstruct);
 
     jl_buffer_uint8_type =
         (jl_type_t*)jl_apply_type_ctor(jl_buffer_type,
                                        jl_tuple(1, jl_uint8_type));
+
+    jl_buffer_any_type =
+        (jl_type_t*)jl_apply_type_ctor(jl_buffer_type,
+                                       jl_tuple(1, jl_any_type));
+
+    jl_expr_type =
+        jl_new_struct_type(jl_symbol("Expr"),
+                           jl_any_type, jl_null,
+                           jl_tuple(2, jl_symbol("head"), jl_symbol("args")),
+                           jl_tuple(2, jl_sym_type, jl_buffer_any_type));
 }

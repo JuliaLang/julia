@@ -142,6 +142,12 @@ typedef struct _jl_methtable_t {
     jl_methlist_t *generics;
 } jl_methtable_t;
 
+typedef struct {
+    JL_VALUE_STRUCT
+    jl_sym_t *head;
+    jl_buffer_t *args;
+} jl_expr_t;
+
 extern jl_module_t *jl_system;
 extern jl_module_t *jl_user;
 
@@ -182,6 +188,8 @@ extern jl_bits_type_t *jl_float32_type;
 extern jl_bits_type_t *jl_float64_type;
 
 extern jl_type_t *jl_buffer_uint8_type;
+extern jl_type_t *jl_buffer_any_type;
+extern jl_struct_type_t *jl_expr_type;
 
 extern jl_tuple_t *jl_null;
 extern jl_value_t *jl_true;
@@ -232,6 +240,12 @@ static inline int jl_is_seq_type(jl_value_t *v)
             ((jl_tag_type_t*)jl_seq_type->body)->name);
 }
 
+static inline
+jl_value_t *jl_apply(jl_function_t *f, jl_value_t **args, uint32_t nargs)
+{
+    return f->fptr(f->env, args, nargs);
+}
+
 // type info accessors
 jl_typename_t *jl_tname(jl_value_t *v);
 jl_tag_type_t *jl_tsuper(jl_value_t *v);
@@ -255,11 +269,14 @@ jl_func_type_t *jl_new_functype(jl_type_t *a, jl_type_t *b);
 // constructors
 jl_value_t *jl_new_struct(jl_struct_type_t *type, ...);
 jl_function_t *jl_new_closure(jl_fptr_t proc, jl_value_t *env);
+jl_tuple_t *jl_tuple(size_t n, ...);
 jl_tuple_t *jl_alloc_tuple(size_t n);
 jl_sym_t *jl_symbol(char *str);
 jl_sym_t *jl_gensym();
 jl_buffer_t *jl_new_buffer(jl_type_t *buf_type, size_t nel);
 jl_buffer_t *jl_cstr_to_buffer(char *str);
+jl_expr_t *jl_expr(jl_sym_t *head, size_t n, ...);
+jl_expr_t *jl_exprn(jl_sym_t *head, size_t n);
 jl_value_t *jl_box_int8(int8_t x);
 jl_value_t *jl_box_uint8(uint8_t x);
 jl_value_t *jl_box_int16(int16_t x);

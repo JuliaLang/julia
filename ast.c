@@ -51,6 +51,16 @@ static void syntax_error_check(___SCMOBJ e)
     }
 }
 
+static size_t scm_list_length(___SCMOBJ x)
+{
+    size_t l = 0;
+    while (___PAIRP(x)) {
+        l++;
+        x = ___CDR(x);
+    }
+    return l;
+}
+
 static jl_value_t *scm_to_julia(___SCMOBJ e)
 {
     ___SCMOBJ ___temp;
@@ -58,15 +68,17 @@ static jl_value_t *scm_to_julia(___SCMOBJ e)
         if (jl_scm_integerp(e)) {
             uint64_t n = jl_scm_uint64(e);
             if (n > S64_MAX)
-                return jl_box_uint64(n);
+                return (jl_value_t*)jl_box_uint64(n);
             if (n > S32_MAX)
-                return jl_box_int64((int64_t)n);
-            return jl_box_int32((int32_t)n);
+                return (jl_value_t*)jl_box_int64((int64_t)n);
+            return (jl_value_t*)jl_box_int32((int32_t)n);
         }
-        return jl_box_float64(jl_scm_float64(e));
+        return (jl_value_t*)jl_box_float64(jl_scm_float64(e));
     }
     if (___STRINGP(e))
-        return jl_symbol(jl_scm_str(e));
+        return (jl_value_t*)jl_symbol(jl_scm_str(e));
+    if (___NULLP(e))
+        return (jl_value_t*)jl_null;
     if (___PAIRP(e)) {
         ___SCMOBJ hd = ___CAR(e);
         if (___STRINGP(hd)) {
@@ -75,17 +87,31 @@ static jl_value_t *scm_to_julia(___SCMOBJ e)
                goto  goto-ifnot  label  return
                lambda  call  =  quote
                null  top  value-or-null  closure-ref
-               file  string
+               body  file  string
             */
             if (!strcmp(s, "string"))
-                return jl_cstr_to_buffer(jl_scm_str(___CADR(e)));
+                return (jl_value_t*)jl_cstr_to_buffer(jl_scm_str(___CADR(e)));
+            if (!strcmp(s, "lambda")) {
+                // TODO: make function info record
+            }
+            size_t n = scm_list_length(e)-1;
+            size_t i;
+            jl_expr_t *ex = jl_exprn(jl_symbol(s), n);
+            e = ___CDR(e);
+            for(i=0; i < n; i++) {
+                assert(___PAIRP(e));
+                ((jl_value_t**)ex->args->data)[i] = scm_to_julia(___CAR(e));
+                e = ___CDR(e);
+            }
+            return (jl_value_t*)ex;
         }
         else {
             jl_error("Malformed tree");
         }
     }
+    jl_error("Malformed tree");
     
-    return jl_null;
+    return (jl_value_t*)jl_null;
 }
 
 jl_value_t *jl_parse_input_line(char *str)

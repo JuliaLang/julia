@@ -76,6 +76,40 @@ except permits the required nesting!
     new(Int8) doesn't work, and new(Symbol) doesn't work...
 - use {} for type parameters, e.g. Complex{Float64}
 
+- idea: only allow field access (dot) on variables whose type is statically
+  known. this (1) guarantees that field access is fast, and (2) allows us
+  to prevent field access on types not visible (exported) to the current
+  module. Example
+
+module A
+export Public
+struct Public
+  field::Private
+end
+struct Private
+  a
+  b
+end
+end
+
+module B
+import A.Public
+x = Public.new()  # ok
+x.field           # ok
+x.field.a         # not allowed
+end
+
+Another way to see this is: does it makes sense to write "f(x) = x.a"? In
+other words field access is not a generic operation. We have 3 kinds of
+operations:
+static: like add_int32, requires specific statically-known types
+function: like the functions is() and istype(), works on any type or almost
+          any type, but may not have new definitions added.
+generic function: the most general kind of function. supports dispatch.
+
+the question is, which kind of operation is field access?
+currently it is kind #2.
+
 -------------------------------------------------------------------------------
 
 a perpetual question is "where do objects come from?"

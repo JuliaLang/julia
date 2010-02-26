@@ -243,10 +243,10 @@
 		   `(call ref Function ,a ,b))
 
    (pattern-lambda (|.| a b)
-		   `(call getfield ,a (quote ,b)))
+		   `(call (top getfield) ,a (quote ,b)))
 
    (pattern-lambda (= (|.| a b) rhs)
-		   `(call setfield ,a (quote ,b) ,rhs))
+		   `(call (top setfield) ,a (quote ,b) ,rhs))
 
    ; type definition
    (pattern-lambda (struct (-- name (-s)) (block . fields))
@@ -1092,7 +1092,10 @@ So far only the second case can actually occur.
     (cond ((or (atom? e) (quoted? e)) e)
 	  ((eq? (car e) 'lambda)
 	   (compile (cadddr e) '())
-	   `(lambda ,(cadr e) ,(caddr e) ,(list->vector (reverse code))))
+	   `(lambda ,(cadr e) ,(caddr e)
+		    ,(if *julia-interpreter*
+			 (list->vector (reverse code))
+			 (cons 'body (reverse code)))))
 	  (else (map goto-form e)))))
 
 ; replace symbolic label references with indexes, for the interpreter
