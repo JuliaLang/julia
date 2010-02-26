@@ -142,6 +142,12 @@ typedef struct _jl_methtable_t {
     jl_methlist_t *generics;
 } jl_methtable_t;
 
+typedef struct {
+    JL_VALUE_STRUCT
+    jl_sym_t *head;
+    jl_buffer_t *args;
+} jl_expr_t;
+
 extern jl_module_t *jl_system;
 extern jl_module_t *jl_user;
 
@@ -180,6 +186,10 @@ extern jl_bits_type_t *jl_int64_type;
 extern jl_bits_type_t *jl_uint64_type;
 extern jl_bits_type_t *jl_float32_type;
 extern jl_bits_type_t *jl_float64_type;
+
+extern jl_type_t *jl_buffer_uint8_type;
+extern jl_type_t *jl_buffer_any_type;
+extern jl_struct_type_t *jl_expr_type;
 
 extern jl_tuple_t *jl_null;
 extern jl_value_t *jl_true;
@@ -230,6 +240,12 @@ static inline int jl_is_seq_type(jl_value_t *v)
             ((jl_tag_type_t*)jl_seq_type->body)->name);
 }
 
+static inline
+jl_value_t *jl_apply(jl_function_t *f, jl_value_t **args, uint32_t nargs)
+{
+    return f->fptr(f->env, args, nargs);
+}
+
 // type info accessors
 jl_typename_t *jl_tname(jl_value_t *v);
 jl_tag_type_t *jl_tsuper(jl_value_t *v);
@@ -253,8 +269,34 @@ jl_func_type_t *jl_new_functype(jl_type_t *a, jl_type_t *b);
 // constructors
 jl_value_t *jl_new_struct(jl_struct_type_t *type, ...);
 jl_function_t *jl_new_closure(jl_fptr_t proc, jl_value_t *env);
+jl_tuple_t *jl_tuple(size_t n, ...);
 jl_tuple_t *jl_alloc_tuple(size_t n);
+jl_sym_t *jl_symbol(char *str);
 jl_sym_t *jl_gensym();
+jl_buffer_t *jl_new_buffer(jl_type_t *buf_type, size_t nel);
+jl_buffer_t *jl_cstr_to_buffer(char *str);
+jl_expr_t *jl_expr(jl_sym_t *head, size_t n, ...);
+jl_expr_t *jl_exprn(jl_sym_t *head, size_t n);
+jl_value_t *jl_box_int8(int8_t x);
+jl_value_t *jl_box_uint8(uint8_t x);
+jl_value_t *jl_box_int16(int16_t x);
+jl_value_t *jl_box_uint16(uint16_t x);
+jl_value_t *jl_box_int32(int32_t x);
+jl_value_t *jl_box_uint32(uint32_t x);
+jl_value_t *jl_box_int64(int64_t x);
+jl_value_t *jl_box_uint64(uint64_t x);
+jl_value_t *jl_box_float32(float x);
+jl_value_t *jl_box_float64(double x);
+int8_t jl_unbox_int8(jl_value_t *v);
+uint8_t jl_unbox_uint8(jl_value_t *v);
+int16_t jl_unbox_int16(jl_value_t *v);
+uint16_t jl_unbox_uint16(jl_value_t *v);
+int32_t jl_unbox_int32(jl_value_t *v);
+uint32_t jl_unbox_uint32(jl_value_t *v);
+int64_t jl_unbox_int64(jl_value_t *v);
+uint64_t jl_unbox_uint64(jl_value_t *v);
+float jl_unbox_float32(jl_value_t *v);
+double jl_unbox_float64(jl_value_t *v);
 
 // exceptions
 void jl_error(char *str);
@@ -264,5 +306,9 @@ void jl_errorf(char *fmt, ...);
 void jl_init_types();
 void jl_init_frontend();
 void jl_shutdown_frontend();
+
+// parsing
+jl_value_t *jl_parse_input_line(char *str);
+jl_value_t *jl_parse_file(char *fname);
 
 #endif

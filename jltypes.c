@@ -57,6 +57,10 @@ jl_bits_type_t *jl_uint64_type;
 jl_bits_type_t *jl_float32_type;
 jl_bits_type_t *jl_float64_type;
 
+jl_type_t *jl_buffer_uint8_type;
+jl_type_t *jl_buffer_any_type;
+jl_struct_type_t *jl_expr_type;;
+
 jl_tuple_t *jl_null;
 jl_value_t *jl_true;
 jl_value_t *jl_false;
@@ -173,7 +177,6 @@ jl_sym_t *jl_gensym()
 
 // the Type type --------------------------------------------------------------
 
-
 jl_typename_t *jl_new_typename(jl_sym_t *name)
 {
     jl_typename_t *tn=(jl_typename_t*)newobj((jl_type_t*)jl_typename_type, 3);
@@ -214,21 +217,6 @@ jl_function_t *jl_new_closure(jl_fptr_t proc, jl_value_t *env)
     f->fptr = proc;
     f->env = env;
     return f;
-}
-
-void jl_error(char *str)
-{
-    fprintf(stderr, "%s", str);
-    exit(1);
-}
-
-void jl_errorf(char *fmt, ...)
-{
-    va_list args;
-    va_start(args, fmt);
-    fprintf(stderr, fmt, args);
-    va_end(args);
-    exit(1);
 }
 
 JL_CALLABLE(jl_new_struct_internal)
@@ -449,6 +437,27 @@ UNBOX_FUNC(bool,   int32_t)
 UNBOX_FUNC(float32, float)
 UNBOX_FUNC(float64, double)
 
+jl_buffer_t *jl_new_buffer(jl_type_t *buf_type, size_t nel)
+{
+    jl_type_t *el_type = (jl_type_t*)jl_tparam0(buf_type);
+    void *data;
+    if (nel > 0) {
+        if (jl_is_bits_type(el_type)) {
+            data = alloc_pod(((jl_bits_type_t*)el_type)->nbits/8 * nel);
+        }
+        else {
+            data = allocb(sizeof(void*) * nel);
+        }
+    }
+    else {
+        data = NULL;
+    }
+    jl_buffer_t *b = (jl_buffer_t*)newobj((jl_type_t*)buf_type, 2);
+    b->length = nel;
+    b->data = data;
+    return (jl_value_t*)b;
+}
+
 JL_CALLABLE(jl_new_buffer_internal)
 {
     jl_struct_type_t *buf_type = (jl_struct_type_t*)env;
@@ -459,18 +468,17 @@ JL_CALLABLE(jl_new_buffer_internal)
         nel = (size_t)jl_unbox_int32(args[0]);
     else
         jl_error("Bufer.new: Expected integer");
-    jl_type_t *el_type = (jl_type_t*)jl_tparam0(buf_type);
-    void *data;
-    if (jl_is_bits_type(el_type)) {
-        data = alloc_pod(((jl_bits_type_t*)el_type)->nbits/8 * nel);
-    }
-    else {
-        data = allocb(sizeof(void*) * nel);
-    }
-    jl_buffer_t *b = (jl_buffer_t*)newobj((jl_type_t*)buf_type, 2);
-    b->length = nel;
-    b->data = data;
-    return (jl_value_t*)b;
+    return jl_new_buffer(buf_type, nel);
+}
+
+jl_buffer_t *jl_cstr_to_buffer(char *str)
+{
+    size_t n = strlen(str);
+    jl_buffer_t *b = jl_new_buffer(jl_buffer_uint8_type, n+1);
+    strcpy(b->data, str);
+    // '\0' terminator is there, but hidden from julia
+    b->length--;
+    return b;
 }
 
 // --- type instantiation and cache ---
@@ -1114,9 +1122,21 @@ void jl_init_types()
     tv = typevars(1, "T");
     jl_struct_type_t *bufstruct = 
         jl_new_struct_type(jl_symbol("Buffer"),
-                           jl_any_type, tv,
-                           jl_tuple(1, jl_symbol("length")),
-                           jl_tuple(1, jl_int32_type));
+                           jl_any_type, tv, jl_null, jl_null);
     bufstruct->fnew->fptr = jl_new_buffer_internal;
     jl_buffer_type = jl_new_type_ctor(tv, (jl_type_t*)bufstruct);
+
+    jl_buffer_uint8_type =
+        (jl_type_t*)jl_apply_type_ctor(jl_buffer_type,
+                                       jl_tuple(1, jl_uint8_type));
+
+    jl_buffer_any_type =
+        (jl_type_t*)jl_apply_type_ctor(jl_buffer_type,
+                                       jl_tuple(1, jl_any_type));
+
+    jl_expr_type =
+        jl_new_struct_type(jl_symbol("Expr"),
+                           jl_any_type, jl_null,
+                           jl_tuple(2, jl_symbol("head"), jl_symbol("args")),
+                           jl_tuple(2, jl_sym_type, jl_buffer_any_type));
 }

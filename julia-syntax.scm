@@ -8,7 +8,7 @@
 ; - validate argument lists, replace a=b in arg lists with keyword exprs
 ; - type parameter renaming stuff
 ; - use (top x) more consistently
-; - make goto-form safe for inlining (delay label to index mapping)
+; * make goto-form safe for inlining (delay label to index mapping)
 
 (define macro-env (make-table))
 
@@ -17,48 +17,6 @@
        (or (eq? (car e) 'quote)
 	   (eq? (car e) 'top)
 	   (eq? (car e) 'value-or-null))))
-
-(define (expand-backquote e)
-  (cond ((symbol? e)          `(quote ,e))
-	((atom? e)            e)
-	((eq? (car e) '$)     (cadr e))
-	((eq? (car e) 'quote)
-	 (if (symbol? (cadr e))
-	     e
-	     (expand-backquote (expand-backquote (cadr e)))))
-	((not (any (lambda (x)
-		     (match '($ (tuple (... x))) x))
-		   e))
-	 `(call (top expr) ,@(map expand-backquote e)))
-	(else
-	 (let loop ((p (cdr e)) (q '()))
-	   (if (null? p)
-	       (let ((forms (reverse q)))
-		 `(call (top exprl) ,(expand-backquote (car e))
-			(call (top append) ,@forms)))
-	       ; look for splice inside backquote, e.g. (a,$(x...),b)
-	       (if (match '($ (tuple (... x))) (car p))
-		   (loop (cdr p)
-			 (cons (cadr (cadr (cadr (car p)))) q))
-		   (loop (cdr p)
-			 (cons `(call (top list) ,(expand-backquote (car p)))
-			       q))))))))
-
-(define (julia-macroexpand e)
-  (cond ((atom? e) e)
-	((eq? (car e) 'quote)
-	 (if (symbol? (cadr e))
-	     e
-	     (julia-macroexpand (expand-backquote (cadr e)))))
-	((and (eq? (car e) 'call)
-	      (pair? (cdr e))
-	      (table-ref macro-env (cadr e) #f)) =>
-	 (lambda (m)
-	   ;(display (cadr e)) (newline)
-	   (julia-macroexpand
-	    (julia->scm (j-apply m (map scm->julia (cddr e)))))))
-	(else
-	 (map julia-macroexpand e))))
 
 (define (lam:args x) (cadr x))
 (define (lam:vars x) (llist-vars (lam:args x)))
@@ -285,10 +243,10 @@
 		   `(call ref Function ,a ,b))
 
    (pattern-lambda (|.| a b)
-		   `(call getfield ,a (quote ,b)))
+		   `(call (top getfield) ,a (quote ,b)))
 
    (pattern-lambda (= (|.| a b) rhs)
-		   `(call setfield ,a (quote ,b) ,rhs))
+		   `(call (top setfield) ,a (quote ,b) ,rhs))
 
    ; type definition
    (pattern-lambda (struct (-- name (-s)) (block . fields))
@@ -1134,7 +1092,10 @@ So far only the second case can actually occur.
     (cond ((or (atom? e) (quoted? e)) e)
 	  ((eq? (car e) 'lambda)
 	   (compile (cadddr e) '())
-	   `(lambda ,(cadr e) ,(caddr e) ,(list->vector (reverse code))))
+	   `(lambda ,(cadr e) ,(caddr e)
+		    ,(if *julia-interpreter*
+			 (list->vector (reverse code))
+			 (cons 'body (reverse code)))))
 	  (else (map goto-form e)))))
 
 ; replace symbolic label references with indexes, for the interpreter
@@ -1167,11 +1128,13 @@ So far only the second case can actually occur.
 		  ,(fix-gotos (lam:body e) (label-addrs (lam:body e)))))
 	(else (map resolve-labels e))))
 
-(define (interpreter-goto-form e)
-  (resolve-labels (goto-form e)))
+(define (to-goto-form e)
+  (if *julia-interpreter*
+      (resolve-labels (goto-form e))
+      (goto-form e)))
 
 (define (julia-expand ex)
-  (interpreter-goto-form
+  (to-goto-form
    (closure-convert
     (flatten-scopes
      (identify-locals
@@ -1180,4 +1143,4 @@ So far only the second case can actually occur.
 	(pattern-expand patterns 
 	 (pattern-expand lower-comprehensions
 	  (pattern-expand identify-comprehensions
-			  (julia-macroexpand ex)))))))))))
+			  ex))))))))))

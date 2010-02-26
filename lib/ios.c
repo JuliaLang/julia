@@ -913,24 +913,19 @@ void ios_purge(ios_t *s)
     }
 }
 
-int ios_printf(ios_t *s, char *format, ...)
+int ios_vprintf(ios_t *s, char *format, va_list args)
 {
     char *str=NULL;
-    va_list args;
     int c;
-
-    va_start(args, format);
 
     if (s->state == bst_wr && s->bpos < s->maxsize && s->bm != bm_none) {
         size_t avail = s->maxsize - s->bpos;
         char *start = s->buf + s->bpos;
         c = vsnprintf(start, avail, format, args);
         if (c < 0) {
-            va_end(args);
             return c;
         }
         if (c < avail) {
-            va_end(args);
             s->bpos += (size_t)c;
             _write_update_pos(s);
             // TODO: only works right if newline is at end
@@ -941,12 +936,21 @@ int ios_printf(ios_t *s, char *format, ...)
     }
     c = vasprintf(&str, format, args);
 
+    if (c >= 0) {
+        ios_write(s, str, c);
+
+        LLT_FREE(str);
+    }
+    return c;
+}
+
+int ios_printf(ios_t *s, char *format, ...)
+{
+    va_list args;
+    int c;
+
+    va_start(args, format);
+    c = ios_vprintf(s, format, args);
     va_end(args);
-
-    if (c < 0) return c;
-
-    ios_write(s, str, c);
-
-    LLT_FREE(str);
     return c;
 }
