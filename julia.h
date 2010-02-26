@@ -206,9 +206,6 @@ extern jl_func_type_t *jl_any_func;
 #define allocb(nb)    GC_MALLOC(nb)
 #define alloc_pod(nb) GC_MALLOC_ATOMIC(nb)
 
-#define JL_CALLABLE(name) \
-    jl_value_t *name(jl_value_t *env, jl_value_t **args, uint32_t nargs)
-
 #define jl_tupleref(t,i) (((jl_value_t**)(t))[2+(i)])
 #define jl_tupleset(t,i,x) ((((jl_value_t**)(t))[2+(i)])=(x))
 
@@ -240,16 +237,11 @@ static inline int jl_is_seq_type(jl_value_t *v)
             ((jl_tag_type_t*)jl_seq_type->body)->name);
 }
 
-static inline
-jl_value_t *jl_apply(jl_function_t *f, jl_value_t **args, uint32_t nargs)
-{
-    return f->fptr(f->env, args, nargs);
-}
-
 // type info accessors
 jl_typename_t *jl_tname(jl_value_t *v);
 jl_tag_type_t *jl_tsuper(jl_value_t *v);
 jl_tuple_t *jl_tparams(jl_value_t *v);
+jl_value_t *jl_full_type(jl_value_t *v);
 
 // type predicates
 int jl_is_type(jl_value_t *v);
@@ -301,6 +293,8 @@ double jl_unbox_float64(jl_value_t *v);
 // exceptions
 void jl_error(char *str);
 void jl_errorf(char *fmt, ...);
+void jl_too_few_args(char *fname, int min);
+void jl_too_many_args(char *fname, int max);
 
 // initialization functions
 void jl_init_types();
@@ -310,5 +304,22 @@ void jl_shutdown_frontend();
 // parsing
 jl_value_t *jl_parse_input_line(char *str);
 jl_value_t *jl_parse_file(char *fname);
+
+// for writing julia functions in C
+#define JL_CALLABLE(name) \
+    jl_value_t *name(jl_value_t *env, jl_value_t **args, uint32_t nargs)
+
+static inline
+jl_value_t *jl_apply(jl_function_t *f, jl_value_t **args, uint32_t nargs)
+{
+    return f->fptr(f->env, args, nargs);
+}
+
+#define JL_NARGS(fname, min, max)                               \
+    if (nargs < min) jl_too_few_args(#fname, min);              \
+    else if (nargs > max) jl_too_many_args(#fname, max);
+
+#define JL_NARGSV(fname, min)                           \
+    if (nargs < min) jl_too_few_args(#fname, min);
 
 #endif

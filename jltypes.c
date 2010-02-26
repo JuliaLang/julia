@@ -397,6 +397,20 @@ int jl_has_typevars(jl_value_t *v)
     return 0;
 }
 
+// construct the full type of a value, possibly making a tuple type
+jl_value_t *jl_full_type(jl_value_t *v)
+{
+    if (!jl_is_tuple(v))
+        return jl_typeof(v);
+    jl_tuple_t *in = (jl_tuple_t*)v;
+    jl_tuple_t *out = jl_alloc_tuple(in->length);
+    size_t i;
+    for(i=0; i < in->length; i++) {
+        jl_tupleset(out, i, jl_full_type(jl_tupleref(in, i)));
+    }
+    return (jl_value_t*)out;
+}
+
 // constructors for some normal types -----------------------------------------
 
 #define BOX_FUNC(type,c_type)                                           \
@@ -750,8 +764,12 @@ int jl_tuple_subtype(jl_value_t **child, size_t cl,
         if (cseq) ce = jl_tparam0(ce);
         if (pseq) pe = jl_tparam0(pe);
 
-        if (!jl_subtype(ta ? (jl_value_t*)jl_typeof(ce) : ce,
-                        tb ? (jl_value_t*)jl_typeof(pe) : pe, 0, 0))
+        if (!jl_subtype((ta&&!jl_is_tuple(ce)) ?
+                          (jl_value_t*)jl_typeof(ce) : ce,
+                        (tb&&!jl_is_tuple(pe)) ?
+                          (jl_value_t*)jl_typeof(pe) : pe,
+                        ta&&jl_is_tuple(ce),
+                        tb&&jl_is_tuple(pe)))
             return 0;
 
         if (cseq && pseq) return 1;
@@ -954,6 +972,13 @@ static jl_value_pair_t *type_conform_(jl_type_t *child, jl_type_t *parent,
 
 static jl_value_pair_t Empty_Env = {NULL,NULL,NULL};
 
+/*
+  typically a is a concrete type and b is a type containing typevars.
+  this function tries to find a typevar assignment such that "a" is a subtype
+  of "b".
+  returns a linked list of (typevar,type) pairs.
+  used to infer static parameter values in generic method definitions.
+*/
 jl_value_pair_t *jl_type_conform(jl_type_t *a, jl_type_t *b)
 {
     return type_conform_(a, b, &Empty_Env);

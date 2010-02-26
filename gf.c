@@ -65,6 +65,9 @@ static int exact_arg_match(jl_value_t **args, size_t n, jl_tuple_t *sig)
     if (sig->length != n) return 0;
     size_t i;
     for(i=0; i < n; i++) {
+        // note: because this uses jl_typeof() directly, it never detects
+        // exact matches for tuples. however this is a conservative answer
+        // given the rest of the dispatch process.
         if (!jl_types_equal((jl_value_t*)jl_typeof(args[i]), jl_tupleref(sig,i)))
             return 0;
     }
@@ -101,7 +104,7 @@ jl_methlist_t *jl_method_table_assoc(jl_methtable_t *mt,
     jl_value_pair_t *env = NULL;
     size_t i;
     for(i=0; i < tt->length; i++) {
-        jl_tupleset(tt, i, (jl_value_t*)jl_typeof(args[i]));
+        jl_tupleset(tt, i, (jl_value_t*)jl_full_type(args[i]));
     }
     while (gm != NULL) {
         env = jl_type_conform((jl_type_t*)tt, gm->sig);

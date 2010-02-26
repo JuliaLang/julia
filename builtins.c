@@ -30,6 +30,16 @@ void jl_errorf(char *fmt, ...)
     exit(1);
 }
 
+void jl_too_few_args(char *fname, int min)
+{
+    jl_errorf("%s: too few arguments (expected %d)", fname, min);
+}
+
+void jl_too_many_args(char *fname, int max)
+{
+    jl_errorf("%s: too many arguments (expected %d)", fname, max);
+}
+
 /*
   equivalent julia code:
   expr(head, args...) = Expr.new(head, buffer(args...))
@@ -53,4 +63,26 @@ jl_expr_t *jl_exprn(jl_sym_t *head, size_t n)
     ctor_args[0] = (jl_value_t*)head;
     ctor_args[1] = (jl_value_t*)jl_new_buffer(jl_buffer_any_type, n);
     return (jl_expr_t*)jl_apply(jl_expr_type->fnew, ctor_args, 2);
+}
+
+JL_CALLABLE(jl_is)
+{
+    JL_NARGS(is, 2, 2);
+    if (args[0] == args[1])
+        return jl_true;
+    return jl_false;
+}
+
+JL_CALLABLE(jl_isnull)
+{
+    JL_NARGS(isnull, 1, 1);
+    if (args[0] == jl_null)
+        return jl_true;
+    return jl_false;
+}
+
+JL_CALLABLE(jl_typeof)
+{
+    JL_NARGS(typeof, 1, 1);
+    return jl_full_type(args[0]);
 }
