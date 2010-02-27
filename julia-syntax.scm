@@ -511,6 +511,12 @@
       (cons `(call numel ,(car expr)) (compute-dims (cdr expr))))
 )
 
+
+;;TODO: With your use of "subst", you have to be careful about the heads of
+;;expressions. The head is special and you don't want to substitute
+;;it. e.g. a (ref ...) expression's head should not change if the user
+;;happens to have a variable called "ref".
+
 ;; substitute every occurence of x with y in expr
 (define (subst x y expr)
   (if (atom? expr)
