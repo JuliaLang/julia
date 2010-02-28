@@ -168,7 +168,7 @@ ref(a::Array, I::Array) = [ a[i] | (i=I) ]
 numel(a::Array) = a.data.length
 length[T](v::Array[T,1]) = v.data.length
 length[T](v::Array[T,2]) = v.data.length
-zeros(sz...) = a = make_array(sz...)
+zeros(sz...) = make_array(sz...)
 ones(m::Size) = [ 1 | (i=1:m) ]
 ones(m::Size, n::Size) = [ 1 | (i=1:m), (j=1:n) ]
 ones(m::Size, n::Size, o::Size) = [ 1 | (i=1:m), (j=1:n), (k=1:o) ]
