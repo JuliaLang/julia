@@ -13,6 +13,8 @@ end
 
 length(b::Buffer) = b.length
 
+buffer() = Buffer[Any].new(0)
+
 function buffer[T](elts::T...)
     b = Buffer[T].new(length(elts))
     for i = 1:length(elts)
@@ -25,23 +27,6 @@ end
 start(b::Buffer) = 1
 done(b::Buffer, i) = (i > b.length)
 next(b::Buffer, i) = (b[i], i+1)
-
-macro def_reduce_op(op)
-    `function ($op)(b::Buffer)
-        m = b[1];
-        for i = 2:b.length
-            m = ($op)(m, b[i])
-        end
-        return m
-    end
-end
-
-def_reduce_op(max)
-def_reduce_op(min)
-def_reduce_op(sum)
-def_reduce_op(prod)
-def_reduce_op(any)
-def_reduce_op(all)
 
 function apply_op(op::Function, b1::Buffer, b2::Buffer)
     n = length(b1) > length(b2) ? length(b1) : length(b2)

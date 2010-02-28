@@ -184,19 +184,6 @@ rand(m::Size, n::Size) = [ rand() | (i=1:m), (j=1:n) ]
 transpose[T](x::Array[T,2]) = [ x[j,i] | (i=1:x.dims[2]), (j=1:x.dims[1]) ]
 ctranspose[T](x::Array[T,2]) = [ conj(x[j,i]) | (i=1:x.dims[2]), (j=1:x.dims[1]) ]
 
-macro def_reduce_op(op)
-    `begin
-        ($op)(a::Array) = ($op)(a.data)
-    end
-end
-
-def_reduce_op(max)
-def_reduce_op(min)
-def_reduce_op(sum)
-def_reduce_op(prod)
-def_reduce_op(any)
-def_reduce_op(all)
-
 function hcat[T](elts::T...)
     n = length(elts)
     if n == 0
@@ -224,7 +211,7 @@ function compute_dims(r...)
     end
 end
 
-# iterating over vectors
-start(v::Vector) = 1
-done(v::Vector, i) = (i > numel(v))
-next(v::Vector, i) = (v[i], i+1)
+# iterate arrays by iterating data
+start(a::Array) = start(a.data)
+next(a::Array,i) = next(a.data,i)
+done(a::Array,i) = done(a.data,i)

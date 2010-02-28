@@ -38,3 +38,20 @@ macro def_compare_ops(bigtype, smallertypes, lt, eq)
         ==(y::Union($(st...)), x::($bt)) = (convert(y,$bt) == x)
      end
 end
+
+macro def_reduce_op(op,init)
+    `function ($op)(itr)
+        v = $init
+        for x = itr
+            v = ($op)(v,x)
+        end
+        return v
+    end
+end
+
+def_reduce_op(max,-1/0)
+def_reduce_op(min,+1/0)
+def_reduce_op(sum,0)
+def_reduce_op(prod,1)
+def_reduce_op(any,false)
+def_reduce_op(all,true)
