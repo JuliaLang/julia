@@ -39,19 +39,30 @@ macro def_compare_ops(bigtype, smallertypes, lt, eq)
      end
 end
 
-macro def_reduce_op(op,init)
-    `function ($op)(itr)
-        v = $init
-        for x = itr
-            v = ($op)(v,x)
+max() = -Inf
+min() = +Inf
+sum() = 0
+prod() = 1
+any() = false
+all() = true
+
+macro def_reduce_op(op)
+    `begin
+        ($op)(x::Scalar) = x
+        function ($op)(itr)
+            v = ($op)()
+            for x = itr
+                v = ($op)(v,x)
+            end
+            return v
         end
-        return v
+        ($op)(x, rest...) = ($op)(($op)(x), ($op)(rest...))
     end
 end
 
-def_reduce_op(max,-1/0)
-def_reduce_op(min,+1/0)
-def_reduce_op(sum,0)
-def_reduce_op(prod,1)
-def_reduce_op(any,false)
-def_reduce_op(all,true)
+def_reduce_op(max)
+def_reduce_op(min)
+def_reduce_op(sum)
+def_reduce_op(prod)
+def_reduce_op(any)
+def_reduce_op(all)

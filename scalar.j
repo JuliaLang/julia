@@ -12,10 +12,3 @@ sum(x::Scalar, y::Scalar) = x + y
 prod(x::Scalar, y::Scalar) = x * y
 all(x::Scalar, y::Scalar) = x && y ? true : false
 any(x::Scalar, y::Scalar) = x || y ? true : false
-
-max(xs::Scalar...) = max(xs)
-min(xs::Scalar...) = min(xs)
-sum(xs::Scalar...) = sum(xs)
-prod(xs::Scalar...) = prod(xs)
-any(xs::Scalar...) = any(xs)
-all(xs::Scalar...) = all(xs)
