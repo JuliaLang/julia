@@ -186,13 +186,7 @@ ctranspose[T](x::Array[T,2]) = [ conj(x[j,i]) | (i=1:x.dims[2]), (j=1:x.dims[1])
 
 macro def_reduce_op(op)
     `begin
-        function ($op)(V::Vector)
-            m = V[1]; 
-            for x=V
-                m = ($op)(m, x)
-            end
-            return m
-        end
+        ($op)(a::Array) = ($op)(a.data)
     end
 end
 
