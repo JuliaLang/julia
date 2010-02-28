@@ -50,15 +50,6 @@ def_compare_ops(Int32, {Int8, Uint8, Int16, Uint16}, lt_int32, eq_int32)
 #>=(x::Int32, y::Int32) = (x>y) || eq_int32(unbox(x),unbox(y))
 #==(x::Int32, y::Int32) = eq_int32(unbox(x),unbox(y))
 
-function gcd(a::Int, b::Int)
-    while b != 0
-        t = b
-        b = a % b
-        a = t
-    end
-    return a
-end
-
 Int64.convert(x::Int8) = int64(x)
 Int64.convert(x::Uint8) = int64(x)
 Int64.convert(x::Int16) = int64(x)
@@ -72,3 +63,11 @@ Int32.convert(x::Uint16) = int32(x)
 Int16.convert(x::Int8) = int16(x)
 Int16.convert(x::Uint8) = int16(x)
 
+function gcd(a::Int, b::Int)
+    while b != 0
+        t = b
+        b = a % b
+        a = t
+    end
+    return a
+end
