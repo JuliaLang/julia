@@ -197,6 +197,8 @@ extern jl_value_t *jl_false;
 
 extern jl_func_type_t *jl_any_func;
 
+extern jl_function_t *jl_print_gf;
+
 #ifdef BITS64
 #define NWORDS(sz) (((sz)+7)>>3)
 #else
@@ -229,6 +231,11 @@ extern jl_func_type_t *jl_any_func;
 #define jl_is_func(v) (jl_is_func_type(jl_typeof(v)))
 #define jl_is_int32(v) (((jl_value_t*)(v))->type == (jl_type_t*)jl_int32_type)
 #define jl_is_bool(v) (((jl_value_t*)(v))->type == (jl_type_t*)jl_bool_type)
+#define jl_is_gf(f)     (((jl_function_t*)(f))->fptr==jl_apply_generic)
+#define jl_gf_mtable(f) ((jl_methtable_t*)(((jl_value_pair_t*)((jl_function_t*)(f))->env)->a))
+
+// get a pointer to the data in a value of bits type
+#define jl_bits_data(v) (&((void**)(v))[1])
 
 static inline int jl_is_seq_type(jl_value_t *v)
 {
@@ -269,6 +276,7 @@ jl_buffer_t *jl_new_buffer(jl_type_t *buf_type, size_t nel);
 jl_buffer_t *jl_cstr_to_buffer(char *str);
 jl_expr_t *jl_expr(jl_sym_t *head, size_t n, ...);
 jl_expr_t *jl_exprn(jl_sym_t *head, size_t n);
+jl_function_t *jl_new_generic_function(jl_sym_t *name);
 jl_value_t *jl_box_int8(int8_t x);
 jl_value_t *jl_box_uint8(uint8_t x);
 jl_value_t *jl_box_int16(int16_t x);
@@ -300,6 +308,7 @@ void jl_too_many_args(char *fname, int max);
 void jl_init_types();
 void jl_init_frontend();
 void jl_shutdown_frontend();
+void jl_init_builtins();
 
 // parsing
 jl_value_t *jl_parse_input_line(char *str);
@@ -314,6 +323,8 @@ jl_value_t *jl_apply(jl_function_t *f, jl_value_t **args, uint32_t nargs)
 {
     return f->fptr(f->env, args, nargs);
 }
+
+JL_CALLABLE(jl_apply_generic);
 
 #define JL_NARGS(fname, min, max)                               \
     if (nargs < min) jl_too_few_args(#fname, min);              \

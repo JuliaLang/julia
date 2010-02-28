@@ -418,7 +418,7 @@ jl_value_t *jl_box_##type(c_type x)                                     \
 {                                                                       \
     jl_value_t *v = newobj((jl_type_t*)jl_##type##_type,                \
                            NWORDS(LLT_ALIGN(sizeof(c_type),sizeof(void*)))); \
-    *(c_type*)(&((void**)v)[1]) = x;                                    \
+    *(c_type*)jl_bits_data(v) = x;                                      \
     return v;                                                           \
 }
 BOX_FUNC(int8,   int8_t)
@@ -437,7 +437,7 @@ BOX_FUNC(float64, double)
 c_type jl_unbox_##j_type(jl_value_t *v)                 \
 {                                                       \
     assert(v->type == (jl_type_t*)jl_##j_type##_type);  \
-    return *(c_type*)(&((void**)v)[1]);                 \
+    return *(c_type*)jl_bits_data(v);                   \
 }
 UNBOX_FUNC(int8,   int8_t)
 UNBOX_FUNC(uint8,  uint8_t)

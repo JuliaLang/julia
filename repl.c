@@ -40,6 +40,7 @@ void julia_init()
     llt_init();
     jl_init_frontend();
     jl_init_types();
+    jl_init_builtins();
 }
 
 static int detect_color()

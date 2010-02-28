@@ -278,9 +278,6 @@ static jl_value_t *add_dummy_type_vars(jl_value_t *t)
     return t;
 }
 
-#define jl_is_gf(f)     (((jl_function_t*)(f))->fptr==jl_apply_generic)
-#define jl_gf_mtable(f) ((jl_methtable_t*)(((jl_value_pair_t*)((jl_function_t*)(f))->env)->a))
-
 void jl_add_method(jl_function_t *gf, jl_tuple_t *types, jl_function_t *meth)
 {
     assert(jl_is_gf(gf));
