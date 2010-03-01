@@ -277,6 +277,7 @@ jl_buffer_t *jl_cstr_to_buffer(char *str);
 jl_expr_t *jl_expr(jl_sym_t *head, size_t n, ...);
 jl_expr_t *jl_exprn(jl_sym_t *head, size_t n);
 jl_function_t *jl_new_generic_function(jl_sym_t *name);
+void jl_add_method(jl_function_t *gf, jl_tuple_t *types, jl_function_t *meth);
 jl_value_t *jl_box_int8(int8_t x);
 jl_value_t *jl_box_uint8(uint8_t x);
 jl_value_t *jl_box_int16(int16_t x);
@@ -313,6 +314,9 @@ void jl_init_builtins();
 // parsing
 jl_value_t *jl_parse_input_line(char *str);
 jl_value_t *jl_parse_file(char *fname);
+
+// some useful functions
+void jl_print(jl_value_t *v);
 
 // for writing julia functions in C
 #define JL_CALLABLE(name) \

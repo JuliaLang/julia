@@ -93,7 +93,10 @@ int main(int argc, char *argv[])
             ios_printf(ios_stdout, "\033[1m\033[36m");
         
         // process input
-        (void)jl_parse_input_line(input);
+        jl_value_t *ast = jl_parse_input_line(input);
+        if (ast != NULL) {
+            jl_print(ast);
+        }
         
         ios_printf(ios_stdout, "\n\n");
     }

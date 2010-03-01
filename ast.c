@@ -121,6 +121,8 @@ static jl_value_t *scm_to_julia(___SCMOBJ e)
 jl_value_t *jl_parse_input_line(char *str)
 {
     ___SCMOBJ e = jl_scm_parse_string(str);
+    if (___BOOLEANP(e) || ___EOFP(e))
+        return NULL;
     syntax_error_check(e);
     
     return scm_to_julia(e);

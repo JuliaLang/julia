@@ -14,7 +14,9 @@
 
 ; return a lambda expression representing a thunk for a top-level expression
 (define (toplevel-expr e)
-  (caddr (cadr (julia-expand `(lambda () ,e)))))
+  (if (or (boolean? e) (eof-object? e))
+      e
+      (caddr (cadr (julia-expand `(lambda () ,e))))))
 
 ; make symbol names easier to access from C by converting to strings
 (define (unsymbol e)
@@ -47,6 +49,6 @@
    x)
  
  (c-define (is-integer x) (scheme-object) int "jl_scm_integerp" ""
-   (if (integer? x) 1 0))
+   (if (not (flonum? x)) 1 0))
  
  )

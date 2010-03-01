@@ -93,14 +93,23 @@ jl_function_t *jl_print_gf;
 
 ios_t *current_output_stream;  // TODO: thread-local
 
+static void call_print(jl_value_t *v)
+{
+    jl_apply(jl_print_gf, &v, 1);
+}
+
+void jl_print(jl_value_t *v)
+{
+    call_print(v);
+}
+
 static void print_tuple(jl_tuple_t *t, char opn, char cls)
 {
     ios_t *s = current_output_stream;
     ios_putc(opn, s);
     size_t i, n=t->length;
     for(i=0; i < n; i++) {
-        jl_value_t *elt = jl_tupleref(t, i);
-        jl_apply(jl_print_gf, &elt, 1);
+        call_print(jl_tupleref(t, i));
         if (i < n-1)
             ios_write(s, ", ", 2);
         else if (n == 1)
@@ -116,9 +125,9 @@ static void print_type(jl_value_t *t)
         ios_puts("Tensor[Scalar, 0]", s);
     }
     else if (jl_is_func_type(t)) {
-        jl_apply(jl_print_gf, &((jl_func_type_t*)t)->from, 1);
+        call_print(((jl_func_type_t*)t)->from);
         ios_write(s, "-->", 3);
-        jl_apply(jl_print_gf, &((jl_func_type_t*)t)->to, 1);
+        call_print(((jl_func_type_t*)t)->to);
     }
     else if (jl_is_union_type(t)) {
         ios_write(s, "Union", 5);
@@ -132,11 +141,9 @@ static void print_type(jl_value_t *t)
     }
 }
 
-JL_CALLABLE(jl_f_print_function)
+static void print_function(jl_value_t *v)
 {
-    JL_NARGS(print, 1, 1);
     ios_t *s = current_output_stream;
-    jl_value_t *v = args[0];
     if (jl_is_gf(v)) {
         ios_puts("#<generic-function ", s);
         ios_puts(((jl_sym_t*)((jl_value_pair_t*)((jl_function_t*)v)->env)->b)->name, s);
@@ -145,17 +152,158 @@ JL_CALLABLE(jl_f_print_function)
     else {
         ios_puts("#<closure>", s);
     }
-    return (jl_value_t*)jl_null;
 }
 
 static void print_int(void *data, int nbits)
 {
     ios_t *s = current_output_stream;
+    switch (nbits) {
+    case 8:
+        ios_printf(s, "%hhd", *(int8_t*)data);
+        break;
+    case 16:
+        ios_printf(s, "%hd", *(int16_t*)data);
+        break;
+    case 32:
+        ios_printf(s, "%d", *(int32_t*)data);
+        break;
+    case 64:
+        ios_printf(s, "%lld", *(int64_t*)data);
+        break;
+    default:
+        jl_error("print: unsupported integer size");
+    }
 }
 
-// print float
-// print bool
-// print buffer
+static void print_uint(void *data, int nbits)
+{
+    ios_t *s = current_output_stream;
+    switch (nbits) {
+    case 8:
+        ios_printf(s, "%hhu", *(int8_t*)data);
+        break;
+    case 16:
+        ios_printf(s, "%hu", *(int16_t*)data);
+        break;
+    case 32:
+        ios_printf(s, "%u", *(int32_t*)data);
+        break;
+    case 64:
+        ios_printf(s, "%llu", *(int64_t*)data);
+        break;
+    default:
+        jl_error("print: unsupported integer size");
+    }
+}
+
+static void print_float64(double d, int single)
+{
+    ios_t *s = current_output_stream;
+    char buf[64];
+    int ndec = single ? 8 : 16;
+    if (!DFINITE(d)) {
+        char *rep;
+        if (isnan(d))
+            rep = sign_bit(d) ? "-NaN" : "+NaN";
+        else
+            rep = sign_bit(d) ? "-Inf" : "+Inf";
+        if (single)
+            ios_printf(s, "float32(%s)", rep);
+        else
+            ios_puts(rep, s);
+    }
+    else if (d == 0) {
+        if (1/d < 0)
+            ios_puts("-0.0", s);
+        else
+            ios_puts("0.0", s);
+    }
+    else {
+        snprint_real(buf, sizeof(buf), d, 0, ndec, 3, 10);
+        int hasdec = (strpbrk(buf, ".eE") != NULL);
+        ios_puts(buf, s);
+        if (!hasdec) ios_puts(".0", s);
+    }
+}
+
+JL_CALLABLE(jl_f_print_bool)
+{
+    ios_t *s = current_output_stream;
+    if (*(int32_t*)jl_bits_data(args[0]) == 0)
+        ios_puts("false", s);
+    else
+        ios_puts("true", s);
+    return (jl_value_t*)jl_null;
+}
+
+JL_CALLABLE(jl_f_print_float32)
+{
+    print_float64((double)*(float*)jl_bits_data(args[0]), 1);
+    return (jl_value_t*)jl_null;
+}
+
+JL_CALLABLE(jl_f_print_float64)
+{
+    print_float64(*(double*)jl_bits_data(args[0]), 0);
+    return (jl_value_t*)jl_null;
+}
+
+#define INT_PRINT_FUNC(sgn,nb)                  \
+JL_CALLABLE(jl_f_print_##sgn##nb)               \
+{                                               \
+    print_##sgn(jl_bits_data(args[0]), nb);     \
+    return (jl_value_t*)jl_null;                \
+}
+
+INT_PRINT_FUNC(int,8)
+INT_PRINT_FUNC(uint,8)
+INT_PRINT_FUNC(int,16)
+INT_PRINT_FUNC(uint,16)
+INT_PRINT_FUNC(int,32)
+INT_PRINT_FUNC(uint,32)
+INT_PRINT_FUNC(int,64)
+INT_PRINT_FUNC(uint,64)
+
+JL_CALLABLE(jl_f_print_symbol)
+{
+    ios_t *s = current_output_stream;
+    ios_puts(((jl_sym_t*)args[0])->name, s);
+    return (jl_value_t*)jl_null;
+}
+
+JL_CALLABLE(jl_f_print_typename)
+{
+    jl_print(((jl_typename_t*)args[0])->name);
+    return (jl_value_t*)jl_null;
+}
+
+JL_CALLABLE(jl_f_print_typevar)
+{
+    jl_print(((jl_tvar_t*)args[0])->name);
+    return (jl_value_t*)jl_null;
+}
+
+JL_CALLABLE(jl_f_print_buffer)
+{
+    ios_t *s = current_output_stream;
+    jl_buffer_t *b = (jl_buffer_t*)args[0];
+
+    ios_puts("buffer(", s);
+    if (jl_typeof(b) == jl_buffer_any_type) {
+        size_t i, n=b->length;
+        for(i=0; i < n; i++) {
+            jl_print(((jl_value_t**)b->data)[i]);
+            if (i < n-1)
+                ios_write(s, ", ", 2);
+        }
+    }
+    else {
+        // TODO
+    }
+    ios_putc(')', s);
+
+    return (jl_value_t*)jl_null;
+}
 
 JL_CALLABLE(jl_f_print_any)
 {
@@ -169,10 +317,13 @@ JL_CALLABLE(jl_f_print_any)
     else if (jl_is_type(v)) {
         print_type(v);
     }
+    else if (jl_is_func(v)) {
+        print_function(v);
+    }
     else {
         jl_value_t *t = (jl_value_t*)jl_typeof(v);
         if (jl_is_bits_type(t)) {
-            print_int(jl_bits_data(v), ((jl_bits_type_t*)t)->nbits);
+            print_uint(jl_bits_data(v), ((jl_bits_type_t*)t)->nbits);
         }
         else {
             assert(jl_is_struct_type(t));
@@ -184,7 +335,7 @@ JL_CALLABLE(jl_f_print_any)
             for(i=0; i < n; i++) {
                 ios_puts(((jl_sym_t*)jl_tupleref(st->names,i))->name, s);
                 ios_putc('=', s);
-                jl_apply(jl_print_gf, &((jl_value_t**)v)[i+1], 1);
+                call_print(((jl_value_t**)v)[i+1]);
                 if (i < n-1)
                     ios_write(s, ", ", 2);
             }
@@ -194,7 +345,31 @@ JL_CALLABLE(jl_f_print_any)
     return (jl_value_t*)jl_null;
 }
 
+static void add_builtin_method1(jl_function_t *gf, jl_type_t *t, jl_fptr_t f)
+{
+    jl_add_method(gf, jl_tuple(1, t), jl_new_closure(f, NULL));
+}
+
 void jl_init_builtins()
 {
     jl_print_gf = jl_new_generic_function(jl_symbol("print"));
+
+    add_builtin_method1(jl_print_gf, jl_any_type,     jl_f_print_any);
+    add_builtin_method1(jl_print_gf, jl_sym_type,     jl_f_print_symbol);
+    add_builtin_method1(jl_print_gf, jl_typename_type,jl_f_print_typename);
+    add_builtin_method1(jl_print_gf, jl_tvar_type,    jl_f_print_typevar);
+    add_builtin_method1(jl_print_gf, jl_buffer_type,  jl_f_print_buffer);
+    add_builtin_method1(jl_print_gf, jl_float32_type, jl_f_print_float32);
+    add_builtin_method1(jl_print_gf, jl_float64_type, jl_f_print_float64);
+    add_builtin_method1(jl_print_gf, jl_int8_type,    jl_f_print_int8);
+    add_builtin_method1(jl_print_gf, jl_uint8_type,   jl_f_print_uint8);
+    add_builtin_method1(jl_print_gf, jl_int16_type,   jl_f_print_int16);
+    add_builtin_method1(jl_print_gf, jl_uint16_type,  jl_f_print_uint16);
+    add_builtin_method1(jl_print_gf, jl_int32_type,   jl_f_print_int32);
+    add_builtin_method1(jl_print_gf, jl_uint32_type,  jl_f_print_uint32);
+    add_builtin_method1(jl_print_gf, jl_int64_type,   jl_f_print_int64);
+    add_builtin_method1(jl_print_gf, jl_uint64_type,  jl_f_print_uint64);
+    add_builtin_method1(jl_print_gf, jl_bool_type,    jl_f_print_bool);
+
+    current_output_stream = ios_stdout;
 }

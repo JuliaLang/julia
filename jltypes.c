@@ -816,13 +816,14 @@ int jl_subtype(jl_value_t *a, jl_value_t *b, int ta, int tb)
         return 0;
     }
 
-    if (jl_is_tuple(a)) return 0;
-    assert(!ta && !tb);
+    if (b == jl_any_type) return 1;
     if (a == b) return 1;
     if (jl_is_typevar(b)) return 1;
     if (jl_is_typevar(a)) return 0;
-    if (b == jl_any_type) return 1;
     if (a == jl_any_type) return 0;
+    if (jl_is_tuple(a)) return 0;
+    assert(!ta && !tb);
+
     if (jl_is_int32(a) && jl_is_int32(b))
         return (jl_unbox_int32(a)==jl_unbox_int32(b));
 
@@ -914,7 +915,7 @@ static jl_value_pair_t *type_conform_(jl_type_t *child, jl_type_t *parent,
     }
     if (child == parent) return env;
     if (parent == (jl_type_t*)jl_any_type) return env;
-    if (child  == (jl_type_t*)jl_any_type) return env;
+    if (child  == (jl_type_t*)jl_any_type) return NULL;
 
     if (jl_is_union_type(child)) {
         jl_tuple_t *t = ((jl_uniontype_t*)child)->types;
