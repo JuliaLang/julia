@@ -63,3 +63,8 @@ function (+)(x1, x2, xs...)
     end
     accum
 end
+
+# iterating over tuples
+start(t::Tuple) = 1
+done(t::Tuple, i) = (i > length(t))
+next(t::Tuple, i) = (t[i], i+1)

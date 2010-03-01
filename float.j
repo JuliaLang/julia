@@ -27,3 +27,6 @@ Float64.convert(x::Int16) = float64(x)
 Float64.convert(x::Uint16) = float64(x)
 Float64.convert(x::Int32) = float64(x)
 Float64.convert(x::Uint32) = float64(x)
+
+Inf = 1/0
+NaN = 0/0
