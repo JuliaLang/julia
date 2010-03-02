@@ -216,22 +216,20 @@ extern jl_function_t *jl_print_gf;
 #define jl_typeof(v) (((jl_value_t*)(v))->type)
 #define jl_typeis(v,t) (jl_typeof(v)==(jl_type_t*)(t))
 
-#define jl_is_null(v) (((jl_value_t*)(v)) == ((jl_value_t*)jl_null))
-
+#define jl_is_null(v)        (((jl_value_t*)(v)) == ((jl_value_t*)jl_null))
 #define jl_is_tuple(v)       jl_typeis(v,jl_tuple_type)
-
 #define jl_is_tag_type(v)    jl_typeis(v,jl_tag_kind)
 #define jl_is_bits_type(v)   jl_typeis(v,jl_bits_kind)
 #define jl_is_struct_type(v) jl_typeis(v,jl_struct_kind)
 #define jl_is_func_type(v)   jl_typeis(v,jl_func_kind)
 #define jl_is_union_type(v)  jl_typeis(v,jl_union_kind)
+#define jl_is_typevar(v)     jl_typeis(v,jl_tvar_type)
+#define jl_is_typector(v)    jl_typeis(v,jl_typector_type)
+#define jl_is_int32(v)       jl_typeis(v,jl_int32_type)
+#define jl_is_bool(v)        jl_typeis(v,jl_bool_type)
+#define jl_is_func(v)        (jl_is_func_type(jl_typeof(v)))
+#define jl_is_gf(f)          (((jl_function_t*)(f))->fptr==jl_apply_generic)
 
-#define jl_is_typevar(v)  (((jl_value_t*)(v))->type==(jl_type_t*)jl_tvar_type)
-#define jl_is_typector(v) (((jl_value_t*)(v))->type==(jl_type_t*)jl_typector_type)
-#define jl_is_func(v) (jl_is_func_type(jl_typeof(v)))
-#define jl_is_int32(v) (((jl_value_t*)(v))->type == (jl_type_t*)jl_int32_type)
-#define jl_is_bool(v) (((jl_value_t*)(v))->type == (jl_type_t*)jl_bool_type)
-#define jl_is_gf(f)     (((jl_function_t*)(f))->fptr==jl_apply_generic)
 #define jl_gf_mtable(f) ((jl_methtable_t*)(((jl_value_pair_t*)((jl_function_t*)(f))->env)->a))
 
 // get a pointer to the data in a value of bits type
