@@ -226,4 +226,6 @@ end
 
 (assert (equal?
 	 '(lambda ((|::| x Int8)) (scope-block x))
-	 (pattern-expand patterns (julia-parse "x::Int8->x"))))
+	 (pattern-expand patterns
+	  (pattern-expand binding-form-patterns
+			  (julia-parse "x::Int8->x")))))

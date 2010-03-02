@@ -134,9 +134,11 @@
   (let ((argl (fsig-to-lambda-list argl)))
     (gf-def-expr-
      name argl
-     `(call (lambda ,sparams
-	      (tuple ,@(llist-types argl)))
-	    ,@(symbols->typevars sparams))
+     (if (null? sparams)
+	 `(tuple ,@(llist-types argl))
+	 `(call (lambda ,sparams
+		  (tuple ,@(llist-types argl)))
+		,@(symbols->typevars sparams)))
      body)))
 
 (define (struct-def-expr name params super fields)
@@ -237,6 +239,32 @@
 (define dotdotdotpattern (pattern-lambda (... a)
 					 `(call (top ref) ... ,a)))
 
+; patterns that introduce lambdas
+(define binding-form-patterns
+  (list
+   ; function with static parameters
+   (pattern-lambda (function (call (ref name . sparams) . argl) body)
+		   (generic-function-def-expr name sparams argl body))
+
+   ; function definition
+   (pattern-lambda (function (call name . argl) body)
+		   (generic-function-def-expr name '() argl body))
+
+   ; expression form function definition
+   (pattern-lambda (= (call (ref name . sparams) . argl) body)
+		   `(function (call (ref ,name . ,sparams) . ,argl) ,body))
+   (pattern-lambda (= (call name . argl) body)
+		   `(function (call ,name ,@argl) ,body))
+
+   (pattern-lambda (-> a b)
+		   (let ((a (if (and (pair? a)
+				     (eq? (car a) 'tuple))
+				(cdr a)
+				(list a))))
+					; TODO: anonymous generic function
+		     (function-expr a b)))
+   )) ; binding-form-patterns
+
 (define patterns
   (list
    (pattern-lambda (--> a b)
@@ -306,28 +334,6 @@
 
    (pattern-lambda (list . elts)
 		   `(call list ,@elts))
-
-   ; function with static parameters
-   (pattern-lambda (function (call (ref name . sparams) . argl) body)
-		   (generic-function-def-expr name sparams argl body))
-
-   ; function definition
-   (pattern-lambda (function (call name . argl) body)
-		   (generic-function-def-expr name '() argl body))
-
-   ; expression form function definition
-   (pattern-lambda (= (call (ref name . sparams) . argl) body)
-		   `(function (call (ref ,name . ,sparams) . ,argl) ,body))
-   (pattern-lambda (= (call name . argl) body)
-		   `(function (call ,name ,@argl) ,body))
-
-   (pattern-lambda (-> a b)
-		   (let ((a (if (and (pair? a)
-				     (eq? (car a) 'tuple))
-				(cdr a)
-				(list a))))
-					; TODO: anonymous generic function
-		     (function-expr a b)))
 
    ; call with splat
    (pattern-lambda (call f ... (... _) ...)
@@ -960,7 +966,12 @@ So far only the second case can actually occur.
 				 (member-p vi (cdr env)
 					   (lambda (v e) (eq? (cdr v) e))))
 			       (cdr rec))))
+	   (for-each (lambda (decl)
+		       (vinfo:set-type! (var-info-for (decl-var decl) vi)
+					(decl-type decl)))
+		     (lam:args e))
 	   (cons `(lambda ,(lam:args e)
+		   ;(var-info  locals  vinfos  captured         staticparams)
 		    (var-info ,(caddr e) ,vi ,(map car (cdr rec)) ())
 		    ,(car rec))
 		 cv)))
@@ -1159,4 +1170,5 @@ So far only the second case can actually occur.
 	(pattern-expand patterns
 	 (pattern-expand lower-comprehensions
 	  (pattern-expand identify-comprehensions
-			  ex))))))))))
+	   (pattern-expand binding-form-patterns
+			   ex)))))))))))
