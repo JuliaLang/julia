@@ -205,8 +205,13 @@ extern jl_function_t *jl_print_gf;
 #define NWORDS(sz) (((sz)+3)>>2)
 #endif
 
+#ifndef NO_BOEHM_GC
 #define allocb(nb)    GC_MALLOC(nb)
 #define alloc_pod(nb) GC_MALLOC_ATOMIC(nb)
+#else
+#define allocb(nb)    malloc(nb)
+#define alloc_pod(nb) malloc(nb)
+#endif
 
 #define jl_tupleref(t,i) (((jl_value_t**)(t))[2+(i)])
 #define jl_tupleset(t,i,x) ((((jl_value_t**)(t))[2+(i)])=(x))
