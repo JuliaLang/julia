@@ -1,9 +1,9 @@
 OS=$(shell uname)
 
 all:
-	make -f Makefile.$(OS)
+	$(MAKE) -f Makefile.$(OS)
 
 clean:
-	make -f Makefile.$(OS) clean
+	$(MAKE) -f Makefile.$(OS) clean
 	rm -f *~ *#
 	rm -f lib/*.do lib/*.o lib/*.a

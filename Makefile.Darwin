@@ -32,7 +32,7 @@ jlfrontend_.c: jlfrontend.c
 	gambit-gsc -link -o $@ $<
 
 $(LLT):
-	cd $(LLTDIR) && make -f Makefile.$(shell uname)
+	cd $(LLTDIR) && $(MAKE) -f Makefile.$(shell uname)
 
 debug: $(DOBJS) $(LIBFILES)
 	$(CC) $(DEBUGFLAGS) $(DOBJS) -o $(EXENAME) $(LIBS)
