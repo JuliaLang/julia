@@ -15,8 +15,8 @@ FLAGS = -falign-functions -Wall -Wno-strict-aliasing -I$(LLTDIR) $(HFILEDIRS:%=-
 LIBFILES = $(LLT) $(GAMBIT)/lib/gambit-c/libgambc.a
 LIBS = $(LIBFILES) -lutil -ldl -lm -lgc -framework ApplicationServices
 
-DEBUGFLAGS = -g -DDEBUG $(FLAGS)
-SHIPFLAGS = -O2 -DNDEBUG $(FLAGS)
+DEBUGFLAGS = -g -DDEBUG $(FLAGS) -DNO_BOEHM_GC
+SHIPFLAGS = -O2 -DNDEBUG $(FLAGS) -DNO_BOEHM_GC
 
 default: debug
 
