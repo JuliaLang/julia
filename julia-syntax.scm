@@ -263,18 +263,6 @@
 				(list a))))
 					; TODO: anonymous generic function
 		     (function-expr a b)))
-   )) ; binding-form-patterns
-
-(define patterns
-  (list
-   (pattern-lambda (--> a b)
-		   `(call ref Function ,a ,b))
-
-   (pattern-lambda (|.| a b)
-		   `(call (top getfield) ,a (quote ,b)))
-
-   (pattern-lambda (= (|.| a b) rhs)
-		   `(call (top setfield) ,a (quote ,b) ,rhs))
 
    ; type definition
    (pattern-lambda (struct (-- name (-s)) (block . fields))
@@ -291,6 +279,19 @@
 				       (-/ |<:|) super)
 			   (block . fields))
 		   (struct-def-expr name params super fields))
+
+   )) ; binding-form-patterns
+
+(define patterns
+  (list
+   (pattern-lambda (--> a b)
+		   `(call ref Function ,a ,b))
+
+   (pattern-lambda (|.| a b)
+		   `(call (top getfield) ,a (quote ,b)))
+
+   (pattern-lambda (= (|.| a b) rhs)
+		   `(call (top setfield) ,a (quote ,b) ,rhs))
 
    (pattern-lambda (type (-- name (-s)))
 		   (type-def-expr name '() 'Any))
