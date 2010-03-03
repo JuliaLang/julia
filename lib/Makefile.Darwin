@@ -11,11 +11,11 @@ TARGET = libllt.a
 # architecture flags: __CPU__=xxx, BITS64, ARCH_X86, ARCH_X86_64
 CONFIG = -DMACOSX -DARCH_X86 -D__CPU__=586
 
-FLAGS = -Wall -Wno-strict-aliasing $(CFLAGS) $(CONFIG)
+FLAGS = -Wall -Wno-strict-aliasing $(CFLAGS) $(CONFIG) -DNO_BOEHM_GC
 LIBS =
 
-DEBUGFLAGS = -g -DDEBUG $(FLAGS) -DNO_BOEHM_GC
-SHIPFLAGS = -O3 -DNDEBUG $(FLAGS) -DNO_BOEHM_GC
+DEBUGFLAGS = -g -DDEBUG $(FLAGS)
+SHIPFLAGS = -O3 -DNDEBUG $(FLAGS)
 
 default: release
 
