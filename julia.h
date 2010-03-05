@@ -1,6 +1,9 @@
 #ifndef _JULIA_H_
 #define _JULIA_H_
 
+#include "htable.h"
+#include "arraylist.h"
+
 #define JL_VALUE_STRUCT \
     struct _jl_type_t *type;
 
@@ -121,8 +124,8 @@ typedef struct _jl_module_t {
     // not first-class
     jl_sym_t *name;
     htable_t bindings;
-    int nimports;
-    struct _jl_module_t **imports;
+    htable_t modules;
+    arraylist_t imports;
 } jl_module_t;
 
 typedef struct _jl_value_pair_t {
@@ -313,6 +316,7 @@ void jl_init_types();
 void jl_init_frontend();
 void jl_shutdown_frontend();
 void jl_init_builtins();
+void jl_init_modules();
 
 // parsing
 jl_value_t *jl_parse_input_line(char *str);
@@ -320,6 +324,17 @@ jl_value_t *jl_parse_file(char *fname);
 
 // some useful functions
 void jl_print(jl_value_t *v);
+
+// modules
+extern jl_module_t *jl_system_module;
+extern jl_module_t *jl_user_module;
+jl_module_t *jl_new_module(jl_sym_t *name);
+jl_binding_t *jl_get_binding(jl_module_t *m, jl_sym_t *var);
+jl_binding_t *jl_add_binding(jl_module_t *m, jl_sym_t *var);
+int jl_boundp(jl_module_t *m, jl_sym_t *var);
+jl_module_t *jl_add_module(jl_module_t *m, jl_module_t *child);
+jl_module_t *jl_get_module(jl_module_t *m, jl_sym_t *name);
+jl_module_t *jl_import_module(jl_module_t *to, jl_module_t *from);
 
 // for writing julia functions in C
 #define JL_CALLABLE(name) \
