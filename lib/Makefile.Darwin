@@ -11,7 +11,7 @@ TARGET = libllt.a
 # architecture flags: __CPU__=xxx, BITS64, ARCH_X86, ARCH_X86_64
 CONFIG = -DMACOSX -DARCH_X86 -D__CPU__=586
 
-FLAGS = -Wall -Wno-strict-aliasing $(CFLAGS) $(CONFIG) -DNO_BOEHM_GC
+FLAGS = -Wall -Wno-strict-aliasing $(CFLAGS) $(CONFIG)
 LIBS =
 
 DEBUGFLAGS = -g -DDEBUG $(FLAGS)

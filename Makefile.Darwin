@@ -12,7 +12,7 @@ GAMBIT = /opt/local
 HFILEDIRS = /opt/local/include $(GAMBIT)/include
 LIBDIRS = /opt/local/lib
 
-FLAGS = -falign-functions -Wall -Wno-strict-aliasing -I$(LLTDIR) $(HFILEDIRS:%=-I%) $(LIBDIRS:%=-L%) $(CFLAGS) -D___LIBRARY -DNO_BOEHM_GC
+FLAGS = -falign-functions -Wall -Wno-strict-aliasing -I$(LLTDIR) $(HFILEDIRS:%=-I%) $(LIBDIRS:%=-L%) $(CFLAGS) -D___LIBRARY
 LIBFILES = $(LLT) $(GAMBIT)/lib/gambit-c/libgambc.a
 LIBS = $(LIBFILES) -lutil -ldl -lm -lgc -framework ApplicationServices
 
