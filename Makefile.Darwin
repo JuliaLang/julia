@@ -26,7 +26,7 @@ default: debug
 %.do: %.c
 	$(CC) $(DEBUGFLAGS) -c $< -o $@
 
-jlfrontend.c: jlfrontend.scm
+jlfrontend.c: jlfrontend.scm julia-parser.scm julia-syntax.scm
 	gambit-gsc -c $<
 
 jlfrontend_.c: jlfrontend.c
