@@ -1090,7 +1090,8 @@ So far only the second case can actually occur.
     (define (make-label)   (gensym))
     (define (mark-label l) (emit `(label ,l)))
     (define (compile e break-labels)
-      (if (atom? e) #f  ; atom has no effect
+      (if (or (atom? e) (equal? e '(null)))
+	  #f  ; atom has no effect
 	  (case (car e)
 	    ((if) (let ((elsel (make-label))
 			(endl  (make-label)))
@@ -1172,6 +1173,6 @@ So far only the second case can actually occur.
        (expand-and-or
 	(pattern-expand patterns
 	 (pattern-expand lower-comprehensions
-	  (pattern-expand identify-comprehensions
-	   (pattern-expand binding-form-patterns
+	  (pattern-expand binding-form-patterns
+	   (pattern-expand identify-comprehensions
 			   ex)))))))))))
