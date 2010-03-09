@@ -21,7 +21,7 @@
 ; make symbol names easier to access from C by converting to strings
 (define (unsymbol e)
   (cond ((symbol? e) (symbol->string e))
-	((string? e) `(string ,e))
+	((string? e) `("string" ,e))
 	((atom? e) e)
 	(else (map unsymbol e))))
 

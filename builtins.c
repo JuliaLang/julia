@@ -291,10 +291,26 @@ JL_CALLABLE(jl_f_print_buffer)
     jl_buffer_t *b = (jl_buffer_t*)args[0];
 
     ios_puts("buffer(", s);
-    if (jl_typeof(b) == jl_buffer_any_type) {
+    jl_type_t *el_type = (jl_type_t*)jl_tparam0(jl_typeof(b));
+    if (el_type == jl_any_type) {
         size_t i, n=b->length;
         for(i=0; i < n; i++) {
             jl_print(((jl_value_t**)b->data)[i]);
+            if (i < n-1)
+                ios_write(s, ", ", 2);
+        }
+    }
+    else if (jl_is_bits_type(el_type)) {
+        jl_bits_type_t *bt = (jl_bits_type_t*)el_type;
+        size_t nb = bt->nbits/8;
+        size_t i, n=b->length;
+        jl_value_t *elt =
+            (jl_value_t*)allocb((NWORDS(LLT_ALIGN(nb,sizeof(void*)))+1)*
+                                sizeof(void*));
+        elt->type = el_type;
+        for(i=0; i < n; i++) {
+            memcpy(jl_bits_data(elt), &((char*)b->data)[i*nb], nb);
+            jl_print(elt);
             if (i < n-1)
                 ios_write(s, ", ", 2);
         }

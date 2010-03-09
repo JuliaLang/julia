@@ -469,7 +469,7 @@ TODO:
 
 ;(define (parse-dot s)  (parse-LtoR s parse-atom (prec-ops 12)))
 
-; parse block structures that begin with reserved words
+; parse expressions or blocks introduced by syntactic reserved words
 (define (parse-resword s word)
   (define (expect-end s)
     (let ((t (peek-token s)))
