@@ -92,7 +92,7 @@ static jl_value_t *scm_to_julia(___SCMOBJ e)
             /* tree node types:
                goto  goto-ifnot  label  return
                lambda  call  =  quote
-               null  top  value-or-null  closure-ref
+               null  top  boundp  closure-ref
                body  file  string
             */
             if (!strcmp(s, "string"))

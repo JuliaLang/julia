@@ -861,7 +861,7 @@ TODO:
 (define (j-tuple-ref v i) (if (= i 0) (error "Tuple index out of range")
 			      (tuple-ref v (- i 1))))
 
-(define (j-buffer-length v) (j-unbox (j-get-field v 'length)))
+(define (j-buffer-length v) (j-get-field v 'length))
 
 (define (buffer-data v) (vector-ref v 2))
 
@@ -878,7 +878,10 @@ TODO:
 
 (define (j-is x y) (eq? x y))
 
-(define (j-box type v) (vector type v))
+(define (j-box type . v)
+  (if (null? v)
+      (vector type *julia-unbound*)
+      (vector type (car v))))
 (define (j-unbox v) (vector-ref v 1))
 (define (j-box-set b v) (begin (vector-set! b 1 v) julia-null))
 
@@ -941,14 +944,22 @@ end
       (cons (j-get-field l 'head)
 	    (julialist->scmlist (j-get-field l 'tail)))))
 
+(define *julia-unbound* (vector '*unbound*))
+
 (define (eval-sym s env)
   (let ((a (assq s (car env))))
-    (if a (cdr a)
+    (if a
+	(if (eq? (cdr a) *julia-unbound*)
+	    (error "Undefined variable" s)
+	    (cdr a))
 	(or (table-ref julia-globals s #f)
 	    (error "Undefined variable" s)))))
 
 (define (j-bound? s env)
-  (or (assq s (car env)) (table-ref julia-globals s #f)))
+  (let ((b (assq s (car env))))
+    (if b
+	(not (eq? (cdr b) *julia-unbound*))
+	(table-ref julia-globals s #f))))
 
 (define (j-eval e env)
   (cond ((eq? e 'false)                julia-false)
@@ -962,11 +973,9 @@ end
 	   ((null)    julia-null)
 	   ((top)     (eval-sym (cadr e) *empty-env*))
 	   ((lambda)  e)  ; remaining lambdas are data
-	   ((value-or-null)  ; variable value or null if undefined
-	    (let ((sym (cadr e)))
-	      (if (j-bound? sym env)
-		  (eval-sym sym env)
-		  julia-null)))
+	   ((boundp)      ; check if identifier is bound
+	    (if (j-bound? (cadr e) env)
+		julia-true julia-false))
 	   ((closure-ref) (tuple-ref (cdr env) (cadr e)))
 	   
 	   ((=)
@@ -1023,7 +1032,7 @@ end
 	 (static-parameters (list-ref (car body) 4))
 	 (code (cadr body))
 	 ; env is ((locals...) . closure-env)
-	 (env  (cons (append (map (lambda (local) (cons local julia-null))
+	 (env  (cons (append (map (lambda (local) (cons local *julia-unbound*))
 				  locl)
 			     (bind-args formals args)
 			     static-parameters)
@@ -1143,6 +1152,7 @@ end
 ; some require unboxed arguments, which are tricky to deal with.
 (make-builtin 'bufferref "(Buffer[`T],Int)-->`T" j-buffer-ref)
 (make-builtin 'bufferset "(Buffer[`T],Int,`T)-->`T" j-buffer-set)
+(make-builtin 'bufferlen "(Buffer,)-->Int32" j-buffer-length)
 (make-builtin 'tupleref "(Tuple,Int)-->Any" j-tuple-ref)
 (make-builtin 'tuplelen "(Tuple,)-->Int" tuple-length)
 (make-builtin 'box "(Type,`T)-->`T" j-box)
@@ -1186,16 +1196,15 @@ end
 				args))
 		    (error "Invalid union type"))
 		(make-union-type args)))
+(make-builtin 'new_generic_function "(Symbol,)-->Function"
+	      make-generic-function)
 (make-builtin 'add_method
-	      "(Symbol, Any, Type, Any)-->Function"
-	      (lambda (name gf type meth)
-		(let ((gf (if (eq? gf julia-null)
-			      (make-generic-function name)
-			      gf)))
-		  (if (not (generic-function? gf))
-		      (error "Variable" name "does not name a function")
-		      (add-method-for gf type meth))
-		  gf)))
+	      "(Any, Type, Any)-->Function"
+	      (lambda (gf type meth)
+		(if (not (generic-function? gf))
+		    (error "add_method: not a generic function" (julia->string gf))
+		    (add-method-for gf type meth))
+		gf))
 
 (define (div-int x y)
   (let ((q (/ x y)))

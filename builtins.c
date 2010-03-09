@@ -89,6 +89,31 @@ JL_CALLABLE(jl_f_typeof)
     return jl_full_type(args[0]);
 }
 
+JL_CALLABLE(jl_f_tuple)
+{
+    size_t i;
+    if (nargs == 0) return (jl_value_t*)jl_null;
+    jl_tuple_t *t = jl_alloc_tuple(nargs);
+    for(i=0; i < nargs; i++) {
+        jl_tupleset(t, i, args[i]);
+    }
+    return (jl_value_t*)t;
+}
+
+static size_t field_offset(jl_struct_type_t *t, jl_sym_t *fld)
+{
+    jl_tuple_t *fn = t->names;
+    size_t i;
+    for(i=0; i < fn->length; i++) {
+        if (jl_tupleref(fn,i) == fld)
+            return i;
+    }
+    jl_errorf("Type %s has no field %s", t->name->name->name, fld->name);
+    return 0;
+}
+
+
+
 // --- printing ---
 
 jl_function_t *jl_print_gf;

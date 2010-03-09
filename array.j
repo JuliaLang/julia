@@ -165,9 +165,9 @@ ref(a::Array, I::Array) = [ a[i] | (i=I) ]
 
 
 ## Other functions
-numel(a::Array) = a.data.length
-length[T](v::Array[T,1]) = v.data.length
-length[T](v::Array[T,2]) = v.data.length
+numel(a::Array) = length(a.data)
+length[T](v::Array[T,1]) = length(v.data)
+length[T](v::Array[T,2]) = length(v.data)
 zeros(sz...) = make_array(sz...)
 ones(m::Size) = [ 1 | (i=1:m) ]
 ones(m::Size, n::Size) = [ 1 | (i=1:m), (j=1:n) ]

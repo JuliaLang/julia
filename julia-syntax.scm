@@ -16,7 +16,7 @@
   (and (pair? e)
        (or (eq? (car e) 'quote)
 	   (eq? (car e) 'top)
-	   (eq? (car e) 'value-or-null))))
+	   (eq? (car e) 'boundp))))
 
 (define (lam:args x) (cadr x))
 (define (lam:vars x) (llist-vars (lam:args x)))
@@ -119,16 +119,16 @@
   (map (lambda (x) `(call (top typevar) ',x)) sl))
 
 (define (gf-def-expr- name argl argtypes body)
-  `(= ,name
-      (call (top add_method)
-	    ,(if (symbol? name)
-		 `(quote ,name)
-		 `(quote ,(caddr name)))
-	    ,(if (symbol? name)
-		 `(value-or-null ,name)
-		 name)
-	    ,argtypes
-	    ,(function-expr argl body))))
+  `(block
+    ,(if (symbol? name)
+	 `(if (boundp ,name)
+	      (null)
+	      (= ,name (call (top new_generic_function) (quote ,name))))
+	 `(null))
+    (call (top add_method)
+	  ,name
+	  ,argtypes
+	  ,(function-expr argl body))))
 
 (define (generic-function-def-expr name sparams argl body)
   (let ((argl (fsig-to-lambda-list argl)))
@@ -174,49 +174,51 @@
 	 (tvars       (gensym))
 	 (proto       (gensym)))
      `(call
-       (lambda (,@func-names ,@func-types ,tvars ,proto)
-	 (block
-	  (call
-	   (lambda (,@params)
-	     ; the static parameters are bound to new TypeVars in here,
-	     ; so everything that sees the TypeVars is evaluated here.
-	     (block
-	      (= ,tvars (tuple ,@params))
-	      (= ,proto
-		 (call (top new_struct_type)
-		       (quote ,name)
-		       ,super
-		       ,tvars
-		       (tuple ,@(map (lambda (x) `',x) field-names))))
-	      ; wrap type prototype in a type constructor if ∃ parameters
-	      ,(if (null? params)
-		   `(= ,name ,proto)
-		   `(= ,name (call (top new_type_constructor)
-				   ,tvars ,proto)))
-	      ; now add the type fields, which might reference the type
-	      ; itself. tie the recursive knot.
-	      (call (top new_struct_fields)
-		    ,name (tuple ,@field-types))
-	      ,@(map (lambda (type argl sp)
-		       `(= ,type
-			   (call (lambda ,sp
-				   (tuple ,@(llist-types argl)))
-				 ,@(symbols->typevars sp))))
-		     func-types func-args func-sparms)))
-	   ,@(symbols->typevars params))
-	  ; build method definitions
-	  ,@(map (lambda (fdef fargs ftype)
-		   (gf-def-expr- (f-exp-name fdef)
-				 fargs
-				 ftype
-				 (caddr fdef)))
-		 funcs func-args func-types)
-	  ; assign methods to type fields
-	  ,@(map (lambda (fname)
-		   `(= (|.| ,proto ,fname) ,fname))
-		 func-names)))
-       ,@(map (lambda (x) '(null))
-	      (append '(tvars proto) func-names func-types))))))
+       (lambda ()
+	 (scope-block
+	  (block
+	   (local (tuple ,@func-names ,@func-types ,tvars ,proto))
+	   (call
+	    (lambda (,@params)
+	      ; the static parameters are bound to new TypeVars in here,
+	      ; so everything that sees the TypeVars is evaluated here.
+	      (block
+	       (= ,tvars (tuple ,@params))
+	       (= ,proto
+		  (call (top new_struct_type)
+			(quote ,name)
+			,super
+			,tvars
+			(tuple ,@(map (lambda (x) `',x) field-names))))
+	       ; wrap type prototype in a type constructor if ∃ parameters
+	       ,(if (null? params)
+		    `(= ,name ,proto)
+		    `(= ,name (call (top new_type_constructor)
+				    ,tvars ,proto)))
+	       ; now add the type fields, which might reference the type
+	       ; itself. tie the recursive knot.
+	       (call (top new_struct_fields)
+		     ,name (tuple ,@field-types))
+	       ,@(map (lambda (type argl sp)
+			`(= ,type
+			    ,(if (null? sp)
+				 `(tuple ,@(llist-types argl))
+				 `(call (lambda ,sp
+					  (tuple ,@(llist-types argl)))
+					,@(symbols->typevars sp)))))
+		      func-types func-args func-sparms)))
+	    ,@(symbols->typevars params))
+	   ; build method definitions
+	   ,@(map (lambda (fdef fargs ftype)
+		    (gf-def-expr- (f-exp-name fdef)
+				  fargs
+				  ftype
+				  (caddr fdef)))
+		  funcs func-args func-types)
+	   ; assign methods to type fields
+	   ,@(map (lambda (fname)
+		    `(= (|.| ,proto ,fname) ,fname))
+		  func-names))))))))
 
 (define (type-def-expr name params super)
   `(block
@@ -1017,7 +1019,7 @@ So far only the second case can actually occur.
 		 ((number? l)    `(call (top unbox) (closure-ref ,l)))
 		 (else e))))
 	((atom? e) e)
-	((eq? (car e) 'value-or-null)
+	((eq? (car e) 'boundp)
 	 (let ((v (closure-convert- (cadr e) vinfo)))
 	   (if (pair? v)
 	       v
@@ -1048,9 +1050,9 @@ So far only the second case can actually occur.
 		     `(block ,@(map (lambda (v)
 				      `(= ,v
 					  (call (top box) (top Any)
-						,(if (memq v args)
-						     v
-						     '(null)))))
+						,@(if (memq v args)
+						      (list v)
+						      '()))))
 				    capt)
 			     ,(closure-convert- body0 vinf))))
 		`(call new_closure

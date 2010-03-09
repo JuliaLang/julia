@@ -90,18 +90,6 @@ jl_value_t *jl_new_struct(jl_struct_type_t *type, ...)
     return jv;
 }
 
-JL_CALLABLE(jl_f_tuple)
-{
-    size_t i;
-    if (nargs == 0) return (jl_value_t*)jl_null;
-    jl_tuple_t *t = (jl_tuple_t*)newobj((jl_type_t*)jl_tuple_type, nargs+1);
-    t->length = nargs;
-    for(i=0; i < nargs; i++) {
-        ((jl_value_t**)t)[i+2] = args[i];
-    }
-    return (jl_value_t*)t;
-}
-
 jl_tuple_t *jl_tuple(size_t n, ...)
 {
     va_list args;

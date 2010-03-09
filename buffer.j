@@ -11,7 +11,7 @@ function set[T](b::Buffer[T], x, i::Index)
     return x
 end
 
-length(b::Buffer) = b.length
+length(b::Buffer) = bufferlen(b)
 
 buffer() = Buffer[Any].new(0)
 
@@ -25,7 +25,7 @@ end
 
 # iterating over buffers
 start(b::Buffer) = 1
-done(b::Buffer, i) = (i > b.length)
+done(b::Buffer, i) = (i > length(b))
 next(b::Buffer, i) = (b[i], i+1)
 
 function apply_op(op::Function, b1::Buffer, b2::Buffer)
