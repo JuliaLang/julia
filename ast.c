@@ -112,10 +112,10 @@ static jl_value_t *scm_to_julia(___SCMOBJ e)
             return (jl_value_t*)ex;
         }
         else {
-            jl_error("Malformed tree");
+            jl_error("malformed tree");
         }
     }
-    jl_error("Malformed tree");
+    jl_error("malformed tree");
     
     return (jl_value_t*)jl_null;
 }

@@ -42,6 +42,12 @@ void jl_too_many_args(char *fname, int max)
     jl_errorf("%s: too many arguments (expected %d)", fname, max);
 }
 
+void jl_type_error(char *fname, char *expected, jl_value_t *got)
+{
+    jl_errorf("type error: %s: expected %s, got %s",
+              fname, expected, jl_tname(jl_typeof(got))->name->name);
+}
+
 /*
   equivalent julia code:
   expr(head, args...) = Expr.new(head, buffer(args...))
@@ -108,11 +114,40 @@ static size_t field_offset(jl_struct_type_t *t, jl_sym_t *fld)
         if (jl_tupleref(fn,i) == fld)
             return i;
     }
-    jl_errorf("Type %s has no field %s", t->name->name->name, fld->name);
+    jl_errorf("type %s has no field %s", t->name->name->name, fld->name);
     return 0;
 }
 
+JL_CALLABLE(jl_f_get_field)
+{
+    JL_NARGS(getfield, 2, 2);
+    JL_TYPECHK(getfield, symbol, args[1]);
+    jl_value_t *v = args[0];
+    if (!jl_is_struct_type(jl_typeof(v)))
+        jl_error("getfield: argument must be a struct");
+    size_t i = field_offset((jl_struct_type_t*)jl_typeof(v),
+                            (jl_sym_t*)args[1]);
+    return ((jl_value_t**)v)[1+i];
+}
 
+JL_CALLABLE(jl_f_tupleref)
+{
+    JL_NARGS(tupleref, 2, 2);
+    JL_TYPECHK(tupleref, tuple, args[0]);
+    JL_TYPECHK(tupleref, int32, args[1]);
+    jl_tuple_t *t = (jl_tuple_t*)args[0];
+    size_t i = jl_unbox_int32(args[1])-1;
+    if (i >= t->length)
+        jl_error("tupleref: index out of range");
+    return jl_tupleref(t, i);
+}
+
+JL_CALLABLE(jl_f_bufferlen)
+{
+    JL_NARGS(bufferlen, 1, 1);
+    JL_TYPECHK(bufferlen, buffer, args[0]);
+    return jl_box_int32(((jl_buffer_t*)args[0])->length);
+}
 
 // --- printing ---
 

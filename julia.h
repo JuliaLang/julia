@@ -170,6 +170,7 @@ extern jl_struct_type_t *jl_bits_kind;
 
 extern jl_type_t *jl_bottom_type;
 extern jl_typector_t *jl_buffer_type;
+extern jl_typename_t *jl_buffer_typename;
 extern jl_typector_t *jl_seq_type;
 extern jl_typector_t *jl_tensor_type;
 extern jl_tag_type_t *jl_scalar_type;
@@ -235,7 +236,9 @@ extern jl_function_t *jl_print_gf;
 #define jl_is_typector(v)    jl_typeis(v,jl_typector_type)
 #define jl_is_int32(v)       jl_typeis(v,jl_int32_type)
 #define jl_is_bool(v)        jl_typeis(v,jl_bool_type)
+#define jl_is_symbol(v)      jl_typeis(v,jl_sym_type)
 #define jl_is_func(v)        (jl_is_func_type(jl_typeof(v)))
+#define jl_is_buffer(v)      (((jl_tag_type_t*)jl_typeof(v))->name==jl_buffer_typename)
 #define jl_is_gf(f)          (((jl_function_t*)(f))->fptr==jl_apply_generic)
 
 #define jl_gf_mtable(f) ((jl_methtable_t*)(((jl_value_pair_t*)((jl_function_t*)(f))->env)->a))
@@ -310,6 +313,7 @@ void jl_error(char *str);
 void jl_errorf(char *fmt, ...);
 void jl_too_few_args(char *fname, int min);
 void jl_too_many_args(char *fname, int max);
+void jl_type_error(char *fname, char *expected, jl_value_t *got);
 
 // initialization functions
 void jl_init_types();
@@ -354,5 +358,10 @@ JL_CALLABLE(jl_apply_generic);
 
 #define JL_NARGSV(fname, min)                           \
     if (nargs < min) jl_too_few_args(#fname, min);
+
+#define JL_TYPECHK(fname, type, v)              \
+    if (!jl_is_##type(v)) {                     \
+        jl_type_error(#fname, #type, (v));      \
+    }
 
 #endif

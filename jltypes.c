@@ -39,6 +39,7 @@ jl_struct_type_t *jl_bits_kind;
 
 jl_type_t *jl_bottom_type;
 jl_typector_t *jl_buffer_type;
+jl_typename_t *jl_buffer_typename;
 jl_typector_t *jl_seq_type;
 jl_typector_t *jl_tensor_type;
 jl_tag_type_t *jl_scalar_type;
@@ -214,9 +215,9 @@ JL_CALLABLE(jl_new_struct_internal)
     jl_struct_type_t *t = (jl_struct_type_t*)env;
     size_t nf = t->names->length;
     if (nargs < nf)
-        jl_error("Too few arguments to constructor");
+        jl_error("too few arguments to constructor");
     else if (nargs > nf)
-        jl_error("Too many arguments to constructor");
+        jl_error("too many arguments to constructor");
     jl_value_t *v = newobj((jl_type_t*)t, nf);
     size_t i;
     for(i=0; i < nargs; i++) {
@@ -466,12 +467,12 @@ JL_CALLABLE(jl_new_buffer_internal)
 {
     jl_struct_type_t *buf_type = (jl_struct_type_t*)env;
     if (nargs != 1)
-        jl_error("Buffer.new: Wrong number of arguments");
+        jl_error("Buffer.new: wrong number of arguments");
     size_t nel=0;
     if (jl_is_int32(args[0]))
         nel = (size_t)jl_unbox_int32(args[0]);
     else
-        jl_error("Bufer.new: Expected integer");
+        jl_error("Bufer.new: expected integer");
     return jl_new_buffer(buf_type, nel);
 }
 
@@ -547,13 +548,13 @@ static jl_type_t *apply_type_ctor_(jl_typector_t *tc, jl_value_t **params,
     for(i=0; i < n; i++) {
         jl_value_t *pi = params[i];
         if (!jl_is_type(pi) && !jl_is_int32(pi) && !jl_is_typevar(pi))
-            jl_errorf("Invalid parameter for type %s", tname);
+            jl_errorf("invalid parameter for type %s", tname);
     }
     jl_tuple_t *tp = tc->parameters;
     if (n < tp->length)
-        jl_errorf("Too few parameters for type %s", tname);
+        jl_errorf("too few parameters for type %s", tname);
     else if (n > tp->length)
-        jl_errorf("Too many parameters for type %s", tname);
+        jl_errorf("too many parameters for type %s", tname);
     jl_value_t **env = alloca(2 * n * sizeof(jl_value_t*));
     for(i=0; i < n; i++) {
         env[i*2+0] = jl_tupleref(tp,i);
@@ -1139,6 +1140,7 @@ void jl_init_types()
     jl_struct_type_t *bufstruct = 
         jl_new_struct_type(jl_symbol("Buffer"),
                            jl_any_type, tv, jl_null, jl_null);
+    jl_buffer_typename = bufstruct->name;
     bufstruct->fnew->fptr = jl_new_buffer_internal;
     jl_buffer_type = jl_new_type_ctor(tv, (jl_type_t*)bufstruct);
 
