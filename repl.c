@@ -82,7 +82,7 @@ int main(int argc, char *argv[])
     while (1) {
         if (have_color)
             ios_printf(ios_stdout, "\033[0m");
-        ios_printf(ios_stdout, "> ");
+        ios_printf(ios_stdout, "julia> ");
         ios_flush(ios_stdout);
         char *input = ios_readline(ios_stdin);
         ios_purge(ios_stdin);
