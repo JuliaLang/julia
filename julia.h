@@ -179,6 +179,10 @@ extern jl_tag_type_t *jl_real_type;
 extern jl_tag_type_t *jl_int_type;
 extern jl_tag_type_t *jl_float_type;
 
+extern jl_typector_t *jl_box_type;
+extern jl_type_t *jl_box_any_type;
+extern jl_typename_t *jl_box_typename;
+
 extern jl_bits_type_t *jl_bool_type;
 extern jl_bits_type_t *jl_int8_type;
 extern jl_bits_type_t *jl_uint8_type;
@@ -238,7 +242,9 @@ extern jl_function_t *jl_print_gf;
 #define jl_is_bool(v)        jl_typeis(v,jl_bool_type)
 #define jl_is_symbol(v)      jl_typeis(v,jl_sym_type)
 #define jl_is_func(v)        (jl_is_func_type(jl_typeof(v)))
+#define jl_is_function(v)    (jl_is_func_type(jl_typeof(v)))
 #define jl_is_buffer(v)      (((jl_tag_type_t*)jl_typeof(v))->name==jl_buffer_typename)
+#define jl_is_box(v)         (((jl_tag_type_t*)jl_typeof(v))->name==jl_box_typename)
 #define jl_is_gf(f)          (((jl_function_t*)(f))->fptr==jl_apply_generic)
 
 #define jl_gf_mtable(f) ((jl_methtable_t*)(((jl_value_pair_t*)((jl_function_t*)(f))->env)->a))

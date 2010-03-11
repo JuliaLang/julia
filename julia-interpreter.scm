@@ -892,7 +892,7 @@ TODO:
 (tuple-set! (vector-ref scalar-type 3) 0 scalar-type)
 
 #|
-function ref(t::Type, params...)
+function ref(t::TypeConstructor, params...)
     return instantiate_type(t, params)
 end
 |#

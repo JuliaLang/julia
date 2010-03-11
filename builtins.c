@@ -97,6 +97,99 @@ JL_CALLABLE(jl_f_typeof)
     return jl_full_type(args[0]);
 }
 
+JL_CALLABLE(jl_f_subtype)
+{
+    JL_NARGS(subtype, 2, 2);
+    return (jl_subtype(args[0],args[1],0,0) ? jl_true : jl_false);
+}
+
+JL_CALLABLE(jl_f_istype)
+{
+    JL_NARGS(istype, 2, 2);
+    if (jl_is_tuple(args[0]))
+        return (jl_subtype(args[0],args[1],1,0) ? jl_true : jl_false);
+    return (jl_subtype(jl_typeof(args[0]),args[1],0,0) ? jl_true : jl_false);
+}
+
+JL_CALLABLE(jl_f_typeassert)
+{
+    JL_NARGS(typeassert, 2, 2);
+    int ok;
+    if (jl_is_tuple(args[0]))
+        ok = (jl_subtype(args[0],args[1],1,0) ? jl_true : jl_false);
+    else
+        ok = (jl_subtype(jl_typeof(args[0]),args[1],0,0) ? jl_true : jl_false);
+    if (!ok)
+        jl_error("type assertion failed");
+    return args[0];
+}
+
+JL_CALLABLE(jl_f_apply)
+{
+    JL_NARGSV(apply, 1);
+    JL_TYPECHK(apply, function, args[0]);
+    if (nargs == 1) {
+        JL_TYPECHK(apply, tuple, args[1]);
+        return jl_apply((jl_function_t*)args[0], &jl_tupleref(args[1],0),
+                        ((jl_tuple_t*)args[1])->length);
+    }
+    size_t n=0, i, j;
+    for(i=1; i < nargs; i++) {
+        JL_TYPECHK(apply, tuple, args[i]);
+        n += ((jl_tuple_t*)args[i])->length;
+    }
+    jl_value_t **newargs = alloca(n * sizeof(jl_value_t*));
+    n = 0;
+    for(i=1; i < nargs; i++) {
+        jl_tuple_t *t = (jl_tuple_t*)args[i];
+        for(j=0; j < t->length; j++)
+            newargs[n++] = jl_tupleref(t, j);
+    }
+    return jl_apply((jl_function_t*)args[0], newargs, n);
+}
+
+JL_CALLABLE(jl_f_error)
+{
+    JL_NARGS(error, 1, 1);
+    if (jl_typeof(args[0]) == jl_buffer_uint8_type) {
+        jl_error((char*)((jl_buffer_t*)args[0])->data);
+    }
+    else {
+        jl_error("error: expected string");
+    }
+    return jl_null;
+}
+
+JL_CALLABLE(jl_f_time_thunk)
+{
+    JL_NARGS(time_thunk, 1, 1);
+    JL_TYPECHK(time_thunk, function, args[0]);
+    double t0 = clock_now();
+    jl_value_t *result = jl_apply(args[0], NULL, 0);
+    double t1 = clock_now();
+    ios_printf(ios_stdout, "elapsed time: %.4f sec\n", t1-t0);
+    return result;
+}
+
+JL_CALLABLE(jl_f_load)
+{
+    JL_NARGS(load, 1, 1);
+    if (jl_typeof(args[0]) == jl_buffer_uint8_type) {
+        char *fname = (char*)((jl_buffer_t*)args[0])->data;
+        jl_value_t *ast = jl_parse_file(fname);
+        jl_buffer_t *b = ((jl_expr_t*)ast)->args;
+        size_t i;
+        for(i=0; i < b->length; i++) {
+            // TODO
+            // process toplevel form b->data[i]
+        }
+    }
+    else {
+        jl_error("load: expected string");
+    }
+    return jl_null;
+}
+
 JL_CALLABLE(jl_f_tuple)
 {
     size_t i;
@@ -244,6 +337,39 @@ JL_CALLABLE(jl_f_bufferset)
         ((jl_value_t**)b->data)[i] = rhs;
     }
     return args[1];
+}
+
+JL_CALLABLE(jl_f_box)
+{
+    JL_NARGS(box, 1, 2);
+    if (nargs == 1)
+        return jl_new_struct(jl_box_any_type, NULL);
+    return jl_new_struct(jl_box_any_type, args[0]);
+}
+
+JL_CALLABLE(jl_f_unbox)
+{
+    JL_NARGS(unbox, 1, 1);
+    JL_TYPECHK(unbox, box, args[0]);
+    return ((jl_value_t**)args[0])[1];
+}
+
+JL_CALLABLE(jl_f_boxset)
+{
+    JL_NARGS(boxset, 2, 2);
+    JL_TYPECHK(boxset, box, args[0]);
+    ((jl_value_t**)args[0])[1] = args[1];
+    return jl_null;
+}
+
+jl_function_t *jl_ref_gf;
+
+JL_CALLABLE(jl_f_ref_typector)
+{
+    JL_NARGSV(ref_typector, 1);
+    JL_TYPECHK(ref_typector, typector, args[0]);
+    jl_tuple_t *tparams = jl_f_tuple(NULL, &args[1], nargs-1);
+    return jl_apply_type_ctor((jl_typector_t*)args[0], tparams);
 }
 
 // --- conversions ---
@@ -584,6 +710,17 @@ JL_CALLABLE(jl_f_print_any)
     return (jl_value_t*)jl_null;
 }
 
+// --- RTS primitives ---
+
+/*
+  todo:
+  new_struct_type, new_struct_fields, new_type_constructor,
+  new_tag_type, typevar, Union, new_generic_function, add_method,
+  new_closure
+*/
+
+// --- init ---
+
 static void add_builtin_method1(jl_function_t *gf, jl_type_t *t, jl_fptr_t f)
 {
     jl_add_method(gf, jl_tuple(1, t), jl_new_closure(f, NULL));
@@ -611,4 +748,11 @@ void jl_init_builtins()
     add_builtin_method1(jl_print_gf, jl_bool_type,    jl_f_print_bool);
 
     current_output_stream = ios_stdout;
+
+    jl_ref_gf = jl_new_generic_function(jl_symbol("ref"));
+    jl_add_method(jl_ref_gf,
+                  jl_tuple(2, jl_typector_type,
+                           jl_apply_type_ctor(jl_seq_type,
+                                              jl_tuple(1,jl_any_type))),
+                  jl_new_closure(jl_f_ref_typector, NULL));
 }

@@ -48,6 +48,10 @@ jl_tag_type_t *jl_real_type;
 jl_tag_type_t *jl_int_type;
 jl_tag_type_t *jl_float_type;
 
+jl_typector_t *jl_box_type;
+jl_type_t *jl_box_any_type;
+jl_typename_t *jl_box_typename;
+
 jl_bits_type_t *jl_bool_type;
 jl_bits_type_t *jl_int8_type;
 jl_bits_type_t *jl_uint8_type;
@@ -451,7 +455,9 @@ jl_buffer_t *jl_new_buffer(jl_type_t *buf_type, size_t nel)
             data = alloc_pod(((jl_bits_type_t*)el_type)->nbits/8 * nel);
         }
         else {
-            data = allocb(sizeof(void*) * nel);
+            size_t tot = sizeof(void*) * nel;
+            data = allocb(tot);
+            memset(data, 0, tot);
         }
     }
     else {
@@ -1157,4 +1163,14 @@ void jl_init_types()
                            jl_any_type, jl_null,
                            jl_tuple(2, jl_symbol("head"), jl_symbol("args")),
                            jl_tuple(2, jl_sym_type, jl_buffer_any_type));
+
+    jl_struct_type_t *boxstruct =
+        jl_new_struct_type(jl_symbol("Box"),
+                           jl_any_type, tv,
+                           jl_tuple(1, jl_symbol("contents")), tv);
+    jl_box_typename = boxstruct->name;
+    jl_box_type = jl_new_type_ctor(tv, (jl_type_t*)boxstruct);
+    jl_box_any_type =
+        (jl_type_t*)jl_apply_type_ctor(jl_box_type,
+                                       jl_tuple(1, jl_any_type));
 }
