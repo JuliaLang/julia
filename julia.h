@@ -328,6 +328,7 @@ jl_value_t *jl_parse_file(char *fname);
 
 // some useful functions
 void jl_print(jl_value_t *v);
+jl_value_t *jl_convert(jl_value_t *x, jl_type_t *to);
 
 // modules
 extern jl_module_t *jl_system_module;
