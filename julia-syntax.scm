@@ -520,44 +520,13 @@
       (cons `(call numel ,(car expr)) (compute-dims (cdr expr))))
 )
 
-
-;;TODO: With your use of "subst", you have to be careful about the heads of
-;;expressions. The head is special and you don't want to substitute
-;;it. e.g. a (ref ...) expression's head should not change if the user
-;;happens to have a variable called "ref".
-
-;; substitute every occurence of x with y in expr
-(define (subst x y expr)
-  (if (atom? expr)
-      (if (eq? x expr) y expr)
-      (cons (subst x y (car expr)) (subst x y (cdr expr)) ))
-)
-
-;; Transform comprehension expression indices
-(define (subst-expr expr result_iters expr_iters)
-  (if (null? result_iters) expr
-      (let ((ri (car result_iters))
-	    (ei (car expr_iters)) )
-	(subst-expr (subst ei `(ref ,ei ,ri) expr)
-		    (cdr result_iters)
-		    (cdr expr_iters) )))
-)
-
 ;; construct loops to cycle over all dimensions for an n-d comprehension
-(define (construct-loops result expr ranges result_iters expr_iters)
+(define (construct-loops result expr ranges ri)
   (if (null? ranges)
-      `(block (call set
-		    ,result
-		    ,(subst-expr expr result_iters expr_iters)
-		    ,@(reverse result_iters)))
-      (let ((ri (gensym))
-	    (ei (car (cdr (car ranges)))) )
-	`(block (for (= ,ri (: 1 (call numel ,ei)))
-		     (block ,(construct-loops result
-					      expr
-					      (cdr ranges)
-					      (cons ri result_iters)
-					      (cons ei expr_iters) ))))))
+      `(block (call set ,result ,expr ,ri)
+	      (+= ,ri 1))
+      `(for ,(car ranges)
+	    ,(construct-loops result expr (cdr ranges) ri) ))
 )
 
 (define lower-comprehensions
@@ -566,9 +535,11 @@
    ; nd comprehensions
    (pattern-lambda
     (comprehension expr . ranges)
-    (let ((result (gensym)))
+    (let ( (result (gensym)) (ri (gensym)) (data (gensym)) )
       `(block (= ,result (call zeros ,@(compute-dims ranges) ))
-	      ,@(construct-loops result expr ranges (list) (list))
+	      (= ,ri 1)
+	      (= ,data (|.| ,result data))
+	      ,(construct-loops data expr ranges ri)
 	      ,result )))
 
 )) ;; lower-comprehensions
