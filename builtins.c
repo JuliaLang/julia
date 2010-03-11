@@ -16,6 +16,8 @@
 #include "llt.h"
 #include "julia.h"
 
+// --- exception raising ---
+
 void jl_error(char *str)
 {
     ios_printf(ios_stderr, "%s\n", str);
@@ -106,6 +108,25 @@ JL_CALLABLE(jl_f_tuple)
     return (jl_value_t*)t;
 }
 
+JL_CALLABLE(jl_f_tupleref)
+{
+    JL_NARGS(tupleref, 2, 2);
+    JL_TYPECHK(tupleref, tuple, args[0]);
+    JL_TYPECHK(tupleref, int32, args[1]);
+    jl_tuple_t *t = (jl_tuple_t*)args[0];
+    size_t i = jl_unbox_int32(args[1])-1;
+    if (i >= t->length)
+        jl_error("tupleref: index out of range");
+    return jl_tupleref(t, i);
+}
+
+JL_CALLABLE(jl_f_tuplelen)
+{
+    JL_NARGS(tuplelen, 1, 1);
+    JL_TYPECHK(tuplelen, tuple, args[0]);
+    return jl_box_int32(((jl_tuple_t*)args[0])->length);
+}
+
 static size_t field_offset(jl_struct_type_t *t, jl_sym_t *fld)
 {
     jl_tuple_t *fn = t->names;
@@ -130,16 +151,18 @@ JL_CALLABLE(jl_f_get_field)
     return ((jl_value_t**)v)[1+i];
 }
 
-JL_CALLABLE(jl_f_tupleref)
+JL_CALLABLE(jl_f_set_field)
 {
-    JL_NARGS(tupleref, 2, 2);
-    JL_TYPECHK(tupleref, tuple, args[0]);
-    JL_TYPECHK(tupleref, int32, args[1]);
-    jl_tuple_t *t = (jl_tuple_t*)args[0];
-    size_t i = jl_unbox_int32(args[1])-1;
-    if (i >= t->length)
-        jl_error("tupleref: index out of range");
-    return jl_tupleref(t, i);
+    JL_NARGS(setfield, 3, 3);
+    JL_TYPECHK(setfield, symbol, args[1]);
+    jl_value_t *v = args[0];
+    if (!jl_is_struct_type(jl_typeof(v)))
+        jl_error("setfield: argument must be a struct");
+    jl_struct_type_t *st = (jl_struct_type_t*)jl_typeof(v);
+    size_t i = field_offset(st, (jl_sym_t*)args[1]);
+    ((jl_value_t**)v)[1+i] = jl_convert(args[2],
+                                        jl_tupleref(st->types,i));
+    return v;
 }
 
 JL_CALLABLE(jl_f_bufferlen)
@@ -147,6 +170,146 @@ JL_CALLABLE(jl_f_bufferlen)
     JL_NARGS(bufferlen, 1, 1);
     JL_TYPECHK(bufferlen, buffer, args[0]);
     return jl_box_int32(((jl_buffer_t*)args[0])->length);
+}
+
+static jl_value_t *new_scalar(jl_bits_type_t *bt)
+{
+    size_t nb = bt->nbits/8;
+    return (jl_value_t*)allocb((NWORDS(LLT_ALIGN(nb,sizeof(void*)))+1)*
+                               sizeof(void*));
+}
+
+JL_CALLABLE(jl_f_bufferref)
+{
+    JL_NARGS(bufferref, 2, 2);
+    JL_TYPECHK(bufferref, buffer, args[0]);
+    JL_TYPECHK(bufferref, int32, args[1]);
+    jl_buffer_t *b = (jl_buffer_t*)args[0];
+    size_t i = jl_unbox_int32(args[1])-1;
+    if (i >= b->length)
+        jl_errorf("buffer[%d]: index out of range", i+1);
+    jl_type_t *el_type = (jl_type_t*)jl_tparam0(jl_typeof(b));
+    jl_value_t *elt;
+    if (jl_is_bits_type(el_type)) {
+        elt = new_scalar((jl_bits_type_t*)el_type);
+        size_t nb = ((jl_bits_type_t*)el_type)->nbits/8;
+        switch (nb) {
+        case 1:
+            *(int8_t*)jl_bits_data(elt)  = ((int8_t*)b->data)[i];  break;
+        case 2:
+            *(int16_t*)jl_bits_data(elt) = ((int16_t*)b->data)[i]; break;
+        case 4:
+            *(int32_t*)jl_bits_data(elt) = ((int32_t*)b->data)[i]; break;
+        case 8:
+            *(int64_t*)jl_bits_data(elt) = ((int64_t*)b->data)[i]; break;
+        default:
+            memcpy(jl_bits_data(elt), &((char*)b->data)[i*nb], nb);
+        }
+    }
+    else {
+        elt = ((jl_value_t**)b->data)[i];
+        if (elt == NULL)
+            jl_errorf("buffer[%d]: uninitialized reference error", i+1);
+    }
+    return elt;
+}
+
+JL_CALLABLE(jl_f_bufferset)
+{
+    JL_NARGS(bufferset, 3, 3);
+    JL_TYPECHK(bufferset, buffer, args[0]);
+    JL_TYPECHK(bufferset, int32, args[2]);
+    jl_buffer_t *b = (jl_buffer_t*)args[0];
+    size_t i = jl_unbox_int32(args[2])-1;
+    if (i >= b->length)
+        jl_errorf("buffer[%d]: index out of range", i+1);
+    jl_type_t *el_type = (jl_type_t*)jl_tparam0(jl_typeof(b));
+    jl_value_t *rhs = jl_convert(args[1], el_type);
+    if (jl_is_bits_type(el_type)) {
+        size_t nb = ((jl_bits_type_t*)el_type)->nbits/8;
+        switch (nb) {
+        case 1:
+            ((int8_t*)b->data)[i]  = *(int8_t*)jl_bits_data(rhs);  break;
+        case 2:
+            ((int16_t*)b->data)[i] = *(int16_t*)jl_bits_data(rhs); break;
+        case 4:
+            ((int32_t*)b->data)[i] = *(int32_t*)jl_bits_data(rhs); break;
+        case 8:
+            ((int64_t*)b->data)[i] = *(int64_t*)jl_bits_data(rhs); break;
+        default:
+            memcpy(&((char*)b->data)[i*nb], jl_bits_data(rhs), nb);
+        }
+    }
+    else {
+        ((jl_value_t**)b->data)[i] = rhs;
+    }
+    return args[1];
+}
+
+// --- conversions ---
+
+static jl_tuple_t *convert_tuple(jl_tuple_t *x, jl_tuple_t *to)
+{
+    size_t i, cl=x->length, pl=to->length;
+    jl_tuple_t *out = jl_alloc_tuple(cl);
+    jl_value_t *ce, *pe;
+    int pseq=0;
+    for(i=0; i < cl; i++) {
+        ce = jl_tupleref(x,i);
+        if (pseq) {
+        }
+        else if (i < pl) {
+            pe = jl_tupleref(to,i);
+            if (jl_is_seq_type(pe)) {
+                pe = jl_tparam0(pe);
+                pseq = 1;
+            }
+        }
+        else {
+            return NULL;
+        }
+        jl_tupleset(out, i, jl_convert(ce, pe));
+    }
+    return out;
+}
+
+jl_value_t *jl_convert(jl_value_t *x, jl_type_t *to)
+{
+    jl_value_t *out;
+    if (jl_is_tuple(x) && jl_is_tuple(to)) {
+        out = convert_tuple((jl_tuple_t*)x, (jl_tuple_t*)to);
+        if (out == NULL)
+            jl_error("convert: invalid tuple conversion");
+        return out;
+    }
+    jl_type_t *t = (jl_type_t*)jl_typeof(x);
+    if (jl_subtype(t, to, 0, 0))
+        return x;
+    jl_function_t *meth;
+    if (jl_is_bits_type(to)) {
+        meth = ((jl_bits_type_t*)to)->fconvert;
+    }
+    else if (jl_is_struct_type(to)) {
+        meth = ((jl_struct_type_t*)to)->fconvert;
+    }
+    else {
+        jl_error("convert: invalid conversion");
+    }
+    if (meth == NULL) {
+        // TODO: temporary
+        jl_error("convert: no conversion defined");
+    }
+    out = jl_apply(meth, &x, 1);
+    if (!jl_subtype(jl_typeof(out), to, 0, 0))
+        jl_errorf("convert: conversion to %s failed",
+                  jl_tname(to)->name->name);
+    return out;
+}
+
+JL_CALLABLE(jl_f_convert)
+{
+    JL_NARGS(convert, 2, 2);
+    return jl_convert(args[0], args[1]);
 }
 
 // --- printing ---
@@ -364,9 +527,7 @@ JL_CALLABLE(jl_f_print_buffer)
         jl_bits_type_t *bt = (jl_bits_type_t*)el_type;
         size_t nb = bt->nbits/8;
         size_t i, n=b->length;
-        jl_value_t *elt =
-            (jl_value_t*)allocb((NWORDS(LLT_ALIGN(nb,sizeof(void*)))+1)*
-                                sizeof(void*));
+        jl_value_t *elt = new_scalar(bt);
         elt->type = el_type;
         for(i=0; i < n; i++) {
             memcpy(jl_bits_data(elt), &((char*)b->data)[i*nb], nb);
