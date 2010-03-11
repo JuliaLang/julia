@@ -536,11 +536,12 @@
    (pattern-lambda
     (comprehension expr . ranges)
     (let ( (result (gensym)) (ri (gensym)) (data (gensym)) )
-      `(block (= ,result (call zeros ,@(compute-dims ranges) ))
-	      (= ,ri 1)
-	      (= ,data (|.| ,result data))
-	      ,(construct-loops data expr ranges ri)
-	      ,result )))
+      `(scope-block
+	(block (= ,result (call zeros ,@(compute-dims ranges) ))
+	       (= ,ri 1)
+	       (= ,data (|.| ,result data))
+	       ,(construct-loops data expr ranges ri)
+	       ,result ))))
 
 )) ;; lower-comprehensions
 
