@@ -1,5 +1,5 @@
 float64(x::Scalar) = box(Float64,to_float64(unbox(x)))
-truncate(x::Real) = box(Int32,_truncate(unbox(x)))
+truncate(x::Real) = int32(x)
 
 def_binary_op(Float64, {Int8, Uint8, Int16, Uint16, Int32, Uint32}, +, add_float64)
 def_binary_op(Float64, {Int8, Uint8, Int16, Uint16, Int32, Uint32}, -, sub_float64)

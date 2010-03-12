@@ -858,18 +858,20 @@ TODO:
 (define (j-tuple . args) (if (null? args) julia-null
 			     (apply julia-tuple args)))
 
-(define (j-tuple-ref v i) (if (= i 0) (error "Tuple index out of range")
-			      (tuple-ref v (- i 1))))
+(define (j-tuple-ref v i)
+  (let ((i (j-unbox i)))
+    (if (= i 0) (error "Tuple index out of range")
+	(tuple-ref v (- i 1)))))
 
 (define (j-buffer-length v) (j-get-field v 'length))
 
 (define (buffer-data v) (vector-ref v 2))
 
 (define (j-buffer-ref v i)
-  (vector-ref (buffer-data v) (- i 1)))
+  (vector-ref (buffer-data v) (- (j-unbox i) 1)))
 
 (define (j-buffer-set v i rhs)
-  (vector-set! (buffer-data v) (- i 1) rhs))
+  (vector-set! (buffer-data v) (- (j-unbox i) 1) rhs))
 
 (define (j-false? x)
   (and (vector? x)
@@ -1286,7 +1288,6 @@ end
 (make-builtin 'to_int64 "Scalar-->Int64"   (lambda (x) (si 64 (to-int x))))
 (make-builtin 'to_uint64 "Scalar-->Uint64" (lambda (x) (ui 64 (to-int x))))
 (make-builtin 'to_float64 "Scalar-->Float64" exact->inexact)
-(make-builtin '_truncate "Scalar-->Int" to-int)
 
 ; the following builtin functions are ordinary first-class functions,
 ; and can be directly employed by the user.

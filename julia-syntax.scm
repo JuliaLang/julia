@@ -324,8 +324,7 @@
 					  (i   1))
 				 (if (null? lhs) '((null))
 				     (cons `(= ,(car lhs)
-					       (call tupleref
-						     ,t (call unbox ,i)))
+					       (call tupleref ,t ,i))
 					   (loop (cdr lhs)
 						 (+ i 1))))))))
 
@@ -514,11 +513,12 @@
 
 )) ;; identify-comprehensions
 
-;; compute the dimensions where expr is a list of ranges
-(define (compute-dims expr)
-  (if (null? expr) (list)
-      (cons `(call numel ,(car expr)) (compute-dims (cdr expr))))
-)
+;; compute the dimensions from a list of ranges
+(define (compute-dims ranges)
+  (map (lambda (dim)
+	 ; dim is of the form (= i range)
+	 `(call numel ,(caddr dim)))
+       ranges))
 
 ;; construct loops to cycle over all dimensions for an n-d comprehension
 (define (construct-loops result expr ranges ri)
@@ -540,7 +540,7 @@
 	(block (= ,result (call zeros ,@(compute-dims ranges) ))
 	       (= ,ri 1)
 	       (= ,data (|.| ,result data))
-	       ,(construct-loops data expr ranges ri)
+	       ,(construct-loops data expr (reverse ranges) ri)
 	       ,result ))))
 
 )) ;; lower-comprehensions

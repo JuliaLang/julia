@@ -9,7 +9,7 @@ typealias UnboxedBuffer Union(Buffer[Bool],
                               Buffer[Int32],Buffer[Uint32],
                               Buffer[Float32],Buffer[Float64])
 
-ref(t::Tuple, i::Index) = tupleref(t, unbox(i))
+ref(t::Tuple, i::Index) = tupleref(t, i)
 length(t::Tuple) = box(Size, tuplelen(t))
 
 function print(x)
