@@ -229,3 +229,16 @@ end
 	 (pattern-expand patterns
 	  (pattern-expand binding-form-patterns
 			  (julia-parse "x::Int8->x")))))
+
+(assert (equal? '(return (call apply f t))
+		(julia-expand (julia-parse "f(t...)"))))
+(assert (equal? '(return (call apply f (call tuple a) t))
+		(julia-expand (julia-parse "f(a,t...)"))))
+(assert (equal? '(return (call apply f t (call tuple e)))
+		(julia-expand (julia-parse "f(t...,e)"))))
+(assert (equal? '(return (call apply f (call tuple a b c d) t))
+		(julia-expand (julia-parse "f(a,b,c,d,t...)"))))
+(assert (equal? '(return (call apply f (call tuple a b c d) t j
+			       (call tuple foo b) k d))
+		(julia-expand
+		 (julia-parse "f(a,b,c,d,t...,j...,foo,b,k...,d...)"))))

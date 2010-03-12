@@ -75,7 +75,7 @@ jl_expr_t *jl_exprn(jl_sym_t *head, size_t n)
     return (jl_expr_t*)jl_apply(jl_expr_type->fnew, ctor_args, 2);
 }
 
-JL_CALLABLE(jl_is)
+JL_CALLABLE(jl_f_is)
 {
     JL_NARGS(is, 2, 2);
     if (args[0] == args[1])
@@ -83,7 +83,7 @@ JL_CALLABLE(jl_is)
     return jl_false;
 }
 
-JL_CALLABLE(jl_isnull)
+JL_CALLABLE(jl_f_isnull)
 {
     JL_NARGS(isnull, 1, 1);
     if (args[0] == (jl_value_t*)jl_null)

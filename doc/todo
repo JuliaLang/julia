@@ -231,7 +231,7 @@ implementation plan:
 * set up core types
 * define all builtin types
 * hash consing types
-- lambda-info struct, currently the lambda expression in calls to new_closure
+* lambda-info struct, currently the lambda expression in calls to new_closure
 
 schedule:
 
