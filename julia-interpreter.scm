@@ -1324,7 +1324,18 @@ end
 ; --- load ---
 
 (define (j-load fname)
-  (for-each j-toplevel-eval (julia-parse-file fname))
+  (let ((s (make-token-stream (open-input-file fname)))
+	(eh (current-exception-handler)))
+    (with-exception-catcher
+     (lambda (e)
+       (display "on ") (display fname) (display ":")
+       (display (- (input-port-line (ts:port s)) 1)) (newline)
+       (eh e))
+     (lambda ()
+       (let loop ((expr (julia-parse s)))
+	 (if (not (eof-object? expr))
+	     (begin (j-toplevel-eval expr)
+		    (loop (julia-parse s))))))))
   julia-null)
 
 (make-builtin 'load "(Any,)-->()" j-load)

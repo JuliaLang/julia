@@ -175,26 +175,29 @@ TODO:
 
 ; --- parser ---
 
-(define (make-token-stream s) (cons #f s))
+(define (make-token-stream s) (vector #f s))
+(define (ts:port s)       (vector-ref s 1))
+(define (ts:last-tok s)   (vector-ref s 0))
+(define (ts:set-tok! s t) (vector-set! s 0 t))
 
 (define (peek-token s)
-  (let ((port     (cdr s))
-	(last-tok (car s)))
+  (let ((port     (ts:port s))
+	(last-tok (ts:last-tok s)))
     (if last-tok last-tok
-	(begin (set-car! s (next-token port))
-	       (car s)))))
+	(begin (ts:set-tok! s (next-token port))
+	       (ts:last-tok s)))))
 
 (define (require-token s)
   (define (req-token s)
-    (let ((port     (cdr s))
-	  (last-tok (car s)))
+    (let ((port     (ts:port s))
+	  (last-tok (ts:last-tok s)))
       (if (and last-tok (not (eof-object? last-tok)))
 	  last-tok
 	  (let ((t (next-token port)))
 	    (if (eof-object? t)
 		(error "Premature end of input")
-		(begin (set-car! s t)
-		       (car s)))))))
+		(begin (ts:set-tok! s t)
+		       (ts:last-tok s)))))))
   (let ((t (req-token s)))
     ; when an actual token is needed, skip newlines
     (if (newline? t)
@@ -203,8 +206,8 @@ TODO:
 	t)))
 
 (define (take-token s)
-  (begin0 (car s)
-	  (set-car! s #f)))
+  (begin0 (ts:last-tok s)
+	  (ts:set-tok! s #f)))
 
 ; parse left-to-right binary operator
 ; produces structures like (+ (+ (+ 2 3) 4) 5)
@@ -621,7 +624,7 @@ TODO:
 	(else
 	 ; as a special case, allow early end of input if there is
 	 ; nothing left but whitespace
-	 (skip-ws-and-comments (cdr s))
+	 (skip-ws-and-comments (ts:port s))
 	 (if (eqv? (peek-token s) #\newline) (take-token s))
 	 (let ((t (peek-token s)))
 	   (if (eof-object? t)
@@ -629,7 +632,7 @@ TODO:
 	       (parse-stmts s))))))
 
 (define (check-end-of-input s)
-  (skip-ws-and-comments (cdr s))
+  (skip-ws-and-comments (ts:port s))
   (if (eqv? (peek-token s) #\newline) (take-token s))
   (if (not (eof-object? (peek-token s)))
       (error "Extra input after end of expression:"
