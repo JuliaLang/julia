@@ -52,8 +52,21 @@ typedef jl_value_t *(*jl_fptr_t)(jl_value_t*, jl_value_t**, uint32_t);
 
 typedef struct {
     JL_VALUE_STRUCT
+    // this holds the static data for a function:
+    // a syntax tree, static parameters, and (if it has been compiled)
+    // a function pointer.
+    // this is the stuff that's shared among different instantiations
+    // (different environments) of a closure.
+    jl_fptr_t fptr;
+    jl_value_t *ast;
+    jl_tuple_t *sparams;
+} jl_lambda_info_t;
+
+typedef struct {
+    JL_VALUE_STRUCT
     jl_fptr_t fptr;
     jl_value_t *env;
+    jl_lambda_info_t *linfo;
 } jl_function_t;
 
 typedef struct {
@@ -171,6 +184,7 @@ extern jl_struct_type_t *jl_bits_kind;
 extern jl_type_t *jl_bottom_type;
 extern jl_typector_t *jl_buffer_type;
 extern jl_typename_t *jl_buffer_typename;
+extern jl_struct_type_t *jl_lambda_info_type;
 extern jl_typector_t *jl_seq_type;
 extern jl_typector_t *jl_tensor_type;
 extern jl_tag_type_t *jl_scalar_type;
@@ -206,6 +220,7 @@ extern jl_value_t *jl_false;
 extern jl_func_type_t *jl_any_func;
 
 extern jl_function_t *jl_print_gf;
+extern jl_function_t *jl_bottom_func;
 
 #ifdef BITS64
 #define NWORDS(sz) (((sz)+7)>>3)
@@ -275,16 +290,25 @@ jl_value_pair_t *jl_type_conform(jl_type_t *a, jl_type_t *b);
 int jl_types_equal(jl_value_t *a, jl_value_t *b);
 
 // type constructors
+jl_typector_t *jl_new_type_ctor(jl_tuple_t *params, jl_type_t *body);
 jl_type_t *jl_apply_type_ctor(jl_typector_t *tc, jl_tuple_t *params);
 jl_type_t *jl_instantiate_type_with(jl_type_t *t, jl_value_t **env, size_t n);
+jl_tvar_t *jl_typevar(jl_sym_t *name);
 jl_uniontype_t *jl_new_uniontype(jl_tuple_t *types);
 jl_func_type_t *jl_new_functype(jl_type_t *a, jl_type_t *b);
+jl_tag_type_t *jl_new_tagtype(jl_sym_t *name, jl_tag_type_t *super,
+                              jl_tuple_t *parameters);
+jl_struct_type_t *jl_new_struct_type(jl_sym_t *name, jl_tag_type_t *super,
+                                     jl_tuple_t *parameters,
+                                     jl_tuple_t *fnames, jl_tuple_t *ftypes);
 
 // constructors
 jl_value_t *jl_new_struct(jl_struct_type_t *type, ...);
 jl_function_t *jl_new_closure(jl_fptr_t proc, jl_value_t *env);
+jl_lambda_info_t *jl_new_lambda_info(jl_value_t *ast, jl_tuple_t *sparams);
 jl_tuple_t *jl_tuple(size_t n, ...);
 jl_tuple_t *jl_alloc_tuple(size_t n);
+jl_value_pair_t *jl_pair(jl_value_t *a, jl_value_t *b);
 jl_sym_t *jl_symbol(char *str);
 jl_sym_t *jl_gensym();
 jl_buffer_t *jl_new_buffer(jl_type_t *buf_type, size_t nel);

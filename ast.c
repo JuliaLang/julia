@@ -97,9 +97,6 @@ static jl_value_t *scm_to_julia(___SCMOBJ e)
             */
             if (!strcmp(s, "string"))
                 return (jl_value_t*)jl_cstr_to_buffer(jl_scm_str(___CADR(e)));
-            if (!strcmp(s, "lambda")) {
-                // TODO: make function info record
-            }
             size_t n = scm_list_length(e)-1;
             size_t i;
             jl_expr_t *ex = jl_exprn(jl_symbol(s), n);
@@ -108,6 +105,10 @@ static jl_value_t *scm_to_julia(___SCMOBJ e)
                 assert(___PAIRP(e));
                 ((jl_value_t**)ex->args->data)[i] = scm_to_julia(___CAR(e));
                 e = ___CDR(e);
+            }
+            if (!strcmp(s, "lambda")) {
+                return (jl_value_t*)jl_expr(jl_symbol("quote"), 1,
+                                            jl_new_lambda_info((jl_value_t*)ex,jl_null));
             }
             return (jl_value_t*)ex;
         }

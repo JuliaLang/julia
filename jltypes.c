@@ -40,6 +40,7 @@ jl_struct_type_t *jl_bits_kind;
 jl_type_t *jl_bottom_type;
 jl_typector_t *jl_buffer_type;
 jl_typename_t *jl_buffer_typename;
+jl_struct_type_t *jl_lambda_info_type;
 jl_typector_t *jl_seq_type;
 jl_typector_t *jl_tensor_type;
 jl_tag_type_t *jl_scalar_type;
@@ -73,6 +74,7 @@ jl_value_t *jl_true;
 jl_value_t *jl_false;
 
 jl_func_type_t *jl_any_func;
+jl_function_t *jl_bottom_func;
 
 static inline jl_value_t *newobj(jl_type_t *type, size_t nfields)
 {
@@ -186,7 +188,7 @@ jl_typename_t *jl_new_typename(jl_sym_t *name)
 static int t_uid_ctr = 1;  // TODO: lock
 
 jl_tag_type_t *jl_new_tagtype(jl_sym_t *name, jl_tag_type_t *super,
-                             jl_tuple_t *parameters)
+                              jl_tuple_t *parameters)
 {
     jl_tag_type_t *t = (jl_tag_type_t*)newobj((jl_type_t*)jl_tag_kind,
                                             TAG_TYPE_NW);
@@ -208,10 +210,21 @@ jl_func_type_t *jl_new_functype(jl_type_t *a, jl_type_t *b)
 
 jl_function_t *jl_new_closure(jl_fptr_t proc, jl_value_t *env)
 {
-    jl_function_t *f = (jl_function_t*)newobj((jl_type_t*)jl_any_func, 2);
+    jl_function_t *f = (jl_function_t*)newobj((jl_type_t*)jl_any_func, 3);
     f->fptr = proc;
     f->env = env;
+    f->linfo = NULL;
     return f;
+}
+
+jl_lambda_info_t *jl_new_lambda_info(jl_value_t *ast, jl_tuple_t *sparams)
+{
+    jl_lambda_info_t *li =
+        (jl_lambda_info_t*)newobj((jl_type_t*)jl_lambda_info_type, 3);
+    li->fptr = NULL;
+    li->ast = ast;
+    li->sparams = sparams;
+    return li;
 }
 
 JL_CALLABLE(jl_new_struct_internal)
@@ -230,6 +243,12 @@ JL_CALLABLE(jl_new_struct_internal)
     return v;
 }
 
+JL_CALLABLE(jl_f_no_function)
+{
+    jl_error("function not defined");
+    return jl_null;
+}
+
 jl_struct_type_t *jl_new_struct_type(jl_sym_t *name, jl_tag_type_t *super,
                                      jl_tuple_t *parameters,
                                      jl_tuple_t *fnames, jl_tuple_t *ftypes)
@@ -242,7 +261,7 @@ jl_struct_type_t *jl_new_struct_type(jl_sym_t *name, jl_tag_type_t *super,
     t->names = fnames;
     t->types = ftypes;
     t->fnew = jl_new_closure(jl_new_struct_internal, (jl_value_t*)t);
-    t->fconvert = NULL; //TODO
+    t->fconvert = jl_bottom_func; //TODO
     if (jl_has_typevars((jl_value_t*)parameters))
         t->uid = 0;
     else
@@ -296,6 +315,12 @@ jl_typector_t *jl_new_type_ctor(jl_tuple_t *params, jl_type_t *body)
 static jl_value_t *tvar(char *name)
 {
     return jl_new_struct(jl_tvar_type, jl_symbol(name),
+                         jl_bottom_type, jl_any_type);
+}
+
+jl_tvar_t *jl_typevar(jl_sym_t *name)
+{
+    return jl_new_struct(jl_tvar_type, name,
                          jl_bottom_type, jl_any_type);
 }
 
@@ -710,7 +735,7 @@ static jl_type_t *inst_type_w_(jl_value_t *t, jl_value_t **env, size_t n,
             nst->names = st->names;
             nst->types = jl_null; // to be filled in below
             nst->fnew = jl_new_closure(st->fnew->fptr, (jl_value_t*)nst);
-            nst->fconvert = NULL;
+            nst->fconvert = jl_bottom_func;
             nst->uid = 0;
             // associate these parameters with the new struct type on
             // the stack, in case one of its field types references it.
@@ -883,6 +908,15 @@ static jl_value_pair_t *tuple_conform(jl_tuple_t *child, jl_tuple_t *parent,
     return env;
 }
 
+jl_value_pair_t *jl_pair(jl_value_t *a, jl_value_t *b)
+{
+    jl_value_pair_t *np = (jl_value_pair_t*)allocb(sizeof(jl_value_pair_t));
+    np->a = a;
+    np->b = b;
+    np->next = NULL;
+    return np;
+}
+
 static jl_value_pair_t *type_conform_(jl_type_t *child, jl_type_t *parent,
                                       jl_value_pair_t *env)
 {
@@ -898,9 +932,7 @@ static jl_value_pair_t *type_conform_(jl_type_t *child, jl_type_t *parent,
             }
             p = p->next;
         }
-        jl_value_pair_t *np = (jl_value_pair_t*)allocb(sizeof(jl_value_pair_t));
-        np->a = (jl_value_t*)parent;
-        np->b = (jl_value_t*)child;
+        jl_value_pair_t *np = jl_pair((jl_value_t*)parent, (jl_value_t*)child);
         np->next = env;
         return np;
     }
@@ -1008,6 +1040,8 @@ void jl_init_types()
 
     jl_any_func = jl_new_functype((jl_type_t*)jl_any_type, (jl_type_t*)jl_any_type);
 
+    jl_bottom_func = jl_new_closure(jl_f_no_function, NULL);
+
     // initialize them. lots of cycles.
     jl_struct_kind->name = jl_new_typename(jl_symbol("StructKind"));
     jl_struct_kind->super = (jl_tag_type_t*)jl_tag_kind;
@@ -1019,7 +1053,7 @@ void jl_init_types()
     jl_struct_kind->types = jl_tuple(7, jl_typename_type, jl_type_type,
                                      jl_tuple_type, jl_tuple_type,
                                      jl_tuple_type, jl_any_func, jl_any_func);
-    jl_struct_kind->fnew = jl_struct_kind->fconvert = NULL;
+    jl_struct_kind->fnew = jl_struct_kind->fconvert = jl_bottom_func;
     jl_struct_kind->uid = t_uid_ctr++;
 
     jl_tag_kind->name = jl_new_typename(jl_symbol("TagKind"));
@@ -1029,7 +1063,7 @@ void jl_init_types()
                                   jl_symbol("parameters"));
     jl_tag_kind->types = jl_tuple(3, jl_typename_type, jl_type_type,
                                   jl_tuple_type);
-    jl_tag_kind->fnew = jl_tag_kind->fconvert = NULL;
+    jl_tag_kind->fnew = jl_tag_kind->fconvert = jl_bottom_func;
     jl_tag_kind->uid = t_uid_ctr++;
 
     jl_func_kind->name = jl_new_typename(jl_symbol("FuncKind"));
@@ -1037,7 +1071,7 @@ void jl_init_types()
     jl_func_kind->parameters = jl_null;
     jl_func_kind->names = jl_tuple(2, jl_symbol("from"), jl_symbol("to"));
     jl_func_kind->types = jl_tuple(2, jl_type_type, jl_type_type);
-    jl_func_kind->fnew = jl_func_kind->fconvert = NULL;
+    jl_func_kind->fnew = jl_func_kind->fconvert = jl_bottom_func;
     jl_func_kind->uid = t_uid_ctr++;
 
     jl_typename_type->name = jl_new_typename(jl_symbol("TypeName"));
@@ -1045,7 +1079,7 @@ void jl_init_types()
     jl_typename_type->parameters = jl_null;
     jl_typename_type->names = jl_tuple(1, jl_symbol("name"));
     jl_typename_type->types = jl_tuple(1, jl_sym_type);
-    jl_typename_type->fnew = jl_typename_type->fconvert = NULL;
+    jl_typename_type->fnew = jl_typename_type->fconvert = jl_bottom_func;
     jl_typename_type->uid = t_uid_ctr++;
 
     jl_sym_type->name = jl_new_typename(jl_symbol("Symbol"));
@@ -1053,7 +1087,7 @@ void jl_init_types()
     jl_sym_type->parameters = jl_null;
     jl_sym_type->names = jl_null;
     jl_sym_type->types = jl_null;
-    jl_sym_type->fnew = jl_sym_type->fconvert = NULL;
+    jl_sym_type->fnew = jl_sym_type->fconvert = jl_bottom_func;
     jl_sym_type->uid = t_uid_ctr++;
 
     jl_any_type->name = jl_new_typename(jl_symbol("Any"));
@@ -1085,7 +1119,7 @@ void jl_init_types()
                           jl_tuple(4, jl_typename_type, jl_type_type,
                                    jl_tuple_type, jl_any_func));
     // cannot be created with normal constructor due to hidden fields
-    jl_bits_kind->fnew = NULL;
+    jl_bits_kind->fnew = jl_bottom_func;
     
     jl_tvar_type = jl_new_struct_type(jl_symbol("TypeVar"),
                                      jl_any_type, jl_null,
@@ -1173,4 +1207,10 @@ void jl_init_types()
     jl_box_any_type =
         (jl_type_t*)jl_apply_type_ctor(jl_box_type,
                                        jl_tuple(1, jl_any_type));
+
+    jl_lambda_info_type =
+        jl_new_struct_type(jl_symbol("LambdaStaticData"),
+                           jl_any_type, jl_null, jl_null, jl_null);
+    jl_lambda_info_type->fnew = jl_bottom_func;
+    jl_lambda_info_type->fconvert = jl_bottom_func;
 }
