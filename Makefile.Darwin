@@ -1,10 +1,10 @@
 CC = gcc
+CXX = g++
 
 NAME = julia
-SRCS = jltypes.c gf.c ast.c repl.c builtins.c jlfrontend.c jlfrontend_.c \
-     module.c
-OBJS = $(SRCS:%.c=%.o)
-DOBJS = $(SRCS:%.c=%.do)
+SRCS = jltypes gf ast repl builtins jlfrontend jlfrontend_ module codegen
+OBJS = $(SRCS:%=%.o)
+DOBJS = $(SRCS:%=%.do)
 EXENAME = $(NAME)
 LLTDIR = lib
 LLT = $(LLTDIR)/libllt.a
@@ -14,7 +14,7 @@ LIBDIRS = /opt/local/lib
 
 FLAGS = -falign-functions -Wall -Wno-strict-aliasing -I$(LLTDIR) $(HFILEDIRS:%=-I%) $(LIBDIRS:%=-L%) $(CFLAGS) -D___LIBRARY
 LIBFILES = $(LLT) $(GAMBIT)/lib/gambit-c/libgambc.a
-LIBS = $(LIBFILES) -lutil -ldl -lm -lgc -framework ApplicationServices
+LIBS = $(LIBFILES) -lutil -ldl -lm -lgc -framework ApplicationServices $(shell llvm-config --ldflags --libs core engine jit interpreter)
 
 DEBUGFLAGS = -g -DDEBUG $(FLAGS)
 SHIPFLAGS = -O2 -DNDEBUG $(FLAGS)
@@ -25,6 +25,10 @@ default: debug
 	$(CC) $(SHIPFLAGS) -c $< -o $@
 %.do: %.c
 	$(CC) $(DEBUGFLAGS) -c $< -o $@
+%.o: %.cpp
+	$(CXX) $(SHIPFLAGS) $(shell llvm-config --cppflags) -c $< -o $@
+%.do: %.cpp
+	$(CXX) $(DEBUGFLAGS) $(shell llvm-config --cppflags) -c $< -o $@
 
 jlfrontend.c: jlfrontend.scm julia-parser.scm julia-syntax.scm
 	gambit-gsc -c $<
@@ -36,10 +40,10 @@ $(LLT):
 	cd $(LLTDIR) && $(MAKE) -f Makefile.$(shell uname)
 
 debug: $(DOBJS) $(LIBFILES)
-	$(CC) $(DEBUGFLAGS) $(DOBJS) -o $(EXENAME) $(LIBS)
+	$(CXX) $(DEBUGFLAGS) $(DOBJS) -o $(EXENAME) $(LIBS)
 
 release: $(OBJS) $(LIBFILES)
-	$(CC) $(SHIPFLAGS) $(OBJS) -o $(EXENAME) $(LIBS)
+	$(CXX) $(SHIPFLAGS) $(OBJS) -o $(EXENAME) $(LIBS)
 
 clean:
 	rm -f *.o

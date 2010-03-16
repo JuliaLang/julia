@@ -351,6 +351,7 @@ void jl_init_frontend();
 void jl_shutdown_frontend();
 void jl_init_builtins();
 void jl_init_modules();
+void jl_init_codegen();
 
 // parsing
 jl_value_t *jl_parse_input_line(char *str);
