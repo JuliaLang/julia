@@ -11,6 +11,8 @@
 #include "llvm/Target/TargetSelect.h"
 #include "llvm/Transforms/Scalar.h"
 #include "llvm/Support/IRBuilder.h"
+#include "llvm/Support/MemoryBuffer.h"
+#include "llvm/Bitcode/ReaderWriter.h"
 #include <cstdio>
 #include <string>
 #include <map>
@@ -29,6 +31,11 @@ static LLVMContext &jl_LLVMContext = getGlobalContext();
 static IRBuilder<> builder(getGlobalContext());
 static Module *jl_Module;
 static ExecutionEngine *jl_ExecutionEngine;
+static const Type *jl_value_llvmt;
+static const FunctionType *jl_func_sig;
+static GlobalVariable *jltrue_var;
+static GlobalVariable *jlfalse_var;
+static GlobalVariable *jlnull_var;
 
 extern "C" void jl_compile(jl_lambda_info_t *li)
 {
@@ -37,6 +44,31 @@ extern "C" void jl_compile(jl_lambda_info_t *li)
 extern "C" void hello_func()
 {
     ios_printf(ios_stdout, "hello, llvm.\n");
+}
+
+static GlobalVariable *global_to_llvm(const std::string &cname, void *addr)
+{
+    GlobalVariable *gv;
+    gv = new GlobalVariable(*jl_Module, jl_value_llvmt,
+                            true, GlobalVariable::ExternalLinkage,
+                            NULL, cname);
+    jl_ExecutionEngine->addGlobalMapping(gv, addr);
+    return gv;
+}
+
+static void init_julia_llvm_env(Module *m)
+{
+    // add needed base definitions to our LLVM environment
+    MemoryBuffer *deffile = MemoryBuffer::getFile("julia-defs.s.bc");
+    Module *jdefs = ParseBitcodeFile(deffile, getGlobalContext());
+    delete deffile;
+
+    jl_value_llvmt = jdefs->getTypeByName("struct._jl_value_t");
+    jl_func_sig = dynamic_cast<const FunctionType*>(jdefs->getTypeByName("jl_callable_t"));
+
+    jltrue_var = global_to_llvm("jl_true", (void*)&jl_true);
+    jlfalse_var = global_to_llvm("jl_false", (void*)&jl_false);
+    jlnull_var = global_to_llvm("jl_null", (void*)&jl_null);
 }
 
 static Function *emit_lambda()
@@ -66,6 +98,8 @@ extern "C" void jl_init_codegen()
     InitializeNativeTarget();
     jl_Module = new Module("julia", jl_LLVMContext);
     jl_ExecutionEngine = EngineBuilder(jl_Module).create();
+
+    init_julia_llvm_env(jl_Module);
 
     // test
     Function *f = emit_lambda();

@@ -284,6 +284,11 @@ JL_CALLABLE(jl_f_bufferref)
     jl_type_t *el_type = (jl_type_t*)jl_tparam0(jl_typeof(b));
     jl_value_t *elt;
     if (jl_is_bits_type(el_type)) {
+        if (el_type == jl_bool_type) {
+            if (((int8_t*)b->data)[i] != 0)
+                return jl_true;
+            return jl_false;
+        }
         elt = new_scalar((jl_bits_type_t*)el_type);
         size_t nb = ((jl_bits_type_t*)el_type)->nbits/8;
         switch (nb) {
@@ -580,7 +585,7 @@ static void print_float64(double d, int single)
 JL_CALLABLE(jl_f_print_bool)
 {
     ios_t *s = current_output_stream;
-    if (*(int32_t*)jl_bits_data(args[0]) == 0)
+    if (jl_unbox_bool(args[0]) == 0)
         ios_puts("false", s);
     else
         ios_puts("true", s);

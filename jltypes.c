@@ -449,9 +449,15 @@ BOX_FUNC(int32,  int32_t)
 BOX_FUNC(uint32, uint32_t)
 BOX_FUNC(int64,  int64_t)
 BOX_FUNC(uint64, uint64_t)
-BOX_FUNC(bool,   int32_t)
 BOX_FUNC(float32, float)
 BOX_FUNC(float64, double)
+
+jl_value_t *jl_box_bool(int8_t x)
+{
+    if (x)
+        return jl_true;
+    return jl_false;
+}
 
 #define UNBOX_FUNC(j_type,c_type)                       \
 c_type jl_unbox_##j_type(jl_value_t *v)                 \
@@ -467,7 +473,7 @@ UNBOX_FUNC(int32,  int32_t)
 UNBOX_FUNC(uint32, uint32_t)
 UNBOX_FUNC(int64,  int64_t)
 UNBOX_FUNC(uint64, uint64_t)
-UNBOX_FUNC(bool,   int32_t)
+UNBOX_FUNC(bool,   int8_t)
 UNBOX_FUNC(float32, float)
 UNBOX_FUNC(float64, double)
 
@@ -1157,7 +1163,7 @@ void jl_init_types()
     jl_int_type = jl_new_tagtype(jl_symbol("Int"), jl_real_type, jl_null);
     jl_float_type = jl_new_tagtype(jl_symbol("Float"), jl_real_type, jl_null);
 
-    jl_bool_type    = make_scalar_type("Bool"  , jl_scalar_type, 32);
+    jl_bool_type    = make_scalar_type("Bool"  , jl_scalar_type, 8);
     jl_int8_type    = make_scalar_type("Int8"  , jl_int_type, 8);
     jl_uint8_type   = make_scalar_type("Uint8" , jl_int_type, 8);
     jl_int16_type   = make_scalar_type("Int16" , jl_int_type, 16);
@@ -1173,8 +1179,8 @@ void jl_init_types()
     jl_tupleset(jl_scalar_type->parameters, 0, (jl_value_t*)jl_scalar_type);
     jl_tupleset(jl_scalar_type->parameters, 1, jl_box_int32(0));
 
-    jl_false = jl_box_bool(0);
-    jl_true = jl_box_bool(1);
+    jl_false = jl_box_int8(0); jl_false->type = jl_bool_type;
+    jl_true  = jl_box_int8(1); jl_true->type  = jl_bool_type;
 
     tv = typevars(1, "T");
     jl_struct_type_t *bufstruct = 
