@@ -70,6 +70,22 @@ char *ios_readline(ios_t *s)
     return ios_takebuf(&dest, &n);
 }
 
+JL_CALLABLE(jl_f_new_closure);
+
+jl_value_t *jl_toplevel_eval(jl_value_t *ast)
+{
+    // ast is of the form (quote <lambda-info>)
+    jl_value_t *args[2];
+    assert(jl_is_expr(ast));
+    jl_lambda_info_t *li =
+        ((jl_lambda_info_t**)((jl_expr_t*)ast)->args->data)[0];
+    assert(jl_typeof(li) == jl_lambda_info_type);
+    args[0] = (jl_value_t*)li;
+    args[1] = (jl_value_t*)jl_null;
+    jl_value_t *thunk = jl_f_new_closure(NULL, args, 2);
+    return jl_apply((jl_function_t*)thunk, NULL, 0);
+}
+
 static int have_color;
 
 int main(int argc, char *argv[])
@@ -100,6 +116,8 @@ int main(int argc, char *argv[])
         jl_value_t *ast = jl_parse_input_line(input);
         if (ast != NULL) {
             jl_print(ast);
+            ios_printf(ios_stdout, "\n");
+            jl_print(jl_toplevel_eval(ast));
         }
         
         ios_printf(ios_stdout, "\n\n");

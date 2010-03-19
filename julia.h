@@ -221,6 +221,7 @@ extern jl_func_type_t *jl_any_func;
 
 extern jl_function_t *jl_print_gf;
 extern jl_function_t *jl_bottom_func;
+extern jl_buffer_t *jl_the_empty_buffer;
 
 #ifdef BITS64
 #define NWORDS(sz) (((sz)+7)>>3)
@@ -256,6 +257,7 @@ extern jl_function_t *jl_bottom_func;
 #define jl_is_int32(v)       jl_typeis(v,jl_int32_type)
 #define jl_is_bool(v)        jl_typeis(v,jl_bool_type)
 #define jl_is_symbol(v)      jl_typeis(v,jl_sym_type)
+#define jl_is_expr(v)        jl_typeis(v,jl_expr_type)
 #define jl_is_func(v)        (jl_is_func_type(jl_typeof(v)))
 #define jl_is_function(v)    (jl_is_func_type(jl_typeof(v)))
 #define jl_is_buffer(v)      (((jl_tag_type_t*)jl_typeof(v))->name==jl_buffer_typename)
@@ -366,11 +368,15 @@ extern jl_module_t *jl_system_module;
 extern jl_module_t *jl_user_module;
 jl_module_t *jl_new_module(jl_sym_t *name);
 jl_binding_t *jl_get_binding(jl_module_t *m, jl_sym_t *var);
+jl_value_t **jl_get_bindingp(jl_module_t *m, jl_sym_t *var);
 jl_binding_t *jl_add_binding(jl_module_t *m, jl_sym_t *var);
 int jl_boundp(jl_module_t *m, jl_sym_t *var);
 jl_module_t *jl_add_module(jl_module_t *m, jl_module_t *child);
 jl_module_t *jl_get_module(jl_module_t *m, jl_sym_t *name);
 jl_module_t *jl_import_module(jl_module_t *to, jl_module_t *from);
+
+// compiler
+void jl_compile(jl_lambda_info_t *li);
 
 // for writing julia functions in C
 #define JL_CALLABLE(name) \

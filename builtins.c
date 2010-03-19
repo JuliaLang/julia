@@ -729,7 +729,7 @@ JL_CALLABLE(jl_trampoline)
     assert(jl_is_func(f));
     assert(f->linfo != NULL);
     jl_value_t *cloenv = ((jl_value_pair_t*)env)->b;
-    // compile(f->linfo);
+    jl_compile(f->linfo);
     assert(f->linfo->fptr != NULL);
     f->fptr = f->linfo->fptr;
     f->env = cloenv;

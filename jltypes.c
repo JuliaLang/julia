@@ -75,6 +75,7 @@ jl_value_t *jl_false;
 
 jl_func_type_t *jl_any_func;
 jl_function_t *jl_bottom_func;
+jl_buffer_t *jl_the_empty_buffer;
 
 static inline jl_value_t *newobj(jl_type_t *type, size_t nfields)
 {
@@ -1219,4 +1220,6 @@ void jl_init_types()
                            jl_any_type, jl_null, jl_null, jl_null);
     jl_lambda_info_type->fnew = jl_bottom_func;
     jl_lambda_info_type->fconvert = jl_bottom_func;
+
+    jl_the_empty_buffer = jl_new_buffer(jl_buffer_any_type, 0);
 }
