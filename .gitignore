@@ -1,7 +1,6 @@
-/types.png
-jlfrontend.c
-jlfrontend_.c
 *.o
 *.do
 *.a
+jlfrontend.c
+jlfrontend_.c
 /julia
