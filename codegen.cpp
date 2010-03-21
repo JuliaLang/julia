@@ -62,6 +62,13 @@ static Function *jltuple_func;
   - instantiate-method to provide static parameters
   - rootlist to track pointers emitted into code
 
+  stuff to fix up:
+  - experiment with llvm optimization passes, option to disable them
+  - function/var name mangling
+  - gensyms from the front end might conflict with real variables, fix it
+  - source location tracking, var name metadata
+  - better error messages
+
   optimizations round 1:
   - constants, especially global. resolve functions statically.
   - keep a table mapping fptr to Function* for compiling known calls
@@ -77,6 +84,7 @@ static Function *jltuple_func;
   - type inference
   - mark non-null references and avoid null check
   - static method lookup
+  - inlining
   - unboxing
 
   future:
