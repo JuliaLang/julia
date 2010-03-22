@@ -42,6 +42,7 @@ static const Type *jl_function_llvmt;
 static const FunctionType *jl_func_sig;
 static const Type *T_int8;
 static const Type *T_int32;
+static const Type *T_int64;
 
 // global vars
 static GlobalVariable *jltrue_var;
@@ -208,7 +209,7 @@ typedef struct {
     const Argument *argCount;
 } jl_codectx_t;
 
-static void emit_expr(jl_value_t *expr, jl_codectx_t *ctx)
+static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool value)
 {
     if (jl_is_symbol(expr)) {
         // var
@@ -226,25 +227,40 @@ static void emit_expr(jl_value_t *expr, jl_codectx_t *ctx)
         else if (jl_is_buffer(expr)) {
             // string literal
         }
+        // TODO: for now just return the direct pointer
+#ifdef BITS64
+        return ConstantExpr::getIntToPtr(ConstantInt::get(T_int64, (uint64_t)expr),
+                                         jl_pvalue_llvmt);
+#else
+        return ConstantExpr::getIntToPtr(ConstantInt::get(T_int32, (uint64_t)expr),
+                                         jl_pvalue_llvmt);
+#endif
         assert(0);
     }
     jl_expr_t *ex = (jl_expr_t*)expr;
+    jl_value_t **args = (jl_value_t**)ex->args->data;
     // this is object-disoriented.
     // however, this is a good way to do it because it should *not* be easy
     // to add new node types.
     if (ex->head == goto_sym) {
+        assert(!value);
     }
     else if (ex->head == goto_ifnot_sym) {
+        assert(!value);
     }
     else if (ex->head == label_sym) {
+        assert(!value);
     }
 
     else if (ex->head == return_sym) {
+        assert(!value);
+        builder.CreateRet(emit_expr(args[0], ctx, true));
     }
     else if (ex->head == call_sym) {
     }
 
     else if (ex->head == assign_sym) {
+        assert(!value);
     }
     else if (ex->head == top_sym) {
     }
@@ -256,7 +272,13 @@ static void emit_expr(jl_value_t *expr, jl_codectx_t *ctx)
     else if (ex->head == quote_sym) {
     }
     else if (ex->head == null_sym) {
+        return builder.CreateLoad(jlnull_var, false);
     }
+    //TODO: temporary
+    if (value)
+        return builder.CreateLoad(jlnull_var, false);
+    assert(!value);
+    return NULL;
 }
 
 static void emit_function(jl_expr_t *lam, Function *f)
@@ -368,11 +390,9 @@ static void emit_function(jl_expr_t *lam, Function *f)
     }
     // compile body statements
     for(i=0; i < stmts->length; i++) {
-        emit_expr(((jl_value_t**)stmts->data)[i], &ctx);
+        (void)emit_expr(((jl_value_t**)stmts->data)[i], &ctx, false);
     }
-
-    LoadInst *nullVal = builder.CreateLoad(jlnull_var, false);
-    builder.CreateRet(nullVal);
+    // all bodies must end in a return
 }
 
 static GlobalVariable *global_to_llvm(const std::string &cname, void *addr)
@@ -390,6 +410,7 @@ extern "C" JL_CALLABLE(jl_f_tuple);
 static void init_julia_llvm_env(Module *m)
 {
     T_int32 = Type::getInt32Ty(getGlobalContext());
+    T_int64 = Type::getInt64Ty(getGlobalContext());
     T_int8  = Type::getInt8Ty(getGlobalContext());
 
     // add needed base definitions to our LLVM environment
