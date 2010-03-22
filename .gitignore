@@ -4,3 +4,4 @@
 jlfrontend.c
 jlfrontend_.c
 /julia
+/*.bc
