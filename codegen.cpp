@@ -232,7 +232,7 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool value)
         return ConstantExpr::getIntToPtr(ConstantInt::get(T_int64, (uint64_t)expr),
                                          jl_pvalue_llvmt);
 #else
-        return ConstantExpr::getIntToPtr(ConstantInt::get(T_int32, (uint64_t)expr),
+        return ConstantExpr::getIntToPtr(ConstantInt::get(T_int32, (uint32_t)expr),
                                          jl_pvalue_llvmt);
 #endif
         assert(0);
@@ -250,6 +250,10 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool value)
     }
     else if (ex->head == label_sym) {
         assert(!value);
+        BasicBlock *bb = (*ctx->labels)[((jl_sym_t*)args[0])->name];
+        assert(bb);
+        ctx->f->getBasicBlockList().push_back(bb);
+        builder.SetInsertPoint(bb);
     }
 
     else if (ex->head == return_sym) {

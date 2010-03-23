@@ -12,7 +12,11 @@ GAMBIT = /opt/local
 HFILEDIRS = /opt/local/include $(GAMBIT)/include
 LIBDIRS = /opt/local/lib
 
-FLAGS = -falign-functions -Wall -Wno-strict-aliasing -I$(LLTDIR) $(HFILEDIRS:%=-I%) $(LIBDIRS:%=-L%) $(CFLAGS) -D___LIBRARY
+# OS flags: LINUX, WIN32, MACOSX
+# architecture flags: __CPU__=xxx, BITS64, ARCH_X86, ARCH_X86_64
+CONFIG = -DMACOSX -DARCH_X86 -D__CPU__=586
+
+FLAGS = -falign-functions -Wall -Wno-strict-aliasing -I$(LLTDIR) $(HFILEDIRS:%=-I%) $(LIBDIRS:%=-L%) $(CFLAGS) -D___LIBRARY $(CONFIG)
 LIBFILES = $(LLT) $(GAMBIT)/lib/gambit-c/libgambc.a
 LIBS = $(LIBFILES) -lutil -ldl -lm -lgc -framework ApplicationServices $(shell llvm-config --ldflags --libs core engine jit interpreter bitreader)
 

@@ -223,6 +223,9 @@ reinventing the repl: language support for interactive use
 improving numeric type systems
 
 eliminating array allocations in loops
+or using register allocation to manage general resources
+
+performance survey over the course of a language implementation (with llvm)
 
 -------------------------------------------------------------------------------
 
