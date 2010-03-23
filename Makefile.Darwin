@@ -14,7 +14,7 @@ LIBDIRS = /opt/local/lib
 
 # OS flags: LINUX, WIN32, MACOSX
 # architecture flags: __CPU__=xxx, BITS64, ARCH_X86, ARCH_X86_64
-CONFIG = -DMACOSX -DARCH_X86 -D__CPU__=586
+CONFIG = -DMACOSX -DARCH_X86_64 -D__CPU__=586 -DBITS64
 
 FLAGS = -falign-functions -Wall -Wno-strict-aliasing -I$(LLTDIR) $(HFILEDIRS:%=-I%) $(LIBDIRS:%=-L%) $(CFLAGS) -D___LIBRARY $(CONFIG)
 LIBFILES = $(LLT) $(GAMBIT)/lib/gambit-c/libgambc.a

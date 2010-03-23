@@ -74,7 +74,7 @@ typedef long int_t;
 typedef int64_t offset_t;
 typedef u_int64_t index_t;
 typedef int64_t ptrint_t; // pointer-size int
-typedef u_int64_t u_ptrint_t
+typedef u_int64_t u_ptrint_t;
 #else
 #define TOP_BIT 0x80000000
 #define NBITS 32
