@@ -1,0 +1,21 @@
+CC = gcc
+CXX = g++
+
+NAME = julia
+SRCS = jltypes gf ast repl builtins jlfrontend jlfrontend_ module codegen
+OBJS = $(SRCS:%=%.o)
+DOBJS = $(SRCS:%=%.do)
+EXENAME = $(NAME)
+LLTDIR = lib
+LLT = $(LLTDIR)/libllt.a
+GAMBIT = /opt/local
+GAMBITGSC = gambit-gsc
+GAMBITLIB = $(GAMBIT)/lib/gambit-c/libgambc.a
+HFILEDIRS = /opt/local/include $(GAMBIT)/include
+LIBDIRS = /opt/local/lib
+
+# OS flags: LINUX, WIN32, MACOSX
+# architecture flags: __CPU__=xxx, BITS64, ARCH_X86, ARCH_X86_64
+CONFIG = -DMACOSX -DARCH_X86_64 -D__CPU__=586 -DBITS64
+
+

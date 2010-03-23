@@ -1,4 +1,4 @@
-CC = gcc
+include ../Make.inc.$(shell uname)
 
 SRCS = hashing.c timefuncs.c dblprint.c ptrhash.c \
 	utf8.c ios.c cplxprint.c dirpath.c htable.c \
@@ -7,11 +7,7 @@ OBJS = $(SRCS:%.c=%.o)
 DOBJS = $(SRCS:%.c=%.do)
 TARGET = libllt.a
 
-# OS flags: LINUX, WIN32, MACOSX
-# architecture flags: __CPU__=xxx, BITS64, ARCH_X86, ARCH_X86_64
-CONFIG = -DLINUX -DARCH_X86 -D__CPU__=586
-
-FLAGS = -Wall -Wno-strict-aliasing $(CFLAGS) $(CONFIG)
+FLAGS = -Wall -Wno-strict-aliasing $(CFLAGS) $(CONFIG) -I $(HFILEDIRS:%=-I%)
 LIBS =
 
 DEBUGFLAGS = -g -DDEBUG $(FLAGS)
@@ -35,6 +31,7 @@ release: $(OBJS)
 clean:
 	rm -f *.o
 	rm -f *.do
-	rm -f *~
+	rm -f *.a
+	rm -f *~ *#
 	rm -f core*
 	rm -f $(TARGET)
