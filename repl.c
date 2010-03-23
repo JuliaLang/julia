@@ -93,13 +93,26 @@ int main(int argc, char *argv[])
     julia_init();
     
     have_color = detect_color();
-    char *banner = have_color ? jl_banner_color : jl_banner_plain;
-    ios_printf(ios_stdout, "%s", banner);
-    
+    int print_banner = 1;
+
+    if (argc > 1) {
+      if (!strncmp(argv[1], "-q", 2)) {
+	print_banner = 0;
+      }
+    }
+
+    if (print_banner) {
+      char *banner = have_color ? jl_banner_color : jl_banner_plain;
+      ios_printf(ios_stdout, "%s", banner);
+    }
+
     while (1) {
-        if (have_color)
-            ios_printf(ios_stdout, "\033[0m");
-        ios_printf(ios_stdout, "julia> ");
+        if (have_color) {
+	  ios_printf(ios_stdout, "\033[32m");
+	  ios_printf(ios_stdout, "julia> \033[0m");
+	} else {
+	  ios_printf(ios_stdout, "julia> ");
+	}
         ios_flush(ios_stdout);
         char *input = ios_readline(ios_stdin);
         ios_purge(ios_stdin);
