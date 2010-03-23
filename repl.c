@@ -118,7 +118,7 @@ int main(int argc, char *argv[])
 #ifdef USE_READLINE
             input = readline ("\033[32mjulia> \033[0m");
 #else
-            input = ios_printf(ios_stdout, "\033[32mjulia> \033[0m");
+            ios_printf(ios_stdout, "\033[32mjulia> \033[0m");
 #endif
         } else {
 #ifdef USE_READLINE
@@ -136,9 +136,7 @@ int main(int argc, char *argv[])
 #endif
         ios_purge(ios_stdin);
 
-        if (!input) return 0;
-
-        if (ios_eof(ios_stdin) || !strcmp(input, "Quit\n")) {
+        if (!input || ios_eof(ios_stdin) || !strcmp(input, "Quit\n")) {
             ios_printf(ios_stdout, "\n");
             break;
         }
