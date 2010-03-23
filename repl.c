@@ -14,6 +14,9 @@
 #ifndef NO_BOEHM_GC
 #include <gc.h>
 #endif
+#ifdef USE_READLINE
+#include <readline/readline.h>
+#endif
 #include "llt.h"
 #include "julia.h"
 
@@ -107,17 +110,33 @@ int main(int argc, char *argv[])
     }
 
     while (1) {
-        if (have_color) {
-	  ios_printf(ios_stdout, "\033[32m");
-	  ios_printf(ios_stdout, "julia> \033[0m");
-	} else {
-	  ios_printf(ios_stdout, "julia> ");
-	}
+	char *input;
+
         ios_flush(ios_stdout);
-        char *input = ios_readline(ios_stdin);
+
+        if (have_color) {
+#ifdef USE_READLINE
+	  input = readline ("\033[32mjulia> \033[0m");
+#else
+	  input = ios_printf(ios_stdout, "\033[32mjulia> \033[0m");
+#endif
+	} else {
+#ifdef USE_READLINE
+	  input = readline ("julia> ");
+#else
+	  ios_printf(ios_stdout, "julia> ");
+#endif
+	}
+
+        ios_flush(ios_stdout);
+#ifdef USE_READLINE
+	if (input && *input) add_history(input);
+#else
+        input = ios_readline(ios_stdin);
+#endif
         ios_purge(ios_stdin);
         
-        if (!strcmp(input, "Quit\n") || ios_eof(ios_stdin)) {
+        if (ios_eof(ios_stdin) || !strcmp(input, "Quit\n")) {
             ios_printf(ios_stdout, "\n");
             break;
         }
@@ -133,7 +152,8 @@ int main(int argc, char *argv[])
             jl_print(jl_toplevel_eval(ast));
         }
         
-        ios_printf(ios_stdout, "\n\n");
+        ios_printf(ios_stdout, "\n");
+	if (input) free(input);
     }
     
     return 0;
