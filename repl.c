@@ -99,14 +99,14 @@ int main(int argc, char *argv[])
     int print_banner = 1;
 
     if (argc > 1) {
-      if (!strncmp(argv[1], "-q", 2)) {
-	print_banner = 0;
-      }
+        if (!strncmp(argv[1], "-q", 2)) {
+            print_banner = 0;
+        }
     }
 
     if (print_banner) {
-      char *banner = have_color ? jl_banner_color : jl_banner_plain;
-      ios_printf(ios_stdout, "%s", banner);
+        char *banner = have_color ? jl_banner_color : jl_banner_plain;
+        ios_printf(ios_stdout, "%s", banner);
     }
 
     while (1) {
@@ -116,21 +116,21 @@ int main(int argc, char *argv[])
 
         if (have_color) {
 #ifdef USE_READLINE
-	  input = readline ("\033[32mjulia> \033[0m");
+            input = readline ("\033[32mjulia> \033[0m");
 #else
-	  input = ios_printf(ios_stdout, "\033[32mjulia> \033[0m");
+            input = ios_printf(ios_stdout, "\033[32mjulia> \033[0m");
 #endif
-	} else {
+        } else {
 #ifdef USE_READLINE
-	  input = readline ("julia> ");
+            input = readline ("julia> ");
 #else
-	  ios_printf(ios_stdout, "julia> ");
+            ios_printf(ios_stdout, "julia> ");
 #endif
-	}
+        }
 
         ios_flush(ios_stdout);
 #ifdef USE_READLINE
-	if (input && *input) add_history(input);
+        if (input && *input) add_history(input);
 #else
         input = ios_readline(ios_stdin);
 #endif
@@ -153,7 +153,7 @@ int main(int argc, char *argv[])
         }
         
         ios_printf(ios_stdout, "\n");
-	if (input) free(input);
+        if (input) free(input);
     }
     
     return 0;
