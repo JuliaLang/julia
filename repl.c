@@ -135,7 +135,9 @@ int main(int argc, char *argv[])
         input = ios_readline(ios_stdin);
 #endif
         ios_purge(ios_stdin);
-        
+
+        if (!input) return 0;
+
         if (ios_eof(ios_stdin) || !strcmp(input, "Quit\n")) {
             ios_printf(ios_stdout, "\n");
             break;
