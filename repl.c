@@ -41,6 +41,10 @@ static char jl_banner_color[] =
     " _/ |\\__'_|_|_|\\__'_|  |  \n"
     "|__/                   |\033[0m\n\n";
 
+static char jl_prompt_plain[] = "julia> ";
+static char jl_prompt_color[] = "\033[1m\033[32mjulia> \033[0m";
+static char jl_pre_answer_color[] = "\033[1m\033[36m";
+
 void julia_init()
 {
     llt_init();
@@ -95,20 +99,20 @@ static int have_color;
 int main(int argc, char *argv[])
 {
     julia_init();
-    
-    have_color = detect_color();
-    int print_banner = 1;
 
+    have_color = detect_color();
+    char *banner = have_color ? jl_banner_color : jl_banner_plain;
+    char *prompt = have_color ? jl_prompt_color : jl_prompt_plain;
+
+    int print_banner = 1;
     if (argc > 1) {
         if (!strncmp(argv[1], "-q", 2)) {
             print_banner = 0;
         }
     }
 
-    if (print_banner) {
-        char *banner = have_color ? jl_banner_color : jl_banner_plain;
+    if (print_banner)
         ios_printf(ios_stdout, "%s", banner);
-    }
 
 #ifdef USE_READLINE
     using_history();
@@ -116,23 +120,15 @@ int main(int argc, char *argv[])
 #endif
 
     while (1) {
-	char *input;
+    char *input;
 
         ios_flush(ios_stdout);
 
-        if (have_color) {
 #ifdef USE_READLINE
-            input = readline ("\033[1m\033[32mjulia> \033[0m");
+        input = readline(prompt);
 #else
-            ios_printf(ios_stdout, "\033[1m\033[32mjulia> \033[0m");
+        ios_printf(ios_stdout, prompt);
 #endif
-        } else {
-#ifdef USE_READLINE
-            input = readline ("julia> ");
-#else
-            ios_printf(ios_stdout, "julia> ");
-#endif
-        }
 
         ios_flush(ios_stdout);
 #ifdef USE_READLINE
@@ -149,10 +145,10 @@ int main(int argc, char *argv[])
 #ifdef USE_READLINE
         append_history(1, ".julia_history");
 #endif
-        
+
         if (have_color)
-            ios_printf(ios_stdout, "\033[1m\033[36m");
-        
+            ios_printf(ios_stdout, jl_pre_answer_color);
+
         // process input
         jl_value_t *ast = jl_parse_input_line(input);
         if (ast != NULL) {
@@ -160,7 +156,7 @@ int main(int argc, char *argv[])
             ios_printf(ios_stdout, "\n");
             jl_print(jl_toplevel_eval(ast));
         }
-        
+
         ios_printf(ios_stdout, "\n");
 #ifdef USE_READLINE
         // readline allocates with system malloc
