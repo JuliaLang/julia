@@ -111,7 +111,8 @@ int main(int argc, char *argv[])
     }
 
 #ifdef USE_READLINE
-    read_history("~/.julia_history");
+    using_history();
+    read_history(".julia_history");
 #endif
 
     while (1) {
@@ -165,8 +166,7 @@ int main(int argc, char *argv[])
     }
     
 #ifdef USE_READLINE
-    write_history ("~/.julia_history");
-    //    history_truncate_file ("~/.julia_history", 1000);
+    write_history (".julia_history");
 #endif
     return 0;
 }

@@ -5,3 +5,4 @@ jlfrontend.c
 jlfrontend_.c
 /julia
 /*.bc
+.julia_history
