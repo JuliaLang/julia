@@ -16,6 +16,7 @@
 #endif
 #ifdef USE_READLINE
 #include <readline/readline.h>
+#include <readline/history.h>
 #endif
 #include "llt.h"
 #include "julia.h"
@@ -109,6 +110,10 @@ int main(int argc, char *argv[])
         ios_printf(ios_stdout, "%s", banner);
     }
 
+#ifdef USE_READLINE
+    read_history("~/.julia_history");
+#endif
+
     while (1) {
 	char *input;
 
@@ -156,5 +161,9 @@ int main(int argc, char *argv[])
         if (input) free(input);
     }
     
+#ifdef USE_READLINE
+    write_history ("~/.julia_history");
+    //    history_truncate_file ("~/.julia_history", 1000);
+#endif
     return 0;
 }
