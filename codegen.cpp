@@ -244,14 +244,30 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool value)
     // to add new node types.
     if (ex->head == goto_sym) {
         assert(!value);
+        char *labelname = ((jl_sym_t*)args[0])->name;
+        BasicBlock *bb = (*ctx->labels)[labelname];
+        assert(bb);
+        builder.CreateBr(bb);
     }
     else if (ex->head == goto_ifnot_sym) {
         assert(!value);
+        jl_value_t *cond = args[0];
+        char *labelname = ((jl_sym_t*)args[1])->name;
+        Value *isfalse =
+            builder.CreateICmpEQ(emit_expr(cond, ctx, true),
+                                 builder.CreateLoad(jlfalse_var, false));
+        BasicBlock *ifso = BasicBlock::Create(getGlobalContext(), "if", ctx->f);
+        BasicBlock *ifnot = (*ctx->labels)[labelname];
+        assert(ifnot);
+        builder.CreateCondBr(isfalse, ifnot, ifso);
+        builder.SetInsertPoint(ifso);
     }
     else if (ex->head == label_sym) {
         assert(!value);
-        BasicBlock *bb = (*ctx->labels)[((jl_sym_t*)args[0])->name];
+        char *labelname = ((jl_sym_t*)args[0])->name;
+        BasicBlock *bb = (*ctx->labels)[labelname];
         assert(bb);
+        builder.CreateBr(bb); // all BasicBlocks must exit explicitly
         ctx->f->getBasicBlockList().push_back(bb);
         builder.SetInsertPoint(bb);
     }
