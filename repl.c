@@ -116,9 +116,9 @@ int main(int argc, char *argv[])
 
         if (have_color) {
 #ifdef USE_READLINE
-            input = readline ("\033[32mjulia> \033[0m");
+            input = readline ("\033[1m\033[32mjulia> \033[0m");
 #else
-            ios_printf(ios_stdout, "\033[32mjulia> \033[0m");
+            ios_printf(ios_stdout, "\033[1m\033[32mjulia> \033[0m");
 #endif
         } else {
 #ifdef USE_READLINE
@@ -153,7 +153,10 @@ int main(int argc, char *argv[])
         }
         
         ios_printf(ios_stdout, "\n");
+#ifdef USE_READLINE
+        // readline allocates with system malloc
         if (input) free(input);
+#endif
     }
     
     return 0;
