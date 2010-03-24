@@ -146,6 +146,9 @@ int main(int argc, char *argv[])
             ios_printf(ios_stdout, "\n");
             break;
         }
+#ifdef USE_READLINE
+        append_history(1, ".julia_history");
+#endif
         
         if (have_color)
             ios_printf(ios_stdout, "\033[1m\033[36m");
@@ -164,9 +167,6 @@ int main(int argc, char *argv[])
         if (input) free(input);
 #endif
     }
-    
-#ifdef USE_READLINE
-    write_history (".julia_history");
-#endif
+
     return 0;
 }
