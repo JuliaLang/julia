@@ -1,3 +1,14 @@
+CC = gcc
+CXX = g++
+
+NAME = julia
+SRCS = jltypes gf ast repl builtins jlfrontend jlfrontend_ module codegen
+OBJS = $(SRCS:%=%.o)
+DOBJS = $(SRCS:%=%.do)
+EXENAME = $(NAME)
+LLTDIR = lib
+LLT = $(LLTDIR)/libllt.a
+
 include ./Make.inc.$(shell uname)
 
 FLAGS = -falign-functions -Wall -Wno-strict-aliasing -I$(LLTDIR) $(HFILEDIRS:%=-I%) $(LIBDIRS:%=-L%) $(CFLAGS) -D___LIBRARY $(CONFIG)
