@@ -130,7 +130,7 @@ int main(int argc, char *argv[])
 #endif
 
     while (1) {
-    char *input;
+        char *input;
 
         ios_flush(ios_stdout);
 

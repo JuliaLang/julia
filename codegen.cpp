@@ -38,17 +38,21 @@ static std::map<const std::string, GlobalVariable*> stringConstants;
 // types
 static const Type *jl_value_llvmt;
 static const Type *jl_pvalue_llvmt;
+static const Type *jl_ppvalue_llvmt;
 static const Type *jl_function_llvmt;
 static const FunctionType *jl_func_sig;
 static const Type *T_int8;
+static const Type *T_pint8;
 static const Type *T_int32;
 static const Type *T_int64;
+static const Type *T_void;
 
 // global vars
 static GlobalVariable *jltrue_var;
 static GlobalVariable *jlfalse_var;
 static GlobalVariable *jlnull_var;
 static GlobalVariable *jlsysmod_var;
+static GlobalVariable *jlfunctype_var;
 
 // important functions
 static Function *jlerror_func;
@@ -209,6 +213,45 @@ typedef struct {
     const Argument *argCount;
 } jl_codectx_t;
 
+static Value *literal_pointer_val(jl_value_t *p)
+{
+#ifdef BITS64
+    return ConstantExpr::getIntToPtr(ConstantInt::get(T_int64, (uint64_t)p),
+                                     jl_pvalue_llvmt);
+#else
+    return ConstantExpr::getIntToPtr(ConstantInt::get(T_int32, (uint32_t)p),
+                                     jl_pvalue_llvmt);
+#endif
+}
+
+static Value *emit_typeof(Value *p)
+{
+    // given p, a jl_value_t*, compute its type tag
+    Value *tt = builder.CreateBitCast(p, jl_ppvalue_llvmt);
+    tt = builder.CreateLoad(builder.CreateGEP(tt,ConstantInt::get(T_int32,0)),
+                            false);
+    return tt;
+}
+
+static void emit_error(char *txt)
+{
+    std::vector<Value *> zeros(0);
+    zeros.push_back(ConstantInt::get(T_int32, 0));
+    zeros.push_back(ConstantInt::get(T_int32, 0));
+    builder.CreateCall(jlerror_func,
+                       builder.CreateGEP(stringConst(txt),
+                                         zeros.begin(), zeros.end()));
+}
+
+static Value *emit_nthptr(Value *v, size_t n)
+{
+    // p = (jl_value_t**)v; p[n]
+    Value *vptr =
+        builder.CreateGEP(builder.CreateBitCast(v, jl_ppvalue_llvmt),
+                          ConstantInt::get(T_int32, n));
+    return builder.CreateLoad(vptr, false);
+}
+
 static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool value)
 {
     if (jl_is_symbol(expr)) {
@@ -228,13 +271,7 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool value)
             // string literal
         }
         // TODO: for now just return the direct pointer
-#ifdef BITS64
-        return ConstantExpr::getIntToPtr(ConstantInt::get(T_int64, (uint64_t)expr),
-                                         jl_pvalue_llvmt);
-#else
-        return ConstantExpr::getIntToPtr(ConstantInt::get(T_int32, (uint32_t)expr),
-                                         jl_pvalue_llvmt);
-#endif
+        return literal_pointer_val(expr);
         assert(0);
     }
     jl_expr_t *ex = (jl_expr_t*)expr;
@@ -277,6 +314,35 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool value)
         builder.CreateRet(emit_expr(args[0], ctx, true));
     }
     else if (ex->head == call_sym) {
+        Value *theFunc = emit_expr(args[0], ctx, true);
+        size_t nargs = ex->args->length-1;
+        Value *isfunc =
+            builder.CreateICmpEQ(emit_typeof(theFunc),
+                                 builder.CreateLoad(jlfunctype_var,false));
+        BasicBlock *elseBB = BasicBlock::Create(getGlobalContext(),"a",ctx->f);
+        BasicBlock *mergeBB = BasicBlock::Create(getGlobalContext(),"b");
+        builder.CreateCondBr(isfunc, mergeBB, elseBB);
+        builder.SetInsertPoint(elseBB);
+        emit_error("apply: expected function.");
+        builder.CreateBr(mergeBB);
+        ctx->f->getBasicBlockList().push_back(mergeBB);
+        builder.SetInsertPoint(mergeBB);
+        Value *cloenv = emit_nthptr(theFunc, 2);
+        std::vector<const Type*> emptyargs(0);
+        Value *stacksave =
+            builder.CreateCall(Function::Create(FunctionType::get(T_pint8, emptyargs, false),
+                                                Function::ExternalLinkage,
+                                                "llvm.stacksave", jl_Module));
+        Value *argl = builder.CreateAlloca(jl_pvalue_llvmt,
+                                           ConstantInt::get(T_int32, nargs));
+        // ...
+        // restore stack
+        std::vector<const Type*> oneptr(0); oneptr.push_back(T_pint8);
+        builder.CreateCall(Function::Create(FunctionType::get(T_void,
+                                                              oneptr, false),
+                                            Function::ExternalLinkage,
+                                            "llvm.stackrestore", jl_Module),
+                           stacksave);
     }
 
     else if (ex->head == assign_sym) {
@@ -287,9 +353,12 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool value)
     else if (ex->head == boundp_sym) {
     }
     else if (ex->head == closure_ref_sym) {
+        int idx = jl_unbox_int32(args[0]);
+        return emit_nthptr((Value*)ctx->envArg, idx+2);
     }
 
     else if (ex->head == quote_sym) {
+        return literal_pointer_val(args[0]);
     }
     else if (ex->head == null_sym) {
         return builder.CreateLoad(jlnull_var, false);
@@ -326,9 +395,6 @@ static void emit_function(jl_expr_t *lam, Function *f)
     // check arg count
     size_t nreq = largs->length;
     int va = 0;
-    std::vector<Value *> zeros(0);
-    zeros.push_back(ConstantInt::get(T_int32, 0));
-    zeros.push_back(ConstantInt::get(T_int32, 0));
     if (nreq > 0 && is_rest_arg(((jl_value_t**)largs->data)[nreq-1])) {
         nreq--;
         va = 1;
@@ -339,10 +405,7 @@ static void emit_function(jl_expr_t *lam, Function *f)
         BasicBlock *mergeBB = BasicBlock::Create(getGlobalContext(), "ifcont");
         builder.CreateCondBr(enough, mergeBB, elseBB);
         builder.SetInsertPoint(elseBB);
-        // throw error
-        builder.CreateCall(jlerror_func,
-                           builder.CreateGEP(stringConst("Too few arguments"),
-                                             zeros.begin(), zeros.end()));
+        emit_error("Too few arguments");
         builder.CreateBr(mergeBB);
         f->getBasicBlockList().push_back(mergeBB);
         builder.SetInsertPoint(mergeBB);
@@ -355,9 +418,7 @@ static void emit_function(jl_expr_t *lam, Function *f)
         BasicBlock *mergeBB = BasicBlock::Create(getGlobalContext(), "ifcont");
         builder.CreateCondBr(enough, mergeBB, elseBB);
         builder.SetInsertPoint(elseBB);
-        // throw error
-        builder.CreateCall(jlerror_func,
-                           builder.CreateGEP(stringConst("Wrong number of arguments"), zeros.begin(), zeros.end()));
+        emit_error("Wrong number of arguments");
         builder.CreateBr(mergeBB);
         f->getBasicBlockList().push_back(mergeBB);
         builder.SetInsertPoint(mergeBB);
@@ -432,6 +493,8 @@ static void init_julia_llvm_env(Module *m)
     T_int32 = Type::getInt32Ty(getGlobalContext());
     T_int64 = Type::getInt64Ty(getGlobalContext());
     T_int8  = Type::getInt8Ty(getGlobalContext());
+    T_pint8 = PointerType::get(T_int8, 0);
+    T_void = Type::getVoidTy(jl_LLVMContext);
 
     // add needed base definitions to our LLVM environment
     MemoryBuffer *deffile = MemoryBuffer::getFile("julia-defs.s.bc");
@@ -440,6 +503,7 @@ static void init_julia_llvm_env(Module *m)
 
     jl_value_llvmt = jdefs->getTypeByName("struct._jl_value_t");
     jl_pvalue_llvmt = PointerType::get(jl_value_llvmt, 0);
+    jl_ppvalue_llvmt = PointerType::get(jl_pvalue_llvmt, 0);
     jl_func_sig = dynamic_cast<const FunctionType*>(jdefs->getTypeByName("jl_callable_t"));
     assert(jl_func_sig != NULL);
     jl_function_llvmt = jdefs->getTypeByName("jl_function_t");
@@ -448,22 +512,21 @@ static void init_julia_llvm_env(Module *m)
     jlfalse_var = global_to_llvm("jl_false", (void*)&jl_false);
     jlnull_var = global_to_llvm("jl_null", (void*)&jl_null);
     jlsysmod_var = global_to_llvm("jl_system_module", (void*)&jl_system_module);
+    jlfunctype_var = global_to_llvm("jl_any_func", (void*)&jl_any_func);
 
     std::vector<const Type*> args1(0);
-    args1.push_back(PointerType::get(T_int8, 0));
+    args1.push_back(T_pint8);
     jlerror_func =
-        Function::Create(FunctionType::get(Type::getVoidTy(jl_LLVMContext),
-                                           args1, false),
+        Function::Create(FunctionType::get(T_void, args1, false),
                          Function::ExternalLinkage,
                          "jl_error", jl_Module);
     jl_ExecutionEngine->addGlobalMapping(jlerror_func, (void*)&jl_error);
 
     std::vector<const Type *> args2(0);
-    args2.push_back(PointerType::get(T_int8,0));
-    args2.push_back(PointerType::get(T_int8,0));
+    args2.push_back(T_pint8);
+    args2.push_back(T_pint8);
     jlgetbinding_func =
-        Function::Create(FunctionType::get(PointerType::get(jl_pvalue_llvmt,0),
-                                           args2, false),
+        Function::Create(FunctionType::get(jl_ppvalue_llvmt, args2, false),
                          Function::ExternalLinkage,
                          "jl_get_bindingp", jl_Module);
     jl_ExecutionEngine->addGlobalMapping(jlgetbinding_func,
