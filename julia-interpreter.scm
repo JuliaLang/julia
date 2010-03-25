@@ -1340,6 +1340,9 @@ end
 
 (make-builtin 'load "(Any,)-->()" j-load)
 
+(make-builtin 'eval "(Any,)-->Any" (lambda (x)
+				     (j-toplevel-eval (julia->scm x))))
+
 ; --- print and repl ---
 
 (define (julia->string x)
