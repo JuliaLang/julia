@@ -44,7 +44,7 @@ static char jl_banner_color[] =
 
 static char jl_prompt_plain[] = "julia> ";
 static char jl_prompt_color[] = "\033[1m\033[32mjulia> \033[0m";
-static char jl_pre_answer_color[] = "\033[1m\033[36m";
+static char jl_answer_color[] = "\033[1m\033[36m";
 
 static char jl_history_file[] = ".julia_history";
 
@@ -125,19 +125,17 @@ int main(int argc, char *argv[])
     } else if (errno == ENOENT) {
         write_history(jl_history_file);
     } else {
-        jl_errorf("history file error: %s\n", strerror(errno));
+        jl_errorf("history file error: %s", strerror(errno));
     }
 #endif
 
     while (1) {
-        char *input;
-
         ios_flush(ios_stdout);
 
 #ifdef USE_READLINE
-        input = readline(prompt);
+        char *input = readline(prompt);
 #else
-        ios_printf(ios_stdout, prompt);
+        char *input = ios_printf(ios_stdout, prompt);
 #endif
 
         ios_flush(ios_stdout);
@@ -157,7 +155,7 @@ int main(int argc, char *argv[])
 #endif
 
         if (have_color)
-            ios_printf(ios_stdout, jl_pre_answer_color);
+            ios_printf(ios_stdout, jl_answer_color);
 
         // process input
         jl_value_t *ast = jl_parse_input_line(input);
