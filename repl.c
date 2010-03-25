@@ -8,6 +8,7 @@
 #include <stdarg.h>
 #include <assert.h>
 #include <sys/types.h>
+#include <sys/stat.h>
 #include <limits.h>
 #include <errno.h>
 #include <math.h>
@@ -44,6 +45,8 @@ static char jl_banner_color[] =
 static char jl_prompt_plain[] = "julia> ";
 static char jl_prompt_color[] = "\033[1m\033[32mjulia> \033[0m";
 static char jl_pre_answer_color[] = "\033[1m\033[36m";
+
+static char jl_history_file[] = ".julia_history";
 
 void julia_init()
 {
@@ -116,7 +119,14 @@ int main(int argc, char *argv[])
 
 #ifdef USE_READLINE
     using_history();
-    read_history(".julia_history");
+    struct stat stat_info;
+    if (!stat(jl_history_file, &stat_info)) {
+        read_history(jl_history_file);
+    } else if (errno == ENOENT) {
+        write_history(jl_history_file);
+    } else {
+        jl_errorf("history file error: %s\n", strerror(errno));
+    }
 #endif
 
     while (1) {
@@ -143,7 +153,7 @@ int main(int argc, char *argv[])
             break;
         }
 #ifdef USE_READLINE
-        append_history(1, ".julia_history");
+        append_history(1, jl_history_file);
 #endif
 
         if (have_color)
