@@ -4,6 +4,7 @@
 #include "llvm/ExecutionEngine/JIT.h"
 #include "llvm/LLVMContext.h"
 #include "llvm/Module.h"
+#include "llvm/Intrinsics.h"
 #include "llvm/ModuleProvider.h"
 #include "llvm/PassManager.h"
 #include "llvm/Analysis/Verifier.h"
@@ -41,11 +42,15 @@ static const Type *jl_pvalue_llvmt;
 static const Type *jl_ppvalue_llvmt;
 static const Type *jl_function_llvmt;
 static const FunctionType *jl_func_sig;
+static const Type *jl_fptr_llvmt;
 static const Type *T_int8;
 static const Type *T_pint8;
 static const Type *T_int32;
 static const Type *T_int64;
 static const Type *T_void;
+
+// constants
+static Value *V_null;
 
 // global vars
 static GlobalVariable *jltrue_var;
@@ -65,10 +70,10 @@ static jl_sym_t *label_sym;   static jl_sym_t *return_sym;
 static jl_sym_t *lambda_sym;  static jl_sym_t *call_sym;
 static jl_sym_t *assign_sym;  static jl_sym_t *quote_sym;
 static jl_sym_t *null_sym;    static jl_sym_t *top_sym;
-static jl_sym_t *boundp_sym;  static jl_sym_t *closure_ref_sym;
+static jl_sym_t *unbound_sym; static jl_sym_t *boxunbound_sym;
 static jl_sym_t *body_sym;    static jl_sym_t *list_sym;
 static jl_sym_t *locals_sym;  static jl_sym_t *colons_sym;
-static jl_sym_t *dots_sym;
+static jl_sym_t *dots_sym;    static jl_sym_t *closure_ref_sym;
 
 /*
   plan
@@ -224,6 +229,17 @@ static Value *literal_pointer_val(jl_value_t *p)
 #endif
 }
 
+static Value *literal_pointer_val(void *p, const Type *t)
+{
+#ifdef BITS64
+    return ConstantExpr::getIntToPtr(ConstantInt::get(T_int64, (uint64_t)p),
+                                     t);
+#else
+    return ConstantExpr::getIntToPtr(ConstantInt::get(T_int32, (uint32_t)p),
+                                     t);
+#endif
+}
+
 static Value *emit_typeof(Value *p)
 {
     // given p, a jl_value_t*, compute its type tag
@@ -233,7 +249,7 @@ static Value *emit_typeof(Value *p)
     return tt;
 }
 
-static void emit_error(char *txt)
+static void emit_error(const char *txt)
 {
     std::vector<Value *> zeros(0);
     zeros.push_back(ConstantInt::get(T_int32, 0));
@@ -252,10 +268,43 @@ static Value *emit_nthptr(Value *v, size_t n)
     return builder.CreateLoad(vptr, false);
 }
 
+static Value *globalvar_binding_pointer(jl_sym_t *s, jl_codectx_t *ctx)
+{
+    return builder.CreateCall2(jlgetbinding_func,
+                               literal_pointer_val(ctx->module, T_pint8),
+                               literal_pointer_val(s, T_pint8));
+}
+
+// yields a jl_value_t** giving the binding location of a variable
+static Value *var_binding_pointer(jl_sym_t *s, jl_codectx_t *ctx)
+{
+    assert(jl_is_symbol(s));
+    AllocaInst *l = (*ctx->vars)[s->name];
+    if (l != NULL) {
+        return l;
+    }
+    return globalvar_binding_pointer(s, ctx);
+}
+
 static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool value)
 {
     if (jl_is_symbol(expr)) {
-        // var
+        // variable
+        Value *bp = var_binding_pointer((jl_sym_t*)expr, ctx);
+        Value *v = builder.CreateLoad(bp, false);
+        Value *ok = builder.CreateICmpNE(v, V_null);
+        BasicBlock *err = BasicBlock::Create(getGlobalContext(), "err", ctx->f);
+        BasicBlock *ifok = BasicBlock::Create(getGlobalContext(), "ok");
+        builder.CreateCondBr(ok, ifok, err);
+        builder.SetInsertPoint(err);
+        std::string msg;
+        msg += "undefined variable ";
+        msg += std::string(((jl_sym_t*)expr)->name);
+        emit_error(msg.c_str());
+        builder.CreateBr(ifok);
+        ctx->f->getBasicBlockList().push_back(ifok);
+        builder.SetInsertPoint(ifok);
+        return v;
     }
     if (!jl_is_expr(expr)) {
         // numeric literals
@@ -304,7 +353,9 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool value)
         char *labelname = ((jl_sym_t*)args[0])->name;
         BasicBlock *bb = (*ctx->labels)[labelname];
         assert(bb);
-        builder.CreateBr(bb); // all BasicBlocks must exit explicitly
+        if (builder.GetInsertBlock()->getTerminator() == NULL) {
+            builder.CreateBr(bb); // all BasicBlocks must exit explicitly
+        }
         ctx->f->getBasicBlockList().push_back(bb);
         builder.SetInsertPoint(bb);
     }
@@ -327,30 +378,52 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool value)
         builder.CreateBr(mergeBB);
         ctx->f->getBasicBlockList().push_back(mergeBB);
         builder.SetInsertPoint(mergeBB);
-        Value *cloenv = emit_nthptr(theFunc, 2);
         std::vector<const Type*> emptyargs(0);
         Value *stacksave =
-            builder.CreateCall(Function::Create(FunctionType::get(T_pint8, emptyargs, false),
-                                                Function::ExternalLinkage,
-                                                "llvm.stacksave", jl_Module));
+            builder.CreateCall(Intrinsic::getDeclaration(jl_Module,
+                                                         Intrinsic::stacksave));
         Value *argl = builder.CreateAlloca(jl_pvalue_llvmt,
                                            ConstantInt::get(T_int32, nargs));
-        // ...
+        // extract pieces of the function object
+        // TODO: try extractelement instead
+        Value *theFptr =
+            builder.CreateBitCast(emit_nthptr(theFunc, 1), jl_fptr_llvmt);
+        Value *theEnv = emit_nthptr(theFunc, 2);
+        // emit arguments
+        size_t i;
+        for(i=0; i < nargs; i++) {
+            Value *anArg = emit_expr(args[i+1], ctx, true);
+            Value *dest = builder.CreateGEP(argl, ConstantInt::get(T_int32,i));
+            builder.CreateStore(anArg, dest);
+        }
+        // call
+        Value *result = builder.CreateCall3(theFptr, theEnv, argl,
+                                            ConstantInt::get(T_int32,nargs));
         // restore stack
         std::vector<const Type*> oneptr(0); oneptr.push_back(T_pint8);
-        builder.CreateCall(Function::Create(FunctionType::get(T_void,
-                                                              oneptr, false),
-                                            Function::ExternalLinkage,
-                                            "llvm.stackrestore", jl_Module),
+        builder.CreateCall(Intrinsic::getDeclaration(jl_Module,
+                                                     Intrinsic::stackrestore),
                            stacksave);
+        return result;
     }
 
     else if (ex->head == assign_sym) {
         assert(!value);
+        Value *rhs = emit_expr(args[1], ctx, true);
+        Value *bp = var_binding_pointer((jl_sym_t*)args[0], ctx);
+        builder.CreateStore(rhs, bp);
     }
     else if (ex->head == top_sym) {
     }
-    else if (ex->head == boundp_sym) {
+    else if (ex->head == unbound_sym) {
+    }
+    else if (ex->head == boxunbound_sym) {
+        Value *box = emit_expr(args[0], ctx, true);
+        Value *contents = emit_nthptr(box, 1);
+        Value *isnull = builder.CreateICmpEQ(contents, V_null);
+        return builder.CreateSelect(isnull,
+                                    builder.CreateLoad(jltrue_var, false),
+                                    builder.CreateLoad(jlfalse_var, false));
     }
     else if (ex->head == closure_ref_sym) {
         int idx = jl_unbox_int32(args[0]);
@@ -441,8 +514,7 @@ static void emit_function(jl_expr_t *lam, Function *f)
     if (va) {
         // restarg = jl_f_tuple(NULL, &args[nreq], nargs-nreq)
         Value *restTuple =
-            builder.CreateCall3(jltuple_func,
-                                Constant::getNullValue(jl_pvalue_llvmt),
+            builder.CreateCall3(jltuple_func, V_null,
                                 builder.CreateGEP((Value*)&argArray,
                                                   ConstantInt::get(T_int32,nreq)),
                                 builder.CreateSub((Value*)&argCount,
@@ -504,8 +576,10 @@ static void init_julia_llvm_env(Module *m)
     jl_value_llvmt = jdefs->getTypeByName("struct._jl_value_t");
     jl_pvalue_llvmt = PointerType::get(jl_value_llvmt, 0);
     jl_ppvalue_llvmt = PointerType::get(jl_pvalue_llvmt, 0);
+    V_null = Constant::getNullValue(jl_pvalue_llvmt);
     jl_func_sig = dynamic_cast<const FunctionType*>(jdefs->getTypeByName("jl_callable_t"));
     assert(jl_func_sig != NULL);
+    jl_fptr_llvmt = PointerType::get(jl_func_sig, 0);
     jl_function_llvmt = jdefs->getTypeByName("jl_function_t");
 
     jltrue_var = global_to_llvm("jl_true", (void*)&jl_true);
@@ -556,7 +630,8 @@ extern "C" void jl_init_codegen()
     quote_sym = jl_symbol("quote");
     null_sym = jl_symbol("null");
     top_sym = jl_symbol("top");
-    boundp_sym = jl_symbol("boundp");
+    unbound_sym = jl_symbol("unbound");
+    boxunbound_sym = jl_symbol("box-unbound");
     closure_ref_sym = jl_symbol("closure-ref");
     body_sym = jl_symbol("body");
     list_sym = jl_symbol("list");

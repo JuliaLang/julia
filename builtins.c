@@ -349,7 +349,7 @@ JL_CALLABLE(jl_f_box)
     JL_NARGS(box, 1, 2);
     if (nargs == 1)
         return jl_new_struct(jl_box_any_type, NULL);
-    return jl_new_struct(jl_box_any_type, args[0]);
+    return jl_new_struct(jl_box_any_type, args[1]);
 }
 
 JL_CALLABLE(jl_f_unbox)

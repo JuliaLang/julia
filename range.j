@@ -27,7 +27,7 @@ rangeby(b) = RangeBy.new(b)
 start(r::Range) = r.start
 done(r::Range, i) = (r.step < 0 ? (i < r.stop) : (i > r.stop))
 next(r::Range, i) = (i, i+r.step)
-numel(r::Range) = (r.step > 0 ? int32((r.stop-r.start+1)/r.step) : int32((r.start-r.stop+1)/-r.step))
+numel(r::Range) = (r.step > 0 ? div((r.stop-r.start+1),r.step) : div((r.start-r.stop+1),-r.step))
 
 start(r::RangeFrom) = r.start
 done(r::RangeFrom) = false

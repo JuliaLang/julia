@@ -884,7 +884,11 @@ TODO:
   (if (null? v)
       (vector type *julia-unbound*)
       (vector type (car v))))
-(define (j-unbox v) (vector-ref v 1))
+(define (j-unbox v)
+  (let ((x (vector-ref v 1)))
+    (if (eq? x *julia-unbound*)
+	(error "Undefined closed variable")
+	x)))
 (define (j-box-set b v) (begin (vector-set! b 1 v) julia-null))
 
 ; fix scalar type to include a proper int32(0)
@@ -975,9 +979,13 @@ end
 	   ((null)    julia-null)
 	   ((top)     (eval-sym (cadr e) *empty-env*))
 	   ((lambda)  e)  ; remaining lambdas are data
-	   ((boundp)      ; check if identifier is bound
-	    (if (j-bound? (cadr e) env)
+	   ((unbound)     ; check if identifier is bound
+	    (if (not (j-bound? (cadr e) env))
 		julia-true julia-false))
+	   ((box-unbound)
+	    (let ((x (vector-ref (j-eval (cadr e) env) 1)))
+	      (if (eq? x *julia-unbound*)
+		  julia-true julia-false)))
 	   ((closure-ref) (tuple-ref (cdr env) (cadr e)))
 	   
 	   ((=)

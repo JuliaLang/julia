@@ -81,8 +81,14 @@ static jl_value_t *scm_to_julia(___SCMOBJ e)
         }
         return (jl_value_t*)jl_box_float64(jl_scm_float64(e));
     }
-    if (___STRINGP(e))
-        return (jl_value_t*)jl_symbol(jl_scm_str(e));
+    if (___STRINGP(e)) {
+        char *s = jl_scm_str(e);
+        if (!strcmp(s,"true"))
+            return jl_true;
+        else if (!strcmp(s,"false"))
+            return jl_false;
+        return (jl_value_t*)jl_symbol(s);
+    }
     if (___NULLP(e))
         return (jl_value_t*)jl_null;
     if (___PAIRP(e)) {
@@ -92,7 +98,7 @@ static jl_value_t *scm_to_julia(___SCMOBJ e)
             /* tree node types:
                goto  goto-ifnot  label  return
                lambda  call  =  quote
-               null  top  boundp  closure-ref
+               null  top  unbound  box-unbound  closure-ref
                body  file  string
             */
             if (!strcmp(s, "string"))
