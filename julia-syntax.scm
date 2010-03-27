@@ -323,8 +323,7 @@
 					  (i   1))
 				 (if (null? lhs) '((null))
 				     (cons `(= ,(car lhs)
-					       (call tupleref
-						     ,t (call unbox ,i)))
+					       (call tupleref ,t ,i))
 					   (loop (cdr lhs)
 						 (+ i 1))))))))
 

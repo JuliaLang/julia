@@ -378,7 +378,6 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool value)
         builder.CreateBr(mergeBB);
         ctx->f->getBasicBlockList().push_back(mergeBB);
         builder.SetInsertPoint(mergeBB);
-        std::vector<const Type*> emptyargs(0);
         Value *stacksave =
             builder.CreateCall(Intrinsic::getDeclaration(jl_Module,
                                                          Intrinsic::stacksave));
@@ -400,7 +399,6 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool value)
         Value *result = builder.CreateCall3(theFptr, theEnv, argl,
                                             ConstantInt::get(T_int32,nargs));
         // restore stack
-        std::vector<const Type*> oneptr(0); oneptr.push_back(T_pint8);
         builder.CreateCall(Intrinsic::getDeclaration(jl_Module,
                                                      Intrinsic::stackrestore),
                            stacksave);

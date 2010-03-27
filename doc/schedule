@@ -13,6 +13,13 @@ goals for Weeks ending
 
 the last 3 weeks are the riskiest, and likely to slip by a week or two
 
+interim high-priority tasks:
+- debugging
+- thread safety
+- simple C interface
+- exceptions
+- const bindings
+
 for the next release we add the remaining critical features:
 
 v0.2 - estimate 7/1/2010 or 8/1/2010
@@ -22,7 +29,6 @@ v0.2 - estimate 7/1/2010 or 8/1/2010
 - get indexing and array comprehensions fully in shape
 - begin type inference, inlining, and unboxing optimizations
 - simple task-parallel computing
-- exceptions
 
 v0.5 - estimate 10/1/2010
 - more optimizations
