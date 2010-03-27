@@ -160,9 +160,10 @@ int main(int argc, char *argv[])
         // process input
         jl_value_t *ast = jl_parse_input_line(input);
         if (ast != NULL) {
-            jl_print(ast);
-            ios_printf(ios_stdout, "\n");
+            //jl_print(ast);
+            //ios_printf(ios_stdout, "\n");
             jl_print(jl_toplevel_eval(ast));
+            ios_printf(ios_stdout, "\n");
         }
 
         ios_printf(ios_stdout, "\n");

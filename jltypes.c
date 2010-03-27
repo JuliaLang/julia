@@ -39,6 +39,7 @@ jl_typector_t *jl_buffer_type;
 jl_typename_t *jl_buffer_typename;
 jl_struct_type_t *jl_lambda_info_type;
 jl_typector_t *jl_seq_type;
+jl_typector_t *jl_functype_ctor;
 jl_typector_t *jl_tensor_type;
 jl_tag_type_t *jl_scalar_type;
 jl_tag_type_t *jl_number_type;
@@ -853,12 +854,18 @@ int jl_subtype(jl_value_t *a, jl_value_t *b, int ta, int tb)
     if (jl_is_int32(a) && jl_is_int32(b))
         return (jl_unbox_int32(a)==jl_unbox_int32(b));
 
-    if (jl_is_func_type(a) && jl_is_func_type(b)) {
-        jl_func_type_t *fa = (jl_func_type_t*)a;
-        jl_func_type_t *fb = (jl_func_type_t*)b;
-        return ( (jl_is_typevar(fb->from) ||
-                  jl_subtype(fb->from, fa->from, 0, 0)) &&
-                 jl_subtype(fa->to, fb->to, 0, 0) );
+    if (jl_is_func_type(a)) {
+        if (jl_is_func_type(b)) {
+            jl_func_type_t *fa = (jl_func_type_t*)a;
+            jl_func_type_t *fb = (jl_func_type_t*)b;
+            return ( (jl_is_typevar(fb->from) ||
+                      jl_subtype(fb->from, fa->from, 0, 0)) &&
+                     jl_subtype(fa->to, fb->to, 0, 0) );
+        }
+        return 0;
+    }
+    else if (jl_is_func_type(b)) {
+        return 0;
     }
 
     assert(jl_is_some_tag_type(a));
@@ -976,6 +983,9 @@ static jl_value_pair_t *type_conform_(jl_type_t *child, jl_type_t *parent,
             return type_conform_(((jl_func_type_t*)child)->to,
                                  ((jl_func_type_t*)parent)->to, env);
         }
+        return NULL;
+    }
+    else if (jl_is_func_type(child)) {
         return NULL;
     }
 
@@ -1219,4 +1229,10 @@ void jl_init_types()
     jl_lambda_info_type->fconvert = jl_bottom_func;
 
     jl_the_empty_buffer = jl_new_buffer(jl_buffer_any_type, 0);
+
+    tv = typevars(2, "A", "B");
+    jl_functype_ctor =
+        jl_new_type_ctor(tv,
+                         (jl_type_t*)jl_new_functype(jl_tupleref(tv,0),
+                                                     jl_tupleref(tv,1)));
 }

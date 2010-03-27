@@ -984,4 +984,33 @@ void jl_init_builtins()
     add_builtin_func("new_tag_type", jl_f_new_tag_type);
     add_builtin_func("new_generic_function", jl_f_new_generic_function);
     add_builtin_func("add_method", jl_f_add_method);
+
+    // builtin types
+    add_builtin("Any", jl_any_type);
+    add_builtin("Bottom", jl_bottom_type);
+    add_builtin("TypeConstructor", jl_typector_type);
+    add_builtin("TypeVar", jl_tvar_type);
+    add_builtin("Tuple", jl_tuple_type);
+    add_builtin("Type", jl_type_type);
+    add_builtin("Symbol", jl_sym_type);
+    add_builtin("...", jl_seq_type);
+    add_builtin("Function", jl_functype_ctor);
+    add_builtin("Buffer", jl_buffer_type);
+    add_builtin("Tensor", jl_tensor_type);
+    add_builtin("Scalar", jl_scalar_type);
+    add_builtin("Number", jl_number_type);
+    add_builtin("Real", jl_real_type);
+    add_builtin("Int", jl_int_type);
+    add_builtin("Float", jl_float_type);
+    add_builtin("Bool", jl_bool_type);
+    add_builtin("Int8", jl_int8_type);
+    add_builtin("Uint8", jl_uint8_type);
+    add_builtin("Int16", jl_int16_type);
+    add_builtin("Uint16", jl_uint16_type);
+    add_builtin("Int32", jl_int32_type);
+    add_builtin("Uint32", jl_uint32_type);
+    add_builtin("Int64", jl_int64_type);
+    add_builtin("Uint64", jl_uint64_type);
+    add_builtin("Float32", jl_float32_type);
+    add_builtin("Float64", jl_float64_type);
 }

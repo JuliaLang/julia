@@ -183,6 +183,7 @@ extern jl_typector_t *jl_buffer_type;
 extern jl_typename_t *jl_buffer_typename;
 extern jl_struct_type_t *jl_lambda_info_type;
 extern jl_typector_t *jl_seq_type;
+extern jl_typector_t *jl_functype_ctor;
 extern jl_typector_t *jl_tensor_type;
 extern jl_tag_type_t *jl_scalar_type;
 extern jl_tag_type_t *jl_number_type;

@@ -61,7 +61,7 @@ static GlobalVariable *jlfunctype_var;
 
 // important functions
 static Function *jlerror_func;
-static Function *jlgetbinding_func;
+static Function *jlgetbindingp_func;
 static Function *jltuple_func;
 
 // head symbols for each expression type
@@ -150,7 +150,7 @@ extern "C" void jl_compile(jl_lambda_info_t *li)
     verifyFunction(*f);
     li->fptr = (jl_fptr_t)jl_ExecutionEngine->getPointerToFunction(f);
     // print out the function's LLVM code
-    f->dump();
+    //f->dump();
 }
 
 // get array of formal argument expressions
@@ -270,7 +270,7 @@ static Value *emit_nthptr(Value *v, size_t n)
 
 static Value *globalvar_binding_pointer(jl_sym_t *s, jl_codectx_t *ctx)
 {
-    return builder.CreateCall2(jlgetbinding_func,
+    return builder.CreateCall2(jlgetbindingp_func,
                                literal_pointer_val(ctx->module, T_pint8),
                                literal_pointer_val(s, T_pint8));
 }
@@ -286,25 +286,30 @@ static Value *var_binding_pointer(jl_sym_t *s, jl_codectx_t *ctx)
     return globalvar_binding_pointer(s, ctx);
 }
 
+static Value *emit_checked_var(Value *bp, char *name, jl_codectx_t *ctx)
+{
+    Value *v = builder.CreateLoad(bp, false);
+    Value *ok = builder.CreateICmpNE(v, V_null);
+    BasicBlock *err = BasicBlock::Create(getGlobalContext(), "err", ctx->f);
+    BasicBlock *ifok = BasicBlock::Create(getGlobalContext(), "ok");
+    builder.CreateCondBr(ok, ifok, err);
+    builder.SetInsertPoint(err);
+    std::string msg;
+    msg += "undefined variable ";
+    msg += std::string(name);
+    emit_error(msg.c_str());
+    builder.CreateBr(ifok);
+    ctx->f->getBasicBlockList().push_back(ifok);
+    builder.SetInsertPoint(ifok);
+    return v;
+}
+
 static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool value)
 {
     if (jl_is_symbol(expr)) {
         // variable
         Value *bp = var_binding_pointer((jl_sym_t*)expr, ctx);
-        Value *v = builder.CreateLoad(bp, false);
-        Value *ok = builder.CreateICmpNE(v, V_null);
-        BasicBlock *err = BasicBlock::Create(getGlobalContext(), "err", ctx->f);
-        BasicBlock *ifok = BasicBlock::Create(getGlobalContext(), "ok");
-        builder.CreateCondBr(ok, ifok, err);
-        builder.SetInsertPoint(err);
-        std::string msg;
-        msg += "undefined variable ";
-        msg += std::string(((jl_sym_t*)expr)->name);
-        emit_error(msg.c_str());
-        builder.CreateBr(ifok);
-        ctx->f->getBasicBlockList().push_back(ifok);
-        builder.SetInsertPoint(ifok);
-        return v;
+        return emit_checked_var(bp, ((jl_sym_t*)expr)->name, ctx);
     }
     if (!jl_is_expr(expr)) {
         // numeric literals
@@ -412,8 +417,16 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool value)
         builder.CreateStore(rhs, bp);
     }
     else if (ex->head == top_sym) {
+        Value *bp = globalvar_binding_pointer((jl_sym_t*)args[0], ctx);
+        return emit_checked_var(bp, ((jl_sym_t*)args[0])->name, ctx);
     }
     else if (ex->head == unbound_sym) {
+        Value *bp = var_binding_pointer((jl_sym_t*)args[0], ctx);
+        Value *v = builder.CreateLoad(bp, false);
+        Value *isnull = builder.CreateICmpEQ(v, V_null);
+        return builder.CreateSelect(isnull,
+                                    builder.CreateLoad(jltrue_var, false),
+                                    builder.CreateLoad(jlfalse_var, false));
     }
     else if (ex->head == boxunbound_sym) {
         Value *box = emit_expr(args[0], ctx, true);
@@ -527,6 +540,7 @@ static void emit_function(jl_expr_t *lam, Function *f)
     for(i=0; i < lvars->length; i++) {
         char *argname = ((jl_sym_t**)lvars->data)[i]->name;
         AllocaInst *lv = builder.CreateAlloca(jl_pvalue_llvmt, 0, argname);
+        builder.CreateStore(V_null, lv);
         localVars[argname] = lv;
     }
 
@@ -597,11 +611,11 @@ static void init_julia_llvm_env(Module *m)
     std::vector<const Type *> args2(0);
     args2.push_back(T_pint8);
     args2.push_back(T_pint8);
-    jlgetbinding_func =
+    jlgetbindingp_func =
         Function::Create(FunctionType::get(jl_ppvalue_llvmt, args2, false),
                          Function::ExternalLinkage,
                          "jl_get_bindingp", jl_Module);
-    jl_ExecutionEngine->addGlobalMapping(jlgetbinding_func,
+    jl_ExecutionEngine->addGlobalMapping(jlgetbindingp_func,
                                          (void*)&jl_get_bindingp);
 
     jltuple_func =
@@ -624,7 +638,7 @@ extern "C" void jl_init_codegen()
     return_sym = jl_symbol("return");
     lambda_sym = jl_symbol("lambda");
     call_sym = jl_symbol("call");
-    assign_sym = jl_symbol("assign");
+    assign_sym = jl_symbol("=");
     quote_sym = jl_symbol("quote");
     null_sym = jl_symbol("null");
     top_sym = jl_symbol("top");
