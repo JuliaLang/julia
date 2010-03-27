@@ -872,6 +872,7 @@ JL_CALLABLE(jl_f_typevar)
 
 JL_CALLABLE(jl_f_union)
 {
+    if (nargs == 1) return args[0];
     size_t i;
     for(i=0; i < nargs; i++) {
         if (!jl_is_type(args[i]) && !jl_is_typevar(args[i]))
@@ -908,6 +909,16 @@ static void add_builtin_method1(jl_function_t *gf, jl_type_t *t, jl_fptr_t f)
     jl_add_method(gf, jl_tuple(1, t), jl_new_closure(f, NULL));
 }
 
+static void add_builtin(char *name, jl_value_t *v)
+{
+    jl_set_const(jl_system_module, jl_symbol(name), v);
+}
+
+static void add_builtin_func(char *name, jl_fptr_t f)
+{
+    add_builtin(name, jl_new_closure(f, NULL));
+}
+
 void jl_init_builtins()
 {
     jl_print_gf = jl_new_generic_function(jl_symbol("print"));
@@ -938,4 +949,39 @@ void jl_init_builtins()
                            jl_apply_type_ctor(jl_seq_type,
                                               jl_tuple(1,jl_any_type))),
                   jl_new_closure(jl_f_ref_typector, NULL));
+    
+    add_builtin_func("is", jl_f_is);
+    add_builtin_func("isnull", jl_f_isnull);
+    add_builtin_func("typeof", jl_f_typeof);
+    add_builtin_func("subtype", jl_f_subtype);
+    add_builtin_func("istype", jl_f_istype);
+    add_builtin_func("typeassert", jl_f_typeassert);
+    add_builtin_func("apply", jl_f_apply);
+    add_builtin_func("error", jl_f_error);
+    add_builtin_func("load", jl_f_load);
+    add_builtin_func("tuple", jl_f_tuple);
+    add_builtin_func("convert", jl_f_convert);
+    add_builtin_func("Union", jl_f_union);
+    add_builtin("print", jl_print_gf);
+    
+    // functions for internal use
+    add_builtin_func("tupleref", jl_f_tupleref);
+    add_builtin_func("tuplelen", jl_f_tuplelen);
+    add_builtin_func("getfield", jl_f_get_field);
+    add_builtin_func("setfield", jl_f_set_field);
+    add_builtin_func("bufferlen", jl_f_bufferlen);
+    add_builtin_func("bufferref", jl_f_bufferref);
+    add_builtin_func("bufferset", jl_f_bufferset);
+    add_builtin_func("box", jl_f_box);
+    add_builtin_func("unbox", jl_f_unbox);
+    add_builtin_func("boxset", jl_f_boxset);
+    add_builtin_func("ref_typector", jl_f_ref_typector);
+    add_builtin_func("typevar", jl_f_typevar);
+    add_builtin_func("new_closure", jl_f_new_closure);
+    add_builtin_func("new_struct_type", jl_f_new_struct_type);
+    add_builtin_func("new_struct_fields", jl_f_new_struct_fields);
+    add_builtin_func("new_type_constructor", jl_f_new_type_constructor);
+    add_builtin_func("new_tag_type", jl_f_new_tag_type);
+    add_builtin_func("new_generic_function", jl_f_new_generic_function);
+    add_builtin_func("add_method", jl_f_add_method);
 }

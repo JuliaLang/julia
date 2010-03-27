@@ -30,12 +30,42 @@ jl_module_t *jl_new_module(jl_sym_t *name)
 
 jl_binding_t *jl_get_binding(jl_module_t *m, jl_sym_t *var)
 {
-    // TODO
-    return NULL;
+    jl_binding_t **bp = (jl_binding_t**)ptrhash_bp(&m->bindings, var);
+    if (*bp == HT_NOTFOUND) {
+        jl_binding_t *b = (jl_binding_t*)allocb(sizeof(jl_binding_t));
+        b->name = var;
+        b->value = NULL;
+        b->type = jl_any_type;
+        b->constp = 0;
+        b->exportp = 0;
+        *bp = b;
+    }
+    return *bp;
 }
 
-jl_binding_t *jl_add_binding(jl_module_t *m, jl_sym_t *var);
-int jl_boundp(jl_module_t *m, jl_sym_t *var);
+int jl_boundp(jl_module_t *m, jl_sym_t *var)
+{
+    jl_binding_t *b = (jl_binding_t*)ptrhash_get(&m->bindings, var);
+    return (b != HT_NOTFOUND && b->value != NULL);
+}
+
+void jl_set_global(jl_module_t *m, jl_sym_t *var, jl_value_t *val)
+{
+    jl_binding_t *bp = jl_get_binding(m, var);
+    if (!bp->constp) {
+        bp->value = val;
+    }
+}
+
+void jl_set_const(jl_module_t *m, jl_sym_t *var, jl_value_t *val)
+{
+    jl_binding_t *bp = jl_get_binding(m, var);
+    if (!bp->constp) {
+        bp->value = val;
+        bp->constp = 1;
+    }
+}
+
 jl_module_t *jl_add_module(jl_module_t *m, jl_module_t *child);
 jl_module_t *jl_get_module(jl_module_t *m, jl_sym_t *name);
 jl_module_t *jl_import_module(jl_module_t *to, jl_module_t *from);

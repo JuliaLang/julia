@@ -20,9 +20,6 @@
 #include "llt.h"
 #include "julia.h"
 
-jl_module_t *jl_system;
-jl_module_t *jl_user;
-
 jl_tag_type_t *jl_any_type;
 jl_tag_type_t *jl_type_type;
 jl_struct_type_t *jl_typename_type;

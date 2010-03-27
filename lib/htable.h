@@ -10,7 +10,7 @@ typedef struct {
 } htable_t;
 
 // define this to be an invalid key/value
-#define HT_NOTFOUND ((void*)1)
+#define HT_NOTFOUND ((void*)0)
 
 // initialize and free
 htable_t *htable_new(htable_t *h, size_t size);

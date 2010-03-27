@@ -164,9 +164,6 @@ typedef struct {
     jl_buffer_t *args;
 } jl_expr_t;
 
-extern jl_module_t *jl_system;
-extern jl_module_t *jl_user;
-
 extern jl_tag_type_t *jl_any_type;
 extern jl_tag_type_t *jl_type_type;
 extern jl_struct_type_t *jl_typename_type;
@@ -374,8 +371,9 @@ extern jl_module_t *jl_user_module;
 jl_module_t *jl_new_module(jl_sym_t *name);
 jl_binding_t *jl_get_binding(jl_module_t *m, jl_sym_t *var);
 jl_value_t **jl_get_bindingp(jl_module_t *m, jl_sym_t *var);
-jl_binding_t *jl_add_binding(jl_module_t *m, jl_sym_t *var);
 int jl_boundp(jl_module_t *m, jl_sym_t *var);
+void jl_set_global(jl_module_t *m, jl_sym_t *var, jl_value_t *val);
+void jl_set_const(jl_module_t *m, jl_sym_t *var, jl_value_t *val);
 jl_module_t *jl_add_module(jl_module_t *m, jl_module_t *child);
 jl_module_t *jl_get_module(jl_module_t *m, jl_sym_t *name);
 jl_module_t *jl_import_module(jl_module_t *to, jl_module_t *from);
