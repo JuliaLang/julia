@@ -14,3 +14,6 @@ sum(x::Scalar, y::Scalar) = x + y
 prod(x::Scalar, y::Scalar) = x * y
 all(x::Scalar, y::Scalar) = x && y ? true : false
 any(x::Scalar, y::Scalar) = x || y ? true : false
+
+numel(x::Scalar) = 1
+length(x::Scalar) = 1

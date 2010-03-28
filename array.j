@@ -161,17 +161,14 @@ function set(a::Array, x, I::Index...)
 end
 
 ## Vector indexing
-function ref(A::Array, I) 
-    if istype(I, RangeBy)
-        I = range(1, I.step, length(A))
-    elseif istype(I, RangeFrom)
-        I = range(I.start, I.step, length(A))
-    elseif istype(I, RangeTo)
-        I = range(1, I.step, I.stop)
-    end
-    
-    return [ A[i] | i=I ] 
-end
+jl_fill_endpts(A, R::RangeBy) = range(1, R.step, length(A))
+jl_fill_endpts(A, R::RangeFrom) = range(R.start, R.step, length(A))
+jl_fill_endpts(A, R::RangeTo) = range(1, R.step, R.stop)
+jl_fill_endpts(A, R) = R
+
+ref[T](A::Array[T,1], I) = [ A[i] | i=jl_fill_endpts(A, I) ]
+ref[T](A::Array[T,2], I, J) = [ A[i, j] | i = jl_fill_endpts(A, I), 
+                                          j = jl_fill_endpts(A, J)  ] 
 
 ## Other functions
 numel(a::Array) = length(a.data)
