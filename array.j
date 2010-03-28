@@ -76,13 +76,13 @@ end
 
 function set(a::Array, x, i::Index)
     a.data[i] = x
-    return x
+    return a
 end
 
 function set(a::Array, x, i::Index, j::Index)
     m = a.dims[1]
     a.data[(j-1)*m + i] = x
-    return x
+    return a
 end
 
 function set(a::Array, x, I::Index...)
@@ -98,7 +98,7 @@ function set(a::Array, x, I::Index...)
     end
 
     data[index] = x
-    return x
+    return a
 end
 
 ## Vector indexing
