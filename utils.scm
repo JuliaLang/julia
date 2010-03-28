@@ -146,3 +146,8 @@
        (lambda () (or (uninterned-keyword? 0) #t)))
       `(begin ,@forms)
       #f))
+
+(gambit-only
+ (define (gensym? s)
+   (and (symbol? s)
+	(not (eq? s (string->symbol (symbol->string s)))))))

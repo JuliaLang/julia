@@ -34,8 +34,8 @@ static char jl_banner_plain[] =
 
 static char jl_banner_color[] =
     "\033[1m               \033[32m_\033[37m      \n"
-    "   \033[36m_\033[37m       _ \033[31m_\033[32m(_)\033[35m_\033[37m     |\n"
-    "  \033[36m(_)\033[37m     | \033[31m(_) \033[35m(_)\033[37m    |  pre-release version\n"
+    "   \033[37m_\033[37m       _ \033[31m_\033[32m(_)\033[35m_\033[37m     |\n"
+    "  \033[37m(_)\033[37m     | \033[31m(_) \033[35m(_)\033[37m    |  pre-release version\n"
     "   _ _   _| |_  __ _   |\n"
     "  | | | | | | |/ _` |  |\n"
     "  | | |_| | | | (_| |  |  \302\2512010 contributors\n"
@@ -43,8 +43,8 @@ static char jl_banner_color[] =
     "|__/                   |\033[0m\n\n";
 
 static char jl_prompt_plain[] = "julia> ";
-static char jl_prompt_color[] = "\033[1m\033[32mjulia> \033[0m";
-static char jl_answer_color[] = "\033[1m\033[36m";
+static char jl_prompt_color[] = "\033[1m\033[32mjulia> \033[37m";
+static char jl_answer_color[] = "\033[0m\033[37m";
 
 static char jl_history_file[] = ".julia_history";
 
@@ -154,8 +154,10 @@ int main(int argc, char *argv[])
         append_history(1, jl_history_file);
 #endif
 
-        if (have_color)
+        if (have_color) {
             ios_printf(ios_stdout, jl_answer_color);
+            ios_flush(ios_stdout);
+        }
 
         // process input
         jl_value_t *ast = jl_parse_input_line(input);

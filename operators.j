@@ -56,7 +56,7 @@ macro def_reduce_op(op)
             end
             return v
         end
-        ($op)(x, rest...) = ($op)(($op)(x), ($op)(rest...))
+        ($op)(rest...) = ($op)(rest)
     end
 end
 

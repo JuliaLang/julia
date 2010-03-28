@@ -75,6 +75,15 @@ jl_func_type_t *jl_any_func;
 jl_function_t *jl_bottom_func;
 jl_buffer_t *jl_the_empty_buffer;
 
+jl_sym_t *call_sym;
+jl_sym_t *dots_sym;
+jl_sym_t *dollar_sym;
+jl_sym_t *quote_sym;
+jl_sym_t *tuple_sym;
+jl_sym_t *top_sym;
+jl_sym_t *expr_sym;
+jl_sym_t *list_sym;
+
 static inline jl_value_t *newobj(jl_type_t *type, size_t nfields)
 {
     jl_value_t *jv = (jl_value_t*)allocb((1+nfields) * sizeof(void*));
@@ -1235,4 +1244,13 @@ void jl_init_types()
         jl_new_type_ctor(tv,
                          (jl_type_t*)jl_new_functype(jl_tupleref(tv,0),
                                                      jl_tupleref(tv,1)));
+
+    call_sym = jl_symbol("call");
+    quote_sym = jl_symbol("quote");
+    top_sym = jl_symbol("top");
+    list_sym = jl_symbol("list");
+    dots_sym = jl_symbol("...");
+    expr_sym = jl_symbol("expr");
+    tuple_sym = jl_symbol("tuple");
+    dollar_sym = jl_symbol("$");
 }

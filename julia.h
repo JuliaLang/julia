@@ -221,6 +221,16 @@ extern jl_function_t *jl_print_gf;
 extern jl_function_t *jl_bottom_func;
 extern jl_buffer_t *jl_the_empty_buffer;
 
+// some important symbols
+extern jl_sym_t *call_sym;
+extern jl_sym_t *dots_sym;
+extern jl_sym_t *dollar_sym;
+extern jl_sym_t *quote_sym;
+extern jl_sym_t *tuple_sym;
+extern jl_sym_t *top_sym;
+extern jl_sym_t *expr_sym;
+extern jl_sym_t *list_sym;
+
 #ifdef BITS64
 #define NWORDS(sz) (((sz)+7)>>3)
 #else

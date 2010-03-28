@@ -67,13 +67,11 @@ static Function *jltuple_func;
 // head symbols for each expression type
 static jl_sym_t *goto_sym;    static jl_sym_t *goto_ifnot_sym;
 static jl_sym_t *label_sym;   static jl_sym_t *return_sym;
-static jl_sym_t *lambda_sym;  static jl_sym_t *call_sym;
-static jl_sym_t *assign_sym;  static jl_sym_t *quote_sym;
-static jl_sym_t *null_sym;    static jl_sym_t *top_sym;
+static jl_sym_t *lambda_sym;  static jl_sym_t *assign_sym;
+static jl_sym_t *null_sym;    static jl_sym_t *body_sym;
 static jl_sym_t *unbound_sym; static jl_sym_t *boxunbound_sym;
-static jl_sym_t *body_sym;    static jl_sym_t *list_sym;
 static jl_sym_t *locals_sym;  static jl_sym_t *colons_sym;
-static jl_sym_t *dots_sym;    static jl_sym_t *closure_ref_sym;
+static jl_sym_t *closure_ref_sym;
 
 /*
   plan
@@ -510,6 +508,7 @@ static void emit_function(jl_expr_t *lam, Function *f)
 
     // move args into local variables
     // (probably possible to avoid this step with a little redesign)
+    // TODO: avoid for arguments that aren't assigned
     size_t i;
     for(i=0; i < nreq; i++) {
         char *argname = decl_var(((jl_value_t**)largs->data)[i])->name;
@@ -637,17 +636,12 @@ extern "C" void jl_init_codegen()
     label_sym = jl_symbol("label");
     return_sym = jl_symbol("return");
     lambda_sym = jl_symbol("lambda");
-    call_sym = jl_symbol("call");
     assign_sym = jl_symbol("=");
-    quote_sym = jl_symbol("quote");
     null_sym = jl_symbol("null");
-    top_sym = jl_symbol("top");
     unbound_sym = jl_symbol("unbound");
     boxunbound_sym = jl_symbol("box-unbound");
     closure_ref_sym = jl_symbol("closure-ref");
     body_sym = jl_symbol("body");
-    list_sym = jl_symbol("list");
     locals_sym = jl_symbol("locals");
     colons_sym = jl_symbol("::");
-    dots_sym = jl_symbol("...");
 }
