@@ -10,7 +10,7 @@ typealias Matrix[T] Tensor[T,2]
 numel(a::Array) = length(a.data)
 
 length[T](v::Array[T,1]) = length(v.data)
-length[T](v::Array[T,2]) = length(v.data)
+length[T](a::Array[T,2]) = max(size(a))
 
 size(a::Array) = a.dims
 size(a::Array, d) = a.dims[d]
