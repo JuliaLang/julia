@@ -161,8 +161,17 @@ function set(a::Array, x, I::Index...)
 end
 
 ## Vector indexing
-ref(a::Array, I::Array) = [ a[i] | (i=I) ]
-
+function ref(A::Array, I) 
+    if istype(I, RangeBy)
+        I = range(1, I.step, length(A))
+    elseif istype(I, RangeFrom)
+        I = range(I.start, I.step, length(A))
+    elseif istype(I, RangeTo)
+        I = range(1, I.step, I.stop)
+    end
+    
+    return [ A[i] | i=I ] 
+end
 
 ## Other functions
 numel(a::Array) = length(a.data)
