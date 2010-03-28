@@ -96,6 +96,7 @@ function zeros_int(dim...)
 end
 
 size(a::Array) = a.dims
+size(a::Array, d) = a.dims[d]
 
 # colon
 
@@ -161,14 +162,14 @@ function set(a::Array, x, I::Index...)
 end
 
 ## Vector indexing
-jl_fill_endpts(A, R::RangeBy) = range(1, R.step, length(A))
-jl_fill_endpts(A, R::RangeFrom) = range(R.start, R.step, length(A))
-jl_fill_endpts(A, R::RangeTo) = range(1, R.step, R.stop)
-jl_fill_endpts(A, R) = R
+jl_fill_endpts(A, n, R::RangeBy) = range(1, R.step, size(A, n))
+jl_fill_endpts(A, n, R::RangeFrom) = range(R.start, R.step, size(A, n))
+jl_fill_endpts(A, n, R::RangeTo) = range(1, R.step, R.stop)
+jl_fill_endpts(A, n, R) = R
 
-ref[T](A::Array[T,1], I) = [ A[i] | i=jl_fill_endpts(A, I) ]
-ref[T](A::Array[T,2], I, J) = [ A[i, j] | i = jl_fill_endpts(A, I), 
-                                          j = jl_fill_endpts(A, J)  ] 
+ref[T](A::Array[T,1], I) = [ A[i] | i = jl_fill_endpts(A, 1, I) ]
+ref[T](A::Array[T,2], I, J) = [ A[i, j] | i = jl_fill_endpts(A, 1, I),
+                                          j = jl_fill_endpts(A, 2, J)  ]
 
 ## Other functions
 numel(a::Array) = length(a.data)
