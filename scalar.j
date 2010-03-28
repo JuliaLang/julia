@@ -14,3 +14,10 @@ sum(x::Scalar, y::Scalar) = x + y
 prod(x::Scalar, y::Scalar) = x * y
 all(x::Scalar, y::Scalar) = x && y ? true : false
 any(x::Scalar, y::Scalar) = x || y ? true : false
+
+numel(x::Scalar) = 1
+length(x::Scalar) = 1
+
+start(a::Scalar) = a
+next(a::Scalar, i) = (a, i+1)
+done(a::Scalar, i) = (i > 1)

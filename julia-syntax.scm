@@ -481,6 +481,13 @@
 	`(call colon ,a ,c ,b)
 	`(call colon ,a ,b 1)))
 
+   ;; hcat, vcat
+   (pattern-lambda (hcat . a)
+		   `(call hcat ,@a))
+
+   (pattern-lambda (vcat . a)
+		   `(call vcat ,@a))
+
    )) ; patterns
 
 ; patterns that verify all syntactic sugar was well-formed
