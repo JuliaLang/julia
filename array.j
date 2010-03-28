@@ -54,12 +54,21 @@ function colon(start::Int32, stop::Int32, stride::Int32)
     return x
 end
 
-## Scalar indexing
-ref(a::Array, i::Index) = a.data[i]
-ref(a::Array, i::Index, j::Index) = a.data[(j-1)*a.dims[1] + i]
+## Indexing: ref()
+ref[T](a::Array[T,1], i::Index) = a.data[i]
+ref[T](a::Array[T,2], i::Index, j::Index) = a.data[(j-1)*a.dims[1] + i]
 
-# TODO: Need out-of-bounds checks
-function ref(a::Array, I::Index...)
+jl_fill_endpts(A, n, R::RangeBy) = range(1, R.step, size(A, n))
+jl_fill_endpts(A, n, R::RangeFrom) = range(R.start, R.step, size(A, n))
+jl_fill_endpts(A, n, R::RangeTo) = range(1, R.step, R.stop)
+jl_fill_endpts(A, n, R) = R
+
+ref[T](A::Array[T,1], I) = [ A[i] | i = jl_fill_endpts(A, 1, I) ]
+ref[T](A::Array[T,2], I, J) = [ A[i, j] | i = jl_fill_endpts(A, 1, I),
+                                          j = jl_fill_endpts(A, 2, J)  ]
+
+function ref(a::Array, I::Index...) 
+    # TODO: Need out-of-bounds checks
     data = a.data
     dims = a.dims
     ndims = length(I) - 1
@@ -74,18 +83,12 @@ function ref(a::Array, I::Index...)
     return data[index]
 end
 
-function set(a::Array, x, i::Index)
-    a.data[i] = x
-    return a
-end
-
-function set(a::Array, x, i::Index, j::Index)
-    m = a.dims[1]
-    a.data[(j-1)*m + i] = x
-    return a
-end
+# Indexing: set()
+set[T](a::Array[T,1], x, i::Index) = do (a.data[i] = x, a)
+set[T](a::Array[T,2], x, i::Index, j::Index) = do (a.data[(j-1)*a.dims[1] + i] = x, a)
 
 function set(a::Array, x, I::Index...)
+    # TODO: Need to take care of growing
     data = a.data
     dims = a.dims
     ndims = length(I)
@@ -101,36 +104,12 @@ function set(a::Array, x, I::Index...)
     return a
 end
 
-## Vector indexing
-jl_fill_endpts(A, n, R::RangeBy) = range(1, R.step, size(A, n))
-jl_fill_endpts(A, n, R::RangeFrom) = range(R.start, R.step, size(A, n))
-jl_fill_endpts(A, n, R::RangeTo) = range(1, R.step, R.stop)
-jl_fill_endpts(A, n, R) = R
-
-ref[T](A::Array[T,1], I) = [ A[i] | i = jl_fill_endpts(A, 1, I) ]
-ref[T](A::Array[T,2], I, J) = [ A[i, j] | i = jl_fill_endpts(A, 1, I),
-                                          j = jl_fill_endpts(A, 2, J)  ]
-
 # Concatenation
-function hcat[T](elts::T...)
-    n = length(elts)
-    if n == 0
-        return jl_make_array(0)
-    end
-    a = jl_make_array(T, n)
-    for i=1:n
-        a[i] = elts[i]
-    end
-    a
-end
+cat(x::Scalar...) = [ x[i] | i=1:length(x) ]
+hcat(x::Scalar...) = [ x[j] | i=1, j=1:length(x) ]
+vcat(x::Scalar...) = [ x[i] | i=1:length(x), j=1 ]
 
-function vector[T](elts::T...)
-    v = jl_make_array(T,length(elts))
-    for i = 1:length(elts)
-        v[i] = elts[i]
-    end
-    return v
-end
+vector[T](elts::T...) = cat(elts...)
 
 # iterate arrays by iterating data
 start(a::Array) = start(a.data)
