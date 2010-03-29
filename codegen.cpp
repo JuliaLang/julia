@@ -308,6 +308,11 @@ static Value *var_binding_pointer(jl_sym_t *s, jl_codectx_t *ctx)
     return globalvar_binding_pointer(s, ctx);
 }
 
+static int is_global(jl_sym_t *s, jl_codectx_t *ctx)
+{
+    return ((*ctx->vars)[s->name] == NULL);
+}
+
 static Value *emit_checked_var(Value *bp, char *name, jl_codectx_t *ctx)
 {
     Value *v = builder.CreateLoad(bp, false);
@@ -396,21 +401,40 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool value)
         builder.CreateRet(emit_expr(args[0], ctx, true));
     }
     else if (ex->head == call_sym) {
-        Value *theFunc = emit_expr(args[0], ctx, true);
         size_t nargs = ex->args->length-1;
-        emit_typecheck(theFunc, (jl_value_t*)jl_any_func,
-                       "apply: expected function.", ctx);
+        Value *theFptr, *theEnv;
+        jl_binding_t *b=NULL; bool done=false;
+        if (jl_is_symbol(args[0]) && is_global((jl_sym_t*)args[0], ctx) &&
+            jl_boundp(ctx->module, (jl_sym_t*)args[0]) &&
+            (b=jl_get_binding(ctx->module, (jl_sym_t*)args[0]))->constp) {
+            // head is a constant global
+            if (jl_typeis(b->value, jl_intrinsic_type)) {
+                return emit_intrinsic((intrinsic)*(uint32_t*)jl_bits_data(b->value),
+                                      args, nargs, ctx);
+            }
+            if (jl_is_func(b->value)) {
+                jl_function_t *f = (jl_function_t*)b->value;
+                theFptr = literal_pointer_val((void*)f->fptr, jl_fptr_llvmt);
+                theEnv = literal_pointer_val(f->env);
+                done = true;
+            }
+        }
+        if (!done) {
+            Value *theFunc = emit_expr(args[0], ctx, true);
+            emit_typecheck(theFunc, (jl_value_t*)jl_any_func,
+                           "apply: expected function.", ctx);
+            // extract pieces of the function object
+            // TODO: try extractelement instead
+            theFptr =
+                builder.CreateBitCast(emit_nthptr(theFunc, 1), jl_fptr_llvmt);
+            theEnv = emit_nthptr(theFunc, 2);
+        }
+        // emit arguments
         Value *stacksave =
             builder.CreateCall(Intrinsic::getDeclaration(jl_Module,
                                                          Intrinsic::stacksave));
         Value *argl = builder.CreateAlloca(jl_pvalue_llvmt,
                                            ConstantInt::get(T_int32, nargs));
-        // extract pieces of the function object
-        // TODO: try extractelement instead
-        Value *theFptr =
-            builder.CreateBitCast(emit_nthptr(theFunc, 1), jl_fptr_llvmt);
-        Value *theEnv = emit_nthptr(theFunc, 2);
-        // emit arguments
         size_t i;
         for(i=0; i < nargs; i++) {
             Value *anArg = emit_expr(args[i+1], ctx, true);
@@ -506,7 +530,7 @@ static void emit_function(jl_expr_t *lam, Function *f)
         BasicBlock *mergeBB = BasicBlock::Create(getGlobalContext(), "ifcont");
         builder.CreateCondBr(enough, mergeBB, elseBB);
         builder.SetInsertPoint(elseBB);
-        emit_error("Too few arguments");
+        emit_error("too few arguments");
         builder.CreateBr(mergeBB);
         f->getBasicBlockList().push_back(mergeBB);
         builder.SetInsertPoint(mergeBB);
@@ -519,7 +543,7 @@ static void emit_function(jl_expr_t *lam, Function *f)
         BasicBlock *mergeBB = BasicBlock::Create(getGlobalContext(), "ifcont");
         builder.CreateCondBr(enough, mergeBB, elseBB);
         builder.SetInsertPoint(elseBB);
-        emit_error("Wrong number of arguments");
+        emit_error("wrong number of arguments");
         builder.CreateBr(mergeBB);
         f->getBasicBlockList().push_back(mergeBB);
         builder.SetInsertPoint(mergeBB);

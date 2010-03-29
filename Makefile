@@ -38,6 +38,9 @@ jlfrontend_.c: jlfrontend.c
 julia-defs.s.bc: julia-defs.s
 	llvm-as -f julia-defs.s
 
+codegen.o: intrinsics.cpp
+codegen.do: intrinsics.cpp
+
 $(LLT):
 	cd $(LLTDIR) && $(MAKE)
 
