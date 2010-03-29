@@ -66,6 +66,7 @@ jl_bits_type_t *jl_float64_type;
 jl_type_t *jl_buffer_uint8_type;
 jl_type_t *jl_buffer_any_type;
 jl_struct_type_t *jl_expr_type;;
+jl_bits_type_t *jl_intrinsic_type;
 
 jl_tuple_t *jl_null;
 jl_value_t *jl_true;
@@ -1244,6 +1245,9 @@ void jl_init_types()
         jl_new_type_ctor(tv,
                          (jl_type_t*)jl_new_functype(jl_tupleref(tv,0),
                                                      jl_tupleref(tv,1)));
+
+    jl_intrinsic_type = jl_new_bitstype(jl_symbol("IntrinsicFunction"),
+                                        jl_any_type, jl_null, 32);
 
     call_sym = jl_symbol("call");
     quote_sym = jl_symbol("quote");

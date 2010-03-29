@@ -696,6 +696,9 @@ JL_CALLABLE(jl_f_print_any)
     else if (jl_is_func(v)) {
         print_function(v);
     }
+    else if (jl_typeis(v,jl_intrinsic_type)) {
+        ios_printf(s, "#<intrinsic-function %d>", *(uint32_t*)jl_bits_data(v));
+    }
     else {
         jl_value_t *t = (jl_value_t*)jl_typeof(v);
         if (jl_is_bits_type(t)) {

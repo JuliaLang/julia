@@ -224,6 +224,8 @@ improving numeric type systems
 
 eliminating array allocations in loops
 or using register allocation to manage general resources
+or inference for minimizing temporary space use. e.g. figure out
+  that in-place matmul can be done with O(n) space overhead.
 
 performance survey over the course of a language implementation (with llvm)
 

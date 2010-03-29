@@ -210,6 +210,7 @@ extern jl_bits_type_t *jl_float64_type;
 extern jl_type_t *jl_buffer_uint8_type;
 extern jl_type_t *jl_buffer_any_type;
 extern jl_struct_type_t *jl_expr_type;
+extern jl_bits_type_t *jl_intrinsic_type;
 
 extern jl_tuple_t *jl_null;
 extern jl_value_t *jl_true;
@@ -367,6 +368,7 @@ void jl_shutdown_frontend();
 void jl_init_builtins();
 void jl_init_modules();
 void jl_init_codegen();
+void jl_init_intrinsic_functions();
 
 // parsing
 jl_value_t *jl_parse_input_line(char *str);

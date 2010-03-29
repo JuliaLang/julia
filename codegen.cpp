@@ -45,8 +45,15 @@ static const FunctionType *jl_func_sig;
 static const Type *jl_fptr_llvmt;
 static const Type *T_int8;
 static const Type *T_pint8;
+static const Type *T_uint8;
+static const Type *T_int16;
+static const Type *T_uint16;
 static const Type *T_int32;
+static const Type *T_uint32;
 static const Type *T_int64;
+static const Type *T_uint64;
+static const Type *T_float32;
+static const Type *T_float64;
 static const Type *T_void;
 
 // constants
@@ -63,6 +70,7 @@ static GlobalVariable *jlfunctype_var;
 static Function *jlerror_func;
 static Function *jlgetbindingp_func;
 static Function *jltuple_func;
+static Function *jlapplygeneric_func;
 
 // head symbols for each expression type
 static jl_sym_t *goto_sym;    static jl_sym_t *goto_ifnot_sym;
@@ -90,6 +98,7 @@ static jl_sym_t *closure_ref_sym;
   - better error messages
   - exceptions
   - threads or other advanced control flow
+  - include julia-defs.bc in the executable
 
   optimizations round 1:
   - constants, especially global. resolve functions statically.
@@ -247,7 +256,7 @@ static Value *emit_typeof(Value *p)
     return tt;
 }
 
-static void emit_error(const char *txt)
+static void emit_error(const std::string &txt)
 {
     std::vector<Value *> zeros(0);
     zeros.push_back(ConstantInt::get(T_int32, 0));
@@ -255,6 +264,21 @@ static void emit_error(const char *txt)
     builder.CreateCall(jlerror_func,
                        builder.CreateGEP(stringConst(txt),
                                          zeros.begin(), zeros.end()));
+}
+
+static void emit_typecheck(Value *x, jl_value_t *type, const std::string &msg,
+                           jl_codectx_t *ctx)
+{
+    Value *istype =
+        builder.CreateICmpEQ(emit_typeof(x), literal_pointer_val(type));
+    BasicBlock *elseBB = BasicBlock::Create(getGlobalContext(),"a",ctx->f);
+    BasicBlock *mergeBB = BasicBlock::Create(getGlobalContext(),"b");
+    builder.CreateCondBr(istype, mergeBB, elseBB);
+    builder.SetInsertPoint(elseBB);
+    emit_error(msg);
+    builder.CreateBr(mergeBB);
+    ctx->f->getBasicBlockList().push_back(mergeBB);
+    builder.SetInsertPoint(mergeBB);
 }
 
 static Value *emit_nthptr(Value *v, size_t n)
@@ -295,12 +319,16 @@ static Value *emit_checked_var(Value *bp, char *name, jl_codectx_t *ctx)
     std::string msg;
     msg += "undefined variable ";
     msg += std::string(name);
-    emit_error(msg.c_str());
+    emit_error(msg);
     builder.CreateBr(ifok);
     ctx->f->getBasicBlockList().push_back(ifok);
     builder.SetInsertPoint(ifok);
     return v;
 }
+
+static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool value);
+
+#include "intrinsics.cpp"
 
 static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool value)
 {
@@ -370,17 +398,8 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool value)
     else if (ex->head == call_sym) {
         Value *theFunc = emit_expr(args[0], ctx, true);
         size_t nargs = ex->args->length-1;
-        Value *isfunc =
-            builder.CreateICmpEQ(emit_typeof(theFunc),
-                                 builder.CreateLoad(jlfunctype_var,false));
-        BasicBlock *elseBB = BasicBlock::Create(getGlobalContext(),"a",ctx->f);
-        BasicBlock *mergeBB = BasicBlock::Create(getGlobalContext(),"b");
-        builder.CreateCondBr(isfunc, mergeBB, elseBB);
-        builder.SetInsertPoint(elseBB);
-        emit_error("apply: expected function.");
-        builder.CreateBr(mergeBB);
-        ctx->f->getBasicBlockList().push_back(mergeBB);
-        builder.SetInsertPoint(mergeBB);
+        emit_typecheck(theFunc, (jl_value_t*)jl_any_func,
+                       "apply: expected function.", ctx);
         Value *stacksave =
             builder.CreateCall(Intrinsic::getDeclaration(jl_Module,
                                                          Intrinsic::stacksave));
@@ -561,22 +580,36 @@ static void emit_function(jl_expr_t *lam, Function *f)
 
 static GlobalVariable *global_to_llvm(const std::string &cname, void *addr)
 {
-    GlobalVariable *gv;
-    gv = new GlobalVariable(*jl_Module, jl_pvalue_llvmt,
-                            true, GlobalVariable::ExternalLinkage,
-                            NULL, cname);
+    GlobalVariable *gv =
+        new GlobalVariable(*jl_Module, jl_pvalue_llvmt,
+                           true, GlobalVariable::ExternalLinkage,
+                           NULL, cname);
     jl_ExecutionEngine->addGlobalMapping(gv, addr);
     return gv;
+}
+
+static Function *jlfunc_to_llvm(const std::string &cname, void *addr)
+{
+    Function *f =
+        Function::Create(jl_func_sig, Function::ExternalLinkage,
+                         cname, jl_Module);
+    jl_ExecutionEngine->addGlobalMapping(f, addr);
+    return f;
 }
 
 extern "C" JL_CALLABLE(jl_f_tuple);
 
 static void init_julia_llvm_env(Module *m)
 {
-    T_int32 = Type::getInt32Ty(getGlobalContext());
-    T_int64 = Type::getInt64Ty(getGlobalContext());
     T_int8  = Type::getInt8Ty(getGlobalContext());
     T_pint8 = PointerType::get(T_int8, 0);
+    T_int16 = Type::getInt16Ty(getGlobalContext());
+    T_int32 = Type::getInt32Ty(getGlobalContext());
+    T_int64 = Type::getInt64Ty(getGlobalContext());
+    T_uint8 = T_int8;   T_uint16 = T_int16;
+    T_uint32 = T_int32; T_uint64 = T_int64;
+    T_float32 = Type::getFloatTy(getGlobalContext());
+    T_float64 = Type::getDoubleTy(getGlobalContext());
     T_void = Type::getVoidTy(jl_LLVMContext);
 
     // add needed base definitions to our LLVM environment
@@ -617,10 +650,9 @@ static void init_julia_llvm_env(Module *m)
     jl_ExecutionEngine->addGlobalMapping(jlgetbindingp_func,
                                          (void*)&jl_get_bindingp);
 
-    jltuple_func =
-        Function::Create(jl_func_sig, Function::ExternalLinkage,
-                         "jl_f_tuple", jl_Module);
-    jl_ExecutionEngine->addGlobalMapping(jltuple_func, (void*)*jl_f_tuple);
+    jltuple_func = jlfunc_to_llvm("jl_f_tuple", (void*)*jl_f_tuple);
+    jlapplygeneric_func =
+        jlfunc_to_llvm("jl_apply_generic", (void*)*jl_apply_generic);
 }
 
 extern "C" void jl_init_codegen()
