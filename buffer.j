@@ -1,10 +1,4 @@
-ref(b::UnboxedBuffer, i::Index) = box(typeof(b).parameters[1], bufferref(b, i))
 ref[T](b::Buffer[T], i::Index) = bufferref(b, i)
-
-function set(b::UnboxedBuffer, x::Unboxable, i::Index)
-    bufferset(b, i, unbox(convert(x,typeof(b).parameters[1])))
-    return x
-end
 
 function set[T](b::Buffer[T], x, i::Index)
     bufferset(b, i, convert(x,T))

@@ -286,6 +286,7 @@ jl_bits_type_t *jl_new_bitstype(jl_sym_t *name, jl_tag_type_t *super,
     t->name = jl_new_typename(name);
     t->super = super;
     t->parameters = parameters;
+    t->fconvert = jl_bottom_func;
     t->nbits = nbits;
     if (jl_has_typevars((jl_value_t*)parameters))
         t->uid = 0;

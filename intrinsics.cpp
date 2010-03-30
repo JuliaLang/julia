@@ -1,24 +1,23 @@
 namespace JL_I {
     enum intrinsic {
+        // wrap and unwrap
+        boxui8=0, boxsi8, boxui16, boxsi16, boxui32, boxsi32, boxui64, boxsi64,
+        boxf32, boxf64,
+        unbox8, unbox16, unbox32, unbox64,
         // arithmetic
-        neg_int8=0, add_int8, sub_int8, mul_int8, div_int8, mod_int8,
-        neg_int16, add_int16, sub_int16, mul_int16, div_int16, mod_int16,
-        neg_int32, add_int32, sub_int32, mul_int32, div_int32, mod_int32,
-        neg_int64, add_int64, sub_int64, mul_int64, div_int64, mod_int64,
-        neg_float32, add_float32, sub_float32, mul_float32, div_float32,
-        neg_float64, add_float64, sub_float64, mul_float64, div_float64,
+        neg_int, add_int, sub_int, mul_int, sdiv_int, udiv_int,
+        smod_int, umod_int,
+        neg_float, add_float, sub_float, mul_float, div_float,
         // comparison
-        eq_int8, lt_int8,       eq_int16, lt_int16,
-        eq_int32, lt_int32,     eq_int64, lt_int64,
-        eq_float32, lt_float32, eq_float64, lt_float64,
-        ne_float32, ne_float64,
+        eq_int, slt_int, ult_int,
+        eq_float, lt_float, ne_float,
         // conversion
-        to_bool,
-        to_int8, to_uint8,
-        to_int16, to_uint16,
-        to_int32, to_uint32,
-        to_int64, to_uint64,
-        to_float32, to_float64,
+        sext16, zext16, sext32, zext32, sext64, zext64,
+        trunc8, trunc16, trunc32,
+        fptoui8, fptosi8, fptoui16, fptosi16, fptoui32, fptosi32,
+        fptoui64, fptosi64, 
+        uitofp32, sitofp32, uitofp64, sitofp64,
+        fptrunc32, fpext64,
     };
 };
 
@@ -45,138 +44,175 @@ static Function *unbox_uint64_func;
 static Function *unbox_float32_func;
 static Function *unbox_float64_func;
 
+/*
+  low-level intrinsics design:
+  functions like add_int expect unboxed values of matching bit-length.
+  every operation that can return an unboxed value does so.
+  this maximizes opportunities for composing functions without
+    unnecessary boxing.
+  this means that box and unbox functions might do nothing except change
+    the type tag of a value.
+  boxing is delayed until absolutely necessary, and handled at the point
+    where the box is needed.
+
+  NOTE: LLVM does not have unsigned integer types, so we need to find
+  some way to flag LLVM Values as unsigned. We might have to wrap Value
+  in another class and propagate that around instead.
+*/
+
+// this is used to wrap values for generic contexts, where a
+// dynamically-typed value is required (e.g. argument to unknown function).
+// if it's already a pointer it's left alone.
+static Value *boxed(Value *v)
+{
+    const Type *t = v->getType();
+    if (t == T_int8)  return builder.CreateCall(box_int8_func, v);
+    if (t == T_int16) return builder.CreateCall(box_int16_func, v);
+    if (t == T_int32) return builder.CreateCall(box_int32_func, v);
+    if (t == T_int64) return builder.CreateCall(box_int64_func, v);
+    if (t == T_float32) return builder.CreateCall(box_float32_func, v);
+    if (t == T_float64) return builder.CreateCall(box_float64_func, v);
+    // TODO: unsigned
+    return v;
+}
+
 #define HANDLE(intr,n)                                                  \
     case intr: if (nargs!=n) jl_error(#intr": wrong number of arguments");
-
-#define BINARY_OP(typ, inst)                                            \
-    return                                                              \
-      builder.CreateCall(box_##typ##_func,                              \
-        builder.Create##inst(builder.CreateCall(unbox_##typ##_func,     \
-                                                emit_expr(args[1],ctx,true)), \
-                             builder.CreateCall(unbox_##typ##_func,     \
-                                                emit_expr(args[2],ctx,true))))
 
 static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
                              jl_codectx_t *ctx)
 {
+    if (nargs < 1) jl_error("invalid intrinsic call");
+    Value *x = emit_expr(args[1], ctx, true);
+    const Type *t = x->getType();
+    Value *p;
     switch (f) {
-    HANDLE(neg_int8,1)
+    HANDLE(boxui8,1);
         break;
-    HANDLE(add_int8,2)
-        BINARY_OP(int8, Add);
-    HANDLE(sub_int8,2)
+    HANDLE(boxsi8,1);
+        assert(t == T_int8);
+        return x;
+    HANDLE(boxui16,1);
         break;
-    HANDLE(mul_int8,2)
+    HANDLE(boxsi16,1);
+        return x;
+    HANDLE(boxui32,1);
         break;
-    HANDLE(div_int8,2)
+    HANDLE(boxsi32,1);
+        return x;
+    HANDLE(boxui64,1);
         break;
-    HANDLE(mod_int8,2)
+    HANDLE(boxsi64,1);
+        return x;
+    HANDLE(boxf32,1);
+        if (t == T_float32) return x;
+        assert(t == T_int32);
+        return builder.CreateBitCast(x, T_float32);
         break;
-    HANDLE(neg_int16,1)
+    HANDLE(boxf64,1);
+        if (t == T_float64) return x;
+        assert(t == T_int64);
+        return builder.CreateBitCast(x, T_float64);
         break;
-    HANDLE(add_int16,2)
+    HANDLE(unbox8,1);
+        p = builder.CreateGEP(builder.CreateBitCast(x, jl_ppvalue_llvmt),
+                              ConstantInt::get(T_int32, 1));
+        return builder.CreateLoad(builder.CreateBitCast(p,T_pint8),false);
+    HANDLE(unbox16,1)
+        p = builder.CreateGEP(builder.CreateBitCast(x, jl_ppvalue_llvmt),
+                              ConstantInt::get(T_int32, 1));
+        return builder.CreateLoad(builder.CreateBitCast(p,T_pint16),false);
+    HANDLE(unbox32,1)
+        p = builder.CreateGEP(builder.CreateBitCast(x, jl_ppvalue_llvmt),
+                              ConstantInt::get(T_int32, 1));
+        return builder.CreateLoad(builder.CreateBitCast(p,T_pint32),false);
+    HANDLE(unbox64,1)
+        p = builder.CreateGEP(builder.CreateBitCast(x, jl_ppvalue_llvmt),
+                              ConstantInt::get(T_int32, 1));
+        return builder.CreateLoad(builder.CreateBitCast(p,T_pint64),false);
+    HANDLE(neg_int,1)
+        return builder.CreateSub(ConstantInt::get(t, 0), x);
+    HANDLE(add_int,2)
+        return builder.CreateAdd(x, emit_expr(args[2],ctx,true));
+    HANDLE(sub_int,2)
+        return builder.CreateSub(x, emit_expr(args[2],ctx,true));
+    HANDLE(mul_int,2)
+        return builder.CreateMul(x, emit_expr(args[2],ctx,true));
+    HANDLE(sdiv_int,2)
         break;
-    HANDLE(sub_int16,2)
+    HANDLE(udiv_int,2)
         break;
-    HANDLE(mul_int16,2)
+    HANDLE(smod_int,2)
         break;
-    HANDLE(div_int16,2)
+    HANDLE(umod_int,2)
         break;
-    HANDLE(mod_int16,2)
+    HANDLE(neg_float,1)
         break;
-    HANDLE(neg_int32,1)
+    HANDLE(add_float,2)
         break;
-    HANDLE(add_int32,2)
-        BINARY_OP(int32, Add);
-    HANDLE(sub_int32,2)
+    HANDLE(sub_float,2)
         break;
-    HANDLE(mul_int32,2)
+    HANDLE(mul_float,2)
         break;
-    HANDLE(div_int32,2)
+    HANDLE(div_float,2)
         break;
-    HANDLE(mod_int32,2)
+    HANDLE(eq_int,2)
         break;
-    HANDLE(neg_int64,1)
+    HANDLE(slt_int,2)
         break;
-    HANDLE(add_int64,2)
+    HANDLE(ult_int,2)
         break;
-    HANDLE(sub_int64,2)
+    HANDLE(eq_float,2)
         break;
-    HANDLE(mul_int64,2)
+    HANDLE(lt_float,2)
         break;
-    HANDLE(div_int64,2)
+    HANDLE(ne_float,2)
         break;
-    HANDLE(mod_int64,2)
+    HANDLE(sext16,1)
         break;
-    HANDLE(neg_float32,1)
+    HANDLE(zext16,1)
         break;
-    HANDLE(add_float32,2)
+    HANDLE(sext32,1)
         break;
-    HANDLE(sub_float32,2)
+    HANDLE(zext32,1)
         break;
-    HANDLE(mul_float32,2)
+    HANDLE(sext64,1)
         break;
-    HANDLE(div_float32,2)
+    HANDLE(zext64,1)
         break;
-    HANDLE(neg_float64,1)
+    HANDLE(trunc8,1)
         break;
-    HANDLE(add_float64,2)
+    HANDLE(trunc16,1)
         break;
-    HANDLE(sub_float64,2)
+    HANDLE(trunc32,1)
         break;
-    HANDLE(mul_float64,2)
+    HANDLE(fptoui8,1)
         break;
-    HANDLE(div_float64,2)
+    HANDLE(fptosi8,1)
         break;
-    HANDLE(eq_int8,2)
+    HANDLE(fptoui16,1)
         break;
-    HANDLE(lt_int8,2)
+    HANDLE(fptosi16,1)
         break;
-    HANDLE(eq_int16,2)
+    HANDLE(fptoui32,1)
         break;
-    HANDLE(lt_int16,2)
+    HANDLE(fptosi32,1)
         break;
-    HANDLE(eq_int32,2)
+    HANDLE(fptoui64,1)
         break;
-    HANDLE(lt_int32,2)
+    HANDLE(fptosi64,1)
         break;
-    HANDLE(eq_int64,2)
+    HANDLE(uitofp32,1)
         break;
-    HANDLE(lt_int64,2)
+    HANDLE(sitofp32,1)
         break;
-    HANDLE(eq_float32,2)
+    HANDLE(uitofp64,1)
         break;
-    HANDLE(lt_float32,2)
+    HANDLE(sitofp64,1)
         break;
-    HANDLE(eq_float64,2)
+    HANDLE(fptrunc32,1)
         break;
-    HANDLE(lt_float64,2)
-        break;
-    HANDLE(ne_float32,2)
-        break;
-    HANDLE(ne_float64,2)
-        break;
-    HANDLE(to_bool,1)
-        break;
-    HANDLE(to_int8,1)
-        break;
-    HANDLE(to_uint8,1)
-        break;
-    HANDLE(to_int16,1)
-        break;
-    HANDLE(to_uint16,1)
-        break;
-    HANDLE(to_int32,1)
-        break;
-    HANDLE(to_uint32,1)
-        break;
-    HANDLE(to_int64,1)
-        break;
-    HANDLE(to_uint64,1)
-        break;
-    HANDLE(to_float32,1)
-        break;
-    HANDLE(to_float64,1)
+    HANDLE(fpext64,1)
         break;
     }
 }
@@ -215,34 +251,25 @@ static void add_intrinsic(const std::string &name, intrinsic f)
 
 extern "C" void jl_init_intrinsic_functions()
 {
-    ADD_I(neg_int8); ADD_I(add_int8); ADD_I(sub_int8); ADD_I(mul_int8);
-    ADD_I(div_int8); ADD_I(mod_int8);
-    ADD_I(neg_int16); ADD_I(add_int16); ADD_I(sub_int16); ADD_I(mul_int16);
-    ADD_I(div_int16); ADD_I(mod_int16);
-    ADD_I(neg_int32); ADD_I(add_int32); ADD_I(sub_int32); ADD_I(mul_int32);
-    ADD_I(div_int32); ADD_I(mod_int32);
-    ADD_I(neg_int64); ADD_I(add_int64); ADD_I(sub_int64); ADD_I(mul_int64);
-    ADD_I(div_int64); ADD_I(mod_int64);
-    ADD_I(neg_float32); ADD_I(add_float32);
-    ADD_I(sub_float32); ADD_I(mul_float32);
-    ADD_I(div_float32);
-    ADD_I(neg_float64); ADD_I(add_float64);
-    ADD_I(sub_float64); ADD_I(mul_float64);
-    ADD_I(div_float64);
-    ADD_I(eq_int8);  ADD_I(lt_int8);
-    ADD_I(eq_int16); ADD_I(lt_int16);
-    ADD_I(eq_int32); ADD_I(lt_int32);
-    ADD_I(eq_int64); ADD_I(lt_int64);
-    ADD_I(eq_float32); ADD_I(lt_float32);
-    ADD_I(eq_float64); ADD_I(lt_float64);
-    ADD_I(ne_float32); ADD_I(ne_float64);
-    ADD_I(to_bool);
-    ADD_I(to_int8);    ADD_I(to_uint8);
-    ADD_I(to_int16);   ADD_I(to_uint16);
-    ADD_I(to_int32);   ADD_I(to_uint32);
-    ADD_I(to_int64);   ADD_I(to_uint64);
-    ADD_I(to_float32); ADD_I(to_float64);
-
+    ADD_I(boxui8); ADD_I(boxsi8); ADD_I(boxui16); ADD_I(boxsi16);
+    ADD_I(boxui32); ADD_I(boxsi32); ADD_I(boxui64); ADD_I(boxsi64);
+    ADD_I(boxf32); ADD_I(boxf64);
+    ADD_I(unbox8); ADD_I(unbox16); ADD_I(unbox32); ADD_I(unbox64);
+    ADD_I(neg_int); ADD_I(add_int); ADD_I(sub_int); ADD_I(mul_int);
+    ADD_I(sdiv_int); ADD_I(udiv_int); ADD_I(smod_int); ADD_I(umod_int);
+    ADD_I(neg_float); ADD_I(add_float); ADD_I(sub_float);
+    ADD_I(mul_float); ADD_I(div_float);
+    ADD_I(eq_int); ADD_I(slt_int); ADD_I(ult_int);
+    ADD_I(eq_float); ADD_I(lt_float); ADD_I(ne_float);
+    ADD_I(sext16); ADD_I(zext16); ADD_I(sext32); ADD_I(zext32);
+    ADD_I(sext64); ADD_I(zext64);
+    ADD_I(trunc8); ADD_I(trunc16); ADD_I(trunc32);
+    ADD_I(fptoui8); ADD_I(fptosi8);
+    ADD_I(fptoui16); ADD_I(fptosi16); ADD_I(fptoui32); ADD_I(fptosi32);
+    ADD_I(fptoui64); ADD_I(fptosi64);
+    ADD_I(uitofp32); ADD_I(sitofp32); ADD_I(uitofp64); ADD_I(sitofp64);
+    ADD_I(fptrunc32); ADD_I(fpext64);
+    
     BOX_F(int8);  BOX_F(uint8);
     BOX_F(int16); BOX_F(uint16);
     BOX_F(int32); BOX_F(uint32);

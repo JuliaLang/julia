@@ -47,13 +47,18 @@ static const Type *T_int8;
 static const Type *T_pint8;
 static const Type *T_uint8;
 static const Type *T_int16;
+static const Type *T_pint16;
 static const Type *T_uint16;
 static const Type *T_int32;
+static const Type *T_pint32;
 static const Type *T_uint32;
 static const Type *T_int64;
+static const Type *T_pint64;
 static const Type *T_uint64;
 static const Type *T_float32;
+static const Type *T_pfloat32;
 static const Type *T_float64;
+static const Type *T_pfloat64;
 static const Type *T_void;
 
 // constants
@@ -88,9 +93,10 @@ static jl_sym_t *closure_ref_sym;
   - simple code gen for all node types
   - implement all low-level intrinsics
   - instantiate-method to provide static parameters
-  - rootlist to track pointers emitted into code
+  - default conversion functions
 
   stuff to fix up:
+  - rootlist to track pointers emitted into code
   - experiment with llvm optimization passes, option to disable them
   - function/var name mangling
   - gensyms from the front end might conflict with real variables, fix it
@@ -398,7 +404,7 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool value)
 
     else if (ex->head == return_sym) {
         assert(!value);
-        builder.CreateRet(emit_expr(args[0], ctx, true));
+        builder.CreateRet(boxed(emit_expr(args[0], ctx, true)));
     }
     else if (ex->head == call_sym) {
         size_t nargs = ex->args->length-1;
@@ -439,7 +445,7 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool value)
         for(i=0; i < nargs; i++) {
             Value *anArg = emit_expr(args[i+1], ctx, true);
             Value *dest = builder.CreateGEP(argl, ConstantInt::get(T_int32,i));
-            builder.CreateStore(anArg, dest);
+            builder.CreateStore(boxed(anArg), dest);
         }
         // call
         Value *result = builder.CreateCall3(theFptr, theEnv, argl,
@@ -455,7 +461,7 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool value)
         assert(!value);
         Value *rhs = emit_expr(args[1], ctx, true);
         Value *bp = var_binding_pointer((jl_sym_t*)args[0], ctx);
-        builder.CreateStore(rhs, bp);
+        builder.CreateStore(boxed(rhs), bp);
     }
     else if (ex->head == top_sym) {
         Value *bp = globalvar_binding_pointer((jl_sym_t*)args[0], ctx);
@@ -628,12 +634,17 @@ static void init_julia_llvm_env(Module *m)
     T_int8  = Type::getInt8Ty(getGlobalContext());
     T_pint8 = PointerType::get(T_int8, 0);
     T_int16 = Type::getInt16Ty(getGlobalContext());
+    T_pint16 = PointerType::get(T_int16, 0);
     T_int32 = Type::getInt32Ty(getGlobalContext());
+    T_pint32 = PointerType::get(T_int32, 0);
     T_int64 = Type::getInt64Ty(getGlobalContext());
+    T_pint64 = PointerType::get(T_int64, 0);
     T_uint8 = T_int8;   T_uint16 = T_int16;
     T_uint32 = T_int32; T_uint64 = T_int64;
     T_float32 = Type::getFloatTy(getGlobalContext());
+    T_pfloat32 = PointerType::get(T_float32, 0);
     T_float64 = Type::getDoubleTy(getGlobalContext());
+    T_pfloat64 = PointerType::get(T_float64, 0);
     T_void = Type::getVoidTy(jl_LLVMContext);
 
     // add needed base definitions to our LLVM environment
