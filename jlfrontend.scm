@@ -27,11 +27,13 @@
 	((atom? e) e)
 	(else
 	 (let ((l (map unsymbol e)))
-	   (if (eq? (car e) 'lambda)
-	       `("lambda" ("list" ,@(cadr l)) ,@(cddr l))
-	       (if (pair? (car l))
-		   (cons "list" l)
-		   l))))))
+	   (cond ((eq? (car e) 'lambda)
+		  `("lambda" ("list" ,@(cadr l)) ,@(cddr l)))
+		 ((eq? (car e) 'var-info)
+		  `("var-info" ,(cadr l)
+		    ("list" ,@(caddr l))
+		    ,@(cdddr l)))
+		 (else l))))))
 
 (gambit-only
  (c-define (jl-parse-string s) (char-string) scheme-object
