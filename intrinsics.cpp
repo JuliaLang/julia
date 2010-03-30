@@ -213,39 +213,28 @@ static void add_intrinsic(const std::string &name, intrinsic f)
     unbox_##ct##_func = boxfunc_llvm(ft1arg(T_##ct, jl_pvalue_llvmt),   \
                                      "jl_unbox_"#ct, (void*)&jl_unbox_##ct)
 
+#define INT_INTRINSICS(bits) \
+    ADD_I(neg_int##bits); ADD_I(add_int##bits); ADD_I(sub_int##bits); \
+    ADD_I(mul_int##bits); ADD_I(div_int##bits); ADD_I(mod_int##bits); \
+    ADD_I(eq_int##bits);  ADD_I(lt_int##bits);                        \
+    ADD_I(to_int##bits);  ADD_I(to_uint##bits);                       \
+    BOX_F(int##bits);     BOX_F(uint##bits);
+
+#define FLOAT_INTRINSICS(bits) \
+    ADD_I(neg_float##bits); ADD_I(add_float##bits); ADD_I(sub_float##bits); \
+    ADD_I(mul_float##bits); ADD_I(div_float##bits);                         \
+    ADD_I(eq_float##bits);  ADD_I(lt_float##bits);  ADD_I(ne_float##bits);  \
+    BOX_F(float##bits);
+
 extern "C" void jl_init_intrinsic_functions()
 {
-    ADD_I(neg_int8); ADD_I(add_int8); ADD_I(sub_int8); ADD_I(mul_int8);
-    ADD_I(div_int8); ADD_I(mod_int8);
-    ADD_I(neg_int16); ADD_I(add_int16); ADD_I(sub_int16); ADD_I(mul_int16);
-    ADD_I(div_int16); ADD_I(mod_int16);
-    ADD_I(neg_int32); ADD_I(add_int32); ADD_I(sub_int32); ADD_I(mul_int32);
-    ADD_I(div_int32); ADD_I(mod_int32);
-    ADD_I(neg_int64); ADD_I(add_int64); ADD_I(sub_int64); ADD_I(mul_int64);
-    ADD_I(div_int64); ADD_I(mod_int64);
-    ADD_I(neg_float32); ADD_I(add_float32);
-    ADD_I(sub_float32); ADD_I(mul_float32);
-    ADD_I(div_float32);
-    ADD_I(neg_float64); ADD_I(add_float64);
-    ADD_I(sub_float64); ADD_I(mul_float64);
-    ADD_I(div_float64);
-    ADD_I(eq_int8);  ADD_I(lt_int8);
-    ADD_I(eq_int16); ADD_I(lt_int16);
-    ADD_I(eq_int32); ADD_I(lt_int32);
-    ADD_I(eq_int64); ADD_I(lt_int64);
-    ADD_I(eq_float32); ADD_I(lt_float32);
-    ADD_I(eq_float64); ADD_I(lt_float64);
-    ADD_I(ne_float32); ADD_I(ne_float64);
     ADD_I(to_bool);
-    ADD_I(to_int8);    ADD_I(to_uint8);
-    ADD_I(to_int16);   ADD_I(to_uint16);
-    ADD_I(to_int32);   ADD_I(to_uint32);
-    ADD_I(to_int64);   ADD_I(to_uint64);
-    ADD_I(to_float32); ADD_I(to_float64);
 
-    BOX_F(int8);  BOX_F(uint8);
-    BOX_F(int16); BOX_F(uint16);
-    BOX_F(int32); BOX_F(uint32);
-    BOX_F(int64); BOX_F(uint64);
-    BOX_F(float32); BOX_F(float64);
+    INT_INTRINSICS(8);
+    INT_INTRINSICS(16);
+    INT_INTRINSICS(32);
+    INT_INTRINSICS(64);
+
+    FLOAT_INTRINSICS(32);
+    FLOAT_INTRINSICS(64);
 }
