@@ -1462,7 +1462,12 @@ end
 			(loop L (+ i 1)))
 		 (display ")"))))))))))
 
-(make-builtin '_print "(Any,)-->()" julia-print)
+(let ((print-gf (make-generic-function 'print)))
+  (table-set! julia-globals 'print print-gf)
+  (add-method-for print-gf
+		  (julia-tuple Any-type)
+		  (make-closure
+		   (lambda (ce args) (julia-print (car args))) #f)))
 
 (define (detect-color)
   (let ((tput (shell-command "tput setaf 9 >&/dev/null")))

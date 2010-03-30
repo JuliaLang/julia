@@ -420,6 +420,7 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool value)
         if (jl_is_symbol(args[0]) && is_global((jl_sym_t*)args[0], ctx) &&
             jl_boundp(ctx->module, (jl_sym_t*)args[0]) &&
             (b=jl_get_binding(ctx->module, (jl_sym_t*)args[0]))->constp) {
+            // TODO: handle (top x) as well
             // head is a constant global
             if (jl_typeis(b->value, jl_intrinsic_type)) {
                 return emit_intrinsic((intrinsic)*(uint32_t*)jl_bits_data(b->value),

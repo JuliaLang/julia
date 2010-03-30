@@ -180,8 +180,8 @@ JL_CALLABLE(jl_f_load)
         jl_buffer_t *b = ((jl_expr_t*)ast)->args;
         size_t i;
         for(i=0; i < b->length; i++) {
-            // TODO
-            // process toplevel form b->data[i]
+            // process toplevel form
+            jl_toplevel_eval(((jl_value_t**)b->data)[i]);
         }
     }
     else {
@@ -898,7 +898,6 @@ JL_CALLABLE(jl_f_add_method)
     if (!jl_is_gf(args[0]))
         jl_error("add_method: not a generic function");
     JL_TYPECHK(add_method, tuple, args[1]);
-    JL_TYPECHK(add_method, type, args[1]);
     JL_TYPECHK(add_method, function, args[2]);
     jl_add_method((jl_function_t*)args[0], (jl_tuple_t*)args[1],
                   (jl_function_t*)args[2]);
@@ -966,6 +965,7 @@ void jl_init_builtins()
     add_builtin_func("convert", jl_f_convert);
     add_builtin_func("Union", jl_f_union);
     add_builtin("print", jl_print_gf);
+    add_builtin("ref", jl_ref_gf);
     
     // functions for internal use
     add_builtin_func("tupleref", jl_f_tupleref);

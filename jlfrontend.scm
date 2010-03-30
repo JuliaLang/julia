@@ -25,9 +25,13 @@
 	((boolean? e) (if e 1 0))
 	((vector? e) (cons "vinfo" (map unsymbol (vector->list e))))
 	((atom? e) e)
-	(else (let ((l (map unsymbol e)))
-		(if (pair? (car l))
-		    (cons "list" l) l)))))
+	(else
+	 (let ((l (map unsymbol e)))
+	   (if (eq? (car e) 'lambda)
+	       `("lambda" ("list" ,@(cadr l)) ,@(cddr l))
+	       (if (pair? (car l))
+		   (cons "list" l)
+		   l))))))
 
 (gambit-only
  (c-define (jl-parse-string s) (char-string) scheme-object

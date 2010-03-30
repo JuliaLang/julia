@@ -393,6 +393,7 @@ jl_module_t *jl_import_module(jl_module_t *to, jl_module_t *from);
 
 // compiler
 void jl_compile(jl_lambda_info_t *li);
+jl_value_t *jl_toplevel_eval(jl_value_t *ast);
 
 // for writing julia functions in C
 #define JL_CALLABLE(name) \

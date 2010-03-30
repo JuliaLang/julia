@@ -5,12 +5,6 @@ typealias Size  Int32
 ref(t::Tuple, i::Index) = tupleref(t, i)
 length(t::Tuple) = tuplelen(t)
 
-function print(x)
-    # default print function, call builtin
-    _print(x)
-    return ()
-end
-
 !(x::Bool) = eq_int(unbox8(x),unbox8(0))
 !(x) = false
 !=(x, y) = !(x == y)

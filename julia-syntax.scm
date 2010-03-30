@@ -911,6 +911,15 @@ So far only the second case can actually occur.
   (append (lam:vars e)
 	  (cdr (caddr e))))
 
+(define (fix-seq-type t)
+  ; wrap (call (top ref) ... . args) in (tuple ...)
+  (if (and (length> t 2)
+	   (eq? (car t) 'call)
+	   (equal? (cadr t) '(top ref))
+	   (eq? (caddr t) '...))
+      `(call (top tuple) ,t)
+      t))
+
 ; convert each lambda's (locals ...) to
 ;   (var-info (locals ...) var-info-lst captured-var-names)
 ; where var-info-lst is a list of var-info records
@@ -956,7 +965,7 @@ So far only the second case can actually occur.
 			       (cdr rec))))
 	   (for-each (lambda (decl)
 		       (vinfo:set-type! (var-info-for (decl-var decl) vi)
-					(decl-type decl)))
+					(fix-seq-type (decl-type decl))))
 		     (lam:args e))
 	   (cons `(lambda ,(lam:args e)
 		   ;(var-info  locals  vinfos  captured         staticparams)
