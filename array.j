@@ -110,8 +110,6 @@ function set[T](A::Array[T,1], X, I)
 
     if isscalar(X)
         for i=I; A[i] = X; end;
-    else
-        for i=I; A[i] = X[i]; end;
     end
 
     return A
@@ -124,8 +122,6 @@ function set[T](A::Array[T,2], X, I, J)
 
     if isscalar(X)
         for i=I; for j=J; A[i,j] = X; end; end
-    else
-        for i=I; for j=J; A[i,j] = X[i,j]; end; end
     end
 
     return A
