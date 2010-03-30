@@ -10,7 +10,7 @@ typealias Matrix[T] Tensor[T,2]
 numel(a::Array) = length(a.data)
 
 length[T](v::Array[T,1]) = length(v.data)
-length[T](a::Array[T,2]) = max(size(a))
+length[T](a::Array[T,2]) = max(a.dims)
 
 size(a::Array) = a.dims
 size(a::Array, d) = a.dims[d]
@@ -102,6 +102,33 @@ function set(a::Array, x, I::Index...)
 
     data[index] = x
     return a
+end
+
+function set[T](A::Array[T,1], X, I)
+    # TODO: Need to take care of growing
+    I = jl_fill_endpts(A, 1, I)
+
+    if isscalar(X)
+        for i=I; A[i] = X; end;
+    else
+        for i=I; A[i] = X[i]; end;
+    end
+
+    return A
+end
+
+function set[T](A::Array[T,2], X, I, J)
+    # TODO: Need to take care of growing
+    I = jl_fill_endpts(A, 1, I)
+    J = jl_fill_endpts(A, 2, J)
+
+    if isscalar(X)
+        for i=I; for j=J; A[i,j] = X; end; end
+    else
+        for i=I; for j=J; A[i,j] = X[i,j]; end; end
+    end
+
+    return A
 end
 
 # Concatenation
