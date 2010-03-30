@@ -337,6 +337,13 @@ static Value *emit_checked_var(Value *bp, char *name, jl_codectx_t *ctx)
     return v;
 }
 
+static Value *julia_bool(Value *cond)
+{
+    return builder.CreateSelect(cond,
+                                builder.CreateLoad(jltrue_var, false),
+                                builder.CreateLoad(jlfalse_var, false));
+}
+
 static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool value);
 
 #include "intrinsics.cpp"
@@ -471,9 +478,7 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool value)
         Value *bp = var_binding_pointer((jl_sym_t*)args[0], ctx);
         Value *v = builder.CreateLoad(bp, false);
         Value *isnull = builder.CreateICmpEQ(v, V_null);
-        return builder.CreateSelect(isnull,
-                                    builder.CreateLoad(jltrue_var, false),
-                                    builder.CreateLoad(jlfalse_var, false));
+        return julia_bool(isnull);
     }
     else if (ex->head == boxunbound_sym) {
         Value *box = emit_expr(args[0], ctx, true);

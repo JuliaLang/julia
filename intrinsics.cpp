@@ -33,16 +33,6 @@ static Function *box_int64_func;
 static Function *box_uint64_func;
 static Function *box_float32_func;
 static Function *box_float64_func;
-static Function *unbox_int8_func;
-static Function *unbox_uint8_func;
-static Function *unbox_int16_func;
-static Function *unbox_uint16_func;
-static Function *unbox_int32_func;
-static Function *unbox_uint32_func;
-static Function *unbox_int64_func;
-static Function *unbox_uint64_func;
-static Function *unbox_float32_func;
-static Function *unbox_float64_func;
 
 /*
   low-level intrinsics design:
@@ -76,6 +66,22 @@ static Value *boxed(Value *v)
     return v;
 }
 
+// convert int type to same-size float type
+static const Type *FT(const Type *t)
+{
+    if (t == T_int32) return T_float32;
+    assert(t == T_int64);
+    return T_float64;
+}
+
+// reinterpret-cast to float
+static Value *FP(Value *v)
+{
+    if (v->getType()->isFloatingPoint())
+        return v;
+    return builder.CreateBitCast(v, FT(v->getType()));
+}
+
 #define HANDLE(intr,n)                                                  \
     case intr: if (nargs!=n) jl_error(#intr": wrong number of arguments");
 
@@ -87,34 +93,34 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
     const Type *t = x->getType();
     Value *p;
     switch (f) {
-    HANDLE(boxui8,1);
+    HANDLE(boxui8,1)
         break;
-    HANDLE(boxsi8,1);
+    HANDLE(boxsi8,1)
         assert(t == T_int8);
         return x;
-    HANDLE(boxui16,1);
+    HANDLE(boxui16,1)
         break;
-    HANDLE(boxsi16,1);
+    HANDLE(boxsi16,1)
         return x;
-    HANDLE(boxui32,1);
+    HANDLE(boxui32,1)
         break;
-    HANDLE(boxsi32,1);
+    HANDLE(boxsi32,1)
         return x;
-    HANDLE(boxui64,1);
+    HANDLE(boxui64,1)
         break;
-    HANDLE(boxsi64,1);
+    HANDLE(boxsi64,1)
         return x;
-    HANDLE(boxf32,1);
+    HANDLE(boxf32,1)
         if (t == T_float32) return x;
         assert(t == T_int32);
         return builder.CreateBitCast(x, T_float32);
         break;
-    HANDLE(boxf64,1);
+    HANDLE(boxf64,1)
         if (t == T_float64) return x;
         assert(t == T_int64);
         return builder.CreateBitCast(x, T_float64);
         break;
-    HANDLE(unbox8,1);
+    HANDLE(unbox8,1)
         p = builder.CreateGEP(builder.CreateBitCast(x, jl_ppvalue_llvmt),
                               ConstantInt::get(T_int32, 1));
         return builder.CreateLoad(builder.CreateBitCast(p,T_pint8),false);
@@ -139,82 +145,94 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
     HANDLE(mul_int,2)
         return builder.CreateMul(x, emit_expr(args[2],ctx,true));
     HANDLE(sdiv_int,2)
-        break;
+        return builder.CreateSDiv(x, emit_expr(args[2],ctx,true));
     HANDLE(udiv_int,2)
-        break;
+        return builder.CreateUDiv(x, emit_expr(args[2],ctx,true));
     HANDLE(smod_int,2)
-        break;
+        return builder.CreateSRem(x, emit_expr(args[2],ctx,true));
     HANDLE(umod_int,2)
-        break;
+        return builder.CreateURem(x, emit_expr(args[2],ctx,true));
     HANDLE(neg_float,1)
-        break;
+        return builder.CreateFSub(ConstantFP::get(FT(t), 0), FP(x));
     HANDLE(add_float,2)
-        break;
+        return builder.CreateFAdd(FP(x), FP(emit_expr(args[2],ctx,true)));
     HANDLE(sub_float,2)
-        break;
+        return builder.CreateFSub(FP(x), FP(emit_expr(args[2],ctx,true)));
     HANDLE(mul_float,2)
-        break;
+        return builder.CreateFMul(FP(x), FP(emit_expr(args[2],ctx,true)));
     HANDLE(div_float,2)
-        break;
+        return builder.CreateFDiv(FP(x), FP(emit_expr(args[2],ctx,true)));
     HANDLE(eq_int,2)
-        break;
+        return julia_bool(builder.CreateICmpEQ(x,
+                                               emit_expr(args[2],ctx,true)));
     HANDLE(slt_int,2)
-        break;
+        return julia_bool(builder.CreateICmpSLT(x,
+                                                emit_expr(args[2],ctx,true)));
     HANDLE(ult_int,2)
-        break;
+        return julia_bool(builder.CreateICmpULT(x,
+                                                emit_expr(args[2],ctx,true)));
     HANDLE(eq_float,2)
-        break;
+        return
+        julia_bool(builder.CreateFCmpOEQ(FP(x),
+                                         FP(emit_expr(args[2],ctx,true))));
     HANDLE(lt_float,2)
-        break;
+        return
+        julia_bool(builder.CreateFCmpOLT(FP(x),
+                                         FP(emit_expr(args[2],ctx,true))));
     HANDLE(ne_float,2)
-        break;
+        return
+        julia_bool(builder.CreateFCmpONE(FP(x),
+                                         FP(emit_expr(args[2],ctx,true))));
     HANDLE(sext16,1)
-        break;
+        return builder.CreateSExt(x, T_int16);
     HANDLE(zext16,1)
-        break;
+        return builder.CreateZExt(x, T_int16);
     HANDLE(sext32,1)
-        break;
+        return builder.CreateSExt(x, T_int32);
     HANDLE(zext32,1)
-        break;
+        return builder.CreateZExt(x, T_int32);
     HANDLE(sext64,1)
-        break;
+        return builder.CreateSExt(x, T_int64);
     HANDLE(zext64,1)
-        break;
+        return builder.CreateZExt(x, T_int64);
     HANDLE(trunc8,1)
-        break;
+        return builder.CreateTrunc(x, T_int8);
     HANDLE(trunc16,1)
-        break;
+        return builder.CreateTrunc(x, T_int16);
     HANDLE(trunc32,1)
-        break;
+        return builder.CreateTrunc(x, T_int32);
     HANDLE(fptoui8,1)
-        break;
+        return builder.CreateFPToUI(FP(x), T_int8);
     HANDLE(fptosi8,1)
-        break;
+        return builder.CreateFPToSI(FP(x), T_int8);
     HANDLE(fptoui16,1)
-        break;
+        return builder.CreateFPToUI(FP(x), T_int16);
     HANDLE(fptosi16,1)
-        break;
+        return builder.CreateFPToSI(FP(x), T_int16);
     HANDLE(fptoui32,1)
-        break;
+        return builder.CreateFPToUI(FP(x), T_int32);
     HANDLE(fptosi32,1)
-        break;
+        return builder.CreateFPToSI(FP(x), T_int32);
     HANDLE(fptoui64,1)
-        break;
+        return builder.CreateFPToUI(FP(x), T_int64);
     HANDLE(fptosi64,1)
-        break;
+        return builder.CreateFPToSI(FP(x), T_int64);
     HANDLE(uitofp32,1)
-        break;
+        return builder.CreateUIToFP(FP(x), T_float32);
     HANDLE(sitofp32,1)
-        break;
+        return builder.CreateSIToFP(FP(x), T_float32);
     HANDLE(uitofp64,1)
-        break;
+        return builder.CreateUIToFP(FP(x), T_float64);
     HANDLE(sitofp64,1)
-        break;
+        return builder.CreateSIToFP(FP(x), T_float64);
     HANDLE(fptrunc32,1)
-        break;
+        return builder.CreateFPTrunc(FP(x), T_float32);
     HANDLE(fpext64,1)
-        break;
+        return builder.CreateFPExt(FP(x), T_float64);
+    default:
+        assert(false);
     }
+    assert(false);
 }
 
 #undef HANDLE
@@ -245,9 +263,7 @@ static void add_intrinsic(const std::string &name, intrinsic f)
 #define ADD_I(name) add_intrinsic(#name, name)
 #define BOX_F(ct)                                                       \
     box_##ct##_func = boxfunc_llvm(ft1arg(jl_pvalue_llvmt, T_##ct),     \
-                                   "jl_box_"#ct, (void*)&jl_box_##ct);  \
-    unbox_##ct##_func = boxfunc_llvm(ft1arg(T_##ct, jl_pvalue_llvmt),   \
-                                     "jl_unbox_"#ct, (void*)&jl_unbox_##ct)
+                                   "jl_box_"#ct, (void*)&jl_box_##ct);
 
 extern "C" void jl_init_intrinsic_functions()
 {
