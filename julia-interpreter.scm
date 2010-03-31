@@ -630,13 +630,10 @@ TODO:
     (and m
 	 (if (has-typevars? (car m))
 	     (let* ((env     (conform type (car m)))
-		    (newtype (instantiate-type- (car m) env))
 		    (newmeth (instantiate-method (cdr m) env)))
 	       ; cache result in concrete method table
-	       (method-table-insert! methtable newtype newmeth)
-	       (if (subtype? type newtype)
-		   (cons newtype newmeth)
-		   #f))
+	       (method-table-insert! methtable type newmeth)
+	       (cons type newmeth))
 	     m))))
 
 (define (method-table-insert-p mlist type method pred)
@@ -1468,6 +1465,11 @@ end
 		  (julia-tuple Any-type)
 		  (make-closure
 		   (lambda (ce args) (julia-print (car args))) #f)))
+
+; show the types of the methods in a global generic function, by name
+(define (show-mtable globalname)
+  (for-each (lambda (x) (call-print x) (newline))
+	    (map car (mt:mlist (gf-mtable (j-toplevel-eval globalname))))))
 
 (define (detect-color)
   (let ((tput (shell-command "tput setaf 9 >&/dev/null")))

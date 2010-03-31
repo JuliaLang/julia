@@ -105,6 +105,7 @@ static jl_sym_t *closure_ref_sym;
   - exceptions
   - threads or other advanced control flow
   - include julia-defs.bc in the executable
+  - discard toplevel wrapper functions
 
   optimizations round 1:
   - constants, especially global. resolve functions statically.
