@@ -51,8 +51,16 @@ static void syntax_error_check(___SCMOBJ e)
     ___SCMOBJ ___temp;
     if (___PAIRP(e)) {
         ___SCMOBJ hd = ___CAR(e);
-        if (___STRINGP(hd) && !strcmp(jl_scm_str(hd),"error")) {
-            jl_errorf("syntax error: %s", jl_scm_str(___CADR(___CADR(e))));
+        char *s;
+        ___SCMOBJ_to_CHARSTRING(hd, &s, 0);
+        if (___STRINGP(hd) && !strcmp(s,"error")) {
+            ___release_rc(s);
+            // note: this string should be released
+            ___SCMOBJ_to_CHARSTRING(___CADR(___CADR(e)), &s, 0);
+            jl_errorf("syntax error: %s", s);
+        }
+        else {
+            ___release_rc(s);
         }
     }
 }
@@ -82,41 +90,59 @@ static jl_value_t *scm_to_julia(___SCMOBJ e)
         return (jl_value_t*)jl_box_float64(jl_scm_float64(e));
     }
     if (___STRINGP(e)) {
-        char *s = jl_scm_str(e);
+        char *s;
+        ___SCMOBJ_to_CHARSTRING(e, &s, 0);
+        jl_value_t *v;
         if (!strcmp(s,"true"))
-            return jl_true;
+            v = (jl_value_t*)jl_true;
         else if (!strcmp(s,"false"))
-            return jl_false;
-        return (jl_value_t*)jl_symbol(s);
+            v = (jl_value_t*)jl_false;
+        else
+            v = (jl_value_t*)jl_symbol(s);
+        ___release_rc(s);
+        return v;
     }
     if (___NULLP(e))
         return (jl_value_t*)jl_null;
     if (___PAIRP(e)) {
         ___SCMOBJ hd = ___CAR(e);
         if (___STRINGP(hd)) {
-            char *s = jl_scm_str(hd);
+            char *s;
+            ___SCMOBJ_to_CHARSTRING(hd, &s, 0);
             /* tree node types:
                goto  goto-ifnot  label  return
                lambda  call  =  quote
                null  top  unbound  box-unbound  closure-ref
                body  file  string
             */
-            if (!strcmp(s, "string"))
-                return (jl_value_t*)jl_cstr_to_buffer(jl_scm_str(___CADR(e)));
-            size_t n = scm_list_length(e)-1;
-            size_t i;
-            jl_expr_t *ex = jl_exprn(jl_symbol(s), n);
-            e = ___CDR(e);
-            for(i=0; i < n; i++) {
-                assert(___PAIRP(e));
-                ((jl_value_t**)ex->args->data)[i] = scm_to_julia(___CAR(e));
+            jl_value_t *v;
+            if (!strcmp(s, "string")) {
+                char *ss;
+                ___SCMOBJ_to_CHARSTRING(___CADR(e), &ss, 0);
+                v = (jl_value_t*)jl_cstr_to_buffer(ss);
+                ___release_rc(ss);
+            }
+            else {
+                size_t n = scm_list_length(e)-1;
+                size_t i;
+                jl_expr_t *ex = jl_exprn(jl_symbol(s), n);
                 e = ___CDR(e);
+                for(i=0; i < n; i++) {
+                    assert(___PAIRP(e));
+                    ((jl_value_t**)ex->args->data)[i] = scm_to_julia(___CAR(e));
+                    e = ___CDR(e);
+                }
+                if (!strcmp(s, "lambda")) {
+                    v = (jl_value_t*)
+                        jl_expr(jl_symbol("quote"), 1,
+                                jl_new_lambda_info((jl_value_t*)ex,jl_null));
+                }
+                else {
+                    v = (jl_value_t*)ex;
+                }
             }
-            if (!strcmp(s, "lambda")) {
-                return (jl_value_t*)jl_expr(jl_symbol("quote"), 1,
-                                            jl_new_lambda_info((jl_value_t*)ex,jl_null));
-            }
-            return (jl_value_t*)ex;
+            ___release_rc(s);
+            return v;
         }
         else {
             jl_error("malformed tree");

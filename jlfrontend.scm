@@ -46,13 +46,6 @@
     (parser-wrap (lambda ()
 		   (cons 'file (map toplevel-expr (julia-parse-file s)))))))
  
- (c-define (get-sym s) (char-string) scheme-object "jl_get_sym" ""
-   (string->symbol s))
- 
- (c-define (get-string s) (scheme-object) char-string "jl_scm_str" ""
-   (begin
-     (if (not (string? s)) (error "jl_scm_str: string expected"))
-     s))
  (c-define (get-integer n) (scheme-object) unsigned-int64 "jl_scm_uint64" ""
    n)
  (c-define (get-float64 x) (scheme-object) float64 "jl_scm_float64" ""

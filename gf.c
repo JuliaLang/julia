@@ -162,6 +162,7 @@ static int args_match(jl_type_t *a, jl_type_t *b)
 
 static int sigs_match(jl_value_t **a, size_t n, jl_type_t *b)
 {
+    assert(jl_is_tuple(b));
     return jl_tuple_subtype(a, n, &jl_tupleref(b,0), ((jl_tuple_t*)b)->length,
                             0, 0) &&
         jl_tuple_subtype(&jl_tupleref(b,0), ((jl_tuple_t*)b)->length, a, n,
@@ -175,6 +176,7 @@ jl_methlist_t *jl_method_list_insert_p(jl_methlist_t **pml, jl_type_t *type,
 {
     jl_methlist_t *l, **pl;
 
+    assert(jl_is_tuple(type));
     l = jl_method_list_assoc(*pml,
                              &jl_tupleref(type,0), ((jl_tuple_t*)type)->length,
                              sigs_match);
