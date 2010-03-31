@@ -5,6 +5,7 @@ end
 
 typealias Vector[T] Tensor[T,1]
 typealias Matrix[T] Tensor[T,2]
+typealias Indices[T] Union(Range, RangeFrom, RangeBy, RangeTo, Vector[T])
 
 ## Basic functions
 numel(a::Array) = length(a.data)
@@ -110,6 +111,12 @@ function set[T](A::Array[T,1], X, I)
 
     if isscalar(X)
         for i=I; A[i] = X; end;
+    else
+        count = 1
+        for i=I
+            A[i] = X[count]
+            count += 1
+        end
     end
 
     return A
