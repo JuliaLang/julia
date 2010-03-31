@@ -101,6 +101,7 @@ jl_methlist_t *jl_method_table_assoc(jl_methtable_t *mt,
     
     // try generics
     jl_methlist_t *gm = mt->generics;
+    if (gm == NULL) return m;
     // TODO: avoid this allocation
     jl_tuple_t *tt = jl_alloc_tuple(nargs);
     jl_value_pair_t *env = NULL;

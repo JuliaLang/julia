@@ -263,6 +263,7 @@ extern jl_sym_t *list_sym;
 #define jl_is_union_type(v)  jl_typeis(v,jl_union_kind)
 #define jl_is_typevar(v)     jl_typeis(v,jl_tvar_type)
 #define jl_is_typector(v)    jl_typeis(v,jl_typector_type)
+#define jl_is_typename(v)    jl_typeis(v,jl_typename_type)
 #define jl_is_int32(v)       jl_typeis(v,jl_int32_type)
 #define jl_is_int64(v)       jl_typeis(v,jl_int64_type)
 #define jl_is_uint32(v)      jl_typeis(v,jl_uint32_type)
@@ -286,7 +287,7 @@ extern jl_sym_t *list_sym;
 static inline int jl_is_seq_type(jl_value_t *v)
 {
     return (jl_is_tag_type(v) &&
-            ((jl_tag_type_t*)jl_typeof(v))->name ==
+            ((jl_tag_type_t*)(v))->name ==
             ((jl_tag_type_t*)jl_seq_type->body)->name);
 }
 
@@ -312,7 +313,7 @@ jl_type_t *jl_instantiate_type_with(jl_type_t *t, jl_value_t **env, size_t n);
 jl_tvar_t *jl_typevar(jl_sym_t *name);
 jl_uniontype_t *jl_new_uniontype(jl_tuple_t *types);
 jl_func_type_t *jl_new_functype(jl_type_t *a, jl_type_t *b);
-jl_tag_type_t *jl_new_tagtype(jl_sym_t *name, jl_tag_type_t *super,
+jl_tag_type_t *jl_new_tagtype(jl_value_t *name, jl_tag_type_t *super,
                               jl_tuple_t *parameters);
 jl_struct_type_t *jl_new_struct_type(jl_sym_t *name, jl_tag_type_t *super,
                                      jl_tuple_t *parameters,

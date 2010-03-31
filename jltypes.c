@@ -196,12 +196,15 @@ jl_typename_t *jl_new_typename(jl_sym_t *name)
 #define BITS_TYPE_NW (NWORDS(sizeof(jl_bits_type_t))-1)
 static int t_uid_ctr = 1;  // TODO: lock
 
-jl_tag_type_t *jl_new_tagtype(jl_sym_t *name, jl_tag_type_t *super,
+jl_tag_type_t *jl_new_tagtype(jl_value_t *name, jl_tag_type_t *super,
                               jl_tuple_t *parameters)
 {
     jl_tag_type_t *t = (jl_tag_type_t*)newobj((jl_type_t*)jl_tag_kind,
                                             TAG_TYPE_NW);
-    t->name = jl_new_typename(name);
+    if (jl_is_typename(name))
+        t->name = (jl_typename_t*)name;
+    else
+        t->name = jl_new_typename((jl_sym_t*)name);
     t->super = super;
     t->parameters = parameters;
     return t;
@@ -278,12 +281,15 @@ jl_struct_type_t *jl_new_struct_type(jl_sym_t *name, jl_tag_type_t *super,
     return t;
 }
 
-jl_bits_type_t *jl_new_bitstype(jl_sym_t *name, jl_tag_type_t *super,
+jl_bits_type_t *jl_new_bitstype(jl_value_t *name, jl_tag_type_t *super,
                                 jl_tuple_t *parameters, size_t nbits)
 {
     jl_bits_type_t *t = (jl_bits_type_t*)newobj((jl_type_t*)jl_bits_kind,
                                                 BITS_TYPE_NW);
-    t->name = jl_new_typename(name);
+    if (jl_is_typename(name))
+        t->name = (jl_typename_t*)name;
+    else
+        t->name = jl_new_typename((jl_sym_t*)name);
     t->super = super;
     t->parameters = parameters;
     t->fconvert = jl_bottom_func;
@@ -789,8 +795,8 @@ int jl_tuple_subtype(jl_value_t **child, size_t cl,
 {
     size_t ci=0, pi=0;
     while(1) {
-        int cseq = (ci<cl) && jl_is_seq_type(child[ci]);
-        int pseq = (pi<pl) && jl_is_seq_type(parent[pi]);
+        int cseq = !ta && (ci<cl) && jl_is_seq_type(child[ci]);
+        int pseq = !tb && (pi<pl) && jl_is_seq_type(parent[pi]);
         if (ci >= cl)
             return (pi>=pl || pseq);
         if (cseq && !pseq)

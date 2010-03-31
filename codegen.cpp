@@ -329,8 +329,8 @@ static Value *emit_checked_var(Value *bp, char *name, jl_codectx_t *ctx)
     builder.CreateCondBr(ok, ifok, err);
     builder.SetInsertPoint(err);
     std::string msg;
-    msg += "undefined variable ";
     msg += std::string(name);
+    msg += " not defined";
     emit_error(msg);
     builder.CreateBr(ifok);
     ctx->f->getBasicBlockList().push_back(ifok);

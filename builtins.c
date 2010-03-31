@@ -178,6 +178,8 @@ JL_CALLABLE(jl_f_load)
         char *fname = (char*)((jl_buffer_t*)args[0])->data;
         jl_value_t *ast = jl_parse_file(fname);
         jl_buffer_t *b = ((jl_expr_t*)ast)->args;
+        if (b == NULL)
+            jl_errorf("could not open file %s", fname);
         size_t i;
         for(i=0; i < b->length; i++) {
             // process toplevel form
