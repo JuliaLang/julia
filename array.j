@@ -56,7 +56,8 @@ function colon(start::Int32, stop::Int32, stride::Int32)
 end
 
 ## Indexing: ref()
-ref[T](a::Array[T,1], i::Index) = a.data[i]
+#TODO: Out-of-bound checks
+ref(a::Array, i::Index) = a.data[i]
 ref[T](a::Array[T,2], i::Index, j::Index) = a.data[(j-1)*a.dims[1] + i]
 
 jl_fill_endpts(A, n, R::RangeBy) = range(1, R.step, size(A, n))
@@ -69,7 +70,6 @@ ref[T](A::Array[T,2], I, J) = [ A[i, j] | i = jl_fill_endpts(A, 1, I),
                                           j = jl_fill_endpts(A, 2, J)  ]
 
 function ref(a::Array, I::Index...) 
-    # TODO: Need out-of-bounds checks
     data = a.data
     dims = a.dims
     ndims = length(I) - 1
@@ -85,7 +85,8 @@ function ref(a::Array, I::Index...)
 end
 
 # Indexing: set()
-set[T](a::Array[T,1], x, i::Index) = do (a.data[i] = x, a)
+# TODO: Take care of growing
+set(a::Array, x, i::Index) = do (a.data[i] = x, a)
 set[T](a::Array[T,2], x, i::Index, j::Index) = do (a.data[(j-1)*a.dims[1] + i] = x, a)
 
 function set(a::Array, x, I::Index...)
@@ -105,32 +106,31 @@ function set(a::Array, x, I::Index...)
     return a
 end
 
-function set[T](A::Array[T,1], X, I)
-    # TODO: Need to take care of growing
+function set[T](A::Array[T,1], x::Scalar, I)
     I = jl_fill_endpts(A, 1, I)
+    for i=I; A[i] = x; end;
+    return A
+end
 
-    if isscalar(X)
-        for i=I; A[i] = X; end;
-    else
-        count = 1
-        for i=I
-            A[i] = X[count]
-            count += 1
-        end
-    end
+function set[T](A::Array[T,1], X, I)
+    I = jl_fill_endpts(A, 1, I)
+    count = 1
+    for i=I; A[i] = X[count]; count += 1; end
+    return A
+end
 
+function set[T](A::Array[T,2], x::Scalar, I, J)
+    I = jl_fill_endpts(A, 1, I)
+    J = jl_fill_endpts(A, 2, J)
+    for i=I; for j=J; A[i,j] = x; end; end
     return A
 end
 
 function set[T](A::Array[T,2], X, I, J)
-    # TODO: Need to take care of growing
     I = jl_fill_endpts(A, 1, I)
     J = jl_fill_endpts(A, 2, J)
-
-    if isscalar(X)
-        for i=I; for j=J; A[i,j] = X; end; end
-    end
-
+    count = 1
+    for i=I; for j=J; A[i,j] = X[count]; count += 1; end; end    
     return A
 end
 

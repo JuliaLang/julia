@@ -22,5 +22,5 @@ numel(x::Scalar) = 1
 length(x::Scalar) = 1
 
 start(a::Scalar) = a
-next(a::Scalar, i) = (a, i+1)
-done(a::Scalar, i) = (i > 1)
+next(a::Scalar, i) = (a, a+1)
+done(a::Scalar, i) = (i > a)
