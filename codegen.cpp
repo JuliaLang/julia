@@ -35,6 +35,8 @@ static IRBuilder<> builder(getGlobalContext());
 static Module *jl_Module;
 static ExecutionEngine *jl_ExecutionEngine;
 static std::map<const std::string, GlobalVariable*> stringConstants;
+static FunctionPassManager *FPM;
+static ExistingModuleProvider *JuliaModuleProvider;
 
 // types
 static const Type *jl_value_llvmt;
@@ -76,6 +78,7 @@ static Function *jlerror_func;
 static Function *jlgetbindingp_func;
 static Function *jltuple_func;
 static Function *jlapplygeneric_func;
+static Function *jlalloc_func;
 
 // head symbols for each expression type
 static jl_sym_t *goto_sym;    static jl_sym_t *goto_ifnot_sym;
@@ -112,6 +115,10 @@ static jl_sym_t *closure_ref_sym;
   - keep a table mapping fptr to Function* for compiling known calls
   - manually inline simple builtins (tuple,box,boxset,etc.)
   - int and float constant table
+  - dispatch optimizations
+  - inline space for buffers
+  - speed up type caching
+  - do something about all the string copying from scheme
 
   optimizations round 2:
   - lambda lifting
@@ -161,9 +168,10 @@ extern "C" void jl_compile(jl_lambda_info_t *li)
                                    "a_julia_function", jl_Module);
     assert(jl_is_expr(li->ast));
     emit_function(li, f);
+    verifyFunction(*f);
+    FPM->run(*f);
     // print out the function's LLVM code
     //f->dump();
-    verifyFunction(*f);
     li->fptr = (jl_fptr_t)jl_ExecutionEngine->getPointerToFunction(f);
 }
 
@@ -448,9 +456,12 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool value,
             }
             if (jl_is_func(b->value)) {
                 jl_function_t *f = (jl_function_t*)b->value;
-                theFptr = literal_pointer_val((void*)f->fptr, jl_fptr_llvmt);
-                theEnv = literal_pointer_val(f->env);
-                done = true;
+                if (f->fptr == &jl_apply_generic) {
+                    theFptr = jlapplygeneric_func;
+                    //theFptr = literal_pointer_val((void*)f->fptr, jl_fptr_llvmt);
+                    theEnv = literal_pointer_val(f->env);
+                    done = true;
+                }
             }
         }
         if (!done) {
@@ -555,6 +566,21 @@ static void emit_function(jl_lambda_info_t *lam, Function *f)
     ctx.argArray = &argArray;
     ctx.argCount = &argCount;
 
+    // allocate local variables
+    // must be first for the mem2reg pass to work
+    size_t i;
+    for(i=0; i < lvars->length; i++) {
+        char *argname = ((jl_sym_t**)lvars->data)[i]->name;
+        AllocaInst *lv = builder.CreateAlloca(jl_pvalue_llvmt, 0, argname);
+        builder.CreateStore(V_null, lv);
+        localVars[argname] = lv;
+    }
+    for(i=0; i < largs->length; i++) {
+        char *argname = decl_var(((jl_value_t**)largs->data)[i])->name;
+        AllocaInst *lv = builder.CreateAlloca(jl_pvalue_llvmt, 0, argname);
+        localVars[argname] = lv;
+    }
+
     // check arg count
     size_t nreq = largs->length;
     int va = 0;
@@ -590,16 +616,14 @@ static void emit_function(jl_lambda_info_t *lam, Function *f)
     // move args into local variables
     // (probably possible to avoid this step with a little redesign)
     // TODO: avoid for arguments that aren't assigned
-    size_t i;
     for(i=0; i < nreq; i++) {
         char *argname = decl_var(((jl_value_t**)largs->data)[i])->name;
-        AllocaInst *lv = builder.CreateAlloca(jl_pvalue_llvmt, 0, argname);
+        AllocaInst *lv = localVars[argname];
         Value *argPtr =
             builder.CreateGEP((Value*)&argArray,
                               ConstantInt::get(T_int32, i));
         LoadInst *theArg = builder.CreateLoad(argPtr, false);
         builder.CreateStore(theArg, lv);
-        localVars[argname] = lv;
     }
     // allocate rest argument if necessary
     if (va) {
@@ -613,14 +637,6 @@ static void emit_function(jl_lambda_info_t *lam, Function *f)
         char *argname = decl_var(((jl_value_t**)largs->data)[nreq])->name;
         AllocaInst *lv = builder.CreateAlloca(jl_pvalue_llvmt, 0, argname);
         builder.CreateStore(restTuple, lv);
-        localVars[argname] = lv;
-    }
-
-    // allocate local variables
-    for(i=0; i < lvars->length; i++) {
-        char *argname = ((jl_sym_t**)lvars->data)[i]->name;
-        AllocaInst *lv = builder.CreateAlloca(jl_pvalue_llvmt, 0, argname);
-        builder.CreateStore(V_null, lv);
         localVars[argname] = lv;
     }
 
@@ -743,13 +759,45 @@ static void init_julia_llvm_env(Module *m)
     jltuple_func = jlfunc_to_llvm("jl_f_tuple", (void*)*jl_f_tuple);
     jlapplygeneric_func =
         jlfunc_to_llvm("jl_apply_generic", (void*)*jl_apply_generic);
+
+    std::vector<const Type*> aargs(0);
+#ifdef BITS64
+    aargs.push_back(T_uint64);
+#else
+    aargs.push_back(T_uint32);
+#endif
+#ifdef NO_BOEHM_GC
+    jlalloc_func =
+        Function::Create(FunctionType::get(T_pint8, aargs, false),
+                         Function::ExternalLinkage,
+                         "malloc", jl_Module);
+    jl_ExecutionEngine->addGlobalMapping(jlalloc_func, (void*)&malloc);
+#else
+    jlalloc_func =
+        Function::Create(FunctionType::get(T_pint8, aargs, false),
+                         Function::ExternalLinkage,
+                         "GC_malloc", jl_Module);
+    jl_ExecutionEngine->addGlobalMapping(jlalloc_func, (void*)&GC_malloc);
+#endif
+
+    // set up optimization passes
+    JuliaModuleProvider = new ExistingModuleProvider(jl_Module);
+    FPM = new FunctionPassManager(JuliaModuleProvider);
+    FPM->add(new TargetData(*jl_ExecutionEngine->getTargetData()));
+    FPM->add(createPromoteMemoryToRegisterPass());
+    FPM->add(createInstructionCombiningPass());
+    FPM->add(createReassociatePass());
+    FPM->add(createGVNPass());
+    FPM->add(createCFGSimplificationPass());
+    FPM->doInitialization();
 }
 
 extern "C" void jl_init_codegen()
 {
     InitializeNativeTarget();
     jl_Module = new Module("julia", jl_LLVMContext);
-    jl_ExecutionEngine = EngineBuilder(jl_Module).create();
+    jl_ExecutionEngine =
+        EngineBuilder(jl_Module).setEngineKind(EngineKind::JIT).create();
 
     init_julia_llvm_env(jl_Module);
 
