@@ -44,11 +44,21 @@ static Function *box_float64_func;
     the type tag of a value.
   boxing is delayed until absolutely necessary, and handled at the point
     where the box is needed.
-
-  NOTE: LLVM does not have unsigned integer types, so we need to find
-  some way to flag LLVM Values as unsigned. We might have to wrap Value
-  in another class and propagate that around instead.
 */
+
+static Value *mark_unsigned(Value *v)
+{
+    // use value name as a hack to tag as unsigned
+    Value *x = builder.CreateBitCast(v, v->getType());
+    x->setName("$u");
+    return x;
+}
+
+static int is_unsigned(Value *v)
+{
+    const char *name = v->getName().data();
+    return (!strncmp(name, "$u", 2));
+}
 
 // this is used to wrap values for generic contexts, where a
 // dynamically-typed value is required (e.g. argument to unknown function).
@@ -56,13 +66,20 @@ static Function *box_float64_func;
 static Value *boxed(Value *v)
 {
     const Type *t = v->getType();
-    if (t == T_int8)  return builder.CreateCall(box_int8_func, v);
-    if (t == T_int16) return builder.CreateCall(box_int16_func, v);
-    if (t == T_int32) return builder.CreateCall(box_int32_func, v);
-    if (t == T_int64) return builder.CreateCall(box_int64_func, v);
-    if (t == T_float32) return builder.CreateCall(box_float32_func, v);
-    if (t == T_float64) return builder.CreateCall(box_float64_func, v);
-    // TODO: unsigned
+    if (is_unsigned(v)) {
+        if (t == T_int8)  return builder.CreateCall(box_uint8_func, v);
+        if (t == T_int16) return builder.CreateCall(box_uint16_func, v);
+        if (t == T_int32) return builder.CreateCall(box_uint32_func, v);
+        if (t == T_int64) return builder.CreateCall(box_uint64_func, v);
+    }
+    else {
+        if (t == T_int8)  return builder.CreateCall(box_int8_func, v);
+        if (t == T_int16) return builder.CreateCall(box_int16_func, v);
+        if (t == T_int32) return builder.CreateCall(box_int32_func, v);
+        if (t == T_int64) return builder.CreateCall(box_int64_func, v);
+        if (t == T_float32) return builder.CreateCall(box_float32_func, v);
+        if (t == T_float64) return builder.CreateCall(box_float64_func, v);
+    }
     return v;
 }
 
@@ -94,32 +111,37 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
     Value *p;
     switch (f) {
     HANDLE(boxui8,1)
-        break;
+        assert(t == T_int8);
+        return mark_unsigned(x);
     HANDLE(boxsi8,1)
         assert(t == T_int8);
         return x;
     HANDLE(boxui16,1)
-        break;
+        assert(t == T_int16);
+        return mark_unsigned(x);
     HANDLE(boxsi16,1)
+        assert(t == T_int16);
         return x;
     HANDLE(boxui32,1)
-        break;
+        assert(t == T_int32);
+        return mark_unsigned(x);
     HANDLE(boxsi32,1)
+        assert(t == T_int32);
         return x;
     HANDLE(boxui64,1)
-        break;
+        assert(t == T_int64);
+        return mark_unsigned(x);
     HANDLE(boxsi64,1)
+        assert(t == T_int64);
         return x;
     HANDLE(boxf32,1)
         if (t == T_float32) return x;
         assert(t == T_int32);
         return builder.CreateBitCast(x, T_float32);
-        break;
     HANDLE(boxf64,1)
         if (t == T_float64) return x;
         assert(t == T_int64);
         return builder.CreateBitCast(x, T_float64);
-        break;
     HANDLE(unbox8,1)
         p = builder.CreateGEP(builder.CreateBitCast(x, jl_ppvalue_llvmt),
                               ConstantInt::get(T_int32, 1));
