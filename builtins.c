@@ -971,6 +971,7 @@ void jl_init_builtins()
     add_builtin_func("tuple", jl_f_tuple);
     add_builtin_func("convert", jl_f_convert);
     add_builtin_func("Union", jl_f_union);
+    add_builtin_func("time_thunk", jl_f_time_thunk);
     add_builtin("print", jl_print_gf);
     add_builtin("ref", jl_ref_gf);
     
