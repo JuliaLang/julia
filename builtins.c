@@ -655,8 +655,13 @@ JL_CALLABLE(jl_f_print_buffer)
     ios_t *s = current_output_stream;
     jl_buffer_t *b = (jl_buffer_t*)args[0];
 
-    ios_puts("buffer(", s);
     jl_type_t *el_type = (jl_type_t*)jl_tparam0(jl_typeof(b));
+    if (el_type == jl_uint8_type) {
+        // simple string
+        ios_write(s, (char*)b->data, b->length);
+        return (jl_value_t*)jl_null;
+    }
+    ios_puts("buffer(", s);
     if (jl_is_bits_type(el_type)) {
         jl_bits_type_t *bt = (jl_bits_type_t*)el_type;
         size_t nb = bt->nbits/8;
