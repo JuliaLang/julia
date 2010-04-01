@@ -43,7 +43,7 @@ static char jl_banner_color[] =
     "|__/                   |\033[0m\n\n";
 
 static char jl_prompt_plain[] = "julia> ";
-static char jl_prompt_color[] = "\033[1m\033[32mjulia> \033[37m";
+static char jl_prompt_color[] = "\001\033[1m\033[32m\002julia> \001\033[37m\002";
 static char jl_answer_color[] = "\033[0m\033[37m";
 
 static char jl_history_file[] = ".julia_history";
