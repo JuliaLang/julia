@@ -32,7 +32,8 @@
 		 ((eq? (car e) 'var-info)
 		  `("var-info" ,(cadr l)
 		    ("list" ,@(caddr l))
-		    ,@(cdddr l)))
+		    ("list" ,@(cadddr l))
+		    ,@(cddddr l)))
 		 (else l))))))
 
 (gambit-only

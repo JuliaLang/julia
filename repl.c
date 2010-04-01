@@ -86,6 +86,8 @@ JL_CALLABLE(jl_f_new_closure);
 
 jl_value_t *jl_toplevel_eval(jl_value_t *ast)
 {
+    //jl_print(ast);
+    //ios_printf(ios_stdout, "\n");
     // ast is of the form (quote <lambda-info>)
     jl_value_t *args[2];
     assert(jl_is_expr(ast));
