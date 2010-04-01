@@ -26,6 +26,7 @@ jl_module_t *jl_new_module(jl_sym_t *name)
     htable_new(&m->bindings, 0);
     htable_new(&m->modules, 0);
     arraylist_new(&m->imports, 0);
+    return m;
 }
 
 jl_binding_t *jl_get_binding(jl_module_t *m, jl_sym_t *var)
