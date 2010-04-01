@@ -273,7 +273,8 @@ jl_struct_type_t *jl_new_struct_type(jl_sym_t *name, jl_tag_type_t *super,
     t->names = fnames;
     t->types = ftypes;
     t->fnew = jl_new_closure(jl_new_struct_internal, (jl_value_t*)t);
-    t->fconvert = jl_bottom_func; //TODO
+    t->fconvert = jl_new_generic_function(jl_symbol("convert"));
+    //TODO: add convert(x::this) = x
     if (jl_has_typevars((jl_value_t*)parameters))
         t->uid = 0;
     else
@@ -292,7 +293,8 @@ jl_bits_type_t *jl_new_bitstype(jl_value_t *name, jl_tag_type_t *super,
         t->name = jl_new_typename((jl_sym_t*)name);
     t->super = super;
     t->parameters = parameters;
-    t->fconvert = jl_bottom_func;
+    t->fconvert = jl_new_generic_function(jl_symbol("convert"));
+    //TODO: add convert(x::this) = x
     t->nbits = nbits;
     if (jl_has_typevars((jl_value_t*)parameters))
         t->uid = 0;
@@ -741,8 +743,15 @@ static jl_type_t *inst_type_w_(jl_value_t *t, jl_value_t **env, size_t n,
         }
         else if (jl_is_bits_type(t)) {
             jl_bits_type_t *bitst = (jl_bits_type_t*)t;
-            return jl_new_bitstype(tn, inst_type_w_(bitst->super, env,n,stack),
-                                   iparams_tuple, bitst->nbits);
+            jl_bits_type_t *nbt =
+                (jl_bits_type_t*)newobj((jl_type_t*)jl_bits_kind,
+                                        BITS_TYPE_NW);
+            nbt->name = tn;
+            nbt->super = inst_type_w_(bitst->super, env, n, stack);
+            nbt->parameters = iparams_tuple;
+            nbt->nbits = bitst->nbits;
+            nbt->fconvert = jl_bottom_func; // todo
+            return (jl_type_t*)nbt;
         }
         else {
             assert(jl_is_struct_type(t));

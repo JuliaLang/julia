@@ -90,9 +90,9 @@ static jl_sym_t *closure_ref_sym;
   plan
 
   The Simplest Thing That Could Possibly Work:
-  - simple code gen for all node types
-  - implement all low-level intrinsics
-  - instantiate-method to provide static parameters
+  * simple code gen for all node types
+  * implement all low-level intrinsics
+  * instantiate-method to provide static parameters
   - default conversion functions
 
   stuff to fix up:
@@ -152,7 +152,7 @@ static GlobalVariable *stringConst(const std::string &txt)
     return gv;
 }
 
-static void emit_function(jl_expr_t *lam, Function *f);
+static void emit_function(jl_lambda_info_t *lam, Function *f);
 
 extern "C" void jl_compile(jl_lambda_info_t *li)
 {
@@ -160,11 +160,11 @@ extern "C" void jl_compile(jl_lambda_info_t *li)
     Function *f = Function::Create(jl_func_sig, Function::ExternalLinkage,
                                    "a_julia_function", jl_Module);
     assert(jl_is_expr(li->ast));
-    emit_function((jl_expr_t*)li->ast, f);
-    verifyFunction(*f);
-    li->fptr = (jl_fptr_t)jl_ExecutionEngine->getPointerToFunction(f);
+    emit_function(li, f);
     // print out the function's LLVM code
     //f->dump();
+    verifyFunction(*f);
+    li->fptr = (jl_fptr_t)jl_ExecutionEngine->getPointerToFunction(f);
 }
 
 // get array of formal argument expressions
@@ -226,7 +226,8 @@ typedef struct {
     std::map<std::string, AllocaInst*> *vars;
     std::map<std::string, BasicBlock*> *labels;
     jl_module_t *module;
-    jl_expr_t *lam;
+    jl_expr_t *ast;
+    jl_tuple_t *sp;
     const Argument *envArg;
     const Argument *argArray;
     const Argument *argCount;
@@ -345,16 +346,28 @@ static Value *julia_bool(Value *cond)
                                 builder.CreateLoad(jlfalse_var, false));
 }
 
-static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool value);
+static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool value,
+                        bool last=false);
 
 #include "intrinsics.cpp"
 
-static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool value)
+static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool value,
+                        bool last)
 {
     if (jl_is_symbol(expr)) {
         // variable
-        Value *bp = var_binding_pointer((jl_sym_t*)expr, ctx);
-        return emit_checked_var(bp, ((jl_sym_t*)expr)->name, ctx);
+        jl_sym_t *sym = (jl_sym_t*)expr;
+        if (is_global(sym, ctx)) {
+            size_t i;
+            // look for static parameter
+            for(i=0; i < ctx->sp->length; i+=2) {
+                if (sym == (jl_sym_t*)jl_tupleref(ctx->sp, i)) {
+                    return literal_pointer_val(jl_tupleref(ctx->sp, i+1));
+                }
+            }
+        }
+        Value *bp = var_binding_pointer(sym, ctx);
+        return emit_checked_var(bp, sym->name, ctx);
     }
     if (!jl_is_expr(expr)) {
         // numeric literals
@@ -413,6 +426,12 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool value)
     else if (ex->head == return_sym) {
         assert(!value);
         builder.CreateRet(boxed(emit_expr(args[0], ctx, true)));
+        if (!last) {
+            // basic block must end here because there's a return
+            BasicBlock *bb =
+                BasicBlock::Create(getGlobalContext(), "ret", ctx->f);
+            builder.SetInsertPoint(bb);
+        }
     }
     else if (ex->head == call_sym) {
         size_t nargs = ex->args->length-1;
@@ -508,14 +527,19 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool value)
     return NULL;
 }
 
-static void emit_function(jl_expr_t *lam, Function *f)
+#define is_label(ex) (jl_is_expr(ex) && ((jl_expr_t*)ex)->head == label_sym)
+
+static void emit_function(jl_lambda_info_t *lam, Function *f)
 {
+    jl_expr_t *ast = (jl_expr_t*)lam->ast;
+    //jl_print((jl_value_t*)ast);
+    //ios_printf(ios_stdout, "\n");
     BasicBlock *b0 = BasicBlock::Create(jl_LLVMContext, "top", f);
     builder.SetInsertPoint(b0);
     std::map<std::string, AllocaInst*> localVars;
     std::map<std::string, BasicBlock*> labels;
-    jl_buffer_t *largs = lam_args(lam);
-    jl_buffer_t *lvars = lam_locals(lam);
+    jl_buffer_t *largs = lam_args(ast);
+    jl_buffer_t *lvars = lam_locals(ast);
     Function::arg_iterator AI = f->arg_begin();
     const Argument &envArg = *AI++;
     const Argument &argArray = *AI++;
@@ -525,7 +549,8 @@ static void emit_function(jl_expr_t *lam, Function *f)
     ctx.vars = &localVars;
     ctx.labels = &labels;
     ctx.module = jl_system_module; //TODO
-    ctx.lam = lam;
+    ctx.ast = ast;
+    ctx.sp = lam->sparams;
     ctx.envArg = &envArg;
     ctx.argArray = &argArray;
     ctx.argCount = &argCount;
@@ -599,20 +624,43 @@ static void emit_function(jl_expr_t *lam, Function *f)
         localVars[argname] = lv;
     }
 
-    jl_buffer_t *stmts = lam_body(lam);
+    jl_buffer_t *stmts = lam_body(ast);
     // associate labels with basic blocks so forward jumps can be resolved
+    BasicBlock *prev=NULL;
     for(i=0; i < stmts->length; i++) {
         jl_value_t *ex = ((jl_value_t**)stmts->data)[i];
-        if (jl_is_expr(ex) && ((jl_expr_t*)ex)->head == label_sym) {
+        if (is_label(ex)) {
             char *lname = ((jl_sym_t**)((jl_expr_t*)ex)->args->data)[0]->name;
-            labels[lname] = BasicBlock::Create(getGlobalContext(), lname);
+            if (prev != NULL) {
+                // fuse consecutive labels
+                labels[lname] = prev;
+            }
+            else {
+                prev = BasicBlock::Create(getGlobalContext(), lname);
+                labels[lname] = prev;
+            }
+        }
+        else {
+            prev = NULL;
         }
     }
     // compile body statements
+    bool prevlabel = false;
     for(i=0; i < stmts->length; i++) {
-        (void)emit_expr(((jl_value_t**)stmts->data)[i], &ctx, false);
+        jl_value_t *stmt = ((jl_value_t**)stmts->data)[i];
+        if (is_label(stmt)) {
+            if (prevlabel) continue;
+            prevlabel = true;
+        }
+        else {
+            prevlabel = false;
+        }
+        (void)emit_expr(stmt, &ctx, false, i==stmts->length-1);
     }
-    // all bodies must end in a return
+    // sometimes we have dangling labels after the end
+    if (builder.GetInsertBlock()->getTerminator() == NULL) {
+        builder.CreateRet(V_null);
+    }
 }
 
 static GlobalVariable *global_to_llvm(const std::string &cname, void *addr)

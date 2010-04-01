@@ -318,13 +318,13 @@ JL_CALLABLE(jl_f_bufferset)
 {
     JL_NARGS(bufferset, 3, 3);
     JL_TYPECHK(bufferset, buffer, args[0]);
-    JL_TYPECHK(bufferset, int32, args[2]);
+    JL_TYPECHK(bufferset, int32, args[1]);
     jl_buffer_t *b = (jl_buffer_t*)args[0];
-    size_t i = jl_unbox_int32(args[2])-1;
+    size_t i = jl_unbox_int32(args[1])-1;
     if (i >= b->length)
         jl_errorf("buffer[%d]: index out of range", i+1);
     jl_type_t *el_type = (jl_type_t*)jl_tparam0(jl_typeof(b));
-    jl_value_t *rhs = jl_convert(args[1], el_type);
+    jl_value_t *rhs = jl_convert(args[2], el_type);
     if (jl_is_bits_type(el_type)) {
         size_t nb = ((jl_bits_type_t*)el_type)->nbits/8;
         switch (nb) {
@@ -343,7 +343,7 @@ JL_CALLABLE(jl_f_bufferset)
     else {
         ((jl_value_t**)b->data)[i] = rhs;
     }
-    return args[1];
+    return args[0];
 }
 
 JL_CALLABLE(jl_f_box)

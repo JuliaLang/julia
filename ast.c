@@ -135,7 +135,7 @@ static jl_value_t *scm_to_julia(___SCMOBJ e)
                 if (!strcmp(s, "lambda")) {
                     v = (jl_value_t*)
                         jl_expr(jl_symbol("quote"), 1,
-                                jl_new_lambda_info((jl_value_t*)ex,jl_null));
+                                jl_new_lambda_info((jl_value_t*)ex, jl_null));
                 }
                 else {
                     v = (jl_value_t*)ex;

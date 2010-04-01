@@ -57,8 +57,34 @@ static int args_match_sig(jl_value_t **a, size_t n, jl_type_t *b)
 
 jl_function_t *jl_instantiate_method(jl_function_t *f, jl_value_pair_t *env)
 {
-    // TODO
-    return f;
+    jl_tuple_t *sp;
+    jl_value_pair_t *temp = env;
+    size_t i, n=0;
+
+    if (f->linfo == NULL)
+        return f;
+    while (temp != NULL && temp->a != NULL) {
+        n++;
+        temp = temp->next;
+    }
+    sp = jl_alloc_tuple(n*2);
+    temp = env;
+    // store static parameters as a tuple of (name, value, name, value, ...)
+    for(i=0; i < n; i++) {
+        assert(jl_is_typevar(temp->a));
+        jl_tupleset(sp, i*2+0, ((jl_tvar_t*)temp->a)->name);
+        jl_tupleset(sp, i*2+1, temp->b);
+        temp = temp->next;
+    }
+
+    jl_function_t *nf = jl_new_closure(f->fptr, f->env);
+    if (f->env != NULL && ((jl_value_pair_t*)f->env)->a == (jl_value_t*)f) {
+        jl_value_pair_t *vp = (jl_value_pair_t*)f->env;
+        nf->env = (jl_value_t*)jl_pair((jl_value_t*)nf, vp->b);
+    }
+    nf->linfo = jl_new_lambda_info(f->linfo->ast, sp);
+    nf->linfo->fptr = f->linfo->fptr;
+    return nf;
 }
 
 static int exact_arg_match(jl_value_t **args, size_t n, jl_tuple_t *sig)
@@ -101,18 +127,20 @@ jl_methlist_t *jl_method_table_assoc(jl_methtable_t *mt,
     
     // try generics
     jl_methlist_t *gm = mt->generics;
-    if (gm == NULL) return m;
-    // TODO: avoid this allocation
-    jl_tuple_t *tt = jl_alloc_tuple(nargs);
     jl_value_pair_t *env = NULL;
-    size_t i;
-    for(i=0; i < tt->length; i++) {
-        jl_tupleset(tt, i, (jl_value_t*)jl_full_type(args[i]));
-    }
-    while (gm != NULL) {
-        env = jl_type_conform((jl_type_t*)tt, gm->sig);
-        if (env != NULL) break;
-        gm = gm->next;
+    jl_tuple_t *tt = NULL;
+    if (gm != NULL) {
+        // TODO: avoid this allocation
+        tt = jl_alloc_tuple(nargs);
+        size_t i;
+        for(i=0; i < tt->length; i++) {
+            jl_tupleset(tt, i, (jl_value_t*)jl_full_type(args[i]));
+        }
+        while (gm != NULL) {
+            env = jl_type_conform((jl_type_t*)tt, gm->sig);
+            if (env != NULL) break;
+            gm = gm->next;
+        }
     }
     if (env == NULL) {
         if (m != NULL) {
@@ -120,11 +148,21 @@ jl_methlist_t *jl_method_table_assoc(jl_methtable_t *mt,
         }
         return m;
     }
+    assert(tt!=NULL);
+    /* the following bit tries instantiating a generic signature in case
+       it yields something more specific than the inexact match we
+       already have. for example if we call f(Int32), it matches f(Scalar)
+       but if f[T](T) exists that would yield f(Int32) which is a better
+       match. this is slow and arguably wrong; one could say f(Scalar) is
+       more specific than f[T](T) so it should be used anyway.
+    */
+    /*
+    // --- begin unnecessary part ---
     // instantiate type signature and method with the parameter
     // assignments we found
     jl_value_pair_t *temp = env;
     size_t n=0;
-    while (temp != NULL) {
+    while (temp != NULL && temp->a != NULL) {
         n++;
         temp = temp->next;
     }
@@ -144,10 +182,12 @@ jl_methlist_t *jl_method_table_assoc(jl_methtable_t *mt,
         // more specific than this one
         return m;
     }
+    // --- end unnecessary part ---
+    */
 
     // cache result in concrete part of method table
     jl_function_t *newmeth = jl_instantiate_method(gm->func, env);
-    return jl_method_table_insert(mt, newtype, newmeth);
+    return jl_method_table_insert(mt, tt, newmeth);
 }
 
 static int args_match_generic(jl_type_t *a, jl_type_t *b)

@@ -240,13 +240,13 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
     HANDLE(fptosi64,1)
         return builder.CreateFPToSI(FP(x), T_int64);
     HANDLE(uitofp32,1)
-        return builder.CreateUIToFP(FP(x), T_float32);
+        return builder.CreateUIToFP(x, T_float32);
     HANDLE(sitofp32,1)
-        return builder.CreateSIToFP(FP(x), T_float32);
+        return builder.CreateSIToFP(x, T_float32);
     HANDLE(uitofp64,1)
-        return builder.CreateUIToFP(FP(x), T_float64);
+        return builder.CreateUIToFP(x, T_float64);
     HANDLE(sitofp64,1)
-        return builder.CreateSIToFP(FP(x), T_float64);
+        return builder.CreateSIToFP(x, T_float64);
     HANDLE(fptrunc32,1)
         return builder.CreateFPTrunc(FP(x), T_float32);
     HANDLE(fpext64,1)
