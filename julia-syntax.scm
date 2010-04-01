@@ -281,6 +281,10 @@
 			   (block . fields))
 		   (struct-def-expr name params super fields))
 
+   ; macro for timing evaluation
+   (pattern-lambda (call (-/ Time) expr)
+		   `(call time_thunk (-> (tuple) ,expr)))
+
    )) ; binding-form-patterns
 
 (define patterns
@@ -438,10 +442,6 @@
 		      (block
 		       (= (tuple ,i ,state) (call (top next) ,coll ,state))
 		       ,body))))))
-
-   ; macro for timing evaluation
-   (pattern-lambda (call (-/ Time) expr)
-		   `(call time_thunk (-> (tuple) ,expr)))
 
    ; update operators
    (pattern-lambda (+= a b)     (expand-update-operator '+ a b))

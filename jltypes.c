@@ -874,7 +874,7 @@ int jl_subtype(jl_value_t *a, jl_value_t *b, int ta, int tb)
     if (jl_is_typevar(b)) return 1;
     if (jl_is_typevar(a)) return 0;
     if (a == jl_any_type) return 0;
-    if (jl_is_tuple(a)) return 0;
+    if (jl_is_tuple(a) || jl_is_tuple(b)) return 0;
     assert(!ta && !tb);
 
     if (jl_is_int32(a) && jl_is_int32(b))
