@@ -10,8 +10,8 @@ typealias Indices[T] Union(Range, RangeFrom, RangeBy, RangeTo, Vector[T])
 ## Basic functions
 numel(a::Array) = length(a.data)
 
-length[T](v::Array[T,1]) = length(v.data)
-length[T](a::Array[T,2]) = max(a.dims)
+length(v::Vector) = length(v.data)
+length(a::Matrix) = max(a.dims)
 
 size(a::Array) = a.dims
 size(a::Array, d) = a.dims[d]
@@ -25,13 +25,17 @@ ones(m::Size, n::Size) = [ 1 | i=1:m, j=1:n ]
 rand(m::Size) = [ rand() | i=1:m ]
 rand(m::Size, n::Size) = [ rand() | i=1:m, j=1:n ]
 
-(+)[T](x::Array[T,1], y::Array[T,1]) = [ x[i] + y[i] | i=1:numel(x) ]
-(+)[T](x::Array[T,2], y::Array[T,2]) = [ x[i,j] + y[i,j] | i=1:x.dims[1], j=1:x.dims[2] ]
+(+)(x::Vector, y::Vector) = [ x[i] + y[i] | i=1:numel(x) ]
+(+)(x::Matrix, y::Matrix) = [ x[i,j] + y[i,j] | i=1:x.dims[1], j=1:x.dims[2] ]
+
+(.*)(x::Vector, y::Vector) = [ x[i] * y[i] | i=1:numel(x) ]
 
 (==)(x::Array, y::Array) = x.dims == y.dims && x.data == y.data
 
-transpose[T](x::Array[T,2]) = [ x[j,i] | i=1:x.dims[2], j=1:x.dims[1] ]
-ctranspose[T](x::Array[T,2]) = [ conj(x[j,i]) | i=1:x.dims[2], j=1:x.dims[1] ]
+transpose(x::Matrix) = [ x[j,i] | i=1:x.dims[2], j=1:x.dims[1] ]
+ctranspose(x::Matrix) = [ conj(x[j,i]) | i=1:x.dims[2], j=1:x.dims[1] ]
+
+dot(x::Vector, y::Vector) = sum(x.*y)
 
 function jl_make_array(eltype::Type, dim...)
     ndims = length(dim)
@@ -58,15 +62,15 @@ end
 ## Indexing: ref()
 #TODO: Out-of-bound checks
 ref(a::Array, i::Index) = a.data[i]
-ref[T](a::Array[T,2], i::Index, j::Index) = a.data[(j-1)*a.dims[1] + i]
+ref(a::Matrix, i::Index, j::Index) = a.data[(j-1)*a.dims[1] + i]
 
 jl_fill_endpts(A, n, R::RangeBy) = range(1, R.step, size(A, n))
 jl_fill_endpts(A, n, R::RangeFrom) = range(R.start, R.step, size(A, n))
 jl_fill_endpts(A, n, R::RangeTo) = range(1, R.step, R.stop)
 jl_fill_endpts(A, n, R) = R
 
-ref[T](A::Array[T,1], I) = [ A[i] | i = jl_fill_endpts(A, 1, I) ]
-ref[T](A::Array[T,2], I, J) = [ A[i, j] | i = jl_fill_endpts(A, 1, I),
+ref(A::Vector, I) = [ A[i] | i = jl_fill_endpts(A, 1, I) ]
+ref(A::Matrix, I, J) = [ A[i, j] | i = jl_fill_endpts(A, 1, I),
                                           j = jl_fill_endpts(A, 2, J)  ]
 
 function ref(a::Array, I::Index...) 
@@ -87,7 +91,7 @@ end
 # Indexing: set()
 # TODO: Take care of growing
 set(a::Array, x, i::Index) = do (a.data[i] = x, a)
-set[T](a::Array[T,2], x, i::Index, j::Index) = do (a.data[(j-1)*a.dims[1] + i] = x, a)
+set(a::Matrix, x, i::Index, j::Index) = do (a.data[(j-1)*a.dims[1] + i] = x, a)
 
 function set(a::Array, x, I::Index...)
     # TODO: Need to take care of growing
@@ -106,27 +110,27 @@ function set(a::Array, x, I::Index...)
     return a
 end
 
-function set[T](A::Array[T,1], x::Scalar, I)
+function set(A::Vector, x::Scalar, I)
     I = jl_fill_endpts(A, 1, I)
     for i=I; A[i] = x; end;
     return A
 end
 
-function set[T](A::Array[T,1], X, I)
+function set(A::Vector, X, I)
     I = jl_fill_endpts(A, 1, I)
     count = 1
     for i=I; A[i] = X[count]; count += 1; end
     return A
 end
 
-function set[T](A::Array[T,2], x::Scalar, I, J)
+function set(A::Matrix, x::Scalar, I, J)
     I = jl_fill_endpts(A, 1, I)
     J = jl_fill_endpts(A, 2, J)
     for i=I; for j=J; A[i,j] = x; end; end
     return A
 end
 
-function set[T](A::Array[T,2], X, I, J)
+function set(A::Matrix, X, I, J)
     I = jl_fill_endpts(A, 1, I)
     J = jl_fill_endpts(A, 2, J)
     count = 1
@@ -139,7 +143,7 @@ cat(x::Scalar...) = [ x[i] | i=1:length(x) ]
 hcat(x::Scalar...) = [ x[j] | i=1, j=1:length(x) ]
 vcat(x::Scalar...) = [ x[i] | i=1:length(x), j=1 ]
 
-vector[T](elts::T...) = cat(elts...)
+vector(elts...) = cat(elts...)
 
 # iterate arrays by iterating data
 start(a::Array) = start(a.data)
@@ -147,7 +151,7 @@ next(a::Array,i) = next(a.data,i)
 done(a::Array,i) = done(a.data,i)
 
 # Print arrays
-function print[T](a::Array[T,1])
+function print(a::Vector)
     n = a.dims[1]
 
     if n < 10
@@ -163,7 +167,7 @@ function printcols(a, start, stop, i)
     for j=start:stop; print(a[i,j]); print(" "); end
 end
 
-function print[T](a::Array[T,2])
+function print(a::Matrix)
 
     m = a.dims[1]
     n = a.dims[2]
