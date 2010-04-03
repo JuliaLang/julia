@@ -658,10 +658,7 @@ JL_CALLABLE(jl_f_print_buffer)
     jl_type_t *el_type = (jl_type_t*)jl_tparam0(jl_typeof(b));
     if (el_type == jl_uint8_type) {
         // simple string
-        ios_putc('"', s);
-        // TODO: handle escaping
         ios_write(s, (char*)b->data, b->length);
-        ios_putc('"', s);
         return (jl_value_t*)jl_null;
     }
     ios_puts("buffer(", s);
