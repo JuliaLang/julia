@@ -24,14 +24,14 @@ rand(m::Size) = [ rand() | i=1:m ]
 rand(m::Size, n::Size) = [ rand() | i=1:m, j=1:n ]
 
 (+)(x::Vector, y::Vector) = [ x[i] + y[i] | i=1:length(x) ]
-(+)(x::Matrix, y::Matrix) = [ x[i,j] + y[i,j] | i=1:x.dims[1], j=1:x.dims[2] ]
+(+)(x::Matrix, y::Matrix) = [ x[i,j] + y[i,j] | i=1:size(x,1), j=1:size(x,2) ]
 
 (.*)(x::Vector, y::Vector) = [ x[i] * y[i] | i=1:length(x) ]
 
-(==)(x::Array, y::Array) = x.dims == y.dims && x.data == y.data
+(==)(x::Array, y::Array) = (x.dims == y.dims && x.data == y.data)
 
-transpose(x::Matrix) = [ x[j,i] | i=1:x.dims[2], j=1:x.dims[1] ]
-ctranspose(x::Matrix) = [ conj(x[j,i]) | i=1:x.dims[2], j=1:x.dims[1] ]
+transpose(x::Matrix) = [ x[j,i] | i=1:size(x,1), j=1:size(x,2) ]
+ctranspose(x::Matrix) = [ conj(x[j,i]) | i=1:size(x,1), j=1:size(x,2) ]
 
 dot(x::Vector, y::Vector) = sum(x.*y)
 
@@ -63,9 +63,9 @@ jl_fill_endpts(A, n, R::RangeFrom) = range(R.start, R.step, size(A, n))
 jl_fill_endpts(A, n, R::RangeTo) = range(1, R.step, R.stop)
 jl_fill_endpts(A, n, R) = R
 
-ref(A::Vector, I) = [ A[i] | i = jl_fill_endpts(A, 1, I) ]
-ref(A::Matrix, I, J) = [ A[i, j] | i = jl_fill_endpts(A, 1, I),
-                                   j = jl_fill_endpts(A, 2, J) ]
+ref(A::Vector,I) = [ A[i] | i = jl_fill_endpts(A,1,I) ]
+ref(A::Matrix,I,J) = [ A[i,j] | i = jl_fill_endpts(A,1,I),
+                                j = jl_fill_endpts(A,2,J) ]
 
 function ref(a::Array, I::Index...) 
     data = a.data
