@@ -8,10 +8,8 @@ typealias Matrix[T] Tensor[T,2]
 typealias Indices[T] Union(Range, RangeFrom, RangeBy, RangeTo, Vector[T])
 
 ## Basic functions
-numel(a::Array) = length(a.data)
-
-length(v::Vector) = length(v.data)
-length(a::Matrix) = max(a.dims)
+length(t::Tensor) = prod(size(t))
+length(a::Array) = length(a.data)
 
 size(a::Array) = a.dims
 size(a::Array, d) = a.dims[d]
@@ -25,10 +23,10 @@ ones(m::Size, n::Size) = [ 1 | i=1:m, j=1:n ]
 rand(m::Size) = [ rand() | i=1:m ]
 rand(m::Size, n::Size) = [ rand() | i=1:m, j=1:n ]
 
-(+)(x::Vector, y::Vector) = [ x[i] + y[i] | i=1:numel(x) ]
+(+)(x::Vector, y::Vector) = [ x[i] + y[i] | i=1:length(x) ]
 (+)(x::Matrix, y::Matrix) = [ x[i,j] + y[i,j] | i=1:x.dims[1], j=1:x.dims[2] ]
 
-(.*)(x::Vector, y::Vector) = [ x[i] * y[i] | i=1:numel(x) ]
+(.*)(x::Vector, y::Vector) = [ x[i] * y[i] | i=1:length(x) ]
 
 (==)(x::Array, y::Array) = x.dims == y.dims && x.data == y.data
 
@@ -37,13 +35,9 @@ ctranspose(x::Matrix) = [ conj(x[j,i]) | i=1:x.dims[2], j=1:x.dims[1] ]
 
 dot(x::Vector, y::Vector) = sum(x.*y)
 
-function jl_make_array(eltype::Type, dim...)
-    ndims = length(dim)
-    dims = Buffer[Size].new(ndims)
-    numel = 1
-    for i=1:ndims; dims[i] = dim[i]; numel = numel*dim[i]; end
-    data = Buffer[eltype].new(numel)
-    Array[eltype,ndims].new(dims, data)
+function jl_make_array(eltype::Type, dims...)
+    data = Buffer[eltype].new(prod(dims))
+    Array[eltype,length(dims)].new(buffer(dims...), data)
 end
 
 jl_make_array(dim...) = jl_make_array(Float64, dim...)
