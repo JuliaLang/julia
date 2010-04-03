@@ -8,11 +8,11 @@ typealias Matrix[T] Tensor[T,2]
 typealias Indices[T] Union(Range, RangeFrom, RangeBy, RangeTo, Vector[T])
 
 ## Basic functions
-length(t::Tensor) = prod(size(t))
-length(a::Array) = length(a.data)
-
 size(a::Array) = a.dims
-size(a::Array, d) = a.dims[d]
+
+size(t::Tensor, d) = size(t)[d]
+numel(t::Tensor) = prod(size(t))
+length(v::Vector) = size(v,1)
 
 zeros(sz...) = jl_make_array(sz...)
 zeros(T::Type, sz...) = jl_make_array(T, sz...)
@@ -65,7 +65,7 @@ jl_fill_endpts(A, n, R) = R
 
 ref(A::Vector, I) = [ A[i] | i = jl_fill_endpts(A, 1, I) ]
 ref(A::Matrix, I, J) = [ A[i, j] | i = jl_fill_endpts(A, 1, I),
-                                          j = jl_fill_endpts(A, 2, J)  ]
+                                   j = jl_fill_endpts(A, 2, J) ]
 
 function ref(a::Array, I::Index...) 
     data = a.data
@@ -85,7 +85,7 @@ end
 # Indexing: set()
 # TODO: Take care of growing
 set(a::Array, x, i::Index) = do (a.data[i] = x, a)
-set(a::Matrix, x, i::Index, j::Index) = do (a.data[(j-1)*a.dims[1] + i] = x, a)
+set(a::Matrix, x, i::Index, j::Index) = do (a.data[(j-1)*a.dims[1]+i] = x, a)
 
 function set(a::Array, x, I::Index...)
     # TODO: Need to take care of growing
@@ -133,7 +133,7 @@ function set(A::Matrix, X, I, J)
 end
 
 # Concatenation
-cat(x::Scalar...) = [ x[i] | i=1:length(x) ]
+cat(x::Scalar...)  = [ x[i] | i=1:length(x) ]
 hcat(x::Scalar...) = [ x[j] | i=1, j=1:length(x) ]
 vcat(x::Scalar...) = [ x[i] | i=1:length(x), j=1 ]
 

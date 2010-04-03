@@ -7,7 +7,7 @@ end
 
 length(b::Buffer) = bufferlen(b)
 
-buffer() = Buffer[Any].new(0)
+buffer() = Buffer[Bottom].new(0)
 
 function buffer[T](elts::T...)
     b = Buffer[T].new(length(elts))
