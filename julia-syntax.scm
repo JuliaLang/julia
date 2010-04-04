@@ -534,7 +534,23 @@
    ; nd comprehensions
    (pattern-lambda
     (comprehension expr . ranges)
-    (let ( (result (gensym)) (ri (gensym)) (data (gensym)) )
+    (let ( (result (gensym)) (ri (gensym)) (data (gensym)) (oneresult (gensym)) )
+
+      ;; compute just one value by inserting a break inside loops
+      ;; TODO: This should be cleaned up by handling all the 
+      ;; appropriate cases of vectors, ranges, and for loop ranges.
+      (define (construct-loops-with-break expr ranges)
+	(if (null? ranges)
+	    `(block (= ,oneresult ,expr)
+		    (break))
+	    `(block (for ,(car ranges)
+			 ,(construct-loops-with-break expr (cdr ranges)))
+		    (break) )))
+
+      ;; evaluate one expression to figure out type and size
+      (define (evaluate-one expr ranges)
+	`(block (for ,(car ranges)
+		     ,(construct-loops-with-break expr (cdr ranges)) )))
 
       ;; compute the dimensions where expr is a list of ranges
       (define (compute-dims expr)
@@ -549,12 +565,16 @@
 	    `(for ,(car ranges)
 		  ,(construct-loops result expr (cdr ranges) ri) )))
 
+      ;; Evaluate the comprehension
       `(scope-block
-	(block (= ,result (call zeros ,@(compute-dims ranges) ))
-	       (= ,ri 1)
-	       (= ,data (|.| ,result data))
-	       ,(construct-loops data expr (reverse ranges) ri)
-	       ,result ))))
+	(block 
+	 (= ,oneresult (tuple))
+	 ,(evaluate-one expr (reverse ranges))
+	 (= ,result (call zeros (call typeof ,oneresult) ,@(compute-dims ranges) ))
+	 (= ,ri 1)
+	 (= ,data (|.| ,result data))
+	 ,(construct-loops data expr (reverse ranges) ri)
+	 ,result ))))
 
 )) ;; lower-comprehensions
 
