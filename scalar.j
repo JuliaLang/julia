@@ -1,6 +1,9 @@
 isscalar(x::Scalar) = true
 isscalar(x) = false
 
+ndims(x::Scalar) = 0
+size(x::Scalar) = ()
+
 sign(x::Scalar) = (x < 0 ? -1 : (x > 0 ? +1 : 0))
 signbit(x::Scalar) = (x < 0 ? -1 : +1)
 signbit(x::Float) = (x < 0 ? -1 : (x > 0 ? 1 : (1.0/x < 0 ? -1 : +1)))
