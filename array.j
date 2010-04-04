@@ -9,9 +9,9 @@ typealias Indices[T] Union(Range, RangeFrom, RangeBy, RangeTo, Vector[T])
 
 ## Basic functions
 size(a::Array) = a.dims
-ndims(a::Array) = length(a.dims)
 
 size(t::Tensor, d) = size(t)[d]
+ndims(t::Tensor) = length(size(t))
 numel(t::Tensor) = prod(size(t))
 length(v::Vector) = size(v,1)
 
