@@ -1523,8 +1523,8 @@ end
 		(display " ") (display x))
 	      (error-exception-parameters e)))
   
-  (if COLOR? (display "\033[0m"))
-  (display "julia> ")
+  (if COLOR? (display "\001\033[1m\033[32m\002julia> \001\033[37m\002")
+      (display "julia> "))
   (let* ((line (read-line))
 	 (str  (make-token-stream (open-input-string (if (eof-object? line)
 							 ""
