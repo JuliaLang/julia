@@ -270,8 +270,10 @@ JL_CALLABLE(jl_f_bufferlen)
 static jl_value_t *new_scalar(jl_bits_type_t *bt)
 {
     size_t nb = bt->nbits/8;
-    return (jl_value_t*)allocb((NWORDS(LLT_ALIGN(nb,sizeof(void*)))+1)*
-                               sizeof(void*));
+    jl_value_t *v = (jl_value_t*)allocb((NWORDS(LLT_ALIGN(nb,sizeof(void*)))+1)*
+                                        sizeof(void*));
+    v->type = (jl_type_t*)bt;
+    return v;
 }
 
 JL_CALLABLE(jl_f_bufferref)
@@ -667,7 +669,6 @@ JL_CALLABLE(jl_f_print_buffer)
         size_t nb = bt->nbits/8;
         size_t i, n=b->length;
         jl_value_t *elt = new_scalar(bt);
-        elt->type = el_type;
         for(i=0; i < n; i++) {
             memcpy(jl_bits_data(elt), &((char*)b->data)[i*nb], nb);
             jl_print(elt);
