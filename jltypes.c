@@ -514,7 +514,7 @@ static void init_box_caches()
 {
     int64_t i;
     for(i=0; i < 256; i++) {
-        boxed_int8_cache[i]  = _jl_box_int8((int8_t)i);
+        boxed_int8_cache[i]  = _jl_box_int8((int8_t)(i-128));
         boxed_uint8_cache[i] = _jl_box_uint8(i);
     }
     for(i=0; i < 1024; i++) {

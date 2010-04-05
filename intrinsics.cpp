@@ -175,7 +175,7 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
     HANDLE(umod_int,2)
         return builder.CreateURem(x, emit_expr(args[2],ctx,true));
     HANDLE(neg_float,1)
-        return builder.CreateFSub(ConstantFP::get(FT(t), 0), FP(x));
+        return builder.CreateFMul(ConstantFP::get(FT(t), -1.0), FP(x));
     HANDLE(add_float,2)
         return builder.CreateFAdd(FP(x), FP(emit_expr(args[2],ctx,true)));
     HANDLE(sub_float,2)
