@@ -6,6 +6,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdarg.h>
+#include <setjmp.h>
 #include <assert.h>
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -102,6 +103,8 @@ jl_value_t *jl_toplevel_eval(jl_value_t *ast)
 
 static int have_color;
 
+jmp_buf ExceptionHandler;
+
 int main(int argc, char *argv[])
 {
     julia_init();
@@ -165,10 +168,10 @@ int main(int argc, char *argv[])
         // process input
         jl_value_t *ast = jl_parse_input_line(input);
         if (ast != NULL) {
-            //jl_print(ast);
-            //ios_printf(ios_stdout, "\n");
-            jl_print(jl_toplevel_eval(ast));
-            ios_printf(ios_stdout, "\n");
+            if (!setjmp(ExceptionHandler)) {
+                jl_print(jl_toplevel_eval(ast));
+                ios_printf(ios_stdout, "\n");
+            }
         }
 
         ios_printf(ios_stdout, "\n");

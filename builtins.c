@@ -5,6 +5,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdarg.h>
+#include <setjmp.h>
 #include <assert.h>
 #include <sys/types.h>
 #include <limits.h>
@@ -18,10 +19,12 @@
 
 // --- exception raising ---
 
+extern jmp_buf ExceptionHandler;
+
 void jl_error(char *str)
 {
     ios_printf(ios_stderr, "%s\n", str);
-    exit(1);
+    longjmp(ExceptionHandler, 1);
 }
 
 void jl_errorf(char *fmt, ...)
@@ -31,7 +34,7 @@ void jl_errorf(char *fmt, ...)
     ios_vprintf(ios_stderr, fmt, args);
     ios_printf(ios_stderr, "\n");
     va_end(args);
-    exit(1);
+    longjmp(ExceptionHandler, 1);
 }
 
 void jl_too_few_args(char *fname, int min)
