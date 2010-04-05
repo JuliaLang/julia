@@ -459,14 +459,14 @@ jl_value_t *pfx##_##type(c_type x)                                      \
     *(c_type*)jl_bits_data(v) = x;                                      \
     return v;                                                           \
 }
-BOX_FUNC(int8,    int8_t,   _jl_box)
-BOX_FUNC(uint8,   uint8_t,  _jl_box)
-BOX_FUNC(int16,   int16_t,  _jl_box)
-BOX_FUNC(uint16,  uint16_t, _jl_box)
-BOX_FUNC(int32,   int32_t,  _jl_box)
-BOX_FUNC(uint32,  uint32_t, _jl_box)
-BOX_FUNC(int64,   int64_t,  _jl_box)
-BOX_FUNC(uint64,  uint64_t, _jl_box)
+BOX_FUNC(int8,    int8_t,   jl_new_box)
+BOX_FUNC(uint8,   uint8_t,  jl_new_box)
+BOX_FUNC(int16,   int16_t,  jl_new_box)
+BOX_FUNC(uint16,  uint16_t, jl_new_box)
+BOX_FUNC(int32,   int32_t,  jl_new_box)
+BOX_FUNC(uint32,  uint32_t, jl_new_box)
+BOX_FUNC(int64,   int64_t,  jl_new_box)
+BOX_FUNC(uint64,  uint64_t, jl_new_box)
 BOX_FUNC(float32, float,    jl_box)
 BOX_FUNC(float64, double,   jl_box)
 
@@ -514,16 +514,16 @@ static void init_box_caches()
 {
     int64_t i;
     for(i=0; i < 256; i++) {
-        boxed_int8_cache[i]  = _jl_box_int8((int8_t)(i-128));
-        boxed_uint8_cache[i] = _jl_box_uint8(i);
+        boxed_int8_cache[i]  = jl_new_box_int8((int8_t)(i-128));
+        boxed_uint8_cache[i] = jl_new_box_uint8(i);
     }
     for(i=0; i < 1024; i++) {
-        boxed_int16_cache[i]  = _jl_box_int16(i-512);
-        boxed_int32_cache[i]  = _jl_box_int32(i-512);
-        boxed_int64_cache[i]  = _jl_box_int64(i-512);
-        boxed_uint16_cache[i] = _jl_box_uint16(i);
-        boxed_uint32_cache[i] = _jl_box_uint32(i);
-        boxed_uint64_cache[i] = _jl_box_uint64(i);
+        boxed_int16_cache[i]  = jl_new_box_int16(i-512);
+        boxed_int32_cache[i]  = jl_new_box_int32(i-512);
+        boxed_int64_cache[i]  = jl_new_box_int64(i-512);
+        boxed_uint16_cache[i] = jl_new_box_uint16(i);
+        boxed_uint32_cache[i] = jl_new_box_uint32(i);
+        boxed_uint64_cache[i] = jl_new_box_uint64(i);
     }
 }
 
@@ -1275,10 +1275,10 @@ void jl_init_types()
     jl_float64_type = make_scalar_type("Float64", jl_float_type, 64);
 
     jl_tupleset(jl_scalar_type->parameters, 0, (jl_value_t*)jl_scalar_type);
-    jl_tupleset(jl_scalar_type->parameters, 1, _jl_box_int32(0));
+    jl_tupleset(jl_scalar_type->parameters, 1, jl_new_box_int32(0));
 
-    jl_false = _jl_box_int8(0); jl_false->type = jl_bool_type;
-    jl_true  = _jl_box_int8(1); jl_true->type  = jl_bool_type;
+    jl_false = jl_new_box_int8(0); jl_false->type = jl_bool_type;
+    jl_true  = jl_new_box_int8(1); jl_true->type  = jl_bool_type;
 
     tv = typevars(1, "T");
     jl_struct_type_t *bufstruct = 
