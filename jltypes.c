@@ -451,24 +451,81 @@ jl_value_t *jl_full_type(jl_value_t *v)
 
 // constructors for some normal types -----------------------------------------
 
-#define BOX_FUNC(type,c_type)                                           \
-jl_value_t *jl_box_##type(c_type x)                                     \
+#define BOX_FUNC(type,c_type,pfx)                                       \
+jl_value_t *pfx##_##type(c_type x)                                      \
 {                                                                       \
     jl_value_t *v = newobj((jl_type_t*)jl_##type##_type,                \
                            NWORDS(LLT_ALIGN(sizeof(c_type),sizeof(void*)))); \
     *(c_type*)jl_bits_data(v) = x;                                      \
     return v;                                                           \
 }
-BOX_FUNC(int8,   int8_t)
-BOX_FUNC(uint8,  uint8_t)
-BOX_FUNC(int16,  int16_t)
-BOX_FUNC(uint16, uint16_t)
-BOX_FUNC(int32,  int32_t)
-BOX_FUNC(uint32, uint32_t)
-BOX_FUNC(int64,  int64_t)
-BOX_FUNC(uint64, uint64_t)
-BOX_FUNC(float32, float)
-BOX_FUNC(float64, double)
+BOX_FUNC(int8,    int8_t,   _jl_box)
+BOX_FUNC(uint8,   uint8_t,  _jl_box)
+BOX_FUNC(int16,   int16_t,  _jl_box)
+BOX_FUNC(uint16,  uint16_t, _jl_box)
+BOX_FUNC(int32,   int32_t,  _jl_box)
+BOX_FUNC(uint32,  uint32_t, _jl_box)
+BOX_FUNC(int64,   int64_t,  _jl_box)
+BOX_FUNC(uint64,  uint64_t, _jl_box)
+BOX_FUNC(float32, float,    jl_box)
+BOX_FUNC(float64, double,   jl_box)
+
+#define SIBOX_FUNC(type,c_type)                                         \
+static jl_value_t *boxed_##type##_cache[1024];                          \
+jl_value_t *jl_box_##type(c_type x)                                     \
+{                                                                       \
+    if ((u##c_type)(x+512) < 1024)                                      \
+        return boxed_##type##_cache[(x+512)];                           \
+    jl_value_t *v = newobj((jl_type_t*)jl_##type##_type,                \
+                           NWORDS(LLT_ALIGN(sizeof(c_type),sizeof(void*)))); \
+    *(c_type*)jl_bits_data(v) = x;                                      \
+    return v;                                                           \
+}
+#define UIBOX_FUNC(type,c_type)                                         \
+static jl_value_t *boxed_##type##_cache[1024];                          \
+jl_value_t *jl_box_##type(c_type x)                                     \
+{                                                                       \
+    if (x < 1024)                                                       \
+        return boxed_##type##_cache[x];                                 \
+    jl_value_t *v = newobj((jl_type_t*)jl_##type##_type,                \
+                           NWORDS(LLT_ALIGN(sizeof(c_type),sizeof(void*)))); \
+    *(c_type*)jl_bits_data(v) = x;                                      \
+    return v;                                                           \
+}
+SIBOX_FUNC(int16,  int16_t)
+SIBOX_FUNC(int32,  int32_t)
+SIBOX_FUNC(int64,  int64_t)
+UIBOX_FUNC(uint16, uint16_t)
+UIBOX_FUNC(uint32, uint32_t)
+UIBOX_FUNC(uint64, uint64_t)
+
+static jl_value_t *boxed_int8_cache[256];
+jl_value_t *jl_box_int8(int8_t x)
+{
+    return boxed_int8_cache[((int32_t)x)+128];
+}
+static jl_value_t *boxed_uint8_cache[256];
+jl_value_t *jl_box_uint8(uint8_t x)
+{
+    return boxed_uint8_cache[x];
+}
+
+static void init_box_caches()
+{
+    int64_t i;
+    for(i=0; i < 256; i++) {
+        boxed_int8_cache[i]  = _jl_box_int8((int8_t)i);
+        boxed_uint8_cache[i] = _jl_box_uint8(i);
+    }
+    for(i=0; i < 1024; i++) {
+        boxed_int16_cache[i]  = _jl_box_int16(i-512);
+        boxed_int32_cache[i]  = _jl_box_int32(i-512);
+        boxed_int64_cache[i]  = _jl_box_int64(i-512);
+        boxed_uint16_cache[i] = _jl_box_uint16(i);
+        boxed_uint32_cache[i] = _jl_box_uint32(i);
+        boxed_uint64_cache[i] = _jl_box_uint64(i);
+    }
+}
 
 jl_value_t *jl_box_bool(int8_t x)
 {
@@ -498,21 +555,28 @@ UNBOX_FUNC(float64, double)
 jl_buffer_t *jl_new_buffer(jl_type_t *buf_type, size_t nel)
 {
     jl_type_t *el_type = (jl_type_t*)jl_tparam0(buf_type);
+    jl_buffer_t *b = (jl_buffer_t*)newobj((jl_type_t*)buf_type, 15);
     void *data;
     if (nel > 0) {
         if (jl_is_bits_type(el_type)) {
-            data = alloc_pod(((jl_bits_type_t*)el_type)->nbits/8 * nel);
+            size_t tot = ((jl_bits_type_t*)el_type)->nbits/8 * nel;
+            if (tot <= 13*sizeof(void*))
+                data = &b->_space[0];
+            else
+                data = alloc_pod(tot);
         }
         else {
             size_t tot = sizeof(void*) * nel;
-            data = allocb(tot);
+            if (nel <= 13)
+                data = &b->_space[0];
+            else
+                data = allocb(tot);
             memset(data, 0, tot);
         }
     }
     else {
         data = NULL;
     }
-    jl_buffer_t *b = (jl_buffer_t*)newobj((jl_type_t*)buf_type, 2);
     b->length = nel;
     b->data = data;
     return (jl_value_t*)b;
@@ -1211,10 +1275,10 @@ void jl_init_types()
     jl_float64_type = make_scalar_type("Float64", jl_float_type, 64);
 
     jl_tupleset(jl_scalar_type->parameters, 0, (jl_value_t*)jl_scalar_type);
-    jl_tupleset(jl_scalar_type->parameters, 1, jl_box_int32(0));
+    jl_tupleset(jl_scalar_type->parameters, 1, _jl_box_int32(0));
 
-    jl_false = jl_box_int8(0); jl_false->type = jl_bool_type;
-    jl_true  = jl_box_int8(1); jl_true->type  = jl_bool_type;
+    jl_false = _jl_box_int8(0); jl_false->type = jl_bool_type;
+    jl_true  = _jl_box_int8(1); jl_true->type  = jl_bool_type;
 
     tv = typevars(1, "T");
     jl_struct_type_t *bufstruct = 
@@ -1273,4 +1337,6 @@ void jl_init_types()
     expr_sym = jl_symbol("expr");
     tuple_sym = jl_symbol("tuple");
     dollar_sym = jl_symbol("$");
+
+    init_box_caches();
 }

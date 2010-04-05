@@ -96,19 +96,21 @@ static jl_sym_t *closure_ref_sym;
   * simple code gen for all node types
   * implement all low-level intrinsics
   * instantiate-method to provide static parameters
-  - default conversion functions
+  - default conversion functions, instantiating conversion functions
 
   stuff to fix up:
-  - rootlist to track pointers emitted into code
-  - experiment with llvm optimization passes, option to disable them
-  - function/var name mangling
+  - discard toplevel wrapper functions
   - gensyms from the front end might conflict with real variables, fix it
-  - source location tracking, var name metadata
   - better error messages
   - exceptions
   - threads or other advanced control flow
+  - I/O and strings
+
+  - source location tracking, var name metadata
+  - rootlist to track pointers emitted into code
+  - function/var name mangling
   - include julia-defs.bc in the executable
-  - discard toplevel wrapper functions
+  - experiment with llvm optimization passes, option to disable them
 
   optimizations round 1:
   - constants, especially global. resolve functions statically.
@@ -119,6 +121,7 @@ static jl_sym_t *closure_ref_sym;
   - inline space for buffers
   - speed up type caching
   - do something about all the string copying from scheme
+  - speed up scheme pattern matcher by compiling patterns
 
   optimizations round 2:
   - lambda lifting

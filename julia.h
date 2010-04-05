@@ -32,6 +32,7 @@ typedef struct {
     JL_VALUE_STRUCT
     size_t length;
     void *data;
+    jl_value_t *_space[13];
 } jl_buffer_t;
 
 typedef struct {
