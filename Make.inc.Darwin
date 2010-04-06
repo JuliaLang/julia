@@ -1,5 +1,6 @@
 GAMBIT = /opt/local
 GAMBITGSC = gambit-gsc
+GAMBITGSI = gambit-gsi
 GAMBITLIB = $(GAMBIT)/lib/gambit-c/libgambc.a
 HFILEDIRS = /opt/local/include $(GAMBIT)/include
 LIBDIRS = /opt/local/lib

@@ -38,8 +38,11 @@ jlfrontend_.c: jlfrontend.c
 julia-defs.s.bc: julia-defs.s
 	llvm-as -f julia-defs.s
 
-codegen.o: intrinsics.cpp
-codegen.do: intrinsics.cpp
+julia-defs.s.bc.inc: julia-defs.s.bc
+	$(GAMBITGSI) ./bin2hex.scm < $< > $@
+
+codegen.o: intrinsics.cpp julia-defs.s.bc.inc
+codegen.do: intrinsics.cpp julia-defs.s.bc.inc
 
 $(LLT):
 	cd $(LLTDIR) && $(MAKE)

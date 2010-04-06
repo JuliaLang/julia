@@ -1,6 +1,7 @@
 *.o
 *.do
 *.a
+julia-defs.s.bc.inc
 jlfrontend.c
 jlfrontend_.c
 /julia

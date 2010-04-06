@@ -1,5 +1,6 @@
 GAMBIT = /usr/local/Gambit-C
 GAMBITGSC = gsc
+GAMBITGSI = gsi
 GAMBITLIB = $(GAMBIT)/lib/libgambc.a
 HFILEDIRS = /usr/local/include $(GAMBIT)/include
 LIBDIRS = /usr/local/lib

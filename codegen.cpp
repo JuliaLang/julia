@@ -109,7 +109,7 @@ static jl_sym_t *closure_ref_sym;
   - source location tracking, var name metadata
   - rootlist to track pointers emitted into code
   - function/var name mangling
-  - include julia-defs.bc in the executable
+  * include julia-defs.bc in the executable
   - experiment with llvm optimization passes, option to disable them
 
   optimizations round 1:
@@ -118,7 +118,8 @@ static jl_sym_t *closure_ref_sym;
   - manually inline simple builtins (tuple,box,boxset,etc.)
   - int and float constant table
   - dispatch optimizations
-  - inline space for buffers
+  * inline space for buffers
+  * preallocate boxes for small integers
   - speed up type caching
   - do something about all the string copying from scheme
   - speed up scheme pattern matcher by compiling patterns
@@ -703,6 +704,11 @@ static Function *jlfunc_to_llvm(const std::string &cname, void *addr)
 
 extern "C" JL_CALLABLE(jl_f_tuple);
 
+static const char julia_defs_file[] = {
+#include "julia-defs.s.bc.inc"
+    , 0x0
+};
+
 static void init_julia_llvm_env(Module *m)
 {
     T_int8  = Type::getInt8Ty(getGlobalContext());
@@ -722,7 +728,8 @@ static void init_julia_llvm_env(Module *m)
     T_void = Type::getVoidTy(jl_LLVMContext);
 
     // add needed base definitions to our LLVM environment
-    MemoryBuffer *deffile = MemoryBuffer::getFile("julia-defs.s.bc");
+    const char *jdf = &julia_defs_file[0];
+    MemoryBuffer *deffile = MemoryBuffer::getMemBuffer(jdf, jdf+sizeof(julia_defs_file)-1);
     Module *jdefs = ParseBitcodeFile(deffile, getGlobalContext());
     delete deffile;
 
