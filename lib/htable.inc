@@ -50,7 +50,7 @@ static void **HTNAME##_lookup_bp(htable_t *h, void *key)                \
     if (sz >= (1<<19) || (sz <= (1<<8)))                                \
         newsz = sz<<1;                                                  \
     else if (sz <= HT_N_INLINE)                                         \
-        newsz = 32;                                                     \
+        newsz = HT_N_INLINE;                                            \
     else                                                                \
         newsz = sz<<2;                                                  \
     /*printf("trying to allocate %d words.\n", newsz); fflush(stdout);*/ \

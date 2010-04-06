@@ -1321,9 +1321,6 @@ end
 (make-builtin 'is "(Any,Any)-->Bool" (lambda (x y)
 				       (if (j-is x y)
 					   julia-true julia-false)))
-(make-builtin 'isnull "Any-->Bool" (lambda (x)
-				     (if (null? x)
-					 julia-true julia-false)))
 (make-builtin 'typeof "(Any,)-->Type" type-of)
 (make-builtin 'subtype "(Type,Type)-->Bool"
 	      (lambda (x t) (if (subtype? x t)

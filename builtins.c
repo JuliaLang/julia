@@ -86,14 +86,6 @@ JL_CALLABLE(jl_f_is)
     return jl_false;
 }
 
-JL_CALLABLE(jl_f_isnull)
-{
-    JL_NARGS(isnull, 1, 1);
-    if (args[0] == (jl_value_t*)jl_null)
-        return jl_true;
-    return jl_false;
-}
-
 JL_CALLABLE(jl_f_typeof)
 {
     JL_NARGS(typeof, 1, 1);
@@ -964,7 +956,6 @@ void jl_init_builtins()
                   jl_new_closure(jl_f_ref_typector, NULL));
     
     add_builtin_func("is", jl_f_is);
-    add_builtin_func("isnull", jl_f_isnull);
     add_builtin_func("typeof", jl_f_typeof);
     add_builtin_func("subtype", jl_f_subtype);
     add_builtin_func("istype", jl_f_istype);
