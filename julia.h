@@ -274,6 +274,7 @@ extern jl_sym_t *list_sym;
 #define jl_is_bool(v)        jl_typeis(v,jl_bool_type)
 #define jl_is_symbol(v)      jl_typeis(v,jl_sym_type)
 #define jl_is_expr(v)        jl_typeis(v,jl_expr_type)
+#define jl_is_lambda_info(v) jl_typeis(v,jl_lambda_info_type)
 #define jl_is_func(v)        (jl_is_func_type(jl_typeof(v)))
 #define jl_is_function(v)    (jl_is_func_type(jl_typeof(v)))
 #define jl_is_buffer(v)      (((jl_tag_type_t*)jl_typeof(v))->name==jl_buffer_typename)
@@ -326,6 +327,7 @@ jl_function_t *jl_new_closure(jl_fptr_t proc, jl_value_t *env);
 jl_lambda_info_t *jl_new_lambda_info(jl_value_t *ast, jl_tuple_t *sparams);
 jl_tuple_t *jl_tuple(size_t n, ...);
 jl_tuple_t *jl_alloc_tuple(size_t n);
+jl_tuple_t *jl_tuple_append(jl_tuple_t *a, jl_tuple_t *b);
 jl_value_pair_t *jl_pair(jl_value_t *a, jl_value_t *b);
 jl_sym_t *jl_symbol(char *str);
 jl_sym_t *jl_gensym();
@@ -396,6 +398,8 @@ jl_module_t *jl_import_module(jl_module_t *to, jl_module_t *from);
 // compiler
 void jl_compile(jl_lambda_info_t *li);
 jl_value_t *jl_toplevel_eval(jl_value_t *ast);
+
+jl_lambda_info_t *jl_add_static_parameters(jl_lambda_info_t *l, jl_tuple_t *sp);
 
 // for writing julia functions in C
 #define JL_CALLABLE(name) \

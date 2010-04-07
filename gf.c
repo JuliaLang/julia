@@ -55,6 +55,17 @@ static int args_match_sig(jl_value_t **a, size_t n, jl_type_t *b)
                             1, 0);
 }
 
+// return a new lambda-info that has some extra static parameters
+// merged in.
+jl_lambda_info_t *jl_add_static_parameters(jl_lambda_info_t *l, jl_tuple_t *sp)
+{
+    if (l->sparams->length > 0)
+        sp = jl_tuple_append(sp, l->sparams);
+    jl_lambda_info_t *nli = jl_new_lambda_info(l->ast, sp);
+    nli->fptr = l->fptr;
+    return nli;
+}
+
 jl_function_t *jl_instantiate_method(jl_function_t *f, jl_value_pair_t *env)
 {
     jl_tuple_t *sp;
@@ -82,8 +93,7 @@ jl_function_t *jl_instantiate_method(jl_function_t *f, jl_value_pair_t *env)
         jl_value_pair_t *vp = (jl_value_pair_t*)f->env;
         nf->env = (jl_value_t*)jl_pair((jl_value_t*)nf, vp->b);
     }
-    nf->linfo = jl_new_lambda_info(f->linfo->ast, sp);
-    nf->linfo->fptr = f->linfo->fptr;
+    nf->linfo = jl_add_static_parameters(f->linfo, sp);
     return nf;
 }
 

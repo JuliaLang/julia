@@ -129,6 +129,21 @@ jl_tuple_t *jl_alloc_tuple(size_t n)
     return jv;
 }
 
+jl_tuple_t *jl_tuple_append(jl_tuple_t *a, jl_tuple_t *b)
+{
+    jl_tuple_t *c = jl_alloc_tuple(a->length + b->length);
+    size_t i=0, j;
+    for(j=0; j < a->length; j++) {
+        jl_tupleset(c, i, jl_tupleref(a,j));
+        i++;
+    }
+    for(j=0; j < b->length; j++) {
+        jl_tupleset(c, i, jl_tupleref(b,j));
+        i++;
+    }
+    return c;
+}
+
 static jl_sym_t *symtab = NULL;
 
 static jl_sym_t *mk_symbol(char *str)

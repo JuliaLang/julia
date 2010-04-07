@@ -354,8 +354,8 @@ static Value *emit_checked_var(Value *bp, char *name, jl_codectx_t *ctx)
 static Value *julia_bool(Value *cond)
 {
     return builder.CreateSelect(cond,
-                                builder.CreateLoad(jltrue_var, false),
-                                builder.CreateLoad(jlfalse_var, false));
+                                literal_pointer_val(jl_true),
+                                literal_pointer_val(jl_false));
 }
 
 static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool value,
@@ -416,7 +416,7 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool value,
         char *labelname = ((jl_sym_t*)args[1])->name;
         Value *isfalse =
             builder.CreateICmpEQ(emit_expr(cond, ctx, true),
-                                 builder.CreateLoad(jlfalse_var, false));
+                                 literal_pointer_val(jl_false));
         BasicBlock *ifso = BasicBlock::Create(getGlobalContext(), "if", ctx->f);
         BasicBlock *ifnot = (*ctx->labels)[labelname];
         assert(ifnot);
@@ -521,8 +521,8 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool value,
         Value *contents = emit_nthptr(box, 1);
         Value *isnull = builder.CreateICmpEQ(contents, V_null);
         return builder.CreateSelect(isnull,
-                                    builder.CreateLoad(jltrue_var, false),
-                                    builder.CreateLoad(jlfalse_var, false));
+                                    literal_pointer_val(jl_true),
+                                    literal_pointer_val(jl_false));
     }
     else if (ex->head == closure_ref_sym) {
         int idx = jl_unbox_int32(args[0]);
@@ -530,14 +530,16 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool value,
     }
 
     else if (ex->head == quote_sym) {
-        return literal_pointer_val(args[0]);
+        jl_value_t *jv = args[0];
+        if (jl_is_lambda_info(jv)) {
+            jv = (jl_value_t*)jl_add_static_parameters((jl_lambda_info_t*)jv,
+                                                       ctx->sp);
+        }
+        return literal_pointer_val(jv);
     }
     else if (ex->head == null_sym) {
-        return builder.CreateLoad(jlnull_var, false);
+        return literal_pointer_val((jl_value_t*)jl_null);
     }
-    //TODO: temporary
-    if (value)
-        return builder.CreateLoad(jlnull_var, false);
     assert(!value);
     return NULL;
 }

@@ -746,7 +746,7 @@ JL_CALLABLE(jl_f_new_closure)
 {
     JL_NARGS(new_closure, 2, 2);
     JL_TYPECHK(new_closure, tuple, args[1]);
-    assert(jl_typeof(args[0]) == jl_lambda_info_type);
+    assert(jl_is_lambda_info(args[0]));
     jl_lambda_info_t *li = (jl_lambda_info_t*)args[0];
     jl_function_t *f = jl_new_closure(NULL, NULL);
     f->linfo = li;
@@ -760,21 +760,6 @@ JL_CALLABLE(jl_f_new_closure)
         f->env = (jl_value_t*)jl_pair((jl_value_t*)f, args[1]);
     }
     return f;
-}
-
-static jl_tuple_t *tuple_append(jl_tuple_t *a, jl_tuple_t *b)
-{
-    jl_tuple_t *c = jl_alloc_tuple(a->length + b->length);
-    size_t i=0, j;
-    for(j=0; j < a->length; j++) {
-        jl_tupleset(c, i, jl_tupleref(a,j));
-        i++;
-    }
-    for(j=0; j < b->length; j++) {
-        jl_tupleset(c, i, jl_tupleref(b,j));
-        i++;
-    }
-    return c;
 }
 
 static int all_typevars(jl_tuple_t *p)
@@ -814,7 +799,7 @@ JL_CALLABLE(jl_f_new_struct_type)
     else
         jl_errorf("invalid subtyping in definition of %s", name->name);
     return jl_new_struct_type(name, super, params,
-                              tuple_append(pfn, fnames), NULL);
+                              jl_tuple_append(pfn, fnames), NULL);
 }
 
 JL_CALLABLE(jl_f_new_struct_fields)
@@ -838,7 +823,7 @@ JL_CALLABLE(jl_f_new_struct_fields)
         pft = jl_null;
     else
         assert(0);
-    st->types = tuple_append(pft, ftypes);
+    st->types = jl_tuple_append(pft, ftypes);
     return jl_null;
 }
 
