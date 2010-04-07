@@ -165,9 +165,8 @@ static GlobalVariable *stringConst(const std::string &txt)
 
 static void emit_function(jl_lambda_info_t *lam, Function *f);
 
-extern "C" void jl_compile(jl_lambda_info_t *li)
+static Function *to_function(jl_lambda_info_t *li)
 {
-    // objective: assign li->fptr
     Function *f = Function::Create(jl_func_sig, Function::ExternalLinkage,
                                    "a_julia_function", jl_Module);
     assert(jl_is_expr(li->ast));
@@ -176,6 +175,13 @@ extern "C" void jl_compile(jl_lambda_info_t *li)
     FPM->run(*f);
     // print out the function's LLVM code
     //f->dump();
+    return f;
+}
+
+extern "C" void jl_compile(jl_lambda_info_t *li)
+{
+    // objective: assign li->fptr
+    Function *f = to_function(li);
     li->fptr = (jl_fptr_t)jl_ExecutionEngine->getPointerToFunction(f);
 }
 
@@ -312,9 +318,13 @@ static Value *emit_nthptr(Value *v, size_t n)
 
 static Value *globalvar_binding_pointer(jl_sym_t *s, jl_codectx_t *ctx)
 {
+    jl_value_t **bp = jl_get_bindingp(ctx->module, s);
+    return literal_pointer_val(bp, jl_ppvalue_llvmt);
+    /*
     return builder.CreateCall2(jlgetbindingp_func,
                                literal_pointer_val(ctx->module, T_pint8),
                                literal_pointer_val(s, T_pint8));
+    */
 }
 
 // yields a jl_value_t** giving the binding location of a variable

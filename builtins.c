@@ -95,12 +95,14 @@ JL_CALLABLE(jl_f_typeof)
 JL_CALLABLE(jl_f_subtype)
 {
     JL_NARGS(subtype, 2, 2);
+    JL_TYPECHK(subtype, type, args[1]);
     return (jl_subtype(args[0],args[1],0,0) ? jl_true : jl_false);
 }
 
 JL_CALLABLE(jl_f_istype)
 {
     JL_NARGS(istype, 2, 2);
+    JL_TYPECHK(istype, type, args[1]);
     if (jl_is_tuple(args[0]))
         return (jl_subtype(args[0],args[1],1,0) ? jl_true : jl_false);
     return (jl_subtype(jl_typeof(args[0]),args[1],0,0) ? jl_true : jl_false);
@@ -109,6 +111,7 @@ JL_CALLABLE(jl_f_istype)
 JL_CALLABLE(jl_f_typeassert)
 {
     JL_NARGS(typeassert, 2, 2);
+    JL_TYPECHK(typeassert, type, args[1]);
     int ok;
     if (jl_is_tuple(args[0]))
         ok = (jl_subtype(args[0],args[1],1,0) ? jl_true : jl_false);
@@ -503,6 +506,10 @@ static void print_function(jl_value_t *v)
         ios_puts("#<generic-function ", s);
         ios_puts(((jl_sym_t*)((jl_value_pair_t*)((jl_function_t*)v)->env)->b)->name, s);
         ios_putc('>', s);
+#ifdef DEBUG
+        ios_putc('\n', s);
+        jl_print_method_table((jl_function_t*)v);
+#endif
     }
     else {
         ios_puts("#<closure>", s);

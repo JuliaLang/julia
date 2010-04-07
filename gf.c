@@ -52,7 +52,7 @@ static int args_match_sig(jl_value_t **a, size_t n, jl_type_t *b)
 {
     assert(jl_is_tuple(b));
     return jl_tuple_subtype(a, n, &jl_tupleref(b,0), ((jl_tuple_t*)b)->length,
-                            1, 0);
+                            1, 0, 0);
 }
 
 // return a new lambda-info that has some extra static parameters
@@ -202,21 +202,23 @@ jl_methlist_t *jl_method_table_assoc(jl_methtable_t *mt,
 
 static int args_match_generic(jl_type_t *a, jl_type_t *b)
 {
-    return (jl_type_conform(a,b) != NULL);
+    return (jl_type_conform_morespecific(a,b) != NULL);
 }
 
 static int args_match(jl_type_t *a, jl_type_t *b)
 {
-    return jl_subtype((jl_value_t*)a,(jl_value_t*)b,0,0);
+    return jl_type_morespecific((jl_value_t*)a,(jl_value_t*)b,0,0);
 }
 
-static int sigs_match(jl_value_t **a, size_t n, jl_type_t *b)
+static int sigs_match(jl_type_t *a, jl_type_t *b)
 {
-    assert(jl_is_tuple(b));
-    return jl_tuple_subtype(a, n, &jl_tupleref(b,0), ((jl_tuple_t*)b)->length,
-                            0, 0) &&
-        jl_tuple_subtype(&jl_tupleref(b,0), ((jl_tuple_t*)b)->length, a, n,
-                         0, 0);
+    if (jl_has_typevars((jl_value_t*)a)) {
+        if (jl_has_typevars((jl_value_t*)b)) {
+            return jl_types_equal_generic((jl_value_t*)a,(jl_value_t*)b);
+        }
+        return 0;
+    }
+    return jl_types_equal(a,b);
 }
 
 static
@@ -227,11 +229,15 @@ jl_methlist_t *jl_method_list_insert_p(jl_methlist_t **pml, jl_type_t *type,
     jl_methlist_t *l, **pl;
 
     assert(jl_is_tuple(type));
-    l = jl_method_list_assoc(*pml,
-                             &jl_tupleref(type,0), ((jl_tuple_t*)type)->length,
-                             sigs_match);
+    l = *pml;
+    while (l != NULL) {
+        if (sigs_match(type, l->sig))
+            break;
+        l = l->next;
+    }
     if (l != NULL) {
         // method overwritten
+        // TODO: invalidate cached methods
         l->sig = type;
         l->func = method;
         return l;
@@ -287,7 +293,38 @@ JL_CALLABLE(jl_apply_generic)
         jl_errorf("no matching method for function %s", name->name);
     }
 
+#if 0
+    // TRACE
+    ios_printf(ios_stdout, "%s(", ((jl_sym_t*)((jl_value_pair_t*)env)->b)->name);
+    size_t i;
+    for(i=0; i < nargs; i++) {
+        if (i > 0) ios_printf(ios_stdout, ", ");
+        ios_printf(ios_stdout, "%s", jl_tname(jl_typeof(args[i]))->name->name);
+    }
+    ios_printf(ios_stdout, ")\n");
+#endif
+
     return (m->func->fptr)(m->func->env, args, nargs);
+}
+
+void jl_print_method_table(jl_function_t *gf)
+{
+    assert(jl_is_gf(gf));
+    char *name = ((jl_sym_t*)((jl_value_pair_t*)gf->env)->b)->name;
+    jl_methtable_t *mt = (jl_methtable_t*)((jl_value_pair_t*)gf->env)->a;
+    jl_methlist_t *ml = mt->mlist;
+    while (ml != NULL) {
+        ios_printf(ios_stdout, "%s", name);
+        jl_print(ml->sig); ios_printf(ios_stdout, "\n");
+        ml = ml->next;
+    }
+    ios_printf(ios_stdout, "generic:\n");
+    ml = mt->generics;
+    while (ml != NULL) {
+        ios_printf(ios_stdout, "%s", name);
+        jl_print(ml->sig); ios_printf(ios_stdout, "\n");
+        ml = ml->next;
+    }
 }
 
 jl_function_t *jl_new_generic_function(jl_sym_t *name)

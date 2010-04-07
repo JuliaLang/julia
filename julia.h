@@ -303,10 +303,14 @@ jl_value_t *jl_full_type(jl_value_t *v);
 int jl_is_type(jl_value_t *v);
 int jl_has_typevars(jl_value_t *v);
 int jl_tuple_subtype(jl_value_t **child, size_t cl,
-                     jl_value_t **parent, size_t pl, int ta, int tb);
+                     jl_value_t **parent, size_t pl, int ta, int tb,
+                     int morespecific);
 int jl_subtype(jl_value_t *a, jl_value_t *b, int ta, int tb);
+int jl_type_morespecific(jl_value_t *a, jl_value_t *b, int ta, int tb);
 jl_value_pair_t *jl_type_conform(jl_type_t *a, jl_type_t *b);
+jl_value_pair_t *jl_type_conform_morespecific(jl_type_t *a, jl_type_t *b);
 int jl_types_equal(jl_value_t *a, jl_value_t *b);
+int jl_types_equal_generic(jl_value_t *a, jl_value_t *b);
 
 // type constructors
 jl_typector_t *jl_new_type_ctor(jl_tuple_t *params, jl_type_t *body);
