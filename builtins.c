@@ -20,11 +20,12 @@
 // --- exception raising ---
 
 extern jmp_buf ExceptionHandler;
+extern jmp_buf *CurrentExceptionHandler;
 
 void jl_error(char *str)
 {
     ios_printf(ios_stderr, "%s\n", str);
-    longjmp(ExceptionHandler, 1);
+    longjmp(*CurrentExceptionHandler, 1);
 }
 
 void jl_errorf(char *fmt, ...)
@@ -34,7 +35,7 @@ void jl_errorf(char *fmt, ...)
     ios_vprintf(ios_stderr, fmt, args);
     ios_printf(ios_stderr, "\n");
     va_end(args);
-    longjmp(ExceptionHandler, 1);
+    longjmp(*CurrentExceptionHandler, 1);
 }
 
 void jl_too_few_args(char *fname, int min)
@@ -178,11 +179,28 @@ JL_CALLABLE(jl_f_load)
         jl_buffer_t *b = ((jl_expr_t*)ast)->args;
         if (b == NULL)
             jl_errorf("could not open file %s", fname);
-        size_t i;
-        for(i=0; i < b->length; i++) {
-            // process toplevel form
-            jl_toplevel_eval(((jl_value_t**)b->data)[i]);
+        size_t i, lineno=0;
+        jmp_buf *prevh = CurrentExceptionHandler;
+        jmp_buf handler;
+        CurrentExceptionHandler = &handler;
+        if (!setjmp(handler)) {
+            for(i=0; i < b->length; i++) {
+                // process toplevel form
+                jl_value_t *form = ((jl_value_t**)b->data)[i];
+                if (jl_is_expr(form) && ((jl_expr_t*)form)->head == line_sym) {
+                    lineno = jl_unbox_int32(jl_exprarg(form, 0));
+                }
+                else {
+                    jl_toplevel_eval(form);
+                }
+            }
         }
+        else {
+            CurrentExceptionHandler = prevh;
+            ios_printf(ios_stderr, "on %s:%d\n", fname, lineno);
+            longjmp(*CurrentExceptionHandler, 1);
+        }
+        CurrentExceptionHandler = prevh;
     }
     else {
         jl_error("load: expected string");

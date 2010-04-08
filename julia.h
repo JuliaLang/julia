@@ -232,6 +232,7 @@ extern jl_sym_t *tuple_sym;
 extern jl_sym_t *top_sym;
 extern jl_sym_t *expr_sym;
 extern jl_sym_t *list_sym;
+extern jl_sym_t *line_sym;
 
 #ifdef BITS64
 #define NWORDS(sz) (((sz)+7)>>3)
@@ -249,6 +250,8 @@ extern jl_sym_t *list_sym;
 
 #define jl_tupleref(t,i) (((jl_value_t**)(t))[2+(i)])
 #define jl_tupleset(t,i,x) ((((jl_value_t**)(t))[2+(i)])=(x))
+
+#define jl_exprarg(e,n) (((jl_value_t**)(((jl_expr_t*)(e))->args->data))[(n)])
 
 #define jl_tparam0(t) jl_tupleref(((jl_tag_type_t*)(t))->parameters, 0)
 

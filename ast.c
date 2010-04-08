@@ -114,6 +114,7 @@ static jl_value_t *scm_to_julia(___SCMOBJ e)
                lambda  call  =  quote
                null  top  unbound  box-unbound  closure-ref
                body  file  string
+               line
             */
             jl_value_t *v;
             if (!strcmp(s, "string")) {

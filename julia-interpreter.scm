@@ -986,6 +986,7 @@ end
 	 (case (car e)
 	   ((quote)   (scm->julia (cadr e)))
 	   ((null)    julia-null)
+	   ((line)    julia-null)
 	   ((top)     (eval-sym (cadr e) *empty-env*))
 	   ((lambda)  e)  ; remaining lambdas are data
 	   ((unbound)     ; check if identifier is bound

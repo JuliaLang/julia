@@ -14,7 +14,7 @@
 
 ; return a lambda expression representing a thunk for a top-level expression
 (define (toplevel-expr e)
-  (if (or (boolean? e) (eof-object? e))
+  (if (or (boolean? e) (eof-object? e) (and (pair? e) (eq? (car e) 'line)))
       e
       (caddr (cadr (julia-expand `(lambda () ,e))))))
 

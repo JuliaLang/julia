@@ -84,6 +84,7 @@ jl_sym_t *tuple_sym;
 jl_sym_t *top_sym;
 jl_sym_t *expr_sym;
 jl_sym_t *list_sym;
+jl_sym_t *line_sym;
 
 static inline jl_value_t *newobj(jl_type_t *type, size_t nfields)
 {
@@ -570,7 +571,8 @@ UNBOX_FUNC(float64, double)
 jl_buffer_t *jl_new_buffer(jl_type_t *buf_type, size_t nel)
 {
     jl_type_t *el_type = (jl_type_t*)jl_tparam0(buf_type);
-    jl_buffer_t *b = (jl_buffer_t*)newobj((jl_type_t*)buf_type, 15);
+    jl_buffer_t *b = (jl_buffer_t*)allocb(sizeof(jl_buffer_t));
+    b->type = buf_type;
     void *data;
     if (nel > 0) {
         if (jl_is_bits_type(el_type)) {
@@ -1417,6 +1419,7 @@ void jl_init_types()
     expr_sym = jl_symbol("expr");
     tuple_sym = jl_symbol("tuple");
     dollar_sym = jl_symbol("$");
+    line_sym = jl_symbol("line");
 
     init_box_caches();
 }

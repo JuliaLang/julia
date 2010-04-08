@@ -16,7 +16,8 @@
   (and (pair? e)
        (or (eq? (car e) 'quote)
 	   (eq? (car e) 'top)
-	   (eq? (car e) 'unbound))))
+	   (eq? (car e) 'unbound)
+	   (eq? (car e) 'line))))
 
 (define (lam:args x) (cadr x))
 (define (lam:vars x) (llist-vars (lam:args x)))

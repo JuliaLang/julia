@@ -641,17 +641,16 @@ TODO:
       (error "Extra input after end of expression:"
 	     (peek-token s))))
 
-; call f on a stream until the stream runs out of data
-(define (read-all-of f s)
-  (let loop ((lines '())
-	     (curr  (f s)))
-    (if (eof-object? curr)
-	(reverse lines)
-	(loop (cons curr lines) (f s)))))
-
-; for testing. generally no need to tokenize a whole stream in advance.
-(define (julia-tokenize port)
-  (read-all-of next-token port))
-
 (define (julia-parse-file filename)
+  ; call f on a stream until the stream runs out of data
+  (define (read-all-of f s)
+    (let loop ((lines '())
+	       (linen 1)
+	       (curr  (f s)))
+      (if (eof-object? curr)
+	  (reverse lines)
+	  (let ((nl (input-port-line (ts:port s))))
+	    (loop (list* curr `(line ,linen) lines)
+		  nl
+		  (f s))))))
   (read-all-of julia-parse (make-token-stream (open-input-file filename))))

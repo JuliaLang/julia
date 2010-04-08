@@ -104,6 +104,7 @@ jl_value_t *jl_toplevel_eval(jl_value_t *ast)
 static int have_color;
 
 jmp_buf ExceptionHandler;
+jmp_buf *CurrentExceptionHandler = &ExceptionHandler;
 
 int main(int argc, char *argv[])
 {

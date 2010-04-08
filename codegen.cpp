@@ -123,6 +123,7 @@ static jl_sym_t *closure_ref_sym;
   - speed up type caching
   - do something about all the string copying from scheme
   - speed up scheme pattern matcher by compiling patterns
+  - get llvm interpreter to work, see if it's faster for toplevel expressions
 
   optimizations round 2:
   - lambda lifting
