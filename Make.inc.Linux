@@ -6,3 +6,4 @@ HFILEDIRS = /usr/local/include $(GAMBIT)/include
 LIBDIRS = /usr/local/lib
 CONFIG = -DLINUX -DARCH_X86 -D__CPU__=586 -DUSE_READLINE
 NBITS = 32
+EFENCE =

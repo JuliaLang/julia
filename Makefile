@@ -50,6 +50,9 @@ $(LLT):
 debug: $(DOBJS) $(LIBFILES) julia-defs.s.bc
 	$(CXX) $(DEBUGFLAGS) $(DOBJS) -o $(EXENAME) $(LIBS)
 
+efence: $(DOBJS) $(LIBFILES) julia-defs.s.bc
+	$(CXX) $(DEBUGFLAGS) $(DOBJS) -o $(EXENAME) $(EFENCE) $(LIBS)
+
 release: $(OBJS) $(LIBFILES) julia-defs.s.bc
 	$(CXX) $(SHIPFLAGS) $(OBJS) -o $(EXENAME) $(LIBS)
 
