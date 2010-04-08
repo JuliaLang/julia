@@ -5,3 +5,5 @@ GAMBITLIB = $(GAMBIT)/lib/gambit-c/libgambc.a
 HFILEDIRS = /opt/local/include $(GAMBIT)/include
 LIBDIRS = /opt/local/lib
 CONFIG = -DMACOSX -DARCH_X86_64 -D__CPU__=586 -DBITS64 -DUSE_READLINE
+NBITS = 64
+EFENCE = /opt/local/lib/libefence.a

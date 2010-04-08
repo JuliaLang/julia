@@ -35,8 +35,8 @@ jlfrontend.c: jlfrontend.scm julia-parser.scm julia-syntax.scm
 jlfrontend_.c: jlfrontend.c
 	$(GAMBITGSC) -link -o $@ $<
 
-julia-defs.s.bc: julia-defs.s
-	llvm-as -f julia-defs.s
+julia-defs.s.bc: julia-defs$(NBITS).s
+	llvm-as -f $< -o $@
 
 julia-defs.s.bc.inc: julia-defs.s.bc
 	$(GAMBITGSI) ./bin2hex.scm < $< > $@
@@ -50,12 +50,17 @@ $(LLT):
 debug: $(DOBJS) $(LIBFILES) julia-defs.s.bc
 	$(CXX) $(DEBUGFLAGS) $(DOBJS) -o $(EXENAME) $(LIBS)
 
+efence: $(DOBJS) $(LIBFILES) julia-defs.s.bc
+	$(CXX) $(DEBUGFLAGS) $(DOBJS) -o $(EXENAME) $(EFENCE) $(LIBS)
+
 release: $(OBJS) $(LIBFILES) julia-defs.s.bc
 	$(CXX) $(SHIPFLAGS) $(OBJS) -o $(EXENAME) $(LIBS)
 
 clean:
 	rm -f *.o
 	rm -f *.do
+	rm -f *.bc
+	rm -f *.bc.inc
 	rm -f $(EXENAME)
 	rm -f jlfrontend.c
 	rm -f jlfrontend_.c

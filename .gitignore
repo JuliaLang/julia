@@ -1,9 +1,9 @@
 *.o
 *.do
 *.a
-julia-defs.s.bc.inc
-jlfrontend.c
-jlfrontend_.c
+/julia-defs.s.bc
+/julia-defs.s.bc.inc
+/jlfrontend.c
+/jlfrontend_.c
 /julia
-/*.bc
 .julia_history
