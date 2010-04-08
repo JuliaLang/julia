@@ -166,9 +166,9 @@ int main(int argc, char *argv[])
         }
 
         // process input
-        jl_value_t *ast = jl_parse_input_line(input);
-        if (ast != NULL) {
-            if (!setjmp(ExceptionHandler)) {
+        if (!setjmp(ExceptionHandler)) {
+            jl_value_t *ast = jl_parse_input_line(input);
+            if (ast != NULL) {
                 jl_print(jl_toplevel_eval(ast));
                 ios_printf(ios_stdout, "\n");
             }
