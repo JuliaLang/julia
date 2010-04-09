@@ -79,3 +79,42 @@ function foo()
 end
 assert(int32(foo()) == -24)
 
+fib(n) = n < 2 ? n : fib(n-1) + fib(n-2)
+assert(fib(20) == 6765)
+
+# static parameters
+sptest1[T](x::T, y::T) = 42
+sptest1[T,S](x::T, y::S) = 43
+assert(sptest1(1,2) == 42)
+assert(sptest1(1,"b") == 43)
+
+sptest2[T](x::T) = T
+assert(is(sptest2(`a),Symbol))
+
+sptest3[T](x::T) = y->T
+m = sptest3(`a)
+assert(is(m(0),Symbol))
+
+# closures
+function clotest()
+    c = 0
+    function inc()
+        c += 1
+    end
+    function dec()
+        c -= 1
+    end
+    inc(); inc()
+    assert(c == 2)
+    dec()
+    assert(c == 1)
+    assert((()->c)() == 1)
+    return (n->do(c+=n), ()->c)
+end
+(inc, C) = clotest()
+inc(11)
+assert(C() == 12)
+
+Y(f) = (h->f(x->h(h)(x)))(h->f(x->h(h)(x)))
+yfib = Y(fib->(n->(n < 2 ? n : fib(n-1) + fib(n-2))))
+assert(yfib(20) == 6765)
