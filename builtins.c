@@ -1039,4 +1039,9 @@ void jl_init_builtins()
     add_builtin("Float64", jl_float64_type);
 
     add_builtin("Expr", jl_expr_type);
+
+    add_builtin("BitsKind", jl_bits_kind);
+    add_builtin("StructKind", jl_struct_kind);
+    add_builtin("FuncKind", jl_func_kind);
+    add_builtin("TagKind", jl_tag_kind);
 }
