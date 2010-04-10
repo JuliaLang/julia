@@ -70,12 +70,3 @@ function append(lsts...)
     end
     return l
 end
-
-struct Expr
-    head::Symbol
-    args::List
-end
-
-expr(hd, args...)  = Expr.new(hd, list(args...))
-exprl(hd, arglist) = Expr.new(hd, arglist)
-
