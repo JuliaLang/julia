@@ -1,8 +1,8 @@
-GAMBIT = /opt/local
-GAMBITGSC = gambit-gsc
-GAMBITGSI = gambit-gsi
-GAMBITLIB = $(GAMBIT)/lib/gambit-c/libgambc.a
-HFILEDIRS = /opt/local/include $(GAMBIT)/include
+GAMBIT = /usr/local/Gambit-C
+GAMBITGSC = $(GAMBIT)/bin/gsc
+GAMBITGSI = $(GAMBIT)/bin/gsi
+GAMBITLIB = $(GAMBIT)/lib/libgambc.a
+HFILEDIRS = $(GAMBIT)/include /opt/local/include
 LIBDIRS = /opt/local/lib
 CONFIG = -DMACOSX -DARCH_X86_64 -D__CPU__=586 -DBITS64 -DUSE_READLINE
 NBITS = 64
