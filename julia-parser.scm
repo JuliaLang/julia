@@ -462,8 +462,10 @@ TODO:
 	((#\[ )   (take-token s)
 	 ; ref is syntax, so we can distinguish
 	 ; a[i] = x  from
-	 ; ref(a,i) = x  which is invalid
+	 ; ref(a,i) = x
 	 (loop (list* 'ref  ex (parse-arglist s #\] ))))
+	((#\{ )   (take-token s)
+	 (loop (list* 'typed-buffer ex (parse-arglist s #\} ))))
 	(else ex))))
   
   (let* (#;(do-kw? (not (eqv? (peek-token s) #\`)))
@@ -603,7 +605,7 @@ TODO:
 
 	  ((eqv? t #\{ )
 	   (take-token s)
-	   (cons 'list (parse-arglist s #\})))
+	   (cons 'buffer (parse-arglist s #\})))
 
 	  ((eqv? t #\[ )
 	   (take-token s)

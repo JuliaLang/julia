@@ -405,6 +405,7 @@ jl_module_t *jl_import_module(jl_module_t *to, jl_module_t *from);
 // compiler
 void jl_compile(jl_lambda_info_t *li);
 jl_value_t *jl_toplevel_eval(jl_value_t *ast);
+void jl_load(char *fname);
 
 jl_lambda_info_t *jl_add_static_parameters(jl_lambda_info_t *l, jl_tuple_t *sp);
 

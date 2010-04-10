@@ -129,6 +129,7 @@ static jl_sym_t *closure_ref_sym;
   - lambda lifting
   - mark pure (builtin) functions and don't call them in statement position
   - avoid tuple allocation in (a,b)=(b,a)
+  - varargs and ... optimizations
 
   optimizations round 3:
   - type inference

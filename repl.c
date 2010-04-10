@@ -123,6 +123,8 @@ int main(int argc, char *argv[])
         }
     }
 
+    jl_load("start.j");
+
     if (print_banner)
         ios_printf(ios_stdout, "%s", banner);
 

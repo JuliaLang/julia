@@ -17,6 +17,33 @@ function buffer[T](elts::T...)
     return b
 end
 
+function buffer_literal(t::Type, elts...)
+    b = Buffer[t].new(length(elts))
+    for i = 1:length(elts)
+        b[i] = elts[i]
+    end
+    return b
+end
+
+function append[T](bs::Buffer[T]...)
+    l = 0
+    for b = bs
+        l += length(b)
+    end
+    nb = Buffer[T].new(l)
+    n = 1
+    for b = bs
+        for i = 1:length(b)
+            nb[n] = b[i]
+            n += 1
+        end
+    end
+    return nb
+end
+
+expr(hd::Symbol, args...)  = Expr.new(hd, {args...})
+exprl(hd::Symbol, arglist) = Expr.new(hd, arglist)
+
 # iterating over buffers
 start(b::Buffer) = 1
 done(b::Buffer, i) = (i > length(b))

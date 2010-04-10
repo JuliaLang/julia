@@ -170,37 +170,42 @@ JL_CALLABLE(jl_f_time_thunk)
     return result;
 }
 
+void jl_load(char *fname)
+{
+    jl_value_t *ast = jl_parse_file(fname);
+    jl_buffer_t *b = ((jl_expr_t*)ast)->args;
+    if (b == NULL)
+        jl_errorf("could not open file %s", fname);
+    size_t i, lineno=0;
+    jmp_buf *prevh = CurrentExceptionHandler;
+    jmp_buf handler;
+    CurrentExceptionHandler = &handler;
+    if (!setjmp(handler)) {
+        for(i=0; i < b->length; i++) {
+            // process toplevel form
+            jl_value_t *form = ((jl_value_t**)b->data)[i];
+            if (jl_is_expr(form) && ((jl_expr_t*)form)->head == line_sym) {
+                lineno = jl_unbox_int32(jl_exprarg(form, 0));
+            }
+            else {
+                jl_toplevel_eval(form);
+            }
+        }
+    }
+    else {
+        CurrentExceptionHandler = prevh;
+        ios_printf(ios_stderr, " %s:%d\n", fname, lineno);
+        longjmp(*CurrentExceptionHandler, 1);
+    }
+    CurrentExceptionHandler = prevh;
+}
+
 JL_CALLABLE(jl_f_load)
 {
     JL_NARGS(load, 1, 1);
     if (jl_typeof(args[0]) == jl_buffer_uint8_type) {
         char *fname = (char*)((jl_buffer_t*)args[0])->data;
-        jl_value_t *ast = jl_parse_file(fname);
-        jl_buffer_t *b = ((jl_expr_t*)ast)->args;
-        if (b == NULL)
-            jl_errorf("could not open file %s", fname);
-        size_t i, lineno=0;
-        jmp_buf *prevh = CurrentExceptionHandler;
-        jmp_buf handler;
-        CurrentExceptionHandler = &handler;
-        if (!setjmp(handler)) {
-            for(i=0; i < b->length; i++) {
-                // process toplevel form
-                jl_value_t *form = ((jl_value_t**)b->data)[i];
-                if (jl_is_expr(form) && ((jl_expr_t*)form)->head == line_sym) {
-                    lineno = jl_unbox_int32(jl_exprarg(form, 0));
-                }
-                else {
-                    jl_toplevel_eval(form);
-                }
-            }
-        }
-        else {
-            CurrentExceptionHandler = prevh;
-            ios_printf(ios_stderr, " %s:%d\n", fname, lineno);
-            longjmp(*CurrentExceptionHandler, 1);
-        }
-        CurrentExceptionHandler = prevh;
+        jl_load(fname);
     }
     else {
         jl_error("load: expected string");
@@ -683,7 +688,10 @@ JL_CALLABLE(jl_f_print_buffer)
         ios_write(s, (char*)b->data, b->length);
         return (jl_value_t*)jl_null;
     }
-    ios_puts("buffer(", s);
+    if (el_type != jl_any_type) {
+        jl_print((jl_value_t*)el_type);
+    }
+    ios_puts("{", s);
     if (jl_is_bits_type(el_type)) {
         jl_bits_type_t *bt = (jl_bits_type_t*)el_type;
         size_t nb = bt->nbits/8;
@@ -704,7 +712,7 @@ JL_CALLABLE(jl_f_print_buffer)
                 ios_write(s, ", ", 2);
         }
     }
-    ios_putc(')', s);
+    ios_putc('}', s);
 
     return (jl_value_t*)jl_null;
 }
@@ -1029,4 +1037,6 @@ void jl_init_builtins()
     add_builtin("Uint64", jl_uint64_type);
     add_builtin("Float32", jl_float32_type);
     add_builtin("Float64", jl_float64_type);
+
+    add_builtin("Expr", jl_expr_type);
 }

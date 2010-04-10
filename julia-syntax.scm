@@ -338,8 +338,10 @@
    (pattern-lambda (ref a . idxs)
 		   `(call ref ,a ,@(process-indexes idxs)))
 
-   (pattern-lambda (list . elts)
-		   `(call list ,@elts))
+   (pattern-lambda (buffer . elts)
+		   `(call (top buffer_literal) (top Any) ,@elts))
+   (pattern-lambda (typed-buffer type . elts)
+		   `(call (top buffer_literal) ,type ,@elts))
 
    ; call with splat
    (pattern-lambda (call f ... (... _) ...)
@@ -1183,6 +1185,42 @@ So far only the second case can actually occur.
       (resolve-labels (goto-form e))
       (goto-form e)))
 
+(define (expand-backquote e)
+  (cond ((symbol? e)          `(quote ,e))
+	((atom? e)            e)
+	((eq? (car e) '$)     (cadr e))
+	((eq? (car e) 'quote)
+	 (if (symbol? (cadr e))
+	     e
+	     (expand-backquote (expand-backquote (cadr e)))))
+	((not (any (lambda (x)
+		     (match '($ (tuple (... x))) x))
+		   e))
+	 `(call (top expr) ,@(map expand-backquote e)))
+	(else
+	 (let loop ((p (cdr e)) (q '()))
+	   (if (null? p)
+	       (let ((forms (reverse q)))
+		 `(call (top exprl) ,(expand-backquote (car e))
+			(call (top append) ,@forms)))
+	       ; look for splice inside backquote, e.g. (a,$(x...),b)
+	       (if (match '($ (tuple (... x))) (car p))
+		   (loop (cdr p)
+			 (cons (cadr (cadr (cadr (car p)))) q))
+		   (loop (cdr p)
+			 (cons `(call (top buffer_literal) (top Any)
+				      ,(expand-backquote (car p)))
+			       q))))))))
+
+(define (julia-expand-backquote e)
+  (cond ((atom? e) e)
+	((eq? (car e) 'quote)
+	 (if (symbol? (cadr e))
+	     e
+	     (julia-expand-backquote (expand-backquote (cadr e)))))
+	(else
+	 (map julia-expand-backquote e))))
+
 (define (julia-expand ex)
   (to-goto-form
    (closure-convert
@@ -1194,4 +1232,4 @@ So far only the second case can actually occur.
 	 (pattern-expand lower-comprehensions
 	  (pattern-expand binding-form-patterns
 	   (pattern-expand identify-comprehensions
-			   ex)))))))))))
+	    (julia-expand-backquote ex))))))))))))
