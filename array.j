@@ -31,8 +31,8 @@ rand(m::Size, n::Size) = [ rand() | i=1:m, j=1:n ]
 
 (==)(x::Array, y::Array) = (x.dims == y.dims && x.data == y.data)
 
-transpose(x::Matrix) = [ x[j,i] | i=1:size(x,1), j=1:size(x,2) ]
-ctranspose(x::Matrix) = [ conj(x[j,i]) | i=1:size(x,1), j=1:size(x,2) ]
+transpose(x::Matrix) = [ x[j,i] | i=1:size(x,2), j=1:size(x,1) ]
+ctranspose(x::Matrix) = [ conj(x[j,i]) | i=1:size(x,2), j=1:size(x,1) ]
 
 dot(x::Vector, y::Vector) = sum(x.*y)
 
