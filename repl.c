@@ -47,6 +47,8 @@ static char jl_prompt_plain[] = "julia> ";
 static char jl_prompt_color[] = "\001\033[1m\033[32m\002julia> \001\033[37m\002";
 static char jl_answer_color[] = "\033[0m\033[37m";
 
+static char jl_color_normal[] = "\033[0m\033[37m";
+
 static char jl_history_file[] = ".julia_history";
 
 void julia_init()
@@ -180,6 +182,10 @@ int main(int argc, char *argv[])
         // readline allocates with system malloc
         if (input) free(input);
 #endif
+    }
+    if (have_color) {
+        ios_printf(ios_stdout, jl_color_normal);
+        ios_flush(ios_stdout);
     }
 
     return 0;

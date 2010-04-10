@@ -644,13 +644,16 @@ TODO:
 (define (julia-parse-file filename)
   ; call f on a stream until the stream runs out of data
   (define (read-all-of f s)
+    (skip-ws (ts:port s) #t)
     (let loop ((lines '())
-	       (linen 1)
+	       (linen (input-port-line (ts:port s)))
 	       (curr  (f s)))
       (if (eof-object? curr)
 	  (reverse lines)
-	  (let ((nl (input-port-line (ts:port s))))
-	    (loop (list* curr `(line ,linen) lines)
-		  nl
-		  (f s))))))
+	  (begin
+	    (skip-ws (ts:port s) #t)
+	    (let ((nl (input-port-line (ts:port s))))
+	      (loop (list* curr `(line ,linen) lines)
+		    nl
+		    (f s)))))))
   (read-all-of julia-parse (make-token-stream (open-input-file filename))))

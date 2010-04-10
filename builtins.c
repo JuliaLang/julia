@@ -197,7 +197,7 @@ JL_CALLABLE(jl_f_load)
         }
         else {
             CurrentExceptionHandler = prevh;
-            ios_printf(ios_stderr, " %s:%d\n", fname, lineno+1);
+            ios_printf(ios_stderr, " %s:%d\n", fname, lineno);
             longjmp(*CurrentExceptionHandler, 1);
         }
         CurrentExceptionHandler = prevh;
