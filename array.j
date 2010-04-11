@@ -35,6 +35,7 @@ transpose(x::Matrix) = [ x[j,i] | i=1:size(x,2), j=1:size(x,1) ]
 ctranspose(x::Matrix) = [ conj(x[j,i]) | i=1:size(x,2), j=1:size(x,1) ]
 
 dot(x::Vector, y::Vector) = sum(x.*y)
+diag(A::Matrix) = [ A[i,i] | i=1:min(size(A)) ]
 
 function jl_make_array(eltype::Type, dims...)
     data = Buffer[eltype].new(prod(dims))
