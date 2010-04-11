@@ -558,7 +558,7 @@
       ;; compute the dimensions where expr is a list of ranges
       (define (compute-dims expr)
 	(if (null? expr) (list)
-	    (cons `(call numel ,(car expr)) (compute-dims (cdr expr))) ))
+	    (cons `(call length ,(car expr)) (compute-dims (cdr expr))) ))
 
       ;; construct loops to cycle over all dimensions of an n-d comprehension
       (define (construct-loops result expr ranges ri)
