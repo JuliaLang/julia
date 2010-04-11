@@ -1044,4 +1044,5 @@ void jl_init_builtins()
     add_builtin("StructKind", jl_struct_kind);
     add_builtin("FuncKind", jl_func_kind);
     add_builtin("TagKind", jl_tag_kind);
+    add_builtin("UnionKind", jl_union_kind);
 }

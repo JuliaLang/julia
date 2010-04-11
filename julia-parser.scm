@@ -455,8 +455,6 @@ TODO:
 	 ; some names are syntactic and not function calls
 	 (cond ((eq? ex 'do)
 		(loop (list* 'block   (parse-arglist s #\) ))))
-	       ((eq? ex 'quote)
-		(loop (list* ex       (parse-arglist s #\) ))))
 	       (else
 		(loop (list* 'call ex (parse-arglist s #\) ))))))
 	((#\[ )   (take-token s)
