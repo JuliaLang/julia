@@ -45,7 +45,7 @@
          (mapconcat
           'identity
           '("if" "else" "elseif" "while" "for" "begin" "end" "do"
-            "try" "catch" "return" "local" "type" "function" "quote"
+            "try" "catch" "return" "local" "type" "function"
 	    "typealias" "break" "continue" "struct" "global" "macro"
 	    "module" "import" "export" "const")
           "\\|") "\\)\\>")

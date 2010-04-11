@@ -104,7 +104,6 @@ static jl_sym_t *closure_ref_sym;
   - better error messages
   - exceptions
   - threads or other advanced control flow
-  - I/O and strings
 
   - source location tracking, var name metadata
   - rootlist to track pointers emitted into code

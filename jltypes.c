@@ -1289,38 +1289,38 @@ void jl_init_types()
     jl_tuple_type->parameters = jl_null;
 
     // now they can be used to create the remaining base kinds and types
-    jl_union_kind = jl_new_struct_type(jl_symbol("Union"),
-                                      jl_type_type, jl_null,
-                                      jl_tuple(1, jl_symbol("types")),
-                                      jl_tuple(1, jl_tuple_type));
+    jl_union_kind = jl_new_struct_type(jl_symbol("UnionKind"),
+                                       jl_type_type, jl_null,
+                                       jl_tuple(1, jl_symbol("types")),
+                                       jl_tuple(1, jl_tuple_type));
 
     jl_bottom_type = (jl_type_t*)jl_new_struct(jl_union_kind, jl_null);
 
     jl_bits_kind =
         jl_new_struct_type(jl_symbol("BitsKind"), (jl_tag_type_t*)jl_tag_kind,
-                          jl_null,
-                          jl_tuple(4, jl_symbol("name"), jl_symbol("super"),
-                                   jl_symbol("parameters"),
-                                   jl_symbol("convert")),
-                          jl_tuple(4, jl_typename_type, jl_type_type,
-                                   jl_tuple_type, jl_any_func));
+                           jl_null,
+                           jl_tuple(4, jl_symbol("name"), jl_symbol("super"),
+                                    jl_symbol("parameters"),
+                                    jl_symbol("convert")),
+                           jl_tuple(4, jl_typename_type, jl_type_type,
+                                    jl_tuple_type, jl_any_func));
     // cannot be created with normal constructor due to hidden fields
     jl_bits_kind->fnew = jl_bottom_func;
     
     jl_tvar_type = jl_new_struct_type(jl_symbol("TypeVar"),
-                                     jl_any_type, jl_null,
-                                     jl_tuple(3, jl_symbol("name"),
-                                              jl_symbol("lb"),
-                                              jl_symbol("ub")),
-                                     jl_tuple(3, jl_sym_type, jl_type_type,
-                                              jl_type_type));
+                                      jl_any_type, jl_null,
+                                      jl_tuple(3, jl_symbol("name"),
+                                               jl_symbol("lb"),
+                                               jl_symbol("ub")),
+                                      jl_tuple(3, jl_sym_type, jl_type_type,
+                                               jl_type_type));
 
     jl_typector_type = jl_new_struct_type(jl_symbol("TypeConstructor"),
-                                         jl_any_type, jl_null,
-                                         jl_tuple(2, jl_symbol("parameters"),
-                                                  jl_symbol("body")),
-                                         jl_tuple(2, jl_tuple_type,
-                                                  jl_type_type));
+                                          jl_any_type, jl_null,
+                                          jl_tuple(2, jl_symbol("parameters"),
+                                                   jl_symbol("body")),
+                                          jl_tuple(2, jl_tuple_type,
+                                                   jl_type_type));
 
     jl_tuple_t *tv;
     tv = typevars(1, "T");

@@ -290,7 +290,10 @@ JL_CALLABLE(jl_apply_generic)
 
     if (m == NULL) {
         jl_sym_t *name = (jl_sym_t*)((jl_value_pair_t*)env)->b;
-        jl_errorf("no matching method for function %s", name->name);
+        jl_tuple_t *argt = jl_f_tuple(NULL, args, nargs);
+        char *argt_str = jl_print_to_string(jl_full_type(argt));
+        jl_errorf("no method for function %s matching types %s",
+                  name->name, argt_str);
     }
 
 #if 0

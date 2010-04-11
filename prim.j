@@ -23,12 +23,11 @@ div(x::Int32, y::Int32) = boxsi32(sdiv_int(unbox32(x), unbox32(y)))
 
 (*)() = 1
 (*)(x::Tensor) = x
-(*)(x,y) = error("No matching method for function *")
 (*)(a,b,c) = (*)((*)(a,b),c)
 (*)(a,b,c,d) = (*)((*)((*)(a,b),c),d)
 (*)(a,b,c,d,e) = (*)((*)((*)((*)(a,b),c),d),e)
-function (*)(x1, x2, xs...)
-    accum = x1*x2
+function (*)(x1, x2, x3, xs...)
+    accum = (*)((*)(x1,x2),x3)
     n = length(xs)
     for i=1:n
         accum = accum * xs[i]
@@ -38,12 +37,11 @@ end
 
 (+)() = 0
 (+)(x::Tensor) = x
-(+)(x,y) = error("No matching method for function +")
 (+)(a,b,c) = (+)((+)(a,b),c)
 (+)(a,b,c,d) = (+)((+)((+)(a,b),c),d)
 (+)(a,b,c,d,e) = (+)((+)((+)((+)(a,b),c),d),e)
-function (+)(x1, x2, xs...)
-    accum = x1+x2
+function (+)(x1, x2, x3, xs...)
+    accum = (+)((+)(x1,x2),x3)
     n = length(xs)
     for i=1:n
         accum = accum + xs[i]
