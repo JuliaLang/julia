@@ -479,6 +479,32 @@ static void call_print(jl_value_t *v)
     jl_apply(jl_print_gf, &v, 1);
 }
 
+char *jl_print_to_string(jl_value_t *v)
+{
+    ios_t *prevs = current_output_stream;
+    ios_t dest;
+    ios_mem(&dest, 0);
+    current_output_stream = &dest;
+    // this is a long-winded unwind-protect
+    // the reason for all this fuss is to reset the current output stream
+    // if an error occurs during printing.
+    jmp_buf *prevh = CurrentExceptionHandler;
+    jmp_buf handler;
+    CurrentExceptionHandler = &handler;
+    if (!setjmp(handler)) {
+        jl_print(v);
+    }
+    else {
+        CurrentExceptionHandler = prevh;
+        current_output_stream = prevs;
+        longjmp(*CurrentExceptionHandler, 1);
+    }
+    CurrentExceptionHandler = prevh;
+    current_output_stream = prevs;
+    size_t n;
+    return ios_takebuf(&dest, &n);
+}
+
 void jl_print(jl_value_t *v)
 {
     call_print(v);
