@@ -150,11 +150,11 @@ function print(a::Vector)
     n = a.dims[1]
 
     if n < 10
-        for i=1:n; print(a[i]); print("\n"); end
+        for i=1:n; print(a[i]); if i<n; print("\n"); end; end
     else
         for i=1:3; print(a[i]); print("\n"); end
         print(":\n");
-        for i=n-2:n; print(a[i]); print("\n"); end
+        for i=n-2:n; print(a[i]); if i<n; print("\n"); end; end
     end
 end
 
@@ -175,9 +175,8 @@ function print(a::Matrix)
     if !print_vdots && !print_hdots
         for i=1:m
             printcols(a, 1, n, i)
-            print("\n")
+            if i<m; print("\n"); end
         end
-        return ()
     elseif print_vdots && !print_hdots
         for i=1:3
             printcols(a, 1, n, i)
@@ -186,15 +185,14 @@ function print(a::Matrix)
         print(":\n")
         for i=m-2:m
             printcols(a, 1, n, i)
-            print("\n")
+            if i<m; print("\n"); end
         end
-        return ()
     elseif !print_vdots && print_hdots
         for i=1:m
             printcols (a, 1, 3, i)
             if i == 1 || i == m; print(": "); else; print("  "); end
             printcols (a, n-2, n, i)
-            print("\n")
+            if i<m; print("\n"); end
         end
     else
         for i=1:3
@@ -208,7 +206,7 @@ function print(a::Matrix)
             printcols (a, 1, 3, i)
             if i == m; print(": "); else; print("  "); end
             printcols (a, n-2, n, i)
-            print("\n")
+            if i<m; print("\n"); end
         end
     end
 end # print()

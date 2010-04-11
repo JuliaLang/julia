@@ -282,6 +282,8 @@ jl_methlist_t *jl_method_table_insert(jl_methtable_t *mt, jl_type_t *type,
     }
 }
 
+JL_CALLABLE(jl_f_tuple);
+
 JL_CALLABLE(jl_apply_generic)
 {
     jl_methtable_t *mt = (jl_methtable_t*)((jl_value_pair_t*)env)->a;
@@ -290,7 +292,7 @@ JL_CALLABLE(jl_apply_generic)
 
     if (m == NULL) {
         jl_sym_t *name = (jl_sym_t*)((jl_value_pair_t*)env)->b;
-        jl_tuple_t *argt = jl_f_tuple(NULL, args, nargs);
+        jl_tuple_t *argt = (jl_tuple_t*)jl_f_tuple(NULL, args, nargs);
         char *argt_str = jl_print_to_string(jl_full_type(argt));
         jl_errorf("no method for function %s matching types %s",
                   name->name, argt_str);

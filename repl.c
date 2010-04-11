@@ -76,7 +76,8 @@ static int detect_color()
 #endif
 }
 
-char *ios_readline(ios_t *s)
+#ifndef USE_READLINE
+static char *ios_readline(ios_t *s)
 {
     ios_t dest;
     ios_mem(&dest, 0);
@@ -84,6 +85,7 @@ char *ios_readline(ios_t *s)
     size_t n;
     return ios_takebuf(&dest, &n);
 }
+#endif
 
 JL_CALLABLE(jl_f_new_closure);
 
