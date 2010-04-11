@@ -37,6 +37,8 @@ ctranspose(x::Matrix) = [ conj(x[j,i]) | i=1:size(x,2), j=1:size(x,1) ]
 dot(x::Vector, y::Vector) = sum(x.*y)
 diag(A::Matrix) = [ A[i,i] | i=1:min(size(A)) ]
 
+(*)(A::Matrix, B::Matrix) = [ dot(A[i,:],B[:,j]) | i=1:size(A,1), j=1:size(B,2) ]
+
 function jl_make_array(eltype::Type, dims...)
     data = Buffer[eltype].new(prod(dims))
     Array[eltype,length(dims)].new(buffer(dims...), data)
@@ -68,6 +70,9 @@ jl_fill_endpts(A, n, R) = R
 ref(A::Vector,I) = [ A[i] | i = jl_fill_endpts(A,1,I) ]
 ref(A::Matrix,I,J) = [ A[i,j] | i = jl_fill_endpts(A,1,I),
                                 j = jl_fill_endpts(A,2,J) ]
+
+ref(A::Matrix,i::Index,J) = [ A[i,j] | j = jl_fill_endpts(A,2,J) ]
+ref(A::Matrix,I,j::Index) = [ A[i,j] | i = jl_fill_endpts(A,1,I) ]
 
 function ref(a::Array, I::Index...) 
     data = a.data
