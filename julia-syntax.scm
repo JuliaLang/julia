@@ -815,7 +815,7 @@ So far only the second case can actually occur.
 	'()
 	(case (car e)
 	  ((lambda scope-block)  '())
-	  ((local)  (list (decl-var (cadr e))))
+	  ((local local!)  (list (decl-var (cadr e))))
 	  ((=)
 	   (let ((others (find-assigned-vars (caddr e) env))
 		 (v (decl-var (cadr e))))
@@ -847,15 +847,19 @@ So far only the second case can actually occur.
 		      e))))))
   (add-local-decls e '()))
 
-(define (declared-local-vars- e sym)
+(define (declared-local-vars e)
   (map (lambda (x) (decl-var (cadr x)))
        (filter (lambda (x)
 		 (and (pair? x)
-		      (eq? (car x) sym)))
+		      (or (eq? (car x) 'local)
+			  (eq? (car x) 'local!))))
 	       (cdr e))))
-
-(define (declared-local-vars e)  (declared-local-vars- e 'local))
-(define (declared-local!-vars e) (declared-local-vars- e 'local!))
+(define (declared-local!-vars e)
+  (map cadr
+       (filter (lambda (x)
+		 (and (pair? x)
+		      (eq? (car x) 'local!)))
+	       (cdr e))))
 
 ; e - expression
 ; renames - assoc list of (oldname . newname)
@@ -890,8 +894,10 @@ So far only the second case can actually occur.
   (define (remove-scope-blocks e)
     (cond ((or (atom? e) (quoted? e)) (cons e '()))
 	  ((eq? (car e) 'lambda) (cons (flatten-scopes e) '()))
-	  ((eq? (car e) 'local)  (cons (cadr e) '()))
-	  ((eq? (car e) 'local!) (cons (cadr e) '()))
+	  ((eq? (car e) 'local)  (if (pair? (cadr e))
+				     (cons (cadr e) '())
+				     (cons '(null) '())))
+	  ((eq? (car e) 'local!) (cons '(null) '()))
 	  ((eq? (car e) 'scope-block)
 	   (let ((vars (declared-local-vars e))
 		 (body (car (last-pair e))))
@@ -1115,7 +1121,8 @@ So far only the second case can actually occur.
     (define (mark-label l) (emit `(label ,l)))
     (define (compile e break-labels)
       (if (or (atom? e) (equal? e '(null)))
-	  #f  ; atom has no effect
+	  ; atom has no effect, but keep symbols for undefined-var checking
+	  (if (symbol? e) (emit e) #f)
 	  (case (car e)
 	    ((if) (let ((elsel (make-label))
 			(endl  (make-label))
