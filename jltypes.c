@@ -74,6 +74,7 @@ jl_value_t *jl_false;
 
 jl_func_type_t *jl_any_func;
 jl_function_t *jl_bottom_func;
+jl_function_t *jl_identity_func;
 jl_buffer_t *jl_the_empty_buffer;
 
 jl_sym_t *call_sym;
@@ -277,6 +278,8 @@ JL_CALLABLE(jl_f_no_function)
     return jl_null;
 }
 
+JL_CALLABLE(jl_f_identity);
+
 jl_struct_type_t *jl_new_struct_type(jl_sym_t *name, jl_tag_type_t *super,
                                      jl_tuple_t *parameters,
                                      jl_tuple_t *fnames, jl_tuple_t *ftypes)
@@ -290,7 +293,8 @@ jl_struct_type_t *jl_new_struct_type(jl_sym_t *name, jl_tag_type_t *super,
     t->types = ftypes;
     t->fnew = jl_new_closure(jl_new_struct_internal, (jl_value_t*)t);
     t->fconvert = jl_new_generic_function(jl_symbol("convert"));
-    //TODO: add convert(x::this) = x
+    // add identity conversion, convert(x::this) = x
+    jl_add_method(t->fconvert, jl_tuple(1, t), jl_identity_func);
     if (jl_has_typevars((jl_value_t*)parameters))
         t->uid = 0;
     else
@@ -310,7 +314,8 @@ jl_bits_type_t *jl_new_bitstype(jl_value_t *name, jl_tag_type_t *super,
     t->super = super;
     t->parameters = parameters;
     t->fconvert = jl_new_generic_function(jl_symbol("convert"));
-    //TODO: add convert(x::this) = x
+    // add identity conversion, convert(x::this) = x
+    jl_add_method(t->fconvert, jl_tuple(1, t), jl_identity_func);
     t->nbits = nbits;
     if (jl_has_typevars((jl_value_t*)parameters))
         t->uid = 0;
@@ -1227,6 +1232,7 @@ void jl_init_types()
     jl_any_func = jl_new_functype((jl_type_t*)jl_any_type, (jl_type_t*)jl_any_type);
 
     jl_bottom_func = jl_new_closure(jl_f_no_function, NULL);
+    jl_identity_func = jl_new_closure(jl_f_identity, NULL);
 
     // initialize them. lots of cycles.
     jl_struct_kind->name = jl_new_typename(jl_symbol("StructKind"));
@@ -1293,6 +1299,7 @@ void jl_init_types()
                                        jl_type_type, jl_null,
                                        jl_tuple(1, jl_symbol("types")),
                                        jl_tuple(1, jl_tuple_type));
+    jl_union_kind->fconvert = jl_bottom_func;
 
     jl_bottom_type = (jl_type_t*)jl_new_struct(jl_union_kind, jl_null);
 
@@ -1305,7 +1312,7 @@ void jl_init_types()
                            jl_tuple(4, jl_typename_type, jl_type_type,
                                     jl_tuple_type, jl_any_func));
     // cannot be created with normal constructor due to hidden fields
-    jl_bits_kind->fnew = jl_bottom_func;
+    jl_bits_kind->fnew = jl_bits_kind->fconvert = jl_bottom_func;
     
     jl_tvar_type = jl_new_struct_type(jl_symbol("TypeVar"),
                                       jl_any_type, jl_null,
@@ -1314,6 +1321,7 @@ void jl_init_types()
                                                jl_symbol("ub")),
                                       jl_tuple(3, jl_sym_type, jl_type_type,
                                                jl_type_type));
+    jl_tvar_type->fconvert = jl_bottom_func;
 
     jl_typector_type = jl_new_struct_type(jl_symbol("TypeConstructor"),
                                           jl_any_type, jl_null,
@@ -1321,6 +1329,7 @@ void jl_init_types()
                                                    jl_symbol("body")),
                                           jl_tuple(2, jl_tuple_type,
                                                    jl_type_type));
+    jl_typector_type->fconvert = jl_bottom_func;
 
     jl_tuple_t *tv;
     tv = typevars(1, "T");
@@ -1410,6 +1419,7 @@ void jl_init_types()
 
     jl_intrinsic_type = jl_new_bitstype(jl_symbol("IntrinsicFunction"),
                                         jl_any_type, jl_null, 32);
+    jl_intrinsic_type->fconvert = jl_bottom_func;
 
     call_sym = jl_symbol("call");
     quote_sym = jl_symbol("quote");

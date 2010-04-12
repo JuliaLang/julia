@@ -87,6 +87,12 @@ JL_CALLABLE(jl_f_is)
     return jl_false;
 }
 
+JL_CALLABLE(jl_f_identity)
+{
+    JL_NARGS(identity, 1, 1);
+    return args[0];
+}
+
 JL_CALLABLE(jl_f_typeof)
 {
     JL_NARGS(typeof, 1, 1);
@@ -451,10 +457,7 @@ jl_value_t *jl_convert(jl_value_t *x, jl_type_t *to)
     else {
         jl_error("convert: invalid conversion");
     }
-    if (meth == NULL) {
-        // TODO: temporary
-        jl_error("convert: no conversion defined");
-    }
+    assert(meth != NULL);
     out = jl_apply(meth, &x, 1);
     if (!jl_subtype(jl_typeof(out), to, 0, 0))
         jl_errorf("convert: conversion to %s failed",
@@ -1013,6 +1016,7 @@ void jl_init_builtins()
     add_builtin_func("time_thunk", jl_f_time_thunk);
     add_builtin("print", jl_print_gf);
     add_builtin("ref", jl_ref_gf);
+    add_builtin("identity", jl_identity_func);
     
     // functions for internal use
     add_builtin_func("tupleref", jl_f_tupleref);

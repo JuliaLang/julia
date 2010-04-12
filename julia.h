@@ -221,6 +221,7 @@ extern jl_func_type_t *jl_any_func;
 
 extern jl_function_t *jl_print_gf;
 extern jl_function_t *jl_bottom_func;
+extern jl_function_t *jl_identity_func;
 extern jl_buffer_t *jl_the_empty_buffer;
 
 // some important symbols
