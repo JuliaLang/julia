@@ -98,7 +98,7 @@ jl_value_t *jl_toplevel_eval(jl_value_t *ast)
     assert(jl_is_expr(ast));
     jl_lambda_info_t *li =
         ((jl_lambda_info_t**)((jl_expr_t*)ast)->args->data)[0];
-    assert(jl_typeof(li) == jl_lambda_info_type);
+    assert(jl_typeof(li) == (jl_type_t*)jl_lambda_info_type);
     args[0] = (jl_value_t*)li;
     args[1] = (jl_value_t*)jl_null;
     jl_value_t *thunk = jl_f_new_closure(NULL, args, 2);

@@ -743,16 +743,16 @@
 		       (cdr r)))))
 
 	  ((scope-block)
-	   (if (and (eq? dest #t) (not tail))
+	   (if (and dest (not tail))
 	       (let* ((g (gensym))
 		      (r (to-lff (cadr e) g tail)))
-		 (cons g
+		 (cons (car (to-lff g dest tail))
 		       ; tricky: need to introduce a new local outside the
 		       ; scope-block so the scope-block's value can propagate
 		       ; out. otherwise the value could be inaccessible due
 		       ; to being wrapped inside a scope.
 		       `((scope-block ,(to-blk r))
-			 (local ,g))))
+			 (local! ,g))))
 	       (let ((r (to-lff (cadr e) dest tail)))
 		 (cons `(scope-block ,(to-blk r))
 		       '()))))
@@ -839,17 +839,23 @@ So far only the second case can actually occur.
 		 `(scope-block ,@(map (lambda (v) `(local ,v))
 				      vars)
 			       ,body)))
-	      (else (map (lambda (x)
-			   (add-local-decls x env))
-			 e)))))
+	      (else
+	       ; form (local! x) adds a local to a normal (non-scope) block
+	       (let ((newenv (append (declared-local!-vars e) env)))
+		 (map (lambda (x)
+			(add-local-decls x newenv))
+		      e))))))
   (add-local-decls e '()))
 
-(define (scope-block-vars e)
+(define (declared-local-vars- e sym)
   (map (lambda (x) (decl-var (cadr x)))
        (filter (lambda (x)
 		 (and (pair? x)
-		      (eq? (car x) 'local)))
+		      (eq? (car x) sym)))
 	       (cdr e))))
+
+(define (declared-local-vars e)  (declared-local-vars- e 'local))
+(define (declared-local!-vars e) (declared-local-vars- e 'local!))
 
 ; e - expression
 ; renames - assoc list of (oldname . newname)
@@ -869,7 +875,7 @@ So far only the second case can actually occur.
 	 (let* ((bound-vars  ; compute vars bound by current expr
 		 (case (car e)
 		   ((lambda)      (lam:vars e))
-		   ((scope-block) (scope-block-vars e))
+		   ((scope-block) (declared-local-vars e))
 		   (else '())))
 		(new-renames (without renames bound-vars)))
 	   (cons (car e)
@@ -885,8 +891,9 @@ So far only the second case can actually occur.
     (cond ((or (atom? e) (quoted? e)) (cons e '()))
 	  ((eq? (car e) 'lambda) (cons (flatten-scopes e) '()))
 	  ((eq? (car e) 'local)  (cons (cadr e) '()))
+	  ((eq? (car e) 'local!) (cons (cadr e) '()))
 	  ((eq? (car e) 'scope-block)
-	   (let ((vars (scope-block-vars e))
+	   (let ((vars (declared-local-vars e))
 		 (body (car (last-pair e))))
 	     (let ((newnames (map (lambda (x) (gensym)) vars))
 		   (rec (remove-scope-blocks body)))
@@ -910,8 +917,8 @@ So far only the second case can actually occur.
 		 (if (eq? (car body0) 'scope-block)
 		     (filter   ; remove locals conflicting with arg names
 		      (lambda (v) (not (memq v argnames)))
-		      (scope-block-vars body0))
-		     '()))
+		      (declared-local-vars body0))
+		     (declared-local!-vars body0)))
 		(r-s-b (remove-scope-blocks body)))
 	   `(lambda ,(cadr e)
 	      (locals ,@l0 ,@(cdr r-s-b))
