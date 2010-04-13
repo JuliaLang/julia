@@ -31,9 +31,10 @@ default: debug
 
 jlfrontend.c: jlfrontend.scm julia-parser.scm julia-syntax.scm
 	$(GAMBITGSC) -c $<
-
 jlfrontend_.c: jlfrontend.c
 	$(GAMBITGSC) -link -o $@ $<
+jlfrontend.do jlfrontend_.do: %.do: %.c
+	$(CC) $(DEBUGFLAGS) -w -c $< -o $@
 
 julia-defs.s.bc: julia-defs$(NBITS).s
 	llvm-as -f $< -o $@
