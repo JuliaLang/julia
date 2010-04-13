@@ -356,6 +356,7 @@ jl_value_t *jl_box_int64(int64_t x);
 jl_value_t *jl_box_uint64(uint64_t x);
 jl_value_t *jl_box_float32(float x);
 jl_value_t *jl_box_float64(double x);
+int8_t jl_unbox_bool(jl_value_t *v);
 int8_t jl_unbox_int8(jl_value_t *v);
 uint8_t jl_unbox_uint8(jl_value_t *v);
 int16_t jl_unbox_int16(jl_value_t *v);
@@ -410,6 +411,7 @@ void jl_compile(jl_lambda_info_t *li);
 jl_value_t *jl_toplevel_eval(jl_value_t *ast);
 void jl_load(char *fname);
 
+void jl_print_method_table(jl_function_t *gf);
 jl_function_t *jl_instantiate_method(jl_function_t *f, jl_tuple_t *sp);
 jl_lambda_info_t *jl_add_static_parameters(jl_lambda_info_t *l, jl_tuple_t *sp);
 
