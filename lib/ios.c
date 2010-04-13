@@ -913,7 +913,7 @@ void ios_purge(ios_t *s)
     }
 }
 
-int ios_vprintf(ios_t *s, char *format, va_list args)
+int ios_vprintf(ios_t *s, const char *format, va_list args)
 {
     char *str=NULL;
     int c;
@@ -944,7 +944,7 @@ int ios_vprintf(ios_t *s, char *format, va_list args)
     return c;
 }
 
-int ios_printf(ios_t *s, char *format, ...)
+int ios_printf(ios_t *s, const char *format, ...)
 {
     va_list args;
     int c;

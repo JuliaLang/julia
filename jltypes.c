@@ -148,7 +148,7 @@ jl_tuple_t *jl_tuple_append(jl_tuple_t *a, jl_tuple_t *b)
 
 static jl_sym_t *symtab = NULL;
 
-static jl_sym_t *mk_symbol(char *str)
+static jl_sym_t *mk_symbol(const char *str)
 {
     jl_sym_t *sym;
     size_t len = strlen(str);
@@ -161,7 +161,7 @@ static jl_sym_t *mk_symbol(char *str)
     return sym;
 }
 
-static jl_sym_t **symtab_lookup(jl_sym_t **ptree, char *str)
+static jl_sym_t **symtab_lookup(jl_sym_t **ptree, const char *str)
 {
     int x;
 
@@ -177,7 +177,7 @@ static jl_sym_t **symtab_lookup(jl_sym_t **ptree, char *str)
     return ptree;
 }
 
-jl_sym_t *jl_symbol(char *str)
+jl_sym_t *jl_symbol(const char *str)
 {
     jl_sym_t **pnode;
 

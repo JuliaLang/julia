@@ -105,8 +105,8 @@ int ios_putnum(ios_t *s, char *data, uint32_t type);
 int ios_putint(ios_t *s, int n);
 int ios_pututf8(ios_t *s, uint32_t wc);
 int ios_putstringz(ios_t *s, char *str, bool_t do_write_nulterm);
-int ios_printf(ios_t *s, char *format, ...);
-int ios_vprintf(ios_t *s, char *format, va_list args);
+int ios_printf(ios_t *s, const char *format, ...);
+int ios_vprintf(ios_t *s, const char *format, va_list args);
 
 void hexdump(ios_t *dest, char *buffer, size_t len, size_t startoffs);
 

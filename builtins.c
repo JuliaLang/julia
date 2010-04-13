@@ -22,13 +22,13 @@
 extern jmp_buf ExceptionHandler;
 extern jmp_buf *CurrentExceptionHandler;
 
-void jl_error(char *str)
+void jl_error(const char *str)
 {
     ios_printf(ios_stderr, "%s\n", str);
     longjmp(*CurrentExceptionHandler, 1);
 }
 
-void jl_errorf(char *fmt, ...)
+void jl_errorf(const char *fmt, ...)
 {
     va_list args;
     va_start(args, fmt);
@@ -38,17 +38,17 @@ void jl_errorf(char *fmt, ...)
     longjmp(*CurrentExceptionHandler, 1);
 }
 
-void jl_too_few_args(char *fname, int min)
+void jl_too_few_args(const char *fname, int min)
 {
     jl_errorf("%s: too few arguments (expected %d)", fname, min);
 }
 
-void jl_too_many_args(char *fname, int max)
+void jl_too_many_args(const char *fname, int max)
 {
     jl_errorf("%s: too many arguments (expected %d)", fname, max);
 }
 
-void jl_type_error(char *fname, char *expected, jl_value_t *got)
+void jl_type_error(const char *fname, const char *expected, jl_value_t *got)
 {
     jl_errorf("type error: %s: expected %s, got %s",
               fname, expected, jl_tname((jl_value_t*)jl_typeof(got))->name->name);

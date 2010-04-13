@@ -338,7 +338,7 @@ jl_tuple_t *jl_tuple(size_t n, ...);
 jl_tuple_t *jl_alloc_tuple(size_t n);
 jl_tuple_t *jl_tuple_append(jl_tuple_t *a, jl_tuple_t *b);
 jl_value_pair_t *jl_pair(jl_value_t *a, jl_value_t *b);
-jl_sym_t *jl_symbol(char *str);
+jl_sym_t *jl_symbol(const char *str);
 jl_sym_t *jl_gensym();
 jl_buffer_t *jl_new_buffer(jl_type_t *buf_type, size_t nel);
 jl_buffer_t *jl_cstr_to_buffer(char *str);
@@ -369,11 +369,11 @@ float jl_unbox_float32(jl_value_t *v);
 double jl_unbox_float64(jl_value_t *v);
 
 // exceptions
-void jl_error(char *str);
-void jl_errorf(char *fmt, ...);
-void jl_too_few_args(char *fname, int min);
-void jl_too_many_args(char *fname, int max);
-void jl_type_error(char *fname, char *expected, jl_value_t *got);
+void jl_error(const char *str);
+void jl_errorf(const char *fmt, ...);
+void jl_too_few_args(const char *fname, int min);
+void jl_too_many_args(const char *fname, int max);
+void jl_type_error(const char *fname, const char *expected, jl_value_t *got);
 
 // initialization functions
 void jl_init_types();
