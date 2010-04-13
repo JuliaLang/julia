@@ -6,4 +6,7 @@
 /jlfrontend.c
 /jlfrontend_.c
 /julia
+/julia-debug
+/julia-release
+/julia-efence
 .julia_history

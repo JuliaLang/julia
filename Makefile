@@ -48,22 +48,29 @@ codegen.do: intrinsics.cpp julia-defs.s.bc.inc
 $(LLT):
 	cd $(LLTDIR) && $(MAKE)
 
-debug: $(DOBJS) $(LIBFILES) julia-defs.s.bc
-	$(CXX) $(DEBUGFLAGS) $(DOBJS) -o $(EXENAME) $(LIBS)
+julia-debug: $(DOBJS) $(LIBFILES) julia-defs.s.bc
+	$(CXX) $(DEBUGFLAGS) $(DOBJS) -o $@ $(LIBS)
+	ln -sf $@ julia
 
-efence: $(DOBJS) $(LIBFILES) julia-defs.s.bc
-	$(CXX) $(DEBUGFLAGS) $(DOBJS) -o $(EXENAME) $(EFENCE) $(LIBS)
+julia-efence: $(DOBJS) $(LIBFILES) julia-defs.s.bc
+	$(CXX) $(DEBUGFLAGS) $(DOBJS) -o $@ $(EFENCE) $(LIBS)
+	ln -sf $@ julia
 
-release: $(OBJS) $(LIBFILES) julia-defs.s.bc
-	$(CXX) $(SHIPFLAGS) $(OBJS) -o $(EXENAME) $(LIBS)
+julia-release: $(OBJS) $(LIBFILES) julia-defs.s.bc
+	$(CXX) $(SHIPFLAGS) $(OBJS) -o $@ $(LIBS)
+	ln -sf $@ julia
+
+debug release efence: %: julia-%
 
 clean:
 	rm -f *.o
 	rm -f *.do
 	rm -f *.bc
 	rm -f *.bc.inc
-	rm -f $(EXENAME)
 	rm -f jlfrontend.c
 	rm -f jlfrontend_.c
+	rm -f $(EXENAME) $(EXENAME)-{debug,efence,release}
 	rm -f *~ *#
 	cd $(LLTDIR) && $(MAKE) clean
+
+.PHONY: debug release efence clean
