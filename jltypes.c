@@ -351,7 +351,7 @@ jl_typector_t *jl_new_type_ctor(jl_tuple_t *params, jl_type_t *body)
     return tc;
 }
 
-static jl_value_t *tvar(char *name)
+static jl_value_t *tvar(const char *name)
 {
     return jl_new_struct(jl_tvar_type, jl_symbol(name),
                          jl_bottom_type, jl_any_type);
@@ -1245,7 +1245,8 @@ jl_value_pair_t *jl_type_conform_morespecific(jl_type_t *a, jl_type_t *b)
     return type_conform_(a, b, &Empty_Env, 1);
 }
 
-static jl_bits_type_t *make_scalar_type(char *name, jl_tag_type_t *super,
+static jl_bits_type_t *make_scalar_type(const char *name,
+                                        jl_tag_type_t *super,
                                         int nbits)
 {
     return jl_new_bitstype((jl_value_t*)jl_symbol(name), super, jl_null, nbits);

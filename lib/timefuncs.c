@@ -108,7 +108,7 @@ void timestring(double seconds, char *buffer, size_t len)
 
 #if defined(LINUX) || defined(MACOSX)
 extern char *strptime(const char *s, const char *format, struct tm *tm);
-double parsetime(char *str)
+double parsetime(const char *str)
 {
     char *fmt = "%c"; /* needed to suppress GCC warning */
     char *res;

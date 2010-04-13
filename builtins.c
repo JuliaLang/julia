@@ -175,7 +175,7 @@ JL_CALLABLE(jl_f_time_thunk)
     return result;
 }
 
-void jl_load(char *fname)
+void jl_load(const char *fname)
 {
     jl_value_t *ast = jl_parse_file(fname);
     jl_buffer_t *b = ((jl_expr_t*)ast)->args;
@@ -963,12 +963,12 @@ static void add_builtin_method1(jl_function_t *gf, jl_type_t *t, jl_fptr_t f)
     jl_add_method(gf, jl_tuple(1, t), jl_new_closure(f, NULL));
 }
 
-static void add_builtin(char *name, jl_value_t *v)
+static void add_builtin(const char *name, jl_value_t *v)
 {
     jl_set_const(jl_system_module, jl_symbol(name), v);
 }
 
-static void add_builtin_func(char *name, jl_fptr_t f)
+static void add_builtin_func(const char *name, jl_fptr_t f)
 {
     add_builtin(name, (jl_value_t*)jl_new_closure(f, NULL));
 }

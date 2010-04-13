@@ -344,7 +344,7 @@ static int is_global(jl_sym_t *s, jl_codectx_t *ctx)
     return ((*ctx->vars)[s->name] == NULL);
 }
 
-static Value *emit_checked_var(Value *bp, char *name, jl_codectx_t *ctx)
+static Value *emit_checked_var(Value *bp, const char *name, jl_codectx_t *ctx)
 {
     Value *v = builder.CreateLoad(bp, false);
     Value *ok = builder.CreateICmpNE(v, V_null);

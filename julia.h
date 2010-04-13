@@ -385,8 +385,8 @@ void jl_init_codegen();
 void jl_init_intrinsic_functions();
 
 // parsing
-jl_value_t *jl_parse_input_line(char *str);
-jl_value_t *jl_parse_file(char *fname);
+jl_value_t *jl_parse_input_line(const char *str);
+jl_value_t *jl_parse_file(const char *fname);
 
 // some useful functions
 void jl_print(jl_value_t *v);
@@ -409,7 +409,7 @@ jl_module_t *jl_import_module(jl_module_t *to, jl_module_t *from);
 // compiler
 void jl_compile(jl_lambda_info_t *li);
 jl_value_t *jl_toplevel_eval(jl_value_t *ast);
-void jl_load(char *fname);
+void jl_load(const char *fname);
 
 void jl_print_method_table(jl_function_t *gf);
 jl_function_t *jl_instantiate_method(jl_function_t *f, jl_tuple_t *sp);

@@ -150,7 +150,7 @@ static jl_value_t *scm_to_julia(___SCMOBJ e)
     return (jl_value_t*)jl_null;
 }
 
-jl_value_t *jl_parse_input_line(char *str)
+jl_value_t *jl_parse_input_line(const char *str)
 {
     ___SCMOBJ e = jl_scm_parse_string(str);
     if (___BOOLEANP(e) || ___EOFP(e))
@@ -160,7 +160,7 @@ jl_value_t *jl_parse_input_line(char *str)
     return scm_to_julia(e);
 }
 
-jl_value_t *jl_parse_file(char *fname)
+jl_value_t *jl_parse_file(const char *fname)
 {
     ___SCMOBJ e = jl_scm_parse_file(fname);
     syntax_error_check(e);
