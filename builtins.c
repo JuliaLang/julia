@@ -446,7 +446,7 @@ jl_value_t *jl_convert(jl_value_t *x, jl_type_t *to)
     jl_type_t *t = (jl_type_t*)jl_typeof(x);
     if (jl_subtype((jl_value_t*)t, (jl_value_t*)to, 0, 0))
         return x;
-    jl_function_t *meth;
+    jl_function_t *meth = NULL;
     if (jl_is_bits_type(to)) {
         meth = ((jl_bits_type_t*)to)->fconvert;
     }
@@ -852,7 +852,7 @@ JL_CALLABLE(jl_f_new_struct_type)
     }
     if (!all_typevars(params))
         jl_errorf("invalid type parameter list for %s", name->name);
-    jl_tuple_t *pfn;
+    jl_tuple_t *pfn = NULL;
     if (jl_is_struct_type(super))
         pfn = ((jl_struct_type_t*)super)->names;
     else if (jl_is_tag_type(super))
@@ -879,7 +879,7 @@ JL_CALLABLE(jl_f_new_struct_fields)
     jl_struct_type_t *st = (jl_struct_type_t*)t;
     if (st->types != NULL)
         jl_error("you can't do that.");
-    jl_tuple_t *pft;
+    jl_tuple_t *pft = NULL;
     jl_tag_type_t *super = st->super;
     if (jl_is_struct_type(super))
         pft = ((jl_struct_type_t*)super)->types;

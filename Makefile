@@ -33,6 +33,8 @@ jlfrontend.c: jlfrontend.scm julia-parser.scm julia-syntax.scm
 	$(GAMBITGSC) -c $<
 jlfrontend_.c: jlfrontend.c
 	$(GAMBITGSC) -link -o $@ $<
+jlfrontend.o jlfrontend_.o: %.o: %.c
+	$(CC) $(SHIPFLAGS) -w -c $< -o $@
 jlfrontend.do jlfrontend_.do: %.do: %.c
 	$(CC) $(DEBUGFLAGS) -w -c $< -o $@
 
