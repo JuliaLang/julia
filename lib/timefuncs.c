@@ -81,9 +81,9 @@ double clock_now()
 void timestring(double seconds, char *buffer, size_t len)
 {
     time_t tme = (time_t)seconds;
-    char *fmt = "%c"; /* needed to suppress GCC warning */
 
 #ifdef LINUX
+    char *fmt = "%c"; /* needed to suppress GCC warning */
     struct tm tm;
 
     localtime_r(&tme, &tm);
