@@ -66,14 +66,12 @@ jl_lambda_info_t *jl_add_static_parameters(jl_lambda_info_t *l, jl_tuple_t *sp)
     return nli;
 }
 
-jl_function_t *jl_instantiate_method(jl_function_t *f, jl_value_pair_t *env)
+static jl_tuple_t *valuepair_to_tuple(jl_value_pair_t *env)
 {
     jl_tuple_t *sp;
     jl_value_pair_t *temp = env;
     size_t i, n=0;
 
-    if (f->linfo == NULL)
-        return f;
     while (temp != NULL && temp->a != NULL) {
         n++;
         temp = temp->next;
@@ -87,7 +85,13 @@ jl_function_t *jl_instantiate_method(jl_function_t *f, jl_value_pair_t *env)
         jl_tupleset(sp, i*2+1, temp->b);
         temp = temp->next;
     }
+    return sp;
+}
 
+jl_function_t *jl_instantiate_method(jl_function_t *f, jl_tuple_t *sp)
+{
+    if (f->linfo == NULL)
+        return f;
     jl_function_t *nf = jl_new_closure(f->fptr, f->env);
     if (f->env != NULL && ((jl_value_pair_t*)f->env)->a == (jl_value_t*)f) {
         jl_value_pair_t *vp = (jl_value_pair_t*)f->env;
@@ -196,7 +200,8 @@ jl_methlist_t *jl_method_table_assoc(jl_methtable_t *mt,
     */
 
     // cache result in concrete part of method table
-    jl_function_t *newmeth = jl_instantiate_method(gm->func, env);
+    jl_function_t *newmeth = jl_instantiate_method(gm->func,
+                                                   valuepair_to_tuple(env));
     return jl_method_table_insert(mt, tt, newmeth);
 }
 

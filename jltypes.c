@@ -787,6 +787,39 @@ static void cache_type_(jl_value_t **key, size_t n, jl_type_t *type)
     tk->next = Type_Cache;
 }
 
+JL_CALLABLE(jl_f_tuple);
+
+static jl_type_t *inst_type_w_(jl_value_t *t, jl_value_t **env, size_t n,
+                               typekey_stack_t *stack);
+
+static jl_function_t *instantiate_gf(jl_function_t *f,
+                                     jl_value_t **env, size_t n,
+                                     typekey_stack_t *stack)
+{
+    if (f == NULL || !jl_is_gf(f)) return f;
+    jl_function_t *newgf = jl_new_generic_function(jl_gf_name(f));
+    jl_methlist_t *ml = jl_gf_mtable(f)->mlist;
+    jl_tuple_t *sp = jl_f_tuple(NULL, env, n*2);
+    size_t i;
+    for(i=0; i < sp->length; i+=2) {
+        jl_tvar_t *tv = (jl_tvar_t*)jl_tupleref(sp,i);
+        jl_tupleset(sp, i, tv->name);
+    }
+    while (ml != NULL) {
+        jl_add_method(newgf, ml->sig,
+                      jl_instantiate_method(ml->func, sp));
+        ml = ml->next;
+    }
+    ml = jl_gf_mtable(f)->generics;
+    while (ml != NULL) {
+        jl_add_method(newgf,
+                      inst_type_w_(ml->sig, env, n, stack),
+                      jl_instantiate_method(ml->func, sp));
+        ml = ml->next;
+    }
+    return newgf;
+}
+
 static jl_type_t *inst_type_w_(jl_value_t *t, jl_value_t **env, size_t n,
                                typekey_stack_t *stack)
 {
@@ -866,7 +899,7 @@ static jl_type_t *inst_type_w_(jl_value_t *t, jl_value_t **env, size_t n,
             nbt->super = inst_type_w_(bitst->super, env, n, stack);
             nbt->parameters = iparams_tuple;
             nbt->nbits = bitst->nbits;
-            nbt->fconvert = jl_bottom_func; // todo
+            nbt->fconvert = instantiate_gf(bitst->fconvert, env, n, stack);
             return (jl_type_t*)nbt;
         }
         else {
@@ -902,7 +935,7 @@ static jl_type_t *inst_type_w_(jl_value_t *t, jl_value_t **env, size_t n,
                 }
                 nst->types = nftypes;
             }
-            // TODO: instantiate st->fconvert
+            nst->fconvert = instantiate_gf(st->fconvert, env, n, stack);
             cache_type_(iparams, ntp+1, (jl_type_t*)nst);
             return (jl_type_t*)nst;
         }

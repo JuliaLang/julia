@@ -286,6 +286,7 @@ extern jl_sym_t *line_sym;
 #define jl_is_gf(f)          (((jl_function_t*)(f))->fptr==jl_apply_generic)
 
 #define jl_gf_mtable(f) ((jl_methtable_t*)(((jl_value_pair_t*)((jl_function_t*)(f))->env)->a))
+#define jl_gf_name(f) ((jl_sym_t*)(((jl_value_pair_t*)((jl_function_t*)(f))->env)->b))
 
 // get a pointer to the data in a value of bits type
 #define jl_bits_data(v) (&((void**)(v))[1])

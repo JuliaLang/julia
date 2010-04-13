@@ -96,7 +96,7 @@ static jl_sym_t *closure_ref_sym;
   * simple code gen for all node types
   * implement all low-level intrinsics
   * instantiate-method to provide static parameters
-  - default conversion functions, instantiating conversion functions
+  * default conversion functions, instantiating conversion functions
 
   stuff to fix up:
   - discard toplevel wrapper functions
