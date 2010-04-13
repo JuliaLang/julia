@@ -175,9 +175,19 @@ int main(int argc, char *argv[])
         // process input
         if (!setjmp(ExceptionHandler)) {
             jl_value_t *ast = jl_parse_input_line(input);
+            int print_value = 1;
+            char *p = strrchr(input, ';');
+            if (p++) {
+                while (isspace(*p)) p++;
+                if (*p == '\0' || *p == '#')
+                    print_value = 0;
+            }
             if (ast != NULL) {
-                jl_print(jl_toplevel_eval(ast));
-                ios_printf(ios_stdout, "\n");
+                jl_value_t *value = jl_toplevel_eval(ast);
+                if (print_value) {
+                    jl_print(value);
+                    ios_printf(ios_stdout, "\n");
+                }
             }
         }
 
