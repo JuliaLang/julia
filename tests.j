@@ -67,6 +67,7 @@ assert(signbit(-1.0/0.0) == -1)
 assert(1+rational(1,2) == rational(3,2))
 assert(1./complex(2.,2.) == complex(.25, -.25))
 
+# conversions
 Int8.convert(x::Real) = int8(x)
 
 function foo()
@@ -79,6 +80,10 @@ function foo()
 end
 assert(int32(foo()) == -24)
 
+z = Complex[Float64].convert(2)
+assert(z == complex(2.0,0.0))
+
+# misc
 fib(n) = n < 2 ? n : fib(n-1) + fib(n-2)
 assert(fib(20) == 6765)
 
@@ -118,3 +123,8 @@ assert(C() == 12)
 Y(f) = (h->f(x->h(h)(x)))(h->f(x->h(h)(x)))
 yfib = Y(fib->(n->(n < 2 ? n : fib(n-1) + fib(n-2))))
 assert(yfib(20) == 6765)
+
+# comprehensions
+X = [ i+2j | i=1:5, j=1:5 ]
+assert(X[2,3] == 8)
+assert(X[4,5] == 14)
