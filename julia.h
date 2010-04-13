@@ -410,6 +410,7 @@ void jl_compile(jl_lambda_info_t *li);
 jl_value_t *jl_toplevel_eval(jl_value_t *ast);
 void jl_load(char *fname);
 
+jl_function_t *jl_instantiate_method(jl_function_t *f, jl_tuple_t *sp);
 jl_lambda_info_t *jl_add_static_parameters(jl_lambda_info_t *l, jl_tuple_t *sp);
 
 // for writing julia functions in C
@@ -422,6 +423,7 @@ jl_value_t *jl_apply(jl_function_t *f, jl_value_t **args, uint32_t nargs)
     return f->fptr(f->env, args, nargs);
 }
 
+JL_CALLABLE(jl_f_tuple);
 JL_CALLABLE(jl_apply_generic);
 
 #define JL_NARGS(fname, min, max)                               \
