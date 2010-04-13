@@ -75,4 +75,7 @@ clean:
 	rm -f *~ *#
 	cd $(LLTDIR) && $(MAKE) clean
 
+cleanall: clean
+	rm -rf $(EXENAME)-{debug,release,efence}
+
 .PHONY: debug release efence clean
