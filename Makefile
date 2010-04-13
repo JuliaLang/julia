@@ -71,7 +71,7 @@ clean:
 	rm -f *.bc.inc
 	rm -f jlfrontend.c
 	rm -f jlfrontend_.c
-	rm -f $(EXENAME) $(EXENAME)-{debug,efence,release}
+	rm -f $(EXENAME)
 	rm -f *~ *#
 	cd $(LLTDIR) && $(MAKE) clean
 
