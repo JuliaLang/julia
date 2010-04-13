@@ -423,6 +423,7 @@ jl_value_t *jl_apply(jl_function_t *f, jl_value_t **args, uint32_t nargs)
     return f->fptr(f->env, args, nargs);
 }
 
+JL_CALLABLE(jl_f_tuple);
 JL_CALLABLE(jl_apply_generic);
 
 #define JL_NARGS(fname, min, max)                               \

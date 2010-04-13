@@ -287,8 +287,6 @@ jl_methlist_t *jl_method_table_insert(jl_methtable_t *mt, jl_type_t *type,
     }
 }
 
-JL_CALLABLE(jl_f_tuple);
-
 JL_CALLABLE(jl_apply_generic)
 {
     jl_methtable_t *mt = (jl_methtable_t*)((jl_value_pair_t*)env)->a;
