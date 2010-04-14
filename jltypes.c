@@ -812,7 +812,7 @@ static jl_function_t *instantiate_gf(jl_function_t *f,
     }
     ml = jl_gf_mtable(f)->generics;
     while (ml != NULL) {
-        jl_function_t *meth = (jl_function_t*)jl_instantiate_method(ml->func, sp);
+        jl_function_t *meth = jl_instantiate_method(ml->func, sp);
         jl_add_method(newgf, (jl_tuple_t*)inst_type_w_((jl_value_t*)ml->sig, env, n, stack), meth);
         ml = ml->next;
     }

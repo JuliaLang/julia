@@ -45,6 +45,7 @@ void *memrchr(const void *s, int c, size_t n)
 extern void *memrchr(const void *s, int c, size_t n);
 #endif
 
+/*
 static int _fd_available(long fd)
 {
 #ifndef WIN32
@@ -58,6 +59,7 @@ static int _fd_available(long fd)
     return 1;
 #endif
 }
+*/
 
 // poll for read, unless forwrite!=0
 static void _fd_poll(long fd, int forwrite)
@@ -414,17 +416,22 @@ off_t ios_seek(ios_t *s, off_t pos)
         return s->bpos;
     }
     // TODO
+    return 0;
 }
 
-void ios_seek_end(ios_t *s)
+off_t ios_seek_end(ios_t *s)
 {
     s->_eof = 1;
+    // TODO
+    return 0;
 }
 
-void ios_skip(ios_t *s, off_t offs)
+off_t ios_skip(ios_t *s, off_t offs)
 {
     if (offs < 0)
         s->_eof = 0;
+    // TODO
+    return 0;
 }
 
 off_t ios_pos(ios_t *s)
@@ -911,6 +918,8 @@ void ios_purge(ios_t *s)
         s->bpos = s->size;
     }
 }
+
+int vasprintf(char **strp, const char *fmt, va_list ap);
 
 int ios_vprintf(ios_t *s, const char *format, va_list args)
 {
