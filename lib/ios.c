@@ -371,7 +371,7 @@ size_t ios_write(ios_t *s, char *data, size_t n)
         wrote = _write_grow(s, data, n);
     }
     else if (s->bm == bm_none) {
-        int result = _os_write_all(s->fd, data, n, &wrote);
+        _os_write_all(s->fd, data, n, &wrote);
         return wrote;
     }
     else if (n <= space) {
@@ -395,7 +395,7 @@ size_t ios_write(ios_t *s, char *data, size_t n)
         s->state = bst_wr;
         ios_flush(s);
         if (n > MOST_OF(s->maxsize)) {
-            int result = _os_write_all(s->fd, data, n, &wrote);
+            _os_write_all(s->fd, data, n, &wrote);
             return wrote;
         }
         return ios_write(s, data, n);
@@ -416,12 +416,12 @@ off_t ios_seek(ios_t *s, off_t pos)
     // TODO
 }
 
-off_t ios_seek_end(ios_t *s)
+void ios_seek_end(ios_t *s)
 {
     s->_eof = 1;
 }
 
-off_t ios_skip(ios_t *s, off_t offs)
+void ios_skip(ios_t *s, off_t offs)
 {
     if (offs < 0)
         s->_eof = 0;
@@ -879,7 +879,6 @@ int ios_peekutf8(ios_t *s, uint32_t *pwc)
     int c;
     size_t sz;
     char c0;
-    char buf[8];
 
     c = ios_peekc(s);
     if (c == IOS_EOF)
@@ -913,7 +912,7 @@ void ios_purge(ios_t *s)
     }
 }
 
-int ios_vprintf(ios_t *s, char *format, va_list args)
+int ios_vprintf(ios_t *s, const char *format, va_list args)
 {
     char *str=NULL;
     int c;
@@ -944,7 +943,7 @@ int ios_vprintf(ios_t *s, char *format, va_list args)
     return c;
 }
 
-int ios_printf(ios_t *s, char *format, ...)
+int ios_printf(ios_t *s, const char *format, ...)
 {
     va_list args;
     int c;

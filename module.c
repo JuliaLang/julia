@@ -36,7 +36,7 @@ jl_binding_t *jl_get_binding(jl_module_t *m, jl_sym_t *var)
         jl_binding_t *b = (jl_binding_t*)allocb(sizeof(jl_binding_t));
         b->name = var;
         b->value = NULL;
-        b->type = jl_any_type;
+        b->type = (jl_type_t*)jl_any_type;
         b->constp = 0;
         b->exportp = 0;
         *bp = b;

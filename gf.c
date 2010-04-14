@@ -81,7 +81,7 @@ static jl_tuple_t *valuepair_to_tuple(jl_value_pair_t *env)
     // store static parameters as a tuple of (name, value, name, value, ...)
     for(i=0; i < n; i++) {
         assert(jl_is_typevar(temp->a));
-        jl_tupleset(sp, i*2+0, ((jl_tvar_t*)temp->a)->name);
+        jl_tupleset(sp, i*2+0, (jl_value_t*)((jl_tvar_t*)temp->a)->name);
         jl_tupleset(sp, i*2+1, temp->b);
         temp = temp->next;
     }
@@ -202,7 +202,7 @@ jl_methlist_t *jl_method_table_assoc(jl_methtable_t *mt,
     // cache result in concrete part of method table
     jl_function_t *newmeth = jl_instantiate_method(gm->func,
                                                    valuepair_to_tuple(env));
-    return jl_method_table_insert(mt, tt, newmeth);
+    return jl_method_table_insert(mt, (jl_type_t*)tt, newmeth);
 }
 
 static int args_match_generic(jl_type_t *a, jl_type_t *b)
@@ -223,7 +223,7 @@ static int sigs_match(jl_type_t *a, jl_type_t *b)
         }
         return 0;
     }
-    return jl_types_equal(a,b);
+    return jl_types_equal((jl_value_t*)a, (jl_value_t*)b);
 }
 
 static
@@ -296,7 +296,7 @@ JL_CALLABLE(jl_apply_generic)
     if (m == NULL) {
         jl_sym_t *name = (jl_sym_t*)((jl_value_pair_t*)env)->b;
         jl_tuple_t *argt = (jl_tuple_t*)jl_f_tuple(NULL, args, nargs);
-        char *argt_str = jl_print_to_string(jl_full_type(argt));
+        char *argt_str = jl_print_to_string(jl_full_type((jl_value_t*)argt));
         jl_errorf("no method %s%s", name->name, argt_str);
     }
 
@@ -322,14 +322,16 @@ void jl_print_method_table(jl_function_t *gf)
     jl_methlist_t *ml = mt->mlist;
     while (ml != NULL) {
         ios_printf(ios_stdout, "%s", name);
-        jl_print(ml->sig); ios_printf(ios_stdout, "\n");
+        jl_print((jl_value_t*)ml->sig);
+        ios_printf(ios_stdout, "\n");
         ml = ml->next;
     }
     ios_printf(ios_stdout, "generic:\n");
     ml = mt->generics;
     while (ml != NULL) {
         ios_printf(ios_stdout, "%s", name);
-        jl_print(ml->sig); ios_printf(ios_stdout, "\n");
+        jl_print((jl_value_t*)ml->sig);
+        ios_printf(ios_stdout, "\n");
         ml = ml->next;
     }
 }
@@ -366,11 +368,13 @@ static jl_value_t *add_dummy_type_vars(jl_value_t *t)
         return (jl_value_t*)np;
     }
     else if (jl_is_union_type(t)) {
-        return jl_new_uniontype((jl_tuple_t*)add_dummy_type_vars(((jl_uniontype_t*)t)->types));
+        jl_value_t * ut = (jl_value_t*)((jl_uniontype_t*)t)->types;
+        return (jl_value_t*)jl_new_uniontype((jl_tuple_t*)add_dummy_type_vars(ut));
     }
     else if (jl_is_func_type(t)) {
-        return jl_new_functype((jl_type_t*)add_dummy_type_vars(((jl_func_type_t*)t)->from),
-                               (jl_type_t*)add_dummy_type_vars(((jl_func_type_t*)t)->to));
+        jl_type_t *from = (jl_type_t*)add_dummy_type_vars((jl_value_t*)((jl_func_type_t*)t)->from);
+        jl_type_t *to   = (jl_type_t*)add_dummy_type_vars((jl_value_t*)((jl_func_type_t*)t)->to);
+        return (jl_value_t*)jl_new_functype(from, to);
     }
     return t;
 }

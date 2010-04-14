@@ -338,7 +338,7 @@ jl_tuple_t *jl_tuple(size_t n, ...);
 jl_tuple_t *jl_alloc_tuple(size_t n);
 jl_tuple_t *jl_tuple_append(jl_tuple_t *a, jl_tuple_t *b);
 jl_value_pair_t *jl_pair(jl_value_t *a, jl_value_t *b);
-jl_sym_t *jl_symbol(char *str);
+jl_sym_t *jl_symbol(const char *str);
 jl_sym_t *jl_gensym();
 jl_buffer_t *jl_new_buffer(jl_type_t *buf_type, size_t nel);
 jl_buffer_t *jl_cstr_to_buffer(char *str);
@@ -356,6 +356,7 @@ jl_value_t *jl_box_int64(int64_t x);
 jl_value_t *jl_box_uint64(uint64_t x);
 jl_value_t *jl_box_float32(float x);
 jl_value_t *jl_box_float64(double x);
+int8_t jl_unbox_bool(jl_value_t *v);
 int8_t jl_unbox_int8(jl_value_t *v);
 uint8_t jl_unbox_uint8(jl_value_t *v);
 int16_t jl_unbox_int16(jl_value_t *v);
@@ -368,11 +369,11 @@ float jl_unbox_float32(jl_value_t *v);
 double jl_unbox_float64(jl_value_t *v);
 
 // exceptions
-void jl_error(char *str);
-void jl_errorf(char *fmt, ...);
-void jl_too_few_args(char *fname, int min);
-void jl_too_many_args(char *fname, int max);
-void jl_type_error(char *fname, char *expected, jl_value_t *got);
+void jl_error(const char *str);
+void jl_errorf(const char *fmt, ...);
+void jl_too_few_args(const char *fname, int min);
+void jl_too_many_args(const char *fname, int max);
+void jl_type_error(const char *fname, const char *expected, jl_value_t *got);
 
 // initialization functions
 void jl_init_types();
@@ -384,8 +385,8 @@ void jl_init_codegen();
 void jl_init_intrinsic_functions();
 
 // parsing
-jl_value_t *jl_parse_input_line(char *str);
-jl_value_t *jl_parse_file(char *fname);
+jl_value_t *jl_parse_input_line(const char *str);
+jl_value_t *jl_parse_file(const char *fname);
 
 // some useful functions
 void jl_print(jl_value_t *v);
@@ -408,8 +409,9 @@ jl_module_t *jl_import_module(jl_module_t *to, jl_module_t *from);
 // compiler
 void jl_compile(jl_lambda_info_t *li);
 jl_value_t *jl_toplevel_eval(jl_value_t *ast);
-void jl_load(char *fname);
+void jl_load(const char *fname);
 
+void jl_print_method_table(jl_function_t *gf);
 jl_function_t *jl_instantiate_method(jl_function_t *f, jl_tuple_t *sp);
 jl_lambda_info_t *jl_add_static_parameters(jl_lambda_info_t *l, jl_tuple_t *sp);
 

@@ -81,9 +81,9 @@ double clock_now()
 void timestring(double seconds, char *buffer, size_t len)
 {
     time_t tme = (time_t)seconds;
-    char *fmt = "%c"; /* needed to suppress GCC warning */
 
 #ifdef LINUX
+    char *fmt = "%c"; /* needed to suppress GCC warning */
     struct tm tm;
 
     localtime_r(&tme, &tm);
@@ -108,7 +108,7 @@ void timestring(double seconds, char *buffer, size_t len)
 
 #if defined(LINUX) || defined(MACOSX)
 extern char *strptime(const char *s, const char *format, struct tm *tm);
-double parsetime(char *str)
+double parsetime(const char *str)
 {
     char *fmt = "%c"; /* needed to suppress GCC warning */
     char *res;

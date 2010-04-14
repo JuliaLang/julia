@@ -67,8 +67,8 @@ size_t ios_read(ios_t *s, char *dest, size_t n);
 size_t ios_readall(ios_t *s, char *dest, size_t n);
 size_t ios_write(ios_t *s, char *data, size_t n);
 off_t ios_seek(ios_t *s, off_t pos);   // absolute seek
-off_t ios_seek_end(ios_t *s);
-off_t ios_skip(ios_t *s, off_t offs);  // relative seek
+void ios_seek_end(ios_t *s);
+void ios_skip(ios_t *s, off_t offs);  // relative seek
 off_t ios_pos(ios_t *s);  // get current position
 size_t ios_trunc(ios_t *s, size_t size);
 int ios_eof(ios_t *s);
@@ -105,10 +105,10 @@ int ios_putnum(ios_t *s, char *data, uint32_t type);
 int ios_putint(ios_t *s, int n);
 int ios_pututf8(ios_t *s, uint32_t wc);
 int ios_putstringz(ios_t *s, char *str, bool_t do_write_nulterm);
-int ios_printf(ios_t *s, char *format, ...);
-int ios_vprintf(ios_t *s, char *format, va_list args);
+int ios_printf(ios_t *s, const char *format, ...);
+int ios_vprintf(ios_t *s, const char *format, va_list args);
 
-void hexdump(ios_t *dest, char *buffer, size_t len, size_t startoffs);
+void hexdump(ios_t *dest, const char *buffer, size_t len, size_t startoffs);
 
 /* high-level stream functions - input */
 int ios_getnum(ios_t *s, char *data, uint32_t type);

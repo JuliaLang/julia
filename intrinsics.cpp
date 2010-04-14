@@ -255,6 +255,7 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
         assert(false);
     }
     assert(false);
+    return NULL;
 }
 
 #undef HANDLE

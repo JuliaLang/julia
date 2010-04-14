@@ -31,9 +31,12 @@ default: debug
 
 jlfrontend.c: jlfrontend.scm julia-parser.scm julia-syntax.scm
 	$(GAMBITGSC) -c $<
-
 jlfrontend_.c: jlfrontend.c
 	$(GAMBITGSC) -link -o $@ $<
+jlfrontend.o jlfrontend_.o: %.o: %.c
+	$(CC) $(SHIPFLAGS) -w -c $< -o $@
+jlfrontend.do jlfrontend_.do: %.do: %.c
+	$(CC) $(DEBUGFLAGS) -w -c $< -o $@
 
 julia-defs.s.bc: julia-defs$(NBITS).s
 	llvm-as -f $< -o $@
@@ -47,22 +50,32 @@ codegen.do: intrinsics.cpp julia-defs.s.bc.inc
 $(LLT):
 	cd $(LLTDIR) && $(MAKE)
 
-debug: $(DOBJS) $(LIBFILES) julia-defs.s.bc
-	$(CXX) $(DEBUGFLAGS) $(DOBJS) -o $(EXENAME) $(LIBS)
+julia-debug: $(DOBJS) $(LIBFILES) julia-defs.s.bc
+	$(CXX) $(DEBUGFLAGS) $(DOBJS) -o $@ $(LIBS)
+	ln -sf $@ julia
 
-efence: $(DOBJS) $(LIBFILES) julia-defs.s.bc
-	$(CXX) $(DEBUGFLAGS) $(DOBJS) -o $(EXENAME) $(EFENCE) $(LIBS)
+julia-efence: $(DOBJS) $(LIBFILES) julia-defs.s.bc
+	$(CXX) $(DEBUGFLAGS) $(DOBJS) -o $@ $(EFENCE) $(LIBS)
+	ln -sf $@ julia
 
-release: $(OBJS) $(LIBFILES) julia-defs.s.bc
-	$(CXX) $(SHIPFLAGS) $(OBJS) -o $(EXENAME) $(LIBS)
+julia-release: $(OBJS) $(LIBFILES) julia-defs.s.bc
+	$(CXX) $(SHIPFLAGS) $(OBJS) -o $@ $(LIBS)
+	ln -sf $@ julia
+
+debug release efence: %: julia-%
 
 clean:
 	rm -f *.o
 	rm -f *.do
 	rm -f *.bc
 	rm -f *.bc.inc
-	rm -f $(EXENAME)
 	rm -f jlfrontend.c
 	rm -f jlfrontend_.c
+	rm -f $(EXENAME)
 	rm -f *~ *#
 	cd $(LLTDIR) && $(MAKE) clean
+
+cleanall: clean
+	rm -rf $(EXENAME)-{debug,release,efence}
+
+.PHONY: debug release efence clean
