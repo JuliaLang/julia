@@ -1,5 +1,7 @@
 CC = gcc
 CXX = g++
+#CC = /Developer/usr/llvm-gcc-4.2/bin/llvm-gcc-4.2
+#CXX = /Developer/usr/llvm-gcc-4.2/bin/llvm-g++-4.2
 CFLAGS =
 
 GAMBIT = /usr/local/Gambit-C
