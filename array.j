@@ -15,11 +15,11 @@ ndims(t::Tensor) = length(size(t))
 numel(t::Tensor) = prod(size(t))
 length(v::Vector) = size(v,1)
 
-zeros(sz...) = jl_make_array(sz...)
-zeros(T::Type, sz...) = jl_make_array(T, sz...)
+zeros(T::Type, dims...) = Array[T,length(dims)].new(buffer(dims...), Buffer[T].new(prod(dims)))
+zeros(dims...) = zeros(Float64, dims...)
 
-ones(m::Size) = [ 1 | i=1:m ]
-ones(m::Size, n::Size) = [ 1 | i=1:m, j=1:n ]
+ones(m::Size) = [ 1.0 | i=1:m ]
+ones(m::Size, n::Size) = [ 1.0 | i=1:m, j=1:n ]
 
 rand(m::Size) = [ rand() | i=1:m ]
 rand(m::Size, n::Size) = [ rand() | i=1:m, j=1:n ]
@@ -38,13 +38,6 @@ dot(x::Vector, y::Vector) = sum(x.*y)
 diag(A::Matrix) = [ A[i,i] | i=1:min(size(A)) ]
 
 (*)(A::Matrix, B::Matrix) = [ dot(A[i,:],B[:,j]) | i=1:size(A,1), j=1:size(B,2) ]
-
-function jl_make_array(eltype::Type, dims...)
-    data = Buffer[eltype].new(prod(dims))
-    Array[eltype,length(dims)].new(buffer(dims...), data)
-end
-
-jl_make_array(dim...) = jl_make_array(Float64, dim...)
 
 function colon(start::Int32, stop::Int32, stride::Int32)
     len = div((stop-start),stride) + 1

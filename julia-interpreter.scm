@@ -1528,11 +1528,11 @@ end
 							 ""
 							 line))))
 	 (continue?
-	  (with-exception-catcher
-	   (lambda (e)
+	  ;(with-exception-catcher
+	  #; (lambda (e)
 	     (display-error-exception e)
 	     #t)
-	   (lambda ()
+	   ((lambda ()
 	     (let ((expr (julia-parse str)))
 	       (check-end-of-input str)
 	       (or (equal? line "")     ; empty line is valid
