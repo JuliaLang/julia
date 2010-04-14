@@ -573,7 +573,8 @@
 	(block 
 	 (= ,oneresult (tuple))
 	 ,(evaluate-one expr (reverse ranges))
-	 (= ,result (call zeros (call typeof ,oneresult) ,@(compute-dims ranges) ))
+	 ;(= ,result (call zeros (call typeof ,oneresult) ,@(compute-dims ranges) ))
+	 (= ,result (call jl_comprehension_zeros ,oneresult ,@(compute-dims ranges) ))
 	 (= ,ri 1)
 	 (= ,data (|.| ,result data))
 	 ,(construct-loops data expr (reverse ranges) ri)
