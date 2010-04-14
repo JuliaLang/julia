@@ -1,3 +1,7 @@
+CC = gcc
+CXX = g++
+CFLAGS = 
+
 GAMBIT = /usr/local/Gambit-C
 GAMBITGSC = gsc
 GAMBITGSI = gsi

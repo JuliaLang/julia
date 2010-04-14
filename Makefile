@@ -1,6 +1,3 @@
-CC = gcc
-CXX = g++
-
 NAME = julia
 SRCS = jltypes gf ast repl builtins jlfrontend jlfrontend_ module codegen
 OBJS = $(SRCS:%=%.o)
