@@ -29,7 +29,8 @@ default: debug
 %.do: %.cpp
 	$(CXX) $(DEBUGFLAGS) $(shell llvm-config --cppflags) -c $< -o $@
 
-jlfrontend.c: jlfrontend.scm julia-parser.scm julia-syntax.scm
+jlfrontend.c: jlfrontend.scm \
+	julia-parser.scm julia-syntax.scm match.scm utils.scm
 	$(GAMBITGSC) -c $<
 jlfrontend_.c: jlfrontend.c
 	$(GAMBITGSC) -link -o $@ $<
@@ -41,11 +42,11 @@ jlfrontend.do jlfrontend_.do: %.do: %.c
 julia-defs.s.bc: julia-defs$(NBITS).s
 	llvm-as -f $< -o $@
 
-julia-defs.s.bc.inc: julia-defs.s.bc
+julia-defs.s.bc.inc: julia-defs.s.bc bin2hex.scm
 	$(GAMBITGSI) ./bin2hex.scm < $< > $@
 
-codegen.o: intrinsics.cpp julia-defs.s.bc.inc
-codegen.do: intrinsics.cpp julia-defs.s.bc.inc
+codegen.o:: intrinsics.cpp julia-defs.s.bc.inc
+codegen.do:: intrinsics.cpp julia-defs.s.bc.inc
 
 $(LLT):
 	cd $(LLTDIR) && $(MAKE)
