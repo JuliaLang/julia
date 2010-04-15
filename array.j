@@ -143,8 +143,8 @@ function set(A::Matrix, X, I, J)
 end
 
 # Concatenation
-hcat(X::Scalar...) = [ X[i] | i=1:length(X) ]
-vcat(X::Scalar...) = [ X[i] | i=1:length(X) ]
+hcat[T](X::Scalar[T]...) = [ X[i] | i=1:length(X) ]
+vcat[T](X::Scalar[T]...) = [ X[i] | i=1:length(X) ]
 vcat[T](V::Vector[T]...) = [ V[i][j] | i=1:length(V), j=1:length(V[1]) ]
 hcat[T](V::Vector[T]...) = [ V[j][i] | i=1:length(V[1]), j=1:length(V) ]
 

@@ -5,6 +5,24 @@ assert(!!1)
 assert(0)
 assert(!!0)
 
+# basic type relationships
+assert(subtype(Int8, Int))
+assert(subtype(Int32, Int))
+assert(subtype((Int8,Int8), (Int,Int)))
+assert(!subtype(Tensor[Float64,2], Tensor[Scalar,2]))
+assert(!subtype(Tensor[Float64,1], Tensor[Scalar,2]))
+assert(subtype((Int,Int...), (Int, Scalar...)))
+assert(subtype((Int,Float64,Int...), (Int, Scalar...)))
+assert(subtype((Int,Float64), (Int, Scalar...)))
+assert(subtype((Int32,), (Scalar...)))
+assert(subtype((), (Scalar...)))
+assert(!subtype((Int32...), (Int32,)))
+assert(!subtype((Int32...), (Scalar, Int)))
+assert(!subtype((Int...,), (Int, Int, Int...)))
+assert(!subtype(Buffer[Int8], Buffer[Any]))
+assert(!subtype(Buffer[Any], Buffer[Int8]))
+assert(subtype(Buffer[Int8], Buffer[Int8]))
+
 assert(2+3 == 5)
 assert(2.+3. == 5.)
 assert(2*3 == 6)
@@ -12,7 +30,7 @@ assert(2. * 3. == 6.)
 
 a = ones(4)
 b = a+a
-assert(b[1]==2 && b[2]==2 && b[3]==2 && b[4]==2)
+assert(b[1]==2. && b[2]==2. && b[3]==2. && b[4]==2.)
 
 assert(length((1,)) == 1)
 assert(length((1,2)) == 2)
@@ -32,10 +50,10 @@ a[1,2] = 2
 a[2,1] = 3
 a[2,2] = 4
 b = a'
-assert(a[1,1] == 1 && a[1,2] == 2 &&
-       a[2,1] == 3 && a[2,2] == 4)
-assert(b[1,1] == 1 && b[2,1] == 2 &&
-       b[1,2] == 3 && b[2,2] == 4)
+assert(a[1,1] == 1. && a[1,2] == 2. &&
+       a[2,1] == 3. && a[2,2] == 4.)
+assert(b[1,1] == 1. && b[2,1] == 2. &&
+       b[1,2] == 3. && b[2,2] == 4.)
 
 x = (2,3)
 assert((+)(x...) == 5)
@@ -68,8 +86,6 @@ assert(1+rational(1,2) == rational(3,2))
 assert(1./complex(2.,2.) == complex(.25, -.25))
 
 # conversions
-Int8.convert(x::Real) = int8(x)
-
 function foo()
     local x::Int8
     function bar()

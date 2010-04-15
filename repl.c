@@ -125,7 +125,13 @@ int main(int argc, char *argv[])
         }
     }
 
-    jl_load("start.j");
+    if (!setjmp(ExceptionHandler)) {
+        jl_load("start.j");
+    }
+    else {
+        ios_printf(ios_stderr, "error during startup.\n");
+        return 1;
+    }
 
     if (print_banner)
         ios_printf(ios_stdout, "%s", banner);

@@ -169,7 +169,8 @@ extern jl_tag_type_t *jl_any_type;
 extern jl_tag_type_t *jl_type_type;
 extern jl_struct_type_t *jl_typename_type;
 extern jl_struct_type_t *jl_sym_type;
-extern jl_tag_type_t *jl_tuple_type;
+extern jl_tuple_t *jl_tuple_type;
+extern jl_typename_t *jl_tuple_typename;
 extern jl_struct_type_t *jl_tvar_type;
 extern jl_struct_type_t *jl_typector_type;
 
@@ -186,11 +187,11 @@ extern jl_struct_type_t *jl_lambda_info_type;
 extern jl_typector_t *jl_seq_type;
 extern jl_typector_t *jl_functype_ctor;
 extern jl_typector_t *jl_tensor_type;
-extern jl_tag_type_t *jl_scalar_type;
-extern jl_tag_type_t *jl_number_type;
-extern jl_tag_type_t *jl_real_type;
-extern jl_tag_type_t *jl_int_type;
-extern jl_tag_type_t *jl_float_type;
+extern jl_typector_t *jl_scalar_type;
+extern jl_typector_t *jl_number_type;
+extern jl_typector_t *jl_real_type;
+extern jl_typector_t *jl_int_type;
+extern jl_typector_t *jl_float_type;
 
 extern jl_typector_t *jl_box_type;
 extern jl_type_t *jl_box_any_type;
@@ -262,6 +263,7 @@ extern jl_sym_t *line_sym;
 #define jl_is_null(v)        (((jl_value_t*)(v)) == ((jl_value_t*)jl_null))
 #define jl_is_tuple(v)       jl_typeis(v,jl_tuple_type)
 #define jl_is_tag_type(v)    jl_typeis(v,jl_tag_kind)
+#define jl_is_some_tag_type(v) (jl_is_tag_type(v)||jl_is_struct_type(v)||jl_is_bits_type(v))
 #define jl_is_bits_type(v)   jl_typeis(v,jl_bits_kind)
 #define jl_is_struct_type(v) jl_typeis(v,jl_struct_kind)
 #define jl_is_func_type(v)   jl_typeis(v,jl_func_kind)
@@ -300,7 +302,6 @@ static inline int jl_is_seq_type(jl_value_t *v)
 
 // type info accessors
 jl_typename_t *jl_tname(jl_value_t *v);
-jl_tag_type_t *jl_tsuper(jl_value_t *v);
 jl_tuple_t *jl_tparams(jl_value_t *v);
 jl_value_t *jl_full_type(jl_value_t *v);
 
@@ -321,6 +322,7 @@ int jl_types_equal_generic(jl_value_t *a, jl_value_t *b);
 jl_typector_t *jl_new_type_ctor(jl_tuple_t *params, jl_type_t *body);
 jl_type_t *jl_apply_type_ctor(jl_typector_t *tc, jl_tuple_t *params);
 jl_type_t *jl_instantiate_type_with(jl_type_t *t, jl_value_t **env, size_t n);
+jl_value_t *jl_add_dummy_type_vars(jl_value_t *t);
 jl_tvar_t *jl_typevar(jl_sym_t *name);
 jl_uniontype_t *jl_new_uniontype(jl_tuple_t *types);
 jl_func_type_t *jl_new_functype(jl_type_t *a, jl_type_t *b);

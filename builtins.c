@@ -102,14 +102,16 @@ JL_CALLABLE(jl_f_typeof)
 JL_CALLABLE(jl_f_subtype)
 {
     JL_NARGS(subtype, 2, 2);
-    JL_TYPECHK(subtype, type, args[1]);
+    if (!jl_is_typector(args[1]))
+        JL_TYPECHK(subtype, type, args[1]);
     return (jl_subtype(args[0],args[1],0,0) ? jl_true : jl_false);
 }
 
 JL_CALLABLE(jl_f_istype)
 {
     JL_NARGS(istype, 2, 2);
-    JL_TYPECHK(istype, type, args[1]);
+    if (!jl_is_typector(args[1]))
+        JL_TYPECHK(istype, type, args[1]);
     if (jl_is_tuple(args[0]))
         return (jl_subtype(args[0],args[1],1,0) ? jl_true : jl_false);
     return (jl_subtype((jl_value_t*)jl_typeof(args[0]),args[1],0,0)
@@ -119,7 +121,8 @@ JL_CALLABLE(jl_f_istype)
 JL_CALLABLE(jl_f_typeassert)
 {
     JL_NARGS(typeassert, 2, 2);
-    JL_TYPECHK(typeassert, type, args[1]);
+    if (!jl_is_typector(args[1]))
+        JL_TYPECHK(typeassert, type, args[1]);
     int ok = jl_is_tuple(args[0]) ?
         jl_subtype(args[0],args[1],1,0) :
         jl_subtype((jl_value_t*)jl_typeof(args[0]),args[1],0,0);
@@ -481,6 +484,8 @@ jl_value_t *jl_convert(jl_value_t *x, jl_type_t *to)
 JL_CALLABLE(jl_f_convert)
 {
     JL_NARGS(convert, 2, 2);
+    if (!jl_is_typector(args[1]))
+        JL_TYPECHK(convert, type, args[1]);
     return jl_convert(args[0], (jl_type_t*)args[1]);
 }
 
@@ -559,7 +564,12 @@ static void print_type(jl_value_t *t)
         ios_write(s, "Union", 5);
         print_tuple(((jl_uniontype_t*)t)->types, '(', ')');
     }
+    else if (jl_is_seq_type(t)) {
+        call_print(jl_tparam0(t));
+        ios_write(s, "...", 3);
+    }
     else {
+        assert(jl_is_some_tag_type(t));
         ios_puts(((jl_tag_type_t*)t)->name->name->name, s);
         jl_tuple_t *p = jl_tparams(t);
         if (p->length > 0)
@@ -854,33 +864,44 @@ JL_CALLABLE(jl_f_new_struct_type)
 {
     JL_NARGS(new_struct_type, 4, 4);
     JL_TYPECHK(new_struct_type, symbol, args[0]);
-    assert(jl_is_type(args[1]));
     JL_TYPECHK(new_struct_type, tuple, args[2]);
     JL_TYPECHK(new_struct_type, tuple, args[3]);
     jl_sym_t *name = (jl_sym_t*)args[0];
-    jl_value_t *super = args[1];
     jl_tuple_t *params = (jl_tuple_t*)args[2];
     jl_tuple_t *fnames = (jl_tuple_t*)args[3];
-    if (jl_subtype(super,(jl_value_t*)jl_tuple_type,0,0) ||
-        jl_is_func_type(super) ||
-        jl_is_union_type(super) ||
-        jl_subtype(super,(jl_value_t*)jl_buffer_type->body,0,0)) {
-        jl_errorf("invalid subtyping in definition of %s", name->name);
-    }
     if (!all_typevars(params))
         jl_errorf("invalid type parameter list for %s", name->name);
-    jl_tuple_t *pfn = NULL;
-    if (jl_is_struct_type(super))
-        pfn = ((jl_struct_type_t*)super)->names;
-    else if (jl_is_tag_type(super))
-        pfn = jl_null;
-    else
-        jl_errorf("invalid subtyping in definition of %s", name->name);
-    return (jl_value_t*)jl_new_struct_type(name,
-                                           (jl_tag_type_t*)super,
-                                           params,
-                                           jl_tuple_append(pfn, fnames),
-                                           NULL);
+    jl_value_t *super = args[1];
+
+    jl_struct_type_t *nst =
+        jl_new_struct_type(name, jl_any_type, params, jl_null, NULL);
+    if (super == (jl_value_t*)jl_scalar_type ||
+        super == (jl_value_t*)jl_number_type ||
+        super == (jl_value_t*)jl_real_type ||
+        super == (jl_value_t*)jl_int_type ||
+        super == (jl_value_t*)jl_float_type) {
+        nst->super = (jl_tag_type_t*)jl_apply_type_ctor((jl_typector_t*)super,
+                                                        jl_tuple(1, nst));
+        nst->names = fnames;
+    }
+    else {
+        assert(jl_is_type(args[1]));
+        if (jl_subtype(super,(jl_value_t*)jl_tuple_type,0,0) ||
+            jl_is_func_type(super) ||
+            jl_is_union_type(super) ||
+            jl_subtype(super,(jl_value_t*)jl_buffer_type,0,0)) {
+            jl_errorf("invalid subtyping in definition of %s", name->name);
+        }
+        nst->super = (jl_tag_type_t*)super;
+        if (jl_is_struct_type(super))
+            nst->names = jl_tuple_append(((jl_struct_type_t*)super)->names,
+                                         fnames);
+        else if (jl_is_tag_type(super))
+            nst->names = fnames;
+        else
+            jl_errorf("invalid subtyping in definition of %s", name->name);
+    }
+    return (jl_value_t*)nst;
 }
 
 JL_CALLABLE(jl_f_new_struct_fields)
