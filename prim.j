@@ -53,3 +53,16 @@ end
 start(t::Tuple) = 1
 done(t::Tuple, i) = (i > length(t))
 next(t::Tuple, i) = (t[i], i+1)
+
+map(f, t::()) = ()
+map(f, t::Tuple) = maptuple(f, t...)
+maptuple(f, el1, elts...) = tuple(f(el1), maptuple(f, elts...)...)
+maptuple(f) = ()
+
+ref(t::Tuple, r::Range) = accumtuple(t, r, start(r))
+function accumtuple(t::Tuple, r::Range, i, elts...)
+    if (done(r, i))
+        return elts
+    end
+    accumtuple(t, r, i+r.step, elts..., t[i])
+end

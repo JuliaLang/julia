@@ -19,3 +19,14 @@ function fibnorecur(n)
     end
     return f
 end
+
+function iterate(t::Tuple, body, it...)
+    idx = length(t)-length(it)
+    if (idx == 0)
+        body(it)
+    else
+        for i = t[idx]
+            iterate(t, body, i, it...)
+        end
+    end
+end

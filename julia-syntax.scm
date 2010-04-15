@@ -105,8 +105,20 @@
       `(call ,(cadr e) ,(car e) ,(caddr e))))
 
 ; : inside indexing means :1:
+; a:b and a:b:c are ranges instead of calls to colon
 (define (process-indexes i)
-  (map (lambda (x) (if (eq? x ':) '(: (: 1 :)) x)) i))
+  (map (lambda (x)
+	 (cond ((eq? x ':) '(: (: 1 :)))
+	       ((and (pair? x)
+		     (eq? (car x) ':)
+		     (length= x 3))
+		`(call (top range) ,(cadr x) 1 ,(caddr x)))
+	       ((and (pair? x)
+		     (eq? (car x) ':)
+		     (length= x 4))
+		`(call (top range) ,@(cdr x)))
+	       (else       x)))
+       i))
 
 (define (function-expr argl body)
   (let ((t (llist-types argl))
