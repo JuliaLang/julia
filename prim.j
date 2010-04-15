@@ -56,7 +56,7 @@ next(t::Tuple, i) = (t[i], i+1)
 
 map(f, t::()) = ()
 map(f, t::Tuple) = maptuple(f, t...)
-maptuple(f, el1, elts...) = tuple(f(el1), maptuple(f, elts...)...)
+maptuple(f, first, rest...) = tuple(f(first), maptuple(f, rest...)...)
 maptuple(f) = ()
 
 ref(t::Tuple, r::Range) = accumtuple(t, r, start(r))
@@ -66,3 +66,6 @@ function accumtuple(t::Tuple, r::Range, i, elts...)
     end
     accumtuple(t, r, i+r.step, elts..., t[i])
 end
+ref(t::Tuple, r::RangeFrom) = t[range(r.start,r.step,length(t))]
+ref(t::Tuple, r::RangeTo)   = t[range(1,r.step,r.stop)]
+ref(t::Tuple, r::RangeBy)   = t[range(1,r.step,length(t))]
