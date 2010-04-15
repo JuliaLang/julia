@@ -128,26 +128,35 @@ JL_CALLABLE(jl_f_typeassert)
     return args[0];
 }
 
+static jl_value_t *jl_bufferref(jl_buffer_t *b, size_t i);
+
 JL_CALLABLE(jl_f_apply)
 {
     JL_NARGSV(apply, 1);
     JL_TYPECHK(apply, function, args[0]);
-    if (nargs == 1) {
-        JL_TYPECHK(apply, tuple, args[1]);
-        return jl_apply((jl_function_t*)args[0], &jl_tupleref(args[1],0),
-                        ((jl_tuple_t*)args[1])->length);
-    }
     size_t n=0, i, j;
     for(i=1; i < nargs; i++) {
-        JL_TYPECHK(apply, tuple, args[i]);
-        n += ((jl_tuple_t*)args[i])->length;
+        if (jl_is_buffer(args[i])) {
+            n += ((jl_buffer_t*)args[i])->length;
+        }
+        else {
+            JL_TYPECHK(apply, tuple, args[i]);
+            n += ((jl_tuple_t*)args[i])->length;
+        }
     }
     jl_value_t **newargs = alloca(n * sizeof(jl_value_t*));
     n = 0;
     for(i=1; i < nargs; i++) {
-        jl_tuple_t *t = (jl_tuple_t*)args[i];
-        for(j=0; j < t->length; j++)
-            newargs[n++] = jl_tupleref(t, j);
+        if (jl_is_buffer(args[i])) {
+            jl_buffer_t *b = (jl_buffer_t*)args[i];
+            for(j=0; j < b->length; j++)
+                newargs[n++] = jl_bufferref(b, j);
+        }
+        else {
+            jl_tuple_t *t = (jl_tuple_t*)args[i];
+            for(j=0; j < t->length; j++)
+                newargs[n++] = jl_tupleref(t, j);
+        }
     }
     return jl_apply((jl_function_t*)args[0], newargs, n);
 }
@@ -302,15 +311,8 @@ static jl_value_t *new_scalar(jl_bits_type_t *bt)
     return v;
 }
 
-JL_CALLABLE(jl_f_bufferref)
+static jl_value_t *jl_bufferref(jl_buffer_t *b, size_t i)
 {
-    JL_NARGS(bufferref, 2, 2);
-    JL_TYPECHK(bufferref, buffer, args[0]);
-    JL_TYPECHK(bufferref, int32, args[1]);
-    jl_buffer_t *b = (jl_buffer_t*)args[0];
-    size_t i = jl_unbox_int32(args[1])-1;
-    if (i >= b->length)
-        jl_errorf("buffer[%d]: index out of range", i+1);
     jl_type_t *el_type = (jl_type_t*)jl_tparam0(jl_typeof(b));
     jl_value_t *elt;
     if (jl_is_bits_type(el_type)) {
@@ -340,6 +342,18 @@ JL_CALLABLE(jl_f_bufferref)
             jl_errorf("buffer[%d]: uninitialized reference error", i+1);
     }
     return elt;
+}
+
+JL_CALLABLE(jl_f_bufferref)
+{
+    JL_NARGS(bufferref, 2, 2);
+    JL_TYPECHK(bufferref, buffer, args[0]);
+    JL_TYPECHK(bufferref, int32, args[1]);
+    jl_buffer_t *b = (jl_buffer_t*)args[0];
+    size_t i = jl_unbox_int32(args[1])-1;
+    if (i >= b->length)
+        jl_errorf("buffer[%d]: index out of range", i+1);
+    return jl_bufferref(b, i);
 }
 
 JL_CALLABLE(jl_f_bufferset)
@@ -534,9 +548,12 @@ static void print_type(jl_value_t *t)
         ios_puts("Tensor[Scalar, 0]", s);
     }
     else if (jl_is_func_type(t)) {
+        /*
         call_print((jl_value_t*)((jl_func_type_t*)t)->from);
         ios_write(s, "-->", 3);
         call_print((jl_value_t*)((jl_func_type_t*)t)->to);
+        */
+        ios_write(s, "Function", 8);
     }
     else if (jl_is_union_type(t)) {
         ios_write(s, "Union", 5);
@@ -1050,7 +1067,7 @@ void jl_init_builtins()
     add_builtin("Type", (jl_value_t*)jl_type_type);
     add_builtin("Symbol", (jl_value_t*)jl_sym_type);
     add_builtin("...", (jl_value_t*)jl_seq_type);
-    add_builtin("Function", (jl_value_t*)jl_functype_ctor);
+    add_builtin("Function", (jl_value_t*)jl_any_func);
     add_builtin("Buffer", (jl_value_t*)jl_buffer_type);
     add_builtin("Tensor", (jl_value_t*)jl_tensor_type);
     add_builtin("Scalar", (jl_value_t*)jl_scalar_type);

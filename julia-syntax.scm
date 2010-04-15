@@ -290,7 +290,7 @@
 
 (define patterns
   (list
-   (pattern-lambda (--> a b)
+   #;(pattern-lambda (--> a b)
 		   `(call ref Function ,a ,b))
 
    (pattern-lambda (|.| a b)

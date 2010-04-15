@@ -20,13 +20,12 @@ zeros(dims...) = zeros(Float64, dims...)
 
 jl_comprehension_zeros (oneresult::Scalar, dims...) = zeros(typeof(oneresult), dims...)
 
-function jl_comprehension_zeros (oneresult, dims...)
+function jl_comprehension_zeros[T,n](oneresult::Tensor[T,n], dims...)
     newdims = Buffer[Int32].new(length(dims) + ndims(oneresult))
     for i=1:length(dims); newdims[i] = dims[i]; end
     for i=1:ndims(oneresult); newdims[i+length(dims)] = size(oneresult, i); end
-    eltype = typeof(oneresult.data[1])
-    data = Buffer[eltype].new(prod(newdims))
-    Array[eltype, length(newdims)].new(newdims, data)
+    data = Buffer[T].new(prod(newdims))
+    Array[T, length(newdims)].new(newdims, data)
 end
 
 ones(m::Size) = [ 1.0 | i=1:m ]
