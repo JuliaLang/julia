@@ -5,6 +5,7 @@ DOBJS = $(SRCS:%=%.do)
 EXENAME = $(NAME)
 LLTDIR = lib
 LLT = $(LLTDIR)/libllt.a
+LLT_H = $(LLTDIR)/llt.h
 
 include ./Make.inc.$(shell uname)
 
@@ -17,14 +18,17 @@ SHIPFLAGS = -O2 -DNDEBUG $(FLAGS)
 
 default: debug
 
-%.o: %.c
+%.o: %.c julia.h
 	$(CC) $(SHIPFLAGS) -c $< -o $@
-%.do: %.c
+%.do: %.c julia.h
 	$(CC) $(DEBUGFLAGS) -c $< -o $@
-%.o: %.cpp
+%.o: %.cpp julia.h
 	$(CXX) $(SHIPFLAGS) $(shell llvm-config --cppflags) -c $< -o $@
-%.do: %.cpp
+%.do: %.cpp julia.h
 	$(CXX) $(DEBUGFLAGS) $(shell llvm-config --cppflags) -c $< -o $@
+
+ast.o ast.do: jlfrontend.h
+codegen.o codegen.do: intrinsics.cpp julia-defs.s.bc.inc
 
 jlfrontend.c: jlfrontend.scm \
 	julia-parser.scm julia-syntax.scm match.scm utils.scm
@@ -42,10 +46,7 @@ julia-defs.s.bc: julia-defs$(NBITS).s
 julia-defs.s.bc.inc: julia-defs.s.bc bin2hex.scm
 	$(GAMBITGSI) ./bin2hex.scm < $< > $@
 
-codegen.o:: intrinsics.cpp julia-defs.s.bc.inc
-codegen.do:: intrinsics.cpp julia-defs.s.bc.inc
-
-$(LLT):
+$(LLT): $(LLT_H)
 	cd $(LLTDIR) && $(MAKE)
 
 julia-debug: $(DOBJS) $(LIBFILES) julia-defs.s.bc
