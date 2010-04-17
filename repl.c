@@ -13,6 +13,7 @@
 #include <limits.h>
 #include <errno.h>
 #include <math.h>
+#include <libgen.h>
 #ifndef NO_BOEHM_GC
 #include <gc.h>
 #endif
@@ -114,6 +115,13 @@ jmp_buf *CurrentExceptionHandler = &ExceptionHandler;
 int main(int argc, char *argv[])
 {
     julia_home = getenv("JULIA_HOME");
+    if (!julia_home) {
+        char *julia_path = (char*)malloc(PATH_MAX);
+        get_exename(julia_path, PATH_MAX);
+        julia_home = strdup(dirname(julia_path));
+        free(julia_path);
+    }
+
     julia_init();
 
     have_color = detect_color();
