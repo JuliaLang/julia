@@ -19,6 +19,7 @@
 
 // --- exception raising ---
 
+extern char *julia_home;
 extern jmp_buf ExceptionHandler;
 extern jmp_buf *CurrentExceptionHandler;
 
@@ -189,10 +190,13 @@ JL_CALLABLE(jl_f_time_thunk)
 
 void jl_load(const char *fname)
 {
-    jl_value_t *ast = jl_parse_file(fname);
+    char *fpath = (char*)fname;
+    if (julia_home)
+        asprintf(&fpath, "%s/%s", julia_home, fname);
+    jl_value_t *ast = jl_parse_file(fpath);
     jl_buffer_t *b = ((jl_expr_t*)ast)->args;
     if (b == NULL)
-        jl_errorf("could not open file %s", fname);
+        jl_errorf("could not open file %s", fpath);
     size_t i, lineno=0;
     jmp_buf *prevh = CurrentExceptionHandler;
     jmp_buf handler;
@@ -211,10 +215,11 @@ void jl_load(const char *fname)
     }
     else {
         CurrentExceptionHandler = prevh;
-        ios_printf(ios_stderr, " %s:%d\n", fname, lineno);
+        ios_printf(ios_stderr, " %s:%d\n", fpath, lineno);
         longjmp(*CurrentExceptionHandler, 1);
     }
     CurrentExceptionHandler = prevh;
+    if (fpath != fname) free(fpath);
 }
 
 JL_CALLABLE(jl_f_load)

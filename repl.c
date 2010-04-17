@@ -46,10 +46,11 @@ static char jl_banner_color[] =
 static char jl_prompt_plain[] = "julia> ";
 static char jl_prompt_color[] = "\001\033[1m\033[32m\002julia> \001\033[37m\002";
 static char jl_answer_color[] = "\033[0m\033[37m";
-
 static char jl_color_normal[] = "\033[0m\033[37m";
 
 static char jl_history_file[] = ".julia_history";
+
+char *julia_home; // load is relative to here
 
 void julia_init()
 {
@@ -112,6 +113,7 @@ jmp_buf *CurrentExceptionHandler = &ExceptionHandler;
 
 int main(int argc, char *argv[])
 {
+    julia_home = getenv("JULIA_HOME");
     julia_init();
 
     have_color = detect_color();
