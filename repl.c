@@ -54,25 +54,31 @@ static char jl_history_file[] = ".julia_history";
 
 char *julia_home = NULL; // load is relative to here
 static int print_banner = 1;
+static int load_start_j = 1;
 
 static const char *usage = "julia [options]\n";
 static const char *opts =
     " -H --home=<dir>   Load files relative to <dir>\n"
+    " -b --bare         Bare REPL: don't load 'start.j'\n"
     " -q --quiet        Quiet startup without banner\n"
     " -h --help         Print this message\n";
 
 void parse_opts(int *argcp, char ***argvp) {
     static struct option longopts[] = {
         { "home",  required_argument, 0, 'H' },
+        { "bare",  no_argument,       0, 'b' },
         { "quiet", no_argument,       0, 'q' },
         { "help",  no_argument,       0, 'h' },
         { 0, 0, 0, 0 }
     };
     int c;
-    while ((c = getopt_long(*argcp,*argvp,"H:qh",longopts,0)) != -1) {
+    while ((c = getopt_long(*argcp,*argvp,"H:bqh",longopts,0)) != -1) {
         switch (c) {
         case 'H':
             julia_home = optarg;
+            break;
+        case 'b':
+            load_start_j = 0;
             break;
         case 'q':
             print_banner = 0;
@@ -278,11 +284,13 @@ int main(int argc, char *argv[])
     rl_bind_keyseq("\033[C", right_callback);
 #endif
 
-    if (!setjmp(ExceptionHandler)) {
-        jl_load("start.j");
-    } else {
-        ios_printf(ios_stderr, "error during startup.\n");
-        return 1;
+    if (load_start_j) {
+        if (!setjmp(ExceptionHandler)) {
+            jl_load("start.j");
+        } else {
+            ios_printf(ios_stderr, "error during startup.\n");
+            return 1;
+        }
     }
     if (print_banner)
         ios_printf(ios_stdout, "%s", banner);
