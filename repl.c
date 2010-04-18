@@ -108,9 +108,94 @@ jl_value_t *jl_toplevel_eval(jl_value_t *ast)
 }
 
 static int have_color;
+static int prompt_length;
 
 jmp_buf ExceptionHandler;
 jmp_buf *CurrentExceptionHandler = &ExceptionHandler;
+
+static int line_start(int point) {
+    if (!point) return 0;
+    int i = point-1;
+    for (; i && rl_line_buffer[i] != '\n'; i--) ;
+    return i ? i+1 : 0;
+}
+
+static int line_end(int point) {
+    char *nl = strchr(rl_line_buffer + point, '\n');
+    if (!nl) return rl_end;
+    return nl - rl_line_buffer;
+}
+
+static int newline_callback(int count, int key) {
+    if (rl_point > 0) {
+        if (!isspace(rl_line_buffer[rl_point-1])) {
+            rl_insert_text("\n");
+            int i;
+            for (i = 0; i < prompt_length; i++)
+                rl_insert_text(" ");
+        } else {
+            rl_insert_text("  ");
+        }
+    }
+    return 0;
+}
+
+static int space_callback(int count, int key) {
+    if (rl_point > 0)
+        rl_insert_text(" ");
+    return 0;
+}
+
+static int left_callback(int count, int key) {
+    if (rl_point > 0) {
+        int i = line_start(rl_point);
+        rl_point = (i == 0 || rl_point-i > prompt_length) ? rl_point-1 : i-1;
+    }
+    return 0;
+}
+
+static int right_callback(int count, int key) {
+    rl_point += (rl_line_buffer[rl_point] == '\n') ? prompt_length+1 : 1;
+    if (rl_end < rl_point) rl_point = rl_end;
+    return 0;
+}
+
+static int up_callback(int count, int key) {
+    int i = line_start(rl_point);
+    if (i > 0) {
+        int j = line_start(i-1);
+        if (j == 0) rl_point -= prompt_length;
+        rl_point += j - i;
+        if (rl_point >= i) rl_point = i - 1;
+    } else {
+        rl_get_previous_history(count, key);
+    }
+    return 0;
+}
+
+static int down_callback(int count, int key) {
+    int j = line_end(rl_point);
+    if (j < rl_end) {
+        int i = line_start(rl_point);
+        if (i == 0) rl_point += prompt_length;
+        rl_point += j - i + 1;
+        int k = line_end(j+1);
+        if (rl_point > k) rl_point = k;
+    } else {
+        rl_get_next_history(count, key);
+    }
+    return 0;
+}
+
+static int backspace_callback(int count, int key) {
+    return 0;
+    if (rl_point > 0) {
+        int i = line_start(rl_point);
+        int j = (i == 0 || rl_point-i > prompt_length) ? rl_point-1 : i-1;
+        rl_delete_text(j, i);
+    }
+    return 0;
+}
 
 int main(int argc, char *argv[])
 {
@@ -127,20 +212,13 @@ int main(int argc, char *argv[])
     have_color = detect_color();
     char *banner = have_color ? jl_banner_color : jl_banner_plain;
     char *prompt = have_color ? jl_prompt_color : jl_prompt_plain;
+    prompt_length = strlen(jl_prompt_plain);
 
     int print_banner = 1;
     if (argc > 1) {
         if (!strncmp(argv[1], "-q", 2)) {
             print_banner = 0;
         }
-    }
-
-    if (!setjmp(ExceptionHandler)) {
-        jl_load("start.j");
-    }
-    else {
-        ios_printf(ios_stderr, "error during startup.\n");
-        return 1;
     }
 
     if (print_banner)
@@ -156,7 +234,20 @@ int main(int argc, char *argv[])
     } else {
         jl_errorf("history file error: %s", strerror(errno));
     }
+    rl_bind_key(' ', space_callback);
+    rl_bind_key('\t', newline_callback);
+    rl_bind_keyseq("\033[A", up_callback);
+    rl_bind_keyseq("\033[B", down_callback);
+    rl_bind_keyseq("\033[D", left_callback);
+    rl_bind_keyseq("\033[C", right_callback);
 #endif
+
+    if (!setjmp(ExceptionHandler)) {
+        jl_load("start.j");
+    } else {
+        ios_printf(ios_stderr, "error during startup.\n");
+        return 1;
+    }
 
     while (1) {
         ios_flush(ios_stdout);
@@ -175,7 +266,7 @@ int main(int argc, char *argv[])
 #endif
         ios_purge(ios_stdin);
 
-        if (!input || ios_eof(ios_stdin) || !strcmp(input, "Quit\n")) {
+        if (!input || ios_eof(ios_stdin)) {
             ios_printf(ios_stdout, "\n");
             break;
         }
