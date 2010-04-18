@@ -8,7 +8,10 @@
   (with-exception-catcher
    (lambda (e)
      (if (error-exception? e)
-	 `(error ,(error-exception-message e))
+	 (let ((msg (error-exception-message e)))
+	   (if (equal? msg "Premature end of input")
+	       `(continue)
+	       `(error ,msg)))
 	 #f))
    thk))
 

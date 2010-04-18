@@ -255,6 +255,80 @@ static int backspace_callback(int count, int key) {
     return 0;
 }
 
+static int ends_with_semicolon(const char *input)
+{
+    char *p = strrchr(input, ';');
+    if (p++) {
+        while (isspace(*p)) p++;
+        if (*p == '\0' || *p == '#')
+            return 1;
+    }
+    return 0;
+}
+
+#ifdef USE_READLINE
+static jl_value_t *read_expression(char *prompt, int *end, int *doprint)
+{
+    char *input;
+    input = readline(prompt);
+    
+    if (have_color) {
+        ios_printf(ios_stdout, jl_answer_color);
+        ios_flush(ios_stdout);
+    }
+
+    if (!input || ios_eof(ios_stdin)) {
+        *end = 1;
+        return NULL;
+    }
+
+    jl_value_t *ast = jl_parse_input_line(input);
+    if (ast == NULL) return NULL;
+    if (jl_is_expr(ast) && ((jl_expr_t*)ast)->head == continue_sym) {
+        // continuable parse error
+        // TODO
+        return read_expression(prompt, end, doprint);
+    }
+    
+    ios_flush(ios_stdout);
+    if (input && *input) add_history(input);
+    ios_purge(ios_stdin);
+    
+    *doprint = !ends_with_semicolon(input);
+
+    append_history(1, jl_history_file);
+
+    // readline allocates with system malloc
+    free(input);
+    return ast;
+}
+#else
+static jl_value_t *read_expression(char *prompt, int *end, int *doprint)
+{
+    char *input;
+    ios_printf(ios_stdout, prompt);
+    ios_flush(ios_stdout);
+    input = ios_readline(ios_stdin);
+    ios_purge(ios_stdin);
+
+    if (!input || ios_eof(ios_stdin)) {
+        *end = 1;
+        return NULL;
+    }
+
+    jl_value_t *ast = jl_parse_input_line(input);
+    if (ast == NULL) return NULL;
+    if (jl_is_expr(ast) && ((jl_expr_t*)ast)->head == continue_sym) {
+        // continuable parse error
+        // TODO
+        return read_expression(prompt, end, doprint);
+    }
+
+    *doprint = !ends_with_semicolon(input);
+    return ast;
+}
+#endif
+
 int main(int argc, char *argv[])
 {
     llt_init();
@@ -298,42 +372,13 @@ int main(int argc, char *argv[])
     while (1) {
         ios_flush(ios_stdout);
 
-#ifdef USE_READLINE
-        char *input = readline(prompt);
-#else
-        char *input = ios_printf(ios_stdout, prompt);
-#endif
-
-        ios_flush(ios_stdout);
-#ifdef USE_READLINE
-        if (input && *input) add_history(input);
-#else
-        input = ios_readline(ios_stdin);
-#endif
-        ios_purge(ios_stdin);
-
-        if (!input || ios_eof(ios_stdin)) {
-            ios_printf(ios_stdout, "\n");
-            break;
-        }
-#ifdef USE_READLINE
-        append_history(1, jl_history_file);
-#endif
-
-        if (have_color) {
-            ios_printf(ios_stdout, jl_answer_color);
-            ios_flush(ios_stdout);
-        }
-
-        // process input
         if (!setjmp(ExceptionHandler)) {
-            jl_value_t *ast = jl_parse_input_line(input);
+            int end = 0;
             int print_value = 1;
-            char *p = strrchr(input, ';');
-            if (p++) {
-                while (isspace(*p)) p++;
-                if (*p == '\0' || *p == '#')
-                    print_value = 0;
+            jl_value_t *ast = read_expression(prompt, &end, &print_value);
+            if (end) {
+                ios_printf(ios_stdout, "\n");
+                break;
             }
             if (ast != NULL) {
                 jl_value_t *value = jl_toplevel_eval(ast);
@@ -345,10 +390,6 @@ int main(int argc, char *argv[])
         }
 
         ios_printf(ios_stdout, "\n");
-#ifdef USE_READLINE
-        // readline allocates with system malloc
-        if (input) free(input);
-#endif
     }
     if (have_color) {
         ios_printf(ios_stdout, jl_color_normal);

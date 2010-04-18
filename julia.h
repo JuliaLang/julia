@@ -235,6 +235,7 @@ extern jl_sym_t *top_sym;
 extern jl_sym_t *expr_sym;
 extern jl_sym_t *list_sym;
 extern jl_sym_t *line_sym;
+extern jl_sym_t *continue_sym;
 
 #ifdef BITS64
 #define NWORDS(sz) (((sz)+7)>>3)

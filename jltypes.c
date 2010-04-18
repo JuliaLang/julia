@@ -87,6 +87,7 @@ jl_sym_t *top_sym;
 jl_sym_t *expr_sym;
 jl_sym_t *list_sym;
 jl_sym_t *line_sym;
+jl_sym_t *continue_sym;
 
 static inline jl_value_t *newobj(jl_type_t *type, size_t nfields)
 {
@@ -1515,6 +1516,7 @@ void jl_init_types()
     tuple_sym = jl_symbol("tuple");
     dollar_sym = jl_symbol("$");
     line_sym = jl_symbol("line");
+    continue_sym = jl_symbol("continue");
 
     init_box_caches();
 }

@@ -9,9 +9,10 @@ fixes
 * provide default unique generic type parameters if none given
 * for conversions, make generic parameters present in destination type
   available in the function body
-- only skip generic matching if an existing method matches exactly
+* only skip generic matching if an existing method matches exactly
 - update wiki
-- make Buffer a kind of Vector
+- allow partial type application; fill in missing with dummy typevars
+- add NTuple
 -------------------------------------------------------------------------------
 
 features
