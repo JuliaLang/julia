@@ -14,6 +14,7 @@
 #include <errno.h>
 #include <math.h>
 #include <libgen.h>
+#include <getopt.h>
 #ifndef NO_BOEHM_GC
 #include <gc.h>
 #endif
@@ -51,11 +52,62 @@ static char jl_color_normal[] = "\033[0m\033[37m";
 
 static char jl_history_file[] = ".julia_history";
 
-char *julia_home; // load is relative to here
+char *julia_home = NULL; // load is relative to here
+static int print_banner = 1;
+
+static const char *usage = "julia [options]\n";
+static const char *opts =
+    " -H --home=<dir>   Load files relative to <dir>\n"
+    " -q --quiet        Quiet startup without banner\n"
+    " -h --help         Print this message\n";
+
+void parse_opts(int *argcp, char ***argvp) {
+    static struct option longopts[] = {
+        { "home",  required_argument, 0, 'H' },
+        { "quiet", no_argument,       0, 'q' },
+        { "help",  no_argument,       0, 'h' },
+        { 0, 0, 0, 0 }
+    };
+    int c;
+    while ((c = getopt_long(*argcp,*argvp,"H:qh",longopts,0)) != -1) {
+        switch (c) {
+        case 'H':
+            julia_home = optarg;
+            break;
+        case 'q':
+            print_banner = 0;
+            break;
+        case 'h':
+            printf("%s%s", usage, opts);
+            exit(0);
+        case '?':
+            ios_printf(ios_stderr, "options:\n%s", opts);
+            exit(1);
+        default:
+            ios_printf(ios_stderr, "ERROR: getopt badness.\n");
+            exit(1);
+        }
+    }
+    if (!julia_home) {
+        julia_home = getenv("JULIA_HOME");
+        if (!julia_home) {
+            char *julia_path = (char*)malloc(PATH_MAX);
+            get_exename(julia_path, PATH_MAX);
+            julia_home = strdup(dirname(julia_path));
+            free(julia_path);
+        }
+    }
+    *argvp += optind;
+    *argcp -= optind;
+    if (*argcp > 0) {
+        ios_printf(ios_stderr, "julia: no arguments allowed\n", usage);
+        ios_printf(ios_stderr, "usage: %s", usage);
+        exit(1);
+    }
+}
 
 void julia_init()
 {
-    llt_init();
     jl_init_frontend();
     jl_init_types();
     jl_init_modules();
@@ -199,30 +251,14 @@ static int backspace_callback(int count, int key) {
 
 int main(int argc, char *argv[])
 {
-    julia_home = getenv("JULIA_HOME");
-    if (!julia_home) {
-        char *julia_path = (char*)malloc(PATH_MAX);
-        get_exename(julia_path, PATH_MAX);
-        julia_home = strdup(dirname(julia_path));
-        free(julia_path);
-    }
-
+    llt_init();
+    parse_opts(&argc, &argv);
     julia_init();
 
     have_color = detect_color();
     char *banner = have_color ? jl_banner_color : jl_banner_plain;
     char *prompt = have_color ? jl_prompt_color : jl_prompt_plain;
     prompt_length = strlen(jl_prompt_plain);
-
-    int print_banner = 1;
-    if (argc > 1) {
-        if (!strncmp(argv[1], "-q", 2)) {
-            print_banner = 0;
-        }
-    }
-
-    if (print_banner)
-        ios_printf(ios_stdout, "%s", banner);
 
 #ifdef USE_READLINE
     using_history();
@@ -248,6 +284,8 @@ int main(int argc, char *argv[])
         ios_printf(ios_stderr, "error during startup.\n");
         return 1;
     }
+    if (print_banner)
+        ios_printf(ios_stdout, "%s", banner);
 
     while (1) {
         ios_flush(ios_stdout);
