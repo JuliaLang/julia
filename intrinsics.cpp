@@ -46,18 +46,19 @@ static Function *box_float64_func;
     where the box is needed.
 */
 
-static Value *mark_unsigned(Value *v)
-{
-    // use value name as a hack to tag as unsigned
-    Value *x = builder.CreateBitCast(v, v->getType());
-    x->setName("$u");
-    return x;
-}
-
 static int is_unsigned(Value *v)
 {
     const char *name = v->getName().data();
     return (!strncmp(name, "$u", 2));
+}
+
+static Value *mark_unsigned(Value *v)
+{
+    if (is_unsigned(v)) return v;
+    // use value name as a hack to tag as unsigned
+    Value *x = builder.CreateBitCast(v, v->getType());
+    x->setName("$u");
+    return x;
 }
 
 // this is used to wrap values for generic contexts, where a
@@ -111,37 +112,35 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
     Value *p;
     switch (f) {
     HANDLE(boxui8,1)
-        assert(t == T_int8);
+        if (t != T_int8) x = builder.CreateBitCast(x, T_int8);
         return mark_unsigned(x);
     HANDLE(boxsi8,1)
-        assert(t == T_int8);
+        if (t != T_int8) x = builder.CreateBitCast(x, T_int8);
         return x;
     HANDLE(boxui16,1)
-        assert(t == T_int16);
+        if (t != T_int16) x = builder.CreateBitCast(x, T_int16);
         return mark_unsigned(x);
     HANDLE(boxsi16,1)
-        assert(t == T_int16);
+        if (t != T_int16) x = builder.CreateBitCast(x, T_int16);
         return x;
     HANDLE(boxui32,1)
-        assert(t == T_int32);
+        if (t != T_int32) x = builder.CreateBitCast(x, T_int32);
         return mark_unsigned(x);
     HANDLE(boxsi32,1)
-        assert(t == T_int32);
+        if (t != T_int32) x = builder.CreateBitCast(x, T_int32);
         return x;
     HANDLE(boxui64,1)
-        assert(t == T_int64);
+        if (t != T_int64) x = builder.CreateBitCast(x, T_int64);
         return mark_unsigned(x);
     HANDLE(boxsi64,1)
-        assert(t == T_int64);
+        if (t != T_int64) x = builder.CreateBitCast(x, T_int64);
         return x;
     HANDLE(boxf32,1)
-        if (t == T_float32) return x;
-        assert(t == T_int32);
-        return builder.CreateBitCast(x, T_float32);
+        if (t != T_float32) x = builder.CreateBitCast(x, T_float32);
+        return x;
     HANDLE(boxf64,1)
-        if (t == T_float64) return x;
-        assert(t == T_int64);
-        return builder.CreateBitCast(x, T_float64);
+        if (t != T_float64) x = builder.CreateBitCast(x, T_float64);
+        return x;
     HANDLE(unbox8,1)
         p = builder.CreateGEP(builder.CreateBitCast(x, jl_ppvalue_llvmt),
                               ConstantInt::get(T_int32, 1));

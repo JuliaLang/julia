@@ -101,6 +101,7 @@ static jl_sym_t *closure_ref_sym;
   stuff to fix up:
   - discard toplevel wrapper functions
   - gensyms from the front end might conflict with real variables, fix it
+  - don't fully instantiate types with typevars, e.g. no Complex[typevar()].new
   - better error messages
   - exceptions
   - threads or other advanced control flow
