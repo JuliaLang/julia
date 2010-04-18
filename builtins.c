@@ -188,6 +188,8 @@ JL_CALLABLE(jl_f_time_thunk)
     return result;
 }
 
+int asprintf(char **strp, const char *fmt, ...);
+
 void jl_load(const char *fname)
 {
     char *fpath = (char*)fname;
