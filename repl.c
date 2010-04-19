@@ -201,6 +201,8 @@ static jl_value_t *ast;
 
 #ifdef USE_READLINE
 
+static int history_offset = -1;
+
 // yes, readline uses inconsistent indexing internally.
 #define history_rem(n) remove_history(n-history_base)
 
@@ -316,6 +318,10 @@ static int up_callback(int count, int key) {
         rl_point += j - i;
         if (rl_point >= i) rl_point = i - 1;
     } else {
+        if (history_offset >= 0) {
+            history_set_pos(history_offset+1);
+            history_offset = -1;
+        }
         rl_get_previous_history(count, key);
     }
     return 0;
@@ -330,6 +336,10 @@ static int down_callback(int count, int key) {
         int k = line_end(j+1);
         if (rl_point > k) rl_point = k;
     } else {
+        if (history_offset >= 0) {
+            history_set_pos(history_offset);
+            history_offset = -1;
+        }
         rl_get_next_history(count, key);
     }
     return 0;
@@ -348,8 +358,7 @@ static int backspace_callback(int count, int key) {
 static void read_expression(char *prompt, int *end, int *doprint)
 {
     ast = NULL;
-    char *input;
-    input = readline(prompt);
+    char *input = readline(prompt);
     if (!input || ios_eof(ios_stdin)) {
         *end = 1;
         return;
@@ -357,8 +366,16 @@ static void read_expression(char *prompt, int *end, int *doprint)
     if (ast == NULL) return;
 
     *doprint = !ends_with_semicolon(input);
-    if (input && *input) add_history(input);
-    append_history(1, jl_history_file);
+    if (input && *input) {
+        HIST_ENTRY *entry = current_history();
+        if (!entry || strcmp(input, entry->line)) {
+            add_history(input);
+            append_history(1, jl_history_file);
+            history_offset = -1;
+        } else {
+            history_offset = where_history();
+        }
+    }
 
     ios_printf(ios_stdout, "\n");
 
