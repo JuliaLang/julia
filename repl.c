@@ -55,10 +55,12 @@ static char jl_history_file[] = ".julia_history";
 char *julia_home = NULL; // load is relative to here
 static int print_banner = 1;
 static int load_start_j = 1;
+static int tab_width = 2;
 
 static const char *usage = "julia [options]\n";
 static const char *opts =
     " -H --home=<dir>   Load files relative to <dir>\n"
+    " -T --tab=<size>   Set tab width to <size>\n"
     " -b --bare         Bare REPL: don't load 'start.j'\n"
     " -q --quiet        Quiet startup without banner\n"
     " -h --help         Print this message\n";
@@ -66,13 +68,14 @@ static const char *opts =
 void parse_opts(int *argcp, char ***argvp) {
     static struct option longopts[] = {
         { "home",  required_argument, 0, 'H' },
+        { "tab",   required_argument, 0, 'T' },
         { "bare",  no_argument,       0, 'b' },
         { "quiet", no_argument,       0, 'q' },
         { "help",  no_argument,       0, 'h' },
         { 0, 0, 0, 0 }
     };
     int c;
-    while ((c = getopt_long(*argcp,*argvp,"H:bqh",longopts,0)) != -1) {
+    while ((c = getopt_long(*argcp,*argvp,"H:T:bqh",longopts,0)) != -1) {
         switch (c) {
         case 'H':
             julia_home = optarg;
@@ -219,6 +222,15 @@ static int space_callback(int count, int key) {
     return 0;
 }
 
+static int tab_callback(int count, int key) {
+    if (rl_point > 0) {
+        int i;
+        for (i=0; i < tab_width; i++)
+            rl_insert_text(" ");
+    }
+    return 0;
+}
+
 static int left_callback(int count, int key) {
     if (rl_point > 0) {
         int i = line_start(rl_point);
@@ -337,6 +349,7 @@ int main(int argc, char *argv[])
         jl_errorf("history file error: %s", strerror(errno));
     }
     rl_bind_key(' ', space_callback);
+    rl_bind_key('\t', tab_callback);
     rl_bind_key('\r', newline_callback);
     rl_bind_key('\n', newline_callback);
     rl_bind_keyseq("\033[A", up_callback);
