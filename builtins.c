@@ -867,6 +867,16 @@ static int all_typevars(jl_tuple_t *p)
     return 1;
 }
 
+static void check_supertype(jl_value_t *super, char *name)
+{
+    if (jl_subtype(super,(jl_value_t*)jl_tuple_type,0,0) ||
+        jl_is_func_type(super) ||
+        jl_is_union_type(super) ||
+        jl_subtype(super,(jl_value_t*)jl_buffer_type,0,0)) {
+        jl_errorf("invalid subtyping in definition of %s", name);
+    }
+}
+
 JL_CALLABLE(jl_f_new_struct_type)
 {
     JL_NARGS(new_struct_type, 4, 4);
@@ -893,12 +903,7 @@ JL_CALLABLE(jl_f_new_struct_type)
     }
     else {
         assert(jl_is_type(args[1]));
-        if (jl_subtype(super,(jl_value_t*)jl_tuple_type,0,0) ||
-            jl_is_func_type(super) ||
-            jl_is_union_type(super) ||
-            jl_subtype(super,(jl_value_t*)jl_buffer_type,0,0)) {
-            jl_errorf("invalid subtyping in definition of %s", name->name);
-        }
+        check_supertype(super, name->name);
         nst->super = (jl_tag_type_t*)super;
         if (jl_is_struct_type(super))
             nst->names = jl_tuple_append(((jl_struct_type_t*)super)->names,
@@ -960,7 +965,9 @@ JL_CALLABLE(jl_f_new_tag_type)
         jl_errorf("invalid type parameter list for %s",
                   ((jl_sym_t*)args[0])->name);
     }
-    return (jl_value_t*)jl_new_tagtype((jl_value_t*)args[0], (jl_tag_type_t*)args[1], p);
+    jl_value_t *super = args[1];
+    check_supertype(super, ((jl_sym_t*)args[0])->name);
+    return (jl_value_t*)jl_new_tagtype((jl_value_t*)args[0], (jl_tag_type_t*)super, p);
 }
 
 JL_CALLABLE(jl_f_typevar)
@@ -1092,6 +1099,7 @@ void jl_init_builtins()
     add_builtin("TypeConstructor", (jl_value_t*)jl_typector_type);
     add_builtin("TypeVar", (jl_value_t*)jl_tvar_type);
     add_builtin("Tuple", (jl_value_t*)jl_tuple_type);
+    add_builtin("NTuple", (jl_value_t*)jl_ntuple_type);
     add_builtin("Type", (jl_value_t*)jl_type_type);
     add_builtin("Symbol", (jl_value_t*)jl_sym_type);
     add_builtin("...", (jl_value_t*)jl_seq_type);

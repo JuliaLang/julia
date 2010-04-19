@@ -11,8 +11,8 @@ fixes
   available in the function body
 * only skip generic matching if an existing method matches exactly
 - update wiki
-- allow partial type application; fill in missing with dummy typevars
-- add NTuple
+* allow partial type application; fill in missing with dummy typevars
+* add NTuple
 -------------------------------------------------------------------------------
 
 features

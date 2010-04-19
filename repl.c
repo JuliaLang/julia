@@ -48,6 +48,7 @@ static char jl_banner_color[] =
 static char jl_prompt_plain[] = "julia> ";
 static char jl_prompt_color[] = "\001\033[1m\033[32m\002julia> \001\033[37m\002";
 static char jl_answer_color[] = "\033[0m\033[37m";
+static char jl_input_color[]  = "\033[1m\033[37m";
 static char jl_color_normal[] = "\033[0m\033[37m";
 
 static char jl_history_file[] = ".julia_history";
@@ -161,17 +162,6 @@ static int detect_color()
 #endif
 }
 
-#ifndef USE_READLINE
-static char *ios_readline(ios_t *s)
-{
-    ios_t dest;
-    ios_mem(&dest, 0);
-    ios_copyuntil(&dest, s, '\n');
-    size_t n;
-    return ios_takebuf(&dest, &n);
-}
-#endif
-
 JL_CALLABLE(jl_f_new_closure);
 
 jl_value_t *jl_toplevel_eval(jl_value_t *ast)
@@ -224,9 +214,17 @@ static int line_end(int point) {
 }
 
 static int newline_callback(int count, int key) {
+    if (have_color) {
+        ios_printf(ios_stdout, jl_answer_color);
+        ios_flush(ios_stdout);
+    }
     ast = jl_parse_input_line(rl_line_buffer);
     rl_done = !ast || !jl_is_expr(ast) ||
         (((jl_expr_t*)ast)->head != continue_sym);
+    if (!rl_done && have_color) {
+        ios_printf(ios_stdout, jl_input_color);
+        ios_flush(ios_stdout);
+    }
     if (!rl_done) {
         rl_insert_text("\n");
         int i;
@@ -324,6 +322,15 @@ static void read_expression(char *prompt, int *end, int *doprint)
     return;
 }
 #else
+static char *ios_readline(ios_t *s)
+{
+    ios_t dest;
+    ios_mem(&dest, 0);
+    ios_copyuntil(&dest, s, '\n');
+    size_t n;
+    return ios_takebuf(&dest, &n);
+}
+
 static void read_expression(char *prompt, int *end, int *doprint)
 {
     ast = NULL;

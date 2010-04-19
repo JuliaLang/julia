@@ -171,6 +171,8 @@ extern jl_struct_type_t *jl_typename_type;
 extern jl_struct_type_t *jl_sym_type;
 extern jl_tuple_t *jl_tuple_type;
 extern jl_typename_t *jl_tuple_typename;
+extern jl_typector_t *jl_ntuple_type;
+extern jl_typename_t *jl_ntuple_typename;
 extern jl_struct_type_t *jl_tvar_type;
 extern jl_struct_type_t *jl_typector_type;
 
