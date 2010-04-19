@@ -309,6 +309,15 @@ static int line_end_callback(int count, int key) {
     return 0;
 }
 
+static int line_kill_callback(int count, int key) {
+    int end = line_end(rl_point);
+    int flush_right = rl_point == end;
+    int kill = flush_right ? end + prompt_length + 1 : end;
+    if (kill > rl_end) kill = rl_end;
+    rl_kill_text(rl_point, kill);
+    return 0;
+}
+
 static int left_callback(int count, int key) {
     if (rl_point > 0) {
         int i = line_start(rl_point);
@@ -449,8 +458,11 @@ int main(int argc, char *argv[])
     rl_bind_key('\t', tab_callback);
     rl_bind_key('\r', newline_callback);
     rl_bind_key('\n', newline_callback);
+    rl_bind_key('\v', line_kill_callback);
     rl_bind_key('\001', line_start_callback);
     rl_bind_key('\005', line_end_callback);
+    rl_bind_key('\002', left_callback);
+    rl_bind_key('\006', right_callback);
     rl_bind_keyseq("\033[A", up_callback);
     rl_bind_keyseq("\033[B", down_callback);
     rl_bind_keyseq("\033[D", left_callback);
