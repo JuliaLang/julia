@@ -271,6 +271,9 @@ static int newline_callback(int count, int key) {
         int i;
         for (i = 0; i < prompt_length; i++)
             rl_insert_text(" ");
+    } else {
+        rl_point = rl_end;
+        rl_redisplay();
     }
     return 0;
 }
