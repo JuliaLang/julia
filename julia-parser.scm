@@ -579,7 +579,7 @@ TODO:
 
 	  ((eqv? t #\( )
 	   (take-token s)
-	   (if (eqv? (peek-token s) #\) )
+	   (if (eqv? (require-token s) #\) )
 	       (begin (take-token s) '(tuple))
 	       ; here we parse the first subexpression separately, so
 	       ; we can look for a comma to see if it's a tuple. if we
