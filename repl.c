@@ -182,6 +182,8 @@ static int ends_with_semicolon(const char *input)
     return 0;
 }
 
+static jl_value_t *ast;
+
 #ifdef USE_READLINE
 static int line_start(int point) {
     if (!point) return 0;
@@ -197,15 +199,16 @@ static int line_end(int point) {
 }
 
 static int newline_callback(int count, int key) {
-    if (rl_point > 0) {
-        if (!isspace(rl_line_buffer[rl_point-1])) {
-            rl_insert_text("\n");
-            int i;
-            for (i = 0; i < prompt_length; i++)
-                rl_insert_text(" ");
-        } else {
-            rl_insert_text("  ");
-        }
+    if (rl_point == rl_end) {
+        ast = jl_parse_input_line(rl_line_buffer);
+        rl_done = !ast || !jl_is_expr(ast) ||
+            (((jl_expr_t*)ast)->head != continue_sym);
+    }
+    if (!rl_done) {
+        rl_insert_text("\n");
+        int i;
+        for (i = 0; i < prompt_length; i++)
+            rl_insert_text(" ");
     }
     return 0;
 }
@@ -219,7 +222,8 @@ static int space_callback(int count, int key) {
 static int left_callback(int count, int key) {
     if (rl_point > 0) {
         int i = line_start(rl_point);
-        rl_point = (i == 0 || rl_point-i > prompt_length) ? rl_point-1 : i-1;
+        rl_point = (i == 0 || rl_point-i > prompt_length) ?
+            rl_point-1 : i-1;
     }
     return 0;
 }
@@ -267,44 +271,30 @@ static int backspace_callback(int count, int key) {
     return 0;
 }
 
-static jl_value_t *read_expression(char *prompt, int *end, int *doprint)
+static void read_expression(char *prompt, int *end, int *doprint)
 {
+    ast = NULL;
     char *input;
     input = readline(prompt);
-    
-    if (have_color) {
-        ios_printf(ios_stdout, jl_answer_color);
-        ios_flush(ios_stdout);
-    }
-
     if (!input || ios_eof(ios_stdin)) {
         *end = 1;
-        return NULL;
+        return;
     }
+    if (ast == NULL) return;
 
-    jl_value_t *ast = jl_parse_input_line(input);
-    if (ast == NULL) return NULL;
-    if (jl_is_expr(ast) && ((jl_expr_t*)ast)->head == continue_sym) {
-        // continuable parse error
-        // TODO
-        return read_expression(prompt, end, doprint);
-    }
-    
-    ios_flush(ios_stdout);
-    if (input && *input) add_history(input);
-    ios_purge(ios_stdin);
-    
     *doprint = !ends_with_semicolon(input);
-
+    if (input && *input) add_history(input);
     append_history(1, jl_history_file);
 
-    // readline allocates with system malloc
+    ios_printf(ios_stdout, "\n");
+
     free(input);
-    return ast;
+    return;
 }
 #else
-static jl_value_t *read_expression(char *prompt, int *end, int *doprint)
+static void read_expression(char *prompt, int *end, int *doprint)
 {
+    ast = NULL;
     char *input;
     ios_printf(ios_stdout, prompt);
     ios_flush(ios_stdout);
@@ -316,16 +306,12 @@ static jl_value_t *read_expression(char *prompt, int *end, int *doprint)
         return NULL;
     }
 
-    jl_value_t *ast = jl_parse_input_line(input);
+    ast = jl_parse_input_line(input);
     if (ast == NULL) return NULL;
-    if (jl_is_expr(ast) && ((jl_expr_t*)ast)->head == continue_sym) {
-        // continuable parse error
-        // TODO
+    if (jl_is_expr(ast) && ((jl_expr_t*)ast)->head == continue_sym)
         return read_expression(prompt, end, doprint);
-    }
 
     *doprint = !ends_with_semicolon(input);
-    return ast;
 }
 #endif
 
@@ -351,7 +337,8 @@ int main(int argc, char *argv[])
         jl_errorf("history file error: %s", strerror(errno));
     }
     rl_bind_key(' ', space_callback);
-    rl_bind_key('\t', newline_callback);
+    rl_bind_key('\r', newline_callback);
+    rl_bind_key('\n', newline_callback);
     rl_bind_keyseq("\033[A", up_callback);
     rl_bind_keyseq("\033[B", down_callback);
     rl_bind_keyseq("\033[D", left_callback);
@@ -375,10 +362,14 @@ int main(int argc, char *argv[])
         if (!setjmp(ExceptionHandler)) {
             int end = 0;
             int print_value = 1;
-            jl_value_t *ast = read_expression(prompt, &end, &print_value);
+            read_expression(prompt, &end, &print_value);
             if (end) {
                 ios_printf(ios_stdout, "\n");
                 break;
+            }
+            if (have_color) {
+                ios_printf(ios_stdout, jl_answer_color);
+                ios_flush(ios_stdout);
             }
             if (ast != NULL) {
                 jl_value_t *value = jl_toplevel_eval(ast);

@@ -53,7 +53,7 @@ static void syntax_error_check(___SCMOBJ e)
             ___release_rc(s);
             // note: this string should be released
             ___SCMOBJ_to_CHARSTRING(___CADR(___CADR(e)), &s, 0);
-            jl_errorf("syntax error: %s", s);
+            jl_errorf("\nsyntax error: %s", s);
         }
         else {
             ___release_rc(s);
