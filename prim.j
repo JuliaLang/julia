@@ -91,8 +91,7 @@ end
 
 print(x...) = for i=x; print(i); end
 
-expr(hd::Symbol, args...)  = Expr.new(hd, args)
-exprl(hd::Symbol, arglist) = Expr.new(hd, arglist)
+expr(hd::Symbol, args...)  = Expr{hd, args}
 
 function cell_literal(xs...)
     n = length(xs)

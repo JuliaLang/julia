@@ -1,12 +1,12 @@
 struct Range
-    step
     start
+    step
     stop
 end
 
 struct RangeFrom
-    step
     start
+    step
 end
 
 struct RangeTo
@@ -19,10 +19,10 @@ struct RangeBy
 end
 
 # arguments always in the order start,step,stop
-range(a,b,c) = Range.new(b,a,c)
-rangefrom(a,b) = RangeFrom.new(b,a)
-rangeto(b,c) = RangeTo.new(b,c)
-rangeby(b) = RangeBy.new(b)
+range(a,b,c) = Range{a,b,c}
+rangefrom(a,b) = RangeFrom{a,b}
+rangeto(b,c) = RangeTo{b,c}
+rangeby(b) = RangeBy{b}
 
 numel(r::Range) = length(r)
 length(r::Range) = (r.step > 0 ?

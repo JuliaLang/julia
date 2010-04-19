@@ -355,7 +355,7 @@
    (pattern-lambda (cell . elts)
 		   `(call (top cell_literal) ,@elts))
    (pattern-lambda (new type . elts)
-		   `(call (top new) ,type ,@elts))
+		   `(call (|.| ,type new) ,@elts))
 
    ; call with splat
    (pattern-lambda (call f ... (... _) ...)
@@ -1229,8 +1229,8 @@ So far only the second case can actually occur.
 	 (let loop ((p (cdr e)) (q '()))
 	   (if (null? p)
 	       (let ((forms (reverse q)))
-		 `(call (top exprl) ,(expand-backquote (car e))
-			(call (top append) ,@forms)))
+		 `(new (top Expr) ,(expand-backquote (car e))
+		       (call (top append) ,@forms)))
 	       ; look for splice inside backquote, e.g. (a,$(x...),b)
 	       (if (match '($ (tuple (... x))) (car p))
 		   (loop (cdr p)

@@ -763,7 +763,7 @@ JL_CALLABLE(jl_f_print_any)
             assert(jl_is_struct_type(t));
             jl_struct_type_t *st = (jl_struct_type_t*)t;
             ios_puts(st->name->name->name, s);
-            ios_putc('(', s);
+            ios_putc('{', s);
             size_t i;
             size_t n = st->names->length;
             for(i=0; i < n; i++) {
@@ -773,7 +773,7 @@ JL_CALLABLE(jl_f_print_any)
                 if (i < n-1)
                     ios_write(s, ", ", 2);
             }
-            ios_putc(')', s);
+            ios_putc('}', s);
         }
     }
     return (jl_value_t*)jl_null;
