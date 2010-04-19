@@ -257,6 +257,14 @@ static int line_end(int point) {
 }
 
 static int newline_callback(int count, int key) {
+    rl_insert_text("\n");
+    int i;
+    for (i = 0; i < prompt_length; i++)
+        rl_insert_text(" ");
+    return 0;
+}
+
+static int return_callback(int count, int key) {
     if (have_color) {
         ios_printf(ios_stdout, jl_answer_color);
         ios_flush(ios_stdout);
@@ -269,10 +277,7 @@ static int newline_callback(int count, int key) {
         ios_flush(ios_stdout);
     }
     if (!rl_done) {
-        rl_insert_text("\n");
-        int i;
-        for (i = 0; i < prompt_length; i++)
-            rl_insert_text(" ");
+        newline_callback(count, key);
     } else {
         rl_point = rl_end;
         rl_redisplay();
@@ -456,8 +461,8 @@ int main(int argc, char *argv[])
     init_history();
     rl_bind_key(' ', space_callback);
     rl_bind_key('\t', tab_callback);
-    rl_bind_key('\r', newline_callback);
-    rl_bind_key('\n', newline_callback);
+    rl_bind_key('\r', return_callback);
+    rl_bind_key('\n', return_callback);
     rl_bind_key('\v', line_kill_callback);
     rl_bind_key('\001', line_start_callback);
     rl_bind_key('\005', line_end_callback);
