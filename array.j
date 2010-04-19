@@ -1,5 +1,5 @@
 struct Array[T,ndims] <: Tensor[T,ndims]
-    dims::Buffer[Size]
+    dims::NTuple[ndims,Size]
     data::Buffer[T]
 end
 
@@ -15,15 +15,13 @@ ndims(t::Tensor) = length(size(t))
 numel(t::Tensor) = prod(size(t))
 length(v::Vector) = size(v,1)
 
-zeros(T::Type, dims...) = Array[T,length(dims)].new(buffer(dims...), Buffer[T].new(prod(dims)))
+zeros(T::Type, dims...) = Array[T,length(dims)].new(dims, Buffer[T].new(prod(dims)))
 zeros(dims...) = zeros(Float64, dims...)
 
 jl_comprehension_zeros (oneresult::Scalar, dims...) = zeros(typeof(oneresult), dims...)
 
 function jl_comprehension_zeros[T,n](oneresult::Tensor[T,n], dims...)
-    newdims = Buffer[Int32].new(length(dims) + ndims(oneresult))
-    for i=1:length(dims); newdims[i] = dims[i]; end
-    for i=1:ndims(oneresult); newdims[i+length(dims)] = size(oneresult, i); end
+    newdims = tuple(dims..., size(oneresult)...)
     data = Buffer[T].new(prod(newdims))
     Array[T, length(newdims)].new(newdims, data)
 end

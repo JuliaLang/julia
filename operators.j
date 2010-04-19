@@ -29,7 +29,7 @@ end
 
 max(itr)  = reduce(max, itr)
 min(itr)  = reduce(min, itr)
-sum(itr)  = reduce(sum, itr)
-prod(itr) = reduce(prod, itr)
+sum(itr)  = reduce(+,   itr)
+prod(itr) = reduce(*,   itr)
 any(itr)  = reduce(any, itr)
 all(itr)  = reduce(all, itr)
