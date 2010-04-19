@@ -79,7 +79,7 @@ void parse_opts(int *argcp, char ***argvp) {
     while ((c = getopt_long(*argcp,*argvp,"H:T:bqh",longopts,0)) != -1) {
         switch (c) {
         case 'H':
-            julia_home = optarg;
+            julia_home = strdup(optarg);
             break;
         case 'b':
             load_start_j = 0;
@@ -100,11 +100,33 @@ void parse_opts(int *argcp, char ***argvp) {
     }
     if (!julia_home) {
         julia_home = getenv("JULIA_HOME");
-        if (!julia_home) {
+        if (julia_home) {
+            julia_home = strdup(julia_home);
+        } else {
             char *julia_path = (char*)malloc(PATH_MAX);
             get_exename(julia_path, PATH_MAX);
             julia_home = strdup(dirname(julia_path));
             free(julia_path);
+        }
+    }
+    char *pwd = getenv("PWD");
+    if (julia_home && pwd) {
+        int i, prefix = 1;
+        for (i=0; pwd[i]; i++) {
+            if (pwd[i] != julia_home[i]) {
+                prefix = 0;
+                break;
+            }
+        }
+        if (prefix && (julia_home[i] == '/' || julia_home[i] == '\0')) {
+            while (julia_home[i] == '/') i++;
+            if (julia_home[i]) {
+                char *p = strdup(julia_home + i);
+                free(julia_home);
+                julia_home = p;
+            } else {
+                julia_home = NULL;
+            }
         }
     }
     *argvp += optind;
