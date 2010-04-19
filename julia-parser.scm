@@ -126,7 +126,7 @@ TODO:
     (let* ((s (get-output-string str))
 	   (n (string->number s)))
       (if n n
-	  (error "Invalid numeric constant " s)))))
+	  (error "invalid numeric constant " s)))))
 
 (define (read-operator port c)
   (string->symbol
@@ -171,7 +171,7 @@ TODO:
 
 	  ((eqv? c #\")  (read port))
 
-	  (else (error "Invalid character" (read-char port))))))
+	  (else (error "invalid character" (read-char port))))))
 
 ; --- parser ---
 
@@ -259,7 +259,7 @@ TODO:
 ; ow, my eyes!!
 (define (parse-Nary s down op head closers allow-empty)
   (if (invalid-initial-token? (require-token s))
-      (error "Unexpected token" (peek-token s)))
+      (error "unexpected token" (peek-token s)))
   (if (memv (require-token s) closers)
       (list head)  ; empty block
       (let loop ((ex
@@ -408,7 +408,7 @@ TODO:
 (define (parse-unary s)
   (let ((t (require-token s)))
     (if (closing-token? t)
-	(error "Unexpected token" t))
+	(error "unexpected token" t))
     (if (memq t unary-ops)
 	(let ((op (take-token s))
 	      (next (peek-token s)))
@@ -498,7 +498,7 @@ TODO:
 	 ((end)     (list 'if test then))
 	 ((elseif)  (list 'if test then (parse-resword s 'if)))
 	 ((else)    (list 'if test then (parse-resword s 'begin)))
-	 (else (error "Improperly terminated if statement")))))
+	 (else (error "improperly terminated if statement")))))
     ((local)  (list 'local (parse-eq s)))
     ((function macro)
      (let ((sig (parse-call s)))
@@ -516,7 +516,7 @@ TODO:
      )
     ((return)          (list 'return (parse-eq s)))
     ((break continue)  (list word))
-    (else (error "Unhandled reserved word"))))
+    (else (error "unhandled reserved word"))))
 
 ; handle function call argument list, or any comma-delimited list.
 ; . an extra comma at the end is allowed
@@ -537,19 +537,20 @@ TODO:
 			 (reverse (cons (cons 'parameters (loop '()))
 					lst))))
 	      (let* ((nxt (parse-eq* s))
-		     (c (peek-token s))
+		     (c (require-token s))
 		     (nxt (if (eq? c '...)
 			      (list '... nxt)
 			      nxt))
 		     (c (if (eq? c '...)
 			    (begin (take-token s)
-				   (peek-token s))
+				   (require-token s))
 			    c)))
 		(cond ((equal? c #\,)
 		       (begin (take-token s) (loop (cons nxt lst))))
 		      ((equal? c #\;)        (loop (cons nxt lst)))
 		      ((equal? c closer)     (loop (cons nxt lst)))
-		      (else (error "incomplete: comma expected")))))))))
+		      (else
+		       (error "unexpected line break in argument list")))))))))
 
 ; parse [] concatenation expressions
 (define (parse-vector s)
@@ -566,9 +567,12 @@ TODO:
 		     (fix 'vcat (update-outer vec))
 		     (fix 'hcat vec)))
 	  (let ((nv (cons (parse-eq* s) vec)))
-	    (case (require-token s)
+	    (case (if (eqv? (peek-token s) #\newline)
+		      #\newline
+		      (require-token s))
 	      ((#\]) (loop nv outer))
-	      ((#\;) (begin (take-token s) (loop '() (update-outer nv))))
+	      ((#\; #\newline)
+	       (begin (take-token s) (loop '() (update-outer nv))))
 	      ((#\,) (begin (take-token s) (loop  nv outer)))
 	      (else  (error "incomplete: comma expected"))))))))
 
@@ -599,7 +603,7 @@ TODO:
 			       (list* 'tuple (list '... ex)
 				      (parse-arglist s #\) ))))
 		       (else
-			(error "incomplete: ) expected"))))))
+			(error "unexpected line break in tuple"))))))
 
 	  ((eqv? t #\{ )
 	   (take-token s)
@@ -638,7 +642,7 @@ TODO:
   (skip-ws-and-comments (ts:port s))
   (if (eqv? (peek-token s) #\newline) (take-token s))
   (if (not (eof-object? (peek-token s)))
-      (error "Extra input after end of expression:"
+      (error "extra input after end of expression:"
 	     (peek-token s))))
 
 (define (julia-parse-file filename)
