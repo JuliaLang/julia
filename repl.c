@@ -200,6 +200,47 @@ static int ends_with_semicolon(const char *input)
 static jl_value_t *ast;
 
 #ifdef USE_READLINE
+
+// yes, readline uses inconsistent indexing internally.
+#define history_rem(n) remove_history(n-history_base)
+
+static void init_history() {
+    using_history();
+    struct stat stat_info;
+    if (!stat(jl_history_file, &stat_info)) {
+        read_history(jl_history_file);
+        for (;;) {
+            HIST_ENTRY *entry = history_get(history_base);
+            if (entry && isspace(entry->line[0]))
+                free_history_entry(history_rem(history_base));
+            else break;
+        }
+        int i, j, k;
+        for (i=1 ;; i++) {
+            HIST_ENTRY *first = history_get(i);
+            if (!first) break;
+            int length = strlen(first->line)+1;
+            for (j = i+1 ;; j++) {
+                HIST_ENTRY *child = history_get(j);
+                if (!child || !isspace(child->line[0])) break;
+                length += strlen(child->line)+1;
+            }
+            if (j == i+1) continue;
+            first->line = (char*)realloc(first->line, length);
+            char *p = strchr(first->line, '\0');
+            for (k = i+1; k < j; k++) {
+                *p = '\n';
+                p = stpcpy(p+1, history_get(i+1)->line);
+                free_history_entry(history_rem(i+1));
+            }
+        }
+    } else if (errno == ENOENT) {
+        write_history(jl_history_file);
+    } else {
+        jl_errorf("history file error: %s", strerror(errno));
+    }
+}
+
 static int line_start(int point) {
     if (!point) return 0;
     int i = point-1;
@@ -321,7 +362,9 @@ static void read_expression(char *prompt, int *end, int *doprint)
     free(input);
     return;
 }
+
 #else
+
 static char *ios_readline(ios_t *s)
 {
     ios_t dest;
@@ -352,6 +395,7 @@ static void read_expression(char *prompt, int *end, int *doprint)
 
     *doprint = !ends_with_semicolon(input);
 }
+
 #endif
 
 int main(int argc, char *argv[])
@@ -366,15 +410,7 @@ int main(int argc, char *argv[])
     prompt_length = strlen(jl_prompt_plain);
 
 #ifdef USE_READLINE
-    using_history();
-    struct stat stat_info;
-    if (!stat(jl_history_file, &stat_info)) {
-        read_history(jl_history_file);
-    } else if (errno == ENOENT) {
-        write_history(jl_history_file);
-    } else {
-        jl_errorf("history file error: %s", strerror(errno));
-    }
+    init_history();
     rl_bind_key(' ', space_callback);
     rl_bind_key('\t', tab_callback);
     rl_bind_key('\r', newline_callback);
