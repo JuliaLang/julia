@@ -723,7 +723,7 @@ static jl_type_t *apply_type_ctor_(jl_typector_t *tc, jl_value_t **params,
         if (n==2) {
             jl_tuple_t *tup = jl_alloc_tuple(nt);
             // extract the T from T...
-            jl_value_t *eltype = jl_tparam0(params[1]);
+            jl_value_t *eltype = jl_tparam0(jl_tupleref(params[1],0));
             for(i=0; i < nt; i++) {
                 jl_tupleset(tup, i, eltype);
             }
@@ -1034,7 +1034,7 @@ int jl_subtype_le(jl_value_t *a, jl_value_t *b, int ta, int tb, int morespecific
             ((jl_tag_type_t*)b)->name == jl_ntuple_typename) {
             jl_tuple_t *tp = ((jl_tag_type_t*)b)->parameters;
             size_t alen = ((jl_tuple_t*)a)->length;
-            if (jl_is_seq_type(jl_tupleref(a,alen-1)))
+            if (alen>0 && jl_is_seq_type(jl_tupleref(a,alen-1)))
                 return 0;
             jl_value_t *nt_len = jl_tupleref(tp,0);
             if (jl_is_int32(nt_len)) {
@@ -1262,7 +1262,7 @@ static jl_value_pair_t *type_conform_(jl_type_t *child, jl_type_t *parent,
             ((jl_tag_type_t*)parent)->name == jl_ntuple_typename) {
             jl_tuple_t *tp = ((jl_tag_type_t*)parent)->parameters;
             size_t alen = ((jl_tuple_t*)child)->length;
-            if (jl_is_seq_type(jl_tupleref(child,alen-1)))
+            if (alen>0 && jl_is_seq_type(jl_tupleref(child,alen-1)))
                 return NULL;
             jl_value_t *nt_len = jl_tupleref(tp,0);
             /*

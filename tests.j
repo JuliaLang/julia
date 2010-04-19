@@ -23,6 +23,13 @@ assert(!subtype(Buffer[Int8], Buffer[Any]))
 assert(!subtype(Buffer[Any], Buffer[Int8]))
 assert(subtype(Buffer[Int8], Buffer[Int8]))
 
+# ntuples
+nttest1[n](x::NTuple[n,Int32]) = n
+assert(nttest1(()) == 0)
+assert(nttest1((1,2)) == 2)
+assert(subtype(NTuple,Tuple))
+assert(!subtype(Tuple,NTuple))
+
 assert(2+3 == 5)
 assert(2.+3. == 5.)
 assert(2*3 == 6)
