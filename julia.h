@@ -28,12 +28,17 @@ typedef struct {
     jl_value_t *data[1];
 } jl_tuple_t;
 
+// 3*3*sizeof(double)
+#define ARRAY_INLINE_NBYTES 72
+
 typedef struct {
     JL_VALUE_STRUCT
+    jl_tuple_t *dims;
     size_t length;
     void *data;
-    jl_value_t *_space[13];
-} jl_buffer_t;
+    char _space[ARRAY_INLINE_NBYTES];
+    jl_tuple_t _dims;
+} jl_array_t;
 
 typedef struct {
     JL_VALUE_STRUCT
@@ -162,7 +167,7 @@ typedef struct _jl_methtable_t {
 typedef struct {
     JL_VALUE_STRUCT
     jl_sym_t *head;
-    jl_buffer_t *args;
+    jl_tuple_t *args;
 } jl_expr_t;
 
 extern jl_tag_type_t *jl_any_type;
@@ -183,8 +188,6 @@ extern jl_struct_type_t *jl_struct_kind;
 extern jl_struct_type_t *jl_bits_kind;
 
 extern jl_type_t *jl_bottom_type;
-extern jl_typector_t *jl_buffer_type;
-extern jl_typename_t *jl_buffer_typename;
 extern jl_struct_type_t *jl_lambda_info_type;
 extern jl_typector_t *jl_seq_type;
 extern jl_typector_t *jl_functype_ctor;
@@ -194,6 +197,8 @@ extern jl_typector_t *jl_number_type;
 extern jl_typector_t *jl_real_type;
 extern jl_typector_t *jl_int_type;
 extern jl_typector_t *jl_float_type;
+extern jl_typector_t *jl_array_type;
+extern jl_typename_t *jl_array_typename;
 
 extern jl_typector_t *jl_box_type;
 extern jl_type_t *jl_box_any_type;
@@ -211,8 +216,8 @@ extern jl_bits_type_t *jl_uint64_type;
 extern jl_bits_type_t *jl_float32_type;
 extern jl_bits_type_t *jl_float64_type;
 
-extern jl_type_t *jl_buffer_uint8_type;
-extern jl_type_t *jl_buffer_any_type;
+extern jl_type_t *jl_array_uint8_type;
+extern jl_type_t *jl_array_any_type;
 extern jl_struct_type_t *jl_expr_type;
 extern jl_bits_type_t *jl_intrinsic_type;
 
@@ -225,7 +230,6 @@ extern jl_func_type_t *jl_any_func;
 extern jl_function_t *jl_print_gf;
 extern jl_function_t *jl_bottom_func;
 extern jl_function_t *jl_identity_func;
-extern jl_buffer_t *jl_the_empty_buffer;
 
 // some important symbols
 extern jl_sym_t *call_sym;
@@ -256,7 +260,7 @@ extern jl_sym_t *continue_sym;
 #define jl_tupleref(t,i) (((jl_value_t**)(t))[2+(i)])
 #define jl_tupleset(t,i,x) ((((jl_value_t**)(t))[2+(i)])=(x))
 
-#define jl_exprarg(e,n) (((jl_value_t**)(((jl_expr_t*)(e))->args->data))[(n)])
+#define jl_exprarg(e,n) jl_tupleref(((jl_expr_t*)(e))->args,n)
 
 #define jl_tparam0(t) jl_tupleref(((jl_tag_type_t*)(t))->parameters, 0)
 
@@ -286,7 +290,7 @@ extern jl_sym_t *continue_sym;
 #define jl_is_lambda_info(v) jl_typeis(v,jl_lambda_info_type)
 #define jl_is_func(v)        (jl_is_func_type(jl_typeof(v)))
 #define jl_is_function(v)    (jl_is_func_type(jl_typeof(v)))
-#define jl_is_buffer(v)      (((jl_tag_type_t*)jl_typeof(v))->name==jl_buffer_typename)
+#define jl_is_array(v)       (((jl_tag_type_t*)jl_typeof(v))->name==jl_array_typename)
 #define jl_is_box(v)         (((jl_tag_type_t*)jl_typeof(v))->name==jl_box_typename)
 #define jl_is_gf(f)          (((jl_function_t*)(f))->fptr==jl_apply_generic)
 
@@ -345,8 +349,8 @@ jl_tuple_t *jl_tuple_append(jl_tuple_t *a, jl_tuple_t *b);
 jl_value_pair_t *jl_pair(jl_value_t *a, jl_value_t *b);
 jl_sym_t *jl_symbol(const char *str);
 jl_sym_t *jl_gensym();
-jl_buffer_t *jl_new_buffer(jl_type_t *buf_type, size_t nel);
-jl_buffer_t *jl_cstr_to_buffer(char *str);
+jl_array_t *jl_new_array(jl_type_t *atype, jl_value_t **dimargs, size_t ndims);
+jl_array_t *jl_cstr_to_array(char *str);
 jl_expr_t *jl_expr(jl_sym_t *head, size_t n, ...);
 jl_expr_t *jl_exprn(jl_sym_t *head, size_t n);
 jl_function_t *jl_new_generic_function(jl_sym_t *name);

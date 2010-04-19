@@ -19,9 +19,9 @@ assert(subtype((), (Scalar...)))
 assert(!subtype((Int32...), (Int32,)))
 assert(!subtype((Int32...), (Scalar, Int)))
 assert(!subtype((Int...,), (Int, Int, Int...)))
-assert(!subtype(Buffer[Int8], Buffer[Any]))
-assert(!subtype(Buffer[Any], Buffer[Int8]))
-assert(subtype(Buffer[Int8], Buffer[Int8]))
+assert(!subtype(Array[Int8,1], Array[Any,1]))
+assert(!subtype(Array[Any,1], Array[Int8,1]))
+assert(subtype(Array[Int8,1], Array[Int8,1]))
 
 # ntuples
 nttest1[n](x::NTuple[n,Int32]) = n

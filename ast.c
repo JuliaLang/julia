@@ -116,7 +116,7 @@ static jl_value_t *scm_to_julia(___SCMOBJ e)
             if (!strcmp(s, "string")) {
                 char *ss;
                 ___SCMOBJ_to_CHARSTRING(___CADR(e), &ss, 0);
-                v = (jl_value_t*)jl_cstr_to_buffer(ss);
+                v = (jl_value_t*)jl_cstr_to_array(ss);
                 ___release_rc(ss);
             }
             else {
@@ -126,7 +126,7 @@ static jl_value_t *scm_to_julia(___SCMOBJ e)
                 e = ___CDR(e);
                 for(i=0; i < n; i++) {
                     assert(___PAIRP(e));
-                    ((jl_value_t**)ex->args->data)[i] = scm_to_julia(___CAR(e));
+                    jl_tupleset(ex->args, i, scm_to_julia(___CAR(e)));
                     e = ___CDR(e);
                 }
                 if (!strcmp(s, "lambda")) {

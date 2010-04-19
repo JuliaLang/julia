@@ -70,4 +70,35 @@ ref(t::Tuple, r::RangeFrom) = t[range(r.start,r.step,length(t))]
 ref(t::Tuple, r::RangeTo)   = t[range(1,r.step,r.stop)]
 ref(t::Tuple, r::RangeBy)   = t[range(1,r.step,length(t))]
 
+function ==(t1::Tuple, t2::Tuple)
+    if length(t1) != length(t2)
+        return false
+    end
+    for i = 1:length(t1)
+        if t1[i] != t2[i]
+            return false
+        end
+    end
+    return true
+end
+
+function append(t1::Tuple, ts::Tuple...)
+    if (length(ts)==0)
+        return t1
+    end
+    return tuple(t1..., append(ts...)...)
+end
+
 print(x...) = for i=x; print(i); end
+
+expr(hd::Symbol, args...)  = Expr.new(hd, args)
+exprl(hd::Symbol, arglist) = Expr.new(hd, arglist)
+
+function cell_literal(xs...)
+    n = length(xs)
+    a = Array[Any,1].new(n)
+    for i=1:n
+        arrayset(a,i,xs[i])
+    end
+    a
+end

@@ -57,7 +57,7 @@ void jl_type_error(const char *fname, const char *expected, jl_value_t *got)
 
 /*
   equivalent julia code:
-  expr(head, args...) = Expr.new(head, buffer(args...))
+  expr(head, args...) = Expr.new(head, args)
 */
 jl_expr_t *jl_expr(jl_sym_t *head, size_t n, ...)
 {
@@ -66,7 +66,7 @@ jl_expr_t *jl_expr(jl_sym_t *head, size_t n, ...)
     jl_expr_t *ex = jl_exprn(head,n);
     va_start(args, n);
     for(i=0; i < n; i++) {
-        ((jl_value_t**)ex->args->data)[i] = va_arg(args, jl_value_t*);
+        jl_tupleset(ex->args, i, va_arg(args, jl_value_t*));
     }
     va_end(args);
     return ex;
@@ -76,7 +76,7 @@ jl_expr_t *jl_exprn(jl_sym_t *head, size_t n)
 {
     jl_value_t *ctor_args[2];
     ctor_args[0] = (jl_value_t*)head;
-    ctor_args[1] = (jl_value_t*)jl_new_buffer(jl_buffer_any_type, n);
+    ctor_args[1] = (jl_value_t*)jl_alloc_tuple(n);
     return (jl_expr_t*)jl_apply(jl_expr_type->fnew, ctor_args, 2);
 }
 
@@ -132,7 +132,7 @@ JL_CALLABLE(jl_f_typeassert)
     return args[0];
 }
 
-static jl_value_t *jl_bufferref(jl_buffer_t *b, size_t i);
+static jl_value_t *jl_arrayref(jl_array_t *a, size_t i);
 
 JL_CALLABLE(jl_f_apply)
 {
@@ -140,27 +140,15 @@ JL_CALLABLE(jl_f_apply)
     JL_TYPECHK(apply, function, args[0]);
     size_t n=0, i, j;
     for(i=1; i < nargs; i++) {
-        if (jl_is_buffer(args[i])) {
-            n += ((jl_buffer_t*)args[i])->length;
-        }
-        else {
-            JL_TYPECHK(apply, tuple, args[i]);
-            n += ((jl_tuple_t*)args[i])->length;
-        }
+        JL_TYPECHK(apply, tuple, args[i]);
+        n += ((jl_tuple_t*)args[i])->length;
     }
     jl_value_t **newargs = alloca(n * sizeof(jl_value_t*));
     n = 0;
     for(i=1; i < nargs; i++) {
-        if (jl_is_buffer(args[i])) {
-            jl_buffer_t *b = (jl_buffer_t*)args[i];
-            for(j=0; j < b->length; j++)
-                newargs[n++] = jl_bufferref(b, j);
-        }
-        else {
-            jl_tuple_t *t = (jl_tuple_t*)args[i];
-            for(j=0; j < t->length; j++)
-                newargs[n++] = jl_tupleref(t, j);
-        }
+        jl_tuple_t *t = (jl_tuple_t*)args[i];
+        for(j=0; j < t->length; j++)
+            newargs[n++] = jl_tupleref(t, j);
     }
     return jl_apply((jl_function_t*)args[0], newargs, n);
 }
@@ -168,8 +156,8 @@ JL_CALLABLE(jl_f_apply)
 JL_CALLABLE(jl_f_error)
 {
     JL_NARGS(error, 1, 1);
-    if (jl_typeof(args[0]) == jl_buffer_uint8_type) {
-        jl_error((char*)((jl_buffer_t*)args[0])->data);
+    if (jl_typeof(args[0]) == jl_array_uint8_type) {
+        jl_error((char*)((jl_array_t*)args[0])->data);
     }
     else {
         jl_error("error: expected string");
@@ -196,9 +184,9 @@ void jl_load(const char *fname)
     if (julia_home)
         asprintf(&fpath, "%s/%s", julia_home, fname);
     jl_value_t *ast = jl_parse_file(fpath);
-    jl_buffer_t *b = ((jl_expr_t*)ast)->args;
-    if (b == NULL)
+    if (ast == (jl_value_t*)jl_null)
         jl_errorf("could not open file %s", fpath);
+    jl_tuple_t *b = ((jl_expr_t*)ast)->args;
     size_t i, lineno=0;
     jmp_buf *prevh = CurrentExceptionHandler;
     jmp_buf handler;
@@ -206,7 +194,7 @@ void jl_load(const char *fname)
     if (!setjmp(handler)) {
         for(i=0; i < b->length; i++) {
             // process toplevel form
-            jl_value_t *form = ((jl_value_t**)b->data)[i];
+            jl_value_t *form = jl_tupleref(b, i);
             if (jl_is_expr(form) && ((jl_expr_t*)form)->head == line_sym) {
                 lineno = jl_unbox_int32(jl_exprarg(form, 0));
             }
@@ -227,8 +215,8 @@ void jl_load(const char *fname)
 JL_CALLABLE(jl_f_load)
 {
     JL_NARGS(load, 1, 1);
-    if (jl_typeof(args[0]) == jl_buffer_uint8_type) {
-        char *fname = (char*)((jl_buffer_t*)args[0])->data;
+    if (jl_typeof(args[0]) == jl_array_uint8_type) {
+        char *fname = (char*)((jl_array_t*)args[0])->data;
         jl_load(fname);
     }
     else {
@@ -305,11 +293,11 @@ JL_CALLABLE(jl_f_set_field)
     return v;
 }
 
-JL_CALLABLE(jl_f_bufferlen)
+JL_CALLABLE(jl_f_arraylen)
 {
-    JL_NARGS(bufferlen, 1, 1);
-    JL_TYPECHK(bufferlen, buffer, args[0]);
-    return jl_box_int32(((jl_buffer_t*)args[0])->length);
+    JL_NARGS(arraylen, 1, 1);
+    JL_TYPECHK(arraylen, array, args[0]);
+    return jl_box_int32(((jl_array_t*)args[0])->length);
 }
 
 static jl_value_t *new_scalar(jl_bits_type_t *bt)
@@ -321,13 +309,13 @@ static jl_value_t *new_scalar(jl_bits_type_t *bt)
     return v;
 }
 
-static jl_value_t *jl_bufferref(jl_buffer_t *b, size_t i)
+static jl_value_t *jl_arrayref(jl_array_t *a, size_t i)
 {
-    jl_type_t *el_type = (jl_type_t*)jl_tparam0(jl_typeof(b));
+    jl_type_t *el_type = (jl_type_t*)jl_tparam0(jl_typeof(a));
     jl_value_t *elt;
     if (jl_is_bits_type(el_type)) {
         if (el_type == (jl_type_t*)jl_bool_type) {
-            if (((int8_t*)b->data)[i] != 0)
+            if (((int8_t*)a->data)[i] != 0)
                 return jl_true;
             return jl_false;
         }
@@ -335,46 +323,46 @@ static jl_value_t *jl_bufferref(jl_buffer_t *b, size_t i)
         size_t nb = ((jl_bits_type_t*)el_type)->nbits/8;
         switch (nb) {
         case 1:
-            *(int8_t*)jl_bits_data(elt)  = ((int8_t*)b->data)[i];  break;
+            *(int8_t*)jl_bits_data(elt)  = ((int8_t*)a->data)[i];  break;
         case 2:
-            *(int16_t*)jl_bits_data(elt) = ((int16_t*)b->data)[i]; break;
+            *(int16_t*)jl_bits_data(elt) = ((int16_t*)a->data)[i]; break;
         case 4:
-            *(int32_t*)jl_bits_data(elt) = ((int32_t*)b->data)[i]; break;
+            *(int32_t*)jl_bits_data(elt) = ((int32_t*)a->data)[i]; break;
         case 8:
-            *(int64_t*)jl_bits_data(elt) = ((int64_t*)b->data)[i]; break;
+            *(int64_t*)jl_bits_data(elt) = ((int64_t*)a->data)[i]; break;
         default:
-            memcpy(jl_bits_data(elt), &((char*)b->data)[i*nb], nb);
+            memcpy(jl_bits_data(elt), &((char*)a->data)[i*nb], nb);
         }
     }
     else {
-        elt = ((jl_value_t**)b->data)[i];
+        elt = ((jl_value_t**)a->data)[i];
         if (elt == NULL)
-            jl_errorf("buffer[%d]: uninitialized reference error", i+1);
+            jl_errorf("array[%d]: uninitialized reference error", i+1);
     }
     return elt;
 }
 
-JL_CALLABLE(jl_f_bufferref)
+JL_CALLABLE(jl_f_arrayref)
 {
-    JL_NARGS(bufferref, 2, 2);
-    JL_TYPECHK(bufferref, buffer, args[0]);
-    JL_TYPECHK(bufferref, int32, args[1]);
-    jl_buffer_t *b = (jl_buffer_t*)args[0];
+    JL_NARGS(arrayref, 2, 2);
+    JL_TYPECHK(arrayref, array, args[0]);
+    JL_TYPECHK(arrayref, int32, args[1]);
+    jl_array_t *a = (jl_array_t*)args[0];
     size_t i = jl_unbox_int32(args[1])-1;
-    if (i >= b->length)
-        jl_errorf("buffer[%d]: index out of range", i+1);
-    return jl_bufferref(b, i);
+    if (i >= a->length)
+        jl_errorf("array[%d]: index out of range", i+1);
+    return jl_arrayref(a, i);
 }
 
-JL_CALLABLE(jl_f_bufferset)
+JL_CALLABLE(jl_f_arrayset)
 {
-    JL_NARGS(bufferset, 3, 3);
-    JL_TYPECHK(bufferset, buffer, args[0]);
-    JL_TYPECHK(bufferset, int32, args[1]);
-    jl_buffer_t *b = (jl_buffer_t*)args[0];
+    JL_NARGS(arrayset, 3, 3);
+    JL_TYPECHK(arrayset, array, args[0]);
+    JL_TYPECHK(arrayset, int32, args[1]);
+    jl_array_t *b = (jl_array_t*)args[0];
     size_t i = jl_unbox_int32(args[1])-1;
     if (i >= b->length)
-        jl_errorf("buffer[%d]: index out of range", i+1);
+        jl_errorf("array[%d]: index out of range", i+1);
     jl_type_t *el_type = (jl_type_t*)jl_tparam0(jl_typeof(b));
     jl_value_t *rhs = jl_convert(args[2], el_type);
     if (jl_is_bits_type(el_type)) {
@@ -739,43 +727,12 @@ JL_CALLABLE(jl_f_print_linfo)
     return (jl_value_t*)jl_null;
 }
 
-JL_CALLABLE(jl_f_print_buffer)
+JL_CALLABLE(jl_f_print_string)
 {
     ios_t *s = current_output_stream;
-    jl_buffer_t *b = (jl_buffer_t*)args[0];
+    jl_array_t *b = (jl_array_t*)args[0];
 
-    jl_type_t *el_type = (jl_type_t*)jl_tparam0(jl_typeof(b));
-    if (el_type == (jl_type_t*)jl_uint8_type) {
-        // simple string
-        ios_write(s, (char*)b->data, b->length);
-        return (jl_value_t*)jl_null;
-    }
-    if (el_type != (jl_type_t*)jl_any_type) {
-        jl_print((jl_value_t*)el_type);
-    }
-    ios_puts("{", s);
-    if (jl_is_bits_type(el_type)) {
-        jl_bits_type_t *bt = (jl_bits_type_t*)el_type;
-        size_t nb = bt->nbits/8;
-        size_t i, n=b->length;
-        jl_value_t *elt = new_scalar(bt);
-        for(i=0; i < n; i++) {
-            memcpy(jl_bits_data(elt), &((char*)b->data)[i*nb], nb);
-            jl_print(elt);
-            if (i < n-1)
-                ios_write(s, ", ", 2);
-        }
-    }
-    else {
-        size_t i, n=b->length;
-        for(i=0; i < n; i++) {
-            jl_print(((jl_value_t**)b->data)[i]);
-            if (i < n-1)
-                ios_write(s, ", ", 2);
-        }
-    }
-    ios_putc('}', s);
-
+    ios_write(s, (char*)b->data, b->length);
     return (jl_value_t*)jl_null;
 }
 
@@ -872,7 +829,7 @@ static void check_supertype(jl_value_t *super, char *name)
     if (jl_subtype(super,(jl_value_t*)jl_tuple_type,0,0) ||
         jl_is_func_type(super) ||
         jl_is_union_type(super) ||
-        jl_subtype(super,(jl_value_t*)jl_buffer_type,0,0)) {
+        jl_subtype(super,(jl_value_t*)jl_array_type,0,0)) {
         jl_errorf("invalid subtyping in definition of %s", name);
     }
 }
@@ -1034,7 +991,7 @@ void jl_init_builtins()
     add_builtin_method1(jl_print_gf, (jl_type_t*)jl_typename_type,jl_f_print_typename);
     add_builtin_method1(jl_print_gf, (jl_type_t*)jl_tvar_type,    jl_f_print_typevar);
     add_builtin_method1(jl_print_gf, (jl_type_t*)jl_lambda_info_type, jl_f_print_linfo);
-    add_builtin_method1(jl_print_gf, (jl_type_t*)jl_buffer_type,  jl_f_print_buffer);
+    add_builtin_method1(jl_print_gf, (jl_type_t*)jl_array_uint8_type,  jl_f_print_string);
     add_builtin_method1(jl_print_gf, (jl_type_t*)jl_float32_type, jl_f_print_float32);
     add_builtin_method1(jl_print_gf, (jl_type_t*)jl_float64_type, jl_f_print_float64);
     add_builtin_method1(jl_print_gf, (jl_type_t*)jl_int8_type,    jl_f_print_int8);
@@ -1077,9 +1034,9 @@ void jl_init_builtins()
     add_builtin_func("tuplelen", jl_f_tuplelen);
     add_builtin_func("getfield", jl_f_get_field);
     add_builtin_func("setfield", jl_f_set_field);
-    add_builtin_func("bufferlen", jl_f_bufferlen);
-    add_builtin_func("bufferref", jl_f_bufferref);
-    add_builtin_func("bufferset", jl_f_bufferset);
+    add_builtin_func("arraylen", jl_f_arraylen);
+    add_builtin_func("arrayref", jl_f_arrayref);
+    add_builtin_func("arrayset", jl_f_arrayset);
     add_builtin_func("box", jl_f_box);
     add_builtin_func("unbox", jl_f_unbox);
     add_builtin_func("boxset", jl_f_boxset);
@@ -1104,7 +1061,7 @@ void jl_init_builtins()
     add_builtin("Symbol", (jl_value_t*)jl_sym_type);
     add_builtin("...", (jl_value_t*)jl_seq_type);
     add_builtin("Function", (jl_value_t*)jl_any_func);
-    add_builtin("Buffer", (jl_value_t*)jl_buffer_type);
+    add_builtin("Array", (jl_value_t*)jl_array_type);
     add_builtin("Tensor", (jl_value_t*)jl_tensor_type);
     add_builtin("Scalar", (jl_value_t*)jl_scalar_type);
     add_builtin("Number", (jl_value_t*)jl_number_type);

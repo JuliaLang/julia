@@ -38,8 +38,6 @@ jl_struct_type_t *jl_struct_kind;
 jl_struct_type_t *jl_bits_kind;
 
 jl_type_t *jl_bottom_type;
-jl_typector_t *jl_buffer_type;
-jl_typename_t *jl_buffer_typename;
 jl_struct_type_t *jl_lambda_info_type;
 jl_typector_t *jl_seq_type;
 jl_typector_t *jl_functype_ctor;
@@ -49,6 +47,8 @@ jl_typector_t *jl_number_type;
 jl_typector_t *jl_real_type;
 jl_typector_t *jl_int_type;
 jl_typector_t *jl_float_type;
+jl_typector_t *jl_array_type;
+jl_typename_t *jl_array_typename;
 
 jl_typector_t *jl_box_type;
 jl_type_t *jl_box_any_type;
@@ -66,8 +66,8 @@ jl_bits_type_t *jl_uint64_type;
 jl_bits_type_t *jl_float32_type;
 jl_bits_type_t *jl_float64_type;
 
-jl_type_t *jl_buffer_uint8_type;
-jl_type_t *jl_buffer_any_type;
+jl_type_t *jl_array_uint8_type;
+jl_type_t *jl_array_any_type;
 jl_struct_type_t *jl_expr_type;;
 jl_bits_type_t *jl_intrinsic_type;
 
@@ -78,7 +78,6 @@ jl_value_t *jl_false;
 jl_func_type_t *jl_any_func;
 jl_function_t *jl_bottom_func;
 jl_function_t *jl_identity_func;
-jl_buffer_t *jl_the_empty_buffer;
 
 jl_sym_t *call_sym;
 jl_sym_t *dots_sym;
@@ -568,24 +567,40 @@ UNBOX_FUNC(bool,   int8_t)
 UNBOX_FUNC(float32, float)
 UNBOX_FUNC(float64, double)
 
-jl_buffer_t *jl_new_buffer(jl_type_t *buf_type, size_t nel)
+jl_array_t *jl_new_array(jl_type_t *atype, jl_value_t **dimargs, size_t ndims)
 {
-    jl_type_t *el_type = (jl_type_t*)jl_tparam0(buf_type);
-    jl_buffer_t *b = (jl_buffer_t*)allocb(sizeof(jl_buffer_t));
-    b->type = buf_type;
+    size_t nel=1;
+    jl_array_t *a = allocb(sizeof(jl_array_t) +
+                           (ndims?(ndims-1):0)*sizeof(jl_value_t*));
+    a->type = atype;
+    a->dims = &a->_dims;
+    a->_dims.type = (jl_type_t*)jl_tuple_type;
+    a->_dims.length = ndims;
+    size_t i;
+    if (ndims == 0) nel = 0;
+    for(i=0; i < ndims; i++) {
+        assert(jl_is_int32(dimargs[i]));
+        size_t d = jl_unbox_int32(dimargs[i]);
+        nel *= d;
+        jl_tupleset(a->dims, i, dimargs[i]);
+    }
+    a->length = nel;
+
+    jl_type_t *el_type = (jl_type_t*)jl_tparam0(atype);
     void *data;
+
     if (nel > 0) {
         if (jl_is_bits_type(el_type)) {
             size_t tot = ((jl_bits_type_t*)el_type)->nbits/8 * nel;
-            if (tot <= 13*sizeof(void*))
-                data = &b->_space[0];
+            if (tot <= ARRAY_INLINE_NBYTES)
+                data = &a->_space[0];
             else
                 data = alloc_pod(tot);
         }
         else {
             size_t tot = sizeof(void*) * nel;
-            if (nel <= 13)
-                data = &b->_space[0];
+            if (nel <= ARRAY_INLINE_NBYTES)
+                data = &a->_space[0];
             else
                 data = allocb(tot);
             memset(data, 0, tot);
@@ -594,32 +609,31 @@ jl_buffer_t *jl_new_buffer(jl_type_t *buf_type, size_t nel)
     else {
         data = NULL;
     }
-    b->length = nel;
-    b->data = data;
-    return (jl_buffer_t*)b;
+    a->data = data;
+
+    return a;
 }
 
-JL_CALLABLE(jl_new_buffer_internal)
+JL_CALLABLE(jl_new_array_internal)
 {
-    jl_struct_type_t *buf_type = (jl_struct_type_t*)env;
-    if (nargs != 1)
-        jl_error("Buffer.new: wrong number of arguments");
-    size_t nel=0;
-    if (jl_is_int32(args[0]))
-        nel = (size_t)jl_unbox_int32(args[0]);
-    else
-        jl_error("Bufer.new: expected integer");
-    return (jl_value_t*)jl_new_buffer((jl_type_t*)buf_type, nel);
+    jl_struct_type_t *atype = (jl_struct_type_t*)env;
+    size_t i;
+    for(i=0; i < nargs; i++) {
+        JL_TYPECHK(Array, int32, args[i]);
+    }
+    return (jl_value_t*)jl_new_array((jl_type_t*)atype, args, nargs);
 }
 
-jl_buffer_t *jl_cstr_to_buffer(char *str)
+jl_array_t *jl_cstr_to_array(char *str)
 {
     size_t n = strlen(str);
-    jl_buffer_t *b = jl_new_buffer(jl_buffer_uint8_type, n+1);
-    strcpy(b->data, str);
+    jl_value_t *dims = jl_box_int32(n+1);
+    jl_array_t *a = jl_new_array(jl_array_uint8_type, &dims, 1);
+    strcpy(a->data, str);
     // '\0' terminator is there, but hidden from julia
-    b->length--;
-    return b;
+    a->length--;
+    jl_tupleset(a->dims, 0, jl_box_int32(n));
+    return a;
 }
 
 // --- type instantiation and cache ---
@@ -1556,27 +1570,36 @@ void jl_init_types()
     jl_false = jl_new_box_int8(0); jl_false->type = (jl_type_t*)jl_bool_type;
     jl_true  = jl_new_box_int8(1); jl_true->type  = (jl_type_t*)jl_bool_type;
 
-    tv = typevars(1, "T");
-    jl_struct_type_t *bufstruct = 
-        jl_new_struct_type(jl_symbol("Buffer"),
-                           jl_any_type, tv, jl_null, jl_null);
-    jl_buffer_typename = bufstruct->name;
-    bufstruct->fnew->fptr = jl_new_buffer_internal;
-    jl_buffer_type = jl_new_type_ctor(tv, (jl_type_t*)bufstruct);
+    init_box_caches();
 
-    jl_buffer_uint8_type =
-        (jl_type_t*)jl_apply_type_ctor(jl_buffer_type,
-                                       jl_tuple(1, jl_uint8_type));
+    tv = typevars(2, "T", "N");
+    jl_struct_type_t *arrstruct = 
+        jl_new_struct_type(jl_symbol("Array"),
+                           (jl_tag_type_t*)jl_apply_type_ctor(jl_tensor_type, tv),
+                           tv,
+                           jl_tuple(1, jl_symbol("dims")),
+                           jl_tuple(1, jl_apply_type_ctor(jl_ntuple_type,
+                                                          jl_tuple(2, jl_tupleref(tv,1),
+                                                                   jl_int32_type))));
+    jl_array_typename = arrstruct->name;
+    arrstruct->fnew->fptr = jl_new_array_internal;
+    jl_array_type = jl_new_type_ctor(tv, (jl_type_t*)arrstruct);
 
-    jl_buffer_any_type =
-        (jl_type_t*)jl_apply_type_ctor(jl_buffer_type,
-                                       jl_tuple(1, jl_any_type));
+    jl_array_uint8_type =
+        (jl_type_t*)jl_apply_type_ctor(jl_array_type,
+                                       jl_tuple(2, jl_uint8_type,
+                                                jl_box_int32(1)));
+
+    jl_array_any_type =
+        (jl_type_t*)jl_apply_type_ctor(jl_array_type,
+                                       jl_tuple(2, jl_any_type,
+                                                jl_box_int32(1)));
 
     jl_expr_type =
         jl_new_struct_type(jl_symbol("Expr"),
                            jl_any_type, jl_null,
                            jl_tuple(2, jl_symbol("head"), jl_symbol("args")),
-                           jl_tuple(2, jl_sym_type, jl_buffer_any_type));
+                           jl_tuple(2, jl_sym_type, jl_tuple_type));
 
     jl_struct_type_t *boxstruct =
         jl_new_struct_type(jl_symbol("Box"),
@@ -1593,8 +1616,6 @@ void jl_init_types()
                            jl_any_type, jl_null, jl_null, jl_null);
     jl_lambda_info_type->fnew = jl_bottom_func;
     jl_lambda_info_type->fconvert = jl_bottom_func;
-
-    jl_the_empty_buffer = jl_new_buffer(jl_buffer_any_type, 0);
 
     tv = typevars(2, "A", "B");
     jl_functype_ctor =
@@ -1616,6 +1637,4 @@ void jl_init_types()
     dollar_sym = jl_symbol("$");
     line_sym = jl_symbol("line");
     continue_sym = jl_symbol("continue");
-
-    init_box_caches();
 }

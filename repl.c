@@ -171,8 +171,7 @@ jl_value_t *jl_toplevel_eval(jl_value_t *ast)
     // ast is of the form (quote <lambda-info>)
     jl_value_t *args[2];
     assert(jl_is_expr(ast));
-    jl_lambda_info_t *li =
-        ((jl_lambda_info_t**)((jl_expr_t*)ast)->args->data)[0];
+    jl_lambda_info_t *li = (jl_lambda_info_t*)jl_exprarg(ast,0);
     assert(jl_typeof(li) == (jl_type_t*)jl_lambda_info_type);
     args[0] = (jl_value_t*)li;
     args[1] = (jl_value_t*)jl_null;

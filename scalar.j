@@ -1,7 +1,7 @@
 isscalar(x::Scalar) = true
 isscalar(x) = false
 
-size(x::Scalar) = buffer()
+size(x::Scalar) = ()
 ndims(x::Scalar) = 0
 numel(x::Scalar) = 1
 length(x::Scalar) = 1

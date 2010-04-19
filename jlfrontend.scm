@@ -23,14 +23,14 @@
       (caddr (cadr (julia-expand `(lambda () ,e))))))
 
 ; make symbol names easier to access from C by converting to strings
-(define (unsymbol e)
+(define (unsymbol- e)
   (cond ((symbol? e) (symbol->string e))
 	((string? e) `("string" ,e))
 	((boolean? e) (if e 1 0))
-	((vector? e) (cons "vinfo" (map unsymbol (vector->list e))))
+	((vector? e) (cons "vinfo" (map unsymbol- (vector->list e))))
 	((atom? e) e)
 	(else
-	 (let ((l (map unsymbol e)))
+	 (let ((l (map unsymbol- e)))
 	   (cond ((eq? (car e) 'lambda)
 		  `("lambda" ("list" ,@(cadr l)) ,@(cddr l)))
 		 ((eq? (car e) 'var-info)
@@ -39,6 +39,13 @@
 		    ("list" ,@(cadddr l))
 		    ,@(cddddr l)))
 		 (else l))))))
+
+(define *last* #f)
+(define (unsymbol e)
+  (let ((u (unsymbol- e)))
+    ; hold a reference to the object we return to protect it from GC
+    (set! *last* u)
+    u))
 
 (gambit-only
  (c-define (jl-parse-string s) (char-string) scheme-object

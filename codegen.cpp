@@ -188,31 +188,31 @@ extern "C" void jl_compile(jl_lambda_info_t *li)
 }
 
 // get array of formal argument expressions
-static jl_buffer_t *lam_args(jl_expr_t *l)
+static jl_tuple_t *lam_args(jl_expr_t *l)
 {
     assert(l->head == lambda_sym);
-    jl_value_t *ae = ((jl_value_t**)l->args->data)[0];
-    if (ae == (jl_value_t*)jl_null) return jl_the_empty_buffer;
+    jl_value_t *ae = jl_exprarg(l,0);
+    if (ae == (jl_value_t*)jl_null) return jl_null;
     assert(jl_is_expr(ae));
     assert(((jl_expr_t*)ae)->head == list_sym);
     return ((jl_expr_t*)ae)->args;
 }
 
 // get array of local var symbols
-static jl_buffer_t *lam_locals(jl_expr_t *l)
+static jl_tuple_t *lam_locals(jl_expr_t *l)
 {
-    jl_value_t *le = ((jl_value_t**)l->args->data)[1];
+    jl_value_t *le = jl_exprarg(l, 1);
     assert(jl_is_expr(le));
-    jl_expr_t *lle = ((jl_expr_t**)((jl_expr_t*)le)->args->data)[0];
+    jl_expr_t *lle = (jl_expr_t*)jl_exprarg(le,0);
     assert(jl_is_expr(lle));
     assert(lle->head == locals_sym);
     return lle->args;
 }
 
 // get array of body forms
-static jl_buffer_t *lam_body(jl_expr_t *l)
+static jl_tuple_t *lam_body(jl_expr_t *l)
 {
-    jl_value_t *be = ((jl_value_t**)l->args->data)[2];
+    jl_value_t *be = jl_exprarg(l, 2);
     assert(jl_is_expr(be));
     assert(((jl_expr_t*)be)->head == body_sym);
     return ((jl_expr_t*)be)->args;
@@ -222,19 +222,19 @@ static jl_sym_t *decl_var(jl_value_t *ex)
 {
     if (jl_is_symbol(ex)) return (jl_sym_t*)ex;
     assert(jl_is_expr(ex));
-    return ((jl_sym_t**)((jl_expr_t*)ex)->args->data)[0];
+    return (jl_sym_t*)jl_exprarg(ex, 0);
 }
 
 static int is_rest_arg(jl_value_t *ex)
 {
     if (!jl_is_expr(ex)) return 0;
     if (((jl_expr_t*)ex)->head != colons_sym) return 0;
-    jl_expr_t *atype = ((jl_expr_t**)((jl_expr_t*)ex)->args->data)[1];
+    jl_expr_t *atype = (jl_expr_t*)jl_exprarg(ex,1);
     if (!jl_is_expr(atype)) return 0;
     if (atype->head != call_sym ||
         atype->args->length != 3)
         return 0;
-    if (((jl_sym_t**)atype->args->data)[1] != dots_sym)
+    if ((jl_sym_t*)jl_exprarg(atype,1) != dots_sym)
         return 0;
     return 1;
 }
@@ -403,7 +403,7 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool value,
         }
         else if (jl_is_float64(expr)) {
         }
-        else if (jl_is_buffer(expr)) {
+        else if (jl_is_array(expr)) {
             // string literal
         }
         // TODO: for now just return the direct pointer
@@ -411,7 +411,7 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool value,
         assert(0);
     }
     jl_expr_t *ex = (jl_expr_t*)expr;
-    jl_value_t **args = (jl_value_t**)ex->args->data;
+    jl_value_t **args = &jl_tupleref(ex->args,0);
     // this is object-disoriented.
     // however, this is a good way to do it because it should *not* be easy
     // to add new node types.
@@ -567,8 +567,8 @@ static void emit_function(jl_lambda_info_t *lam, Function *f)
     builder.SetInsertPoint(b0);
     std::map<std::string, AllocaInst*> localVars;
     std::map<std::string, BasicBlock*> labels;
-    jl_buffer_t *largs = lam_args(ast);
-    jl_buffer_t *lvars = lam_locals(ast);
+    jl_tuple_t *largs = lam_args(ast);
+    jl_tuple_t *lvars = lam_locals(ast);
     Function::arg_iterator AI = f->arg_begin();
     const Argument &envArg = *AI++;
     const Argument &argArray = *AI++;
@@ -588,13 +588,13 @@ static void emit_function(jl_lambda_info_t *lam, Function *f)
     // must be first for the mem2reg pass to work
     size_t i;
     for(i=0; i < lvars->length; i++) {
-        char *argname = ((jl_sym_t**)lvars->data)[i]->name;
+        char *argname = ((jl_sym_t*)jl_tupleref(lvars,i))->name;
         AllocaInst *lv = builder.CreateAlloca(jl_pvalue_llvmt, 0, argname);
         builder.CreateStore(V_null, lv);
         localVars[argname] = lv;
     }
     for(i=0; i < largs->length; i++) {
-        char *argname = decl_var(((jl_value_t**)largs->data)[i])->name;
+        char *argname = decl_var(jl_tupleref(largs,i))->name;
         AllocaInst *lv = builder.CreateAlloca(jl_pvalue_llvmt, 0, argname);
         localVars[argname] = lv;
     }
@@ -602,7 +602,7 @@ static void emit_function(jl_lambda_info_t *lam, Function *f)
     // check arg count
     size_t nreq = largs->length;
     int va = 0;
-    if (nreq > 0 && is_rest_arg(((jl_value_t**)largs->data)[nreq-1])) {
+    if (nreq > 0 && is_rest_arg(jl_tupleref(largs,nreq-1))) {
         nreq--;
         va = 1;
         Value *enough =
@@ -635,7 +635,7 @@ static void emit_function(jl_lambda_info_t *lam, Function *f)
     // (probably possible to avoid this step with a little redesign)
     // TODO: avoid for arguments that aren't assigned
     for(i=0; i < nreq; i++) {
-        char *argname = decl_var(((jl_value_t**)largs->data)[i])->name;
+        char *argname = decl_var(jl_tupleref(largs,i))->name;
         AllocaInst *lv = localVars[argname];
         Value *argPtr =
             builder.CreateGEP((Value*)&argArray,
@@ -652,19 +652,19 @@ static void emit_function(jl_lambda_info_t *lam, Function *f)
                                                   ConstantInt::get(T_int32,nreq)),
                                 builder.CreateSub((Value*)&argCount,
                                                   ConstantInt::get(T_int32,nreq)));
-        char *argname = decl_var(((jl_value_t**)largs->data)[nreq])->name;
+        char *argname = decl_var(jl_tupleref(largs,nreq))->name;
         AllocaInst *lv = builder.CreateAlloca(jl_pvalue_llvmt, 0, argname);
         builder.CreateStore(restTuple, lv);
         localVars[argname] = lv;
     }
 
-    jl_buffer_t *stmts = lam_body(ast);
+    jl_tuple_t *stmts = lam_body(ast);
     // associate labels with basic blocks so forward jumps can be resolved
     BasicBlock *prev=NULL;
     for(i=0; i < stmts->length; i++) {
-        jl_value_t *ex = ((jl_value_t**)stmts->data)[i];
+        jl_value_t *ex = jl_tupleref(stmts,i);
         if (is_label(ex)) {
-            char *lname = ((jl_sym_t**)((jl_expr_t*)ex)->args->data)[0]->name;
+            char *lname = ((jl_sym_t*)jl_exprarg(ex,0))->name;
             if (prev != NULL) {
                 // fuse consecutive labels
                 labels[lname] = prev;
@@ -681,7 +681,7 @@ static void emit_function(jl_lambda_info_t *lam, Function *f)
     // compile body statements
     bool prevlabel = false;
     for(i=0; i < stmts->length; i++) {
-        jl_value_t *stmt = ((jl_value_t**)stmts->data)[i];
+        jl_value_t *stmt = jl_tupleref(stmts,i);
         if (is_label(stmt)) {
             if (prevlabel) continue;
             prevlabel = true;

@@ -1,8 +1,3 @@
-struct Array[T,ndims] <: Tensor[T,ndims]
-    dims::NTuple[ndims,Size]
-    data::Buffer[T]
-end
-
 typealias Vector[T] Tensor[T,1]
 typealias Matrix[T] Tensor[T,2]
 typealias Indices[T] Union(Range, RangeFrom, RangeBy, RangeTo, Vector[T])
@@ -15,15 +10,14 @@ ndims(t::Tensor) = length(size(t))
 numel(t::Tensor) = prod(size(t))
 length(v::Vector) = size(v,1)
 
-zeros(T::Type, dims...) = Array[T,length(dims)].new(dims, Buffer[T].new(prod(dims)))
+zeros(T::Type, dims...) = Array[T,length(dims)].new(dims...)
 zeros(dims...) = zeros(Float64, dims...)
 
 jl_comprehension_zeros (oneresult::Scalar, dims...) = zeros(typeof(oneresult), dims...)
 
 function jl_comprehension_zeros[T,n](oneresult::Tensor[T,n], dims...)
     newdims = tuple(dims..., size(oneresult)...)
-    data = Buffer[T].new(prod(newdims))
-    Array[T, length(newdims)].new(newdims, data)
+    Array[T, length(newdims)].new(newdims...)
 end
 
 ones(m::Size) = [ 1.0 | i=1:m ]
@@ -37,7 +31,17 @@ rand(m::Size, n::Size) = [ rand() | i=1:m, j=1:n ]
 
 (.*)(x::Vector, y::Vector) = [ x[i] * y[i] | i=1:length(x) ]
 
-(==)(x::Array, y::Array) = (x.dims == y.dims && x.data == y.data)
+function (==)(x::Array, y::Array)
+    if (x.dims != y.dims)
+        return false
+    end
+    for i=1:numel(x)
+        if (arrayref(x,i) != arrayref(y,i))
+            return false
+        end
+    end
+    return true
+end
 
 transpose(x::Matrix) = [ x[j,i] | i=1:size(x,2), j=1:size(x,1) ]
 ctranspose(x::Matrix) = [ conj(x[j,i]) | i=1:size(x,2), j=1:size(x,1) ]
@@ -60,8 +64,8 @@ end
 
 ## Indexing: ref()
 #TODO: Out-of-bound checks
-ref(a::Array, i::Index) = a.data[i]
-ref(a::Matrix, i::Index, j::Index) = a.data[(j-1)*a.dims[1] + i]
+ref(a::Array, i::Index) = arrayref(a,i)
+ref[T](a::Array[T,2], i::Index, j::Index) = arrayref(a, (j-1)*a.dims[1] + i)
 
 jl_fill_endpts(A, n, R::RangeBy) = range(1, R.step, size(A, n))
 jl_fill_endpts(A, n, R::RangeFrom) = range(R.start, R.step, size(A, n))
@@ -76,7 +80,6 @@ ref(A::Matrix,i::Index,J) = [ A[i,j] | j = jl_fill_endpts(A,2,J) ]
 ref(A::Matrix,I,j::Index) = [ A[i,j] | i = jl_fill_endpts(A,1,I) ]
 
 function ref(a::Array, I::Index...) 
-    data = a.data
     dims = a.dims
     ndims = length(I) - 1
 
@@ -87,17 +90,17 @@ function ref(a::Array, I::Index...)
         index += (I[k]-1) * stride
     end
 
-    return data[index]
+    return arrayref(a,index)
 end
 
 # Indexing: set()
 # TODO: Take care of growing
-set(a::Array, x, i::Index) = do (a.data[i] = x, a)
-set(a::Matrix, x, i::Index, j::Index) = do (a.data[(j-1)*a.dims[1]+i] = x, a)
+set[T](a::Array[T], x, i::Index) = do (arrayset(a,i,convert(x,T)), a)
+set[T](a::Array[T,2], x, i::Index, j::Index) =
+    do (arrayset(a, (j-1)*a.dims[1]+i, convert(x,T)), a)
 
 function set(a::Array, x, I::Index...)
     # TODO: Need to take care of growing
-    data = a.data
     dims = a.dims
     ndims = length(I)
 
@@ -108,7 +111,7 @@ function set(a::Array, x, I::Index...)
         index += (I[k]-1) * stride
     end
 
-    data[index] = x
+    a[index] = x
     return a
 end
 
@@ -146,13 +149,12 @@ vcat[T](X::Scalar[T]...) = [ X[i] | i=1:length(X) ]
 vcat[T](V::Vector[T]...) = [ V[i][j] | i=1:length(V), j=1:length(V[1]) ]
 hcat[T](V::Vector[T]...) = [ V[j][i] | i=1:length(V[1]), j=1:length(V) ]
 
-# iterate arrays by iterating data
-start(a::Array) = start(a.data)
-next(a::Array,i) = next(a.data,i)
-done(a::Array,i) = done(a.data,i)
+start(a::Array) = 1
+next(a::Array,i) = (a[i],i+1)
+done(a::Array,i) = (i > numel(a))
 
 # Print arrays
-function print(a::Vector)
+function print[T](a::Array[T,1])
     n = a.dims[1]
 
     if n < 10
@@ -168,7 +170,7 @@ function printcols(a, start, stop, i)
     for j=start:stop; print(a[i,j]); print(" "); end
 end
 
-function print(a::Matrix)
+function print[T](a::Array[T,2])
 
     m = a.dims[1]
     n = a.dims[2]

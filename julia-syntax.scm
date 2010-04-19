@@ -352,10 +352,10 @@
    (pattern-lambda (ref a . idxs)
 		   `(call ref ,a ,@(process-indexes idxs)))
 
-   (pattern-lambda (buffer . elts)
-		   `(call (top buffer_literal) (top Any) ,@elts))
-   (pattern-lambda (typed-buffer type . elts)
-		   `(call (top buffer_literal) ,type ,@elts))
+   (pattern-lambda (cell . elts)
+		   `(call (top cell_literal) ,@elts))
+   (pattern-lambda (new type . elts)
+		   `(call (top new) ,type ,@elts))
 
    ; call with splat
    (pattern-lambda (call f ... (... _) ...)
@@ -551,7 +551,7 @@
    ; nd comprehensions
    (pattern-lambda
     (comprehension expr . ranges)
-    (let ( (result (gensym)) (ri (gensym)) (data (gensym)) (oneresult (gensym)) )
+    (let ( (result (gensym)) (ri (gensym)) (oneresult (gensym)) )
 
       ;; compute just one value by inserting a break inside loops
       ;; TODO: This should be cleaned up by handling all the 
@@ -590,8 +590,7 @@
 	 ;(= ,result (call zeros (call typeof ,oneresult) ,@(compute-dims ranges) ))
 	 (= ,result (call jl_comprehension_zeros ,oneresult ,@(compute-dims ranges) ))
 	 (= ,ri 1)
-	 (= ,data (|.| ,result data))
-	 ,(construct-loops data expr (reverse ranges) ri)
+	 ,(construct-loops result expr (reverse ranges) ri)
 	 ,result ))))
 
 )) ;; lower-comprehensions
@@ -1237,7 +1236,7 @@ So far only the second case can actually occur.
 		   (loop (cdr p)
 			 (cons (cadr (cadr (cadr (car p)))) q))
 		   (loop (cdr p)
-			 (cons `(call (top buffer_literal) (top Any)
+			 (cons `(call (top tuple)
 				      ,(expand-backquote (car p)))
 			       q))))))))
 
