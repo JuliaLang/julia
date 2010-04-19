@@ -195,7 +195,7 @@ TODO:
 	  last-tok
 	  (let ((t (next-token port)))
 	    (if (eof-object? t)
-		(error "Premature end of input")
+		(error "incomplete: premature end of input")
 		(begin (ts:set-tok! s t)
 		       (ts:last-tok s)))))))
   (let ((t (req-token s)))
@@ -481,7 +481,7 @@ TODO:
     (let ((t (peek-token s)))
       (if (eq? t 'end)
 	  (take-token s)
-	  (error "Expected end"))))
+	  (error "incomplete: end expected"))))
   (case word
     ((begin)  (begin0 (parse-block s)
 		      (expect-end s)))
@@ -549,7 +549,7 @@ TODO:
 		       (begin (take-token s) (loop (cons nxt lst))))
 		      ((equal? c #\;)        (loop (cons nxt lst)))
 		      ((equal? c closer)     (loop (cons nxt lst)))
-		      (else (error "Comma expected")))))))))
+		      (else (error "incomplete: comma expected")))))))))
 
 ; parse [] concatenation expressions
 (define (parse-vector s)
@@ -570,7 +570,7 @@ TODO:
 	      ((#\]) (loop nv outer))
 	      ((#\;) (begin (take-token s) (loop '() (update-outer nv))))
 	      ((#\,) (begin (take-token s) (loop  nv outer)))
-	      (else  (error "Comma expected"))))))))
+	      (else  (error "incomplete: comma expected"))))))))
 
 ; parse numbers, identifiers, parenthesized expressions, lists, vectors, etc.
 (define (parse-atom s)
@@ -599,7 +599,7 @@ TODO:
 			       (list* 'tuple (list '... ex)
 				      (parse-arglist s #\) ))))
 		       (else
-			(error "Expected )"))))))
+			(error "incomplete: ) expected"))))))
 
 	  ((eqv? t #\{ )
 	   (take-token s)

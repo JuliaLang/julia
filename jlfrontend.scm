@@ -9,7 +9,8 @@
    (lambda (e)
      (if (error-exception? e)
 	 (let ((msg (error-exception-message e)))
-	   (if (equal? msg "Premature end of input")
+	   (if (equal? "incomplete:"
+	               (substring msg 0 (string-length "incomplete:")))
 	       `(continue)
 	       `(error ,msg)))
 	 #f))
