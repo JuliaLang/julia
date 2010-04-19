@@ -224,11 +224,9 @@ static int line_end(int point) {
 }
 
 static int newline_callback(int count, int key) {
-    if (rl_point == rl_end) {
-        ast = jl_parse_input_line(rl_line_buffer);
-        rl_done = !ast || !jl_is_expr(ast) ||
-            (((jl_expr_t*)ast)->head != continue_sym);
-    }
+    ast = jl_parse_input_line(rl_line_buffer);
+    rl_done = !ast || !jl_is_expr(ast) ||
+        (((jl_expr_t*)ast)->head != continue_sym);
     if (!rl_done) {
         rl_insert_text("\n");
         int i;
