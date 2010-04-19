@@ -171,6 +171,18 @@ static int prompt_length;
 jmp_buf ExceptionHandler;
 jmp_buf *CurrentExceptionHandler = &ExceptionHandler;
 
+static int ends_with_semicolon(const char *input)
+{
+    char *p = strrchr(input, ';');
+    if (p++) {
+        while (isspace(*p)) p++;
+        if (*p == '\0' || *p == '#')
+            return 1;
+    }
+    return 0;
+}
+
+#ifdef USE_READLINE
 static int line_start(int point) {
     if (!point) return 0;
     int i = point-1;
@@ -255,18 +267,6 @@ static int backspace_callback(int count, int key) {
     return 0;
 }
 
-static int ends_with_semicolon(const char *input)
-{
-    char *p = strrchr(input, ';');
-    if (p++) {
-        while (isspace(*p)) p++;
-        if (*p == '\0' || *p == '#')
-            return 1;
-    }
-    return 0;
-}
-
-#ifdef USE_READLINE
 static jl_value_t *read_expression(char *prompt, int *end, int *doprint)
 {
     char *input;
