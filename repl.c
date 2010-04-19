@@ -214,18 +214,16 @@ static int line_end(int point) {
 }
 
 static int newline_callback(int count, int key) {
-    if (rl_point == rl_end) {
-        if (have_color) {
-            ios_printf(ios_stdout, jl_answer_color);
-            ios_flush(ios_stdout);
-        }
-        ast = jl_parse_input_line(rl_line_buffer);
-        rl_done = !ast || !jl_is_expr(ast) ||
-            (((jl_expr_t*)ast)->head != continue_sym);
-        if (!rl_done && have_color) {
-            ios_printf(ios_stdout, jl_input_color);
-            ios_flush(ios_stdout);
-        }
+    if (have_color) {
+        ios_printf(ios_stdout, jl_answer_color);
+        ios_flush(ios_stdout);
+    }
+    ast = jl_parse_input_line(rl_line_buffer);
+    rl_done = !ast || !jl_is_expr(ast) ||
+        (((jl_expr_t*)ast)->head != continue_sym);
+    if (!rl_done && have_color) {
+        ios_printf(ios_stdout, jl_input_color);
+        ios_flush(ios_stdout);
     }
     if (!rl_done) {
         rl_insert_text("\n");

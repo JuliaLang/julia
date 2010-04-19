@@ -69,3 +69,5 @@ end
 ref(t::Tuple, r::RangeFrom) = t[range(r.start,r.step,length(t))]
 ref(t::Tuple, r::RangeTo)   = t[range(1,r.step,r.stop)]
 ref(t::Tuple, r::RangeBy)   = t[range(1,r.step,length(t))]
+
+print(x...) = for i=x; print(i); end
