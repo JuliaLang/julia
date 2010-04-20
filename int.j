@@ -98,3 +98,36 @@ function gcd(a::Int, b::Int)
     end
     return a
 end
+
+function ^(x::Tensor, p::Int)
+    if p == 1
+        return x
+    elseif p == 0
+        return convert(1,typeof(x))
+    elseif p < 0
+        return 1/(x^(-p))
+    elseif p == 2
+        return x*x
+    end
+    t = 1
+    while t <= p
+        t *= 2
+    end
+    t = div(t,2)
+    p -= t
+    a = x
+    while true
+        t = div(t,2)
+        if t > 0
+            x = x*x
+        else
+            break
+        end
+
+        if p >= t
+            x = x*a
+            p -= t
+        end
+    end
+    return x
+end

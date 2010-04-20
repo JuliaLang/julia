@@ -829,6 +829,7 @@ static void check_supertype(jl_value_t *super, char *name)
     if (jl_subtype(super,(jl_value_t*)jl_tuple_type,0,0) ||
         jl_is_func_type(super) ||
         jl_is_union_type(super) ||
+        jl_subtype(super,(jl_value_t*)jl_type_type,0,0) ||
         jl_subtype(super,(jl_value_t*)jl_array_type,0,0)) {
         jl_errorf("invalid subtyping in definition of %s", name);
     }

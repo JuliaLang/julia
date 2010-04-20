@@ -28,7 +28,10 @@ nttest1[n](x::NTuple[n,Int32]) = n
 assert(nttest1(()) == 0)
 assert(nttest1((1,2)) == 2)
 assert(subtype(NTuple,Tuple))
-assert(!subtype(Tuple,NTuple))
+assert(subtype(NTuple[typevar(`t),Int32], (Int32...)))
+assert(!subtype(NTuple[typevar(`t),Int32], (Int32, Int32...)))
+assert(subtype((Int32...), NTuple[typevar(`t),Int32]))
+assert(subtype((Int32, Int32...), NTuple[typevar(`t),Int32]))
 
 assert(2+3 == 5)
 assert(2.+3. == 5.)

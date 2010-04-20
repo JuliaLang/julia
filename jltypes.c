@@ -736,8 +736,7 @@ static jl_type_t *apply_type_ctor_(jl_typector_t *tc, jl_value_t **params,
         if (nt == 0) return (jl_type_t*)jl_null;
         if (n==2) {
             jl_tuple_t *tup = jl_alloc_tuple(nt);
-            // extract the T from T...
-            jl_value_t *eltype = jl_tparam0(jl_tupleref(params[1],0));
+            jl_value_t *eltype = params[1];
             for(i=0; i < nt; i++) {
                 jl_tupleset(tup, i, eltype);
             }
@@ -1030,6 +1029,25 @@ int jl_tuple_subtype(jl_value_t **child, size_t cl,
     return 0;
 }
 
+static int tuple_all_subtype(jl_tuple_t *t, jl_value_t *super,
+                             int ta, int morespecific)
+{
+    size_t ci;
+    for(ci=0; ci < t->length; ci++) {
+        jl_value_t *ce = jl_tupleref(t,ci);
+        if (!ta && jl_is_seq_type(ce))
+            ce = jl_tparam0(ce);
+        if (!jl_subtype_le((ta&&!jl_is_tuple(ce)) ?
+                           (jl_value_t*)jl_typeof(ce) : ce,
+                           super,
+                           ta&&jl_is_tuple(ce),
+                           0,
+                           morespecific))
+            return 0;
+    }
+    return 1;
+}
+
 /*
   ta and tb specify whether typeof() should be implicitly applied
   to the arguments a and b. this is used for tuple types to avoid
@@ -1047,15 +1065,8 @@ int jl_subtype_le(jl_value_t *a, jl_value_t *b, int ta, int tb, int morespecific
         if (jl_is_tag_type(b) &&
             ((jl_tag_type_t*)b)->name == jl_ntuple_typename) {
             jl_tuple_t *tp = ((jl_tag_type_t*)b)->parameters;
-            size_t alen = ((jl_tuple_t*)a)->length;
-            if (alen>0 && jl_is_seq_type(jl_tupleref(a,alen-1)))
-                return 0;
-            jl_value_t *nt_len = jl_tupleref(tp,0);
-            if (jl_is_int32(nt_len)) {
-                if (alen != jl_unbox_int32(nt_len))
-                    return 0;
-            }
-            return jl_subtype_le(a, jl_tupleref(tp,1), ta, tb, morespecific);
+            return tuple_all_subtype((jl_tuple_t*)a,
+                                     jl_tupleref(tp,1), ta, morespecific);
         }
         if (jl_is_tuple(b)) {
             return jl_tuple_subtype(&jl_tupleref(a,0), ((jl_tuple_t*)a)->length,
@@ -1090,9 +1101,13 @@ int jl_subtype_le(jl_value_t *a, jl_value_t *b, int ta, int tb, int morespecific
     if (jl_is_tuple(b)) {
         if (jl_is_tag_type(a) &&
             ((jl_tag_type_t*)a)->name == jl_ntuple_typename) {
-            return jl_subtype_le(jl_tupleref(((jl_tag_type_t*)a)->parameters,
-                                             1),
-                                 b, 0, tb, morespecific);
+            // only ((T:>S)...,) can be a supertype of NTuple[N,S]
+            jl_tuple_t *tp = (jl_tuple_t*)b;
+            jl_value_t *ntp = jl_tupleref(((jl_tag_type_t*)a)->parameters, 1);
+            if (tp->length == 1 && jl_is_seq_type(jl_tupleref(tp,0))) {
+                return jl_subtype_le(ntp, jl_tparam0(jl_tupleref(tp,0)),
+                                     0, 0, morespecific);
+            }
         }
         return 0;
     }
@@ -1137,7 +1152,7 @@ int jl_subtype_le(jl_value_t *a, jl_value_t *b, int ta, int tb, int morespecific
             for(i=0; i < tta->parameters->length; i++) {
                 jl_value_t *apara = jl_tupleref(tta->parameters,i);
                 jl_value_t *bpara = jl_tupleref(ttb->parameters,i);
-                if (jl_is_typevar(bpara) && (!jl_is_typevar(apara) || super))
+                if (jl_is_typevar(bpara))
                     continue;
                 if (!jl_types_equal(apara, bpara))
                     return 0;
@@ -1276,15 +1291,11 @@ static jl_value_pair_t *type_conform_(jl_type_t *child, jl_type_t *parent,
             ((jl_tag_type_t*)parent)->name == jl_ntuple_typename) {
             jl_tuple_t *tp = ((jl_tag_type_t*)parent)->parameters;
             size_t alen = ((jl_tuple_t*)child)->length;
+            // if child has a sequence type, there exists no N such that
+            // NTuple[N,Any] could be its supertype.
             if (alen>0 && jl_is_seq_type(jl_tupleref(child,alen-1)))
                 return NULL;
             jl_value_t *nt_len = jl_tupleref(tp,0);
-            /*
-            if (jl_is_int32(nt_len)) {
-                if (alen != jl_unbox_int32(nt_len))
-                    return NULL;
-            }
-            */
             jl_value_t *childlen = jl_box_int32(((jl_tuple_t*)child)->length);
             if (jl_is_typevar(nt_len)) {
                 env = type_conform_((jl_type_t*)childlen, (jl_type_t*)nt_len,
@@ -1294,9 +1305,11 @@ static jl_value_pair_t *type_conform_(jl_type_t *child, jl_type_t *parent,
             else {
                 return NULL;
             }
-            return tuple_conform((jl_tuple_t*)child,
-                                 (jl_tuple_t*)jl_tupleref(tp, 1), env,
-                                 morespecific);
+            jl_tuple_t *p_seq =
+                jl_tuple(1, jl_apply_type_ctor(jl_seq_type,
+                                               jl_tuple(1,jl_tupleref(tp,1))));
+            return tuple_conform((jl_tuple_t*)child, p_seq,
+                                 env, morespecific);
         }
 
         if (jl_is_tuple(parent)) {
@@ -1308,9 +1321,16 @@ static jl_value_pair_t *type_conform_(jl_type_t *child, jl_type_t *parent,
     if (jl_is_tuple(parent)) {
         if (jl_is_tag_type(child) &&
             ((jl_tag_type_t*)child)->name == jl_ntuple_typename) {
-            return tuple_conform((jl_tuple_t*)jl_tupleref(((jl_tag_type_t*)child)->parameters,
-                                                          1),
-                                 (jl_tuple_t*)parent, env, morespecific);
+            // only ((T:>S)...,) can be a supertype of NTuple[N,S]
+            jl_tuple_t *tp = (jl_tuple_t*)parent;
+            jl_value_t *ntp = jl_tupleref(((jl_tag_type_t*)child)->parameters,
+                                          1);
+            if (tp->length == 1 && jl_is_seq_type(jl_tupleref(tp,0))) {
+                return type_conform_((jl_type_t*)ntp,
+                                     (jl_type_t*)jl_tparam0(jl_tupleref(tp,0)),
+                                     env, morespecific);
+            }
+            return NULL;
         }
         return NULL;
     }
@@ -1511,17 +1531,11 @@ void jl_init_types()
                                                 jl_tuple(1,jl_any_type)));
 
     tv = typevars(2, "N", "T");
-    // NTuple[N,T] expands to NTuple[N,(T...)], so it matches the same
-    // as (T...) plus a length constraint
     jl_ntuple_type =
         jl_new_type_ctor(tv,
                          (jl_type_t*)
                          jl_new_tagtype((jl_value_t*)jl_symbol("NTuple"),
-                                        jl_any_type,
-                                        jl_tuple(2,jl_tupleref(tv,0),
-                                                 jl_tuple(1,
-                                                          jl_apply_type_ctor(jl_seq_type,
-                                                                             jl_tuple(1,jl_tupleref(tv,1)))))));
+                                        jl_any_type, tv));
     jl_ntuple_typename = ((jl_tag_type_t*)jl_ntuple_type->body)->name;
 
     tv = typevars(2, "T", "N");
