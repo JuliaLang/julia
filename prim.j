@@ -66,9 +66,9 @@ function accumtuple(t::Tuple, r::Range, i, elts...)
     end
     accumtuple(t, r, i+r.step, elts..., t[i])
 end
-ref(t::Tuple, r::RangeFrom) = t[range(r.start,r.step,length(t))]
-ref(t::Tuple, r::RangeTo)   = t[range(1,r.step,r.stop)]
-ref(t::Tuple, r::RangeBy)   = t[range(1,r.step,length(t))]
+ref(t::Tuple, r::RangeFrom) = t[Range{r.start,r.step,length(t)}]
+ref(t::Tuple, r::RangeTo)   = t[Range{1,r.step,r.stop}]
+ref(t::Tuple, r::RangeBy)   = t[Range{1,r.step,length(t)}]
 
 function ==(t1::Tuple, t2::Tuple)
     if length(t1) != length(t2)

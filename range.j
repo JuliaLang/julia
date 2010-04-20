@@ -18,12 +18,6 @@ struct RangeBy
     step
 end
 
-# arguments always in the order start,step,stop
-range(a,b,c) = Range{a,b,c}
-rangefrom(a,b) = RangeFrom{a,b}
-rangeto(b,c) = RangeTo{b,c}
-rangeby(b) = RangeBy{b}
-
 numel(r::Range) = length(r)
 length(r::Range) = (r.step > 0 ?
     div((r.stop-r.start+1),r.step) :
