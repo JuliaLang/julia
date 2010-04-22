@@ -328,13 +328,57 @@ jl_bits_type_t *jl_new_bitstype(jl_value_t *name, jl_tag_type_t *super,
     return t;
 }
 
+jl_tuple_t *jl_compute_type_union(jl_tuple_t *types)
+{
+    size_t n = types->length;
+    jl_value_t **temp = alloca(n * sizeof(jl_value_t*));
+    size_t i, j, ndel=0;
+    for(i=0; i < n; i++)
+        temp[i] = jl_tupleref(types, i);
+    for(i=0; i < n; i++) {
+        for(j=0; j < n; j++) {
+            if (j != i && temp[i] && temp[j]) {
+                if (temp[i] == temp[j] ||
+                    (!jl_has_typevars(temp[j]) &&
+                     jl_subtype(temp[i], temp[j], 0, 0))) {
+                    temp[i] = NULL;
+                    ndel++;
+                }
+            }
+        }
+    }
+    if (ndel == 0) return types;
+    jl_tuple_t *result = jl_alloc_tuple(n - ndel);
+    j=0;
+    for(i=0; i < n; i++) {
+        if (temp[i] != NULL) {
+            jl_tupleset(result, j, temp[i]);
+            j++;
+        }
+    }
+    assert(j == n-ndel);
+    return result;
+}
+
 jl_uniontype_t *jl_new_uniontype(jl_tuple_t *types)
 {
     jl_uniontype_t *t = (jl_uniontype_t*)newobj((jl_type_t*)jl_union_kind, 1);
-    // TODO: enforce non-overlapping restriction
-
     // don't make unions of 1 type; Union(T)==T
     assert(types->length != 1);
+    size_t i, j;
+    for(i=0; i < types->length; i++) {
+        for(j=0; j < types->length; j++) {
+            if (j != i) {
+                jl_value_t *a = jl_tupleref(types, i);
+                jl_value_t *b = jl_tupleref(types, j);
+                if (jl_has_typevars(b) &&
+                    (!jl_is_typevar(b) || jl_has_typevars(a)) &&
+                    jl_type_conform((jl_type_t*)a, (jl_type_t*)b)) {
+                    jl_error("union type pattern too complex");
+                }
+            }
+        }
+    }
     t->types = types;
     return t;
 }

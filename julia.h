@@ -323,6 +323,7 @@ jl_value_pair_t *jl_type_conform(jl_type_t *a, jl_type_t *b);
 jl_value_pair_t *jl_type_conform_morespecific(jl_type_t *a, jl_type_t *b);
 int jl_types_equal(jl_value_t *a, jl_value_t *b);
 int jl_types_equal_generic(jl_value_t *a, jl_value_t *b);
+jl_tuple_t *jl_compute_type_union(jl_tuple_t *types);
 
 // type constructors
 jl_typector_t *jl_new_type_ctor(jl_tuple_t *params, jl_type_t *body);

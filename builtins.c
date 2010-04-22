@@ -999,6 +999,9 @@ JL_CALLABLE(jl_f_union)
             jl_tupleset(argt, i, args[i]);
         }
     }
+    argt = jl_compute_type_union(argt);
+    if (argt->length == 1)
+        return jl_tupleref(argt, 0);
     return (jl_value_t*)jl_new_uniontype(argt);
 }
 
