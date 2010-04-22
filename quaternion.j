@@ -1,4 +1,4 @@
-struct Quaternion[T] <: Number
+struct Quaternion{T} <: Number
     q0::T
     q1::T
     q2::T
@@ -40,7 +40,7 @@ function print(z::Quaternion)
     print("k")
 end
 
-quaternion[T](q0::T, q1::T, q2::T, q3::T) = Quaternion[T].new(q0, q1, q2, q3)
+quaternion{T}(q0::T, q1::T, q2::T, q3::T) = Quaternion(q0, q1, q2, q3)
 
 re(z::Quaternion) = z.q0
 im(z::Quaternion) = z.q1

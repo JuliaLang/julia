@@ -8,11 +8,11 @@ end
 
 typealias List Union(EmptyList, Cons)
 
-nil = EmptyList.new()
+nil = EmptyList()
 
 head(x::Cons) = x.head
 tail(x::Cons) = x.tail
-cons(x, y::List) = Cons.new(x,y)
+cons(x, y::List) = Cons(x,y)
 
 function print(l::List)
     if istype(l,EmptyList)

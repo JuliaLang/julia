@@ -9,8 +9,8 @@ assert(!!0)
 assert(subtype(Int8, Int))
 assert(subtype(Int32, Int))
 assert(subtype((Int8,Int8), (Int,Int)))
-assert(!subtype(Tensor[Float64,2], Tensor[Scalar,2]))
-assert(!subtype(Tensor[Float64,1], Tensor[Scalar,2]))
+assert(!subtype(Tensor{Float64,2}, Tensor{Scalar,2}))
+assert(!subtype(Tensor{Float64,1}, Tensor{Scalar,2}))
 assert(subtype((Int,Int...), (Int, Scalar...)))
 assert(subtype((Int,Float64,Int...), (Int, Scalar...)))
 assert(subtype((Int,Float64), (Int, Scalar...)))
@@ -19,19 +19,19 @@ assert(subtype((), (Scalar...)))
 assert(!subtype((Int32...), (Int32,)))
 assert(!subtype((Int32...), (Scalar, Int)))
 assert(!subtype((Int...,), (Int, Int, Int...)))
-assert(!subtype(Array[Int8,1], Array[Any,1]))
-assert(!subtype(Array[Any,1], Array[Int8,1]))
-assert(subtype(Array[Int8,1], Array[Int8,1]))
+assert(!subtype(Array{Int8,1}, Array{Any,1}))
+assert(!subtype(Array{Any,1}, Array{Int8,1}))
+assert(subtype(Array{Int8,1}, Array{Int8,1}))
 
 # ntuples
-nttest1[n](x::NTuple[n,Int32]) = n
+nttest1{n}(x::NTuple{n,Int32}) = n
 assert(nttest1(()) == 0)
 assert(nttest1((1,2)) == 2)
 assert(subtype(NTuple,Tuple))
-assert(subtype(NTuple[typevar(`t),Int32], (Int32...)))
-assert(!subtype(NTuple[typevar(`t),Int32], (Int32, Int32...)))
-assert(subtype((Int32...), NTuple[typevar(`t),Int32]))
-assert(subtype((Int32, Int32...), NTuple[typevar(`t),Int32]))
+assert(subtype(NTuple{typevar(`t),Int32}, (Int32...)))
+assert(!subtype(NTuple{typevar(`t),Int32}, (Int32, Int32...)))
+assert(subtype((Int32...), NTuple{typevar(`t),Int32}))
+assert(subtype((Int32, Int32...), NTuple{typevar(`t),Int32}))
 
 assert(2+3 == 5)
 assert(2.+3. == 5.)
@@ -106,7 +106,7 @@ function foo()
 end
 assert(int32(foo()) == -24)
 
-z = Complex[Float64].convert(2)
+z = Complex{Float64}.convert(2)
 assert(z == complex(2.0,0.0))
 
 # misc
@@ -114,15 +114,15 @@ fib(n) = n < 2 ? n : fib(n-1) + fib(n-2)
 assert(fib(20) == 6765)
 
 # static parameters
-sptest1[T](x::T, y::T) = 42
-sptest1[T,S](x::T, y::S) = 43
+sptest1{T}(x::T, y::T) = 42
+sptest1{T,S}(x::T, y::S) = 43
 assert(sptest1(1,2) == 42)
 assert(sptest1(1,"b") == 43)
 
-sptest2[T](x::T) = T
+sptest2{T}(x::T) = T
 assert(is(sptest2(`a),Symbol))
 
-sptest3[T](x::T) = y->T
+sptest3{T}(x::T) = y->T
 m = sptest3(`a)
 assert(is(m(0),Symbol))
 

@@ -204,11 +204,8 @@
 			,super
 			,tvars
 			(tuple ,@(map (lambda (x) `',x) field-names))))
-	       ; wrap type prototype in a type constructor if ∃ parameters
-	       ,(if (null? params)
-		    `(= ,name ,proto)
-		    `(= ,name (call (top new_type_constructor)
-				    ,tvars ,proto)))
+	       ; wrap type prototype in a type constructor
+	       (= ,name (call (top new_type_constructor) ,tvars ,proto))
 	       ; now add the type fields, which might reference the type
 	       ; itself. tie the recursive knot.
 	       (call (top new_struct_fields)
@@ -252,14 +249,13 @@
 
 (define *anonymous-generic-function-name* (gensym))
 
-(define dotdotdotpattern (pattern-lambda (... a)
-					 `(call (top ref) ... ,a)))
+(define dotdotdotpattern (pattern-lambda (... a) `(curly ... ,a)))
 
 ; patterns that introduce lambdas
 (define binding-form-patterns
   (list
    ; function with static parameters
-   (pattern-lambda (function (call (ref name . sparams) . argl) body)
+   (pattern-lambda (function (call (curly name . sparams) . argl) body)
 		   (generic-function-def-expr name sparams argl body))
 
    ; function definition
@@ -267,8 +263,8 @@
 		   (generic-function-def-expr name '() argl body))
 
    ; expression form function definition
-   (pattern-lambda (= (call (ref name . sparams) . argl) body)
-		   `(function (call (ref ,name . ,sparams) . ,argl) ,body))
+   (pattern-lambda (= (call (curly name . sparams) . argl) body)
+		   `(function (call (curly ,name . ,sparams) . ,argl) ,body))
    (pattern-lambda (= (call name . argl) body)
 		   `(function (call ,name ,@argl) ,body))
 
@@ -284,14 +280,14 @@
    (pattern-lambda (struct (-- name (-s)) (block . fields))
 		   (struct-def-expr name '() 'Any fields))
 
-   (pattern-lambda (struct (ref (-- name (-s)) . params) (block . fields))
+   (pattern-lambda (struct (curly (-- name (-s)) . params) (block . fields))
 		   (struct-def-expr name params 'Any fields))
 
    (pattern-lambda (struct (comparison (-- name (-s)) (-/ |<:|) super)
 			   (block . fields))
 		   (struct-def-expr name '() super fields))
 
-   (pattern-lambda (struct (comparison (ref (-- name (-s)) . params)
+   (pattern-lambda (struct (comparison (curly (-- name (-s)) . params)
 				       (-/ |<:|) super)
 			   (block . fields))
 		   (struct-def-expr name params super fields))
@@ -305,7 +301,7 @@
 (define patterns
   (list
    #;(pattern-lambda (--> a b)
-		   `(call ref Function ,a ,b))
+		   `(call curly Function ,a ,b))
 
    (pattern-lambda (|.| a b)
 		   `(call (top getfield) ,a (quote ,b)))
@@ -315,18 +311,18 @@
 
    (pattern-lambda (type (-- name (-s)))
 		   (type-def-expr name '() 'Any))
-   (pattern-lambda (type (ref (-- name (-s)) . params))
+   (pattern-lambda (type (curly (-- name (-s)) . params))
 		   (type-def-expr name params 'Any))
    (pattern-lambda (type (comparison (-- name (-s)) (-/ |<:|) super))
 		   (type-def-expr name '() super))
-   (pattern-lambda (type (comparison (ref (-- name (-s)) . params)
+   (pattern-lambda (type (comparison (curly (-- name (-s)) . params)
 				     (-/ |<:|) super))
 		   (type-def-expr name params super))
 
    ; typealias is an assignment; should be const when that exists
    (pattern-lambda (typealias (-- name (-s)) type-ex)
 		   `(= ,name ,type-ex))
-   (pattern-lambda (typealias (ref (-- name (-s)) . params) type-ex)
+   (pattern-lambda (typealias (curly (-- name (-s)) . params) type-ex)
 		   `(call (lambda ,params
 			    (= ,name (call (top new_type_constructor)
 					   (tuple ,@params) ,type-ex)))
@@ -354,8 +350,8 @@
 
    (pattern-lambda (cell . elts)
 		   `(call (top cell_literal) ,@elts))
-   (pattern-lambda (new type . elts)
-		   `(call (|.| ,type new) ,@elts))
+   (pattern-lambda (curly type . elts)
+		   `(call (top instantiate_type) ,type ,@elts))
 
    ; call with splat
    (pattern-lambda (call f ... (... _) ...)
@@ -962,10 +958,10 @@ So far only the second case can actually occur.
 	  (cdr (caddr e))))
 
 (define (fix-seq-type t)
-  ; wrap (call (top ref) ... . args) in (tuple ...)
+  ; wrap (call (top instantiate_type) ... . args) in (tuple ...)
   (if (and (length> t 2)
 	   (eq? (car t) 'call)
-	   (equal? (cadr t) '(top ref))
+	   (equal? (cadr t) '(top instantiate_type))
 	   (eq? (caddr t) '...))
       `(call (top tuple) ,t)
       t))
@@ -1229,7 +1225,7 @@ So far only the second case can actually occur.
 	 (let loop ((p (cdr e)) (q '()))
 	   (if (null? p)
 	       (let ((forms (reverse q)))
-		 `(new (top Expr) ,(expand-backquote (car e))
+		 `(call (top Expr) ,(expand-backquote (car e))
 		       (call (top append) ,@forms)))
 	       ; look for splice inside backquote, e.g. (a,$(x...),b)
 	       (if (match '($ (tuple (... x))) (car p))

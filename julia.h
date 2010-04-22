@@ -40,16 +40,6 @@ typedef struct {
     jl_tuple_t _dims;
 } jl_array_t;
 
-typedef struct {
-    JL_VALUE_STRUCT
-    jl_sym_t *name;
-    // if this is the name of a parametric type, ctor points to the
-    // original typector for the type.
-    // a type alias, for example, might make a type constructor that is
-    // not the original.
-    struct _jl_typector_t *ctor;
-} jl_typename_t;
-
 typedef struct _jl_type_t {
     JL_VALUE_STRUCT
 } jl_type_t;
@@ -65,6 +55,7 @@ typedef struct {
     // (different environments) of a closure.
     jl_fptr_t fptr;
     jl_value_t *ast;
+    // sparams is a tuple (symbol, value, symbol, value, ...)
     jl_tuple_t *sparams;
 } jl_lambda_info_t;
 
@@ -73,7 +64,22 @@ typedef struct {
     jl_fptr_t fptr;
     jl_value_t *env;
     jl_lambda_info_t *linfo;
+    // for functions which are also type constructors
+    jl_tuple_t *parameters;
+    jl_type_t *body;
 } jl_function_t;
+
+typedef jl_function_t jl_typector_t;
+
+typedef struct {
+    JL_VALUE_STRUCT
+    jl_sym_t *name;
+    // if this is the name of a parametric type, ctor points to the
+    // original typector for the type.
+    // a type alias, for example, might make a type constructor that is
+    // not the original.
+    jl_typector_t *ctor;
+} jl_typename_t;
 
 typedef struct {
     JL_VALUE_STRUCT
@@ -116,12 +122,6 @@ typedef struct {
     size_t nbits;
     uptrint_t uid;
 } jl_bits_type_t;
-
-typedef struct _jl_typector_t {
-    JL_VALUE_STRUCT
-    jl_tuple_t *parameters;
-    jl_type_t *body;
-} jl_typector_t;
 
 typedef struct {
     JL_VALUE_STRUCT
@@ -179,7 +179,6 @@ extern jl_typename_t *jl_tuple_typename;
 extern jl_typector_t *jl_ntuple_type;
 extern jl_typename_t *jl_ntuple_typename;
 extern jl_struct_type_t *jl_tvar_type;
-extern jl_struct_type_t *jl_typector_type;
 
 extern jl_struct_type_t *jl_func_kind;
 extern jl_struct_type_t *jl_union_kind;
@@ -276,7 +275,7 @@ extern jl_sym_t *continue_sym;
 #define jl_is_func_type(v)   jl_typeis(v,jl_func_kind)
 #define jl_is_union_type(v)  jl_typeis(v,jl_union_kind)
 #define jl_is_typevar(v)     jl_typeis(v,jl_tvar_type)
-#define jl_is_typector(v)    jl_typeis(v,jl_typector_type)
+#define jl_is_typector(v)    (jl_is_func(v) && ((jl_function_t*)v)->body!=NULL)
 #define jl_is_typename(v)    jl_typeis(v,jl_typename_type)
 #define jl_is_int32(v)       jl_typeis(v,jl_int32_type)
 #define jl_is_int64(v)       jl_typeis(v,jl_int64_type)

@@ -385,7 +385,8 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool value,
             size_t i;
             // look for static parameter
             for(i=0; i < ctx->sp->length; i+=2) {
-                if (sym == (jl_sym_t*)jl_tupleref(ctx->sp, i)) {
+                assert(jl_is_typevar(jl_tupleref(ctx->sp, i)));
+                if (sym == ((jl_tvar_t*)jl_tupleref(ctx->sp, i))->name) {
                     return literal_pointer_val(jl_tupleref(ctx->sp, i+1));
                 }
             }

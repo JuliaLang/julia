@@ -1,8 +1,8 @@
-struct Dequeue[T]
+struct Dequeue{T}
     maxsize:: Size
     size:: Size
     offset:: Size
-    data:: Array[T,1]
+    data:: Array{T,1}
 end
 
 function dequeue(elts...)
@@ -12,11 +12,11 @@ function dequeue(elts...)
     else
         maxsize = n
     end
-    data = Array[Any,1].new(maxsize)
+    data = Array(Any,maxsize)
     for i = 1:n
         data[i] = elts[i]
     end
-    return Dequeue[Any].new(maxsize, n, 0, data)
+    return Dequeue(maxsize, n, 0, data)
 end
 
 function ref(l::Dequeue, i::Index)
@@ -55,7 +55,7 @@ function grow(a::Dequeue, inc::Size)
         while (a.size+inc > newsize-a.offset)
             newsize *= 2
         end
-        newdeq = Array[Any,1].new(newsize)
+        newdeq = Array(Any,newsize)
         a.maxsize = newsize
         for i=1:a.size
             newdeq[i+a.offset] = a.data[i+a.offset]

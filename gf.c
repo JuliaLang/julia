@@ -81,7 +81,7 @@ static jl_tuple_t *valuepair_to_tuple(jl_value_pair_t *env)
     // store static parameters as a tuple of (name, value, name, value, ...)
     for(i=0; i < n; i++) {
         assert(jl_is_typevar(temp->a));
-        jl_tupleset(sp, i*2+0, (jl_value_t*)((jl_tvar_t*)temp->a)->name);
+        jl_tupleset(sp, i*2+0, (jl_value_t*)(jl_tvar_t*)temp->a);
         jl_tupleset(sp, i*2+1, temp->b);
         temp = temp->next;
     }

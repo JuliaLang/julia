@@ -1,4 +1,4 @@
-typealias Nullable[T] Union(T,())
+typealias Nullable{T} Union(T,())
 typealias Index Int32
 typealias Size  Int32
 
@@ -66,9 +66,9 @@ function accumtuple(t::Tuple, r::Range, i, elts...)
     end
     accumtuple(t, r, i+r.step, elts..., t[i])
 end
-ref(t::Tuple, r::RangeFrom) = t[Range{r.start,r.step,length(t)}]
-ref(t::Tuple, r::RangeTo)   = t[Range{1,r.step,r.stop}]
-ref(t::Tuple, r::RangeBy)   = t[Range{1,r.step,length(t)}]
+ref(t::Tuple, r::RangeFrom) = t[Range(r.start,r.step,length(t))]
+ref(t::Tuple, r::RangeTo)   = t[Range(1,r.step,r.stop)]
+ref(t::Tuple, r::RangeBy)   = t[Range(1,r.step,length(t))]
 
 function ==(t1::Tuple, t2::Tuple)
     if length(t1) != length(t2)
@@ -91,11 +91,11 @@ end
 
 print(x...) = for i=x; print(i); end
 
-expr(hd::Symbol, args...)  = Expr{hd, args}
+expr(hd::Symbol, args...)  = Expr(hd, args)
 
 function cell_literal(xs...)
     n = length(xs)
-    a = Array[Any,1].new(n)
+    a = Array(Any,n)
     for i=1:n
         arrayset(a,i,xs[i])
     end

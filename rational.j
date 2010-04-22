@@ -1,4 +1,4 @@
-struct Rational[T] <: Real
+struct Rational{T} <: Real
     num::T
     den::T
 
@@ -11,13 +11,13 @@ function print(x::Rational)
     print(den(x))
 end
 
-function rational[T](num::T, den::T)
+function rational{T}(num::T, den::T)
     g = gcd(num, den)
     num = div(num, g)
     den = div(den, g)
     num = sign(den) * num
     den = sign(den) * den
-    return Rational[T].new(num, den)
+    return Rational(num, den)
 end
 
 num(x::Rational) = x.num

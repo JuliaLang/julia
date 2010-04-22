@@ -1,6 +1,6 @@
-typealias Vector[T] Tensor[T,1]
-typealias Matrix[T] Tensor[T,2]
-typealias Indices[T] Union(Range, RangeFrom, RangeBy, RangeTo, Vector[T])
+typealias Vector{T} Tensor{T,1}
+typealias Matrix{T} Tensor{T,2}
+typealias Indices{T} Union(Range, RangeFrom, RangeBy, RangeTo, Vector{T})
 
 ## Basic functions
 size(a::Array) = a.dims
@@ -10,14 +10,14 @@ ndims(t::Tensor) = length(size(t))
 numel(t::Tensor) = prod(size(t))
 length(v::Vector) = size(v,1)
 
-zeros(T::Type, dims...) = Array[T,length(dims)].new(dims...)
+zeros(T::Type, dims...) = Array(T,dims...)
 zeros(dims...) = zeros(Float64, dims...)
 
 jl_comprehension_zeros (oneresult::Scalar, dims...) = zeros(typeof(oneresult), dims...)
 
-function jl_comprehension_zeros[T,n](oneresult::Tensor[T,n], dims...)
+function jl_comprehension_zeros{T,n}(oneresult::Tensor{T,n}, dims...)
     newdims = tuple(dims..., size(oneresult)...)
-    Array[T, length(newdims)].new(newdims...)
+    Array(T, newdims...)
 end
 
 ones(m::Size) = [ 1.0 | i=1:m ]
@@ -65,7 +65,7 @@ end
 ## Indexing: ref()
 #TODO: Out-of-bound checks
 ref(a::Array, i::Index) = arrayref(a,i)
-ref[T](a::Array[T,2], i::Index, j::Index) = arrayref(a, (j-1)*a.dims[1] + i)
+ref{T}(a::Array{T,2}, i::Index, j::Index) = arrayref(a, (j-1)*a.dims[1] + i)
 
 jl_fill_endpts(A,n,R::RangeBy)   = Range{1,R.step,size(A,n)}
 jl_fill_endpts(A,n,R::RangeFrom) = Range{R.start,R.step,size(A,n)}
@@ -95,8 +95,8 @@ end
 
 # Indexing: set()
 # TODO: Take care of growing
-set[T](a::Array[T], x, i::Index) = do (arrayset(a,i,convert(x,T)), a)
-set[T](a::Array[T,2], x, i::Index, j::Index) =
+set{T}(a::Array{T}, x, i::Index) = do (arrayset(a,i,convert(x,T)), a)
+set{T}(a::Array{T,2}, x, i::Index, j::Index) =
     do (arrayset(a, (j-1)*a.dims[1]+i, convert(x,T)), a)
 
 function set(a::Array, x, I::Index...)
@@ -144,17 +144,17 @@ function set(A::Matrix, X, I, J)
 end
 
 # Concatenation
-hcat[T](X::Scalar[T]...) = [ X[i] | i=1:length(X) ]
-vcat[T](X::Scalar[T]...) = [ X[i] | i=1:length(X) ]
-vcat[T](V::Vector[T]...) = [ V[i][j] | i=1:length(V), j=1:length(V[1]) ]
-hcat[T](V::Vector[T]...) = [ V[j][i] | i=1:length(V[1]), j=1:length(V) ]
+hcat{T}(X::Scalar{T}...) = [ X[i] | i=1:length(X) ]
+vcat{T}(X::Scalar{T}...) = [ X[i] | i=1:length(X) ]
+vcat{T}(V::Vector{T}...) = [ V[i][j] | i=1:length(V), j=1:length(V[1]) ]
+hcat{T}(V::Vector{T}...) = [ V[j][i] | i=1:length(V[1]), j=1:length(V) ]
 
 start(a::Array) = 1
 next(a::Array,i) = (a[i],i+1)
 done(a::Array,i) = (i > numel(a))
 
 # Print arrays
-function print[T](a::Array[T,1])
+function print{T}(a::Array{T,1})
     n = a.dims[1]
 
     if n < 10
@@ -170,7 +170,7 @@ function printcols(a, start, stop, i)
     for j=start:stop; print(a[i,j]); print(" "); end
 end
 
-function print[T](a::Array[T,2])
+function print{T}(a::Array{T,2})
 
     m = a.dims[1]
     n = a.dims[2]
