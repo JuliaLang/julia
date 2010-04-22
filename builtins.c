@@ -534,8 +534,8 @@ static void print_tuple(jl_tuple_t *t, char opn, char cls)
     for(i=0; i < n; i++) {
         call_print(jl_tupleref(t, i));
         if (i < n-1)
-            ios_write(s, ", ", 2);
-        else if (n == 1)
+            ios_write(s, ",", 2);
+        else if (n == 1 && cls == ')')
             ios_putc(',', s);
     }
     ios_putc(cls, s);
@@ -764,11 +764,9 @@ JL_CALLABLE(jl_f_print_any)
             size_t i;
             size_t n = st->names->length;
             for(i=0; i < n; i++) {
-                ios_puts(((jl_sym_t*)jl_tupleref(st->names,i))->name, s);
-                ios_putc('=', s);
                 call_print(((jl_value_t**)v)[i+1]);
                 if (i < n-1)
-                    ios_write(s, ", ", 2);
+                    ios_write(s, ",", 2);
             }
             ios_putc(')', s);
         }
