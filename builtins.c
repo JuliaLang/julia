@@ -584,9 +584,7 @@ static void print_tuple(jl_tuple_t *t, char opn, char cls, int comma_one)
     size_t i, n=t->length;
     for(i=0; i < n; i++) {
         call_print(jl_tupleref(t, i));
-        if (i < n-1)
-            ios_write(s, ", ", 2);
-        else if (n==1 && comma_one)
+        if ((i < n-1) || (n==1 && comma_one))
             ios_putc(',', s);
     }
     ios_putc(cls, s);
