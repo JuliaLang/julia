@@ -67,9 +67,9 @@ end
 ref(a::Array, i::Index) = arrayref(a,i)
 ref{T}(a::Array{T,2}, i::Index, j::Index) = arrayref(a, (j-1)*a.dims[1] + i)
 
-jl_fill_endpts(A,n,R::RangeBy)   = Range{1,R.step,size(A,n)}
-jl_fill_endpts(A,n,R::RangeFrom) = Range{R.start,R.step,size(A,n)}
-jl_fill_endpts(A,n,R::RangeTo)   = Range{1,R.step,R.stop}
+jl_fill_endpts(A,n,R::RangeBy)   = Range(1,R.step,size(A,n))
+jl_fill_endpts(A,n,R::RangeFrom) = Range(R.start,R.step,size(A,n))
+jl_fill_endpts(A,n,R::RangeTo)   = Range(1,R.step,R.stop)
 jl_fill_endpts(A,n,R) = R
 
 ref(A::Vector,I) = [ A[i] | i = jl_fill_endpts(A,1,I) ]
