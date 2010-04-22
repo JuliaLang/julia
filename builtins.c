@@ -484,7 +484,29 @@ JL_CALLABLE(jl_f_convert)
     return jl_convert(args[0], (jl_type_t*)args[1]);
 }
 
-static jl_value_t *common_supertype(jl_tag_type_t *t1, jl_tag_type_t *t2)
+/*
+  we allow promotion to be covariant by default, i.e.
+  T{S} is promotable to T{R} if S is promotable to R.
+  for example the following diagram must commute:
+
+        Int32 ---------------> Float64
+          |                       |
+          |                       |
+          V                       V
+    Complex{Int32} ------> Complex{Float64}
+
+  The top arrow is explicitly declared.
+  The left arrow is given by "Complex.convert(x::T) = Complex(x, T.convert(0))".
+  The bottom arrow is provided by covariant promotion.
+*/
+static jl_value_t *bigger_type(jl_tag_type_t *t1, jl_tag_type_t *t2);
+static int is_type_bigger(jl_value_t *a, jl_value_t *b)
+{
+    assert(jl_is_some_tag_type(a));
+    assert(jl_is_some_tag_type(b));
+    return (a == bigger_type((jl_tag_type_t*)a, (jl_tag_type_t*)b));
+}
+static jl_value_t *bigger_type(jl_tag_type_t *t1, jl_tag_type_t *t2)
 {
     if (t1 == t2) return (jl_value_t*)t1;
     if (jl_is_bits_type(t1) && jl_is_bits_type(t2)) {
@@ -496,7 +518,48 @@ static jl_value_t *common_supertype(jl_tag_type_t *t1, jl_tag_type_t *t2)
     }
     jl_tag_type_t *t1_ = t1;
     jl_tag_type_t *t2_ = t2;
-    while (t1 != jl_any_type && t2 != jl_any_type) {
+    while (1) {
+        if (t1 == jl_any_type) {
+            if (t2 != jl_any_type)
+                return (jl_value_t*)t1_;
+            break;
+        }
+        else if (t2 == jl_any_type) {
+            return (jl_value_t*)t2_;
+        }
+        
+        if (t1->name == t2->name) {
+            size_t i;
+            jl_tag_type_t *winner = NULL;
+            for(i=0; i < t1->parameters->length; i++) {
+                jl_value_t *p1 = jl_tupleref(t1->parameters, i);
+                jl_value_t *p2 = jl_tupleref(t2->parameters, i);
+                if (jl_types_equal(p1,p2))
+                    continue;
+                if (jl_is_some_tag_type(p1) && jl_is_some_tag_type(p2)) {
+                    if (is_type_bigger(p1,p2)) {
+                        if (winner == t2_)
+                            return NULL;
+                        winner = t1_;
+                    }
+                    else if (is_type_bigger(p2,p1)) {
+                        if (winner == t1_)
+                            return NULL;
+                        winner = t2_;
+                    }
+                    else {
+                        return NULL;
+                    }
+                }
+                else {
+                    return NULL;
+                }
+            }
+            if (winner == NULL)  // types equal
+                return (jl_value_t*)t1_;
+            return (jl_value_t*)winner;
+        }
+
         if (jl_type_morespecific((jl_value_t*)t1, (jl_value_t*)t2, 0 ,0))
             return (jl_value_t*)t2_;
         if (jl_type_morespecific((jl_value_t*)t2, (jl_value_t*)t1, 0, 0))
@@ -504,6 +567,7 @@ static jl_value_t *common_supertype(jl_tag_type_t *t1, jl_tag_type_t *t2)
         t1 = t1->super;
         t2 = t2->super;
     }
+    
     return NULL;
 }
 
@@ -518,13 +582,13 @@ JL_CALLABLE(jl_f_promote)
         if (!jl_is_some_tag_type(jl_typeof(args[i])))
             jl_error("promotion not applicable to given types");
     }
-    jl_value_t *t = common_supertype((jl_tag_type_t*)jl_typeof(args[0]),
-                                     (jl_tag_type_t*)jl_typeof(args[1]));
+    jl_value_t *t = bigger_type((jl_tag_type_t*)jl_typeof(args[0]),
+                                (jl_tag_type_t*)jl_typeof(args[1]));
     if (t == NULL)
         jl_error("arguments have no common embedding type");
     for(i=2; i < nargs; i++) {
-        t = common_supertype((jl_tag_type_t*)t,
-                             (jl_tag_type_t*)jl_typeof(args[i]));
+        t = bigger_type((jl_tag_type_t*)t,
+                        (jl_tag_type_t*)jl_typeof(args[i]));
         if (t == NULL)
             jl_error("arguments have no common embedding type");
     }
