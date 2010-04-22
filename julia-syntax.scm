@@ -113,12 +113,12 @@
 		     (eq? (car x) ':)
 		     (length= x 3)
 		     (not (eq? (caddr x) ':)))
-		`(call (top range) ,(cadr x) 1 ,(caddr x)))
+		`(call (top Range) ,(cadr x) 1 ,(caddr x)))
 	       ((and (pair? x)
 		     (eq? (car x) ':)
 		     (length= x 4)
 		     (not (eq? (cadddr x) ':)))
-		`(call (top range) ,@(cdr x)))
+		`(call (top Range) ,@(cdr x)))
 	       (else       x)))
        i))
 
@@ -478,15 +478,15 @@
 
    ;; colon
    (pattern-lambda (: a (-/ :))
-		   `(call (top rangefrom) ,a 1))
+		   `(call (top RangeFrom) ,a 1))
    (pattern-lambda (: a b (-/ :))
-		   `(call (top rangefrom) ,a ,b))
+		   `(call (top RangeFrom) ,a ,b))
    (pattern-lambda (: (: b (-/ :)))
-		   `(call (top rangeby) ,b))
+		   `(call (top RangeBy) ,b))
    (pattern-lambda (: (: b c))
-		   `(call (top rangeto) ,b ,c))
+		   `(call (top RangeTo) ,b ,c))
    (pattern-lambda (: c)
-		   `(call (top rangeto) 1 ,c))
+		   `(call (top RangeTo) 1 ,c))
 
    (pattern-lambda
     (: a b (-? c))
