@@ -9,7 +9,7 @@ assert(!!0)
 assert(subtype(Int8, Int))
 assert(subtype(Int32, Int))
 assert(subtype((Int8,Int8), (Int,Int)))
-assert(!subtype(Tensor{Float64,2}, Tensor{Scalar,2}))
+assert(subtype(Tensor{Float64,2}, Tensor{Scalar,2}))
 assert(!subtype(Tensor{Float64,1}, Tensor{Scalar,2}))
 assert(subtype((Int,Int...), (Int, Scalar...)))
 assert(subtype((Int,Float64,Int...), (Int, Scalar...)))
@@ -93,7 +93,7 @@ assert(signbit( 1.0/0.0) == 1)
 assert(signbit(-1.0/0.0) == -1)
 
 assert(1+rational(1,2) == rational(3,2))
-assert(1./complex(2.,2.) == complex(.25, -.25))
+assert(1./Complex(2.,2.) == Complex(.25, -.25))
 
 # conversions
 function foo()
@@ -107,7 +107,7 @@ end
 assert(int32(foo()) == -24)
 
 z = Complex{Float64}.convert(2)
-assert(z == complex(2.0,0.0))
+assert(z == Complex(2.0,0.0))
 
 # misc
 fib(n) = n < 2 ? n : fib(n-1) + fib(n-2)

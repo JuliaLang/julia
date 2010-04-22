@@ -484,6 +484,56 @@ JL_CALLABLE(jl_f_convert)
     return jl_convert(args[0], (jl_type_t*)args[1]);
 }
 
+static jl_value_t *common_supertype(jl_tag_type_t *t1, jl_tag_type_t *t2)
+{
+    if (t1 == t2) return (jl_value_t*)t1;
+    if (jl_is_bits_type(t1) && jl_is_bits_type(t2)) {
+        if (((jl_bits_type_t*)t1)->nbits > ((jl_bits_type_t*)t2)->nbits)
+            return (jl_value_t*)t1;
+        if (((jl_bits_type_t*)t2)->nbits > ((jl_bits_type_t*)t1)->nbits)
+            return (jl_value_t*)t2;
+        return NULL;
+    }
+    jl_tag_type_t *t1_ = t1;
+    jl_tag_type_t *t2_ = t2;
+    while (t1 != jl_any_type && t2 != jl_any_type) {
+        if (jl_type_morespecific((jl_value_t*)t1, (jl_value_t*)t2, 0 ,0))
+            return (jl_value_t*)t2_;
+        if (jl_type_morespecific((jl_value_t*)t2, (jl_value_t*)t1, 0, 0))
+            return (jl_value_t*)t1_;
+        t1 = t1->super;
+        t2 = t2->super;
+    }
+    return NULL;
+}
+
+JL_CALLABLE(jl_f_promote)
+{
+    if (nargs == 0)
+        return (jl_value_t*)jl_null;
+    if (nargs == 1)
+        return (jl_value_t*)jl_tuple(1, args[0]);
+    size_t i;
+    for(i=0; i < nargs; i++) {
+        if (!jl_is_some_tag_type(jl_typeof(args[i])))
+            jl_error("promotion not applicable to given types");
+    }
+    jl_value_t *t = common_supertype((jl_tag_type_t*)jl_typeof(args[0]),
+                                     (jl_tag_type_t*)jl_typeof(args[1]));
+    if (t == NULL)
+        jl_error("arguments have no common embedding type");
+    for(i=2; i < nargs; i++) {
+        t = common_supertype((jl_tag_type_t*)t,
+                             (jl_tag_type_t*)jl_typeof(args[i]));
+        if (t == NULL)
+            jl_error("arguments have no common embedding type");
+    }
+    jl_tuple_t *result = jl_alloc_tuple(nargs);
+    for(i=0; i < nargs; i++)
+        jl_tupleset(result, i, jl_convert(args[i], (jl_type_t*)t));
+    return (jl_value_t*)result;
+}
+
 // --- printing ---
 
 jl_function_t *jl_print_gf;
@@ -526,7 +576,8 @@ void jl_print(jl_value_t *v)
     call_print(v);
 }
 
-static void print_tuple(jl_tuple_t *t, char opn, char cls)
+// comma_one prints a comma for 1 element, e.g. "(x,)"
+static void print_tuple(jl_tuple_t *t, char opn, char cls, int comma_one)
 {
     ios_t *s = current_output_stream;
     ios_putc(opn, s);
@@ -535,7 +586,7 @@ static void print_tuple(jl_tuple_t *t, char opn, char cls)
         call_print(jl_tupleref(t, i));
         if (i < n-1)
             ios_write(s, ", ", 2);
-        else if (n == 1)
+        else if (n == 1 && comma_one)
             ios_putc(',', s);
     }
     ios_putc(cls, s);
@@ -554,7 +605,7 @@ static void print_type(jl_value_t *t)
     }
     else if (jl_is_union_type(t)) {
         ios_write(s, "Union", 5);
-        print_tuple(((jl_uniontype_t*)t)->types, '(', ')');
+        print_tuple(((jl_uniontype_t*)t)->types, '(', ')', 0);
     }
     else if (jl_is_seq_type(t)) {
         call_print(jl_tparam0(t));
@@ -565,7 +616,7 @@ static void print_type(jl_value_t *t)
         ios_puts(((jl_tag_type_t*)t)->name->name->name, s);
         jl_tuple_t *p = jl_tparams(t);
         if (p->length > 0)
-            print_tuple(p, '{', '}');
+            print_tuple(p, '{', '}', 0);
     }
 }
 
@@ -740,7 +791,7 @@ JL_CALLABLE(jl_f_print_any)
     ios_t *s = current_output_stream;
     jl_value_t *v = args[0];
     if (jl_is_tuple(v)) {
-        print_tuple((jl_tuple_t*)v, '(', ')');
+        print_tuple((jl_tuple_t*)v, '(', ')', 1);
     }
     else if (jl_is_type(v)) {
         print_type(v);
@@ -823,9 +874,8 @@ static int all_typevars(jl_tuple_t *p)
 
 static void check_supertype(jl_value_t *super, char *name)
 {
-    if (jl_subtype(super,(jl_value_t*)jl_tuple_type,0,0) ||
-        jl_is_func_type(super) ||
-        jl_is_union_type(super) ||
+    if (!(jl_is_struct_type(super) || jl_is_tag_type(super)) ||
+        super == (jl_value_t*)jl_sym_type ||
         jl_subtype(super,(jl_value_t*)jl_type_type,0,0) ||
         jl_subtype(super,(jl_value_t*)jl_array_type,0,0)) {
         jl_errorf("invalid subtyping in definition of %s", name);
@@ -860,13 +910,14 @@ JL_CALLABLE(jl_f_new_struct_type)
         assert(jl_is_type(args[1]));
         check_supertype(super, name->name);
         nst->super = (jl_tag_type_t*)super;
-        if (jl_is_struct_type(super))
+        if (jl_is_struct_type(super)) {
             nst->names = jl_tuple_append(((jl_struct_type_t*)super)->names,
                                          fnames);
-        else if (jl_is_tag_type(super))
+        }
+        else {
+            assert(jl_is_tag_type(super));
             nst->names = fnames;
-        else
-            jl_errorf("invalid subtyping in definition of %s", name->name);
+        }
     }
     return (jl_value_t*)nst;
 }
@@ -1025,6 +1076,7 @@ void jl_init_builtins()
     add_builtin_func("load", jl_f_load);
     add_builtin_func("tuple", jl_f_tuple);
     add_builtin_func("convert", jl_f_convert);
+    add_builtin_func("promote", jl_f_promote);
     add_builtin_func("Union", jl_f_union);
     add_builtin_func("time_thunk", jl_f_time_thunk);
     add_builtin("print", (jl_value_t*)jl_print_gf);

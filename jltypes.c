@@ -1212,8 +1212,15 @@ int jl_subtype_le(jl_value_t *a, jl_value_t *b, int ta, int tb, int morespecific
                 jl_value_t *bpara = jl_tupleref(ttb->parameters,i);
                 if (jl_is_typevar(bpara))
                     continue;
-                if (!jl_types_equal(apara, bpara))
-                    return 0;
+                if (jl_is_tag_type(ttb)) {
+                    // allow abstract types to be covariant
+                    if (!jl_subtype_le(apara, bpara, 0, 0, morespecific))
+                        return 0;
+                }
+                else {
+                    if (!jl_types_equal(apara, bpara))
+                        return 0;
+                }
             }
             return 1;
         }
