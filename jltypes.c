@@ -78,16 +78,19 @@ jl_func_type_t *jl_any_func;
 jl_function_t *jl_bottom_func;
 jl_function_t *jl_identity_func;
 
-jl_sym_t *call_sym;
-jl_sym_t *dots_sym;
-jl_sym_t *dollar_sym;
-jl_sym_t *quote_sym;
-jl_sym_t *tuple_sym;
-jl_sym_t *top_sym;
-jl_sym_t *expr_sym;
-jl_sym_t *list_sym;
-jl_sym_t *line_sym;
-jl_sym_t *continue_sym;
+jl_sym_t *call_sym;    jl_sym_t *dots_sym;
+jl_sym_t *dollar_sym;  jl_sym_t *quote_sym;
+jl_sym_t *tuple_sym;   jl_sym_t *top_sym;
+jl_sym_t *expr_sym;    jl_sym_t *list_sym;
+jl_sym_t *line_sym;    jl_sym_t *continue_sym;
+// head symbols for each expression type
+jl_sym_t *goto_sym;    jl_sym_t *goto_ifnot_sym;
+jl_sym_t *label_sym;   jl_sym_t *return_sym;
+jl_sym_t *lambda_sym;  jl_sym_t *assign_sym;
+jl_sym_t *null_sym;    jl_sym_t *body_sym;
+jl_sym_t *unbound_sym; jl_sym_t *boxunbound_sym;
+jl_sym_t *locals_sym;  jl_sym_t *colons_sym;
+jl_sym_t *closure_ref_sym;
 
 static inline jl_value_t *newobj(jl_type_t *type, size_t nfields)
 {
@@ -1741,4 +1744,17 @@ void jl_init_types()
     dollar_sym = jl_symbol("$");
     line_sym = jl_symbol("line");
     continue_sym = jl_symbol("continue");
+    goto_sym = jl_symbol("goto");
+    goto_ifnot_sym = jl_symbol("goto-ifnot");
+    label_sym = jl_symbol("label");
+    return_sym = jl_symbol("return");
+    lambda_sym = jl_symbol("lambda");
+    assign_sym = jl_symbol("=");
+    null_sym = jl_symbol("null");
+    unbound_sym = jl_symbol("unbound");
+    boxunbound_sym = jl_symbol("box-unbound");
+    closure_ref_sym = jl_symbol("closure-ref");
+    body_sym = jl_symbol("body");
+    locals_sym = jl_symbol("locals");
+    colons_sym = jl_symbol("::");
 }

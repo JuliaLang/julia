@@ -235,6 +235,13 @@ extern jl_sym_t *expr_sym;
 extern jl_sym_t *list_sym;
 extern jl_sym_t *line_sym;
 extern jl_sym_t *continue_sym;
+extern jl_sym_t *goto_sym;    extern jl_sym_t *goto_ifnot_sym;
+extern jl_sym_t *label_sym;   extern jl_sym_t *return_sym;
+extern jl_sym_t *lambda_sym;  extern jl_sym_t *assign_sym;
+extern jl_sym_t *null_sym;    extern jl_sym_t *body_sym;
+extern jl_sym_t *unbound_sym; extern jl_sym_t *boxunbound_sym;
+extern jl_sym_t *locals_sym;  extern jl_sym_t *colons_sym;
+extern jl_sym_t *closure_ref_sym;
 
 #ifdef BITS64
 #define NWORDS(sz) (((sz)+7)>>3)
@@ -417,10 +424,18 @@ jl_module_t *jl_import_module(jl_module_t *to, jl_module_t *from);
 void jl_compile(jl_lambda_info_t *li);
 jl_value_t *jl_toplevel_eval(jl_value_t *ast);
 void jl_load(const char *fname);
+jl_value_t *jl_interpret_toplevel_expr(jl_lambda_info_t *lam);
 
 void jl_print_method_table(jl_function_t *gf);
 jl_function_t *jl_instantiate_method(jl_function_t *f, jl_tuple_t *sp);
 jl_lambda_info_t *jl_add_static_parameters(jl_lambda_info_t *l, jl_tuple_t *sp);
+
+// AST access
+jl_tuple_t *jl_lam_args(jl_expr_t *l);
+jl_tuple_t *jl_lam_locals(jl_expr_t *l);
+jl_tuple_t *jl_lam_body(jl_expr_t *l);
+jl_sym_t *jl_decl_var(jl_value_t *ex);
+int jl_is_rest_arg(jl_value_t *ex);
 
 // for writing julia functions in C
 #define JL_CALLABLE(name) \

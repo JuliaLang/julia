@@ -168,3 +168,57 @@ jl_value_t *jl_parse_file(const char *fname)
         return (jl_value_t*)jl_null;
     return scm_to_julia(e);
 }
+
+// syntax tree accessors
+
+// get array of formal argument expressions
+jl_tuple_t *jl_lam_args(jl_expr_t *l)
+{
+    assert(l->head == lambda_sym);
+    jl_value_t *ae = jl_exprarg(l,0);
+    if (ae == (jl_value_t*)jl_null) return jl_null;
+    assert(jl_is_expr(ae));
+    assert(((jl_expr_t*)ae)->head == list_sym);
+    return ((jl_expr_t*)ae)->args;
+}
+
+// get array of local var symbols
+jl_tuple_t *jl_lam_locals(jl_expr_t *l)
+{
+    jl_value_t *le = jl_exprarg(l, 1);
+    assert(jl_is_expr(le));
+    jl_expr_t *lle = (jl_expr_t*)jl_exprarg(le,0);
+    assert(jl_is_expr(lle));
+    assert(lle->head == locals_sym);
+    return lle->args;
+}
+
+// get array of body forms
+jl_tuple_t *jl_lam_body(jl_expr_t *l)
+{
+    jl_value_t *be = jl_exprarg(l, 2);
+    assert(jl_is_expr(be));
+    assert(((jl_expr_t*)be)->head == body_sym);
+    return ((jl_expr_t*)be)->args;
+}
+
+jl_sym_t *jl_decl_var(jl_value_t *ex)
+{
+    if (jl_is_symbol(ex)) return (jl_sym_t*)ex;
+    assert(jl_is_expr(ex));
+    return (jl_sym_t*)jl_exprarg(ex, 0);
+}
+
+int jl_is_rest_arg(jl_value_t *ex)
+{
+    if (!jl_is_expr(ex)) return 0;
+    if (((jl_expr_t*)ex)->head != colons_sym) return 0;
+    jl_expr_t *atype = (jl_expr_t*)jl_exprarg(ex,1);
+    if (!jl_is_expr(atype)) return 0;
+    if (atype->head != call_sym ||
+        atype->args->length != 3)
+        return 0;
+    if ((jl_sym_t*)jl_exprarg(atype,1) != dots_sym)
+        return 0;
+    return 1;
+}

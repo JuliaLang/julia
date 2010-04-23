@@ -1,5 +1,5 @@
 NAME = julia
-SRCS = jltypes gf ast repl builtins jlfrontend jlfrontend_ module codegen
+SRCS = jltypes gf ast repl builtins jlfrontend jlfrontend_ module codegen interpreter
 OBJS = $(SRCS:%=%.o)
 DOBJS = $(SRCS:%=%.do)
 EXENAME = $(NAME)

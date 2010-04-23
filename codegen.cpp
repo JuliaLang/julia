@@ -80,15 +80,6 @@ static Function *jltuple_func;
 static Function *jlapplygeneric_func;
 static Function *jlalloc_func;
 
-// head symbols for each expression type
-static jl_sym_t *goto_sym;    static jl_sym_t *goto_ifnot_sym;
-static jl_sym_t *label_sym;   static jl_sym_t *return_sym;
-static jl_sym_t *lambda_sym;  static jl_sym_t *assign_sym;
-static jl_sym_t *null_sym;    static jl_sym_t *body_sym;
-static jl_sym_t *unbound_sym; static jl_sym_t *boxunbound_sym;
-static jl_sym_t *locals_sym;  static jl_sym_t *colons_sym;
-static jl_sym_t *closure_ref_sym;
-
 /*
   plan
 
@@ -173,8 +164,8 @@ static Function *to_function(jl_lambda_info_t *li)
                                    "a_julia_function", jl_Module);
     assert(jl_is_expr(li->ast));
     emit_function(li, f);
-    verifyFunction(*f);
-    FPM->run(*f);
+    //verifyFunction(*f);
+    //FPM->run(*f);
     // print out the function's LLVM code
     //f->dump();
     return f;
@@ -187,57 +178,6 @@ extern "C" void jl_compile(jl_lambda_info_t *li)
     li->fptr = (jl_fptr_t)jl_ExecutionEngine->getPointerToFunction(f);
 }
 
-// get array of formal argument expressions
-static jl_tuple_t *lam_args(jl_expr_t *l)
-{
-    assert(l->head == lambda_sym);
-    jl_value_t *ae = jl_exprarg(l,0);
-    if (ae == (jl_value_t*)jl_null) return jl_null;
-    assert(jl_is_expr(ae));
-    assert(((jl_expr_t*)ae)->head == list_sym);
-    return ((jl_expr_t*)ae)->args;
-}
-
-// get array of local var symbols
-static jl_tuple_t *lam_locals(jl_expr_t *l)
-{
-    jl_value_t *le = jl_exprarg(l, 1);
-    assert(jl_is_expr(le));
-    jl_expr_t *lle = (jl_expr_t*)jl_exprarg(le,0);
-    assert(jl_is_expr(lle));
-    assert(lle->head == locals_sym);
-    return lle->args;
-}
-
-// get array of body forms
-static jl_tuple_t *lam_body(jl_expr_t *l)
-{
-    jl_value_t *be = jl_exprarg(l, 2);
-    assert(jl_is_expr(be));
-    assert(((jl_expr_t*)be)->head == body_sym);
-    return ((jl_expr_t*)be)->args;
-}
-
-static jl_sym_t *decl_var(jl_value_t *ex)
-{
-    if (jl_is_symbol(ex)) return (jl_sym_t*)ex;
-    assert(jl_is_expr(ex));
-    return (jl_sym_t*)jl_exprarg(ex, 0);
-}
-
-static int is_rest_arg(jl_value_t *ex)
-{
-    if (!jl_is_expr(ex)) return 0;
-    if (((jl_expr_t*)ex)->head != colons_sym) return 0;
-    jl_expr_t *atype = (jl_expr_t*)jl_exprarg(ex,1);
-    if (!jl_is_expr(atype)) return 0;
-    if (atype->head != call_sym ||
-        atype->args->length != 3)
-        return 0;
-    if ((jl_sym_t*)jl_exprarg(atype,1) != dots_sym)
-        return 0;
-    return 1;
-}
 
 // information about the context of a piece of code: its enclosing
 // function and module, and visible local variables and labels.
@@ -484,7 +424,7 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool value,
         if (!done) {
             Value *theFunc = emit_expr(args[0], ctx, true);
             emit_typecheck(theFunc, (jl_value_t*)jl_any_func,
-                           "apply: expected function.", ctx);
+                           "apply: expected function", ctx);
             // extract pieces of the function object
             // TODO: try extractelement instead
             theFptr =
@@ -568,8 +508,8 @@ static void emit_function(jl_lambda_info_t *lam, Function *f)
     builder.SetInsertPoint(b0);
     std::map<std::string, AllocaInst*> localVars;
     std::map<std::string, BasicBlock*> labels;
-    jl_tuple_t *largs = lam_args(ast);
-    jl_tuple_t *lvars = lam_locals(ast);
+    jl_tuple_t *largs = jl_lam_args(ast);
+    jl_tuple_t *lvars = jl_lam_locals(ast);
     Function::arg_iterator AI = f->arg_begin();
     const Argument &envArg = *AI++;
     const Argument &argArray = *AI++;
@@ -595,7 +535,7 @@ static void emit_function(jl_lambda_info_t *lam, Function *f)
         localVars[argname] = lv;
     }
     for(i=0; i < largs->length; i++) {
-        char *argname = decl_var(jl_tupleref(largs,i))->name;
+        char *argname = jl_decl_var(jl_tupleref(largs,i))->name;
         AllocaInst *lv = builder.CreateAlloca(jl_pvalue_llvmt, 0, argname);
         localVars[argname] = lv;
     }
@@ -603,7 +543,7 @@ static void emit_function(jl_lambda_info_t *lam, Function *f)
     // check arg count
     size_t nreq = largs->length;
     int va = 0;
-    if (nreq > 0 && is_rest_arg(jl_tupleref(largs,nreq-1))) {
+    if (nreq > 0 && jl_is_rest_arg(jl_tupleref(largs,nreq-1))) {
         nreq--;
         va = 1;
         Value *enough =
@@ -636,7 +576,7 @@ static void emit_function(jl_lambda_info_t *lam, Function *f)
     // (probably possible to avoid this step with a little redesign)
     // TODO: avoid for arguments that aren't assigned
     for(i=0; i < nreq; i++) {
-        char *argname = decl_var(jl_tupleref(largs,i))->name;
+        char *argname = jl_decl_var(jl_tupleref(largs,i))->name;
         AllocaInst *lv = localVars[argname];
         Value *argPtr =
             builder.CreateGEP((Value*)&argArray,
@@ -653,13 +593,13 @@ static void emit_function(jl_lambda_info_t *lam, Function *f)
                                                   ConstantInt::get(T_int32,nreq)),
                                 builder.CreateSub((Value*)&argCount,
                                                   ConstantInt::get(T_int32,nreq)));
-        char *argname = decl_var(jl_tupleref(largs,nreq))->name;
+        char *argname = jl_decl_var(jl_tupleref(largs,nreq))->name;
         AllocaInst *lv = builder.CreateAlloca(jl_pvalue_llvmt, 0, argname);
         builder.CreateStore(restTuple, lv);
         localVars[argname] = lv;
     }
 
-    jl_tuple_t *stmts = lam_body(ast);
+    jl_tuple_t *stmts = jl_lam_body(ast);
     // associate labels with basic blocks so forward jumps can be resolved
     BasicBlock *prev=NULL;
     for(i=0; i < stmts->length; i++) {
@@ -826,17 +766,5 @@ extern "C" void jl_init_codegen()
 
     init_julia_llvm_env(jl_Module);
 
-    goto_sym = jl_symbol("goto");
-    goto_ifnot_sym = jl_symbol("goto-ifnot");
-    label_sym = jl_symbol("label");
-    return_sym = jl_symbol("return");
-    lambda_sym = jl_symbol("lambda");
-    assign_sym = jl_symbol("=");
-    null_sym = jl_symbol("null");
-    unbound_sym = jl_symbol("unbound");
-    boxunbound_sym = jl_symbol("box-unbound");
-    closure_ref_sym = jl_symbol("closure-ref");
-    body_sym = jl_symbol("body");
-    locals_sym = jl_symbol("locals");
-    colons_sym = jl_symbol("::");
+    jl_init_intrinsic_functions();
 }
