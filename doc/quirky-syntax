@@ -1,0 +1,21 @@
+Is there a reason that .^ and ^ behave differently for scalars? It seems to me that the first one is not interpreted as .^ but rather as 2.0^31. How do we sort such problems?
+
+julia> 2.^31
+2147483648.0
+
+julia> 2^31
+-2147483648
+
+==
+
+Note that there are no complaints for all the extra closing parens.
+
+julia> a = ones(5,5))))
+1 1 1 1 1
+1 1 1 1 1
+1 1 1 1 1
+1 1 1 1 1
+1 1 1 1 1
+
+==
+
