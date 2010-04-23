@@ -153,7 +153,39 @@ start(a::Array) = 1
 next(a::Array,i) = (a[i],i+1)
 done(a::Array,i) = (i > numel(a))
 
+# Sort
+
+sort (a::Vector) = sort (a, int32(1), int32(length(a)))
+
+function sort (a::Vector, low, high)
+    i = low
+    j = high
+
+    pivot = a[int32((low+high)/2)];
+
+    # Partition
+    while i <= j
+        while a[i] < pivot; i += 1; end
+        while a[j] > pivot; j -= 1; end
+
+        if i <= j
+            temp = a[i]; a[i] = a[j]; a[j] = temp;
+            i += 1;
+            j -= 1;
+        end
+    end
+
+    # Recursion for quicksort
+    if low < j; sort(a, low, j); end
+    if i < high; sort(a, i, high); end
+end
+
 # Print arrays
+function printall{T}(a::Array{T,1})
+    n = a.dims[1]
+    for i=1:n; print(a[i]); if i<n; print("\n"); end; end
+end
+
 function print{T}(a::Array{T,1})
     n = a.dims[1]
 
