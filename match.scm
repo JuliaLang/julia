@@ -136,11 +136,20 @@
 ; try to transform expr using a pattern-lambda from plist
 ; returns the new expression, or expr if no matches
 (define (apply-patterns plist expr)
-  (if (null? plist) expr
-      (let ((enew ((car plist) expr)))
-	(if (not enew)
-	    (apply-patterns (cdr plist) expr)
-	    enew))))
+  (cond ((vector? plist)
+	 (if (pair? expr)
+	     (let* ((relevant (table-ref (vector-ref plist 1) (car expr) '()))
+		    (enew     (apply-patterns relevant expr)))
+	       (if (eq? enew expr)
+		   (apply-patterns (vector-ref plist 2) expr)
+		   enew))
+	     (apply-patterns (vector-ref plist 2) expr)))
+        ((null? plist) expr)
+	(else
+	 (let ((enew ((car plist) expr)))
+	   (if (not enew)
+	       (apply-patterns (cdr plist) expr)
+	       enew)))))
 
 ; top-down fixed-point macroexpansion. this is a typical algorithm,
 ; but it may leave some structure that matches a pattern unexpanded.
@@ -160,6 +169,58 @@
 		 expr)
 	    ; expr changed; iterate
 	    (pattern-expand plist enew)))))
+
+(define-macro (pattern-set . pats)
+  (define (filter pred lis)
+    (let recur ((lis lis))
+      (if (null? lis) lis
+	  (let ((head (car lis))
+		(tail (cdr lis)))
+	    (if (pred head)
+		(let ((new-tail (recur tail)))
+		  (if (eq? tail new-tail) lis
+		      (cons head new-tail)))
+		(recur tail))))))
+  (define (delete-duplicates lst)
+    (if (not (pair? lst))
+	lst
+	(let ((elt  (car lst))
+	      (tail (cdr lst)))
+	  (if (member elt tail)
+	      (delete-duplicates tail)
+	      (cons elt
+		    (delete-duplicates tail))))))
+  (define (separate pred lst)
+    (define (separate- pred lst yes no)
+      (cond ((null? lst) (values (reverse yes) (reverse no)))
+	    ((pred (car lst))
+	     (separate- pred (cdr lst) (cons (car lst) yes) no))
+	    (else
+	     (separate- pred (cdr lst) yes (cons (car lst) no)))))
+    (separate- pred lst '() '()))
+  (define (length= lst n)
+    (cond ((< n 0)     #f)
+	  ((= n 0)     (not (pair? lst)))
+	  ((not (pair? lst)) (= n 0))
+	  (else        (length= (cdr lst) (- n 1)))))
+  ; (pattern-lambda (x ...) ...) => x
+  (define (pl-head p) (car (cadr p)))
+  (receive
+   (pls others) (separate (lambda (x)
+			    (and (pair? x) (length= x 3)
+				 (eq? (car x) 'pattern-lambda)
+				 (pair? (cadr x))))
+			  pats)
+   (let ((heads (delete-duplicates (map pl-head pls)))
+	 (ht    (gensym)))
+     `(let ((,ht (make-table)))
+	,@(map (lambda (h)
+		 `(table-set! ,ht ',h (list
+				       ,@(filter (lambda (p)
+						   (eq? (pl-head p) h))
+						 pls))))
+	       heads)
+	(vector 'pattern-set ,ht (list ,@others))))))
 
 (define-macro (pattern-lambda pat body)
   ; for some moronic reason gsc fails unless this code is pasted here

@@ -253,7 +253,7 @@
 
 ; patterns that introduce lambdas
 (define binding-form-patterns
-  (list
+  (pattern-set
    ; function with static parameters
    (pattern-lambda (function (call (curly name . sparams) . argl) body)
 		   (generic-function-def-expr name sparams argl body))
@@ -299,7 +299,7 @@
    )) ; binding-form-patterns
 
 (define patterns
-  (list
+  (pattern-set
    #;(pattern-lambda (--> a b)
 		   `(call curly Function ,a ,b))
 
@@ -507,7 +507,7 @@
 ; if any sugary forms remain after the above patterns, it means the
 ; patterns didn't match, which implies a syntax error.
 (define check-desugared
-  (list
+  (pattern-set
    (pattern-lambda (function . any)
 		   (error "Invalid function definition"))
 
@@ -529,7 +529,7 @@
 ;; array indexing inside loop expressions.
 
 (define identify-comprehensions
-  (list
+  (pattern-set
 
    (pattern-lambda
     (hcat (call (-/ |\||) expr (= i range)) . rest)
@@ -542,7 +542,7 @@
 )) ;; identify-comprehensions
 
 (define lower-comprehensions
-  (list
+  (pattern-set
 
    ; nd comprehensions
    (pattern-lambda
@@ -594,7 +594,7 @@
 
 ; (op (op a b) c) => (op a b c) etc.
 (define (flatten-op op e)
-  (if (atom? e) e
+  (if (not (pair? e)) e
       (if (eq? (car e) op)
 	  (apply append (map (lambda (x)
 			       (let ((x (flatten-op op x)))
@@ -606,7 +606,7 @@
 	  (map (lambda (x) (flatten-op op x)) e))))
 
 (define (expand-and-or e)
-  (if (or (atom? e) (quoted? e)) e
+  (if (or (not (pair? e)) (quoted? e)) e
       (case (car e)
 	((&&) (let ((e (flatten-op '&& e)))
 		(let loop ((tail (cdr e)))
@@ -676,7 +676,7 @@
   ; This expression walk is entirely within the "else" clause of the giant
   ; case expression. Everything else deals with special forms.
   (define (to-lff e dest tail)
-    (if (or (atom? e) (quoted? e) (equal? e '(null)))
+    (if (or (not (pair? e)) (quoted? e) (equal? e '(null)))
 	(cond ((symbol? dest) (cons `(= ,dest ,e) '()))
 	      (dest (cons (if tail `(return ,e) e)
 			  '()))
@@ -821,7 +821,7 @@ So far only the second case can actually occur.
 ;    scopes
 (define (identify-locals e)
   (define (find-assigned-vars e env)
-    (if (or (atom? e) (quoted? e))
+    (if (or (not (pair? e)) (quoted? e))
 	'()
 	(case (car e)
 	  ((lambda scope-block)  '())
@@ -836,7 +836,7 @@ So far only the second case can actually occur.
 	   (apply append (map (lambda (x) (find-assigned-vars x env))
 			      e))))))
   (define (add-local-decls e env)
-    (if (or (atom? e) (quoted? e)) e
+    (if (or (not (pair? e)) (quoted? e)) e
 	(cond ((eq? (car e) 'lambda)
 	       (let* ((env (append (lam:vars e) env))
 		      (body (add-local-decls (caddr e) env)))
@@ -883,7 +883,7 @@ So far only the second case can actually occur.
 		alst)))
   (cond ((null? renames)  e)
 	((symbol? e)      (lookup e renames e))
-	((atom? e)        e)
+	((not (pair? e))  e)
 	((quoted? e)      e)
 	(else
 	 (let* ((bound-vars  ; compute vars bound by current expr
@@ -902,7 +902,7 @@ So far only the second case can actually occur.
 (define (flatten-scopes e)
   ; returns (expr . all-locals)
   (define (remove-scope-blocks e)
-    (cond ((or (atom? e) (quoted? e)) (cons e '()))
+    (cond ((or (not (pair? e)) (quoted? e)) (cons e '()))
 	  ((eq? (car e) 'lambda) (cons (flatten-scopes e) '()))
 	  ((eq? (car e) 'local)  (if (pair? (cadr e))
 				     (cons (cadr e) '())
@@ -921,9 +921,9 @@ So far only the second case can actually occur.
 	     (cons (map car rec)
 		   (apply append (map cdr rec)))))))
 
-  (cond ((atom? e)   e)
-	((quoted? e) e)
-	((eq? (car e) 'lambda)
+  (cond ((not (pair? e))   e)
+	((quoted? e)       e)
+	((eq? (car e)      'lambda)
 	 (let* ((argnames  (lam:vars e))
 		(body0     (caddr e))
 		(body      (if (eq? (car body0) 'scope-block)
@@ -939,7 +939,7 @@ So far only the second case can actually occur.
 	   `(lambda ,(cadr e)
 	      (locals ,@l0 ,@(cdr r-s-b))
 	      ,(car r-s-b))))
-	(else (map flatten-scopes e))))
+	(else (map (lambda (x) (if (not (pair? x)) x (flatten-scopes x))) e))))
 
 (define (make-var-info name) (vector name 'Any #f))
 (define (vinfo:name v) (vector-ref v 0))
@@ -974,7 +974,7 @@ So far only the second case can actually occur.
 (define (analyze-vars e env)
   ; returns #f or (var-info . frame)
   (define (var-lookup v env)
-    (if (atom? env) #f
+    (if (not (pair? env)) #f
 	(let ((vi (var-info-for v (car env))))
 	  (if vi
 	      (cons vi (car env))
@@ -986,7 +986,7 @@ So far only the second case can actually occur.
 	       (begin (vinfo:set-capt! (car v) #t)
 		      (cons e (list v)))
 	       (cons e '()))))
-	((or (atom? e) (quoted? e)) (cons e '()))
+	((or (not (pair? e)) (quoted? e)) (cons e '()))
 	((eq? (car e) '|::|)
 	 (let ((inner (analyze-vars (cadr e) env)))
 	   (if (symbol? (cadr e))
@@ -1058,7 +1058,7 @@ So far only the second case can actually occur.
 	   (cond ((eq? l 'boxed) `(call (top unbox) ,e))
 		 ((number? l)    `(call (top unbox) (closure-ref ,l)))
 		 (else e))))
-	((atom? e) e)
+	((not (pair? e)) e)
 	((eq? (car e) 'unbound)
 	 (let ((v (closure-convert- (cadr e) vinfo)))
 	   (if (pair? v)
@@ -1130,7 +1130,7 @@ So far only the second case can actually occur.
     (define (make-label)   (gensym))
     (define (mark-label l) (emit `(label ,l)))
     (define (compile e break-labels)
-      (if (or (atom? e) (equal? e '(null)))
+      (if (or (not (pair? e)) (equal? e '(null)))
 	  ; atom has no effect, but keep symbols for undefined-var checking
 	  (if (symbol? e) (emit e) #f)
 	  (case (car e)
@@ -1165,7 +1165,7 @@ So far only the second case can actually occur.
 	    ((call)  (if (not (equal? (cadr e) '(top unbox)))
 			 (emit (goto-form e))))
 	    (else  (emit (goto-form e))))))
-    (cond ((or (atom? e) (quoted? e)) e)
+    (cond ((or (not (pair? e)) (quoted? e)) e)
 	  ((eq? (car e) 'lambda)
 	   (compile (cadddr e) '())
 	   `(lambda ,(cadr e) ,(caddr e)
@@ -1198,8 +1198,8 @@ So far only the second case can actually occur.
 				      ,(lookup (caddr e) labels (caddr e))))
 			(else (resolve-labels e))))
 		v))
-  (cond ((atom? e) e)
-	((eq? (car e) 'lambda)
+  (cond ((not (pair? e)) e)
+	((eq? (car e)    'lambda)
 	 `(lambda ,(cadr e) ,(caddr e)
 		  ,(fix-gotos (lam:body e) (label-addrs (lam:body e)))))
 	(else (map resolve-labels e))))
@@ -1211,7 +1211,7 @@ So far only the second case can actually occur.
 
 (define (expand-backquote e)
   (cond ((symbol? e)          `(quote ,e))
-	((atom? e)            e)
+	((not (pair? e))      e)
 	((eq? (car e) '$)     (cadr e))
 	((eq? (car e) 'quote)
 	 (if (symbol? (cadr e))
@@ -1237,7 +1237,7 @@ So far only the second case can actually occur.
 			       q))))))))
 
 (define (julia-expand-backquote e)
-  (cond ((atom? e) e)
+  (cond ((not (pair? e)) e)
 	((eq? (car e) 'quote)
 	 (if (symbol? (cadr e))
 	     e

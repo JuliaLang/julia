@@ -1,3 +1,10 @@
+(declare
+ (standard-bindings)
+ (extended-bindings)
+ (not run-time-bindings)
+ (not safe)
+ (not interrupts-enabled)
+)
 (define *julia-interpreter* #f)
 (include "utils.scm")
 (include "match.scm")
@@ -28,7 +35,7 @@
 	((string? e) `("string" ,e))
 	((boolean? e) (if e 1 0))
 	((vector? e) (cons "vinfo" (map unsymbol- (vector->list e))))
-	((atom? e) e)
+	((not (pair? e)) e)
 	(else
 	 (let ((l (map unsymbol- e)))
 	   (cond ((eq? (car e) 'lambda)
