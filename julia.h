@@ -328,7 +328,6 @@ jl_typector_t *jl_new_type_ctor(jl_tuple_t *params, jl_type_t *body);
 jl_type_t *jl_apply_type_ctor(jl_typector_t *tc, jl_tuple_t *params);
 jl_type_t *jl_instantiate_type_with(jl_type_t *t, jl_value_t **env, size_t n);
 jl_value_t *jl_add_dummy_type_vars(jl_value_t *t);
-jl_tvar_t *jl_typevar(jl_sym_t *name);
 jl_uniontype_t *jl_new_uniontype(jl_tuple_t *types);
 jl_func_type_t *jl_new_functype(jl_type_t *a, jl_type_t *b);
 jl_tag_type_t *jl_new_tagtype(jl_value_t *name, jl_tag_type_t *super,
@@ -359,6 +358,7 @@ jl_value_t *jl_box_int16(int16_t x);
 jl_value_t *jl_box_uint16(uint16_t x);
 jl_value_t *jl_box_int32(int32_t x);
 jl_value_t *jl_box_uint32(uint32_t x);
+jl_value_t *jl_new_box_uint32(uint32_t x);
 jl_value_t *jl_box_int64(int64_t x);
 jl_value_t *jl_box_uint64(uint64_t x);
 jl_value_t *jl_box_float32(float x);
