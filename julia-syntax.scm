@@ -571,37 +571,22 @@
 	    (cons `(call length ,(car expr)) (compute-dims (cdr expr))) ))
 
       ;; construct loops to cycle over all dimensions of an n-d comprehension
-;;       (define (construct-loops result expr ranges ri)
-;; 	(if (null? ranges)
-;; 	    `(block (call set ,result ,expr ,ri)
-;; 		    (+= ,ri 1))
-;; 	    `(for ,(car ranges)
-;; 		  ,(construct-loops result expr (cdr ranges) ri) )))
-
-      ;; construct loops to cycle over all dimensions of an n-d comprehension
-      (define (construct-loops result expr ranges ri oneresult-dim iters)
+      (define (construct-loops result expr ranges ri)
 	(if (null? ranges)
-	    (if (null? iters)
-		`(block (call set ,result ,expr ,ri)
-			(+= ,ri 1))
-		`(block (call set ,result (ref ,expr ,iters) ,ri)
-			(+= ,ri 1)) )
-	    (if (eq? (car ranges) ...)
-		(let ((i (gensym)))
-		      `(for (= ,i (: 1 (call size ,oneresult ,oneresult-dim))))
-		      ,(construct-loops result expr (cdr ranges) ri (+ oneresult-dim 1) (cons i iters)) )
-		`(for ,(car ranges)
-		      ,(construct-loops result expr (cdr ranges) ri oneresult-dim iters) ))))
+	    `(block (call set ,result ,expr ,ri)
+		    (+= ,ri 1))
+	    `(for ,(car ranges)
+		  ,(construct-loops result expr (cdr ranges) ri) )))
 
-      ;; lower-comprehensions
+      ;; Evaluate the comprehension
       `(scope-block
-	(block
+	(block 
 	 (= ,oneresult (tuple))
 	 ,(evaluate-one expr (reverse ranges))
+	 ;(= ,result (call zeros (call typeof ,oneresult) ,@(compute-dims ranges) ))
 	 (= ,result (call jl_comprehension_zeros ,oneresult ,@(compute-dims ranges) ))
 	 (= ,ri 1)
-	 ,(construct-loops result expr (reverse ranges) ri 0 (list))
-	 (display ,(construct-loops result expr (reverse ranges) ri 0 (list)))
+	 ,(construct-loops result expr (reverse ranges) ri)
 	 ,result ))))
 
 )) ;; lower-comprehensions
