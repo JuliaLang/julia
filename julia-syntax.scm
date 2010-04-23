@@ -993,7 +993,7 @@ So far only the second case can actually occur.
 	       (let ((v (var-lookup (cadr e) env)))
 		 (if v
 		     (vinfo:set-type! (car v) (caddr e)))
-		 inner)
+		 (cons '(null) (cdr inner)))
 	       (cons `(call (top typeassert)
 			    ,(car inner) ,(caddr e))
 		     (cdr inner)))))

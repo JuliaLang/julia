@@ -106,6 +106,13 @@ function foo()
 end
 assert(int32(foo()) == -24)
 
+function bar{T}(x::T)
+    local z::Complex{T}
+    z = x
+    z
+end
+assert(bar(3.0) == Complex(3.0,0.0))
+
 z = Complex{Float64}.convert(2)
 assert(z == Complex(2.0,0.0))
 

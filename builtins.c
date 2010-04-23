@@ -398,7 +398,10 @@ JL_CALLABLE(jl_f_unbox)
 {
     JL_NARGS(unbox, 1, 1);
     JL_TYPECHK(unbox, box, args[0]);
-    return ((jl_value_t**)args[0])[1];
+    jl_value_t *v = ((jl_value_t**)args[0])[1];
+    if (v == NULL)
+        jl_error("variable not defined");
+    return v;
 }
 
 JL_CALLABLE(jl_f_boxset)
