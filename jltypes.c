@@ -449,12 +449,6 @@ static jl_value_t *tvar(const char *name)
                          jl_bottom_type, jl_any_type);
 }
 
-jl_tvar_t *jl_typevar(jl_sym_t *name)
-{
-    return (jl_tvar_t*)jl_new_struct(jl_tvar_type, name,
-                                     jl_bottom_type, jl_any_type);
-}
-
 static jl_tuple_t *typevars(size_t n, ...)
 {
     va_list args;

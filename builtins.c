@@ -1050,7 +1050,8 @@ JL_CALLABLE(jl_f_typevar)
 {
     JL_NARGS(typevar, 1, 1);
     JL_TYPECHK(typevar, symbol, args[0]);
-    return (jl_value_t*)jl_typevar((jl_sym_t*)args[0]);
+    return (jl_value_t*)jl_new_struct(jl_tvar_type, (jl_sym_t*)args[0],
+                                      jl_bottom_type, jl_any_type);
 }
 
 JL_CALLABLE(jl_f_union)
