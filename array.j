@@ -144,6 +144,7 @@ function set(A::Matrix, X, I, J)
 end
 
 # Concatenation
+hcat() = Array(Bottom,0)
 hcat{T}(X::Scalar{T}...) = [ X[i] | i=1:length(X) ]
 vcat{T}(X::Scalar{T}...) = [ X[i] | i=1:length(X) ]
 vcat{T}(V::Vector{T}...) = [ V[i][j] | i=1:length(V), j=1:length(V[1]) ]

@@ -10,7 +10,7 @@
 ; - use (top x) more consistently
 ; * make goto-form safe for inlining (delay label to index mapping)
 
-(define macro-env (make-table))
+(define *julia-interpreter* #f)
 
 (define (quoted? e)
   (and (pair? e)
