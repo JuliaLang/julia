@@ -55,6 +55,24 @@ static int args_match_sig(jl_value_t **a, size_t n, jl_type_t *b)
                             1, 0, 0);
 }
 
+static jl_tuple_t *flatten_pairs(jl_tuple_t *t)
+{
+    size_t i, n = 0;
+    jl_tuple_t *t0 = t;
+    while (t != jl_null) {
+        n++;
+        t = (jl_tuple_t*)jl_nextpair(t);
+    }
+    jl_tuple_t *nt = jl_alloc_tuple(n*2);
+    t = t0;
+    for(i=0; i < n*2; i+=2) {
+        jl_tupleset(nt, i,   jl_t0(t));
+        jl_tupleset(nt, i+1, jl_t1(t));
+        t = (jl_tuple_t*)jl_nextpair(t);
+    }
+    return nt;
+}
+
 // return a new lambda-info that has some extra static parameters
 // merged in.
 jl_lambda_info_t *jl_add_static_parameters(jl_lambda_info_t *l, jl_tuple_t *sp)
@@ -66,36 +84,15 @@ jl_lambda_info_t *jl_add_static_parameters(jl_lambda_info_t *l, jl_tuple_t *sp)
     return nli;
 }
 
-static jl_tuple_t *valuepair_to_tuple(jl_value_pair_t *env)
-{
-    jl_tuple_t *sp;
-    jl_value_pair_t *temp = env;
-    size_t i, n=0;
-
-    while (temp != NULL && temp->a != NULL) {
-        n++;
-        temp = temp->next;
-    }
-    sp = jl_alloc_tuple(n*2);
-    temp = env;
-    // store static parameters as a tuple of (name, value, name, value, ...)
-    for(i=0; i < n; i++) {
-        assert(jl_is_typevar(temp->a));
-        jl_tupleset(sp, i*2+0, (jl_value_t*)(jl_tvar_t*)temp->a);
-        jl_tupleset(sp, i*2+1, temp->b);
-        temp = temp->next;
-    }
-    return sp;
-}
-
 jl_function_t *jl_instantiate_method(jl_function_t *f, jl_tuple_t *sp)
 {
     if (f->linfo == NULL)
         return f;
     jl_function_t *nf = jl_new_closure(f->fptr, f->env);
-    if (f->env != NULL && ((jl_value_pair_t*)f->env)->a == (jl_value_t*)f) {
-        jl_value_pair_t *vp = (jl_value_pair_t*)f->env;
-        nf->env = (jl_value_t*)jl_pair((jl_value_t*)nf, vp->b);
+    if (f->env != NULL && jl_is_tuple(f->env) &&
+        ((jl_tuple_t*)f->env)->length == 2 &&
+        jl_t0(f->env) == (jl_value_t*)f) {
+        nf->env = (jl_value_t*)jl_pair((jl_value_t*)nf, jl_t1(f->env));
     }
     nf->linfo = jl_add_static_parameters(f->linfo, sp);
     return nf;
@@ -141,7 +138,7 @@ jl_methlist_t *jl_method_table_assoc(jl_methtable_t *mt,
     
     // try generics
     jl_methlist_t *gm = mt->generics;
-    jl_value_pair_t *env = NULL;
+    jl_value_t *env = (jl_value_t*)jl_false;
     jl_tuple_t *tt = NULL;
     if (gm != NULL) {
         // TODO: avoid this allocation
@@ -152,11 +149,11 @@ jl_methlist_t *jl_method_table_assoc(jl_methtable_t *mt,
         }
         while (gm != NULL) {
             env = jl_type_conform((jl_type_t*)tt, gm->sig);
-            if (env != NULL) break;
+            if (env != (jl_value_t*)jl_false) break;
             gm = gm->next;
         }
     }
-    if (env == NULL) {
+    if (env == (jl_value_t*)jl_false) {
         if (m != NULL) {
             // TODO: possibly re-specialize method on inexact match
         }
@@ -200,14 +197,16 @@ jl_methlist_t *jl_method_table_assoc(jl_methtable_t *mt,
     */
 
     // cache result in concrete part of method table
-    jl_function_t *newmeth = jl_instantiate_method(gm->func,
-                                                   valuepair_to_tuple(env));
+    assert(jl_is_tuple(env));
+    jl_function_t *newmeth =
+        jl_instantiate_method(gm->func,
+                              flatten_pairs((jl_tuple_t*)env));
     return jl_method_table_insert(mt, (jl_type_t*)tt, newmeth);
 }
 
 static int args_match_generic(jl_type_t *a, jl_type_t *b)
 {
-    return (jl_type_conform_morespecific(a,b) != NULL);
+    return (jl_type_conform_morespecific(a,b) != (jl_value_t*)jl_false);
 }
 
 static int args_match(jl_type_t *a, jl_type_t *b)
@@ -289,12 +288,12 @@ jl_methlist_t *jl_method_table_insert(jl_methtable_t *mt, jl_type_t *type,
 
 JL_CALLABLE(jl_apply_generic)
 {
-    jl_methtable_t *mt = (jl_methtable_t*)((jl_value_pair_t*)env)->a;
+    jl_methtable_t *mt = (jl_methtable_t*)jl_t0(env);
 
     jl_methlist_t *m = jl_method_table_assoc(mt, args, nargs);
 
     if (m == NULL) {
-        jl_sym_t *name = (jl_sym_t*)((jl_value_pair_t*)env)->b;
+        jl_sym_t *name = (jl_sym_t*)jl_t1(env);
         jl_tuple_t *argt = (jl_tuple_t*)jl_f_tuple(NULL, args, nargs);
         char *argt_str = jl_print_to_string(jl_full_type((jl_value_t*)argt));
         jl_errorf("no method %s%s", name->name, argt_str);
@@ -302,7 +301,7 @@ JL_CALLABLE(jl_apply_generic)
 
 #if 0
     // TRACE
-    ios_printf(ios_stdout, "%s(", ((jl_sym_t*)((jl_value_pair_t*)env)->b)->name);
+    ios_printf(ios_stdout, "%s(", ((jl_sym_t*)jl_t1(env))->name);
     size_t i;
     for(i=0; i < nargs; i++) {
         if (i > 0) ios_printf(ios_stdout, ", ");
@@ -317,8 +316,8 @@ JL_CALLABLE(jl_apply_generic)
 void jl_print_method_table(jl_function_t *gf)
 {
     assert(jl_is_gf(gf));
-    char *name = ((jl_sym_t*)((jl_value_pair_t*)gf->env)->b)->name;
-    jl_methtable_t *mt = (jl_methtable_t*)((jl_value_pair_t*)gf->env)->a;
+    char *name = ((jl_sym_t*)jl_t1(gf->env))->name;
+    jl_methtable_t *mt = (jl_methtable_t*)jl_t0(gf->env);
     jl_methlist_t *ml = mt->mlist;
     while (ml != NULL) {
         ios_printf(ios_stdout, "%s", name);
@@ -338,9 +337,9 @@ void jl_print_method_table(jl_function_t *gf)
 
 jl_function_t *jl_new_generic_function(jl_sym_t *name)
 {
-    jl_value_pair_t *vp = jl_pair((jl_value_t*)new_method_table(),
-                                  (jl_value_t*)name);
-    return jl_new_closure(jl_apply_generic, (jl_value_t*)vp);
+    return jl_new_closure(jl_apply_generic,
+                          (jl_value_t*)jl_pair((jl_value_t*)new_method_table(),
+                                               (jl_value_t*)name));
 }
 
 static jl_value_t *dummy_tvar(jl_type_t *lb, jl_type_t *ub)

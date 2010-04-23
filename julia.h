@@ -147,12 +147,6 @@ typedef struct _jl_module_t {
     arraylist_t imports;
 } jl_module_t;
 
-typedef struct _jl_value_pair_t {
-    jl_value_t *a;
-    jl_value_t *b;
-    struct _jl_value_pair_t *next;
-} jl_value_pair_t;
-
 typedef struct _jl_methlist_t {
     jl_type_t *sig;
     jl_function_t *func;
@@ -258,6 +252,10 @@ extern jl_sym_t *continue_sym;
 
 #define jl_tupleref(t,i) (((jl_value_t**)(t))[2+(i)])
 #define jl_tupleset(t,i,x) ((((jl_value_t**)(t))[2+(i)])=(x))
+#define jl_t0(t) jl_tupleref(t,0)
+#define jl_t1(t) jl_tupleref(t,1)
+#define jl_t2(t) jl_tupleref(t,2)
+#define jl_nextpair(p) jl_t2(p)
 
 #define jl_exprarg(e,n) jl_tupleref(((jl_expr_t*)(e))->args,n)
 
@@ -293,8 +291,8 @@ extern jl_sym_t *continue_sym;
 #define jl_is_box(v)         (((jl_tag_type_t*)jl_typeof(v))->name==jl_box_typename)
 #define jl_is_gf(f)          (((jl_function_t*)(f))->fptr==jl_apply_generic)
 
-#define jl_gf_mtable(f) ((jl_methtable_t*)(((jl_value_pair_t*)((jl_function_t*)(f))->env)->a))
-#define jl_gf_name(f) ((jl_sym_t*)(((jl_value_pair_t*)((jl_function_t*)(f))->env)->b))
+#define jl_gf_mtable(f) ((jl_methtable_t*)jl_t0(((jl_function_t*)(f))->env))
+#define jl_gf_name(f) ((jl_sym_t*)jl_t1(((jl_function_t*)(f))->env))
 
 // get a pointer to the data in a value of bits type
 #define jl_bits_data(v) (&((void**)(v))[1])
@@ -319,8 +317,8 @@ int jl_tuple_subtype(jl_value_t **child, size_t cl,
                      int morespecific);
 int jl_subtype(jl_value_t *a, jl_value_t *b, int ta, int tb);
 int jl_type_morespecific(jl_value_t *a, jl_value_t *b, int ta, int tb);
-jl_value_pair_t *jl_type_conform(jl_type_t *a, jl_type_t *b);
-jl_value_pair_t *jl_type_conform_morespecific(jl_type_t *a, jl_type_t *b);
+jl_value_t *jl_type_conform(jl_type_t *a, jl_type_t *b);
+jl_value_t *jl_type_conform_morespecific(jl_type_t *a, jl_type_t *b);
 int jl_types_equal(jl_value_t *a, jl_value_t *b);
 int jl_types_equal_generic(jl_value_t *a, jl_value_t *b);
 jl_tuple_t *jl_compute_type_union(jl_tuple_t *types);
@@ -346,7 +344,7 @@ jl_lambda_info_t *jl_new_lambda_info(jl_value_t *ast, jl_tuple_t *sparams);
 jl_tuple_t *jl_tuple(size_t n, ...);
 jl_tuple_t *jl_alloc_tuple(size_t n);
 jl_tuple_t *jl_tuple_append(jl_tuple_t *a, jl_tuple_t *b);
-jl_value_pair_t *jl_pair(jl_value_t *a, jl_value_t *b);
+jl_tuple_t *jl_pair(jl_value_t *a, jl_value_t *b);
 jl_sym_t *jl_symbol(const char *str);
 jl_sym_t *jl_gensym();
 jl_array_t *jl_new_array(jl_type_t *atype, jl_value_t **dimargs, size_t ndims);

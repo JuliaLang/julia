@@ -685,9 +685,12 @@ static void print_type(jl_value_t *t)
 static void print_function(jl_value_t *v)
 {
     ios_t *s = current_output_stream;
-    if (jl_is_gf(v)) {
+    if (jl_is_typector(v)) {
+        jl_print((jl_value_t*)((jl_typector_t*)v)->body);
+    }
+    else if (jl_is_gf(v)) {
         ios_puts("#<generic-function ", s);
-        ios_puts(((jl_sym_t*)((jl_value_pair_t*)((jl_function_t*)v)->env)->b)->name, s);
+        ios_puts(jl_gf_name(v)->name, s);
         ios_putc('>', s);
 #ifdef DEBUG
         ios_putc('\n', s);
@@ -891,10 +894,10 @@ JL_CALLABLE(jl_f_print_any)
 
 JL_CALLABLE(jl_trampoline)
 {
-    jl_function_t *f = (jl_function_t*)((jl_value_pair_t*)env)->a;
+    jl_function_t *f = (jl_function_t*)jl_t0(env);
     assert(jl_is_func(f));
     assert(f->linfo != NULL);
-    jl_value_t *cloenv = ((jl_value_pair_t*)env)->b;
+    jl_value_t *cloenv = jl_t1(env);
     jl_compile(f->linfo);
     assert(f->linfo->fptr != NULL);
     f->fptr = f->linfo->fptr;

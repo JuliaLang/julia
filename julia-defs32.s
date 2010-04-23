@@ -25,7 +25,6 @@
 %struct._jl_sym_t = type { %struct._jl_type_t*, %struct._jl_sym_t*, %struct._jl_sym_t*, i32, %union.anon }
 %struct._jl_tag_type_t = type { %struct._jl_type_t*, %2*, %struct._jl_tag_type_t*, %3* }
 %struct._jl_typector_t = type { %struct._jl_type_t*, %3*, %struct._jl_type_t* }
-%struct._jl_value_pair_t = type { %struct._jl_type_t*, %struct._jl_type_t*, %struct._jl_value_pair_t* }
 %struct._typekey_stack_t = type { %struct._jl_type_t**, i32, %struct._jl_type_t*, %struct._typekey_stack_t* }
 %struct.anon = type { %struct._jl_type_t*, %2*, %struct._jl_tag_type_t*, %3*, %3*, %3*, %4*, %4*, i32 }
 %union.anon = type { i8* }
