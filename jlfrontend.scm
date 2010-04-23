@@ -29,41 +29,15 @@
       e
       (caddr (cadr (julia-expand `(lambda () ,e))))))
 
-; make symbol names easier to access from C by converting to strings
-(define (unsymbol- e)
-  (cond ((symbol? e) (symbol->string e))
-	((string? e) `("string" ,e))
-	((boolean? e) (if e 1 0))
-	((vector? e) (cons "vinfo" (map unsymbol- (vector->list e))))
-	((not (pair? e)) e)
-	(else
-	 (let ((l (map unsymbol- e)))
-	   (cond ((eq? (car e) 'lambda)
-		  `("lambda" ("list" ,@(cadr l)) ,@(cddr l)))
-		 ((eq? (car e) 'var-info)
-		  `("var-info" ,(cadr l)
-		    ("list" ,@(caddr l))
-		    ("list" ,@(cadddr l))
-		    ,@(cddddr l)))
-		 (else l))))))
-
-(define *last* #f)
-(define (unsymbol e)
-  (let ((u (unsymbol- e)))
-    ; hold a reference to the object we return to protect it from GC
-    (set! *last* u)
-    u))
-
 (gambit-only
  (c-define (jl-parse-string s) (char-string) scheme-object
    "jl_scm_parse_string" ""
-   (unsymbol (parser-wrap (lambda () (toplevel-expr (julia-parse s))))))
+   (parser-wrap (lambda () (toplevel-expr (julia-parse s)))))
  
  (c-define (jl-parse-file s) (char-string) scheme-object
    "jl_scm_parse_file" ""
-   (unsymbol
     (parser-wrap (lambda ()
-		   (cons 'file (map toplevel-expr (julia-parse-file s)))))))
+		   (cons 'file (map toplevel-expr (julia-parse-file s))))))
  
  (c-define (get-integer n) (scheme-object) unsigned-int64 "jl_scm_uint64" ""
    n)

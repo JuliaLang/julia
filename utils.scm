@@ -132,13 +132,6 @@
 	  (cons item lst)
 	  (cons (car lst) (cons-in-order item (cdr lst) key <)))))
 
-(define (vector-map f v)
-  (let* ((n  (vector-length v))
-         (nv (make-vector n)))
-    (do ((i 0 (+ 1 i)))
-	((>= i n) nv)
-      (vector-set! nv i (f (vector-ref v i))))))
-
 (define-macro (gambit-only . forms)
   (if (with-exception-catcher
        (lambda (e) #f)
