@@ -5,7 +5,7 @@
       l
       (last-pair (cdr l))))
 
-(define (list-head lst n)
+#;(define (list-head lst n)
   (if (<= n 0) '()
       (cons (car lst)
 	    (list-head (cdr lst) (- n 1)))))
@@ -35,7 +35,7 @@
 	    (cons elt
 		  (delete-duplicates-p tail test))))))
 
-(define (assoc-p item lst test)
+#;(define (assoc-p item lst test)
   (cond ((atom? lst) #f)
 	((test       (caar lst) item) (car lst))
 	(else        (assoc-p item (cdr lst) test))))
@@ -84,7 +84,7 @@
        (or (pred (car lst))
            (any pred (cdr lst)))))
 
-(define (andmap proc l . ls)
+#;(define (andmap proc l . ls)
   (or (null? l)
       (and (apply proc (car l) (map car ls))
            (apply andmap proc (cdr l) (map cdr ls)))))
@@ -119,13 +119,13 @@
   (if (null? lst) zero
       (foldl f (f (car lst) zero) (cdr lst))))
 
-(define (check-same-length a b aShort bShort)
+#;(define (check-same-length a b aShort bShort)
   (cond ((and (pair? a) (pair? b))
 	 (check-same-length (cdr a) (cdr b) aShort bShort))
 	((null? a) (if (null? b) #t (aShort)))
 	(else      (bShort))))
 
-(define (cons-in-order item lst key <)
+#;(define (cons-in-order item lst key <)
   (if (null? lst)
       (list item)
       (if (< (key item) (key (car lst)))
@@ -139,8 +139,3 @@
        (lambda () (or (uninterned-keyword? 0) #t)))
       `(begin ,@forms)
       #f))
-
-(gambit-only
- (define (gensym? s)
-   (and (symbol? s)
-	(not (eq? s (string->symbol (symbol->string s)))))))

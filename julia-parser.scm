@@ -100,7 +100,13 @@ TODO:
 	       (loop (cons c str) (peek-char port) #f))
 	(list->string (reverse str)))))
 
-(define (yes x) #t)
+(define (accum-tok-eager c pred port)
+  (let loop ((str '())
+	     (c c))
+    (if (and (not (eof-object? c)) (pred c))
+	(begin (read-char port)
+	       (loop (cons c str) (peek-char port)))
+	(list->string (reverse str)))))
 
 (define (read-number port . leadingdot)
   (let ((str (open-output-string)))
@@ -109,7 +115,7 @@ TODO:
 	(and (eqv? c ch)
 	     (begin (write-char (read-char port) str) #t))))
     (define (read-digs)
-      (let ((d (accum-tok (peek-char port) char-numeric? yes port)))
+      (let ((d (accum-tok-eager (peek-char port) char-numeric? port)))
 	(and (not (equal? d ""))
 	     (not (eof-object? d))
 	     (display d str)
@@ -166,8 +172,8 @@ TODO:
 	  
 	  ((opchar? c)  (read-operator port c))
 
-	  ((identifier-char? c) (string->symbol (accum-tok c identifier-char?
-							   yes port)))
+	  ((identifier-char? c) (string->symbol (accum-tok-eager
+						 c identifier-char? port)))
 
 	  ((eqv? c #\")  (read port))
 
@@ -177,15 +183,14 @@ TODO:
 
 (define (make-token-stream s) (vector #f s))
 (define (ts:port s)       (vector-ref s 1))
-(define (ts:last-tok s)   (vector-ref s 0))
+;(define (ts:last-tok s)   (vector-ref s 0))
+(define-macro (ts:last-tok s) `(vector-ref ,s 0))
 (define (ts:set-tok! s t) (vector-set! s 0 t))
 
 (define (peek-token s)
-  (let ((port     (ts:port s))
-	(last-tok (ts:last-tok s)))
-    (if last-tok last-tok
-	(begin (ts:set-tok! s (next-token port))
-	       (ts:last-tok s)))))
+  (or (ts:last-tok s)
+      (begin (ts:set-tok! s (next-token (ts:port s)))
+	     (ts:last-tok s))))
 
 (define (require-token s)
   (define (req-token s)
