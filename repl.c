@@ -54,38 +54,48 @@ static char jl_color_normal[] = "\033[0m\033[37m";
 static char jl_history_file[] = ".julia_history";
 
 char *julia_home = NULL; // load is relative to here
+static int tab_width = 2;
 static int print_banner = 1;
 static int load_start_j = 1;
-static int tab_width = 2;
+static int exit_after_start = 0;
 
 static const char *usage = "julia [options]\n";
 static const char *opts =
-    " -H --home=<dir>   Load files relative to <dir>\n"
-    " -T --tab=<size>   Set tab width to <size>\n"
-    " -b --bare         Bare REPL: don't load 'start.j'\n"
     " -q --quiet        Quiet startup without banner\n"
+    " -H --home=<dir>   Load files relative to <dir>\n"
+    " -T --tab=<size>   Set REPL tab width to <size>\n"
+    " -b --bare         Bare REPL: don't load start.j\n"
+    " -X --exit         Exit immediately after start\n"
     " -h --help         Print this message\n";
 
 void parse_opts(int *argcp, char ***argvp) {
     static struct option longopts[] = {
+        { "quiet", no_argument,       0, 'q' },
         { "home",  required_argument, 0, 'H' },
         { "tab",   required_argument, 0, 'T' },
         { "bare",  no_argument,       0, 'b' },
-        { "quiet", no_argument,       0, 'q' },
+        { "exit",  no_argument,       0, 'X' },
         { "help",  no_argument,       0, 'h' },
         { 0, 0, 0, 0 }
     };
     int c;
-    while ((c = getopt_long(*argcp,*argvp,"H:T:bqh",longopts,0)) != -1) {
+    while ((c = getopt_long(*argcp,*argvp,"H:T:qbXh",longopts,0)) != -1) {
         switch (c) {
+        case 'q':
+            print_banner = 0;
+            break;
         case 'H':
             julia_home = strdup(optarg);
+            break;
+        case 'T':
+            // TODO: more robust error checking.
+            tab_width = atoi(optarg);
             break;
         case 'b':
             load_start_j = 0;
             break;
-        case 'q':
-            print_banner = 0;
+        case 'X':
+            exit_after_start = 1;
             break;
         case 'h':
             printf("%s%s", usage, opts);
@@ -94,7 +104,8 @@ void parse_opts(int *argcp, char ***argvp) {
             ios_printf(ios_stderr, "options:\n%s", opts);
             exit(1);
         default:
-            ios_printf(ios_stderr, "ERROR: getopt badness.\n");
+            ios_printf(ios_stderr, "julia: unhandled option -- %c\n",  c);
+            ios_printf(ios_stderr, "This is a bug, please report it.\n");
             exit(1);
         }
     }
@@ -480,6 +491,8 @@ int main(int argc, char *argv[])
             return 1;
         }
     }
+    if (exit_after_start)
+        return 0;
     if (print_banner)
         ios_printf(ios_stdout, "%s", banner);
 
