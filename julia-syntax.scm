@@ -42,7 +42,7 @@
 	((...)         (decl-var (cadr v)))
 	((= keyword)   (decl-var (caddr v)))
 	((|::|)        (decl-var v))
-	(else (error "Malformed function argument" v)))))
+	(else (error "malformed function argument" v)))))
 
 ; convert a lambda list into a list of just symbols
 (define (llist-vars lst)
@@ -51,13 +51,15 @@
 ; get just argument types
 (define (llist-types lst)
   (map (lambda (v)
-	 (if (symbol? v)
-	     'Any
-	     (case (car v)
-	       ((...)         `(... ,(decl-type (cadr v))))
-	       ((= keyword)   (decl-type (caddr v)))
-	       ((|::|)        (decl-type v))
-	       (else (error "Malformed function arguments" lst)))))
+	 (cond ((symbol? v)  'Any)
+	       ((not (pair? v))
+		(error "malformed function arguments"))
+	       (else
+		(case (car v)
+		  ((...)         `(... ,(decl-type (cadr v))))
+		  ((= keyword)   (decl-type (caddr v)))
+		  ((|::|)        (decl-type v))
+		  (else (error "malformed function arguments" lst))))))
        lst))
 
 ; get the variable name part of a declaration, x::int => x
@@ -172,7 +174,7 @@
 				   (pair? (cadr x))
 				   (eq? (caadr x) 'call))
 			      (not (or (eq? (car x) '|::|)
-				       (error "Invalid struct syntax:" x))))))
+				       (error "invalid struct syntax:" x))))))
 		   fields)
    (let ((field-names (map decl-var fields))
 	 (field-types (map decl-type fields))
@@ -416,7 +418,7 @@
     (for (= var (: a b (-? c))) body)
     (begin
       (if (not (symbol? var))
-	  (error "Invalid for loop syntax: expected symbol"))
+	  (error "invalid for loop syntax: expected symbol"))
       (if c
 	  (let ((cnt (gensym))
 		(lim (gensym)))
@@ -509,19 +511,19 @@
 (define check-desugared
   (pattern-set
    (pattern-lambda (function . any)
-		   (error "Invalid function definition"))
+		   (error "invalid function definition"))
 
    (pattern-lambda (for . any)
-		   (error "Invalid for loop syntax"))
+		   (error "invalid for loop syntax"))
 
    (pattern-lambda (type . any)
-		   (error "Invalid type definition"))
+		   (error "invalid type definition"))
 
    (pattern-lambda (typealias . any)
-		   (error "Invalid typealias statement"))
+		   (error "invalid typealias statement"))
 
    (pattern-lambda (macro . any)
-		   (error "Macros must be defined at the top level"))
+		   (error "macros must be defined at the top level"))
 
    ))
 
@@ -728,7 +730,7 @@
 
 	  ((return)
 	   (if (and dest (not tail))
-	       (error "Misplaced return statement")
+	       (error "misplaced return statement")
 	       (to-lff (cadr e) #t #t)))
 
 	  ((_while) (cond ((eq? dest #t)
@@ -768,7 +770,7 @@
 		       '()))))
 
 	  ((break) (if dest
-		       (error "Misplaced break or continue")
+		       (error "misplaced break or continue")
 		       (cons e '())))
 
 	  ((lambda)
@@ -780,7 +782,7 @@
 
 	  ((local)
 	   (if (symbol? dest)
-	       (error "Misplaced local declaration"))
+	       (error "misplaced local declaration"))
 	   (cons (to-blk (to-lff '(null) dest tail))
 		 (list e)))
 
