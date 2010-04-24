@@ -19,3 +19,9 @@ julia> a = ones(5,5))))
 
 ==
 
+I want to hard code dim(a, 2) for dispatch when dim is 2. Is it possble? I tried the following, and got a segfault:
+
+julia> diff(a::Matrix, 2) = [ a[i+1,j] - a[i,j] | i=1:size(a,1)-1, j=1:size(a,2) ]Segmentation fault
+
+==
+
