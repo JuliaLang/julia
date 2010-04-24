@@ -154,6 +154,19 @@ start(a::Array) = 1
 next(a::Array,i) = (a[i],i+1)
 done(a::Array,i) = (i > numel(a))
 
+# Other functions
+
+diff(a::Vector) = [ a[i+1] - a[i] | i=1:length(a)-1 ]
+diff(a::Matrix) = diff(a, 1)
+
+function diff(a::Matrix, dim) 
+    if dim == 1
+        [ a[i+1,j] - a[i,j] | i=1:size(a,1)-1, j=1:size(a,2) ]
+    else
+        [ a[i,j+1] - a[i,j] | i=1:size(a,1), j=1:size(a,2)-1 ]
+    end
+end
+
 # Sort
 
 sort (a::Vector) = sort (a, int32(1), int32(length(a)))
