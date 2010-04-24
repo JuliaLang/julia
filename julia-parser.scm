@@ -607,6 +607,8 @@ TODO:
 				   (take-token s))
 			       (list* 'tuple (list '... ex)
 				      (parse-arglist s #\) ))))
+		       ((eqv? t #\;)
+			(error "unexpected ; in tuple"))
 		       (else
 			(error "unexpected line break in tuple"))))))
 

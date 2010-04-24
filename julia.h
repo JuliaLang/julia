@@ -57,6 +57,7 @@ typedef struct {
     jl_value_t *ast;
     // sparams is a tuple (symbol, value, symbol, value, ...)
     jl_tuple_t *sparams;
+    jl_tuple_t *roots;  // pointers in generated code
 } jl_lambda_info_t;
 
 typedef struct {

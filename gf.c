@@ -77,6 +77,8 @@ static jl_tuple_t *flatten_pairs(jl_tuple_t *t)
 // merged in.
 jl_lambda_info_t *jl_add_static_parameters(jl_lambda_info_t *l, jl_tuple_t *sp)
 {
+    if (sp->length == 0)
+        return l;
     if (l->sparams->length > 0)
         sp = jl_tuple_append(sp, l->sparams);
     jl_lambda_info_t *nli = jl_new_lambda_info(l->ast, sp);

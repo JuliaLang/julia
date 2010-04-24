@@ -156,13 +156,13 @@ done(a::Array,i) = (i > numel(a))
 
 # Sort
 
-sort (a::Vector) = sort (a, int32(1), int32(length(a)))
+sort (a::Vector) = sort (a, 1, length(a))
 
 function sort (a::Vector, low, high)
     i = low
     j = high
 
-    pivot = a[int32((low+high)/2)];
+    pivot = a[div((low+high),2)];
 
     # Partition
     while i <= j
@@ -179,6 +179,7 @@ function sort (a::Vector, low, high)
     # Recursion for quicksort
     if low < j; sort(a, low, j); end
     if i < high; sort(a, i, high); end
+    a
 end
 
 # Print arrays

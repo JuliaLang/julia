@@ -98,7 +98,7 @@ static Function *jlalloc_func;
   - threads or other advanced control flow
 
   - source location tracking, var name metadata
-  - rootlist to track pointers emitted into code
+  * rootlist to track pointers emitted into code
   - function/var name mangling
   * include julia-defs.bc in the executable
   - experiment with llvm optimization passes, option to disable them
@@ -188,6 +188,7 @@ typedef struct {
     jl_module_t *module;
     jl_expr_t *ast;
     jl_tuple_t *sp;
+    jl_lambda_info_t *linfo;
     const Argument *envArg;
     const Argument *argArray;
     const Argument *argCount;
@@ -485,8 +486,14 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool value,
     else if (ex->head == quote_sym) {
         jl_value_t *jv = args[0];
         if (jl_is_lambda_info(jv)) {
-            jv = (jl_value_t*)jl_add_static_parameters((jl_lambda_info_t*)jv,
-                                                       ctx->sp);
+            jl_value_t *nli =
+                (jl_value_t*)jl_add_static_parameters((jl_lambda_info_t*)jv,
+                                                      ctx->sp);
+            if (nli != jv) {
+                ctx->linfo->roots =
+                    jl_pair(nli, (jl_value_t*)ctx->linfo->roots);
+                jv = nli;
+            }
         }
         return literal_pointer_val(jv);
     }
@@ -521,6 +528,7 @@ static void emit_function(jl_lambda_info_t *lam, Function *f)
     ctx.module = jl_system_module; //TODO
     ctx.ast = ast;
     ctx.sp = lam->sparams;
+    ctx.linfo = lam;
     ctx.envArg = &envArg;
     ctx.argArray = &argArray;
     ctx.argCount = &argCount;

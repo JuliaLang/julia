@@ -942,7 +942,7 @@ static int all_typevars(jl_tuple_t *p)
 
 static void check_supertype(jl_value_t *super, char *name)
 {
-    if (!(jl_is_struct_type(super) || jl_is_tag_type(super)) ||
+    if (!(/*jl_is_struct_type(super) || */jl_is_tag_type(super)) ||
         super == (jl_value_t*)jl_sym_type ||
         jl_subtype(super,(jl_value_t*)jl_type_type,0,0) ||
         jl_subtype(super,(jl_value_t*)jl_array_type,0,0)) {

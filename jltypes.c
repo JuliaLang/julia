@@ -255,10 +255,11 @@ jl_function_t *jl_new_closure(jl_fptr_t proc, jl_value_t *env)
 jl_lambda_info_t *jl_new_lambda_info(jl_value_t *ast, jl_tuple_t *sparams)
 {
     jl_lambda_info_t *li =
-        (jl_lambda_info_t*)newobj((jl_type_t*)jl_lambda_info_type, 3);
+        (jl_lambda_info_t*)newobj((jl_type_t*)jl_lambda_info_type, 4);
     li->fptr = NULL;
     li->ast = ast;
     li->sparams = sparams;
+    li->roots = jl_null;
     return li;
 }
 
