@@ -1,7 +1,5 @@
 CC = gcc
 CXX = g++
-#CC = /Developer/usr/llvm-gcc-4.2/bin/llvm-gcc-4.2
-#CXX = /Developer/usr/llvm-gcc-4.2/bin/llvm-g++-4.2
 CFLAGS =
 
 GAMBIT = /usr/local/Gambit-C
@@ -10,7 +8,13 @@ GAMBITGSI = $(GAMBIT)/bin/gsi
 GAMBITLIB = $(GAMBIT)/lib/libgambc.a
 HFILEDIRS = $(GAMBIT)/include /opt/local/include
 LIBDIRS = /opt/local/lib
-NBITS = 64
-CONFIG = -DMACOSX -DARCH_X86_64 -D__CPU__=586 -DBITS64 -DUSE_READLINE
 OSLIBS = -framework ApplicationServices
 EFENCE = /opt/local/lib/libefence.a
+
+NBITS = 64
+ifeq ($(NBITS),32)
+CONFIG = -DMACOSX -DARCH_X86 -D__CPU__=586 -DUSE_READLINE
+endif
+ifeq ($(NBITS),64)
+CONFIG = -DMACOSX -DARCH_X86_64 -D__CPU__=586 -DBITS64 -DUSE_READLINE
+endif
