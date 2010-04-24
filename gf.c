@@ -344,43 +344,10 @@ jl_function_t *jl_new_generic_function(jl_sym_t *name)
                                                (jl_value_t*)name));
 }
 
-static jl_value_t *dummy_tvar(jl_type_t *lb, jl_type_t *ub)
-{
-    return jl_new_struct(jl_tvar_type, jl_gensym(), lb, ub);
-}
-
-// fill in new typevars for any type constructors within a type
-jl_value_t *jl_add_dummy_type_vars(jl_value_t *t)
-{
-    size_t i;
-    if (jl_is_typector(t)) {
-        jl_typector_t *tc = (jl_typector_t*)t;
-        jl_tuple_t *p = jl_alloc_tuple(tc->parameters->length);
-        for(i=0; i < p->length; i++) {
-            jl_tvar_t *tv = (jl_tvar_t*)jl_tupleref(tc->parameters,i);
-            jl_tupleset(p, i, dummy_tvar(tv->lb, tv->ub));
-        }
-        return (jl_value_t*)jl_apply_type_ctor(tc, p);
-    }
-    else if (jl_is_tuple(t)) {
-        jl_tuple_t *p = (jl_tuple_t*)t;
-        jl_tuple_t *np = jl_alloc_tuple(p->length);
-        for(i=0; i < p->length; i++)
-            jl_tupleset(np, i, jl_add_dummy_type_vars(jl_tupleref(p,i)));
-        return (jl_value_t*)np;
-    }
-    else if (jl_is_union_type(t)) {
-        jl_value_t * ut = (jl_value_t*)((jl_uniontype_t*)t)->types;
-        return (jl_value_t*)jl_new_uniontype((jl_tuple_t*)jl_add_dummy_type_vars(ut));
-    }
-    return t;
-}
-
 void jl_add_method(jl_function_t *gf, jl_tuple_t *types, jl_function_t *meth)
 {
     assert(jl_is_gf(gf));
     assert(jl_is_tuple(types));
     assert(jl_is_func(meth));
-    types = (jl_tuple_t*)jl_add_dummy_type_vars((jl_value_t*)types);
     (void)jl_method_table_insert(jl_gf_mtable(gf), (jl_type_t*)types, meth);
 }

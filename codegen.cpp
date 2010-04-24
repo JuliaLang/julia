@@ -112,9 +112,8 @@ static Function *jlalloc_func;
   * inline space for buffers
   * preallocate boxes for small integers
   - speed up type caching
-  - do something about all the string copying from scheme
-  - speed up scheme pattern matcher by compiling patterns
-  - get llvm interpreter to work, see if it's faster for toplevel expressions
+  * do something about all the string copying from scheme
+  * speed up scheme pattern matcher
 
   optimizations round 2:
   - lambda lifting

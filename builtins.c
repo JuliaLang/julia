@@ -1063,7 +1063,7 @@ JL_CALLABLE(jl_f_union)
     jl_tuple_t *argt = jl_alloc_tuple(nargs);
     for(i=0; i < nargs; i++) {
         if (jl_is_typector(args[i])) {
-            jl_tupleset(argt, i, jl_add_dummy_type_vars(args[i]));
+            jl_tupleset(argt,i,jl_unconstrained_type((jl_typector_t*)args[i]));
         }
         else if (!jl_is_type(args[i]) && !jl_is_typevar(args[i])) {
             jl_error("invalid union type");

@@ -68,6 +68,7 @@ typedef struct {
     // for functions which are also type constructors
     jl_tuple_t *parameters;
     jl_type_t *body;
+    jl_type_t *unconstrained;  // instantiated with T{*,*,...}
 } jl_function_t;
 
 typedef jl_function_t jl_typector_t;
@@ -335,7 +336,7 @@ jl_tuple_t *jl_compute_type_union(jl_tuple_t *types);
 jl_typector_t *jl_new_type_ctor(jl_tuple_t *params, jl_type_t *body);
 jl_type_t *jl_apply_type_ctor(jl_typector_t *tc, jl_tuple_t *params);
 jl_type_t *jl_instantiate_type_with(jl_type_t *t, jl_value_t **env, size_t n);
-jl_value_t *jl_add_dummy_type_vars(jl_value_t *t);
+jl_value_t *jl_unconstrained_type(jl_typector_t *tc);
 jl_uniontype_t *jl_new_uniontype(jl_tuple_t *types);
 jl_func_type_t *jl_new_functype(jl_type_t *a, jl_type_t *b);
 jl_tag_type_t *jl_new_tagtype(jl_value_t *name, jl_tag_type_t *super,
