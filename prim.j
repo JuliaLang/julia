@@ -20,7 +20,6 @@ div(x::Int32, y::Int32) = boxsi32(sdiv_int(unbox32(x), unbox32(y)))
 <=(x::Int32, y::Int32) = slt_int(unbox32(x),unbox32(y)) || eq_int(unbox32(x),unbox32(y))
 
 # fallback definitions for emulating N-arg operators with 2-arg definitions
-
 (*)() = 1
 (*)(x::Tensor) = x
 (*)(a,b,c) = (*)((*)(a,b),c)
@@ -48,6 +47,12 @@ function (+)(x1, x2, x3, xs...)
     end
     accum
 end
+
+# arithmetic promotion
+(+)(x::Number...) = (+)(promote(x...)...)
+(*)(x::Number...) = (*)(promote(x...)...)
+(-)(x::Number, y::Number) = (-)(promote(x,y)...)
+(/)(x::Number, y::Number) = (/)(promote(x,y)...)
 
 # iterating over tuples
 start(t::Tuple) = 1
