@@ -13,12 +13,8 @@ length(v::Vector) = size(v,1)
 zeros(T::Type, dims...) = Array(T,dims...)
 zeros(dims...) = zeros(Float64, dims...)
 
-jl_comprehension_zeros (oneresult::Scalar, dims...) = zeros(typeof(oneresult), dims...)
-
-function jl_comprehension_zeros{T,n}(oneresult::Tensor{T,n}, dims...)
-    newdims = tuple(dims..., size(oneresult)...)
-    Array(T, newdims...)
-end
+jl_comprehension_zeros (oneresult::Scalar, dims...) = Array(typeof(oneresult), dims...)
+jl_comprehension_zeros{T,n}(oneresult::Tensor{T,n}, dims...) = Array(T, dims...)
 
 ones(m::Size) = [ 1.0 | i=1:m ]
 ones(m::Size, n::Size) = [ 1.0 | i=1:m, j=1:n ]
