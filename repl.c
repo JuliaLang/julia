@@ -21,6 +21,8 @@
 #ifdef USE_READLINE
 #include <readline/readline.h>
 #include <readline/history.h>
+#else
+#include <ctype.h>
 #endif
 #include "llt.h"
 #include "julia.h"
@@ -54,35 +56,55 @@ static char jl_color_normal[] = "\033[0m\033[37m";
 static char jl_history_file[] = ".julia_history";
 
 char *julia_home = NULL; // load is relative to here
-static int tab_width = 2;
 static int print_banner = 1;
+static int no_readline = 0;
+static int tab_width = 2;
 static int load_start_j = 1;
-static int exit_after_start = 0;
+
+int num_evals = 0;
+char **eval_exprs = NULL;
+int *print_exprs = NULL;
 
 static const char *usage = "julia [options]\n";
 static const char *opts =
-    " -q --quiet        Quiet startup without banner\n"
-    " -H --home=<dir>   Load files relative to <dir>\n"
-    " -T --tab=<size>   Set REPL tab width to <size>\n"
-    " -b --bare         Bare REPL: don't load start.j\n"
-    " -X --exit         Exit immediately after start\n"
-    " -h --help         Print this message\n";
+    " -q --quiet         Quiet startup without banner\n"
+    " -R --no-readline   Disable readline functionality\n"
+    " -e --eval=<expr>   Evaluate <expr>, don't print\n"
+    " -E --print=<expr>  Evaluate and print <expr>\n"
+    " -H --home=<dir>    Load files relative to <dir>\n"
+    " -T --tab=<size>    Set REPL tab width to <size>\n"
+    " -b --bare          Bare REPL: don't load start.j\n"
+    " -h --help          Print this message\n";
 
 void parse_opts(int *argcp, char ***argvp) {
     static struct option longopts[] = {
-        { "quiet", no_argument,       0, 'q' },
-        { "home",  required_argument, 0, 'H' },
-        { "tab",   required_argument, 0, 'T' },
-        { "bare",  no_argument,       0, 'b' },
-        { "exit",  no_argument,       0, 'X' },
-        { "help",  no_argument,       0, 'h' },
+        { "quiet",       no_argument,       0, 'q' },
+        { "no-readline", no_argument,       0, 'R' },
+        { "eval",        required_argument, 0, 'e' },
+        { "print",       required_argument, 0, 'E' },
+        { "home",        required_argument, 0, 'H' },
+        { "tab",         required_argument, 0, 'T' },
+        { "bare",        no_argument,       0, 'b' },
+        { "help",        no_argument,       0, 'h' },
         { 0, 0, 0, 0 }
     };
     int c;
-    while ((c = getopt_long(*argcp,*argvp,"H:T:qbXh",longopts,0)) != -1) {
+    while ((c = getopt_long(*argcp,*argvp,"qRe:E:H:T:bh",longopts,0)) != -1) {
         switch (c) {
         case 'q':
             print_banner = 0;
+            break;
+        case 'R':
+            no_readline = 1;
+            break;
+        case 'e':
+        case 'E':
+            no_readline = 1;
+            num_evals++;
+            eval_exprs = (char**)realloc(eval_exprs, num_evals*sizeof(char*));
+            print_exprs = (int*)realloc(print_exprs, num_evals*sizeof(int));
+            eval_exprs[num_evals-1] = optarg;
+            print_exprs[num_evals-1] = (c == 'E');
             break;
         case 'H':
             julia_home = strdup(optarg);
@@ -93,9 +115,6 @@ void parse_opts(int *argcp, char ***argvp) {
             break;
         case 'b':
             load_start_j = 0;
-            break;
-        case 'X':
-            exit_after_start = 1;
             break;
         case 'h':
             printf("%s%s", usage, opts);
@@ -206,10 +225,9 @@ static int ends_with_semicolon(const char *input)
     return 0;
 }
 
-static jl_value_t *ast;
-
 #ifdef USE_READLINE
 
+static jl_value_t *rl_ast;
 static int history_offset = -1;
 
 // yes, readline uses inconsistent indexing internally.
@@ -278,9 +296,9 @@ static int return_callback(int count, int key) {
         ios_printf(ios_stdout, jl_answer_color);
         ios_flush(ios_stdout);
     }
-    ast = jl_parse_input_line(rl_line_buffer);
-    rl_done = !ast || !jl_is_expr(ast) ||
-        (((jl_expr_t*)ast)->head != continue_sym);
+    rl_ast = jl_parse_input_line(rl_line_buffer);
+    rl_done = !rl_ast || !jl_is_expr(rl_ast) ||
+        (((jl_expr_t*)rl_ast)->head != continue_sym);
     if (!rl_done && have_color) {
         ios_printf(ios_stdout, jl_input_color);
         ios_flush(ios_stdout);
@@ -392,15 +410,15 @@ static int backspace_callback(int count, int key) {
     return 0;
 }
 
-static void read_expression(char *prompt, int *end, int *doprint)
+static jl_value_t *read_expr_ast_readline(char *prompt, int *end, int *doprint)
 {
-    ast = NULL;
+    rl_ast = NULL;
     char *input = readline(prompt);
     if (!input || ios_eof(ios_stdin)) {
         *end = 1;
-        return;
+        return NULL;
     }
-    if (ast == NULL) return;
+    if (rl_ast == NULL) return NULL;
 
     *doprint = !ends_with_semicolon(input);
     if (input && *input) {
@@ -417,10 +435,10 @@ static void read_expression(char *prompt, int *end, int *doprint)
     ios_printf(ios_stdout, "\n");
 
     free(input);
-    return;
+    return rl_ast;
 }
 
-#else
+#endif
 
 static char *ios_readline(ios_t *s)
 {
@@ -431,9 +449,8 @@ static char *ios_readline(ios_t *s)
     return ios_takebuf(&dest, &n);
 }
 
-static void read_expression(char *prompt, int *end, int *doprint)
+static jl_value_t *read_expr_ast_no_readline(char *prompt, int *end, int *doprint)
 {
-    ast = NULL;
     char *input;
     ios_printf(ios_stdout, prompt);
     ios_flush(ios_stdout);
@@ -445,15 +462,24 @@ static void read_expression(char *prompt, int *end, int *doprint)
         return NULL;
     }
 
-    ast = jl_parse_input_line(input);
+    jl_value_t *ast = jl_parse_input_line(input);
     if (ast == NULL) return NULL;
     if (jl_is_expr(ast) && ((jl_expr_t*)ast)->head == continue_sym)
-        return read_expression(prompt, end, doprint);
+        return read_expr_ast_no_readline(prompt, end, doprint);
 
     *doprint = !ends_with_semicolon(input);
+    return ast;
 }
 
+static jl_value_t *read_expr_ast(char *prompt, int *end, int *doprint) {
+#ifdef USE_READLINE
+    return no_readline ?
+        read_expr_ast_no_readline(prompt, end, doprint) :
+        read_expr_ast_readline(prompt, end, doprint);
+#else
+    return read_expr_ast_no_readline(prompt, end, doprint);
 #endif
+}
 
 int main(int argc, char *argv[])
 {
@@ -461,26 +487,23 @@ int main(int argc, char *argv[])
     parse_opts(&argc, &argv);
     julia_init();
 
-    have_color = detect_color();
-    char *banner = have_color ? jl_banner_color : jl_banner_plain;
-    char *prompt = have_color ? jl_prompt_color : jl_prompt_plain;
-    prompt_length = strlen(jl_prompt_plain);
-
 #ifdef USE_READLINE
-    init_history();
-    rl_bind_key(' ', space_callback);
-    rl_bind_key('\t', tab_callback);
-    rl_bind_key('\r', return_callback);
-    rl_bind_key('\n', return_callback);
-    rl_bind_key('\v', line_kill_callback);
-    rl_bind_key('\001', line_start_callback);
-    rl_bind_key('\005', line_end_callback);
-    rl_bind_key('\002', left_callback);
-    rl_bind_key('\006', right_callback);
-    rl_bind_keyseq("\033[A", up_callback);
-    rl_bind_keyseq("\033[B", down_callback);
-    rl_bind_keyseq("\033[D", left_callback);
-    rl_bind_keyseq("\033[C", right_callback);
+    if (!no_readline) {
+        init_history();
+        rl_bind_key(' ', space_callback);
+        rl_bind_key('\t', tab_callback);
+        rl_bind_key('\r', return_callback);
+        rl_bind_key('\n', return_callback);
+        rl_bind_key('\v', line_kill_callback);
+        rl_bind_key('\001', line_start_callback);
+        rl_bind_key('\005', line_end_callback);
+        rl_bind_key('\002', left_callback);
+        rl_bind_key('\006', right_callback);
+        rl_bind_keyseq("\033[A", up_callback);
+        rl_bind_keyseq("\033[B", down_callback);
+        rl_bind_keyseq("\033[D", left_callback);
+        rl_bind_keyseq("\033[C", right_callback);
+    }
 #endif
 
     if (load_start_j) {
@@ -491,8 +514,24 @@ int main(int argc, char *argv[])
             return 1;
         }
     }
-    if (exit_after_start)
+    if (num_evals) {
+        int i;
+        for (i=0; i < num_evals; i++) {
+            jl_value_t *ast = jl_parse_input_line(eval_exprs[i]);
+            jl_value_t *value = jl_toplevel_eval(ast);
+            if (print_exprs[i]) {
+                jl_print(value);
+                ios_printf(ios_stdout, "\n");
+            }
+        }
         return 0;
+    }
+
+    have_color = detect_color();
+    char *banner = have_color ? jl_banner_color : jl_banner_plain;
+    char *prompt = have_color ? jl_prompt_color : jl_prompt_plain;
+    prompt_length = strlen(jl_prompt_plain);
+
     if (print_banner)
         ios_printf(ios_stdout, "%s", banner);
 
@@ -502,7 +541,7 @@ int main(int argc, char *argv[])
         if (!setjmp(ExceptionHandler)) {
             int end = 0;
             int print_value = 1;
-            read_expression(prompt, &end, &print_value);
+            jl_value_t *ast = read_expr_ast(prompt, &end, &print_value);
             if (end) {
                 ios_printf(ios_stdout, "\n");
                 break;
