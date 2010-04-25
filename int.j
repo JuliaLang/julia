@@ -90,6 +90,9 @@ div(x::Int32, y::Int32) = boxsi32(sdiv_int(unbox32(x), unbox32(y)))
 > (x::Int32, y::Int32) = slt_int(unbox32(y),unbox32(x))
 >=(x::Int32, y::Int32) = (x>y) || eq_int(unbox32(x),unbox32(y))
 
+isodd(n::Int)  = ((n%2)==1)
+iseven(n::Int) = ((n%2)==0)
+
 function gcd(a::Int, b::Int)
     while b != 0
         t = b
@@ -130,4 +133,56 @@ function ^(x::Tensor, p::Int)
         end
     end
     return x
+end
+
+function nPr(n::Int, r::Int)
+    if (r < 0 || n < 0 || r > n)
+        return 0
+    end
+
+    ans = 1
+    while (r > 0)
+        ans *= n
+        n -= 1
+        r -= 1
+    end
+    return ans
+end
+
+function nCr(n::Int, r::Int)
+    if (r < 0 || n == 0)
+        return 0
+    end
+
+    neg = false
+    if (n < 0)
+        n = (-n)+r-1
+        if isodd(r)
+            neg = true
+        end
+    end
+
+    if (r > n)
+        return 0
+    end
+    if (r == 0 || r == n)
+        return 1
+    end
+
+    if r > div(n,2)
+        r = (n - r)
+    end
+
+    ans = nn = n - r + 1.0
+    nn += 1.0
+    rr = 2.0
+    while (rr <= r+0.0)
+        ans *= (nn/rr)
+        rr += 1
+        nn += 1
+    end
+    if neg
+        return -truncate(ans)
+    end
+    return truncate(ans)
 end
