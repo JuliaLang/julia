@@ -90,6 +90,9 @@ div(x::Int32, y::Int32) = boxsi32(sdiv_int(unbox32(x), unbox32(y)))
 > (x::Int32, y::Int32) = slt_int(unbox32(y),unbox32(x))
 >=(x::Int32, y::Int32) = (x>y) || eq_int(unbox32(x),unbox32(y))
 
+isodd(n::Int)  = ((n%2)==1)
+iseven(n::Int) = ((n%2)==0)
+
 function gcd(a::Int, b::Int)
     while b != 0
         t = b
@@ -97,6 +100,32 @@ function gcd(a::Int, b::Int)
         a = t
     end
     return a
+end
+
+lcm(a::Int, b::Int) = div(a*b,gcd(a,b))
+
+# return (gcd(a,b),x,y) such that ax+by == gcd(a,b)
+function gcdx(a, b)
+    if b == 0
+        (a, 1, 0)
+    else
+        m = a%b
+        k = div((a-m), b)
+        (g, x, y) = gcdx(b, m)
+        (g, y, x-k*y)
+    end
+end
+
+# multiplicative inverse of x mod m, false if none
+function invmod(n, m)
+    (g, x, y) = gcdx(n, m)
+    if g != 1
+        false
+    elseif x<0
+        m+x
+    else
+        x
+    end
 end
 
 function ^(x::Tensor, p::Int)
@@ -130,4 +159,84 @@ function ^(x::Tensor, p::Int)
         end
     end
     return x
+end
+
+# x^p mod m
+function powermod(x::Int, p::Int, m::Int)
+    if p == 0
+        return convert(1,typeof(x))
+    elseif p < 0
+        error("powermod: exponent must be >= 0")
+    end
+    t = 1
+    while t <= p
+        t *= 2
+    end
+    t = div(t,2)
+    r = 1
+    while true
+        if p >= t
+            r = (r*x) % m
+            p -= t
+        end
+        t = div(t,2)
+        if t > 0
+            r = (r*r) % m
+        else
+            break
+        end
+    end
+    return r
+end
+
+function nPr(n::Int, r::Int)
+    if (r < 0 || n < 0 || r > n)
+        return 0
+    end
+
+    ans = 1
+    while (r > 0)
+        ans *= n
+        n -= 1
+        r -= 1
+    end
+    return ans
+end
+
+function nCr(n::Int, r::Int)
+    if (r < 0 || n == 0)
+        return 0
+    end
+
+    neg = false
+    if (n < 0)
+        n = (-n)+r-1
+        if isodd(r)
+            neg = true
+        end
+    end
+
+    if (r > n)
+        return 0
+    end
+    if (r == 0 || r == n)
+        return 1
+    end
+
+    if r > div(n,2)
+        r = (n - r)
+    end
+
+    ans = nn = n - r + 1.0
+    nn += 1.0
+    rr = 2.0
+    while (rr <= r+0.0)
+        ans *= (nn/rr)
+        rr += 1
+        nn += 1
+    end
+    if neg
+        return -truncate(ans)
+    end
+    return truncate(ans)
 end

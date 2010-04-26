@@ -13,7 +13,6 @@ length(v::Vector) = size(v,1)
 zeros(T::Type, dims...) = Array(T,dims...)
 zeros(dims...) = zeros(Float64, dims...)
 
-jl_comprehension_zeros (oneresult::Scalar, dims...) = Array(typeof(oneresult), dims...)
 jl_comprehension_zeros{T,n}(oneresult::Tensor{T,n}, dims...) = Array(T, dims...)
 
 ones(m::Size) = [ 1.0 | i=1:m ]
@@ -103,9 +102,9 @@ end
 
 # Indexing: set()
 # TODO: Take care of growing
-set{T}(a::Array{T}, x, i::Index) = do (arrayset(a,i,convert(x,T)), a)
+set(a::Array, x, i::Index) = do (arrayset(a,i,x), a)
 set{T}(a::Array{T,2}, x, i::Index, j::Index) =
-    do (arrayset(a, (j-1)*a.dims[1]+i, convert(x,T)), a)
+    do (arrayset(a, (j-1)*a.dims[1]+i, x), a)
 
 function set(a::Array, x, I::Index...)
     # TODO: Need to take care of growing
