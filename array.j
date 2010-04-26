@@ -13,12 +13,8 @@ length(v::Vector) = size(v,1)
 zeros(T::Type, dims...) = Array(T,dims...)
 zeros(dims...) = zeros(Float64, dims...)
 
-jl_comprehension_zeros (oneresult::Scalar, dims...) = zeros(typeof(oneresult), dims...)
-
-function jl_comprehension_zeros{T,n}(oneresult::Tensor{T,n}, dims...)
-    newdims = tuple(dims..., size(oneresult)...)
-    Array(T, newdims...)
-end
+jl_comprehension_zeros (oneresult::Scalar, dims...) = Array(typeof(oneresult), dims...)
+jl_comprehension_zeros{T,n}(oneresult::Tensor{T,n}, dims...) = Array(T, dims...)
 
 ones(m::Size) = [ 1.0 | i=1:m ]
 ones(m::Size, n::Size) = [ 1.0 | i=1:m, j=1:n ]
@@ -26,10 +22,22 @@ ones(m::Size, n::Size) = [ 1.0 | i=1:m, j=1:n ]
 rand(m::Size) = [ rand() | i=1:m ]
 rand(m::Size, n::Size) = [ rand() | i=1:m, j=1:n ]
 
-(+)(x::Vector, y::Vector) = [ x[i] + y[i] | i=1:length(x) ]
-(+)(x::Matrix, y::Matrix) = [ x[i,j] + y[i,j] | i=1:size(x,1), j=1:size(x,2) ]
+(+)(x::Scalar, y::Vector) = [ x + y[i] | i=1:length(y) ]
+(-)(x::Scalar, y::Vector) = [ x - y[i] | i=1:length(y) ]
+(*)(x::Scalar, y::Vector) = [ x * y[i] | i=1:length(y) ]
+(/)(x::Scalar, y::Vector) = [ x / y[i] | i=1:length(y) ]
 
+(+)(x::Vector, y::Scalar) = [ x[i] + y | i=1:length(x) ]
+(-)(x::Vector, y::Scalar) = [ x[i] - y | i=1:length(x) ]
+(*)(x::Vector, y::Scalar) = [ x[i] * y | i=1:length(x) ]
+(/)(x::Vector, y::Scalar) = [ x[i] / y | i=1:length(x) ]
+
+(+)(x::Vector, y::Vector) = [ x[i] + y[i] | i=1:length(x) ]
+(-)(x::Vector, y::Vector) = [ x[i] - y[i] | i=1:length(x) ]
 (.*)(x::Vector, y::Vector) = [ x[i] * y[i] | i=1:length(x) ]
+(./)(x::Vector, y::Vector) = [ x[i] / y[i] | i=1:length(x) ]
+
+(+)(x::Matrix, y::Matrix) = [ x[i,j] + y[i,j] | i=1:size(x,1), j=1:size(x,2) ]
 
 function (==)(x::Array, y::Array)
     if (x.dims != y.dims)
