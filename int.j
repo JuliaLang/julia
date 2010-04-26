@@ -102,6 +102,32 @@ function gcd(a::Int, b::Int)
     return a
 end
 
+lcm(a::Int, b::Int) = div(a*b,gcd(a,b))
+
+# return (gcd(a,b),x,y) such that ax+by == gcd(a,b)
+function gcdx(a, b)
+    if b == 0
+        (a, 1, 0)
+    else
+        m = a%b
+        k = div((a-m), b)
+        (g, x, y) = gcdx(b, m)
+        (g, y, x-k*y)
+    end
+end
+
+# multiplicative inverse of x mod m, false if none
+function invmod(n, m)
+    (g, x, y) = gcdx(n, m)
+    if g != 1
+        false
+    elseif x<0
+        m+x
+    else
+        x
+    end
+end
+
 function ^(x::Tensor, p::Int)
     if p == 1
         return x
@@ -133,6 +159,34 @@ function ^(x::Tensor, p::Int)
         end
     end
     return x
+end
+
+# x^p mod m
+function powermod(x::Int, p::Int, m::Int)
+    if p == 0
+        return convert(1,typeof(x))
+    elseif p < 0
+        error("powermod: exponent must be >= 0")
+    end
+    t = 1
+    while t <= p
+        t *= 2
+    end
+    t = div(t,2)
+    r = 1
+    while true
+        if p >= t
+            r = (r*x) % m
+            p -= t
+        end
+        t = div(t,2)
+        if t > 0
+            r = (r*r) % m
+        else
+            break
+        end
+    end
+    return r
 end
 
 function nPr(n::Int, r::Int)
