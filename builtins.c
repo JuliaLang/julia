@@ -820,6 +820,7 @@ INT_PRINT_FUNC(uint,64)
 JL_CALLABLE(jl_f_print_symbol)
 {
     ios_t *s = current_output_stream;
+    ios_putc('`', s);
     ios_puts(((jl_sym_t*)args[0])->name, s);
     return (jl_value_t*)jl_null;
 }
