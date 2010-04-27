@@ -18,6 +18,8 @@ namespace JL_I {
         fptoui64, fptosi64, 
         uitofp32, sitofp32, uitofp64, sitofp64,
         fptrunc32, fpext64,
+        // functions
+        sqrt_float, powi_float, sin_float, cos_float, pow_float,
     };
 };
 
@@ -109,7 +111,9 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
     if (nargs < 1) jl_error("invalid intrinsic call");
     Value *x = emit_expr(args[1], ctx, true);
     const Type *t = x->getType();
-    Value *p;
+    const Type *fxt;
+    const Type *fxts[2];
+    Value *p, *fx, *fy;
     switch (f) {
     HANDLE(boxui8,1)
         if (t != T_int8) x = builder.CreateBitCast(x, T_int8);
@@ -250,6 +254,48 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
         return builder.CreateFPTrunc(FP(x), T_float32);
     HANDLE(fpext64,1)
         return builder.CreateFPExt(FP(x), T_float64);
+    HANDLE(sqrt_float,1)
+        fx = FP(x);
+        fxt = fx->getType();
+        return builder.CreateCall(Intrinsic::getDeclaration(jl_Module,
+                                                            Intrinsic::sqrt,
+                                                            &fxt, 1),
+                                  fx);
+    HANDLE(sin_float,1)
+        fx = FP(x);
+        fxt = fx->getType();
+        return builder.CreateCall(Intrinsic::getDeclaration(jl_Module,
+                                                            Intrinsic::sin,
+                                                            &fxt, 1),
+                                  fx);
+    HANDLE(cos_float,1)
+        fx = FP(x);
+        fxt = fx->getType();
+        return builder.CreateCall(Intrinsic::getDeclaration(jl_Module,
+                                                            Intrinsic::cos,
+                                                            &fxt, 1),
+                                  fx);
+    HANDLE(pow_float,2)
+        fx = FP(x);
+        fy = FP(emit_expr(args[2],ctx,true));
+        fxts[0] = fx->getType(); fxts[1] = fy->getType();
+        if (fxts[0] != fxts[1] ||
+            !fxts[0]->isFloatingPoint() || !fxts[1]->isFloatingPoint())
+            jl_error("invalid arguments to pow_float");
+        return builder.CreateCall2(Intrinsic::getDeclaration(jl_Module,
+                                                             Intrinsic::pow,
+                                                             fxts, 2),
+                                   fx, fy);
+    HANDLE(powi_float,2)
+        fx = FP(x);
+        fy = emit_expr(args[2],ctx,true);
+        fxts[0] = fx->getType(); fxts[1] = fy->getType();
+        if (!fxts[0]->isFloatingPoint() || fxts[1] != T_int32)
+            jl_error("invalid arguments to powi_float");
+        return builder.CreateCall2(Intrinsic::getDeclaration(jl_Module,
+                                                             Intrinsic::powi,
+                                                             fxts, 2),
+                                   fx, fy);
     default:
         assert(false);
     }
@@ -307,6 +353,8 @@ extern "C" void jl_init_intrinsic_functions()
     ADD_I(fptoui64); ADD_I(fptosi64);
     ADD_I(uitofp32); ADD_I(sitofp32); ADD_I(uitofp64); ADD_I(sitofp64);
     ADD_I(fptrunc32); ADD_I(fpext64);
+    ADD_I(sqrt_float); ADD_I(powi_float); ADD_I(pow_float);
+    ADD_I(sin_float); ADD_I(cos_float);
     
     BOX_F(int8);  BOX_F(uint8);
     BOX_F(int16); BOX_F(uint16);
