@@ -13,8 +13,8 @@ FLAGS = -falign-functions -Wall -Wno-strict-aliasing -I$(LLTDIR) $(HFILEDIRS:%=-
 LIBFILES = $(LLT) $(GAMBITLIB)
 LIBS = $(LIBFILES) -lutil -ldl -lm -lgc $(shell llvm-config --ldflags --libs core engine jit interpreter bitreader) -lreadline $(OSLIBS)
 
-DEBUGFLAGS = -g -DDEBUG $(FLAGS)
-SHIPFLAGS = -O2 -DNDEBUG $(FLAGS)
+DEBUGFLAGS = -ggdb3 -DDEBUG $(FLAGS)
+SHIPFLAGS = -O3 -DNDEBUG $(FLAGS)
 
 default: debug
 
@@ -72,9 +72,9 @@ clean:
 	rm -f jlfrontend_.c
 	rm -f $(EXENAME)
 	rm -f *~ *#
-	cd $(LLTDIR) && $(MAKE) clean
 
 cleanall: clean
 	rm -rf $(EXENAME)-{debug,release,efence}
+	$(MAKE) -C $(LLTDIR) clean
 
-.PHONY: debug release efence clean
+.PHONY: debug release efence clean cleanall
