@@ -28,8 +28,7 @@ typedef struct {
     jl_value_t *data[1];
 } jl_tuple_t;
 
-// 3*3*sizeof(double)
-#define ARRAY_INLINE_NBYTES 72
+#define ARRAY_INLINE_NBYTES (3*3*sizeof(double))
 
 typedef struct {
     JL_VALUE_STRUCT
