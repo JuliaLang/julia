@@ -1131,11 +1131,14 @@ So far only the second case can actually occur.
 ;       such a location (the assignment to the variable).
 (define (goto-form e)
   (let ((code '())
-	(ip   0))
+	(ip   0)
+	(label-counter 0))
     (define (emit c)
       (set! code (cons c code))
       (set! ip (+ ip 1)))
-    (define (make-label)   (gensym))
+    (define (make-label)
+      (begin0 label-counter
+	      (set! label-counter (+ 1 label-counter))))
     (define (mark-label l) (emit `(label ,l)))
     (define (compile e break-labels)
       (if (or (not (pair? e)) (equal? e '(null)))

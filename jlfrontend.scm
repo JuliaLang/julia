@@ -11,7 +11,13 @@
 (include "julia-parser.scm")
 (include "julia-syntax.scm")
 
+(define *last* #f)
 (define (parser-wrap thk)
+  (let ((ex (parser-wrap- thk)))
+    (set! *last* ex)
+    ex))
+
+(define (parser-wrap- thk)
   (with-exception-catcher
    (lambda (e)
      (if (error-exception? e)
@@ -36,8 +42,8 @@
  
  (c-define (jl-parse-file s) (char-string) scheme-object
    "jl_scm_parse_file" ""
-    (parser-wrap (lambda ()
-		   (cons 'file (map toplevel-expr (julia-parse-file s))))))
+   (parser-wrap (lambda ()
+		  (cons 'file (map toplevel-expr (julia-parse-file s))))))
  
  (c-define (get-integer n) (scheme-object) unsigned-int64 "jl_scm_uint64" ""
    n)

@@ -183,7 +183,7 @@ extern "C" void jl_compile(jl_lambda_info_t *li)
 typedef struct {
     Function *f;
     std::map<std::string, AllocaInst*> *vars;
-    std::map<std::string, BasicBlock*> *labels;
+    std::map<int, BasicBlock*> *labels;
     jl_module_t *module;
     jl_expr_t *ast;
     jl_tuple_t *sp;
@@ -358,7 +358,7 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool value,
     // to add new node types.
     if (ex->head == goto_sym) {
         assert(!value);
-        char *labelname = ((jl_sym_t*)args[0])->name;
+        int labelname = jl_unbox_int32(args[0]);
         BasicBlock *bb = (*ctx->labels)[labelname];
         assert(bb);
         builder.CreateBr(bb);
@@ -366,7 +366,7 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool value,
     else if (ex->head == goto_ifnot_sym) {
         assert(!value);
         jl_value_t *cond = args[0];
-        char *labelname = ((jl_sym_t*)args[1])->name;
+        int labelname = jl_unbox_int32(args[1]);
         Value *isfalse =
             builder.CreateICmpEQ(emit_expr(cond, ctx, true),
                                  literal_pointer_val(jl_false));
@@ -378,7 +378,7 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool value,
     }
     else if (ex->head == label_sym) {
         assert(!value);
-        char *labelname = ((jl_sym_t*)args[0])->name;
+        int labelname = jl_unbox_int32(args[0]);
         BasicBlock *bb = (*ctx->labels)[labelname];
         assert(bb);
         if (builder.GetInsertBlock()->getTerminator() == NULL) {
@@ -513,7 +513,7 @@ static void emit_function(jl_lambda_info_t *lam, Function *f)
     BasicBlock *b0 = BasicBlock::Create(jl_LLVMContext, "top", f);
     builder.SetInsertPoint(b0);
     std::map<std::string, AllocaInst*> localVars;
-    std::map<std::string, BasicBlock*> labels;
+    std::map<int, BasicBlock*> labels;
     jl_tuple_t *largs = jl_lam_args(ast);
     jl_tuple_t *lvars = jl_lam_locals(ast);
     Function::arg_iterator AI = f->arg_begin();
@@ -612,13 +612,13 @@ static void emit_function(jl_lambda_info_t *lam, Function *f)
     for(i=0; i < stmts->length; i++) {
         jl_value_t *ex = jl_tupleref(stmts,i);
         if (is_label(ex)) {
-            char *lname = ((jl_sym_t*)jl_exprarg(ex,0))->name;
+            int lname = jl_unbox_int32(jl_exprarg(ex,0));
             if (prev != NULL) {
                 // fuse consecutive labels
                 labels[lname] = prev;
             }
             else {
-                prev = BasicBlock::Create(getGlobalContext(), lname);
+                prev = BasicBlock::Create(getGlobalContext(), "L");
                 labels[lname] = prev;
             }
         }
