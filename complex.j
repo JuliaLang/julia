@@ -25,7 +25,7 @@ im(z::Complex) = z.im
 
 conj(z::Complex) = Complex(z.re,-z.im)
 norm(z::Complex) = z.re*z.re + z.im*z.im
-abs(z::Complex) = sqrt(norm(z))
+abs(z::Complex) = hypot(z.re, z.im)
 inv(z::Complex) = conj(z)/norm(z)
 
 (-)(z::Complex) = Complex(-z.re, -z.im)
@@ -50,3 +50,11 @@ inv(z::Complex) = conj(z)/norm(z)
 =={T}(z::Complex{T}, w::Complex{T})  = (z.re == w.re && z.im == w.im)
 =={T}(z::Complex{T}, w::T)           = (z.re == w    && z.im == 0)
 =={T}(w::T, z::Complex{T})           = (z.re == w    && z.im == 0)
+
+function sqrt(z::Complex)
+    r = sqrt((hypot(z.re, z.im)+abs(z.re))*0.5)
+    if z.re >= 0.0
+        return Complex(r, z.im/r*0.5)
+    end
+    return Complex(abs(z.im)/r*0.5, z.im >= 0.0 ? r : -r)
+end

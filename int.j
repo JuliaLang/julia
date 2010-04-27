@@ -204,7 +204,7 @@ function nPr(n::Int, r::Int)
 end
 
 function nCr(n::Int, r::Int)
-    if (r < 0 || n == 0)
+    if (r < 0)
         return 0
     end
 
