@@ -171,3 +171,4 @@ assert(yfib(20) == 6765)
 X = [ i+2j | i=1:5, j=1:5 ]
 assert(X[2,3] == 8)
 assert(X[4,5] == 14)
+assert(ones(2,3) * ones(3,2) == [3.,3.; 3.,3.])
