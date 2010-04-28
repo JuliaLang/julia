@@ -833,7 +833,8 @@ JL_CALLABLE(jl_f_print_typename)
 
 JL_CALLABLE(jl_f_print_typevar)
 {
-    jl_print((jl_value_t*)((jl_tvar_t*)args[0])->name);
+    ios_t *s = current_output_stream;
+    ios_puts(((jl_tvar_t*)args[0])->name->name, s);
     return (jl_value_t*)jl_null;
 }
 

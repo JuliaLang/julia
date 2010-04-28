@@ -21,15 +21,17 @@ ones(m::Size, n::Size) = [ 1.0 | i=1:m, j=1:n ]
 rand(m::Size) = [ rand() | i=1:m ]
 rand(m::Size, n::Size) = [ rand() | i=1:m, j=1:n ]
 
-(+)(x::Scalar, y::Vector) = [ x + y[i] | i=1:length(y) ]
-(-)(x::Scalar, y::Vector) = [ x - y[i] | i=1:length(y) ]
-(*)(x::Scalar, y::Vector) = [ x * y[i] | i=1:length(y) ]
-(/)(x::Scalar, y::Vector) = [ x / y[i] | i=1:length(y) ]
+(/)(x, y) = x./y
 
-(+)(x::Vector, y::Scalar) = [ x[i] + y | i=1:length(x) ]
-(-)(x::Vector, y::Scalar) = [ x[i] - y | i=1:length(x) ]
-(*)(x::Vector, y::Scalar) = [ x[i] * y | i=1:length(x) ]
-(/)(x::Vector, y::Scalar) = [ x[i] / y | i=1:length(x) ]
+(+)(x::Scalar, y::Vector)  = [ x + y[i] | i=1:length(y) ]
+(-)(x::Scalar, y::Vector)  = [ x - y[i] | i=1:length(y) ]
+(*)(x::Scalar, y::Vector)  = [ x * y[i] | i=1:length(y) ]
+(./)(x::Scalar, y::Vector) = [ x / y[i] | i=1:length(y) ]
+
+(+)(x::Vector, y::Scalar)  = [ x[i] + y | i=1:length(x) ]
+(-)(x::Vector, y::Scalar)  = [ x[i] - y | i=1:length(x) ]
+(*)(x::Vector, y::Scalar)  = [ x[i] * y | i=1:length(x) ]
+(./)(x::Vector, y::Scalar) = [ x[i] / y | i=1:length(x) ]
 
 (+)(x::Vector, y::Vector) = [ x[i] + y[i] | i=1:length(x) ]
 (-)(x::Vector, y::Vector) = [ x[i] - y[i] | i=1:length(x) ]
@@ -56,6 +58,7 @@ ctranspose(x::Matrix) = [ conj(x[j,i]) | i=1:size(x,2), j=1:size(x,1) ]
 dot(x::Vector, y::Vector) = sum(x.*y)
 diag(A::Matrix) = [ A[i,i] | i=1:min(size(A)) ]
 
+(*)(A::Matrix, B::Vector) = [ dot(A[i,:],B) | i=1:size(A,1) ]
 (*)(A::Matrix, B::Matrix) = [ dot(A[i,:],B[:,j]) | i=1:size(A,1), j=1:size(B,2) ]
 
 function colon(start::Int32, stop::Int32, stride::Int32)

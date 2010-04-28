@@ -36,23 +36,16 @@ typedef int (*jl_argtuple_comparer_t)(jl_value_t **args, size_t n,
 
 // trivial linked list implementation for now
 // TODO: pull out all the stops
-jl_methlist_t *jl_method_list_assoc(jl_methlist_t *ml,
-                                    jl_value_t **args, size_t n,
-                                    jl_argtuple_comparer_t pred)
+jl_methlist_t *jl_method_list_assoc_args(jl_methlist_t *ml,
+                                         jl_value_t **args, size_t n)
 {
     while (ml != NULL) {
-        if (pred(args, n, ml->sig))
+        if (jl_tuple_subtype(args, n, &jl_tupleref(ml->sig,0),
+                             ((jl_tuple_t*)ml->sig)->length, 1, 0, 0))
             return ml;
         ml = ml->next;
     }
     return NULL;
-}
-
-static int args_match_sig(jl_value_t **a, size_t n, jl_type_t *b)
-{
-    assert(jl_is_tuple(b));
-    return jl_tuple_subtype(a, n, &jl_tupleref(b,0), ((jl_tuple_t*)b)->length,
-                            1, 0, 0);
 }
 
 static jl_tuple_t *flatten_pairs(jl_tuple_t *t)
@@ -127,14 +120,12 @@ jl_methlist_t *jl_method_table_assoc(jl_methtable_t *mt,
       if there is an exact match, return it
       otherwise look for a matching generic signature
       if no concrete or generic match, raise error
-      if there was no concrete match, use the generic one
-      else use whichever of the concrete match or the instantiated generic one
-        is more specific
+      if no generic match, use the concrete one even if inexact
+      otherwise instantiate the generic method and use it
       
       TODO: cache exact matches in a faster lookup table
     */
-    jl_methlist_t *m = jl_method_list_assoc(mt->mlist, args, nargs,
-                                            args_match_sig);
+    jl_methlist_t *m = jl_method_list_assoc_args(mt->mlist, args, nargs);
     if (m!=NULL && exact_arg_match(args, nargs, (jl_tuple_t*)m->sig))
         return m;
     
@@ -162,41 +153,6 @@ jl_methlist_t *jl_method_table_assoc(jl_methtable_t *mt,
         return m;
     }
     assert(tt!=NULL);
-    /* the following bit tries instantiating a generic signature in case
-       it yields something more specific than the inexact match we
-       already have. for example if we call f(Int32), it matches f(Scalar)
-       but if f[T](T) exists that would yield f(Int32) which is a better
-       match. this is slow and arguably wrong; one could say f(Scalar) is
-       more specific than f[T](T) so it should be used anyway.
-    */
-    /*
-    // --- begin unnecessary part ---
-    // instantiate type signature and method with the parameter
-    // assignments we found
-    jl_value_pair_t *temp = env;
-    size_t n=0;
-    while (temp != NULL && temp->a != NULL) {
-        n++;
-        temp = temp->next;
-    }
-    jl_value_t **tenv = (jl_value_t**)alloca(2 * n * sizeof(jl_value_t*));
-    temp = env;
-    for(i=0; i < n; i++) {
-        tenv[i*2+0] = temp->a;
-        tenv[i*2+1] = temp->b;
-        temp = temp->next;
-    }
-    jl_type_t *newtype = jl_instantiate_type_with(gm->sig, tenv, n);
-
-    assert(jl_subtype((jl_value_t*)tt, (jl_value_t*)newtype, 0, 0));
-
-    if (m!=NULL && jl_subtype((jl_value_t*)m->sig, (jl_value_t*)newtype,0,0)) {
-        // the inexact concrete method we found earlier is actually
-        // more specific than this one
-        return m;
-    }
-    // --- end unnecessary part ---
-    */
 
     // cache result in concrete part of method table
     assert(jl_is_tuple(env));
