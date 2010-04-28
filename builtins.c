@@ -181,7 +181,7 @@ int asprintf(char **strp, const char *fmt, ...);
 void jl_load(const char *fname)
 {
     char *fpath = (char*)fname;
-    if (julia_home)
+    if (julia_home && !strchr(fname, '/'))
         asprintf(&fpath, "%s/%s", julia_home, fname);
     jl_value_t *ast = jl_parse_file(fpath);
     if (ast == (jl_value_t*)jl_null)
