@@ -69,6 +69,7 @@ jl_type_t *jl_array_uint8_type;
 jl_type_t *jl_array_any_type;
 jl_struct_type_t *jl_expr_type;;
 jl_bits_type_t *jl_intrinsic_type;
+jl_struct_type_t *jl_methtable_type;
 
 jl_tuple_t *jl_null;
 jl_value_t *jl_true;
@@ -1748,6 +1749,12 @@ void jl_init_types()
                            jl_any_type, jl_null, jl_null, jl_null);
     jl_lambda_info_type->fnew = jl_bottom_func;
     jl_lambda_info_type->fconvert = jl_bottom_func;
+
+    jl_methtable_type =
+        jl_new_struct_type(jl_symbol("MethodTable"),
+                           jl_any_type, jl_null, jl_null, jl_null);
+    jl_methtable_type->fnew = jl_bottom_func;
+    jl_methtable_type->fconvert = jl_bottom_func;
 
     tv = typevars(2, "A", "B");
     jl_functype_ctor =

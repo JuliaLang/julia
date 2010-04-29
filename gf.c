@@ -23,6 +23,7 @@
 static jl_methtable_t *new_method_table()
 {
     jl_methtable_t *mt = (jl_methtable_t*)allocb(sizeof(jl_methtable_t));
+    mt->type = (jl_type_t*)jl_methtable_type;
     mt->mlist = NULL;
     mt->generics = NULL;
     return mt;
@@ -36,12 +37,13 @@ typedef int (*jl_argtuple_comparer_t)(jl_value_t **args, size_t n,
 
 // trivial linked list implementation for now
 // TODO: pull out all the stops
-jl_methlist_t *jl_method_list_assoc_args(jl_methlist_t *ml,
-                                         jl_value_t **args, size_t n)
+jl_methlist_t *jl_method_list_assoc(jl_methlist_t *ml,
+                                    jl_value_t **args, size_t n,
+                                    int type_of)
 {
     while (ml != NULL) {
         if (jl_tuple_subtype(args, n, &jl_tupleref(ml->sig,0),
-                             ((jl_tuple_t*)ml->sig)->length, 1, 0, 0))
+                             ((jl_tuple_t*)ml->sig)->length, type_of, 0, 0))
             return ml;
         ml = ml->next;
     }
@@ -93,26 +95,11 @@ jl_function_t *jl_instantiate_method(jl_function_t *f, jl_tuple_t *sp)
     return nf;
 }
 
-static int exact_arg_match(jl_value_t **args, size_t n, jl_tuple_t *sig)
-{
-    assert(jl_is_tuple(sig));
-    if (sig->length != n) return 0;
-    size_t i;
-    for(i=0; i < n; i++) {
-        // note: because this uses jl_typeof() directly, it never detects
-        // exact matches for tuples. however this is a conservative answer
-        // given the rest of the dispatch process.
-        if (!jl_types_equal((jl_value_t*)jl_typeof(args[i]), jl_tupleref(sig,i)))
-            return 0;
-    }
-    return 1;
-}
-
 jl_methlist_t *jl_method_table_insert(jl_methtable_t *mt, jl_type_t *type,
                                       jl_function_t *method);
 
 jl_methlist_t *jl_method_table_assoc(jl_methtable_t *mt,
-                                     jl_value_t **args, size_t nargs)
+                                     jl_value_t **args, size_t nargs, int t)
 {
     /*
       search order:
@@ -125,9 +112,23 @@ jl_methlist_t *jl_method_table_assoc(jl_methtable_t *mt,
       
       TODO: cache exact matches in a faster lookup table
     */
-    jl_methlist_t *m = jl_method_list_assoc_args(mt->mlist, args, nargs);
-    if (m!=NULL && exact_arg_match(args, nargs, (jl_tuple_t*)m->sig))
-        return m;
+    jl_methlist_t *m = jl_method_list_assoc(mt->mlist, args, nargs, t);
+    if (m != NULL) {
+        jl_tuple_t *sig = (jl_tuple_t*)m->sig;
+        if (sig->length == nargs) {
+            size_t i;
+            for(i=0; i < nargs; i++) {
+                // note: because this uses jl_typeof() directly, it never
+                // detects exact matches for tuples. however this is a 
+                // conservative answer given the rest of the dispatch process.
+                if (!jl_types_equal(t?(jl_value_t*)jl_typeof(args[i]):args[i],
+                                    jl_tupleref(sig,i)))
+                    break;
+            }
+            if (i == nargs)
+                return m;
+        }
+    }
     
     // try generics
     jl_methlist_t *gm = mt->generics;
@@ -138,7 +139,7 @@ jl_methlist_t *jl_method_table_assoc(jl_methtable_t *mt,
         tt = jl_alloc_tuple(nargs);
         size_t i;
         for(i=0; i < tt->length; i++) {
-            jl_tupleset(tt, i, (jl_value_t*)jl_full_type(args[i]));
+            jl_tupleset(tt, i, t?(jl_value_t*)jl_full_type(args[i]):args[i]);
         }
         while (gm != NULL) {
             env = jl_type_conform((jl_type_t*)tt, gm->sig);
@@ -157,8 +158,7 @@ jl_methlist_t *jl_method_table_assoc(jl_methtable_t *mt,
     // cache result in concrete part of method table
     assert(jl_is_tuple(env));
     jl_function_t *newmeth =
-        jl_instantiate_method(gm->func,
-                              flatten_pairs((jl_tuple_t*)env));
+        jl_instantiate_method(gm->func, flatten_pairs((jl_tuple_t*)env));
     return jl_method_table_insert(mt, (jl_type_t*)tt, newmeth);
 }
 
@@ -244,17 +244,21 @@ jl_methlist_t *jl_method_table_insert(jl_methtable_t *mt, jl_type_t *type,
     }
 }
 
+void jl_no_method_error(jl_sym_t *name, jl_value_t **args, size_t nargs)
+{
+    jl_tuple_t *argt = (jl_tuple_t*)jl_f_tuple(NULL, args, nargs);
+    char *argt_str = jl_print_to_string(jl_full_type((jl_value_t*)argt));
+    jl_errorf("no method %s%s", name->name, argt_str);
+}
+
 JL_CALLABLE(jl_apply_generic)
 {
     jl_methtable_t *mt = (jl_methtable_t*)jl_t0(env);
 
-    jl_methlist_t *m = jl_method_table_assoc(mt, args, nargs);
+    jl_methlist_t *m = jl_method_table_assoc(mt, args, nargs, 1);
 
     if (m == NULL) {
-        jl_sym_t *name = (jl_sym_t*)jl_t1(env);
-        jl_tuple_t *argt = (jl_tuple_t*)jl_f_tuple(NULL, args, nargs);
-        char *argt_str = jl_print_to_string(jl_full_type((jl_value_t*)argt));
-        jl_errorf("no method %s%s", name->name, argt_str);
+        jl_no_method_error((jl_sym_t*)jl_t1(env), args, nargs);
     }
 
 #if 0
@@ -268,7 +272,7 @@ JL_CALLABLE(jl_apply_generic)
     ios_printf(ios_stdout, ")\n");
 #endif
 
-    return (m->func->fptr)(m->func->env, args, nargs);
+    return jl_apply(m->func, args, nargs);
 }
 
 void jl_print_method_table(jl_function_t *gf)

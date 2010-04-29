@@ -112,6 +112,9 @@ generic function: the most general kind of function. supports dispatch.
 the question is, which kind of operation is field access?
 currently it is kind #2.
 
+- want some way to define types that are variants of others, for example
+  matrices with named rows and columns, without lots of redundant work.
+
 -------------------------------------------------------------------------------
 
 a perpetual question is "where do objects come from?"

@@ -155,6 +155,7 @@ typedef struct _jl_methlist_t {
 } jl_methlist_t;
 
 typedef struct _jl_methtable_t {
+    JL_VALUE_STRUCT
     jl_methlist_t *mlist;
     jl_methlist_t *generics;
 } jl_methtable_t;
@@ -214,6 +215,7 @@ extern jl_type_t *jl_array_uint8_type;
 extern jl_type_t *jl_array_any_type;
 extern jl_struct_type_t *jl_expr_type;
 extern jl_bits_type_t *jl_intrinsic_type;
+extern jl_struct_type_t *jl_methtable_type;
 
 extern jl_tuple_t *jl_null;
 extern jl_value_t *jl_true;
@@ -293,6 +295,7 @@ extern jl_sym_t *closure_ref_sym;
 #define jl_is_symbol(v)      jl_typeis(v,jl_sym_type)
 #define jl_is_expr(v)        jl_typeis(v,jl_expr_type)
 #define jl_is_lambda_info(v) jl_typeis(v,jl_lambda_info_type)
+#define jl_is_mtable(v)      jl_typeis(v,jl_methtable_type)
 #define jl_is_func(v)        (jl_is_func_type(jl_typeof(v)))
 #define jl_is_function(v)    (jl_is_func_type(jl_typeof(v)))
 #define jl_is_array(v)       (((jl_tag_type_t*)jl_typeof(v))->name==jl_array_typename)
@@ -389,6 +392,7 @@ void jl_errorf(const char *fmt, ...);
 void jl_too_few_args(const char *fname, int min);
 void jl_too_many_args(const char *fname, int max);
 void jl_type_error(const char *fname, const char *expected, jl_value_t *got);
+void jl_no_method_error(jl_sym_t *name, jl_value_t **args, size_t nargs);
 
 // initialization functions
 void jl_init_types();

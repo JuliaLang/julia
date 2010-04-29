@@ -15,14 +15,14 @@ tail(x::Cons) = x.tail
 cons(x, y::List) = Cons(x,y)
 
 function print(l::List)
-    if istype(l,EmptyList)
+    if isa(l,EmptyList)
         print("{}")
     else
         print("{")
         while true
             print(head(l))
             l = tail(l)
-            if istype(l,Cons)
+            if isa(l,Cons)
                 print(", ")
             else
                 break
@@ -55,7 +55,7 @@ copylist(l::EmptyList) = nil
 copylist(l::Cons) = cons(head(l), copylist(tail(l)))
 
 function append2(a, b)
-    if istype(a,EmptyList)
+    if isa(a,EmptyList)
         b
     else
         cons(head(a), append2(tail(a), b))

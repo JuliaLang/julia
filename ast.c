@@ -217,6 +217,8 @@ static jl_value_t *scm_to_julia(___SCMOBJ e)
             jl_error("malformed tree");
         }
     }
+    if (___BIGNUMP(e) || ___RATNUMP(e))
+        jl_error("unsupported");
     jl_error("malformed tree");
     
     return (jl_value_t*)jl_null;

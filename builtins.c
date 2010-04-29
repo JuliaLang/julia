@@ -489,120 +489,6 @@ JL_CALLABLE(jl_f_convert)
     return jl_convert(args[0], (jl_type_t*)args[1]);
 }
 
-/*
-  we allow promotion to be covariant by default, i.e.
-  T{S} is promotable to T{R} if S is promotable to R.
-  for example the following diagram must commute:
-
-        Int32 ---------------> Float64
-          |                       |
-          |                       |
-          V                       V
-    Complex{Int32} ------> Complex{Float64}
-
-  The top arrow is explicitly declared.
-  The left arrow is given by "Complex.convert(x::T) = Complex(x, T.convert(0))".
-  The bottom arrow is provided by covariant promotion.
-*/
-static jl_value_t *bigger_type(jl_tag_type_t *t1, jl_tag_type_t *t2);
-static int is_type_bigger(jl_value_t *a, jl_value_t *b)
-{
-    assert(jl_is_some_tag_type(a));
-    assert(jl_is_some_tag_type(b));
-    return (a == bigger_type((jl_tag_type_t*)a, (jl_tag_type_t*)b));
-}
-static jl_value_t *bigger_type(jl_tag_type_t *t1, jl_tag_type_t *t2)
-{
-    if (t1 == t2) return (jl_value_t*)t1;
-    if (jl_is_bits_type(t1) && jl_is_bits_type(t2)) {
-        if (((jl_bits_type_t*)t1)->nbits > ((jl_bits_type_t*)t2)->nbits)
-            return (jl_value_t*)t1;
-        if (((jl_bits_type_t*)t2)->nbits > ((jl_bits_type_t*)t1)->nbits)
-            return (jl_value_t*)t2;
-        return NULL;
-    }
-    jl_tag_type_t *t1_ = t1;
-    jl_tag_type_t *t2_ = t2;
-    while (1) {
-        if (t1 == jl_any_type) {
-            if (t2 != jl_any_type)
-                return (jl_value_t*)t1_;
-            break;
-        }
-        else if (t2 == jl_any_type) {
-            return (jl_value_t*)t2_;
-        }
-        
-        if (t1->name == t2->name) {
-            size_t i;
-            jl_tag_type_t *winner = NULL;
-            for(i=0; i < t1->parameters->length; i++) {
-                jl_value_t *p1 = jl_tupleref(t1->parameters, i);
-                jl_value_t *p2 = jl_tupleref(t2->parameters, i);
-                if (jl_types_equal(p1,p2))
-                    continue;
-                if (jl_is_some_tag_type(p1) && jl_is_some_tag_type(p2)) {
-                    if (is_type_bigger(p1,p2)) {
-                        if (winner == t2_)
-                            return NULL;
-                        winner = t1_;
-                    }
-                    else if (is_type_bigger(p2,p1)) {
-                        if (winner == t1_)
-                            return NULL;
-                        winner = t2_;
-                    }
-                    else {
-                        return NULL;
-                    }
-                }
-                else {
-                    return NULL;
-                }
-            }
-            if (winner == NULL)  // types equal
-                return (jl_value_t*)t1_;
-            return (jl_value_t*)winner;
-        }
-
-        if (jl_type_morespecific((jl_value_t*)t1, (jl_value_t*)t2, 0 ,0))
-            return (jl_value_t*)t2_;
-        if (jl_type_morespecific((jl_value_t*)t2, (jl_value_t*)t1, 0, 0))
-            return (jl_value_t*)t1_;
-        t1 = t1->super;
-        t2 = t2->super;
-    }
-    
-    return NULL;
-}
-
-JL_CALLABLE(jl_f_promote)
-{
-    if (nargs == 0)
-        return (jl_value_t*)jl_null;
-    if (nargs == 1)
-        return (jl_value_t*)jl_tuple(1, args[0]);
-    size_t i;
-    for(i=0; i < nargs; i++) {
-        if (!jl_is_some_tag_type(jl_typeof(args[i])))
-            jl_error("promotion not applicable to given types");
-    }
-    jl_value_t *t = bigger_type((jl_tag_type_t*)jl_typeof(args[0]),
-                                (jl_tag_type_t*)jl_typeof(args[1]));
-    if (t == NULL)
-        jl_error("arguments have no common embedding type");
-    for(i=2; i < nargs; i++) {
-        t = bigger_type((jl_tag_type_t*)t,
-                        (jl_tag_type_t*)jl_typeof(args[i]));
-        if (t == NULL)
-            jl_error("arguments have no common embedding type");
-    }
-    jl_tuple_t *result = jl_alloc_tuple(nargs);
-    for(i=0; i < nargs; i++)
-        jl_tupleset(result, i, jl_convert(args[i], (jl_type_t*)t));
-    return (jl_value_t*)result;
-}
-
 // --- printing ---
 
 jl_function_t *jl_print_gf;
@@ -1099,6 +985,39 @@ JL_CALLABLE(jl_f_add_method)
     return args[0];
 }
 
+jl_methlist_t *jl_method_table_assoc(jl_methtable_t *mt,
+                                     jl_value_t **args, size_t nargs, int t);
+
+JL_CALLABLE(jl_f_methodexists)
+{
+    JL_NARGS(method_exists, 2, 2);
+    if (!jl_is_gf(args[0]))
+        jl_error("method_exists: not a generic function");
+    JL_TYPECHK(method_exists, tuple, args[1]);
+    return jl_method_table_assoc(jl_gf_mtable(args[0]),
+                                 &jl_tupleref(args[1],0),
+                                 ((jl_tuple_t*)args[1])->length, 0) ?
+        jl_true : jl_false;
+}
+
+JL_CALLABLE(jl_f_invoke)
+{
+    JL_NARGSV(invoke, 2);
+    if (!jl_is_gf(args[0]))
+        jl_error("invoke: not a generic function");
+    JL_TYPECHK(invoke, tuple, args[1]);
+    if (!jl_tuple_subtype(&args[2], nargs-2, &jl_tupleref(args[1],0),
+                          ((jl_tuple_t*)args[1])->length, 1, 0, 0))
+        jl_error("invoke: argument type error");
+    jl_methlist_t *ml =
+        jl_method_table_assoc(jl_gf_mtable(args[0]),
+                              &jl_tupleref(args[1],0),
+                              ((jl_tuple_t*)args[1])->length, 0);
+    if (ml == NULL)
+        jl_no_method_error(jl_gf_name(args[0]), &args[2], nargs-2);
+    return jl_apply(ml->func, &args[2], nargs-2);
+}
+
 // --- init ---
 
 static void add_builtin_method1(jl_function_t *gf, jl_type_t *t, jl_fptr_t f)
@@ -1125,7 +1044,7 @@ void jl_init_builtins()
     add_builtin_method1(jl_print_gf, (jl_type_t*)jl_typename_type,jl_f_print_typename);
     add_builtin_method1(jl_print_gf, (jl_type_t*)jl_tvar_type,    jl_f_print_typevar);
     add_builtin_method1(jl_print_gf, (jl_type_t*)jl_lambda_info_type, jl_f_print_linfo);
-    add_builtin_method1(jl_print_gf, (jl_type_t*)jl_array_uint8_type,  jl_f_print_string);
+    add_builtin_method1(jl_print_gf, (jl_type_t*)jl_array_uint8_type, jl_f_print_string);
     add_builtin_method1(jl_print_gf, (jl_type_t*)jl_float32_type, jl_f_print_float32);
     add_builtin_method1(jl_print_gf, (jl_type_t*)jl_float64_type, jl_f_print_float64);
     add_builtin_method1(jl_print_gf, (jl_type_t*)jl_int8_type,    jl_f_print_int8);
@@ -1143,16 +1062,17 @@ void jl_init_builtins()
     add_builtin_func("is", jl_f_is);
     add_builtin_func("typeof", jl_f_typeof);
     add_builtin_func("subtype", jl_f_subtype);
-    add_builtin_func("istype", jl_f_istype);
+    add_builtin_func("isa", jl_f_istype);
     add_builtin_func("typeassert", jl_f_typeassert);
     add_builtin_func("apply", jl_f_apply);
     add_builtin_func("error", jl_f_error);
     add_builtin_func("load", jl_f_load);
     add_builtin_func("tuple", jl_f_tuple);
     add_builtin_func("convert", jl_f_convert);
-    add_builtin_func("promote", jl_f_promote);
     add_builtin_func("Union", jl_f_union);
     add_builtin_func("time_thunk", jl_f_time_thunk);
+    add_builtin_func("method_exists", jl_f_methodexists);
+    add_builtin_func("invoke", jl_f_invoke);
     add_builtin("print", (jl_value_t*)jl_print_gf);
     add_builtin("identity", (jl_value_t*)jl_identity_func);
     
@@ -1206,8 +1126,9 @@ void jl_init_builtins()
     add_builtin("Float32", (jl_value_t*)jl_float32_type);
     add_builtin("Float64", (jl_value_t*)jl_float64_type);
 
-    add_builtin("Expr", (jl_value_t*)jl_new_type_ctor(jl_null,
-                                                      (jl_type_t*)jl_expr_type));
+    add_builtin("Expr",
+                (jl_value_t*)jl_new_type_ctor(jl_null,
+                                              (jl_type_t*)jl_expr_type));
 
     add_builtin("BitsKind", (jl_value_t*)jl_bits_kind);
     add_builtin("StructKind", (jl_value_t*)jl_struct_kind);
