@@ -951,6 +951,7 @@ JL_CALLABLE(jl_f_typevar)
 
 JL_CALLABLE(jl_f_union)
 {
+    if (nargs == 0) return (jl_value_t*)jl_bottom_type;
     if (nargs == 1) return args[0];
     size_t i;
     jl_tuple_t *argt = jl_alloc_tuple(nargs);

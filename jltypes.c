@@ -346,8 +346,9 @@ jl_tuple_t *jl_compute_type_union(jl_tuple_t *types)
         for(j=0; j < n; j++) {
             if (j != i && temp[i] && temp[j]) {
                 if (temp[i] == temp[j] ||
-                    (!jl_has_typevars(temp[j]) &&
-                     jl_subtype(temp[i], temp[j], 0, 0))) {
+                    (jl_subtype(temp[i], temp[j], 0, 0) &&
+                     (temp[i] == (jl_value_t*)jl_bottom_type ||
+                      !jl_has_typevars(temp[j])))) {
                     temp[i] = NULL;
                     ndel++;
                 }
@@ -379,9 +380,11 @@ jl_uniontype_t *jl_new_uniontype(jl_tuple_t *types)
                 jl_value_t *a = jl_tupleref(types, i);
                 jl_value_t *b = jl_tupleref(types, j);
                 if (jl_has_typevars(b) &&
-                    (!jl_is_typevar(b) || jl_has_typevars(a)) &&
-                    jl_type_conform((jl_type_t*)a, (jl_type_t*)b)!=jl_false) {
-                    jl_error("union type pattern too complex");
+                    (!jl_is_typevar(b) || jl_has_typevars(a))) {
+                    jl_value_t *env =
+                        jl_type_conform((jl_type_t*)a, (jl_type_t*)b);
+                    if (env != jl_false && env != (jl_value_t*)jl_null)
+                        jl_error("union type pattern too complex");
                 }
             }
         }

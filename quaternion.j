@@ -1,13 +1,17 @@
 struct Quaternion{T} <: Number
-    q0::T
-    q1::T
-    q2::T
-    q3::T
+    q0::Real{T}
+    q1::Real{T}
+    q2::Real{T}
+    q3::Real{T}
 
-    function convert(z::Complex)
-        return quaternion(re(z),im(z),0,0)
-    end
+    convert(z::Complex) = Quaternion(re(z),im(z),0,0)
+    convert(x::Real)    = Quaternion(x, 0, 0, 0)
+    convert(z::Quaternion) = Quaternion(T.convert(z.q0), T.convert(z.q1),
+                                        T.convert(z.q2), T.convert(z.q3))
 end
+
+promote_table{T,S}(Complex{T}, Quaternion{S}) => Quaternion{promote_type(T,S)}
+promote_table{T,S}(Real{T}, Quaternion{S}) => Quaternion{promote_type(T,S)}
 
 function print(z::Quaternion)
     print(z.q0)
@@ -40,27 +44,25 @@ function print(z::Quaternion)
     print("k")
 end
 
-quaternion{T}(q0::T, q1::T, q2::T, q3::T) = Quaternion(q0, q1, q2, q3)
-
 re(z::Quaternion) = z.q0
 im(z::Quaternion) = z.q1
 
 scalar(z::Quaternion) = z.q0
 vector(z::Quaternion) = vector(z.q1,z.q2,z.q3)
 
-conj(z::Quaternion) = quaternion(z.q0, -z.q1, -z.q2, -z.q3)
+conj(z::Quaternion) = Quaternion(z.q0, -z.q1, -z.q2, -z.q3)
 norm(z::Quaternion) = z.q0*z.q0 + z.q1*z.q1 + z.q2*z.q2 + z.q3*z.q3
 inv(z::Quaternion) = conj(z)/norm(z)
 
-(-)(z::Quaternion) = quaternion(-z.q0, -z.q1, -z.q2, -z.q3)
+(-)(z::Quaternion) = Quaternion(-z.q0, -z.q1, -z.q2, -z.q3)
 
-(/)(z::Quaternion, x::Real) = quaternion(z.q0/x, z.q1/x, z.q2/x, z.q3/x)
+(/)(z::Quaternion, x::Real) = Quaternion(z.q0/x, z.q1/x, z.q2/x, z.q3/x)
 
-(+)(z::Quaternion, w::Quaternion) = quaternion(z.q0 + w.q0, z.q1 + w.q1,
+(+)(z::Quaternion, w::Quaternion) = Quaternion(z.q0 + w.q0, z.q1 + w.q1,
                                                z.q2 + w.q2, z.q3 + w.q3)
-(-)(z::Quaternion, w::Quaternion) = quaternion(z.q0 - w.q0, z.q1 - w.q1,
+(-)(z::Quaternion, w::Quaternion) = Quaternion(z.q0 - w.q0, z.q1 - w.q1,
                                                z.q2 - w.q2, z.q3 - w.q3)
-(*)(z::Quaternion, w::Quaternion) = quaternion(z.q0*w.q0 - z.q1*w.q1 - z.q2*w.q2 - z.q3*w.q3,
+(*)(z::Quaternion, w::Quaternion) = Quaternion(z.q0*w.q0 - z.q1*w.q1 - z.q2*w.q2 - z.q3*w.q3,
                                                z.q0*w.q1 + z.q1*w.q0 + z.q2*w.q3 - z.q3*w.q2,
                                                z.q0*w.q2 - z.q1*w.q3 + z.q2*w.q0 + z.q3*w.q1,
                                                z.q0*w.q3 + z.q1*w.q2 - z.q2*w.q1 + z.q3*w.q0)

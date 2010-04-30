@@ -1,9 +1,13 @@
 struct Rational{T} <: Real
-    num::T
-    den::T
+    num::Int{T}
+    den::Int{T}
 
-    convert(x::Int32) = rational(T.convert(x),T.convert(1))
+    convert(x::Int) = Rational(T.convert(x),T.convert(1))
+    convert(x::Rational) = Rational(T.convert(x.num),T.convert(x.den))
 end
+
+promote_table{T,S}(Int{T}, Rational{S}) => Rational{promote_type(T,S)}
+promote_table{T,S}(Rational{T}, Rational{S}) => Rational{promote_type(T,S)}
 
 function print(x::Rational)
     print(num(x))
