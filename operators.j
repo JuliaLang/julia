@@ -34,8 +34,18 @@ prod(itr) = reduce(*,   itr)
 any(itr)  = reduce(any, itr)
 all(itr)  = reduce(all, itr)
 
-promote_type = typemap(`promote)
-add_method(promote_type, (Int32, Float64), ()->Float64)
+promote_table(Int32, Float64) => Float64
+
+function promote_type(t::Type, s::Type)
+    if subtype(t,s) || subtype(s,t)
+        error("no method")
+    end
+    if method_exists(promote_table,(t,s))
+        return promote_table(t,s)
+    else
+        return promote_table(s,t)
+    end
+end
 
 promote() = ()
 promote(x) = (x,)

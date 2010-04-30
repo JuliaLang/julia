@@ -978,6 +978,32 @@ JL_CALLABLE(jl_f_new_generic_function)
     return (jl_value_t*)jl_new_generic_function((jl_sym_t*)args[0]);
 }
 
+static void check_type_tuple(jl_tuple_t *t)
+{
+    size_t i;
+    for(i=0; i < t->length; i++) {
+        jl_value_t *elt = jl_tupleref(t,i);
+        if (!jl_is_type(elt) && !jl_is_typector(elt) && !jl_is_typevar(elt)) {
+            char *argstr = jl_print_to_string(elt);
+            jl_errorf("invalid type %s in method definition", argstr);
+        }
+    }
+}
+
+JL_CALLABLE(jl_f_add_method)
+{
+    JL_NARGS(add_method, 3, 3);
+    assert(jl_is_function(args[0]));
+    if (!jl_is_gf(args[0]))
+        jl_error("add_method: not a generic function");
+    JL_TYPECHK(add_method, tuple, args[1]);
+    check_type_tuple((jl_tuple_t*)args[1]);
+    JL_TYPECHK(add_method, function, args[2]);
+    jl_add_method((jl_function_t*)args[0], (jl_tuple_t*)args[1],
+                  (jl_function_t*)args[2]);
+    return args[0];
+}
+
 jl_function_t *jl_new_typemap(jl_sym_t *name);
 
 JL_CALLABLE(jl_f_new_typemap)
@@ -987,13 +1013,15 @@ JL_CALLABLE(jl_f_new_typemap)
     return (jl_value_t*)jl_new_typemap((jl_sym_t*)args[0]);
 }
 
-JL_CALLABLE(jl_f_add_method)
+JL_CALLABLE(jl_f_add_mapping)
 {
-    JL_NARGS(add_method, 3, 3);
-    if (!jl_is_gf(args[0]) && !jl_is_typemap(args[0]))
-        jl_error("add_method: not a generic function");
-    JL_TYPECHK(add_method, tuple, args[1]);
-    JL_TYPECHK(add_method, function, args[2]);
+    JL_NARGS(add_mapping, 3, 3);
+    assert(jl_is_function(args[0]));
+    if (!jl_is_typemap(args[0]))
+        jl_error("expected type map");
+    JL_TYPECHK(add_mapping, tuple, args[1]);
+    check_type_tuple((jl_tuple_t*)args[1]);
+    JL_TYPECHK(add_mapping, function, args[2]);
     jl_add_method((jl_function_t*)args[0], (jl_tuple_t*)args[1],
                   (jl_function_t*)args[2]);
     return args[0];
@@ -1009,6 +1037,7 @@ JL_CALLABLE(jl_f_methodexists)
     if (!jl_is_gf(args[0]) && !jl_is_typemap(args[0]))
         jl_error("method_exists: not a generic function");
     JL_TYPECHK(method_exists, tuple, args[1]);
+    check_type_tuple((jl_tuple_t*)args[1]);
     return jl_method_table_assoc(jl_gf_mtable(args[0]),
                                  &jl_tupleref(args[1],0),
                                  ((jl_tuple_t*)args[1])->length, 0) ?
@@ -1022,6 +1051,7 @@ JL_CALLABLE(jl_f_invoke)
     if (!jl_is_gf(args[0]))
         jl_error("invoke: not a generic function");
     JL_TYPECHK(invoke, tuple, args[1]);
+    check_type_tuple((jl_tuple_t*)args[1]);
     if (!jl_tuple_subtype(&args[2], nargs-2, &jl_tupleref(args[1],0),
                           ((jl_tuple_t*)args[1])->length, 1, 0, 0))
         jl_error("invoke: argument type error");
@@ -1089,7 +1119,6 @@ void jl_init_builtins()
     add_builtin_func("time_thunk", jl_f_time_thunk);
     add_builtin_func("method_exists", jl_f_methodexists);
     add_builtin_func("invoke", jl_f_invoke);
-    add_builtin_func("typemap", jl_f_new_typemap);
     add_builtin("print", (jl_value_t*)jl_print_gf);
     add_builtin("identity", (jl_value_t*)jl_identity_func);
     
@@ -1113,6 +1142,8 @@ void jl_init_builtins()
     add_builtin_func("new_tag_type", jl_f_new_tag_type);
     add_builtin_func("new_generic_function", jl_f_new_generic_function);
     add_builtin_func("add_method", jl_f_add_method);
+    add_builtin_func("new_typemap", jl_f_new_typemap);
+    add_builtin_func("add_mapping", jl_f_add_mapping);
 
     // builtin types
     add_builtin("Any", (jl_value_t*)jl_any_type);

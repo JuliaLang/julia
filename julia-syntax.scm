@@ -136,26 +136,40 @@
   (map (lambda (x) `(call (top typevar) ',x)) sl))
 
 (define (gf-def-expr- name argl argtypes body)
+  (gf-def-expr-- name argl argtypes body 'new_generic_function 'add_method))
+
+(define (gf-def-expr-- name argl argtypes body new add)
   `(block
     ,(if (symbol? name)
 	 `(if (unbound ,name)
-	      (= ,name (call (top new_generic_function) (quote ,name))))
+	      (= ,name (call (top ,new) (quote ,name))))
 	 `(null))
-    (call (top add_method)
+    (call (top ,add)
 	  ,name
 	  ,argtypes
 	  ,(function-expr argl body))))
 
 (define (generic-function-def-expr name sparams argl body)
-  (let ((argl (fsig-to-lambda-list argl)))
+  (let* ((argl  (fsig-to-lambda-list argl))
+	 (types (llist-types argl)))
     (gf-def-expr-
      name argl
      (if (null? sparams)
-	 `(tuple ,@(llist-types argl))
+	 `(tuple ,@types)
 	 `(call (lambda ,sparams
-		  (tuple ,@(llist-types argl)))
+		  (tuple ,@types))
 		,@(symbols->typevars sparams)))
      body)))
+
+(define (typemap-def-expr name sparams body types)
+  (gf-def-expr--
+   name '()
+   (if (null? sparams)
+       `(tuple ,@types)
+       `(call (lambda ,sparams
+		(tuple ,@types))
+	      ,@(symbols->typevars sparams)))
+   body 'new_typemap 'add_mapping))
 
 (define (struct-def-expr name params super fields)
   ; extract the name from a function def expr
@@ -269,6 +283,12 @@
 		   `(function (call (curly ,name . ,sparams) . ,argl) ,body))
    (pattern-lambda (= (call name . argl) body)
 		   `(function (call ,name ,@argl) ,body))
+
+   ; typemap definitions
+   (pattern-lambda (=> (call (curly name . sparams) . types) body)
+		   (typemap-def-expr name sparams body types))
+   (pattern-lambda (=> (call name . types) body)
+		   (typemap-def-expr name '() body types))
 
    (pattern-lambda (-> a b)
 		   (let ((a (if (and (pair? a)

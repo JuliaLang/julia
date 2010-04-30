@@ -7,6 +7,9 @@ struct Complex{T} <: Number
     convert(z::Complex) = Complex(T.convert(z.re), T.convert(z.im))
 end
 
+promote_table{T,S}(Real{T}, Complex{S}) => Complex{promote_type(T,S)}
+promote_table{T,S}(Complex{T}, Complex{S}) => Complex{promote_type(T,S)}
+
 function print(c::Complex)
     print(re(c))
     i = im(c)
