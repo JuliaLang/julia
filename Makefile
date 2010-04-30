@@ -5,7 +5,6 @@ DOBJS = $(SRCS:%=%.do)
 EXENAME = $(NAME)
 LLTDIR = lib
 LLT = $(LLTDIR)/libllt.a
-LLT_H = $(LLTDIR)/llt.h
 
 include ./Make.inc.$(shell uname)
 
@@ -46,7 +45,7 @@ julia-defs.s.bc: julia-defs$(NBITS).s
 julia-defs.s.bc.inc: julia-defs.s.bc bin2hex.scm
 	$(GAMBITGSI) ./bin2hex.scm < $< > $@
 
-$(LLT): $(LLT_H)
+$(LLT): $(LLTDIR)/*.h $(LLTDIR)/*.c
 	cd $(LLTDIR) && $(MAKE)
 
 julia-debug: $(DOBJS) $(LIBFILES) julia-defs.s.bc
