@@ -59,10 +59,22 @@ start(t::Tuple) = 1
 done(t::Tuple, i) = (i > length(t))
 next(t::Tuple, i) = (t[i], i+1)
 
-map(f, t::()) = ()
+# map on tuples
+# 0 argument function
+map(f) = f()
+# 1 argument function
+map(f, t::())                   = ()
+map(f, t::(Any,))               = (f(t[1]),)
+map(f, t::(Any, Any))           = (f(t[1]), f(t[2]))
+map(f, t::(Any, Any, Any))      = (f(t[1]), f(t[2]), f(t[3]))
+map(f, t::(Any, Any, Any, Any)) = (f(t[1]), f(t[2]), f(t[3]), f(t[4]))
 map(f, t::Tuple) = maptuple(f, t...)
-maptuple(f, first, rest...) = tuple(f(first), maptuple(f, rest...)...)
 maptuple(f) = ()
+maptuple(f, first, rest...) = tuple(f(first), maptuple(f, rest...)...)
+# 2 argument function
+map(f, t::(),        s::())        = ()
+map(f, t::(Any,),    s::(Any,))    = (f(t[1],s[1]),)
+map(f, t::(Any,Any), s::(Any,Any)) = (f(t[1],s[1]), f(t[2],s[2]))
 
 ref(t::Tuple, r::Range) = accumtuple(t, r, start(r))
 function accumtuple(t::Tuple, r::Range, i, elts...)

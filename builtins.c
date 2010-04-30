@@ -579,8 +579,13 @@ static void print_function(jl_value_t *v)
     if (jl_is_typector(v)) {
         jl_print((jl_value_t*)((jl_typector_t*)v)->body);
     }
-    else if (jl_is_gf(v)) {
-        ios_puts("#<generic-function ", s);
+    else if (jl_is_gf(v) || jl_is_typemap(v)) {
+        if (jl_is_gf(v)) {
+            ios_puts("#<generic-function ", s);
+        }
+        else {
+            ios_puts("#<typemap ", s);
+        }
         ios_puts(jl_gf_name(v)->name, s);
         ios_putc('>', s);
 #ifdef DEBUG
@@ -973,10 +978,19 @@ JL_CALLABLE(jl_f_new_generic_function)
     return (jl_value_t*)jl_new_generic_function((jl_sym_t*)args[0]);
 }
 
+jl_function_t *jl_new_typemap(jl_sym_t *name);
+
+JL_CALLABLE(jl_f_new_typemap)
+{
+    JL_NARGS(typemap, 1, 1);
+    JL_TYPECHK(typemap, symbol, args[0]);
+    return (jl_value_t*)jl_new_typemap((jl_sym_t*)args[0]);
+}
+
 JL_CALLABLE(jl_f_add_method)
 {
     JL_NARGS(add_method, 3, 3);
-    if (!jl_is_gf(args[0]))
+    if (!jl_is_gf(args[0]) && !jl_is_typemap(args[0]))
         jl_error("add_method: not a generic function");
     JL_TYPECHK(add_method, tuple, args[1]);
     JL_TYPECHK(add_method, function, args[2]);
@@ -991,7 +1005,8 @@ jl_methlist_t *jl_method_table_assoc(jl_methtable_t *mt,
 JL_CALLABLE(jl_f_methodexists)
 {
     JL_NARGS(method_exists, 2, 2);
-    if (!jl_is_gf(args[0]))
+    JL_TYPECHK(method_exists, function, args[0]);
+    if (!jl_is_gf(args[0]) && !jl_is_typemap(args[0]))
         jl_error("method_exists: not a generic function");
     JL_TYPECHK(method_exists, tuple, args[1]);
     return jl_method_table_assoc(jl_gf_mtable(args[0]),
@@ -1003,6 +1018,7 @@ JL_CALLABLE(jl_f_methodexists)
 JL_CALLABLE(jl_f_invoke)
 {
     JL_NARGSV(invoke, 2);
+    JL_TYPECHK(invoke, function, args[0]);
     if (!jl_is_gf(args[0]))
         jl_error("invoke: not a generic function");
     JL_TYPECHK(invoke, tuple, args[1]);
@@ -1073,6 +1089,7 @@ void jl_init_builtins()
     add_builtin_func("time_thunk", jl_f_time_thunk);
     add_builtin_func("method_exists", jl_f_methodexists);
     add_builtin_func("invoke", jl_f_invoke);
+    add_builtin_func("typemap", jl_f_new_typemap);
     add_builtin("print", (jl_value_t*)jl_print_gf);
     add_builtin("identity", (jl_value_t*)jl_identity_func);
     

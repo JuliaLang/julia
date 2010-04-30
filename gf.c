@@ -277,7 +277,6 @@ JL_CALLABLE(jl_apply_generic)
 
 void jl_print_method_table(jl_function_t *gf)
 {
-    assert(jl_is_gf(gf));
     char *name = ((jl_sym_t*)jl_t1(gf->env))->name;
     jl_methtable_t *mt = (jl_methtable_t*)jl_t0(gf->env);
     jl_methlist_t *ml = mt->mlist;
@@ -306,8 +305,29 @@ jl_function_t *jl_new_generic_function(jl_sym_t *name)
 
 void jl_add_method(jl_function_t *gf, jl_tuple_t *types, jl_function_t *meth)
 {
-    assert(jl_is_gf(gf));
+    assert(jl_is_function(gf));
     assert(jl_is_tuple(types));
     assert(jl_is_func(meth));
+    assert(jl_is_tuple(gf->env));
+    assert(jl_is_mtable(jl_t0(gf->env)));
     (void)jl_method_table_insert(jl_gf_mtable(gf), (jl_type_t*)types, meth);
+}
+
+JL_CALLABLE(jl_apply_typemap)
+{
+    jl_methtable_t *mt = (jl_methtable_t*)jl_t0(env);
+    jl_methlist_t *m = jl_method_table_assoc(mt, args, nargs, 0);
+    if (m == NULL) {
+        jl_tuple_t *argt = (jl_tuple_t*)jl_f_tuple(NULL, args, nargs);
+        char *argstr = jl_print_to_string((jl_value_t*)argt);
+        jl_errorf("%s: %s not found", ((jl_sym_t*)jl_t1(env))->name, argstr);
+    }
+    return jl_apply(m->func, NULL, 0);
+}
+
+jl_function_t *jl_new_typemap(jl_sym_t *name)
+{
+    return jl_new_closure(jl_apply_typemap,
+                          (jl_value_t*)jl_pair((jl_value_t*)new_method_table(),
+                                               (jl_value_t*)name));
 }

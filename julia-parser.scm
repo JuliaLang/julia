@@ -414,16 +414,20 @@ TODO:
   (let ((t (require-token s)))
     (if (closing-token? t)
 	(error "unexpected token" t))
-    (if (memq t unary-ops)
-	(let ((op (take-token s))
-	      (next (peek-token s)))
-	  (if (closing-token? next)
-	      ; return operator by itself, as in (+)
-	      op
-	      (if (syntactic-unary-op? op)
-		  (list op (parse-unary s))
-		  (list 'call op (parse-unary s)))))
-	(parse-factor s))))
+    (cond ((memq t unary-ops)
+	   (let ((op (take-token s))
+		 (next (peek-token s)))
+	     (if (closing-token? next)
+		 op  ; return operator by itself, as in (+)
+		 (if (syntactic-unary-op? op)
+		     (list op (parse-unary s))
+		     (list 'call op (parse-unary s))))))
+	  ((eq? t '|::|)
+	   ; allow ::T, omitting argument name
+	   (take-token s)
+	   `(|::| ,(gensym) ,(parse-call s)))
+	  (else
+	   (parse-factor s)))))
 
 ; handle ^, .^, and postfix transpose operator
 (define (parse-factor-h s down ops)

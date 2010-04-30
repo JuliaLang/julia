@@ -1608,6 +1608,12 @@ void jl_init_types()
     jl_tuple_typename = jl_new_typename(jl_symbol("Tuple"));
 
     // now they can be used to create the remaining base kinds and types
+    jl_methtable_type =
+        jl_new_struct_type(jl_symbol("MethodTable"),
+                           jl_any_type, jl_null, jl_null, jl_null);
+    jl_methtable_type->fnew = jl_bottom_func;
+    jl_methtable_type->fconvert = jl_bottom_func;
+
     jl_union_kind = jl_new_struct_type(jl_symbol("UnionKind"),
                                        jl_type_type, jl_null,
                                        jl_tuple(1, jl_symbol("types")),
@@ -1749,12 +1755,6 @@ void jl_init_types()
                            jl_any_type, jl_null, jl_null, jl_null);
     jl_lambda_info_type->fnew = jl_bottom_func;
     jl_lambda_info_type->fconvert = jl_bottom_func;
-
-    jl_methtable_type =
-        jl_new_struct_type(jl_symbol("MethodTable"),
-                           jl_any_type, jl_null, jl_null, jl_null);
-    jl_methtable_type->fnew = jl_bottom_func;
-    jl_methtable_type->fconvert = jl_bottom_func;
 
     tv = typevars(2, "A", "B");
     jl_functype_ctor =

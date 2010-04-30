@@ -301,6 +301,7 @@ extern jl_sym_t *closure_ref_sym;
 #define jl_is_array(v)       (((jl_tag_type_t*)jl_typeof(v))->name==jl_array_typename)
 #define jl_is_box(v)         (((jl_tag_type_t*)jl_typeof(v))->name==jl_box_typename)
 #define jl_is_gf(f)          (((jl_function_t*)(f))->fptr==jl_apply_generic)
+#define jl_is_typemap(f)     (((jl_function_t*)(f))->fptr==jl_apply_typemap)
 
 #define jl_gf_mtable(f) ((jl_methtable_t*)jl_t0(((jl_function_t*)(f))->env))
 #define jl_gf_name(f) ((jl_sym_t*)jl_t1(((jl_function_t*)(f))->env))
@@ -454,6 +455,7 @@ jl_value_t *jl_apply(jl_function_t *f, jl_value_t **args, uint32_t nargs)
 
 JL_CALLABLE(jl_f_tuple);
 JL_CALLABLE(jl_apply_generic);
+JL_CALLABLE(jl_apply_typemap);
 
 #define JL_NARGS(fname, min, max)                               \
     if (nargs < min) jl_too_few_args(#fname, min);              \
