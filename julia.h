@@ -454,6 +454,7 @@ jl_value_t *jl_apply(jl_function_t *f, jl_value_t **args, uint32_t nargs)
 }
 
 JL_CALLABLE(jl_f_tuple);
+JL_CALLABLE(jl_f_arrayset);
 JL_CALLABLE(jl_apply_generic);
 JL_CALLABLE(jl_apply_typemap);
 
