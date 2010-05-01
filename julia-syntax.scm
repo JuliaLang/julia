@@ -547,8 +547,7 @@
 
    ))
 
-;; TODO: Special cases of comprehensions must be detected to simplify
-;; array indexing inside loop expressions.
+;; Comprehensions
 
 (define identify-comprehensions
   (pattern-set
@@ -581,7 +580,6 @@
 (define lower-comprehensions
   (pattern-set
 
-   ; nd comprehensions
    (pattern-lambda
     (comprehension expr . ranges)
     (let ( (result (gensym)) (ri (gensym)) (oneresult (gensym)) )
