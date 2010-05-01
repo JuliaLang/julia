@@ -255,12 +255,6 @@ JL_CALLABLE(jl_apply_generic)
 {
     jl_methtable_t *mt = (jl_methtable_t*)jl_t0(env);
 
-    jl_methlist_t *m = jl_method_table_assoc(mt, args, nargs, 1);
-
-    if (m == NULL) {
-        jl_no_method_error((jl_sym_t*)jl_t1(env), args, nargs);
-    }
-
 #if 0
     // TRACE
     ios_printf(ios_stdout, "%s(", ((jl_sym_t*)jl_t1(env))->name);
@@ -271,6 +265,12 @@ JL_CALLABLE(jl_apply_generic)
     }
     ios_printf(ios_stdout, ")\n");
 #endif
+
+    jl_methlist_t *m = jl_method_table_assoc(mt, args, nargs, 1);
+
+    if (m == NULL) {
+        jl_no_method_error((jl_sym_t*)jl_t1(env), args, nargs);
+    }
 
     return jl_apply(m->func, args, nargs);
 }

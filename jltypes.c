@@ -695,7 +695,7 @@ jl_array_t *jl_new_array(jl_type_t *atype, jl_value_t **dimargs, size_t ndims)
         }
         else {
             size_t tot = sizeof(void*) * nel;
-            if (nel <= ARRAY_INLINE_NBYTES)
+            if (tot <= ARRAY_INLINE_NBYTES)
                 data = &a->_space[0];
             else
                 data = allocb(tot);
