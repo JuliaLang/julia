@@ -26,3 +26,5 @@ any(x::Scalar, y::Scalar) = x || y ? true : false
 start(a::Scalar) = a
 next(a::Scalar, i) = (a, a+1)
 done(a::Scalar, i) = (i > a)
+
+clamp(x::Scalar, lo::Scalar, hi::Scalar) = (x > hi ? hi : (x < lo ? lo : x))
