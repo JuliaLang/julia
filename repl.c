@@ -60,12 +60,13 @@ static int print_banner = 1;
 static int no_readline = 0;
 static int tab_width = 2;
 static int load_start_j = 1;
+static char *program = NULL;
 
 int num_evals = 0;
 char **eval_exprs = NULL;
 int *print_exprs = NULL;
 
-static const char *usage = "julia [options]\n";
+static const char *usage = "julia [options] [program] [args...]\n";
 static const char *opts =
     " -q --quiet         Quiet startup without banner\n"
     " -R --no-readline   Disable readline functionality\n"
@@ -161,10 +162,15 @@ void parse_opts(int *argcp, char ***argvp) {
     }
     *argvp += optind;
     *argcp -= optind;
+    if (!num_evals && *argcp > 0) {
+        if (strcmp((*argvp)[0], "-")) {
+            no_readline = 1;
+            program = (*argvp)[0];
+        }
+        ++*argvp; --*argcp;
+    }
     if (*argcp > 0) {
-        ios_printf(ios_stderr, "julia: no arguments allowed\n", usage);
-        ios_printf(ios_stderr, "usage: %s", usage);
-        exit(1);
+        // TODO: make into global array
     }
 }
 
@@ -523,6 +529,14 @@ int main(int argc, char *argv[])
                 jl_print(value);
                 ios_printf(ios_stdout, "\n");
             }
+        }
+        return 0;
+    }
+    if (program) {
+        if (!setjmp(ExceptionHandler)) {
+            jl_load(program);
+        } else {
+            return 1;
         }
         return 0;
     }
