@@ -98,6 +98,7 @@ static Function *jlalloc_func;
   - threads or other advanced control flow
 
   - source location tracking, var name metadata
+ (- store var name in closure box for error reporting)
   * rootlist to track pointers emitted into code
   - function/var name mangling
   * include julia-defs.bc in the executable

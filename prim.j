@@ -54,6 +54,12 @@ end
 (-)(x::Number, y::Number) = (-)(promote(x,y)...)
 (/)(x::Number, y::Number) = (/)(promote(x,y)...)
 
+(<)(x::Number, y::Number)  = (<)(promote(x,y)...)
+(>)(x::Number, y::Number)  = (>)(promote(x,y)...)
+(<=)(x::Number, y::Number) = (<=)(promote(x,y)...)
+(>=)(x::Number, y::Number) = (>=)(promote(x,y)...)
+(==)(x::Number, y::Number) = (==)(promote(x,y)...)
+
 # iterating over tuples
 start(t::Tuple) = 1
 done(t::Tuple, i) = (i > length(t))
@@ -75,6 +81,16 @@ maptuple(f, first, rest...) = tuple(f(first), maptuple(f, rest...)...)
 map(f, t::(),        s::())        = ()
 map(f, t::(Any,),    s::(Any,))    = (f(t[1],s[1]),)
 map(f, t::(Any,Any), s::(Any,Any)) = (f(t[1],s[1]), f(t[2],s[2]))
+# n argument function
+function map(f, ts::Tuple...)
+    function _map(f, ts, i)
+        if i > length(ts[1])
+            return ()
+        end
+        return tuple(f(map(x->x[i],ts)...), _map(f,ts,i+1)...)
+    end
+    return _map(f, ts, 1)
+end
 
 ref(t::Tuple, r::Range) = accumtuple(t, r, start(r))
 function accumtuple(t::Tuple, r::Range, i, elts...)
