@@ -169,9 +169,6 @@ void parse_opts(int *argcp, char ***argvp) {
         }
         ++*argvp; --*argcp;
     }
-    if (*argcp > 0) {
-        // TODO: make into global array
-    }
 }
 
 void julia_init()
@@ -492,6 +489,17 @@ int main(int argc, char *argv[])
     llt_init();
     parse_opts(&argc, &argv);
     julia_init();
+
+    jl_value_t *dims = (jl_value_t*)jl_box_int32(argc);
+    jl_value_t *args = (jl_value_t*)jl_new_array(jl_array_any_type, &dims, 1);
+    int i;
+    for (i=0; i < argc; i++) {
+        jl_value_t *idx = (jl_value_t*)jl_box_int32(i+1);
+        jl_value_t *val = (jl_value_t*)jl_cstr_to_array(argv[i]);
+        jl_value_t *dat[] = {args, idx, val};
+        jl_f_arrayset(NULL, dat, 3);
+    }
+    jl_set_const(jl_system_module, jl_symbol("ARGS"), args);
 
 #ifdef USE_READLINE
     if (!no_readline) {
