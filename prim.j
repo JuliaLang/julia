@@ -60,6 +60,9 @@ end
 (>=)(x::Number, y::Number) = (>=)(promote(x,y)...)
 (==)(x::Number, y::Number) = (==)(promote(x,y)...)
 
+(./)(x, y) = x/y
+(.*)(x, y) = x*y
+
 # iterating over tuples
 start(t::Tuple) = 1
 done(t::Tuple, i) = (i > length(t))

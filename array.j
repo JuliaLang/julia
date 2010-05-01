@@ -32,37 +32,35 @@ reshape{T,n}(a::Array{T,n}, dims...) = do (b = zeros(T, dims...),
                                            for i=1:numel(a); b[i] = a[i]; end,
                                            b)
 
-(/)(x, y) = x./y
-
 (+)(x::Scalar, y::Vector)  = [ x + y[i] | i=1:length(y) ]
 (-)(x::Scalar, y::Vector)  = [ x - y[i] | i=1:length(y) ]
 (*)(x::Scalar, y::Vector)  = [ x * y[i] | i=1:length(y) ]
-(./)(x::Scalar, y::Vector) = [ x / y[i] | i=1:length(y) ]
+(/)(x::Scalar, y::Vector)  = [ x / y[i] | i=1:length(y) ]
 
 (+)(x::Vector, y::Scalar)  = [ x[i] + y | i=1:length(x) ]
 (-)(x::Vector, y::Scalar)  = [ x[i] - y | i=1:length(x) ]
 (*)(x::Vector, y::Scalar)  = [ x[i] * y | i=1:length(x) ]
-(./)(x::Vector, y::Scalar) = [ x[i] / y | i=1:length(x) ]
+(/)(x::Vector, y::Scalar)  = [ x[i] / y | i=1:length(x) ]
 
-(+)(x::Vector, y::Vector) = [ x[i] + y[i] | i=1:length(x) ]
-(-)(x::Vector, y::Vector) = [ x[i] - y[i] | i=1:length(x) ]
+(+)(x::Vector, y::Vector)  = [ x[i] + y[i] | i=1:length(x) ]
+(-)(x::Vector, y::Vector)  = [ x[i] - y[i] | i=1:length(x) ]
 (.*)(x::Vector, y::Vector) = [ x[i] * y[i] | i=1:length(x) ]
 (./)(x::Vector, y::Vector) = [ x[i] / y[i] | i=1:length(x) ]
 
 (+)(x::Scalar, y::Matrix) = [ x + y[i,j] | i=1:size(y,1), j=1:size(y,2) ]
 (-)(x::Scalar, y::Matrix) = [ x - y[i,j] | i=1:size(y,1), j=1:size(y,2) ]
-(.*)(x::Scalar, y::Matrix) = [ x .* y[i,j] | i=1:size(y,1), j=1:size(y,2) ]
-(./)(x::Scalar, y::Matrix) = [ x ./ y[i,j] | i=1:size(y,1), j=1:size(y,2) ]
+(*)(x::Scalar, y::Matrix) = [ x * y[i,j] | i=1:size(y,1), j=1:size(y,2) ]
+(/)(x::Scalar, y::Matrix) = [ x / y[i,j] | i=1:size(y,1), j=1:size(y,2) ]
 
 (+)(x::Matrix, y::Scalar) = [ x[i,j] + y | i=1:size(x,1), j=1:size(x,2) ]
 (-)(x::Matrix, y::Scalar) = [ x[i,j] - y | i=1:size(x,1), j=1:size(x,2) ]
-(.*)(x::Matrix, y::Scalar) = [ x[i,j] .* y | i=1:size(x,1), j=1:size(x,2) ]
-(./)(x::Matrix, y::Scalar) = [ x[i,j] ./ y | i=1:size(x,1), j=1:size(x,2) ]
+(*)(x::Matrix, y::Scalar) = [ x[i,j] * y | i=1:size(x,1), j=1:size(x,2) ]
+(/)(x::Matrix, y::Scalar) = [ x[i,j] / y | i=1:size(x,1), j=1:size(x,2) ]
 
-(+)(x::Matrix, y::Matrix) = [ x[i,j] + y[i,j] | i=1:size(x,1), j=1:size(x,2) ]
-(-)(x::Matrix, y::Matrix) = [ x[i,j] - y[i,j] | i=1:size(x,1), j=1:size(x,2) ]
-(.*)(x::Matrix, y::Matrix) = [ x[i,j] .* y[i,j] | i=1:size(x,1), j=1:size(x,2) ]
-(./)(x::Matrix, y::Matrix) = [ x[i,j] ./ y[i,j] | i=1:size(x,1), j=1:size(x,2) ]
+(+)(x::Matrix, y::Matrix)  = [ x[i,j] + y[i,j] | i=1:size(x,1), j=1:size(x,2) ]
+(-)(x::Matrix, y::Matrix)  = [ x[i,j] - y[i,j] | i=1:size(x,1), j=1:size(x,2) ]
+(.*)(x::Matrix, y::Matrix) = [ x[i,j] * y[i,j] | i=1:size(x,1), j=1:size(x,2) ]
+(./)(x::Matrix, y::Matrix) = [ x[i,j] / y[i,j] | i=1:size(x,1), j=1:size(x,2) ]
 
 function (==)(x::Array, y::Array)
     if (x.dims != y.dims)

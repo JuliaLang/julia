@@ -5,7 +5,6 @@
 #include "llvm/LLVMContext.h"
 #include "llvm/Module.h"
 #include "llvm/Intrinsics.h"
-#include "llvm/ModuleProvider.h"
 #include "llvm/PassManager.h"
 #include "llvm/Analysis/Verifier.h"
 #include "llvm/Target/TargetData.h"
@@ -36,7 +35,6 @@ static Module *jl_Module;
 static ExecutionEngine *jl_ExecutionEngine;
 static std::map<const std::string, GlobalVariable*> stringConstants;
 static FunctionPassManager *FPM;
-static ExistingModuleProvider *JuliaModuleProvider;
 
 // types
 static const Type *jl_value_llvmt;
@@ -754,8 +752,7 @@ static void init_julia_llvm_env(Module *m)
 #endif
 
     // set up optimization passes
-    JuliaModuleProvider = new ExistingModuleProvider(jl_Module);
-    FPM = new FunctionPassManager(JuliaModuleProvider);
+    FPM = new FunctionPassManager(jl_Module);
     FPM->add(new TargetData(*jl_ExecutionEngine->getTargetData()));
     FPM->add(createPromoteMemoryToRegisterPass());
     FPM->add(createInstructionCombiningPass());

@@ -97,7 +97,7 @@ static const Type *FT(const Type *t)
 // reinterpret-cast to float
 static Value *FP(Value *v)
 {
-    if (v->getType()->isFloatingPoint())
+    if (v->getType()->isFloatingPointTy())
         return v;
     return builder.CreateBitCast(v, FT(v->getType()));
 }
@@ -280,7 +280,7 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
         fy = FP(emit_expr(args[2],ctx,true));
         fxts[0] = fx->getType(); fxts[1] = fy->getType();
         if (fxts[0] != fxts[1] ||
-            !fxts[0]->isFloatingPoint() || !fxts[1]->isFloatingPoint())
+            !fxts[0]->isFloatingPointTy() || !fxts[1]->isFloatingPointTy())
             jl_error("invalid arguments to pow_float");
         return builder.CreateCall2(Intrinsic::getDeclaration(jl_Module,
                                                              Intrinsic::pow,
@@ -290,7 +290,7 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
         fx = FP(x);
         fy = emit_expr(args[2],ctx,true);
         fxts[0] = fx->getType(); fxts[1] = fy->getType();
-        if (!fxts[0]->isFloatingPoint() || fxts[1] != T_int32)
+        if (!fxts[0]->isFloatingPointTy() || fxts[1] != T_int32)
             jl_error("invalid arguments to powi_float");
         return builder.CreateCall2(Intrinsic::getDeclaration(jl_Module,
                                                              Intrinsic::powi,
