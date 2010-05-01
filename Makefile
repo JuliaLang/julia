@@ -8,7 +8,7 @@ LLT = $(LLTDIR)/libllt.a
 
 include ./Make.inc.$(shell uname)
 
-FLAGS = -falign-functions -Wall -Wno-strict-aliasing -I$(LLTDIR) $(HFILEDIRS:%=-I%) $(LIBDIRS:%=-L%) $(CFLAGS) -D___LIBRARY $(CONFIG)
+FLAGS = -falign-functions -Wall -Wno-strict-aliasing -I$(LLTDIR) $(HFILEDIRS:%=-I%) $(LIBDIRS:%=-L%) $(CFLAGS) -D___LIBRARY $(CONFIG) -I$(shell llvm-config --includedir)
 LIBFILES = $(LLT) $(GAMBITLIB)
 LIBS = $(LIBFILES) -lutil -ldl -lm -lgc $(shell llvm-config --ldflags --libs core engine jit interpreter bitreader) -lreadline $(OSLIBS)
 
