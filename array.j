@@ -49,11 +49,6 @@ reshape{T,n}(a::Array{T,n}, dims...) = do (b = zeros(T, dims...),
 (.*)(x::Vector, y::Vector) = [ x[i] * y[i] | i=1:length(x) ]
 (./)(x::Vector, y::Vector) = [ x[i] / y[i] | i=1:length(x) ]
 
-(+)(x::Matrix, y::Matrix) = [ x[i,j] + y[i,j] | i=1:size(x,1), j=1:size(x,2) ]
-(-)(x::Matrix, y::Matrix) = [ x[i,j] - y[i,j] | i=1:size(x,1), j=1:size(x,2) ]
-(.*)(x::Matrix, y::Matrix) = [ x[i,j] .* y[i,j] | i=1:size(x,1), j=1:size(x,2) ]
-(./)(x::Matrix, y::Matrix) = [ x[i,j] ./ y[i,j] | i=1:size(x,1), j=1:size(x,2) ]
-
 (+)(x::Scalar, y::Matrix) = [ x + y[i,j] | i=1:size(y,1), j=1:size(y,2) ]
 (-)(x::Scalar, y::Matrix) = [ x - y[i,j] | i=1:size(y,1), j=1:size(y,2) ]
 (.*)(x::Scalar, y::Matrix) = [ x .* y[i,j] | i=1:size(y,1), j=1:size(y,2) ]
@@ -63,6 +58,11 @@ reshape{T,n}(a::Array{T,n}, dims...) = do (b = zeros(T, dims...),
 (-)(x::Matrix, y::Scalar) = [ x[i,j] - y | i=1:size(x,1), j=1:size(x,2) ]
 (.*)(x::Matrix, y::Scalar) = [ x[i,j] .* y | i=1:size(x,1), j=1:size(x,2) ]
 (./)(x::Matrix, y::Scalar) = [ x[i,j] ./ y | i=1:size(x,1), j=1:size(x,2) ]
+
+(+)(x::Matrix, y::Matrix) = [ x[i,j] + y[i,j] | i=1:size(x,1), j=1:size(x,2) ]
+(-)(x::Matrix, y::Matrix) = [ x[i,j] - y[i,j] | i=1:size(x,1), j=1:size(x,2) ]
+(.*)(x::Matrix, y::Matrix) = [ x[i,j] .* y[i,j] | i=1:size(x,1), j=1:size(x,2) ]
+(./)(x::Matrix, y::Matrix) = [ x[i,j] ./ y[i,j] | i=1:size(x,1), j=1:size(x,2) ]
 
 function (==)(x::Array, y::Array)
     if (x.dims != y.dims)
@@ -195,9 +195,9 @@ end
 
 # Sort
 
-sort (a::Vector) = sort (a, 1, length(a))
+sort(a::Vector) = sort(a, 1, length(a))
 
-function sort (a::Vector, low, high)
+function sort(a::Vector, low, high)
     i = low
     j = high
 
