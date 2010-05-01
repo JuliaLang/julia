@@ -555,11 +555,26 @@
 
    (pattern-lambda
     (hcat (call (-/ |\||) expr (= i range)) . rest)
-    `(comprehension ,expr (= ,i ,range) ,@rest))
+    `(comprehension-int ,expr (= ,i ,range) ,@rest))
 
    (pattern-lambda
     (hcat (= (call (-/ |\||) expr i) range) . rest)
-    `(comprehension ,expr (= ,i ,range) ,@rest))
+    `(comprehension-int ,expr (= ,i ,range) ,@rest))
+
+    (pattern-lambda
+     (comprehension-int expr . ranges)
+     `(comprehension
+       ,expr
+       ,@(map (lambda (r) (pattern-expand
+			   (list
+			    (pattern-lambda (: a b) `(call (top Range) ,a 1 ,b))
+			    (pattern-lambda (: a b c) `(call (top Range) ,a ,b ,c)) )
+			   r))
+	      ranges) ))
+
+    (pattern-lambda
+     (comprehension-int expr . ranges)
+     `(comprehension ,expr ,@ranges))
 
 )) ;; identify-comprehensions
 
@@ -573,8 +588,6 @@
 
       ;; evaluate one expression to figure out type and size
       ;; compute just one value by inserting a break inside loops
-      ;; TODO: This should be cleaned up by handling all the 
-      ;; appropriate cases of vectors, ranges, and for loop ranges.
       (define (evaluate-one ranges)
         (if (null? ranges)
 	    `(= ,oneresult ,expr)

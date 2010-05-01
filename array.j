@@ -61,16 +61,7 @@ diag(A::Matrix) = [ A[i,i] | i=1:min(size(A)) ]
 (*)(A::Matrix, B::Vector) = [ dot(A[i,:],B) | i=1:size(A,1) ]
 (*)(A::Matrix, B::Matrix) = [ dot(A[i,:],B[:,j]) | i=1:size(A,1), j=1:size(B,2) ]
 
-function colon(start::Int32, stop::Int32, stride::Int32)
-    len = div((stop-start),stride) + 1
-    x = zeros(Int32, len)
-    ind = 1
-    for i=start:stride:stop
-        x[ind] = i
-        ind = ind+1
-    end
-    return x
-end
+colon(start::Int32, stop::Int32, stride::Int32) = [ i | i=start:stride:stop ]
 
 ## Indexing: ref()
 #TODO: Out-of-bound checks
