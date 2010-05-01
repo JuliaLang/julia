@@ -17,9 +17,20 @@ jl_comprehension_zeros{T,n}(oneresult::Tensor{T,n}, dims...) = Array(T, dims...)
 
 ones(m::Size) = [ 1.0 | i=1:m ]
 ones(m::Size, n::Size) = [ 1.0 | i=1:m, j=1:n ]
+ones(Type, m::Size) = [ 1::Type | i=1:m ]
+ones(Type, m::Size, n::Size) = [ 1::Type | i=1:m, j=1:n ]
 
 rand(m::Size) = [ rand() | i=1:m ]
 rand(m::Size, n::Size) = [ rand() | i=1:m, j=1:n ]
+
+colon(start::Int32, stop::Int32, stride::Int32) = [ i | i=start:stride:stop ]
+
+copy(a::Vector) = [ a[i] | i=1:length(a) ]
+copy(a::Matrix) = [ a[i,j] | i=1:size(a,1), j=1:size(a,2) ]
+
+reshape{T,n}(a::Array{T,n}, dims...) = do (b = zeros(T, dims...),
+                                           for i=1:numel(a); b[i] = a[i]; end,
+                                           b)
 
 (/)(x, y) = x./y
 
@@ -38,7 +49,20 @@ rand(m::Size, n::Size) = [ rand() | i=1:m, j=1:n ]
 (.*)(x::Vector, y::Vector) = [ x[i] * y[i] | i=1:length(x) ]
 (./)(x::Vector, y::Vector) = [ x[i] / y[i] | i=1:length(x) ]
 
+(+)(x::Scalar, y::Matrix) = [ x + y[i,j] | i=1:size(y,1), j=1:size(y,2) ]
+(-)(x::Scalar, y::Matrix) = [ x - y[i,j] | i=1:size(y,1), j=1:size(y,2) ]
+(.*)(x::Scalar, y::Matrix) = [ x .* y[i,j] | i=1:size(y,1), j=1:size(y,2) ]
+(./)(x::Scalar, y::Matrix) = [ x ./ y[i,j] | i=1:size(y,1), j=1:size(y,2) ]
+
+(+)(x::Matrix, y::Scalar) = [ x[i,j] + y | i=1:size(x,1), j=1:size(x,2) ]
+(-)(x::Matrix, y::Scalar) = [ x[i,j] - y | i=1:size(x,1), j=1:size(x,2) ]
+(.*)(x::Matrix, y::Scalar) = [ x[i,j] .* y | i=1:size(x,1), j=1:size(x,2) ]
+(./)(x::Matrix, y::Scalar) = [ x[i,j] ./ y | i=1:size(x,1), j=1:size(x,2) ]
+
 (+)(x::Matrix, y::Matrix) = [ x[i,j] + y[i,j] | i=1:size(x,1), j=1:size(x,2) ]
+(-)(x::Matrix, y::Matrix) = [ x[i,j] - y[i,j] | i=1:size(x,1), j=1:size(x,2) ]
+(.*)(x::Matrix, y::Matrix) = [ x[i,j] .* y[i,j] | i=1:size(x,1), j=1:size(x,2) ]
+(./)(x::Matrix, y::Matrix) = [ x[i,j] ./ y[i,j] | i=1:size(x,1), j=1:size(x,2) ]
 
 function (==)(x::Array, y::Array)
     if (x.dims != y.dims)
@@ -61,16 +85,8 @@ diag(A::Matrix) = [ A[i,i] | i=1:min(size(A)) ]
 (*)(A::Matrix, B::Vector) = [ dot(A[i,:],B) | i=1:size(A,1) ]
 (*)(A::Matrix, B::Matrix) = [ dot(A[i,:],B[:,j]) | i=1:size(A,1), j=1:size(B,2) ]
 
-function colon(start::Int32, stop::Int32, stride::Int32)
-    len = div((stop-start),stride) + 1
-    x = zeros(Int32, len)
-    ind = 1
-    for i=start:stride:stop
-        x[ind] = i
-        ind = ind+1
-    end
-    return x
-end
+kron(a::Matrix, b::Matrix) = reshape ([a[i,j]*b[k,l] | i=1:size(a,1), j=1:size(a,2), k=1:size(b,1), l=1:size(b,2) ],
+                                      size(a,1)*size(b,1), size(a,2)*size(b,2))
 
 ## Indexing: ref()
 #TODO: Out-of-bound checks
@@ -179,9 +195,9 @@ end
 
 # Sort
 
-sort (a::Vector) = sort (a, 1, length(a))
+sort(a::Vector) = sort(a, 1, length(a))
 
-function sort (a::Vector, low, high)
+function sort(a::Vector, low, high)
     i = low
     j = high
 
