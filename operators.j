@@ -50,11 +50,11 @@ end
 promote() = ()
 promote(x) = (x,)
 promote{T,S}(x::T, y::S) =
-    (convert(x,promote_type(T,S)), convert(y,promote_type(T,S)))
+    (convert(promote_type(T,S),x), convert(promote_type(T,S),y))
 function promote(xs...)
     t = promote_type(typeof(xs[1]), typeof(xs[2]))
     for i=3:length(xs)
         t = promote_type(t,xs[i])
     end
-    map(x->convert(x,t), xs)
+    map(x->convert(t,x), xs)
 end

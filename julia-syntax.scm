@@ -1096,7 +1096,7 @@ So far only the second case can actually occur.
 		  (rhs (closure-convert- (caddr e) vinfo)))
 	      (let ((rhs (if (eq? t 'Any)
 			     rhs
-			     `(call (top convert) ,rhs ,t))))
+			     `(call (top convert) ,t ,rhs))))
 		(cond ((eq? l 'boxed)
 		       `(call (top boxset) ,(cadr e) ,rhs))
 		      ((number? l)

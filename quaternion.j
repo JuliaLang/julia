@@ -3,12 +3,17 @@ struct Quaternion{T} <: Number
     q1::Real{T}
     q2::Real{T}
     q3::Real{T}
-
-    convert(z::Complex) = Quaternion(re(z),im(z),0,0)
-    convert(x::Real)    = Quaternion(x, 0, 0, 0)
-    convert(z::Quaternion) = Quaternion(convert(z.q0,T), convert(z.q1,T),
-                                        convert(z.q2,T), convert(z.q3,T))
 end
+
+convert{T}(::Type{Quaternion{T}}, x::Real) =
+    Quaternion(convert(T,x), convert(T,0), convert(T,0), convert(T,0))
+
+convert{T}(::Type{Quaternion{T}}, z::Complex) =
+    Quaternion(convert(T,re(z)), convert(T,im(z)), convert(T,0), convert(T,0))
+
+convert{T}(::Type{Quaternion{T}}, z::Quaternion) =
+    Quaternion(convert(T,z.q0), convert(T,z.q1),
+               convert(T,z.q2), convert(T,z.q3))
 
 promote_table{T,S}(::Type{Complex{T}}, ::Type{Quaternion{S}}) =
     Quaternion{promote_type(T,S)}

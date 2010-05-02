@@ -123,7 +123,7 @@ function bar{T}(x::T)
 end
 assert(bar(3.0) == Complex(3.0,0.0))
 
-z = Complex{Float64}.convert(2)
+z = convert(Complex{Float64},2)
 assert(z == Complex(2.0,0.0))
 
 # misc

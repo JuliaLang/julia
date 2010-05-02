@@ -74,10 +74,11 @@ jl_expr_t *jl_expr(jl_sym_t *head, size_t n, ...)
 
 jl_expr_t *jl_exprn(jl_sym_t *head, size_t n)
 {
-    jl_value_t *ctor_args[2];
-    ctor_args[0] = (jl_value_t*)head;
-    ctor_args[1] = (jl_value_t*)jl_alloc_tuple(n);
-    return (jl_expr_t*)jl_apply(jl_expr_type->fnew, ctor_args, 2);
+    jl_expr_t *ex = (jl_expr_t*)allocb(sizeof(jl_expr_t));
+    ex->type = (jl_type_t*)jl_expr_type;
+    ex->head = head;
+    ex->args = jl_alloc_tuple(n);
+    return ex;
 }
 
 JL_CALLABLE(jl_f_is)
@@ -113,10 +114,7 @@ JL_CALLABLE(jl_f_istype)
     JL_NARGS(istype, 2, 2);
     if (!jl_is_typector(args[1]))
         JL_TYPECHK(istype, type, args[1]);
-    if (jl_is_tuple(args[0]))
-        return (jl_subtype(args[0],args[1],1) ? jl_true : jl_false);
-    return (jl_subtype((jl_value_t*)jl_typeof(args[0]),args[1],0)
-            ? jl_true : jl_false);
+    return (jl_subtype(args[0],args[1],1) ? jl_true : jl_false);
 }
 
 JL_CALLABLE(jl_f_typeassert)
@@ -290,8 +288,8 @@ JL_CALLABLE(jl_f_set_field)
         jl_error("setfield: argument must be a struct");
     jl_struct_type_t *st = (jl_struct_type_t*)jl_typeof(v);
     size_t i = field_offset(st, (jl_sym_t*)args[1]);
-    ((jl_value_t**)v)[1+i] = jl_convert(args[2],
-                                        (jl_type_t*)jl_tupleref(st->types,i));
+    ((jl_value_t**)v)[1+i] = jl_convert((jl_type_t*)jl_tupleref(st->types,i),
+                                        args[2]);
     return v;
 }
 
@@ -366,7 +364,7 @@ JL_CALLABLE(jl_f_arrayset)
     if (i >= b->length)
         jl_errorf("array[%d]: index out of range", i+1);
     jl_type_t *el_type = (jl_type_t*)jl_tparam0(jl_typeof(b));
-    jl_value_t *rhs = jl_convert(args[2], el_type);
+    jl_value_t *rhs = jl_convert(el_type, args[2]);
     if (jl_is_bits_type(el_type)) {
         size_t nb = ((jl_bits_type_t*)el_type)->nbits/8;
         switch (nb) {
@@ -424,7 +422,7 @@ JL_CALLABLE(jl_f_instantiate_type)
 
 // --- conversions ---
 
-static jl_tuple_t *convert_tuple(jl_tuple_t *x, jl_tuple_t *to)
+static jl_tuple_t *convert_tuple(jl_tuple_t *to, jl_tuple_t *x)
 {
     if (to == jl_tuple_type)
         return x;
@@ -446,47 +444,39 @@ static jl_tuple_t *convert_tuple(jl_tuple_t *x, jl_tuple_t *to)
         else {
             return NULL;
         }
-        jl_tupleset(out, i, jl_convert(ce, (jl_type_t*)pe));
+        jl_tupleset(out, i, jl_convert((jl_type_t*)pe, ce));
     }
     return out;
 }
 
-jl_value_t *jl_convert(jl_value_t *x, jl_type_t *to)
+jl_function_t *jl_convert_gf;
+
+jl_value_t *jl_convert(jl_type_t *to, jl_value_t *x)
 {
-    jl_value_t *out;
-    if (jl_is_tuple(x) && jl_is_tuple(to)) {
-        out = (jl_value_t*)convert_tuple((jl_tuple_t*)x, (jl_tuple_t*)to);
-        if (out == NULL)
-            jl_error("convert: invalid tuple conversion");
-        return out;
-    }
-    jl_type_t *t = (jl_type_t*)jl_typeof(x);
-    if (jl_subtype((jl_value_t*)t, (jl_value_t*)to, 0))
-        return x;
-    jl_function_t *meth = NULL;
-    if (jl_is_bits_type(to)) {
-        meth = ((jl_bits_type_t*)to)->fconvert;
-    }
-    else if (jl_is_struct_type(to)) {
-        meth = ((jl_struct_type_t*)to)->fconvert;
-    }
-    else {
-        jl_error("convert: invalid conversion");
-    }
-    assert(meth != NULL);
-    out = jl_apply(meth, &x, 1);
-    if (!jl_subtype((jl_value_t*)jl_typeof(out), (jl_value_t*)to, 0))
-        jl_errorf("convert: conversion to %s failed",
-                  jl_tname((jl_value_t*)to)->name->name);
-    return out;
+    jl_value_t *args[2];
+    args[0] = (jl_value_t*)to; args[1] = x;
+    return jl_apply(jl_convert_gf, args, 2);
 }
 
 JL_CALLABLE(jl_f_convert)
 {
     JL_NARGS(convert, 2, 2);
-    if (!jl_is_typector(args[1]))
-        JL_TYPECHK(convert, type, args[1]);
-    return jl_convert(args[0], (jl_type_t*)args[1]);
+    if (!jl_is_typector(args[0]))
+        JL_TYPECHK(convert, type, args[0]);
+    jl_type_t *to = (jl_type_t*)args[0];
+    jl_value_t *x = args[1];
+    jl_value_t *out;
+    if (jl_is_tuple(x) && jl_is_tuple(to)) {
+        out = (jl_value_t*)convert_tuple((jl_tuple_t*)to, (jl_tuple_t*)x);
+        if (out == NULL)
+            jl_error("convert: invalid tuple conversion");
+        return out;
+    }
+    if (jl_subtype(x, (jl_value_t*)to, 1))
+        return x;
+    jl_errorf("cannot convert %s to %s",
+              jl_print_to_string(x), jl_print_to_string((jl_value_t*)to));
+    return (jl_value_t*)jl_null;
 }
 
 // --- printing ---
@@ -1078,6 +1068,11 @@ void jl_init_builtins()
 
     current_output_stream = ios_stdout;
 
+    jl_convert_gf = jl_new_generic_function(jl_symbol("convert"));
+    jl_add_method(jl_convert_gf,
+                  jl_tuple(2, jl_any_type, jl_any_type),
+                  jl_new_closure(jl_f_convert, NULL));
+
     add_builtin_func("is", jl_f_is);
     add_builtin_func("typeof", jl_f_typeof);
     add_builtin_func("subtype", jl_f_subtype);
@@ -1087,11 +1082,11 @@ void jl_init_builtins()
     add_builtin_func("error", jl_f_error);
     add_builtin_func("load", jl_f_load);
     add_builtin_func("tuple", jl_f_tuple);
-    add_builtin_func("convert", jl_f_convert);
     add_builtin_func("Union", jl_f_union);
     add_builtin_func("time_thunk", jl_f_time_thunk);
     add_builtin_func("method_exists", jl_f_methodexists);
     add_builtin_func("invoke", jl_f_invoke);
+    add_builtin("convert", (jl_value_t*)jl_convert_gf);
     add_builtin("print", (jl_value_t*)jl_print_gf);
     add_builtin("identity", (jl_value_t*)jl_identity_func);
     

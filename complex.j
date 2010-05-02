@@ -1,11 +1,12 @@
 struct Complex{T} <: Number
     re::Real{T}
     im::Real{T}
-
-    convert(x::T) = Complex(x, T.convert(0))
-    convert(x::Real) = Complex(T.convert(x), T.convert(0))
-    convert(z::Complex) = Complex(T.convert(z.re), T.convert(z.im))
 end
+
+convert{T}(::Type{Complex{T}}, x::T) = Complex(x, convert(T,0))
+convert{T}(::Type{Complex{T}}, x::Real) = Complex(convert(T,x), convert(T,0))
+convert{T}(::Type{Complex{T}}, z::Complex) =
+    Complex(convert(T,z.re),convert(T,z.im))
 
 promote_table{T,S}(::Type{Real{T}}, ::Type{Complex{S}}) =
     Complex{promote_type(T,S)}

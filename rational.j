@@ -1,10 +1,12 @@
 struct Rational{T} <: Real
     num::Int{T}
     den::Int{T}
-
-    convert(x::Int) = Rational(convert(x,T),convert(1,T))
-    convert(x::Rational) = Rational(convert(x.num,T),convert(x.den,T))
 end
+
+convert{T}(::Type{Rational{T}}, x::Int) = Rational(convert(T,x), convert(T,1))
+
+convert{T}(::Type{Rational{T}}, x::Rational) =
+    Rational(convert(T,x.num),convert(T,x.den))
 
 promote_table{T,S}(::Type{Int{T}}, ::Type{Rational{S}}) =
     Rational{promote_type(T,S)}

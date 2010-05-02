@@ -108,7 +108,6 @@ typedef struct {
     jl_tuple_t *names;
     jl_tuple_t *types;
     jl_function_t *fnew;
-    jl_function_t *fconvert;
     // hidden fields:
     uptrint_t uid;
 } jl_struct_type_t;
@@ -118,7 +117,6 @@ typedef struct {
     jl_typename_t *name;
     jl_tag_type_t *super;
     jl_tuple_t *parameters;
-    jl_function_t *fconvert;
     // hidden fields:
     size_t nbits;
     uptrint_t uid;
@@ -410,7 +408,7 @@ jl_value_t *jl_parse_file(const char *fname);
 // some useful functions
 void jl_print(jl_value_t *v);
 char *jl_print_to_string(jl_value_t *v);
-jl_value_t *jl_convert(jl_value_t *x, jl_type_t *to);
+jl_value_t *jl_convert(jl_type_t *to, jl_value_t *x);
 
 // modules
 extern jl_module_t *jl_system_module;
