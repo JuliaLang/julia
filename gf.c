@@ -162,7 +162,7 @@ jl_methlist_t *jl_method_table_assoc(jl_methtable_t *mt,
             jl_tupleset(tt, i, a);
         }
         while (gm != NULL) {
-            env = jl_type_conform((jl_type_t*)tt, gm->sig);
+            env = jl_type_match((jl_type_t*)tt, gm->sig);
             if (env != (jl_value_t*)jl_false) break;
             gm = gm->next;
         }
@@ -184,7 +184,7 @@ jl_methlist_t *jl_method_table_assoc(jl_methtable_t *mt,
 
 static int args_match_generic(jl_type_t *a, jl_type_t *b)
 {
-    return (jl_type_conform_morespecific(a,b) != (jl_value_t*)jl_false);
+    return (jl_type_match_morespecific(a,b) != (jl_value_t*)jl_false);
 }
 
 static int args_match(jl_type_t *a, jl_type_t *b)

@@ -89,6 +89,12 @@ JL_CALLABLE(jl_f_is)
     return jl_false;
 }
 
+JL_CALLABLE(jl_f_no_function)
+{
+    jl_error("function not defined");
+    return (jl_value_t*)jl_null;
+}
+
 JL_CALLABLE(jl_f_identity)
 {
     JL_NARGS(identity, 1, 1);
@@ -122,20 +128,20 @@ JL_CALLABLE(jl_f_typeassert)
     JL_NARGS(typeassert, 2, 2);
     if (!jl_is_typector(args[1]))
         JL_TYPECHK(typeassert, type, args[1]);
-    int ok = jl_is_tuple(args[0]) ?
-        jl_subtype(args[0],args[1],1) :
-        jl_subtype((jl_value_t*)jl_typeof(args[0]),args[1],0);
-    if (!ok)
+    if (!jl_subtype(args[0],args[1],1))
         jl_error("type assertion failed");
     return args[0];
 }
-
-static jl_value_t *jl_arrayref(jl_array_t *a, size_t i);
 
 JL_CALLABLE(jl_f_apply)
 {
     JL_NARGSV(apply, 1);
     JL_TYPECHK(apply, function, args[0]);
+    if (nargs == 2) {
+        JL_TYPECHK(apply, tuple, args[1]);
+        return jl_apply((jl_function_t*)args[0], &jl_tupleref(args[1],0),
+                        ((jl_tuple_t*)args[1])->length);
+    }
     size_t n=0, i, j;
     for(i=1; i < nargs; i++) {
         JL_TYPECHK(apply, tuple, args[i]);
@@ -989,6 +995,8 @@ JL_CALLABLE(jl_f_add_method)
                   (jl_function_t*)args[2]);
     return args[0];
 }
+
+// --- generic function reflection ---
 
 jl_methlist_t *jl_method_table_assoc(jl_methtable_t *mt,
                                      jl_value_t **args, size_t nargs, int t);

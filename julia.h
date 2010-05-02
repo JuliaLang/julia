@@ -326,13 +326,14 @@ int jl_tuple_subtype(jl_value_t **child, size_t cl,
                      jl_value_t **parent, size_t pl, int ta, int morespecific);
 int jl_subtype(jl_value_t *a, jl_value_t *b, int ta);
 int jl_type_morespecific(jl_value_t *a, jl_value_t *b, int ta);
-jl_value_t *jl_type_conform(jl_type_t *a, jl_type_t *b);
-jl_value_t *jl_type_conform_morespecific(jl_type_t *a, jl_type_t *b);
+jl_value_t *jl_type_match(jl_type_t *a, jl_type_t *b);
+jl_value_t *jl_type_match_morespecific(jl_type_t *a, jl_type_t *b);
 int jl_types_equal(jl_value_t *a, jl_value_t *b);
 int jl_types_equal_generic(jl_value_t *a, jl_value_t *b);
 jl_tuple_t *jl_compute_type_union(jl_tuple_t *types);
 
 // type constructors
+jl_typename_t *jl_new_typename(jl_sym_t *name);
 jl_typector_t *jl_new_type_ctor(jl_tuple_t *params, jl_type_t *body);
 jl_type_t *jl_apply_type_ctor(jl_typector_t *tc, jl_tuple_t *params);
 jl_type_t *jl_instantiate_type_with(jl_type_t *t, jl_value_t **env, size_t n);
@@ -344,6 +345,8 @@ jl_tag_type_t *jl_new_tagtype(jl_value_t *name, jl_tag_type_t *super,
 jl_struct_type_t *jl_new_struct_type(jl_sym_t *name, jl_tag_type_t *super,
                                      jl_tuple_t *parameters,
                                      jl_tuple_t *fnames, jl_tuple_t *ftypes);
+jl_bits_type_t *jl_new_bitstype(jl_value_t *name, jl_tag_type_t *super,
+                                jl_tuple_t *parameters, size_t nbits);
 
 // constructors
 jl_value_t *jl_new_struct(jl_struct_type_t *type, ...);
@@ -367,6 +370,7 @@ jl_value_t *jl_box_int16(int16_t x);
 jl_value_t *jl_box_uint16(uint16_t x);
 jl_value_t *jl_box_int32(int32_t x);
 jl_value_t *jl_box_uint32(uint32_t x);
+jl_value_t *jl_new_box_int32(int32_t x);
 jl_value_t *jl_new_box_uint32(uint32_t x);
 jl_value_t *jl_box_int64(int64_t x);
 jl_value_t *jl_box_uint64(uint64_t x);
@@ -394,6 +398,7 @@ void jl_no_method_error(jl_sym_t *name, jl_value_t **args, size_t nargs);
 
 // initialization functions
 void jl_init_types();
+void jl_init_builtin_types();
 void jl_init_frontend();
 void jl_shutdown_frontend();
 void jl_init_builtins();
@@ -450,6 +455,8 @@ jl_value_t *jl_apply(jl_function_t *f, jl_value_t **args, uint32_t nargs)
     return f->fptr(f->env, args, nargs);
 }
 
+JL_CALLABLE(jl_f_no_function);
+JL_CALLABLE(jl_f_identity);
 JL_CALLABLE(jl_f_tuple);
 JL_CALLABLE(jl_f_arrayset);
 JL_CALLABLE(jl_apply_generic);

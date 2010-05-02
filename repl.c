@@ -175,6 +175,7 @@ void julia_init()
 {
     jl_init_frontend();
     jl_init_types();
+    jl_init_builtin_types();
     jl_init_modules();
     jl_init_builtins();
     jl_init_codegen();
