@@ -105,7 +105,7 @@ JL_CALLABLE(jl_f_subtype)
     JL_NARGS(subtype, 2, 2);
     if (!jl_is_typector(args[1]))
         JL_TYPECHK(subtype, type, args[1]);
-    return (jl_subtype(args[0],args[1],0,0) ? jl_true : jl_false);
+    return (jl_subtype(args[0],args[1],0) ? jl_true : jl_false);
 }
 
 JL_CALLABLE(jl_f_istype)
@@ -114,8 +114,8 @@ JL_CALLABLE(jl_f_istype)
     if (!jl_is_typector(args[1]))
         JL_TYPECHK(istype, type, args[1]);
     if (jl_is_tuple(args[0]))
-        return (jl_subtype(args[0],args[1],1,0) ? jl_true : jl_false);
-    return (jl_subtype((jl_value_t*)jl_typeof(args[0]),args[1],0,0)
+        return (jl_subtype(args[0],args[1],1) ? jl_true : jl_false);
+    return (jl_subtype((jl_value_t*)jl_typeof(args[0]),args[1],0)
             ? jl_true : jl_false);
 }
 
@@ -125,8 +125,8 @@ JL_CALLABLE(jl_f_typeassert)
     if (!jl_is_typector(args[1]))
         JL_TYPECHK(typeassert, type, args[1]);
     int ok = jl_is_tuple(args[0]) ?
-        jl_subtype(args[0],args[1],1,0) :
-        jl_subtype((jl_value_t*)jl_typeof(args[0]),args[1],0,0);
+        jl_subtype(args[0],args[1],1) :
+        jl_subtype((jl_value_t*)jl_typeof(args[0]),args[1],0);
     if (!ok)
         jl_error("type assertion failed");
     return args[0];
@@ -461,7 +461,7 @@ jl_value_t *jl_convert(jl_value_t *x, jl_type_t *to)
         return out;
     }
     jl_type_t *t = (jl_type_t*)jl_typeof(x);
-    if (jl_subtype((jl_value_t*)t, (jl_value_t*)to, 0, 0))
+    if (jl_subtype((jl_value_t*)t, (jl_value_t*)to, 0))
         return x;
     jl_function_t *meth = NULL;
     if (jl_is_bits_type(to)) {
@@ -475,7 +475,7 @@ jl_value_t *jl_convert(jl_value_t *x, jl_type_t *to)
     }
     assert(meth != NULL);
     out = jl_apply(meth, &x, 1);
-    if (!jl_subtype((jl_value_t*)jl_typeof(out), (jl_value_t*)to, 0, 0))
+    if (!jl_subtype((jl_value_t*)jl_typeof(out), (jl_value_t*)to, 0))
         jl_errorf("convert: conversion to %s failed",
                   jl_tname((jl_value_t*)to)->name->name);
     return out;
@@ -579,13 +579,8 @@ static void print_function(jl_value_t *v)
     if (jl_is_typector(v)) {
         jl_print((jl_value_t*)((jl_typector_t*)v)->body);
     }
-    else if (jl_is_gf(v) || jl_is_typemap(v)) {
-        if (jl_is_gf(v)) {
-            ios_puts("#<generic-function ", s);
-        }
-        else {
-            ios_puts("#<typemap ", s);
-        }
+    else if (jl_is_gf(v)) {
+        ios_puts("#<generic-function ", s);
         ios_puts(jl_gf_name(v)->name, s);
         ios_putc('>', s);
 #ifdef DEBUG
@@ -837,8 +832,8 @@ static void check_supertype(jl_value_t *super, char *name)
 {
     if (!(/*jl_is_struct_type(super) || */jl_is_tag_type(super)) ||
         super == (jl_value_t*)jl_sym_type ||
-        jl_subtype(super,(jl_value_t*)jl_type_type,0,0) ||
-        jl_subtype(super,(jl_value_t*)jl_array_type,0,0)) {
+        jl_subtype(super,(jl_value_t*)jl_type_type,0) ||
+        jl_subtype(super,(jl_value_t*)jl_array_type,0)) {
         jl_errorf("invalid subtyping in definition of %s", name);
     }
 }
@@ -1005,29 +1000,6 @@ JL_CALLABLE(jl_f_add_method)
     return args[0];
 }
 
-jl_function_t *jl_new_typemap(jl_sym_t *name);
-
-JL_CALLABLE(jl_f_new_typemap)
-{
-    JL_NARGS(typemap, 1, 1);
-    JL_TYPECHK(typemap, symbol, args[0]);
-    return (jl_value_t*)jl_new_typemap((jl_sym_t*)args[0]);
-}
-
-JL_CALLABLE(jl_f_add_mapping)
-{
-    JL_NARGS(add_mapping, 3, 3);
-    assert(jl_is_function(args[0]));
-    if (!jl_is_typemap(args[0]))
-        jl_error("expected type map");
-    JL_TYPECHK(add_mapping, tuple, args[1]);
-    check_type_tuple((jl_tuple_t*)args[1]);
-    JL_TYPECHK(add_mapping, function, args[2]);
-    jl_add_method((jl_function_t*)args[0], (jl_tuple_t*)args[1],
-                  (jl_function_t*)args[2]);
-    return args[0];
-}
-
 jl_methlist_t *jl_method_table_assoc(jl_methtable_t *mt,
                                      jl_value_t **args, size_t nargs, int t);
 
@@ -1035,7 +1007,7 @@ JL_CALLABLE(jl_f_methodexists)
 {
     JL_NARGS(method_exists, 2, 2);
     JL_TYPECHK(method_exists, function, args[0]);
-    if (!jl_is_gf(args[0]) && !jl_is_typemap(args[0]))
+    if (!jl_is_gf(args[0]))
         jl_error("method_exists: not a generic function");
     JL_TYPECHK(method_exists, tuple, args[1]);
     check_type_tuple((jl_tuple_t*)args[1]);
@@ -1054,7 +1026,7 @@ JL_CALLABLE(jl_f_invoke)
     JL_TYPECHK(invoke, tuple, args[1]);
     check_type_tuple((jl_tuple_t*)args[1]);
     if (!jl_tuple_subtype(&args[2], nargs-2, &jl_tupleref(args[1],0),
-                          ((jl_tuple_t*)args[1])->length, 1, 0, 0))
+                          ((jl_tuple_t*)args[1])->length, 1, 0))
         jl_error("invoke: argument type error");
     jl_methlist_t *ml =
         jl_method_table_assoc(jl_gf_mtable(args[0]),
@@ -1143,8 +1115,6 @@ void jl_init_builtins()
     add_builtin_func("new_tag_type", jl_f_new_tag_type);
     add_builtin_func("new_generic_function", jl_f_new_generic_function);
     add_builtin_func("add_method", jl_f_add_method);
-    add_builtin_func("new_typemap", jl_f_new_typemap);
-    add_builtin_func("add_mapping", jl_f_add_mapping);
 
     // builtin types
     add_builtin("Any", (jl_value_t*)jl_any_type);
@@ -1152,7 +1122,7 @@ void jl_init_builtins()
     add_builtin("TypeVar", (jl_value_t*)jl_tvar_type);
     add_builtin("Tuple", (jl_value_t*)jl_tuple_type);
     add_builtin("NTuple", (jl_value_t*)jl_ntuple_type);
-    add_builtin("Type", (jl_value_t*)jl_type_type);
+    add_builtin("Type", (jl_value_t*)jl_type_typector);
     add_builtin("Symbol", (jl_value_t*)jl_sym_type);
     add_builtin("...", (jl_value_t*)jl_seq_type);
     add_builtin("Function", (jl_value_t*)jl_any_func);

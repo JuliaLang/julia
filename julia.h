@@ -167,6 +167,7 @@ typedef struct {
 } jl_expr_t;
 
 extern jl_tag_type_t *jl_any_type;
+extern jl_typector_t *jl_type_typector;
 extern jl_tag_type_t *jl_type_type;
 extern jl_struct_type_t *jl_typename_type;
 extern jl_struct_type_t *jl_sym_type;
@@ -301,7 +302,6 @@ extern jl_sym_t *closure_ref_sym;
 #define jl_is_array(v)       (((jl_tag_type_t*)jl_typeof(v))->name==jl_array_typename)
 #define jl_is_box(v)         (((jl_tag_type_t*)jl_typeof(v))->name==jl_box_typename)
 #define jl_is_gf(f)          (((jl_function_t*)(f))->fptr==jl_apply_generic)
-#define jl_is_typemap(f)     (((jl_function_t*)(f))->fptr==jl_apply_typemap)
 
 #define jl_gf_mtable(f) ((jl_methtable_t*)jl_t0(((jl_function_t*)(f))->env))
 #define jl_gf_name(f) ((jl_sym_t*)jl_t1(((jl_function_t*)(f))->env))
@@ -325,10 +325,9 @@ jl_value_t *jl_full_type(jl_value_t *v);
 int jl_is_type(jl_value_t *v);
 int jl_has_typevars(jl_value_t *v);
 int jl_tuple_subtype(jl_value_t **child, size_t cl,
-                     jl_value_t **parent, size_t pl, int ta, int tb,
-                     int morespecific);
-int jl_subtype(jl_value_t *a, jl_value_t *b, int ta, int tb);
-int jl_type_morespecific(jl_value_t *a, jl_value_t *b, int ta, int tb);
+                     jl_value_t **parent, size_t pl, int ta, int morespecific);
+int jl_subtype(jl_value_t *a, jl_value_t *b, int ta);
+int jl_type_morespecific(jl_value_t *a, jl_value_t *b, int ta);
 jl_value_t *jl_type_conform(jl_type_t *a, jl_type_t *b);
 jl_value_t *jl_type_conform_morespecific(jl_type_t *a, jl_type_t *b);
 int jl_types_equal(jl_value_t *a, jl_value_t *b);
@@ -456,7 +455,6 @@ jl_value_t *jl_apply(jl_function_t *f, jl_value_t **args, uint32_t nargs)
 JL_CALLABLE(jl_f_tuple);
 JL_CALLABLE(jl_f_arrayset);
 JL_CALLABLE(jl_apply_generic);
-JL_CALLABLE(jl_apply_typemap);
 
 #define JL_NARGS(fname, min, max)                               \
     if (nargs < min) jl_too_few_args(#fname, min);              \

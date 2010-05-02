@@ -161,16 +161,6 @@
 		,@(symbols->typevars sparams)))
      body)))
 
-(define (typemap-def-expr name sparams body types)
-  (gf-def-expr--
-   name '()
-   (if (null? sparams)
-       `(tuple ,@types)
-       `(call (lambda ,sparams
-		(tuple ,@types))
-	      ,@(symbols->typevars sparams)))
-   body 'new_typemap 'add_mapping))
-
 (define (struct-def-expr name params super fields)
   ; extract the name from a function def expr
   (define (f-exp-name e)
@@ -283,12 +273,6 @@
 		   `(function (call (curly ,name . ,sparams) . ,argl) ,body))
    (pattern-lambda (= (call name . argl) body)
 		   `(function (call ,name ,@argl) ,body))
-
-   ; typemap definitions
-   (pattern-lambda (=> (call (curly name . sparams) . types) body)
-		   (typemap-def-expr name sparams body types))
-   (pattern-lambda (=> (call name . types) body)
-		   (typemap-def-expr name '() body types))
 
    (pattern-lambda (-> a b)
 		   (let ((a (if (and (pair? a)
