@@ -230,7 +230,7 @@ function nCr(n::Int, r::Int)
     ans = nn = n - r + 1.0
     nn += 1.0
     rr = 2.0
-    while (rr <= r+0.0)
+    while (rr <= r)
         ans *= (nn/rr)
         rr += 1
         nn += 1

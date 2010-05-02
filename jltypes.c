@@ -1161,15 +1161,6 @@ int jl_subtype_le(jl_value_t *a, jl_value_t *b, int ta, int morespecific)
         }
     }
 
-    if (jl_is_union_type(a)) {
-        assert(!ta);
-        jl_tuple_t *ap = ((jl_uniontype_t*)a)->types;
-        for(i=0; i < ap->length; i++) {
-            if (!jl_subtype_le(jl_tupleref(ap,i), b, 0, morespecific))
-                return 0;
-        }
-        return 1;
-    }
     if (jl_is_union_type(b)) {
         jl_tuple_t *bp = ((jl_uniontype_t*)b)->types;
         for(i=0; i < bp->length; i++) {
@@ -1180,6 +1171,15 @@ int jl_subtype_le(jl_value_t *a, jl_value_t *b, int ta, int morespecific)
     }
 
     if (ta) a = (jl_value_t*)jl_typeof(a);
+
+    if (jl_is_union_type(a)) {
+        jl_tuple_t *ap = ((jl_uniontype_t*)a)->types;
+        for(i=0; i < ap->length; i++) {
+            if (!jl_subtype_le(jl_tupleref(ap,i), b, 0, morespecific))
+                return 0;
+        }
+        return 1;
+    }
 
     if ((jl_tag_type_t*)b == jl_any_type) return 1;
     if (a == b) return 1;

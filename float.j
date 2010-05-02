@@ -59,8 +59,8 @@ function hypot(x::Real, y::Real)
         r = y/x
         return x*sqrt(1.0+r*r)
     end
-    if y == 0.0
-        return 0.0
+    if y == 0
+        return convert(typeof(x),0)
     end
     r = x/y
     return y*sqrt(1.0+r*r)
