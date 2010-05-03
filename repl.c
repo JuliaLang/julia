@@ -404,6 +404,7 @@ static int down_callback(int count, int key) {
     return 0;
 }
 
+/*
 static int backspace_callback(int count, int key) {
     return 0;
     if (rl_point > 0) {
@@ -413,6 +414,7 @@ static int backspace_callback(int count, int key) {
     }
     return 0;
 }
+*/
 
 static jl_value_t *read_expr_ast_readline(char *prompt, int *end, int *doprint)
 {
