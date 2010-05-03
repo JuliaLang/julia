@@ -67,6 +67,9 @@ julia-release: $(OBJS) $(LIBFILES) julia-defs.s.bc
 
 debug release efence: %: julia-%
 
+test: debug
+	julia tests.j
+
 clean:
 	rm -f *.o
 	rm -f *.do
@@ -82,4 +85,4 @@ cleanall: clean
 	$(MAKE) -C $(LLTDIR) clean
 	$(MAKE) -C $(FLISPDIR) clean
 
-.PHONY: debug release efence clean cleanall
+.PHONY: debug release efence test clean cleanall

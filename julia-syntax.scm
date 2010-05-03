@@ -544,6 +544,10 @@
     (hcat (= (call (-/ |\||) expr i) range) . rest)
     `(comprehension-int ,expr (= ,i ,range) ,@rest))
 
+   (pattern-lambda
+    (hcat (call (-/ |\||) expr i) . rest)
+    `(comprehension-int ,expr ,i ,@rest))
+
     (pattern-lambda
      (comprehension-int expr . ranges)
      `(comprehension
