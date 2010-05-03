@@ -15,10 +15,10 @@ zeros(dims...) = zeros(Float64, dims...)
 
 jl_comprehension_zeros{T,n}(oneresult::Tensor{T,n}, dims...) = Array(T, dims...)
 
+ones(T::Type, m::Size) = [ convert(1,T) | i=1:m ]
+ones(T::Type, m::Size, n::Size) = [ convert(1,T) | i=1:m, j=1:n ]
 ones(m::Size) = [ 1.0 | i=1:m ]
 ones(m::Size, n::Size) = [ 1.0 | i=1:m, j=1:n ]
-ones(Type, m::Size) = [ 1::Type | i=1:m ]
-ones(Type, m::Size, n::Size) = [ 1::Type | i=1:m, j=1:n ]
 
 rand(m::Size) = [ rand() | i=1:m ]
 rand(m::Size, n::Size) = [ rand() | i=1:m, j=1:n ]
