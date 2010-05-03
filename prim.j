@@ -27,9 +27,8 @@ div(x::Int32, y::Int32) = boxsi32(sdiv_int(unbox32(x), unbox32(y)))
 (*)(a,b,c,d,e) = (*)((*)((*)((*)(a,b),c),d),e)
 function (*)(x1, x2, x3, xs...)
     accum = (*)((*)(x1,x2),x3)
-    n = length(xs)
-    for i=1:n
-        accum = accum * xs[i]
+    for x = xs
+        accum = accum * x
     end
     accum
 end
@@ -41,9 +40,8 @@ end
 (+)(a,b,c,d,e) = (+)((+)((+)((+)(a,b),c),d),e)
 function (+)(x1, x2, x3, xs...)
     accum = (+)((+)(x1,x2),x3)
-    n = length(xs)
-    for i=1:n
-        accum = accum + xs[i]
+    for x = xs
+        accum = accum + x
     end
     accum
 end

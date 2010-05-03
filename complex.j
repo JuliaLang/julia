@@ -5,13 +5,10 @@ end
 
 convert{T}(::Type{Complex{T}}, x::T) = Complex(x, convert(T,0))
 convert{T}(::Type{Complex{T}}, x::Real) = Complex(convert(T,x), convert(T,0))
-convert{T}(::Type{Complex{T}}, z::Complex) =
-    Complex(convert(T,z.re),convert(T,z.im))
+convert{T}(::Type{Complex{T}}, z::Complex) = Complex(convert(T,z.re),convert(T,z.im))
 
-promote_table{T,S}(::Type{Real{T}}, ::Type{Complex{S}}) =
-    Complex{promote_type(T,S)}
-promote_table{T,S}(::Type{Complex{T}}, ::Type{Complex{S}}) =
-    Complex{promote_type(T,S)}
+promote_table{T,S}(::Type{Complex{T}}, ::Type{Real{S}}) = Complex{promote_type(T,S)}
+promote_table{T,S}(::Type{Complex{T}}, ::Type{Complex{S}}) = Complex{promote_type(T,S)}
 
 function print(c::Complex)
     print(re(c))
