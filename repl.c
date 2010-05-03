@@ -53,9 +53,8 @@ static char jl_answer_color[] = "\033[0m\033[37m";
 static char jl_input_color[]  = "\033[1m\033[37m";
 static char jl_color_normal[] = "\033[0m\033[37m";
 
-static char jl_history_file[] = ".julia_history";
-
 char *julia_home = NULL; // load is relative to here
+static char *history_file = NULL;
 static int print_banner = 1;
 static int no_readline = 0;
 static int tab_width = 2;
@@ -238,10 +237,13 @@ static int history_offset = -1;
 #define history_rem(n) remove_history(n-history_base)
 
 static void init_history() {
+    char *home = getenv("HOME");
+    if (!home) return;
     using_history();
+    asprintf(&history_file, "%s/.julia_history", home);
     struct stat stat_info;
-    if (!stat(jl_history_file, &stat_info)) {
-        read_history(jl_history_file);
+    if (!stat(history_file, &stat_info)) {
+        read_history(history_file);
         for (;;) {
             HIST_ENTRY *entry = history_get(history_base);
             if (entry && isspace(entry->line[0]))
@@ -268,7 +270,7 @@ static void init_history() {
             }
         }
     } else if (errno == ENOENT) {
-        write_history(jl_history_file);
+        write_history(history_file);
     } else {
         jl_errorf("history file error: %s", strerror(errno));
     }
@@ -431,8 +433,9 @@ static jl_value_t *read_expr_ast_readline(char *prompt, int *end, int *doprint)
         HIST_ENTRY *entry = current_history();
         if (!entry || strcmp(input, entry->line)) {
             add_history(input);
-            append_history(1, jl_history_file);
             history_offset = -1;
+            if (history_file)
+                append_history(1, history_file);
         } else {
             history_offset = where_history();
         }
