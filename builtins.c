@@ -11,7 +11,7 @@
 #include <limits.h>
 #include <errno.h>
 #include <math.h>
-#ifndef NO_BOEHM_GC
+#ifdef BOEHM_GC
 #include <gc.h>
 #endif
 #include "llt.h"

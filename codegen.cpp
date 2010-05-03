@@ -21,7 +21,7 @@
 using namespace llvm;
 
 extern "C" {
-#ifndef NO_BOEHM_GC
+#ifdef BOEHM_GC
 #include <gc.h>
 #endif
 #include "llt.h"

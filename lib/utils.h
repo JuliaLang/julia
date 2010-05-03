@@ -40,6 +40,26 @@ STATIC_INLINE double fpart(double arg)
 
 #define ipart(x) trunc(x)
 
+numerictype_t effective_numerictype(double r);
+double conv_to_double(void *data, numerictype_t tag);
+void conv_from_double(void *data, double d, numerictype_t tag);
+int64_t conv_to_int64(void *data, numerictype_t tag);
+uint64_t conv_to_uint64(void *data, numerictype_t tag);
+int32_t conv_to_int32(void *data, numerictype_t tag);
+uint32_t conv_to_uint32(void *data, numerictype_t tag);
+#ifdef BITS64
+#define conv_to_long conv_to_int64
+#define conv_to_ulong conv_to_uint64
+#else
+#define conv_to_long conv_to_int32
+#define conv_to_ulong conv_to_uint32
+#endif
+int cmp_same_lt(void *a, void *b, numerictype_t tag);
+int cmp_same_eq(void *a, void *b, numerictype_t tag);
+int cmp_lt(void *a, numerictype_t atag, void *b, numerictype_t btag);
+int cmp_eq(void *a, numerictype_t atag, void *b, numerictype_t btag,
+           int equalnans);
+
 #ifdef ARCH_X86_64
 #  define LEGACY_REGS "=Q"
 #else

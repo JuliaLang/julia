@@ -4,11 +4,13 @@ OBJS = $(SRCS:%=%.o)
 DOBJS = $(SRCS:%=%.do)
 EXENAME = $(NAME)
 LLTDIR = lib
+FLISPDIR = flisp
 LLT = $(LLTDIR)/libllt.a
+FLISP = $(FLISPDIR)/libflisp.a
 
 include ./Make.inc.$(shell uname)
 
-FLAGS = -falign-functions -Wall -Wno-strict-aliasing -I$(LLTDIR) $(HFILEDIRS:%=-I%) $(LIBDIRS:%=-L%) $(CFLAGS) -D___LIBRARY $(CONFIG) -I$(shell llvm-config --includedir)
+FLAGS = -falign-functions -Wall -Wno-strict-aliasing -I$(FLISPDIR) -I$(LLTDIR) $(HFILEDIRS:%=-I%) $(LIBDIRS:%=-L%) $(CFLAGS) -D___LIBRARY $(CONFIG) -I$(shell llvm-config --includedir)
 LIBFILES = $(LLT) $(GAMBITLIB)
 LIBS = $(LIBFILES) -lutil -ldl -lm -lgc $(shell llvm-config --ldflags --libs core engine jit interpreter bitreader) -lreadline $(OSLIBS)
 
@@ -48,6 +50,9 @@ julia-defs.s.bc.inc: julia-defs.s.bc bin2hex.scm
 $(LLT): $(LLTDIR)/*.h $(LLTDIR)/*.c
 	cd $(LLTDIR) && $(MAKE)
 
+$(FLISP): $(FLISPDIR)/*.h $(FLISPDIR)/*.c
+	cd $(FLISPDIR) && $(MAKE)
+
 julia-debug: $(DOBJS) $(LIBFILES) julia-defs.s.bc
 	$(CXX) $(DEBUGFLAGS) $(DOBJS) -o $@ $(LIBS)
 	ln -sf $@ julia
@@ -75,5 +80,6 @@ clean:
 cleanall: clean
 	rm -rf $(EXENAME)-{debug,release,efence}
 	$(MAKE) -C $(LLTDIR) clean
+	$(MAKE) -C $(FLISPDIR) clean
 
 .PHONY: debug release efence clean cleanall

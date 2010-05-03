@@ -16,7 +16,7 @@
   We assume the LP64 convention for 64-bit platforms.
 */
 
-#ifndef NO_BOEHM_GC
+#ifdef BOEHM_GC
 // boehm GC allocator
 #include <gc.h>
 #define LLT_ALLOC(n) GC_MALLOC(n)

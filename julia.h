@@ -251,7 +251,7 @@ extern jl_sym_t *closure_ref_sym;
 #define NWORDS(sz) (((sz)+3)>>2)
 #endif
 
-#ifndef NO_BOEHM_GC
+#ifdef BOEHM_GC
 #define allocb(nb)    GC_MALLOC(nb)
 #define alloc_pod(nb) GC_MALLOC_ATOMIC(nb)
 #else
