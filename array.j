@@ -2,7 +2,7 @@ typealias Vector{T} Tensor{T,1}
 typealias Matrix{T} Tensor{T,2}
 typealias Indices{T} Union(Range, RangeFrom, RangeBy, RangeTo, Vector{T})
 
-## Basic functions
+# Basic functions
 size(a::Array) = a.dims
 
 size(t::Tensor, d) = size(t)[d]
@@ -32,18 +32,18 @@ reshape{T,n}(a::Array{T,n}, dims...) = do (b = zeros(T, dims...),
                                            for i=1:numel(a); b[i] = a[i]; end,
                                            b)
 
-(+)(x::Scalar, y::Vector)  = [ x + y[i] | i=1:length(y) ]
-(-)(x::Scalar, y::Vector)  = [ x - y[i] | i=1:length(y) ]
-(*)(x::Scalar, y::Vector)  = [ x * y[i] | i=1:length(y) ]
-(/)(x::Scalar, y::Vector)  = [ x / y[i] | i=1:length(y) ]
+(+)(x::Scalar, y::Vector) = [ x + y[i] | i=1:length(y) ]
+(-)(x::Scalar, y::Vector) = [ x - y[i] | i=1:length(y) ]
+(*)(x::Scalar, y::Vector) = [ x * y[i] | i=1:length(y) ]
+(/)(x::Scalar, y::Vector) = [ x / y[i] | i=1:length(y) ]
 
-(+)(x::Vector, y::Scalar)  = [ x[i] + y | i=1:length(x) ]
-(-)(x::Vector, y::Scalar)  = [ x[i] - y | i=1:length(x) ]
-(*)(x::Vector, y::Scalar)  = [ x[i] * y | i=1:length(x) ]
-(/)(x::Vector, y::Scalar)  = [ x[i] / y | i=1:length(x) ]
+(+)(x::Vector, y::Scalar) = [ x[i] + y | i=1:length(x) ]
+(-)(x::Vector, y::Scalar) = [ x[i] - y | i=1:length(x) ]
+(*)(x::Vector, y::Scalar) = [ x[i] * y | i=1:length(x) ]
+(/)(x::Vector, y::Scalar) = [ x[i] / y | i=1:length(x) ]
 
-(+)(x::Vector, y::Vector)  = [ x[i] + y[i] | i=1:length(x) ]
-(-)(x::Vector, y::Vector)  = [ x[i] - y[i] | i=1:length(x) ]
+(+)(x::Vector, y::Vector) = [ x[i] + y[i] | i=1:length(x) ]
+(-)(x::Vector, y::Vector) = [ x[i] - y[i] | i=1:length(x) ]
 (.*)(x::Vector, y::Vector) = [ x[i] * y[i] | i=1:length(x) ]
 (./)(x::Vector, y::Vector) = [ x[i] / y[i] | i=1:length(x) ]
 
@@ -57,8 +57,8 @@ reshape{T,n}(a::Array{T,n}, dims...) = do (b = zeros(T, dims...),
 (*)(x::Matrix, y::Scalar) = [ x[i,j] * y | i=1:size(x,1), j=1:size(x,2) ]
 (/)(x::Matrix, y::Scalar) = [ x[i,j] / y | i=1:size(x,1), j=1:size(x,2) ]
 
-(+)(x::Matrix, y::Matrix)  = [ x[i,j] + y[i,j] | i=1:size(x,1), j=1:size(x,2) ]
-(-)(x::Matrix, y::Matrix)  = [ x[i,j] - y[i,j] | i=1:size(x,1), j=1:size(x,2) ]
+(+)(x::Matrix, y::Matrix) = [ x[i,j] + y[i,j] | i=1:size(x,1), j=1:size(x,2) ]
+(-)(x::Matrix, y::Matrix) = [ x[i,j] - y[i,j] | i=1:size(x,1), j=1:size(x,2) ]
 (.*)(x::Matrix, y::Matrix) = [ x[i,j] * y[i,j] | i=1:size(x,1), j=1:size(x,2) ]
 (./)(x::Matrix, y::Matrix) = [ x[i,j] / y[i,j] | i=1:size(x,1), j=1:size(x,2) ]
 
@@ -179,7 +179,6 @@ next(a::Array,i) = (a[i],i+1)
 done(a::Array,i) = (i > numel(a))
 
 # Other functions
-
 diff(a::Vector) = [ a[i+1] - a[i] | i=1:length(a)-1 ]
 diff(a::Matrix) = diff(a, 1)
 
@@ -192,48 +191,41 @@ function diff(a::Matrix, dim)
 end
 
 # Sort
-
 sort(a::Vector) = sort(a, 1, length(a))
 
-function sort(a::Vector, low, high)
-    i = low
-    j = high
-
-    pivot = a[div((low+high),2)];
-
+function sort(a::Vector, lo, hi)
+    i, j = lo, hi
+    pivot = a[div((lo+hi),2)];
     # Partition
     while i <= j
         while a[i] < pivot; i += 1; end
         while a[j] > pivot; j -= 1; end
-
         if i <= j
-            temp = a[i]; a[i] = a[j]; a[j] = temp;
+            a[i], a[j] = a[j], a[i]
             i += 1;
             j -= 1;
         end
     end
-
     # Recursion for quicksort
-    if low < j; sort(a, low, j); end
-    if i < high; sort(a, i, high); end
-    a
+    if lo < j; sort(a, lo, j); end
+    if i < hi; sort(a, i, hi); end
+    return a
 end
 
 # Print arrays
 function printall{T}(a::Array{T,1})
     n = a.dims[1]
-    for i=1:n; print(a[i]); if i<n; print("\n"); end; end
+    for i = 1:n; print(a[i]); if i < n; print("\n"); end; end
 end
 
 function print{T}(a::Array{T,1})
     n = a.dims[1]
-
     if n < 10
-        for i=1:n; print(a[i]); if i<n; print("\n"); end; end
+        for i = 1:n; print(a[i]); if i < n; print("\n"); end; end
     else
-        for i=1:3; print(a[i]); print("\n"); end
+        for i = 1:3; print(a[i]); print("\n"); end
         print(":\n");
-        for i=n-2:n; print(a[i]); if i<n; print("\n"); end; end
+        for i = n-2:n; print(a[i]); if i < n; print("\n"); end; end
     end
 end
 
@@ -242,15 +234,12 @@ function printcols(a, start, stop, i)
 end
 
 function print{T}(a::Array{T,2})
-
     m = a.dims[1]
     n = a.dims[2]
-
     print_hdots = false
     print_vdots = false
     if 10 < m; print_vdots = true; end
     if 10 < n; print_hdots = true; end
-
     if !print_vdots && !print_hdots
         for i=1:m
             printcols(a, 1, n, i)

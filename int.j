@@ -109,7 +109,7 @@ function gcdx(a, b)
     if b == 0
         (a, 1, 0)
     else
-        m = a%b
+        m = a % b
         k = div((a-m), b)
         (g, x, y) = gcdx(b, m)
         (g, y, x-k*y)
@@ -118,14 +118,8 @@ end
 
 # multiplicative inverse of x mod m, false if none
 function invmod(n, m)
-    (g, x, y) = gcdx(n, m)
-    if g != 1
-        false
-    elseif x<0
-        m+x
-    else
-        x
-    end
+    g, x, y = gcdx(n, m)
+    g != 1 ? false : (x < 0 ? m + x : x)
 end
 
 function ^(x::Tensor, p::Int)
