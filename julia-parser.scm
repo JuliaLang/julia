@@ -246,7 +246,7 @@ TODO:
 	       (let ((then (parse-shift s)))
 		 (if (not (eq? (take-token s) ':))
 		     (error "colon expected in ? expression")
-		     (let ((els  (parse-shift s)))
+		     (let ((els  (parse-cond s)))
 		       (if (eq? (peek-token s) ':)
 			   (error "ambiguous use of colon in ? expression")
 			   (list 'if ex then els)))))))))
