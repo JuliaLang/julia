@@ -36,14 +36,14 @@ all(itr)  = reduce(all, itr)
 
 promote_table(::Type{Int32}, ::Type{Float64}) = Float64
 
-function promote_type(t::Type, s::Type)
-    if subtype(t,s) || subtype(s,t)
+function promote_type(T::Type, S::Type)
+    if T <: S || S <: T
         error("no method")
     end
-    if method_exists(promote_table,(t,s))
-        return promote_table(t,s)
+    if method_exists(promote_table,(T,S))
+        return promote_table(T,S)
     else
-        return promote_table(s,t)
+        return promote_table(S,T)
     end
 end
 

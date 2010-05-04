@@ -2,6 +2,9 @@ typealias Nullable{T} Union(T,())
 typealias Index Int32
 typealias Size  Int32
 
+(<:)(T::Type, S::Type) = subtype(T,S)
+(:>)(T::Type, S::Type) = subtype(S,T)
+
 ref(t::Tuple, i::Index) = tupleref(t, i)
 length(t::Tuple) = tuplelen(t)
 
