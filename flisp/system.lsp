@@ -18,21 +18,25 @@
 (define-macro (label name fn)
   `((lambda (,name) (set! ,name ,fn)) #f))
 
+(define (mapn f lsts)
+  (if (null? (car lsts))
+      ()
+      (cons (apply f (map1 (lambda (x) (car x)) lsts))
+	    (mapn  f (map1 (lambda (x) (cdr x)) lsts)))))
+
+(define (map1-other f lst acc)
+  (cdr
+   (prog1 acc
+	  (while (pair? lst)
+		 (begin (set! acc
+			      (cdr (set-cdr! acc (cons (f (car lst)) ()))))
+			(set! lst (cdr lst)))))))
+
 (define (map f lst . lsts)
-  (define (map1 f lst acc)
-    (cdr
-     (prog1 acc
-      (while (pair? lst)
-	     (begin (set! acc
-			  (cdr (set-cdr! acc (cons (f (car lst)) ()))))
-		    (set! lst (cdr lst)))))))
-  (define (mapn f lsts)
-    (if (null? (car lsts))
-	()
-	(cons (apply f (map1 car lsts (list ())))
-	      (mapn  f (map1 cdr lsts (list ()))))))
   (if (null? lsts)
-      (map1 f lst (list ()))
+      (if (builtin? f)
+	  (map1-other f lst (list ()))
+	  (map1 f lst))
       (mapn f (cons lst lsts))))
 
 (define-macro (let binds . body)

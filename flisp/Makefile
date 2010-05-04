@@ -36,16 +36,17 @@ flmain.do: flmain.c flisp.h
 $(LLT):
 	cd $(LLTDIR) && make
 
-$(LIBTARGET).da: $(DOBJS)
+$(LIBTARGET)-debug.a: $(DOBJS)
 	rm -rf $@
 	ar rs $@ $(DOBJS)
+	ln -sf $@ $(LIBTARGET).a
 
 $(LIBTARGET).a: $(OBJS)
 	rm -rf $@
 	ar rs $@ $(OBJS)
 
-debug: $(DOBJS) $(LIBFILES) $(LIBTARGET).da flmain.do
-	$(CC) $(DEBUGFLAGS) $(DOBJS) flmain.do -o $(EXENAME) $(LIBS) $(LIBTARGET).da
+debug: $(DOBJS) $(LIBFILES) $(LIBTARGET)-debug.a flmain.do
+	$(CC) $(DEBUGFLAGS) $(DOBJS) flmain.do -o $(EXENAME) $(LIBS) $(LIBTARGET).a
 	make test
 
 release: $(OBJS) $(LIBFILES) $(LIBTARGET).a flmain.o
@@ -55,5 +56,4 @@ clean:
 	rm -f *.o
 	rm -f *.do
 	rm -f *.a
-	rm -f *.da
 	rm -f $(EXENAME)

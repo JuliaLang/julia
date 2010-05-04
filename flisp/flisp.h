@@ -29,6 +29,13 @@ typedef struct _symbol_t {
     };
 } symbol_t;
 
+typedef struct {
+    value_t isconst;
+    value_t binding;   // global value binding
+    struct _fltype_t *type;
+    uint32_t id;
+} gensym_t;
+
 #define TAG_NUM      0x0
 #define TAG_CPRIM    0x1
 #define TAG_FUNCTION 0x2
@@ -75,7 +82,7 @@ typedef struct _symbol_t {
 #define vector_size(v) (((size_t*)ptr(v))[0]>>2)
 #define vector_setsize(v,n) (((size_t*)ptr(v))[0] = ((n)<<2))
 #define vector_elt(v,i) (((value_t*)ptr(v))[1+(i)])
-#define vector_grow_amt(x) ((x)<8 ? 4 : 6*((x)>>3))
+#define vector_grow_amt(x) ((x)<8 ? 5 : 6*((x)>>3))
 // functions ending in _ are unsafe, faster versions
 #define car_(v) (((cons_t*)ptr(v))->car)
 #define cdr_(v) (((cons_t*)ptr(v))->cdr)
@@ -323,6 +330,7 @@ value_t string_from_cstr(char *str);
 value_t string_from_cstrn(char *str, size_t n);
 int fl_isstring(value_t v);
 int fl_isnumber(value_t v);
+int fl_isgensym(value_t v);
 int fl_isiostream(value_t v);
 value_t cvalue_compare(value_t a, value_t b);
 int numeric_compare(value_t a, value_t b, int eq, int eqnans, char *fname);

@@ -145,6 +145,56 @@ value_t fl_iopeekc(value_t *args, u_int32_t nargs)
     return mk_wchar(wc);
 }
 
+static int is_uws(uint32_t wc)
+{
+    return (wc==9 || wc==10 || wc==11 || wc==12 || wc==13 || wc==32 ||
+            wc==133 || wc==160 || wc==5760 || wc==6158 || wc==8192 ||
+            wc==8193 || wc==8194 || wc==8195 || wc==8196 || wc==8197 ||
+            wc==8198 || wc==8199 || wc==8200 || wc==8201 || wc==8202 ||
+            wc==8232 || wc==8233 || wc==8239 || wc==8287 || wc==12288);
+}
+
+value_t fl_skipws(value_t *args, u_int32_t nargs)
+{
+    argcount("skip-ws", nargs, 2);
+    ios_t *s = toiostream(args[0], "skip-ws");
+    int newlines = (args[1]!=FL_F);
+    uint32_t wc;
+    if (ios_peekutf8(s, &wc) == IOS_EOF)
+        return FL_EOF;
+    while (!ios_eof(s) && is_uws(wc) && (newlines || wc!=10)) {
+        ios_getutf8(s, &wc);
+        ios_peekutf8(s, &wc);
+    }
+    return FL_T;
+}
+
+static int jl_id_char(uint32_t wc)
+{
+    return ((wc >= 'A' && wc <= 'Z') ||
+            (wc >= 'a' && wc <= 'z') ||
+            (wc >= '0' && wc <= '9') ||
+            wc == '_');
+}
+
+value_t fl_accum_julia_symbol(value_t *args, u_int32_t nargs)
+{
+    argcount("accum-julia-symbol", nargs, 2);
+    ios_t *s = toiostream(args[1], "accum-julia-symbol");
+    if (!iscprim(args[0]) || ((cprim_t*)ptr(args[0]))->type != wchartype)
+        type_error("accum-julia-symbol", "wchar", args[0]);
+    uint32_t wc = *(uint32_t*)cp_data((cprim_t*)ptr(args[0]));
+    ios_t str;
+    ios_mem(&str, 0);
+    while (!ios_eof(s) && jl_id_char(wc)) {
+        ios_getutf8(s, &wc);
+        ios_pututf8(&str, wc);
+        ios_peekutf8(s, &wc);
+    }
+    ios_pututf8(&str, 0);
+    return symbol(str.buf);
+}
+
 value_t fl_ioputc(value_t *args, u_int32_t nargs)
 {
     argcount("io.putc", nargs, 2);
@@ -333,7 +383,9 @@ value_t fl_ioreaduntil(value_t *args, u_int32_t nargs)
     if (dest.buf != data) {
         // outgrew initial space
         cv->data = dest.buf;
+#ifndef BOEHM_GC
         cv_autorelease(cv);
+#endif
     }
     ((char*)cv->data)[n] = '\0';
     if (n == 0 && ios_eof(src))
@@ -368,22 +420,20 @@ value_t stream_to_string(value_t *ps)
     value_t str;
     size_t n;
     ios_t *st = value2c(ios_t*,*ps);
-    //if (st->buf == &st->local[0]) {
-    // always copy, to allow flisp objects and ios library to have
-    // different memory management domains.
-    n = st->size;
-    str = cvalue_string(n);
-    memcpy(cvalue_data(str), value2c(ios_t*,*ps)->buf, n);
-    ios_trunc(st, 0);
-        /*
+    if (st->buf == &st->local[0]) {
+        n = st->size;
+        str = cvalue_string(n);
+        memcpy(cvalue_data(str), value2c(ios_t*,*ps)->buf, n);
+        ios_trunc(st, 0);
     }
     else {
         char *b = ios_takebuf(st, &n); n--;
         b[n] = '\0';
         str = cvalue_from_ref(stringtype, b, n, FL_NIL);
+#ifndef BOEHM_GC
         cv_autorelease((cvalue_t*)ptr(str));
+#endif
     }
-        */
     return str;
 }
 
@@ -420,6 +470,9 @@ static builtinspec_t iostreamfunc_info[] = {
     { "io.readuntil", fl_ioreaduntil },
     { "io.copyuntil", fl_iocopyuntil },
     { "io.tostring!", fl_iotostring },
+
+    { "skip-ws", fl_skipws },
+    { "accum-julia-symbol", fl_accum_julia_symbol },
     { NULL, NULL }
 };
 

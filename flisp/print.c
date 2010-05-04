@@ -168,7 +168,8 @@ static inline int tinyp(value_t v)
         return (u8_strwidth(symbol_name(v)) < SMALL_STR_LEN);
     if (fl_isstring(v))
         return (cv_len((cvalue_t*)ptr(v)) < SMALL_STR_LEN);
-    return (isfixnum(v) || isbuiltin(v));
+    return (isfixnum(v) || isbuiltin(v) || v==FL_F || v==FL_T || v==FL_NIL ||
+            v == FL_EOF);
 }
 
 static int smallp(value_t v)
@@ -757,5 +758,8 @@ void fl_print(ios_t *f, value_t v)
         memset(consflags, 0, 4*bitvector_nwords(heapsize/sizeof(cons_t)));
     }
 
-    htable_reset(&printconses, 32);
+    if ((iscons(v) || isvector(v) || isfunction(v) || iscvalue(v)) &&
+        !fl_isstring(v) && v!=FL_T && v!=FL_F && v!=FL_NIL) {
+        htable_reset(&printconses, 32);
+    }
 }

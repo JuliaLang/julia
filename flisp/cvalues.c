@@ -48,7 +48,7 @@ void add_finalizer(cvalue_t *cv)
 {
     if (nfinalizers == maxfinalizers) {
         size_t nn = (maxfinalizers==0 ? 256 : maxfinalizers*2);
-        cvalue_t **temp = (cvalue_t**)LLT_REALLOC(Finalizers, nn*sizeof(value_t));
+        cvalue_t **temp = (cvalue_t**)realloc(Finalizers, nn*sizeof(value_t));
         if (temp == NULL)
             lerror(MemoryError, "out of memory");
         Finalizers = temp;

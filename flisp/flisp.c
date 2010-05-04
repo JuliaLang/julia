@@ -289,13 +289,6 @@ value_t symbol(char *str)
     return tagptr(*pnode, TAG_SYM);
 }
 
-typedef struct {
-    value_t isconst;
-    value_t binding;   // global value binding
-    fltype_t *type;
-    uint32_t id;
-} gensym_t;
-
 static uint32_t _gensym_ctr=0;
 // two static buffers for gensym printing so there can be two
 // gensym names available at a time, mostly for compare()
@@ -311,6 +304,11 @@ value_t fl_gensym(value_t *args, uint32_t nargs)
     gs->isconst = 0;
     gs->type = NULL;
     return tagptr(gs, TAG_SYM);
+}
+
+int fl_isgensym(value_t v)
+{
+    return isgensym(v);
 }
 
 static value_t fl_gensymp(value_t *args, u_int32_t nargs)
@@ -1988,7 +1986,7 @@ static value_t _stacktrace(uint32_t top)
 void assign_global_builtins(builtinspec_t *b)
 {
     while (b->name != NULL) {
-        set(symbol(b->name), cbuiltin(b->name, b->fptr));
+        setc(symbol(b->name), cbuiltin(b->name, b->fptr));
         b++;
     }
 }
@@ -2124,6 +2122,33 @@ value_t fl_stacktrace(value_t *args, u_int32_t nargs)
     return _stacktrace(fl_throwing_frame ? fl_throwing_frame : curr_frame);
 }
 
+value_t fl_map1(value_t *args, u_int32_t nargs)
+{
+    argcount("map1", nargs, 2);
+    value_t lst = args[1];
+    value_t first = NIL;
+    value_t last = NIL;
+    fl_gc_handle(&lst);
+    fl_gc_handle(&first);
+    fl_gc_handle(&last);
+    PUSH(args[0]);
+    PUSH(NIL);
+    while (iscons(lst)) {
+        Stack[SP-1] = car_(lst);
+        Stack[SP-2] = args[0];
+        value_t v = fl_cons(_applyn(1), NIL);
+        if (first == NIL)
+            first = v;
+        else
+            cdr_(last) = v;
+        last = v;
+        lst = cdr_(lst);
+    }
+    POPN(2);
+    fl_free_gc_handles(3);
+    return first;
+}
+
 static builtinspec_t core_builtin_info[] = {
     { "function", fl_function },
     { "function:code", fl_function_code },
@@ -2137,6 +2162,7 @@ static builtinspec_t core_builtin_info[] = {
     { "copy-list", fl_copylist },
     { "append", fl_append },
     { "list*", fl_liststar },
+    { "map1", fl_map1 },
     { NULL, NULL }
 };
 

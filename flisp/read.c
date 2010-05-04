@@ -666,9 +666,11 @@ value_t fl_read_sexpr(value_t f)
     state.source = f;
     readstate = &state;
     assert(toktype == TOK_NONE);
+    fl_gc_handle(&tokval);
 
     v = do_read_sexpr(UNBOUND);
 
+    fl_free_gc_handles(1);
     readstate = state.prev;
     free_readstate(&state);
     return v;

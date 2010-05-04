@@ -18,7 +18,7 @@
 static value_t argv_list(int argc, char *argv[])
 {
     int i;
-    value_t lst, temp;
+    value_t lst=FL_NIL, temp;
     fl_gc_handle(&lst);
     fl_gc_handle(&temp);
     for(i=argc-1; i >= 0; i--) {
