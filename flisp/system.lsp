@@ -269,7 +269,7 @@
 
 (define (separate pred lst)
   (define (separate- pred lst yes no)
-    (cond ((null? lst) (values yes no))
+    (cond ((null? lst) (values (reverse yes) (reverse no)))
 	  ((pred (car lst))
 	   (separate- pred (cdr lst) (cons (car lst) yes) no))
 	  (else

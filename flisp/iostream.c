@@ -186,10 +186,11 @@ value_t fl_accum_julia_symbol(value_t *args, u_int32_t nargs)
     uint32_t wc = *(uint32_t*)cp_data((cprim_t*)ptr(args[0]));
     ios_t str;
     ios_mem(&str, 0);
-    while (!ios_eof(s) && jl_id_char(wc)) {
+    while (jl_id_char(wc)) {
         ios_getutf8(s, &wc);
         ios_pututf8(&str, wc);
-        ios_peekutf8(s, &wc);
+        if (ios_peekutf8(s, &wc) == IOS_EOF)
+            break;
     }
     ios_pututf8(&str, 0);
     return symbol(str.buf);

@@ -374,7 +374,8 @@
 	  #fn("7000r1c0q_41;" [#fn("9000r1]~F6C02~N~|~m02P2o005\x1c/2|;" [])] reverse!)
 	  self-evaluating? #fn("8000r1|?16602|C@17K02c0|3116A02|C16:02|c1|31<;" [#builtin(constant?)
   #builtin(top-level-value)] self-evaluating?)
-	  separate #fn("7000r2c0q]41;" [#fn(":000r1c0qm02|~\x7f__44;" [#fn(";000r4}\x85;0e0g2g342;|}M316@0~|}N}Mg2Kg344;~|}Ng2}Mg3K44;" [values] separate-)])] separate)
+	  separate #fn("7000r2c0q]41;" [#fn(":000r1c0qm02|~\x7f__44;" [#fn(";000r4}\x85C0e0e1g231e1g33142;|}M316@0~|}N}Mg2Kg344;~|}Ng2}Mg3K44;" [values
+  reverse] separate-)])] separate)
 	  set-syntax! #fn("9000r2c0e1|}43;" [#builtin(put!)
 					     *syntax-environment*] set-syntax!)
 	  simple-sort #fn("7000r1|A17602|NA640|;c0q|M41;" [#fn("8000r1e0c1qc2q42;" [call-with-values

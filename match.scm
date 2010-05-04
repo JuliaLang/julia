@@ -174,14 +174,6 @@
 	    (pattern-expand plist enew)))))
 
 (define-macro (pattern-set . pats)
-  (define (separate pred lst)
-    (define (separate- pred lst yes no)
-      (cond ((null? lst) (values (reverse yes) (reverse no)))
-	    ((pred (car lst))
-	     (separate- pred (cdr lst) (cons (car lst) yes) no))
-	    (else
-	     (separate- pred (cdr lst) yes (cons (car lst) no)))))
-    (separate- pred lst '() '()))
   ; (pattern-lambda (x ...) ...) => x
   (define (pl-head p) (car (cadr p)))
   (receive

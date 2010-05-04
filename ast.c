@@ -63,9 +63,7 @@ static jl_sym_t *scmsym_to_julia(value_t s)
         }
         return (jl_sym_t*)*bp;
     }
-    char *ss = symbol_name(s);
-    assert(!(ss[0]=='g' && isdigit(ss[1])));
-    return jl_symbol(ss);
+    return jl_symbol(symbol_name(s));
 }
 
 static char *scmsym_to_str(value_t s)
