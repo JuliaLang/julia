@@ -1,3 +1,6 @@
+(define (read-u8) (io.read *input-stream* 'uint8))
+(define modulo mod)
+(define display princ)
 (let loop ((b (read-u8))
 	   (i 0))
   (if (not (eof-object? b))
@@ -8,3 +11,4 @@
 	(if (= 0 (modulo (+ 1 i) 16))
 	    (newline))
 	(loop (read-u8) (+ 1 i)))))
+(newline)

@@ -1,5 +1,5 @@
 NAME = julia
-SRCS = jltypes gf ast repl builtins jlfrontend jlfrontend_ module codegen interpreter alloc
+SRCS = jltypes gf ast repl builtins module codegen interpreter alloc
 OBJS = $(SRCS:%=%.o)
 DOBJS = $(SRCS:%=%.do)
 EXENAME = $(NAME)
@@ -11,7 +11,7 @@ FLISP = $(FLISPDIR)/libflisp.a
 include ./Make.inc.$(shell uname)
 
 FLAGS = -falign-functions -Wall -Wno-strict-aliasing -I$(FLISPDIR) -I$(LLTDIR) $(HFILEDIRS:%=-I%) $(LIBDIRS:%=-L%) $(CFLAGS) -D___LIBRARY $(CONFIG) -I$(shell llvm-config --includedir)
-LIBFILES = $(LLT) $(GAMBITLIB)
+LIBFILES = $(FLISP) $(LLT)
 LIBS = $(LIBFILES) -lutil -ldl -lm -lgc $(shell llvm-config --ldflags --libs core engine jit interpreter bitreader) -lreadline $(OSLIBS)
 
 DEBUGFLAGS = -ggdb3 -DDEBUG $(FLAGS)
@@ -28,29 +28,23 @@ default: debug
 %.do: %.cpp julia.h
 	$(CXX) $(DEBUGFLAGS) $(shell llvm-config --cppflags) -c $< -o $@
 
-ast.o ast.do: jlfrontend.h
+ast.o ast.do: julia_flisp.boot.inc
+julia_flisp.boot.inc: julia_flisp.boot $(FLISP)
+	$(FLISPDIR)/flisp ./bin2hex.scm < $< > $@
+julia_flisp.boot: julia-parser.scm julia-syntax.scm match.scm utils.scm jlfrontend.scm $(FLISP)
+	$(FLISPDIR)/flisp ./jlfrontend.scm
 codegen.o codegen.do: intrinsics.cpp julia-defs.s.bc.inc
-
-jlfrontend.c: jlfrontend.scm \
-	julia-parser.scm julia-syntax.scm match.scm utils.scm
-	$(GAMBITGSC) -c $<
-jlfrontend_.c: jlfrontend.c
-	$(GAMBITGSC) -link -o $@ $<
-jlfrontend.o jlfrontend_.o: %.o: %.c
-	$(CC) $(SHIPFLAGS) -w -c $< -o $@
-jlfrontend.do jlfrontend_.do: %.do: %.c
-	$(CC) $(DEBUGFLAGS) -w -c $< -o $@
 
 julia-defs.s.bc: julia-defs$(NBITS).s
 	llvm-as -f $< -o $@
 
-julia-defs.s.bc.inc: julia-defs.s.bc bin2hex.scm
-	$(GAMBITGSI) ./bin2hex.scm < $< > $@
+julia-defs.s.bc.inc: julia-defs.s.bc bin2hex.scm $(FLISP)
+	$(FLISPDIR)/flisp ./bin2hex.scm < $< > $@
 
 $(LLT): $(LLTDIR)/*.h $(LLTDIR)/*.c
 	cd $(LLTDIR) && $(MAKE)
 
-$(FLISP): $(FLISPDIR)/*.h $(FLISPDIR)/*.c
+$(FLISP): $(FLISPDIR)/*.h $(FLISPDIR)/*.c $(LLT)
 	cd $(FLISPDIR) && $(MAKE)
 
 julia-debug: $(DOBJS) $(LIBFILES) julia-defs.s.bc

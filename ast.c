@@ -11,134 +11,116 @@
 #include <limits.h>
 #include <errno.h>
 #include <math.h>
+#include <setjmp.h>
 #ifdef BOEHM_GC
 #include <gc.h>
 #endif
 #include "llt.h"
 #include "julia.h"
 
-#define ___VERSION 405001
-#include "gambit.h"
-
-#include "jlfrontend.h"
-
-// gambit boilerplate. just look at all those underscores...
-#define SCHEME_LIBRARY_LINKER ____20_jlfrontend__
-___BEGIN_C_LINKAGE
-extern ___mod_or_lnk SCHEME_LIBRARY_LINKER (___global_state_struct*);
-___END_C_LINKAGE
+#include "flisp.h"
 
 static htable_t gensym_table;
 
+static char flisp_system_image[] = {
+#include "julia_flisp.boot.inc"
+};
+
+extern fltype_t *iostreamtype;
+
 void jl_init_frontend()
 {
-    ___setup_params_struct setup_params;
-    ___setup_params_reset (&setup_params);
-    setup_params.version = ___VERSION;
-    setup_params.linker  = SCHEME_LIBRARY_LINKER;
-    ___setup (&setup_params);
+    fl_init(512*1024);
+    value_t img = cvalue(iostreamtype, sizeof(ios_t));
+    ios_t *pi = value2c(ios_t*, img);
+    ios_mem(pi, 0);
+    ios_setbuf(pi, flisp_system_image, sizeof(flisp_system_image), 0);
+    pi->size = sizeof(flisp_system_image);
+    ios_set_readonly(pi);
+    
+    if (fl_load_system_image(img)) {
+        ios_printf(ios_stderr, "fatal error loading system image");
+        exit(1);
+    }
+
+    fl_applyn(0, symbol_value(symbol("__init_globals")));
 
     htable_new(&gensym_table, 0);
 }
 
 void jl_shutdown_frontend()
 {
-    ___cleanup();
 }
 
-static jl_sym_t *scmsym_to_julia(___SCMOBJ s)
+static jl_sym_t *scmsym_to_julia(value_t s)
 {
-    ___SCMOBJ ___temp;
-    assert(___SYMBOLP(s));
-    ___SCMOBJ str = ___VECTORREF(s,0);
-    if (___NUMBERP(str)) {
-        uptrint_t n = (uptrint_t)jl_scm_uint64(str)+100;
+    assert(issymbol(s));
+    if (fl_isgensym(s)) {
+        uptrint_t n = ((gensym_t*)ptr(s))->id + 100;
         void **bp = ptrhash_bp(&gensym_table, (void*)n);
         if (*bp == HT_NOTFOUND) {
             *bp = jl_gensym();
         }
         return (jl_sym_t*)*bp;
     }
-    char *ss;
-    ___SCMOBJ_to_CHARSTRING(str, &ss, 0);
-    jl_sym_t *sym = jl_symbol(ss);
-    ___release_rc(ss);
-    return sym;
+    char *ss = symbol_name(s);
+    assert(!(ss[0]=='g' && isdigit(ss[1])));
+    return jl_symbol(ss);
 }
 
-static char *scmsym_to_str(___SCMOBJ s)
+static char *scmsym_to_str(value_t s)
 {
-    ___SCMOBJ ___temp;
-    assert(___SYMBOLP(s));
-    ___SCMOBJ str = ___VECTORREF(s,0);
-    if (___NUMBERP(str)) {
-        return NULL;
-    }
-    char *ss;
-    ___SCMOBJ_to_CHARSTRING(str, &ss, 0);
-    return ss;
+    assert(issymbol(s));
+    return symbol_name(s);
 }
 
-static void syntax_error_check(___SCMOBJ e)
+static void syntax_error_check(value_t e)
 {
-    ___SCMOBJ ___temp;
-    if (___PAIRP(e)) {
-        ___SCMOBJ hd = ___CAR(e);
-        if (___SYMBOLP(hd)) {
-            char *s;
-            s = scmsym_to_str(hd);
+    if (iscons(e)) {
+        value_t hd = car_(e);
+        if (issymbol(hd)) {
+            char *s = scmsym_to_str(hd);
             if (!strcmp(s,"error")) {
-                ___release_rc(s);
-                // note: this string should be released
-                ___SCMOBJ_to_CHARSTRING(___CADR(e), &s, 0);
-                jl_errorf("\nsyntax error: %s", s);
-            }
-            else {
-                ___release_rc(s);
+                jl_errorf("\nsyntax error: %s",
+                          (char*)cvalue_data(car_(cdr_(e))));
             }
         }
     }
 }
 
-static size_t scm_list_length(___SCMOBJ x)
+static size_t scm_list_length(value_t x)
 {
-    size_t l = 0;
-    while (___PAIRP(x)) {
-        l++;
-        x = ___CDR(x);
-    }
-    return l;
+    return llength(x);
 }
 
-static jl_value_t *scm_to_julia(___SCMOBJ e);
+static jl_value_t *scm_to_julia(value_t e);
 
-static jl_expr_t *full_list(___SCMOBJ e)
+static jl_expr_t *full_list(value_t e)
 {
     jl_expr_t *ar = jl_exprn(list_sym, scm_list_length(e));
     size_t i=0;
-    while (___PAIRP(e)) {
-        jl_tupleset(ar->args, i, scm_to_julia(___CAR(e)));
-        e = ___CDR(e);
+    while (iscons(e)) {
+        jl_tupleset(ar->args, i, scm_to_julia(car_(e)));
+        e = cdr_(e);
         i++;
     }
     return ar;
 }
 
-static jl_value_t *scm_to_julia(___SCMOBJ e)
+static jl_value_t *scm_to_julia(value_t e)
 {
-    ___SCMOBJ ___temp;
-    if (___NUMBERP(e)) {
-        if (jl_scm_integerp(e)) {
-            uint64_t n = jl_scm_uint64(e);
-            if (n > S64_MAX)
-                return (jl_value_t*)jl_box_uint64(n);
-            if (n > S32_MAX)
-                return (jl_value_t*)jl_box_int64((int64_t)n);
-            return (jl_value_t*)jl_box_int32((int32_t)n);
+    if (fl_isnumber(e)) {
+        if (iscprim(e) && cp_numtype((cprim_t*)ptr(e))==T_DOUBLE) {
+            return (jl_value_t*)jl_box_float64(*(double*)cp_data((cprim_t*)ptr(e)));
         }
-        return (jl_value_t*)jl_box_float64(jl_scm_float64(e));
+        uint64_t n = toulong(e, "scm_to_julia");
+        if (n > S64_MAX)
+            return (jl_value_t*)jl_box_uint64(n);
+        if (n > S32_MAX)
+            return (jl_value_t*)jl_box_int64((int64_t)n);
+        return (jl_value_t*)jl_box_int32((int32_t)n);
     }
-    if (___SYMBOLP(e)) {
+    if (issymbol(e)) {
         jl_sym_t *sym = scmsym_to_julia(e);
         if (!strcmp(sym->name,"true"))
             return jl_true;
@@ -146,23 +128,21 @@ static jl_value_t *scm_to_julia(___SCMOBJ e)
             return jl_false;
         return (jl_value_t*)sym;
     }
-    if (___STRINGP(e)) {
-        char *ss;
-        ___SCMOBJ_to_CHARSTRING(e, &ss, 0);
-        jl_value_t *v = (jl_value_t*)jl_cstr_to_array(ss);
-        ___release_rc(ss);
-        return v;
+    if (fl_isstring(e)) {
+        return (jl_value_t*)jl_cstr_to_array(cvalue_data(e));
     }
-    if (___BOOLEANP(e)) {
-        if (___FALSEP(e))
-            return jl_false;
+    if (e == FL_F) {
+        return jl_false;
+    }
+    if (e == FL_T) {
         return jl_true;
     }
-    if (___NULLP(e))
+    if (e == FL_NIL) {
         return (jl_value_t*)jl_null;
-    if (___PAIRP(e)) {
-        ___SCMOBJ hd = ___CAR(e);
-        if (___SYMBOLP(hd)) {
+    }
+    if (iscons(e)) {
+        value_t hd = car_(e);
+        if (issymbol(hd)) {
             jl_sym_t *sym = scmsym_to_julia(hd);
             char *s = sym->name;
             /* tree node types:
@@ -176,13 +156,13 @@ static jl_value_t *scm_to_julia(___SCMOBJ e)
             size_t i;
             if (sym == lambda_sym) {
                 jl_expr_t *ex = jl_exprn(lambda_sym, n);
-                ___SCMOBJ largs = ___CADR(e);
+                value_t largs = car_(cdr_(e));
                 jl_tupleset(ex->args, 0, (jl_value_t*)full_list(largs));
-                e = ___CDR(___CDR(e));
+                e = cdr_(cdr_(e));
                 for(i=1; i < n; i++) {
-                    assert(___PAIRP(e));
-                    jl_tupleset(ex->args, i, scm_to_julia(___CAR(e)));
-                    e = ___CDR(e);
+                    assert(iscons(e));
+                    jl_tupleset(ex->args, i, scm_to_julia(car_(e)));
+                    e = cdr_(e);
                 }
                 return (jl_value_t*)
                     jl_expr(quote_sym, 1,
@@ -190,26 +170,26 @@ static jl_value_t *scm_to_julia(___SCMOBJ e)
             }
             if (!strcmp(s, "var-info")) {
                 jl_expr_t *ex = jl_exprn(sym, n);
-                e = ___CDR(e);
-                jl_tupleset(ex->args, 0, scm_to_julia(___CAR(e)));
-                e = ___CDR(e);
-                jl_tupleset(ex->args, 1, (jl_value_t*)full_list(___CAR(e)));
-                e = ___CDR(e);
-                jl_tupleset(ex->args, 2, (jl_value_t*)full_list(___CAR(e)));
-                e = ___CDR(e);
+                e = cdr_(e);
+                jl_tupleset(ex->args, 0, scm_to_julia(car_(e)));
+                e = cdr_(e);
+                jl_tupleset(ex->args, 1, (jl_value_t*)full_list(car_(e)));
+                e = cdr_(e);
+                jl_tupleset(ex->args, 2, (jl_value_t*)full_list(car_(e)));
+                e = cdr_(e);
                 for(i=3; i < n; i++) {
-                    assert(___PAIRP(e));
-                    jl_tupleset(ex->args, i, scm_to_julia(___CAR(e)));
-                    e = ___CDR(e);
+                    assert(iscons(e));
+                    jl_tupleset(ex->args, i, scm_to_julia(car_(e)));
+                    e = cdr_(e);
                 }
                 return (jl_value_t*)ex;
             }
             jl_expr_t *ex = jl_exprn(sym, n);
-            e = ___CDR(e);
+            e = cdr_(e);
             for(i=0; i < n; i++) {
-                assert(___PAIRP(e));
-                jl_tupleset(ex->args, i, scm_to_julia(___CAR(e)));
-                e = ___CDR(e);
+                assert(iscons(e));
+                jl_tupleset(ex->args, i, scm_to_julia(car_(e)));
+                e = cdr_(e);
             }
             return (jl_value_t*)ex;
         }
@@ -217,8 +197,6 @@ static jl_value_t *scm_to_julia(___SCMOBJ e)
             jl_error("malformed tree");
         }
     }
-    if (___BIGNUMP(e) || ___RATNUMP(e))
-        jl_error("unsupported");
     jl_error("malformed tree");
     
     return (jl_value_t*)jl_null;
@@ -226,8 +204,9 @@ static jl_value_t *scm_to_julia(___SCMOBJ e)
 
 jl_value_t *jl_parse_input_line(const char *str)
 {
-    ___SCMOBJ e = jl_scm_parse_string(str);
-    if (___BOOLEANP(e) || ___EOFP(e))
+    value_t e = fl_applyn(1, symbol_value(symbol("jl-parse-string")),
+                          cvalue_static_cstring(str));
+    if (e == FL_T || e == FL_F || e == FL_EOF)
         return NULL;
     syntax_error_check(e);
     
@@ -236,9 +215,12 @@ jl_value_t *jl_parse_input_line(const char *str)
 
 jl_value_t *jl_parse_file(const char *fname)
 {
-    ___SCMOBJ e = jl_scm_parse_file(fname);
+    //(void)fl_applyn(1, symbol_value(symbol("__start")), FL_NIL);
+
+    value_t e = fl_applyn(1, symbol_value(symbol("jl-parse-file")),
+                          cvalue_static_cstring(fname));
     syntax_error_check(e);
-    if (!___PAIRP(e))
+    if (!iscons(e))
         return (jl_value_t*)jl_null;
     return scm_to_julia(e);
 }

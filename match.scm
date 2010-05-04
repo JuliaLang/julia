@@ -174,25 +174,6 @@
 	    (pattern-expand plist enew)))))
 
 (define-macro (pattern-set . pats)
-  (define (filter pred lis)
-    (let recur ((lis lis))
-      (if (null? lis) lis
-	  (let ((head (car lis))
-		(tail (cdr lis)))
-	    (if (pred head)
-		(let ((new-tail (recur tail)))
-		  (if (eq? tail new-tail) lis
-		      (cons head new-tail)))
-		(recur tail))))))
-  (define (delete-duplicates lst)
-    (if (not (pair? lst))
-	lst
-	(let ((elt  (car lst))
-	      (tail (cdr lst)))
-	  (if (member elt tail)
-	      (delete-duplicates tail)
-	      (cons elt
-		    (delete-duplicates tail))))))
   (define (separate pred lst)
     (define (separate- pred lst yes no)
       (cond ((null? lst) (values (reverse yes) (reverse no)))
@@ -201,11 +182,6 @@
 	    (else
 	     (separate- pred (cdr lst) yes (cons (car lst) no)))))
     (separate- pred lst '() '()))
-  (define (length= lst n)
-    (cond ((< n 0)     #f)
-	  ((= n 0)     (not (pair? lst)))
-	  ((not (pair? lst)) (= n 0))
-	  (else        (length= (cdr lst) (- n 1)))))
   ; (pattern-lambda (x ...) ...) => x
   (define (pl-head p) (car (cadr p)))
   (receive
@@ -226,27 +202,12 @@
 	(vector 'pattern-set ,ht (list ,@others))))))
 
 (define-macro (pattern-lambda pat body)
-  ; for some moronic reason gsc fails unless this code is pasted here
-  (define (filter pred lis)
-    (let recur ((lis lis))
-      (if (null? lis) lis
-	  (let ((head (car lis))
-		(tail (cdr lis)))
-	    (if (pred head)
-		(let ((new-tail (recur tail)))
-		  (if (eq? tail new-tail) lis
-		      (cons head new-tail)))
-		(recur tail))))))
   (define (unique lst)
     (if (null? lst)
 	'()
 	(cons (car lst)
 	      (filter (lambda (x) (not (eq? x (car lst))))
 		      (unique (cdr lst))))))
-  (define (to-proper l)
-    (cond ((null? l) l)
-	  ((not (pair? l)) (list l))
-	  (else (cons (car l) (to-proper (cdr l))))))
   ; given a pattern p, return the list of capturing variables it uses
   (define (patargs- p)
     (cond ((and (symbol? p)
@@ -269,5 +230,5 @@
              ; matches; perform expansion
              (apply ,expander (map (lambda (var) (cdr (or (assq var m)
 							  '(0 . #f))))
-                                   ',args))
+				   ',args))
 	     #f)))))

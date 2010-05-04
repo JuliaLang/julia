@@ -71,13 +71,6 @@ TODO:
 (define (opchar? c) (memv c op-chars))
 (define (operator? c) (memq c operators))
 
-(define (skip-ws port newlines?)
-  (let ((c (peek-char port)))
-    (if (and (not (eof-object? c)) (char-whitespace? c)
-	     (or newlines? (not (newline? c))))
-	(begin (read-char port)
-	       (skip-ws port newlines?)))))
-
 (define (skip-to-eol port)
   (let ((c (peek-char port)))
     (cond ((eof-object? c)    c)
@@ -172,8 +165,7 @@ TODO:
 	  
 	  ((opchar? c)  (read-operator port c))
 
-	  ((identifier-char? c) (string->symbol (accum-tok-eager
-						 c identifier-char? port)))
+	  ((identifier-char? c) (accum-julia-symbol c port))
 
 	  ((eqv? c #\")  (read port))
 

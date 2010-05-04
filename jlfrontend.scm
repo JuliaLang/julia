@@ -1,11 +1,5 @@
-(declare
- (standard-bindings)
- (extended-bindings)
- (not run-time-bindings)
- (not safe)
- (not interrupts-enabled)
-)
 (define *julia-interpreter* #f)
+(load "flisp/aliases.scm")
 (include "utils.scm")
 (include "match.scm")
 (include "julia-parser.scm")
@@ -20,8 +14,9 @@
 (define (parser-wrap- thk)
   (with-exception-catcher
    (lambda (e)
-     (if (error-exception? e)
-	 (let ((msg (error-exception-message e)))
+     (prn e)
+     (if (and (pair? e) (eq? (car e) 'error))
+	 (let ((msg (cadr e)))
 	   (if (equal? "incomplete:"
 	               (substring msg 0 (string-length "incomplete:")))
 	       `(continue)
@@ -35,22 +30,12 @@
       e
       (caddr (cadr (julia-expand `(lambda () ,e))))))
 
-(gambit-only
- (c-define (jl-parse-string s) (char-string) scheme-object
-   "jl_scm_parse_string" ""
-   (parser-wrap (lambda () (toplevel-expr (julia-parse s)))))
- 
- (c-define (jl-parse-file s) (char-string) scheme-object
-   "jl_scm_parse_file" ""
-   (parser-wrap (lambda ()
-		  (cons 'file (map toplevel-expr (julia-parse-file s))))))
- 
- (c-define (get-integer n) (scheme-object) unsigned-int64 "jl_scm_uint64" ""
-   n)
- (c-define (get-float64 x) (scheme-object) float64 "jl_scm_float64" ""
-   x)
- 
- (c-define (is-integer x) (scheme-object) int "jl_scm_integerp" ""
-   (if (not (flonum? x)) 1 0))
- 
- )
+(define (jl-parse-string s)
+  (parser-wrap (lambda ()
+		 (toplevel-expr (julia-parse s)))))
+
+(define (jl-parse-file s)
+  (parser-wrap (lambda ()
+		 (cons 'file (map toplevel-expr (julia-parse-file s))))))
+
+(make-system-image "julia_flisp.boot")
