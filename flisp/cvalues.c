@@ -648,7 +648,7 @@ value_t cvalue_typeof(value_t *args, u_int32_t nargs)
     return cv_type((cvalue_t*)ptr(args[0]));
 }
 
-value_t cvalue_relocate(value_t v)
+static value_t cvalue_relocate(value_t v)
 {
     size_t nw;
     cvalue_t *cv = (cvalue_t*)ptr(v);

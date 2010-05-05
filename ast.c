@@ -213,8 +213,6 @@ jl_value_t *jl_parse_input_line(const char *str)
 
 jl_value_t *jl_parse_file(const char *fname)
 {
-    //(void)fl_applyn(1, symbol_value(symbol("__start")), FL_NIL);
-
     value_t e = fl_applyn(1, symbol_value(symbol("jl-parse-file")),
                           cvalue_static_cstring(fname));
     syntax_error_check(e);

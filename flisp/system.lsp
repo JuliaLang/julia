@@ -5,6 +5,27 @@
 
 (define (void) #t)  ; the unspecified value
 
+(define *builtins*
+  (vector
+   0 0 0 0 0 0 0 0 0 0 0 0
+   (lambda (x y) (eq? x y))          (lambda (x y) (eqv? x y))
+   (lambda (x y) (equal? x y))       (lambda (x) (atom? x))
+   (lambda (x) (not x))              (lambda (x) (null? x))
+   (lambda (x) (boolean? x))         (lambda (x) (symbol? x))
+   (lambda (x) (number? x))          (lambda (x) (bound? x))
+   (lambda (x) (pair? x))            (lambda (x) (builtin? x))
+   (lambda (x) (vector? x))          (lambda (x) (fixnum? x))
+   (lambda (x) (function? x))        (lambda (x y) (cons x y))
+   (lambda rest (apply list rest))   (lambda (x) (car x))
+   (lambda (x) (cdr x))              (lambda (x y) (set-car! x y))
+   (lambda (x y) (set-cdr! x y))     (lambda rest (apply apply rest))
+   (lambda rest (apply + rest))      (lambda rest (apply - rest))
+   (lambda rest (apply * rest))      (lambda rest (apply / rest))
+   (lambda rest (apply div0 rest))   (lambda (x y) (= x y))
+   (lambda (x y) (< x y))            (lambda (x y) (compare x y))
+   (lambda rest (apply vector rest)) (lambda (x y) (aref x y))
+   (lambda (x y z) (aset! x y z))))
+
 (if (not (bound? '*syntax-environment*))
     (define *syntax-environment* (table)))
 
@@ -21,22 +42,12 @@
 (define (mapn f lsts)
   (if (null? (car lsts))
       ()
-      (cons (apply f (map1 (lambda (x) (car x)) lsts))
-	    (mapn  f (map1 (lambda (x) (cdr x)) lsts)))))
-
-(define (map1-other f lst acc)
-  (cdr
-   (prog1 acc
-	  (while (pair? lst)
-		 (begin (set! acc
-			      (cdr (set-cdr! acc (cons (f (car lst)) ()))))
-			(set! lst (cdr lst)))))))
+      (cons (apply f (map1 car lsts))
+	    (mapn  f (map1 cdr lsts)))))
 
 (define (map f lst . lsts)
   (if (null? lsts)
-      (if (builtin? f)
-	  (map1-other f lst (list ()))
-	  (map1 f lst))
+      (map1 f lst)
       (mapn f (cons lst lsts))))
 
 (define-macro (let binds . body)

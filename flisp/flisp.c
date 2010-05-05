@@ -93,7 +93,7 @@ value_t FL_NIL, FL_T, FL_F, FL_EOF, QUOTE;
 value_t IOError, ParseError, TypeError, ArgError, UnboundError, MemoryError;
 value_t DivideError, BoundsError, Error, KeyError, EnumerationError;
 value_t printwidthsym, printreadablysym, printprettysym, printlengthsym;
-value_t printlevelsym;
+value_t printlevelsym, builtins_table_sym;
 
 static value_t NIL, LAMBDA, IF, TRYCATCH;
 static value_t BACKQUOTE, COMMA, COMMAAT, COMMADOT, FUNCTION;
@@ -617,6 +617,11 @@ static value_t _applyn(uint32_t n)
         v = ((builtin_t*)ptr(f))[3](&Stack[SP-n], n);
     }
     else if (isfunction(f)) {
+        v = apply_cl(n);
+    }
+    else if (isbuiltin(f)) {
+        value_t tab = symbol_value(builtins_table_sym);
+        Stack[SP-n-1] = vector_elt(tab, uintval(f));
         v = apply_cl(n);
     }
     else {
@@ -2125,27 +2130,31 @@ value_t fl_stacktrace(value_t *args, u_int32_t nargs)
 value_t fl_map1(value_t *args, u_int32_t nargs)
 {
     argcount("map1", nargs, 2);
-    value_t lst = args[1];
-    value_t first = NIL;
-    value_t last = NIL;
-    fl_gc_handle(&lst);
+    if (!iscons(args[1])) return NIL;
+    value_t first, last, v;
+    PUSH(args[0]);
+    PUSH(car_(args[1]));
+    v = _applyn(1);
+    PUSH(v);
+    v = mk_cons();
+    car_(v) = POP(); cdr_(v) = NIL;
+    last = first = v;
+    args[1] = cdr_(args[1]);
     fl_gc_handle(&first);
     fl_gc_handle(&last);
-    PUSH(args[0]);
-    PUSH(NIL);
-    while (iscons(lst)) {
-        Stack[SP-1] = car_(lst);
+    while (iscons(args[1])) {
         Stack[SP-2] = args[0];
-        value_t v = fl_cons(_applyn(1), NIL);
-        if (first == NIL)
-            first = v;
-        else
-            cdr_(last) = v;
+        Stack[SP-1] = car_(args[1]);
+        value_t v = _applyn(1);
+        PUSH(v);
+        v = mk_cons();
+        car_(v) = POP(); cdr_(v) = NIL;
+        cdr_(last) = v;
         last = v;
-        lst = cdr_(lst);
+        args[1] = cdr_(args[1]);
     }
     POPN(2);
-    fl_free_gc_handles(3);
+    fl_free_gc_handles(2);
     return first;
 }
 
@@ -2218,6 +2227,7 @@ static void lisp_init(size_t initial_heapsize)
     pagesym = symbol("page");         returnsym = symbol("return");
     escsym = symbol("esc");           spacesym = symbol("space");
     deletesym = symbol("delete");     newlinesym = symbol("newline");
+    builtins_table_sym = symbol("*builtins*");
     tsym = symbol("t"); Tsym = symbol("T");
     fsym = symbol("f"); Fsym = symbol("F");
     set(printprettysym=symbol("*print-pretty*"), FL_T);
