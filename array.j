@@ -23,6 +23,8 @@ ones(m::Size, n::Size) = [ 1.0 | i=1:m, j=1:n ]
 rand(m::Size) = [ rand() | i=1:m ]
 rand(m::Size, n::Size) = [ rand() | i=1:m, j=1:n ]
 
+eye(n::Size) = diagm(ones(n))
+
 colon(start::Int32, stop::Int32, stride::Int32) = [ i | i=start:stride:stop ]
 
 copy(a::Vector) = [ a[i] | i=1:length(a) ]
@@ -79,6 +81,10 @@ ctranspose(x::Matrix) = [ conj(x[j,i]) | i=1:size(x,2), j=1:size(x,1) ]
 
 dot(x::Vector, y::Vector) = sum(x.*y)
 diag(A::Matrix) = [ A[i,i] | i=1:min(size(A)) ]
+diagm(v::Vector) = do (n=length(v),
+                       a=zeros(n,n),
+                       for i=1:n; a[i,i] = v[i]; end,
+                       a)
 
 (*)(A::Matrix, B::Vector) = [ dot(A[i,:],B) | i=1:size(A,1) ]
 (*)(A::Matrix, B::Matrix) = [ dot(A[i,:],B[:,j]) | i=1:size(A,1), j=1:size(B,2) ]
