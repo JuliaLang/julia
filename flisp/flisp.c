@@ -2316,6 +2316,8 @@ int fl_load_system_image(value_t sys_image_iostream)
                 break;
             }
         }
+        value_t igf = symbol_value(symbol("__init_globals"));
+        if (igf != UNBOUND) fl_applyn(0, igf);
     }
     FL_CATCH {
         ios_puts("fatal error during bootstrap:\n", ios_stderr);

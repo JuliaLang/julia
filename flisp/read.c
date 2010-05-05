@@ -11,7 +11,7 @@ enum {
 // exceptions are '.', which is an ordinary symbol character
 // unless it's the only character in the symbol, and '#', which is
 // an ordinary symbol character unless it's the first character.
-static int symchar(char c)
+static inline int symchar(char c)
 {
     static char *special = "()[]'\";`,\\| \f\n\r\t\v";
     return !strchr(special, c);
