@@ -83,10 +83,10 @@ diag(A::Matrix) = [ A[i,i] | i=1:min(size(A)) ]
 (*)(A::Matrix, B::Vector) = [ dot(A[i,:],B) | i=1:size(A,1) ]
 (*)(A::Matrix, B::Matrix) = [ dot(A[i,:],B[:,j]) | i=1:size(A,1), j=1:size(B,2) ]
 
-kron(a::Matrix, b::Matrix) = reshape([ a[i,j]*b[k,l] | i=1:size(a,1),
-                                                       j=1:size(a,2),
-                                                       k=1:size(b,1),
-                                                       l=1:size(b,2) ],
+kron(a::Matrix, b::Matrix) = reshape([ a[i,j]*b[k,l] | k=1:size(b,1),
+                                                       i=1:size(a,1),
+                                                       l=1:size(b,2),
+                                                       j=1:size(a,2)],
                                      size(a,1)*size(b,1),
                                      size(a,2)*size(b,2))
 

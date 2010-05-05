@@ -737,18 +737,18 @@ static void init_julia_llvm_env(Module *m)
 #else
     aargs.push_back(T_uint32);
 #endif
-#ifdef NO_BOEHM_GC
-    jlalloc_func =
-        Function::Create(FunctionType::get(T_pint8, aargs, false),
-                         Function::ExternalLinkage,
-                         "malloc", jl_Module);
-    jl_ExecutionEngine->addGlobalMapping(jlalloc_func, (void*)&malloc);
-#else
+#ifdef BOEHM_GC
     jlalloc_func =
         Function::Create(FunctionType::get(T_pint8, aargs, false),
                          Function::ExternalLinkage,
                          "GC_malloc", jl_Module);
     jl_ExecutionEngine->addGlobalMapping(jlalloc_func, (void*)&GC_malloc);
+#else
+    jlalloc_func =
+        Function::Create(FunctionType::get(T_pint8, aargs, false),
+                         Function::ExternalLinkage,
+                         "malloc", jl_Module);
+    jl_ExecutionEngine->addGlobalMapping(jlalloc_func, (void*)&malloc);
 #endif
 
     // set up optimization passes
