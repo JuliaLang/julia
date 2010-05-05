@@ -90,6 +90,13 @@ kron(a::Matrix, b::Matrix) = reshape([ a[i,j]*b[k,l] | k=1:size(b,1),
                                      size(a,1)*size(b,1),
                                      size(a,2)*size(b,2))
 
+repmat(a::Matrix, m::Size, n::Size) = reshape([ a[i,j] | i=1:size(a,1),
+                                                         k=1:m,
+                                                         j=1:size(a,2),
+                                                         l=1:n],
+                                              size(a,1)*m,
+                                              size(a,2)*n)
+
 ## Indexing: ref()
 #TODO: Out-of-bound checks
 ref(a::Array, i::Index) = arrayref(a,i)
