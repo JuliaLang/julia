@@ -521,7 +521,7 @@ static void read_list(value_t *pval, value_t label)
         }
         *pc = c;
         c = do_read_sexpr(UNBOUND); // must be on separate lines due to
-        car_(*pc) = c;                // undefined evaluation order
+        car_(*pc) = c;              // undefined evaluation order
 
         t = peek();
         if (t == TOK_DOT) {

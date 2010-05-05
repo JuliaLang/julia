@@ -2,11 +2,7 @@ CC = gcc
 CXX = g++
 CFLAGS =
 
-GAMBIT = /usr/local/Gambit-C
-GAMBITGSC = $(GAMBIT)/bin/gsc
-GAMBITGSI = $(GAMBIT)/bin/gsi
-GAMBITLIB = $(GAMBIT)/lib/libgambc.a
-HFILEDIRS = $(GAMBIT)/include /opt/local/include
+HFILEDIRS = /opt/local/include
 LIBDIRS = /opt/local/lib
 OSLIBS = -framework ApplicationServices
 EFENCE = /opt/local/lib/libefence.a

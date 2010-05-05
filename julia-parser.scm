@@ -23,7 +23,7 @@ TODO:
      (|::|)
      (|.|)))
 
-(define (prec-ops n) (vector-ref ops-by-prec n))
+(define (prec-ops n) (aref ops-by-prec n))
 
 ; unused characters: @ prefix'
 ; no character literals; unicode kind of makes them obsolete. strings instead.
@@ -174,10 +174,9 @@ TODO:
 ; --- parser ---
 
 (define (make-token-stream s) (vector #f s))
-(define (ts:port s)       (vector-ref s 1))
-;(define (ts:last-tok s)   (vector-ref s 0))
-(define-macro (ts:last-tok s) `(vector-ref ,s 0))
-(define (ts:set-tok! s t) (vector-set! s 0 t))
+(define-macro (ts:port s)       `(aref ,s 1))
+(define-macro (ts:last-tok s)   `(aref ,s 0))
+(define-macro (ts:set-tok! s t) `(aset! ,s 0 ,t))
 
 (define (peek-token s)
   (or (ts:last-tok s)

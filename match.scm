@@ -193,6 +193,13 @@
 	       heads)
 	(vector 'pattern-set ,ht (list ,@others))))))
 
+(define (plambda-expansion pat expr expander args)
+  (let ((m (match pat expr)))
+    (if m
+	(apply expander (map (lambda (var) (cdr (or (assq var m) '(0 . #f))))
+			     args))
+	#f)))
+
 (define-macro (pattern-lambda pat body)
   (define (unique lst)
     (if (null? lst)
@@ -216,11 +223,5 @@
     (cons '__ (patargs- p)))
   (let* ((args (patargs pat))
          (expander `(lambda ,args ,body)))
-    `(lambda (expr)
-       (let ((m (match ',pat expr)))
-         (if m
-             ; matches; perform expansion
-             (apply ,expander (map (lambda (var) (cdr (or (assq var m)
-							  '(0 . #f))))
-				   ',args))
-	     #f)))))
+    `(lambda (__ex__)
+       (plambda-expansion ',pat __ex__ ,expander ',args))))

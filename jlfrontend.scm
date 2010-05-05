@@ -1,17 +1,11 @@
 (define *julia-interpreter* #f)
 (load "flisp/aliases.scm")
-(include "utils.scm")
-(include "match.scm")
-(include "julia-parser.scm")
-(include "julia-syntax.scm")
+(load "utils.scm")
+(load "match.scm")
+(load "julia-parser.scm")
+(load "julia-syntax.scm")
 
-(define *last* #f)
 (define (parser-wrap thk)
-  (let ((ex (parser-wrap- thk)))
-    (set! *last* ex)
-    ex))
-
-(define (parser-wrap- thk)
   (with-exception-catcher
    (lambda (e)
      (prn e)
