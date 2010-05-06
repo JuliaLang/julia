@@ -51,9 +51,10 @@ TODO:
 			  (apply append (vector->list ops-by-prec)))))
 
 (define op-chars
-  (delete-duplicates
-   (apply append
-	  (map string->list (map symbol->string operators)))))
+  (list->string
+   (delete-duplicates
+    (apply append
+	   (map string->list (map symbol->string operators))))))
 
 ; --- lexer ---
 
@@ -68,7 +69,7 @@ TODO:
 				 (and (char>=? c #\0)
 				      (char<=? c #\9))
 				 (eqv? c #\_)))
-(define (opchar? c) (memv c op-chars))
+(define (opchar? c) (string.find op-chars c))
 (define (operator? c) (memq c operators))
 
 (define (skip-to-eol port)
@@ -78,20 +79,19 @@ TODO:
 	  (else               (read-char port)
 			      (skip-to-eol port)))))
 
-; pred - should we consider a character?
-; valid - does adding the next character to the token produce
-;         a valid token?
-(define (accum-tok c pred valid port)
-  (let loop ((str '())
-	     (c c)
-	     (first? #t))
-    (if (and (not (eof-object? c)) (pred c)
-	     (or first?
-		 (valid (string-append (list->string (reverse str))
-				       (string c)))))
-	(begin (read-char port)
-	       (loop (cons c str) (peek-char port) #f))
-	(list->string (reverse str)))))
+(define (read-operator port c)
+  (read-char port)
+  (if (not (opchar? (peek-char port)))
+      (symbol (string c)) ; 1-char operator
+      (let loop ((str (string c))
+		 (c   (peek-char port)))
+	(if (and (not (eof-object? c)) (opchar? c))
+	    (let ((newop (string str c)))
+	      (if (operator? (string->symbol newop))
+		  (begin (read-char port)
+			 (loop newop (peek-char port)))
+		  (string->symbol str)))
+	    (string->symbol str)))))
 
 (define (accum-tok-eager c pred port)
   (let loop ((str '())
@@ -126,12 +126,6 @@ TODO:
 	   (n (string->number s)))
       (if n n
 	  (error "invalid numeric constant " s)))))
-
-(define (read-operator port c)
-  (string->symbol
-   (accum-tok c opchar?
-	      (lambda (x) (operator? (string->symbol x)))
-	      port)))
 
 (define (skip-ws-and-comments port)
   (skip-ws port #t)
@@ -183,17 +177,18 @@ TODO:
       (begin (ts:set-tok! s (next-token (ts:port s)))
 	     (ts:last-tok s))))
 
+(define (req-token s)
+  (let ((port     (ts:port s))
+	(last-tok (ts:last-tok s)))
+    (if (and last-tok (not (eof-object? last-tok)))
+	last-tok
+	(let ((t (next-token port)))
+	  (if (eof-object? t)
+	      (error "incomplete: premature end of input")
+	      (begin (ts:set-tok! s t)
+		     (ts:last-tok s)))))))
+
 (define (require-token s)
-  (define (req-token s)
-    (let ((port     (ts:port s))
-	  (last-tok (ts:last-tok s)))
-      (if (and last-tok (not (eof-object? last-tok)))
-	  last-tok
-	  (let ((t (next-token port)))
-	    (if (eof-object? t)
-		(error "incomplete: premature end of input")
-		(begin (ts:set-tok! s t)
-		       (ts:last-tok s)))))))
   (let ((t (req-token s)))
     ; when an actual token is needed, skip newlines
     (if (newline? t)

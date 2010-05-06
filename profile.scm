@@ -46,7 +46,7 @@
 (for-each profile
 	  '(syntactic-op? syntactic-unary-op? newline?
 	    identifier-char? opchar? operator? skip-to-eol
-	    accum-tok accum-tok-eager read-number read-operator
+	    accum-tok-eager read-number read-operator
 	    skip-ws-and-comments next-token peek-token require-token
 	    parse-LtoR parse-RtoL parse-cond parse-call parse-atom
 	    julia-parse-file julia-parse

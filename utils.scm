@@ -1,8 +1,3 @@
-(define (member-p item lst test)
-  (cond ((atom? lst) #f)
-        ((test       item (car lst)) lst)
-        (else        (member-p item (cdr lst) test))))
-
 (define (prn x) (display x) (newline) x)
 
 (define (lookup elt alst default)

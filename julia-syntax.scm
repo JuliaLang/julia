@@ -976,18 +976,14 @@ So far only the second case can actually occur.
 	      ,(car r-s-b))))
 	(else (map (lambda (x) (if (not (pair? x)) x (flatten-scopes x))) e))))
 
-(define (make-var-info name) (list 'vinfo name 'Any #f))
-(define (var-info/t name type) (list 'vinfo name type #f))
-(define vinfo:name cadr)
-(define (vinfo:type v) (list-ref v 2))
-(define (vinfo:capt v) (list-ref v 3))
-(define (vinfo:set-type! v t) (set-car! (list-tail v 2) t))
-(define (vinfo:set-capt! v c) (set-car! (list-tail v 3) c))
-(define (var-info-for name vinfo)
-  (and (pair? vinfo)
-       (or (and (eq? (vinfo:name (car vinfo)) name)
-		(car vinfo))
-	   (var-info-for name (cdr vinfo)))))
+(define (make-var-info name) (list name 'Any #f))
+(define (var-info/t name type) (list name type #f))
+(define vinfo:name car)
+(define vinfo:type cadr)
+(define vinfo:capt caddr)
+(define (vinfo:set-type! v t) (set-car! (cdr v) t))
+(define (vinfo:set-capt! v c) (set-car! (cddr v) c))
+(define var-info-for assq)
 
 (define (lambda-all-vars e)
   (append (lam:vars e)
@@ -1016,6 +1012,8 @@ So far only the second case can actually occur.
 (define (analyze-vars e env)
   (cond ((or (atom? e) (quoted? e)) e)
 	((eq? (car e) '|::|)
+	 ; handle var::T declaration by storing the type in the var-info
+	 ; record. for non-symbols, emit a type assertion.
 	 (if (symbol? (cadr e))
 	     (let ((vi (var-info-for (cadr e) env)))
 	       (if vi
@@ -1028,20 +1026,25 @@ So far only the second case can actually occur.
 		(locl (cdr (caddr e)))
 		(allv (nconc (map arg-name args) locl))
 		(fv   (diff (free-vars (lam:body e)) allv))
+		; make var-info records for vars introduced by this lambda
 		(vi   (nconc
 		       (map (lambda (decl)
 			      (var-info/t (decl-var decl)
 					  (fix-seq-type (decl-type decl))))
 			    args)
 		       (map make-var-info locl)))
+		; captured vars: vars from the environment that occur
+		; in our set of free variables (fv).
 		(cv    (filter (lambda (v) (memq (vinfo:name v) fv))
 			       env))
 		(bod   (analyze-vars
 			(lam:body e)
 			(append vi
+				; new environment: add our vars
 				(filter (lambda (v)
 					  (not (memq (vinfo:name v) allv)))
 					env)))))
+	   ; mark all the vars we capture as captured
 	   (for-each (lambda (v) (vinfo:set-capt! v #t))
 		     cv)
 	   `(lambda ,args
@@ -1072,13 +1075,13 @@ So far only the second case can actually occur.
 		 (or i 'global)))))
   (define (lookup-var-type v vinfo)
     (let ((vi (var-info-for v (caddr vinfo))))
-	   (if vi
-	       (vinfo:type vi)
-	       (let ((vl (member-p v (cadddr vinfo)
-				   (lambda (x y) (eq? x (vinfo:name y))))))
-		 (or (and vl (vinfo:type (car vl)))
-		     'Any)))))  ; TODO: types of globals?
-
+      (if vi
+	  (vinfo:type vi)
+	  (let ((vl (var-info-for v (cadddr vinfo))))
+	    (if vl
+		(vinfo:type vl)
+		'Any)))))  ; TODO: types of globals?
+  
   (cond ((symbol? e)
 	 (let ((l (lookup e vinfo)))
 	   (cond ((eq? l 'boxed) `(call (top unbox) ,e))
