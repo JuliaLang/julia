@@ -64,4 +64,5 @@
 	    analyze-variables closure-convert goto-form
 	    expand-backquote julia-expand-backquote
 	    julia-expand closure-convert- pattern-expand
+	    lookup-var-type lookup-v
 ))

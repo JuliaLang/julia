@@ -12,12 +12,7 @@
 
 (define *julia-interpreter* #f)
 
-(define (quoted? e)
-  (and (pair? e)
-       (or (eq? (car e) 'quote)
-	   (eq? (car e) 'top)
-	   (eq? (car e) 'unbound)
-	   (eq? (car e) 'line))))
+(define (quoted? e) (memq (car e) '(quote top unbound line break)))
 
 (define (lam:args x) (cadr x))
 (define (lam:vars x) (llist-vars (lam:args x)))
@@ -1011,6 +1006,8 @@ So far only the second case can actually occur.
 ; where var-info-lst is a list of var-info records
 (define (analyze-vars e env)
   (cond ((or (atom? e) (quoted? e)) e)
+	((and (eq? (car e) '=) (symbol? (cadr e)))
+	 `(= ,(cadr e) ,(analyze-vars (caddr e) env)))
 	((eq? (car e) '|::|)
 	 ; handle var::T declaration by storing the type in the var-info
 	 ; record. for non-symbols, emit a type assertion.
@@ -1056,6 +1053,24 @@ So far only the second case can actually occur.
 
 (define (analyze-variables e) (analyze-vars e '()))
 
+(define (lookup-v v vinfo)
+  (let ((vi (var-info-for v (caddr vinfo))))
+    (if vi
+	(vinfo:capt vi)
+	(let ((i (index-p (lambda (xx)
+			    (eq? v (vinfo:name xx)))
+			  (cadddr vinfo) 0)))
+	  (or i 'global)))))
+
+(define (lookup-var-type v vinfo)
+  (let ((vi (var-info-for v (caddr vinfo))))
+    (if vi
+	(vinfo:type vi)
+	(let ((vl (var-info-for v (cadddr vinfo))))
+	  (if vl
+	      (vinfo:type vl)
+	      'Any)))))  ; TODO: types of globals?
+
 ; lower closures, using the results of analyze-vars
 ; . for each captured var v, initialize with v = box(Any,())
 ; . uses of v change to unbox(v)
@@ -1065,25 +1080,8 @@ So far only the second case can actually occur.
 ; . for each closed var v, uses change to (call unbox (closure-ref idx))
 ; . assignments to closed var v change to (call boxset (closure-ref idx) rhs)
 (define (closure-convert- e vinfo)
-  (define (lookup v vinfo)
-    (let ((vi (var-info-for v (caddr vinfo))))
-	   (if vi
-	       (vinfo:capt vi)
-	       (let ((i (index-p (lambda (xx)
-				   (eq? v (vinfo:name xx)))
-				 (cadddr vinfo) 0)))
-		 (or i 'global)))))
-  (define (lookup-var-type v vinfo)
-    (let ((vi (var-info-for v (caddr vinfo))))
-      (if vi
-	  (vinfo:type vi)
-	  (let ((vl (var-info-for v (cadddr vinfo))))
-	    (if vl
-		(vinfo:type vl)
-		'Any)))))  ; TODO: types of globals?
-  
   (cond ((symbol? e)
-	 (let ((l (lookup e vinfo)))
+	 (let ((l (lookup-v e vinfo)))
 	   (cond ((eq? l #t)   `(call (top unbox) ,e))
 		 ((number? l)  `(call (top unbox) (closure-ref ,l)))
 		 (else e))))
@@ -1095,7 +1093,7 @@ So far only the second case can actually occur.
 	       e)))
 	((quoted? e) e)
 	((eq? (car e) '=)
-	 (let ((l (lookup (cadr e) vinfo))
+	 (let ((l (lookup-v (cadr e) vinfo))
 	       (t (lookup-var-type (cadr e) vinfo))
 	       (rhs (closure-convert- (caddr e) vinfo)))
 	   (let ((rhs (if (eq? t 'Any)
