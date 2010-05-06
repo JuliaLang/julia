@@ -81,7 +81,7 @@ TODO:
 
 (define (read-operator port c)
   (read-char port)
-  (if (not (opchar? (peek-char port)))
+  (if (or (eof-object? (peek-char port)) (not (opchar? (peek-char port))))
       (symbol (string c)) ; 1-char operator
       (let loop ((str (string c))
 		 (c   (peek-char port)))
@@ -177,24 +177,15 @@ TODO:
       (begin (ts:set-tok! s (next-token (ts:port s)))
 	     (ts:last-tok s))))
 
-(define (req-token s)
-  (let ((port     (ts:port s))
-	(last-tok (ts:last-tok s)))
-    (if (and last-tok (not (eof-object? last-tok)))
-	last-tok
-	(let ((t (next-token port)))
-	  (if (eof-object? t)
-	      (error "incomplete: premature end of input")
-	      (begin (ts:set-tok! s t)
-		     (ts:last-tok s)))))))
-
 (define (require-token s)
-  (let ((t (req-token s)))
-    ; when an actual token is needed, skip newlines
-    (if (newline? t)
-	(begin (take-token s)
-	       (require-token s))
-	t)))
+  (let ((t (or (ts:last-tok s) (next-token (ts:port s)))))
+    (if (eof-object? t)
+	(error "incomplete: premature end of input")
+	(if (newline? t)
+	    (begin (take-token s)
+		   (require-token s))
+	    (begin (ts:set-tok! s t)
+		   t)))))
 
 (define (take-token s)
   (begin0 (ts:last-tok s)

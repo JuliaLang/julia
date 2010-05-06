@@ -634,7 +634,7 @@
 (define (hex5 n)
   (string.lpad (number->string n 16) 5 #\0))
 
-(define (disassemble f . lev?)
+#;(define (disassemble f . lev?)
   (if (null? lev?)
       (begin (disassemble f 0)
 	     (newline)

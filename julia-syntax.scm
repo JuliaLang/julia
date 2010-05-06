@@ -1007,7 +1007,7 @@ So far only the second case can actually occur.
 	(else (unique (apply nconc (map free-vars (cdr e)))))))
 
 ; convert each lambda's (locals ...) to
-;   (var-info (locals ...) var-info-lst captured-var-names)
+;   (var-info (locals ...) var-info-lst captured-var-infos)
 ; where var-info-lst is a list of var-info records
 (define (analyze-vars e env)
   (cond ((or (atom? e) (quoted? e)) e)
@@ -1068,7 +1068,7 @@ So far only the second case can actually occur.
   (define (lookup v vinfo)
     (let ((vi (var-info-for v (caddr vinfo))))
 	   (if vi
-	       (if (vinfo:capt vi) 'boxed 'local)
+	       (vinfo:capt vi)
 	       (let ((i (index-p (lambda (xx)
 				   (eq? v (vinfo:name xx)))
 				 (cadddr vinfo) 0)))
@@ -1084,8 +1084,8 @@ So far only the second case can actually occur.
   
   (cond ((symbol? e)
 	 (let ((l (lookup e vinfo)))
-	   (cond ((eq? l 'boxed) `(call (top unbox) ,e))
-		 ((number? l)    `(call (top unbox) (closure-ref ,l)))
+	   (cond ((eq? l #t)   `(call (top unbox) ,e))
+		 ((number? l)  `(call (top unbox) (closure-ref ,l)))
 		 (else e))))
 	((not (pair? e)) e)
 	((eq? (car e) 'unbound)
@@ -1094,51 +1094,49 @@ So far only the second case can actually occur.
 	       `(box-unbound ,(caddr v))
 	       e)))
 	((quoted? e) e)
+	((eq? (car e) '=)
+	 (let ((l (lookup (cadr e) vinfo))
+	       (t (lookup-var-type (cadr e) vinfo))
+	       (rhs (closure-convert- (caddr e) vinfo)))
+	   (let ((rhs (if (eq? t 'Any)
+			  rhs
+			  `(call (top convert) ,t ,rhs))))
+	     (cond ((eq? l #t)
+		    `(call (top boxset) ,(cadr e) ,rhs))
+		   ((number? l)
+		    `(call (top boxset) (closure-ref ,l) ,rhs))
+		   (else
+		    `(= ,(cadr e) ,rhs))))))
+	((eq? (car e) 'lambda)
+	 (let ((vinf  (lam:vinfo e))
+	       (args  (llist-vars (cadr e)))
+	       (body0 (lam:body e))
+	       (capt  (map vinfo:name
+			   (filter vinfo:capt (caddr (lam:vinfo e))))))
+	   (let ((body
+		  `(block ,@(map (lambda (v)
+				   `(= ,v
+				       (call (top box) (top Any)
+					     ,@(if (memq v args)
+						   (list v)
+						   '()))))
+				 capt)
+			  ,(closure-convert- body0 vinf))))
+	     `(call new_closure
+		    (lambda ,(lam:args e) ,(lam:vinfo e) ,body)
+		    (call tuple
+			  ; NOTE: to pass captured variables on to other
+			  ; closures we must pass the box, not the value
+			  ,@(map (lambda (x)
+				   (let ((i (index-of x (cadddr vinfo) 0)))
+				     (if i
+					 `(closure-ref ,i)
+					 (vinfo:name x))))
+				 (cadddr vinf)))))))
 	(else
-	 (case (car e)
-	   ((=)
-	    (let ((l (lookup (cadr e) vinfo))
-		  (t (lookup-var-type (cadr e) vinfo))
-		  (rhs (closure-convert- (caddr e) vinfo)))
-	      (let ((rhs (if (eq? t 'Any)
-			     rhs
-			     `(call (top convert) ,t ,rhs))))
-		(cond ((eq? l 'boxed)
-		       `(call (top boxset) ,(cadr e) ,rhs))
-		      ((number? l)
-		       `(call (top boxset) (closure-ref ,l) ,rhs))
-		      (else
-		       `(= ,(cadr e) ,rhs))))))
-	   ((lambda)
-	    (let ((vinf  (lam:vinfo e))
-		  (args  (llist-vars (cadr e)))
-		  (body0 (lam:body e))
-		  (capt  (map vinfo:name
-			      (filter vinfo:capt (caddr (lam:vinfo e))))))
-	      (let ((body
-		     `(block ,@(map (lambda (v)
-				      `(= ,v
-					  (call (top box) (top Any)
-						,@(if (memq v args)
-						      (list v)
-						      '()))))
-				    capt)
-			     ,(closure-convert- body0 vinf))))
-		`(call new_closure
-		       (lambda ,(lam:args e) ,(lam:vinfo e) ,body)
-		       (call tuple
-			     ; NOTE: to pass captured variables on to other
-			     ; closures we must pass the box, not the value
-			     ,@(map (lambda (x)
-				      (let ((i (index-of x (cadddr vinfo) 0)))
-					(if i
-					    `(closure-ref ,i)
-					    (vinfo:name x))))
-				    (cadddr vinf)))))))
-	   (else
-	    (cons (car e)
-		  (map (lambda (x) (closure-convert- x vinfo))
-		       (cdr e))))))))
+	 (cons (car e)
+	       (map (lambda (x) (closure-convert- x vinfo))
+		    (cdr e))))))
 
 (define (closure-convert e)
   (closure-convert- (analyze-variables e) '(var-info (locals) () () ())))

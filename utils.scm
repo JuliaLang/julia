@@ -4,11 +4,6 @@
   (let ((a (assq elt alst)))
     (if a (cdr a) default)))
 
-(define (index-of item lst start)
-  (cond ((null? lst) #f)
-	((eqv? item (car lst)) start)
-	(else (index-of item (cdr lst) (+ start 1)))))
-
 (define (index-p pred lst start)
   (cond ((null? lst) #f)
 	((pred (car lst)) start)

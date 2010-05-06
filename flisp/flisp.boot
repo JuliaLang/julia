@@ -160,7 +160,7 @@
   caddr ret values #builtin(function) encode-byte-code bcode:code
   const-to-idx-vec]) filter keyword-arg?])
   #builtin(length)]) #builtin(length)]) make-code-emitter lastcdr lambda-vars
-  filter #.pair? lambda])] #0=[#:g698 ()])
+  filter #.pair? lambda])] #0=[#:g689 ()])
 	  compile-for #fn(":000r5e0g4316X0e1|}^g2342e1|}^g3342e1|}^g4342e2|c342;e4c541;" [1arg-lambda?
   compile-in emit for error "for: third form must be a 1-argument lambda"] compile-for)
 	  compile-if #fn("<000r4c0qe1|31e1|31g3\x84e2g331e3g331F6;0e4g331560e53045;" [#fn(";000r5g2]\x82>0e0~\x7fi02g344;g2^\x82>0e0~\x7fi02g444;e0~\x7f^g2342e1~c2|332e0~\x7fi02g3342i026<0e1~c3325:0e1~c4}332e5~|322e0~\x7fi02g4342e5~}42;" [compile-in
@@ -192,27 +192,9 @@
   void mark-label emit brf pop jmp]) make-label] compile-while)
 	  const-to-idx-vec #fn("9000r1c0qc1e2|313141;" [#fn("9000r1e0c1qe2~31322|;" [table.foreach
   #fn("8000r2~}|\\;" []) bcode:ctable]) #builtin(vector.alloc) bcode:nconst] const-to-idx-vec)
-	  copy-tree #fn("8000r1|?640|;e0|M31e0|N31K;" [copy-tree] copy-tree)
 	  count #fn("7000r2c0q]41;" [#fn("9000r1c0qm02|~\x7f`43;" [#fn(":000r3}\x8550g2;~|}N|}M31690g2aw540g243;" [] count-)])] count)
 	  delete-duplicates #fn("8000r1|?640|;c0|M|N42;" [#fn("8000r2e0|}32680e1}41;|e1}31K;" [member
   delete-duplicates])] delete-duplicates)
-	  disassemble #fn("=000s1}\x85C0e0|`322e1302];530]2c2}Mc3|31c4|3143;" [disassemble
-  newline #fn("7000r3c0q]41;" [#fn(":000r1c0qm02`~axc1u2e2c3e4\x7f`32c5332c6qb4c7\x7f3142;" [#fn("9000r1|J16602|G@6D0e0c1312e2|i10aw42;e3|41;" [princ
-  "\n" disassemble print] print-val) #fn("7000r1e0c141;" [princ "\t"]) princ "maxstack "
-  ref-int32-LE "\n" #fn(":000r2]|}X6E02c0qc1c2q^e333315\x19/;" [#fn(";000r1e0~b432690e130530]2`i20axc2u2e3e4~b4x31c5c6|31c7342~awo002c8q|41;" [>
-  newline #fn("7000r1e0c141;" [princ "\t"]) princ hex5 ":  " #builtin(string)
-  "\t" #fn("=000r1c0|c1326P0i20i32e2i31i1032[312i10b4wo10;c0|c3326L0i20i32i31i10[[312i10awo10;c0|c4326K0e5c6i31i10[31312i10awo10;c0|c7326O0e5c6e2i31i103231312i10b4wo10;c0|c8326f0e5c6i31i10[31c9322i10awo102e5c6i31i10[31312i10awo10;c0|c:326\x9c0e5c6e2i31i103231c9322i10b4wo102e5c6e2i31i103231312i10b4wo102~c;\x82X0e5c9312e5c6e2i31i103231c9322i10b4wo10;];|c<=6Q0e5c6e2i31i103231c9322i10b4wo10;c0|c=326X0e5c>e?i10b,e@i31i1032R331322i10b2wo10;c0|cA326X0e5c>e?i10b,e2i31i1032R331322i10b4wo10;^;" [#builtin(memq)
-  (loadv.l loadg.l setg.l) ref-int32-LE (loadv loadg setg)
-  (loada seta call tcall list + - * / vector argc vargc loadi8 apply tapply)
-  princ #builtin(number->string) (loada.l seta.l largc lvargc call.l tcall.l)
-  (loadc setc) " " (loadc.l setc.l optargs keyargs) keyargs brbound (jmp brf
-  brt brne brnn brn) "@" hex5 ref-int16-LE (jmp.l brf.l brt.l brne.l brnn.l
-						  brn.l)])])
-								#builtin(table.foldl)
-								#fn("8000r3g217@02}i21~[<16402|;" [])
-								Instructions])
-  #builtin(length)])]) #builtin(function:code)
-  #builtin(function:vals)] disassemble)
 	  div #fn("8000r2|}V|`X16C02}`X16402a17502b/17402`w;" [] div) emit
 	  #fn("G000s2g2\x85b0}c0<16C02|`[F16:02|`[Mc1<6;0|`[c2O5:0|`}|`[K\\5\xe20c3}c4326A0e5|g2M32L1m2530]2c6qc7}c832312c9qc7}c:32312}c;\x82\\0g2c<>6=0c=m12_m25F0g2c>>6=0c?m12_m2530^530]2}c@\x82\\0g2cA>6=0cBm12_m25F0g2cC>6=0cDm12_m2530^530]2cEq|`[F690|`[M530_|`[322|;" [car
   cdr cadr #builtin(memq) (loadv loadg setg) bcode:indexfor #fn("8000r1|16=02e0i02Mc132680|\x84o01;];" [>
@@ -348,7 +330,6 @@
   #fn("7000r2|}X640|;};" [])] min)
 	  mod #fn("9000r2|e0|}32}T2x;" [div] mod) mod0
 	  #fn("8000r2||}V}T2x;" [] mod0) negative? #fn("7000r1|`X;" [] negative?)
-	  nestlist #fn(";000r3e0g2`32640_;}e1||}31g2ax33K;" [<= nestlist] nestlist)
 	  newline #fn("9000\x8900001000\x8a0000770e0m02c1|e2322];" [*output-stream*
 								    #builtin(io.write)
 								    *linefeed*] newline)
@@ -437,14 +418,8 @@
   #builtin(length)])] string.trim)
 	  symbol-syntax #fn("9000r1c0e1|^43;" [#builtin(get)
 					       *syntax-environment*] symbol-syntax)
-	  table.clone #fn("7000r1c0qc13041;" [#fn("9000r1c0c1q_~332|;" [#builtin(table.foldl)
-  #fn("9000r3c0~|}43;" [#builtin(put!)])])
-					      #builtin(table)] table.clone)
 	  table.foreach #fn("9000r2c0c1q_}43;" [#builtin(table.foldl)
 						#fn("8000r3~|}322];" [])] table.foreach)
-	  table.invert #fn("7000r1c0qc13041;" [#fn("9000r1c0c1q_~332|;" [#builtin(table.foldl)
-  #fn("9000r3c0~}|43;" [#builtin(put!)])])
-					       #builtin(table)] table.invert)
 	  table.keys #fn("9000r1c0c1_|43;" [#builtin(table.foldl)
 					    #fn("7000r3|g2K;" [])] table.keys)
 	  table.pairs #fn("9000r1c0c1_|43;" [#builtin(table.foldl)
@@ -457,14 +432,6 @@
   print-stack-trace #builtin(stacktrace)])
 					    #fn("7000r1~302c0|41;" [#builtin(raise)])])
   #fn("6000r0~k0;" [*output-stream*])]) *output-stream*] top-level-exception-handler)
-	  trace #fn("8000r1c0qc1|31312c2;" [#fn("7000r1c0qc13041;" [#fn("@000r1e0~317e0c1i10e2c3|c4c5c6c7i10L2|L3L2c8L1c9c7~L2|L3L4L33142;];" [traced?
-  #builtin(set-top-level-value!) eval lambda begin write cons quote newline
-  apply]) #builtin(gensym)]) #builtin(top-level-value) ok] trace)
-	  traced? #fn("8000r1e0|3116>02c1|31c1~31>;" [closure? #builtin(function:code)] [#fn(":000s0c0c1|K312e2302c3|v2;" [#builtin(write)
-  x newline #.apply]) ()])
-	  untrace #fn("8000r1c0qc1|3141;" [#fn("9000r1e0|316@0c1~c2|31b2[42;];" [traced?
-  #builtin(set-top-level-value!) #builtin(function:vals)])
-					   #builtin(top-level-value)] untrace)
 	  values #fn("9000s0|F16602|NA650|M;~|K;" [] #2#) vector->list
 	  #fn("8000r1c0qc1|31_42;" [#fn(":000r2a|c0qu2};" [#fn("8000r1i10~|x[\x7fKo01;" [])])
 				    #builtin(length)] vector->list)

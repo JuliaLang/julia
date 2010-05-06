@@ -8,14 +8,18 @@
 (define (parser-wrap thk)
   (with-exception-catcher
    (lambda (e)
-     (prn e)
      (if (and (pair? e) (eq? (car e) 'error))
 	 (let ((msg (cadr e)))
 	   (if (equal? "incomplete:"
 	               (substring msg 0 (string-length "incomplete:")))
 	       `(continue)
 	       `(error ,msg)))
-	 #f))
+	 (begin
+	   (newline)
+	   (display "unexpected error: ")
+	   (prn e)
+	   (print-stack-trace (stacktrace))
+	   #f)))
    thk))
 
 ; return a lambda expression representing a thunk for a top-level expression

@@ -291,10 +291,6 @@
 			      n))))
   (count- f l 0))
 
-(define (nestlist f zero n)
-  (if (<= n 0) ()
-      (cons zero (nestlist f (f zero) (- n 1)))))
-
 (define (foldr f zero lst)
   (if (null? lst) zero
       (f (car lst) (foldr f zero (cdr lst)))))
@@ -312,11 +308,6 @@
 			  (set-cdr! l (prog1 prev
 					     (set! prev l))))))
     prev))
-
-(define (copy-tree l)
-  (if (atom? l) l
-    (cons (copy-tree (car l))
-          (copy-tree (cdr l)))))
 
 (define (delete-duplicates lst)
   (if (atom? lst)
@@ -521,7 +512,7 @@
 
 (define-macro (assert expr) `(if ,expr #t (raise '(assert-failed ,expr))))
 
-(define traced?
+#;(define traced?
   (letrec ((sample-traced-lambda (lambda args (begin (write (cons 'x args))
 						     (newline)
 						     (apply #.apply args)))))
@@ -530,7 +521,7 @@
 	   (equal? (function:code f)
 		   (function:code sample-traced-lambda))))))
 
-(define (trace sym)
+#;(define (trace sym)
   (let* ((func (top-level-value sym))
 	 (args (gensym)))
     (if (not (traced? func))
@@ -542,7 +533,7 @@
 					 (apply ',func ,args)))))))
   'ok)
 
-(define (untrace sym)
+#;(define (untrace sym)
   (let ((func (top-level-value sym)))
     (if (traced? func)
 	(set-top-level-value! sym
@@ -624,12 +615,12 @@
 (define (table.values t)
   (table.foldl (lambda (k v z) (cons v z))
                () t))
-(define (table.clone t)
+#;(define (table.clone t)
   (let ((nt (table)))
     (table.foldl (lambda (k v z) (put! nt k v))
                  () t)
     nt))
-(define (table.invert t)
+#;(define (table.invert t)
   (let ((nt (table)))
     (table.foldl (lambda (k v z) (put! nt v k))
 		 () t)
