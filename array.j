@@ -103,11 +103,12 @@ repmat(a::Matrix, m::Size, n::Size) = reshape([ a[i,j] | i=1:size(a,1),
                                               size(a,1)*m,
                                               size(a,2)*n)
 
-triu(M::Matrix, k) = [ j-i >= k ? M[i,j] : 0 | i=1:size(M,1), j=1:size(M,2) ]
-tril(M::Matrix, k) = [ j-i <= k ? M[i,j] : 0 | i=1:size(M,1), j=1:size(M,2) ]
 triu(M) = triu(M,0)
 tril(M) = tril(M,0)
-
+triu(M::Matrix, k) = [ j-i >= k ? M[i,j] : convert(typeof(M[i,j]),0) |
+                       i=1:size(M,1), j=1:size(M,2) ]
+tril(M::Matrix, k) = [ j-i <= k ? M[i,j] : convert(typeof(M[i,j]),0) |
+                       i=1:size(M,1), j=1:size(M,2) ]
 ## Indexing: ref()
 #TODO: Out-of-bound checks
 ref(a::Array, i::Index) = arrayref(a,i)
