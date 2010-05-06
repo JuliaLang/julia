@@ -548,6 +548,10 @@
     (hcat (call (-/ |\||) expr i) . rest)
     `(comprehension-int ,expr ,i ,@rest))
 
+   (pattern-lambda
+    (hcat (if expr expr-then (call (-/ |\||) expr-else i)) . rest)
+    `(comprehension-int (if ,expr ,expr-then ,expr-else) ,i ,@rest))
+
     (pattern-lambda
      (comprehension-int expr . ranges)
      `(comprehension
