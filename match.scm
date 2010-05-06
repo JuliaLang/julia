@@ -201,12 +201,6 @@
 	#f)))
 
 (define-macro (pattern-lambda pat body)
-  (define (unique lst)
-    (if (null? lst)
-	'()
-	(cons (car lst)
-	      (filter (lambda (x) (not (eq? x (car lst))))
-		      (unique (cdr lst))))))
   ; given a pattern p, return the list of capturing variables it uses
   (define (patargs- p)
     (cond ((and (symbol? p)

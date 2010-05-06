@@ -59,6 +59,7 @@ static int print_banner = 1;
 static int no_readline = 0;
 static int tab_width = 2;
 static int load_start_j = 1;
+static int lisp_prompt = 0;
 static char *program = NULL;
 
 int num_evals = 0;
@@ -89,7 +90,7 @@ void parse_opts(int *argcp, char ***argvp) {
         { 0, 0, 0, 0 }
     };
     int c;
-    while ((c = getopt_long(*argcp,*argvp,"qRe:E:H:T:bh",longopts,0)) != -1) {
+    while ((c = getopt_long(*argcp,*argvp,"qRe:E:H:T:bhl",longopts,0)) != -1) {
         switch (c) {
         case 'q':
             print_banner = 0;
@@ -122,6 +123,9 @@ void parse_opts(int *argcp, char ***argvp) {
         case '?':
             ios_printf(ios_stderr, "options:\n%s", opts);
             exit(1);
+        case 'l':
+            lisp_prompt = 1;
+            break;
         default:
             ios_printf(ios_stderr, "julia: unhandled option -- %c\n",  c);
             ios_printf(ios_stderr, "This is a bug, please report it.\n");
@@ -490,6 +494,8 @@ static jl_value_t *read_expr_ast(char *prompt, int *end, int *doprint) {
 #endif
 }
 
+void jl_lisp_prompt();
+
 int main(int argc, char *argv[])
 {
     llt_init();
@@ -526,6 +532,10 @@ int main(int argc, char *argv[])
     }
 #endif
 
+    if (lisp_prompt) {
+        jl_lisp_prompt();
+        return 0;
+    }
     if (load_start_j) {
         if (!setjmp(ExceptionHandler)) {
             jl_load("start.j");
@@ -544,6 +554,7 @@ int main(int argc, char *argv[])
                 ios_printf(ios_stdout, "\n");
             }
         }
+        jl_shutdown_frontend();
         return 0;
     }
     if (program) {

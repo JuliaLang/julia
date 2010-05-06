@@ -85,6 +85,11 @@ static builtinspec_t julia_flisp_func_info[] = {
     { NULL, NULL }
 };
 
+void jl_lisp_prompt()
+{
+    fl_applyn(1, symbol_value(symbol("__start")), fl_cons(FL_NIL,FL_NIL));
+}
+
 void jl_init_frontend()
 {
     fl_init(2*512*1024);
@@ -101,11 +106,14 @@ void jl_init_frontend()
         exit(1);
     }
 
+    fl_applyn(0, symbol_value(symbol("__init_globals")));
+
     htable_new(&gensym_table, 0);
 }
 
 void jl_shutdown_frontend()
 {
+    //fl_applyn(0, symbol_value(symbol("show-profiles")));
 }
 
 static jl_sym_t *scmsym_to_julia(value_t s)

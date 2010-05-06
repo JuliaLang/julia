@@ -39,17 +39,6 @@
 (define-macro (label name fn)
   `((lambda (,name) (set! ,name ,fn)) #f))
 
-(define (mapn f lsts)
-  (if (null? (car lsts))
-      ()
-      (cons (apply f (map1 car lsts))
-	    (mapn  f (map1 cdr lsts)))))
-
-(define (map f lst . lsts)
-  (if (null? lsts)
-      (map1 f lst)
-      (mapn f (cons lst lsts))))
-
 (define-macro (let binds . body)
   (let ((lname #f))
     (if (symbol? binds)
@@ -280,12 +269,18 @@
 
 (define (separate pred lst)
   (define (separate- pred lst yes no)
-    (cond ((null? lst) (values (reverse yes) (reverse no)))
-	  ((pred (car lst))
-	   (separate- pred (cdr lst) (cons (car lst) yes) no))
-	  (else
-	   (separate- pred (cdr lst) yes (cons (car lst) no)))))
-  (separate- pred lst () ()))
+    (let ((vals
+	   (prog1
+	    (cons yes no)
+	    (while (pair? lst)
+		   (begin (if (pred (car lst))
+			      (set! yes
+				    (cdr (set-cdr! yes (cons (car lst) ()))))
+			      (set! no
+				    (cdr (set-cdr! no  (cons (car lst) ())))))
+			  (set! lst (cdr lst)))))))
+      (values (cdr (car vals)) (cdr (cdr vals)))))
+  (separate- pred lst (list ()) (list ())))
 
 (define (count f l)
   (define (count- f l n)

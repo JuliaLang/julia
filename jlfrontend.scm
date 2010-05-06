@@ -32,4 +32,6 @@
   (parser-wrap (lambda ()
 		 (cons 'file (map toplevel-expr (julia-parse-file s))))))
 
+;(load "profile.scm")
+
 (make-system-image "julia_flisp.boot")

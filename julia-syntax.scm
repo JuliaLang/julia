@@ -977,7 +977,8 @@ So far only the second case can actually occur.
 	(else (map (lambda (x) (if (not (pair? x)) x (flatten-scopes x))) e))))
 
 (define (make-var-info name) (list 'vinfo name 'Any #f))
-(define (vinfo:name v) (list-ref v 1))
+(define (var-info/t name type) (list 'vinfo name type #f))
+(define vinfo:name cadr)
 (define (vinfo:type v) (list-ref v 2))
 (define (vinfo:capt v) (list-ref v 3))
 (define (vinfo:set-type! v t) (set-car! (list-tail v 2) t))
@@ -1001,66 +1002,56 @@ So far only the second case can actually occur.
       `(call (top tuple) ,t)
       t))
 
+(define (free-vars e)
+  (cond ((symbol? e) (list e))
+	((or (atom? e) (quoted? e)) '())
+	((eq? (car e) 'lambda)
+	 (diff (free-vars (lam:body e))
+	       (lambda-all-vars e)))
+	(else (unique (apply nconc (map free-vars (cdr e)))))))
+
 ; convert each lambda's (locals ...) to
 ;   (var-info (locals ...) var-info-lst captured-var-names)
 ; where var-info-lst is a list of var-info records
-; returns (expr . captured-vars), where captured-vars is a list of
-; (var-info . frame) records.
 (define (analyze-vars e env)
-  ; returns #f or (var-info . frame)
-  (define (var-lookup v env)
-    (if (not (pair? env)) #f
-	(let ((vi (var-info-for v (car env))))
-	  (if vi
-	      (cons vi (car env))
-	      (var-lookup v (cdr env))))))
-
-  (cond ((symbol? e)
-	 (let ((v (var-lookup e env)))
-	   (if (and v (not (eq? (cdr v) (car env))))
-	       (begin (vinfo:set-capt! (car v) #t)
-		      (cons e (list v)))
-	       (cons e '()))))
-	((or (not (pair? e)) (quoted? e)) (cons e '()))
+  (cond ((or (atom? e) (quoted? e)) e)
 	((eq? (car e) '|::|)
-	 (let ((inner (analyze-vars (cadr e) env)))
-	   (if (symbol? (cadr e))
-	       (let ((v (var-lookup (cadr e) env)))
-		 (if v
-		     (vinfo:set-type! (car v) (caddr e)))
-		 (cons '(null) (cdr inner)))
-	       (cons `(call (top typeassert)
-			    ,(car inner) ,(caddr e))
-		     (cdr inner)))))
+	 (if (symbol? (cadr e))
+	     (let ((vi (var-info-for (cadr e) env)))
+	       (if vi
+		   (vinfo:set-type! vi (caddr e)))
+	       '(null))
+	     (let ((e2 (analyze-vars (cadr e) env)))
+	       `(call (top typeassert) ,e2 ,(caddr e)))))
 	((eq? (car e) 'lambda)
-	 (let* ((lvars (lambda-all-vars e))
-		(vi    (map make-var-info lvars))
-		(rec   (analyze-vars (lam:body e) (cons vi env)))
-		; from this inner function's captured variables, select
-		; those that come from frames above ours. we need to
-		; capture those variables too, in order to pass them on
-		; to this inner function.
-		(cv    (filter (lambda (vi)
-				 (member-p vi (cdr env)
-					   (lambda (v e) (eq? (cdr v) e))))
-			       (cdr rec))))
-	   (for-each (lambda (decl)
-		       (vinfo:set-type! (var-info-for (decl-var decl) vi)
-					(fix-seq-type (decl-type decl))))
-		     (lam:args e))
-	   (cons `(lambda ,(lam:args e)
-		   ;(var-info  locals  vinfos  captured         staticparams)
-		    (var-info ,(caddr e) ,vi ,(map car (cdr rec)) ())
-		    ,(car rec))
-		 cv)))
-	(else (let ((rec (map (lambda (x) (analyze-vars x env))
-			      (cdr e))))
-		(cons (cons (car e) (map car rec))
-		      (delete-duplicates-p
-		       (apply append (map cdr rec))
-		       (lambda (a b) (eq? (car a) (car b)))))))))
+	 (let* ((args (lam:args e))
+		(locl (cdr (caddr e)))
+		(allv (nconc (map arg-name args) locl))
+		(fv   (diff (free-vars (lam:body e)) allv))
+		(vi   (nconc
+		       (map (lambda (decl)
+			      (var-info/t (decl-var decl)
+					  (fix-seq-type (decl-type decl))))
+			    args)
+		       (map make-var-info locl)))
+		(cv    (filter (lambda (v) (memq (vinfo:name v) fv))
+			       env))
+		(bod   (analyze-vars
+			(lam:body e)
+			(append vi
+				(filter (lambda (v)
+					  (not (memq (vinfo:name v) allv)))
+					env)))))
+	   (for-each (lambda (v) (vinfo:set-capt! v #t))
+		     cv)
+	   `(lambda ,args
+	      (var-info ,(caddr e) ,vi ,cv ())
+	      ,bod)))
+	(else (cons (car e)
+		    (map (lambda (x) (analyze-vars x env))
+			 (cdr e))))))
 
-(define (analyze-variables e) (car (analyze-vars e '())))
+(define (analyze-variables e) (analyze-vars e '()))
 
 ; lower closures, using the results of analyze-vars
 ; . for each captured var v, initialize with v = box(Any,())

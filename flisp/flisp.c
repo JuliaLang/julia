@@ -1724,7 +1724,10 @@ static value_t apply_cl(uint32_t nargs)
             else {
                 PUSH(Stack[bp]); // env has already been captured; share
             }
-            pv = alloc_words(4);
+            if (curheap > lim-2)
+                gc(0);
+            pv = (value_t*)curheap;
+            curheap += (4*sizeof(value_t));
             e = Stack[SP-2];  // closure to copy
             assert(isfunction(e));
             pv[0] = ((value_t*)ptr(e))[0];
@@ -2129,32 +2132,65 @@ value_t fl_stacktrace(value_t *args, u_int32_t nargs)
 
 value_t fl_map1(value_t *args, u_int32_t nargs)
 {
-    argcount("map1", nargs, 2);
+    if (nargs < 2)
+        lerror(ArgError, "map: too few arguments");
     if (!iscons(args[1])) return NIL;
     value_t first, last, v;
-    PUSH(args[0]);
-    PUSH(car_(args[1]));
-    v = _applyn(1);
-    PUSH(v);
-    v = mk_cons();
-    car_(v) = POP(); cdr_(v) = NIL;
-    last = first = v;
-    args[1] = cdr_(args[1]);
-    fl_gc_handle(&first);
-    fl_gc_handle(&last);
-    while (iscons(args[1])) {
-        Stack[SP-2] = args[0];
-        Stack[SP-1] = car_(args[1]);
-        value_t v = _applyn(1);
+    if (nargs == 2) {
+        PUSH(args[0]);
+        PUSH(car_(args[1]));
+        v = _applyn(1);
         PUSH(v);
         v = mk_cons();
         car_(v) = POP(); cdr_(v) = NIL;
-        cdr_(last) = v;
-        last = v;
+        last = first = v;
         args[1] = cdr_(args[1]);
+        fl_gc_handle(&first);
+        fl_gc_handle(&last);
+        while (iscons(args[1])) {
+            Stack[SP-2] = args[0];
+            Stack[SP-1] = car_(args[1]);
+            v = _applyn(1);
+            PUSH(v);
+            v = mk_cons();
+            car_(v) = POP(); cdr_(v) = NIL;
+            cdr_(last) = v;
+            last = v;
+            args[1] = cdr_(args[1]);
+        }
+        POPN(2);
+        fl_free_gc_handles(2);
     }
-    POPN(2);
-    fl_free_gc_handles(2);
+    else {
+        size_t i;
+        PUSH(args[0]);
+        for(i=1; i < nargs; i++) {
+            PUSH(car(args[i]));
+            args[i] = cdr_(args[i]);
+        }
+        v = _applyn(nargs-1);
+        PUSH(v);
+        v = mk_cons();
+        car_(v) = POP(); cdr_(v) = NIL;
+        last = first = v;
+        fl_gc_handle(&first);
+        fl_gc_handle(&last);
+        while (iscons(args[1])) {
+            Stack[SP-nargs] = args[0];
+            for(i=1; i < nargs; i++) {
+                Stack[SP-nargs+i] = car(args[i]);
+                args[i] = cdr_(args[i]);
+            }
+            v = _applyn(nargs-1);
+            PUSH(v);
+            v = mk_cons();
+            car_(v) = POP(); cdr_(v) = NIL;
+            cdr_(last) = v;
+            last = v;
+        }
+        POPN(nargs);
+        fl_free_gc_handles(2);
+    }
     return first;
 }
 
@@ -2171,7 +2207,7 @@ static builtinspec_t core_builtin_info[] = {
     { "copy-list", fl_copylist },
     { "append", fl_append },
     { "list*", fl_liststar },
-    { "map1", fl_map1 },
+    { "map", fl_map1 },
     { NULL, NULL }
 };
 
@@ -2316,8 +2352,6 @@ int fl_load_system_image(value_t sys_image_iostream)
                 break;
             }
         }
-        value_t igf = symbol_value(symbol("__init_globals"));
-        if (igf != UNBOUND) fl_applyn(0, igf);
     }
     FL_CATCH {
         ios_puts("fatal error during bootstrap:\n", ios_stderr);

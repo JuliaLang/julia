@@ -23,7 +23,7 @@ TODO:
      (|::|)
      (|.|)))
 
-(define (prec-ops n) (aref ops-by-prec n))
+(define-macro (prec-ops n) `(aref ops-by-prec ,n))
 
 ; unused characters: @ prefix'
 ; no character literals; unicode kind of makes them obsolete. strings instead.
