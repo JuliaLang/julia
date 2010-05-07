@@ -3,8 +3,9 @@
 *.a
 /julia-defs.s.bc
 /julia-defs.s.bc.inc
-/jlfrontend.c
-/jlfrontend_.c
+/julia_flisp.boot
+/julia_flisp.boot.inc
+flisp/flisp
 /julia
 /julia-debug
 /julia-release

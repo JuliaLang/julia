@@ -7,6 +7,7 @@
 
 #include "llt.h"
 #include "flisp.h"
+#include "equalhash.h"
 
 #include "htable.inc"
 

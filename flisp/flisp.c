@@ -109,6 +109,13 @@ static value_t apply_cl(uint32_t nargs);
 static value_t *alloc_words(int n);
 static value_t relocate(value_t v);
 
+typedef struct _fl_readstate_t {
+    htable_t backrefs;
+    htable_t gensyms;
+    value_t source;
+    struct _fl_readstate_t *prev;
+} fl_readstate_t;
+
 static fl_readstate_t *readstate = NULL;
 
 static void free_readstate(fl_readstate_t *rs)
@@ -164,7 +171,7 @@ void fl_raise(value_t e)
 {
     fl_lasterror = e;
     // unwind read state
-    while (readstate != fl_ctx->rdst) {
+    while (readstate != (fl_readstate_t*)fl_ctx->rdst) {
         free_readstate(readstate);
         readstate = readstate->prev;
     }
