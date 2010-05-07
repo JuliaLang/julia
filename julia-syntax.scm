@@ -906,22 +906,22 @@ So far only the second case can actually occur.
 ; this works on any tree format after identify-locals
 (define (rename-vars e renames)
   (define (without alst remove)
-    (if (null? remove)
-	alst
-	(filter (lambda (ren)
-		  (not (memq (car ren) remove)))
-		alst)))
+    (cond ((null? alst)               '())
+	  ((null? remove)             alst)
+	  ((memq (caar alst) remove)  (without (cdr alst) remove))
+	  (else                       (cons (car last)
+					    (without (cdr alst) remove)))))
   (cond ((null? renames)  e)
 	((symbol? e)      (lookup e renames e))
 	((not (pair? e))  e)
 	((quoted? e)      e)
 	(else
-	 (let* ((bound-vars  ; compute vars bound by current expr
-		 (case (car e)
-		   ((lambda)      (lam:vars e))
-		   ((scope-block) (declared-local-vars e))
-		   (else '())))
-		(new-renames (without renames bound-vars)))
+	 (let (; remove vars bound by current expr from rename list
+	       (new-renames (without renames
+				     (case (car e)
+				       ((lambda)      (lam:vars e))
+				       ((scope-block) (declared-local-vars e))
+				       (else '())))))
 	   (cons (car e)
 		 (map (lambda (x)
 			(rename-vars x new-renames))
@@ -930,27 +930,20 @@ So far only the second case can actually occur.
 ; remove (scope-block) and (local), convert lambdas to the form
 ; (lambda (argname...) (locals var...) body)
 (define (flatten-scopes e)
-  ; returns (expr . all-locals)
+  (define scope-block-vars '())
   (define (remove-scope-blocks e)
-    (cond ((or (not (pair? e)) (quoted? e)) (cons e '()))
-	  ((eq? (car e) 'lambda) (cons (flatten-scopes e) '()))
-	  ((eq? (car e) 'local)  (if (pair? (cadr e))
-				     (cons (cadr e) '())
-				     (cons '(null) '())))
-	  ((eq? (car e) 'local!) (cons '(null) '()))
+    (cond ((or (atom? e) (quoted? e)) e)
+	  ((eq? (car e) 'lambda) (flatten-scopes e))
 	  ((eq? (car e) 'scope-block)
 	   (let ((vars (declared-local-vars e))
 		 (body (car (last-pair e))))
-	     (let ((newnames (map (lambda (x) (gensym)) vars))
-		   (rec (remove-scope-blocks body)))
-	       (cons
-		(rename-vars (car rec) (map cons vars newnames))
-		(append newnames (cdr rec))))))
-	  (else
-	   (let ((rec (map remove-scope-blocks e)))
-	     (cons (map car rec)
-		   (apply append (map cdr rec)))))))
-
+	     (let* ((newnames (map (lambda (x) (gensym)) vars))
+		    (bod (rename-vars (remove-scope-blocks body)
+				      (map cons vars newnames))))
+	       (set! scope-block-vars (nconc newnames scope-block-vars))
+	       bod)))
+	  (else (map remove-scope-blocks e))))
+  
   (cond ((not (pair? e))   e)
 	((quoted? e)       e)
 	((eq? (car e)      'lambda)
@@ -967,9 +960,11 @@ So far only the second case can actually occur.
 		     (declared-local!-vars body0)))
 		(r-s-b (remove-scope-blocks body)))
 	   `(lambda ,(cadr e)
-	      (locals ,@l0 ,@(cdr r-s-b))
-	      ,(car r-s-b))))
-	(else (map (lambda (x) (if (not (pair? x)) x (flatten-scopes x))) e))))
+	      (locals ,@l0 ,@scope-block-vars)
+	      ,r-s-b)))
+	(else (map (lambda (x) (if (not (pair? x)) x
+				   (flatten-scopes x)))
+		   e))))
 
 (define (make-var-info name) (list name 'Any #f))
 (define (var-info/t name type) (list name type #f))
@@ -1008,6 +1003,10 @@ So far only the second case can actually occur.
   (cond ((or (atom? e) (quoted? e)) e)
 	((and (eq? (car e) '=) (symbol? (cadr e)))
 	 `(= ,(cadr e) ,(analyze-vars (caddr e) env)))
+	((or (eq? (car e) 'local) (eq? (car e) 'local!))
+	 (if (pair? (cadr e))
+	     (analyze-vars (cadr e) env)
+	     '(null)))
 	((eq? (car e) '|::|)
 	 ; handle var::T declaration by storing the type in the var-info
 	 ; record. for non-symbols, emit a type assertion.

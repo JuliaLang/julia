@@ -93,6 +93,7 @@ size_t ios_readprep(ios_t *from, size_t n);
 ios_t *ios_file(ios_t *s, char *fname, int rd, int wr, int create, int trunc);
 ios_t *ios_mem(ios_t *s, size_t initsize);
 ios_t *ios_str(ios_t *s, char *str);
+ios_t *ios_static_buffer(ios_t *s, char *buf, size_t sz);
 ios_t *ios_fd(ios_t *s, long fd, int isfile);
 // todo: ios_socket
 extern ios_t *ios_stdin;

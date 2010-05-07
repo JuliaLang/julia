@@ -768,6 +768,15 @@ ios_t *ios_str(ios_t *s, char *str)
     return s;
 }
 
+ios_t *ios_static_buffer(ios_t *s, char *buf, size_t sz)
+{
+    ios_mem(s, 0);
+    ios_setbuf(s, buf, sz, 0);
+    s->size = sz;
+    ios_set_readonly(s);
+    return s;
+}
+
 ios_t *ios_fd(ios_t *s, long fd, int isfile)
 {
     _ios_init(s);

@@ -96,10 +96,7 @@ void jl_init_frontend()
     assign_global_builtins(julia_flisp_func_info);
     value_t img = cvalue(iostreamtype, sizeof(ios_t));
     ios_t *pi = value2c(ios_t*, img);
-    ios_mem(pi, 0);
-    ios_setbuf(pi, flisp_system_image, sizeof(flisp_system_image), 0);
-    pi->size = sizeof(flisp_system_image);
-    ios_set_readonly(pi);
+    ios_static_buffer(pi, flisp_system_image, sizeof(flisp_system_image));
     
     if (fl_load_system_image(img)) {
         ios_printf(ios_stderr, "fatal error loading system image");
