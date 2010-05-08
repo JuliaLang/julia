@@ -15,7 +15,7 @@ FLAGS = -falign-functions -Wall -Wno-strict-aliasing -I$(LLTDIR) $(CFLAGS) $(CON
 LIBFILES = $(LLT)
 LIBS = $(LIBFILES) -lm -lgc
 
-DEBUGFLAGS = -g -DDEBUG $(FLAGS)
+DEBUGFLAGS = -g -ggdb3 -DDEBUG $(FLAGS)
 SHIPFLAGS = -O2 -DNDEBUG $(FLAGS)
 
 default: release test
@@ -45,11 +45,11 @@ $(LIBTARGET).a: $(OBJS)
 	rm -rf $@
 	ar rs $@ $(OBJS)
 
-efence: $(DOBJS) $(LIBFILES) $(LIBTARGET)-debug.a flmain.do
+debug: $(DOBJS) $(LIBFILES) $(LIBTARGET)-debug.a flmain.do
 	$(CC) $(DEBUGFLAGS) $(DOBJS) flmain.do -o $(EXENAME) $(LIBS) $(LIBTARGET).a $(OSLIBS)
 	make test
 
-debug: $(DOBJS) $(LIBFILES) $(LIBTARGET)-debug.a flmain.do
+efence: $(DOBJS) $(LIBFILES) $(LIBTARGET)-debug.a flmain.do
 	$(CC) $(DEBUGFLAGS) $(DOBJS) flmain.do -o $(EXENAME) $(EFENCE) $(LIBS) $(LIBTARGET).a $(OSLIBS)
 	make test
 
