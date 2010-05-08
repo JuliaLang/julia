@@ -46,11 +46,11 @@ $(LIBTARGET).a: $(OBJS)
 	ar rs $@ $(OBJS)
 
 debug: $(DOBJS) $(LIBFILES) $(LIBTARGET)-debug.a flmain.do
-	$(CC) $(DEBUGFLAGS) $(DOBJS) flmain.do -o $(EXENAME) $(LIBS) $(LIBTARGET).a
+	$(CC) $(DEBUGFLAGS) $(DOBJS) flmain.do -o $(EXENAME) $(LIBS) $(LIBTARGET).a $(OSLIBS)
 	make test
 
 release: $(OBJS) $(LIBFILES) $(LIBTARGET).a flmain.o
-	$(CC) $(SHIPFLAGS) $(OBJS) flmain.o -o $(EXENAME) $(LIBS) $(LIBTARGET).a
+	$(CC) $(SHIPFLAGS) $(OBJS) flmain.o -o $(EXENAME) $(LIBS) $(LIBTARGET).a $(OSLIBS)
 
 clean:
 	rm -f *.o
