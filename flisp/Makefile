@@ -45,8 +45,12 @@ $(LIBTARGET).a: $(OBJS)
 	rm -rf $@
 	ar rs $@ $(OBJS)
 
-debug: $(DOBJS) $(LIBFILES) $(LIBTARGET)-debug.a flmain.do
+efence: $(DOBJS) $(LIBFILES) $(LIBTARGET)-debug.a flmain.do
 	$(CC) $(DEBUGFLAGS) $(DOBJS) flmain.do -o $(EXENAME) $(LIBS) $(LIBTARGET).a $(OSLIBS)
+	make test
+
+debug: $(DOBJS) $(LIBFILES) $(LIBTARGET)-debug.a flmain.do
+	$(CC) $(DEBUGFLAGS) $(DOBJS) flmain.do -o $(EXENAME) $(EFENCE) $(LIBS) $(LIBTARGET).a $(OSLIBS)
 	make test
 
 release: $(OBJS) $(LIBFILES) $(LIBTARGET).a flmain.o
