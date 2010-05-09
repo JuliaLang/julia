@@ -844,16 +844,16 @@ static uint32_t process_keys(value_t kwtable,
     }
     if (i >= nargs) goto no_kw;
     // now process keywords
-    uint32_t n = vector_size(kwtable)/2;
+    uptrint_t n = vector_size(kwtable)/2;
     do {
         i++;
         if (i >= nargs)
             lerrorf(ArgError, "keyword %s requires an argument",
                     symbol_name(v));
         value_t hv = fixnum(((symbol_t*)ptr(v))->hash);
-        uint32_t x = 2*(abs(numval(hv)) % n);
+        uptrint_t x = 2*(labs(numval(hv)) % n);
         if (vector_elt(kwtable, x) == v) {
-            uint32_t idx = numval(vector_elt(kwtable, x+1));
+            uptrint_t idx = numval(vector_elt(kwtable, x+1));
             assert(idx < nkw);
             idx += nopt;
             if (args[idx] == UNBOUND) {
