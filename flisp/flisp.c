@@ -2008,6 +2008,8 @@ void assign_global_builtins(builtinspec_t *b)
 
 static value_t fl_function(value_t *args, uint32_t nargs)
 {
+    if (nargs == 1 && issymbol(args[0]))
+        return fl_builtin(args, nargs);
     if (nargs < 2 || nargs > 4)
         argcount("function", nargs, 2);
     if (!fl_isstring(args[0]))

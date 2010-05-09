@@ -712,7 +712,7 @@ static void cvalue_print(ios_t *f, value_t v)
             if (print_princ)
                 outs(symbol_name(label), f);
             else
-                HPOS += ios_printf(f, "#builtin(%s)", symbol_name(label));
+                HPOS += ios_printf(f, "#fn(%s)", symbol_name(label));
         }
     }
     else if (cv_class(cv)->vtable != NULL &&

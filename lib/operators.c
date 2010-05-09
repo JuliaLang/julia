@@ -205,6 +205,7 @@ int cmp_lt(void *a, numerictype_t atag, void *b, numerictype_t btag)
             return ((int64_t)*(uint64_t*)a < *(int64_t*)b);
         }
         else if (btag == T_DOUBLE) {
+            if (db != db) return 0;
             return (*(uint64_t*)a < (uint64_t)*(double*)b);
         }
     }
@@ -213,6 +214,7 @@ int cmp_lt(void *a, numerictype_t atag, void *b, numerictype_t btag)
             return (*(int64_t*)a < (int64_t)*(uint64_t*)b);
         }
         else if (btag == T_DOUBLE) {
+            if (db != db) return 0;
             return (*(int64_t*)a < (int64_t)*(double*)b);
         }
     }
@@ -221,6 +223,7 @@ int cmp_lt(void *a, numerictype_t atag, void *b, numerictype_t btag)
             return ((int64_t)*(uint64_t*)b > *(int64_t*)a);
         }
         else if (atag == T_DOUBLE) {
+            if (da != da) return 0;
             return (*(uint64_t*)b > (uint64_t)*(double*)a);
         }
     }
@@ -229,6 +232,7 @@ int cmp_lt(void *a, numerictype_t atag, void *b, numerictype_t btag)
             return (*(int64_t*)b > (int64_t)*(uint64_t*)a);
         }
         else if (atag == T_DOUBLE) {
+            if (da != da) return 0;
             return (*(int64_t*)b > (int64_t)*(double*)a);
         }
     }
