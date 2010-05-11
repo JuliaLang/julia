@@ -149,6 +149,26 @@ actual object to the constructor. but how to enforce that it gets
 initialized? do we require DFA to show that all fields are set and none
 are accessed before being set? this constrains the programming style.
 
+IDEA: have a special new() function in scope for user-defined constructors
+inside the type definition:
+
+struct Foo
+    ...
+
+    function Foo(any, arguments, x)
+        return new(any-x, x*any)
+    end
+end
+
+new() is the only way to make objects. it's a sealed generic
+function that only accepts arguments of the field types, and it's only
+visible inside the struct definition, so you can guarantee that immutable
+objects obey your invariants. Then calling Foo() externally calls
+your constructors. You can define new Foo() methods externally, but they
+can't see new() so they have to call other Foo constructors. You get full
+flexibility plus an abstraction barrier. If you don't write any constructors
+you get the default, Foo(args...) = new(args...).
+
 -------------------------------------------------------------------------------
 
 conversion/dispatch test cases:

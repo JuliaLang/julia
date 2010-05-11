@@ -69,8 +69,8 @@ clean:
 	rm -f *.do
 	rm -f *.bc
 	rm -f *.bc.inc
-	rm -f jlfrontend.c
-	rm -f jlfrontend_.c
+	rm -f julia_flisp.boot
+	rm -f julia_flisp.boot.inc
 	rm -f $(EXENAME)
 	rm -f *~ *#
 

@@ -20,28 +20,6 @@
 
 #define _IEEE754_H 1
 
-#ifdef LINUX
-
-#include <features.h>
-#include <endian.h>
-__BEGIN_DECLS
-
-#else
-
-#define __LITTLE_ENDIAN	1234
-#define __BIG_ENDIAN	4321
-#define __PDP_ENDIAN	3412
-
-#if defined(WIN32) || defined(ARCH_X86) || defined(ARCH_X86_64)
-#define __BYTE_ORDER __LITTLE_ENDIAN
-#define __FLOAT_WORD_ORDER __LITTLE_ENDIAN
-#else
-#define __BYTE_ORDER __BIG_ENDIAN
-#define __FLOAT_WORD_ORDER __BIG_ENDIAN
-#endif
-
-#endif //ifdef LINUX
-
 union ieee754_float
   {
     float f;
@@ -210,9 +188,5 @@ union ieee854_long_double
   };
 
 #define IEEE854_LONG_DOUBLE_BIAS 0x3fff
-
-#ifdef LINUX
-__END_DECLS
-#endif
 
 #endif /* ieee754.h */

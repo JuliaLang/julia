@@ -2146,6 +2146,7 @@ value_t fl_map1(value_t *args, u_int32_t nargs)
     if (!iscons(args[1])) return NIL;
     value_t first, last, v;
     if (nargs == 2) {
+        if (SP+3 > N_STACK) grow_stack();
         PUSH(args[0]);
         PUSH(car_(args[1]));
         v = _applyn(1);
@@ -2172,6 +2173,7 @@ value_t fl_map1(value_t *args, u_int32_t nargs)
     }
     else {
         size_t i;
+        while (SP+nargs+1 > N_STACK) grow_stack();
         PUSH(args[0]);
         for(i=1; i < nargs; i++) {
             PUSH(car(args[i]));

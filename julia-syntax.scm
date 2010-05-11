@@ -263,6 +263,11 @@
    (pattern-lambda (function (call name . argl) body)
 		   (generic-function-def-expr name '() argl body))
 
+   (pattern-lambda (function (-- arg (-s)) body)
+		   `(-> ,arg ,body))
+   (pattern-lambda (function (tuple . args) body)
+		   `(-> (tuple ,@args) ,body))
+
    ; expression form function definition
    (pattern-lambda (= (call (curly name . sparams) . argl) body)
 		   `(function (call (curly ,name . ,sparams) . ,argl) ,body))
@@ -294,7 +299,7 @@
 		   (struct-def-expr name params super fields))
 
    ; macro for timing evaluation
-   (pattern-lambda (call (-/ Time) expr)
+   (pattern-lambda (call (-/ time) expr)
 		   `(call time_thunk (-> (tuple) ,expr)))
 
    )) ; binding-form-patterns

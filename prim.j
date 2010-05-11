@@ -8,7 +8,7 @@ typealias Size  Int32
 ref(t::Tuple, i::Index) = tupleref(t, i)
 length(t::Tuple) = tuplelen(t)
 
-!(x::Bool) = eq_int(unbox8(x),unbox8(0))
+!(x::Bool) = eq_int(unbox8(x),trunc8(unbox32(0)))
 !(x) = false
 !=(x, y) = !(x == y)
 
