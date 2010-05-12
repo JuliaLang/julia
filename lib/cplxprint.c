@@ -1,7 +1,9 @@
 #include <math.h>
 #include <stdlib.h>
 #include <string.h>
+#ifndef MACOSX
 #include "ieee754.h"
+#endif
 #include "dtypes.h"
 #include "utils.h"
 

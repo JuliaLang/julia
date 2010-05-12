@@ -4,7 +4,9 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <math.h>
+#ifndef MACOSX
 #include "ieee754.h"
+#endif
 #include "dtypes.h"
 #include "utils.h"
 #include "hashing.h"
