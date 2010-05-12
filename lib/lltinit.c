@@ -3,9 +3,6 @@
 #include <stdarg.h>
 #include <math.h>
 #include <locale.h>
-#ifndef MACOSX
-#include "ieee754.h"
-#endif
 #include "dtypes.h"
 #include "timefuncs.h"
 #include "ios.h"
