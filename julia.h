@@ -162,6 +162,7 @@ typedef struct {
     JL_VALUE_STRUCT
     jl_sym_t *head;
     jl_tuple_t *args;
+    jl_type_t *etype;
 } jl_expr_t;
 
 extern jl_tag_type_t *jl_any_type;

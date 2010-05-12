@@ -69,7 +69,6 @@ static GlobalVariable *jltrue_var;
 static GlobalVariable *jlfalse_var;
 static GlobalVariable *jlnull_var;
 static GlobalVariable *jlsysmod_var;
-static GlobalVariable *jlfunctype_var;
 
 // important functions
 static Function *jlerror_func;
@@ -715,7 +714,6 @@ static void init_julia_llvm_env(Module *m)
     jlfalse_var = global_to_llvm("jl_false", (void*)&jl_false);
     jlnull_var = global_to_llvm("jl_null", (void*)&jl_null);
     jlsysmod_var = global_to_llvm("jl_system_module", (void*)&jl_system_module);
-    jlfunctype_var = global_to_llvm("jl_any_func", (void*)&jl_any_func);
 
     std::vector<const Type*> args1(0);
     args1.push_back(T_pint8);

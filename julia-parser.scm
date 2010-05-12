@@ -68,6 +68,7 @@ TODO:
 				      (char<=? c #\z))
 				 (and (char>=? c #\0)
 				      (char<=? c #\9))
+				 (char>=? c #\uA1)
 				 (eqv? c #\_)))
 (define (opchar? c) (string.find op-chars c))
 (define (operator? c) (memq c operators))
