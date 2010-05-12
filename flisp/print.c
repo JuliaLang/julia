@@ -489,6 +489,7 @@ static void print_string(ios_t *f, char *str, size_t sz)
     char buf[512];
     size_t i = 0;
     uint8_t c;
+    static char hexdig[] = "0123456789abcdef";
 
     outc('"', f);
     if (!u8_isvalid(str, sz)) {
@@ -501,8 +502,11 @@ static void print_string(ios_t *f, char *str, size_t sz)
                 outsn("\\\"", f, 2);
             else if (c >= 32 && c < 0x7f)
                 outc(c, f);
-            else
-                HPOS += ios_printf(f, "\\x%02x", c);
+            else {
+                outsn("\\x", f, 2);
+                outc(hexdig[c>>4], f);
+                outc(hexdig[c&0xf], f);
+            }
         }
     }
     else {
@@ -709,10 +713,14 @@ static void cvalue_print(ios_t *f, value_t v)
                                (unsigned long)(builtin_t)fptr);
         }
         else {
-            if (print_princ)
+            if (print_princ) {
                 outs(symbol_name(label), f);
-            else
-                HPOS += ios_printf(f, "#fn(%s)", symbol_name(label));
+            }
+            else {
+                outsn("#fn(", f, 4);
+                outs(symbol_name(label), f);
+                outc(')', f);
+            }
         }
     }
     else if (cv_class(cv)->vtable != NULL &&
