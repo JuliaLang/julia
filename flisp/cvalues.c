@@ -882,7 +882,7 @@ value_t fl_builtin(value_t *args, u_int32_t nargs)
     symbol_t *name = tosymbol(args[0], "builtin");
     cvalue_t *cv;
     if (ismanaged(args[0]) || (cv=name->dlcache) == NULL) {
-        lerror(ArgError, "builtin: function not found");
+        lerrorf(ArgError, "builtin: function %s not found", name->name);
     }
     return tagptr(cv, TAG_CVALUE);
 }
