@@ -887,7 +887,7 @@ static uint32_t process_keys(value_t kwtable,
     return nargs;
 }
 
-#if _BYTE_ORDER == __BIG_ENDIAN
+#if BYTE_ORDER == BIG_ENDIAN
 #define GET_INT32(a)                            \
     ((int32_t)                                  \
     ((((int32_t)a[0])<<0)  |                    \
@@ -2027,7 +2027,7 @@ static value_t fl_function(value_t *args, uint32_t nargs)
             data[i] -= 48;
     }
     else {
-#if _BYTE_ORDER == __BIG_ENDIAN
+#if BYTE_ORDER == BIG_ENDIAN
         swap = 1;
 #endif
     }

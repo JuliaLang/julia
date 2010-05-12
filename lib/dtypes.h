@@ -20,20 +20,18 @@
 
 #include <features.h>
 #include <endian.h>
+#define LITTLE_ENDIAN  __LITTLE_ENDIAN
+#define BIG_ENDIAN     __BIG_ENDIAN
+#define PDP_ENDIAN     __PDP_ENDIAN
+#define BYTE_ORDER     __BYTE_ORDER
 
 #else
 
-#define __LITTLE_ENDIAN	1234
-#define __BIG_ENDIAN	4321
-#define __PDP_ENDIAN	3412
-
-#if defined(WIN32) || defined(ARCH_X86) || defined(ARCH_X86_64)
-#define __BYTE_ORDER __LITTLE_ENDIAN
-#define __FLOAT_WORD_ORDER __LITTLE_ENDIAN
-#else
-#define __BYTE_ORDER __BIG_ENDIAN
-#define __FLOAT_WORD_ORDER __BIG_ENDIAN
-#endif
+#include <machine/endian.h>
+#define __LITTLE_ENDIAN  LITTLE_ENDIAN
+#define __BIG_ENDIAN     BIG_ENDIAN
+#define __PDP_ENDIAN     PDP_ENDIAN
+#define __BYTE_ORDER     BYTE_ORDER
 
 #endif //ifdef LINUX
 

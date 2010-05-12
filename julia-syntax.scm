@@ -646,7 +646,7 @@
 	((&&) (let ((e (flatten-op '&& e)))
 		(let loop ((tail (cdr e)))
 		  (if (null? tail)
-		      true
+		      'true
 		      (if (null? (cdr tail))
 			  (expand-and-or (car tail))
 			  `(if ,(expand-and-or (car tail))
@@ -655,7 +655,7 @@
 	((|\|\||) (let ((e (flatten-op '|\|\|| e)))
 		    (let loop ((tail (cdr e)))
 		      (if (null? tail)
-			  false
+			  'false
 			  (if (null? (cdr tail))
 			      (expand-and-or (car tail))
 			      (if (symbol? (car tail))

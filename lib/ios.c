@@ -718,6 +718,7 @@ static void _ios_init(ios_t *s)
     s->bpos = 0;
     s->ndirty = 0;
     s->tally = 0;
+    s->lineno = 1;
     s->fd = -1;
     s->byteswap = 0;
     s->ownbuf = 1;
@@ -823,12 +824,16 @@ int ios_putc(int c, ios_t *s)
 
 int ios_getc(ios_t *s)
 {
-    if (s->bpos < s->size)
-        return s->buf[s->bpos++];
-    if (s->_eof) return IOS_EOF;
     char ch;
-    if (ios_read(s, &ch, 1) < 1)
-        return IOS_EOF;
+    if (s->bpos < s->size) {
+        ch = s->buf[s->bpos++];
+    }
+    else {
+        if (s->_eof) return IOS_EOF;
+        if (ios_read(s, &ch, 1) < 1)
+            return IOS_EOF;
+    }
+    if (ch == '\n') s->lineno++;
     return (int)ch;
 }
 
@@ -873,12 +878,12 @@ int ios_getutf8(ios_t *s, uint32_t *pwc)
     c = ios_getc(s);
     if (c == IOS_EOF)
         return IOS_EOF;
-    c0 = (char)c;
-    sz = u8_seqlen(&c0)-1;
-    if (sz == 0) {
-        *pwc = (uint32_t)c0;
+    if (c < 0x80) {
+        *pwc = (uint32_t)c;
         return 1;
     }
+    c0 = (char)c;
+    sz = u8_seqlen(&c0)-1;
     if (ios_ungetc(c, s) == IOS_EOF)
         return IOS_EOF;
     if (ios_readprep(s, sz) < sz)

@@ -34,6 +34,7 @@ typedef struct {
     // intended for keeping track of relative positions in streams
     // that don't have absolute positions (like sockets).
     size_t tally;
+    size_t lineno;
 
     // pointer-size integer to support platforms where it might have
     // to be a pointer

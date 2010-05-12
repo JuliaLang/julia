@@ -192,6 +192,13 @@ value_t fl_ioeof(value_t *args, u_int32_t nargs)
     return (ios_eof(s) ? FL_T : FL_F);
 }
 
+value_t fl_iolineno(value_t *args, u_int32_t nargs)
+{
+    argcount("input-port-line", nargs, 1);
+    ios_t *s = toiostream(args[0], "input-port-line");
+    return size_wrap(s->lineno);
+}
+
 value_t fl_ioseek(value_t *args, u_int32_t nargs)
 {
     argcount("io.seek", nargs, 2);
@@ -425,6 +432,7 @@ static builtinspec_t iostreamfunc_info[] = {
     { "io.readuntil", fl_ioreaduntil },
     { "io.copyuntil", fl_iocopyuntil },
     { "io.tostring!", fl_iotostring },
+    { "input-port-line", fl_iolineno },
 
     { NULL, NULL }
 };

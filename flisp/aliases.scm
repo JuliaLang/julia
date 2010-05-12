@@ -61,10 +61,6 @@
 (define (current-output-port (p *output-stream*))
   (set! *output-stream* p))
 
-(define (input-port-line p)
-  ; TODO
-  1)
-
 (define (display x (port *output-stream*))
   (with-output-to port (princ x))
   #t)
