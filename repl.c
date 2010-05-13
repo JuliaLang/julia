@@ -241,9 +241,9 @@ static int history_offset = -1;
 #define history_rem(n) remove_history(n-history_base)
 
 static void init_history() {
+    using_history();
     char *home = getenv("HOME");
     if (!home) return;
-    using_history();
     asprintf(&history_file, "%s/.julia_history", home);
     struct stat stat_info;
     if (!stat(history_file, &stat_info)) {
