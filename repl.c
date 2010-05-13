@@ -75,6 +75,7 @@ static const char *opts =
     " -H --home=<dir>    Load files relative to <dir>\n"
     " -T --tab=<size>    Set REPL tab width to <size>\n"
     " -b --bare          Bare REPL: don't load start.j\n"
+    " -L --lisp          Start with Lisp prompt not Julia\n"
     " -h --help          Print this message\n";
 
 void parse_opts(int *argcp, char ***argvp) {
@@ -86,11 +87,12 @@ void parse_opts(int *argcp, char ***argvp) {
         { "home",        required_argument, 0, 'H' },
         { "tab",         required_argument, 0, 'T' },
         { "bare",        no_argument,       0, 'b' },
+        { "lisp",        no_argument,       0, 'L' },
         { "help",        no_argument,       0, 'h' },
         { 0, 0, 0, 0 }
     };
     int c;
-    while ((c = getopt_long(*argcp,*argvp,"qRe:E:H:T:bhl",longopts,0)) != -1) {
+    while ((c = getopt_long(*argcp,*argvp,"qRe:E:H:T:bLh",longopts,0)) != -1) {
         switch (c) {
         case 'q':
             print_banner = 0;
@@ -117,15 +119,15 @@ void parse_opts(int *argcp, char ***argvp) {
         case 'b':
             load_start_j = 0;
             break;
+        case 'L':
+            lisp_prompt = 1;
+            break;
         case 'h':
             printf("%s%s", usage, opts);
             exit(0);
         case '?':
             ios_printf(ios_stderr, "options:\n%s", opts);
             exit(1);
-        case 'l':
-            lisp_prompt = 1;
-            break;
         default:
             ios_printf(ios_stderr, "julia: unhandled option -- %c\n",  c);
             ios_printf(ios_stderr, "This is a bug, please report it.\n");
