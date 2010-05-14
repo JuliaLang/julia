@@ -60,6 +60,7 @@ julia-release: $(OBJS) $(LIBFILES) julia-defs.s.bc
 	ln -sf $@ julia
 
 debug release efence: %: julia-%
+	sh ./gen_mathfunctions.sh > mathfunctions.j
 
 test: debug
 	julia tests.j
