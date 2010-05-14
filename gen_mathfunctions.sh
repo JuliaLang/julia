@@ -10,7 +10,7 @@ fi
 
 echo
 
-for func in sin cos tan sinh cosh tanh asin acos atan log log10 log1p exp expm1 erf floor ceil sqrt cbrt rint; do
+for func in sin cos tan sinh cosh tanh asin acos atan log log10 log1p exp expm1 erf erfc floor ceil sqrt cbrt rint; do
     echo "# $func"
     echo "$func(x::Float64) = ccall(dlsym(libm,\"$func\"), Float64, (Float64,), x)"
     echo "$func(x::Float32) = ccall(dlsym(libm,\"${func}f\"), Float32, (Float32,), x)"
@@ -41,3 +41,6 @@ for func in isinf isnan; do
     echo "$func(x::Matrix) = [ $func(x[i,j]) | i=1:size(x,1), j=1:size(x,2) ]"
     echo
 done
+
+echo "rand_func = dlsym(libm, \"random\")"
+echo "rand() = ccall (rand_func, Int32, ()) / 2147483647"
