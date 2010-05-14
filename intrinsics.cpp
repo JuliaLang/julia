@@ -143,11 +143,15 @@ static Function *value_to_pointer_func;
 
 extern "C" void *jl_value_to_pointer(jl_value_t *jt, jl_value_t *v, int argn)
 {
+    if (v == (jl_value_t*)jl_null)
+        return NULL;
+    if (jl_is_cpointer(v))
+        return jl_unbox_pointer(v);
     if ((jl_value_t*)jl_typeof(v) == jt)
         return jl_bits_data(v);
     if (jl_is_array(v) && jl_tparam0(jl_typeof(v)) == jt)
         return ((jl_array_t*)v)->data;
-    jl_errorf("ccall: expected %s as argument %d",
+    jl_errorf("ccall: expected Pointer{%s} as argument %d",
               jl_print_to_string(jt), argn);
     return (jl_value_t*)jl_null;
 }

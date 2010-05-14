@@ -10,7 +10,7 @@ fi
 
 echo
 
-for func in sin cos tan sinh cosh tanh asin acos atan log log2 log10 log1p exp expm1 erf erfc floor ceil sqrt cbrt rint; do
+for func in sin cos tan sinh cosh tanh asin acos atan log log2 log10 log1p logb exp exp2 expm1 erf erfc sqrt cbrt ceil floor nearbyint round rint trunc; do
     echo "# $func"
     echo "$func(x::Float64) = ccall(dlsym(libm,\"$func\"), Float64, (Float64,), x)"
     echo "$func(x::Float32) = ccall(dlsym(libm,\"${func}f\"), Float32, (Float32,), x)"
@@ -26,7 +26,12 @@ echo "abs(x::Vector) = [ abs(x[i]) | i=1:length(x) ]"
 echo "abs(x::Matrix) = [ abs(x[i,j]) | i=1:size(x,1), j=1:size(x,2) ]"
 echo
 
-for func in atan2 pow remainder copysign hypot; do
+echo "# ldexp"
+echo "ldexp(x::Float64,e::Int32) = ccall(dlsym(libm,\"ldexp\"), Float64, (Float64,Int32), x, e)"
+echo "ldexp(x::Float32,e::Int32) = ccall(dlsym(libm,\"ldexpf\"), Float32, (Float32,Int32), x, e)"
+echo
+
+for func in atan2 pow remainder fmod copysign hypot fmin fmax fdim; do
     echo "# $func"
     echo "$func(x::Float64, y::Float64) = ccall(dlsym(libm,\"$func\"), Float64, (Float64, Float64,), x, y)"
     echo "$func(x::Float32, y::Float32) = ccall(dlsym(libm,\"${func}f\"), Float32, (Float32, Float32), x, y)"
@@ -37,6 +42,15 @@ for func in isinf isnan; do
     echo "# $func"
     echo "$func(x::Float64) = ccall(dlsym(libm,\"$func\"), Int32, (Float64,), x)!=0"
     echo "$func(x::Float32) = ccall(dlsym(libm,\"${func}f\"), Int32, (Float32,), x)!=0"
+    echo "$func(x::Vector) = [ $func(x[i]) | i=1:length(x) ]"
+    echo "$func(x::Matrix) = [ $func(x[i,j]) | i=1:size(x,1), j=1:size(x,2) ]"
+    echo
+done
+
+for func in lrint lround ilogb; do
+    echo "# $func"
+    echo "$func(x::Float64) = ccall(dlsym(libm,\"$func\"), Int32, (Float64,), x)"
+    echo "$func(x::Float32) = ccall(dlsym(libm,\"${func}f\"), Int32, (Float32,), x)"
     echo "$func(x::Vector) = [ $func(x[i]) | i=1:length(x) ]"
     echo "$func(x::Matrix) = [ $func(x[i,j]) | i=1:size(x,1), j=1:size(x,2) ]"
     echo

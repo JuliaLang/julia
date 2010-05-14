@@ -9,6 +9,7 @@ size(t::Tensor, d) = size(t)[d]
 ndims(t::Tensor) = length(size(t))
 numel(t::Tensor) = prod(size(t))
 length(v::Vector) = size(v,1)
+nnz(a::Array) = do (n = 0, for i=1:numel(a); n += a[i] != 0 ? 1 : 0; end, n)
 
 zeros(T::Type, dims...) = Array(T,dims...)
 zeros(dims...) = zeros(Float64, dims...)
