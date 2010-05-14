@@ -9,9 +9,11 @@ if [ `uname` == "Darwin" ]; then
 fi
 
 for func in sin cos tan sinh cosh tanh asin acos atan log log10 exp pow erf abs finite floor ceil sqrt; do
+    echo "# $func"
     echo "$func(x::Float64) = ccall(dlsym(libm,\"$func\"), Float64, (Float64,), x)"
+    echo "$func(x::Float32) = ccall(dlsym(libm,\"${func}f\"), Float32, (Float32,), x)"
+    echo "$func(x::Vector) = [ $func(x[i]) | i=1:length(x) ]"
+    echo "$func(x::Matrix) = [ $func(x[i,j]) | i=1:size(x,1), j=1:size(x,2) ]"
+    echo "\n"
 done
 
-for func in sinf cosf tanf sinhf coshf tanhf asinf acosf atanf logf log10f expf powf erff absf finitef floorf ceilf sqrtf; do
-    echo "$func(x::Float32) = ccall(dlsym(libm,\"$func\"), Float32, (Float32,), x)"
-done
