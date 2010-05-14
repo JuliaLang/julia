@@ -139,19 +139,40 @@ static Value *bitstype_pointer(Value *x)
                              ConstantInt::get(T_int32, 1));
 }
 
+static Function *value_to_pointer_func;
+
+extern "C" void *jl_value_to_pointer(jl_value_t *jt, jl_value_t *v, int argn)
+{
+    if ((jl_value_t*)jl_typeof(v) == jt)
+        return jl_bits_data(v);
+    if (jl_is_array(v) && jl_tparam0(jl_typeof(v)) == jt)
+        return ((jl_array_t*)v)->data;
+    jl_errorf("ccall: expected %s as argument %d",
+              jl_print_to_string(jt), argn);
+    return (jl_value_t*)jl_null;
+}
+
 static Value *julia_to_native(const Type *ty, jl_value_t *jt, Value *jv,
                               int argn, jl_codectx_t *ctx)
 {
-    std::stringstream msg;
-    msg << "ccall: expected ";
-    msg << std::string(jl_print_to_string(jt));
-    msg << " as argument ";
-    msg << argn;
-    emit_typecheck(jv, jt, msg.str(), ctx);
-    Value *p;
-    p = bitstype_pointer(jv);
-    return builder.CreateLoad(builder.CreateBitCast(p,PointerType::get(ty,0)),
-                              false);
+    if (jl_is_cpointer_type(jt)) {
+        return builder.CreateCall3(value_to_pointer_func,
+                                   literal_pointer_val(jl_tparam0(jt)), jv,
+                                   ConstantInt::get(T_int32, argn));
+    }
+    else {
+        std::stringstream msg;
+        msg << "ccall: expected ";
+        msg << std::string(jl_print_to_string(jt));
+        msg << " as argument ";
+        msg << argn;
+        emit_typecheck(jv, jt, msg.str(), ctx);
+        Value *p;
+        p = bitstype_pointer(jv);
+        return builder.CreateLoad(builder.CreateBitCast(p,
+                                                        PointerType::get(ty,0)),
+                                  false);
+    }
 }
 
 // ccall(pointer, rettype, (argtypes...), args...)
@@ -473,4 +494,15 @@ extern "C" void jl_init_intrinsic_functions()
                          jl_Module);
     jl_ExecutionEngine->addGlobalMapping(box_pointer_func,
                                          (void*)&jl_box_pointer);
+
+    std::vector<const Type*> toptrargs(0);
+    toptrargs.push_back(jl_pvalue_llvmt);
+    toptrargs.push_back(jl_pvalue_llvmt);
+    toptrargs.push_back(T_int32);
+    value_to_pointer_func =
+        Function::Create(FunctionType::get(T_pint8, toptrargs, false),
+                         Function::ExternalLinkage, "jl_value_to_pointer",
+                         jl_Module);
+    jl_ExecutionEngine->addGlobalMapping(value_to_pointer_func,
+                                         (void*)&jl_value_to_pointer);
 }
