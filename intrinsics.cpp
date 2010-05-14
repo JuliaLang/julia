@@ -20,6 +20,8 @@ namespace JL_I {
         fptrunc32, fpext64,
         // functions
         sqrt_float, powi_float, sin_float, cos_float, pow_float,
+        // c interface
+        ccall,
     };
 };
 
@@ -35,6 +37,7 @@ static Function *box_int64_func;
 static Function *box_uint64_func;
 static Function *box_float32_func;
 static Function *box_float64_func;
+static Function *box_pointer_func;
 
 /*
   low-level intrinsics design:
@@ -63,12 +66,51 @@ static Value *mark_unsigned(Value *v)
     return x;
 }
 
+static const Type *julia_type_to_llvm(jl_value_t *jt)
+{
+    if (jt == (jl_value_t*)jl_int8_type || jt == (jl_value_t*)jl_uint8_type) return T_int8;
+    if (jt == (jl_value_t*)jl_int16_type || jt == (jl_value_t*)jl_uint16_type) return T_int16;
+    if (jt == (jl_value_t*)jl_int32_type || jt == (jl_value_t*)jl_uint32_type) return T_int32;
+    if (jt == (jl_value_t*)jl_int64_type || jt == (jl_value_t*)jl_uint64_type) return T_int64;
+    if (jt == (jl_value_t*)jl_float32_type) return T_float32;
+    if (jt == (jl_value_t*)jl_float64_type) return T_float64;
+    if (jt == (jl_value_t*)jl_bottom_type) return T_void;
+    if (jl_is_bits_type(jt) && jl_is_cpointer_type(jt)) {
+        const Type *lt = julia_type_to_llvm(jl_tparam0(jt));
+        return PointerType::get(lt, 0);
+    }
+    jl_errorf("cannot convert type %s to a native type",
+              jl_print_to_string(jt));
+    return NULL;
+}
+
+static jl_value_t *llvm_type_to_julia(const Type *t)
+{
+    if (t == T_int8)  return (jl_value_t*)jl_int8_type;
+    if (t == T_int16) return (jl_value_t*)jl_int16_type;
+    if (t == T_int32) return (jl_value_t*)jl_int32_type;
+    if (t == T_int64) return (jl_value_t*)jl_int64_type;
+    if (t == T_float32) return (jl_value_t*)jl_float32_type;
+    if (t == T_float64) return (jl_value_t*)jl_float64_type;
+    if (t == T_void) return (jl_value_t*)jl_bottom_type;
+    if (t->isPointerTy()) {
+        jl_value_t *elty = llvm_type_to_julia(t->getContainedType(0));
+        return (jl_value_t*)jl_apply_type_ctor(jl_pointer_typector,
+                                               jl_tuple(1, elty));
+    }
+    jl_errorf("cannot convert type %s to a julia type",
+              t->getDescription().c_str());
+    return NULL;
+}
+
 // this is used to wrap values for generic contexts, where a
 // dynamically-typed value is required (e.g. argument to unknown function).
 // if it's already a pointer it's left alone.
 static Value *boxed(Value *v)
 {
     const Type *t = v->getType();
+    if (t == jl_pvalue_llvmt)
+        return v;
     if (is_unsigned(v)) {
         if (t == T_int8)  return builder.CreateCall(box_uint8_func, v);
         if (t == T_int16) return builder.CreateCall(box_uint16_func, v);
@@ -83,7 +125,68 @@ static Value *boxed(Value *v)
         if (t == T_float32) return builder.CreateCall(box_float32_func, v);
         if (t == T_float64) return builder.CreateCall(box_float64_func, v);
     }
-    return v;
+    if (t->isPointerTy()) {
+        jl_value_t *jt = llvm_type_to_julia(t);
+        return builder.CreateCall2(box_pointer_func,
+                                   literal_pointer_val(jt), v);
+    }
+    assert("Don't know how to box this type" && false);
+}
+
+static Value *bitstype_pointer(Value *x)
+{
+    return builder.CreateGEP(builder.CreateBitCast(x, jl_ppvalue_llvmt),
+                             ConstantInt::get(T_int32, 1));
+}
+
+static Value *julia_to_native(const Type *ty, jl_value_t *jt, Value *jv,
+                              int argn, jl_codectx_t *ctx)
+{
+    std::stringstream msg;
+    msg << "ccall: expected ";
+    msg << std::string(jl_print_to_string(jt));
+    msg << " as argument ";
+    msg << argn;
+    emit_typecheck(jv, jt, msg.str(), ctx);
+    Value *p;
+    p = bitstype_pointer(jv);
+    return builder.CreateLoad(builder.CreateBitCast(p,PointerType::get(ty,0)),
+                              false);
+}
+
+// ccall(pointer, rettype, (argtypes...), args...)
+static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
+{
+    JL_NARGSV(ccall, 3);
+    jl_value_t *ptr = jl_interpret_toplevel_expr(args[1]);
+    jl_value_t *rt  = jl_interpret_toplevel_expr(args[2]);
+    jl_value_t *at  = jl_interpret_toplevel_expr(args[3]);
+    JL_TYPECHK(ccall, cpointer, ptr);
+    JL_TYPECHK(ccall, type, rt);
+    JL_TYPECHK(ccall, tuple, at);
+    JL_TYPECHK(ccall, type, at);
+    jl_tuple_t *tt = (jl_tuple_t*)at;
+    if (tt->length != nargs-3)
+        jl_error("ccall: wrong number of arguments to C function");
+    void *fptr = *(void**)jl_bits_data(ptr);
+    std::vector<const Type *> fargt(0);
+    const Type *lrt = julia_type_to_llvm(rt);
+    size_t i;
+    for(i=0; i < tt->length; i++) {
+        fargt.push_back(julia_type_to_llvm(jl_tupleref(tt,i)));
+    }
+    Function *llvmf =
+        Function::Create(FunctionType::get(lrt, fargt, false),
+                         Function::ExternalLinkage,
+                         "ccall_", jl_Module);
+    jl_ExecutionEngine->addGlobalMapping(llvmf, fptr);
+    std::vector<Value*> argvals(0);
+    for(i=4; i < nargs+1; i++) {
+        Value *arg = emit_expr(args[i], ctx, true);
+        argvals.push_back(julia_to_native(fargt[i-4], jl_tupleref(tt,i-4),
+                                          arg, i-3, ctx));
+    }
+    return builder.CreateCall(llvmf, argvals.begin(), argvals.end());
 }
 
 // convert int type to same-size float type
@@ -108,6 +211,7 @@ static Value *FP(Value *v)
 static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
                              jl_codectx_t *ctx)
 {
+    if (f == ccall) return emit_ccall(args, nargs, ctx);
     if (nargs < 1) jl_error("invalid intrinsic call");
     Value *x = emit_expr(args[1], ctx, true);
     const Type *t = x->getType();
@@ -146,20 +250,16 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
         if (t != T_float64) x = builder.CreateBitCast(x, T_float64);
         return x;
     HANDLE(unbox8,1)
-        p = builder.CreateGEP(builder.CreateBitCast(x, jl_ppvalue_llvmt),
-                              ConstantInt::get(T_int32, 1));
+        p = bitstype_pointer(x);
         return builder.CreateLoad(builder.CreateBitCast(p,T_pint8),false);
     HANDLE(unbox16,1)
-        p = builder.CreateGEP(builder.CreateBitCast(x, jl_ppvalue_llvmt),
-                              ConstantInt::get(T_int32, 1));
+        p = bitstype_pointer(x);
         return builder.CreateLoad(builder.CreateBitCast(p,T_pint16),false);
     HANDLE(unbox32,1)
-        p = builder.CreateGEP(builder.CreateBitCast(x, jl_ppvalue_llvmt),
-                              ConstantInt::get(T_int32, 1));
+        p = bitstype_pointer(x);
         return builder.CreateLoad(builder.CreateBitCast(p,T_pint32),false);
     HANDLE(unbox64,1)
-        p = builder.CreateGEP(builder.CreateBitCast(x, jl_ppvalue_llvmt),
-                              ConstantInt::get(T_int32, 1));
+        p = bitstype_pointer(x);
         return builder.CreateLoad(builder.CreateBitCast(p,T_pint64),false);
     HANDLE(neg_int,1)
         return builder.CreateSub(ConstantInt::get(t, 0), x);
@@ -355,10 +455,22 @@ extern "C" void jl_init_intrinsic_functions()
     ADD_I(fptrunc32); ADD_I(fpext64);
     ADD_I(sqrt_float); ADD_I(powi_float); ADD_I(pow_float);
     ADD_I(sin_float); ADD_I(cos_float);
+    ADD_I(ccall);
     
     BOX_F(int8);  BOX_F(uint8);
     BOX_F(int16); BOX_F(uint16);
     BOX_F(int32); BOX_F(uint32);
     BOX_F(int64); BOX_F(uint64);
     BOX_F(float32); BOX_F(float64);
+
+    std::vector<const Type*> boxpointerargs(0);
+    boxpointerargs.push_back(jl_pvalue_llvmt);
+    boxpointerargs.push_back(T_pint8);
+    box_pointer_func =
+        Function::Create(FunctionType::get(jl_pvalue_llvmt,
+                                           boxpointerargs, false),
+                         Function::ExternalLinkage, "jl_box_pointer",
+                         jl_Module);
+    jl_ExecutionEngine->addGlobalMapping(box_pointer_func,
+                                         (void*)&jl_box_pointer);
 }

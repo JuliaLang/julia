@@ -1,5 +1,5 @@
 NAME = julia
-SRCS = jltypes gf ast repl builtins module codegen interpreter alloc
+SRCS = jltypes gf ast repl builtins module codegen interpreter alloc dlload
 OBJS = $(SRCS:%=%.o)
 DOBJS = $(SRCS:%=%.do)
 EXENAME = $(NAME)
@@ -12,7 +12,7 @@ include ./Make.inc.$(shell uname)
 
 FLAGS = -falign-functions -Wall -Wno-strict-aliasing -I$(FLISPDIR) -I$(LLTDIR) $(HFILEDIRS:%=-I%) $(LIBDIRS:%=-L%) $(CFLAGS) -D___LIBRARY $(CONFIG) -I$(shell llvm-config --includedir)
 LIBFILES = $(FLISP) $(LLT)
-LIBS = $(LIBFILES) -lutil -ldl -lm -lgc $(shell llvm-config --ldflags --libs core engine jit interpreter bitreader) -lreadline $(OSLIBS)
+LIBS = $(LIBFILES) -lutil -ldl -lm -lgc $(shell llvm-config --ldflags --libs core engine jit interpreter bitreader) -lreadline $(OSLIBS) -Wl,--export-dynamic
 
 DEBUGFLAGS = -ggdb3 -DDEBUG $(FLAGS)
 SHIPFLAGS = -O3 -DNDEBUG $(FLAGS)

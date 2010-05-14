@@ -78,7 +78,7 @@ jl_expr_t *jl_exprn(jl_sym_t *head, size_t n)
     ex->type = (jl_type_t*)jl_expr_type;
     ex->head = head;
     ex->args = jl_alloc_tuple(n);
-    ex->etype = jl_any_type;
+    ex->etype = (jl_type_t*)jl_any_type;
     return ex;
 }
 
@@ -206,7 +206,7 @@ void jl_load(const char *fname)
             else {
                 //jl_toplevel_eval(form);
                 jl_lambda_info_t *lam = (jl_lambda_info_t*)jl_exprarg(form,0);
-                (void)jl_interpret_toplevel_expr(lam);
+                (void)jl_interpret_toplevel_thunk(lam);
             }
         }
     }
@@ -222,13 +222,11 @@ void jl_load(const char *fname)
 JL_CALLABLE(jl_f_load)
 {
     JL_NARGS(load, 1, 1);
-    if (jl_typeof(args[0]) == jl_array_uint8_type) {
-        char *fname = (char*)((jl_array_t*)args[0])->data;
-        jl_load(fname);
-    }
-    else {
+    if (jl_typeof(args[0]) != jl_array_uint8_type) {
         jl_error("load: expected string");
     }
+    char *fname = (char*)((jl_array_t*)args[0])->data;
+    jl_load(fname);
     return (jl_value_t*)jl_null;
 }
 
@@ -700,6 +698,22 @@ INT_PRINT_FUNC(uint,32)
 INT_PRINT_FUNC(int,64)
 INT_PRINT_FUNC(uint,64)
 
+JL_CALLABLE(jl_f_print_pointer)
+{
+    ios_t *s = current_output_stream;
+    void *ptr = *(void**)jl_bits_data(args[0]);
+    if (jl_typeis(args[0],jl_pointer_void_type))
+        ios_printf(s, "Pointer{Void}");
+    else
+        jl_print((jl_value_t*)jl_typeof(args[0]));
+#ifdef BITS64
+    ios_printf(s, " @0x%016x", (uptrint_t)ptr);
+#else
+    ios_printf(s, " @0x%08x", (uptrint_t)ptr);
+#endif
+    return (jl_value_t*)jl_null;
+}
+
 JL_CALLABLE(jl_f_print_symbol)
 {
     ios_t *s = current_output_stream;
@@ -1036,6 +1050,31 @@ JL_CALLABLE(jl_f_invoke)
     return jl_apply(ml->func, &args[2], nargs-2);
 }
 
+// --- c interface ---
+
+JL_CALLABLE(jl_f_dlopen)
+{
+    JL_NARGS(dlopen, 1, 1);
+    if (jl_typeof(args[0]) != jl_array_uint8_type) {
+        jl_error("dlopen: expected string");
+    }
+    char *fname = (char*)((jl_array_t*)args[0])->data;
+    return jl_box_pointer(jl_pointer_void_type,
+                          jl_load_dynamic_library(fname));
+}
+
+JL_CALLABLE(jl_f_dlsym)
+{
+    JL_NARGS(dlsym, 2, 2);
+    JL_TYPECHK(dlsym, cpointer, args[0]);
+    if (jl_typeof(args[1]) != jl_array_uint8_type) {
+        jl_error("dlsym: expected string");
+    }
+    void *hnd = jl_unbox_pointer(args[0]);
+    char *sym = (char*)((jl_array_t*)args[1])->data;
+    return jl_box_pointer(jl_pointer_void_type, jl_dlsym(hnd, sym));
+}
+
 // --- init ---
 
 static void add_builtin_method1(jl_function_t *gf, jl_type_t *t, jl_fptr_t f)
@@ -1074,6 +1113,7 @@ void jl_init_builtins()
     add_builtin_method1(jl_print_gf, (jl_type_t*)jl_int64_type,   jl_f_print_int64);
     add_builtin_method1(jl_print_gf, (jl_type_t*)jl_uint64_type,  jl_f_print_uint64);
     add_builtin_method1(jl_print_gf, (jl_type_t*)jl_bool_type,    jl_f_print_bool);
+    add_builtin_method1(jl_print_gf, (jl_type_t*)jl_unconstrained_type(jl_pointer_typector), jl_f_print_pointer);
 
     current_output_stream = ios_stdout;
 
@@ -1095,6 +1135,8 @@ void jl_init_builtins()
     add_builtin_func("time_thunk", jl_f_time_thunk);
     add_builtin_func("method_exists", jl_f_methodexists);
     add_builtin_func("invoke", jl_f_invoke);
+    add_builtin_func("dlopen", jl_f_dlopen);
+    add_builtin_func("dlsym", jl_f_dlsym);
     add_builtin("convert", (jl_value_t*)jl_convert_gf);
     add_builtin("print", (jl_value_t*)jl_print_gf);
     add_builtin("identity", (jl_value_t*)jl_identity_func);
@@ -1123,6 +1165,7 @@ void jl_init_builtins()
     // builtin types
     add_builtin("Any", (jl_value_t*)jl_any_type);
     add_builtin("Bottom", (jl_value_t*)jl_bottom_type);
+    add_builtin("Void", (jl_value_t*)jl_bottom_type);
     add_builtin("TypeVar", (jl_value_t*)jl_tvar_type);
     add_builtin("Tuple", (jl_value_t*)jl_tuple_type);
     add_builtin("NTuple", (jl_value_t*)jl_ntuple_type);
@@ -1152,10 +1195,14 @@ void jl_init_builtins()
     add_builtin("Expr",
                 (jl_value_t*)jl_new_type_ctor(jl_null,
                                               (jl_type_t*)jl_expr_type));
+    add_builtin("Pointer", (jl_value_t*)jl_pointer_typector);
 
     add_builtin("BitsKind", (jl_value_t*)jl_bits_kind);
     add_builtin("StructKind", (jl_value_t*)jl_struct_kind);
     add_builtin("FuncKind", (jl_value_t*)jl_func_kind);
     add_builtin("TagKind", (jl_value_t*)jl_tag_kind);
     add_builtin("UnionKind", (jl_value_t*)jl_union_kind);
+
+    add_builtin("JuliaDLHandle", jl_box_pointer(jl_pointer_void_type,
+                                                jl_load_dynamic_library(NULL)));
 }

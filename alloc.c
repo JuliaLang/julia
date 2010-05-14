@@ -34,6 +34,10 @@ jl_bits_type_t *jl_intrinsic_type;
 jl_struct_type_t *jl_methtable_type;
 jl_struct_type_t *jl_lambda_info_type;
 
+jl_typector_t *jl_pointer_typector;
+jl_bits_type_t *jl_pointer_void_type;
+jl_bits_type_t *jl_pointer_uint8_type;
+
 jl_sym_t *call_sym;    jl_sym_t *dots_sym;
 jl_sym_t *dollar_sym;  jl_sym_t *quote_sym;
 jl_sym_t *tuple_sym;   jl_sym_t *top_sym;
@@ -461,6 +465,19 @@ UNBOX_FUNC(bool,   int8_t)
 UNBOX_FUNC(float32, float)
 UNBOX_FUNC(float64, double)
 
+jl_value_t *jl_box_pointer(jl_bits_type_t *ty, void *p)
+{
+    jl_value_t *v = newobj((jl_type_t*)ty, 1);
+    *(void**)jl_bits_data(v) = p;
+    return v;
+}
+
+void *jl_unbox_pointer(jl_value_t *v)
+{
+    assert(jl_is_cpointer(v));
+    return *(void**)jl_bits_data(v);
+}
+
 // array constructors ---------------------------------------------------------
 
 jl_array_t *jl_new_array(jl_type_t *atype, jl_value_t **dimargs, size_t ndims)
@@ -607,6 +624,23 @@ void jl_init_builtin_types()
 
     jl_intrinsic_type = jl_new_bitstype((jl_value_t*)jl_symbol("IntrinsicFunction"),
                                         jl_any_type, jl_null, 32);
+
+    tv = jl_typevars(1, "T");
+    jl_bits_type_t *cptrbits =
+        jl_new_bitstype((jl_value_t*)jl_symbol("Pointer"), jl_any_type, tv,
+#ifdef BITS64
+                        64
+#else
+                        32
+#endif
+                        );
+    jl_pointer_typector = jl_new_type_ctor(tv, (jl_type_t*)cptrbits);
+    jl_pointer_void_type =
+        (jl_bits_type_t*)jl_apply_type_ctor(jl_pointer_typector,
+                                            jl_tuple(1, jl_bottom_type));
+    jl_pointer_uint8_type =
+        (jl_bits_type_t*)jl_apply_type_ctor(jl_pointer_typector,
+                                            jl_tuple(1, jl_uint8_type));
 
     call_sym = jl_symbol("call");
     quote_sym = jl_symbol("quote");

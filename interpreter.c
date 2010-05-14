@@ -16,6 +16,11 @@
 
 static jl_value_t *eval(jl_value_t *e);
 
+jl_value_t *jl_interpret_toplevel_expr(jl_value_t *e)
+{
+    return eval(e);
+}
+
 static jl_value_t *do_call(jl_function_t *f, jl_value_t **args, size_t nargs)
 {
     jl_value_t **argv = alloca(nargs * sizeof(jl_value_t*));
@@ -81,7 +86,7 @@ static int label_idx(jl_value_t *tgt, jl_tuple_t *stmts)
     return j;
 }
 
-jl_value_t *jl_interpret_toplevel_expr(jl_lambda_info_t *lam)
+jl_value_t *jl_interpret_toplevel_thunk(jl_lambda_info_t *lam)
 {
     jl_expr_t *ast = (jl_expr_t*)lam->ast;
     jl_tuple_t *stmts = jl_lam_body(ast);

@@ -211,6 +211,10 @@ extern jl_bits_type_t *jl_uint64_type;
 extern jl_bits_type_t *jl_float32_type;
 extern jl_bits_type_t *jl_float64_type;
 
+extern jl_typector_t *jl_pointer_typector;
+extern jl_bits_type_t *jl_pointer_void_type;
+extern jl_bits_type_t *jl_pointer_uint8_type;
+
 extern jl_type_t *jl_array_uint8_type;
 extern jl_type_t *jl_array_any_type;
 extern jl_struct_type_t *jl_expr_type;
@@ -300,6 +304,8 @@ extern jl_sym_t *closure_ref_sym;
 #define jl_is_function(v)    (jl_is_func_type(jl_typeof(v)))
 #define jl_is_array(v)       (((jl_tag_type_t*)jl_typeof(v))->name==jl_array_typename)
 #define jl_is_box(v)         (((jl_tag_type_t*)jl_typeof(v))->name==jl_box_typename)
+#define jl_is_cpointer_type(v) (((jl_tag_type_t*)(v))->name==jl_pointer_void_type->name)
+#define jl_is_cpointer(v)    jl_is_cpointer_type(jl_typeof(v))
 #define jl_is_gf(f)          (((jl_function_t*)(f))->fptr==jl_apply_generic)
 
 #define jl_gf_mtable(f) ((jl_methtable_t*)jl_t0(((jl_function_t*)(f))->env))
@@ -388,6 +394,8 @@ int64_t jl_unbox_int64(jl_value_t *v);
 uint64_t jl_unbox_uint64(jl_value_t *v);
 float jl_unbox_float32(jl_value_t *v);
 double jl_unbox_float64(jl_value_t *v);
+jl_value_t *jl_box_pointer(jl_bits_type_t *ty, void *p);
+void *jl_unbox_pointer(jl_value_t *v);
 
 // exceptions
 void jl_error(const char *str);
@@ -429,11 +437,16 @@ jl_module_t *jl_add_module(jl_module_t *m, jl_module_t *child);
 jl_module_t *jl_get_module(jl_module_t *m, jl_sym_t *name);
 jl_module_t *jl_import_module(jl_module_t *to, jl_module_t *from);
 
+// external libraries
+void *jl_load_dynamic_library(char *fname);
+void *jl_dlsym(void *handle, char *symbol);
+
 // compiler
 void jl_compile(jl_lambda_info_t *li);
 jl_value_t *jl_toplevel_eval(jl_value_t *ast);
 void jl_load(const char *fname);
-jl_value_t *jl_interpret_toplevel_expr(jl_lambda_info_t *lam);
+jl_value_t *jl_interpret_toplevel_thunk(jl_lambda_info_t *lam);
+jl_value_t *jl_interpret_toplevel_expr(jl_value_t *e);
 
 void jl_print_method_table(jl_function_t *gf);
 jl_function_t *jl_instantiate_method(jl_function_t *f, jl_tuple_t *sp);
