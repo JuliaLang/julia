@@ -39,3 +39,12 @@ for func in atan2 pow remainder copysign hypot; do
     echo "\n"
 done
 
+for func in isinf isnan; do
+    echo "# $func"
+    echo "${func}_func = dlsym(libm,\"$func\")"
+    echo "$func(x::Float64) = ccall(${func}_func, Int32, (Float64,), x)"
+    echo "$func(x::Float32) = ccall(${func}_func, Int32, (Float32,), x)"
+    echo "$func(x::Vector) = [ $func(x[i]) | i=1:length(x) ]"
+    echo "$func(x::Matrix) = [ $func(x[i,j]) | i=1:size(x,1), j=1:size(x,2) ]"
+    echo "\n"
+done
