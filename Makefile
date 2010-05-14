@@ -12,7 +12,7 @@ include ./Make.inc.$(shell uname)
 
 FLAGS = -falign-functions -Wall -Wno-strict-aliasing -I$(FLISPDIR) -I$(LLTDIR) $(HFILEDIRS:%=-I%) $(LIBDIRS:%=-L%) $(CFLAGS) -D___LIBRARY $(CONFIG) -I$(shell llvm-config --includedir)
 LIBFILES = $(FLISP) $(LLT)
-LIBS = $(LIBFILES) -lutil -ldl -lm -lgc $(shell llvm-config --ldflags --libs core engine jit interpreter bitreader) -lreadline $(OSLIBS) -Wl,--export-dynamic
+LIBS = $(LIBFILES) -lutil -ldl -lm -lgc $(shell llvm-config --ldflags --libs core engine jit interpreter bitreader) -lreadline $(OSLIBS) 
 
 DEBUGFLAGS = -ggdb3 -DDEBUG $(FLAGS)
 SHIPFLAGS = -O3 -DNDEBUG $(FLAGS)
@@ -60,6 +60,7 @@ julia-release: $(OBJS) $(LIBFILES) julia-defs.s.bc
 	ln -sf $@ julia
 
 debug release efence: %: julia-%
+	sh ./gen_mathfunctions.sh > mathfunctions.j
 
 test: debug
 	julia tests.j

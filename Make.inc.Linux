@@ -4,7 +4,7 @@ CFLAGS =
 
 HFILEDIRS = /usr/local/include
 LIBDIRS = /usr/local/lib
-OSLIBS =
+OSLIBS = -Wl,--export-dynamic
 EFENCE =
 
 NBITS = 32
