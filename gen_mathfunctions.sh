@@ -10,7 +10,7 @@ fi
 
 echo
 
-for func in sin cos tan sinh cosh tanh asin acos atan log log10 log1p exp expm1 erf erfc floor ceil sqrt cbrt rint; do
+for func in sin cos tan sinh cosh tanh asin acos atan log log2 log10 log1p exp expm1 erf erfc floor ceil sqrt cbrt rint; do
     echo "# $func"
     echo "$func(x::Float64) = ccall(dlsym(libm,\"$func\"), Float64, (Float64,), x)"
     echo "$func(x::Float32) = ccall(dlsym(libm,\"${func}f\"), Float32, (Float32,), x)"
