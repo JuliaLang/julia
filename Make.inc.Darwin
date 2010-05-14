@@ -4,7 +4,7 @@ CFLAGS =
 
 HFILEDIRS = /opt/local/include
 LIBDIRS = /opt/local/lib
-OSLIBS = -framework ApplicationServices
+OSLIBS = -framework ApplicationServices -framework vecLib
 EFENCE = /opt/local/lib/libefence.a
 
 NBITS = 64
