@@ -160,9 +160,11 @@ static Value *julia_to_native(const Type *ty, jl_value_t *jt, Value *jv,
                               int argn, jl_codectx_t *ctx)
 {
     if (jl_is_cpointer_type(jt)) {
-        return builder.CreateCall3(value_to_pointer_func,
-                                   literal_pointer_val(jl_tparam0(jt)), jv,
-                                   ConstantInt::get(T_int32, argn));
+        Value *p = builder.CreateCall3(value_to_pointer_func,
+                                       literal_pointer_val(jl_tparam0(jt)), jv,
+                                       ConstantInt::get(T_int32, argn));
+        assert(ty->isPointerTy());
+        return builder.CreateBitCast(p, ty);
     }
     else {
         std::stringstream msg;
@@ -171,8 +173,7 @@ static Value *julia_to_native(const Type *ty, jl_value_t *jt, Value *jv,
         msg << " as argument ";
         msg << argn;
         emit_typecheck(jv, jt, msg.str(), ctx);
-        Value *p;
-        p = bitstype_pointer(jv);
+        Value *p = bitstype_pointer(jv);
         return builder.CreateLoad(builder.CreateBitCast(p,
                                                         PointerType::get(ty,0)),
                                   false);

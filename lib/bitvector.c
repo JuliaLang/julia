@@ -44,7 +44,7 @@ u_int32_t *bitvector_resize(u_int32_t *b, u_int64_t n, int initzero)
 {
     u_int32_t *p;
     size_t sz = ((n+31)>>5) * 4;
-    p = realloc(b, sz);
+    p = LLT_REALLOC(b, sz);
     if (p == NULL) return NULL;
     if (initzero) memset(p, 0, sz);
     return p;
