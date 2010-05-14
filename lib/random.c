@@ -16,8 +16,8 @@ double rand_double()
 {
     union ieee754_double d;
 
-    d.ieee.mantissa0 = random();
-    d.ieee.mantissa1 = random();
+    d.ieee.mantissa0 = genrand_int32();
+    d.ieee.mantissa1 = genrand_int32();
     d.ieee.negative = 0;
     d.ieee.exponent = IEEE754_DOUBLE_BIAS + 0;    /* 2^0 */
     return d.d - 1.0;
@@ -27,7 +27,7 @@ float rand_float()
 {
     union ieee754_float f;
 
-    f.ieee.mantissa = random();
+    f.ieee.mantissa = genrand_int32();
     f.ieee.negative = 0;
     f.ieee.exponent = IEEE754_FLOAT_BIAS + 0;     /* 2^0 */
     return f.f - 1.0;
@@ -58,5 +58,5 @@ double randn()
 void randomize()
 {
     u_int64_t tm = i64time();
-    init_by_array((unsigned long*)&tm, 2);
+    init_by_array((uint32_t*)&tm, 2);
 }

@@ -42,5 +42,6 @@ for func in isinf isnan; do
     echo
 done
 
-echo "rand_func = dlsym(libm, \"random\")"
-echo "rand() = ccall (rand_func, Int32, ()) / 2147483647"
+echo "rand() = ccall(dlsym(JuliaDLHandle,\"rand_double\"), Float64, ())"
+echo "randf() = ccall(dlsym(JuliaDLHandle,\"rand_float\"), Float32, ())"
+echo "randint() = ccall(dlsym(JuliaDLHandle,\"genrand_int32\"), Uint32, ())"

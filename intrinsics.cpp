@@ -175,6 +175,12 @@ static Value *julia_to_native(const Type *ty, jl_value_t *jt, Value *jv,
     }
 }
 
+static bool is_unsigned_julia_type(jl_value_t *t)
+{
+    return (t==(jl_value_t*)jl_uint8_type  || t==(jl_value_t*)jl_uint16_type ||
+            t==(jl_value_t*)jl_uint32_type || t==(jl_value_t*)jl_uint64_type);
+}
+
 // ccall(pointer, rettype, (argtypes...), args...)
 static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
 {
@@ -207,7 +213,10 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
         argvals.push_back(julia_to_native(fargt[i-4], jl_tupleref(tt,i-4),
                                           arg, i-3, ctx));
     }
-    return builder.CreateCall(llvmf, argvals.begin(), argvals.end());
+    Value *result = builder.CreateCall(llvmf, argvals.begin(), argvals.end());
+    if (is_unsigned_julia_type(rt))
+        return mark_unsigned(result);
+    return result;
 }
 
 // convert int type to same-size float type
