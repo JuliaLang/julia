@@ -1,6 +1,7 @@
 typealias Nullable{T} Union(T,())
 typealias Index Int32
 typealias Size  Int32
+typealias String Array{Uint8,1}
 
 (<:)(T::Type, S::Type) = subtype(T,S)
 (:>)(T::Type, S::Type) = subtype(S,T)
