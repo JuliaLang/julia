@@ -15,7 +15,7 @@ function copy (X::Vector{Float64})
     n = length(X)
     Y = zeros(Float64, n)
     ccall(dlsym(libBLAS, "cblas_dcopy"),
-          Float64,
+          Void,
           (Int32, Pointer{Float64}, Int32, Pointer{Float64}, Int32),
           n, X, 1, Y, 1)
     return Y
@@ -26,7 +26,7 @@ function copy (X::Matrix{Float64})
     n = size(X,2)
     Y = zeros(Float64, m, n)
     ccall(dlsym(libBLAS, "cblas_dcopy"),
-          Float64,
+          Void,
           (Int32, Pointer{Float64}, Int32, Pointer{Float64}, Int32),
           m*n, X, 1, Y, 1)
     return Y
@@ -36,7 +36,7 @@ function copy (X::Vector{Float32})
     n = length(X)
     Y = zeros(Float32, n)
     ccall(dlsym(libBLAS, "cblas_scopy"),
-          Float32,
+          Void,
           (Int32, Pointer{Float32}, Int32, Pointer{Float32}, Int32),
           n, X, 1, Y, 1)
     return Y
@@ -47,7 +47,7 @@ function copy (X::Matrix{Float32})
     n = size(X,2)
     Y = zeros(Float32, m, n)
     ccall(dlsym(libBLAS, "cblas_scopy"),
-          Float32,
+          Void,
           (Int32, Pointer{Float32}, Int32, Pointer{Float32}, Int32),
           m*n, X, 1, Y, 1)
     return Y
@@ -103,7 +103,7 @@ function * (A::Matrix{Float64}, B::Matrix{Float64})
     C = zeros(Float64, m, n)
 
     ccall(dlsym(libBLAS, "cblas_dgemm"),
-          Int32,
+          Void,
           (Int32, Int32, Int32, Int32, Int32, Int32, 
            Float64, Pointer{Float64}, Int32, 
            Pointer{Float64}, Int32, 
@@ -122,7 +122,7 @@ function * (A::Matrix{Float32}, B::Matrix{Float32})
     C = zeros(Float32, m, n)
 
     ccall(dlsym(libBLAS, "cblas_sgemm"),
-          Int32,
+          Void,
           (Int32, Int32, Int32, Int32, Int32, Int32, 
            Float32, Pointer{Float32}, Int32, 
            Pointer{Float32}, Int32, 
