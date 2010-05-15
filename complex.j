@@ -118,7 +118,7 @@ end
 function (^)(z::Complex, p::Complex)
     r = abs(z)
     r_n = r^p.re
-    theta = atan2(z.re, z.im)
+    theta = atan2(z.im, z.re)
     ntheta = p.re*theta
     re = r_n*cos(ntheta)
     im = r_n*sin(ntheta)
@@ -128,3 +128,93 @@ function (^)(z::Complex, p::Complex)
     iz = cis(Complex(p.im*log(r), p.im*theta))
     return Complex(re,im)*iz
 end
+
+function (^)(z::Real, p::Complex)
+    if (p.im == 0)
+        return z^p.re
+    end
+    (^)(promote(z,p)...)
+end
+
+function (^)(z::Complex, p::Real)
+    if (z.im == 0)
+        return z.re^p
+    end
+    r = abs(z)
+    r_n = r^p
+    theta = atan2(z.im, z.re)
+    ntheta = p*theta
+    re = r_n*cos(ntheta)
+    im = r_n*sin(ntheta)
+    return Complex(re, im)
+end
+
+function tan(z::Complex)
+    u = exp(z.im)
+    v = 1/u
+    u = (u+v)*0.5
+    v = u-v
+    sinre = sin(z.re)
+    cosre = cos(z.re)
+    d = cosre*cosre + v*v
+    Complex(sinre*cosre/d, u*v/d)
+end
+
+function asin(z::Complex)
+    re = 1 - (z.re*z.re - z.im*z.im)
+    im = -2*z.re*z.im
+    x = sqrt(Complex(re,im))
+    re = x.re - z.im
+    im = x.im + z.re
+    Complex(atan2(im, re), -log(hypot(re, im)))
+end
+
+function acos(z::Complex)
+    re = 1 - (z.re*z.re - z.im*z.im)
+    im = -2*z.re*z.im
+    x = sqrt(Complex(re,im))
+    re = z.re - x.im
+    im = z.im + x.re
+    Complex(atan2(im, re), -log(hypot(re, im)))
+end
+
+function atan(z::Complex)
+    xsq = z.re * z.re
+    ysq = z.im * z.im
+    m1y = 1-z.im
+    yp1 = 1+z.im
+    m1ysq = m1y * m1y
+    yp1sq = yp1 * yp1
+    Complex(0.5 *(atan2(z.re,m1y) - atan2(-z.re, yp1)),
+            0.25*log((yp1sq + xsq)/(xsq + m1ysq)))
+end
+
+function sinh(z::Complex)
+    y = exp(z.re)
+    v = 1/u
+    u = (u+v)*0.5
+    v = u-v
+    Complex(v*cos(z.im), u*sin(z.im))
+end
+
+function cosh(z::Complex)
+    u = exp(z.re)
+    v = 1/u
+    u = (u+v)*0.5
+    v = u-v
+    Complex(u*cos(z.im), v*sin(z.im))
+end
+
+function tanh(z::Complex)
+    cosim = cos(z.im)
+    u = exp(z.re)
+    v = 1/u
+    u = (u+v)*0.5
+    v = u-v
+    d = cosim*cosim + v*v
+    Complex(u*v/d, sin(z.im)*cosim/d)
+end
+
+asinh(z::Complex) = log(z+sqrt(z*z+1))
+acosh(z::Complex) = log(z+sqrt(z*z-1))
+atanh(z::Complex) = log(sqrt((1+z)/(1-z)))

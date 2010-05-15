@@ -41,7 +41,7 @@ truncate(x::Real) = int32(x)
 > (x::Float64, y::Int32) = x > convert(Float64, y)
 
 Inf = 1/0
-NaN = 0/0
+NaN = -(0/0)
 
 sqrt(x::Float64) = boxf64(sqrt_float(unbox64(x)))
 sqrt(x::Float32) = boxf32(sqrt_float(unbox32(x)))
