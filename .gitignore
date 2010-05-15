@@ -5,9 +5,8 @@
 /julia-defs.s.bc.inc
 /julia_flisp.boot
 /julia_flisp.boot.inc
-flisp/flisp
 /julia
 /julia-debug
 /julia-release
 /julia-efence
-.julia_history
+/mathfunctions.j
