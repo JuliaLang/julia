@@ -136,26 +136,26 @@ end
 #             lda, __CLPK_integer *info);
 
 function chol (A::Matrix{Float64})
-    info = 0
+    info = [0]
     n = size(A, 1)
     R = triu(A)
     ccall(dlsym(libLAPACK, "dpotrf_"),
           Int32,
           (Pointer{Uint8}, Pointer{Int32}, Pointer{Float64}, Pointer{Int32}, Pointer{Int32}),
           "U", n, R, n, info)
-    if info > 0; error("Matrix not Positive Definite"); end
+    if info[1] > 0; error("Matrix not Positive Definite"); end
     return R
 end
 
 function chol (A::Matrix{Float32})
-    info = 0
+    info = [0]
     n = size(A, 1)
     R = triu(A)
     ccall(dlsym(libLAPACK, "spotrf_"),
           Int32,
           (Pointer{Uint8}, Pointer{Int32}, Pointer{Float32}, Pointer{Int32}, Pointer{Int32}),
           "U", n, R, n, info)
-    if info > 0; error("Matrix not Positive Definite"); end
+    if info[1] > 0; error("Matrix not Positive Definite"); end
     return R
 end
 
@@ -163,7 +163,7 @@ end
 #            *lda, __CLPK_integer *ipiv, __CLPK_doublereal *b, __CLPK_integer *ldb, __CLPK_integer *info);
 
 function \ (A::Matrix{Float64}, B::Matrix{Float64})
-    info = 0
+    info = [0]
     n = size(A, 1)
     nrhs = size(B, 2)
     ipiv = ones(Int32, n)
@@ -173,12 +173,12 @@ function \ (A::Matrix{Float64}, B::Matrix{Float64})
          (Pointer{Int32}, Pointer{Int32}, Pointer{Float64}, Pointer{Int32}, Pointer{Int32}, 
           Pointer{Float64}, Pointer{Int32}, Pointer{Int32}),
          n, nrhs, A, n, ipiv, X, n, info)
-    if info > 0; error("U is singular"); end
+    if info[1] > 0; error("U is singular"); end
     return X
 end
 
 function \ (A::Matrix{Float32}, B::Matrix{Float32})
-    info = 0
+    info = [0]
     n = size(A, 1)
     nrhs = size(B, 2)
     ipiv = ones(Int32, n)
@@ -188,7 +188,7 @@ function \ (A::Matrix{Float32}, B::Matrix{Float32})
          (Pointer{Int32}, Pointer{Int32}, Pointer{Float32}, Pointer{Int32}, Pointer{Int32}, 
           Pointer{Float32}, Pointer{Int32}, Pointer{Int32}),
          n, nrhs, A, n, ipiv, X, n, info)
-    if info > 0; error("U is singular"); end
+    if info[1] > 0; error("U is singular"); end
     return X
 end
 

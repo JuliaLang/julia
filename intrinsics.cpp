@@ -143,14 +143,49 @@ static Value *bitstype_pointer(Value *x)
 
 static Function *value_to_pointer_func;
 
+// TODO: per-thread
+static char *temp_arg_area;
+static const uint32_t arg_area_sz = 4196;
+static uint32_t arg_area_loc;
+static Function *save_arg_area_loc_func;
+static Function *restore_arg_area_loc_func;
+
+static uint32_t save_arg_area_loc() { return arg_area_loc; }
+static void restore_arg_area_loc(uint32_t l) { arg_area_loc = l; }
+
+static Value *get_saved_arg_area_loc(jl_codectx_t *ctx)
+{
+    if (ctx->last_arg_area_loc == NULL) {
+        ctx->last_arg_area_loc = builder.CreateAlloca(T_uint32);
+    }
+    return ctx->last_arg_area_loc;
+}
+
+static void *alloc_temp_arg_copy(void *obj, uint32_t sz)
+{
+    void *p;
+    if (arg_area_loc+sz > arg_area_sz) {
+        p = allocb(sz);
+    }
+    else {
+        p = &temp_arg_area[arg_area_loc];
+        arg_area_loc += sz;
+    }
+    memcpy(p, obj, sz);
+    return p;
+}
+
 extern "C" void *jl_value_to_pointer(jl_value_t *jt, jl_value_t *v, int argn)
 {
     if (v == (jl_value_t*)jl_null)
         return NULL;
     if (jl_is_cpointer(v))
         return jl_unbox_pointer(v);
-    if ((jl_value_t*)jl_typeof(v) == jt)
-        return jl_bits_data(v);
+    if ((jl_value_t*)jl_typeof(v) == jt) {
+        assert(jl_is_bits_type(jt));
+        size_t osz = ((jl_bits_type_t*)jt)->nbits/8;
+        return alloc_temp_arg_copy(jl_bits_data(v), osz);
+    }
     if (jl_is_array(v) && jl_tparam0(jl_typeof(v)) == jt)
         return ((jl_array_t*)v)->data;
     jl_errorf("ccall: expected Pointer{%s} as argument %d",
@@ -206,21 +241,43 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
     std::vector<const Type *> fargt(0);
     const Type *lrt = julia_type_to_llvm(rt);
     size_t i;
+    bool haspointers = false;
     for(i=0; i < tt->length; i++) {
-        fargt.push_back(julia_type_to_llvm(jl_tupleref(tt,i)));
+        const Type *t = julia_type_to_llvm(jl_tupleref(tt,i));
+        haspointers = haspointers || t->isPointerTy();
+        fargt.push_back(t);
     }
+    // make LLVM function object for the target
     Function *llvmf =
         Function::Create(FunctionType::get(lrt, fargt, false),
                          Function::ExternalLinkage,
                          "ccall_", jl_Module);
     jl_ExecutionEngine->addGlobalMapping(llvmf, fptr);
+
+    // save temp argument area stack pointer
+    if (haspointers) {
+        Value *saveloc = get_saved_arg_area_loc(ctx);
+        Value *aalval = builder.CreateCall(save_arg_area_loc_func);
+        builder.CreateStore(aalval, saveloc);
+    }
+
+    // emit arguments
     std::vector<Value*> argvals(0);
     for(i=4; i < nargs+1; i++) {
         Value *arg = emit_expr(args[i], ctx, true);
         argvals.push_back(julia_to_native(fargt[i-4], jl_tupleref(tt,i-4),
                                           arg, i-3, ctx));
     }
+    // the actual call
     Value *result = builder.CreateCall(llvmf, argvals.begin(), argvals.end());
+
+    // restore temp argument area stack pointer
+    if (haspointers) {
+        Value *saveloc = get_saved_arg_area_loc(ctx);
+        Value *lastval = builder.CreateLoad(saveloc);
+        builder.CreateCall(restore_arg_area_loc_func, lastval);
+    }
+
     if (is_unsigned_julia_type(rt))
         return mark_unsigned(result);
     if (lrt == T_void)
@@ -523,4 +580,22 @@ extern "C" void jl_init_intrinsic_functions()
                          jl_Module);
     jl_ExecutionEngine->addGlobalMapping(value_to_pointer_func,
                                          (void*)&jl_value_to_pointer);
+
+    temp_arg_area = (char*)allocb(arg_area_sz);
+    arg_area_loc = 0;
+
+    std::vector<const Type*> noargs(0);
+    save_arg_area_loc_func =
+        Function::Create(FunctionType::get(T_uint32, noargs, false),
+                         Function::ExternalLinkage, "save_arg_area_loc",
+                         jl_Module);
+    jl_ExecutionEngine->addGlobalMapping(save_arg_area_loc_func,
+                                         (void*)&save_arg_area_loc);
+
+    restore_arg_area_loc_func =
+        Function::Create(ft1arg(T_void, T_uint32),
+                         Function::ExternalLinkage, "restore_arg_area_loc",
+                         jl_Module);
+    jl_ExecutionEngine->addGlobalMapping(restore_arg_area_loc_func,
+                                         (void*)&restore_arg_area_loc);
 }

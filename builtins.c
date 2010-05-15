@@ -1205,4 +1205,5 @@ void jl_init_builtins()
 
     add_builtin("JuliaDLHandle", jl_box_pointer(jl_pointer_void_type,
                                                 jl_load_dynamic_library(NULL)));
+    add_builtin("C_NULL", jl_box_pointer(jl_pointer_void_type, NULL));
 }

@@ -55,6 +55,7 @@ static const Type *T_uint32;
 static const Type *T_int64;
 static const Type *T_pint64;
 static const Type *T_uint64;
+static const Type *T_size;
 static const Type *T_float32;
 static const Type *T_pfloat32;
 static const Type *T_float64;
@@ -189,6 +190,7 @@ typedef struct {
     const Argument *envArg;
     const Argument *argArray;
     const Argument *argCount;
+    Value *last_arg_area_loc;
 } jl_codectx_t;
 
 static Value *literal_pointer_val(jl_value_t *p)
@@ -537,6 +539,7 @@ static void emit_function(jl_lambda_info_t *lam, Function *f)
     ctx.envArg = &envArg;
     ctx.argArray = &argArray;
     ctx.argCount = &argCount;
+    ctx.last_arg_area_loc = NULL;
 
     // allocate local variables
     // must be first for the mem2reg pass to work
@@ -689,6 +692,11 @@ static void init_julia_llvm_env(Module *m)
     T_pint64 = PointerType::get(T_int64, 0);
     T_uint8 = T_int8;   T_uint16 = T_int16;
     T_uint32 = T_int32; T_uint64 = T_int64;
+#ifdef BITS64
+    T_size = T_uint64;
+#else
+    T_size = T_uint32;
+#endif
     T_float32 = Type::getFloatTy(getGlobalContext());
     T_pfloat32 = PointerType::get(T_float32, 0);
     T_float64 = Type::getDoubleTy(getGlobalContext());
