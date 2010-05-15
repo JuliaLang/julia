@@ -14,6 +14,7 @@ for func in sin cos tan sinh cosh tanh asin acos atan log log2 log10 log1p logb 
     echo "# $func"
     echo "$func(x::Float64) = ccall(dlsym(libm,\"$func\"), Float64, (Float64,), x)"
     echo "$func(x::Float32) = ccall(dlsym(libm,\"${func}f\"), Float32, (Float32,), x)"
+    echo "$func(x::Scalar) = $func(convert(Float64,x))"
     echo "$func(x::Vector) = [ $func(x[i]) | i=1:length(x) ]"
     echo "$func(x::Matrix) = [ $func(x[i,j]) | i=1:size(x,1), j=1:size(x,2) ]"
     echo
@@ -35,6 +36,7 @@ for func in atan2 pow remainder fmod copysign hypot fmin fmax fdim; do
     echo "# $func"
     echo "$func(x::Float64, y::Float64) = ccall(dlsym(libm,\"$func\"), Float64, (Float64, Float64,), x, y)"
     echo "$func(x::Float32, y::Float32) = ccall(dlsym(libm,\"${func}f\"), Float32, (Float32, Float32), x, y)"
+    echo "$func(x::Scalar, y::Scalar) = $func(convert(Float64,x),convert(Float64,y))"
     echo
 done
 
@@ -42,6 +44,7 @@ for func in isinf isnan; do
     echo "# $func"
     echo "$func(x::Float64) = ccall(dlsym(libm,\"$func\"), Int32, (Float64,), x)!=0"
     echo "$func(x::Float32) = ccall(dlsym(libm,\"${func}f\"), Int32, (Float32,), x)!=0"
+    echo "$func(x::Int) = false"
     echo "$func(x::Vector) = [ $func(x[i]) | i=1:length(x) ]"
     echo "$func(x::Matrix) = [ $func(x[i,j]) | i=1:size(x,1), j=1:size(x,2) ]"
     echo
