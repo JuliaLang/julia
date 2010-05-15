@@ -75,6 +75,7 @@ static const Type *julia_type_to_llvm(jl_value_t *jt)
     if (jt == (jl_value_t*)jl_float32_type) return T_float32;
     if (jt == (jl_value_t*)jl_float64_type) return T_float64;
     if (jt == (jl_value_t*)jl_bottom_type) return T_void;
+    if (jt == (jl_value_t*)jl_null) return T_void;
     if (jl_is_bits_type(jt) && jl_is_cpointer_type(jt)) {
         const Type *lt = julia_type_to_llvm(jl_tparam0(jt));
         return PointerType::get(lt, 0);
@@ -222,6 +223,8 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
     Value *result = builder.CreateCall(llvmf, argvals.begin(), argvals.end());
     if (is_unsigned_julia_type(rt))
         return mark_unsigned(result);
+    if (lrt == T_void)
+        return literal_pointer_val((jl_value_t*)jl_null);
     return result;
 }
 
