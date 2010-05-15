@@ -1,6 +1,7 @@
 *.o
 *.do
 *.a
+/tmp
 /julia-defs.s.bc
 /julia-defs.s.bc.inc
 /julia_flisp.boot
