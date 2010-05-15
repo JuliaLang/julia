@@ -8,6 +8,52 @@
 libBLAS = dlopen("libBLAS")
 libLAPACK = dlopen("libLAPACK")
 
+# void cblas_dcopy(const int N, const double *X, const int incX,
+#                 double *Y, const int incY);
+
+function copy (X::Vector{Float64})
+    n = length(X)
+    Y = zeros(Float64, n)
+    ccall(dlsym(libBLAS, "cblas_dcopy"),
+          Float64,
+          (Int32, Pointer{Float64}, Int32, Pointer{Float64}, Int32),
+          n, X, 1, Y, 1)
+    return Y
+end
+
+function copy (X::Matrix{Float64})
+    m = size(X,1)
+    n = size(X,2)
+    Y = zeros(Float64, m, n)
+    ccall(dlsym(libBLAS, "cblas_dcopy"),
+          Float64,
+          (Int32, Pointer{Float64}, Int32, Pointer{Float64}, Int32),
+          m*n, X, 1, Y, 1)
+    return Y
+end
+
+function copy (X::Vector{Float32})
+    n = length(X)
+    Y = zeros(Float32, n)
+    ccall(dlsym(libBLAS, "cblas_scopy"),
+          Float32,
+          (Int32, Pointer{Float32}, Int32, Pointer{Float32}, Int32),
+          n, X, 1, Y, 1)
+    return Y
+end
+
+function copy (X::Matrix{Float32})
+    m = size(X,1)
+    n = size(X,2)
+    Y = zeros(Float32, m, n)
+    ccall(dlsym(libBLAS, "cblas_scopy"),
+          Float32,
+          (Int32, Pointer{Float32}, Int32, Pointer{Float32}, Int32),
+          m*n, X, 1, Y, 1)
+    return Y
+end
+
+
 # double cblas_ddot(const int N, const double *X, const int incX,
 #                   const double *Y, const int incY);
 
@@ -37,22 +83,6 @@ end
 
 function norm (x::Vector{Float32})
     ccall(dlsym(libBLAS, "cblas_snrm2"),
-          Float32,
-          (Int32, Pointer{Float32}, Int32),
-          length(x), x, 1)
-end
-
-# double cblas_dasum(const int N, const double *X, const int incX);
-
-function sum (x::Vector{Float64})
-    ccall(dlsym(libBLAS, "cblas_dasum"),
-          Float64,
-          (Int32, Pointer{Float64}, Int32),
-          length(x), x, 1)
-end
-
-function sum (x::Vector{Float32})
-    ccall(dlsym(libBLAS, "cblas_sasum"),
           Float32,
           (Int32, Pointer{Float32}, Int32),
           length(x), x, 1)
