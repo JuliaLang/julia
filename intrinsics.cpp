@@ -131,6 +131,7 @@ static Value *boxed(Value *v)
                                    literal_pointer_val(jt), v);
     }
     assert("Don't know how to box this type" && false);
+    return NULL;
 }
 
 static Value *bitstype_pointer(Value *x)
