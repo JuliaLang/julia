@@ -9,7 +9,7 @@ size(t::Tensor, d) = size(t)[d]
 ndims(t::Tensor) = length(size(t))
 numel(t::Tensor) = prod(size(t))
 length(v::Vector) = size(v,1)
-nnz(a::Array) = do (n = 0, for i=1:numel(a); n += a[i] != 0 ? 1 : 0; end, n)
+nnz(a::Array) = (n = 0; for i=1:numel(a); n += a[i] != 0 ? 1 : 0; end; n)
 
 zeros(T::Type, dims...) = Array(T,dims...)
 zeros(dims...) = zeros(Float64, dims...)
@@ -31,9 +31,9 @@ colon(start::Int32, stop::Int32, stride::Int32) = [ i | i=start:stride:stop ]
 copy(a::Vector) = [ a[i] | i=1:length(a) ]
 copy(a::Matrix) = [ a[i,j] | i=1:size(a,1), j=1:size(a,2) ]
 
-reshape{T,n}(a::Array{T,n}, dims...) = do (b = zeros(T, dims...),
-                                           for i=1:numel(a); b[i] = a[i]; end,
-                                           b)
+reshape{T,n}(a::Array{T,n}, dims...) = (b = zeros(T, dims...);
+                                        for i=1:numel(a); b[i] = a[i]; end;
+                                        b)
 
 (+)(x::Scalar, y::Vector) = [ x + y[i] | i=1:length(y) ]
 (-)(x::Scalar, y::Vector) = [ x - y[i] | i=1:length(y) ]
@@ -82,10 +82,10 @@ ctranspose(x::Matrix) = [ conj(x[j,i]) | i=1:size(x,2), j=1:size(x,1) ]
 
 dot(x::Vector, y::Vector) = sum(x.*y)
 diag(A::Matrix) = [ A[i,i] | i=1:min(size(A)) ]
-diagm(v::Vector) = do (n=length(v),
-                       a=zeros(n,n),
-                       for i=1:n; a[i,i] = v[i]; end,
-                       a)
+diagm(v::Vector) = (n=length(v);
+                    a=zeros(n,n);
+                    for i=1:n; a[i,i] = v[i]; end;
+                    a)
 
 (*)(A::Matrix, B::Vector) = [ dot(A[i,:],B) | i=1:size(A,1) ]
 (*)(A::Matrix, B::Matrix) = [ dot(A[i,:],B[:,j]) | i=1:size(A,1), j=1:size(B,2) ]
@@ -143,9 +143,9 @@ end
 
 # Indexing: set()
 # TODO: Take care of growing
-set(a::Array, x, i::Index) = do (arrayset(a,i,x), a)
+set(a::Array, x, i::Index) = (arrayset(a,i,x); a)
 set{T}(a::Array{T,2}, x, i::Index, j::Index) =
-    do (arrayset(a, (j-1)*a.dims[1]+i, x), a)
+    (arrayset(a, (j-1)*a.dims[1]+i, x); a)
 
 function set(a::Array, x, I::Index...)
     # TODO: Need to take care of growing

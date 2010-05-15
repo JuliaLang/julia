@@ -67,8 +67,8 @@ yiq2rgb(yiq) = [1,  .956, .621;
 
 rgb2gray(rgb::Vector) = 0.3*v[1] + 0.59*v[2] + 0.11*v[3]
 rgb2gray(p::Pixel) =
-    do(y = 0.3*redval(p) + 0.59*greenval(p) + 0.11*blueval(p),
-       rgb(y,y,y))
+    (y = 0.3*redval(p) + 0.59*greenval(p) + 0.11*blueval(p);
+     rgb(y,y,y))
 
 cie_color_match =
     [[0.001368, 3.8999999999999999e-005, 0.006450001],

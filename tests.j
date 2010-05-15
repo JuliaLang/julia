@@ -165,7 +165,7 @@ function clotest()
     dec()
     assert(c == 1)
     assert((()->c)() == 1)
-    return (n->do(c+=n), ()->c)
+    return (n->(c+=n), ()->c)
 end
 (inc, C) = clotest()
 inc(11)

@@ -242,7 +242,7 @@ TODO:
 ; ow, my eyes!!
 (define (parse-Nary s down op head closers allow-empty)
   (if (invalid-initial-token? (require-token s))
-      (error "unexpected token" (peek-token s)))
+      (error (string "unexpected token " (peek-token s))))
   (if (memv (require-token s) closers)
       (list head)  ; empty block
       (let loop ((ex
@@ -308,6 +308,9 @@ TODO:
 					  '(end else elseif catch #\newline)
 					  #t))
 (define (parse-stmts s) (parse-Nary s parse-eq    #\; 'block '(#\newline) #t))
+; for sequenced evaluation inside expressions: e.g. (a;b, c;d)
+(define (parse-stmts-within-tuple s)
+  (parse-Nary s parse-eq* #\; 'block '(#\, #\) ) #t))
 
 (define (parse-eq s)    (parse-RtoL s parse-comma (prec-ops 0)))
 ; parse-eq* is used where commas are special, for example in an argument list
@@ -391,7 +394,7 @@ TODO:
 (define (parse-unary s)
   (let ((t (require-token s)))
     (if (closing-token? t)
-	(error "unexpected token" t))
+	(error (string "unexpected token " t)))
     (cond ((memq t unary-ops)
 	   (let ((op (take-token s))
 		 (next (peek-token s)))
@@ -439,11 +442,7 @@ TODO:
 	((|.|)
 	 (loop (list (take-token s) ex (parse-atom s))))
 	((#\( )   (take-token s)
-	 ; some names are syntactic and not function calls
-	 (cond ((eq? ex 'do)
-		(loop (list* 'block   (parse-arglist s #\) ))))
-	       (else
-		(loop (list* 'call ex (parse-arglist s #\) ))))))
+	 (loop (list* 'call ex (parse-arglist s #\) ))))
 	((#\[ )   (take-token s)
 	 ; ref is syntax, so we can distinguish
 	 ; a[i] = x  from
@@ -532,12 +531,15 @@ TODO:
 			    (begin (take-token s)
 				   (require-token s))
 			    c)))
-		(cond ((equal? c #\,)
+		(cond ((eqv? c #\,)
 		       (begin (take-token s) (loop (cons nxt lst))))
-		      ((equal? c #\;)        (loop (cons nxt lst)))
+		      ((eqv? c #\;)          (loop (cons nxt lst)))
 		      ((equal? c closer)     (loop (cons nxt lst)))
+		      ; newline character isn't detectable here
+		      #;((eqv? c #\newline)
+		       (error "unexpected line break in argument list"))
 		      (else
-		       (error "unexpected line break in argument list")))))))))
+		       (error "missing separator in argument list")))))))))
 
 ; parse [] concatenation expressions
 (define (parse-vector s)
@@ -563,6 +565,34 @@ TODO:
 	      ((#\,) (begin (take-token s) (loop  nv outer)))
 	      (else  (error "incomplete: comma expected"))))))))
 
+(define (parse-tuple-elt s)
+  (let ((ex (parse-stmts-within-tuple s)))
+    (if (eqv? (peek-token s) '...)
+	(list (take-token s) ex)
+	ex)))
+
+(define (parse-tuple s first)
+  (let loop ((lst '())
+	     (nxt (if (eq? (require-token s) '...)
+		      (list (take-token s) first)
+		      first)))
+    (let ((t (require-token s)))
+      (case t
+	((#\))
+	 (take-token s)
+	 (cons 'tuple (reverse (cons nxt lst))))
+	((#\,)
+	 (take-token s)
+	 (if (eqv? (require-token s) #\))
+	     ; allow ending with ,
+	     (begin (take-token s)
+		    (cons 'tuple (reverse (cons nxt lst))))
+	     (loop (cons nxt lst) (parse-tuple-elt s))))
+	#;((#\newline)
+	 (error "unexpected line break in tuple"))
+	(else
+	 (error "missing separator in tuple"))))))
+
 ; parse numbers, identifiers, parenthesized expressions, lists, vectors, etc.
 (define (parse-atom s)
   (let ((t (require-token s)))
@@ -571,28 +601,23 @@ TODO:
 	  ((eqv? t #\( )
 	   (take-token s)
 	   (if (eqv? (require-token s) #\) )
+	       ; empty tuple ()
 	       (begin (take-token s) '(tuple))
 	       ; here we parse the first subexpression separately, so
-	       ; we can look for a comma to see if it's a tuple. if we
-	       ; just called parse-arglist instead, we couldn't distinguish
-	       ; (x) from (x,)
-	       (let* ((ex (parse-eq* s))
+	       ; we can look for a comma to see if it's a tuple. this lets us
+	       ; distinguish (x) from (x,)
+	       (let* ((ex (parse-stmts-within-tuple s))
 		      (t (require-token s)))
 		 (cond ((eqv? t #\) )
-			(begin (take-token s) ex))
-		       ((eqv? t #\, )
-			(begin (take-token s)
-			       (list* 'tuple ex (parse-arglist s #\) ))))
-		       ((eq? t '...)
-			(begin (take-token s)
-			       (if (eqv? (peek-token s) #\,)
-				   (take-token s))
-			       (list* 'tuple (list '... ex)
-				      (parse-arglist s #\) ))))
-		       ((eqv? t #\;)
-			(error "unexpected ; in tuple"))
+			; value in parentheses (x)
+			(take-token s) ex)
+		       ((or (eqv? t #\, ) (eq? t '...))
+			; tuple (x,) (x,y) (x...) etc.
+			(parse-tuple s ex))
+		       #;((eqv? t #\newline)
+			(error "unexpected line break in tuple"))
 		       (else
-			(error "unexpected line break in tuple"))))))
+			(error "missing separator in tuple"))))))
 
 	  ((eqv? t #\{ )
 	   (take-token s)
