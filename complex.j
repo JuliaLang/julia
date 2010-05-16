@@ -54,6 +54,36 @@ inv(z::Complex) = conj(z)/norm(z)
 =={T}(z::Complex{T}, w::T)           = (z.re == w    && z.im == 0)
 =={T}(w::T, z::Complex{T})           = (z.re == w    && z.im == 0)
 
+function (/)(a::Complex, b::Complex)
+    are = a.re; aim = a.im; bre = b.re; bim = b.im
+    abr = abs(bre)
+    abi = abs(bim)
+    if abr <= abi
+        r = bre / bim
+        den = bim * (1 + r*r)
+        Complex((are*r + aim)/den, (aim*r - are)/den)
+    else
+        r = bim / bre
+        den = bre * (1 + r*r)
+        Complex((are + aim*r)/den, (aim - are*r)/den)
+    end
+end
+
+function (/)(a::Real, b::Complex)
+    bre = b.re; bim = b.im
+    abr = abs(bre)
+    abi = abs(bim)
+    if abr <= abi
+        r = bre / bim
+        den = bim * (1 + r*r)
+        Complex(a*r/den, -a/den)
+    else
+        r = bim / bre
+        den = bre * (1 + r*r)
+        Complex(a/den, -a*r/den)
+    end
+end
+
 function sqrt(z::Complex)
     r = sqrt((hypot(z.re, z.im)+abs(z.re))*0.5)
     if z.re >= 0.0
@@ -108,45 +138,79 @@ function (^){T}(x::Float{T}, p::Float{T})
     if x >= 0
         return pow(x, p)
     end
-    r = convert(Complex{T},x)^convert(Complex{T},p)
-    if r.im == 0
-        return r.re
+    if p == 0.5
+        return sqrt(convert(Complex{T},x))
     end
-    r
+    return convert(Complex{T},x)^convert(Complex{T},p)
 end
 
-function (^)(z::Complex, p::Complex)
+function (^){T}(z::Complex{T}, p::Complex)
+    if p.im == 0
+        if p.re == 0
+            return convert(T,1)
+        elseif p.re == 1
+            return z
+        elseif p.re == 2
+            return z*z
+        elseif p.re == 0.5
+            return sqrt(z)
+        end
+    end
     r = abs(z)
-    r_n = r^p.re
+    rp = r^p.re
+    if p.im == 0
+        ip = truncate(p.re)
+        if ip == p.re
+            # integer multiples of pi/2
+            if z.im == 0 && z.re < 0
+                return Complex(isodd(ip) ? -rp : rp, convert(T,0))
+            elseif z.re == 0 && z.im < 0
+                if isodd(ip)
+                    return Complex(convert(T,0), isodd(div(ip-1,2)) ? rp : -rp)
+                else
+                    return Complex(isodd(div(ip,2)) ? -rp : rp, convert(T,0))
+                end
+            elseif z.re == 0 && z.im > 0
+                if isodd(ip)
+                    return Complex(convert(T,0), isodd(div(ip-1,2)) ? -rp : rp)
+                else
+                    return Complex(isodd(div(ip,2)) ? -rp : rp, convert(T,0))
+                end
+            end
+        else
+            dr = p.re*2
+            ip = truncate(dr)
+            # 1/2 multiples of pi
+            if ip == dr && z.im == 0
+                if z.re < 0
+                    return Complex(convert(T,0), isodd(div(ip-1,2)) ? -rp : rp)
+                elseif z.re >= 0
+                    return Complex(rp, 0)
+                end
+            end
+        end
+    end
     theta = atan2(z.im, z.re)
     ntheta = p.re*theta
-    re = r_n*cos(ntheta)
-    im = r_n*sin(ntheta)
-    if (p.im == 0)
-        return Complex(re, im)
+    if p.im != 0
+        rp = rp * exp(-p.im * theta)
+        ntheta = ntheta + p.im*log(r)
     end
-    iz = cis(Complex(p.im*log(r), p.im*theta))
-    return Complex(re,im)*iz
+    Complex(rp*cos(ntheta), rp*sin(ntheta))
 end
 
 function (^)(z::Real, p::Complex)
-    if (p.im == 0)
+    if p.im == 0
         return z^p.re
     end
     (^)(promote(z,p)...)
 end
 
 function (^)(z::Complex, p::Real)
-    if (z.im == 0)
+    if z.im == 0
         return z.re^p
     end
-    r = abs(z)
-    r_n = r^p
-    theta = atan2(z.im, z.re)
-    ntheta = p*theta
-    re = r_n*cos(ntheta)
-    im = r_n*sin(ntheta)
-    return Complex(re, im)
+    (^)(promote(z,p)...)
 end
 
 function tan(z::Complex)
