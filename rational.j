@@ -11,9 +11,12 @@ convert{T}(::Type{Float{T}}, x::Rational) = convert(T,x.num)/convert(T,x.den)
 promote_table{T}(::Type{Rational{T}}, ::Type{Int{T}}) = Rational{T}
 promote_table{T,S}(::Type{Rational{T}}, ::Type{Int{S}}) = Rational{promote_type(T,S)}
 promote_table{T,S}(::Type{Rational{T}}, ::Type{Rational{S}}) = Rational{promote_type(T,S)}
-promote_table{T,S}(::Type{Rational{T}}, ::Type{Float{S}}) = Float{promote_type(T,S)}
+promote_table{T,S}(::Type{Rational{T}}, ::Type{Float{S}}) = promote_type(T,S)
 
 function //{T}(num::T, den::T)
+    if den == 0
+        error("demoinator cannot be zero")
+    end
     g = gcd(num, den)
     num = div(num, g)
     den = div(den, g)
@@ -34,6 +37,7 @@ end
 
 num(x::Rational) = x.num
 den(x::Rational) = x.den
+sign(x::Rational) = sign(x.num)*sign(x.den)
 
 (-)(x::Rational) = (-x.num) // x.den
 (+)(x::Rational, y::Rational) = (x.num*y.den + x.den*y.num) // (x.den*y.den)

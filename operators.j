@@ -37,6 +37,7 @@ all(itr)  = reduce(all, itr)
 promote_table(::Type{Int32}, ::Type{Float64}) = Float64
 
 function promote_type(T::Type, S::Type)
+    # print("promote_type: ",T,", ",S,"\n")
     if T <: S || S <: T
         error("no method")
     end
@@ -50,6 +51,7 @@ end
 promote() = ()
 promote(x) = (x,)
 function promote{T,S}(x::T, y::S)
+    # print("promote: ",T,", ",S,"\n")
     R = promote_type(T,S)
     (convert(R,x), convert(R,y))
 end
