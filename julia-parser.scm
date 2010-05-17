@@ -308,9 +308,6 @@ TODO:
 					  '(end else elseif catch #\newline)
 					  #t))
 (define (parse-stmts s) (parse-Nary s parse-eq    #\; 'block '(#\newline) #t))
-; for sequenced evaluation inside expressions: e.g. (a;b, c;d)
-(define (parse-stmts-within-tuple s)
-  (parse-Nary s parse-eq* #\; 'block '(#\, #\) ) #t))
 
 (define (parse-eq s)    (parse-RtoL s parse-comma (prec-ops 0)))
 ; parse-eq* is used where commas are special, for example in an argument list
@@ -565,8 +562,12 @@ TODO:
 	      ((#\,) (begin (take-token s) (loop  nv outer)))
 	      (else  (error "incomplete: comma expected"))))))))
 
+; for sequenced evaluation inside expressions: e.g. (a;b, c;d)
+(define (parse-stmts-within-expr s)
+  (parse-Nary s parse-eq* #\; 'block '(#\, #\) ) #t))
+
 (define (parse-tuple-elt s)
-  (let ((ex (parse-stmts-within-tuple s)))
+  (let ((ex (parse-eq* s)))
     (if (eqv? (peek-token s) '...)
 	(list (take-token s) ex)
 	ex)))
@@ -588,6 +589,8 @@ TODO:
 	     (begin (take-token s)
 		    (cons 'tuple (reverse (cons nxt lst))))
 	     (loop (cons nxt lst) (parse-tuple-elt s))))
+	((#\;)
+	 (error "unexpected semicolon in tuple"))
 	#;((#\newline)
 	 (error "unexpected line break in tuple"))
 	(else
@@ -606,7 +609,7 @@ TODO:
 	       ; here we parse the first subexpression separately, so
 	       ; we can look for a comma to see if it's a tuple. this lets us
 	       ; distinguish (x) from (x,)
-	       (let* ((ex (parse-stmts-within-tuple s))
+	       (let* ((ex (parse-eq* s))
 		      (t (require-token s)))
 		 (cond ((eqv? t #\) )
 			; value in parentheses (x)
@@ -614,6 +617,17 @@ TODO:
 		       ((or (eqv? t #\, ) (eq? t '...))
 			; tuple (x,) (x,y) (x...) etc.
 			(parse-tuple s ex))
+		       ((eqv? t #\;)
+			; parenthesized block (a;b;c)
+			(take-token s)
+			(let* ((blk (parse-stmts-within-expr s))
+			       (tok (require-token s)))
+			  (if (eqv? tok #\,)
+			      (error "unexpected comma in statement block"))
+			  (if (not (eqv? tok #\)))
+			      (error "missing separator in statement block"))
+			  (take-token s)
+			  `(block ,ex ,blk)))
 		       #;((eqv? t #\newline)
 			(error "unexpected line break in tuple"))
 		       (else
