@@ -99,7 +99,7 @@ end
 
 ref(t::Tuple, r::Range) = accumtuple(t, r, start(r))
 function accumtuple(t::Tuple, r::Range, i, elts...)
-    if (done(r, i))
+    if done(r, i)
         return elts
     end
     accumtuple(t, r, i+r.step, elts..., t[i])
@@ -121,7 +121,7 @@ function ==(t1::Tuple, t2::Tuple)
 end
 
 function append(t1::Tuple, ts::Tuple...)
-    if (length(ts)==0)
+    if length(ts)==0
         return t1
     end
     return tuple(t1..., append(ts...)...)

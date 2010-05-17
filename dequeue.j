@@ -47,10 +47,10 @@ function print(l::Dequeue)
 end
 
 function grow(a::Dequeue, inc::Size)
-    if (inc == 0)
+    if inc == 0
         return a
     end
-    if (a.size + inc > a.maxsize - a.offset)
+    if a.size + inc > a.maxsize - a.offset
         newsize = a.maxsize*2
         while (a.size+inc > newsize-a.offset)
             newsize *= 2
@@ -73,7 +73,7 @@ function push(a::Dequeue, item)
 end
 
 function pop(a::Dequeue)
-    if (a.size == 0)
+    if a.size == 0
         error("pop: dequeue is empty")
     end
     item = a[a.size]

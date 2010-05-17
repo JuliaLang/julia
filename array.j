@@ -66,11 +66,11 @@ reshape{T,n}(a::Array{T,n}, dims...) = (b = zeros(T, dims...);
 (./)(x::Matrix, y::Matrix) = [ x[i,j] / y[i,j] | i=1:size(x,1), j=1:size(x,2) ]
 
 function (==)(x::Array, y::Array)
-    if (x.dims != y.dims)
+    if x.dims != y.dims
         return false
     end
     for i=1:numel(x)
-        if (arrayref(x,i) != arrayref(y,i))
+        if arrayref(x,i) != arrayref(y,i)
             return false
         end
     end

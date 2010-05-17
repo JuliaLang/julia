@@ -183,7 +183,7 @@ function powermod(x::Int, p::Int, m::Int)
 end
 
 function nPr(n::Int, r::Int)
-    if (r < 0 || n < 0 || r > n)
+    if r < 0 || n < 0 || r > n
         return 0
     end
 
@@ -197,22 +197,22 @@ function nPr(n::Int, r::Int)
 end
 
 function nCr(n::Int, r::Int)
-    if (r < 0)
+    if r < 0
         return 0
     end
 
     neg = false
-    if (n < 0)
+    if n < 0
         n = (-n)+r-1
         if isodd(r)
             neg = true
         end
     end
 
-    if (r > n)
+    if r > n
         return 0
     end
-    if (r == 0 || r == n)
+    if r == 0 || r == n
         return 1
     end
 

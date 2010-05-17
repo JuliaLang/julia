@@ -131,6 +131,7 @@ assert(im(Complex(1//2,2//3)) == 2//3)
 assert(Complex(1,2) + 1//2 == Complex(3//2,2//1))
 assert(Complex(1,2) + 1//2 * 0.5 == Complex(1.25,2.0))
 assert((Complex(1,2) + 1//2) * 0.5 == Complex(0.75,1.0))
+assert((Complex(1,2)/Complex(2.5,3.0))*Complex(2.5,3.0) == Complex(1,2))
 
 # conversions
 function foo()
