@@ -80,7 +80,6 @@ uint64(x::Scalar) = convert(Uint64, x)
 (-)(x::Int8 ) = boxsi8 (neg_int(unbox8 (x)))
 (*)(x::Int32, y::Int32) = boxsi32(mul_int(unbox32(x), unbox32(y)))
 (/)(x::Int32, y::Int32) = float64(x)/float64(y)
-(//)(x::Int32, y::Int32) = rational(x,y)
 div(x::Int32, y::Int32) = boxsi32(sdiv_int(unbox32(x), unbox32(y)))
 (%)(x::Int32, y::Int32) = boxsi32(smod_int(unbox32(x), unbox32(y)))
 
