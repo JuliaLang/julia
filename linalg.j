@@ -116,7 +116,7 @@ function * (A::Matrix{Float32}, B::Matrix{Float32})
     assert (k == size(B,1))
     C = zeros(Float32, m, n)
 
-    ccall(dlsym(libBLAS, "cblas_sgemm"),
+    ccall(dlsym(libBLAS, "sgemm_"),
           Void,
           (Ptr{Uint8}, Ptr{Uint8}, Ptr{Int32}, Ptr{Int32}, Ptr{Int32}, 
            Ptr{Float32}, Ptr{Float32}, Ptr{Int32}, 
