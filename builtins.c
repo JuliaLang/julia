@@ -703,7 +703,7 @@ JL_CALLABLE(jl_f_print_pointer)
     ios_t *s = current_output_stream;
     void *ptr = *(void**)jl_bits_data(args[0]);
     if (jl_typeis(args[0],jl_pointer_void_type))
-        ios_printf(s, "Pointer{Void}");
+        ios_printf(s, "Ptr{Void}");
     else
         jl_print((jl_value_t*)jl_typeof(args[0]));
 #ifdef BITS64
@@ -1195,7 +1195,7 @@ void jl_init_builtins()
     add_builtin("Expr",
                 (jl_value_t*)jl_new_type_ctor(jl_null,
                                               (jl_type_t*)jl_expr_type));
-    add_builtin("Pointer", (jl_value_t*)jl_pointer_typector);
+    add_builtin("Ptr", (jl_value_t*)jl_pointer_typector);
 
     add_builtin("BitsKind", (jl_value_t*)jl_bits_kind);
     add_builtin("StructKind", (jl_value_t*)jl_struct_kind);

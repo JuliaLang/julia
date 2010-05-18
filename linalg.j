@@ -1,8 +1,6 @@
 libBLAS = dlopen("libBLAS")
 libLAPACK = dlopen("libLAPACK")
 
-typealias Ptr Pointer
-
 # SUBROUTINE DCOPY(N,DX,INCX,DY,INCY) 
 
 function copy (X::Vector{Float64})

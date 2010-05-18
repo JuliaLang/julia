@@ -627,7 +627,7 @@ void jl_init_builtin_types()
 
     tv = jl_typevars(1, "T");
     jl_bits_type_t *cptrbits =
-        jl_new_bitstype((jl_value_t*)jl_symbol("Pointer"), jl_any_type, tv,
+        jl_new_bitstype((jl_value_t*)jl_symbol("Ptr"), jl_any_type, tv,
 #ifdef BITS64
                         64
 #else
