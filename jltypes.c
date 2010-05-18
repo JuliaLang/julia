@@ -150,13 +150,44 @@ jl_value_t *jl_full_type(jl_value_t *v)
     return (jl_value_t*)out;
 }
 
+static int count_union_components(jl_tuple_t *types)
+{
+    size_t i, c=0;
+    for(i=0; i < types->length; i++) {
+        jl_value_t *e = jl_tupleref(types,i);
+        if (jl_is_union_type(e)) {
+            c += count_union_components(((jl_uniontype_t*)e)->types);
+        }
+        else {
+            c++;
+        }
+    }
+    return c;
+}
+
+static void flatten_type_union(jl_tuple_t *types, jl_value_t **out, size_t *idx)
+{
+    size_t i;
+    for(i=0; i < types->length; i++) {
+        jl_value_t *e = jl_tupleref(types,i);
+        if (jl_is_union_type(e)) {
+            flatten_type_union(((jl_uniontype_t*)e)->types, out, idx);
+        }
+        else {
+            out[*idx] = e;
+            (*idx)++;
+        }
+    }
+}
+
 jl_tuple_t *jl_compute_type_union(jl_tuple_t *types)
 {
-    size_t n = types->length;
+    size_t n = count_union_components(types);
     jl_value_t **temp = alloca(n * sizeof(jl_value_t*));
+    size_t idx=0;
+    flatten_type_union(types, temp, &idx);
+    assert(idx == n);
     size_t i, j, ndel=0;
-    for(i=0; i < n; i++)
-        temp[i] = jl_tupleref(types, i);
     for(i=0; i < n; i++) {
         for(j=0; j < n; j++) {
             if (j != i && temp[i] && temp[j]) {
@@ -803,7 +834,7 @@ static jl_value_t *type_match_(jl_type_t *child, jl_type_t *parent,
         jl_tuple_t *t = ((jl_uniontype_t*)parent)->types;
         for(i=0; i < t->length; i++) {
             jl_value_t *p = type_match_((jl_type_t*)child,
-                                        (jl_type_t*)jl_tupleref(parent,i),
+                                        (jl_type_t*)jl_tupleref(t,i),
                                         env, morespecific);
             if (p != jl_false) return p;
         }

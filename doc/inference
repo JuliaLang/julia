@@ -47,6 +47,9 @@ possible alternate for type inference:
 define  new⊲s = (new ≠ s)
 define  update(s, new) = s ⊓ new
 
+define  new⊲s = !(new <: s)
+define  update(s, new) = s ⊔ new
+
 or  update(s, new) = {U=(s[U] ⊓ new[U]), L=(s[L] ⊓ new[L]) ⊓ s[U]}
 
 define exec⟦z := f(x,y)⟧(s[v,UL]) =

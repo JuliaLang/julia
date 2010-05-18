@@ -1,7 +1,7 @@
 load("range.j")
 load("prim.j")
 load("error.j")
-#load("list.j")
+load("list.j")
 load("operators.j")
 load("scalar.j")
 load("int.j")
