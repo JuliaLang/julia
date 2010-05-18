@@ -72,3 +72,50 @@ u_int32_t bitvector_get(u_int32_t *b, u_int64_t n)
 {
     return b[n>>5] & (1<<(n&31));
 }
+
+static int ntz(uint32_t x)
+{
+    int n;
+
+    if (x == 0) return 32;
+    n = 1;
+    if ((x & 0x0000FFFF) == 0) {n = n +16; x = x >>16;}
+    if ((x & 0x000000FF) == 0) {n = n + 8; x = x >> 8;}
+    if ((x & 0x0000000F) == 0) {n = n + 4; x = x >> 4;}
+    if ((x & 0x00000003) == 0) {n = n + 2; x = x >> 2;}
+    return n - (x & 1);
+}
+
+// given a bitvector of n bits, starting at bit n0 find the next
+// set bit, including n0.
+// returns n if no set bits.
+uint32_t bitvector_next(uint32_t *b, uint64_t n0, uint64_t n)
+{
+    if (n == 0) return 0;
+
+    uint32_t i = n0>>5;
+    uint32_t nb = n0&31;
+    uint32_t nw = (n+31)>>5;
+
+    uint32_t w = b[i]>>nb;
+    if (w != 0)
+        return ntz(w)+n0;
+    if (nw == 1)
+        return n;
+    i++;
+    while (i < nw-1) {
+        w = b[i];
+        if (w != 0) {
+            return ntz(w) + (i<<5);
+        }
+        i++;
+    }
+    w = b[i];
+    nb = n&31;
+    i = ntz(w);
+    if (nb == 0)
+        return i + (n-32);
+    if (i >= nb)
+        return n;
+    return i + (n-nb);
+}

@@ -129,7 +129,8 @@ static Value *boxed(Value *v)
     if (t->isPointerTy()) {
         jl_value_t *jt = llvm_type_to_julia(t);
         return builder.CreateCall2(box_pointer_func,
-                                   literal_pointer_val(jt), v);
+                                   literal_pointer_val(jt),
+                                   builder.CreateBitCast(v, T_pint8));
     }
     assert("Don't know how to box this type" && false);
     return NULL;
@@ -282,6 +283,10 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
         return mark_unsigned(result);
     if (lrt == T_void)
         return literal_pointer_val((jl_value_t*)jl_null);
+    if (lrt->isPointerTy())
+        return builder.CreateCall2(box_pointer_func,
+                                   literal_pointer_val(rt),
+                                   builder.CreateBitCast(result,T_pint8));
     return result;
 }
 

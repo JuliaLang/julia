@@ -15,7 +15,7 @@ promote_table{T,S}(::Type{Rational{T}}, ::Type{Float{S}}) = promote_type(T,S)
 
 function //{T}(num::T, den::T)
     if den == 0
-        error("demoinator cannot be zero")
+        error("//: division by zero")
     end
     g = gcd(num, den)
     num = div(num, g)
