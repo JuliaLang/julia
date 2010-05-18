@@ -152,7 +152,7 @@ function print(e::Expr)
         print("()")
     elseif is(hd,`goto)
         print("goto ", e.args[1])
-    elseif is(hd,symbol("goto-ifnot"))
+    elseif is(hd,`gotoifnot)
         print("unless ", e.args[1], " goto ", e.args[2])
     elseif is(hd,`label)
         print(e.args[1],": ")
@@ -170,5 +170,8 @@ function print(e::Expr)
         print("end\n")
     else
         print(hd, e.args)
+    end
+    if !is(e.type, Any)
+        print("::", e.type)
     end
 end

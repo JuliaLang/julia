@@ -1065,7 +1065,7 @@ end
 	  ((label) (loop (+ ip 1)))
 	  ((goto)
 	   (loop (cadr I)))
-	  ((goto-ifnot)
+	  ((gotoifnot)
 	   (if (j-false? (j-eval (cadr I) env))
 	       (loop (caddr I))
 	       (loop (+ ip 1))))

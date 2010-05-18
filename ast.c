@@ -218,7 +218,7 @@ static jl_value_t *scm_to_julia(value_t e)
             jl_sym_t *sym = scmsym_to_julia(hd);
             char *s = sym->name;
             /* tree node types:
-               goto  goto-ifnot  label  return
+               goto  gotoifnot  label  return
                lambda  call  =  quote
                null  top  unbound  box-unbound  closure-ref
                body  file

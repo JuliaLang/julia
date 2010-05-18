@@ -652,7 +652,7 @@ void jl_init_builtin_types()
     line_sym = jl_symbol("line");
     continue_sym = jl_symbol("continue");
     goto_sym = jl_symbol("goto");
-    goto_ifnot_sym = jl_symbol("goto-ifnot");
+    goto_ifnot_sym = jl_symbol("gotoifnot");
     label_sym = jl_symbol("label");
     return_sym = jl_symbol("return");
     lambda_sym = jl_symbol("lambda");

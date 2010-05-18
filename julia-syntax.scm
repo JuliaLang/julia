@@ -1144,7 +1144,7 @@ So far only the second case can actually occur.
   (closure-convert- (analyze-variables e) '(var-info (locals) () () ())))
 
 ; remove if, _while, block, break-block, and break
-; replaced with goto and goto-ifnot
+; replaced with goto and gotoifnot
 ; TODO: remove type-assignment-affecting expressions from conditional branch.
 ;       needed because there's no program location after the condition
 ;       is evaluated but before the branch's successors.
@@ -1170,7 +1170,7 @@ So far only the second case can actually occur.
 			(endl  (make-label))
 			(tail  (and (pair? (caddr e))
 				    (eq? (car (caddr e)) 'return))))
-		    (emit `(goto-ifnot ,(goto-form (cadr e)) ,elsel))
+		    (emit `(gotoifnot ,(goto-form (cadr e)) ,elsel))
 		    (compile (caddr e) break-labels)
 		    (if (not tail) (emit `(goto ,endl)))
 		    (mark-label elsel)
@@ -1179,7 +1179,7 @@ So far only the second case can actually occur.
 	    ((_while) (let ((topl (make-label))
 			    (endl (make-label)))
 			(mark-label topl)
-			(emit `(goto-ifnot ,(goto-form (cadr e)) ,endl))
+			(emit `(gotoifnot ,(goto-form (cadr e)) ,endl))
 			(compile (caddr e) break-labels)
 			(emit `(goto ,topl))
 			(mark-label endl)))
