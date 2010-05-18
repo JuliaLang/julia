@@ -41,7 +41,7 @@ jl_bits_type_t *jl_pointer_uint8_type;
 jl_sym_t *call_sym;    jl_sym_t *dots_sym;
 jl_sym_t *dollar_sym;  jl_sym_t *quote_sym;
 jl_sym_t *tuple_sym;   jl_sym_t *top_sym;
-jl_sym_t *expr_sym;    jl_sym_t *list_sym;
+jl_sym_t *expr_sym;
 jl_sym_t *line_sym;    jl_sym_t *continue_sym;
 // head symbols for each expression type
 jl_sym_t *goto_sym;    jl_sym_t *goto_ifnot_sym;
@@ -645,7 +645,6 @@ void jl_init_builtin_types()
     call_sym = jl_symbol("call");
     quote_sym = jl_symbol("quote");
     top_sym = jl_symbol("top");
-    list_sym = jl_symbol("list");
     dots_sym = jl_symbol("...");
     expr_sym = jl_symbol("expr");
     tuple_sym = jl_symbol("tuple");

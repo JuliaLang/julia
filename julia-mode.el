@@ -68,6 +68,8 @@
     (or (equal item (car lst))
 	(member item (cdr lst)))))
 
+; TODO: skip keywords inside strings
+
 ; get the column of the last open block
 (defun last-open-block (min count)
   (cond ((> count 0) (+ 4 (current-indentation)))

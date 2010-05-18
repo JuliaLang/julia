@@ -239,7 +239,6 @@ extern jl_sym_t *quote_sym;
 extern jl_sym_t *tuple_sym;
 extern jl_sym_t *top_sym;
 extern jl_sym_t *expr_sym;
-extern jl_sym_t *list_sym;
 extern jl_sym_t *line_sym;
 extern jl_sym_t *continue_sym;
 extern jl_sym_t *goto_sym;    extern jl_sym_t *goto_ifnot_sym;

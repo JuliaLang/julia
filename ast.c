@@ -157,10 +157,10 @@ static jl_value_t *scm_to_julia(value_t e);
 
 static jl_value_t *full_list(value_t e)
 {
-    jl_expr_t *ar = jl_exprn(list_sym, scm_list_length(e));
+    jl_tuple_t *ar = jl_alloc_tuple(scm_list_length(e));
     size_t i=0;
     while (iscons(e)) {
-        jl_tupleset(ar->args, i, scm_to_julia(car_(e)));
+        jl_tupleset(ar, i, scm_to_julia(car_(e)));
         e = cdr_(e);
         i++;
     }
@@ -169,10 +169,10 @@ static jl_value_t *full_list(value_t e)
 
 static jl_value_t *full_list_of_lists(value_t e)
 {
-    jl_expr_t *ar = jl_exprn(list_sym, scm_list_length(e));
+    jl_tuple_t *ar = jl_alloc_tuple(scm_list_length(e));
     size_t i=0;
     while (iscons(e)) {
-        jl_tupleset(ar->args, i, full_list(car_(e)));
+        jl_tupleset(ar, i, full_list(car_(e)));
         e = cdr_(e);
         i++;
     }
@@ -221,7 +221,7 @@ static jl_value_t *scm_to_julia(value_t e)
                goto  goto-ifnot  label  return
                lambda  call  =  quote
                null  top  unbound  box-unbound  closure-ref
-               body  file  string
+               body  file
                line
             */
             size_t n = scm_list_length(e)-1;
@@ -302,10 +302,8 @@ jl_tuple_t *jl_lam_args(jl_expr_t *l)
 {
     assert(l->head == lambda_sym);
     jl_value_t *ae = jl_exprarg(l,0);
-    if (ae == (jl_value_t*)jl_null) return jl_null;
-    assert(jl_is_expr(ae));
-    assert(((jl_expr_t*)ae)->head == list_sym);
-    return ((jl_expr_t*)ae)->args;
+    assert(jl_is_tuple(ae));
+    return (jl_tuple_t*)ae;
 }
 
 // get array of local var symbols

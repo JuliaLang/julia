@@ -161,13 +161,20 @@ JL_CALLABLE(jl_f_apply)
 JL_CALLABLE(jl_f_error)
 {
     JL_NARGS(error, 1, 1);
-    if (jl_typeof(args[0]) == jl_array_uint8_type) {
-        jl_error((char*)((jl_array_t*)args[0])->data);
-    }
-    else {
+    if (jl_typeof(args[0]) != jl_array_uint8_type) {
         jl_error("error: expected string");
     }
+    jl_error((char*)((jl_array_t*)args[0])->data);
     return (jl_value_t*)jl_null;
+}
+
+JL_CALLABLE(jl_f_symbol)
+{
+    JL_NARGS(symbol, 1, 1);
+    if (jl_typeof(args[0]) != jl_array_uint8_type) {
+        jl_error("symbol: expected string");
+    }
+    return (jl_value_t*)jl_symbol((char*)((jl_array_t*)args[0])->data);
 }
 
 JL_CALLABLE(jl_f_time_thunk)
@@ -717,7 +724,6 @@ JL_CALLABLE(jl_f_print_pointer)
 JL_CALLABLE(jl_f_print_symbol)
 {
     ios_t *s = current_output_stream;
-    ios_putc('`', s);
     ios_puts(((jl_sym_t*)args[0])->name, s);
     return (jl_value_t*)jl_null;
 }
@@ -1137,6 +1143,7 @@ void jl_init_builtins()
     add_builtin_func("invoke", jl_f_invoke);
     add_builtin_func("dlopen", jl_f_dlopen);
     add_builtin_func("dlsym", jl_f_dlsym);
+    add_builtin_func("symbol", jl_f_symbol);
     add_builtin("convert", (jl_value_t*)jl_convert_gf);
     add_builtin("print", (jl_value_t*)jl_print_gf);
     add_builtin("identity", (jl_value_t*)jl_identity_func);
