@@ -140,6 +140,9 @@ function cell_literal(xs...)
     a
 end
 
+symbol(s::String) =
+    ccall(dlsym(JuliaDLHandle,"jl_symbol"), Any, (Ptr{Uint8},), s)::Symbol
+
 function print(e::Expr)
     hd = e.head
     if is(hd,`call)

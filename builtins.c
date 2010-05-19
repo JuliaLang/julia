@@ -168,15 +168,6 @@ JL_CALLABLE(jl_f_error)
     return (jl_value_t*)jl_null;
 }
 
-JL_CALLABLE(jl_f_symbol)
-{
-    JL_NARGS(symbol, 1, 1);
-    if (jl_typeof(args[0]) != jl_array_uint8_type) {
-        jl_error("symbol: expected string");
-    }
-    return (jl_value_t*)jl_symbol((char*)((jl_array_t*)args[0])->data);
-}
-
 JL_CALLABLE(jl_f_time_thunk)
 {
     JL_NARGS(time_thunk, 1, 1);
@@ -1081,6 +1072,45 @@ JL_CALLABLE(jl_f_dlsym)
     return jl_box_pointer(jl_pointer_void_type, jl_dlsym(hnd, sym));
 }
 
+// --- eq hash table ---
+
+htable_t *jl_new_eqtable(uint32_t sz)
+{
+    htable_t *h = (htable_t*)allocb(sizeof(htable_t));
+    htable_new(h, sz);
+    return h;
+}
+
+void jl_eqtable_put(htable_t *t, jl_value_t *key, jl_value_t *val)
+{
+    jl_value_t **bp = (jl_value_t**)ptrhash_bp(t, key);
+    *bp = val;
+}
+
+jl_value_t *jl_eqtable_get(htable_t *t, jl_value_t *key, jl_value_t *deflt)
+{
+    jl_value_t **bp = (jl_value_t**)ptrhash_bp(t, key);
+    if (*bp == HT_NOTFOUND)
+        return deflt;
+    return *bp;
+}
+
+void jl_eqtable_del(htable_t *t, jl_value_t *key)
+{
+    ptrhash_remove(t, key);
+}
+
+jl_value_t *jl_eqtable_next(htable_t *t, uint32_t i)
+{
+    if (i&1) i++;
+    while (i < t->size && t->table[i+1] == HT_NOTFOUND)
+        i+=2;
+    if (i >= t->size) return (jl_value_t*)jl_null;
+    return (jl_value_t*)jl_tuple(2, jl_tuple(2, (jl_value_t*)t->table[i],
+                                             (jl_value_t*)t->table[i+1]),
+                                 jl_box_uint32(i+2));
+}
+
 // --- init ---
 
 static void add_builtin_method1(jl_function_t *gf, jl_type_t *t, jl_fptr_t f)
@@ -1143,7 +1173,6 @@ void jl_init_builtins()
     add_builtin_func("invoke", jl_f_invoke);
     add_builtin_func("dlopen", jl_f_dlopen);
     add_builtin_func("dlsym", jl_f_dlsym);
-    add_builtin_func("symbol", jl_f_symbol);
     add_builtin("convert", (jl_value_t*)jl_convert_gf);
     add_builtin("print", (jl_value_t*)jl_print_gf);
     add_builtin("identity", (jl_value_t*)jl_identity_func);

@@ -78,8 +78,12 @@ static const Type *julia_type_to_llvm(jl_value_t *jt)
     if (jt == (jl_value_t*)jl_null) return T_void;
     if (jl_is_bits_type(jt) && jl_is_cpointer_type(jt)) {
         const Type *lt = julia_type_to_llvm(jl_tparam0(jt));
+        if (lt == T_void)
+            lt = T_pint8;
         return PointerType::get(lt, 0);
     }
+    if (jt == (jl_value_t*)jl_any_type)
+        return jl_pvalue_llvmt;
     jl_errorf("cannot convert type %s to a native type",
               jl_print_to_string(jt));
     return NULL;
@@ -99,6 +103,8 @@ static jl_value_t *llvm_type_to_julia(const Type *t)
         return (jl_value_t*)jl_apply_type_ctor(jl_pointer_typector,
                                                jl_tuple(1, elty));
     }
+    if (t == jl_pvalue_llvmt)
+        return (jl_value_t*)jl_any_type;
     jl_errorf("cannot convert type %s to a julia type",
               t->getDescription().c_str());
     return NULL;
@@ -204,7 +210,11 @@ static Value *julia_to_native(const Type *ty, jl_value_t *jt, Value *jv,
         assert(ty->isPointerTy());
         return builder.CreateBitCast(p, ty);
     }
+    else if (ty == jl_pvalue_llvmt) {
+        return boxed(jv);
+    }
     else {
+        assert(jl_is_bits_type(jt));
         std::stringstream msg;
         msg << "ccall: expected ";
         msg << std::string(jl_print_to_string(jt));
@@ -283,7 +293,7 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
         return mark_unsigned(result);
     if (lrt == T_void)
         return literal_pointer_val((jl_value_t*)jl_null);
-    if (lrt->isPointerTy())
+    if (jl_is_cpointer_type(rt))
         return builder.CreateCall2(box_pointer_func,
                                    literal_pointer_val(rt),
                                    builder.CreateBitCast(result,T_pint8));
