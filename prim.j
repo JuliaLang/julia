@@ -143,6 +143,11 @@ end
 symbol(s::String) =
     ccall(dlsym(JuliaDLHandle,"jl_symbol"), Any, (Ptr{Uint8},), s)::Symbol
 
+string(x) =
+    ccall(dlsym(JuliaDLHandle,"jl_cstr_to_array"), Any, (Ptr{Int8},),
+          ccall(dlsym(JuliaDLHandle,"jl_print_to_string"), Ptr{Int8}, (Any,),
+                x))
+
 function print(e::Expr)
     hd = e.head
     if is(hd,`call)
