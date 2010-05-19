@@ -402,6 +402,7 @@ static void cache_type_(jl_value_t **key, size_t n, jl_type_t *type)
     tk->n = n;
     tk->type = type;
     tk->next = Type_Cache;
+    Type_Cache = tk;
 }
 
 JL_CALLABLE(jl_f_tuple);
@@ -500,6 +501,7 @@ static jl_type_t *inst_type_w_(jl_value_t *t, jl_value_t **env, size_t n,
             nbt->super = (jl_tag_type_t*)inst_type_w_((jl_value_t*)bitst->super, env, n, stack);
             nbt->parameters = iparams_tuple;
             nbt->nbits = bitst->nbits;
+            cache_type_(iparams, ntp+1, (jl_type_t*)nbt);
             return (jl_type_t*)nbt;
         }
         else {

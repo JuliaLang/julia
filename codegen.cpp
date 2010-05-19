@@ -507,6 +507,9 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool value,
     else if (ex->head == null_sym) {
         return literal_pointer_val((jl_value_t*)jl_null);
     }
+    if (!strcmp(ex->head->name, "$")) {
+        jl_error("syntax error: prefix $ outside backquote");
+    }
     assert(!value);
     return NULL;
 }
