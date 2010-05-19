@@ -228,6 +228,15 @@ JL_CALLABLE(jl_f_load)
     return (jl_value_t*)jl_null;
 }
 
+JL_CALLABLE(jl_f_top_eval)
+{
+    JL_NARGS(eval, 1, 1);
+    jl_value_t *e = args[0];
+    if (jl_is_symbol(e))
+        return jl_interpret_toplevel_expr(e);
+    return jl_interpret_toplevel_thunk(jl_expand(e));
+}
+
 JL_CALLABLE(jl_f_tuple)
 {
     size_t i;
@@ -1173,6 +1182,7 @@ void jl_init_builtins()
     add_builtin_func("invoke", jl_f_invoke);
     add_builtin_func("dlopen", jl_f_dlopen);
     add_builtin_func("dlsym", jl_f_dlsym);
+    add_builtin_func("eval", jl_f_top_eval);
     add_builtin("convert", (jl_value_t*)jl_convert_gf);
     add_builtin("print", (jl_value_t*)jl_print_gf);
     add_builtin("identity", (jl_value_t*)jl_identity_func);

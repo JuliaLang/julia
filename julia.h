@@ -414,9 +414,10 @@ void jl_init_modules();
 void jl_init_codegen();
 void jl_init_intrinsic_functions();
 
-// parsing
+// front end interface
 jl_value_t *jl_parse_input_line(const char *str);
 jl_value_t *jl_parse_file(const char *fname);
+jl_lambda_info_t *jl_expand(jl_value_t *expr);
 
 // some useful functions
 void jl_print(jl_value_t *v);

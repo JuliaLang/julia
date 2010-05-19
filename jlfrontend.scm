@@ -36,6 +36,11 @@
   (parser-wrap (lambda ()
 		 (cons 'file (map toplevel-expr (julia-parse-file s))))))
 
+; expand a piece of raw surface syntax to an executable thunk
+(define (jl-expand-to-thunk expr)
+  (parser-wrap (lambda ()
+		 (toplevel-expr expr))))
+
 ;(load "profile.scm")
 
 (make-system-image "julia_flisp.boot")

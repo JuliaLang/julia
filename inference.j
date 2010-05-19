@@ -1,9 +1,9 @@
 # infrastructure needed for type inference:
 # * shared assoc list
 # * IntSet
-# - printing exprs
+# * printing exprs
 # - more method table reflection
-# - hash table of symbols
+# * hash table of symbols
 # - t-functions for builtins
 # - constantp()
 
@@ -28,6 +28,8 @@ NF = NotFound()
 # note: with Nullable (or other union types) it might not be possible to
 # infer type parameters from field values. bug or feature??
 alist(kt::Type, vt::Type) = AList{kt,vt}.new((), nil)
+
+alist(a::AList) = AList(a, nil)
 
 assoc(item, a::EmptyList) = nil
 assoc(item, p::List{Pair}) = is(head(p).a,item) ? head(p) : assoc(item,tail(p))

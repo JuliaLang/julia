@@ -91,6 +91,8 @@ void jl_lisp_prompt()
     fl_applyn(1, symbol_value(symbol("__start")), fl_cons(FL_NIL,FL_NIL));
 }
 
+static fltype_t *jvtype;
+
 void jl_init_frontend()
 {
     fl_init(2*512*1024);
@@ -107,6 +109,9 @@ void jl_init_frontend()
     fl_applyn(0, symbol_value(symbol("__init_globals")));
 
     htable_new(&gensym_table, 0);
+
+    jvtype = define_opaque_type(symbol("julia_value"), sizeof(void*),
+                                NULL, NULL);
 }
 
 void jl_shutdown_frontend()
@@ -269,9 +274,56 @@ static jl_value_t *scm_to_julia(value_t e)
             jl_error("malformed tree");
         }
     }
+    if (iscvalue(e) && cv_class((cvalue_t*)ptr(e)) == jvtype) {
+        return *(jl_value_t**)cv_data((cvalue_t*)ptr(e));
+    }
     jl_error("malformed tree");
     
     return (jl_value_t*)jl_null;
+}
+
+static value_t julia_to_scm(jl_value_t *v);
+
+static value_t tuple_to_list(jl_tuple_t *t)
+{
+    long i;
+    value_t lst=FL_NIL, temp;
+    fl_gc_handle(&lst);
+    fl_gc_handle(&temp);
+    for(i=t->length-1; i >= 0; i--) {
+        temp = julia_to_scm(jl_tupleref(t,i));
+        lst = fl_cons(temp, lst);
+    }
+    fl_free_gc_handles(2);
+    return lst;
+}
+
+static value_t julia_to_scm(jl_value_t *v)
+{
+    if (jl_is_symbol(v)) {
+        return symbol(((jl_sym_t*)v)->name);
+    }
+    if (v == jl_true) {
+        return symbol("true");
+    }
+    if (v == jl_false) {
+        return symbol("false");
+    }
+    if (jl_is_expr(v)) {
+        jl_expr_t *ex = (jl_expr_t*)v;
+        value_t args = tuple_to_list(ex->args);
+        fl_gc_handle(&args);
+        value_t hd = julia_to_scm((jl_value_t*)ex->head);
+        value_t scmv = fl_cons(hd, args);
+        fl_free_gc_handles(1);
+        return scmv;
+    }
+    if (jl_is_tuple(v)) {
+        return tuple_to_list((jl_tuple_t*)v);
+    }
+    value_t opaque = cvalue(jvtype, sizeof(void*));
+    *(jl_value_t**)cv_data((cvalue_t*)ptr(opaque)) = v;
+    return opaque;
 }
 
 jl_value_t *jl_parse_input_line(const char *str)
@@ -293,6 +345,21 @@ jl_value_t *jl_parse_file(const char *fname)
     if (!iscons(e))
         return (jl_value_t*)jl_null;
     return scm_to_julia(e);
+}
+
+jl_lambda_info_t *jl_expand(jl_value_t *expr)
+{
+    value_t e = fl_applyn(1, symbol_value(symbol("jl-expand-to-thunk")),
+                          julia_to_scm(expr));
+    if (e == FL_T || e == FL_F || e == FL_EOF)
+        return NULL;
+    syntax_error_check(e);
+
+    jl_expr_t *ex = (jl_expr_t*)scm_to_julia(e);
+    assert(jl_is_expr(ex));
+    jl_lambda_info_t *li = (jl_lambda_info_t*)jl_exprarg(ex,0);
+    assert(jl_is_lambda_info(li));
+    return li;
 }
 
 // syntax tree accessors
