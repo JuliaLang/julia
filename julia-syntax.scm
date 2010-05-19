@@ -533,43 +533,56 @@
 
 ;; Comprehensions
 
+(define (colons-to-ranges ranges)
+  (map (lambda (r) (pattern-expand
+		    (list
+		     (pattern-lambda (: a b) `(call (top Range) ,a 1 ,b))
+		     (pattern-lambda (: a b c) `(call (top Range) ,a ,b ,c)) )
+		    r))
+       ranges))
+
 (define identify-comprehensions
   (pattern-set
 
    (pattern-lambda
     (hcat (if expr expr-then (call (-/ |\||) expr-else i)) . rest)
     `(comprehension-int (if ,expr ,expr-then ,expr-else) ,i ,@rest))
-
    (pattern-lambda
     (hcat (= (if expr expr-then (call (-/ |\||) expr-else i)) range) . rest)
     `(comprehension-int (if ,expr ,expr-then ,expr-else) (= ,i ,range) ,@rest))
-
    (pattern-lambda
     (hcat (call (-/ |\||) expr (= i range)) . rest)
     `(comprehension-int ,expr (= ,i ,range) ,@rest))
-
    (pattern-lambda
     (hcat (= (call (-/ |\||) expr i) range) . rest)
     `(comprehension-int ,expr (= ,i ,range) ,@rest))
-
    (pattern-lambda
     (hcat (call (-/ |\||) expr i) . rest)
     `(comprehension-int ,expr ,i ,@rest))
+   
+   (pattern-lambda
+    (cell (if expr expr-then (call (-/ |\||) expr-else i)) . rest)
+    `(comprehension-intc (if ,expr ,expr-then ,expr-else) ,i ,@rest))
+   (pattern-lambda
+    (cell (= (if expr expr-then (call (-/ |\||) expr-else i)) range) . rest)
+    `(comprehension-intc (if ,expr ,expr-then ,expr-else) (= ,i ,range) ,@rest))
+   (pattern-lambda
+    (cell (call (-/ |\||) expr (= i range)) . rest)
+    `(comprehension-intc ,expr (= ,i ,range) ,@rest))
+   (pattern-lambda
+    (cell (= (call (-/ |\||) expr i) range) . rest)
+    `(comprehension-intc ,expr (= ,i ,range) ,@rest))
+   (pattern-lambda
+    (cell (call (-/ |\||) expr i) . rest)
+    `(comprehension-intc ,expr ,i ,@rest))
+   
+   (pattern-lambda
+    (comprehension-int expr . ranges)
+    `(comprehension ,expr ,@(colons-to-ranges ranges)))
 
-    (pattern-lambda
-     (comprehension-int expr . ranges)
-     `(comprehension
-       ,expr
-       ,@(map (lambda (r) (pattern-expand
-			   (list
-			    (pattern-lambda (: a b) `(call (top Range) ,a 1 ,b))
-			    (pattern-lambda (: a b c) `(call (top Range) ,a ,b ,c)) )
-			   r))
-	      ranges) ))
-
-    (pattern-lambda
-     (comprehension-int expr . ranges)
-     `(comprehension ,expr ,@ranges))
+   (pattern-lambda
+    (comprehension-intc expr . ranges)
+    `(cell-comprehension ,expr ,@(colons-to-ranges ranges)))
 
 )) ;; identify-comprehensions
 
@@ -623,6 +636,34 @@
 	 (= ,ri 1)
 	 ,(construct-loops (reverse ranges) (list) 1)
 	 ,result ))))
+
+   ;; cell array comprehensions
+   (pattern-lambda
+    (cell-comprehension expr . ranges)
+    (let ( (result (gensym)) (ri (gensym)) )
+
+      ;; compute the dimensions of the result
+      (define (compute-dims ranges)
+	(if (null? ranges)
+	    (list)
+	    (cons `(call length ,(car ranges))
+		  (compute-dims (cdr ranges)))))
+
+      ;; construct loops to cycle over all dimensions of an n-d comprehension
+      (define (construct-loops ranges)
+        (if (null? ranges)
+	    `(block (call set ,result ,expr ,ri)
+		    (+= ,ri 1))
+	    `(for ,(car ranges)
+		  ,(construct-loops (cdr ranges)))))
+
+      ;; Evaluate the comprehension
+      `(scope-block
+	(block 
+	 (= ,result (call (top Array) (top Any) ,@(compute-dims ranges)))
+	 (= ,ri 1)
+	 ,(construct-loops (reverse ranges))
+	 ,result))))
 
 )) ;; lower-comprehensions
 
