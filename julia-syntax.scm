@@ -1226,7 +1226,7 @@ So far only the second case can actually occur.
 	   (if (null? p)
 	       (let ((forms (reverse q)))
 		 `(call (top Expr) ,(expand-backquote (car e))
-		       (call (top append) ,@forms)))
+			(call (top append) ,@forms) (top Any)))
 	       ; look for splice inside backquote, e.g. (a,$(x...),b)
 	       (if (match '($ (tuple (... x))) (car p))
 		   (loop (cdr p)
