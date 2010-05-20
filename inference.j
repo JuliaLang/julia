@@ -4,6 +4,7 @@
 # * printing exprs
 # - more method table reflection
 # * hash table of symbols
+# * eval
 # - t-functions for builtins
 # - constantp()
 

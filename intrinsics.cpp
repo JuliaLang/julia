@@ -203,6 +203,7 @@ extern "C" void *jl_value_to_pointer(jl_value_t *jt, jl_value_t *v, int argn)
 static Value *julia_to_native(const Type *ty, jl_value_t *jt, Value *jv,
                               int argn, jl_codectx_t *ctx)
 {
+    // todo: handle case where argument is already the correct unboxed type
     if (jl_is_cpointer_type(jt)) {
         Value *p = builder.CreateCall3(value_to_pointer_func,
                                        literal_pointer_val(jl_tparam0(jt)), jv,

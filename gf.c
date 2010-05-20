@@ -153,7 +153,7 @@ jl_methlist_t *jl_method_table_assoc(jl_methtable_t *mt,
         size_t i;
         for(i=0; i < tt->length; i++) {
             jl_value_t *a;
-            if (jl_is_type(args[i])) {
+            if (jl_is_some_tag_type(args[i])) {
                 a = wrap_Type(args[i]);
             }
             else {
