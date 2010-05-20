@@ -203,36 +203,61 @@ extern "C" void *jl_value_to_pointer(jl_value_t *jt, jl_value_t *v, int argn)
 static Value *julia_to_native(const Type *ty, jl_value_t *jt, Value *jv,
                               int argn, jl_codectx_t *ctx)
 {
-    // todo: handle case where argument is already the correct unboxed type
-    if (jl_is_cpointer_type(jt)) {
+    const Type *vt = jv->getType();
+    if (ty == jl_pvalue_llvmt) {
+        return boxed(jv);
+    }
+    else if (ty == vt) {
+        return jv;
+    }
+    else if (vt != jl_pvalue_llvmt) {
+        if ((vt->isIntegerTy() || vt->isFloatingPointTy() ||
+             vt->isPointerTy()) &&
+            (ty->isIntegerTy() || ty->isFloatingPointTy() ||
+             ty->isPointerTy())) {
+            if (vt->getPrimitiveSizeInBits() ==
+                ty->getPrimitiveSizeInBits()) {
+                return builder.CreateBitCast(jv, ty);
+            }
+            else {
+                // error. box for error handling.
+                jv = boxed(jv);
+            }
+        }
+        else {
+            assert(false && "Unsupported native type.");
+        }
+    }
+    else if (jl_is_cpointer_type(jt)) {
         Value *p = builder.CreateCall3(value_to_pointer_func,
                                        literal_pointer_val(jl_tparam0(jt)), jv,
                                        ConstantInt::get(T_int32, argn));
         assert(ty->isPointerTy());
         return builder.CreateBitCast(p, ty);
     }
-    else if (ty == jl_pvalue_llvmt) {
-        return boxed(jv);
-    }
-    else {
-        assert(jl_is_bits_type(jt));
-        std::stringstream msg;
-        msg << "ccall: expected ";
-        msg << std::string(jl_print_to_string(jt));
-        msg << " as argument ";
-        msg << argn;
-        emit_typecheck(jv, jt, msg.str(), ctx);
-        Value *p = bitstype_pointer(jv);
-        return builder.CreateLoad(builder.CreateBitCast(p,
-                                                        PointerType::get(ty,0)),
-                                  false);
-    }
+    assert(jl_is_bits_type(jt));
+    std::stringstream msg;
+    msg << "ccall: expected ";
+    msg << std::string(jl_print_to_string(jt));
+    msg << " as argument ";
+    msg << argn;
+    emit_typecheck(jv, jt, msg.str(), ctx);
+    Value *p = bitstype_pointer(jv);
+    return builder.CreateLoad(builder.CreateBitCast(p,
+                                                    PointerType::get(ty,0)),
+                              false);
 }
 
 static bool is_unsigned_julia_type(jl_value_t *t)
 {
     return (t==(jl_value_t*)jl_uint8_type  || t==(jl_value_t*)jl_uint16_type ||
             t==(jl_value_t*)jl_uint32_type || t==(jl_value_t*)jl_uint64_type);
+}
+
+static bool is_punsigned_julia_type(jl_value_t *t)
+{
+    return is_unsigned_julia_type(t) ||
+        (jl_is_cpointer_type(t) && is_punsigned_julia_type(jl_tparam0(t)));
 }
 
 // ccall(pointer, rettype, (argtypes...), args...)
@@ -256,7 +281,7 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
     bool haspointers = false;
     for(i=0; i < tt->length; i++) {
         const Type *t = julia_type_to_llvm(jl_tupleref(tt,i));
-        haspointers = haspointers || t->isPointerTy();
+        haspointers = haspointers || (t->isPointerTy() && t!=jl_pvalue_llvmt);
         fargt.push_back(t);
     }
     // make LLVM function object for the target
@@ -294,7 +319,7 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
         return mark_unsigned(result);
     if (lrt == T_void)
         return literal_pointer_val((jl_value_t*)jl_null);
-    if (jl_is_cpointer_type(rt))
+    if (jl_is_cpointer_type(rt) && is_punsigned_julia_type(rt))
         return builder.CreateCall2(box_pointer_func,
                                    literal_pointer_val(rt),
                                    builder.CreateBitCast(result,T_pint8));
