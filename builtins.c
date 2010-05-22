@@ -1120,6 +1120,19 @@ jl_value_t *jl_eqtable_next(htable_t *t, uint32_t i)
                                  jl_box_uint32(i+2));
 }
 
+// --- hashing ---
+
+jl_function_t *jl_hash_gf;
+
+JL_CALLABLE(jl_f_hash_symbol)
+{
+#ifdef BITS64
+    return jl_box_uint64(((jl_sym_t*)args[0])->hash);
+#else
+    return jl_box_uint32(((jl_sym_t*)args[0])->hash);
+#endif
+}
+
 // --- init ---
 
 static void add_builtin_method1(jl_function_t *gf, jl_type_t *t, jl_fptr_t f)
@@ -1167,6 +1180,10 @@ void jl_init_builtins()
                   jl_tuple(2, jl_any_type, jl_any_type),
                   jl_new_closure(jl_f_convert, NULL));
 
+    jl_hash_gf = jl_new_generic_function(jl_symbol("hash"));
+
+    add_builtin_method1(jl_hash_gf, (jl_type_t*)jl_sym_type, jl_f_hash_symbol);
+
     add_builtin_func("is", jl_f_is);
     add_builtin_func("typeof", jl_f_typeof);
     add_builtin_func("subtype", jl_f_subtype);
@@ -1185,6 +1202,7 @@ void jl_init_builtins()
     add_builtin_func("eval", jl_f_top_eval);
     add_builtin("convert", (jl_value_t*)jl_convert_gf);
     add_builtin("print", (jl_value_t*)jl_print_gf);
+    add_builtin("hash", (jl_value_t*)jl_hash_gf);
     add_builtin("identity", (jl_value_t*)jl_identity_func);
     
     // functions for internal use

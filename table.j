@@ -48,3 +48,14 @@ function print(t::IdTable)
     end
     print("}")
 end
+
+# hashing
+
+bitmix(a::Union(Int32,Uint32), b::Union(Int32,Uint32)) =
+    ccall(dlsym(JuliaDLHandle,"int64to32hash"), Uint32, (Uint64,),
+          or_int(shl_int(zext64(unbox32(a)),unbox32(32)), zext64(unbox32(b))))
+
+bitmix(a::Union(Int64,Uint64), b::Union(Int64, Uint64)) =
+    ccall(dlsym(JuliaDLHandle,"int64hash"), Uint64, (Uint64,),
+          xor_int(unbox64(a), or_int(lshr_int(unbox64(b),unbox32(32)),
+                                     shl_int(unbox64(b),unbox32(32)))))

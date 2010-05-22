@@ -138,7 +138,11 @@ static jl_sym_t *mk_symbol(const char *str)
     sym = (jl_sym_t*)allocb(sizeof(jl_sym_t)-sizeof(void*) + len + 1);
     sym->type = (jl_type_t*)jl_sym_type;
     sym->left = sym->right = NULL;
+#ifdef BITS64
+    sym->hash = memhash(str, len)^0xAAAAAAAAAAAAAAAAL;
+#else
     sym->hash = memhash32(str, len)^0xAAAAAAAA;
+#endif
     strcpy(&sym->name[0], str);
     return sym;
 }

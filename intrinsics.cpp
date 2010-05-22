@@ -11,6 +11,8 @@ namespace JL_I {
         // comparison
         eq_int, slt_int, ult_int,
         eq_float, lt_float, ne_float,
+        // bitwise operators
+        and_int, or_int, xor_int, not_int, shl_int, lshr_int, ashr_int,
         // conversion
         sext16, zext16, sext32, zext32, sext64, zext64,
         trunc8, trunc16, trunc32,
@@ -342,6 +344,15 @@ static Value *FP(Value *v)
     return builder.CreateBitCast(v, FT(v->getType()));
 }
 
+static Value *uint_cnvt(const Type *to, Value *x)
+{
+    const Type *t = x->getType();
+    if (t == to) return x;
+    if (to->getPrimitiveSizeInBits() < x->getType()->getPrimitiveSizeInBits())
+        return builder.CreateTrunc(x, to);
+    return builder.CreateZExt(x, to);
+}
+
 #define HANDLE(intr,n)                                                  \
     case intr: if (nargs!=n) jl_error(#intr": wrong number of arguments");
 
@@ -445,6 +456,20 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
         return
         julia_bool(builder.CreateFCmpONE(FP(x),
                                          FP(emit_expr(args[2],ctx,true))));
+    HANDLE(and_int,2)
+        return builder.CreateAnd(x, emit_expr(args[2],ctx,true));
+    HANDLE(or_int,2)
+        return builder.CreateOr(x, emit_expr(args[2],ctx,true));
+    HANDLE(xor_int,2)
+        return builder.CreateXor(x, emit_expr(args[2],ctx,true));
+    HANDLE(not_int,1)
+        return builder.CreateXor(x, ConstantInt::get(t, -1));
+    HANDLE(shl_int,2)
+        return builder.CreateShl(x, uint_cnvt(t,emit_expr(args[2],ctx,true)));
+    HANDLE(lshr_int,2)
+        return builder.CreateLShr(x, uint_cnvt(t,emit_expr(args[2],ctx,true)));
+    HANDLE(ashr_int,2)
+        return builder.CreateAShr(x, uint_cnvt(t,emit_expr(args[2],ctx,true)));
     HANDLE(sext16,1)
         return builder.CreateSExt(x, T_int16);
     HANDLE(zext16,1)
@@ -582,6 +607,8 @@ extern "C" void jl_init_intrinsic_functions()
     ADD_I(mul_float); ADD_I(div_float);
     ADD_I(eq_int); ADD_I(slt_int); ADD_I(ult_int);
     ADD_I(eq_float); ADD_I(lt_float); ADD_I(ne_float);
+    ADD_I(and_int); ADD_I(or_int); ADD_I(xor_int); ADD_I(not_int);
+    ADD_I(shl_int); ADD_I(lshr_int); ADD_I(ashr_int);
     ADD_I(sext16); ADD_I(zext16); ADD_I(sext32); ADD_I(zext32);
     ADD_I(sext64); ADD_I(zext64);
     ADD_I(trunc8); ADD_I(trunc16); ADD_I(trunc32);
