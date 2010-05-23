@@ -38,7 +38,7 @@
   "Syntax table for julia-mode")
 
 (defconst julia-font-lock-keywords
-  (list '("\\<\\(true\\|false\\|\\|Uint\\(8\\|16\\|32\\|64\\)\\|Int\\(8\\|16\\|32\\|64\\)\\|Float\\|Float32\\|Float64\\|Bool\\|Number\\|Scalar\\|Real\\|Int\\|Tensor\\|Array\\|Tuple\\|NTuple\\|Buffer\\|Size\\|Index\\|Symbol\\|Function\\|Vector\\|Matrix\\|Union\\|Type\\|Any\\|Complex\\|Bottom\\|Pointer\\|Void\\)\\>" .
+  (list '("\\<\\(true\\|false\\|\\|Uint\\(8\\|16\\|32\\|64\\)\\|Int\\(8\\|16\\|32\\|64\\)\\|Float\\|Float32\\|Float64\\|Bool\\|Number\\|Scalar\\|Real\\|Int\\|Tensor\\|Array\\|Tuple\\|NTuple\\|Buffer\\|Size\\|Index\\|Symbol\\|Function\\|Vector\\|Matrix\\|Union\\|Type\\|Any\\|Complex\\|Bottom\\|Ptr\\|Void\\)\\>" .
       font-lock-type-face)
     (cons
      (concat "\\<\\("
@@ -46,15 +46,14 @@
           'identity
           '("if" "else" "elseif" "while" "for" "begin" "end" "do"
             "try" "catch" "return" "local" "type" "function"
-	    "typealias" "break" "continue" "struct" "global" "macro"
+	    "typealias" "break" "continue" "struct" "global" "eval"
 	    "module" "import" "export" "const")
           "\\|") "\\)\\>")
      'font-lock-keyword-face)
     '("\\\\\\s-*\".*?\"" . font-lock-string-face)))
 
 (defconst julia-block-start-keywords
-  (list "if" "while" "for" "begin" "try" "type" "function" "struct"
-	"macro"))
+  (list "if" "while" "for" "begin" "try" "type" "function" "struct"))
 
 (defconst julia-block-other-keywords
   (list "else" "elseif"))
