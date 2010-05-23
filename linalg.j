@@ -3,80 +3,53 @@ libLAPACK = dlopen("libLAPACK")
 
 # SUBROUTINE DCOPY(N,DX,INCX,DY,INCY) 
 
-function copy (X::Vector{Float64})
-    n = length(X)
-    Y = zeros(Float64, n)
-    ccall(dlsym(libBLAS, "dcopy_"),
-          Void,
-          (Ptr{Int32}, Ptr{Float64}, Ptr{Int32}, Ptr{Float64}, Ptr{Int32}),
-          n, X, 1, Y, 1)
-    return Y
+function jl_gen_copy (fname, shape, eltype)
+    eval (`function copy (X::($shape){$eltype})
+          sz = size(X)
+          Y = zeros($eltype, sz)
+          ccall(dlsym(libBLAS, $fname),
+                Void,
+                (Ptr{Int32}, Ptr{$eltype}, Ptr{Int32}, Ptr{$eltype}, Ptr{Int32}),
+                prod(sz), X, 1, Y, 1)
+          return Y
+          end
+          )
 end
 
-function copy (X::Matrix{Float64})
-    m = size(X,1)
-    n = size(X,2)
-    Y = zeros(Float64, m, n)
-    ccall(dlsym(libBLAS, "dcopy_"),
-          Void,
-          (Ptr{Int32}, Ptr{Float64}, Ptr{Int32}, Ptr{Float64}, Ptr{Int32}),
-          m*n, X, 1, Y, 1)
-    return Y
-end
-
-function copy (X::Vector{Float32})
-    n = length(X)
-    Y = zeros(Float32, n)
-    ccall(dlsym(libBLAS, "scopy_"),
-          Void,
-          (Ptr{Int32}, Ptr{Float32}, Ptr{Int32}, Ptr{Float32}, Ptr{Int32}),
-          n, X, 1, Y, 1)
-    return Y
-end
-
-function copy (X::Matrix{Float32})
-    m = size(X,1)
-    n = size(X,2)
-    Y = zeros(Float32, m, n)
-    ccall(dlsym(libBLAS, "scopy_"),
-          Void,
-          (Ptr{Int32}, Ptr{Float32}, Ptr{Int32}, Ptr{Float32}, Ptr{Int32}),
-          m*n, X, 1, Y, 1)
-    return Y
-end
+jl_gen_copy ("dcopy_", `Vector, Float64)
+jl_gen_copy ("scopy_", `Vector, Float32)
+jl_gen_copy ("dcopy_", `Matrix, Float64)
+jl_gen_copy ("scopy_", `Matrix, Float32)
 
 # DOUBLE PRECISION FUNCTION DDOT(N,DX,INCX,DY,INCY)
 
-function dot (x::Vector{Float64}, y::Vector{Float64})
-    ccall(dlsym(libBLAS, "ddot_"),
-          Float64, 
-          (Ptr{Int32}, Ptr{Float64}, Ptr{Int32}, Ptr{Float64}, Ptr{Int32}), 
-          length(x), x, 1, y, 1)
+function jl_gen_dot (fname, eltype)
+    eval(`function dot (x::Vector{$eltype}, y::Vector{$eltype})
+         ccall(dlsym(libBLAS, $fname),
+               $eltype, 
+               (Ptr{Int32}, Ptr{$eltype}, Ptr{Int32}, Ptr{$eltype}, Ptr{Int32}), 
+               length(x), x, 1, y, 1)
+         end
+         )
 end
 
-function dot (x::Vector{Float32}, y::Vector{Float32})
-    ccall(dlsym(libBLAS, "sdot_"),
-          Float32, 
-          (Ptr{Int32}, Ptr{Float32}, Ptr{Int32}, Ptr{Float32}, Ptr{Int32}), 
-          length(x), x, 1, y, 1)
-end
-
+jl_gen_dot ("ddot_", Float64)
+jl_gen_dot ("sdot_", Float32)
 
 # DOUBLE PRECISION FUNCTION DNRM2(N,X,INCX)
 
-function norm (x::Vector{Float64})
-    ccall(dlsym(libBLAS, "dnrm2_"),
-          Float64,
-          (Ptr{Int32}, Ptr{Float64}, Ptr{Int32}),
-          length(x), x, 1)
+function jl_gen_norm (fname, eltype)
+    eval(`function norm (x::Vector{$eltype})
+         ccall(dlsym(libBLAS, $fname),
+               $eltype,
+               (Ptr{Int32}, Ptr{$eltype}, Ptr{Int32}),
+               length(x), x, 1)
+         end
+         )
 end
 
-function norm (x::Vector{Float32})
-    ccall(dlsym(libBLAS, "snrm2_"),
-          Float32,
-          (Int32, Ptr{Float32}, Int32),
-          length(x), x, 1)
-end
+jl_gen_norm ("ddot_", Float64)
+jl_gen_norm ("sdot_", Float32)
 
 #       SUBROUTINE DGEMM(TRANSA,TRANSB,M,N,K,ALPHA,A,LDA,B,LDB,BETA,C,LDC)
 # *     .. Scalar Arguments ..
@@ -87,43 +60,30 @@ end
 # *     .. Array Arguments ..
 #       DOUBLE PRECISION A(LDA,*),B(LDB,*),C(LDC,*)
 
-function * (A::Matrix{Float64}, B::Matrix{Float64})
-    m = size(A, 1)
-    n = size(B, 2)
-    k = size(A, 2)
-
-    assert (k == size(B,1))
-    C = zeros(Float64, m, n)
-
-    ccall(dlsym(libBLAS, "dgemm_"),
-          Void,
-          (Ptr{Uint8}, Ptr{Uint8}, Ptr{Int32}, Ptr{Int32}, Ptr{Int32}, 
-           Ptr{Float64}, Ptr{Float64}, Ptr{Int32}, 
-           Ptr{Float64}, Ptr{Int32}, 
-           Ptr{Float64}, Ptr{Float64}, Ptr{Int32}),
-          "N", "N", m, n, k, 1.0, A, m, B, k, 0.0, C, m)
-
-    return C
+function jl_gen_mtimes(fname, eltype)
+    eval (`function * (A::Matrix{$eltype}, B::Matrix{$eltype})
+          m = size(A, 1)
+          n = size(B, 2)
+          k = size(A, 2)
+          
+          assert (k == size(B,1))
+          C = zeros($eltype, m, n)
+          
+          ccall(dlsym(libBLAS, $fname),
+                Void,
+                (Ptr{Uint8}, Ptr{Uint8}, Ptr{Int32}, Ptr{Int32}, Ptr{Int32}, 
+                 Ptr{$eltype}, Ptr{$eltype}, Ptr{Int32}, 
+                 Ptr{$eltype}, Ptr{Int32}, 
+                 Ptr{$eltype}, Ptr{$eltype}, Ptr{Int32}),
+                "N", "N", m, n, k, 1.0, A, m, B, k, 0.0, C, m)
+          
+          return C
+          end
+          )
 end
 
-function * (A::Matrix{Float32}, B::Matrix{Float32})
-    m = size(A, 1)
-    n = size(B, 2)
-    k = size(A, 2)
-
-    assert (k == size(B,1))
-    C = zeros(Float32, m, n)
-
-    ccall(dlsym(libBLAS, "sgemm_"),
-          Void,
-          (Ptr{Uint8}, Ptr{Uint8}, Ptr{Int32}, Ptr{Int32}, Ptr{Int32}, 
-           Ptr{Float32}, Ptr{Float32}, Ptr{Int32}, 
-           Ptr{Float32}, Ptr{Int32}, 
-           Ptr{Float32}, Ptr{Float32}, Ptr{Int32}),
-          "N", "N", m, n, k, 1.0, A, m, B, k, 0.0, C, m)
-
-    return C
-end
+jl_gen_mtimes ("dgemm_", Float64)
+jl_gen_mtimes ("sgemm_", Float32)
 
 # SUBROUTINE DPOTRF( UPLO, N, A, LDA, INFO )
 # *     .. Scalar Arguments ..
@@ -133,29 +93,23 @@ end
 # *     .. Array Arguments ..
 #       DOUBLE PRECISION   A( LDA, * )
 
-function chol (A::Matrix{Float64})
-    info = [0]
-    n = size(A, 1)
-    R = triu(A)
-    ccall(dlsym(libLAPACK, "dpotrf_"),
-          Int32,
-          (Ptr{Uint8}, Ptr{Int32}, Ptr{Float64}, Ptr{Int32}, Ptr{Int32}),
-          "U", n, R, n, info)
-    if info[1] > 0; error("Matrix not Positive Definite"); end
-    return R
+function jl_gen_chol(fname, eltype)
+    eval(`function chol (A::Matrix{$eltype})
+         info = [0]
+         n = size(A, 1)
+         R = triu(A)
+         ccall(dlsym(libLAPACK, $fname),
+               Int32,
+               (Ptr{Uint8}, Ptr{Int32}, Ptr{$eltype}, Ptr{Int32}, Ptr{Int32}),
+               "U", n, R, n, info)
+         if info[1] > 0; error("Matrix not Positive Definite"); end
+         return R
+         end
+         )
 end
 
-function chol (A::Matrix{Float32})
-    info = [0]
-    n = size(A, 1)
-    R = triu(A)
-    ccall(dlsym(libLAPACK, "spotrf_"),
-          Int32,
-          (Ptr{Uint8}, Ptr{Int32}, Ptr{Float32}, Ptr{Int32}, Ptr{Int32}),
-          "U", n, R, n, info)
-    if info[1] > 0; error("Matrix not Positive Definite"); end
-    return R
-end
+jl_gen_chol("dpotrf_", Float64)
+jl_gen_chol("spotrf_", Float32)
 
 #       SUBROUTINE DGESV( N, NRHS, A, LDA, IPIV, B, LDB, INFO )
 # *     .. Scalar Arguments ..
@@ -165,33 +119,23 @@ end
 #       INTEGER            IPIV( * )
 #       DOUBLE PRECISION   A( LDA, * ), B( LDB, * )
 
-function \ (A::Matrix{Float64}, B::Matrix{Float64})
-    info = [0]
-    n = size(A, 1)
-    nrhs = size(B, 2)
-    ipiv = ones(Int32, n)
-    X = copy(B)
-   ccall(dlsym(libLAPACK, "dgesv_"),
-         Int32,
-         (Ptr{Int32}, Ptr{Int32}, Ptr{Float64}, Ptr{Int32}, Ptr{Int32}, 
-          Ptr{Float64}, Ptr{Int32}, Ptr{Int32}),
-         n, nrhs, A, n, ipiv, X, n, info)
-    if info[1] > 0; error("U is singular"); end
-    return X
+function jl_gen_mldivide (fname, eltype)
+    eval(`function \ (A::Matrix{$eltype}, B::Matrix{$eltype})
+        info = [0]
+         n = size(A, 1)
+         nrhs = size(B, 2)
+         ipiv = ones(Int32, n)
+         X = copy(B)
+         ccall(dlsym(libLAPACK, $fname),
+               Int32,
+               (Ptr{Int32}, Ptr{Int32}, Ptr{$eltype}, Ptr{Int32}, Ptr{Int32}, 
+                Ptr{$eltype}, Ptr{Int32}, Ptr{Int32}),
+               n, nrhs, A, n, ipiv, X, n, info)
+         if info[1] > 0; error("U is singular"); end
+         return X
+         end
+         )
 end
 
-function \ (A::Matrix{Float32}, B::Matrix{Float32})
-    info = [0]
-    n = size(A, 1)
-    nrhs = size(B, 2)
-    ipiv = ones(Int32, n)
-    X = copy(B)
-   ccall(dlsym(libLAPACK, "sgesv_"),
-         Int32,
-         (Ptr{Int32}, Ptr{Int32}, Ptr{Float32}, Ptr{Int32}, Ptr{Int32}, 
-          Ptr{Float32}, Ptr{Int32}, Ptr{Int32}),
-         n, nrhs, A, n, ipiv, X, n, info)
-    if info[1] > 0; error("U is singular"); end
-    return X
-end
-
+jl_gen_mldivide("dgesv_", Float64)
+jl_gen_mldivide("sgesv_", Float32)
