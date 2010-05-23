@@ -20,8 +20,8 @@ end
 
 numel(r::Range) = length(r)
 length(r::Range) = (r.step > 0 ?
-    div((r.stop-r.start+1),r.step) :
-    div((r.start-r.stop+1),-r.step))
+                    int32(ceil((r.stop-r.start+1) / r.step)) :
+                    int32(ceil((r.start-r.stop+1) / -r.step)))
 
 start(r::Range) = r.start
 done(r::Range, i) = (r.step < 0 ? (i < r.stop) : (i > r.stop))

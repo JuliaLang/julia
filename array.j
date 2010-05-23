@@ -36,7 +36,7 @@ randf(dims::Tuple) = randf(dims...)
 
 eye(n::Size) = diagm(ones(n))
 
-colon(start::Int32, stop::Int32, stride::Int32) = [ i | i=start:stride:stop ]
+colon(start::Size, stop::Size, stride::Size) = [ i | i=start:stride:stop ]
 
 copy(a::Vector) = [ a[i] | i=1:length(a) ]
 copy(a::Matrix) = [ a[i,j] | i=1:size(a,1), j=1:size(a,2) ]
