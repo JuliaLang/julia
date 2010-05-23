@@ -65,18 +65,18 @@ function jl_gen_mtimes(fname, eltype)
           m = size(A, 1)
           n = size(B, 2)
           k = size(A, 2)
-          
+
           assert (k == size(B,1))
           C = zeros($eltype, m, n)
-          
+
           ccall(dlsym(libBLAS, $fname),
                 Void,
-                (Ptr{Uint8}, Ptr{Uint8}, Ptr{Int32}, Ptr{Int32}, Ptr{Int32}, 
-                 Ptr{$eltype}, Ptr{$eltype}, Ptr{Int32}, 
-                 Ptr{$eltype}, Ptr{Int32}, 
+                (Ptr{Uint8}, Ptr{Uint8}, Ptr{Int32}, Ptr{Int32}, Ptr{Int32},
+                 Ptr{$eltype}, Ptr{$eltype}, Ptr{Int32},
+                 Ptr{$eltype}, Ptr{Int32},
                  Ptr{$eltype}, Ptr{$eltype}, Ptr{Int32}),
                 "N", "N", m, n, k, 1.0, A, m, B, k, 0.0, C, m)
-          
+
           return C
           end
           )
