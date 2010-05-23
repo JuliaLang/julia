@@ -26,8 +26,8 @@ jl_gen_copy ("scopy_", `Matrix, Float32)
 function jl_gen_dot (fname, eltype)
     eval(`function dot (x::Vector{$eltype}, y::Vector{$eltype})
          ccall(dlsym(libBLAS, $fname),
-               $eltype, 
-               (Ptr{Int32}, Ptr{$eltype}, Ptr{Int32}, Ptr{$eltype}, Ptr{Int32}), 
+               $eltype,
+               (Ptr{Int32}, Ptr{$eltype}, Ptr{Int32}, Ptr{$eltype}, Ptr{Int32}),
                length(x), x, 1, y, 1)
          end
          )
