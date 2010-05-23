@@ -28,7 +28,11 @@ ones(dims::Tuple) = ones(dims...)
 
 rand(m::Size) = [ rand() | i=1:m ]
 rand(m::Size, n::Size) = [ rand() | i=1:m, j=1:n ]
-rand(dims::Tuple) = rand (dims...)
+rand(dims::Tuple) = rand(dims...)
+
+randf(m::Size) = [ randf() | i=1:m ]
+randf(m::Size, n::Size) = [ randf() | i=1:m, j=1:n ]
+randf(dims::Tuple) = randf(dims...)
 
 eye(n::Size) = diagm(ones(n))
 
