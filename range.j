@@ -1,27 +1,30 @@
-struct Range
-    start
-    step
-    stop
+struct Range{T}
+    start::T
+    step::T
+    stop::T
 end
 
-struct RangeFrom
-    start
-    step
+struct RangeFrom{T}
+    start::T
+    step::T
 end
 
-struct RangeTo
-    step
-    stop
+struct RangeTo{T}
+    step::T
+    stop::T
 end
 
-struct RangeBy
-    step
+struct RangeBy{T}
+    step::T
 end
 
 numel(r::Range) = length(r)
+length{T}(r::Range{Int{T}}) = (r.step > 0 ?
+                               div((r.stop-r.start+r.step), r.step) :
+                               div((r.start-r.stop-r.step), -r.step))
 length(r::Range) = (r.step > 0 ?
-                    int32(ceil((r.stop-r.start+1) / r.step)) :
-                    int32(ceil((r.start-r.stop+1) / -r.step)))
+                    ceil((r.stop-r.start+r.step) / r.step) :
+                    ceil((r.start-r.stop-r.step) / -r.step))
 
 start(r::Range) = r.start
 done(r::Range, i) = (r.step < 0 ? (i < r.stop) : (i > r.stop))

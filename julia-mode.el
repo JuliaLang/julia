@@ -46,7 +46,7 @@
           'identity
           '("if" "else" "elseif" "while" "for" "begin" "end" "do"
             "try" "catch" "return" "local" "type" "function"
-	    "typealias" "break" "continue" "struct" "global" "eval"
+	    "typealias" "break" "continue" "struct" "global"
 	    "module" "import" "export" "const")
           "\\|") "\\)\\>")
      'font-lock-keyword-face)

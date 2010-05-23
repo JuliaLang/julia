@@ -14,15 +14,15 @@ nnz(a::Array) = (n = 0; for i=1:numel(a); n += a[i] != 0 ? 1 : 0; end; n)
 jl_comprehension_zeros{T,n}(oneresult::Tensor{T,n}, dims...) = Array(T, dims...)
 jl_comprehension_zeros{T,n}(oneresult::Tensor{T,n}, dims::Tuple) = Array(T, dims...)
 
-zeros(T::Type, m::Size) = [ convert(T,0) | i=1:m ]
-zeros(T::Type, m::Size, n::Size) = [ convert(T,0) | i=1:m, j=1:n ]
+zeros(T::Type, m::Size) = (z=convert(T,0); [ z | i=1:m ])
+zeros(T::Type, m::Size, n::Size) = (z=convert(T,0); [ z | i=1:m, j=1:n ])
 zeros(m::Size) = [ 0.0 | i=1:m ]
 zeros(m::Size, n::Size) = [ 0.0 | i=1:m, j=1:n ]
 zeros(T::Type, dims::Tuple) = zeros (T, dims...)
 zeros(dims::Tuple) = zeros(dims...)
 
-ones(T::Type, m::Size) = [ convert(T,1) | i=1:m ]
-ones(T::Type, m::Size, n::Size) = [ convert(T,1) | i=1:m, j=1:n ]
+ones(T::Type, m::Size) = (o=convert(T,1); [ o | i=1:m ])
+ones(T::Type, m::Size, n::Size) = (o=convert(T,1); [ o | i=1:m, j=1:n ])
 ones(m::Size) = [ 1.0 | i=1:m ]
 ones(m::Size, n::Size) = [ 1.0 | i=1:m, j=1:n ]
 ones(T::Type, dims::Tuple) = ones (T, dims...)
