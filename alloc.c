@@ -617,7 +617,9 @@ void jl_init_builtin_types()
 
     jl_lambda_info_type =
         jl_new_struct_type(jl_symbol("LambdaStaticData"),
-                           jl_any_type, jl_null, jl_null, jl_null);
+                           jl_any_type, jl_null,
+                           jl_tuple(2, jl_symbol("ast"), jl_symbol("sparams")),
+                           jl_tuple(2, jl_expr_type, jl_tuple_type));
     jl_lambda_info_type->fnew = jl_bottom_func;
 
     tv = jl_typevars(2, "A", "B");

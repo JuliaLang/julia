@@ -52,10 +52,10 @@ typedef struct {
     // a function pointer.
     // this is the stuff that's shared among different instantiations
     // (different environments) of a closure.
-    jl_fptr_t fptr;
     jl_value_t *ast;
     // sparams is a tuple (symbol, value, symbol, value, ...)
     jl_tuple_t *sparams;
+    jl_fptr_t fptr;
     jl_tuple_t *roots;  // pointers in generated code
 } jl_lambda_info_t;
 
@@ -154,8 +154,9 @@ typedef struct _jl_methlist_t {
 
 typedef struct _jl_methtable_t {
     JL_VALUE_STRUCT
-    jl_methlist_t *mlist;
+    jl_methlist_t *defs;
     jl_methlist_t *generics;
+    jl_methlist_t *cache;
 } jl_methtable_t;
 
 typedef struct {
