@@ -1,3 +1,5 @@
+## conversions ##
+
 convert(::Type{Int8}, x::Uint8) = boxsi8(unbox8(x))
 convert(::Type{Int8}, x::Union(Int16,Uint16)) = boxsi8(trunc8(unbox16(x)))
 convert(::Type{Int8}, x::Union(Int32,Uint32)) = boxsi8(trunc8(unbox32(x)))
@@ -62,7 +64,6 @@ convert(::Type{Uint64}, x::Int64) = boxui64(unbox64(x))
 convert(::Type{Uint64}, x::Float32) = boxui64(fptoui64(unbox32(x)))
 convert(::Type{Uint64}, x::Float64) = boxui64(fptoui64(unbox64(x)))
 
-
 int8(x::Scalar)   = convert(Int8, x)
 uint8(x::Scalar)  = convert(Uint8, x)
 int16(x::Scalar)  = convert(Int16, x)
@@ -71,6 +72,8 @@ int32(x::Scalar)  = convert(Int32, x)
 uint32(x::Scalar) = convert(Uint32, x)
 int64(x::Scalar)  = convert(Int64, x)
 uint64(x::Scalar) = convert(Uint64, x)
+
+## basic arithmetic ##
 
 (-)(x::Int8 ) = boxsi8 (neg_int(unbox8 (x)))
 (-)(x::Int16) = boxsi16(neg_int(unbox16(x)))
@@ -104,6 +107,30 @@ div(x::Int64, y::Int64) = boxsi64(sdiv_int(unbox64(x), unbox64(y)))
 (%)(x::Int32, y::Int32) = boxsi32(smod_int(unbox32(x), unbox32(y)))
 (%)(x::Int64, y::Int64) = boxsi64(smod_int(unbox64(x), unbox64(y)))
 
+## bitwise operations ##
+
+(~)(x::Int8 ) = boxsi8 (not_int(unbox8 (x)))
+(~)(x::Int16) = boxsi16(not_int(unbox16(x)))
+(~)(x::Int32) = boxsi32(not_int(unbox32(x)))
+(~)(x::Int64) = boxsi64(not_int(unbox64(x)))
+
+(&)(x::Int8 , y::Int8 ) = boxsi8 (and_int(unbox8 (x), unbox8 (y)))
+(&)(x::Int16, y::Int16) = boxsi16(and_int(unbox16(x), unbox16(y)))
+(&)(x::Int32, y::Int32) = boxsi32(and_int(unbox32(x), unbox32(y)))
+(&)(x::Int64, y::Int64) = boxsi64(and_int(unbox64(x), unbox64(y)))
+
+(|)(x::Int8 , y::Int8 ) = boxsi8 (or_int(unbox8 (x), unbox8 (y)))
+(|)(x::Int16, y::Int16) = boxsi16(or_int(unbox16(x), unbox16(y)))
+(|)(x::Int32, y::Int32) = boxsi32(or_int(unbox32(x), unbox32(y)))
+(|)(x::Int64, y::Int64) = boxsi64(or_int(unbox64(x), unbox64(y)))
+
+($)(x::Int8 , y::Int8 ) = boxsi8 (xor_int(unbox8 (x), unbox8 (y)))
+($)(x::Int16, y::Int16) = boxsi16(xor_int(unbox16(x), unbox16(y)))
+($)(x::Int32, y::Int32) = boxsi32(xor_int(unbox32(x), unbox32(y)))
+($)(x::Int64, y::Int64) = boxsi64(xor_int(unbox64(x), unbox64(y)))
+
+## integer comparisons ##
+
 ==(x::Int8 , y::Int8 ) = eq_int(unbox8 (x),unbox8 (y))
 ==(x::Int16, y::Int16) = eq_int(unbox16(x),unbox16(y))
 ==(x::Int32, y::Int32) = eq_int(unbox32(x),unbox32(y))
@@ -117,6 +144,8 @@ div(x::Int64, y::Int64) = boxsi64(sdiv_int(unbox64(x), unbox64(y)))
 > (x::Int, y::Int) = (y < x)
 <=(x::Int, y::Int) = (x < y) || x == y
 >=(x::Int, y::Int) = (x > y) || x == y
+
+## integer functions ##
 
 isodd(n::Int)  = ((n%2)==1)
 iseven(n::Int) = ((n%2)==0)
