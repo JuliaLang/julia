@@ -27,8 +27,6 @@ end
 re(z::Complex) = z.re
 im(z::Complex) = z.im
 
-=={T}(z::Complex{T}, w::Complex{T})  = (z.re == w.re && z.im == w.im)
-
 conj(z::Complex) = Complex(z.re,-z.im)
 norm(z::Complex) = z.re z.re + z.im z.im
 abs(z::Complex) = hypot(z.re, z.im)
@@ -39,6 +37,8 @@ inv(z::Complex) = conj(z)/norm(z)
 (-){T}(z::Complex{T}, w::Complex{T}) = Complex(z.re - w.re, z.im - w.im)
 (*){T}(z::Complex{T}, w::Complex{T}) = Complex(z.re w.re - z.im w.im,
                                                z.re w.im + z.im w.re)
+
+=={T}(z::Complex{T}, w::Complex{T}) = (z.re == w.re && z.im == w.im)
 
 (/)(z::Number, w::Complex) = z inv(w)
 (/)(z::Complex, x::Real) = Complex(z.re/x, z.im/x)
@@ -74,7 +74,7 @@ function (/)(a::Real, b::Complex)
 end
 
 function sqrt(z::Complex)
-    r = sqrt(0.5 (hypot(z.re,z.im)+abs(z.re)))
+    r = sqrt(0.5*(hypot(z.re,z.im)+abs(z.re)))
     if z.re >= 0.0
         return Complex(r, 0.5 z.im/r)
     end
@@ -92,7 +92,7 @@ arg(z::Complex) = atan2(z.im, z.re)
 function sin(z::Complex)
     u = exp(z.im)
     v = 1/u
-    u = 0.5 (u+v)
+    u = 0.5*(u+v)
     v = u-v
     Complex(u sin(z.re), v cos(z.re))
 end
@@ -100,7 +100,7 @@ end
 function cos(z::Complex)
     u = exp(z.im)
     v = 1/u
-    u = 0.5 (u+v)
+    u = 0.5*(u+v)
     v = u-v
     Complex(u cos(z.re), -v sin(z.re))
 end
@@ -205,7 +205,7 @@ end
 function tan(z::Complex)
     u = exp(z.im)
     v = 1/u
-    u = 0.5 (u+v)
+    u = 0.5*(u+v)
     v = u-v
     sinre = sin(z.re)
     cosre = cos(z.re)
@@ -238,14 +238,14 @@ function atan(z::Complex)
     yp1 = 1+z.im
     m1ysq = m1y m1y
     yp1sq = yp1 yp1
-    Complex(0.5 (atan2(z.re,m1y) - atan2(-z.re, yp1)),
+    Complex(0.5*(atan2(z.re,m1y) - atan2(-z.re, yp1)),
             0.25 log((yp1sq + xsq)/(xsq + m1ysq)))
 end
 
 function sinh(z::Complex)
     y = exp(z.re)
     v = 1/u
-    u = 0.5 (u+v)
+    u = 0.5*(u+v)
     v = u-v
     Complex(v cos(z.im), u sin(z.im))
 end
@@ -253,7 +253,7 @@ end
 function cosh(z::Complex)
     u = exp(z.re)
     v = 1/u
-    u = 0.5 (u+v)
+    u = 0.5*(u+v)
     v = u-v
     Complex(u cos(z.im), v sin(z.im))
 end
@@ -262,7 +262,7 @@ function tanh(z::Complex)
     cosim = cos(z.im)
     u = exp(z.re)
     v = 1/u
-    u = 0.5 (u+v)
+    u = 0.5*(u+v)
     v = u-v
     d = cosim cosim + v v
     Complex(u v/d, sin(z.im) cosim/d)
