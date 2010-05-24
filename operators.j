@@ -43,10 +43,10 @@ function promote_type(T::Type, S::Type)
     if T <: S || S <: T
         error("no method")
     end
-    if method_exists(promote_table,(T,S))
-        return promote_table(T,S)
+    if method_exists(promote_rule,(T,S))
+        return promote_rule(T,S)
     else
-        return promote_table(S,T)
+        return promote_rule(S,T)
     end
 end
 

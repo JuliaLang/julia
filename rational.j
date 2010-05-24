@@ -8,10 +8,10 @@ convert{T}(::Type{Rational{T}}, x::Int) = Rational(convert(T,x), convert(T,1))
 convert{T}(::Type{Rational{T}}, x::Rational) = Rational(convert(T,x.num),convert(T,x.den))
 convert{T}(::Type{Float{T}}, x::Rational) = convert(T,x.num)/convert(T,x.den)
 
-promote_table{T}(::Type{Rational{T}}, ::Type{Int{T}}) = Rational{T}
-promote_table{T,S}(::Type{Rational{T}}, ::Type{Int{S}}) = Rational{promote_type(T,S)}
-promote_table{T,S}(::Type{Rational{T}}, ::Type{Rational{S}}) = Rational{promote_type(T,S)}
-promote_table{T,S}(::Type{Rational{T}}, ::Type{Float{S}}) = promote_type(T,S)
+promote_rule{T}(::Type{Rational{T}}, ::Type{Int{T}}) = Rational{T}
+promote_rule{T,S}(::Type{Rational{T}}, ::Type{Int{S}}) = Rational{promote_type(T,S)}
+promote_rule{T,S}(::Type{Rational{T}}, ::Type{Rational{S}}) = Rational{promote_type(T,S)}
+promote_rule{T,S}(::Type{Rational{T}}, ::Type{Float{S}}) = promote_type(T,S)
 
 function //{T}(num::T, den::T)
     if den == 0

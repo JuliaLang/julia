@@ -15,9 +15,9 @@ convert{T}(::Type{Quaternion{T}}, z::Quaternion) =
     Quaternion(convert(T,z.q0), convert(T,z.q1),
                convert(T,z.q2), convert(T,z.q3))
 
-promote_table{T,S}(::Type{Complex{T}}, ::Type{Quaternion{S}}) =
+promote_rule{T,S}(::Type{Complex{T}}, ::Type{Quaternion{S}}) =
     Quaternion{promote_type(T,S)}
-promote_table{T,S}(::Type{Real{T}}, ::Type{Quaternion{S}}) =
+promote_rule{T,S}(::Type{Real{T}}, ::Type{Quaternion{S}}) =
     Quaternion{promote_type(T,S)}
 
 function print(z::Quaternion)

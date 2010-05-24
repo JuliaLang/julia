@@ -26,16 +26,16 @@ truncate(x::Real) = int32(x)
 
 ## promotions ##
 
-promote_table(::Type{Float64}, ::Type{Float32} ) = Float64
+promote_rule(::Type{Float64}, ::Type{Float32} ) = Float64
 
-promote_table(::Type{Float32}, ::Type{Int8} ) = Float32
-promote_table(::Type{Float32}, ::Type{Int16}) = Float32
-promote_table(::Type{Float32}, ::Type{Int32}) = Float64
-promote_table(::Type{Float32}, ::Type{Int64}) = Float64 # TODO: should be Float128 or BigFloat
-promote_table(::Type{Float64}, ::Type{Int8} ) = Float64
-promote_table(::Type{Float64}, ::Type{Int16}) = Float64
-promote_table(::Type{Float64}, ::Type{Int32}) = Float64
-promote_table(::Type{Float64}, ::Type{Int64}) = Float64 # TODO: should be Float128 or BitFloat
+promote_rule(::Type{Float32}, ::Type{Int8} ) = Float32
+promote_rule(::Type{Float32}, ::Type{Int16}) = Float32
+promote_rule(::Type{Float32}, ::Type{Int32}) = Float64
+promote_rule(::Type{Float32}, ::Type{Int64}) = Float64 # TODO: should be Float128 or BigFloat
+promote_rule(::Type{Float64}, ::Type{Int8} ) = Float64
+promote_rule(::Type{Float64}, ::Type{Int16}) = Float64
+promote_rule(::Type{Float64}, ::Type{Int32}) = Float64
+promote_rule(::Type{Float64}, ::Type{Int64}) = Float64 # TODO: should be Float128 or BitFloat
 
 ## basic arithmetic ##
 

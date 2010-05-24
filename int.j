@@ -75,12 +75,12 @@ uint64(x::Scalar) = convert(Uint64, x)
 
 ## promotions ##
 
-promote_table(::Type{Int16}, ::Type{Int8} ) = Int16
-promote_table(::Type{Int32}, ::Type{Int8} ) = Int32
-promote_table(::Type{Int32}, ::Type{Int16}) = Int32
-promote_table(::Type{Int64}, ::Type{Int8} ) = Int64
-promote_table(::Type{Int64}, ::Type{Int16}) = Int64
-promote_table(::Type{Int64}, ::Type{Int32}) = Int64
+promote_rule(::Type{Int16}, ::Type{Int8} ) = Int16
+promote_rule(::Type{Int32}, ::Type{Int8} ) = Int32
+promote_rule(::Type{Int32}, ::Type{Int16}) = Int32
+promote_rule(::Type{Int64}, ::Type{Int8} ) = Int64
+promote_rule(::Type{Int64}, ::Type{Int16}) = Int64
+promote_rule(::Type{Int64}, ::Type{Int32}) = Int64
 
 ## basic arithmetic ##
 
