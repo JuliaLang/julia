@@ -26,7 +26,7 @@ end
 jl_gen_chol("dpotrf_", Float64)
 jl_gen_chol("spotrf_", Float32)
 
-#      SUBROUTINE DGETRF( M, N, A, LDA, IPIV, INFO )
+# SUBROUTINE DGETRF( M, N, A, LDA, IPIV, INFO )
 # *     .. Scalar Arguments ..
 #       INTEGER            INFO, LDA, M, N
 # *     ..
@@ -34,7 +34,7 @@ jl_gen_chol("spotrf_", Float32)
 #       INTEGER            IPIV( * )
 #       DOUBLE PRECISION   A( LDA, * )
 
-function jl_gen_lu (fname, eltype)
+function jl_gen_lu(fname, eltype)
     eval(`function lu (A::Matrix{$eltype})
          info = [0]
          m = size(A, 1)
@@ -51,10 +51,10 @@ function jl_gen_lu (fname, eltype)
          )
 end
 
-jl_gen_lu ("dgetrf_", Float64)
-jl_gen_lu ("sgetrf_", Float32)
+jl_gen_lu("dgetrf_", Float64)
+jl_gen_lu("sgetrf_", Float32)
 
-#    SUBROUTINE DGEQP3( M, N, A, LDA, JPVT, TAU, WORK, LWORK, INFO )
+# SUBROUTINE DGEQP3( M, N, A, LDA, JPVT, TAU, WORK, LWORK, INFO )
 # *     .. Scalar Arguments ..
 #       INTEGER            INFO, LDA, LWORK, M, N
 # *     ..
@@ -62,7 +62,7 @@ jl_gen_lu ("sgetrf_", Float32)
 #       INTEGER            JPVT( * )
 #       DOUBLE PRECISION   A( LDA, * ), TAU( * ), WORK( * )
 
-function jl_gen_qr (fname, eltype)
+function jl_gen_qr(fname, eltype)
     eval(`function qr (A::Matrix{$eltype})
          info = [0]
          m = size(A, 1)
@@ -96,10 +96,10 @@ function jl_gen_qr (fname, eltype)
          )
 end
 
-jl_gen_qr ("dgeqp3_", Float64)
-jl_gen_qr ("sgeqp3_", Float32)
+jl_gen_qr("dgeqp3_", Float64)
+jl_gen_qr("sgeqp3_", Float32)
 
-#       SUBROUTINE DGESV( N, NRHS, A, LDA, IPIV, B, LDB, INFO )
+# SUBROUTINE DGESV( N, NRHS, A, LDA, IPIV, B, LDB, INFO )
 # *     .. Scalar Arguments ..
 #       INTEGER            INFO, LDA, LDB, N, NRHS
 # *     ..
@@ -107,7 +107,7 @@ jl_gen_qr ("sgeqp3_", Float32)
 #       INTEGER            IPIV( * )
 #       DOUBLE PRECISION   A( LDA, * ), B( LDB, * )
 
-function jl_gen_mldivide (fname, eltype)
+function jl_gen_mldivide(fname, eltype)
     eval(`function \ (A::Matrix{$eltype}, B::Matrix{$eltype})
         info = [0]
          n = size(A, 1)
