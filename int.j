@@ -73,6 +73,15 @@ uint32(x::Scalar) = convert(Uint32, x)
 int64(x::Scalar)  = convert(Int64, x)
 uint64(x::Scalar) = convert(Uint64, x)
 
+## promotions ##
+
+promote_table(::Type{Int16}, ::Type{Int8} ) = Int16
+promote_table(::Type{Int32}, ::Type{Int8} ) = Int32
+promote_table(::Type{Int32}, ::Type{Int16}) = Int32
+promote_table(::Type{Int64}, ::Type{Int8} ) = Int64
+promote_table(::Type{Int64}, ::Type{Int16}) = Int64
+promote_table(::Type{Int64}, ::Type{Int32}) = Int64
+
 ## basic arithmetic ##
 
 (-)(x::Int8 ) = boxsi8 (neg_int(unbox8 (x)))
@@ -140,10 +149,6 @@ div(x::Int64, y::Int64) = boxsi64(sdiv_int(unbox64(x), unbox64(y)))
 < (x::Int16, y::Int16) = slt_int(unbox16(x),unbox16(y))
 < (x::Int32, y::Int32) = slt_int(unbox32(x),unbox32(y))
 < (x::Int64, y::Int64) = slt_int(unbox64(x),unbox64(y))
-
-> (x::Int, y::Int) = (y < x)
-<=(x::Int, y::Int) = (x < y) || x == y
->=(x::Int, y::Int) = (x > y) || x == y
 
 ## integer functions ##
 

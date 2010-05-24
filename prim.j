@@ -50,6 +50,11 @@ function (+)(x1, x2, x3, xs...)
     accum
 end
 
+# real comparisons from == and < operators
+> (x::Real, y::Real) = (y < x)
+<=(x::Real, y::Real) = (x < y) || x == y
+>=(x::Real, y::Real) = (x > y) || x == y
+
 # arithmetic promotion
 (+)(x::Number...) = (+)(promote(x...)...)
 (*)(x::Number...) = (*)(promote(x...)...)

@@ -1,3 +1,5 @@
+## conversions ##
+
 convert(::Type{Float32}, x::Int8)    = boxf32(sitofp32(unbox8(x)))
 convert(::Type{Float32}, x::Int16)   = boxf32(sitofp32(unbox16(x)))
 convert(::Type{Float32}, x::Int32)   = boxf32(sitofp32(unbox32(x)))
@@ -22,26 +24,45 @@ float32(x::Scalar) = convert(Float32, x)
 float64(x::Scalar) = convert(Float64, x)
 truncate(x::Real) = int32(x)
 
+## promotions ##
+
+promote_table(::Type{Float64}, ::Type{Float32} ) = Float64
+
+promote_table(::Type{Float32}, ::Type{Int8} ) = Float32
+promote_table(::Type{Float32}, ::Type{Int16}) = Float32
+promote_table(::Type{Float32}, ::Type{Int32}) = Float64
+promote_table(::Type{Float32}, ::Type{Int64}) = Float64 # TODO: should be Float128 or BigFloat
+promote_table(::Type{Float64}, ::Type{Int8} ) = Float64
+promote_table(::Type{Float64}, ::Type{Int16}) = Float64
+promote_table(::Type{Float64}, ::Type{Int32}) = Float64
+promote_table(::Type{Float64}, ::Type{Int64}) = Float64 # TODO: should be Float128 or BitFloat
+
+## basic arithmetic ##
+
+(-)(x::Float32) = boxf32(neg_float(unbox32(x)))
+(-)(x::Float64) = boxf64(neg_float(unbox64(x)))
+(+)(x::Float32, y::Float32) = boxf32(add_float(unbox32(x), unbox32(y)))
 (+)(x::Float64, y::Float64) = boxf64(add_float(unbox64(x), unbox64(y)))
+(-)(x::Float32, y::Float32) = boxf32(sub_float(unbox32(x), unbox32(y)))
 (-)(x::Float64, y::Float64) = boxf64(sub_float(unbox64(x), unbox64(y)))
+(*)(x::Float32, y::Float32) = boxf32(mul_float(unbox32(x), unbox32(y)))
 (*)(x::Float64, y::Float64) = boxf64(mul_float(unbox64(x), unbox64(y)))
+(/)(x::Float32, y::Float32) = boxf32(div_float(unbox32(x), unbox32(y)))
 (/)(x::Float64, y::Float64) = boxf64(div_float(unbox64(x), unbox64(y)))
 
-(-)(x::Float64) = boxf64(neg_float(unbox64(x)))
+## floating point comparisons ##
 
-<=(x::Float64, y::Float64) = lt_float(unbox64(x),unbox64(y)) || eq_float(unbox64(x),unbox64(y))
-< (x::Float64, y::Float64) = lt_float(unbox64(x),unbox64(y))
-> (x::Float64, y::Float64) = lt_float(unbox64(y),unbox64(x))
->=(x::Float64, y::Float64) = (x>y) || eq_float(unbox64(x),unbox64(y))
+==(x::Float32, y::Float32) = eq_float(unbox32(x),unbox32(y))
 ==(x::Float64, y::Float64) = eq_float(unbox64(x),unbox64(y))
+< (x::Float32, y::Float32) = lt_float(unbox32(x),unbox32(y))
+< (x::Float64, y::Float64) = lt_float(unbox64(x),unbox64(y))
 
-!=(x::Float64, y::Float64) = ne_float(unbox64(x),unbox64(y))
-
-< (x::Float64, y::Int32) = x < convert(Float64, y)
-> (x::Float64, y::Int32) = x > convert(Float64, y)
+## floating point constants ##
 
 Inf = 1/0
 NaN = -(0/0)
+
+## floating point functions ##
 
 sqrt(x::Float64) = boxf64(sqrt_float(unbox64(x)))
 sqrt(x::Float32) = boxf32(sqrt_float(unbox32(x)))

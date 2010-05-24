@@ -1,3 +1,5 @@
+## reduce operations ##
+
 max() = -Inf
 min() = +Inf
 sum() = 0
@@ -34,7 +36,7 @@ prod(itr) = reduce(*,   itr)
 any(itr)  = reduce(any, itr)
 all(itr)  = reduce(all, itr)
 
-promote_table(::Type{Int32}, ::Type{Float64}) = Float64
+## promotions ##
 
 function promote_type(T::Type, S::Type)
     # print("promote_type: ",T,", ",S,"\n")
