@@ -7,7 +7,6 @@ LIBDIRS = /opt/local/lib
 OSLIBS = -framework ApplicationServices -framework vecLib
 EFENCE = /opt/local/lib/libefence.a
 
-NBITS = 64
 ifeq ($(NBITS),32)
 CONFIG = -DMACOSX -DARCH_X86 -D__CPU__=586 -DUSE_READLINE -DBOEHM_GC
 endif

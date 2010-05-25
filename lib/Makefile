@@ -1,3 +1,4 @@
+NBITS = $(shell (test -e ../nbits || $(CC) ../nbits.c -o ../nbits) && ../nbits)
 include ../Make.inc.$(shell uname)
 
 SRCS = hashing.c timefuncs.c dblprint.c ptrhash.c operators.c socket.c \
