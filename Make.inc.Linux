@@ -7,7 +7,6 @@ LIBDIRS = /usr/local/lib
 OSLIBS = -Wl,--export-dynamic
 EFENCE =
 
-NBITS = 32
 ifeq ($(NBITS),32)
 CONFIG = -DLINUX -DARCH_X86 -D__CPU__=586 -DUSE_READLINE -DBOEHM_GC
 endif
