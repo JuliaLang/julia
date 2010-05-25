@@ -3,8 +3,8 @@ typealias Index Int32
 typealias Size  Int32
 typealias String Array{Uint8,1}
 
-(<:)(T::Type, S::Type) = subtype(T,S)
-(:>)(T::Type, S::Type) = subtype(S,T)
+(<:)(T, S) = subtype(T,S)
+(:>)(T, S) = subtype(S,T)
 
 ref(t::Tuple, i::Index) = tupleref(t, i)
 length(t::Tuple) = tuplelen(t)
@@ -56,8 +56,8 @@ end
 >=(x::Real, y::Real) = (x > y) || x == y
 
 # arithmetic promotion
-(+)(x::Number...) = (+)(promote(x...)...)
-(*)(x::Number...) = (*)(promote(x...)...)
+(+)(x::Number, y::Number) = (+)(promote(x,y)...)
+(*)(x::Number, y::Number) = (*)(promote(x,y)...)
 (-)(x::Number, y::Number) = (-)(promote(x,y)...)
 (/)(x::Number, y::Number) = (/)(promote(x,y)...)
 
