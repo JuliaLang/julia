@@ -2,7 +2,13 @@
 # * shared assoc list
 # * IntSet
 # * printing exprs
+# - compute type intersection
 # - more method table reflection
+#   . cached t-functions
+#   . abstract_invoke()
+#     . consult t-func cache
+#     . determine applicable methods
+#     . abstract_invoke all of them, type-union the result, and cache it
 # * hash table of symbols
 # * eval
 # - t-functions for builtins
@@ -55,6 +61,9 @@ function ref{T,S}(a::AList{T,S}, key::T)
     end
     p.b
 end
+
+tintersect(a,b) = ccall(dlsym(JuliaDLHandle,"jl_type_intersection"),Any,
+                        (Any,Any), a, b)
 
 function interpret(expr, vtypes::AList, vars)
 end

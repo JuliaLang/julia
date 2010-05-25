@@ -337,7 +337,8 @@ jl_value_t *jl_type_match(jl_type_t *a, jl_type_t *b);
 jl_value_t *jl_type_match_morespecific(jl_type_t *a, jl_type_t *b);
 int jl_types_equal(jl_value_t *a, jl_value_t *b);
 int jl_types_equal_generic(jl_value_t *a, jl_value_t *b);
-jl_tuple_t *jl_compute_type_union(jl_tuple_t *types);
+jl_value_t *jl_type_union(jl_tuple_t *types);
+jl_value_t *jl_type_intersection(jl_value_t *a, jl_value_t *b);
 
 // type constructors
 jl_typename_t *jl_new_typename(jl_sym_t *name);

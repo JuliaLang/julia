@@ -52,8 +52,8 @@ function issymmetric (A::Matrix)
     m = size(A, 1)
     n = size(A, 2)
     if m != n; error("Input matrix must be square"); end
-    for i=1:n
-        for j=1:n
+    for i=1:(n-1)
+        for j=(i+1):n
             if A[i,j] != A[j,i]; return false; end
         end
     end

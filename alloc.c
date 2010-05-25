@@ -586,6 +586,7 @@ void jl_init_builtin_types()
     jl_array_type = jl_new_closure(jl_generic_array_ctor, NULL);
     jl_array_type->parameters = tv;
     jl_array_type->body = (jl_type_t*)arrstruct;
+    jl_array_typename->ctor = jl_array_type;
 
     jl_array_uint8_type =
         (jl_type_t*)jl_apply_type_ctor(jl_array_type,

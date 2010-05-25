@@ -150,6 +150,8 @@ jl_value_t *jl_full_type(jl_value_t *v)
     return (jl_value_t*)out;
 }
 
+// --- union and intersection ---
+
 static int count_union_components(jl_tuple_t *types)
 {
     size_t i, c=0;
@@ -201,7 +203,6 @@ jl_tuple_t *jl_compute_type_union(jl_tuple_t *types)
             }
         }
     }
-    if (ndel == 0) return types;
     jl_tuple_t *result = jl_alloc_tuple(n - ndel);
     j=0;
     for(i=0; i < n; i++) {
@@ -212,6 +213,214 @@ jl_tuple_t *jl_compute_type_union(jl_tuple_t *types)
     }
     assert(j == n-ndel);
     return result;
+}
+
+jl_value_t *jl_type_union(jl_tuple_t *types)
+{
+    types = jl_compute_type_union(types);
+    if (types->length == 1)
+        return jl_tupleref(types, 0);
+    return (jl_value_t*)jl_new_uniontype(types);
+}
+
+jl_value_t *jl_type_intersection(jl_value_t *a, jl_value_t *b);
+
+static jl_value_t *intersect_union(jl_uniontype_t *a, jl_value_t *b)
+{
+    jl_tuple_t *t = jl_alloc_tuple(a->types->length);
+    size_t i;
+    for(i=0; i < t->length; i++) {
+        jl_tupleset(t, i, jl_type_intersection(jl_tupleref(a->types,i),b));
+    }
+    return jl_type_union(t);
+}
+
+// if returns with *bot!=0, then intersection is Bottom
+static size_t tuple_intersect_size(jl_tuple_t *a, jl_tuple_t *b, int *bot)
+{
+    size_t al = a->length;
+    size_t bl = b->length;
+    *bot = 0;
+    if (al == bl) return al;
+    if (al > bl) return tuple_intersect_size(b, a, bot);
+    assert(al < bl);
+    if (jl_is_seq_type(jl_tupleref(b,bl-1))) {
+        if (al > 0 && jl_is_seq_type(jl_tupleref(a,al-1))) {
+            return bl;
+        }
+        else {
+            if (bl == al+1)
+                return al;
+            *bot=1;
+            return 0;
+        }
+    }
+    if (al > 0 && jl_is_seq_type(jl_tupleref(a,al-1))) {
+        return bl;
+    }
+    *bot=1;
+    return 0;
+}
+
+static jl_value_t *intersect_tuple(jl_tuple_t *a, jl_tuple_t *b)
+{
+    size_t al = a->length;
+    size_t bl = b->length;
+    int bot=0;
+    size_t n = tuple_intersect_size(a, b, &bot);
+    if (bot)
+        return (jl_value_t*)jl_bottom_type;
+    if (n == 0) return (jl_value_t*)jl_null;
+    jl_tuple_t *tc = jl_alloc_tuple(n);
+    size_t ai=0, bi=0, ci;
+    jl_value_t *ae, *be;
+    int aseq=0, bseq=0;
+    for(ci=0; ci < n; ci++) {
+        if (ai < al) {
+            ae = jl_tupleref(a,ai);
+            if (jl_is_seq_type(ae)) {
+                aseq=1;
+                ae = jl_tparam0(ae);
+            }
+            ai++;
+        }
+        if (bi < bl) {
+            be = jl_tupleref(b,bi);
+            if (jl_is_seq_type(be)) {
+                bseq=1;
+                be = jl_tparam0(be);
+            }
+            bi++;
+        }
+        jl_value_t *ce = jl_type_intersection(ae,be);
+        if (ce == (jl_value_t*)jl_bottom_type)
+            return (jl_value_t*)jl_bottom_type;
+        if (aseq && bseq) {
+            ce = (jl_value_t*)jl_apply_type_ctor(jl_seq_type, jl_tuple(1, ce));
+        }
+        jl_tupleset(tc, ci, ce);
+    }
+    return (jl_value_t*)tc;
+}
+
+static jl_tag_type_t *intersect_tag(jl_tag_type_t *a, jl_tag_type_t *b)
+{
+    assert(a->name == b->name);
+    assert(a->parameters->length == b->parameters->length);
+    jl_tuple_t *p = jl_alloc_tuple(a->parameters->length);
+    size_t i;
+    for(i=0; i < p->length; i++) {
+        jl_tupleset(p, i, jl_type_intersection(jl_tupleref(a->parameters,i),
+                                               jl_tupleref(b->parameters,i)));
+    }
+    if (a->name->ctor != NULL)
+        return (jl_tag_type_t*)jl_apply_type_ctor(a->name->ctor, p);
+    assert(0 && "not yet implemented");
+    return NULL;
+}
+
+jl_value_t *jl_type_intersection(jl_value_t *a, jl_value_t *b)
+{
+    if (jl_type_match((jl_type_t*)a, (jl_type_t*)b) != jl_false)
+        return a;
+    if (jl_type_match((jl_type_t*)b, (jl_type_t*)a) != jl_false)
+        return b;
+    if (jl_is_typector(a))
+        a = jl_unconstrained_type((jl_typector_t*)a);
+    if (jl_is_typector(b))
+        b = jl_unconstrained_type((jl_typector_t*)b);
+    // union
+    if (jl_is_union_type(a))
+        return intersect_union((jl_uniontype_t*)a, b);
+    if (jl_is_union_type(b))
+        return intersect_union((jl_uniontype_t*)b, a);
+    // tuple
+    if (jl_is_tuple(a)) {
+        if (!jl_is_tuple(b))
+            return (jl_value_t*)jl_bottom_type;
+        return intersect_tuple((jl_tuple_t*)a, (jl_tuple_t*)b);
+    }
+    if (jl_is_tuple(b))
+        return (jl_value_t*)jl_bottom_type;
+    // function
+    if (jl_is_func_type(a)) {
+        if (!jl_is_func_type(b))
+            return (jl_value_t*)jl_bottom_type;
+        return
+            (jl_value_t*)jl_new_functype((jl_type_t*)
+                                         jl_type_union(jl_tuple(2,((jl_func_type_t*)a)->from,
+                                                                ((jl_func_type_t*)b)->from)),
+                                         (jl_type_t*)
+                                         jl_type_intersection((jl_value_t*)((jl_func_type_t*)a)->to,
+                                                              (jl_value_t*)((jl_func_type_t*)b)->to));
+    }
+    if (jl_is_func_type(b))
+        return (jl_value_t*)jl_bottom_type;
+    // tag
+    assert(jl_is_some_tag_type(a));
+    assert(jl_is_some_tag_type(b));
+    jl_tag_type_t *tta = (jl_tag_type_t*)a;
+    jl_tag_type_t *ttb = (jl_tag_type_t*)b;
+    if (tta->name == ttb->name)
+        return (jl_value_t*)intersect_tag(tta, ttb);
+    jl_tag_type_t *super = NULL;
+    jl_tag_type_t *sub = NULL;
+    while (tta != jl_any_type) {
+        if (tta->name == ttb->name) {
+            super = intersect_tag(tta, ttb);
+            sub = (jl_tag_type_t*)a;
+            break;
+        }
+        tta = tta->super;
+    }
+    if (super == NULL) {
+        tta = (jl_tag_type_t*)a;
+        while (ttb != jl_any_type) {
+            if (tta->name == ttb->name) {
+                super = intersect_tag(tta, ttb);
+                sub = (jl_tag_type_t*)b;
+                break;
+            }
+            ttb = ttb->super;
+        }
+    }
+    if (super == NULL)
+        return (jl_value_t*)jl_bottom_type;
+
+    size_t n = sub->parameters->length;
+    if (n == 0) return (jl_value_t*)sub;
+
+    assert(sub->name->ctor != NULL);
+    jl_typector_t *tc = sub->name->ctor;
+    // compute what constraints the supertype imposes on the subtype
+    jl_tuple_t *sup_params =
+        ((jl_tag_type_t*)((jl_tag_type_t*)tc->body)->super)->parameters;
+    // match the intersected supertype against the pattern this subtype
+    // uses to instantiate its supertype. this tells use that the
+    // intersected supertype cannot come from this subtype (in which case
+    // our final answer is Bottom), or it tells us what subtype parameter
+    // values are implied by the intersected supertype.
+    jl_value_t *env = jl_type_match((jl_type_t*)super->parameters,
+                                    (jl_type_t*)sup_params);
+    if (env == jl_false)
+        return (jl_value_t*)jl_bottom_type;
+
+    jl_tuple_t *p = jl_alloc_tuple(n);
+    size_t i;
+    for(i=0; i < n; i++) {
+        jl_value_t *tp = jl_tupleref(tc->parameters, i);
+        jl_value_t *elt = jl_tupleref(sub->parameters, i);
+        jl_value_t *e = env;
+        while (e != (jl_value_t*)jl_null) {
+            if (jl_t0(e) == tp) {
+                elt = jl_type_intersection(elt, jl_t1(e));
+                break;
+            }
+            e = jl_nextpair(e);
+        }
+        jl_tupleset(p, i, elt);
+    }
+    return (jl_value_t*)jl_apply_type_ctor(tc, p);
 }
 
 // --- type instantiation and cache ---
@@ -639,6 +848,7 @@ int jl_subtype_le(jl_value_t *a, jl_value_t *b, int ta, int morespecific)
     }
 
     if (jl_is_union_type(b)) {
+        if (a == b) return 1;  // Bottom <: Bottom
         jl_tuple_t *bp = ((jl_uniontype_t*)b)->types;
         for(i=0; i < bp->length; i++) {
             if (jl_subtype_le(a, jl_tupleref(bp,i), ta, morespecific))
