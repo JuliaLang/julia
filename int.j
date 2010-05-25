@@ -150,6 +150,15 @@ div(x::Int64, y::Int64) = boxsi64(sdiv_int(unbox64(x), unbox64(y)))
 < (x::Int32, y::Int32) = slt_int(unbox32(x),unbox32(y))
 < (x::Int64, y::Int64) = slt_int(unbox64(x),unbox64(y))
 
+## integer-specific arithmetic promotions ##
+
+(%)(x::Int, y::Int) = (%)(promote(x,y)...)
+div(x::Int, y::Int) = div(promote(x,y)...)
+
+(&)(x::Int...) = (&)(promote(x...)...)
+(|)(x::Int...) = (|)(promote(x...)...)
+($)(x::Int...) = ($)(promote(x...)...)
+
 ## integer functions ##
 
 isodd(n::Int)  = ((n%2)==1)

@@ -55,7 +55,7 @@ end
 <=(x::Real, y::Real) = (x < y) || x == y
 >=(x::Real, y::Real) = (x > y) || x == y
 
-# arithmetic promotion
+# arithmetic and comparison promotion
 (+)(x::Number...) = (+)(promote(x...)...)
 (*)(x::Number...) = (*)(promote(x...)...)
 (-)(x::Number, y::Number) = (-)(promote(x,y)...)
@@ -67,6 +67,7 @@ end
 (>=)(x::Number, y::Number) = (>=)(promote(x,y)...)
 (==)(x::Number, y::Number) = (==)(promote(x,y)...)
 
+# .<op> defaults to <op>
 (./)(x, y) = x/y
 (.*)(x, y) = x*y
 
