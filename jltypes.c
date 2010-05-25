@@ -133,6 +133,10 @@ int jl_has_typevars(jl_value_t *v)
                 return 1;
         }
     }
+    // probably not necessary; no reason to use match() instead of subtype()
+    // on the unconstrained version of a type
+    //if (jl_is_typector(v))
+    //    return (((jl_typector_t*)v)->parameters->length > 0);
     return 0;
 }
 
@@ -848,7 +852,8 @@ int jl_subtype_le(jl_value_t *a, jl_value_t *b, int ta, int morespecific)
     }
 
     if (jl_is_union_type(b)) {
-        if (a == b) return 1;  // Bottom <: Bottom
+        // Bottom <: Bottom
+        if (!ta && a == b && b==(jl_value_t*)jl_bottom_type) return 1;
         jl_tuple_t *bp = ((jl_uniontype_t*)b)->types;
         for(i=0; i < bp->length; i++) {
             if (jl_subtype_le(a, jl_tupleref(bp,i), ta, morespecific))
@@ -999,6 +1004,12 @@ jl_tuple_t *jl_pair(jl_value_t *a, jl_value_t *b)
     return jl_tuple(2, a, b);
 }
 
+jl_tag_type_t *jl_wrap_Type(jl_value_t *t)
+{
+    return jl_new_tagtype((jl_value_t*)jl_type_type->name,
+                          jl_any_type, jl_tuple(1, t));
+}
+
 static jl_value_t *type_match_(jl_type_t *child, jl_type_t *parent,
                                jl_tuple_t *env, int morespecific)
 {
@@ -1122,6 +1133,8 @@ static jl_value_t *type_match_(jl_type_t *child, jl_type_t *parent,
     jl_tag_type_t *tta = (jl_tag_type_t*)child;
     jl_tag_type_t *ttb = (jl_tag_type_t*)parent;
     int super = 0;
+    if (ttb->name == jl_type_type->name && tta->name != ttb->name)
+        tta = jl_wrap_Type((jl_value_t*)tta);
     while (tta != (jl_tag_type_t*)jl_any_type) {
         if (tta->name == ttb->name) {
             if (super && morespecific)
@@ -1314,7 +1327,7 @@ void jl_init_types()
                                       jl_tuple(3, jl_sym_type, jl_type_type,
                                                jl_type_type));
 
-    jl_wildcard_type = tvar("*");
+    jl_wildcard_type = tvar("_");
     jl_type_type->parameters = jl_tuple(1, jl_wildcard_type);
 
     jl_tuple_t *tv;

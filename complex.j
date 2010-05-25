@@ -123,6 +123,9 @@ function exp(z::Complex)
     Complex(er cos(z.im), er sin(z.im))
 end
 
+(^)(x::Union(Int8,Uint8,Int16,Uint16,Int32,Uint32), p::Union(Float,Complex)) =
+    float64(x)^p
+
 function (^){T}(x::Float{T}, p::Float{T})
     if x >= 0
         return pow(x, p)

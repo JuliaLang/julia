@@ -62,8 +62,13 @@ function ref{T,S}(a::AList{T,S}, key::T)
     p.b
 end
 
-tintersect(a,b) = ccall(dlsym(JuliaDLHandle,"jl_type_intersection"),Any,
+tintersect(a,b) = ccall(dlsym(JuliaDLHandle,"jl_type_intersection"), Any,
                         (Any,Any), a, b)
+tmatch(a,b) = ccall(dlsym(JuliaDLHandle,"jl_type_match"), Any,
+                    (Any,Any), a, b)
+
+getmethods(f,t) = ccall(dlsym(JuliaDLHandle,"jl_matching_methods"), Any,
+                        (Any,Any), f, t)
 
 function interpret(expr, vtypes::AList, vars)
 end

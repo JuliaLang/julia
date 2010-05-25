@@ -579,7 +579,7 @@ static void print_function(jl_value_t *v)
 {
     ios_t *s = current_output_stream;
     if (jl_is_typector(v)) {
-        jl_print((jl_value_t*)((jl_typector_t*)v)->body);
+        jl_print((jl_value_t*)((jl_typector_t*)v)->unconstrained);
     }
     else if (jl_is_gf(v)) {
         ios_puts("#<generic-function ", s);
