@@ -11,7 +11,6 @@ length(t::Tuple) = tuplelen(t)
 
 !(x::Bool) = eq_int(unbox8(x),trunc8(unbox32(0)))
 !(x) = false
-!=(x, y) = !(x == y)
 
 # bootstrapping versions of operators needed by for loops
 (-)(x::Int32) = boxsi32(neg_int(unbox32(x)))
@@ -21,7 +20,6 @@ length(t::Tuple) = tuplelen(t)
 div(x::Int32, y::Int32) = boxsi32(sdiv_int(unbox32(x), unbox32(y)))
 < (x::Int32, y::Int32) = slt_int(unbox32(x),unbox32(y))
 ==(x::Int32, y::Int32) = eq_int(unbox32(x),unbox32(y))
-<=(x::Int32, y::Int32) = slt_int(unbox32(x),unbox32(y)) || eq_int(unbox32(x),unbox32(y))
 
 # fallback definitions for emulating N-arg operators with 2-arg definitions
 (*)() = 1
@@ -50,11 +48,6 @@ function (+)(x1, x2, x3, xs...)
     accum
 end
 
-# real comparisons from == and < operators
-> (x::Real, y::Real) = (y < x)
-<=(x::Real, y::Real) = (x < y) || x == y
->=(x::Real, y::Real) = (x > y) || x == y
-
 # arithmetic and comparison promotion
 (+)(x::Number, y::Number) = (+)(promote(x,y)...)
 (*)(x::Number, y::Number) = (*)(promote(x,y)...)
@@ -67,13 +60,19 @@ end
 (>=)(x::Number, y::Number) = (>=)(promote(x,y)...)
 (==)(x::Number, y::Number) = (==)(promote(x,y)...)
 
+# .<op> defaults to <op>
+(./)(x,y) = x/y
+(.*)(x,y) = x*y
+
 # generic div and % operations
 div(x::Number, y::Number) = truncate(x/y)
 (%)(x::Number, y::Number) = x-div(x,y)*y
 
-# .<op> defaults to <op>
-(./)(x, y) = x/y
-(.*)(x, y) = x*y
+# general comparisons from == and < operators
+!=(x, y) = !(x == y)
+> (x::Real, y::Real) = (y < x)
+<=(x::Real, y::Real) = (x < y) || x == y
+>=(x::Real, y::Real) = (x > y) || x == y
 
 # iterating over tuples
 start(t::Tuple) = 1
