@@ -13,6 +13,7 @@
 #include <limits.h>
 #include <errno.h>
 #include <math.h>
+#include <signal.h>
 #include <libgen.h>
 #include <getopt.h>
 #ifdef BOEHM_GC
@@ -176,6 +177,12 @@ void parse_opts(int *argcp, char ***argvp) {
     }
 }
 
+void fpe_handler(int arg)
+{
+    (void)arg;
+    jl_error("error: integer divide by zero");
+}
+
 void julia_init()
 {
     jl_init_frontend();
@@ -184,6 +191,7 @@ void julia_init()
     jl_init_modules();
     jl_init_builtins();
     jl_init_codegen();
+    signal(SIGFPE, fpe_handler);
 }
 
 static int detect_color()

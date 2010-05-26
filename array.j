@@ -36,7 +36,10 @@ randf(m::Size) = [ randf() | i=1:m ]
 randf(m::Size, n::Size) = [ randf() | i=1:m, j=1:n ]
 randf(dims::Tuple) = randf(dims...)
 
-eye(n::Size) = diagm(ones(n))
+eye(n::Size) = (a = zeros(n); a[1]=1; a)
+eye(m::Size, n::Size) = (a = zeros(m,n);
+                         for i=1:min(m,n); a[i,i]=1; end;
+                         a)
 
 colon(start::Size, stop::Size, stride::Size) = [ i | i=start:stride:stop ]
 
@@ -328,3 +331,26 @@ function print{T}(a::Array{T,2})
         end
     end
 end # print()
+
+function ndmap(body, t::Tuple, it...)
+    idx = length(t)-length(it)
+    if idx == 0
+        body(it)
+    else
+        for i = t[idx]
+            ndmap(body, t, i, it...)
+        end
+    end
+end
+
+function print{T,n}(a::Array{T,n})
+    slice2d(a, idxs) = [ a[i, j, idxs...] | i=1:size(a,1), j=1:size(a,2) ]
+    
+    tail = size(a)[3:]
+    
+    ndmap(idxs->(print("[:, :, ");
+                 for i=1:(length(idxs)-1); print(idxs[i],", "); end;
+                 print(idxs[length(idxs)], "] =\n");
+                 print(slice2d(a, idxs), idxs==tail?"":"\n\n")),
+          map(x->Range(1,1,x), tail))
+end

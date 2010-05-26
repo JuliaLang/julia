@@ -254,6 +254,17 @@ function powermod(x::Int, p::Int, m::Int)
     return r
 end
 
+function fact{T}(n::Int{T})
+    if n < 0
+        return convert(T,0)
+    end
+    p = convert(T,1)
+    for i=2:n
+        p*=i
+    end
+    p
+end
+
 function nPr(n::Int, r::Int)
     if r < 0 || n < 0 || r > n
         return 0
