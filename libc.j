@@ -15,8 +15,10 @@ end
 system(cmd::String) = ccall(dlsym(libc,"system"), Int32, (Ptr{Uint8},), cmd)
 fork() = ccall(dlsym(libc,"fork"), Int32, ())
 function exec(cmd::String, args::String...)
-    arr = Array(String, length(args))
-    for i = i:length(args); arr[i] = args[i]; end
+    arr = Array(Ptr{Uint8}, length(args)+2)
+    arr[1] = cmd
+    for i = 1:length(args); arr[i+1] = args[i]; end
+    arr[length(args)+2] = C_NULL
     ccall(dlsym(libc,"execvp"),
           Int32,
           (Ptr{Uint8}, Ptr{Ptr{Uint8}}),

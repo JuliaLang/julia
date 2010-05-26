@@ -321,7 +321,7 @@ static jl_value_t *new_scalar(jl_bits_type_t *bt)
     return v;
 }
 
-static jl_value_t *jl_arrayref(jl_array_t *a, size_t i)
+jl_value_t *jl_arrayref(jl_array_t *a, size_t i)
 {
     jl_type_t *el_type = (jl_type_t*)jl_tparam0(jl_typeof(a));
     jl_value_t *elt;
@@ -366,6 +366,30 @@ JL_CALLABLE(jl_f_arrayref)
     return jl_arrayref(a, i);
 }
 
+void jl_arrayset(jl_array_t *a, size_t i, jl_value_t *v)
+{
+    jl_type_t *el_type = (jl_type_t*)jl_tparam0(jl_typeof(a));
+    jl_value_t *rhs = jl_convert(el_type, v);
+    if (jl_is_bits_type(el_type)) {
+        size_t nb = ((jl_bits_type_t*)el_type)->nbits/8;
+        switch (nb) {
+        case 1:
+            ((int8_t*)a->data)[i]  = *(int8_t*)jl_bits_data(rhs);  break;
+        case 2:
+            ((int16_t*)a->data)[i] = *(int16_t*)jl_bits_data(rhs); break;
+        case 4:
+            ((int32_t*)a->data)[i] = *(int32_t*)jl_bits_data(rhs); break;
+        case 8:
+            ((int64_t*)a->data)[i] = *(int64_t*)jl_bits_data(rhs); break;
+        default:
+            memcpy(&((char*)a->data)[i*nb], jl_bits_data(rhs), nb);
+        }
+    }
+    else {
+        ((jl_value_t**)a->data)[i] = rhs;
+    }
+}
+
 JL_CALLABLE(jl_f_arrayset)
 {
     JL_NARGS(arrayset, 3, 3);
@@ -375,26 +399,7 @@ JL_CALLABLE(jl_f_arrayset)
     size_t i = jl_unbox_int32(args[1])-1;
     if (i >= b->length)
         jl_errorf("array[%d]: index out of range", i+1);
-    jl_type_t *el_type = (jl_type_t*)jl_tparam0(jl_typeof(b));
-    jl_value_t *rhs = jl_convert(el_type, args[2]);
-    if (jl_is_bits_type(el_type)) {
-        size_t nb = ((jl_bits_type_t*)el_type)->nbits/8;
-        switch (nb) {
-        case 1:
-            ((int8_t*)b->data)[i]  = *(int8_t*)jl_bits_data(rhs);  break;
-        case 2:
-            ((int16_t*)b->data)[i] = *(int16_t*)jl_bits_data(rhs); break;
-        case 4:
-            ((int32_t*)b->data)[i] = *(int32_t*)jl_bits_data(rhs); break;
-        case 8:
-            ((int64_t*)b->data)[i] = *(int64_t*)jl_bits_data(rhs); break;
-        default:
-            memcpy(&((char*)b->data)[i*nb], jl_bits_data(rhs), nb);
-        }
-    }
-    else {
-        ((jl_value_t**)b->data)[i] = rhs;
-    }
+    jl_arrayset(b, i, args[2]);
     return args[0];
 }
 
@@ -489,6 +494,29 @@ JL_CALLABLE(jl_f_convert)
     jl_errorf("cannot convert %s to %s",
               jl_print_to_string(x), jl_print_to_string((jl_value_t*)to));
     return (jl_value_t*)jl_null;
+}
+
+JL_CALLABLE(jl_f_convert_to_ptr)
+{
+    JL_NARGS(convert, 2, 2);
+    assert(jl_is_cpointer_type(args[0]));
+    jl_value_t *v = args[1];
+    jl_value_t *elty = jl_tparam0(args[0]);
+    void *p;
+    if (v == (jl_value_t*)jl_null) {
+        p = NULL;
+    }
+    else if (jl_is_cpointer(v)) {
+        p = jl_unbox_pointer(v);
+    }
+    else if (jl_is_array(v) && jl_tparam0(jl_typeof(v)) == elty) {
+        p = ((jl_array_t*)v)->data;
+    }
+    else {
+        jl_errorf("cannot convert %s to %s",
+                  jl_print_to_string(v), jl_print_to_string(args[0]));
+    }
+    return jl_box_pointer((jl_bits_type_t*)args[0], p);
 }
 
 // --- printing ---
@@ -1176,6 +1204,9 @@ void jl_init_builtins()
     jl_add_method(jl_convert_gf,
                   jl_tuple(2, jl_any_type, jl_any_type),
                   jl_new_closure(jl_f_convert, NULL));
+    jl_add_method(jl_convert_gf,
+                  jl_tuple(2, jl_wrap_Type(jl_pointer_typector), jl_any_type),
+                  jl_new_closure(jl_f_convert_to_ptr, NULL));
 
     jl_hash_gf = jl_new_generic_function(jl_symbol("hash"));
 

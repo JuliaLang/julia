@@ -170,7 +170,7 @@ static Value *get_saved_arg_area_loc(jl_codectx_t *ctx)
     return ctx->last_arg_area_loc;
 }
 
-static void *alloc_temp_arg_copy(void *obj, uint32_t sz)
+static void *alloc_temp_arg_space(uint32_t sz)
 {
     void *p;
     if (arg_area_loc+sz > arg_area_sz) {
@@ -180,12 +180,20 @@ static void *alloc_temp_arg_copy(void *obj, uint32_t sz)
         p = &temp_arg_area[arg_area_loc];
         arg_area_loc += sz;
     }
+    return p;
+}
+
+static void *alloc_temp_arg_copy(void *obj, uint32_t sz)
+{
+    void *p = alloc_temp_arg_space(sz);
     memcpy(p, obj, sz);
     return p;
 }
 
 extern "C" void *jl_value_to_pointer(jl_value_t *jt, jl_value_t *v, int argn)
 {
+    // this is a custom version of convert_to_ptr that is able to use
+    // the temporary argument space.
     if (v == (jl_value_t*)jl_null)
         return NULL;
     if (jl_is_cpointer(v))
@@ -195,9 +203,21 @@ extern "C" void *jl_value_to_pointer(jl_value_t *jt, jl_value_t *v, int argn)
         size_t osz = ((jl_bits_type_t*)jt)->nbits/8;
         return alloc_temp_arg_copy(jl_bits_data(v), osz);
     }
-    if (jl_is_array(v) && jl_tparam0(jl_typeof(v)) == jt)
-        return ((jl_array_t*)v)->data;
-    jl_errorf("ccall: expected Pointer{%s} as argument %d",
+    if (jl_is_array(v)) {
+        if (jl_tparam0(jl_typeof(v)) == jt)
+            return ((jl_array_t*)v)->data;
+        if (jl_is_cpointer_type(jt)) {
+            jl_array_t *ar = (jl_array_t*)v;
+            void **temp=(void**)alloc_temp_arg_space(ar->length*sizeof(void*));
+            size_t i;
+            for(i=0; i < ar->length; i++) {
+                temp[i] = jl_value_to_pointer(jl_tparam0(jt),
+                                              jl_arrayref(ar, i), argn);
+            }
+            return temp;
+        }
+    }
+    jl_errorf("ccall: expected Ptr{%s} as argument %d",
               jl_print_to_string(jt), argn);
     return (jl_value_t*)jl_null;
 }

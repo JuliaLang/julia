@@ -355,6 +355,7 @@ jl_struct_type_t *jl_new_struct_type(jl_sym_t *name, jl_tag_type_t *super,
                                      jl_tuple_t *fnames, jl_tuple_t *ftypes);
 jl_bits_type_t *jl_new_bitstype(jl_value_t *name, jl_tag_type_t *super,
                                 jl_tuple_t *parameters, size_t nbits);
+jl_tag_type_t *jl_wrap_Type(jl_value_t *t);  // x -> Type{x}
 
 // constructors
 jl_value_t *jl_new_struct(jl_struct_type_t *type, ...);
@@ -368,6 +369,8 @@ jl_sym_t *jl_symbol(const char *str);
 jl_sym_t *jl_gensym();
 jl_array_t *jl_new_array(jl_type_t *atype, jl_value_t **dimargs, size_t ndims);
 jl_array_t *jl_cstr_to_array(char *str);
+jl_value_t *jl_arrayref(jl_array_t *a, size_t i);  // 0-indexed
+void jl_arrayset(jl_array_t *a, size_t i, jl_value_t *v);  // 0-indexed
 jl_expr_t *jl_expr(jl_sym_t *head, size_t n, ...);
 jl_expr_t *jl_exprn(jl_sym_t *head, size_t n);
 jl_function_t *jl_new_generic_function(jl_sym_t *name);
