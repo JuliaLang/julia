@@ -76,6 +76,7 @@ clean:
 	rm -f *~ *#
 
 cleanall: clean
+	rm -f nbits
 	rm -rf $(EXENAME)-{debug,release,efence}
 	$(MAKE) -C $(LLTDIR) clean
 	$(MAKE) -C $(FLISPDIR) clean
