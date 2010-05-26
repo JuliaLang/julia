@@ -16,7 +16,7 @@ FLAGS = -falign-functions -Wall -Wno-strict-aliasing \
 	$(CFLAGS) -D___LIBRARY $(CONFIG) -I$(shell llvm-config --includedir)
 LIBFILES = $(FLISP) $(LLT)
 LIBS = $(LIBFILES) -lutil -ldl -lm -lgc -lreadline $(OSLIBS) \
-	$(shell llvm-config --ldflags --libs core engine jit interpreter bitreader) \
+	$(shell llvm-config --ldflags --libs core engine jit interpreter bitreader)
 
 DEBUGFLAGS = -ggdb3 -DDEBUG $(FLAGS)
 SHIPFLAGS = -O3 -DNDEBUG $(FLAGS)
