@@ -1205,7 +1205,7 @@ void jl_init_builtins()
                   jl_tuple(2, jl_any_type, jl_any_type),
                   jl_new_closure(jl_f_convert, NULL));
     jl_add_method(jl_convert_gf,
-                  jl_tuple(2, jl_wrap_Type(jl_pointer_typector), jl_any_type),
+                  jl_tuple(2, jl_wrap_Type((jl_value_t*)jl_pointer_typector), jl_any_type),
                   jl_new_closure(jl_f_convert_to_ptr, NULL));
 
     jl_hash_gf = jl_new_generic_function(jl_symbol("hash"));
