@@ -1,10 +1,6 @@
 # basic booleans
 assert(true)
 assert(!false)
-assert(1)
-assert(!!1)
-assert(0)
-assert(!!0)
 
 # basic type relationships
 assert(Int8 <: Int)
@@ -115,7 +111,6 @@ assert(2//4 == 3//6)
 assert(1//2 + 1//2 == 1)
 assert((-1)//3 == -(1//3))
 assert(1//2 + 3//4 == 5//4)
-assert(2//3 + 3//4)
 assert(1//3 * 3//4 == 1//4)
 # assert(1//2 / 3//4 == 2//3)
 
