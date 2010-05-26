@@ -40,13 +40,15 @@ function jl_gen_lu(fname, eltype)
          m = size(A, 1)
          n = size(A, 2)
          LU = copy(A)
-         ipiv = zeros(Int32, min(m,n))
+         ipiv = Array(Int32, min(m,n))
          ccall(dlsym(libLAPACK, $fname),
                Void,
                (Ptr{Int32}, Ptr{Int32}, Ptr{$eltype}, Ptr{Int32}, Ptr{Int32}, Ptr{Int32}),
                m, n, LU, m, ipiv, info)
          if info[1] > 0; error("Matrix is singular"); end
-         return (LU, ipiv)
+         P = 1:m
+         for i=1:m; t = P[i]; P[i] = P[ipiv[i]]; P[ipiv[i]] = t ; end
+         return (tril(LU, -1) + eye(m,n), triu(LU), P)
          end
          )
 end
@@ -62,17 +64,26 @@ jl_gen_lu("sgetrf_", Float32)
 #       INTEGER            JPVT( * )
 #       DOUBLE PRECISION   A( LDA, * ), TAU( * ), WORK( * )
 
-function jl_gen_qr(fname, eltype)
+# SUBROUTINE DORGQR( M, N, K, A, LDA, TAU, WORK, LWORK, INFO )
+# *
+# *     .. Scalar Arguments ..
+#       INTEGER            INFO, K, LDA, LWORK, M, N
+# *     ..
+# *     .. Array Arguments ..
+#       DOUBLE PRECISION   A( LDA, * ), TAU( * ), WORK( * )
+
+function jl_gen_qr(fname, fname2, eltype)
     eval(`function qr (A::Matrix{$eltype})
          info = [0]
          m = size(A, 1)
          n = size(A, 2)
          QR = copy(A)
          jpvt = zeros(Int32, n)
-         tau = zeros(Float64, min(m,n))
+         k = min(m,n)
+         tau = Array(Float64, k)
+
          work = [0.0]
          lwork = -1
-
          ccall(dlsym(libLAPACK, $fname),
                Void,
                (Ptr{Int32}, Ptr{Int32}, Ptr{$eltype}, Ptr{Int32}, 
@@ -81,7 +92,7 @@ function jl_gen_qr(fname, eltype)
 
          if info[1] == 0
             lwork = int32(work[1])
-            work = zeros(Float64, lwork)
+            work = Array(Float64, lwork)
          end
 
          ccall(dlsym(libLAPACK, $fname),
@@ -91,13 +102,34 @@ function jl_gen_qr(fname, eltype)
                m, n, QR, m, jpvt, tau, work, lwork, info)
 
          if info[1] > 0; error("Matrix is singular"); end
-         return (QR, jpvt)
+         
+         R = triu(QR)
+         
+         lwork2 = -1
+         ccall(dlsym(libLAPACK, $fname2),
+               Void,
+               (Ptr{Int32}, Ptr{Int32}, Ptr{Int32}, Ptr{$eltype},
+                Ptr{Int32}, Ptr{$eltype}, Ptr{$eltype}, Ptr{Int32}, Ptr{Int32}),
+               m, k, k, QR, m, tau, work, lwork2, info)
+
+         if info[1] == 0
+            lwork2 = int32(work[1])
+            if lwork2 > lwork; work = Array(Float64, lwork2); end
+         end
+
+         ccall(dlsym(libLAPACK, $fname2),
+               Void,
+               (Ptr{Int32}, Ptr{Int32}, Ptr{Int32}, Ptr{$eltype},
+                Ptr{Int32}, Ptr{$eltype}, Ptr{$eltype}, Ptr{Int32}, Ptr{Int32}),
+               m, k, k, QR, m, tau, work, lwork2, info)
+         
+         return (QR[:, 1:k], triu(QR), jpvt)
          end
          )
 end
 
-jl_gen_qr("dgeqp3_", Float64)
-jl_gen_qr("sgeqp3_", Float32)
+jl_gen_qr("dgeqp3_", "dorgqr_", Float64)
+jl_gen_qr("sgeqp3_", "sorgqr_", Float32)
 
 # SUBROUTINE DGESV( N, NRHS, A, LDA, IPIV, B, LDB, INFO )
 # *     .. Scalar Arguments ..
@@ -112,7 +144,7 @@ function jl_gen_mldivide(fname, eltype)
         info = [0]
          n = size(A, 1)
          nrhs = size(B, 2)
-         ipiv = zeros(Int32, n)
+         ipiv = Array(Int32, n)
          X = copy(B)
          ccall(dlsym(libLAPACK, $fname),
                Void,

@@ -199,3 +199,11 @@ assert([ [1,2] | i=1:2, : ] == [1, 2; 1, 2])
 
 # syntax
 assert((true ? 1 : false ? 2 : 3) == 1)
+
+# blas, lapack
+a = rand(4,4)
+b = a+a'+10*eye(4,4)
+r = chol(b)
+assert(sum(r'*r - b) < 1e-8)
+(l,u,p) = lu(a)
+assert(sum(l[p,:]*u - a) < 1e-8)
