@@ -22,7 +22,8 @@ convert(::Type{Float64}, x::Float32) = boxf64(fpext64(unbox32(x)))
 
 float32(x::Scalar) = convert(Float32, x)
 float64(x::Scalar) = convert(Float64, x)
-truncate(x::Real) = int32(x)
+truncate(x::Float32) = convert(Int32, x)
+truncate(x::Float64) = convert(Int64, x)
 
 ## promotions ##
 
