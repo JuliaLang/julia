@@ -11,9 +11,12 @@ FLISP = $(FLISPDIR)/libflisp.a
 NBITS = $(shell (test -e nbits || $(CC) nbits.c -o nbits) && ./nbits)
 include ./Make.inc.$(shell uname)
 
-FLAGS = -falign-functions -Wall -Wno-strict-aliasing -I$(FLISPDIR) -I$(LLTDIR) $(HFILEDIRS:%=-I%) $(LIBDIRS:%=-L%) $(CFLAGS) -D___LIBRARY $(CONFIG) -I$(shell llvm-config --includedir)
+FLAGS = -falign-functions -Wall -Wno-strict-aliasing \
+	-I$(FLISPDIR) -I$(LLTDIR) $(HFILEDIRS:%=-I%) $(LIBDIRS:%=-L%) \
+	$(CFLAGS) -D___LIBRARY $(CONFIG) -I$(shell llvm-config --includedir)
 LIBFILES = $(FLISP) $(LLT)
-LIBS = $(LIBFILES) -lutil -ldl -lm -lgc $(shell llvm-config --ldflags --libs core engine jit interpreter bitreader) -lreadline $(OSLIBS) 
+LIBS = $(LIBFILES) -lutil -ldl -lm -lgc -lreadline $(OSLIBS) \
+	$(shell llvm-config --ldflags --libs core engine jit interpreter bitreader) \
 
 DEBUGFLAGS = -ggdb3 -DDEBUG $(FLAGS)
 SHIPFLAGS = -O3 -DNDEBUG $(FLAGS)
@@ -32,7 +35,8 @@ default: debug
 ast.o ast.do: julia_flisp.boot.inc
 julia_flisp.boot.inc: julia_flisp.boot $(FLISP)
 	$(FLISPDIR)/flisp ./bin2hex.scm < $< > $@
-julia_flisp.boot: julia-parser.scm julia-syntax.scm match.scm utils.scm jlfrontend.scm $(FLISP)
+julia_flisp.boot: julia-parser.scm julia-syntax.scm \
+	match.scm utils.scm jlfrontend.scm $(FLISP)
 	$(FLISPDIR)/flisp ./jlfrontend.scm
 codegen.o codegen.do: intrinsics.cpp julia-defs.s.bc.inc
 
