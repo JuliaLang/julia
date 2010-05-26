@@ -543,6 +543,7 @@ JL_CALLABLE(jl_new_array_internal)
 
 JL_CALLABLE(jl_generic_array_ctor)
 {
+    JL_NARGSV(Array, 1);
     JL_TYPECHK(Array, type, args[0]);
     return jl_new_array_internal((jl_value_t*)jl_apply_type_ctor(jl_array_type,
                                                                  jl_tuple(2,args[0],

@@ -12,7 +12,7 @@ length(v::Vector) = size(v,1)
 nnz(a::Array) = (n = 0; for i=1:numel(a); n += a[i] != 0 ? 1 : 0; end; n)
 
 jl_comprehension_zeros{T,n}(oneresult::Tensor{T,n}, dims...) = Array(T, dims...)
-jl_comprehension_zeros{T,n}(oneresult::Tensor{T,n}, dims::Tuple) = Array(T, dims...)
+jl_comprehension_zeros(oneresult::(), dims...) = Array(Bottom, dims...)
 
 zeros(T::Type, m::Size) = (z=convert(T,0); [ z | i=1:m ])
 zeros(T::Type, m::Size, n::Size) = (z=convert(T,0); [ z | i=1:m, j=1:n ])
@@ -342,6 +342,8 @@ function ndmap(body, t::Tuple, it...)
         end
     end
 end
+
+print{T}(a::Array{T,0}) = print("Array(",T,")")
 
 function print{T,n}(a::Array{T,n})
     slice2d(a, idxs) = [ a[i, j, idxs...] | i=1:size(a,1), j=1:size(a,2) ]
