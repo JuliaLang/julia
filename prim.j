@@ -1,7 +1,8 @@
 typealias Nullable{T} Union(T,())
 typealias Index Int32
-typealias Size  Int32
-typealias String Array{Uint8,1}
+typealias Size Int32
+typealias Char Uint8
+typealias String Array{Char,1}
 
 (<:)(T, S) = subtype(T,S)
 (:>)(T, S) = subtype(S,T)
@@ -149,11 +150,11 @@ function cell_literal(xs...)
 end
 
 symbol(s::String) =
-    ccall(dlsym(JuliaDLHandle,"jl_symbol"), Any, (Ptr{Uint8},), s)::Symbol
+    ccall(dlsym(JuliaDLHandle,"jl_symbol"), Any, (Ptr{Char},), s)::Symbol
 
 string(x) =
-    ccall(dlsym(JuliaDLHandle,"jl_cstr_to_array"), Any, (Ptr{Int8},),
-          ccall(dlsym(JuliaDLHandle,"jl_print_to_string"), Ptr{Int8}, (Any,),
+    ccall(dlsym(JuliaDLHandle,"jl_cstr_to_array"), Any, (Ptr{Char},),
+          ccall(dlsym(JuliaDLHandle,"jl_print_to_string"), Ptr{Char}, (Any,),
                 x))
 
 function print(e::Expr)

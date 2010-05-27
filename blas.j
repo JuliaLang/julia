@@ -68,7 +68,7 @@ function jl_gen_mtimes(fname, eltype)
          C = zeros($eltype, m, n)
          ccall(dlsym(libBLAS, $fname),
              Void,
-             (Ptr{Uint8}, Ptr{Uint8}, Ptr{Int32}, Ptr{Int32}, Ptr{Int32},
+             (Ptr{Char}, Ptr{Char}, Ptr{Int32}, Ptr{Int32}, Ptr{Int32},
               Ptr{$eltype}, Ptr{$eltype}, Ptr{Int32},
               Ptr{$eltype}, Ptr{Int32},
               Ptr{$eltype}, Ptr{$eltype}, Ptr{Int32}),
