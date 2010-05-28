@@ -2,7 +2,7 @@ libBLAS = dlopen("libBLAS")
 
 # SUBROUTINE DCOPY(N,DX,INCX,DY,INCY) 
 
-function jl_gen_copy(fname, shape, eltype)
+for (fname, shape, eltype) = (("dcopy_", `Vector, Float64), ("scopy_", `Vector, Float32), ("dcopy_", `Matrix, Float64), ("scopy_", `Matrix, Float32))
     eval (`function copy (X::($shape){$eltype})
           sz = size(X)
           Y = zeros($eltype, sz)
@@ -15,14 +15,9 @@ function jl_gen_copy(fname, shape, eltype)
           )
 end
 
-jl_gen_copy("dcopy_", `Vector, Float64)
-jl_gen_copy("scopy_", `Vector, Float32)
-jl_gen_copy("dcopy_", `Matrix, Float64)
-jl_gen_copy("scopy_", `Matrix, Float32)
-
 # DOUBLE PRECISION FUNCTION DDOT(N,DX,INCX,DY,INCY)
 
-function jl_gen_dot(fname, eltype)
+for (fname, eltype) = (("ddot_", Float64), ("sdot_", Float32))
     eval(`function dot (x::Vector{$eltype}, y::Vector{$eltype})
          ccall(dlsym(libBLAS, $fname),
                $eltype,
@@ -32,12 +27,9 @@ function jl_gen_dot(fname, eltype)
          )
 end
 
-jl_gen_dot("ddot_", Float64)
-jl_gen_dot("sdot_", Float32)
-
 # DOUBLE PRECISION FUNCTION DNRM2(N,X,INCX)
 
-function jl_gen_norm(fname, eltype)
+for (fname, eltype) = (("ddot_", Float64), ("sdot_", Float32))
     eval(`function norm (x::Vector{$eltype})
          ccall(dlsym(libBLAS, $fname),
                $eltype,
@@ -47,19 +39,15 @@ function jl_gen_norm(fname, eltype)
          )
 end
 
-jl_gen_norm("ddot_", Float64)
-jl_gen_norm("sdot_", Float32)
-
 # SUBROUTINE DGEMM(TRANSA,TRANSB,M,N,K,ALPHA,A,LDA,B,LDB,BETA,C,LDC)
 # *     .. Scalar Arguments ..
 #       DOUBLE PRECISION ALPHA,BETA
 #       INTEGER K,LDA,LDB,LDC,M,N
 #       CHARACTER TRANSA,TRANSB
-# *     ..
 # *     .. Array Arguments ..
 #       DOUBLE PRECISION A(LDA,*),B(LDB,*),C(LDC,*)
 
-function jl_gen_mtimes(fname, eltype)
+for (fname, eltype) = (("dgemm_", Float64), ("sgemm_", Float32))
     eval(`function * (A::Matrix{$eltype}, B::Matrix{$eltype})
          m = size(A, 1)
          n = size(B, 2)
@@ -77,6 +65,3 @@ function jl_gen_mtimes(fname, eltype)
          end
          )
 end
-
-jl_gen_mtimes("dgemm_", Float64)
-jl_gen_mtimes("sgemm_", Float32)
