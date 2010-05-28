@@ -4,7 +4,6 @@ libLAPACK = dlopen("libLAPACK")
 # *     .. Scalar Arguments ..
 #       CHARACTER          UPLO
 #       INTEGER            INFO, LDA, N
-# *     ..
 # *     .. Array Arguments ..
 #       DOUBLE PRECISION   A( LDA, * )
 
@@ -26,7 +25,6 @@ end
 # SUBROUTINE DGETRF( M, N, A, LDA, IPIV, INFO )
 # *     .. Scalar Arguments ..
 #       INTEGER            INFO, LDA, M, N
-# *     ..
 # *     .. Array Arguments ..
 #       INTEGER            IPIV( * )
 #       DOUBLE PRECISION   A( LDA, * )
@@ -53,16 +51,13 @@ end
 # SUBROUTINE DGEQP3( M, N, A, LDA, JPVT, TAU, WORK, LWORK, INFO )
 # *     .. Scalar Arguments ..
 #       INTEGER            INFO, LDA, LWORK, M, N
-# *     ..
 # *     .. Array Arguments ..
 #       INTEGER            JPVT( * )
 #       DOUBLE PRECISION   A( LDA, * ), TAU( * ), WORK( * )
 
 # SUBROUTINE DORGQR( M, N, K, A, LDA, TAU, WORK, LWORK, INFO )
-# *
 # *     .. Scalar Arguments ..
 #       INTEGER            INFO, K, LDA, LWORK, M, N
-# *     ..
 # *     .. Array Arguments ..
 #       DOUBLE PRECISION   A( LDA, * ), TAU( * ), WORK( * )
 
@@ -101,9 +96,9 @@ for (fname, fname2, eltype) = (("dgeqp3_", "dorgqr_", Float64),
                m, n, QR, m, jpvt, tau, work, lwork, info)
 
          if info[1] > 0; error("Matrix is singular"); end
-         
+
          R = triu(QR)
-         
+
          # Workspace query to form Q
          lwork2 = -1
          ccall(dlsym(libLAPACK, $fname2),
@@ -162,7 +157,6 @@ end
 # *     .. Scalar Arguments ..
 #       CHARACTER          JOBZ, UPLO
 #       INTEGER            INFO, LDA, LWORK, N
-# *     ..
 # *     .. Array Arguments ..
 #       DOUBLE PRECISION   A( LDA, * ), W( * ), WORK( * )
 
@@ -177,23 +171,23 @@ for (fname, eltype) = (("dsyev_", Float64), ("ssyev_", Float32))
          EV = copy(A)
          W = Array($eltype, n)
          info = [0]
-         
+
          # Workspace query
          work = [0.0]
          lwork = -1
          ccall(dlsym(libLAPACK, $fname),
                Void,
-               (Ptr{Uint8}, Ptr{Uint8}, Ptr{Int32}, Ptr{$eltype}, Ptr{Int32}, 
+               (Ptr{Uint8}, Ptr{Uint8}, Ptr{Int32}, Ptr{$eltype}, Ptr{Int32},
                 Ptr{$eltype}, Ptr{$eltype}, Ptr{Int32}, Ptr{Int32}),
                jobz, uplo, n, EV, n, W, work, lwork, info)
-         
+
          if info[1] == 0
              lwork = int32(work[1])
              work = Array($eltype, lwork)
          else
              error("Error in $fname")
          end
-        
+
          ccall(dlsym(libLAPACK, $fname),
                Void,
                (Ptr{Uint8}, Ptr{Uint8}, Ptr{Int32}, Ptr{$eltype}, Ptr{Int32}, 
