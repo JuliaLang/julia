@@ -38,7 +38,8 @@ for (fname, eltype) = (("dgetrf_", Float64), ("sgetrf_", Float32))
          ipiv = Array(Int32, min(m,n))
          ccall(dlsym(libLAPACK, $fname),
                Void,
-               (Ptr{Int32}, Ptr{Int32}, Ptr{$eltype}, Ptr{Int32}, Ptr{Int32}, Ptr{Int32}),
+               (Ptr{Int32}, Ptr{Int32}, Ptr{$eltype},
+                Ptr{Int32}, Ptr{Int32}, Ptr{Int32}),
                m, n, LU, m, ipiv, info)
          if info[1] > 0; error("Matrix is singular"); end
          P = 1:m

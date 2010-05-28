@@ -2,7 +2,10 @@ libBLAS = dlopen("libBLAS")
 
 # SUBROUTINE DCOPY(N,DX,INCX,DY,INCY) 
 
-for (fname, shape, eltype) = (("dcopy_", `Vector, Float64), ("scopy_", `Vector, Float32), ("dcopy_", `Matrix, Float64), ("scopy_", `Matrix, Float32))
+for (fname, shape, eltype) = (("dcopy_", `Vector, Float64),
+                              ("scopy_", `Vector, Float32),
+                              ("dcopy_", `Matrix, Float64),
+                              ("scopy_", `Matrix, Float32))
     eval (`function copy (X::($shape){$eltype})
           sz = size(X)
           Y = zeros($eltype, sz)
