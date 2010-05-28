@@ -448,3 +448,13 @@ jl_value_t *jl_matching_methods(jl_function_t *gf, jl_value_t *type)
     }
     return (jl_value_t*)t;
 }
+
+int jl_is_builtin(jl_value_t *v)
+{
+    return (jl_is_func(v) && ((jl_function_t*)v)->linfo==NULL);
+}
+
+int jl_is_genericfunc(jl_value_t *v)
+{
+    return (jl_is_func(v) && jl_is_gf(v));
+}

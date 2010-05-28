@@ -36,7 +36,7 @@ randf(m::Size) = [ randf() | i=1:m ]
 randf(m::Size, n::Size) = [ randf() | i=1:m, j=1:n ]
 randf(dims::Tuple) = randf(dims...)
 
-eye(n::Size) = (a = zeros(n); a[1]=1; a)
+eye(n::Size) = eye(n, n)
 eye(m::Size, n::Size) = (a = zeros(m,n);
                          for i=1:min(m,n); a[i,i]=1; end;
                          a)

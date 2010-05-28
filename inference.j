@@ -70,7 +70,52 @@ tmatch(a,b) = ccall(dlsym(JuliaDLHandle,"jl_type_match"), Any,
 getmethods(f,t) = ccall(dlsym(JuliaDLHandle,"jl_matching_methods"), Any,
                         (Any,Any), f, t)
 
-function interpret(expr, vtypes::AList, vars)
+isbuiltin(f) = ccall(dlsym(JuliaDLHandle,"jl_is_builtin"), Int32, (Any,),
+                     f) != 0
+isgeneric(f) = ccall(dlsym(JuliaDLHandle,"jl_is_genericfunc"), Int32, (Any,),
+                     f) != 0
+
+function abstract_eval(e::Expr, vtypes::AList, vars)
+    # handle:
+    # call  lambda  quote  null  top  unbound  box-unbound
+    # closure-ref
+    if is(e.head,`unbound) || is(e.head,symbol("box-unbound"))
+        return Bool
+    elseif is(e.head,`null)
+        return ()
+    elseif is(e.head,`quote)
+        return typeof(e.args[1])
+    elseif is(e.head,`top)
+        return abstract_eval(e.args[1], vtypes, vars)
+    elseif is(e.head,symbol("closure-ref"))
+        return Any
+    elseif is(e.head,`call)
+        # TODO
+    end
+end
+
+function abstract_eval(s::Symbol, vtypes::AList, vars)
+    t = vtypes[s]
+    if is(t,NF)
+        # global
+        return Any
+    end
+    return t
+end
+
+abstract_eval(s, vtypes::AList, vars) = typeof(s)
+
+function interpret(e::Expr, vtypes::AList, vars)
+    # handle assignment
+    if is(e.head,symbol("="))
+        t = abstract_eval(e.args[2], vtypes, vars)
+        a = alist(vtypes)
+        a[e.args[1]] = t
+        return a
+    elseif is(e.head,`label)
+        # no effect
+    end
+    return vtypes
 end
 
 tchanged(n, o) = is(o,NF) || (!is(n,NF) && !subtype(n,o))
@@ -84,13 +129,17 @@ function changed(new::AList, old::AList, vars)
     return false
 end
 
+function tmerge(typea, typeb)
+    return Union(typea, typeb)
+end
+
 function update(state::AList, new::AList, vars)
     if is(state.prev,())
         state.prev = new
     else
         for v=vars
             if tchanged(new[v], state[v])
-                state[v] = Union(state[v], new[v])
+                state[v] = tmerge(state[v], new[v])
             end
         end
     end
@@ -123,6 +172,7 @@ function typeinf(ast::Expr, sparams::Tuple, atypes::Tuple)
     for v=vars
         s[1][v] = Bottom
     end
+    rettype = Bottom
     for i=1:length(args)
         s[1][args[i]] = atypes[i]
     end
@@ -137,25 +187,62 @@ function typeinf(ast::Expr, sparams::Tuple, atypes::Tuple)
             if isa(stmt,Expr)
                 if is(stmt.head,`goto)
                     pc´ = findlabel(body,stmt.args[1])
-                else
-                    if is(stmt.head,`gotoifnot)
-                        l = findlabel(body,stmt.args[2])
-                        if changed(newstate, s[l], vars)
-                            adjoin(W, l)
-                            update(s[l], newstate, vars)
-                        end
+                elseif is(stmt.head,`gotoifnot)
+                    l = findlabel(body,stmt.args[2])
+                    if changed(newstate, s[l], vars)
+                        adjoin(W, l)
+                        update(s[l], newstate, vars)
                     end
+                elseif is(stmt.head,symbol("return"))
+                    pc´ = n+1
+                    rettype = tmerge(rettype, stmt.args[1].type)
                 end
             end
-            if changed(newstate, s[pc´], vars)
+            if pc´<=n && changed(newstate, s[pc´], vars)
                 update(s[pc´], newstate, vars)
                 pc = pc´
             else
                 break
             end
-            if pc == n+1
-                break
-            end
         end
     end
+    return type_annotate(ast, s, vars, rettype)
+end
+
+function eval_annotate(e::Expr, vtypes::AList, vars)
+    if is(e.head,`quote) || is(e.head,`top)
+        return Expr(e.head, e.args, abstract_eval(e, vtypes, vars))
+    elseif is(e.head,`goto) || is(e.head,`label)
+        return e
+    elseif is(e.head,`gotoifnot) || is(e.head,symbol("return"))
+        return Expr(e.head, map(x->eval_annotate(x,vtypes,vars), e.args), Any)
+    end
+    Expr(e.head, map(x->eval_annotate(x,vtypes,vars), e.args),
+         abstract_eval(e, vtypes, vars))
+end
+
+function eval_annotate(e::Symbol, vtypes::AList, vars)
+    Expr(`symbol, (e,), abstract_eval(e, vtypes, vars))
+end
+
+eval_annotate(s, vtypes::AList, vars) = s
+
+# expand v to v::T as appropriate based on all inferred type info
+function add_decls(vars::(Symbol...), states::(AList...))
+    # TODO
+    return vars
+end
+
+# copy of AST with all type information inserted
+function type_annotate(ast::Expr, states::(AList...), vars, rettype)
+    vinf = ast.args[2]
+    expr(`lambda,
+         ast.args[1],
+         expr(symbol("var-info"), expr(`locals, add_decls(vinf.args[1].args,
+                                                          states)),
+              vinf.args[2], vinf.args[3], vinf.args[4]),
+         Expr(`body,
+              map((stmt,s)->eval_annotate(stmt, s, vars),
+                  ast.args[3].args, states),
+              rettype))
 end

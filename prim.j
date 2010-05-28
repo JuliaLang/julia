@@ -178,6 +178,8 @@ function print(e::Expr)
         print("\"", e.args[1], "\"")
     elseif is(hd,symbol("::"))
         print(e.args[1], "::", e.args[2])
+    elseif is(hd,`symbol)
+        print(e.args[1])
     elseif is(hd,`body) || is(hd,`block)
         print("\nbegin\n")
         for a=e.args
