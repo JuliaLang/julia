@@ -158,9 +158,6 @@ for (fname, eltype) = (("dgesv_", Float64), ("sgesv_", Float32))
          )
 end
 
-jl_gen_mldivide("dgesv_", Float64)
-jl_gen_mldivide("sgesv_", Float32)
-
 #       SUBROUTINE DSYEV( JOBZ, UPLO, N, A, LDA, W, WORK, LWORK, INFO )
 # *     .. Scalar Arguments ..
 #       CHARACTER          JOBZ, UPLO
@@ -169,7 +166,7 @@ jl_gen_mldivide("sgesv_", Float32)
 # *     .. Array Arguments ..
 #       DOUBLE PRECISION   A( LDA, * ), W( * ), WORK( * )
 
-function jl_gen_eig(fname, eltype)
+for (fname, eltype) = (("dsyev_", Float64), ("ssyev_", Float32))
     eval(`function eig(A::Matrix{$eltype})
 
          if !issymmetric(A); error("Matrix must be symmetric"); end
@@ -207,6 +204,3 @@ function jl_gen_eig(fname, eltype)
          end
          )
 end
-
-jl_gen_eig("dsyev_", Float64)
-jl_gen_eig("ssyev_", Float32)
