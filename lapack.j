@@ -82,6 +82,7 @@ function jl_gen_qr(fname, fname2, eltype)
          k = min(m,n)
          tau = Array(Float64, k)
 
+         # Workspace query for QR factorization
          work = [0.0]
          lwork = -1
          ccall(dlsym(libLAPACK, $fname),
@@ -93,8 +94,11 @@ function jl_gen_qr(fname, fname2, eltype)
          if info[1] == 0
             lwork = int32(work[1])
             work = Array(Float64, lwork)
+         else
+             error("Error in QR factorization")
          end
 
+         # QR factorization
          ccall(dlsym(libLAPACK, $fname),
                Void,
                (Ptr{Int32}, Ptr{Int32}, Ptr{$eltype}, Ptr{Int32}, 
@@ -105,6 +109,7 @@ function jl_gen_qr(fname, fname2, eltype)
          
          R = triu(QR)
          
+         # Workspace query to form Q
          lwork2 = -1
          ccall(dlsym(libLAPACK, $fname2),
                Void,
@@ -115,15 +120,18 @@ function jl_gen_qr(fname, fname2, eltype)
          if info[1] == 0
             lwork2 = int32(work[1])
             if lwork2 > lwork; work = Array(Float64, lwork2); end
+         else
+             error("Error in QR factorization")
          end
 
+         # Form Q
          ccall(dlsym(libLAPACK, $fname2),
                Void,
                (Ptr{Int32}, Ptr{Int32}, Ptr{Int32}, Ptr{$eltype},
                 Ptr{Int32}, Ptr{$eltype}, Ptr{$eltype}, Ptr{Int32}, Ptr{Int32}),
                m, k, k, QR, m, tau, work, lwork2, info)
          
-         return (QR[:, 1:k], triu(QR), jpvt)
+         return (QR[:, 1:k], R[1:k, :], jpvt)
          end
          )
 end
