@@ -8,7 +8,7 @@ libLAPACK = dlopen("libLAPACK")
 # *     .. Array Arguments ..
 #       DOUBLE PRECISION   A( LDA, * )
 
-function jl_gen_chol(fname, eltype)
+for (fname, eltype) = (("dpotrf_", Float64), ("spotrf_", Float32))
     eval(`function chol (A::Matrix{$eltype})
          info = [0]
          n = size(A, 1)
@@ -23,9 +23,6 @@ function jl_gen_chol(fname, eltype)
          )
 end
 
-jl_gen_chol("dpotrf_", Float64)
-jl_gen_chol("spotrf_", Float32)
-
 # SUBROUTINE DGETRF( M, N, A, LDA, IPIV, INFO )
 # *     .. Scalar Arguments ..
 #       INTEGER            INFO, LDA, M, N
@@ -34,7 +31,7 @@ jl_gen_chol("spotrf_", Float32)
 #       INTEGER            IPIV( * )
 #       DOUBLE PRECISION   A( LDA, * )
 
-function jl_gen_lu(fname, eltype)
+for (fname, eltype) = (("dgetrf_", Float64), ("sgetrf_", Float32))
     eval(`function lu (A::Matrix{$eltype})
          info = [0]
          m = size(A, 1)
@@ -53,9 +50,6 @@ function jl_gen_lu(fname, eltype)
          )
 end
 
-jl_gen_lu("dgetrf_", Float64)
-jl_gen_lu("sgetrf_", Float32)
-
 # SUBROUTINE DGEQP3( M, N, A, LDA, JPVT, TAU, WORK, LWORK, INFO )
 # *     .. Scalar Arguments ..
 #       INTEGER            INFO, LDA, LWORK, M, N
@@ -72,7 +66,8 @@ jl_gen_lu("sgetrf_", Float32)
 # *     .. Array Arguments ..
 #       DOUBLE PRECISION   A( LDA, * ), TAU( * ), WORK( * )
 
-function jl_gen_qr(fname, fname2, eltype)
+for (fname, fname2, eltype) = (("dgeqp3_", "dorgqr_", Float64),
+                               ("sgeqp3_", "sorgqr_", Float32))
     eval(`function qr (A::Matrix{$eltype})
          info = [0]
          m = size(A, 1)
@@ -136,9 +131,6 @@ function jl_gen_qr(fname, fname2, eltype)
          )
 end
 
-jl_gen_qr("dgeqp3_", "dorgqr_", Float64)
-jl_gen_qr("sgeqp3_", "sorgqr_", Float32)
-
 # SUBROUTINE DGESV( N, NRHS, A, LDA, IPIV, B, LDB, INFO )
 # *     .. Scalar Arguments ..
 #       INTEGER            INFO, LDA, LDB, N, NRHS
@@ -147,7 +139,7 @@ jl_gen_qr("sgeqp3_", "sorgqr_", Float32)
 #       INTEGER            IPIV( * )
 #       DOUBLE PRECISION   A( LDA, * ), B( LDB, * )
 
-function jl_gen_mldivide(fname, eltype)
+for (fname, eltype) = (("dgesv_", Float64), ("sgesv_", Float32))
     eval(`function \ (A::Matrix{$eltype}, B::Matrix{$eltype})
         info = [0]
          n = size(A, 1)
