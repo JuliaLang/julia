@@ -80,7 +80,7 @@ function jl_gen_qr(fname, fname2, eltype)
          QR = copy(A)
          jpvt = zeros(Int32, n)
          k = min(m,n)
-         tau = Array(Float64, k)
+         tau = Array($eltype, k)
 
          # Workspace query for QR factorization
          work = [0.0]
@@ -93,7 +93,7 @@ function jl_gen_qr(fname, fname2, eltype)
 
          if info[1] == 0
             lwork = int32(work[1])
-            work = Array(Float64, lwork)
+            work = Array($eltype, lwork)
          else
              error("Error in QR factorization")
          end
@@ -119,7 +119,7 @@ function jl_gen_qr(fname, fname2, eltype)
 
          if info[1] == 0
             lwork2 = int32(work[1])
-            if lwork2 > lwork; work = Array(Float64, lwork2); end
+            if lwork2 > lwork; work = Array($eltype, lwork2); end
          else
              error("Error in QR factorization")
          end
@@ -159,6 +159,7 @@ function jl_gen_mldivide(fname, eltype)
                (Ptr{Int32}, Ptr{Int32}, Ptr{$eltype}, Ptr{Int32}, Ptr{Int32}, 
                 Ptr{$eltype}, Ptr{Int32}, Ptr{Int32}),
                n, nrhs, A, n, ipiv, X, n, info)
+
          if info[1] > 0; error("U is singular"); end
          return X
          end
@@ -167,3 +168,53 @@ end
 
 jl_gen_mldivide("dgesv_", Float64)
 jl_gen_mldivide("sgesv_", Float32)
+
+#       SUBROUTINE DSYEV( JOBZ, UPLO, N, A, LDA, W, WORK, LWORK, INFO )
+# *     .. Scalar Arguments ..
+#       CHARACTER          JOBZ, UPLO
+#       INTEGER            INFO, LDA, LWORK, N
+# *     ..
+# *     .. Array Arguments ..
+#       DOUBLE PRECISION   A( LDA, * ), W( * ), WORK( * )
+
+function jl_gen_eig(fname, eltype)
+    eval(`function eig(A::Matrix{$eltype})
+
+         if !issymmetric(A); error("Matrix must be symmetric"); end
+
+         jobz = "V"
+         uplo = "U"
+         n = size(A, 1)
+         EV = copy(A)
+         W = Array($eltype, n)
+         info = [0]
+         
+         # Workspace query
+         work = [0.0]
+         lwork = -1
+         ccall(dlsym(libLAPACK, $fname),
+               Void,
+               (Ptr{Uint8}, Ptr{Uint8}, Ptr{Int32}, Ptr{$eltype}, Ptr{Int32}, 
+                Ptr{$eltype}, Ptr{$eltype}, Ptr{Int32}, Ptr{Int32}),
+               jobz, uplo, n, EV, n, W, work, lwork, info)
+         
+         if info[1] == 0
+             lwork = int32(work[1])
+             work = Array($eltype, lwork)
+         else
+             error("Error in $fname")
+         end
+        
+         ccall(dlsym(libLAPACK, $fname),
+               Void,
+               (Ptr{Uint8}, Ptr{Uint8}, Ptr{Int32}, Ptr{$eltype}, Ptr{Int32}, 
+                Ptr{$eltype}, Ptr{$eltype}, Ptr{Int32}, Ptr{Int32}),
+               jobz, uplo, n, EV, n, W, work, lwork, info)
+
+         return (W, EV)
+         end
+         )
+end
+
+jl_gen_eig("dsyev_", Float64)
+jl_gen_eig("ssyev_", Float32)
