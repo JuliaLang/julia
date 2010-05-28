@@ -4,11 +4,10 @@ libLAPACK = dlopen("libLAPACK")
 # *     .. Scalar Arguments ..
 #       CHARACTER          UPLO
 #       INTEGER            INFO, LDA, N
-# *     ..
 # *     .. Array Arguments ..
 #       DOUBLE PRECISION   A( LDA, * )
 
-function jl_gen_chol(fname, eltype)
+for (fname, eltype) = (("dpotrf_", Float64), ("spotrf_", Float32))
     eval(`function chol (A::Matrix{$eltype})
          info = [0]
          n = size(A, 1)
@@ -23,18 +22,14 @@ function jl_gen_chol(fname, eltype)
          )
 end
 
-jl_gen_chol("dpotrf_", Float64)
-jl_gen_chol("spotrf_", Float32)
-
 # SUBROUTINE DGETRF( M, N, A, LDA, IPIV, INFO )
 # *     .. Scalar Arguments ..
 #       INTEGER            INFO, LDA, M, N
-# *     ..
 # *     .. Array Arguments ..
 #       INTEGER            IPIV( * )
 #       DOUBLE PRECISION   A( LDA, * )
 
-function jl_gen_lu(fname, eltype)
+for (fname, eltype) = (("dgetrf_", Float64), ("sgetrf_", Float32))
     eval(`function lu (A::Matrix{$eltype})
          info = [0]
          m = size(A, 1)
@@ -53,26 +48,21 @@ function jl_gen_lu(fname, eltype)
          )
 end
 
-jl_gen_lu("dgetrf_", Float64)
-jl_gen_lu("sgetrf_", Float32)
-
 # SUBROUTINE DGEQP3( M, N, A, LDA, JPVT, TAU, WORK, LWORK, INFO )
 # *     .. Scalar Arguments ..
 #       INTEGER            INFO, LDA, LWORK, M, N
-# *     ..
 # *     .. Array Arguments ..
 #       INTEGER            JPVT( * )
 #       DOUBLE PRECISION   A( LDA, * ), TAU( * ), WORK( * )
 
 # SUBROUTINE DORGQR( M, N, K, A, LDA, TAU, WORK, LWORK, INFO )
-# *
 # *     .. Scalar Arguments ..
 #       INTEGER            INFO, K, LDA, LWORK, M, N
-# *     ..
 # *     .. Array Arguments ..
 #       DOUBLE PRECISION   A( LDA, * ), TAU( * ), WORK( * )
 
-function jl_gen_qr(fname, fname2, eltype)
+for (fname, fname2, eltype) = (("dgeqp3_", "dorgqr_", Float64),
+                               ("sgeqp3_", "sorgqr_", Float32))
     eval(`function qr (A::Matrix{$eltype})
          info = [0]
          m = size(A, 1)
@@ -80,8 +70,9 @@ function jl_gen_qr(fname, fname2, eltype)
          QR = copy(A)
          jpvt = zeros(Int32, n)
          k = min(m,n)
-         tau = Array(Float64, k)
+         tau = Array($eltype, k)
 
+         # Workspace query for QR factorization
          work = [0.0]
          lwork = -1
          ccall(dlsym(libLAPACK, $fname),
@@ -92,9 +83,12 @@ function jl_gen_qr(fname, fname2, eltype)
 
          if info[1] == 0
             lwork = int32(work[1])
-            work = Array(Float64, lwork)
+            work = Array($eltype, lwork)
+         else
+             error("Error in QR factorization")
          end
 
+         # QR factorization
          ccall(dlsym(libLAPACK, $fname),
                Void,
                (Ptr{Int32}, Ptr{Int32}, Ptr{$eltype}, Ptr{Int32}, 
@@ -102,9 +96,10 @@ function jl_gen_qr(fname, fname2, eltype)
                m, n, QR, m, jpvt, tau, work, lwork, info)
 
          if info[1] > 0; error("Matrix is singular"); end
-         
+
          R = triu(QR)
-         
+
+         # Workspace query to form Q
          lwork2 = -1
          ccall(dlsym(libLAPACK, $fname2),
                Void,
@@ -114,22 +109,22 @@ function jl_gen_qr(fname, fname2, eltype)
 
          if info[1] == 0
             lwork2 = int32(work[1])
-            if lwork2 > lwork; work = Array(Float64, lwork2); end
+            if lwork2 > lwork; work = Array($eltype, lwork2); end
+         else
+             error("Error in QR factorization")
          end
 
+         # Form Q
          ccall(dlsym(libLAPACK, $fname2),
                Void,
                (Ptr{Int32}, Ptr{Int32}, Ptr{Int32}, Ptr{$eltype},
                 Ptr{Int32}, Ptr{$eltype}, Ptr{$eltype}, Ptr{Int32}, Ptr{Int32}),
                m, k, k, QR, m, tau, work, lwork2, info)
          
-         return (QR[:, 1:k], triu(QR), jpvt)
+         return (QR[:, 1:k], R[1:k, :], jpvt)
          end
          )
 end
-
-jl_gen_qr("dgeqp3_", "dorgqr_", Float64)
-jl_gen_qr("sgeqp3_", "sorgqr_", Float32)
 
 # SUBROUTINE DGESV( N, NRHS, A, LDA, IPIV, B, LDB, INFO )
 # *     .. Scalar Arguments ..
@@ -139,7 +134,7 @@ jl_gen_qr("sgeqp3_", "sorgqr_", Float32)
 #       INTEGER            IPIV( * )
 #       DOUBLE PRECISION   A( LDA, * ), B( LDB, * )
 
-function jl_gen_mldivide(fname, eltype)
+for (fname, eltype) = (("dgesv_", Float64), ("sgesv_", Float32))
     eval(`function \ (A::Matrix{$eltype}, B::Matrix{$eltype})
         info = [0]
          n = size(A, 1)
@@ -151,11 +146,55 @@ function jl_gen_mldivide(fname, eltype)
                (Ptr{Int32}, Ptr{Int32}, Ptr{$eltype}, Ptr{Int32}, Ptr{Int32}, 
                 Ptr{$eltype}, Ptr{Int32}, Ptr{Int32}),
                n, nrhs, A, n, ipiv, X, n, info)
+
          if info[1] > 0; error("U is singular"); end
          return X
          end
          )
 end
 
-jl_gen_mldivide("dgesv_", Float64)
-jl_gen_mldivide("sgesv_", Float32)
+#       SUBROUTINE DSYEV( JOBZ, UPLO, N, A, LDA, W, WORK, LWORK, INFO )
+# *     .. Scalar Arguments ..
+#       CHARACTER          JOBZ, UPLO
+#       INTEGER            INFO, LDA, LWORK, N
+# *     .. Array Arguments ..
+#       DOUBLE PRECISION   A( LDA, * ), W( * ), WORK( * )
+
+for (fname, eltype) = (("dsyev_", Float64), ("ssyev_", Float32))
+    eval(`function eig(A::Matrix{$eltype})
+
+         if !issymmetric(A); error("Matrix must be symmetric"); end
+
+         jobz = "V"
+         uplo = "U"
+         n = size(A, 1)
+         EV = copy(A)
+         W = Array($eltype, n)
+         info = [0]
+
+         # Workspace query
+         work = [0.0]
+         lwork = -1
+         ccall(dlsym(libLAPACK, $fname),
+               Void,
+               (Ptr{Uint8}, Ptr{Uint8}, Ptr{Int32}, Ptr{$eltype}, Ptr{Int32},
+                Ptr{$eltype}, Ptr{$eltype}, Ptr{Int32}, Ptr{Int32}),
+               jobz, uplo, n, EV, n, W, work, lwork, info)
+
+         if info[1] == 0
+             lwork = int32(work[1])
+             work = Array($eltype, lwork)
+         else
+             error("Error in $fname")
+         end
+
+         ccall(dlsym(libLAPACK, $fname),
+               Void,
+               (Ptr{Uint8}, Ptr{Uint8}, Ptr{Int32}, Ptr{$eltype}, Ptr{Int32}, 
+                Ptr{$eltype}, Ptr{$eltype}, Ptr{Int32}, Ptr{Int32}),
+               jobz, uplo, n, EV, n, W, work, lwork, info)
+
+         return (W, EV)
+         end
+         )
+end
