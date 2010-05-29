@@ -182,6 +182,7 @@ extern "C" void jl_compile(jl_lambda_info_t *li)
 typedef struct {
     Function *f;
     std::map<std::string, AllocaInst*> *vars;
+    std::map<std::string, AllocaInst*> *arguments;
     std::map<int, BasicBlock*> *labels;
     jl_module_t *module;
     jl_expr_t *ast;
@@ -190,7 +191,6 @@ typedef struct {
     const Argument *envArg;
     const Argument *argArray;
     const Argument *argCount;
-    Value *last_arg_area_loc;
 } jl_codectx_t;
 
 static Value *literal_pointer_val(jl_value_t *p)
@@ -332,6 +332,9 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool value,
             }
         }
         Value *bp = var_binding_pointer(sym, ctx);
+        AllocaInst *arg = (*ctx->arguments)[sym->name];
+        if (arg != NULL)  // arguments are always defined
+            return builder.CreateLoad(bp, false);
         return emit_checked_var(bp, sym->name, ctx);
     }
     if (!jl_is_expr(expr)) {
@@ -524,6 +527,7 @@ static void emit_function(jl_lambda_info_t *lam, Function *f)
     BasicBlock *b0 = BasicBlock::Create(jl_LLVMContext, "top", f);
     builder.SetInsertPoint(b0);
     std::map<std::string, AllocaInst*> localVars;
+    std::map<std::string, AllocaInst*> argumentMap;
     std::map<int, BasicBlock*> labels;
     jl_tuple_t *largs = jl_lam_args(ast);
     jl_tuple_t *lvars = jl_lam_locals(ast);
@@ -534,6 +538,7 @@ static void emit_function(jl_lambda_info_t *lam, Function *f)
     jl_codectx_t ctx;
     ctx.f = f;
     ctx.vars = &localVars;
+    ctx.arguments = &argumentMap;
     ctx.labels = &labels;
     ctx.module = jl_system_module; //TODO
     ctx.ast = ast;
@@ -542,20 +547,20 @@ static void emit_function(jl_lambda_info_t *lam, Function *f)
     ctx.envArg = &envArg;
     ctx.argArray = &argArray;
     ctx.argCount = &argCount;
-    ctx.last_arg_area_loc = NULL;
 
     // allocate local variables
     // must be first for the mem2reg pass to work
     size_t i;
+    for(i=0; i < largs->length; i++) {
+        char *argname = jl_decl_var(jl_tupleref(largs,i))->name;
+        AllocaInst *lv = builder.CreateAlloca(jl_pvalue_llvmt, 0, argname);
+        localVars[argname] = lv;
+        argumentMap[argname] = lv;
+    }
     for(i=0; i < lvars->length; i++) {
         char *argname = ((jl_sym_t*)jl_tupleref(lvars,i))->name;
         AllocaInst *lv = builder.CreateAlloca(jl_pvalue_llvmt, 0, argname);
         builder.CreateStore(V_null, lv);
-        localVars[argname] = lv;
-    }
-    for(i=0; i < largs->length; i++) {
-        char *argname = jl_decl_var(jl_tupleref(largs,i))->name;
-        AllocaInst *lv = builder.CreateAlloca(jl_pvalue_llvmt, 0, argname);
         localVars[argname] = lv;
     }
 

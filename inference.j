@@ -41,7 +41,7 @@ alist(a::AList) = AList(a, nil)
 assoc(item, a::EmptyList) = nil
 assoc(item, p::List{Pair}) = is(head(p).a,item) ? head(p) : assoc(item,tail(p))
 
-function set{T,S}(a::AList{T,S}, val::S, key::T)
+function set{K,V}(a::AList{K,V}, val::V, key::K)
     p = assoc(key, a.elts)
     if !is(p,nil)
         p.b = val
@@ -51,7 +51,7 @@ function set{T,S}(a::AList{T,S}, val::S, key::T)
     a
 end
 
-function ref{T,S}(a::AList{T,S}, key::T)
+function ref{K,V}(a::AList{K,V}, key::K)
     p = assoc(key, a.elts)
     if is(p,nil)
         if is(a.prev,())

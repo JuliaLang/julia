@@ -162,14 +162,6 @@ static Function *restore_arg_area_loc_func;
 static uint32_t save_arg_area_loc() { return arg_area_loc; }
 static void restore_arg_area_loc(uint32_t l) { arg_area_loc = l; }
 
-static Value *get_saved_arg_area_loc(jl_codectx_t *ctx)
-{
-    if (ctx->last_arg_area_loc == NULL) {
-        ctx->last_arg_area_loc = builder.CreateAlloca(T_uint32);
-    }
-    return ctx->last_arg_area_loc;
-}
-
 static void *alloc_temp_arg_space(uint32_t sz)
 {
     void *p;
@@ -314,10 +306,9 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
     jl_ExecutionEngine->addGlobalMapping(llvmf, fptr);
 
     // save temp argument area stack pointer
+    Value *saveloc=NULL;
     if (haspointers) {
-        Value *saveloc = get_saved_arg_area_loc(ctx);
-        Value *aalval = builder.CreateCall(save_arg_area_loc_func);
-        builder.CreateStore(aalval, saveloc);
+        saveloc = builder.CreateCall(save_arg_area_loc_func);
     }
 
     // emit arguments
@@ -332,9 +323,8 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
 
     // restore temp argument area stack pointer
     if (haspointers) {
-        Value *saveloc = get_saved_arg_area_loc(ctx);
-        Value *lastval = builder.CreateLoad(saveloc);
-        builder.CreateCall(restore_arg_area_loc_func, lastval);
+        assert(saveloc != NULL);
+        builder.CreateCall(restore_arg_area_loc_func, saveloc);
     }
 
     if (is_unsigned_julia_type(rt))
