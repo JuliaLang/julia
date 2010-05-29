@@ -429,7 +429,7 @@
 	    `(scope-block
 	     (block
 	      (= ,cnt 0)
-	      (= ,lim (call div (call - ,c ,a) ,b))
+	      (= ,lim (call int32 (call floor (call / (call - ,c ,a) ,b))))
 	      (break-block loop-exit
 			   (_while (call <= ,cnt ,lim)
 				   (block

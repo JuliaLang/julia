@@ -605,7 +605,7 @@ void jl_init_builtin_types()
                            jl_tuple(3, jl_symbol("head"), jl_symbol("args"),
                                     jl_symbol("type")),
                            jl_tuple(3, jl_sym_type, jl_tuple_type,
-                                    jl_type_type));
+                                    jl_any_type));
 
     jl_struct_type_t *boxstruct =
         jl_new_struct_type(jl_symbol("Box"),

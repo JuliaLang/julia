@@ -1,12 +1,12 @@
 struct EmptyList
 end
 
-struct Cons{T}
-    head::T
-    tail::Union(EmptyList, Cons{T})
+struct Cons
+    head
+    tail::Union(EmptyList, Cons)
 end
 
-typealias List{T} Union(EmptyList, Cons{T})
+typealias List Union(EmptyList, Cons)
 
 nil = EmptyList()
 

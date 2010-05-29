@@ -15,16 +15,16 @@
 # - isconstant()
 
 # mutable pair
-struct Pair{T,S}
-    a::T
-    b::S
+struct Pair
+    a
+    b
 end
 
 # delegated assoc list
 # equivalent to some previous list except for local modifications
-struct AList{T,S}
-    prev::Nullable{AList{T,S}}
-    elts::List{Pair{T,S}}
+struct AList
+    prev::Nullable{AList}
+    elts::List
 end
 
 struct NotFound
@@ -34,14 +34,14 @@ NF = NotFound()
 
 # note: with Nullable (or other union types) it might not be possible to
 # infer type parameters from field values. bug or feature??
-alist(kt::Type, vt::Type) = AList{kt,vt}.new((), nil)
+alist(kt::Type, vt::Type) = AList((), nil)
 
 alist(a::AList) = AList(a, nil)
 
 assoc(item, a::EmptyList) = nil
-assoc(item, p::List{Pair}) = is(head(p).a,item) ? head(p) : assoc(item,tail(p))
+assoc(item, p::List) = is(head(p).a,item) ? head(p) : assoc(item,tail(p))
 
-function set{K,V}(a::AList{K,V}, val, key::K)
+function set(a::AList, val, key)
     p = assoc(key, a.elts)
     if !is(p,nil)
         p.b = val
@@ -51,7 +51,7 @@ function set{K,V}(a::AList{K,V}, val, key::K)
     a
 end
 
-function ref{K,V}(a::AList{K,V}, key::K)
+function ref(a::AList, key)
     p = assoc(key, a.elts)
     if is(p,nil)
         if is(a.prev,())
@@ -60,6 +60,24 @@ function ref{K,V}(a::AList{K,V}, key::K)
         return a.prev[key]
     end
     p.b
+end
+
+function print(a::AList)
+    allv = idtable()
+    al = a
+    while !is(al,())
+        l = al.elts
+        while isa(l,Cons)
+            allv[head(l).a] = true
+            l = tail(l)
+        end
+        al = al.prev
+    end
+    print("AList(")
+    for (sym,_)=allv
+        print(sym,"::",a[sym],", ")
+    end
+    print(")")
 end
 
 tintersect(a,b) = ccall(dlsym(JuliaDLHandle,"jl_type_intersection"), Any,
@@ -112,9 +130,7 @@ function builtin_tfunction(f::Symbol, argtypes::Tuple)
     return tf[3](argtypes...)
 end
 
-EmptyAList = alist(Symbol, Type)
-
-function abstract_eval(e::Expr, vtypes::AList, vars)
+function abstract_eval(e::Expr, vtypes::AList, sp)
     # handle:
     # call  lambda  quote  null  top  unbound  box-unbound
     # closure-ref
@@ -125,7 +141,7 @@ function abstract_eval(e::Expr, vtypes::AList, vars)
     elseif is(e.head,`quote)
         return typeof(e.args[1])
     elseif is(e.head,`top)
-        return abstract_eval(e.args[1], EmptyAList, ())
+        return abstract_eval_global(e.args[1])
     elseif is(e.head,symbol("closure-ref"))
         return Any
     elseif is(e.head,`call)
@@ -147,7 +163,7 @@ function abstract_eval(e::Expr, vtypes::AList, vars)
         if !isa(f,Function)
             return Any
         end
-        argtypes = map(x->abstract_eval(x,vtypes,vars), e.args[2:])
+        argtypes = map(x->abstract_eval(x,vtypes,sp), e.args[2:])
         if isbuiltin(f)
             return builtin_tfunction(func, argtypes)
         elseif isgeneric(f)
@@ -170,29 +186,42 @@ end
 
 ast_rettype(ast) = ast.args[3].type
 
-function abstract_eval(s::Symbol, vtypes::AList, vars)
+function abstract_eval_constant(x)
+    if isa(x,TagKind)
+        return Type{x}
+    end
+    return typeof(x)
+end
+
+function abstract_eval_global(s::Symbol)
+    if isconstant(s)
+        return abstract_eval_constant(eval(s))
+    else
+        return Any
+    end
+end
+
+function abstract_eval(s::Symbol, vtypes::AList, sp)
     t = vtypes[s]
     if is(t,NF)
-        # global
-        if isconstant(s)
-            T = typeof(eval(s))
-            if isa(T,TagKind)
-                return Type{T}
+        for i=1:2:length(sp)
+            if is(sp[i],s)
+                # static parameter
+                return abstract_eval_constant(sp[i+1])
             end
-            return T
-        else
-            return Any
         end
+        # global
+        return abstract_eval_global(s)
     end
     return t
 end
 
-abstract_eval(s, vtypes::AList, vars) = typeof(s)
+abstract_eval(x, vtypes::AList, sp) = abstract_eval_constant(x)
 
-function interpret(e::Expr, vtypes::AList, vars)
+function interpret(e::Expr, vtypes::AList, sp)
     # handle assignment
     if is(e.head,symbol("="))
-        t = abstract_eval(e.args[2], vtypes, vars)
+        t = abstract_eval(e.args[2], vtypes, sp)
         a = alist(vtypes)
         a[e.args[1]] = t
         return a
@@ -251,7 +280,7 @@ function typeinf(ast::Expr, sparams::Tuple, atypes::Tuple)
     s = map(stmt->alist(Symbol,Type), body)
     W = intset(n+1)
     # initial set of pc
-    for i=1:n; adjoin(W, i); end
+    adjoin(W,1)
     # initial types
     for v=vars
         s[1][v] = Bottom
@@ -264,9 +293,10 @@ function typeinf(ast::Expr, sparams::Tuple, atypes::Tuple)
     while !isempty(W)
         pc = choose(W)
         while true
+            #print(pc,": ",s[pc],"\n")
             remove(W, pc)
             stmt = body[pc]
-            newstate = interpret(stmt, s[pc], vars)
+            newstate = interpret(stmt, s[pc], sparams)
             pc´ = pc+1
             if isa(stmt,Expr)
                 if is(stmt.head,`goto)
@@ -279,7 +309,8 @@ function typeinf(ast::Expr, sparams::Tuple, atypes::Tuple)
                     end
                 elseif is(stmt.head,symbol("return"))
                     pc´ = n+1
-                    rettype = tmerge(rettype, stmt.args[1].type)
+                    rt = abstract_eval(stmt.args[1], s[pc], sparams)
+                    rettype = tmerge(rettype, rt)
                 end
             end
             if pc´<=n && changed(newstate, s[pc´], vars)
@@ -290,26 +321,27 @@ function typeinf(ast::Expr, sparams::Tuple, atypes::Tuple)
             end
         end
     end
-    return type_annotate(ast, s, vars, rettype)
+    return type_annotate(ast, s, sparams, rettype)
 end
 
-function eval_annotate(e::Expr, vtypes::AList, vars)
+function eval_annotate(e::Expr, vtypes::AList, sp)
     if is(e.head,`quote) || is(e.head,`top)
-        return Expr(e.head, e.args, abstract_eval(e, vtypes, vars))
+        return Expr(e.head, e.args, abstract_eval(e, vtypes, sp))
     elseif is(e.head,`goto) || is(e.head,`label)
         return e
-    elseif is(e.head,`gotoifnot) || is(e.head,symbol("return"))
-        return Expr(e.head, map(x->eval_annotate(x,vtypes,vars), e.args), Any)
+    elseif is(e.head,`gotoifnot) || is(e.head,symbol("return")) ||
+        is(e.head,symbol("="))
+        return Expr(e.head, map(x->eval_annotate(x,vtypes,sp), e.args), Any)
     end
-    Expr(e.head, map(x->eval_annotate(x,vtypes,vars), e.args),
-         abstract_eval(e, vtypes, vars))
+    Expr(e.head, map(x->eval_annotate(x,vtypes,sp), e.args),
+         abstract_eval(e, vtypes, sp))
 end
 
-function eval_annotate(e::Symbol, vtypes::AList, vars)
-    Expr(`symbol, (e,), abstract_eval(e, vtypes, vars))
+function eval_annotate(e::Symbol, vtypes::AList, sp)
+    Expr(`symbol, (e,), abstract_eval(e, vtypes, sp))
 end
 
-eval_annotate(s, vtypes::AList, vars) = s
+eval_annotate(s, vtypes::AList, sp) = s
 
 # expand v to v::T as appropriate based on all inferred type info
 function add_decls(vars::(Symbol...), states::(AList...))
@@ -318,7 +350,7 @@ function add_decls(vars::(Symbol...), states::(AList...))
 end
 
 # copy of AST with all type information inserted
-function type_annotate(ast::Expr, states::(AList...), vars, rettype)
+function type_annotate(ast::Expr, states::(AList...), sp, rettype)
     vinf = ast.args[2]
     expr(`lambda,
          ast.args[1],
@@ -326,7 +358,7 @@ function type_annotate(ast::Expr, states::(AList...), vars, rettype)
                                                           states)),
               vinf.args[2], vinf.args[3], vinf.args[4]),
          Expr(`body,
-              map((stmt,s)->eval_annotate(stmt, s, vars),
+              map((stmt,s)->eval_annotate(stmt, s, sp),
                   ast.args[3].args, states),
               rettype))
 end
