@@ -820,7 +820,7 @@ JL_CALLABLE(jl_f_print_any)
             for(i=0; i < n; i++) {
                 call_print(((jl_value_t**)v)[i+1]);
                 if (i < n-1)
-                    ios_write(s, ",", 2);
+                    ios_putc(',', s);
             }
             ios_putc(')', s);
         }

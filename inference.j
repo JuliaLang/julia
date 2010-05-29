@@ -41,12 +41,12 @@ alist(a::AList) = AList(a, nil)
 assoc(item, a::EmptyList) = nil
 assoc(item, p::List{Pair}) = is(head(p).a,item) ? head(p) : assoc(item,tail(p))
 
-function set{K,V}(a::AList{K,V}, val::V, key::K)
+function set{K,V}(a::AList{K,V}, val, key::K)
     p = assoc(key, a.elts)
     if !is(p,nil)
         p.b = val
     else
-        p.b = Cons(Pair(key,val),p.b)
+        a.elts = Cons(Pair(key,val),a.elts)
     end
     a
 end
