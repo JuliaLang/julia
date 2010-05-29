@@ -1,5 +1,7 @@
 libBLAS = dlopen("libBLAS")
 
+typealias VectorOrMatrix{T} Union(Vector{T}, Matrix{T})
+
 # SUBROUTINE DCOPY(N,DX,INCX,DY,INCY) 
 
 for (fname, shape, eltype) = (("dcopy_", `Vector, Float64),
@@ -51,12 +53,13 @@ end
 #       DOUBLE PRECISION A(LDA,*),B(LDB,*),C(LDC,*)
 
 for (fname, eltype) = (("dgemm_", Float64), ("sgemm_", Float32))
-    eval(`function * (A::Matrix{$eltype}, B::Matrix{$eltype})
+    eval(`function * (A::VectorOrMatrix{$eltype}, B::VectorOrMatrix{$eltype})
          m = size(A, 1)
-         n = size(B, 2)
-         k = size(A, 2)
+         if ndims(B) == 1; n = 1; else n = size(B, 2); end
+         if ndims(A) == 1; k = 1; else k = size(A, 2); end
          assert (k == size(B,1))
          C = zeros($eltype, m, n)
+
          ccall(dlsym(libBLAS, $fname),
              Void,
              (Ptr{Char}, Ptr{Char}, Ptr{Int32}, Ptr{Int32}, Ptr{Int32},
@@ -64,6 +67,7 @@ for (fname, eltype) = (("dgemm_", Float64), ("sgemm_", Float32))
               Ptr{$eltype}, Ptr{Int32},
               Ptr{$eltype}, Ptr{$eltype}, Ptr{Int32}),
              "N", "N", m, n, k, 1.0, A, m, B, k, 0.0, C, m)
+
          return C
          end
          )

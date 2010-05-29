@@ -12,12 +12,15 @@ for (fname, eltype) = (("dpotrf_", Float64), ("spotrf_", Float32))
          info = [0]
          n = size(A, 1)
          R = triu(A)
+
          ccall(dlsym(libLAPACK, $fname),
                Void,
                (Ptr{Char}, Ptr{Int32}, Ptr{$eltype}, Ptr{Int32}, Ptr{Int32}),
                "U", n, R, n, info)
+
+         if info[1] == 0; return R; end
          if info[1] > 0; error("Matrix not Positive Definite"); end
-         return R
+         error("Error in CHOL")
          end
          )
 end
@@ -36,15 +39,19 @@ for (fname, eltype) = (("dgetrf_", Float64), ("sgetrf_", Float32))
          n = size(A, 2)
          LU = copy(A)
          ipiv = Array(Int32, min(m,n))
+
          ccall(dlsym(libLAPACK, $fname),
                Void,
                (Ptr{Int32}, Ptr{Int32}, Ptr{$eltype},
                 Ptr{Int32}, Ptr{Int32}, Ptr{Int32}),
                m, n, LU, m, ipiv, info)
+
          if info[1] > 0; error("Matrix is singular"); end
          P = 1:m
          for i=1:m; t = P[i]; P[i] = P[ipiv[i]]; P[ipiv[i]] = t ; end
-         return (tril(LU, -1) + eye(m,n), triu(LU), P)
+
+         if info[1] == 0; return (tril(LU, -1) + eye(m,n), triu(LU), P); end
+         error("Error in LU")
          end
          )
 end
@@ -89,7 +96,7 @@ for (fname, fname2, eltype) = (("dgeqp3_", "dorgqr_", Float64),
              error("Error in QR factorization")
          end
 
-         # QR factorization
+         # Compute QR factorization
          ccall(dlsym(libLAPACK, $fname),
                Void,
                (Ptr{Int32}, Ptr{Int32}, Ptr{$eltype}, Ptr{Int32}, 
@@ -115,14 +122,15 @@ for (fname, fname2, eltype) = (("dgeqp3_", "dorgqr_", Float64),
              error("Error in QR factorization")
          end
 
-         # Form Q
+         # Compute Q
          ccall(dlsym(libLAPACK, $fname2),
                Void,
                (Ptr{Int32}, Ptr{Int32}, Ptr{Int32}, Ptr{$eltype},
                 Ptr{Int32}, Ptr{$eltype}, Ptr{$eltype}, Ptr{Int32}, Ptr{Int32}),
                m, k, k, QR, m, tau, work, lwork2, info)
          
-         return (QR[:, 1:k], R[1:k, :], jpvt)
+         if info[1] == 0; return (QR[:, 1:k], R[1:k, :], jpvt); end
+         error("Error in QR");
          end
          )
 end
@@ -142,14 +150,15 @@ for (fname, eltype) = (("dgesv_", Float64), ("sgesv_", Float32))
          nrhs = size(B, 2)
          ipiv = Array(Int32, n)
          X = copy(B)
+
          ccall(dlsym(libLAPACK, $fname),
                Void,
                (Ptr{Int32}, Ptr{Int32}, Ptr{$eltype}, Ptr{Int32}, Ptr{Int32}, 
                 Ptr{$eltype}, Ptr{Int32}, Ptr{Int32}),
-               n, nrhs, A, n, ipiv, X, n, info)
+               n, nrhs, copy(A), n, ipiv, X, n, info)
 
+         if info[1] == 0; return X; end
          if info[1] > 0; error("U is singular"); end
-         return X
          end
          )
 end
@@ -189,13 +198,70 @@ for (fname, eltype) = (("dsyev_", Float64), ("ssyev_", Float32))
              error("Error in $fname")
          end
 
+         # Compute eigenvalues, eigenvectors
          ccall(dlsym(libLAPACK, $fname),
                Void,
                (Ptr{Uint8}, Ptr{Uint8}, Ptr{Int32}, Ptr{$eltype}, Ptr{Int32}, 
                 Ptr{$eltype}, Ptr{$eltype}, Ptr{Int32}, Ptr{Int32}),
                jobz, uplo, n, EV, n, W, work, lwork, info)
 
-         return (W, EV)
+         if info[1] == 0; return (EV, W); end
+         error("Error in EIG");
+         end
+         )
+end
+
+# SUBROUTINE DGESVD( JOBU, JOBVT, M, N, A, LDA, S, U, LDU, VT, LDVT, WORK, LWORK, INFO )
+# *     .. Scalar Arguments ..
+#       CHARACTER          JOBU, JOBVT
+#       INTEGER            INFO, LDA, LDU, LDVT, LWORK, M, N
+# *     .. Array Arguments ..
+#       DOUBLE PRECISION   A( LDA, * ), S( * ), U( LDU, * ),
+#      $                   VT( LDVT, * ), WORK( * )
+
+for (fname, eltype) = (("dgesvd_", Float64), ("sgesvd_", Float32))
+    eval(`function svd(A::Matrix{$eltype})
+         jobu = "A"
+         jobvt = "A"
+         m = size(A, 1)
+         n = size(A, 2)
+         k = min(m,n)
+         X = copy(A)
+         S = Array($eltype, k)
+         U = Array($eltype, m, m)
+         VT = Array($eltype, n, n)
+         info = [0]
+
+         # Workspace query
+         work = [0.0]
+         lwork = -1
+         ccall(dlsym(libLAPACK, $fname),
+               Void,
+               (Ptr{Uint8}, Ptr{Uint8}, Ptr{Int32}, Ptr{Int32}, Ptr{$eltype}, Ptr{Int32},
+                Ptr{$eltype}, Ptr{$eltype}, Ptr{Int32}, Ptr{$eltype}, Ptr{Int32},
+                Ptr{$eltype}, Ptr{Int32}, Ptr{Int32}),
+               jobu, jobvt, m, n, X, m, S, U, m, VT, n, work, lwork, info)
+
+         if info[1] == 0
+             lwork = int32(work[1])
+             work = Array($eltype, lwork)
+         else
+             error("Error in $fname")
+         end
+
+         # Compute SVD
+         ccall(dlsym(libLAPACK, $fname),
+               Void,
+               (Ptr{Uint8}, Ptr{Uint8}, Ptr{Int32}, Ptr{Int32}, Ptr{$eltype}, Ptr{Int32},
+                Ptr{$eltype}, Ptr{$eltype}, Ptr{Int32}, Ptr{$eltype}, Ptr{Int32},
+                Ptr{$eltype}, Ptr{Int32}, Ptr{Int32}),
+               jobu, jobvt, m, n, X, m, S, U, m, VT, n, work, lwork, info)
+
+         SIGMA = zeros($eltype, m, n)
+         for i=1:k; SIGMA[i,i] = S[i]; end
+
+         if info[1] == 0; return (U,SIGMA,VT); end
+         error("Error in SVD");
          end
          )
 end
