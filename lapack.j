@@ -135,35 +135,6 @@ for (fname, fname2, eltype) = (("dgeqp3_", "dorgqr_", Float64),
          )
 end
 
-# SUBROUTINE DGESV( N, NRHS, A, LDA, IPIV, B, LDB, INFO )
-# *     .. Scalar Arguments ..
-#       INTEGER            INFO, LDA, LDB, N, NRHS
-# *     ..
-# *     .. Array Arguments ..
-#       INTEGER            IPIV( * )
-#       DOUBLE PRECISION   A( LDA, * ), B( LDB, * )
-
-for (fname, eltype) = (("dgesv_", Float64), ("sgesv_", Float32))
-    eval(`function \ (A::Matrix{$eltype}, B::VectorOrMatrix{$eltype})
-        info = [0]
-         n = size(A, 1)
-         if isa(B, Vector); nrhs = 1; else nrhs = size(B, 2); end
-         ipiv = Array(Int32, n)
-         X = copy(B)
-
-         ccall(dlsym(libLAPACK, $fname),
-               Void,
-               (Ptr{Int32}, Ptr{Int32}, Ptr{$eltype}, Ptr{Int32}, Ptr{Int32}, 
-                Ptr{$eltype}, Ptr{Int32}, Ptr{Int32}),
-               n, nrhs, copy(A), n, ipiv, X, n, info)
-
-         if info[1] == 0; return X; end
-         if info[1] > 0; error("U is singular"); end
-         error("Error in solving A*X = B")
-         end
-         )
-end
-
 #       SUBROUTINE DSYEV( JOBZ, UPLO, N, A, LDA, W, WORK, LWORK, INFO )
 # *     .. Scalar Arguments ..
 #       CHARACTER          JOBZ, UPLO
@@ -266,3 +237,70 @@ for (fname, eltype) = (("dgesvd_", Float64), ("sgesvd_", Float32))
          end
          )
 end
+
+# SUBROUTINE DGESV( N, NRHS, A, LDA, IPIV, B, LDB, INFO )
+# *     .. Scalar Arguments ..
+#       INTEGER            INFO, LDA, LDB, N, NRHS
+# *     ..
+# *     .. Array Arguments ..
+#       INTEGER            IPIV( * )
+#       DOUBLE PRECISION   A( LDA, * ), B( LDB, * )
+
+#      SUBROUTINE DGELS( TRANS, M, N, NRHS, A, LDA, B, LDB, WORK, LWORK, INFO)
+# *     .. Scalar Arguments ..
+#       CHARACTER          TRANS
+#      INTEGER            INFO, LDA, LDB, LWORK, M, N, NRHS
+
+for (fname_lu, fname_lsq, eltype) = (("dgesv_", "dgels_", Float64), 
+                                     ("sgesv_", "sgels_", Float32))
+    eval(`function \ (A::Matrix{$eltype}, B::VectorOrMatrix{$eltype})
+        info = [0]
+        m = size(A, 1)
+        n = size(A, 2)
+        if isa(B, Vector); nrhs = 1; else nrhs = size(B, 2); end
+        Acopy = copy(A)
+        X = copy(B)
+
+        if m == n
+            ipiv = Array(Int32, n)
+            ccall(dlsym(libLAPACK, $fname_lu),
+                  Void,
+                  (Ptr{Int32}, Ptr{Int32}, Ptr{$eltype}, Ptr{Int32}, Ptr{Int32}, 
+                   Ptr{$eltype}, Ptr{Int32}, Ptr{Int32}),
+                  n, nrhs, Acopy, n, ipiv, X, n, info)
+            
+            if info[1] == 0; return X; end
+            if info[1] > 0; error("U is singular"); end
+            error("Error in solving A*X = B")
+        else
+            # Workspace query
+            lwork = -1
+            work = [0.0]
+            ccall(dlsym(libLAPACK, $fname_lsq),
+                  Void,
+                  (Ptr{Uint8}, Ptr{Int32}, Ptr{Int32}, Ptr{Int32}, Ptr{$eltype}, Ptr{Int32}, 
+                   Ptr{$eltype}, Ptr{Int32}, Ptr{$eltype}, Ptr{Int32}, Ptr{Int32}),
+                  "N", m, n, nrhs, Acopy, m, X, max(m,n), work, lwork, info)
+
+            # Compute A*x = b
+            if info[1] == 0
+                lwork = int32(work[1])
+                work = Array($eltype, lwork)
+            else
+                error("Error in $fname")
+            end
+
+            ccall(dlsym(libLAPACK, $fname_lsq),
+                  Void,
+                  (Ptr{Uint8}, Ptr{Int32}, Ptr{Int32}, Ptr{Int32}, Ptr{$eltype}, Ptr{Int32}, 
+                   Ptr{$eltype}, Ptr{Int32}, Ptr{$eltype}, Ptr{Int32}, Ptr{Int32}),
+                  "N", m, n, nrhs, Acopy, m, X, max(m,n), work, lwork, info)
+
+            if info[1] == 0; return X; end
+            error("Error in solving A*X = B")
+         end
+
+         end
+         )
+end
+
