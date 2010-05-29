@@ -81,7 +81,7 @@ static const Type *julia_type_to_llvm(jl_value_t *jt)
     if (jl_is_bits_type(jt) && jl_is_cpointer_type(jt)) {
         const Type *lt = julia_type_to_llvm(jl_tparam0(jt));
         if (lt == T_void)
-            lt = T_pint8;
+            lt = T_int8;
         return PointerType::get(lt, 0);
     }
     if (jt == (jl_value_t*)jl_any_type)
@@ -341,7 +341,8 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
         return mark_unsigned(result);
     if (lrt == T_void)
         return literal_pointer_val((jl_value_t*)jl_null);
-    if (jl_is_cpointer_type(rt) && is_punsigned_julia_type(rt))
+    if (jl_is_cpointer_type(rt) && (is_punsigned_julia_type(rt) ||
+                                    rt == (jl_value_t*)jl_pointer_void_type))
         return builder.CreateCall2(box_pointer_func,
                                    literal_pointer_val(rt),
                                    builder.CreateBitCast(result,T_pint8));

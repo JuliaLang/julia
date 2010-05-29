@@ -40,19 +40,23 @@
 #include <malloc.h>
 #endif
 
-u_int32_t *bitvector_resize(u_int32_t *b, u_int64_t n, int initzero)
+u_int32_t *bitvector_resize(u_int32_t *b, uint64_t oldsz, uint64_t newsz,
+                            int initzero)
 {
     u_int32_t *p;
-    size_t sz = ((n+31)>>5) * 4;
+    size_t sz = ((newsz+31)>>5) * sizeof(uint32_t);
     p = LLT_REALLOC(b, sz);
     if (p == NULL) return NULL;
-    if (initzero) memset(p, 0, sz);
+    if (initzero && newsz>oldsz) {
+        size_t osz = ((oldsz+31)>>5) * sizeof(uint32_t);
+        memset(&p[osz], 0, sz-osz);
+    }
     return p;
 }
 
 u_int32_t *bitvector_new(u_int64_t n, int initzero)
 {
-    return bitvector_resize(NULL, n, initzero);
+    return bitvector_resize(NULL, 0, n, initzero);
 }
 
 size_t bitvector_nwords(u_int64_t nbits)

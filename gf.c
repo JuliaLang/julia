@@ -451,7 +451,8 @@ jl_value_t *jl_matching_methods(jl_function_t *gf, jl_value_t *type)
 
 int jl_is_builtin(jl_value_t *v)
 {
-    return (jl_is_func(v) && ((jl_function_t*)v)->linfo==NULL);
+    return ((jl_is_func(v) && ((jl_function_t*)v)->linfo==NULL) ||
+            jl_typeis(v,jl_intrinsic_type));
 }
 
 int jl_is_genericfunc(jl_value_t *v)

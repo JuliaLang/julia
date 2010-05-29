@@ -15,8 +15,8 @@ function adjoin(s::IntSet, n::Int)
     if n >= s.limit
         lim = int32(n + div(n,2))
         s.bits = ccall(dlsym(JuliaDLHandle,"bitvector_resize"), Ptr{Uint32},
-                       (Ptr{Uint32}, Uint64, Int32),
-                       s.bits, uint64(lim), 1)
+                       (Ptr{Uint32}, Uint64, Uint64, Int32),
+                       s.bits, uint64(s.limit), uint64(lim), 1)
         s.limit = lim
     end
     ccall(dlsym(JuliaDLHandle,"bitvector_set"), Void,

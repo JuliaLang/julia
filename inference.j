@@ -12,7 +12,7 @@
 # * hash table of symbols
 # * eval
 # - t-functions for builtins
-# - constantp()
+# - isconstant()
 
 # mutable pair
 struct Pair{T,S}
@@ -75,6 +75,45 @@ isbuiltin(f) = ccall(dlsym(JuliaDLHandle,"jl_is_builtin"), Int32, (Any,),
 isgeneric(f) = ccall(dlsym(JuliaDLHandle,"jl_is_genericfunc"), Int32, (Any,),
                      f) != 0
 
+# for now assume all globals constant
+isconstant(s::Symbol) = true
+
+t_func = idtable()
+t_func[`tuple] = (0, Inf, (args...)->args)
+t_func[`boxsi8] = (1, 1, x->Int8)
+t_func[`boxui8] = (1, 1, x->Uint8)
+t_func[`boxsi16] = (1, 1, x->Int16)
+t_func[`boxui16] = (1, 1, x->Uint16)
+t_func[`boxsi32] = (1, 1, x->Int32)
+t_func[`boxui32] = (1, 1, x->Uint32)
+t_func[`boxsi64] = (1, 1, x->Int64)
+t_func[`boxui64] = (1, 1, x->Uint64)
+t_func[`boxf32] = (1, 1, x->Float32)
+t_func[`boxf64] = (1, 1, x->Float64)
+t_func[`is] = (2, 2, (x,y)->Bool)
+t_func[`subtype] = (2, 2, (x,y)->Bool)
+t_func[`isa] = (2, 2, (x,y)->Bool)
+t_func[`tuplelen] = (1, 1, x->Int32)
+t_func[`arraylen] = (1, 1, x->Int32)
+t_func[`arrayref] = (2, 2, (a,i)->(subtype(a,Array) ? a.parameters[1] : Any))
+t_func[`arrayset] = (3, 3, (a,i,v)->a)
+t_func[`identity] = (1, 1, identity)
+
+function builtin_tfunction(f::Symbol, argtypes::Tuple)
+    tf = get(t_func, f, false)
+    if is(tf,false)
+        # unknown/unhandled builtin
+        return Any
+    end
+    if !(tf[1] <= length(argtypes) <= tf[2])
+        # wrong # of args
+        return Bottom
+    end
+    return tf[3](argtypes...)
+end
+
+EmptyAList = alist(Symbol, Type)
+
 function abstract_eval(e::Expr, vtypes::AList, vars)
     # handle:
     # call  lambda  quote  null  top  unbound  box-unbound
@@ -86,19 +125,64 @@ function abstract_eval(e::Expr, vtypes::AList, vars)
     elseif is(e.head,`quote)
         return typeof(e.args[1])
     elseif is(e.head,`top)
-        return abstract_eval(e.args[1], vtypes, vars)
+        return abstract_eval(e.args[1], EmptyAList, ())
     elseif is(e.head,symbol("closure-ref"))
         return Any
     elseif is(e.head,`call)
-        # TODO
+        func = e.args[1]
+        if isa(func,Expr) && is(func.head,`top)
+            func = func.args[1]
+            assert(isa(func,Symbol))
+        else
+            if !isa(func,Symbol)
+                # TODO: lambda expression (let)
+                return Any
+            end
+            if !is(vtypes[func],NF)
+                # computed call with local var
+                return Any
+            end
+        end
+        f = eval(func)
+        if !isa(f,Function)
+            return Any
+        end
+        argtypes = map(x->abstract_eval(x,vtypes,vars), e.args[2:])
+        if isbuiltin(f)
+            return builtin_tfunction(func, argtypes)
+        elseif isgeneric(f)
+            applicable = getmethods(f, argtypes)
+            rettype = Bottom
+            x = applicable
+            while !is(x,())
+                # TODO: approximate static parameters by calling tmatch
+                # on argtypes and the intersection
+                rt = ast_rettype(typeinf(x[2].ast, x[2].sparams,
+                                         tintersect(x[1],argtypes)))
+                rettype = tmerge(rettype, rt)
+                x = x[3]
+            end
+            # if rettype is Bottom we've found a method not found error
+            return rettype
+        end
     end
 end
+
+ast_rettype(ast) = ast.args[3].type
 
 function abstract_eval(s::Symbol, vtypes::AList, vars)
     t = vtypes[s]
     if is(t,NF)
         # global
-        return Any
+        if isconstant(s)
+            T = typeof(eval(s))
+            if isa(T,TagKind)
+                return Type{T}
+            end
+            return T
+        else
+            return Any
+        end
     end
     return t
 end

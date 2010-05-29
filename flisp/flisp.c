@@ -591,7 +591,7 @@ void gc(int mustgrow)
             heapsize*=2;
         }
         else {
-            temp = bitvector_resize(consflags, heapsize/sizeof(cons_t), 1);
+            temp = bitvector_resize(consflags, 0, heapsize/sizeof(cons_t), 1);
             if (temp == NULL)
                 fl_raise(memory_exception_value);
             consflags = (uint32_t*)temp;
