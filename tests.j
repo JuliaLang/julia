@@ -204,7 +204,7 @@ assert((true ? 1 : false ? 2 : 3) == 1)
 n = 10
 a = rand(n,n)
 asym = a+a'+n*eye(n)
-b = rand(n,1)
+b = rand(n)
 r = chol(asym)
 assert(sum(r'*r - asym) < 1e-8)
 (l,u,p) = lu(a)

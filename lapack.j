@@ -144,10 +144,10 @@ end
 #       DOUBLE PRECISION   A( LDA, * ), B( LDB, * )
 
 for (fname, eltype) = (("dgesv_", Float64), ("sgesv_", Float32))
-    eval(`function \ (A::Matrix{$eltype}, B::Matrix{$eltype})
+    eval(`function \ (A::Matrix{$eltype}, B::VectorOrMatrix{$eltype})
         info = [0]
          n = size(A, 1)
-         nrhs = size(B, 2)
+         if isa(B, Vector); nrhs = 1; else nrhs = size(B, 2); end
          ipiv = Array(Int32, n)
          X = copy(B)
 
