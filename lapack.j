@@ -159,6 +159,7 @@ for (fname, eltype) = (("dgesv_", Float64), ("sgesv_", Float32))
 
          if info[1] == 0; return X; end
          if info[1] > 0; error("U is singular"); end
+         error("Error in solving A*X = B")
          end
          )
 end
