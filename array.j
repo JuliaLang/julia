@@ -51,19 +51,6 @@ reshape{T,n}(a::Array{T,n}, dims...) = (b = zeros(T, dims...);
                                         b)
 reshape{T,n}(a::Array{T,n}, dims::Tuple) = reshape(a, dims...)
 
-function issymmetric (A::Matrix)
-    m = size(A, 1)
-    n = size(A, 2)
-    if m != n; error("Input matrix must be square"); end
-    for i=1:(n-1)
-        for j=(i+1):n
-            if A[i,j] != A[j,i]; return false; end
-        end
-    end
-
-    return true
-end
-
 (+)(x::Scalar, y::Vector) = [ x + y[i] | i=1:length(y) ]
 (-)(x::Scalar, y::Vector) = [ x - y[i] | i=1:length(y) ]
 (*)(x::Scalar, y::Vector) = [ x * y[i] | i=1:length(y) ]

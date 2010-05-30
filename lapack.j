@@ -1,5 +1,26 @@
 libLAPACK = dlopen("libLAPACK")
 
+function issymmetric (A::Matrix)
+    (m, n) = size(A)
+    if m != n; error("Input matrix must be square"); end
+    for i=1:(n-1); for j=(i+1):n; if A[i,j] != A[j,i]; return false; end; end; end
+    return true
+end
+
+function isuppertriangular (A::Matrix)
+    (m, n) = size(A)
+    if m != n; error("Input matrix must be square"); end
+    for i=1:n; for j=1:n; if A[i,j] != 0 && j < i; return false; end; end; end
+    return true
+end
+
+function islowertriangular (A::Matrix)
+    (m, n) = size(A)
+    if m != n; error("Input matrix must be square"); end
+    for i=1:n; for j=n:-1:1; if A[i,j] != 0 && j > i; return false; end; end; end
+    return true
+end
+
 # SUBROUTINE DPOTRF( UPLO, N, A, LDA, INFO )
 # *     .. Scalar Arguments ..
 #       CHARACTER          UPLO
@@ -235,7 +256,7 @@ end
 #      SUBROUTINE DGELS( TRANS, M, N, NRHS, A, LDA, B, LDB, WORK, LWORK, INFO)
 # *     .. Scalar Arguments ..
 #       CHARACTER          TRANS
-#      INTEGER            INFO, LDA, LDB, LWORK, M, N, NRHS
+#       INTEGER            INFO, LDA, LDB, LWORK, M, N, NRHS
 
 #      SUBROUTINE DTRTRS( UPLO, TRANS, DIAG, N, NRHS, A, LDA, B, LDB, INFO )
 # *     .. Scalar Arguments ..
@@ -247,28 +268,6 @@ end
 for (fname_lu, fname_lsq, fname_tri, eltype) = (("dgesv_", "dgels_", "dtrtrs_", Float64),
                                                 ("sgesv_", "sgels_", "strtrs_", Float32))
     eval(`function \ (A::Matrix{$eltype}, B::VectorOrMatrix{$eltype})
-
-        function issymmetric (A::Matrix)
-            (m, n) = size(A)
-            if m != n; error("Input matrix must be square"); end
-            for i=1:(n-1); for j=(i+1):n; if A[i,j] != A[j,i]; return false; end; end; end
-            return true
-        end
-
-        function isuppertriangular (A::Matrix)
-            (m, n) = size(A)
-            if m != n; error("Input matrix must be square"); end
-            for i=1:n; for j=1:n; if A[i,j] != 0 && j < i; return false; end; end; end
-            return true
-        end
-
-        function islowertriangular (A::Matrix)
-            (m, n) = size(A)
-            if m != n; error("Input matrix must be square"); end
-            for i=1:n; for j=n:-1:1; if A[i,j] != 0 && j > i; return false; end; end; end
-            return true
-        end
-
         info = [0]
         m = size(A, 1)
         n = size(A, 2)
