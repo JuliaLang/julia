@@ -1,21 +1,21 @@
 libLAPACK = dlopen("libLAPACK")
 
 function issymmetric (A::Matrix)
-    (m, n) = size(A)
+    m, n = size(A)
     if m != n; error("Input matrix must be square"); end
     for i=1:(n-1); for j=(i+1):n; if A[i,j] != A[j,i]; return false; end; end; end
     return true
 end
 
 function isuppertriangular (A::Matrix)
-    (m, n) = size(A)
+    m, n = size(A)
     if m != n; error("Input matrix must be square"); end
     for i=1:n; for j=1:n; if A[i,j] != 0 && j < i; return false; end; end; end
     return true
 end
 
 function islowertriangular (A::Matrix)
-    (m, n) = size(A)
+    m, n = size(A)
     if m != n; error("Input matrix must be square"); end
     for i=1:n; for j=n:-1:1; if A[i,j] != 0 && j > i; return false; end; end; end
     return true
@@ -57,7 +57,7 @@ end
 for (fname, eltype) = (("dgetrf_", Float64), ("sgetrf_", Float32))
     eval(`function lu (A::Matrix{$eltype})
          info = [0]
-         (m, n) = size(A)
+         m, n = size(A)
          LU = copy(A)
          ipiv = Array(Int32, min(m,n))
 
@@ -95,7 +95,7 @@ for (fname, fname2, eltype) = (("dgeqp3_", "dorgqr_", Float64),
                                ("sgeqp3_", "sorgqr_", Float32))
     eval(`function qr (A::Matrix{$eltype})
          info = [0]
-         (m, n) = size(A)
+         m, n = size(A)
          QR = copy(A)
          jpvt = zeros(Int32, n)
          k = min(m,n)
@@ -206,7 +206,7 @@ for (fname, eltype) = (("dgesvd_", Float64), ("sgesvd_", Float32))
     eval(`function svd(A::Matrix{$eltype})
          jobu = "A"
          jobvt = "A"
-         (m, n) = size(A)
+         m, n = size(A)
          k = min(m,n)
          X = copy(A)
          S = Array($eltype, k)
