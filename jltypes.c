@@ -224,6 +224,8 @@ jl_value_t *jl_type_union(jl_tuple_t *types)
     types = jl_compute_type_union(types);
     if (types->length == 1)
         return jl_tupleref(types, 0);
+    if (types->length == 0)
+        return jl_bottom_type;
     return (jl_value_t*)jl_new_uniontype(types);
 }
 
@@ -307,18 +309,21 @@ static jl_value_t *intersect_tuple(jl_tuple_t *a, jl_tuple_t *b)
     return (jl_value_t*)tc;
 }
 
-static jl_tag_type_t *intersect_tag(jl_tag_type_t *a, jl_tag_type_t *b)
+static jl_value_t *intersect_tag(jl_tag_type_t *a, jl_tag_type_t *b)
 {
     assert(a->name == b->name);
     assert(a->parameters->length == b->parameters->length);
     jl_tuple_t *p = jl_alloc_tuple(a->parameters->length);
     size_t i;
     for(i=0; i < p->length; i++) {
-        jl_tupleset(p, i, jl_type_intersection(jl_tupleref(a->parameters,i),
-                                               jl_tupleref(b->parameters,i)));
+        jl_value_t *ti = jl_type_intersection(jl_tupleref(a->parameters,i),
+                                              jl_tupleref(b->parameters,i));
+        if (ti == (jl_value_t*)jl_bottom_type)
+            return (jl_value_t*)jl_bottom_type;
+        jl_tupleset(p, i, ti);
     }
     if (a->name->ctor != NULL)
-        return (jl_tag_type_t*)jl_apply_type_ctor(a->name->ctor, p);
+        return (jl_value_t*)jl_apply_type_ctor(a->name->ctor, p);
     assert(0 && "not yet implemented");
     return NULL;
 }
@@ -329,6 +334,8 @@ jl_value_t *jl_type_intersection(jl_value_t *a, jl_value_t *b)
         return a;
     if (jl_type_match((jl_type_t*)b, (jl_type_t*)a) != jl_false)
         return b;
+    if (jl_is_int32(a) || jl_is_int32(b))
+        return (jl_value_t*)jl_bottom_type;
     if (jl_is_typector(a))
         a = jl_unconstrained_type((jl_typector_t*)a);
     if (jl_is_typector(b))
@@ -369,9 +376,12 @@ jl_value_t *jl_type_intersection(jl_value_t *a, jl_value_t *b)
         return (jl_value_t*)intersect_tag(tta, ttb);
     jl_tag_type_t *super = NULL;
     jl_tag_type_t *sub = NULL;
+    jl_value_t *ti;
     while (tta != jl_any_type) {
         if (tta->name == ttb->name) {
-            super = intersect_tag(tta, ttb);
+            ti = intersect_tag(tta, ttb);
+            if (ti == (jl_value_t*)jl_bottom_type) return ti;
+            super = (jl_tag_type_t*)ti;
             sub = (jl_tag_type_t*)a;
             break;
         }
@@ -381,7 +391,9 @@ jl_value_t *jl_type_intersection(jl_value_t *a, jl_value_t *b)
         tta = (jl_tag_type_t*)a;
         while (ttb != jl_any_type) {
             if (tta->name == ttb->name) {
-                super = intersect_tag(tta, ttb);
+                ti = intersect_tag(tta, ttb);
+                if (ti == (jl_value_t*)jl_bottom_type) return ti;
+                super = (jl_tag_type_t*)ti;
                 sub = (jl_tag_type_t*)b;
                 break;
             }

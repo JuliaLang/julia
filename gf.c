@@ -424,6 +424,25 @@ void jl_add_method(jl_function_t *gf, jl_tuple_t *types, jl_function_t *meth)
     (void)jl_method_table_insert(jl_gf_mtable(gf), (jl_type_t*)types, meth);
 }
 
+static jl_tuple_t *ml_matches(jl_methlist_t *ml, jl_value_t *type,
+                              jl_tuple_t *t, jl_sym_t *name)
+{
+    while (ml != NULL) {
+        jl_value_t *ti = jl_type_intersection((jl_value_t*)ml->sig, type);
+        if (ti != (jl_value_t*)jl_bottom_type) {
+            if (ml->func->linfo == NULL) {
+                // builtin
+                t = jl_tuple(3, ti, name, t);
+            }
+            else {
+                t = jl_tuple(3, ti, ml->func->linfo, t);
+            }
+        }
+        ml = ml->next;
+    }
+    return t;
+}
+
 // return linked tuples (t1, M1, (t2, M2, (... ()))) of types and methods.
 // t is the intersection of the type argument and the method signature,
 // and M is the corresponding LambdaStaticData (jl_lambda_info_t)
@@ -432,26 +451,16 @@ jl_value_t *jl_matching_methods(jl_function_t *gf, jl_value_t *type)
     jl_tuple_t *t = jl_null;
     if (!jl_is_gf(gf)) return (jl_value_t*)t;
     jl_methtable_t *mt = jl_gf_mtable(gf);
-    jl_methlist_t *ml = mt->generics;
-    while (ml != NULL) {
-        jl_value_t *ti = jl_type_intersection((jl_value_t*)ml->sig, type);
-        if (ti != (jl_value_t*)jl_bottom_type)
-            t = jl_tuple(3, ti, ml->func->linfo, t);
-        ml = ml->next;
-    }
-    ml = mt->defs;
-    while (ml != NULL) {
-        jl_value_t *ti = jl_type_intersection((jl_value_t*)ml->sig, type);
-        if (ti != (jl_value_t*)jl_bottom_type)
-            t = jl_tuple(3, ti, ml->func->linfo, t);
-        ml = ml->next;
-    }
+    jl_sym_t *gfname = jl_gf_name(gf);
+    t = ml_matches(mt->generics, type, t, gfname);
+    t = ml_matches(mt->defs, type, t, gfname);
     return (jl_value_t*)t;
 }
 
 int jl_is_builtin(jl_value_t *v)
 {
-    return ((jl_is_func(v) && ((jl_function_t*)v)->linfo==NULL) ||
+    return ((jl_is_func(v) && (((jl_function_t*)v)->linfo==NULL) &&
+             !jl_is_gf(v)) ||
             jl_typeis(v,jl_intrinsic_type));
 }
 

@@ -116,6 +116,10 @@ t_func[`arraylen] = (1, 1, x->Int32)
 t_func[`arrayref] = (2, 2, (a,i)->(subtype(a,Array) ? a.parameters[1] : Any))
 t_func[`arrayset] = (3, 3, (a,i,v)->a)
 t_func[`identity] = (1, 1, identity)
+t_func[`convert] =
+    (2, 2, (t,x)->((isa(t,TagKind) && is(t.name,Type{}.name)) ?
+                   t.parameters[1] :
+                   Any))
 
 function builtin_tfunction(f::Symbol, argtypes::Tuple)
     tf = get(t_func, f, false)
@@ -164,6 +168,7 @@ function abstract_eval(e::Expr, vtypes::AList, sp)
             return Any
         end
         argtypes = map(x->abstract_eval(x,vtypes,sp), e.args[2:])
+        #print("call ", e.args[1], argtypes, "\n")
         if isbuiltin(f)
             return builtin_tfunction(func, argtypes)
         elseif isgeneric(f)
@@ -171,10 +176,16 @@ function abstract_eval(e::Expr, vtypes::AList, sp)
             rettype = Bottom
             x = applicable
             while !is(x,())
+                #print(x,"\n")
                 # TODO: approximate static parameters by calling tmatch
                 # on argtypes and the intersection
-                rt = ast_rettype(typeinf(x[2].ast, x[2].sparams,
-                                         tintersect(x[1],argtypes)))
+                if isa(x[2],Symbol)
+                    # when there is a builtin method in this GF, we get
+                    # a symbol with the name instead of a LambdaStaticData
+                    rt = builtin_tfunction(x[2], x[1])
+                else
+                    rt = ast_rettype(typeinf(x[2].ast, x[2].sparams, x[1]))
+                end
                 rettype = tmerge(rettype, rt)
                 x = x[3]
             end
@@ -270,6 +281,8 @@ function typeinf(ast::Expr, sparams::Tuple, atypes::Tuple)
         error("label not found")
     end
 
+    #print("typeinf ", ast, " ", sparams, " ", atypes, "\n")
+
     assert(is(ast.head,`lambda))
     args = map(x->(isa(x,Expr) ? x.args[1] : x), ast.args[1])
     locals = ast.args[2].args[1].args
@@ -286,7 +299,16 @@ function typeinf(ast::Expr, sparams::Tuple, atypes::Tuple)
         s[1][v] = Bottom
     end
     rettype = Bottom
-    for i=1:length(args)
+    la = length(args)
+    lastarg = ast.args[1][la]
+    if isa(lastarg,Expr) && is(lastarg.head,symbol("::"))
+        if ccall(dlsym(JuliaDLHandle,"jl_is_rest_arg"),Int32,(Any,),
+                 lastarg)!=0
+            s[1][args[la]] = atypes[la:]
+            la -= 1
+        end
+    end
+    for i=1:la
         s[1][args[i]] = atypes[i]
     end
 
