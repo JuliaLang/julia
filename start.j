@@ -5,6 +5,7 @@ load("error.j")
 load("operators.j")
 
 # primitive data types
+load("bool.j")
 load("scalar.j")
 load("int.j")
 load("float.j")
