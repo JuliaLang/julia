@@ -240,11 +240,15 @@ r = chol(asym)
 assert(sum(r'*r - asym) < 1e-8)
 (l,u,p) = lu(a)
 assert(sum(l[p,:]*u - a) < 1e-8)
-x = a \ b
-assert(sum(a*x-b) < 1e-8)
 (q,r,p) = qr(a)
 assert(sum(q*r[:,p] - a) < 1e-8)
 (v,d) = eig(asym)
 assert(sum(asym*v[:,1]-d[1]*v[:,1]) < 1e-8)
 (u,s,vt) = svd(a)
 assert(sum(u*s*vt - a) < 1e-8)
+x = a \ b
+assert(sum(a*x-b) < 1e-8)
+x = triu(a) \ b
+assert(sum(triu(a)*x-b) < 1e-8)
+x = tril(a) \ b
+assert(sum(tril(a)*x-b) < 1e-8)

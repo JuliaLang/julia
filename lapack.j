@@ -21,6 +21,7 @@ for (fname, eltype) = (("dpotrf_", Float64), ("spotrf_", Float32))
          if info[1] == 0; return R; end
          if info[1] > 0; error("Matrix not Positive Definite"); end
          error("Error in CHOL")
+
          end
          )
 end
@@ -35,8 +36,7 @@ end
 for (fname, eltype) = (("dgetrf_", Float64), ("sgetrf_", Float32))
     eval(`function lu (A::Matrix{$eltype})
          info = [0]
-         m = size(A, 1)
-         n = size(A, 2)
+         (m, n) = size(A)
          LU = copy(A)
          ipiv = Array(Int32, min(m,n))
 
@@ -52,6 +52,7 @@ for (fname, eltype) = (("dgetrf_", Float64), ("sgetrf_", Float32))
 
          if info[1] == 0; return (tril(LU, -1) + eye(m,n), triu(LU), P); end
          error("Error in LU")
+
          end
          )
 end
@@ -73,8 +74,7 @@ for (fname, fname2, eltype) = (("dgeqp3_", "dorgqr_", Float64),
                                ("sgeqp3_", "sorgqr_", Float32))
     eval(`function qr (A::Matrix{$eltype})
          info = [0]
-         m = size(A, 1)
-         n = size(A, 2)
+         (m, n) = size(A)
          QR = copy(A)
          jpvt = zeros(Int32, n)
          k = min(m,n)
@@ -89,12 +89,8 @@ for (fname, fname2, eltype) = (("dgeqp3_", "dorgqr_", Float64),
                 Ptr{Int32}, Ptr{$eltype}, Ptr{$eltype}, Ptr{Int32}, Ptr{Int32}),
                m, n, QR, m, jpvt, tau, work, lwork, info)
 
-         if info[1] == 0
-            lwork = int32(work[1])
-            work = Array($eltype, lwork)
-         else
-             error("Error in QR factorization")
-         end
+         if info[1] == 0; lwork = int32(work[1]); work = Array($eltype, lwork);
+         else error("Error in $fname"); end
 
          # Compute QR factorization
          ccall(dlsym(libLAPACK, $fname),
@@ -115,12 +111,8 @@ for (fname, fname2, eltype) = (("dgeqp3_", "dorgqr_", Float64),
                 Ptr{Int32}, Ptr{$eltype}, Ptr{$eltype}, Ptr{Int32}, Ptr{Int32}),
                m, k, k, QR, m, tau, work, lwork2, info)
 
-         if info[1] == 0
-            lwork2 = int32(work[1])
-            if lwork2 > lwork; work = Array($eltype, lwork2); end
-         else
-             error("Error in QR factorization")
-         end
+         if info[1] == 0; lwork = int32(work[1]); work = Array($eltype, lwork);
+         else error("Error in $fname2"); end
 
          # Compute Q
          ccall(dlsym(libLAPACK, $fname2),
@@ -130,7 +122,8 @@ for (fname, fname2, eltype) = (("dgeqp3_", "dorgqr_", Float64),
                m, k, k, QR, m, tau, work, lwork2, info)
          
          if info[1] == 0; return (QR[:, 1:k], R[1:k, :], jpvt); end
-         error("Error in QR");
+         error("Error in $fname");
+
          end
          )
 end
@@ -163,12 +156,8 @@ for (fname, eltype) = (("dsyev_", Float64), ("ssyev_", Float32))
                 Ptr{$eltype}, Ptr{$eltype}, Ptr{Int32}, Ptr{Int32}),
                jobz, uplo, n, EV, n, W, work, lwork, info)
 
-         if info[1] == 0
-             lwork = int32(work[1])
-             work = Array($eltype, lwork)
-         else
-             error("Error in $fname")
-         end
+         if info[1] == 0; lwork = int32(work[1]); work = Array($eltype, lwork);
+         else error("Error in $fname"); end
 
          # Compute eigenvalues, eigenvectors
          ccall(dlsym(libLAPACK, $fname),
@@ -179,6 +168,7 @@ for (fname, eltype) = (("dsyev_", Float64), ("ssyev_", Float32))
 
          if info[1] == 0; return (EV, W); end
          error("Error in EIG");
+
          end
          )
 end
@@ -195,8 +185,7 @@ for (fname, eltype) = (("dgesvd_", Float64), ("sgesvd_", Float32))
     eval(`function svd(A::Matrix{$eltype})
          jobu = "A"
          jobvt = "A"
-         m = size(A, 1)
-         n = size(A, 2)
+         (m, n) = size(A)
          k = min(m,n)
          X = copy(A)
          S = Array($eltype, k)
@@ -214,12 +203,8 @@ for (fname, eltype) = (("dgesvd_", Float64), ("sgesvd_", Float32))
                 Ptr{$eltype}, Ptr{Int32}, Ptr{Int32}),
                jobu, jobvt, m, n, X, m, S, U, m, VT, n, work, lwork, info)
 
-         if info[1] == 0
-             lwork = int32(work[1])
-             work = Array($eltype, lwork)
-         else
-             error("Error in $fname")
-         end
+         if info[1] == 0; lwork = int32(work[1]); work = Array($eltype, lwork);
+         else error("Error in $fname"); end
 
          # Compute SVD
          ccall(dlsym(libLAPACK, $fname),
@@ -234,6 +219,7 @@ for (fname, eltype) = (("dgesvd_", Float64), ("sgesvd_", Float32))
 
          if info[1] == 0; return (U,SIGMA,VT); end
          error("Error in SVD");
+
          end
          )
 end
@@ -251,9 +237,38 @@ end
 #       CHARACTER          TRANS
 #      INTEGER            INFO, LDA, LDB, LWORK, M, N, NRHS
 
-for (fname_lu, fname_lsq, eltype) = (("dgesv_", "dgels_", Float64), 
-                                     ("sgesv_", "sgels_", Float32))
+#      SUBROUTINE DTRTRS( UPLO, TRANS, DIAG, N, NRHS, A, LDA, B, LDB, INFO )
+# *     .. Scalar Arguments ..
+#       CHARACTER          DIAG, TRANS, UPLO
+#       INTEGER            INFO, LDA, LDB, N, NRHS
+# *     .. Array Arguments ..
+#       DOUBLE PRECISION   A( LDA, * ), B( LDB, * )
+
+for (fname_lu, fname_lsq, fname_tri, eltype) = (("dgesv_", "dgels_", "dtrtrs_", Float64),
+                                                ("sgesv_", "sgels_", "strtrs_", Float32))
     eval(`function \ (A::Matrix{$eltype}, B::VectorOrMatrix{$eltype})
+
+        function issymmetric (A::Matrix)
+            (m, n) = size(A)
+            if m != n; error("Input matrix must be square"); end
+            for i=1:(n-1); for j=(i+1):n; if A[i,j] != A[j,i]; return false; end; end; end
+            return true
+        end
+
+        function isuppertriangular (A::Matrix)
+            (m, n) = size(A)
+            if m != n; error("Input matrix must be square"); end
+            for i=1:n; for j=1:n; if A[i,j] != 0 && j < i; return false; end; end; end
+            return true
+        end
+
+        function islowertriangular (A::Matrix)
+            (m, n) = size(A)
+            if m != n; error("Input matrix must be square"); end
+            for i=1:n; for j=n:-1:1; if A[i,j] != 0 && j > i; return false; end; end; end
+            return true
+        end
+
         info = [0]
         m = size(A, 1)
         n = size(A, 2)
@@ -261,18 +276,30 @@ for (fname_lu, fname_lsq, eltype) = (("dgesv_", "dgels_", Float64),
         Acopy = copy(A)
         X = copy(B)
 
-        if m == n
-            ipiv = Array(Int32, n)
-            ccall(dlsym(libLAPACK, $fname_lu),
-                  Void,
-                  (Ptr{Int32}, Ptr{Int32}, Ptr{$eltype}, Ptr{Int32}, Ptr{Int32}, 
-                   Ptr{$eltype}, Ptr{Int32}, Ptr{Int32}),
-                  n, nrhs, Acopy, n, ipiv, X, n, info)
-            
-            if info[1] == 0; return X; end
-            if info[1] > 0; error("U is singular"); end
-            error("Error in solving A*X = B")
-        else
+        if m == n # Square
+            case = 0
+            if isuppertriangular(A); case = 1; end
+            if islowertriangular(A); case = 2; end
+
+            if case == 0 # General
+                ipiv = Array(Int32, n)
+                ccall(dlsym(libLAPACK, $fname_lu),
+                      Void,
+                      (Ptr{Int32}, Ptr{Int32}, Ptr{$eltype}, Ptr{Int32}, Ptr{Int32},
+                       Ptr{$eltype}, Ptr{Int32}, Ptr{Int32}),
+                      n, nrhs, Acopy, n, ipiv, X, n, info)
+            elseif case == 1 || case == 2 # Triangular
+                uplo = "U"
+                if case == 2; uplo = "L"; end
+                ccall(dlsym(libLAPACK, $fname_tri),
+                      Void,
+                      (Ptr{Uint8}, Ptr{Uint8}, Ptr{Uint8}, Ptr{Int32}, Ptr{Int32},
+                       Ptr{$eltype}, Ptr{Int32}, Ptr{$eltype}, Ptr{Int32}, Ptr{Int32}),
+                      uplo, "N", "N", n, nrhs, Acopy, n, X, n, info)
+            end
+
+        else # Rectangular
+
             # Workspace query
             lwork = -1
             work = [0.0]
@@ -282,13 +309,8 @@ for (fname_lu, fname_lsq, eltype) = (("dgesv_", "dgels_", Float64),
                    Ptr{$eltype}, Ptr{Int32}, Ptr{$eltype}, Ptr{Int32}, Ptr{Int32}),
                   "N", m, n, nrhs, Acopy, m, X, max(m,n), work, lwork, info)
 
-            # Compute A*x = b
-            if info[1] == 0
-                lwork = int32(work[1])
-                work = Array($eltype, lwork)
-            else
-                error("Error in $fname")
-            end
+            if info[1] == 0; lwork = int32(work[1]); work = Array($eltype, lwork);
+            else error("Error in $fname_lsq"); end
 
             ccall(dlsym(libLAPACK, $fname_lsq),
                   Void,
@@ -296,11 +318,12 @@ for (fname_lu, fname_lsq, eltype) = (("dgesv_", "dgels_", Float64),
                    Ptr{$eltype}, Ptr{Int32}, Ptr{$eltype}, Ptr{Int32}, Ptr{Int32}),
                   "N", m, n, nrhs, Acopy, m, X, max(m,n), work, lwork, info)
 
-            if info[1] == 0; return X; end
-            error("Error in solving A*X = B")
-         end
+         end # if m == n...
 
-         end
+         if info[1] == 0; return X; end
+         error("Error in solving A*X = B")
+
+    end # function \ ...
          )
 end
 
