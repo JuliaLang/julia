@@ -225,7 +225,7 @@ jl_value_t *jl_type_union(jl_tuple_t *types)
     if (types->length == 1)
         return jl_tupleref(types, 0);
     if (types->length == 0)
-        return jl_bottom_type;
+        return (jl_value_t*)jl_bottom_type;
     return (jl_value_t*)jl_new_uniontype(types);
 }
 
