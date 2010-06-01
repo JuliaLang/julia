@@ -13,6 +13,8 @@
 # * eval
 # - t-functions for builtins
 # - isconstant()
+# - deal with call stack and recursive types
+# - approximate static parameters
 
 # mutable pair
 struct Pair
@@ -38,12 +40,12 @@ alist(kt::Type, vt::Type) = AList((), nil)
 
 alist(a::AList) = AList(a, nil)
 
-assoc(item, a::EmptyList) = nil
+assoc(item, a::EmptyList) = a
 assoc(item, p::List) = is(head(p).a,item) ? head(p) : assoc(item,tail(p))
 
 function set(a::AList, val, key)
     p = assoc(key, a.elts)
-    if !is(p,nil)
+    if !isa(p,EmptyList)
         p.b = val
     else
         a.elts = Cons(Pair(key,val),a.elts)
@@ -53,7 +55,7 @@ end
 
 function ref(a::AList, key)
     p = assoc(key, a.elts)
-    if is(p,nil)
+    if isa(p,EmptyList)
         if is(a.prev,())
             return NF
         end
@@ -96,6 +98,8 @@ isgeneric(f) = ccall(dlsym(JuliaDLHandle,"jl_is_genericfunc"), Int32, (Any,),
 # for now assume all globals constant
 isconstant(s::Symbol) = true
 
+cmp_tfunc = (x,y)->Bool
+
 t_func = idtable()
 t_func[`tuple] = (0, Inf, (args...)->args)
 t_func[`boxsi8] = (1, 1, x->Int8)
@@ -108,9 +112,15 @@ t_func[`boxsi64] = (1, 1, x->Int64)
 t_func[`boxui64] = (1, 1, x->Uint64)
 t_func[`boxf32] = (1, 1, x->Float32)
 t_func[`boxf64] = (1, 1, x->Float64)
-t_func[`is] = (2, 2, (x,y)->Bool)
-t_func[`subtype] = (2, 2, (x,y)->Bool)
-t_func[`isa] = (2, 2, (x,y)->Bool)
+t_func[`eq_int] = (2, 2, cmp_tfunc)
+t_func[`slt_int] = (2, 2, cmp_tfunc)
+t_func[`ult_int] = (2, 2, cmp_tfunc)
+t_func[`eq_float] = (2, 2, cmp_tfunc)
+t_func[`lt_float] = (2, 2, cmp_tfunc)
+t_func[`ne_float] = (2, 2, cmp_tfunc)
+t_func[`is] = (2, 2, cmp_tfunc)
+t_func[`subtype] = (2, 2, cmp_tfunc)
+t_func[`isa] = (2, 2, cmp_tfunc)
 t_func[`tuplelen] = (1, 1, x->Int32)
 t_func[`arraylen] = (1, 1, x->Int32)
 t_func[`arrayref] = (2, 2, (a,i)->(subtype(a,Array) ? a.parameters[1] : Any))
@@ -164,13 +174,12 @@ function abstract_eval(e::Expr, vtypes::AList, sp)
             end
         end
         f = eval(func)
-        if !isa(f,Function)
-            return Any
-        end
         argtypes = map(x->abstract_eval(x,vtypes,sp), e.args[2:])
-        #print("call ", e.args[1], argtypes, "\n")
+        print("call ", e.args[1], argtypes, " ")
         if isbuiltin(f)
-            return builtin_tfunction(func, argtypes)
+            rt = builtin_tfunction(func, argtypes)
+            print("=> ", rt, "\n")
+            return rt
         elseif isgeneric(f)
             applicable = getmethods(f, argtypes)
             rettype = Bottom
@@ -190,7 +199,11 @@ function abstract_eval(e::Expr, vtypes::AList, sp)
                 x = x[3]
             end
             # if rettype is Bottom we've found a method not found error
+            print("=> ", rettype, "\n")
             return rettype
+        else
+            print("=> ", Any, "\n")
+            return Any
         end
     end
 end
@@ -384,3 +397,15 @@ function type_annotate(ast::Expr, states::(AList...), sp, rettype)
                   ast.args[3].args, states),
               rettype))
 end
+
+T=typevar(`T)
+S=typevar(`S)
+R=typevar(`R)
+a=typevar(`a)
+b=typevar(`b)
+c=typevar(`c)
+d=typevar(`d)
+
+m = getmethods(fact,(Int32,))
+ast = m[2]
+#typeinf(ast.ast, (`T,Int32), (Int32,))

@@ -328,6 +328,7 @@ jl_value_t *jl_full_type(jl_value_t *v);
 
 // type predicates
 int jl_is_type(jl_value_t *v);
+int jl_is_abstract_type(jl_value_t *v);
 int jl_has_typevars(jl_value_t *v);
 int jl_tuple_subtype(jl_value_t **child, size_t cl,
                      jl_value_t **parent, size_t pl, int ta, int morespecific);
@@ -339,6 +340,8 @@ int jl_types_equal(jl_value_t *a, jl_value_t *b);
 int jl_types_equal_generic(jl_value_t *a, jl_value_t *b);
 jl_value_t *jl_type_union(jl_tuple_t *types);
 jl_value_t *jl_type_intersection(jl_value_t *a, jl_value_t *b);
+jl_value_t *jl_type_intersect(jl_value_t *a, jl_value_t *b,
+                              jl_tuple_t **penv);
 
 // type constructors
 jl_typename_t *jl_new_typename(jl_sym_t *name);
@@ -364,6 +367,7 @@ jl_lambda_info_t *jl_new_lambda_info(jl_value_t *ast, jl_tuple_t *sparams);
 jl_tuple_t *jl_tuple(size_t n, ...);
 jl_tuple_t *jl_alloc_tuple(size_t n);
 jl_tuple_t *jl_tuple_append(jl_tuple_t *a, jl_tuple_t *b);
+jl_tuple_t *jl_flatten_pairs(jl_tuple_t *t);
 jl_tuple_t *jl_pair(jl_value_t *a, jl_value_t *b);
 jl_sym_t *jl_symbol(const char *str);
 jl_sym_t *jl_gensym();

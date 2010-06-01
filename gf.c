@@ -90,25 +90,6 @@ static jl_methlist_t *jl_method_list_assoc(jl_methlist_t *ml,
     return NULL;
 }
 
-// convert (a, b, (c, d, (... ()))) to (a, b, c, d, ...)
-static jl_tuple_t *flatten_pairs(jl_tuple_t *t)
-{
-    size_t i, n = 0;
-    jl_tuple_t *t0 = t;
-    while (t != jl_null) {
-        n++;
-        t = (jl_tuple_t*)jl_nextpair(t);
-    }
-    jl_tuple_t *nt = jl_alloc_tuple(n*2);
-    t = t0;
-    for(i=0; i < n*2; i+=2) {
-        jl_tupleset(nt, i,   jl_t0(t));
-        jl_tupleset(nt, i+1, jl_t1(t));
-        t = (jl_tuple_t*)jl_nextpair(t);
-    }
-    return nt;
-}
-
 // return a new lambda-info that has some extra static parameters
 // merged in.
 jl_lambda_info_t *jl_add_static_parameters(jl_lambda_info_t *l, jl_tuple_t *sp)
@@ -263,7 +244,7 @@ jl_methlist_t *jl_method_table_assoc(jl_methtable_t *mt,
 
     // cache result in concrete part of method table
     assert(jl_is_tuple(env));
-    jl_tuple_t *tpenv = flatten_pairs((jl_tuple_t*)env);
+    jl_tuple_t *tpenv = jl_flatten_pairs((jl_tuple_t*)env);
     jl_function_t *newmeth = jl_instantiate_method(gm->func, tpenv);
     jl_tuple_t *newsig;
     // don't bother computing this if no arguments are tuples
@@ -428,14 +409,29 @@ static jl_tuple_t *ml_matches(jl_methlist_t *ml, jl_value_t *type,
                               jl_tuple_t *t, jl_sym_t *name)
 {
     while (ml != NULL) {
-        jl_value_t *ti = jl_type_intersection((jl_value_t*)ml->sig, type);
-        if (ti != (jl_value_t*)jl_bottom_type) {
-            if (ml->func->linfo == NULL) {
-                // builtin
-                t = jl_tuple(3, ti, name, t);
+        // a method is shadowed if type <: S <: m->sig where S is the
+        // signature of another applicable method
+        jl_tuple_t *tt = t;
+        int shadowed = 0;
+        while (tt != jl_null) {
+            jl_value_t *S = jl_tupleref(tt,0);
+            if (jl_subtype(type, S, 0) &&
+                jl_subtype(S, (jl_value_t*)ml->sig, 0)) {
+                shadowed = 1;
+                break;
             }
-            else {
-                t = jl_tuple(3, ti, ml->func->linfo, t);
+            tt = (jl_tuple_t*)jl_tupleref(tt,2);
+        }
+        if (!shadowed) {
+            jl_value_t *ti = jl_type_intersection((jl_value_t*)ml->sig, type);
+            if (ti != (jl_value_t*)jl_bottom_type) {
+                if (ml->func->linfo == NULL) {
+                    // builtin
+                    t = jl_tuple(3, ti, name, t);
+                }
+                else {
+                    t = jl_tuple(3, ti, ml->func->linfo, t);
+                }
             }
         }
         ml = ml->next;

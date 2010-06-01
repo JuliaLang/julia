@@ -320,3 +320,54 @@ environment.
 
 so in the interpreter the static parameters are inside the AST, but no
 big deal.
+
+-------------------------------------------------------------------------------
+
+issues 5/31/10
+
+- covariance. Array{Int} probably should mean any integer array.
+  . T{S} is covariant iff S is abstract. if S is concrete you need T{<:S}.
+    this allows us to distinguish a method specialized for concrete class C
+    from a method defined for types T<:C. Internally, methods are only
+    specialized for concrete types so this works out.
+  . if we have function types this gets difficult because contravariant
+    contexts are introduced. a type can then be fundamentally invariant or
+    contravariant.
+
+- unions, tagged unions
+  consider Cons(Cons(`a,nil), Cons(nil, nil)), or {{a}, {}}
+  the type of {{}} is inferred as Cons{EmptyList}, then we have
+  Cons{Cons{Symbol}}. these need to match. if we picked
+  T == List{Symbol} == Union(EmptyList,Cons{Symbol}), it would have worked.
+  Should there be both Cons{Cons{Symbol}} and Cons{List{Symbol}} ?
+  . the way it would work is during matching, T starts as Cons{EmptyList}.
+    when we try to add T==Cons{Cons{Symbol}}, we see EmptyList and Cons
+    are disjoint, but they explicitly indicate a common supertype List,
+    so we can pick that. type_match will only pick values of T from the
+    types actually present, or their typeunion parents.
+
+- inferred type parameters. problem with union types, e.g.
+  struct Foo{T,S}
+    a::Nullable{T}
+    b::Nullable{S}
+  end
+
+  what is the type of Foo((),()) ?
+  Should we give it unconstrained type variables, then adjust their bounds
+  when the object is mutated?
+  It would be great to get rid of T{...}.new(...) altogether.
+  . idea is to use Nullable{T}==Union(T,Null{T}), but currently that Union
+    type is too complex!
+
+- in f{T}(T, T) allow the actual types to differ as long as one is a
+  supertype of the other. for example, taking the type intersection of
+  (Real, Int) with (T, T) should give (T<:Int, T<:Int)
+
+* in matching_methods, don't include signature S if we've already found
+  a signature R such that T <: R <: S, where T is the type we're searching for
+
+- given f(Int32, Int32), matching f(T, T) and giving it priority over
+  f(Int, Int) is wrong. typevars should be treated like types, and all
+  methods must be consistently comparable with each other for specificity.
+  . monotonicity: if the declaration of A is more specific than B,
+    it remains that way for all possible actual arguments.

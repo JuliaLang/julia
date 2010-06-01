@@ -104,6 +104,25 @@ jl_tuple_t *jl_tuple_append(jl_tuple_t *a, jl_tuple_t *b)
     return c;
 }
 
+// convert (a, b, (c, d, (... ()))) to (a, b, c, d, ...)
+jl_tuple_t *jl_flatten_pairs(jl_tuple_t *t)
+{
+    size_t i, n = 0;
+    jl_tuple_t *t0 = t;
+    while (t != jl_null) {
+        n++;
+        t = (jl_tuple_t*)jl_nextpair(t);
+    }
+    jl_tuple_t *nt = jl_alloc_tuple(n*2);
+    t = t0;
+    for(i=0; i < n*2; i+=2) {
+        jl_tupleset(nt, i,   jl_t0(t));
+        jl_tupleset(nt, i+1, jl_t1(t));
+        t = (jl_tuple_t*)jl_nextpair(t);
+    }
+    return nt;
+}
+
 jl_function_t *jl_new_closure(jl_fptr_t proc, jl_value_t *env)
 {
     jl_function_t *f = (jl_function_t*)newobj((jl_type_t*)jl_any_func, 6);
