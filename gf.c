@@ -306,6 +306,12 @@ jl_methlist_t *jl_method_table_insert(jl_methtable_t *mt, jl_type_t *type,
       however, (Tensor, Matrix, Foo) and (Matrix, Tensor, Bar) are fine
       since Foo and Bar are disjoint, so there would be no confusion over
       which one to call.
+      
+      There is also this kind of ambiguity: foo{T,S}(T, S) vs. foo(Any,Any)
+      In this case jl_types_equal() is true, but one is jl_type_morespecific
+      or jl_type_match_morespecific than the other.
+      To check this, jl_types_equal_generic needs to be more sophisticated
+      so (T,T) is not equivalent to (Any,Any).
     */
     if (jl_has_typevars((jl_value_t*)type)) {
         return jl_method_list_insert_p(&mt->defs, type, method,

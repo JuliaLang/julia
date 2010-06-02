@@ -2,7 +2,7 @@
 # * shared assoc list
 # * IntSet
 # * printing exprs
-# - compute type intersection
+# * compute type intersection
 # - more method table reflection
 #   . cached t-functions
 #   . abstract_invoke()
@@ -96,42 +96,120 @@ isgeneric(f) = ccall(dlsym(JuliaDLHandle,"jl_is_genericfunc"), Int32, (Any,),
                      f) != 0
 
 # for now assume all globals constant
+# TODO
 isconstant(s::Symbol) = true
+isconstant(s::Expr) = is(s.head,`quote)
+isconstant(x) = true
+
+mintype(a, b) = subtype(a,b) ? a : b
 
 cmp_tfunc = (x,y)->Bool
 
-t_func = idtable()
-t_func[`tuple] = (0, Inf, (args...)->args)
-t_func[`boxsi8] = (1, 1, x->Int8)
-t_func[`boxui8] = (1, 1, x->Uint8)
-t_func[`boxsi16] = (1, 1, x->Int16)
-t_func[`boxui16] = (1, 1, x->Uint16)
-t_func[`boxsi32] = (1, 1, x->Int32)
-t_func[`boxui32] = (1, 1, x->Uint32)
-t_func[`boxsi64] = (1, 1, x->Int64)
-t_func[`boxui64] = (1, 1, x->Uint64)
-t_func[`boxf32] = (1, 1, x->Float32)
-t_func[`boxf64] = (1, 1, x->Float64)
-t_func[`eq_int] = (2, 2, cmp_tfunc)
-t_func[`slt_int] = (2, 2, cmp_tfunc)
-t_func[`ult_int] = (2, 2, cmp_tfunc)
-t_func[`eq_float] = (2, 2, cmp_tfunc)
-t_func[`lt_float] = (2, 2, cmp_tfunc)
-t_func[`ne_float] = (2, 2, cmp_tfunc)
-t_func[`is] = (2, 2, cmp_tfunc)
-t_func[`subtype] = (2, 2, cmp_tfunc)
-t_func[`isa] = (2, 2, cmp_tfunc)
-t_func[`tuplelen] = (1, 1, x->Int32)
-t_func[`arraylen] = (1, 1, x->Int32)
-t_func[`arrayref] = (2, 2, (a,i)->(subtype(a,Array) ? a.parameters[1] : Any))
-t_func[`arrayset] = (3, 3, (a,i,v)->a)
-t_func[`identity] = (1, 1, identity)
-t_func[`convert] =
-    (2, 2, (t,x)->((isa(t,TagKind) && is(t.name,Type{}.name)) ?
-                   t.parameters[1] :
-                   Any))
+isType(t) = isa(t,TagKind) && is(t.name,Type{}.name)
 
-function builtin_tfunction(f::Symbol, argtypes::Tuple)
+t_func = idtable()
+t_func[tuple] = (0, Inf, (args...)->args)
+t_func[boxsi8] = (1, 1, x->Int8)
+t_func[boxui8] = (1, 1, x->Uint8)
+t_func[boxsi16] = (1, 1, x->Int16)
+t_func[boxui16] = (1, 1, x->Uint16)
+t_func[boxsi32] = (1, 1, x->Int32)
+t_func[boxui32] = (1, 1, x->Uint32)
+t_func[boxsi64] = (1, 1, x->Int64)
+t_func[boxui64] = (1, 1, x->Uint64)
+t_func[boxf32] = (1, 1, x->Float32)
+t_func[boxf64] = (1, 1, x->Float64)
+t_func[eq_int] = (2, 2, cmp_tfunc)
+t_func[slt_int] = (2, 2, cmp_tfunc)
+t_func[ult_int] = (2, 2, cmp_tfunc)
+t_func[eq_float] = (2, 2, cmp_tfunc)
+t_func[lt_float] = (2, 2, cmp_tfunc)
+t_func[ne_float] = (2, 2, cmp_tfunc)
+t_func[is] = (2, 2, cmp_tfunc)
+t_func[subtype] = (2, 2, cmp_tfunc)
+t_func[isa] = (2, 2, cmp_tfunc)
+t_func[tuplelen] = (1, 1, x->Int32)
+t_func[arraylen] = (1, 1, x->Int32)
+t_func[arrayref] = (2, 2, (a,i)->(subtype(a,Array) ? a.parameters[1] : Any))
+t_func[arrayset] = (3, 3, (a,i,v)->a)
+t_func[identity] = (1, 1, identity)
+t_func[`convert] =
+    (2, 2, (t,x)->(isType(t) ? t.parameters[1] : Any))
+t_func[typeof] =
+    (1, 1, t->(isType(t)      ? Type{typeof(t.parameters[1])} :
+               isa(t,TagKind) ? Type{t} :
+               typeof(t)))
+# involving constants: typeassert, tupleref, getfield
+# therefore they get their arguments unevaluated
+t_func[typeassert] =
+    (2, 2, (A, v, t)->(isType(t) ? mintype(v,t.parameters[1]) :
+                       isconstant(A[2]) ? mintype(v,eval(A[2])) :
+                       Any))
+function tupleref_tfunc(A, t, i)
+    if is(t,())
+        return Bottom
+    end
+    if !isa(t,Tuple)
+        return Any
+    end
+    n = length(t)
+    last = t[n]
+    vararg = (isa(last,TagKind) && is(last.name,`...))
+    if isa(A[2],Int)
+        # index is a constant
+        i = A[2]
+        if i > n
+            if vararg
+                return last.parameters[1]
+            else
+                return Bottom
+            end
+        elseif i == n && vararg
+            return last.parameters[1]
+        else
+            return t[i]
+        end
+    else
+        # index unknown, could be anything from the tuple
+        if vararg
+            types = tuple(t[1:(n-1)]..., last.parameters[1])
+        else
+            types = t
+        end
+        return Union(types...)
+    end
+end
+t_func[tupleref] = (2, 2, tupleref_tfunc)
+function getfield_tfunc(A, s, name)
+    if !isa(s,StructKind)
+        return Any
+    end
+    if isa(A[2],Expr) && is(A[2].head,`quote) && isa(A[2].args[1],Symbol)
+        fld = A[2].args[1]
+        for i=1:length(s.names)
+            if is(s.names[i],fld)
+                return s.types[i]
+            end
+        end
+        return Bottom
+    else
+        return Union(s.types...)
+    end
+end
+t_func[getfield] = (2, 2, getfield_tfunc)
+
+# other: apply, setfield, new_closure
+
+# Scalar{T} => T
+normalize_numeric_type(t) = t
+function normalize_numeric_type(t::Type{Scalar})
+    if isa(t,TagKind) && length(t.parameters)==1 && subtype(t.parameters[1],t)
+        return t.parameters[1]
+    end
+    return t
+end
+
+function builtin_tfunction(f, args::Tuple, argtypes::Tuple)
     tf = get(t_func, f, false)
     if is(tf,false)
         # unknown/unhandled builtin
@@ -141,7 +219,10 @@ function builtin_tfunction(f::Symbol, argtypes::Tuple)
         # wrong # of args
         return Bottom
     end
-    return tf[3](argtypes...)
+    if is(f,typeassert) || is(f,tupleref) || is(f,getfield)
+        return normalize_numeric_type(tf[3](args, argtypes...))
+    end
+    return normalize_numeric_type(tf[3](argtypes...))
 end
 
 function abstract_eval(e::Expr, vtypes::AList, sp)
@@ -174,10 +255,11 @@ function abstract_eval(e::Expr, vtypes::AList, sp)
             end
         end
         f = eval(func)
-        argtypes = map(x->abstract_eval(x,vtypes,sp), e.args[2:])
+        fargs = e.args[2:]
+        argtypes = map(x->abstract_eval(x,vtypes,sp), fargs)
         print("call ", e.args[1], argtypes, " ")
         if isbuiltin(f)
-            rt = builtin_tfunction(func, argtypes)
+            rt = builtin_tfunction(f, fargs, argtypes)
             print("=> ", rt, "\n")
             return rt
         elseif isgeneric(f)
@@ -191,7 +273,7 @@ function abstract_eval(e::Expr, vtypes::AList, sp)
                 if isa(x[2],Symbol)
                     # when there is a builtin method in this GF, we get
                     # a symbol with the name instead of a LambdaStaticData
-                    rt = builtin_tfunction(x[2], x[1])
+                    rt = builtin_tfunction(x[2], fargs, x[1])
                 else
                     rt = ast_rettype(typeinf(x[2].ast, x[2].sparams, x[1]))
                 end
@@ -409,3 +491,10 @@ d=typevar(`d)
 m = getmethods(fact,(Int32,))
 ast = m[2]
 #typeinf(ast.ast, (`T,Int32), (Int32,))
+
+function foo(x)
+    return x.re + x.im
+end
+
+m = getmethods(foo,(Complex{Float64},))
+ast = m[2]
