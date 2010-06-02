@@ -155,7 +155,6 @@ typedef struct _jl_methlist_t {
 typedef struct _jl_methtable_t {
     JL_VALUE_STRUCT
     jl_methlist_t *defs;
-    jl_methlist_t *generics;
     jl_methlist_t *cache;
 } jl_methtable_t;
 

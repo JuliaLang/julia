@@ -111,7 +111,9 @@ JL_CALLABLE(jl_f_typeof)
 JL_CALLABLE(jl_f_subtype)
 {
     JL_NARGS(subtype, 2, 2);
-    if (!jl_is_typector(args[1]))
+    if (!jl_is_typector(args[0]) && !jl_is_typevar(args[0]))
+        JL_TYPECHK(subtype, type, args[0]);
+    if (!jl_is_typector(args[1]) && !jl_is_typevar(args[1]))
         JL_TYPECHK(subtype, type, args[1]);
     return (jl_subtype(args[0],args[1],0) ? jl_true : jl_false);
 }

@@ -25,7 +25,6 @@ static jl_methtable_t *new_method_table()
     jl_methtable_t *mt = (jl_methtable_t*)allocb(sizeof(jl_methtable_t));
     mt->type = (jl_type_t*)jl_methtable_type;
     mt->defs = NULL;
-    mt->generics = NULL;
     mt->cache = NULL;
     return mt;
 }
@@ -72,18 +71,6 @@ static jl_methlist_t *jl_method_list_assoc_exact(jl_methlist_t *ml,
 {
     while (ml != NULL) {
         if (exact_match(args, n, (jl_tuple_t*)ml->sig))
-            return ml;
-        ml = ml->next;
-    }
-    return NULL;
-}
-
-static jl_methlist_t *jl_method_list_assoc(jl_methlist_t *ml,
-                                           jl_value_t **args, size_t n)
-{
-    while (ml != NULL) {
-        if (jl_tuple_subtype(args, n, &jl_tupleref(ml->sig,0),
-                             ((jl_tuple_t*)ml->sig)->length, 1, 0))
             return ml;
         ml = ml->next;
     }
@@ -216,24 +203,20 @@ jl_methlist_t *jl_method_table_assoc(jl_methtable_t *mt,
         jl_tupleset(tt, i, a);
     }
 
-    m = jl_method_list_assoc(mt->defs, args, nargs);
-    if (m != NULL) {
-        if (exact_match(args, nargs, (jl_tuple_t*)m->sig)) {
-            cache_method(mt, tt, m->func, (jl_tuple_t*)m->sig);
-            return m;
+    m = mt->defs;
+    jl_value_t *env = (jl_value_t*)jl_false;
+    while (m != NULL) {
+        if (jl_has_typevars((jl_value_t*)m->sig)) {
+            env = jl_type_match((jl_type_t*)tt, m->sig);
+            if (env != (jl_value_t*)jl_false) break;
         }
+        else if (jl_tuple_subtype(args, nargs, &jl_tupleref(m->sig,0),
+                                  ((jl_tuple_t*)m->sig)->length, 1, 0)) {
+            break;
+        }
+        m = m->next;
     }
 
-    // try generics
-    jl_methlist_t *gm = mt->generics;
-    jl_value_t *env = (jl_value_t*)jl_false;
-    if (gm != NULL) {
-        while (gm != NULL) {
-            env = jl_type_match((jl_type_t*)tt, gm->sig);
-            if (env != (jl_value_t*)jl_false) break;
-            gm = gm->next;
-        }
-    }
     if (env == (jl_value_t*)jl_false) {
         if (m != NULL) {
             // TODO: possibly re-specialize method on inexact match
@@ -245,7 +228,7 @@ jl_methlist_t *jl_method_table_assoc(jl_methtable_t *mt,
     // cache result in concrete part of method table
     assert(jl_is_tuple(env));
     jl_tuple_t *tpenv = jl_flatten_pairs((jl_tuple_t*)env);
-    jl_function_t *newmeth = jl_instantiate_method(gm->func, tpenv);
+    jl_function_t *newmeth = jl_instantiate_method(m->func, tpenv);
     jl_tuple_t *newsig;
     // don't bother computing this if no arguments are tuples
     for(i=0; i < tt->length; i++) {
@@ -253,12 +236,12 @@ jl_methlist_t *jl_method_table_assoc(jl_methtable_t *mt,
             break;
     }
     if (i < tt->length) {
-        newsig = (jl_tuple_t*)jl_instantiate_type_with((jl_type_t*)gm->sig,
+        newsig = (jl_tuple_t*)jl_instantiate_type_with((jl_type_t*)m->sig,
                                                        &jl_tupleref(tpenv,0),
                                                        tpenv->length/2);
     }
     else {
-        newsig = (jl_tuple_t*)gm->sig;
+        newsig = (jl_tuple_t*)m->sig;
     }
     assert(jl_is_tuple(newsig));
     return cache_method(mt, tt, newmeth, newsig);
@@ -266,11 +249,8 @@ jl_methlist_t *jl_method_table_assoc(jl_methtable_t *mt,
 
 static int sigs_match(jl_type_t *a, jl_type_t *b)
 {
-    if (jl_has_typevars((jl_value_t*)a)) {
-        if (jl_has_typevars((jl_value_t*)b)) {
-            return jl_types_equal_generic((jl_value_t*)a,(jl_value_t*)b);
-        }
-        return 0;
+    if (jl_has_typevars((jl_value_t*)a) || jl_has_typevars((jl_value_t*)b)) {
+        return jl_types_equal_generic((jl_value_t*)a,(jl_value_t*)b);
     }
     return jl_types_equal((jl_value_t*)a, (jl_value_t*)b);
 }
@@ -328,7 +308,7 @@ jl_methlist_t *jl_method_table_insert(jl_methtable_t *mt, jl_type_t *type,
       which one to call.
     */
     if (jl_has_typevars((jl_value_t*)type)) {
-        return jl_method_list_insert_p(&mt->generics, type, method,
+        return jl_method_list_insert_p(&mt->defs, type, method,
                                        args_match_generic);
     }
     else {
@@ -382,8 +362,6 @@ void jl_print_method_table(jl_function_t *gf)
     char *name = ((jl_sym_t*)jl_t1(gf->env))->name;
     jl_methtable_t *mt = (jl_methtable_t*)jl_t0(gf->env);
     print_methlist(name, mt->defs);
-    ios_printf(ios_stdout, "generic:\n");
-    print_methlist(name, mt->generics);
     //ios_printf(ios_stdout, "cache:\n");
     //print_methlist(name, mt->cache);
 }
@@ -448,7 +426,6 @@ jl_value_t *jl_matching_methods(jl_function_t *gf, jl_value_t *type)
     if (!jl_is_gf(gf)) return (jl_value_t*)t;
     jl_methtable_t *mt = jl_gf_mtable(gf);
     jl_sym_t *gfname = jl_gf_name(gf);
-    t = ml_matches(mt->generics, type, t, gfname);
     t = ml_matches(mt->defs, type, t, gfname);
     return (jl_value_t*)t;
 }

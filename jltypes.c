@@ -130,6 +130,8 @@ jl_tuple_t *jl_tparams(jl_value_t *v)
 int jl_has_typevars(jl_value_t *v)
 {
     size_t i;
+    if (v == (jl_value_t*)jl_wildcard_type)
+        return 0;
     if (jl_typeis(v, jl_tvar_type))
         return 1;
     if (jl_is_tuple(v)) {
@@ -986,6 +988,9 @@ int jl_subtype_le(jl_value_t *a, jl_value_t *b, int ta, int morespecific)
 
     if ((jl_tag_type_t*)b == jl_any_type) return 1;
     if (a == b) return 1;
+    // Any is the same as an unconstrained typevar, but less "specific" for
+    // method ordering purposes.
+    if (morespecific && (jl_tag_type_t*)a == jl_any_type) return 0;
     if (jl_is_typevar(a)) return 0;
     if (jl_is_typevar(b)) return 1;
     if ((jl_tag_type_t*)a == jl_any_type) return 0;
@@ -1154,7 +1159,8 @@ static jl_value_t *type_match_(jl_type_t *child, jl_type_t *parent,
     }
     if (jl_is_typevar(child)) return jl_false;
     if (jl_is_int32(child) && jl_is_int32(parent)) {
-        if (jl_unbox_int32((jl_value_t*)child) == jl_unbox_int32((jl_value_t*)parent))
+        if (jl_unbox_int32((jl_value_t*)child) ==
+            jl_unbox_int32((jl_value_t*)parent))
             return (jl_value_t*)env;
         return jl_false;
     }

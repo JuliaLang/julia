@@ -359,15 +359,36 @@ issues 5/31/10
   . idea is to use Nullable{T}==Union(T,Null{T}), but currently that Union
     type is too complex!
 
-- in f{T}(T, T) allow the actual types to differ as long as one is a
+* in f{T}(T, T) allow the actual types to differ as long as one is a
   supertype of the other. for example, taking the type intersection of
   (Real, Int) with (T, T) should give (T<:Int, T<:Int)
 
 * in matching_methods, don't include signature S if we've already found
   a signature R such that T <: R <: S, where T is the type we're searching for
 
-- given f(Int32, Int32), matching f(T, T) and giving it priority over
+* given f(Int32, Int32), matching f(T, T) and giving it priority over
   f(Int, Int) is wrong. typevars should be treated like types, and all
   methods must be consistently comparable with each other for specificity.
   . monotonicity: if the declaration of A is more specific than B,
     it remains that way for all possible actual arguments.
+
+- need to make Type <: Function
+  trouble is that in foo(x::SomeType) we want the unconstrained version of
+  SomeType, but in SomeType{T} we need SomeType to contain constraint
+  information, plus SomeType is a function!
+
+- add the ability to hide the default constructor, which also makes it
+  possible to add multiple constructor overloads:
+
+struct Foo
+  ...
+  Foo(x) = new(x, 0)
+end
+
+struct MySingleton
+  ...
+  instance = ()
+  MySingleton() = is(instance,()) ? (instance=new(...)) : instance
+end
+
+if no ctor definitions preset, you get Foo(...) = new(...)
