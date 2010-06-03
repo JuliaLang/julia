@@ -1075,7 +1075,7 @@ int jl_type_morespecific(jl_value_t *a, jl_value_t *b, int ta)
     return jl_subtype_le(a, b, ta, 1);
 }
 
-static jl_value_t *type_match_(jl_type_t *child, jl_type_t *parent,
+static jl_value_t *type_match_(jl_value_t *child, jl_value_t *parent,
                                jl_tuple_t *env, int morespecific);
 
 static jl_value_t *tuple_match(jl_tuple_t *child, jl_tuple_t *parent,
@@ -1098,7 +1098,7 @@ static jl_value_t *tuple_match(jl_tuple_t *child, jl_tuple_t *parent,
         if (cseq) ce = jl_tparam0(ce);
         if (pseq) pe = jl_tparam0(pe);
 
-        env = (jl_tuple_t*)type_match_((jl_type_t*)ce, (jl_type_t*)pe, env, morespecific);
+        env = (jl_tuple_t*)type_match_(ce, pe, env, morespecific);
         if ((jl_value_t*)env == jl_false) return (jl_value_t*)env;
 
         if (cseq && pseq) return (jl_value_t*)env;
@@ -1119,18 +1119,18 @@ jl_tag_type_t *jl_wrap_Type(jl_value_t *t)
                           jl_any_type, jl_tuple(1, t));
 }
 
-static jl_value_t *type_match_(jl_type_t *child, jl_type_t *parent,
+static jl_value_t *type_match_(jl_value_t *child, jl_value_t *parent,
                                jl_tuple_t *env, int morespecific)
 {
     if (jl_is_typector(child))
-        child = (jl_type_t*)jl_unconstrained_type((jl_typector_t*)child);
+        child = jl_unconstrained_type((jl_typector_t*)child);
     if (jl_is_typector(parent))
-        parent = (jl_type_t*)jl_unconstrained_type((jl_typector_t*)parent);
+        parent = jl_unconstrained_type((jl_typector_t*)parent);
     size_t i;
     if (jl_is_typevar(parent)) {
         if ((jl_tvar_t*)parent == jl_wildcard_type) return (jl_value_t*)env;
         // make sure type is within this typevar's bounds
-        if (!jl_subtype_le((jl_value_t*)child, (jl_value_t*)parent, 0, 0))
+        if (!jl_subtype_le(child, parent, 0, 0))
             return jl_false;
         jl_tuple_t *p = env;
         while (p != jl_null) {
@@ -1141,10 +1141,10 @@ static jl_value_t *type_match_(jl_type_t *child, jl_type_t *parent,
                         return (jl_value_t*)env;
                     return jl_false;
                 }
-                if (jl_subtype((jl_value_t*)child, pv, 0)) {
+                if (jl_subtype(child, pv, 0)) {
                     return (jl_value_t*)env;
                 }
-                else if (jl_subtype(pv, (jl_value_t*)child, 0)) {
+                else if (jl_subtype(pv, child, 0)) {
                     jl_t1(p) = (jl_value_t*)child;
                     return (jl_value_t*)env;
                 }
@@ -1152,8 +1152,7 @@ static jl_value_t *type_match_(jl_type_t *child, jl_type_t *parent,
             }
             p = (jl_tuple_t*)jl_nextpair(p);
         }
-        jl_tuple_t *np = jl_tuple(3, (jl_value_t*)parent, (jl_value_t*)child,
-                                  (jl_value_t*)env);
+        jl_tuple_t *np = jl_tuple(3, parent, child, (jl_value_t*)env);
         return (jl_value_t*)np;
     }
     if (jl_is_typevar(child)) {
@@ -1168,14 +1167,14 @@ static jl_value_t *type_match_(jl_type_t *child, jl_type_t *parent,
         return jl_false;
     }
     if (child == parent) return (jl_value_t*)env;
-    if (parent == (jl_type_t*)jl_any_type) return (jl_value_t*)env;
-    if (child  == (jl_type_t*)jl_any_type) return jl_false;
+    if (parent == (jl_value_t*)jl_any_type) return (jl_value_t*)env;
+    if (child  == (jl_value_t*)jl_any_type) return jl_false;
 
     if (jl_is_union_type(child)) {
         jl_tuple_t *t = ((jl_uniontype_t*)child)->types;
         for(i=0; i < t->length; i++) {
-            env = (jl_tuple_t*)type_match_((jl_type_t*)jl_tupleref(t,i),
-                                           (jl_type_t*)parent, env, morespecific);
+            env = (jl_tuple_t*)type_match_(jl_tupleref(t,i), parent, env,
+                                           morespecific);
             if ((jl_value_t*)env == jl_false) return (jl_value_t*)env;
         }
         return (jl_value_t*)env;
@@ -1183,9 +1182,8 @@ static jl_value_t *type_match_(jl_type_t *child, jl_type_t *parent,
     if (jl_is_union_type(parent)) {
         jl_tuple_t *t = ((jl_uniontype_t*)parent)->types;
         for(i=0; i < t->length; i++) {
-            jl_value_t *p = type_match_((jl_type_t*)child,
-                                        (jl_type_t*)jl_tupleref(t,i),
-                                        env, morespecific);
+            jl_value_t *p = type_match_(child, jl_tupleref(t,i), env,
+                                        morespecific);
             if (p != jl_false) return p;
         }
         return jl_false;
@@ -1193,12 +1191,13 @@ static jl_value_t *type_match_(jl_type_t *child, jl_type_t *parent,
 
     if (jl_is_func_type(parent)) {
         if (jl_is_func_type(child)) {
-            env = (jl_tuple_t*)type_match_(((jl_func_type_t*)child)->from,
-                                           ((jl_func_type_t*)parent)->from, env,
-                                           morespecific);
+            env = (jl_tuple_t*)
+                type_match_((jl_value_t*)((jl_func_type_t*)child)->from,
+                            (jl_value_t*)((jl_func_type_t*)parent)->from, env,
+                            morespecific);
             if ((jl_value_t*)env == jl_false) return (jl_value_t*)env;
-            return type_match_(((jl_func_type_t*)child)->to,
-                               ((jl_func_type_t*)parent)->to, env,
+            return type_match_((jl_value_t*)((jl_func_type_t*)child)->to,
+                               (jl_value_t*)((jl_func_type_t*)parent)->to, env,
                                morespecific);
         }
         return jl_false;
@@ -1219,8 +1218,8 @@ static jl_value_t *type_match_(jl_type_t *child, jl_type_t *parent,
             jl_value_t *nt_len = jl_tupleref(tp,0);
             jl_value_t *childlen = jl_box_int32(((jl_tuple_t*)child)->length);
             if (jl_is_typevar(nt_len)) {
-                env = (jl_tuple_t*)type_match_((jl_type_t*)childlen, (jl_type_t*)nt_len,
-                                               env, morespecific);
+                env = (jl_tuple_t*)type_match_(childlen, nt_len, env,
+                                               morespecific);
                 if ((jl_value_t*)env == jl_false) return (jl_value_t*)env;
             }
             else {
@@ -1247,8 +1246,7 @@ static jl_value_t *type_match_(jl_type_t *child, jl_type_t *parent,
             jl_value_t *ntp = jl_tupleref(((jl_tag_type_t*)child)->parameters,
                                           1);
             if (tp->length == 1 && jl_is_seq_type(jl_tupleref(tp,0))) {
-                return type_match_((jl_type_t*)ntp,
-                                   (jl_type_t*)jl_tparam0(jl_tupleref(tp,0)),
+                return type_match_(ntp, jl_tparam0(jl_tupleref(tp,0)),
                                    env, morespecific);
             }
         }
@@ -1268,8 +1266,8 @@ static jl_value_t *type_match_(jl_type_t *child, jl_type_t *parent,
                 return (jl_value_t*)env;
             assert(tta->parameters->length == ttb->parameters->length);
             for(i=0; i < tta->parameters->length; i++) {
-                env = (jl_tuple_t*)type_match_((jl_type_t*)jl_tupleref(tta->parameters,i),
-                                               (jl_type_t*)jl_tupleref(ttb->parameters,i),
+                env = (jl_tuple_t*)type_match_(jl_tupleref(tta->parameters,i),
+                                               jl_tupleref(ttb->parameters,i),
                                                env, morespecific);
                 if ((jl_value_t*)env == jl_false) goto check_Type;
             }
@@ -1280,7 +1278,7 @@ static jl_value_t *type_match_(jl_type_t *child, jl_type_t *parent,
  check_Type:
     if (((jl_tag_type_t*)child)->name == jl_type_type->name) {
         // Type{T} matches either Type{:>T} or :>typeof(T)
-        return type_match_((jl_type_t*)jl_full_type(jl_tparam0(child)),
+        return type_match_(jl_full_type(jl_tparam0(child)),
                            parent, env, morespecific);
     }
 
@@ -1296,12 +1294,12 @@ static jl_value_t *type_match_(jl_type_t *child, jl_type_t *parent,
 */
 jl_value_t *jl_type_match(jl_type_t *a, jl_type_t *b)
 {
-    return type_match_(a, b, jl_null, 0);
+    return type_match_((jl_value_t*)a, (jl_value_t*)b, jl_null, 0);
 }
 
 jl_value_t *jl_type_match_morespecific(jl_type_t *a, jl_type_t *b)
 {
-    return type_match_(a, b, jl_null, 1);
+    return type_match_((jl_value_t*)a, (jl_value_t*)b, jl_null, 1);
 }
 
 // initialization -------------------------------------------------------------
