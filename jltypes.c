@@ -980,8 +980,7 @@ int jl_subtype_le(jl_value_t *a, jl_value_t *b, int ta, int morespecific)
                 jl_subtype_le((jl_value_t*)((jl_tvar_t*)b)->lb,
                               (jl_value_t*)((jl_tvar_t*)a)->lb, 0, 0);
         }
-        return jl_subtype_le((jl_value_t*)((jl_tvar_t*)a)->ub, b, 0, 0) &&
-            jl_subtype_le(b, (jl_value_t*)((jl_tvar_t*)a)->lb, 0, 0);
+        return jl_subtype_le((jl_value_t*)((jl_tvar_t*)a)->ub, b, 0, 0);
     }
     if (jl_is_typevar(b)) {
         return jl_subtype_le(a, (jl_value_t*)((jl_tvar_t*)b)->ub, 0, 0) &&
@@ -1157,7 +1156,11 @@ static jl_value_t *type_match_(jl_type_t *child, jl_type_t *parent,
                                   (jl_value_t*)env);
         return (jl_value_t*)np;
     }
-    if (jl_is_typevar(child)) return jl_false;
+    if (jl_is_typevar(child)) {
+        if (jl_subtype_le(child, parent, 0, morespecific))
+            return (jl_value_t*)env;
+        return jl_false;
+    }
     if (jl_is_int32(child) && jl_is_int32(parent)) {
         if (jl_unbox_int32((jl_value_t*)child) ==
             jl_unbox_int32((jl_value_t*)parent))
