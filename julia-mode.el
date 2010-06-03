@@ -67,14 +67,19 @@
     (or (equal item (car lst))
 	(member item (cdr lst)))))
 
-; TODO: skip keywords inside strings
+; TODO: skip keywords inside strings and comments
+
+(defun at-keyword (kw-list)
+  (and (or (= (point) 1)
+	   (not (equal (char-before (point)) ?.)))
+       (member (current-word) kw-list)))
 
 ; get the column of the last open block
 (defun last-open-block (min count)
   (cond ((> count 0) (+ 4 (current-indentation)))
         ((<= (point) min) nil)
         (t (backward-word 1)
-           (cond ((member (current-word) julia-block-start-keywords)
+           (cond ((at-keyword julia-block-start-keywords)
                   (last-open-block min (+ count 1)))
                  ((equal (current-word) "end")
                   (last-open-block min (- count 1)))
@@ -85,14 +90,13 @@
   (forward-line -1)
   (end-of-line)
   (backward-sexp)
-  (if (member (current-word) julia-block-other-keywords)
+  (if (at-keyword julia-block-other-keywords)
       (+ 4 (current-indentation))
     (if (char-equal (char-after (point)) ?\()
         (progn
           (backward-word 1)
-          (let ((cur (current-indentation))
-                (cw (current-word)))
-            (if (member cw julia-block-start-keywords)
+          (let ((cur (current-indentation)))
+            (if (at-keyword julia-block-start-keywords)
                 (+ 4 cur)
               nil)))
       nil)))
@@ -130,7 +134,7 @@
            (let ((endtok (progn
                            (beginning-of-line)
                            (forward-to-indentation 0)
-                           (member (current-word) julia-block-end-keywords))))
+                           (at-keyword julia-block-end-keywords))))
              (error2nil (+ (last-open-block (point-min) 0)
                            (if endtok -4 0)))))
 ; take same indentation as previous line
@@ -146,7 +150,7 @@
 					  (equal (char-after (point)) ?=)))
 			   4 nil))
          0))
-	(when (member (current-word) julia-block-end-keywords)
+	(when (at-keyword julia-block-end-keywords)
 	  (forward-word 1)))
 
 (defun julia-mode ()

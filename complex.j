@@ -2,6 +2,7 @@ struct Complex{T<:Real} <: Number
     re::T
     im::T
 end
+Complex{T<:Real}(x::T) = Complex(x, convert(T,0))
 
 convert{T}(::Type{Complex{T}}, x::T) = Complex(x, convert(T,0))
 convert{T}(::Type{Complex{T}}, x::Real) = Complex(convert(T,x), convert(T,0))
@@ -126,14 +127,14 @@ end
 (^)(x::Union(Int8,Uint8,Int16,Uint16,Int32,Uint32), p::Union(Float,Complex)) =
     float64(x)^p
 
-function (^){T}(x::Float{T}, p::Float{T})
+function (^)(x::Float, p::Float)
     if x >= 0
         return pow(x, p)
     end
     if p == 0.5
-        return sqrt(convert(Complex{T},x))
+        return sqrt(Complex(x))
     end
-    return convert(Complex{T},x)^convert(Complex{T},p)
+    return Complex(x)^Complex(p)
 end
 
 function (^){T}(z::Complex{T}, p::Complex)

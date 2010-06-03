@@ -14,8 +14,9 @@
 # - t-functions for builtins
 # - isconstant()
 # - deal with call stack and recursive types
-# - approximate static parameters
+# * approximate static parameters
 # - use type bounds
+# - reflection for constructors
 
 # mutable pair
 struct Pair
@@ -83,6 +84,26 @@ function print(a::AList)
     print(")")
 end
 
+struct EmptyCallStack
+end
+
+struct CallStack
+    ast
+    types::Tuple
+    n::Int32
+    recurred::Bool
+    result
+    prev::Union(EmptyCallStack,CallStack)
+end
+
+CallStack(ast, types, prev::EmptyCallStack) =
+    CallStack(ast, types, 0, false, Bottom, prev)
+CallStack(ast, types, prev::CallStack) =
+    CallStack(ast, types, prev.n+1, false, Bottom, prev)
+
+# TODO thread local
+inference_stack = EmptyCallStack()
+
 tintersect(a,b) = ccall(dlsym(JuliaDLHandle,"jl_type_intersection"), Any,
                         (Any,Any), a, b)
 tmatch(a,b) = ccall(dlsym(JuliaDLHandle,"jl_type_match"), Any,
@@ -90,6 +111,8 @@ tmatch(a,b) = ccall(dlsym(JuliaDLHandle,"jl_type_match"), Any,
 
 getmethods(f,t) = ccall(dlsym(JuliaDLHandle,"jl_matching_methods"), Any,
                         (Any,Any), f, t)
+
+typeseq(a,b) = subtype(a,b)&&subtype(b,a)
 
 isbuiltin(f) = ccall(dlsym(JuliaDLHandle,"jl_is_builtin"), Int32, (Any,),
                      f) != 0
@@ -227,6 +250,12 @@ function builtin_tfunction(f, args::Tuple, argtypes::Tuple)
 end
 
 function abstract_eval(e::Expr, vtypes::AList, sp)
+    t = abstract_eval_expr(e, vtypes, sp)
+    e.type = t
+    return t
+end
+
+function abstract_eval_expr(e, vtypes::AList, sp)
     # handle:
     # call  lambda  quote  null  top  unbound  box-unbound
     # closure-ref
@@ -255,10 +284,13 @@ function abstract_eval(e::Expr, vtypes::AList, sp)
                 return Any
             end
         end
-        f = eval(func)
         fargs = e.args[2:]
         argtypes = map(x->abstract_eval(x,vtypes,sp), fargs)
         print("call ", e.args[1], argtypes, " ")
+        if !isbuiltin(func)
+            return Any
+        end
+        f = eval(func)
         if isbuiltin(f)
             rt = builtin_tfunction(f, fargs, argtypes)
             print("=> ", rt, "\n")
@@ -302,6 +334,9 @@ end
 
 function abstract_eval_global(s::Symbol)
     if isconstant(s)
+        if !isbound(s)
+            return Any
+        end
         return abstract_eval_constant(eval(s))
     else
         return Any
@@ -330,10 +365,12 @@ function interpret(e::Expr, vtypes::AList, sp)
     if is(e.head,symbol("="))
         t = abstract_eval(e.args[2], vtypes, sp)
         a = alist(vtypes)
-        a[e.args[1]] = t
+        lhs = e.args[1]
+        assert(isa(lhs,Symbol))
+        a[lhs] = t
         return a
-    elseif is(e.head,`label)
-        # no effect
+    elseif is(e.head,`gotoifnot)
+        abstract_eval(e.args[1], vtypes, sp)
     end
     return vtypes
 end
@@ -377,6 +414,7 @@ function typeinf(ast::Expr, sparams::Tuple, atypes::Tuple)
         error("label not found")
     end
 
+    ast = copy(ast)
     #print("typeinf ", ast, " ", sparams, " ", atypes, "\n")
 
     assert(is(ast.head,`lambda))
@@ -443,16 +481,14 @@ function typeinf(ast::Expr, sparams::Tuple, atypes::Tuple)
 end
 
 function eval_annotate(e::Expr, vtypes::AList, sp)
-    if is(e.head,`quote) || is(e.head,`top)
-        return Expr(e.head, e.args, abstract_eval(e, vtypes, sp))
-    elseif is(e.head,`goto) || is(e.head,`label)
+    if is(e.head,`quote) || is(e.head,`top) || is(e.head,`goto) ||
+        is(e.head,`label)
         return e
     elseif is(e.head,`gotoifnot) || is(e.head,symbol("return")) ||
         is(e.head,symbol("="))
         return Expr(e.head, map(x->eval_annotate(x,vtypes,sp), e.args), Any)
     end
-    Expr(e.head, map(x->eval_annotate(x,vtypes,sp), e.args),
-         abstract_eval(e, vtypes, sp))
+    Expr(e.head, map(x->eval_annotate(x,vtypes,sp), e.args), e.type)
 end
 
 function eval_annotate(e::Symbol, vtypes::AList, sp)
@@ -467,7 +503,7 @@ function add_decls(vars::(Symbol...), states::(AList...))
     return vars
 end
 
-# copy of AST with all type information inserted
+# copy of AST with types of all symbols annotated
 function type_annotate(ast::Expr, states::(AList...), sp, rettype)
     vinf = ast.args[2]
     expr(`lambda,
@@ -498,4 +534,21 @@ function foo(x)
 end
 
 m = getmethods(foo,(Complex{Float64},))
+ast = m[3]
+
+function bar(x)
+    if (x > 0)
+        return bar(x-1)
+    end
+    return 0
+end
+
+function qux(x)
+    if mystery()
+        a = 10
+    end
+    z = a + 1
+end
+
+m = getmethods(qux,(Int32,))
 ast = m[3]

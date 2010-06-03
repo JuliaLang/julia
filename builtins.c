@@ -239,6 +239,13 @@ JL_CALLABLE(jl_f_top_eval)
     return jl_interpret_toplevel_thunk(jl_expand(e));
 }
 
+JL_CALLABLE(jl_f_isbound)
+{
+    JL_NARGS(isbound, 1, 1);
+    JL_TYPECHK(isbound, symbol, args[0]);
+    return jl_boundp(jl_system_module, (jl_sym_t*)args[0]) ? jl_true : jl_false;
+}
+
 JL_CALLABLE(jl_f_tuple)
 {
     size_t i;
@@ -1265,6 +1272,7 @@ void jl_init_builtins()
     add_builtin_func("dlopen", jl_f_dlopen);
     add_builtin_func("dlsym", jl_f_dlsym);
     add_builtin_func("eval", jl_f_top_eval);
+    add_builtin_func("isbound", jl_f_isbound);
     add_builtin("convert", (jl_value_t*)jl_convert_gf);
     add_builtin("print", (jl_value_t*)jl_print_gf);
     add_builtin("hash", (jl_value_t*)jl_hash_gf);
