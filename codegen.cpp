@@ -513,7 +513,10 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool value,
     if (!strcmp(ex->head->name, "$")) {
         jl_error("syntax error: prefix $ outside backquote");
     }
-    assert(!value);
+    if (value) {
+        jl_errorf("unsupported expression type %s", ex->head->name);
+    }
+    //assert(!value);
     return NULL;
 }
 

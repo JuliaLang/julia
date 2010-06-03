@@ -767,7 +767,16 @@ JL_CALLABLE(jl_f_print_typename)
 JL_CALLABLE(jl_f_print_typevar)
 {
     ios_t *s = current_output_stream;
-    ios_puts(((jl_tvar_t*)args[0])->name->name, s);
+    jl_tvar_t *tv = (jl_tvar_t*)args[0];
+    if (tv->lb != jl_bottom_type) {
+        call_print((jl_value_t*)tv->lb);
+        ios_puts("<:", s);
+    }
+    ios_puts(tv->name->name, s);
+    if (tv->ub != (jl_type_t*)jl_any_type) {
+        ios_puts("<:", s);
+        call_print((jl_value_t*)tv->ub);
+    }
     return (jl_value_t*)jl_null;
 }
 
@@ -985,10 +994,36 @@ JL_CALLABLE(jl_f_new_tag_type)
 
 JL_CALLABLE(jl_f_typevar)
 {
-    JL_NARGS(typevar, 1, 1);
+    if (nargs < 1 || nargs > 3) {
+        JL_NARGS(typevar, 1, 1);
+    }
     JL_TYPECHK(typevar, symbol, args[0]);
-    return (jl_value_t*)jl_new_struct(jl_tvar_type, (jl_sym_t*)args[0],
-                                      jl_bottom_type, jl_any_type);
+    jl_value_t *lb = (jl_value_t*)jl_bottom_type;
+    jl_value_t *ub = (jl_value_t*)jl_any_type;
+    if (nargs > 1) {
+        if (jl_is_typector(args[1])) {
+            lb = jl_unconstrained_type((jl_typector_t*)args[1]);
+        }
+        else {
+            JL_TYPECHK(typevar, type, args[1]);
+            lb = args[1];
+        }
+        if (nargs > 2) {
+            if (jl_is_typector(args[2])) {
+                ub = jl_unconstrained_type((jl_typector_t*)args[2]);
+            }
+            else {
+                JL_TYPECHK(typevar, type, args[2]);
+                lb = args[2];
+            }
+        }
+        else {
+            // typevar(name, UB)
+            ub = lb;
+            lb = (jl_value_t*)jl_bottom_type;
+        }
+    }
+    return (jl_value_t*)jl_new_struct(jl_tvar_type, (jl_sym_t*)args[0], lb, ub);
 }
 
 JL_CALLABLE(jl_f_union)

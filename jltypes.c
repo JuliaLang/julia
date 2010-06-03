@@ -86,25 +86,6 @@ int jl_is_type(jl_value_t *v)
             jl_typeis(v, jl_bits_kind));
 }
 
-int jl_is_abstract_type(jl_value_t *v)
-{
-    if (jl_is_typevar(v) || jl_typeis(v, jl_union_kind) ||
-        jl_typeis(v, jl_tag_kind))
-        return 1;
-    if (jl_is_tuple(v)) {
-        jl_tuple_t *t = (jl_tuple_t*)v;
-        size_t i;
-        for(i=0; i < t->length; i++) {
-            if (jl_is_abstract_type(jl_tupleref(t, i)))
-                return 1;
-        }
-        return 0;
-    }
-    if (jl_is_typector(v))
-        return jl_is_abstract_type((jl_value_t*)((jl_typector_t*)v)->body);
-    return 0;
-}
-
 jl_typename_t *jl_tname(jl_value_t *v)
 {
     if (jl_is_tuple(v))
@@ -991,8 +972,21 @@ int jl_subtype_le(jl_value_t *a, jl_value_t *b, int ta, int morespecific)
     // Any is the same as an unconstrained typevar, but less "specific" for
     // method ordering purposes.
     if (morespecific && (jl_tag_type_t*)a == jl_any_type) return 0;
-    if (jl_is_typevar(a)) return 0;
-    if (jl_is_typevar(b)) return 1;
+    if (jl_is_typevar(a)) {
+        if (jl_is_typevar(b)) {
+            return
+                jl_subtype_le((jl_value_t*)((jl_tvar_t*)a)->ub,
+                              (jl_value_t*)((jl_tvar_t*)b)->ub, 0, 0) &&
+                jl_subtype_le((jl_value_t*)((jl_tvar_t*)b)->lb,
+                              (jl_value_t*)((jl_tvar_t*)a)->lb, 0, 0);
+        }
+        return jl_subtype_le((jl_value_t*)((jl_tvar_t*)a)->ub, b, 0, 0) &&
+            jl_subtype_le(b, (jl_value_t*)((jl_tvar_t*)a)->lb, 0, 0);
+    }
+    if (jl_is_typevar(b)) {
+        return jl_subtype_le(a, (jl_value_t*)((jl_tvar_t*)b)->ub, 0, 0) &&
+            jl_subtype_le((jl_value_t*)((jl_tvar_t*)b)->lb, a, 0, 0);
+    }
     if ((jl_tag_type_t*)a == jl_any_type) return 0;
     if (jl_is_tuple(b)) {
         if (jl_is_tag_type(a) &&
@@ -1049,7 +1043,7 @@ int jl_subtype_le(jl_value_t *a, jl_value_t *b, int ta, int morespecific)
                 jl_value_t *bpara = jl_tupleref(ttb->parameters,i);
                 if (jl_is_typevar(bpara))
                     continue;
-                if (jl_is_tag_type(ttb)) {
+                if (jl_is_tag_type(ttb) || jl_is_typevar(bpara)) {
                     // allow abstract types to be covariant
                     if (!jl_subtype_le(apara, bpara, 0, morespecific))
                         goto check_Type;
@@ -1136,12 +1130,18 @@ static jl_value_t *type_match_(jl_type_t *child, jl_type_t *parent,
     size_t i;
     if (jl_is_typevar(parent)) {
         if ((jl_tvar_t*)parent == jl_wildcard_type) return (jl_value_t*)env;
+        // make sure type is within this typevar's bounds
+        if (!jl_subtype_le((jl_value_t*)child, (jl_value_t*)parent, 0, 0))
+            return jl_false;
         jl_tuple_t *p = env;
         while (p != jl_null) {
             if (jl_t0(p) == (jl_value_t*)parent) {
                 jl_value_t *pv = jl_t1(p);
-                if (jl_types_equal((jl_value_t*)child, pv))
-                    return (jl_value_t*)env;
+                if (jl_is_typevar(pv) && jl_is_typevar(child)) {
+                    if (pv == (jl_value_t*)child)
+                        return (jl_value_t*)env;
+                    return jl_false;
+                }
                 if (jl_subtype((jl_value_t*)child, pv, 0)) {
                     return (jl_value_t*)env;
                 }

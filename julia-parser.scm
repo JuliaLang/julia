@@ -28,7 +28,7 @@ TODO:
 ; unused characters: @ prefix'
 ; no character literals; unicode kind of makes them obsolete. strings instead.
 
-(define unary-ops '(- + ! ~ $))
+(define unary-ops '(- + ! ~ $ |<:| |:>|))
 
 ; operators that are special forms, not function names
 (define syntactic-operators

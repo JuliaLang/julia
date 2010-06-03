@@ -127,8 +127,10 @@
       `(lambda ,argl
 	 (scope-block ,body)))))
 
-(define (symbols->typevars sl)
-  (map (lambda (x) `(call (top typevar) ',x)) sl))
+(define (symbols->typevars sl upperbounds)
+  (if (null? upperbounds)
+      (map (lambda (x)    `(call (top typevar) ',x)) sl)
+      (map (lambda (x ub) `(call (top typevar) ',x ,ub)) sl upperbounds)))
 
 (define (gf-def-expr- name argl argtypes body)
   (gf-def-expr-- name argl argtypes body 'new_generic_function 'add_method))
@@ -144,6 +146,20 @@
 	  ,argtypes
 	  ,(function-expr argl body))))
 
+(define (sparam-name-bounds sparams names bounds)
+  (cond ((null? sparams)
+	 (values names bounds))
+	((symbol? (car sparams))
+	 (sparam-name-bounds (cdr sparams) (cons (car sparams) names)
+			     (cons '(top Any) bounds)))
+	((and (length= (car sparams) 4)
+	      (eq? (caar sparams) 'comparison)
+	      (eq? (caddar sparams) '|<:|))
+	 (sparam-name-bounds (cdr sparams) (cons (cadr (car sparams)) names)
+			     (cons (cadddr (car sparams)) bounds)))
+	(else
+	 (error "malformed static parameter list"))))
+
 (define (generic-function-def-expr name sparams argl body)
   (let* ((argl  (fsig-to-lambda-list argl))
 	 (types (llist-types argl)))
@@ -151,12 +167,19 @@
      name argl
      (if (null? sparams)
 	 `(tuple ,@types)
-	 `(call (lambda ,sparams
-		  (tuple ,@types))
-		,@(symbols->typevars sparams)))
+	 (receive
+	  (names bounds) (sparam-name-bounds sparams '() '())
+	  `(call (lambda ,names
+		   (tuple ,@types))
+		 ,@(symbols->typevars names bounds))))
      body)))
 
 (define (struct-def-expr name params super fields)
+  (receive
+   (params bounds) (sparam-name-bounds params '() '())
+   (struct-def-expr- name params bounds super fields)))
+
+(define (struct-def-expr- name params bounds super fields)
   ; extract the name from a function def expr
   (define (f-exp-name e)
     (let ((head (cadadr e)))
@@ -215,11 +238,14 @@
 			`(= ,type
 			    ,(if (null? sp)
 				 `(tuple ,@(llist-types argl))
-				 `(call (lambda ,sp
-					  (tuple ,@(llist-types argl)))
-					,@(symbols->typevars sp)))))
+				 (receive
+				  (sp bnds)
+				  (sparam-name-bounds sp)
+				  `(call (lambda ,sp
+					   (tuple ,@(llist-types argl)))
+					 ,@(symbols->typevars sp bnds))))))
 		      func-types func-args func-sparms)))
-	    ,@(symbols->typevars params))
+	    ,@(symbols->typevars params bounds))
 	   ; build method definitions
 	   ,@(map (lambda (fdef fargs ftype)
 		    (gf-def-expr- (f-exp-name fdef)
@@ -233,20 +259,23 @@
 		  func-names))))))))
 
 (define (type-def-expr name params super)
-  `(block
-    (call
-     (lambda ,params
-       (block
-	(= ,name
-	   (call (top new_tag_type)
-		 (quote ,name)
-		 ,super
-		 (tuple ,@params)))
-	,(if (null? params)
-	     `(null)
-	     `(= ,name (call (top new_type_constructor)
-			     (tuple ,@params) ,name)))))
-     ,@(symbols->typevars params))))
+  (receive
+   (params bounds)
+   (sparam-name-bounds params '() '())
+   `(block
+     (call
+      (lambda ,params
+	(block
+	 (= ,name
+	    (call (top new_tag_type)
+		  (quote ,name)
+		  ,super
+		  (tuple ,@params)))
+	 ,(if (null? params)
+	      `(null)
+	      `(= ,name (call (top new_type_constructor)
+			      (tuple ,@params) ,name)))))
+      ,@(symbols->typevars params bounds)))))
 
 (define *anonymous-generic-function-name* (gensym))
 
@@ -332,7 +361,10 @@
 		   `(call (lambda ,params
 			    (= ,name (call (top new_type_constructor)
 					   (tuple ,@params) ,type-ex)))
-			  ,@(symbols->typevars params)))
+			  ,@(receive
+			     (params bounds)
+			     (sparam-name-bounds params '() '())
+			     (symbols->typevars params bounds))))
 
    (pattern-lambda (comparison . chain) (expand-compare-chain chain))
 

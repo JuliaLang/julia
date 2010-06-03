@@ -246,6 +246,8 @@ reinventing the repl: language support for interactive use
 
 improving numeric type systems, e.g. apprach to type promotion
 
+a highly unobtrusive type system
+
 eliminating array allocations in loops
 or using register allocation to manage general resources
 or inference for minimizing temporary space use. e.g. figure out

@@ -404,17 +404,19 @@ static jl_tuple_t *ml_matches(jl_methlist_t *ml, jl_value_t *type,
                 shadowed = 1;
                 break;
             }
-            tt = (jl_tuple_t*)jl_tupleref(tt,2);
+            tt = (jl_tuple_t*)jl_tupleref(tt,3);
         }
         if (!shadowed) {
-            jl_value_t *ti = jl_type_intersection((jl_value_t*)ml->sig, type);
+            jl_tuple_t *env=jl_null;
+            jl_value_t *ti=jl_type_intersect((jl_value_t*)ml->sig, type, &env);
+            env = jl_flatten_pairs(env);
             if (ti != (jl_value_t*)jl_bottom_type) {
                 if (ml->func->linfo == NULL) {
                     // builtin
-                    t = jl_tuple(3, ti, name, t);
+                    t = jl_tuple(4, ti, env, name, t);
                 }
                 else {
-                    t = jl_tuple(3, ti, ml->func->linfo, t);
+                    t = jl_tuple(4, ti, env, ml->func->linfo, t);
                 }
             }
         }

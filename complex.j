@@ -1,6 +1,6 @@
-struct Complex{T} <: Number
-    re::Real{T}
-    im::Real{T}
+struct Complex{T<:Real} <: Number
+    re::T
+    im::T
 end
 
 convert{T}(::Type{Complex{T}}, x::T) = Complex(x, convert(T,0))

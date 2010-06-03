@@ -1,6 +1,6 @@
-struct Rational{T} <: Real
-    num::Int{T}
-    den::Int{T}
+struct Rational{T<:Int} <: Real
+    num::T
+    den::T
 end
 
 convert{T}(::Type{Rational{T}}, x::T) = Rational(x, convert(T,1))

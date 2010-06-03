@@ -7,14 +7,15 @@
 #   . cached t-functions
 #   . abstract_invoke()
 #     . consult t-func cache
-#     . determine applicable methods
-#     . abstract_invoke all of them, type-union the result, and cache it
+#     * determine applicable methods
+#     * abstract_invoke all of them, type-union the result, and cache it
 # * hash table of symbols
 # * eval
 # - t-functions for builtins
 # - isconstant()
 # - deal with call stack and recursive types
 # - approximate static parameters
+# - use type bounds
 
 # mutable pair
 struct Pair
@@ -270,15 +271,15 @@ function abstract_eval(e::Expr, vtypes::AList, sp)
                 #print(x,"\n")
                 # TODO: approximate static parameters by calling tmatch
                 # on argtypes and the intersection
-                if isa(x[2],Symbol)
+                if isa(x[3],Symbol)
                     # when there is a builtin method in this GF, we get
                     # a symbol with the name instead of a LambdaStaticData
-                    rt = builtin_tfunction(x[2], fargs, x[1])
+                    rt = builtin_tfunction(x[3], fargs, x[1])
                 else
-                    rt = ast_rettype(typeinf(x[2].ast, x[2].sparams, x[1]))
+                    rt = ast_rettype(typeinf(x[3].ast, x[2], x[1]))
                 end
                 rettype = tmerge(rettype, rt)
-                x = x[3]
+                x = x[4]
             end
             # if rettype is Bottom we've found a method not found error
             print("=> ", rettype, "\n")
@@ -489,7 +490,7 @@ c=typevar(`c)
 d=typevar(`d)
 
 m = getmethods(fact,(Int32,))
-ast = m[2]
+ast = m[3]
 #typeinf(ast.ast, (`T,Int32), (Int32,))
 
 function foo(x)
@@ -497,4 +498,4 @@ function foo(x)
 end
 
 m = getmethods(foo,(Complex{Float64},))
-ast = m[2]
+ast = m[3]
