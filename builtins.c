@@ -1021,7 +1021,7 @@ JL_CALLABLE(jl_f_typevar)
             }
             else {
                 JL_TYPECHK(typevar, type, args[2]);
-                lb = args[2];
+                ub = args[2];
             }
         }
         else {

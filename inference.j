@@ -149,6 +149,7 @@ t_func[ult_int] = (2, 2, cmp_tfunc)
 t_func[eq_float] = (2, 2, cmp_tfunc)
 t_func[lt_float] = (2, 2, cmp_tfunc)
 t_func[ne_float] = (2, 2, cmp_tfunc)
+# TODO: ccall
 t_func[is] = (2, 2, cmp_tfunc)
 t_func[subtype] = (2, 2, cmp_tfunc)
 t_func[isa] = (2, 2, cmp_tfunc)

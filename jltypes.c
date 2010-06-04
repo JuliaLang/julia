@@ -231,9 +231,6 @@ jl_value_t *jl_type_union(jl_tuple_t *types)
     return (jl_value_t*)jl_new_uniontype(types);
 }
 
-jl_value_t *jl_type_intersect(jl_value_t *a, jl_value_t *b,
-                              jl_tuple_t **penv);
-
 static jl_value_t *intersect_union(jl_uniontype_t *a, jl_value_t *b,
                                    jl_tuple_t **penv)
 {
@@ -358,6 +355,34 @@ static jl_value_t *tvar_find(jl_tuple_t **penv, jl_value_t *b)
         p = (jl_tuple_t*)jl_nextpair(p);
     }
     return b;
+}
+
+static jl_value_t *meet_tvars(jl_tvar_t *a, jl_tvar_t *b)
+{
+    jl_value_t *lb, *ub;
+    if (jl_types_equal((jl_value_t*)a->lb, (jl_value_t*)b->lb) &&
+        jl_types_equal((jl_value_t*)a->ub, (jl_value_t*)b->ub))
+        return (jl_value_t*)b;
+    ub = jl_type_intersection((jl_value_t*)a->ub, (jl_value_t*)b->ub);
+    if (ub == (jl_value_t*)jl_bottom_type)
+        return ub;
+    lb = jl_type_union(jl_tuple(2, a->lb, b->lb));
+    if (!jl_subtype(lb, ub, 0))
+        return (jl_value_t*)jl_bottom_type;
+    return jl_new_struct(jl_tvar_type, jl_gensym(), lb, ub);
+}
+
+static jl_value_t *meet_tvar(jl_tvar_t *tv, jl_value_t *ty)
+{
+    if (jl_is_typevar(ty))
+        return (jl_value_t*)meet_tvars(tv, (jl_tvar_t*)ty);
+    if (jl_subtype((jl_value_t*)tv->ub, ty, 0))
+        return (jl_value_t*)tv;
+    if (jl_types_equal((jl_value_t*)tv->lb, ty))
+        return ty;
+    if (jl_subtype((jl_value_t*)tv->lb, ty, 0))
+        return jl_new_struct(jl_tvar_type, jl_gensym(), tv->lb, ty);
+    return (jl_value_t*)jl_bottom_type;
 }
 
 // use, essentially, union-find on type variables to group them
@@ -513,6 +538,20 @@ jl_value_t *jl_type_intersection(jl_value_t *a, jl_value_t *b)
     if (ti == (jl_value_t*)jl_bottom_type)
         return ti;
     if (env != jl_null) {
+        //jl_print(env); ios_printf(ios_stdout,"\n");
+        jl_tuple_t *p = env;
+        while (p != jl_null) {
+            jl_tvar_t *tv = (jl_tvar_t*)jl_t0(p);
+            jl_value_t *pv = jl_t1(p);
+            jl_value_t *m = meet_tvar(tv, pv);
+            if (m != pv) {
+                if (jl_is_typevar(pv))
+                    tvar_union(&env, (jl_tvar_t*)pv, m);
+                jl_t1(p) = m;
+                tvar_union(&env, tv, m);
+            }
+            p = (jl_tuple_t*)jl_nextpair(p);
+        }
         jl_tuple_t *t = jl_flatten_pairs(env);
         return (jl_value_t*)
             jl_instantiate_type_with((jl_type_t*)ti,
