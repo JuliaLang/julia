@@ -53,7 +53,7 @@
     '("\\\\\\s-*\".*?\"" . font-lock-string-face)))
 
 (defconst julia-block-start-keywords
-  (list "if" "while" "for" "begin" "try" "type" "function" "struct"))
+  (list "if" "while" "for" "begin" "try" "function" "struct"))
 
 (defconst julia-block-other-keywords
   (list "else" "elseif"))
@@ -70,6 +70,7 @@
 ; TODO: skip keywords inside strings and comments
 
 (defun at-keyword (kw-list)
+  ; not a keyword if used as a field name, X.word
   (and (or (= (point) 1)
 	   (not (equal (char-before (point)) ?.)))
        (member (current-word) kw-list)))
