@@ -170,9 +170,9 @@ div(x::Int, y::Int) = div(promote(x,y)...)
 ## string to integer functions ##
 
 function digit(c::Uint8)
-    if "0"[1] <= c <= "9"[1]; return int32(c - "0"[1])      ; end
-    if "A"[1] <= c <= "Z"[1]; return int32(c - "A"[1]) + 10 ; end
-    if "a"[1] <= c <= "z"[1]; return int32(c - "a"[1]) + 10 ; end
+    "0"[1] <= c <= "9"[1] ? int32(c - "0"[1]) :
+    "A"[1] <= c <= "Z"[1] ? int32(c - "A"[1]) + 10 :
+    "a"[1] <= c <= "z"[1] ? int32(c - "a"[1]) + 10 :
     error("non alphanumeric digit")
 end
 
