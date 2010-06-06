@@ -155,7 +155,7 @@ div(x::Int64, y::Int64) = boxsi64(sdiv_int(unbox64(x), unbox64(y)))
 
 (+)(x::Uint8, y::Uint8) = uint8(int8(x) + int8(y))
 (-)(x::Uint8, y::Uint8) = uint8(int8(x) - int8(y))
-==(x::Uint8, y::Uint8) = int16(x) == int16(y)
+==(x::Uint8, y::Uint8) = int8(x) == int8(y)
 < (x::Uint8, y::Uint8) = int16(x) < int16(y)
 
 ## integer-specific arithmetic promotions ##
@@ -228,7 +228,8 @@ function invmod(n, m)
     g != 1 ? false : (x < 0 ? m + x : x)
 end
 
-function ^(x::Tensor, p::Int)
+# ^ for any x supporting *
+function ^(x, p::Int)
     if p == 1
         return x
     elseif p == 0
