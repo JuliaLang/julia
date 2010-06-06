@@ -150,6 +150,14 @@ div(x::Int64, y::Int64) = boxsi64(sdiv_int(unbox64(x), unbox64(y)))
 < (x::Int32, y::Int32) = slt_int(unbox32(x),unbox32(y))
 < (x::Int64, y::Int64) = slt_int(unbox64(x),unbox64(y))
 
+## character operations & comparisons ##
+# TODO: implement real unisgned stuff
+
+(+)(x::Uint8, y::Uint8) = uint8(int8(x) + int8(y))
+(-)(x::Uint8, y::Uint8) = uint8(int8(x) - int8(y))
+==(x::Uint8, y::Uint8) = int16(x) == int16(y)
+< (x::Uint8, y::Uint8) = int16(x) < int16(y)
+
 ## integer-specific arithmetic promotions ##
 
 (%)(x::Int, y::Int) = (%)(promote(x,y)...)
@@ -158,6 +166,33 @@ div(x::Int, y::Int) = div(promote(x,y)...)
 (&)(x::Int...) = (&)(promote(x...)...)
 (|)(x::Int...) = (|)(promote(x...)...)
 ($)(x::Int...) = ($)(promote(x...)...)
+
+## string to integer functions ##
+
+function digit(c::Uint8)
+    if "0"[1] <= c <= "9"[1]; return int32(c - "0"[1])      ; end
+    if "A"[1] <= c <= "Z"[1]; return int32(c - "A"[1]) + 10 ; end
+    if "a"[1] <= c <= "z"[1]; return int32(c - "a"[1]) + 10 ; end
+    error("non alphanumeric digit")
+end
+
+function parse_int(T::Type{Int}, str::String, base::Int32)
+    n = convert(T,0)
+    base = convert(T,base)
+    for p = 0:length(str)-1
+        d = convert(T,digit(str[length(str)-p]))
+        if base <= d
+            error("digit not valid in base")
+        end
+        n += d*base^convert(T,p)
+    end
+    return n
+end
+
+bin(str::String) = parse_int(Int64, str,  2)
+oct(str::String) = parse_int(Int64, str,  8)
+dec(str::String) = parse_int(Int64, str, 10)
+hex(str::String) = parse_int(Int64, str, 16)
 
 ## integer functions ##
 
