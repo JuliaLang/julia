@@ -219,6 +219,9 @@ next(a::Array,i) = (a[i],i+1)
 done(a::Array,i) = (i > numel(a))
 
 # Other functions
+
+reverse(v::Vector) = [ v[length(v)-i+1] | i=1:length(v) ]
+
 diff(a::Vector) = [ a[i+1] - a[i] | i=1:length(a)-1 ]
 diff(a::Matrix) = diff(a, 1)
 
