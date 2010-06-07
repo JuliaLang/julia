@@ -501,7 +501,9 @@ TODO:
 	     `(for ,(car r) ,(nest (cdr r)))))))
     ((if)
      (let* ((test (parse-cond s))
-	    (then (parse-block s))
+	    (then (if (memq (require-token s) '(else elseif))
+		      '(block)
+		      (parse-block s)))
 	    (nxt  (require-token s)))
        (take-token s)
        (case nxt
