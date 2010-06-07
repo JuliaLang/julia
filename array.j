@@ -198,7 +198,7 @@ end
 function set(A::Matrix, x::Scalar, I, J)
     I = jl_fill_endpts(A, 1, I)
     J = jl_fill_endpts(A, 2, J)
-    for i=I; for j=J; A[i,j] = x; end; end
+    for i=I, j=J; A[i,j] = x; end
     return A
 end
 
@@ -206,7 +206,7 @@ function set(A::Matrix, X, I, J)
     I = jl_fill_endpts(A, 1, I)
     J = jl_fill_endpts(A, 2, J)
     count = 1
-    for i=I; for j=J; A[i,j] = X[count]; count += 1; end; end    
+    for i=I, j=J; A[i,j] = X[count]; count += 1; end
     return A
 end
 
