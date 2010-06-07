@@ -46,7 +46,7 @@ colon(start::Size, stop::Size, stride::Size) = [ i | i=start:stride:stop ]
 
 copy(a::Vector) = [ a[i] | i=1:length(a) ]
 copy(a::Matrix) = [ a[i,j] | i=1:size(a,1), j=1:size(a,2) ]
-copy(a::Array{Any,1}) = { a[i] | i=1:length(a) }
+copy(a::Array{Any,1}) = { copy(a[i]) | i=1:length(a) }
 
 reshape{T,n}(a::Array{T,n}, dims...) = (b = zeros(T, dims...);
                                         for i=1:numel(a); b[i] = a[i]; end;

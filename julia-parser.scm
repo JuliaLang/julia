@@ -470,8 +470,14 @@ TODO:
 		      (expect-end s)))
     ((while)  (begin0 (list 'while (parse-cond s) (parse-block s))
 		      (expect-end s)))
-    ((for)    (begin0 (list 'for (parse-eq* s) (parse-block s))
-		      (expect-end s)))
+    ((for)
+     (let* ((ranges (cdr (parse-var-ranges s)))
+	    (body (parse-block s)))
+       (expect-end s)
+       (let nest ((r ranges))
+	 (if (null? r)
+	     body
+	     `(for ,(car r) ,(nest (cdr r)))))))
     ((if)
      (let* ((test (parse-cond s))
 	    (then (parse-block s))
@@ -500,6 +506,13 @@ TODO:
     ((return)          (list 'return (parse-eq s)))
     ((break continue)  (list word))
     (else (error "unhandled reserved word"))))
+
+; parse comma-separated assignments, like "i=1:n,j=1:m,..."
+(define (parse-var-ranges s)
+  (let ((r (parse-Nary s parse-eq* #\, 'ranges '(#\newline #\; end) #f)))
+    (if (not (and (pair? r) (eq? (car r) 'ranges)))
+	`(ranges ,r)
+	r)))
 
 ; handle function call argument list, or any comma-delimited list.
 ; . an extra comma at the end is allowed

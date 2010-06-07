@@ -498,9 +498,12 @@ function eval_annotate(e::Expr, vtypes::AList, sp)
         return e
     elseif is(e.head,`gotoifnot) || is(e.head,symbol("return")) ||
         is(e.head,symbol("="))
-        return Expr(e.head, map(x->eval_annotate(x,vtypes,sp), e.args), Any)
+        e.type = Any
     end
-    Expr(e.head, map(x->eval_annotate(x,vtypes,sp), e.args), e.type)
+    for i=1:length(e.args)
+        e.args[i] = eval_annotate(e.args[i],vtypes,sp)
+    end
+    e
 end
 
 function eval_annotate(e::Symbol, vtypes::AList, sp)
@@ -515,18 +518,16 @@ function add_decls(vars::Array, states::Array)
     return vars
 end
 
-# copy of AST with types of all symbols annotated
+# annotate types of all symbols in AST
 function type_annotate(ast::Expr, states::Array, sp, rettype)
     vinf = ast.args[2]
-    expr(`lambda,
-         ast.args[1],
-         expr(symbol("var-info"), expr(`locals, add_decls(vinf.args[1].args,
-                                                          states)),
-              vinf.args[2], vinf.args[3], vinf.args[4]),
-         Expr(`body,
-              map((stmt,s)->eval_annotate(stmt, s, sp),
-                  ast.args[3].args, states),
-              rettype))
+    vinf.args[1].args = add_decls(vinf.args[1].args, states)
+    body = ast.args[3].args
+    for i=1:length(body)
+        body[i] = eval_annotate(body[i], states[i], sp)
+    end
+    ast.args[3].type = rettype
+    ast
 end
 
 T=typevar(`T)
