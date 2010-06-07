@@ -25,6 +25,24 @@ TODO:
 
 (define-macro (prec-ops n) `(aref ops-by-prec ,n))
 
+(define normal-ops (vector.map identity ops-by-prec))
+(define no-pipe-ops (vector.map identity ops-by-prec))
+(vector-set! no-pipe-ops 8 '(+ - $))
+(define range-colon-enabled #t)
+
+(define-macro (with-normal-ops . body)
+  `(with-bindings ((ops-by-prec normal-ops)
+		   (range-colon-enabled #t))
+		  ,@body))
+
+(define-macro (without-bitor . body)
+  `(with-bindings ((ops-by-prec no-pipe-ops))
+		  ,@body))
+
+(define-macro (without-range-colon . body)
+  `(with-bindings ((range-colon-enabled #f))
+		  ,@body))
+
 ; unused characters: @ prefix'
 ; no character literals; unicode kind of makes them obsolete. strings instead.
 
@@ -221,13 +239,10 @@ TODO:
     (if (not (eq? (peek-token s) '?))
 	ex
 	(begin (take-token s)
-	       (let ((then (parse-shift s)))
+	       (let ((then (without-range-colon (parse-eq* s))))
 		 (if (not (eq? (take-token s) ':))
 		     (error "colon expected in ? expression")
-		     (let ((els  (parse-cond s)))
-		       (if (eq? (peek-token s) ':)
-			   (error "ambiguous use of colon in ? expression")
-			   (list 'if ex then els)))))))))
+		     (list 'if ex then (parse-cond s))))))))
 
 (define (invalid-initial-token? tok)
   (or (eof-object? tok)
@@ -281,6 +296,8 @@ TODO:
 ; we will leave : expressions as a syntax form, not a call to ':',
 ; so they can be processed by syntax passes.
 (define (parse-range s)
+  (if (not range-colon-enabled)
+      (return (parse-shift s)))
   (if (eq? (peek-token s) ':)
       (begin (take-token s)
 	     (if (closing-token? (peek-token s))
@@ -417,6 +434,9 @@ TODO:
 	    ((eq? t trans-op)
 	     (take-token s)
 	     (list 'call 'transpose ex))
+	    ((eq? t '...)
+	     (take-token s)
+	     (list '... ex))
 	    ((not (memq t ops))
 	     ex)
 	    (else
@@ -465,13 +485,14 @@ TODO:
       (if (eq? t 'end)
 	  (take-token s)
 	  (error "incomplete: end expected"))))
+  (with-normal-ops
   (case word
     ((begin)  (begin0 (parse-block s)
 		      (expect-end s)))
     ((while)  (begin0 (list 'while (parse-cond s) (parse-block s))
 		      (expect-end s)))
     ((for)
-     (let* ((ranges (cdr (parse-var-ranges s)))
+     (let* ((ranges (parse-var-ranges s))
 	    (body (parse-block s)))
        (expect-end s)
        (let nest ((r ranges))
@@ -505,14 +526,15 @@ TODO:
      )
     ((return)          (list 'return (parse-eq s)))
     ((break continue)  (list word))
-    (else (error "unhandled reserved word"))))
+    (else (error "unhandled reserved word")))))
 
 ; parse comma-separated assignments, like "i=1:n,j=1:m,..."
 (define (parse-var-ranges s)
-  (let ((r (parse-Nary s parse-eq* #\, 'ranges '(#\newline #\; end) #f)))
-    (if (not (and (pair? r) (eq? (car r) 'ranges)))
-	`(ranges ,r)
-	r)))
+  (let loop ((ranges '()))
+    (let ((r (parse-eq* s)))
+      (case (peek-token s)
+	((#\,)  (take-token s) (loop (cons r ranges)))
+	(else   (reverse! (cons r ranges)))))))
 
 ; handle function call argument list, or any comma-delimited list.
 ; . an extra comma at the end is allowed
@@ -533,14 +555,7 @@ TODO:
 			 (reverse (cons (cons 'parameters (loop '()))
 					lst))))
 	      (let* ((nxt (parse-eq* s))
-		     (c (require-token s))
-		     (nxt (if (eq? c '...)
-			      (list '... nxt)
-			      nxt))
-		     (c (if (eq? c '...)
-			    (begin (take-token s)
-				   (require-token s))
-			    c)))
+		     (c (require-token s)))
 		(cond ((eqv? c #\,)
 		       (begin (take-token s) (loop (cons nxt lst))))
 		      ((eqv? c #\;)          (loop (cons nxt lst)))
@@ -551,11 +566,20 @@ TODO:
 		      (else
 		       (error "missing separator in argument list")))))))))
 
+(define (colons-to-ranges ranges)
+  (map (lambda (r) (pattern-expand
+		    (list
+		     (pattern-lambda (: a b) `(call (top Range) ,a 1 ,b))
+		     (pattern-lambda (: a b c) `(call (top Range) ,a ,b ,c)) )
+		    r))
+       ranges))
+
 ; parse [] concatenation expressions
 (define (parse-vector s)
   (define (fix head v) (cons head (reverse v)))
   (let loop ((vec '())
-	     (outer '()))
+	     (outer '())
+	     (first #t))
     (let ((update-outer (lambda (v)
 			  (cond ((null? v)       outer)
 				((null? (cdr v)) (cons (car v) outer))
@@ -565,31 +589,33 @@ TODO:
 		 (if (pair? outer)
 		     (fix 'vcat (update-outer vec))
 		     (fix 'hcat vec)))
-	  (let ((nv (cons (parse-eq* s) vec)))
+	  (let ((nv (cons (if first
+			      (without-bitor (parse-eq* s))
+			      (parse-eq* s))
+			  vec)))
 	    (case (if (eqv? (peek-token s) #\newline)
 		      #\newline
 		      (require-token s))
-	      ((#\]) (loop nv outer))
+	      ((#\]) (loop nv outer #f))
+	      ((|\||)
+	       (begin (take-token s)
+		      (let ((r (parse-var-ranges s)))
+			(if (not (eqv? (require-token s) #\]))
+			    (error "expected ]")
+			    (take-token s))
+			`(comprehension ,(car nv) ,@(colons-to-ranges r)))))
 	      ((#\; #\newline)
-	       (begin (take-token s) (loop '() (update-outer nv))))
-	      ((#\,) (begin (take-token s) (loop  nv outer)))
+	       (begin (take-token s) (loop '() (update-outer nv) #f)))
+	      ((#\,) (begin (take-token s) (loop nv outer #f)))
 	      (else  (error "incomplete: comma expected"))))))))
 
 ; for sequenced evaluation inside expressions: e.g. (a;b, c;d)
 (define (parse-stmts-within-expr s)
   (parse-Nary s parse-eq* #\; 'block '(#\, #\) ) #t))
 
-(define (parse-tuple-elt s)
-  (let ((ex (parse-eq* s)))
-    (if (eqv? (peek-token s) '...)
-	(list (take-token s) ex)
-	ex)))
-
 (define (parse-tuple s first)
   (let loop ((lst '())
-	     (nxt (if (eq? (require-token s) '...)
-		      (list (take-token s) first)
-		      first)))
+	     (nxt first))
     (let ((t (require-token s)))
       (case t
 	((#\))
@@ -601,7 +627,7 @@ TODO:
 	     ; allow ending with ,
 	     (begin (take-token s)
 		    (cons 'tuple (reverse (cons nxt lst))))
-	     (loop (cons nxt lst) (parse-tuple-elt s))))
+	     (loop (cons nxt lst) (parse-eq* s))))
 	((#\;)
 	 (error "unexpected semicolon in tuple"))
 	#;((#\newline)
@@ -616,6 +642,7 @@ TODO:
 
 	  ((eqv? t #\( )
 	   (take-token s)
+	   (with-normal-ops
 	   (if (eqv? (require-token s) #\) )
 	       ; empty tuple ()
 	       (begin (take-token s) '(tuple))
@@ -625,9 +652,12 @@ TODO:
 	       (let* ((ex (parse-eq* s))
 		      (t (require-token s)))
 		 (cond ((eqv? t #\) )
+			(take-token s)
 			; value in parentheses (x)
-			(take-token s) ex)
-		       ((or (eqv? t #\, ) (eq? t '...))
+			(if (and (pair? ex) (eq? (car ex) '...))
+			    `(tuple ,ex)
+			    ex))
+		       ((eqv? t #\, )
 			; tuple (x,) (x,y) (x...) etc.
 			(parse-tuple s ex))
 		       ((eqv? t #\;)
@@ -644,15 +674,31 @@ TODO:
 		       #;((eqv? t #\newline)
 			(error "unexpected line break in tuple"))
 		       (else
-			(error "missing separator in tuple"))))))
+			(error "missing separator in tuple")))))))
 
 	  ((eqv? t #\{ )
 	   (take-token s)
-	   (cons 'cell (parse-arglist s #\})))
+	   (if (eqv? (require-token s) #\})
+	       (begin (take-token s) '(cell))
+	       (let ((first (without-bitor (parse-eq* s))))
+		 (if (eq? (peek-token s) '|\||)
+		     (begin
+		       (take-token s)
+		       (let ((r (parse-var-ranges s)))
+			 (if (not (eqv? (require-token s) #\}))
+			     (error "expected }")
+			     (take-token s))
+			 `(cell-comprehension ,first ,@(colons-to-ranges r))))
+		     (begin
+		       (if (eqv? (peek-token s) #\,)
+			   (take-token s))
+		       `(cell ,@(cons first
+				      (with-normal-ops
+				       (parse-arglist s #\})))))))))
 
 	  ((eqv? t #\[ )
 	   (take-token s)
-	   (parse-vector s))
+	   (with-normal-ops (parse-vector s)))
 
 	  ((eqv? t #\` )
 	   (take-token s)
@@ -689,16 +735,24 @@ TODO:
 (define (julia-parse-file filename)
   ; call f on a stream until the stream runs out of data
   (define (read-all-of f s)
-    (skip-ws (ts:port s) #t)
-    (let loop ((lines '())
-	       (linen (input-port-line (ts:port s)))
-	       (curr  (f s)))
-      (if (eof-object? curr)
-	  (reverse lines)
-	  (begin
-	    (skip-ws (ts:port s) #t)
-	    (let ((nl (input-port-line (ts:port s))))
-	      (loop (list* curr `(line ,linen) lines)
-		    nl
-		    (f s)))))))
+    (with-exception-catcher
+     (lambda (e)
+       (if (and (pair? e) (eq? (car e) 'error))
+	   (let ((msg (cadr e)))
+	     (raise `(error ,(string msg " at " filename ":" 
+				     (input-port-line (ts:port s))))))
+	   (raise e)))
+     (lambda ()
+       (skip-ws (ts:port s) #t)
+       (let loop ((lines '())
+		  (linen (input-port-line (ts:port s)))
+		  (curr  (f s)))
+	 (if (eof-object? curr)
+	     (reverse lines)
+	     (begin
+	       (skip-ws (ts:port s) #t)
+	       (let ((nl (input-port-line (ts:port s))))
+		 (loop (list* curr `(line ,linen) lines)
+		       nl
+		       (f s)))))))))
   (read-all-of julia-parse (make-token-stream (open-input-file filename))))
