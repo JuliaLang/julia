@@ -136,9 +136,25 @@ function append(t1::Tuple, ts::Tuple...)
     return tuple(t1..., append(ts...)...)
 end
 
+function append(a1::Array{Any,1}, as::Array{Any,1}...)
+    n = length(a1) + apply(+,map(length, as))
+    a = Array(Any,n)
+    for i = 1:length(a1)
+        a[i] = a1[i]
+    end
+    i = length(a1)+1
+    for x = as
+        for j = 1:length(x)
+            a[i] = x[j]
+            i += 1
+        end
+    end
+    a
+end
+
 print(x...) = for i=x; print(i); end
 
-expr(hd::Symbol, args...) = Expr(hd, args, Any)
+expr(hd::Symbol, args...) = Expr(hd, {args...}, Any)
 
 function cell_literal(xs...)
     n = length(xs)
@@ -157,10 +173,22 @@ string(x) =
           ccall(dlsym(JuliaDLHandle,"jl_print_to_string"), Ptr{Char}, (Any,),
                 x))
 
+function print_comma_array(ar, open, close)
+    print(open)
+    for i=1:length(ar)
+        print(ar[i])
+        if i < length(ar)
+            print(",")
+        end
+    end
+    print(close)
+end
+
 function print(e::Expr)
     hd = e.head
     if is(hd,`call)
-        print(e.args[1], e.args[2:])
+        print(e.args[1])
+        print_comma_array(e.args[2:],"(",")")
     elseif is(hd,`=)
         print(e.args[1], " = ", e.args[2])
     elseif is(hd,`quote)
@@ -188,7 +216,8 @@ function print(e::Expr)
         end
         print("end\n")
     else
-        print(hd, e.args)
+        print(hd)
+        print_comma_array(e.args,"(",")")
     end
     if !is(e.type, Any)
         print("::", e.type)

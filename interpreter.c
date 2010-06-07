@@ -41,7 +41,7 @@ static jl_value_t *eval(jl_value_t *e)
     if (!jl_is_expr(e))
         return e;
     jl_expr_t *ex = (jl_expr_t*)e;
-    jl_value_t **args = &jl_tupleref(ex->args,0);
+    jl_value_t **args = &jl_cellref(ex->args,0);
     if (ex->head == call_sym) {
         jl_function_t *f = (jl_function_t*)eval(args[0]);
         if (!jl_is_func(f))
@@ -73,11 +73,11 @@ static jl_value_t *eval(jl_value_t *e)
     return (jl_value_t*)jl_null;
 }
 
-static int label_idx(jl_value_t *tgt, jl_tuple_t *stmts)
+static int label_idx(jl_value_t *tgt, jl_array_t *stmts)
 {
     size_t j;
     for(j=0; j < stmts->length; j++) {
-        jl_value_t *l = jl_tupleref(stmts,j);
+        jl_value_t *l = jl_cellref(stmts,j);
         if (jl_is_expr(l) && ((jl_expr_t*)l)->head==label_sym &&
             jl_exprarg(l,0)==tgt)
             break;
@@ -89,10 +89,10 @@ static int label_idx(jl_value_t *tgt, jl_tuple_t *stmts)
 jl_value_t *jl_interpret_toplevel_thunk(jl_lambda_info_t *lam)
 {
     jl_expr_t *ast = (jl_expr_t*)lam->ast;
-    jl_tuple_t *stmts = jl_lam_body(ast);
+    jl_array_t *stmts = jl_lam_body(ast);
     size_t i=0;
     while (1) {
-        jl_value_t *stmt = jl_tupleref(stmts,i);
+        jl_value_t *stmt = jl_cellref(stmts,i);
         if (jl_is_expr(stmt)) {
             jl_sym_t *head = ((jl_expr_t*)stmt)->head;
             if (head == label_sym) {

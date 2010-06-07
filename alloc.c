@@ -582,6 +582,12 @@ jl_array_t *jl_cstr_to_array(char *str)
     return a;
 }
 
+jl_array_t *jl_alloc_cell_1d(size_t n)
+{
+    jl_value_t *sz = jl_box_int32(n);
+    return jl_new_array(jl_array_any_type, &sz, 1);
+}
+
 // initialization -------------------------------------------------------------
 
 void jl_init_builtin_types()
@@ -623,7 +629,7 @@ void jl_init_builtin_types()
                            jl_any_type, jl_null,
                            jl_tuple(3, jl_symbol("head"), jl_symbol("args"),
                                     jl_symbol("type")),
-                           jl_tuple(3, jl_sym_type, jl_tuple_type,
+                           jl_tuple(3, jl_sym_type, jl_array_any_type,
                                     jl_any_type));
 
     jl_struct_type_t *boxstruct =

@@ -161,7 +161,7 @@ typedef struct _jl_methtable_t {
 typedef struct {
     JL_VALUE_STRUCT
     jl_sym_t *head;
-    jl_tuple_t *args;
+    jl_array_t *args;
     jl_type_t *etype;
 } jl_expr_t;
 
@@ -270,7 +270,10 @@ extern jl_sym_t *closure_ref_sym;
 #define jl_t2(t) jl_tupleref(t,2)
 #define jl_nextpair(p) jl_t2(p)
 
-#define jl_exprarg(e,n) jl_tupleref(((jl_expr_t*)(e))->args,n)
+#define jl_cellref(a,i) (((jl_value_t**)((jl_array_t*)a)->data)[(i)])
+#define jl_cellset(a,i,x) ((((jl_value_t**)((jl_array_t*)a)->data)[(i)])=(x))
+
+#define jl_exprarg(e,n) jl_cellref(((jl_expr_t*)(e))->args,n)
 
 #define jl_tparam0(t) jl_tupleref(((jl_tag_type_t*)(t))->parameters, 0)
 
@@ -302,6 +305,7 @@ extern jl_sym_t *closure_ref_sym;
 #define jl_is_func(v)        (jl_is_func_type(jl_typeof(v)))
 #define jl_is_function(v)    (jl_is_func_type(jl_typeof(v)))
 #define jl_is_array(v)       (((jl_tag_type_t*)jl_typeof(v))->name==jl_array_typename)
+#define jl_is_string(v)      jl_typeis(v,jl_array_uint8_type)
 #define jl_is_box(v)         (((jl_tag_type_t*)jl_typeof(v))->name==jl_box_typename)
 #define jl_is_cpointer_type(v) (((jl_tag_type_t*)(v))->name==jl_pointer_void_type->name)
 #define jl_is_cpointer(v)    jl_is_cpointer_type(jl_typeof(v))
@@ -372,6 +376,7 @@ jl_sym_t *jl_symbol(const char *str);
 jl_sym_t *jl_gensym();
 jl_array_t *jl_new_array(jl_type_t *atype, jl_value_t **dimargs, size_t ndims);
 jl_array_t *jl_cstr_to_array(char *str);
+jl_array_t *jl_alloc_cell_1d(size_t n);
 jl_value_t *jl_arrayref(jl_array_t *a, size_t i);  // 0-indexed
 void jl_arrayset(jl_array_t *a, size_t i, jl_value_t *v);  // 0-indexed
 jl_expr_t *jl_expr(jl_sym_t *head, size_t n, ...);
@@ -461,9 +466,9 @@ jl_function_t *jl_instantiate_method(jl_function_t *f, jl_tuple_t *sp);
 jl_lambda_info_t *jl_add_static_parameters(jl_lambda_info_t *l, jl_tuple_t *sp);
 
 // AST access
-jl_tuple_t *jl_lam_args(jl_expr_t *l);
-jl_tuple_t *jl_lam_locals(jl_expr_t *l);
-jl_tuple_t *jl_lam_body(jl_expr_t *l);
+jl_array_t *jl_lam_args(jl_expr_t *l);
+jl_array_t *jl_lam_locals(jl_expr_t *l);
+jl_array_t *jl_lam_body(jl_expr_t *l);
 jl_sym_t *jl_decl_var(jl_value_t *ex);
 int jl_is_rest_arg(jl_value_t *ex);
 

@@ -12,6 +12,7 @@ length(v::Vector) = size(v,1)
 nnz(a::Array) = (n = 0; for i=1:numel(a); n += a[i] != 0 ? 1 : 0; end; n)
 
 jl_comprehension_zeros{T,n}(oneresult::Tensor{T,n}, dims...) = Array(T, dims...)
+jl_comprehension_zeros{T}(oneresult::T, dims...) = Array(T, dims...)
 jl_comprehension_zeros(oneresult::(), dims...) = Array(Bottom, dims...)
 
 zeros(T::Type, m::Size) = (z=convert(T,0); [ z | i=1:m ])
@@ -45,6 +46,7 @@ colon(start::Size, stop::Size, stride::Size) = [ i | i=start:stride:stop ]
 
 copy(a::Vector) = [ a[i] | i=1:length(a) ]
 copy(a::Matrix) = [ a[i,j] | i=1:size(a,1), j=1:size(a,2) ]
+copy(a::Array{Any,1}) = { a[i] | i=1:length(a) }
 
 reshape{T,n}(a::Array{T,n}, dims...) = (b = zeros(T, dims...);
                                         for i=1:numel(a); b[i] = a[i]; end;
@@ -137,6 +139,7 @@ jl_fill_endpts(A,n,R::RangeTo)   = Range(1,R.step,R.stop)
 jl_fill_endpts(A,n,R)            = R
 
 ref(A::Vector,I) = [ A[i] | i = jl_fill_endpts(A,1,I) ]
+ref(A::Array{Any,1},I) = { A[i] | i = jl_fill_endpts(A,1,I) }
 ref(A::Matrix,I,J) = [ A[i,j] | i = jl_fill_endpts(A,1,I),
                                 j = jl_fill_endpts(A,2,J) ]
 
@@ -262,6 +265,10 @@ function printall{T}(a::Array{T,1})
 end
 
 function print{T}(a::Array{T,1})
+    if is(T,Any)
+        print_comma_array(a, "{", "}")
+        return ()
+    end
     n = a.dims[1]
     if n < 10
         for i = 1:n; print(a[i]); if i < n; print("\n"); end; end
@@ -321,6 +328,10 @@ function print{T}(a::Array{T,2})
         end
     end
 end # print()
+
+map(f, a::Array{Any,1}) = { f(a[i]) | i=1:length(a) }
+map(f, a::Array{Any,1}, b::Array{Any,1}) =
+    { f(a[i],b[i]) | i=1:min(length(a),length(b)) }
 
 function ndmap(body, t::Tuple, it...)
     idx = length(t)-length(it)

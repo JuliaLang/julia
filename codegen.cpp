@@ -355,7 +355,7 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool value,
         assert(0);
     }
     jl_expr_t *ex = (jl_expr_t*)expr;
-    jl_value_t **args = &jl_tupleref(ex->args,0);
+    jl_value_t **args = &jl_cellref(ex->args,0);
     // this is object-disoriented.
     // however, this is a good way to do it because it should *not* be easy
     // to add new node types.
@@ -532,8 +532,8 @@ static void emit_function(jl_lambda_info_t *lam, Function *f)
     std::map<std::string, AllocaInst*> localVars;
     std::map<std::string, AllocaInst*> argumentMap;
     std::map<int, BasicBlock*> labels;
-    jl_tuple_t *largs = jl_lam_args(ast);
-    jl_tuple_t *lvars = jl_lam_locals(ast);
+    jl_array_t *largs = jl_lam_args(ast);
+    jl_array_t *lvars = jl_lam_locals(ast);
     Function::arg_iterator AI = f->arg_begin();
     const Argument &envArg = *AI++;
     const Argument &argArray = *AI++;
@@ -555,13 +555,13 @@ static void emit_function(jl_lambda_info_t *lam, Function *f)
     // must be first for the mem2reg pass to work
     size_t i;
     for(i=0; i < largs->length; i++) {
-        char *argname = jl_decl_var(jl_tupleref(largs,i))->name;
+        char *argname = jl_decl_var(jl_cellref(largs,i))->name;
         AllocaInst *lv = builder.CreateAlloca(jl_pvalue_llvmt, 0, argname);
         localVars[argname] = lv;
         argumentMap[argname] = lv;
     }
     for(i=0; i < lvars->length; i++) {
-        char *argname = ((jl_sym_t*)jl_tupleref(lvars,i))->name;
+        char *argname = ((jl_sym_t*)jl_cellref(lvars,i))->name;
         AllocaInst *lv = builder.CreateAlloca(jl_pvalue_llvmt, 0, argname);
         builder.CreateStore(V_null, lv);
         localVars[argname] = lv;
@@ -570,7 +570,7 @@ static void emit_function(jl_lambda_info_t *lam, Function *f)
     // check arg count
     size_t nreq = largs->length;
     int va = 0;
-    if (nreq > 0 && jl_is_rest_arg(jl_tupleref(largs,nreq-1))) {
+    if (nreq > 0 && jl_is_rest_arg(jl_cellref(largs,nreq-1))) {
         nreq--;
         va = 1;
         Value *enough =
@@ -603,7 +603,7 @@ static void emit_function(jl_lambda_info_t *lam, Function *f)
     // (probably possible to avoid this step with a little redesign)
     // TODO: avoid for arguments that aren't assigned
     for(i=0; i < nreq; i++) {
-        char *argname = jl_decl_var(jl_tupleref(largs,i))->name;
+        char *argname = jl_decl_var(jl_cellref(largs,i))->name;
         AllocaInst *lv = localVars[argname];
         Value *argPtr =
             builder.CreateGEP((Value*)&argArray,
@@ -620,17 +620,17 @@ static void emit_function(jl_lambda_info_t *lam, Function *f)
                                                   ConstantInt::get(T_int32,nreq)),
                                 builder.CreateSub((Value*)&argCount,
                                                   ConstantInt::get(T_int32,nreq)));
-        char *argname = jl_decl_var(jl_tupleref(largs,nreq))->name;
+        char *argname = jl_decl_var(jl_cellref(largs,nreq))->name;
         AllocaInst *lv = builder.CreateAlloca(jl_pvalue_llvmt, 0, argname);
         builder.CreateStore(restTuple, lv);
         localVars[argname] = lv;
     }
 
-    jl_tuple_t *stmts = jl_lam_body(ast);
+    jl_array_t *stmts = jl_lam_body(ast);
     // associate labels with basic blocks so forward jumps can be resolved
     BasicBlock *prev=NULL;
     for(i=0; i < stmts->length; i++) {
-        jl_value_t *ex = jl_tupleref(stmts,i);
+        jl_value_t *ex = jl_cellref(stmts,i);
         if (is_label(ex)) {
             int lname = jl_unbox_int32(jl_exprarg(ex,0));
             if (prev != NULL) {
@@ -649,7 +649,7 @@ static void emit_function(jl_lambda_info_t *lam, Function *f)
     // compile body statements
     bool prevlabel = false;
     for(i=0; i < stmts->length; i++) {
-        jl_value_t *stmt = jl_tupleref(stmts,i);
+        jl_value_t *stmt = jl_cellref(stmts,i);
         if (is_label(stmt)) {
             if (prevlabel) continue;
             prevlabel = true;

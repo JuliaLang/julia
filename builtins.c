@@ -66,7 +66,7 @@ jl_expr_t *jl_expr(jl_sym_t *head, size_t n, ...)
     jl_expr_t *ex = jl_exprn(head,n);
     va_start(args, n);
     for(i=0; i < n; i++) {
-        jl_tupleset(ex->args, i, va_arg(args, jl_value_t*));
+        jl_cellset(ex->args, i, va_arg(args, jl_value_t*));
     }
     va_end(args);
     return ex;
@@ -77,7 +77,7 @@ jl_expr_t *jl_exprn(jl_sym_t *head, size_t n)
     jl_expr_t *ex = (jl_expr_t*)allocb(sizeof(jl_expr_t));
     ex->type = (jl_type_t*)jl_expr_type;
     ex->head = head;
-    ex->args = jl_alloc_tuple(n);
+    ex->args = jl_alloc_cell_1d(n);
     ex->etype = (jl_type_t*)jl_any_type;
     return ex;
 }
@@ -191,7 +191,7 @@ void jl_load(const char *fname)
     jl_value_t *ast = jl_parse_file(fpath);
     if (ast == (jl_value_t*)jl_null)
         jl_errorf("could not open file %s", fpath);
-    jl_tuple_t *b = ((jl_expr_t*)ast)->args;
+    jl_array_t *b = ((jl_expr_t*)ast)->args;
     size_t i, lineno=0;
     jmp_buf *prevh = CurrentExceptionHandler;
     jmp_buf handler;
@@ -199,7 +199,7 @@ void jl_load(const char *fname)
     if (!setjmp(handler)) {
         for(i=0; i < b->length; i++) {
             // process toplevel form
-            jl_value_t *form = jl_tupleref(b, i);
+            jl_value_t *form = jl_cellref(b, i);
             if (jl_is_expr(form) && ((jl_expr_t*)form)->head == line_sym) {
                 lineno = jl_unbox_int32(jl_exprarg(form, 0));
             }

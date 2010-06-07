@@ -1305,7 +1305,7 @@ So far only the second case can actually occur.
 		   (loop (cdr p)
 			 (cons (cadr (cadr (cadr (car p)))) q))
 		   (loop (cdr p)
-			 (cons `(call (top tuple)
+			 (cons `(call (top cell_literal)
 				      ,(expand-backquote (car p)))
 			       q))))))))
 

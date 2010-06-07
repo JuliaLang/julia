@@ -12,8 +12,8 @@
 # * hash table of symbols
 # * eval
 # - t-functions for builtins
-# - isconstant()
 # - deal with call stack and recursive types
+# - isconstant()
 # * approximate static parameters
 # - use type bounds
 # - reflection for constructors
@@ -256,6 +256,14 @@ function abstract_eval(e::Expr, vtypes::AList, sp)
     return t
 end
 
+function a2t(a::Vector)
+    t = ()
+    for i=length(a):-1:1
+        t = tuple(a[i], t...)
+    end
+    t
+end
+
 function abstract_eval_expr(e, vtypes::AList, sp)
     # handle:
     # call  lambda  quote  null  top  unbound  box-unbound
@@ -285,10 +293,11 @@ function abstract_eval_expr(e, vtypes::AList, sp)
                 return Any
             end
         end
-        fargs = e.args[2:]
+        fargs = a2t(e.args[2:])
         argtypes = map(x->abstract_eval(x,vtypes,sp), fargs)
         print("call ", e.args[1], argtypes, " ")
-        if !isbuiltin(func)
+        if !isbound(func)
+            print("=> ", Any, "\n")
             return Any
         end
         f = eval(func)
@@ -404,6 +413,8 @@ function update(state::AList, new::AList, vars)
     state
 end
 
+type Undef
+
 function typeinf(ast::Expr, sparams::Tuple, atypes::Tuple)
     function findlabel(body, l)
         for i=1:length(body)
@@ -431,7 +442,7 @@ function typeinf(ast::Expr, sparams::Tuple, atypes::Tuple)
     adjoin(W,1)
     # initial types
     for v=vars
-        s[1][v] = Bottom
+        s[1][v] = Undef
     end
     rettype = Bottom
     la = length(args)
@@ -493,19 +504,19 @@ function eval_annotate(e::Expr, vtypes::AList, sp)
 end
 
 function eval_annotate(e::Symbol, vtypes::AList, sp)
-    Expr(`symbol, (e,), abstract_eval(e, vtypes, sp))
+    Expr(`symbol, {e}, abstract_eval(e, vtypes, sp))
 end
 
 eval_annotate(s, vtypes::AList, sp) = s
 
 # expand v to v::T as appropriate based on all inferred type info
-function add_decls(vars::(Symbol...), states::(AList...))
+function add_decls(vars::Array, states::Array)
     # TODO
     return vars
 end
 
 # copy of AST with types of all symbols annotated
-function type_annotate(ast::Expr, states::(AList...), sp, rettype)
+function type_annotate(ast::Expr, states::Array, sp, rettype)
     vinf = ast.args[2]
     expr(`lambda,
          ast.args[1],
@@ -547,8 +558,11 @@ end
 function qux(x)
     if mystery()
         a = 10
+    else
+        a = 2+b
     end
-    z = a + 1
+    b = 1
+    z = a + b
 end
 
 m = getmethods(qux,(Int32,))
