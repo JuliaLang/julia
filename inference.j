@@ -12,7 +12,7 @@
 # * hash table of symbols
 # * eval
 # - t-functions for builtins
-# - deal with call stack and recursive types
+# * deal with call stack and recursive types
 # - isconstant()
 # * approximate static parameters
 # - use type bounds
@@ -149,7 +149,8 @@ t_func[ult_int] = (2, 2, cmp_tfunc)
 t_func[eq_float] = (2, 2, cmp_tfunc)
 t_func[lt_float] = (2, 2, cmp_tfunc)
 t_func[ne_float] = (2, 2, cmp_tfunc)
-# TODO: ccall
+t_func[ccall] =
+    (3, Inf, (fptr, rt, at, a...)->(isType(rt) ? rt.parameters[1] : Any))
 t_func[is] = (2, 2, cmp_tfunc)
 t_func[subtype] = (2, 2, cmp_tfunc)
 t_func[isa] = (2, 2, cmp_tfunc)
@@ -318,7 +319,7 @@ function abstract_eval_expr(e, vtypes::AList, sp)
                     # a symbol with the name instead of a LambdaStaticData
                     rt = builtin_tfunction(x[3], fargs, x[1])
                 else
-                    rt = ast_rettype(typeinf(x[3].ast, x[2], x[1]))
+                    (_tree, rt) = typeinf(x[3].ast, x[2], x[1])
                 end
                 rettype = tmerge(rettype, rt)
                 x = x[4]
@@ -333,7 +334,7 @@ function abstract_eval_expr(e, vtypes::AList, sp)
     end
 end
 
-ast_rettype(ast) = ast.args[3].type
+#ast_rettype(ast) = ast.args[3].type
 
 function abstract_eval_constant(x)
     if isa(x,TagKind)
@@ -415,7 +416,7 @@ end
 
 type Undef
 
-function typeinf(ast::Expr, sparams::Tuple, atypes::Tuple)
+function typeinf(ast0::Expr, sparams::Tuple, atypes::Tuple)
     function findlabel(body, l)
         for i=1:length(body)
             b = body[i]
@@ -426,7 +427,19 @@ function typeinf(ast::Expr, sparams::Tuple, atypes::Tuple)
         error("label not found")
     end
 
-    ast = copy(ast)
+    global inference_stack
+    # check for recursion
+    f = inference_stack
+    while !isa(f,EmptyCallStack)
+        if is(f.ast,ast0) && typeseq(f.types, atypes)
+            # return best guess so far
+            f.recurred = true
+            return ((),f.result)
+        end
+        f = f.prev
+    end
+
+    ast = copy(ast0)
     #print("typeinf ", ast, " ", sparams, " ", atypes, "\n")
 
     assert(is(ast.head,`lambda))
@@ -437,6 +450,7 @@ function typeinf(ast::Expr, sparams::Tuple, atypes::Tuple)
 
     n = length(body)
     s = map(stmt->alist(Symbol,Type), body)
+    recpts = intset(n+1)  # statements that depend recursively on our value
     W = intset(n+1)
     # initial set of pc
     adjoin(W,1)
@@ -444,7 +458,6 @@ function typeinf(ast::Expr, sparams::Tuple, atypes::Tuple)
     for v=vars
         s[1][v] = Undef
     end
-    rettype = Bottom
     la = length(args)
     lastarg = ast.args[1][la]
     if isa(lastarg,Expr) && is(lastarg.head,symbol("::"))
@@ -458,6 +471,10 @@ function typeinf(ast::Expr, sparams::Tuple, atypes::Tuple)
         s[1][args[i]] = atypes[i]
     end
 
+    # our stack frame
+    frame = CallStack(ast0, atypes, inference_stack)
+    inference_stack = frame
+
     while !isempty(W)
         pc = choose(W)
         while true
@@ -465,6 +482,10 @@ function typeinf(ast::Expr, sparams::Tuple, atypes::Tuple)
             remove(W, pc)
             stmt = body[pc]
             newstate = interpret(stmt, s[pc], sparams)
+            if frame.recurred
+                adjoin(recpts, pc)
+                frame.recurred = false
+            end
             pc´ = pc+1
             if isa(stmt,Expr)
                 if is(stmt.head,`goto)
@@ -478,7 +499,13 @@ function typeinf(ast::Expr, sparams::Tuple, atypes::Tuple)
                 elseif is(stmt.head,symbol("return"))
                     pc´ = n+1
                     rt = abstract_eval(stmt.args[1], s[pc], sparams)
-                    rettype = tmerge(rettype, rt)
+                    if tchanged(rt, frame.result)
+                        frame.result = tmerge(frame.result, rt)
+                        # revisit states that recursively depend on this
+                        for r=recpts
+                            adjoin(W,r)
+                        end
+                    end
                 end
             end
             if pc´<=n && changed(newstate, s[pc´], vars)
@@ -489,7 +516,8 @@ function typeinf(ast::Expr, sparams::Tuple, atypes::Tuple)
             end
         end
     end
-    return type_annotate(ast, s, sparams, rettype)
+    inference_stack = inference_stack.prev
+    return (type_annotate(ast, s, sparams, frame.result), frame.result)
 end
 
 function eval_annotate(e::Expr, vtypes::AList, sp)
@@ -530,6 +558,8 @@ function type_annotate(ast::Expr, states::Array, sp, rettype)
     ast
 end
 
+# stuff for testing
+
 T=typevar(`T)
 S=typevar(`S)
 R=typevar(`R)
@@ -568,3 +598,5 @@ end
 
 m = getmethods(qux,(Int32,))
 ast = m[3]
+
+fib(n) = n < 2 ? n : fib(n-1) + fib(n-2)

@@ -380,4 +380,8 @@ randint(::Type{Int64}) = int64(randui64())&typemax(Int64)
 randint(::Type{Uint64}) = randui64()
 randint() = randint(Int32)
 
+# random integer from lo to hi inclusive
 randint{T<:Int}(lo::T, hi::T) = div(randint(T),div(typemax(T),hi-lo+1)+1) + lo
+
+# random integer from 0 to n-1
+randint{T<:Int}(n::T) = div(randint(T),div(typemax(T),n)+1)
