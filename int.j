@@ -381,7 +381,19 @@ randint(::Type{Uint64}) = randui64()
 randint() = randint(Int32)
 
 # random integer from lo to hi inclusive
-randint{T<:Int}(lo::T, hi::T) = div(randint(T),div(typemax(T),hi-lo+1)+1) + lo
+function randint{T<:Int}(lo::T, hi::T)
+    m = typemax(T)
+    s = randint(T)
+    if (hi-lo == m)
+        return s
+    end
+    r = hi-lo+1
+    lim = m - (m%r+1)%r  # m - (m+1)%r
+    while s > lim
+        s = randint(T)
+    end
+    return s%r + lo
+end
 
-# random integer from 0 to n-1
-randint{T<:Int}(n::T) = div(randint(T),div(typemax(T),n)+1)
+# random integer from 1 to n
+randint{T<:Int}(n::T) = randint(convert(T,1), n)
