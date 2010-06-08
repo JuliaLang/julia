@@ -180,83 +180,48 @@
    (struct-def-expr- name params bounds super fields)))
 
 (define (struct-def-expr- name params bounds super fields)
-  ; extract the name from a function def expr
-  (define (f-exp-name e)
-    (let ((head (cadadr e)))
-      (if (symbol? head) head
-	  (cadr head))))
-
   (receive
-   (funcs fields) (separate
-		   (lambda (x)
-		     (and (pair? x)
-			  (or (eq? (car x) 'function)
-			      (and (length= x 3)
-				   (eq? (car x) '=)
-				   (pair? (cadr x))
-				   (eq? (caadr x) 'call))
-			      (not (or (eq? (car x) '|::|)
-				       (error "invalid struct syntax:" x))))))
-		   fields)
+   (fields defs) (separate (lambda (x) (or (symbol? x)
+					   (and (pair? x)
+						(eq? (car x) '|::|))))
+			   fields)
    (let ((field-names (map decl-var fields))
 	 (field-types (map decl-type fields))
-	 (func-names  (delete-duplicates (map f-exp-name funcs)))
-	 (func-args   (map (lambda (fexp)
-			     (fsig-to-lambda-list (cddadr fexp))) funcs))
-	 (func-types  (map (lambda (x) (gensym)) funcs))
-	 (func-sparms (map (lambda (fexp)
-			     (let ((head (cadadr fexp)))
-			       (if (symbol? head) '()
-				   (cddr head))))
-			   funcs))
 	 (tvars       (gensym))
 	 (proto       (gensym)))
      `(call
        (lambda ()
-	 (scope-block
-	  (block
-	   (local (tuple ,@func-names ,@func-types ,tvars ,proto))
-	   (call
-	    (lambda (,@params)
-	      ; the static parameters are bound to new TypeVars in here,
-	      ; so everything that sees the TypeVars is evaluated here.
-	      (block
-	       (= ,tvars (tuple ,@params))
-	       (= ,proto
-		  (call (top new_struct_type)
-			(quote ,name)
-			,super
-			,tvars
-			(tuple ,@(map (lambda (x) `',x) field-names))))
-	       ; wrap type prototype in a type constructor
-	       (= ,name (call (top new_type_constructor) ,tvars ,proto))
-	       ; now add the type fields, which might reference the type
-	       ; itself. tie the recursive knot.
-	       (call (top new_struct_fields)
-		     ,name (tuple ,@field-types))
-	       ,@(map (lambda (type argl sp)
-			`(= ,type
-			    ,(if (null? sp)
-				 `(tuple ,@(llist-types argl))
-				 (receive
-				  (sp bnds)
-				  (sparam-name-bounds sp)
-				  `(call (lambda ,sp
-					   (tuple ,@(llist-types argl)))
-					 ,@(symbols->typevars sp bnds))))))
-		      func-types func-args func-sparms)))
-	    ,@(symbols->typevars params bounds))
-	   ; build method definitions
-	   ,@(map (lambda (fdef fargs ftype)
-		    (gf-def-expr- (f-exp-name fdef)
-				  fargs
-				  ftype
-				  (caddr fdef)))
-		  funcs func-args func-types)
-	   ; assign methods to type fields
-	   ,@(map (lambda (fname)
-		    `(= (|.| ,proto ,fname) ,fname))
-		  func-names))))))))
+	 (block
+	  (scope-block
+	   (block
+	    (local (tuple ,tvars ,proto))
+	    (call
+	     (lambda (,@params)
+	       ; the static parameters are bound to new TypeVars in here,
+	       ; so everything that sees the TypeVars is evaluated here.
+	       (block
+		(= ,tvars (tuple ,@params))
+		(= ,proto
+		   (call (top new_struct_type)
+			 (quote ,name)
+			 ,super
+			 ,tvars
+			 (tuple ,@(map (lambda (x) `',x) field-names))))
+	        ; wrap type prototype in a type constructor
+		(= ,name (call (top new_type_constructor) ,tvars ,proto))
+	        ; now add the type fields, which might reference the type
+	        ; itself. tie the recursive knot.
+		(call (top new_struct_fields)
+		      ,name (tuple ,@field-types))))
+	     ,@(symbols->typevars params bounds))))
+	  ; now wrap the other definitions in a private scope,
+	  ; except providing "new" and the type name
+	  ,(if (null? defs)
+	       '(null)
+	       `(call (lambda (new ,name)
+			(scope-block
+			 (block ,@defs (null))))
+		      ,name ,name))))))))
 
 (define (type-def-expr name params super)
   (receive
@@ -428,6 +393,15 @@
    (pattern-lambda (local (= var rhs))
 		   `(block (local ,var)
 			   (= ,(decl-var var) ,rhs)))
+
+   ; global x,y,z => global x;global y;global z
+   (pattern-lambda (global (tuple . vars))
+		   `(block
+		     ,@(map (lambda (x) `(global ,x)) vars)))
+
+   ; global x=2 => global x;x=2
+   (pattern-lambda (global (= var rhs))
+		   `(block (global ,var) (= ,var ,rhs)))
 
    ; x::T = rhs => x::T; x = rhs
    (pattern-lambda (= (|::| x T) rhs)
@@ -833,9 +807,9 @@
 		 (cons `(= ,dest ,l) '())
 		 (cons (if tail `(return ,l) l) '()))))
 
-	  ((local)
+	  ((local global)
 	   (if (symbol? dest)
-	       (error "misplaced local declaration"))
+	       (error (string "misplaced " (car e) " declaration")))
 	   (cons (to-blk (to-lff '(null) dest tail))
 		 (list e)))
 
@@ -868,6 +842,15 @@ The first one gave something broken, but the second case works.
 So far only the second case can actually occur.
 |#
 
+(define (declared-global-vars e)
+  (if (or (not (pair? e)) (quoted? e))
+      '()
+      (case (car e)
+	((lambda scope-block)  '())
+	((global)  (cdr e))
+	(else
+	 (apply append (map declared-global-vars e))))))
+
 ; local variable identification
 ; convert (scope-block x) to `(scope-block ,@locals ,x)
 ; where locals is a list of (local x) expressions, derived from two sources:
@@ -898,8 +881,12 @@ So far only the second case can actually occur.
 		 (list 'lambda (cadr e) body)))
 
 	      ((eq? (car e) 'scope-block)
-	       (let* ((vars (delete-duplicates
-			     (find-assigned-vars (cadr e) env)))
+	       (let* ((glob (declared-global-vars (cadr e)))
+		      (vars (delete-duplicates
+			     (find-assigned-vars
+			      ; being declared global prevents a variable
+			      ; assignment from introducing a local
+			      (cadr e) (append env glob))))
 		      (body (add-local-decls (cadr e) (append vars env))))
 		 `(scope-block ,@(map (lambda (v) `(local ,v))
 				      vars)
@@ -934,7 +921,7 @@ So far only the second case can actually occur.
     (cond ((null? alst)               '())
 	  ((null? remove)             alst)
 	  ((memq (caar alst) remove)  (without (cdr alst) remove))
-	  (else                       (cons (car last)
+	  (else                       (cons (car alst)
 					    (without (cdr alst) remove)))))
   (cond ((null? renames)  e)
 	((symbol? e)      (lookup e renames e))
@@ -1047,6 +1034,7 @@ So far only the second case can actually occur.
 		(locl (cdr (caddr e)))
 		(allv (nconc (map arg-name args) locl))
 		(fv   (diff (free-vars (lam:body e)) allv))
+		(glo  (declared-global-vars (lam:body e)))
 		; make var-info records for vars introduced by this lambda
 		(vi   (nconc
 		       (map (lambda (decl)
@@ -1056,7 +1044,9 @@ So far only the second case can actually occur.
 		       (map make-var-info locl)))
 		; captured vars: vars from the environment that occur
 		; in our set of free variables (fv).
-		(cv    (filter (lambda (v) (memq (vinfo:name v) fv))
+		(cv    (filter (lambda (v) (and (memq (vinfo:name v) fv)
+						(not (memq
+						      (vinfo:name v) glo))))
 			       env))
 		(bod   (analyze-vars
 			(lam:body e)
