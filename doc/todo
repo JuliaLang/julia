@@ -327,14 +327,9 @@ big deal.
 
 issues 5/31/10
 
-- covariance. Array{Int} probably should mean any integer array.
-  . T{S} is covariant iff S is abstract. if S is concrete you need T{<:S}.
-    this allows us to distinguish a method specialized for concrete class C
-    from a method defined for types T<:C. Internally, methods are only
-    specialized for concrete types so this works out.
-  . if we have function types this gets difficult because contravariant
-    contexts are introduced. a type can then be fundamentally invariant or
-    contravariant.
+- covariance
+  . we will use T{S<:R} type patterns instead of covariance.
+  . T{S} is covariant iff T is abstract.
 
 - unions, tagged unions
   consider Cons(Cons(`a,nil), Cons(nil, nil)), or {{a}, {}}

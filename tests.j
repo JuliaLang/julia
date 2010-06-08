@@ -254,6 +254,23 @@ Y(f) = (h->f(x->h(h)(x)))(h->f(x->h(h)(x)))
 yfib = Y(fib->(n->(n < 2 ? n : fib(n-1) + fib(n-2))))
 assert(yfib(20) == 6765)
 
+# variable scope, globals
+glob_x = 23
+function glotest()
+    global glob_x
+    glob_x = 24
+    loc_x = 8
+    function inner()
+        global loc_x = 10
+        glob_x = 88  # glob_x is not global in here
+    end
+    inner()
+    assert(loc_x == 8)
+end
+glotest()
+assert(glob_x == 24)
+assert(loc_x == 10)
+
 # comprehensions
 X = [ i+2j | i=1:5, j=1:5 ]
 assert(X[2,3] == 8)
