@@ -48,10 +48,10 @@ copy(a::Vector) = [ a[i] | i=1:length(a) ]
 copy(a::Matrix) = [ a[i,j] | i=1:size(a,1), j=1:size(a,2) ]
 copy(a::Array{Any,1}) = { copy(a[i]) | i=1:length(a) }
 
-reshape{T,n}(a::Array{T,n}, dims...) = (b = zeros(T, dims...);
-                                        for i=1:numel(a); b[i] = a[i]; end;
-                                        b)
-reshape{T,n}(a::Array{T,n}, dims::Tuple) = reshape(a, dims...)
+reshape{T}(a::Array{T}, dims...) = (b = zeros(T, dims...);
+                                    for i=1:numel(a); b[i] = a[i]; end;
+                                    b)
+reshape(a::Array, dims::Tuple) = reshape(a, dims...)
 
 (+)(x::Scalar, y::Vector) = [ x + y[i] | i=1:length(y) ]
 (-)(x::Scalar, y::Vector) = [ x - y[i] | i=1:length(y) ]
@@ -267,32 +267,48 @@ function sort(a::Vector, lo, hi)
 end
 
 # Knuth shuffle
-function shuffle{T}(a::Vector)
-    for i = length(a):-1:1
+function shuffle(a::Vector)
+    for i = length(a):-1:2
         j = int32(ceil(i*rand()))
         a[i], a[j] = a[j], a[i]
     end
     return a
 end
 
+function randperm(n::Int)
+    a = Array(typeof(n), n)
+    a[1] = 1
+    for i = 2:n
+        j = int32(ceil(i*rand()))
+        a[i] = a[j]
+        a[j] = i
+    end
+    return a
+end
+
 # Print arrays
 function printall{T}(a::Array{T,1})
-    n = a.dims[1]
-    for i = 1:n; print(a[i]); if i < n; print("\n"); end; end
+    if is(T,Any)
+        opn = "{"; cls = "}"
+    else
+        opn = "["; cls = "]";
+    end
+    print_comma_array(a, opn, cls)
 end
 
 function print{T}(a::Array{T,1})
     if is(T,Any)
-        print_comma_array(a, "{", "}")
-        return ()
+        opn = "{"; cls = "}"
+    else
+        opn = "["; cls = "]";
     end
     n = a.dims[1]
-    if n < 10
-        for i = 1:n; print(a[i]); if i < n; print("\n"); end; end
+    if n <= 10
+        print_comma_array(a, opn, cls)
     else
-        for i = 1:3; print(a[i]); print("\n"); end
-        print(":\n");
-        for i = n-2:n; print(a[i]); if i < n; print("\n"); end; end
+        print_comma_array(a[1:5], opn, "")
+        print(",...,")
+        print_comma_array(a[(n-4):n], "", cls)
     end
 end
 
