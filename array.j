@@ -258,6 +258,15 @@ function sort(a::Vector, lo, hi)
     return a
 end
 
+# Knuth shuffle
+function shuffle{T}(a::Vector)
+    for i = length(a):-1:1
+        j = int32(ceil(i*rand()))
+        a[i], a[j] = a[j], a[i]
+    end
+    return a
+end
+
 # Print arrays
 function printall{T}(a::Array{T,1})
     n = a.dims[1]
