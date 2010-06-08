@@ -82,6 +82,24 @@ promote_rule(::Type{Int64}, ::Type{Int8} ) = Int64
 promote_rule(::Type{Int64}, ::Type{Int16}) = Int64
 promote_rule(::Type{Int64}, ::Type{Int32}) = Int64
 
+## traits ##
+typemin(::Type{Int8  }) = int8(-128)
+typemax(::Type{Int8  }) = int8(127)
+typemin(::Type{Uint8 }) = uint8(0)
+typemax(::Type{Uint8 }) = uint8(255)
+typemin(::Type{Int16 }) = int16(-32768)
+typemax(::Type{Int16 }) = int16(32767)
+typemin(::Type{Uint16}) = uint16(0)
+typemax(::Type{Uint16}) = uint16(65535)
+typemin(::Type{Int32 }) = (-2147483647 - 1)
+typemax(::Type{Int32 }) = 2147483647
+typemin(::Type{Uint32}) = uint32(0)
+typemax(::Type{Uint32}) = uint32(4294967295)
+typemin(::Type{Int64 }) = (-9223372036854775807 - 1)
+typemax(::Type{Int64 }) = 9223372036854775807
+typemin(::Type{Uint64}) = uint64(0)
+typemax(::Type{Uint64}) = 18446744073709551615
+
 ## basic arithmetic ##
 
 (-)(x::Int8 ) = boxsi8 (neg_int(unbox8 (x)))
@@ -352,3 +370,14 @@ function nCr(n::Int, r::Int)
     end
     return truncate(ans)
 end
+
+randui64() = boxui64(or_int(zext64(unbox32(randui32())),
+                            shl_int(zext64(unbox32(randui32())),unbox32(32))))
+
+randint(::Type{Int32}) = int32(randui32())&typemax(Int32)
+randint(::Type{Uint32}) = randui32()
+randint(::Type{Int64}) = int64(randui64())&typemax(Int64)
+randint(::Type{Uint64}) = randui64()
+randint() = randint(Int32)
+
+randint{T<:Int}(lo::T, hi::T) = div(randint(T),div(typemax(T),hi-lo+1)+1) + lo

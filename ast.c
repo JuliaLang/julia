@@ -190,9 +190,13 @@ static jl_value_t *scm_to_julia(value_t e)
         if (iscprim(e) && cp_numtype((cprim_t*)ptr(e))==T_DOUBLE) {
             return (jl_value_t*)jl_box_float64(*(double*)cp_data((cprim_t*)ptr(e)));
         }
+        if (iscprim(e) && cp_numtype((cprim_t*)ptr(e))==T_INT64) {
+            return (jl_value_t*)jl_box_int64(*(int64_t*)cp_data((cprim_t*)ptr(e)));
+        }
+        if (iscprim(e) && cp_numtype((cprim_t*)ptr(e))==T_UINT64) {
+            return (jl_value_t*)jl_box_uint64(*(uint64_t*)cp_data((cprim_t*)ptr(e)));
+        }
         uint64_t n = toulong(e, "scm_to_julia");
-        if (n > S64_MAX)
-            return (jl_value_t*)jl_box_uint64(n);
         if (n > S32_MAX)
             return (jl_value_t*)jl_box_int64((int64_t)n);
         return (jl_value_t*)jl_box_int32((int32_t)n);

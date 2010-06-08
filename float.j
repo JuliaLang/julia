@@ -39,6 +39,15 @@ promote_rule(::Type{Float64}, ::Type{Int16}) = Float64
 promote_rule(::Type{Float64}, ::Type{Int32}) = Float64
 promote_rule(::Type{Float64}, ::Type{Int64}) = Float64 # TODO: should be Float80
 
+## traits ##
+
+eps(::Type{Float32}) = float32(1.1920928e-7)
+eps(::Type{Float64}) = 2.2204460492503131e-16
+typemin(::Type{Float32}) = float32(1.175494351e-38)
+typemax(::Type{Float32}) = float32(3.402823466e+38)
+typemin(::Type{Float64}) = 2.2250738585072014e-308
+typemax(::Type{Float64}) = 1.7976931348623157e+308
+
 ## basic arithmetic ##
 
 (-)(x::Float32) = boxf32(neg_float(unbox32(x)))
