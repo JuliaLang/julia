@@ -89,6 +89,14 @@ reshape{T,n}(a::Array{T,n}, dims::Tuple) = reshape(a, dims...)
 (./)(x::Matrix, y::Matrix) = [ x[i,j] / y[i,j] | i=1:size(x,1), j=1:size(x,2) ]
 (>)(x::Matrix, y::Matrix) = [ x[i,j] > y[i,j] | i=1:size(x,1), j=1:size(x,2) ]
 
+function sum(x::Matrix, dim::Number)
+    if dim == 1
+        [ sum(x[:,i]) | i=1:size(x, 2) ]
+    elseif dim == 2
+        [ sum(x[i,:]) | i=1:size(x, 1) ]
+    end
+end
+
 function (==)(x::Array, y::Array)
     if x.dims != y.dims; return false; end
     for i=1:numel(x); if arrayref(x,i) != arrayref(y,i); return false; end; end
