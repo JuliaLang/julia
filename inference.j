@@ -459,12 +459,14 @@ function typeinf(ast0::Expr, sparams::Tuple, atypes::Tuple)
         s[1][v] = Undef
     end
     la = length(args)
-    lastarg = ast.args[1][la]
-    if isa(lastarg,Expr) && is(lastarg.head,symbol("::"))
-        if ccall(dlsym(JuliaDLHandle,"jl_is_rest_arg"),Int32,(Any,),
-                 lastarg)!=0
-            s[1][args[la]] = atypes[la:]
-            la -= 1
+    if la > 0
+        lastarg = ast.args[1][la]
+        if isa(lastarg,Expr) && is(lastarg.head,symbol("::"))
+            if ccall(dlsym(JuliaDLHandle,"jl_is_rest_arg"),Int32,(Any,),
+                     lastarg)!=0
+                s[1][args[la]] = atypes[la:]
+                la -= 1
+            end
         end
     end
     for i=1:la

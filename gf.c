@@ -408,7 +408,8 @@ static jl_tuple_t *ml_matches(jl_methlist_t *ml, jl_value_t *type,
         }
         if (!shadowed) {
             jl_tuple_t *env=jl_null;
-            jl_value_t *ti=jl_type_intersect((jl_value_t*)ml->sig, type, &env);
+            jl_value_t *ti =
+                jl_type_intersection_matching((jl_value_t*)ml->sig, type, &env);
             env = jl_flatten_pairs(env);
             if (ti != (jl_value_t*)jl_bottom_type) {
                 if (ml->func->linfo == NULL) {

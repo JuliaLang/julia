@@ -385,9 +385,13 @@ function randint{T<:Int}(lo::T, hi::T)
     m = typemax(T)
     s = randint(T)
     if (hi-lo == m)
-        return s
+        return s + lo
     end
     r = hi-lo+1
+    if (r&(r-1))==0
+        # power of 2 range
+        return s&(r-1) + lo
+    end
     lim = m - (m%r+1)%r  # m - (m+1)%r
     while s > lim
         s = randint(T)
