@@ -18,71 +18,10 @@
 # - use type bounds
 # - reflection for constructors
 
-# mutable pair
-struct Pair
-    a
-    b
-end
-
-# delegated assoc list
-# equivalent to some previous list except for local modifications
-struct AList
-    prev::Nullable{AList}
-    elts::List
-end
-
 struct NotFound
 end
 
 NF = NotFound()
-
-# note: with Nullable (or other union types) it might not be possible to
-# infer type parameters from field values. bug or feature??
-alist(kt::Type, vt::Type) = AList((), nil)
-
-alist(a::AList) = AList(a, nil)
-
-assoc(item, a::EmptyList) = a
-assoc(item, p::List) = is(head(p).a,item) ? head(p) : assoc(item,tail(p))
-
-function set(a::AList, val, key)
-    p = assoc(key, a.elts)
-    if !isa(p,EmptyList)
-        p.b = val
-    else
-        a.elts = Cons(Pair(key,val),a.elts)
-    end
-    a
-end
-
-function ref(a::AList, key)
-    p = assoc(key, a.elts)
-    if isa(p,EmptyList)
-        if is(a.prev,())
-            return NF
-        end
-        return a.prev[key]
-    end
-    p.b
-end
-
-function print(a::AList)
-    allv = idtable()
-    al = a
-    while !is(al,())
-        l = al.elts
-        while isa(l,Cons)
-            allv[head(l).a] = true
-            l = tail(l)
-        end
-        al = al.prev
-    end
-    print("AList(")
-    for (sym,_)=allv
-        print(sym,"::",a[sym],", ")
-    end
-    print(")")
-end
 
 struct EmptyCallStack
 end
@@ -251,7 +190,7 @@ function builtin_tfunction(f, args::Tuple, argtypes::Tuple)
     return normalize_numeric_type(tf[3](argtypes...))
 end
 
-function abstract_eval(e::Expr, vtypes::AList, sp)
+function abstract_eval(e::Expr, vtypes, sp)
     t = abstract_eval_expr(e, vtypes, sp)
     e.type = t
     return t
@@ -265,7 +204,7 @@ function a2t(a::Vector)
     t
 end
 
-function abstract_eval_expr(e, vtypes::AList, sp)
+function abstract_eval_expr(e, vtypes, sp)
     # handle:
     # call  lambda  quote  null  top  unbound  box-unbound
     # closure-ref
@@ -289,7 +228,7 @@ function abstract_eval_expr(e, vtypes::AList, sp)
                 # TODO: lambda expression (let)
                 return Any
             end
-            if !is(vtypes[func],NF)
+            if has(vtypes,func)
                 # computed call with local var
                 return Any
             end
@@ -354,8 +293,8 @@ function abstract_eval_global(s::Symbol)
     end
 end
 
-function abstract_eval(s::Symbol, vtypes::AList, sp)
-    t = vtypes[s]
+function abstract_eval(s::Symbol, vtypes, sp)
+    t = get(vtypes,s,NF)
     if is(t,NF)
         for i=1:2:length(sp)
             if is(sp[i],s)
@@ -369,28 +308,40 @@ function abstract_eval(s::Symbol, vtypes::AList, sp)
     return t
 end
 
-abstract_eval(x, vtypes::AList, sp) = abstract_eval_constant(x)
+abstract_eval(x, vtypes, sp) = abstract_eval_constant(x)
 
-function interpret(e::Expr, vtypes::AList, sp)
+struct StateUpdate
+    changes::((Symbol,Any)...)
+    state::IdTable
+end
+
+function ref(x::StateUpdate, s::Symbol)
+    for (v,t) = x.changes
+        if is(v,s)
+            return t
+        end
+    end
+    return get(x.state,s,NF)
+end
+
+function interpret(e::Expr, vtypes, sp)
     # handle assignment
     if is(e.head,symbol("="))
         t = abstract_eval(e.args[2], vtypes, sp)
-        a = alist(vtypes)
         lhs = e.args[1]
         assert(isa(lhs,Symbol))
-        a[lhs] = t
-        return a
+        return StateUpdate(((lhs, t),), vtypes)
     elseif is(e.head,`gotoifnot)
         abstract_eval(e.args[1], vtypes, sp)
     end
-    return vtypes
+    return StateUpdate((), vtypes)
 end
 
 tchanged(n, o) = is(o,NF) || (!is(n,NF) && !subtype(n,o))
 
-function changed(new::AList, old::AList, vars)
-    for v=vars
-        if tchanged(new[v], old[v])
+function changed(new::StateUpdate, old, vars)
+    for v = vars
+        if tchanged(new[v], get(old,v,NF))
             return true
         end
     end
@@ -398,17 +349,21 @@ function changed(new::AList, old::AList, vars)
 end
 
 function tmerge(typea, typeb)
+    if is(typea,NF)
+        return typeb
+    end
+    if is(typeb,NF)
+        return typea
+    end
     return Union(typea, typeb)
 end
 
-function update(state::AList, new::AList, vars)
-    if is(state.prev,())
-        state.prev = new
-    else
-        for v=vars
-            if tchanged(new[v], state[v])
-                state[v] = tmerge(state[v], new[v])
-            end
+function update(state, changes::StateUpdate, vars)
+    for v = vars
+        newtype = changes[v]
+        oldtype = get(state,v,NF)
+        if tchanged(newtype, oldtype)
+            state[v] = tmerge(oldtype, newtype)
         end
     end
     state
@@ -449,7 +404,7 @@ function typeinf(ast0::Expr, sparams::Tuple, atypes::Tuple)
     body = ast.args[3].args
 
     n = length(body)
-    s = map(stmt->alist(Symbol,Type), body)
+    s = { idtable() | i=1:n }
     recpts = intset(n+1)  # statements that depend recursively on our value
     W = intset(n+1)
     # initial set of pc
@@ -483,7 +438,7 @@ function typeinf(ast0::Expr, sparams::Tuple, atypes::Tuple)
             #print(pc,": ",s[pc],"\n")
             remove(W, pc)
             stmt = body[pc]
-            newstate = interpret(stmt, s[pc], sparams)
+            changes = interpret(stmt, s[pc], sparams)
             if frame.recurred
                 adjoin(recpts, pc)
                 frame.recurred = false
@@ -494,9 +449,9 @@ function typeinf(ast0::Expr, sparams::Tuple, atypes::Tuple)
                     pc´ = findlabel(body,stmt.args[1])
                 elseif is(stmt.head,`gotoifnot)
                     l = findlabel(body,stmt.args[2])
-                    if changed(newstate, s[l], vars)
+                    if changed(changes, s[l], vars)
                         adjoin(W, l)
-                        update(s[l], newstate, vars)
+                        update(s[l], changes, vars)
                     end
                 elseif is(stmt.head,symbol("return"))
                     pc´ = n+1
@@ -510,8 +465,8 @@ function typeinf(ast0::Expr, sparams::Tuple, atypes::Tuple)
                     end
                 end
             end
-            if pc´<=n && changed(newstate, s[pc´], vars)
-                update(s[pc´], newstate, vars)
+            if pc´<=n && changed(changes, s[pc´], vars)
+                update(s[pc´], changes, vars)
                 pc = pc´
             else
                 break
@@ -522,7 +477,7 @@ function typeinf(ast0::Expr, sparams::Tuple, atypes::Tuple)
     return (type_annotate(ast, s, sparams, frame.result), frame.result)
 end
 
-function eval_annotate(e::Expr, vtypes::AList, sp)
+function eval_annotate(e::Expr, vtypes, sp)
     if is(e.head,`quote) || is(e.head,`top) || is(e.head,`goto) ||
         is(e.head,`label)
         return e
@@ -536,11 +491,11 @@ function eval_annotate(e::Expr, vtypes::AList, sp)
     e
 end
 
-function eval_annotate(e::Symbol, vtypes::AList, sp)
+function eval_annotate(e::Symbol, vtypes, sp)
     Expr(`symbol, {e}, abstract_eval(e, vtypes, sp))
 end
 
-eval_annotate(s, vtypes::AList, sp) = s
+eval_annotate(s, vtypes, sp) = s
 
 # expand v to v::T as appropriate based on all inferred type info
 function add_decls(vars::Array, states::Array)
@@ -602,3 +557,16 @@ m = getmethods(qux,(Int32,))
 ast = m[3]
 
 fib(n) = n < 2 ? n : fib(n-1) + fib(n-2)
+
+function both()
+    a = 2
+    while mystery()
+        b = a+a
+        g(a)
+        a = 2.0
+        c = a+a
+        f(a)
+        f(c)
+    end
+    c
+end

@@ -29,6 +29,9 @@ function ref(t::IdTable, key)
     return v
 end
 
+has(t::IdTable, key) = !is(get(t, key, _secret_idtable_token_),
+                           _secret_idtable_token_)
+
 start(t::IdTable) = 0
 done(t::IdTable, i) = is(next(t,i),())
 next(t::IdTable, i) = ccall(dlsym(JuliaDLHandle,"jl_eqtable_next"),
