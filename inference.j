@@ -97,6 +97,10 @@ t_func[tuplelen] = (1, 1, x->Int32)
 t_func[arraylen] = (1, 1, x->Int32)
 t_func[arrayref] = (2, 2, (a,i)->(subtype(a,Array) ? a.parameters[1] : Any))
 t_func[arrayset] = (3, 3, (a,i,v)->a)
+t_func[Array] =
+    (1, Inf, (T,dims...)->(nd = length(dims);
+                           et = isType(T) ? T.parameters[1] : Any;
+                           Array{et,nd}))
 t_func[identity] = (1, 1, identity)
 t_func[`convert] =
     (2, 2, (t,x)->(isType(t) ? t.parameters[1] : Any))
@@ -185,6 +189,7 @@ function builtin_tfunction(f, args::Tuple, argtypes::Tuple)
         return Bottom
     end
     if is(f,typeassert) || is(f,tupleref) || is(f,getfield)
+        # TODO: case of apply(), where we do not have the args
         return normalize_numeric_type(tf[3](args, argtypes...))
     end
     return normalize_numeric_type(tf[3](argtypes...))
@@ -204,6 +209,77 @@ function a2t(a::Vector)
     t
 end
 
+function isconstantfunc(f, vtypes)
+    if isa(f,Expr) && is(func.head,`top)
+        assert(isa(f.args[1],Symbol))
+        return (true, f.args[1])
+    end
+    return (isa(f,Symbol) && !has(vtypes,f), f)
+end
+
+function abstract_call(f, fargs, argtypes, vtypes, sp)
+    if isbuiltin(f)
+        if is(f,apply) && length(fargs)>0
+            (isfunc, af) = isconstantfunc(fargs[1], vtypes)
+            if isfunc && isbound(af)
+                afargs = fargs[2:]
+                aargtypes = argtypes[2:]
+                if all(map(x->isa(x,Tuple),aargtypes))
+                    # apply with known func with known tuple types
+                    # can be collapsed to a call to the applied func
+                    at = length(aargtypes)>0 ? append(aargtypes...) : ()
+                    return abstract_call(eval(af), (), append(aargtypes...),
+                                         vtypes, sp)
+                end
+            end
+        end
+        rt = builtin_tfunction(f, fargs, argtypes)
+        print("=> ", rt, "\n")
+        return rt
+    elseif isgeneric(f)
+        applicable = getmethods(f, argtypes)
+        rettype = Bottom
+        x = applicable
+        while !is(x,())
+            #print(x,"\n")
+            # TODO: approximate static parameters by calling tmatch
+            # on argtypes and the intersection
+            if isa(x[3],Symbol)
+                # when there is a builtin method in this GF, we get
+                # a symbol with the name instead of a LambdaStaticData
+                rt = builtin_tfunction(x[3], fargs, x[1])
+            else
+                (_tree, rt) = typeinf(x[3].ast, x[2], x[1])
+            end
+            rettype = tmerge(rettype, rt)
+            x = x[4]
+        end
+        # if rettype is Bottom we've found a method not found error
+        print("=> ", rettype, "\n")
+        return rettype
+    else
+        print("=> ", Any, "\n")
+        return Any
+    end
+end
+
+function abstract_eval_call(e, vtypes, sp)
+    (isfunc, func) = isconstantfunc(e.args[1], vtypes)
+    if !isfunc
+        # TODO: lambda expression (let)
+        return Any
+    end
+    fargs = a2t(e.args[2:])
+    argtypes = map(x->abstract_eval(x,vtypes,sp), fargs)
+    print("call ", e.args[1], argtypes, " ")
+    if !isbound(func)
+        print("=> ", Any, "\n")
+        return Any
+    end
+    f = eval(func)
+    return abstract_call(f, fargs, argtypes, vtypes, sp)
+end
+
 function abstract_eval_expr(e, vtypes, sp)
     # handle:
     # call  lambda  quote  null  top  unbound  box-unbound
@@ -219,57 +295,7 @@ function abstract_eval_expr(e, vtypes, sp)
     elseif is(e.head,symbol("closure-ref"))
         return Any
     elseif is(e.head,`call)
-        func = e.args[1]
-        if isa(func,Expr) && is(func.head,`top)
-            func = func.args[1]
-            assert(isa(func,Symbol))
-        else
-            if !isa(func,Symbol)
-                # TODO: lambda expression (let)
-                return Any
-            end
-            if has(vtypes,func)
-                # computed call with local var
-                return Any
-            end
-        end
-        fargs = a2t(e.args[2:])
-        argtypes = map(x->abstract_eval(x,vtypes,sp), fargs)
-        print("call ", e.args[1], argtypes, " ")
-        if !isbound(func)
-            print("=> ", Any, "\n")
-            return Any
-        end
-        f = eval(func)
-        if isbuiltin(f)
-            rt = builtin_tfunction(f, fargs, argtypes)
-            print("=> ", rt, "\n")
-            return rt
-        elseif isgeneric(f)
-            applicable = getmethods(f, argtypes)
-            rettype = Bottom
-            x = applicable
-            while !is(x,())
-                #print(x,"\n")
-                # TODO: approximate static parameters by calling tmatch
-                # on argtypes and the intersection
-                if isa(x[3],Symbol)
-                    # when there is a builtin method in this GF, we get
-                    # a symbol with the name instead of a LambdaStaticData
-                    rt = builtin_tfunction(x[3], fargs, x[1])
-                else
-                    (_tree, rt) = typeinf(x[3].ast, x[2], x[1])
-                end
-                rettype = tmerge(rettype, rt)
-                x = x[4]
-            end
-            # if rettype is Bottom we've found a method not found error
-            print("=> ", rettype, "\n")
-            return rettype
-        else
-            print("=> ", Any, "\n")
-            return Any
-        end
+        return abstract_eval_call(e, vtypes, sp)
     end
 end
 

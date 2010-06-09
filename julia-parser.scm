@@ -14,7 +14,7 @@ TODO:
      ; the way the lexer works, every prefix of an operator must also
      ; be an operator.
      (-> <- -- -->)
-     (> < >= <= == != |.>| |.<| |.>=| |.<=| |.==| |.!=| |.=| |.!| |<:| |:>|)
+     (> < >= <= == != |.>| |.<| |.>=| |.<=| |.==| |.!=| |.=| |.!| |<:| |:>| |>:|)
      (: ..)
      (<< >>)
      (+ - |\|| $)
@@ -46,7 +46,7 @@ TODO:
 ; unused characters: @ prefix'
 ; no character literals; unicode kind of makes them obsolete. strings instead.
 
-(define unary-ops '(- + ! ~ $ |<:| |:>|))
+(define unary-ops '(- + ! ~ $ |<:| |>:|))
 
 ; operators that are special forms, not function names
 (define syntactic-operators
@@ -64,7 +64,7 @@ TODO:
 (define ctrans-op (string->symbol "'"))
 (define vararg-op (string->symbol "..."))
 
-(define operators (list* '~ ctrans-op trans-op vararg-op
+(define operators (list* '~ '! ctrans-op trans-op vararg-op
 			 (delete-duplicates
 			  (apply append (vector->list ops-by-prec)))))
 
@@ -443,7 +443,7 @@ TODO:
 	     (list 'call
 		   (take-token s) ex (parse-factor-h s parse-unary ops)))))))
 
-; -2^3 is parsed as -(2^3), so call parse-call for the first argument,
+; -2^3 is parsed as -(2^3), so call parse-decl for the first argument,
 ; and parse-unary from then on (to handle 2^-3)
 (define (parse-factor s)
   (parse-factor-h s parse-decl (prec-ops 10)))

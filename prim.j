@@ -5,7 +5,7 @@ typealias Char Uint8
 typealias String Array{Char,1}
 
 (<:)(T, S) = subtype(T,S)
-(:>)(T, S) = subtype(S,T)
+(>:)(T, S) = subtype(S,T)
 
 ref(t::Tuple, i::Index) = tupleref(t, i)
 length(t::Tuple) = tuplelen(t)

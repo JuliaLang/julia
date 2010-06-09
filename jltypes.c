@@ -1044,7 +1044,7 @@ int jl_subtype_le(jl_value_t *a, jl_value_t *b, int ta, int morespecific)
     if (jl_is_tuple(b)) {
         if (jl_is_tag_type(a) &&
             ((jl_tag_type_t*)a)->name == jl_ntuple_typename) {
-            // only ((T:>S)...,) can be a supertype of NTuple[N,S]
+            // only ((T>:S)...,) can be a supertype of NTuple[N,S]
             jl_tuple_t *tp = (jl_tuple_t*)b;
             jl_value_t *ntp = jl_tupleref(((jl_tag_type_t*)a)->parameters, 1);
             if (tp->length == 1 && jl_is_seq_type(jl_tupleref(tp,0))) {
@@ -1112,7 +1112,7 @@ int jl_subtype_le(jl_value_t *a, jl_value_t *b, int ta, int morespecific)
     }
  check_Type:
     if (((jl_tag_type_t*)a)->name == jl_type_type->name) {
-        // Type{T} matches either Type{:>T} or :>typeof(T)
+        // Type{T} matches either Type{>:T} or >:typeof(T)
         return jl_subtype_le(jl_tparam0(a), b, 1, morespecific);
     }
 
@@ -1295,7 +1295,7 @@ static jl_value_t *type_match_(jl_value_t *child, jl_value_t *parent,
     if (jl_is_tuple(parent)) {
         if (jl_is_tag_type(child) &&
             ((jl_tag_type_t*)child)->name == jl_ntuple_typename) {
-            // only ((T:>S)...,) can be a supertype of NTuple[N,S]
+            // only ((T>:S)...,) can be a supertype of NTuple[N,S]
             jl_tuple_t *tp = (jl_tuple_t*)parent;
             jl_value_t *ntp = jl_tupleref(((jl_tag_type_t*)child)->parameters,
                                           1);
@@ -1331,7 +1331,7 @@ static jl_value_t *type_match_(jl_value_t *child, jl_value_t *parent,
     }
  check_Type:
     if (((jl_tag_type_t*)child)->name == jl_type_type->name) {
-        // Type{T} matches either Type{:>T} or :>typeof(T)
+        // Type{T} matches either Type{>:T} or >:typeof(T)
         return type_match_(jl_full_type(jl_tparam0(child)),
                            parent, env, morespecific);
     }

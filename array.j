@@ -297,6 +297,16 @@ function randcycle(n::Int)
     return a
 end
 
+function permute(A, k::Int)
+    fac = convert(typeof(k),1)
+    for i=2:length(A)
+        fac *= (i-1)
+        j = i - div(k,fac)%i
+        A[i], A[j] = A[j], A[i]
+    end
+    A
+end
+
 # Print arrays
 function printall{T}(a::Array{T,1})
     if is(T,Any)
