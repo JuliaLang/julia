@@ -269,7 +269,7 @@ end
 # Knuth shuffle
 function shuffle(a::Vector)
     for i = length(a):-1:2
-        j = int32(ceil(i*rand()))
+        j = randint(i)
         a[i], a[j] = a[j], a[i]
     end
     return a
@@ -279,7 +279,18 @@ function randperm(n::Int)
     a = Array(typeof(n), n)
     a[1] = 1
     for i = 2:n
-        j = int32(ceil(i*rand()))
+        j = randint(i)
+        a[i] = a[j]
+        a[j] = i
+    end
+    return a
+end
+
+function randcycle(n::Int)
+    a = Array(typeof(n), n)
+    a[1] = 1
+    for i = 2:n
+        j = randint(i-1)
         a[i] = a[j]
         a[j] = i
     end
