@@ -26,6 +26,7 @@ extern "C" {
 #endif
 #include "llt.h"
 #include "julia.h"
+#include "builtin_proto.h"
 }
 
 // llvm state
@@ -110,22 +111,22 @@ static Function *jlalloc_func;
   - dispatch optimizations
   * inline space for buffers
   * preallocate boxes for small integers
-  - speed up type caching
+  ? speed up type caching
   * do something about all the string copying from scheme
   * speed up scheme pattern matcher
 
   optimizations round 2:
-  - lambda lifting
-  - mark pure (builtin) functions and don't call them in statement position
+  - type inference
+  - mark non-null references and avoid null check
+  - static method lookup
   - avoid tuple allocation in (a,b)=(b,a)
   - varargs and ... optimizations
 
   optimizations round 3:
-  - type inference
-  - mark non-null references and avoid null check
-  - static method lookup
   - inlining
   - unboxing
+  - lambda lifting
+  - mark pure (builtin) functions, CSE
 
   future:
   - try using fastcc to get tail calls
@@ -315,6 +316,76 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool value,
 
 #include "intrinsics.cpp"
 
+static Value *emit_call(jl_value_t **args, size_t arglen, jl_codectx_t *ctx)
+{
+    size_t nargs = arglen-1;
+    Value *theFptr, *theEnv;
+    jl_binding_t *b=NULL; bool done=false;
+    if (jl_is_symbol(args[0]) && is_global((jl_sym_t*)args[0], ctx) &&
+        jl_boundp(ctx->module, (jl_sym_t*)args[0])) {
+        b = jl_get_binding(ctx->module, (jl_sym_t*)args[0]);
+        if (!b->constp || b->value==NULL) b = NULL;
+    }
+    if (jl_is_expr(args[0]) && ((jl_expr_t*)args[0])->head == top_sym) {
+        // (top x) is also global
+        b = jl_get_binding(ctx->module,
+                           (jl_sym_t*)jl_exprarg(((jl_expr_t*)args[0]),0));
+        if (!b->constp || b->value==NULL) b = NULL;
+    }
+    if (b != NULL) {
+        // head is a constant global
+        if (jl_typeis(b->value, jl_intrinsic_type)) {
+            return emit_intrinsic((intrinsic)*(uint32_t*)jl_bits_data(b->value),
+                                  args, nargs, ctx);
+        }
+        if (jl_is_func(b->value)) {
+            jl_function_t *f = (jl_function_t*)b->value;
+            if (f->fptr == &jl_apply_generic) {
+                theFptr = jlapplygeneric_func;
+                //theFptr = literal_pointer_val((void*)f->fptr, jl_fptr_llvmt);
+                theEnv = literal_pointer_val(f->env);
+                done = true;
+            }
+            if (f->fptr == &jl_f_is && nargs==2) {
+                Value *arg1 = emit_expr(args[1], ctx, true);
+                Value *arg2 = emit_expr(args[2], ctx, true);
+                return julia_bool(builder.CreateICmpEQ(arg1, arg2));
+            }
+            // TODO: other known builtins
+        }
+    }
+    if (!done) {
+        Value *theFunc = emit_expr(args[0], ctx, true);
+        emit_typecheck(theFunc, (jl_value_t*)jl_any_func,
+                       "apply: expected function", ctx);
+        // extract pieces of the function object
+        // TODO: try extractelement instead
+        theFptr =
+            builder.CreateBitCast(emit_nthptr(theFunc, 1), jl_fptr_llvmt);
+        theEnv = emit_nthptr(theFunc, 2);
+    }
+    // emit arguments
+    Value *stacksave =
+        builder.CreateCall(Intrinsic::getDeclaration(jl_Module,
+                                                     Intrinsic::stacksave));
+    Value *argl = builder.CreateAlloca(jl_pvalue_llvmt,
+                                       ConstantInt::get(T_int32, nargs));
+    size_t i;
+    for(i=0; i < nargs; i++) {
+        Value *anArg = emit_expr(args[i+1], ctx, true);
+        Value *dest = builder.CreateGEP(argl, ConstantInt::get(T_int32,i));
+        builder.CreateStore(boxed(anArg), dest);
+    }
+    // call
+    Value *result = builder.CreateCall3(theFptr, theEnv, argl,
+                                        ConstantInt::get(T_int32,nargs));
+    // restore stack
+    builder.CreateCall(Intrinsic::getDeclaration(jl_Module,
+                                                 Intrinsic::stackrestore),
+                       stacksave);
+    return result;
+}
+
 static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool value,
                         bool last)
 {
@@ -402,66 +473,7 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool value,
         }
     }
     else if (ex->head == call_sym) {
-        size_t nargs = ex->args->length-1;
-        Value *theFptr, *theEnv;
-        jl_binding_t *b=NULL; bool done=false;
-        if (jl_is_symbol(args[0]) && is_global((jl_sym_t*)args[0], ctx) &&
-            jl_boundp(ctx->module, (jl_sym_t*)args[0])) {
-            b = jl_get_binding(ctx->module, (jl_sym_t*)args[0]);
-            if (!b->constp || b->value==NULL) b = NULL;
-        }
-        if (jl_is_expr(args[0]) && ((jl_expr_t*)args[0])->head == top_sym) {
-            // (top x) is also global
-            b = jl_get_binding(ctx->module,
-                               (jl_sym_t*)jl_exprarg(((jl_expr_t*)args[0]),0));
-            if (!b->constp || b->value==NULL) b = NULL;
-        }
-        if (b != NULL) {
-            // head is a constant global
-            if (jl_typeis(b->value, jl_intrinsic_type)) {
-                return emit_intrinsic((intrinsic)*(uint32_t*)jl_bits_data(b->value),
-                                      args, nargs, ctx);
-            }
-            if (jl_is_func(b->value)) {
-                jl_function_t *f = (jl_function_t*)b->value;
-                if (f->fptr == &jl_apply_generic) {
-                    theFptr = jlapplygeneric_func;
-                    //theFptr = literal_pointer_val((void*)f->fptr, jl_fptr_llvmt);
-                    theEnv = literal_pointer_val(f->env);
-                    done = true;
-                }
-            }
-        }
-        if (!done) {
-            Value *theFunc = emit_expr(args[0], ctx, true);
-            emit_typecheck(theFunc, (jl_value_t*)jl_any_func,
-                           "apply: expected function", ctx);
-            // extract pieces of the function object
-            // TODO: try extractelement instead
-            theFptr =
-                builder.CreateBitCast(emit_nthptr(theFunc, 1), jl_fptr_llvmt);
-            theEnv = emit_nthptr(theFunc, 2);
-        }
-        // emit arguments
-        Value *stacksave =
-            builder.CreateCall(Intrinsic::getDeclaration(jl_Module,
-                                                         Intrinsic::stacksave));
-        Value *argl = builder.CreateAlloca(jl_pvalue_llvmt,
-                                           ConstantInt::get(T_int32, nargs));
-        size_t i;
-        for(i=0; i < nargs; i++) {
-            Value *anArg = emit_expr(args[i+1], ctx, true);
-            Value *dest = builder.CreateGEP(argl, ConstantInt::get(T_int32,i));
-            builder.CreateStore(boxed(anArg), dest);
-        }
-        // call
-        Value *result = builder.CreateCall3(theFptr, theEnv, argl,
-                                            ConstantInt::get(T_int32,nargs));
-        // restore stack
-        builder.CreateCall(Intrinsic::getDeclaration(jl_Module,
-                                                     Intrinsic::stackrestore),
-                           stacksave);
-        return result;
+        return emit_call(args, ex->args->length, ctx);
     }
 
     else if (ex->head == assign_sym) {
