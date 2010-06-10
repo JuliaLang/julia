@@ -57,37 +57,68 @@ reshape(a::Array, dims::Tuple) = reshape(a, dims...)
 (-)(x::Scalar, y::Vector) = [ x - y[i] | i=1:length(y) ]
 (*)(x::Scalar, y::Vector) = [ x * y[i] | i=1:length(y) ]
 (/)(x::Scalar, y::Vector) = [ x / y[i] | i=1:length(y) ]
-(>)(x::Scalar, y::Vector) = [ x > y[i] | i=1:length(y) ]
+(<)(x::Scalar, y::Vector) = [ x < y[i] | i=1:length(y) ]
+(==)(x::Scalar, y::Vector) = [ x == y[i] | i=1:length(y) ]
 
 (+)(x::Vector, y::Scalar) = [ x[i] + y | i=1:length(x) ]
 (-)(x::Vector, y::Scalar) = [ x[i] - y | i=1:length(x) ]
 (*)(x::Vector, y::Scalar) = [ x[i] * y | i=1:length(x) ]
 (/)(x::Vector, y::Scalar) = [ x[i] / y | i=1:length(x) ]
-(>)(x::Vector, y::Scalar) = [ x[i] > y | i=1:length(x) ]
+(<)(x::Vector, y::Scalar) = [ x[i] < y | i=1:length(x) ]
+(==)(x::Vector, y::Scalar) = [ x[i] == y | i=1:length(x) ]
 
 (+)(x::Vector, y::Vector) = [ x[i] + y[i] | i=1:length(x) ]
 (-)(x::Vector, y::Vector) = [ x[i] - y[i] | i=1:length(x) ]
 (.*)(x::Vector, y::Vector) = [ x[i] * y[i] | i=1:length(x) ]
 (./)(x::Vector, y::Vector) = [ x[i] / y[i] | i=1:length(x) ]
-(>)(x::Vector, y::Vector) = [ x[i] > y[i] | i=1:length(x) ]
+(<)(x::Vector, y::Vector) = [ x[i] < y[i] | i=1:length(x) ]
+(==)(x::Vector, y::Vector) = [ x[i] == y[i] | i=1:length(x) ]
 
 (+)(x::Scalar, y::Matrix) = [ x + y[i,j] | i=1:size(y,1), j=1:size(y,2) ]
 (-)(x::Scalar, y::Matrix) = [ x - y[i,j] | i=1:size(y,1), j=1:size(y,2) ]
 (*)(x::Scalar, y::Matrix) = [ x * y[i,j] | i=1:size(y,1), j=1:size(y,2) ]
 (/)(x::Scalar, y::Matrix) = [ x / y[i,j] | i=1:size(y,1), j=1:size(y,2) ]
-(>)(x::Scalar, y::Matrix) = [ x > y[i,j] | i=1:size(y,1), j=1:size(y,2) ]
+(<)(x::Scalar, y::Matrix) = [ x < y[i,j] | i=1:size(y,1), j=1:size(y,2) ]
+(==)(x::Scalar, y::Matrix) = [ x == y[i,j] | i=1:size(y,1), j=1:size(y,2) ]
 
 (+)(x::Matrix, y::Scalar) = [ x[i,j] + y | i=1:size(x,1), j=1:size(x,2) ]
 (-)(x::Matrix, y::Scalar) = [ x[i,j] - y | i=1:size(x,1), j=1:size(x,2) ]
 (*)(x::Matrix, y::Scalar) = [ x[i,j] * y | i=1:size(x,1), j=1:size(x,2) ]
 (/)(x::Matrix, y::Scalar) = [ x[i,j] / y | i=1:size(x,1), j=1:size(x,2) ]
-(>)(x::Matrix, y::Scalar) = [ x[i,j] > y | i=1:size(x,1), j=1:size(x,2) ]
+(<)(x::Matrix, y::Scalar) = [ x[i,j] < y | i=1:size(x,1), j=1:size(x,2) ]
+(==)(x::Matrix, y::Scalar) = [ x[i,j] == y | i=1:size(x,1), j=1:size(x,2) ]
 
 (+)(x::Matrix, y::Matrix) = [ x[i,j] + y[i,j] | i=1:size(x,1), j=1:size(x,2) ]
 (-)(x::Matrix, y::Matrix) = [ x[i,j] - y[i,j] | i=1:size(x,1), j=1:size(x,2) ]
 (.*)(x::Matrix, y::Matrix) = [ x[i,j] * y[i,j] | i=1:size(x,1), j=1:size(x,2) ]
 (./)(x::Matrix, y::Matrix) = [ x[i,j] / y[i,j] | i=1:size(x,1), j=1:size(x,2) ]
-(>)(x::Matrix, y::Matrix) = [ x[i,j] > y[i,j] | i=1:size(x,1), j=1:size(x,2) ]
+(<)(x::Matrix, y::Matrix) = [ x[i,j] < y[i,j] | i=1:size(x,1), j=1:size(x,2) ]
+(==)(x::Matrix, y::Matrix) = [ x[i,j] == y[i,j] | i=1:size(x,1), j=1:size(x,2) ]
+
+(>) {T,S,n}(x::Tensor{T,n}, y::Tensor{S,n}) = (y < x)
+(>) {T,S,n}(x::Scalar,      y::Tensor{S,n}) = (y < x)
+(>) {T,S,n}(x::Tensor{T,n}, y::Scalar)      = (y < x)
+(<=){T,S,n}(x::Tensor{T,n}, y::Tensor{S,n}) = (x < y) | (x == y)
+(<=){T,S,n}(x::Scalar,      y::Tensor{S,n}) = (x < y) | (x == y)
+(<=){T,S,n}(x::Tensor{T,n}, y::Scalar)      = (x < y) | (x == y)
+(>=){T,S,n}(x::Tensor{T,n}, y::Tensor{S,n}) = (x > y) | (x == y)
+(>=){T,S,n}(x::Scalar,      y::Tensor{S,n}) = (x > y) | (x == y)
+(>=){T,S,n}(x::Tensor{T,n}, y::Scalar)      = (x > y) | (x == y)
+
+(~)(x::Vector{Bool}) = [ ~x[i] | i=1:length(x) ]
+(~)(x::Matrix{Bool}) = [ ~x[i,j] | i=1:size(x,1), j=1:=size(x,2) ]
+
+(&)(x::Bool, y::Vector{Bool}) = [  x & y[i]  | i=1:length(y) ]
+(|)(x::Bool, y::Vector{Bool}) = [ (x | y[i]) | i=1:length(y) ]
+($)(x::Bool, y::Vector{Bool}) = [  x $ y[i]  | i=1:length(y) ]
+
+(&)(x::Vector{Bool}, y::Bool) = [  x[i] & y  | i=1:length(x) ]
+(|)(x::Vector{Bool}, y::Bool) = [ (x[i] | y) | i=1:length(x) ]
+($)(x::Vector{Bool}, y::Bool) = [  x[i] $ y  | i=1:length(x) ]
+
+(&)(x::Vector{Bool}, y::Vector{Bool}) = [  x[i] & y[i]  | i=1:length(x) ]
+(|)(x::Vector{Bool}, y::Vector{Bool}) = [ (x[i] | y[i]) | i=1:length(x) ]
+($)(x::Vector{Bool}, y::Vector{Bool}) = [  x[i] $ y[i]  | i=1:length(x) ]
 
 function sum(x::Matrix, dim::Number)
     if dim == 1

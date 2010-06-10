@@ -53,11 +53,10 @@ end
 (*)(x::Number, y::Number) = (*)(promote(x,y)...)
 (-)(x::Number, y::Number) = (-)(promote(x,y)...)
 (/)(x::Number, y::Number) = (/)(promote(x,y)...)
-
+# these are defined for the fundamental < and == so that if a method is
+# not found for e.g. <=, it is translated to < and == first, then promotion
+# is handled after.
 (<)(x::Number, y::Number)  = (<)(promote(x,y)...)
-(>)(x::Number, y::Number)  = (>)(promote(x,y)...)
-(<=)(x::Number, y::Number) = (<=)(promote(x,y)...)
-(>=)(x::Number, y::Number) = (>=)(promote(x,y)...)
 (==)(x::Number, y::Number) = (==)(promote(x,y)...)
 
 # if arguments are of the same type and no method exists, promotion
@@ -82,8 +81,8 @@ div(x::Number, y::Number) = truncate(x/y)
 # general comparisons from == and < operators
 !=(x, y) = !(x == y)
 > (x::Real, y::Real) = (y < x)
-<=(x::Real, y::Real) = (x < y) || x == y
->=(x::Real, y::Real) = (x > y) || x == y
+<=(x::Real, y::Real) = (x < y) || (x == y)
+>=(x::Real, y::Real) = (x > y) || (x == y)
 
 # iterating over tuples
 start(t::Tuple) = 1
