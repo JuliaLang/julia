@@ -45,8 +45,10 @@ function promote_type(T::Type, S::Type)
     end
     if method_exists(promote_rule,(T,S))
         return promote_rule(T,S)
-    else
+    elseif method_exists(promote_rule,(S,T))
         return promote_rule(S,T)
+    else
+        error(strcat("no promotion exists for ",string(T)," and ",string(S)))
     end
 end
 

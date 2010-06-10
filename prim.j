@@ -60,13 +60,24 @@ end
 (>=)(x::Number, y::Number) = (>=)(promote(x,y)...)
 (==)(x::Number, y::Number) = (==)(promote(x,y)...)
 
+# if arguments are of the same type and no method exists, promotion
+# is not applicable. it means the operator is not defined.
+no_op_err(name, T) = error(strcat(name," not defined for ",string(T)))
+(+){T<:Number}(x::T, y::T) = no_op_err("+", T)
+(*){T<:Number}(x::T, y::T) = no_op_err("*", T)
+(-){T<:Number}(x::T, y::T) = no_op_err("-", T)
+(/){T<:Number}(x::T, y::T) = no_op_err("/", T)
+(<){T<:Number}(x::T, y::T) = no_op_err("<", T)
+
 # .<op> defaults to <op>
 (./)(x,y) = x/y
+(.\)(x,y) = y./x
 (.*)(x,y) = x*y
 
 # generic div and % operations
 div(x::Number, y::Number) = truncate(x/y)
 (%)(x::Number, y::Number) = x-div(x,y)*y
+(\)(x,y) = y/x
 
 # general comparisons from == and < operators
 !=(x, y) = !(x == y)
@@ -164,14 +175,6 @@ function cell_literal(xs...)
     end
     a
 end
-
-symbol(s::String) =
-    ccall(dlsym(JuliaDLHandle,"jl_symbol"), Any, (Ptr{Char},), s)::Symbol
-
-string(x) =
-    ccall(dlsym(JuliaDLHandle,"jl_cstr_to_array"), Any, (Ptr{Char},),
-          ccall(dlsym(JuliaDLHandle,"jl_print_to_string"), Ptr{Char}, (Any,),
-                x))
 
 function print_comma_array(ar, open, close)
     print(open)

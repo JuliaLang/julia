@@ -156,12 +156,29 @@ div(x::Int64, y::Int64) = boxsi64(sdiv_int(unbox64(x), unbox64(y)))
 ($)(x::Int32, y::Int32) = boxsi32(xor_int(unbox32(x), unbox32(y)))
 ($)(x::Int64, y::Int64) = boxsi64(xor_int(unbox64(x), unbox64(y)))
 
+(<<) (x::Int8 , y::Int32) = boxsi8 ( shl_int(unbox8 (x), unbox32(y)))
+(<<) (x::Int16, y::Int32) = boxsi16( shl_int(unbox16(x), unbox32(y)))
+(<<) (x::Int32, y::Int32) = boxsi32( shl_int(unbox32(x), unbox32(y)))
+(<<) (x::Int64, y::Int32) = boxsi64( shl_int(unbox64(x), unbox32(y)))
+(>>) (x::Int8 , y::Int32) = boxsi8 (ashr_int(unbox8 (x), unbox32(y)))
+(>>) (x::Int16, y::Int32) = boxsi16(ashr_int(unbox16(x), unbox32(y)))
+(>>) (x::Int32, y::Int32) = boxsi32(ashr_int(unbox32(x), unbox32(y)))
+(>>) (x::Int64, y::Int32) = boxsi64(ashr_int(unbox64(x), unbox32(y)))
+(>>>)(x::Int8 , y::Int32) = boxsi8 (lshr_int(unbox8 (x), unbox32(y)))
+(>>>)(x::Int16, y::Int32) = boxsi16(lshr_int(unbox16(x), unbox32(y)))
+(>>>)(x::Int32, y::Int32) = boxsi32(lshr_int(unbox32(x), unbox32(y)))
+(>>>)(x::Int64, y::Int32) = boxsi64(lshr_int(unbox64(x), unbox32(y)))
+
 ## integer comparisons ##
 
 ==(x::Int8 , y::Int8 ) = eq_int(unbox8 (x),unbox8 (y))
 ==(x::Int16, y::Int16) = eq_int(unbox16(x),unbox16(y))
 ==(x::Int32, y::Int32) = eq_int(unbox32(x),unbox32(y))
 ==(x::Int64, y::Int64) = eq_int(unbox64(x),unbox64(y))
+==(x::Uint8 , y::Uint8 ) = eq_int(unbox8 (x),unbox8 (y))
+==(x::Uint16, y::Uint16) = eq_int(unbox16(x),unbox16(y))
+==(x::Uint32, y::Uint32) = eq_int(unbox32(x),unbox32(y))
+==(x::Uint64, y::Uint64) = eq_int(unbox64(x),unbox64(y))
 
 < (x::Int8 , y::Int8 ) = slt_int(unbox8 (x),unbox8 (y))
 < (x::Int16, y::Int16) = slt_int(unbox16(x),unbox16(y))
@@ -184,33 +201,6 @@ div(x::Int, y::Int) = div(promote(x,y)...)
 (&)(x::Int...) = (&)(promote(x...)...)
 (|)(x::Int...) = (|)(promote(x...)...)
 ($)(x::Int...) = ($)(promote(x...)...)
-
-## string to integer functions ##
-
-function digit(c::Uint8)
-    "0"[1] <= c <= "9"[1] ? int32(c - "0"[1]) :
-    "A"[1] <= c <= "Z"[1] ? int32(c - "A"[1]) + 10 :
-    "a"[1] <= c <= "z"[1] ? int32(c - "a"[1]) + 10 :
-    error("non alphanumeric digit")
-end
-
-function parse_int(T::Type{Int}, str::String, base::Int32)
-    n = convert(T,0)
-    base = convert(T,base)
-    for p = 0:length(str)-1
-        d = convert(T,digit(str[length(str)-p]))
-        if base <= d
-            error("digit not valid in base")
-        end
-        n += d*base^convert(T,p)
-    end
-    return n
-end
-
-bin(str::String) = parse_int(Int64, str,  2)
-oct(str::String) = parse_int(Int64, str,  8)
-dec(str::String) = parse_int(Int64, str, 10)
-hex(str::String) = parse_int(Int64, str, 16)
 
 ## integer functions ##
 

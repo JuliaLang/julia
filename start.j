@@ -11,6 +11,7 @@ load("int.j")
 load("float.j")
 load("complex.j")
 load("rational.j")
+load("string.j")
 
 # complex data types
 load("list.j")

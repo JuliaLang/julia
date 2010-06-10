@@ -97,3 +97,13 @@ function hypot(x::Real, y::Real)
     r = x/y
     return y*sqrt(1.0+r*r)
 end
+
+num2hex(x::Float32) = lpad(uint2str(boxui32(unbox32(x)),16),16,"0"[1])
+num2hex(x::Float64) = lpad(uint2str(boxui64(unbox64(x)),16),16,"0"[1])
+
+function hex2num(s)
+    if length(s) <= 8
+        return boxf32(unbox32(parse_int(Int32, s, 16)))
+    end
+    return boxf64(unbox64(parse_int(Int64, s, 16)))
+end
