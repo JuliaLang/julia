@@ -6,10 +6,10 @@ idtable(sz::Int) = IdTable(ccall(dlsym(JuliaDLHandle,"jl_new_eqtable"),
                                  Ptr{Void}, (Uint32,), uint32(sz)))
 idtable() = idtable(0)
 
-set(t::IdTable, v, k) = (ccall(dlsym(JuliaDLHandle,"jl_eqtable_put"),
-                               Void, (Ptr{Void}, Any, Any),
-                               t.htptr, k, v);
-                         t)
+assign(t::IdTable, v, k) = (ccall(dlsym(JuliaDLHandle,"jl_eqtable_put"),
+                                  Void, (Ptr{Void}, Any, Any),
+                                  t.htptr, k, v);
+                            t)
 
 get(t::IdTable, key, default) = ccall(dlsym(JuliaDLHandle,"jl_eqtable_get"),
                                       Any, (Ptr{Void}, Any, Any),

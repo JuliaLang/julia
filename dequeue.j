@@ -26,7 +26,7 @@ function ref(l::Dequeue, i::Index)
     return l.data[i+l.offset]
 end
 
-function set(l::Dequeue, elt, i::Index)
+function assign(l::Dequeue, elt, i::Index)
     if i > l.size
         error("Out of bounds")
     end

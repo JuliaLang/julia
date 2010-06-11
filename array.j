@@ -199,13 +199,13 @@ function ref(a::Array, I::Index...)
     return arrayref(a,index)
 end
 
-# Indexing: set()
+# Indexing: assign()
 # TODO: Take care of growing
-set(a::Array, x, i::Index) = (arrayset(a,i,x); a)
-set{T}(a::Array{T,2}, x, i::Index, j::Index) =
+assign(a::Array, x, i::Index) = (arrayset(a,i,x); a)
+assign{T}(a::Array{T,2}, x, i::Index, j::Index) =
     (arrayset(a, (j-1)*a.dims[1]+i, x); a)
 
-function set(a::Array, x, I::Index...)
+function assign(a::Array, x, I::Index...)
     # TODO: Need to take care of growing
     dims = a.dims
     ndims = length(I)
@@ -221,27 +221,27 @@ function set(a::Array, x, I::Index...)
     return a
 end
 
-function set(A::Vector, x::Scalar, I)
+function assign(A::Vector, x::Scalar, I)
     I = jl_fill_endpts(A, 1, I)
     for i=I; A[i] = x; end;
     return A
 end
 
-function set(A::Vector, X, I)
+function assign(A::Vector, X, I)
     I = jl_fill_endpts(A, 1, I)
     count = 1
     for i=I; A[i] = X[count]; count += 1; end
     return A
 end
 
-function set(A::Matrix, x::Scalar, I, J)
+function assign(A::Matrix, x::Scalar, I, J)
     I = jl_fill_endpts(A, 1, I)
     J = jl_fill_endpts(A, 2, J)
     for i=I, j=J; A[i,j] = x; end
     return A
 end
 
-function set(A::Matrix, X, I, J)
+function assign(A::Matrix, X, I, J)
     I = jl_fill_endpts(A, 1, I)
     J = jl_fill_endpts(A, 2, J)
     count = 1

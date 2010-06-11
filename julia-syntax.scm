@@ -346,7 +346,7 @@
 						 (+ i 1))))))))
 
    (pattern-lambda (= (ref a . idxs) rhs)
-		   `(call set ,a ,rhs ,@(process-indexes idxs)))
+		   `(call assign ,a ,rhs ,@(process-indexes idxs)))
 
    (pattern-lambda (ref a . idxs)
 		   `(call ref ,a ,@(process-indexes idxs)))
@@ -569,9 +569,9 @@
       (define (construct-loops ranges iters oneresult-dim)
         (if (null? ranges)
 	    (if (null? iters)
-		`(block (call set ,result ,expr ,ri)
+		`(block (call assign ,result ,expr ,ri)
 			(+= ,ri 1))
-		`(block (call set ,result (ref ,expr ,@(reverse iters)) ,ri)
+		`(block (call assign ,result (ref ,expr ,@(reverse iters)) ,ri)
 			(+= ,ri 1)) )
 	    (if (eq? (car ranges) `:)
 		(let ((i (gensym)))
@@ -605,7 +605,7 @@
       ;; construct loops to cycle over all dimensions of an n-d comprehension
       (define (construct-loops ranges)
         (if (null? ranges)
-	    `(block (call set ,result ,expr ,ri)
+	    `(block (call assign ,result ,expr ,ri)
 		    (+= ,ri 1))
 	    `(for ,(car ranges)
 		  ,(construct-loops (cdr ranges)))))
