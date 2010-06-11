@@ -144,8 +144,8 @@ diagm(v::Vector) = (n=length(v);
                     for i=1:n; a[i,i] = v[i]; end;
                     a)
 
-(*)(A::Matrix, B::Vector) = [ dot(A[i,:],B) | i=1:size(A,1) ]
-(*)(A::Matrix, B::Matrix) = [ dot(A[i,:],B[:,j]) | i=1:size(A,1), j=1:size(B,2) ]
+#(*)(A::Matrix, B::Vector) = [ dot(A[i,:],B) | i=1:size(A,1) ]
+#(*)(A::Matrix, B::Matrix) = [ dot(A[i,:],B[:,j]) | i=1:size(A,1), j=1:size(B,2) ]
 
 kron(a::Matrix, b::Matrix) = reshape([ a[i,j]*b[k,l] | k=1:size(b,1),
                                                        i=1:size(a,1),
@@ -346,6 +346,13 @@ function printall{T}(a::Array{T,1})
         opn = "["; cls = "]";
     end
     print_comma_array(a, opn, cls)
+end
+
+function printall{T}(a::Array{T,2})
+    for i=1:size(a,1)
+        printcols(a, 1, size(a,2), i)
+        print("\n")
+    end
 end
 
 function print{T}(a::Array{T,1})

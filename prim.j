@@ -10,8 +10,6 @@ typealias String Array{Char,1}
 ref(t::Tuple, i::Index) = tupleref(t, i)
 length(t::Tuple) = tuplelen(t)
 
-==(x,y) = false
-
 # bootstrapping versions of operators needed by for loops
 (-)(x::Int32) = boxsi32(neg_int(unbox32(x)))
 (+)(x::Int32, y::Int32) = boxsi32(add_int(unbox32(x), unbox32(y)))

@@ -55,10 +55,12 @@ end
 for (fname, eltype) = (("dgemm_", Float64), ("sgemm_", Float32))
     eval(`function * (A::VectorOrMatrix{$eltype}, B::VectorOrMatrix{$eltype})
          m = size(A, 1)
-         if isa(B, Vector) == 1; n = 1; else n = size(B, 2); end
-         if isa(A, Vector) == 1; k = 1; else k = size(A, 2); end
-         assert (k == size(B,1))
-         C = zeros($eltype, m, n)
+         if isa(B, Vector); n = 1; else n = size(B, 2); end
+         if isa(A, Vector); k = 1; else k = size(A, 2); end
+         if k != size(B,1)
+             error("*: argument shapes do not match")
+         end
+         C = isa(B, Vector) ? zeros($eltype, m) : zeros($eltype, m, n)
 
          ccall(dlsym(libBLAS, $fname),
              Void,

@@ -432,10 +432,12 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool value,
     // to add new node types.
     if (ex->head == goto_sym) {
         assert(!value);
-        int labelname = jl_unbox_int32(args[0]);
-        BasicBlock *bb = (*ctx->labels)[labelname];
-        assert(bb);
-        builder.CreateBr(bb);
+        if (builder.GetInsertBlock()->getTerminator() == NULL) {
+            int labelname = jl_unbox_int32(args[0]);
+            BasicBlock *bb = (*ctx->labels)[labelname];
+            assert(bb);
+            builder.CreateBr(bb);
+        }
     }
     else if (ex->head == goto_ifnot_sym) {
         assert(!value);
