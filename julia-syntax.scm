@@ -621,45 +621,41 @@
 )) ;; lower-comprehensions
 
 
-; (op (op a b) c) => (op a b c) etc.
+; (op (op a b) c) => (a b c) etc.
 (define (flatten-op op e)
   (if (not (pair? e)) e
-      (if (eq? (car e) op)
-	  (apply append (map (lambda (x)
-			       (let ((x (flatten-op op x)))
-				 (if (and (pair? x)
-					  (eq? (car x) op))
-				     (cdr x)
-				     (list x))))
-			     e))
-	  (map (lambda (x) (flatten-op op x)) e))))
+      (apply append
+	     (map (lambda (x)
+		    (if (and (pair? x) (eq? (car x) op))
+			(flatten-op op x)
+			(list x)))
+		  (cdr e)))))
 
-(define (expand-and-or e)
-  (if (or (not (pair? e)) (quoted? e)) e
-      (case (car e)
-	((&&) (let ((e (flatten-op '&& e)))
-		(let loop ((tail (cdr e)))
-		  (if (null? tail)
-		      'true
-		      (if (null? (cdr tail))
-			  (expand-and-or (car tail))
-			  `(if ,(expand-and-or (car tail))
-			       ,(loop (cdr tail))
-			       false))))))
-	((|\|\||) (let ((e (flatten-op '|\|\|| e)))
-		    (let loop ((tail (cdr e)))
-		      (if (null? tail)
-			  'false
-			  (if (null? (cdr tail))
-			      (expand-and-or (car tail))
-			      (if (symbol? (car tail))
-				  `(if ,(car tail) ,(car tail)
-				       ,(loop (cdr tail)))
-				  (let ((g (gensym)))
-				    `(block (= ,g ,(expand-and-or (car tail)))
-					    (if ,g ,g
-						,(loop (cdr tail)))))))))))
-	(else (map expand-and-or e)))))
+(define (expand-and e)
+  (let ((e (flatten-op '&& e)))
+    (let loop ((tail e))
+      (if (null? tail)
+	  'true
+	  (if (null? (cdr tail))
+	      (car tail)
+	      `(if ,(car tail)
+		   ,(loop (cdr tail))
+		   false))))))
+
+(define (expand-or e)
+  (let ((e (flatten-op '|\|\|| e)))
+    (let loop ((tail e))
+      (if (null? tail)
+	  'false
+	  (if (null? (cdr tail))
+	      (car tail)
+	      (if (symbol? (car tail))
+		  `(if ,(car tail) ,(car tail)
+		       ,(loop (cdr tail)))
+		  (let ((g (gensym)))
+		    `(block (= ,g ,(car tail))
+			    (if ,g ,g
+				,(loop (cdr tail)))))))))))
 
 ; conversion to "linear flow form"
 ;
@@ -734,6 +730,11 @@
 		 (else (let ((g (gensym)))
 			 (cons g
 			       (to-lff e g #f))))))
+
+	  ((&&)
+	   (to-lff (expand-and e) dest tail))
+	  ((|\|\||)
+	   (to-lff (expand-or e) dest tail))
 
 	  ((block)
 	   (let* ((g (gensym))
@@ -1261,8 +1262,7 @@ So far only the second case can actually occur.
     (flatten-scopes
      (identify-locals
       (to-LFF
-       (expand-and-or
-	(pattern-expand patterns
-	 (pattern-expand lower-comprehensions
-	  (pattern-expand binding-form-patterns
-	   (julia-expand-backquote ex)))))))))))
+       (pattern-expand patterns
+	(pattern-expand lower-comprehensions
+	 (pattern-expand binding-form-patterns
+	  (julia-expand-backquote ex))))))))))
