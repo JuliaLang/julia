@@ -19,7 +19,7 @@ struct RangeBy{T}
 end
 
 numel(r::Range) = length(r)
-length{T}(r::Range{Int{T}}) = (r.step > 0 ?
+length{T<:Int}(r::Range{T}) = (r.step > 0 ?
                                div((r.stop-r.start+r.step), r.step) :
                                div((r.start-r.stop-r.step), -r.step))
 length(r::Range) = (r.step > 0 ?

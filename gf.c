@@ -389,6 +389,8 @@ void jl_add_method(jl_function_t *gf, jl_tuple_t *types, jl_function_t *meth)
     (void)jl_method_table_insert(jl_gf_mtable(gf), (jl_type_t*)types, meth);
 }
 
+JL_CALLABLE(jl_generic_ctor);
+
 static jl_tuple_t *ml_matches(jl_methlist_t *ml, jl_value_t *type,
                               jl_tuple_t *t, jl_sym_t *name)
 {
@@ -416,6 +418,21 @@ static jl_tuple_t *ml_matches(jl_methlist_t *ml, jl_value_t *type,
                     // builtin
                     t = jl_tuple(4, ti, env, name, t);
                 }
+                else if (ml->func->fptr == jl_generic_ctor) {
+                    // a generic struct constructor
+                    jl_type_t *body =
+                        ((jl_typector_t*)jl_t1(ml->func->env))->body;
+                    // determine what kind of object this constructor call
+                    // would make
+                    jl_type_t *objt =
+                        jl_instantiate_type_with(body,
+                                                 &jl_t0(env),env->length/2);
+                    t = jl_tuple(4, ti, env, (jl_value_t*)objt, t);
+                }
+                /*
+                else if (ml->func->fptr == jl_new_struct_internal) {
+                }
+                */
                 else {
                     t = jl_tuple(4, ti, env, ml->func->linfo, t);
                 }

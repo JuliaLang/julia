@@ -86,6 +86,26 @@ int jl_is_type(jl_value_t *v)
             jl_typeis(v, jl_bits_kind));
 }
 
+int jl_has_typevars_(jl_value_t *v, int incl_wildcard);
+
+int jl_is_leaf_type(jl_value_t *v)
+{
+    if (jl_is_bits_type(v))
+        return 1;
+    if (jl_is_tuple(v)) {
+        jl_tuple_t *t = (jl_tuple_t*)v;
+        size_t i;
+        for(i=0; i < t->length; i++) {
+            if (!jl_is_leaf_type(jl_tupleref(t, i)))
+                return 0;
+        }
+        return 1;
+    }
+    if (!jl_is_struct_type(v))
+        return 0;
+    return !jl_has_typevars_(v,1);
+}
+
 jl_typename_t *jl_tname(jl_value_t *v)
 {
     if (jl_is_tuple(v))
@@ -108,30 +128,32 @@ jl_tuple_t *jl_tparams(jl_value_t *v)
     return jl_null;
 }
 
-int jl_has_typevars(jl_value_t *v)
+int jl_has_typevars_(jl_value_t *v, int incl_wildcard)
 {
     size_t i;
     if (v == (jl_value_t*)jl_wildcard_type)
-        return 0;
+        return incl_wildcard;
     if (jl_typeis(v, jl_tvar_type))
         return 1;
     if (jl_is_tuple(v)) {
         jl_tuple_t *t = (jl_tuple_t*)v;
         for(i=0; i < t->length; i++) {
-            if (jl_has_typevars(jl_tupleref(t, i)))
+            if (jl_has_typevars_(jl_tupleref(t, i), incl_wildcard))
                 return 1;
         }
         return 0;
     }
     if (jl_is_func_type(v))
-        return jl_has_typevars((jl_value_t*)((jl_func_type_t*)v)->from) ||
-            jl_has_typevars((jl_value_t*)((jl_func_type_t*)v)->to);
+        return jl_has_typevars_((jl_value_t*)((jl_func_type_t*)v)->from,
+                                incl_wildcard) ||
+            jl_has_typevars_((jl_value_t*)((jl_func_type_t*)v)->to,
+                             incl_wildcard);
 
     jl_tuple_t *t = jl_tparams(v);
     for(i=0; i < t->length; i++) {
         jl_value_t *elt = jl_tupleref(t, i);
         if (elt != v) {
-            if (jl_has_typevars(elt))
+            if (jl_has_typevars_(elt, incl_wildcard))
                 return 1;
         }
     }
@@ -140,6 +162,11 @@ int jl_has_typevars(jl_value_t *v)
     //if (jl_is_typector(v))
     //    return (((jl_typector_t*)v)->parameters->length > 0);
     return 0;
+}
+
+int jl_has_typevars(jl_value_t *v)
+{
+    return jl_has_typevars_(v, 0);
 }
 
 // construct the full type of a value, possibly making a tuple type
@@ -372,6 +399,9 @@ static jl_value_t *meet_tvars(jl_tvar_t *a, jl_tvar_t *b)
     lb = jl_type_union(jl_tuple(2, a->lb, b->lb));
     if (!jl_subtype(lb, ub, 0))
         return (jl_value_t*)jl_bottom_type;
+    // TODO: might not want to collapse tvar to non-tvar in all cases
+    if (jl_is_leaf_type(ub))
+        return ub;
     return jl_new_struct(jl_tvar_type, jl_gensym(), lb, ub);
 }
 
@@ -386,8 +416,11 @@ static jl_value_t *meet_tvar(jl_tvar_t *tv, jl_value_t *ty)
         return (jl_value_t*)jl_bottom_type;
     if (jl_types_equal((jl_value_t*)tv->lb, ty))
         return ty;
-    if (jl_subtype((jl_value_t*)tv->lb, ty, 0))
+    if (jl_subtype((jl_value_t*)tv->lb, ty, 0)) {
+        if (jl_is_leaf_type(ty))
+            return ty;
         return jl_new_struct(jl_tvar_type, jl_gensym(), tv->lb, ty);
+    }
     return (jl_value_t*)jl_bottom_type;
 }
 
@@ -1094,8 +1127,6 @@ int jl_subtype_le(jl_value_t *a, jl_value_t *b, int ta, int morespecific)
             for(i=0; i < tta->parameters->length; i++) {
                 jl_value_t *apara = jl_tupleref(tta->parameters,i);
                 jl_value_t *bpara = jl_tupleref(ttb->parameters,i);
-                if (jl_is_typevar(bpara))
-                    continue;
                 if (jl_is_tag_type(ttb) || jl_is_typevar(bpara)) {
                     // allow abstract types to be covariant
                     if (!jl_subtype_le(apara, bpara, 0, morespecific))

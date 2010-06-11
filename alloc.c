@@ -137,10 +137,11 @@ jl_function_t *jl_new_closure(jl_fptr_t proc, jl_value_t *env)
 jl_lambda_info_t *jl_new_lambda_info(jl_value_t *ast, jl_tuple_t *sparams)
 {
     jl_lambda_info_t *li =
-        (jl_lambda_info_t*)newobj((jl_type_t*)jl_lambda_info_type, 4);
-    li->fptr = NULL;
+        (jl_lambda_info_t*)newobj((jl_type_t*)jl_lambda_info_type, 5);
     li->ast = ast;
     li->sparams = sparams;
+    li->tfunc = (jl_value_t*)jl_null;
+    li->fptr = NULL;
     li->roots = jl_null;
     return li;
 }
@@ -645,8 +646,10 @@ void jl_init_builtin_types()
     jl_lambda_info_type =
         jl_new_struct_type(jl_symbol("LambdaStaticData"),
                            jl_any_type, jl_null,
-                           jl_tuple(2, jl_symbol("ast"), jl_symbol("sparams")),
-                           jl_tuple(2, jl_expr_type, jl_tuple_type));
+                           jl_tuple(3, jl_symbol("ast"), jl_symbol("sparams"),
+                                    jl_symbol("tfunc")),
+                           jl_tuple(3, jl_expr_type, jl_tuple_type,
+                                    jl_any_type));
     jl_lambda_info_type->fnew = jl_bottom_func;
 
     tv = jl_typevars(2, "A", "B");

@@ -1333,6 +1333,9 @@ void jl_init_builtins()
                 (jl_value_t*)jl_new_type_ctor(jl_null,
                                               (jl_type_t*)jl_expr_type));
     add_builtin("Ptr", (jl_value_t*)jl_pointer_typector);
+    add_builtin("LambdaStaticData",
+                (jl_value_t*)jl_new_type_ctor(jl_null,
+                                              (jl_type_t*)jl_lambda_info_type));
 
     add_builtin("BitsKind", (jl_value_t*)jl_bits_kind);
     add_builtin("StructKind", (jl_value_t*)jl_struct_kind);

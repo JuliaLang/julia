@@ -210,7 +210,7 @@ function a2t(a::Vector)
 end
 
 function isconstantfunc(f, vtypes)
-    if isa(f,Expr) && is(func.head,`top)
+    if isa(f,Expr) && is(f.head,`top)
         assert(isa(f.args[1],Symbol))
         return (true, f.args[1])
     end
@@ -248,8 +248,11 @@ function abstract_call(f, fargs, argtypes, vtypes, sp)
                 # when there is a builtin method in this GF, we get
                 # a symbol with the name instead of a LambdaStaticData
                 rt = builtin_tfunction(x[3], fargs, x[1])
+            elseif isa(x[3],Type)
+                # constructor
+                rt = x[3]
             else
-                (_tree, rt) = typeinf(x[3].ast, x[2], x[1])
+                rt = ast_rettype(typeinf(x[3], x[2], x[1]))
             end
             rettype = tmerge(rettype, rt)
             x = x[4]
@@ -299,7 +302,7 @@ function abstract_eval_expr(e, vtypes, sp)
     end
 end
 
-#ast_rettype(ast) = ast.args[3].type
+ast_rettype(ast) = ast.args[3].type
 
 function abstract_eval_constant(x)
     if isa(x,TagKind)
@@ -397,7 +400,7 @@ end
 
 type Undef
 
-function typeinf(ast0::Expr, sparams::Tuple, atypes::Tuple)
+function typeinf(linfo::LambdaStaticData, sparams::Tuple, atypes::Tuple)
     function findlabel(body, l)
         for i=1:length(body)
             b = body[i]
@@ -407,6 +410,17 @@ function typeinf(ast0::Expr, sparams::Tuple, atypes::Tuple)
         end
         error("label not found")
     end
+
+    # check cached t-functions
+    tf = linfo.tfunc
+    while !is(tf,())
+        if typeseq(tf[1],atypes)
+            return tf[2]
+        end
+        tf = tf[3]
+    end
+
+    ast0 = linfo.ast
 
     global inference_stack
     # check for recursion
@@ -500,7 +514,9 @@ function typeinf(ast0::Expr, sparams::Tuple, atypes::Tuple)
         end
     end
     inference_stack = inference_stack.prev
-    return (type_annotate(ast, s, sparams, frame.result), frame.result)
+    fulltree = type_annotate(ast, s, sparams, frame.result)
+    linfo.tfunc = (atypes, fulltree, linfo.tfunc)
+    return fulltree
 end
 
 function eval_annotate(e::Expr, vtypes, sp)
@@ -553,7 +569,7 @@ d=typevar(`d)
 
 m = getmethods(fact,(Int32,))
 ast = m[3]
-#typeinf(ast.ast, (`T,Int32), (Int32,))
+#typeinf(ast, (`T,Int32), (Int32,))
 
 function foo(x)
     return x.re + x.im
@@ -577,6 +593,7 @@ function qux(x)
     end
     b = 1
     z = a + b
+    Range(1, 2, 10)
 end
 
 m = getmethods(qux,(Int32,))
