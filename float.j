@@ -39,6 +39,16 @@ promote_rule(::Type{Float64}, ::Type{Int16}) = Float64
 promote_rule(::Type{Float64}, ::Type{Int32}) = Float64
 promote_rule(::Type{Float64}, ::Type{Int64}) = Float64 # TODO: should be Float80
 
+promote_rule(::Type{Float32}, ::Type{Uint8} ) = Float32
+promote_rule(::Type{Float32}, ::Type{Uint16}) = Float32
+promote_rule(::Type{Float32}, ::Type{Uint32}) = Float64
+promote_rule(::Type{Float32}, ::Type{Uint64}) = Float64# TODO: should be Float80
+
+promote_rule(::Type{Float64}, ::Type{Uint8} ) = Float64
+promote_rule(::Type{Float64}, ::Type{Uint16}) = Float64
+promote_rule(::Type{Float64}, ::Type{Uint32}) = Float64
+promote_rule(::Type{Float64}, ::Type{Uint64}) = Float64# TODO: should be Float80
+
 ## traits ##
 
 eps(::Type{Float32}) = float32(1.1920928e-7)

@@ -38,10 +38,13 @@ all(itr)  = reduce(all, itr)
 
 ## promotions ##
 
-function promote_type(T::Type, S::Type)
+function promote_type{T,S}(::Type{T}, ::Type{S})
     # print("promote_type: ",T,", ",S,"\n")
-    if T <: S || S <: T
-        error("no method")
+    if T <: S
+        return T
+    end
+    if S <: T
+        return S
     end
     if method_exists(promote_rule,(T,S))
         return promote_rule(T,S)

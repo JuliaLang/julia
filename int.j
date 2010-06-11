@@ -82,6 +82,20 @@ promote_rule(::Type{Int64}, ::Type{Int8} ) = Int64
 promote_rule(::Type{Int64}, ::Type{Int16}) = Int64
 promote_rule(::Type{Int64}, ::Type{Int32}) = Int64
 
+promote_rule(::Type{Uint16}, ::Type{Uint8} ) = Uint16
+promote_rule(::Type{Uint32}, ::Type{Uint8} ) = Uint32
+promote_rule(::Type{Uint32}, ::Type{Uint16}) = Uint32
+promote_rule(::Type{Uint64}, ::Type{Uint8} ) = Uint64
+promote_rule(::Type{Uint64}, ::Type{Uint16}) = Uint64
+promote_rule(::Type{Uint64}, ::Type{Uint32}) = Uint64
+
+promote_rule(::Type{Int16}, ::Type{Uint8} ) = Int16
+promote_rule(::Type{Int32}, ::Type{Uint8} ) = Int32
+promote_rule(::Type{Int32}, ::Type{Uint16}) = Int32
+promote_rule(::Type{Int64}, ::Type{Uint8} ) = Int64
+promote_rule(::Type{Int64}, ::Type{Uint16}) = Int64
+promote_rule(::Type{Int64}, ::Type{Uint32}) = Int64
+
 ## traits ##
 typemin(::Type{Int8  }) = int8(-128)
 typemax(::Type{Int8  }) = int8(127)
@@ -201,6 +215,12 @@ div(x::Int, y::Int) = div(promote(x,y)...)
 (&)(x::Int...) = (&)(promote(x...)...)
 (|)(x::Int...) = (|)(promote(x...)...)
 ($)(x::Int...) = ($)(promote(x...)...)
+
+(%){T<:Int}(x::T, y::T) = no_op_err("%", T)
+div{T<:Int}(x::T, y::T) = no_op_err("div", T)
+(&){T<:Int}(x::T, y::T) = no_op_err("&", T)
+(|){T<:Int}(x::T, y::T) = no_op_err("|", T)
+($){T<:Int}(x::T, y::T) = no_op_err("$", T)
 
 ## integer functions ##
 

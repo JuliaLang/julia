@@ -42,7 +42,9 @@ eye(m::Size, n::Size) = (a = zeros(m,n);
                          for i=1:min(m,n); a[i,i]=1; end;
                          a)
 
-colon(start::Size, stop::Size, stride::Size) = [ i | i=start:stride:stop ]
+colon(start::Real, stop::Real, stride::Real) =
+    ((start, stop, stride) = promote(start, stop, stride);
+     [ i | i=start:stride:stop ])
 
 copy(a::Vector) = [ a[i] | i=1:length(a) ]
 copy(a::Matrix) = [ a[i,j] | i=1:size(a,1), j=1:size(a,2) ]

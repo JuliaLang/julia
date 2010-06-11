@@ -65,6 +65,7 @@ no_op_err(name, T) = error(strcat(name," not defined for ",string(T)))
 (-){T<:Number}(x::T, y::T) = no_op_err("-", T)
 (/){T<:Number}(x::T, y::T) = no_op_err("/", T)
 (<){T<:Number}(x::T, y::T) = no_op_err("<", T)
+(==){T<:Number}(x::T, y::T) = no_op_err("==", T)
 
 # .<op> defaults to <op>
 (./)(x,y) = x/y
