@@ -23,6 +23,6 @@ load("array.j")
 
 # external libraries
 load("libc.j")
-load("libm.j")
+load("math.j")
 load("blas.j")
 load("lapack.j")
