@@ -12,7 +12,7 @@ for f = {`sin, `cos, `tan, `sinh, `cosh, `tanh, `asin, `acos, `atan, `log,
          `sqrt, `cbrt, `ceil, `floor, `nearbyint, `round, `rint, `trunc}
     eval(`begin
         ($f)(x::Float64) = ccall(dlsym(libm,$string(f)), Float64, (Float64,), x)
-        # ($f)(x::Float32) = ccall(dlsym(libm,[$string(f),"f"]), Float32, (Float32,), x)
+        ($f)(x::Float32) = ccall(dlsym(libm,strcat($string(f),"f")), Float32, (Float32,), x)
         ($f)(x::Scalar) = ($f)(convert(Float64,x))
         vectorize($f)
     end)
@@ -21,7 +21,7 @@ end
 for f = {`isinf, `isnan}
     eval(`begin
         ($f)(x::Float64) = (0 != ccall(dlsym(libm,$string(f)), Int32, (Float64,), x))
-        # ($f)(x::Float32) = (0 != ccall(dlsym(libm,[$string(f),"f"]), Int32, (Float32,), x))
+        ($f)(x::Float32) = (0 != ccall(dlsym(libm,strcat($string(f),"f")), Int32, (Float32,), x))
         ($f)(x::Int) = false
         vectorize($f)
     end)
@@ -30,7 +30,7 @@ end
 for f = {`lrint, `lround, `ilogb}
     eval(`begin
         ($f)(x::Float64) = ccall(dlsym(libm,$string(f)), Int32, (Float64,), x)
-        # ($f)(x::Float32) = ccall(dlsym(libm,[$string(f),"f"]), Int32, (Float32,), x)
+        ($f)(x::Float32) = ccall(dlsym(libm,strcat($string(f),"f")), Int32, (Float32,), x)
         vectorize($f)
     end)
 end
@@ -45,10 +45,10 @@ for f = {`atan2, `pow, `remainder, `fmod, `copysign, `hypot, `fmin, `fmax, `fdim
                                              Float64,
                                              (Float64, Float64,),
                                              x, y)
-        # ($f)(x::Float32, y::Float32) = ccall(dlsym(libm,[$string($f),"f"]),
-        #                                      Float32,
-        #                                      (Float32, Float32),
-        #                                      x, y)
+        ($f)(x::Float32, y::Float32) = ccall(dlsym(libm,strcat($string(f),"f")),
+                                             Float32,
+                                             (Float32, Float32),
+                                             x, y)
         ($f)(x::Scalar, y::Scalar) = ($f)(convert(Float64,x),convert(Float64,y))
     end)
 end
