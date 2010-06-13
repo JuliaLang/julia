@@ -60,7 +60,8 @@ for (fname, eltype) = (("dgemm_", Float64), ("sgemm_", Float32))
          if k != size(B,1)
              error("*: argument shapes do not match")
          end
-         C = isa(B, Vector) ? zeros($eltype, m) : zeros($eltype, m, n)
+         # array does not need to be initialized as long as beta==0
+         C = isa(B, Vector) ? Array($eltype, m) : Array($eltype, m, n)
 
          ccall(dlsym(libBLAS, $fname),
              Void,

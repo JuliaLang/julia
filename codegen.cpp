@@ -162,11 +162,14 @@ static Function *to_function(jl_lambda_info_t *li)
     Function *f = Function::Create(jl_func_sig, Function::ExternalLinkage,
                                    "a_julia_function", jl_Module);
     assert(jl_is_expr(li->ast));
+    BasicBlock *old = builder.GetInsertBlock();
     emit_function(li, f);
-    //verifyFunction(*f);
     //FPM->run(*f);
     // print out the function's LLVM code
     //f->dump();
+    //verifyFunction(*f);
+    if (old != NULL)
+        builder.SetInsertPoint(old);
     return f;
 }
 
