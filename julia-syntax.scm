@@ -292,10 +292,6 @@
 			   (block . fields))
 		   (struct-def-expr name params super fields))
 
-   ; macro for timing evaluation
-   (pattern-lambda (call (-/ time) expr)
-		   `(call time_thunk (-> (tuple) ,expr)))
-
    )) ; binding-form-patterns
 
 (define patterns
@@ -341,7 +337,7 @@
 					  (i   1))
 				 (if (null? lhs) '((null))
 				     (cons `(= ,(car lhs)
-					       (call tupleref ,t ,i))
+					       (call (top tupleref) ,t ,i))
 					   (loop (cdr lhs)
 						 (+ i 1))))))))
 
@@ -363,14 +359,14 @@
 		     (define (tuple-wrap a run)
 		       (if (null? a)
 			   (if (null? run) '()
-			       (list `(call tuple ,@(reverse run))))
+			       (list `(call (top tuple) ,@(reverse run))))
 			   (let ((x (car a)))
 			     (if (and (length= x 2)
 				      (eq? (car x) '...))
 				 (if (null? run)
 				     (list* (cadr x)
 					    (tuple-wrap (cdr a) '()))
-				     (list* `(call tuple ,@(reverse run))
+				     (list* `(call (top tuple) ,@(reverse run))
 					    (cadr x)
 					    (tuple-wrap (cdr a) '())))
 				 (tuple-wrap (cdr a) (cons x run))))))
@@ -380,7 +376,7 @@
    ; note, inside tuple ... means sequence type
    (pattern-lambda (tuple . args)
 		   (pattern-expand (list dotdotdotpattern)
-				   `(call tuple ,@args)))
+				   `(call (top tuple) ,@args)))
 
    dotdotdotpattern
 
@@ -1135,9 +1131,9 @@ So far only the second case can actually occur.
 						   '()))))
 				 capt)
 			  ,(closure-convert- body0 vinf))))
-	     `(call new_closure
+	     `(call (top new_closure)
 		    (lambda ,(lam:args e) ,(lam:vinfo e) ,body)
-		    (call tuple
+		    (call (top tuple)
 			  ; NOTE: to pass captured variables on to other
 			  ; closures we must pass the box, not the value
 			  ,@(map (lambda (x)
@@ -1207,6 +1203,7 @@ So far only the second case can actually occur.
 			   (emit `(goto ,(cdr labl))))))
 	    ((call)  (if (not (equal? (cadr e) '(top unbox)))
 			 (emit (goto-form e))))
+	    ((global) #f)  ; remove global declarations
 	    (else  (emit (goto-form e))))))
     (cond ((or (not (pair? e)) (quoted? e)) e)
 	  ((eq? (car e) 'lambda)

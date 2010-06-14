@@ -170,17 +170,6 @@ JL_CALLABLE(jl_f_error)
     return (jl_value_t*)jl_null;
 }
 
-JL_CALLABLE(jl_f_time_thunk)
-{
-    JL_NARGS(time_thunk, 1, 1);
-    JL_TYPECHK(time_thunk, function, args[0]);
-    double t0 = clock_now();
-    jl_value_t *result = jl_apply((jl_function_t*)args[0], NULL, 0);
-    double t1 = clock_now();
-    ios_printf(ios_stdout, "elapsed time: %.4f sec\n", t1-t0);
-    return result;
-}
-
 int asprintf(char **strp, const char *fmt, ...);
 
 void jl_load(const char *fname)
@@ -1266,7 +1255,6 @@ void jl_init_builtins()
     add_builtin_func("load", jl_f_load);
     add_builtin_func("tuple", jl_f_tuple);
     add_builtin_func("Union", jl_f_union);
-    add_builtin_func("time_thunk", jl_f_time_thunk);
     add_builtin_func("method_exists", jl_f_methodexists);
     add_builtin_func("invoke", jl_f_invoke);
     add_builtin_func("dlopen", jl_f_dlopen);

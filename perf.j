@@ -7,8 +7,8 @@ nl() = print("\n")
 fib(n) = n < 2 ? n : fib(n-1) + fib(n-2)
 
 print("recursive fib(33): ")
-fib(5)  # warm up: make sure function is compiled
-f = time(fib(33))
+fib(5)  # warm up: make sure fib is compiled
+tic(); f = fib(33); toc()
 assert(f == 3524578)
 nl()
 
@@ -16,7 +16,12 @@ nl()
 
 print("parse_int: ")
 bin("10")
-time(for i=1:1000; global n; n=bin("1111000011110000111100001111"); end)
+tic()
+for i=1:1000
+    global n
+    n=bin("1111000011110000111100001111")
+end
+toc()
 assert(n == 252645135)
 nl()
 
@@ -24,7 +29,7 @@ nl()
 
 print("ones: ")
 small=ones(2,2)
-o = time(ones(200,200))
+tic(); o = ones(200,200); toc()
 assert(all(o==1))
 nl()
 
@@ -32,7 +37,7 @@ nl()
 
 print("A * A': ")
 small*small'
-oo = time(o * o')
+tic(); oo = o * o'; toc()
 assert(all(oo==200))
 nl()
 
@@ -52,6 +57,8 @@ end
 
 print("mandelbrot: ")
 mandel(Complex(-.53,.68))
-M = time([ mandel(Complex(r,i)) | r = -2.0:.1:0.5, i = -1.:.1:1. ])
+tic()
+M = [ mandel(Complex(r,i)) | r = -2.0:.1:0.5, i = -1.:.1:1. ]
+toc()
 assert(sum(M) == 14791)
 nl()

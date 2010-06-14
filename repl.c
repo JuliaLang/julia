@@ -210,6 +210,21 @@ static int detect_color()
 
 JL_CALLABLE(jl_f_new_closure);
 
+// heuristic for whether a top-level input should be evaluated with
+// the compiler or the interpreter.
+static int eval_with_compiler_p(jl_array_t *body)
+{
+    size_t i;
+    for(i=0; i < body->length; i++) {
+        jl_value_t *stmt = jl_cellref(body,i);
+        if (jl_is_expr(stmt) && (((jl_expr_t*)stmt)->head == goto_sym ||
+                                 ((jl_expr_t*)stmt)->head == goto_ifnot_sym)) {
+            return 1;
+        }
+    }
+    return 0;
+}
+
 jl_value_t *jl_toplevel_eval(jl_value_t *ast)
 {
     //jl_print(ast);
@@ -219,10 +234,13 @@ jl_value_t *jl_toplevel_eval(jl_value_t *ast)
     assert(jl_is_expr(ast));
     jl_lambda_info_t *li = (jl_lambda_info_t*)jl_exprarg(ast,0);
     assert(jl_typeof(li) == (jl_type_t*)jl_lambda_info_type);
-    args[0] = (jl_value_t*)li;
-    args[1] = (jl_value_t*)jl_null;
-    jl_value_t *thunk = jl_f_new_closure(NULL, args, 2);
-    return jl_apply((jl_function_t*)thunk, NULL, 0);
+    if (eval_with_compiler_p(jl_lam_body(li->ast))) {
+        args[0] = (jl_value_t*)li;
+        args[1] = (jl_value_t*)jl_null;
+        jl_value_t *thunk = jl_f_new_closure(NULL, args, 2);
+        return jl_apply((jl_function_t*)thunk, NULL, 0);
+    }
+    return jl_interpret_toplevel_thunk(li);
 }
 
 static int have_color;

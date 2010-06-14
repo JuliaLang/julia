@@ -228,3 +228,28 @@ end
 copy(x::Any) = x
 copy(x::Tuple) = map(copy, x)
 copy(e::Expr) = Expr(e.head, copy(e.args), e.type)
+
+# timing
+
+clock() = ccall(dlsym(JuliaDLHandle,"clock_now"), Float64, ())
+
+_TIMERS = ()
+
+function tic()
+    t0 = clock()
+    global _TIMERS = (t0, _TIMERS)
+    return t0
+end
+
+function toc()
+    t1 = clock()
+    global _TIMERS
+    if is(_TIMERS,())
+        error("toc() without tic()")
+    end
+    t0 = _TIMERS[1]
+    _TIMERS = _TIMERS[2]
+    t = t1-t0
+    print("elapsed time: ", t, " sec\n")
+    t
+end

@@ -101,14 +101,14 @@ reshape(a::Array, dims::Tuple) = reshape(a, dims...)
 (==)(x::Matrix, y::Matrix) = [ x[i,j] == y[i,j] | i=1:size(x,1), j=1:size(x,2) ]
 
 (>) {T,S,n}(x::Tensor{T,n}, y::Tensor{S,n}) = (y < x)
-(>) {T,S,n}(x::Scalar,      y::Tensor{S,n}) = (y < x)
-(>) {T,S,n}(x::Tensor{T,n}, y::Scalar)      = (y < x)
+(>)        (x::Scalar,      y::Tensor)      = (y < x)
+(>)        (x::Tensor,      y::Scalar)      = (y < x)
 (<=){T,S,n}(x::Tensor{T,n}, y::Tensor{S,n}) = (x < y) | (x == y)
-(<=){T,S,n}(x::Scalar,      y::Tensor{S,n}) = (x < y) | (x == y)
-(<=){T,S,n}(x::Tensor{T,n}, y::Scalar)      = (x < y) | (x == y)
+(<=)       (x::Scalar,      y::Tensor)      = (x < y) | (x == y)
+(<=)       (x::Tensor,      y::Scalar)      = (x < y) | (x == y)
 (>=){T,S,n}(x::Tensor{T,n}, y::Tensor{S,n}) = (x > y) | (x == y)
-(>=){T,S,n}(x::Scalar,      y::Tensor{S,n}) = (x > y) | (x == y)
-(>=){T,S,n}(x::Tensor{T,n}, y::Scalar)      = (x > y) | (x == y)
+(>=)       (x::Scalar,      y::Tensor)      = (x > y) | (x == y)
+(>=)       (x::Tensor,      y::Scalar)      = (x > y) | (x == y)
 
 (~)(x::Vector{Bool}) = [ ~x[i] | i=1:length(x) ]
 (~)(x::Matrix{Bool}) = [ ~x[i,j] | i=1:size(x,1), j=1:=size(x,2) ]
@@ -443,7 +443,7 @@ end
 
 print{T}(a::Array{T,0}) = print("Array(",T,")")
 
-function print{T,n}(a::Array{T,n})
+function print(a::Array)
     slice2d(a, idxs) = [ a[i, j, idxs...] | i=1:size(a,1), j=1:size(a,2) ]
     
     tail = size(a)[3:]
