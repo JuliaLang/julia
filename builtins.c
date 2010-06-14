@@ -193,8 +193,7 @@ void jl_load(const char *fname)
                 lineno = jl_unbox_int32(jl_exprarg(form, 0));
             }
             else {
-                //jl_toplevel_eval(form);
-                jl_lambda_info_t *lam = (jl_lambda_info_t*)jl_exprarg(form,0);
+                jl_lambda_info_t *lam = (jl_lambda_info_t*)form;
                 (void)jl_interpret_toplevel_thunk(lam);
             }
         }

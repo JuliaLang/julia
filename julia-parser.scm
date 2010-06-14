@@ -450,31 +450,26 @@ TODO:
 
 (define (parse-decl s) (parse-LtoR s parse-call (prec-ops 11)))
 
-; parse function call, indexing, dot, and :: expressions
+; parse function call, indexing, and dot expressions
 ; also handles looking for syntactic reserved words
 (define (parse-call s)
-  (define (loop ex)
-    (let ((t (peek-token s)))
-      (case t
-	((|.|)
-	 (loop (list (take-token s) ex (parse-atom s))))
-	((#\( )   (take-token s)
-	 (loop (list* 'call ex (parse-arglist s #\) ))))
-	((#\[ )   (take-token s)
-	 ; ref is syntax, so we can distinguish
-	 ; a[i] = x  from
-	 ; ref(a,i) = x
-	 (loop (list* 'ref  ex (parse-arglist s #\] ))))
-	((#\{ )   (take-token s)
-	 (loop (list* 'curly ex (parse-arglist s #\} ))))
-	(else ex))))
-  
-  (let* (#;(do-kw? (not (eqv? (peek-token s) #\`)))
-	 (ex (parse-atom s)))
-    (if (and #;do-kw?
-	 (memq ex reserved-words))
+  (let ((ex (parse-atom s)))
+    (if (memq ex reserved-words)
 	(parse-resword s ex)
-	(loop ex))))
+	(let loop ((ex ex))
+	  (case (peek-token s)
+	    ((|.|)
+	     (loop (list (take-token s) ex (parse-atom s))))
+	    ((#\( )   (take-token s)
+	     (loop (list* 'call ex (parse-arglist s #\) ))))
+	    ((#\[ )   (take-token s)
+	     ; ref is syntax, so we can distinguish
+	     ; a[i] = x  from
+	     ; ref(a,i) = x
+	     (loop (list* 'ref ex  (parse-arglist s #\] ))))
+	    ((#\{ )   (take-token s)
+	     (loop (list* 'curly ex (parse-arglist s #\} ))))
+	    (else ex))))))
 
 ;(define (parse-dot s)  (parse-LtoR s parse-atom (prec-ops 12)))
 

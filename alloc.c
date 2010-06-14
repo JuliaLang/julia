@@ -51,6 +51,7 @@ jl_sym_t *null_sym;    jl_sym_t *body_sym;
 jl_sym_t *unbound_sym; jl_sym_t *boxunbound_sym;
 jl_sym_t *locals_sym;  jl_sym_t *colons_sym;
 jl_sym_t *closure_ref_sym;
+jl_sym_t *symbol_sym;
 
 jl_value_t *jl_new_struct(jl_struct_type_t *type, ...)
 {
@@ -137,12 +138,13 @@ jl_function_t *jl_new_closure(jl_fptr_t proc, jl_value_t *env)
 jl_lambda_info_t *jl_new_lambda_info(jl_value_t *ast, jl_tuple_t *sparams)
 {
     jl_lambda_info_t *li =
-        (jl_lambda_info_t*)newobj((jl_type_t*)jl_lambda_info_type, 5);
+        (jl_lambda_info_t*)newobj((jl_type_t*)jl_lambda_info_type, 6);
     li->ast = ast;
     li->sparams = sparams;
     li->tfunc = (jl_value_t*)jl_null;
     li->fptr = NULL;
     li->roots = jl_null;
+    li->functionObject = NULL;
     return li;
 }
 
@@ -697,6 +699,7 @@ void jl_init_builtin_types()
     unbound_sym = jl_symbol("unbound");
     boxunbound_sym = jl_symbol("box-unbound");
     closure_ref_sym = jl_symbol("closure-ref");
+    symbol_sym = jl_symbol("symbol");
     body_sym = jl_symbol("body");
     locals_sym = jl_symbol("locals");
     colons_sym = jl_symbol("::");

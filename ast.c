@@ -245,9 +245,8 @@ static jl_value_t *scm_to_julia(value_t e)
                     jl_cellset(ex->args, i, scm_to_julia(car_(e)));
                     e = cdr_(e);
                 }
-                return (jl_value_t*)
-                    jl_expr(quote_sym, 1,
-                            jl_new_lambda_info((jl_value_t*)ex, jl_null));
+                return
+                    (jl_value_t*)jl_new_lambda_info((jl_value_t*)ex, jl_null);
             }
             if (!strcmp(s, "var-info")) {
                 jl_expr_t *ex = jl_exprn(sym, n);
@@ -359,9 +358,7 @@ jl_lambda_info_t *jl_expand(jl_value_t *expr)
         return NULL;
     syntax_error_check(e);
 
-    jl_expr_t *ex = (jl_expr_t*)scm_to_julia(e);
-    assert(jl_is_expr(ex));
-    jl_lambda_info_t *li = (jl_lambda_info_t*)jl_exprarg(ex,0);
+    jl_lambda_info_t *li = (jl_lambda_info_t*)scm_to_julia(e);
     assert(jl_is_lambda_info(li));
     return li;
 }

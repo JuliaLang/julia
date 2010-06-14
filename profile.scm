@@ -49,10 +49,11 @@
 	    accum-tok-eager read-number read-operator
 	    skip-ws-and-comments next-token peek-token require-token
 	    parse-LtoR parse-RtoL parse-cond parse-call parse-atom
+	    parse-arglist
 	    julia-parse-file julia-parse
 	    quoted? lam:args lam:vars lam:vinfo lam:body
 	    fsig-to-lambda-list arg-name llist-vars llist-types
-	    decl-var decl-type to-LFF expand-and-or
+	    decl-var decl-type to-LFF
 	    remove-argument-side-effects expand-update-operator
 	    expand-compare-chain process-indexes function-expr
 	    symbols->typevars generic-function-def-expr

@@ -225,22 +225,20 @@ static int eval_with_compiler_p(jl_array_t *body)
     return 0;
 }
 
-jl_value_t *jl_toplevel_eval(jl_value_t *ast)
+jl_value_t *jl_toplevel_eval_thunk(jl_lambda_info_t *thk)
 {
-    //jl_print(ast);
+    //jl_print(thk);
     //ios_printf(ios_stdout, "\n");
-    // ast is of the form (quote <lambda-info>)
     jl_value_t *args[2];
-    assert(jl_is_expr(ast));
-    jl_lambda_info_t *li = (jl_lambda_info_t*)jl_exprarg(ast,0);
-    assert(jl_typeof(li) == (jl_type_t*)jl_lambda_info_type);
-    if (eval_with_compiler_p(jl_lam_body(li->ast))) {
-        args[0] = (jl_value_t*)li;
+    assert(jl_typeof(thk) == (jl_type_t*)jl_lambda_info_type);
+    assert(jl_is_expr(thk->ast));
+    if (eval_with_compiler_p(jl_lam_body((jl_expr_t*)thk->ast))) {
+        args[0] = (jl_value_t*)thk;
         args[1] = (jl_value_t*)jl_null;
         jl_value_t *thunk = jl_f_new_closure(NULL, args, 2);
         return jl_apply((jl_function_t*)thunk, NULL, 0);
     }
-    return jl_interpret_toplevel_thunk(li);
+    return jl_interpret_toplevel_thunk(thk);
 }
 
 static int have_color;
@@ -576,7 +574,7 @@ int main(int argc, char *argv[])
         int i;
         for (i=0; i < num_evals; i++) {
             jl_value_t *ast = jl_parse_input_line(eval_exprs[i]);
-            jl_value_t *value = jl_toplevel_eval(ast);
+            jl_value_t *value = jl_toplevel_eval_thunk((jl_lambda_info_t*)ast);
             if (print_exprs[i]) {
                 jl_print(value);
                 ios_printf(ios_stdout, "\n");
@@ -618,7 +616,8 @@ int main(int argc, char *argv[])
                 ios_flush(ios_stdout);
             }
             if (ast != NULL) {
-                jl_value_t *value = jl_toplevel_eval(ast);
+                jl_value_t *value =
+                    jl_toplevel_eval_thunk((jl_lambda_info_t*)ast);
                 if (print_value) {
                     jl_print(value);
                     ios_printf(ios_stdout, "\n");

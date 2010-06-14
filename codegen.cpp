@@ -162,6 +162,7 @@ static Function *to_function(jl_lambda_info_t *li)
     Function *f = Function::Create(jl_func_sig, Function::ExternalLinkage,
                                    "a_julia_function", jl_Module);
     assert(jl_is_expr(li->ast));
+    li->functionObject = (void*)f;
     BasicBlock *old = builder.GetInsertBlock();
     emit_function(li, f);
     //FPM->run(*f);
@@ -424,6 +425,16 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool value,
         else if (jl_is_array(expr)) {
             // string literal
         }
+        else if (jl_is_lambda_info(expr)) {
+            jl_value_t *nli =
+                (jl_value_t*)jl_add_static_parameters((jl_lambda_info_t*)expr,
+                                                      ctx->sp);
+            if (nli != expr) {
+                ctx->linfo->roots =
+                    jl_pair(nli, (jl_value_t*)ctx->linfo->roots);
+                expr = nli;
+            }
+        }
         // TODO: for now just return the direct pointer
         return literal_pointer_val(expr);
         assert(0);
@@ -481,6 +492,9 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool value,
         return emit_call(args, ex->args->length, ctx);
     }
 
+    else if (ex->head == symbol_sym) {
+        return emit_expr(args[0], ctx, true);
+    }
     else if (ex->head == assign_sym) {
         assert(!value);
         Value *rhs = emit_expr(args[1], ctx, true);
@@ -512,16 +526,6 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool value,
 
     else if (ex->head == quote_sym) {
         jl_value_t *jv = args[0];
-        if (jl_is_lambda_info(jv)) {
-            jl_value_t *nli =
-                (jl_value_t*)jl_add_static_parameters((jl_lambda_info_t*)jv,
-                                                      ctx->sp);
-            if (nli != jv) {
-                ctx->linfo->roots =
-                    jl_pair(nli, (jl_value_t*)ctx->linfo->roots);
-                jv = nli;
-            }
-        }
         return literal_pointer_val(jv);
     }
     else if (ex->head == null_sym) {

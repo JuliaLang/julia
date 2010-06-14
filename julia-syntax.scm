@@ -10,8 +10,6 @@
 ; - use (top x) more consistently
 ; * make goto-form safe for inlining (delay label to index mapping)
 
-(define *julia-interpreter* #f)
-
 (define (quoted? e) (memq (car e) '(quote top unbound line break)))
 
 (define (lam:args x) (cadr x))
@@ -1212,9 +1210,7 @@ So far only the second case can actually occur.
 	  ((eq? (car e) 'lambda)
 	   (compile (cadddr e) '())
 	   `(lambda ,(cadr e) ,(caddr e)
-		    ,(if *julia-interpreter*
-			 (list->vector (reverse code))
-			 (cons 'body (reverse code)))))
+		    ,(cons 'body (reverse code))))
 	  (else (map goto-form e)))))
 
 (define (to-goto-form e)

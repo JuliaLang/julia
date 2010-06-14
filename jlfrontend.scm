@@ -1,4 +1,3 @@
-(define *julia-interpreter* #f)
 (load "flisp/aliases.scm")
 (load "utils.scm")
 (load "match.scm")

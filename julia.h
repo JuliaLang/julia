@@ -58,6 +58,7 @@ typedef struct {
     jl_value_t *tfunc;
     jl_fptr_t fptr;
     jl_tuple_t *roots;  // pointers in generated code
+    void *functionObject;
 } jl_lambda_info_t;
 
 typedef struct {
@@ -249,6 +250,7 @@ extern jl_sym_t *null_sym;    extern jl_sym_t *body_sym;
 extern jl_sym_t *unbound_sym; extern jl_sym_t *boxunbound_sym;
 extern jl_sym_t *locals_sym;  extern jl_sym_t *colons_sym;
 extern jl_sym_t *closure_ref_sym;
+extern jl_sym_t *symbol_sym;
 
 #ifdef BITS64
 #define NWORDS(sz) (((sz)+7)>>3)
@@ -457,7 +459,7 @@ void *jl_dlsym(void *handle, char *symbol);
 
 // compiler
 void jl_compile(jl_lambda_info_t *li);
-jl_value_t *jl_toplevel_eval(jl_value_t *ast);
+jl_value_t *jl_toplevel_eval_thunk(jl_lambda_info_t *thk);
 void jl_load(const char *fname);
 jl_value_t *jl_interpret_toplevel_thunk(jl_lambda_info_t *lam);
 jl_value_t *jl_interpret_toplevel_expr(jl_value_t *e);
