@@ -166,6 +166,7 @@ static jl_methlist_t *cache_method(jl_methtable_t *mt, jl_tuple_t *type,
             }
         }
     }
+    // TODO: specialize method
     return jl_method_list_insert_p(&mt->cache, (jl_type_t*)type, method,
                                    args_match);
 }
@@ -183,8 +184,6 @@ jl_methlist_t *jl_method_table_assoc(jl_methtable_t *mt,
       if no concrete or generic match, raise error
       if no generic match, use the concrete one even if inexact
       otherwise instantiate the generic method and use it
-      
-      TODO: cache exact matches in a faster lookup table
     */
     jl_methlist_t *m = jl_method_list_assoc_exact(mt->cache, args, nargs);
     if (m != NULL)
@@ -219,7 +218,6 @@ jl_methlist_t *jl_method_table_assoc(jl_methtable_t *mt,
 
     if (env == (jl_value_t*)jl_false) {
         if (m != NULL) {
-            // TODO: possibly re-specialize method on inexact match
             cache_method(mt, tt, m->func, (jl_tuple_t*)m->sig);
         }
         return m;

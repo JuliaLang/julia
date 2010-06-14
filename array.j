@@ -55,6 +55,9 @@ reshape{T}(a::Array{T}, dims...) = (b = zeros(T, dims...);
                                     b)
 reshape(a::Array, dims::Tuple) = reshape(a, dims...)
 
+(-)(x::Vector) = [ -x[i] | i=1:length(x) ]
+(-)(x::Matrix) = [ -x[i,j] | i=1:size(x,1), j=1:size(x,2) ]
+
 (+)(x::Scalar, y::Vector) = [ x + y[i] | i=1:length(y) ]
 (-)(x::Scalar, y::Vector) = [ x - y[i] | i=1:length(y) ]
 (*)(x::Scalar, y::Vector) = [ x * y[i] | i=1:length(y) ]
