@@ -169,9 +169,12 @@
 	 `(tuple ,@types)
 	 (receive
 	  (names bounds) (sparam-name-bounds sparams '() '())
-	  `(call (lambda ,names
-		   (tuple ,@types))
-		 ,@(symbols->typevars names bounds))))
+	  `(scope-block
+	    (block
+	     ,@(map (lambda (var val) `(= ,var ,val))
+		    names
+		    (symbols->typevars names bounds))
+	     (tuple ,@types)))))
      body)))
 
 (define (struct-def-expr name params super fields)
