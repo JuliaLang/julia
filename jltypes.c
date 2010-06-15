@@ -227,6 +227,7 @@ jl_tuple_t *jl_compute_type_union(jl_tuple_t *types)
         for(j=0; j < n; j++) {
             if (j != i && temp[i] && temp[j]) {
                 if (temp[i] == temp[j] ||
+                    jl_types_equal(temp[i], temp[j]) ||
                     (jl_subtype(temp[i], temp[j], 0) &&
                      (temp[i] == (jl_value_t*)jl_bottom_type ||
                       !jl_has_typevars(temp[j])))) {
@@ -349,9 +350,19 @@ static jl_value_t *intersect_tag(jl_tag_type_t *a, jl_tag_type_t *b,
     jl_tuple_t *p = jl_alloc_tuple(a->parameters->length);
     size_t i;
     for(i=0; i < p->length; i++) {
-        jl_value_t *ti = jl_type_intersect(jl_tupleref(a->parameters,i),
-                                           jl_tupleref(b->parameters,i),
-                                           penv);
+        jl_value_t *ap = jl_tupleref(a->parameters,i);
+        jl_value_t *bp = jl_tupleref(b->parameters,i);
+        jl_value_t *ti;
+        if (a->name == jl_ntuple_typename || jl_is_tag_type(a) ||
+            jl_has_typevars(ap) || jl_has_typevars(bp)) {
+            ti = jl_type_intersect(ap,bp,penv);
+        }
+        else if (jl_types_equal(ap,bp)) {
+            ti = ap;
+        }
+        else {
+            return (jl_value_t*)jl_bottom_type;
+        }
         if (ti == (jl_value_t*)jl_bottom_type)
             return (jl_value_t*)jl_bottom_type;
         jl_tupleset(p, i, ti);
@@ -417,7 +428,7 @@ static jl_value_t *meet_tvar(jl_tvar_t *tv, jl_value_t *ty)
     if (jl_types_equal((jl_value_t*)tv->lb, ty))
         return ty;
     if (jl_subtype((jl_value_t*)tv->lb, ty, 0)) {
-        if (jl_is_leaf_type(ty))
+        if (jl_is_leaf_type(ty) || jl_is_int32(ty))
             return ty;
         return jl_new_struct(jl_tvar_type, jl_gensym(), tv->lb, ty);
     }

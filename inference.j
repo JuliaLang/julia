@@ -95,7 +95,8 @@ t_func[subtype] = (2, 2, cmp_tfunc)
 t_func[isa] = (2, 2, cmp_tfunc)
 t_func[tuplelen] = (1, 1, x->Int32)
 t_func[arraylen] = (1, 1, x->Int32)
-t_func[arrayref] = (2, 2, (a,i)->(subtype(a,Array) ? a.parameters[1] : Any))
+t_func[arrayref] = (2, 2, (a,i)->(isa(a,StructKind) && subtype(a,Array) ?
+                                  a.parameters[1] : Any))
 t_func[arrayset] = (3, 3, (a,i,v)->a)
 t_func[Array] =
     (1, Inf, (T,dims...)->(nd = length(dims);
@@ -117,6 +118,9 @@ t_func[typeassert] =
 function tupleref_tfunc(A, t, i)
     if is(t,())
         return Bottom
+    end
+    if isa(t,TagKind) && is(t.name,NTuple{}.name)
+        return t.parameters[2]
     end
     if !isa(t,Tuple)
         return Any
@@ -242,8 +246,6 @@ function abstract_call(f, fargs, argtypes, vtypes, sp)
         x = applicable
         while !is(x,())
             #print(x,"\n")
-            # TODO: approximate static parameters by calling tmatch
-            # on argtypes and the intersection
             if isa(x[3],Symbol)
                 # when there is a builtin method in this GF, we get
                 # a symbol with the name instead of a LambdaStaticData
@@ -252,7 +254,7 @@ function abstract_call(f, fargs, argtypes, vtypes, sp)
                 # constructor
                 rt = x[3]
             else
-                rt = ast_rettype(typeinf(x[3], x[2], x[1]))
+                (_tree,rt) = typeinf(x[3], x[2], x[1])
             end
             rettype = tmerge(rettype, rt)
             x = x[4]
@@ -326,7 +328,7 @@ function abstract_eval(s::Symbol, vtypes, sp)
     t = get(vtypes,s,NF)
     if is(t,NF)
         for i=1:2:length(sp)
-            if is(sp[i],s)
+            if is(sp[i].name,s)
                 # static parameter
                 return abstract_eval_constant(sp[i+1])
             end
@@ -377,6 +379,9 @@ function changed(new::StateUpdate, old, vars)
     return false
 end
 
+badunion(t) = ccall(dlsym(JuliaDLHandle,"jl_union_too_complex"),
+                    Int32, (Any,), t)!=0
+
 function tmerge(typea, typeb)
     if is(typea,NF)
         return typeb
@@ -384,7 +389,22 @@ function tmerge(typea, typeb)
     if is(typeb,NF)
         return typea
     end
-    return Union(typea, typeb)
+    t = ccall(dlsym(JuliaDLHandle,"jl_compute_type_union"),Any,(Any,),
+              (typea, typeb))
+    if length(t)==1
+        return t[1]
+    elseif length(t)==0
+        return Bottom
+    end
+    if badunion(t)
+        return Any
+    end
+    u = Union(t...)
+    if isa(u,UnionKind) && length(u.types) > 3
+        # don't let type unions get too big
+        return Any
+    end
+    return u
 end
 
 function update(state, changes::StateUpdate, vars)
@@ -415,7 +435,7 @@ function typeinf(linfo::LambdaStaticData, sparams::Tuple, atypes::Tuple)
     tf = linfo.tfunc
     while !is(tf,())
         if typeseq(tf[1],atypes)
-            return tf[2]
+            return (tf[2], ast_rettype(tf[2]))
         end
         tf = tf[3]
     end
@@ -516,7 +536,7 @@ function typeinf(linfo::LambdaStaticData, sparams::Tuple, atypes::Tuple)
     inference_stack = inference_stack.prev
     fulltree = type_annotate(ast, s, sparams, frame.result)
     linfo.tfunc = (atypes, fulltree, linfo.tfunc)
-    return fulltree
+    return (fulltree, frame.result)
 end
 
 function eval_annotate(e::Expr, vtypes, sp)
@@ -566,6 +586,11 @@ a=typevar(`a)
 b=typevar(`b)
 c=typevar(`c)
 d=typevar(`d)
+
+function finfer(f, types)
+    x = getmethods(f,types)
+    typeinf(x[3], x[2], x[1])[1]
+end
 
 m = getmethods(fact,(Int32,))
 ast = m[3]

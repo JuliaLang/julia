@@ -280,11 +280,8 @@ jl_bits_type_t *jl_new_bitstype(jl_value_t *name, jl_tag_type_t *super,
     return t;
 }
 
-jl_uniontype_t *jl_new_uniontype(jl_tuple_t *types)
+int jl_union_too_complex(jl_tuple_t *types)
 {
-    jl_uniontype_t *t = (jl_uniontype_t*)newobj((jl_type_t*)jl_union_kind, 1);
-    // don't make unions of 1 type; Union(T)==T
-    assert(types->length != 1);
     size_t i, j;
     for(i=0; i < types->length; i++) {
         for(j=0; j < types->length; j++) {
@@ -296,11 +293,23 @@ jl_uniontype_t *jl_new_uniontype(jl_tuple_t *types)
                     jl_value_t *env =
                         jl_type_match((jl_type_t*)a, (jl_type_t*)b);
                     if (env != jl_false && env != (jl_value_t*)jl_null)
-                        jl_error("union type pattern too complex");
+                        return 1;
                 }
             }
         }
     }
+    return 0;
+}
+
+jl_uniontype_t *jl_new_uniontype(jl_tuple_t *types)
+{
+    if (jl_union_too_complex(types)) {
+        jl_errorf("union type pattern too complex: %s",
+                  jl_print_to_string((jl_value_t*)types));
+    }
+    jl_uniontype_t *t = (jl_uniontype_t*)newobj((jl_type_t*)jl_union_kind, 1);
+    // don't make unions of 1 type; Union(T)==T
+    assert(types->length != 1);
     t->types = types;
     return t;
 }
