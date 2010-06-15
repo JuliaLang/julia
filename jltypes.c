@@ -1353,6 +1353,7 @@ static jl_value_t *type_match_(jl_value_t *child, jl_value_t *parent,
     assert(jl_is_some_tag_type(parent));
     jl_tag_type_t *tta = (jl_tag_type_t*)child;
     jl_tag_type_t *ttb = (jl_tag_type_t*)parent;
+    jl_tuple_t *env0 = env;
     int super = 0;
     if (ttb->name == jl_type_type->name && tta->name != ttb->name)
         tta = jl_wrap_Type((jl_value_t*)tta);
@@ -1375,7 +1376,7 @@ static jl_value_t *type_match_(jl_value_t *child, jl_value_t *parent,
     if (((jl_tag_type_t*)child)->name == jl_type_type->name) {
         // Type{T} matches either Type{>:T} or >:typeof(T)
         return type_match_(jl_full_type(jl_tparam0(child)),
-                           parent, env, morespecific);
+                           parent, env0, morespecific);
     }
 
     return jl_false;

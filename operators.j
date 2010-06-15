@@ -40,12 +40,6 @@ all(itr)  = reduce(all, itr)
 
 function promote_type{T,S}(::Type{T}, ::Type{S})
     # print("promote_type: ",T,", ",S,"\n")
-    if T <: S
-        return T
-    end
-    if S <: T
-        return S
-    end
     if method_exists(promote_rule,(T,S))
         return promote_rule(T,S)
     elseif method_exists(promote_rule,(S,T))
@@ -54,6 +48,8 @@ function promote_type{T,S}(::Type{T}, ::Type{S})
         error(strcat("no promotion exists for ",string(T)," and ",string(S)))
     end
 end
+
+promote_type{T}(::Type{T}, ::Type{T}) = T
 
 promote() = ()
 promote(x) = (x,)

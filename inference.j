@@ -17,6 +17,7 @@
 # * approximate static parameters
 # - use type bounds
 # - reflection for constructors
+# * be able to infer the results of promote()
 
 struct NotFound
 end
@@ -72,6 +73,7 @@ isType(t) = isa(t,TagKind) && is(t.name,Type{}.name)
 
 t_func = idtable()
 t_func[tuple] = (0, Inf, (args...)->args)
+t_func[error] = (1, 1, x->Bottom)
 t_func[boxsi8] = (1, 1, x->Int8)
 t_func[boxui8] = (1, 1, x->Uint8)
 t_func[boxsi16] = (1, 1, x->Int16)
@@ -362,6 +364,8 @@ function interpret(e::Expr, vtypes, sp)
         lhs = e.args[1]
         assert(isa(lhs,Symbol))
         return StateUpdate(((lhs, t),), vtypes)
+    elseif is(e.head,`call)
+        abstract_eval(e, vtypes, sp)
     elseif is(e.head,`gotoifnot)
         abstract_eval(e.args[1], vtypes, sp)
     end
