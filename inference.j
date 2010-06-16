@@ -19,6 +19,10 @@
 # - reflection for constructors
 # * be able to infer the results of promote()
 
+# parameters limiting potentially-infinite types
+MAX_TYPEUNION_SIZE = 3
+MAX_TUPLETYPE_LEN  = 10
+
 struct NotFound
 end
 
@@ -117,6 +121,7 @@ t_func[typeassert] =
     (2, 2, (A, v, t)->(isType(t) ? mintype(v,t.parameters[1]) :
                        isconstant(A[2]) ? mintype(v,eval(A[2])) :
                        Any))
+isseqtype(t) = isa(t,TagKind) && is(t.name.name,`...)
 function tupleref_tfunc(A, t, i)
     if is(t,())
         return Bottom
@@ -129,7 +134,7 @@ function tupleref_tfunc(A, t, i)
     end
     n = length(t)
     last = t[n]
-    vararg = (isa(last,TagKind) && is(last.name,`...))
+    vararg = isseqtype(last)
     if isa(A[2],Int)
         # index is a constant
         i = A[2]
@@ -151,6 +156,7 @@ function tupleref_tfunc(A, t, i)
         else
             types = t
         end
+        # TODO: possibly use reduce of tmerge instead
         return Union(types...)
     end
 end
@@ -223,6 +229,21 @@ function isconstantfunc(f, vtypes)
     return (isa(f,Symbol) && !has(vtypes,f), f)
 end
 
+isvatuple(t) = (n = length(t); n > 0 && isseqtype(t[n]))
+
+function limit_tuple_type(t)
+    n = length(t)
+    if n > MAX_TUPLETYPE_LEN
+        last = t[n]
+        if isseqtype(last)
+            last = last.parameters[1]
+        end
+        tail = Union(t[MAX_TUPLETYPE_LEN:(n-1)]..., last)
+        return tuple(t[1:(MAX_TUPLETYPE_LEN-1)]..., ...{tail})
+    end
+    return t
+end
+
 function abstract_call(f, fargs, argtypes, vtypes, sp)
     if isbuiltin(f)
         if is(f,apply) && length(fargs)>0
@@ -230,12 +251,13 @@ function abstract_call(f, fargs, argtypes, vtypes, sp)
             if isfunc && isbound(af)
                 afargs = fargs[2:]
                 aargtypes = argtypes[2:]
-                if all(map(x->isa(x,Tuple),aargtypes))
+                if all(map(x->isa(x,Tuple),aargtypes)) &&
+                    !any(map(isvatuple,aargtypes[1:(length(aargtypes)-1)]))
                     # apply with known func with known tuple types
                     # can be collapsed to a call to the applied func
-                    at = length(aargtypes)>0 ? append(aargtypes...) : ()
-                    return abstract_call(eval(af), (), append(aargtypes...),
-                                         vtypes, sp)
+                    at = length(aargtypes) > 0 ?
+                         limit_tuple_type(append(aargtypes...)) : ()
+                    return abstract_call(eval(af), (), at, vtypes, sp)
                 end
             end
         end
@@ -309,7 +331,7 @@ end
 ast_rettype(ast) = ast.args[3].type
 
 function abstract_eval_constant(x)
-    if isa(x,TagKind)
+    if isa(x,TagKind) || isa(x,TypeVar)
         return Type{x}
     end
     return typeof(x)
@@ -404,7 +426,7 @@ function tmerge(typea, typeb)
         return Any
     end
     u = Union(t...)
-    if isa(u,UnionKind) && length(u.types) > 3
+    if isa(u,UnionKind) && length(u.types) > MAX_TYPEUNION_SIZE
         # don't let type unions get too big
         return Any
     end
@@ -424,17 +446,17 @@ end
 
 type Undef
 
-function typeinf(linfo::LambdaStaticData, sparams::Tuple, atypes::Tuple)
-    function findlabel(body, l)
-        for i=1:length(body)
-            b = body[i]
-            if isa(b,Expr) && is(b.head,`label) && b.args[1]==l
-                return i
-            end
+function findlabel(body, l)
+    for i=1:length(body)
+        b = body[i]
+        if isa(b,Expr) && is(b.head,`label) && b.args[1]==l
+            return i
         end
-        error("label not found")
     end
+    error("label not found")
+end
 
+function typeinf(linfo::LambdaStaticData, sparams::Tuple, atypes::Tuple)
     # check cached t-functions
     tf = linfo.tfunc
     while !is(tf,())
