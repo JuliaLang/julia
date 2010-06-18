@@ -374,6 +374,32 @@ issues 5/31/10
   SomeType, but in SomeType{T} we need SomeType to contain constraint
   information, plus SomeType is a function!
 
+  plus SomeType{T}(args...) should work, no .new
+  make structs with no fields singletons
+
+  so both Complex and Complex{...} should be types, and also applicable
+
+plan:
+. TypeConstructor only for typealias
+. typename->ctor becomes typename->type, and points to the original
+  version of a type
+. Complex, e.g., is a StructType. both Function and StructType are applicable
+  . this avoids the issue of abstract types being functions, which is crazy
+. T{...} can work on either TypeConstructor or a TagType
+. explicit T{x} yields a (non-overloadable?) specialized constructor
+. when applying a type or typector to concrete types, enforce that all typevar
+  bounds are respected.
+. keep track of whether a method is "generic" explicitly, instead of
+  using jl_has_typevars. when matching, make sure the method's own static
+  parameters were what matched, e.g.
+  foo{T,S}(a::SomeType, b::OtherType)
+  typevars in SomeType and OtherType might match, but we could not infer T,S
+  so this is an error. this fully generalizes the "cannot infer type
+  parameters from arguments" error in generic constructors, so it would not
+  be needed there any more.
+. consider changing the rules so in f(x::T...) T is the union of the actual
+  argument types.
+
 - add the ability to hide the default constructor, which also makes it
   possible to add multiple constructor overloads:
 

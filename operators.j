@@ -58,6 +58,7 @@ promote(x) = (x,)
 function promote{T,S}(x::T, y::S)
     # print("promote: ",T,", ",S,"\n")
     R = promote_type(T,S)
+    # print("= ", R,"\n")
     (convert(R,x), convert(R,y))
 end
 function promote{T,S}(x::T, y::S, zs...)

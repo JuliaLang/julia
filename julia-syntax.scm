@@ -977,7 +977,7 @@ So far only the second case can actually occur.
 		   e))))
 
 (define (make-var-info name) (list name 'Any #f))
-(define (var-info/t name type) (list name type #f))
+;(define (var-info/t name type) (list name type #f))
 (define vinfo:name car)
 (define vinfo:type cadr)
 (define vinfo:capt caddr)
@@ -989,7 +989,7 @@ So far only the second case can actually occur.
   (append (lam:vars e)
 	  (cdr (caddr e))))
 
-(define (fix-seq-type t)
+#;(define (fix-seq-type t)
   ; wrap (call (top instantiate_type) ... . args) in (tuple ...)
   (if (and (length> t 2)
 	   (eq? (car t) 'call)
@@ -1035,9 +1035,7 @@ So far only the second case can actually occur.
 		(glo  (declared-global-vars (lam:body e)))
 		; make var-info records for vars introduced by this lambda
 		(vi   (nconc
-		       (map (lambda (decl)
-			      (var-info/t (decl-var decl)
-					  (fix-seq-type (decl-type decl))))
+		       (map (lambda (decl) (make-var-info (decl-var decl)))
 			    args)
 		       (map make-var-info locl)))
 		; captured vars: vars from the environment that occur

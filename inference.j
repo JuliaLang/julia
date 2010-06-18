@@ -262,7 +262,7 @@ function abstract_call(f, fargs, argtypes, vtypes, sp)
             end
         end
         rt = builtin_tfunction(f, fargs, argtypes)
-        print("=> ", rt, "\n")
+        #print("=> ", rt, "\n")
         return rt
     elseif isgeneric(f)
         applicable = getmethods(f, argtypes)
@@ -284,10 +284,10 @@ function abstract_call(f, fargs, argtypes, vtypes, sp)
             x = x[4]
         end
         # if rettype is Bottom we've found a method not found error
-        print("=> ", rettype, "\n")
+        #print("=> ", rettype, "\n")
         return rettype
     else
-        print("=> ", Any, "\n")
+        #print("=> ", Any, "\n")
         return Any
     end
 end
@@ -300,9 +300,9 @@ function abstract_eval_call(e, vtypes, sp)
     end
     fargs = a2t(e.args[2:])
     argtypes = map(x->abstract_eval(x,vtypes,sp), fargs)
-    print("call ", e.args[1], argtypes, " ")
+    #print("call ", e.args[1], argtypes, " ")
     if !isbound(func)
-        print("=> ", Any, "\n")
+        #print("=> ", Any, "\n")
         return Any
     end
     f = eval(func)

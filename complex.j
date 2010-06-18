@@ -111,10 +111,10 @@ function log(z::Complex)
     ai = abs(z.im)
     if ar < ai
         r = ar/ai
-        re = log(ai) + 0.5 log1p(r r)
+        re = log(ai) + 0.5 log1p(r*r)
     else
         r = ai/ar
-        re = log(ar) + 0.5 log1p(r r)
+        re = log(ar) + 0.5 log1p(r*r)
     end
     Complex(re, atan2(z.im, z.re))
 end

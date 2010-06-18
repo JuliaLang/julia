@@ -81,8 +81,6 @@ static jl_methlist_t *jl_method_list_assoc_exact(jl_methlist_t *ml,
 // merged in.
 jl_lambda_info_t *jl_add_static_parameters(jl_lambda_info_t *l, jl_tuple_t *sp)
 {
-    if (sp->length == 0)
-        return l;
     if (l->sparams->length > 0)
         sp = jl_tuple_append(sp, l->sparams);
     jl_lambda_info_t *nli = jl_new_lambda_info(l->ast, sp);
@@ -123,7 +121,8 @@ static int args_match(jl_type_t *a, jl_type_t *b)
 }
 
 static jl_methlist_t *cache_method(jl_methtable_t *mt, jl_tuple_t *type,
-                                   jl_function_t *method, jl_tuple_t *decl)
+                                   jl_function_t *method, jl_tuple_t *decl,
+                                   jl_tuple_t *sparams)
 {
     size_t i;
     for (i=0; i < type->length; i++) {
@@ -167,7 +166,12 @@ static jl_methlist_t *cache_method(jl_methtable_t *mt, jl_tuple_t *type,
         }
     }
     // TODO: specialize method
-    return jl_method_list_insert_p(&mt->cache, (jl_type_t*)type, method,
+    jl_function_t *newmeth;
+    if (sparams==jl_null)
+        newmeth = method;
+    else
+        newmeth = jl_instantiate_method(method, sparams);
+    return jl_method_list_insert_p(&mt->cache, (jl_type_t*)type, newmeth,
                                    args_match);
 }
 
@@ -218,15 +222,13 @@ jl_methlist_t *jl_method_table_assoc(jl_methtable_t *mt,
 
     if (env == (jl_value_t*)jl_false) {
         if (m != NULL) {
-            cache_method(mt, tt, m->func, (jl_tuple_t*)m->sig);
+            cache_method(mt, tt, m->func, (jl_tuple_t*)m->sig, jl_null);
         }
         return m;
     }
 
-    // cache result in concrete part of method table
     assert(jl_is_tuple(env));
     jl_tuple_t *tpenv = jl_flatten_pairs((jl_tuple_t*)env);
-    jl_function_t *newmeth = jl_instantiate_method(m->func, tpenv);
     jl_tuple_t *newsig;
     // don't bother computing this if no arguments are tuples
     for(i=0; i < tt->length; i++) {
@@ -242,7 +244,7 @@ jl_methlist_t *jl_method_table_assoc(jl_methtable_t *mt,
         newsig = (jl_tuple_t*)m->sig;
     }
     assert(jl_is_tuple(newsig));
-    return cache_method(mt, tt, newmeth, newsig);
+    return cache_method(mt, tt, m->func, newsig, tpenv);
 }
 
 static int sigs_match(jl_type_t *a, jl_type_t *b)

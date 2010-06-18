@@ -14,33 +14,31 @@
 #include "llt.h"
 #include "julia.h"
 
-static jl_value_t *eval(jl_value_t *e,
-                        jl_value_t **locals, jl_value_t **vals, size_t nl);
+static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl);
 
 jl_value_t *jl_interpret_toplevel_expr(jl_value_t *e)
 {
-    return eval(e, NULL, NULL, 0);
+    return eval(e, NULL, 0);
 }
 
 static jl_value_t *do_call(jl_function_t *f, jl_value_t **args, size_t nargs,
-                           jl_value_t **locals, jl_value_t **vals, size_t nl)
+                           jl_value_t **locals, size_t nl)
 {
     jl_value_t **argv = alloca(nargs * sizeof(jl_value_t*));
     size_t i;
     for(i=0; i < nargs; i++)
-        argv[i] = eval(args[i], locals, vals, nl);
+        argv[i] = eval(args[i], locals, nl);
     return jl_apply(f, argv, nargs);
 }
 
-static jl_value_t *eval(jl_value_t *e,
-                        jl_value_t **locals, jl_value_t **vals, size_t nl)
+static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl)
 {
     if (jl_is_symbol(e)) {
         jl_value_t **bp = NULL;
         size_t i;
         for(i=0; i < nl; i++) {
-            if (locals[i] == e) {
-                bp = &vals[i];
+            if (locals[i*2] == e) {
+                bp = &locals[i*2+1];
                 break;
             }
         }
@@ -55,24 +53,24 @@ static jl_value_t *eval(jl_value_t *e,
     jl_expr_t *ex = (jl_expr_t*)e;
     jl_value_t **args = &jl_cellref(ex->args,0);
     if (ex->head == call_sym) {
-        jl_function_t *f = (jl_function_t*)eval(args[0], locals, vals, nl);
+        jl_function_t *f = (jl_function_t*)eval(args[0], locals, nl);
         if (!jl_is_func(f))
             jl_error("apply: expected function");
-        return do_call(f, &args[1], ex->args->length-1, locals, vals, nl);
+        return do_call(f, &args[1], ex->args->length-1, locals, nl);
     }
     else if (ex->head == assign_sym) {
         jl_value_t **bp = NULL;
         jl_value_t *sym = args[0];
         size_t i;
         for(i=0; i < nl; i++) {
-            if (locals[i] == sym) {
-                bp = &vals[i];
+            if (locals[i*2] == sym) {
+                bp = &locals[i*2+1];
                 break;
             }
         }
         if (bp == NULL)
             bp = jl_get_bindingp(jl_system_module, (jl_sym_t*)sym);
-        *bp = eval(args[1], locals, vals, nl);
+        *bp = eval(args[1], locals, nl);
         return (jl_value_t*)jl_null;
     }
     else if (ex->head == top_sym) {
@@ -115,11 +113,13 @@ jl_value_t *jl_interpret_toplevel_thunk(jl_lambda_info_t *lam)
     jl_expr_t *ast = (jl_expr_t*)lam->ast;
     jl_array_t *stmts = jl_lam_body(ast);
     jl_array_t *l = jl_lam_locals(ast);
-    jl_value_t **locals = &((jl_value_t**)l->data)[0];
-    jl_value_t **vals = (jl_value_t**)alloca(l->length*sizeof(void*));
+    jl_value_t **names = &((jl_value_t**)l->data)[0];
+    jl_value_t **locals = (jl_value_t**)alloca(l->length*2*sizeof(void*));
     size_t i=0;
-    for(i=0; i < l->length; i++)
-        vals[i] = NULL;
+    for(i=0; i < l->length; i++) {
+        locals[i*2]   = names[i];
+        locals[i*2+1] = NULL;
+    }
     i = 0;
     while (1) {
         jl_value_t *stmt = jl_cellref(stmts,i);
@@ -132,22 +132,21 @@ jl_value_t *jl_interpret_toplevel_thunk(jl_lambda_info_t *lam)
                 continue;
             }
             else if (head == goto_ifnot_sym) {
-                jl_value_t *cond = eval(jl_exprarg(stmt,0), locals, vals,
-                                        l->length);
+                jl_value_t *cond = eval(jl_exprarg(stmt,0), locals, l->length);
                 if (cond == jl_false) {
                     i = label_idx(jl_exprarg(stmt,1), stmts);
                     continue;
                 }
             }
             else if (head == return_sym) {
-                return eval(jl_exprarg(stmt,0), locals, vals, l->length);
+                return eval(jl_exprarg(stmt,0), locals, l->length);
             }
             else {
-                eval(stmt, locals, vals, l->length);
+                eval(stmt, locals, l->length);
             }
         }
         else {
-            eval(stmt, locals, vals, l->length);
+            eval(stmt, locals, l->length);
         }
         i++;
     }
