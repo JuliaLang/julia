@@ -741,14 +741,14 @@ TODO:
 				     (input-port-line (ts:port s))))))
 	   (raise e)))
      (lambda ()
-       (skip-ws (ts:port s) #t)
+       (skip-ws-and-comments (ts:port s))
        (let loop ((lines '())
 		  (linen (input-port-line (ts:port s)))
 		  (curr  (f s)))
 	 (if (eof-object? curr)
 	     (reverse lines)
 	     (begin
-	       (skip-ws (ts:port s) #t)
+	       (skip-ws-and-comments (ts:port s))
 	       (let ((nl (input-port-line (ts:port s))))
 		 (loop (list* curr `(line ,linen) lines)
 		       nl

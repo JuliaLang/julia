@@ -1,8 +1,10 @@
 struct Complex{T<:Real} <: Number
     re::T
     im::T
+
+    Complex(x::Real, y::Real) = new(x, y)
+    Complex(x::Real) = new(x, convert(typeof(x),0))
 end
-Complex{T<:Real}(x::T) = Complex(x, convert(T,0))
 
 convert{T}(::Type{Complex{T}}, x::T) = Complex(x, convert(T,0))
 convert{T}(::Type{Complex{T}}, x::Real) = Complex(convert(T,x), convert(T,0))

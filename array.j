@@ -22,7 +22,7 @@ zeros(m::Size, n::Size) = [ 0.0 | i=1:m, j=1:n ]
 zeros(T::Type, dims::Tuple) = zeros (T, dims...)
 zeros(dims::Tuple) = zeros(dims...)
 
-ones(T::Type, m::Size) = (o=convert(T,1); [ o | i=1:m ])
+ones(T::Type, m::Size) = (print("AA\n");o=convert(T,1); [ o | i=1:m ])
 ones(T::Type, m::Size, n::Size) = (o=convert(T,1); [ o | i=1:m, j=1:n ])
 ones(m::Size) = [ 1.0 | i=1:m ]
 ones(m::Size, n::Size) = [ 1.0 | i=1:m, j=1:n ]

@@ -8,10 +8,10 @@ struct Cons{T} <: List{T}
     tail::List{T}
 end
 
-# make the type of Cons(Cons,List) be Cons{List}, not Cons{Cons}
-Cons{T}(h::List{T}, t::List{List{T}}) = Cons{List{T}}.new(h, t)
+cons{T}(h::List{T}, t::List{List{T}}) = Cons{List{T}}(h, t)
+cons(x,y) = Cons(x,y)
 
-nil(T) = Nil{T}.new()
+nil(T) = Nil{T}()
 nil() = nil(Any)
 
 head(x::Cons) = x.head
@@ -40,23 +40,23 @@ function print{T}(l::List{T})
 end
 
 list() = nil()
-list{T}(first::T) = Cons(first, nil(T))
-list(first, rest...) = Cons(first, list(rest...))
+list{T}(first::T) = cons(first, nil(T))
+list(first, rest...) = cons(first, list(rest...))
 
 length(l::Nil) = 0
 length(l::Cons) = 1 + length(tail(l))
 
 map(f, l::Nil) = l
-map(f, l::Cons) = Cons(f(head(l)), map(f, tail(l)))
+map(f, l::Cons) = cons(f(head(l)), map(f, tail(l)))
 
 copylist(l::Nil) = l
-copylist(l::Cons) = Cons(head(l), copylist(tail(l)))
+copylist(l::Cons) = cons(head(l), copylist(tail(l)))
 
 function append2(a, b)
     if isa(a,Nil)
         b
     else
-        Cons(head(a), append2(tail(a), b))
+        cons(head(a), append2(tail(a), b))
     end
 end
 

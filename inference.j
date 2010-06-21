@@ -38,12 +38,12 @@ struct CallStack
     recurred::Bool
     result
     prev::Union(EmptyCallStack,CallStack)
-end
 
-CallStack(ast, types, prev::EmptyCallStack) =
-    CallStack(ast, types, 0, false, Bottom, prev)
-CallStack(ast, types, prev::CallStack) =
-    CallStack(ast, types, prev.n+1, false, Bottom, prev)
+    CallStack(ast, types, prev::EmptyCallStack) =
+        new(ast, types, 0, false, Bottom, prev)
+    CallStack(ast, types, prev::CallStack) =
+        new(ast, types, prev.n+1, false, Bottom, prev)
+end
 
 # TODO thread local
 inference_stack = EmptyCallStack()
@@ -73,7 +73,7 @@ mintype(a, b) = subtype(a,b) ? a : b
 
 cmp_tfunc = (x,y)->Bool
 
-isType(t) = isa(t,TagKind) && is(t.name,Type{}.name)
+isType(t) = isa(t,TagKind) && is(t.name,Type.name)
 
 t_func = idtable()
 t_func[tuple] = (0, Inf, (args...)->args)
@@ -126,7 +126,7 @@ function tupleref_tfunc(A, t, i)
     if is(t,())
         return Bottom
     end
-    if isa(t,TagKind) && is(t.name,NTuple{}.name)
+    if isa(t,TagKind) && is(t.name,NTuple.name)
         return t.parameters[2]
     end
     if !isa(t,Tuple)

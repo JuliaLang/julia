@@ -102,8 +102,8 @@ static jl_value_t *llvm_type_to_julia(const Type *t)
     if (t == T_void) return (jl_value_t*)jl_bottom_type;
     if (t->isPointerTy()) {
         jl_value_t *elty = llvm_type_to_julia(t->getContainedType(0));
-        return (jl_value_t*)jl_apply_type_ctor(jl_pointer_typector,
-                                               jl_tuple(1, elty));
+        return (jl_value_t*)jl_apply_type((jl_value_t*)jl_pointer_type,
+                                          jl_tuple(1, elty));
     }
     if (t == jl_pvalue_llvmt)
         return (jl_value_t*)jl_any_type;

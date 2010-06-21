@@ -26,6 +26,7 @@ static jl_methtable_t *new_method_table()
     mt->type = (jl_type_t*)jl_methtable_type;
     mt->defs = NULL;
     mt->cache = NULL;
+    mt->sealed = 0;
     return mt;
 }
 
@@ -154,8 +155,8 @@ static jl_methlist_t *cache_method(jl_methtable_t *mt, jl_tuple_t *type,
               this can be determined using a type intersection.
             */
             jl_value_t *typetype = // Type{Type{_}}
-                (jl_value_t*)jl_apply_type_ctor(jl_type_typector,
-                                                jl_tuple(1,jl_type_type));
+                (jl_value_t*)jl_apply_type((jl_value_t*)jl_type_type,
+                                           jl_tuple(1,jl_type_type));
             if (i < decl->length) {
                 jl_tupleset(type, i, jl_type_intersection(jl_tupleref(decl,i),
                                                           typetype));
@@ -329,17 +330,28 @@ void jl_no_method_error(jl_sym_t *name, jl_value_t **args, size_t nargs)
     jl_errorf("no method %s%s", name->name, argt_str);
 }
 
+//#define JL_TRACE
+#ifdef JL_TRACE
+static char *type_summary(jl_value_t *t)
+{
+    if (jl_is_tuple(t)) return "Tuple";
+    if (jl_is_func_type(t)) return "Function";
+    if (jl_is_some_tag_type(t))
+        return ((jl_tag_type_t*)t)->name->name->name;
+    assert(0);
+}
+#endif
+
 JL_CALLABLE(jl_apply_generic)
 {
     jl_methtable_t *mt = (jl_methtable_t*)jl_t0(env);
 
-#if 0
-    // TRACE
+#ifdef JL_TRACE
     ios_printf(ios_stdout, "%s(", ((jl_sym_t*)jl_t1(env))->name);
     size_t i;
     for(i=0; i < nargs; i++) {
         if (i > 0) ios_printf(ios_stdout, ", ");
-        ios_printf(ios_stdout, "%s", jl_tname(jl_typeof(args[i]))->name->name);
+        ios_printf(ios_stdout, "%s", type_summary(jl_typeof(args[i])));
     }
     ios_printf(ios_stdout, ")\n");
 #endif
@@ -372,6 +384,13 @@ void jl_print_method_table(jl_function_t *gf)
     //print_methlist(name, mt->cache);
 }
 
+void jl_initialize_generic_function(jl_function_t *f, jl_sym_t *name)
+{
+    f->fptr = jl_apply_generic;
+    f->env = (jl_value_t*)jl_pair((jl_value_t*)new_method_table(),
+                                  (jl_value_t*)name);
+}
+
 jl_function_t *jl_new_generic_function(jl_sym_t *name)
 {
     return jl_new_closure(jl_apply_generic,
@@ -386,6 +405,8 @@ void jl_add_method(jl_function_t *gf, jl_tuple_t *types, jl_function_t *meth)
     assert(jl_is_func(meth));
     assert(jl_is_tuple(gf->env));
     assert(jl_is_mtable(jl_t0(gf->env)));
+    if (jl_gf_mtable(gf)->sealed)
+        jl_errorf("cannot add methods to %s", jl_gf_name(gf)->name);
     (void)jl_method_table_insert(jl_gf_mtable(gf), (jl_type_t*)types, meth);
 }
 

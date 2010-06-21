@@ -187,42 +187,29 @@
 						(eq? (car x) '|::|))))
 			   fields)
    (let ((field-names (map decl-var fields))
-	 (field-types (map decl-type fields))
-	 (tvars       (gensym))
-	 (proto       (gensym)))
+	 (field-types (map decl-type fields)))
      `(call
-       (lambda ()
+       (lambda (,@params)
+	 ; the static parameters are bound to new TypeVars in here,
+	 ; so everything that sees the TypeVars is evaluated here.
 	 (block
-	  (scope-block
-	   (block
-	    (local (tuple ,tvars ,proto))
-	    (call
-	     (lambda (,@params)
-	       ; the static parameters are bound to new TypeVars in here,
-	       ; so everything that sees the TypeVars is evaluated here.
-	       (block
-		(= ,tvars (tuple ,@params))
-		(= ,proto
-		   (call (top new_struct_type)
-			 (quote ,name)
-			 ,super
-			 ,tvars
-			 (tuple ,@(map (lambda (x) `',x) field-names))))
-	        ; wrap type prototype in a type constructor
-		(= ,name (call (top new_type_constructor) ,tvars ,proto))
-	        ; now add the type fields, which might reference the type
-	        ; itself. tie the recursive knot.
-		(call (top new_struct_fields)
-		      ,name (tuple ,@field-types))))
-	     ,@(symbols->typevars params bounds))))
-	  ; now wrap the other definitions in a private scope,
-	  ; except providing "new" and the type name
-	  ,(if (null? defs)
-	       '(null)
-	       `(call (lambda (new ,name)
-			(scope-block
-			 (block ,@defs (null))))
-		      ,name ,name))))))))
+	  (= ,name
+	     (call (top new_struct_type)
+		   (quote ,name)
+		   ,super
+		   (tuple ,@params)
+		   (tuple ,@(map (lambda (x) `',x) field-names))
+		   ,(if (null? defs)
+			`(null)
+			; pass a closure that defines constructors, given
+			; the type and a "new" function.
+			`(lambda (,name new)
+			   (scope-block
+			    (block ,@defs (null)))))))
+	  ; now add the type fields, which might reference the type itself.
+	  (call (top new_struct_fields)
+		,name (tuple ,@field-types))))
+       ,@(symbols->typevars params bounds)))))
 
 (define (type-def-expr name params super)
   (receive
@@ -236,11 +223,7 @@
 	    (call (top new_tag_type)
 		  (quote ,name)
 		  ,super
-		  (tuple ,@params)))
-	 ,(if (null? params)
-	      `(null)
-	      `(= ,name (call (top new_type_constructor)
-			      (tuple ,@params) ,name)))))
+		  (tuple ,@params)))))
       ,@(symbols->typevars params bounds)))))
 
 (define *anonymous-generic-function-name* (gensym))

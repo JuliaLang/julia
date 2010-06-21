@@ -254,6 +254,27 @@ static void emit_typecheck(Value *x, jl_value_t *type, const std::string &msg,
     builder.SetInsertPoint(mergeBB);
 }
 
+static void emit_func_check(Value *x, const std::string &msg, jl_codectx_t *ctx)
+{
+    Value *istype1 =
+        builder.CreateICmpEQ(emit_typeof(x),
+                             literal_pointer_val((jl_value_t*)jl_any_func));
+    BasicBlock *elseBB1 = BasicBlock::Create(getGlobalContext(),"a", ctx->f);
+    BasicBlock *mergeBB1 = BasicBlock::Create(getGlobalContext(),"b");
+    builder.CreateCondBr(istype1, mergeBB1, elseBB1);
+    builder.SetInsertPoint(elseBB1);
+    Value *istype2 =
+        builder.CreateICmpEQ(emit_typeof(x),
+                             literal_pointer_val((jl_value_t*)jl_struct_kind));
+    BasicBlock *elseBB2 = BasicBlock::Create(getGlobalContext(),"a", ctx->f);
+    builder.CreateCondBr(istype2, mergeBB1, elseBB2);
+    builder.SetInsertPoint(elseBB2);
+    emit_error(msg);
+    builder.CreateBr(mergeBB1);
+    ctx->f->getBasicBlockList().push_back(mergeBB1);
+    builder.SetInsertPoint(mergeBB1);
+}
+
 static Value *emit_nthptr(Value *v, size_t n)
 {
     // p = (jl_value_t**)v; p[n]
@@ -360,8 +381,7 @@ static Value *emit_call(jl_value_t **args, size_t arglen, jl_codectx_t *ctx)
     }
     if (!done) {
         Value *theFunc = emit_expr(args[0], ctx, true);
-        emit_typecheck(theFunc, (jl_value_t*)jl_any_func,
-                       "apply: expected function", ctx);
+        emit_func_check(theFunc, "apply: expected function", ctx);
         // extract pieces of the function object
         // TODO: try extractelement instead
         theFptr =

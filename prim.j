@@ -1,4 +1,3 @@
-typealias Nullable{T} Union(T,())
 typealias Index Int32
 typealias Size Int32
 typealias Char Uint8
