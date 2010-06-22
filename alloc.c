@@ -261,7 +261,7 @@ void jl_initialize_generic_function(jl_function_t *f, jl_sym_t *name);
 
 static void add_generic_ctor(jl_function_t *gf, jl_struct_type_t *t)
 {
-    jl_function_t *gmeth = jl_new_closure(jl_generic_ctor, NULL);
+    jl_function_t *gmeth = jl_new_closure(jl_generic_ctor,(jl_value_t*)jl_null);
     jl_tuple_t *ntvs = jl_alloc_tuple(t->parameters->length);
     size_t i;
     // create new typevars, so the function has its own constraint
@@ -284,9 +284,8 @@ static void add_generic_ctor(jl_function_t *gf, jl_struct_type_t *t)
     gmeth->linfo = jl_new_lambda_info(NULL, jl_null);
 }
 
-JL_CALLABLE(jl_constructor_factory_trampoline)
+void jl_add_constructors(jl_struct_type_t *t)
 {
-    jl_struct_type_t *t = (jl_struct_type_t*)env;
     if (t->ctor_factory == (jl_value_t*)jl_null) {
         // no user-defined constructors
         if (t->parameters->length>0 && (jl_value_t*)t==t->name->primary) {
@@ -323,6 +322,12 @@ JL_CALLABLE(jl_constructor_factory_trampoline)
         // to the methods for their use.
         jl_gf_mtable(t)->sealed = 1;
     }
+}
+
+JL_CALLABLE(jl_constructor_factory_trampoline)
+{
+    jl_struct_type_t *t = (jl_struct_type_t*)env;
+    jl_add_constructors(t);
     return jl_apply((jl_function_t*)t, args, nargs);
 }
 
@@ -720,11 +725,14 @@ void jl_init_builtin_types()
                                     jl_symbol("type")),
                            jl_tuple(3, jl_sym_type, jl_array_any_type,
                                     jl_any_type));
+    jl_add_constructors(jl_expr_type);
 
-    jl_struct_type_t *jl_box_type =
+    tv = jl_typevars(1, "T");
+    jl_box_type =
         jl_new_struct_type(jl_symbol("Box"),
                            jl_any_type, tv,
                            jl_tuple(1, jl_symbol("contents")), tv);
+    jl_add_constructors(jl_box_type);
     jl_box_typename = jl_box_type->name;
     jl_box_any_type =
         (jl_type_t*)jl_apply_type((jl_value_t*)jl_box_type,

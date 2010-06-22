@@ -221,7 +221,7 @@ function print(e::Expr)
     end
     if !is(e.type, Any)
         if isa(e.type, FuncKind)
-            print("::(", e.type, ")")
+            print("::F")
         else
             print("::", e.type)
         end

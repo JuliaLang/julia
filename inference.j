@@ -283,7 +283,10 @@ function abstract_call(f, fargs, argtypes, vtypes, sp)
                 (_tree,rt) = typeinf(x[3], x[2], x[1])
             end
             rettype = tmerge(rettype, rt)
-            x = x[4]
+            if is(rettype,Any)
+                break
+            end
+            x = x[5]
         end
         # if rettype is Bottom we've found a method not found error
         #print("=> ", rettype, "\n")

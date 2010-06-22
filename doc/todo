@@ -473,8 +473,13 @@ if no ctor definitions preset, you get Foo(...) = new(...)
 
 issues 6/21/10
 
-- inference for new constructor stuff
 - inference within closures
+  . avoid box for variables (arguments) that aren't assigned
+    . even better, for variables that are assigned definitely and once
+  . then multiple assignments in the binding scope but not in closures
+  . then assignments within closures
+- inference for new constructor stuff
+  . reflection to access closed values, see if constant.
 - hooking up the pieces to use inferred types in the compiler
   . we could save tuples (type_sig, AST) as s-exprs to avoid the cost
     of lowering and type inference.

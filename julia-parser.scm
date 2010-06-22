@@ -362,6 +362,7 @@ TODO:
 ; operator between them?
 (define (juxtapose? expr t)
   (and (not (operator? t))
+       (not (memq t reserved-words))
        (not (closing-token? t))
        (not (newline? t))
        (or (number? expr)

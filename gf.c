@@ -420,6 +420,41 @@ void jl_add_method(jl_function_t *gf, jl_tuple_t *types, jl_function_t *meth)
 
 JL_CALLABLE(jl_generic_ctor);
 
+static jl_tuple_t *match_method(jl_value_t *type, jl_function_t *func,
+                                jl_type_t *sig, jl_sym_t *name,
+                                jl_tuple_t *next)
+{
+    jl_tuple_t *env = jl_null;
+    jl_value_t *ti =
+        jl_type_intersection_matching((jl_value_t*)sig, type, &env);
+    env = jl_flatten_pairs(env);
+    if (ti != (jl_value_t*)jl_bottom_type) {
+        if (func->linfo == NULL) {
+            // builtin
+            return jl_tuple(5, ti, env, name, jl_null, next);
+        }
+        else if (func->fptr == jl_generic_ctor) {
+            // a generic struct constructor
+            jl_type_t *body = (jl_type_t*)jl_t1(func->env);
+            // determine what kind of object this constructor call
+            // would make
+            jl_type_t *objt =
+                jl_instantiate_type_with(body, &jl_t0(env), env->length/2);
+            return jl_tuple(5, ti, env, (jl_value_t*)objt, jl_null, next);
+        }
+        else {
+            jl_value_t *cenv;
+            if (func->env != NULL)
+                cenv = func->env;
+            else
+                cenv = (jl_value_t*)jl_null;
+            return jl_tuple(5, ti, env, func->linfo, cenv, next);
+        }
+    }
+    return NULL;
+}
+
+// returns linked tuples (argtypes, static_params, lambdainfo, cloenv, next)
 static jl_tuple_t *ml_matches(jl_methlist_t *ml, jl_value_t *type,
                               jl_tuple_t *t, jl_sym_t *name)
 {
@@ -443,37 +478,13 @@ static jl_tuple_t *ml_matches(jl_methlist_t *ml, jl_value_t *type,
                 shadowed = 1;
                 break;
             }
-            tt = (jl_tuple_t*)jl_tupleref(tt,3);
+            tt = (jl_tuple_t*)jl_tupleref(tt,4);
         }
         */
         if (1/*!shadowed*/) {
-            jl_tuple_t *env=jl_null;
-            jl_value_t *ti =
-                jl_type_intersection_matching((jl_value_t*)ml->sig, type, &env);
-            env = jl_flatten_pairs(env);
-            if (ti != (jl_value_t*)jl_bottom_type) {
-                if (ml->func->linfo == NULL) {
-                    // builtin
-                    t = jl_tuple(4, ti, env, name, t);
-                }
-                else if (ml->func->fptr == jl_generic_ctor) {
-                    // a generic struct constructor
-                    jl_type_t *body =
-                        ((jl_typector_t*)jl_t1(ml->func->env))->body;
-                    // determine what kind of object this constructor call
-                    // would make
-                    jl_type_t *objt =
-                        jl_instantiate_type_with(body,
-                                                 &jl_t0(env),env->length/2);
-                    t = jl_tuple(4, ti, env, (jl_value_t*)objt, t);
-                }
-                /*
-                else if (ml->func->fptr == jl_new_struct_internal) {
-                }
-                */
-                else {
-                    t = jl_tuple(4, ti, env, ml->func->linfo, t);
-                }
+            jl_tuple_t *matc = match_method(type, ml->func, ml->sig, name, t);
+            if (matc != NULL) {
+                t = matc;
                 if (jl_subtype(type, (jl_value_t*)ml->sig, 0))
                     return t;
             }
@@ -483,13 +494,27 @@ static jl_tuple_t *ml_matches(jl_methlist_t *ml, jl_value_t *type,
     return t;
 }
 
+JL_CALLABLE(jl_new_struct_internal);
+
 // return linked tuples (t1, M1, (t2, M2, (... ()))) of types and methods.
 // t is the intersection of the type argument and the method signature,
 // and M is the corresponding LambdaStaticData (jl_lambda_info_t)
 jl_value_t *jl_matching_methods(jl_function_t *gf, jl_value_t *type)
 {
     jl_tuple_t *t = jl_null;
-    if (!jl_is_gf(gf)) return (jl_value_t*)t;
+    if (!jl_is_gf(gf)) {
+        if (gf->fptr == jl_new_struct_internal) {
+            if (jl_is_struct_type(gf)) {
+                t = jl_tuple(5, ((jl_struct_type_t*)gf)->types,
+                             jl_null, gf, jl_null, t);
+            }
+            else {
+                t = jl_tuple(5, ((jl_struct_type_t*)gf->env)->types,
+                             jl_null, gf->env, jl_null, t);
+            }
+        }
+        return (jl_value_t*)t;
+    }
     jl_methtable_t *mt = jl_gf_mtable(gf);
     jl_sym_t *gfname = jl_gf_name(gf);
     t = ml_matches(mt->defs, type, t, gfname);

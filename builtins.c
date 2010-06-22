@@ -937,6 +937,8 @@ JL_CALLABLE(jl_f_new_struct_type)
     return (jl_value_t*)nst;
 }
 
+void jl_add_constructors(jl_struct_type_t *t);
+
 JL_CALLABLE(jl_f_new_struct_fields)
 {
     JL_NARGS(new_struct_fields, 2, 2);
@@ -957,6 +959,7 @@ JL_CALLABLE(jl_f_new_struct_fields)
     else
         assert(0);
     st->types = jl_tuple_append(pft, ftypes);
+    jl_add_constructors(st);
     return (jl_value_t*)jl_null;
 }
 
@@ -1321,6 +1324,7 @@ void jl_init_builtins()
     add_builtin("Expr", (jl_value_t*)jl_expr_type);
     add_builtin("Ptr", (jl_value_t*)jl_pointer_type);
     add_builtin("LambdaStaticData", (jl_value_t*)jl_lambda_info_type);
+    add_builtin("Box", (jl_value_t*)jl_box_type);
 
     add_builtin("BitsKind", (jl_value_t*)jl_bits_kind);
     add_builtin("StructKind", (jl_value_t*)jl_struct_kind);

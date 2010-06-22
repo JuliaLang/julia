@@ -62,6 +62,8 @@ jl_func_type_t *jl_any_func;
 jl_function_t *jl_bottom_func;
 jl_function_t *jl_identity_func;
 
+void jl_add_constructors(jl_struct_type_t *t);
+
 // --- type properties and predicates ---
 
 int jl_is_type(jl_value_t *v)
@@ -960,6 +962,9 @@ static jl_type_t *inst_type_w_(jl_value_t *t, jl_value_t **env, size_t n,
                 nst->types = nftypes;
             }
             cache_type_(iparams, ntp+1, (jl_type_t*)nst);
+            if (!jl_has_typevars_((jl_value_t*)nst,1)) {
+                jl_add_constructors(nst);
+            }
             return (jl_type_t*)nst;
         }
     }
