@@ -280,8 +280,8 @@
 
 (define patterns
   (pattern-set
-   #;(pattern-lambda (--> a b)
-		   `(call curly Function ,a ,b))
+   (pattern-lambda (--> a b)
+		   `(curly (top Function) ,a ,b))
 
    (pattern-lambda (|.| a b)
 		   `(call (top getfield) ,a (quote ,b)))

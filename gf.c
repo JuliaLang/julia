@@ -107,19 +107,8 @@ jl_methlist_t *jl_method_table_insert(jl_methtable_t *mt, jl_type_t *type,
                                       jl_function_t *method);
 
 static
-jl_methlist_t *jl_method_list_insert_p(jl_methlist_t **pml, jl_type_t *type,
-                                       jl_function_t *method,
-                                       jl_type_comparer_t pred);
-
-static int args_match_generic(jl_type_t *a, jl_type_t *b)
-{
-    return (jl_type_match_morespecific(a,b) != (jl_value_t*)jl_false);
-}
-
-static int args_match(jl_type_t *a, jl_type_t *b)
-{
-    return jl_type_morespecific((jl_value_t*)a,(jl_value_t*)b,0);
-}
+jl_methlist_t *jl_method_list_insert(jl_methlist_t **pml, jl_type_t *type,
+                                     jl_function_t *method);
 
 static jl_methlist_t *cache_method(jl_methtable_t *mt, jl_tuple_t *type,
                                    jl_function_t *method, jl_tuple_t *decl,
@@ -172,8 +161,7 @@ static jl_methlist_t *cache_method(jl_methtable_t *mt, jl_tuple_t *type,
         newmeth = method;
     else
         newmeth = jl_instantiate_method(method, sparams);
-    return jl_method_list_insert_p(&mt->cache, (jl_type_t*)type, newmeth,
-                                   args_match);
+    return jl_method_list_insert(&mt->cache, (jl_type_t*)type, newmeth);
 }
 
 jl_tag_type_t *jl_wrap_Type(jl_value_t *t);
@@ -248,7 +236,7 @@ jl_methlist_t *jl_method_table_assoc(jl_methtable_t *mt,
     return cache_method(mt, tt, m->func, newsig, tpenv);
 }
 
-static int sigs_match(jl_type_t *a, jl_type_t *b)
+static int sigs_eq(jl_type_t *a, jl_type_t *b)
 {
     if (jl_has_typevars((jl_value_t*)a) || jl_has_typevars((jl_value_t*)b)) {
         return jl_types_equal_generic((jl_value_t*)a,(jl_value_t*)b);
@@ -256,17 +244,43 @@ static int sigs_match(jl_type_t *a, jl_type_t *b)
     return jl_types_equal((jl_value_t*)a, (jl_value_t*)b);
 }
 
+static int args_morespecific(jl_type_t *a, jl_type_t *b)
+{
+    int msp = jl_type_morespecific((jl_value_t*)a,(jl_value_t*)b,0);
+    if (jl_has_typevars((jl_value_t*)b)) {
+        if (jl_type_match_morespecific(a,b) == (jl_value_t*)jl_false) {
+            return 0;
+        }
+        if (jl_has_typevars((jl_value_t*)a)) {
+            if (jl_type_match_morespecific(b,a) == (jl_value_t*)jl_false) {
+                return 1;
+            }
+        }
+        int nmsp = jl_type_morespecific((jl_value_t*)b,(jl_value_t*)a,0);
+        if (nmsp == msp)
+            return 0;
+    }
+    if (jl_has_typevars((jl_value_t*)a)) {
+        int nmsp = jl_type_morespecific((jl_value_t*)b,(jl_value_t*)a,0);
+        if (nmsp && msp)
+            return 1;
+        if (jl_type_match_morespecific(b,a) != (jl_value_t*)jl_false) {
+            return 0;
+        }
+    }
+    return msp;
+}
+
 static
-jl_methlist_t *jl_method_list_insert_p(jl_methlist_t **pml, jl_type_t *type,
-                                       jl_function_t *method,
-                                       jl_type_comparer_t pred)
+jl_methlist_t *jl_method_list_insert(jl_methlist_t **pml, jl_type_t *type,
+                                     jl_function_t *method)
 {
     jl_methlist_t *l, **pl;
 
     assert(jl_is_tuple(type));
     l = *pml;
     while (l != NULL) {
-        if (sigs_match(type, l->sig))
+        if (sigs_eq(type, l->sig))
             break;
         l = l->next;
     }
@@ -283,7 +297,7 @@ jl_methlist_t *jl_method_list_insert_p(jl_methlist_t **pml, jl_type_t *type,
     pl = pml;
     l = *pml;
     while (l != NULL) {
-        if (pred(type, l->sig))
+        if (args_morespecific(type, l->sig))
             break;
         pl = &l->next;
         l = l->next;
@@ -312,15 +326,9 @@ jl_methlist_t *jl_method_table_insert(jl_methtable_t *mt, jl_type_t *type,
       In this case jl_types_equal() is true, but one is jl_type_morespecific
       or jl_type_match_morespecific than the other.
       To check this, jl_types_equal_generic needs to be more sophisticated
-      so (T,T) is not equivalent to (Any,Any).
+      so (T,T) is not equivalent to (Any,Any). (TODO)
     */
-    if (jl_has_typevars((jl_value_t*)type)) {
-        return jl_method_list_insert_p(&mt->defs, type, method,
-                                       args_match_generic);
-    }
-    else {
-        return jl_method_list_insert_p(&mt->defs, type, method, args_match);
-    }
+    return jl_method_list_insert(&mt->defs, type, method);
 }
 
 void jl_no_method_error(jl_sym_t *name, jl_value_t **args, size_t nargs)
@@ -418,8 +426,16 @@ static jl_tuple_t *ml_matches(jl_methlist_t *ml, jl_value_t *type,
     while (ml != NULL) {
         // a method is shadowed if type <: S <: m->sig where S is the
         // signature of another applicable method
-        jl_tuple_t *tt = t;
-        int shadowed = 0;
+        /*
+          more generally?
+          given arguments T
+          X is shadowed if there exist other applicable methods A, B
+          (possibly A==B), such that (T ⊆ A) ∧ (B ⊆ X) ∧ (A∩X ⊆ B)
+          in other words, B covers any ambiguity between A and X.
+        */
+        //jl_tuple_t *tt = t;
+        //int shadowed = 0;
+        /*
         while (tt != jl_null) {
             jl_value_t *S = jl_tupleref(tt,0);
             if (jl_subtype(type, S, 0) &&
@@ -429,7 +445,8 @@ static jl_tuple_t *ml_matches(jl_methlist_t *ml, jl_value_t *type,
             }
             tt = (jl_tuple_t*)jl_tupleref(tt,3);
         }
-        if (!shadowed) {
+        */
+        if (1/*!shadowed*/) {
             jl_tuple_t *env=jl_null;
             jl_value_t *ti =
                 jl_type_intersection_matching((jl_value_t*)ml->sig, type, &env);
@@ -457,6 +474,8 @@ static jl_tuple_t *ml_matches(jl_methlist_t *ml, jl_value_t *type,
                 else {
                     t = jl_tuple(4, ti, env, ml->func->linfo, t);
                 }
+                if (jl_subtype(type, (jl_value_t*)ml->sig, 0))
+                    return t;
             }
         }
         ml = ml->next;

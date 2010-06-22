@@ -332,7 +332,7 @@ static jl_value_t *intersect_tag(jl_tag_type_t *a, jl_tag_type_t *b,
         jl_value_t *bp = jl_tupleref(b->parameters,i);
         jl_value_t *ti;
         if (a->name == jl_ntuple_typename || jl_is_tag_type(a) ||
-            jl_has_typevars(ap) || jl_has_typevars(bp)) {
+            jl_has_typevars_(ap,1) || jl_has_typevars_(bp,1)) {
             ti = jl_type_intersect(ap,bp,penv);
         }
         else if (jl_types_equal(ap,bp)) {
@@ -1072,9 +1072,6 @@ int jl_subtype_le(jl_value_t *a, jl_value_t *b, int ta, int morespecific)
 
     if ((jl_tag_type_t*)b == jl_any_type) return 1;
     if (a == b) return 1;
-    // Any is the same as an unconstrained typevar, but less "specific" for
-    // method ordering purposes.
-    if (morespecific && (jl_tag_type_t*)a == jl_any_type) return 0;
     if (jl_is_typevar(a)) {
         if (jl_is_typevar(b)) {
             return
@@ -1229,13 +1226,13 @@ static jl_value_t *type_match_(jl_value_t *child, jl_value_t *parent,
         parent = (jl_value_t*)((jl_typector_t*)parent)->body;
     size_t i;
     if (jl_is_typevar(parent)) {
-        if (((jl_tvar_t*)parent)->unbound) return (jl_value_t*)env;
         // make sure type is within this typevar's bounds
         if (!jl_subtype_le(child, parent, 0, 0))
             return jl_false;
         jl_tuple_t *p = env;
         while (p != jl_null) {
             if (jl_t0(p) == (jl_value_t*)parent) {
+                if (((jl_tvar_t*)parent)->unbound) return (jl_value_t*)env;
                 jl_value_t *pv = jl_t1(p);
                 if (jl_is_typevar(pv) && jl_is_typevar(child)) {
                     if (pv == (jl_value_t*)child)
@@ -1480,13 +1477,12 @@ void jl_init_types()
     jl_struct_kind->name = jl_new_typename(jl_symbol("StructKind"));
     jl_struct_kind->super = (jl_tag_type_t*)jl_tag_kind;
     jl_struct_kind->parameters = jl_null;
-    jl_struct_kind->names = jl_tuple(6, jl_symbol("name"), jl_symbol("super"),
+    jl_struct_kind->names = jl_tuple(5, jl_symbol("name"), jl_symbol("super"),
                                      jl_symbol("parameters"),
-                                     jl_symbol("names"), jl_symbol("types"),
-                                     jl_symbol("new"));
+                                     jl_symbol("names"), jl_symbol("types"));
     jl_struct_kind->types = jl_tuple(6, jl_typename_type, jl_type_type,
                                      jl_tuple_type, jl_tuple_type,
-                                     jl_tuple_type, jl_any_func);
+                                     jl_tuple_type);
     jl_struct_kind->fptr = jl_f_no_function;
     jl_struct_kind->uid = t_uid_ctr++;
 
@@ -1546,6 +1542,7 @@ void jl_init_types()
     jl_union_kind->fptr = jl_f_no_function;
 
     jl_bottom_type = (jl_type_t*)jl_new_struct(jl_union_kind, jl_null);
+    jl_any_func->from = jl_bottom_type;
 
     jl_bits_kind =
         jl_new_struct_type(jl_symbol("BitsKind"), (jl_tag_type_t*)jl_tag_kind,

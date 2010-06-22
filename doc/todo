@@ -370,13 +370,8 @@ issues 5/31/10
     it remains that way for all possible actual arguments.
 
 * need to make Type <: Function
-  trouble is that in foo(x::SomeType) we want the unconstrained version of
-  SomeType, but in SomeType{T} we need SomeType to contain constraint
-  information, plus SomeType is a function!
-
   plus SomeType{T}(args...) should work, no .new
   make structs with no fields singletons
-
   so both Complex and Complex{...} should be types, and also applicable
 
 plan:
@@ -473,3 +468,26 @@ struct MySingleton
 end
 
 if no ctor definitions preset, you get Foo(...) = new(...)
+
+-------------------------------------------------------------------------------
+
+issues 6/21/10
+
+- inference for new constructor stuff
+- inference within closures
+- hooking up the pieces to use inferred types in the compiler
+  . we could save tuples (type_sig, AST) as s-exprs to avoid the cost
+    of lowering and type inference.
+- make type parameters visible to user-defined constructors
+  . in generic case, instantiate all signatures with the typevar mapping
+    that's currently created in add_generic_ctor
+  . in non-generic case, add static parameters
+
+- coroutines, Tasks, exceptions
+- new for loop, comprehension, reduction formulation
+
+method ordering tests:
+//:  (T,T) before (Any,Any)
++:   (T<:Number{T},T<:Number{T}) before (Number{T},Number{T})
+promote_type: promote_type(Type{T},Type{T}) first
+ref: ref(Array{Any,1},Int32) before ref(Array{T,1},Int32)

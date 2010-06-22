@@ -139,3 +139,43 @@ define update(s::List[State], p::Int)
   s0.before.upper = U ⊓ s0.before.upper
   s0.before.lower = L ⊓ s0.before.upper
 end
+
+-------------------------------------------------------------------------------
+
+adding function types to the mix.
+example of infererence on a call to map():
+
+assuming:
+ cons(x,y) = Cons(x,y)
+ map(f, l::Nil) = l
+ map(f, l::Cons) = cons(f(head(l)), map(f, tail(l)))
+
+map(x->2x, list(...))
+
+ map(A-->B, Cons{C})
+
+ cons(f(C), map(A-->B, List{C}))
+   => A==C
+
+ map(A-->B, List{C})
+   ==> Union(Rec{map(A-->B,Cons{C})}, Nil)
+
+ cons(f(C), Union(Rec{map(A-->B,Cons{C})}, Nil))
+                                            
+ cons(B, Union(Rec, Nil))
+                                            
+ Cons( ((B,Union(Rec,Nil)) ∩ (T,List{T}))... )  
+   => T==B
+   ==> Cons{B}
+
+ cons(B, Union(Cons{B}, Nil))
+
+ Cons(B, Union(Cons{B}, Nil))
+   ==> Cons{B}
+
+ ==> Cons{B}
+
+map collects all types that might be passed as A and unions them as if
+A were a single location.
+so ideally inference on the map() call returns Cons{B} and also
+somehow tells us that A is C.

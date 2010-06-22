@@ -220,7 +220,11 @@ function print(e::Expr)
         print_comma_array(e.args,"(",")")
     end
     if !is(e.type, Any)
-        print("::", e.type)
+        if isa(e.type, FuncKind)
+            print("::(", e.type, ")")
+        else
+            print("::", e.type)
+        end
     end
 end
 

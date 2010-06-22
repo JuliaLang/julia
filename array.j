@@ -175,6 +175,10 @@ tril(M::Matrix, k) = [ j-i <= k ? M[i,j] : convert(typeof(M[i,j]),0) |
 ## Indexing: ref()
 #TODO: Out-of-bound checks
 ref(a::Array, i::Index) = arrayref(a,i)
+# disambiguating definitions
+ref{T}(a::Array{T,1}, i::Index) = arrayref(a,i)
+ref(a::Array{Any,1}, i::Index) = arrayref(a,i)
+
 ref{T}(a::Array{T,2}, i::Index, j::Index) = arrayref(a, (j-1)*a.dims[1] + i)
 
 jl_fill_endpts(A,n,R::RangeBy)   = Range(1,R.step,size(A,n))

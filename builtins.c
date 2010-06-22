@@ -583,12 +583,12 @@ static void print_type(jl_value_t *t)
 {
     ios_t *s = current_output_stream;
     if (jl_is_func_type(t)) {
-        /*
         call_print((jl_value_t*)((jl_func_type_t*)t)->from);
         ios_write(s, "-->", 3);
         call_print((jl_value_t*)((jl_func_type_t*)t)->to);
-        */
+        /*
         ios_write(s, "Function", 8);
+        */
     }
     else if (jl_is_union_type(t)) {
         ios_write(s, "Union", 5);
@@ -610,10 +610,7 @@ static void print_type(jl_value_t *t)
 static void print_function(jl_value_t *v)
 {
     ios_t *s = current_output_stream;
-    if (jl_is_typector(v)) {
-        jl_print((jl_value_t*)((jl_typector_t*)v)->body);
-    }
-    else if (jl_is_gf(v)) {
+    if (jl_is_gf(v)) {
         ios_puts("#<generic-function ", s);
         ios_puts(jl_gf_name(v)->name, s);
         ios_putc('>', s);
@@ -1301,7 +1298,7 @@ void jl_init_builtins()
     add_builtin("Type", (jl_value_t*)jl_type_type);
     add_builtin("Symbol", (jl_value_t*)jl_sym_type);
     add_builtin("...", (jl_value_t*)jl_seq_type);
-    add_builtin("Function", (jl_value_t*)jl_any_func);
+    add_builtin("Function", (jl_value_t*)jl_functype_ctor);
     add_builtin("Array", (jl_value_t*)jl_array_type);
     add_builtin("Tensor", (jl_value_t*)jl_tensor_type);
     add_builtin("Scalar", (jl_value_t*)jl_scalar_type);
