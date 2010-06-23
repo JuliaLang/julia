@@ -54,7 +54,7 @@ void jl_type_error(const char *fname, const char *expected, jl_value_t *got)
 {
     jl_errorf("type error: %s: expected %c%s, got %s",
               fname, toupper(expected[0]), &expected[1],
-              jl_print_to_string((jl_value_t*)jl_typeof(got)));
+              jl_print_to_string((jl_value_t*)jl_full_type(got)));
 }
 
 /*

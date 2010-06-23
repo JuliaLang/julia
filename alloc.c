@@ -284,8 +284,14 @@ static void add_generic_ctor(jl_function_t *gf, jl_struct_type_t *t)
     gmeth->linfo = jl_new_lambda_info(NULL, jl_null);
 }
 
+JL_CALLABLE(jl_new_array_internal);
+
 void jl_add_constructors(jl_struct_type_t *t)
 {
+    if (t->name == jl_array_typename) {
+        t->fptr = jl_new_array_internal;
+        return;
+    }
     if (t->ctor_factory == (jl_value_t*)jl_null) {
         // no user-defined constructors
         if (t->parameters->length>0 && (jl_value_t*)t==t->name->primary) {
@@ -647,6 +653,12 @@ jl_array_t *jl_new_array(jl_type_t *atype, jl_value_t **dimargs, size_t ndims)
 JL_CALLABLE(jl_new_array_internal)
 {
     jl_struct_type_t *atype = (jl_struct_type_t*)env;
+    jl_value_t *ndims = jl_tupleref(atype->parameters,1);
+    if (!jl_is_int32(ndims))
+        jl_errorf("Array: incomplete type %s",
+                  jl_print_to_string((jl_value_t*)atype));
+    size_t nd = jl_unbox_int32(ndims);
+    JL_NARGS(Array, nd, nd);
     size_t i;
     for(i=0; i < nargs; i++) {
         JL_TYPECHK(Array, int32, args[i]);
@@ -658,9 +670,18 @@ JL_CALLABLE(jl_generic_array_ctor)
 {
     JL_NARGSV(Array, 1);
     JL_TYPECHK(Array, type, args[0]);
+    if (nargs==2 && jl_is_tuple(args[1])) {
+        jl_tuple_t *d = (jl_tuple_t*)args[1];
+        return jl_new_array_internal
+            ((jl_value_t*)
+             jl_apply_type((jl_value_t*)jl_array_type,
+                           jl_tuple(2, args[0],
+                                    jl_box_int32(d->length))),
+             &jl_tupleref(d,0), d->length);
+    }
     return jl_new_array_internal((jl_value_t*)
                                  jl_apply_type((jl_value_t*)jl_array_type,
-                                               jl_tuple(2,args[0],
+                                               jl_tuple(2, args[0],
                                                         jl_box_int32(nargs-1))),
                                  &args[1], nargs-1);
 }
