@@ -54,6 +54,7 @@ jl_sym_t *unbound_sym; jl_sym_t *boxunbound_sym;
 jl_sym_t *locals_sym;  jl_sym_t *colons_sym;
 jl_sym_t *closure_ref_sym;
 jl_sym_t *symbol_sym;
+jl_sym_t *Any_sym;
 
 // NOTE: does not work for TagKind or its subtypes
 jl_value_t *jl_new_struct(jl_struct_type_t *type, ...)
@@ -823,4 +824,5 @@ void jl_init_builtin_types()
     body_sym = jl_symbol("body");
     locals_sym = jl_symbol("locals");
     colons_sym = jl_symbol("::");
+    Any_sym = jl_symbol("Any");
 }

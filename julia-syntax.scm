@@ -959,27 +959,18 @@ So far only the second case can actually occur.
 				   (flatten-scopes x)))
 		   e))))
 
-(define (make-var-info name) (list name 'Any #f))
-;(define (var-info/t name type) (list name type #f))
+(define (make-var-info name) (list name 'Any #f #f))
 (define vinfo:name car)
 (define vinfo:type cadr)
 (define vinfo:capt caddr)
 (define (vinfo:set-type! v t) (set-car! (cdr v) t))
 (define (vinfo:set-capt! v c) (set-car! (cddr v) c))
+(define (vinfo:set-asgn! v a) (set-car! (cdddr v) a))
 (define var-info-for assq)
 
 (define (lambda-all-vars e)
   (append (lam:vars e)
 	  (cdr (caddr e))))
-
-#;(define (fix-seq-type t)
-  ; wrap (call (top instantiate_type) ... . args) in (tuple ...)
-  (if (and (length> t 2)
-	   (eq? (car t) 'call)
-	   (equal? (cadr t) '(top instantiate_type))
-	   (eq? (caddr t) '...))
-      `(call (top tuple) ,t)
-      t))
 
 (define (free-vars e)
   (cond ((symbol? e) (list e))
@@ -995,6 +986,9 @@ So far only the second case can actually occur.
 (define (analyze-vars e env)
   (cond ((or (atom? e) (quoted? e)) e)
 	((and (eq? (car e) '=) (symbol? (cadr e)))
+	 (let ((vi (var-info-for (cadr e) env)))
+	   (if vi
+	       (vinfo:set-asgn! vi #t)))
 	 `(= ,(cadr e) ,(analyze-vars (caddr e) env)))
 	((or (eq? (car e) 'local) (eq? (car e) 'local!))
 	 (if (pair? (cadr e))
@@ -1011,29 +1005,29 @@ So far only the second case can actually occur.
 	     (let ((e2 (analyze-vars (cadr e) env)))
 	       `(call (top typeassert) ,e2 ,(caddr e)))))
 	((eq? (car e) 'lambda)
-	 (let* ((args (lam:args e))
-		(locl (cdr (caddr e)))
-		(allv (nconc (map arg-name args) locl))
-		(fv   (diff (free-vars (lam:body e)) allv))
-		(glo  (declared-global-vars (lam:body e)))
-		; make var-info records for vars introduced by this lambda
-		(vi   (nconc
-		       (map (lambda (decl) (make-var-info (decl-var decl)))
-			    args)
-		       (map make-var-info locl)))
-		; captured vars: vars from the environment that occur
-		; in our set of free variables (fv).
-		(cv    (filter (lambda (v) (and (memq (vinfo:name v) fv)
-						(not (memq
-						      (vinfo:name v) glo))))
-			       env))
-		(bod   (analyze-vars
-			(lam:body e)
-			(append vi
-				; new environment: add our vars
-				(filter (lambda (v)
-					  (not (memq (vinfo:name v) allv)))
-					env)))))
+	 (letrec ((args (lam:args e))
+		  (locl (cdr (caddr e)))
+		  (allv (nconc (map arg-name args) locl))
+		  (fv   (diff (free-vars (lam:body e)) allv))
+		  (glo  (declared-global-vars (lam:body e)))
+		  ; make var-info records for vars introduced by this lambda
+		  (vi   (nconc
+			 (map (lambda (decl) (make-var-info (decl-var decl)))
+			      args)
+			 (map make-var-info locl)))
+		  ; captured vars: vars from the environment that occur
+		  ; in our set of free variables (fv).
+		  (cv    (filter (lambda (v) (and (memq (vinfo:name v) fv)
+						  (not (memq
+							(vinfo:name v) glo))))
+				 env))
+		  (bod   (analyze-vars
+			  (lam:body e)
+			  (append vi
+				  ; new environment: add our vars
+				  (filter (lambda (v)
+					    (not (memq (vinfo:name v) allv)))
+					  env)))))
 	   ; mark all the vars we capture as captured
 	   (for-each (lambda (v) (vinfo:set-capt! v #t))
 		     cv)
@@ -1045,92 +1039,6 @@ So far only the second case can actually occur.
 			 (cdr e))))))
 
 (define (analyze-variables e) (analyze-vars e '()))
-
-(define (lookup-v v vinfo)
-  (let ((vi (var-info-for v (caddr vinfo))))
-    (if vi
-	(vinfo:capt vi)
-	(let ((i (index-p (lambda (xx)
-			    (eq? v (vinfo:name xx)))
-			  (cadddr vinfo) 0)))
-	  (or i 'global)))))
-
-(define (lookup-var-type v vinfo)
-  (let ((vi (var-info-for v (caddr vinfo))))
-    (if vi
-	(vinfo:type vi)
-	(let ((vl (var-info-for v (cadddr vinfo))))
-	  (if vl
-	      (vinfo:type vl)
-	      'Any)))))  ; TODO: types of globals?
-
-; lower closures, using the results of analyze-vars
-; . for each captured var v, initialize with v = box(Any,())
-; . uses of v change to unbox(v)
-; . assignments to v change to boxset(v, value)
-; . lambda expressions change to
-;   new_closure(lambda-expr, (capt-var1, capt-var2, ...))
-; . for each closed var v, uses change to (call unbox (closure-ref idx))
-; . assignments to closed var v change to (call boxset (closure-ref idx) rhs)
-(define (closure-convert- e vinfo)
-  (cond ((symbol? e)
-	 (let ((l (lookup-v e vinfo)))
-	   (cond ((eq? l #t)   `(call (top unbox) ,e))
-		 ((number? l)  `(call (top unbox) (closure-ref ,l)))
-		 (else e))))
-	((not (pair? e)) e)
-	((eq? (car e) 'unbound)
-	 (let ((v (closure-convert- (cadr e) vinfo)))
-	   (if (pair? v)
-	       `(box-unbound ,(caddr v))
-	       e)))
-	((quoted? e) e)
-	((eq? (car e) '=)
-	 (let ((l (lookup-v (cadr e) vinfo))
-	       (t (lookup-var-type (cadr e) vinfo))
-	       (rhs (closure-convert- (caddr e) vinfo)))
-	   (let ((rhs (if (eq? t 'Any)
-			  rhs
-			  `(call (top convert) ,t ,rhs))))
-	     (cond ((eq? l #t)
-		    `(call (top boxset) ,(cadr e) ,rhs))
-		   ((number? l)
-		    `(call (top boxset) (closure-ref ,l) ,rhs))
-		   (else
-		    `(= ,(cadr e) ,rhs))))))
-	((eq? (car e) 'lambda)
-	 (let ((vinf  (lam:vinfo e))
-	       (args  (llist-vars (cadr e)))
-	       (body0 (lam:body e))
-	       (capt  (map vinfo:name
-			   (filter vinfo:capt (caddr (lam:vinfo e))))))
-	   (let ((body
-		  `(block ,@(map (lambda (v)
-				   `(= ,v
-				       (call (top box) (top Any)
-					     ,@(if (memq v args)
-						   (list v)
-						   '()))))
-				 capt)
-			  ,(closure-convert- body0 vinf))))
-	     `(call (top new_closure)
-		    (lambda ,(lam:args e) ,(lam:vinfo e) ,body)
-		    (call (top tuple)
-			  ; NOTE: to pass captured variables on to other
-			  ; closures we must pass the box, not the value
-			  ,@(map (lambda (x)
-				   (let ((i (index-of x (cadddr vinfo) 0)))
-				     (if i
-					 `(closure-ref ,i)
-					 (vinfo:name x))))
-				 (cadddr vinf)))))))
-	(else
-	 (cons (car e)
-	       (map (lambda (x) (closure-convert- x vinfo))
-		    (cdr e))))))
-
-(define (closure-convert e)
-  (closure-convert- (analyze-variables e) '(var-info (locals) () () ())))
 
 ; remove if, _while, block, break-block, and break
 ; replaced with goto and gotoifnot
@@ -1235,7 +1143,7 @@ So far only the second case can actually occur.
 
 (define (julia-expand ex)
   (to-goto-form
-   (closure-convert
+   (analyze-variables
     (flatten-scopes
      (identify-locals
       (to-LFF

@@ -25,7 +25,7 @@
 (define (toplevel-expr e)
   (if (or (boolean? e) (eof-object? e) (and (pair? e) (eq? (car e) 'line)))
       e
-      (caddr (cadr (julia-expand `(lambda () ,e))))))
+      (cadr (julia-expand `(lambda () ,e)))))
 
 (define (jl-parse-string s)
   (parser-wrap (lambda ()

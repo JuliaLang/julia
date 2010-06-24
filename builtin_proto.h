@@ -59,6 +59,7 @@ JL_CALLABLE(jl_f_dlopen);
 JL_CALLABLE(jl_f_dlsym);
 JL_CALLABLE(jl_f_hash_symbol);
 JL_CALLABLE(jl_apply_generic);
-JL_CALLABLE(jl_f_new_closure);
+
+jl_value_t *jl_new_closure_internal(jl_lambda_info_t *li, jl_value_t *env);
 
 #endif

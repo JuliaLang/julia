@@ -406,32 +406,6 @@ JL_CALLABLE(jl_f_arrayset)
     return args[0];
 }
 
-JL_CALLABLE(jl_f_box)
-{
-    JL_NARGS(box, 1, 2);
-    return nargs == 1 ?
-        jl_new_struct((jl_struct_type_t*)jl_box_any_type, NULL) :
-        jl_new_struct((jl_struct_type_t*)jl_box_any_type, args[1]);
-}
-
-JL_CALLABLE(jl_f_unbox)
-{
-    JL_NARGS(unbox, 1, 1);
-    JL_TYPECHK(unbox, box, args[0]);
-    jl_value_t *v = ((jl_value_t**)args[0])[1];
-    if (v == NULL)
-        jl_error("variable not defined");
-    return v;
-}
-
-JL_CALLABLE(jl_f_boxset)
-{
-    JL_NARGS(boxset, 2, 2);
-    JL_TYPECHK(boxset, box, args[0]);
-    ((jl_value_t**)args[0])[1] = args[1];
-    return (jl_value_t*)jl_null;
-}
-
 JL_CALLABLE(jl_f_instantiate_type)
 {
     JL_NARGSV(instantiate_type, 1);
@@ -853,22 +827,20 @@ JL_CALLABLE(jl_trampoline)
     return jl_apply(f, args, nargs);
 }
 
-JL_CALLABLE(jl_f_new_closure)
+jl_value_t *jl_new_closure_internal(jl_lambda_info_t *li, jl_value_t *env)
 {
-    JL_NARGS(new_closure, 2, 2);
-    JL_TYPECHK(new_closure, tuple, args[1]);
-    assert(jl_is_lambda_info(args[0]));
-    jl_lambda_info_t *li = (jl_lambda_info_t*)args[0];
+    assert(jl_is_lambda_info(li));
+    assert(jl_is_tuple(env));
     jl_function_t *f = jl_new_closure(NULL, NULL);
     f->linfo = li;
     if (li->fptr != NULL) {
         // function has been compiled
         f->fptr = li->fptr;
-        f->env = args[1];
+        f->env = env;
     }
     else {
         f->fptr = jl_trampoline;
-        f->env = (jl_value_t*)jl_pair((jl_value_t*)f, args[1]);
+        f->env = (jl_value_t*)jl_pair((jl_value_t*)f, env);
     }
     return (jl_value_t*)f;
 }
@@ -1278,12 +1250,8 @@ void jl_init_builtins()
     add_builtin_func("arraylen", jl_f_arraylen);
     add_builtin_func("arrayref", jl_f_arrayref);
     add_builtin_func("arrayset", jl_f_arrayset);
-    add_builtin_func("box", jl_f_box);
-    add_builtin_func("unbox", jl_f_unbox);
-    add_builtin_func("boxset", jl_f_boxset);
     add_builtin_func("instantiate_type", jl_f_instantiate_type);
     add_builtin_func("typevar", jl_f_typevar);
-    add_builtin_func("new_closure", jl_f_new_closure);
     add_builtin_func("new_struct_type", jl_f_new_struct_type);
     add_builtin_func("new_struct_fields", jl_f_new_struct_fields);
     add_builtin_func("new_type_constructor", jl_f_new_type_constructor);

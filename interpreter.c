@@ -13,6 +13,7 @@
 #endif
 #include "llt.h"
 #include "julia.h"
+#include "builtin_proto.h"
 
 static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl);
 
@@ -48,8 +49,13 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl)
             jl_errorf("%s not defined", ((jl_sym_t*)e)->name);
         return *bp;
     }
-    if (!jl_is_expr(e))
+    if (!jl_is_expr(e)) {
+        if (jl_is_lambda_info(e)) {
+            return jl_new_closure_internal((jl_lambda_info_t*)e,
+                                           (jl_value_t*)jl_null);
+        }
         return e;
+    }
     jl_expr_t *ex = (jl_expr_t*)e;
     jl_value_t **args = &jl_cellref(ex->args,0);
     if (ex->head == call_sym) {

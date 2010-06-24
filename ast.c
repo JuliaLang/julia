@@ -255,7 +255,7 @@ static jl_value_t *scm_to_julia(value_t e)
                 e = cdr_(e);
                 jl_cellset(ex->args, 1, full_list_of_lists(car_(e)));
                 e = cdr_(e);
-                jl_cellset(ex->args, 2, full_list(car_(e)));
+                jl_cellset(ex->args, 2, full_list_of_lists(car_(e)));
                 e = cdr_(e);
                 for(i=3; i < n; i++) {
                     assert(iscons(e));
@@ -383,6 +383,26 @@ jl_array_t *jl_lam_locals(jl_expr_t *l)
     assert(jl_is_expr(lle));
     assert(lle->head == locals_sym);
     return lle->args;
+}
+
+// get array of var info records
+jl_array_t *jl_lam_vinfo(jl_expr_t *l)
+{
+    jl_value_t *le = jl_exprarg(l, 1);
+    assert(jl_is_expr(le));
+    jl_array_t *vil = (jl_array_t*)jl_exprarg(le,1);
+    assert(jl_is_array(vil));
+    return vil;
+}
+
+// get array of var info records for captured vars
+jl_array_t *jl_lam_capt(jl_expr_t *l)
+{
+    jl_value_t *le = jl_exprarg(l, 1);
+    assert(jl_is_expr(le));
+    jl_array_t *vil = (jl_array_t*)jl_exprarg(le,2);
+    assert(jl_is_array(vil));
+    return vil;
 }
 
 // get array of body forms

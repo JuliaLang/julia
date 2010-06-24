@@ -261,6 +261,7 @@ extern jl_sym_t *unbound_sym; extern jl_sym_t *boxunbound_sym;
 extern jl_sym_t *locals_sym;  extern jl_sym_t *colons_sym;
 extern jl_sym_t *closure_ref_sym;
 extern jl_sym_t *symbol_sym;
+extern jl_sym_t *Any_sym;
 
 #ifdef BITS64
 #define NWORDS(sz) (((sz)+7)>>3)
@@ -480,6 +481,8 @@ jl_lambda_info_t *jl_add_static_parameters(jl_lambda_info_t *l, jl_tuple_t *sp);
 // AST access
 jl_array_t *jl_lam_args(jl_expr_t *l);
 jl_array_t *jl_lam_locals(jl_expr_t *l);
+jl_array_t *jl_lam_vinfo(jl_expr_t *l);
+jl_array_t *jl_lam_capt(jl_expr_t *l);
 jl_array_t *jl_lam_body(jl_expr_t *l);
 jl_sym_t *jl_decl_var(jl_value_t *ex);
 int jl_is_rest_arg(jl_value_t *ex);

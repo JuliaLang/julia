@@ -208,7 +208,7 @@ static int detect_color()
 #endif
 }
 
-JL_CALLABLE(jl_f_new_closure);
+jl_value_t *jl_new_closure_internal(jl_lambda_info_t *li, jl_value_t *env);
 
 // heuristic for whether a top-level input should be evaluated with
 // the compiler or the interpreter.
@@ -229,13 +229,10 @@ jl_value_t *jl_toplevel_eval_thunk(jl_lambda_info_t *thk)
 {
     //jl_print(thk);
     //ios_printf(ios_stdout, "\n");
-    jl_value_t *args[2];
     assert(jl_typeof(thk) == (jl_type_t*)jl_lambda_info_type);
     assert(jl_is_expr(thk->ast));
     if (eval_with_compiler_p(jl_lam_body((jl_expr_t*)thk->ast))) {
-        args[0] = (jl_value_t*)thk;
-        args[1] = (jl_value_t*)jl_null;
-        jl_value_t *thunk = jl_f_new_closure(NULL, args, 2);
+        jl_value_t *thunk = jl_new_closure_internal(thk, (jl_value_t*)jl_null);
         return jl_apply((jl_function_t*)thunk, NULL, 0);
     }
     return jl_interpret_toplevel_thunk(thk);
