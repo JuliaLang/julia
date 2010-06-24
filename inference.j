@@ -280,7 +280,7 @@ function abstract_call(f, fargs, argtypes, vtypes, sp)
                 # constructor
                 rt = x[3]
             else
-                (_tree,rt) = typeinf(x[3], x[2], x[1])
+                (_tree,rt) = typeinf(x[3], x[1], x[2])
             end
             rettype = tmerge(rettype, rt)
             if is(rettype,Any)
@@ -370,9 +370,11 @@ end
 
 abstract_eval(x, vtypes, sp) = abstract_eval_constant(x)
 
+typealias VInfo IdTable
+
 struct StateUpdate
     changes::((Symbol,Any)...)
-    state::IdTable
+    state::VInfo
 end
 
 function ref(x::StateUpdate, s::Symbol)
@@ -396,12 +398,12 @@ function interpret(e::Expr, vtypes, sp)
     elseif is(e.head,`gotoifnot)
         abstract_eval(e.args[1], vtypes, sp)
     end
-    return StateUpdate((), vtypes)
+    return vtypes
 end
 
 tchanged(n, o) = is(o,NF) || (!is(n,NF) && !subtype(n,o))
 
-function changed(new::StateUpdate, old, vars)
+function changed(new::Union(StateUpdate,VInfo), old, vars)
     for v = vars
         if tchanged(new[v], get(old,v,NF))
             return true
@@ -438,7 +440,7 @@ function tmerge(typea, typeb)
     return u
 end
 
-function update(state, changes::StateUpdate, vars)
+function update(state, changes::Union(StateUpdate,VInfo), vars)
     for v = vars
         newtype = changes[v]
         oldtype = get(state,v,NF)
@@ -461,7 +463,7 @@ function findlabel(body, l)
     error("label not found")
 end
 
-function typeinf(linfo::LambdaStaticData, sparams::Tuple, atypes::Tuple)
+function typeinf(linfo::LambdaStaticData, atypes::Tuple, sparams::Tuple)
     # check cached t-functions
     tf = linfo.tfunc
     while !is(tf,())
@@ -620,12 +622,12 @@ d=typevar(`d)
 
 function finfer(f, types)
     x = getmethods(f,types)
-    typeinf(x[3], x[2], x[1])[1]
+    typeinf(x[3], x[1], x[2])[1]
 end
 
 m = getmethods(fact,(Int32,))
 ast = m[3]
-#typeinf(ast, (`T,Int32), (Int32,))
+#typeinf(ast, (Int32,), (`T,Int32))
 
 function foo(x)
     return x.re + x.im

@@ -420,6 +420,7 @@ struct Rational{T<:Int} <: Real
 
     #implicit: new{T<:Int}(x::T, y::T) = construct(Rational{T}, x, y)
 
+    new::((T,T)-->Rational{T})
     Rational(n::Int, d::Int) = new(lowest_terms(n,d)...)
     Rational(n::Int) = Rational(n, 1)
 end

@@ -613,7 +613,7 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool value,
 
 static bool vinfo_isboxed(jl_array_t *a)
 {
-    return (jl_cellref(a,3)!=jl_false);
+    return (jl_cellref(a,2)!=jl_false && jl_cellref(a,3)!=jl_false);
 }
 
 static void emit_function(jl_lambda_info_t *lam, Function *f)
