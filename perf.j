@@ -6,10 +6,10 @@ nl() = print("\n")
 
 fib(n) = n < 2 ? n : fib(n-1) + fib(n-2)
 
-print("recursive fib(33): ")
+print("recursive fib(20): ")
 fib(5)  # warm up: make sure fib is compiled
-tic(); f = fib(33); toc()
-assert(f == 3524578)
+tic(); f = fib(20); toc()
+assert(f == 6765)
 nl()
 
 ## parse int ##
