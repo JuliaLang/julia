@@ -15,27 +15,85 @@ jl_comprehension_zeros{T,n}(oneresult::Tensor{T,n}, dims...) = Array(T, dims...)
 jl_comprehension_zeros{T}(oneresult::T, dims...) = Array(T, dims...)
 jl_comprehension_zeros(oneresult::(), dims...) = Array(Bottom, dims...)
 
-zeros(T::Type, m::Size) = (z=convert(T,0); [ z | i=1:m ])
-zeros(T::Type, m::Size, n::Size) = (z=convert(T,0); [ z | i=1:m, j=1:n ])
-zeros(m::Size) = [ 0.0 | i=1:m ]
-zeros(m::Size, n::Size) = [ 0.0 | i=1:m, j=1:n ]
+function zeros(T::Type, dims::Size...)
+    a = Array(T, dims...)
+    z = convert(T,0)
+    for i=1:numel(a); a[i] = z; end
+    return a
+end
+
+zeros(dims::Size...) = zeros(Float64, dims...)
 zeros(T::Type, dims::Tuple) = zeros (T, dims...)
 zeros(dims::Tuple) = zeros(dims...)
 
-ones(T::Type, m::Size) = (print("AA\n");o=convert(T,1); [ o | i=1:m ])
-ones(T::Type, m::Size, n::Size) = (o=convert(T,1); [ o | i=1:m, j=1:n ])
-ones(m::Size) = [ 1.0 | i=1:m ]
-ones(m::Size, n::Size) = [ 1.0 | i=1:m, j=1:n ]
+## Redefine as comprehensions when comprehension optimizations are available
+
+#zeros(T::Type, m::Size) = (z=convert(T,0); [ z | i=1:m ])
+#zeros(T::Type, m::Size, n::Size) = (z=convert(T,0); [ z | i=1:m, j=1:n ])
+#zeros(m::Size) = [ 0.0 | i=1:m ]
+#zeros(m::Size, n::Size) = [ 0.0 | i=1:m, j=1:n ]
+
+function ones(T::Type, dims::Size...)
+    a = Array(T, dims...)
+    o = convert(T,1)
+    for i=1:numel(a); a[i] = o; end
+    return a
+end
+
+ones(dims::Size...) = ones(Float64, dims...)
 ones(T::Type, dims::Tuple) = ones (T, dims...)
 ones(dims::Tuple) = ones(dims...)
 
-rand(m::Size) = [ rand() | i=1:m ]
-rand(m::Size, n::Size) = [ rand() | i=1:m, j=1:n ]
+## Redefine as comprehensions when comprehension optimizations are available
+
+#ones(T::Type, m::Size) = (o=convert(T,1); [ o | i=1:m ])
+#ones(T::Type, m::Size, n::Size) = (o=convert(T,1); [ o | i=1:m, j=1:n ])
+#ones(m::Size) = [ 1.0 | i=1:m ]
+#ones(m::Size, n::Size) = [ 1.0 | i=1:m, j=1:n ]
+
+function rand(dims::Size...)
+    a = Array(Float64, dims...)
+    for i=1:numel(a); a[i] = rand(); end
+    return a
+end
+
 rand(dims::Tuple) = rand(dims...)
 
-randf(m::Size) = [ randf() | i=1:m ]
-randf(m::Size, n::Size) = [ randf() | i=1:m, j=1:n ]
+## Redefine as comprehensions when comprehension optimizations are available
+
+# rand(m::Size) = [ rand() | i=1:m ]
+# rand(m::Size, n::Size) = [ rand() | i=1:m, j=1:n ]
+
+function randf(dims::Size...)
+    a = Array(Float32, dims...)
+    for i=1:numel(a); a[i] = randf(); end
+    return a
+end
+
 randf(dims::Tuple) = randf(dims...)
+
+## Redefine as comprehensions when comprehension optimizations are available
+
+# randf(m::Size) = [ randf() | i=1:m ]
+# randf(m::Size, n::Size) = [ randf() | i=1:m, j=1:n ]
+
+function copy{T}(a::Array{T})
+    b = Array(T, size(a))
+    for i=1:numel(a); b[i] = a[i]; end
+    return b
+end
+
+## Redefine as comprehensions when comprehension optimizations are available
+
+# copy(a::Vector) = [ a[i] | i=1:length(a) ]
+# copy(a::Matrix) = [ a[i,j] | i=1:size(a,1), j=1:size(a,2) ]
+
+copy(a::Array{Any,1}) = { copy(a[i]) | i=1:length(a) }
+
+reshape{T}(a::Array{T}, dims...) = (b = zeros(T, dims...);
+                                    for i=1:numel(a); b[i] = a[i]; end;
+                                    b)
+reshape(a::Array, dims::Tuple) = reshape(a, dims...)
 
 eye(n::Size) = eye(n, n)
 eye(m::Size, n::Size) = (a = zeros(m,n);
@@ -45,15 +103,6 @@ eye(m::Size, n::Size) = (a = zeros(m,n);
 colon(start::Real, stop::Real, stride::Real) =
     ((start, stop, stride) = promote(start, stop, stride);
      [ i | i=start:stride:stop ])
-
-copy(a::Vector) = [ a[i] | i=1:length(a) ]
-copy(a::Matrix) = [ a[i,j] | i=1:size(a,1), j=1:size(a,2) ]
-copy(a::Array{Any,1}) = { copy(a[i]) | i=1:length(a) }
-
-reshape{T}(a::Array{T}, dims...) = (b = zeros(T, dims...);
-                                    for i=1:numel(a); b[i] = a[i]; end;
-                                    b)
-reshape(a::Array, dims::Tuple) = reshape(a, dims...)
 
 (-)(x::Vector) = [ -x[i] | i=1:length(x) ]
 (-)(x::Matrix) = [ -x[i,j] | i=1:size(x,1), j=1:size(x,2) ]
