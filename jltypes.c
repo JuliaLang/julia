@@ -1405,6 +1405,21 @@ jl_value_t *jl_type_match_morespecific(jl_type_t *a, jl_type_t *b)
     return type_match_((jl_value_t*)a, (jl_value_t*)b, jl_null, 1);
 }
 
+// given a (possibly-generic) function type and some argument types,
+// determine the result type. this is using a function type A-->B as a
+// transfer function.
+jl_value_t *jl_func_type_tfunc(jl_func_type_t *ft, jl_tuple_t *argtypes)
+{
+    if (!jl_has_typevars((jl_value_t*)ft->from)) {
+        return (jl_value_t*)ft->to;
+    }
+    jl_value_t *env = jl_type_match((jl_type_t*)argtypes, ft->from);
+    jl_tuple_t *te = (env == jl_false) ? jl_null : (jl_tuple_t*)env;
+    te = jl_flatten_pairs(te);
+    return
+        (jl_value_t*)jl_instantiate_type_with(ft->to, &jl_t0(te), te->length/2);
+}
+
 // initialization -------------------------------------------------------------
 
 jl_tvar_t *jl_new_typevar(jl_sym_t *name, jl_type_t *lb, jl_type_t *ub)

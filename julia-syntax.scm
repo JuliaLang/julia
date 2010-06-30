@@ -10,7 +10,7 @@
 ; - use (top x) more consistently
 ; * make goto-form safe for inlining (delay label to index mapping)
 
-(define (quoted? e) (memq (car e) '(quote top unbound line break)))
+(define (quoted? e) (memq (car e) '(quote top line break)))
 
 (define (lam:args x) (cadr x))
 (define (lam:vars x) (llist-vars (lam:args x)))
@@ -131,15 +131,12 @@
       (map (lambda (x ub) `(call (top typevar) ',x ,ub)) sl upperbounds)))
 
 (define (gf-def-expr- name argl argtypes body)
-  (gf-def-expr-- name argl argtypes body 'new_generic_function 'add_method))
-
-(define (gf-def-expr-- name argl argtypes body new add)
   `(block
     ,(if (symbol? name)
 	 `(if (unbound ,name)
-	      (= ,name (call (top ,new) (quote ,name))))
+	      (= ,name (call (top new_generic_function) (quote ,name))))
 	 `(null))
-    (call (top ,add)
+    (call (top add_method)
 	  ,name
 	  ,argtypes
 	  ,(function-expr argl body))))
@@ -180,6 +177,8 @@
    (params bounds) (sparam-name-bounds params '() '())
    (struct-def-expr- name params bounds super fields)))
 
+(define *ctor-factory-name* (gensym))
+
 (define (struct-def-expr- name params bounds super fields)
   (receive
    (fields defs) (separate (lambda (x) (or (symbol? x)
@@ -187,12 +186,32 @@
 						(eq? (car x) '|::|))))
 			   fields)
    (let ((field-names (map decl-var fields))
-	 (field-types (map decl-type fields)))
+	 (field-types (map decl-type fields))
+	 (T (gensym)))
      `(call
        (lambda (,@params)
 	 ; the static parameters are bound to new TypeVars in here,
 	 ; so everything that sees the TypeVars is evaluated here.
 	 (block
+	  (local! ,*ctor-factory-name*)
+	  (local! ,T)
+	  ,(if (null? defs)
+	       `(null)
+	       ; create a function that defines constructors, given
+	       ; the type and a "new" function.
+	       ; a mild hack to feed inference the type of "new":
+	       ; when "new" is created internally by the runtime, it is
+	       ; tagged with a specific function type. this type is captured
+	       ; as a static parameter which is visible to inference through
+	       ; a declaration.
+	       `(scope-block
+		 (block
+		  (function (call (curly ,*ctor-factory-name* ,T)
+				  ,name (|::| new ,T))
+			    (block
+			     (|::| new ,T)
+			     ,@defs
+			     (null))))))
 	  (= ,name
 	     (call (top new_struct_type)
 		   (quote ,name)
@@ -201,11 +220,8 @@
 		   (tuple ,@(map (lambda (x) `',x) field-names))
 		   ,(if (null? defs)
 			`(null)
-			; pass a closure that defines constructors, given
-			; the type and a "new" function.
-			`(lambda (,name new)
-			   (scope-block
-			    (block ,@defs (null)))))))
+			; pass constructor factory function
+			*ctor-factory-name*)))
 	  ; now add the type fields, which might reference the type itself.
 	  (call (top new_struct_fields)
 		,name (tuple ,@field-types))))

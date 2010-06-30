@@ -473,6 +473,8 @@ jl_value_t *jl_toplevel_eval_thunk(jl_lambda_info_t *thk);
 void jl_load(const char *fname);
 jl_value_t *jl_interpret_toplevel_thunk(jl_lambda_info_t *lam);
 jl_value_t *jl_interpret_toplevel_expr(jl_value_t *e);
+jl_value_t *jl_interpret_toplevel_expr_with(jl_value_t *e,
+                                            jl_value_t **locals, size_t nl);
 
 void jl_print_method_table(jl_function_t *gf);
 jl_function_t *jl_instantiate_method(jl_function_t *f, jl_tuple_t *sp);

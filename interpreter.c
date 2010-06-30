@@ -22,6 +22,12 @@ jl_value_t *jl_interpret_toplevel_expr(jl_value_t *e)
     return eval(e, NULL, 0);
 }
 
+jl_value_t *jl_interpret_toplevel_expr_with(jl_value_t *e,
+                                            jl_value_t **locals, size_t nl)
+{
+    return eval(e, locals, nl);
+}
+
 static jl_value_t *do_call(jl_function_t *f, jl_value_t **args, size_t nargs,
                            jl_value_t **locals, size_t nl)
 {

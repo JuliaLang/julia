@@ -10,7 +10,7 @@ for (fname, shape, eltype) = (("dcopy_", `Vector, Float64),
                               ("scopy_", `Matrix, Float32))
     eval (`function copy (X::($shape){$eltype})
           sz = size(X)
-          Y = zeros($eltype, sz)
+          Y = Array($eltype, sz)
           ccall(dlsym(libBLAS, $fname),
                 Void,
                 (Ptr{Int32}, Ptr{$eltype}, Ptr{Int32}, Ptr{$eltype}, Ptr{Int32}),

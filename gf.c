@@ -89,6 +89,8 @@ jl_lambda_info_t *jl_add_static_parameters(jl_lambda_info_t *l, jl_tuple_t *sp)
     return nli;
 }
 
+void jl_specialize_ast(jl_lambda_info_t *li);
+
 jl_function_t *jl_instantiate_method(jl_function_t *f, jl_tuple_t *sp)
 {
     if (f->linfo == NULL)
@@ -161,6 +163,9 @@ static jl_methlist_t *cache_method(jl_methtable_t *mt, jl_tuple_t *type,
         newmeth = method;
     else
         newmeth = jl_instantiate_method(method, sparams);
+
+    if (newmeth->linfo != NULL)
+        jl_specialize_ast(newmeth->linfo);
     return jl_method_list_insert(&mt->cache, (jl_type_t*)type, newmeth);
 }
 

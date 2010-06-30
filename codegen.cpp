@@ -262,8 +262,8 @@ static void emit_typecheck(Value *x, jl_value_t *type, const std::string &msg,
 static void emit_func_check(Value *x, const std::string &msg, jl_codectx_t *ctx)
 {
     Value *istype1 =
-        builder.CreateICmpEQ(emit_typeof(x),
-                             literal_pointer_val((jl_value_t*)jl_any_func));
+        builder.CreateICmpEQ(emit_typeof(emit_typeof(x)),
+                             literal_pointer_val((jl_value_t*)jl_func_kind));
     BasicBlock *elseBB1 = BasicBlock::Create(getGlobalContext(),"a", ctx->f);
     BasicBlock *mergeBB1 = BasicBlock::Create(getGlobalContext(),"b");
     builder.CreateCondBr(istype1, mergeBB1, elseBB1);
@@ -497,14 +497,6 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool value,
             // string literal
         }
         else if (jl_is_lambda_info(expr)) {
-            jl_value_t *nli =
-                (jl_value_t*)jl_add_static_parameters((jl_lambda_info_t*)expr,
-                                                      ctx->sp);
-            if (nli != expr) {
-                ctx->linfo->roots =
-                    jl_pair(nli, (jl_value_t*)ctx->linfo->roots);
-                expr = nli;
-            }
             return emit_lambda_closure(expr, ctx);
         }
         // TODO: for now just return the direct pointer
@@ -571,12 +563,21 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool value,
         assert(!value);
         Value *rhs = emit_expr(args[1], ctx, true);
         jl_sym_t *s = (jl_sym_t*)args[0];
-        jl_value_t *texpr = (*ctx->declTypes)[s->name];
-        if (texpr && texpr != (jl_value_t*)Any_sym) {
-            // TODO: statically evaluate type if possible
-            Value *typexp = emit_expr(texpr, ctx, true);
+        jl_value_t *static_type = (*ctx->declTypes)[s->name];
+        if (static_type) {
+            Value *typexp=NULL;
+            if (jl_is_type(static_type)) {
+                if (static_type != (jl_value_t*)jl_any_type) {
+                    typexp = literal_pointer_val(static_type);
+                }
+            }
+            else if (static_type != (jl_value_t*)Any_sym) {
+                // this case happens for non-generic functions
+                typexp = emit_expr(static_type, ctx, true);
+            }
             // convert to declared type
-            rhs = builder.CreateCall2(jlconvert_func, typexp, rhs);
+            if (typexp)
+                rhs = builder.CreateCall2(jlconvert_func, typexp, rhs);
         }
         Value *bp = var_binding_pointer(s, ctx);
         builder.CreateStore(boxed(rhs), bp);

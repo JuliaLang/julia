@@ -283,9 +283,15 @@ static void add_generic_ctor(jl_function_t *gf, jl_struct_type_t *t)
     jl_add_method(gf, t->types, gmeth);
     gmeth->env = (jl_value_t*)jl_pair((jl_value_t*)gmeth, (jl_value_t*)t);
     gmeth->linfo = jl_new_lambda_info(NULL, jl_null);
+    if (!jl_is_struct_type(gf)) {
+        gf->type =
+            (jl_type_t*)jl_new_functype((jl_type_t*)t->types, (jl_type_t*)t);
+    }
 }
 
 JL_CALLABLE(jl_new_array_internal);
+
+void jl_specialize_ast(jl_lambda_info_t *li);
 
 void jl_add_constructors(jl_struct_type_t *t)
 {
@@ -316,6 +322,9 @@ void jl_add_constructors(jl_struct_type_t *t)
         }
         else {
             fnew = jl_new_closure(jl_new_struct_internal, (jl_value_t*)t);
+            fnew->type =
+                (jl_type_t*)jl_new_functype((jl_type_t*)t->types,
+                                            (jl_type_t*)t);
         }
         // in this case the type itself always works as a generic function,
         // to accomodate the user's various definitions
@@ -328,6 +337,16 @@ void jl_add_constructors(jl_struct_type_t *t)
         // TODO: if we want to, here we could feed the type's static parameters
         // to the methods for their use.
         jl_gf_mtable(t)->sealed = 1;
+
+        // calling ctor_factory binds the type of new() to a static parameter
+        // visible to each of the constructor methods. eagerly specialize
+        // the ASTs for all constructor methods so that type inference can
+        // see the type of new() even before any constructors have been called.
+        jl_methlist_t *ml = jl_gf_mtable(t)->defs;
+        while (ml != NULL) {
+            jl_specialize_ast(ml->func->linfo);
+            ml = ml->next;
+        }
     }
 }
 

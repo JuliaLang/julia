@@ -434,3 +434,61 @@ int jl_is_rest_arg(jl_value_t *ex)
         return 0;
     return 1;
 }
+
+static jl_value_t *copy_ast(jl_value_t *expr, jl_tuple_t *sp)
+{
+    if (jl_is_lambda_info(expr)) {
+        return (jl_value_t*)jl_add_static_parameters((jl_lambda_info_t*)expr,
+                                                     sp);
+    }
+    if (jl_typeis(expr,jl_array_any_type)) {
+        jl_array_t *a = (jl_array_t*)expr;
+        jl_array_t *na = jl_alloc_cell_1d(a->length);
+        size_t i;
+        for(i=0; i < a->length; i++)
+            jl_cellset(na, i, copy_ast(jl_cellref(a,i), sp));
+        return (jl_value_t*)na;
+    }
+    if (jl_is_expr(expr)) {
+        jl_expr_t *e = (jl_expr_t*)expr;
+        jl_expr_t *ne = jl_exprn(e->head, e->args->length);
+        size_t i;
+        for(i=0; i < e->args->length; i++)
+            jl_exprarg(ne, i) = copy_ast(jl_exprarg(e,i), sp);
+        return (jl_value_t*)ne;
+    }
+    return expr;
+}
+
+static void eval_decl_types(jl_array_t *vi, jl_tuple_t *spenv)
+{
+    size_t i;
+    for(i=0; i < vi->length; i++) {
+        jl_array_t *v = (jl_array_t*)jl_cellref(vi, i);
+        jl_value_t *ty =
+            jl_interpret_toplevel_expr_with(jl_cellref(v,1),
+                                            &jl_tupleref(spenv,0),
+                                            spenv->length/2);
+        jl_cellref(v, 1) = ty;
+    }
+}
+
+// given a new lambda_info with static parameter values, make a copy
+// of the tree with declared types evaluated and static parameters passed
+// on to all enclosed functions.
+// this tree can then be further mutated by optimization passes.
+void jl_specialize_ast(jl_lambda_info_t *li)
+{
+    if (li->ast == NULL) return;
+    jl_tuple_t *spenv = jl_alloc_tuple(li->sparams->length);
+    size_t i;
+    for(i=0; i < spenv->length; i+=2) {
+        jl_tupleset(spenv, i,
+                    (jl_value_t*)((jl_tvar_t*)jl_tupleref(li->sparams,i))->name);
+        jl_tupleset(spenv, i+1, jl_tupleref(li->sparams,i+1));
+    }
+    jl_value_t *ast = copy_ast(li->ast, li->sparams);
+    li->ast = ast;
+    eval_decl_types(jl_lam_vinfo((jl_expr_t*)ast), spenv);
+    eval_decl_types(jl_lam_capt((jl_expr_t*)ast), spenv);
+}
