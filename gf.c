@@ -41,9 +41,6 @@ static int exact_match(jl_value_t **args, size_t n, jl_tuple_t *sig)
     if (sig->length != n) return 0;
     size_t i;
     for(i=0; i < n; i++) {
-        // note: because this uses jl_typeof() directly, it never
-        // detects exact matches for tuples. however this is a 
-        // conservative answer given the rest of the dispatch process.
         jl_value_t *decl = jl_tupleref(sig, i);
         jl_value_t *a = args[i];
         if (jl_is_tuple(decl)) {

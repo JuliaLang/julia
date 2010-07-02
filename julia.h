@@ -56,6 +56,7 @@ typedef struct {
     // sparams is a tuple (symbol, value, symbol, value, ...)
     jl_tuple_t *sparams;
     jl_value_t *tfunc;
+    // hidden fields:
     jl_fptr_t fptr;
     jl_tuple_t *roots;  // pointers in generated code
     void *functionObject;
@@ -158,6 +159,7 @@ typedef struct _jl_module_t {
 } jl_module_t;
 
 typedef struct _jl_methlist_t {
+    // not first-class
     jl_type_t *sig;
     jl_function_t *func;
     struct _jl_methlist_t *next;
@@ -179,6 +181,7 @@ typedef struct {
 
 extern jl_tag_type_t *jl_any_type;
 extern jl_tag_type_t *jl_type_type;
+extern jl_tag_type_t *jl_undef_type;
 extern jl_struct_type_t *jl_typename_type;
 extern jl_struct_type_t *jl_typector_type;
 extern jl_struct_type_t *jl_sym_type;

@@ -20,6 +20,7 @@
 jl_value_t *jl_true;
 jl_value_t *jl_false;
 
+jl_tag_type_t *jl_undef_type;
 jl_typector_t *jl_functype_ctor;
 jl_struct_type_t *jl_box_type;
 jl_type_t *jl_box_any_type;
@@ -819,6 +820,9 @@ void jl_init_builtin_types()
     jl_pointer_uint8_type =
         (jl_bits_type_t*)jl_apply_type((jl_value_t*)jl_pointer_type,
                                        jl_tuple(1, jl_uint8_type));
+
+    jl_undef_type = jl_new_tagtype((jl_value_t*)jl_symbol("Undef"),
+                                   jl_any_type, jl_null);
 
     call_sym = jl_symbol("call");
     quote_sym = jl_symbol("quote");

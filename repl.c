@@ -519,6 +519,24 @@ static jl_value_t *read_expr_ast(char *prompt, int *end, int *doprint) {
 
 void jl_lisp_prompt();
 
+jl_function_t *jl_typeinf_func=NULL;
+
+int jl_load_startup_file()
+{
+    if (!setjmp(ExceptionHandler)) {
+        jl_load("start.j");
+        if (jl_boundp(jl_system_module, jl_symbol("typeinf"))) {
+            jl_typeinf_func =
+                (jl_function_t*)*(jl_get_bindingp(jl_system_module,
+                                                  jl_symbol("typeinf")));
+        }
+    } else {
+        ios_printf(ios_stderr, "error during startup.\n");
+        return 1;
+    }
+    return 0;
+}
+
 int main(int argc, char *argv[])
 {
     llt_init();
@@ -560,12 +578,8 @@ int main(int argc, char *argv[])
         return 0;
     }
     if (load_start_j) {
-        if (!setjmp(ExceptionHandler)) {
-            jl_load("start.j");
-        } else {
-            ios_printf(ios_stderr, "error during startup.\n");
+        if (jl_load_startup_file())
             return 1;
-        }
     }
     if (num_evals) {
         int i;

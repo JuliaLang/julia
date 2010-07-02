@@ -1075,8 +1075,10 @@ int jl_subtype_le(jl_value_t *a, jl_value_t *b, int ta, int morespecific)
 
     if (ta) a = (jl_value_t*)jl_typeof(a);
 
-    if ((jl_tag_type_t*)b == jl_any_type) return 1;
     if (a == b) return 1;
+    if (a==(jl_value_t*)jl_undef_type || b==(jl_value_t*)jl_undef_type)
+        return 0;
+    if ((jl_tag_type_t*)b == jl_any_type) return 1;
     if (jl_is_typevar(a)) {
         if (jl_is_typevar(b)) {
             return

@@ -859,6 +859,7 @@ static void check_supertype(jl_value_t *super, char *name)
 {
     if (!(/*jl_is_struct_type(super) || */jl_is_tag_type(super)) ||
         super == (jl_value_t*)jl_sym_type ||
+        super == (jl_value_t*)jl_undef_type ||
         jl_subtype(super,(jl_value_t*)jl_type_type,0) ||
         jl_subtype(super,(jl_value_t*)jl_array_type,0)) {
         jl_errorf("invalid subtyping in definition of %s", name);
@@ -1293,6 +1294,8 @@ void jl_init_builtins()
     add_builtin("Ptr", (jl_value_t*)jl_pointer_type);
     add_builtin("LambdaStaticData", (jl_value_t*)jl_lambda_info_type);
     add_builtin("Box", (jl_value_t*)jl_box_type);
+    // todo: this should only be visible to compiler components
+    add_builtin("Undef", (jl_value_t*)jl_undef_type);
 
     add_builtin("BitsKind", (jl_value_t*)jl_bits_kind);
     add_builtin("StructKind", (jl_value_t*)jl_struct_kind);

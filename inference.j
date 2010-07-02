@@ -101,6 +101,7 @@ t_func[ccall] =
 t_func[is] = (2, 2, cmp_tfunc)
 t_func[subtype] = (2, 2, cmp_tfunc)
 t_func[isa] = (2, 2, cmp_tfunc)
+t_func[new_generic_function] = (1, 1, s->(Bottom-->Any))
 t_func[tuplelen] = (1, 1, x->Int32)
 t_func[arraylen] = (1, 1, x->Int32)
 t_func[arrayref] = (2, 2, (a,i)->(isa(a,StructKind) && subtype(a,Array) ?
@@ -351,6 +352,9 @@ function abstract_eval_constant(x)
     if isa(x,TagKind) || isa(x,TypeVar)
         return Type{x}
     end
+    if isa(x,LambdaStaticData)
+        return Bottom-->Any
+    end
     return typeof(x)
 end
 
@@ -467,8 +471,6 @@ function update(state, changes::Union(StateUpdate,VarTable), vars)
     end
     state
 end
-
-type Undef
 
 function findlabel(body, l)
     for i=1:length(body)
@@ -694,4 +696,12 @@ function both()
         f(c)
     end
     c
+end
+
+function und()
+    local a
+    if mystery()
+        a = other_mystery()
+    end
+    c = a
 end
