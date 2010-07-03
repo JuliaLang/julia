@@ -185,6 +185,9 @@ void fpe_handler(int arg)
 
 void julia_init()
 {
+#ifdef BOEHM_GC
+    GC_expand_hp(12000000);  //shaves a tiny bit off startup time
+#endif
     jl_init_frontend();
     jl_init_types();
     jl_init_builtin_types();

@@ -1118,6 +1118,7 @@ JL_CALLABLE(jl_f_dlsym)
 
 // --- eq hash table ---
 
+DLLEXPORT
 htable_t *jl_new_eqtable(uint32_t sz)
 {
     htable_t *h = (htable_t*)allocb(sizeof(htable_t));
@@ -1125,12 +1126,14 @@ htable_t *jl_new_eqtable(uint32_t sz)
     return h;
 }
 
+DLLEXPORT
 void jl_eqtable_put(htable_t *t, jl_value_t *key, jl_value_t *val)
 {
     jl_value_t **bp = (jl_value_t**)ptrhash_bp(t, key);
     *bp = val;
 }
 
+DLLEXPORT
 jl_value_t *jl_eqtable_get(htable_t *t, jl_value_t *key, jl_value_t *deflt)
 {
     jl_value_t **bp = (jl_value_t**)ptrhash_bp(t, key);
@@ -1139,11 +1142,13 @@ jl_value_t *jl_eqtable_get(htable_t *t, jl_value_t *key, jl_value_t *deflt)
     return *bp;
 }
 
+DLLEXPORT
 void jl_eqtable_del(htable_t *t, jl_value_t *key)
 {
     ptrhash_remove(t, key);
 }
 
+DLLEXPORT
 jl_value_t *jl_eqtable_next(htable_t *t, uint32_t i)
 {
     if (i&1) i++;

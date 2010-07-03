@@ -1,6 +1,5 @@
 #include "llvm/DerivedTypes.h"
 #include "llvm/ExecutionEngine/ExecutionEngine.h"
-#include "llvm/ExecutionEngine/Interpreter.h"
 #include "llvm/ExecutionEngine/JIT.h"
 #include "llvm/LLVMContext.h"
 #include "llvm/Module.h"
@@ -11,8 +10,6 @@
 #include "llvm/Target/TargetSelect.h"
 #include "llvm/Transforms/Scalar.h"
 #include "llvm/Support/IRBuilder.h"
-#include "llvm/Support/MemoryBuffer.h"
-#include "llvm/Bitcode/ReaderWriter.h"
 #include <cstdio>
 #include <string>
 #include <sstream>
@@ -41,7 +38,6 @@ static FunctionPassManager *FPM;
 static const Type *jl_value_llvmt;
 static const Type *jl_pvalue_llvmt;
 static const Type *jl_ppvalue_llvmt;
-static const Type *jl_function_llvmt;
 static const FunctionType *jl_func_sig;
 static const Type *jl_fptr_llvmt;
 static const Type *T_int8;
@@ -102,7 +98,6 @@ static Function *jlconvert_func;
   - source location tracking, var name metadata
   * rootlist to track pointers emitted into code
   - function/var name mangling
-  * include julia-defs.bc in the executable
   - experiment with llvm optimization passes, option to disable them
 
   optimizations round 1:
@@ -820,11 +815,6 @@ extern "C" jl_value_t *jl_new_box(jl_value_t *v)
     return jl_new_struct((jl_struct_type_t*)jl_box_any_type, v);
 }
 
-static const char julia_defs_file[] = {
-#include "julia-defs.s.bc.inc"
-    , 0x0
-};
-
 static void init_julia_llvm_env(Module *m)
 {
     T_int8  = Type::getInt8Ty(getGlobalContext());
@@ -849,19 +839,23 @@ static void init_julia_llvm_env(Module *m)
     T_void = Type::getVoidTy(jl_LLVMContext);
 
     // add needed base definitions to our LLVM environment
-    const char *jdf = &julia_defs_file[0];
-    MemoryBuffer *deffile = MemoryBuffer::getMemBuffer(jdf, jdf+sizeof(julia_defs_file)-1);
-    Module *jdefs = ParseBitcodeFile(deffile, getGlobalContext());
-    delete deffile;
+    PATypeHolder tempTy = OpaqueType::get(getGlobalContext());
+    std::vector<const Type*> valueStructElts(0);
+    valueStructElts.push_back(PointerType::getUnqual(tempTy));
+    StructType *valueSt = StructType::get(getGlobalContext(),valueStructElts);
+    ((OpaqueType*)tempTy.get())->refineAbstractTypeTo(valueSt);
+    jl_value_llvmt = tempTy.get();
 
-    jl_value_llvmt = jdefs->getTypeByName("struct._jl_value_t");
     jl_pvalue_llvmt = PointerType::get(jl_value_llvmt, 0);
     jl_ppvalue_llvmt = PointerType::get(jl_pvalue_llvmt, 0);
     V_null = Constant::getNullValue(jl_pvalue_llvmt);
-    jl_func_sig = dynamic_cast<const FunctionType*>(jdefs->getTypeByName("jl_callable_t"));
+    std::vector<const Type*> ftargs(0);
+    ftargs.push_back(jl_pvalue_llvmt);
+    ftargs.push_back(jl_ppvalue_llvmt);
+    ftargs.push_back(T_int32);
+    jl_func_sig = FunctionType::get(jl_pvalue_llvmt, ftargs, false);
     assert(jl_func_sig != NULL);
     jl_fptr_llvmt = PointerType::get(jl_func_sig, 0);
-    jl_function_llvmt = jdefs->getTypeByName("jl_function_t");
 
     jltrue_var = global_to_llvm("jl_true", (void*)&jl_true);
     jlfalse_var = global_to_llvm("jl_false", (void*)&jl_false);

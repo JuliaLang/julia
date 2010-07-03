@@ -194,6 +194,7 @@ static void flatten_type_union(jl_tuple_t *types, jl_value_t **out, size_t *idx)
     }
 }
 
+DLLEXPORT
 jl_tuple_t *jl_compute_type_union(jl_tuple_t *types)
 {
     size_t n = count_union_components(types);
@@ -1410,6 +1411,7 @@ jl_value_t *jl_type_match_morespecific(jl_type_t *a, jl_type_t *b)
 // given a (possibly-generic) function type and some argument types,
 // determine the result type. this is using a function type A-->B as a
 // transfer function.
+DLLEXPORT
 jl_value_t *jl_func_type_tfunc(jl_func_type_t *ft, jl_tuple_t *argtypes)
 {
     if (!jl_has_typevars((jl_value_t*)ft->from)) {

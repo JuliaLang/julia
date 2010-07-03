@@ -45,7 +45,7 @@ typedef struct _jl_type_t {
 
 typedef jl_value_t *(*jl_fptr_t)(jl_value_t*, jl_value_t**, uint32_t);
 
-typedef struct {
+typedef struct _jl_lambda_info_t {
     JL_VALUE_STRUCT
     // this holds the static data for a function:
     // a syntax tree, static parameters, and (if it has been compiled)
@@ -60,6 +60,11 @@ typedef struct {
     jl_fptr_t fptr;
     jl_tuple_t *roots;  // pointers in generated code
     void *functionObject;
+    // flag telling if inference is running on this function
+    // used to avoid infinite recursion
+    uptrint_t inInference;
+    // a slower-but-works version of this function as a fallback
+    struct _jl_lambda_info_t *unspecialized;
 } jl_lambda_info_t;
 
 #define JL_FUNC_FIELDS                          \
@@ -353,14 +358,14 @@ int jl_tuple_subtype(jl_value_t **child, size_t cl,
                      jl_value_t **parent, size_t pl, int ta, int morespecific);
 int jl_subtype(jl_value_t *a, jl_value_t *b, int ta);
 int jl_type_morespecific(jl_value_t *a, jl_value_t *b, int ta);
-jl_value_t *jl_type_match(jl_type_t *a, jl_type_t *b);
+DLLEXPORT jl_value_t *jl_type_match(jl_type_t *a, jl_type_t *b);
 jl_value_t *jl_type_match_morespecific(jl_type_t *a, jl_type_t *b);
 int jl_types_equal(jl_value_t *a, jl_value_t *b);
 int jl_types_equal_generic(jl_value_t *a, jl_value_t *b);
 jl_value_t *jl_type_union(jl_tuple_t *types);
 jl_value_t *jl_type_intersection_matching(jl_value_t *a, jl_value_t *b,
                                           jl_tuple_t **penv);
-jl_value_t *jl_type_intersection(jl_value_t *a, jl_value_t *b);
+DLLEXPORT jl_value_t *jl_type_intersection(jl_value_t *a, jl_value_t *b);
 
 // type constructors
 jl_typename_t *jl_new_typename(jl_sym_t *name);
@@ -388,10 +393,10 @@ jl_tuple_t *jl_alloc_tuple(size_t n);
 jl_tuple_t *jl_tuple_append(jl_tuple_t *a, jl_tuple_t *b);
 jl_tuple_t *jl_flatten_pairs(jl_tuple_t *t);
 jl_tuple_t *jl_pair(jl_value_t *a, jl_value_t *b);
-jl_sym_t *jl_symbol(const char *str);
+DLLEXPORT jl_sym_t *jl_symbol(const char *str);
 jl_sym_t *jl_gensym();
 jl_array_t *jl_new_array(jl_type_t *atype, jl_value_t **dimargs, size_t ndims);
-jl_array_t *jl_cstr_to_array(char *str);
+DLLEXPORT jl_array_t *jl_cstr_to_array(char *str);
 jl_array_t *jl_alloc_cell_1d(size_t n);
 jl_value_t *jl_arrayref(jl_array_t *a, size_t i);  // 0-indexed
 void jl_arrayset(jl_array_t *a, size_t i, jl_value_t *v);  // 0-indexed
@@ -450,7 +455,7 @@ jl_lambda_info_t *jl_expand(jl_value_t *expr);
 
 // some useful functions
 void jl_print(jl_value_t *v);
-char *jl_print_to_string(jl_value_t *v);
+DLLEXPORT char *jl_print_to_string(jl_value_t *v);
 jl_value_t *jl_convert(jl_type_t *to, jl_value_t *x);
 
 // modules
@@ -490,7 +495,7 @@ jl_array_t *jl_lam_vinfo(jl_expr_t *l);
 jl_array_t *jl_lam_capt(jl_expr_t *l);
 jl_array_t *jl_lam_body(jl_expr_t *l);
 jl_sym_t *jl_decl_var(jl_value_t *ex);
-int jl_is_rest_arg(jl_value_t *ex);
+DLLEXPORT int jl_is_rest_arg(jl_value_t *ex);
 
 // for writing julia functions in C
 #define JL_CALLABLE(name) \

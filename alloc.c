@@ -141,13 +141,15 @@ jl_function_t *jl_new_closure(jl_fptr_t proc, jl_value_t *env)
 jl_lambda_info_t *jl_new_lambda_info(jl_value_t *ast, jl_tuple_t *sparams)
 {
     jl_lambda_info_t *li =
-        (jl_lambda_info_t*)newobj((jl_type_t*)jl_lambda_info_type, 6);
+        (jl_lambda_info_t*)newobj((jl_type_t*)jl_lambda_info_type, 8);
     li->ast = ast;
     li->sparams = sparams;
     li->tfunc = (jl_value_t*)jl_null;
     li->fptr = NULL;
     li->roots = jl_null;
     li->functionObject = NULL;
+    li->inInference = 0;
+    li->unspecialized = NULL;
     return li;
 }
 
@@ -188,7 +190,7 @@ static jl_sym_t **symtab_lookup(jl_sym_t **ptree, const char *str)
     return ptree;
 }
 
-jl_sym_t *jl_symbol(const char *str)
+DLLEXPORT jl_sym_t *jl_symbol(const char *str)
 {
     jl_sym_t **pnode;
 
@@ -292,7 +294,7 @@ static void add_generic_ctor(jl_function_t *gf, jl_struct_type_t *t)
 
 JL_CALLABLE(jl_new_array_internal);
 
-void jl_specialize_ast(jl_lambda_info_t *li);
+void jl_specialize_ast(jl_lambda_info_t *li, jl_tuple_t **spenv_out);
 
 void jl_add_constructors(jl_struct_type_t *t)
 {
@@ -345,7 +347,7 @@ void jl_add_constructors(jl_struct_type_t *t)
         // see the type of new() even before any constructors have been called.
         jl_methlist_t *ml = jl_gf_mtable(t)->defs;
         while (ml != NULL) {
-            jl_specialize_ast(ml->func->linfo);
+            jl_specialize_ast(ml->func->linfo, NULL);
             ml = ml->next;
         }
     }
@@ -405,6 +407,7 @@ jl_bits_type_t *jl_new_bitstype(jl_value_t *name, jl_tag_type_t *super,
     return t;
 }
 
+DLLEXPORT
 int jl_union_too_complex(jl_tuple_t *types)
 {
     size_t i, j;
@@ -649,17 +652,26 @@ jl_array_t *jl_new_array(jl_type_t *atype, jl_value_t **dimargs, size_t ndims)
     if (nel > 0) {
         if (jl_is_bits_type(el_type)) {
             size_t tot = ((jl_bits_type_t*)el_type)->nbits/8 * nel;
-            if (tot <= ARRAY_INLINE_NBYTES)
+            if (tot <= ARRAY_INLINE_NBYTES) {
                 data = &a->_space[0];
-            else
+            }
+            else {
                 data = alloc_pod(tot);
+            }
         }
         else {
             size_t tot = sizeof(void*) * nel;
-            if (tot <= ARRAY_INLINE_NBYTES)
+            if (tot <= ARRAY_INLINE_NBYTES) {
                 data = &a->_space[0];
-            else
-                data = allocb(tot);
+            }
+            else {
+#ifdef BOEHM_GC
+                if (tot >= 100000)
+                    data = GC_malloc_ignore_off_page(tot);
+                else
+#endif
+                    data = allocb(tot);
+            }
             memset(data, 0, tot);
         }
     }

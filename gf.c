@@ -86,7 +86,7 @@ jl_lambda_info_t *jl_add_static_parameters(jl_lambda_info_t *l, jl_tuple_t *sp)
     return nli;
 }
 
-void jl_specialize_ast(jl_lambda_info_t *li);
+void jl_specialize_ast(jl_lambda_info_t *li, jl_tuple_t **spenv_out);
 
 jl_function_t *jl_instantiate_method(jl_function_t *f, jl_tuple_t *sp)
 {
@@ -161,9 +161,25 @@ static jl_methlist_t *cache_method(jl_methtable_t *mt, jl_tuple_t *type,
     else
         newmeth = jl_instantiate_method(method, sparams);
 
-    if (newmeth->linfo != NULL)
-        jl_specialize_ast(newmeth->linfo);
-    return jl_method_list_insert(&mt->cache, (jl_type_t*)type, newmeth);
+    jl_methlist_t *ret =
+        jl_method_list_insert(&mt->cache, (jl_type_t*)type, newmeth);
+
+    if (newmeth->linfo != NULL) {
+        jl_tuple_t *spenv=jl_null;
+        jl_specialize_ast(newmeth->linfo, &spenv);
+        /*
+        if (jl_typeinf_func != NULL) {
+            newmeth->linfo->inInference = 1;
+            jl_value_t *fargs[3];
+            fargs[0] = (jl_value_t*)newmeth->linfo;
+            fargs[1] = (jl_value_t*)type;
+            fargs[2] = (jl_value_t*)spenv;
+            jl_value_t *newast = jl_apply(jl_typeinf_func, fargs, 3);
+            newmeth->linfo->ast = jl_tupleref(newast, 0);
+        }
+        */
+    }
+    return ret;
 }
 
 jl_tag_type_t *jl_wrap_Type(jl_value_t *t);
@@ -501,6 +517,7 @@ JL_CALLABLE(jl_new_struct_internal);
 // return linked tuples (t1, M1, (t2, M2, (... ()))) of types and methods.
 // t is the intersection of the type argument and the method signature,
 // and M is the corresponding LambdaStaticData (jl_lambda_info_t)
+DLLEXPORT
 jl_value_t *jl_matching_methods(jl_function_t *gf, jl_value_t *type)
 {
     jl_tuple_t *t = jl_null;
@@ -523,6 +540,7 @@ jl_value_t *jl_matching_methods(jl_function_t *gf, jl_value_t *type)
     return (jl_value_t*)t;
 }
 
+DLLEXPORT
 int jl_is_builtin(jl_value_t *v)
 {
     return ((jl_is_func(v) && (((jl_function_t*)v)->linfo==NULL) &&
@@ -530,6 +548,7 @@ int jl_is_builtin(jl_value_t *v)
             jl_typeis(v,jl_intrinsic_type));
 }
 
+DLLEXPORT
 int jl_is_genericfunc(jl_value_t *v)
 {
     return (jl_is_func(v) && jl_is_gf(v));

@@ -4,7 +4,7 @@ CFLAGS =
 
 HFILEDIRS = /usr/local/include
 LIBDIRS = /usr/local/lib
-OSLIBS = -Wl,--export-dynamic
+OSLIBS = -Wl,--export-dynamic -Wl,--version-script=julia.expmap
 EFENCE =
 
 ifeq ($(NBITS),32)
