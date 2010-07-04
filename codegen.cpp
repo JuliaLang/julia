@@ -15,6 +15,10 @@
 #include <sstream>
 #include <map>
 #include <vector>
+#ifdef DEBUG
+#undef NDEBUG
+#endif
+#include <cassert>
 using namespace llvm;
 
 extern "C" {
@@ -196,7 +200,7 @@ typedef struct {
     const Argument *envArg;
     const Argument *argArray;
     const Argument *argCount;
-    Value *argTemp;
+    AllocaInst *argTemp;
     std::string funcName;
 } jl_codectx_t;
 
@@ -466,7 +470,7 @@ static Value *emit_call(jl_value_t **args, size_t arglen, jl_codectx_t *ctx)
         Value *anArg = emit_expr(args[i+1], ctx, true);
         argVs.push_back(anArg);
     }
-    assert(nargs <= ((ConstantInt)argTemp->getArraySize())->getValue());
+    assert(nargs <= ((ConstantInt*)ctx->argTemp->getArraySize())->getZExtValue());
     // put into argument space
     for(i=0; i < nargs; i++) {
         Value *dest = builder.CreateGEP(ctx->argTemp,

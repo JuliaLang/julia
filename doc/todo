@@ -488,6 +488,9 @@ issues 6/21/10
     that's currently created in add_generic_ctor
   . in non-generic case, add static parameters
 - limit specialization of vararg functions
+- be able to cache results obtained by recursive inference in method
+  table cache when appropriate. instead of calling typeinf() recursively,
+  call specialize(), which will do something more like cache_method.
 
 - coroutines, Tasks, exceptions
 - new for loop, comprehension, reduction formulation

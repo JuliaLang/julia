@@ -286,7 +286,7 @@ function abstract_call(f, fargs, argtypes, vtypes, sv::StaticVarInfo)
                 # constructor
                 rt = x[3]
             else
-                (_tree,rt) = typeinf(x[3], x[1], x[2])
+                (_tree,rt) = typeinf(x[3], x[1], x[2], true)
             end
             rettype = tmerge(rettype, rt)
             if is(rettype,Any)
@@ -482,7 +482,7 @@ function findlabel(body, l)
     error("label not found")
 end
 
-function typeinf(linfo::LambdaStaticData, atypes::Tuple, sparams::Tuple)
+function typeinf(linfo::LambdaStaticData, atypes::Tuple, sparams::Tuple, cop)
     # check cached t-functions
     tf = linfo.tfunc
     while !is(tf,())
@@ -506,7 +506,7 @@ function typeinf(linfo::LambdaStaticData, atypes::Tuple, sparams::Tuple)
         f = f.prev
     end
 
-    ast = copy(ast0)
+    ast = cop ? copy(ast0) : ast0
     #print("typeinf ", ast, " ", sparams, " ", atypes, "\n")
     #print("typeinf ", atypes, "\n")
 
@@ -649,7 +649,7 @@ d=typevar(`d)
 
 function finfer(f, types)
     x = getmethods(f,types)
-    typeinf(x[3], x[1], x[2])[1]
+    typeinf(x[3], x[1], x[2], true)[1]
 end
 
 m = getmethods(fact,(Int32,))

@@ -201,10 +201,11 @@ static jl_methlist_t *cache_method(jl_methtable_t *mt, jl_tuple_t *type,
         jl_specialize_ast(newmeth->linfo);
         if (jl_typeinf_func != NULL) {
             newmeth->linfo->inInference = 1;
-            jl_value_t *fargs[3];
+            jl_value_t *fargs[4];
             fargs[0] = (jl_value_t*)newmeth->linfo;
             fargs[1] = (jl_value_t*)type;
             fargs[2] = (jl_value_t*)newmeth->linfo->sparams;
+            fargs[3] = jl_false;
 #ifdef TRACE_INFERENCE
             ios_printf(ios_stdout,"inference on %s(", cur_fname);
             size_t i;
@@ -215,7 +216,7 @@ static jl_methlist_t *cache_method(jl_methtable_t *mt, jl_tuple_t *type,
             ios_printf(ios_stdout, ")\n");
 #endif
 #ifdef ENABLE_INFERENCE
-            jl_value_t *newast = jl_apply(jl_typeinf_func, fargs, 3);
+            jl_value_t *newast = jl_apply(jl_typeinf_func, fargs, 4);
             newmeth->linfo->ast = jl_tupleref(newast, 0);
 #endif
             newmeth->linfo->inInference = 0;
