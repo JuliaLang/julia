@@ -466,7 +466,7 @@ static Value *emit_call(jl_value_t **args, size_t arglen, jl_codectx_t *ctx)
         Value *anArg = emit_expr(args[i+1], ctx, true);
         argVs.push_back(anArg);
     }
-    assert(nargs <= ((ConstantInt)argTemp->getArraySize())->getValue());
+    //assert(nargs <= ((ConstantInt)argTemp->getArraySize())->getValue());
     // put into argument space
     for(i=0; i < nargs; i++) {
         Value *dest = builder.CreateGEP(ctx->argTemp,
