@@ -487,6 +487,7 @@ issues 6/21/10
   . in generic case, instantiate all signatures with the typevar mapping
     that's currently created in add_generic_ctor
   . in non-generic case, add static parameters
+- limit specialization of vararg functions
 
 - coroutines, Tasks, exceptions
 - new for loop, comprehension, reduction formulation

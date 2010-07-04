@@ -157,7 +157,7 @@ static void emit_function(jl_lambda_info_t *lam, Function *f);
 static Function *to_function(jl_lambda_info_t *li)
 {
     Function *f = Function::Create(jl_func_sig, Function::ExternalLinkage,
-                                   "a_julia_function", jl_Module);
+                                   li->name->name, jl_Module);
     assert(jl_is_expr(li->ast));
     li->functionObject = (void*)f;
     BasicBlock *old = builder.GetInsertBlock();
@@ -196,6 +196,8 @@ typedef struct {
     const Argument *envArg;
     const Argument *argArray;
     const Argument *argCount;
+    Value *argTemp;
+    std::string funcName;
 } jl_codectx_t;
 
 static Value *literal_pointer_val(jl_value_t *p)
@@ -229,13 +231,14 @@ static Value *emit_typeof(Value *p)
     return tt;
 }
 
-static void emit_error(const std::string &txt)
+static void emit_error(const std::string &txt, jl_codectx_t *ctx)
 {
+    std::string txt2 = "in " + ctx->funcName + ": " + txt;
     std::vector<Value *> zeros(0);
     zeros.push_back(ConstantInt::get(T_int32, 0));
     zeros.push_back(ConstantInt::get(T_int32, 0));
     builder.CreateCall(jlerror_func,
-                       builder.CreateGEP(stringConst(txt),
+                       builder.CreateGEP(stringConst(txt2),
                                          zeros.begin(), zeros.end()));
 }
 
@@ -248,7 +251,7 @@ static void emit_typecheck(Value *x, jl_value_t *type, const std::string &msg,
     BasicBlock *mergeBB = BasicBlock::Create(getGlobalContext(),"b");
     builder.CreateCondBr(istype, mergeBB, elseBB);
     builder.SetInsertPoint(elseBB);
-    emit_error(msg);
+    emit_error(msg, ctx);
     builder.CreateBr(mergeBB);
     ctx->f->getBasicBlockList().push_back(mergeBB);
     builder.SetInsertPoint(mergeBB);
@@ -269,7 +272,7 @@ static void emit_func_check(Value *x, const std::string &msg, jl_codectx_t *ctx)
     BasicBlock *elseBB2 = BasicBlock::Create(getGlobalContext(),"a", ctx->f);
     builder.CreateCondBr(istype2, mergeBB1, elseBB2);
     builder.SetInsertPoint(elseBB2);
-    emit_error(msg);
+    emit_error(msg, ctx);
     builder.CreateBr(mergeBB1);
     ctx->f->getBasicBlockList().push_back(mergeBB1);
     builder.SetInsertPoint(mergeBB1);
@@ -337,7 +340,7 @@ static Value *emit_checked_var(Value *bp, const char *name, jl_codectx_t *ctx)
     std::string msg;
     msg += std::string(name);
     msg += " not defined";
-    emit_error(msg);
+    emit_error(msg, ctx);
     builder.CreateBr(ifok);
     ctx->f->getBasicBlockList().push_back(ifok);
     builder.SetInsertPoint(ifok);
@@ -385,6 +388,25 @@ static Value *emit_lambda_closure(jl_value_t *expr, jl_codectx_t *ctx)
                                literal_pointer_val(expr), tuple);
 }
 
+static size_t biggest_call(jl_value_t *expr)
+{
+    if (jl_is_expr(expr)) {
+        size_t max = 0;
+        jl_expr_t *e = (jl_expr_t*)expr;
+        size_t i, m;
+        for(i=0; i < e->args->length; i++) {
+            m = biggest_call(jl_exprarg(e,i));
+            if (m > max) max = m;
+        }
+        if (e->head == call_sym) {
+            if (e->args->length > max)
+                max = e->args->length;
+        }
+        return max;
+    }
+    return 0;
+}
+
 #include "intrinsics.cpp"
 
 static Value *emit_call(jl_value_t **args, size_t arglen, jl_codectx_t *ctx)
@@ -392,15 +414,18 @@ static Value *emit_call(jl_value_t **args, size_t arglen, jl_codectx_t *ctx)
     size_t nargs = arglen-1;
     Value *theFptr, *theEnv;
     jl_binding_t *b=NULL; bool done=false;
-    if (jl_is_symbol(args[0]) && is_global((jl_sym_t*)args[0], ctx) &&
-        jl_boundp(ctx->module, (jl_sym_t*)args[0])) {
-        b = jl_get_binding(ctx->module, (jl_sym_t*)args[0]);
+    jl_value_t *a0 = args[0];
+    if (jl_is_expr(a0) && ((jl_expr_t*)a0)->head==symbol_sym)
+        a0 = jl_exprarg(a0,0);
+    if (jl_is_symbol(a0) && is_global((jl_sym_t*)a0, ctx) &&
+        jl_boundp(ctx->module, (jl_sym_t*)a0)) {
+        b = jl_get_binding(ctx->module, (jl_sym_t*)a0);
         if (!b->constp || b->value==NULL) b = NULL;
     }
-    if (jl_is_expr(args[0]) && ((jl_expr_t*)args[0])->head == top_sym) {
+    if (jl_is_expr(a0) && ((jl_expr_t*)a0)->head == top_sym) {
         // (top x) is also global
         b = jl_get_binding(ctx->module,
-                           (jl_sym_t*)jl_exprarg(((jl_expr_t*)args[0]),0));
+                           (jl_sym_t*)jl_exprarg(((jl_expr_t*)a0),0));
         if (!b->constp || b->value==NULL) b = NULL;
     }
     if (b != NULL) {
@@ -426,7 +451,7 @@ static Value *emit_call(jl_value_t **args, size_t arglen, jl_codectx_t *ctx)
         }
     }
     if (!done) {
-        Value *theFunc = emit_expr(args[0], ctx, true);
+        Value *theFunc = emit_expr(a0, ctx, true);
         emit_func_check(theFunc, "apply: expected function", ctx);
         // extract pieces of the function object
         // TODO: try extractelement instead
@@ -435,6 +460,20 @@ static Value *emit_call(jl_value_t **args, size_t arglen, jl_codectx_t *ctx)
         theEnv = emit_nthptr(theFunc, 2);
     }
     // emit arguments
+    std::vector<Value*> argVs(0);
+    size_t i;
+    for(i=0; i < nargs; i++) {
+        Value *anArg = emit_expr(args[i+1], ctx, true);
+        argVs.push_back(anArg);
+    }
+    assert(nargs <= ((ConstantInt)argTemp->getArraySize())->getValue());
+    // put into argument space
+    for(i=0; i < nargs; i++) {
+        Value *dest = builder.CreateGEP(ctx->argTemp,
+                                        ConstantInt::get(T_int32,i));
+        builder.CreateStore(boxed(argVs[i]), dest);
+    }
+    /*
     Value *stacksave =
         builder.CreateCall(Intrinsic::getDeclaration(jl_Module,
                                                      Intrinsic::stacksave));
@@ -446,13 +485,16 @@ static Value *emit_call(jl_value_t **args, size_t arglen, jl_codectx_t *ctx)
         Value *dest = builder.CreateGEP(argl, ConstantInt::get(T_int32,i));
         builder.CreateStore(boxed(anArg), dest);
     }
+    */
     // call
-    Value *result = builder.CreateCall3(theFptr, theEnv, argl,
+    Value *result = builder.CreateCall3(theFptr, theEnv, ctx->argTemp,
                                         ConstantInt::get(T_int32,nargs));
     // restore stack
+    /*
     builder.CreateCall(Intrinsic::getDeclaration(jl_Module,
                                                  Intrinsic::stackrestore),
                        stacksave);
+    */
     return result;
 }
 
@@ -557,7 +599,14 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool value,
     else if (ex->head == assign_sym) {
         assert(!value);
         Value *rhs = emit_expr(args[1], ctx, true);
-        jl_sym_t *s = (jl_sym_t*)args[0];
+        jl_sym_t *s;
+        if (jl_is_symbol(args[0]))
+            s = (jl_sym_t*)args[0];
+        else if (jl_is_expr(args[0]) &&
+                 ((jl_expr_t*)args[0])->head == symbol_sym)
+            s = (jl_sym_t*)jl_exprarg(args[0],0);
+        else
+            assert(false);
         jl_value_t *static_type = (*ctx->declTypes)[s->name];
         if (static_type) {
             Value *typexp=NULL;
@@ -646,6 +695,7 @@ static void emit_function(jl_lambda_info_t *lam, Function *f)
     ctx.envArg = &envArg;
     ctx.argArray = &argArray;
     ctx.argCount = &argCount;
+    ctx.funcName = lam->name->name;
 
     // process var-info lists to see what vars are captured, need boxing
     jl_array_t *vinfos = jl_lam_vinfo(ast);
@@ -685,6 +735,11 @@ static void emit_function(jl_lambda_info_t *lam, Function *f)
         localVars[argname] = lv;
     }
 
+    ctx.argTemp =
+        builder.CreateAlloca(jl_pvalue_llvmt,
+                             ConstantInt::get(T_int32,
+                                              (int32_t)biggest_call((jl_value_t*)ast)));
+
     // check arg count
     size_t nreq = largs->length;
     int va = 0;
@@ -698,7 +753,7 @@ static void emit_function(jl_lambda_info_t *lam, Function *f)
         BasicBlock *mergeBB = BasicBlock::Create(getGlobalContext(), "ifcont");
         builder.CreateCondBr(enough, mergeBB, elseBB);
         builder.SetInsertPoint(elseBB);
-        emit_error("too few arguments");
+        emit_error("too few arguments", &ctx);
         builder.CreateBr(mergeBB);
         f->getBasicBlockList().push_back(mergeBB);
         builder.SetInsertPoint(mergeBB);
@@ -711,7 +766,7 @@ static void emit_function(jl_lambda_info_t *lam, Function *f)
         BasicBlock *mergeBB = BasicBlock::Create(getGlobalContext(), "ifcont");
         builder.CreateCondBr(enough, mergeBB, elseBB);
         builder.SetInsertPoint(elseBB);
-        emit_error("wrong number of arguments");
+        emit_error("wrong number of arguments", &ctx);
         builder.CreateBr(mergeBB);
         f->getBasicBlockList().push_back(mergeBB);
         builder.SetInsertPoint(mergeBB);

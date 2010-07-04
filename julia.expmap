@@ -21,6 +21,7 @@
     jl_union_too_complex;
     jl_type_match;
     jl_type_intersection;
+    jl_types_equal;
     jl_cstr_to_array;
     jl_print_to_string;
     jl_is_rest_arg;

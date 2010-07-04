@@ -372,7 +372,8 @@ JL_CALLABLE(jl_f_arrayref)
 void jl_arrayset(jl_array_t *a, size_t i, jl_value_t *v)
 {
     jl_type_t *el_type = (jl_type_t*)jl_tparam0(jl_typeof(a));
-    jl_value_t *rhs = jl_convert(el_type, v);
+    jl_value_t *rhs =
+        (el_type==(jl_type_t*)jl_any_type) ? v : jl_convert(el_type, v);
     if (jl_is_bits_type(el_type)) {
         size_t nb = ((jl_bits_type_t*)el_type)->nbits/8;
         switch (nb) {
@@ -1054,7 +1055,7 @@ JL_CALLABLE(jl_f_add_method)
 
 // --- generic function reflection ---
 
-jl_methlist_t *jl_method_table_assoc(jl_methtable_t *mt,
+jl_function_t *jl_method_table_assoc(jl_methtable_t *mt,
                                      jl_value_t **args, size_t nargs, int t);
 
 JL_CALLABLE(jl_f_methodexists)
@@ -1082,13 +1083,13 @@ JL_CALLABLE(jl_f_invoke)
     if (!jl_tuple_subtype(&args[2], nargs-2, &jl_tupleref(args[1],0),
                           ((jl_tuple_t*)args[1])->length, 1, 0))
         jl_error("invoke: argument type error");
-    jl_methlist_t *ml =
+    jl_function_t *mlfunc =
         jl_method_table_assoc(jl_gf_mtable(args[0]),
                               &jl_tupleref(args[1],0),
                               ((jl_tuple_t*)args[1])->length, 0);
-    if (ml == NULL)
+    if (mlfunc == NULL)
         jl_no_method_error(jl_gf_name(args[0]), &args[2], nargs-2);
-    return jl_apply(ml->func, &args[2], nargs-2);
+    return jl_apply(mlfunc, &args[2], nargs-2);
 }
 
 // --- c interface ---

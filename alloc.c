@@ -21,6 +21,7 @@ jl_value_t *jl_true;
 jl_value_t *jl_false;
 
 jl_tag_type_t *jl_undef_type;
+jl_tag_type_t *jl_typetype_type;
 jl_typector_t *jl_functype_ctor;
 jl_struct_type_t *jl_box_type;
 jl_type_t *jl_box_any_type;
@@ -141,7 +142,7 @@ jl_function_t *jl_new_closure(jl_fptr_t proc, jl_value_t *env)
 jl_lambda_info_t *jl_new_lambda_info(jl_value_t *ast, jl_tuple_t *sparams)
 {
     jl_lambda_info_t *li =
-        (jl_lambda_info_t*)newobj((jl_type_t*)jl_lambda_info_type, 8);
+        (jl_lambda_info_t*)newobj((jl_type_t*)jl_lambda_info_type, 9);
     li->ast = ast;
     li->sparams = sparams;
     li->tfunc = (jl_value_t*)jl_null;
@@ -150,6 +151,7 @@ jl_lambda_info_t *jl_new_lambda_info(jl_value_t *ast, jl_tuple_t *sparams)
     li->functionObject = NULL;
     li->inInference = 0;
     li->unspecialized = NULL;
+    li->name = jl_symbol("anonymous");
     return li;
 }
 
@@ -283,9 +285,9 @@ static void add_generic_ctor(jl_function_t *gf, jl_struct_type_t *t)
         }
     }
     t = (jl_struct_type_t*)jl_apply_type((jl_value_t*)t, ntvs);
+    gmeth->linfo = jl_new_lambda_info(NULL, jl_null);
     jl_add_method(gf, t->types, gmeth);
     gmeth->env = (jl_value_t*)jl_pair((jl_value_t*)gmeth, (jl_value_t*)t);
-    gmeth->linfo = jl_new_lambda_info(NULL, jl_null);
     if (!jl_is_struct_type(gf)) {
         gf->type =
             (jl_type_t*)jl_new_functype((jl_type_t*)t->types, (jl_type_t*)t);
@@ -294,7 +296,7 @@ static void add_generic_ctor(jl_function_t *gf, jl_struct_type_t *t)
 
 JL_CALLABLE(jl_new_array_internal);
 
-void jl_specialize_ast(jl_lambda_info_t *li, jl_tuple_t **spenv_out);
+void jl_specialize_ast(jl_lambda_info_t *li);
 
 void jl_add_constructors(jl_struct_type_t *t)
 {
@@ -347,7 +349,7 @@ void jl_add_constructors(jl_struct_type_t *t)
         // see the type of new() even before any constructors have been called.
         jl_methlist_t *ml = jl_gf_mtable(t)->defs;
         while (ml != NULL) {
-            jl_specialize_ast(ml->func->linfo, NULL);
+            jl_specialize_ast(ml->func->linfo);
             ml = ml->next;
         }
     }
@@ -835,6 +837,10 @@ void jl_init_builtin_types()
 
     jl_undef_type = jl_new_tagtype((jl_value_t*)jl_symbol("Undef"),
                                    jl_any_type, jl_null);
+
+    // Type{Type}
+    jl_typetype_type = (jl_tag_type_t*)jl_apply_type((jl_value_t*)jl_type_type,
+                                                     jl_tuple(1,jl_type_type));
 
     call_sym = jl_symbol("call");
     quote_sym = jl_symbol("quote");

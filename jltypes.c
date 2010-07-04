@@ -617,6 +617,8 @@ static int type_eqv_(jl_value_t *a, jl_value_t *b, jl_value_pair_t *stack)
 {
     jl_value_pair_t top;
     if (a == b) return 1;
+    if (jl_is_typector(a)) a = (jl_value_t*)((jl_typector_t*)a)->body;
+    if (jl_is_typector(b)) b = (jl_value_t*)((jl_typector_t*)b)->body;
     if (jl_is_typevar(a) || jl_is_typevar(b)) return 0;
     if (jl_is_int32(a) && jl_is_int32(b))
         return (jl_unbox_int32(a) == jl_unbox_int32(b));
@@ -725,7 +727,8 @@ static jl_value_t *apply_type_(jl_value_t *tc, jl_value_t **params, size_t n)
         jl_value_t *pi = params[i];
         if (!jl_is_typector(pi) && !jl_is_type(pi) && !jl_is_int32(pi) &&
             !jl_is_typevar(pi))
-            jl_errorf("invalid parameter for type %s", tname);
+            jl_errorf("invalid parameter %s for type %s",
+                      jl_print_to_string(pi), tname);
     }
     if (tc == (jl_value_t*)jl_ntuple_type && (n==1||n==2) &&
         jl_is_int32(params[0])) {
@@ -753,6 +756,10 @@ static jl_value_t *apply_type_(jl_value_t *tc, jl_value_t **params, size_t n)
         }
         else {
             if (!jl_is_typevar(params[i]) &&
+                // TODO: Undef should not be special here; fix.
+                // maybe introduce Top == Union(Any,Undef), and make this
+                // the default upper bound.
+                params[i] != (jl_value_t*)jl_undef_type &&
                 !jl_subtype(params[i], (jl_value_t*)tv, 0))
                 jl_errorf("%s: %s does not match type parameter %s",
                           tname, jl_print_to_string(params[i]),

@@ -182,7 +182,7 @@ function getfield_tfunc(A, s, name)
 end
 t_func[getfield] = (2, 2, getfield_tfunc)
 
-# other: apply, setfield, new_closure
+# other: apply, setfield, instantiate_type
 
 # Scalar{T} => T
 normalize_numeric_type(t) = t
@@ -508,6 +508,7 @@ function typeinf(linfo::LambdaStaticData, atypes::Tuple, sparams::Tuple)
 
     ast = copy(ast0)
     #print("typeinf ", ast, " ", sparams, " ", atypes, "\n")
+    #print("typeinf ", atypes, "\n")
 
     assert(is(ast.head,`lambda))
     args = map(x->(isa(x,Expr) ? x.args[1] : x), ast.args[1])
@@ -653,7 +654,6 @@ end
 
 m = getmethods(fact,(Int32,))
 ast = m[3]
-#typeinf(ast, (Int32,), (`T,Int32))
 
 function foo(x)
     return x.re + x.im

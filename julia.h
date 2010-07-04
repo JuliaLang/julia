@@ -64,7 +64,8 @@ typedef struct _jl_lambda_info_t {
     // used to avoid infinite recursion
     uptrint_t inInference;
     // a slower-but-works version of this function as a fallback
-    struct _jl_lambda_info_t *unspecialized;
+    struct _jl_function_t *unspecialized;
+    jl_sym_t *name;  // for error reporting
 } jl_lambda_info_t;
 
 #define JL_FUNC_FIELDS                          \
@@ -72,7 +73,7 @@ typedef struct _jl_lambda_info_t {
     jl_value_t *env;                            \
     jl_lambda_info_t *linfo;
 
-typedef struct {
+typedef struct _jl_function_t {
     JL_VALUE_STRUCT
     JL_FUNC_FIELDS
 } jl_function_t;
@@ -186,6 +187,7 @@ typedef struct {
 
 extern jl_tag_type_t *jl_any_type;
 extern jl_tag_type_t *jl_type_type;
+extern jl_tag_type_t *jl_typetype_type;
 extern jl_tag_type_t *jl_undef_type;
 extern jl_struct_type_t *jl_typename_type;
 extern jl_struct_type_t *jl_typector_type;
@@ -360,7 +362,7 @@ int jl_subtype(jl_value_t *a, jl_value_t *b, int ta);
 int jl_type_morespecific(jl_value_t *a, jl_value_t *b, int ta);
 DLLEXPORT jl_value_t *jl_type_match(jl_type_t *a, jl_type_t *b);
 jl_value_t *jl_type_match_morespecific(jl_type_t *a, jl_type_t *b);
-int jl_types_equal(jl_value_t *a, jl_value_t *b);
+DLLEXPORT int jl_types_equal(jl_value_t *a, jl_value_t *b);
 int jl_types_equal_generic(jl_value_t *a, jl_value_t *b);
 jl_value_t *jl_type_union(jl_tuple_t *types);
 jl_value_t *jl_type_intersection_matching(jl_value_t *a, jl_value_t *b,

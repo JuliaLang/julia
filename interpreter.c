@@ -91,6 +91,9 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl)
             jl_errorf("%s not defined", ((jl_sym_t*)args[0])->name);
         return *bp;
     }
+    else if (ex->head == symbol_sym) {
+        return eval(jl_exprarg(ex,0), locals, nl);
+    }
     else if (ex->head == unbound_sym) {
         jl_value_t **bp = jl_get_bindingp(jl_system_module, (jl_sym_t*)args[0]);
         if (*bp == NULL)
