@@ -1,6 +1,12 @@
 function perf()
 % simple performance tests
 
+function assert(expr)
+   if ~expr
+     error('Assertion failed')
+   end
+end
+
 %% recursive fib %%
 
 function f = fib(n)
@@ -12,13 +18,14 @@ function f = fib(n)
   end
 end
 
-fprintf('recursive fib(20): \n')
+fprintf('recursive fib(20): ')
 fib(5);  % warm up: make sure fib is compiled
 tic(); f = fib(20); toc()
+assert(f == 6765)
 
 %% parse int %%
 
-fprintf('parse_int: \n')
+fprintf('parse_int: ')
 bin2dec('10');
 tic()
 for i=1:1000
@@ -26,18 +33,21 @@ for i=1:1000
     n=bin2dec('1111000011110000111100001111');
 end
 toc()
+assert(n == 252645135)
 
 %% array constructors %%
 
-fprintf('ones: \n')
+fprintf('ones: ')
 small=ones(2,2);
 tic(); o = ones(200,200); toc()
+assert(all(o) == 1)
 
 %% matmul and transpose %%
 
-fprintf('A * A.T: \n');
+fprintf('A * A.T: ');
 small*small';
 tic(); oo = o * o'; toc()
+assert(all(oo == 200))
 
 %% mandelbrot set: complex arithmetic and comprehensions %%
 
@@ -52,18 +62,18 @@ function n = mandel(z)
     end
 end
 
-fprintf('mandelbrot: \n');
+fprintf('mandelbrot: ');
 mandel(complex(-.53,.68));
-tic()
 
-r = -2:0:.1:0.5;
-i = -1:.1:1;
-res = zeros(length(r), length(i));
-for x=1:length(r)
-  for y=1:length(i)
-    res(x,y) = mandel(complex(r,i));
+tic()
+M = zeros(length(-2.0:.1:0.5), length(-1:.1:1));
+count = 1;
+for r = -2:0.1:0.5
+  for i = -1:.1:1
+    M(count) = mandel(complex(r,i));
+    count = count + 1;
   end
 end
 toc()
-
+assert(sum(sum(M)) == 14791)
 end
