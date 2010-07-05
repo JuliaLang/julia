@@ -1,6 +1,10 @@
 function perf()
 % simple performance tests
 
+function nl()
+   fprintf('\n')
+end
+
 function assert(expr)
    if ~expr
      error('Assertion failed')
@@ -22,6 +26,7 @@ fprintf('recursive fib(20): ')
 fib(5);  % warm up: make sure fib is compiled
 tic(); f = fib(20); toc()
 assert(f == 6765)
+nl()
 
 %% parse int %%
 
@@ -34,6 +39,7 @@ for i=1:1000
 end
 toc()
 assert(n == 252645135)
+nl()
 
 %% array constructors %%
 
@@ -41,13 +47,15 @@ fprintf('ones: ')
 small=ones(2,2);
 tic(); o = ones(200,200); toc()
 assert(all(o) == 1)
+nl()
 
 %% matmul and transpose %%
 
-fprintf('A * A.T: ');
+fprintf('A * transpose(A): ');
 small*small';
 tic(); oo = o * o'; toc()
 assert(all(oo == 200))
+nl()
 
 %% mandelbrot set: complex arithmetic and comprehensions %%
 
@@ -75,5 +83,7 @@ for r = -2:0.1:0.5
   end
 end
 toc()
-assert(sum(sum(M)) == 14791)
+assert(sum(sum(M)) == 14628)
+nl()
+
 end
