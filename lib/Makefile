@@ -1,3 +1,5 @@
+JULIAHOME = ..
+
 NBITS = $(shell (test -e ../nbits || $(CC) ../nbits.c -o ../nbits) && ../nbits)
 include ../Make.inc.$(shell uname)
 
@@ -8,7 +10,7 @@ OBJS = $(SRCS:%.c=%.o)
 DOBJS = $(SRCS:%.c=%.do)
 TARGET = libllt.a
 
-FLAGS = -Wall -Wno-strict-aliasing $(CFLAGS) $(CONFIG) -I $(HFILEDIRS:%=-I%) \
+FLAGS = -Wall -Wno-strict-aliasing $(CFLAGS) $(CONFIG) $(HFILEDIRS:%=-I%) \
 	-fvisibility=hidden
 LIBS =
 

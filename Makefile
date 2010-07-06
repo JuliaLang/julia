@@ -8,6 +8,8 @@ FLISPDIR = flisp
 LLT = $(LLTDIR)/libllt.a
 FLISP = $(FLISPDIR)/libflisp.a
 
+JULIAHOME = .
+
 NBITS = $(shell (test -e nbits || $(CC) nbits.c -o nbits) && ./nbits)
 include ./Make.inc.$(shell uname)
 

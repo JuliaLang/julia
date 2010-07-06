@@ -2,9 +2,11 @@ CC = gcc
 CXX = g++
 CFLAGS = 
 
-HFILEDIRS = /usr/local/include
-LIBDIRS = /usr/local/lib
-OSLIBS = -Wl,--export-dynamic -Wl,--version-script=julia.expmap
+PFX = /usr/local
+#PFX = /afs/csail.mit.edu/u/b/bezanson
+HFILEDIRS = $(PFX)/include
+LIBDIRS = $(PFX)/lib
+OSLIBS = -Wl,--export-dynamic -Wl,--version-script=$(JULIAHOME)/julia.expmap
 EFENCE =
 
 ifeq ($(NBITS),32)
