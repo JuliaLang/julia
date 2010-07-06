@@ -535,7 +535,10 @@ void gc(int mustgrow)
     fl_readstate_t *rs;
 
     curheap = tospace;
-    lim = curheap+heapsize-sizeof(cons_t);
+    if (grew)
+        lim = curheap+heapsize*2-sizeof(cons_t);
+    else
+        lim = curheap+heapsize-sizeof(cons_t);
 
     if (fl_throwing_frame > curr_frame) {
         top = fl_throwing_frame - 4;
@@ -583,14 +586,12 @@ void gc(int mustgrow)
     // more space to fill next time. if we grew tospace last time,
     // grow the other half of the heap this time to catch up.
     if (grew || ((lim-curheap) < (int)(heapsize/5)) || mustgrow) {
-        temp = LLT_REALLOC(tospace, grew ? heapsize : heapsize*2);
+        temp = LLT_REALLOC(tospace, heapsize*2);
         if (temp == NULL)
             fl_raise(memory_exception_value);
         tospace = temp;
-        if (!grew) {
+        if (grew) {
             heapsize*=2;
-        }
-        else {
             temp = bitvector_resize(consflags, 0, heapsize/sizeof(cons_t), 1);
             if (temp == NULL)
                 fl_raise(memory_exception_value);
