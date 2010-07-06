@@ -12,7 +12,9 @@ LIBTARGET = lib$(NAME)
 LLTDIR = ../lib
 LLT = $(LLTDIR)/libllt.a
 
-FLAGS = -falign-functions -Wall -Wno-strict-aliasing -I$(LLTDIR) $(CFLAGS) $(CONFIG) -DUSE_COMPUTED_GOTO $(HFILEDIRS:%=-I%) $(LIBDIRS:%=-L%)
+FLAGS = -falign-functions -Wall -Wno-strict-aliasing -I$(LLTDIR) $(CFLAGS) \
+	$(CONFIG) -DUSE_COMPUTED_GOTO $(HFILEDIRS:%=-I%) $(LIBDIRS:%=-L%) \
+	-fvisibility=hidden
 LIBFILES = $(LLT)
 LIBS = $(LIBFILES) -lm -lgc
 
