@@ -13,11 +13,10 @@ include ./Make.inc.$(shell uname)
 
 FLAGS = -falign-functions -Wall -Wno-strict-aliasing \
 	-I$(FLISPDIR) -I$(LLTDIR) $(HFILEDIRS:%=-I%) $(LIBDIRS:%=-L%) \
-	$(CFLAGS) $(CONFIG) -I$(shell llvm-config --includedir) \
-	-fvisibility=hidden
+	$(CFLAGS) -D___LIBRARY $(CONFIG) -I$(shell llvm-config --includedir)
 LIBFILES = $(FLISP) $(LLT)
 LIBS = $(LIBFILES) -lutil -ldl -lm -lgc -lreadline $(OSLIBS) \
-	$(shell llvm-config --ldflags --libs engine)
+	$(shell llvm-config --ldflags --libs core engine jit interpreter bitreader)
 
 DEBUGFLAGS = -ggdb3 -DDEBUG $(FLAGS)
 SHIPFLAGS = -O3 -DNDEBUG $(FLAGS)
@@ -39,7 +38,7 @@ julia_flisp.boot.inc: julia_flisp.boot $(FLISP)
 julia_flisp.boot: julia-parser.scm julia-syntax.scm \
 	match.scm utils.scm jlfrontend.scm $(FLISP)
 	$(FLISPDIR)/flisp ./jlfrontend.scm
-codegen.o codegen.do: intrinsics.cpp
+codegen.o codegen.do: intrinsics.cpp julia-defs.s.bc.inc
 
 julia-defs.s.bc: julia-defs$(NBITS).s
 	llvm-as -f $< -o $@
@@ -53,15 +52,15 @@ $(LLT): $(LLTDIR)/*.h $(LLTDIR)/*.c
 $(FLISP): $(FLISPDIR)/*.h $(FLISPDIR)/*.c $(LLT)
 	cd $(FLISPDIR) && $(MAKE)
 
-julia-debug: $(DOBJS) $(LIBFILES)
+julia-debug: $(DOBJS) $(LIBFILES) julia-defs.s.bc
 	$(CXX) $(DEBUGFLAGS) $(DOBJS) -o $@ $(LIBS)
 	ln -sf $@ julia
 
-julia-efence: $(DOBJS) $(LIBFILES)
+julia-efence: $(DOBJS) $(LIBFILES) julia-defs.s.bc
 	$(CXX) $(DEBUGFLAGS) $(DOBJS) -o $@ $(EFENCE) $(LIBS)
 	ln -sf $@ julia
 
-julia-release: $(OBJS) $(LIBFILES)
+julia-release: $(OBJS) $(LIBFILES) julia-defs.s.bc
 	$(CXX) $(SHIPFLAGS) $(OBJS) -o $@ $(LIBS)
 	ln -sf $@ julia
 
