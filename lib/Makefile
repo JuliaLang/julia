@@ -1,5 +1,4 @@
-NBITS = $(shell (test -e ../nbits || $(CC) ../nbits.c -o ../nbits) && ../nbits)
-include ../Make.inc.$(shell uname)
+include ../Make.inc.Linux64
 
 SRCS = hashing.c timefuncs.c dblprint.c ptrhash.c operators.c socket.c \
 	utf8.c ios.c cplxprint.c dirpath.c htable.c bitvector.c \
