@@ -4,7 +4,7 @@ symbol(s::String) =
 string(x) =
     ccall(dlsym(JuliaDLHandle,"jl_cstr_to_array"), Any, (Ptr{Char},),
           ccall(dlsym(JuliaDLHandle,"jl_print_to_string"), Ptr{Char}, (Any,),
-                x))
+                x))::String
 
 function strcat(ss::String...)
     nn = apply(+,map(length,ss))

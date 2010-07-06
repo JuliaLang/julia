@@ -1,4 +1,5 @@
-include ../Make.inc.Linux64
+NBITS = $(shell (test -e ../nbits || $(CC) ../nbits.c -o ../nbits) && ../nbits)
+include ../Make.inc.$(shell uname)
 
 CC = gcc
 
@@ -11,7 +12,7 @@ LIBTARGET = lib$(NAME)
 LLTDIR = ../lib
 LLT = $(LLTDIR)/libllt.a
 
-FLAGS = -falign-functions -Wall -Wno-strict-aliasing -I$(LLTDIR) $(CFLAGS) $(CONFIG) -DUSE_COMPUTED_GOTO $(LIBDIRS:%=-L%)
+FLAGS = -falign-functions -Wall -Wno-strict-aliasing -I$(LLTDIR) $(CFLAGS) $(CONFIG) -DUSE_COMPUTED_GOTO $(HFILEDIRS:%=-I%) $(LIBDIRS:%=-L%) -fvisibility=hidden
 LIBFILES = $(LLT)
 LIBS = $(LIBFILES) -lm -lgc
 

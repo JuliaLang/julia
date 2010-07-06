@@ -1,8 +1,10 @@
 struct Complex{T<:Real} <: Number
     re::T
     im::T
+
+    Complex(x::Real, y::Real) = new(x, y)
+    Complex(x::Real) = new(x, convert(typeof(x),0))
 end
-Complex{T<:Real}(x::T) = Complex(x, convert(T,0))
 
 convert{T}(::Type{Complex{T}}, x::T) = Complex(x, convert(T,0))
 convert{T}(::Type{Complex{T}}, x::Real) = Complex(convert(T,x), convert(T,0))
@@ -111,10 +113,10 @@ function log(z::Complex)
     ai = abs(z.im)
     if ar < ai
         r = ar/ai
-        re = log(ai) + 0.5 log1p(r r)
+        re = log(ai) + 0.5 log1p(r*r)
     else
         r = ai/ar
-        re = log(ar) + 0.5 log1p(r r)
+        re = log(ar) + 0.5 log1p(r*r)
     end
     Complex(re, atan2(z.im, z.re))
 end

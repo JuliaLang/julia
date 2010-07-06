@@ -31,14 +31,15 @@ static inline u_int32_t count_bits(u_int32_t b)
 
 u_int32_t bitreverse(u_int32_t x);
 
-u_int32_t *bitvector_new(u_int64_t n, int initzero);
+DLLEXPORT u_int32_t *bitvector_new(u_int64_t n, int initzero);
+DLLEXPORT
 u_int32_t *bitvector_resize(u_int32_t *b, uint64_t oldsz, uint64_t newsz,
                             int initzero);
 size_t bitvector_nwords(u_int64_t nbits);
-void bitvector_set(u_int32_t *b, u_int64_t n, u_int32_t c);
-u_int32_t bitvector_get(u_int32_t *b, u_int64_t n);
+DLLEXPORT void bitvector_set(u_int32_t *b, u_int64_t n, u_int32_t c);
+DLLEXPORT u_int32_t bitvector_get(u_int32_t *b, u_int64_t n);
 
-uint32_t bitvector_next(uint32_t *b, uint64_t n0, uint64_t n);
+DLLEXPORT uint32_t bitvector_next(uint32_t *b, uint64_t n0, uint64_t n);
 
 void bitvector_shr(u_int32_t *b, size_t n, u_int32_t s);
 void bitvector_shr_to(u_int32_t *dest, u_int32_t *b, size_t n, u_int32_t s);

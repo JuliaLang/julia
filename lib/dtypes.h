@@ -16,6 +16,18 @@
   We assume the LP64 convention for 64-bit platforms.
 */
 
+#ifdef WIN32
+#define STDCALL __stdcall
+# ifdef IMPORT_EXPORTS
+#  define DLLEXPORT __declspec(dllimport)
+# else
+#  define DLLEXPORT __declspec(dllexport)
+# endif
+#else
+#define STDCALL
+#define DLLEXPORT __attribute__ ((visibility("default")))
+#endif
+
 #ifdef LINUX
 #include <features.h>
 #include <endian.h>

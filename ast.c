@@ -245,9 +245,8 @@ static jl_value_t *scm_to_julia(value_t e)
                     jl_cellset(ex->args, i, scm_to_julia(car_(e)));
                     e = cdr_(e);
                 }
-                return (jl_value_t*)
-                    jl_expr(quote_sym, 1,
-                            jl_new_lambda_info((jl_value_t*)ex, jl_null));
+                return
+                    (jl_value_t*)jl_new_lambda_info((jl_value_t*)ex, jl_null);
             }
             if (!strcmp(s, "var-info")) {
                 jl_expr_t *ex = jl_exprn(sym, n);
@@ -256,7 +255,7 @@ static jl_value_t *scm_to_julia(value_t e)
                 e = cdr_(e);
                 jl_cellset(ex->args, 1, full_list_of_lists(car_(e)));
                 e = cdr_(e);
-                jl_cellset(ex->args, 2, full_list(car_(e)));
+                jl_cellset(ex->args, 2, full_list_of_lists(car_(e)));
                 e = cdr_(e);
                 for(i=3; i < n; i++) {
                     assert(iscons(e));
@@ -359,9 +358,7 @@ jl_lambda_info_t *jl_expand(jl_value_t *expr)
         return NULL;
     syntax_error_check(e);
 
-    jl_expr_t *ex = (jl_expr_t*)scm_to_julia(e);
-    assert(jl_is_expr(ex));
-    jl_lambda_info_t *li = (jl_lambda_info_t*)jl_exprarg(ex,0);
+    jl_lambda_info_t *li = (jl_lambda_info_t*)scm_to_julia(e);
     assert(jl_is_lambda_info(li));
     return li;
 }
@@ -386,6 +383,26 @@ jl_array_t *jl_lam_locals(jl_expr_t *l)
     assert(jl_is_expr(lle));
     assert(lle->head == locals_sym);
     return lle->args;
+}
+
+// get array of var info records
+jl_array_t *jl_lam_vinfo(jl_expr_t *l)
+{
+    jl_value_t *le = jl_exprarg(l, 1);
+    assert(jl_is_expr(le));
+    jl_array_t *vil = (jl_array_t*)jl_exprarg(le,1);
+    assert(jl_is_array(vil));
+    return vil;
+}
+
+// get array of var info records for captured vars
+jl_array_t *jl_lam_capt(jl_expr_t *l)
+{
+    jl_value_t *le = jl_exprarg(l, 1);
+    assert(jl_is_expr(le));
+    jl_array_t *vil = (jl_array_t*)jl_exprarg(le,2);
+    assert(jl_is_array(vil));
+    return vil;
 }
 
 // get array of body forms
@@ -416,4 +433,62 @@ int jl_is_rest_arg(jl_value_t *ex)
     if ((jl_sym_t*)jl_exprarg(atype,1) != dots_sym)
         return 0;
     return 1;
+}
+
+static jl_value_t *copy_ast(jl_value_t *expr, jl_tuple_t *sp)
+{
+    if (jl_is_lambda_info(expr)) {
+        return (jl_value_t*)jl_add_static_parameters((jl_lambda_info_t*)expr,
+                                                     sp);
+    }
+    if (jl_typeis(expr,jl_array_any_type)) {
+        jl_array_t *a = (jl_array_t*)expr;
+        jl_array_t *na = jl_alloc_cell_1d(a->length);
+        size_t i;
+        for(i=0; i < a->length; i++)
+            jl_cellset(na, i, copy_ast(jl_cellref(a,i), sp));
+        return (jl_value_t*)na;
+    }
+    if (jl_is_expr(expr)) {
+        jl_expr_t *e = (jl_expr_t*)expr;
+        jl_expr_t *ne = jl_exprn(e->head, e->args->length);
+        size_t i;
+        for(i=0; i < e->args->length; i++)
+            jl_exprarg(ne, i) = copy_ast(jl_exprarg(e,i), sp);
+        return (jl_value_t*)ne;
+    }
+    return expr;
+}
+
+static void eval_decl_types(jl_array_t *vi, jl_tuple_t *spenv)
+{
+    size_t i;
+    for(i=0; i < vi->length; i++) {
+        jl_array_t *v = (jl_array_t*)jl_cellref(vi, i);
+        jl_value_t *ty =
+            jl_interpret_toplevel_expr_with(jl_cellref(v,1),
+                                            &jl_tupleref(spenv,0),
+                                            spenv->length/2);
+        jl_cellref(v, 1) = ty;
+    }
+}
+
+// given a new lambda_info with static parameter values, make a copy
+// of the tree with declared types evaluated and static parameters passed
+// on to all enclosed functions.
+// this tree can then be further mutated by optimization passes.
+void jl_specialize_ast(jl_lambda_info_t *li)
+{
+    if (li->ast == NULL) return;
+    jl_tuple_t *spenv = jl_alloc_tuple(li->sparams->length);
+    size_t i;
+    for(i=0; i < spenv->length; i+=2) {
+        jl_tupleset(spenv, i,
+                    (jl_value_t*)((jl_tvar_t*)jl_tupleref(li->sparams,i))->name);
+        jl_tupleset(spenv, i+1, jl_tupleref(li->sparams,i+1));
+    }
+    jl_value_t *ast = copy_ast(li->ast, li->sparams);
+    li->ast = ast;
+    eval_decl_types(jl_lam_vinfo((jl_expr_t*)ast), spenv);
+    eval_decl_types(jl_lam_capt((jl_expr_t*)ast), spenv);
 }

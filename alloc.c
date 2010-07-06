@@ -20,12 +20,16 @@
 jl_value_t *jl_true;
 jl_value_t *jl_false;
 
+jl_tag_type_t *jl_undef_type;
+jl_tag_type_t *jl_typetype_type;
 jl_typector_t *jl_functype_ctor;
-jl_typector_t *jl_box_type;
+jl_struct_type_t *jl_box_type;
 jl_type_t *jl_box_any_type;
 jl_typename_t *jl_box_typename;
 
-jl_typector_t *jl_array_type;
+jl_struct_type_t *jl_typector_type;
+
+jl_struct_type_t *jl_array_type;
 jl_typename_t *jl_array_typename;
 jl_type_t *jl_array_uint8_type;
 jl_type_t *jl_array_any_type;
@@ -34,7 +38,7 @@ jl_bits_type_t *jl_intrinsic_type;
 jl_struct_type_t *jl_methtable_type;
 jl_struct_type_t *jl_lambda_info_type;
 
-jl_typector_t *jl_pointer_typector;
+jl_bits_type_t *jl_pointer_type;
 jl_bits_type_t *jl_pointer_void_type;
 jl_bits_type_t *jl_pointer_uint8_type;
 
@@ -51,7 +55,10 @@ jl_sym_t *null_sym;    jl_sym_t *body_sym;
 jl_sym_t *unbound_sym; jl_sym_t *boxunbound_sym;
 jl_sym_t *locals_sym;  jl_sym_t *colons_sym;
 jl_sym_t *closure_ref_sym;
+jl_sym_t *symbol_sym;
+jl_sym_t *Any_sym;
 
+// NOTE: does not work for TagKind or its subtypes
 jl_value_t *jl_new_struct(jl_struct_type_t *type, ...)
 {
     va_list args;
@@ -125,24 +132,26 @@ jl_tuple_t *jl_flatten_pairs(jl_tuple_t *t)
 
 jl_function_t *jl_new_closure(jl_fptr_t proc, jl_value_t *env)
 {
-    jl_function_t *f = (jl_function_t*)newobj((jl_type_t*)jl_any_func, 6);
+    jl_function_t *f = (jl_function_t*)newobj((jl_type_t*)jl_any_func, 3);
     f->fptr = proc;
     f->env = env;
     f->linfo = NULL;
-    f->body = NULL;
-    f->unconstrained = NULL;
     return f;
 }
 
 jl_lambda_info_t *jl_new_lambda_info(jl_value_t *ast, jl_tuple_t *sparams)
 {
     jl_lambda_info_t *li =
-        (jl_lambda_info_t*)newobj((jl_type_t*)jl_lambda_info_type, 5);
+        (jl_lambda_info_t*)newobj((jl_type_t*)jl_lambda_info_type, 9);
     li->ast = ast;
     li->sparams = sparams;
     li->tfunc = (jl_value_t*)jl_null;
     li->fptr = NULL;
     li->roots = jl_null;
+    li->functionObject = NULL;
+    li->inInference = 0;
+    li->unspecialized = NULL;
+    li->name = jl_symbol("anonymous");
     return li;
 }
 
@@ -183,7 +192,7 @@ static jl_sym_t **symtab_lookup(jl_sym_t **ptree, const char *str)
     return ptree;
 }
 
-jl_sym_t *jl_symbol(const char *str)
+DLLEXPORT jl_sym_t *jl_symbol(const char *str)
 {
     jl_sym_t **pnode;
 
@@ -208,23 +217,36 @@ jl_sym_t *jl_gensym()
 
 jl_typename_t *jl_new_typename(jl_sym_t *name)
 {
-    jl_typename_t *tn=(jl_typename_t*)newobj((jl_type_t*)jl_typename_type, 3);
+    jl_typename_t *tn=(jl_typename_t*)newobj((jl_type_t*)jl_typename_type, 2);
     tn->name = name;
-    tn->ctor = NULL;
+    tn->primary = NULL;
     return tn;
+}
+
+static void unbind_tvars(jl_tuple_t *parameters)
+{
+    size_t i;
+    for(i=0; i < parameters->length; i++) {
+        jl_tvar_t *tv = (jl_tvar_t*)jl_tupleref(parameters, i);
+        if (jl_is_typevar(tv))
+            tv->unbound = 1;
+    }
 }
 
 jl_tag_type_t *jl_new_tagtype(jl_value_t *name, jl_tag_type_t *super,
                               jl_tuple_t *parameters)
 {
     jl_tag_type_t *t = (jl_tag_type_t*)newobj((jl_type_t*)jl_tag_kind,
-                                            TAG_TYPE_NW);
+                                              TAG_TYPE_NW);
     if (jl_is_typename(name))
         t->name = (jl_typename_t*)name;
     else
         t->name = jl_new_typename((jl_sym_t*)name);
     t->super = super;
+    unbind_tvars(parameters);
     t->parameters = parameters;
+    if (t->name->primary == NULL)
+        t->name->primary = (jl_value_t*)t;
     return t;
 }
 
@@ -239,6 +261,106 @@ jl_func_type_t *jl_new_functype(jl_type_t *a, jl_type_t *b)
 }
 
 JL_CALLABLE(jl_new_struct_internal);
+JL_CALLABLE(jl_generic_ctor);
+
+void jl_initialize_generic_function(jl_function_t *f, jl_sym_t *name);
+
+static void add_generic_ctor(jl_function_t *gf, jl_struct_type_t *t)
+{
+    jl_function_t *gmeth = jl_new_closure(jl_generic_ctor,(jl_value_t*)jl_null);
+    jl_tuple_t *ntvs = jl_alloc_tuple(t->parameters->length);
+    size_t i;
+    // create new typevars, so the function has its own constraint
+    // environment.
+    for(i=0; i < t->parameters->length; i++) {
+        jl_value_t *tv = jl_tupleref(t->parameters, i);
+        if (jl_is_typevar(tv)) {
+            jl_tupleset(ntvs, i,
+                        (jl_value_t*)jl_new_typevar(((jl_tvar_t*)tv)->name,
+                                                    ((jl_tvar_t*)tv)->lb,
+                                                    ((jl_tvar_t*)tv)->ub));
+        }
+        else {
+            jl_tupleset(ntvs, i, tv);
+        }
+    }
+    t = (jl_struct_type_t*)jl_apply_type((jl_value_t*)t, ntvs);
+    gmeth->linfo = jl_new_lambda_info(NULL, jl_null);
+    jl_add_method(gf, t->types, gmeth);
+    gmeth->env = (jl_value_t*)jl_pair((jl_value_t*)gmeth, (jl_value_t*)t);
+    if (!jl_is_struct_type(gf)) {
+        gf->type =
+            (jl_type_t*)jl_new_functype((jl_type_t*)t->types, (jl_type_t*)t);
+    }
+}
+
+JL_CALLABLE(jl_new_array_internal);
+
+void jl_specialize_ast(jl_lambda_info_t *li);
+
+void jl_add_constructors(jl_struct_type_t *t)
+{
+    if (t->name == jl_array_typename) {
+        t->fptr = jl_new_array_internal;
+        return;
+    }
+    if (t->ctor_factory == (jl_value_t*)jl_null) {
+        // no user-defined constructors
+        if (t->parameters->length>0 && (jl_value_t*)t==t->name->primary) {
+            jl_function_t *tf = (jl_function_t*)t;
+            jl_initialize_generic_function(tf, t->name->name);
+            add_generic_ctor(tf, t);
+            jl_gf_mtable(tf)->sealed = 1;
+        }
+        else {
+            t->fptr = jl_new_struct_internal;
+        }
+    }
+    else {
+        // call user-defined constructor factory on (type, new)
+        // where new is a default constructor
+        jl_function_t *fnew;
+        if (t->parameters->length>0 && (jl_value_t*)t==t->name->primary) {
+            fnew = jl_new_generic_function(t->name->name);
+            add_generic_ctor(fnew, t);
+            jl_gf_mtable(fnew)->sealed = 1;
+        }
+        else {
+            fnew = jl_new_closure(jl_new_struct_internal, (jl_value_t*)t);
+            fnew->type =
+                (jl_type_t*)jl_new_functype((jl_type_t*)t->types,
+                                            (jl_type_t*)t);
+        }
+        // in this case the type itself always works as a generic function,
+        // to accomodate the user's various definitions
+        jl_initialize_generic_function((jl_function_t*)t, t->name->name);
+        assert(jl_is_function(t->ctor_factory));
+        jl_value_t *cfargs[2];
+        cfargs[0] = (jl_value_t*)t;
+        cfargs[1] = (jl_value_t*)fnew;
+        jl_apply((jl_function_t*)t->ctor_factory, cfargs, 2);
+        // TODO: if we want to, here we could feed the type's static parameters
+        // to the methods for their use.
+        jl_gf_mtable(t)->sealed = 1;
+
+        // calling ctor_factory binds the type of new() to a static parameter
+        // visible to each of the constructor methods. eagerly specialize
+        // the ASTs for all constructor methods so that type inference can
+        // see the type of new() even before any constructors have been called.
+        jl_methlist_t *ml = jl_gf_mtable(t)->defs;
+        while (ml != NULL) {
+            jl_specialize_ast(ml->func->linfo);
+            ml = ml->next;
+        }
+    }
+}
+
+JL_CALLABLE(jl_constructor_factory_trampoline)
+{
+    jl_struct_type_t *t = (jl_struct_type_t*)env;
+    jl_add_constructors(t);
+    return jl_apply((jl_function_t*)t, args, nargs);
+}
 
 jl_struct_type_t *jl_new_struct_type(jl_sym_t *name, jl_tag_type_t *super,
                                      jl_tuple_t *parameters,
@@ -247,11 +369,17 @@ jl_struct_type_t *jl_new_struct_type(jl_sym_t *name, jl_tag_type_t *super,
     jl_struct_type_t *t = (jl_struct_type_t*)newobj((jl_type_t*)jl_struct_kind,
                                                     STRUCT_TYPE_NW);
     t->name = jl_new_typename(name);
+    t->name->primary = (jl_value_t*)t;
     t->super = super;
+    unbind_tvars(parameters);
     t->parameters = parameters;
     t->names = fnames;
     t->types = ftypes;
-    t->fnew = jl_new_closure(jl_new_struct_internal, (jl_value_t*)t);
+    t->fptr = jl_constructor_factory_trampoline;
+    t->env = (jl_value_t*)t;
+    t->linfo = NULL;
+    t->ctor_factory = (jl_value_t*)jl_null;
+    t->instance = NULL;
     if (jl_has_typevars((jl_value_t*)parameters))
         t->uid = 0;
     else
@@ -269,20 +397,21 @@ jl_bits_type_t *jl_new_bitstype(jl_value_t *name, jl_tag_type_t *super,
     else
         t->name = jl_new_typename((jl_sym_t*)name);
     t->super = super;
+    unbind_tvars(parameters);
     t->parameters = parameters;
     t->nbits = nbits;
     if (jl_has_typevars((jl_value_t*)parameters))
         t->uid = 0;
     else
         t->uid = jl_assign_type_uid();
+    if (t->name->primary == NULL)
+        t->name->primary = (jl_value_t*)t;
     return t;
 }
 
-jl_uniontype_t *jl_new_uniontype(jl_tuple_t *types)
+DLLEXPORT
+int jl_union_too_complex(jl_tuple_t *types)
 {
-    jl_uniontype_t *t = (jl_uniontype_t*)newobj((jl_type_t*)jl_union_kind, 1);
-    // don't make unions of 1 type; Union(T)==T
-    assert(types->length != 1);
     size_t i, j;
     for(i=0; i < types->length; i++) {
         for(j=0; j < types->length; j++) {
@@ -294,56 +423,42 @@ jl_uniontype_t *jl_new_uniontype(jl_tuple_t *types)
                     jl_value_t *env =
                         jl_type_match((jl_type_t*)a, (jl_type_t*)b);
                     if (env != jl_false && env != (jl_value_t*)jl_null)
-                        jl_error("union type pattern too complex");
+                        return 1;
                 }
             }
         }
     }
+    return 0;
+}
+
+jl_uniontype_t *jl_new_uniontype(jl_tuple_t *types)
+{
+    if (jl_union_too_complex(types)) {
+        jl_errorf("union type pattern too complex: %s",
+                  jl_print_to_string((jl_value_t*)types));
+    }
+    jl_uniontype_t *t = (jl_uniontype_t*)newobj((jl_type_t*)jl_union_kind, 1);
+    // don't make unions of 1 type; Union(T)==T
+    assert(types->length != 1);
     t->types = types;
     return t;
 }
 
-// type constructors ----------------------------------------------------------
-
-JL_CALLABLE(jl_generic_ctor);
-
-void jl_add_generic_constructor(jl_typector_t *tc)
-{
-    jl_type_t *body = tc->body;
-    jl_function_t *gmeth = jl_new_closure(jl_generic_ctor, NULL);
-    jl_add_method(tc, ((jl_struct_type_t*)body)->types, gmeth);
-    gmeth->env = (jl_value_t*)jl_pair((jl_value_t*)gmeth, (jl_value_t*)tc);
-    gmeth->linfo = jl_new_lambda_info(NULL, jl_null);
-}
+// type constructor -----------------------------------------------------------
 
 jl_typector_t *jl_new_type_ctor(jl_tuple_t *params, jl_type_t *body)
 {
-    jl_function_t *tc;
-    if (jl_is_struct_type(body)) {
-        tc = jl_new_generic_function(jl_tname((jl_value_t*)body)->name);
-        tc->body = body;
-        // add ctor{params}(fields...) = alloc(Type{params},fields...)
-        if (((jl_struct_type_t*)body)->types != NULL) {
-            jl_add_generic_constructor(tc);
-        }
-    }
-    else {
-        tc = jl_new_closure(jl_f_no_function, NULL);
-        tc->body = body;
-    }
-    if (jl_is_some_tag_type(body)) {
-        jl_typename_t *tn = jl_tname((jl_value_t*)body);
-        if (tn->ctor == NULL)
-            tn->ctor = (jl_typector_t*)tc;
-    }
+    jl_typector_t *tc = (jl_typector_t*)newobj((jl_type_t*)jl_typector_type,2);
+    unbind_tvars(params);
     tc->parameters = params;
-    if (params->length == 0)
-        tc->unconstrained = tc->body;
+    tc->body = body;
     return (jl_typector_t*)tc;
 }
 
 // struct constructors --------------------------------------------------------
 
+// this one is for fully-instantiated types where we know the field types,
+// and arguments are converted to the field types.
 JL_CALLABLE(jl_new_struct_internal)
 {
     jl_struct_type_t *t = (jl_struct_type_t*)env;
@@ -352,37 +467,47 @@ JL_CALLABLE(jl_new_struct_internal)
         jl_error("too few arguments to constructor");
     else if (nargs > nf)
         jl_error("too many arguments to constructor");
+    if (t->instance != NULL)
+        return t->instance;
     jl_value_t *v = newobj((jl_type_t*)t, nf);
     size_t i;
     for(i=0; i < nargs; i++) {
         ((jl_value_t**)v)[i+1] = jl_convert((jl_type_t*)jl_tupleref(t->types,i),
                                             args[i]);
     }
+    if (nf == 0)
+        t->instance = v;
     return v;
 }
 
+// this one infers type parameters from the arguments and instantiates
+// (with caching) the right type, then constructs an instance.
 JL_CALLABLE(jl_generic_ctor)
 {
-    jl_function_t *self = (jl_function_t*)jl_t0(env);
-    jl_function_t *tc   = (jl_function_t*)jl_t1(env);
+    jl_function_t *self  = (jl_function_t*)jl_t0(env);
+    jl_struct_type_t *ty = (jl_struct_type_t*)jl_t1(env);
     jl_lambda_info_t *li = self->linfo;
     // we cache the instantiated type in li->ast
     if (li->ast == NULL) {
-        if (li->sparams->length != tc->parameters->length*2) {
+        if (li->sparams->length != ty->parameters->length*2) {
             jl_errorf("%s: type parameters cannot be inferred from arguments",
-                      jl_tname((jl_value_t*)tc->body)->name->name);
+                      ty->name->name->name);
         }
         li->ast =
-            (jl_value_t*)jl_instantiate_type_with(tc->body,
+            (jl_value_t*)jl_instantiate_type_with((jl_type_t*)ty,
                                                   &jl_tupleref(li->sparams,0),
                                                   li->sparams->length/2);
     }
-    jl_type_t *tp = (jl_type_t*)li->ast;
-    jl_value_t *v = newobj(tp, ((jl_struct_type_t*)tp)->names->length);
+    jl_struct_type_t *tp = (jl_struct_type_t*)li->ast;
+    if (tp->instance != NULL)
+        return tp->instance;
+    jl_value_t *v = newobj((jl_type_t*)tp, tp->names->length);
     size_t i;
     for(i=0; i < nargs; i++) {
         ((jl_value_t**)v)[i+1] = args[i];
     }
+    if (nargs == 0)
+        tp->instance = v;
     return v;
 }
 
@@ -529,17 +654,26 @@ jl_array_t *jl_new_array(jl_type_t *atype, jl_value_t **dimargs, size_t ndims)
     if (nel > 0) {
         if (jl_is_bits_type(el_type)) {
             size_t tot = ((jl_bits_type_t*)el_type)->nbits/8 * nel;
-            if (tot <= ARRAY_INLINE_NBYTES)
+            if (tot <= ARRAY_INLINE_NBYTES) {
                 data = &a->_space[0];
-            else
+            }
+            else {
                 data = alloc_pod(tot);
+            }
         }
         else {
             size_t tot = sizeof(void*) * nel;
-            if (tot <= ARRAY_INLINE_NBYTES)
+            if (tot <= ARRAY_INLINE_NBYTES) {
                 data = &a->_space[0];
-            else
-                data = allocb(tot);
+            }
+            else {
+#ifdef BOEHM_GC
+                if (tot >= 100000)
+                    data = GC_malloc_ignore_off_page(tot);
+                else
+#endif
+                    data = allocb(tot);
+            }
             memset(data, 0, tot);
         }
     }
@@ -554,6 +688,12 @@ jl_array_t *jl_new_array(jl_type_t *atype, jl_value_t **dimargs, size_t ndims)
 JL_CALLABLE(jl_new_array_internal)
 {
     jl_struct_type_t *atype = (jl_struct_type_t*)env;
+    jl_value_t *ndims = jl_tupleref(atype->parameters,1);
+    if (!jl_is_int32(ndims))
+        jl_errorf("Array: incomplete type %s",
+                  jl_print_to_string((jl_value_t*)atype));
+    size_t nd = jl_unbox_int32(ndims);
+    JL_NARGS(Array, nd, nd);
     size_t i;
     for(i=0; i < nargs; i++) {
         JL_TYPECHK(Array, int32, args[i]);
@@ -565,9 +705,19 @@ JL_CALLABLE(jl_generic_array_ctor)
 {
     JL_NARGSV(Array, 1);
     JL_TYPECHK(Array, type, args[0]);
-    return jl_new_array_internal((jl_value_t*)jl_apply_type_ctor(jl_array_type,
-                                                                 jl_tuple(2,args[0],
-                                                                          jl_box_int32(nargs-1))),
+    if (nargs==2 && jl_is_tuple(args[1])) {
+        jl_tuple_t *d = (jl_tuple_t*)args[1];
+        return jl_new_array_internal
+            ((jl_value_t*)
+             jl_apply_type((jl_value_t*)jl_array_type,
+                           jl_tuple(2, args[0],
+                                    jl_box_int32(d->length))),
+             &jl_tupleref(d,0), d->length);
+    }
+    return jl_new_array_internal((jl_value_t*)
+                                 jl_apply_type((jl_value_t*)jl_array_type,
+                                               jl_tuple(2, args[0],
+                                                        jl_box_int32(nargs-1))),
                                  &args[1], nargs-1);
 }
 
@@ -600,30 +750,29 @@ void jl_init_builtin_types()
 
     jl_tuple_t *tv;
     tv = jl_typevars(2, "T", "N");
-    jl_struct_type_t *arrstruct = 
+    jl_array_type = 
         jl_new_struct_type(jl_symbol("Array"),
-                           (jl_tag_type_t*)jl_apply_type_ctor(jl_tensor_type, tv),
+                           (jl_tag_type_t*)
+                           jl_apply_type((jl_value_t*)jl_tensor_type, tv),
                            tv,
                            jl_tuple(1, jl_symbol("dims")),
-                           jl_tuple(1, jl_apply_type_ctor(jl_ntuple_type,
-                                                          jl_tuple(2, jl_tupleref(tv,1),
-                                                                   jl_int32_type))));
-    jl_array_typename = arrstruct->name;
-    arrstruct->fnew->fptr = jl_new_array_internal;
-    jl_array_type = jl_new_closure(jl_generic_array_ctor, NULL);
-    jl_array_type->parameters = tv;
-    jl_array_type->body = (jl_type_t*)arrstruct;
-    jl_array_typename->ctor = jl_array_type;
+                           jl_tuple(1, jl_apply_type((jl_value_t*)jl_ntuple_type,
+                                                     jl_tuple(2, jl_tupleref(tv,1),
+                                                              jl_int32_type))));
+    jl_array_typename = jl_array_type->name;
+    jl_array_type->fptr = jl_generic_array_ctor;
+    jl_array_type->env = NULL;
+    jl_array_type->linfo = NULL;
 
     jl_array_uint8_type =
-        (jl_type_t*)jl_apply_type_ctor(jl_array_type,
-                                       jl_tuple(2, jl_uint8_type,
-                                                jl_box_int32(1)));
+        (jl_type_t*)jl_apply_type((jl_value_t*)jl_array_type,
+                                  jl_tuple(2, jl_uint8_type,
+                                           jl_box_int32(1)));
 
     jl_array_any_type =
-        (jl_type_t*)jl_apply_type_ctor(jl_array_type,
-                                       jl_tuple(2, jl_any_type,
-                                                jl_box_int32(1)));
+        (jl_type_t*)jl_apply_type((jl_value_t*)jl_array_type,
+                                  jl_tuple(2, jl_any_type,
+                                           jl_box_int32(1)));
 
     jl_expr_type =
         jl_new_struct_type(jl_symbol("Expr"),
@@ -632,16 +781,18 @@ void jl_init_builtin_types()
                                     jl_symbol("type")),
                            jl_tuple(3, jl_sym_type, jl_array_any_type,
                                     jl_any_type));
+    jl_add_constructors(jl_expr_type);
 
-    jl_struct_type_t *boxstruct =
+    tv = jl_typevars(1, "T");
+    jl_box_type =
         jl_new_struct_type(jl_symbol("Box"),
                            jl_any_type, tv,
                            jl_tuple(1, jl_symbol("contents")), tv);
-    jl_box_typename = boxstruct->name;
-    jl_box_type = jl_new_type_ctor(tv, (jl_type_t*)boxstruct);
+    jl_add_constructors(jl_box_type);
+    jl_box_typename = jl_box_type->name;
     jl_box_any_type =
-        (jl_type_t*)jl_apply_type_ctor(jl_box_type,
-                                       jl_tuple(1, jl_any_type));
+        (jl_type_t*)jl_apply_type((jl_value_t*)jl_box_type,
+                                  jl_tuple(1, jl_any_type));
 
     jl_lambda_info_type =
         jl_new_struct_type(jl_symbol("LambdaStaticData"),
@@ -650,7 +801,14 @@ void jl_init_builtin_types()
                                     jl_symbol("tfunc")),
                            jl_tuple(3, jl_expr_type, jl_tuple_type,
                                     jl_any_type));
-    jl_lambda_info_type->fnew = jl_bottom_func;
+    jl_lambda_info_type->fptr = jl_f_no_function;
+
+    jl_typector_type =
+        jl_new_struct_type(jl_symbol("TypeConstructor"),
+                           jl_any_type, jl_null,
+                           jl_tuple(2, jl_symbol("parameters"),
+                                    jl_symbol("body")),
+                           jl_tuple(2, jl_tuple_type, jl_any_type));
 
     tv = jl_typevars(2, "A", "B");
     jl_functype_ctor =
@@ -662,7 +820,7 @@ void jl_init_builtin_types()
                                         jl_any_type, jl_null, 32);
 
     tv = jl_typevars(1, "T");
-    jl_bits_type_t *cptrbits =
+    jl_pointer_type =
         jl_new_bitstype((jl_value_t*)jl_symbol("Ptr"), jl_any_type, tv,
 #ifdef BITS64
                         64
@@ -670,13 +828,19 @@ void jl_init_builtin_types()
                         32
 #endif
                         );
-    jl_pointer_typector = jl_new_type_ctor(tv, (jl_type_t*)cptrbits);
     jl_pointer_void_type =
-        (jl_bits_type_t*)jl_apply_type_ctor(jl_pointer_typector,
-                                            jl_tuple(1, jl_bottom_type));
+        (jl_bits_type_t*)jl_apply_type((jl_value_t*)jl_pointer_type,
+                                       jl_tuple(1, jl_bottom_type));
     jl_pointer_uint8_type =
-        (jl_bits_type_t*)jl_apply_type_ctor(jl_pointer_typector,
-                                            jl_tuple(1, jl_uint8_type));
+        (jl_bits_type_t*)jl_apply_type((jl_value_t*)jl_pointer_type,
+                                       jl_tuple(1, jl_uint8_type));
+
+    jl_undef_type = jl_new_tagtype((jl_value_t*)jl_symbol("Undef"),
+                                   jl_any_type, jl_null);
+
+    // Type{Type}
+    jl_typetype_type = (jl_tag_type_t*)jl_apply_type((jl_value_t*)jl_type_type,
+                                                     jl_tuple(1,jl_type_type));
 
     call_sym = jl_symbol("call");
     quote_sym = jl_symbol("quote");
@@ -697,7 +861,9 @@ void jl_init_builtin_types()
     unbound_sym = jl_symbol("unbound");
     boxunbound_sym = jl_symbol("box-unbound");
     closure_ref_sym = jl_symbol("closure-ref");
+    symbol_sym = jl_symbol("symbol");
     body_sym = jl_symbol("body");
     locals_sym = jl_symbol("locals");
     colons_sym = jl_symbol("::");
+    Any_sym = jl_symbol("Any");
 }

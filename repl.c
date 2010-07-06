@@ -185,6 +185,9 @@ void fpe_handler(int arg)
 
 void julia_init()
 {
+#ifdef BOEHM_GC
+    GC_expand_hp(12000000);  //shaves a tiny bit off startup time
+#endif
     jl_init_frontend();
     jl_init_types();
     jl_init_builtin_types();
@@ -208,21 +211,34 @@ static int detect_color()
 #endif
 }
 
-JL_CALLABLE(jl_f_new_closure);
+jl_value_t *jl_new_closure_internal(jl_lambda_info_t *li, jl_value_t *env);
 
-jl_value_t *jl_toplevel_eval(jl_value_t *ast)
+// heuristic for whether a top-level input should be evaluated with
+// the compiler or the interpreter.
+static int eval_with_compiler_p(jl_array_t *body)
 {
-    //jl_print(ast);
+    size_t i;
+    for(i=0; i < body->length; i++) {
+        jl_value_t *stmt = jl_cellref(body,i);
+        if (jl_is_expr(stmt) && (((jl_expr_t*)stmt)->head == goto_sym ||
+                                 ((jl_expr_t*)stmt)->head == goto_ifnot_sym)) {
+            return 1;
+        }
+    }
+    return 0;
+}
+
+jl_value_t *jl_toplevel_eval_thunk(jl_lambda_info_t *thk)
+{
+    //jl_print(thk);
     //ios_printf(ios_stdout, "\n");
-    // ast is of the form (quote <lambda-info>)
-    jl_value_t *args[2];
-    assert(jl_is_expr(ast));
-    jl_lambda_info_t *li = (jl_lambda_info_t*)jl_exprarg(ast,0);
-    assert(jl_typeof(li) == (jl_type_t*)jl_lambda_info_type);
-    args[0] = (jl_value_t*)li;
-    args[1] = (jl_value_t*)jl_null;
-    jl_value_t *thunk = jl_f_new_closure(NULL, args, 2);
-    return jl_apply((jl_function_t*)thunk, NULL, 0);
+    assert(jl_typeof(thk) == (jl_type_t*)jl_lambda_info_type);
+    assert(jl_is_expr(thk->ast));
+    if (eval_with_compiler_p(jl_lam_body((jl_expr_t*)thk->ast))) {
+        jl_value_t *thunk = jl_new_closure_internal(thk, (jl_value_t*)jl_null);
+        return jl_apply((jl_function_t*)thunk, NULL, 0);
+    }
+    return jl_interpret_toplevel_thunk(thk);
 }
 
 static int have_color;
@@ -506,6 +522,24 @@ static jl_value_t *read_expr_ast(char *prompt, int *end, int *doprint) {
 
 void jl_lisp_prompt();
 
+jl_function_t *jl_typeinf_func=NULL;
+
+int jl_load_startup_file()
+{
+    if (!setjmp(ExceptionHandler)) {
+        jl_load("start.j");
+        if (jl_boundp(jl_system_module, jl_symbol("typeinf"))) {
+            jl_typeinf_func =
+                (jl_function_t*)*(jl_get_bindingp(jl_system_module,
+                                                  jl_symbol("typeinf")));
+        }
+    } else {
+        ios_printf(ios_stderr, "error during startup.\n");
+        return 1;
+    }
+    return 0;
+}
+
 int main(int argc, char *argv[])
 {
     llt_init();
@@ -547,18 +581,14 @@ int main(int argc, char *argv[])
         return 0;
     }
     if (load_start_j) {
-        if (!setjmp(ExceptionHandler)) {
-            jl_load("start.j");
-        } else {
-            ios_printf(ios_stderr, "error during startup.\n");
+        if (jl_load_startup_file())
             return 1;
-        }
     }
     if (num_evals) {
         int i;
         for (i=0; i < num_evals; i++) {
             jl_value_t *ast = jl_parse_input_line(eval_exprs[i]);
-            jl_value_t *value = jl_toplevel_eval(ast);
+            jl_value_t *value = jl_toplevel_eval_thunk((jl_lambda_info_t*)ast);
             if (print_exprs[i]) {
                 jl_print(value);
                 ios_printf(ios_stdout, "\n");
@@ -600,7 +630,8 @@ int main(int argc, char *argv[])
                 ios_flush(ios_stdout);
             }
             if (ast != NULL) {
-                jl_value_t *value = jl_toplevel_eval(ast);
+                jl_value_t *value =
+                    jl_toplevel_eval_thunk((jl_lambda_info_t*)ast);
                 if (print_value) {
                     jl_print(value);
                     ios_printf(ios_stdout, "\n");

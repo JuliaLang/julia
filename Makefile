@@ -8,11 +8,16 @@ FLISPDIR = flisp
 LLT = $(LLTDIR)/libllt.a
 FLISP = $(FLISPDIR)/libflisp.a
 
-include ./Make.inc.Linux64
+NBITS = $(shell (test -e nbits || $(CC) nbits.c -o nbits) && ./nbits)
+include ./Make.inc.$(shell uname)
 
-FLAGS = -falign-functions -Wall -Wno-strict-aliasing -I$(FLISPDIR) -I$(LLTDIR) $(HFILEDIRS:%=-I%) $(LIBDIRS:%=-L%) $(CFLAGS) -D___LIBRARY $(CONFIG) -I$(shell llvm-config --includedir)
+FLAGS = -falign-functions -Wall -Wno-strict-aliasing \
+	-I$(FLISPDIR) -I$(LLTDIR) $(HFILEDIRS:%=-I%) $(LIBDIRS:%=-L%) \
+	$(CFLAGS) $(CONFIG) -I$(shell llvm-config --includedir) \
+	-fvisibility=hidden
 LIBFILES = $(FLISP) $(LLT)
-LIBS = $(LIBFILES) -lutil -ldl -lm -lgc $(shell llvm-config --ldflags --libs core engine jit interpreter bitreader) -lreadline $(OSLIBS) 
+LIBS = $(LIBFILES) -lutil -ldl -lm -lgc -lreadline $(OSLIBS) \
+	$(shell llvm-config --ldflags --libs engine)
 
 DEBUGFLAGS = -ggdb3 -DDEBUG $(FLAGS)
 SHIPFLAGS = -O3 -DNDEBUG $(FLAGS)
@@ -31,9 +36,10 @@ default: debug
 ast.o ast.do: julia_flisp.boot.inc
 julia_flisp.boot.inc: julia_flisp.boot $(FLISP)
 	$(FLISPDIR)/flisp ./bin2hex.scm < $< > $@
-julia_flisp.boot: julia-parser.scm julia-syntax.scm match.scm utils.scm jlfrontend.scm $(FLISP)
+julia_flisp.boot: julia-parser.scm julia-syntax.scm \
+	match.scm utils.scm jlfrontend.scm $(FLISP)
 	$(FLISPDIR)/flisp ./jlfrontend.scm
-codegen.o codegen.do: intrinsics.cpp julia-defs.s.bc.inc
+codegen.o codegen.do: intrinsics.cpp
 
 julia-defs.s.bc: julia-defs$(NBITS).s
 	llvm-as -f $< -o $@
@@ -47,15 +53,15 @@ $(LLT): $(LLTDIR)/*.h $(LLTDIR)/*.c
 $(FLISP): $(FLISPDIR)/*.h $(FLISPDIR)/*.c $(LLT)
 	cd $(FLISPDIR) && $(MAKE)
 
-julia-debug: $(DOBJS) $(LIBFILES) julia-defs.s.bc
+julia-debug: $(DOBJS) $(LIBFILES)
 	$(CXX) $(DEBUGFLAGS) $(DOBJS) -o $@ $(LIBS)
 	ln -sf $@ julia
 
-julia-efence: $(DOBJS) $(LIBFILES) julia-defs.s.bc
+julia-efence: $(DOBJS) $(LIBFILES)
 	$(CXX) $(DEBUGFLAGS) $(DOBJS) -o $@ $(EFENCE) $(LIBS)
 	ln -sf $@ julia
 
-julia-release: $(OBJS) $(LIBFILES) julia-defs.s.bc
+julia-release: $(OBJS) $(LIBFILES)
 	$(CXX) $(SHIPFLAGS) $(OBJS) -o $@ $(LIBS)
 	ln -sf $@ julia
 
@@ -75,6 +81,7 @@ clean:
 	rm -f *~ *#
 
 cleanall: clean
+	rm -f nbits
 	rm -rf $(EXENAME)-{debug,release,efence}
 	$(MAKE) -C $(LLTDIR) clean
 	$(MAKE) -C $(FLISPDIR) clean

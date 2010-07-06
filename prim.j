@@ -1,4 +1,3 @@
-typealias Nullable{T} Union(T,())
 typealias Index Int32
 typealias Size Int32
 typealias Char Uint8
@@ -221,10 +220,39 @@ function print(e::Expr)
         print_comma_array(e.args,"(",")")
     end
     if !is(e.type, Any)
-        print("::", e.type)
+        if isa(e.type, FuncKind)
+            print("::F")
+        else
+            print("::", e.type)
+        end
     end
 end
 
 copy(x::Any) = x
 copy(x::Tuple) = map(copy, x)
 copy(e::Expr) = Expr(e.head, copy(e.args), e.type)
+
+# timing
+
+clock() = ccall(dlsym(JuliaDLHandle,"clock_now"), Float64, ())
+
+_TIMERS = ()
+
+function tic()
+    t0 = clock()
+    global _TIMERS = (t0, _TIMERS)
+    return t0
+end
+
+function toc()
+    t1 = clock()
+    global _TIMERS
+    if is(_TIMERS,())
+        error("toc() without tic()")
+    end
+    t0 = _TIMERS[1]
+    _TIMERS = _TIMERS[2]
+    t = t1-t0
+    print("elapsed time: ", t, " sec\n")
+    t
+end

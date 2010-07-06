@@ -27,7 +27,7 @@ void snprint_cplx(char *s, size_t cnt, double re, double im,
                   // print spaces around sign in a+bi
                   int spflag);
 
-char *uint2str(char *dest, size_t len, uint64_t num, uint32_t base);
+DLLEXPORT char *uint2str(char *dest, size_t len, uint64_t num, uint32_t base);
 int str2int(char *str, size_t len, int64_t *res, uint32_t base);
 int isdigit_base(char c, int base);
 

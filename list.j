@@ -1,21 +1,29 @@
-struct EmptyList
+type List{T}
+
+struct Nil{T} <: List{T}
 end
 
-struct Cons
-    head
-    tail::Union(EmptyList, Cons)
+struct Cons{T} <: List{T}
+    head::T
+    tail::List{T}
 end
 
-typealias List Union(EmptyList, Cons)
+cons{T}(h::List{T}, t::List{List{T}}) = Cons{List{T}}(h, t)
+cons(x,y) = Cons(x,y)
 
-nil = EmptyList()
+nil(T) = Nil{T}()
+nil() = nil(Any)
 
 head(x::Cons) = x.head
 tail(x::Cons) = x.tail
 
-function print(l::List)
-    if isa(l,EmptyList)
-        print("list()")
+function print{T}(l::List{T})
+    if isa(l,Nil)
+        if is(T,Any)
+            print("nil()")
+        else
+            print("nil(",T,")")
+        end
     else
         print("list(")
         while true
@@ -31,31 +39,32 @@ function print(l::List)
     end
 end
 
-list() = nil
-list(first, rest...) = Cons(first, list(rest...))
+list() = nil()
+list{T}(first::T) = cons(first, nil(T))
+list(first, rest...) = cons(first, list(rest...))
 
-length(l::EmptyList) = 0
+length(l::Nil) = 0
 length(l::Cons) = 1 + length(tail(l))
 
-map(f, l::EmptyList) = nil
-map(f, l::Cons) = Cons(f(head(l)), map(f, tail(l)))
+map(f, l::Nil) = l
+map(f, l::Cons) = cons(f(head(l)), map(f, tail(l)))
 
-copylist(l::EmptyList) = nil
-copylist(l::Cons) = Cons(head(l), copylist(tail(l)))
+copylist(l::Nil) = l
+copylist(l::Cons) = cons(head(l), copylist(tail(l)))
 
 function append2(a, b)
-    if isa(a,EmptyList)
+    if isa(a,Nil)
         b
     else
-        Cons(head(a), append2(tail(a), b))
+        cons(head(a), append2(tail(a), b))
     end
 end
 
-function append(lsts...)
+function append{T}(lst::List{T}, lsts...)
     n = length(lsts)
-    l = nil
+    l = nil(T)
     for i = n:-1:1
         l = append2(lsts[i], l)
     end
-    return l
+    return append2(lst, l)
 end

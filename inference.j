@@ -17,6 +17,13 @@
 # * approximate static parameters
 # - use type bounds
 # - reflection for constructors
+# * be able to infer the results of promote()
+# - avoid branches when condition can be statically evaluated
+# - do something about box, unbox, boxset so we can at least handle easy cases
+
+# parameters limiting potentially-infinite types
+MAX_TYPEUNION_SIZE = 3
+MAX_TUPLETYPE_LEN  = 10
 
 struct NotFound
 end
@@ -33,12 +40,12 @@ struct CallStack
     recurred::Bool
     result
     prev::Union(EmptyCallStack,CallStack)
-end
 
-CallStack(ast, types, prev::EmptyCallStack) =
-    CallStack(ast, types, 0, false, Bottom, prev)
-CallStack(ast, types, prev::CallStack) =
-    CallStack(ast, types, prev.n+1, false, Bottom, prev)
+    CallStack(ast, types, prev::EmptyCallStack) =
+        new(ast, types, 0, false, Bottom, prev)
+    CallStack(ast, types, prev::CallStack) =
+        new(ast, types, prev.n+1, false, Bottom, prev)
+end
 
 # TODO thread local
 inference_stack = EmptyCallStack()
@@ -68,10 +75,11 @@ mintype(a, b) = subtype(a,b) ? a : b
 
 cmp_tfunc = (x,y)->Bool
 
-isType(t) = isa(t,TagKind) && is(t.name,Type{}.name)
+isType(t) = isa(t,TagKind) && is(t.name,Type.name)
 
 t_func = idtable()
 t_func[tuple] = (0, Inf, (args...)->args)
+t_func[error] = (1, 1, x->Bottom)
 t_func[boxsi8] = (1, 1, x->Int8)
 t_func[boxui8] = (1, 1, x->Uint8)
 t_func[boxsi16] = (1, 1, x->Int16)
@@ -93,9 +101,11 @@ t_func[ccall] =
 t_func[is] = (2, 2, cmp_tfunc)
 t_func[subtype] = (2, 2, cmp_tfunc)
 t_func[isa] = (2, 2, cmp_tfunc)
+t_func[new_generic_function] = (1, 1, s->(Bottom-->Any))
 t_func[tuplelen] = (1, 1, x->Int32)
 t_func[arraylen] = (1, 1, x->Int32)
-t_func[arrayref] = (2, 2, (a,i)->(subtype(a,Array) ? a.parameters[1] : Any))
+t_func[arrayref] = (2, 2, (a,i)->(isa(a,StructKind) && subtype(a,Array) ?
+                                  a.parameters[1] : Any))
 t_func[arrayset] = (3, 3, (a,i,v)->a)
 t_func[Array] =
     (1, Inf, (T,dims...)->(nd = length(dims);
@@ -114,16 +124,20 @@ t_func[typeassert] =
     (2, 2, (A, v, t)->(isType(t) ? mintype(v,t.parameters[1]) :
                        isconstant(A[2]) ? mintype(v,eval(A[2])) :
                        Any))
+isseqtype(t) = isa(t,TagKind) && is(t.name.name,`...)
 function tupleref_tfunc(A, t, i)
     if is(t,())
         return Bottom
+    end
+    if isa(t,TagKind) && is(t.name,NTuple.name)
+        return t.parameters[2]
     end
     if !isa(t,Tuple)
         return Any
     end
     n = length(t)
     last = t[n]
-    vararg = (isa(last,TagKind) && is(last.name,`...))
+    vararg = isseqtype(last)
     if isa(A[2],Int)
         # index is a constant
         i = A[2]
@@ -145,6 +159,7 @@ function tupleref_tfunc(A, t, i)
         else
             types = t
         end
+        # TODO: possibly use reduce of tmerge instead
         return Union(types...)
     end
 end
@@ -167,7 +182,7 @@ function getfield_tfunc(A, s, name)
 end
 t_func[getfield] = (2, 2, getfield_tfunc)
 
-# other: apply, setfield, new_closure
+# other: apply, setfield, instantiate_type
 
 # Scalar{T} => T
 normalize_numeric_type(t) = t
@@ -195,8 +210,13 @@ function builtin_tfunction(f, args::Tuple, argtypes::Tuple)
     return normalize_numeric_type(tf[3](argtypes...))
 end
 
-function abstract_eval(e::Expr, vtypes, sp)
-    t = abstract_eval_expr(e, vtypes, sp)
+struct StaticVarInfo
+    sp::Tuple
+    cenv::IdTable   # types of closed vars
+end
+
+function abstract_eval(e::Expr, vtypes, sv::StaticVarInfo)
+    t = abstract_eval_expr(e, vtypes, sv)
     e.type = t
     return t
 end
@@ -217,24 +237,40 @@ function isconstantfunc(f, vtypes)
     return (isa(f,Symbol) && !has(vtypes,f), f)
 end
 
-function abstract_call(f, fargs, argtypes, vtypes, sp)
+isvatuple(t) = (n = length(t); n > 0 && isseqtype(t[n]))
+
+function limit_tuple_type(t)
+    n = length(t)
+    if n > MAX_TUPLETYPE_LEN
+        last = t[n]
+        if isseqtype(last)
+            last = last.parameters[1]
+        end
+        tail = Union(t[MAX_TUPLETYPE_LEN:(n-1)]..., last)
+        return tuple(t[1:(MAX_TUPLETYPE_LEN-1)]..., ...{tail})
+    end
+    return t
+end
+
+function abstract_call(f, fargs, argtypes, vtypes, sv::StaticVarInfo)
     if isbuiltin(f)
         if is(f,apply) && length(fargs)>0
             (isfunc, af) = isconstantfunc(fargs[1], vtypes)
             if isfunc && isbound(af)
                 afargs = fargs[2:]
                 aargtypes = argtypes[2:]
-                if all(map(x->isa(x,Tuple),aargtypes))
+                if all(map(x->isa(x,Tuple),aargtypes)) &&
+                    !any(map(isvatuple,aargtypes[1:(length(aargtypes)-1)]))
                     # apply with known func with known tuple types
                     # can be collapsed to a call to the applied func
-                    at = length(aargtypes)>0 ? append(aargtypes...) : ()
-                    return abstract_call(eval(af), (), append(aargtypes...),
-                                         vtypes, sp)
+                    at = length(aargtypes) > 0 ?
+                         limit_tuple_type(append(aargtypes...)) : ()
+                    return abstract_call(eval(af), (), at, vtypes, sv)
                 end
             end
         end
         rt = builtin_tfunction(f, fargs, argtypes)
-        print("=> ", rt, "\n")
+        #print("=> ", rt, "\n")
         return rt
     elseif isgeneric(f)
         applicable = getmethods(f, argtypes)
@@ -242,8 +278,6 @@ function abstract_call(f, fargs, argtypes, vtypes, sp)
         x = applicable
         while !is(x,())
             #print(x,"\n")
-            # TODO: approximate static parameters by calling tmatch
-            # on argtypes and the intersection
             if isa(x[3],Symbol)
                 # when there is a builtin method in this GF, we get
                 # a symbol with the name instead of a LambdaStaticData
@@ -252,38 +286,48 @@ function abstract_call(f, fargs, argtypes, vtypes, sp)
                 # constructor
                 rt = x[3]
             else
-                rt = ast_rettype(typeinf(x[3], x[2], x[1]))
+                (_tree,rt) = typeinf(x[3], x[1], x[2], true)
             end
             rettype = tmerge(rettype, rt)
-            x = x[4]
+            if is(rettype,Any)
+                break
+            end
+            x = x[5]
         end
         # if rettype is Bottom we've found a method not found error
-        print("=> ", rettype, "\n")
+        #print("=> ", rettype, "\n")
         return rettype
     else
-        print("=> ", Any, "\n")
+        #print("=> ", Any, "\n")
         return Any
     end
 end
 
-function abstract_eval_call(e, vtypes, sp)
+ft_tfunc(ft, argtypes) = ccall(dlsym(JuliaDLHandle,"jl_func_type_tfunc"), Any,
+                               (Any, Any), ft, argtypes)
+
+function abstract_eval_call(e, vtypes, sv::StaticVarInfo)
+    fargs = a2t(e.args[2:])
+    argtypes = map(x->abstract_eval(x,vtypes,sv), fargs)
     (isfunc, func) = isconstantfunc(e.args[1], vtypes)
     if !isfunc
         # TODO: lambda expression (let)
+        ft = abstract_eval(e.args[1], vtypes, sv)
+        if isa(ft,FuncKind)
+            return ft_tfunc(ft, argtypes)
+        end
         return Any
     end
-    fargs = a2t(e.args[2:])
-    argtypes = map(x->abstract_eval(x,vtypes,sp), fargs)
-    print("call ", e.args[1], argtypes, " ")
+    #print("call ", e.args[1], argtypes, " ")
     if !isbound(func)
-        print("=> ", Any, "\n")
+        #print("=> ", Any, "\n")
         return Any
     end
     f = eval(func)
-    return abstract_call(f, fargs, argtypes, vtypes, sp)
+    return abstract_call(f, fargs, argtypes, vtypes, sv)
 end
 
-function abstract_eval_expr(e, vtypes, sp)
+function abstract_eval_expr(e, vtypes, sv::StaticVarInfo)
     # handle:
     # call  lambda  quote  null  top  unbound  box-unbound
     # closure-ref
@@ -298,15 +342,18 @@ function abstract_eval_expr(e, vtypes, sp)
     elseif is(e.head,symbol("closure-ref"))
         return Any
     elseif is(e.head,`call)
-        return abstract_eval_call(e, vtypes, sp)
+        return abstract_eval_call(e, vtypes, sv)
     end
 end
 
 ast_rettype(ast) = ast.args[3].type
 
 function abstract_eval_constant(x)
-    if isa(x,TagKind)
+    if isa(x,TagKind) || isa(x,TypeVar)
         return Type{x}
+    end
+    if isa(x,LambdaStaticData)
+        return Bottom-->Any
     end
     return typeof(x)
 end
@@ -322,11 +369,16 @@ function abstract_eval_global(s::Symbol)
     end
 end
 
-function abstract_eval(s::Symbol, vtypes, sp)
+function abstract_eval(s::Symbol, vtypes, sv::StaticVarInfo)
+    if has(sv.cenv,s)
+        # consider closed vars to always have their propagated (declared) type
+        return sv.cenv[s]
+    end
     t = get(vtypes,s,NF)
     if is(t,NF)
+        sp = sv.sp
         for i=1:2:length(sp)
-            if is(sp[i],s)
+            if is(sp[i].name,s)
                 # static parameter
                 return abstract_eval_constant(sp[i+1])
             end
@@ -337,11 +389,13 @@ function abstract_eval(s::Symbol, vtypes, sp)
     return t
 end
 
-abstract_eval(x, vtypes, sp) = abstract_eval_constant(x)
+abstract_eval(x, vtypes, sv::StaticVarInfo) = abstract_eval_constant(x)
+
+typealias VarTable IdTable
 
 struct StateUpdate
     changes::((Symbol,Any)...)
-    state::IdTable
+    state::VarTable
 end
 
 function ref(x::StateUpdate, s::Symbol)
@@ -353,22 +407,24 @@ function ref(x::StateUpdate, s::Symbol)
     return get(x.state,s,NF)
 end
 
-function interpret(e::Expr, vtypes, sp)
+function interpret(e::Expr, vtypes, sv::StaticVarInfo)
     # handle assignment
     if is(e.head,symbol("="))
-        t = abstract_eval(e.args[2], vtypes, sp)
+        t = abstract_eval(e.args[2], vtypes, sv)
         lhs = e.args[1]
         assert(isa(lhs,Symbol))
         return StateUpdate(((lhs, t),), vtypes)
+    elseif is(e.head,`call)
+        abstract_eval(e, vtypes, sv)
     elseif is(e.head,`gotoifnot)
-        abstract_eval(e.args[1], vtypes, sp)
+        abstract_eval(e.args[1], vtypes, sv)
     end
-    return StateUpdate((), vtypes)
+    return vtypes
 end
 
 tchanged(n, o) = is(o,NF) || (!is(n,NF) && !subtype(n,o))
 
-function changed(new::StateUpdate, old, vars)
+function changed(new::Union(StateUpdate,VarTable), old, vars)
     for v = vars
         if tchanged(new[v], get(old,v,NF))
             return true
@@ -377,6 +433,9 @@ function changed(new::StateUpdate, old, vars)
     return false
 end
 
+badunion(t) = ccall(dlsym(JuliaDLHandle,"jl_union_too_complex"),
+                    Int32, (Any,), t)!=0
+
 function tmerge(typea, typeb)
     if is(typea,NF)
         return typeb
@@ -384,10 +443,25 @@ function tmerge(typea, typeb)
     if is(typeb,NF)
         return typea
     end
-    return Union(typea, typeb)
+    t = ccall(dlsym(JuliaDLHandle,"jl_compute_type_union"),Any,(Any,),
+              (typea, typeb))
+    if length(t)==1
+        return t[1]
+    elseif length(t)==0
+        return Bottom
+    end
+    if badunion(t)
+        return Any
+    end
+    u = Union(t...)
+    if isa(u,UnionKind) && length(u.types) > MAX_TYPEUNION_SIZE
+        # don't let type unions get too big
+        return Any
+    end
+    return u
 end
 
-function update(state, changes::StateUpdate, vars)
+function update(state, changes::Union(StateUpdate,VarTable), vars)
     for v = vars
         newtype = changes[v]
         oldtype = get(state,v,NF)
@@ -398,24 +472,22 @@ function update(state, changes::StateUpdate, vars)
     state
 end
 
-type Undef
-
-function typeinf(linfo::LambdaStaticData, sparams::Tuple, atypes::Tuple)
-    function findlabel(body, l)
-        for i=1:length(body)
-            b = body[i]
-            if isa(b,Expr) && is(b.head,`label) && b.args[1]==l
-                return i
-            end
+function findlabel(body, l)
+    for i=1:length(body)
+        b = body[i]
+        if isa(b,Expr) && is(b.head,`label) && b.args[1]==l
+            return i
         end
-        error("label not found")
     end
+    error("label not found")
+end
 
+function typeinf(linfo::LambdaStaticData, atypes::Tuple, sparams::Tuple, cop)
     # check cached t-functions
     tf = linfo.tfunc
     while !is(tf,())
         if typeseq(tf[1],atypes)
-            return tf[2]
+            return (tf[2], ast_rettype(tf[2]))
         end
         tf = tf[3]
     end
@@ -434,8 +506,9 @@ function typeinf(linfo::LambdaStaticData, sparams::Tuple, atypes::Tuple)
         f = f.prev
     end
 
-    ast = copy(ast0)
+    ast = cop ? copy(ast0) : ast0
     #print("typeinf ", ast, " ", sparams, " ", atypes, "\n")
+    #print("typeinf ", atypes, "\n")
 
     assert(is(ast.head,`lambda))
     args = map(x->(isa(x,Expr) ? x.args[1] : x), ast.args[1])
@@ -467,6 +540,13 @@ function typeinf(linfo::LambdaStaticData, sparams::Tuple, atypes::Tuple)
     for i=1:la
         s[1][args[i]] = atypes[i]
     end
+    # types of closed vars
+    cenv = idtable()
+    for vi = ast.args[2].args[3]
+        cenv[vi[1]] = vi[2]
+        s[1][vi[1]] = vi[2]
+    end
+    sv = StaticVarInfo(sparams, cenv)
 
     # our stack frame
     frame = CallStack(ast0, atypes, inference_stack)
@@ -478,7 +558,7 @@ function typeinf(linfo::LambdaStaticData, sparams::Tuple, atypes::Tuple)
             #print(pc,": ",s[pc],"\n")
             remove(W, pc)
             stmt = body[pc]
-            changes = interpret(stmt, s[pc], sparams)
+            changes = interpret(stmt, s[pc], sv)
             if frame.recurred
                 adjoin(recpts, pc)
                 frame.recurred = false
@@ -495,7 +575,7 @@ function typeinf(linfo::LambdaStaticData, sparams::Tuple, atypes::Tuple)
                     end
                 elseif is(stmt.head,symbol("return"))
                     pc´ = n+1
-                    rt = abstract_eval(stmt.args[1], s[pc], sparams)
+                    rt = abstract_eval(stmt.args[1], s[pc], sv)
                     if tchanged(rt, frame.result)
                         frame.result = tmerge(frame.result, rt)
                         # revisit states that recursively depend on this
@@ -514,12 +594,12 @@ function typeinf(linfo::LambdaStaticData, sparams::Tuple, atypes::Tuple)
         end
     end
     inference_stack = inference_stack.prev
-    fulltree = type_annotate(ast, s, sparams, frame.result)
+    fulltree = type_annotate(ast, s, sv, frame.result)
     linfo.tfunc = (atypes, fulltree, linfo.tfunc)
-    return fulltree
+    return (fulltree, frame.result)
 end
 
-function eval_annotate(e::Expr, vtypes, sp)
+function eval_annotate(e::Expr, vtypes, sv)
     if is(e.head,`quote) || is(e.head,`top) || is(e.head,`goto) ||
         is(e.head,`label)
         return e
@@ -528,16 +608,16 @@ function eval_annotate(e::Expr, vtypes, sp)
         e.type = Any
     end
     for i=1:length(e.args)
-        e.args[i] = eval_annotate(e.args[i],vtypes,sp)
+        e.args[i] = eval_annotate(e.args[i],vtypes,sv)
     end
     e
 end
 
-function eval_annotate(e::Symbol, vtypes, sp)
-    Expr(`symbol, {e}, abstract_eval(e, vtypes, sp))
+function eval_annotate(e::Symbol, vtypes, sv)
+    Expr(`symbol, {e}, abstract_eval(e, vtypes, sv))
 end
 
-eval_annotate(s, vtypes, sp) = s
+eval_annotate(s, vtypes, sv) = s
 
 # expand v to v::T as appropriate based on all inferred type info
 function add_decls(vars::Array, states::Array)
@@ -546,12 +626,12 @@ function add_decls(vars::Array, states::Array)
 end
 
 # annotate types of all symbols in AST
-function type_annotate(ast::Expr, states::Array, sp, rettype)
+function type_annotate(ast::Expr, states::Array, sv, rettype)
     vinf = ast.args[2]
     vinf.args[1].args = add_decls(vinf.args[1].args, states)
     body = ast.args[3].args
     for i=1:length(body)
-        body[i] = eval_annotate(body[i], states[i], sp)
+        body[i] = eval_annotate(body[i], states[i], sv)
     end
     ast.args[3].type = rettype
     ast
@@ -567,9 +647,13 @@ b=typevar(`b)
 c=typevar(`c)
 d=typevar(`d)
 
+function finfer(f, types)
+    x = getmethods(f,types)
+    typeinf(x[3], x[1], x[2], true)[1]
+end
+
 m = getmethods(fact,(Int32,))
 ast = m[3]
-#typeinf(ast, (`T,Int32), (Int32,))
 
 function foo(x)
     return x.re + x.im
@@ -612,4 +696,12 @@ function both()
         f(c)
     end
     c
+end
+
+function und()
+    local a
+    if mystery()
+        a = other_mystery()
+    end
+    c = a
 end

@@ -369,13 +369,93 @@ issues 5/31/10
   . monotonicity: if the declaration of A is more specific than B,
     it remains that way for all possible actual arguments.
 
-- need to make Type <: Function
-  trouble is that in foo(x::SomeType) we want the unconstrained version of
-  SomeType, but in SomeType{T} we need SomeType to contain constraint
-  information, plus SomeType is a function!
+* need to make Type <: Function
+  plus SomeType{T}(args...) should work, no .new
+  make structs with no fields singletons
+  so both Complex and Complex{...} should be types, and also applicable
 
-- add the ability to hide the default constructor, which also makes it
+plan:
+* TypeConstructor only for typealias
+* typename->ctor becomes typename->primary, and points to the original
+  version of a type
+* Complex, e.g., is a StructType. both Function and StructType are applicable
+  . this avoids the issue of abstract types being functions, which is crazy
+* T{...} can work on either TypeConstructor or a TagType
+* when applying a type or typector to concrete types, enforce that all typevar
+  bounds are respected.
+* start off every struct type as a constructor-factory-trampoline function,
+  so no constructors are created until constructing is actually attempted.
+* add the ability to seal a generic function. use for constructors.
+. keep track of whether a method is "generic" explicitly, instead of
+  using jl_has_typevars. when matching, make sure the method's own static
+  parameters were what matched, e.g.
+  foo{T,S}(a::SomeType, b::OtherType)
+  typevars in SomeType and OtherType might match, but we could not infer T,S
+  so this is an error. this fully generalizes the "cannot infer type
+  parameters from arguments" error in generic constructors, so it would not
+  be needed there any more.
+. consider changing the rules so in f(x::T...) T is the union of the actual
+  argument types.
+
+* add the ability to hide the default constructor, which also makes it
   possible to add multiple constructor overloads:
+
+struct Rational <: Real
+    num::Int
+    den::Int
+
+    #implicit: new(x::Int, y::Int) = construct(Rational, x, y)
+
+    Rational(n::Int, d::Int) = new(lowest_terms(n,d)...)
+    Rational(n::Int) = Rational(n, 1)
+end
+
+or if no constructor defs are present:
+   add_generic_constructor(Rational), which does
+   Rational(x::Int, y::Int) = construct(Rational, x, y)
+
+struct Rational{T<:Int} <: Real
+    num::T
+    den::T
+
+    #implicit: new{T<:Int}(x::T, y::T) = construct(Rational{T}, x, y)
+
+    new::((T,T)-->Rational{T})
+    Rational(n::Int, d::Int) = new(lowest_terms(n,d)...)
+    Rational(n::Int) = Rational(n, 1)
+end
+
+   add_generic_constructor(Rational) does
+   Rational{T<:Int}(x::T, y::T) = construct(Rational{T}, x, y)
+
+now what does e.g. Rational{Int8} mean?
+technically we should repeat the whole declaration with this substitution
+done:
+struct Rational{Int8} <: Real
+    num::Int8
+    den::Int8
+
+    #implicit: new(x::Int8, y::Int8) = construct(Rational{Int8}, x, y)
+
+    Rational(n::Int, d::Int) = new(lowest_terms(n,d)...)
+    Rational(n::Int) = Rational(n, 1)
+end
+
+the key is to keep the closure that defines the constructors:
+
+constructor_defining_closure(Rational, new) = begin
+   ... all user's constructor decls go here ...
+end
+
+initially we call constructor_defining_closure(Rational, new)
+
+when we instantiate a type, e.g. Rational{Int8}, we make a new type
+object that's also an empty generic function (no methods).
+then we make "new", the base constructor for it.
+R = instantiate(Rational,(Int8,))
+new = jl_new_closure(jl_new_struct_internal, R)
+R.constructor_defining_closure(R, new)
+
 
 struct Foo
   ...
@@ -389,3 +469,34 @@ struct MySingleton
 end
 
 if no ctor definitions preset, you get Foo(...) = new(...)
+
+-------------------------------------------------------------------------------
+
+issues 6/21/10
+
+- inference within closures
+  * avoid box for variables (arguments) that aren't assigned
+    . even better, for variables that are assigned definitely and once
+  . then multiple assignments in the binding scope but not in closures
+  . then assignments within closures
+* inference for new constructor stuff
+- hooking up the pieces to use inferred types in the compiler
+  . we could save tuples (type_sig, AST) as s-exprs to avoid the cost
+    of lowering and type inference.
+- make type parameters visible to user-defined constructors
+  . in generic case, instantiate all signatures with the typevar mapping
+    that's currently created in add_generic_ctor
+  . in non-generic case, add static parameters
+- limit specialization of vararg functions
+- be able to cache results obtained by recursive inference in method
+  table cache when appropriate. instead of calling typeinf() recursively,
+  call specialize(), which will do something more like cache_method.
+
+- coroutines, Tasks, exceptions
+- new for loop, comprehension, reduction formulation
+
+method ordering tests:
+//:  (T,T) before (Any,Any)
++:   (T<:Number{T},T<:Number{T}) before (Number{T},Number{T})
+promote_type: promote_type(Type{T},Type{T}) first
+ref: ref(Array{Any,1},Int32) before ref(Array{T,1},Int32)

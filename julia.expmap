@@ -1,0 +1,35 @@
+{
+  global:
+    int64hash;
+    int64to32hash;
+    rand_double;
+    rand_float;
+    genrand_int32;
+    clock_now;
+    uint2str;
+    bitvector_new;
+    bitvector_resize;
+    bitvector_set;
+    bitvector_get;
+    bitvector_next;
+    jl_symbol;
+    jl_matching_methods;
+    jl_is_builtin;
+    jl_is_genericfunc;
+    jl_func_type_tfunc;
+    jl_compute_type_union;
+    jl_union_too_complex;
+    jl_type_match;
+    jl_type_intersection;
+    jl_types_equal;
+    jl_cstr_to_array;
+    jl_print_to_string;
+    jl_is_rest_arg;
+    jl_new_eqtable;
+    jl_eqtable_put;
+    jl_eqtable_get;
+    jl_eqtable_del;
+    jl_eqtable_next;
+  local:
+    *;
+};

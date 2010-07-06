@@ -14,15 +14,10 @@ prod(x::Scalar) = x
 any(x::Scalar)  = x
 all(x::Scalar)  = x
 
-max(rest...)  = max(rest)
-min(rest...)  = min(rest)
-sum(rest...)  = sum(rest)
-prod(rest...) = prod(rest)
-any(rest...)  = any(rest)
-all(rest...)  = all(rest)
+reduce(op, itr) = reduce(op, op(), itr)
 
-function reduce(op, itr)
-    v = op()
+function reduce(op, v0, itr)
+    v = v0
     for x = itr
         v = op(v,x)
     end
@@ -36,16 +31,19 @@ prod(itr) = reduce(*,   itr)
 any(itr)  = reduce(any, itr)
 all(itr)  = reduce(all, itr)
 
+max(x, y, z, rest...)  = reduce(max,  max(max(x,y),z),   rest)
+min(x, y, z, rest...)  = reduce(min,  min(min(x,y),z),   rest)
+sum(x, y, z, rest...)  = reduce(sum,  sum(sum(x,y),z),   rest)
+prod(x, y, z, rest...) = reduce(prod, prod(prod(x,y),z), rest)
+any(x, y, z, rest...)  = reduce(any,  any(any(x,y),z),   rest)
+all(x, y, z, rest...)  = reduce(all,  all(all(x,y),z),   rest)
+
 ## promotions ##
+
+promote_type{T}(::Type{T}, ::Type{T}) = T
 
 function promote_type{T,S}(::Type{T}, ::Type{S})
     # print("promote_type: ",T,", ",S,"\n")
-    if T <: S
-        return T
-    end
-    if S <: T
-        return S
-    end
     if method_exists(promote_rule,(T,S))
         return promote_rule(T,S)
     elseif method_exists(promote_rule,(S,T))
@@ -60,6 +58,7 @@ promote(x) = (x,)
 function promote{T,S}(x::T, y::S)
     # print("promote: ",T,", ",S,"\n")
     R = promote_type(T,S)
+    # print("= ", R,"\n")
     (convert(R,x), convert(R,y))
 end
 function promote{T,S}(x::T, y::S, zs...)
