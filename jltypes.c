@@ -292,7 +292,7 @@ static jl_value_t *intersect_tuple(jl_tuple_t *a, jl_tuple_t *b,
     if (n == 0) return (jl_value_t*)jl_null;
     jl_tuple_t *tc = jl_alloc_tuple(n);
     size_t ai=0, bi=0, ci;
-    jl_value_t *ae, *be;
+    jl_value_t *ae=NULL, *be=NULL;
     int aseq=0, bseq=0;
     for(ci=0; ci < n; ci++) {
         if (ai < al) {
