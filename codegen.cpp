@@ -309,6 +309,8 @@ static Value *globalvar_binding_pointer(jl_sym_t *s, jl_codectx_t *ctx)
 // yields a jl_value_t** giving the binding location of a variable
 static Value *var_binding_pointer(jl_sym_t *s, jl_codectx_t *ctx)
 {
+    if (jl_is_expr(s) && ((jl_expr_t*)s)->head == symbol_sym)
+        s = (jl_sym_t*)jl_exprarg(s,0);
     assert(jl_is_symbol(s));
     std::map<std::string,int>::iterator it = ctx->closureEnv->find(s->name);
     if (it != ctx->closureEnv->end()) {
@@ -419,8 +421,15 @@ static Value *emit_call(jl_value_t **args, size_t arglen, jl_codectx_t *ctx)
     Value *theFptr, *theEnv;
     jl_binding_t *b=NULL; bool done=false;
     jl_value_t *a0 = args[0];
-    if (jl_is_expr(a0) && ((jl_expr_t*)a0)->head==symbol_sym)
-        a0 = jl_exprarg(a0,0);
+    jl_value_t *hdtype;
+    if (jl_is_expr(a0)) {
+        hdtype = ((jl_expr_t*)a0)->etype;
+        if (((jl_expr_t*)a0)->head==symbol_sym)
+            a0 = jl_exprarg(a0,0);
+    }
+    else {
+        hdtype = (jl_value_t*)jl_any_type;
+    }
     if (jl_is_symbol(a0) && is_global((jl_sym_t*)a0, ctx) &&
         jl_boundp(ctx->module, (jl_sym_t*)a0)) {
         b = jl_get_binding(ctx->module, (jl_sym_t*)a0);
@@ -455,8 +464,10 @@ static Value *emit_call(jl_value_t **args, size_t arglen, jl_codectx_t *ctx)
         }
     }
     if (!done) {
-        Value *theFunc = emit_expr(a0, ctx, true);
-        emit_func_check(theFunc, "apply: expected function", ctx);
+        Value *theFunc = emit_expr(args[0], ctx, true);
+        if (!jl_is_func_type(hdtype) && hdtype!=(jl_value_t*)jl_struct_kind) {
+            emit_func_check(theFunc, "apply: expected function", ctx);
+        }
         // extract pieces of the function object
         // TODO: try extractelement instead
         theFptr =
@@ -502,27 +513,32 @@ static Value *emit_call(jl_value_t **args, size_t arglen, jl_codectx_t *ctx)
     return result;
 }
 
+static Value *emit_var(jl_sym_t *sym, jl_value_t *ty, jl_codectx_t *ctx)
+{
+    // variable
+    if (is_global(sym, ctx)) {
+        size_t i;
+        // look for static parameter
+        for(i=0; i < ctx->sp->length; i+=2) {
+            assert(jl_is_typevar(jl_tupleref(ctx->sp, i)));
+            if (sym == ((jl_tvar_t*)jl_tupleref(ctx->sp, i))->name) {
+                return literal_pointer_val(jl_tupleref(ctx->sp, i+1));
+            }
+        }
+    }
+    Value *bp = var_binding_pointer(sym, ctx);
+    AllocaInst *arg = (*ctx->arguments)[sym->name];
+    // arguments are always defined
+    if (arg != NULL || !jl_subtype((jl_value_t*)jl_undef_type, ty, 0))
+        return builder.CreateLoad(bp, false);
+    return emit_checked_var(bp, sym->name, ctx);
+}
+
 static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool value,
                         bool last)
 {
     if (jl_is_symbol(expr)) {
-        // variable
-        jl_sym_t *sym = (jl_sym_t*)expr;
-        if (is_global(sym, ctx)) {
-            size_t i;
-            // look for static parameter
-            for(i=0; i < ctx->sp->length; i+=2) {
-                assert(jl_is_typevar(jl_tupleref(ctx->sp, i)));
-                if (sym == ((jl_tvar_t*)jl_tupleref(ctx->sp, i))->name) {
-                    return literal_pointer_val(jl_tupleref(ctx->sp, i+1));
-                }
-            }
-        }
-        Value *bp = var_binding_pointer(sym, ctx);
-        AllocaInst *arg = (*ctx->arguments)[sym->name];
-        if (arg != NULL)  // arguments are always defined
-            return builder.CreateLoad(bp, false);
-        return emit_checked_var(bp, sym->name, ctx);
+        return emit_var((jl_sym_t*)expr, (jl_value_t*)jl_undef_type, ctx);
     }
     if (!jl_is_expr(expr)) {
         // numeric literals
@@ -598,7 +614,8 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool value,
     }
 
     else if (ex->head == symbol_sym) {
-        return emit_expr(args[0], ctx, true);
+        assert(jl_is_symbol(args[0]));
+        return emit_var((jl_sym_t*)args[0], ex->etype, ctx);
     }
     else if (ex->head == assign_sym) {
         assert(!value);
@@ -631,7 +648,13 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool value,
         builder.CreateStore(boxed(rhs), bp);
     }
     else if (ex->head == top_sym) {
+        jl_binding_t *b = jl_get_binding(ctx->module, (jl_sym_t*)args[0]);
         Value *bp = globalvar_binding_pointer((jl_sym_t*)args[0], ctx);
+        if ((b->constp && b->value!=NULL) ||
+            (ex->etype!=(jl_value_t*)jl_any_type &&
+             !jl_subtype((jl_value_t*)jl_undef_type, ex->etype, 0))) {
+            return builder.CreateLoad(bp, false);
+        }
         return emit_checked_var(bp, ((jl_sym_t*)args[0])->name, ctx);
     }
     else if (ex->head == unbound_sym) {

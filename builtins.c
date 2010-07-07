@@ -80,7 +80,7 @@ jl_expr_t *jl_exprn(jl_sym_t *head, size_t n)
     ex->type = (jl_type_t*)jl_expr_type;
     ex->head = head;
     ex->args = jl_alloc_cell_1d(n);
-    ex->etype = (jl_type_t*)jl_any_type;
+    ex->etype = (jl_value_t*)jl_any_type;
     return ex;
 }
 

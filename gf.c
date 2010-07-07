@@ -49,7 +49,7 @@ static int exact_match(jl_value_t **args, size_t n, jl_tuple_t *sig)
             if (!jl_subtype(a, decl, 1))
                 return 0;
         }
-        else if (jl_is_type(a) && jl_is_tag_type(decl) &&
+        else if (jl_is_some_tag_type(a) && jl_is_tag_type(decl) &&
                  ((jl_tag_type_t*)decl)->name == jl_type_type->name) {
             if (jl_tparam0(decl) == (jl_value_t*)jl_type_type) {
                 // in the case of Type{Type{...}}, the types don't have

@@ -491,6 +491,8 @@ issues 6/21/10
 - be able to cache results obtained by recursive inference in method
   table cache when appropriate. instead of calling typeinf() recursively,
   call specialize(), which will do something more like cache_method.
+? don't specialize on arguments declared as Any. make the default type
+  an unconstrained typevar, and specialize those.
 
 - coroutines, Tasks, exceptions
 - new for loop, comprehension, reduction formulation
