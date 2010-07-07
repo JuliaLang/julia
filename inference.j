@@ -160,7 +160,7 @@ function tupleref_tfunc(A, t, i)
             types = t
         end
         # TODO: possibly use reduce of tmerge instead
-        return Union(types...)
+        return reduce(tmerge, Bottom, types)
     end
 end
 t_func[tupleref] = (2, 2, tupleref_tfunc)
@@ -177,7 +177,7 @@ function getfield_tfunc(A, s, name)
         end
         return Bottom
     else
-        return Union(s.types...)
+        return reduce(tmerge, Bottom, s.types)#Union(s.types...)
     end
 end
 t_func[getfield] = (2, 2, getfield_tfunc)
@@ -229,8 +229,9 @@ function a2t(a::Vector)
     t
 end
 
-function isconstantfunc(f, vtypes)
+function isconstantfunc(f, vtypes, sv::StaticVarInfo)
     if isa(f,Expr) && is(f.head,`top)
+        abstract_eval(f, vtypes, sv)
         assert(isa(f.args[1],Symbol))
         return (true, f.args[1])
     end
@@ -246,7 +247,8 @@ function limit_tuple_type(t)
         if isseqtype(last)
             last = last.parameters[1]
         end
-        tail = Union(t[MAX_TUPLETYPE_LEN:(n-1)]..., last)
+        tail = tuple(t[MAX_TUPLETYPE_LEN:(n-1)]..., last)
+        tail = reduce(tmerge, Bottom, tail)
         return tuple(t[1:(MAX_TUPLETYPE_LEN-1)]..., ...{tail})
     end
     return t
@@ -255,7 +257,7 @@ end
 function abstract_call(f, fargs, argtypes, vtypes, sv::StaticVarInfo)
     if isbuiltin(f)
         if is(f,apply) && length(fargs)>0
-            (isfunc, af) = isconstantfunc(fargs[1], vtypes)
+            (isfunc, af) = isconstantfunc(fargs[1], vtypes, sv)
             if isfunc && isbound(af)
                 afargs = fargs[2:]
                 aargtypes = argtypes[2:]
@@ -309,7 +311,7 @@ ft_tfunc(ft, argtypes) = ccall(dlsym(JuliaDLHandle,"jl_func_type_tfunc"), Any,
 function abstract_eval_call(e, vtypes, sv::StaticVarInfo)
     fargs = a2t(e.args[2:])
     argtypes = map(x->abstract_eval(x,vtypes,sv), fargs)
-    (isfunc, func) = isconstantfunc(e.args[1], vtypes)
+    (isfunc, func) = isconstantfunc(e.args[1], vtypes, sv)
     if !isfunc
         # TODO: lambda expression (let)
         ft = abstract_eval(e.args[1], vtypes, sv)
@@ -436,6 +438,8 @@ end
 badunion(t) = ccall(dlsym(JuliaDLHandle,"jl_union_too_complex"),
                     Int32, (Any,), t)!=0
 
+typealias Top Union(Any,Undef)
+
 function tmerge(typea, typeb)
     if is(typea,NF)
         return typeb
@@ -451,12 +455,13 @@ function tmerge(typea, typeb)
         return Bottom
     end
     if badunion(t)
-        return Any
+        return subtype(Undef,t) ? Top : Any
     end
     u = Union(t...)
     if isa(u,UnionKind) && length(u.types) > MAX_TYPEUNION_SIZE
         # don't let type unions get too big
-        return Any
+        # TODO: something smarter, like a common supertype
+        return subtype(Undef,u) ? Top : Any
     end
     return u
 end
@@ -482,7 +487,17 @@ function findlabel(body, l)
     error("label not found")
 end
 
+function typeinf_ext(linfo, atypes, sparams, cop)
+    global inference_stack
+    last = inference_stack
+    inference_stack = EmptyCallStack()
+    result = typeinf(linfo, atypes, sparams, cop)
+    inference_stack = last
+    return result
+end
+
 function typeinf(linfo::LambdaStaticData, atypes::Tuple, sparams::Tuple, cop)
+    #dotrace = true#is(linfo,sizestr)
     # check cached t-functions
     tf = linfo.tfunc
     while !is(tf,())
@@ -494,6 +509,9 @@ function typeinf(linfo::LambdaStaticData, atypes::Tuple, sparams::Tuple, cop)
 
     ast0 = linfo.ast
 
+    #print("typeinf ", ast0, " ", sparams, " ", atypes, "\n")
+    #print("typeinf ", atypes, "\n")
+
     global inference_stack
     # check for recursion
     f = inference_stack
@@ -501,14 +519,13 @@ function typeinf(linfo::LambdaStaticData, atypes::Tuple, sparams::Tuple, cop)
         if is(f.ast,ast0) && typeseq(f.types, atypes)
             # return best guess so far
             f.recurred = true
+            #print("*==> ", f.result,"\n")
             return ((),f.result)
         end
         f = f.prev
     end
 
     ast = cop ? copy(ast0) : ast0
-    #print("typeinf ", ast, " ", sparams, " ", atypes, "\n")
-    #print("typeinf ", atypes, "\n")
 
     assert(is(ast.head,`lambda))
     args = map(x->(isa(x,Expr) ? x.args[1] : x), ast.args[1])
@@ -596,6 +613,7 @@ function typeinf(linfo::LambdaStaticData, atypes::Tuple, sparams::Tuple, cop)
     inference_stack = inference_stack.prev
     fulltree = type_annotate(ast, s, sv, frame.result)
     linfo.tfunc = (atypes, fulltree, linfo.tfunc)
+    #print("==> ", frame.result,"\n")
     return (fulltree, frame.result)
 end
 
@@ -705,3 +723,5 @@ function und()
     end
     c = a
 end
+
+tfunc(f,t) = (getmethods(f,t)[3]).tfunc

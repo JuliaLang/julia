@@ -528,10 +528,10 @@ int jl_load_startup_file()
 {
     if (!setjmp(ExceptionHandler)) {
         jl_load("start.j");
-        if (jl_boundp(jl_system_module, jl_symbol("typeinf"))) {
+        if (jl_boundp(jl_system_module, jl_symbol("typeinf_ext"))) {
             jl_typeinf_func =
                 (jl_function_t*)*(jl_get_bindingp(jl_system_module,
-                                                  jl_symbol("typeinf")));
+                                                  jl_symbol("typeinf_ext")));
         }
     } else {
         ios_printf(ios_stderr, "error during startup.\n");

@@ -239,6 +239,18 @@ jl_value_t *jl_type_union(jl_tuple_t *types)
     return (jl_value_t*)jl_new_uniontype(types);
 }
 
+static jl_value_t *unsafe_type_union(jl_tuple_t *types)
+{
+    types = jl_compute_type_union(types);
+    if (types->length == 1)
+        return jl_tupleref(types, 0);
+    if (types->length == 0)
+        return (jl_value_t*)jl_bottom_type;
+    jl_uniontype_t *t = (jl_uniontype_t*)newobj((jl_type_t*)jl_union_kind, 1);
+    t->types = types;
+    return (jl_value_t*)t;
+}
+
 static jl_value_t *jl_type_intersect(jl_value_t *a, jl_value_t *b,
                                      jl_tuple_t **penv);
 
@@ -250,7 +262,10 @@ static jl_value_t *intersect_union(jl_uniontype_t *a, jl_value_t *b,
     for(i=0; i < t->length; i++) {
         jl_tupleset(t, i, jl_type_intersect(jl_tupleref(a->types,i),b,penv));
     }
-    return jl_type_union(t);
+    // problem: an intermediate union type we make here might be too
+    // complex, even though the final type after typevars are replaced
+    // might be ok.
+    return unsafe_type_union(t);
 }
 
 // if returns with *bot!=0, then intersection is Bottom
@@ -311,6 +326,7 @@ static jl_value_t *intersect_tuple(jl_tuple_t *a, jl_tuple_t *b,
             }
             bi++;
         }
+        assert(ae!=NULL && be!=NULL);
         jl_value_t *ce = jl_type_intersect(ae,be,penv);
         if (ce == (jl_value_t*)jl_bottom_type)
             return (jl_value_t*)jl_bottom_type;
@@ -444,6 +460,7 @@ static jl_value_t *intersect_typevar(jl_tvar_t *a, jl_value_t *b,
     return (jl_value_t*)a;
 }
 
+// TODO: handle NTuple
 static jl_value_t *jl_type_intersect(jl_value_t *a, jl_value_t *b,
                                      jl_tuple_t **penv)
 {
@@ -452,18 +469,8 @@ static jl_value_t *jl_type_intersect(jl_value_t *a, jl_value_t *b,
     if (jl_is_typector(b))
         b = (jl_value_t*)((jl_typector_t*)b)->body;
     if (a == b) return a;
-    if (jl_is_typevar(a))
-        return intersect_typevar((jl_tvar_t*)a, b, penv);
-    if (jl_is_typevar(b))
-        return intersect_typevar((jl_tvar_t*)b, a, penv);
-    if (!jl_has_typevars(a) && !jl_has_typevars(b)) {
-        if (jl_subtype(a, b, 0))
-            return a;
-        if (jl_subtype(b, a, 0))
-            return b;
-    }
-    if (jl_is_int32(a) || jl_is_int32(b))
-        return (jl_value_t*)jl_bottom_type;
+    if (a == (jl_value_t*)jl_any_type) return b;
+    if (b == (jl_value_t*)jl_any_type) return a;
     // union
     if (jl_is_union_type(a))
         return intersect_union((jl_uniontype_t*)a, b, penv);
@@ -491,6 +498,21 @@ static jl_value_t *jl_type_intersect(jl_value_t *a, jl_value_t *b,
     }
     if (jl_is_func_type(b))
         return (jl_value_t*)jl_bottom_type;
+    if (a == (jl_value_t*)jl_bottom_type ||
+        b == (jl_value_t*)jl_bottom_type)
+        return (jl_value_t*)jl_bottom_type;
+    if (!jl_has_typevars(a) && !jl_has_typevars(b)) {
+        if (jl_subtype(a, b, 0))
+            return a;
+        if (jl_subtype(b, a, 0))
+            return b;
+    }
+    if (jl_is_int32(a) || jl_is_int32(b))
+        return (jl_value_t*)jl_bottom_type;
+    if (jl_is_typevar(a))
+        return intersect_typevar((jl_tvar_t*)a, b, penv);
+    if (jl_is_typevar(b))
+        return intersect_typevar((jl_tvar_t*)b, a, penv);
     // tag
     assert(jl_is_some_tag_type(a));
     assert(jl_is_some_tag_type(b));
@@ -894,10 +916,10 @@ static jl_type_t *inst_type_w_(jl_value_t *t, jl_value_t **env, size_t n,
         if (lkup != NULL) return lkup;
 
         // always use original type constructor (?)
-        // doesn't appear to be necessary
-        //jl_value_t *tc = tn->primary;
-        //if (tc != NULL && tc != t)
-        //    return apply_type_(tc, &iparams[1], ntp);
+        // only necessary for special cases like NTuple
+        jl_value_t *tc = tn->primary;
+        if (tc == (jl_value_t*)jl_ntuple_type && tc != t)//(tc != NULL && tc != t)
+            return (jl_type_t*)apply_type_(tc, &iparams[1], ntp);
 
         // move array of instantiated parameters to heap; we need to keep it
         jl_tuple_t *iparams_tuple = jl_alloc_tuple(ntp);

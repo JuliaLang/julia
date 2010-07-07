@@ -176,6 +176,7 @@ typedef struct _jl_methtable_t {
     jl_methlist_t *defs;
     jl_methlist_t *cache;
     int sealed;
+    int max_args;  // max # of non-vararg arguments in a signature
 } jl_methtable_t;
 
 typedef struct {
