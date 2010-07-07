@@ -481,7 +481,7 @@ JL_CALLABLE(jl_f_convert_to_ptr)
     assert(jl_is_cpointer_type(args[0]));
     jl_value_t *v = args[1];
     jl_value_t *elty = jl_tparam0(args[0]);
-    void *p;
+    void *p=NULL;
     if (v == (jl_value_t*)jl_null) {
         p = NULL;
     }
