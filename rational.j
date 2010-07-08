@@ -26,8 +26,8 @@ function //{T}(num::T, den::T)
 end
 
 //(num, den) = //(promote(num, den)...)
-//{T}(x::Rational{T}, y::T) = x.num // (x.den y)
-//{T}(x::T, y::Rational{T}) = (x y.den) // y.num
+//{T<:Int}(x::Rational{T}, y::T) = x.num // (x.den y)
+//{T<:Int}(x::T, y::Rational{T}) = (x y.den) // y.num
 
 function print(x::Rational)
     print(num(x))

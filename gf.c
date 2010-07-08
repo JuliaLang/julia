@@ -115,7 +115,7 @@ jl_methlist_t *jl_method_table_insert(jl_methtable_t *mt, jl_type_t *type,
 
 static
 jl_methlist_t *jl_method_list_insert(jl_methlist_t **pml, jl_type_t *type,
-                                     jl_function_t *method);
+                                     jl_function_t *method, int check_amb);
 
 extern jl_function_t *jl_typeinf_func;
 //TODO: disabled for now
@@ -189,7 +189,7 @@ static jl_methlist_t *cache_method(jl_methtable_t *mt, jl_tuple_t *type,
     newmeth = jl_instantiate_method(method, sparams);
 
     jl_methlist_t *ret =
-        jl_method_list_insert(&mt->cache, (jl_type_t*)type, newmeth);
+        jl_method_list_insert(&mt->cache, (jl_type_t*)type, newmeth, 0);
 
     if (newmeth->linfo != NULL && newmeth->linfo->sparams == jl_null) {
         // when there are no static parameters, one unspecialized version
@@ -344,9 +344,67 @@ static int args_morespecific(jl_type_t *a, jl_type_t *b)
     return msp;
 }
 
+static jl_tuple_t *without_typectors(jl_tuple_t *t)
+{
+    jl_tuple_t *tc = jl_alloc_tuple(t->length);
+    size_t i;
+    for(i=0; i < t->length; i++) {
+        jl_value_t *v = jl_tupleref(t,i);
+        if (jl_is_typector(v))
+            jl_tupleset(tc,i,(jl_value_t*)((jl_typector_t*)v)->body);
+        else
+            jl_tupleset(tc,i,v);
+    }
+    return tc;
+}
+
+/*
+  warn about ambiguous method priorities
+  
+  the relative priority of A and B is ambiguous if
+  !subtype(A,B) && !subtype(B,A) && no corresponding tuple
+  elements are disjoint.
+  
+  for example, (Tensor, Matrix) and (Matrix, Tensor) are ambiguous.
+  however, (Tensor, Matrix, Foo) and (Matrix, Tensor, Bar) are fine
+  since Foo and Bar are disjoint, so there would be no confusion over
+  which one to call.
+  
+  There is also this kind of ambiguity: foo{T,S}(T, S) vs. foo(Any,Any)
+  In this case jl_types_equal() is true, but one is jl_type_morespecific
+  or jl_type_match_morespecific than the other.
+  To check this, jl_types_equal_generic needs to be more sophisticated
+  so (T,T) is not equivalent to (Any,Any). (TODO)
+*/
+static void check_ambiguous(jl_methlist_t *ml, jl_tuple_t *type,
+                            jl_tuple_t *sig, jl_sym_t *fname)
+{
+    // we know !args_morespecific(type, sig)
+    if (type->length==sig->length && !args_morespecific((jl_type_t*)sig,
+                                                        (jl_type_t*)type)) {
+        jl_value_t *isect = jl_type_intersection((jl_value_t*)type,
+                                                 (jl_value_t*)sig);
+        if (isect == (jl_value_t*)jl_bottom_type)
+            return;
+        jl_methlist_t *l = ml;
+        while (l != NULL) {
+            if (sigs_eq((jl_type_t*)isect, l->sig))
+                return;  // ok, intersection is covered
+            l = l->next;
+        }
+        char *n = fname->name;
+        ios_printf(ios_stdout,
+                   "Warning: new definition %s%s is ambiguous with %s%s. "
+                   "Make sure %s%s is also defined.\n",
+                   n, jl_print_to_string((jl_value_t*)without_typectors(type)),
+                   n, jl_print_to_string((jl_value_t*)without_typectors(sig)),
+                   n, jl_print_to_string(isect));
+    }
+}
+
 static
 jl_methlist_t *jl_method_list_insert(jl_methlist_t **pml, jl_type_t *type,
-                                     jl_function_t *method)
+                                     jl_function_t *method, int check_amb)
 {
     jl_methlist_t *l, **pl;
 
@@ -372,6 +430,11 @@ jl_methlist_t *jl_method_list_insert(jl_methlist_t **pml, jl_type_t *type,
     while (l != NULL) {
         if (args_morespecific(type, l->sig))
             break;
+        if (check_amb) {
+            check_ambiguous(*pml, (jl_tuple_t*)type, (jl_tuple_t*)l->sig,
+                            method->linfo ? method->linfo->name :
+                            jl_symbol("anonymous"));
+        }
         pl = &l->next;
         l = l->next;
     }
@@ -383,25 +446,8 @@ jl_methlist_t *jl_method_list_insert(jl_methlist_t **pml, jl_type_t *type,
 jl_methlist_t *jl_method_table_insert(jl_methtable_t *mt, jl_type_t *type,
                                       jl_function_t *method)
 {
-    /*
-      TODO: warn about ambiguous method priorities
-      
-      the relative priority of A and B is ambiguous if
-      !subtype(A,B) && !subtype(B,A) && no corresponding tuple
-      elements are disjoint.
-      
-      for example, (Tensor, Matrix) and (Matrix, Tensor) are ambiguous.
-      however, (Tensor, Matrix, Foo) and (Matrix, Tensor, Bar) are fine
-      since Foo and Bar are disjoint, so there would be no confusion over
-      which one to call.
-      
-      There is also this kind of ambiguity: foo{T,S}(T, S) vs. foo(Any,Any)
-      In this case jl_types_equal() is true, but one is jl_type_morespecific
-      or jl_type_match_morespecific than the other.
-      To check this, jl_types_equal_generic needs to be more sophisticated
-      so (T,T) is not equivalent to (Any,Any). (TODO)
-    */
-    return jl_method_list_insert(&mt->defs, type, method);
+    jl_methlist_t *ml = jl_method_list_insert(&mt->defs, type, method, 1);
+    return ml;
 }
 
 void jl_no_method_error(jl_sym_t *name, jl_value_t **args, size_t nargs)

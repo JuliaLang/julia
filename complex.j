@@ -126,8 +126,7 @@ function exp(z::Complex)
     Complex(er cos(z.im), er sin(z.im))
 end
 
-(^)(x::Union(Int8,Uint8,Int16,Uint16,Int32,Uint32), p::Union(Float,Complex)) =
-    float64(x)^p
+(^)(x::Union(Int8,Uint8,Int16,Uint16,Int32,Uint32), p::Float) = float64(x)^p
 
 function (^)(x::Float, p::Float)
     if x >= 0
@@ -201,7 +200,7 @@ function (^)(z::Real, p::Complex)
     (^)(promote(z,p)...)
 end
 
-function (^)(z::Complex, p::Real)
+function (^)(z::Complex, p::Float)
     if z.im == 0
         return z.re^p
     end

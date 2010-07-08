@@ -150,14 +150,14 @@ colon(start::Real, stop::Real, stride::Real) =
 (==)(x::Matrix, y::Matrix) = [ x[i,j] == y[i,j] | i=1:size(x,1), j=1:size(x,2) ]
 
 (>) {T,S,n}(x::Tensor{T,n}, y::Tensor{S,n}) = (y < x)
-(>)        (x::Scalar,      y::Tensor)      = (y < x)
-(>)        (x::Tensor,      y::Scalar)      = (y < x)
+(>)        (x::Real  ,      y::Tensor)      = (y < x)
+(>)        (x::Tensor,      y::Real  )      = (y < x)
 (<=){T,S,n}(x::Tensor{T,n}, y::Tensor{S,n}) = (x < y) | (x == y)
-(<=)       (x::Scalar,      y::Tensor)      = (x < y) | (x == y)
-(<=)       (x::Tensor,      y::Scalar)      = (x < y) | (x == y)
+(<=)       (x::Real  ,      y::Tensor)      = (x < y) | (x == y)
+(<=)       (x::Tensor,      y::Real  )      = (x < y) | (x == y)
 (>=){T,S,n}(x::Tensor{T,n}, y::Tensor{S,n}) = (x > y) | (x == y)
-(>=)       (x::Scalar,      y::Tensor)      = (x > y) | (x == y)
-(>=)       (x::Tensor,      y::Scalar)      = (x > y) | (x == y)
+(>=)       (x::Real  ,      y::Tensor)      = (x > y) | (x == y)
+(>=)       (x::Tensor,      y::Real  )      = (x > y) | (x == y)
 
 (~)(x::Vector{Bool}) = [ ~x[i] | i=1:length(x) ]
 (~)(x::Matrix{Bool}) = [ ~x[i,j] | i=1:size(x,1), j=1:=size(x,2) ]

@@ -480,7 +480,7 @@ issues 6/21/10
   . then multiple assignments in the binding scope but not in closures
   . then assignments within closures
 * inference for new constructor stuff
-- hooking up the pieces to use inferred types in the compiler
+* hooking up the pieces to use inferred types in the compiler
   . we could save tuples (type_sig, AST) as s-exprs to avoid the cost
     of lowering and type inference.
 - make type parameters visible to user-defined constructors
@@ -491,6 +491,8 @@ issues 6/21/10
 - be able to cache results obtained by recursive inference in method
   table cache when appropriate. instead of calling typeinf() recursively,
   call specialize(), which will do something more like cache_method.
+- method cache invalidation, also invalidate all caches once type inference
+  is available (after loading start.j)
 ? don't specialize on arguments declared as Any. make the default type
   an unconstrained typevar, and specialize those.
 

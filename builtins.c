@@ -558,12 +558,14 @@ static void print_type(jl_value_t *t)
 {
     ios_t *s = current_output_stream;
     if (jl_is_func_type(t)) {
-        call_print((jl_value_t*)((jl_func_type_t*)t)->from);
-        ios_write(s, "-->", 3);
-        call_print((jl_value_t*)((jl_func_type_t*)t)->to);
-        /*
-        ios_write(s, "Function", 8);
-        */
+        if (t == (jl_value_t*)jl_any_func) {
+            ios_write(s, "Function", 8);
+        }
+        else {
+            call_print((jl_value_t*)((jl_func_type_t*)t)->from);
+            ios_write(s, "-->", 3);
+            call_print((jl_value_t*)((jl_func_type_t*)t)->to);
+        }
     }
     else if (jl_is_union_type(t)) {
         ios_write(s, "Union", 5);

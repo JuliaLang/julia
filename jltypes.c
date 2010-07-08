@@ -786,7 +786,10 @@ static jl_value_t *apply_type_(jl_value_t *tc, jl_value_t **params, size_t n)
                 jl_errorf("%s: %s does not match type parameter %s",
                           tname, jl_print_to_string(params[i]),
                           jl_print_to_string((jl_value_t*)tv));
-            env[i*2+1] = params[i];
+            if (jl_is_typector(params[i]))
+                env[i*2+1] = (jl_value_t*)((jl_typector_t*)params[i])->body;
+            else
+                env[i*2+1] = params[i];
         }
     }
     if (jl_is_typector(tc)) tc = (jl_value_t*)((jl_typector_t*)tc)->body;
