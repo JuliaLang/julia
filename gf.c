@@ -417,7 +417,6 @@ jl_methlist_t *jl_method_list_insert(jl_methlist_t **pml, jl_type_t *type,
     }
     if (l != NULL) {
         // method overwritten
-        // TODO: invalidate cached methods
         l->sig = type;
         l->func = method;
         return l;
@@ -447,6 +446,19 @@ jl_methlist_t *jl_method_table_insert(jl_methtable_t *mt, jl_type_t *type,
                                       jl_function_t *method)
 {
     jl_methlist_t *ml = jl_method_list_insert(&mt->defs, type, method, 1);
+    // invalidate cached methods that overlap this definition
+    jl_methlist_t *l = mt->cache;
+    jl_methlist_t **pthis = &mt->cache;
+    while (l != NULL) {
+        if (jl_type_intersection((jl_value_t*)type, (jl_value_t*)l->sig) !=
+            (jl_value_t*)jl_bottom_type) {
+            *pthis = l->next;
+        }
+        else {
+            pthis = &l->next;
+        }
+        l = l->next;
+    }
     return ml;
 }
 

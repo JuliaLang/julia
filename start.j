@@ -21,10 +21,10 @@ load("table.j")
 load("array.j")
 #load("tree.j")
 
-load("inference.j")
-
 # external libraries
 load("libc.j")
 load("math.j")
 load("blas.j")
 load("lapack.j")
+
+load("inference.j")

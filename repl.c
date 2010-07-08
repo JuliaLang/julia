@@ -532,6 +532,12 @@ int jl_load_startup_file()
             jl_typeinf_func =
                 (jl_function_t*)*(jl_get_bindingp(jl_system_module,
                                                   jl_symbol("typeinf_ext")));
+            // todo: invalidate method caches
+            // warm up type inference to put the latency up front
+            jl_value_t *one = jl_box_int32(1);
+            jl_apply((jl_function_t*)*(jl_get_bindingp(jl_system_module,
+                                                       jl_symbol("fact"))),
+                     &one, 1);
         }
     } else {
         ios_printf(ios_stderr, "error during startup.\n");
