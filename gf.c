@@ -27,6 +27,7 @@ static jl_methtable_t *new_method_table()
     mt->defs = NULL;
     mt->cache = NULL;
     mt->sealed = 0;
+    mt->max_args = 0;
     return mt;
 }
 
@@ -36,12 +37,44 @@ typedef int (*jl_type_comparer_t)(jl_type_t *a, jl_type_t *b);
 typedef int (*jl_argtuple_comparer_t)(jl_value_t **args, size_t n,
                                       jl_type_t *b);
 
-static int exact_match(jl_value_t **args, size_t n, jl_tuple_t *sig)
+static inline int exact_match(jl_value_t **args, size_t n, jl_tuple_t *sig)
 {
-    if (sig->length != n) return 0;
+#if 0
+    if (sig->length > n) {
+        //if (!(n == sig->length-1 && jl_is_seq_type(jl_tupleref(sig,n))))
+        /*
+          in the cache, don't allow T... to match 0 args. here's why:
+          say we have these definitions:
+          f(x::Int32)
+          f(xs...)
+
+          say f(1,2) is called first. this is cached as f(Int32,Any...).
+          now I call f(1). If f(Int32,Any...) matched this, it would call
+          the cached f(xs...) definition, but it should call f(x::Int32).
+
+          alternatively, we could cache f(1,2) as f(Int32,Int32,Any...).
+          however this leads to more compilation.
+        */
+        return 0;
+    }
+#endif
+    if (sig->length < n) {
+        if (sig->length==0 || !jl_is_seq_type(jl_tupleref(sig,sig->length-1)))
+            return 0;
+    }
     size_t i;
     for(i=0; i < n; i++) {
         jl_value_t *decl = jl_tupleref(sig, i);
+        if (i == sig->length-1) {
+            if (jl_is_seq_type(decl)) {
+                jl_value_t *t = jl_tparam0(decl);
+                for(; i < n; i++) {
+                    if (!jl_subtype(args[i], t, 1))
+                        return 0;
+                }
+                return 1;
+            }
+        }
         jl_value_t *a = args[i];
         if (jl_is_tuple(decl)) {
             // tuples don't have to match exactly, to avoid caching
@@ -75,8 +108,10 @@ static jl_methlist_t *jl_method_list_assoc_exact(jl_methlist_t *ml,
                                                  jl_value_t **args, size_t n)
 {
     while (ml != NULL) {
-        if (exact_match(args, n, (jl_tuple_t*)ml->sig))
-            return ml;
+        if (((jl_tuple_t*)ml->sig)->length <= n) {
+            if (exact_match(args, n, (jl_tuple_t*)ml->sig))
+                return ml;
+        }
         ml = ml->next;
     }
     return NULL;
@@ -179,6 +214,17 @@ static jl_methlist_t *cache_method(jl_methtable_t *mt, jl_tuple_t *type,
             assert(jl_tupleref(type,i) != (jl_value_t*)jl_bottom_type);
         }
     }
+    // for varargs methods, only specialize up to max_args
+    if (type->length > mt->max_args &&
+        jl_is_seq_type(jl_tupleref(decl,decl->length-1))) {
+        jl_tuple_t *limited = jl_alloc_tuple(mt->max_args+1);
+        for(i=0; i < mt->max_args; i++) {
+            jl_tupleset(limited, i, jl_tupleref(type, i));
+        }
+        jl_tupleset(limited, i, jl_tupleref(decl,decl->length-1));
+        type = limited;
+    }
+
     // here we infer types and specialize the method
     jl_function_t *newmeth;
     /*
@@ -411,15 +457,13 @@ jl_methlist_t *jl_method_list_insert(jl_methlist_t **pml, jl_type_t *type,
     assert(jl_is_tuple(type));
     l = *pml;
     while (l != NULL) {
-        if (sigs_eq(type, l->sig))
-            break;
+        if (sigs_eq(type, l->sig)) {
+            // method overwritten
+            l->sig = type;
+            l->func = method;
+            return l;
+        }
         l = l->next;
-    }
-    if (l != NULL) {
-        // method overwritten
-        l->sig = type;
-        l->func = method;
-        return l;
     }
     jl_methlist_t *newrec = (jl_methlist_t*)allocb(sizeof(jl_methlist_t));
     newrec->sig = type;
@@ -458,6 +502,14 @@ jl_methlist_t *jl_method_table_insert(jl_methtable_t *mt, jl_type_t *type,
             pthis = &l->next;
         }
         l = l->next;
+    }
+    // update max_args
+    jl_tuple_t *t = (jl_tuple_t*)type;
+    size_t na = t->length;
+    if (t->length>0 && jl_is_seq_type(jl_tupleref(t,t->length-1)))
+        na--;
+    if (na > mt->max_args) {
+        mt->max_args = na;
     }
     return ml;
 }
