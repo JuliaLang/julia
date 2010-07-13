@@ -6,7 +6,7 @@
 # - more method table reflection
 #   . cached t-functions
 #   . abstract_invoke()
-#     . consult t-func cache
+#     * consult t-func cache
 #     * determine applicable methods
 #     * abstract_invoke all of them, type-union the result, and cache it
 # * hash table of symbols
@@ -16,10 +16,9 @@
 # - isconstant()
 # * approximate static parameters
 # - use type bounds
-# - reflection for constructors
+# * reflection for constructors
 # * be able to infer the results of promote()
 # - avoid branches when condition can be statically evaluated
-# - do something about box, unbox, boxset so we can at least handle easy cases
 
 # parameters limiting potentially-infinite types
 MAX_TYPEUNION_SIZE = 3

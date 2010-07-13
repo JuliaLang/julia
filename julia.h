@@ -56,13 +56,16 @@ typedef struct _jl_lambda_info_t {
     // sparams is a tuple (symbol, value, symbol, value, ...)
     jl_tuple_t *sparams;
     jl_value_t *tfunc;
+
     // hidden fields:
     jl_fptr_t fptr;
     jl_tuple_t *roots;  // pointers in generated code
     void *functionObject;
+    jl_value_t *specTypes;  // argument types this is specialized for
     // flag telling if inference is running on this function
     // used to avoid infinite recursion
     uptrint_t inInference;
+    uptrint_t inCompile;
     // a slower-but-works version of this function as a fallback
     struct _jl_function_t *unspecialized;
     jl_sym_t *name;  // for error reporting
@@ -355,7 +358,7 @@ jl_value_t *jl_full_type(jl_value_t *v);
 
 // type predicates
 int jl_is_type(jl_value_t *v);
-int jl_is_abstract_type(jl_value_t *v);
+int jl_is_leaf_type(jl_value_t *v);
 int jl_has_typevars(jl_value_t *v);
 int jl_tuple_subtype(jl_value_t **child, size_t cl,
                      jl_value_t **parent, size_t pl, int ta, int morespecific);
@@ -479,7 +482,7 @@ void *jl_load_dynamic_library(char *fname);
 void *jl_dlsym(void *handle, char *symbol);
 
 // compiler
-void jl_compile(jl_lambda_info_t *li);
+void jl_compile(jl_function_t *f);
 jl_value_t *jl_toplevel_eval_thunk(jl_lambda_info_t *thk);
 void jl_load(const char *fname);
 jl_value_t *jl_interpret_toplevel_thunk(jl_lambda_info_t *lam);

@@ -1168,8 +1168,10 @@ int jl_subtype_le(jl_value_t *a, jl_value_t *b, int ta, int morespecific)
     int super=0;
     while (tta != (jl_tag_type_t*)jl_any_type) {
         if (tta->name == ttb->name) {
-            if (super && morespecific)
-                return 1;
+            if (super && morespecific) {
+                if (tta->name != jl_type_type->name)
+                    return 1;
+            }
             if (tta->name == jl_ntuple_typename) {
                 // NTuple must be covariant
                 return jl_subtype_le(jl_tupleref(tta->parameters,1),

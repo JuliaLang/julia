@@ -822,11 +822,8 @@ JL_CALLABLE(jl_trampoline)
     jl_function_t *f = (jl_function_t*)jl_t0(env);
     assert(jl_is_func(f));
     assert(f->linfo != NULL);
-    jl_value_t *cloenv = jl_t1(env);
-    jl_compile(f->linfo);
-    assert(f->linfo->fptr != NULL);
-    f->fptr = f->linfo->fptr;
-    f->env = cloenv;
+    jl_compile(f);
+    assert(f->fptr != NULL);
     return jl_apply(f, args, nargs);
 }
 

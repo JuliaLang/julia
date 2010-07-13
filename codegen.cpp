@@ -175,11 +175,23 @@ static Function *to_function(jl_lambda_info_t *li)
     return f;
 }
 
-extern "C" void jl_compile(jl_lambda_info_t *li)
+extern "C" void jl_compile(jl_function_t *f)
 {
-    // objective: assign li->fptr
-    Function *f = to_function(li);
-    li->fptr = (jl_fptr_t)jl_ExecutionEngine->getPointerToFunction(f);
+    jl_lambda_info_t *li = f->linfo;
+    if (li->functionObject == NULL) {
+        // objective: assign li->fptr
+        li->inCompile = 1;
+        Function *llvmf = to_function(li);
+        li->fptr = (jl_fptr_t)jl_ExecutionEngine->getPointerToFunction(llvmf);
+    }
+    jl_value_t *env = f->env;
+    if (f->fptr == &jl_trampoline) {
+        assert(jl_t0(env) == (jl_value_t*)f);
+        f->env = jl_t1(env);
+    }
+    assert(li->fptr != NULL);
+    f->fptr = li->fptr;
+    li->inCompile = 0;
 }
 
 
@@ -415,6 +427,32 @@ static size_t biggest_call(jl_value_t *expr)
 
 #include "intrinsics.cpp"
 
+extern "C" jl_function_t *jl_get_specialization(jl_function_t *f, jl_tuple_t *types);
+
+static jl_value_t *expr_type(jl_value_t *e)
+{
+    if (jl_is_expr(e))
+        return ((jl_expr_t*)e)->etype;
+    if (jl_is_symbol(e))
+        return (jl_value_t*)jl_any_type;
+    if (jl_is_lambda_info(e))
+        return (jl_value_t*)jl_any_func;
+    return (jl_value_t*)jl_typeof(e);
+}
+
+static jl_tuple_t *call_arg_types(jl_value_t **args, size_t n)
+{
+    jl_tuple_t *t = jl_alloc_tuple(n);
+    size_t i;
+    for(i=0; i < n; i++) {
+        jl_value_t *ty = expr_type(args[i]);
+        if (!jl_is_leaf_type(ty))
+            return NULL;
+        jl_tupleset(t, i, ty);
+    }
+    return t;
+}
+
 static Value *emit_call(jl_value_t **args, size_t arglen, jl_codectx_t *ctx)
 {
     size_t nargs = arglen-1;
@@ -433,7 +471,8 @@ static Value *emit_call(jl_value_t **args, size_t arglen, jl_codectx_t *ctx)
     if (jl_is_symbol(a0) && is_global((jl_sym_t*)a0, ctx) &&
         jl_boundp(ctx->module, (jl_sym_t*)a0)) {
         b = jl_get_binding(ctx->module, (jl_sym_t*)a0);
-        if (!b->constp || b->value==NULL) b = NULL;
+        // TODO
+        //if (!b->constp) b = NULL;
     }
     if (jl_is_expr(a0) && ((jl_expr_t*)a0)->head == top_sym) {
         // (top x) is also global
@@ -454,8 +493,27 @@ static Value *emit_call(jl_value_t **args, size_t arglen, jl_codectx_t *ctx)
                 //theFptr = literal_pointer_val((void*)f->fptr, jl_fptr_llvmt);
                 theEnv = literal_pointer_val(f->env);
                 done = true;
+                if (ctx->linfo->specTypes != NULL) {
+                    jl_tuple_t *aty = call_arg_types(&args[1], nargs);
+                    // attempt compile-time specialization for inferred types
+                    if (aty != NULL) {
+                        /*
+                        if (trace) {
+                            ios_printf(ios_stdout, "call %s%s\n",
+                                       jl_print_to_string(args[0]),
+                                       jl_print_to_string((jl_value_t*)aty));
+                        }
+                        */
+                        f = jl_get_specialization(f, aty);
+                        if (f != NULL) {
+                            assert(f->linfo->functionObject != NULL);
+                            theFptr = (Value*)f->linfo->functionObject;
+                            theEnv = literal_pointer_val(f->env);
+                        }
+                    }
+                }
             }
-            if (f->fptr == &jl_f_is && nargs==2) {
+            else if (f->fptr == &jl_f_is && nargs==2) {
                 Value *arg1 = emit_expr(args[1], ctx, true);
                 Value *arg2 = emit_expr(args[2], ctx, true);
                 return julia_bool(builder.CreateICmpEQ(arg1, arg2));

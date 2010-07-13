@@ -62,3 +62,15 @@ M = [ mandel(Complex(r,i)) | r = -2.0:.1:0.5, i = -1.:.1:1. ]
 toc()
 assert(sum(M) == 14791)
 nl()
+
+## numeric vector quicksort ##
+
+print("quicksort: ")
+small=rand(3)
+sort(small)
+n = 5000
+v = rand(n)
+tic(); v = sort(v); toc()
+for i=1:(n-1)
+    assert(v[i]<=v[i+1])
+end
