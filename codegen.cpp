@@ -258,19 +258,32 @@ static void emit_error(const std::string &txt, jl_codectx_t *ctx)
                                          zeros.begin(), zeros.end()));
 }
 
+static void error_unless(Value *cond, const std::string &msg, jl_codectx_t *ctx)
+{
+    BasicBlock *failBB = BasicBlock::Create(getGlobalContext(),"fail",ctx->f);
+    BasicBlock *passBB = BasicBlock::Create(getGlobalContext(),"pass");
+    builder.CreateCondBr(cond, passBB, failBB);
+    builder.SetInsertPoint(failBB);
+    emit_error(msg, ctx);
+    builder.CreateBr(passBB);
+    ctx->f->getBasicBlockList().push_back(passBB);
+    builder.SetInsertPoint(passBB);
+}
+
 static void emit_typecheck(Value *x, jl_value_t *type, const std::string &msg,
                            jl_codectx_t *ctx)
 {
     Value *istype =
         builder.CreateICmpEQ(emit_typeof(x), literal_pointer_val(type));
-    BasicBlock *elseBB = BasicBlock::Create(getGlobalContext(),"a",ctx->f);
-    BasicBlock *mergeBB = BasicBlock::Create(getGlobalContext(),"b");
-    builder.CreateCondBr(istype, mergeBB, elseBB);
-    builder.SetInsertPoint(elseBB);
-    emit_error(msg, ctx);
-    builder.CreateBr(mergeBB);
-    ctx->f->getBasicBlockList().push_back(mergeBB);
-    builder.SetInsertPoint(mergeBB);
+    error_unless(istype, msg, ctx);
+}
+
+static void emit_bounds_check(Value *i, Value *len, const std::string &msg,
+                              jl_codectx_t *ctx)
+{
+    Value *im1 = builder.CreateSub(i, ConstantInt::get(T_int32, 1));
+    Value *ok = builder.CreateICmpULT(im1, len);
+    error_unless(ok, msg, ctx);
 }
 
 static void emit_func_check(Value *x, const std::string &msg, jl_codectx_t *ctx)
@@ -300,10 +313,22 @@ static Value *emit_nthptr_addr(Value *v, size_t n)
                              ConstantInt::get(T_int32, n));
 }
 
+static Value *emit_nthptr_addr(Value *v, Value *idx)
+{
+    return builder.CreateGEP(builder.CreateBitCast(v, jl_ppvalue_llvmt), idx);
+}
+
 static Value *emit_nthptr(Value *v, size_t n)
 {
     // p = (jl_value_t**)v; p[n]
     Value *vptr = emit_nthptr_addr(v, n);
+    return builder.CreateLoad(vptr, false);
+}
+
+static Value *emit_nthptr(Value *v, Value *idx)
+{
+    // p = (jl_value_t**)v; p[n]
+    Value *vptr = emit_nthptr_addr(v, idx);
     return builder.CreateLoad(vptr, false);
 }
 
@@ -453,6 +478,17 @@ static jl_tuple_t *call_arg_types(jl_value_t **args, size_t n)
     return t;
 }
 
+static Value *emit_tuplelen(Value *t)
+{
+    Value *lenbits = emit_nthptr(t, 1);
+#ifdef BITS64
+    return builder.CreateTrunc(builder.CreateBitCast(lenbits, T_int64),
+                               T_int32);
+#else
+    return builder.CreateBitCast(lenbits, T_int32);
+#endif
+}
+
 static Value *emit_call(jl_value_t **args, size_t arglen, jl_codectx_t *ctx)
 {
     size_t nargs = arglen-1;
@@ -518,6 +554,38 @@ static Value *emit_call(jl_value_t **args, size_t arglen, jl_codectx_t *ctx)
                 Value *arg2 = emit_expr(args[2], ctx, true);
                 return julia_bool(builder.CreateICmpEQ(arg1, arg2));
             }
+            else if (f->fptr == &jl_f_tuplelen && nargs==1) {
+                jl_value_t *aty = expr_type(args[1]);
+                if (jl_is_tuple(aty)) {
+                    Value *arg1 = emit_expr(args[1], ctx, true);
+                    return emit_tuplelen(arg1);
+                }
+            }
+            else if (f->fptr == &jl_f_tupleref && nargs==2) {
+                jl_value_t *tty = expr_type(args[1]);
+                jl_value_t *ity = expr_type(args[2]);
+                if (jl_is_tuple(tty) && ity==(jl_value_t*)jl_int32_type) {
+                    Value *arg1 = emit_expr(args[1], ctx, true);
+                    if (jl_is_int32(args[2])) {
+                        uint32_t idx = (uint32_t)jl_unbox_int32(args[2]);
+                        if (idx > 0 &&
+                            (idx < ((jl_tuple_t*)tty)->length ||
+                             (idx == ((jl_tuple_t*)tty)->length &&
+                              !jl_is_seq_type(jl_tupleref(tty,
+                                                          ((jl_tuple_t*)tty)->length-1))))) {
+                            // known to be in bounds
+                            return emit_nthptr(arg1, idx+1);
+                        }
+                    }
+                    Value *arg2 = emit_expr(args[2], ctx, true);
+                    Value *tlen = emit_tuplelen(arg1);
+                    Value *idx = emit_unbox(T_int32, T_pint32, arg2);
+                    emit_bounds_check(idx, tlen,
+                                      "tupleref: index out of range", ctx);
+                    return emit_nthptr(arg1,
+                                       builder.CreateAdd(idx, ConstantInt::get(T_int32,1)));
+                }
+            }
             // TODO: other known builtins
         }
     }
@@ -569,6 +637,37 @@ static Value *emit_call(jl_value_t **args, size_t arglen, jl_codectx_t *ctx)
                        stacksave);
     */
     return result;
+}
+
+static void emit_assignment(jl_value_t *l, jl_value_t *r, jl_codectx_t *ctx)
+{
+    Value *rhs = emit_expr(r, ctx, true);
+    jl_sym_t *s;
+    if (jl_is_symbol(l))
+        s = (jl_sym_t*)l;
+    else if (jl_is_expr(l) &&
+             ((jl_expr_t*)l)->head == symbol_sym)
+        s = (jl_sym_t*)jl_exprarg(l,0);
+    else
+        assert(false);
+    jl_value_t *static_type = (*ctx->declTypes)[s->name];
+    if (static_type) {
+        Value *typexp=NULL;
+        if (jl_is_type(static_type)) {
+            if (static_type != (jl_value_t*)jl_any_type) {
+                typexp = literal_pointer_val(static_type);
+            }
+        }
+        else if (static_type != (jl_value_t*)Any_sym) {
+            // this case happens for non-generic functions
+            typexp = emit_expr(static_type, ctx, true);
+        }
+        // convert to declared type
+        if (typexp)
+            rhs = builder.CreateCall2(jlconvert_func, typexp, rhs);
+    }
+    Value *bp = var_binding_pointer(s, ctx);
+    builder.CreateStore(boxed(rhs), bp);
 }
 
 static Value *emit_var(jl_sym_t *sym, jl_value_t *ty, jl_codectx_t *ctx)
@@ -677,33 +776,7 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool value,
     }
     else if (ex->head == assign_sym) {
         assert(!value);
-        Value *rhs = emit_expr(args[1], ctx, true);
-        jl_sym_t *s;
-        if (jl_is_symbol(args[0]))
-            s = (jl_sym_t*)args[0];
-        else if (jl_is_expr(args[0]) &&
-                 ((jl_expr_t*)args[0])->head == symbol_sym)
-            s = (jl_sym_t*)jl_exprarg(args[0],0);
-        else
-            assert(false);
-        jl_value_t *static_type = (*ctx->declTypes)[s->name];
-        if (static_type) {
-            Value *typexp=NULL;
-            if (jl_is_type(static_type)) {
-                if (static_type != (jl_value_t*)jl_any_type) {
-                    typexp = literal_pointer_val(static_type);
-                }
-            }
-            else if (static_type != (jl_value_t*)Any_sym) {
-                // this case happens for non-generic functions
-                typexp = emit_expr(static_type, ctx, true);
-            }
-            // convert to declared type
-            if (typexp)
-                rhs = builder.CreateCall2(jlconvert_func, typexp, rhs);
-        }
-        Value *bp = var_binding_pointer(s, ctx);
-        builder.CreateStore(boxed(rhs), bp);
+        emit_assignment(args[0], args[1], ctx);
     }
     else if (ex->head == top_sym) {
         jl_binding_t *b = jl_get_binding(ctx->module, (jl_sym_t*)args[0]);
@@ -735,7 +808,6 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool value,
     if (value) {
         jl_errorf("unsupported expression type %s", ex->head->name);
     }
-    //assert(!value);
     return NULL;
 }
 

@@ -364,6 +364,15 @@ static Value *uint_cnvt(const Type *to, Value *x)
     return builder.CreateZExt(x, to);
 }
 
+static Value *emit_unbox(const Type *to, const Type *pto, Value *x)
+{
+    if (x->getType() == to)
+        return x;
+    assert(x->getType() == jl_pvalue_llvmt);
+    Value *p = bitstype_pointer(x);
+    return builder.CreateLoad(builder.CreateBitCast(p, pto), false);
+}
+
 #define HANDLE(intr,n)                                                  \
     case intr: if (nargs!=n) jl_error(#intr": wrong number of arguments");
 
@@ -376,7 +385,7 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
     const Type *t = x->getType();
     const Type *fxt;
     const Type *fxts[2];
-    Value *p, *fx, *fy;
+    Value *fx, *fy;
     switch (f) {
     HANDLE(boxui8,1)
         if (t != T_int8) x = builder.CreateBitCast(x, T_int8);
@@ -409,17 +418,13 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
         if (t != T_float64) x = builder.CreateBitCast(x, T_float64);
         return x;
     HANDLE(unbox8,1)
-        p = bitstype_pointer(x);
-        return builder.CreateLoad(builder.CreateBitCast(p,T_pint8),false);
+        return emit_unbox(T_int8, T_pint8, x);
     HANDLE(unbox16,1)
-        p = bitstype_pointer(x);
-        return builder.CreateLoad(builder.CreateBitCast(p,T_pint16),false);
+        return emit_unbox(T_int16, T_pint16, x);
     HANDLE(unbox32,1)
-        p = bitstype_pointer(x);
-        return builder.CreateLoad(builder.CreateBitCast(p,T_pint32),false);
+        return emit_unbox(T_int32, T_pint32, x);
     HANDLE(unbox64,1)
-        p = bitstype_pointer(x);
-        return builder.CreateLoad(builder.CreateBitCast(p,T_pint64),false);
+        return emit_unbox(T_int64, T_pint64, x);
     HANDLE(neg_int,1)
         return builder.CreateSub(ConstantInt::get(t, 0), x);
     HANDLE(add_int,2)
