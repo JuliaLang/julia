@@ -1,6 +1,8 @@
 symbol(s::String) =
     ccall(dlsym(JuliaDLHandle,"jl_symbol"), Any, (Ptr{Char},), s)::Symbol
 
+gensym() = ccall(dlsym(JuliaDLHandle,"jl_gensym"), Any, ())::Symbol
+
 string(x) =
     ccall(dlsym(JuliaDLHandle,"jl_cstr_to_array"), Any, (Ptr{Char},),
           ccall(dlsym(JuliaDLHandle,"jl_print_to_string"), Ptr{Char}, (Any,),

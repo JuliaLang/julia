@@ -10,6 +10,7 @@
 #include "llvm/Target/TargetSelect.h"
 #include "llvm/Transforms/Scalar.h"
 #include "llvm/Support/IRBuilder.h"
+#include "llvm/Support/StandardPasses.h"
 #include <cstdio>
 #include <string>
 #include <sstream>
@@ -216,17 +217,6 @@ typedef struct {
     std::string funcName;
 } jl_codectx_t;
 
-static Value *literal_pointer_val(jl_value_t *p)
-{
-#ifdef BITS64
-    return ConstantExpr::getIntToPtr(ConstantInt::get(T_int64, (uint64_t)p),
-                                     jl_pvalue_llvmt);
-#else
-    return ConstantExpr::getIntToPtr(ConstantInt::get(T_int32, (uint32_t)p),
-                                     jl_pvalue_llvmt);
-#endif
-}
-
 static Value *literal_pointer_val(void *p, const Type *t)
 {
 #ifdef BITS64
@@ -236,6 +226,11 @@ static Value *literal_pointer_val(void *p, const Type *t)
     return ConstantExpr::getIntToPtr(ConstantInt::get(T_int32, (uint32_t)p),
                                      t);
 #endif
+}
+
+static Value *literal_pointer_val(jl_value_t *p)
+{
+    return literal_pointer_val(p, jl_pvalue_llvmt);
 }
 
 static Value *emit_typeof(Value *p)
@@ -425,8 +420,14 @@ static Value *emit_lambda_closure(jl_value_t *expr, jl_codectx_t *ctx)
         }
         captured.push_back(val);
     }
-    Value *tuple = builder.CreateCall(jlntuple_func,
-                                      captured.begin(), captured.end());
+    Value *tuple;
+    if (capt->length == 0) {
+        tuple = literal_pointer_val((jl_value_t*)jl_null);
+    }
+    else {
+        tuple = builder.CreateCall(jlntuple_func,
+                                   captured.begin(), captured.end());
+    }
     return builder.CreateCall2(jlclosure_func,
                                literal_pointer_val(expr), tuple);
 }
@@ -441,7 +442,7 @@ static size_t biggest_call(jl_value_t *expr)
             m = biggest_call(jl_exprarg(e,i));
             if (m > max) max = m;
         }
-        if (e->head == call_sym) {
+        if (e->head == call_sym || e->head == call1_sym) {
             if (e->args->length > max)
                 max = e->args->length;
         }
@@ -482,27 +483,99 @@ static Value *emit_tuplelen(Value *t)
 {
     Value *lenbits = emit_nthptr(t, 1);
 #ifdef BITS64
-    return builder.CreateTrunc(builder.CreateBitCast(lenbits, T_int64),
+    return builder.CreateTrunc(builder.CreatePtrToInt(lenbits, T_int64),
                                T_int32);
 #else
-    return builder.CreateBitCast(lenbits, T_int32);
+    return builder.CreatePtrToInt(lenbits, T_int32);
 #endif
+}
+
+static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
+                              jl_codectx_t *ctx,
+                              Value **theFptr, Value **theEnv)
+{
+    if (jl_typeis(ff, jl_intrinsic_type)) {
+        return emit_intrinsic((intrinsic)*(uint32_t*)jl_bits_data(ff),
+                              args, nargs, ctx);
+    }
+    if (jl_is_func(ff)) {
+        jl_function_t *f = (jl_function_t*)ff;
+        if (f->fptr == &jl_apply_generic) {
+            *theFptr = jlapplygeneric_func;
+            //*theFptr = literal_pointer_val((void*)f->fptr, jl_fptr_llvmt);
+            *theEnv = literal_pointer_val(f->env);
+            if (ctx->linfo->specTypes != NULL) {
+                jl_tuple_t *aty = call_arg_types(&args[1], nargs);
+                // attempt compile-time specialization for inferred types
+                if (aty != NULL) {
+                    /*
+                    if (trace) {
+                        ios_printf(ios_stdout, "call %s%s\n",
+                                   jl_print_to_string(args[0]),
+                                   jl_print_to_string((jl_value_t*)aty));
+                    }
+                    */
+                    f = jl_get_specialization(f, aty);
+                    if (f != NULL) {
+                        assert(f->linfo->functionObject != NULL);
+                        *theFptr = (Value*)f->linfo->functionObject;
+                        *theEnv = literal_pointer_val(f->env);
+                    }
+                }
+            }
+        }
+        else if (f->fptr == &jl_f_is && nargs==2) {
+            Value *arg1 = emit_expr(args[1], ctx, true);
+            Value *arg2 = emit_expr(args[2], ctx, true);
+            return julia_bool(builder.CreateICmpEQ(arg1, arg2));
+        }
+        else if (f->fptr == &jl_f_tuplelen && nargs==1) {
+            jl_value_t *aty = expr_type(args[1]);
+            if (jl_is_tuple(aty)) {
+                Value *arg1 = emit_expr(args[1], ctx, true);
+                return emit_tuplelen(arg1);
+            }
+        }
+        else if (f->fptr == &jl_f_tupleref && nargs==2) {
+            jl_value_t *tty = expr_type(args[1]);
+            jl_value_t *ity = expr_type(args[2]);
+            if (jl_is_tuple(tty) && ity==(jl_value_t*)jl_int32_type) {
+                Value *arg1 = emit_expr(args[1], ctx, true);
+                if (jl_is_int32(args[2])) {
+                    uint32_t idx = (uint32_t)jl_unbox_int32(args[2]);
+                    if (idx > 0 &&
+                        (idx < ((jl_tuple_t*)tty)->length ||
+                         (idx == ((jl_tuple_t*)tty)->length &&
+                          !jl_is_seq_type(jl_tupleref(tty,
+                                                      ((jl_tuple_t*)tty)->length-1))))) {
+                        // known to be in bounds
+                        return emit_nthptr(arg1, idx+1);
+                    }
+                }
+                Value *arg2 = emit_expr(args[2], ctx, true);
+                Value *tlen = emit_tuplelen(arg1);
+                Value *idx = emit_unbox(T_int32, T_pint32, arg2);
+                emit_bounds_check(idx, tlen,
+                                  "tupleref: index out of range", ctx);
+                return emit_nthptr(arg1,
+                                   builder.CreateAdd(idx, ConstantInt::get(T_int32,1)));
+            }
+        }
+        // TODO: other known builtins
+    }
+    return NULL;
 }
 
 static Value *emit_call(jl_value_t **args, size_t arglen, jl_codectx_t *ctx)
 {
     size_t nargs = arglen-1;
-    Value *theFptr, *theEnv;
-    jl_binding_t *b=NULL; bool done=false;
+    Value *theFptr=NULL, *theEnv=NULL;
+    jl_binding_t *b=NULL;
     jl_value_t *a0 = args[0];
     jl_value_t *hdtype;
-    if (jl_is_expr(a0)) {
-        hdtype = ((jl_expr_t*)a0)->etype;
-        if (((jl_expr_t*)a0)->head==symbol_sym)
-            a0 = jl_exprarg(a0,0);
-    }
-    else {
-        hdtype = (jl_value_t*)jl_any_type;
+    hdtype = expr_type(a0);
+    if (jl_is_expr(a0) && ((jl_expr_t*)a0)->head==symbol_sym) {
+        a0 = jl_exprarg(a0,0);
     }
     if (jl_is_symbol(a0) && is_global((jl_sym_t*)a0, ctx) &&
         jl_boundp(ctx->module, (jl_sym_t*)a0)) {
@@ -516,80 +589,19 @@ static Value *emit_call(jl_value_t **args, size_t arglen, jl_codectx_t *ctx)
                            (jl_sym_t*)jl_exprarg(((jl_expr_t*)a0),0));
         if (!b->constp || b->value==NULL) b = NULL;
     }
+    jl_value_t *f = NULL;
     if (b != NULL) {
         // head is a constant global
-        if (jl_typeis(b->value, jl_intrinsic_type)) {
-            return emit_intrinsic((intrinsic)*(uint32_t*)jl_bits_data(b->value),
-                                  args, nargs, ctx);
-        }
-        if (jl_is_func(b->value)) {
-            jl_function_t *f = (jl_function_t*)b->value;
-            if (f->fptr == &jl_apply_generic) {
-                theFptr = jlapplygeneric_func;
-                //theFptr = literal_pointer_val((void*)f->fptr, jl_fptr_llvmt);
-                theEnv = literal_pointer_val(f->env);
-                done = true;
-                if (ctx->linfo->specTypes != NULL) {
-                    jl_tuple_t *aty = call_arg_types(&args[1], nargs);
-                    // attempt compile-time specialization for inferred types
-                    if (aty != NULL) {
-                        /*
-                        if (trace) {
-                            ios_printf(ios_stdout, "call %s%s\n",
-                                       jl_print_to_string(args[0]),
-                                       jl_print_to_string((jl_value_t*)aty));
-                        }
-                        */
-                        f = jl_get_specialization(f, aty);
-                        if (f != NULL) {
-                            assert(f->linfo->functionObject != NULL);
-                            theFptr = (Value*)f->linfo->functionObject;
-                            theEnv = literal_pointer_val(f->env);
-                        }
-                    }
-                }
-            }
-            else if (f->fptr == &jl_f_is && nargs==2) {
-                Value *arg1 = emit_expr(args[1], ctx, true);
-                Value *arg2 = emit_expr(args[2], ctx, true);
-                return julia_bool(builder.CreateICmpEQ(arg1, arg2));
-            }
-            else if (f->fptr == &jl_f_tuplelen && nargs==1) {
-                jl_value_t *aty = expr_type(args[1]);
-                if (jl_is_tuple(aty)) {
-                    Value *arg1 = emit_expr(args[1], ctx, true);
-                    return emit_tuplelen(arg1);
-                }
-            }
-            else if (f->fptr == &jl_f_tupleref && nargs==2) {
-                jl_value_t *tty = expr_type(args[1]);
-                jl_value_t *ity = expr_type(args[2]);
-                if (jl_is_tuple(tty) && ity==(jl_value_t*)jl_int32_type) {
-                    Value *arg1 = emit_expr(args[1], ctx, true);
-                    if (jl_is_int32(args[2])) {
-                        uint32_t idx = (uint32_t)jl_unbox_int32(args[2]);
-                        if (idx > 0 &&
-                            (idx < ((jl_tuple_t*)tty)->length ||
-                             (idx == ((jl_tuple_t*)tty)->length &&
-                              !jl_is_seq_type(jl_tupleref(tty,
-                                                          ((jl_tuple_t*)tty)->length-1))))) {
-                            // known to be in bounds
-                            return emit_nthptr(arg1, idx+1);
-                        }
-                    }
-                    Value *arg2 = emit_expr(args[2], ctx, true);
-                    Value *tlen = emit_tuplelen(arg1);
-                    Value *idx = emit_unbox(T_int32, T_pint32, arg2);
-                    emit_bounds_check(idx, tlen,
-                                      "tupleref: index out of range", ctx);
-                    return emit_nthptr(arg1,
-                                       builder.CreateAdd(idx, ConstantInt::get(T_int32,1)));
-                }
-            }
-            // TODO: other known builtins
-        }
+        f = b->value;
     }
-    if (!done) {
+    else if (jl_is_func(a0)) {
+        f = a0;
+    }
+    if (f != NULL) {
+        Value *result = emit_known_call(f, args, nargs, ctx, &theFptr, &theEnv);
+        if (result != NULL) return result;
+    }
+    if (theFptr == NULL) {
         Value *theFunc = emit_expr(args[0], ctx, true);
         if (!jl_is_func_type(hdtype) && hdtype!=(jl_value_t*)jl_struct_kind) {
             emit_func_check(theFunc, "apply: expected function", ctx);
@@ -663,6 +675,8 @@ static void emit_assignment(jl_value_t *l, jl_value_t *r, jl_codectx_t *ctx)
             typexp = emit_expr(static_type, ctx, true);
         }
         // convert to declared type
+        // TODO: do this in a way that the convert() call will be subject
+        // to optimizations (go through emit_call())
         if (typexp)
             rhs = builder.CreateCall2(jlconvert_func, typexp, rhs);
     }
@@ -715,7 +729,6 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool value,
         }
         // TODO: for now just return the direct pointer
         return literal_pointer_val(expr);
-        assert(0);
     }
     jl_expr_t *ex = (jl_expr_t*)expr;
     jl_value_t **args = &jl_cellref(ex->args,0);
@@ -766,7 +779,7 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool value,
             builder.SetInsertPoint(bb);
         }
     }
-    else if (ex->head == call_sym) {
+    else if (ex->head == call_sym || ex->head == call1_sym) {
         return emit_call(args, ex->args->length, ctx);
     }
 
@@ -1151,11 +1164,18 @@ static void init_julia_llvm_env(Module *m)
     // set up optimization passes
     FPM = new FunctionPassManager(jl_Module);
     FPM->add(new TargetData(*jl_ExecutionEngine->getTargetData()));
+    FPM->add(createCFGSimplificationPass());
     FPM->add(createPromoteMemoryToRegisterPass());
     FPM->add(createInstructionCombiningPass());
-    FPM->add(createReassociatePass());
-    FPM->add(createGVNPass());
+    FPM->add(createJumpThreadingPass());
     FPM->add(createCFGSimplificationPass());
+    //FPM->add(createDeadCodeEliminationPass());
+    FPM->add(createReassociatePass());
+    //FPM->add(createInstructionCombiningPass());
+    //FPM->add(createGVNPass());
+    FPM->add(createSCCPPass());
+    FPM->add(createDeadStoreEliminationPass());
+    //llvm::createStandardFunctionPasses(FPM, 2);
     FPM->doInitialization();
 }
 

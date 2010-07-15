@@ -43,6 +43,7 @@ jl_bits_type_t *jl_pointer_void_type;
 jl_bits_type_t *jl_pointer_uint8_type;
 
 jl_sym_t *call_sym;    jl_sym_t *dots_sym;
+jl_sym_t *call1_sym;
 jl_sym_t *dollar_sym;  jl_sym_t *quote_sym;
 jl_sym_t *tuple_sym;   jl_sym_t *top_sym;
 jl_sym_t *expr_sym;
@@ -204,7 +205,7 @@ DLLEXPORT jl_sym_t *jl_symbol(const char *str)
     return *pnode;
 }
 
-jl_sym_t *jl_gensym()
+DLLEXPORT jl_sym_t *jl_gensym()
 {
     static uint32_t gs_ctr = 0;  // TODO: per-thread
     char name[32];
@@ -845,6 +846,7 @@ void jl_init_builtin_types()
                                                      jl_tuple(1,jl_type_type));
 
     call_sym = jl_symbol("call");
+    call1_sym = jl_symbol("call1");
     quote_sym = jl_symbol("quote");
     top_sym = jl_symbol("top");
     dots_sym = jl_symbol("...");

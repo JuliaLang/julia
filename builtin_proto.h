@@ -12,7 +12,7 @@ JL_CALLABLE(jl_f_no_function);
 JL_CALLABLE(jl_f_identity);
 JL_CALLABLE(jl_f_typeof);
 JL_CALLABLE(jl_f_subtype);
-JL_CALLABLE(jl_f_istype);
+JL_CALLABLE(jl_f_isa);
 JL_CALLABLE(jl_f_typeassert);
 JL_CALLABLE(jl_f_apply);
 JL_CALLABLE(jl_f_error);

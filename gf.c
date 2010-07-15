@@ -721,10 +721,15 @@ static jl_tuple_t *match_method(jl_value_t *type, jl_function_t *func,
         }
         else {
             jl_value_t *cenv;
-            if (func->env != NULL)
-                cenv = func->env;
-            else
+            if (func->env != NULL) {
+                if (func->fptr == &jl_trampoline)
+                    cenv = jl_t1(func->env);
+                else
+                    cenv = func->env;
+            }
+            else {
                 cenv = (jl_value_t*)jl_null;
+            }
             return jl_tuple(5, ti, env, func->linfo, cenv, next);
         }
     }

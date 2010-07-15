@@ -222,6 +222,8 @@ function print(e::Expr)
     if !is(e.type, Any)
         if isa(e.type, FuncKind)
             print("::F")
+        elseif is(e.type, IntrinsicFunction)
+            print("::I")
         else
             print("::", e.type)
         end

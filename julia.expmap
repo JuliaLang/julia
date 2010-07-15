@@ -30,6 +30,7 @@
     jl_eqtable_get;
     jl_eqtable_del;
     jl_eqtable_next;
+    jl_gensym;
   local:
     *;
 };

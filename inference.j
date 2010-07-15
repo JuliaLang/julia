@@ -55,7 +55,7 @@ tmatch(a,b) = ccall(dlsym(JuliaDLHandle,"jl_type_match"), Any,
                     (Any,Any), a, b)
 
 getmethods(f,t) = ccall(dlsym(JuliaDLHandle,"jl_matching_methods"), Any,
-                        (Any,Any), f, t)
+                        (Any,Any), f, t)::Tuple
 
 typeseq(a,b) = subtype(a,b)&&subtype(b,a)
 
@@ -253,7 +253,7 @@ function limit_tuple_type(t)
     return t
 end
 
-function abstract_call(f, fargs, argtypes, vtypes, sv::StaticVarInfo)
+function abstract_call(f, fargs, argtypes, vtypes, sv::StaticVarInfo, e)
     if isbuiltin(f)
         if is(f,apply) && length(fargs)>0
             (isfunc, af) = isconstantfunc(fargs[1], vtypes, sv)
@@ -266,7 +266,7 @@ function abstract_call(f, fargs, argtypes, vtypes, sv::StaticVarInfo)
                     # can be collapsed to a call to the applied func
                     at = length(aargtypes) > 0 ?
                          limit_tuple_type(append(aargtypes...)) : ()
-                    return abstract_call(eval(af), (), at, vtypes, sv)
+                    return abstract_call(eval(af), (), at, vtypes, sv, ())
                 end
             end
         end
@@ -277,6 +277,14 @@ function abstract_call(f, fargs, argtypes, vtypes, sv::StaticVarInfo)
         applicable = getmethods(f, argtypes)
         rettype = Bottom
         x = applicable
+        if isa(e,Expr)
+            if !is(x,()) && is(x[5],())
+                # method match is unique; mark it
+                e.head = `call1
+            else
+                e.head = `call
+            end
+        end
         while !is(x,())
             #print(x,"\n")
             if isa(x[3],Symbol)
@@ -325,7 +333,7 @@ function abstract_eval_call(e, vtypes, sv::StaticVarInfo)
         return Any
     end
     f = eval(func)
-    return abstract_call(f, fargs, argtypes, vtypes, sv)
+    return abstract_call(f, fargs, argtypes, vtypes, sv, e)
 end
 
 function abstract_eval_expr(e, vtypes, sv::StaticVarInfo)
@@ -342,7 +350,7 @@ function abstract_eval_expr(e, vtypes, sv::StaticVarInfo)
         return abstract_eval_global(e.args[1])
     elseif is(e.head,symbol("closure-ref"))
         return Any
-    elseif is(e.head,`call)
+    elseif is(e.head,`call) || is(e.head,`call1)
         return abstract_eval_call(e, vtypes, sv)
     end
 end
@@ -415,7 +423,7 @@ function interpret(e::Expr, vtypes, sv::StaticVarInfo)
         lhs = e.args[1]
         assert(isa(lhs,Symbol))
         return StateUpdate(((lhs, t),), vtypes)
-    elseif is(e.head,`call)
+    elseif is(e.head,`call) || is(e.head,`call1)
         abstract_eval(e, vtypes, sv)
     elseif is(e.head,`gotoifnot)
         abstract_eval(e.args[1], vtypes, sv)
@@ -486,6 +494,12 @@ function findlabel(body, l)
     error("label not found")
 end
 
+f_argnames(ast) = map(x->(isa(x,Expr) ? x.args[1] : x), ast.args[1])
+
+is_rest_arg(arg) = (isa(arg,Expr) && is(arg.head,symbol("::")) &&
+                    ccall(dlsym(JuliaDLHandle,"jl_is_rest_arg"),Int32,(Any,),
+                          arg)!=0)
+
 function typeinf_ext(linfo, atypes, sparams, cop)
     global inference_stack
     last = inference_stack
@@ -527,7 +541,7 @@ function typeinf(linfo::LambdaStaticData, atypes::Tuple, sparams::Tuple, cop)
     ast = cop ? copy(ast0) : ast0
 
     assert(is(ast.head,`lambda))
-    args = map(x->(isa(x,Expr) ? x.args[1] : x), ast.args[1])
+    args = f_argnames(ast)
     locals = ast.args[2].args[1].args
     vars = append(args, locals)
     body = ast.args[3].args
@@ -545,12 +559,9 @@ function typeinf(linfo::LambdaStaticData, atypes::Tuple, sparams::Tuple, cop)
     la = length(args)
     if la > 0
         lastarg = ast.args[1][la]
-        if isa(lastarg,Expr) && is(lastarg.head,symbol("::"))
-            if ccall(dlsym(JuliaDLHandle,"jl_is_rest_arg"),Int32,(Any,),
-                     lastarg)!=0
-                s[1][args[la]] = atypes[la:]
-                la -= 1
-            end
+        if is_rest_arg(lastarg)
+            s[1][args[la]] = atypes[la:]
+            la -= 1
         end
     end
     for i=1:la
@@ -612,6 +623,8 @@ function typeinf(linfo::LambdaStaticData, atypes::Tuple, sparams::Tuple, cop)
     inference_stack = inference_stack.prev
     fulltree = type_annotate(ast, s, sv, frame.result)
     linfo.tfunc = (atypes, fulltree, linfo.tfunc)
+    fulltree.args[3] = inlining_pass(fulltree.args[3])
+    #print("\n",fulltree,"\n")
     #print("==> ", frame.result,"\n")
     return (fulltree, frame.result)
 end
@@ -652,6 +665,109 @@ function type_annotate(ast::Expr, states::Array, sv, rettype)
     end
     ast.args[3].type = rettype
     ast
+end
+
+function sym_replace(e::Expr, from, to)
+    if is(e.head,`quote) || is(e.head,`top) || is(e.head,`goto) ||
+        is(e.head,`label)
+        return e
+    end
+    if is(e.head,`symbol)
+        s = e.args[1]
+        for i=1:length(from)
+            if is(from[i],s)
+                return to[i]
+            end
+        end
+        return e
+    end
+    for i=1:length(e.args)
+        e.args[i] = sym_replace(e.args[i], from, to)
+    end
+    e
+end
+
+function sym_replace(s::Symbol, from, to)
+    for i=1:length(from)
+        if is(from[i],s)
+            return to[i]
+        end
+    end
+    s
+end
+
+sym_replace(x, from, to) = x
+
+# does s occur more than once?
+function count_occurs(e::Expr, s)
+    if is(e.head,`quote) || is(e.head,`top) || is(e.head,`goto) ||
+        is(e.head,`label)
+        return 0
+    end
+    c = 0
+    for a = e.args
+        c += count_occurs(a, s)
+        if c>1
+            return c
+        end
+    end
+    c
+end
+
+count_occurs(e, s) = is(e,s) ? 1 : 0
+
+exprtype(e::Expr) = e.type
+exprtype(s::Symbol) = Any
+exprtype(other) = typeof(other)
+
+function inlineable(e::Expr)
+    f = eval(e.args[1])
+    argexprs = e.args[2:]
+    atypes = map(exprtype, a2t(argexprs))
+    meth = getmethods(f, atypes)
+    assert(!is(meth,()) && is(meth[5],()))
+    if !isa(meth[3],LambdaStaticData) || !is(meth[4],()) || !is(meth[2],())
+        return NF
+    end
+    (ast, ty) = typeinf(meth[3], meth[1], meth[2], true)
+    if is(ast,())
+        return NF
+    end
+    body = ast.args[3].args
+    if length(body) > 1
+        return NF
+    end
+    assert(isa(body[1],Expr))
+    assert(is(body[1].head,symbol("return")))
+    expr = body[1].args[1]
+    args = f_argnames(ast)
+    na = length(args)
+    if na>0 && is_rest_arg(ast.args[1][na])
+        return NF
+    end
+    for a = args
+        if count_occurs(expr, a) > 1
+            return NF
+        end
+    end
+    return sym_replace(copy(expr), args, argexprs)
+end
+
+inlining_pass(x) = x
+
+function inlining_pass(e::Expr)
+    for i=1:length(e.args)
+        e.args[i] = inlining_pass(e.args[i])
+    end
+    if is(e.head,`call1)
+        e.head = `call
+        body = inlineable(e)
+        if !is(body,NF)
+            #print("inlining ", e, "\n")
+            return body
+        end
+    end
+    e
 end
 
 # stuff for testing

@@ -120,11 +120,11 @@ JL_CALLABLE(jl_f_subtype)
     return (jl_subtype(args[0],args[1],0) ? jl_true : jl_false);
 }
 
-JL_CALLABLE(jl_f_istype)
+JL_CALLABLE(jl_f_isa)
 {
-    JL_NARGS(istype, 2, 2);
+    JL_NARGS(isa, 2, 2);
     if (!jl_is_typector(args[1]))
-        JL_TYPECHK(istype, type, args[1]);
+        JL_TYPECHK(isa, type, args[1]);
     return (jl_subtype(args[0],args[1],1) ? jl_true : jl_false);
 }
 
@@ -288,7 +288,8 @@ JL_CALLABLE(jl_f_get_field)
     JL_TYPECHK(getfield, symbol, args[1]);
     jl_value_t *v = args[0];
     if (!jl_is_struct_type(jl_typeof(v)))
-        jl_error("getfield: argument must be a struct");
+        jl_errorf("getfield: argument must be a struct, got %s",
+                  jl_print_to_string(v));
     size_t i = field_offset((jl_struct_type_t*)jl_typeof(v),
                             (jl_sym_t*)args[1]);
     return ((jl_value_t**)v)[1+i];
@@ -300,7 +301,8 @@ JL_CALLABLE(jl_f_set_field)
     JL_TYPECHK(setfield, symbol, args[1]);
     jl_value_t *v = args[0];
     if (!jl_is_struct_type(jl_typeof(v)))
-        jl_error("setfield: argument must be a struct");
+        jl_errorf("setfield: argument must be a struct, got %s",
+                  jl_print_to_string(v));
     jl_struct_type_t *st = (jl_struct_type_t*)jl_typeof(v);
     size_t i = field_offset(st, (jl_sym_t*)args[1]);
     ((jl_value_t**)v)[1+i] = jl_convert((jl_type_t*)jl_tupleref(st->types,i),
@@ -1230,7 +1232,7 @@ void jl_init_builtins()
     add_builtin_func("is", jl_f_is);
     add_builtin_func("typeof", jl_f_typeof);
     add_builtin_func("subtype", jl_f_subtype);
-    add_builtin_func("isa", jl_f_istype);
+    add_builtin_func("isa", jl_f_isa);
     add_builtin_func("typeassert", jl_f_typeassert);
     add_builtin_func("apply", jl_f_apply);
     add_builtin_func("error", jl_f_error);
@@ -1299,6 +1301,7 @@ void jl_init_builtins()
     add_builtin("Ptr", (jl_value_t*)jl_pointer_type);
     add_builtin("LambdaStaticData", (jl_value_t*)jl_lambda_info_type);
     add_builtin("Box", (jl_value_t*)jl_box_type);
+    add_builtin("IntrinsicFunction", (jl_value_t*)jl_intrinsic_type);
     // todo: this should only be visible to compiler components
     add_builtin("Undef", (jl_value_t*)jl_undef_type);
 

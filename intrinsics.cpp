@@ -366,7 +366,7 @@ static Value *uint_cnvt(const Type *to, Value *x)
 
 static Value *emit_unbox(const Type *to, const Type *pto, Value *x)
 {
-    if (x->getType() == to)
+    if (x->getType()->isIntegerTy() || x->getType()->isFloatingPointTy())
         return x;
     assert(x->getType() == jl_pvalue_llvmt);
     Value *p = bitstype_pointer(x);
@@ -381,7 +381,23 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
 {
     if (f == ccall) return emit_ccall(args, nargs, ctx);
     if (nargs < 1) jl_error("invalid intrinsic call");
-    Value *x = emit_expr(args[1], ctx, true);
+    Value *x;
+    if (jl_is_int32(args[1])) {
+        x = ConstantInt::get(T_int32, jl_unbox_int32(args[1]));
+    }
+    else if (jl_is_int64(args[1])) {
+        x = ConstantInt::get(T_int64, jl_unbox_int64(args[1]));
+    }
+    else if (jl_is_uint64(args[1])) {
+        x = mark_unsigned(ConstantInt::get(T_int64,
+                                           (int64_t)jl_unbox_uint64(args[1])));
+    }
+    else if (jl_is_float64(args[1])) {
+        x = ConstantFP::get(T_float64, jl_unbox_float64(args[1]));
+    }
+    else {
+        x = emit_expr(args[1], ctx, true);
+    }
     const Type *t = x->getType();
     const Type *fxt;
     const Type *fxts[2];

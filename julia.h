@@ -259,6 +259,7 @@ extern jl_function_t *jl_identity_func;
 
 // some important symbols
 extern jl_sym_t *call_sym;
+extern jl_sym_t *call1_sym;
 extern jl_sym_t *dots_sym;
 extern jl_sym_t *dollar_sym;
 extern jl_sym_t *quote_sym;
@@ -400,7 +401,7 @@ jl_tuple_t *jl_tuple_append(jl_tuple_t *a, jl_tuple_t *b);
 jl_tuple_t *jl_flatten_pairs(jl_tuple_t *t);
 jl_tuple_t *jl_pair(jl_value_t *a, jl_value_t *b);
 DLLEXPORT jl_sym_t *jl_symbol(const char *str);
-jl_sym_t *jl_gensym();
+DLLEXPORT jl_sym_t *jl_gensym();
 jl_array_t *jl_new_array(jl_type_t *atype, jl_value_t **dimargs, size_t ndims);
 DLLEXPORT jl_array_t *jl_cstr_to_array(char *str);
 jl_array_t *jl_alloc_cell_1d(size_t n);
