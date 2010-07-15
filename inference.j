@@ -64,6 +64,9 @@ isbuiltin(f) = ccall(dlsym(JuliaDLHandle,"jl_is_builtin"), Int32, (Any,),
 isgeneric(f) = ccall(dlsym(JuliaDLHandle,"jl_is_genericfunc"), Int32, (Any,),
                      f) != 0
 
+isleaftype(t) = ccall(dlsym(JuliaDLHandle,"jl_is_leaf_type"), Int32, (Any,),
+                      t) != 0
+
 # for now assume all globals constant
 # TODO
 isconstant(s::Symbol) = true
@@ -258,10 +261,10 @@ function abstract_call(f, fargs, argtypes, vtypes, sv::StaticVarInfo, e)
         if is(f,apply) && length(fargs)>0
             (isfunc, af) = isconstantfunc(fargs[1], vtypes, sv)
             if isfunc && isbound(af)
-                afargs = fargs[2:]
                 aargtypes = argtypes[2:]
                 if all(map(x->isa(x,Tuple),aargtypes)) &&
                     !any(map(isvatuple,aargtypes[1:(length(aargtypes)-1)]))
+                    e.head = `call1
                     # apply with known func with known tuple types
                     # can be collapsed to a call to the applied func
                     at = length(aargtypes) > 0 ?
@@ -718,19 +721,38 @@ count_occurs(e, s) = is(e,s) ? 1 : 0
 
 exprtype(e::Expr) = e.type
 exprtype(s::Symbol) = Any
+exprtype(t::Type) = Type{t}
 exprtype(other) = typeof(other)
 
 # for now, only inline functions whose bodies are of the form "return <expr>"
 # where <expr> doesn't contain any argument more than once.
-# functions with closure environments, static parameters, or varargs are
-# also excluded.
+# functions with closure environments or varargs are also excluded.
+# static parameters are ok if all the static parameter values are leaf types,
+# meaning they are fully known.
 function inlineable(e::Expr)
     f = eval(e.args[1])
-    argexprs = e.args[2:]
-    atypes = map(exprtype, a2t(argexprs))
+    argexprs = a2t(e.args[2:])
+    atypes = map(exprtype, argexprs)
     meth = getmethods(f, atypes)
-    assert(!is(meth,()) && is(meth[5],()))
-    if !isa(meth[3],LambdaStaticData) || !is(meth[4],()) || !is(meth[2],())
+    if is(meth,())
+        return NF
+    end
+    #if !(!is(meth,()) && is(meth[5],()))
+    #    print(e,"\n")
+    #end
+    assert(is(meth[5],()))
+    if is(meth[3],`convert) && length(atypes)==2
+        # builtin case of convert. convert(T,x::S) => x, when S<:T
+        if isType(atypes[1]) && subtype(atypes[2],atypes[1].parameters[1])
+            return e.args[3]
+        end
+    end
+    if !isa(meth[3],LambdaStaticData) || !is(meth[4],())
+        return NF
+    end
+    sp = meth[2]
+    spvals = sp[2:2:]
+    if !all(map(isleaftype,spvals))
         return NF
     end
     (ast, ty) = typeinf(meth[3], meth[1], meth[2], true)
@@ -754,7 +776,9 @@ function inlineable(e::Expr)
             return NF
         end
     end
-    return sym_replace(copy(expr), args, argexprs)
+    spnames = { sp[i].name | i=1:2:length(sp) }
+    return sym_replace(copy(expr), append(args,spnames),
+                       append(argexprs,spvals))
 end
 
 inlining_pass(x) = x
@@ -767,8 +791,20 @@ function inlining_pass(e::Expr)
         e.head = `call
         body = inlineable(e)
         if !is(body,NF)
-            #print("inlining ", e, "\n")
+            #print("inlining ", e, " => ", body, "\n")
             return body
+        end
+        if is(eval(e.args[1]),apply)
+            if length(e.args) == 3
+                aarg = e.args[3]
+                if isa(aarg,Expr) && is(aarg.head,`call) &&
+                    isa(aarg.args[1],Expr) && is(aarg.args[1].head,`top) &&
+                    is(eval(aarg.args[1]),tuple)
+                    # apply(f,tuple(x,y,...)) => f(x,y,...)
+                    e.args = append({e.args[2]}, aarg.args[2:])
+                    return e
+                end
+            end
         end
     end
     e

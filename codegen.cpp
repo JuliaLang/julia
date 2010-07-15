@@ -463,6 +463,8 @@ static jl_value_t *expr_type(jl_value_t *e)
         return (jl_value_t*)jl_any_type;
     if (jl_is_lambda_info(e))
         return (jl_value_t*)jl_any_func;
+    if (jl_is_some_tag_type(e))
+        return (jl_value_t*)jl_wrap_Type(e);
     return (jl_value_t*)jl_typeof(e);
 }
 

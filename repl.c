@@ -524,6 +524,28 @@ void jl_lisp_prompt();
 
 jl_function_t *jl_typeinf_func=NULL;
 
+static void clear_tfunc_caches()
+{
+    htable_t *t = &jl_system_module->bindings;
+    size_t i;
+    for(i=0; i < t->size; i+=2) {
+        if (t->table[i+1] == HT_NOTFOUND)
+            continue;
+        jl_binding_t *b = (jl_binding_t*)t->table[i+1];
+        if (b->value != NULL && jl_is_func(b->value) && jl_is_gf(b->value)) {
+            jl_function_t *f = (jl_function_t*)b->value;
+            jl_methtable_t *mt = jl_gf_mtable(f);
+            //mt->cache = NULL;
+            jl_methlist_t *ml = mt->defs;
+            while (ml != NULL) {
+                if (ml->func != NULL && ml->func->linfo != NULL)
+                    ml->func->linfo->tfunc = (jl_value_t*)jl_null;
+                ml = ml->next;
+            }
+        }
+    }
+}
+
 int jl_load_startup_file()
 {
     if (!setjmp(ExceptionHandler)) {
@@ -532,12 +554,34 @@ int jl_load_startup_file()
             jl_typeinf_func =
                 (jl_function_t*)*(jl_get_bindingp(jl_system_module,
                                                   jl_symbol("typeinf_ext")));
-            // todo: invalidate method caches (?)
             // warm up type inference to put the latency up front
             jl_value_t *one = jl_box_int32(1);
             jl_apply((jl_function_t*)*(jl_get_bindingp(jl_system_module,
                                                        jl_symbol("fact"))),
                      &one, 1);
+            /*
+              cached t-functions and inferred ASTs need to be cleared at
+              this point, because during bootstrapping we might not be
+              able to inline optimally. the reason is that we cache an AST
+              before doing inlining, to prevent infinite recursion.
+              for example, consider this function:
+
+              > (x::Real, y::Real) = (y < x)
+
+              after doing inference on this >, we cache its AST "(y < x)".
+              now we begin inlining. the problem is that the inlining code
+              itself will trigger compilation of functions that use >, so
+              "(y < x)" will be inlined into those functions. ultimately
+              we inline the definition of < into "(y < x)", but by then it's
+              too late, since "(y < x)" has already been inlined into some
+              functions.
+
+              to fix this, we clear the t-function cache after all
+              type-inference related code has been compiled. now we can
+              inline everything fully without compilation of the compiler
+              itself interfering.
+            */
+            clear_tfunc_caches();
         }
     } else {
         ios_printf(ios_stderr, "error during startup.\n");

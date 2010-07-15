@@ -74,3 +74,21 @@ tic(); v = sort(v); toc()
 for i=1:(n-1)
     assert(v[i]<=v[i+1])
 end
+nl()
+
+## slow pi series ##
+
+function pisum()
+    sum = 0.0
+    for j=1:500
+        sum = 0.0
+        for i=1:10000
+            sum += 1.0/(i*i)
+        end
+    end
+    sum
+end
+
+print("pi sum: ")
+tic(); s = pisum(); toc()
+assert(abs(s-1.644834071848065) < 1e-12)

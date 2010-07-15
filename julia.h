@@ -360,7 +360,7 @@ jl_value_t *jl_full_type(jl_value_t *v);
 
 // type predicates
 int jl_is_type(jl_value_t *v);
-int jl_is_leaf_type(jl_value_t *v);
+DLLEXPORT int jl_is_leaf_type(jl_value_t *v);
 int jl_has_typevars(jl_value_t *v);
 int jl_tuple_subtype(jl_value_t **child, size_t cl,
                      jl_value_t **parent, size_t pl, int ta, int morespecific);

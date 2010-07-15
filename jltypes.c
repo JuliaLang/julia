@@ -88,7 +88,7 @@ int jl_is_type(jl_value_t *v)
 
 int jl_has_typevars_(jl_value_t *v, int incl_wildcard);
 
-int jl_is_leaf_type(jl_value_t *v)
+DLLEXPORT int jl_is_leaf_type(jl_value_t *v)
 {
     if (jl_is_bits_type(v))
         return 1;

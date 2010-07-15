@@ -25,6 +25,7 @@
     jl_cstr_to_array;
     jl_print_to_string;
     jl_is_rest_arg;
+    jl_is_leaf_type;
     jl_new_eqtable;
     jl_eqtable_put;
     jl_eqtable_get;
