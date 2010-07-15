@@ -720,6 +720,10 @@ exprtype(e::Expr) = e.type
 exprtype(s::Symbol) = Any
 exprtype(other) = typeof(other)
 
+# for now, only inline functions whose bodies are of the form "return <expr>"
+# where <expr> doesn't contain any argument more than once.
+# functions with closure environments, static parameters, or varargs are
+# also excluded.
 function inlineable(e::Expr)
     f = eval(e.args[1])
     argexprs = e.args[2:]

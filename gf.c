@@ -134,13 +134,20 @@ static inline int cache_match(jl_value_t **args, size_t n, jl_tuple_t *sig)
                 // analogous to the situation with tuples.
                 return 1;
             }
-            if (!jl_types_equal(a, jl_tparam0(decl))) {
+            if (a != jl_tparam0(decl))
                 return 0;
-            }
+            //if (!jl_types_equal(a, jl_tparam0(decl)))
+            //    return 0;
         }
         else {
-            if (!jl_types_equal((jl_value_t*)jl_typeof(a), decl))
+            /*
+              we know there are only concrete types here, and types are
+              hash-consed, so pointer comparison should work.
+            */
+            if ((jl_value_t*)jl_typeof(a) != decl)
                 return 0;
+            //if (!jl_types_equal((jl_value_t*)jl_typeof(a), decl))
+            //    return 0;
         }
     }
     return 1;
@@ -324,7 +331,7 @@ static jl_function_t *mt_assoc_by_type(jl_methtable_t *mt, jl_tuple_t *tt)
     jl_value_t *env = (jl_value_t*)jl_false;
 
     while (m != NULL) {
-        if (jl_has_typevars((jl_value_t*)m->sig)) {
+        if (m->has_tvars) {
             env = jl_type_match((jl_type_t*)tt, m->sig);
             if (env != (jl_value_t*)jl_false) break;
         }
@@ -513,6 +520,7 @@ jl_methlist_t *jl_method_list_insert(jl_methlist_t **pml, jl_type_t *type,
         if (sigs_eq(type, l->sig)) {
             // method overwritten
             l->sig = type;
+            l->has_tvars = jl_has_typevars((jl_value_t*)type);
             l->func = method;
             return l;
         }
@@ -520,6 +528,7 @@ jl_methlist_t *jl_method_list_insert(jl_methlist_t **pml, jl_type_t *type,
     }
     jl_methlist_t *newrec = (jl_methlist_t*)allocb(sizeof(jl_methlist_t));
     newrec->sig = type;
+    newrec->has_tvars = jl_has_typevars((jl_value_t*)type);
     newrec->func = method;
     pl = pml;
     l = *pml;

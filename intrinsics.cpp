@@ -10,7 +10,7 @@ namespace JL_I {
         neg_float, add_float, sub_float, mul_float, div_float,
         // comparison
         eq_int, slt_int, ult_int,
-        eq_float, lt_float, ne_float,
+        eq_float, lt_float, ne_float, le_float, ge_float,
         // bitwise operators
         and_int, or_int, xor_int, not_int, shl_int, lshr_int, ashr_int,
         // conversion
@@ -488,6 +488,14 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
         return
         julia_bool(builder.CreateFCmpONE(FP(x),
                                          FP(emit_expr(args[2],ctx,true))));
+    HANDLE(le_float,2)
+        return
+        julia_bool(builder.CreateFCmpOLE(FP(x),
+                                         FP(emit_expr(args[2],ctx,true))));
+    HANDLE(ge_float,2)
+        return
+        julia_bool(builder.CreateFCmpOGE(FP(x),
+                                         FP(emit_expr(args[2],ctx,true))));
     HANDLE(and_int,2)
         return builder.CreateAnd(x, emit_expr(args[2],ctx,true));
     HANDLE(or_int,2)
@@ -639,6 +647,7 @@ extern "C" void jl_init_intrinsic_functions()
     ADD_I(mul_float); ADD_I(div_float);
     ADD_I(eq_int); ADD_I(slt_int); ADD_I(ult_int);
     ADD_I(eq_float); ADD_I(lt_float); ADD_I(ne_float);
+    ADD_I(le_float); ADD_I(ge_float);
     ADD_I(and_int); ADD_I(or_int); ADD_I(xor_int); ADD_I(not_int);
     ADD_I(shl_int); ADD_I(lshr_int); ADD_I(ashr_int);
     ADD_I(sext16); ADD_I(zext16); ADD_I(sext32); ADD_I(zext32);

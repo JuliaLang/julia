@@ -198,6 +198,9 @@ div(x::Int64, y::Int64) = boxsi64(sdiv_int(unbox64(x), unbox64(y)))
 < (x::Int16, y::Int16) = slt_int(unbox16(x),unbox16(y))
 < (x::Int32, y::Int32) = slt_int(unbox32(x),unbox32(y))
 < (x::Int64, y::Int64) = slt_int(unbox64(x),unbox64(y))
+# negating a comparison is ok for integers
+<=(x::Int, y::Int) = !(x > y)
+>=(x::Int, y::Int) = !(x < y)
 
 ## character operations & comparisons ##
 # TODO: implement real unisgned stuff

@@ -170,6 +170,7 @@ typedef struct _jl_module_t {
 typedef struct _jl_methlist_t {
     // not first-class
     jl_type_t *sig;
+    int has_tvars;
     jl_function_t *func;
     struct _jl_methlist_t *next;
 } jl_methlist_t;

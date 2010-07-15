@@ -75,8 +75,18 @@ typemax(::Type{Float64}) = 1.7976931348623157e+308
 
 ==(x::Float32, y::Float32) = eq_float(unbox32(x),unbox32(y))
 ==(x::Float64, y::Float64) = eq_float(unbox64(x),unbox64(y))
+!=(x::Float32, y::Float32) = ne_float(unbox32(x),unbox32(y))
+!=(x::Float64, y::Float64) = ne_float(unbox64(x),unbox64(y))
+# negating a comparison is not ok for floats
+!=(x::Float, y::Float) = (!=)(promote(x,y)...)
 < (x::Float32, y::Float32) = lt_float(unbox32(x),unbox32(y))
 < (x::Float64, y::Float64) = lt_float(unbox64(x),unbox64(y))
+<=(x::Float32, y::Float32) = le_float(unbox32(x),unbox32(y))
+<=(x::Float64, y::Float64) = le_float(unbox64(x),unbox64(y))
+>=(x::Float32, y::Float32) = ge_float(unbox32(x),unbox32(y))
+>=(x::Float64, y::Float64) = ge_float(unbox64(x),unbox64(y))
+<=(x::Float, y::Float) = (<=)(promote(x,y)...)
+>=(x::Float, y::Float) = (>=)(promote(x,y)...)
 
 ## floating point constants ##
 

@@ -260,9 +260,9 @@ end
 
 # Indexing: assign()
 # TODO: Take care of growing
-assign(a::Array, x, i::Index) = (arrayset(a,i,x); a)
+assign(a::Array, x, i::Index) = arrayset(a,i,x)
 assign{T}(a::Array{T,2}, x, i::Index, j::Index) =
-    (arrayset(a, (j-1)*a.dims[1]+i, x); a)
+    arrayset(a, (j-1)*a.dims[1]+i, x)
 
 function assign(a::Array, x, I::Index...)
     # TODO: Need to take care of growing

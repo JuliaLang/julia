@@ -167,7 +167,7 @@ static Function *to_function(jl_lambda_info_t *li)
     li->functionObject = (void*)f;
     BasicBlock *old = builder.GetInsertBlock();
     emit_function(li, f);
-    //FPM->run(*f);
+    FPM->run(*f);
     // print out the function's LLVM code
     //f->dump();
     //verifyFunction(*f);
