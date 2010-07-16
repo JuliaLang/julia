@@ -294,6 +294,8 @@
 
    )) ; binding-form-patterns
 
+(define (make-assignment l r) `(= ,l ,r))
+
 (define patterns
   (pattern-set
    (pattern-lambda (--> a b)
@@ -331,15 +333,23 @@
 
    ; multiple value assignment
    (pattern-lambda (= (tuple . lhss) x)
-		   (let ((t (gensym)))
-		     `(block (= ,t ,x)
-			     ,@(let loop ((lhs lhss)
-					  (i   1))
-				 (if (null? lhs) '((null))
-				     (cons `(= ,(car lhs)
-					       (call (top tupleref) ,t ,i))
-					   (loop (cdr lhs)
-						 (+ i 1))))))))
+		   (if (and (pair? x) (pair? lhss) (eq? (car x) 'tuple)
+			    (length= lhss (length (cdr x))))
+		       (let ((temps (map (lambda (x) (gensym)) (cddr x))))
+			 `(block
+			   ,@(map make-assignment temps (cddr x))
+			   (= ,(car lhss) ,(cadr x))
+			   ,@(map make-assignment (cdr lhss) temps)))
+		       (let ((t (gensym)))
+			 `(block
+			   (= ,t ,x)
+			   ,@(let loop ((lhs lhss)
+					(i   1))
+			       (if (null? lhs) '((null))
+				   (cons `(= ,(car lhs)
+					     (call (top tupleref) ,t ,i))
+					 (loop (cdr lhs)
+					       (+ i 1)))))))))
 
    (pattern-lambda (= (ref a . idxs) rhs)
 		   `(call assign ,a ,rhs ,@(process-indexes idxs)))
