@@ -656,7 +656,7 @@ static Value *emit_call(jl_value_t **args, size_t arglen, jl_codectx_t *ctx)
 static void emit_assignment(jl_value_t *l, jl_value_t *r, jl_codectx_t *ctx)
 {
     Value *rhs = emit_expr(r, ctx, true);
-    jl_sym_t *s;
+    jl_sym_t *s = NULL;
     if (jl_is_symbol(l))
         s = (jl_sym_t*)l;
     else if (jl_is_expr(l) &&
