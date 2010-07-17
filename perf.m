@@ -86,4 +86,58 @@ toc()
 assert(sum(sum(M)) == 14628)
 nl()
 
+%% numeric vector quicksort %%
+
+function b = qsort(a) 
+  b = qsort_kernel(a, 1, length(a));
+end
+
+function a = qsort_kernel(a, lo, hi)
+    i = lo;
+    j = hi;
+    pivot = a((lo+hi)/2);
+    % Partition
+    while i <= j
+        while a(i) < pivot, i = i + 1; end
+        while a(j) > pivot, j = j - 1; end
+        if i <= j
+	    t = a(i);
+	    a(i) = a(j);
+	    a(j) = t;
+            i = i + 1;
+            j = j - 1;
+        end
+    end
+    % Recursion for quicksort
+    if lo < j; qsort_kernel(a, lo, j); end
+    if i < hi; qsort_kernel(a, i, hi); end
+end
+
+fprintf('quicksort: ')
+small=rand(3,1);
+sort(small);
+n = 5000;
+v = rand(n,1);
+tic(); v = sort(v); toc()
+for i=1:(n-1)
+    assert(v(i)<=v(i+1));
+end
+nl()
+
+%% slow pi series %%
+
+function sum = pisum()
+    sum = 0.0;
+    for j=1:500
+        sum = 0.0;
+        for i=1:10000
+            sum = sum + 1.0/(i*i);
+        end
+    end
+end
+
+fprintf('pi sum: ')
+tic(); s = pisum(); toc()
+assert(abs(s-1.644834071848065) < 1e-12);
+
 end
