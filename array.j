@@ -315,6 +315,42 @@ vcat{T}(X::Scalar{T}...) = [ X[i] | i=1:length(X) ]
 vcat{T}(V::Vector{T}...) = [ V[i][j] | i=1:length(V), j=1:length(V[1]) ]
 hcat{T}(V::Vector{T}...) = [ V[j][i] | i=1:length(V[1]), j=1:length(V) ]
 
+function hcat{T}(A...)
+    ncols = sum([size(A[i], 2) | i=1:length(A)])
+    nrows = size(A[1], 1)
+    B = zeros(typeof(A[1][1]), nrows, ncols)
+
+    pos = 1
+    for k=1:length(A)
+        for i=1:numel(A[i])
+            B[pos] = A[k][i]
+            pos = pos + 1
+        end
+    end
+    
+    return B
+end
+
+function vcat{T}(A...)
+    nrows = sum([size(A[i], 1) | i=1:length(A)])
+    ncols = size(A[1], 2)
+    B = zeros(typeof(A[1][1]), nrows, ncols)
+
+    pos = 1
+    for j=1:ncols
+        for k=1:length(A)
+            for i=1:size(A[k], 1)
+                B[pos] = A[k][i,j]
+                pos = pos + 1
+            end
+        end
+    end
+    
+    return B
+end
+
+# iteration support for arrays as ranges
+
 start(a::Array) = 1
 next(a::Array,i) = (a[i],i+1)
 done(a::Array,i) = (i > numel(a))
