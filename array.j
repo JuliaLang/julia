@@ -54,6 +54,14 @@ end
 
 randf(dims::Tuple) = randf(dims...)
 
+function randn(dims::Size...)
+    a = Array(Float64, dims...)
+    for i=1:numel(a); a[i] = randn(); end
+    return a
+end
+
+randn(dims::Tuple) = randn(dims...)
+
 function copy{T}(a::Array{T})
     b = Array(T, size(a))
     for i=1:numel(a); b[i] = a[i]; end
@@ -163,15 +171,20 @@ end
 transpose(x::Matrix) = [ x[j,i] | i=1:size(x,2), j=1:size(x,1) ]
 ctranspose(x::Matrix) = [ conj(x[j,i]) | i=1:size(x,2), j=1:size(x,1) ]
 
-dot(x::Vector, y::Vector) = sum(x.*y)
-
 diag(A::Matrix) = [ A[i,i] | i=1:min(size(A)) ]
 diagm(v::Vector) = (n=length(v);
                     a=zeros(n,n);
                     for i=1:n; a[i,i] = v[i]; end;
                     a)
 
+dot(x::Vector, y::Vector) = sum(x.*y)
+
 trace(A::Matrix) = sum(diag(A))
+
+mean(V::Vector) = sum(V) / length(V)
+
+std(V::Vector) = (m = mean(V);
+                  sqrt( sum([ (V[i] - m)^2 | i=1:length(V) ]) / length(V) ))
 
 ## blas.j definse these for floats
 ## This should be commented out for supporting the int cases

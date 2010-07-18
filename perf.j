@@ -92,3 +92,28 @@ end
 print("pi sum: ")
 tic(); s = pisum(); toc()
 assert(abs(s-1.644834071848065) < 1e-12)
+nl()
+
+## Random matrix statistics ##
+
+function randmatstat(t)
+n=5
+v = zeros(t)
+w = zeros(t)
+for i=1:t
+    a = rand(n, n)
+    b = rand(n, n)
+    c = rand(n, n)
+    d = rand(n, n)
+    P = [a b c d]
+    Q = [a b;c d]
+    v[i] = trace((P'*P)^4)
+    w[i] = trace((Q'*Q)^4)
+end
+return (std(v)/mean(v), std(w)/mean(w))
+end
+
+print("random matrix statistics: ")
+randmatstat(5)
+tic(); (a, b) = randmatstat(1000); toc()
+nl()

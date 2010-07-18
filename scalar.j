@@ -17,7 +17,9 @@ transpose(x::Scalar) = x
 ctranspose(x::Scalar) = conj(transpose(x))
 
 max(x::Scalar, y::Scalar) = x > y ? x : y
+max(a::Number, b::Number) = a > b ? a : b
 min(x::Scalar, y::Scalar) = x < y ? x : y
+min(a::Number, b::Number) = a < b ? a : b
 sum(x::Scalar, y::Scalar) = x + y
 prod(x::Scalar, y::Scalar) = x * y
 all(x::Scalar, y::Scalar) = x && y ? true : false
