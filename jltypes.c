@@ -1467,8 +1467,10 @@ jl_tvar_t *jl_new_typevar(jl_sym_t *name, jl_type_t *lb, jl_type_t *ub)
 
 static jl_tvar_t *tvar(const char *name)
 {
-    return jl_new_typevar(jl_symbol(name), (jl_type_t*)jl_bottom_type,
-                          (jl_type_t*)jl_any_type);
+    jl_tvar_t *tv = jl_new_typevar(jl_symbol(name), (jl_type_t*)jl_bottom_type,
+                                   (jl_type_t*)jl_any_type);
+    tv->unbound = 1;
+    return tv;
 }
 
 jl_tuple_t *jl_typevars(size_t n, ...)
@@ -1621,7 +1623,7 @@ void jl_init_types()
                                                jl_type_type));
     jl_tvar_type->fptr = jl_f_no_function;
 
-    jl_tvar_t *tttvar = tvar("T"); tttvar->unbound = 1;
+    jl_tvar_t *tttvar = tvar("T");
     jl_type_type->parameters = jl_tuple(1, tttvar);
 
     jl_tuple_t *tv;
