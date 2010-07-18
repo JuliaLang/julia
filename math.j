@@ -59,3 +59,7 @@ ldexp(x::Float32,e::Int32) = ccall(dlsym(libm,"ldexpf"), Float32, (Float32,Int32
 rand() = ccall(dlsym(JuliaDLHandle,"rand_double"), Float64, ())
 randf() = ccall(dlsym(JuliaDLHandle,"rand_float"), Float32, ())
 randui32() = ccall(dlsym(JuliaDLHandle,"genrand_int32"), Uint32, ())
+
+## This is just a makeshift implementation of randn
+## http://en.wikipedia.org/wiki/Normal_distribution#Generating_values_from_normal_distribution
+randn() = sum(rand(12)) - 6

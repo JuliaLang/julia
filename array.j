@@ -27,13 +27,6 @@ zeros(dims::Size...) = zeros(Float64, dims...)
 zeros(T::Type, dims::Tuple) = zeros (T, dims...)
 zeros(dims::Tuple) = zeros(dims...)
 
-## Redefine as comprehensions when comprehension optimizations are available
-
-#zeros(T::Type, m::Size) = (z=convert(T,0); [ z | i=1:m ])
-#zeros(T::Type, m::Size, n::Size) = (z=convert(T,0); [ z | i=1:m, j=1:n ])
-#zeros(m::Size) = [ 0.0 | i=1:m ]
-#zeros(m::Size, n::Size) = [ 0.0 | i=1:m, j=1:n ]
-
 function ones(T::Type, dims::Size...)
     a = Array(T, dims...)
     o = convert(T,1)
@@ -45,13 +38,6 @@ ones(dims::Size...) = ones(Float64, dims...)
 ones(T::Type, dims::Tuple) = ones (T, dims...)
 ones(dims::Tuple) = ones(dims...)
 
-## Redefine as comprehensions when comprehension optimizations are available
-
-#ones(T::Type, m::Size) = (o=convert(T,1); [ o | i=1:m ])
-#ones(T::Type, m::Size, n::Size) = (o=convert(T,1); [ o | i=1:m, j=1:n ])
-#ones(m::Size) = [ 1.0 | i=1:m ]
-#ones(m::Size, n::Size) = [ 1.0 | i=1:m, j=1:n ]
-
 function rand(dims::Size...)
     a = Array(Float64, dims...)
     for i=1:numel(a); a[i] = rand(); end
@@ -59,11 +45,6 @@ function rand(dims::Size...)
 end
 
 rand(dims::Tuple) = rand(dims...)
-
-## Redefine as comprehensions when comprehension optimizations are available
-
-# rand(m::Size) = [ rand() | i=1:m ]
-# rand(m::Size, n::Size) = [ rand() | i=1:m, j=1:n ]
 
 function randf(dims::Size...)
     a = Array(Float32, dims...)
@@ -73,21 +54,19 @@ end
 
 randf(dims::Tuple) = randf(dims...)
 
-## Redefine as comprehensions when comprehension optimizations are available
+function randn(dims::Size...)
+    a = Array(Float64, dims...)
+    for i=1:numel(a); a[i] = randn(); end
+    return a
+end
 
-# randf(m::Size) = [ randf() | i=1:m ]
-# randf(m::Size, n::Size) = [ randf() | i=1:m, j=1:n ]
+randn(dims::Tuple) = randn(dims...)
 
 function copy{T}(a::Array{T})
     b = Array(T, size(a))
     for i=1:numel(a); b[i] = a[i]; end
     return b
 end
-
-## Redefine as comprehensions when comprehension optimizations are available
-
-# copy(a::Vector) = [ a[i] | i=1:length(a) ]
-# copy(a::Matrix) = [ a[i,j] | i=1:size(a,1), j=1:size(a,2) ]
 
 copy(a::Array{Any,1}) = { copy(a[i]) | i=1:length(a) }
 
@@ -192,13 +171,23 @@ end
 transpose(x::Matrix) = [ x[j,i] | i=1:size(x,2), j=1:size(x,1) ]
 ctranspose(x::Matrix) = [ conj(x[j,i]) | i=1:size(x,2), j=1:size(x,1) ]
 
-dot(x::Vector, y::Vector) = sum(x.*y)
 diag(A::Matrix) = [ A[i,i] | i=1:min(size(A)) ]
 diagm(v::Vector) = (n=length(v);
                     a=zeros(n,n);
                     for i=1:n; a[i,i] = v[i]; end;
                     a)
 
+dot(x::Vector, y::Vector) = sum(x.*y)
+
+trace(A::Matrix) = sum(diag(A))
+
+mean(V::Vector) = sum(V) / length(V)
+
+std(V::Vector) = (m = mean(V);
+                  sqrt( sum([ (V[i] - m)^2 | i=1:length(V) ]) / length(V) ))
+
+## blas.j definse these for floats
+## This should be commented out for supporting the int cases
 #(*)(A::Matrix, B::Vector) = [ dot(A[i,:],B) | i=1:size(A,1) ]
 #(*)(A::Matrix, B::Matrix) = [ dot(A[i,:],B[:,j]) | i=1:size(A,1), j=1:size(B,2) ]
 
@@ -312,8 +301,39 @@ end
 hcat() = Array(Bottom,0)
 hcat{T}(X::Scalar{T}...) = [ X[i] | i=1:length(X) ]
 vcat{T}(X::Scalar{T}...) = [ X[i] | i=1:length(X) ]
-vcat{T}(V::Vector{T}...) = [ V[i][j] | i=1:length(V), j=1:length(V[1]) ]
+
 hcat{T}(V::Vector{T}...) = [ V[j][i] | i=1:length(V[1]), j=1:length(V) ]
+vcat{T}(V::Vector{T}...) = [ V[i][j] | i=1:length(V), j=1:length(V[1]) ]
+
+function hcat{T}(A::Matrix{T}...)
+    ncols = sum([ size(A[i], 2) | i=1:length(A) ])
+    nrows = size(A[1], 1)
+    B = zeros(typeof(A[1][1]), nrows, ncols)
+
+    pos = 1
+    for k=1:length(A), i=1:numel(A[k])
+        B[pos] = A[k][i]
+        pos = pos + 1
+    end
+    
+    return B
+end
+
+function vcat{T}(A::Matrix{T}...)
+    nrows = sum([size(A[i], 1) | i=1:length(A)])
+    ncols = size(A[1], 2)
+    B = zeros(typeof(A[1][1]), nrows, ncols)
+
+    pos = 1
+    for j=1:ncols, k=1:length(A), i=1:size(A[k], 1)
+        B[pos] = A[k][i,j]
+        pos = pos + 1
+    end
+    
+    return B
+end
+
+# iteration support for arrays as ranges
 
 start(a::Array) = 1
 next(a::Array,i) = (a[i],i+1)
@@ -354,6 +374,13 @@ function sort(a::Vector, lo, hi)
     if lo < j; sort(a, lo, j); end
     if i < hi; sort(a, i, hi); end
     return a
+end
+
+function issorted(v::Vector)
+    for i=1:(length(v)-1)
+        if v[i] > v[i+1]; return false; end
+    end
+    return true
 end
 
 # Knuth shuffle

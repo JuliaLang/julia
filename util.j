@@ -4,3 +4,7 @@ function assert(c)
     end
     true
 end
+
+ls() = system("ls")
+
+show(file::String) = system(strcat("cat ", file))

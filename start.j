@@ -1,7 +1,7 @@
 # core functionality
 load("range.j")
 load("prim.j")
-load("error.j")
+load("util.j")
 load("operators.j")
 
 # primitive data types

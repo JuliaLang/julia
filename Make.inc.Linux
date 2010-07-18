@@ -7,7 +7,6 @@ PFX = /usr/local
 HFILEDIRS = $(PFX)/include
 LIBDIRS = $(PFX)/lib
 OSLIBS = -Wl,--export-dynamic -Wl,--version-script=$(JULIAHOME)/julia.expmap
-EFENCE =
 
 ifeq ($(NBITS),32)
 CONFIG = -DLINUX -DARCH_X86 -D__CPU__=586 -DUSE_READLINE -DBOEHM_GC

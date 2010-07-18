@@ -837,7 +837,7 @@ static value_t cvalue_array_aref(value_t *args)
 {
     char *data; ulong_t index;
     fltype_t *eltype = cv_class((cvalue_t*)ptr(args[0]))->eltype;
-    value_t el;
+    value_t el = 0;
     numerictype_t nt = eltype->numtype;
     if (nt >= T_INT32)
         el = cvalue(eltype, eltype->size);
