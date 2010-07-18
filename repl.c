@@ -587,6 +587,9 @@ int jl_load_startup_file()
         ios_printf(ios_stderr, "error during startup.\n");
         return 1;
     }
+#ifdef BOEHM_GC
+    GC_gcollect();
+#endif
     return 0;
 }
 
