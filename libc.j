@@ -24,3 +24,7 @@ function exec(cmd::String, args::String...)
           (Ptr{Char}, Ptr{Ptr{Char}}),
           cmd, arr)
 end
+
+ls() = system("ls")
+
+show(file::String) = system(strcat("cat ", file))
