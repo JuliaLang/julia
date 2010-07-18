@@ -62,4 +62,5 @@ randui32() = ccall(dlsym(JuliaDLHandle,"genrand_int32"), Uint32, ())
 
 ## This is just a makeshift implementation of randn
 ## http://en.wikipedia.org/wiki/Normal_distribution#Generating_values_from_normal_distribution
-randn() = sum(rand(12)) - 6
+#randn() = sum(rand(12)) - 6
+randn() = ccall(dlsym(JuliaDLHandle,"randn"), Float64, ())

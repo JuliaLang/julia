@@ -5,6 +5,7 @@
     rand_double;
     rand_float;
     genrand_int32;
+    randn;
     clock_now;
     uint2str;
     bitvector_new;

@@ -3,7 +3,7 @@
 
 DLLEXPORT double rand_double();
 DLLEXPORT float rand_float();
-double randn();
+DLLEXPORT double randn();
 void randomize();
 DLLEXPORT uint32_t genrand_int32();
 void init_genrand(uint32_t s);
