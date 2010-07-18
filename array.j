@@ -376,6 +376,13 @@ function sort(a::Vector, lo, hi)
     return a
 end
 
+function issorted(v::Vector)
+    for i=1:(length(v)-1)
+        if v[i] > v[i+1]; return false; end
+    end
+    return true
+end
+
 # Knuth shuffle
 function shuffle(a::Vector)
     for i = length(a):-1:2

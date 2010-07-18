@@ -71,9 +71,7 @@ sort(small)
 n = 5000
 v = rand(n)
 tic(); v = sort(v); toc()
-for i=1:(n-1)
-    assert(v[i]<=v[i+1])
-end
+assert(issorted(v))
 nl()
 
 ## slow pi series ##
