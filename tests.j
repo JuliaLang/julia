@@ -278,6 +278,10 @@ assert(X[4,5] == 14)
 assert(ones(2,3) * ones(2,3)' == [3.,3.; 3.,3.])
 assert([ [1,2] | i=1:2, : ] == [1, 2; 1, 2])
 
+# concatenation
+assert( [ ones(2,2), 2*ones(2,1) ] == [ 1, 1, 2; 1, 1, 2 ] )
+assert( [ ones(2,2); 2*ones(1,2) ] == [ 1, 1; 1, 1; 2, 2 ] )
+
 # syntax
 assert((true ? 1 : false ? 2 : 3) == 1)
 

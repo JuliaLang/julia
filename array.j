@@ -317,12 +317,12 @@ hcat{T}(V::Vector{T}...) = [ V[j][i] | i=1:length(V[1]), j=1:length(V) ]
 vcat{T}(V::Vector{T}...) = [ V[i][j] | i=1:length(V), j=1:length(V[1]) ]
 
 function hcat{T}(A::Matrix{T}...)
-    ncols = sum([size(A[i], 2) | i=1:length(A)])
+    ncols = sum([ size(A[i], 2) | i=1:length(A) ])
     nrows = size(A[1], 1)
     B = zeros(typeof(A[1][1]), nrows, ncols)
 
     pos = 1
-    for k=1:length(A), i=1:numel(A[i])
+    for k=1:length(A), i=1:numel(A[k])
         B[pos] = A[k][i]
         pos = pos + 1
     end
