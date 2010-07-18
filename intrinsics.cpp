@@ -74,6 +74,7 @@ static const Type *julia_type_to_llvm(jl_value_t *jt)
     if (jt == (jl_value_t*)jl_int16_type || jt == (jl_value_t*)jl_uint16_type) return T_int16;
     if (jt == (jl_value_t*)jl_int32_type || jt == (jl_value_t*)jl_uint32_type) return T_int32;
     if (jt == (jl_value_t*)jl_int64_type || jt == (jl_value_t*)jl_uint64_type) return T_int64;
+    if (jt == (jl_value_t*)jl_bool_type) return T_int1;
     if (jt == (jl_value_t*)jl_float32_type) return T_float32;
     if (jt == (jl_value_t*)jl_float64_type) return T_float64;
     if (jt == (jl_value_t*)jl_bottom_type) return T_void;
@@ -93,6 +94,7 @@ static const Type *julia_type_to_llvm(jl_value_t *jt)
 
 static jl_value_t *llvm_type_to_julia(const Type *t)
 {
+    if (t == T_int1)  return (jl_value_t*)jl_bool_type;
     if (t == T_int8)  return (jl_value_t*)jl_int8_type;
     if (t == T_int16) return (jl_value_t*)jl_int16_type;
     if (t == T_int32) return (jl_value_t*)jl_int32_type;
@@ -120,6 +122,7 @@ static Value *boxed(Value *v)
     const Type *t = v->getType();
     if (t == jl_pvalue_llvmt)
         return v;
+    if (t == T_int1) return julia_bool(v);
     if (is_unsigned(v)) {
         if (t == T_int8)  return builder.CreateCall(box_uint8_func, v);
         if (t == T_int16) return builder.CreateCall(box_uint16_func, v);

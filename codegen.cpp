@@ -45,6 +45,7 @@ static const Type *jl_pvalue_llvmt;
 static const Type *jl_ppvalue_llvmt;
 static const FunctionType *jl_func_sig;
 static const Type *jl_fptr_llvmt;
+static const Type *T_int1;
 static const Type *T_int8;
 static const Type *T_pint8;
 static const Type *T_uint8;
@@ -273,12 +274,13 @@ static void emit_typecheck(Value *x, jl_value_t *type, const std::string &msg,
     error_unless(istype, msg, ctx);
 }
 
-static void emit_bounds_check(Value *i, Value *len, const std::string &msg,
-                              jl_codectx_t *ctx)
+static Value *emit_bounds_check(Value *i, Value *len, const std::string &msg,
+                                jl_codectx_t *ctx)
 {
     Value *im1 = builder.CreateSub(i, ConstantInt::get(T_int32, 1));
     Value *ok = builder.CreateICmpULT(im1, len);
     error_unless(ok, msg, ctx);
+    return im1;
 }
 
 static void emit_func_check(Value *x, const std::string &msg, jl_codectx_t *ctx)
@@ -492,6 +494,17 @@ static Value *emit_tuplelen(Value *t)
 #endif
 }
 
+static Value *emit_arraylen(Value *t)
+{
+    Value *lenbits = emit_nthptr(t, 2);
+#ifdef BITS64
+    return builder.CreateTrunc(builder.CreatePtrToInt(lenbits, T_int64),
+                               T_int32);
+#else
+    return builder.CreatePtrToInt(lenbits, T_int32);
+#endif
+}
+
 static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
                               jl_codectx_t *ctx,
                               Value **theFptr, Value **theEnv)
@@ -561,6 +574,40 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
                                   "tupleref: index out of range", ctx);
                 return emit_nthptr(arg1,
                                    builder.CreateAdd(idx, ConstantInt::get(T_int32,1)));
+            }
+        }
+        else if (f->fptr == &jl_f_arraylen && nargs==1) {
+            jl_value_t *aty = expr_type(args[1]);
+            if (jl_subtype(aty, (jl_value_t*)jl_array_type, 0)) {
+                Value *arg1 = emit_expr(args[1], ctx, true);
+                return emit_arraylen(arg1);
+            }
+        }
+        else if (f->fptr == &jl_f_arrayref && nargs==2) {
+            jl_value_t *aty = expr_type(args[1]);
+            jl_value_t *ity = expr_type(args[2]);
+            if (jl_subtype(aty, (jl_value_t*)jl_array_type, 0) &&
+                ity == (jl_value_t*)jl_int32_type) {
+                if (jl_is_bits_type(jl_tparam0(aty))) {
+                    Value *ary = emit_expr(args[1], ctx, true);
+                    const Type *elty = julia_type_to_llvm(jl_tparam0(aty));
+                    bool isbool=false;
+                    if (elty==T_int1) { elty = T_int8; isbool=true; }
+                    Value *data =
+                        builder.CreateBitCast(emit_nthptr(ary, 3),
+                                              PointerType::get(elty, 0));
+                    Value *alen = emit_arraylen(ary);
+                    Value *idx = emit_unbox(T_int32, T_pint32,
+                                            emit_expr(args[2], ctx, true));
+                    Value *im1 =
+                        emit_bounds_check(idx, alen,
+                                          "arrayref: index out of range", ctx);
+                    Value *elt=builder.CreateLoad(builder.CreateGEP(data, im1),
+                                                  false);
+                    if (isbool)
+                        return builder.CreateTrunc(elt, T_int1);
+                    return elt;
+                }
             }
         }
         // TODO: other known builtins
@@ -1044,6 +1091,7 @@ extern "C" jl_value_t *jl_new_box(jl_value_t *v)
 
 static void init_julia_llvm_env(Module *m)
 {
+    T_int1  = Type::getInt1Ty(getGlobalContext());
     T_int8  = Type::getInt8Ty(getGlobalContext());
     T_pint8 = PointerType::get(T_int8, 0);
     T_int16 = Type::getInt16Ty(getGlobalContext());
