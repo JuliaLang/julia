@@ -27,13 +27,6 @@ zeros(dims::Size...) = zeros(Float64, dims...)
 zeros(T::Type, dims::Tuple) = zeros (T, dims...)
 zeros(dims::Tuple) = zeros(dims...)
 
-## Redefine as comprehensions when comprehension optimizations are available
-
-#zeros(T::Type, m::Size) = (z=convert(T,0); [ z | i=1:m ])
-#zeros(T::Type, m::Size, n::Size) = (z=convert(T,0); [ z | i=1:m, j=1:n ])
-#zeros(m::Size) = [ 0.0 | i=1:m ]
-#zeros(m::Size, n::Size) = [ 0.0 | i=1:m, j=1:n ]
-
 function ones(T::Type, dims::Size...)
     a = Array(T, dims...)
     o = convert(T,1)
@@ -45,13 +38,6 @@ ones(dims::Size...) = ones(Float64, dims...)
 ones(T::Type, dims::Tuple) = ones (T, dims...)
 ones(dims::Tuple) = ones(dims...)
 
-## Redefine as comprehensions when comprehension optimizations are available
-
-#ones(T::Type, m::Size) = (o=convert(T,1); [ o | i=1:m ])
-#ones(T::Type, m::Size, n::Size) = (o=convert(T,1); [ o | i=1:m, j=1:n ])
-#ones(m::Size) = [ 1.0 | i=1:m ]
-#ones(m::Size, n::Size) = [ 1.0 | i=1:m, j=1:n ]
-
 function rand(dims::Size...)
     a = Array(Float64, dims...)
     for i=1:numel(a); a[i] = rand(); end
@@ -59,11 +45,6 @@ function rand(dims::Size...)
 end
 
 rand(dims::Tuple) = rand(dims...)
-
-## Redefine as comprehensions when comprehension optimizations are available
-
-# rand(m::Size) = [ rand() | i=1:m ]
-# rand(m::Size, n::Size) = [ rand() | i=1:m, j=1:n ]
 
 function randf(dims::Size...)
     a = Array(Float32, dims...)
@@ -73,21 +54,11 @@ end
 
 randf(dims::Tuple) = randf(dims...)
 
-## Redefine as comprehensions when comprehension optimizations are available
-
-# randf(m::Size) = [ randf() | i=1:m ]
-# randf(m::Size, n::Size) = [ randf() | i=1:m, j=1:n ]
-
 function copy{T}(a::Array{T})
     b = Array(T, size(a))
     for i=1:numel(a); b[i] = a[i]; end
     return b
 end
-
-## Redefine as comprehensions when comprehension optimizations are available
-
-# copy(a::Vector) = [ a[i] | i=1:length(a) ]
-# copy(a::Matrix) = [ a[i,j] | i=1:size(a,1), j=1:size(a,2) ]
 
 copy(a::Array{Any,1}) = { copy(a[i]) | i=1:length(a) }
 
@@ -193,12 +164,17 @@ transpose(x::Matrix) = [ x[j,i] | i=1:size(x,2), j=1:size(x,1) ]
 ctranspose(x::Matrix) = [ conj(x[j,i]) | i=1:size(x,2), j=1:size(x,1) ]
 
 dot(x::Vector, y::Vector) = sum(x.*y)
+
 diag(A::Matrix) = [ A[i,i] | i=1:min(size(A)) ]
 diagm(v::Vector) = (n=length(v);
                     a=zeros(n,n);
                     for i=1:n; a[i,i] = v[i]; end;
                     a)
 
+trace(A::Matrix) = sum(diag(A))
+
+## blas.j definse these for floats
+## This should be commented out for supporting the int cases
 #(*)(A::Matrix, B::Vector) = [ dot(A[i,:],B) | i=1:size(A,1) ]
 #(*)(A::Matrix, B::Matrix) = [ dot(A[i,:],B[:,j]) | i=1:size(A,1), j=1:size(B,2) ]
 
