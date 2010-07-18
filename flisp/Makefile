@@ -19,7 +19,7 @@ LIBFILES = $(LLT)
 LIBS = $(LIBFILES) -lm -lgc
 
 DEBUGFLAGS = -g -ggdb3 -DDEBUG $(FLAGS)
-SHIPFLAGS = -O2 -DNDEBUG $(FLAGS)
+SHIPFLAGS = -O3 -DNDEBUG $(FLAGS)
 
 default: release test
 
