@@ -4,8 +4,7 @@ CFLAGS =
 
 HFILEDIRS = /opt/local/include
 LIBDIRS = /opt/local/lib
-OSLIBS = -framework ApplicationServices -framework vecLib
-EFENCE = /opt/local/lib/libefence.a
+OSLIBS = -Wl,-w -framework ApplicationServices -framework vecLib
 
 ifeq ($(NBITS),32)
 CONFIG = -DMACOSX -DARCH_X86 -D__CPU__=586 -DUSE_READLINE -DBOEHM_GC
