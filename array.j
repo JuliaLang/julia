@@ -214,11 +214,10 @@ tril(M::Matrix, k) = [ j-i <= k ? M[i,j] : convert(typeof(M[i,j]),0) |
 ## Indexing: ref()
 #TODO: Out-of-bound checks
 ref(a::Array, i::Index) = arrayref(a,i)
-# disambiguating definitions
 ref{T}(a::Array{T,1}, i::Index) = arrayref(a,i)
 ref(a::Array{Any,1}, i::Index) = arrayref(a,i)
 
-ref{T}(a::Array{T,2}, i::Index, j::Index) = arrayref(a, (j-1)*a.dims[1] + i)
+ref(a::Matrix, i::Index, j::Index) = arrayref(a, (j-1)*a.dims[1] + i)
 
 jl_fill_endpts(A,n,R::RangeBy)   = Range(1,R.step,size(A,n))
 jl_fill_endpts(A,n,R::RangeFrom) = Range(R.start,R.step,size(A,n))
@@ -247,49 +246,48 @@ function ref(a::Array, I::Index...)
     return arrayref(a,index)
 end
 
-# Indexing: assign()
-# TODO: Take care of growing
+# assign()
 assign(a::Array, x, i::Index) = arrayset(a,i,x)
+
 assign{T}(a::Array{T,2}, x, i::Index, j::Index) =
     arrayset(a, (j-1)*a.dims[1]+i, x)
 
-function assign(a::Array, x, I::Index...)
-    # TODO: Need to take care of growing
+function assign(a::Array, x, I0::Index, I::Index...)
     dims = a.dims
     ndims = length(I)
 
-    index = I[1]
+    index = I0
     stride = 1
-    for k=2:ndims
-        stride = stride * dims[k-1]
+    for k=1:(ndims-1)
+        stride = stride * dims[k]
         index += (I[k]-1) * stride
     end
 
-    a[index] = x
+    arrayset(a, index, x)
     return a
 end
 
-function assign(A::Vector, x::Scalar, I)
+function assign(A::Vector, x, I::Indices)
     I = jl_fill_endpts(A, 1, I)
-    for i=I; A[i] = x; end;
+    for i=I; arrayset(A, i, x); end;
     return A
 end
 
-function assign(A::Vector, X, I)
+function assign(A::Vector, X::Vector, I::Indices)
     I = jl_fill_endpts(A, 1, I)
     count = 1
-    for i=I; A[i] = X[count]; count += 1; end
+    for i=I; arrayset(A, i, X[count]); count += 1; end
     return A
 end
 
-function assign(A::Matrix, x::Scalar, I, J)
+function assign(A::Matrix, x, I::Indices, J::Indices)
     I = jl_fill_endpts(A, 1, I)
     J = jl_fill_endpts(A, 2, J)
     for i=I, j=J; A[i,j] = x; end
     return A
 end
 
-function assign(A::Matrix, X, I, J)
+function assign(A::Matrix, X::Matrix, I::Indices, J::Indices)
     I = jl_fill_endpts(A, 1, I)
     J = jl_fill_endpts(A, 2, J)
     count = 1
