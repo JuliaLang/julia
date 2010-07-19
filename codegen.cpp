@@ -711,6 +711,7 @@ static void emit_assignment(jl_value_t *l, jl_value_t *r, jl_codectx_t *ctx)
         s = (jl_sym_t*)jl_exprarg(l,0);
     else
         assert(false);
+#if 0
     jl_value_t *static_type = (*ctx->declTypes)[s->name];
     if (static_type) {
         Value *typexp=NULL;
@@ -729,6 +730,7 @@ static void emit_assignment(jl_value_t *l, jl_value_t *r, jl_codectx_t *ctx)
         if (typexp)
             rhs = builder.CreateCall2(jlconvert_func, typexp, rhs);
     }
+#endif
     Value *bp = var_binding_pointer(s, ctx);
     builder.CreateStore(boxed(rhs), bp);
 }

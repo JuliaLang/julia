@@ -194,6 +194,12 @@ assert(hex("CafeBabe") == 3405691582)
 assert(hex("DeadBeef") == 3735928559)
 
 # conversions
+function fooo()
+    local x::Int8
+    x = 1000
+    x
+end
+assert(int32(fooo()) == -24)
 function foo()
     local x::Int8
     function bar()

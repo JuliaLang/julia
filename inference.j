@@ -624,7 +624,7 @@ function typeinf(linfo::LambdaStaticData, atypes::Tuple, sparams::Tuple, cop)
         end
     end
     inference_stack = inference_stack.prev
-    fulltree = type_annotate(ast, s, sv, frame.result)
+    fulltree = type_annotate(ast, s, sv, frame.result, vars)
     linfo.tfunc = (atypes, fulltree, linfo.tfunc)
     fulltree.args[3] = inlining_pass(fulltree.args[3])
     #print("\n",fulltree,"\n")
@@ -659,7 +659,7 @@ function add_decls(vars::Array, states::Array)
 end
 
 # annotate types of all symbols in AST
-function type_annotate(ast::Expr, states::Array, sv, rettype)
+function type_annotate(ast::Expr, states::Array, sv, rettype, vnames)
     vinf = ast.args[2]
     vinf.args[1].args = add_decls(vinf.args[1].args, states)
     body = ast.args[3].args
