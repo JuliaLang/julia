@@ -184,7 +184,7 @@ trace(A::Matrix) = sum(diag(A))
 mean(V::Vector) = sum(V) / length(V)
 
 std(V::Vector) = (m = mean(V);
-                  sqrt( sum([ (V[i] - m)^2 | i=1:length(V) ]) / length(V) ))
+                  sqrt( sum([ (V[i] - m)^2 | i=1:length(V) ]) / (length(V)-1) ))
 
 ## blas.j definse these for floats
 ## This should be commented out for supporting the int cases

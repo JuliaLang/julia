@@ -137,5 +137,31 @@ end
 fprintf('pi sum: ')
 tic(); s = pisum(); toc()
 assert(abs(s-1.644834071848065) < 1e-12);
+nl()
+
+function [s1, s2] = randmatstat(t)
+    n=5;
+    v = zeros(t,1);
+    w = zeros(t,1);
+    for i=1:t
+        a = randn(n, n);
+        b = randn(n, n);
+        c = randn(n, n);
+        d = randn(n, n);
+        P = [a b c d];
+        Q = [a b;c d];
+        v(i) = trace((P'*P)^4);
+        w(i) = trace((Q'*Q)^4);
+    end
+    s1 = std(v)/mean(v);
+    s2 = std(w)/mean(w);
+end
+
+fprintf('random matrix statistics: ');
+randmatstat(5);
+tic(); [s1, s2] = randmatstat(1000); toc()
+assert(round(10*s1) == 7);
+nl()
+
 
 end
