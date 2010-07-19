@@ -24,7 +24,3 @@ function exec(cmd::String, args::String...)
           (Ptr{Char}, Ptr{Ptr{Char}}),
           cmd, arr)
 end
-
-memset(a::Array, x::Int32) = ccall(dlsym(libc,"memset"), Void, 
-                                   (Ptr{Char}, Int32, Int32),
-                                   a, x, numel(a))
