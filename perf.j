@@ -114,7 +114,5 @@ end
 print("random matrix statistics: ")
 randmatstat(5)
 tic(); (s1, s2) = randmatstat(1000); toc()
-print(s1)
-print(s2)
 #assert(round(10*s1) == 7);
 nl()
