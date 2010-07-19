@@ -263,20 +263,20 @@ function assign(a::Array, x, I0::Index, I::Index...)
         index += (I[k]-1) * stride
     end
 
-    arrayset(a, index, x)
+    a[index] = x
     return a
 end
 
 function assign(A::Vector, x, I::Indices)
     I = jl_fill_endpts(A, 1, I)
-    for i=I; arrayset(A, i, x); end;
+    for i=I; A[i] = x; end;
     return A
 end
 
 function assign(A::Vector, X::Vector, I::Indices)
     I = jl_fill_endpts(A, 1, I)
     count = 1
-    for i=I; arrayset(A, i, X[count]); count += 1; end
+    for i=I; A[i] = X[count]; count += 1; end
     return A
 end
 

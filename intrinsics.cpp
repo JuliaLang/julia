@@ -199,7 +199,7 @@ extern "C" void *jl_value_to_pointer(jl_value_t *jt, jl_value_t *v, int argn)
         return alloc_temp_arg_copy(jl_bits_data(v), osz);
     }
     if (jl_is_array(v)) {
-        if (jl_tparam0(jl_typeof(v)) == jt)
+        if (jl_tparam0(jl_typeof(v)) == jt || jt==(jl_value_t*)jl_bottom_type)
             return ((jl_array_t*)v)->data;
         if (jl_is_cpointer_type(jt)) {
             jl_array_t *ar = (jl_array_t*)v;
