@@ -668,8 +668,7 @@ static void print_float64(double d, int single)
             ios_puts(" 0.0", s);
     }
     else {
-        //snprint_real(buf, sizeof(buf), d, 0, ndec, 3, 10);
-        snprint_real(buf, sizeof(buf), d, 0, ndec, 0, 0);
+        snprint_real(buf, sizeof(buf), d, 0, ndec, 3, 10);
         int hasdec = (strpbrk(buf, ".eE") != NULL);
 	if (d > 0) {
 	  ios_puts(" ", s);

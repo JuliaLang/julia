@@ -243,14 +243,14 @@ function ref(a::Array, I::Index...)
         index += (I[k]-1) * stride
     end
 
-    return arrayref(a,index)
+    return a[index]
 end
 
 # assign()
 assign(a::Array, x, i::Index) = arrayset(a,i,x)
 
 assign{T}(a::Array{T,2}, x, i::Index, j::Index) =
-    arrayset(a, (j-1)*a.dims[1]+i, x)
+    a[(j-1)*a.dims[1] + i] = x
 
 function assign(a::Array, x, I0::Index, I::Index...)
     dims = a.dims
