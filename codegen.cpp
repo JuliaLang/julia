@@ -542,7 +542,9 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
         else if (f->fptr == &jl_f_is && nargs==2) {
             Value *arg1 = emit_expr(args[1], ctx, true);
             Value *arg2 = emit_expr(args[2], ctx, true);
-            return julia_bool(builder.CreateICmpEQ(arg1, arg2));
+            if (arg1->getType() != arg2->getType())
+                return ConstantInt::get(T_int1,0);
+            return builder.CreateICmpEQ(arg1, arg2);
         }
         else if (f->fptr == &jl_f_tuplelen && nargs==1) {
             jl_value_t *aty = expr_type(args[1]);
@@ -732,7 +734,11 @@ static void emit_assignment(jl_value_t *l, jl_value_t *r, jl_codectx_t *ctx)
     }
 #endif
     Value *bp = var_binding_pointer(s, ctx);
-    builder.CreateStore(boxed(rhs), bp);
+    const Type *vt = bp->getType();
+    if (vt->isPointerTy() && vt->getContainedType(0)!=jl_pvalue_llvmt)
+        builder.CreateStore(emit_unbox(vt->getContainedType(0), vt, rhs), bp);
+    else
+        builder.CreateStore(boxed(rhs), bp);
 }
 
 static Value *emit_var(jl_sym_t *sym, jl_value_t *ty, jl_codectx_t *ctx)
@@ -799,9 +805,19 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool value,
         assert(!value);
         jl_value_t *cond = args[0];
         int labelname = jl_unbox_int32(args[1]);
-        Value *isfalse =
-            builder.CreateICmpEQ(emit_expr(cond, ctx, true),
-                                 literal_pointer_val(jl_false));
+        Value *condV = emit_expr(cond, ctx, true);
+        Value *isfalse;
+        if (condV->getType() == T_int1) {
+            isfalse = builder.CreateXor(condV, ConstantInt::get(T_int1,1));
+        }
+        else if (condV->getType() == jl_pvalue_llvmt) {
+            isfalse =
+                builder.CreateICmpEQ(condV, literal_pointer_val(jl_false));
+        }
+        else {
+            // not a boolean
+            isfalse = ConstantInt::get(T_int1,0);
+        }
         BasicBlock *ifso = BasicBlock::Create(getGlobalContext(), "if", ctx->f);
         BasicBlock *ifnot = (*ctx->labels)[labelname];
         assert(ifnot);
@@ -854,9 +870,12 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool value,
     }
     else if (ex->head == unbound_sym) {
         Value *bp = var_binding_pointer((jl_sym_t*)args[0], ctx);
+        // unboxed vars will never be referenced undefined
+        if (bp->getType()->getContainedType(0) != jl_pvalue_llvmt)
+            return ConstantInt::get(T_int1, 0);
         Value *v = builder.CreateLoad(bp, false);
         Value *isnull = builder.CreateICmpEQ(v, V_null);
-        return julia_bool(isnull);
+        return isnull;
     }
 
     else if (ex->head == quote_sym) {
@@ -880,6 +899,21 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool value,
 static bool vinfo_isboxed(jl_array_t *a)
 {
     return (jl_cellref(a,2)!=jl_false && jl_cellref(a,3)!=jl_false);
+}
+
+static AllocaInst *alloc_local(char *name, jl_codectx_t *ctx)
+{
+    jl_value_t *jt = (*ctx->declTypes)[name];
+    const Type *vtype;
+    // only store a variable unboxed if type inference has run, which
+    // checks that the variable is not referenced undefined.
+    if (jl_is_bits_type(jt) && !(*ctx->isBoxed)[name] && ctx->linfo->inferred)
+        vtype = julia_type_to_llvm(jt);
+    else
+        vtype = jl_pvalue_llvmt;
+    AllocaInst *lv = builder.CreateAlloca(vtype, 0, name);
+    (*ctx->vars)[name] = lv;
+    return lv;
 }
 
 static void emit_function(jl_lambda_info_t *lam, Function *f)
@@ -942,18 +976,15 @@ static void emit_function(jl_lambda_info_t *lam, Function *f)
     // must be first for the mem2reg pass to work
     for(i=0; i < largs->length; i++) {
         char *argname = jl_decl_var(jl_cellref(largs,i))->name;
-        AllocaInst *lv = builder.CreateAlloca(jl_pvalue_llvmt, 0, argname);
-        localVars[argname] = lv;
-        argumentMap[argname] = lv;
+        argumentMap[argname] = alloc_local(argname, &ctx);
     }
     for(i=0; i < lvars->length; i++) {
         char *argname = ((jl_sym_t*)jl_cellref(lvars,i))->name;
-        AllocaInst *lv = builder.CreateAlloca(jl_pvalue_llvmt, 0, argname);
+        AllocaInst *lv = alloc_local(argname, &ctx);
         if (isBoxed[argname])
             builder.CreateStore(builder.CreateCall(jlbox_func, V_null), lv);
-        else
+        else if (lv->getAllocatedType() == jl_pvalue_llvmt)
             builder.CreateStore(V_null, lv);
-        localVars[argname] = lv;
     }
 
     ctx.argTemp =
@@ -1005,8 +1036,13 @@ static void emit_function(jl_lambda_info_t *lam, Function *f)
         LoadInst *theArg = builder.CreateLoad(argPtr, false);
         if (isBoxed[argname])
             builder.CreateStore(builder.CreateCall(jlbox_func, theArg), lv);
-        else
+        else if (lv->getAllocatedType() == jl_pvalue_llvmt)
             builder.CreateStore(theArg, lv);
+        else
+            builder.CreateStore(emit_unbox(lv->getAllocatedType(),
+                                           lv->getType(),
+                                           theArg),
+                                lv);
     }
     // allocate rest argument if necessary
     if (va) {

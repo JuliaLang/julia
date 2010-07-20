@@ -62,6 +62,7 @@ typedef struct _jl_lambda_info_t {
     jl_tuple_t *roots;  // pointers in generated code
     void *functionObject;
     jl_value_t *specTypes;  // argument types this is specialized for
+    uptrint_t inferred;
     // flag telling if inference is running on this function
     // used to avoid infinite recursion
     uptrint_t inInference;

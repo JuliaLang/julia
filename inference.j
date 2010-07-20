@@ -632,41 +632,58 @@ function typeinf(linfo::LambdaStaticData, atypes::Tuple, sparams::Tuple, cop)
     return (fulltree, frame.result)
 end
 
-function eval_annotate(e::Expr, vtypes, sv)
+function eval_annotate(e::Expr, vtypes, sv, decls)
     if is(e.head,`quote) || is(e.head,`top) || is(e.head,`goto) ||
         is(e.head,`label)
         return e
-    elseif is(e.head,`gotoifnot) || is(e.head,symbol("return")) ||
-        is(e.head,symbol("="))
+    elseif is(e.head,`gotoifnot) || is(e.head,symbol("return"))
         e.type = Any
+    elseif is(e.head,symbol("="))
+        e.type = Any
+        s = e.args[1]
+        # assignment LHS not subject to all-same-type variable checking
+        e.args[1] = Expr(`symbol, {s}, abstract_eval(s, vtypes, sv))
+        e.args[2] = eval_annotate(e.args[2], vtypes, sv, decls)
+        return e
     end
     for i=1:length(e.args)
-        e.args[i] = eval_annotate(e.args[i],vtypes,sv)
+        e.args[i] = eval_annotate(e.args[i], vtypes, sv, decls)
     end
     e
 end
 
-function eval_annotate(e::Symbol, vtypes, sv)
-    Expr(`symbol, {e}, abstract_eval(e, vtypes, sv))
+function eval_annotate(e::Symbol, vtypes, sv, decls)
+    t = abstract_eval(e, vtypes, sv)
+    otherTy = get(decls, e, false)
+    # keep track of whether a variable is always the same type
+    if !is(otherTy,false)
+        if !is(otherTy, t)
+            decls[e] = Any
+        end
+    else
+        decls[e] = t
+    end
+    Expr(`symbol, {e}, t)
 end
 
-eval_annotate(s, vtypes, sv) = s
-
-# expand v to v::T as appropriate based on all inferred type info
-function add_decls(vars::Array, states::Array)
-    # TODO
-    return vars
-end
+eval_annotate(s, vtypes, sv, decls) = s
 
 # annotate types of all symbols in AST
 function type_annotate(ast::Expr, states::Array, sv, rettype, vnames)
-    vinf = ast.args[2]
-    vinf.args[1].args = add_decls(vinf.args[1].args, states)
+    decls = idtable()
     body = ast.args[3].args
     for i=1:length(body)
-        body[i] = eval_annotate(body[i], states[i], sv)
+        body[i] = eval_annotate(body[i], states[i], sv, decls)
     end
     ast.args[3].type = rettype
+
+    vinf = append(ast.args[2].args[2],ast.args[2].args[3])
+    # add declarations for variables that are always the same type
+    for vi = vinf
+        if has(decls,vi[1])
+            vi[2] = decls[vi[1]]
+        end
+    end
     ast
 end
 
@@ -740,7 +757,10 @@ function inlineable(e::Expr)
     #if !(!is(meth,()) && is(meth[5],()))
     #    print(e,"\n")
     #end
-    assert(is(meth[5],()))
+    #assert(is(meth[5],()))
+    if !is(meth[5],())
+        return NF
+    end
     if is(meth[3],`convert) && length(atypes)==2
         # builtin case of convert. convert(T,x::S) => x, when S<:T
         if isType(atypes[1]) && subtype(atypes[2],atypes[1].parameters[1])
@@ -802,6 +822,11 @@ function inlining_pass(e::Expr)
                     is(eval(aarg.args[1]),tuple)
                     # apply(f,tuple(x,y,...)) => f(x,y,...)
                     e.args = append({e.args[2]}, aarg.args[2:])
+                    # now try to inline the simplified call
+                    body = inlineable(e)
+                    if !is(body,NF)
+                        return body
+                    end
                     return e
                 end
             end

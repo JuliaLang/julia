@@ -316,6 +316,7 @@ static jl_function_t *cache_method(jl_methtable_t *mt, jl_tuple_t *type,
 #ifdef ENABLE_INFERENCE
             jl_value_t *newast = jl_apply(jl_typeinf_func, fargs, 4);
             newmeth->linfo->ast = jl_tupleref(newast, 0);
+            newmeth->linfo->inferred = 1;
 #endif
             newmeth->linfo->inInference = 0;
         }

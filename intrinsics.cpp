@@ -228,22 +228,30 @@ static Value *julia_to_native(const Type *ty, jl_value_t *jt, Value *jv,
         return jv;
     }
     else if (vt != jl_pvalue_llvmt) {
-        if ((vt->isIntegerTy() || vt->isFloatingPointTy() ||
-             vt->isPointerTy()) &&
-            (ty->isIntegerTy() || ty->isFloatingPointTy() ||
-             ty->isPointerTy())) {
+        if ((vt->isIntegerTy() && ty->isIntegerTy()) ||
+            (vt->isFloatingPointTy() && ty->isFloatingPointTy()) ||
+            (vt->isPointerTy() && ty->isPointerTy())) {
             if (vt->getPrimitiveSizeInBits() ==
                 ty->getPrimitiveSizeInBits()) {
                 return builder.CreateBitCast(jv, ty);
             }
-            else {
-                // error. box for error handling.
-                jv = boxed(jv);
-            }
         }
+        if (ty->isPointerTy() && ty->getContainedType(0)==vt) {
+            // we have an unboxed variable x, and need to pass &x
+            // todo: pass address of stack-allocated variable
+            jv = boxed(jv);
+            Value *p = bitstype_pointer(jv);
+            return builder.CreateBitCast(p, ty);
+        }
+        else {
+            // error. box for error handling.
+            jv = boxed(jv);
+        }
+        /*
         else {
             assert(false && "Unsupported native type.");
         }
+        */
     }
     else if (jl_is_cpointer_type(jt)) {
         Value *p = builder.CreateCall3(value_to_pointer_func,
@@ -369,10 +377,22 @@ static Value *uint_cnvt(const Type *to, Value *x)
 
 static Value *emit_unbox(const Type *to, const Type *pto, Value *x)
 {
-    if (x->getType()->isIntegerTy() || x->getType()->isFloatingPointTy())
+    if (x->getType()->isIntegerTy() || x->getType()->isFloatingPointTy()) {
+        // bools are stored internally as int8 (for now), so we need to make
+        // unbox8(x::Bool) work.
+        if (x->getType() == T_int1 && to == T_int8)
+            return builder.CreateZExt(x, T_int8);
         return x;
+    }
     assert(x->getType() == jl_pvalue_llvmt);
     Value *p = bitstype_pointer(x);
+    if (to == T_int1) {
+        // bools stored as int8, so an extra Trunc is needed to get an int1
+        return builder.CreateTrunc(builder.
+                                   CreateLoad(builder.
+                                              CreateBitCast(p, T_pint8), false),
+                                   T_int1);
+    }
     return builder.CreateLoad(builder.CreateBitCast(p, pto), false);
 }
 
@@ -471,34 +491,26 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
     HANDLE(div_float,2)
         return builder.CreateFDiv(FP(x), FP(emit_expr(args[2],ctx,true)));
     HANDLE(eq_int,2)
-        return julia_bool(builder.CreateICmpEQ(x,
-                                               emit_expr(args[2],ctx,true)));
+        return builder.CreateICmpEQ(x, emit_expr(args[2],ctx,true));
     HANDLE(slt_int,2)
-        return julia_bool(builder.CreateICmpSLT(x,
-                                                emit_expr(args[2],ctx,true)));
+        return builder.CreateICmpSLT(x, emit_expr(args[2],ctx,true));
     HANDLE(ult_int,2)
-        return julia_bool(builder.CreateICmpULT(x,
-                                                emit_expr(args[2],ctx,true)));
+        return builder.CreateICmpULT(x, emit_expr(args[2],ctx,true));
     HANDLE(eq_float,2)
-        return
-        julia_bool(builder.CreateFCmpOEQ(FP(x),
-                                         FP(emit_expr(args[2],ctx,true))));
+        return builder.CreateFCmpOEQ(FP(x),
+                                     FP(emit_expr(args[2],ctx,true)));
     HANDLE(lt_float,2)
-        return
-        julia_bool(builder.CreateFCmpOLT(FP(x),
-                                         FP(emit_expr(args[2],ctx,true))));
+        return builder.CreateFCmpOLT(FP(x),
+                                     FP(emit_expr(args[2],ctx,true)));
     HANDLE(ne_float,2)
-        return
-        julia_bool(builder.CreateFCmpONE(FP(x),
-                                         FP(emit_expr(args[2],ctx,true))));
+        return builder.CreateFCmpONE(FP(x),
+                                     FP(emit_expr(args[2],ctx,true)));
     HANDLE(le_float,2)
-        return
-        julia_bool(builder.CreateFCmpOLE(FP(x),
-                                         FP(emit_expr(args[2],ctx,true))));
+        return builder.CreateFCmpOLE(FP(x),
+                                     FP(emit_expr(args[2],ctx,true)));
     HANDLE(ge_float,2)
-        return
-        julia_bool(builder.CreateFCmpOGE(FP(x),
-                                         FP(emit_expr(args[2],ctx,true))));
+        return builder.CreateFCmpOGE(FP(x),
+                                     FP(emit_expr(args[2],ctx,true)));
     HANDLE(and_int,2)
         return builder.CreateAnd(x, emit_expr(args[2],ctx,true));
     HANDLE(or_int,2)
@@ -599,7 +611,7 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
             jl_error("invalid arguments to powi_float");
         return builder.CreateCall2(Intrinsic::getDeclaration(jl_Module,
                                                              Intrinsic::powi,
-                                                             fxts, 2),
+                                                             fxts, 1),
                                    fx, fy);
     default:
         assert(false);
