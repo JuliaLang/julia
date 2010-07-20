@@ -419,6 +419,8 @@ function ref(x::StateUpdate, s::Symbol)
     return get(x.state,s,NF)
 end
 
+interpret(e, vtypes, sv::StaticVarInfo) = vtypes
+
 function interpret(e::Expr, vtypes, sv::StaticVarInfo)
     # handle assignment
     if is(e.head,symbol("="))
