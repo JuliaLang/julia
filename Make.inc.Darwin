@@ -1,6 +1,6 @@
 CC = gcc
 CXX = g++
-CFLAGS =
+CFLAGS = -DENABLE_INFERENCE
 
 HFILEDIRS = /opt/local/include
 LIBDIRS = /opt/local/lib
