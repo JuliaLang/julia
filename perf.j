@@ -78,11 +78,12 @@ timeit(mandelperf, true)
 ## numeric vector quicksort ##
 
 print("quicksort: ")
-n = 5000
-v = rand(n)
-v = sort(v)
-assert(issorted(v))
-timeit(sort, v)
+function sortperf(n)
+  v = rand(n)
+  v = sort(v)
+end
+assert(issorted(sortperf(5000)))
+timeit(sortperf, 5000)
 
 ## slow pi series ##
 
