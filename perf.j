@@ -2,44 +2,59 @@
 
 nl() = print("\n")
 
+function timeit(func, args...)
+    nexpt = 5
+    times = zeros(nexpt)
+
+    for i=1:nexpt
+        tic(); func(args...); times[i] = qtoc();
+    end
+
+    times = sort(times)
+    print (times[1])
+    nl()
+    nl()
+end
+
+nl()
+
 ## recursive fib ##
 
 fib(n) = n < 2 ? n : fib(n-1) + fib(n-2)
 
 print("recursive fib(20): ")
-fib(5)  # warm up: make sure fib is compiled
-tic(); f = fib(20); toc()
+f = fib(20)
 assert(f == 6765)
-nl()
+timeit(fib, 20)
 
 ## parse int ##
 
 print("parse_int: ")
-bin("10")
-tic()
-for i=1:1000
-    global n
-    n=bin("1111000011110000111100001111")
+
+function parseintperf(ignore)
+    for i=1:1000
+        global n
+        n=bin("1111000011110000111100001111")
+    end
+    n
 end
-toc()
-assert(n == 252645135)
-nl()
+
+assert(parseintperf(true) == 252645135)
+timeit(parseintperf, true)
 
 ## array constructors ##
 
 print("ones: ")
-small=ones(2,2)
-tic(); o = ones(200,200); toc()
+o = ones(200,200)
 assert(all(o==1))
-nl()
+timeit(ones, 200, 200)
 
 ## matmul and transpose ##
 
 print("A * A': ")
-small*small'
-tic(); oo = o * o'; toc()
-assert(all(oo==200))
-nl()
+matmul(o) = o * o'
+assert(all(matmul(o)==200))
+timeit(matmul, o)
 
 ## mandelbrot set: complex arithmetic and comprehensions ##
 
@@ -56,27 +71,22 @@ function mandel(z::Complex)
 end
 
 print("mandelbrot: ")
-mandel(Complex(-.53,.68))
-tic()
-M = [ mandel(Complex(r,i)) | r = -2.0:.1:0.5, i = -1.:.1:1. ]
-toc()
-assert(sum(M) == 14791)
-nl()
+mandelperf(ignore) = [ mandel(Complex(r,i)) | r = -2.0:.1:0.5, i = -1.:.1:1. ]
+assert(sum(mandelperf(true)) == 14791)
+timeit(mandelperf, true)
 
 ## numeric vector quicksort ##
 
 print("quicksort: ")
-small=rand(3)
-sort(small)
 n = 5000
 v = rand(n)
-tic(); v = sort(v); toc()
+v = sort(v)
 assert(issorted(v))
-nl()
+timeit(sort, v)
 
 ## slow pi series ##
 
-function pisum()
+function pisum(ignore)
     sum = 0.0
     for j=1:500
         sum = 0.0
@@ -88,9 +98,9 @@ function pisum()
 end
 
 print("pi sum: ")
-tic(); s = pisum(); toc()
+s = pisum(true)
 assert(abs(s-1.644834071848065) < 1e-12)
-nl()
+timeit(pisum, true)
 
 ## Random matrix statistics ##
 
@@ -112,7 +122,6 @@ function randmatstat(t)
 end
 
 print("random matrix statistics: ")
-randmatstat(5)
-tic(); (s1, s2) = randmatstat(1000); toc()
-assert(round(10*s1) == 7);
-nl()
+(s1, s2) = randmatstat(1000)
+assert(round(10*s1) > 6 && round(10*s1) < 8)
+timeit(randmatstat, 1000)
