@@ -63,7 +63,7 @@ julia-release: $(OBJS) $(LIBFILES)
 	$(CXX) $(SHIPFLAGS) $(OBJS) -o $@ $(LIBS)
 	ln -sf $@ julia
 
-debug release efence: %: julia-%
+debug release: %: julia-%
 
 test: debug
 	julia tests.j
@@ -80,8 +80,8 @@ clean:
 
 cleanall: clean
 	rm -f nbits
-	rm -rf $(EXENAME)-{debug,release,efence}
+	rm -rf $(EXENAME)-{debug,release}
 	$(MAKE) -C $(LLTDIR) clean
 	$(MAKE) -C $(FLISPDIR) clean
 
-.PHONY: debug release efence test clean cleanall
+.PHONY: debug release test clean cleanall
