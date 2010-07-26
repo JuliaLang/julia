@@ -57,11 +57,9 @@ $(FLISP): $(FLISPDIR)/*.h $(FLISPDIR)/*.c $(LLT)
 
 julia-debug: $(DOBJS) $(LIBFILES)
 	$(CXX) $(DEBUGFLAGS) $(DOBJS) -o $@ $(LIBS)
-	ln -sf $@ julia
 
 julia-release: $(OBJS) $(LIBFILES)
 	$(CXX) $(SHIPFLAGS) $(OBJS) -o $@ $(LIBS)
-	ln -sf $@ julia
 
 debug release: %: julia-%
 	ln -sf julia-$@ julia
