@@ -64,9 +64,10 @@ julia-release: $(OBJS) $(LIBFILES)
 	ln -sf $@ julia
 
 debug release: %: julia-%
+	ln -sf julia-$@ julia
 
 test: debug
-	julia tests.j
+	./julia tests.j
 
 clean:
 	rm -f *.o
