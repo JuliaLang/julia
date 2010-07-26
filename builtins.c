@@ -18,6 +18,9 @@
 #include "llt.h"
 #include "julia.h"
 
+#include <fcntl.h>
+#include <unistd.h>
+
 // --- exception raising ---
 
 extern char *julia_home;
@@ -179,9 +182,20 @@ void jl_load(const char *fname)
     char *fpath = (char*)fname;
     if (julia_home && !strchr(fname, '/'))
         asprintf(&fpath, "%s/%s", julia_home, fname);
+    int fid = open (fpath, O_RDONLY);
+    if (fid == -1) {
+      asprintf(&fpath, "%s/%s.j", julia_home, fname);
+      fid = open (fpath, O_RDONLY);
+      if (fid == -1) {
+	jl_errorf("could not open file %s", fpath);
+      }
+    }
+    close(fid);
+
     jl_value_t *ast = jl_parse_file(fpath);
-    if (ast == (jl_value_t*)jl_null)
-        jl_errorf("could not open file %s", fpath);
+    if (ast == (jl_value_t*)jl_null) 
+	jl_errorf("could not open file %s", fpath);
+
     jl_array_t *b = ((jl_expr_t*)ast)->args;
     size_t i, lineno=0;
     jmp_buf *prevh = CurrentExceptionHandler;
