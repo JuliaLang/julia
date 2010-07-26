@@ -224,6 +224,34 @@ function accumarray(I::Vector, J::Vector, V::Vector, m::Size, n::Size)
     return A
 end
 
+function find(A::Vector)
+    nnzA = nnz(A)
+    I = Array(Size, nnzA)
+    count = 1
+    for i=1:length(A)
+        if A[i] != 0
+            I[count] = i
+            count = count + 1
+        end
+    end
+    return I
+end
+
+function find(A::Matrix)
+    nnzA = nnz(A)
+    I = Array(Size, nnzA)
+    J = Array(Size, nnzA)
+    count = 1
+    for i=1:size(A,1), j=1:size(A,2)
+        if A[i,j] != 0
+            I[count] = i
+            J[count] = j
+            count = count + 1
+        end
+    end
+    return (I, J)
+end
+
 triu(M) = triu(M,0)
 tril(M) = tril(M,0)
 triu(M::Matrix, k) = [ j-i >= k ? M[i,j] : convert(typeof(M[i,j]),0) |
