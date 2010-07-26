@@ -205,6 +205,25 @@ repmat(a::Matrix, m::Size, n::Size) = reshape([ a[i,j] | i=1:size(a,1),
                                               size(a,1)*m,
                                               size(a,2)*n)
 
+
+accumarray(I::Vector, J::Vector, V) = accumarray (I, J, V, max(I), max(J))
+
+function accumarray(I::Vector, J::Vector, V::Scalar, m::Size, n::Size)
+    A = zeros(m, n)
+    for k=1:length(I)
+        A[I[k], J[k]] += V
+    end
+    return A
+end
+
+function accumarray(I::Vector, J::Vector, V::Vector, m::Size, n::Size)
+    A = zeros(m, n)
+    for k=1:length(I)
+        A[I[k], J[k]] += V[k]
+    end
+    return A
+end
+
 triu(M) = triu(M,0)
 tril(M) = tril(M,0)
 triu(M::Matrix, k) = [ j-i >= k ? M[i,j] : convert(typeof(M[i,j]),0) |
