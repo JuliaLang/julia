@@ -246,7 +246,7 @@ function tic()
     return t0
 end
 
-function toc()
+function _toc(noisy)
     t1 = clock()
     global _TIMERS
     if is(_TIMERS,())
@@ -255,19 +255,11 @@ function toc()
     t0 = _TIMERS[1]
     _TIMERS = _TIMERS[2]
     t = t1-t0
-    print("elapsed time: ", t, " sec\n")
+    if noisy
+        print("elapsed time: ", t, " sec\n")
+    end
     t
 end
 
-function qtoc()
-    t1 = clock()
-    global _TIMERS
-    if is(_TIMERS,())
-        error("toc() without tic()")
-    end
-    t0 = _TIMERS[1]
-    _TIMERS = _TIMERS[2]
-    t = t1-t0
-    #print("elapsed time: ", t, " sec\n")
-    t
-end
+qtoc() = _toc(false)
+toc()  = _toc(true)

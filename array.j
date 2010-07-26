@@ -164,7 +164,7 @@ end
 
 function (==)(x::Array, y::Array)
     if x.dims != y.dims; return false; end
-    for i=1:numel(x); if arrayref(x,i) != arrayref(y,i); return false; end; end
+    for i=1:numel(x); if x[i] != y[i]; return false; end; end
     return true
 end
 

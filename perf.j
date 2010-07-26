@@ -31,7 +31,7 @@ timeit(fib, 20)
 
 print("parse_int: ")
 
-function parseintperf(ignore)
+function parseintperf()
     for i=1:1000
         global n
         n=bin("1111000011110000111100001111")
@@ -39,8 +39,8 @@ function parseintperf(ignore)
     n
 end
 
-assert(parseintperf(true) == 252645135)
-timeit(parseintperf, true)
+assert(parseintperf() == 252645135)
+timeit(parseintperf)
 
 ## array constructors ##
 
@@ -71,9 +71,9 @@ function mandel(z::Complex)
 end
 
 print("mandelbrot: ")
-mandelperf(ignore) = [ mandel(Complex(r,i)) | r = -2.0:.1:0.5, i = -1.:.1:1. ]
-assert(sum(mandelperf(true)) == 14791)
-timeit(mandelperf, true)
+mandelperf() = [ mandel(Complex(r,i)) | r = -2.0:.1:0.5, i = -1.:.1:1. ]
+assert(sum(mandelperf()) == 14791)
+timeit(mandelperf)
 
 ## numeric vector quicksort ##
 
@@ -87,7 +87,7 @@ timeit(sortperf, 5000)
 
 ## slow pi series ##
 
-function pisum(ignore)
+function pisum()
     sum = 0.0
     for j=1:500
         sum = 0.0
@@ -99,9 +99,9 @@ function pisum(ignore)
 end
 
 print("pi sum: ")
-s = pisum(true)
+s = pisum()
 assert(abs(s-1.644834071848065) < 1e-12)
-timeit(pisum, true)
+timeit(pisum)
 
 ## Random matrix statistics ##
 
