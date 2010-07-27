@@ -358,6 +358,7 @@ static inline int jl_is_seq_type(jl_value_t *v)
 
 // type info accessors
 jl_value_t *jl_full_type(jl_value_t *v);
+size_t jl_field_offset(jl_struct_type_t *t, jl_sym_t *fld);
 
 // type predicates
 int jl_is_type(jl_value_t *v);

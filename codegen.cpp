@@ -611,6 +611,19 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
                 }
             }
         }
+        else if (f->fptr == &jl_f_get_field && nargs==2) {
+            jl_value_t *sty = expr_type(args[1]);
+            if (jl_is_struct_type(sty) && jl_is_expr(args[2]) &&
+                ((jl_expr_t*)args[2])->head == quote_sym &&
+                jl_is_symbol(jl_exprarg(args[2],0))) {
+                size_t offs = jl_field_offset((jl_struct_type_t*)sty,
+                                              (jl_sym_t*)jl_exprarg(args[2],0));
+                if (offs != (size_t)-1) {
+                    Value *strct = emit_expr(args[1], ctx, true);
+                    return emit_nthptr(strct, offs+1);
+                }
+            }
+        }
         // TODO: other known builtins
     }
     return NULL;

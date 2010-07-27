@@ -280,20 +280,25 @@ JL_CALLABLE(jl_f_tuplelen)
     return jl_box_int32(((jl_tuple_t*)args[0])->length);
 }
 
-static size_t field_offset(jl_struct_type_t *t, jl_sym_t *fld)
+static size_t field_offset(jl_struct_type_t *t, jl_sym_t *fld, int err)
 {
     jl_tuple_t *fn = t->names;
     size_t i;
     for(i=0; i < fn->length; i++) {
         if (jl_tupleref(fn,i) == (jl_value_t*)fld) {
-            if (t == jl_struct_kind || t == jl_bits_kind ||
-                t == jl_tag_kind)
+            if (t == jl_struct_kind || t == jl_bits_kind || t == jl_tag_kind)
                 i += 3;
             return i;
         }
     }
-    jl_errorf("type %s has no field %s", t->name->name->name, fld->name);
-    return 0;
+    if (err)
+        jl_errorf("type %s has no field %s", t->name->name->name, fld->name);
+    return -1;
+}
+
+size_t jl_field_offset(jl_struct_type_t *t, jl_sym_t *fld)
+{
+    return field_offset(t, fld, 0);
 }
 
 JL_CALLABLE(jl_f_get_field)
@@ -305,7 +310,7 @@ JL_CALLABLE(jl_f_get_field)
         jl_errorf("getfield: argument must be a struct, got %s",
                   jl_print_to_string(v));
     size_t i = field_offset((jl_struct_type_t*)jl_typeof(v),
-                            (jl_sym_t*)args[1]);
+                            (jl_sym_t*)args[1], 1);
     return ((jl_value_t**)v)[1+i];
 }
 
@@ -318,7 +323,7 @@ JL_CALLABLE(jl_f_set_field)
         jl_errorf("setfield: argument must be a struct, got %s",
                   jl_print_to_string(v));
     jl_struct_type_t *st = (jl_struct_type_t*)jl_typeof(v);
-    size_t i = field_offset(st, (jl_sym_t*)args[1]);
+    size_t i = field_offset(st, (jl_sym_t*)args[1], 1);
     ((jl_value_t**)v)[1+i] = jl_convert((jl_type_t*)jl_tupleref(st->types,i),
                                         args[2]);
     return v;
