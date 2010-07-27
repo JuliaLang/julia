@@ -396,6 +396,24 @@ static Value *emit_unbox(const Type *to, const Type *pto, Value *x)
     return builder.CreateLoad(builder.CreateBitCast(p, pto), false);
 }
 
+static Value *emit_unboxed(jl_value_t *e, jl_codectx_t *ctx)
+{
+    if (jl_is_int32(e)) {
+        return ConstantInt::get(T_int32, jl_unbox_int32(e));
+    }
+    else if (jl_is_int64(e)) {
+        return ConstantInt::get(T_int64, jl_unbox_int64(e));
+    }
+    else if (jl_is_uint64(e)) {
+        return mark_unsigned(ConstantInt::get(T_int64,
+                                              (int64_t)jl_unbox_uint64(e)));
+    }
+    else if (jl_is_float64(e)) {
+        return ConstantFP::get(T_float64, jl_unbox_float64(e));
+    }
+    return emit_expr(e, ctx, true);
+}
+
 #define HANDLE(intr,n)                                                  \
     case intr: if (nargs!=n) jl_error(#intr": wrong number of arguments");
 
@@ -404,23 +422,7 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
 {
     if (f == ccall) return emit_ccall(args, nargs, ctx);
     if (nargs < 1) jl_error("invalid intrinsic call");
-    Value *x;
-    if (jl_is_int32(args[1])) {
-        x = ConstantInt::get(T_int32, jl_unbox_int32(args[1]));
-    }
-    else if (jl_is_int64(args[1])) {
-        x = ConstantInt::get(T_int64, jl_unbox_int64(args[1]));
-    }
-    else if (jl_is_uint64(args[1])) {
-        x = mark_unsigned(ConstantInt::get(T_int64,
-                                           (int64_t)jl_unbox_uint64(args[1])));
-    }
-    else if (jl_is_float64(args[1])) {
-        x = ConstantFP::get(T_float64, jl_unbox_float64(args[1]));
-    }
-    else {
-        x = emit_expr(args[1], ctx, true);
-    }
+    Value *x = emit_unboxed(args[1], ctx);
     const Type *t = x->getType();
     const Type *fxt;
     const Type *fxts[2];

@@ -394,8 +394,7 @@ static Value *julia_bool(Value *cond)
                                 literal_pointer_val(jl_false));
 }
 
-static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool value,
-                        bool last=false);
+static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool value);
 
 static Value *emit_lambda_closure(jl_value_t *expr, jl_codectx_t *ctx)
 {
@@ -704,7 +703,6 @@ static Value *emit_call(jl_value_t **args, size_t arglen, jl_codectx_t *ctx)
 
 static void emit_assignment(jl_value_t *l, jl_value_t *r, jl_codectx_t *ctx)
 {
-    Value *rhs = emit_expr(r, ctx, true);
     jl_sym_t *s = NULL;
     if (jl_is_symbol(l))
         s = (jl_sym_t*)l;
@@ -713,32 +711,14 @@ static void emit_assignment(jl_value_t *l, jl_value_t *r, jl_codectx_t *ctx)
         s = (jl_sym_t*)jl_exprarg(l,0);
     else
         assert(false);
-#if 0
-    jl_value_t *static_type = (*ctx->declTypes)[s->name];
-    if (static_type) {
-        Value *typexp=NULL;
-        if (jl_is_type(static_type)) {
-            if (static_type != (jl_value_t*)jl_any_type) {
-                typexp = literal_pointer_val(static_type);
-            }
-        }
-        else if (static_type != (jl_value_t*)Any_sym) {
-            // this case happens for non-generic functions
-            typexp = emit_expr(static_type, ctx, true);
-        }
-        // convert to declared type
-        // TODO: do this in a way that the convert() call will be subject
-        // to optimizations (go through emit_call())
-        if (typexp)
-            rhs = builder.CreateCall2(jlconvert_func, typexp, rhs);
-    }
-#endif
     Value *bp = var_binding_pointer(s, ctx);
     const Type *vt = bp->getType();
     if (vt->isPointerTy() && vt->getContainedType(0)!=jl_pvalue_llvmt)
-        builder.CreateStore(emit_unbox(vt->getContainedType(0), vt, rhs), bp);
+        builder.CreateStore(emit_unbox(vt->getContainedType(0), vt,
+                                       emit_unboxed(r, ctx)),
+                            bp);
     else
-        builder.CreateStore(boxed(rhs), bp);
+        builder.CreateStore(boxed(emit_expr(r, ctx, true)), bp);
 }
 
 static Value *emit_var(jl_sym_t *sym, jl_value_t *ty, jl_codectx_t *ctx)
@@ -762,8 +742,7 @@ static Value *emit_var(jl_sym_t *sym, jl_value_t *ty, jl_codectx_t *ctx)
     return emit_checked_var(bp, sym->name, ctx);
 }
 
-static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool value,
-                        bool last)
+static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool value)
 {
     if (jl_is_symbol(expr)) {
         return emit_var((jl_sym_t*)expr, (jl_value_t*)jl_undef_type, ctx);
@@ -836,16 +815,6 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool value,
         builder.SetInsertPoint(bb);
     }
 
-    else if (ex->head == return_sym) {
-        assert(!value);
-        builder.CreateRet(boxed(emit_expr(args[0], ctx, true)));
-        if (!last) {
-            // basic block must end here because there's a return
-            BasicBlock *bb =
-                BasicBlock::Create(getGlobalContext(), "ret", ctx->f);
-            builder.SetInsertPoint(bb);
-        }
-    }
     else if (ex->head == call_sym || ex->head == call1_sym) {
         return emit_call(args, ex->args->length, ctx);
     }
@@ -1093,7 +1062,18 @@ static void emit_function(jl_lambda_info_t *lam, Function *f)
         else {
             prevlabel = false;
         }
-        (void)emit_expr(stmt, &ctx, false, i==stmts->length-1);
+        if (jl_is_expr(stmt) && ((jl_expr_t*)stmt)->head == return_sym) {
+            jl_expr_t *ex = (jl_expr_t*)stmt;
+            builder.CreateRet(boxed(emit_expr(jl_exprarg(ex,0), &ctx, true)));
+            if (i != stmts->length-1) {
+                BasicBlock *bb =
+                    BasicBlock::Create(getGlobalContext(), "ret", ctx.f);
+                builder.SetInsertPoint(bb);
+            }
+        }
+        else {
+            (void)emit_expr(stmt, &ctx, false);
+        }
     }
     // sometimes we have dangling labels after the end
     if (builder.GetInsertBlock()->getTerminator() == NULL) {
