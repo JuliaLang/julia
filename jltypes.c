@@ -417,6 +417,8 @@ static jl_value_t *meet_tvar(jl_tvar_t *tv, jl_value_t *ty)
 {
     if (jl_is_typevar(ty))
         return (jl_value_t*)meet_tvars(tv, (jl_tvar_t*)ty);
+    if (jl_types_equal((jl_value_t*)tv->ub, ty))
+        return ty;
     if (jl_subtype((jl_value_t*)tv->ub, ty, 0))
         return (jl_value_t*)tv;
     // TODO: should we check type_intersection(tv->ub, ty) instead?
@@ -469,6 +471,10 @@ static jl_value_t *jl_type_intersect(jl_value_t *a, jl_value_t *b,
     if (jl_is_typector(b))
         b = (jl_value_t*)((jl_typector_t*)b)->body;
     if (a == b) return a;
+    if (jl_is_typevar(a))
+        return intersect_typevar((jl_tvar_t*)a, b, penv);
+    if (jl_is_typevar(b))
+        return intersect_typevar((jl_tvar_t*)b, a, penv);
     if (a == (jl_value_t*)jl_any_type) return b;
     if (b == (jl_value_t*)jl_any_type) return a;
     // union
@@ -509,10 +515,6 @@ static jl_value_t *jl_type_intersect(jl_value_t *a, jl_value_t *b,
     }
     if (jl_is_int32(a) || jl_is_int32(b))
         return (jl_value_t*)jl_bottom_type;
-    if (jl_is_typevar(a))
-        return intersect_typevar((jl_tvar_t*)a, b, penv);
-    if (jl_is_typevar(b))
-        return intersect_typevar((jl_tvar_t*)b, a, penv);
     // tag
     assert(jl_is_some_tag_type(a));
     assert(jl_is_some_tag_type(b));
@@ -642,8 +644,12 @@ static int type_eqv_(jl_value_t *a, jl_value_t *b, jl_value_pair_t *stack)
     if (jl_is_typector(a)) a = (jl_value_t*)((jl_typector_t*)a)->body;
     if (jl_is_typector(b)) b = (jl_value_t*)((jl_typector_t*)b)->body;
     if (jl_is_typevar(a) || jl_is_typevar(b)) return 0;
-    if (jl_is_int32(a) && jl_is_int32(b))
-        return (jl_unbox_int32(a) == jl_unbox_int32(b));
+    if (jl_is_int32(a)) {
+        if (jl_is_int32(b))
+            return (jl_unbox_int32(a) == jl_unbox_int32(b));
+        return 0;
+    }
+    if (jl_is_int32(b)) return 0;
     if (jl_is_tuple(a)) {
         if (jl_is_tuple(b)) {
             return extensionally_same_type(a, b);

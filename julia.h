@@ -56,6 +56,7 @@ typedef struct _jl_lambda_info_t {
     // sparams is a tuple (symbol, value, symbol, value, ...)
     jl_tuple_t *sparams;
     jl_value_t *tfunc;
+    jl_sym_t *name;  // for error reporting
 
     // hidden fields:
     jl_fptr_t fptr;
@@ -69,7 +70,6 @@ typedef struct _jl_lambda_info_t {
     uptrint_t inCompile;
     // a slower-but-works version of this function as a fallback
     struct _jl_function_t *unspecialized;
-    jl_sym_t *name;  // for error reporting
 } jl_lambda_info_t;
 
 #define JL_FUNC_FIELDS                          \

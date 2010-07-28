@@ -528,7 +528,6 @@ function typeinf(linfo::LambdaStaticData, atypes::Tuple, sparams::Tuple, cop)
     ast0 = linfo.ast
 
     #print("typeinf ", ast0, " ", sparams, " ", atypes, "\n")
-    #print("typeinf ", atypes, "\n")
 
     global inference_stack
     # check for recursion
@@ -542,6 +541,8 @@ function typeinf(linfo::LambdaStaticData, atypes::Tuple, sparams::Tuple, cop)
         end
         f = f.prev
     end
+
+    #print("typeinf ", linfo.name, atypes, "\n")
 
     ast = cop ? copy(ast0) : ast0
 

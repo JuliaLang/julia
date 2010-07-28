@@ -294,7 +294,8 @@ function ref(a::Array, I::Index...)
 end
 
 # assign()
-assign(a::Array, x, i::Index) = arrayset(a,i,x)
+assign{T}(a::Array{T}, x, i::Index) = arrayset(a,i,convert(T,x))
+assign(a::Array{Any}, x, i::Index) = arrayset(a,i,x)
 
 assign{T}(a::Array{T,2}, x, i::Index, j::Index) =
     a[(j-1)*a.dims[1] + i] = x

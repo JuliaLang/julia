@@ -29,7 +29,7 @@ end
 #       DOUBLE PRECISION   A( LDA, * )
 
 for (fname, eltype) = (("dpotrf_", Float64), ("spotrf_", Float32))
-    eval(`function chol (A::Matrix{$eltype})
+    eval(`function chol (A::DenseMatrix{$eltype})
          info = [0]
          n = size(A, 1)
          R = triu(A)
@@ -55,7 +55,7 @@ end
 #       DOUBLE PRECISION   A( LDA, * )
 
 for (fname, eltype) = (("dgetrf_", Float64), ("sgetrf_", Float32))
-    eval(`function lu (A::Matrix{$eltype})
+    eval(`function lu (A::DenseMatrix{$eltype})
          info = [0]
          m, n = size(A)
          LU = copy(A)
@@ -93,7 +93,7 @@ end
 
 for (fname, fname2, eltype) = (("dgeqp3_", "dorgqr_", Float64),
                                ("sgeqp3_", "sorgqr_", Float32))
-    eval(`function qr (A::Matrix{$eltype})
+    eval(`function qr (A::DenseMatrix{$eltype})
          info = [0]
          m, n = size(A)
          QR = copy(A)
@@ -157,7 +157,7 @@ end
 #       DOUBLE PRECISION   A( LDA, * ), W( * ), WORK( * )
 
 for (fname, eltype) = (("dsyev_", Float64), ("ssyev_", Float32))
-    eval(`function eig(A::Matrix{$eltype})
+    eval(`function eig(A::DenseMatrix{$eltype})
 
          if !issymmetric(A); error("Matrix must be symmetric"); end
 
@@ -203,7 +203,7 @@ end
 #      $                   VT( LDVT, * ), WORK( * )
 
 for (fname, eltype) = (("dgesvd_", Float64), ("sgesvd_", Float32))
-    eval(`function svd(A::Matrix{$eltype})
+    eval(`function svd(A::DenseMatrix{$eltype})
          jobu = "A"
          jobvt = "A"
          m, n = size(A)
@@ -267,7 +267,7 @@ end
 
 for (fname_lu, fname_lsq, fname_tri, eltype) = (("dgesv_", "dgels_", "dtrtrs_", Float64),
                                                 ("sgesv_", "sgels_", "strtrs_", Float32))
-    eval(`function \ (A::Matrix{$eltype}, B::VectorOrMatrix{$eltype})
+    eval(`function \ (A::DenseMatrix{$eltype}, B::DenseVecOrMat{$eltype})
         info = [0]
         m = size(A, 1)
         n = size(A, 2)

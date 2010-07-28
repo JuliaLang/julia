@@ -390,11 +390,13 @@ JL_CALLABLE(jl_f_arrayref)
     return jl_arrayref(a, i);
 }
 
-void jl_arrayset(jl_array_t *a, size_t i, jl_value_t *v)
+void jl_arrayset(jl_array_t *a, size_t i, jl_value_t *rhs)
 {
-    jl_type_t *el_type = (jl_type_t*)jl_tparam0(jl_typeof(a));
-    jl_value_t *rhs =
-        (el_type==(jl_type_t*)jl_any_type) ? v : jl_convert(el_type, v);
+    jl_value_t *el_type = jl_tparam0(jl_typeof(a));
+    if (el_type != (jl_value_t*)jl_any_type) {
+        if (!jl_subtype(rhs, el_type, 1))
+            jl_type_error("arrayset", jl_print_to_string(el_type), rhs);
+    }
     if (jl_is_bits_type(el_type)) {
         size_t nb = ((jl_bits_type_t*)el_type)->nbits/8;
         switch (nb) {

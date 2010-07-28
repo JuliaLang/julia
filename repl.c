@@ -599,16 +599,12 @@ int main(int argc, char *argv[])
     parse_opts(&argc, &argv);
     julia_init();
 
-    jl_value_t *dims = (jl_value_t*)jl_box_int32(argc);
-    jl_value_t *args = (jl_value_t*)jl_new_array(jl_array_any_type, &dims, 1);
+    jl_array_t *args = jl_alloc_cell_1d(argc);
     int i;
     for (i=0; i < argc; i++) {
-        jl_value_t *idx = (jl_value_t*)jl_box_int32(i+1);
-        jl_value_t *val = (jl_value_t*)jl_cstr_to_array(argv[i]);
-        jl_value_t *dat[] = {args, idx, val};
-        jl_f_arrayset(NULL, dat, 3);
+        jl_arrayset(args, i, (jl_value_t*)jl_cstr_to_array(argv[i]));
     }
-    jl_set_const(jl_system_module, jl_symbol("ARGS"), args);
+    jl_set_const(jl_system_module, jl_symbol("ARGS"), (jl_value_t*)args);
 
 #ifdef USE_READLINE
     if (!no_readline) {

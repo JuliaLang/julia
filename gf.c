@@ -134,7 +134,7 @@ static inline int cache_match(jl_value_t **args, size_t n, jl_tuple_t *sig)
                 // analogous to the situation with tuples.
                 return 1;
             }
-            if (a != jl_tparam0(decl))
+            if (a != jl_tparam0(decl) && !jl_types_equal(a,jl_tparam0(decl)))
                 return 0;
             //if (!jl_types_equal(a, jl_tparam0(decl)))
             //    return 0;
@@ -298,6 +298,7 @@ static jl_function_t *cache_method(jl_methtable_t *mt, jl_tuple_t *type,
         newmeth->linfo->specTypes = (jl_value_t*)type;
         jl_specialize_ast(newmeth->linfo);
         if (jl_typeinf_func != NULL) {
+            assert(newmeth->linfo->inInference == 0);
             newmeth->linfo->inInference = 1;
             jl_value_t *fargs[4];
             fargs[0] = (jl_value_t*)newmeth->linfo;

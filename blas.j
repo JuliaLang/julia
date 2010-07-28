@@ -1,13 +1,15 @@
 libBLAS = dlopen("libBLAS")
 
-typealias VectorOrMatrix{T} Union(Vector{T}, Matrix{T})
+typealias DenseVector{T} Array{T,1}
+typealias DenseMatrix{T} Array{T,2}
+typealias DenseVecOrMat{T} Union(DenseVector{T}, DenseMatrix{T})
 
 # SUBROUTINE DCOPY(N,DX,INCX,DY,INCY) 
 
-for (fname, shape, eltype) = (("dcopy_", `Vector, Float64),
-                              ("scopy_", `Vector, Float32),
-                              ("dcopy_", `Matrix, Float64),
-                              ("scopy_", `Matrix, Float32))
+for (fname, shape, eltype) = (("dcopy_", `DenseVector, Float64),
+                              ("scopy_", `DenseVector, Float32),
+                              ("dcopy_", `DenseMatrix, Float64),
+                              ("scopy_", `DenseMatrix, Float32))
     eval (`function copy (X::($shape){$eltype})
           sz = size(X)
           Y = Array($eltype, sz)
@@ -23,7 +25,7 @@ end
 # DOUBLE PRECISION FUNCTION DDOT(N,DX,INCX,DY,INCY)
 
 for (fname, eltype) = (("ddot_", Float64), ("sdot_", Float32))
-    eval(`function dot (x::Vector{$eltype}, y::Vector{$eltype})
+    eval(`function dot (x::DenseVector{$eltype}, y::DenseVector{$eltype})
          ccall(dlsym(libBLAS, $fname),
                $eltype,
                (Ptr{Int32}, Ptr{$eltype}, Ptr{Int32}, Ptr{$eltype}, Ptr{Int32}),
@@ -35,7 +37,7 @@ end
 # DOUBLE PRECISION FUNCTION DNRM2(N,X,INCX)
 
 for (fname, eltype) = (("ddot_", Float64), ("sdot_", Float32))
-    eval(`function norm (x::Vector{$eltype})
+    eval(`function norm (x::DenseVector{$eltype})
          ccall(dlsym(libBLAS, $fname),
                $eltype,
                (Ptr{Int32}, Ptr{$eltype}, Ptr{Int32}),
@@ -53,7 +55,7 @@ end
 #       DOUBLE PRECISION A(LDA,*),B(LDB,*),C(LDC,*)
 
 for (fname, eltype) = (("dgemm_", Float64), ("sgemm_", Float32))
-    eval(`function * (A::VectorOrMatrix{$eltype}, B::VectorOrMatrix{$eltype})
+    eval(`function * (A::DenseVecOrMat{$eltype}, B::DenseVecOrMat{$eltype})
          m = size(A, 1)
          if isa(B, Vector); n = 1; else n = size(B, 2); end
          if isa(A, Vector); k = 1; else k = size(A, 2); end

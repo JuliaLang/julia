@@ -568,9 +568,9 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
                         return emit_nthptr(arg1, idx+1);
                     }
                 }
-                Value *arg2 = emit_expr(args[2], ctx, true);
                 Value *tlen = emit_tuplelen(arg1);
-                Value *idx = emit_unbox(T_int32, T_pint32, arg2);
+                Value *idx = emit_unbox(T_int32, T_pint32,
+                                        emit_unboxed(args[2], ctx));
                 emit_bounds_check(idx, tlen,
                                   "tupleref: index out of range", ctx);
                 return emit_nthptr(arg1,
@@ -599,7 +599,7 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
                                               PointerType::get(elty, 0));
                     Value *alen = emit_arraylen(ary);
                     Value *idx = emit_unbox(T_int32, T_pint32,
-                                            emit_expr(args[2], ctx, true));
+                                            emit_unboxed(args[2], ctx));
                     Value *im1 =
                         emit_bounds_check(idx, alen,
                                           "arrayref: index out of range", ctx);
@@ -607,7 +607,36 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
                                                   false);
                     if (isbool)
                         return builder.CreateTrunc(elt, T_int1);
+                    if (is_unsigned_julia_type(jl_tparam0(aty)))
+                        return mark_unsigned(elt);
                     return elt;
+                }
+            }
+        }
+        else if (f->fptr == &jl_f_arrayset && nargs==3) {
+            jl_value_t *aty = expr_type(args[1]);
+            jl_value_t *ity = expr_type(args[2]);
+            jl_value_t *vty = expr_type(args[3]);
+            if (jl_subtype(aty, (jl_value_t*)jl_array_type, 0) &&
+                ity == (jl_value_t*)jl_int32_type) {
+                jl_value_t *ety = jl_tparam0(aty);
+                if (jl_is_bits_type(ety) && jl_subtype(vty, ety, 0)) {
+                    Value *ary = emit_expr(args[1], ctx, true);
+                    const Type *elty = julia_type_to_llvm(ety);
+                    if (elty==T_int1) { elty = T_int8; }
+                    Value *data =
+                        builder.CreateBitCast(emit_nthptr(ary, 3),
+                                              PointerType::get(elty, 0));
+                    Value *alen = emit_arraylen(ary);
+                    Value *idx = emit_unbox(T_int32, T_pint32,
+                                            emit_unboxed(args[2], ctx));
+                    Value *rhs = emit_unbox(elty, PointerType::get(elty,0),
+                                            emit_unboxed(args[3], ctx));
+                    Value *im1 =
+                        emit_bounds_check(idx, alen,
+                                          "arrayset: index out of range", ctx);
+                    builder.CreateStore(rhs, builder.CreateGEP(data, im1));
+                    return ary;
                 }
             }
         }

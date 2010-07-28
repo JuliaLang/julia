@@ -353,6 +353,8 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
 // convert int type to same-size float type
 static const Type *FT(const Type *t)
 {
+    if (t->isFloatingPointTy())
+        return t;
     if (t == T_int32) return T_float32;
     assert(t == T_int64);
     return T_float64;
@@ -410,6 +412,12 @@ static Value *emit_unboxed(jl_value_t *e, jl_codectx_t *ctx)
     }
     else if (jl_is_float64(e)) {
         return ConstantFP::get(T_float64, jl_unbox_float64(e));
+    }
+    else if (e == jl_true) {
+        return ConstantInt::get(T_int1, 1);
+    }
+    else if (e == jl_false) {
+        return ConstantInt::get(T_int1, 0);
     }
     return emit_expr(e, ctx, true);
 }
