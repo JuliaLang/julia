@@ -1219,6 +1219,8 @@ static void add_builtin_func(const char *name, jl_fptr_t f)
 
 void jl_init_builtins()
 {
+    current_output_stream = ios_stdout;
+
     jl_print_gf = jl_new_generic_function(jl_symbol("print"));
 
     add_builtin_method1(jl_print_gf, (jl_type_t*)jl_any_type,     jl_f_print_any);
@@ -1239,8 +1241,6 @@ void jl_init_builtins()
     add_builtin_method1(jl_print_gf, (jl_type_t*)jl_uint64_type,  jl_f_print_uint64);
     add_builtin_method1(jl_print_gf, (jl_type_t*)jl_bool_type,    jl_f_print_bool);
     add_builtin_method1(jl_print_gf, (jl_type_t*)jl_pointer_type, jl_f_print_pointer);
-
-    current_output_stream = ios_stdout;
 
     jl_convert_gf = jl_new_generic_function(jl_symbol("convert"));
     jl_add_method(jl_convert_gf,
