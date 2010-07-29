@@ -110,7 +110,7 @@ int jl_has_typevars_(jl_value_t *v, int incl_wildcard)
 {
     size_t i;
     if (jl_typeis(v, jl_tvar_type)) {
-        if (((jl_tvar_t*)v)->unbound)
+        if (!((jl_tvar_t*)v)->bound)
             return incl_wildcard;
         return 1;
     }
@@ -410,7 +410,8 @@ static jl_value_t *meet_tvars(jl_tvar_t *a, jl_tvar_t *b)
     // TODO: might not want to collapse tvar to non-tvar in all cases
     if (jl_is_leaf_type(ub))
         return ub;
-    return jl_new_struct(jl_tvar_type, jl_gensym(), lb, ub);
+    return (jl_value_t*)
+        jl_new_typevar(jl_symbol("_"), lb, ub, a->bound || b->bound);
 }
 
 static jl_value_t *meet_tvar(jl_tvar_t *tv, jl_value_t *ty)
@@ -429,7 +430,8 @@ static jl_value_t *meet_tvar(jl_tvar_t *tv, jl_value_t *ty)
     if (jl_subtype((jl_value_t*)tv->lb, ty, 0)) {
         if (jl_is_leaf_type(ty) || jl_is_int32(ty))
             return ty;
-        return jl_new_struct(jl_tvar_type, jl_gensym(), tv->lb, ty);
+        return (jl_value_t*)
+            jl_new_typevar(jl_symbol("_"), tv->lb, ty, tv->bound);
     }
     return (jl_value_t*)jl_bottom_type;
 }
@@ -439,7 +441,7 @@ static jl_value_t *meet_tvar(jl_tvar_t *tv, jl_value_t *ty)
 static jl_value_t *intersect_typevar(jl_tvar_t *a, jl_value_t *b,
                                      jl_tuple_t **penv)
 {
-    if (((jl_tvar_t*)a)->unbound) return b;
+    if (!((jl_tvar_t*)a)->bound) return b;
     jl_tuple_t *p = *penv;
     while (p != jl_null) {
         if (jl_t0(p) == (jl_value_t*)a) {
@@ -1280,7 +1282,7 @@ static jl_value_t *type_match_(jl_value_t *child, jl_value_t *parent,
         jl_tuple_t *p = env;
         while (p != jl_null) {
             if (jl_t0(p) == (jl_value_t*)parent) {
-                if (((jl_tvar_t*)parent)->unbound) return (jl_value_t*)env;
+                if (!((jl_tvar_t*)parent)->bound) return (jl_value_t*)env;
                 jl_value_t *pv = jl_t1(p);
                 if (jl_is_typevar(pv) && jl_is_typevar(child)) {
                     if (pv == (jl_value_t*)child)
@@ -1466,17 +1468,21 @@ jl_value_t *jl_func_type_tfunc(jl_func_type_t *ft, jl_tuple_t *argtypes)
 
 // initialization -------------------------------------------------------------
 
-jl_tvar_t *jl_new_typevar(jl_sym_t *name, jl_type_t *lb, jl_type_t *ub)
+jl_tvar_t *jl_new_typevar(jl_sym_t *name, jl_value_t *lb, jl_value_t *ub,
+                          int bound)
 {
-    return (jl_tvar_t*)jl_new_struct(jl_tvar_type, name, lb, ub, NULL);
+    jl_tvar_t *tv = (jl_tvar_t*)newobj((jl_type_t*)jl_tvar_type, 4);
+    tv->name = name;
+    tv->lb = lb;
+    tv->ub = ub;
+    tv->bound = bound;
+    return tv;
 }
 
 static jl_tvar_t *tvar(const char *name)
 {
-    jl_tvar_t *tv = jl_new_typevar(jl_symbol(name), (jl_type_t*)jl_bottom_type,
-                                   (jl_type_t*)jl_any_type);
-    tv->unbound = 1;
-    return tv;
+    return jl_new_typevar(jl_symbol(name), (jl_value_t*)jl_bottom_type,
+                          (jl_value_t*)jl_any_type, 0);
 }
 
 jl_tuple_t *jl_typevars(size_t n, ...)

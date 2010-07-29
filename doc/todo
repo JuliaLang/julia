@@ -495,6 +495,7 @@ issues 6/21/10
   is available (after loading start.j)
 ? don't specialize on arguments declared as Any. make the default type
   an unconstrained typevar, and specialize those.
+- make optimized arrayset, arrayref work on all Arrays
 
 - coroutines, Tasks, exceptions
 - new for loop, comprehension, reduction formulation

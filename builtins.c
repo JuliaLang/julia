@@ -772,12 +772,12 @@ JL_CALLABLE(jl_f_print_typevar)
 {
     ios_t *s = current_output_stream;
     jl_tvar_t *tv = (jl_tvar_t*)args[0];
-    if (tv->lb != jl_bottom_type) {
+    if (tv->lb != (jl_value_t*)jl_bottom_type) {
         call_print((jl_value_t*)tv->lb);
         ios_puts("<:", s);
     }
     ios_puts(tv->name->name, s);
-    if (tv->ub != (jl_type_t*)jl_any_type) {
+    if (tv->ub != (jl_value_t*)jl_any_type) {
         ios_puts("<:", s);
         call_print((jl_value_t*)tv->ub);
     }
@@ -1023,8 +1023,7 @@ JL_CALLABLE(jl_f_typevar)
             lb = (jl_value_t*)jl_bottom_type;
         }
     }
-    return (jl_value_t*)jl_new_typevar((jl_sym_t*)args[0], (jl_type_t*)lb,
-                                       (jl_type_t*)ub);
+    return (jl_value_t*)jl_new_typevar((jl_sym_t*)args[0], lb, ub, 1);
 }
 
 JL_CALLABLE(jl_f_union)

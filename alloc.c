@@ -233,7 +233,7 @@ static void unbind_tvars(jl_tuple_t *parameters)
     for(i=0; i < parameters->length; i++) {
         jl_tvar_t *tv = (jl_tvar_t*)jl_tupleref(parameters, i);
         if (jl_is_typevar(tv))
-            tv->unbound = 1;
+            tv->bound = 0;
     }
 }
 
@@ -282,7 +282,8 @@ static void add_generic_ctor(jl_function_t *gf, jl_struct_type_t *t)
             jl_tupleset(ntvs, i,
                         (jl_value_t*)jl_new_typevar(((jl_tvar_t*)tv)->name,
                                                     ((jl_tvar_t*)tv)->lb,
-                                                    ((jl_tvar_t*)tv)->ub));
+                                                    ((jl_tvar_t*)tv)->ub,
+                                                    1));
         }
         else {
             jl_tupleset(ntvs, i, tv);

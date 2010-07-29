@@ -146,9 +146,9 @@ typedef struct {
 typedef struct {
     JL_VALUE_STRUCT
     jl_sym_t *name;
-    jl_type_t *lb;  // lower bound
-    jl_type_t *ub;  // upper bound
-    uptrint_t unbound;  // not part of a constraint environment
+    jl_value_t *lb;   // lower bound
+    jl_value_t *ub;   // upper bound
+    uptrint_t bound;  // part of a constraint environment
 } jl_tvar_t;
 
 typedef struct {
@@ -379,7 +379,7 @@ DLLEXPORT jl_value_t *jl_type_intersection(jl_value_t *a, jl_value_t *b);
 
 // type constructors
 jl_typename_t *jl_new_typename(jl_sym_t *name);
-jl_tvar_t *jl_new_typevar(jl_sym_t *name, jl_type_t *lb, jl_type_t *ub);
+jl_tvar_t *jl_new_typevar(jl_sym_t *name,jl_value_t *lb,jl_value_t *ub,int b);
 jl_typector_t *jl_new_type_ctor(jl_tuple_t *params, jl_type_t *body);
 jl_value_t *jl_apply_type(jl_value_t *tc, jl_tuple_t *params);
 jl_type_t *jl_instantiate_type_with(jl_type_t *t, jl_value_t **env, size_t n);
