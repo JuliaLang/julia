@@ -66,7 +66,7 @@ timeit(@ones, 200, 200)
 
 fprintf('A * transpose(A): ');
 function oo = matmul(o)
-  oo = o * o';
+  oo = o * o.';
 end
 assert(all(matmul(o) == 200))
 timeit(@matmul, o)
@@ -163,8 +163,8 @@ function [s1, s2] = randmatstat(t)
         d = randn(n, n);
         P = [a b c d];
         Q = [a b;c d];
-        v(i) = trace((P'*P)^4);
-        w(i) = trace((Q'*Q)^4);
+        v(i) = trace((P.'*P)^4);
+        w(i) = trace((Q.'*Q)^4);
     end
     s1 = std(v)/mean(v);
     s2 = std(w)/mean(w);
