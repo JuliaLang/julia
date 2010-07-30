@@ -354,7 +354,7 @@ vcat{T}(V::Vector{T}...) = [ V[i][j] | i=1:length(V), j=1:length(V[1]) ]
 function hcat{T}(A::Matrix{T}...)
     ncols = sum([ size(A[i], 2) | i=1:length(A) ])
     nrows = size(A[1], 1)
-    B = zeros(typeof(A[1][1]), nrows, ncols)
+    B = Array(T, nrows, ncols)
 
     pos = 1
     for k=1:length(A), i=1:numel(A[k])
@@ -368,7 +368,7 @@ end
 function vcat{T}(A::Matrix{T}...)
     nrows = sum([size(A[i], 1) | i=1:length(A)])
     ncols = size(A[1], 2)
-    B = zeros(typeof(A[1][1]), nrows, ncols)
+    B = Array(T, nrows, ncols)
 
     pos = 1
     for j=1:ncols, k=1:length(A), i=1:size(A[k], 1)
