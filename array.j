@@ -209,7 +209,7 @@ repmat(a::Matrix, m::Size, n::Size) = reshape([ a[i,j] | i=1:size(a,1),
 accumarray(I::Vector, J::Vector, V) = accumarray (I, J, V, max(I), max(J))
 
 function accumarray{T}(I::Vector, J::Vector, V::Scalar{T}, m::Size, n::Size)
-    A = Array(T, m, n)
+    A = zeros(T, m, n)
     for k=1:length(I)
         A[I[k], J[k]] += V
     end
@@ -217,7 +217,7 @@ function accumarray{T}(I::Vector, J::Vector, V::Scalar{T}, m::Size, n::Size)
 end
 
 function accumarray{T}(I::Vector, J::Vector, V::Vector{T}, m::Size, n::Size)
-    A = Array(T, m, n)
+    A = zeros(T, m, n)
     for k=1:length(I)
         A[I[k], J[k]] += V[k]
     end
@@ -226,7 +226,7 @@ end
 
 function find{T}(A::Vector{T})
     nnzA = nnz(A)
-    I = Array(T, nnzA)
+    I = Array(Size, nnzA)
     count = 1
     for i=1:length(A)
         if A[i] != 0
@@ -239,8 +239,8 @@ end
 
 function find{T}(A::Matrix{T})
     nnzA = nnz(A)
-    I = Array(T, nnzA)
-    J = Array(T, nnzA)
+    I = Array(Size, nnzA)
+    J = Array(Size, nnzA)
     count = 1
     for i=1:size(A,1), j=1:size(A,2)
         if A[i,j] != 0
