@@ -175,6 +175,39 @@ JL_CALLABLE(jl_f_error)
     return (jl_value_t*)jl_null;
 }
 
+// heuristic for whether a top-level input should be evaluated with
+// the compiler or the interpreter.
+static int eval_with_compiler_p(jl_array_t *body)
+{
+    size_t i;
+    for(i=0; i < body->length; i++) {
+        jl_value_t *stmt = jl_cellref(body,i);
+        if (jl_is_expr(stmt) && (((jl_expr_t*)stmt)->head == goto_sym ||
+                                 ((jl_expr_t*)stmt)->head == goto_ifnot_sym)) {
+            return 1;
+        }
+    }
+    return 0;
+}
+
+jl_value_t *jl_new_closure_internal(jl_lambda_info_t *li, jl_value_t *env);
+
+jl_value_t *jl_toplevel_eval_thunk(jl_lambda_info_t *thk)
+{
+    //jl_print(thk);
+    //ios_printf(ios_stdout, "\n");
+    assert(jl_typeof(thk) == (jl_type_t*)jl_lambda_info_type);
+    assert(jl_is_expr(thk->ast));
+    if (eval_with_compiler_p(jl_lam_body((jl_expr_t*)thk->ast))) {
+        jl_value_t *thunk = jl_new_closure_internal(thk, (jl_value_t*)jl_null);
+        // use a generic function so type inference runs
+        jl_function_t *gf = jl_new_generic_function(lambda_sym);
+        jl_add_method(gf, jl_null, (jl_function_t*)thunk);
+        return jl_apply(gf, NULL, 0);
+    }
+    return jl_interpret_toplevel_thunk(thk);
+}
+
 int asprintf(char **strp, const char *fmt, ...);
 
 void jl_load(const char *fname)
@@ -238,7 +271,7 @@ JL_CALLABLE(jl_f_top_eval)
 {
     JL_NARGS(eval, 1, 1);
     jl_value_t *e = args[0];
-    if (jl_is_symbol(e))
+    if (!jl_is_expr(e))
         return jl_interpret_toplevel_expr(e);
     return jl_interpret_toplevel_thunk(jl_expand(e));
 }
@@ -859,17 +892,16 @@ jl_value_t *jl_new_closure_internal(jl_lambda_info_t *li, jl_value_t *env)
 {
     assert(jl_is_lambda_info(li));
     assert(jl_is_tuple(env));
-    jl_function_t *f = jl_new_closure(NULL, NULL);
-    f->linfo = li;
+    jl_function_t *f;
     if (li->fptr != NULL) {
         // function has been compiled
-        f->fptr = li->fptr;
-        f->env = env;
+        f = jl_new_closure(li->fptr, env);
     }
     else {
-        f->fptr = jl_trampoline;
+        f = jl_new_closure(jl_trampoline, NULL);
         f->env = (jl_value_t*)jl_pair((jl_value_t*)f, env);
     }
+    f->linfo = li;
     return (jl_value_t*)f;
 }
 

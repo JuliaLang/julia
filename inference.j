@@ -371,12 +371,13 @@ function abstract_eval_constant(x)
 end
 
 function abstract_eval_global(s::Symbol)
+    if !isbound(s)
+        return Undef
+    end
     if isconstant(s)
-        if !isbound(s)
-            return Any
-        end
         return abstract_eval_constant(eval(s))
     else
+        # TODO: change to Undef if there's a way to clear variables
         return Any
     end
 end

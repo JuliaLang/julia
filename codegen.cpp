@@ -766,7 +766,8 @@ static void emit_assignment(jl_value_t *l, jl_value_t *r, jl_codectx_t *ctx)
 static Value *emit_var(jl_sym_t *sym, jl_value_t *ty, jl_codectx_t *ctx)
 {
     // variable
-    if (is_global(sym, ctx)) {
+    bool isglobal = is_global(sym, ctx);
+    if (isglobal) {
         size_t i;
         // look for static parameter
         for(i=0; i < ctx->sp->length; i+=2) {
