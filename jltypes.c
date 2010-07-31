@@ -1310,10 +1310,10 @@ static jl_value_t *type_match_(jl_value_t *child, jl_value_t *parent,
                     return jl_false;
                 }
                 if (jl_subtype(child, pv, 0)) {
+                    jl_t1(p) = (jl_value_t*)child;
                     return (jl_value_t*)env;
                 }
                 else if (jl_subtype(pv, child, 0)) {
-                    jl_t1(p) = (jl_value_t*)child;
                     return (jl_value_t*)env;
                 }
                 return jl_false;
