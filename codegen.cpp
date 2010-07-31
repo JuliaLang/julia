@@ -366,6 +366,9 @@ static Value *var_binding_pointer(jl_sym_t *s, jl_codectx_t *ctx)
 
 static int is_global(jl_sym_t *s, jl_codectx_t *ctx)
 {
+    std::map<std::string,int>::iterator it = ctx->closureEnv->find(s->name);
+    if (it != ctx->closureEnv->end())
+        return false;
     return ((*ctx->vars)[s->name] == NULL);
 }
 

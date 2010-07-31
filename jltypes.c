@@ -1309,6 +1309,8 @@ static jl_value_t *type_match_(jl_value_t *child, jl_value_t *parent,
                         return (jl_value_t*)env;
                     return jl_false;
                 }
+                // TODO:
+                // (Union(A,B),Union(A,B)) probably should not match (T,T)
                 if (jl_subtype(child, pv, 0)) {
                     jl_t1(p) = (jl_value_t*)child;
                     return (jl_value_t*)env;
