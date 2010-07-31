@@ -839,73 +839,73 @@ function inlining_pass(e::Expr)
     e
 end
 
-# stuff for testing
-
-T=typevar(`T)
-S=typevar(`S)
-R=typevar(`R)
-a=typevar(`a)
-b=typevar(`b)
-c=typevar(`c)
-d=typevar(`d)
-
 function finfer(f, types)
     x = getmethods(f,types)
     typeinf(x[3], x[1], x[2], true)[1]
 end
 
-m = getmethods(fact,(Int32,))
-ast = m[3]
-
-function foo(x)
-    return x.re + x.im
-end
-
-m = getmethods(foo,(Complex{Float64},))
-ast = m[3]
-
-function bar(x)
-    if (x > 0)
-        return bar(x-1)
-    end
-    return 0
-end
-
-function qux(x)
-    if mystery()
-        a = 10
-    else
-        a = 2+b
-    end
-    b = 1
-    z = a + b
-    Range(1, 2, 10)
-end
-
-m = getmethods(qux,(Int32,))
-ast = m[3]
-
-fib(n) = n < 2 ? n : fib(n-1) + fib(n-2)
-
-function both()
-    a = 2
-    while mystery()
-        b = a+a
-        g(a)
-        a = 2.0
-        c = a+a
-        f(a)
-        f(c)
-    end
-    c
-end
-
-function und()
-    local a
-    if mystery()
-        a = other_mystery()
-    end
-    c = a
-end
-
 tfunc(f,t) = (getmethods(f,t)[3]).tfunc
+
+# stuff for testing
+
+# T=typevar(`T)
+# S=typevar(`S)
+# R=typevar(`R)
+# a=typevar(`a)
+# b=typevar(`b)
+# c=typevar(`c)
+# d=typevar(`d)
+
+# m = getmethods(fact,(Int32,))
+# ast = m[3]
+
+# function foo(x)
+#     return x.re + x.im
+# end
+
+# m = getmethods(foo,(Complex{Float64},))
+# ast = m[3]
+
+# function bar(x)
+#     if (x > 0)
+#         return bar(x-1)
+#     end
+#     return 0
+# end
+
+# function qux(x)
+#     if mystery()
+#         a = 10
+#     else
+#         a = 2+b
+#     end
+#     b = 1
+#     z = a + b
+#     Range(1, 2, 10)
+# end
+
+# m = getmethods(qux,(Int32,))
+# ast = m[3]
+
+# fib(n) = n < 2 ? n : fib(n-1) + fib(n-2)
+
+# function both()
+#     a = 2
+#     while mystery()
+#         b = a+a
+#         g(a)
+#         a = 2.0
+#         c = a+a
+#         f(a)
+#         f(c)
+#     end
+#     c
+# end
+
+# function und()
+#     local a
+#     if mystery()
+#         a = other_mystery()
+#     end
+#     c = a
+# end
