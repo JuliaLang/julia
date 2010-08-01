@@ -26,6 +26,7 @@ any(x::Scalar, y::Scalar) = x || y ? true : false
 start(a::Real) = a
 next(a::Real, i) = (a, a+1)
 done(a::Real, i) = (i > a)
+isempty(a::Real) = false
 
 clamp(x::Real, lo::Real, hi::Real) = (x > hi ? hi : (x < lo ? lo : x))
 

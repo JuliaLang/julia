@@ -384,6 +384,7 @@ end
 start(a::Array) = 1
 next(a::Array,i) = (a[i],i+1)
 done(a::Array,i) = (i > numel(a))
+isempty(a::Array) = (numel(a) < 1)
 
 # Other functions
 
