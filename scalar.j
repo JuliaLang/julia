@@ -1,6 +1,12 @@
 isscalar(x::Scalar) = true
 isscalar(x) = false
 
+isreal(x::Real) = true
+isreal(x) = false
+
+isinteger(x::Int) = true
+isinteger(x) = false
+
 size(x::Scalar) = ()
 ndims(x::Scalar) = 0
 numel(x::Scalar) = 1
@@ -42,3 +48,12 @@ coth(z) = 1 ./tanh(z)
 asech(y) = acosh(1 ./y)
 acsch(y) = asinh(1 ./y)
 acoth(y) = atanh(1 ./y)
+
+logb(b, x) = log(x)/log(b)
+
+function realsqrt(x::Real)
+    if x < 0
+        error("realsqrt: expected non-negative argument")
+    end
+    return sqrt(x)::Real
+end

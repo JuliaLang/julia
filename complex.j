@@ -27,6 +27,9 @@ function print(c::Complex)
     print("i")
 end
 
+iscomplex(x::Complex) = true
+iscomplex(x) = false
+
 re(z::Complex) = z.re
 im(z::Complex) = z.im
 

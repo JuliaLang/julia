@@ -73,8 +73,6 @@ isconstant(s::Symbol) = true
 isconstant(s::Expr) = is(s.head,`quote)
 isconstant(x) = true
 
-mintype(a, b) = subtype(a,b) ? a : b
-
 cmp_tfunc = (x,y)->Bool
 
 isType(t) = isa(t,TagKind) && is(t.name,Type.name)
@@ -123,8 +121,8 @@ t_func[typeof] =
 # involving constants: typeassert, tupleref, getfield
 # therefore they get their arguments unevaluated
 t_func[typeassert] =
-    (2, 2, (A, v, t)->(isType(t) ? mintype(v,t.parameters[1]) :
-                       isconstant(A[2]) ? mintype(v,eval(A[2])) :
+    (2, 2, (A, v, t)->(isType(t) ? tintersect(v,t.parameters[1]) :
+                       isconstant(A[2]) ? tintersect(v,eval(A[2])) :
                        Any))
 isseqtype(t) = isa(t,TagKind) && is(t.name.name,`...)
 function tupleref_tfunc(A, t, i)

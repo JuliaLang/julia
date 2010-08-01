@@ -57,10 +57,10 @@ end
 function anyfunc(args...)
     if (almost-out-of-stack)
         C = coroutine(anyfunc)
-        # if somebody yields to us, yield to C instead
-        forward_coroutine(current_coroutine(), C)
         # when C exits it will yield to us
         set_exit_coroutine(C, current_coroutine())
+        # if somebody yields to us, yield to C instead
+        forward_coroutine(current_coroutine(), C)
         return yieldto(C, args...)
     end
     ...
