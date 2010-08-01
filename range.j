@@ -30,8 +30,8 @@ start{T<:Int}(r::Range{T}) = r.start
 done{T<:Int}(r::Range{T}, i) = (r.step < 0 ? (i < r.stop) : (i > r.stop))
 next{T<:Int}(r::Range{T}, i) = (i, i+r.step)
 isempty{T<:Int}(r::Range{T}) = (r.step > 0 ?
-                                (r.start > r.stop ? true : false) :
-                                (r.start < r.stop ? true : false))
+                                r.stop < r.start :
+                                r.stop > r.start)
 
 start{T<:Int}(r::RangeFrom{T}) = r.start
 done{T<:Int}(r::RangeFrom{T}, st) = false
