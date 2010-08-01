@@ -148,6 +148,7 @@ assert(Complex(1,2) + 1//2 == Complex(3//2,2//1))
 assert(Complex(1,2) + 1//2 * 0.5 == Complex(1.25,2.0))
 assert((Complex(1,2) + 1//2) * 0.5 == Complex(0.75,1.0))
 assert((Complex(1,2)/Complex(2.5,3.0))*Complex(2.5,3.0) == Complex(1,2))
+assert(0.7 < re(sqrt(Complex(0,1))) < 0.707107)
 
 # integer parsing
 assert(digit("0"[1]) == 0)

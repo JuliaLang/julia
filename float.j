@@ -109,13 +109,13 @@ function hypot(x::Real, y::Real)
     y = abs(y)
     if x > y
         r = y/x
-        return x*sqrt(1.0+r*r)
+        return x*sqrt(1+r*r)
     end
     if y == 0
         return convert(typeof(x),0)
     end
     r = x/y
-    return y*sqrt(1.0+r*r)
+    return y*sqrt(1+r*r)
 end
 
 num2hex(x::Float32) = lpad(uint2str(boxui32(unbox32(x)),16),16,"0"[1])

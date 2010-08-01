@@ -81,10 +81,10 @@ end
 
 function sqrt(z::Complex)
     r = sqrt(0.5*(hypot(z.re,z.im)+abs(z.re)))
-    if z.re >= 0.0
+    if z.re >= 0
         return Complex(r, 0.5*z.im/r)
     end
-    return Complex(0.5*abs(z.im)/r, z.im >= 0.0 ? r : -r)
+    return Complex(0.5*abs(z.im)/r, z.im >= 0 ? r : -r)
 end
 
 cis(theta::Real) = Complex(cos(theta),sin(theta))
