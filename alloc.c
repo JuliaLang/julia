@@ -425,8 +425,7 @@ int jl_union_too_complex(jl_tuple_t *types)
                 jl_value_t *b = jl_tupleref(types, j);
                 if (jl_has_typevars(b) &&
                     (!jl_is_typevar(b) || jl_has_typevars(a))) {
-                    jl_value_t *env =
-                        jl_type_match((jl_type_t*)a, (jl_type_t*)b);
+                    jl_value_t *env = jl_type_match(a, b);
                     if (env != jl_false && env != (jl_value_t*)jl_null)
                         return 1;
                 }

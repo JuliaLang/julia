@@ -587,8 +587,8 @@ static jl_value_t *jl_type_intersect(jl_value_t *a, jl_value_t *b,
     // values are implied by the intersected supertype, or that the
     // intersected supertype cannot come from this subtype (in which case
     // our final answer is Bottom).
-    jl_value_t *env = jl_type_match((jl_type_t*)super->parameters,
-                                    (jl_type_t*)sup_params);
+    jl_value_t *env = jl_type_match((jl_value_t*)super->parameters,
+                                    (jl_value_t*)sup_params);
     if (env == jl_false)
         return (jl_value_t*)jl_bottom_type;
 
@@ -729,7 +729,7 @@ int jl_types_equal(jl_value_t *a, jl_value_t *b)
 
 static int type_le_generic(jl_value_t *a, jl_value_t *b)
 {
-    jl_value_t *env = jl_type_match((jl_type_t*)a, (jl_type_t*)b);
+    jl_value_t *env = jl_type_match(a, b);
     if (env == jl_false) return 0;
     jl_value_t *vp = env;
     jl_value_t *x;
@@ -1283,8 +1283,11 @@ jl_tuple_t *jl_pair(jl_value_t *a, jl_value_t *b)
 
 jl_tag_type_t *jl_wrap_Type(jl_value_t *t)
 {
-    return jl_new_tagtype((jl_value_t*)jl_type_type->name,
-                          jl_any_type, jl_tuple(1, t));
+    jl_value_t *env[2];
+    env[0] = jl_tparam0(jl_type_type);
+    env[1] = t;
+    return (jl_tag_type_t*)
+        jl_instantiate_type_with((jl_type_t*)jl_type_type, env, 1);
 }
 
 static jl_value_t *type_match_(jl_value_t *child, jl_value_t *parent,
@@ -1466,14 +1469,14 @@ static jl_value_t *type_match_(jl_value_t *child, jl_value_t *parent,
   returns a linked list of (typevar,type) pairs.
   used to infer static parameter values in generic method definitions.
 */
-jl_value_t *jl_type_match(jl_type_t *a, jl_type_t *b)
+jl_value_t *jl_type_match(jl_value_t *a, jl_value_t *b)
 {
-    return type_match_((jl_value_t*)a, (jl_value_t*)b, jl_null, 0);
+    return type_match_(a, b, jl_null, 0);
 }
 
-jl_value_t *jl_type_match_morespecific(jl_type_t *a, jl_type_t *b)
+jl_value_t *jl_type_match_morespecific(jl_value_t *a, jl_value_t *b)
 {
-    return type_match_((jl_value_t*)a, (jl_value_t*)b, jl_null, 1);
+    return type_match_(a, b, jl_null, 1);
 }
 
 // given a (possibly-generic) function type and some argument types,
@@ -1485,7 +1488,7 @@ jl_value_t *jl_func_type_tfunc(jl_func_type_t *ft, jl_tuple_t *argtypes)
     if (!jl_has_typevars((jl_value_t*)ft->from)) {
         return (jl_value_t*)ft->to;
     }
-    jl_value_t *env = jl_type_match((jl_type_t*)argtypes, ft->from);
+    jl_value_t *env=jl_type_match((jl_value_t*)argtypes,(jl_value_t*)ft->from);
     jl_tuple_t *te = (env == jl_false) ? jl_null : (jl_tuple_t*)env;
     te = jl_flatten_pairs(te);
     return

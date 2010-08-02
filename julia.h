@@ -140,6 +140,7 @@ typedef struct {
     jl_tuple_t *parameters;
     // hidden fields:
     size_t nbits;
+    uptrint_t unused;
     uptrint_t uid;
 } jl_bits_type_t;
 
@@ -170,7 +171,7 @@ typedef struct _jl_module_t {
 
 typedef struct _jl_methlist_t {
     // not first-class
-    jl_type_t *sig;
+    jl_tuple_t *sig;
     int has_tvars;
     jl_tuple_t *tvars;
     jl_function_t *func;
@@ -181,6 +182,8 @@ typedef struct _jl_methtable_t {
     JL_VALUE_STRUCT
     jl_methlist_t *defs;
     jl_methlist_t *cache;
+    jl_function_t **cache_1arg;
+    size_t n_1arg;
     int sealed;
     int max_args;  // max # of non-vararg arguments in a signature
 } jl_methtable_t;
@@ -369,8 +372,8 @@ int jl_tuple_subtype(jl_value_t **child, size_t cl,
                      jl_value_t **parent, size_t pl, int ta, int morespecific);
 int jl_subtype(jl_value_t *a, jl_value_t *b, int ta);
 int jl_type_morespecific(jl_value_t *a, jl_value_t *b, int ta);
-DLLEXPORT jl_value_t *jl_type_match(jl_type_t *a, jl_type_t *b);
-jl_value_t *jl_type_match_morespecific(jl_type_t *a, jl_type_t *b);
+DLLEXPORT jl_value_t *jl_type_match(jl_value_t *a, jl_value_t *b);
+jl_value_t *jl_type_match_morespecific(jl_value_t *a, jl_value_t *b);
 DLLEXPORT int jl_types_equal(jl_value_t *a, jl_value_t *b);
 int jl_types_equal_generic(jl_value_t *a, jl_value_t *b);
 jl_value_t *jl_type_union(jl_tuple_t *types);

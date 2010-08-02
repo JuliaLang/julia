@@ -708,9 +708,9 @@ static void print_float64(double d, int single)
     if (!DFINITE(d)) {
         char *rep;
         if (isnan(d))
-            rep = sign_bit(d) ? "-NaN" : "+NaN";
+            rep = sign_bit(d) ? "-NaN" : " NaN";
         else
-            rep = sign_bit(d) ? "-Inf" : "+Inf";
+            rep = sign_bit(d) ? "-Inf" : " Inf";
         if (single)
             ios_printf(s, "float32(%s)", rep);
         else

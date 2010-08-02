@@ -286,7 +286,17 @@ function abstract_call(f, fargs, argtypes, vtypes, sv::StaticVarInfo, e)
                 e.head = `call
             end
         end
+        ctr = 0
         while !is(x,())
+            ctr += 1
+            # don't consider more than 3 methods. this trades off between
+            # compiler performance and generated code performance.
+            # typically, considering many methods means spending lots of time
+            # obtaining poor type information.
+            if ctr > 3
+                rettype = Any
+                break
+            end
             #print(x,"\n")
             if isa(x[3],Symbol)
                 # when there is a builtin method in this GF, we get
