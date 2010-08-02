@@ -18,6 +18,9 @@ for f = {`sin, `cos, `tan, `sinh, `cosh, `tanh, `asin, `acos, `atan, `log,
     end)
 end
 
+ipart(x) = trunc(x)
+fpart(x) = x - trunc(x)
+
 for f = {`isinf, `isnan}
     eval(`begin
         ($f)(x::Float64) = (0 != ccall(dlsym(libm,$string(f)), Int32, (Float64,), x))

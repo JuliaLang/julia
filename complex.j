@@ -32,8 +32,11 @@ iscomplex(x) = false
 
 re(z::Complex) = z.re
 im(z::Complex) = z.im
+re(x::Real) = x
+im(x::Real) = convert(typeof(x), 0)
 
 conj(z::Complex) = Complex(z.re,-z.im)
+conj(x::Real) = x
 norm(z::Complex) = z.re*z.re + z.im*z.im
 abs(z::Complex) = hypot(z.re, z.im)
 inv(z::Complex) = conj(z)/norm(z)

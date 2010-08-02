@@ -4,6 +4,7 @@
 #include <stdio.h>
 #include "dtypes.h"
 #include "ieee754.h"
+#include "utils.h"
 
 int double_exponent(double d)
 {

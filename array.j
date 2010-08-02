@@ -129,6 +129,21 @@ colon(start::Real, stop::Real, stride::Real) =
 (<)(x::Matrix, y::Matrix) = [ x[i,j] < y[i,j] | i=1:size(x,1), j=1:size(x,2) ]
 (==)(x::Matrix, y::Matrix) = [ x[i,j] == y[i,j] | i=1:size(x,1), j=1:size(x,2) ]
 
+conj{T <: Real}(x::Vector{T}) = x
+conj{T <: Real}(x::Matrix{T}) = x
+conj(x::Vector) = [ conj(x[i]) | i=1:length(x) ]
+conj(x::Matrix) = [ conj(x[i,j]) | i=1:size(x,1), j=1:size(x,2) ]
+
+re{T <: Real}(x::Vector{T}) = x
+re{T <: Real}(x::Matrix{T}) = x
+re(x::Vector) = [ re(x[i]) | i=1:length(x) ]
+re(x::Matrix) = [ re(x[i,j]) | i=1:size(x,1), j=1:size(x,2) ]
+
+im{T <: Real}(x::Array{T,1}) = zeros(T, length(x))
+im{T <: Real}(x::Array{T,2}) = zeros(T, size(x))
+im(x::Vector) = [ im(x[i]) | i=1:length(x) ]
+im(x::Matrix) = [ im(x[i,j]) | i=1:size(x,1), j=1:size(x,2) ]
+
 (>) {T,S,n}(x::Tensor{T,n}, y::Tensor{S,n}) = (y < x)
 (>)        (x::Real  ,      y::Tensor)      = (y < x)
 (>)        (x::Tensor,      y::Real  )      = (y < x)

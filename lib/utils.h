@@ -7,10 +7,10 @@ void bswap_to(byte_t *dest, byte_t *src, size_t n);
 void bswap_buffer(byte_t *data, size_t sz, size_t npts);
 /* ------------------------------------------------------------- */
 
-int double_exponent(double d);
-double double_mantissa(double d);
-int float_exponent(float f);
-float float_mantissa(float f);
+DLLEXPORT int double_exponent(double d);
+DLLEXPORT double double_mantissa(double d);
+DLLEXPORT int float_exponent(float f);
+DLLEXPORT float float_mantissa(float f);
 void snprint_real(char *s, size_t cnt, double r,
                   int width,    // printf field width, or 0
                   int dec,      // # decimal digits desired, recommend 16

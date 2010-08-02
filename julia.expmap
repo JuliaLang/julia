@@ -8,6 +8,10 @@
     randn;
     clock_now;
     uint2str;
+    double_exponent;
+    double_mantissa;
+    float_exponent;
+    float_mantissa;
     bitvector_new;
     bitvector_resize;
     bitvector_set;
