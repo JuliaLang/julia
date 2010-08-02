@@ -7,6 +7,9 @@ isreal(x) = false
 isinteger(x::Int) = true
 isinteger(x) = false
 
+integer_valued(x::Int) = true
+real_valued(x::Real) = true
+
 size(x::Scalar) = ()
 ndims(x::Scalar) = 0
 numel(x::Scalar) = 1

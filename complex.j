@@ -30,6 +30,9 @@ end
 iscomplex(x::Complex) = true
 iscomplex(x) = false
 
+real_valued(z::Complex) = (z.im == 0)
+integer_valued(z::Complex) = (real_valued(z) && integer_valued(z.re))
+
 re(z::Complex) = z.re
 im(z::Complex) = z.im
 re(x::Real) = x

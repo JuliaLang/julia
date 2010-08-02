@@ -108,6 +108,9 @@ mantissa(x::Float64) = ccall(dlsym(JuliaDLHandle,"double_mantissa"),
 mantissa(x::Float32) = ccall(dlsym(JuliaDLHandle,"float_mantissa"),
                              Float32, (Float32,), x)
 
+integer_valued(x::Float64) = (trunc(x)==x && abs(x)<=9007199254740992.)
+integer_valued(x::Float32) = (trunc(x)==x && abs(x)<=float32(16777216.))
+
 sqrt(x::Float64) = boxf64(sqrt_float(unbox64(x)))
 sqrt(x::Float32) = boxf32(sqrt_float(unbox32(x)))
 sin(x::Float64) = boxf64(sin_float(unbox64(x)))
