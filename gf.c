@@ -834,6 +834,10 @@ static jl_tuple_t *ml_matches(jl_methlist_t *ml, jl_value_t *type,
                                             name, t);
             if (matc != NULL) {
                 t = matc;
+                // (type ∩ ml->sig == type) ⇒ (type ⊆ ml->sig)
+                if (jl_types_equal(jl_t0(matc), type))
+                    return t;
+                /*
                 if (ml->has_tvars) {
                     if (jl_type_match((jl_type_t*)type, ml->sig) != jl_false)
                         return t;
@@ -842,6 +846,7 @@ static jl_tuple_t *ml_matches(jl_methlist_t *ml, jl_value_t *type,
                     if (jl_subtype(type, (jl_value_t*)ml->sig, 0))
                         return t;
                 }
+                */
             }
         }
         ml = ml->next;

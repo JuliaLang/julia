@@ -230,7 +230,8 @@ void jl_load(const char *fname)
 	jl_errorf("could not open file %s", fpath);
 
     jl_array_t *b = ((jl_expr_t*)ast)->args;
-    size_t i, lineno=0;
+    size_t i;
+    volatile size_t lineno=0;
     jmp_buf *prevh = CurrentExceptionHandler;
     jmp_buf handler;
     CurrentExceptionHandler = &handler;

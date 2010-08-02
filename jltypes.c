@@ -1311,17 +1311,14 @@ static jl_value_t *type_match_(jl_value_t *child, jl_value_t *parent,
                 }
                 if (morespecific) {
                     if (jl_subtype(child, pv, 0)) {
-                        jl_t1(p) = (jl_value_t*)child;
                         return (jl_value_t*)env;
                     }
                     else if (jl_subtype(pv, child, 0)) {
+                        jl_t1(p) = (jl_value_t*)child;
                         return (jl_value_t*)env;
                     }
                 }
                 else {
-                    // (Union(A,B),Union(A,B)) should not match (T,T)
-                    if (jl_is_union_type(child) || jl_is_union_type(pv))
-                        return jl_false;
                     if (jl_types_equal(child, pv))
                         return (jl_value_t*)env;
                 }
