@@ -17,7 +17,7 @@ promote_rule{T,S}(::Type{Complex{T}}, ::Type{Complex{S}}) = Complex{promote_type
 function print(c::Complex)
     print(re(c))
     i = im(c)
-    if sign(i) == -1
+    if signbit(i) == -1
         i = -i
         print(" - ")
     else

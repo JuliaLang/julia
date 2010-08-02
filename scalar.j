@@ -14,7 +14,6 @@ length(x::Scalar) = 1
 
 sign(x::Real) = (x < 0 ? -1 : (x > 0 ? +1 : 0))
 signbit(x::Real) = (x < 0 ? -1 : +1)
-signbit(x::Float) = (x < 0 ? -1 : (x > 0 ? 1 : (1.0/x < 0 ? -1 : +1)))
 
 abs(x::Real) = (x < 0 ? -x : x)
 

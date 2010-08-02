@@ -95,6 +95,10 @@ NaN = -(0/0)
 
 ## floating point functions ##
 
+signbit(x::Float) = (x < 0 ? -1 : (x > 0 ? 1 : (1.0/x < 0 ? -1 : +1)))
+signbit(x::Float64) = (boxsi64(unbox64(x)) < int64(0) ? -1 : +1)
+signbit(x::Float32) = (boxsi32(unbox32(x)) < int32(0) ? -1 : +1)
+
 sqrt(x::Float64) = boxf64(sqrt_float(unbox64(x)))
 sqrt(x::Float32) = boxf32(sqrt_float(unbox32(x)))
 sin(x::Float64) = boxf64(sin_float(unbox64(x)))
