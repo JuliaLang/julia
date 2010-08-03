@@ -244,8 +244,6 @@
 
 (define *anonymous-generic-function-name* (gensym))
 
-(define dotdotdotpattern (pattern-lambda (... a) `(curly ... ,a)))
-
 ; patterns that introduce lambdas
 (define binding-form-patterns
   (pattern-set
@@ -383,12 +381,17 @@
 		     `(call apply ,f ,@(tuple-wrap argl '()))))
 
    ; tuple syntax (a, b...)
-   ; note, inside tuple ... means sequence type
+   ; note, directly inside tuple ... means sequence type
    (pattern-lambda (tuple . args)
-		   (pattern-expand (list dotdotdotpattern)
-				   `(call (top tuple) ,@args)))
+		   `(call (top tuple)
+			  ,@(map (lambda (x)
+				   (if (and (length= x 2)
+					    (eq? (car x) '...))
+				       `(curly ... ,(cadr x))
+				       x))
+				 args)))
 
-   dotdotdotpattern
+   (pattern-lambda (... a) `(curly ... ,a))
 
    ; local x,y,z => local x;local y;local z
    (pattern-lambda (local (tuple . vars))
