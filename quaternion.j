@@ -9,7 +9,7 @@ convert{T}(::Type{Quaternion{T}}, x::Real) =
     Quaternion(convert(T,x), convert(T,0), convert(T,0), convert(T,0))
 
 convert{T}(::Type{Quaternion{T}}, z::Complex) =
-    Quaternion(convert(T,re(z)), convert(T,im(z)), convert(T,0), convert(T,0))
+    Quaternion(convert(T,real(z)), convert(T,imag(z)), convert(T,0), convert(T,0))
 
 convert{T}(::Type{Quaternion{T}}, z::Quaternion) =
     Quaternion(convert(T,z.q0), convert(T,z.q1),
@@ -51,8 +51,8 @@ function print(z::Quaternion)
     print("k")
 end
 
-re(z::Quaternion) = z.q0
-im(z::Quaternion) = z.q1
+real(z::Quaternion) = z.q0
+imag(z::Quaternion) = z.q1
 
 scalar(z::Quaternion) = z.q0
 vector(z::Quaternion) = vector(z.q1,z.q2,z.q3)

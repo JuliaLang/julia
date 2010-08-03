@@ -15,8 +15,8 @@ promote_rule{T,S}(::Type{Complex{T}}, ::Type{Real{S}}) = Complex{promote_type(T,
 promote_rule{T,S}(::Type{Complex{T}}, ::Type{Complex{S}}) = Complex{promote_type(T,S)}
 
 function print(c::Complex)
-    print(re(c))
-    i = im(c)
+    print(real(c))
+    i = imag(c)
     if signbit(i) == -1
         i = -i
         print(" - ")
@@ -33,10 +33,10 @@ iscomplex(x) = false
 real_valued(z::Complex) = (z.im == 0)
 integer_valued(z::Complex) = (real_valued(z) && integer_valued(z.re))
 
-re(z::Complex) = z.re
-im(z::Complex) = z.im
-re(x::Real) = x
-im(x::Real) = convert(typeof(x), 0)
+real(z::Complex) = z.re
+imag(z::Complex) = z.im
+real(x::Real) = x
+imag(x::Real) = convert(typeof(x), 0)
 
 conj(z::Complex) = Complex(z.re,-z.im)
 conj(x::Real) = x
