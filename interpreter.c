@@ -106,6 +106,9 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl)
     else if (ex->head == null_sym) {
         return (jl_value_t*)jl_null;
     }
+    else if (ex->head == static_typeof_sym) {
+        return (jl_value_t*)jl_any_type;
+    }
     jl_error("not supported");
     return (jl_value_t*)jl_null;
 }

@@ -269,20 +269,18 @@ extern jl_sym_t *call1_sym;
 extern jl_sym_t *dots_sym;
 extern jl_sym_t *dollar_sym;
 extern jl_sym_t *quote_sym;
-extern jl_sym_t *tuple_sym;
 extern jl_sym_t *top_sym;
-extern jl_sym_t *expr_sym;
 extern jl_sym_t *line_sym;
 extern jl_sym_t *continue_sym;
 extern jl_sym_t *goto_sym;    extern jl_sym_t *goto_ifnot_sym;
 extern jl_sym_t *label_sym;   extern jl_sym_t *return_sym;
 extern jl_sym_t *lambda_sym;  extern jl_sym_t *assign_sym;
 extern jl_sym_t *null_sym;    extern jl_sym_t *body_sym;
-extern jl_sym_t *unbound_sym; extern jl_sym_t *boxunbound_sym;
+extern jl_sym_t *unbound_sym;
 extern jl_sym_t *locals_sym;  extern jl_sym_t *colons_sym;
-extern jl_sym_t *closure_ref_sym;
 extern jl_sym_t *symbol_sym;
 extern jl_sym_t *Any_sym;
+extern jl_sym_t *static_typeof_sym;
 
 #ifdef BITS64
 #define NWORDS(sz) (((sz)+7)>>3)

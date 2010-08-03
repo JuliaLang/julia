@@ -1,5 +1,5 @@
-#ifndef __JCSOCKET_H_
-#define __JCSOCKET_H_
+#ifndef __LLTSOCKET_H_
+#define __LLTSOCKET_H_
 
 #ifdef WIN32
 #include <winsock2.h>

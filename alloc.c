@@ -45,19 +45,18 @@ jl_bits_type_t *jl_pointer_uint8_type;
 jl_sym_t *call_sym;    jl_sym_t *dots_sym;
 jl_sym_t *call1_sym;
 jl_sym_t *dollar_sym;  jl_sym_t *quote_sym;
-jl_sym_t *tuple_sym;   jl_sym_t *top_sym;
-jl_sym_t *expr_sym;
+jl_sym_t *top_sym;
 jl_sym_t *line_sym;    jl_sym_t *continue_sym;
 // head symbols for each expression type
 jl_sym_t *goto_sym;    jl_sym_t *goto_ifnot_sym;
 jl_sym_t *label_sym;   jl_sym_t *return_sym;
 jl_sym_t *lambda_sym;  jl_sym_t *assign_sym;
 jl_sym_t *null_sym;    jl_sym_t *body_sym;
-jl_sym_t *unbound_sym; jl_sym_t *boxunbound_sym;
+jl_sym_t *unbound_sym;
 jl_sym_t *locals_sym;  jl_sym_t *colons_sym;
-jl_sym_t *closure_ref_sym;
 jl_sym_t *symbol_sym;
 jl_sym_t *Any_sym;
+jl_sym_t *static_typeof_sym;
 
 // NOTE: does not work for TagKind or its subtypes
 jl_value_t *jl_new_struct(jl_struct_type_t *type, ...)
@@ -851,8 +850,6 @@ void jl_init_builtin_types()
     quote_sym = jl_symbol("quote");
     top_sym = jl_symbol("top");
     dots_sym = jl_symbol("...");
-    expr_sym = jl_symbol("expr");
-    tuple_sym = jl_symbol("tuple");
     dollar_sym = jl_symbol("$");
     line_sym = jl_symbol("line");
     continue_sym = jl_symbol("continue");
@@ -864,11 +861,10 @@ void jl_init_builtin_types()
     assign_sym = jl_symbol("=");
     null_sym = jl_symbol("null");
     unbound_sym = jl_symbol("unbound");
-    boxunbound_sym = jl_symbol("box-unbound");
-    closure_ref_sym = jl_symbol("closure-ref");
     symbol_sym = jl_symbol("symbol");
     body_sym = jl_symbol("body");
     locals_sym = jl_symbol("locals");
     colons_sym = jl_symbol("::");
     Any_sym = jl_symbol("Any");
+    static_typeof_sym = jl_symbol("static_typeof");
 }

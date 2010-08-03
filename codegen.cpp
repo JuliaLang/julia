@@ -900,6 +900,16 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool value)
     else if (ex->head == null_sym) {
         return literal_pointer_val((jl_value_t*)jl_null);
     }
+    else if (ex->head == static_typeof_sym) {
+        jl_sym_t *s = (jl_sym_t*)args[0];
+        if (jl_is_symbol(s)) {
+            jl_value_t *ty = (*ctx->declTypes)[s->name];
+            if (ty != NULL) {
+                return literal_pointer_val(ty);
+            }
+        }
+        return literal_pointer_val((jl_value_t*)jl_any_type);
+    }
     if (!strcmp(ex->head->name, "$")) {
         jl_error("syntax error: prefix $ outside backquote");
     }

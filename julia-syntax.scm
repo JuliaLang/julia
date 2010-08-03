@@ -244,8 +244,6 @@
 
 (define *anonymous-generic-function-name* (gensym))
 
-(define dotdotdotpattern (pattern-lambda (... a) `(curly ... ,a)))
-
 ; patterns that introduce lambdas
 (define binding-form-patterns
   (pattern-set
@@ -383,12 +381,17 @@
 		     `(call apply ,f ,@(tuple-wrap argl '()))))
 
    ; tuple syntax (a, b...)
-   ; note, inside tuple ... means sequence type
+   ; note, directly inside tuple ... means sequence type
    (pattern-lambda (tuple . args)
-		   (pattern-expand (list dotdotdotpattern)
-				   `(call (top tuple) ,@args)))
+		   `(call (top tuple)
+			  ,@(map (lambda (x)
+				   (if (and (length= x 2)
+					    (eq? (car x) '...))
+				       `(curly ... ,(cadr x))
+				       x))
+				 args)))
 
-   dotdotdotpattern
+   (pattern-lambda (... a) `(curly ... ,a))
 
    ; local x,y,z => local x;local y;local z
    (pattern-lambda (local (tuple . vars))
@@ -546,56 +549,112 @@
 
 ;; Comprehensions
 
+(define (lower-nd-comprehension expr ranges)
+  (let ((result    (gensym))
+	(ri        (gensym))
+	(oneresult (gensym)))
+    ;; evaluate one expression to figure out type and size
+    ;; compute just one value by inserting a break inside loops
+    (define (evaluate-one ranges)
+      (if (null? ranges)
+	  `(= ,oneresult ,expr)
+	  (if (eq? (car ranges) `:)
+	      (evaluate-one (cdr ranges))
+	      `(for ,(car ranges)
+		    (block ,(evaluate-one (cdr ranges))
+			   (break)) ))))
+
+    ;; compute the dimensions of the result
+    (define (compute-dims ranges oneresult-dim)
+      (if (null? ranges)
+	  (list)
+	  (if (eq? (car ranges) `:)
+	      (cons `(call size ,oneresult ,oneresult-dim)
+		    (compute-dims (cdr ranges) (+ oneresult-dim 1)))
+	      (cons `(call length ,(caddr (car ranges)))
+		    (compute-dims (cdr ranges) oneresult-dim)) )))
+
+    ;; construct loops to cycle over all dimensions of an n-d comprehension
+    (define (construct-loops ranges iters oneresult-dim)
+      (if (null? ranges)
+	  (if (null? iters)
+	      `(block (call assign ,result ,expr ,ri)
+		      (+= ,ri 1))
+	      `(block (call assign ,result (ref ,expr ,@(reverse iters)) ,ri)
+		      (+= ,ri 1)) )
+	  (if (eq? (car ranges) `:)
+	      (let ((i (gensym)))
+		`(for (= ,i (: 1 (call size ,oneresult ,oneresult-dim)))
+		      ,(construct-loops (cdr ranges) (cons i iters) (+ oneresult-dim 1)) ))
+	      `(for ,(car ranges)
+		    ,(construct-loops (cdr ranges) iters oneresult-dim) ))))
+
+    ;; Evaluate the comprehension
+    `(scope-block
+      (block 
+       (= ,oneresult (tuple))
+       ,(evaluate-one ranges)
+       (= ,result (call jl_comprehension_zeros ,oneresult ,@(compute-dims ranges 1) ))
+       (= ,ri 1)
+       ,(construct-loops (reverse ranges) (list) 1)
+       ,result ))))
+
 (define lower-comprehensions
   (pattern-set
 
    (pattern-lambda
     (comprehension expr . ranges)
-    (let ( (result (gensym)) (ri (gensym)) (oneresult (gensym)) )
+    (if (any (lambda (x) (eq? x ':)) ranges)
+	(lower-nd-comprehension expr ranges)
+    (let ((result    (gensym))
+	  (ri        (gensym))
+	  (oneresult (gensym))
+	  (rv        (map (lambda (x) (gensym)) ranges)))
+
+      ;; get the first value in a range
+      (define (first-val range)
+	`(call (top ref)
+	       (call (top next) ,range (call (top start) ,range)) 1))
 
       ;; evaluate one expression to figure out type and size
       ;; compute just one value by inserting a break inside loops
       (define (evaluate-one ranges)
-        (if (null? ranges)
-	    `(= ,oneresult ,expr)
-	    (if (eq? (car ranges) `:)
-		(evaluate-one (cdr ranges))
-		`(for ,(car ranges)
-		      (block ,(evaluate-one (cdr ranges))
-			     (break)) ))))
+	`(block
+	  ,@(map (lambda (r)
+		   ;; r is (= var range)
+		   `(= ,(cadr r) ,(first-val (caddr r))))
+		 ranges)
+	  (= ,oneresult ,expr)
+	  ,oneresult))
 
       ;; compute the dimensions of the result
-      (define (compute-dims ranges oneresult-dim)
-	(if (null? ranges)
-	    (list)
-	    (if (eq? (car ranges) `:)
-		(cons `(call size ,oneresult ,oneresult-dim) (compute-dims (cdr ranges) (+ oneresult-dim 1)))
-		(cons `(call length ,(car ranges)) (compute-dims (cdr ranges) oneresult-dim)) )))
+      (define (compute-dims ranges)
+	(map (lambda (r) `(call length ,(caddr r)))
+	     ranges))
 
       ;; construct loops to cycle over all dimensions of an n-d comprehension
-      (define (construct-loops ranges iters oneresult-dim)
+      (define (construct-loops ranges)
         (if (null? ranges)
-	    (if (null? iters)
-		`(block (call assign ,result ,expr ,ri)
-			(+= ,ri 1))
-		`(block (call assign ,result (ref ,expr ,@(reverse iters)) ,ri)
-			(+= ,ri 1)) )
-	    (if (eq? (car ranges) `:)
-		(let ((i (gensym)))
-		  `(for (= ,i (: 1 (call size ,oneresult ,oneresult-dim)))
-			,(construct-loops (cdr ranges) (cons i iters) (+ oneresult-dim 1)) ))
-		`(for ,(car ranges)
-		      ,(construct-loops (cdr ranges) iters oneresult-dim) ))))
+	    `(block (call assign ,result ,expr ,ri)
+		    (+= ,ri 1))
+	    `(for ,(car ranges)
+		  ,(construct-loops (cdr ranges)))))
 
       ;; Evaluate the comprehension
-      `(scope-block
-	(block 
-	 (= ,oneresult (tuple))
-	 ,(evaluate-one ranges)
-	 (= ,result (call jl_comprehension_zeros ,oneresult ,@(compute-dims ranges 1) ))
-	 (= ,ri 1)
-	 ,(construct-loops (reverse ranges) (list) 1)
-	 ,result ))))
+      (let ((ranges2
+	     (map (lambda (r v) `(= ,(cadr r) ,v)) ranges rv)))
+	`(scope-block
+	  (block
+	   (local ,oneresult)
+	   ,@(map (lambda (v r) `(= ,v ,(caddr r))) rv ranges)
+	   ;; the evaluate-one code is used by type inference but does not run
+	   (if false ,(evaluate-one ranges2))
+	   (= ,result (call (top Array)
+			    (static_typeof ,oneresult)
+			    ,@(compute-dims ranges2)))
+	   (= ,ri 1)
+	   ,(construct-loops (reverse ranges2))
+	   ,result))))))
 
    ;; cell array comprehensions
    (pattern-lambda
