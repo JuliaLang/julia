@@ -190,8 +190,7 @@ static jl_function_t *jl_method_table_assoc_exact(jl_methtable_t *mt,
         jl_value_t *ty = (jl_value_t*)jl_typeof(args[0]);
         if (jl_is_struct_type(ty) || jl_is_bits_type(ty)) {
             uptrint_t uid = ((jl_struct_type_t*)ty)->uid;
-            assert(uid > 0);
-            if (uid < mt->n_1arg) {
+            if (uid > 0 && uid < mt->n_1arg) {
                 jl_function_t *m = mt->cache_1arg[uid];
                 if (m)
                     return m;
@@ -345,7 +344,34 @@ static jl_function_t *cache_method(jl_methtable_t *mt, jl_tuple_t *type,
         for(i=0; i < mt->max_args; i++) {
             jl_tupleset(limited, i, jl_tupleref(type, i));
         }
-        jl_tupleset(limited, i, jl_tupleref(decl,decl->length-1));
+        jl_value_t *lasttype = jl_tupleref(type,i);
+        // if all subsequent arguments are subtypes of lasttype, specialize
+        // on that instead of decl. for example, if decl is
+        // (Any...)
+        // and type is
+        // (Symbol, Symbol, Symbol)
+        // then specialize as (Symbol...), but if type is
+        // (Symbol, Int32, Expr)
+        // then specialize as (Any...)
+        size_t j = i+1;
+        int all_are_subtypes=1;
+        for(; j < type->length; j++) {
+            if (!jl_subtype(jl_tupleref(type,j), lasttype, 0)) {
+                all_are_subtypes = 0;
+                break;
+            }
+        }
+        if (all_are_subtypes) {
+            // avoid Type{Type{...}...}...
+            if (jl_is_tag_type(lasttype) &&
+                ((jl_tag_type_t*)lasttype)->name == jl_type_type->name)
+                lasttype = (jl_value_t*)jl_type_type;
+            jl_tupleset(limited, i, jl_apply_type((jl_value_t*)jl_seq_type,
+                                                  jl_tuple(1,lasttype)));
+        }
+        else {
+            jl_tupleset(limited, i, jl_tupleref(decl,decl->length-1));
+        }
         type = limited;
     }
 
