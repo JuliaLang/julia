@@ -208,9 +208,9 @@ jl_tuple_t *jl_compute_type_union(jl_tuple_t *types)
             if (j != i && temp[i] && temp[j]) {
                 if (temp[i] == temp[j] ||
                     jl_types_equal(temp[i], temp[j]) ||
-                    (jl_subtype(temp[i], temp[j], 0) &&
+                    (jl_subtype(temp[i], temp[j], 0) /*&&
                      (temp[i] == (jl_value_t*)jl_bottom_type ||
-                      !jl_has_typevars(temp[j])))) {
+                     !jl_has_typevars(temp[j]))*/)) {
                     temp[i] = NULL;
                     ndel++;
                 }
@@ -1302,10 +1302,10 @@ static jl_value_t *type_match_(jl_value_t *child, jl_value_t *parent,
         // make sure type is within this typevar's bounds
         if (!jl_subtype_le(child, parent, 0, 0))
             return jl_false;
+        if (!((jl_tvar_t*)parent)->bound) return (jl_value_t*)env;
         jl_tuple_t *p = env;
         while (p != jl_null) {
             if (jl_t0(p) == (jl_value_t*)parent) {
-                if (!((jl_tvar_t*)parent)->bound) return (jl_value_t*)env;
                 jl_value_t *pv = jl_t1(p);
                 if (jl_is_typevar(pv) && jl_is_typevar(child)) {
                     if (pv == (jl_value_t*)child)
