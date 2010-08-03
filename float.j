@@ -111,6 +111,10 @@ mantissa(x::Float32) = ccall(dlsym(JuliaDLHandle,"float_mantissa"),
 integer_valued(x::Float64) = (trunc(x)==x && abs(x)<=9007199254740992.)
 integer_valued(x::Float32) = (trunc(x)==x && abs(x)<=float32(16777216.))
 
+pi(x) = 3.14159265358979323846
+pi(::Union(Float64, Type{Float64})) = 3.14159265358979323846
+pi(::Union(Float32, Type{Float32})) = float32(3.14159265358979323846)
+
 sqrt(x::Float64) = boxf64(sqrt_float(unbox64(x)))
 sqrt(x::Float32) = boxf32(sqrt_float(unbox32(x)))
 sin(x::Float64) = boxf64(sin_float(unbox64(x)))

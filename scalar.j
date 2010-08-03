@@ -10,6 +10,12 @@ isinteger(x) = false
 integer_valued(x::Int) = true
 real_valued(x::Real) = true
 
+oftype{T}(x::T,c) = convert(T,c)
+oftype{T}(x::Type{T},c) = convert(T,c)
+
+zero(x) = oftype(x, 0)
+one(x)  = oftype(x, 1)
+
 size(x::Scalar) = ()
 ndims(x::Scalar) = 0
 numel(x::Scalar) = 1
@@ -50,6 +56,9 @@ coth(z) = 1 ./tanh(z)
 asech(y) = acosh(1 ./y)
 acsch(y) = asinh(1 ./y)
 acoth(y) = atanh(1 ./y)
+
+sinc(x) = x==0 ? one(x)  : (pix = pi(x)*x; sin(pix)/pix)
+cosc(x) = x==0 ? zero(x) : (pix = pi(x)*x; cos(pix)/x - sin(pix)/(pix*x))
 
 logb(b, x) = log(x)/log(b)
 
