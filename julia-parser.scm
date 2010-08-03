@@ -540,6 +540,8 @@ TODO:
 ; . expressions after a ; are enclosed in (parameters ...)
 ; . an expression followed by ... becomes (... x)
 (define (parse-arglist s closer)
+  (with-normal-ops (parse-arglist- s closer)))
+(define (parse-arglist- s closer)
   (let loop ((lst '()))
     (let ((t (require-token s)))
       (if (equal? t closer)
@@ -692,8 +694,7 @@ TODO:
 		       (if (eqv? (peek-token s) #\,)
 			   (take-token s))
 		       `(cell ,@(cons first
-				      (with-normal-ops
-				       (parse-arglist s #\})))))))))
+				      (parse-arglist s #\}))))))))
 
 	  ((eqv? t #\[ )
 	   (take-token s)
