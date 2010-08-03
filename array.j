@@ -201,7 +201,7 @@ mean(V::Vector) = sum(V) / length(V)
 std(V::Vector) = (m = mean(V);
                   sqrt( sum([ (V[i] - m)^2 | i=1:length(V) ]) / (length(V)-1) ))
 
-## blas.j definse these for floats
+## blas.j defines these for floats
 ## This should be commented out for supporting the int cases
 #(*)(A::Matrix, B::Vector) = [ dot(A[i,:],B) | i=1:size(A,1) ]
 #(*)(A::Matrix, B::Matrix) = [ dot(A[i,:],B[:,j]) | i=1:size(A,1), j=1:size(B,2) ]
@@ -360,8 +360,8 @@ end
 
 # Concatenation
 hcat() = Array(Bottom,0)
-hcat{T}(X::Scalar{T}...) = [ X[i] | i=1:length(X) ]
-vcat{T}(X::Scalar{T}...) = [ X[i] | i=1:length(X) ]
+hcat{T <: Scalar}(X::T...) = [ X[i] | i=1:length(X) ]
+vcat{T <: Scalar}(X::T...) = [ X[i] | i=1:length(X) ]
 
 hcat{T}(V::Vector{T}...) = [ V[j][i] | i=1:length(V[1]), j=1:length(V) ]
 vcat{T}(V::Vector{T}...) = [ V[i][j] | i=1:length(V), j=1:length(V[1]) ]

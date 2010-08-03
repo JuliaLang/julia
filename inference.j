@@ -79,6 +79,14 @@ isType(t) = isa(t,TagKind) && is(t.name,Type.name)
 
 t_func = idtable()
 t_func[tuple] = (0, Inf, (args...)->args)
+t_func[instantiate_type] =
+    (1, Inf, (args...)->(all(map(isType,args)) ?
+                         Type{instantiate_type(args[1].parameters[1],
+                                               map(t->t.parameters[1],
+                                                   args[2:])...)} :
+                         isType(args[1]) ?
+                         args[1] :
+                         Any))
 t_func[error] = (1, 1, x->Bottom)
 t_func[boxsi8] = (1, 1, x->Int8)
 t_func[boxui8] = (1, 1, x->Uint8)
@@ -113,7 +121,11 @@ t_func[Array] =
                            Array{et,nd}))
 t_func[identity] = (1, 1, identity)
 t_func[`convert] =
-    (2, 2, (t,x)->(isType(t) ? t.parameters[1] : Any))
+    (2, 2, (t,x)->(if isa(t,Tuple) && all(map(isType,t))
+                       t = Type{map(t->t.parameters[1],t)}
+                   end;
+                   isType(t) ? tintersect(t.parameters[1],x) :
+                   Any))
 t_func[typeof] =
     (1, 1, t->(isType(t)      ? Type{typeof(t.parameters[1])} :
                isa(t,TagKind) ? Type{t} :
@@ -182,7 +194,7 @@ function getfield_tfunc(A, s, name)
 end
 t_func[getfield] = (2, 2, getfield_tfunc)
 
-# other: apply, setfield, instantiate_type
+# other: apply, setfield
 
 # Scalar{T} => T
 normalize_numeric_type(t) = t
@@ -349,20 +361,28 @@ end
 
 function abstract_eval_expr(e, vtypes, sv::StaticVarInfo)
     # handle:
-    # call  lambda  quote  null  top  unbound  box-unbound
-    # closure-ref
-    if is(e.head,`unbound) || is(e.head,symbol("box-unbound"))
+    # call  lambda  quote  null  top  unbound static_typeof
+    if is(e.head,`call) || is(e.head,`call1)
+        return abstract_eval_call(e, vtypes, sv)
+    elseif is(e.head,`top)
+        return abstract_eval_global(e.args[1])
+    elseif is(e.head,`unbound)
         return Bool
     elseif is(e.head,`null)
         return ()
     elseif is(e.head,`quote)
         return typeof(e.args[1])
-    elseif is(e.head,`top)
-        return abstract_eval_global(e.args[1])
-    elseif is(e.head,symbol("closure-ref"))
-        return Any
-    elseif is(e.head,`call) || is(e.head,`call1)
-        return abstract_eval_call(e, vtypes, sv)
+    elseif is(e.head,`static_typeof)
+        t = abstract_eval(e.args[1], vtypes, sv)
+        if isa(t,UnionKind)
+            for tt = t.types
+                if !is(tt,Undef)
+                    t = tt
+                    break
+                end
+            end
+        end
+        return Type{t}
     end
 end
 
@@ -646,7 +666,7 @@ end
 
 function eval_annotate(e::Expr, vtypes, sv, decls)
     if is(e.head,`quote) || is(e.head,`top) || is(e.head,`goto) ||
-        is(e.head,`label)
+        is(e.head,`label) || is(e.head,`static_typeof)
         return e
     elseif is(e.head,`gotoifnot) || is(e.head,symbol("return"))
         e.type = Any

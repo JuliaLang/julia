@@ -66,5 +66,5 @@ function promote{T,S}(x::T, y::S, zs...)
     for z = zs
         R = promote_type(R,typeof(z))
     end
-    map(x->convert(R,x), tuple(x,y,zs...))
+    convert((R...), tuple(x,y,zs...))
 end
