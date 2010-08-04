@@ -31,6 +31,8 @@ extern "C" {
 #include "builtin_proto.h"
 }
 
+#define CONDITION_REQUIRES_BOOL
+
 // llvm state
 static LLVMContext &jl_LLVMContext = getGlobalContext();
 static IRBuilder<> builder(getGlobalContext());
@@ -76,6 +78,7 @@ static GlobalVariable *jlsysmod_var;
 
 // important functions
 static Function *jlerror_func;
+static Function *jltypeerror_func;
 static Function *jlgetbindingp_func;
 static Function *jltuple_func;
 static Function *jlntuple_func;
@@ -234,13 +237,19 @@ static Value *literal_pointer_val(jl_value_t *p)
     return literal_pointer_val(p, jl_pvalue_llvmt);
 }
 
+static jl_value_t *llvm_type_to_julia(const Type *t);
+
 static Value *emit_typeof(Value *p)
 {
     // given p, a jl_value_t*, compute its type tag
-    Value *tt = builder.CreateBitCast(p, jl_ppvalue_llvmt);
-    tt = builder.CreateLoad(builder.CreateGEP(tt,ConstantInt::get(T_int32,0)),
-                            false);
-    return tt;
+    if (p->getType() == jl_pvalue_llvmt) {
+        Value *tt = builder.CreateBitCast(p, jl_ppvalue_llvmt);
+        tt = builder.
+            CreateLoad(builder.CreateGEP(tt,ConstantInt::get(T_int32,0)),
+                       false);
+        return tt;
+    }
+    return literal_pointer_val(llvm_type_to_julia(p->getType()));
 }
 
 static void emit_error(const std::string &txt, jl_codectx_t *ctx)
@@ -271,7 +280,25 @@ static void emit_typecheck(Value *x, jl_value_t *type, const std::string &msg,
 {
     Value *istype =
         builder.CreateICmpEQ(emit_typeof(x), literal_pointer_val(type));
-    error_unless(istype, msg, ctx);
+    BasicBlock *failBB = BasicBlock::Create(getGlobalContext(),"fail",ctx->f);
+    BasicBlock *passBB = BasicBlock::Create(getGlobalContext(),"pass");
+    builder.CreateCondBr(istype, passBB, failBB);
+    builder.SetInsertPoint(failBB);
+
+    std::vector<Value *> zeros(0);
+    zeros.push_back(ConstantInt::get(T_int32, 0));
+    zeros.push_back(ConstantInt::get(T_int32, 0));
+    Value *fname_val = builder.CreateGEP(stringConst(ctx->funcName),
+                                         zeros.begin(), zeros.end());
+    Value *msg_val = builder.CreateGEP(stringConst(msg),
+                                       zeros.begin(), zeros.end());
+    builder.CreateCall4(jltypeerror_func,
+                        fname_val, msg_val,
+                        literal_pointer_val(type), x);
+
+    builder.CreateBr(passBB);
+    ctx->f->getBasicBlockList().push_back(passBB);
+    builder.SetInsertPoint(passBB);
 }
 
 static Value *emit_bounds_check(Value *i, Value *len, const std::string &msg,
@@ -831,6 +858,12 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool value)
         jl_value_t *cond = args[0];
         int labelname = jl_unbox_int32(args[1]);
         Value *condV = emit_expr(cond, ctx, true);
+#ifdef CONDITION_REQUIRES_BOOL
+        if (expr_type(cond) != (jl_value_t*)jl_bool_type &&
+            condV->getType() != T_int1) {
+            emit_typecheck(condV, (jl_value_t*)jl_bool_type, "if", ctx);
+        }
+#endif
         Value *isfalse;
         if (condV->getType() == T_int1) {
             isfalse = builder.CreateXor(condV, ConstantInt::get(T_int1,1));
@@ -1218,6 +1251,17 @@ static void init_julia_llvm_env(Module *m)
                          Function::ExternalLinkage,
                          "jl_error", jl_Module);
     jl_ExecutionEngine->addGlobalMapping(jlerror_func, (void*)&jl_error);
+    std::vector<const Type*> te_args(0);
+    te_args.push_back(T_pint8);
+    te_args.push_back(T_pint8);
+    te_args.push_back(jl_pvalue_llvmt);
+    te_args.push_back(jl_pvalue_llvmt);
+    jltypeerror_func =
+        Function::Create(FunctionType::get(T_void, te_args, false),
+                         Function::ExternalLinkage,
+                         "jl_type_error_rt", jl_Module);
+    jl_ExecutionEngine->addGlobalMapping(jltypeerror_func,
+                                         (void*)&jl_type_error_rt);
 
     std::vector<const Type *> args2(0);
     args2.push_back(T_pint8);

@@ -60,6 +60,14 @@ void jl_type_error(const char *fname, const char *expected, jl_value_t *got)
               jl_print_to_string((jl_value_t*)jl_full_type(got)));
 }
 
+void jl_type_error_rt(const char *fname, const char *context,
+                      jl_value_t *ty, jl_value_t *got)
+{
+    jl_errorf("type error: %s: in %s, expected %s, got %s",
+              fname, context, jl_print_to_string(ty),
+              jl_print_to_string((jl_value_t*)jl_full_type(got)));
+}
+
 /*
   equivalent julia code:
   expr(head, args...) = Expr.new(head, args)

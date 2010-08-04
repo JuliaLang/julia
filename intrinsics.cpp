@@ -262,9 +262,7 @@ static Value *julia_to_native(const Type *ty, jl_value_t *jt, Value *jv,
     }
     assert(jl_is_bits_type(jt));
     std::stringstream msg;
-    msg << "ccall: expected ";
-    msg << std::string(jl_print_to_string(jt));
-    msg << " as argument ";
+    msg << "ccall argument ";
     msg << argn;
     emit_typecheck(jv, jt, msg.str(), ctx);
     Value *p = bitstype_pointer(jv);

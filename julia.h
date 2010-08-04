@@ -448,6 +448,8 @@ void jl_errorf(const char *fmt, ...);
 void jl_too_few_args(const char *fname, int min);
 void jl_too_many_args(const char *fname, int max);
 void jl_type_error(const char *fname, const char *expected, jl_value_t *got);
+void jl_type_error_rt(const char *fname, const char *context,
+                      jl_value_t *ty, jl_value_t *got);
 void jl_no_method_error(jl_sym_t *name, jl_value_t **args, size_t nargs);
 
 // initialization functions

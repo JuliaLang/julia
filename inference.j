@@ -812,22 +812,26 @@ function inlineable(e::Expr)
         return NF
     end
     body = ast.args[3].args
+    # see if body is only "return <expr>"
     if length(body) > 1
         return NF
     end
     assert(isa(body[1],Expr))
     assert(is(body[1].head,symbol("return")))
-    expr = body[1].args[1]
+    # check for vararg function
     args = f_argnames(ast)
     na = length(args)
     if na>0 && is_rest_arg(ast.args[1][na])
         return NF
     end
+    # see if each argument occurs only once in the body expression
+    expr = body[1].args[1]
     for a = args
         if count_occurs(expr, a) > 1
             return NF
         end
     end
+    # ok, substitute argument expressions for argument names in the body
     spnames = { sp[i].name | i=1:2:length(sp) }
     return sym_replace(copy(expr), append(args,spnames),
                        append(argexprs,spvals))

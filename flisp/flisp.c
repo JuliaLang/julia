@@ -2275,7 +2275,6 @@ static void lisp_init(size_t initial_heapsize)
     pagesym = symbol("page");         returnsym = symbol("return");
     escsym = symbol("esc");           spacesym = symbol("space");
     deletesym = symbol("delete");     newlinesym = symbol("newline");
-    builtins_table_sym = symbol("*builtins*");
     tsym = symbol("t"); Tsym = symbol("T");
     fsym = symbol("f"); Fsym = symbol("F");
     set(printprettysym=symbol("*print-pretty*"), FL_T);
@@ -2283,6 +2282,7 @@ static void lisp_init(size_t initial_heapsize)
     set(printwidthsym=symbol("*print-width*"), fixnum(SCR_WIDTH));
     set(printlengthsym=symbol("*print-length*"), FL_F);
     set(printlevelsym=symbol("*print-level*"), FL_F);
+    builtins_table_sym = symbol("*builtins*");
     fl_lasterror = NIL;
     i = 0;
     for (i=OP_EQ; i <= OP_ASET; i++) {
