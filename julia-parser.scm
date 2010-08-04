@@ -570,7 +570,7 @@ TODO:
 (define (colons-to-ranges ranges)
   (map (lambda (r) (pattern-expand
 		    (list
-		     (pattern-lambda (: a b) `(call (top Range) ,a 1 ,b))
+		     (pattern-lambda (: a b) `(call (top Range1) ,a ,b))
 		     (pattern-lambda (: a b c) `(call (top Range) ,a ,b ,c)) )
 		    r))
        ranges))

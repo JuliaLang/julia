@@ -108,7 +108,7 @@
 		     (eq? (car x) ':)
 		     (length= x 3)
 		     (not (eq? (caddr x) ':)))
-		`(call (top Range) ,(cadr x) 1 ,(caddr x)))
+		`(call (top Range1) ,(cadr x) ,(caddr x)))
 	       ((and (pair? x)
 		     (eq? (car x) ':)
 		     (length= x 4)

@@ -114,12 +114,13 @@ function map(f, ts::Tuple...)
     return _map(f, ts, 1)
 end
 
-ref(t::Tuple, r::Range) = accumtuple(t, r, start(r))
-function accumtuple(t::Tuple, r::Range, i, elts...)
+ref(t::Tuple, r::Range)  = accumtuple(t, r, start(r), r.step)
+ref(t::Tuple, r::Range1) = accumtuple(t, r, start(r), 1)
+function accumtuple(t::Tuple, r, i, step, elts...)
     if done(r, i)
         return elts
     end
-    accumtuple(t, r, i+r.step, elts..., t[i])
+    accumtuple(t, r, i+step, step, elts..., t[i])
 end
 ref(t::Tuple, r::RangeFrom) = t[Range(r.start,r.step,length(t))]
 ref(t::Tuple, r::RangeTo)   = t[Range(1,r.step,r.stop)]

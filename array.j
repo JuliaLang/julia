@@ -1,6 +1,6 @@
 typealias Vector{T} Tensor{T,1}
 typealias Matrix{T} Tensor{T,2}
-typealias Indices{T} Union(Range, RangeFrom, RangeBy, RangeTo, Vector{T})
+typealias Indices{T} Union(Range,Range1,RangeFrom,RangeBy,RangeTo, Vector{T})
 
 # Basic functions
 size(a::Array) = a.dims
@@ -595,5 +595,5 @@ function print(a::Array)
                  for i=1:(length(idxs)-1); print(idxs[i],", "); end;
                  print(idxs[length(idxs)], "] =\n");
                  print(slice2d(a, idxs), idxs==tail?"":"\n\n")),
-          map(x->Range(1,1,x), tail))
+          map(x->Range1(1,x), tail))
 end
