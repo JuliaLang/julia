@@ -264,7 +264,7 @@ function ^(x, p::Int)
     if p == 1
         return x
     elseif p == 0
-        return convert(typeof(x),1)
+        return one(x)
     elseif p < 0
         return 1/(x^(-p))
     elseif p == 2
@@ -296,7 +296,7 @@ end
 # x^p mod m
 function powermod(x::Int, p::Int, m::Int)
     if p == 0
-        return convert(typeof(x),1)
+        return one(x)
     elseif p < 0
         error("powermod: exponent must be >= 0")
     end
@@ -321,11 +321,11 @@ function powermod(x::Int, p::Int, m::Int)
     return r
 end
 
-function fact{T}(n::Int{T})
+function fact(n::Int)
     if n < 0
-        return convert(T,0)
+        return zero(n)
     end
-    p = convert(T,1)
+    p = one(n)
     for i=2:n
         p*=i
     end
@@ -413,4 +413,4 @@ function randint{T<:Int}(lo::T, hi::T)
 end
 
 # random integer from 1 to n
-randint{T<:Int}(n::T) = randint(convert(T,1), n)
+randint(n::Int) = randint(one(n), n)

@@ -796,6 +796,7 @@ function inlineable(e::Expr)
     if is(meth[3],`convert) && length(atypes)==2
         # builtin case of convert. convert(T,x::S) => x, when S<:T
         if isType(atypes[1]) && subtype(atypes[2],atypes[1].parameters[1])
+            # todo: if T expression has side effects??!
             return e.args[3]
         end
     end
@@ -825,6 +826,7 @@ function inlineable(e::Expr)
         return NF
     end
     # see if each argument occurs only once in the body expression
+    # todo: make sure side effects aren't skipped if argument doesn't occur?
     expr = body[1].args[1]
     for a = args
         if count_occurs(expr, a) > 1

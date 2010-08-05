@@ -53,8 +53,8 @@ function digit(c::Uint8)
 end
 
 function parse_int(T::Type{Int}, str::String, base::Int32)
-    n = convert(T,0)
-    b = convert(T,1)
+    n = zero(T)
+    b = one(T)
     for p = 0:length(str)-1
         d = digit(str[length(str)-p])
         if base <= d

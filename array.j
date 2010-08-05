@@ -18,7 +18,7 @@ jl_comprehension_zeros(oneresult::(), dims...) = Array(Bottom, dims...)
 
 function zeros(T::Type, dims::Size...)
     a = Array(T, dims...)
-    z = convert(T,0)
+    z = zero(T)
     for i=1:numel(a); a[i] = z; end
     return a
 end
@@ -29,7 +29,7 @@ zeros(dims::Tuple) = zeros(dims...)
 
 function ones(T::Type, dims::Size...)
     a = Array(T, dims...)
-    o = convert(T,1)
+    o = one(T)
     for i=1:numel(a); a[i] = o; end
     return a
 end
@@ -79,6 +79,11 @@ eye(n::Size) = eye(n, n)
 eye(m::Size, n::Size) = (a = zeros(m,n);
                          for i=1:min(m,n); a[i,i]=1; end;
                          a)
+one{T}(x::Array{T,2}) = (m=size(x,1); n=size(x,2);
+                         a = zeros(T,m,n);
+                         for i=1:min(m,n); a[i,i]=1; end;
+                         a)
+zero{T}(x::Array{T,2}) = zeros(T,size(x))
 
 colon(start::Real, stop::Real, stride::Real) =
     ((start, stop, stride) = promote(start, stop, stride);
@@ -201,10 +206,9 @@ mean(V::Vector) = sum(V) / length(V)
 std(V::Vector) = (m = mean(V);
                   sqrt( sum([ (V[i] - m)^2 | i=1:length(V) ]) / (length(V)-1) ))
 
-## blas.j defines these for floats
-## This should be commented out for supporting the int cases
-#(*)(A::Matrix, B::Vector) = [ dot(A[i,:],B) | i=1:size(A,1) ]
-#(*)(A::Matrix, B::Matrix) = [ dot(A[i,:],B[:,j]) | i=1:size(A,1), j=1:size(B,2) ]
+## blas.j defines these for floats; this handles other cases
+(*)(A::Matrix, B::Vector) = [ dot(A[i,:],B) | i=1:size(A,1) ]
+(*)(A::Matrix, B::Matrix) = [ dot(A[i,:],B[:,j]) | i=1:size(A,1), j=1:size(B,2) ]
 
 kron(a::Matrix, b::Matrix) = reshape([ a[i,j]*b[k,l] | k=1:size(b,1),
                                                        i=1:size(a,1),
@@ -269,10 +273,10 @@ end
 
 triu(M) = triu(M,0)
 tril(M) = tril(M,0)
-triu(M::Matrix, k) = [ j-i >= k ? M[i,j] : convert(typeof(M[i,j]),0) |
-                       i=1:size(M,1), j=1:size(M,2) ]
-tril(M::Matrix, k) = [ j-i <= k ? M[i,j] : convert(typeof(M[i,j]),0) |
-                       i=1:size(M,1), j=1:size(M,2) ]
+triu{T}(M::Matrix{T}, k) = [ j-i >= k ? M[i,j] : zero(T) |
+                            i=1:size(M,1), j=1:size(M,2) ]
+tril{T}(M::Matrix{T}, k) = [ j-i <= k ? M[i,j] : zero(T) |
+                            i=1:size(M,1), j=1:size(M,2) ]
 ## Indexing: ref()
 #TODO: Out-of-bound checks
 ref(a::Array, i::Index) = arrayref(a,i)
@@ -477,7 +481,7 @@ function randcycle(n::Int)
 end
 
 function permute(A, k::Int)
-    fac = convert(typeof(k),1)
+    fac = one(k)
     for i=2:length(A)
         fac *= (i-1)
         j = i - div(k,fac)%i
