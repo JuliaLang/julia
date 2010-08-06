@@ -13,6 +13,7 @@ namespace JL_I {
         eq_float, lt_float, ne_float, le_float, ge_float,
         // bitwise operators
         and_int, or_int, xor_int, not_int, shl_int, lshr_int, ashr_int,
+        bswap_int,
         // conversion
         sext16, zext16, sext32, zext32, sext64, zext64,
         trunc8, trunc16, trunc32,
@@ -533,6 +534,12 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
         return builder.CreateLShr(x, uint_cnvt(t,emit_expr(args[2],ctx,true)));
     HANDLE(ashr_int,2)
         return builder.CreateAShr(x, uint_cnvt(t,emit_expr(args[2],ctx,true)));
+    HANDLE(bswap_int,1)
+        fxt = x->getType();
+        return builder.CreateCall(Intrinsic::getDeclaration(jl_Module,
+                                                            Intrinsic::bswap,
+                                                            &fxt, 1),
+                                  x);
     HANDLE(sext16,1)
         return builder.CreateSExt(x, T_int16);
     HANDLE(zext16,1)
@@ -672,7 +679,7 @@ extern "C" void jl_init_intrinsic_functions()
     ADD_I(eq_float); ADD_I(lt_float); ADD_I(ne_float);
     ADD_I(le_float); ADD_I(ge_float);
     ADD_I(and_int); ADD_I(or_int); ADD_I(xor_int); ADD_I(not_int);
-    ADD_I(shl_int); ADD_I(lshr_int); ADD_I(ashr_int);
+    ADD_I(shl_int); ADD_I(lshr_int); ADD_I(ashr_int); ADD_I(bswap_int);
     ADD_I(sext16); ADD_I(zext16); ADD_I(sext32); ADD_I(zext32);
     ADD_I(sext64); ADD_I(zext64);
     ADD_I(trunc8); ADD_I(trunc16); ADD_I(trunc32);

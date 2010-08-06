@@ -27,4 +27,9 @@ load("math.j")
 load("blas.j")
 load("lapack.j")
 
+# interface
+load("io.j")
+load("multi.j")
+
+# compiler
 load("inference.j")

@@ -73,8 +73,8 @@ off_t ios_skip(ios_t *s, off_t offs);  // relative seek
 off_t ios_pos(ios_t *s);  // get current position
 size_t ios_trunc(ios_t *s, size_t size);
 int ios_eof(ios_t *s);
-int ios_flush(ios_t *s);
-void ios_close(ios_t *s);
+DLLEXPORT int ios_flush(ios_t *s);
+DLLEXPORT void ios_close(ios_t *s);
 char *ios_takebuf(ios_t *s, size_t *psize);  // release buffer to caller
 // set buffer space to use
 int ios_setbuf(ios_t *s, char *buf, size_t size, int own);
@@ -130,9 +130,9 @@ int ios_prevutf8(ios_t *s);
 
 /* stdio-style functions */
 #define IOS_EOF (-1)
-int ios_putc(int c, ios_t *s);
+DLLEXPORT int ios_putc(int c, ios_t *s);
 //wint_t ios_putwc(ios_t *s, wchar_t wc);
-int ios_getc(ios_t *s);
+DLLEXPORT int ios_getc(ios_t *s);
 int ios_peekc(ios_t *s);
 //wint_t ios_getwc(ios_t *s);
 int ios_ungetc(int c, ios_t *s);

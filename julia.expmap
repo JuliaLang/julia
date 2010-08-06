@@ -31,12 +31,22 @@
     jl_print_to_string;
     jl_is_rest_arg;
     jl_is_leaf_type;
+    jl_gensym;
     jl_new_eqtable;
     jl_eqtable_put;
     jl_eqtable_get;
     jl_eqtable_del;
     jl_eqtable_next;
-    jl_gensym;
+    jl_new_fdio;
+    jl_new_fileio;
+    jl_new_memio;
+    ios_putc;
+    ios_getc;
+    ios_close;
+    ios_flush;
+    connect_to_host;
+    jl_start_worker;
+    jl_wait_msg;
   local:
     *;
 };

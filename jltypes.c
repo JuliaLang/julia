@@ -60,7 +60,6 @@ jl_tuple_t *jl_null;
 
 jl_func_type_t *jl_any_func;
 jl_function_t *jl_bottom_func;
-jl_function_t *jl_identity_func;
 
 void jl_add_constructors(jl_struct_type_t *t);
 
@@ -1572,7 +1571,6 @@ void jl_init_types()
     jl_any_func = jl_new_functype((jl_type_t*)jl_any_type, (jl_type_t*)jl_any_type);
 
     jl_bottom_func = jl_new_closure(jl_f_no_function, NULL);
-    jl_identity_func = jl_new_closure(jl_f_identity, NULL);
 
     // initialize them. lots of cycles.
     jl_struct_kind->name = jl_new_typename(jl_symbol("StructKind"));

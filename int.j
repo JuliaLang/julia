@@ -1,11 +1,13 @@
 ## conversions ##
 
+convert(::Type{Int8}, x::Bool ) = boxsi8(unbox8(x))
 convert(::Type{Int8}, x::Uint8) = boxsi8(unbox8(x))
 convert(::Type{Int8}, x::Union(Int16,Uint16)) = boxsi8(trunc8(unbox16(x)))
 convert(::Type{Int8}, x::Union(Int32,Uint32)) = boxsi8(trunc8(unbox32(x)))
 convert(::Type{Int8}, x::Union(Int64,Uint64)) = boxsi8(trunc8(unbox64(x)))
 convert(::Type{Int8}, x::Float32) = boxsi8(fptosi8(unbox32(x)))
 convert(::Type{Int8}, x::Float64) = boxsi8(fptosi8(unbox64(x)))
+convert(::Type{Uint8}, x::Bool) = boxui8(unbox8(x))
 convert(::Type{Uint8}, x::Int8) = boxui8(unbox8(x))
 convert(::Type{Uint8}, x::Union(Int16,Uint16)) = boxui8(trunc8(unbox16(x)))
 convert(::Type{Uint8}, x::Union(Int32,Uint32)) = boxui8(trunc8(unbox32(x)))
@@ -13,6 +15,7 @@ convert(::Type{Uint8}, x::Union(Int64,Uint64)) = boxui8(trunc8(unbox64(x)))
 convert(::Type{Uint8}, x::Float32) = boxui8(fptoui8(unbox32(x)))
 convert(::Type{Uint8}, x::Float64) = boxui8(fptoui8(unbox64(x)))
 
+convert(::Type{Int16}, x::Bool) = boxsi16(sext16(unbox8(x)))
 convert(::Type{Int16}, x::Int8) = boxsi16(sext16(unbox8(x)))
 convert(::Type{Int16}, x::Uint8) = boxsi16(zext16(unbox8(x)))
 convert(::Type{Int16}, x::Uint16) = boxsi16(unbox16(x))
@@ -20,6 +23,7 @@ convert(::Type{Int16}, x::Union(Int32,Uint32)) = boxsi16(trunc16(unbox32(x)))
 convert(::Type{Int16}, x::Union(Int64,Uint64)) = boxsi16(trunc16(unbox64(x)))
 convert(::Type{Int16}, x::Float32) = boxsi16(fptosi16(unbox32(x)))
 convert(::Type{Int16}, x::Float64) = boxsi16(fptosi16(unbox64(x)))
+convert(::Type{Uint16}, x::Bool) = boxui16(sext16(unbox8(x)))
 convert(::Type{Uint16}, x::Int8) = boxui16(sext16(unbox8(x)))
 convert(::Type{Uint16}, x::Uint8) = boxui16(zext16(unbox8(x)))
 convert(::Type{Uint16}, x::Int16) = boxui16(unbox16(x))
@@ -28,6 +32,7 @@ convert(::Type{Uint16}, x::Union(Int64,Uint64)) = boxui16(trunc16(unbox64(x)))
 convert(::Type{Uint16}, x::Float32) = boxui16(fptoui16(unbox32(x)))
 convert(::Type{Uint16}, x::Float64) = boxui16(fptoui16(unbox64(x)))
 
+convert(::Type{Int32}, x::Bool) = boxsi32(sext32(unbox8(x)))
 convert(::Type{Int32}, x::Int8) = boxsi32(sext32(unbox8(x)))
 convert(::Type{Int32}, x::Uint8) = boxsi32(zext32(unbox8(x)))
 convert(::Type{Int32}, x::Int16) = boxsi32(sext32(unbox16(x)))
@@ -36,6 +41,7 @@ convert(::Type{Int32}, x::Uint32) = boxsi32(unbox32(x))
 convert(::Type{Int32}, x::Union(Int64,Uint64)) = boxsi32(trunc32(unbox64(x)))
 convert(::Type{Int32}, x::Float32) = boxsi32(fptosi32(unbox32(x)))
 convert(::Type{Int32}, x::Float64) = boxsi32(fptosi32(unbox64(x)))
+convert(::Type{Uint32}, x::Bool) = boxui32(sext32(unbox8(x)))
 convert(::Type{Uint32}, x::Int8) = boxui32(sext32(unbox8(x)))
 convert(::Type{Uint32}, x::Uint8) = boxui32(zext32(unbox8(x)))
 convert(::Type{Uint32}, x::Int16) = boxui32(sext32(unbox16(x)))
@@ -45,6 +51,7 @@ convert(::Type{Uint32}, x::Union(Int64,Uint64)) = boxui32(trunc32(unbox64(x)))
 convert(::Type{Uint32}, x::Float32) = boxui32(fptoui32(unbox32(x)))
 convert(::Type{Uint32}, x::Float64) = boxui32(fptoui32(unbox64(x)))
 
+convert(::Type{Int64}, x::Bool) = boxsi64(sext64(unbox8(x)))
 convert(::Type{Int64}, x::Int8) = boxsi64(sext64(unbox8(x)))
 convert(::Type{Int64}, x::Uint8) = boxsi64(zext64(unbox8(x)))
 convert(::Type{Int64}, x::Int16) = boxsi64(sext64(unbox16(x)))
@@ -54,6 +61,7 @@ convert(::Type{Int64}, x::Uint32) = boxsi64(zext64(unbox32(x)))
 convert(::Type{Int64}, x::Uint64) = boxsi64(unbox64(x))
 convert(::Type{Int64}, x::Float32) = boxsi64(fptosi64(unbox32(x)))
 convert(::Type{Int64}, x::Float64) = boxsi64(fptosi64(unbox64(x)))
+convert(::Type{Uint64}, x::Bool) = boxui64(sext64(unbox8(x)))
 convert(::Type{Uint64}, x::Int8) = boxui64(sext64(unbox8(x)))
 convert(::Type{Uint64}, x::Uint8) = boxui64(zext64(unbox8(x)))
 convert(::Type{Uint64}, x::Int16) = boxui64(sext64(unbox16(x)))
@@ -113,6 +121,11 @@ typemin(::Type{Int64 }) = (-9223372036854775807 - 1)
 typemax(::Type{Int64 }) = 9223372036854775807
 typemin(::Type{Uint64}) = uint64(0)
 typemax(::Type{Uint64}) = 18446744073709551615
+
+sizeof(x::Union(Int8 , Uint8 )) = 1
+sizeof(x::Union(Int16, Uint16)) = 2
+sizeof(x::Union(Int32, Uint32)) = 4
+sizeof(x::Union(Int64, Uint64)) = 8
 
 ## basic arithmetic ##
 
@@ -182,6 +195,13 @@ div(x::Int64, y::Int64) = boxsi64(sdiv_int(unbox64(x), unbox64(y)))
 (>>>)(x::Int16, y::Int32) = boxsi16(lshr_int(unbox16(x), unbox32(y)))
 (>>>)(x::Int32, y::Int32) = boxsi32(lshr_int(unbox32(x), unbox32(y)))
 (>>>)(x::Int64, y::Int32) = boxsi64(lshr_int(unbox64(x), unbox32(y)))
+
+bswap(x::Int16)  = boxsi16(bswap_int(unbox16(x)))
+bswap(x::Uint16) = boxui16(bswap_int(unbox16(x)))
+bswap(x::Int32)  = boxsi32(bswap_int(unbox32(x)))
+bswap(x::Uint32) = boxui32(bswap_int(unbox32(x)))
+bswap(x::Int64)  = boxsi64(bswap_int(unbox64(x)))
+bswap(x::Uint64) = boxui64(bswap_int(unbox64(x)))
 
 ## integer comparisons ##
 

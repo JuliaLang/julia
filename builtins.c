@@ -109,12 +109,6 @@ JL_CALLABLE(jl_f_no_function)
     return (jl_value_t*)jl_null;
 }
 
-JL_CALLABLE(jl_f_identity)
-{
-    JL_NARGS(identity, 1, 1);
-    return args[0];
-}
-
 JL_CALLABLE(jl_f_typeof)
 {
     JL_NARGS(typeof, 1, 1);
@@ -470,15 +464,6 @@ JL_CALLABLE(jl_f_arrayset)
         jl_errorf("array[%d]: index out of range", i+1);
     jl_arrayset(b, i, args[2]);
     return args[0];
-}
-
-JL_CALLABLE(jl_f_instantiate_type)
-{
-    JL_NARGSV(instantiate_type, 1);
-    if (!jl_is_some_tag_type(args[0]))
-        JL_TYPECHK(instantiate_type, TypeConstructor, args[0]);
-    jl_tuple_t *tparams = (jl_tuple_t*)jl_f_tuple(NULL, &args[1], nargs-1);
-    return jl_apply_type(args[0], tparams);
 }
 
 // --- conversions ---
@@ -914,6 +899,15 @@ jl_value_t *jl_new_closure_internal(jl_lambda_info_t *li, jl_value_t *env)
     return (jl_value_t*)f;
 }
 
+JL_CALLABLE(jl_f_instantiate_type)
+{
+    JL_NARGSV(instantiate_type, 1);
+    if (!jl_is_some_tag_type(args[0]))
+        JL_TYPECHK(instantiate_type, TypeConstructor, args[0]);
+    jl_tuple_t *tparams = (jl_tuple_t*)jl_f_tuple(NULL, &args[1], nargs-1);
+    return jl_apply_type(args[0], tparams);
+}
+
 static int all_typevars(jl_tuple_t *p)
 {
     size_t i;
@@ -1087,6 +1081,8 @@ JL_CALLABLE(jl_f_union)
     return jl_type_union(argt);
 }
 
+// --- generic function primitives ---
+
 JL_CALLABLE(jl_f_new_generic_function)
 {
     JL_NARGS(new_generic_function, 1, 1);
@@ -1241,6 +1237,34 @@ JL_CALLABLE(jl_f_hash_symbol)
 #endif
 }
 
+// --- io ---
+
+DLLEXPORT
+void *jl_new_fdio(int fd)
+{
+    ios_t *s = (ios_t*)allocb(sizeof(ios_t));
+    ios_fd(s, fd, 0);
+    return s;
+}
+
+DLLEXPORT
+void *jl_new_fileio(char *fname, int rd, int wr, int create, int trunc)
+{
+    ios_t *s = (ios_t*)allocb(sizeof(ios_t));
+    if (ios_file(s, fname, rd, wr, create, trunc) == NULL)
+        jl_errorf("could not open file %s", fname);
+    return s;
+}
+
+DLLEXPORT
+void *jl_new_memio(uint32_t sz)
+{
+    ios_t *s = (ios_t*)allocb(sizeof(ios_t));
+    if (ios_mem(s, sz) == NULL)
+        jl_errorf("error creating memory I/O stream");
+    return s;
+}
+
 // --- init ---
 
 static void add_builtin_method1(jl_function_t *gf, jl_type_t *t, jl_fptr_t f)
@@ -1314,7 +1338,6 @@ void jl_init_builtins()
     add_builtin("convert", (jl_value_t*)jl_convert_gf);
     add_builtin("print", (jl_value_t*)jl_print_gf);
     add_builtin("hash", (jl_value_t*)jl_hash_gf);
-    add_builtin("identity", (jl_value_t*)jl_identity_func);
     
     // functions for internal use
     add_builtin_func("tupleref", jl_f_tupleref);

@@ -261,7 +261,6 @@ extern jl_func_type_t *jl_any_func;
 
 extern jl_function_t *jl_print_gf;
 extern jl_function_t *jl_bottom_func;
-extern jl_function_t *jl_identity_func;
 
 // some important symbols
 extern jl_sym_t *call_sym;
@@ -522,7 +521,6 @@ jl_value_t *jl_apply(jl_function_t *f, jl_value_t **args, uint32_t nargs)
 }
 
 JL_CALLABLE(jl_f_no_function);
-JL_CALLABLE(jl_f_identity);
 JL_CALLABLE(jl_f_tuple);
 JL_CALLABLE(jl_f_arrayset);
 JL_CALLABLE(jl_apply_generic);

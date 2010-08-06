@@ -119,7 +119,6 @@ t_func[Array] =
     (1, Inf, (T,dims...)->(nd = length(dims);
                            et = isType(T) ? T.parameters[1] : Any;
                            Array{et,nd}))
-t_func[identity] = (1, 1, identity)
 t_func[`convert] =
     (2, 2, (t,x)->(if isa(t,Tuple) && all(map(isType,t))
                        t = Type{map(t->t.parameters[1],t)}

@@ -50,8 +50,6 @@ int open_tcp_port(short portno)
     serv_addr.sin_addr.s_addr = htonl(INADDR_ANY);
     serv_addr.sin_port = htons(portno);
     if (bind(sockfd, (struct sockaddr*)&serv_addr, sizeof(serv_addr)) < 0) {
-        fprintf(stderr, "could not bind to port %d.\n",
-                portno);
         return -1;
     }
 

@@ -33,6 +33,9 @@ iscomplex(x) = false
 real_valued(z::Complex) = (z.im == 0)
 integer_valued(z::Complex) = (real_valued(z) && integer_valued(z.re))
 
+pi{T}(z::Complex{T}) = pi(T)
+pi{T}(::Type{Complex{T}}) = pi(T)
+
 real(z::Complex) = z.re
 imag(z::Complex) = z.im
 real(x::Real) = x

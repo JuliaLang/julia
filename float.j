@@ -58,6 +58,9 @@ typemax(::Type{Float32}) = float32(3.402823466e+38)
 typemin(::Type{Float64}) = 2.2250738585072014e-308
 typemax(::Type{Float64}) = 1.7976931348623157e+308
 
+sizeof(x::Float32) = 4
+sizeof(x::Float64) = 8
+
 ## basic arithmetic ##
 
 (-)(x::Float32) = boxf32(neg_float(unbox32(x)))

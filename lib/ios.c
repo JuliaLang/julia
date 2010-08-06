@@ -364,10 +364,16 @@ size_t ios_write(ios_t *s, char *data, size_t n)
     size_t wrote = 0;
 
     if (s->state == bst_none) s->state = bst_wr;
-    if (s->state == bst_wr)
-        space = s->maxsize - s->bpos;
-    else
+    if (s->state == bst_rd) {
+        if (!s->rereadable) {
+            s->size = 0;
+            s->bpos = 0;
+        }
         space = s->size - s->bpos;
+    }
+    else {
+        space = s->maxsize - s->bpos;
+    }
 
     if (s->bm == bm_mem) {
         wrote = _write_grow(s, data, n);
