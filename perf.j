@@ -106,7 +106,7 @@ timeit(pisum)
 ## Random matrix statistics ##
 
 function randmatstat(t)
-    n=5
+    n = 5
     v = zeros(t)
     w = zeros(t)
     for i=1:t
@@ -115,7 +115,7 @@ function randmatstat(t)
         c = randn(n, n)
         d = randn(n, n)
         P = [a, b, c, d]
-        Q = [a, b;c, d]
+        Q = [a, b; c, d]
         v[i] = trace((P.'*P)^4)
         w[i] = trace((Q.'*Q)^4)
     end
