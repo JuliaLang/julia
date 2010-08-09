@@ -432,14 +432,36 @@ function sort(a::Vector, lo, hi)
         while a[j] > pivot; j -= 1; end
         if i <= j
             a[i], a[j] = a[j], a[i]
-            i += 1;
-            j -= 1;
+            i += 1
+            j -= 1
         end
     end
     # Recursion for quicksort
     if lo < j; sort(a, lo, j); end
     if i < hi; sort(a, i, hi); end
     return a
+end
+
+sortperm(a::Vector) = sortperm(a, 1:length(a), 1, length(a))
+
+function sortperm(a::Vector, p::Vector{Size}, lo, hi)
+    i, j = lo, hi
+    pivot = a[div((lo+hi),2)];
+    # Partition
+    while i <= j
+        while a[i] < pivot; i += 1; end
+        while a[j] > pivot; j -= 1; end
+        if i <= j
+            a[i], a[j] = a[j], a[i]
+            p[i], p[j] = p[j], p[i]
+            i += 1
+            j -= 1
+        end
+    end
+    # Recursion for quicksort
+    if lo < j; sortperm(a, p, lo, j); end
+    if i < hi; sortperm(a, p, i, hi); end
+    return (a, p)
 end
 
 function issorted(v::Vector)
