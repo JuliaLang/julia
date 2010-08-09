@@ -175,4 +175,14 @@ fprintf('random matrix statistics: ');
 assert(round(10*s1) > 6 && round(10*s1) < 8);
 timeit (@randmatstat, 1000)
 
+function t = mytranspose(x)
+    [m, n] = size(x);
+    t = zeros(n, m);
+    for i=1:n
+      for j=1:m
+        t(i,j) = x(j,i);
+      end
+    end
+end
+
 end
