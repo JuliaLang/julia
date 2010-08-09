@@ -421,9 +421,9 @@ function diff(a::Matrix, dim)
 end
 
 # Sort
-sort(a::Vector) = sort(a, 1, length(a))
+sort(a::Vector) = sort_(copy(a), 1, length(a))
 
-function sort(a::Vector, lo, hi)
+function sort_(a::Vector, lo, hi)
     i, j = lo, hi
     pivot = a[div((lo+hi),2)];
     # Partition
@@ -437,14 +437,14 @@ function sort(a::Vector, lo, hi)
         end
     end
     # Recursion for quicksort
-    if lo < j; sort(a, lo, j); end
-    if i < hi; sort(a, i, hi); end
+    if lo < j; sort_(a, lo, j); end
+    if i < hi; sort_(a, i, hi); end
     return a
 end
 
-sortperm(a::Vector) = sortperm(a, 1:length(a), 1, length(a))
+sortperm(a::Vector) = sortperm_(copy(a), 1:length(a), 1, length(a))
 
-function sortperm(a::Vector, p::Vector{Size}, lo, hi)
+function sortperm_(a::Vector, p::Vector{Size}, lo, hi)
     i, j = lo, hi
     pivot = a[div((lo+hi),2)];
     # Partition
@@ -459,8 +459,8 @@ function sortperm(a::Vector, p::Vector{Size}, lo, hi)
         end
     end
     # Recursion for quicksort
-    if lo < j; sortperm(a, p, lo, j); end
-    if i < hi; sortperm(a, p, i, hi); end
+    if lo < j; sortperm_(a, p, lo, j); end
+    if i < hi; sortperm_(a, p, i, hi); end
     return (a, p)
 end
 
