@@ -143,7 +143,7 @@
 
 (define (sparam-name-bounds sparams names bounds)
   (cond ((null? sparams)
-	 (values names bounds))
+	 (values (reverse names) (reverse bounds)))
 	((symbol? (car sparams))
 	 (sparam-name-bounds (cdr sparams) (cons (car sparams) names)
 			     (cons '(top Any) bounds)))
