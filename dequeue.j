@@ -1,3 +1,37 @@
+struct Pair
+    a
+    b
+end
+
+struct Queue
+    head::Union((),Pair)
+    tail::Union((),Pair)
+
+    Queue() = new((),())
+end
+
+isempty(q::Queue) = is(q.head,())
+
+function enq(q::Queue, elt)
+    if isempty(q)
+        q.head = Pair(elt,())
+        q.tail = q.head
+    else
+        q.tail.b = Pair(elt,())
+        q.tail = q.tail.b
+    end
+    q
+end
+
+function pop(q::Queue)
+    if isempty(q)
+        error("pop: queue is empty")
+    end
+    elt = q.head.a
+    q.head = q.head.b
+    elt
+end
+
 struct Dequeue{T}
     maxsize:: Size
     size:: Size
@@ -31,6 +65,7 @@ function assign(l::Dequeue, elt, i::Index)
         error("Out of bounds")
     end
     l.data[i+l.offset] = elt
+    l
 end
 
 length(l::Dequeue) = l.size
@@ -80,4 +115,17 @@ function pop(a::Dequeue)
     a[a.size] = ()
     a.size -= 1
     return item
+end
+
+function insert(a::Dequeue, i::Int, item)
+    sz = a.size
+    if i > sz
+        grow(a, i-sz)
+    else
+        grow(a, 1)
+        for k=(sz+1):-1:(i+1)
+            a[k] = a[k-1]
+        end
+    end
+    a[i] = item
 end

@@ -19,7 +19,7 @@ load("dequeue.j")
 load("intset.j")
 load("table.j")
 load("array.j")
-#load("tree.j")
+load("tree.j")
 
 # external libraries
 load("libc.j")
