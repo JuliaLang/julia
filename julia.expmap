@@ -45,7 +45,7 @@
     ios_close;
     ios_flush;
     connect_to_host;
-    jl_start_worker;
+    open_any_tcp_port;
     jl_wait_msg;
   local:
     *;
