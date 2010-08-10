@@ -24,3 +24,6 @@ function exec(cmd::String, args::String...)
           (Ptr{Char}, Ptr{Ptr{Char}}),
           cmd, arr)
 end
+
+exit() = exit(0)
+exit(n) = ccall(dlsym(libc,"exit"), Void, (Int32,), int32(n))

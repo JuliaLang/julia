@@ -18,7 +18,7 @@ struct IOStream
                   uint32(x)))
 end
 
-nthbyte(x::Int, n::Int) = (n>sizeof(x) ? uint8(0) : uint8((x>>((n-1)<<3))))
+nthbyte(x::Int, n::Int) = (n>sizeof(x) ? uint8(0) : uint8((x>>>((n-1)<<3))))
 
 write(s, x::Uint8) = error(strcat(string(typeof(s)),
                                   " does not support byte I/O"))
@@ -30,8 +30,8 @@ function write(s, x::Int)
 end
 
 write(s, x::Bool)    = write(s, uint8(x))
-write(s, x::Float32) = write(s, boxui32(unbox32(x)))
-write(s, x::Float64) = write(s, boxui64(unbox64(x)))
+write(s, x::Float32) = write(s, boxsi32(unbox32(x)))
+write(s, x::Float64) = write(s, boxsi64(unbox64(x)))
 
 function write(s, a::Array)
     for i=1:numel(a)
