@@ -878,6 +878,7 @@ JL_CALLABLE(jl_trampoline)
     assert(jl_is_func(f));
     assert(f->linfo != NULL);
     jl_compile(f);
+    jl_generate_fptr(f);
     assert(f->fptr != NULL);
     return jl_apply(f, args, nargs);
 }

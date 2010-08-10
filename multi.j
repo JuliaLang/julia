@@ -1,15 +1,5 @@
-function recv_msg(s)
-    len = read(s, Int32)
-    return read(s, Uint8, len)
-end
-
-function send_msg(s, msg)
-    t = IOTally()
-    write(t, msg)
-    write(s, int32(t.nbytes))
-    write(s, msg)
-    flush(s)
-end
+recv_msg(s) = deserialize(s)
+send_msg(s, x) = (serialize(s, x); flush(s))
 
 wait_msg(fd) =
     ccall(dlsym(JuliaDLHandle,"jl_wait_msg"), Int32, (Int32,), fd)==0
@@ -23,7 +13,7 @@ function jl_worker(fd)
         end
         msg = recv_msg(sock)
         # handle message
-        if msg == "quit"
+        if isa(msg,String) && msg == "quit"
             break
         end
         print("got message: ", msg, "\n")
@@ -72,10 +62,90 @@ end
 function worker_demo()
     sock = connect_to_worker("localhost", start_local_worker())
 
-    send_msg(sock, "hello, worker process.")
+    send_msg(sock, (1, "\"hello, worker process.\"", 2, `test))
     reply = recv_msg(sock)
     print("got reply: ", reply, "\n")
 
     send_msg(sock, "quit")
     close(sock)
+end
+
+struct Worker
+    host::String
+    port::Int16
+    socket::IOStream
+    requests::Queue
+    busy::Bool
+    maxid::Int32
+    pending::Int32
+    completed::BTree{Int32,Any}
+
+    function Worker()
+        host = "localhost"
+        port = start_local_worker()
+        sock = connect_to_worker(host, port)
+        new(host, port, sock, Queue(), false, 0, 0, BTree(Int32,Any))
+    end
+end
+
+struct Future
+    where::Worker
+    id::Int32
+    done::Bool
+    val
+end
+
+function remote_apply(w::Worker, f::Function, args...)
+    w.maxid += 1
+    nid = w.maxid
+    if !w.busy
+        send_msg(w.socket, (f, args))
+        w.pending = nid
+        w.busy = true
+    else
+        enq(w.requests, Pair(nid, (f, args)))
+    end
+    Future(w, nid, false, ())
+end
+
+function wait(f::Future)
+    if f.done
+        return f.val
+    end
+    w = f.where
+    if has(w.completed,f.id)
+        v = w.completed[f.id]
+        del(w.completed,f.id)
+        f.done = true
+        f.val = v
+        return v
+    end
+    while true
+        if !w.busy
+            error("invalid Future")
+        end
+        current = w.pending
+        result = recv_msg(w.socket)
+
+        if isempty(w.requests)
+            w.busy = false
+            w.pending = 0
+        else
+            # handle next request
+            p = pop(w.requests)
+            # send remote apply message p.b
+            send_msg(w.socket, p.b)
+            # w.busy = true  # already true
+            w.pending = p.a
+        end
+
+        if current == f.id
+            f.done = true
+            f.val = result
+            return result
+        else
+            # store result, allowing out-of-order retrieval
+            w.completed[current] = result
+        end
+    end
 end

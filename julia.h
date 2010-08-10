@@ -490,6 +490,7 @@ void *jl_dlsym(void *handle, char *symbol);
 
 // compiler
 void jl_compile(jl_function_t *f);
+void jl_generate_fptr(jl_function_t *f);
 jl_value_t *jl_toplevel_eval_thunk(jl_lambda_info_t *thk);
 void jl_load(const char *fname);
 jl_value_t *jl_interpret_toplevel_thunk(jl_lambda_info_t *lam);

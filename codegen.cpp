@@ -180,25 +180,32 @@ static Function *to_function(jl_lambda_info_t *li)
     return f;
 }
 
-extern "C" void jl_compile(jl_function_t *f)
+extern "C" void jl_generate_fptr(jl_function_t *f)
 {
+    // objective: assign li->fptr
     jl_lambda_info_t *li = f->linfo;
-    if (li->functionObject == NULL) {
-        // objective: assign li->fptr
-        li->inCompile = 1;
-        Function *llvmf = to_function(li);
-        li->fptr = (jl_fptr_t)jl_ExecutionEngine->getPointerToFunction(llvmf);
-    }
+    assert(li->functionObject);
+    Function *llvmf = (Function*)li->functionObject;
+    li->fptr = (jl_fptr_t)jl_ExecutionEngine->getPointerToFunction(llvmf);
+    assert(li->fptr != NULL);
     jl_value_t *env = f->env;
     if (f->fptr == &jl_trampoline) {
         assert(jl_t0(env) == (jl_value_t*)f);
         f->env = jl_t1(env);
     }
-    assert(li->fptr != NULL);
     f->fptr = li->fptr;
-    li->inCompile = 0;
 }
 
+extern "C" void jl_compile(jl_function_t *f)
+{
+    jl_lambda_info_t *li = f->linfo;
+    if (li->functionObject == NULL) {
+        // objective: assign li->functionObject
+        li->inCompile = 1;
+        (void)to_function(li);
+        li->inCompile = 0;
+    }
+}
 
 // information about the context of a piece of code: its enclosing
 // function and module, and visible local variables and labels.
@@ -563,7 +570,10 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
                     if (f != NULL) {
                         assert(f->linfo->functionObject != NULL);
                         *theFptr = (Value*)f->linfo->functionObject;
-                        *theEnv = literal_pointer_val(f->env);
+                        if (f->fptr == &jl_trampoline)
+                            *theEnv = literal_pointer_val(jl_t1(f->env));
+                        else
+                            *theEnv = literal_pointer_val(f->env);
                     }
                 }
             }
