@@ -75,9 +75,9 @@ mandelperf() = [ mandel(Complex(r,i)) | r = -2.0:.1:0.5, i = -1.:.1:1. ]
 assert(sum(mandelperf()) == 14791)
 timeit(mandelperf)
 
-## numeric vector quicksort ##
+## numeric vector sort ##
 
-print("quicksort: ")
+print("sort: ")
 function sortperf(n)
   v = rand(n)
   v = sort(v)

@@ -450,8 +450,11 @@ end
 # TODO: How to specialize this dispatch correctly??
 sort(a::Vector{Real}) = quicksort(copy(a), 1, length(a))
 
-sort{T}(a::Vector{T}) = mergesort(copy(a), 1:length(a), 1, length(a), 
-                                  Array(T, length(a)), Array(Size, length(a)) )
+function sort{T}(a::Vector{T})
+    (x,p) = mergesort(copy(a), 1:length(a), 1, length(a), 
+                      Array(T, length(a)), Array(Size, length(a)) )
+    return x
+end
 
 sortperm{T}(a::Vector{T}) = mergesort(copy(a), 1:length(a), 1, length(a), 
                                       Array(T, length(a)), Array(Size, length(a)) )
@@ -515,8 +518,8 @@ function mergesort(a::Vector, p::Vector{Size}, lo, hi,
             i += 1
         end
 
-    end # if lo < hi...
-
+    end # if lo<hi...
+    
     return (a, p)
 end
 
