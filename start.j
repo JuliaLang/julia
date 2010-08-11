@@ -19,6 +19,7 @@ load("dequeue.j")
 load("intset.j")
 load("table.j")
 load("array.j")
+load("sparse.j")
 load("tree.j")
 
 # external libraries
