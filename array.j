@@ -182,6 +182,28 @@ function sum(x::Matrix, dim::Number)
     end
 end
 
+function cumsum{T}(v::Vector{T})
+    n = length(v)
+    c = Array(T, n)
+    
+    c[1] = v[1]
+    for i=2:n
+        c[i] = v[i] + c[i-1]
+    end
+    return c
+end
+
+function cumprod{T}(v::Vector{T})
+    n = length(v)
+    c = Array(T, n)
+    
+    c[1] = v[1]
+    for i=2:n
+        c[i] = v[i] * c[i-1]
+    end
+    return c
+end
+
 function (==)(x::Array, y::Array)
     if x.dims != y.dims; return false; end
     for i=1:numel(x); if x[i] != y[i]; return false; end; end
@@ -420,10 +442,21 @@ function diff(a::Matrix, dim)
     end
 end
 
-# Sort
-sort(a::Vector) = sort_(copy(a), 1, length(a))
+# Sort should be stable
+# Thus, if a permutation is required, or records are being sorted
+# a stable sort should be used.
+# If only numbers are being sorted, a faster quicksort can be used.
 
-function sort_(a::Vector, lo, hi)
+# TODO: How to specialize this dispatch correctly??
+sort(a::Vector{Real}) = quicksort(copy(a), 1, length(a))
+
+sort{T}(a::Vector{T}) = mergesort(copy(a), 1:length(a), 1, length(a), 
+                                  Array(T, length(a)), Array(Size, length(a)) )
+
+sortperm{T}(a::Vector{T}) = mergesort(copy(a), 1:length(a), 1, length(a), 
+                                      Array(T, length(a)), Array(Size, length(a)) )
+
+function quicksort(a::Vector, lo, hi)
     i, j = lo, hi
     pivot = a[div((lo+hi),2)];
     # Partition
@@ -437,30 +470,53 @@ function sort_(a::Vector, lo, hi)
         end
     end
     # Recursion for quicksort
-    if lo < j; sort_(a, lo, j); end
-    if i < hi; sort_(a, i, hi); end
+    if lo < j; quicksort(a, lo, j); end
+    if i < hi; quicksort(a, i, hi); end
     return a
 end
 
-sortperm(a::Vector) = sortperm_(copy(a), 1:length(a), 1, length(a))
+function mergesort(a::Vector, p::Vector{Size}, lo, hi, 
+                   b::Vector, pb::Vector{Size})
 
-function sortperm_(a::Vector, p::Vector{Size}, lo, hi)
-    i, j = lo, hi
-    pivot = a[div((lo+hi),2)];
-    # Partition
-    while i <= j
-        while a[i] < pivot; i += 1; end
-        while a[j] > pivot; j -= 1; end
-        if i <= j
-            a[i], a[j] = a[j], a[i]
-            p[i], p[j] = p[j], p[i]
+    if lo < hi
+        m = div ((lo + hi), 2)
+        mergesort(a, p, lo, m, b, pb)
+        mergesort(a, p, m+1, hi, b, pb)
+
+        # merge(lo,m,hi)
+        i = 1
+        j = lo
+        while (j <= m)
+            b[i] = a[j]
+            pb[i] = p[j]
             i += 1
-            j -= 1
+            j += 1
         end
-    end
-    # Recursion for quicksort
-    if lo < j; sortperm_(a, p, lo, j); end
-    if i < hi; sortperm_(a, p, i, hi); end
+
+        i = 1
+        k = lo
+        while ((k < j) & (j <= hi))
+            if (b[i] <= a[j])
+                a[k] = b[i]
+                p[k] = pb[i]
+                i += 1
+            else
+                a[k] = a[j]
+                p[k] = p[j]
+                j += 1
+            end
+            k += 1
+        end
+
+        while (k < j)
+            a[k] = b[i]
+            p[k] = pb[i]
+            k += 1
+            i += 1
+        end
+
+    end # if lo < hi...
+
     return (a, p)
 end
 
