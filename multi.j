@@ -4,6 +4,12 @@ send_msg(s, x) = (serialize(s, x); flush(s))
 wait_msg(fd) =
     ccall(dlsym(JuliaDLHandle,"jl_wait_msg"), Int32, (Int32,), fd)==0
 
+# todo:
+# - recover from i/o errors
+# - handle remote execution errors
+# - send pings at some interval to detect failed/hung machines
+# - asynch i/o with coroutines to overlap computing with communication
+
 function jl_worker(fd)
     sock = fdio(fd)
 

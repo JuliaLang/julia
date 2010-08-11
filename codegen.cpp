@@ -740,9 +740,16 @@ static Value *emit_call(jl_value_t **args, size_t arglen, jl_codectx_t *ctx)
         }
         // extract pieces of the function object
         // TODO: try extractelement instead
-        theFptr =
-            builder.CreateBitCast(emit_nthptr(theFunc, 1), jl_fptr_llvmt);
-        theEnv = emit_nthptr(theFunc, 2);
+        if (theFunc->getType() != jl_pvalue_llvmt) {
+            // we know it's not a function, in fact it has been declared
+            // not to be. the above error should therefore trigger.
+            return V_null;
+        }
+        else {
+            theFptr =
+                builder.CreateBitCast(emit_nthptr(theFunc, 1), jl_fptr_llvmt);
+            theEnv = emit_nthptr(theFunc, 2);
+        }
     }
     // emit arguments
     std::vector<Value*> argVs(0);

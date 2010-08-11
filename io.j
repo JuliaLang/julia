@@ -77,6 +77,8 @@ function read(s::IOStream, ::Type{Uint8})
     uint8(b)
 end
 
+# TODO: bulk reads and writes
+
 function close(s::IOStream)
     ccall(dlsym(JuliaDLHandle,"ios_close"), Void, (Ptr{Void},), s.ios)
 end
