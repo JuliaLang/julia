@@ -11,13 +11,10 @@ function jl_worker(fd)
         if !wait_msg(fd)
             break
         end
-        msg = recv_msg(sock)
+        (f, args) = recv_msg(sock)
         # handle message
-        if isa(msg,String) && msg == "quit"
-            break
-        end
-        print("got message: ", msg, "\n")
-        send_msg(sock, "OK")
+        result = apply(eval(f), args)
+        send_msg(sock, result)
     end
 end
 
@@ -38,6 +35,8 @@ function start_local_worker()
         io = fdio(wrfd)
         write(io, port[1])
         close(io)
+        # close stdin; workers will not use it
+        ccall(dlsym(libc,"close"), Int32, (Int32,), 0)
 
         connectfd = ccall(dlsym(libc,"accept"), Int32,
                           (Int32, Ptr{Void}, Ptr{Void}),
@@ -50,24 +49,13 @@ function start_local_worker()
     io = fdio(rdfd)
     port = read(io, Int16)
     close(io)
-    print("started worker on port ", port, "\n")
+    #print("started worker on port ", port, "\n")
     port
 end
 
 function connect_to_worker(hostname, port)
     fdio(ccall(dlsym(JuliaDLHandle,"connect_to_host"), Int32,
                (Ptr{Uint8}, Int16), hostname, port))
-end
-
-function worker_demo()
-    sock = connect_to_worker("localhost", start_local_worker())
-
-    send_msg(sock, (1, "\"hello, worker process.\"", 2, `test))
-    reply = recv_msg(sock)
-    print("got reply: ", reply, "\n")
-
-    send_msg(sock, "quit")
-    close(sock)
 end
 
 struct Worker
@@ -95,7 +83,7 @@ struct Future
     val
 end
 
-function remote_apply(w::Worker, f::Function, args...)
+function remote_apply(w::Worker, f, args...)
     w.maxid += 1
     nid = w.maxid
     if !w.busy
@@ -148,4 +136,13 @@ function wait(f::Future)
             w.completed[current] = result
         end
     end
+end
+
+function pmap(wpool, fname, lst)
+    fut = { remote_apply(wpool[(i-1)%length(wpool)+1], fname, lst[i]) |
+           i = 1:length(lst) }
+    for i=1:length(fut)
+        fut[i] = wait(fut[i])
+    end
+    fut
 end
