@@ -126,6 +126,10 @@ TODO:
       (let ((c (peek-char port)))
 	(and (eqv? c ch)
 	     (begin (write-char (read-char port) str) #t))))
+    (define (disallow ch)
+      (if (eqv? (peek-char port) ch)
+	  (error (string "invalid numeric constant "
+			 (get-output-string str) ch))))
     (define (read-digs)
       (let ((d (accum-tok-eager (peek-char port) char-numeric? port)))
 	(and (not (equal? d ""))
@@ -138,13 +142,15 @@ TODO:
     (read-digs)
     (allow #\.)
     (read-digs)
+    (disallow #\.)
     (if (or (allow #\e) (allow #\E))
 	(begin (or (allow #\+) (allow #\-))
-	       (read-digs)))
+	       (read-digs)
+	       (disallow #\.)))
     (let* ((s (get-output-string str))
 	   (n (string->number s)))
       (if n n
-	  (error "invalid numeric constant " s)))))
+	  (error (string "invalid numeric constant " s))))))
 
 (define (skip-ws-and-comments port)
   (skip-ws port #t)
@@ -182,7 +188,7 @@ TODO:
 
 	  ((eqv? c #\")  (read port))
 
-	  (else (error "invalid character" (read-char port))))))
+	  (else (error (string "invalid character" (read-char port)))))))
 
 ; --- parser ---
 
@@ -362,6 +368,7 @@ TODO:
 ; operator between them?
 (define (juxtapose? expr t)
   (and (not (operator? t))
+       (not (operator? expr))
        (not (memq t reserved-words))
        (not (closing-token? t))
        (not (newline? t))
@@ -729,8 +736,8 @@ TODO:
   (skip-ws-and-comments (ts:port s))
   (if (eqv? (peek-token s) #\newline) (take-token s))
   (if (not (eof-object? (peek-token s)))
-      (error "extra input after end of expression:"
-	     (peek-token s))))
+      (error (string "extra input after end of expression:"
+		     (peek-token s)))))
 
 (define (julia-parse-file filename)
   ; call f on a stream until the stream runs out of data
