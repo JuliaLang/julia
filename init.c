@@ -90,7 +90,7 @@ void julia_init()
 
     stack_t ss;
     ss.ss_flags = 0;
-    ss.ss_size = MINSIGSTKSZ + 4096;
+    ss.ss_size = SIGSTKSZ;
     ss.ss_sp = malloc(ss.ss_size);
     if (sigaltstack(&ss, NULL) < 0) {
         ios_printf(ios_stderr, "sigaltstack: %s\n", strerror(errno));
