@@ -5,12 +5,6 @@ struct SparseMatrix{T} <: Matrix{T}
     colptr::Vector{Size}
     rowval::Vector{Size}
     nzval::Vector{T}
-
-    SparseMatrix(m::Size, n::Size, numnz::Size, 
-                 colptr::Vector{Size}, 
-                 rowval::Vector{Size}, 
-                 nzval::Vector{T})  = new(m, n, numnz, colptr, rowval, nzval)
-
 end
 
 function sparse{T}(I::Vector{Size}, 
@@ -40,9 +34,11 @@ function sparse{T}(I::Vector{Size},
     return SparseMatrix(m,n,numnz,colptr,rowval,nzval)
 end
 
-sprand(m,n,density) = sprand_rng (m,n,density,rand())
-sprandn(m,n,density) = sprand_rng (m,n,density,randn())
-sprandint(m,n,density) = sprand_rng (m,n,density,randint())
+nnz(S::SparseMatrix) = S.colptr[S.n+1]
+
+sprand(m,n,density) = sprand_rng (m,n,density,rand)
+sprandn(m,n,density) = sprand_rng (m,n,density,randn)
+#sprandint(m,n,density) = sprand_rng (m,n,density,randint)
 
 function sprand_rng(m, n, density, rng)
     numnz = int32(m*n*density)
@@ -51,7 +47,6 @@ function sprand_rng(m, n, density, rng)
     V = rng(numnz)
     S = sparse(I, J, V, m, n)
 end
-
 
 function print(S::SparseMatrix)
     for col = 1:S.n
