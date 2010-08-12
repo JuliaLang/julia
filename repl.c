@@ -7,6 +7,7 @@
 #include <string.h>
 #include <stdarg.h>
 #include <setjmp.h>
+#include <signal.h>
 #include <assert.h>
 #if defined(LINUX) || defined(MACOSX)
 #include <sys/types.h>
@@ -542,6 +543,9 @@ int main(int argc, char *argv[])
 
     if (print_banner)
         ios_printf(ios_stdout, "%s", banner);
+
+    if (!setjmp(ExceptionHandler))
+        kill(getpid(), SIGFPE);
 
     while (1) {
         ios_flush(ios_stdout);
