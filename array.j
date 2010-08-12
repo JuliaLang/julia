@@ -447,8 +447,7 @@ end
 # a stable sort should be used.
 # If only numbers are being sorted, a faster quicksort can be used.
 
-# TODO: How to specialize this dispatch correctly??
-sort(a::Vector{Real}) = quicksort(copy(a), 1, length(a))
+sort{T <: Real}(a::Vector{T}) = quicksort(copy(a), 1, length(a))
 
 function sort{T}(a::Vector{T})
     (x,p) = mergesort(copy(a), 1:length(a), 1, length(a), 

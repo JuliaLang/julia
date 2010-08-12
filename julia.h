@@ -452,6 +452,8 @@ void jl_type_error_rt(const char *fname, const char *context,
 void jl_no_method_error(jl_sym_t *name, jl_value_t **args, size_t nargs);
 
 // initialization functions
+void julia_init();
+int jl_load_startup_file();
 void jl_init_types();
 void jl_init_builtin_types();
 void jl_init_frontend();

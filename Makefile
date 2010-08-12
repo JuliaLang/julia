@@ -1,6 +1,6 @@
 NAME = julia
 SRCS = jltypes gf ast repl builtins module codegen interpreter alloc dlload \
-	multi
+	multi init
 OBJS = $(SRCS:%=%.o)
 DOBJS = $(SRCS:%=%.do)
 EXENAME = $(NAME)

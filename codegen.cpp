@@ -991,6 +991,8 @@ static AllocaInst *alloc_local(char *name, jl_codectx_t *ctx)
     return lv;
 }
 
+extern char *jl_stack_bottom;
+
 static void emit_function(jl_lambda_info_t *lam, Function *f)
 {
     jl_expr_t *ast = (jl_expr_t*)lam->ast;
@@ -1027,6 +1029,18 @@ static void emit_function(jl_lambda_info_t *lam, Function *f)
     ctx.argCount = &argCount;
     ctx.funcName = lam->name->name;
 
+    /*
+    // check for stack overflow (the slower way)
+    Value *cur_sp =
+        builder.CreateCall(Intrinsic::getDeclaration(jl_Module,
+                                                     Intrinsic::frameaddress),
+                           ConstantInt::get(T_int32, 0));
+    Value *sp_ok =
+        builder.CreateICmpUGT(cur_sp,
+                              ConstantInt::get(T_size,
+                                               (uptrint_t)jl_stack_bottom));
+    error_unless(sp_ok, "stack overflow", &ctx);
+    */
     // process var-info lists to see what vars are captured, need boxing
     jl_array_t *vinfos = jl_lam_vinfo(ast);
     size_t i;
