@@ -1,11 +1,12 @@
 struct SparseMatrix{T} <: Matrix{T}
     m::Size
     n::Size
-    numnz::Size
     colptr::Vector{Size}
     rowval::Vector{Size}
     nzval::Vector{T}
 end
+
+nnz(S::SparseMatrix) = S.colptr[S.n+1] - 1
 
 function sparse{T}(I::Vector{Size}, 
                    J::Vector{Size}, 
@@ -31,10 +32,35 @@ function sparse{T}(I::Vector{Size},
     rowval = copy(I)
     nzval = copy(V)
 
-    return SparseMatrix(m,n,numnz,colptr,rowval,nzval)
+    return SparseMatrix(m,n,colptr,rowval,nzval)
 end
 
-nnz(S::SparseMatrix) = S.colptr[S.n+1]
+function find{T}(S::SparseMatrix{T})
+    numnz = nnz(S)
+    I = Array(Size, numnz)
+    J = Array(Size, numnz)
+    V = Array(T, numnz)
+
+    count = 1
+    for col = 1 : S.n
+        for k = S.colptr[col] : (S.colptr[col+1]-1)
+            if S.nzval[k] != 0
+                I[count] = S.rowval[k]
+                J[count] = col
+                V[count] = S.nzval[k]
+                count += 1
+            end
+        end
+    end
+
+    if numnz != count-1
+        I = I[1:count]
+        J = J[1:count]
+        V = V[1:count]
+    end
+
+    return (I, J, V)
+end
 
 sprand(m,n,density) = sprand_rng (m,n,density,rand)
 sprandn(m,n,density) = sprand_rng (m,n,density,randn)
@@ -48,9 +74,14 @@ function sprand_rng(m, n, density, rng)
     S = sparse(I, J, V, m, n)
 end
 
+transpose(S::SparseMatrix) = ((I,J,V) = find(S); 
+                              sparse (J, I, V, S.n, S.m) )
+ctranspose(S::SparseMatrix) = ((I,J,V) = find(S); 
+                               sparse (J, I, conj(V), S.n, S.m) )
+
 function print(S::SparseMatrix)
-    for col = 1:S.n
-        for k = S.colptr[col]:S.colptr[col+1]-1
+    for col = 1 : S.n
+        for k = S.colptr[col] : (S.colptr[col+1]-1)
             print ("(", S.rowval[k], ",", col, ")   ", S.nzval[k], "\n")
         end
     end
