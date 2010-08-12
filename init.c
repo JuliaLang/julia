@@ -92,15 +92,19 @@ void julia_init()
     ss.ss_flags = 0;
     ss.ss_size = 4096;
     ss.ss_sp = malloc(ss.ss_size);
-    if (sigaltstack(&ss, NULL) < 0)
+    if (sigaltstack(&ss, NULL) < 0) {
+        ios_printf(ios_stderr, "sigaltstack: %s\n", strerror(errno));
         exit(1);
+    }
     struct sigaction act;
     memset(&act, 0, sizeof(struct sigaction));
     sigemptyset(&act.sa_mask);
     act.sa_sigaction = segv_handler;
     act.sa_flags = SA_ONSTACK | SA_SIGINFO;
-    if (sigaction(SIGSEGV, &act, NULL) < 0)
+    if (sigaction(SIGSEGV, &act, NULL) < 0) {
+        ios_printf(ios_stderr, "sigaction: %s\n", strerror(errno));
         exit(1);
+    }
 }
 
 jl_function_t *jl_typeinf_func=NULL;
