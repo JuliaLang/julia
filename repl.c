@@ -9,6 +9,7 @@
 #include <setjmp.h>
 #include <signal.h>
 #include <assert.h>
+#include <time.h>
 #if defined(LINUX) || defined(MACOSX)
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -477,6 +478,8 @@ void jl_lisp_prompt();
 
 int main(int argc, char *argv[])
 {
+    clock_t julia_launch_tic = clock();
+
     llt_init();
     parse_opts(&argc, &argv);
     julia_init();
@@ -542,8 +545,11 @@ int main(int argc, char *argv[])
     char *prompt = have_color ? jl_prompt_color : jl_prompt_plain;
     prompt_length = strlen(jl_prompt_plain);
 
-    if (print_banner)
+    if (print_banner) {
         ios_printf(ios_stdout, "%s", banner);
+	ios_printf(ios_stdout, "Startup time: %.1f seconds\n", 
+		   (clock()-julia_launch_tic) / (double)CLOCKS_PER_SEC);
+    }
 
     if (!setjmp(ExceptionHandler))
         kill(getpid(), SIGFPE);
