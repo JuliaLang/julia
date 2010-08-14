@@ -119,6 +119,7 @@ after
 # can be optimized to:
 
 before
+C = current_coroutine()
 eh = copy_coroutine(current_coroutine())
 prev = current_exception_handler()
 current_exception_handler(eh)
@@ -126,6 +127,8 @@ if (!setjmp(eh._ctxt))
   try_block
 else
   current_exception_handler(prev)
+  mark_done(eh)  # make sure nobody yields to this task again
+  current_coroutine(C)  # make it look like C is running
   catch_block
 end
 current_exception_handler(prev)

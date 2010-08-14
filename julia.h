@@ -252,6 +252,7 @@ extern jl_type_t *jl_array_any_type;
 extern jl_struct_type_t *jl_expr_type;
 extern jl_bits_type_t *jl_intrinsic_type;
 extern jl_struct_type_t *jl_methtable_type;
+extern jl_struct_type_t *jl_task_type;
 
 extern jl_tuple_t *jl_null;
 extern jl_value_t *jl_true;
@@ -335,6 +336,7 @@ extern jl_sym_t *static_typeof_sym;
 #define jl_is_expr(v)        jl_typeis(v,jl_expr_type)
 #define jl_is_lambda_info(v) jl_typeis(v,jl_lambda_info_type)
 #define jl_is_mtable(v)      jl_typeis(v,jl_methtable_type)
+#define jl_is_task(v)        jl_typeis(v,jl_task_type)
 #define jl_is_func(v)        (jl_is_func_type(jl_typeof(v)) || jl_is_struct_type(v))
 #define jl_is_function(v)    jl_is_func(v)
 #define jl_is_array(v)       (((jl_tag_type_t*)jl_typeof(v))->name==jl_array_typename)
@@ -462,6 +464,7 @@ void jl_init_builtins();
 void jl_init_modules();
 void jl_init_codegen();
 void jl_init_intrinsic_functions();
+void jl_init_tasks(void *stack, size_t ssize);
 
 // front end interface
 jl_value_t *jl_parse_input_line(const char *str);
@@ -522,6 +525,9 @@ jl_value_t *jl_apply(jl_function_t *f, jl_value_t **args, uint32_t nargs)
 {
     return f->fptr(f->env, args, nargs);
 }
+
+void jl_add_builtin(const char *name, jl_value_t *v);
+void jl_add_builtin_func(const char *name, jl_fptr_t f);
 
 JL_CALLABLE(jl_f_no_function);
 JL_CALLABLE(jl_f_tuple);

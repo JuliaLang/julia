@@ -85,6 +85,7 @@ void julia_init()
     jl_init_modules();
     jl_init_builtins();
     jl_init_codegen();
+    jl_init_tasks(jl_stack_bottom, jl_stack_top-jl_stack_bottom);
 
     signal(SIGFPE, fpe_handler);
 

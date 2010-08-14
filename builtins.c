@@ -1283,6 +1283,16 @@ static void add_builtin_func(const char *name, jl_fptr_t f)
     add_builtin(name, (jl_value_t*)jl_new_closure(f, NULL));
 }
 
+void jl_add_builtin_func(const char *name, jl_fptr_t f)
+{
+    return add_builtin_func(name, f);
+}
+
+void jl_add_builtin(const char *name, jl_value_t *v)
+{
+    return add_builtin(name, v);
+}
+
 void jl_init_builtins()
 {
     current_output_stream = ios_stdout;
