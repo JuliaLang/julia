@@ -1,3 +1,25 @@
+## multi.j - multiprocessing
+##
+## higher-level interface:
+##
+## Worker() - create a new local worker
+##
+## remote_apply(w, func, args...) -
+##     tell a worker to call a function on the given arguments.
+##     for now, functions are passed as symbols, e.g. `randn
+##     returns a Future.
+##
+## wait(f) - wait for, then return the value represented by a Future
+##
+## pmap(pool, func, lst) -
+##     call a function on each element of lst (some 1-d thing), in
+##     parallel. pool is a list of available Workers.
+##
+## lower-level interface:
+##
+## send_msg(socket, x) - send a Julia object through a socket
+## recv_msg(socket) - read the next Julia object from a socket
+
 recv_msg(s) = deserialize(s)
 send_msg(s, x) = (serialize(s, x); flush(s))
 
@@ -89,6 +111,9 @@ struct Future
     val
 end
 
+# todo:
+# - remote references
+
 function remote_apply(w::Worker, f, args...)
     w.maxid += 1
     nid = w.maxid
@@ -145,7 +170,8 @@ function wait(f::Future)
 end
 
 function pmap(wpool, fname, lst)
-    fut = { remote_apply(wpool[(i-1)%length(wpool)+1], fname, lst[i]) |
+    nw = length(wpool)
+    fut = { remote_apply(wpool[(i-1)%nw+1], fname, lst[i]) |
            i = 1:length(lst) }
     for i=1:length(fut)
         fut[i] = wait(fut[i])
