@@ -55,9 +55,8 @@ static void boundhigh(struct _probe_data *p)
 
 static void probe(struct _probe_data *p)
 {
-    int c;
     p->prior_local = p->probe_local;
-    p->probe_local = (intptr_t)&c;
+    p->probe_local = (intptr_t)&p;
     setjmp( *(p->ref_probe) );
     p->ref_probe = &p->probe_env;
     setjmp( p->probe_sameAR );
@@ -103,9 +102,12 @@ static void _infer_jmpbuf_offsets(struct _probe_data *pb)
         }
     }
 
+    /*
     _frame_offset = (_stack_grows_up
                      ? pb->probe_local - min_frame
                      : min_frame - pb->probe_local);
+    */
+    _frame_offset = labs(prior_diff);
 }
 
 static void _infer_direction_from(int *first_addr)
@@ -200,33 +202,29 @@ static void rebase_state(jmp_buf *ctx, intptr_t local_sp, intptr_t new_sp)
 {
     ptrint_t *s = (ptrint_t*)ctx;
     ptrint_t diff = new_sp - local_sp; /* subtract old base, and add new base */
-    int i;
-    // ebp
+#if defined(ARCH_X86) && defined(LINUX)
     s[3] += diff;
-    // esp; but glibc mangles the pointer!
-    //s[4] += diff;
-#if defined(ARCH_X86)
     s[4] = ptr_mangle(ptr_demangle(s[4])+diff);
-#endif
-    /*
+#else
+    int i;
     for (i=0; i < _offsets_len; i++) {
         s[_offsets[i]] += diff;
     }
-    */
+#endif
 }
 
 static void init_task(jl_task_t *t)
 {
     if (setjmp(t->ctx)) {
-        jl_apply(t->start, NULL, 0);
+        // this runs the first time we switch to t
+        jl_value_t *ret = jl_apply(t->start, NULL, 0);
         t->done = 1;
-        jl_switchto(t->on_exit, (jl_value_t*)jl_null);
+        jl_switchto(t->on_exit, ret);
     }
-    size_t framesz = 32;//_frame_offset + sizeof(void*);
-    ptrint_t local_sp;
-    local_sp = (ptrint_t)&local_sp;
-    ptrint_t new_sp = (ptrint_t)t->stack + t->ssize - framesz;
-    memcpy((void*)new_sp, (void*)local_sp, framesz);
+    // this runs when the task is created
+    ptrint_t local_sp = (ptrint_t)&t;
+    ptrint_t new_sp = (ptrint_t)t->stack + t->ssize - _frame_offset;
+    memcpy((void*)new_sp, (void*)local_sp, _frame_offset);
     rebase_state(&t->ctx, local_sp, new_sp);
 }
 
@@ -277,7 +275,6 @@ void jl_init_tasks(void *stack, size_t ssize)
     jl_task_type->fptr = jl_f_task;
 
     jl_current_task = (jl_task_t*)allocb(sizeof(jl_task_t));
-    memset(&jl_current_task->ctx, 0, sizeof(jmp_buf));
     jl_current_task->type = (jl_type_t*)jl_task_type;
     jl_current_task->ssize = ssize;
     jl_current_task->stack = stack;
