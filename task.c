@@ -168,31 +168,45 @@ jl_value_t *jl_switchto(jl_task_t *t, jl_value_t *arg)
 }
 
 #if defined(ARCH_X86)
-static int ptr_mangle(int p)
+static intptr_t ptr_mangle(intptr_t p)
 {
-    unsigned int ret;
+    intptr_t ret;
     asm(" movl %1, %%eax;\n"
         " xorl %%gs:0x18, %%eax;"
-        " roll $0x9, %%eax;"
+        " roll $9, %%eax;"
         " movl %%eax, %0;"
-        : "=r"(ret)
-        : "r"(p)
-        : "%eax"
-        );
+        : "=r"(ret) : "r"(p) : "%eax");
     return ret;
 }
-
-static int ptr_demangle(int p)
+static intptr_t ptr_demangle(intptr_t p)
 {
-    unsigned int ret;
+    intptr_t ret;
     asm(" movl %1, %%eax;\n"
-        " rorl $0x9, %%eax;"
+        " rorl $9, %%eax;"
         " xorl %%gs:0x18, %%eax;"
         " movl %%eax, %0;"
-        : "=r"(ret)
-        : "r"(p)
-        : "%eax"
-        );
+        : "=r"(ret) : "r"(p) : "%eax" );
+    return ret;
+}
+#elif defined(ARCH_X86_64)
+static intptr_t ptr_mangle(intptr_t p)
+{
+    intptr_t ret;
+    asm(" movq %1, %%rax;\n"
+        " xorq %%fs:0x30, %%rax;"
+        " rolq $17, %%rax;"
+        " movq %%rax, %0;"
+        : "=r"(ret) : "r"(p) : "%rax");
+    return ret;
+}
+static intptr_t ptr_demangle(intptr_t p)
+{
+    intptr_t ret;
+    asm(" movq %1, %%rax;\n"
+        " rorq $17, %%rax;"
+        " xorq %%fs:0x30, %%rax;"
+        " movq %%rax, %0;"
+        : "=r"(ret) : "r"(p) : "%rax" );
     return ret;
 }
 #endif
@@ -202,10 +216,20 @@ static void rebase_state(jmp_buf *ctx, intptr_t local_sp, intptr_t new_sp)
 {
     ptrint_t *s = (ptrint_t*)ctx;
     ptrint_t diff = new_sp - local_sp; /* subtract old base, and add new base */
-#if defined(ARCH_X86) && defined(LINUX)
+#if defined(LINUX) && defined(ARCH_X86)
     s[3] += diff;
     s[4] = ptr_mangle(ptr_demangle(s[4])+diff);
+#elif defined(LINUX) && defined(ARCH_X86_64)
+    s[1] = ptr_mangle(ptr_demangle(s[1])+diff);
+    s[6] = ptr_mangle(ptr_demangle(s[6])+diff);
+#elif defined(MACOSX) && defined(ARCH_X86)
+    s[8] += diff;
+    s[9] += diff;
+#elif defined(MACOSX) && defined(ARCH_X86_64)
+    s[1] += diff;
+    s[2] += diff;
 #else
+    // use automated guess and hope for the best
     int i;
     for (i=0; i < _offsets_len; i++) {
         s[_offsets[i]] += diff;
