@@ -28,7 +28,8 @@ load("math.j")
 load("blas.j")
 load("lapack.j")
 
-# interface
+# I/O and concurrency
+load("task.j")
 load("io.j")
 load("multi.j")
 

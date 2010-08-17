@@ -142,6 +142,12 @@ static void _probe_arch()
 
 /* end probing code */
 
+/*
+  TODO:
+  - per-task storage (scheme-like parameters)
+  - stack growth
+*/
+
 typedef struct _jl_task_t {
     JL_VALUE_STRUCT
     struct _jl_task_t *on_exit;
@@ -244,7 +250,11 @@ static void init_task(jl_task_t *t)
         // this runs the first time we switch to t
         jl_value_t *ret = jl_apply(t->start, NULL, 0);
         t->done = 1;
-        jl_switchto(t->on_exit, ret);
+        jl_task_t *cont = t->on_exit;
+        // if parent task has exited, try its parent, and so on
+        while (cont->done)
+            cont = cont->on_exit;
+        jl_switchto(cont, ret);
     }
     // this runs when the task is created
     ptrint_t local_sp = (ptrint_t)&t;
@@ -271,7 +281,17 @@ JL_CALLABLE(jl_f_task)
 {
     JL_NARGS(Task, 1, 2);
     JL_TYPECHK(Task, function, args[0]);
+    /*
+      we need a somewhat large stack, because execution can trigger
+      compilation, which uses perhaps too much stack space.
+    */
     size_t ssize = 16384;
+#ifdef BITS64
+    ssize *= 2;
+#ifdef LINUX
+    ssize *= 2;
+#endif
+#endif
     if (nargs == 2) {
         JL_TYPECHK(Task, int32, args[1]);
         ssize = jl_unbox_int32(args[1]);
@@ -295,6 +315,13 @@ JL_CALLABLE(jl_f_current_task)
     return (jl_value_t*)jl_current_task;
 }
 
+JL_CALLABLE(jl_f_taskdone)
+{
+    JL_NARGS(task_done, 1, 1);
+    JL_TYPECHK(task_done, task, args[0]);
+    return ((jl_task_t*)args[0])->done ? jl_true : jl_false;
+}
+
 void jl_init_tasks(void *stack, size_t ssize)
 {
     _probe_arch();
@@ -316,4 +343,5 @@ void jl_init_tasks(void *stack, size_t ssize)
     jl_add_builtin("Task", (jl_value_t*)jl_task_type);
     jl_add_builtin_func("yieldto", jl_f_yieldto);
     jl_add_builtin_func("current_task", jl_f_current_task);
+    jl_add_builtin_func("task_done", jl_f_taskdone);
 }

@@ -2331,7 +2331,9 @@ value_t fl_toplevel_eval(value_t expr)
 
 void fl_init(size_t initial_heapsize)
 {
+#ifdef BOEHM_GC
     GC_init();
+#endif
     lisp_init(initial_heapsize);
 }
 
