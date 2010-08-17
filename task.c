@@ -65,11 +65,12 @@ static void probe(struct _probe_data *p)
 
 static void boundlow(struct _probe_data *p)
 {
-    int c;
-    p->low_bound = (intptr_t)&c;
+    p->low_bound = (intptr_t)&p;
     probe(p);
 }
 
+// we need this function to exist so we can measure its stack frame!
+static void fill(struct _probe_data *p) __attribute__ ((noinline));
 static void fill(struct _probe_data *p)
 {
     boundlow(p);
@@ -270,7 +271,7 @@ JL_CALLABLE(jl_f_task)
 {
     JL_NARGS(Task, 1, 2);
     JL_TYPECHK(Task, function, args[0]);
-    size_t ssize = 8192;
+    size_t ssize = 16384;
     if (nargs == 2) {
         JL_TYPECHK(Task, int32, args[1]);
         ssize = jl_unbox_int32(args[1]);

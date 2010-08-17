@@ -483,6 +483,7 @@ int main(int argc, char *argv[])
 {
     double julia_launch_tic = clock_now();
 
+    GC_init();
     llt_init();
     parse_opts(&argc, &argv);
     julia_init();
