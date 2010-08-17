@@ -2331,6 +2331,7 @@ value_t fl_toplevel_eval(value_t expr)
 
 void fl_init(size_t initial_heapsize)
 {
+    GC_init();
     lisp_init(initial_heapsize);
 }
 
