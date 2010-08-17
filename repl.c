@@ -474,11 +474,14 @@ static jl_value_t *read_expr_ast(char *prompt, int *end, int *doprint) {
 #endif
 }
 
+// TODO: sigfpe hack
+extern int jl_fpe_err_msg;
+
 void jl_lisp_prompt();
 
 int main(int argc, char *argv[])
 {
-    clock_t julia_launch_tic = clock();
+    double julia_launch_tic = clock_now();
 
     llt_init();
     parse_opts(&argc, &argv);
@@ -547,12 +550,14 @@ int main(int argc, char *argv[])
 
     if (print_banner) {
         ios_printf(ios_stdout, "%s", banner);
-	ios_printf(ios_stdout, "Startup time: %.1f seconds\n", 
-		   (clock()-julia_launch_tic) / (double)CLOCKS_PER_SEC);
+	ios_printf(ios_stdout, "Startup time: %.1f seconds\n\n", 
+		   (clock_now()-julia_launch_tic));
     }
 
+    // TODO: sigfpe hack
     if (!setjmp(ExceptionHandler))
         kill(getpid(), SIGFPE);
+    jl_fpe_err_msg = 1;
 
     while (1) {
         ios_flush(ios_stdout);

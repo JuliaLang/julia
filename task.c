@@ -252,13 +252,12 @@ static void init_task(jl_task_t *t)
     rebase_state(&t->ctx, local_sp, new_sp);
 }
 
-jl_task_t *jl_new_task(jl_function_t *start)
+jl_task_t *jl_new_task(jl_function_t *start, size_t ssize)
 {
     jl_task_t *t = (jl_task_t*)allocb(sizeof(jl_task_t));
-    memset(&t->ctx, 0, sizeof(jmp_buf));
     t->type = (jl_type_t*)jl_task_type;
-    t->ssize = 8192;
-    t->stack = allocb(t->ssize);
+    t->ssize = ssize;
+    t->stack = allocb(ssize);
     t->on_exit = jl_current_task;
     t->done = 0;
     t->start = start;
@@ -269,9 +268,16 @@ jl_task_t *jl_new_task(jl_function_t *start)
 
 JL_CALLABLE(jl_f_task)
 {
-    JL_NARGS(Task, 1, 1);
+    JL_NARGS(Task, 1, 2);
     JL_TYPECHK(Task, function, args[0]);
-    return (jl_value_t*)jl_new_task((jl_function_t*)args[0]);
+    size_t ssize = 8192;
+    if (nargs == 2) {
+        JL_TYPECHK(Task, int32, args[1]);
+        ssize = jl_unbox_int32(args[1]);
+        if (ssize < 4096)
+            jl_error("Task: stack size too small");
+    }
+    return (jl_value_t*)jl_new_task((jl_function_t*)args[0], ssize);
 }
 
 JL_CALLABLE(jl_f_yieldto)

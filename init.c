@@ -31,6 +31,7 @@ jmp_buf *CurrentExceptionHandler = &ExceptionHandler;
 
 char *jl_stack_bottom;
 char *jl_stack_top;
+int jl_fpe_err_msg = 0;
 
 static void jl_find_stack_bottom()
 {
@@ -54,7 +55,10 @@ void fpe_handler(int arg)
     sigaddset(&sset, SIGFPE);
     sigprocmask(SIG_UNBLOCK, &sset, NULL);
 
-    jl_error("error: integer divide by zero");
+    if (jl_fpe_err_msg)
+        jl_error("error: integer divide by zero");
+    else
+        longjmp(*CurrentExceptionHandler, 1);
 }
 
 void segv_handler(int sig, siginfo_t *info, void *context)
