@@ -172,7 +172,7 @@ extern value_t fl_lasterror;
   fl_exception_context_t _ctx; int l__tr, l__ca;                        \
   fl_savestate(&_ctx); fl_ctx = &_ctx;                                  \
   if (!setjmp(_ctx.buf))                                                \
-    for (l__tr=1; l__tr; l__tr=0, (void)(fl_ctx->prev&&(fl_ctx=fl_ctx->prev)))
+    for (l__tr=1; l__tr; l__tr=0, (void)(fl_ctx=fl_ctx->prev))
 
 #define FL_CATCH_EXTERN \
   else \

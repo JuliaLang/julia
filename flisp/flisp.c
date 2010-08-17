@@ -143,7 +143,7 @@ value_t fl_lasterror;
   _ctx.sp=SP; _ctx.frame=curr_frame; _ctx.rdst=readstate; _ctx.prev=fl_ctx; \
   _ctx.ngchnd = N_GCHND; fl_ctx = &_ctx;                                    \
   if (!setjmp(_ctx.buf)) \
-    for (l__tr=1; l__tr; l__tr=0, (void)(fl_ctx->prev&&(fl_ctx=fl_ctx->prev)))
+    for (l__tr=1; l__tr; l__tr=0, (void)(fl_ctx=fl_ctx->prev))
 
 #define FL_CATCH \
   else \

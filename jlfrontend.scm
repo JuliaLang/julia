@@ -8,9 +8,11 @@
   (with-exception-catcher
    (lambda (e)
      (if (and (pair? e) (eq? (car e) 'error))
-	 (let ((msg (cadr e)))
-	   (if (equal? "incomplete:"
-	               (substring msg 0 (string-length "incomplete:")))
+	 (let ((msg (cadr e))
+	       (pfx "incomplete:"))
+	   (if (and (>= (string-length msg) (string-length pfx))
+		    (equal? pfx
+			    (substring msg 0 (string-length pfx))))
 	       `(continue)
 	       `(error ,msg)))
 	 (begin
