@@ -66,11 +66,19 @@ function anyfunc(args...)
     ...
 end
 
+function wait(t::Task)
+    local v
+    while !done(t)
+        v = yieldto(t)
+    end
+    v
+end
+
 function spawn(thunk)
     c = coroutine(thunk)
     make_runnable(c)
     # return a thunk that forces the coroutine to finish.
-    return ()->(while !done(c); yieldto(c); end; yieldto(c))
+    return ()->wait(c)
 end
 
 # pick and run 1 task until it yields
@@ -93,32 +101,34 @@ end
 
 # implementing try/catch exception handling
 
-before
 try
     try_block
-catch
+catch E
     catch_block
 end
-after
 
 |
 V
 
-before
-C = current_coroutine()
-prev = current_exception_handler()
-eh = coroutine(()->(current_exception_handler(prev);
-                    catch_block;
-                    yieldto(C)))
-current_exception_handler(eh)
-totry = coroutine(()->try_block)
-yieldto(totry)
-current_exception_handler(prev)
-after
+C = current_task()
+error = false
+eh = err->(error=true; yieldto(C, err))
+t = Task(()->try_block)
+t.exception_handler = eh
+local v
+while !task_done(t)
+    v = yieldto(t)
+    if (error)
+        error = false
+        E = v
+        v = catch_block
+        break
+    end
+end
+v
 
 # can be optimized to:
 
-before
 C = current_coroutine()
 eh = copy_coroutine(current_coroutine())
 prev = current_exception_handler()
@@ -132,4 +142,3 @@ else
   catch_block
 end
 current_exception_handler(prev)
-after

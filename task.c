@@ -174,6 +174,7 @@ jl_value_t *jl_switchto(jl_task_t *t, jl_value_t *arg)
     return task_arg_in_transit;
 }
 
+#ifdef LINUX
 #if defined(ARCH_X86)
 static intptr_t ptr_mangle(intptr_t p)
 {
@@ -217,6 +218,7 @@ static intptr_t ptr_demangle(intptr_t p)
     return ret;
 }
 #endif
+#endif //LINUX
 
 /* rebase any values in saved state to the new stack */
 static void rebase_state(jmp_buf *ctx, intptr_t local_sp, intptr_t new_sp)
