@@ -127,18 +127,23 @@ while !task_done(t)
 end
 v
 
-# can be optimized to:
+# the eh function can be replaced by "error" and "eh" fields in task_t
+# eh will be a task_t* and a jmp_buf*, since the exception context does not
+# have to be the same as the task context, making it possible to avoid
+# creating a new task (as an optimization).
 
-C = current_coroutine()
-eh = copy_coroutine(current_coroutine())
-prev = current_exception_handler()
-current_exception_handler(eh)
-if (!setjmp(eh._ctxt))
+# for non-continuable errors:
+
+C = current_task()
+prev = C.eh
+save = copy(C.parameters)
+C.eh = new_jmp_buf()
+if (!setjmp(C.eh))
   try_block
 else
-  current_exception_handler(prev)
-  mark_done(eh)  # make sure nobody yields to this task again
-  current_coroutine(C)  # make it look like C is running
+  C.eh = prev
+  C.parameters = save
   catch_block
 end
-current_exception_handler(prev)
+C.eh = prev
+C.parameters = save

@@ -114,7 +114,8 @@ mantissa(x::Float32) = ccall(dlsym(JuliaDLHandle,"float_mantissa"),
 integer_valued(x::Float64) = (trunc(x)==x && abs(x)<=9007199254740992.)
 integer_valued(x::Float32) = (trunc(x)==x && abs(x)<=float32(16777216.))
 
-pi(x) = 3.14159265358979323846
+pi() = 3.14159265358979323846
+pi(x) = pi()
 pi(::Union(Float64, Type{Float64})) = 3.14159265358979323846
 pi(::Union(Float32, Type{Float32})) = float32(3.14159265358979323846)
 

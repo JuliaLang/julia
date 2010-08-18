@@ -322,7 +322,7 @@ ref(A::Matrix,I,j::Index) = [ A[i,j] | i = jl_fill_endpts(A,1,I) ]
 
 function ref(a::Array, I::Index...) 
     dims = a.dims
-    ndims = length(I) - 1
+    ndims = length(I)
 
     index = I[1]
     stride = 1

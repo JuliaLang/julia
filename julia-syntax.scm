@@ -774,14 +774,17 @@
 	      (else (cons e '())))
 
 	(case (car e)
-	  ((=)  (let ((r (to-lff (caddr e) (cadr e) #f)))
-		  (cond ((symbol? dest)
-			 (cons `(block ,(car r)
-				       (= ,dest ,(cadr e)))
-			       (cdr r)))
-			(dest
-			 (cons (if tail `(return ,(cadr e)) (cadr e)) r))
-			(else r))))
+	  ((=)
+	   (if (not (symbol? (cadr e)))
+	       (error "invalid assignment statement")
+	       (let ((r (to-lff (caddr e) (cadr e) #f)))
+		 (cond ((symbol? dest)
+			(cons `(block ,(car r)
+				      (= ,dest ,(cadr e)))
+			      (cdr r)))
+		       (dest
+			(cons (if tail `(return ,(cadr e)) (cadr e)) r))
+		       (else r)))))
 
 	  ((if)
 	   (cond ((or tail (eq? dest #f) (symbol? dest))

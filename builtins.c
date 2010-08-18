@@ -215,15 +215,23 @@ int asprintf(char **strp, const char *fmt, ...);
 void jl_load(const char *fname)
 {
     char *fpath = (char*)fname;
-    if (julia_home && !strchr(fname, '/'))
-        asprintf(&fpath, "%s/%s", julia_home, fname);
     int fid = open (fpath, O_RDONLY);
+    // try adding julia home and .j
+    if (fid == -1 && julia_home && fname[0] != '/') {
+        asprintf(&fpath, "%s/%s", julia_home, fname);
+        fid = open (fpath, O_RDONLY);
+        if (fid == -1) {
+            asprintf(&fpath, "%s/%s.j", julia_home, fname);
+            fid = open (fpath, O_RDONLY);
+        }
+    }
+    // try adding just .j
     if (fid == -1) {
-      asprintf(&fpath, "%s/%s.j", julia_home, fname);
-      fid = open (fpath, O_RDONLY);
-      if (fid == -1) {
-	jl_errorf("could not open file %s", fpath);
-      }
+        asprintf(&fpath, "%s.j", fname);
+        fid = open (fpath, O_RDONLY);
+        if (fid == -1) {
+            jl_errorf("could not open file %s", fpath);
+        }
     }
     close(fid);
 
