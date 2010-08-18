@@ -432,17 +432,11 @@ TODO:
 	  (else
 	   (parse-factor s)))))
 
-; handle ^, .^, and postfix transpose operator
+; handle ^, .^, and postfix ...
 (define (parse-factor-h s down ops)
   (let ((ex (down s)))
     (let ((t (peek-token s)))
-      (cond ((eq? t ctrans-op)
-	     (take-token s)
-	     (list 'call 'ctranspose ex))
-	    ((eq? t trans-op)
-	     (take-token s)
-	     (list 'call 'transpose ex))
-	    ((eq? t '...)
+      (cond ((eq? t '...)
 	     (take-token s)
 	     (list '... ex))
 	    ((not (memq t ops))
@@ -458,7 +452,7 @@ TODO:
 
 (define (parse-decl s) (parse-LtoR s parse-call (prec-ops 11)))
 
-; parse function call, indexing, and dot expressions
+; parse function call, indexing, dot, and transpose expressions
 ; also handles looking for syntactic reserved words
 (define (parse-call s)
   (let ((ex (parse-atom s)))
@@ -466,8 +460,6 @@ TODO:
 	(parse-resword s ex)
 	(let loop ((ex ex))
 	  (case (peek-token s)
-	    ((|.|)
-	     (loop (list (take-token s) ex (parse-atom s))))
 	    ((#\( )   (take-token s)
 	     (loop (list* 'call ex (parse-arglist s #\) ))))
 	    ((#\[ )   (take-token s)
@@ -475,6 +467,14 @@ TODO:
 	     ; a[i] = x  from
 	     ; ref(a,i) = x
 	     (loop (list* 'ref ex  (parse-arglist s #\] ))))
+	    ((|.|)
+	     (loop (list (take-token s) ex (parse-atom s))))
+	    ((|.'|)
+	     (take-token s)
+	     (loop (list 'call 'transpose ex)))
+	    ((|'|)
+	     (take-token s)
+	     (loop (list 'call 'ctranspose ex)))
 	    ((#\{ )   (take-token s)
 	     (loop (list* 'curly ex (parse-arglist s #\} ))))
 	    (else ex))))))
