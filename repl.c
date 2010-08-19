@@ -32,9 +32,6 @@
 #include "llt.h"
 #include "julia.h"
 
-extern jmp_buf ExceptionHandler;
-extern jmp_buf *CurrentExceptionHandler;
-
 static char jl_banner_plain[] =
     "               _      \n"
     "   _       _ _(_)_     |\n"
@@ -474,8 +471,28 @@ static jl_value_t *read_expr_ast(char *prompt, int *end, int *doprint) {
 #endif
 }
 
+static int exec_program()
+{
+    JL_TRY {
+        jl_load(program);
+    }
+    JL_CATCH {
+        return 1;
+    }
+    return 0;
+}
+
 // TODO: sigfpe hack
 extern int jl_fpe_err_msg;
+static void awful_sigfpe_hack()
+{
+    JL_TRY {
+        kill(getpid(), SIGFPE);
+    }
+    JL_CATCH {
+    }
+    jl_fpe_err_msg = 1;
+}
 
 void jl_lisp_prompt();
 
@@ -536,12 +553,7 @@ int main(int argc, char *argv[])
         return 0;
     }
     if (program) {
-        if (!setjmp(ExceptionHandler)) {
-            jl_load(program);
-        } else {
-            return 1;
-        }
-        return 0;
+        return exec_program();
     }
 
     have_color = detect_color();
@@ -555,15 +567,14 @@ int main(int argc, char *argv[])
 		   (clock_now()-julia_launch_tic));
     }
 
-    // TODO: sigfpe hack
-    if (!setjmp(ExceptionHandler))
-        kill(getpid(), SIGFPE);
-    jl_fpe_err_msg = 1;
+    awful_sigfpe_hack();
 
-    while (1) {
-        ios_flush(ios_stdout);
+ again:
+    ;
+    JL_TRY {
+        while (1) {
+            ios_flush(ios_stdout);
 
-        if (!setjmp(ExceptionHandler)) {
             int end = 0;
             int print_value = 1;
             jl_value_t *ast = read_expr_ast(prompt, &end, &print_value);
@@ -583,10 +594,14 @@ int main(int argc, char *argv[])
                     ios_printf(ios_stdout, "\n");
                 }
             }
+            ios_printf(ios_stdout, "\n");
         }
-
-        ios_printf(ios_stdout, "\n");
     }
+    JL_CATCH {
+        ios_printf(ios_stdout, "\n");
+        goto again;
+    }
+
     if (have_color) {
         ios_printf(ios_stdout, jl_color_normal);
         ios_flush(ios_stdout);

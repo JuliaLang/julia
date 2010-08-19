@@ -3,6 +3,7 @@
 
 #include "htable.h"
 #include "arraylist.h"
+#include <setjmp.h>
 
 #define JL_VALUE_STRUCT \
     struct _jl_type_t *type;
@@ -207,6 +208,7 @@ extern jl_typename_t *jl_tuple_typename;
 extern jl_tag_type_t *jl_ntuple_type;
 extern jl_typename_t *jl_ntuple_typename;
 extern jl_struct_type_t *jl_tvar_type;
+extern jl_struct_type_t *jl_task_type;
 
 extern jl_struct_type_t *jl_func_kind;
 extern jl_struct_type_t *jl_union_kind;
@@ -545,5 +547,73 @@ JL_CALLABLE(jl_apply_generic);
     if (!jl_is_##type(v)) {                     \
         jl_type_error(#fname, #type, (v));      \
     }
+
+// tasks
+
+// context that needs to be restored around a try block
+typedef struct _jl_savestate_t {
+    // eh_task is who I yield to for exception handling
+    struct _jl_task_t *eh_task;
+    // eh_ctx is where I go to handle an exception yielded to me
+    jmp_buf *eh_ctx;
+    int err;
+    ios_t *current_output_stream;
+} jl_savestate_t;
+
+typedef struct _jl_task_t {
+    JL_VALUE_STRUCT
+    struct _jl_task_t *on_exit;
+    jmp_buf ctx;
+    void *stack;
+    size_t ssize;
+    jl_function_t *start;
+    int done;
+    // exception state and per-task dynamic parameters
+    jl_savestate_t state;
+} jl_task_t;
+
+extern jl_task_t * volatile jl_current_task;
+extern jl_task_t *jl_root_task;
+
+jl_task_t *jl_new_task(jl_function_t *start, size_t ssize);
+jl_value_t *jl_switchto(jl_task_t *t, jl_value_t *arg);
+void jl_raise();
+
+static inline ios_t *jl_current_output_stream()
+{
+    return jl_current_task->state.current_output_stream;
+}
+
+static inline void jl_set_current_output_stream(ios_t *s)
+{
+    jl_current_task->state.current_output_stream = s;
+}
+
+static inline void jl_eh_save_state(jl_savestate_t *ss)
+{
+    ss->eh_task = jl_current_task->state.eh_task;
+    ss->eh_ctx = jl_current_task->state.eh_ctx;
+    ss->current_output_stream = jl_current_task->state.current_output_stream;
+}
+
+static inline void jl_eh_restore_state(jl_savestate_t *ss)
+{
+    jl_current_task->state.eh_task = ss->eh_task;
+    jl_current_task->state.eh_ctx = ss->eh_ctx;
+    jl_current_task->state.current_output_stream = ss->current_output_stream;
+}
+
+#define JL_TRY                                                          \
+    int i__tr, i__ca; jl_savestate_t __ss; jmp_buf __handlr;            \
+    jl_eh_save_state(&__ss);                                            \
+    jl_current_task->state.eh_task = jl_current_task;                   \
+    jl_current_task->state.eh_ctx = &__handlr;                          \
+    if (!setjmp(__handlr))                                              \
+        for (i__tr=1; i__tr; i__tr=0, jl_eh_restore_state(&__ss))
+
+#define JL_CATCH                                                \
+    else                                                        \
+        for (i__ca=1, jl_current_task->state.err = 0,           \
+             jl_eh_restore_state(&__ss); i__ca; i__ca=0)
 
 #endif

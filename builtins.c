@@ -24,13 +24,11 @@
 // --- exception raising ---
 
 extern char *julia_home;
-extern jmp_buf ExceptionHandler;
-extern jmp_buf *CurrentExceptionHandler;
 
 void jl_error(const char *str)
 {
     ios_printf(ios_stderr, "%s\n", str);
-    longjmp(*CurrentExceptionHandler, 1);
+    jl_raise();
 }
 
 void jl_errorf(const char *fmt, ...)
@@ -40,7 +38,7 @@ void jl_errorf(const char *fmt, ...)
     ios_vprintf(ios_stderr, fmt, args);
     ios_printf(ios_stderr, "\n");
     va_end(args);
-    longjmp(*CurrentExceptionHandler, 1);
+    jl_raise();
 }
 
 void jl_too_few_args(const char *fname, int min)
@@ -242,10 +240,7 @@ void jl_load(const char *fname)
     jl_array_t *b = ((jl_expr_t*)ast)->args;
     size_t i;
     volatile size_t lineno=0;
-    jmp_buf *prevh = CurrentExceptionHandler;
-    jmp_buf handler;
-    CurrentExceptionHandler = &handler;
-    if (!setjmp(handler)) {
+    JL_TRY {
         for(i=0; i < b->length; i++) {
             // process toplevel form
             jl_value_t *form = jl_cellref(b, i);
@@ -258,12 +253,10 @@ void jl_load(const char *fname)
             }
         }
     }
-    else {
-        CurrentExceptionHandler = prevh;
+    JL_CATCH {
         ios_printf(ios_stderr, " %s:%d\n", fpath, lineno);
-        longjmp(*CurrentExceptionHandler, 1);
+        jl_raise();
     }
-    CurrentExceptionHandler = prevh;
     if (fpath != fname) free(fpath);
 }
 
@@ -560,8 +553,6 @@ JL_CALLABLE(jl_f_convert_to_ptr)
 
 jl_function_t *jl_print_gf;
 
-ios_t *current_output_stream;  // TODO: thread-local
-
 static void call_print(jl_value_t *v)
 {
     jl_apply(jl_print_gf, &v, 1);
@@ -569,26 +560,17 @@ static void call_print(jl_value_t *v)
 
 char *jl_print_to_string(jl_value_t *v)
 {
-    ios_t *prevs = current_output_stream;
     ios_t dest;
     ios_mem(&dest, 0);
-    current_output_stream = &dest;
-    // this is a long-winded unwind-protect
-    // the reason for all this fuss is to reset the current output stream
+    // use try/catch to reset the current output stream
     // if an error occurs during printing.
-    jmp_buf *prevh = CurrentExceptionHandler;
-    jmp_buf handler;
-    CurrentExceptionHandler = &handler;
-    if (!setjmp(handler)) {
+    JL_TRY {
+        jl_set_current_output_stream(&dest);
         jl_print(v);
     }
-    else {
-        CurrentExceptionHandler = prevh;
-        current_output_stream = prevs;
-        longjmp(*CurrentExceptionHandler, 1);
+    JL_CATCH {
+        jl_raise();
     }
-    CurrentExceptionHandler = prevh;
-    current_output_stream = prevs;
     size_t n;
     return ios_takebuf(&dest, &n);
 }
@@ -601,7 +583,7 @@ void jl_print(jl_value_t *v)
 // comma_one prints a comma for 1 element, e.g. "(x,)"
 static void print_tuple(jl_tuple_t *t, char opn, char cls, int comma_one)
 {
-    ios_t *s = current_output_stream;
+    ios_t *s = jl_current_output_stream();
     ios_putc(opn, s);
     size_t i, n=t->length;
     for(i=0; i < n; i++) {
@@ -614,7 +596,7 @@ static void print_tuple(jl_tuple_t *t, char opn, char cls, int comma_one)
 
 static void print_type(jl_value_t *t)
 {
-    ios_t *s = current_output_stream;
+    ios_t *s = jl_current_output_stream();
     if (jl_is_func_type(t)) {
         if (t == (jl_value_t*)jl_any_func) {
             ios_write(s, "Function", 8);
@@ -644,7 +626,7 @@ static void print_type(jl_value_t *t)
 
 static void print_function(jl_value_t *v)
 {
-    ios_t *s = current_output_stream;
+    ios_t *s = jl_current_output_stream();
     if (jl_is_gf(v)) {
         ios_puts("#<generic-function ", s);
         ios_puts(jl_gf_name(v)->name, s);
@@ -661,7 +643,7 @@ static void print_function(jl_value_t *v)
 
 static void print_int(void *data, int nbits)
 {
-    ios_t *s = current_output_stream;
+    ios_t *s = jl_current_output_stream();
     switch (nbits) {
     case 8:
         ios_printf(s, "%hhd", *(int8_t*)data);
@@ -682,7 +664,7 @@ static void print_int(void *data, int nbits)
 
 static void print_uint(void *data, int nbits)
 {
-    ios_t *s = current_output_stream;
+    ios_t *s = jl_current_output_stream();
     switch (nbits) {
     case 8:
         ios_printf(s, "%hhu", *(int8_t*)data);
@@ -703,7 +685,7 @@ static void print_uint(void *data, int nbits)
 
 static void print_float64(double d, int single)
 {
-    ios_t *s = current_output_stream;
+    ios_t *s = jl_current_output_stream();
     char buf[64];
     int ndec = single ? 8 : 16;
     if (!DFINITE(d)) {
@@ -738,7 +720,7 @@ static void print_float64(double d, int single)
 
 JL_CALLABLE(jl_f_print_bool)
 {
-    ios_t *s = current_output_stream;
+    ios_t *s = jl_current_output_stream();
     if (jl_unbox_bool(args[0]) == 0)
         ios_puts("false", s);
     else
@@ -776,7 +758,7 @@ INT_PRINT_FUNC(uint,64)
 
 JL_CALLABLE(jl_f_print_pointer)
 {
-    ios_t *s = current_output_stream;
+    ios_t *s = jl_current_output_stream();
     void *ptr = *(void**)jl_bits_data(args[0]);
     if (jl_typeis(args[0],jl_pointer_void_type))
         ios_printf(s, "Ptr{Void}");
@@ -792,7 +774,7 @@ JL_CALLABLE(jl_f_print_pointer)
 
 JL_CALLABLE(jl_f_print_symbol)
 {
-    ios_t *s = current_output_stream;
+    ios_t *s = jl_current_output_stream();
     ios_puts(((jl_sym_t*)args[0])->name, s);
     return (jl_value_t*)jl_null;
 }
@@ -805,7 +787,7 @@ JL_CALLABLE(jl_f_print_typename)
 
 JL_CALLABLE(jl_f_print_typevar)
 {
-    ios_t *s = current_output_stream;
+    ios_t *s = jl_current_output_stream();
     jl_tvar_t *tv = (jl_tvar_t*)args[0];
     if (tv->lb != (jl_value_t*)jl_bottom_type) {
         call_print((jl_value_t*)tv->lb);
@@ -821,7 +803,7 @@ JL_CALLABLE(jl_f_print_typevar)
 
 JL_CALLABLE(jl_f_print_linfo)
 {
-    ios_t *s = current_output_stream;
+    ios_t *s = jl_current_output_stream();
     ios_puts("AST(", s);
     jl_print(((jl_lambda_info_t*)args[0])->ast);
     ios_putc(')', s);
@@ -830,7 +812,7 @@ JL_CALLABLE(jl_f_print_linfo)
 
 JL_CALLABLE(jl_f_print_string)
 {
-    ios_t *s = current_output_stream;
+    ios_t *s = jl_current_output_stream();
     jl_array_t *b = (jl_array_t*)args[0];
 
     ios_write(s, (char*)b->data, b->length);
@@ -841,7 +823,7 @@ JL_CALLABLE(jl_f_print_any)
 {
     JL_NARGS(print, 1, 1);
     // fallback for printing some other builtin types
-    ios_t *s = current_output_stream;
+    ios_t *s = jl_current_output_stream();
     jl_value_t *v = args[0];
     if (jl_is_tuple(v)) {
         print_tuple((jl_tuple_t*)v, '(', ')', 1);
@@ -1303,8 +1285,6 @@ void jl_add_builtin(const char *name, jl_value_t *v)
 
 void jl_init_builtins()
 {
-    current_output_stream = ios_stdout;
-
     jl_print_gf = jl_new_generic_function(jl_symbol("print"));
 
     add_builtin_method1(jl_print_gf, (jl_type_t*)jl_any_type,     jl_f_print_any);

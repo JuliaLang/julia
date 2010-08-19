@@ -333,11 +333,14 @@
    (pattern-lambda (= (tuple . lhss) x)
 		   (if (and (pair? x) (pair? lhss) (eq? (car x) 'tuple)
 			    (length= lhss (length (cdr x))))
+		       ; (a, b, ...) = (x, y, ...)
 		       (let ((temps (map (lambda (x) (gensym)) (cddr x))))
 			 `(block
 			   ,@(map make-assignment temps (cddr x))
 			   (= ,(car lhss) ,(cadr x))
-			   ,@(map make-assignment (cdr lhss) temps)))
+			   ,@(map make-assignment (cdr lhss) temps)
+			   (null)))
+		       ; (a, b, ...) = other
 		       (let ((t (gensym)))
 			 `(block
 			   (= ,t ,x)

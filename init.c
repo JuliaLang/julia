@@ -26,9 +26,6 @@
 #include "llt.h"
 #include "julia.h"
 
-jmp_buf ExceptionHandler;
-jmp_buf *CurrentExceptionHandler = &ExceptionHandler;
-
 char *jl_stack_bottom;
 char *jl_stack_top;
 int jl_fpe_err_msg = 0;
@@ -58,7 +55,7 @@ void fpe_handler(int arg)
     if (jl_fpe_err_msg)
         jl_error("error: integer divide by zero");
     else
-        longjmp(*CurrentExceptionHandler, 1);
+        jl_raise();
 }
 
 void segv_handler(int sig, siginfo_t *info, void *context)
@@ -87,9 +84,9 @@ void julia_init()
     jl_init_types();
     jl_init_builtin_types();
     jl_init_modules();
+    jl_init_tasks(jl_stack_bottom, jl_stack_top-jl_stack_bottom);
     jl_init_builtins();
     jl_init_codegen();
-    jl_init_tasks(jl_stack_bottom, jl_stack_top-jl_stack_bottom);
 
     signal(SIGFPE, fpe_handler);
 
@@ -138,7 +135,7 @@ static void clear_tfunc_caches()
 
 int jl_load_startup_file()
 {
-    if (!setjmp(ExceptionHandler)) {
+    JL_TRY {
         jl_load("start.j");
         if (jl_boundp(jl_system_module, jl_symbol("typeinf_ext"))) {
             jl_typeinf_func =
@@ -173,7 +170,8 @@ int jl_load_startup_file()
             */
             clear_tfunc_caches();
         }
-    } else {
+    }
+    JL_CATCH {
         ios_printf(ios_stderr, "error during startup.\n");
         return 1;
     }

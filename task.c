@@ -148,18 +148,9 @@ static void _probe_arch()
   - stack growth
 */
 
-typedef struct _jl_task_t {
-    JL_VALUE_STRUCT
-    struct _jl_task_t *on_exit;
-    jmp_buf ctx;
-    void *stack;
-    size_t ssize;
-    jl_function_t *start;
-    int done;
-} jl_task_t;
-
 jl_struct_type_t *jl_task_type;
 jl_task_t * volatile jl_current_task;
+jl_task_t *jl_root_task;
 static jl_value_t * volatile task_arg_in_transit;
 
 jl_value_t *jl_switchto(jl_task_t *t, jl_value_t *arg)
@@ -172,6 +163,30 @@ jl_value_t *jl_switchto(jl_task_t *t, jl_value_t *arg)
         longjmp(t->ctx, 1);
     }
     return task_arg_in_transit;
+}
+
+// yield to exception handler
+void jl_raise()
+{
+    jl_task_t *eh = jl_current_task->state.eh_task;
+    eh->state.err = 1;
+    if (jl_current_task == eh) {
+        longjmp(*eh->state.eh_ctx, 1);
+    }
+    else {
+        if (eh->done || eh->state.eh_ctx==NULL) {
+            // our handler is not available, use root task
+            ios_printf(ios_stderr, "warning: exception handler exited\n");
+            eh = jl_root_task;
+        }
+        if (!setjmp(jl_current_task->ctx)) {
+            jl_current_task = eh;
+            longjmp(*eh->state.eh_ctx, 1);
+        }
+        else {
+            // TODO: continued exception
+        }
+    }
 }
 
 #ifdef LINUX
@@ -274,6 +289,11 @@ jl_task_t *jl_new_task(jl_function_t *start, size_t ssize)
     t->on_exit = jl_current_task;
     t->done = 0;
     t->start = start;
+    t->state.err = 0;
+    t->state.eh_task = jl_current_task->state.eh_task;
+    // there is no active exception handler available on this stack yet
+    t->state.eh_ctx = NULL;
+    t->state.current_output_stream = jl_current_task->state.current_output_stream;
     init_task(t);
 
     return t;
@@ -341,6 +361,12 @@ void jl_init_tasks(void *stack, size_t ssize)
     jl_current_task->on_exit = jl_current_task;
     jl_current_task->done = 0;
     jl_current_task->start = jl_bottom_func;
+    jl_current_task->state.err = 0;
+    jl_current_task->state.eh_task = jl_current_task;
+    jl_current_task->state.eh_ctx = NULL;
+    jl_current_task->state.current_output_stream = ios_stdout;
+
+    jl_root_task = jl_current_task;
 
     jl_add_builtin("Task", (jl_value_t*)jl_task_type);
     jl_add_builtin_func("yieldto", jl_f_yieldto);
