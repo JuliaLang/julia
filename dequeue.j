@@ -29,6 +29,9 @@ function pop(q::Queue)
     end
     elt = q.head.a
     q.head = q.head.b
+    if is(q.head,())
+        q.tail = ()
+    end
     elt
 end
 

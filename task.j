@@ -52,7 +52,7 @@ scheduler = Task(schedule)
 # this way every future call to the scheduler enters/exits through the
 # scheduler's internal "yieldto" call.
 enq(Runnable_Q, current_task())
-yieldto(scheduler)
+#yieldto(scheduler)
 
 function io_wait(s::IOStream)
     Waiting_Set[current_task()] = s
