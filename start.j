@@ -35,3 +35,12 @@ load("multi.j")
 
 # compiler
 load("inference.j")
+
+# pre-run inference on scheduler so it doesn't need to run in the task stack
+finfer(schedule,())
+scheduler = Task(schedule)
+# bootstrap the current task into the scheduler.
+# this way every future call to the scheduler enters/exits through the
+# scheduler's internal "yieldto" call.
+enq(Runnable_Q, current_task())
+yieldto(scheduler)

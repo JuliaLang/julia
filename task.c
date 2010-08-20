@@ -9,6 +9,7 @@
 #include <setjmp.h>
 #include <assert.h>
 #include <sys/types.h>
+#include <sys/mman.h>
 #include <limits.h>
 #include <errno.h>
 #include <math.h>
@@ -148,6 +149,7 @@ static void _probe_arch()
   - stack growth
 */
 
+extern size_t jl_page_size;
 jl_struct_type_t *jl_task_type;
 jl_task_t * volatile jl_current_task;
 jl_task_t *jl_root_task;
@@ -282,10 +284,18 @@ static void init_task(jl_task_t *t)
 
 jl_task_t *jl_new_task(jl_function_t *start, size_t ssize)
 {
+    size_t pagesz = jl_page_size;
     jl_task_t *t = (jl_task_t*)allocb(sizeof(jl_task_t));
     t->type = (jl_type_t*)jl_task_type;
+    ssize = LLT_ALIGN(ssize, pagesz);
     t->ssize = ssize;
-    t->stack = allocb(ssize);
+    char *stk = allocb(ssize+pagesz+(pagesz-1));
+    stk = (char*)LLT_ALIGN((uptrint_t)stk, pagesz);
+    // add a guard page to detect stack overflow
+    // the GC might read this area, which is ok, just prevent writes
+    if (mprotect(stk, pagesz-1, PROT_READ) == -1)
+        jl_errorf("mprotect: %s", strerror(errno));
+    t->stack = stk+pagesz;
     t->on_exit = jl_current_task;
     t->done = 0;
     t->start = start;
@@ -307,12 +317,9 @@ JL_CALLABLE(jl_f_task)
       we need a somewhat large stack, because execution can trigger
       compilation, which uses perhaps too much stack space.
     */
-    size_t ssize = 16384;
+    size_t ssize = 24576;
 #ifdef BITS64
     ssize *= 2;
-#ifdef LINUX
-    ssize *= 2;
-#endif
 #endif
     if (nargs == 2) {
         JL_TYPECHK(Task, int32, args[1]);

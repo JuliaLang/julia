@@ -47,13 +47,6 @@ function schedule()
     end
 end
 
-scheduler = Task(schedule)
-# bootstrap the current task into the scheduler.
-# this way every future call to the scheduler enters/exits through the
-# scheduler's internal "yieldto" call.
-enq(Runnable_Q, current_task())
-#yieldto(scheduler)
-
 function io_wait(s::IOStream)
     Waiting_Set[current_task()] = s
     yieldto(scheduler)

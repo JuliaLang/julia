@@ -16,7 +16,7 @@ include ./Make.inc.$(shell uname)
 
 FLAGS = -falign-functions -Wall -Wno-strict-aliasing \
 	-I$(FLISPDIR) -I$(LLTDIR) $(HFILEDIRS:%=-I%) $(LIBDIRS:%=-L%) \
-	$(CFLAGS) -D___LIBRARY $(CONFIG) -I$(shell llvm-config --includedir) \
+	$(CFLAGS) $(CONFIG) -I$(shell llvm-config --includedir) \
 	-fvisibility=hidden
 LIBFILES = $(FLISP) $(LLT)
 LIBS = $(LIBFILES) -lutil -ldl -lm -lgc -lreadline $(OSLIBS) \

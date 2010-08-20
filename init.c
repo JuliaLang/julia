@@ -13,6 +13,7 @@
 #include <sys/stat.h>
 #include <sys/resource.h>
 #include <sys/mman.h>
+#include <unistd.h>
 #endif
 #include <limits.h>
 #include <errno.h>
@@ -26,9 +27,10 @@
 #include "llt.h"
 #include "julia.h"
 
-char *jl_stack_bottom;
-char *jl_stack_top;
+char *jl_stack_lo;
+char *jl_stack_hi;
 int jl_fpe_err_msg = 0;
+size_t jl_page_size;
 
 static void jl_find_stack_bottom()
 {
@@ -40,8 +42,8 @@ static void jl_find_stack_bottom()
 #else
     stack_size = 262144;  // guess
 #endif
-    jl_stack_top = (char*)&stack_size;
-    jl_stack_bottom = jl_stack_top - stack_size;
+    jl_stack_hi = (char*)&stack_size;
+    jl_stack_lo = jl_stack_hi - stack_size;
 }
 
 void fpe_handler(int arg)
@@ -65,8 +67,9 @@ void segv_handler(int sig, siginfo_t *info, void *context)
     sigaddset(&sset, SIGSEGV);
     sigprocmask(SIG_UNBLOCK, &sset, NULL);
 
-    if ((char*)info->si_addr > jl_stack_bottom-8192 &&
-        (char*)info->si_addr < jl_stack_top) {
+    if ((char*)info->si_addr > (char*)jl_current_task->stack-8192 &&
+        (char*)info->si_addr <
+        (char*)jl_current_task->stack+jl_current_task->ssize) {
         jl_error("error: stack overflow");
     }
     else {
@@ -76,6 +79,7 @@ void segv_handler(int sig, siginfo_t *info, void *context)
 
 void julia_init()
 {
+    jl_page_size = sysconf(_SC_PAGESIZE);
     jl_find_stack_bottom();
 #ifdef BOEHM_GC
     GC_expand_hp(12000000);  //shaves a tiny bit off startup time
@@ -84,7 +88,7 @@ void julia_init()
     jl_init_types();
     jl_init_builtin_types();
     jl_init_modules();
-    jl_init_tasks(jl_stack_bottom, jl_stack_top-jl_stack_bottom);
+    jl_init_tasks(jl_stack_lo, jl_stack_hi-jl_stack_lo);
     jl_init_builtins();
     jl_init_codegen();
 

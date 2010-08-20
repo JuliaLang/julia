@@ -991,7 +991,7 @@ static AllocaInst *alloc_local(char *name, jl_codectx_t *ctx)
     return lv;
 }
 
-extern char *jl_stack_bottom;
+extern char *jl_stack_lo;
 
 static void emit_function(jl_lambda_info_t *lam, Function *f)
 {
@@ -1038,7 +1038,7 @@ static void emit_function(jl_lambda_info_t *lam, Function *f)
     Value *sp_ok =
         builder.CreateICmpUGT(cur_sp,
                               ConstantInt::get(T_size,
-                                               (uptrint_t)jl_stack_bottom));
+                                               (uptrint_t)jl_stack_lo));
     error_unless(sp_ok, "stack overflow", &ctx);
     */
     // process var-info lists to see what vars are captured, need boxing
