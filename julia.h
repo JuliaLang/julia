@@ -568,6 +568,7 @@ typedef struct _jl_task_t {
     size_t ssize;
     jl_function_t *start;
     int done;
+    jl_value_t *result;
     // exception state and per-task dynamic parameters
     jl_savestate_t state;
 } jl_task_t;

@@ -156,7 +156,7 @@ static jl_value_t * volatile task_arg_in_transit;
 jl_value_t *jl_switchto(jl_task_t *t, jl_value_t *arg)
 {
     if (t->done)
-        jl_error("task has already exited");
+        return t->result;
     task_arg_in_transit = arg;
     if (!setjmp(jl_current_task->ctx)) {
         jl_current_task = t;
@@ -265,13 +265,13 @@ static void init_task(jl_task_t *t)
 {
     if (setjmp(t->ctx)) {
         // this runs the first time we switch to t
-        jl_value_t *ret = jl_apply(t->start, NULL, 0);
+        t->result = jl_apply(t->start, NULL, 0);
         t->done = 1;
         jl_task_t *cont = t->on_exit;
         // if parent task has exited, try its parent, and so on
         while (cont->done)
             cont = cont->on_exit;
-        jl_switchto(cont, ret);
+        jl_switchto(cont, t->result);
     }
     // this runs when the task is created
     ptrint_t local_sp = (ptrint_t)&t;

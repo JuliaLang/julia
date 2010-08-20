@@ -29,8 +29,8 @@ load("blas.j")
 load("lapack.j")
 
 # I/O and concurrency
-load("task.j")
 load("io.j")
+load("task.j")
 load("multi.j")
 
 # compiler

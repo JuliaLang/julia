@@ -32,6 +32,10 @@ function pop(q::Queue)
     elt
 end
 
+start(q::Queue) = q.head
+done(q::Queue, elt) = is(elt,())
+next(q::Queue, elt) = (elt.a, elt.b)
+
 struct Dequeue{T}
     maxsize:: Size
     size:: Size
