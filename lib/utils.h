@@ -78,15 +78,8 @@ STATIC_INLINE u_int16_t ByteSwap16(u_int16_t x)
 
 STATIC_INLINE u_int32_t ByteSwap32(u_int32_t x)
 {
-#if __CPU__ > 386
  __asm("bswap	%0":
       "=r" (x)     :
-#else
- __asm("xchgb	%b0,%h0\n"\
-      "	rorl	$16,%0\n"
-      "	xchgb	%b0,%h0":
-      LEGACY_REGS (x)		:
-#endif
       "0" (x));
   return x;
 }
