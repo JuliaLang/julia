@@ -165,10 +165,18 @@ print(x...) = for i=x; print(i); end
 
 expr(hd::Symbol, args...) = Expr(hd, {args...}, Any)
 
-function cell_literal(xs...)
+function cell_1d(xs...)
     n = length(xs)
     a = Array(Any,n)
     for i=1:n
+        arrayset(a,i,xs[i])
+    end
+    a
+end
+
+function cell_2d(nr, nc, xs...)
+    a = Array(Any,nr,nc)
+    for i=1:numel(a)
         arrayset(a,i,xs[i])
     end
     a

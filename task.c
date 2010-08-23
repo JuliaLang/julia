@@ -317,7 +317,7 @@ JL_CALLABLE(jl_f_task)
       we need a somewhat large stack, because execution can trigger
       compilation, which uses perhaps too much stack space.
     */
-    size_t ssize = 24576;
+    size_t ssize = 32768;
 #ifdef BITS64
     ssize *= 2;
 #endif

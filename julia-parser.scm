@@ -582,8 +582,8 @@ TODO:
 		    r))
        ranges))
 
-; parse [] concatenation expressions
-(define (parse-vector s)
+; parse [] concatenation expressions and {} cell expressions
+(define (parse-cat s closer)
   (define (fix head v) (cons head (reverse v)))
   (let loop ((vec '())
 	     (outer '())
@@ -592,11 +592,13 @@ TODO:
 			  (cond ((null? v)       outer)
 				((null? (cdr v)) (cons (car v) outer))
 				(else            (cons (fix 'hcat v) outer))))))
-      (if (eqv? (require-token s) #\])
+      (if (eqv? (require-token s) closer)
 	  (begin (take-token s)
 		 (if (pair? outer)
 		     (fix 'vcat (update-outer vec))
-		     (fix 'hcat vec)))
+		     (if (or (null? vec) (null? (cdr vec)))
+			 (fix 'vcat vec)    ; [x]   => (vcat x)
+			 (fix 'hcat vec)))) ; [x,y] => (hcat x y)
 	  (let ((nv (cons (if first
 			      (without-bitor (parse-eq* s))
 			      (parse-eq* s))
@@ -604,12 +606,17 @@ TODO:
 	    (case (if (eqv? (peek-token s) #\newline)
 		      #\newline
 		      (require-token s))
-	      ((#\]) (loop nv outer #f))
+	      ((#\]) (if (eqv? closer #\])
+			 (loop nv outer #f)
+			 (error "unexpected ]")))
+	      ((#\}) (if (eqv? closer #\})
+			 (loop nv outer #f)
+			 (error "unexpected }")))
 	      ((|\||)
 	       (begin (take-token s)
 		      (let ((r (parse-var-ranges s)))
-			(if (not (eqv? (require-token s) #\]))
-			    (error "expected ]")
+			(if (not (eqv? (require-token s) closer))
+			    (error (string "expected " closer))
 			    (take-token s))
 			`(comprehension ,(car nv) ,@(colons-to-ranges r)))))
 	      ((#\; #\newline)
@@ -687,25 +694,38 @@ TODO:
 	  ((eqv? t #\{ )
 	   (take-token s)
 	   (if (eqv? (require-token s) #\})
-	       (begin (take-token s) '(cell))
-	       (let ((first (without-bitor (parse-eq* s))))
-		 (if (eq? (peek-token s) '|\||)
-		     (begin
-		       (take-token s)
-		       (let ((r (parse-var-ranges s)))
-			 (if (not (eqv? (require-token s) #\}))
-			     (error "expected }")
-			     (take-token s))
-			 `(cell-comprehension ,first ,@(colons-to-ranges r))))
-		     (begin
-		       (if (eqv? (peek-token s) #\,)
-			   (take-token s))
-		       `(cell ,@(cons first
-				      (parse-arglist s #\}))))))))
+	       (begin (take-token s) '(call (top cell_1d)))
+	       (let ((vex (with-normal-ops (parse-cat s #\}))))
+		 (cond ((eq? (car vex) 'comprehension)
+			(cons 'cell-comprehension (cdr vex)))
+		       ((eq? (car vex) 'hcat)
+			`(call (top cell_1d) ,@(cdr vex)))
+		       (else  ; (vcat ...)
+			(if (and (pair? (cadr vex)) (eq? (caadr vex) 'hcat))
+			    (let ((nr (length (cdr vex)))
+				  (nc (length (cdadr vex))))
+			      ; make sure all rows are the same length
+			      (if (not (every
+					(lambda (x)
+					  (and (pair? x)
+					       (eq? (car x) 'hcat)
+					       (length= (cdr x) nc)))
+					(cddr vex)))
+				  (error "inconsistent shape in cell expression"))
+			      `(call (top cell_2d) ,nr ,nc
+				     ,@(apply append
+					      ; transpose to storage order
+					      (apply map list
+						     (map cdr (cdr vex))))))
+			    (if (any (lambda (x) (and (pair? x)
+						      (eq? (car x) 'hcat)))
+				     (cddr vex))
+				(error "inconsistent shape in cell expression")
+				`(call (top cell_1d) ,@(cdr vex)))))))))
 
 	  ((eqv? t #\[ )
 	   (take-token s)
-	   (with-normal-ops (parse-vector s)))
+	   (with-normal-ops (parse-cat s #\])))
 
 	  ((eqv? t #\` )
 	   (take-token s)

@@ -358,8 +358,6 @@
    (pattern-lambda (ref a . idxs)
 		   `(call ref ,a ,@(process-indexes idxs)))
 
-   (pattern-lambda (cell . elts)
-		   `(call (top cell_literal) ,@elts))
    (pattern-lambda (curly type . elts)
 		   `(call (top instantiate_type) ,type ,@elts))
 
@@ -1227,7 +1225,7 @@ So far only the second case can actually occur.
 		   (loop (cdr p)
 			 (cons (cadr (cadr (cadr (car p)))) q))
 		   (loop (cdr p)
-			 (cons `(call (top cell_literal)
+			 (cons `(call (top cell_1d)
 				      ,(expand-backquote (car p)))
 			       q))))))))
 
