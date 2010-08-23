@@ -212,6 +212,8 @@ end
 
 transpose(x::Matrix) = [ x[j,i] | i=1:size(x,2), j=1:size(x,1) ]
 ctranspose(x::Matrix) = [ conj(x[j,i]) | i=1:size(x,2), j=1:size(x,1) ]
+transpose(x::Vector) = [ x[j] | i=1, j=1:size(x,1) ]
+ctranspose(x::Vector) = [ conj(x[j]) | i=1, j=1:size(x,1) ]
 
 diag(A::Matrix) = [ A[i,i] | i=1:min(size(A)) ]
 diagm{T}(v::Vector{T}) = (n=length(v);
@@ -390,6 +392,7 @@ end
 # Concatenation
 hcat() = Array(Bottom,0)
 hcat{T <: Scalar}(X::T...) = [ X[i] | i=1:length(X) ]
+vcat() = Array(Bottom,0)
 vcat{T <: Scalar}(X::T...) = [ X[i] | i=1:length(X) ]
 
 hcat{T}(V::Vector{T}...) = [ V[j][i] | i=1:length(V[1]), j=1:length(V) ]
