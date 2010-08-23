@@ -341,8 +341,16 @@ static jl_value_t *intersect_tuple(jl_tuple_t *a, jl_tuple_t *b,
         }
         assert(ae!=NULL && be!=NULL);
         jl_value_t *ce = jl_type_intersect(ae,be,penv);
-        if (ce == (jl_value_t*)jl_bottom_type)
+        if (ce == (jl_value_t*)jl_bottom_type) {
+            if (aseq && bseq) {
+                // (X∩Y)==∅ → (X...)∩(Y...) == ()
+                if (n == 1)
+                    return (jl_value_t*)jl_null;
+                tc->length--;
+                return (jl_value_t*)tc;
+            }
             return (jl_value_t*)jl_bottom_type;
+        }
         if (aseq && bseq) {
             ce = (jl_value_t*)jl_apply_type((jl_value_t*)jl_seq_type,
                                             jl_tuple(1, ce));
