@@ -114,8 +114,8 @@ function randmatstat(t)
         b = randn(n, n)
         c = randn(n, n)
         d = randn(n, n)
-        P = [a, b, c, d]
-        Q = [a, b; c, d]
+        P = [a b c d]
+        Q = [a b, c d]
         v[i] = trace((P.'*P)^4)
         w[i] = trace((Q.'*Q)^4)
     end

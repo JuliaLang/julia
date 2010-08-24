@@ -96,6 +96,11 @@ sizeof(x::Float64) = 8
 Inf = 1/0
 NaN = -(0/0)
 
+pi() = 3.14159265358979323846
+pi(x) = pi()
+pi(::Union(Float64, Type{Float64})) = 3.14159265358979323846
+pi(::Union(Float32, Type{Float32})) = float32(3.14159265358979323846)
+
 ## floating point functions ##
 
 signbit(x::Float) = (x < 0 ? -1 : (x > 0 ? 1 : (1.0/x < 0 ? -1 : +1)))
@@ -113,11 +118,6 @@ mantissa(x::Float32) = ccall(dlsym(JuliaDLHandle,"float_mantissa"),
 
 integer_valued(x::Float64) = (trunc(x)==x && abs(x)<=9007199254740992.)
 integer_valued(x::Float32) = (trunc(x)==x && abs(x)<=float32(16777216.))
-
-pi() = 3.14159265358979323846
-pi(x) = pi()
-pi(::Union(Float64, Type{Float64})) = 3.14159265358979323846
-pi(::Union(Float32, Type{Float32})) = float32(3.14159265358979323846)
 
 sqrt(x::Float64) = boxf64(sqrt_float(unbox64(x)))
 sqrt(x::Float32) = boxf32(sqrt_float(unbox32(x)))

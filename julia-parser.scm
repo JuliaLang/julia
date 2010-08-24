@@ -29,6 +29,8 @@ TODO:
 (define no-pipe-ops (vector.map identity ops-by-prec))
 (vector-set! no-pipe-ops 8 '(+ - $))
 (define range-colon-enabled #t)
+; in space-sensitive mode "x -y" is 2 expressions, not a subtraction
+(define space-sensitive #f)
 
 (define-macro (with-normal-ops . body)
   `(with-bindings ((ops-by-prec normal-ops)
@@ -43,10 +45,17 @@ TODO:
   `(with-bindings ((range-colon-enabled #f))
 		  ,@body))
 
+(define-macro (with-space-sensitive . body)
+  `(with-bindings ((space-sensitive #t))
+		  ,@body))
+
 ; unused characters: @ prefix'
 ; no character literals; unicode kind of makes them obsolete. strings instead.
 
-(define unary-ops '(- + ! ~ $ |<:| |>:|))
+(define unary-ops '(+ - ! ~ $ |<:| |>:|))
+
+; operators that are both unary and binary
+(define unary-and-binary-ops '(+ - $))
 
 ; operators that are special forms, not function names
 (define syntactic-operators
@@ -192,30 +201,39 @@ TODO:
 
 ; --- parser ---
 
-(define (make-token-stream s) (vector #f s #t))
+(define (make-token-stream s) (vector #f s #t #f))
 (define-macro (ts:port s)       `(aref ,s 1))
 (define-macro (ts:last-tok s)   `(aref ,s 0))
 (define-macro (ts:set-tok! s t) `(aset! ,s 0 ,t))
 (define-macro (ts:space? s)     `(aref ,s 2))
+(define-macro (ts:pbtok s)      `(aref ,s 3))
+(define (ts:put-back! s t)
+  (if (ts:pbtok s)
+      (error "too many pushed-back tokens (internal error)")
+      (aset! s 3 t)))
 
 (define (peek-token s)
-  (or (ts:last-tok s)
+  (or (ts:pbtok s)
+      (ts:last-tok s)
       (begin (ts:set-tok! s (next-token (ts:port s) s))
 	     (ts:last-tok s))))
 
 (define (require-token s)
-  (let ((t (or (ts:last-tok s) (next-token (ts:port s) s))))
+  (let ((t (or (ts:pbtok s) (ts:last-tok s) (next-token (ts:port s) s))))
     (if (eof-object? t)
 	(error "incomplete: premature end of input")
 	(if (newline? t)
 	    (begin (take-token s)
 		   (require-token s))
-	    (begin (ts:set-tok! s t)
+	    (begin (if (not (ts:pbtok s)) (ts:set-tok! s t))
 		   t)))))
 
 (define (take-token s)
-  (begin0 (ts:last-tok s)
-	  (ts:set-tok! s #f)))
+  (or
+   (begin0 (ts:pbtok s)
+	   (aset! s 3 #f))
+   (begin0 (ts:last-tok s)
+	   (ts:set-tok! s #f))))
 
 ; parse left-to-right binary operator
 ; produces structures like (+ (+ (+ 2 3) 4) 5)
@@ -345,25 +363,32 @@ TODO:
 		      ; (parse-LtoR s parse-range (prec-ops 5)))
 ;(define (parse-range s) (parse-LtoR s parse-shift  (prec-ops 6)))
 (define (parse-shift s) (parse-LtoR s parse-expr (prec-ops 7)))
-(define (parse-expr s)  (parse-LtoR/chains s parse-term  (prec-ops 8) '(+)))
+;(define (parse-expr s)  (parse-LtoR/chains s parse-term  (prec-ops 8) '(+)))
 ;(define (parse-term s)  (parse-LtoR/chains s parse-unary (prec-ops 9) '(*)))
 
 ; parse left to right, combining chains of certain operators into 1 call
 ; e.g. a+b+c => (call + a b c)
-(define (parse-LtoR/chains s down ops chain-ops)
-  (let loop ((ex       (down s))
-	     (chain-op #f))
-    (let ((t (peek-token s)))
-      (cond ((not (memq t ops))
-	     ex)
-	    ((eq? t chain-op)
-	     (begin (take-token s)
-		    (loop (append ex (list (down s)))
-			  chain-op)))
-	    (else
-	     (begin (take-token s)
-		    (loop (list 'call t ex (down s))
-			  (and (memq t chain-ops) t))))))))
+(define (parse-expr s)
+  (let ((ops (prec-ops 8)))
+    (let loop ((ex       (parse-term s))
+	       (chain-op #f))
+      (let* ((t   (peek-token s))
+	     (spc (ts:space? s)))
+	(if (not (memq t ops))
+	    ex
+	    (begin
+	      (take-token s)
+	      (cond ((and space-sensitive spc (memq t unary-and-binary-ops)
+			  (or (peek-token s) #t) (not (ts:space? s)))
+		     ; here we have "x -y"
+		     (ts:put-back! s t)
+		     ex)
+		    ((eq? t chain-op)
+		     (loop (append ex (list (parse-term s)))
+			   chain-op))
+		    (else
+		     (loop (list 'call t ex (parse-term s))
+			   (and (eq? t '+) t))))))))))
 
 ; given an expression and the next token, is there a juxtaposition
 ; operator between them?
@@ -397,7 +422,7 @@ TODO:
 	      (else
 	       (begin (take-token s)
 		      (loop (list 'call t ex (parse-unary s))
-			    (and (memq t '(*)) t)))))))))
+			    (and (eq? t '*) t)))))))))
 
 (define (parse-comparison s ops)
   (let loop ((ex (parse-range s))
@@ -461,25 +486,27 @@ TODO:
     (if (memq ex reserved-words)
 	(parse-resword s ex)
 	(let loop ((ex ex))
-	  (case (peek-token s)
-	    ((#\( )   (take-token s)
-	     (loop (list* 'call ex (parse-arglist s #\) ))))
-	    ((#\[ )   (take-token s)
-	     ; ref is syntax, so we can distinguish
-	     ; a[i] = x  from
-	     ; ref(a,i) = x
-	     (loop (list* 'ref ex  (parse-arglist s #\] ))))
-	    ((|.|)
-	     (loop (list (take-token s) ex (parse-atom s))))
-	    ((|.'|)
-	     (take-token s)
-	     (loop (list 'call 'transpose ex)))
-	    ((|'|)
-	     (take-token s)
-	     (loop (list 'call 'ctranspose ex)))
-	    ((#\{ )   (take-token s)
-	     (loop (list* 'curly ex (parse-arglist s #\} ))))
-	    (else ex))))))
+	  (let ((t (peek-token s)))
+	    (if (and space-sensitive (ts:space? s)
+		     (memv t '(#\( #\[ #\{)))
+		ex
+		(case t
+		  ((#\( )   (take-token s)
+		   (loop (list* 'call ex (parse-arglist s #\) ))))
+		  ((#\[ )   (take-token s)
+	           ; ref is syntax, so we can distinguish
+	           ; a[i] = x  from
+	           ; ref(a,i) = x
+		   (loop (list* 'ref ex  (parse-arglist s #\] ))))
+		  ((|.|)
+		   (loop (list (take-token s) ex (parse-atom s))))
+		  ((|.'|)   (take-token s)
+		   (loop (list 'call 'transpose ex)))
+		  ((|'|)    (take-token s)
+		   (loop (list 'call 'ctranspose ex)))
+		  ((#\{ )   (take-token s)
+		   (loop (list* 'curly ex (parse-arglist s #\} ))))
+		  (else ex))))))))
 
 ;(define (parse-dot s)  (parse-LtoR s parse-atom (prec-ops 12)))
 
@@ -586,6 +613,10 @@ TODO:
 
 ; parse [] concatenation expressions and {} cell expressions
 (define (parse-cat s closer)
+  (with-normal-ops
+   (with-space-sensitive
+    (parse-cat- s closer))))
+(define (parse-cat- s closer)
   (define (fix head v) (cons head (reverse v)))
   (let loop ((vec '())
 	     (outer '())
@@ -621,10 +652,10 @@ TODO:
 			    (error (string "expected " closer))
 			    (take-token s))
 			`(comprehension ,(car nv) ,@(colons-to-ranges r)))))
-	      ((#\; #\newline)
+	      ((#\, #\; #\newline)
 	       (begin (take-token s) (loop '() (update-outer nv) #f)))
-	      ((#\,) (begin (take-token s) (loop nv outer #f)))
-	      (else  (error "incomplete: comma expected"))))))))
+	      (else
+	       (begin (loop nv outer #f)))))))))
 
 ; for sequenced evaluation inside expressions: e.g. (a;b, c;d)
 (define (parse-stmts-within-expr s)
@@ -697,7 +728,7 @@ TODO:
 	   (take-token s)
 	   (if (eqv? (require-token s) #\})
 	       (begin (take-token s) '(call (top cell_1d)))
-	       (let ((vex (with-normal-ops (parse-cat s #\}))))
+	       (let ((vex (parse-cat s #\})))
 		 (cond ((eq? (car vex) 'comprehension)
 			(cons 'cell-comprehension (cdr vex)))
 		       ((eq? (car vex) 'hcat)
@@ -727,7 +758,7 @@ TODO:
 
 	  ((eqv? t #\[ )
 	   (take-token s)
-	   (with-normal-ops (parse-cat s #\])))
+	   (parse-cat s #\]))
 
 	  ((eqv? t #\` )
 	   (take-token s)

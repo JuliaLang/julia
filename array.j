@@ -391,12 +391,20 @@ end
 
 # Concatenation
 hcat() = Array(Bottom,0)
-hcat{T <: Scalar}(X::T...) = [ X[i] | i=1:length(X) ]
+hcat{T <: Scalar}(X::T...) = [ X[j] | i=1, j=1:length(X) ]
 vcat() = Array(Bottom,0)
 vcat{T <: Scalar}(X::T...) = [ X[i] | i=1:length(X) ]
 
 hcat{T}(V::Vector{T}...) = [ V[j][i] | i=1:length(V[1]), j=1:length(V) ]
-vcat{T}(V::Vector{T}...) = [ V[i][j] | i=1:length(V), j=1:length(V[1]) ]
+function vcat{T}(V::Vector{T}...)
+    a = Array(T, sum(map(length, V)))
+    pos = 1
+    for k=1:length(V), i=1:length(V[k])
+        a[pos] = V[k][i]
+        pos += 1
+    end
+    a
+end
 
 function hcat{T}(A::Matrix{T}...)
     ncols = sum([ size(A[i], 2) | i=1:length(A) ])

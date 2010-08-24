@@ -81,6 +81,8 @@ uint32(x::Scalar) = convert(Uint32, x)
 int64(x::Scalar)  = convert(Int64, x)
 uint64(x::Scalar) = convert(Uint64, x)
 
+truncate(x::Int) = x
+
 ## promotions ##
 
 promote_rule(::Type{Int16}, ::Type{Int8} ) = Int16
