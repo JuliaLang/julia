@@ -20,14 +20,14 @@ function //{T}(num::T, den::T)
     g = gcd(num, den)
     num = div(num, g)
     den = div(den, g)
-    num = sign(den) num
-    den = sign(den) den
+    num = sign(den)*num
+    den = sign(den)*den
     Rational(num, den)
 end
 
 //(num, den) = //(promote(num, den)...)
-//{T<:Int}(x::Rational{T}, y::T) = x.num // (x.den y)
-//{T<:Int}(x::T, y::Rational{T}) = (x y.den) // y.num
+//{T<:Int}(x::Rational{T}, y::T) = x.num // (x.den*y)
+//{T<:Int}(x::T, y::Rational{T}) = (x*y.den) // y.num
 
 function print(x::Rational)
     print(num(x))
@@ -37,13 +37,13 @@ end
 
 num(x::Rational) = x.num
 den(x::Rational) = x.den
-sign(x::Rational) = sign(x.num) sign(x.den)
+sign(x::Rational) = sign(x.num)*sign(x.den)
 
 (-)(x::Rational) = (-x.num) // x.den
-(+)(x::Rational, y::Rational) = (x.num y.den + x.den y.num) // (x.den y.den)
-(-)(x::Rational, y::Rational) = (x.num y.den - x.den y.num) // (x.den y.den)
-(*)(x::Rational, y::Rational) = (x.num y.num) // (x.den y.den)
-(/)(x::Rational, y::Rational) = (x.num y.den) // (x.den y.num)
+(+)(x::Rational, y::Rational) = (x.num*y.den + x.den*y.num) // (x.den*y.den)
+(-)(x::Rational, y::Rational) = (x.num*y.den - x.den*y.num) // (x.den*y.den)
+(*)(x::Rational, y::Rational) = (x.num*y.num) // (x.den*y.den)
+(/)(x::Rational, y::Rational) = (x.num*y.den) // (x.den*y.num)
 
 ==(x::Rational, y::Rational) = (x.num == y.num && x.den == y.den)
-< (x::Rational, y::Rational) = (x.num y.den < y.num x.den)
+< (x::Rational, y::Rational) = (x.num*y.den < y.num*x.den)

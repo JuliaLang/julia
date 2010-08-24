@@ -45,11 +45,13 @@ value_t fl_skipws(value_t *args, u_int32_t nargs)
     uint32_t wc;
     if (ios_peekutf8(s, &wc) == IOS_EOF)
         return FL_EOF;
+    value_t skipped = FL_F;
     while (!ios_eof(s) && is_uws(wc) && (newlines || wc!=10)) {
+        skipped = FL_T;
         ios_getutf8(s, &wc);
         ios_peekutf8(s, &wc);
     }
-    return FL_T;
+    return skipped;
 }
 
 static int jl_id_char(uint32_t wc)

@@ -159,13 +159,13 @@ TODO:
 	     (skip-ws-and-comments port)))
   #t)
 
-(define (next-token port)
-  (skip-ws port #f)
+(define (next-token port s)
+  (aset! s 2 (eq? (skip-ws port #f) #t))
   (let ((c (peek-char port)))
     (cond ((or (eof-object? c) (newline? c) (special-char? c))
 	   (read-char port))
 
-	  ((eqv? c #\#) (skip-to-eol port) (next-token port))
+	  ((eqv? c #\#) (skip-to-eol port) (next-token port s))
 	  
 	  ((char-numeric? c) (read-number port))
 	  
@@ -192,18 +192,19 @@ TODO:
 
 ; --- parser ---
 
-(define (make-token-stream s) (vector #f s))
+(define (make-token-stream s) (vector #f s #t))
 (define-macro (ts:port s)       `(aref ,s 1))
 (define-macro (ts:last-tok s)   `(aref ,s 0))
 (define-macro (ts:set-tok! s t) `(aset! ,s 0 ,t))
+(define-macro (ts:space? s)     `(aref ,s 2))
 
 (define (peek-token s)
   (or (ts:last-tok s)
-      (begin (ts:set-tok! s (next-token (ts:port s)))
+      (begin (ts:set-tok! s (next-token (ts:port s) s))
 	     (ts:last-tok s))))
 
 (define (require-token s)
-  (let ((t (or (ts:last-tok s) (next-token (ts:port s)))))
+  (let ((t (or (ts:last-tok s) (next-token (ts:port s) s))))
     (if (eof-object? t)
 	(error "incomplete: premature end of input")
 	(if (newline? t)
@@ -380,7 +381,8 @@ TODO:
     (let loop ((ex       (parse-unary s))
 	       (chain-op #f))
       (let ((t (peek-token s)))
-	(cond ((juxtapose? ex t)
+	(cond ((and (juxtapose? ex t)
+		    (not (ts:space? s)))
 	       (if (eq? chain-op '*)
 		   (loop (append ex (list (parse-unary s)))
 			 chain-op)
@@ -653,7 +655,7 @@ TODO:
 ; parse numbers, identifiers, parenthesized expressions, lists, vectors, etc.
 (define (parse-atom s)
   (let ((t (require-token s)))
-    (cond ((or (string? t) (number? t)) (take-token s))
+    (cond ((or (string? t) (number? t) (symbol? t)) (take-token s))
 
 	  ((eqv? t #\( )
 	   (take-token s)
