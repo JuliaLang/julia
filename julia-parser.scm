@@ -34,7 +34,8 @@ TODO:
 
 (define-macro (with-normal-ops . body)
   `(with-bindings ((ops-by-prec normal-ops)
-		   (range-colon-enabled #t))
+		   (range-colon-enabled #t)
+		   (space-sensitive #f))
 		  ,@body))
 
 (define-macro (without-bitor . body)
@@ -732,7 +733,7 @@ TODO:
 		 (cond ((eq? (car vex) 'comprehension)
 			(cons 'cell-comprehension (cdr vex)))
 		       ((eq? (car vex) 'hcat)
-			`(call (top cell_1d) ,@(cdr vex)))
+			`(call (top cell_2d) 1 ,(length (cdr vex)) ,@(cdr vex)))
 		       (else  ; (vcat ...)
 			(if (and (pair? (cadr vex)) (eq? (caadr vex) 'hcat))
 			    (let ((nr (length (cdr vex)))
