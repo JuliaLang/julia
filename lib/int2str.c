@@ -1,5 +1,6 @@
 #include <stdlib.h>
 #include "dtypes.h"
+#include "utils.h"
 
 char *uint2str(char *dest, size_t len, uint64_t num, uint32_t base)
 {
