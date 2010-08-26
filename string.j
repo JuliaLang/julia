@@ -8,17 +8,68 @@ string(x) =
           ccall(dlsym(JuliaDLHandle,"jl_print_to_string"), Ptr{Char}, (Any,),
                 x))::String
 
-function strcat(ss::String...)
-    nn = apply(+,map(length,ss))
-    c = Array(Uint8,nn)
+strcat(ss::String...) = vcat(ss...)
+
+function escape_char(c::Uint8)
+    if 31 < c < 127
+        return c == "\\"[1] ? "\\\\" : [c]
+    end
+    if c == 0
+        return "\\0"
+    end
+    if 7 <= c <= 13
+        return ["\\",["abtnvfr"[c-6]]]
+    end
+    if c == 127
+        return "\\e"
+    end
+    ["\\",lpad(uint2str(c,8),3,"0"[1])]
+end
+
+function escape_string(raw::String)
+    esc = ""
+    for i = 1:length(raw)
+        esc = [esc, escape_char(raw[i])]
+    end
+    return esc
+end
+
+function unescape_string(esc::String)
+    raw = ""
     i = 1
-    for s = ss
-        for j = 1:length(s)
-            c[i] = s[j]
+    while i <= length(esc)
+        if esc[i] == "\\"[1] && i < length(esc)
+            e = esc[i+1]
+            i += 2
+            c = e == "a"[1] ?   7 :
+                e == "b"[1] ?   8 :
+                e == "t"[1] ?   9 :
+                e == "n"[1] ?  10 :
+                e == "v"[1] ?  11 :
+                e == "f"[1] ?  12 :
+                e == "r"[1] ?  13 :
+                e == "e"[1] ? 127 :
+                e == "0"[1] ? begin
+                    x = 0
+                    while i <= length(esc)
+                        if !("0"[1] <= esc[i] <= "7"[1])
+                            break
+                        end
+                        x = 8*x + (esc[i]-"0"[1])
+                        i += 1
+                    end
+                    if 255 < x
+                        error("invalid octal character escape")
+                    end
+                    x
+                end : e
+            raw = [raw, [uint8(c)]]
+        else
+            raw = [raw, [esc[i]]]
             i += 1
         end
     end
-    c
+    return raw
 end
 
 function lpad(s,n,char)
@@ -52,7 +103,7 @@ function parse_digit(c::Uint8)
     error("non alphanumeric digit")
 end
 
-function parse_int(T::Type{Int}, str::String, base::Int32)
+function parse_int(T::Type{Int}, str::String, base::Int)
     n = zero(T)
     b = one(T)
     for p = 0:length(str)-1
