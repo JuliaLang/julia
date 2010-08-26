@@ -45,7 +45,7 @@ end
 
 ## string to integer functions ##
 
-function digit(c::Uint8)
+function parse_digit(c::Uint8)
     "0"[1] <= c <= "9"[1] ? int32(c - "0"[1]) :
     "A"[1] <= c <= "Z"[1] ? int32(c - "A"[1]) + 10 :
     "a"[1] <= c <= "z"[1] ? int32(c - "a"[1]) + 10 :
@@ -56,7 +56,7 @@ function parse_int(T::Type{Int}, str::String, base::Int32)
     n = zero(T)
     b = one(T)
     for p = 0:length(str)-1
-        d = digit(str[length(str)-p])
+        d = parse_digit(str[length(str)-p])
         if base <= d
             error("digit not valid in base")
         end
