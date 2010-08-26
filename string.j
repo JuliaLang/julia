@@ -72,6 +72,15 @@ function unescape_string(esc::String)
     return raw
 end
 
+function quote_string(raw::String)
+    esc = escape_string(raw)
+    quo = ""
+    for i = 1:length(esc)
+       quo = [quo, esc[i] == "\""[1] ? "\\\"" : [esc[i]]]
+    end
+    ["\"",quo,"\""]
+end
+
 function lpad(s,n,char)
     k = length(s)
     if k >= n
