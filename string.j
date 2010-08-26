@@ -23,7 +23,7 @@ function escape_char(c::Uint8)
     if c == 127
         return "\\e"
     end
-    ["\\",lpad(uint2str(c,8),3,"0"[1])]
+    ["\\0",lpad(uint2str(c,8),2,"0"[1])]
 end
 
 function escape_string(raw::String)
@@ -38,7 +38,7 @@ function unescape_string(esc::String)
     raw = ""
     i = 1
     while i <= length(esc)
-        if esc[i] == "\\"[1] && i < length(esc)
+        if i < length(esc) && esc[i] == "\\"[1]
             e = esc[i+1]
             i += 2
             c = e == "a"[1] ?   7 :
