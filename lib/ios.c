@@ -840,17 +840,17 @@ int ios_getc(ios_t *s)
             return IOS_EOF;
     }
     if (ch == '\n') s->lineno++;
-    return (int)ch;
+    return (unsigned char)ch;
 }
 
 int ios_peekc(ios_t *s)
 {
     if (s->bpos < s->size)
-        return s->buf[s->bpos];
+        return (unsigned char)s->buf[s->bpos];
     if (s->_eof) return IOS_EOF;
     size_t n = ios_readprep(s, 1);
     if (n == 0)  return IOS_EOF;
-    return s->buf[s->bpos];
+    return (unsigned char)s->buf[s->bpos];
 }
 
 int ios_ungetc(int c, ios_t *s)

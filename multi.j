@@ -31,6 +31,7 @@ wait_msg(fd) =
 # - handle remote execution errors
 # - send pings at some interval to detect failed/hung machines
 # - asynch i/o with coroutines to overlap computing with communication
+# - all-to-all communication
 
 function jl_worker(fd)
     sock = fdio(fd)
@@ -96,9 +97,9 @@ struct Worker
     pending::Int32
     completed::BTree{Int32,Any}
 
-    function Worker()
-        host = "localhost"
-        port = start_local_worker()
+    Worker() = Worker("localhost", start_local_worker())
+
+    function Worker(host, port)
         sock = connect_to_worker(host, port)
         new(host, port, sock, Queue(), false, 0, 0, BTree(Int32,Any))
     end
@@ -112,7 +113,15 @@ struct Future
 end
 
 # todo:
-# - remote references
+# - remote references (?)
+
+struct LocalProcess
+end
+
+# run a task locally with the remote_apply interface
+function remote_apply(w::LocalProcess, f, args...)
+    return spawn(()->apply(eval(f), args))
+end
 
 function remote_apply(w::Worker, f, args...)
     w.maxid += 1

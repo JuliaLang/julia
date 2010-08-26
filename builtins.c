@@ -1228,34 +1228,6 @@ JL_CALLABLE(jl_f_hash_symbol)
 #endif
 }
 
-// --- io ---
-
-DLLEXPORT
-void *jl_new_fdio(int fd)
-{
-    ios_t *s = (ios_t*)allocb(sizeof(ios_t));
-    ios_fd(s, fd, 0);
-    return s;
-}
-
-DLLEXPORT
-void *jl_new_fileio(char *fname, int rd, int wr, int create, int trunc)
-{
-    ios_t *s = (ios_t*)allocb(sizeof(ios_t));
-    if (ios_file(s, fname, rd, wr, create, trunc) == NULL)
-        jl_errorf("could not open file %s", fname);
-    return s;
-}
-
-DLLEXPORT
-void *jl_new_memio(uint32_t sz)
-{
-    ios_t *s = (ios_t*)allocb(sizeof(ios_t));
-    if (ios_mem(s, sz) == NULL)
-        jl_errorf("error creating memory I/O stream");
-    return s;
-}
-
 // --- init ---
 
 static void add_builtin_method1(jl_function_t *gf, jl_type_t *t, jl_fptr_t f)

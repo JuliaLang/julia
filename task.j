@@ -7,10 +7,9 @@ next(t::Task, val) = (val, yieldto(t))
 Runnable_Q = Queue()
 Waiting_Set = idtable()
 
-function select(s::IOStream)
-    # TODO
-    return true
-end
+select(s::IOStream) =
+    ccall(dlsym(JuliaDLHandle,"jl_read_avail"), Int32, (Ptr{Void},),
+          s.ios)!=0
 
 function schedule()
     global Runnable_Q
@@ -21,6 +20,7 @@ function schedule()
         if !isempty(Runnable_Q)
             # run a runnable task
             task = pop(Runnable_Q)
+            # invariant: current_task is not in Runnable_Q or Waiting_Set
             yieldto(task)
         end
 
@@ -71,6 +71,7 @@ function make_scheduled(t::Task)
 end
 
 function wait(t::Task)
+    assert(!is(t,current_task()))
     make_scheduled(t)
     while !task_done(t)
         yieldto(scheduler)
@@ -78,9 +79,10 @@ function wait(t::Task)
     yieldto(t)  # return last value
 end
 
-# TODO
 # num bytes available without blocking
-nb_available(s::IOStream) = Inf
+nb_available(s::IOStream) =
+    ccall(dlsym(JuliaDLHandle,"jl_nb_available"), Int32, (Ptr{Void},),
+          s.ios)
 
 # non-blocking read
 function nbread(s::IOStream, what)
