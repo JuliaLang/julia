@@ -212,7 +212,14 @@ static jl_value_t *scm_to_julia(value_t e)
         return (jl_value_t*)sym;
     }
     if (fl_isstring(e)) {
-        return (jl_value_t*)jl_cstr_to_array(cvalue_data(e));
+        size_t len = cvalue_len(e);
+        jl_value_t *dims = jl_box_int32(len+1);
+        jl_array_t *a = jl_new_array(jl_array_uint8_type, &dims, 1);
+        memcpy(a->data, cvalue_data(e), len);
+        ((char*)a->data)[len] = '\0';
+        a->length--;
+        jl_tupleset(a->dims, 0, jl_box_int32(len));
+        return (jl_value_t*)a;
     }
     if (e == FL_F) {
         return jl_false;
