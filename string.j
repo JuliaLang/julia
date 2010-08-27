@@ -18,7 +18,7 @@ function escape_string(raw::String)
         c = raw[i]
         e = c == 0 ? (i < length(raw) && "0"[1] <= raw[i+1] <= "7"[1] ? "\\000" : "\\0") :
             c == "\\"[1] ? "\\\\" :
-            c == 127 ? "\\e" :
+            c == 27 ? "\\e" :
             31 < c < 127 ? [c] :
             7 <= c <= 13 ? ["\\",["abtnvfr"[c-6]]] :
             ["\\",lpad(uint2str(c,8),3,"0"[1])]
@@ -32,18 +32,18 @@ function unescape_string(esc::String)
     i = 1
     while i <= length(esc)
         if i < length(esc) && esc[i] == "\\"[1]
-            e = esc[i += 1]
-            c = e == "a"[1] ?   7 :
-                e == "b"[1] ?   8 :
-                e == "t"[1] ?   9 :
-                e == "n"[1] ?  10 :
-                e == "v"[1] ?  11 :
-                e == "f"[1] ?  12 :
-                e == "r"[1] ?  13 :
-                e == "e"[1] ? 127 :
+            e = esc[i + 1]
+            i += 2
+            c = e == "a"[1] ?  7 :
+                e == "b"[1] ?  8 :
+                e == "t"[1] ?  9 :
+                e == "n"[1] ? 10 :
+                e == "v"[1] ? 11 :
+                e == "f"[1] ? 12 :
+                e == "r"[1] ? 13 :
+                e == "e"[1] ? 27 :
                 e == "x"[1] ? begin
                     x = 0
-                    i += 1
                     m = min(i+1,length(esc))
                     while i <= m
                         if !("0"[1] <= esc[i] <= "9"[1] ||
@@ -60,13 +60,13 @@ function unescape_string(esc::String)
                     x
                 end :
                 "0"[1] <= e <= "7"[1] ? begin
-                    x = 0
-                    m = min(i+2,length(esc))
+                    x = e - "0"[1]
+                    m = min(i+1,length(esc))
                     while i <= m
                         if !("0"[1] <= esc[i] <= "7"[1])
                             break
                         end
-                        x = 8*x + (esc[i]-"0"[1])
+                        x = 8*x + (esc[i] - "0"[1])
                         i += 1
                     end
                     if x > 255
