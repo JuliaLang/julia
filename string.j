@@ -8,6 +8,8 @@ string(x) =
           ccall(dlsym(JuliaDLHandle,"jl_print_to_string"), Ptr{Char}, (Any,),
                 x))::String
 
+inspect(s::String) = print(quote_string(s))
+
 strcat(ss::String...) = vcat(ss...)
 
 function escape_char(c::Uint8)

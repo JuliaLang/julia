@@ -239,6 +239,8 @@ function print(e::Expr)
     end
 end
 
+inspect(x) = print(x)
+
 copy(x::Any) = x
 copy(x::Tuple) = map(copy, x)
 copy(e::Expr) = Expr(e.head, copy(e.args), e.type)

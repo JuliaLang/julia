@@ -590,7 +590,10 @@ int main(int argc, char *argv[])
                 jl_value_t *value =
                     jl_toplevel_eval_thunk((jl_lambda_info_t*)ast);
                 if (print_value) {
-                    jl_print(value);
+                    jl_value_t *jl_inspect = *jl_get_bindingp(jl_system_module,
+                                                              jl_symbol("inspect"));
+                    assert(jl_is_function(jl_inspect));
+                    jl_apply((jl_function_t*)jl_inspect, &value, 1);
                     ios_printf(ios_stdout, "\n");
                 }
             }
