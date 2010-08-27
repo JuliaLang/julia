@@ -151,6 +151,61 @@ assert((Complex(1,2) + 1//2) * 0.5 == Complex(0.75,1.0))
 assert((Complex(1,2)/Complex(2.5,3.0))*Complex(2.5,3.0) == Complex(1,2))
 assert(0.7 < real(sqrt(Complex(0,1))) < 0.707107)
 
+# string escaping & unescaping
+chars = {
+    0       "\0"    "\\0"
+    1       "\001"  "\\001"
+    6       "\006"  "\\006"
+    7       "\a"    "\\a"
+    8       "\b"    "\\b"
+    9       "\t"    "\\t"
+    10      "\n"    "\\n"
+    11      "\v"    "\\v"
+    12      "\f"    "\\f"
+    13      "\r"    "\\r"
+    14      "\016"  "\\016"
+    26      "\032"  "\\032"
+    27      "\033"  "\\e"   # TODO: implement \e in flisp.
+    28      "\034"  "\\034"
+    32      " "     " "
+    47      "/"     "/"
+    48      "0"     "0"
+    57      "9"     "9"
+    58      ":"     ":"
+    64      "@"     "@"
+    65      "A"     "A"
+    90      "Z"     "Z"
+    91      "["     "["
+    96      "`"     "`"
+    97      "a"     "a"
+    122     "z"     "z"
+    123     "{"     "{"
+    126     "~"     "~"
+    127     "\177"  "\\177"
+    255     "\377"  "\\377"
+}
+
+for i = 1:size(chars,1)
+    assert(chars[i,1] == chars[i,2][1])
+    assert(chars[i,2] == unescape_string(chars[i,3]))
+    assert(chars[i,3] == escape_string(chars[i,2]))
+    for j = 1:size(chars,1)
+        str = [chars[i,2],chars[j,2]]
+        assert(str == unescape_string(escape_string(str)))
+    end
+end
+
+for i = 0:255, p = {"","\0","x","\127","xxx"}
+    s = [uint8(i)]
+    assert(unescape_string(["\\",lpad(uint2str(i,8),1,"0"[1]),p]) == [s,p])
+    assert(unescape_string(["\\",lpad(uint2str(i,8),2,"0"[1]),p]) == [s,p])
+    assert(unescape_string(["\\",lpad(uint2str(i,8),3,"0"[1]),p]) == [s,p])
+    assert(unescape_string(["\\",lpad(uint2str(i,8),4,"0"[1]),p]) == [[uint8(div(i,8))],uint2str(i%8,8),p])
+    assert(unescape_string(["\\x",lpad(uint2str(i,16),1,"0"[1]),p]) == [s,p])
+    assert(unescape_string(["\\x",lpad(uint2str(i,16),2,"0"[1]),p]) == [s,p])
+    assert(unescape_string(["\\x",lpad(uint2str(i,16),3,"0"[1]),p]) == [[uint8(div(i,16))],uint2str(i%16,16),p])
+end
+
 # integer parsing
 assert(parse_digit("0"[1]) == 0)
 assert(parse_digit("1"[1]) == 1)
