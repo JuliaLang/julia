@@ -12,28 +12,19 @@ inspect(s::String) = print(quote_string(s))
 
 strcat(ss::String...) = vcat(ss...)
 
-function escape_char(c::Uint8)
-    if 31 < c < 127
-        return c == "\\"[1] ? "\\\\" : [c]
-    end
-    if c == 0
-        return "\\0"
-    end
-    if 7 <= c <= 13
-        return ["\\",["abtnvfr"[c-6]]]
-    end
-    if c == 127
-        return "\\e"
-    end
-    ["\\0",lpad(uint2str(c,8),2,"0"[1])]
-end
-
 function escape_string(raw::String)
     esc = ""
     for i = 1:length(raw)
-        esc = [esc, escape_char(raw[i])]
+        c = raw[i]
+        e = c == 0 ? (i < length(raw) && "0"[1] <= raw[i+1] <= "7"[1] ? "\\000" : "\\0") :
+            c == "\\"[1] ? "\\\\" :
+            c == 127 ? "\\e" :
+            31 < c < 127 ? [c] :
+            7 <= c <= 13 ? ["\\",["abtnvfr"[c-6]]] :
+            ["\\",lpad(uint2str(c,8),3,"0"[1])]
+        esc = [esc, e]
     end
-    return esc
+    esc
 end
 
 function unescape_string(esc::String)
@@ -41,8 +32,7 @@ function unescape_string(esc::String)
     i = 1
     while i <= length(esc)
         if i < length(esc) && esc[i] == "\\"[1]
-            e = esc[i+1]
-            i += 2
+            e = esc[i += 1]
             c = e == "a"[1] ?   7 :
                 e == "b"[1] ?   8 :
                 e == "t"[1] ?   9 :
@@ -51,17 +41,18 @@ function unescape_string(esc::String)
                 e == "f"[1] ?  12 :
                 e == "r"[1] ?  13 :
                 e == "e"[1] ? 127 :
-                e == "0"[1] ? begin
+                "0"[1] <= e <= "7"[1] ? begin
                     x = 0
-                    while i <= length(esc)
+                    m = min(i+2,length(esc))
+                    while i <= m
                         if !("0"[1] <= esc[i] <= "7"[1])
                             break
                         end
                         x = 8*x + (esc[i]-"0"[1])
                         i += 1
                     end
-                    if 255 < x
-                        error("invalid octal character escape")
+                    if x > 255
+                        error("invalid octal ASCII escape")
                     end
                     x
                 end : e
@@ -71,7 +62,7 @@ function unescape_string(esc::String)
             i += 1
         end
     end
-    return raw
+    raw
 end
 
 function quote_string(raw::String)

@@ -22,7 +22,7 @@ LIBFILES = $(FLISP) $(LLT)
 LIBS = $(LIBFILES) -lutil -ldl -lm -lgc -lreadline $(OSLIBS) \
 	$(shell llvm-config --ldflags --libs engine)
 
-DEBUGFLAGS = -ggdb3 -DDEBUG $(FLAGS)
+DEBUGFLAGS = -ggdb3 -DDEBUG $(FLAGS) -DENABLE_INFERENCE
 SHIPFLAGS = -O3 -DNDEBUG $(FLAGS) -DENABLE_INFERENCE
 
 default: debug
