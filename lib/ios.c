@@ -251,19 +251,19 @@ static size_t _ios_read(ios_t *s, char *dest, size_t n, int all)
     while (n > 0) {
         avail = s->size - s->bpos;
         
-        if (avail >= n) {
-            memcpy(dest, s->buf + s->bpos, n);
-            s->bpos += n;
-            return tot+n;
-        }
-        
         if (avail > 0) {
-            memcpy(dest, s->buf + s->bpos, avail);
+            size_t ncopy = (avail >= n) ? n : avail;
+            memcpy(dest, s->buf + s->bpos, ncopy);
+            s->bpos += ncopy;
+            if (ncopy >= n) {
+                s->state = bst_rd;
+                return tot+ncopy;
+            }
         }
         if (s->bm == bm_mem || s->fd == -1) {
             // can't get any more data
-            s->bpos += avail;
-            if (avail == 0 && n > 0)
+            s->state = bst_rd;
+            if (avail == 0)
                 s->_eof = 1;
             return avail;
         }
@@ -831,7 +831,7 @@ int ios_putc(int c, ios_t *s)
 int ios_getc(ios_t *s)
 {
     char ch;
-    if (s->bpos < s->size) {
+    if (s->state == bst_rd && s->bpos < s->size) {
         ch = s->buf[s->bpos++];
     }
     else {

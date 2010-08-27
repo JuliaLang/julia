@@ -67,9 +67,10 @@ isgeneric(f) = ccall(dlsym(JuliaDLHandle,"jl_is_genericfunc"), Int32, (Any,),
 isleaftype(t) = ccall(dlsym(JuliaDLHandle,"jl_is_leaf_type"), Int32, (Any,),
                       t) != 0
 
-# for now assume all globals constant
+# for now assume all global functions constant
 # TODO
-isconstant(s::Symbol) = true
+isconstant(s::Symbol) = isbound(s) && (e=eval(s);
+                                       isa(e,Function) || isa(e,Type))
 isconstant(s::Expr) = is(s.head,`quote)
 isconstant(x) = true
 

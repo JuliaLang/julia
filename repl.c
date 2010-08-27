@@ -592,8 +592,12 @@ int main(int argc, char *argv[])
                 if (print_value) {
                     jl_value_t *jl_inspect = *jl_get_bindingp(jl_system_module,
                                                               jl_symbol("inspect"));
-                    assert(jl_is_function(jl_inspect));
-                    jl_apply((jl_function_t*)jl_inspect, &value, 1);
+                    if (jl_inspect && jl_is_function(jl_inspect)) {
+                        jl_apply((jl_function_t*)jl_inspect, &value, 1);
+                    }
+                    else {
+                        jl_print(value);
+                    }
                     ios_printf(ios_stdout, "\n");
                 }
             }
