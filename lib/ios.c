@@ -911,11 +911,11 @@ int ios_peekutf8(ios_t *s, uint32_t *pwc)
     if (c == IOS_EOF)
         return IOS_EOF;
     c0 = (char)c;
-    sz = u8_seqlen(&c0)-1;
-    if (sz == 0) {
-        *pwc = (uint32_t)c0;
+    if ((unsigned char)c0 < 0x80) {
+        *pwc = (uint32_t)(unsigned char)c0;
         return 1;
     }
+    sz = u8_seqlen(&c0)-1;
     if (ios_readprep(s, sz) < sz)
         return IOS_EOF;
     size_t i = s->bpos;
