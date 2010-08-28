@@ -78,9 +78,9 @@ div(x::Number, y::Number) = truncate(x/y)
 
 # general comparisons from == and < operators
 !=(x, y) = !(x == y)
-> (x::Real, y::Real) = (y < x)
-<=(x::Real, y::Real) = (x < y) || (x == y)
->=(x::Real, y::Real) = (x > y) || (x == y)
+> (x, y) = (y < x)
+<=(x, y) = (x < y) || (x == y)
+>=(x, y) = (x > y) || (x == y)
 
 # iterating over tuples
 start(t::Tuple) = 1

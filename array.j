@@ -149,9 +149,6 @@ imag{T <: Real}(x::Array{T,2}) = zeros(T, size(x))
 imag(x::Vector) = [ imag(x[i]) | i=1:length(x) ]
 imag(x::Matrix) = [ imag(x[i,j]) | i=1:size(x,1), j=1:size(x,2) ]
 
-(>) {T,S,n}(x::Tensor{T,n}, y::Tensor{S,n}) = (y < x)
-(>)        (x::Real  ,      y::Tensor)      = (y < x)
-(>)        (x::Tensor,      y::Real  )      = (y < x)
 (<=){T,S,n}(x::Tensor{T,n}, y::Tensor{S,n}) = (x < y) | (x == y)
 (<=)       (x::Real  ,      y::Tensor)      = (x < y) | (x == y)
 (<=)       (x::Tensor,      y::Real  )      = (x < y) | (x == y)
