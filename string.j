@@ -45,12 +45,9 @@ function unescape_string(esc::String)
                 e == "x"[1] ? begin
                     x = 0
                     m = min(i+1,length(esc))
-                    while i <= m
-                        if !("0"[1] <= esc[i] <= "9"[1] ||
-                             "a"[1] <= esc[i] <= "f"[1] ||
-                             "A"[1] <= esc[i] <= "F"[1])
-                            break
-                        end
+                    while i <= m && ( "0"[1] <= esc[i] <= "9"[1] ||
+                                      "a"[1] <= esc[i] <= "f"[1] ||
+                                      "A"[1] <= esc[i] <= "F"[1] )
                         x = 16*x + parse_digit(esc[i])
                         i += 1
                     end
