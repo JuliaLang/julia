@@ -178,7 +178,29 @@ function wait(f::Future)
     end
 end
 
-function pmap(wpool, fname, lst)
+function pmap_d(wpool, fname, lst)
+    # spawn a task to feed work to each worker as it finishes, providing
+    # dynamic load-balancing
+    idx = 1
+    N = length(lst)
+    result = Array(Any, N)
+    for w = wpool
+        spawn(function ()
+                while idx <= N
+                  todo = idx; idx+=1
+                  f = remote_apply(w, fname, lst[todo])
+                  result[todo] = wait(f)
+                end
+              end)
+    end
+    while idx <= N
+        yieldto(scheduler)
+    end
+    result
+end
+
+function pmap_s(wpool, fname, lst)
+    # statically-balanced version
     nw = length(wpool)
     fut = { remote_apply(wpool[(i-1)%nw+1], fname, lst[i]) |
            i = 1:length(lst) }

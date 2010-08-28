@@ -83,6 +83,7 @@ void julia_init()
     jl_find_stack_bottom();
 #ifdef BOEHM_GC
     GC_expand_hp(12000000);  //shaves a tiny bit off startup time
+    GC_time_limit = GC_TIME_UNLIMITED;
 #endif
     jl_init_frontend();
     jl_init_types();
