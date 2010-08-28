@@ -337,6 +337,8 @@ char read_escape_control_char(char c)
         return '\t';
     else if (c == 'r')
         return '\r';
+    else if (c == 'e')
+        return '\e';
     else if (c == 'b')
         return '\b';
     else if (c == 'f')
@@ -431,7 +433,9 @@ int u8_escape_wchar(char *buf, size_t sz, u_int32_t ch)
     else if (ch == L'\t')
         return buf_put2c(buf, "\\t");
     else if (ch == L'\r')
-        return buf_put2c(buf, "\\r");
+        return buf_put2c(buf, "\\r"); 
+    else if (ch == L'\e')
+        return buf_put2c(buf, "\\e");
     else if (ch == L'\b')
         return buf_put2c(buf, "\\b");
     else if (ch == L'\f')
