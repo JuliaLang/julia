@@ -62,10 +62,7 @@ function unescape_string(esc::String)
                 "0"[1] <= e <= "7"[1] ? begin
                     x = e - "0"[1]
                     m = min(i+1,length(esc))
-                    while i <= m
-                        if !("0"[1] <= esc[i] <= "7"[1])
-                            break
-                        end
+                    while i <= m && "0"[1] <= esc[i] <= "7"[1]
                         x = 8*x + (esc[i] - "0"[1])
                         i += 1
                     end

@@ -837,8 +837,10 @@
 			  (else
 			   (let* ((r (to-lff (cadr e) #t #f))
 				  (w (cons `(_while ,(car r)
-						    ,(to-blk
-						      (to-lff (caddr e) #f #f)))
+					      ,(to-blk
+						(append
+						 (cdr r)
+						 (to-lff (caddr e) #f #f))))
 					   (cdr r))))
 			     (if (symbol? dest)
 				 (cons `(= ,dest (null)) w)
