@@ -12,6 +12,8 @@ inspect(s::String) = print(quote_string(s))
 
 strcat(ss::String...) = vcat(ss...)
 
+global escape_strings_with_hex = false
+
 function escape_string(raw::String)
     esc = ""
     for i = 1:length(raw)
@@ -21,7 +23,9 @@ function escape_string(raw::String)
             c == 27 ? "\\e" :
             31 < c < 127 ? [c] :
             7 <= c <= 13 ? ["\\",["abtnvfr"[c-6]]] :
-            ["\\",lpad(uint2str(c,8),3,"0"[1])]
+            escape_strings_with_hex ?
+                ["\\x",lpad(uint2str(c,16),2,"0"[1])] :
+                ["\\",lpad(uint2str(c,8),3,"0"[1])]
         esc = [esc, e]
     end
     esc
