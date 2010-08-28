@@ -161,6 +161,7 @@ jl_value_t *jl_switchto(jl_task_t *t, jl_value_t *arg)
         return t->result;
     task_arg_in_transit = arg;
     if (!setjmp(jl_current_task->ctx)) {
+        GC_stackbottom = t->stack+t->ssize;
         jl_current_task = t;
         longjmp(t->ctx, 1);
     }
@@ -309,6 +310,9 @@ jl_task_t *jl_new_task(jl_function_t *start, size_t ssize)
     return t;
 }
 
+// boehm GC's LOCAL_MARK_STACK_SIZE makes it stack-allocate 8192*wordsize bytes
+#define JL_MIN_STACK (4096*(2*sizeof(void*)+1))
+
 JL_CALLABLE(jl_f_task)
 {
     JL_NARGS(Task, 1, 2);
@@ -317,14 +321,14 @@ JL_CALLABLE(jl_f_task)
       we need a somewhat large stack, because execution can trigger
       compilation, which uses perhaps too much stack space.
     */
-    size_t ssize = 32768;
+    size_t ssize = 49152;
 #ifdef BITS64
     ssize *= 2;
 #endif
     if (nargs == 2) {
         JL_TYPECHK(Task, int32, args[1]);
         ssize = jl_unbox_int32(args[1]);
-        if (ssize < 4096)
+        if (ssize < JL_MIN_STACK)
             jl_error("Task: stack size too small");
     }
     return (jl_value_t*)jl_new_task((jl_function_t*)args[0], ssize);
