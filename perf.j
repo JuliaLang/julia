@@ -124,5 +124,5 @@ end
 
 print("random matrix statistics: ")
 (s1, s2) = randmatstat(1000)
-assert(round(10*s1) > 6 && round(10*s1) < 8)
+assert(s1 > 0.5 && s1 < 1.0)
 timeit(randmatstat, 1000)
