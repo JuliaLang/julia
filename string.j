@@ -24,8 +24,8 @@ function escape_string(raw::String)
             31 < c < 127 ? [c] :
             7 <= c <= 13 ? ["\\",["abtnvfr"[c-6]]] :
             escape_strings_with_hex ?
-                ["\\x",lpad(uint2str(c,16),2,"0"[1])] :
-                ["\\",lpad(uint2str(c,8),3,"0"[1])]
+                ["\\x",uint2str(c,16,2)] :
+                ["\\",uint2str(c,8,3)]
         esc = [esc, e]
     end
     esc
@@ -151,3 +151,5 @@ function uint2str(n::Int, base::Int)
           str, sz, uint64(n), uint32(base))
     str[:(sz-1)]  # cut out terminating nul
 end
+
+uint2str(n::Int, base::Int, len::Int) = lpad(uint2str(n,base),len,"0"[1])

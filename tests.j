@@ -197,13 +197,13 @@ end
 
 for i = 0:255, p = {"","\0","x","\127","xxx"}
     s = [uint8(i)]
-    assert(unescape_string(["\\",lpad(uint2str(i,8),1,"0"[1]),p]) == [s,p])
-    assert(unescape_string(["\\",lpad(uint2str(i,8),2,"0"[1]),p]) == [s,p])
-    assert(unescape_string(["\\",lpad(uint2str(i,8),3,"0"[1]),p]) == [s,p])
-    assert(unescape_string(["\\",lpad(uint2str(i,8),4,"0"[1]),p]) == [[uint8(div(i,8))],uint2str(i%8,8),p])
-    assert(unescape_string(["\\x",lpad(uint2str(i,16),1,"0"[1]),p]) == [s,p])
-    assert(unescape_string(["\\x",lpad(uint2str(i,16),2,"0"[1]),p]) == [s,p])
-    assert(unescape_string(["\\x",lpad(uint2str(i,16),3,"0"[1]),p]) == [[uint8(div(i,16))],uint2str(i%16,16),p])
+    assert(unescape_string(["\\",uint2str(i,8,1),p]) == [s,p])
+    assert(unescape_string(["\\",uint2str(i,8,2),p]) == [s,p])
+    assert(unescape_string(["\\",uint2str(i,8,3),p]) == [s,p])
+    assert(unescape_string(["\\",uint2str(i,8,4),p]) == [[uint8(div(i,8))],uint2str(i%8,8),p])
+    assert(unescape_string(["\\x",uint2str(i,16,1),p]) == [s,p])
+    assert(unescape_string(["\\x",uint2str(i,16,2),p]) == [s,p])
+    assert(unescape_string(["\\x",uint2str(i,16,3),p]) == [[uint8(div(i,16))],uint2str(i%16,16),p])
 end
 
 assert("\z" == unescape_string("\z") == "z")
