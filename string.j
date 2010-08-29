@@ -18,7 +18,9 @@ function escape_string(raw::String)
     esc = ""
     for i = 1:length(raw)
         c = raw[i]
-        e = c == 0 ? (i < length(raw) && "0"[1] <= raw[i+1] <= "7"[1] ? "\\000" : "\\0") :
+        z = i < length(raw) && "0"[1] <= raw[i+1] <= "7"[1] ?
+            (escape_strings_with_hex ? "\\x00" : "\\000") : "\\0"
+        e = c == 0 ? z :
             c == "\\"[1] ? "\\\\" :
             c == 27 ? "\\e" :
             31 < c < 127 ? [c] :
