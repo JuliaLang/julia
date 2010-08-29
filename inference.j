@@ -534,8 +534,7 @@ is_rest_arg(arg) = (isa(arg,Expr) && is(arg.head,symbol("::")) &&
                     ccall(dlsym(JuliaDLHandle,"jl_is_rest_arg"),Int32,(Any,),
                           arg)!=0)
 
-function typeinf_task()
-    caller = current_task().parent
+function typeinf_task(caller)
     result = ()
     while true
         (caller, args) = yieldto(caller, result)
@@ -543,8 +542,8 @@ function typeinf_task()
     end
 end
 
-#Inference_Task = Task(typeinf_task, 300000)
-#yieldto(Inference_Task)
+#Inference_Task = Task(typeinf_task, 1048576)
+#yieldto(Inference_Task, current_task())
 
 function typeinf_ext(linfo, atypes, sparams, cop)
     return typeinf_ext_(linfo, atypes, sparams, cop)
@@ -554,7 +553,7 @@ function typeinf_ext(linfo, atypes, sparams, cop)
     #if is(C, Inference_Task)
     #    return typeinf_ext_(args...)
     #end
-    #return yieldto(Inference_Task, (C, args))
+    #return yieldto(Inference_Task, C, args)
 end
 
 function typeinf_ext_(linfo, atypes, sparams, cop)

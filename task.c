@@ -154,18 +154,29 @@ jl_struct_type_t *jl_task_type;
 jl_task_t * volatile jl_current_task;
 jl_task_t *jl_root_task;
 static jl_value_t * volatile task_arg_in_transit;
+static volatile int n_args_in_transit;
 
-jl_value_t *jl_switchto(jl_task_t *t, jl_value_t *arg)
+static jl_value_t *switchto(jl_task_t *t)
 {
-    if (t->done)
+    if (t->done) {
+        task_arg_in_transit = (jl_value_t*)jl_null;
         return t->result;
-    task_arg_in_transit = arg;
+    }
     if (!setjmp(jl_current_task->ctx)) {
         GC_stackbottom = t->stack+t->ssize;
         jl_current_task = t;
         longjmp(t->ctx, 1);
     }
-    return task_arg_in_transit;
+    jl_value_t *val = task_arg_in_transit;
+    task_arg_in_transit = (jl_value_t*)jl_null;
+    return val;
+}
+
+jl_value_t *jl_switchto(jl_task_t *t, jl_value_t *arg)
+{
+    task_arg_in_transit = arg;
+    n_args_in_transit = 1;
+    return switchto(t);
 }
 
 // yield to exception handler
@@ -268,7 +279,18 @@ static void init_task(jl_task_t *t)
 {
     if (setjmp(t->ctx)) {
         // this runs the first time we switch to t
-        t->result = jl_apply(t->start, NULL, 0);
+        if (n_args_in_transit == 0) {
+            t->result = jl_apply(t->start, NULL, 0);
+        }
+        else if (n_args_in_transit == 1) {
+            jl_value_t *arg = task_arg_in_transit;
+            t->result = jl_apply(t->start, &arg, 1);
+        }
+        else {
+            assert(jl_is_tuple(task_arg_in_transit));
+            t->result = jl_apply(t->start, &jl_tupleref(task_arg_in_transit,0),
+                                 n_args_in_transit);
+        }
         t->done = 1;
         jl_task_t *cont = t->on_exit;
         // if parent task has exited, try its parent, and so on
@@ -336,10 +358,19 @@ JL_CALLABLE(jl_f_task)
 
 JL_CALLABLE(jl_f_yieldto)
 {
-    JL_NARGS(yieldto, 1, 2);
-    jl_value_t *arg = (nargs==1 ? (jl_value_t*)jl_null : args[1]);
+    JL_NARGSV(yieldto, 1);
     JL_TYPECHK(yieldto, task, args[0]);
-    return jl_switchto((jl_task_t*)args[0], arg);
+    n_args_in_transit = nargs-1;
+    if (nargs == 2) {
+        task_arg_in_transit = args[1];
+    }
+    else if (nargs > 2) {
+        task_arg_in_transit = jl_f_tuple(NULL, &args[1], n_args_in_transit);
+    }
+    else {
+        task_arg_in_transit = (jl_value_t*)jl_null;
+    }
+    return switchto((jl_task_t*)args[0]);
 }
 
 JL_CALLABLE(jl_f_current_task)

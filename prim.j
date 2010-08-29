@@ -154,15 +154,18 @@ end
 # cell primitives
 # these are used by the front end to implement {} and backquote
 function append(a1::Array{Any,1}, as::Array{Any,1}...)
-    n = length(a1) + apply(+,map(length, as))
-    a = Array(Any,n)
-    for i = 1:length(a1)
-        a[i] = a1[i]
+    n = arraylen(a1)
+    for i = 1:length(as)
+        n += arraylen(as[i])
     end
-    i = length(a1)+1
+    a = Array(Any,n)
+    for i = 1:arraylen(a1)
+        arrayset(a,i,arrayref(a1,i))
+    end
+    i = arraylen(a1)+1
     for x = as
         for j = 1:length(x)
-            a[i] = x[j]
+            arrayset(a,i,x[j])
             i += 1
         end
     end
@@ -180,7 +183,7 @@ end
 
 function cell_2d(nr, nc, xs...)
     a = Array(Any,nr,nc)
-    for i=1:numel(a)
+    for i=1:(nr*nc)
         arrayset(a,i,xs[i])
     end
     a
