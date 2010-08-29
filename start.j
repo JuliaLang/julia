@@ -1,6 +1,7 @@
 # core functionality
 load("range.j")
 load("prim.j")
+load("print.j")
 load("util.j")
 load("operators.j")
 

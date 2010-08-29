@@ -64,11 +64,9 @@ randn(dims::Tuple) = randn(dims...)
 
 function copy{T}(a::Array{T})
     b = Array(T, size(a))
-    for i=1:numel(a); b[i] = a[i]; end
+    for i=1:numel(a); b[i] = copy(a[i]); end
     return b
 end
-
-copy(a::Array{Any,1}) = { copy(a[i]) | i=1:length(a) }
 
 reshape{T}(a::Array{T}, dims...) = (b = Array(T, dims...);
                                     for i=1:numel(a); b[i] = a[i]; end;
@@ -663,10 +661,6 @@ function print{T}(a::Array{T,2})
         end
     end
 end # print()
-
-map(f, a::Array{Any,1}) = { f(a[i]) | i=1:length(a) }
-map(f, a::Array{Any,1}, b::Array{Any,1}) =
-    { f(a[i],b[i]) | i=1:min(length(a),length(b)) }
 
 function ndmap(body, t::Tuple, it...)
     idx = length(t)-length(it)
