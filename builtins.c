@@ -1339,6 +1339,7 @@ void jl_init_builtins()
     add_builtin("...", (jl_value_t*)jl_seq_type);
     add_builtin("Function", (jl_value_t*)jl_functype_ctor);
     add_builtin("Array", (jl_value_t*)jl_array_type);
+    add_builtin("String", (jl_value_t*)jl_string_type);
     add_builtin("Tensor", (jl_value_t*)jl_tensor_type);
     add_builtin("Scalar", (jl_value_t*)jl_scalar_type);
     add_builtin("Number", (jl_value_t*)jl_number_type);

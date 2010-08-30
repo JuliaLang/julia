@@ -37,6 +37,7 @@ jl_struct_type_t *jl_bits_kind;
 
 jl_type_t *jl_bottom_type;
 jl_tag_type_t *jl_seq_type;
+jl_tag_type_t *jl_string_type;
 jl_tag_type_t *jl_tensor_type;
 jl_tag_type_t *jl_scalar_type;
 jl_tag_type_t *jl_number_type;
@@ -1687,6 +1688,9 @@ void jl_init_types()
     jl_ntuple_type = jl_new_tagtype((jl_value_t*)jl_symbol("NTuple"),
                                     jl_any_type, tv);
     jl_ntuple_typename = jl_ntuple_type->name;
+
+    jl_string_type = jl_new_tagtype((jl_value_t*)jl_symbol("String"),
+                                   jl_any_type, jl_null);
 
     tv = jl_typevars(2, "T", "N");
     jl_tensor_type = jl_new_tagtype((jl_value_t*)jl_symbol("Tensor"),

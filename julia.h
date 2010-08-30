@@ -220,6 +220,7 @@ extern jl_type_t *jl_bottom_type;
 extern jl_struct_type_t *jl_lambda_info_type;
 extern jl_tag_type_t *jl_seq_type;
 extern jl_typector_t *jl_functype_ctor;
+extern jl_tag_type_t *jl_string_type;
 extern jl_tag_type_t *jl_tensor_type;
 extern jl_tag_type_t *jl_scalar_type;
 extern jl_tag_type_t *jl_number_type;
