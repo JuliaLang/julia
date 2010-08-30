@@ -229,6 +229,7 @@ extern jl_tag_type_t *jl_int_type;
 extern jl_tag_type_t *jl_float_type;
 extern jl_struct_type_t *jl_array_type;
 extern jl_typename_t *jl_array_typename;
+extern jl_struct_type_t *jl_arraystring_type;
 
 extern jl_struct_type_t *jl_box_type;
 extern jl_type_t *jl_box_any_type;

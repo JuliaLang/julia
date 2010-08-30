@@ -1338,10 +1338,9 @@ void jl_init_builtins()
     add_builtin("Symbol", (jl_value_t*)jl_sym_type);
     add_builtin("...", (jl_value_t*)jl_seq_type);
     add_builtin("Function", (jl_value_t*)jl_functype_ctor);
-    add_builtin("Array", (jl_value_t*)jl_array_type);
-    add_builtin("String", (jl_value_t*)jl_string_type);
     add_builtin("Tensor", (jl_value_t*)jl_tensor_type);
     add_builtin("Scalar", (jl_value_t*)jl_scalar_type);
+    add_builtin("Array", (jl_value_t*)jl_array_type);
     add_builtin("Number", (jl_value_t*)jl_number_type);
     add_builtin("Real", (jl_value_t*)jl_real_type);
     add_builtin("Int", (jl_value_t*)jl_int_type);
@@ -1357,6 +1356,8 @@ void jl_init_builtins()
     add_builtin("Uint64", (jl_value_t*)jl_uint64_type);
     add_builtin("Float32", (jl_value_t*)jl_float32_type);
     add_builtin("Float64", (jl_value_t*)jl_float64_type);
+    add_builtin("String", (jl_value_t*)jl_string_type);
+    add_builtin("ArrayString", (jl_value_t*)jl_arraystring_type);
 
     add_builtin("Expr", (jl_value_t*)jl_expr_type);
     add_builtin("Ptr", (jl_value_t*)jl_pointer_type);
