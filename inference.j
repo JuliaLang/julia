@@ -542,7 +542,7 @@ function typeinf_task(caller)
     end
 end
 
-#Inference_Task = Task(typeinf_task, 1048576)
+#Inference_Task = Task(typeinf_task, 2097152)
 #yieldto(Inference_Task, current_task())
 
 function typeinf_ext(linfo, atypes, sparams, cop)

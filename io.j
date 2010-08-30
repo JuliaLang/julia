@@ -70,6 +70,10 @@ function write(s::IOStream, b::Uint8)
 end
 
 function read(s::IOStream, ::Type{Uint8})
+    # for asynch I/O
+    #if nb_available(s) < 1
+    #    io_wait(s)
+    #end
     b = ccall(dlsym(JuliaDLHandle,"ios_getc"), Int32, (Ptr{Void},), s.ios)
     if b == -1
         error("read: end of file")

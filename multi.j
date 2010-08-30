@@ -178,24 +178,56 @@ function wait(f::Future)
     end
 end
 
+struct WorkPool
+    #workers
+    q::Queue
+    ntasks
+    
+    function WorkPool(n)
+        # create a pool of Workers, each with a Task to feed it work from
+        # a shared queue.
+        #w = { (i==1 ? LocalProcess() : Worker()) | i=1:n }
+        wp = new(Queue(), 0)
+        make_scheduled(Task(()->pool_worker(wp, LocalProcess())))
+        for i=1:(n-1)
+            make_scheduled(Task(()->pool_worker(wp, Worker())))
+        end
+        return wp
+    end
+end
+
+function pool_worker(p::WorkPool, worker)
+    while true
+        while isempty(p.q)
+            yield()
+        end
+        (consumer, f, args) = pop(p.q)
+        consumer(wait(remote_apply(worker, f, args...)))
+        p.ntasks -= 1
+    end
+end
+
+function spawn(p::WorkPool, consumer, f, args...)
+    p.ntasks += 1
+    enq(p.q, (consumer, f, args))
+end
+
+function wait(p::WorkPool)
+    while p.ntasks > 0
+        yield()
+    end
+end
+
 function pmap_d(wpool, fname, lst)
     # spawn a task to feed work to each worker as it finishes, providing
     # dynamic load-balancing
-    idx = 1
     N = length(lst)
     result = Array(Any, N)
-    for w = wpool
-        spawn(function ()
-                while idx <= N
-                  todo = idx; idx+=1
-                  f = remote_apply(w, fname, lst[todo])
-                  result[todo] = wait(f)
-                end
-              end)
+    for idx = 1:N
+        # result[idx] = f(lst[idx])
+        (i->spawn(wpool, ans_i->(result[i]=ans_i), fname, lst[i]))(idx)
     end
-    while idx <= N
-        yieldto(scheduler)
-    end
+    wait(wpool)
     result
 end
 
@@ -209,3 +241,10 @@ function pmap_s(wpool, fname, lst)
     end
     fut
 end
+
+# A=randn(800,800);A=A*A';
+# wp=WorkPool(3)
+# pmap_d(wp, `eig, {A,A,A})
+
+# p={Worker(),Worker()}
+# pmap_s(p,`eig,{A,A})

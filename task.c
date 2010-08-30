@@ -296,7 +296,10 @@ static void init_task(jl_task_t *t)
         // if parent task has exited, try its parent, and so on
         while (cont->done)
             cont = cont->on_exit;
+        t->stack = NULL;
+        t->start = NULL;
         jl_switchto(cont, t->result);
+        assert(0);
     }
     // this runs when the task is created
     ptrint_t local_sp = (ptrint_t)&t;

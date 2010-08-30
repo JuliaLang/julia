@@ -47,9 +47,11 @@ function schedule()
     end
 end
 
+yield() = yieldto(scheduler)
+
 function io_wait(s::IOStream)
     Waiting_Set[current_task()] = s
-    yieldto(scheduler)
+    yield()
 end
 
 function spawn(thunk)
@@ -74,7 +76,7 @@ function wait(t::Task)
     assert(!is(t,current_task()))
     make_scheduled(t)
     while !task_done(t)
-        yieldto(scheduler)
+        yield()
     end
     yieldto(t)  # return last value
 end
