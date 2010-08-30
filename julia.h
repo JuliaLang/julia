@@ -220,7 +220,6 @@ extern jl_type_t *jl_bottom_type;
 extern jl_struct_type_t *jl_lambda_info_type;
 extern jl_tag_type_t *jl_seq_type;
 extern jl_typector_t *jl_functype_ctor;
-extern jl_tag_type_t *jl_string_type;
 extern jl_tag_type_t *jl_tensor_type;
 extern jl_tag_type_t *jl_scalar_type;
 extern jl_tag_type_t *jl_number_type;
@@ -229,7 +228,6 @@ extern jl_tag_type_t *jl_int_type;
 extern jl_tag_type_t *jl_float_type;
 extern jl_struct_type_t *jl_array_type;
 extern jl_typename_t *jl_array_typename;
-extern jl_struct_type_t *jl_arraystring_type;
 
 extern jl_struct_type_t *jl_box_type;
 extern jl_type_t *jl_box_any_type;
@@ -344,6 +342,7 @@ extern jl_sym_t *static_typeof_sym;
 #define jl_is_func(v)        (jl_is_func_type(jl_typeof(v)) || jl_is_struct_type(v))
 #define jl_is_function(v)    jl_is_func(v)
 #define jl_is_array(v)       (((jl_tag_type_t*)jl_typeof(v))->name==jl_array_typename)
+#define jl_is_string(v)      jl_typeis(v,jl_array_uint8_type)
 #define jl_is_box(v)         (((jl_tag_type_t*)jl_typeof(v))->name==jl_box_typename)
 #define jl_is_cpointer_type(v) (((jl_tag_type_t*)(v))->name==jl_pointer_void_type->name)
 #define jl_is_cpointer(v)    jl_is_cpointer_type(jl_typeof(v))

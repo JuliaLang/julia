@@ -219,9 +219,7 @@ static jl_value_t *scm_to_julia(value_t e)
         ((char*)a->data)[len] = '\0';
         a->length--;
         jl_tupleset(a->dims, 0, jl_box_int32(len));
-        return jl_apply((jl_function_t*)jl_arraystring_type,
-                        (jl_value_t**)&a,
-                        1);
+        return (jl_value_t*)a;
     }
     if (e == FL_F) {
         return jl_false;
@@ -332,7 +330,7 @@ static value_t julia_to_scm(jl_value_t *v)
         fl_free_gc_handles(1);
         return scmv;
     }
-    if (jl_is_array(v)) {
+    if (jl_is_array(v) && !jl_is_string(v)) {
         return array_to_list((jl_array_t*)v);
     }
     value_t opaque = cvalue(jvtype, sizeof(void*));
