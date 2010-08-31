@@ -33,7 +33,8 @@ jl_struct_type_t *jl_array_type;
 jl_typename_t *jl_array_typename;
 jl_type_t *jl_array_uint8_type;
 jl_type_t *jl_array_any_type;
-jl_struct_type_t *jl_expr_type;;
+jl_struct_type_t *jl_arraystring_type;
+jl_struct_type_t *jl_expr_type;
 jl_bits_type_t *jl_intrinsic_type;
 jl_struct_type_t *jl_methtable_type;
 jl_struct_type_t *jl_lambda_info_type;
@@ -776,6 +777,14 @@ void jl_init_builtin_types()
         (jl_type_t*)jl_apply_type((jl_value_t*)jl_array_type,
                                   jl_tuple(2, jl_any_type,
                                            jl_box_int32(1)));
+
+    jl_arraystring_type =
+        jl_new_struct_type(jl_symbol("ArrayString"),
+                           (jl_tag_type_t*)
+                           jl_apply_type((jl_value_t*)jl_string_type, jl_null),
+                           jl_null,
+                           jl_tuple(1, jl_symbol("data")),
+                           jl_tuple(1, jl_array_uint8_type));
 
     jl_expr_type =
         jl_new_struct_type(jl_symbol("Expr"),
