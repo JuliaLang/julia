@@ -11,8 +11,10 @@ function string(x)
     ArrayString(data)
 end
 
-length(s::ArrayString) = length(s.data)
+print(s::ArrayString) = print(s.data)
 inspect(s::ArrayString) = print(quote_string(s).data)
+
+length(s::ArrayString) = length(s.data)
 strcat(ss::ArrayString...) = ArrayString(vcat(map(s->s.data, ss)...))
 ref(s::ArrayString, i::Index) = ArrayString([s.data[i]])
 ref(s::ArrayString, x) = ArrayString(s.data[x])
