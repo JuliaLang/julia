@@ -67,7 +67,7 @@ for (fname, eltype) = (("dgemm_", Float64), ("sgemm_", Float32))
 
          ccall(dlsym(libBLAS, $fname),
              Void,
-             (Ptr{Char}, Ptr{Char}, Ptr{Int32}, Ptr{Int32}, Ptr{Int32},
+             (Ptr{Uint8}, Ptr{Uint8}, Ptr{Int32}, Ptr{Int32}, Ptr{Int32},
               Ptr{$eltype}, Ptr{$eltype}, Ptr{Int32},
               Ptr{$eltype}, Ptr{Int32},
               Ptr{$eltype}, Ptr{$eltype}, Ptr{Int32}),

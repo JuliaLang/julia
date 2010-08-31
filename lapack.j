@@ -36,7 +36,7 @@ for (fname, eltype) = (("dpotrf_", Float64), ("spotrf_", Float32))
 
          ccall(dlsym(libLAPACK, $fname),
                Void,
-               (Ptr{Char}, Ptr{Int32}, Ptr{$eltype}, Ptr{Int32}, Ptr{Int32}),
+               (Ptr{Uint8}, Ptr{Int32}, Ptr{$eltype}, Ptr{Int32}, Ptr{Int32}),
                "U", n, R, n, info)
 
          if info[1] == 0; return R; end

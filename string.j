@@ -1,144 +1,166 @@
-symbol(s::String) =
-    ccall(dlsym(JuliaDLHandle,"jl_symbol"), Any, (Ptr{Char},), s)::Symbol
+symbol(s::ArrayString) =
+    ccall(dlsym(JuliaDLHandle,"jl_symbol"), Any, (Ptr{Uint8},), s.data)::Symbol
 
 gensym() = ccall(dlsym(JuliaDLHandle,"jl_gensym"), Any, ())::Symbol
 
-string(x) =
-    ccall(dlsym(JuliaDLHandle,"jl_cstr_to_array"), Any, (Ptr{Char},),
-          ccall(dlsym(JuliaDLHandle,"jl_print_to_string"), Ptr{Char}, (Any,),
-                x))::String
+function string(x)
+    cstr = ccall(dlsym(JuliaDLHandle,"jl_print_to_string"),
+                 Ptr{Uint8}, (Any,), x)
+    data = ccall(dlsym(JuliaDLHandle,"jl_cstr_to_array"),
+                 Any, (Ptr{Uint8},), cstr)::Array{Uint8,1}
+    ArrayString(data)
+end
 
-inspect(s::String) = print(quote_string(s))
+length(s::ArrayString) = length(s.data)
+inspect(s::ArrayString) = print(quote_string(s).data)
+strcat(ss::ArrayString...) = ArrayString(vcat(map(s->s.data, ss)...))
+ref(s::ArrayString, i::Index) = ArrayString([s.data[i]])
+ref(s::ArrayString, x) = ArrayString(s.data[x])
+chr(c::Int) = ArrayString([uint8(c)])
+ord(s::ArrayString) = s.data[1]
 
-strcat(ss::String...) = vcat(ss...)
+function cmp(a::ArrayString, b::ArrayString)
+    for i = 1:min(length(a),length(b))
+        if a.data[i] != b.data[i]
+            return a.data[i] < b.data[i] ? -1 : +1
+        end
+    end
+    length(a) < length(b) ? -1 :
+    length(a) > length(b) ? +1 : 0
+end
+
+(<) (a::ArrayString, b::ArrayString) = cmp(a,b) < 0
+(>) (a::ArrayString, b::ArrayString) = cmp(a,b) > 0
+(==)(a::ArrayString, b::ArrayString) = cmp(a,b) == 0
+(<=)(a::ArrayString, b::ArrayString) = cmp(a,b) <= 0
+(>=)(a::ArrayString, b::ArrayString) = cmp(a,b) >= 0
+
+(+)(ss::ArrayString...) = strcat(ss...)
 
 global escape_strings_with_hex = false
 
-function escape_string(raw::String)
+function escape_string(raw::ArrayString)
     esc = ""
     for i = 1:length(raw)
-        c = raw[i]
-        z = i < length(raw) && "0"[1] <= raw[i+1] <= "7"[1] ?
+        c = ord(raw[i])
+        z = i < length(raw) && "0" <= raw[i+1] <= "7" ?
             (escape_strings_with_hex ? "\\x00" : "\\000") : "\\0"
         e = c == 0 ? z :
-            c == "\\"[1] ? "\\\\" :
+            c == ord("\\") ? "\\\\" :
             c == 27 ? "\\e" :
-            31 < c < 127 ? [c] :
-            7 <= c <= 13 ? ["\\",["abtnvfr"[c-6]]] :
+            31 < c < 127 ? chr(c) :
+            7 <= c <= 13 ? "\\" + "abtnvfr"[c-6] :
             escape_strings_with_hex ?
-                ["\\x",uint2str(c,16,2)] :
-                ["\\",uint2str(c,8,3)]
-        esc = [esc, e]
+                "\\x" + uint2str(c,16,2) :
+                "\\"  + uint2str(c, 8,3)
+        esc += e
     end
     esc
 end
 
-function unescape_string(esc::String)
+function unescape_string(esc::ArrayString)
     raw = ""
     i = 1
     while i <= length(esc)
-        if i < length(esc) && esc[i] == "\\"[1]
-            e = esc[i + 1]
+        if i < length(esc) && esc[i] == "\\"
+            e = esc[i+1]
             i += 2
-            c = e == "a"[1] ?  7 :
-                e == "b"[1] ?  8 :
-                e == "t"[1] ?  9 :
-                e == "n"[1] ? 10 :
-                e == "v"[1] ? 11 :
-                e == "f"[1] ? 12 :
-                e == "r"[1] ? 13 :
-                e == "e"[1] ? 27 :
-                e == "x"[1] ? begin
+            c = e == "a" ?  7 :
+                e == "b" ?  8 :
+                e == "t" ?  9 :
+                e == "n" ? 10 :
+                e == "v" ? 11 :
+                e == "f" ? 12 :
+                e == "r" ? 13 :
+                e == "e" ? 27 :
+                e == "x" ? begin
                     x = 0
                     m = min(i+1,length(esc))
                     while i <= m
-                        if "0"[1] <= esc[i] <= "9"[1]
-                            x = 16*x + esc[i] - "0"[1]
-                        elseif "a"[1] <= esc[i] <= "f"[1]
-                            x = 16*x + esc[i] - "a"[1] + 10
-                        elseif "A"[1] <= esc[i] <= "F"[1]
-                            x = 16*x + esc[i] - "A"[1] + 10
+                        if "0" <= esc[i] <= "9"
+                            x = 16*x + ord(esc[i]) - ord("0")
+                        elseif "a" <= esc[i] <= "f"
+                            x = 16*x + ord(esc[i]) - ord("a") + 10
+                        elseif "A" <= esc[i] <= "F"
+                            x = 16*x + ord(esc[i]) - ord("A") + 10
                         else
                             break
                         end
                         i += 1
                     end
-                    if esc[i-1] == "x"[1]
+                    if esc[i-1] == "x"
                         error("\\x used with no following hex digits")
                     end
                     x
                 end :
-                "0"[1] <= e <= "7"[1] ? begin
-                    x = e - "0"[1]
+                "0" <= e <= "7" ? begin
+                    x = ord(e) - ord("0")
                     m = min(i+1,length(esc))
-                    while i <= m && "0"[1] <= esc[i] <= "7"[1]
-                        x = 8*x + esc[i] - "0"[1]
+                    while i <= m && "0" <= esc[i] <= "7"
+                        x = 8*x + ord(esc[i]) - ord("0")
                         i += 1
                     end
                     if x > 255
                         error("octal escape sequence out of range")
                     end
                     x
-                end : e
-            raw = [raw, [uint8(c)]]
+                end : ord(e)
+            raw += chr(c)
         else
-            raw = [raw, [esc[i]]]
+            raw += esc[i]
             i += 1
         end
     end
     raw
 end
 
-function quote_string(raw::String)
+function quote_string(raw::ArrayString)
     esc = escape_string(raw)
-    quo = ""
+    quo = "\""
     for i = 1:length(esc)
-       quo = [quo, esc[i] == "\""[1] ? "\\\"" : [esc[i]]]
+       quo += esc[i] == "\"" ? "\\\"" : esc[i]
     end
-    ["\"",quo,"\""]
+    quo += "\""
 end
 
-function lpad(s,n,char)
-    k = length(s)
-    if k >= n
+function lpad(s::ArrayString, n::Int, p::ArrayString)
+    if n <= length(s)
         return s
     end
-    p = Array(Uint8,n)
-    for i=1:n-k; p[i] = char; end
-    for i=1:k; p[n-k+i] = s[i]; end
-    p
+    ps = s
+    while length(ps) < n
+        ps = p + ps
+    end
+    ps[length(ps)-n+1:length(ps)]
 end
 
-function rpad(s,n,char)
-    k = length(s)
-    if k >= n
+function rpad(s::ArrayString, n::Int, p::ArrayString)
+    if n <= length(s)
         return s
     end
-    p = Array(Uint8,n)
-    for i=1:k; p[i] = s[i]; end
-    for i=1:n-k; p[k+i] = char; end
-    p
+    ps = s
+    while length(ps) < n
+        ps += p
+    end
+    ps[1:n]
 end
 
 ## string to integer functions ##
 
-function parse_digit(c::Uint8)
-    "0"[1] <= c <= "9"[1] ? int32(c - "0"[1]) :
-    "A"[1] <= c <= "Z"[1] ? int32(c - "A"[1]) + 10 :
-    "a"[1] <= c <= "z"[1] ? int32(c - "a"[1]) + 10 :
-    error("non alphanumeric digit")
-end
-
-function parse_int(T::Type{Int}, str::String, base::Int)
+function parse_int(T::Type{Int}, str::ArrayString, base::Int)
     n = zero(T)
-    b = one(T)
-    for p = 0:length(str)-1
-        d = parse_digit(str[length(str)-p])
+    base = convert(T,base)
+    for i = 1:length(str)
+        c = str[i]
+        d = "0" <= c <= "9" ? int32(ord(c) - ord("0")) :
+            "A" <= c <= "Z" ? int32(ord(c) - ord("A")) + 10 :
+            "a" <= c <= "z" ? int32(ord(c) - ord("a")) + 10 :
+            error("non alphanumeric digit")
+        d = convert(T,d)
         if base <= d
             error("digit not valid in base")
         end
-        n += d*b
-        b *= base
+        n = n*base + d
     end
     return n
 end
@@ -153,11 +175,11 @@ hex(str::String) = parse_int(Int64, str, 16)
 function uint2str(n::Int, base::Int)
     ndig = n==convert(typeof(n),0) ? 1 : int32(floor(log(n)/log(base)+1))
     sz = ndig+1
-    str = Array(Uint8, sz)
+    data = Array(Uint8, sz)
     ccall(dlsym(JuliaDLHandle,"uint2str"), Ptr{Uint8},
           (Ptr{Uint8}, Size, Uint64, Uint32),
-          str, sz, uint64(n), uint32(base))
-    str[:(sz-1)]  # cut out terminating nul
+          data, sz, uint64(n), uint32(base))
+    ArrayString(data[:(sz-1)]) # cut out terminating NUL
 end
 
-uint2str(n::Int, base::Int, len::Int) = lpad(uint2str(n,base),len,"0"[1])
+uint2str(n::Int, base::Int, len::Int) = lpad(uint2str(n,base),len,"0")

@@ -15,11 +15,11 @@ load("rational.j")
 load("string.j")
 
 # complex data types
+load("array.j")
 load("list.j")
 load("dequeue.j")
 load("intset.j")
 load("table.j")
-load("array.j")
 load("sparse.j")
 load("tree.j")
 

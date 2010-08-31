@@ -199,6 +199,9 @@ extern "C" void *jl_value_to_pointer(jl_value_t *jt, jl_value_t *v, int argn)
         size_t osz = ((jl_bits_type_t*)jt)->nbits/8;
         return alloc_temp_arg_copy(jl_bits_data(v), osz);
     }
+    if ((jl_value_t*)jl_uint8_type == jt && jl_is_arraystring(v)) {
+        return jl_string_data(v);
+    }
     if (jl_is_array(v)) {
         if (jl_tparam0(jl_typeof(v)) == jt || jt==(jl_value_t*)jl_bottom_type)
             return ((jl_array_t*)v)->data;

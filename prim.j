@@ -1,7 +1,5 @@
 typealias Index Int32
 typealias Size Int32
-typealias Char Uint8
-typealias String Array{Char,1}
 
 (<:)(T, S) = subtype(T,S)
 (>:)(T, S) = subtype(S,T)

@@ -186,24 +186,26 @@ chars = {
 }
 
 for i = 1:size(chars,1)
-    assert(chars[i,1] == chars[i,2][1])
+    assert(chr(chars[i,1]) == chars[i,2])
     assert(chars[i,2] == unescape_string(chars[i,3]))
     assert(chars[i,3] == escape_string(chars[i,2]))
     for j = 1:size(chars,1)
-        str = [chars[i,2],chars[j,2]]
+        str = chars[i,2] + chars[j,2]
         assert(str == unescape_string(escape_string(str)))
     end
 end
 
 for i = 0:255, p = {"","\0","x","\127","xxx"}
-    s = [uint8(i)]
-    assert(unescape_string(["\\",uint2str(i,8,1),p]) == [s,p])
-    assert(unescape_string(["\\",uint2str(i,8,2),p]) == [s,p])
-    assert(unescape_string(["\\",uint2str(i,8,3),p]) == [s,p])
-    assert(unescape_string(["\\",uint2str(i,8,4),p]) == [[uint8(div(i,8))],uint2str(i%8,8),p])
-    assert(unescape_string(["\\x",uint2str(i,16,1),p]) == [s,p])
-    assert(unescape_string(["\\x",uint2str(i,16,2),p]) == [s,p])
-    assert(unescape_string(["\\x",uint2str(i,16,3),p]) == [[uint8(div(i,16))],uint2str(i%16,16),p])
+    s = chr(i)
+    assert(unescape_string("\\"  + uint2str(i, 8,1) + p) == s + p)
+    assert(unescape_string("\\"  + uint2str(i, 8,2) + p) == s + p)
+    assert(unescape_string("\\"  + uint2str(i, 8,3) + p) == s + p)
+    assert(unescape_string("\\"  + uint2str(i, 8,4) + p) ==
+        chr(uint8(div(i,8))) + uint2str(i%8,8) + p)
+    assert(unescape_string("\\x" + uint2str(i,16,1) + p) == s + p)
+    assert(unescape_string("\\x" + uint2str(i,16,2) + p) == s + p)
+    assert(unescape_string("\\x" + uint2str(i,16,3) + p) ==
+        chr(uint8(div(i,16))) + uint2str(i%16,16) + p)
 end
 
 assert("\z" == unescape_string("\z") == "z")
@@ -269,17 +271,17 @@ assert("\xffa" == unescape_string("\\xffa"))
 assert("\xfFa" == unescape_string("\\xfFa"))
 
 # integer parsing
-assert(parse_digit("0"[1]) == 0)
-assert(parse_digit("1"[1]) == 1)
-assert(parse_digit("9"[1]) == 9)
-assert(parse_digit("A"[1]) == 10)
-assert(parse_digit("a"[1]) == 10)
-assert(parse_digit("B"[1]) == 11)
-assert(parse_digit("b"[1]) == 11)
-assert(parse_digit("F"[1]) == 15)
-assert(parse_digit("f"[1]) == 15)
-assert(parse_digit("Z"[1]) == 35)
-assert(parse_digit("z"[1]) == 35)
+assert(parse_int(Int32,"0",36) == 0)
+assert(parse_int(Int32,"1",36) == 1)
+assert(parse_int(Int32,"9",36) == 9)
+assert(parse_int(Int32,"A",36) == 10)
+assert(parse_int(Int32,"a",36) == 10)
+assert(parse_int(Int32,"B",36) == 11)
+assert(parse_int(Int32,"b",36) == 11)
+assert(parse_int(Int32,"F",36) == 15)
+assert(parse_int(Int32,"f",36) == 15)
+assert(parse_int(Int32,"Z",36) == 35)
+assert(parse_int(Int32,"z",36) == 35)
 
 assert(bin("0") == 0)
 assert(bin("1") == 1)
