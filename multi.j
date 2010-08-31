@@ -225,7 +225,9 @@ function pmap_d(wpool, fname, lst)
     result = Array(Any, N)
     for idx = 1:N
         # result[idx] = f(lst[idx])
-        (i->spawn(wpool, ans_i->(result[i]=ans_i), fname, lst[i]))(idx)
+        let i = idx
+            spawn(wpool, ans_i->(result[i]=ans_i), fname, lst[i])
+        end
     end
     wait(wpool)
     result

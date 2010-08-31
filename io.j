@@ -102,16 +102,15 @@ flush(s::IOTally) = ()
 ## serializing values ##
 
 ser_tag = idtable()
-(()->begin
- global ser_tag
- i = 1
- for t = {Any, Symbol, Bool, Int8, Uint8, Int16, Uint16, Int32, Uint32,
-          Int64, Uint64, Float32, Float64,
-          TagKind, UnionKind, StructKind, Tuple, Array}
-     ser_tag[t] = i
-     i += 1
- end
-end)()
+let i = 1
+    global ser_tag
+    for t = {Any, Symbol, Bool, Int8, Uint8, Int16, Uint16, Int32, Uint32,
+             Int64, Uint64, Float32, Float64,
+             TagKind, UnionKind, StructKind, Tuple, Array}
+        ser_tag[t] = i
+        i += 1
+    end
+end
 
 writetag(s, x) = write(s, uint8(ser_tag[x]))
 

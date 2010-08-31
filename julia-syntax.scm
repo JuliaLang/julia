@@ -274,6 +274,29 @@
 					; TODO: anonymous generic function
 		     (function-expr a b)))
 
+   (pattern-lambda (let binds ex)
+		   (let loop ((binds binds)
+			      (args  ())
+			      (inits ())
+			      (locls ()))
+		     (if (null? binds)
+			 `(call (-> (tuple ,@args)
+				    (block (local (tuple ,@locls))
+					   ,ex))
+				,@inits)
+			 (cond
+			  ((symbol? (car binds))
+			   (loop (cdr binds) args inits
+				 (cons (car binds) locls)))
+			  ((and (length= (car binds) 3)
+				(eq? (caar binds) '=)
+				(symbol? (cadar binds)))
+			   (loop (cdr binds)
+				 (cons (cadar binds) args)
+				 (cons (caddar binds) inits)
+				 locls))
+			  (else (error "invalid let syntax"))))))
+
    ; type definition
    (pattern-lambda (struct (-- name (-s)) (block . fields))
 		   (struct-def-expr name '() 'Any fields))

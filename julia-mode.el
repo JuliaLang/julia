@@ -47,13 +47,13 @@
           '("if" "else" "elseif" "while" "for" "begin" "end"
             "try" "catch" "return" "local" "type" "function"
 	    "typealias" "break" "continue" "struct" "global"
-	    "module" "import" "export" "const")
+	    "module" "import" "export" "const" "let")
           "\\|") "\\)\\>")
      'font-lock-keyword-face)
     '("\\\\\\s-*\".*?\"" . font-lock-string-face)))
 
 (defconst julia-block-start-keywords
-  (list "if" "while" "for" "begin" "try" "function" "struct"))
+  (list "if" "while" "for" "begin" "try" "function" "struct" "let"))
 
 (defconst julia-block-other-keywords
   (list "else" "elseif"))

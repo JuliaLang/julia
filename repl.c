@@ -589,6 +589,7 @@ int main(int argc, char *argv[])
             if (ast != NULL) {
                 jl_value_t *value =
                     jl_toplevel_eval_thunk((jl_lambda_info_t*)ast);
+                jl_set_global(jl_system_module, jl_symbol("ans"), value);
                 if (print_value) {
                     jl_value_t *jl_inspect = *jl_get_bindingp(jl_system_module,
                                                               jl_symbol("inspect"));
