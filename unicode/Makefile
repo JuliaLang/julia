@@ -8,8 +8,7 @@ CHECKS = $(addprefix check-,$(DERIVED_FILES))
 all: $(DERIVED_FILES)
 
 UTF-32BE.txt:
-	perl -e 'print pack "N", 0xfeff; \
-	         print pack "N", $$_ for 0..0xd7ff, 0xe000..0x10ffff' >$@
+	perl -e 'print pack "N*", 0xfeff, 0..0xd7ff, 0xe000..0x10ffff' >$@
 
 $(DERIVED_FILES): %.txt: $(PRIMARY).txt
 	iconv -f $(PRIMARY) -t $* <$< >$@
