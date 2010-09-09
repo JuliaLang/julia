@@ -24,7 +24,7 @@ function zeros(T::Type, dims::Size...)
 end
 
 zeros(dims::Size...) = zeros(Float64, dims...)
-zeros(T::Type, dims::Tuple) = zeros (T, dims...)
+zeros(T::Type, dims::Tuple) = zeros(T, dims...)
 zeros(dims::Tuple) = zeros(dims...)
 
 function ones(T::Type, dims::Size...)

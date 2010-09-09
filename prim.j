@@ -80,7 +80,6 @@ mod(x,y) = x%y
 <=(x::Real, y::Real) = (x < y) || (x == y)
 >=(x::Real, y::Real) = (x > y) || (x == y)
 
-
 # indexing tuples
 length(t::Tuple) = tuplelen(t)
 ref(t::Tuple, i::Index) = tupleref(t, i)
@@ -189,14 +188,16 @@ end
 
 expr(hd::Symbol, args...) = Expr(hd, {args...}, Any)
 
-
 # map cell array
 map(f, a::Array{Any,1}) = { f(a[i]) | i=1:length(a) }
 map(f, a::Array{Any,1}, b::Array{Any,1}) =
     { f(a[i],b[i]) | i=1:min(length(a),length(b)) }
 
-
 # copy
 copy(x::Any) = x
 copy(x::Tuple) = map(copy, x)
 copy(e::Expr) = Expr(e.head, copy(e.args), e.type)
+
+# sizeof
+sizeof{T}(x::T) = sizeof(T)
+sizeof(t::Type) = error(strcat("size of type ",string(t)," unknown"))
