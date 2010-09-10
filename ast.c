@@ -484,6 +484,18 @@ static void eval_decl_types(jl_array_t *vi, jl_tuple_t *spenv)
     }
 }
 
+jl_tuple_t *jl_tuple_tvars_to_symbols(jl_tuple_t *t)
+{
+    jl_tuple_t *s = jl_alloc_tuple(t->length);
+    size_t i;
+    for(i=0; i < s->length; i+=2) {
+        jl_tupleset(s, i,
+                    (jl_value_t*)((jl_tvar_t*)jl_tupleref(t,i))->name);
+        jl_tupleset(s, i+1, jl_tupleref(t,i+1));
+    }
+    return s;
+}
+
 // given a new lambda_info with static parameter values, make a copy
 // of the tree with declared types evaluated and static parameters passed
 // on to all enclosed functions.
@@ -491,13 +503,7 @@ static void eval_decl_types(jl_array_t *vi, jl_tuple_t *spenv)
 void jl_specialize_ast(jl_lambda_info_t *li)
 {
     if (li->ast == NULL) return;
-    jl_tuple_t *spenv = jl_alloc_tuple(li->sparams->length);
-    size_t i;
-    for(i=0; i < spenv->length; i+=2) {
-        jl_tupleset(spenv, i,
-                    (jl_value_t*)((jl_tvar_t*)jl_tupleref(li->sparams,i))->name);
-        jl_tupleset(spenv, i+1, jl_tupleref(li->sparams,i+1));
-    }
+    jl_tuple_t *spenv = jl_tuple_tvars_to_symbols(li->sparams);
     jl_value_t *ast = copy_ast(li->ast, li->sparams);
     li->ast = ast;
     eval_decl_types(jl_lam_vinfo((jl_expr_t*)ast), spenv);

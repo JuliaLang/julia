@@ -818,8 +818,8 @@ static Value *emit_var(jl_sym_t *sym, jl_value_t *ty, jl_codectx_t *ctx)
         size_t i;
         // look for static parameter
         for(i=0; i < ctx->sp->length; i+=2) {
-            assert(jl_is_typevar(jl_tupleref(ctx->sp, i)));
-            if (sym == ((jl_tvar_t*)jl_tupleref(ctx->sp, i))->name) {
+            assert(jl_is_symbol(jl_tupleref(ctx->sp, i)));
+            if (sym == (jl_sym_t*)jl_tupleref(ctx->sp, i)) {
                 return literal_pointer_val(jl_tupleref(ctx->sp, i+1));
             }
         }
@@ -993,6 +993,8 @@ static AllocaInst *alloc_local(char *name, jl_codectx_t *ctx)
 
 extern char *jl_stack_lo;
 
+extern "C" jl_tuple_t *jl_tuple_tvars_to_symbols(jl_tuple_t *t);
+
 static void emit_function(jl_lambda_info_t *lam, Function *f)
 {
     jl_expr_t *ast = (jl_expr_t*)lam->ast;
@@ -1022,7 +1024,7 @@ static void emit_function(jl_lambda_info_t *lam, Function *f)
     ctx.labels = &labels;
     ctx.module = jl_system_module; //TODO
     ctx.ast = ast;
-    ctx.sp = lam->sparams;
+    ctx.sp = jl_tuple_tvars_to_symbols(lam->sparams);
     ctx.linfo = lam;
     ctx.envArg = &envArg;
     ctx.argArray = &argArray;
