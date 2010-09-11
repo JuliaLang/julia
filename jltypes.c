@@ -46,6 +46,7 @@ jl_tag_type_t *jl_int_type;
 jl_tag_type_t *jl_float_type;
 
 jl_bits_type_t *jl_bool_type;
+jl_bits_type_t *jl_char_type;
 jl_bits_type_t *jl_int8_type;
 jl_bits_type_t *jl_uint8_type;
 jl_bits_type_t *jl_int16_type;
@@ -1718,6 +1719,7 @@ void jl_init_types()
     jl_float_type = make_scalar_subtype("Float", jl_real_type);
 
     jl_bool_type    = make_scalar_type("Bool"  , jl_scalar_type, 8);
+    jl_char_type    = make_scalar_type("Char"  , jl_scalar_type, 32);
     jl_int8_type    = make_scalar_type("Int8"  , jl_int_type, 8);
     jl_uint8_type   = make_scalar_type("Uint8" , jl_int_type, 8);
     jl_int16_type   = make_scalar_type("Int16" , jl_int_type, 16);

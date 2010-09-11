@@ -588,11 +588,11 @@ char *ios_takebuf(ios_t *s, size_t *psize)
             return NULL;
         if (s->size)
             memcpy(buf, s->buf, s->size);
-        buf[s->size] = '\0';
     }
     else {
         buf = s->buf;
     }
+    buf[s->size] = '\0';
 
     *psize = s->size+1;  // buffer is actually 1 bigger for terminating NUL
 

@@ -228,6 +228,10 @@ typedef struct {
     std::string funcName;
 } jl_codectx_t;
 
+static Value *mark_julia_type(Value *v, jl_value_t *jt);
+static jl_value_t *julia_type_of(Value *v);
+static Value *tpropagate(Value *a, Value *b);
+
 static Value *literal_pointer_val(void *p, const Type *t)
 {
 #ifdef BITS64
@@ -408,7 +412,7 @@ static int is_global(jl_sym_t *s, jl_codectx_t *ctx)
 
 static Value *emit_checked_var(Value *bp, const char *name, jl_codectx_t *ctx)
 {
-    Value *v = builder.CreateLoad(bp, false);
+    Value *v = tpropagate(bp, builder.CreateLoad(bp, false));
     Value *ok = builder.CreateICmpNE(v, V_null);
     BasicBlock *err = BasicBlock::Create(getGlobalContext(), "err", ctx->f);
     BasicBlock *ifok = BasicBlock::Create(getGlobalContext(), "ok");
@@ -647,9 +651,7 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
                                                   false);
                     if (isbool)
                         return builder.CreateTrunc(elt, T_int1);
-                    if (is_unsigned_julia_type(jl_tparam0(aty)))
-                        return mark_unsigned(elt);
-                    return elt;
+                    return mark_julia_type(elt, jl_tparam0(aty));
                 }
             }
         }
@@ -827,8 +829,9 @@ static Value *emit_var(jl_sym_t *sym, jl_value_t *ty, jl_codectx_t *ctx)
     Value *bp = var_binding_pointer(sym, ctx);
     AllocaInst *arg = (*ctx->arguments)[sym->name];
     // arguments are always defined
-    if (arg != NULL || !jl_subtype((jl_value_t*)jl_undef_type, ty, 0))
-        return builder.CreateLoad(bp, false);
+    if (arg != NULL || !jl_subtype((jl_value_t*)jl_undef_type, ty, 0)) {
+        return tpropagate(bp, builder.CreateLoad(bp, false));
+    }
     return emit_checked_var(bp, sym->name, ctx);
 }
 
@@ -987,6 +990,8 @@ static AllocaInst *alloc_local(char *name, jl_codectx_t *ctx)
     else
         vtype = jl_pvalue_llvmt;
     AllocaInst *lv = builder.CreateAlloca(vtype, 0, name);
+    if (vtype != jl_pvalue_llvmt)
+        mark_julia_type(lv, jt);
     (*ctx->vars)[name] = lv;
     return lv;
 }

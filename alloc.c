@@ -600,11 +600,27 @@ jl_value_t *jl_box_bool(int8_t x)
     return jl_false;
 }
 
-#define UNBOX_FUNC(j_type,c_type)                       \
-c_type jl_unbox_##j_type(jl_value_t *v)                 \
-{                                                       \
-    assert(v->type == (jl_type_t*)jl_##j_type##_type);  \
-    return *(c_type*)jl_bits_data(v);                   \
+#define BOXN_FUNC(nb)                                                   \
+jl_value_t *jl_box##nb(jl_value_t *t, int##nb##_t x)                    \
+{                                                                       \
+    assert(jl_is_bits_type(t));                                         \
+    assert(((jl_bits_type_t*)t)->nbits/8 == sizeof(x));                 \
+    jl_value_t *v = newobj((jl_type_t*)t,                               \
+                           NWORDS(LLT_ALIGN(sizeof(x),sizeof(void*)))); \
+    *(int##nb##_t*)jl_bits_data(v) = x;                                 \
+    return v;                                                           \
+}
+BOXN_FUNC(8)
+BOXN_FUNC(16)
+BOXN_FUNC(32)
+BOXN_FUNC(64)
+
+#define UNBOX_FUNC(j_type,c_type)                                       \
+c_type jl_unbox_##j_type(jl_value_t *v)                                 \
+{                                                                       \
+    assert(jl_is_bits_type(v->type));                                   \
+    assert(((jl_bits_type_t*)v->type)->nbits/8 == sizeof(c_type));      \
+    return *(c_type*)jl_bits_data(v);                                   \
 }
 UNBOX_FUNC(int8,   int8_t)
 UNBOX_FUNC(uint8,  uint8_t)

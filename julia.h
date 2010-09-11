@@ -236,6 +236,7 @@ extern jl_type_t *jl_box_any_type;
 extern jl_typename_t *jl_box_typename;
 
 extern jl_bits_type_t *jl_bool_type;
+extern jl_bits_type_t *jl_char_type;
 extern jl_bits_type_t *jl_int8_type;
 extern jl_bits_type_t *jl_uint8_type;
 extern jl_bits_type_t *jl_int16_type;
@@ -435,6 +436,10 @@ jl_value_t *jl_box_int64(int64_t x);
 jl_value_t *jl_box_uint64(uint64_t x);
 jl_value_t *jl_box_float32(float x);
 jl_value_t *jl_box_float64(double x);
+jl_value_t *jl_box8 (jl_value_t *t, int8_t  x);
+jl_value_t *jl_box16(jl_value_t *t, int16_t x);
+jl_value_t *jl_box32(jl_value_t *t, int32_t x);
+jl_value_t *jl_box64(jl_value_t *t, int64_t x);
 int8_t jl_unbox_bool(jl_value_t *v);
 int8_t jl_unbox_int8(jl_value_t *v);
 uint8_t jl_unbox_uint8(jl_value_t *v);

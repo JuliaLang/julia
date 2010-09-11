@@ -697,8 +697,35 @@ TODO:
 ; parse numbers, identifiers, parenthesized expressions, lists, vectors, etc.
 (define (parse-atom s)
   (let ((t (require-token s)))
-    (cond ((or (string? t) (number? t) (symbol? t)) (take-token s))
+    (cond ((or (string? t) (number? t)) (take-token s))
 
+	  ; char literal
+	  ((eq? t '|'|)
+	   (take-token s)
+	   (let ((b (open-output-string)))
+	     (let loop ((c (read-char (ts:port s))))
+	       (if (eof-object? c)
+		   (error "incomplete: invalid character literal"))
+	       (if (eqv? c #\')
+		   #t
+		   (begin (write-char c b)
+			  (if (eqv? c #\\)
+			      (write-char (read-char (ts:port s)) b))
+			  (loop (read-char (ts:port s))))))
+	     (let ((str (read (open-input-string
+			       (string #\" (io.tostring! b) #\")))))
+	       (if (not (= (string-length str) 1))
+		   (error "invalid character literal"))
+	       (if (= (length str) 1)
+		   ; one byte, e.g. '\xff'. maybe not valid utf-8, but we
+		   ; want to use the raw value as a codepoint in this case.
+		   (wchar (aref str 0))
+		   (string.char str 0)))))
+
+	  ; identifier
+	  ((symbol? t) (take-token s))
+
+	  ; parens or tuple
 	  ((eqv? t #\( )
 	   (take-token s)
 	   (with-normal-ops
@@ -735,6 +762,7 @@ TODO:
 		       (else
 			(error "missing separator in tuple")))))))
 
+	  ; cell expression
 	  ((eqv? t #\{ )
 	   (take-token s)
 	   (if (eqv? (require-token s) #\})
@@ -767,10 +795,12 @@ TODO:
 				(error "inconsistent shape in cell expression")
 				`(call (top cell_1d) ,@(cdr vex)))))))))
 
+	  ; cat expression
 	  ((eqv? t #\[ )
 	   (take-token s)
 	   (parse-cat s #\]))
 
+	  ; quote
 	  ((eqv? t #\` )
 	   (take-token s)
 	   (list 'quote (parse-decl s)))

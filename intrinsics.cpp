@@ -41,6 +41,10 @@ static Function *box_uint64_func;
 static Function *box_float32_func;
 static Function *box_float64_func;
 static Function *box_pointer_func;
+static Function *box8_func;
+static Function *box16_func;
+static Function *box32_func;
+static Function *box64_func;
 
 /*
   low-level intrinsics design:
@@ -54,45 +58,126 @@ static Function *box_pointer_func;
     where the box is needed.
 */
 
-static int is_unsigned(Value *v)
+// scheme for tagging llvm values with julia types
+
+static std::map<int, jl_value_t*> typeIdToType;
+static std::map<jl_value_t*, int> typeToTypeId;
+static int cur_type_id = 1;
+
+static int jl_type_to_typeid(jl_value_t *t)
 {
-    const char *name = v->getName().data();
-    return (!strncmp(name, "$u", 2));
+    std::map<jl_value_t*, int>::iterator it = typeToTypeId.find(t);
+    if (it == typeToTypeId.end()) {
+        int mine = cur_type_id++;
+        if (mine > 65025)
+            jl_error("unexpected error: too many bits types");
+        typeToTypeId[t] = mine;
+        typeIdToType[mine] = t;
+        return mine;
+    }
+    return (*it).second;
 }
 
-static Value *mark_unsigned(Value *v)
+static jl_value_t *jl_typeid_to_type(int i)
 {
-    if (is_unsigned(v)) return v;
-    // use value name as a hack to tag as unsigned
-    Value *x = builder.CreateBitCast(v, v->getType());
-    x->setName("$u");
-    return x;
+    std::map<int, jl_value_t*>::iterator it = typeIdToType.find(i);
+    if (it == typeIdToType.end()) {
+        jl_error("unexpected error: invalid type id");
+    }
+    return (*it).second;
+}
+
+static bool has_julia_type(Value *v)
+{
+    const char *name = v->getName().data();
+    const char *sep = strrchr(name, '$');
+    return (sep != NULL);
+}
+
+static jl_value_t *julia_type_of(Value *v)
+{
+    const char *name = v->getName().data();
+    const char *sep = strrchr(name, '$');
+    if (sep == NULL) {
+        return llvm_type_to_julia(v->getType());
+    }
+    int id = (sep[1]-1) + (sep[2]-1)*255;
+    return jl_typeid_to_type(id);
+}
+
+// see if a julia type maps directly to an llvm type
+static bool is_julia_type_representable(jl_value_t *jt)
+{
+    return
+        (jt == (jl_value_t*)jl_bool_type || jt == (jl_value_t*)jl_int8_type ||
+         jt == (jl_value_t*)jl_int16_type || jt == (jl_value_t*)jl_int32_type ||
+         jt == (jl_value_t*)jl_int64_type ||
+         jt == (jl_value_t*)jl_float32_type ||
+         jt == (jl_value_t*)jl_float64_type ||
+         (jl_is_cpointer_type(jt) &&
+          is_julia_type_representable(jl_tparam0(jt))));
+}
+
+static Value *mark_julia_type(Value *v, jl_value_t *jt)
+{
+    if (is_julia_type_representable(jt))
+        return v;
+    //Value *x = builder.CreateBitCast(v, v->getType());
+    char name[4];
+    name[0] = '$';
+    int id = jl_type_to_typeid(jt);
+    // store id as base-255 to avoid NUL
+    name[1] = (id%255)+1;
+    name[2] = (id/255)+1;
+    name[3] = '\0';
+    v->setName(v->getName()+std::string(name));
+    return v;
+}
+
+static Value *mark_julia_type(Value *v, jl_bits_type_t *jt)
+{
+    return mark_julia_type(v, (jl_value_t*)jt);
+}
+
+// propagate julia type from value a to b. returns b.
+static Value *tpropagate(Value *a, Value *b)
+{
+    if (has_julia_type(a))
+        return mark_julia_type(b, julia_type_of(a));
+    return b;
 }
 
 static const Type *julia_type_to_llvm(jl_value_t *jt)
 {
-    if (jt == (jl_value_t*)jl_int8_type || jt == (jl_value_t*)jl_uint8_type) return T_int8;
-    if (jt == (jl_value_t*)jl_int16_type || jt == (jl_value_t*)jl_uint16_type) return T_int16;
-    if (jt == (jl_value_t*)jl_int32_type || jt == (jl_value_t*)jl_uint32_type) return T_int32;
-    if (jt == (jl_value_t*)jl_int64_type || jt == (jl_value_t*)jl_uint64_type) return T_int64;
     if (jt == (jl_value_t*)jl_bool_type) return T_int1;
     if (jt == (jl_value_t*)jl_float32_type) return T_float32;
     if (jt == (jl_value_t*)jl_float64_type) return T_float64;
-    if (jt == (jl_value_t*)jl_bottom_type) return T_void;
-    if (jt == (jl_value_t*)jl_null) return T_void;
+    //if (jt == (jl_value_t*)jl_null) return T_void;
     if (jl_is_bits_type(jt) && jl_is_cpointer_type(jt)) {
         const Type *lt = julia_type_to_llvm(jl_tparam0(jt));
         if (lt == T_void)
             lt = T_int8;
         return PointerType::get(lt, 0);
     }
+    if (jl_is_bits_type(jt)) {
+        int nb = ((jl_bits_type_t*)jt)->nbits;
+        if (nb == 8)  return T_int8;
+        if (nb == 16) return T_int16;
+        if (nb == 32) return T_int32;
+        if (nb == 64) return T_int64;
+    }
     if (jt == (jl_value_t*)jl_any_type)
         return jl_pvalue_llvmt;
+    if (jt == (jl_value_t*)jl_bottom_type) return T_void;
     jl_errorf("cannot convert type %s to a native type",
               jl_print_to_string(jt));
     return NULL;
 }
 
+// NOTE: llvm cannot express all julia types (for example unsigned),
+// so this is an approximation. it's only correct if the associated LLVM
+// value is not tagged with our value name hack.
+// boxed(v) below gets the correct type.
 static jl_value_t *llvm_type_to_julia(const Type *t)
 {
     if (t == T_int1)  return (jl_value_t*)jl_bool_type;
@@ -124,25 +209,33 @@ static Value *boxed(Value *v)
     if (t == jl_pvalue_llvmt)
         return v;
     if (t == T_int1) return julia_bool(v);
-    if (is_unsigned(v)) {
-        if (t == T_int8)  return builder.CreateCall(box_uint8_func, v);
-        if (t == T_int16) return builder.CreateCall(box_uint16_func, v);
-        if (t == T_int32) return builder.CreateCall(box_uint32_func, v);
-        if (t == T_int64) return builder.CreateCall(box_uint64_func, v);
-    }
-    else {
-        if (t == T_int8)  return builder.CreateCall(box_int8_func, v);
-        if (t == T_int16) return builder.CreateCall(box_int16_func, v);
-        if (t == T_int32) return builder.CreateCall(box_int32_func, v);
-        if (t == T_int64) return builder.CreateCall(box_int64_func, v);
-        if (t == T_float32) return builder.CreateCall(box_float32_func, v);
-        if (t == T_float64) return builder.CreateCall(box_float64_func, v);
-    }
-    if (t->isPointerTy()) {
-        jl_value_t *jt = llvm_type_to_julia(t);
+    jl_value_t *jt = julia_type_of(v);
+    jl_bits_type_t *jb = (jl_bits_type_t*)jt;
+    if (jb == jl_int8_type)  return builder.CreateCall(box_int8_func, v);
+    if (jb == jl_int16_type) return builder.CreateCall(box_int16_func, v);
+    if (jb == jl_int32_type) return builder.CreateCall(box_int32_func, v);
+    if (jb == jl_int64_type) return builder.CreateCall(box_int64_func, v);
+    if (jb == jl_float32_type) return builder.CreateCall(box_float32_func, v);
+    if (jb == jl_float64_type) return builder.CreateCall(box_float64_func, v);
+    if (jb == jl_uint8_type)  return builder.CreateCall(box_uint8_func, v);
+    if (jb == jl_uint16_type) return builder.CreateCall(box_uint16_func, v);
+    if (jb == jl_uint32_type) return builder.CreateCall(box_uint32_func, v);
+    if (jb == jl_uint64_type) return builder.CreateCall(box_uint64_func, v);
+    if (jl_is_cpointer_type(jt)) {
         return builder.CreateCall2(box_pointer_func,
                                    literal_pointer_val(jt),
                                    builder.CreateBitCast(v, T_pint8));
+    }
+    if (jl_is_bits_type(jt)) {
+        int nb = ((jl_bits_type_t*)jt)->nbits;
+        if (nb == 8)
+            return builder.CreateCall2(box8_func,  literal_pointer_val(jt), v);
+        if (nb == 16)
+            return builder.CreateCall2(box16_func, literal_pointer_val(jt), v);
+        if (nb == 32)
+            return builder.CreateCall2(box32_func, literal_pointer_val(jt), v);
+        if (nb == 64)
+            return builder.CreateCall2(box64_func, literal_pointer_val(jt), v);
     }
     assert("Don't know how to box this type" && false);
     return NULL;
@@ -275,18 +368,6 @@ static Value *julia_to_native(const Type *ty, jl_value_t *jt, Value *jv,
                               false);
 }
 
-static bool is_unsigned_julia_type(jl_value_t *t)
-{
-    return (t==(jl_value_t*)jl_uint8_type  || t==(jl_value_t*)jl_uint16_type ||
-            t==(jl_value_t*)jl_uint32_type || t==(jl_value_t*)jl_uint64_type);
-}
-
-static bool is_punsigned_julia_type(jl_value_t *t)
-{
-    return is_unsigned_julia_type(t) ||
-        (jl_is_cpointer_type(t) && is_punsigned_julia_type(jl_tparam0(t)));
-}
-
 // ccall(pointer, rettype, (argtypes...), args...)
 static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
 {
@@ -346,16 +427,9 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
         builder.CreateCall(restore_arg_area_loc_func, saveloc);
     }
 
-    if (is_unsigned_julia_type(rt))
-        return mark_unsigned(result);
     if (lrt == T_void)
         return literal_pointer_val((jl_value_t*)jl_null);
-    if (jl_is_cpointer_type(rt) && (is_punsigned_julia_type(rt) ||
-                                    rt == (jl_value_t*)jl_pointer_void_type))
-        return builder.CreateCall2(box_pointer_func,
-                                   literal_pointer_val(rt),
-                                   builder.CreateBitCast(result,T_pint8));
-    return result;
+    return mark_julia_type(result, rt);
 }
 
 // convert int type to same-size float type
@@ -387,14 +461,15 @@ static Value *uint_cnvt(const Type *to, Value *x)
 
 static Value *emit_unbox(const Type *to, const Type *pto, Value *x)
 {
-    if (x->getType()->isIntegerTy() || x->getType()->isFloatingPointTy()) {
+    //if (x->getType()->isIntegerTy() || x->getType()->isFloatingPointTy()) {
+    if (x->getType() != jl_pvalue_llvmt) {
         // bools are stored internally as int8 (for now), so we need to make
         // unbox8(x::Bool) work.
         if (x->getType() == T_int1 && to == T_int8)
             return builder.CreateZExt(x, T_int8);
         return x;
     }
-    assert(x->getType() == jl_pvalue_llvmt);
+    //assert(x->getType() == jl_pvalue_llvmt);
     Value *p = bitstype_pointer(x);
     if (to == T_int1) {
         // bools stored as int8, so an extra Trunc is needed to get an int1
@@ -415,8 +490,9 @@ static Value *emit_unboxed(jl_value_t *e, jl_codectx_t *ctx)
         return ConstantInt::get(T_int64, jl_unbox_int64(e));
     }
     else if (jl_is_uint64(e)) {
-        return mark_unsigned(ConstantInt::get(T_int64,
-                                              (int64_t)jl_unbox_uint64(e)));
+        return mark_julia_type(ConstantInt::get(T_int64,
+                                                (int64_t)jl_unbox_uint64(e)),
+                               jl_uint64_type);
     }
     else if (jl_is_float64(e)) {
         return ConstantFP::get(T_float64, jl_unbox_float64(e));
@@ -446,25 +522,25 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
     switch (f) {
     HANDLE(boxui8,1)
         if (t != T_int8) x = builder.CreateBitCast(x, T_int8);
-        return mark_unsigned(x);
+        return mark_julia_type(x, jl_uint8_type);
     HANDLE(boxsi8,1)
         if (t != T_int8) x = builder.CreateBitCast(x, T_int8);
         return x;
     HANDLE(boxui16,1)
         if (t != T_int16) x = builder.CreateBitCast(x, T_int16);
-        return mark_unsigned(x);
+        return mark_julia_type(x, jl_uint16_type);
     HANDLE(boxsi16,1)
         if (t != T_int16) x = builder.CreateBitCast(x, T_int16);
         return x;
     HANDLE(boxui32,1)
         if (t != T_int32) x = builder.CreateBitCast(x, T_int32);
-        return mark_unsigned(x);
+        return mark_julia_type(x, jl_uint32_type);
     HANDLE(boxsi32,1)
         if (t != T_int32) x = builder.CreateBitCast(x, T_int32);
         return x;
     HANDLE(boxui64,1)
         if (t != T_int64) x = builder.CreateBitCast(x, T_int64);
-        return mark_unsigned(x);
+        return mark_julia_type(x, jl_uint64_type);
     HANDLE(boxsi64,1)
         if (t != T_int64) x = builder.CreateBitCast(x, T_int64);
         return x;
@@ -662,6 +738,15 @@ static FunctionType *ft1arg(const Type *ret, const Type *arg)
     return FunctionType::get(ret, args1, false);
 }
 
+static FunctionType *ft2arg(const Type *ret, const Type *arg1,
+                            const Type *arg2)
+{
+    std::vector<const Type*> args2(0);
+    args2.push_back(arg1);
+    args2.push_back(arg2);
+    return FunctionType::get(ret, args2, false);
+}
+
 static void add_intrinsic(const std::string &name, intrinsic f)
 {
     jl_value_t *i = jl_new_box_uint32((uint32_t)f);
@@ -706,6 +791,15 @@ extern "C" void jl_init_intrinsic_functions()
     BOX_F(int32); BOX_F(uint32);
     BOX_F(int64); BOX_F(uint64);
     BOX_F(float32); BOX_F(float64);
+
+    box8_func  = boxfunc_llvm(ft2arg(jl_pvalue_llvmt, jl_pvalue_llvmt, T_int8),
+                              "jl_box8", (void*)*jl_box8);
+    box16_func = boxfunc_llvm(ft2arg(jl_pvalue_llvmt, jl_pvalue_llvmt, T_int16),
+                              "jl_box16", (void*)*jl_box16);
+    box32_func = boxfunc_llvm(ft2arg(jl_pvalue_llvmt, jl_pvalue_llvmt, T_int32),
+                              "jl_box32", (void*)*jl_box32);
+    box64_func = boxfunc_llvm(ft2arg(jl_pvalue_llvmt, jl_pvalue_llvmt, T_int64),
+                              "jl_box64", (void*)*jl_box64);
 
     std::vector<const Type*> boxpointerargs(0);
     boxpointerargs.push_back(jl_pvalue_llvmt);

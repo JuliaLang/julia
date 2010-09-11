@@ -314,6 +314,9 @@ assert(hex("BADCAB1E") == 3135023902)
 assert(hex("CafeBabe") == 3405691582)
 assert(hex("DeadBeef") == 3735928559)
 
+# bits types, printing numbers
+assert(string(uint32(-1)) == "4294967295")
+
 # conversions
 function fooo()
     local x::Int8

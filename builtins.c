@@ -726,6 +726,16 @@ JL_CALLABLE(jl_f_print_bool)
     return (jl_value_t*)jl_null;
 }
 
+JL_CALLABLE(jl_f_print_char)
+{
+    ios_t *s = jl_current_output_stream();
+    u_int32_t wc = *(uint32_t*)jl_bits_data(args[0]);
+    ios_putc('\'', s);
+    ios_pututf8(s, wc);
+    ios_putc('\'', s);
+    return (jl_value_t*)jl_null;
+}
+
 JL_CALLABLE(jl_f_print_float32)
 {
     print_float64((double)*(float*)jl_bits_data(args[0]), 1);
@@ -1272,6 +1282,7 @@ void jl_init_builtins()
     add_builtin_method1(jl_print_gf, (jl_type_t*)jl_int64_type,   jl_f_print_int64);
     add_builtin_method1(jl_print_gf, (jl_type_t*)jl_uint64_type,  jl_f_print_uint64);
     add_builtin_method1(jl_print_gf, (jl_type_t*)jl_bool_type,    jl_f_print_bool);
+    add_builtin_method1(jl_print_gf, (jl_type_t*)jl_char_type,    jl_f_print_char);
     add_builtin_method1(jl_print_gf, (jl_type_t*)jl_pointer_type, jl_f_print_pointer);
 
     jl_convert_gf = jl_new_generic_function(jl_symbol("convert"));
@@ -1342,6 +1353,7 @@ void jl_init_builtins()
     add_builtin("Int", (jl_value_t*)jl_int_type);
     add_builtin("Float", (jl_value_t*)jl_float_type);
     add_builtin("Bool", (jl_value_t*)jl_bool_type);
+    add_builtin("Char", (jl_value_t*)jl_char_type);
     add_builtin("Int8", (jl_value_t*)jl_int8_type);
     add_builtin("Uint8", (jl_value_t*)jl_uint8_type);
     add_builtin("Int16", (jl_value_t*)jl_int16_type);

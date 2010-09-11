@@ -239,12 +239,14 @@ because it needs to specialize it anyway.
 paper/thesis ideas:
 
 design recommendations for technical computing languages
+why use dynamic languages for technical computing
 
 the design and implementation of julia
 
 reinventing the repl: language support for interactive use
+propagating assumption violations in jit compiled systems
 
-improving numeric type systems, e.g. apprach to type promotion
+improving numeric type systems, e.g. approach to type promotion
 
 a highly unobtrusive type system
 
@@ -497,7 +499,14 @@ issues 6/21/10
   an unconstrained typevar, and specialize those.
 - make optimized arrayset, arrayref work on all Arrays
 
-- coroutines, Tasks, exceptions
+* coroutines, Tasks, exceptions
+* let
+* ans
+* Char type, more flexible bits types
+- make pmap_d work
+- try/catch
+- bitstype syntax
+- intrinsic calls from command line (use compiler)
 - new for loop, comprehension, reduction formulation
 
 method ordering tests:
