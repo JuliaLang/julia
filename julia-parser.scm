@@ -489,7 +489,7 @@ TODO:
 	(let loop ((ex ex))
 	  (let ((t (peek-token s)))
 	    (if (and space-sensitive (ts:space? s)
-		     (memv t '(#\( #\[ #\{)))
+		     (memv t '(#\( #\[ #\{ |'|)))
 		ex
 		(case t
 		  ((#\( )   (take-token s)
