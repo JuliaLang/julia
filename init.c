@@ -77,6 +77,8 @@ void segv_handler(int sig, siginfo_t *info, void *context)
     }
 }
 
+static void jl_get_builtin_hooks();
+
 void julia_init()
 {
     jl_page_size = sysconf(_SC_PAGESIZE);
@@ -87,11 +89,14 @@ void julia_init()
 #endif
     jl_init_frontend();
     jl_init_types();
-    jl_init_builtin_types();
     jl_init_modules();
     jl_init_tasks(jl_stack_lo, jl_stack_hi-jl_stack_lo);
-    jl_init_builtins();
+    jl_init_primitives();
     jl_init_codegen();
+    jl_load_boot_j();
+    jl_get_builtin_hooks();
+    jl_init_builtin_types();
+    jl_init_builtins();
 
     signal(SIGFPE, fpe_handler);
 
@@ -184,4 +189,46 @@ int jl_load_startup_file()
     GC_gcollect();
 #endif
     return 0;
+}
+
+static jl_value_t *global(char *name)
+{
+    return *jl_get_bindingp(jl_system_module, jl_symbol(name));
+}
+
+void jl_get_builtin_hooks()
+{
+    // fetch references to things defined in boot.j
+    jl_tensor_type = (jl_tag_type_t*)global("Tensor");
+    jl_string_type = (jl_tag_type_t*)global("String");
+    jl_scalar_type = (jl_tag_type_t*)((jl_typector_t*)global("Scalar"))->body;
+    jl_real_type   = (jl_tag_type_t*)global("Real");
+    jl_int_type    = (jl_tag_type_t*)global("Int");
+    jl_float_type  = (jl_tag_type_t*)global("Float");
+
+    // update bootstrapping versions of Bool and Int32
+    jl_bits_type_t *i32t = (jl_bits_type_t*)global("Int32");
+    *jl_int32_type = *i32t;
+    jl_set_const(jl_system_module, jl_symbol("Int32"),
+                 (jl_value_t*)jl_int32_type);
+
+    jl_bits_type_t *bt   = (jl_bits_type_t*)global("Bool");
+    *jl_bool_type = *bt;
+    jl_set_const(jl_system_module, jl_symbol("Bool"),
+                 (jl_value_t*)jl_bool_type);
+
+    jl_char_type    = (jl_bits_type_t*)global("Char");
+    jl_int8_type    = (jl_bits_type_t*)global("Int8");
+    jl_uint8_type   = (jl_bits_type_t*)global("Uint8");
+    jl_int16_type   = (jl_bits_type_t*)global("Int16");
+    jl_uint16_type  = (jl_bits_type_t*)global("Uint16");
+    jl_uint32_type  = (jl_bits_type_t*)global("Uint32");
+    jl_int64_type   = (jl_bits_type_t*)global("Int64");
+    jl_uint64_type  = (jl_bits_type_t*)global("Uint64");
+
+    jl_float32_type = (jl_bits_type_t*)global("Float32");
+    jl_float64_type = (jl_bits_type_t*)global("Float64");
+
+    jl_array_type = (jl_struct_type_t*)global("Array");
+    jl_arraystring_type = (jl_struct_type_t*)global("ArrayString");
 }

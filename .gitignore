@@ -6,6 +6,7 @@
 /julia-defs.s.bc.inc
 /julia_flisp.boot
 /julia_flisp.boot.inc
+/boot.j.inc
 /julia
 /julia-debug
 /julia-release

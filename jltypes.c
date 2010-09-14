@@ -1536,28 +1536,8 @@ jl_tuple_t *jl_typevars(size_t n, ...)
     return t;
 }
 
-static jl_bits_type_t *make_scalar_type(const char *name, jl_tag_type_t *super,
-                                        int nbits)
-{
-    jl_bits_type_t *bt =
-        jl_new_bitstype((jl_value_t*)jl_symbol(name), jl_any_type,
-                        jl_null, nbits);
-    bt->super = (jl_tag_type_t*)jl_apply_type((jl_value_t*)super,
-                                              jl_tuple(1, bt));
-    assert(jl_is_tag_type(bt->super));
-    return bt;
-}
-
-static jl_tag_type_t *make_scalar_subtype(const char *name,
-                                          jl_tag_type_t *super)
-{
-    jl_tag_type_t *t;
-    jl_tuple_t *tv = jl_typevars(1, "T");
-    t = jl_new_tagtype((jl_value_t*)jl_symbol(name),
-                       (jl_tag_type_t*)jl_apply_type((jl_value_t*)super, tv),
-                       tv);
-    return t;
-}
+extern void jl_init_int32_cache();
+extern JL_CALLABLE(jl_generic_array_ctor);
 
 void jl_init_types()
 {
@@ -1691,44 +1671,121 @@ void jl_init_types()
     jl_ntuple_typename = jl_ntuple_type->name;
 
     // non-primitive definitions follow
-    jl_string_type = jl_new_tagtype((jl_value_t*)jl_symbol("String"),
-                                   jl_any_type, jl_null);
+    jl_bool_type = jl_new_bitstype((jl_value_t*)jl_symbol("Bool"),
+                                   jl_any_type, jl_null, 8);
+    jl_false = jl_new_box_int8(0); jl_false->type = (jl_type_t*)jl_bool_type;
+    jl_true  = jl_new_box_int8(1); jl_true->type  = (jl_type_t*)jl_bool_type;
+
+    jl_int32_type = jl_new_bitstype((jl_value_t*)jl_symbol("Int32"),
+                                    jl_any_type, jl_null, 32);
+    jl_init_int32_cache();
 
     tv = jl_typevars(2, "T", "N");
     jl_tensor_type = jl_new_tagtype((jl_value_t*)jl_symbol("Tensor"),
                                     jl_any_type, tv);
 
+    tv = jl_typevars(2, "T", "N");
+    jl_array_type = 
+        jl_new_struct_type(jl_symbol("Array"),
+                           (jl_tag_type_t*)
+                           jl_apply_type((jl_value_t*)jl_tensor_type, tv),
+                           tv,
+                           jl_tuple(1, jl_symbol("dims")),
+                           jl_tuple(1, jl_apply_type((jl_value_t*)jl_ntuple_type,
+                                                     jl_tuple(2, jl_tupleref(tv,1),
+                                                              jl_int32_type))));
+    jl_array_typename = jl_array_type->name;
+    jl_array_type->fptr = jl_generic_array_ctor;
+    jl_array_type->env = NULL;
+    jl_array_type->linfo = NULL;
+
+    jl_array_any_type =
+        (jl_type_t*)jl_apply_type((jl_value_t*)jl_array_type,
+                                  jl_tuple(2, jl_any_type,
+                                           jl_box_int32(1)));
+
+    jl_expr_type =
+        jl_new_struct_type(jl_symbol("Expr"),
+                           jl_any_type, jl_null,
+                           jl_tuple(3, jl_symbol("head"), jl_symbol("args"),
+                                    jl_symbol("type")),
+                           jl_tuple(3, jl_sym_type, jl_array_any_type,
+                                    jl_any_type));
+    jl_add_constructors(jl_expr_type);
+
     tv = jl_typevars(1, "T");
-    jl_scalar_type =
-        (jl_tag_type_t*)jl_apply_type((jl_value_t*)jl_tensor_type,
-                                      jl_tuple(2, jl_tupleref(tv,0),
-                                               jl_bottom_type));
+    jl_box_type =
+        jl_new_struct_type(jl_symbol("Box"),
+                           jl_any_type, tv,
+                           jl_tuple(1, jl_symbol("contents")), tv);
+    jl_add_constructors(jl_box_type);
+    jl_box_typename = jl_box_type->name;
+    jl_box_any_type =
+        (jl_type_t*)jl_apply_type((jl_value_t*)jl_box_type,
+                                  jl_tuple(1, jl_any_type));
 
-    jl_number_type = make_scalar_subtype("Number", jl_scalar_type);
-    jl_real_type = make_scalar_subtype("Real", jl_number_type);
-    jl_int_type = make_scalar_subtype("Int", jl_real_type);
+    jl_lambda_info_type =
+        jl_new_struct_type(jl_symbol("LambdaStaticData"),
+                           jl_any_type, jl_null,
+                           jl_tuple(4, jl_symbol("ast"), jl_symbol("sparams"),
+                                    jl_symbol("tfunc"), jl_symbol("name")),
+                           jl_tuple(4, jl_expr_type, jl_tuple_type,
+                                    jl_any_type, jl_sym_type));
+    jl_lambda_info_type->fptr = jl_f_no_function;
 
-    jl_int32_type = make_scalar_type("Int32", jl_int_type, 32);
-    jl_value_t *zero = jl_new_box_int32(0);
-    jl_tupleset(jl_scalar_type->parameters, 1, zero);
-    jl_tupleset(jl_number_type->super->parameters, 1, zero);
-    jl_tupleset(jl_real_type->super->super->parameters, 1, zero);
-    jl_tupleset(jl_int_type->super->super->super->parameters, 1, zero);
-    jl_tupleset(jl_int32_type->super->super->super->super->parameters, 1,
-                zero);
+    jl_typector_type =
+        jl_new_struct_type(jl_symbol("TypeConstructor"),
+                           jl_any_type, jl_null,
+                           jl_tuple(2, jl_symbol("parameters"),
+                                    jl_symbol("body")),
+                           jl_tuple(2, jl_tuple_type, jl_any_type));
 
-    jl_float_type = make_scalar_subtype("Float", jl_real_type);
+    tv = jl_typevars(2, "A", "B");
+    jl_functype_ctor =
+        jl_new_type_ctor(tv,
+                         (jl_type_t*)jl_new_functype((jl_type_t*)jl_tupleref(tv,0),
+                                                     (jl_type_t*)jl_tupleref(tv,1)));
 
-    jl_bool_type    = make_scalar_type("Bool"  , jl_scalar_type, 8);
-    jl_char_type    = make_scalar_type("Char"  , jl_scalar_type, 32);
-    jl_int8_type    = make_scalar_type("Int8"  , jl_int_type, 8);
-    jl_uint8_type   = make_scalar_type("Uint8" , jl_int_type, 8);
-    jl_int16_type   = make_scalar_type("Int16" , jl_int_type, 16);
-    jl_uint16_type  = make_scalar_type("Uint16", jl_int_type, 16);
-    jl_uint32_type  = make_scalar_type("Uint32", jl_int_type, 32);
-    jl_int64_type   = make_scalar_type("Int64" , jl_int_type, 64);
-    jl_uint64_type  = make_scalar_type("Uint64", jl_int_type, 64);
+    jl_intrinsic_type = jl_new_bitstype((jl_value_t*)jl_symbol("IntrinsicFunction"),
+                                        jl_any_type, jl_null, 32);
 
-    jl_float32_type = make_scalar_type("Float32", jl_float_type, 32);
-    jl_float64_type = make_scalar_type("Float64", jl_float_type, 64);
+    tv = jl_typevars(1, "T");
+    jl_pointer_type =
+        jl_new_bitstype((jl_value_t*)jl_symbol("Ptr"), jl_any_type, tv,
+#ifdef BITS64
+                        64
+#else
+                        32
+#endif
+                        );
+
+    jl_undef_type = jl_new_tagtype((jl_value_t*)jl_symbol("Undef"),
+                                   jl_any_type, jl_null);
+
+    // Type{Type}
+    jl_typetype_type = (jl_tag_type_t*)jl_apply_type((jl_value_t*)jl_type_type,
+                                                     jl_tuple(1,jl_type_type));
+
+    call_sym = jl_symbol("call");
+    call1_sym = jl_symbol("call1");
+    quote_sym = jl_symbol("quote");
+    top_sym = jl_symbol("top");
+    dots_sym = jl_symbol("...");
+    dollar_sym = jl_symbol("$");
+    line_sym = jl_symbol("line");
+    continue_sym = jl_symbol("continue");
+    goto_sym = jl_symbol("goto");
+    goto_ifnot_sym = jl_symbol("gotoifnot");
+    label_sym = jl_symbol("label");
+    return_sym = jl_symbol("return");
+    lambda_sym = jl_symbol("lambda");
+    assign_sym = jl_symbol("=");
+    null_sym = jl_symbol("null");
+    unbound_sym = jl_symbol("unbound");
+    symbol_sym = jl_symbol("symbol");
+    body_sym = jl_symbol("body");
+    locals_sym = jl_symbol("locals");
+    colons_sym = jl_symbol("::");
+    Any_sym = jl_symbol("Any");
+    static_typeof_sym = jl_symbol("static_typeof");
 }

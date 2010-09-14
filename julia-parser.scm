@@ -836,7 +836,7 @@ TODO:
       (error (string "extra input after end of expression:"
 		     (peek-token s)))))
 
-(define (julia-parse-file filename)
+(define (julia-parse-file filename stream)
   ; call f on a stream until the stream runs out of data
   (define (read-all-of f s)
     (with-exception-catcher
@@ -859,4 +859,4 @@ TODO:
 		 (loop (list* curr `(line ,linen) lines)
 		       nl
 		       (f s)))))))))
-  (read-all-of julia-parse (make-token-stream (open-input-file filename))))
+  (read-all-of julia-parse (make-token-stream stream)))

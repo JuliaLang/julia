@@ -4,7 +4,8 @@ NBITS = $(shell (test -e ../nbits || $(CC) ../nbits.c -o ../nbits) && ../nbits)
 include ../Make.inc.$(shell uname)
 
 NAME = flisp
-SRCS = $(NAME).c builtins.c string.c equalhash.c table.c iostream.c
+SRCS = $(NAME).c builtins.c string.c equalhash.c table.c iostream.c \
+	julia_extensions.c
 OBJS = $(SRCS:%.c=%.o)
 DOBJS = $(SRCS:%.c=%.do)
 EXENAME = $(NAME)

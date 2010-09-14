@@ -209,6 +209,31 @@ jl_value_t *jl_toplevel_eval_thunk(jl_lambda_info_t *thk)
 
 int asprintf(char **strp, const char *fmt, ...);
 
+// load toplevel expressions, from (file ...)
+void jl_load_file_expr(char *fname, jl_value_t *ast)
+{
+    jl_array_t *b = ((jl_expr_t*)ast)->args;
+    size_t i;
+    volatile size_t lineno=0;
+    JL_TRY {
+        for(i=0; i < b->length; i++) {
+            // process toplevel form
+            jl_value_t *form = jl_cellref(b, i);
+            if (jl_is_expr(form) && ((jl_expr_t*)form)->head == line_sym) {
+                lineno = jl_unbox_int32(jl_exprarg(form, 0));
+            }
+            else {
+                jl_lambda_info_t *lam = (jl_lambda_info_t*)form;
+                (void)jl_interpret_toplevel_thunk(lam);
+            }
+        }
+    }
+    JL_CATCH {
+        ios_printf(ios_stderr, " %s:%d\n", fname, lineno);
+        jl_raise();
+    }
+}
+
 void jl_load(const char *fname)
 {
     char *fpath = (char*)fname;
@@ -236,26 +261,7 @@ void jl_load(const char *fname)
     if (ast == (jl_value_t*)jl_null) 
 	jl_errorf("could not open file %s", fpath);
 
-    jl_array_t *b = ((jl_expr_t*)ast)->args;
-    size_t i;
-    volatile size_t lineno=0;
-    JL_TRY {
-        for(i=0; i < b->length; i++) {
-            // process toplevel form
-            jl_value_t *form = jl_cellref(b, i);
-            if (jl_is_expr(form) && ((jl_expr_t*)form)->head == line_sym) {
-                lineno = jl_unbox_int32(jl_exprarg(form, 0));
-            }
-            else {
-                jl_lambda_info_t *lam = (jl_lambda_info_t*)form;
-                (void)jl_interpret_toplevel_thunk(lam);
-            }
-        }
-    }
-    JL_CATCH {
-        ios_printf(ios_stderr, " %s:%d\n", fpath, lineno);
-        jl_raise();
-    }
+    jl_load_file_expr(fpath, ast);
     if (fpath != fname) free(fpath);
 }
 
@@ -1278,6 +1284,73 @@ void jl_add_builtin(const char *name, jl_value_t *v)
     return add_builtin(name, v);
 }
 
+void jl_init_primitives()
+{
+    add_builtin_func("is", jl_f_is);
+    add_builtin_func("typeof", jl_f_typeof);
+    add_builtin_func("subtype", jl_f_subtype);
+    add_builtin_func("isa", jl_f_isa);
+    add_builtin_func("typeassert", jl_f_typeassert);
+    add_builtin_func("apply", jl_f_apply);
+    add_builtin_func("error", jl_f_error);
+    add_builtin_func("load", jl_f_load);
+    add_builtin_func("tuple", jl_f_tuple);
+    add_builtin_func("Union", jl_f_union);
+    add_builtin_func("method_exists", jl_f_methodexists);
+    add_builtin_func("invoke", jl_f_invoke);
+    add_builtin_func("dlopen", jl_f_dlopen);
+    add_builtin_func("dlsym", jl_f_dlsym);
+    add_builtin_func("eval", jl_f_top_eval);
+    add_builtin_func("isbound", jl_f_isbound);
+    
+    // functions for internal use
+    add_builtin_func("tupleref", jl_f_tupleref);
+    add_builtin_func("tuplelen", jl_f_tuplelen);
+    add_builtin_func("getfield", jl_f_get_field);
+    add_builtin_func("setfield", jl_f_set_field);
+    add_builtin_func("arraylen", jl_f_arraylen);
+    add_builtin_func("arrayref", jl_f_arrayref);
+    add_builtin_func("arrayset", jl_f_arrayset);
+    add_builtin_func("instantiate_type", jl_f_instantiate_type);
+    add_builtin_func("typevar", jl_f_typevar);
+    add_builtin_func("new_struct_type", jl_f_new_struct_type);
+    add_builtin_func("new_struct_fields", jl_f_new_struct_fields);
+    add_builtin_func("new_type_constructor", jl_f_new_type_constructor);
+    add_builtin_func("new_tag_type", jl_f_new_tag_type);
+    add_builtin_func("new_tag_type_super", jl_f_new_tag_type_super);
+    add_builtin_func("new_bits_type", jl_f_new_bits_type);
+    add_builtin_func("new_generic_function", jl_f_new_generic_function);
+    add_builtin_func("add_method", jl_f_add_method);
+
+    // builtin types
+    add_builtin("Any", (jl_value_t*)jl_any_type);
+    add_builtin("Bottom", (jl_value_t*)jl_bottom_type);
+    add_builtin("Void", (jl_value_t*)jl_bottom_type);
+    add_builtin("TypeVar", (jl_value_t*)jl_tvar_type);
+    add_builtin("Tuple", (jl_value_t*)jl_tuple_type);
+    add_builtin("NTuple", (jl_value_t*)jl_ntuple_type);
+    add_builtin("Type", (jl_value_t*)jl_type_type);
+    add_builtin("Symbol", (jl_value_t*)jl_sym_type);
+    add_builtin("...", (jl_value_t*)jl_seq_type);
+    add_builtin("Function", (jl_value_t*)jl_functype_ctor);
+    add_builtin("Tensor", (jl_value_t*)jl_tensor_type);
+    add_builtin("Array", (jl_value_t*)jl_array_type);
+
+    add_builtin("Expr", (jl_value_t*)jl_expr_type);
+    add_builtin("Ptr", (jl_value_t*)jl_pointer_type);
+    add_builtin("LambdaStaticData", (jl_value_t*)jl_lambda_info_type);
+    add_builtin("Box", (jl_value_t*)jl_box_type);
+    add_builtin("IntrinsicFunction", (jl_value_t*)jl_intrinsic_type);
+    // todo: this should only be visible to compiler components
+    add_builtin("Undef", (jl_value_t*)jl_undef_type);
+
+    add_builtin("BitsKind", (jl_value_t*)jl_bits_kind);
+    add_builtin("StructKind", (jl_value_t*)jl_struct_kind);
+    add_builtin("FuncKind", (jl_value_t*)jl_func_kind);
+    add_builtin("TagKind", (jl_value_t*)jl_tag_kind);
+    add_builtin("UnionKind", (jl_value_t*)jl_union_kind);
+}
+
 void jl_init_builtins()
 {
     jl_print_gf = jl_new_generic_function(jl_symbol("print"));
@@ -1314,91 +1387,9 @@ void jl_init_builtins()
 
     add_builtin_method1(jl_hash_gf, (jl_type_t*)jl_sym_type, jl_f_hash_symbol);
 
-    add_builtin_func("is", jl_f_is);
-    add_builtin_func("typeof", jl_f_typeof);
-    add_builtin_func("subtype", jl_f_subtype);
-    add_builtin_func("isa", jl_f_isa);
-    add_builtin_func("typeassert", jl_f_typeassert);
-    add_builtin_func("apply", jl_f_apply);
-    add_builtin_func("error", jl_f_error);
-    add_builtin_func("load", jl_f_load);
-    add_builtin_func("tuple", jl_f_tuple);
-    add_builtin_func("Union", jl_f_union);
-    add_builtin_func("method_exists", jl_f_methodexists);
-    add_builtin_func("invoke", jl_f_invoke);
-    add_builtin_func("dlopen", jl_f_dlopen);
-    add_builtin_func("dlsym", jl_f_dlsym);
-    add_builtin_func("eval", jl_f_top_eval);
-    add_builtin_func("isbound", jl_f_isbound);
     add_builtin("convert", (jl_value_t*)jl_convert_gf);
     add_builtin("print", (jl_value_t*)jl_print_gf);
     add_builtin("hash", (jl_value_t*)jl_hash_gf);
-    
-    // functions for internal use
-    add_builtin_func("tupleref", jl_f_tupleref);
-    add_builtin_func("tuplelen", jl_f_tuplelen);
-    add_builtin_func("getfield", jl_f_get_field);
-    add_builtin_func("setfield", jl_f_set_field);
-    add_builtin_func("arraylen", jl_f_arraylen);
-    add_builtin_func("arrayref", jl_f_arrayref);
-    add_builtin_func("arrayset", jl_f_arrayset);
-    add_builtin_func("instantiate_type", jl_f_instantiate_type);
-    add_builtin_func("typevar", jl_f_typevar);
-    add_builtin_func("new_struct_type", jl_f_new_struct_type);
-    add_builtin_func("new_struct_fields", jl_f_new_struct_fields);
-    add_builtin_func("new_type_constructor", jl_f_new_type_constructor);
-    add_builtin_func("new_tag_type", jl_f_new_tag_type);
-    add_builtin_func("new_tag_type_super", jl_f_new_tag_type_super);
-    add_builtin_func("new_bits_type", jl_f_new_bits_type);
-    add_builtin_func("new_generic_function", jl_f_new_generic_function);
-    add_builtin_func("add_method", jl_f_add_method);
-
-    // builtin types
-    add_builtin("Any", (jl_value_t*)jl_any_type);
-    add_builtin("Bottom", (jl_value_t*)jl_bottom_type);
-    add_builtin("Void", (jl_value_t*)jl_bottom_type);
-    add_builtin("TypeVar", (jl_value_t*)jl_tvar_type);
-    add_builtin("Tuple", (jl_value_t*)jl_tuple_type);
-    add_builtin("NTuple", (jl_value_t*)jl_ntuple_type);
-    add_builtin("Type", (jl_value_t*)jl_type_type);
-    add_builtin("Symbol", (jl_value_t*)jl_sym_type);
-    add_builtin("...", (jl_value_t*)jl_seq_type);
-    add_builtin("Function", (jl_value_t*)jl_functype_ctor);
-    add_builtin("Tensor", (jl_value_t*)jl_tensor_type);
-    add_builtin("Scalar", (jl_value_t*)jl_scalar_type);
-    add_builtin("Array", (jl_value_t*)jl_array_type);
-    add_builtin("Number", (jl_value_t*)jl_number_type);
-    add_builtin("Real", (jl_value_t*)jl_real_type);
-    add_builtin("Int", (jl_value_t*)jl_int_type);
-    add_builtin("Float", (jl_value_t*)jl_float_type);
-    add_builtin("Bool", (jl_value_t*)jl_bool_type);
-    add_builtin("Char", (jl_value_t*)jl_char_type);
-    add_builtin("Int8", (jl_value_t*)jl_int8_type);
-    add_builtin("Uint8", (jl_value_t*)jl_uint8_type);
-    add_builtin("Int16", (jl_value_t*)jl_int16_type);
-    add_builtin("Uint16", (jl_value_t*)jl_uint16_type);
-    add_builtin("Int32", (jl_value_t*)jl_int32_type);
-    add_builtin("Uint32", (jl_value_t*)jl_uint32_type);
-    add_builtin("Int64", (jl_value_t*)jl_int64_type);
-    add_builtin("Uint64", (jl_value_t*)jl_uint64_type);
-    add_builtin("Float32", (jl_value_t*)jl_float32_type);
-    add_builtin("Float64", (jl_value_t*)jl_float64_type);
-    add_builtin("String", (jl_value_t*)jl_string_type);
-    add_builtin("ArrayString", (jl_value_t*)jl_arraystring_type);
-
-    add_builtin("Expr", (jl_value_t*)jl_expr_type);
-    add_builtin("Ptr", (jl_value_t*)jl_pointer_type);
-    add_builtin("LambdaStaticData", (jl_value_t*)jl_lambda_info_type);
-    add_builtin("Box", (jl_value_t*)jl_box_type);
-    add_builtin("IntrinsicFunction", (jl_value_t*)jl_intrinsic_type);
-    // todo: this should only be visible to compiler components
-    add_builtin("Undef", (jl_value_t*)jl_undef_type);
-
-    add_builtin("BitsKind", (jl_value_t*)jl_bits_kind);
-    add_builtin("StructKind", (jl_value_t*)jl_struct_kind);
-    add_builtin("FuncKind", (jl_value_t*)jl_func_kind);
-    add_builtin("TagKind", (jl_value_t*)jl_tag_kind);
-    add_builtin("UnionKind", (jl_value_t*)jl_union_kind);
 
     add_builtin("JuliaDLHandle", jl_box_pointer(jl_pointer_void_type,
                                                 jl_load_dynamic_library(NULL)));

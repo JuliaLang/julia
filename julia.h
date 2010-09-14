@@ -430,6 +430,7 @@ jl_value_t *jl_box_int16(int16_t x);
 jl_value_t *jl_box_uint16(uint16_t x);
 jl_value_t *jl_box_int32(int32_t x);
 jl_value_t *jl_box_uint32(uint32_t x);
+jl_value_t *jl_new_box_int8(int8_t x);
 jl_value_t *jl_new_box_int32(int32_t x);
 jl_value_t *jl_new_box_uint32(uint32_t x);
 jl_value_t *jl_box_int64(int64_t x);
@@ -471,11 +472,13 @@ void jl_init_types();
 void jl_init_builtin_types();
 void jl_init_frontend();
 void jl_shutdown_frontend();
+void jl_init_primitives();
 void jl_init_builtins();
 void jl_init_modules();
 void jl_init_codegen();
 void jl_init_intrinsic_functions();
 void jl_init_tasks(void *stack, size_t ssize);
+void jl_load_boot_j();
 
 // front end interface
 jl_value_t *jl_parse_input_line(const char *str);
@@ -509,6 +512,7 @@ void jl_compile(jl_function_t *f);
 void jl_generate_fptr(jl_function_t *f);
 jl_value_t *jl_toplevel_eval_thunk(jl_lambda_info_t *thk);
 void jl_load(const char *fname);
+void jl_load_file_expr(char *fname, jl_value_t *ast);
 jl_value_t *jl_interpret_toplevel_thunk(jl_lambda_info_t *lam);
 jl_value_t *jl_interpret_toplevel_expr(jl_value_t *e);
 jl_value_t *jl_interpret_toplevel_expr_with(jl_value_t *e,

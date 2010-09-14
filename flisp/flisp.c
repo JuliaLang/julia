@@ -2329,12 +2329,15 @@ value_t fl_toplevel_eval(value_t expr)
     return fl_applyn(1, symbol_value(evalsym), expr);
 }
 
+extern void fl_init_julia_extensions();
+
 void fl_init(size_t initial_heapsize)
 {
 #ifdef BOEHM_GC
     GC_init();
 #endif
     lisp_init(initial_heapsize);
+    fl_init_julia_extensions();
 }
 
 int fl_load_system_image(value_t sys_image_iostream)

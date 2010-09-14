@@ -576,6 +576,14 @@ jl_value_t *jl_box_uint8(uint8_t x)
     return boxed_uint8_cache[x];
 }
 
+void jl_init_int32_cache()
+{
+    int64_t i;
+    for(i=0; i < 1024; i++) {
+        boxed_int32_cache[i]  = jl_new_box_int32(i-512);
+    }
+}
+
 static void init_box_caches()
 {
     int64_t i;
@@ -585,7 +593,6 @@ static void init_box_caches()
     }
     for(i=0; i < 1024; i++) {
         boxed_int16_cache[i]  = jl_new_box_int16(i-512);
-        boxed_int32_cache[i]  = jl_new_box_int32(i-512);
         boxed_int64_cache[i]  = jl_new_box_int64(i-512);
         boxed_uint16_cache[i] = jl_new_box_uint16(i);
         boxed_uint32_cache[i] = jl_new_box_uint32(i);
@@ -763,133 +770,18 @@ jl_array_t *jl_alloc_cell_1d(size_t n)
 
 void jl_init_builtin_types()
 {
-    jl_false = jl_new_box_int8(0); jl_false->type = (jl_type_t*)jl_bool_type;
-    jl_true  = jl_new_box_int8(1); jl_true->type  = (jl_type_t*)jl_bool_type;
-
     init_box_caches();
-
-    jl_tuple_t *tv;
-    tv = jl_typevars(2, "T", "N");
-    jl_array_type = 
-        jl_new_struct_type(jl_symbol("Array"),
-                           (jl_tag_type_t*)
-                           jl_apply_type((jl_value_t*)jl_tensor_type, tv),
-                           tv,
-                           jl_tuple(1, jl_symbol("dims")),
-                           jl_tuple(1, jl_apply_type((jl_value_t*)jl_ntuple_type,
-                                                     jl_tuple(2, jl_tupleref(tv,1),
-                                                              jl_int32_type))));
-    jl_array_typename = jl_array_type->name;
-    jl_array_type->fptr = jl_generic_array_ctor;
-    jl_array_type->env = NULL;
-    jl_array_type->linfo = NULL;
 
     jl_array_uint8_type =
         (jl_type_t*)jl_apply_type((jl_value_t*)jl_array_type,
                                   jl_tuple(2, jl_uint8_type,
                                            jl_box_int32(1)));
 
-    jl_array_any_type =
-        (jl_type_t*)jl_apply_type((jl_value_t*)jl_array_type,
-                                  jl_tuple(2, jl_any_type,
-                                           jl_box_int32(1)));
-
-    jl_arraystring_type =
-        jl_new_struct_type(jl_symbol("ArrayString"),
-                           (jl_tag_type_t*)
-                           jl_apply_type((jl_value_t*)jl_string_type, jl_null),
-                           jl_null,
-                           jl_tuple(1, jl_symbol("data")),
-                           jl_tuple(1, jl_array_uint8_type));
-
-    jl_expr_type =
-        jl_new_struct_type(jl_symbol("Expr"),
-                           jl_any_type, jl_null,
-                           jl_tuple(3, jl_symbol("head"), jl_symbol("args"),
-                                    jl_symbol("type")),
-                           jl_tuple(3, jl_sym_type, jl_array_any_type,
-                                    jl_any_type));
-    jl_add_constructors(jl_expr_type);
-
-    tv = jl_typevars(1, "T");
-    jl_box_type =
-        jl_new_struct_type(jl_symbol("Box"),
-                           jl_any_type, tv,
-                           jl_tuple(1, jl_symbol("contents")), tv);
-    jl_add_constructors(jl_box_type);
-    jl_box_typename = jl_box_type->name;
-    jl_box_any_type =
-        (jl_type_t*)jl_apply_type((jl_value_t*)jl_box_type,
-                                  jl_tuple(1, jl_any_type));
-
-    jl_lambda_info_type =
-        jl_new_struct_type(jl_symbol("LambdaStaticData"),
-                           jl_any_type, jl_null,
-                           jl_tuple(4, jl_symbol("ast"), jl_symbol("sparams"),
-                                    jl_symbol("tfunc"), jl_symbol("name")),
-                           jl_tuple(4, jl_expr_type, jl_tuple_type,
-                                    jl_any_type, jl_sym_type));
-    jl_lambda_info_type->fptr = jl_f_no_function;
-
-    jl_typector_type =
-        jl_new_struct_type(jl_symbol("TypeConstructor"),
-                           jl_any_type, jl_null,
-                           jl_tuple(2, jl_symbol("parameters"),
-                                    jl_symbol("body")),
-                           jl_tuple(2, jl_tuple_type, jl_any_type));
-
-    tv = jl_typevars(2, "A", "B");
-    jl_functype_ctor =
-        jl_new_type_ctor(tv,
-                         (jl_type_t*)jl_new_functype((jl_type_t*)jl_tupleref(tv,0),
-                                                     (jl_type_t*)jl_tupleref(tv,1)));
-
-    jl_intrinsic_type = jl_new_bitstype((jl_value_t*)jl_symbol("IntrinsicFunction"),
-                                        jl_any_type, jl_null, 32);
-
-    tv = jl_typevars(1, "T");
-    jl_pointer_type =
-        jl_new_bitstype((jl_value_t*)jl_symbol("Ptr"), jl_any_type, tv,
-#ifdef BITS64
-                        64
-#else
-                        32
-#endif
-                        );
     jl_pointer_void_type =
         (jl_bits_type_t*)jl_apply_type((jl_value_t*)jl_pointer_type,
                                        jl_tuple(1, jl_bottom_type));
+
     jl_pointer_uint8_type =
         (jl_bits_type_t*)jl_apply_type((jl_value_t*)jl_pointer_type,
                                        jl_tuple(1, jl_uint8_type));
-
-    jl_undef_type = jl_new_tagtype((jl_value_t*)jl_symbol("Undef"),
-                                   jl_any_type, jl_null);
-
-    // Type{Type}
-    jl_typetype_type = (jl_tag_type_t*)jl_apply_type((jl_value_t*)jl_type_type,
-                                                     jl_tuple(1,jl_type_type));
-
-    call_sym = jl_symbol("call");
-    call1_sym = jl_symbol("call1");
-    quote_sym = jl_symbol("quote");
-    top_sym = jl_symbol("top");
-    dots_sym = jl_symbol("...");
-    dollar_sym = jl_symbol("$");
-    line_sym = jl_symbol("line");
-    continue_sym = jl_symbol("continue");
-    goto_sym = jl_symbol("goto");
-    goto_ifnot_sym = jl_symbol("gotoifnot");
-    label_sym = jl_symbol("label");
-    return_sym = jl_symbol("return");
-    lambda_sym = jl_symbol("lambda");
-    assign_sym = jl_symbol("=");
-    null_sym = jl_symbol("null");
-    unbound_sym = jl_symbol("unbound");
-    symbol_sym = jl_symbol("symbol");
-    body_sym = jl_symbol("body");
-    locals_sym = jl_symbol("locals");
-    colons_sym = jl_symbol("::");
-    Any_sym = jl_symbol("Any");
-    static_typeof_sym = jl_symbol("static_typeof");
 }

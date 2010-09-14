@@ -36,12 +36,16 @@ default: debug
 %.do: %.cpp julia.h
 	$(CXX) $(DEBUGFLAGS) $(shell llvm-config --cppflags) -c $< -o $@
 
-ast.o ast.do: julia_flisp.boot.inc
+ast.o ast.do: julia_flisp.boot.inc boot.j.inc
 julia_flisp.boot.inc: julia_flisp.boot $(FLISP)
 	$(FLISPDIR)/flisp ./bin2hex.scm < $< > $@
 julia_flisp.boot: julia-parser.scm julia-syntax.scm \
-	match.scm utils.scm jlfrontend.scm $(FLISP)
-	$(FLISPDIR)/flisp ./jlfrontend.scm
+	match.scm utils.scm jlfrontend.scm mk_julia_flisp_boot.scm $(FLISP)
+	$(FLISPDIR)/flisp ./mk_julia_flisp_boot.scm
+
+boot.j.inc: boot.j preparse.scm julia_flisp.boot
+	$(FLISPDIR)/flisp ./preparse.scm < $< | $(FLISPDIR)/flisp ./bin2hex.scm > $@
+
 codegen.o codegen.do: intrinsics.cpp
 
 julia-defs.s.bc: julia-defs$(NBITS).s
