@@ -65,7 +65,8 @@ TODO:
 (define syntactic-unary-operators '($))
 
 (define reserved-words '(begin while if for try function type typealias local
-			       return break continue struct global macro let))
+			       return break continue struct global macro let
+			       bitstype))
 
 (define (syntactic-op? op) (memq op syntactic-operators))
 (define (syntactic-unary-op? op) (memq op syntactic-unary-operators))
@@ -566,6 +567,8 @@ TODO:
 	       (expect-end s))))
     ((type)
      (list 'type (parse-ineq s)))
+    ((bitstype)
+     (list 'bitstype (parse-atom s) (parse-ineq s)))
     ((typealias)
      (list 'typealias (parse-call s) (parse-arrow s)))
     ((try) #f ; TODO

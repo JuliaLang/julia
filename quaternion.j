@@ -1,4 +1,4 @@
-struct Quaternion{T} <: Number
+struct Quaternion{T} <: Number{Quaternion}
     q0::Real{T}
     q1::Real{T}
     q2::Real{T}

@@ -215,7 +215,6 @@
 	  (= ,name
 	     (call (top new_struct_type)
 		   (quote ,name)
-		   ,super
 		   (tuple ,@params)
 		   (tuple ,@(map (lambda (x) `',x) field-names))
 		   ,(if (null? defs)
@@ -224,7 +223,7 @@
 			*ctor-factory-name*)))
 	  ; now add the type fields, which might reference the type itself.
 	  (call (top new_struct_fields)
-		,name (tuple ,@field-types))))
+		,name ,super (tuple ,@field-types))))
        ,@(symbols->typevars params bounds)))))
 
 (define (type-def-expr name params super)
@@ -237,10 +236,36 @@
 	(block
 	 (= ,name
 	    (call (top new_tag_type)
-		  (quote ,name)
-		  ,super
-		  (tuple ,@params)))))
+		  (quote ,name) (tuple ,@params)))
+	 (call (top new_tag_type_super) ,name ,super)))
       ,@(symbols->typevars params bounds)))))
+
+(define (bits-def-expr n name params super)
+  (receive
+   (params bounds)
+   (sparam-name-bounds params '() '())
+   `(block
+     (call
+      (lambda ,params
+	(block
+	 (= ,name
+	    (call (top new_bits_type)
+		  (quote ,name) (tuple ,@params) ,n))
+	 (call (top new_tag_type_super) ,name ,super)))
+      ,@(symbols->typevars params bounds)))))
+
+; take apart a type signature, e.g. T{X} <: S{Y}
+(define (analyze-type-sig ex)
+  (or ((pattern-lambda (-- name (-s))
+		       (values name '() 'Any)) ex)
+      ((pattern-lambda (curly (-- name (-s)) . params)
+		       (values name params 'Any)) ex)
+      ((pattern-lambda (comparison (-- name (-s)) (-/ |<:|) super)
+		       (values name '() super)) ex)
+      ((pattern-lambda (comparison (curly (-- name (-s)) . params)
+				   (-/ |<:|) super)
+		       (values name params super)) ex)
+      (error "invalid type signature")))
 
 (define *anonymous-generic-function-name* (gensym))
 
@@ -298,20 +323,9 @@
 			  (else (error "invalid let syntax"))))))
 
    ; type definition
-   (pattern-lambda (struct (-- name (-s)) (block . fields))
-		   (struct-def-expr name '() 'Any fields))
-
-   (pattern-lambda (struct (curly (-- name (-s)) . params) (block . fields))
-		   (struct-def-expr name params 'Any fields))
-
-   (pattern-lambda (struct (comparison (-- name (-s)) (-/ |<:|) super)
-			   (block . fields))
-		   (struct-def-expr name '() super fields))
-
-   (pattern-lambda (struct (comparison (curly (-- name (-s)) . params)
-				       (-/ |<:|) super)
-			   (block . fields))
-		   (struct-def-expr name params super fields))
+   (pattern-lambda (struct sig (block . fields))
+		   (receive (name params super) (analyze-type-sig sig)
+			    (struct-def-expr name params super fields)))
 
    )) ; binding-form-patterns
 
@@ -328,15 +342,13 @@
    (pattern-lambda (= (|.| a b) rhs)
 		   `(call (top setfield) ,a (quote ,b) ,rhs))
 
-   (pattern-lambda (type (-- name (-s)))
-		   (type-def-expr name '() 'Any))
-   (pattern-lambda (type (curly (-- name (-s)) . params))
-		   (type-def-expr name params 'Any))
-   (pattern-lambda (type (comparison (-- name (-s)) (-/ |<:|) super))
-		   (type-def-expr name '() super))
-   (pattern-lambda (type (comparison (curly (-- name (-s)) . params)
-				     (-/ |<:|) super))
-		   (type-def-expr name params super))
+   (pattern-lambda (type sig)
+		   (receive (name params super) (analyze-type-sig sig)
+			    (type-def-expr name params super)))
+
+   (pattern-lambda (bitstype n sig)
+		   (receive (name params super) (analyze-type-sig sig)
+			    (bits-def-expr n name params super)))
 
    ; typealias is an assignment; should be const when that exists
    (pattern-lambda (typealias (-- name (-s)) type-ex)

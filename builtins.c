@@ -930,45 +930,21 @@ static void check_supertype(jl_value_t *super, char *name)
 
 JL_CALLABLE(jl_f_new_struct_type)
 {
-    JL_NARGS(new_struct_type, 5, 5);
+    JL_NARGS(new_struct_type, 4, 4);
     JL_TYPECHK(new_struct_type, symbol, args[0]);
+    JL_TYPECHK(new_struct_type, tuple, args[1]);
     JL_TYPECHK(new_struct_type, tuple, args[2]);
-    JL_TYPECHK(new_struct_type, tuple, args[3]);
-    if (args[4] != (jl_value_t*)jl_null)
-        JL_TYPECHK(new_struct_type, function, args[4]);
+    if (args[3] != (jl_value_t*)jl_null)
+        JL_TYPECHK(new_struct_type, function, args[3]);
     jl_sym_t *name = (jl_sym_t*)args[0];
-    jl_tuple_t *params = (jl_tuple_t*)args[2];
-    jl_tuple_t *fnames = (jl_tuple_t*)args[3];
+    jl_tuple_t *params = (jl_tuple_t*)args[1];
+    jl_tuple_t *fnames = (jl_tuple_t*)args[2];
     if (!all_typevars(params))
         jl_errorf("invalid type parameter list for %s", name->name);
-    jl_value_t *super = args[1];
 
     jl_struct_type_t *nst =
-        jl_new_struct_type(name, jl_any_type, params, jl_null, NULL);
-    if (super == (jl_value_t*)jl_scalar_type ||
-        super == (jl_value_t*)jl_number_type ||
-        super == (jl_value_t*)jl_real_type ||
-        super == (jl_value_t*)jl_int_type ||
-        super == (jl_value_t*)jl_float_type) {
-        nst->super = (jl_tag_type_t*)jl_apply_type(super, jl_tuple(1, nst));
-        nst->names = fnames;
-    }
-    else {
-        assert(jl_is_type(args[1]));
-        check_supertype(super, name->name);
-        nst->super = (jl_tag_type_t*)super;
-        if (jl_is_struct_type(super)) {
-            // UNUSED
-            assert(0);
-            nst->names = jl_tuple_append(((jl_struct_type_t*)super)->names,
-                                         fnames);
-        }
-        else {
-            assert(jl_is_tag_type(super));
-            nst->names = fnames;
-        }
-    }
-    nst->ctor_factory = args[4];
+        jl_new_struct_type(name, jl_any_type, params, fnames, NULL);
+    nst->ctor_factory = args[3];
     return (jl_value_t*)nst;
 }
 
@@ -976,17 +952,32 @@ void jl_add_constructors(jl_struct_type_t *t);
 
 JL_CALLABLE(jl_f_new_struct_fields)
 {
-    JL_NARGS(new_struct_fields, 2, 2);
-    JL_TYPECHK(new_struct_fields, tuple, args[1]);
+    JL_NARGS(new_struct_fields, 3, 3);
+    jl_value_t *super = args[1];
+    JL_TYPECHK(new_struct_fields, tuple, args[2]);
     jl_value_t *t = args[0];
-    jl_tuple_t *ftypes = (jl_tuple_t*)args[1];
+    jl_tuple_t *ftypes = (jl_tuple_t*)args[2];
     if (!jl_is_struct_type(t))
         jl_error("you can't do that.");
     jl_struct_type_t *st = (jl_struct_type_t*)t;
     if (st->types != NULL)
         jl_error("you can't do that.");
     jl_tuple_t *pft = NULL;
-    jl_tag_type_t *super = st->super;
+    jl_tuple_t *fnames = st->names;
+
+    assert(jl_is_type(super));
+    check_supertype(super, st->name->name->name);
+    st->super = (jl_tag_type_t*)super;
+    if (jl_is_struct_type(super)) {
+        // UNUSED
+        assert(0);
+        st->names = jl_tuple_append(((jl_struct_type_t*)super)->names,
+                                    fnames);
+    }
+    else {
+        assert(jl_is_tag_type(super));
+    }
+
     if (jl_is_struct_type(super))
         pft = ((jl_struct_type_t*)super)->types;
     else if (jl_is_tag_type(super))
@@ -1012,18 +1003,44 @@ JL_CALLABLE(jl_f_new_type_constructor)
 
 JL_CALLABLE(jl_f_new_tag_type)
 {
-    JL_NARGS(new_tag_type, 3, 3);
+    JL_NARGS(new_tag_type, 2, 2);
     JL_TYPECHK(new_tag_type, symbol, args[0]);
-    JL_TYPECHK(new_tag_type, tag_type, args[1]);
-    JL_TYPECHK(new_tag_type, tuple, args[2]);
-    jl_tuple_t *p = (jl_tuple_t*)args[2];
+    JL_TYPECHK(new_tag_type, tuple, args[1]);
+    jl_tuple_t *p = (jl_tuple_t*)args[1];
     if (!all_typevars(p)) {
         jl_errorf("invalid type parameter list for %s",
                   ((jl_sym_t*)args[0])->name);
     }
+    return (jl_value_t*)jl_new_tagtype((jl_value_t*)args[0], jl_any_type, p);
+}
+
+JL_CALLABLE(jl_f_new_tag_type_super)
+{
+    JL_NARGS(new_tag_type_super, 2, 2);
+    JL_TYPECHK(new_tag_type_super, tag_type, args[1]);
     jl_value_t *super = args[1];
     check_supertype(super, ((jl_sym_t*)args[0])->name);
-    return (jl_value_t*)jl_new_tagtype((jl_value_t*)args[0], (jl_tag_type_t*)super, p);
+    ((jl_tag_type_t*)args[0])->super = (jl_tag_type_t*)super;
+    return (jl_value_t*)jl_null;
+}
+
+JL_CALLABLE(jl_f_new_bits_type)
+{
+    JL_NARGS(new_bits_type, 3, 3);
+    JL_TYPECHK(new_bits_type, symbol, args[0]);
+    JL_TYPECHK(new_bits_type, tuple, args[1]);
+    JL_TYPECHK(new_bits_type, int32, args[2]);
+    jl_tuple_t *p = (jl_tuple_t*)args[1];
+    if (!all_typevars(p)) {
+        jl_errorf("invalid type parameter list for %s",
+                  ((jl_sym_t*)args[0])->name);
+    }
+    int32_t nb = jl_unbox_int32(args[2]);
+    if (nb != 8 && nb != 16 && nb != 32 && nb != 64)
+        jl_errorf("invalid number of bits in type %s",
+                  ((jl_sym_t*)args[0])->name);
+    return (jl_value_t*)jl_new_bitstype((jl_value_t*)args[0], jl_any_type, p,
+                                        nb);
 }
 
 JL_CALLABLE(jl_f_typevar)
@@ -1331,6 +1348,8 @@ void jl_init_builtins()
     add_builtin_func("new_struct_fields", jl_f_new_struct_fields);
     add_builtin_func("new_type_constructor", jl_f_new_type_constructor);
     add_builtin_func("new_tag_type", jl_f_new_tag_type);
+    add_builtin_func("new_tag_type_super", jl_f_new_tag_type_super);
+    add_builtin_func("new_bits_type", jl_f_new_bits_type);
     add_builtin_func("new_generic_function", jl_f_new_generic_function);
     add_builtin_func("add_method", jl_f_add_method);
 

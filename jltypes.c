@@ -1690,6 +1690,7 @@ void jl_init_types()
                                     jl_any_type, tv);
     jl_ntuple_typename = jl_ntuple_type->name;
 
+    // non-primitive definitions follow
     jl_string_type = jl_new_tagtype((jl_value_t*)jl_symbol("String"),
                                    jl_any_type, jl_null);
 

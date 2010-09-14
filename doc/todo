@@ -506,6 +506,7 @@ issues 6/21/10
 - make pmap_d work
 - try/catch
 - bitstype syntax
+- boot.j
 - intrinsic calls from command line (use compiler)
 - new for loop, comprehension, reduction formulation
 
