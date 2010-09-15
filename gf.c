@@ -281,7 +281,6 @@ extern jl_function_t *jl_typeinf_func;
 //#define TRACE_INFERENCE
 
 #ifdef TRACE_INFERENCE
-static char *cur_fname;
 static char *type_summary(jl_value_t *t);
 #endif
 
@@ -404,7 +403,7 @@ static jl_function_t *cache_method(jl_methtable_t *mt, jl_tuple_t *type,
             fargs[2] = (jl_value_t*)newmeth->linfo->sparams;
             fargs[3] = jl_false;
 #ifdef TRACE_INFERENCE
-            ios_printf(ios_stdout,"inference on %s(", cur_fname);
+            ios_printf(ios_stdout,"inference on %s(", newmeth->linfo->name->name);
             size_t i;
             for(i=0; i < type->length; i++) {
                 if (i > 0) ios_printf(ios_stdout, ", ");
@@ -735,6 +734,7 @@ static char *type_summary(jl_value_t *t)
     jl_print(t);
     ios_printf(ios_stdout, "\n");
     assert(0);
+    return NULL;
 }
 #endif
 
@@ -775,9 +775,6 @@ JL_CALLABLE(jl_apply_generic)
         ios_printf(ios_stdout, "%s", type_summary(jl_typeof(args[i])));
     }
     ios_printf(ios_stdout, ")\n");
-#endif
-#ifdef TRACE_INFERENCE
-    cur_fname = ((jl_sym_t*)jl_t1(env))->name;
 #endif
     jl_function_t *mfunc = jl_method_table_assoc(mt, args, nargs);
 

@@ -354,12 +354,12 @@ function fact(n::Int)
     p
 end
 
-function nPr(n::Int, r::Int)
+function nPr{T <: Int}(n::T, r::T)
     if r < 0 || n < 0 || r > n
-        return 0
+        return zero(T)
     end
 
-    ans = 1
+    ans = one(T)
     while (r > 0)
         ans *= n
         n -= 1
@@ -368,9 +368,9 @@ function nPr(n::Int, r::Int)
     return ans
 end
 
-function nCr(n::Int, r::Int)
+function nCr{T <: Int}(n::T, r::T)
     if r < 0
-        return 0
+        return zero(T)
     end
 
     neg = false
@@ -382,10 +382,10 @@ function nCr(n::Int, r::Int)
     end
 
     if r > n
-        return 0
+        return zero(T)
     end
     if r == 0 || r == n
-        return 1
+        return one(T)
     end
 
     if r > div(n,2)
@@ -401,9 +401,9 @@ function nCr(n::Int, r::Int)
         nn += 1
     end
     if neg
-        return -truncate(ans)
+        return oftype(T,-ans)
     end
-    return truncate(ans)
+    return oftype(T,ans)
 end
 
 randui64() = boxui64(or_int(zext64(unbox32(randui32())),
