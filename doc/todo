@@ -505,8 +505,8 @@ issues 6/21/10
 * Char type, more flexible bits types
 - make pmap_d work
 - try/catch
-- bitstype syntax
-- boot.j
+* bitstype syntax
+* boot.j
 - intrinsic calls from command line (use compiler)
 - new for loop, comprehension, reduction formulation
 

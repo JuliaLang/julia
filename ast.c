@@ -246,8 +246,7 @@ static jl_value_t *scm_to_julia(value_t e)
     }
     if (iscprim(e) && cp_class((cprim_t*)ptr(e))==wchartype) {
         jl_value_t *wc =
-            jl_new_box_uint32(*(uint32_t*)cp_data((cprim_t*)ptr(e)));
-        wc->type = (jl_type_t*)jl_char_type;
+            jl_box32(jl_char_type, *(int32_t*)cp_data((cprim_t*)ptr(e)));
         return wc;
     }
     if (iscvalue(e) && cv_class((cvalue_t*)ptr(e)) == jvtype) {

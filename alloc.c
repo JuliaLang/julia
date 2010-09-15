@@ -608,10 +608,10 @@ jl_value_t *jl_box_bool(int8_t x)
 }
 
 #define BOXN_FUNC(nb)                                                   \
-jl_value_t *jl_box##nb(jl_value_t *t, int##nb##_t x)                    \
+jl_value_t *jl_box##nb(jl_bits_type_t *t, int##nb##_t x)                \
 {                                                                       \
     assert(jl_is_bits_type(t));                                         \
-    assert(((jl_bits_type_t*)t)->nbits/8 == sizeof(x));                 \
+    assert(t->nbits/8 == sizeof(x));                                    \
     jl_value_t *v = newobj((jl_type_t*)t,                               \
                            NWORDS(LLT_ALIGN(sizeof(x),sizeof(void*)))); \
     *(int##nb##_t*)jl_bits_data(v) = x;                                 \
