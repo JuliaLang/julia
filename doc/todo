@@ -497,18 +497,22 @@ issues 6/21/10
   is available (after loading start.j)
 ? don't specialize on arguments declared as Any. make the default type
   an unconstrained typevar, and specialize those.
-- make optimized arrayset, arrayref work on all Arrays
 
 * coroutines, Tasks, exceptions
 * let
 * ans
 * Char type, more flexible bits types
 - make pmap_d work
-- try/catch
 * bitstype syntax
 * boot.j
+- make optimized arrayset, arrayref work on all Arrays
 - intrinsic calls from command line (use compiler)
-- new for loop, comprehension, reduction formulation
+? new for loop, comprehension, reduction formulation
+- faster I/O (not byte at a time!)
+
+- try/catch
+- flatten memory layout for Array of Complex (immutability)
+- SPMD layer
 
 method ordering tests:
 //:  (T,T) before (Any,Any)

@@ -160,7 +160,7 @@ static const Type *julia_type_to_llvm(jl_value_t *jt)
         return PointerType::get(lt, 0);
     }
     if (jl_is_bits_type(jt)) {
-        int nb = ((jl_bits_type_t*)jt)->nbits;
+        int nb = jl_bitstype_nbits(jt);
         if (nb == 8)  return T_int8;
         if (nb == 16) return T_int16;
         if (nb == 32) return T_int32;
@@ -227,7 +227,7 @@ static Value *boxed(Value *v)
                                    builder.CreateBitCast(v, T_pint8));
     }
     if (jl_is_bits_type(jt)) {
-        int nb = ((jl_bits_type_t*)jt)->nbits;
+        int nb = jl_bitstype_nbits(jt);
         if (nb == 8)
             return builder.CreateCall2(box8_func,  literal_pointer_val(jt), v);
         if (nb == 16)
@@ -289,7 +289,7 @@ extern "C" void *jl_value_to_pointer(jl_value_t *jt, jl_value_t *v, int argn)
         return jl_unbox_pointer(v);
     if ((jl_value_t*)jl_typeof(v) == jt) {
         assert(jl_is_bits_type(jt));
-        size_t osz = ((jl_bits_type_t*)jt)->nbits/8;
+        size_t osz = jl_bitstype_nbits(jt)/8;
         return alloc_temp_arg_copy(jl_bits_data(v), osz);
     }
     if ((jl_value_t*)jl_uint8_type == jt && jl_is_arraystring(v)) {

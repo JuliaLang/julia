@@ -993,6 +993,7 @@ static jl_type_t *inst_type_w_(jl_value_t *t, jl_value_t **env, size_t n,
             nbt->super = (jl_tag_type_t*)inst_type_w_((jl_value_t*)bitst->super, env, n, stack);
             nbt->parameters = iparams_tuple;
             nbt->nbits = bitst->nbits;
+            nbt->bnbits = bitst->bnbits;
             cache_type_(iparams, ntp+1, (jl_type_t*)nbt);
             return (jl_type_t*)nbt;
         }
@@ -1636,10 +1637,11 @@ void jl_init_types()
     jl_bits_kind =
         jl_new_struct_type(jl_symbol("BitsKind"), (jl_tag_type_t*)jl_tag_kind,
                            jl_null,
-                           jl_tuple(3, jl_symbol("name"), jl_symbol("super"),
-                                    jl_symbol("parameters")),
-                           jl_tuple(3, jl_typename_type, jl_type_type,
-                                    jl_tuple_type));
+                           jl_tuple(4, jl_symbol("name"), jl_symbol("super"),
+                                    jl_symbol("parameters"),
+                                    jl_symbol("nbits")),
+                           jl_tuple(4, jl_typename_type, jl_type_type,
+                                    jl_tuple_type, jl_any_type));
     // cannot be created with normal constructor due to hidden fields
     jl_bits_kind->fptr = jl_f_no_function;
     
@@ -1671,14 +1673,17 @@ void jl_init_types()
     jl_ntuple_typename = jl_ntuple_type->name;
 
     // non-primitive definitions follow
-    jl_bool_type = jl_new_bitstype((jl_value_t*)jl_symbol("Bool"),
-                                   jl_any_type, jl_null, 8);
-    jl_false = jl_new_box_int8(0); jl_false->type = (jl_type_t*)jl_bool_type;
-    jl_true  = jl_new_box_int8(1); jl_true->type  = (jl_type_t*)jl_bool_type;
-
+    jl_int32_type = NULL;
     jl_int32_type = jl_new_bitstype((jl_value_t*)jl_symbol("Int32"),
                                     jl_any_type, jl_null, 32);
     jl_init_int32_cache();
+    jl_int32_type->bnbits = jl_box_int32(32);
+    jl_tupleset(jl_bits_kind->types, 3, (jl_value_t*)jl_int32_type);
+
+    jl_bool_type = jl_new_bitstype((jl_value_t*)jl_symbol("Bool"),
+                                   jl_any_type, jl_null, 8);
+    jl_false = jl_box8(jl_bool_type, 0);
+    jl_true  = jl_box8(jl_bool_type, 1);
 
     tv = jl_typevars(2, "T", "N");
     jl_tensor_type = jl_new_tagtype((jl_value_t*)jl_symbol("Tensor"),

@@ -404,6 +404,10 @@ jl_bits_type_t *jl_new_bitstype(jl_value_t *name, jl_tag_type_t *super,
     t->super = super;
     unbind_tvars(parameters);
     t->parameters = parameters;
+    if (jl_int32_type != NULL)
+        t->bnbits = jl_box_int32(nbits);
+    else
+        t->bnbits = (jl_value_t*)jl_null;
     t->nbits = nbits;
     if (jl_has_typevars((jl_value_t*)parameters))
         t->uid = 0;
@@ -611,7 +615,7 @@ jl_value_t *jl_box_bool(int8_t x)
 jl_value_t *jl_box##nb(jl_bits_type_t *t, int##nb##_t x)                \
 {                                                                       \
     assert(jl_is_bits_type(t));                                         \
-    assert(t->nbits/8 == sizeof(x));                                    \
+    assert(jl_bitstype_nbits(t)/8 == sizeof(x));                        \
     jl_value_t *v = newobj((jl_type_t*)t,                               \
                            NWORDS(LLT_ALIGN(sizeof(x),sizeof(void*)))); \
     *(int##nb##_t*)jl_bits_data(v) = x;                                 \
@@ -626,7 +630,7 @@ BOXN_FUNC(64)
 c_type jl_unbox_##j_type(jl_value_t *v)                                 \
 {                                                                       \
     assert(jl_is_bits_type(v->type));                                   \
-    assert(((jl_bits_type_t*)v->type)->nbits/8 == sizeof(c_type));      \
+    assert(jl_bitstype_nbits(v->type)/8 == sizeof(c_type));             \
     return *(c_type*)jl_bits_data(v);                                   \
 }
 UNBOX_FUNC(int8,   int8_t)
@@ -680,7 +684,7 @@ jl_array_t *jl_new_array(jl_type_t *atype, jl_value_t **dimargs, size_t ndims)
 
     if (nel > 0) {
         if (jl_is_bits_type(el_type)) {
-            size_t tot = ((jl_bits_type_t*)el_type)->nbits/8 * nel;
+            size_t tot = jl_bitstype_nbits(el_type)/8 * nel;
             if (tot <= ARRAY_INLINE_NBYTES) {
                 data = &a->_space[0];
             }

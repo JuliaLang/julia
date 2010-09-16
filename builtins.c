@@ -379,7 +379,7 @@ JL_CALLABLE(jl_f_arraylen)
 
 static jl_value_t *new_scalar(jl_bits_type_t *bt)
 {
-    size_t nb = bt->nbits/8;
+    size_t nb = jl_bitstype_nbits(bt)/8;
     jl_value_t *v = (jl_value_t*)allocb((NWORDS(LLT_ALIGN(nb,sizeof(void*)))+1)*
                                         sizeof(void*));
     v->type = (jl_type_t*)bt;
@@ -397,7 +397,7 @@ jl_value_t *jl_arrayref(jl_array_t *a, size_t i)
             return jl_false;
         }
         elt = new_scalar((jl_bits_type_t*)el_type);
-        size_t nb = ((jl_bits_type_t*)el_type)->nbits/8;
+        size_t nb = jl_bitstype_nbits(el_type)/8;
         switch (nb) {
         case 1:
             *(int8_t*)jl_bits_data(elt)  = ((int8_t*)a->data)[i];  break;
@@ -439,7 +439,7 @@ void jl_arrayset(jl_array_t *a, size_t i, jl_value_t *rhs)
             jl_type_error("arrayset", jl_print_to_string(el_type), rhs);
     }
     if (jl_is_bits_type(el_type)) {
-        size_t nb = ((jl_bits_type_t*)el_type)->nbits/8;
+        size_t nb = jl_bitstype_nbits(el_type)/8;
         switch (nb) {
         case 1:
             ((int8_t*)a->data)[i]  = *(int8_t*)jl_bits_data(rhs);  break;
@@ -854,7 +854,7 @@ JL_CALLABLE(jl_f_print_any)
     else {
         jl_value_t *t = (jl_value_t*)jl_typeof(v);
         if (jl_is_bits_type(t)) {
-            print_uint(jl_bits_data(v), ((jl_bits_type_t*)t)->nbits);
+            print_uint(jl_bits_data(v), jl_bitstype_nbits(t));
         }
         else {
             assert(jl_is_struct_type(t));

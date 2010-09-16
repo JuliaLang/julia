@@ -139,10 +139,11 @@ typedef struct {
     jl_typename_t *name;
     jl_tag_type_t *super;
     jl_tuple_t *parameters;
+    jl_value_t *bnbits;
     // hidden fields:
     size_t nbits;
+    uptrint_t uid;   // must be at same offset as in jl_struct_type_t
     uptrint_t unused;
-    uptrint_t uid;
 } jl_bits_type_t;
 
 typedef struct {
@@ -323,6 +324,7 @@ extern jl_sym_t *static_typeof_sym;
 #define jl_is_tag_type(v)    jl_typeis(v,jl_tag_kind)
 #define jl_is_some_tag_type(v) (jl_is_tag_type(v)||jl_is_struct_type(v)||jl_is_bits_type(v))
 #define jl_is_bits_type(v)   jl_typeis(v,jl_bits_kind)
+#define jl_bitstype_nbits(t) (((jl_bits_type_t*)t)->nbits)
 #define jl_is_struct_type(v) jl_typeis(v,jl_struct_kind)
 #define jl_is_func_type(v)   jl_typeis(v,jl_func_kind)
 #define jl_is_union_type(v)  jl_typeis(v,jl_union_kind)
