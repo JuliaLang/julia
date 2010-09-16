@@ -374,14 +374,8 @@ function abstract_eval_expr(e, vtypes, sv::StaticVarInfo)
         return typeof(e.args[1])
     elseif is(e.head,`static_typeof)
         t = abstract_eval(e.args[1], vtypes, sv)
-        if isa(t,UnionKind)
-            for tt = t.types
-                if !is(tt,Undef)
-                    t = tt
-                    break
-                end
-            end
-        end
+        # intersect with Any to remove Undef
+        t = tintersect(t, Any)
         return Type{t}
     end
 end

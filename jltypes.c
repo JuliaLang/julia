@@ -508,8 +508,8 @@ static jl_value_t *jl_type_intersect(jl_value_t *a, jl_value_t *b,
         return intersect_typevar((jl_tvar_t*)a, b, penv);
     if (jl_is_typevar(b))
         return intersect_typevar((jl_tvar_t*)b, a, penv);
-    if (a == (jl_value_t*)jl_any_type) return b;
-    if (b == (jl_value_t*)jl_any_type) return a;
+    //if (a == (jl_value_t*)jl_any_type) return b;
+    //if (b == (jl_value_t*)jl_any_type) return a;
     if (a == (jl_value_t*)jl_bottom_type || b == (jl_value_t*)jl_bottom_type)
         return (jl_value_t*)jl_bottom_type;
     if (!jl_has_typevars(a) && !jl_has_typevars(b)) {
