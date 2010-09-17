@@ -1,6 +1,9 @@
 symbol(s::ArrayString) =
     ccall(dlsym(JuliaDLHandle,"jl_symbol"), Any, (Ptr{Uint8},), s.data)::Symbol
 
+symbol(a::Array{Uint8,1}) =
+    ccall(dlsym(JuliaDLHandle,"jl_symbol"), Any, (Ptr{Uint8},), a)::Symbol
+
 gensym() = ccall(dlsym(JuliaDLHandle,"jl_gensym"), Any, ())::Symbol
 
 function string(x)
@@ -20,6 +23,8 @@ ref(s::ArrayString, i::Index) = ArrayString([s.data[i]])
 ref(s::ArrayString, x) = ArrayString(s.data[x])
 chr(c::Int) = ArrayString([uint8(c)])
 ord(s::ArrayString) = s.data[1]
+
+write(io, s::ArrayString) = write(io, s.data)
 
 function cmp(a::ArrayString, b::ArrayString)
     for i = 1:min(length(a),length(b))

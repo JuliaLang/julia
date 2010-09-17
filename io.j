@@ -64,9 +64,20 @@ function read{T}(s, ::Type{T}, dims::Size...)
     a
 end
 
+## low-level calls ##
+
 function write(s::IOStream, b::Uint8)
     ccall(dlsym(JuliaDLHandle,"ios_putc"), Int32, (Int32, Ptr{Void}),
           int32(b), s.ios)
+end
+
+function write{T}(s::IOStream, a::Array{T})
+    if isa(T,BitsKind)
+        ccall(dlsym(JuliaDLHandle,"ios_write"), Size,
+              (Ptr{Void}, Ptr{Void}, Size), s.ios, a, numel(a)*sizeof(T))
+    else
+        invoke(write, (Any, Array), s, a)
+    end
 end
 
 function read(s::IOStream, ::Type{Uint8})
@@ -81,7 +92,16 @@ function read(s::IOStream, ::Type{Uint8})
     uint8(b)
 end
 
-# TODO: bulk reads and writes
+function read{T}(s::IOStream, ::Type{T}, dims::Size...)
+    if isa(T,BitsKind)
+        a = Array(T, dims...)
+        ccall(dlsym(JuliaDLHandle,"ios_readall"), Size,
+              (Ptr{Void}, Ptr{Void}, Size), s.ios, a, numel(a)*sizeof(T))
+        a
+    else
+        invoke(read, (Any, Type, Size...), s, T, dims...)
+    end
+end
 
 function close(s::IOStream)
     ccall(dlsym(JuliaDLHandle,"ios_close"), Void, (Ptr{Void},), s.ios)

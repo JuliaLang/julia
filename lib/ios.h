@@ -64,9 +64,9 @@ typedef struct {
 } ios_t;
 
 /* low-level interface functions */
-size_t ios_read(ios_t *s, char *dest, size_t n);
-size_t ios_readall(ios_t *s, char *dest, size_t n);
-size_t ios_write(ios_t *s, char *data, size_t n);
+DLLEXPORT size_t ios_read(ios_t *s, char *dest, size_t n);
+DLLEXPORT size_t ios_readall(ios_t *s, char *dest, size_t n);
+DLLEXPORT size_t ios_write(ios_t *s, char *data, size_t n);
 off_t ios_seek(ios_t *s, off_t pos);   // absolute seek
 off_t ios_seek_end(ios_t *s);
 off_t ios_skip(ios_t *s, off_t offs);  // relative seek

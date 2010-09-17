@@ -44,6 +44,9 @@
     ios_getc;
     ios_close;
     ios_flush;
+    ios_read;
+    ios_readall;
+    ios_write;
     connect_to_host;
     open_any_tcp_port;
     jl_wait_msg;

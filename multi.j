@@ -41,6 +41,7 @@ function jl_worker(fd)
             break
         end
         (f, args) = recv_msg(sock)
+        #print("got ", tuple(f, map(typeof,args)...), "\n")
         # handle message
         result = apply(eval(f), args)
         send_msg(sock, result)
@@ -54,8 +55,7 @@ function start_local_worker()
     wrfd = fds[2]
 
     if fork()==0
-        port = Array(Int16, 1)
-        port[1] = 9009
+        port = [int16(9009)]
         sockfd = ccall(dlsym(JuliaDLHandle,"open_any_tcp_port"), Int32,
                        (Ptr{Int16},), port)
         if sockfd == -1
