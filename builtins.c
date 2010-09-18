@@ -793,12 +793,6 @@ JL_CALLABLE(jl_f_print_symbol)
     return (jl_value_t*)jl_null;
 }
 
-JL_CALLABLE(jl_f_print_typename)
-{
-    jl_print((jl_value_t*)((jl_typename_t*)args[0])->name);
-    return (jl_value_t*)jl_null;
-}
-
 JL_CALLABLE(jl_f_print_typevar)
 {
     ios_t *s = jl_current_output_stream();
@@ -1363,7 +1357,6 @@ void jl_init_builtins()
 
     add_builtin_method1(jl_print_gf, (jl_type_t*)jl_any_type,     jl_f_print_any);
     add_builtin_method1(jl_print_gf, (jl_type_t*)jl_sym_type,     jl_f_print_symbol);
-    add_builtin_method1(jl_print_gf, (jl_type_t*)jl_typename_type,jl_f_print_typename);
     add_builtin_method1(jl_print_gf, (jl_type_t*)jl_tvar_type,    jl_f_print_typevar);
     add_builtin_method1(jl_print_gf, (jl_type_t*)jl_lambda_info_type, jl_f_print_linfo);
     add_builtin_method1(jl_print_gf, (jl_type_t*)jl_array_uint8_type, jl_f_print_string);
