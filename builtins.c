@@ -1327,6 +1327,8 @@ void jl_init_primitives()
     add_builtin("Bottom", (jl_value_t*)jl_bottom_type);
     add_builtin("Void", (jl_value_t*)jl_bottom_type);
     add_builtin("TypeVar", (jl_value_t*)jl_tvar_type);
+    add_builtin("TypeName", (jl_value_t*)jl_typename_type);
+    add_builtin("TypeConstructor", (jl_value_t*)jl_typector_type);
     add_builtin("Tuple", (jl_value_t*)jl_tuple_type);
     add_builtin("NTuple", (jl_value_t*)jl_ntuple_type);
     add_builtin("Type", (jl_value_t*)jl_type_type);
