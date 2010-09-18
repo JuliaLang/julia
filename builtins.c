@@ -1349,6 +1349,10 @@ void jl_init_primitives()
     add_builtin("FuncKind", (jl_value_t*)jl_func_kind);
     add_builtin("TagKind", (jl_value_t*)jl_tag_kind);
     add_builtin("UnionKind", (jl_value_t*)jl_union_kind);
+
+    add_builtin("JuliaDLHandle", jl_box_pointer(jl_pointer_void_type,
+                                                jl_load_dynamic_library(NULL)));
+    add_builtin("C_NULL", jl_box_pointer(jl_pointer_void_type, NULL));
 }
 
 void jl_init_builtins()
@@ -1390,8 +1394,4 @@ void jl_init_builtins()
     add_builtin("convert", (jl_value_t*)jl_convert_gf);
     add_builtin("print", (jl_value_t*)jl_print_gf);
     add_builtin("hash", (jl_value_t*)jl_hash_gf);
-
-    add_builtin("JuliaDLHandle", jl_box_pointer(jl_pointer_void_type,
-                                                jl_load_dynamic_library(NULL)));
-    add_builtin("C_NULL", jl_box_pointer(jl_pointer_void_type, NULL));
 }

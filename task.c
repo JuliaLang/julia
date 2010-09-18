@@ -298,9 +298,6 @@ static void init_task(jl_task_t *t)
         // if parent task has exited, try its parent, and so on
         while (cont->done)
             cont = cont->on_exit;
-#ifdef BOEHM_GC
-        GC_free(t->_stkbase);
-#endif
         t->_stkbase = NULL;
         t->stack = NULL;
         t->start = NULL;

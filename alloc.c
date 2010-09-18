@@ -788,10 +788,6 @@ void jl_init_builtin_types()
                                   jl_tuple(2, jl_uint8_type,
                                            jl_box_int32(1)));
 
-    jl_pointer_void_type =
-        (jl_bits_type_t*)jl_apply_type((jl_value_t*)jl_pointer_type,
-                                       jl_tuple(1, jl_bottom_type));
-
     jl_pointer_uint8_type =
         (jl_bits_type_t*)jl_apply_type((jl_value_t*)jl_pointer_type,
                                        jl_tuple(1, jl_uint8_type));

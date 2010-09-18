@@ -19,11 +19,11 @@ FLAGS = -falign-functions -Wall -Wno-strict-aliasing \
 	$(CFLAGS) $(CONFIG) -I$(shell llvm-config --includedir) \
 	-fvisibility=hidden
 LIBFILES = $(FLISP) $(LLT)
-LIBS = $(LIBFILES) -lutil -ldl -lm -lgc -lreadline $(OSLIBS) \
+LIBS = $(LIBFILES) -l:libgc.a -lutil -ldl -lm -lreadline $(OSLIBS) \
 	$(shell llvm-config --ldflags --libs engine)
 
-DEBUGFLAGS = -ggdb3 -DDEBUG $(FLAGS) -DENABLE_INFERENCE
-SHIPFLAGS = -O3 -DNDEBUG $(FLAGS) -DENABLE_INFERENCE
+DEBUGFLAGS = -ggdb3 -DDEBUG $(FLAGS)
+SHIPFLAGS = -O3 -DNDEBUG $(FLAGS)
 
 default: debug
 

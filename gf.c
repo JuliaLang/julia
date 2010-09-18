@@ -277,7 +277,7 @@ jl_function_t *jl_method_cache_insert(jl_methtable_t *mt, jl_tuple_t *type,
 
 extern jl_function_t *jl_typeinf_func;
 //TODO: disabled for now
-//#define ENABLE_INFERENCE
+#define ENABLE_INFERENCE
 //#define TRACE_INFERENCE
 
 #ifdef TRACE_INFERENCE
