@@ -198,14 +198,6 @@ static jl_value_t *global(char *name)
 
 void jl_get_builtin_hooks()
 {
-    // fetch references to things defined in boot.j
-    jl_tensor_type = (jl_tag_type_t*)global("Tensor");
-    jl_string_type = (jl_tag_type_t*)global("String");
-    jl_scalar_type = (jl_tag_type_t*)((jl_typector_t*)global("Scalar"))->body;
-    jl_real_type   = (jl_tag_type_t*)global("Real");
-    jl_int_type    = (jl_tag_type_t*)global("Int");
-    jl_float_type  = (jl_tag_type_t*)global("Float");
-
     // update bootstrapping versions of Bool and Int32
     jl_bits_type_t *i32t = (jl_bits_type_t*)global("Int32");
     *jl_int32_type = *i32t;
@@ -217,6 +209,7 @@ void jl_get_builtin_hooks()
     jl_set_const(jl_system_module, jl_symbol("Bool"),
                  (jl_value_t*)jl_bool_type);
 
+    // fetch references to things defined in boot.j
     jl_char_type    = (jl_bits_type_t*)global("Char");
     jl_int8_type    = (jl_bits_type_t*)global("Int8");
     jl_uint8_type   = (jl_bits_type_t*)global("Uint8");

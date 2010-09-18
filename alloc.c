@@ -41,7 +41,6 @@ jl_struct_type_t *jl_lambda_info_type;
 
 jl_bits_type_t *jl_pointer_type;
 jl_bits_type_t *jl_pointer_void_type;
-jl_bits_type_t *jl_pointer_uint8_type;
 
 jl_sym_t *call_sym;    jl_sym_t *dots_sym;
 jl_sym_t *call1_sym;
@@ -787,8 +786,4 @@ void jl_init_builtin_types()
         (jl_type_t*)jl_apply_type((jl_value_t*)jl_array_type,
                                   jl_tuple(2, jl_uint8_type,
                                            jl_box_int32(1)));
-
-    jl_pointer_uint8_type =
-        (jl_bits_type_t*)jl_apply_type((jl_value_t*)jl_pointer_type,
-                                       jl_tuple(1, jl_uint8_type));
 }

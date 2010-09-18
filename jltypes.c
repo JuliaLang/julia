@@ -37,13 +37,7 @@ jl_struct_type_t *jl_bits_kind;
 
 jl_type_t *jl_bottom_type;
 jl_tag_type_t *jl_seq_type;
-jl_tag_type_t *jl_string_type;
 jl_tag_type_t *jl_tensor_type;
-jl_tag_type_t *jl_scalar_type;
-jl_tag_type_t *jl_number_type;
-jl_tag_type_t *jl_real_type;
-jl_tag_type_t *jl_int_type;
-jl_tag_type_t *jl_float_type;
 
 jl_bits_type_t *jl_bool_type;
 jl_bits_type_t *jl_char_type;

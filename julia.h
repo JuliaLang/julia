@@ -221,13 +221,7 @@ extern jl_type_t *jl_bottom_type;
 extern jl_struct_type_t *jl_lambda_info_type;
 extern jl_tag_type_t *jl_seq_type;
 extern jl_typector_t *jl_functype_ctor;
-extern jl_tag_type_t *jl_string_type;
 extern jl_tag_type_t *jl_tensor_type;
-extern jl_tag_type_t *jl_scalar_type;
-extern jl_tag_type_t *jl_number_type;
-extern jl_tag_type_t *jl_real_type;
-extern jl_tag_type_t *jl_int_type;
-extern jl_tag_type_t *jl_float_type;
 extern jl_struct_type_t *jl_array_type;
 extern jl_typename_t *jl_array_typename;
 extern jl_struct_type_t *jl_arraystring_type;
@@ -251,7 +245,6 @@ extern jl_bits_type_t *jl_float64_type;
 
 extern jl_bits_type_t *jl_pointer_type;
 extern jl_bits_type_t *jl_pointer_void_type;
-extern jl_bits_type_t *jl_pointer_uint8_type;
 
 extern jl_type_t *jl_array_uint8_type;
 extern jl_type_t *jl_array_any_type;
