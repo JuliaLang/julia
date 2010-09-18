@@ -3,8 +3,8 @@ CXX = g++
 CFLAGS =
 
 HFILEDIRS = /opt/local/include
-LIBDIRS = /opt/local/lib
-OSLIBS = -Wl,-w -framework ApplicationServices -framework vecLib
+LIBDIRS = /opt/local/lib /usr/local/lib
+OSLIBS = -lgc -Wl,-w -framework ApplicationServices -framework vecLib
 
 ifeq ($(NBITS),32)
 CONFIG = -DMACOSX -DARCH_X86 -DUSE_READLINE -DBOEHM_GC

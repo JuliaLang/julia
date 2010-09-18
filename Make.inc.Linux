@@ -6,7 +6,7 @@ PFX = /usr/local
 #PFX = /afs/csail.mit.edu/u/b/bezanson
 HFILEDIRS = $(PFX)/include
 LIBDIRS = $(PFX)/lib
-OSLIBS = -Wl,--export-dynamic -Wl,--version-script=$(JULIAHOME)/julia.expmap
+OSLIBS = -l:libgc.a -Wl,--export-dynamic -Wl,--version-script=$(JULIAHOME)/julia.expmap
 
 ifeq ($(NBITS),32)
 CONFIG = -DLINUX -DARCH_X86 -DUSE_READLINE -DBOEHM_GC
