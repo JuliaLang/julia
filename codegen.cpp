@@ -36,6 +36,7 @@ extern "C" {
 // llvm state
 static LLVMContext &jl_LLVMContext = getGlobalContext();
 static IRBuilder<> builder(getGlobalContext());
+static bool nested_compile=false;
 static Module *jl_Module;
 static ExecutionEngine *jl_ExecutionEngine;
 static std::map<const std::string, GlobalVariable*> stringConstants;
@@ -169,8 +170,11 @@ static Function *to_function(jl_lambda_info_t *li)
                                    li->name->name, jl_Module);
     assert(jl_is_expr(li->ast));
     li->functionObject = (void*)f;
-    BasicBlock *old = builder.GetInsertBlock();
+    BasicBlock *old = nested_compile ? builder.GetInsertBlock() : NULL;
+    bool last_n_c = nested_compile;
+    nested_compile = true;
     emit_function(li, f);
+    nested_compile = last_n_c;
     FPM->run(*f);
     // print out the function's LLVM code
     //f->dump();
