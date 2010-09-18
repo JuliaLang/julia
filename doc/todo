@@ -474,6 +474,18 @@ if no ctor definitions preset, you get Foo(...) = new(...)
 
 -------------------------------------------------------------------------------
 
+idea: fault-tolerant remote references
+you do spawn(thunk), and it runs somewhere. saving the thunk might allow
+the same value to be recomputed later. when the work is done, we time it.
+if it takes longer to compute than some estimate of how long it takes to
+send, we can replicate it somewhere. the caller gets a remote ref back
+with a list of locations where the value can be found. if they all fail
+the value can be recomputed.
+
+can a program written in terms of remote references be converted to SPMD?
+
+-------------------------------------------------------------------------------
+
 issues 6/21/10
 
 - inference within closures
@@ -508,7 +520,7 @@ issues 6/21/10
 - make optimized arrayset, arrayref work on all Arrays
 - intrinsic calls from command line (use compiler)
 ? new for loop, comprehension, reduction formulation
-- faster I/O (not byte at a time!)
+* faster I/O (not byte at a time!)
 
 - try/catch
 - flatten memory layout for Array of Complex (immutability)

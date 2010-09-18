@@ -194,6 +194,7 @@ extern "C" void jl_generate_fptr(jl_function_t *f)
         f->env = jl_t1(env);
     }
     f->fptr = li->fptr;
+    llvmf->deleteBody();
 }
 
 extern "C" void jl_compile(jl_function_t *f)

@@ -540,22 +540,24 @@ BOX_FUNC(uint64,  uint64_t, jl_new_box)
 BOX_FUNC(float32, float,    jl_box)
 BOX_FUNC(float64, double,   jl_box)
 
+#define NBOX_C 2048
+
 #define SIBOX_FUNC(type,c_type)                                         \
-static jl_value_t *boxed_##type##_cache[1024];                          \
+static jl_value_t *boxed_##type##_cache[NBOX_C];                        \
 jl_value_t *jl_box_##type(c_type x)                                     \
 {                                                                       \
-    if ((u##c_type)(x+512) < 1024)                                      \
-        return boxed_##type##_cache[(x+512)];                           \
+    if ((u##c_type)(x+NBOX_C/2) < NBOX_C)                               \
+        return boxed_##type##_cache[(x+NBOX_C/2)];                      \
     jl_value_t *v = newobj((jl_type_t*)jl_##type##_type,                \
                            NWORDS(LLT_ALIGN(sizeof(c_type),sizeof(void*)))); \
     *(c_type*)jl_bits_data(v) = x;                                      \
     return v;                                                           \
 }
 #define UIBOX_FUNC(type,c_type)                                         \
-static jl_value_t *boxed_##type##_cache[1024];                          \
+static jl_value_t *boxed_##type##_cache[NBOX_C];                        \
 jl_value_t *jl_box_##type(c_type x)                                     \
 {                                                                       \
-    if (x < 1024)                                                       \
+    if (x < NBOX_C)                                                     \
         return boxed_##type##_cache[x];                                 \
     jl_value_t *v = newobj((jl_type_t*)jl_##type##_type,                \
                            NWORDS(LLT_ALIGN(sizeof(c_type),sizeof(void*)))); \
@@ -583,8 +585,8 @@ jl_value_t *jl_box_uint8(uint8_t x)
 void jl_init_int32_cache()
 {
     int64_t i;
-    for(i=0; i < 1024; i++) {
-        boxed_int32_cache[i]  = jl_new_box_int32(i-512);
+    for(i=0; i < NBOX_C; i++) {
+        boxed_int32_cache[i]  = jl_new_box_int32(i-NBOX_C/2);
     }
 }
 
@@ -595,9 +597,9 @@ static void init_box_caches()
         boxed_int8_cache[i]  = jl_new_box_int8((int8_t)(i-128));
         boxed_uint8_cache[i] = jl_new_box_uint8(i);
     }
-    for(i=0; i < 1024; i++) {
-        boxed_int16_cache[i]  = jl_new_box_int16(i-512);
-        boxed_int64_cache[i]  = jl_new_box_int64(i-512);
+    for(i=0; i < NBOX_C; i++) {
+        boxed_int16_cache[i]  = jl_new_box_int16(i-NBOX_C/2);
+        boxed_int64_cache[i]  = jl_new_box_int64(i-NBOX_C/2);
         boxed_uint16_cache[i] = jl_new_box_uint16(i);
         boxed_uint32_cache[i] = jl_new_box_uint32(i);
         boxed_uint64_cache[i] = jl_new_box_uint64(i);
@@ -689,7 +691,12 @@ jl_array_t *jl_new_array(jl_type_t *atype, jl_value_t **dimargs, size_t ndims)
                 data = &a->_space[0];
             }
             else {
-                data = alloc_pod(tot);
+#ifdef BOEHM_GC
+                if (tot >= 200000)
+                    data = GC_malloc_atomic_ignore_off_page(tot);
+                else
+#endif
+                    data = alloc_pod(tot);
             }
         }
         else {
@@ -699,7 +706,7 @@ jl_array_t *jl_new_array(jl_type_t *atype, jl_value_t **dimargs, size_t ndims)
             }
             else {
 #ifdef BOEHM_GC
-                if (tot >= 100000)
+                if (tot >= 200000)
                     data = GC_malloc_ignore_off_page(tot);
                 else
 #endif

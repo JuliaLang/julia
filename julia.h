@@ -347,9 +347,6 @@ extern jl_sym_t *static_typeof_sym;
 #define jl_is_func(v)        (jl_is_func_type(jl_typeof(v)) || jl_is_struct_type(v))
 #define jl_is_function(v)    jl_is_func(v)
 #define jl_is_arraystring(v) jl_typeis(v,jl_arraystring_type)
-#define jl_is_array(v)       (((jl_tag_type_t*)jl_typeof(v))->name==jl_array_typename)
-#define jl_is_box(v)         (((jl_tag_type_t*)jl_typeof(v))->name==jl_box_typename)
-#define jl_is_cpointer_type(v) (((jl_tag_type_t*)(v))->name==jl_pointer_void_type->name)
 #define jl_is_cpointer(v)    jl_is_cpointer_type(jl_typeof(v))
 #define jl_is_pointer(v)     jl_is_cpointer_type(jl_typeof(v))
 #define jl_is_gf(f)          (((jl_function_t*)(f))->fptr==jl_apply_generic)
@@ -361,6 +358,26 @@ extern jl_sym_t *static_typeof_sym;
 
 // get a pointer to the data in a value of bits type
 #define jl_bits_data(v) (&((void**)(v))[1])
+
+static inline int jl_is_array(void *v)
+{
+    jl_type_t *t = jl_typeof(v);
+    return (jl_is_struct_type(t) &&
+            ((jl_struct_type_t*)(t))->name == jl_array_typename);
+}
+
+static inline int jl_is_box(void *v)
+{
+    jl_type_t *t = jl_typeof(v);
+    return (jl_is_struct_type(t) &&
+            ((jl_struct_type_t*)(t))->name == jl_box_typename);
+}
+
+static inline int jl_is_cpointer_type(void *t)
+{
+    return (jl_is_bits_type(t) &&
+            ((jl_bits_type_t*)(t))->name == jl_pointer_void_type->name);
+}
 
 static inline int jl_is_seq_type(jl_value_t *v)
 {
@@ -579,6 +596,7 @@ typedef struct _jl_task_t {
     struct _jl_task_t *on_exit;
     jmp_buf ctx;
     void *stack;
+    void *_stkbase;
     size_t ssize;
     jl_function_t *start;
     int done;

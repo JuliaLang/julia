@@ -163,7 +163,9 @@ static jl_value_t *switchto(jl_task_t *t)
         return t->result;
     }
     if (!setjmp(jl_current_task->ctx)) {
+#ifdef BOEHM_GC
         GC_stackbottom = t->stack+t->ssize;
+#endif
         jl_current_task = t;
         longjmp(t->ctx, 1);
     }
@@ -296,6 +298,10 @@ static void init_task(jl_task_t *t)
         // if parent task has exited, try its parent, and so on
         while (cont->done)
             cont = cont->on_exit;
+#ifdef BOEHM_GC
+        GC_free(t->_stkbase);
+#endif
+        t->_stkbase = NULL;
         t->stack = NULL;
         t->start = NULL;
         jl_switchto(cont, t->result);
@@ -321,6 +327,7 @@ jl_task_t *jl_new_task(jl_function_t *start, size_t ssize)
     // the GC might read this area, which is ok, just prevent writes
     if (mprotect(stk, pagesz-1, PROT_READ) == -1)
         jl_errorf("mprotect: %s", strerror(errno));
+    t->_stkbase = stk;
     t->stack = stk+pagesz;
     t->on_exit = jl_current_task;
     t->done = 0;
