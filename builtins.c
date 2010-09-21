@@ -1187,10 +1187,14 @@ JL_CALLABLE(jl_f_dlsym)
 {
     JL_NARGS(dlsym, 2, 2);
     JL_TYPECHK(dlsym, pointer, args[0]);
-    if (!jl_is_arraystring(args[1]))
+    char *sym;
+    if (jl_is_symbol(args[1]))
+        sym = ((jl_sym_t*)args[1])->name;
+    else if (jl_is_arraystring(args[1]))
+        sym = jl_string_data(args[1]);
+    else
         jl_error("dlsym: expected ArrayString");
     void *hnd = jl_unbox_pointer(args[0]);
-    char *sym = jl_string_data(args[1]);
     return jl_box_pointer(jl_pointer_void_type, jl_dlsym(hnd, sym));
 }
 
