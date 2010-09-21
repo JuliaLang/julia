@@ -62,6 +62,9 @@ end
 
 randn(dims::Tuple) = randn(dims...)
 
+cell(dims::Tuple)   = cell(dims...)
+cell(dims::Size...) = Array(Any, dims...)
+
 function copy{T}(a::Array{T})
     b = Array(T, size(a))
     for i=1:numel(a); b[i] = copy(a[i]); end

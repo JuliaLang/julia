@@ -2,8 +2,8 @@ namespace JL_I {
     enum intrinsic {
         // wrap and unwrap
         boxui8=0, boxsi8, boxui16, boxsi16, boxui32, boxsi32, boxui64, boxsi64,
-        boxf32, boxf64,
-        unbox8, unbox16, unbox32, unbox64,
+        boxf32, boxf64, box,
+        unbox8, unbox16, unbox32, unbox64, unbox,
         // arithmetic
         neg_int, add_int, sub_int, mul_int, sdiv_int, udiv_int,
         smod_int, umod_int,
@@ -506,6 +506,34 @@ static Value *emit_unboxed(jl_value_t *e, jl_codectx_t *ctx)
     return emit_expr(e, ctx, true);
 }
 
+static Value *generic_box(jl_value_t *targ, jl_value_t *x, jl_codectx_t *ctx)
+{
+    jl_value_t *bt =
+        jl_interpret_toplevel_expr_with(targ,
+                                        &jl_tupleref(ctx->sp,0),
+                                        ctx->sp->length/2);
+    if (!jl_is_bits_type(bt))
+        jl_error("box: expected bits type as first argument");
+    unsigned int nb = jl_bitstype_nbits(bt);
+    Value *vx = emit_unboxed(x, ctx);
+    if (vx->getType()->getPrimitiveSizeInBits() != nb)
+        jl_errorf("box: expected argument with %d bits", nb);
+    return mark_julia_type(vx, bt);
+}
+
+static Value *generic_unbox(jl_value_t *targ, jl_value_t *x, jl_codectx_t *ctx)
+{
+    jl_value_t *bt =
+        jl_interpret_toplevel_expr_with(targ,
+                                        &jl_tupleref(ctx->sp,0),
+                                        ctx->sp->length/2);
+    if (!jl_is_bits_type(bt))
+        jl_error("unbox: expected bits type as first argument");
+    unsigned int nb = jl_bitstype_nbits(bt);
+    const Type *to = IntegerType::get(jl_LLVMContext, nb);
+    return emit_unbox(to, PointerType::get(to, 0), emit_unboxed(x, ctx));
+}
+
 #define HANDLE(intr,n)                                                  \
     case intr: if (nargs!=n) jl_error(#intr": wrong number of arguments");
 
@@ -513,6 +541,16 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
                              jl_codectx_t *ctx)
 {
     if (f == ccall) return emit_ccall(args, nargs, ctx);
+    if (f == box) {
+        if (nargs!=2)
+            jl_error("box: wrong number of arguments");
+        return generic_box(args[1], args[2], ctx);
+    }
+    if (f == unbox) {
+        if (nargs!=2)
+            jl_error("unbox: wrong number of arguments");
+        return generic_unbox(args[1], args[2], ctx);
+    }
     if (nargs < 1) jl_error("invalid intrinsic call");
     Value *x = emit_unboxed(args[1], ctx);
     const Type *t = x->getType();
@@ -762,7 +800,7 @@ extern "C" void jl_init_intrinsic_functions()
 {
     ADD_I(boxui8); ADD_I(boxsi8); ADD_I(boxui16); ADD_I(boxsi16);
     ADD_I(boxui32); ADD_I(boxsi32); ADD_I(boxui64); ADD_I(boxsi64);
-    ADD_I(boxf32); ADD_I(boxf64);
+    ADD_I(boxf32); ADD_I(boxf64); ADD_I(box);
     ADD_I(unbox8); ADD_I(unbox16); ADD_I(unbox32); ADD_I(unbox64);
     ADD_I(neg_int); ADD_I(add_int); ADD_I(sub_int); ADD_I(mul_int);
     ADD_I(sdiv_int); ADD_I(udiv_int); ADD_I(smod_int); ADD_I(umod_int);

@@ -58,6 +58,36 @@ jl_sym_t *symbol_sym;
 jl_sym_t *Any_sym;
 jl_sym_t *static_typeof_sym;
 
+/*
+// distribution of object sizes
+(gdb) p sizebins[0]   $1 = 0
+(gdb) p sizebins[1]   $2 = 0
+(gdb) p sizebins[2]   $3 = 2
+(gdb) p sizebins[3]   $4 = 794256
+(gdb) p sizebins[4]   $5 = 2608590
+(gdb) p sizebins[5]   $6 = 19808
+(gdb) p sizebins[6]   $7 = 428950
+(gdb) p sizebins[7]   $8 = 28894
+(gdb) p sizebins[8]   $9 = 85
+(gdb) p sizebins[9]   $10 = 19
+(gdb) p sizebins[10]  $11 = 2
+(gdb) p sizebins[11]  $12 = 0
+(gdb) p sizebins[12]  $13 = 1
+(gdb) p sizebins[13]  $14 = 0
+(gdb) p sizebins[14]  $15 = 0
+(gdb) p sizebins[15]  $16 = 1
+(gdb) p sizebins[16]  $17 = 0
+void *allocb(size_t nb)
+{
+    int i = 30;
+    while (1<<i > nb && i>0) {
+        i--;
+    }
+    sizebins[i]++;
+    return GC_MALLOC(nb);
+}
+*/
+
 // NOTE: does not work for TagKind or its subtypes
 jl_value_t *jl_new_struct(jl_struct_type_t *type, ...)
 {
