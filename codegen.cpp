@@ -541,7 +541,7 @@ static Value *emit_tuplelen(Value *t)
 
 static Value *emit_arraylen(Value *t)
 {
-    Value *lenbits = emit_nthptr(t, 2);
+    Value *lenbits = emit_nthptr(t, 3);
 #ifdef BITS64
     return builder.CreateTrunc(builder.CreatePtrToInt(lenbits, T_int64),
                                T_int32);
@@ -644,7 +644,7 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
                     bool isbool=false;
                     if (elty==T_int1) { elty = T_int8; isbool=true; }
                     Value *data =
-                        builder.CreateBitCast(emit_nthptr(ary, 3),
+                        builder.CreateBitCast(emit_nthptr(ary, 2),
                                               PointerType::get(elty, 0));
                     Value *alen = emit_arraylen(ary);
                     Value *idx = emit_unbox(T_int32, T_pint32,
@@ -672,7 +672,7 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
                     const Type *elty = julia_type_to_llvm(ety);
                     if (elty==T_int1) { elty = T_int8; }
                     Value *data =
-                        builder.CreateBitCast(emit_nthptr(ary, 3),
+                        builder.CreateBitCast(emit_nthptr(ary, 2),
                                               PointerType::get(elty, 0));
                     Value *alen = emit_arraylen(ary);
                     Value *idx = emit_unbox(T_int32, T_pint32,

@@ -29,15 +29,17 @@ typedef struct {
     jl_value_t *data[1];
 } jl_tuple_t;
 
-#define ARRAY_INLINE_NBYTES (3*3*sizeof(double))
+#define ARRAY_INLINE_NBYTES (4*4*sizeof(double))
 
 typedef struct {
     JL_VALUE_STRUCT
     jl_tuple_t *dims;
-    size_t length;
     void *data;
-    char _space[ARRAY_INLINE_NBYTES];
-    jl_tuple_t _dims;
+    size_t length;
+    union {
+        char _space[1];
+        void *_pad;
+    };
 } jl_array_t;
 
 typedef struct _jl_type_t {
@@ -427,7 +429,7 @@ jl_tuple_t *jl_flatten_pairs(jl_tuple_t *t);
 jl_tuple_t *jl_pair(jl_value_t *a, jl_value_t *b);
 DLLEXPORT jl_sym_t *jl_symbol(const char *str);
 DLLEXPORT jl_sym_t *jl_gensym();
-jl_array_t *jl_new_array(jl_type_t *atype, jl_value_t **dimargs, size_t ndims);
+jl_array_t *jl_alloc_array_1d(jl_type_t *atype, size_t nr);
 DLLEXPORT jl_array_t *jl_cstr_to_array(char *str);
 jl_array_t *jl_alloc_cell_1d(size_t n);
 jl_value_t *jl_arrayref(jl_array_t *a, size_t i);  // 0-indexed

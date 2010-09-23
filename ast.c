@@ -169,8 +169,7 @@ static jl_value_t *scm_to_julia(value_t e)
     }
     if (fl_isstring(e)) {
         size_t len = cvalue_len(e);
-        jl_value_t *dims = jl_box_int32(len+1);
-        jl_array_t *a = jl_new_array(jl_array_uint8_type, &dims, 1);
+        jl_array_t *a = jl_alloc_array_1d(jl_array_uint8_type, len+1);
         memcpy(a->data, cvalue_data(e), len);
         ((char*)a->data)[len] = '\0';
         a->length--;

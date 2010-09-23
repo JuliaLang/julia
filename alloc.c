@@ -59,15 +59,18 @@ jl_sym_t *Any_sym;
 jl_sym_t *static_typeof_sym;
 
 /*
+static int sizebins[] = {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+                         0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
+
 // distribution of object sizes
 (gdb) p sizebins[0]   $1 = 0
 (gdb) p sizebins[1]   $2 = 0
 (gdb) p sizebins[2]   $3 = 2
-(gdb) p sizebins[3]   $4 = 794256
-(gdb) p sizebins[4]   $5 = 2608590
-(gdb) p sizebins[5]   $6 = 19808
-(gdb) p sizebins[6]   $7 = 428950
-(gdb) p sizebins[7]   $8 = 28894
+(gdb) p sizebins[3]   $4 = 762210
+(gdb) p sizebins[4]   $5 = 2575571
+(gdb) p sizebins[5]   $6 = 365939
+(gdb) p sizebins[6]   $7 = 3015
+(gdb) p sizebins[7]   $8 = 28131
 (gdb) p sizebins[8]   $9 = 85
 (gdb) p sizebins[9]   $10 = 19
 (gdb) p sizebins[10]  $11 = 2
@@ -691,47 +694,45 @@ void *jl_unbox_pointer(jl_value_t *v)
 
 // array constructors ---------------------------------------------------------
 
-jl_array_t *jl_new_array(jl_type_t *atype, jl_value_t **dimargs, size_t ndims)
+static
+jl_array_t *jl_new_array(jl_type_t *atype, jl_value_t **dimargs, size_t ndims,
+                         jl_tuple_t *dims_as_tuple)
 {
+    size_t i, tot;
     size_t nel=1;
-    jl_array_t *a = allocb(sizeof(jl_array_t) +
-                           (ndims?(ndims-1):0)*sizeof(jl_value_t*));
-    a->type = atype;
-    a->dims = &a->_dims;
-    a->_dims.type = (jl_type_t*)jl_tuple_type;
-    a->_dims.length = ndims;
-    size_t i;
     if (ndims == 0) nel = 0;
     for(i=0; i < ndims; i++) {
         assert(jl_is_int32(dimargs[i]));
         size_t d = jl_unbox_int32(dimargs[i]);
         nel *= d;
-        jl_tupleset(a->dims, i, dimargs[i]);
     }
-    a->length = nel;
-
     jl_type_t *el_type = (jl_type_t*)jl_tparam0(atype);
-    void *data;
 
-    if (nel > 0) {
-        if (jl_is_bits_type(el_type)) {
-            size_t tot = jl_bitstype_nbits(el_type)/8 * nel;
-            if (tot <= ARRAY_INLINE_NBYTES) {
-                data = &a->_space[0];
-            }
-            else {
+    if (jl_is_bits_type(el_type))
+        tot = jl_bitstype_nbits(el_type)/8 * nel;
+    else
+        tot = sizeof(void*) * nel;
+
+    void *data;
+    jl_array_t *a;
+
+    if (tot <= ARRAY_INLINE_NBYTES) {
+        a = allocb(sizeof(jl_array_t) + (tot - sizeof(void*)));
+        data = &a->_space[0];
+        if (tot > 0 && !jl_is_bits_type(el_type)) {
+            memset(data, 0, tot);
+        }
+    }
+    else {
+        a = allocb(sizeof(jl_array_t));
+        if (tot > 0) {
+            if (jl_is_bits_type(el_type)) {
 #ifdef BOEHM_GC
                 if (tot >= 200000)
                     data = GC_malloc_atomic_ignore_off_page(tot);
                 else
 #endif
                     data = alloc_pod(tot);
-            }
-        }
-        else {
-            size_t tot = sizeof(void*) * nel;
-            if (tot <= ARRAY_INLINE_NBYTES) {
-                data = &a->_space[0];
             }
             else {
 #ifdef BOEHM_GC
@@ -740,16 +741,34 @@ jl_array_t *jl_new_array(jl_type_t *atype, jl_value_t **dimargs, size_t ndims)
                 else
 #endif
                     data = allocb(tot);
+                memset(data, 0, tot);
             }
-            memset(data, 0, tot);
+        }
+        else {
+            data = NULL;
         }
     }
-    else {
-        data = NULL;
-    }
+
+    a->type = atype;
     a->data = data;
+    a->length = nel;
+    if (dims_as_tuple != NULL) {
+        a->dims = dims_as_tuple;
+    }
+    else {
+        a->dims = jl_alloc_tuple(ndims);
+        for(i=0; i < ndims; i++) {
+            jl_tupleset(a->dims, i, dimargs[i]);
+        }
+    }
 
     return a;
+}
+
+jl_array_t *jl_alloc_array_1d(jl_type_t *atype, size_t nr)
+{
+    jl_value_t *dim = jl_box_int32(nr);
+    return jl_new_array(atype, &dim, 1, NULL);
 }
 
 JL_CALLABLE(jl_new_array_internal)
@@ -765,34 +784,42 @@ JL_CALLABLE(jl_new_array_internal)
     for(i=0; i < nargs; i++) {
         JL_TYPECHK(Array, int32, args[i]);
     }
-    return (jl_value_t*)jl_new_array((jl_type_t*)atype, args, nargs);
+    return (jl_value_t*)jl_new_array((jl_type_t*)atype, args, nargs, NULL);
 }
 
 JL_CALLABLE(jl_generic_array_ctor)
 {
     JL_NARGSV(Array, 1);
     JL_TYPECHK(Array, type, args[0]);
+    size_t i;
     if (nargs==2 && jl_is_tuple(args[1])) {
         jl_tuple_t *d = (jl_tuple_t*)args[1];
-        return jl_new_array_internal
-            ((jl_value_t*)
-             jl_apply_type((jl_value_t*)jl_array_type,
-                           jl_tuple(2, args[0],
-                                    jl_box_int32(d->length))),
-             &jl_tupleref(d,0), d->length);
+        for(i=0; i < d->length; i++) {
+            JL_TYPECHK(Array, int32, jl_tupleref(d,i));
+        }
+        return (jl_value_t*)
+            jl_new_array((jl_type_t*)
+                         jl_apply_type((jl_value_t*)jl_array_type,
+                                       jl_tuple(2, args[0],
+                                                jl_box_int32(d->length))),
+                         &jl_tupleref(d,0), d->length, d);
     }
-    return jl_new_array_internal((jl_value_t*)
-                                 jl_apply_type((jl_value_t*)jl_array_type,
-                                               jl_tuple(2, args[0],
-                                                        jl_box_int32(nargs-1))),
-                                 &args[1], nargs-1);
+    size_t nd = nargs-1;
+    for(i=1; i < nargs; i++) {
+        JL_TYPECHK(Array, int32, args[i]);
+    }
+    return (jl_value_t*)
+        jl_new_array((jl_type_t*)
+                     jl_apply_type((jl_value_t*)jl_array_type,
+                                   jl_tuple(2, args[0],
+                                            jl_box_int32(nd))),
+                     &args[1], nd, NULL);
 }
 
 jl_array_t *jl_cstr_to_array(char *str)
 {
     size_t n = strlen(str);
-    jl_value_t *dims = jl_box_int32(n+1);
-    jl_array_t *a = jl_new_array(jl_array_uint8_type, &dims, 1);
+    jl_array_t *a = jl_alloc_array_1d(jl_array_uint8_type, n+1);
     strcpy(a->data, str);
     // '\0' terminator is there, but hidden from julia
     a->length--;
@@ -802,8 +829,7 @@ jl_array_t *jl_cstr_to_array(char *str)
 
 jl_array_t *jl_alloc_cell_1d(size_t n)
 {
-    jl_value_t *sz = jl_box_int32(n);
-    return jl_new_array(jl_array_any_type, &sz, 1);
+    return jl_alloc_array_1d(jl_array_any_type, n);
 }
 
 // initialization -------------------------------------------------------------

@@ -632,13 +632,10 @@ static void print_function(jl_value_t *v)
 {
     ios_t *s = jl_current_output_stream();
     if (jl_is_gf(v)) {
-        ios_puts("#<generic-function ", s);
+        ios_puts("Methods for generic function ", s);
         ios_puts(jl_gf_name(v)->name, s);
-        ios_putc('>', s);
-#ifdef DEBUG
         ios_putc('\n', s);
         jl_print_method_table((jl_function_t*)v);
-#endif
     }
     else {
         ios_puts("#<closure>", s);
@@ -1187,7 +1184,7 @@ JL_CALLABLE(jl_f_dlsym)
 {
     JL_NARGS(dlsym, 2, 2);
     JL_TYPECHK(dlsym, pointer, args[0]);
-    char *sym;
+    char *sym=NULL;
     if (jl_is_symbol(args[1]))
         sym = ((jl_sym_t*)args[1])->name;
     else if (jl_is_arraystring(args[1]))

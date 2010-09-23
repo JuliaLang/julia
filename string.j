@@ -6,6 +6,11 @@ symbol(a::Array{Uint8,1}) =
 
 gensym() = ccall(dlsym(JuliaDLHandle,"jl_gensym"), Any, ())::Symbol
 
+convert(::Type{Char}, x::Int32)  = box(Char,unbox32(x))
+convert(::Type{Char}, x::Uint32) = box(Char,unbox32(x))
+convert(::Type{Int32}, x::Char)  = boxsi32(unbox32(x))
+convert(::Type{Uint32}, x::Char) = boxui32(unbox32(x))
+
 function string(x)
     cstr = ccall(dlsym(JuliaDLHandle,"jl_print_to_string"),
                  Ptr{Uint8}, (Any,), x)

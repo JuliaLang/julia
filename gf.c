@@ -790,7 +790,8 @@ static void print_methlist(char *name, jl_methlist_t *ml)
     while (ml != NULL) {
         ios_printf(ios_stdout, "%s", name);
         jl_print((jl_value_t*)ml->sig);
-        ios_printf(ios_stdout, "\n");
+        if (ml->next != NULL)
+            ios_printf(ios_stdout, "\n");
         ml = ml->next;
     }
 }
