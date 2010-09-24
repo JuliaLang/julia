@@ -1215,10 +1215,10 @@ void jl_eqtable_put(htable_t *t, jl_value_t *key, jl_value_t *val)
 DLLEXPORT
 jl_value_t *jl_eqtable_get(htable_t *t, jl_value_t *key, jl_value_t *deflt)
 {
-    jl_value_t **bp = (jl_value_t**)ptrhash_bp(t, key);
-    if (*bp == HT_NOTFOUND)
+    jl_value_t *v = (jl_value_t*)ptrhash_get(t, key);
+    if (v == HT_NOTFOUND)
         return deflt;
-    return *bp;
+    return v;
 }
 
 DLLEXPORT

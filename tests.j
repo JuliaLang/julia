@@ -419,6 +419,16 @@ end
 assert( [ ones(2,2)  2*ones(2,1) ] == [ 1 1 2, 1 1 2 ] )
 assert( [ ones(2,2), 2*ones(1,2) ] == [ 1 1, 1 1, 2 2 ] )
 
+# "end"
+X = [ i+2j | i=1:5, j=1:5 ]
+assert(X[end,end] == 15)
+assert(X[2,  end] == 12)
+assert(X[end,  2] == 9)
+assert(X[end-1,2] == 8)
+Y = [2, 1, 4, 3]
+assert(X[Y[end],1] == 5)
+assert(X[end,Y[end]] == 11)
+
 # syntax
 assert((true ? 1 : false ? 2 : 3) == 1)
 

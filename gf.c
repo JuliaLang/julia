@@ -4,6 +4,7 @@
   . GF constructor, add_method
   . dispatch
   . static parameter inference
+  . method specialization, invoking type inference
 */
 #include <stdlib.h>
 #include <stdio.h>
@@ -187,6 +188,12 @@ static jl_function_t *jl_method_table_assoc_exact(jl_methtable_t *mt,
                                                   jl_value_t **args, size_t n)
 {
     if (FASTER_1ARG && n == 1) {
+        /*
+          valgrind says:
+          ==11709== Use of uninitialised value of size 4
+          ==11709==    at 0x8053F51: jl_method_table_assoc_exact (gf.c:191)
+          could this be?
+        */
         jl_value_t *ty = (jl_value_t*)jl_typeof(args[0]);
         if (jl_is_struct_type(ty) || jl_is_bits_type(ty)) {
             uptrint_t uid = ((jl_struct_type_t*)ty)->uid;

@@ -31,6 +31,8 @@ TODO:
 (define range-colon-enabled #t)
 ; in space-sensitive mode "x -y" is 2 expressions, not a subtraction
 (define space-sensitive #f)
+; treat 'end' like a normal symbol instead of a reserved word
+(define end-symbol #f)
 
 (define-macro (with-normal-ops . body)
   `(with-bindings ((ops-by-prec normal-ops)
@@ -48,6 +50,10 @@ TODO:
 
 (define-macro (with-space-sensitive . body)
   `(with-bindings ((space-sensitive #t))
+		  ,@body))
+
+(define-macro (with-end-symbol . body)
+  `(with-bindings ((end-symbol #t))
 		  ,@body))
 
 ; unused characters: @ prefix'
@@ -440,7 +446,8 @@ TODO:
 ; flag an error for tokens that cannot begin an expression
 (define (closing-token? tok)
   (or (eof-object? tok)
-      (memv tok '(#\, #\) #\] #\} #\; end else elseif catch))))
+      (and (eq? tok 'end) (not end-symbol))
+      (memv tok '(#\, #\) #\] #\} #\; else elseif catch))))
 
 (define (parse-unary s)
   (let ((t (require-token s)))
@@ -499,7 +506,9 @@ TODO:
 	           ; ref is syntax, so we can distinguish
 	           ; a[i] = x  from
 	           ; ref(a,i) = x
-		   (loop (list* 'ref ex  (parse-arglist s #\] ))))
+		   (loop (list* 'ref ex
+				(with-end-symbol
+				 (parse-arglist s #\] )))))
 		  ((|.|)
 		   (loop (list (take-token s) ex (parse-atom s))))
 		  ((|.'|)   (take-token s)

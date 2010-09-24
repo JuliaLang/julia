@@ -99,23 +99,43 @@
 		 ,(expand-compare-chain (cddr e)))))
       `(call ,(cadr e) ,(car e) ,(caddr e))))
 
+; replace end inside ex with (call (top size) a n)
+; affects only the closest ref expression, so doesn't go inside nested refs
+(define (replace-end ex a n)
+  (cond ((eq? ex 'end)                `(call (top size) ,a ,n))
+	((or (atom? ex) (quoted? ex)) ex)
+	((eq? (car ex) 'ref)          ex)
+	(else
+	 (cons (car ex)
+	       (map (lambda (x) (replace-end x a n))
+		    (cdr ex))))))
+
 ; : inside indexing means :1:
 ; a:b and a:b:c are ranges instead of calls to colon
-(define (process-indexes i)
-  (map (lambda (x)
-	 (cond ((eq? x ':) '(: (: 1 :)))
-	       ((and (pair? x)
-		     (eq? (car x) ':)
-		     (length= x 3)
-		     (not (eq? (caddr x) ':)))
-		`(call (top Range1) ,(cadr x) ,(caddr x)))
-	       ((and (pair? x)
-		     (eq? (car x) ':)
-		     (length= x 4)
-		     (not (eq? (cadddr x) ':)))
-		`(call (top Range) ,@(cdr x)))
-	       (else       x)))
-       i))
+; expand end to size(a,n)
+; a = array being indexed, i = list of indexes
+(define (process-indexes a i)
+  (let loop ((lst i)
+	     (n   1)
+	     (ret '()))
+    (if (null? lst)
+	(reverse ret)
+	(loop (cdr lst) (+ n 1)
+	      (cons
+	       (let ((x (replace-end (car lst) a n)))
+		 (cond ((eq? x ':) '(: (: 1 :)))
+		       ((and (pair? x)
+			     (eq? (car x) ':)
+			     (length= x 3)
+			     (not (eq? (caddr x) ':)))
+			`(call (top Range1) ,(cadr x) ,(caddr x)))
+		       ((and (pair? x)
+			     (eq? (car x) ':)
+			     (length= x 4)
+			     (not (eq? (cadddr x) ':)))
+			`(call (top Range) ,@(cdr x)))
+		       (else       x)))
+	       ret)))))
 
 (define (function-expr argl body)
   (let ((t (llist-types argl))
@@ -388,10 +408,20 @@
 					       (+ i 1)))))))))
 
    (pattern-lambda (= (ref a . idxs) rhs)
-		   `(call assign ,a ,rhs ,@(process-indexes idxs)))
+		   (if (pair? a)
+		       (let ((g (gensym)))
+			 `(block
+			   (= ,g ,a)
+			   (call assign ,g ,rhs ,@(process-indexes g idxs))))
+		       `(call assign ,a ,rhs ,@(process-indexes a idxs))))
 
    (pattern-lambda (ref a . idxs)
-		   `(call ref ,a ,@(process-indexes idxs)))
+		   (if (pair? a)
+		       (let ((g (gensym)))
+			 `(block
+			   (= ,g ,a)
+			   (call ref ,g ,@(process-indexes g idxs))))
+		       `(call ref ,a ,@(process-indexes a idxs))))
 
    (pattern-lambda (curly type . elts)
 		   `(call (top instantiate_type) ,type ,@elts))
