@@ -77,13 +77,13 @@ end
 
 length(l::Dequeue) = l.size
 
-function print(l::Dequeue)
+function show(l::Dequeue)
     print("dequeue(")
     for i=1:length(l)
         if i > 1
             print(", ")
         end
-        print(l[i])
+        show(l[i])
     end
     print(")")
 end

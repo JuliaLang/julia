@@ -14,8 +14,8 @@ promote_rule{T}(::Type{Complex{T}}, ::Type{Real{T}}) = Complex{T}
 promote_rule{T,S}(::Type{Complex{T}}, ::Type{Real{S}}) = Complex{promote_type(T,S)}
 promote_rule{T,S}(::Type{Complex{T}}, ::Type{Complex{S}}) = Complex{promote_type(T,S)}
 
-function print(c::Complex)
-    print(real(c))
+function show(c::Complex)
+    show(real(c))
     i = imag(c)
     if signbit(i) == -1
         i = -i
@@ -23,7 +23,7 @@ function print(c::Complex)
     else
         print(" + ")
     end
-    print(i)
+    show(i)
     print("i")
 end
 

@@ -578,8 +578,8 @@ int main(int argc, char *argv[])
             ios_flush(ios_stdout);
 
             int end = 0;
-            int print_value = 1;
-            jl_value_t *ast = read_expr_ast(prompt, &end, &print_value);
+            int show_value = 1;
+            jl_value_t *ast = read_expr_ast(prompt, &end, &show_value);
             if (end) {
                 ios_printf(ios_stdout, "\n");
                 break;
@@ -592,15 +592,8 @@ int main(int argc, char *argv[])
                 jl_value_t *value =
                     jl_toplevel_eval_thunk((jl_lambda_info_t*)ast);
                 jl_set_global(jl_system_module, jl_symbol("ans"), value);
-                if (print_value) {
-                    jl_value_t *jl_inspect = *jl_get_bindingp(jl_system_module,
-                                                              jl_symbol("inspect"));
-                    if (jl_inspect && jl_is_function(jl_inspect)) {
-                        jl_apply((jl_function_t*)jl_inspect, &value, 1);
-                    }
-                    else {
-                        jl_show(value);
-                    }
+                if (show_value) {
+                    jl_show(value);
                     ios_printf(ios_stdout, "\n");
                 }
             }

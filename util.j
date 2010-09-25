@@ -7,7 +7,7 @@ end
 
 ls() = system("ls")
 
-show(file::String) = system(strcat("cat ", file))
+catfile(file::String) = system(strcat("cat ", file))
 
 # timing
 

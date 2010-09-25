@@ -20,8 +20,8 @@ promote_rule{T,S}(::Type{Complex{T}}, ::Type{Quaternion{S}}) =
 promote_rule{T,S}(::Type{Real{T}}, ::Type{Quaternion{S}}) =
     Quaternion{promote_type(T,S)}
 
-function print(z::Quaternion)
-    print(z.q0)
+function show(z::Quaternion)
+    show(z.q0)
     i = z.q1
     if sign(i) == -1
         i = -i
@@ -29,7 +29,7 @@ function print(z::Quaternion)
     else
         print(" + ")
     end
-    print(i)
+    show(i)
     print("i")
     j = z.q2
     if sign(j) == -1
@@ -38,7 +38,7 @@ function print(z::Quaternion)
     else
         print(" + ")
     end
-    print(j)
+    show(j)
     print("j")
     k = z.q3
     if sign(k) == -1
@@ -47,7 +47,7 @@ function print(z::Quaternion)
     else
         print(" + ")
     end
-    print(k)
+    show(k)
     print("k")
 end
 

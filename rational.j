@@ -29,10 +29,10 @@ end
 //{T<:Int}(x::Rational{T}, y::T) = x.num // (x.den*y)
 //{T<:Int}(x::T, y::Rational{T}) = (x*y.den) // y.num
 
-function print(x::Rational)
-    print(num(x))
+function show(x::Rational)
+    show(num(x))
     print("//")
-    print(den(x))
+    show(den(x))
 end
 
 num(x::Rational) = x.num

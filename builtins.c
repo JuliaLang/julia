@@ -1390,7 +1390,8 @@ void jl_init_builtins()
 
     add_builtin_method1(jl_hash_gf, (jl_type_t*)jl_sym_type, jl_f_hash_symbol);
 
-    add_builtin("convert", (jl_value_t*)jl_convert_gf);
-    add_builtin("print", (jl_value_t*)jl_show_gf);
-    add_builtin("hash", (jl_value_t*)jl_hash_gf);
+    add_builtin("print",    (jl_value_t*)jl_print_gf);
+    add_builtin("show",     (jl_value_t*)jl_show_gf);
+    add_builtin("convert",  (jl_value_t*)jl_convert_gf);
+    add_builtin("hash",     (jl_value_t*)jl_hash_gf);
 }

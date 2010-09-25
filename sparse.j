@@ -79,10 +79,14 @@ transpose(S::SparseMatrix) = ((I,J,V) = find(S);
 ctranspose(S::SparseMatrix) = ((I,J,V) = find(S); 
                                sparse (J, I, conj(V), S.n, S.m) )
 
-function print(S::SparseMatrix)
+function show(S::SparseMatrix)
     for col = 1 : S.n
         for k = S.colptr[col] : (S.colptr[col+1]-1)
-            print ("(", S.rowval[k], ",", col, ")   ", S.nzval[k], "\n")
+            print("(")
+            show(S.rowval[k])
+            print(",", col, ")   ")
+            show(S.nzval[k])
+            print("\n")
         end
     end
 end

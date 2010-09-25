@@ -18,9 +18,9 @@ function string(x)
                  Any, (Ptr{Uint8},), cstr)::Array{Uint8,1}
     ArrayString(data)
 end
-
+string(s::String) = s
 print(s::ArrayString) = print(s.data)
-inspect(s::ArrayString) = print(quote_string(s).data)
+show(s::ArrayString) = print(quote_string(s).data)
 
 length(s::ArrayString) = length(s.data)
 strcat(ss::ArrayString...) = ArrayString(vcat(map(s->s.data, ss)...))

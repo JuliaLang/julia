@@ -17,17 +17,19 @@ nil() = nil(Any)
 head(x::Cons) = x.head
 tail(x::Cons) = x.tail
 
-function print{T}(l::List{T})
+function show{T}(l::List{T})
     if isa(l,Nil)
         if is(T,Any)
             print("nil()")
         else
-            print("nil(",T,")")
+            print("nil(")
+            show(T)
+            print(")")
         end
     else
         print("list(")
         while true
-            print(head(l))
+            show(head(l))
             l = tail(l)
             if isa(l,Cons)
                 print(", ")

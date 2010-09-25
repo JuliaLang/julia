@@ -433,14 +433,12 @@ function vcat{T}(A::Matrix{T}...)
 end
 
 # iteration support for arrays as ranges
-
 start(a::Array) = 1
 next(a::Array,i) = (a[i],i+1)
 done(a::Array,i) = (i > numel(a))
 isempty(a::Array) = (numel(a) == 0)
 
-# Other functions
-
+# other functions
 reverse(v::Vector) = [ v[length(v)-i+1] | i=1:length(v) ]
 
 diff(a::Vector) = [ a[i+1] - a[i] | i=1:length(a)-1 ]
@@ -454,10 +452,10 @@ function diff(a::Matrix, dim)
     end
 end
 
-# Sort should be stable
-# Thus, if a permutation is required, or records are being sorted
+# sort should be stable
+# thus, if a permutation is required, or records are being sorted
 # a stable sort should be used.
-# If only numbers are being sorted, a faster quicksort can be used.
+# if only numbers are being sorted, a faster quicksort can be used.
 
 sort{T <: Real}(a::Vector{T}) = quicksort(copy(a), 1, length(a))
 
@@ -582,89 +580,6 @@ function permute(A, k::Int)
     A
 end
 
-# Print arrays
-function printall{T}(a::Array{T,1})
-    if is(T,Any)
-        opn = "{"; cls = "}"
-    else
-        opn = "["; cls = "]";
-    end
-    print_comma_array(a, opn, cls)
-end
-
-function printall{T}(a::Array{T,2})
-    for i=1:size(a,1)
-        printcols(a, 1, size(a,2), i)
-        print("\n")
-    end
-end
-
-function print{T}(a::Array{T,1})
-    if is(T,Any)
-        opn = "{"; cls = "}"
-    else
-        opn = "["; cls = "]";
-    end
-    n = a.dims[1]
-    if n <= 10
-        print_comma_array(a, opn, cls)
-    else
-        print_comma_array(a[1:5], opn, "")
-        print(",...,")
-        print_comma_array(a[(n-4):n], "", cls)
-    end
-end
-
-function printcols(a, start, stop, i)
-    for j=start:stop; print(a[i,j]); print(" "); end
-end
-
-function print{T}(a::Array{T,2})
-    m = a.dims[1]
-    n = a.dims[2]
-    print_hdots = false
-    print_vdots = false
-    if 10 < m; print_vdots = true; end
-    if 10 < n; print_hdots = true; end
-    if !print_vdots && !print_hdots
-        for i=1:m
-            printcols(a, 1, n, i)
-            if i<m; print("\n"); end
-        end
-    elseif print_vdots && !print_hdots
-        for i=1:3
-            printcols(a, 1, n, i)
-            print("\n")
-        end
-        print(":\n")
-        for i=m-2:m
-            printcols(a, 1, n, i)
-            if i<m; print("\n"); end
-        end
-    elseif !print_vdots && print_hdots
-        for i=1:m
-            printcols (a, 1, 3, i)
-            if i == 1 || i == m; print(": "); else; print("  "); end
-            printcols (a, n-2, n, i)
-            if i<m; print("\n"); end
-        end
-    else
-        for i=1:3
-            printcols (a, 1, 3, i)
-            if i == 1; print(": "); else; print("  "); end
-            printcols (a, n-2, n, i)
-            print("\n")
-        end
-        print(":\n")
-        for i=m-2:m
-            printcols (a, 1, 3, i)
-            if i == m; print(": "); else; print("  "); end
-            printcols (a, n-2, n, i)
-            if i<m; print("\n"); end
-        end
-    end
-end # print()
-
 function ndmap(body, t::Tuple, it...)
     idx = length(t)-length(it)
     if idx == 0
@@ -676,13 +591,97 @@ function ndmap(body, t::Tuple, it...)
     end
 end
 
-print{T}(a::Array{T,0}) = print("Array(",T,")")
+# show arrays
+function showall{T}(a::Array{T,1})
+    if is(T,Any)
+        opn = "{"; cls = "}"
+    else
+        opn = "["; cls = "]";
+    end
+    show_comma_array(a, opn, cls)
+end
 
-function print(a::Array)
+function showall{T}(a::Array{T,2})
+    for i=1:size(a,1)
+        show_cols(a, 1, size(a,2), i)
+        print("\n")
+    end
+end
+
+function show{T}(a::Array{T,1})
+    if is(T,Any)
+        opn = "{"; cls = "}"
+    else
+        opn = "["; cls = "]";
+    end
+    n = a.dims[1]
+    if n <= 10
+        show_comma_array(a, opn, cls)
+    else
+        show_comma_array(a[1:5], opn, "")
+        print(",...,")
+        show_comma_array(a[(n-4):n], "", cls)
+    end
+end
+
+function show_cols(a, start, stop, i)
+    for j = start:stop
+        show(a[i,j])
+        print(" ")
+    end
+end
+
+function show{T}(a::Array{T,2})
+    m = a.dims[1]
+    n = a.dims[2]
+    print_hdots = false
+    print_vdots = false
+    if 10 < m; print_vdots = true; end
+    if 10 < n; print_hdots = true; end
+    if !print_vdots && !print_hdots
+        for i=1:m
+            show_cols(a, 1, n, i)
+            if i<m; print("\n"); end
+        end
+    elseif print_vdots && !print_hdots
+        for i=1:3
+            show_cols(a, 1, n, i)
+            print("\n")
+        end
+        print(":\n")
+        for i=m-2:m
+            show_cols(a, 1, n, i)
+            if i<m; print("\n"); end
+        end
+    elseif !print_vdots && print_hdots
+        for i=1:m
+            show_cols(a, 1, 3, i)
+            if i == 1 || i == m; print(": "); else; print("  "); end
+            show_cols(a, n-2, n, i)
+            if i<m; print("\n"); end
+        end
+    else
+        for i=1:3
+            show_cols(a, 1, 3, i)
+            if i == 1; print(": "); else; print("  "); end
+            show_cols(a, n-2, n, i)
+            print("\n")
+        end
+        print(":\n")
+        for i=m-2:m
+            show_cols(a, 1, 3, i)
+            if i == m; print(": "); else; print("  "); end
+            show_cols(a, n-2, n, i)
+            if i<m; print("\n"); end
+        end
+    end
+end
+
+show{T}(a::Array{T,0}) = print("Array(",T,")")
+
+function show(a::Array)
     slice2d(a, idxs) = [ a[i, j, idxs...] | i=1:size(a,1), j=1:size(a,2) ]
-    
     tail = size(a)[3:]
-    
     ndmap(idxs->(print("[:, :, ");
                  for i=1:(length(idxs)-1); print(idxs[i],", "); end;
                  print(idxs[length(idxs)], "] =\n");

@@ -1,11 +1,12 @@
-# printing fundamental objects
+# showing fundamental objects
 
-print(x...) = for i=x; print(i); end
+print(x) = show(x)
+print(x...) = (for i=x; print(i); end)
 
-function print_comma_array(ar, open, close)
+function show_comma_array(ar, open, close)
     print(open)
     for i=1:length(ar)
-        print(ar[i])
+        show(ar[i])
         if i < length(ar)
             print(",")
         end
@@ -13,11 +14,11 @@ function print_comma_array(ar, open, close)
     print(close)
 end
 
-function print(e::Expr)
+function show(e::Expr)
     hd = e.head
     if is(hd,`call)
         print(e.args[1])
-        print_comma_array(e.args[2:],"(",")")
+        show_comma_array(e.args[2:],"(",")")
     elseif is(hd,`=)
         print(e.args[1], " = ", e.args[2])
     elseif is(hd,`quote)
@@ -46,7 +47,7 @@ function print(e::Expr)
         print("end\n")
     else
         print(hd)
-        print_comma_array(e.args,"(",")")
+        show_comma_array(e.args,"(",")")
     end
     if !is(e.type, Any)
         if isa(e.type, FuncKind)
@@ -58,5 +59,3 @@ function print(e::Expr)
         end
     end
 end
-
-inspect(x) = print(x)

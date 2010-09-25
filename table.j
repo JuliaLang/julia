@@ -40,14 +40,17 @@ next(t::IdTable, i) = ccall(dlsym(JuliaDLHandle,"jl_eqtable_next"),
 
 isempty(t::IdTable) = is(next(t,0),())
 
-function print(t::IdTable)
+function show(t::IdTable)
     if isempty(t)
         print("idtable()")
         return ()
     end
     print("{")
     for (k, v) = t
-        print(k,"=>",v,", ")
+        show(k)
+        print("=>")
+        show(v)
+        print(", ")
     end
     print("}")
 end
