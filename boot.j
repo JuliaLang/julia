@@ -79,30 +79,29 @@ show(tn::TypeName) = show(tn.name)
 
 #bitstype {32|64} Ptr{T}
 
-type String
-
 typealias Scalar{T} Tensor{T, 0}
 
 type Number{T} <: Scalar{T}
-type Real{T} <: Number{T}
-type Int{T} <: Real{T}
-type Float{T} <: Real{T}
+type Real{T}   <: Number{T}
+type Int{T}    <: Real{T}
+type Float{T}  <: Real{T}
 
 bitstype 8  Bool <: Scalar{Bool}
 bitstype 32 Char <: Scalar{Char}
 
-bitstype 8  Int8 <: Int{Int8}
-bitstype 8  Uint8 <: Int{Uint8}
-bitstype 16 Int16 <: Int{Int16}
+bitstype 8  Int8   <: Int{Int8}
+bitstype 8  Uint8  <: Int{Uint8}
+bitstype 16 Int16  <: Int{Int16}
 bitstype 16 Uint16 <: Int{Uint16}
-bitstype 32 Int32 <: Int{Int32}
+bitstype 32 Int32  <: Int{Int32}
 bitstype 32 Uint32 <: Int{Uint32}
-bitstype 64 Int64 <: Int{Int64}
+bitstype 64 Int64  <: Int{Int64}
 bitstype 64 Uint64 <: Int{Uint64}
 
 bitstype 32 Float32 <: Float{Float32}
 bitstype 64 Float64 <: Float{Float64}
 
+type String
 struct UTF8String <: String
     data::Array{Uint8, 1}
 end
