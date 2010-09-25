@@ -226,7 +226,7 @@ extern jl_typector_t *jl_functype_ctor;
 extern jl_tag_type_t *jl_tensor_type;
 extern jl_struct_type_t *jl_array_type;
 extern jl_typename_t *jl_array_typename;
-extern jl_struct_type_t *jl_arraystring_type;
+extern jl_struct_type_t *jl_utf8_string_type;
 
 extern jl_struct_type_t *jl_box_type;
 extern jl_type_t *jl_box_any_type;
@@ -341,7 +341,7 @@ extern jl_sym_t *static_typeof_sym;
 #define jl_is_task(v)        jl_typeis(v,jl_task_type)
 #define jl_is_func(v)        (jl_is_func_type(jl_typeof(v)) || jl_is_struct_type(v))
 #define jl_is_function(v)    jl_is_func(v)
-#define jl_is_arraystring(v) jl_typeis(v,jl_arraystring_type)
+#define jl_is_utf8_string(v) jl_typeis(v,jl_utf8_string_type)
 #define jl_is_cpointer(v)    jl_is_cpointer_type(jl_typeof(v))
 #define jl_is_pointer(v)     jl_is_cpointer_type(jl_typeof(v))
 #define jl_is_gf(f)          (((jl_function_t*)(f))->fptr==jl_apply_generic)

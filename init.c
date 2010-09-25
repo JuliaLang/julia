@@ -223,5 +223,5 @@ void jl_get_builtin_hooks()
     jl_float64_type = (jl_bits_type_t*)global("Float64");
 
     jl_array_type = (jl_struct_type_t*)global("Array");
-    jl_arraystring_type = (jl_struct_type_t*)global("ArrayString");
+    jl_utf8_string_type = (jl_struct_type_t*)global("UTF8String");
 }

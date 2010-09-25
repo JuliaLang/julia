@@ -174,7 +174,7 @@ static jl_value_t *scm_to_julia(value_t e)
         ((char*)a->data)[len] = '\0';
         a->length--;
         jl_tupleset(a->dims, 0, jl_box_int32(len));
-        return jl_apply((jl_function_t*)jl_arraystring_type,
+        return jl_apply((jl_function_t*)jl_utf8_string_type,
                         (jl_value_t**)&a,
                         1);
     }

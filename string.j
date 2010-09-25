@@ -1,4 +1,4 @@
-symbol(s::ArrayString) =
+symbol(s::UTF8String) =
     ccall(dlsym(JuliaDLHandle,"jl_symbol"), Any, (Ptr{Uint8},), s.data)::Symbol
 
 symbol(a::Array{Uint8,1}) =
@@ -16,22 +16,22 @@ function string(x)
                  Ptr{Uint8}, (Any,), x)
     data = ccall(dlsym(JuliaDLHandle,"jl_cstr_to_array"),
                  Any, (Ptr{Uint8},), cstr)::Array{Uint8,1}
-    ArrayString(data)
+    UTF8String(data)
 end
 string(s::String) = s
-print(s::ArrayString) = print(s.data)
-show(s::ArrayString) = print(quote_string(s).data)
+print(s::UTF8String) = print(s.data)
+show(s::UTF8String) = print(quote_string(s).data)
 
-length(s::ArrayString) = length(s.data)
-strcat(ss::ArrayString...) = ArrayString(vcat(map(s->s.data, ss)...))
-ref(s::ArrayString, i::Index) = ArrayString([s.data[i]])
-ref(s::ArrayString, x) = ArrayString(s.data[x])
-chr(c::Int) = ArrayString([uint8(c)])
-ord(s::ArrayString) = s.data[1]
+length(s::UTF8String) = length(s.data)
+strcat(ss::UTF8String...) = UTF8String(vcat(map(s->s.data, ss)...))
+ref(s::UTF8String, i::Index) = UTF8String([s.data[i]])
+ref(s::UTF8String, x) = UTF8String(s.data[x])
+chr(c::Int) = UTF8String([uint8(c)])
+ord(s::UTF8String) = s.data[1]
 
-write(io, s::ArrayString) = write(io, s.data)
+write(io, s::UTF8String) = write(io, s.data)
 
-function cmp(a::ArrayString, b::ArrayString)
+function cmp(a::UTF8String, b::UTF8String)
     for i = 1:min(length(a),length(b))
         if a.data[i] != b.data[i]
             return a.data[i] < b.data[i] ? -1 : +1
@@ -41,17 +41,17 @@ function cmp(a::ArrayString, b::ArrayString)
     length(a) > length(b) ? +1 : 0
 end
 
-(<) (a::ArrayString, b::ArrayString) = cmp(a,b) < 0
-(>) (a::ArrayString, b::ArrayString) = cmp(a,b) > 0
-(==)(a::ArrayString, b::ArrayString) = cmp(a,b) == 0
-(<=)(a::ArrayString, b::ArrayString) = cmp(a,b) <= 0
-(>=)(a::ArrayString, b::ArrayString) = cmp(a,b) >= 0
+(<) (a::UTF8String, b::UTF8String) = cmp(a,b) < 0
+(>) (a::UTF8String, b::UTF8String) = cmp(a,b) > 0
+(==)(a::UTF8String, b::UTF8String) = cmp(a,b) == 0
+(<=)(a::UTF8String, b::UTF8String) = cmp(a,b) <= 0
+(>=)(a::UTF8String, b::UTF8String) = cmp(a,b) >= 0
 
-(+)(ss::ArrayString...) = strcat(ss...)
+(+)(ss::UTF8String...) = strcat(ss...)
 
 global escape_strings_with_hex = false
 
-function escape_string(raw::ArrayString)
+function escape_string(raw::UTF8String)
     esc = ""
     for i = 1:length(raw)
         c = ord(raw[i])
@@ -70,7 +70,7 @@ function escape_string(raw::ArrayString)
     esc
 end
 
-function unescape_string(esc::ArrayString)
+function unescape_string(esc::UTF8String)
     raw = ""
     i = 1
     while i <= length(esc)
@@ -126,7 +126,7 @@ function unescape_string(esc::ArrayString)
     raw
 end
 
-function quote_string(raw::ArrayString)
+function quote_string(raw::UTF8String)
     esc = escape_string(raw)
     quo = "\""
     for i = 1:length(esc)
@@ -135,7 +135,7 @@ function quote_string(raw::ArrayString)
     quo += "\""
 end
 
-function lpad(s::ArrayString, n::Int, p::ArrayString)
+function lpad(s::UTF8String, n::Int, p::UTF8String)
     if n <= length(s)
         return s
     end
@@ -146,7 +146,7 @@ function lpad(s::ArrayString, n::Int, p::ArrayString)
     ps[length(ps)-n+1:length(ps)]
 end
 
-function rpad(s::ArrayString, n::Int, p::ArrayString)
+function rpad(s::UTF8String, n::Int, p::UTF8String)
     if n <= length(s)
         return s
     end
@@ -159,7 +159,7 @@ end
 
 ## string to integer functions ##
 
-function parse_int(T::Type{Int}, str::ArrayString, base::Int)
+function parse_int(T::Type{Int}, str::UTF8String, base::Int)
     n = zero(T)
     base = convert(T,base)
     for i = 1:length(str)
@@ -191,7 +191,7 @@ function uint2str(n::Int, base::Int)
     ccall(dlsym(JuliaDLHandle,"uint2str"), Ptr{Uint8},
           (Ptr{Uint8}, Size, Uint64, Uint32),
           data, sz, uint64(n), uint32(base))
-    ArrayString(data[:(sz-1)]) # cut out terminating NUL
+    UTF8String(data[:(sz-1)]) # cut out terminating NUL
 end
 
 uint2str(n::Int, base::Int, len::Int) = lpad(uint2str(n,base),len,"0")
