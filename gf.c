@@ -608,9 +608,9 @@ static void check_ambiguous(jl_methlist_t *ml, jl_tuple_t *type,
         ios_printf(ios_stdout,
                    "Warning: new definition %s%s is ambiguous with %s%s. "
                    "Make sure %s%s is also defined.\n",
-                   n, jl_print_to_string((jl_value_t*)without_typectors(type)),
-                   n, jl_print_to_string((jl_value_t*)without_typectors(sig)),
-                   n, jl_print_to_string(isect));
+                   n, jl_show_to_string((jl_value_t*)without_typectors(type)),
+                   n, jl_show_to_string((jl_value_t*)without_typectors(sig)),
+                   n, jl_show_to_string(isect));
     }
 }
 
@@ -725,7 +725,7 @@ jl_methlist_t *jl_method_table_insert(jl_methtable_t *mt, jl_tuple_t *type,
 void jl_no_method_error(jl_sym_t *name, jl_value_t **args, size_t nargs)
 {
     jl_tuple_t *argt = (jl_tuple_t*)jl_f_tuple(NULL, args, nargs);
-    char *argt_str = jl_print_to_string(jl_full_type((jl_value_t*)argt));
+    char *argt_str = jl_show_to_string(jl_full_type((jl_value_t*)argt));
     jl_errorf("no method %s%s", name->name, argt_str);
 }
 
@@ -738,7 +738,7 @@ static char *type_summary(jl_value_t *t)
     if (jl_is_some_tag_type(t))
         return ((jl_tag_type_t*)t)->name->name->name;
     ios_printf(ios_stdout, "unexpected argument type: ");
-    jl_print(t);
+    jl_show(t);
     ios_printf(ios_stdout, "\n");
     assert(0);
     return NULL;
@@ -796,14 +796,14 @@ static void print_methlist(char *name, jl_methlist_t *ml)
 {
     while (ml != NULL) {
         ios_printf(ios_stdout, "%s", name);
-        jl_print((jl_value_t*)ml->sig);
+        jl_show((jl_value_t*)ml->sig);
         if (ml->next != NULL)
             ios_printf(ios_stdout, "\n");
         ml = ml->next;
     }
 }
 
-void jl_print_method_table(jl_function_t *gf)
+void jl_show_method_table(jl_function_t *gf)
 {
     char *name = ((jl_sym_t*)jl_t1(gf->env))->name;
     jl_methtable_t *mt = (jl_methtable_t*)jl_t0(gf->env);

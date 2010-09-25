@@ -55,15 +55,15 @@ void jl_type_error(const char *fname, const char *expected, jl_value_t *got)
 {
     jl_errorf("type error: %s: expected %c%s, got %s",
               fname, toupper(expected[0]), &expected[1],
-              jl_print_to_string((jl_value_t*)jl_full_type(got)));
+              jl_show_to_string((jl_value_t*)jl_full_type(got)));
 }
 
 void jl_type_error_rt(const char *fname, const char *context,
                       jl_value_t *ty, jl_value_t *got)
 {
     jl_errorf("type error: %s: in %s, expected %s, got %s",
-              fname, context, jl_print_to_string(ty),
-              jl_print_to_string((jl_value_t*)jl_full_type(got)));
+              fname, context, jl_show_to_string(ty),
+              jl_show_to_string((jl_value_t*)jl_full_type(got)));
 }
 
 /*
@@ -193,7 +193,7 @@ jl_value_t *jl_new_closure_internal(jl_lambda_info_t *li, jl_value_t *env);
 
 jl_value_t *jl_toplevel_eval_thunk(jl_lambda_info_t *thk)
 {
-    //jl_print(thk);
+    //jl_show(thk);
     //ios_printf(ios_stdout, "\n");
     assert(jl_typeof(thk) == (jl_type_t*)jl_lambda_info_type);
     assert(jl_is_expr(thk->ast));
@@ -349,7 +349,7 @@ JL_CALLABLE(jl_f_get_field)
     jl_value_t *v = args[0];
     if (!jl_is_struct_type(jl_typeof(v)))
         jl_errorf("getfield: argument must be a struct, got %s",
-                  jl_print_to_string(v));
+                  jl_show_to_string(v));
     size_t i = field_offset((jl_struct_type_t*)jl_typeof(v),
                             (jl_sym_t*)args[1], 1);
     return ((jl_value_t**)v)[1+i];
@@ -362,7 +362,7 @@ JL_CALLABLE(jl_f_set_field)
     jl_value_t *v = args[0];
     if (!jl_is_struct_type(jl_typeof(v)))
         jl_errorf("setfield: argument must be a struct, got %s",
-                  jl_print_to_string(v));
+                  jl_show_to_string(v));
     jl_struct_type_t *st = (jl_struct_type_t*)jl_typeof(v);
     size_t i = field_offset(st, (jl_sym_t*)args[1], 1);
     ((jl_value_t**)v)[1+i] = jl_convert((jl_type_t*)jl_tupleref(st->types,i),
@@ -436,7 +436,7 @@ void jl_arrayset(jl_array_t *a, size_t i, jl_value_t *rhs)
     jl_value_t *el_type = jl_tparam0(jl_typeof(a));
     if (el_type != (jl_value_t*)jl_any_type) {
         if (!jl_subtype(rhs, el_type, 1))
-            jl_type_error("arrayset", jl_print_to_string(el_type), rhs);
+            jl_type_error("arrayset", jl_show_to_string(el_type), rhs);
     }
     if (jl_is_bits_type(el_type)) {
         size_t nb = jl_bitstype_nbits(el_type)/8;
@@ -526,7 +526,7 @@ JL_CALLABLE(jl_f_convert)
     if (jl_subtype(x, (jl_value_t*)to, 1))
         return x;
     jl_errorf("cannot convert %s to %s",
-              jl_print_to_string(x), jl_print_to_string((jl_value_t*)to));
+              jl_show_to_string(x), jl_show_to_string((jl_value_t*)to));
     return (jl_value_t*)jl_null;
 }
 
@@ -548,7 +548,7 @@ JL_CALLABLE(jl_f_convert_to_ptr)
     }
     else {
         jl_errorf("cannot convert %s to %s",
-                  jl_print_to_string(v), jl_print_to_string(args[0]));
+                  jl_show_to_string(v), jl_show_to_string(args[0]));
     }
     return jl_box_pointer((jl_bits_type_t*)args[0], p);
 }
@@ -557,12 +557,24 @@ JL_CALLABLE(jl_f_convert_to_ptr)
 
 jl_function_t *jl_print_gf;
 
-static void call_print(jl_value_t *v)
+JL_CALLABLE(jl_f_print_array_uint8)
 {
-    jl_apply(jl_print_gf, &v, 1);
+    ios_t *s = jl_current_output_stream();
+    jl_array_t *b = (jl_array_t*)args[0];
+    ios_write(s, (char*)b->data, b->length);
+    return (jl_value_t*)jl_null;
 }
 
-char *jl_print_to_string(jl_value_t *v)
+// --- showing ---
+
+jl_function_t *jl_show_gf;
+
+static void call_show(jl_value_t *v)
+{
+    jl_apply(jl_show_gf, &v, 1);
+}
+
+char *jl_show_to_string(jl_value_t *v)
 {
     ios_t dest;
     ios_mem(&dest, 0);
@@ -570,7 +582,7 @@ char *jl_print_to_string(jl_value_t *v)
     // if an error occurs during printing.
     JL_TRY {
         jl_set_current_output_stream(&dest);
-        jl_print(v);
+        jl_show(v);
     }
     JL_CATCH {
         jl_raise();
@@ -579,26 +591,26 @@ char *jl_print_to_string(jl_value_t *v)
     return ios_takebuf(&dest, &n);
 }
 
-void jl_print(jl_value_t *v)
+void jl_show(jl_value_t *v)
 {
-    call_print(v);
+    call_show(v);
 }
 
 // comma_one prints a comma for 1 element, e.g. "(x,)"
-static void print_tuple(jl_tuple_t *t, char opn, char cls, int comma_one)
+static void show_tuple(jl_tuple_t *t, char opn, char cls, int comma_one)
 {
     ios_t *s = jl_current_output_stream();
     ios_putc(opn, s);
     size_t i, n=t->length;
     for(i=0; i < n; i++) {
-        call_print(jl_tupleref(t, i));
+        call_show(jl_tupleref(t, i));
         if ((i < n-1) || (n==1 && comma_one))
             ios_putc(',', s);
     }
     ios_putc(cls, s);
 }
 
-static void print_type(jl_value_t *t)
+static void show_type(jl_value_t *t)
 {
     ios_t *s = jl_current_output_stream();
     if (jl_is_func_type(t)) {
@@ -606,17 +618,17 @@ static void print_type(jl_value_t *t)
             ios_write(s, "Function", 8);
         }
         else {
-            call_print((jl_value_t*)((jl_func_type_t*)t)->from);
+            call_show((jl_value_t*)((jl_func_type_t*)t)->from);
             ios_write(s, "-->", 3);
-            call_print((jl_value_t*)((jl_func_type_t*)t)->to);
+            call_show((jl_value_t*)((jl_func_type_t*)t)->to);
         }
     }
     else if (jl_is_union_type(t)) {
         ios_write(s, "Union", 5);
-        print_tuple(((jl_uniontype_t*)t)->types, '(', ')', 0);
+        show_tuple(((jl_uniontype_t*)t)->types, '(', ')', 0);
     }
     else if (jl_is_seq_type(t)) {
-        call_print(jl_tparam0(t));
+        call_show(jl_tparam0(t));
         ios_write(s, "...", 3);
     }
     else {
@@ -624,25 +636,25 @@ static void print_type(jl_value_t *t)
         ios_puts(((jl_tag_type_t*)t)->name->name->name, s);
         jl_tuple_t *p = ((jl_tag_type_t*)t)->parameters;
         if (p->length > 0)
-            print_tuple(p, '{', '}', 0);
+            show_tuple(p, '{', '}', 0);
     }
 }
 
-static void print_function(jl_value_t *v)
+static void show_function(jl_value_t *v)
 {
     ios_t *s = jl_current_output_stream();
     if (jl_is_gf(v)) {
         ios_puts("Methods for generic function ", s);
         ios_puts(jl_gf_name(v)->name, s);
         ios_putc('\n', s);
-        jl_print_method_table((jl_function_t*)v);
+        jl_show_method_table((jl_function_t*)v);
     }
     else {
         ios_puts("#<closure>", s);
     }
 }
 
-static void print_int(void *data, int nbits)
+static void show_int(void *data, int nbits)
 {
     ios_t *s = jl_current_output_stream();
     switch (nbits) {
@@ -663,7 +675,7 @@ static void print_int(void *data, int nbits)
     }
 }
 
-static void print_uint(void *data, int nbits)
+static void show_uint(void *data, int nbits)
 {
     ios_t *s = jl_current_output_stream();
     switch (nbits) {
@@ -684,7 +696,7 @@ static void print_uint(void *data, int nbits)
     }
 }
 
-static void print_float64(double d, int single)
+static void show_float64(double d, int single)
 {
     ios_t *s = jl_current_output_stream();
     char buf[64];
@@ -692,9 +704,9 @@ static void print_float64(double d, int single)
     if (!DFINITE(d)) {
         char *rep;
         if (isnan(d))
-            rep = sign_bit(d) ? "-NaN" : " NaN";
+            rep = sign_bit(d) ? "-NaN" : "NaN";
         else
-            rep = sign_bit(d) ? "-Inf" : " Inf";
+            rep = sign_bit(d) ? "-Inf" : "Inf";
         if (single)
             ios_printf(s, "float32(%s)", rep);
         else
@@ -704,22 +716,17 @@ static void print_float64(double d, int single)
         if (1/d < 0)
             ios_puts("-0.0", s);
         else
-            ios_puts(" 0.0", s);
+            ios_puts("0.0", s);
     }
     else {
         snprint_real(buf, sizeof(buf), d, 0, ndec, 3, 10);
         int hasdec = (strpbrk(buf, ".eE") != NULL);
-	if (d > 0) {
-	  ios_puts(" ", s);
-	  ios_puts(buf, s);
-	} else {
-	  ios_puts(buf, s);
-	}
+	    ios_puts(buf, s);
         if (!hasdec) ios_puts(".0", s);
     }
 }
 
-JL_CALLABLE(jl_f_print_bool)
+JL_CALLABLE(jl_f_show_bool)
 {
     ios_t *s = jl_current_output_stream();
     if (jl_unbox_bool(args[0]) == 0)
@@ -729,7 +736,7 @@ JL_CALLABLE(jl_f_print_bool)
     return (jl_value_t*)jl_null;
 }
 
-JL_CALLABLE(jl_f_print_char)
+JL_CALLABLE(jl_f_show_char)
 {
     ios_t *s = jl_current_output_stream();
     u_int32_t wc = *(uint32_t*)jl_bits_data(args[0]);
@@ -739,42 +746,42 @@ JL_CALLABLE(jl_f_print_char)
     return (jl_value_t*)jl_null;
 }
 
-JL_CALLABLE(jl_f_print_float32)
+JL_CALLABLE(jl_f_show_float32)
 {
-    print_float64((double)*(float*)jl_bits_data(args[0]), 1);
+    show_float64((double)*(float*)jl_bits_data(args[0]), 1);
     return (jl_value_t*)jl_null;
 }
 
-JL_CALLABLE(jl_f_print_float64)
+JL_CALLABLE(jl_f_show_float64)
 {
-    print_float64(*(double*)jl_bits_data(args[0]), 0);
+    show_float64(*(double*)jl_bits_data(args[0]), 0);
     return (jl_value_t*)jl_null;
 }
 
-#define INT_PRINT_FUNC(sgn,nb)                  \
-JL_CALLABLE(jl_f_print_##sgn##nb)               \
-{                                               \
-    print_##sgn(jl_bits_data(args[0]), nb);     \
-    return (jl_value_t*)jl_null;                \
+#define INT_SHOW_FUNC(sgn,nb)               \
+JL_CALLABLE(jl_f_show_##sgn##nb)            \
+{                                           \
+    show_##sgn(jl_bits_data(args[0]), nb);  \
+    return (jl_value_t*)jl_null;            \
 }
 
-INT_PRINT_FUNC(int,8)
-INT_PRINT_FUNC(uint,8)
-INT_PRINT_FUNC(int,16)
-INT_PRINT_FUNC(uint,16)
-INT_PRINT_FUNC(int,32)
-INT_PRINT_FUNC(uint,32)
-INT_PRINT_FUNC(int,64)
-INT_PRINT_FUNC(uint,64)
+INT_SHOW_FUNC(int,8)
+INT_SHOW_FUNC(uint,8)
+INT_SHOW_FUNC(int,16)
+INT_SHOW_FUNC(uint,16)
+INT_SHOW_FUNC(int,32)
+INT_SHOW_FUNC(uint,32)
+INT_SHOW_FUNC(int,64)
+INT_SHOW_FUNC(uint,64)
 
-JL_CALLABLE(jl_f_print_pointer)
+JL_CALLABLE(jl_f_show_pointer)
 {
     ios_t *s = jl_current_output_stream();
     void *ptr = *(void**)jl_bits_data(args[0]);
     if (jl_typeis(args[0],jl_pointer_void_type))
         ios_printf(s, "Ptr{Void}");
     else
-        jl_print((jl_value_t*)jl_typeof(args[0]));
+        jl_show((jl_value_t*)jl_typeof(args[0]));
 #ifdef BITS64
     ios_printf(s, " @0x%016x", (uptrint_t)ptr);
 #else
@@ -783,61 +790,52 @@ JL_CALLABLE(jl_f_print_pointer)
     return (jl_value_t*)jl_null;
 }
 
-JL_CALLABLE(jl_f_print_symbol)
+JL_CALLABLE(jl_f_show_symbol)
 {
     ios_t *s = jl_current_output_stream();
     ios_puts(((jl_sym_t*)args[0])->name, s);
     return (jl_value_t*)jl_null;
 }
 
-JL_CALLABLE(jl_f_print_typevar)
+JL_CALLABLE(jl_f_show_typevar)
 {
     ios_t *s = jl_current_output_stream();
     jl_tvar_t *tv = (jl_tvar_t*)args[0];
     if (tv->lb != (jl_value_t*)jl_bottom_type) {
-        call_print((jl_value_t*)tv->lb);
+        call_show((jl_value_t*)tv->lb);
         ios_puts("<:", s);
     }
     ios_puts(tv->name->name, s);
     if (tv->ub != (jl_value_t*)jl_any_type) {
         ios_puts("<:", s);
-        call_print((jl_value_t*)tv->ub);
+        call_show((jl_value_t*)tv->ub);
     }
     return (jl_value_t*)jl_null;
 }
 
-JL_CALLABLE(jl_f_print_linfo)
+JL_CALLABLE(jl_f_show_linfo)
 {
     ios_t *s = jl_current_output_stream();
     ios_puts("AST(", s);
-    jl_print(((jl_lambda_info_t*)args[0])->ast);
+    jl_show(((jl_lambda_info_t*)args[0])->ast);
     ios_putc(')', s);
     return (jl_value_t*)jl_null;
 }
 
-JL_CALLABLE(jl_f_print_string)
-{
-    ios_t *s = jl_current_output_stream();
-    jl_array_t *b = (jl_array_t*)args[0];
-
-    ios_write(s, (char*)b->data, b->length);
-    return (jl_value_t*)jl_null;
-}
-
-JL_CALLABLE(jl_f_print_any)
+JL_CALLABLE(jl_f_show_any)
 {
     JL_NARGS(print, 1, 1);
     // fallback for printing some other builtin types
     ios_t *s = jl_current_output_stream();
     jl_value_t *v = args[0];
     if (jl_is_tuple(v)) {
-        print_tuple((jl_tuple_t*)v, '(', ')', 1);
+        show_tuple((jl_tuple_t*)v, '(', ')', 1);
     }
     else if (jl_is_type(v)) {
-        print_type(v);
+        show_type(v);
     }
     else if (jl_is_func(v)) {
-        print_function(v);
+        show_function(v);
     }
     else if (jl_typeis(v,jl_intrinsic_type)) {
         ios_printf(s, "#<intrinsic-function %d>", *(uint32_t*)jl_bits_data(v));
@@ -845,7 +843,7 @@ JL_CALLABLE(jl_f_print_any)
     else {
         jl_value_t *t = (jl_value_t*)jl_typeof(v);
         if (jl_is_bits_type(t)) {
-            print_uint(jl_bits_data(v), jl_bitstype_nbits(t));
+            show_uint(jl_bits_data(v), jl_bitstype_nbits(t));
         }
         else {
             assert(jl_is_struct_type(t));
@@ -855,7 +853,7 @@ JL_CALLABLE(jl_f_print_any)
             size_t i;
             size_t n = st->names->length;
             for(i=0; i < n; i++) {
-                call_print(((jl_value_t**)v)[i+1]);
+                call_show(((jl_value_t**)v)[i+1]);
                 if (i < n-1)
                     ios_putc(',', s);
             }
@@ -1109,7 +1107,7 @@ static void check_type_tuple(jl_tuple_t *t)
     for(i=0; i < t->length; i++) {
         jl_value_t *elt = jl_tupleref(t,i);
         if (!jl_is_type(elt) && !jl_is_typector(elt) && !jl_is_typevar(elt)) {
-            char *argstr = jl_print_to_string(elt);
+            char *argstr = jl_show_to_string(elt);
             jl_errorf("invalid type %s in method definition", argstr);
         }
     }
@@ -1356,24 +1354,29 @@ void jl_init_builtins()
 {
     jl_print_gf = jl_new_generic_function(jl_symbol("print"));
 
-    add_builtin_method1(jl_print_gf, (jl_type_t*)jl_any_type,     jl_f_print_any);
-    add_builtin_method1(jl_print_gf, (jl_type_t*)jl_sym_type,     jl_f_print_symbol);
-    add_builtin_method1(jl_print_gf, (jl_type_t*)jl_tvar_type,    jl_f_print_typevar);
-    add_builtin_method1(jl_print_gf, (jl_type_t*)jl_lambda_info_type, jl_f_print_linfo);
-    add_builtin_method1(jl_print_gf, (jl_type_t*)jl_array_uint8_type, jl_f_print_string);
-    add_builtin_method1(jl_print_gf, (jl_type_t*)jl_float32_type, jl_f_print_float32);
-    add_builtin_method1(jl_print_gf, (jl_type_t*)jl_float64_type, jl_f_print_float64);
-    add_builtin_method1(jl_print_gf, (jl_type_t*)jl_int8_type,    jl_f_print_int8);
-    add_builtin_method1(jl_print_gf, (jl_type_t*)jl_uint8_type,   jl_f_print_uint8);
-    add_builtin_method1(jl_print_gf, (jl_type_t*)jl_int16_type,   jl_f_print_int16);
-    add_builtin_method1(jl_print_gf, (jl_type_t*)jl_uint16_type,  jl_f_print_uint16);
-    add_builtin_method1(jl_print_gf, (jl_type_t*)jl_int32_type,   jl_f_print_int32);
-    add_builtin_method1(jl_print_gf, (jl_type_t*)jl_uint32_type,  jl_f_print_uint32);
-    add_builtin_method1(jl_print_gf, (jl_type_t*)jl_int64_type,   jl_f_print_int64);
-    add_builtin_method1(jl_print_gf, (jl_type_t*)jl_uint64_type,  jl_f_print_uint64);
-    add_builtin_method1(jl_print_gf, (jl_type_t*)jl_bool_type,    jl_f_print_bool);
-    add_builtin_method1(jl_print_gf, (jl_type_t*)jl_char_type,    jl_f_print_char);
-    add_builtin_method1(jl_print_gf, (jl_type_t*)jl_pointer_type, jl_f_print_pointer);
+    add_builtin_method1(jl_print_gf,
+                        (jl_type_t*)jl_array_uint8_type,
+                        jl_f_print_array_uint8);
+
+    jl_show_gf = jl_new_generic_function(jl_symbol("show"));
+
+    add_builtin_method1(jl_show_gf, (jl_type_t*)jl_any_type,         jl_f_show_any);
+    add_builtin_method1(jl_show_gf, (jl_type_t*)jl_sym_type,         jl_f_show_symbol);
+    add_builtin_method1(jl_show_gf, (jl_type_t*)jl_tvar_type,        jl_f_show_typevar);
+    add_builtin_method1(jl_show_gf, (jl_type_t*)jl_lambda_info_type, jl_f_show_linfo);
+    add_builtin_method1(jl_show_gf, (jl_type_t*)jl_float32_type,     jl_f_show_float32);
+    add_builtin_method1(jl_show_gf, (jl_type_t*)jl_float64_type,     jl_f_show_float64);
+    add_builtin_method1(jl_show_gf, (jl_type_t*)jl_int8_type,        jl_f_show_int8);
+    add_builtin_method1(jl_show_gf, (jl_type_t*)jl_uint8_type,       jl_f_show_uint8);
+    add_builtin_method1(jl_show_gf, (jl_type_t*)jl_int16_type,       jl_f_show_int16);
+    add_builtin_method1(jl_show_gf, (jl_type_t*)jl_uint16_type,      jl_f_show_uint16);
+    add_builtin_method1(jl_show_gf, (jl_type_t*)jl_int32_type,       jl_f_show_int32);
+    add_builtin_method1(jl_show_gf, (jl_type_t*)jl_uint32_type,      jl_f_show_uint32);
+    add_builtin_method1(jl_show_gf, (jl_type_t*)jl_int64_type,       jl_f_show_int64);
+    add_builtin_method1(jl_show_gf, (jl_type_t*)jl_uint64_type,      jl_f_show_uint64);
+    add_builtin_method1(jl_show_gf, (jl_type_t*)jl_bool_type,        jl_f_show_bool);
+    add_builtin_method1(jl_show_gf, (jl_type_t*)jl_char_type,        jl_f_show_char);
+    add_builtin_method1(jl_show_gf, (jl_type_t*)jl_pointer_type,     jl_f_show_pointer);
 
     jl_convert_gf = jl_new_generic_function(jl_symbol("convert"));
     jl_add_method(jl_convert_gf,
@@ -1388,6 +1391,6 @@ void jl_init_builtins()
     add_builtin_method1(jl_hash_gf, (jl_type_t*)jl_sym_type, jl_f_hash_symbol);
 
     add_builtin("convert", (jl_value_t*)jl_convert_gf);
-    add_builtin("print", (jl_value_t*)jl_print_gf);
+    add_builtin("print", (jl_value_t*)jl_show_gf);
     add_builtin("hash", (jl_value_t*)jl_hash_gf);
 }

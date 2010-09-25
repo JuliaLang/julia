@@ -261,7 +261,7 @@ extern jl_value_t *jl_false;
 
 extern jl_func_type_t *jl_any_func;
 
-extern jl_function_t *jl_print_gf;
+extern jl_function_t *jl_show_gf;
 extern jl_function_t *jl_bottom_func;
 
 // some important symbols
@@ -499,8 +499,8 @@ jl_value_t *jl_parse_file(const char *fname);
 jl_lambda_info_t *jl_expand(jl_value_t *expr);
 
 // some useful functions
-void jl_print(jl_value_t *v);
-DLLEXPORT char *jl_print_to_string(jl_value_t *v);
+void jl_show(jl_value_t *v);
+DLLEXPORT char *jl_show_to_string(jl_value_t *v);
 jl_value_t *jl_convert(jl_type_t *to, jl_value_t *x);
 
 // modules
@@ -531,7 +531,7 @@ jl_value_t *jl_interpret_toplevel_expr(jl_value_t *e);
 jl_value_t *jl_interpret_toplevel_expr_with(jl_value_t *e,
                                             jl_value_t **locals, size_t nl);
 
-void jl_print_method_table(jl_function_t *gf);
+void jl_show_method_table(jl_function_t *gf);
 jl_function_t *jl_instantiate_method(jl_function_t *f, jl_tuple_t *sp);
 jl_lambda_info_t *jl_add_static_parameters(jl_lambda_info_t *l, jl_tuple_t *sp);
 

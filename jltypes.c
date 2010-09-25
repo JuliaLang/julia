@@ -626,7 +626,7 @@ jl_value_t *jl_type_intersection_matching(jl_value_t *a, jl_value_t *b,
     if (ti == (jl_value_t*)jl_bottom_type)
         return ti;
     if (*penv != jl_null) {
-        //jl_print(*penv); ios_printf(ios_stdout,"\n");
+        //jl_show(*penv); ios_printf(ios_stdout,"\n");
         jl_tuple_t *p = *penv;
         while (p != jl_null) {
             jl_tvar_t *tv = (jl_tvar_t*)jl_t0(p);
@@ -782,7 +782,7 @@ static jl_value_t *apply_type_(jl_value_t *tc, jl_value_t **params, size_t n)
         if (!jl_is_typector(pi) && !jl_is_type(pi) && !jl_is_int32(pi) &&
             !jl_is_typevar(pi))
             jl_errorf("invalid parameter %s for type %s",
-                      jl_print_to_string(pi), tname);
+                      jl_show_to_string(pi), tname);
     }
     if (tc == (jl_value_t*)jl_ntuple_type && (n==1||n==2) &&
         jl_is_int32(params[0])) {
@@ -816,8 +816,8 @@ static jl_value_t *apply_type_(jl_value_t *tc, jl_value_t **params, size_t n)
                 params[i] != (jl_value_t*)jl_undef_type &&
                 !jl_subtype(params[i], (jl_value_t*)tv, 0))
                 jl_errorf("%s: %s does not match type parameter %s",
-                          tname, jl_print_to_string(params[i]),
-                          jl_print_to_string((jl_value_t*)tv));
+                          tname, jl_show_to_string(params[i]),
+                          jl_show_to_string((jl_value_t*)tv));
             if (jl_is_typector(params[i]))
                 env[i*2+1] = (jl_value_t*)((jl_typector_t*)params[i])->body;
             else

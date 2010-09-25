@@ -170,7 +170,7 @@ static const Type *julia_type_to_llvm(jl_value_t *jt)
         return jl_pvalue_llvmt;
     if (jt == (jl_value_t*)jl_bottom_type) return T_void;
     jl_errorf("cannot convert type %s to a native type",
-              jl_print_to_string(jt));
+              jl_show_to_string(jt));
     return NULL;
 }
 
@@ -310,7 +310,7 @@ extern "C" void *jl_value_to_pointer(jl_value_t *jt, jl_value_t *v, int argn)
         }
     }
     jl_errorf("ccall: expected Ptr{%s} as argument %d",
-              jl_print_to_string(jt), argn);
+              jl_show_to_string(jt), argn);
     return (jl_value_t*)jl_null;
 }
 

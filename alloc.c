@@ -475,7 +475,7 @@ jl_uniontype_t *jl_new_uniontype(jl_tuple_t *types)
 {
     if (jl_union_too_complex(types)) {
         jl_errorf("union type pattern too complex: %s",
-                  jl_print_to_string((jl_value_t*)types));
+                  jl_show_to_string((jl_value_t*)types));
     }
     jl_uniontype_t *t = (jl_uniontype_t*)newobj((jl_type_t*)jl_union_kind, 1);
     // don't make unions of 1 type; Union(T)==T
@@ -777,7 +777,7 @@ JL_CALLABLE(jl_new_array_internal)
     jl_value_t *ndims = jl_tupleref(atype->parameters,1);
     if (!jl_is_int32(ndims))
         jl_errorf("Array: incomplete type %s",
-                  jl_print_to_string((jl_value_t*)atype));
+                  jl_show_to_string((jl_value_t*)atype));
     size_t nd = jl_unbox_int32(ndims);
     JL_NARGS(Array, nd, nd);
     size_t i;

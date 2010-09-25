@@ -547,7 +547,7 @@ int main(int argc, char *argv[])
             jl_value_t *ast = jl_parse_input_line(eval_exprs[i]);
             jl_value_t *value = jl_toplevel_eval_thunk((jl_lambda_info_t*)ast);
             if (print_exprs[i]) {
-                jl_print(value);
+                jl_show(value);
                 ios_printf(ios_stdout, "\n");
             }
         }
@@ -599,7 +599,7 @@ int main(int argc, char *argv[])
                         jl_apply((jl_function_t*)jl_inspect, &value, 1);
                     }
                     else {
-                        jl_print(value);
+                        jl_show(value);
                     }
                     ios_printf(ios_stdout, "\n");
                 }

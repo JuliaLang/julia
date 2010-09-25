@@ -12,7 +12,7 @@ convert(::Type{Int32}, x::Char)  = boxsi32(unbox32(x))
 convert(::Type{Uint32}, x::Char) = boxui32(unbox32(x))
 
 function string(x)
-    cstr = ccall(dlsym(JuliaDLHandle,"jl_print_to_string"),
+    cstr = ccall(dlsym(JuliaDLHandle,"jl_show_to_string"),
                  Ptr{Uint8}, (Any,), x)
     data = ccall(dlsym(JuliaDLHandle,"jl_cstr_to_array"),
                  Any, (Ptr{Uint8},), cstr)::Array{Uint8,1}
