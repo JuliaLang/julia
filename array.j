@@ -323,7 +323,7 @@ ref(A::Matrix,I,J) = [ A[i,j] | i = jl_fill_endpts(A,1,I),
 ref(A::Matrix,i::Index,J) = [ A[i,j] | j = jl_fill_endpts(A,2,J) ]
 ref(A::Matrix,I,j::Index) = [ A[i,j] | i = jl_fill_endpts(A,1,I) ]
 
-function ref(a::Array, I::Index...) 
+function ref(a::Array, I::Index...)
     dims = a.dims
     ndims = length(I)
 
