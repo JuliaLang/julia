@@ -58,10 +58,10 @@ show(tn::TypeName) = show(tn.name)
 #    body
 #end
 
-#type Tensor{T, N}
+#type Tensor{T,N}
 
-#struct Array{T, N} <: Tensor{T, N}
-#    dims::NTuple{N, Int32}
+#struct Array{T,N} <: Tensor{T,N}
+#    dims::NTuple{N,Int32}
 #end
 
 #struct Expr
@@ -79,7 +79,7 @@ show(tn::TypeName) = show(tn.name)
 
 #bitstype {32|64} Ptr{T}
 
-typealias Scalar{T} Tensor{T, 0}
+typealias Scalar{T} Tensor{T,0}
 
 type Number{T} <: Scalar{T}
 type Real{T}   <: Number{T}
