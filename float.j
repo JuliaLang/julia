@@ -7,6 +7,7 @@ convert(::Type{Float32}, x::Int64)   = boxf32(sitofp32(unbox64(x)))
 convert(::Type{Float32}, x::Uint8)   = boxf32(uitofp32(unbox8(x)))
 convert(::Type{Float32}, x::Uint16)  = boxf32(uitofp32(unbox16(x)))
 convert(::Type{Float32}, x::Uint32)  = boxf32(uitofp32(unbox32(x)))
+convert(::Type{Float32}, x::Char)    = boxf32(uitofp32(unbox32(x)))
 convert(::Type{Float32}, x::Uint64)  = boxf32(uitofp32(unbox64(x)))
 convert(::Type{Float32}, x::Float64) = boxf32(fptrunc32(unbox64(x)))
 
@@ -17,6 +18,7 @@ convert(::Type{Float64}, x::Int64)   = boxf64(sitofp64(unbox64(x)))
 convert(::Type{Float64}, x::Uint8)   = boxf64(uitofp64(unbox8(x)))
 convert(::Type{Float64}, x::Uint16)  = boxf64(uitofp64(unbox16(x)))
 convert(::Type{Float64}, x::Uint32)  = boxf64(uitofp64(unbox32(x)))
+convert(::Type{Float64}, x::Char)    = boxf64(uitofp64(unbox32(x)))
 convert(::Type{Float64}, x::Uint64)  = boxf64(uitofp64(unbox64(x)))
 convert(::Type{Float64}, x::Float32) = boxf64(fpext64(unbox32(x)))
 
@@ -42,12 +44,15 @@ promote_rule(::Type{Float64}, ::Type{Int64}) = Float64 # TODO: should be Float80
 promote_rule(::Type{Float32}, ::Type{Uint8} ) = Float32
 promote_rule(::Type{Float32}, ::Type{Uint16}) = Float32
 promote_rule(::Type{Float32}, ::Type{Uint32}) = Float64
-promote_rule(::Type{Float32}, ::Type{Uint64}) = Float64# TODO: should be Float80
+promote_rule(::Type{Float32}, ::Type{Uint64}) = Float64 # TODO: should be Float80
 
 promote_rule(::Type{Float64}, ::Type{Uint8} ) = Float64
 promote_rule(::Type{Float64}, ::Type{Uint16}) = Float64
 promote_rule(::Type{Float64}, ::Type{Uint32}) = Float64
-promote_rule(::Type{Float64}, ::Type{Uint64}) = Float64# TODO: should be Float80
+promote_rule(::Type{Float64}, ::Type{Uint64}) = Float64 # TODO: should be Float80
+
+promote_rule(::Type{Float32}, ::Type{Char}) = Float32
+promote_rule(::Type{Float64}, ::Type{Char}) = Float64
 
 ## traits ##
 

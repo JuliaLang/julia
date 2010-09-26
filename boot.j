@@ -87,7 +87,7 @@ type Int{T}    <: Real{T}
 type Float{T}  <: Real{T}
 
 bitstype 8  Bool <: Scalar{Bool}
-bitstype 32 Char <: Scalar{Char}
+bitstype 32 Char <: Int{Char}
 
 bitstype 8  Int8   <: Int{Int8}
 bitstype 8  Uint8  <: Int{Uint8}
