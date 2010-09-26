@@ -1,6 +1,6 @@
 typealias Vector{T} Tensor{T,1}
 typealias Matrix{T} Tensor{T,2}
-typealias Indices{T} Union(Range,Range1,RangeFrom,RangeBy,RangeTo, Vector{T})
+typealias Indices{T} Union(Range,Range1,RangeFrom,RangeBy,RangeTo,Vector{T})
 
 # Basic functions
 size(a::Array) = a.dims
@@ -302,6 +302,11 @@ triu{T}(M::Matrix{T}, k) = [ j-i >= k ? M[i,j] : zero(T) |
                             i=1:size(M,1), j=1:size(M,2) ]
 tril{T}(M::Matrix{T}, k) = [ j-i <= k ? M[i,j] : zero(T) |
                             i=1:size(M,1), j=1:size(M,2) ]
+
+# real indexing
+ref(t::Tensor, r::Real...) = t[map(x->convert(Int32,round(x)),r)...]
+assign(t::Tensor, x, r::Real...) = (t[map(x->convert(Int32,round(x)),r)...] = x)
+
 ## Indexing: ref()
 #TODO: Out-of-bound checks
 ref(a::Array, i::Index) = arrayref(a,i)
@@ -315,13 +320,13 @@ jl_fill_endpts(A,n,R::RangeFrom) = Range(R.start,R.step,size(A,n))
 jl_fill_endpts(A,n,R::RangeTo)   = Range(1,R.step,R.stop)
 jl_fill_endpts(A,n,R)            = R
 
-ref(A::Vector,I) = [ A[i] | i = jl_fill_endpts(A,1,I) ]
-ref(A::Array{Any,1},I) = { A[i] | i = jl_fill_endpts(A,1,I) }
-ref(A::Matrix,I,J) = [ A[i,j] | i = jl_fill_endpts(A,1,I),
-                                j = jl_fill_endpts(A,2,J) ]
+ref(A::Vector,I::Indices) = [ A[i] | i = jl_fill_endpts(A,1,I) ]
+ref(A::Array{Any,1},I::Indices) = { A[i] | i = jl_fill_endpts(A,1,I) }
+ref(A::Matrix,I::Indices,J::Indices) = [ A[i,j] | i = jl_fill_endpts(A,1,I),
+                                                  j = jl_fill_endpts(A,2,J) ]
 
-ref(A::Matrix,i::Index,J) = [ A[i,j] | j = jl_fill_endpts(A,2,J) ]
-ref(A::Matrix,I,j::Index) = [ A[i,j] | i = jl_fill_endpts(A,1,I) ]
+ref(A::Matrix,i::Index,J::Indices) = [ A[i,j] | j = jl_fill_endpts(A,2,J) ]
+ref(A::Matrix,I::Indices,j::Index) = [ A[i,j] | i = jl_fill_endpts(A,1,I) ]
 
 function ref(a::Array, I::Index...)
     dims = a.dims
