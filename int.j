@@ -173,7 +173,7 @@ typemax(::Type{Uint64}) = 18446744073709551615
 
 sizeof(::Type{Union(Int8,Uint8,Bool)})   = 1
 sizeof(::Type{Union(Int16,Uint16)})      = 2
-sizeof(::Type{Union(Int32,Uint32,Char)}) = 4
+sizeof(::Type{Union(Char,Int32,Uint32)}) = 4
 sizeof(::Type{Union(Int64,Uint64)})      = 8
 
 ## basic arithmetic ##
