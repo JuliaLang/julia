@@ -103,5 +103,5 @@ bitstype 64 Float64 <: Float{Float64}
 
 type String
 struct UTF8String <: String
-    data::Array{Uint8, 1}
+    data::Array{Uint8,1}
 end

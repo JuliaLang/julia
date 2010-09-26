@@ -6,16 +6,19 @@ convert(::Type{Int8}, x::Int16) = boxsi8(trunc8(unbox16(x)))
 convert(::Type{Int8}, x::Uint16) = boxsi8(trunc8(unbox16(x)))
 convert(::Type{Int8}, x::Int32) = boxsi8(trunc8(unbox32(x)))
 convert(::Type{Int8}, x::Uint32) = boxsi8(trunc8(unbox32(x)))
+convert(::Type{Int8}, x::Char) = boxsi8(trunc8(unbox32(x)))
 convert(::Type{Int8}, x::Int64) = boxsi8(trunc8(unbox64(x)))
 convert(::Type{Int8}, x::Uint64) = boxsi8(trunc8(unbox64(x)))
 convert(::Type{Int8}, x::Float32) = boxsi8(fptosi8(unbox32(x)))
 convert(::Type{Int8}, x::Float64) = boxsi8(fptosi8(unbox64(x)))
+
 convert(::Type{Uint8}, x::Bool) = boxui8(unbox8(x))
 convert(::Type{Uint8}, x::Int8) = boxui8(unbox8(x))
 convert(::Type{Uint8}, x::Int16) = boxui8(trunc8(unbox16(x)))
 convert(::Type{Uint8}, x::Uint16) = boxui8(trunc8(unbox16(x)))
 convert(::Type{Uint8}, x::Int32) = boxui8(trunc8(unbox32(x)))
 convert(::Type{Uint8}, x::Uint32) = boxui8(trunc8(unbox32(x)))
+convert(::Type{Uint8}, x::Char) = boxui8(trunc8(unbox32(x)))
 convert(::Type{Uint8}, x::Int64) = boxui8(trunc8(unbox64(x)))
 convert(::Type{Uint8}, x::Uint64) = boxui8(trunc8(unbox64(x)))
 convert(::Type{Uint8}, x::Float32) = boxui8(fptoui8(unbox32(x)))
@@ -27,16 +30,19 @@ convert(::Type{Int16}, x::Uint8) = boxsi16(zext16(unbox8(x)))
 convert(::Type{Int16}, x::Uint16) = boxsi16(unbox16(x))
 convert(::Type{Int16}, x::Int32) = boxsi16(trunc16(unbox32(x)))
 convert(::Type{Int16}, x::Uint32) = boxsi16(trunc16(unbox32(x)))
+convert(::Type{Int16}, x::Char) = boxsi16(trunc16(unbox32(x)))
 convert(::Type{Int16}, x::Int64) = boxsi16(trunc16(unbox64(x)))
 convert(::Type{Int16}, x::Uint64) = boxsi16(trunc16(unbox64(x)))
 convert(::Type{Int16}, x::Float32) = boxsi16(fptosi16(unbox32(x)))
 convert(::Type{Int16}, x::Float64) = boxsi16(fptosi16(unbox64(x)))
+
 convert(::Type{Uint16}, x::Bool) = boxui16(sext16(unbox8(x)))
 convert(::Type{Uint16}, x::Int8) = boxui16(sext16(unbox8(x)))
 convert(::Type{Uint16}, x::Uint8) = boxui16(zext16(unbox8(x)))
 convert(::Type{Uint16}, x::Int16) = boxui16(unbox16(x))
 convert(::Type{Uint16}, x::Int32) = boxui16(trunc16(unbox32(x)))
 convert(::Type{Uint16}, x::Uint32) = boxui16(trunc16(unbox32(x)))
+convert(::Type{Uint16}, x::Char) = boxui16(trunc16(unbox32(x)))
 convert(::Type{Uint16}, x::Int64) = boxui16(trunc16(unbox64(x)))
 convert(::Type{Uint16}, x::Uint64) = boxui16(trunc16(unbox64(x)))
 convert(::Type{Uint16}, x::Float32) = boxui16(fptoui16(unbox32(x)))
@@ -48,20 +54,35 @@ convert(::Type{Int32}, x::Uint8) = boxsi32(zext32(unbox8(x)))
 convert(::Type{Int32}, x::Int16) = boxsi32(sext32(unbox16(x)))
 convert(::Type{Int32}, x::Uint16) = boxsi32(zext32(unbox16(x)))
 convert(::Type{Int32}, x::Uint32) = boxsi32(unbox32(x))
+convert(::Type{Int32}, x::Char) = boxsi32(unbox32(x))
 convert(::Type{Int32}, x::Int64) = boxsi32(trunc32(unbox64(x)))
 convert(::Type{Int32}, x::Uint64) = boxsi32(trunc32(unbox64(x)))
 convert(::Type{Int32}, x::Float32) = boxsi32(fptosi32(unbox32(x)))
 convert(::Type{Int32}, x::Float64) = boxsi32(fptosi32(unbox64(x)))
+
 convert(::Type{Uint32}, x::Bool) = boxui32(sext32(unbox8(x)))
 convert(::Type{Uint32}, x::Int8) = boxui32(sext32(unbox8(x)))
 convert(::Type{Uint32}, x::Uint8) = boxui32(zext32(unbox8(x)))
 convert(::Type{Uint32}, x::Int16) = boxui32(sext32(unbox16(x)))
 convert(::Type{Uint32}, x::Uint16) = boxui32(zext32(unbox16(x)))
 convert(::Type{Uint32}, x::Int32) = boxui32(unbox32(x))
+convert(::Type{Uint32}, x::Char) = boxui32(unbox32(x))
 convert(::Type{Uint32}, x::Int64) = boxui32(trunc32(unbox64(x)))
 convert(::Type{Uint32}, x::Uint64) = boxui32(trunc32(unbox64(x)))
 convert(::Type{Uint32}, x::Float32) = boxui32(fptoui32(unbox32(x)))
 convert(::Type{Uint32}, x::Float64) = boxui32(fptoui32(unbox64(x)))
+
+convert(::Type{Char}, x::Bool) = box(Char,sext32(unbox8(x)))
+convert(::Type{Char}, x::Int8) = box(Char,sext32(unbox8(x)))
+convert(::Type{Char}, x::Uint8) = box(Char,zext32(unbox8(x)))
+convert(::Type{Char}, x::Int16) = box(Char,sext32(unbox16(x)))
+convert(::Type{Char}, x::Uint16) = box(Char,zext32(unbox16(x)))
+convert(::Type{Char}, x::Int32) = box(Char,unbox32(x))
+convert(::Type{Char}, x::Uint32) = box(Char,unbox32(x))
+convert(::Type{Char}, x::Int64) = box(Char,trunc32(unbox64(x)))
+convert(::Type{Char}, x::Uint64) = box(Char,trunc32(unbox64(x)))
+convert(::Type{Char}, x::Float32) = box(Char,fptoui32(unbox32(x)))
+convert(::Type{Char}, x::Float64) = box(Char,fptoui32(unbox64(x)))
 
 convert(::Type{Int64}, x::Bool) = boxsi64(sext64(unbox8(x)))
 convert(::Type{Int64}, x::Int8) = boxsi64(sext64(unbox8(x)))
@@ -70,9 +91,11 @@ convert(::Type{Int64}, x::Int16) = boxsi64(sext64(unbox16(x)))
 convert(::Type{Int64}, x::Uint16) = boxsi64(zext64(unbox16(x)))
 convert(::Type{Int64}, x::Int32) = boxsi64(sext64(unbox32(x)))
 convert(::Type{Int64}, x::Uint32) = boxsi64(zext64(unbox32(x)))
+convert(::Type{Int64}, x::Char) = boxsi64(zext64(unbox32(x)))
 convert(::Type{Int64}, x::Uint64) = boxsi64(unbox64(x))
 convert(::Type{Int64}, x::Float32) = boxsi64(fptosi64(unbox32(x)))
 convert(::Type{Int64}, x::Float64) = boxsi64(fptosi64(unbox64(x)))
+
 convert(::Type{Uint64}, x::Bool) = boxui64(sext64(unbox8(x)))
 convert(::Type{Uint64}, x::Int8) = boxui64(sext64(unbox8(x)))
 convert(::Type{Uint64}, x::Uint8) = boxui64(zext64(unbox8(x)))
@@ -80,17 +103,20 @@ convert(::Type{Uint64}, x::Int16) = boxui64(sext64(unbox16(x)))
 convert(::Type{Uint64}, x::Uint16) = boxui64(zext64(unbox16(x)))
 convert(::Type{Uint64}, x::Int32) = boxui64(sext64(unbox32(x)))
 convert(::Type{Uint64}, x::Uint32) = boxui64(zext64(unbox32(x)))
+convert(::Type{Uint64}, x::Char) = boxui64(zext64(unbox32(x)))
 convert(::Type{Uint64}, x::Int64) = boxui64(unbox64(x))
 convert(::Type{Uint64}, x::Float32) = boxui64(fptoui64(unbox32(x)))
 convert(::Type{Uint64}, x::Float64) = boxui64(fptoui64(unbox64(x)))
 
-int8(x::Scalar)   = convert(Int8, x)
-uint8(x::Scalar)  = convert(Uint8, x)
-int16(x::Scalar)  = convert(Int16, x)
+bool  (x::Scalar) = convert(Bool,   x)
+char  (x::Scalar) = convert(Char,   x)
+int8  (x::Scalar) = convert(Int8,   x)
+uint8 (x::Scalar) = convert(Uint8,  x)
+int16 (x::Scalar) = convert(Int16,  x)
 uint16(x::Scalar) = convert(Uint16, x)
-int32(x::Scalar)  = convert(Int32, x)
+int32 (x::Scalar) = convert(Int32,  x)
 uint32(x::Scalar) = convert(Uint32, x)
-int64(x::Scalar)  = convert(Int64, x)
+int64 (x::Scalar) = convert(Int64,  x)
 uint64(x::Scalar) = convert(Uint64, x)
 
 truncate(x::Int) = x
@@ -118,6 +144,13 @@ promote_rule(::Type{Int64}, ::Type{Uint8} ) = Int64
 promote_rule(::Type{Int64}, ::Type{Uint16}) = Int64
 promote_rule(::Type{Int64}, ::Type{Uint32}) = Int64
 
+promote_rule(::Type{Char}, ::Type{Int8})   = Char
+promote_rule(::Type{Char}, ::Type{Uint8})  = Char
+promote_rule(::Type{Char}, ::Type{Int16})  = Char
+promote_rule(::Type{Char}, ::Type{Uint16}) = Char
+promote_rule(::Type{Char}, ::Type{Int32})  = Char
+promote_rule(::Type{Char}, ::Type{Uint32}) = Char
+
 ## traits ##
 typemin(::Type{Int8  }) = int8(-128)
 typemax(::Type{Int8  }) = int8(127)
@@ -127,19 +160,19 @@ typemin(::Type{Int16 }) = int16(-32768)
 typemax(::Type{Int16 }) = int16(32767)
 typemin(::Type{Uint16}) = uint16(0)
 typemax(::Type{Uint16}) = uint16(65535)
-typemin(::Type{Int32 }) = (-2147483647 - 1)
+typemin(::Type{Int32 }) = (-2147483647-1)
 typemax(::Type{Int32 }) = 2147483647
 typemin(::Type{Uint32}) = uint32(0)
 typemax(::Type{Uint32}) = uint32(4294967295)
-typemin(::Type{Int64 }) = (-9223372036854775807 - 1)
+typemin(::Type{Int64 }) = (-9223372036854775807-1)
 typemax(::Type{Int64 }) = 9223372036854775807
 typemin(::Type{Uint64}) = uint64(0)
 typemax(::Type{Uint64}) = 18446744073709551615
 
-sizeof(::Type{Union(Int8 , Uint8 )}) = 1
-sizeof(::Type{Union(Int16, Uint16)}) = 2
-sizeof(::Type{Union(Int32, Uint32)}) = 4
-sizeof(::Type{Union(Int64, Uint64)}) = 8
+sizeof(::Type{Union(Int8,Uint8,Bool)})   = 1
+sizeof(::Type{Union(Int16,Uint16)})      = 2
+sizeof(::Type{Union(Int32,Uint32,Char)}) = 4
+sizeof(::Type{Union(Int64,Uint64)})      = 8
 
 ## basic arithmetic ##
 
