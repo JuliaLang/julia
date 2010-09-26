@@ -521,6 +521,10 @@ issues 6/21/10
 - intrinsic calls from command line (use compiler)
 ? new for loop, comprehension, reduction formulation
 * faster I/O (not byte at a time!)
+- expose word size in the language?
+  . right now you can't define Ptr
+  . make Size the same as size_t
+- assigned(a,i) to tell if an object array location is assigned?
 
 - try/catch
 - flatten memory layout for Array of Complex (immutability)

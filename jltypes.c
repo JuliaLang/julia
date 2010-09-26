@@ -889,6 +889,21 @@ static void cache_type_(jl_value_t **key, size_t n, jl_type_t *type)
     Type_Cache = tk;
 }
 
+#ifdef JL_GC_MARKSWEEP
+void jl_mark_type_cache()
+{
+    typekey_stack_t *tk = Type_Cache;
+    while (tk != NULL) {
+        //gc_setmark(tk);
+        size_t i;
+        for(i=0; i < tk->n; i++)
+            gc_markval(tk->key[i]);
+        gc_markval(tk->type);
+        tk = next;
+    }
+}
+#endif
+
 JL_CALLABLE(jl_f_tuple);
 JL_CALLABLE(jl_constructor_factory_trampoline);
 

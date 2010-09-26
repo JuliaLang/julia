@@ -296,6 +296,7 @@ extern jl_sym_t *static_typeof_sym;
 #define allocb(nb)    malloc(nb)
 #define alloc_pod(nb) malloc(nb)
 #endif
+#define alloc_permanent(nb) malloc(nb)
 
 #define jl_tupleref(t,i) (((jl_value_t**)(t))[2+(i)])
 #define jl_tupleset(t,i,x) ((((jl_value_t**)(t))[2+(i)])=(x))
