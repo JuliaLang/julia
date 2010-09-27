@@ -6,8 +6,12 @@
 # length(str::UTF8String) = str.data
 
 utf8_offset = [
-    hex("00000000"), hex("00003080"), hex("000E2080"),
-    hex("03C82080"), hex("FA082080"), hex("82082080"),
+    hex("00000000"),
+    hex("00003080"),
+    hex("000E2080"),
+    hex("03C82080"),
+    hex("FA082080"),
+    hex("82082080"),
 ]
 
 utf8_encoding_bytes = [
@@ -23,11 +27,11 @@ utf8_encoding_bytes = [
 
 is_utf8_start(b::Uint8) = ((b&192)!=128)
 
-function char_at(str::UTF8String, i::Index)
+function read_char(str::UTF8String, i::Index)
     if !is_utf8_start(str.data[i])
-        error("no UTF8 char at byte ", i)
+        error(strcat("not a valid UTF8 char at byte ", string(i)))
     end
-    bytes = utf8_encoding_bytes[str.data[i]]
+    bytes = utf8_encoding_bytes[str.data[i]+1]
     c = 0
     if bytes > 5; c += str.data[i]; c <<= 6; i += 1; end
     if bytes > 4; c += str.data[i]; c <<= 6; i += 1; end
@@ -36,6 +40,9 @@ function char_at(str::UTF8String, i::Index)
     if bytes > 1; c += str.data[i]; c <<= 6; i += 1; end
     c += str.data[i]; i += 1
     c -= utf8_offset[bytes]
-    char(c)
+    char(c), i
 end
 
+start(str::String) = 1
+next(str::String,i) = read_char(str,i)
+done(str::String,i) = (i > length(str))
