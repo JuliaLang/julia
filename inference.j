@@ -674,7 +674,7 @@ function typeinf(linfo::LambdaStaticData, atypes::Tuple, sparams::Tuple, cop)
     inference_stack = inference_stack.prev
     fulltree = type_annotate(ast, s, sv, frame.result, vars)
     linfo.tfunc = (atypes, fulltree, linfo.tfunc)
-    fulltree.args[3] = inlining_pass(fulltree.args[3])
+    fulltree.args[3] = inlining_pass(fulltree.args[3], s[1])
     #print("\n",fulltree,"\n")
     #print("==> ", frame.result,"\n")
     return (fulltree, frame.result)
@@ -766,23 +766,32 @@ end
 
 sym_replace(x, from, to) = x
 
-# does s occur more than once?
-function count_occurs(e::Expr, s)
+# count occurrences up to n+1
+function occurs_more(e::Expr, pred, n)
     if is(e.head,`quote) || is(e.head,`top) || is(e.head,`goto) ||
         is(e.head,`label)
         return 0
     end
     c = 0
     for a = e.args
-        c += count_occurs(a, s)
-        if c>1
+        c += occurs_more(a, pred, n)
+        if c>n
             return c
         end
     end
     c
 end
 
-count_occurs(e, s) = is(e,s) ? 1 : 0
+occurs_more(e, pred, n) = pred(e) ? 1 : 0
+
+function contains(arr, item)
+    for i = 1:length(arr)
+        if is(arr[i],item)
+            return true
+        end
+    end
+    return false
+end
 
 exprtype(e::Expr) = e.type
 exprtype(s::Symbol) = Any
@@ -794,7 +803,7 @@ exprtype(other) = typeof(other)
 # functions with closure environments or varargs are also excluded.
 # static parameters are ok if all the static parameter values are leaf types,
 # meaning they are fully known.
-function inlineable(e::Expr)
+function inlineable(e::Expr, vars)
     f = eval(e.args[1])
     argexprs = a2t(e.args[2:])
     atypes = map(exprtype, argexprs)
@@ -819,10 +828,12 @@ function inlineable(e::Expr)
     if !isa(meth[3],LambdaStaticData) || !is(meth[4],())
         return NF
     end
-    sp = meth[2]
+    sp = meth[2]::Tuple
     spvals = sp[2:2:]
-    if !all(map(isleaftype,spvals))
-        return NF
+    for i=1:length(spvals)
+        if !isleaftype(spvals[i])
+            return NF
+        end
     end
     (ast, ty) = typeinf(meth[3], meth[1], meth[2], true)
     if is(ast,())
@@ -844,10 +855,16 @@ function inlineable(e::Expr)
     # see if each argument occurs only once in the body expression
     # todo: make sure side effects aren't skipped if argument doesn't occur?
     expr = body[1].args[1]
-    for a = args
-        if count_occurs(expr, a) > 1
+    for i=1:length(args)
+        a = args[i]
+        if occurs_more(expr, x->is(x,a), 1) > 1
             return NF
         end
+    end
+    # avoid capture if the function has free variables with the same name
+    # as our vars
+    if occurs_more(expr, x->(has(vars,x)&&!contains(args,x)), 0) > 0
+        return NF
     end
     # ok, substitute argument expressions for argument names in the body
     spnames = { sp[i].name | i=1:2:length(sp) }
@@ -855,15 +872,15 @@ function inlineable(e::Expr)
                        append(argexprs,spvals))
 end
 
-inlining_pass(x) = x
+inlining_pass(x, vars) = x
 
-function inlining_pass(e::Expr)
+function inlining_pass(e::Expr, vars)
     for i=1:length(e.args)
-        e.args[i] = inlining_pass(e.args[i])
+        e.args[i] = inlining_pass(e.args[i], vars)
     end
     if is(e.head,`call1)
         e.head = `call
-        body = inlineable(e)
+        body = inlineable(e, vars)
         if !is(body,NF)
             #print("inlining ", e, " => ", body, "\n")
             return body
@@ -877,7 +894,7 @@ function inlining_pass(e::Expr)
                     # apply(f,tuple(x,y,...)) => f(x,y,...)
                     e.args = append({e.args[2]}, aarg.args[2:])
                     # now try to inline the simplified call
-                    body = inlineable(e)
+                    body = inlineable(e, vars)
                     if !is(body,NF)
                         return body
                     end

@@ -905,6 +905,8 @@ static jl_tuple_t *ml_matches(jl_methlist_t *ml, jl_value_t *type,
                               jl_tuple_t *t, jl_sym_t *name)
 {
     while (ml != NULL) {
+        // TODO: bug: getmethods(length,(Array,))
+        
         // a method is shadowed if type <: S <: m->sig where S is the
         // signature of another applicable method
         /*
