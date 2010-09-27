@@ -33,11 +33,11 @@ function read_char(str::UTF8String, i::Index)
     end
     bytes = utf8_encoding_bytes[str.data[i]+1]
     c = 0
-    if bytes > 5; c += str.data[i]; c <<= 6; i += 1; end
-    if bytes > 4; c += str.data[i]; c <<= 6; i += 1; end
-    if bytes > 3; c += str.data[i]; c <<= 6; i += 1; end
-    if bytes > 2; c += str.data[i]; c <<= 6; i += 1; end
-    if bytes > 1; c += str.data[i]; c <<= 6; i += 1; end
+    for j = 1:bytes-1
+        c += str.data[i]
+        c <<= 6
+        i += 1
+    end
     c += str.data[i]; i += 1
     c -= utf8_offset[bytes]
     char(c), i
