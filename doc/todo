@@ -249,6 +249,7 @@ propagating assumption violations in jit compiled systems
 improving numeric type systems, e.g. approach to type promotion
 
 a highly unobtrusive type system
+separating ad-hoc from parametric polymorphism heuristically
 
 eliminating array allocations in loops
 or using register allocation to manage general resources
@@ -260,6 +261,9 @@ performance survey over the course of a language implementation (with llvm)
 destination-passing (generalized nargout), allowing discovery of some
   aspects of the continuation to get some of the benefits of lazy
   evaluation or for space optimization.
+
+comprehension optimizations
+extensible auto-vectorizing
 
 -------------------------------------------------------------------------------
 
