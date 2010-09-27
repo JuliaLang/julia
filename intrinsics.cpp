@@ -99,6 +99,11 @@ static jl_value_t *julia_type_of(Value *v)
     const char *name = v->getName().data();
     const char *sep = strrchr(name, '$');
     if (sep == NULL) {
+        if (dynamic_cast<AllocaInst*>(v) != NULL &&
+            v->getType() != jl_pvalue_llvmt) {
+            // an alloca always has llvm type pointer
+            return llvm_type_to_julia(v->getType()->getContainedType(0));
+        }
         return llvm_type_to_julia(v->getType());
     }
     int id = (sep[1]-1) + (sep[2]-1)*255;
@@ -120,8 +125,16 @@ static bool is_julia_type_representable(jl_value_t *jt)
 
 static Value *mark_julia_type(Value *v, jl_value_t *jt)
 {
-    if (is_julia_type_representable(jt))
+    if (julia_type_of(v) == jt)
         return v;
+    if (is_julia_type_representable(jt)) {
+        const char *vname = v->getName().data();
+        const char *sep = strrchr(vname, '$');
+        assert(sep);
+        std::string newname(vname);
+        v->setName(newname.substr(0, (sep-vname)));
+        return v;
+    }
     //Value *x = builder.CreateBitCast(v, v->getType());
     char name[4];
     name[0] = '$';
@@ -188,13 +201,13 @@ static jl_value_t *llvm_type_to_julia(const Type *t)
     if (t == T_float32) return (jl_value_t*)jl_float32_type;
     if (t == T_float64) return (jl_value_t*)jl_float64_type;
     if (t == T_void) return (jl_value_t*)jl_bottom_type;
+    if (t == jl_pvalue_llvmt)
+        return (jl_value_t*)jl_any_type;
     if (t->isPointerTy()) {
         jl_value_t *elty = llvm_type_to_julia(t->getContainedType(0));
         return (jl_value_t*)jl_apply_type((jl_value_t*)jl_pointer_type,
                                           jl_tuple(1, elty));
     }
-    if (t == jl_pvalue_llvmt)
-        return (jl_value_t*)jl_any_type;
     jl_errorf("cannot convert type %s to a julia type",
               t->getDescription().c_str());
     return NULL;
@@ -563,31 +576,31 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
         return mark_julia_type(x, jl_uint8_type);
     HANDLE(boxsi8,1)
         if (t != T_int8) x = builder.CreateBitCast(x, T_int8);
-        return x;
+        return mark_julia_type(x, jl_int8_type);
     HANDLE(boxui16,1)
         if (t != T_int16) x = builder.CreateBitCast(x, T_int16);
         return mark_julia_type(x, jl_uint16_type);
     HANDLE(boxsi16,1)
         if (t != T_int16) x = builder.CreateBitCast(x, T_int16);
-        return x;
+        return mark_julia_type(x, jl_int16_type);
     HANDLE(boxui32,1)
         if (t != T_int32) x = builder.CreateBitCast(x, T_int32);
         return mark_julia_type(x, jl_uint32_type);
     HANDLE(boxsi32,1)
         if (t != T_int32) x = builder.CreateBitCast(x, T_int32);
-        return x;
+        return mark_julia_type(x, jl_int32_type);
     HANDLE(boxui64,1)
         if (t != T_int64) x = builder.CreateBitCast(x, T_int64);
         return mark_julia_type(x, jl_uint64_type);
     HANDLE(boxsi64,1)
         if (t != T_int64) x = builder.CreateBitCast(x, T_int64);
-        return x;
+        return mark_julia_type(x, jl_int64_type);
     HANDLE(boxf32,1)
         if (t != T_float32) x = builder.CreateBitCast(x, T_float32);
-        return x;
+        return mark_julia_type(x, jl_float32_type);
     HANDLE(boxf64,1)
         if (t != T_float64) x = builder.CreateBitCast(x, T_float64);
-        return x;
+        return mark_julia_type(x, jl_float64_type);
     HANDLE(unbox8,1)
         return emit_unbox(T_int8, T_pint8, x);
     HANDLE(unbox16,1)
