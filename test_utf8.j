@@ -10,10 +10,7 @@ utf8 = UTF8String(data[4:]);
 for i=1, j=1
     while i <= length(utf8)
         (c,i) = read_char(utf8,i)
-        if c != utf32[j]
-            print((i,j,uint32(c)),"\n")
-            break
-        end
+        assert(c == utf32[j])
         j += 1
     end
 end
