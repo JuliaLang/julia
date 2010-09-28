@@ -29,9 +29,12 @@ is_utf8_start(byte::Uint8) = ((byte&192)!=128)
 
 function next(s::UTF8String, i::Index)
     if !is_utf8_start(s.data[i])
-        error(strcat("not a valid UTF8 char at byte ", string(i)))
+        error(strcat("not a valid UTF-8 char at byte ", string(i)))
     end
     bytes = utf8_encoding_bytes[s.data[i]+1]
+    if length(s.data) < i+bytes-1
+        error("premature end of UTF-8 data")
+    end
     c = 0
     for j = 1:bytes-1
         c += s.data[i]
