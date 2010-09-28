@@ -303,9 +303,9 @@ symbol(a::Array{Uint8,1}) =
 gensym() = ccall(dlsym(JuliaDLHandle,"jl_gensym"), Any, ())::Symbol
 
 function string(p::Ptr{Uint8})
-    # if p == C_NULL
-    #     error("cannot convert NULL to string")
-    # end
+    if p == C_NULL
+        error("cannot convert NULL to string")
+    end
     UTF8String(ccall(dlsym(JuliaDLHandle,"jl_cstr_to_array"),
                      Any, (Ptr{Uint8},), p)::Array{Uint8,1})
 end
