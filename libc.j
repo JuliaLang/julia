@@ -28,6 +28,11 @@ end
 exit() = exit(0)
 exit(n) = ccall(dlsym(libc,"exit"), Void, (Int32,), int32(n))
 
+getenv(var::String) =
+    string(ccall(dlsym(libc,"getenv"), Ptr{Uint8}, (Ptr{Uint8},), var))
+setenv(var::String, val::String) =
+    ccall(dlsym(libc,"setenv"), Int32, (Ptr{Uint8}, Ptr{Uint8}, Int32), var, val, 1)
+
 function reinterpret{T,S}(::Type{T}, a::Array{S})
     b = Array(T, div(numel(a)*sizeof(S),sizeof(T)))
     ccall(dlsym(libc,"memcpy"),

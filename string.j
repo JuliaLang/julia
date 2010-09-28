@@ -302,10 +302,13 @@ symbol(a::Array{Uint8,1}) =
     ccall(dlsym(JuliaDLHandle,"jl_symbol"), Any, (Ptr{Uint8},), a)::Symbol
 gensym() = ccall(dlsym(JuliaDLHandle,"jl_gensym"), Any, ())::Symbol
 
-function string(x)
-    cstr = ccall(dlsym(JuliaDLHandle,"jl_show_to_string"),
-                 Ptr{Uint8}, (Any,), x)
-    data = ccall(dlsym(JuliaDLHandle,"jl_cstr_to_array"),
-                 Any, (Ptr{Uint8},), cstr)::Array{Uint8,1}
-    UTF8String(data)
+function string(p::Ptr{Uint8})
+    # if p == C_NULL
+    #     error("cannot convert NULL to string")
+    # end
+    UTF8String(ccall(dlsym(JuliaDLHandle,"jl_cstr_to_array"),
+                     Any, (Ptr{Uint8},), p)::Array{Uint8,1})
 end
+
+string(x) = string(ccall(dlsym(JuliaDLHandle,"jl_show_to_string"),
+                         Ptr{Uint8}, (Any,), x))
