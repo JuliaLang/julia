@@ -714,25 +714,33 @@ TODO:
 	  ; char literal
 	  ((eq? t '|'|)
 	   (take-token s)
-	   (let ((b (open-output-string)))
-	     (let loop ((c (read-char (ts:port s))))
-	       (if (eof-object? c)
-		   (error "incomplete: invalid character literal"))
-	       (if (eqv? c #\')
-		   #t
-		   (begin (write-char c b)
-			  (if (eqv? c #\\)
-			      (write-char (read-char (ts:port s)) b))
-			  (loop (read-char (ts:port s))))))
-	     (let ((str (read (open-input-string
-			       (string #\" (io.tostring! b) #\")))))
-	       (if (not (= (string-length str) 1))
-		   (error "invalid character literal"))
-	       (if (= (length str) 1)
-		   ; one byte, e.g. '\xff'. maybe not valid utf-8, but we
-		   ; want to use the raw value as a codepoint in this case.
-		   (wchar (aref str 0))
-		   (string.char str 0)))))
+	   (let ((firstch (read-char (ts:port s))))
+	     (if (eqv? firstch #\')
+	      (error "invalid character literal")
+	      (if (and (not (eqv? firstch #\\))
+		       (not (eof-object? firstch))
+		       (eqv? (peek-char (ts:port s)) #\'))
+	       ;; easy case: 1 character, no \
+	       (begin (read-char (ts:port s)) firstch)
+	       (let ((b (open-output-string)))
+		 (let loop ((c firstch))
+		   (if (eof-object? c)
+		       (error "incomplete: invalid character literal"))
+		   (if (eqv? c #\')
+		       #t
+		       (begin (write-char c b)
+			      (if (eqv? c #\\)
+				  (write-char (read-char (ts:port s)) b))
+			      (loop (read-char (ts:port s))))))
+		 (let ((str (read (open-input-string
+				   (string #\" (io.tostring! b) #\")))))
+		   (if (not (= (string-length str) 1))
+		       (error "invalid character literal"))
+		   (if (= (length str) 1)
+		       ;; one byte, e.g. '\xff'. maybe not valid utf-8, but we
+		       ;; want to use the raw value as a codepoint in this case.
+		       (wchar (aref str 0))
+		       (string.char str 0))))))))
 
 	  ; identifier
 	  ((symbol? t) (take-token s))
