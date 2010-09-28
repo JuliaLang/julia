@@ -813,7 +813,7 @@ extern "C" void jl_init_intrinsic_functions()
 {
     ADD_I(boxui8); ADD_I(boxsi8); ADD_I(boxui16); ADD_I(boxsi16);
     ADD_I(boxui32); ADD_I(boxsi32); ADD_I(boxui64); ADD_I(boxsi64);
-    ADD_I(boxf32); ADD_I(boxf64); ADD_I(box);
+    ADD_I(boxf32); ADD_I(boxf64); ADD_I(box); ADD_I(unbox);
     ADD_I(unbox8); ADD_I(unbox16); ADD_I(unbox32); ADD_I(unbox64);
     ADD_I(neg_int); ADD_I(add_int); ADD_I(sub_int); ADD_I(mul_int);
     ADD_I(sdiv_int); ADD_I(udiv_int); ADD_I(smod_int); ADD_I(umod_int);

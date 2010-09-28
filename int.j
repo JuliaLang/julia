@@ -289,6 +289,10 @@ div(x::Char, y::Char) = div(int32(x), int32(y))
 == (x::Char, y::Char) = int32(x) == int32(y)
 <  (x::Char, y::Char) = int32(x) < int32(y)
 
+## pointer arithmetic ##
+
+== (x::Ptr, y::Ptr) = eq_int(unbox(Ptr,x),unbox(Ptr,y))
+
 ## integer-specific arithmetic promotions ##
 
 (%)(x::Int, y::Int) = (%)(promote(x,y)...)
