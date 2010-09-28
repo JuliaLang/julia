@@ -1,6 +1,7 @@
 *.o
 *.do
 *.a
+*.jp
 /tmp
 /julia-defs.s.bc
 /julia-defs.s.bc.inc
