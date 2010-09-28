@@ -75,6 +75,11 @@ function write(s::IOStream, b::Uint8)
           int32(b), s.ios)
 end
 
+function write(s::IOStream, c::Char)
+    ccall(dlsym(JuliaDLHandle,"ios_pututf8"), Int32, (Ptr{Void}, Int32),
+          s.ios, c)
+end
+
 function write{T}(s::IOStream, a::Array{T})
     if isa(T,BitsKind)
         ccall(dlsym(JuliaDLHandle,"ios_write"), Size,

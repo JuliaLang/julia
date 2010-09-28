@@ -272,12 +272,22 @@ bswap(x::Uint64) = boxui64(bswap_int(unbox64(x)))
 >=(x::Int, y::Int) = !(x < y)
 
 ## character operations & comparisons ##
-# TODO: implement real unsigned stuff
 
-(+)(x::Uint8, y::Uint8) = uint8(int8(x) + int8(y))
-(-)(x::Uint8, y::Uint8) = uint8(int8(x) - int8(y))
-==(x::Uint8, y::Uint8) = int8(x) == int8(y)
-< (x::Uint8, y::Uint8) = int16(x) < int16(y)
+-(x::Char) = -int32(x)
+~(x::Char) = ~int32(x)
+(+)(x::Char, y::Char) = int32(x) + int32(y)
+(-)(x::Char, y::Char) = int32(x) - int32(y)
+(*)(x::Char, y::Char) = int32(x) * int32(y)
+div(x::Char, y::Char) = div(int32(x), int32(y))
+(%)(x::Char, y::Char) = int32(x) % int32(y)
+(&)(x::Char, y::Char) = int32(x) & int32(y)
+(|)(x::Char, y::Char) = int32(x) | int32(y)
+($)(x::Char, y::Char) = int32(x) $ int32(y)
+(<<)(x::Char, y::Int32) = int32(x) << y
+(>>)(x::Char, y::Int32) = int32(x) >> y
+(>>>)(x::Char, y::Int32) = int32(x) >>> y
+== (x::Char, y::Char) = int32(x) == int32(y)
+<  (x::Char, y::Char) = int32(x) < int32(y)
 
 ## integer-specific arithmetic promotions ##
 

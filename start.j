@@ -12,10 +12,11 @@ load("int.j")
 load("float.j")
 load("complex.j")
 load("rational.j")
+load("array.j")
 load("string.j")
+load("utf8.j")
 
 # complex data types
-load("array.j")
 load("list.j")
 load("dequeue.j")
 load("intset.j")

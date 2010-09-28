@@ -3,7 +3,7 @@
 #     data::Array{Uint8,1}
 # end
 
-# length(str::UTF8String) = str.data
+## basic UTF-8 decoding & iteration ##
 
 utf8_offset = [
     int64(0),
@@ -25,24 +25,30 @@ utf8_encoding_bytes = [
     3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3, 4,4,4,4,4,4,4,4,5,5,5,5,6,6,6,6,
 ]
 
-is_utf8_start(b::Uint8) = ((b&192)!=128)
+is_utf8_start(byte::Uint8) = ((byte&192)!=128)
 
-function read_char(str::UTF8String, i::Index)
-    if !is_utf8_start(str.data[i])
+function next(s::UTF8String, i::Index)
+    if !is_utf8_start(s.data[i])
         error(strcat("not a valid UTF8 char at byte ", string(i)))
     end
-    bytes = utf8_encoding_bytes[str.data[i]+1]
+    bytes = utf8_encoding_bytes[s.data[i]+1]
     c = 0
     for j = 1:bytes-1
-        c += str.data[i]
+        c += s.data[i]
         c <<= 6
         i += 1
     end
-    c += str.data[i]; i += 1
+    c += s.data[i]
+    i += 1
     c -= utf8_offset[bytes]
     char(c), i
 end
 
-start(str::String) = 1
-next(str::String,i) = read_char(str,i)
-done(str::String,i) = (i > length(str))
+## overload methods for efficiency ##
+
+length(s::UTF8String) = length(s.data)
+
+## outputing UTF-8 strings ##
+
+print(s::UTF8String) = print(s.data)
+write(io, s::UTF8String) = write(io, s.data)

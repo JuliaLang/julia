@@ -42,6 +42,7 @@
     jl_new_fileio;
     jl_new_memio;
     ios_putc;
+    ios_pututf8;
     ios_getc;
     ios_close;
     ios_flush;
