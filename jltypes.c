@@ -590,13 +590,27 @@ static jl_value_t *jl_type_intersect(jl_value_t *a, jl_value_t *b,
     // values are implied by the intersected supertype, or that the
     // intersected supertype cannot come from this subtype (in which case
     // our final answer is Bottom).
+    size_t i;
+    // hack: we need type_match to find assignments for these
+    // typevars even though they normally aren't constrained. temporarily
+    // switch them.
+    jl_tuple_t *tc_params = ((jl_tag_type_t*)tc)->parameters;
+    for(i=0; i < tc_params->length; i++) {
+        jl_tvar_t *tv = (jl_tvar_t*)jl_tupleref(tc_params,i);
+        assert(jl_is_typevar(tv));
+        assert(!tv->bound);
+        tv->bound = 1;
+    }
     jl_value_t *env = jl_type_match((jl_value_t*)super->parameters,
                                     (jl_value_t*)sup_params);
+    for(i=0; i < tc_params->length; i++) {
+        jl_tvar_t *tv = (jl_tvar_t*)jl_tupleref(tc_params,i);
+        tv->bound = 0;
+    }
     if (env == jl_false)
         return (jl_value_t*)jl_bottom_type;
 
     jl_tuple_t *p = jl_alloc_tuple(n);
-    size_t i;
     for(i=0; i < n; i++) {
         jl_value_t *tp = jl_tupleref(((jl_tag_type_t*)tc)->parameters, i);
         jl_value_t *elt = jl_tupleref(sub->parameters, i);

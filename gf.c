@@ -911,9 +911,9 @@ static jl_tuple_t *ml_matches(jl_methlist_t *ml, jl_value_t *type,
         // signature of another applicable method
         /*
           more generally?
-          given arguments T
-          X is shadowed if there exist other applicable methods A, B
-          (possibly A==B), such that (T ⊆ A) ∧ (B ⊆ X) ∧ (A∩X ⊆ B)
+          given arguments T and applicable methods A, X (T⊆A ∧ T⊆X),
+          X is shadowed if there exists an applicable method B
+          (possibly A==B), such that (B ⊆ X) ∧ (A∩X ⊆ B)
           in other words, B covers any ambiguity between A and X.
         */
         //jl_tuple_t *tt = t;
