@@ -6,12 +6,12 @@
 # length(str::UTF8String) = str.data
 
 utf8_offset = [
-    hex("00000000"),
-    hex("00003080"),
-    hex("000E2080"),
-    hex("03C82080"),
-    hex("FA082080"),
-    hex("82082080"),
+    int64(0),
+    int64(12416),
+    int64(925824),
+    int64(63447168),
+    int64(4194836608),
+    int64(2181570688),
 ]
 
 utf8_encoding_bytes = [
