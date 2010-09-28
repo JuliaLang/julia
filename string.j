@@ -54,7 +54,8 @@ struct CharString <: String
     chars::Array{Char,1}
 
     CharString(a::Array{Char,1}) = new(a)
-    CharString(c::Char...) = new([c[i] | i=1:length(c)])
+    CharString(c::Char...) = new([ c[i] | i=1:length(c) ])
+    CharString(x...) = CharString(map(char,x)...)
 end
 
 next(s::CharString, i::Index) = (s.chars[i], i+1)
