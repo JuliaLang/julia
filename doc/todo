@@ -534,6 +534,14 @@ issues 6/21/10
 - flatten memory layout for Array of Complex (immutability)
 - SPMD layer
 
+* "let i=0; print(i); end" should parse. use commas for init exprs
+- parsing hex 0x...
+* '"'
+- repl global scope change
+* preparsed source
+* type intersect bug: Array ∩ Scalar
+- make global decls inherited
+
 method ordering tests:
 //:  (T,T) before (Any,Any)
 +:   (T<:Number{T},T<:Number{T}) before (Number{T},Number{T})

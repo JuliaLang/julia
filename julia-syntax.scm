@@ -485,6 +485,10 @@
 			     (|::| ,(car e) ,T)
 			     (= ,(car e) ,rhs))))
 
+   ; <expr>::T => typeassert(expr, T)
+   (pattern-lambda (|::| (-- expr (-^ (-s))) T)
+		   `(call (top typeassert) ,expr ,T))
+
    ; adding break/continue support to while loop
    (pattern-lambda (while cnd body)
 		   `(scope-block
@@ -1154,13 +1158,10 @@ So far only the second case can actually occur.
 	((eq? (car e) '|::|)
 	 ; handle var::T declaration by storing the type in the var-info
 	 ; record. for non-symbols, emit a type assertion.
-	 (if (symbol? (cadr e))
-	     (let ((vi (var-info-for (cadr e) env)))
-	       (if vi
-		   (vinfo:set-type! vi (caddr e)))
-	       '(null))
-	     (let ((e2 (analyze-vars (cadr e) env)))
-	       `(call (top typeassert) ,e2 ,(caddr e)))))
+	 (let ((vi (var-info-for (cadr e) env)))
+	   (if vi
+	       (vinfo:set-type! vi (caddr e)))
+	   '(null)))
 	((eq? (car e) 'lambda)
 	 (letrec ((args (lam:args e))
 		  (locl (cdr (caddr e)))

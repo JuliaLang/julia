@@ -522,7 +522,8 @@ function findlabel(body, l)
     error("label not found")
 end
 
-f_argnames(ast) = map(x->(isa(x,Expr) ? x.args[1] : x), ast.args[1])
+f_argnames(ast) =
+    map(x->(isa(x,Expr) ? x.args[1] : x), ast.args[1]::Array{Any,1})
 
 is_rest_arg(arg) = (isa(arg,Expr) && is(arg.head,symbol("::")) &&
                     ccall(dlsym(JuliaDLHandle,"jl_is_rest_arg"),Int32,(Any,),

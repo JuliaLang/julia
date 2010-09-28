@@ -77,6 +77,7 @@ clean:
 	rm -f *.do
 	rm -f *.bc
 	rm -f *.bc.inc
+	rm -f *.jp
 	rm -f julia_flisp.boot
 	rm -f julia_flisp.boot.inc
 	rm -f $(EXENAME)
