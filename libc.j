@@ -33,6 +33,8 @@ getenv(var::String) =
 setenv(var::String, val::String) =
     ccall(dlsym(libc,"setenv"), Int32, (Ptr{Uint8}, Ptr{Uint8}, Int32), var, val, 1)
 
+tty_columns() = parse_int(Int32, getenv("COLUMNS"), 10)
+
 function reinterpret{T,S}(::Type{T}, a::Array{S})
     b = Array(T, div(numel(a)*sizeof(S),sizeof(T)))
     ccall(dlsym(libc,"memcpy"),
