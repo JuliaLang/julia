@@ -393,13 +393,22 @@ function glotest()
     loc_x = 8
     function inner()
         global loc_x = 10
-        glob_x = 88  # glob_x is not global in here
+        glob_x = 88
+    end
+    function inner2()
+        local glob_x  # override
+        global loc_x
+        glob_x = 2
+        assert(glob_x == 2)
+        assert(loc_x == 10)
     end
     inner()
+    inner2()
+    assert(glob_x == 88)
     assert(loc_x == 8)
 end
 glotest()
-assert(glob_x == 24)
+assert(glob_x == 88)
 assert(loc_x == 10)
 
 # comprehensions

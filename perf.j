@@ -32,8 +32,8 @@ timeit(fib, 20)
 print("parse_int: ")
 
 function parseintperf()
+    local n
     for i=1:1000
-        global n
         n=bin("1111000011110000111100001111")
     end
     n
