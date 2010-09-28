@@ -1,8 +1,6 @@
-fh = open("unicode/UTF-8.txt")
-utf8 = UTF8String(read(fh, Uint8, 4382595)[4:]);
-fh = open("unicode/UTF-32LE.txt")
-utf32 = CharString(read(fh, Char, 1112065)[2:end]);
-assert(utf8 == utf32)
+utf32 = CharString(read(open("unicode/UTF-32LE.txt"), Char, 1112065)[2:]);
+utf8 = UTF8String(read(open("unicode/UTF-8.txt"), Uint8, 4382595)[4:]);
+assert(utf32 == utf8)
 
 str1 = "∀ ε > 0, ∃ δ > 0: |x-y| < δ ⇒ |f(x)-f(y)| < ε"
 str2 = CharString(
