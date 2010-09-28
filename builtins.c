@@ -555,6 +555,11 @@ JL_CALLABLE(jl_f_convert_to_ptr)
 
 // --- printing ---
 
+ios_t *jl_current_output_stream_noninline()
+{
+    return jl_current_output_stream();
+}
+
 jl_function_t *jl_print_gf;
 
 JL_CALLABLE(jl_f_print_array_uint8)

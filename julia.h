@@ -613,6 +613,8 @@ static inline ios_t *jl_current_output_stream()
     return jl_current_task->state.current_output_stream;
 }
 
+DLLEXPORT ios_t *jl_current_output_stream_noninline();
+
 static inline void jl_set_current_output_stream(ios_t *s)
 {
     jl_current_task->state.current_output_stream = s;

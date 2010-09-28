@@ -1,7 +1,7 @@
 struct IOStream
     ios::Ptr{Void}
 
-    global fdio, open, memio
+    global fdio, open, memio, current_output_stream
     fdio(fd::Int) =
         new(ccall(dlsym(JuliaDLHandle,"jl_new_fdio"), Ptr{Void}, (Int32,),
                   int32(fd)))
@@ -16,15 +16,19 @@ struct IOStream
     memio(x::Int) =
         new(ccall(dlsym(JuliaDLHandle,"jl_new_memio"), Ptr{Void}, (Uint32,),
                   uint32(x)))
+
+    current_output_stream() =
+        new(ccall(dlsym(JuliaDLHandle,"jl_current_output_stream_noninline"),
+                  Ptr{Void}, ()))
 end
 
-nthbyte(x::Int, n::Int) = (n>sizeof(x) ? uint8(0) : uint8((x>>>((n-1)<<3))))
+nthbyte(x::Int, n::Int) = (n > sizeof(x) ? uint8(0) : uint8((x>>>((n-1)<<3))))
 
 write(s, x::Uint8) = error(strcat(string(typeof(s)),
                                   " does not support byte I/O"))
 
 function write(s, x::Int)
-    for n=1:sizeof(x)
+    for n = 1:sizeof(x)
         write(s, nthbyte(x, n))
     end
 end
@@ -34,7 +38,7 @@ write(s, x::Float32) = write(s, boxsi32(unbox32(x)))
 write(s, x::Float64) = write(s, boxsi64(unbox64(x)))
 
 function write(s, a::Array)
-    for i=1:numel(a)
+    for i = 1:numel(a)
         write(s, a[i])
     end
 end
@@ -44,7 +48,7 @@ read(s, x::Type{Uint8}) = error(strcat(string(typeof(s)),
 
 function read{T <: Int}(s, ::Type{T})
     x = zero(T)
-    for n=1:sizeof(x)
+    for n = 1:sizeof(x)
         x |= (convert(T,read(s,Uint8))<<((n-1)<<3))
     end
     x
@@ -58,7 +62,7 @@ read{T}(s, t::Type{T}, dims::Tuple) = read(s, t, dims...)
 
 function read{T}(s, ::Type{T}, dims::Size...)
     a = Array(T, dims...)
-    for i=1:numel(a)
+    for i = 1:numel(a)
         a[i] = read(s, T)
     end
     a
@@ -139,7 +143,7 @@ serialize(s, x::Bool) = (writetag(s,Bool); write(s, uint8(x)))
 function serialize(s, t::Tuple)
     writetag(s, Tuple)
     write(s, int32(length(t)))
-    for i=1:length(t)
+    for i = 1:length(t)
         serialize(s, t[i])
     end
 end
@@ -159,7 +163,7 @@ function serialize(s, a::Array)
     if isa(elty,BitsKind)
         write(s, a)
     else
-        for i=1:numel(a)
+        for i = 1:numel(a)
             serialize(s, a[i])
         end
     end

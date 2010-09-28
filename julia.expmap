@@ -27,6 +27,7 @@
     jl_type_match;
     jl_type_intersection;
     jl_types_equal;
+    jl_current_output_stream_noninline;
     jl_cstr_to_array;
     jl_show_to_string;
     jl_is_rest_arg;
