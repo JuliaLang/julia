@@ -163,6 +163,8 @@ print(s::RopeString) = print(s.head,s.tail)
 
 ## generic string utilities ##
 
+# TODO: handle unicode escapes.
+
 function escape_string(s::String, q)
     e = q ? "\"" : ""
     i = start(s)
@@ -185,61 +187,70 @@ end
 escape_string(s::String) = escape_string(s,false)
 quote_string(s::String)  = escape_string(s,true)
 
-# function unescape_string(esc::String)
-#     raw = ""
-#     i = 1
-#     while i <= length(esc)
-#         if i < length(esc) && esc[i] == "\\"
-#             e = esc[i+1]
-#             i += 2
-#             c = e == "a" ?  7 :
-#                 e == "b" ?  8 :
-#                 e == "t" ?  9 :
-#                 e == "n" ? 10 :
-#                 e == "v" ? 11 :
-#                 e == "f" ? 12 :
-#                 e == "r" ? 13 :
-#                 e == "e" ? 27 :
-#                 e == "x" ? begin
-#                     x = 0
-#                     m = min(i+1,length(esc))
-#                     while i <= m
-#                         if "0" <= esc[i] <= "9"
-#                             x = 16*x + ord(esc[i]) - ord("0")
-#                         elseif "a" <= esc[i] <= "f"
-#                             x = 16*x + ord(esc[i]) - ord("a") + 10
-#                         elseif "A" <= esc[i] <= "F"
-#                             x = 16*x + ord(esc[i]) - ord("A") + 10
-#                         else
-#                             break
-#                         end
-#                         i += 1
-#                     end
-#                     if esc[i-1] == "x"
-#                         error("\\x used with no following hex digits")
-#                     end
-#                     x
-#                 end :
-#                 "0" <= e <= "7" ? begin
-#                     x = ord(e) - ord("0")
-#                     m = min(i+1,length(esc))
-#                     while i <= m && "0" <= esc[i] <= "7"
-#                         x = 8*x + ord(esc[i]) - ord("0")
-#                         i += 1
-#                     end
-#                     if x > 255
-#                         error("octal escape sequence out of range")
-#                     end
-#                     x
-#                 end : ord(e)
-#             raw += chr(c)
-#         else
-#             raw += esc[i]
-#             i += 1
-#         end
-#     end
-#     raw
-# end
+function unescape_string(s::String)
+    u = ""
+    i = start(s)
+    while !done(s,i)
+        c, i = next(s,i)
+        if !done(s,i) && c == '\\'
+            c, i = next(s,i)
+            x = c == 'a' ?  7 :
+                c == 'b' ?  8 :
+                c == 't' ?  9 :
+                c == 'n' ? 10 :
+                c == 'v' ? 11 :
+                c == 'f' ? 12 :
+                c == 'r' ? 13 :
+                c == 'e' ? 27 :
+                c == 'x' ? begin
+                    n = 0
+                    k = 0
+                    while (k+=1) <= 2 && !done(s,i)
+                        c, j = next(s,i)
+                        if '0' <= c <= '9'
+                            n = (n<<4) + c-'0'
+                        elseif 'a' <= c <= 'f'
+                            n = (n<<4) + c-'a'+10
+                        elseif 'A' <= c <= 'F'
+                            n = (n<<4) + c-'A'+10
+                        else
+                            break
+                        end
+                        # n = '0' <= c <= '9' ? (n<<4) + c-'0' :
+                        #     'a' <= c <= 'f' ? (n<<4) + c-'a'+10 :
+                        #     'A' <= c <= 'F' ? (n<<4) + c-'A'+10 : break
+                        i = j
+                    end
+                    if k == 1 && n == 0
+                        error("\\x used with no following hex digits")
+                    end
+                    n
+                end :
+                '0' <= c <= '7' ? begin
+                    n = c-'0'
+                    k = 1
+                    while (k+=1) <= 3 && !done(s,i)
+                        c, j = next(s,i)
+                        if '0' <= c <= '7'
+                            n = (n<<3) + c-'0'
+                        else
+                            break
+                        end
+                        # n = '0' <= c <= '7' ? (n<<3) + c-'0' : break
+                        i = j
+                    end
+                    if n > 255
+                        error("octal escape sequence out of range")
+                    end
+                    n
+                end : c
+            u = strcat(u,char(x))
+        else
+            u = strcat(u,c)
+        end
+    end
+    u
+end
 
 function lpad(s::String, n::Int, p)
     n <= length(s) && return s
@@ -265,9 +276,9 @@ function parse_int(T::Type{Int}, s::String, base::Int)
     n = zero(T)
     base = convert(T,base)
     for c = s
-        d = '0' <= c <= '9' ? c - '0' :
-            'A' <= c <= 'Z' ? c - 'A' + 10 :
-            'a' <= c <= 'z' ? c - 'a' + 10 :
+        d = '0' <= c <= '9' ? c-'0' :
+            'A' <= c <= 'Z' ? c-'A'+10 :
+            'a' <= c <= 'z' ? c-'a'+10 :
             error("non alphanumeric digit")
         d = convert(T,d)
         if base <= d
@@ -295,7 +306,7 @@ function uint2str(n::Int, base::Int)
     UTF8String(data[:(sz-1)]) # cut out terminating NUL
 end
 
-uint2str(n::Int, base::Int, len::Int) = lpad(uint2str(n,base),len,"0")
+uint2str(n::Int, base::Int, len::Int) = lpad(uint2str(n,base),len,'0')
 
 symbol(s::UTF8String) = symbol(s.data)
 symbol(a::Array{Uint8,1}) =
