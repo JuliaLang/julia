@@ -543,8 +543,8 @@ issues 6/21/10
 * type intersect bug: Array ∩ Scalar
 * make global decls inherited
 - ccall calls convert
-- << >> precedence
-- "a ? b : break" in loop
+* << >> precedence
+- "v = break" in loop
 
 method ordering tests:
 //:  (T,T) before (Any,Any)
