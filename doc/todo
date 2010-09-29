@@ -538,9 +538,13 @@ issues 6/21/10
 - parsing hex 0x...
 * '"'
 - repl global scope change
+- clear
 * preparsed source
 * type intersect bug: Array ∩ Scalar
-- make global decls inherited
+* make global decls inherited
+- ccall calls convert
+- << >> precedence
+- "a ? b : break" in loop
 
 method ordering tests:
 //:  (T,T) before (Any,Any)

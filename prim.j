@@ -12,6 +12,7 @@ typealias Size Int32
 div(x::Int32, y::Int32) = boxsi32(sdiv_int(unbox32(x), unbox32(y)))
 < (x::Int32, y::Int32) = slt_int(unbox32(x),unbox32(y))
 ==(x::Int32, y::Int32) = eq_int(unbox32(x),unbox32(y))
+floor(x::Float64) = ccall(dlsym(JuliaDLHandle,"floor"),Float64,(Float64,),x)
 
 # fallback definitions for emulating N-arg operators with 2-arg definitions
 (*)() = 1
@@ -201,3 +202,16 @@ copy(e::Expr) = Expr(e.head, copy(e.args), e.type)
 # sizeof
 sizeof{T}(x::T) = sizeof(T)
 sizeof(t::Type) = error(strcat("size of type ",string(t)," unknown"))
+
+function assert(c)
+    if !c
+        error("Assertion failed.")
+    end
+    true
+end
+
+# needed by type inference
+symbol(s::UTF8String) = symbol(s.data)
+symbol(a::Array{Uint8,1}) =
+    ccall(dlsym(JuliaDLHandle,"jl_symbol"), Any, (Ptr{Uint8},), a)::Symbol
+gensym() = ccall(dlsym(JuliaDLHandle,"jl_gensym"), Any, ())::Symbol

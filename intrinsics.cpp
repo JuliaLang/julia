@@ -89,24 +89,30 @@ static jl_value_t *jl_typeid_to_type(int i)
 
 static bool has_julia_type(Value *v)
 {
-    const char *name = v->getName().data();
-    const char *sep = strrchr(name, '$');
-    return (sep != NULL);
+    return ((dynamic_cast<Instruction*>(v) != NULL) &&
+            ((Instruction*)v)->hasMetadata());
+}
+
+static jl_value_t *julia_type_of_without_metadata(Value *v)
+{
+    if (dynamic_cast<AllocaInst*>(v) != NULL &&
+        v->getType() != jl_pvalue_llvmt) {
+        // an alloca always has llvm type pointer
+        return llvm_type_to_julia(v->getType()->getContainedType(0));
+    }
+    return llvm_type_to_julia(v->getType());
 }
 
 static jl_value_t *julia_type_of(Value *v)
 {
-    const char *name = v->getName().data();
-    const char *sep = strrchr(name, '$');
-    if (sep == NULL) {
-        if (dynamic_cast<AllocaInst*>(v) != NULL &&
-            v->getType() != jl_pvalue_llvmt) {
-            // an alloca always has llvm type pointer
-            return llvm_type_to_julia(v->getType()->getContainedType(0));
-        }
-        return llvm_type_to_julia(v->getType());
+    if (dynamic_cast<Instruction*>(v) == NULL ||
+        !((Instruction*)v)->hasMetadata()) {
+        return julia_type_of_without_metadata(v);
     }
-    int id = (sep[1]-1) + (sep[2]-1)*255;
+    MDNode *mdn = ((Instruction*)v)->getMetadata((unsigned int)0);
+    MDString *md = (MDString*)mdn->getOperand(0);
+    const char *vts = md->getString().data();
+    int id = (vts[0]-1) + (vts[1]-1)*255;
     return jl_typeid_to_type(id);
 }
 
@@ -123,27 +129,32 @@ static bool is_julia_type_representable(jl_value_t *jt)
           is_julia_type_representable(jl_tparam0(jt))));
 }
 
+static Value *NoOpCast(Value *v)
+{
+    v = CastInst::Create(Instruction::BitCast, v, v->getType());
+    builder.Insert((Instruction*)v);
+    return v;
+}
+
 static Value *mark_julia_type(Value *v, jl_value_t *jt)
 {
-    if (julia_type_of(v) == jt)
+    if (has_julia_type(v) && julia_type_of(v) == jt)
         return v;
-    if (is_julia_type_representable(jt)) {
-        const char *vname = v->getName().data();
-        const char *sep = strrchr(vname, '$');
-        assert(sep);
-        std::string newname(vname);
-        v->setName(newname.substr(0, (sep-vname)));
-        return v;
-    }
-    //Value *x = builder.CreateBitCast(v, v->getType());
-    char name[4];
-    name[0] = '$';
+    if (julia_type_of_without_metadata(v) == jt)
+        return NoOpCast(v);
+    if (dynamic_cast<Instruction*>(v) == NULL)
+        v = NoOpCast(v);
+    assert(dynamic_cast<Instruction*>(v));
+    char name[3];
     int id = jl_type_to_typeid(jt);
     // store id as base-255 to avoid NUL
-    name[1] = (id%255)+1;
-    name[2] = (id/255)+1;
-    name[3] = '\0';
-    v->setName(v->getName()+std::string(name));
+    name[0] = (id%255)+1;
+    name[1] = (id/255)+1;
+    name[2] = '\0';
+    MDString *md = MDString::get(jl_LLVMContext, name);
+    Value *const vals[1] = {md};
+    MDNode *mdn = MDNode::get(jl_LLVMContext, vals, 1);
+    ((Instruction*)v)->setMetadata((unsigned int)0, mdn);
     return v;
 }
 
@@ -235,9 +246,12 @@ static Value *boxed(Value *v)
     if (jb == jl_uint32_type) return builder.CreateCall(box_uint32_func, v);
     if (jb == jl_uint64_type) return builder.CreateCall(box_uint64_func, v);
     if (jl_is_cpointer_type(jt)) {
+        if (!v->getType()->isPointerTy())
+            v = builder.CreateIntToPtr(v, T_pint8);
+        else
+            v = builder.CreateBitCast(v, T_pint8);
         return builder.CreateCall2(box_pointer_func,
-                                   literal_pointer_val(jt),
-                                   builder.CreateBitCast(v, T_pint8));
+                                   literal_pointer_val(jt), v);
     }
     if (jl_is_bits_type(jt)) {
         int nb = jl_bitstype_nbits(jt);
@@ -480,6 +494,8 @@ static Value *emit_unbox(const Type *to, const Type *pto, Value *x)
         // unbox8(x::Bool) work.
         if (x->getType() == T_int1 && to == T_int8)
             return builder.CreateZExt(x, T_int8);
+        if (x->getType()->isPointerTy() && !to->isPointerTy())
+            return builder.CreatePtrToInt(x, to);
         return x;
     }
     //assert(x->getType() == jl_pvalue_llvmt);

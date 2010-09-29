@@ -510,15 +510,28 @@
 	  (error "invalid for loop syntax: expected symbol"))
       (if c
 	  (let ((cnt (gensym))
-		(lim (gensym)))
+		(lim (gensym))
+		(aa  (if (atom? a) a (gensym)))
+		(bb  (if (atom? b) b (gensym)))
+		(cc  (if (atom? c) c (gensym))))
 	    `(scope-block
 	     (block
+	      ,@(if (eq? aa a) '() `((= ,aa ,a)))
+	      ,@(if (eq? bb b) '() `((= ,bb ,b)))
+	      ,@(if (eq? cc c) '() `((= ,cc ,c)))
 	      (= ,cnt 0)
-	      (= ,lim (call int32 (call floor (call / (call - ,c ,a) ,b))))
+	      (= ,lim 
+		 ;; integer version
+		 #;(if (|\|\||
+		      (call == (call < ,cc ,aa) (call < ,bb 0))
+		      (call == ,cc ,aa))
+		     (call (top div) (call - ,cc ,aa) ,bb)
+		     -1)
+		 (call int32 (call floor (call / (call - ,cc ,aa) ,bb))))
 	      (break-block loop-exit
 			   (_while (call <= ,cnt ,lim)
 				   (block
-				    (= ,var (call + ,a (call * ,cnt ,b)))
+				    (= ,var (call + ,aa (call * ,cnt ,bb)))
 				    (break-block loop-cont
 						 ,body)
 				    (= ,cnt (call + 1 ,cnt))))))))

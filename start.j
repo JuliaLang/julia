@@ -2,7 +2,6 @@
 load("range.j")
 load("prim.j")
 load("show.j")
-load("util.j")
 load("operators.j")
 
 # primitive data types
@@ -10,17 +9,25 @@ load("bool.j")
 load("scalar.j")
 load("int.j")
 load("float.j")
+
+# data types needed by inference
+load("array.j")
+load("intset.j")
+load("table.j")
+
+# compiler
+load("inference.j")
+(()->ccall(dlsym(JuliaDLHandle,"jl_enable_inference"),Void,()))()
+
+# other primitive data types
 load("complex.j")
 load("rational.j")
-load("array.j")
 load("string.j")
 load("utf8.j")
 
-# complex data types
+# other data types
 load("list.j")
 load("dequeue.j")
-load("intset.j")
-load("table.j")
 load("sparse.j")
 load("tree.j")
 
@@ -35,8 +42,8 @@ load("io.j")
 load("task.j")
 load("multi.j")
 
-# compiler
-load("inference.j")
+# misc
+load("util.j")
 
 scheduler = Task(schedule)
 # bootstrap the current task into the scheduler.
