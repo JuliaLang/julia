@@ -115,6 +115,8 @@ struct RopeString <: String
     depth::Int32
     length::Index
 
+    # TODO: be more clever about cases like empty strings.
+
     RopeString(h::RopeString, t::RopeString) =
         depth(h.tail) + depth(t) < depth(h.head) ?
             RopeString(h.head, RopeString(h.tail, t)) :
@@ -176,8 +178,10 @@ function escape_string(s::String, q)
             c == '\e'    ? "\\e" :
         q&& c == '\"'    ? "\\\"" :
             31 < c < 127 ? string(c) :
-            7 <= c <= 13 ? string('\\',"abtnvfr"[c-6]) :
-                           strcat("\\", uint2str(c,8,3))
+            7 <= c <= 13 ? string('\\', "abtnvfr"[c-6]) :
+            c <= 127     ? strcat("\\",  uint2str(c,8,3)) :
+            c <= 0xFFFF  ? strcat("\\u", uint2str(c,16,4)) :
+                           strcat("\\U", uint2str(c,16,8))
         e = strcat(e,d)
         i = j
     end
@@ -202,26 +206,27 @@ function unescape_string(s::String)
                 c == 'f' ? 12 :
                 c == 'r' ? 13 :
                 c == 'e' ? 27 :
-                c == 'x' ? begin
+                c == 'x' || c == 'u' || c == 'U' ? begin
+                    m = c == 'x' ? 2 : c == 'u' ? 4 : 8
                     n = 0
                     k = 0
-                    while (k+=1) <= 2 && !done(s,i)
+                    while (k+=1) <= m && !done(s,i)
                         c, j = next(s,i)
                         if '0' <= c <= '9'
-                            n = (n<<4) + c-'0'
+                            n = n<<4 + c-'0'
                         elseif 'a' <= c <= 'f'
-                            n = (n<<4) + c-'a'+10
+                            n = n<<4 + c-'a'+10
                         elseif 'A' <= c <= 'F'
-                            n = (n<<4) + c-'A'+10
+                            n = n<<4 + c-'A'+10
                         else
                             break
                         end
-                        # n = '0' <= c <= '9' ? (n<<4) + c-'0' :
-                        #     'a' <= c <= 'f' ? (n<<4) + c-'a'+10 :
-                        #     'A' <= c <= 'F' ? (n<<4) + c-'A'+10 : break
+                        # n = '0' <= c <= '9' ? n<<4 + c-'0' :
+                        #     'a' <= c <= 'f' ? n<<4 + c-'a'+10 :
+                        #     'A' <= c <= 'F' ? n<<4 + c-'A'+10 : break
                         i = j
                     end
-                    if k == 1 && n == 0
+                    if k == 1
                         error("\\x used with no following hex digits")
                     end
                     n
@@ -232,11 +237,11 @@ function unescape_string(s::String)
                     while (k+=1) <= 3 && !done(s,i)
                         c, j = next(s,i)
                         if '0' <= c <= '7'
-                            n = (n<<3) + c-'0'
+                            n = n<<3 + c-'0'
                         else
                             break
                         end
-                        # n = '0' <= c <= '7' ? (n<<3) + c-'0' : break
+                        # n = '0' <= c <= '7' ? n<<3 + c-'0' : break
                         i = j
                     end
                     if n > 255

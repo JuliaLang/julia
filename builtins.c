@@ -21,6 +21,17 @@
 #include <fcntl.h>
 #include <unistd.h>
 
+// --- system word size ---
+
+int jl_word_size()
+{
+#ifdef BITS64
+    return 64;
+#else
+    return 32;
+#endif
+}
+
 // --- exception raising ---
 
 extern char *julia_home;

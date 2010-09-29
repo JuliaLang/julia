@@ -182,8 +182,8 @@ chars = {
     123     '{'     "{"
     126     '~'     "~"
     127     '\177'  "\\177"
-    191     '\277'  "\\277"
-    255     '\377'  "\\377"
+    191     '\277'  "\\u00bf"
+    255     '\377'  "\\u00ff"
 }
 
 for i = 1:size(chars,1)
@@ -329,7 +329,11 @@ assert(hex("DeadBeef") == 3735928559)
 
 # bits types, printing numbers
 assert(string(uint32(-1)) == "4294967295")
-#assert(isa((()->box(Ptr{Int8},unbox32(0)))(), Ptr{Int8}))
+if word_size() == 64
+    assert(isa((()->box(Ptr{Int8},unbox64(int64(0))))(), Ptr{Int8}))
+else
+    assert(isa((()->box(Ptr{Int8},unbox32(0)))(), Ptr{Int8}))
+end
 assert(isa((()->box(Char,unbox32(65)))(), Char))
 
 # conversions
