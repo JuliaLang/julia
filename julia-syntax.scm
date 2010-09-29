@@ -35,7 +35,7 @@
 	((...)         (decl-var (cadr v)))
 	((= keyword)   (decl-var (caddr v)))
 	((|::|)        (decl-var v))
-	(else (error "malformed function argument" v)))))
+	(else (error (string "malformed function argument " v))))))
 
 ; convert a lambda list into a list of just symbols
 (define (llist-vars lst)
@@ -46,13 +46,14 @@
   (map (lambda (v)
 	 (cond ((symbol? v)  'Any)
 	       ((not (pair? v))
-		(error "malformed function arguments"))
+		(error (string "malformed function arguments " lst)))
 	       (else
 		(case (car v)
 		  ((...)         `(... ,(decl-type (cadr v))))
 		  ((= keyword)   (decl-type (caddr v)))
 		  ((|::|)        (decl-type v))
-		  (else (error "malformed function arguments" lst))))))
+		  (else (error
+			 (string "malformed function arguments " lst)))))))
        lst))
 
 ; get the variable name part of a declaration, x::int => x
@@ -520,7 +521,7 @@
 	      ,@(if (eq? bb b) '() `((= ,bb ,b)))
 	      ,@(if (eq? cc c) '() `((= ,cc ,c)))
 	      (= ,cnt 0)
-	      (= ,lim 
+	      (= ,lim
 		 ;; integer version
 		 #;(if (|\|\||
 		      (call == (call < ,cc ,aa) (call < ,bb 0))
