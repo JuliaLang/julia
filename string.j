@@ -210,20 +210,20 @@ function unescape_string(s::String)
                     while (k+=1) <= 2 && !done(s,i)
                         c, j = next(s,i)
                         if '0' <= c <= '9'
-                            n = (n<<4) + c-'0'
+                            n = n<<4 + c-'0'
                         elseif 'a' <= c <= 'f'
-                            n = (n<<4) + c-'a'+10
+                            n = n<<4 + c-'a'+10
                         elseif 'A' <= c <= 'F'
-                            n = (n<<4) + c-'A'+10
+                            n = n<<4 + c-'A'+10
                         else
                             break
                         end
-                        # n = '0' <= c <= '9' ? (n<<4) + c-'0' :
-                        #     'a' <= c <= 'f' ? (n<<4) + c-'a'+10 :
-                        #     'A' <= c <= 'F' ? (n<<4) + c-'A'+10 : break
+                        # n = '0' <= c <= '9' ? n<<4 + c-'0' :
+                        #     'a' <= c <= 'f' ? n<<4 + c-'a'+10 :
+                        #     'A' <= c <= 'F' ? n<<4 + c-'A'+10 : break
                         i = j
                     end
-                    if k == 1 && n == 0
+                    if k == 1
                         error("\\x used with no following hex digits")
                     end
                     n
@@ -234,11 +234,11 @@ function unescape_string(s::String)
                     while (k+=1) <= 3 && !done(s,i)
                         c, j = next(s,i)
                         if '0' <= c <= '7'
-                            n = (n<<3) + c-'0'
+                            n = n<<3 + c-'0'
                         else
                             break
                         end
-                        # n = '0' <= c <= '7' ? (n<<3) + c-'0' : break
+                        # n = '0' <= c <= '7' ? n<<3 + c-'0' : break
                         i = j
                     end
                     if n > 255
