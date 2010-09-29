@@ -115,6 +115,8 @@ struct RopeString <: String
     depth::Int32
     length::Index
 
+    # TODO: be more clever about cases like empty strings.
+
     RopeString(h::RopeString, t::RopeString) =
         depth(h.tail) + depth(t) < depth(h.head) ?
             RopeString(h.head, RopeString(h.tail, t)) :
