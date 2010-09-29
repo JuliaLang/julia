@@ -33,6 +33,14 @@
   (parser-wrap (lambda ()
 		 (toplevel-expr (julia-parse s)))))
 
+(define (jl-parse-source s)
+  (let ((infile (open-input-file s)))
+    (begin0
+     (parser-wrap (lambda ()
+		    (cons 'file (map toplevel-expr
+				     (julia-parse-file s infile)))))
+     (io.close infile))))
+
 (define (jl-parse-file s)
   (let ((preparsed-fname (string (string.sub s 0 (- (length s) 2))
 				 ".jp")))
@@ -43,13 +51,7 @@
 	       (> ppmt srcmt))
 	  (let ((fl (open-input-file preparsed-fname)))
 	    (begin0 (read fl) (io.close fl)))
-	  (let* ((infile (open-input-file s))
-		 (ast
-		  (parser-wrap (lambda ()
-				 (cons 'file (map toplevel-expr
-						  (julia-parse-file
-						   s infile)))))))
-	    (io.close infile)
+	  (let ((ast (jl-parse-source s)))
 	    (with-bindings
 	     ((*print-pretty* #f))
 	     (let ((outfl (file preparsed-fname :write :create :truncate)))
