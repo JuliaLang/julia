@@ -210,6 +210,9 @@ function assert(c)
     true
 end
 
+# system word size
+word_size() = ccall(dlsym(JuliaDLHandle,"jl_word_size"), Int32, ())
+
 # needed by type inference
 symbol(s::UTF8String) = symbol(s.data)
 symbol(a::Array{Uint8,1}) =

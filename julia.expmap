@@ -17,6 +17,7 @@
     bitvector_set;
     bitvector_get;
     bitvector_next;
+    jl_word_size;
     jl_enable_inference;
     jl_symbol;
     jl_matching_methods;
