@@ -153,37 +153,54 @@ assert(0.7 < real(sqrt(Complex(0,1))) < 0.707107)
 
 # string escaping & unescaping
 chars = {
-    0       '\0'    "\\0"
-    1       '\001'  "\\001"
-    6       '\006'  "\\006"
-    7       '\a'    "\\a"
-    8       '\b'    "\\b"
-    9       '\t'    "\\t"
-    10      '\n'    "\\n"
-    11      '\v'    "\\v"
-    12      '\f'    "\\f"
-    13      '\r'    "\\r"
-    27      '\e'    "\\e"
-    14      '\016'  "\\016"
-    26      '\032'  "\\032"
-    28      '\034'  "\\034"
-    32      ' '     " "
-    47      '/'     "/"
-    48      '0'     "0"
-    57      '9'     "9"
-    58      ':'     ":"
-    64      '@'     "@"
-    65      'A'     "A"
-    90      'Z'     "Z"
-    91      '['     "["
-    96      '`'     "`"
-    97      'a'     "a"
-    122     'z'     "z"
-    123     '{'     "{"
-    126     '~'     "~"
-    127     '\177'  "\\177"
-    191     '\277'  "\\u00bf"
-    255     '\377'  "\\u00ff"
+    0x00000000      '\0'        "\\0"
+    0x00000001      '\001'      "\\001"
+    0x00000006      '\006'      "\\006"
+    0x00000007      '\a'        "\\a"
+    0x00000008      '\b'        "\\b"
+    0x00000009      '\t'        "\\t"
+    0x0000000a      '\n'        "\\n"
+    0x0000000b      '\v'        "\\v"
+    0x0000000c      '\f'        "\\f"
+    0x0000000d      '\r'        "\\r"
+    0x0000001b      '\e'        "\\e"
+    0x0000000e      '\016'      "\\016"
+    0x0000001a      '\032'      "\\032"
+    0x0000001c      '\034'      "\\034"
+    0x00000020      ' '         " "
+    0x0000002f      '/'         "/"
+    0x00000030      '0'         "0"
+    0x00000039      '9'         "9"
+    0x0000003a      ':'         ":"
+    0x00000040      '@'         "@"
+    0x00000041      'A'         "A"
+    0x0000005a      'Z'         "Z"
+    0x0000005b      '['         "["
+    0x00000060      '`'         "`"
+    0x00000061      'a'         "a"
+    0x0000007a      'z'         "z"
+    0x0000007b      '{'         "{"
+    0x0000007e      '~'         "~"
+    0x0000007f      '\177'      "\\177"
+    0x000000bf      '\u00bf'    "\\u00bf"
+    0x000000ff      '\u00ff'    "\\u00ff"
+    0x00000100      '\u0100'    "\\u0100"
+    0x000001ff      '\u01ff'    "\\u01ff"
+    0x00000fff      '\u0fff'    "\\u0fff"
+    0x00001000      '\u1000'    "\\u1000"
+    0x00001fff      '\u1fff'    "\\u1fff"
+    0x0000ffff      '\uffff'    "\\uffff"
+    0x00010000      '\U10000'   "\\U00010000"
+    0x0001ffff      '\U1ffff'   "\\U0001ffff"
+    0x0002ffff      '\U2ffff'   "\\U0002ffff"
+    0x00030000      '\U30000'   "\\U00030000"
+    0x000dffff      '\Udffff'   "\\U000dffff"
+    0x000e0000      '\Ue0000'   "\\U000e0000"
+    0x000effff      '\Ueffff'   "\\U000effff"
+    0x000f0000      '\Uf0000'   "\\U000f0000"
+    0x000fffff      '\Ufffff'   "\\U000fffff"
+    0x00100000      '\U100000'  "\\U00100000"
+    0x0010ffff      '\U10ffff'  "\\U0010ffff"
 }
 
 for i = 1:size(chars,1)
@@ -196,7 +213,10 @@ for i = 1:size(chars,1)
     end
 end
 
-for i = 0:255, p = {"","\0","x","\127","xxx"}
+# TODO: implement transcoding to UTF-8 and do comparisons that way too.
+
+for i = 0:255, p = {"","\0","x","xxx","\x7f","\uFF","\uFFF",
+                    "\uFFFF","\U10000","\U10FFF","\U10FFFF"}
     c = char(i)
     assert(strcat(unescape_string(strcat("\\",uint2str(i,8,1),p))) == strcat(c,p))
     assert(strcat(unescape_string(strcat("\\",uint2str(i,8,2),p))) == strcat(c,p))
@@ -282,6 +302,8 @@ assert("\x0F" == unescape_string("\\x0F"))
 # assert("\xf1a" == unescape_string("\\xf1a"))
 # assert("\xffa" == unescape_string("\\xffa"))
 # assert("\xfFa" == unescape_string("\\xfFa"))
+
+# TODO: more Unicode testing here.
 
 # integer parsing
 assert(parse_int(Int32,"0",36) == 0)
