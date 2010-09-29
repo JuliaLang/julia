@@ -535,7 +535,7 @@ issues 6/21/10
 - SPMD layer
 
 * "let i=0; print(i); end" should parse. use commas for init exprs
-- parsing hex 0x...
+* parsing hex 0x...
 * '"'
 - repl global scope change
 - clear
@@ -544,7 +544,7 @@ issues 6/21/10
 * make global decls inherited
 - ccall calls convert
 * << >> precedence
-- "v = break" in loop
+- break in value position
 
 method ordering tests:
 //:  (T,T) before (Any,Any)
