@@ -35,7 +35,7 @@
 	((...)         (decl-var (cadr v)))
 	((= keyword)   (decl-var (caddr v)))
 	((|::|)        (decl-var v))
-	(else (error "malformed function argument" v)))))
+	(else (error (string "malformed function argument " v))))))
 
 ; convert a lambda list into a list of just symbols
 (define (llist-vars lst)
@@ -46,13 +46,14 @@
   (map (lambda (v)
 	 (cond ((symbol? v)  'Any)
 	       ((not (pair? v))
-		(error "malformed function arguments"))
+		(error (string "malformed function arguments " lst)))
 	       (else
 		(case (car v)
 		  ((...)         `(... ,(decl-type (cadr v))))
 		  ((= keyword)   (decl-type (caddr v)))
 		  ((|::|)        (decl-type v))
-		  (else (error "malformed function arguments" lst))))))
+		  (else (error
+			 (string "malformed function arguments " lst)))))))
        lst))
 
 ; get the variable name part of a declaration, x::int => x
@@ -510,15 +511,28 @@
 	  (error "invalid for loop syntax: expected symbol"))
       (if c
 	  (let ((cnt (gensym))
-		(lim (gensym)))
+		(lim (gensym))
+		(aa  (if (atom? a) a (gensym)))
+		(bb  (if (atom? b) b (gensym)))
+		(cc  (if (atom? c) c (gensym))))
 	    `(scope-block
 	     (block
+	      ,@(if (eq? aa a) '() `((= ,aa ,a)))
+	      ,@(if (eq? bb b) '() `((= ,bb ,b)))
+	      ,@(if (eq? cc c) '() `((= ,cc ,c)))
 	      (= ,cnt 0)
-	      (= ,lim (call int32 (call floor (call / (call - ,c ,a) ,b))))
+	      (= ,lim
+		 ;; integer version
+		 #;(if (|\|\||
+		      (call == (call < ,cc ,aa) (call < ,bb 0))
+		      (call == ,cc ,aa))
+		     (call (top div) (call - ,cc ,aa) ,bb)
+		     -1)
+		 (call int32 (call floor (call / (call - ,cc ,aa) ,bb))))
 	      (break-block loop-exit
 			   (_while (call <= ,cnt ,lim)
 				   (block
-				    (= ,var (call + ,a (call * ,cnt ,b)))
+				    (= ,var (call + ,aa (call * ,cnt ,bb)))
 				    (break-block loop-cont
 						 ,body)
 				    (= ,cnt (call + 1 ,cnt))))))))

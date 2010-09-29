@@ -154,6 +154,12 @@ static jl_value_t *scm_to_julia(value_t e)
         if (iscprim(e) && cp_numtype((cprim_t*)ptr(e))==T_UINT64) {
             return (jl_value_t*)jl_box_uint64(*(uint64_t*)cp_data((cprim_t*)ptr(e)));
         }
+        if (isfixnum(e)) {
+            int64_t ne = numval(e);
+            if (ne > S32_MAX || ne < S32_MIN)
+                return (jl_value_t*)jl_box_int64(ne);
+            return (jl_value_t*)jl_box_int32((int32_t)ne);
+        }
         uint64_t n = toulong(e, "scm_to_julia");
         if (n > S32_MAX)
             return (jl_value_t*)jl_box_int64((int64_t)n);

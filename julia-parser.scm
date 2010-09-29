@@ -16,8 +16,8 @@ TODO:
      (-> <- -- -->)
      (> < >= <= == != |.>| |.<| |.>=| |.<=| |.==| |.!=| |.=| |.!| |<:| |:>| |>:|)
      (: ..)
-     (<< >> >>>)
      (+ - |\|| $)
+     (<< >> >>>)
      (* / // .// |./| % & |.*| |\\| |.\\|)
      (^ |.^|)
      (|::|)
@@ -27,7 +27,7 @@ TODO:
 
 (define normal-ops (vector.map identity ops-by-prec))
 (define no-pipe-ops (vector.map identity ops-by-prec))
-(vector-set! no-pipe-ops 8 '(+ - $))
+(vector-set! no-pipe-ops 7 '(+ - $))
 (define range-colon-enabled #t)
 ; in space-sensitive mode "x -y" is 2 expressions, not a subtraction
 (define space-sensitive #f)
@@ -138,7 +138,8 @@ TODO:
 	(list->string (reverse str)))))
 
 (define (read-number port . leadingdot)
-  (let ((str (open-output-string)))
+  (let ((str  (open-output-string))
+	(pred char-numeric?))
     (define (allow ch)
       (let ((c (peek-char port)))
 	(and (eqv? c ch)
@@ -148,14 +149,21 @@ TODO:
 	  (error (string "invalid numeric constant "
 			 (get-output-string str) ch))))
     (define (read-digs)
-      (let ((d (accum-tok-eager (peek-char port) char-numeric? port)))
+      (let ((d (accum-tok-eager (peek-char port) pred port)))
 	(and (not (equal? d ""))
 	     (not (eof-object? d))
 	     (display d str)
 	     #t)))
     (if (pair? leadingdot)
 	(write-char #\. str)
-	(allow #\.))
+	(if (eqv? (peek-char port) #\0)
+	    (begin (write-char (read-char port) str)
+		   (if (allow #\x)
+		       (set! pred (lambda (c)
+				    (or (char-numeric? c)
+					(and (>= c #\a) (<= c #\f))
+					(and (>= c #\A) (<= c #\F)))))))
+	    (allow #\.)))
     (read-digs)
     (allow #\.)
     (read-digs)
@@ -205,7 +213,7 @@ TODO:
 
 	  ((eqv? c #\")  (read port))
 
-	  (else (error (string "invalid character" (read-char port)))))))
+	  (else (error (string "invalid character " (read-char port)))))))
 
 ; --- parser ---
 
@@ -330,13 +338,13 @@ TODO:
 ; so they can be processed by syntax passes.
 (define (parse-range s)
   (if (not range-colon-enabled)
-      (return (parse-shift s)))
+      (return (parse-expr s)))
   (if (eq? (peek-token s) ':)
       (begin (take-token s)
 	     (if (closing-token? (peek-token s))
 		 ':
 		 (list ': (parse-range s))))
-      (let loop ((ex (parse-shift s))
+      (let loop ((ex (parse-expr s))
 		 (first? #t))
 	(let ((t (peek-token s)))
 	  (if (not (eq? t ':))
@@ -345,7 +353,7 @@ TODO:
 		     (let ((argument
 			    (if (closing-token? (peek-token s))
 				':  ; missing last argument
-				(parse-shift s))))
+				(parse-expr s))))
 		       (if first?
 			   (loop (list t ex argument) #f)
 			   (loop (append ex (list argument)) #t)))))))))
@@ -369,16 +377,15 @@ TODO:
 (define (parse-arrow s) (parse-RtoL s parse-ineq  (prec-ops 4)))
 (define (parse-ineq s)  (parse-comparison s (prec-ops 5)))
 		      ; (parse-LtoR s parse-range (prec-ops 5)))
-;(define (parse-range s) (parse-LtoR s parse-shift  (prec-ops 6)))
-(define (parse-shift s) (parse-LtoR s parse-expr (prec-ops 7)))
-;(define (parse-expr s)  (parse-LtoR/chains s parse-term  (prec-ops 8) '(+)))
+;(define (parse-range s) (parse-LtoR s parse-expr  (prec-ops 6)))
+;(define (parse-expr s)  (parse-LtoR/chains s parse-shift (prec-ops 8) '(+)))
 ;(define (parse-term s)  (parse-LtoR/chains s parse-unary (prec-ops 9) '(*)))
 
 ; parse left to right, combining chains of certain operators into 1 call
 ; e.g. a+b+c => (call + a b c)
 (define (parse-expr s)
-  (let ((ops (prec-ops 8)))
-    (let loop ((ex       (parse-term s))
+  (let ((ops (prec-ops 7)))
+    (let loop ((ex       (parse-shift s))
 	       (chain-op #f))
       (let* ((t   (peek-token s))
 	     (spc (ts:space? s)))
@@ -392,11 +399,13 @@ TODO:
 		     (ts:put-back! s t)
 		     ex)
 		    ((eq? t chain-op)
-		     (loop (append ex (list (parse-term s)))
+		     (loop (append ex (list (parse-shift s)))
 			   chain-op))
 		    (else
-		     (loop (list 'call t ex (parse-term s))
+		     (loop (list 'call t ex (parse-shift s))
 			   (and (eq? t '+) t))))))))))
+
+(define (parse-shift s) (parse-LtoR s parse-term (prec-ops 8)))
 
 ; given an expression and the next token, is there a juxtaposition
 ; operator between them?
@@ -847,7 +856,7 @@ TODO:
   (skip-ws-and-comments (ts:port s))
   (if (eqv? (peek-token s) #\newline) (take-token s))
   (if (not (eof-object? (peek-token s)))
-      (error (string "extra input after end of expression:"
+      (error (string "extra input after end of expression: "
 		     (peek-token s)))))
 
 (define (julia-parse-file filename stream)

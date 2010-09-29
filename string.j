@@ -64,7 +64,7 @@ length(s::CharString) = length(s.chars)
 string(c::Char) = CharString(c)
 string(c::Char, x::Char...) = CharString(c, x...)
 
-## substrings refernce original strings ##
+## substrings reference original strings ##
 
 struct SubString <: String
     string::String
@@ -309,11 +309,6 @@ function uint2str(n::Int, base::Int)
 end
 
 uint2str(n::Int, base::Int, len::Int) = lpad(uint2str(n,base),len,'0')
-
-symbol(s::UTF8String) = symbol(s.data)
-symbol(a::Array{Uint8,1}) =
-    ccall(dlsym(JuliaDLHandle,"jl_symbol"), Any, (Ptr{Uint8},), a)::Symbol
-gensym() = ccall(dlsym(JuliaDLHandle,"jl_gensym"), Any, ())::Symbol
 
 function string(p::Ptr{Uint8})
     if p == C_NULL

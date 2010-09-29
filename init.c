@@ -143,43 +143,47 @@ static void clear_tfunc_caches()
     }
 }
 
+DLLEXPORT void jl_enable_inference()
+{
+    if (jl_boundp(jl_system_module, jl_symbol("typeinf_ext"))) {
+        jl_typeinf_func =
+            (jl_function_t*)*(jl_get_bindingp(jl_system_module,
+                                              jl_symbol("typeinf_ext")));
+        // warm up type inference to put the latency up front
+        jl_value_t *one = jl_box_int32(1);
+        jl_apply((jl_function_t*)*(jl_get_bindingp(jl_system_module,
+                                                   jl_symbol("fact"))),
+                 &one, 1);
+        /*
+          cached t-functions and inferred ASTs need to be cleared at
+          this point, because during bootstrapping we might not be
+          able to inline optimally. the reason is that we cache an AST
+          before doing inlining, to prevent infinite recursion.
+          for example, consider this function:
+          
+          > (x::Real, y::Real) = (y < x)
+          
+          after doing inference on this >, we cache its AST "(y < x)".
+          now we begin inlining. the problem is that the inlining code
+          itself will trigger compilation of functions that use >, so
+          "(y < x)" will be inlined into those functions. ultimately
+          we inline the definition of < into "(y < x)", but by then it's
+          too late, since "(y < x)" has already been inlined into some
+          functions.
+          
+          to fix this, we clear the t-function cache after all
+          type-inference related code has been compiled. now we can
+          inline everything fully without compilation of the compiler
+          itself interfering.
+        */
+        clear_tfunc_caches();
+    }
+}
+
 int jl_load_startup_file()
 {
     JL_TRY {
         jl_load("start.j");
-        if (jl_boundp(jl_system_module, jl_symbol("typeinf_ext"))) {
-            jl_typeinf_func =
-                (jl_function_t*)*(jl_get_bindingp(jl_system_module,
-                                                  jl_symbol("typeinf_ext")));
-            // warm up type inference to put the latency up front
-            jl_value_t *one = jl_box_int32(1);
-            jl_apply((jl_function_t*)*(jl_get_bindingp(jl_system_module,
-                                                       jl_symbol("fact"))),
-                     &one, 1);
-            /*
-              cached t-functions and inferred ASTs need to be cleared at
-              this point, because during bootstrapping we might not be
-              able to inline optimally. the reason is that we cache an AST
-              before doing inlining, to prevent infinite recursion.
-              for example, consider this function:
-
-              > (x::Real, y::Real) = (y < x)
-
-              after doing inference on this >, we cache its AST "(y < x)".
-              now we begin inlining. the problem is that the inlining code
-              itself will trigger compilation of functions that use >, so
-              "(y < x)" will be inlined into those functions. ultimately
-              we inline the definition of < into "(y < x)", but by then it's
-              too late, since "(y < x)" has already been inlined into some
-              functions.
-
-              to fix this, we clear the t-function cache after all
-              type-inference related code has been compiled. now we can
-              inline everything fully without compilation of the compiler
-              itself interfering.
-            */
-            clear_tfunc_caches();
-        }
     }
     JL_CATCH {
         ios_printf(ios_stderr, "error during startup.\n");
