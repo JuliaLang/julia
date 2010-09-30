@@ -311,3 +311,14 @@ end
 
 string(x) = string(ccall(dlsym(JuliaDLHandle,"jl_show_to_string"),
                          Ptr{Uint8}, (Any,), x))
+
+## lexicographically compare byte arrays (used by Latin-1 and UTF-8) ##
+
+libc = dlopen("libc")
+
+function lexcmp(a::Array{Uint8,1}, b::Array{Uint8,1})
+    d = ccall(dlsym(libc,"memcmp"), Int32,
+              (Ptr{Uint8}, Ptr{Uint8}, Size),
+              a, b, min(length(a),length(b)))
+    d < 0 ? -1 : d > 0 ? +1 : cmp(length(a),length(b))
+end
