@@ -285,7 +285,7 @@ oct(s::String) = parse_int(Int64, s,  8)
 dec(s::String) = parse_int(Int64, s, 10)
 hex(s::String) = parse_int(Int64, s, 16)
 
-## bastard stuff that doesn't quite fit anywhere ##
+## integer to string functions ##
 
 function uint2str(n::Int, base::Int)
     ndig = n==convert(typeof(n),0) ? 1 : int32(floor(log(n)/log(base)+1))
@@ -298,6 +298,8 @@ function uint2str(n::Int, base::Int)
 end
 
 uint2str(n::Int, base::Int, len::Int) = lpad(uint2str(n,base),len,'0')
+
+## conversion of general objects to strings ##
 
 function string(p::Ptr{Uint8})
     if p == C_NULL
