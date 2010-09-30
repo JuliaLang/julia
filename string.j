@@ -172,14 +172,14 @@ function escape_string(s::String, q)
     i = start(s)
     while !done(s,i)
         c, j = next(s,i)
-        z = !done(s,j) && '0' <= next(s,j)[1] <= '7' ? "\\000" : "\\0"
+        z = !done(s,j) && '0' <= next(s,j)[1] <= '7' ? "\\x00" : "\\0"
         d = c == '\0'    ? z :
             c == '\\'    ? "\\\\" :
             c == '\e'    ? "\\e" :
         q&& c == '\"'    ? "\\\"" :
             31 < c < 127 ? string(c) :
             7 <= c <= 13 ? string('\\', "abtnvfr"[c-6]) :
-            c <= 127     ? strcat("\\",  uint2str(c,8,3)) :
+            c <= 127     ? strcat("\\x", uint2str(c,16,2)) :
             c <= 0xFFFF  ? strcat("\\u", uint2str(c,16,4)) :
                            strcat("\\U", uint2str(c,16,8))
         e = strcat(e,d)
