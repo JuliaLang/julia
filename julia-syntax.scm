@@ -851,7 +851,8 @@
   ; This expression walk is entirely within the "else" clause of the giant
   ; case expression. Everything else deals with special forms.
   (define (to-lff e dest tail)
-    (if (or (not (pair? e)) (quoted? e) (equal? e '(null)))
+    (if (or (not (pair? e)) (memq (car e) '(quote top line))
+	    (equal? e '(null)))
 	(cond ((symbol? dest) (cons `(= ,dest ,e) '()))
 	      (dest (cons (if tail `(return ,e) e)
 			  '()))
@@ -952,9 +953,9 @@
 		 (cons `(scope-block ,(to-blk r))
 		       '()))))
 
-	  ((break) (if dest
-		       (error "misplaced break or continue")
-		       (cons e '())))
+	  ;; move the break to the list of preceding statements. value is
+	  ;; null but this will never be observed.
+	  ((break) (cons '(null) (list e)))
 
 	  ((lambda)
 	   (let ((l `(lambda ,(cadr e)
