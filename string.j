@@ -294,7 +294,7 @@ function uint2str(n::Int, base::Int)
     ccall(dlsym(JuliaDLHandle,"uint2str"), Ptr{Uint8},
           (Ptr{Uint8}, Size, Uint64, Uint32),
           data, sz, uint64(n), uint32(base))
-    UTF8String(data[:(sz-1)]) # cut out terminating NUL
+    Latin1String(data[:(sz-1)]) # cut out terminating NUL
 end
 
 uint2str(n::Int, base::Int, len::Int) = lpad(uint2str(n,base),len,'0')

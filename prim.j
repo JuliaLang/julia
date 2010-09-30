@@ -214,6 +214,7 @@ end
 word_size() = ccall(dlsym(JuliaDLHandle,"jl_word_size"), Int32, ())
 
 # needed by type inference
+symbol(s::Latin1String) = symbol(s.data)
 symbol(s::UTF8String) = symbol(s.data)
 symbol(a::Array{Uint8,1}) =
     ccall(dlsym(JuliaDLHandle,"jl_symbol"), Any, (Ptr{Uint8},), a)::Symbol
