@@ -630,12 +630,14 @@ int u8_isvalid(const char *str, int length)
 {
     const unsigned char *p, *pend = (unsigned char*)str + length;
     unsigned char c;
+    int ret = 1; /* ASCII */
     int ab;
 
     for (p = (unsigned char*)str; p < pend; p++) {
         c = *p;
         if (c < 128)
             continue;
+        ret = 2; /* non-ASCII UTF-8 */
         if ((c & 0xc0) != 0xc0)
             return 0;
         ab = trailingBytesForUTF8[c];
@@ -684,7 +686,7 @@ int u8_isvalid(const char *str, int length)
         }
     }
 
-    return 1;
+    return ret;
 }
 
 int u8_reverse(char *dest, char * src, size_t len)
