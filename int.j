@@ -271,6 +271,9 @@ bswap(x::Uint64) = boxui64(bswap_int(unbox64(x)))
 <=(x::Int, y::Int) = !(x > y)
 >=(x::Int, y::Int) = !(x < y)
 
+# not sure if we can safely generalize this to floats:
+cmp(x::Int, y::Int) = x < y ? -1 : x > y ? +1 : 0
+
 ## character operations & comparisons ##
 
 -(x::Char) = -int32(x)

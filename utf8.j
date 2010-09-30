@@ -51,6 +51,15 @@ end
 
 length(s::UTF8String) = length(s.data)
 
+libc = dlopen("libc")
+
+function cmp(a::UTF8String, b::UTF8String)
+    d = ccall(dlsym(libc,"memcmp"), Int32,
+              (Ptr{Uint8}, Ptr{Uint8}, Size),
+              a, b, min(length(a),length(b)))
+    d < 0 ? -1 : d > 0 ? +1 : cmp(length(a),length(b))
+end
+
 ## outputing UTF-8 strings ##
 
 print(s::UTF8String) = print(s.data)

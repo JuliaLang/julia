@@ -1,4 +1,4 @@
-libc = dlopen("libc")
+# libc = dlopen("libc")
 
 sleep(s::Scalar) = ccall(dlsym(libc,"usleep"), Uint32, (Uint32,), uint32(round(s*1e6)))
 unixtime() = ccall(dlsym(libc,"time"), Uint32, (Ptr{Uint32},), C_NULL)
@@ -38,8 +38,7 @@ tty_columns() = parse_int(Int32, getenv("COLUMNS"), 10)
 function reinterpret{T,S}(::Type{T}, a::Array{S})
     b = Array(T, div(numel(a)*sizeof(S),sizeof(T)))
     ccall(dlsym(libc,"memcpy"),
-          Ptr{T},
-          (Ptr{T}, Ptr{S}, Size),
+          Ptr{T}, (Ptr{T}, Ptr{S}, Size),
           b, a, length(b)*sizeof(T))
     b
 end
