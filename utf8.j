@@ -50,15 +50,7 @@ end
 ## overload methods for efficiency ##
 
 length(s::UTF8String) = length(s.data)
-
-libc = dlopen("libc")
-
-function cmp(a::UTF8String, b::UTF8String)
-    d = ccall(dlsym(libc,"memcmp"), Int32,
-              (Ptr{Uint8}, Ptr{Uint8}, Size),
-              a, b, min(length(a),length(b)))
-    d < 0 ? -1 : d > 0 ? +1 : cmp(length(a),length(b))
-end
+cmp(a::UTF8String, b::UTF8String) = lexcmp(a.data, b.data)
 
 ## outputing UTF-8 strings ##
 

@@ -72,6 +72,9 @@ debug release: %: julia-%
 test: debug
 	./julia tests.j
 
+testall: test
+	./julia test_utf8.j
+
 clean:
 	rm -f *.o
 	rm -f *.do

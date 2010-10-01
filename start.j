@@ -23,6 +23,7 @@ load("inference.j")
 load("complex.j")
 load("rational.j")
 load("string.j")
+load("latin1.j")
 load("utf8.j")
 
 # other data types

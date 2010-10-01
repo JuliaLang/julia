@@ -285,7 +285,7 @@ oct(s::String) = parse_int(Int64, s,  8)
 dec(s::String) = parse_int(Int64, s, 10)
 hex(s::String) = parse_int(Int64, s, 16)
 
-## bastard stuff that doesn't quite fit anywhere ##
+## integer to string functions ##
 
 function uint2str(n::Int, base::Int)
     ndig = n==convert(typeof(n),0) ? 1 : int32(floor(log(n)/log(base)+1))
@@ -294,10 +294,12 @@ function uint2str(n::Int, base::Int)
     ccall(dlsym(JuliaDLHandle,"uint2str"), Ptr{Uint8},
           (Ptr{Uint8}, Size, Uint64, Uint32),
           data, sz, uint64(n), uint32(base))
-    UTF8String(data[:(sz-1)]) # cut out terminating NUL
+    Latin1String(data[:(sz-1)]) # cut out terminating NUL
 end
 
 uint2str(n::Int, base::Int, len::Int) = lpad(uint2str(n,base),len,'0')
+
+## conversion of general objects to strings ##
 
 function string(p::Ptr{Uint8})
     if p == C_NULL
@@ -309,3 +311,14 @@ end
 
 string(x) = string(ccall(dlsym(JuliaDLHandle,"jl_show_to_string"),
                          Ptr{Uint8}, (Any,), x))
+
+## lexicographically compare byte arrays (used by Latin-1 and UTF-8) ##
+
+libc = dlopen("libc")
+
+function lexcmp(a::Array{Uint8,1}, b::Array{Uint8,1})
+    d = ccall(dlsym(libc,"memcmp"), Int32,
+              (Ptr{Uint8}, Ptr{Uint8}, Size),
+              a, b, min(length(a),length(b)))
+    d < 0 ? -1 : d > 0 ? +1 : cmp(length(a),length(b))
+end

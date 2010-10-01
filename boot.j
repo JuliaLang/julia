@@ -102,6 +102,11 @@ bitstype 32 Float32 <: Float{Float32}
 bitstype 64 Float64 <: Float{Float64}
 
 type String
+
+struct Latin1String <: String
+    data::Array{Uint8,1}
+end
+
 struct UTF8String <: String
     data::Array{Uint8,1}
 end
