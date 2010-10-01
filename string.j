@@ -165,10 +165,9 @@ print(s::RopeString) = print(s.head,s.tail)
 
 ## generic string utilities ##
 
-# TODO: handle unicode escapes.
-
-function escape_string(s::String, q)
-    e = q ? "\"" : ""
+function escape_string(s::String, unicode::Bool, quoted::Bool)
+    xmax = unicode ? 0x7F : 0xFF
+    e = quoted ? "\"" : ""
     i = start(s)
     while !done(s,i)
         c, j = next(s,i)
@@ -176,20 +175,24 @@ function escape_string(s::String, q)
         d = c == '\0'    ? z :
             c == '\\'    ? "\\\\" :
             c == '\e'    ? "\\e" :
-        q&& c == '\"'    ? "\\\"" :
+  quoted && c == '\"'    ? "\\\"" :
             31 < c < 127 ? string(c) :
             7 <= c <= 13 ? string('\\', "abtnvfr"[c-6]) :
-            c <= 127     ? strcat("\\x", uint2str(c,16,2)) :
+            c <= xmax    ? strcat("\\x", uint2str(c,16,2)) :
             c <= 0xFFFF  ? strcat("\\u", uint2str(c,16,4)) :
                            strcat("\\U", uint2str(c,16,8))
         e = strcat(e,d)
         i = j
     end
-    q ? strcat(e,"\"") : e
+    quoted ? strcat(e,"\"") : e
 end
 
-escape_string(s::String) = escape_string(s,false)
-quote_string(s::String)  = escape_string(s,true)
+escape_string(s::Latin1String) = escape_string(s, false, false)
+quote_string(s::Latin1String)  = escape_string(s, false, true)
+escape_string(s::String)       = escape_string(s, true, false)
+quote_string(s::String)        = escape_string(s, true, true)
+
+# TODO: unescaping needs to work on bytes to match the parser
 
 function unescape_string(s::String)
     u = ""
