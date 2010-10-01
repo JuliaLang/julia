@@ -959,6 +959,18 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool value)
         return literal_pointer_val((jl_value_t*)jl_null);
     }
     else if (ex->head == static_typeof_sym) {
+        jl_value_t *extype = expr_type((jl_value_t*)ex);
+        if (jl_is_tag_type(extype) &&
+            ((jl_tag_type_t*)extype)->name == jl_type_type->name) {
+            extype = jl_tparam0(extype);
+            if (jl_is_typevar(extype))
+                extype = (jl_value_t*)jl_any_type;
+        }
+        else {
+            extype = (jl_value_t*)jl_any_type;
+        }
+        return literal_pointer_val(extype);
+        /*
         jl_sym_t *s = (jl_sym_t*)args[0];
         if (jl_is_symbol(s)) {
             jl_value_t *ty = (*ctx->declTypes)[s->name];
@@ -967,6 +979,7 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool value)
             }
         }
         return literal_pointer_val((jl_value_t*)jl_any_type);
+        */
     }
     if (!strcmp(ex->head->name, "$")) {
         jl_error("syntax error: prefix $ outside backquote");

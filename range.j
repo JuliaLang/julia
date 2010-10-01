@@ -50,12 +50,15 @@ next{T<:Int}(r::RangeFrom{T}, i) = (i, i+r.step)
 
 # floating point ranges need to keep an integer counter
 start(r::Range) = (1, r.start)
-done(r::Range, st) = (r.step < 0 ? (st[2] < r.stop) : (st[2] > r.stop))
-next(r::Range, st) = (st[2], (st[1]+1, r.start + st[1]*r.step))
+done{T}(r::Range{T}, st) =
+    (r.step < 0 ? (st[2]::T < r.stop) : (st[2]::T > r.stop))
+next{T}(r::Range{T}, st) =
+    (st[2]::T, (st[1]::Int+1, r.start + st[1]::Int*r.step))
 
 start(r::RangeFrom) = (1, r.start)
 done(r::RangeFrom, st) = false
-next(r::RangeFrom, st) = (st[2], (st[1]+1, r.start + st[1]*r.step))
+next{T}(r::RangeFrom{T}, st) =
+    (st[2]::T, (st[1]::Int+1, r.start + st[1]::Int*r.step))
 
 start(r::RangeTo) = error("range has no initial value")
 start(r::RangeBy) = error("range has no initial value")

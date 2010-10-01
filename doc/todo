@@ -522,6 +522,7 @@ issues 6/21/10
 * bitstype syntax
 * boot.j
 - make optimized arrayset, arrayref work on all Arrays
+- calling convention optimization, w/ wrapper funcs for generic calling
 - intrinsic calls from command line (use compiler)
 ? new for loop, comprehension, reduction formulation
 * faster I/O (not byte at a time!)
@@ -544,7 +545,7 @@ issues 6/21/10
 * make global decls inherited
 - ccall calls convert
 * << >> precedence
-- break in value position
+* break in value position
 
 method ordering tests:
 //:  (T,T) before (Any,Any)

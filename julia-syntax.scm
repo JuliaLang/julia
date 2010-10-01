@@ -697,7 +697,7 @@
 
       ;; get the first value in a range
       (define (first-val range)
-	`(call (top ref)
+	`(call (top tupleref)
 	       (call (top next) ,range (call (top start) ,range)) 1))
 
       ;; evaluate one expression to figure out type and size
