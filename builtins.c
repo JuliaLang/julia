@@ -179,8 +179,8 @@ JL_CALLABLE(jl_f_apply)
 JL_CALLABLE(jl_f_error)
 {
     JL_NARGS(error, 1, 1);
-    if (!jl_is_utf8_string(args[0]))
-        jl_error("error: expected UTF8String");
+    if (!jl_is_byte_string(args[0]))
+        jl_error("error: expected Latin1String or UTF8String");
     jl_error(jl_string_data(args[0]));
     return (jl_value_t*)jl_null;
 }
@@ -279,8 +279,8 @@ void jl_load(const char *fname)
 JL_CALLABLE(jl_f_load)
 {
     JL_NARGS(load, 1, 1);
-    if (!jl_is_utf8_string(args[0]))
-        jl_error("load: expected UTF8String");
+    if (!jl_is_byte_string(args[0]))
+        jl_error("load: expected Latin1String or UTF8String");
     char *fname = jl_string_data(args[0]);
     jl_load(fname);
     return (jl_value_t*)jl_null;
@@ -1187,8 +1187,8 @@ JL_CALLABLE(jl_f_invoke)
 JL_CALLABLE(jl_f_dlopen)
 {
     JL_NARGS(dlopen, 1, 1);
-    if (!jl_is_utf8_string(args[0]))
-        jl_error("dlopen: expected UTF8String");
+    if (!jl_is_byte_string(args[0]))
+        jl_error("dlopen: expected Latin1String or UTF8String");
     char *fname = jl_string_data(args[0]);
     return jl_box_pointer(jl_pointer_void_type,
                           jl_load_dynamic_library(fname));
@@ -1201,7 +1201,7 @@ JL_CALLABLE(jl_f_dlsym)
     char *sym=NULL;
     if (jl_is_symbol(args[1]))
         sym = ((jl_sym_t*)args[1])->name;
-    else if (jl_is_utf8_string(args[1]))
+    else if (jl_is_byte_string(args[1]))
         sym = jl_string_data(args[1]);
     else
         jl_error("dlsym: expected UTF8String");
