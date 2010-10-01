@@ -443,6 +443,10 @@ next(a::Array,i) = (a[i],i+1)
 done(a::Array,i) = (i > numel(a))
 isempty(a::Array) = (numel(a) == 0)
 
+# map over vectors and matrices
+map(f, v::Vector) = [ f(v[i]) | i=1:length(v) ]
+map(f, M::Matrix) = [ f(M[i,j]) | i=1:size(M,1), j=1:size(M,2) ]
+
 # other functions
 reverse(v::Vector) = [ v[length(v)-i+1] | i=1:length(v) ]
 
