@@ -11,6 +11,9 @@ print(c::Char) = (write(current_output_stream(), c); ())
 print(s::String) = for c = s; print(c); end
 show(s::String) = print(quote_string(s))
 
+(*)(s::String...) = strcat(s...)
+(^)(s::String, r::Int32) = repeat(s,r)
+
 size(s::String) = (length(s),)
 function size(s::String, d::Index)
     if d != 1
@@ -102,6 +105,27 @@ function ref(s::String, r::RangeBy{Index})
     end
     return s
 end
+
+## efficient representation of repeated strings ##
+
+struct RepString <: String
+    string::String
+    repeat::Int32
+end
+
+function next(s::RepString, i::Index)
+    if i < 1 || i > length(s)
+        error("string index out of bounds")
+    end
+    j = mod1(i,length(s.string))
+    c, k = next(s.string, j)
+    c, k-j+i
+end
+
+length(s::RepString) = length(s.string)*s.repeat
+strlen(s::RepString) = strlen(s.string)*s.repeat
+
+repeat(s::String, r::Int32) = r <= 0 ? "" : RepString(s,r)
 
 ## ropes for efficient concatenation, etc. ##
 
@@ -255,23 +279,24 @@ function unescape_string(s::String)
     u
 end
 
-function lpad(s::String, n::Int, p)
-    n <= strlen(s) && return s
-    ps = s
-    while strlen(ps) < n
-        ps = strcat(p,ps)
-    end
-    ps[end-n+1:] # TODO: broken, should be by characters
+function lpad(s::String, n::Int, p::String)
+    m = n - strlen(s)
+    if m <= 0; return s; end
+    t = int32(ceil(m/strlen(p)))
+    x = p^t * s
+    x[end-n+1:] # TODO: broken, should be by characters
 end
 
-function rpad(s::String, n::Int, p)
-    n <= strlen(s) && return s
-    ps = s
-    while strlen(ps) < n
-        ps = strcat(ps,p)
-    end
-    ps[:n] # TODO: broken, should be by characters
+function rpad(s::String, n::Int, p::String)
+    m = n - strlen(s)
+    if m <= 0; return s; end
+    t = int32(ceil(m/strlen(p)))
+    x = s * p^t
+    x[:n] # TODO: broken, should be by characters
 end
+
+lpad(s, n::Int, p) = lpad(string(s), n, string(p))
+rpad(s, n::Int, p) = rpad(string(s), n, string(p))
 
 ## string to integer functions ##
 

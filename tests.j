@@ -219,6 +219,7 @@ end
 for i = 0:255, p = {"","\0","x","xxx","\x7f","\uFF","\uFFF",
                     "\uFFFF","\U10000","\U10FFF","\U10FFFF"}
     c = char(i)
+    # print(i,", ",escape_string(p),"\n")
     assert(strcat(unescape_string(strcat("\\",uint2str(i,8,1),p))) == strcat(c,p))
     assert(strcat(unescape_string(strcat("\\",uint2str(i,8,2),p))) == strcat(c,p))
     assert(strcat(unescape_string(strcat("\\",uint2str(i,8,3),p))) == strcat(c,p))

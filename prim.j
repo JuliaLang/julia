@@ -71,6 +71,7 @@ no_op_err(name, T) = error(strcat(name," not defined for ",string(T)))
 div(x::Number, y::Number) = truncate(x/y)
 (%)(x::Number, y::Number) = x-div(x,y)*y
 mod(x,y) = x%y
+mod1(x,y) = mod(x-one(x),y)+one(x) # TODO: broken <= 0
 (\)(x,y) = y/x
 
 # general comparisons from == and < operators
