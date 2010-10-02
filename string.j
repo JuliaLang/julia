@@ -75,14 +75,15 @@ struct SubString <: String
 
     SubString(s::String, i::Index, j::Index) = new(s, i-1, j-i+1)
     SubString(s::SubString, i::Index, j::Index) =
-        new(s.string, s.offset+i-1, j-i+1)
+        new(s.string, i-1+s.offset, j-i+1)
 end
 
 function next(s::SubString, i::Index)
     if i < 1 || i > s.length
         error("string index out of bounds")
     end
-    next(s.string,s.offset+i)
+    c, i = next(s.string, i+s.offset)
+    c, i-s.offset
 end
 
 length(s::SubString) = s.length
@@ -211,8 +212,11 @@ function unescape_string(s::String)
                 c == 'f' ? 12 :
                 c == 'r' ? 13 :
                 c == 'e' ? 27 :
-                c == 'x' || c == 'u' || c == 'U' ? begin
-                    m = c == 'x' ? 2 : c == 'u' ? 4 : 8
+                c == 'x' ||
+                c == 'u' ||
+                c == 'U' ? begin
+                    m = c == 'x' ? 2 :
+                        c == 'u' ? 4 : 8
                     n = 0
                     k = 0
                     while (k+=1) <= m && !done(s,i)
@@ -249,21 +253,21 @@ function unescape_string(s::String)
 end
 
 function lpad(s::String, n::Int, p)
-    n <= length(s) && return s
+    n <= strlen(s) && return s
     ps = s
-    while length(ps) < n
+    while strlen(ps) < n
         ps = strcat(p,ps)
     end
-    ps[end-n+1:]
+    ps[end-n+1:] # TODO: broken, should be by characters
 end
 
 function rpad(s::String, n::Int, p)
-    n <= length(s) && return s
+    n <= strlen(s) && return s
     ps = s
-    while length(ps) < n
+    while strlen(ps) < n
         ps = strcat(ps,p)
     end
-    ps[:n]
+    ps[:n] # TODO: broken, should be by characters
 end
 
 ## string to integer functions ##
