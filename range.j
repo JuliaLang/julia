@@ -29,9 +29,9 @@ length{T<:Int}(r::Range{T}) = (r.step > 0 ?
                                div((r.start-r.stop-r.step), -r.step))
 length{T<:Int}(r::Range1{T}) = (r.stop-r.start+1)
 length(r::Range) = (r.step > 0 ?
-                    int32(floor((r.stop-r.start+r.step) / r.step)) :
-                    int32(floor((r.start-r.stop-r.step) / -r.step)))
-length(r::Range1) = int32(floor(r.stop-r.start+1))
+                    int32(floor((r.stop-r.start) / r.step))+1 :
+                    int32(floor((r.start-r.stop) / -r.step))+1)
+length(r::Range1) = int32(floor(r.stop-r.start)+1)
 
 isempty(r::Range) = (r.step > 0 ? r.stop < r.start : r.stop > r.start)
 isempty(r::Range1) = (r.stop < r.start)

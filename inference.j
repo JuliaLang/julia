@@ -123,6 +123,7 @@ t_func[Array] =
     (1, Inf, (T,dims...)->(nd = length(dims);
                            et = isType(T) ? T.parameters[1] : T;
                            Array{et,nd}))
+
 static_convert(to, from) = (subtype(from, to) ? from : to)
 function static_convert(to::Tuple, from::Tuple)
     if is(to,Tuple)
@@ -162,6 +163,7 @@ t_func[`convert] =
                    end;
                    isType(t) ? static_convert(t.parameters[1],x) :
                    Any))
+
 t_func[typeof] =
     (1, 1, t->(isType(t)      ? Type{typeof(t.parameters[1])} :
                isa(t,TagKind) ? Type{t} :
@@ -172,6 +174,7 @@ t_func[typeassert] =
     (2, 2, (A, v, t)->(isType(t) ? tintersect(v,t.parameters[1]) :
                        isconstant(A[2]) ? tintersect(v,eval(A[2])) :
                        Any))
+
 function tupleref_tfunc(A, t, i)
     if is(t,())
         return None
@@ -210,6 +213,7 @@ function tupleref_tfunc(A, t, i)
     end
 end
 t_func[tupleref] = (2, 2, tupleref_tfunc)
+
 function getfield_tfunc(A, s, name)
     if !isa(s,StructKind)
         return Any
