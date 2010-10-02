@@ -11,6 +11,7 @@ print(c::Char) = (write(current_output_stream(), c); ())
 print(s::String) = for c = s; print(c); end
 show(s::String) = print(quote_string(s))
 
+size(s::String) = (length(s),)
 function size(s::String, d::Index)
     if d != 1
         error("in size: tupleref: index out of range")
@@ -60,6 +61,7 @@ end
 
 next(s::CharString, i::Index) = (s.chars[i], i+1)
 length(s::CharString) = length(s.chars)
+strlen(s::CharString) = length(s)
 
 string(c::Char) = CharString(c)
 string(c::Char, x::Char...) = CharString(c, x...)
