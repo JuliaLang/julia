@@ -45,7 +45,7 @@ show(tn::TypeName) = show(tn.name)
 #    types::Tuple
 #end
 
-#Bottom = Union()
+#None = Union()
 
 #struct TypeVar
 #    name::Symbol

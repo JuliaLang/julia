@@ -277,7 +277,7 @@ static jl_value_t *intersect_union(jl_uniontype_t *a, jl_value_t *b,
     return unsafe_type_union(t);
 }
 
-// if returns with *bot!=0, then intersection is Bottom
+// if returns with *bot!=0, then intersection is None
 static size_t tuple_intersect_size(jl_tuple_t *a, jl_tuple_t *b, int *bot)
 {
     size_t al = a->length;
@@ -589,7 +589,7 @@ static jl_value_t *jl_type_intersect(jl_value_t *a, jl_value_t *b,
     // uses to instantiate its supertype. this tells us what subtype parameter
     // values are implied by the intersected supertype, or that the
     // intersected supertype cannot come from this subtype (in which case
-    // our final answer is Bottom).
+    // our final answer is None).
     size_t i;
     // hack: we need type_match to find assignments for these
     // typevars even though they normally aren't constrained. temporarily
@@ -1158,7 +1158,7 @@ int jl_subtype_le(jl_value_t *a, jl_value_t *b, int ta, int morespecific)
     }
 
     if (jl_is_union_type(b)) {
-        // Bottom <: Bottom
+        // None <: None
         if (!ta && a == b && b==(jl_value_t*)jl_bottom_type) return 1;
         jl_tuple_t *bp = ((jl_uniontype_t*)b)->types;
         for(i=0; i < bp->length; i++) {

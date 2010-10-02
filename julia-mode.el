@@ -38,7 +38,7 @@
   "Syntax table for julia-mode")
 
 (defconst julia-font-lock-keywords
-  (list '("\\<\\(true\\|false\\|\\|Uint\\(8\\|16\\|32\\|64\\)\\|Int\\(8\\|16\\|32\\|64\\)\\|Float\\|Float32\\|Float64\\|Bool\\|Char\\|Number\\|Scalar\\|Real\\|Int\\|Tensor\\|Array\\|Tuple\\|NTuple\\|Buffer\\|Size\\|Index\\|Symbol\\|Function\\|Vector\\|Matrix\\|Union\\|Type\\|Any\\|Complex\\|Bottom\\|Ptr\\|Void\\)\\>" .
+  (list '("\\<\\(true\\|false\\|\\|Uint\\(8\\|16\\|32\\|64\\)\\|Int\\(8\\|16\\|32\\|64\\)\\|Float\\|Float32\\|Float64\\|Bool\\|Char\\|Number\\|Scalar\\|Real\\|Int\\|Tensor\\|Array\\|Tuple\\|NTuple\\|Buffer\\|Size\\|Index\\|Symbol\\|Function\\|Vector\\|Matrix\\|Union\\|Type\\|Any\\|Complex\\|None\\|Ptr\\|Void\\)\\>" .
       font-lock-type-face)
     (cons
      (concat "\\<\\("

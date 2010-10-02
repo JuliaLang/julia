@@ -41,9 +41,9 @@ struct CallStack
     prev::Union(EmptyCallStack,CallStack)
 
     CallStack(ast, types, prev::EmptyCallStack) =
-        new(ast, types, 0, false, Bottom, prev)
+        new(ast, types, 0, false, None, prev)
     CallStack(ast, types, prev::CallStack) =
-        new(ast, types, prev.n+1, false, Bottom, prev)
+        new(ast, types, prev.n+1, false, None, prev)
 end
 
 # TODO thread local
@@ -78,8 +78,11 @@ cmp_tfunc = (x,y)->Bool
 
 isType(t) = isa(t,TagKind) && is(t.name,Type.name)
 
+isseqtype(t) = isa(t,TagKind) && is(t.name.name,`...)
+
 t_func = idtable()
 t_func[tuple] = (0, Inf, (args...)->args)
+# TODO: handle e.g. instantiate_type(T, R::Union(Type{Int32},Type{Float64}))
 t_func[instantiate_type] =
     (1, Inf, (args...)->(all(map(isType,args)) ?
                          Type{instantiate_type(args[1].parameters[1],
@@ -88,7 +91,7 @@ t_func[instantiate_type] =
                          isType(args[1]) ?
                          args[1] :
                          Any))
-t_func[error] = (1, 1, x->Bottom)
+t_func[error] = (1, 1, x->None)
 t_func[boxsi8] = (1, 1, x->Int8)
 t_func[boxui8] = (1, 1, x->Uint8)
 t_func[boxsi16] = (1, 1, x->Int16)
@@ -110,7 +113,7 @@ t_func[ccall] =
 t_func[is] = (2, 2, cmp_tfunc)
 t_func[subtype] = (2, 2, cmp_tfunc)
 t_func[isa] = (2, 2, cmp_tfunc)
-t_func[new_generic_function] = (1, 1, s->(Bottom-->Any))
+t_func[new_generic_function] = (1, 1, s->(None-->Any))
 t_func[tuplelen] = (1, 1, x->Int32)
 t_func[arraylen] = (1, 1, x->Int32)
 t_func[arrayref] = (2, 2, (a,i)->(isa(a,StructKind) && subtype(a,Array) ?
@@ -118,13 +121,46 @@ t_func[arrayref] = (2, 2, (a,i)->(isa(a,StructKind) && subtype(a,Array) ?
 t_func[arrayset] = (3, 3, (a,i,v)->a)
 t_func[Array] =
     (1, Inf, (T,dims...)->(nd = length(dims);
-                           et = isType(T) ? T.parameters[1] : Any;
+                           et = isType(T) ? T.parameters[1] : T;
                            Array{et,nd}))
+static_convert(to, from) = (subtype(from, to) ? from : to)
+function static_convert(to::Tuple, from::Tuple)
+    if is(to,Tuple)
+        return from
+    end
+    pl = length(to); cl = length(from)
+    pseq = false
+    result = Array(Any, cl)
+    for i=1:cl
+        ce = from[i]
+        if pseq
+        elseif i <= pl
+            pe = to[i]
+            if isseqtype(pe)
+                pe = pe.parameters[1]
+                pseq = true
+            end
+        else
+            return Union()
+        end
+        # tuple conversion calls convert recursively
+        if isseqtype(ce)
+            R = abstract_call_gf(convert, (), (Type{pe}, ce.parameters[1]), ())
+            isType(R) && (R = R.parameters[1])
+            result[i] = ...{R}
+        else
+            R = abstract_call_gf(convert, (), (Type{pe}, ce), ())
+            isType(R) && (R = R.parameters[1])
+            result[i] = R
+        end
+    end
+    a2t(result)
+end
 t_func[`convert] =
     (2, 2, (t,x)->(if isa(t,Tuple) && all(map(isType,t))
                        t = Type{map(t->t.parameters[1],t)}
                    end;
-                   isType(t) ? tintersect(t.parameters[1],x) :
+                   isType(t) ? static_convert(t.parameters[1],x) :
                    Any))
 t_func[typeof] =
     (1, 1, t->(isType(t)      ? Type{typeof(t.parameters[1])} :
@@ -136,10 +172,9 @@ t_func[typeassert] =
     (2, 2, (A, v, t)->(isType(t) ? tintersect(v,t.parameters[1]) :
                        isconstant(A[2]) ? tintersect(v,eval(A[2])) :
                        Any))
-isseqtype(t) = isa(t,TagKind) && is(t.name.name,`...)
 function tupleref_tfunc(A, t, i)
     if is(t,())
-        return Bottom
+        return None
     end
     if isa(t,TagKind) && is(t.name,NTuple.name)
         return t.parameters[2]
@@ -157,7 +192,7 @@ function tupleref_tfunc(A, t, i)
             if vararg
                 return last.parameters[1]
             else
-                return Bottom
+                return None
             end
         elseif i == n && vararg
             return last.parameters[1]
@@ -171,8 +206,7 @@ function tupleref_tfunc(A, t, i)
         else
             types = t
         end
-        # TODO: possibly use reduce of tmerge instead
-        return reduce(tmerge, Bottom, types)
+        return reduce(tmerge, None, types)
     end
 end
 t_func[tupleref] = (2, 2, tupleref_tfunc)
@@ -187,9 +221,9 @@ function getfield_tfunc(A, s, name)
                 return s.types[i]
             end
         end
-        return Bottom
+        return None
     else
-        return reduce(tmerge, Bottom, s.types)#Union(s.types...)
+        return reduce(tmerge, None, s.types)#Union(s.types...)
     end
 end
 t_func[getfield] = (2, 2, getfield_tfunc)
@@ -213,7 +247,7 @@ function builtin_tfunction(f, args::Tuple, argtypes::Tuple)
     end
     if !(tf[1] <= length(argtypes) <= tf[2])
         # wrong # of args
-        return Bottom
+        return None
     end
     if is(f,typeassert) || is(f,tupleref) || is(f,getfield)
         # TODO: case of apply(), where we do not have the args
@@ -260,10 +294,55 @@ function limit_tuple_type(t)
             last = last.parameters[1]
         end
         tail = tuple(t[MAX_TUPLETYPE_LEN:(n-1)]..., last)
-        tail = reduce(tmerge, Bottom, tail)
+        tail = reduce(tmerge, None, tail)
         return tuple(t[1:(MAX_TUPLETYPE_LEN-1)]..., ...{tail})
     end
     return t
+end
+
+function abstract_call_gf(f, fargs, argtypes, e)
+    applicable = getmethods(f, argtypes)
+    rettype = None
+    x = applicable
+    if isa(e,Expr)
+        if !is(x,()) && is(x[5],())
+            # method match is unique; mark it
+            e.head = `call1
+        else
+            e.head = `call
+        end
+    end
+    ctr = 0
+    while !is(x,())
+        ctr += 1
+        # don't consider more than 3 methods. this trades off between
+        # compiler performance and generated code performance.
+        # typically, considering many methods means spending lots of time
+        # obtaining poor type information.
+        if ctr > 3
+            rettype = Any
+            break
+        end
+        #print(x,"\n")
+        if isa(x[3],Symbol)
+            # when there is a builtin method in this GF, we get
+            # a symbol with the name instead of a LambdaStaticData
+            rt = builtin_tfunction(x[3], fargs, x[1])
+        elseif isa(x[3],Type)
+            # constructor
+            rt = x[3]
+        else
+            (_tree,rt) = typeinf(x[3], x[1], x[2], true)
+        end
+        rettype = tmerge(rettype, rt)
+        if is(rettype,Any)
+            break
+        end
+        x = x[5]
+    end
+    # if rettype is None we've found a method not found error
+    #print("=> ", rettype, "\n")
+    return rettype
 end
 
 function abstract_call(f, fargs, argtypes, vtypes, sv::StaticVarInfo, e)
@@ -287,48 +366,7 @@ function abstract_call(f, fargs, argtypes, vtypes, sv::StaticVarInfo, e)
         #print("=> ", rt, "\n")
         return rt
     elseif isgeneric(f)
-        applicable = getmethods(f, argtypes)
-        rettype = Bottom
-        x = applicable
-        if isa(e,Expr)
-            if !is(x,()) && is(x[5],())
-                # method match is unique; mark it
-                e.head = `call1
-            else
-                e.head = `call
-            end
-        end
-        ctr = 0
-        while !is(x,())
-            ctr += 1
-            # don't consider more than 3 methods. this trades off between
-            # compiler performance and generated code performance.
-            # typically, considering many methods means spending lots of time
-            # obtaining poor type information.
-            if ctr > 3
-                rettype = Any
-                break
-            end
-            #print(x,"\n")
-            if isa(x[3],Symbol)
-                # when there is a builtin method in this GF, we get
-                # a symbol with the name instead of a LambdaStaticData
-                rt = builtin_tfunction(x[3], fargs, x[1])
-            elseif isa(x[3],Type)
-                # constructor
-                rt = x[3]
-            else
-                (_tree,rt) = typeinf(x[3], x[1], x[2], true)
-            end
-            rettype = tmerge(rettype, rt)
-            if is(rettype,Any)
-                break
-            end
-            x = x[5]
-        end
-        # if rettype is Bottom we've found a method not found error
-        #print("=> ", rettype, "\n")
-        return rettype
+        return abstract_call_gf(f, fargs, argtypes, e)
     else
         #print("=> ", Any, "\n")
         return Any
@@ -387,7 +425,7 @@ function abstract_eval_constant(x)
         return Type{x}
     end
     if isa(x,LambdaStaticData)
-        return Bottom-->Any
+        return None-->Any
     end
     return typeof(x)
 end
@@ -487,7 +525,7 @@ function tmerge(typea, typeb)
     if length(t)==1
         return t[1]
     elseif length(t)==0
-        return Bottom
+        return None
     end
     if badunion(t)
         return subtype(Undef,t) ? Top : Any

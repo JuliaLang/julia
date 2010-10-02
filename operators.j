@@ -61,6 +61,10 @@ function promote{T,S}(x::T, y::S)
     # print("= ", R,"\n")
     (convert(promote_type(T,S),x), convert(promote_type(T,S),y))
 end
+function promote{T,S,U}(x::T, y::S, z::U)
+    R = promote_type(promote_type(T,S), U)
+    convert((R...), (x, y, z))
+end
 function promote{T,S}(x::T, y::S, zs...)
     R = promote_type(T,S)
     for z = zs

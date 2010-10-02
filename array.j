@@ -14,7 +14,7 @@ numel(a::Array) = arraylen(a)
 
 jl_comprehension_zeros{T,n}(oneresult::Tensor{T,n}, dims...) = Array(T, dims...)
 jl_comprehension_zeros{T}(oneresult::T, dims...) = Array(T, dims...)
-jl_comprehension_zeros(oneresult::(), dims...) = Array(Bottom, dims...)
+jl_comprehension_zeros(oneresult::(), dims...) = Array(None, dims...)
 
 function zeros(T::Type, dims::Size...)
     a = Array(T, dims...)
@@ -393,9 +393,9 @@ function assign(A::Matrix, X::Matrix, I::Indices, J::Indices)
 end
 
 # Concatenation
-hcat() = Array(Bottom,0)
+hcat() = Array(None,0)
 hcat{T <: Scalar}(X::T...) = [ X[j] | i=1, j=1:length(X) ]
-vcat() = Array(Bottom,0)
+vcat() = Array(None,0)
 vcat{T <: Scalar}(X::T...) = [ X[i] | i=1:length(X) ]
 
 hcat{T}(V::Vector{T}...) = [ V[j][i] | i=1:length(V[1]), j=1:length(V) ]

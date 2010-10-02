@@ -1333,7 +1333,7 @@ void jl_init_primitives()
 
     // builtin types
     add_builtin("Any", (jl_value_t*)jl_any_type);
-    add_builtin("Bottom", (jl_value_t*)jl_bottom_type);
+    add_builtin("None", (jl_value_t*)jl_bottom_type);
     add_builtin("Void", (jl_value_t*)jl_bottom_type);
     add_builtin("TypeVar", (jl_value_t*)jl_tvar_type);
     add_builtin("TypeName", (jl_value_t*)jl_typename_type);

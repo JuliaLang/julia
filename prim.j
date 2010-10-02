@@ -83,6 +83,7 @@ mod(x,y) = x%y
 
 # indexing tuples
 length(t::Tuple) = tuplelen(t)
+size(t::Tuple, d) = d==1 ? tuplelen(t) : error("invalid tuple dimension")
 ref(t::Tuple, i::Index) = tupleref(t, i)
 
 ref(t::Tuple, r::Range)  = accumtuple(t, r, start(r), r.step)
