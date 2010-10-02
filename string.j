@@ -92,9 +92,9 @@ length(s::SubString) = s.length
 # can this be delegated efficiently somehow?
 # that may require additional string interfaces
 
-ref(s::String, r::Range1{Index})    = SubString(s,r.start,r.stop)
-ref(s::String, r::RangeFrom{Index}) = SubString(s,r.start,length(s))
-ref(s::String, r::RangeTo{Index})   = SubString(s,1,r.stop)
+ref(s::String, r::Range1{Index})    = SubString(s, r.start, r.stop)
+ref(s::String, r::RangeFrom{Index}) = SubString(s, r.start, length(s))
+ref(s::String, r::RangeTo{Index})   = SubString(s, 1,       r.stop)
 
 function ref(s::String, r::RangeBy{Index})
     if r.step != 1
@@ -125,15 +125,18 @@ struct RopeString <: String
             RopeString(h.head, RopeString(h.tail, t)) :
             new(h, t, max(h.depth, t.depth)+1, length(h)+length(t))
 
-    RopeString(h::RopeString, t::String) = depth(h.tail) < depth(h.head) ?
-        RopeString(h.head, RopeString(h.tail, t)) :
-        new(h, t, h.depth+1, length(h)+length(t))
+    RopeString(h::RopeString, t::String) =
+        depth(h.tail) < depth(h.head) ?
+            RopeString(h.head, RopeString(h.tail, t)) :
+            new(h, t, h.depth+1, length(h)+length(t))
 
-    RopeString(h::String, t::RopeString) = depth(t.head) < depth(t.tail) ?
-        RopeString(RopeString(h, t.head), t.tail) :
-        new(h, t, t.depth+1, length(h)+length(t))
+    RopeString(h::String, t::RopeString) =
+        depth(t.head) < depth(t.tail) ?
+            RopeString(RopeString(h, t.head), t.tail) :
+            new(h, t, t.depth+1, length(h)+length(t))
 
-    RopeString(h::String, t::String) = new(h, t, 1, length(h)+length(t))
+    RopeString(h::String, t::String) =
+        new(h, t, 1, length(h)+length(t))
 end
 
 depth(s::String) = 0
