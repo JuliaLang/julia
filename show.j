@@ -59,3 +59,16 @@ function show(e::Expr)
         end
     end
 end
+
+dump(t::Type) = print(t)
+dump(t::Tuple) = print(t)
+
+function dump{T}(x::T)
+    print(T,"(")
+    for field = T.names
+        print(field, "=")
+        show(getfield(x, field))
+        print(",")
+    end
+    print(")\n")
+end

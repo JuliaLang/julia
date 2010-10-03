@@ -11,6 +11,10 @@ print(c::Char) = (write(current_output_stream(), c); ())
 print(s::String) = for c = s; print(c); end
 show(s::String) = print(quote_string(s))
 
+(*)(s::String...) = strcat(s...)
+(^)(s::String, r::Int32) = repeat(s,r)
+
+size(s::String) = (length(s),)
 function size(s::String, d::Index)
     if d != 1
         error("in size: tupleref: index out of range")
@@ -60,6 +64,7 @@ end
 
 next(s::CharString, i::Index) = (s.chars[i], i+1)
 length(s::CharString) = length(s.chars)
+strlen(s::CharString) = length(s)
 
 string(c::Char) = CharString(c)
 string(c::Char, x::Char...) = CharString(c, x...)
@@ -73,14 +78,15 @@ struct SubString <: String
 
     SubString(s::String, i::Index, j::Index) = new(s, i-1, j-i+1)
     SubString(s::SubString, i::Index, j::Index) =
-        new(s.string, s.offset+i-1, j-i+1)
+        new(s.string, i-1+s.offset, j-i+1)
 end
 
 function next(s::SubString, i::Index)
     if i < 1 || i > s.length
         error("string index out of bounds")
     end
-    next(s.string,s.offset+i)
+    c, i = next(s.string, i+s.offset)
+    c, i-s.offset
 end
 
 length(s::SubString) = s.length
@@ -89,9 +95,9 @@ length(s::SubString) = s.length
 # can this be delegated efficiently somehow?
 # that may require additional string interfaces
 
-ref(s::String, r::Range1{Index})    = SubString(s,r.start,r.stop)
-ref(s::String, r::RangeFrom{Index}) = SubString(s,r.start,length(s))
-ref(s::String, r::RangeTo{Index})   = SubString(s,1,r.stop)
+ref(s::String, r::Range1{Index})    = SubString(s, r.start, r.stop)
+ref(s::String, r::RangeFrom{Index}) = SubString(s, r.start, length(s))
+ref(s::String, r::RangeTo{Index})   = SubString(s, 1,       r.stop)
 
 function ref(s::String, r::RangeBy{Index})
     if r.step != 1
@@ -99,6 +105,27 @@ function ref(s::String, r::RangeBy{Index})
     end
     return s
 end
+
+## efficient representation of repeated strings ##
+
+struct RepString <: String
+    string::String
+    repeat::Int32
+end
+
+function next(s::RepString, i::Index)
+    if i < 1 || i > length(s)
+        error("string index out of bounds")
+    end
+    j = mod1(i,length(s.string))
+    c, k = next(s.string, j)
+    c, k-j+i
+end
+
+length(s::RepString) = length(s.string)*s.repeat
+strlen(s::RepString) = strlen(s.string)*s.repeat
+
+repeat(s::String, r::Int32) = r <= 0 ? "" : RepString(s,r)
 
 ## ropes for efficient concatenation, etc. ##
 
@@ -122,15 +149,18 @@ struct RopeString <: String
             RopeString(h.head, RopeString(h.tail, t)) :
             new(h, t, max(h.depth, t.depth)+1, length(h)+length(t))
 
-    RopeString(h::RopeString, t::String) = depth(h.tail) < depth(h.head) ?
-        RopeString(h.head, RopeString(h.tail, t)) :
-        new(h, t, h.depth+1, length(h)+length(t))
+    RopeString(h::RopeString, t::String) =
+        depth(h.tail) < depth(h.head) ?
+            RopeString(h.head, RopeString(h.tail, t)) :
+            new(h, t, h.depth+1, length(h)+length(t))
 
-    RopeString(h::String, t::RopeString) = depth(t.head) < depth(t.tail) ?
-        RopeString(RopeString(h, t.head), t.tail) :
-        new(h, t, t.depth+1, length(h)+length(t))
+    RopeString(h::String, t::RopeString) =
+        depth(t.head) < depth(t.tail) ?
+            RopeString(RopeString(h, t.head), t.tail) :
+            new(h, t, t.depth+1, length(h)+length(t))
 
-    RopeString(h::String, t::String) = new(h, t, 1, length(h)+length(t))
+    RopeString(h::String, t::String) =
+        new(h, t, 1, length(h)+length(t))
 end
 
 depth(s::String) = 0
@@ -209,8 +239,11 @@ function unescape_string(s::String)
                 c == 'f' ? 12 :
                 c == 'r' ? 13 :
                 c == 'e' ? 27 :
-                c == 'x' || c == 'u' || c == 'U' ? begin
-                    m = c == 'x' ? 2 : c == 'u' ? 4 : 8
+                c == 'x' ||
+                c == 'u' ||
+                c == 'U' ? begin
+                    m = c == 'x' ? 2 :
+                        c == 'u' ? 4 : 8
                     n = 0
                     k = 0
                     while (k+=1) <= m && !done(s,i)
@@ -246,23 +279,24 @@ function unescape_string(s::String)
     u
 end
 
-function lpad(s::String, n::Int, p)
-    n <= length(s) && return s
-    ps = s
-    while length(ps) < n
-        ps = strcat(p,ps)
-    end
-    ps[end-n+1:]
+function lpad(s::String, n::Int, p::String)
+    m = n - strlen(s)
+    if m <= 0; return s; end
+    t = int32(ceil(m/strlen(p)))
+    x = p^t * s
+    x[end-n+1:] # TODO: broken, should be by characters
 end
 
-function rpad(s::String, n::Int, p)
-    n <= length(s) && return s
-    ps = s
-    while length(ps) < n
-        ps = strcat(ps,p)
-    end
-    ps[:n]
+function rpad(s::String, n::Int, p::String)
+    m = n - strlen(s)
+    if m <= 0; return s; end
+    t = int32(ceil(m/strlen(p)))
+    x = s * p^t
+    x[:n] # TODO: broken, should be by characters
 end
+
+lpad(s, n::Int, p) = lpad(string(s), n, string(p))
+rpad(s, n::Int, p) = rpad(string(s), n, string(p))
 
 ## string to integer functions ##
 

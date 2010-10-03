@@ -1204,7 +1204,7 @@ JL_CALLABLE(jl_f_dlsym)
     else if (jl_is_byte_string(args[1]))
         sym = jl_string_data(args[1]);
     else
-        jl_error("dlsym: expected UTF8String");
+        jl_error("dlsym: expected Latin1String or UTF8String");
     void *hnd = jl_unbox_pointer(args[0]);
     return jl_box_pointer(jl_pointer_void_type, jl_dlsym(hnd, sym));
 }
