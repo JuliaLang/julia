@@ -544,10 +544,16 @@ int main(int argc, char *argv[])
     if (num_evals) {
         int i;
         for (i=0; i < num_evals; i++) {
-            jl_value_t *ast = jl_parse_input_line(eval_exprs[i]);
-            jl_value_t *value = jl_toplevel_eval_thunk((jl_lambda_info_t*)ast);
-            if (print_exprs[i]) {
-                jl_show(value);
+            JL_TRY {
+                jl_value_t *ast = jl_parse_input_line(eval_exprs[i]);
+                jl_value_t *value =
+                    jl_toplevel_eval_thunk((jl_lambda_info_t*)ast);
+                if (print_exprs[i]) {
+                    jl_show(value);
+                    ios_printf(ios_stdout, "\n");
+                }
+            }
+            JL_CATCH {
                 ios_printf(ios_stdout, "\n");
             }
         }

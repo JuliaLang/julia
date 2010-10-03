@@ -82,7 +82,8 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl)
         }
         if (bp == NULL)
             bp = jl_get_bindingp(jl_system_module, (jl_sym_t*)sym);
-        *bp = eval(args[1], locals, nl);
+        if (*bp==NULL || !jl_is_func(*bp))
+            *bp = eval(args[1], locals, nl);
         return (jl_value_t*)jl_null;
     }
     else if (ex->head == top_sym) {

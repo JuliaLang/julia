@@ -424,8 +424,8 @@ end
 inc(11)
 assert(C() == 12)
 
-Y(f) = (h->f(x->h(h)(x)))(h->f(x->h(h)(x)))
-yfib = Y(fib->(n->(n < 2 ? n : fib(n-1) + fib(n-2))))
+Yc(f) = (h->f(x->h(h)(x)))(h->f(x->h(h)(x)))
+yfib = Yc(fib->(n->(n < 2 ? n : fib(n-1) + fib(n-2))))
 assert(yfib(20) == 6765)
 
 # variable scope, globals
