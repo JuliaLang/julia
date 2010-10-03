@@ -29,7 +29,7 @@ is_utf8_start(byte::Uint8) = ((byte&192)!=128)
 
 function next(s::UTF8String, i::Index)
     if !is_utf8_start(s.data[i])
-        error(strcat("not a valid UTF-8 char at byte ", string(i)))
+        error("invalid UTF-8 character index")
     end
     trailing = utf8_trailing[s.data[i]+1]
     if length(s.data) < i + trailing
