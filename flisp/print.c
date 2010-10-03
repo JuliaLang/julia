@@ -383,7 +383,7 @@ void fl_print_child(ios_t *f, value_t v)
     switch (tag(v)) {
     case TAG_NUM :
     case TAG_NUM1: //HPOS+=ios_printf(f, "%ld", numval(v)); break;
-        str = uint2str(buf, sizeof(buf), numval(v), 10);
+        str = uint2str(buf, sizeof(buf), labs(numval(v)), 10);
         if (numval(v)<0)
             *(--str) = '-';
         outs(str, f);
