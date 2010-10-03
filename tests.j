@@ -1,9 +1,31 @@
 # basic booleans
 assert(true)
 assert(!false)
-assert(true == true)
+assert(!!true)
+assert(!!!false)
+
+assert(true  == true )
 assert(false == false)
-assert(true != false)
+assert(true  != false)
+assert(false != true )
+
+assert(~true == false)
+assert(~false == true)
+
+assert(false & false == false)
+assert(true  & false == false)
+assert(false & true  == false)
+assert(true  & true  == true )
+
+assert(false | false == false)
+assert(true  | false == true )
+assert(false | true  == true )
+assert(true  | true  == true )
+
+assert(false $ false == false)
+assert(true  $ false == true )
+assert(false $ true  == true )
+assert(true  $ true  == false)
 
 # the bool operator
 assert(bool(false) == false)
