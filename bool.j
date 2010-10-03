@@ -6,7 +6,7 @@ convert(::Type{Bool}, x::Number) = (x!=0)
 (~)(x::Bool) = !x
 (&)(x::Bool, y::Bool) = (x&&y)
 (|)(x::Bool, y::Bool) = (x||y)
-($)(x::Bool, y::Bool) = !eq_int(xor_int(unbox8(x),unbox8(y)),unbox8(0))
+($)(x::Bool, y::Bool) = (x!=y)
 
 bool(x) = true
 bool(x::Bool) = x
