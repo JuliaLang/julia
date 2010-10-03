@@ -45,5 +45,9 @@ sign(x::Rational) = sign(x.num)*sign(x.den)
 (*)(x::Rational, y::Rational) = (x.num*y.num) // (x.den*y.den)
 (/)(x::Rational, y::Rational) = (x.num*y.den) // (x.den*y.num)
 
+div(x::Rational, y::Rational) = div(x.num*y.den, x.den*y.num)
+div(x::Real    , y::Rational) = div(x*y.den, y.num)
+div(x::Rational, y::Real    ) = div(x.num, x.den*y)
+
 ==(x::Rational, y::Rational) = (x.num == y.num && x.den == y.den)
 < (x::Rational, y::Rational) = (x.num*y.den < y.num*x.den)
