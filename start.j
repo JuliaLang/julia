@@ -1,17 +1,24 @@
 # core operations & types
-load("bitops.j")
 load("range.j")
 load("tuple.j")
 load("cell.j")
 load("expr.j")
 
-# core functionality
-load("convert.j")
-load("promote.j")
+# core numeric operations & types
+load("operators.j")
+load("scalar.j")
+load("bool.j")
 load("int.j")
 load("float.j")
-load("generic.j")
+load("char.j")
+
+# core math functions
+load("intfuncs.j")
+load("floatfuncs.j")
+load("genericmath.j")
 load("reduce.j")
+
+# core data structures
 load("array.j")
 load("intset.j")
 load("table.j")

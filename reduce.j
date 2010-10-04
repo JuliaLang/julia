@@ -1,18 +1,12 @@
 ## reductions ##
 
+## reduction operator base cases ##
 max() = -Inf
 min() = +Inf
 sum() = 0
 prod() = 1
 any() = false
 all() = true
-
-max(x::Scalar)  = x
-min(x::Scalar)  = x
-sum(x::Scalar)  = x
-prod(x::Scalar) = x
-any(x::Scalar)  = x
-all(x::Scalar)  = x
 
 reduce(op, itr) = reduce(op, op(), itr)
 

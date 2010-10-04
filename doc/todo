@@ -546,6 +546,7 @@ issues 6/21/10
 - ccall calls convert
 * << >> precedence
 * break in value position
+- tintersect((Int,Int),(T,T)) is wrong when T is T<:Int, ok when T<:Any
 
 method ordering tests:
 //:  (T,T) before (Any,Any)

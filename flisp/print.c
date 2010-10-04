@@ -372,7 +372,7 @@ static int print_circle_prefix(ios_t *f, value_t v)
 void fl_print_child(ios_t *f, value_t v)
 {
     char *name, *str;
-    char buf[128];
+    char buf[64];
     if (print_level >= 0 && P_LEVEL >= print_level &&
         (iscons(v) || isvector(v) || isclosure(v))) {
         outc('#', f);
@@ -383,7 +383,7 @@ void fl_print_child(ios_t *f, value_t v)
     switch (tag(v)) {
     case TAG_NUM :
     case TAG_NUM1: //HPOS+=ios_printf(f, "%ld", numval(v)); break;
-        str = uint2str(buf, sizeof(buf), labs(numval(v)), 10);
+        str = uint2str(&buf[1], sizeof(buf)-1, labs(numval(v)), 10);
         if (numval(v)<0)
             *(--str) = '-';
         outs(str, f);

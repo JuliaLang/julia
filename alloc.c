@@ -302,15 +302,23 @@ JL_CALLABLE(jl_generic_ctor);
 
 void jl_initialize_generic_function(jl_function_t *f, jl_sym_t *name);
 
-static void add_generic_ctor(jl_function_t *gf, jl_struct_type_t *t)
+// instantiate a type with new variables
+jl_value_t *jl_new_type_instantiation(jl_value_t *t)
 {
-    jl_function_t *gmeth = jl_new_closure(jl_generic_ctor,(jl_value_t*)jl_null);
-    jl_tuple_t *ntvs = jl_alloc_tuple(t->parameters->length);
+    jl_tuple_t *tp;
+    if (jl_is_typector(t)) {
+        tp = ((jl_typector_t*)t)->parameters;
+    }
+    else if (jl_is_some_tag_type(t)) {
+        tp = ((jl_tag_type_t*)t)->parameters;
+    }
+    else {
+        assert(0);
+    }
+    jl_tuple_t *ntvs = jl_alloc_tuple(tp->length);
     size_t i;
-    // create new typevars, so the function has its own constraint
-    // environment.
-    for(i=0; i < t->parameters->length; i++) {
-        jl_value_t *tv = jl_tupleref(t->parameters, i);
+    for(i=0; i < tp->length; i++) {
+        jl_value_t *tv = jl_tupleref(tp, i);
         if (jl_is_typevar(tv)) {
             jl_tupleset(ntvs, i,
                         (jl_value_t*)jl_new_typevar(((jl_tvar_t*)tv)->name,
@@ -322,7 +330,15 @@ static void add_generic_ctor(jl_function_t *gf, jl_struct_type_t *t)
             jl_tupleset(ntvs, i, tv);
         }
     }
-    t = (jl_struct_type_t*)jl_apply_type((jl_value_t*)t, ntvs);
+    return (jl_value_t*)jl_apply_type((jl_value_t*)t, ntvs);
+}
+
+static void add_generic_ctor(jl_function_t *gf, jl_struct_type_t *t)
+{
+    jl_function_t *gmeth = jl_new_closure(jl_generic_ctor,(jl_value_t*)jl_null);
+    // create new typevars, so the function has its own constraint
+    // environment.
+    t = (jl_struct_type_t*)jl_new_type_instantiation((jl_value_t*)t);
     gmeth->linfo = jl_new_lambda_info(NULL, jl_null);
     jl_add_method(gf, t->types, gmeth);
     gmeth->env = (jl_value_t*)jl_pair((jl_value_t*)gmeth, (jl_value_t*)t);
@@ -359,11 +375,13 @@ void jl_add_constructors(jl_struct_type_t *t)
         // where new is a default constructor
         jl_function_t *fnew;
         if (t->parameters->length>0 && (jl_value_t*)t==t->name->primary) {
+            // original type; new is generic
             fnew = jl_new_generic_function(t->name->name);
             add_generic_ctor(fnew, t);
             jl_gf_mtable(fnew)->sealed = 1;
         }
         else {
+            // an instantiation; new only constructs a specific type
             fnew = jl_new_closure(jl_new_struct_internal, (jl_value_t*)t);
             fnew->type =
                 (jl_type_t*)jl_new_functype((jl_type_t*)t->types,
