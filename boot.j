@@ -101,6 +101,9 @@ bitstype 64 Uint64 <: Int{Uint64}
 bitstype 32 Float32 <: Float{Float32}
 bitstype 64 Float64 <: Float{Float64}
 
+typealias Size Int32
+typealias Index Int32
+
 type String
 
 struct Latin1String <: String

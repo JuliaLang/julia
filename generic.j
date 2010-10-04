@@ -1,3 +1,61 @@
+## types ##
+
+(<:)(T, S) = subtype(T,S)
+(>:)(T, S) = subtype(S,T)
+
+## arithmetic ##
+
+# fallback definitions for emulating N-arg operators with 2-arg definitions
+(*)() = 1
+(*)(x::Tensor) = x
+(*)(a,b,c) = (*)((*)(a,b),c)
+(*)(a,b,c,d) = (*)((*)((*)(a,b),c),d)
+(*)(a,b,c,d,e) = (*)((*)((*)((*)(a,b),c),d),e)
+function (*)(x1, x2, x3, xs...)
+    accum = (*)((*)(x1,x2),x3)
+    for x = xs
+        accum = accum * x
+    end
+    accum
+end
+
+(+)() = 0
+(+)(x::Tensor) = x
+(+)(a,b,c) = (+)((+)(a,b),c)
+(+)(a,b,c,d) = (+)((+)((+)(a,b),c),d)
+(+)(a,b,c,d,e) = (+)((+)((+)((+)(a,b),c),d),e)
+function (+)(x1, x2, x3, xs...)
+    accum = (+)((+)(x1,x2),x3)
+    for x = xs
+        accum = accum + x
+    end
+    accum
+end
+
+# .<op> defaults to <op>
+(./)(x,y) = x/y
+(.\)(x,y) = y./x
+(.*)(x,y) = x*y
+
+div(x::Number, y::Number) = truncate(x/y)
+(%)(x::Number, y::Number) = x-div(x,y)*y
+mod(x,y) = x%y
+mod1(x,y) = mod(x-one(x),y)+one(x) # TODO: broken <= 0
+(\)(x,y) = y/x
+
+## comparison ##
+
+!=(x, y) = !(x == y)
+> (x, y) = (y < x)
+<=(x, y) = (x < y) || (x == y)
+>=(x, y) = (x > y) || (x == y)
+<=(x::Real, y::Real) = (x < y) || (x == y)
+>=(x::Real, y::Real) = (x > y) || (x == y)
+
+## other generics ##
+
+copy(x::Any) = x
+
 isscalar(x::Scalar) = true
 isscalar(x) = false
 
@@ -13,8 +71,11 @@ real_valued(x::Real) = true
 oftype{T}(x::T,c) = convert(T,c)
 oftype{T}(x::Type{T},c) = convert(T,c)
 
-zero(x) = oftype(x, 0)
-one(x)  = oftype(x, 1)
+sizeof{T}(x::T) = sizeof(T)
+sizeof(t::Type) = error(strcat("size of type ",string(t)," unknown"))
+
+zero(x) = oftype(x,0)
+one(x)  = oftype(x,1)
 
 size(x::Scalar) = ()
 ndims(x::Scalar) = 0
@@ -60,11 +121,18 @@ acoth(y) = atanh(1 ./y)
 sinc(x) = x==0 ? one(x)  : (pix = pi(x)*x; sin(pix)/pix)
 cosc(x) = x==0 ? zero(x) : (pix = pi(x)*x; cos(pix)/x - sin(pix)/(pix*x))
 
-logb(b, x) = log(x)/log(b)
+logb(b,x) = log(x)/log(b)
 
 function realsqrt(x::Real)
     if x < 0
         error("realsqrt: expected non-negative argument")
     end
     return sqrt(x)::Real
+end
+
+function assert(c)
+    if !c
+        error("Assertion failed.")
+    end
+    true
 end

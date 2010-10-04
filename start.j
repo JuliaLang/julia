@@ -1,16 +1,17 @@
-# core functionality
+# core operations & types
+load("bitops.j")
 load("range.j")
-load("prim.j")
-load("show.j")
-load("operators.j")
+load("tuple.j")
+load("cell.j")
+load("expr.j")
 
-# primitive data types
-load("bool.j")
-load("scalar.j")
+# core functionality
+load("convert.j")
+load("promote.j")
 load("int.j")
 load("float.j")
-
-# data types needed by inference
+load("generic.j")
+load("reduce.j")
 load("array.j")
 load("intset.j")
 load("table.j")
@@ -19,14 +20,17 @@ load("table.j")
 load("inference.j")
 (()->ccall(dlsym(JuliaDLHandle,"jl_enable_inference"),Void,()))()
 
-# other primitive data types
-load("complex.j")
+# rational & complex
 load("rational.j")
+load("complex.j")
+
+# strings & printing
 load("string.j")
 load("latin1.j")
 load("utf8.j")
+load("show.j")
 
-# other data types
+# additional data types
 load("list.j")
 load("dequeue.j")
 load("sparse.j")
