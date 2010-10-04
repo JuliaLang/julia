@@ -75,6 +75,17 @@ test: debug
 testall: test
 	./julia test_utf8.j
 
+SLOCCOUNT = sloccount \
+	--addlang makefile \
+	--personcost 100000 \
+	--effort 3.6 1.2 \
+	--schedule 2.5 0.32
+
+sloccount:
+	for x in *.j; do cp $$x $${x%.j}.hs; done
+	$(SLOCCOUNT) . | perl -ple 's/haskell/_julia_/g'
+	rm *.hs
+
 clean:
 	rm -f *.o
 	rm -f *.do
@@ -92,4 +103,4 @@ cleanall: clean
 	$(MAKE) -C $(LLTDIR) clean
 	$(MAKE) -C $(FLISPDIR) clean
 
-.PHONY: debug release test clean cleanall
+.PHONY: debug release test testall sloccount clean cleanall
