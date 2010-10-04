@@ -11,8 +11,3 @@ bool(x::Number) = convert(Bool, x)
 (&)(x::Bool, y::Bool) = (x&&y)
 (|)(x::Bool, y::Bool) = (x||y)
 ($)(x::Bool, y::Bool) = (x!=y)
-
-(-)(x::Bool) = x
-(+)(x::Bool, y::Bool) = (x$y)
-(-)(x::Bool, y::Bool) = (x$y)
-(*)(x::Bool, y::Bool) = (x&y)
