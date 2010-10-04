@@ -64,8 +64,8 @@ function hypot(x::Real, y::Real)
     return y*sqrt(1+r*r)
 end
 
-num2hex(x::Float32) = lpad(uint2str(boxui32(unbox32(x)),16),16,"0"[1])
-num2hex(x::Float64) = lpad(uint2str(boxui64(unbox64(x)),16),16,"0"[1])
+num2hex(x::Float32) = uint2str(boxui32(unbox32(x)),16,16)
+num2hex(x::Float64) = uint2str(boxui64(unbox64(x)),16,16)
 
 function hex2num(s)
     if length(s) <= 8
