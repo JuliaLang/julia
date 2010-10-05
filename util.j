@@ -1,3 +1,10 @@
+## system word size ##
+
+eval(`(word_size() =
+       $(()->ccall(dlsym(JuliaDLHandle,"jl_word_size"), Int32, ()))()))
+
+# shell
+
 ls() = system("ls")
 
 catfile(file::String) = system(strcat("cat ", file))

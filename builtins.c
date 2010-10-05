@@ -630,18 +630,18 @@ static void show_type(jl_value_t *t)
 {
     ios_t *s = jl_current_output_stream();
     if (jl_is_func_type(t)) {
-        if (t == (jl_value_t*)jl_any_func) {
-            ios_write(s, "Function", 8);
-        }
-        else {
-            call_show((jl_value_t*)((jl_func_type_t*)t)->from);
-            ios_write(s, "-->", 3);
-            call_show((jl_value_t*)((jl_func_type_t*)t)->to);
-        }
+        call_show((jl_value_t*)((jl_func_type_t*)t)->from);
+        ios_write(s, "-->", 3);
+        call_show((jl_value_t*)((jl_func_type_t*)t)->to);
     }
     else if (jl_is_union_type(t)) {
-        ios_write(s, "Union", 5);
-        show_tuple(((jl_uniontype_t*)t)->types, '(', ')', 0);
+        if (t == (jl_value_t*)jl_bottom_type) {
+            ios_write(s, "None", 4);
+        }
+        else {
+            ios_write(s, "Union", 5);
+            show_tuple(((jl_uniontype_t*)t)->types, '(', ')', 0);
+        }
     }
     else if (jl_is_seq_type(t)) {
         call_show(jl_tparam0(t));
@@ -1085,7 +1085,7 @@ JL_CALLABLE(jl_f_typevar)
             lb = (jl_value_t*)jl_bottom_type;
         }
     }
-    return (jl_value_t*)jl_new_typevar((jl_sym_t*)args[0], lb, ub, 1);
+    return (jl_value_t*)jl_new_typevar((jl_sym_t*)args[0], lb, ub);
 }
 
 JL_CALLABLE(jl_f_union)

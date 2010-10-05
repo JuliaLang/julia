@@ -141,10 +141,6 @@ div{T<:Int}(x::T, y::T) = no_op_err("div", T)
 
 ==(x::Ptr, y::Ptr) = eq_int(unbox(Ptr,x),unbox(Ptr,y))
 
-## system word size ##
-
-word_size() = ccall(dlsym(JuliaDLHandle,"jl_word_size"), Int32, ())
-
 ## miscellaneous ##
 
 copy(x::Any) = x

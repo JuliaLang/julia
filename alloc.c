@@ -290,7 +290,8 @@ jl_tag_type_t *jl_new_tagtype(jl_value_t *name, jl_tag_type_t *super,
 jl_func_type_t *jl_new_functype(jl_type_t *a, jl_type_t *b)
 {
     jl_func_type_t *t = (jl_func_type_t*)newobj((jl_type_t*)jl_func_kind, 2);
-    if (!jl_is_tuple(a) && !jl_is_typevar(a))
+    if (a != (jl_type_t*)jl_any_type && a != (jl_type_t*)jl_bottom_type &&
+        !jl_subtype((jl_value_t*)a, (jl_value_t*)jl_tuple_type, 0))
         a = (jl_type_t*)jl_tuple(1, a);
     t->from = a;
     t->to = b;
@@ -313,7 +314,8 @@ jl_value_t *jl_new_type_instantiation(jl_value_t *t)
         tp = ((jl_tag_type_t*)t)->parameters;
     }
     else {
-        assert(0);
+        tp = NULL;
+        jl_error("not supported");
     }
     jl_tuple_t *ntvs = jl_alloc_tuple(tp->length);
     size_t i;
@@ -323,8 +325,7 @@ jl_value_t *jl_new_type_instantiation(jl_value_t *t)
             jl_tupleset(ntvs, i,
                         (jl_value_t*)jl_new_typevar(((jl_tvar_t*)tv)->name,
                                                     ((jl_tvar_t*)tv)->lb,
-                                                    ((jl_tvar_t*)tv)->ub,
-                                                    1));
+                                                    ((jl_tvar_t*)tv)->ub));
         }
         else {
             jl_tupleset(ntvs, i, tv);

@@ -212,15 +212,13 @@ jl_tuple_t *jl_compute_type_union(jl_tuple_t *types)
                 else if (jl_is_typevar(temp[i]) && jl_is_typevar(temp[j])) {
                     jl_tvar_t *ti = (jl_tvar_t*)temp[i];
                     jl_tvar_t *tj = (jl_tvar_t*)temp[j];
-                    if (!ti->bound && !tj->bound) {
-                        if (jl_subtype(ti->lb,tj->lb,0) &&
-                            jl_subtype(ti->lb,tj->ub,0) &&
-                            jl_subtype(ti->ub,tj->ub,0)) {
-                            temp[j] =
-                                (jl_value_t*)
-                                jl_new_typevar(tj->name, ti->lb, tj->ub, 0);
-                            temp[i] = NULL;
-                        }
+                    if (jl_subtype(ti->lb,tj->lb,0) &&
+                        jl_subtype(ti->lb,tj->ub,0) &&
+                        jl_subtype(ti->ub,tj->ub,0)) {
+                        temp[j] =
+                            (jl_value_t*)
+                            jl_new_typevar(tj->name, ti->lb, tj->ub);
+                        temp[i] = NULL;
                     }
                 }
             }
@@ -427,8 +425,7 @@ static jl_value_t *meet_tvars(jl_tvar_t *a, jl_tvar_t *b)
     // TODO: might not want to collapse tvar to non-tvar in all cases
     if (jl_is_leaf_type(ub))
         return ub;
-    return (jl_value_t*)
-        jl_new_typevar(jl_symbol("_"), lb, ub, a->bound || b->bound);
+    return (jl_value_t*)jl_new_typevar(jl_symbol("_"), lb, ub);
 }
 
 static jl_value_t *meet_tvar(jl_tvar_t *tv, jl_value_t *ty)
@@ -447,8 +444,7 @@ static jl_value_t *meet_tvar(jl_tvar_t *tv, jl_value_t *ty)
     if (jl_subtype((jl_value_t*)tv->lb, ty, 0)) {
         if (jl_is_leaf_type(ty) || jl_is_int32(ty))
             return ty;
-        return (jl_value_t*)
-            jl_new_typevar(jl_symbol("_"), tv->lb, ty, tv->bound);
+        return (jl_value_t*)jl_new_typevar(jl_symbol("_"), tv->lb, ty);
     }
     return (jl_value_t*)jl_bottom_type;
 }
@@ -1530,21 +1526,23 @@ jl_value_t *jl_func_type_tfunc(jl_func_type_t *ft, jl_tuple_t *argtypes)
 
 // initialization -------------------------------------------------------------
 
-jl_tvar_t *jl_new_typevar(jl_sym_t *name, jl_value_t *lb, jl_value_t *ub,
-                          int bound)
+jl_tvar_t *jl_new_typevar(jl_sym_t *name, jl_value_t *lb, jl_value_t *ub)
 {
     jl_tvar_t *tv = (jl_tvar_t*)newobj((jl_type_t*)jl_tvar_type, 4);
     tv->name = name;
     tv->lb = lb;
     tv->ub = ub;
-    tv->bound = bound;
+    tv->bound = 1;
     return tv;
 }
 
 static jl_tvar_t *tvar(const char *name)
 {
-    return jl_new_typevar(jl_symbol(name), (jl_value_t*)jl_bottom_type,
-                          (jl_value_t*)jl_any_type, 0);
+    jl_tvar_t *tv =
+        jl_new_typevar(jl_symbol(name), (jl_value_t*)jl_bottom_type,
+                       (jl_value_t*)jl_any_type);
+    tv->bound=0;
+    return tv;
 }
 
 jl_tuple_t *jl_typevars(size_t n, ...)
@@ -1581,10 +1579,6 @@ void jl_init_types()
 
     jl_null = (jl_tuple_t*)newobj((jl_type_t*)jl_tuple_type, 1);
     jl_null->length = 0;
-
-    jl_any_func = jl_new_functype((jl_type_t*)jl_any_type, (jl_type_t*)jl_any_type);
-
-    jl_bottom_func = jl_new_closure(jl_f_no_function, NULL);
 
     // initialize them. lots of cycles.
     jl_struct_kind->name = jl_new_typename(jl_symbol("StructKind"));
@@ -1655,7 +1649,15 @@ void jl_init_types()
     jl_union_kind->fptr = jl_f_no_function;
 
     jl_bottom_type = (jl_type_t*)jl_new_struct(jl_union_kind, jl_null);
-    jl_any_func->from = jl_bottom_type;
+
+    // the universal (compatible w/ any signature) function type is Any-->None.
+    // the most general (any function is compatible with it) function type
+    // is None-->Any.
+    // generic functions have the type Any-->Any, as they take any arguments
+    // but don't satisfy any particular return-type requirements.
+    jl_any_func = jl_new_functype((jl_type_t*)jl_any_type, (jl_type_t*)jl_any_type);
+
+    jl_bottom_func = jl_new_closure(jl_f_no_function, NULL);
 
     jl_bits_kind =
         jl_new_struct_type(jl_symbol("BitsKind"), (jl_tag_type_t*)jl_tag_kind,
