@@ -27,6 +27,8 @@
 #include "llt.h"
 #include "julia.h"
 
+int jl_boot_file_loaded = 0;
+
 char *jl_stack_lo;
 char *jl_stack_hi;
 int jl_fpe_err_msg = 0;
@@ -95,6 +97,7 @@ void julia_init()
     jl_init_codegen();
     jl_load_boot_j();
     jl_get_builtin_hooks();
+    jl_boot_file_loaded = 1;
     jl_init_builtin_types();
     jl_init_builtins();
 
@@ -202,17 +205,6 @@ static jl_value_t *global(char *name)
 
 void jl_get_builtin_hooks()
 {
-    // update bootstrapping versions of Bool and Int32
-    jl_bits_type_t *i32t = (jl_bits_type_t*)global("Int32");
-    *jl_int32_type = *i32t;
-    jl_set_const(jl_system_module, jl_symbol("Int32"),
-                 (jl_value_t*)jl_int32_type);
-
-    jl_bits_type_t *bt   = (jl_bits_type_t*)global("Bool");
-    *jl_bool_type = *bt;
-    jl_set_const(jl_system_module, jl_symbol("Bool"),
-                 (jl_value_t*)jl_bool_type);
-
     // fetch references to things defined in boot.j
     jl_char_type    = (jl_bits_type_t*)global("Char");
     jl_int8_type    = (jl_bits_type_t*)global("Int8");

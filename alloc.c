@@ -444,11 +444,22 @@ jl_struct_type_t *jl_new_struct_type(jl_sym_t *name, jl_tag_type_t *super,
     return t;
 }
 
+extern int jl_boot_file_loaded;
+
 jl_bits_type_t *jl_new_bitstype(jl_value_t *name, jl_tag_type_t *super,
                                 jl_tuple_t *parameters, size_t nbits)
 {
-    jl_bits_type_t *t = (jl_bits_type_t*)newobj((jl_type_t*)jl_bits_kind,
-                                                BITS_TYPE_NW);
+    jl_bits_type_t *t=NULL;
+    if (!jl_boot_file_loaded && jl_is_symbol(name)) {
+        // hack to avoid making two versions of basic types needed
+        // during bootstrapping
+        if (!strcmp(((jl_sym_t*)name)->name, "Int32"))
+            t = jl_int32_type;
+        else if (!strcmp(((jl_sym_t*)name)->name, "Bool"))
+            t = jl_bool_type;
+    }
+    if (t == NULL)
+        t = (jl_bits_type_t*)newobj((jl_type_t*)jl_bits_kind, BITS_TYPE_NW);
     if (jl_is_typename(name))
         t->name = (jl_typename_t*)name;
     else
