@@ -32,6 +32,25 @@ function at_string_end(s::String)
     return i, n
 end
 
+function strind(s::String, i::Int)
+    j = start(s)
+    for k = 1:i-1; c, j = next(s,j); end
+    return j
+end
+
+function strchr(s::String, c::Char, i::Int)
+    while !done(s,i)
+        d, j = next(s,i)
+        if c == d
+            return i
+        end
+        i = j
+    end
+    error("char not found")
+end
+
+strchr(s::String, c::Char) = strchr(s, c, start(s))
+
 (<) (a::String, b::String) = cmp(a,b) < 0
 (>) (a::String, b::String) = cmp(a,b) > 0
 (==)(a::String, b::String) = cmp(a,b) == 0
