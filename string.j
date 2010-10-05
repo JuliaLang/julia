@@ -12,7 +12,7 @@ print(s::String) = for c = s; print(c); end
 show(s::String) = print(quote_string(s))
 
 (*)(s::String...) = strcat(s...)
-(^)(s::String, r::Int32) = repeat(s,r)
+(^)(s::String, r::Int) = repeat(s,r)
 
 size(s::String) = (length(s),)
 function size(s::String, d::Index)
@@ -110,7 +110,7 @@ end
 
 struct RepString <: String
     string::String
-    repeat::Int32
+    repeat::Int
 end
 
 function next(s::RepString, i::Index)
@@ -125,7 +125,8 @@ end
 length(s::RepString) = length(s.string)*s.repeat
 strlen(s::RepString) = strlen(s.string)*s.repeat
 
-repeat(s::String, r::Int32) = r <= 0 ? "" : RepString(s,r)
+repeat(s::String, r::Int) = r <= 0 ? "" :
+                            r == 1 ? s  : RepString(s,r)
 
 ## ropes for efficient concatenation, etc. ##
 
