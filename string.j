@@ -302,17 +302,21 @@ end
 function lpad(s::String, n::Int, p::String)
     m = n - strlen(s)
     if m <= 0; return s; end
-    t = int32(ceil(m/strlen(p)))
-    x = p^t * s
-    x[end-n+1:] # TODO: broken, should be by characters
+    l = strlen(p)
+    q = div(m,l)
+    r = m - q*l
+    # TODO: this is correct but inefficient
+    p^q * (r > 0 ? p[1:strind(p,r)] : "") * s
 end
 
 function rpad(s::String, n::Int, p::String)
     m = n - strlen(s)
     if m <= 0; return s; end
-    t = int32(ceil(m/strlen(p)))
-    x = s * p^t
-    x[:n] # TODO: broken, should be by characters
+    l = strlen(p)
+    q = div(m,l)
+    r = m - q*l
+    # TODO: this is correct but inefficient
+    s * p^q * (r > 0 ? p[1:strind(p,r)] : "")
 end
 
 lpad(s, n::Int, p) = lpad(string(s), n, string(p))
