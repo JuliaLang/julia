@@ -148,7 +148,7 @@ JL_CALLABLE(jl_f_typeassert)
     if (!jl_is_typector(args[1]))
         JL_TYPECHK(typeassert, type, args[1]);
     if (!jl_subtype(args[0],args[1],1))
-        jl_error("type assertion failed");
+        jl_type_error("typeassert", jl_show_to_string(args[1]), args[0]);
     return args[0];
 }
 

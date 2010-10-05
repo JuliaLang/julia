@@ -152,7 +152,7 @@ DLLEXPORT void jl_enable_inference()
         // warm up type inference to put the latency up front
         jl_value_t *one = jl_box_int32(1);
         jl_apply((jl_function_t*)*(jl_get_bindingp(jl_system_module,
-                                                   jl_symbol("fact"))),
+                                                   jl_symbol("+"))),
                  &one, 1);
         /*
           cached t-functions and inferred ASTs need to be cleared at

@@ -4,9 +4,6 @@ signbit(x::Float) = (x < 0 ? -1 : (x > 0 ? 1 : (1.0/x < 0 ? -1 : +1)))
 signbit(x::Float64) = (boxsi64(unbox64(x)) < int64(0) ? -1 : +1)
 signbit(x::Float32) = (boxsi32(unbox32(x)) < int32(0) ? -1 : +1)
 
-floor(x::Float64) = ccall(dlsym(JuliaDLHandle,"floor"),
-                          Float64, (Float64,), x)
-
 exponent(x::Float64) = ccall(dlsym(JuliaDLHandle,"double_exponent"),
                              Int32, (Float64,), x)
 exponent(x::Float32) = ccall(dlsym(JuliaDLHandle,"float_exponent"),

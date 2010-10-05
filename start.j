@@ -6,17 +6,12 @@ load("expr.j")
 
 # core numeric operations & types
 load("operators.j")
+load("reduce.j")
 load("scalar.j")
 load("bool.j")
 load("int.j")
 load("float.j")
 load("char.j")
-
-# core math functions
-load("intfuncs.j")
-load("floatfuncs.j")
-load("genericmath.j")
-load("reduce.j")
 
 # core data structures
 load("array.j")
@@ -26,6 +21,11 @@ load("table.j")
 # compiler
 load("inference.j")
 (()->ccall(dlsym(JuliaDLHandle,"jl_enable_inference"),Void,()))()
+
+# core math functions
+load("intfuncs.j")
+load("floatfuncs.j")
+load("genericmath.j")
 
 # rational & complex
 load("rational.j")

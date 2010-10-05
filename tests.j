@@ -72,6 +72,7 @@ assert(!(NTuple{typevar(`T),Int32} <: (Int32,Int32...)))
 assert((Int32...) <: NTuple{typevar(`T),Int32})
 assert((Int32,Int32...) <: NTuple{typevar(`T),Int32})
 
+# basic arithmetic and indexing
 assert(2+3 == 5)
 assert(2.+3. == 5.)
 assert(2*3 == 6)
@@ -94,15 +95,6 @@ assert(5*[1,2,3] == [5,10,15])
 assert([1,2,3]*5 == [5,10,15])
 assert(1/[1,2,5] == [1.0,0.5,0.2])
 assert([1,2,3]/5 == [0.2,0.4,0.6])
-
-l = dequeue(1,2,3)
-push(l,8)
-assert(l[1]==1 && l[2]==2 && l[3]==3 && l[4]==8)
-v = pop(l)
-assert(v == 8)
-v = pop(l)
-assert(v == 3)
-assert(length(l)==2)
 
 a = ones(2,2)
 a[1,1] = 1
@@ -172,6 +164,16 @@ assert(Complex(1,2) + 1//2 * 0.5 == Complex(1.25,2.0))
 assert((Complex(1,2) + 1//2) * 0.5 == Complex(0.75,1.0))
 assert((Complex(1,2)/Complex(2.5,3.0))*Complex(2.5,3.0) == Complex(1,2))
 assert(0.7 < real(sqrt(Complex(0,1))) < 0.707107)
+
+# a data structure
+l = dequeue(1,2,3)
+push(l,8)
+assert(l[1]==1 && l[2]==2 && l[3]==3 && l[4]==8)
+v = pop(l)
+assert(v == 8)
+v = pop(l)
+assert(v == 3)
+assert(length(l)==2)
 
 # string escaping & unescaping
 chars = {
@@ -476,6 +478,15 @@ end
 glotest()
 assert(glob_x == 88)
 assert(loc_x == 10)
+
+# ranges
+assert(size(10:1:0) == (0,))
+assert(length(1:.2:2) == 6)
+assert(length(Range(1.,.2,2.)) == 6)
+assert(length(2:-.2:1) == 6)
+assert(length(Range(2.,-.2,1.)) == 6)
+assert(length(2:.2:1) == 0)
+assert(length(Range(2.,.2,1.)) == 0)
 
 # comprehensions
 X = [ i+2j | i=1:5, j=1:5 ]

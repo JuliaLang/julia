@@ -522,15 +522,9 @@
 	      ,@(if (eq? cc c) '() `((= ,cc ,c)))
 	      (= ,cnt 0)
 	      (= ,lim
-		 ;; integer version
-		 #;(if (|\|\||
-		      (call == (call < ,cc ,aa) (call < ,bb 0))
-		      (call == ,cc ,aa))
-		     (call (top div) (call - ,cc ,aa) ,bb)
-		     -1)
-		 (call int32 (call floor (call / (call - ,cc ,aa) ,bb))))
+		 (call int32 (call + 1 (call / (call - ,cc ,aa) ,bb))))
 	      (break-block loop-exit
-			   (_while (call <= ,cnt ,lim)
+			   (_while (call < ,cnt ,lim)
 				   (block
 				    (= ,var (call + ,aa (call * ,cnt ,bb)))
 				    (break-block loop-cont
