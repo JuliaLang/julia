@@ -27,10 +27,6 @@ load("intfuncs.j")
 load("floatfuncs.j")
 load("genericmath.j")
 
-# rational & complex
-load("rational.j")
-load("complex.j")
-
 # strings & printing
 load("string.j")
 load("latin1.j")
@@ -38,6 +34,8 @@ load("utf8.j")
 load("show.j")
 
 # additional data types
+load("rational.j")
+load("complex.j")
 load("list.j")
 load("dequeue.j")
 load("sparse.j")
