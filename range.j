@@ -26,7 +26,7 @@ end
 numel(r::Union(Range,Range1)) = length(r)
 length{T<:Int}(r::Range{T}) = max(0, div((r.stop-r.start+r.step), r.step))
 length{T<:Int}(r::Range1{T}) = max(0, (r.stop-r.start + 1))
-length(r::Range) = max(0, int32((r.start-r.stop) / -r.step + 1))
+length(r::Range) = max(0, int32((r.stop-r.start) / r.step + 1))
 length(r::Range1) = max(0, int32(r.stop-r.start + 1))
 
 isempty(r::Range) = (r.step > 0 ? r.stop < r.start : r.stop > r.start)

@@ -292,6 +292,13 @@ JL_CALLABLE(jl_f_top_eval)
     jl_value_t *e = args[0];
     if (!jl_is_expr(e))
         return jl_interpret_toplevel_expr(e);
+    jl_expr_t *ex = (jl_expr_t*)e;
+    if (ex->head == symbol_sym || ex->head == top_sym ||
+        ex->head == quote_sym || ex->head == null_sym ||
+        ex->head == unbound_sym) {
+        // expression types simple enough not to need expansion
+        return jl_interpret_toplevel_expr(e);
+    }
     return jl_interpret_toplevel_thunk(jl_expand(e));
 }
 

@@ -547,6 +547,7 @@ issues 6/21/10
 * << >> precedence
 * break in value position
 - tintersect((Int,Int),(T,T)) is wrong when T is T<:Int, ok when T<:Any
+- use Nothing instead of () where appropriate, codegen for tuple()
 
 method ordering tests:
 //:  (T,T) before (Any,Any)

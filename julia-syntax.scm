@@ -1002,6 +1002,21 @@ So far only the second case can actually occur.
 	(else
 	 (apply append (map declared-global-vars e))))))
 
+(define (find-assigned-vars e env)
+  (if (or (not (pair? e)) (quoted? e))
+      '()
+      (case (car e)
+	((lambda scope-block)  '())
+	((local local!)  (list (decl-var (cadr e))))
+	((=)
+	 (let ((v (decl-var (cadr e))))
+	   (if (memq v env)
+	       '()
+	       (list v))))
+	(else
+	 (apply append! (map (lambda (x) (find-assigned-vars x env))
+			     e))))))
+
 ; local variable identification
 ; convert (scope-block x) to `(scope-block ,@locals ,x)
 ; where locals is a list of (local x) expressions, derived from two sources:
@@ -1009,21 +1024,6 @@ So far only the second case can actually occur.
 ; 2. variables assigned inside this scope-block that don't exist in outer
 ;    scopes
 (define (identify-locals e)
-  (define (find-assigned-vars e env)
-    (if (or (not (pair? e)) (quoted? e))
-	'()
-	(case (car e)
-	  ((lambda scope-block)  '())
-	  ((local local!)  (list (decl-var (cadr e))))
-	  ((=)
-	   (let ((others (find-assigned-vars (caddr e) env))
-		 (v (decl-var (cadr e))))
-	     (if (memq v env)
-		 others
-		 (cons v others))))
-	  (else
-	   (apply append (map (lambda (x) (find-assigned-vars x env))
-			      e))))))
   (define (add-local-decls e env)
     (if (or (not (pair? e)) (quoted? e)) e
 	(cond ((eq? (car e) 'lambda)
@@ -1315,13 +1315,18 @@ So far only the second case can actually occur.
 	(else
 	 (map julia-expand-backquote e))))
 
-(define (julia-expand ex)
+(define (julia-expand1 ex)
   (to-goto-form
    (analyze-variables
     (flatten-scopes
-     (identify-locals
-      (to-LFF
-       (pattern-expand patterns
-	(pattern-expand lower-comprehensions
-	 (pattern-expand binding-form-patterns
-	  (julia-expand-backquote ex))))))))))
+     (identify-locals ex)))))
+
+(define (julia-expand0 ex)
+  (to-LFF
+   (pattern-expand patterns
+    (pattern-expand lower-comprehensions
+     (pattern-expand binding-form-patterns
+      (julia-expand-backquote ex))))))
+
+(define (julia-expand ex)
+  (julia-expand1 (julia-expand0 ex)))

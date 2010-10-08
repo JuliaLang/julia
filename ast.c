@@ -33,6 +33,19 @@ void jl_lisp_prompt()
     fl_applyn(1, symbol_value(symbol("__start")), fl_cons(FL_NIL,FL_NIL));
 }
 
+value_t fl_defined_julia_global(value_t *args, uint32_t nargs)
+{
+    argcount("defined-julia-global", nargs, 1);
+    (void)tosymbol(args[0], "defined-julia-global");
+    char *name = symbol_name(args[0]);
+    return jl_boundp(jl_system_module, jl_symbol(name)) ? FL_T : FL_F;
+}
+
+static builtinspec_t julia_flisp_ast_ext[] = {
+    { "defined-julia-global", fl_defined_julia_global },
+    { NULL, NULL }
+};
+
 static fltype_t *jvtype;
 
 void jl_init_frontend()
@@ -53,6 +66,8 @@ void jl_init_frontend()
 
     jvtype = define_opaque_type(symbol("julia_value"), sizeof(void*),
                                 NULL, NULL);
+
+    assign_global_builtins(julia_flisp_ast_ext);
 }
 
 void jl_shutdown_frontend()

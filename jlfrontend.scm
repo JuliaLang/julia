@@ -23,11 +23,43 @@
 	   #f)))
    thk))
 
+;; assigned variables except those marked local or inside inner functions
+(define (find-possible-globals e)
+  (cond ((atom? e)   '())
+	((quoted? e) '())
+	(else (case (car e)
+		((=)            (list (decl-var (cadr e))))
+		((lambda)       '())
+		((local local!) '())
+		((break-block)  (find-possible-globals (caddr e)))
+		(else
+		 (delete-duplicates
+		  (apply append!
+			 (map find-possible-globals (cdr e)))))))))
+
+;; this is overwritten when we run in actual julia
+(define (defined-julia-global v) #f)
+
+;; find variables that should be forced to be global in a toplevel expr
+(define (toplevel-expr-globals e)
+  (delete-duplicates
+   (append
+    ;; vars assigned at the outer level
+    (find-assigned-vars e '())
+    ;; vars assigned anywhere, if they have been defined as global
+    (filter defined-julia-global (find-possible-globals e)))))
+
 ; return a lambda expression representing a thunk for a top-level expression
 (define (toplevel-expr e)
   (if (or (boolean? e) (eof-object? e) (and (pair? e) (eq? (car e) 'line)))
       e
-      (cadr (julia-expand `(lambda () ,e)))))
+      (let* ((ex (julia-expand0 e))
+	     (gv (toplevel-expr-globals ex)))
+	(julia-expand1
+	 `(lambda ()
+	    (scope-block
+	     (block ,@(map (lambda (v) `(global ,v)) gv)
+		    ,ex)))))))
 
 (define (jl-parse-string s)
   (parser-wrap (lambda ()
