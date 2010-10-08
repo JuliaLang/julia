@@ -90,71 +90,71 @@ colon(start::Real, stop::Real, stride::Real) =
 (-)(x::Vector) = [ -x[i] | i=1:length(x) ]
 (-)(x::Matrix) = [ -x[i,j] | i=1:size(x,1), j=1:size(x,2) ]
 
-(+)(x::Scalar, y::Vector) = [ x + y[i] | i=1:length(y) ]
-(-)(x::Scalar, y::Vector) = [ x - y[i] | i=1:length(y) ]
-(*)(x::Scalar, y::Vector) = [ x * y[i] | i=1:length(y) ]
-(/)(x::Scalar, y::Vector) = [ x / y[i] | i=1:length(y) ]
-(<)(x::Scalar, y::Vector) = [ x < y[i] | i=1:length(y) ]
-(==)(x::Scalar, y::Vector) = [ x == y[i] | i=1:length(y) ]
+# (+)(x::Scalar, y::Vector) = [ x + y[i] | i=1:length(y) ]
+# (-)(x::Scalar, y::Vector) = [ x - y[i] | i=1:length(y) ]
+# (*)(x::Scalar, y::Vector) = [ x * y[i] | i=1:length(y) ]
+# (/)(x::Scalar, y::Vector) = [ x / y[i] | i=1:length(y) ]
+# (<)(x::Scalar, y::Vector) = [ x < y[i] | i=1:length(y) ]
+# (==)(x::Scalar, y::Vector) = [ x == y[i] | i=1:length(y) ]
 
-(+)(x::Vector, y::Scalar) = [ x[i] + y | i=1:length(x) ]
-(-)(x::Vector, y::Scalar) = [ x[i] - y | i=1:length(x) ]
-(*)(x::Vector, y::Scalar) = [ x[i] * y | i=1:length(x) ]
-(/)(x::Vector, y::Scalar) = [ x[i] / y | i=1:length(x) ]
-(<)(x::Vector, y::Scalar) = [ x[i] < y | i=1:length(x) ]
-(==)(x::Vector, y::Scalar) = [ x[i] == y | i=1:length(x) ]
+# (+)(x::Vector, y::Scalar) = [ x[i] + y | i=1:length(x) ]
+# (-)(x::Vector, y::Scalar) = [ x[i] - y | i=1:length(x) ]
+# (*)(x::Vector, y::Scalar) = [ x[i] * y | i=1:length(x) ]
+# (/)(x::Vector, y::Scalar) = [ x[i] / y | i=1:length(x) ]
+# (<)(x::Vector, y::Scalar) = [ x[i] < y | i=1:length(x) ]
+# (==)(x::Vector, y::Scalar) = [ x[i] == y | i=1:length(x) ]
 
-(+)(x::Vector, y::Vector) = [ x[i] + y[i] | i=1:length(x) ]
-(-)(x::Vector, y::Vector) = [ x[i] - y[i] | i=1:length(x) ]
-(.*)(x::Vector, y::Vector) = [ x[i] * y[i] | i=1:length(x) ]
-(./)(x::Vector, y::Vector) = [ x[i] / y[i] | i=1:length(x) ]
-(<)(x::Vector, y::Vector) = [ x[i] < y[i] | i=1:length(x) ]
-(==)(x::Vector, y::Vector) = [ x[i] == y[i] | i=1:length(x) ]
+# (+)(x::Vector, y::Vector) = [ x[i] + y[i] | i=1:length(x) ]
+# (-)(x::Vector, y::Vector) = [ x[i] - y[i] | i=1:length(x) ]
+# (.*)(x::Vector, y::Vector) = [ x[i] * y[i] | i=1:length(x) ]
+# (./)(x::Vector, y::Vector) = [ x[i] / y[i] | i=1:length(x) ]
+# (<)(x::Vector, y::Vector) = [ x[i] < y[i] | i=1:length(x) ]
+# (==)(x::Vector, y::Vector) = [ x[i] == y[i] | i=1:length(x) ]
 
-(+)(x::Scalar, y::Matrix) = [ x + y[i,j] | i=1:size(y,1), j=1:size(y,2) ]
-(-)(x::Scalar, y::Matrix) = [ x - y[i,j] | i=1:size(y,1), j=1:size(y,2) ]
-(*)(x::Scalar, y::Matrix) = [ x * y[i,j] | i=1:size(y,1), j=1:size(y,2) ]
-(/)(x::Scalar, y::Matrix) = [ x / y[i,j] | i=1:size(y,1), j=1:size(y,2) ]
-(<)(x::Scalar, y::Matrix) = [ x < y[i,j] | i=1:size(y,1), j=1:size(y,2) ]
-(==)(x::Scalar, y::Matrix) = [ x == y[i,j] | i=1:size(y,1), j=1:size(y,2) ]
+# (+)(x::Scalar, y::Matrix) = [ x + y[i,j] | i=1:size(y,1), j=1:size(y,2) ]
+# (-)(x::Scalar, y::Matrix) = [ x - y[i,j] | i=1:size(y,1), j=1:size(y,2) ]
+# (*)(x::Scalar, y::Matrix) = [ x * y[i,j] | i=1:size(y,1), j=1:size(y,2) ]
+# (/)(x::Scalar, y::Matrix) = [ x / y[i,j] | i=1:size(y,1), j=1:size(y,2) ]
+# (<)(x::Scalar, y::Matrix) = [ x < y[i,j] | i=1:size(y,1), j=1:size(y,2) ]
+# (==)(x::Scalar, y::Matrix) = [ x == y[i,j] | i=1:size(y,1), j=1:size(y,2) ]
 
-(+)(x::Matrix, y::Scalar) = [ x[i,j] + y | i=1:size(x,1), j=1:size(x,2) ]
-(-)(x::Matrix, y::Scalar) = [ x[i,j] - y | i=1:size(x,1), j=1:size(x,2) ]
-(*)(x::Matrix, y::Scalar) = [ x[i,j] * y | i=1:size(x,1), j=1:size(x,2) ]
-(/)(x::Matrix, y::Scalar) = [ x[i,j] / y | i=1:size(x,1), j=1:size(x,2) ]
-(<)(x::Matrix, y::Scalar) = [ x[i,j] < y | i=1:size(x,1), j=1:size(x,2) ]
-(==)(x::Matrix, y::Scalar) = [ x[i,j] == y | i=1:size(x,1), j=1:size(x,2) ]
+# (+)(x::Matrix, y::Scalar) = [ x[i,j] + y | i=1:size(x,1), j=1:size(x,2) ]
+# (-)(x::Matrix, y::Scalar) = [ x[i,j] - y | i=1:size(x,1), j=1:size(x,2) ]
+# (*)(x::Matrix, y::Scalar) = [ x[i,j] * y | i=1:size(x,1), j=1:size(x,2) ]
+# (/)(x::Matrix, y::Scalar) = [ x[i,j] / y | i=1:size(x,1), j=1:size(x,2) ]
+# (<)(x::Matrix, y::Scalar) = [ x[i,j] < y | i=1:size(x,1), j=1:size(x,2) ]
+# (==)(x::Matrix, y::Scalar) = [ x[i,j] == y | i=1:size(x,1), j=1:size(x,2) ]
 
-(+)(x::Matrix, y::Matrix) = [ x[i,j] + y[i,j] | i=1:size(x,1), j=1:size(x,2) ]
-(-)(x::Matrix, y::Matrix) = [ x[i,j] - y[i,j] | i=1:size(x,1), j=1:size(x,2) ]
-(.*)(x::Matrix, y::Matrix) = [ x[i,j] * y[i,j] | i=1:size(x,1), j=1:size(x,2) ]
-(./)(x::Matrix, y::Matrix) = [ x[i,j] / y[i,j] | i=1:size(x,1), j=1:size(x,2) ]
-(<)(x::Matrix, y::Matrix) = [ x[i,j] < y[i,j] | i=1:size(x,1), j=1:size(x,2) ]
-(==)(x::Matrix, y::Matrix) = [ x[i,j] == y[i,j] | i=1:size(x,1), j=1:size(x,2) ]
+# (+)(x::Matrix, y::Matrix) = [ x[i,j] + y[i,j] | i=1:size(x,1), j=1:size(x,2) ]
+# (-)(x::Matrix, y::Matrix) = [ x[i,j] - y[i,j] | i=1:size(x,1), j=1:size(x,2) ]
+# (.*)(x::Matrix, y::Matrix) = [ x[i,j] * y[i,j] | i=1:size(x,1), j=1:size(x,2) ]
+# (./)(x::Matrix, y::Matrix) = [ x[i,j] / y[i,j] | i=1:size(x,1), j=1:size(x,2) ]
+# (<)(x::Matrix, y::Matrix) = [ x[i,j] < y[i,j] | i=1:size(x,1), j=1:size(x,2) ]
+# (==)(x::Matrix, y::Matrix) = [ x[i,j] == y[i,j] | i=1:size(x,1), j=1:size(x,2) ]
 
 (+){T,n}(x::Array{T,n}, y::Array{T,n}) = reshape ( [ x[i] + y[i] | i=1:numel(x) ], size(x) )
-(+){T,n}(x::Scalar, y::Array{T,n}) = reshape ( [ x + y[i] | i=1:numel(y) ], size(y) )
-(+){T,n}(x::Array{T,n}, y::Scalar) = reshape ( [ x[i] + y | i=1:numel(x) ], size(x) )
+(+){T,n}(x::Real, y::Array{T,n}) = reshape ( [ x + y[i] | i=1:numel(y) ], size(y) )
+(+){T,n}(x::Array{T,n}, y::Real) = reshape ( [ x[i] + y | i=1:numel(x) ], size(x) )
 
 (-){T,n}(x::Array{T,n}, y::Array{T,n}) = reshape ( [ x[i] - y[i] | i=1:numel(x) ], size(x) )
-(-){T,n}(x::Scalar, y::Array{T,n}) = reshape ( [ x - y[i] | i=1:numel(y) ], size(y) )
-(-){T,n}(x::Array{T,n}, y::Scalar) = reshape ( [ x[i] - y | i=1:numel(x) ], size(x) )
+(-){T,n}(x::Real, y::Array{T,n}) = reshape ( [ x - y[i] | i=1:numel(y) ], size(y) )
+(-){T,n}(x::Array{T,n}, y::Real) = reshape ( [ x[i] - y | i=1:numel(x) ], size(x) )
 
 (.*){T,n}(x::Array{T,n}, y::Array{T,n}) = reshape ( [ x[i] .* y[i] | i=1:numel(x) ], size(x) )
-(.*){T,n}(x::Scalar, y::Array{T,n}) = reshape ( [ x .* y[i] | i=1:numel(y) ], size(y) )
-(.*){T,n}(x::Array{T,n}, y::Scalar) = reshape ( [ x[i] .* y | i=1:numel(x) ], size(x) )
+(.*){T,n}(x::Real, y::Array{T,n}) = reshape ( [ x .* y[i] | i=1:numel(y) ], size(y) )
+(.*){T,n}(x::Array{T,n}, y::Real) = reshape ( [ x[i] .* y | i=1:numel(x) ], size(x) )
 
 (./){T,n}(x::Array{T,n}, y::Array{T,n}) = reshape ( [ x[i] ./ y[i] | i=1:numel(x) ], size(x) )
-(./){T,n}(x::Scalar, y::Array{T,n}) = reshape ( [ x ./ y[i] | i=1:numel(y) ], size(y) )
-(./){T,n}(x::Array{T,n}, y::Scalar) = reshape ( [ x[i] ./ y | i=1:numel(x) ], size(x) )
+(./){T,n}(x::Real, y::Array{T,n}) = reshape ( [ x ./ y[i] | i=1:numel(y) ], size(y) )
+(./){T,n}(x::Array{T,n}, y::Real) = reshape ( [ x[i] ./ y | i=1:numel(x) ], size(x) )
 
 (<){T,n}(x::Array{T,n}, y::Array{T,n}) = reshape ( [ x[i] < y[i] | i=1:numel(x) ], size(x) )
-(<){T,n}(x::Scalar, y::Array{T,n}) = reshape ( [ x < y[i] | i=1:numel(y) ], size(y) )
-(<){T,n}(x::Array{T,n}, y::Scalar) = reshape ( [ x[i] < y | i=1:numel(x) ], size(x) )
+(<){T,n}(x::Real, y::Array{T,n}) = reshape ( [ x < y[i] | i=1:numel(y) ], size(y) )
+(<){T,n}(x::Array{T,n}, y::Real) = reshape ( [ x[i] < y | i=1:numel(x) ], size(x) )
 
 (==){T,n}(x::Array{T,n}, y::Array{T,n}) = reshape ( [ x[i] == y[i] | i=1:numel(x) ], size(x) )
-(==){T,n}(x::Scalar, y::Array{T,n}) = reshape ( [ x == y[i] | i=1:numel(y) ], size(y) )
-(==){T,n}(x::Array{T,n}, y::Scalar) = reshape ( [ x[i] == y | i=1:numel(x) ], size(x) )
+(==){T,n}(x::Real, y::Array{T,n}) = reshape ( [ x == y[i] | i=1:numel(y) ], size(y) )
+(==){T,n}(x::Array{T,n}, y::Real) = reshape ( [ x[i] == y | i=1:numel(x) ], size(x) )
 
 conj{T <: Real}(x::Vector{T}) = x
 conj{T <: Real}(x::Matrix{T}) = x
