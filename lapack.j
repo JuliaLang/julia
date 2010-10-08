@@ -1,20 +1,20 @@
 libLAPACK = dlopen("libLAPACK")
 
-function issymmetric (A::Matrix)
+function issymmetric(A::Matrix)
     m, n = size(A)
     if m != n; error("Input matrix must be square"); end
     for i=1:(n-1), j=(i+1):n; if A[i,j] != A[j,i]; return false; end; end
     return true
 end
 
-function isuppertriangular (A::Matrix)
+function isuppertriangular(A::Matrix)
     m, n = size(A)
     if m != n; error("Input matrix must be square"); end
     for i=1:n, j=1:n; if A[i,j] != 0 && j < i; return false; end; end
     return true
 end
 
-function islowertriangular (A::Matrix)
+function islowertriangular(A::Matrix)
     m, n = size(A)
     if m != n; error("Input matrix must be square"); end
     for i=1:n, j=n:-1:1; if A[i,j] != 0 && j > i; return false; end; end
@@ -29,7 +29,7 @@ end
 #       DOUBLE PRECISION   A( LDA, * )
 
 for (fname, eltype) = (("dpotrf_", Float64), ("spotrf_", Float32))
-    eval(`function chol (A::DenseMatrix{$eltype})
+    eval(`function chol(A::DenseMatrix{$eltype})
          info = [0]
          n = size(A, 1)
          R = triu(A)
@@ -55,7 +55,7 @@ end
 #       DOUBLE PRECISION   A( LDA, * )
 
 for (fname, eltype) = (("dgetrf_", Float64), ("sgetrf_", Float32))
-    eval(`function lu (A::DenseMatrix{$eltype})
+    eval(`function lu(A::DenseMatrix{$eltype})
          info = [0]
          m, n = size(A)
          LU = copy(A)
@@ -93,7 +93,7 @@ end
 
 for (fname, fname2, eltype) = (("dgeqp3_", "dorgqr_", Float64),
                                ("sgeqp3_", "sorgqr_", Float32))
-    eval(`function qr (A::DenseMatrix{$eltype})
+    eval(`function qr(A::DenseMatrix{$eltype})
          info = [0]
          m, n = size(A)
          QR = copy(A)
@@ -267,7 +267,7 @@ end
 
 for (fname_lu, fname_lsq, fname_tri, eltype) = (("dgesv_", "dgels_", "dtrtrs_", Float64),
                                                 ("sgesv_", "sgels_", "strtrs_", Float32))
-    eval(`function \ (A::DenseMatrix{$eltype}, B::DenseVecOrMat{$eltype})
+    eval(`function \(A::DenseMatrix{$eltype}, B::DenseVecOrMat{$eltype})
         info = [0]
         m = size(A, 1)
         n = size(A, 2)
