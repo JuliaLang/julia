@@ -27,6 +27,9 @@ load("intfuncs.j")
 load("floatfuncs.j")
 load("genericmath.j")
 
+# load libc
+libc = dlopen("libc")
+
 # strings & printing
 load("string.j")
 load("latin1.j")

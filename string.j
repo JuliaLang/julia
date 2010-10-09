@@ -186,14 +186,6 @@ end
 depth(s::String) = 0
 depth(s::RopeString) = s.depth
 
-# strtree(s::String) = print(".")
-# function strtree(s::RopeString)
-#     print("[")
-#     strtree(s.head)
-#     strtree(s.tail)
-#     print("]")
-# end
-
 function next(s::RopeString, i::Index)
     if i <= length(s.head)
         return next(s.head, i)
@@ -215,18 +207,22 @@ print(s::RopeString) = print(s.head,s.tail)
 
 ## generic string utilities ##
 
+iswprint(c::Char) = bool(ccall(dlsym(libc,"iswprint"), Int32, (Char,), c))
+
+escape_nul(s::String, i::Index) =
+    !done(s,i) && '0' <= next(s,i)[1] <= '7' ? "\\x00" : "\\0"
+
 function escape_string(s::String, unicode::Bool, quoted::Bool)
     xmax = unicode ? 0x7F : 0xFF
     e = quoted ? "\"" : ""
     i = start(s)
     while !done(s,i)
         c, j = next(s,i)
-        z = !done(s,j) && '0' <= next(s,j)[1] <= '7' ? "\\x00" : "\\0"
-        d = c == '\0'    ? z :
+        d = c == '\0'    ? escape_nul(s,j) :
             c == '\\'    ? "\\\\" :
             c == '\e'    ? "\\e" :
   quoted && c == '\"'    ? "\\\"" :
-            31 < c < 127 ? string(c) :
+            iswprint(c)  ? string(c) :
             7 <= c <= 13 ? string('\\', "abtnvfr"[c-6]) :
             c <= xmax    ? strcat("\\x", uint2str(c,16,2)) :
             c <= 0xFFFF  ? strcat("\\u", uint2str(c,16,4)) :
@@ -374,8 +370,6 @@ string(x) = string(ccall(dlsym(JuliaDLHandle,"jl_show_to_string"),
                          Ptr{Uint8}, (Any,), x))
 
 ## lexicographically compare byte arrays (used by Latin-1 and UTF-8) ##
-
-libc = dlopen("libc")
 
 function lexcmp(a::Array{Uint8,1}, b::Array{Uint8,1})
     d = ccall(dlsym(libc,"memcmp"), Int32,
