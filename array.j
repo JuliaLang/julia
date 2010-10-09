@@ -93,6 +93,8 @@ colon(start::Number, stop::Number, stride::Number) =
 
 (-)(x::Array) = reshape([ -x[i] | i=1:numel(x) ], size(x) )
 
+(!)(x::Array{Bool}) = reshape( [ !x[i] | i=1:numel(x) ], size(x) )
+
 (~)(x::Array{Bool}) = reshape( [ ~x[i] | i=1:numel(x) ], size(x) )
 
 conj{T <: Number}(x::Array{T}) = x
@@ -138,10 +140,6 @@ imag(x::Array) = reshape( [ imag(x[i]) | i=1:numel(x) ], size(x) )
 (>)(x::Number, y::Array) = reshape( [ x    > y[i] | i=1:numel(y) ], size(y) )
 (>)(x::Array, y::Number) = reshape( [ x[i] > y    | i=1:numel(x) ], size(x) )
 
-(==)(x::Array, y::Array)  = reshape( [ x[i] == y[i] | i=1:numel(x) ], size(x) )
-(==)(x::Number, y::Array) = reshape( [ x    == y[i] | i=1:numel(y) ], size(y) )
-(==)(x::Array, y::Number) = reshape( [ x[i] == y    | i=1:numel(x) ], size(x) )
-
 (<=)(x::Array, y::Array)  = reshape( [ x[i] <= y[i] | i=1:numel(x) ], size(x) )
 (<=)(x::Number, y::Array) = reshape( [ x    <= y[i] | i=1:numel(y) ], size(y) )
 (<=)(x::Array, y::Number) = reshape( [ x[i] <= y    | i=1:numel(x) ], size(x) )
@@ -150,7 +148,15 @@ imag(x::Array) = reshape( [ imag(x[i]) | i=1:numel(x) ], size(x) )
 (>=)(x::Number, y::Array) = reshape( [ x    >= y[i] | i=1:numel(y) ], size(y) )
 (>=)(x::Array, y::Number) = reshape( [ x[i] >= y    | i=1:numel(x) ], size(x) )
 
-(!=)(x::Array, y::Array)  = reshape( [ x[i] != y[i] | i=1:numel(x) ], size(x) )
+function (==)(x::Array, y::Array)
+    if x.dims != y.dims; return false; end
+    for i=1:numel(x); if x[i] != y[i]; return false; end; end
+    return true
+end
+
+(==)(x::Number, y::Array) = reshape( [ x    == y[i] | i=1:numel(y) ], size(y) )
+(==)(x::Array, y::Number) = reshape( [ x[i] == y    | i=1:numel(x) ], size(x) )
+
 (!=)(x::Number, y::Array) = reshape( [ x    != y[i] | i=1:numel(y) ], size(y) )
 (!=)(x::Array, y::Number) = reshape( [ x[i] != y    | i=1:numel(x) ], size(x) )
 
