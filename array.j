@@ -12,6 +12,13 @@ length(v::Vector) = numel(v)
 nnz(a::Array) = (n = 0; for i=1:numel(a); n += a[i] != 0 ? 1 : 0; end; n)
 numel(a::Array) = arraylen(a)
 
+reshape{T}(a::Array{T}, dims...) = (b = Array(T, dims...);
+                                    for i=1:numel(a); b[i] = a[i]; end;
+                                    b)
+reshape(a::Array, dims::Tuple) = reshape(a, dims...)
+
+# Constructors
+
 jl_comprehension_zeros{T,n}(oneresult::Tensor{T,n}, dims...) = Array(T, dims...)
 jl_comprehension_zeros{T}(oneresult::T, dims...) = Array(T, dims...)
 jl_comprehension_zeros(oneresult::(), dims...) = Array(None, dims...)
@@ -68,11 +75,6 @@ function copy{T}(a::Array{T})
     return b
 end
 
-reshape{T}(a::Array{T}, dims...) = (b = Array(T, dims...);
-                                    for i=1:numel(a); b[i] = a[i]; end;
-                                    b)
-reshape(a::Array, dims::Tuple) = reshape(a, dims...)
-
 eye(n::Size) = eye(n, n)
 eye(m::Size, n::Size) = (a = zeros(m,n);
                          for i=1:min(m,n); a[i,i]=1; end;
@@ -87,111 +89,86 @@ colon(start::Number, stop::Number, stride::Number) =
     ((start, stop, stride) = promote(start, stop, stride);
      [ i | i=start:stride:stop ])
 
-(-)(x::Vector) = [ -x[i] | i=1:length(x) ]
-(-)(x::Matrix) = [ -x[i,j] | i=1:size(x,1), j=1:size(x,2) ]
+# Unary operators 
 
-# (+)(x::Scalar, y::Vector) = [ x + y[i] | i=1:length(y) ]
-# (-)(x::Scalar, y::Vector) = [ x - y[i] | i=1:length(y) ]
-# (*)(x::Scalar, y::Vector) = [ x * y[i] | i=1:length(y) ]
-# (/)(x::Scalar, y::Vector) = [ x / y[i] | i=1:length(y) ]
-# (<)(x::Scalar, y::Vector) = [ x < y[i] | i=1:length(y) ]
-# (==)(x::Scalar, y::Vector) = [ x == y[i] | i=1:length(y) ]
+(-)(x::Array) = reshape([ -x[i] | i=1:numel(x) ], size(x) )
 
-# (+)(x::Vector, y::Scalar) = [ x[i] + y | i=1:length(x) ]
-# (-)(x::Vector, y::Scalar) = [ x[i] - y | i=1:length(x) ]
-# (*)(x::Vector, y::Scalar) = [ x[i] * y | i=1:length(x) ]
-# (/)(x::Vector, y::Scalar) = [ x[i] / y | i=1:length(x) ]
-# (<)(x::Vector, y::Scalar) = [ x[i] < y | i=1:length(x) ]
-# (==)(x::Vector, y::Scalar) = [ x[i] == y | i=1:length(x) ]
+(~)(x::Array{Bool}) = reshape( [ ~x[i] | i=1:numel(x) ], size(x) )
 
-# (+)(x::Vector, y::Vector) = [ x[i] + y[i] | i=1:length(x) ]
-# (-)(x::Vector, y::Vector) = [ x[i] - y[i] | i=1:length(x) ]
-# (.*)(x::Vector, y::Vector) = [ x[i] * y[i] | i=1:length(x) ]
-# (./)(x::Vector, y::Vector) = [ x[i] / y[i] | i=1:length(x) ]
-# (<)(x::Vector, y::Vector) = [ x[i] < y[i] | i=1:length(x) ]
-# (==)(x::Vector, y::Vector) = [ x[i] == y[i] | i=1:length(x) ]
+conj{T <: Number}(x::Array{T}) = x
+conj(x::Array) = reshape( [ conj(x[i]) | i=1:numel(x) ], size(x) )
 
-# (+)(x::Scalar, y::Matrix) = [ x + y[i,j] | i=1:size(y,1), j=1:size(y,2) ]
-# (-)(x::Scalar, y::Matrix) = [ x - y[i,j] | i=1:size(y,1), j=1:size(y,2) ]
-# (*)(x::Scalar, y::Matrix) = [ x * y[i,j] | i=1:size(y,1), j=1:size(y,2) ]
-# (/)(x::Scalar, y::Matrix) = [ x / y[i,j] | i=1:size(y,1), j=1:size(y,2) ]
-# (<)(x::Scalar, y::Matrix) = [ x < y[i,j] | i=1:size(y,1), j=1:size(y,2) ]
-# (==)(x::Scalar, y::Matrix) = [ x == y[i,j] | i=1:size(y,1), j=1:size(y,2) ]
+real{T <: Number}(x::Array{T}) = x
+real(x::Array) = reshape( [ real(x[i]) | i=1:numel(x) ], size(x) )
 
-# (+)(x::Matrix, y::Scalar) = [ x[i,j] + y | i=1:size(x,1), j=1:size(x,2) ]
-# (-)(x::Matrix, y::Scalar) = [ x[i,j] - y | i=1:size(x,1), j=1:size(x,2) ]
-# (*)(x::Matrix, y::Scalar) = [ x[i,j] * y | i=1:size(x,1), j=1:size(x,2) ]
-# (/)(x::Matrix, y::Scalar) = [ x[i,j] / y | i=1:size(x,1), j=1:size(x,2) ]
-# (<)(x::Matrix, y::Scalar) = [ x[i,j] < y | i=1:size(x,1), j=1:size(x,2) ]
-# (==)(x::Matrix, y::Scalar) = [ x[i,j] == y | i=1:size(x,1), j=1:size(x,2) ]
+imag{T <: Number}(x::Array{T}) = zeros(T, size(x))
+imag(x::Array) = reshape( [ imag(x[i]) | i=1:numel(x) ], size(x) )
 
-# (+)(x::Matrix, y::Matrix) = [ x[i,j] + y[i,j] | i=1:size(x,1), j=1:size(x,2) ]
-# (-)(x::Matrix, y::Matrix) = [ x[i,j] - y[i,j] | i=1:size(x,1), j=1:size(x,2) ]
-# (.*)(x::Matrix, y::Matrix) = [ x[i,j] * y[i,j] | i=1:size(x,1), j=1:size(x,2) ]
-# (./)(x::Matrix, y::Matrix) = [ x[i,j] / y[i,j] | i=1:size(x,1), j=1:size(x,2) ]
-# (<)(x::Matrix, y::Matrix) = [ x[i,j] < y[i,j] | i=1:size(x,1), j=1:size(x,2) ]
-# (==)(x::Matrix, y::Matrix) = [ x[i,j] == y[i,j] | i=1:size(x,1), j=1:size(x,2) ]
+# Binary arithmetic operators
 
-(+){T,n}(x::Array{T,n}, y::Array{T,n}) = reshape( [ x[i] + y[i] | i=1:numel(x) ], size(x) )
-(+){T,n}(x::Number, y::Array{T,n}) = reshape( [ x + y[i] | i=1:numel(y) ], size(y) )
-(+){T,n}(x::Array{T,n}, y::Number) = reshape( [ x[i] + y | i=1:numel(x) ], size(x) )
+(+)(x::Array, y::Array)  = reshape( [ x[i] + y[i] | i=1:numel(x) ], size(x) )
+(+)(x::Number, y::Array) = reshape( [ x    + y[i] | i=1:numel(y) ], size(y) )
+(+)(x::Array, y::Number) = reshape( [ x[i] + y    | i=1:numel(x) ], size(x) )
 
-(-){T,n}(x::Array{T,n}, y::Array{T,n}) = reshape( [ x[i] - y[i] | i=1:numel(x) ], size(x) )
-(-){T,n}(x::Number, y::Array{T,n}) = reshape( [ x - y[i] | i=1:numel(y) ], size(y) )
-(-){T,n}(x::Array{T,n}, y::Number) = reshape( [ x[i] - y | i=1:numel(x) ], size(x) )
+(-)(x::Array, y::Array)  = reshape( [ x[i] - y[i] | i=1:numel(x) ], size(x) )
+(-)(x::Number, y::Array) = reshape( [ x    - y[i] | i=1:numel(y) ], size(y) )
+(-)(x::Array, y::Number) = reshape( [ x[i] - y    | i=1:numel(x) ], size(x) )
 
-(.*){T,n}(x::Array{T,n}, y::Array{T,n}) = reshape( [ x[i] .* y[i] | i=1:numel(x) ], size(x) )
-(.*){T,n}(x::Number, y::Array{T,n}) = reshape( [ x .* y[i] | i=1:numel(y) ], size(y) )
-(.*){T,n}(x::Array{T,n}, y::Number) = reshape( [ x[i] .* y | i=1:numel(x) ], size(x) )
+(.*)(x::Array, y::Array)  = reshape( [ x[i] .* y[i] | i=1:numel(x) ], size(x) )
+(.*)(x::Number, y::Array) = reshape( [ x    .* y[i] | i=1:numel(y) ], size(y) )
+(.*)(x::Array, y::Number) = reshape( [ x[i] .* y    | i=1:numel(x) ], size(x) )
 
-(./){T,n}(x::Array{T,n}, y::Array{T,n}) = reshape( [ x[i] ./ y[i] | i=1:numel(x) ], size(x) )
-(./){T,n}(x::Number, y::Array{T,n}) = reshape( [ x ./ y[i] | i=1:numel(y) ], size(y) )
-(./){T,n}(x::Array{T,n}, y::Number) = reshape( [ x[i] ./ y | i=1:numel(x) ], size(x) )
+(*)(x::Number, y::Array) = reshape( [ x    * y[i] | i=1:numel(y) ], size(y) )
+(*)(x::Array, y::Number) = reshape( [ x[i] * y    | i=1:numel(x) ], size(x) )
 
-(<){T,n}(x::Array{T,n}, y::Array{T,n}) = reshape( [ x[i] < y[i] | i=1:numel(x) ], size(x) )
-(<){T,n}(x::Number, y::Array{T,n}) = reshape( [ x < y[i] | i=1:numel(y) ], size(y) )
-(<){T,n}(x::Array{T,n}, y::Number) = reshape( [ x[i] < y | i=1:numel(x) ], size(x) )
+(./)(x::Array, y::Array)  = reshape( [ x[i] ./ y[i] | i=1:numel(x) ], size(x) )
+(./)(x::Number, y::Array) = reshape( [ x    ./ y[i] | i=1:numel(y) ], size(y) )
+(./)(x::Array, y::Number) = reshape( [ x[i] ./ y    | i=1:numel(x) ], size(x) )
 
-(==){T,n}(x::Array{T,n}, y::Array{T,n}) = reshape( [ x[i] == y[i] | i=1:numel(x) ], size(x) )
-(==){T,n}(x::Number, y::Array{T,n}) = reshape( [ x == y[i] | i=1:numel(y) ], size(y) )
-(==){T,n}(x::Array{T,n}, y::Number) = reshape( [ x[i] == y | i=1:numel(x) ], size(x) )
+(/)(x::Number, y::Array) = reshape( [ x    / y[i] | i=1:numel(y) ], size(y) )
+(/)(x::Array, y::Number) = reshape( [ x[i] / y    | i=1:numel(x) ], size(x) )
 
-conj{T <: Number}(x::Vector{T}) = x
-conj{T <: Number}(x::Matrix{T}) = x
-conj(x::Vector) = [ conj(x[i]) | i=1:length(x) ]
-conj(x::Matrix) = [ conj(x[i,j]) | i=1:size(x,1), j=1:size(x,2) ]
+# Binary comparison operators
 
-real{T <: Number}(x::Vector{T}) = x
-real{T <: Number}(x::Matrix{T}) = x
-real(x::Vector) = [ real(x[i]) | i=1:length(x) ]
-real(x::Matrix) = [ real(x[i,j]) | i=1:size(x,1), j=1:size(x,2) ]
+(<)(x::Array, y::Array)  = reshape( [ x[i] < y[i] | i=1:numel(x) ], size(x) )
+(<)(x::Number, y::Array) = reshape( [ x    < y[i] | i=1:numel(y) ], size(y) )
+(<)(x::Array, y::Number) = reshape( [ x[i] < y    | i=1:numel(x) ], size(x) )
 
-imag{T <: Number}(x::Array{T,1}) = zeros(T, length(x))
-imag{T <: Number}(x::Array{T,2}) = zeros(T, size(x))
-imag(x::Vector) = [ imag(x[i]) | i=1:length(x) ]
-imag(x::Matrix) = [ imag(x[i,j]) | i=1:size(x,1), j=1:size(x,2) ]
+(>)(x::Array, y::Array)  = reshape( [ x[i] > y[i] | i=1:numel(x) ], size(x) )
+(>)(x::Number, y::Array) = reshape( [ x    > y[i] | i=1:numel(y) ], size(y) )
+(>)(x::Array, y::Number) = reshape( [ x[i] > y    | i=1:numel(x) ], size(x) )
 
-(<=){T,S,n}(x::Tensor{T,n}, y::Tensor{S,n}) = (x < y) | (x == y)
-(<=)       (x::Number  ,      y::Tensor)      = (x < y) | (x == y)
-(<=)       (x::Tensor,      y::Number  )      = (x < y) | (x == y)
-(>=){T,S,n}(x::Tensor{T,n}, y::Tensor{S,n}) = (x > y) | (x == y)
-(>=)       (x::Number  ,      y::Tensor)      = (x > y) | (x == y)
-(>=)       (x::Tensor,      y::Number  )      = (x > y) | (x == y)
+(==)(x::Array, y::Array)  = reshape( [ x[i] == y[i] | i=1:numel(x) ], size(x) )
+(==)(x::Number, y::Array) = reshape( [ x    == y[i] | i=1:numel(y) ], size(y) )
+(==)(x::Array, y::Number) = reshape( [ x[i] == y    | i=1:numel(x) ], size(x) )
 
-(~)(x::Vector{Bool}) = [ ~x[i] | i=1:length(x) ]
-(~)(x::Matrix{Bool}) = [ ~x[i,j] | i=1:size(x,1), j=1:=size(x,2) ]
+(<=)(x::Array, y::Array)  = reshape( [ x[i] <= y[i] | i=1:numel(x) ], size(x) )
+(<=)(x::Number, y::Array) = reshape( [ x    <= y[i] | i=1:numel(y) ], size(y) )
+(<=)(x::Array, y::Number) = reshape( [ x[i] <= y    | i=1:numel(x) ], size(x) )
 
-(&)(x::Bool, y::Vector{Bool}) = [  x & y[i]  | i=1:length(y) ]
-(|)(x::Bool, y::Vector{Bool}) = [ (x | y[i]) | i=1:length(y) ]
-($)(x::Bool, y::Vector{Bool}) = [  x $ y[i]  | i=1:length(y) ]
+(>=)(x::Array, y::Array)  = reshape( [ x[i] >= y[i] | i=1:numel(x) ], size(x) )
+(>=)(x::Number, y::Array) = reshape( [ x    >= y[i] | i=1:numel(y) ], size(y) )
+(>=)(x::Array, y::Number) = reshape( [ x[i] >= y    | i=1:numel(x) ], size(x) )
 
-(&)(x::Vector{Bool}, y::Bool) = [  x[i] & y  | i=1:length(x) ]
-(|)(x::Vector{Bool}, y::Bool) = [ (x[i] | y) | i=1:length(x) ]
-($)(x::Vector{Bool}, y::Bool) = [  x[i] $ y  | i=1:length(x) ]
+(!=)(x::Array, y::Array)  = reshape( [ x[i] != y[i] | i=1:numel(x) ], size(x) )
+(!=)(x::Number, y::Array) = reshape( [ x    != y[i] | i=1:numel(y) ], size(y) )
+(!=)(x::Array, y::Number) = reshape( [ x[i] != y    | i=1:numel(x) ], size(x) )
 
-(&)(x::Vector{Bool}, y::Vector{Bool}) = [  x[i] & y[i]  | i=1:length(x) ]
-(|)(x::Vector{Bool}, y::Vector{Bool}) = [ (x[i] | y[i]) | i=1:length(x) ]
-($)(x::Vector{Bool}, y::Vector{Bool}) = [  x[i] $ y[i]  | i=1:length(x) ]
+# Binary boolean operators
+
+(&)(x::Array{Bool}, y::Array{Bool}) = reshape( [ x[i] & y[i] | i=1:numel(x) ], size(x) )
+(&)(x::Bool, y::Array{Bool})        = reshape( [ x    & y[i] | i=1:numel(y) ], size(y) )
+(&)(x::Array{Bool}, y::Bool)        = reshape( [ x[i] & y    | i=1:numel(x) ], size(x) )
+
+(|)(x::Array{Bool}, y::Array{Bool}) = reshape( [ (x[i] | y[i]) | i=1:numel(x) ], size(x) )
+(|)(x::Bool, y::Array{Bool})        = reshape( [ (x    | y[i]) | i=1:numel(y) ], size(y) )
+(|)(x::Array{Bool}, y::Bool)        = reshape( [ (x[i] | y   ) | i=1:numel(x) ], size(x) )
+
+($)(x::Array{Bool}, y::Array{Bool}) = reshape( [ x[i] $ y[i] | i=1:numel(x) ], size(x) )
+($)(x::Bool, y::Array{Bool})        = reshape( [ x    $ y[i] | i=1:numel(y) ], size(y) )
+($)(x::Array{Bool}, y::Bool)        = reshape( [ x[i] $ y    | i=1:numel(x) ], size(x) )
+
+# Reductions
 
 function sum(x::Matrix, dim::Number)
     if dim == 1
@@ -221,12 +198,6 @@ function cumprod{T}(v::Vector{T})
         c[i] = v[i] * c[i-1]
     end
     return c
-end
-
-function (==)(x::Array, y::Array)
-    if x.dims != y.dims; return false; end
-    for i=1:numel(x); if x[i] != y[i]; return false; end; end
-    return true
 end
 
 transpose(x::Matrix) = [ x[j,i] | i=1:size(x,2), j=1:size(x,1) ]
@@ -718,3 +689,4 @@ function show(a::Array)
                  print(slice2d(a, idxs), idxs==tail?"":"\n\n")),
           map(x->Range1(1,x), tail))
 end
+
