@@ -83,7 +83,7 @@ one{T}(x::Array{T,2}) = (m=size(x,1); n=size(x,2);
                          a)
 zero{T}(x::Array{T,2}) = zeros(T,size(x))
 
-colon(start::Real, stop::Real, stride::Real) =
+colon(start::Number, stop::Number, stride::Number) =
     ((start, stop, stride) = promote(start, stop, stride);
      [ i | i=start:stride:stop ])
 
@@ -133,50 +133,50 @@ colon(start::Real, stop::Real, stride::Real) =
 # (==)(x::Matrix, y::Matrix) = [ x[i,j] == y[i,j] | i=1:size(x,1), j=1:size(x,2) ]
 
 (+){T,n}(x::Array{T,n}, y::Array{T,n}) = reshape( [ x[i] + y[i] | i=1:numel(x) ], size(x) )
-(+){T,n}(x::Real, y::Array{T,n}) = reshape( [ x + y[i] | i=1:numel(y) ], size(y) )
-(+){T,n}(x::Array{T,n}, y::Real) = reshape( [ x[i] + y | i=1:numel(x) ], size(x) )
+(+){T,n}(x::Number, y::Array{T,n}) = reshape( [ x + y[i] | i=1:numel(y) ], size(y) )
+(+){T,n}(x::Array{T,n}, y::Number) = reshape( [ x[i] + y | i=1:numel(x) ], size(x) )
 
 (-){T,n}(x::Array{T,n}, y::Array{T,n}) = reshape( [ x[i] - y[i] | i=1:numel(x) ], size(x) )
-(-){T,n}(x::Real, y::Array{T,n}) = reshape( [ x - y[i] | i=1:numel(y) ], size(y) )
-(-){T,n}(x::Array{T,n}, y::Real) = reshape( [ x[i] - y | i=1:numel(x) ], size(x) )
+(-){T,n}(x::Number, y::Array{T,n}) = reshape( [ x - y[i] | i=1:numel(y) ], size(y) )
+(-){T,n}(x::Array{T,n}, y::Number) = reshape( [ x[i] - y | i=1:numel(x) ], size(x) )
 
 (.*){T,n}(x::Array{T,n}, y::Array{T,n}) = reshape( [ x[i] .* y[i] | i=1:numel(x) ], size(x) )
-(.*){T,n}(x::Real, y::Array{T,n}) = reshape( [ x .* y[i] | i=1:numel(y) ], size(y) )
-(.*){T,n}(x::Array{T,n}, y::Real) = reshape( [ x[i] .* y | i=1:numel(x) ], size(x) )
+(.*){T,n}(x::Number, y::Array{T,n}) = reshape( [ x .* y[i] | i=1:numel(y) ], size(y) )
+(.*){T,n}(x::Array{T,n}, y::Number) = reshape( [ x[i] .* y | i=1:numel(x) ], size(x) )
 
 (./){T,n}(x::Array{T,n}, y::Array{T,n}) = reshape( [ x[i] ./ y[i] | i=1:numel(x) ], size(x) )
-(./){T,n}(x::Real, y::Array{T,n}) = reshape( [ x ./ y[i] | i=1:numel(y) ], size(y) )
-(./){T,n}(x::Array{T,n}, y::Real) = reshape( [ x[i] ./ y | i=1:numel(x) ], size(x) )
+(./){T,n}(x::Number, y::Array{T,n}) = reshape( [ x ./ y[i] | i=1:numel(y) ], size(y) )
+(./){T,n}(x::Array{T,n}, y::Number) = reshape( [ x[i] ./ y | i=1:numel(x) ], size(x) )
 
 (<){T,n}(x::Array{T,n}, y::Array{T,n}) = reshape( [ x[i] < y[i] | i=1:numel(x) ], size(x) )
-(<){T,n}(x::Real, y::Array{T,n}) = reshape( [ x < y[i] | i=1:numel(y) ], size(y) )
-(<){T,n}(x::Array{T,n}, y::Real) = reshape( [ x[i] < y | i=1:numel(x) ], size(x) )
+(<){T,n}(x::Number, y::Array{T,n}) = reshape( [ x < y[i] | i=1:numel(y) ], size(y) )
+(<){T,n}(x::Array{T,n}, y::Number) = reshape( [ x[i] < y | i=1:numel(x) ], size(x) )
 
 (==){T,n}(x::Array{T,n}, y::Array{T,n}) = reshape( [ x[i] == y[i] | i=1:numel(x) ], size(x) )
-(==){T,n}(x::Real, y::Array{T,n}) = reshape( [ x == y[i] | i=1:numel(y) ], size(y) )
-(==){T,n}(x::Array{T,n}, y::Real) = reshape( [ x[i] == y | i=1:numel(x) ], size(x) )
+(==){T,n}(x::Number, y::Array{T,n}) = reshape( [ x == y[i] | i=1:numel(y) ], size(y) )
+(==){T,n}(x::Array{T,n}, y::Number) = reshape( [ x[i] == y | i=1:numel(x) ], size(x) )
 
-conj{T <: Real}(x::Vector{T}) = x
-conj{T <: Real}(x::Matrix{T}) = x
+conj{T <: Number}(x::Vector{T}) = x
+conj{T <: Number}(x::Matrix{T}) = x
 conj(x::Vector) = [ conj(x[i]) | i=1:length(x) ]
 conj(x::Matrix) = [ conj(x[i,j]) | i=1:size(x,1), j=1:size(x,2) ]
 
-real{T <: Real}(x::Vector{T}) = x
-real{T <: Real}(x::Matrix{T}) = x
+real{T <: Number}(x::Vector{T}) = x
+real{T <: Number}(x::Matrix{T}) = x
 real(x::Vector) = [ real(x[i]) | i=1:length(x) ]
 real(x::Matrix) = [ real(x[i,j]) | i=1:size(x,1), j=1:size(x,2) ]
 
-imag{T <: Real}(x::Array{T,1}) = zeros(T, length(x))
-imag{T <: Real}(x::Array{T,2}) = zeros(T, size(x))
+imag{T <: Number}(x::Array{T,1}) = zeros(T, length(x))
+imag{T <: Number}(x::Array{T,2}) = zeros(T, size(x))
 imag(x::Vector) = [ imag(x[i]) | i=1:length(x) ]
 imag(x::Matrix) = [ imag(x[i,j]) | i=1:size(x,1), j=1:size(x,2) ]
 
 (<=){T,S,n}(x::Tensor{T,n}, y::Tensor{S,n}) = (x < y) | (x == y)
-(<=)       (x::Real  ,      y::Tensor)      = (x < y) | (x == y)
-(<=)       (x::Tensor,      y::Real  )      = (x < y) | (x == y)
+(<=)       (x::Number  ,      y::Tensor)      = (x < y) | (x == y)
+(<=)       (x::Tensor,      y::Number  )      = (x < y) | (x == y)
 (>=){T,S,n}(x::Tensor{T,n}, y::Tensor{S,n}) = (x > y) | (x == y)
-(>=)       (x::Real  ,      y::Tensor)      = (x > y) | (x == y)
-(>=)       (x::Tensor,      y::Real  )      = (x > y) | (x == y)
+(>=)       (x::Number  ,      y::Tensor)      = (x > y) | (x == y)
+(>=)       (x::Tensor,      y::Number  )      = (x > y) | (x == y)
 
 (~)(x::Vector{Bool}) = [ ~x[i] | i=1:length(x) ]
 (~)(x::Matrix{Bool}) = [ ~x[i,j] | i=1:size(x,1), j=1:=size(x,2) ]
