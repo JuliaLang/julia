@@ -231,7 +231,9 @@ chars = {
 for i = 1:size(chars,1)
     assert(chars[i,1] == chars[i,2])
     assert(string(chars[i,2]) == unescape_string(chars[i,3]))
-    assert(chars[i,3] == escape_string(string(chars[i,2])))
+    if chars[i,1] < 0x80
+        assert(chars[i,3] == escape_string(string(chars[i,2])))
+    end
     for j = 1:size(chars,1)
         str = string(chars[i,2], chars[j,2])
         assert(str == unescape_string(escape_string(str)))
