@@ -538,7 +538,7 @@ issues 6/21/10
 * "let i=0; print(i); end" should parse. use commas for init exprs
 * parsing hex 0x...
 * '"'
-- repl global scope change
+* repl global scope change
 - clear
 * preparsed source
 * type intersect bug: Array ∩ Scalar

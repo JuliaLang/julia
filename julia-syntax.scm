@@ -352,6 +352,8 @@
 
 ; local x, y=2, z => local x;local y;local z;y = 2
 (define (expand-decls what binds)
+  (if (not (pair? binds))
+      (error (string "invalid " what " declaration")))
   (let loop ((b       binds)
 	     (vars    '())
 	     (assigns '()))
@@ -477,11 +479,11 @@
    (pattern-lambda (... a) `(curly ... ,a))
 
    ; local x,y,z => local x;local y;local z
-   (pattern-lambda (local (-- binds (-^ (-s))))
+   (pattern-lambda (local (vars . binds))
 		   (expand-decls 'local binds))
 
    ; global x,y,z => global x;global y;global z
-   (pattern-lambda (global (-- binds (-^ (-s))))
+   (pattern-lambda (global (vars . binds))
 		   (expand-decls 'global binds))
 
    ; x::T = rhs => x::T; x = rhs

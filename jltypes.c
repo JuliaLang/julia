@@ -904,7 +904,8 @@ void jl_mark_type_cache()
 {
     typekey_stack_t *tk = Type_Cache;
     while (tk != NULL) {
-        //gc_setmark(tk);
+        gc_setmark(tk);
+        gc_setmark(tk->key);
         size_t i;
         for(i=0; i < tk->n; i++)
             gc_markval(tk->key[i]);

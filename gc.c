@@ -74,12 +74,6 @@ typedef struct _bigval_t {
     char _data[1];
 } bigval_t;
 
-typedef struct _jl_gcframe_t {
-    jl_value_t **roots;
-    size_t nroots;
-    struct _jl_gcframe_t *prev;
-} jl_gcframe_t;
-
 #define gc_val(o)     ((gcval_t*)(((void**)(o))-1))
 #define gc_marked(o)  (gc_val(o)->marked)
 #define gc_setmark(o) (gc_val(o)->marked=1)
@@ -236,15 +230,22 @@ static void gc_sweep()
         sweep_pool(&pools[i]);
 }
 
-#define GC_Markval(v) gc_markval((jl_value_t*)(v))
-static void gc_markval(jl_value_t *v);
+#define GC_Markval(v) gc_markval_((jl_value_t*)(v))
+static void gc_markval_(jl_value_t *v);
+
+void gc_markval(jl_value_t *v)
+{
+    gc_markval_(v);
+}
 
 static void gc_mark_stack(jl_gcframe_t *s)
 {
     while (s != NULL) {
         size_t i;
-        for(i=0; i < s->nroots; i++)
-            GC_Markval(s->roots[i]);
+        for(i=0; i < s->nroots; i++) {
+            if (s->roots[i] != NULL)
+                GC_Markval(s->roots[i]);
+        }
         s = s->prev;
     }
 }
@@ -260,7 +261,7 @@ static void gc_mark_methlist(jl_methlist_t *ml)
     }
 }
 
-static void gc_markval(jl_value_t *v)
+static void gc_markval_(jl_value_t *v)
 {
     assert(v != NULL);
     if (gc_marked(v)) return;
@@ -361,8 +362,7 @@ static void gc_markval(jl_value_t *v)
         GC_Markval(ta->on_exit);
         GC_Markval(ta->start);
         GC_Markval(ta->result);
-        // TODO
-        //gc_mark_stack(ta->gc_frames);
+        gc_mark_stack(ta->state.gcstack);
         GC_Markval(ta->state.eh_task);
         // TODO
         // GC_Markval(ta->state.current_output_stream);
@@ -393,6 +393,7 @@ static void gc_mark_module(jl_module_t *m)
 }
 
 void jl_mark_type_cache();
+void jl_mark_box_caches();
 
 static void gc_mark()
 {
@@ -418,6 +419,8 @@ static void gc_mark()
 
     // types
     jl_mark_type_cache();
+
+    jl_mark_box_caches();
 }
 
 void gc_collect()
@@ -435,6 +438,13 @@ void *allocb(size_t sz)
     if (sz > 2048)
         return alloc_big(sz);
     return pool_alloc(&pools[szclass(sz)]);
+}
+
+void *alloc_permanent(size_t sz)
+{
+    // we need 1 word before to allow marking
+    char *ptr = (char*)malloc(sz+sizeof(void*));
+    return ptr+sizeof(void*);
 }
 
 void jl_gc_init()

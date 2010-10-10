@@ -669,6 +669,25 @@ static void init_box_caches()
     }
 }
 
+#ifdef JL_GC_MARKSWEEP
+void jl_mark_box_caches()
+{
+    int64_t i;
+    for(i=0; i < 256; i++) {
+        gc_setmark(boxed_int8_cache[i]);
+        gc_setmark(boxed_uint8_cache[i]);
+    }
+    for(i=0; i < NBOX_C; i++) {
+        gc_setmark(boxed_int16_cache[i]);
+        gc_setmark(boxed_int32_cache[i]);
+        gc_setmark(boxed_int64_cache[i]);
+        gc_setmark(boxed_uint16_cache[i]);
+        gc_setmark(boxed_uint32_cache[i]);
+        gc_setmark(boxed_uint64_cache[i]);
+    }
+}
+#endif
+
 jl_value_t *jl_box_bool(int8_t x)
 {
     if (x)

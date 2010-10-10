@@ -293,11 +293,16 @@ extern jl_sym_t *static_typeof_sym;
 #ifdef BOEHM_GC
 #define allocb(nb)    GC_MALLOC(nb)
 #define alloc_pod(nb) GC_MALLOC_ATOMIC(nb)
+#define alloc_permanent(nb) malloc(nb)
+#elif defined(JL_GC_MARKSWEEP)
+void *allocb(size_t sz);
+#define alloc_pod(nb) allocb(nb)
+void *alloc_permanent(size_t sz);
 #else
 #define allocb(nb)    malloc(nb)
 #define alloc_pod(nb) malloc(nb)
-#endif
 #define alloc_permanent(nb) malloc(nb)
+#endif
 
 #define jl_tupleref(t,i) (((jl_value_t**)(t))[2+(i)])
 #define jl_tupleset(t,i,x) ((((jl_value_t**)(t))[2+(i)])=(x))
@@ -581,6 +586,30 @@ JL_CALLABLE(jl_apply_generic);
         jl_type_error(#fname, #type, (v));      \
     }
 
+// gc
+
+#ifdef JL_GC_MARKSWEEP
+typedef struct _jl_gcframe_t {
+    jl_value_t **roots;
+    size_t nroots;
+    struct _jl_gcframe_t *prev;
+} jl_gcframe_t;
+
+#define JL_GC_PUSH(...)                                                 \
+  void *__gc_rts[] = {__VA_ARGS__};                                     \
+  jl_gcframe_t __gc_stkf_ = { (jl_value_t**)__gc_rts, VA_NARG(__VA_ARGS__), \
+                              jl_current_task->state.gcstack; };        \
+  jl_current_task->state.gcstack = &__gc_stkf_;
+
+#define JL_GC_POP() \
+    (jl_current_task->state.gcstack=jl_current_task->state.gcstack->prev);
+
+void jl_gc_init();
+void gc_markval(jl_value_t *v);
+#define gc_setmark(v) (((uptrint_t*)(v))[-1]|=1)
+
+#endif
+
 // tasks
 
 // context that needs to be restored around a try block
@@ -591,6 +620,9 @@ typedef struct _jl_savestate_t {
     jmp_buf *eh_ctx;
     int err;
     ios_t *current_output_stream;
+#ifdef JL_GC_MARKSWEEP
+    jl_gcframe_t *gcstack;
+#endif
 } jl_savestate_t;
 
 typedef struct _jl_task_t {
@@ -631,6 +663,9 @@ static inline void jl_eh_save_state(jl_savestate_t *ss)
     ss->eh_task = jl_current_task->state.eh_task;
     ss->eh_ctx = jl_current_task->state.eh_ctx;
     ss->current_output_stream = jl_current_task->state.current_output_stream;
+#ifdef JL_GC_MARKSWEEP
+    ss->gcstack = jl_current_task->state.gcstack;
+#endif
 }
 
 static inline void jl_eh_restore_state(jl_savestate_t *ss)
@@ -638,6 +673,9 @@ static inline void jl_eh_restore_state(jl_savestate_t *ss)
     jl_current_task->state.eh_task = ss->eh_task;
     jl_current_task->state.eh_ctx = ss->eh_ctx;
     jl_current_task->state.current_output_stream = ss->current_output_stream;
+#ifdef JL_GC_MARKSWEEP
+    jl_current_task->state.gcstack = ss->gcstack;
+#endif
 }
 
 #define JL_TRY                                                          \

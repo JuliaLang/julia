@@ -570,8 +570,10 @@ TODO:
 	    (ex    (parse-block s)))
        (expect-end s)
        `(let ,binds ,ex)))
-    ((local)  (list 'local  (parse-comma-separated-assignments s)))
-    ((global) (list 'global (parse-comma-separated-assignments s)))
+    ((local)  (list 'local  (cons 'vars
+				  (parse-comma-separated-assignments s))))
+    ((global) (list 'global (cons 'vars
+				  (parse-comma-separated-assignments s))))
     ((function macro)
      (let ((sig (parse-call s)))
        (begin0 (list word sig (parse-block s))

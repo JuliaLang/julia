@@ -89,6 +89,9 @@ void julia_init()
     GC_expand_hp(12000000);  //shaves a tiny bit off startup time
     GC_time_limit = GC_TIME_UNLIMITED;
 #endif
+#ifdef JL_GC_MARKSWEEP
+    jl_gc_init();
+#endif
     jl_init_frontend();
     jl_init_types();
     jl_init_modules();
