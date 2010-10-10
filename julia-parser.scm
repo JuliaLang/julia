@@ -211,7 +211,11 @@ TODO:
 
 	  ((identifier-char? c) (accum-julia-symbol c port))
 
-	  ((eqv? c #\")  (read port))
+	  ((eqv? c #\")
+	   (with-exception-catcher
+	    (lambda (e)
+	      (error "invalid string literal"))
+	    (lambda () (read port))))
 
 	  (else (error (string "invalid character " (read-char port)))))))
 

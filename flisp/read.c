@@ -473,7 +473,7 @@ static value_t read_string()
                 if (c!=IOS_EOF) ios_ungetc(c, F);
                 eseq[j] = '\0';
                 if (j) wc = strtol(eseq, NULL, 16);
-                else {
+                if (!j || wc > 0x10ffff) {
                     free(buf);
                     lerror(ParseError, "read: invalid escape sequence");
                 }
