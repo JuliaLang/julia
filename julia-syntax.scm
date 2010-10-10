@@ -350,6 +350,22 @@
 
    )) ; binding-form-patterns
 
+; local x, y=2, z => local x;local y;local z;y = 2
+(define (expand-decls what binds)
+  (let loop ((b       binds)
+	     (vars    '())
+	     (assigns '()))
+    (if (null? b)
+	`(block
+	  ,@(map (lambda (x) `(,what ,x)) vars)
+	  ,@(reverse assigns))
+	(let ((x (car b)))
+	  (if (and (pair? x) (eq? (car x) '=))
+	      (loop (cdr b)
+		    (cons (cadr x) vars)
+		    (cons `(= ,(decl-var (cadr x)) ,(caddr x)) assigns))
+	      (loop (cdr b) (cons x vars) assigns))))))
+
 (define (make-assignment l r) `(= ,l ,r))
 
 (define patterns
@@ -461,23 +477,12 @@
    (pattern-lambda (... a) `(curly ... ,a))
 
    ; local x,y,z => local x;local y;local z
-   (pattern-lambda (local (tuple . vars))
-		   `(block
-		     ,@(map (lambda (x) `(local ,x)) vars)))
-
-   ; local x::int=2 => local x::int; x=2
-   (pattern-lambda (local (= var rhs))
-		   `(block (local ,var)
-			   (= ,(decl-var var) ,rhs)))
+   (pattern-lambda (local (-- binds (-^ (-s))))
+		   (expand-decls 'local binds))
 
    ; global x,y,z => global x;global y;global z
-   (pattern-lambda (global (tuple . vars))
-		   `(block
-		     ,@(map (lambda (x) `(global ,x)) vars)))
-
-   ; global x=2 => global x;x=2
-   (pattern-lambda (global (= var rhs))
-		   `(block (global ,var) (= ,var ,rhs)))
+   (pattern-lambda (global (-- binds (-^ (-s))))
+		   (expand-decls 'global binds))
 
    ; x::T = rhs => x::T; x = rhs
    (pattern-lambda (= (|::| x T) rhs)
