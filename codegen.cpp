@@ -1112,30 +1112,38 @@ static void emit_function(jl_lambda_info_t *lam, Function *f)
     if (nreq > 0 && jl_is_rest_arg(jl_cellref(largs,nreq-1))) {
         nreq--;
         va = 1;
-        Value *enough =
-            builder.CreateICmpUGE((Value*)&argCount,
-                                  ConstantInt::get(T_int32, nreq));
-        BasicBlock *elseBB = BasicBlock::Create(getGlobalContext(), "else", f);
-        BasicBlock *mergeBB = BasicBlock::Create(getGlobalContext(), "ifcont");
-        builder.CreateCondBr(enough, mergeBB, elseBB);
-        builder.SetInsertPoint(elseBB);
-        emit_error("too few arguments", &ctx);
-        builder.CreateBr(mergeBB);
-        f->getBasicBlockList().push_back(mergeBB);
-        builder.SetInsertPoint(mergeBB);
     }
-    else {
-        Value *enough =
-            builder.CreateICmpEQ((Value*)&argCount,
-                                 ConstantInt::get(T_int32, nreq));
-        BasicBlock *elseBB = BasicBlock::Create(getGlobalContext(), "else", f);
-        BasicBlock *mergeBB = BasicBlock::Create(getGlobalContext(), "ifcont");
-        builder.CreateCondBr(enough, mergeBB, elseBB);
-        builder.SetInsertPoint(elseBB);
-        emit_error("wrong number of arguments", &ctx);
-        builder.CreateBr(mergeBB);
-        f->getBasicBlockList().push_back(mergeBB);
-        builder.SetInsertPoint(mergeBB);
+    if (ctx.linfo->specTypes == NULL) {
+        if (va) {
+            Value *enough =
+                builder.CreateICmpUGE((Value*)&argCount,
+                                      ConstantInt::get(T_int32, nreq));
+            BasicBlock *elseBB =
+                BasicBlock::Create(getGlobalContext(), "else", f);
+            BasicBlock *mergeBB =
+                BasicBlock::Create(getGlobalContext(), "ifcont");
+            builder.CreateCondBr(enough, mergeBB, elseBB);
+            builder.SetInsertPoint(elseBB);
+            emit_error("too few arguments", &ctx);
+            builder.CreateBr(mergeBB);
+            f->getBasicBlockList().push_back(mergeBB);
+            builder.SetInsertPoint(mergeBB);
+        }
+        else {
+            Value *enough =
+                builder.CreateICmpEQ((Value*)&argCount,
+                                     ConstantInt::get(T_int32, nreq));
+            BasicBlock *elseBB =
+                BasicBlock::Create(getGlobalContext(), "else", f);
+            BasicBlock *mergeBB =
+                BasicBlock::Create(getGlobalContext(), "ifcont");
+            builder.CreateCondBr(enough, mergeBB, elseBB);
+            builder.SetInsertPoint(elseBB);
+            emit_error("wrong number of arguments", &ctx);
+            builder.CreateBr(mergeBB);
+            f->getBasicBlockList().push_back(mergeBB);
+            builder.SetInsertPoint(mergeBB);
+        }
     }
 
     // move args into local variables
