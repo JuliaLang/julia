@@ -909,8 +909,8 @@ void jl_mark_type_cache()
         size_t i;
         for(i=0; i < tk->n; i++)
             gc_markval(tk->key[i]);
-        gc_markval(tk->type);
-        tk = next;
+        gc_markval((jl_value_t*)tk->type);
+        tk = tk->next;
     }
 }
 #endif

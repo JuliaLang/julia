@@ -6,11 +6,27 @@ PFX = /usr/local
 #PFX = /afs/csail.mit.edu/u/b/bezanson
 HFILEDIRS = $(PFX)/include
 LIBDIRS = $(PFX)/lib
-OSLIBS = -l:libgc.a -Wl,--export-dynamic -Wl,--version-script=$(JULIAHOME)/julia.expmap
+
+# BOEHM or MARKSWEEP
+JULIAGC = BOEHM
+
+ifeq ($(JULIAGC),BOEHM)
+GCLIBS = -l:libgc.a
+GCFLAGS = -DBOEHM_GC
+GCSRCS =
+endif
+
+ifeq ($(JULIAGC),MARKSWEEP)
+GCLIBS =
+GCFLAGS = -DJL_GC_MARKSWEEP
+GCSRCS = gc
+endif
+
+OSLIBS = $(GCLIBS) -Wl,--export-dynamic -Wl,--version-script=$(JULIAHOME)/julia.expmap
 
 ifeq ($(NBITS),32)
-CONFIG = -DLINUX -DARCH_X86 -DUSE_READLINE -DBOEHM_GC
+CONFIG = -DLINUX -DARCH_X86 -DUSE_READLINE $(GCFLAGS)
 endif
 ifeq ($(NBITS),64)
-CONFIG = -DLINUX -DARCH_X86_64 -DBITS64 -DUSE_READLINE -DBOEHM_GC
+CONFIG = -DLINUX -DARCH_X86_64 -DBITS64 -DUSE_READLINE $(GCFLAGS)
 endif

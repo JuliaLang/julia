@@ -4,11 +4,27 @@ CFLAGS =
 
 HFILEDIRS = /opt/local/include
 LIBDIRS = /opt/local/lib /usr/local/lib
-OSLIBS = -lgc -Wl,-w -framework ApplicationServices -framework vecLib
+
+# BOEHM or MARKSWEEP
+JULIAGC = BOEHM
+
+ifeq ($(JULIAGC),BOEHM)
+GCLIBS = -lgc
+GCFLAGS = -DBOEHM_GC
+GCSRCS =
+endif
+
+ifeq ($(JULIAGC),MARKSWEEP)
+GCLIBS =
+GCFLAGS = -DJL_GC_MARKSWEEP
+GCSRCS = gc
+endif
+
+OSLIBS = $(GCLIBS) -Wl,-w -framework ApplicationServices -framework vecLib
 
 ifeq ($(NBITS),32)
-CONFIG = -DMACOSX -DARCH_X86 -DUSE_READLINE -DBOEHM_GC
+CONFIG = -DMACOSX -DARCH_X86 -DUSE_READLINE $(GCFLAGS)
 endif
 ifeq ($(NBITS),64)
-CONFIG = -DMACOSX -DARCH_X86_64 -DBITS64 -DUSE_READLINE -DBOEHM_GC
+CONFIG = -DMACOSX -DARCH_X86_64 -DBITS64 -DUSE_READLINE $(GCFLAGS)
 endif

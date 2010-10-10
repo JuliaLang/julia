@@ -76,7 +76,7 @@ typedef struct _bigval_t {
 
 #define gc_val(o)     ((gcval_t*)(((void**)(o))-1))
 #define gc_marked(o)  (gc_val(o)->marked)
-#define gc_setmark(o) (gc_val(o)->marked=1)
+//#define gc_setmark(o) (gc_val(o)->marked=1)
 #define gc_unmark(o)  (gc_val(o)->marked=0)
 
 #define gcv_isfree(v)  ((v)->otherbits!=0)
