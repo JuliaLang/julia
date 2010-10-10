@@ -17,6 +17,14 @@ reshape{T}(a::Array{T}, dims...) = (b = Array(T, dims...);
                                     b)
 reshape(a::Array, dims::Tuple) = reshape(a, dims...)
 
+function totuple(a::Array)
+    t = ()
+    for i=1:numel(a)
+        t = append (t, tuple(a[i]))
+    end
+    return t
+end
+
 # Constructors
 
 jl_comprehension_zeros{T,n}(oneresult::Tensor{T,n}, dims...) = Array(T, dims...)
@@ -341,10 +349,33 @@ function ref(a::Array, I::Index...)
     return a[index]
 end
 
-function ref2(a::Array, I::Union(Indices,Index)...)
-    sz = [ length(I[k]) | k=1:length(I) ]
+ref(A::Array, I::Indices, J::Indices, K::Indices...) =
+    refnd (A, I, J, K...)
 
-    
+function refnd{T}(a::Array{T}, I::Indices...)
+    dims = a.dims
+    ndimsa = length(dims)
+
+    strides = zeros(Size, ndimsa)
+    strides[1] = 1
+    for d=2:ndimsa
+        strides[d] = strides[d-1] * dims[d-1]
+    end
+
+    x = zeros(T, map(length,I))
+
+    storeidx = 1
+    function store(ind)
+        index = ind[1]
+        for d=2:ndimsa
+            index += (ind[d]-1) * strides[d]
+        end
+        x[storeidx] = a[index]
+        storeidx += 1
+    end
+
+    ndmap (store, I)
+    return x
 end
 
 # assign()
