@@ -85,7 +85,7 @@ one{T}(x::Array{T,2}) = (m=size(x,1); n=size(x,2);
                          a)
 zero{T}(x::Array{T,2}) = zeros(T,size(x))
 
-colon(start::Number, stop::Number, stride::Number) =
+colon(start::Real, stop::Real, stride::Real) =
     ((start, stop, stride) = promote(start, stop, stride);
      [ i | i=start:stride:stop ])
 
@@ -176,7 +176,7 @@ end
 
 # Reductions
 
-function sum(x::Matrix, dim::Number)
+function sum(x::Matrix, dim::Int)
     if dim == 1
         [ sum(x[:,i]) | i=1:size(x, 2) ]
     elseif dim == 2
@@ -307,6 +307,7 @@ assign(t::Tensor, x, r::Real...) = (t[map(x->convert(Int32,round(x)),r)...] = x)
 
 ## Indexing: ref()
 #TODO: Out-of-bound checks
+
 ref(a::Array, i::Index) = arrayref(a,i)
 ref{T}(a::Array{T,1}, i::Index) = arrayref(a,i)
 ref(a::Array{Any,1}, i::Index) = arrayref(a,i)
@@ -320,9 +321,9 @@ jl_fill_endpts(A,n,R)            = R
 
 ref(A::Vector,I::Indices) = [ A[i] | i = jl_fill_endpts(A,1,I) ]
 ref(A::Array{Any,1},I::Indices) = { A[i] | i = jl_fill_endpts(A,1,I) }
+
 ref(A::Matrix,I::Indices,J::Indices) = [ A[i,j] | i = jl_fill_endpts(A,1,I),
                                                   j = jl_fill_endpts(A,2,J) ]
-
 ref(A::Matrix,i::Index,J::Indices) = [ A[i,j] | j = jl_fill_endpts(A,2,J) ]
 ref(A::Matrix,I::Indices,j::Index) = [ A[i,j] | i = jl_fill_endpts(A,1,I) ]
 
@@ -338,6 +339,12 @@ function ref(a::Array, I::Index...)
     end
 
     return a[index]
+end
+
+function ref2(a::Array, I::Union(Indices,Index)...)
+    sz = [ length(I[k]) | k=1:length(I) ]
+
+    
 end
 
 # assign()
