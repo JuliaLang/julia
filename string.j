@@ -9,6 +9,12 @@ string(s::String) = s
 
 print(c::Char) = (write(current_output_stream(), c); ())
 print(s::String) = for c = s; print(c); end
+
+function show(c::Char)
+    print('\'')
+    print(c == '\'' ? "\\'" : escape_string(string(c)))
+    print('\'')
+end
 show(s::String) = print(quote_string(s))
 
 (*)(s::String...) = strcat(s...)
