@@ -69,17 +69,17 @@ end
 sort{T <: Real}(a::Vector{T}) = quicksort(copy(a), 1, length(a))
 
 function sort{T}(a::Vector{T})
-    (x,p) = mergesort(copy(a), 1:length(a), 1, length(a), 
+    (x,p) = mergesort(copy(a), 1:length(a), 1, length(a),
                       Array(T, length(a)), Array(Size, length(a)) )
     return x
 end
 
-sortperm{T}(a::Vector{T}) = mergesort(copy(a), 1:length(a), 1, length(a), 
+sortperm{T}(a::Vector{T}) = mergesort(copy(a), 1:length(a), 1, length(a),
                                       Array(T, length(a)), Array(Size, length(a)) )
 
 function quicksort(a::Vector, lo, hi)
     i, j = lo, hi
-    pivot = a[div((lo+hi),2)];
+    pivot = a[div((lo+hi),2)]
     # Partition
     while i <= j
         while a[i] < pivot; i += 1; end
@@ -96,7 +96,7 @@ function quicksort(a::Vector, lo, hi)
     return a
 end
 
-function mergesort(a::Vector, p::Vector{Size}, lo, hi, 
+function mergesort(a::Vector, p::Vector{Size}, lo, hi,
                    b::Vector, pb::Vector{Size})
 
     if lo < hi
@@ -137,7 +137,7 @@ function mergesort(a::Vector, p::Vector{Size}, lo, hi,
         end
 
     end # if lo<hi...
-    
+
     return (a, p)
 end
 
