@@ -94,69 +94,6 @@ function powermod(x::Int, p::Int, m::Int)
     return r
 end
 
-function fact(n::Int)
-    if n < 0
-        return zero(n)
-    end
-    p = one(n)
-    for i=2:n
-        p*=i
-    end
-    p
-end
-
-function nPr{T <: Int}(n::T, r::T)
-    if r < 0 || n < 0 || r > n
-        return zero(T)
-    end
-
-    ans = one(T)
-    while (r > 0)
-        ans *= n
-        n -= 1
-        r -= 1
-    end
-    return ans
-end
-
-function nCr{T <: Int}(n::T, r::T)
-    if r < 0
-        return zero(T)
-    end
-
-    neg = false
-    if n < 0
-        n = (-n)+r-1
-        if isodd(r)
-            neg = true
-        end
-    end
-
-    if r > n
-        return zero(T)
-    end
-    if r == 0 || r == n
-        return one(T)
-    end
-
-    if r > div(n,2)
-        r = (n - r)
-    end
-
-    ans = nn = n - r + 1.0
-    nn += 1.0
-    rr = 2.0
-    while (rr <= r)
-        ans *= (nn/rr)
-        rr += 1
-        nn += 1
-    end
-    if neg
-        return oftype(T,-ans)
-    end
-    return oftype(T,ans)
-end
-
 randui64() = boxui64(or_int(zext64(unbox32(randui32())),
                             shl_int(zext64(unbox32(randui32())),unbox32(32))))
 
