@@ -313,7 +313,6 @@ tril{T}(M::Matrix{T}, k) = [ j-i <= k ? M[i,j] : zero(T) |
 ## Indexing: ref
 
 ref(t::Tensor, r::Real...) = t[map(x->convert(Int32,round(x)),r)...]
-assign(t::Tensor, x, r::Real...) = (t[map(x->convert(Int32,round(x)),r)...] = x)
 
 ref(a::Array, i::Index) = arrayref(a,i)
 ref{T}(a::Array{T,1}, i::Index) = arrayref(a,i)
@@ -384,20 +383,27 @@ end
 
 ## Indexing: assign
 
+assign(t::Tensor, x, r::Real...) = (t[map(x->convert(Int32,round(x)),r)...] = x)
+
 assign{T}(A::Array{T}, x, i::Index) = arrayset(A,i,convert(T,x))
 
 assign(A::Array{Any}, x, i::Index) = arrayset(A,i,x)
 
 function assign(A::Vector, x::Scalar, I::Indices)
     I = jl_fill_endpts(A, 1, I)
-    for i=I; A[i] = x; end;
+    for i=I
+        A[i] = x
+    end
     return A
 end
 
 function assign(A::Vector, X::Vector, I::Indices)
     I = jl_fill_endpts(A, 1, I)
     count = 1
-    for i=I; A[i] = X[count]; count += 1; end
+    for i=I
+        A[i] = X[count]
+        count += 1
+    end
     return A
 end
 
@@ -407,7 +413,7 @@ function assign(A::Matrix, x::Scalar, I::Indices2, J::Indices2)
     I = jl_fill_endpts(A, 1, I)
     J = jl_fill_endpts(A, 2, J)
     for i=I, j=J
-        A[i,j] = x; 
+        A[i,j] = x
     end
     return A
 end
@@ -417,8 +423,8 @@ function assign(A::Matrix, X::Matrix, I::Indices2, J::Indices2)
     J = jl_fill_endpts(A, 2, J)
     count = 1
     for i=I, j=J
-        A[i,j] = X[count]; 
-        count += 1; 
+        A[i,j] = X[count]
+        count += 1
     end
     return A
 end
