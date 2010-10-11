@@ -429,7 +429,7 @@ function abstract_eval_constant(x)
         return Type{x}
     end
     if isa(x,LambdaStaticData)
-        return None-->Any
+        return Any-->Any
     end
     return typeof(x)
 end

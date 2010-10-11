@@ -220,6 +220,7 @@ typedef struct {
     std::map<std::string, AllocaInst*> *arguments;
     std::map<std::string, int> *closureEnv;
     std::map<std::string, bool> *isBoxed;
+    std::map<std::string, bool> *isCaptured;
     std::map<std::string, jl_value_t*> *declTypes;
     std::map<int, BasicBlock*> *labels;
     jl_module_t *module;
@@ -1003,7 +1004,8 @@ static AllocaInst *alloc_local(char *name, jl_codectx_t *ctx)
     const Type *vtype;
     // only store a variable unboxed if type inference has run, which
     // checks that the variable is not referenced undefined.
-    if (jl_is_bits_type(jt) && !(*ctx->isBoxed)[name] && ctx->linfo->inferred)
+    if (ctx->linfo->inferred && jl_is_bits_type(jt) &&
+        !(*ctx->isCaptured)[name])
         vtype = julia_type_to_llvm(jt);
     else
         vtype = jl_pvalue_llvmt;
@@ -1029,6 +1031,7 @@ static void emit_function(jl_lambda_info_t *lam, Function *f)
     std::map<std::string, AllocaInst*> argumentMap;
     std::map<std::string, int> closureEnv;
     std::map<std::string, bool> isBoxed;
+    std::map<std::string, bool> isCaptured;
     std::map<std::string, jl_value_t*> declTypes;
     std::map<int, BasicBlock*> labels;
     jl_array_t *largs = jl_lam_args(ast);
@@ -1043,6 +1046,7 @@ static void emit_function(jl_lambda_info_t *lam, Function *f)
     ctx.arguments = &argumentMap;
     ctx.closureEnv = &closureEnv;
     ctx.isBoxed = &isBoxed;
+    ctx.isCaptured = &isCaptured;
     ctx.declTypes = &declTypes;
     ctx.labels = &labels;
     ctx.module = jl_system_module; //TODO
@@ -1074,6 +1078,7 @@ static void emit_function(jl_lambda_info_t *lam, Function *f)
         assert(jl_is_array(vi));
         char *vname = ((jl_sym_t*)jl_cellref(vi,0))->name;
         isBoxed[vname] = vinfo_isboxed(vi);
+        isCaptured[vname] = (jl_cellref(vi,2)!=jl_false);
         declTypes[vname] = jl_cellref(vi,1);
     }
     vinfos = jl_lam_capt(ast);
@@ -1083,6 +1088,7 @@ static void emit_function(jl_lambda_info_t *lam, Function *f)
         char *vname = ((jl_sym_t*)jl_cellref(vi,0))->name;
         closureEnv[vname] = i;
         isBoxed[vname] = vinfo_isboxed(vi);
+        isCaptured[vname] = true;
         declTypes[vname] = jl_cellref(vi,1);
     }
 

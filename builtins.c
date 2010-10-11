@@ -77,23 +77,6 @@ void jl_type_error_rt(const char *fname, const char *context,
               jl_show_to_string((jl_value_t*)jl_full_type(got)));
 }
 
-/*
-  equivalent julia code:
-  expr(head, args...) = Expr.new(head, args)
-*/
-jl_expr_t *jl_expr(jl_sym_t *head, size_t n, ...)
-{
-    va_list args;
-    size_t i;
-    jl_expr_t *ex = jl_exprn(head,n);
-    va_start(args, n);
-    for(i=0; i < n; i++) {
-        jl_cellset(ex->args, i, va_arg(args, jl_value_t*));
-    }
-    va_end(args);
-    return ex;
-}
-
 jl_expr_t *jl_exprn(jl_sym_t *head, size_t n)
 {
     jl_expr_t *ex = (jl_expr_t*)allocb(sizeof(jl_expr_t));

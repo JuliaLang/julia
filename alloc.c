@@ -116,13 +116,13 @@ jl_tuple_t *jl_tuple(size_t n, ...)
     jl_tuple_t *jv = (jl_tuple_t*)newobj((jl_type_t*)jl_tuple_type, n+1);
     jv->length = n;
     for(i=0; i < n; i++) {
-        ((jl_value_t**)jv)[i+2] = va_arg(args, jl_value_t*);
+        jl_tupleset(jv, i, va_arg(args, jl_value_t*));
     }
     va_end(args);
     return jv;
 }
 
-jl_tuple_t *jl_alloc_tuple(size_t n)
+jl_tuple_t *jl_alloc_tuple_uninit(size_t n)
 {
     if (n == 0) return jl_null;
     jl_tuple_t *jv = (jl_tuple_t*)newobj((jl_type_t*)jl_tuple_type, n+1);
@@ -130,9 +130,20 @@ jl_tuple_t *jl_alloc_tuple(size_t n)
     return jv;
 }
 
+jl_tuple_t *jl_alloc_tuple(size_t n)
+{
+    if (n == 0) return jl_null;
+    jl_tuple_t *jv = jl_alloc_tuple_uninit(n);
+    size_t i;
+    for(i=0; i < n; i++) {
+        jl_tupleset(jv, i, NULL);
+    }
+    return jv;
+}
+
 jl_tuple_t *jl_tuple_append(jl_tuple_t *a, jl_tuple_t *b)
 {
-    jl_tuple_t *c = jl_alloc_tuple(a->length + b->length);
+    jl_tuple_t *c = jl_alloc_tuple_uninit(a->length + b->length);
     size_t i=0, j;
     for(j=0; j < a->length; j++) {
         jl_tupleset(c, i, jl_tupleref(a,j));
@@ -154,7 +165,7 @@ jl_tuple_t *jl_flatten_pairs(jl_tuple_t *t)
         n++;
         t = (jl_tuple_t*)jl_nextpair(t);
     }
-    jl_tuple_t *nt = jl_alloc_tuple(n*2);
+    jl_tuple_t *nt = jl_alloc_tuple_uninit(n*2);
     t = t0;
     for(i=0; i < n*2; i+=2) {
         jl_tupleset(nt, i,   jl_t0(t));
@@ -247,7 +258,14 @@ DLLEXPORT jl_sym_t *jl_gensym()
     n = uint2str(name, sizeof(name)-1, gs_ctr, 10);
     *(--n) = 'g';
     gs_ctr++;
-    return mk_symbol(n);
+    jl_sym_t *sym;
+    size_t len = (&name[sizeof(name)-1])-n-1;
+    sym = (jl_sym_t*)allocb(sizeof(jl_sym_t)-sizeof(void*) + len + 1);
+    sym->type = (jl_type_t*)jl_sym_type;
+    sym->left = sym->right = NULL;
+    sym->hash = (uptrint_t)sym;
+    strcpy(&sym->name[0], n);
+    return sym;
 }
 
 // allocating types -----------------------------------------------------------
@@ -273,25 +291,31 @@ static void unbind_tvars(jl_tuple_t *parameters)
 jl_tag_type_t *jl_new_tagtype(jl_value_t *name, jl_tag_type_t *super,
                               jl_tuple_t *parameters)
 {
+    jl_typename_t *tn=NULL;
+    JL_GC_PUSH(&tn);
+
+    if (jl_is_typename(name))
+        tn = (jl_typename_t*)name;
+    else
+        tn = jl_new_typename((jl_sym_t*)name);
     jl_tag_type_t *t = (jl_tag_type_t*)newobj((jl_type_t*)jl_tag_kind,
                                               TAG_TYPE_NW);
-    if (jl_is_typename(name))
-        t->name = (jl_typename_t*)name;
-    else
-        t->name = jl_new_typename((jl_sym_t*)name);
+    t->name = tn;
     t->super = super;
     unbind_tvars(parameters);
     t->parameters = parameters;
     if (t->name->primary == NULL)
         t->name->primary = (jl_value_t*)t;
+    JL_GC_POP();
     return t;
 }
 
 jl_func_type_t *jl_new_functype(jl_type_t *a, jl_type_t *b)
 {
     jl_func_type_t *t = (jl_func_type_t*)newobj((jl_type_t*)jl_func_kind, 2);
-    if (a != (jl_type_t*)jl_any_type && a != (jl_type_t*)jl_bottom_type &&
-        !jl_subtype((jl_value_t*)a, (jl_value_t*)jl_tuple_type, 0))
+    if (a != (jl_type_t*)jl_bottom_type &&
+        !jl_subtype((jl_value_t*)a, (jl_value_t*)jl_tuple_type, 0) &&
+        !jl_subtype((jl_value_t*)jl_tuple_type, (jl_value_t*)a, 0))
         a = (jl_type_t*)jl_tuple(1, a);
     t->from = a;
     t->to = b;

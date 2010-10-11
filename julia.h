@@ -443,7 +443,6 @@ DLLEXPORT jl_array_t *jl_cstr_to_array(char *str);
 jl_array_t *jl_alloc_cell_1d(size_t n);
 jl_value_t *jl_arrayref(jl_array_t *a, size_t i);  // 0-indexed
 void jl_arrayset(jl_array_t *a, size_t i, jl_value_t *v);  // 0-indexed
-jl_expr_t *jl_expr(jl_sym_t *head, size_t n, ...);
 jl_expr_t *jl_exprn(jl_sym_t *head, size_t n);
 jl_function_t *jl_new_generic_function(jl_sym_t *name);
 void jl_add_method(jl_function_t *gf, jl_tuple_t *types, jl_function_t *meth);
@@ -602,12 +601,16 @@ typedef struct _jl_gcframe_t {
   jl_current_task->state.gcstack = &__gc_stkf_;
 
 #define JL_GC_POP() \
-    (jl_current_task->state.gcstack=jl_current_task->state.gcstack->prev);
+    (jl_current_task->state.gcstack=jl_current_task->state.gcstack->prev)
 
 void jl_gc_init();
 void gc_markval(jl_value_t *v);
 #define gc_setmark(v) (((uptrint_t*)(v))[-1]|=1)
 
+#else
+
+#define JL_GC_PUSH(...) ;
+#define JL_GC_POP()
 #endif
 
 // tasks

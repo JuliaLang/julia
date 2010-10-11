@@ -455,6 +455,8 @@ Yc(f) = (h->f(x->h(h)(x)))(h->f(x->h(h)(x)))
 yfib = Yc(fib->(n->(n < 2 ? n : fib(n-1) + fib(n-2))))
 assert(yfib(20) == 6765)
 
+assert(map((x,y)->x+y,(1,2,3),(4,5,6)) == (5,7,9))
+
 # variable scope, globals
 glob_x = 23
 function glotest()
