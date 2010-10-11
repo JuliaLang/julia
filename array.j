@@ -310,12 +310,10 @@ triu{T}(M::Matrix{T}, k) = [ j-i >= k ? M[i,j] : zero(T) |
 tril{T}(M::Matrix{T}, k) = [ j-i <= k ? M[i,j] : zero(T) |
                             i=1:size(M,1), j=1:size(M,2) ]
 
-# real indexing
+## Indexing: ref
+
 ref(t::Tensor, r::Real...) = t[map(x->convert(Int32,round(x)),r)...]
 assign(t::Tensor, x, r::Real...) = (t[map(x->convert(Int32,round(x)),r)...] = x)
-
-## Indexing: ref()
-#TODO: Out-of-bound checks
 
 ref(a::Array, i::Index) = arrayref(a,i)
 ref{T}(a::Array{T,1}, i::Index) = arrayref(a,i)
@@ -339,21 +337,21 @@ ref(A::Matrix,I::Indices,j::Index) = [ A[i,j] | i = jl_fill_endpts(A,1,I) ]
 function ref(A::Array, I::Index...)
     dims = A.dims
     ndims = length(I)
-    
+
     index = I[1]
     stride = 1
     for k=2:ndims
         stride = stride * dims[k-1]
         index += (I[k]-1) * stride
     end
-    
+
     return A[index]
 end
 
 ref(A::Array, I::Indices2, J::Indices2, K::Indices2...) =
-    refnd(A, I, J, K...)
+    refND(A, I, J, K...)
 
-function refnd{T}(A::Array{T}, I::Indices2...)
+function refND{T}(A::Array{T}, I::Indices2...)
     dims = A.dims
     ndimsA = length(dims)
 
@@ -368,7 +366,7 @@ function refnd{T}(A::Array{T}, I::Indices2...)
         I_with_endpts = append(I_with_endpts, tuple(jl_fill_endpts(A, i, I[i])))
     end
 
-    x = zeros(T, map(length, I_with_endpts))
+    X = zeros(T, map(length, I_with_endpts))
 
     storeind = 1
     function store(ind)
@@ -376,37 +374,21 @@ function refnd{T}(A::Array{T}, I::Indices2...)
         for d=2:ndimsA
             index += (ind[d]-1) * strides[d]
         end
-        x[storeind] = A[index]
+        X[storeind] = A[index]
         storeind += 1
     end
 
     ndmap (store, I_with_endpts)
-    return x
+    return X
 end
 
-# assign()
-assign{T}(a::Array{T}, x, i::Index) = arrayset(a,i,convert(T,x))
-assign(a::Array{Any}, x, i::Index) = arrayset(a,i,x)
+## Indexing: assign
 
-assign{T}(a::Array{T,2}, x, i::Index, j::Index) =
-    a[(j-1)*a.dims[1] + i] = x
+assign{T}(A::Array{T}, x, i::Index) = arrayset(A,i,convert(T,x))
 
-function assign(a::Array, x, I0::Index, I::Index...)
-    dims = a.dims
-    ndims = length(I)
+assign(A::Array{Any}, x, i::Index) = arrayset(A,i,x)
 
-    index = I0
-    stride = 1
-    for k=1:(ndims-1)
-        stride = stride * dims[k]
-        index += (I[k]-1) * stride
-    end
-
-    a[index] = x
-    return a
-end
-
-function assign(A::Vector, x, I::Indices)
+function assign(A::Vector, x::Scalar, I::Indices)
     I = jl_fill_endpts(A, 1, I)
     for i=I; A[i] = x; end;
     return A
@@ -419,18 +401,43 @@ function assign(A::Vector, X::Vector, I::Indices)
     return A
 end
 
-function assign(A::Matrix, x, I::Indices, J::Indices)
+assign(A::Matrix, x::Scalar, i::Index, j::Index) = A[(j-1)*A.dims[1] + i] = x
+
+function assign(A::Matrix, x::Scalar, I::Indices2, J::Indices2)
     I = jl_fill_endpts(A, 1, I)
     J = jl_fill_endpts(A, 2, J)
-    for i=I, j=J; A[i,j] = x; end
+    for i=I, j=J
+        A[i,j] = x; 
+    end
     return A
 end
 
-function assign(A::Matrix, X::Matrix, I::Indices, J::Indices)
+function assign(A::Matrix, X::Matrix, I::Indices2, J::Indices2)
     I = jl_fill_endpts(A, 1, I)
     J = jl_fill_endpts(A, 2, J)
     count = 1
-    for i=I, j=J; A[i,j] = X[count]; count += 1; end
+    for i=I, j=J
+        A[i,j] = X[count]; 
+        count += 1; 
+    end
+    return A
+end
+
+assign(A::Array, x::Scalar, I::Index, J::Index, K::Index...) = 
+   assignND(A, x, I, J, K...)
+
+function assignND(A::Array, x::Scalar, I::Index...)
+    dims = A.dims
+    ndims = length(I)
+
+    index = I[1]
+    stride = 1
+    for k=2:ndims
+        stride = stride * dims[k-1]
+        index += (I[k]-1) * stride
+    end
+
+    A[index] = x
     return A
 end
 
