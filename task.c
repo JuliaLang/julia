@@ -155,6 +155,12 @@ jl_task_t * volatile jl_current_task;
 jl_task_t *jl_root_task;
 static jl_value_t * volatile task_arg_in_transit;
 static volatile int n_args_in_transit;
+#ifdef JL_GC_MARKSWEEP
+// temporary GC root stack for use during init, before tasks exist
+// GC should be disabled during this time.
+static jl_gcframe_t *dummy_pgcstack;
+jl_gcframe_t **jl_pgcstack = &dummy_pgcstack;
+#endif
 
 static jl_value_t *switchto(jl_task_t *t)
 {
@@ -167,6 +173,9 @@ static jl_value_t *switchto(jl_task_t *t)
         GC_stackbottom = t->stack+t->ssize;
 #endif
         jl_current_task = t;
+#ifdef JL_GC_MARKSWEEP
+        jl_pgcstack = &jl_current_task->state.gcstack;
+#endif
         longjmp(t->ctx, 1);
     }
     jl_value_t *val = task_arg_in_transit;
@@ -197,6 +206,9 @@ void jl_raise()
         }
         if (!setjmp(jl_current_task->ctx)) {
             jl_current_task = eh;
+#ifdef JL_GC_MARKSWEEP
+            jl_pgcstack = &jl_current_task->state.gcstack;
+#endif
             longjmp(*eh->state.eh_ctx, 1);
         }
         else {
@@ -419,6 +431,7 @@ void jl_init_tasks(void *stack, size_t ssize)
     jl_current_task->state.current_output_stream = ios_stdout;
 #ifdef JL_GC_MARKSWEEP
     jl_current_task->state.gcstack = NULL;
+    jl_pgcstack = &jl_current_task->state.gcstack;
 #endif
 
     jl_root_task = jl_current_task;

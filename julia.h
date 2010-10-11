@@ -589,23 +589,34 @@ JL_CALLABLE(jl_apply_generic);
 
 #ifdef JL_GC_MARKSWEEP
 typedef struct _jl_gcframe_t {
-    jl_value_t **roots;
+    jl_value_t ***roots;
     size_t nroots;
     struct _jl_gcframe_t *prev;
 } jl_gcframe_t;
 
+// NOTE: it is the caller's responsibility to make sure arguments are
+// rooted. foo(f(), g()) will not work, and foo can't do anything about it,
+// so the caller must do
+// jl_value_t *x, *y; JL_GC_PUSH(&x, &y);
+// x = f(); y = g(); foo(x, y)
+
+extern jl_gcframe_t **jl_pgcstack;
+
 #define JL_GC_PUSH(...)                                                 \
   void *__gc_rts[] = {__VA_ARGS__};                                     \
-  jl_gcframe_t __gc_stkf_ = { (jl_value_t**)__gc_rts, VA_NARG(__VA_ARGS__), \
-                              jl_current_task->state.gcstack; };        \
-  jl_current_task->state.gcstack = &__gc_stkf_;
+  jl_gcframe_t __gc_stkf_ = { (jl_value_t***)__gc_rts, VA_NARG(__VA_ARGS__), \
+                              *jl_pgcstack };                           \
+  *jl_pgcstack = &__gc_stkf_;
 
 #define JL_GC_POP() \
-    (jl_current_task->state.gcstack=jl_current_task->state.gcstack->prev)
+    (*jl_pgcstack = (*jl_pgcstack)->prev)
 
 void jl_gc_init();
-void gc_markval(jl_value_t *v);
-#define gc_setmark(v) (((uptrint_t*)(v))[-1]|=1)
+void jl_gc_markval(jl_value_t *v);
+void jl_gc_enable();
+void jl_gc_disable();
+void jl_gc_collect();
+#define jl_gc_setmark(v) (((uptrint_t*)(v))[-1]|=1)
 
 #else
 

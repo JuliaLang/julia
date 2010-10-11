@@ -904,12 +904,12 @@ void jl_mark_type_cache()
 {
     typekey_stack_t *tk = Type_Cache;
     while (tk != NULL) {
-        gc_setmark(tk);
-        gc_setmark(tk->key);
+        jl_gc_setmark(tk);
+        jl_gc_setmark(tk->key);
         size_t i;
         for(i=0; i < tk->n; i++)
-            gc_markval(tk->key[i]);
-        gc_markval((jl_value_t*)tk->type);
+            jl_gc_markval(tk->key[i]);
+        jl_gc_markval((jl_value_t*)tk->type);
         tk = tk->next;
     }
 }

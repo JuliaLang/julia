@@ -18,14 +18,6 @@ reshape{T}(a::Array{T}, dims...) = (b = Array(T, dims...);
                                     b)
 reshape(a::Array, dims::Tuple) = reshape(a, dims...)
 
-function totuple(a::Array)
-    t = ()
-    for i=1:numel(a)
-        t = append (t, tuple(a[i]))
-    end
-    return t
-end
-
 # Constructors
 
 jl_comprehension_zeros{T,n}(oneresult::Tensor{T,n}, dims...) = Array(T, dims...)

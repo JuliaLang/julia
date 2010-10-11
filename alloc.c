@@ -312,13 +312,15 @@ jl_tag_type_t *jl_new_tagtype(jl_value_t *name, jl_tag_type_t *super,
 
 jl_func_type_t *jl_new_functype(jl_type_t *a, jl_type_t *b)
 {
-    jl_func_type_t *t = (jl_func_type_t*)newobj((jl_type_t*)jl_func_kind, 2);
+    JL_GC_PUSH(&a);
     if (a != (jl_type_t*)jl_bottom_type &&
         !jl_subtype((jl_value_t*)a, (jl_value_t*)jl_tuple_type, 0) &&
         !jl_subtype((jl_value_t*)jl_tuple_type, (jl_value_t*)a, 0))
         a = (jl_type_t*)jl_tuple(1, a);
+    jl_func_type_t *t = (jl_func_type_t*)newobj((jl_type_t*)jl_func_kind, 2);
     t->from = a;
     t->to = b;
+    JL_GC_POP();
     return t;
 }
 
@@ -342,6 +344,7 @@ jl_value_t *jl_new_type_instantiation(jl_value_t *t)
         jl_error("not supported");
     }
     jl_tuple_t *ntvs = jl_alloc_tuple(tp->length);
+    JL_GC_PUSH(&ntvs);
     size_t i;
     for(i=0; i < tp->length; i++) {
         jl_value_t *tv = jl_tupleref(tp, i);
@@ -355,12 +358,15 @@ jl_value_t *jl_new_type_instantiation(jl_value_t *t)
             jl_tupleset(ntvs, i, tv);
         }
     }
-    return (jl_value_t*)jl_apply_type((jl_value_t*)t, ntvs);
+    jl_value_t *nt = (jl_value_t*)jl_apply_type((jl_value_t*)t, ntvs);
+    JL_GC_POP();
+    return nt;
 }
 
 static void add_generic_ctor(jl_function_t *gf, jl_struct_type_t *t)
 {
     jl_function_t *gmeth = jl_new_closure(jl_generic_ctor,(jl_value_t*)jl_null);
+    JL_GC_PUSH(&gmeth, &t);
     // create new typevars, so the function has its own constraint
     // environment.
     t = (jl_struct_type_t*)jl_new_type_instantiation((jl_value_t*)t);
@@ -371,6 +377,7 @@ static void add_generic_ctor(jl_function_t *gf, jl_struct_type_t *t)
         gf->type =
             (jl_type_t*)jl_new_functype((jl_type_t*)t->types, (jl_type_t*)t);
     }
+    JL_GC_POP();
 }
 
 JL_CALLABLE(jl_new_array_internal);
@@ -383,6 +390,8 @@ void jl_add_constructors(jl_struct_type_t *t)
         t->fptr = jl_new_array_internal;
         return;
     }
+    jl_function_t *fnew=NULL;
+    JL_GC_PUSH(&fnew);
     if (t->ctor_factory == (jl_value_t*)jl_null) {
         // no user-defined constructors
         if (t->parameters->length>0 && (jl_value_t*)t==t->name->primary) {
@@ -398,7 +407,6 @@ void jl_add_constructors(jl_struct_type_t *t)
     else {
         // call user-defined constructor factory on (type, new)
         // where new is a default constructor
-        jl_function_t *fnew;
         if (t->parameters->length>0 && (jl_value_t*)t==t->name->primary) {
             // original type; new is generic
             fnew = jl_new_generic_function(t->name->name);
@@ -434,6 +442,7 @@ void jl_add_constructors(jl_struct_type_t *t)
             ml = ml->next;
         }
     }
+    JL_GC_POP();
 }
 
 JL_CALLABLE(jl_constructor_factory_trampoline)
@@ -447,9 +456,11 @@ jl_struct_type_t *jl_new_struct_type(jl_sym_t *name, jl_tag_type_t *super,
                                      jl_tuple_t *parameters,
                                      jl_tuple_t *fnames, jl_tuple_t *ftypes)
 {
+    jl_typename_t *tn = jl_new_typename(name);
+    JL_GC_PUSH(&tn);
     jl_struct_type_t *t = (jl_struct_type_t*)newobj((jl_type_t*)jl_struct_kind,
                                                     STRUCT_TYPE_NW);
-    t->name = jl_new_typename(name);
+    t->name = tn;
     t->name->primary = (jl_value_t*)t;
     t->super = super;
     unbind_tvars(parameters);
@@ -465,6 +476,7 @@ jl_struct_type_t *jl_new_struct_type(jl_sym_t *name, jl_tag_type_t *super,
         t->uid = 0;
     else
         t->uid = jl_assign_type_uid();
+    JL_GC_POP();
     return t;
 }
 
@@ -474,6 +486,13 @@ jl_bits_type_t *jl_new_bitstype(jl_value_t *name, jl_tag_type_t *super,
                                 jl_tuple_t *parameters, size_t nbits)
 {
     jl_bits_type_t *t=NULL;
+    jl_typename_t *tn=NULL;
+    JL_GC_PUSH(&t, &tn);
+    if (jl_is_typename(name))
+        tn = (jl_typename_t*)name;
+    else
+        tn = jl_new_typename((jl_sym_t*)name);
+
     if (!jl_boot_file_loaded && jl_is_symbol(name)) {
         // hack to avoid making two versions of basic types needed
         // during bootstrapping
@@ -484,10 +503,7 @@ jl_bits_type_t *jl_new_bitstype(jl_value_t *name, jl_tag_type_t *super,
     }
     if (t == NULL)
         t = (jl_bits_type_t*)newobj((jl_type_t*)jl_bits_kind, BITS_TYPE_NW);
-    if (jl_is_typename(name))
-        t->name = (jl_typename_t*)name;
-    else
-        t->name = jl_new_typename((jl_sym_t*)name);
+    t->name = tn;
     t->super = super;
     unbind_tvars(parameters);
     t->parameters = parameters;
@@ -502,6 +518,7 @@ jl_bits_type_t *jl_new_bitstype(jl_value_t *name, jl_tag_type_t *super,
         t->uid = jl_assign_type_uid();
     if (t->name->primary == NULL)
         t->name->primary = (jl_value_t*)t;
+    JL_GC_POP();
     return t;
 }
 
@@ -565,13 +582,18 @@ JL_CALLABLE(jl_new_struct_internal)
     if (t->instance != NULL)
         return t->instance;
     jl_value_t *v = newobj((jl_type_t*)t, nf);
+    JL_GC_PUSH(&v);
     size_t i;
+    for(i=0; i < nargs; i++) {
+        ((jl_value_t**)v)[i+1] = NULL;
+    }
     for(i=0; i < nargs; i++) {
         ((jl_value_t**)v)[i+1] = jl_convert((jl_type_t*)jl_tupleref(t->types,i),
                                             args[i]);
     }
     if (nf == 0)
         t->instance = v;
+    JL_GC_POP();
     return v;
 }
 
@@ -698,16 +720,16 @@ void jl_mark_box_caches()
 {
     int64_t i;
     for(i=0; i < 256; i++) {
-        gc_setmark(boxed_int8_cache[i]);
-        gc_setmark(boxed_uint8_cache[i]);
+        jl_gc_setmark(boxed_int8_cache[i]);
+        jl_gc_setmark(boxed_uint8_cache[i]);
     }
     for(i=0; i < NBOX_C; i++) {
-        gc_setmark(boxed_int16_cache[i]);
-        gc_setmark(boxed_int32_cache[i]);
-        gc_setmark(boxed_int64_cache[i]);
-        gc_setmark(boxed_uint16_cache[i]);
-        gc_setmark(boxed_uint32_cache[i]);
-        gc_setmark(boxed_uint64_cache[i]);
+        jl_gc_setmark(boxed_int16_cache[i]);
+        jl_gc_setmark(boxed_int32_cache[i]);
+        jl_gc_setmark(boxed_int64_cache[i]);
+        jl_gc_setmark(boxed_uint16_cache[i]);
+        jl_gc_setmark(boxed_uint32_cache[i]);
+        jl_gc_setmark(boxed_uint64_cache[i]);
     }
 }
 #endif
@@ -788,10 +810,13 @@ jl_array_t *jl_new_array(jl_type_t *atype, jl_value_t **dimargs, size_t ndims,
         tot = sizeof(void*) * nel;
 
     void *data;
-    jl_array_t *a;
+    jl_array_t *a=NULL;
+    JL_GC_PUSH(&a);
 
     if (tot <= ARRAY_INLINE_NBYTES) {
         a = allocb(sizeof(jl_array_t) + (tot - sizeof(void*)));
+        a->type = atype;
+        a->dims = jl_null;
         data = &a->_space[0];
         if (tot > 0 && !jl_is_bits_type(el_type)) {
             memset(data, 0, tot);
@@ -799,6 +824,11 @@ jl_array_t *jl_new_array(jl_type_t *atype, jl_value_t **dimargs, size_t ndims,
     }
     else {
         a = allocb(sizeof(jl_array_t));
+        // temporarily initialize to make gc-safe
+        a->type = atype;
+        a->data = &a->_space[0];
+        a->length = 0;
+        a->dims = jl_null;
         if (tot > 0) {
             if (jl_is_bits_type(el_type)) {
 #ifdef BOEHM_GC
@@ -823,7 +853,6 @@ jl_array_t *jl_new_array(jl_type_t *atype, jl_value_t **dimargs, size_t ndims,
         }
     }
 
-    a->type = atype;
     a->data = data;
     a->length = nel;
     if (dims_as_tuple != NULL) {
@@ -836,13 +865,17 @@ jl_array_t *jl_new_array(jl_type_t *atype, jl_value_t **dimargs, size_t ndims,
         }
     }
 
+    JL_GC_POP();
     return a;
 }
 
 jl_array_t *jl_alloc_array_1d(jl_type_t *atype, size_t nr)
 {
     jl_value_t *dim = jl_box_int32(nr);
-    return jl_new_array(atype, &dim, 1, NULL);
+    JL_GC_PUSH(&dim);
+    jl_array_t *a = jl_new_array(atype, &dim, 1, NULL);
+    JL_GC_POP();
+    return a;
 }
 
 JL_CALLABLE(jl_new_array_internal)
@@ -865,29 +898,32 @@ JL_CALLABLE(jl_generic_array_ctor)
 {
     JL_NARGSV(Array, 1);
     JL_TYPECHK(Array, type, args[0]);
-    size_t i;
+    size_t i, nd;
+    jl_value_t **pdims;
+    jl_tuple_t *d = NULL;
     if (nargs==2 && jl_is_tuple(args[1])) {
-        jl_tuple_t *d = (jl_tuple_t*)args[1];
+        d = (jl_tuple_t*)args[1];
         for(i=0; i < d->length; i++) {
             JL_TYPECHK(Array, int32, jl_tupleref(d,i));
         }
-        return (jl_value_t*)
-            jl_new_array((jl_type_t*)
-                         jl_apply_type((jl_value_t*)jl_array_type,
-                                       jl_tuple(2, args[0],
-                                                jl_box_int32(d->length))),
-                         &jl_tupleref(d,0), d->length, d);
+        nd = d->length;
+        pdims = &jl_tupleref(d,0);
     }
-    size_t nd = nargs-1;
-    for(i=1; i < nargs; i++) {
-        JL_TYPECHK(Array, int32, args[i]);
+    else {
+        for(i=1; i < nargs; i++) {
+            JL_TYPECHK(Array, int32, args[i]);
+        }
+        nd = nargs-1;
+        pdims = &args[1];
     }
-    return (jl_value_t*)
-        jl_new_array((jl_type_t*)
-                     jl_apply_type((jl_value_t*)jl_array_type,
-                                   jl_tuple(2, args[0],
-                                            jl_box_int32(nd))),
-                     &args[1], nd, NULL);
+    jl_value_t *vnd=NULL, *vtp=NULL, *vnt=NULL;
+    JL_GC_PUSH(&vnd, &vtp, &vnt);
+    vnd = jl_box_int32(nd);
+    vtp = (jl_value_t*)jl_tuple(2, args[0], vnd);
+    vnt = jl_apply_type((jl_value_t*)jl_array_type, (jl_tuple_t*)vtp);
+    jl_value_t *ar = (jl_value_t*)jl_new_array((jl_type_t*)vnt, pdims, nd, d);
+    JL_GC_POP();
+    return ar;
 }
 
 jl_array_t *jl_cstr_to_array(char *str)

@@ -76,7 +76,7 @@ typedef struct _bigval_t {
 
 #define gc_val(o)     ((gcval_t*)(((void**)(o))-1))
 #define gc_marked(o)  (gc_val(o)->marked)
-//#define gc_setmark(o) (gc_val(o)->marked=1)
+#define gc_setmark(o) (gc_val(o)->marked=1)
 #define gc_unmark(o)  (gc_val(o)->marked=0)
 
 #define gcv_isfree(v)  ((v)->otherbits!=0)
@@ -233,7 +233,7 @@ static void gc_sweep()
 #define GC_Markval(v) gc_markval_((jl_value_t*)(v))
 static void gc_markval_(jl_value_t *v);
 
-void gc_markval(jl_value_t *v)
+void jl_gc_markval(jl_value_t *v)
 {
     gc_markval_(v);
 }
@@ -243,8 +243,8 @@ static void gc_mark_stack(jl_gcframe_t *s)
     while (s != NULL) {
         size_t i;
         for(i=0; i < s->nroots; i++) {
-            if (s->roots[i] != NULL)
-                GC_Markval(s->roots[i]);
+            if (*s->roots[i] != NULL)
+                GC_Markval(*s->roots[i]);
         }
         s = s->prev;
     }
@@ -423,17 +423,31 @@ static void gc_mark()
     jl_mark_box_caches();
 }
 
-void gc_collect()
+static int is_gc_enabled = 0;
+
+void jl_gc_enable()
 {
-    gc_mark();
-    gc_sweep();
+    is_gc_enabled = 1;
+}
+
+void jl_gc_disable()
+{
+    is_gc_enabled = 0;
+}
+
+void jl_gc_collect()
+{
+    if (is_gc_enabled) {
+        gc_mark();
+        gc_sweep();
+    }
     allocd_bytes = 0;
 }
 
 void *allocb(size_t sz)
 {
     if (allocd_bytes > collect_interval)
-        gc_collect();
+        jl_gc_collect();
     allocd_bytes += sz;
     if (sz > 2048)
         return alloc_big(sz);

@@ -456,6 +456,8 @@ yfib = Yc(fib->(n->(n < 2 ? n : fib(n-1) + fib(n-2))))
 assert(yfib(20) == 6765)
 
 assert(map((x,y)->x+y,(1,2,3),(4,5,6)) == (5,7,9))
+assert(map((x,y)->x+y,(100001,100002,100003),(100004,100005,100006)) ==
+       (200005,200007,200009))
 
 # variable scope, globals
 glob_x = 23
