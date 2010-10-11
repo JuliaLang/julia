@@ -430,9 +430,9 @@ function assign(A::Matrix, X::Matrix, I::Indices2, J::Indices2)
 end
 
 assign(A::Array, x::Scalar, I::Index, J::Index, K::Index...) = 
-   assignND(A, x, I, J, K...)
+   assignND_scalar(A, x, I, J, K...)
 
-function assignND(A::Array, x::Scalar, I::Index...)
+function assignND_scalar(A::Array, x::Scalar, I::Index...)
     dims = A.dims
     ndims = length(I)
 
@@ -444,6 +444,51 @@ function assignND(A::Array, x::Scalar, I::Index...)
     end
 
     A[index] = x
+    return A
+end
+
+assign(A::Array, X, I::Indices2, J::Indices2, K::Indices2...) = 
+   assignND_all(A, X, I, J, K...)
+
+function assignND_all(A::Array, X, I::Indices2...)
+    dims = A.dims
+    ndimsA = length(dims)
+
+    strides = zeros(Size, ndimsA)
+    strides[1] = 1
+    for d=2:ndimsA
+        strides[d] = strides[d-1] * dims[d-1]
+    end
+
+    I_with_endpts = ()
+    for i=1:length(I)
+        I_with_endpts = append(I_with_endpts, tuple(jl_fill_endpts(A, i, I[i])))
+    end
+
+    if isa(X, Scalar)
+        function store1(ind)
+            index = ind[1]
+            for d=2:ndimsA
+                index += (ind[d]-1) * strides[d]
+            end
+            A[index] = X
+        end
+        
+        ndmap (store1, I_with_endpts)
+    else
+        refind = 1
+        function storeall(ind)
+            index = ind[1]
+            for d=2:ndimsA
+                index += (ind[d]-1) * strides[d]
+            end
+            A[index] = X[refind]
+            refind += 1
+        end
+        
+        ndmap (storeall, I_with_endpts)
+    end
+
     return A
 end
 
