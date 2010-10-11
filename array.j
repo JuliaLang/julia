@@ -1,6 +1,7 @@
 typealias Vector{T} Tensor{T,1}
 typealias Matrix{T} Tensor{T,2}
 typealias Indices{T} Union(Range,Range1,RangeFrom,RangeBy,RangeTo,Vector{T})
+typealias Indices2{T} Union(Index,Range,Range1,RangeFrom,RangeBy,RangeTo,Vector{T})
 
 # Basic functions
 size(a::Array) = a.dims
@@ -335,46 +336,51 @@ ref(A::Matrix,I::Indices,J::Indices) = [ A[i,j] | i = jl_fill_endpts(A,1,I),
 ref(A::Matrix,i::Index,J::Indices) = [ A[i,j] | j = jl_fill_endpts(A,2,J) ]
 ref(A::Matrix,I::Indices,j::Index) = [ A[i,j] | i = jl_fill_endpts(A,1,I) ]
 
-function ref(a::Array, I::Index...)
-    dims = a.dims
+function ref(A::Array, I::Index...)
+    dims = A.dims
     ndims = length(I)
-
+    
     index = I[1]
     stride = 1
     for k=2:ndims
         stride = stride * dims[k-1]
         index += (I[k]-1) * stride
     end
-
-    return a[index]
+    
+    return A[index]
 end
 
-ref(A::Array, I::Indices, J::Indices, K::Indices...) =
-    refnd (A, I, J, K...)
+ref(A::Array, I::Indices2, J::Indices2, K::Indices2...) =
+    refnd(A, I, J, K...)
 
-function refnd{T}(a::Array{T}, I::Indices...)
-    dims = a.dims
-    ndimsa = length(dims)
+function refnd{T}(A::Array{T}, I::Indices2...)
+    dims = A.dims
+    ndimsA = length(dims)
 
-    strides = zeros(Size, ndimsa)
+    strides = zeros(Size, ndimsA)
     strides[1] = 1
-    for d=2:ndimsa
+    for d=2:ndimsA
         strides[d] = strides[d-1] * dims[d-1]
     end
 
-    x = zeros(T, map(length,I))
-
-    storeidx = 1
-    function store(ind)
-        index = ind[1]
-        for d=2:ndimsa
-            index += (ind[d]-1) * strides[d]
-        end
-        x[storeidx] = a[index]
-        storeidx += 1
+    I_with_endpts = ()
+    for i=1:length(I)
+        I_with_endpts = append(I_with_endpts, tuple(jl_fill_endpts(A, i, I[i])))
     end
 
-    ndmap (store, I)
+    x = zeros(T, map(length, I_with_endpts))
+
+    storeind = 1
+    function store(ind)
+        index = ind[1]
+        for d=2:ndimsA
+            index += (ind[d]-1) * strides[d]
+        end
+        x[storeind] = A[index]
+        storeind += 1
+    end
+
+    ndmap (store, I_with_endpts)
     return x
 end
 
