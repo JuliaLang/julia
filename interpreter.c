@@ -33,9 +33,13 @@ static jl_value_t *do_call(jl_function_t *f, jl_value_t **args, size_t nargs,
 {
     jl_value_t **argv = alloca(nargs * sizeof(jl_value_t*));
     size_t i;
+    for(i=0; i < nargs; i++) argv[i] = NULL;
+    JL_GC_PUSHARGS(argv, nargs);
     for(i=0; i < nargs; i++)
         argv[i] = eval(args[i], locals, nl);
-    return jl_apply(f, argv, nargs);
+    jl_value_t *result = jl_apply(f, argv, nargs);
+    JL_GC_POP();
+    return result;
 }
 
 static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl)
@@ -134,11 +138,13 @@ jl_value_t *jl_interpret_toplevel_thunk(jl_lambda_info_t *lam)
     jl_array_t *l = jl_lam_locals(ast);
     jl_value_t **names = &((jl_value_t**)l->data)[0];
     jl_value_t **locals = (jl_value_t**)alloca(l->length*2*sizeof(void*));
+    jl_value_t *r = (jl_value_t*)jl_null;
     size_t i=0;
     for(i=0; i < l->length; i++) {
         locals[i*2]   = names[i];
         locals[i*2+1] = NULL;
     }
+    JL_GC_PUSHARGS(locals,l->length*2);
     i = 0;
     while (1) {
         jl_value_t *stmt = jl_cellref(stmts,i);
@@ -158,7 +164,8 @@ jl_value_t *jl_interpret_toplevel_thunk(jl_lambda_info_t *lam)
                 }
             }
             else if (head == return_sym) {
-                return eval(jl_exprarg(stmt,0), locals, l->length);
+                r = eval(jl_exprarg(stmt,0), locals, l->length);
+                break;
             }
             else {
                 eval(stmt, locals, l->length);
@@ -169,6 +176,6 @@ jl_value_t *jl_interpret_toplevel_thunk(jl_lambda_info_t *lam)
         }
         i++;
     }
-    assert(0);
-    return (jl_value_t*)jl_null;
+    JL_GC_POP();
+    return r;
 }

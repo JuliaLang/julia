@@ -595,6 +595,7 @@ JL_CALLABLE(jl_apply_generic);
 typedef struct _jl_gcframe_t {
     jl_value_t ***roots;
     size_t nroots;
+    int indirect;
     struct _jl_gcframe_t *prev;
 } jl_gcframe_t;
 
@@ -609,7 +610,12 @@ extern jl_gcframe_t **jl_pgcstack;
 #define JL_GC_PUSH(...)                                                 \
   void *__gc_rts[] = {__VA_ARGS__};                                     \
   jl_gcframe_t __gc_stkf_ = { (jl_value_t***)__gc_rts, VA_NARG(__VA_ARGS__), \
-                              *jl_pgcstack };                           \
+                              1, *jl_pgcstack };                        \
+  *jl_pgcstack = &__gc_stkf_;
+
+#define JL_GC_PUSHARGS(rts,n)                           \
+  jl_gcframe_t __gc_stkf_ = { (jl_value_t***)rts, (n),  \
+                              0, *jl_pgcstack };        \
   *jl_pgcstack = &__gc_stkf_;
 
 #define JL_GC_POP() \
@@ -626,6 +632,7 @@ void jl_gc_collect();
 #else
 
 #define JL_GC_PUSH(...) ;
+#define JL_GC_PUSHARGS(rts,n) ;
 #define JL_GC_POP()
 #endif
 

@@ -292,12 +292,13 @@ static void rebase_state(jmp_buf *ctx, intptr_t local_sp, intptr_t new_sp)
 static void init_task(jl_task_t *t)
 {
     if (setjmp(t->ctx)) {
+        jl_value_t *arg = task_arg_in_transit;
+        JL_GC_PUSH(&arg);
         // this runs the first time we switch to t
         if (n_args_in_transit == 0) {
             t->result = jl_apply(t->start, NULL, 0);
         }
         else if (n_args_in_transit == 1) {
-            jl_value_t *arg = task_arg_in_transit;
             t->result = jl_apply(t->start, &arg, 1);
         }
         else {
@@ -305,6 +306,7 @@ static void init_task(jl_task_t *t)
             t->result = jl_apply(t->start, &jl_tupleref(task_arg_in_transit,0),
                                  n_args_in_transit);
         }
+        JL_GC_POP();
         t->done = 1;
         jl_task_t *cont = t->on_exit;
         // if parent task has exited, try its parent, and so on
@@ -330,14 +332,6 @@ jl_task_t *jl_new_task(jl_function_t *start, size_t ssize)
     t->type = (jl_type_t*)jl_task_type;
     ssize = LLT_ALIGN(ssize, pagesz);
     t->ssize = ssize;
-    char *stk = allocb(ssize+pagesz+(pagesz-1));
-    stk = (char*)LLT_ALIGN((uptrint_t)stk, pagesz);
-    // add a guard page to detect stack overflow
-    // the GC might read this area, which is ok, just prevent writes
-    if (mprotect(stk, pagesz-1, PROT_READ) == -1)
-        jl_errorf("mprotect: %s", strerror(errno));
-    t->_stkbase = stk;
-    t->stack = stk+pagesz;
     t->on_exit = jl_current_task;
     t->done = 0;
     t->start = start;
@@ -349,13 +343,31 @@ jl_task_t *jl_new_task(jl_function_t *start, size_t ssize)
 #ifdef JL_GC_MARKSWEEP
     t->state.gcstack = NULL;
 #endif
-    init_task(t);
+    t->_stkbase = NULL;
 
+    JL_GC_PUSH(&t);
+    char *stk = allocb(ssize+pagesz+(pagesz-1));
+    t->_stkbase = stk;
+    stk = (char*)LLT_ALIGN((uptrint_t)stk, pagesz);
+    // add a guard page to detect stack overflow
+    // the GC might read this area, which is ok, just prevent writes
+    if (mprotect(stk, pagesz-1, PROT_READ) == -1)
+        jl_errorf("mprotect: %s", strerror(errno));
+    t->stack = stk+pagesz;
+
+    init_task(t);
+    JL_GC_POP();
     return t;
 }
 
+#ifdef BOEHM_GC
 // boehm GC's LOCAL_MARK_STACK_SIZE makes it stack-allocate 8192*wordsize bytes
-#define JL_MIN_STACK (4096*(2*sizeof(void*)+1))
+#define JL_MIN_STACK     (4096*(2*sizeof(void*)+1))
+#define JL_DEFAULT_STACK (12288*sizeof(void*))
+#else
+#define JL_MIN_STACK     (4096*sizeof(void*))
+#define JL_DEFAULT_STACK (12288*sizeof(void*))
+#endif
 
 JL_CALLABLE(jl_f_task)
 {
@@ -365,10 +377,7 @@ JL_CALLABLE(jl_f_task)
       we need a somewhat large stack, because execution can trigger
       compilation, which uses perhaps too much stack space.
     */
-    size_t ssize = 49152;
-#ifdef BITS64
-    ssize *= 2;
-#endif
+    size_t ssize = JL_DEFAULT_STACK;
     if (nargs == 2) {
         JL_TYPECHK(Task, int32, args[1]);
         ssize = jl_unbox_int32(args[1]);

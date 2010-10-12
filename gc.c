@@ -242,9 +242,17 @@ static void gc_mark_stack(jl_gcframe_t *s)
 {
     while (s != NULL) {
         size_t i;
-        for(i=0; i < s->nroots; i++) {
-            if (*s->roots[i] != NULL)
-                GC_Markval(*s->roots[i]);
+        if (s->indirect) {
+            for(i=0; i < s->nroots; i++) {
+                if (*s->roots[i] != NULL)
+                    GC_Markval(*s->roots[i]);
+            }
+        }
+        else {
+            for(i=0; i < s->nroots; i++) {
+                if (s->roots[i] != NULL)
+                    GC_Markval(s->roots[i]);
+            }
         }
         s = s->prev;
     }
@@ -364,6 +372,8 @@ static void gc_markval_(jl_value_t *v)
         GC_Markval(ta->result);
         gc_mark_stack(ta->state.gcstack);
         GC_Markval(ta->state.eh_task);
+        if (ta->_stkbase != NULL)
+            gc_setmark(ta->_stkbase);
         // TODO
         // GC_Markval(ta->state.current_output_stream);
     }

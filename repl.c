@@ -508,11 +508,11 @@ int main(int argc, char *argv[])
     julia_init();
 
     jl_array_t *args = jl_alloc_cell_1d(argc);
+    jl_set_const(jl_system_module, jl_symbol("ARGS"), (jl_value_t*)args);
     int i;
     for (i=0; i < argc; i++) {
         jl_arrayset(args, i, (jl_value_t*)jl_cstr_to_array(argv[i]));
     }
-    jl_set_const(jl_system_module, jl_symbol("ARGS"), (jl_value_t*)args);
 
 #ifdef USE_READLINE
     if (!no_readline) {
@@ -543,11 +543,12 @@ int main(int argc, char *argv[])
     }
     if (num_evals) {
         int i;
+        jl_value_t *ast=NULL, *value=NULL;
+        JL_GC_PUSH(&ast, &value);
         for (i=0; i < num_evals; i++) {
             JL_TRY {
-                jl_value_t *ast = jl_parse_input_line(eval_exprs[i]);
-                jl_value_t *value =
-                    jl_toplevel_eval_thunk((jl_lambda_info_t*)ast);
+                ast = jl_parse_input_line(eval_exprs[i]);
+                value = jl_toplevel_eval_thunk((jl_lambda_info_t*)ast);
                 if (print_exprs[i]) {
                     jl_show(value);
                     ios_printf(ios_stdout, "\n");
@@ -558,6 +559,7 @@ int main(int argc, char *argv[])
             }
         }
         jl_shutdown_frontend();
+        JL_GC_POP();
         return 0;
     }
     if (program) {
@@ -577,6 +579,8 @@ int main(int argc, char *argv[])
 
     awful_sigfpe_hack();
 
+    jl_value_t *ast=NULL;
+    JL_GC_PUSH(&ast);
  again:
     ;
     JL_TRY {
@@ -585,7 +589,7 @@ int main(int argc, char *argv[])
 
             int end = 0;
             int show_value = 1;
-            jl_value_t *ast = read_expr_ast(prompt, &end, &show_value);
+            ast = read_expr_ast(prompt, &end, &show_value);
             if (end) {
                 ios_printf(ios_stdout, "\n");
                 break;
@@ -610,6 +614,7 @@ int main(int argc, char *argv[])
         ios_printf(ios_stdout, "\n");
         goto again;
     }
+    JL_GC_POP();
 
     if (have_color) {
         ios_printf(ios_stdout, jl_color_normal);
