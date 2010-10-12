@@ -556,6 +556,6 @@ promote_type: promote_type(Type{T},Type{T}) first
 ref: ref(Array{Any,1},Int32) before ref(Array{T,1},Int32)
 
 convert files for new GC:
- alloc.c     codegen.cpp    gf.c       intrinsics.cpp
- ast.c       init.c         io.c       task.c
+*alloc.c     codegen.cpp    gf.c       intrinsics.cpp
+*ast.c       init.c         io.c       task.c
  builtins.c  interpreter.c  jltypes.c  repl.c

@@ -20,7 +20,7 @@
 
 /*
   integration steps:
-  - convert idtable to use an Array
+  * convert idtable to use an Array
   - give GC access to relevant C local variables
   - allocate ios objects with malloc, use finalizer
 */
@@ -434,6 +434,8 @@ void jl_gc_disable()
 {
     is_gc_enabled = 0;
 }
+
+int jl_gc_is_enabled() { return is_gc_enabled; }
 
 void jl_gc_collect()
 {

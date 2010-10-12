@@ -1201,47 +1201,7 @@ JL_CALLABLE(jl_f_dlsym)
 
 // --- eq hash table ---
 
-DLLEXPORT
-htable_t *jl_new_eqtable(uint32_t sz)
-{
-    htable_t *h = (htable_t*)allocb(sizeof(htable_t));
-    htable_new(h, sz);
-    return h;
-}
-
-DLLEXPORT
-void jl_eqtable_put(htable_t *t, jl_value_t *key, jl_value_t *val)
-{
-    jl_value_t **bp = (jl_value_t**)ptrhash_bp(t, key);
-    *bp = val;
-}
-
-DLLEXPORT
-jl_value_t *jl_eqtable_get(htable_t *t, jl_value_t *key, jl_value_t *deflt)
-{
-    jl_value_t *v = (jl_value_t*)ptrhash_get(t, key);
-    if (v == HT_NOTFOUND)
-        return deflt;
-    return v;
-}
-
-DLLEXPORT
-void jl_eqtable_del(htable_t *t, jl_value_t *key)
-{
-    ptrhash_remove(t, key);
-}
-
-DLLEXPORT
-jl_value_t *jl_eqtable_next(htable_t *t, uint32_t i)
-{
-    if (i&1) i++;
-    while (i < t->size && t->table[i+1] == HT_NOTFOUND)
-        i+=2;
-    if (i >= t->size) return (jl_value_t*)jl_null;
-    return (jl_value_t*)jl_tuple(2, jl_tuple(2, (jl_value_t*)t->table[i],
-                                             (jl_value_t*)t->table[i+1]),
-                                 jl_box_uint32(i+2));
-}
+#include "table.c"
 
 // --- hashing ---
 

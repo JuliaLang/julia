@@ -89,7 +89,9 @@ void jl_load_boot_j()
     ios_static_buffer(pi, boot_j, sizeof(boot_j));
     value_t sexpr = fl_read_sexpr(bootc);
     jl_value_t *ast = scm_to_julia(sexpr);
+    JL_GC_PUSH(&ast);
     jl_load_file_expr("boot.j", ast);
+    JL_GC_POP();
 }
 
 static jl_sym_t *scmsym_to_julia(value_t s)
@@ -131,14 +133,14 @@ static size_t scm_list_length(value_t x)
     return llength(x);
 }
 
-static jl_value_t *scm_to_julia(value_t e);
+static jl_value_t *scm_to_julia_(value_t e);
 
 static jl_value_t *full_list(value_t e)
 {
     jl_array_t *ar = jl_alloc_cell_1d(scm_list_length(e));
     size_t i=0;
     while (iscons(e)) {
-        jl_cellset(ar, i, scm_to_julia(car_(e)));
+        jl_cellset(ar, i, scm_to_julia_(car_(e)));
         e = cdr_(e);
         i++;
     }
@@ -158,6 +160,20 @@ static jl_value_t *full_list_of_lists(value_t e)
 }
 
 static jl_value_t *scm_to_julia(value_t e)
+{
+#ifdef JL_GC_MARKSWEEP
+    int en = jl_gc_is_enabled();
+    jl_gc_disable();
+#endif
+    jl_value_t *v = scm_to_julia_(e);
+#ifdef JL_GC_MARKSWEEP
+    if (en) jl_gc_enable();
+#endif
+    htable_reset(&gensym_table, gensym_table.size);
+    return v;
+}
+
+static jl_value_t *scm_to_julia_(value_t e)
 {
     if (fl_isnumber(e)) {
         if (iscprim(e) && cp_numtype((cprim_t*)ptr(e))==T_DOUBLE) {
@@ -229,7 +245,7 @@ static jl_value_t *scm_to_julia(value_t e)
                 e = cdr_(cdr_(e));
                 for(i=1; i < n; i++) {
                     assert(iscons(e));
-                    jl_cellset(ex->args, i, scm_to_julia(car_(e)));
+                    jl_cellset(ex->args, i, scm_to_julia_(car_(e)));
                     e = cdr_(e);
                 }
                 return
@@ -238,7 +254,7 @@ static jl_value_t *scm_to_julia(value_t e)
             if (!strcmp(s, "var-info")) {
                 jl_expr_t *ex = jl_exprn(sym, n);
                 e = cdr_(e);
-                jl_cellset(ex->args, 0, scm_to_julia(car_(e)));
+                jl_cellset(ex->args, 0, scm_to_julia_(car_(e)));
                 e = cdr_(e);
                 jl_cellset(ex->args, 1, full_list_of_lists(car_(e)));
                 e = cdr_(e);
@@ -246,7 +262,7 @@ static jl_value_t *scm_to_julia(value_t e)
                 e = cdr_(e);
                 for(i=3; i < n; i++) {
                     assert(iscons(e));
-                    jl_cellset(ex->args, i, scm_to_julia(car_(e)));
+                    jl_cellset(ex->args, i, scm_to_julia_(car_(e)));
                     e = cdr_(e);
                 }
                 return (jl_value_t*)ex;
@@ -255,7 +271,7 @@ static jl_value_t *scm_to_julia(value_t e)
             e = cdr_(e);
             for(i=0; i < n; i++) {
                 assert(iscons(e));
-                jl_cellset(ex->args, i, scm_to_julia(car_(e)));
+                jl_cellset(ex->args, i, scm_to_julia_(car_(e)));
                 e = cdr_(e);
             }
             return (jl_value_t*)ex;
@@ -434,17 +450,21 @@ static jl_value_t *copy_ast(jl_value_t *expr, jl_tuple_t *sp)
     if (jl_typeis(expr,jl_array_any_type)) {
         jl_array_t *a = (jl_array_t*)expr;
         jl_array_t *na = jl_alloc_cell_1d(a->length);
+        JL_GC_PUSH(&na);
         size_t i;
         for(i=0; i < a->length; i++)
             jl_cellset(na, i, copy_ast(jl_cellref(a,i), sp));
+        JL_GC_POP();
         return (jl_value_t*)na;
     }
     if (jl_is_expr(expr)) {
         jl_expr_t *e = (jl_expr_t*)expr;
         jl_expr_t *ne = jl_exprn(e->head, e->args->length);
+        JL_GC_PUSH(&ne);
         size_t i;
         for(i=0; i < e->args->length; i++)
             jl_exprarg(ne, i) = copy_ast(jl_exprarg(e,i), sp);
+        JL_GC_POP();
         return (jl_value_t*)ne;
     }
     return expr;
@@ -485,6 +505,8 @@ void jl_specialize_ast(jl_lambda_info_t *li)
     jl_tuple_t *spenv = jl_tuple_tvars_to_symbols(li->sparams);
     jl_value_t *ast = copy_ast(li->ast, li->sparams);
     li->ast = ast;
+    JL_GC_PUSH(&spenv);
     eval_decl_types(jl_lam_vinfo((jl_expr_t*)ast), spenv);
     eval_decl_types(jl_lam_capt((jl_expr_t*)ast), spenv);
+    JL_GC_POP();
 }

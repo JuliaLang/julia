@@ -1,22 +1,32 @@
 struct IdTable
-    htptr::Ptr{Void}
+    ht::Array{Any,1}
 end
 
-idtable(sz::Int) = IdTable(ccall(dlsym(JuliaDLHandle,"jl_new_eqtable"),
-                                 Ptr{Void}, (Uint32,), uint32(sz)))
+function _tablesz(i::Int)
+    if i < 32
+        return 32
+    end
+    while (i&(i-1) != 0)
+        i = i&(i-1)
+    end
+    return i<<1
+end
+
+idtable(sz::Int) = IdTable(cell(_tablesz(sz)))
 idtable() = idtable(0)
 
-assign(t::IdTable, v, k) = (ccall(dlsym(JuliaDLHandle,"jl_eqtable_put"),
-                                  Void, (Ptr{Void}, Any, Any),
-                                  t.htptr, k, v);
-                            t)
+function assign(t::IdTable, v, k)
+    t.ht = ccall(dlsym(JuliaDLHandle,"jl_eqtable_put"),
+                 Any, (Any, Any, Any), t.ht, k, v)::Array{Any,1}
+    t
+end
 
 get(t::IdTable, key, default) = ccall(dlsym(JuliaDLHandle,"jl_eqtable_get"),
-                                      Any, (Ptr{Void}, Any, Any),
-                                      t.htptr, key, default)
+                                      Any, (Any, Any, Any),
+                                      t.ht, key, default)
 
 del(t::IdTable, key) = (ccall(dlsym(JuliaDLHandle,"jl_eqtable_del"),
-                              Void, (Ptr{Void}, Any), t.htptr, key);
+                              Int32, (Any, Any), t.ht, key);
                         t)
 
 _secret_idtable_token_ = {`BOO}
@@ -35,8 +45,8 @@ has(t::IdTable, key) = !is(get(t, key, _secret_idtable_token_),
 start(t::IdTable) = 0
 done(t::IdTable, i) = is(next(t,i),())
 next(t::IdTable, i) = ccall(dlsym(JuliaDLHandle,"jl_eqtable_next"),
-                            Any, (Ptr{Void}, Uint32),
-                            t.htptr, uint32(i))
+                            Any, (Any, Uint32),
+                            t.ht, uint32(i))
 
 isempty(t::IdTable) = is(next(t,0),())
 

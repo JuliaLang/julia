@@ -615,6 +615,7 @@ void jl_gc_init();
 void jl_gc_markval(jl_value_t *v);
 void jl_gc_enable();
 void jl_gc_disable();
+int jl_gc_is_enabled();
 void jl_gc_collect();
 #define jl_gc_setmark(v) (((uptrint_t*)(v))[-1]|=1)
 
