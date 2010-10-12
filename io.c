@@ -69,7 +69,7 @@ int jl_read_avail(ios_t *s)
 DLLEXPORT
 void *jl_new_fdio(int fd)
 {
-    ios_t *s = (ios_t*)allocb(sizeof(ios_t));
+    ios_t *s = (ios_t*)alloc_cobj(sizeof(ios_t));
     ios_fd(s, fd, 0);
     return s;
 }
@@ -77,7 +77,7 @@ void *jl_new_fdio(int fd)
 DLLEXPORT
 void *jl_new_fileio(char *fname, int rd, int wr, int create, int trunc)
 {
-    ios_t *s = (ios_t*)allocb(sizeof(ios_t));
+    ios_t *s = (ios_t*)alloc_cobj(sizeof(ios_t));
     if (ios_file(s, fname, rd, wr, create, trunc) == NULL)
         jl_errorf("could not open file %s", fname);
     return s;
@@ -86,7 +86,7 @@ void *jl_new_fileio(char *fname, int rd, int wr, int create, int trunc)
 DLLEXPORT
 void *jl_new_memio(uint32_t sz)
 {
-    ios_t *s = (ios_t*)allocb(sizeof(ios_t));
+    ios_t *s = (ios_t*)alloc_cobj(sizeof(ios_t));
     if (ios_mem(s, sz) == NULL)
         jl_errorf("error creating memory I/O stream");
     return s;

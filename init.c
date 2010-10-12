@@ -91,6 +91,7 @@ void julia_init()
 #endif
 #ifdef JL_GC_MARKSWEEP
     jl_gc_init();
+    jl_gc_disable();
 #endif
     jl_init_frontend();
     jl_init_types();
@@ -103,6 +104,9 @@ void julia_init()
     jl_boot_file_loaded = 1;
     jl_init_builtin_types();
     jl_init_builtins();
+#ifdef JL_GC_MARKSWEEP
+    //jl_gc_enable();
+#endif
 
     signal(SIGFPE, fpe_handler);
 
@@ -197,6 +201,9 @@ int jl_load_startup_file()
     }
 #ifdef BOEHM_GC
     GC_gcollect();
+#endif
+#ifdef JL_GC_MARKSWEEP
+    jl_gc_collect();
 #endif
     return 0;
 }

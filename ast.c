@@ -485,7 +485,7 @@ static void eval_decl_types(jl_array_t *vi, jl_tuple_t *spenv)
 
 jl_tuple_t *jl_tuple_tvars_to_symbols(jl_tuple_t *t)
 {
-    jl_tuple_t *s = jl_alloc_tuple(t->length);
+    jl_tuple_t *s = jl_alloc_tuple_uninit(t->length);
     size_t i;
     for(i=0; i < s->length; i+=2) {
         jl_tupleset(s, i,
