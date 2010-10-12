@@ -354,7 +354,7 @@ function refND{T}(A::Array{T}, I::Indices2...)
 
     I_with_endpts = ()
     for i=1:length(I)
-        I_with_endpts = append(I_with_endpts, tuple(jl_fill_endpts(A, i, I[i])))
+        I_with_endpts = tuple(I_with_endpts..., jl_fill_endpts(A, i, I[i]))
     end
 
     X = zeros(T, map(length, I_with_endpts))
@@ -369,7 +369,7 @@ function refND{T}(A::Array{T}, I::Indices2...)
         storeind += 1
     end
 
-    ndmap (store, I_with_endpts)
+    ndmap(store, I_with_endpts)
     return X
 end
 
@@ -454,7 +454,7 @@ function assignND_all(A::Array, X, I::Indices2...)
 
     I_with_endpts = ()
     for i=1:length(I)
-        I_with_endpts = append(I_with_endpts, tuple(jl_fill_endpts(A, i, I[i])))
+        I_with_endpts = tuple(I_with_endpts..., jl_fill_endpts(A, i, I[i]))
     end
 
     if isa(X, Scalar)
@@ -466,7 +466,7 @@ function assignND_all(A::Array, X, I::Indices2...)
             A[index] = X
         end
         
-        ndmap (store1, I_with_endpts)
+        ndmap(store1, I_with_endpts)
     else
         refind = 1
         function storeall(ind)
@@ -478,7 +478,7 @@ function assignND_all(A::Array, X, I::Indices2...)
             refind += 1
         end
         
-        ndmap (storeall, I_with_endpts)
+        ndmap(storeall, I_with_endpts)
     end
 
     return A
