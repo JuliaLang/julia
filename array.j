@@ -192,8 +192,6 @@ end
 
 ref(t::Tensor, r::Real...) = t[map(x->convert(Int32,round(x)),r)...]
 
-ref(A::Tensor, T::Tuple) = ref(A, T...)
-
 ref(a::Array, i::Index) = arrayref(a,i)
 ref{T}(a::Array{T,1}, i::Index) = arrayref(a,i)
 ref(a::Array{Any,1}, i::Index) = arrayref(a,i)
@@ -264,8 +262,6 @@ end
 ## Indexing: assign
 
 assign(t::Tensor, x, r::Real...) = (t[map(x->convert(Int32,round(x)),r)...] = x)
-
-assign(A::Tensor, x, T::Tuple) = assign(A, x, T...)
 
 assign{T}(A::Array{T}, x, i::Index) = arrayset(A,i,convert(T,x))
 
@@ -582,7 +578,16 @@ function sub2ind_ND(dims, I::Index...)
 end
 
 function ind2sub(dims, ind::Index)
+    ndims = length(dims)
+    x = tuple(1, cumprod(dims)...)
 
+    sub = ()
+    for i=ndims:-1:1
+        rest = rem(ind-1, x[i]) + 1
+        sub = tuple(div(ind - rest, x[i]) + 1, sub...)
+        ind = rest
+    end
+    return sub
 end
 
 triu(M) = triu(M,0)

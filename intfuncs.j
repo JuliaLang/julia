@@ -1,5 +1,7 @@
 ## integer functions ##
 
+rem(x::Int, y::Int) = x - div(x,y)*y
+
 isodd(n::Int)  = ((n%2)==1)
 iseven(n::Int) = ((n%2)==0)
 

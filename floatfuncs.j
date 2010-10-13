@@ -1,5 +1,7 @@
 ## floating-point functions ##
 
+rem(x::Float, y::Float) = remainder(x, y)
+
 signbit(x::Float) = (x < 0 ? -1 : (x > 0 ? 1 : (1.0/x < 0 ? -1 : +1)))
 signbit(x::Float64) = (boxsi64(unbox64(x)) < int64(0) ? -1 : +1)
 signbit(x::Float32) = (boxsi32(unbox32(x)) < int32(0) ? -1 : +1)
