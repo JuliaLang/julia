@@ -24,6 +24,16 @@ jl_comprehension_zeros{T,n}(oneresult::Tensor{T,n}, dims...) = Array(T, dims...)
 jl_comprehension_zeros{T}(oneresult::T, dims...) = Array(T, dims...)
 jl_comprehension_zeros(oneresult::(), dims...) = Array(None, dims...)
 
+function array(t::Tuple)
+    len = length(t)
+    if len == 0; return []; end
+    A = Array(typeof(t[1]), len)
+    for i=1:len
+        A[i] = t[i]
+    end
+    return A
+end
+
 function zeros(T::Type, dims::Size...)
     a = Array(T, dims...)
     z = zero(T)
@@ -178,23 +188,6 @@ end
 ($)(x::Bool, y::Array{Bool})        = reshape( [ x    $ y[i] | i=1:numel(y) ], size(y) )
 ($)(x::Array{Bool}, y::Bool)        = reshape( [ x[i] $ y    | i=1:numel(x) ], size(x) )
 
-## Indexing
-
-function sub2ind(dims, I::Index...)
-    ndims = length(dims)
-    index = I[1]
-    stride = 1
-    for k=2:ndims
-        stride = stride * dims[k-1]
-        index += (I[k]-1) * stride
-    end
-    return index
-end
-
-function ind2sub()
-
-end
-
 ## Indexing: ref
 
 ref(t::Tensor, r::Real...) = t[map(x->convert(Int32,round(x)),r)...]
@@ -235,9 +228,9 @@ function ref(A::Array, I::Index...)
 end
 
 ref(A::Array, I::Indices2, J::Indices2, K::Indices2...) =
-    refND(A, I, J, K...)
+    ref_ND(A, I, J, K...)
 
-function refND{T}(A::Array{T}, I::Indices2...)
+function ref_ND{T}(A::Array{T}, I::Indices2...)
     dims = A.dims
     ndimsA = length(dims)
 
@@ -319,9 +312,9 @@ function assign(A::Matrix, X::Matrix, I::Indices2, J::Indices2)
 end
 
 assign(A::Array, x::Scalar, I::Index, J::Index, K::Index...) = 
-   assignND_scalar(A, x, I, J, K...)
+   assign_ND_scalar(A, x, I, J, K...)
 
-function assignND_scalar(A::Array, x::Scalar, I::Index...)
+function assign_ND_scalar(A::Array, x::Scalar, I::Index...)
     dims = A.dims
     ndims = length(I)
 
@@ -337,9 +330,9 @@ function assignND_scalar(A::Array, x::Scalar, I::Index...)
 end
 
 assign(A::Array, X, I::Indices2, J::Indices2, K::Indices2...) = 
-   assignND_all(A, X, I, J, K...)
+   assign_ND_all(A, X, I, J, K...)
 
-function assignND_all(A::Array, X, I::Indices2...)
+function assign_ND_all(A::Array, X, I::Indices2...)
     dims = A.dims
     ndimsA = length(dims)
 
@@ -437,27 +430,20 @@ function sum(x::Matrix, dim::Int)
     end
 end
 
-function cumsum{T}(v::Vector{T})
+function scan{T}(op, v::Vector{T})
     n = length(v)
     c = Array(T, n)
-    
+    if n == 0; return c; end
+
     c[1] = v[1]
     for i=2:n
-        c[i] = v[i] + c[i-1]
+        c[i] = op(v[i], c[i-1])
     end
     return c
 end
 
-function cumprod{T}(v::Vector{T})
-    n = length(v)
-    c = Array(T, n)
-    
-    c[1] = v[1]
-    for i=2:n
-        c[i] = v[i] * c[i-1]
-    end
-    return c
-end
+cumsum(v::Vector) = scan(+, v)
+cumprod(v::Vector) = scan(*, v)
 
 # iteration support for arrays as ranges
 start(a::Array) = 1
@@ -576,6 +562,27 @@ function find{T}(A::Matrix{T})
         end
     end
     return (I, J)
+end
+
+sub2ind(dims, i::Index) = i
+
+sub2ind(dims, i::Index, j::Index) = (j-1)*dims[1] + i
+
+sub2ind(dims, i::Index, j::Index, k::Index...) = sub2ind_ND(dims, i, j, k...)
+
+function sub2ind_ND(dims, I::Index...)
+    ndims = length(dims)
+    index = I[1]
+    stride = 1
+    for k=2:ndims
+        stride = stride * dims[k-1]
+        index += (I[k]-1) * stride
+    end
+    return index
+end
+
+function ind2sub(dims, ind::Index)
+
 end
 
 triu(M) = triu(M,0)

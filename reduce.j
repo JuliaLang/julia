@@ -31,3 +31,19 @@ sum(x, y, z, rest...)  = reduce(sum,  sum(sum(x,y),z),   rest)
 prod(x, y, z, rest...) = reduce(prod, prod(prod(x,y),z), rest)
 any(x, y, z, rest...)  = reduce(any,  any(any(x,y),z),   rest)
 all(x, y, z, rest...)  = reduce(all,  all(all(x,y),z),   rest)
+
+scan(op, x) = x
+scan(op, itr::Tuple) = scan(op, itr...)
+
+function scan(op, itr...)
+    n = length(itr)
+    if n == 0; return (); end
+    s = tuple(itr[1])
+    for i=2:n
+        s = tuple(s..., op(s[i-1], itr[i]))
+    end
+    return s
+end
+
+cumsum(itr...) = scan(+, itr)
+cumprod(itr...) = scan(*, itr)
