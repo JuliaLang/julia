@@ -24,6 +24,14 @@ next(t::Tuple, i) = (t[i], i+1)
 
 ## mapping ##
 
+ntuple(n, f) = n<=0 ? () :
+               n==1 ? (f(1),) :
+               n==2 ? (f(1),f(2),) :
+               n==3 ? (f(1),f(2),f(3),) :
+               n==4 ? (f(1),f(2),f(3),f(4),) :
+               n==5 ? (f(1),f(2),f(3),f(4),f(5),) :
+               tuple(ntuple(n-2,f)..., f(n-1), f(n))
+
 # 0 argument function
 map(f) = f()
 # 1 argument function
@@ -39,16 +47,12 @@ maptuple(f, first, rest...) = tuple(f(first), maptuple(f, rest...)...)
 map(f, t::(),        s::())        = ()
 map(f, t::(Any,),    s::(Any,))    = (f(t[1],s[1]),)
 map(f, t::(Any,Any), s::(Any,Any)) = (f(t[1],s[1]), f(t[2],s[2]))
+map(f, t::(Any,Any,Any), s::(Any,Any,Any)) =
+    (f(t[1],s[1]), f(t[2],s[2]), f(t[3],s[3]))
+map(f, t::(Any,Any,Any,Any), s::(Any,Any,Any,Any)) =
+    (f(t[1],s[1]), f(t[2],s[2]), f(t[3],s[3]), f(t[4],s[4]))
 # n argument function
-function map(f, ts::Tuple...)
-    function _map(f, ts, i)
-        if i > length(ts[1])
-            return ()
-        end
-        return tuple(f(map(x->x[i],ts)...), _map(f,ts,i+1)...)
-    end
-    return _map(f, ts, 1)
-end
+map(f, ts::Tuple...) = ntuple(length(ts[1]), n->f(map(t->t[n],ts)...))
 
 ## comparison ##
 
