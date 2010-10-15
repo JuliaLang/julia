@@ -220,11 +220,13 @@ static jl_function_t *jl_method_table_assoc_exact(jl_methtable_t *mt,
 // merged in.
 jl_lambda_info_t *jl_add_static_parameters(jl_lambda_info_t *l, jl_tuple_t *sp)
 {
+    JL_GC_PUSH(&sp);
     if (l->sparams->length > 0)
         sp = jl_tuple_append(sp, l->sparams);
     jl_lambda_info_t *nli = jl_new_lambda_info(l->ast, sp);
     nli->name = l->name;
     nli->fptr = l->fptr;
+    JL_GC_POP();
     return nli;
 }
 
@@ -235,12 +237,14 @@ jl_function_t *jl_instantiate_method(jl_function_t *f, jl_tuple_t *sp)
     if (f->linfo == NULL)
         return f;
     jl_function_t *nf = jl_new_closure(f->fptr, f->env);
+    JL_GC_PUSH(&nf);
     if (f->env != NULL && jl_is_tuple(f->env) &&
         ((jl_tuple_t*)f->env)->length == 2 &&
         jl_t0(f->env) == (jl_value_t*)f) {
         nf->env = (jl_value_t*)jl_pair((jl_value_t*)nf, jl_t1(f->env));
     }
     nf->linfo = jl_add_static_parameters(f->linfo, sp);
+    JL_GC_POP();
     return nf;
 }
 
@@ -283,7 +287,6 @@ jl_function_t *jl_method_cache_insert(jl_methtable_t *mt, jl_tuple_t *type,
 }
 
 extern jl_function_t *jl_typeinf_func;
-//TODO: disabled for now
 #define ENABLE_INFERENCE
 //#define TRACE_INFERENCE
 
@@ -343,6 +346,9 @@ static jl_function_t *cache_method(jl_methtable_t *mt, jl_tuple_t *type,
             assert(jl_tupleref(type,i) != (jl_value_t*)jl_bottom_type);
         }
     }
+    jl_value_t *temp=NULL;
+    jl_function_t *newmeth=NULL;
+    JL_GC_PUSH(&type, &temp, &newmeth);
     // for varargs methods, only specialize up to max_args
     if (type->length > mt->max_args &&
         jl_is_seq_type(jl_tupleref(decl,decl->length-1))) {
@@ -367,22 +373,22 @@ static jl_function_t *cache_method(jl_methtable_t *mt, jl_tuple_t *type,
                 break;
             }
         }
+        type = limited;
         if (all_are_subtypes) {
             // avoid Type{Type{...}...}...
             if (jl_is_tag_type(lasttype) &&
                 ((jl_tag_type_t*)lasttype)->name == jl_type_type->name)
                 lasttype = (jl_value_t*)jl_type_type;
-            jl_tupleset(limited, i, jl_apply_type((jl_value_t*)jl_seq_type,
-                                                  jl_tuple(1,lasttype)));
+            temp = (jl_value_t*)jl_tuple(1,lasttype);
+            jl_tupleset(type, i, jl_apply_type((jl_value_t*)jl_seq_type,
+                                               (jl_tuple_t*)temp));
         }
         else {
-            jl_tupleset(limited, i, jl_tupleref(decl,decl->length-1));
+            jl_tupleset(type, i, jl_tupleref(decl,decl->length-1));
         }
-        type = limited;
     }
 
     // here we infer types and specialize the method
-    jl_function_t *newmeth;
     /*
     if (sparams==jl_null)
         newmeth = method;
@@ -391,6 +397,7 @@ static jl_function_t *cache_method(jl_methtable_t *mt, jl_tuple_t *type,
     newmeth = jl_instantiate_method(method, sparams);
 
     jl_function_t *retfunc = jl_method_cache_insert(mt, type, newmeth);
+    assert(retfunc == newmeth);
 
     if (newmeth->linfo != NULL && newmeth->linfo->sparams == jl_null) {
         // when there are no static parameters, one unspecialized version
@@ -426,6 +433,7 @@ static jl_function_t *cache_method(jl_methtable_t *mt, jl_tuple_t *type,
             newmeth->linfo->inInference = 0;
         }
     }
+    JL_GC_POP();
     return retfunc;
 }
 
@@ -456,9 +464,12 @@ static jl_function_t *mt_assoc_by_type(jl_methtable_t *mt, jl_tuple_t *tt)
         return NULL;
     }
 
+    jl_tuple_t *tpenv=NULL;
+    jl_tuple_t *newsig=NULL;
+    JL_GC_PUSH(&env, &tpenv, &newsig);
+
     assert(jl_is_tuple(env));
-    jl_tuple_t *tpenv = jl_flatten_pairs((jl_tuple_t*)env);
-    jl_tuple_t *newsig;
+    tpenv = jl_flatten_pairs((jl_tuple_t*)env);
     // don't bother computing this if no arguments are tuples
     for(i=0; i < tt->length; i++) {
         if (jl_is_tuple(jl_tupleref(tt,i)))
@@ -473,7 +484,9 @@ static jl_function_t *mt_assoc_by_type(jl_methtable_t *mt, jl_tuple_t *tt)
         newsig = (jl_tuple_t*)m->sig;
     }
     assert(jl_is_tuple(newsig));
-    return cache_method(mt, tt, m->func, newsig, tpenv);
+    jl_function_t *nf = cache_method(mt, tt, m->func, newsig, tpenv);
+    JL_GC_POP();
+    return nf;
 }
 
 jl_tag_type_t *jl_wrap_Type(jl_value_t *t);
@@ -506,6 +519,7 @@ jl_function_t *jl_method_table_assoc(jl_methtable_t *mt,
     }
 
     jl_tuple_t *tt = jl_alloc_tuple(nargs);
+    JL_GC_PUSH(&tt);
     size_t i;
     for(i=0; i < tt->length; i++) {
         jl_value_t *a;
@@ -518,7 +532,9 @@ jl_function_t *jl_method_table_assoc(jl_methtable_t *mt,
         jl_tupleset(tt, i, a);
     }
 
-    return mt_assoc_by_type(mt, tt);
+    jl_function_t *ff = mt_assoc_by_type(mt, tt);
+    JL_GC_POP();
+    return ff;
 }
 
 static int sigs_eq(jl_value_t *a, jl_value_t *b)
@@ -558,7 +574,7 @@ static int args_morespecific(jl_value_t *a, jl_value_t *b)
 
 static jl_tuple_t *without_typectors(jl_tuple_t *t)
 {
-    jl_tuple_t *tc = jl_alloc_tuple(t->length);
+    jl_tuple_t *tc = jl_alloc_tuple_uninit(t->length);
     size_t i;
     for(i=0; i < t->length; i++) {
         jl_value_t *v = jl_tupleref(t,i);
@@ -598,19 +614,29 @@ static void check_ambiguous(jl_methlist_t *ml, jl_tuple_t *type,
                                                  (jl_value_t*)sig);
         if (isect == (jl_value_t*)jl_bottom_type)
             return;
+        jl_value_t *t1=NULL, *t2=NULL;
+        JL_GC_PUSH(&isect, &t1, &t2);
         jl_methlist_t *l = ml;
         while (l != NULL) {
             if (sigs_eq(isect, (jl_value_t*)l->sig))
-                return;  // ok, intersection is covered
+                goto done_chk_amb;  // ok, intersection is covered
             l = l->next;
         }
         char *n = fname->name;
+        t1 = (jl_value_t*)without_typectors(type);
+        t2 = (jl_value_t*)without_typectors(sig);
+        char *s1 = jl_show_to_string(t1);
+        char *s2 = jl_show_to_string(t2);
+        char *s3 = jl_show_to_string(isect);
         ios_printf(ios_stdout,
                    "Warning: new definition %s%s is ambiguous with %s%s. "
                    "Make sure %s%s is also defined.\n",
-                   n, jl_show_to_string((jl_value_t*)without_typectors(type)),
-                   n, jl_show_to_string((jl_value_t*)without_typectors(sig)),
-                   n, jl_show_to_string(isect));
+                   n, s1, n, s2, n, s3);
+        LLT_FREE(s1);
+        LLT_FREE(s2);
+        LLT_FREE(s3);
+    done_chk_amb:
+        JL_GC_POP();
     }
 }
 
@@ -625,10 +651,11 @@ static jl_tuple_t *find_tvars(jl_value_t *v, jl_tuple_t *env)
         }
         return jl_tuple(2, v, env);
     }
+    JL_GC_PUSH(&env);
     if (jl_is_func_type(v)) {
         env = find_tvars((jl_value_t*)((jl_func_type_t*)v)->from, env);
         env = find_tvars((jl_value_t*)((jl_func_type_t*)v)->to  , env);
-        return env;
+        goto done_find_tvars;
     }
     jl_tuple_t *params;
     if (jl_is_tuple(v))
@@ -638,13 +665,15 @@ static jl_tuple_t *find_tvars(jl_value_t *v, jl_tuple_t *env)
     else if (jl_is_some_tag_type(v))
         params = ((jl_tag_type_t*)v)->parameters;
     else
-        return env;
+        goto done_find_tvars;
     int i;
     for(i=0; i < params->length; i++) {
         jl_value_t *p = jl_tupleref(params, i);
         if (p != v)
             env = find_tvars(p, env);
     }
+ done_find_tvars:
+    JL_GC_POP();
     return env;
 }
 
@@ -667,9 +696,11 @@ jl_methlist_t *jl_method_list_insert(jl_methlist_t **pml, jl_tuple_t *type,
         }
         l = l->next;
     }
+    jl_tuple_t *tv = find_tvars((jl_value_t*)type, jl_null);
+    JL_GC_PUSH(&tv);
     jl_methlist_t *newrec = (jl_methlist_t*)allocb(sizeof(jl_methlist_t));
     newrec->sig = type;
-    newrec->tvars = find_tvars((jl_value_t*)type, jl_null);
+    newrec->tvars = tv;
     newrec->has_tvars = (newrec->tvars != jl_null);
     newrec->func = method;
     pl = pml;
@@ -687,6 +718,7 @@ jl_methlist_t *jl_method_list_insert(jl_methlist_t **pml, jl_tuple_t *type,
     }
     newrec->next = l;
     *pl = newrec;
+    JL_GC_POP();
     return newrec;
 }
 
@@ -725,7 +757,12 @@ jl_methlist_t *jl_method_table_insert(jl_methtable_t *mt, jl_tuple_t *type,
 void jl_no_method_error(jl_sym_t *name, jl_value_t **args, size_t nargs)
 {
     jl_tuple_t *argt = (jl_tuple_t*)jl_f_tuple(NULL, args, nargs);
-    char *argt_str = jl_show_to_string(jl_full_type((jl_value_t*)argt));
+    jl_value_t *ft = NULL;
+    JL_GC_PUSH(&argt, &ft);
+    ft = jl_full_type((jl_value_t*)argt);
+    // TODO: string is leaked
+    char *argt_str = jl_show_to_string(ft);
+    JL_GC_POP();
     jl_errorf("no method %s%s", name->name, argt_str);
 }
 
@@ -815,15 +852,21 @@ void jl_show_method_table(jl_function_t *gf)
 void jl_initialize_generic_function(jl_function_t *f, jl_sym_t *name)
 {
     f->fptr = jl_apply_generic;
-    f->env = (jl_value_t*)jl_pair((jl_value_t*)new_method_table(),
-                                  (jl_value_t*)name);
+    jl_value_t *nmt = (jl_value_t*)new_method_table();
+    JL_GC_PUSH(&nmt);
+    f->env = (jl_value_t*)jl_pair(nmt, (jl_value_t*)name);
+    JL_GC_POP();
 }
 
 jl_function_t *jl_new_generic_function(jl_sym_t *name)
 {
-    return jl_new_closure(jl_apply_generic,
-                          (jl_value_t*)jl_pair((jl_value_t*)new_method_table(),
-                                               (jl_value_t*)name));
+    jl_value_t *nmt = (jl_value_t*)new_method_table();
+    jl_value_t *env = NULL;
+    JL_GC_PUSH(&nmt, &env);
+    env = (jl_value_t*)jl_pair(nmt, (jl_value_t*)name);
+    jl_function_t *f = jl_new_closure(jl_apply_generic, env);
+    JL_GC_POP();
+    return f;
 }
 
 void jl_add_method(jl_function_t *gf, jl_tuple_t *types, jl_function_t *meth)
@@ -849,6 +892,8 @@ static jl_tuple_t *match_method(jl_value_t *type, jl_function_t *func,
     jl_tuple_t *env = jl_null;
     jl_value_t *ti =
         jl_type_intersection_matching((jl_value_t*)sig, type, &env);
+    jl_value_t *temp=NULL;
+    JL_GC_PUSH(&env, &ti, &temp);
     jl_tuple_t *t = tvars;
     jl_tuple_t *env0 = env;
     while (t != jl_null) {
@@ -869,10 +914,11 @@ static jl_tuple_t *match_method(jl_value_t *type, jl_function_t *func,
         t = (jl_tuple_t*)jl_t1(t);
     }
     env = jl_flatten_pairs(env);
+    jl_tuple_t *result = NULL;
     if (ti != (jl_value_t*)jl_bottom_type) {
         if (func->linfo == NULL) {
             // builtin
-            return jl_tuple(5, ti, env, name, jl_null, next);
+            result = jl_tuple(5, ti, env, name, jl_null, next);
         }
         else if (func->fptr == jl_generic_ctor) {
             // a generic struct constructor
@@ -883,9 +929,9 @@ static jl_tuple_t *match_method(jl_value_t *type, jl_function_t *func,
             // e.g. Range(Int,Int,Int) => Range{T<:Int}
             // Furthermore, when a function results in a typevar T<:S, that
             // can be converted to just S.
-            jl_type_t *objt =
+            temp = (jl_value_t*)
                 jl_instantiate_type_with(body, &jl_t0(env), env->length/2);
-            return jl_tuple(5, ti, env, (jl_value_t*)objt, jl_null, next);
+            result = jl_tuple(5, ti, env, temp, jl_null, next);
         }
         else {
             jl_value_t *cenv;
@@ -898,10 +944,11 @@ static jl_tuple_t *match_method(jl_value_t *type, jl_function_t *func,
             else {
                 cenv = (jl_value_t*)jl_null;
             }
-            return jl_tuple(5, ti, env, func->linfo, cenv, next);
+            result = jl_tuple(5, ti, env, func->linfo, cenv, next);
         }
     }
-    return NULL;
+    JL_GC_POP();
+    return result;
 }
 
 // returns linked tuples (argtypes, static_params, lambdainfo, cloenv, next)
