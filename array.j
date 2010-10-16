@@ -238,11 +238,7 @@ function ref_ND{T}(A::Array{T}, I::Indices2...)
         strides[d] = strides[d-1] * dims[d-1]
     end
 
-    I_with_endpts = ()
-    for i=1:length(I)
-        I_with_endpts = tuple(I_with_endpts..., jl_fill_endpts(A, i, I[i]))
-    end
-
+    I_with_endpts = ntuple(length(I), i->jl_fill_endpts(A,i,I[i]))
     X = zeros(T, map(length, I_with_endpts))
 
     storeind = 1
@@ -338,10 +334,7 @@ function assign_ND_all(A::Array, X, I::Indices2...)
         strides[d] = strides[d-1] * dims[d-1]
     end
 
-    I_with_endpts = ()
-    for i=1:length(I)
-        I_with_endpts = tuple(I_with_endpts..., jl_fill_endpts(A, i, I[i]))
-    end
+    I_with_endpts = ntuple(length(I), i->jl_fill_endpts(A,i,I[i]))
 
     if isa(X, Scalar)
         function store1(ind)
@@ -378,6 +371,7 @@ vcat() = Array(None,0)
 vcat{T <: Scalar}(X::T...) = [ X[i] | i=1:length(X) ]
 
 hcat{T}(V::Vector{T}...) = [ V[j][i] | i=1:length(V[1]), j=1:length(V) ]
+
 function vcat{T}(V::Vector{T}...)
     a = Array(T, sum(map(length, V)))
     pos = 1
@@ -539,7 +533,7 @@ function find{T}(A::Vector{T})
     for i=1:length(A)
         if A[i] != 0
             I[count] = i
-            count = count + 1
+            count += 1
         end
     end
     return I
@@ -554,10 +548,30 @@ function find{T}(A::Matrix{T})
         if A[i,j] != 0
             I[count] = i
             J[count] = j
-            count = count + 1
+            count += 1
         end
     end
     return (I, J)
+end
+
+function find{T}(A::Array{T})
+    ndimsA = ndims(A)
+    nnzA = nnz(A)
+    I = ntuple(ndimsA, x->zeros(Size, nnzA))
+
+    count = 1
+    function findone(ind)
+        Aind = A[ind...]
+        if Aind != 0
+            for i=1:ndimsA
+                I[i][count] = ind[i]
+            end
+            count += 1
+        end
+    end
+
+    ndmap(findone, ntuple(ndims(A), d->(1:A.dims[d])) )
+    return I
 end
 
 sub2ind(dims, i::Index) = i
