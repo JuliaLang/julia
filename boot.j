@@ -113,3 +113,53 @@ end
 struct UTF8String <: String
     data::Array{Uint8,1}
 end
+
+type Exception
+
+struct ErrorException <: Exception
+    msg::String
+end
+
+struct TypeError <: Exception
+    func::Symbol
+    context::String
+    expected::Type
+    got
+end
+
+struct ParseError <: Exception
+    msg::String
+end
+
+struct ArgumentError <: Exception
+    msg::String
+end
+
+struct BoundsError <: Exception
+end
+
+struct UnboundError <: Exception
+    var::Symbol
+end
+
+struct KeyError <: Exception
+    key
+end
+
+struct DivideByZeroError <: Exception
+end
+
+struct MemoryError <: Exception
+end
+
+struct IOError <: Exception
+end
+
+struct StackOverflowError <: Exception
+end
+
+struct LoadError <: Exception
+    file::String
+    line::Int32
+    error
+end

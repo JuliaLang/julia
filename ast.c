@@ -121,6 +121,7 @@ static void syntax_error_check(value_t e)
         if (issymbol(hd)) {
             char *s = scmsym_to_str(hd);
             if (!strcmp(s,"error")) {
+                // TODO: line number
                 jl_errorf("\nsyntax error: %s",
                           (char*)cvalue_data(car_(cdr_(e))));
             }
@@ -205,15 +206,7 @@ static jl_value_t *scm_to_julia_(value_t e)
         return (jl_value_t*)sym;
     }
     if (fl_isstring(e)) {
-        size_t len = cvalue_len(e);
-        jl_array_t *a = jl_alloc_array_1d(jl_array_uint8_type, len+1);
-        memcpy(a->data, cvalue_data(e), len);
-        ((char*)a->data)[len] = '\0';
-        a->length--;
-        jl_tupleset(a->dims, 0, jl_box_int32(len));
-        jl_struct_type_t* string_type = u8_isvalid(a->data, len) < 2 ?
-                                        jl_latin1_string_type : jl_utf8_string_type;
-        return jl_apply((jl_function_t*)string_type, (jl_value_t**)&a, 1);
+        return jl_pchar_to_string(cvalue_data(e), cvalue_len(e));
     }
     if (e == FL_F) {
         return jl_false;

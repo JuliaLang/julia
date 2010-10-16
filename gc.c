@@ -421,6 +421,8 @@ static void gc_mark()
     GC_Markval(jl_methtable_type);
     GC_Markval(jl_bottom_func);
     GC_Markval(jl_any_func);
+    GC_Markval(jl_an_empty_string);
+    GC_Markval(jl_exception_in_transit);
 
     // constants
     GC_Markval(jl_null);

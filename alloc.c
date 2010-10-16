@@ -23,6 +23,7 @@ jl_value_t *jl_false;
 jl_tag_type_t *jl_undef_type;
 jl_tag_type_t *jl_typetype_type;
 jl_typector_t *jl_functype_ctor;
+jl_typector_t *jl_function_type;
 jl_struct_type_t *jl_box_type;
 jl_type_t *jl_box_any_type;
 jl_typename_t *jl_box_typename;
@@ -39,6 +40,12 @@ jl_struct_type_t *jl_expr_type;
 jl_bits_type_t *jl_intrinsic_type;
 jl_struct_type_t *jl_methtable_type;
 jl_struct_type_t *jl_lambda_info_type;
+jl_struct_type_t *jl_errorexception_type;
+jl_struct_type_t *jl_typeerror_type;
+jl_struct_type_t *jl_loaderror_type;
+jl_value_t *jl_an_empty_string;
+jl_value_t *jl_stackovf_exception;
+jl_value_t *jl_divbyzero_exception;
 
 jl_bits_type_t *jl_pointer_type;
 jl_bits_type_t *jl_pointer_void_type;
@@ -92,7 +99,6 @@ void *allocb(size_t nb)
 }
 */
 
-// NOTE: does not work for TagKind or its subtypes
 jl_value_t *jl_new_struct(jl_struct_type_t *type, ...)
 {
     va_list args;
@@ -937,9 +943,37 @@ jl_array_t *jl_cstr_to_array(char *str)
     return a;
 }
 
+jl_value_t *jl_pchar_to_string(char *str, size_t len)
+{
+    jl_array_t *a = jl_alloc_array_1d(jl_array_uint8_type, len+1);
+    JL_GC_PUSH(&a);
+    memcpy(a->data, str, len);
+    ((char*)a->data)[len] = '\0';
+    a->length--;
+    jl_tupleset(a->dims, 0, jl_box_int32(len));
+    jl_struct_type_t* string_type = u8_isvalid(a->data, len) < 2 ?
+        jl_latin1_string_type : jl_utf8_string_type;
+    jl_value_t *s = jl_apply((jl_function_t*)string_type, (jl_value_t**)&a, 1);
+    JL_GC_POP();
+    return s;
+}
+
 jl_array_t *jl_alloc_cell_1d(size_t n)
 {
     return jl_alloc_array_1d(jl_array_any_type, n);
+}
+
+jl_expr_t *jl_exprn(jl_sym_t *head, size_t n)
+{
+    jl_array_t *ar = jl_alloc_cell_1d(n);
+    JL_GC_PUSH(&ar);
+    jl_expr_t *ex = (jl_expr_t*)allocb(sizeof(jl_expr_t));
+    ex->type = (jl_type_t*)jl_expr_type;
+    ex->head = head;
+    ex->args = ar;
+    ex->etype = (jl_value_t*)jl_any_type;
+    JL_GC_POP();
+    return ex;
 }
 
 // initialization -------------------------------------------------------------

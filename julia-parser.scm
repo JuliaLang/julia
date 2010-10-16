@@ -1,10 +1,3 @@
-#|
-TODO:
-- parsing try/catch
-* parsing typealias
-* semicolons in argument lists, for keywords
-|#
-
 (define ops-by-prec
   '#((= := += -= *= /= //= .//= .*= ./= |\\=| |.\\=| ^= .^= %= |\|=| &= $= => <<= >>= >>>=)
      (?)
@@ -70,9 +63,10 @@ TODO:
       <<= >>= -> --> |\|\|| && : |::| |.|))
 (define syntactic-unary-operators '($))
 
-(define reserved-words '(begin while if for try function type typealias local
-			       return break continue struct global macro let
-			       bitstype))
+(define reserved-words '(begin while if for try return break continue
+			 function macro let local global const
+			 type typealias struct bitstype
+			 module import export))
 
 (define (syntactic-op? op) (memq op syntactic-operators))
 (define (syntactic-unary-op? op) (memq op syntactic-unary-operators))
@@ -592,8 +586,25 @@ TODO:
      (list 'bitstype (parse-atom s) (parse-ineq s)))
     ((typealias)
      (list 'typealias (parse-call s) (parse-arrow s)))
-    ((try) #f ; TODO
-     )
+    ((try)
+     (let* ((try-block (if (eq? (require-token s) 'catch)
+			   '(block)
+			   (parse-block s)))
+	    (nxt       (require-token s)))
+       (take-token s)
+       (case nxt
+	 ((end)   try-block)
+	 ((catch) (let* ((var
+			  (if (eqv? (peek-token s) #\newline)
+			      (gensym)
+			      (let ((v (parse-atom s)))
+				(if (not (symbol? v))
+				    (error "expected variable in catch"))
+				v)))
+			 (catch-block (parse-block s)))
+		    (expect-end s)
+		    (list 'try try-block var catch-block)))
+	 (else (error "improperly terminated try block")))))
     ((return)          (list 'return (parse-eq s)))
     ((break continue)  (list word))
     (else (error "unhandled reserved word")))))

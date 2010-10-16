@@ -60,6 +60,23 @@ function show(e::Expr)
     end
 end
 
+function show(e::TypeError)
+    ctx = (e.context=="") ? "" : strcat("in ", e.context, ", ")
+    print("type error: ", e.func, ": ", ctx, "expected ", e.expected, ", got ",
+          typeof(e.got), "\n")
+end
+
+function show(e::LoadError)
+    show(e.error)
+    print(" ", e.file, ":", e.line, "\n")
+end
+
+show(e::DivideByZeroError) = print("error: integer divide by zero\n")
+
+show(e::StackOverflowError) = print("error: stack overflow\n")
+
+show(e::ErrorException) = print(e.msg, "\n")
+
 dump(t::Type) = print(t)
 dump(t::Tuple) = print(t)
 

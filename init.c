@@ -31,7 +31,6 @@ int jl_boot_file_loaded = 0;
 
 char *jl_stack_lo;
 char *jl_stack_hi;
-int jl_fpe_err_msg = 0;
 size_t jl_page_size;
 
 static void jl_find_stack_bottom()
@@ -56,10 +55,7 @@ void fpe_handler(int arg)
     sigaddset(&sset, SIGFPE);
     sigprocmask(SIG_UNBLOCK, &sset, NULL);
 
-    if (jl_fpe_err_msg)
-        jl_error("error: integer divide by zero");
-    else
-        jl_raise();
+    jl_raise(jl_divbyzero_exception);
 }
 
 void segv_handler(int sig, siginfo_t *info, void *context)
@@ -72,7 +68,7 @@ void segv_handler(int sig, siginfo_t *info, void *context)
     if ((char*)info->si_addr > (char*)jl_current_task->stack-8192 &&
         (char*)info->si_addr <
         (char*)jl_current_task->stack+jl_current_task->ssize) {
-        jl_error("error: stack overflow");
+        jl_raise(jl_stackovf_exception);
     }
     else {
         signal(SIGSEGV, SIG_DFL);
@@ -104,6 +100,7 @@ void julia_init()
     jl_boot_file_loaded = 1;
     jl_init_builtin_types();
     jl_init_builtins();
+    jl_an_empty_string = jl_pchar_to_string("", 0);
 #ifdef JL_GC_MARKSWEEP
     //jl_gc_enable();
 #endif
@@ -196,7 +193,8 @@ int jl_load_startup_file()
         jl_load("start.j");
     }
     JL_CATCH {
-        ios_printf(ios_stderr, "error during startup.\n");
+        ios_printf(ios_stderr, "error during startup:\n");
+        jl_show(jl_exception_in_transit);
         return 1;
     }
 #ifdef BOEHM_GC
@@ -231,4 +229,12 @@ void jl_get_builtin_hooks()
     jl_array_type = (jl_struct_type_t*)global("Array");
     jl_latin1_string_type = (jl_struct_type_t*)global("Latin1String");
     jl_utf8_string_type = (jl_struct_type_t*)global("UTF8String");
+    jl_errorexception_type = (jl_struct_type_t*)global("ErrorException");
+    jl_typeerror_type = (jl_struct_type_t*)global("TypeError");
+    jl_loaderror_type = (jl_struct_type_t*)global("LoadError");
+
+    jl_stackovf_exception =
+        jl_apply((jl_function_t*)global("StackOverflowError"), NULL, 0);
+    jl_divbyzero_exception =
+        jl_apply((jl_function_t*)global("DivideByZeroError"), NULL, 0);
 }

@@ -23,6 +23,7 @@ jl_tag_type_t *jl_any_type;
 jl_tag_type_t *jl_type_type;
 jl_struct_type_t *jl_typename_type;
 jl_struct_type_t *jl_sym_type;
+jl_struct_type_t *jl_symbol_type;
 jl_tuple_t *jl_tuple_type;
 jl_typename_t *jl_tuple_typename;
 jl_tag_type_t *jl_ntuple_type;
@@ -32,6 +33,7 @@ jl_struct_type_t *jl_tvar_type;
 jl_struct_type_t *jl_func_kind;
 jl_struct_type_t *jl_union_kind;
 jl_struct_type_t *jl_tag_kind;
+jl_struct_type_t *jl_tag_type_type;
 jl_struct_type_t *jl_struct_kind;
 jl_struct_type_t *jl_bits_kind;
 
@@ -1568,10 +1570,12 @@ void jl_init_types()
     jl_struct_kind = (jl_struct_type_t*)newobj(NULL, STRUCT_TYPE_NW);
     jl_struct_kind->type = (jl_type_t*)jl_struct_kind;
     jl_tag_kind = (jl_struct_type_t*)newobj((jl_type_t*)jl_struct_kind, STRUCT_TYPE_NW);
+    jl_tag_type_type = jl_tag_kind;
     jl_func_kind = (jl_struct_type_t*)newobj((jl_type_t*)jl_struct_kind, STRUCT_TYPE_NW);
 
     jl_typename_type = (jl_struct_type_t*)newobj((jl_type_t*)jl_struct_kind, STRUCT_TYPE_NW);
     jl_sym_type = (jl_struct_type_t*)newobj((jl_type_t*)jl_struct_kind, STRUCT_TYPE_NW);
+    jl_symbol_type = jl_sym_type;
 
     jl_any_type = (jl_tag_type_t*)newobj((jl_type_t*)jl_tag_kind, TAG_TYPE_NW);
     jl_type_type = (jl_tag_type_t*)newobj((jl_type_t*)jl_tag_kind, TAG_TYPE_NW);
@@ -1777,6 +1781,7 @@ void jl_init_types()
         jl_new_type_ctor(tv,
                          (jl_type_t*)jl_new_functype((jl_type_t*)jl_tupleref(tv,0),
                                                      (jl_type_t*)jl_tupleref(tv,1)));
+    jl_function_type = jl_functype_ctor;
 
     jl_intrinsic_type = jl_new_bitstype((jl_value_t*)jl_symbol("IntrinsicFunction"),
                                         jl_any_type, jl_null, 32);

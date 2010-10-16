@@ -206,6 +206,7 @@ extern jl_tag_type_t *jl_undef_type;
 extern jl_struct_type_t *jl_typename_type;
 extern jl_struct_type_t *jl_typector_type;
 extern jl_struct_type_t *jl_sym_type;
+extern jl_struct_type_t *jl_symbol_type;
 extern jl_tuple_t *jl_tuple_type;
 extern jl_typename_t *jl_tuple_typename;
 extern jl_tag_type_t *jl_ntuple_type;
@@ -216,6 +217,7 @@ extern jl_struct_type_t *jl_task_type;
 extern jl_struct_type_t *jl_func_kind;
 extern jl_struct_type_t *jl_union_kind;
 extern jl_struct_type_t *jl_tag_kind;
+extern jl_struct_type_t *jl_tag_type_type;
 extern jl_struct_type_t *jl_struct_kind;
 extern jl_struct_type_t *jl_bits_kind;
 
@@ -223,11 +225,18 @@ extern jl_type_t *jl_bottom_type;
 extern jl_struct_type_t *jl_lambda_info_type;
 extern jl_tag_type_t *jl_seq_type;
 extern jl_typector_t *jl_functype_ctor;
+extern jl_typector_t *jl_function_type;
 extern jl_tag_type_t *jl_tensor_type;
 extern jl_struct_type_t *jl_array_type;
 extern jl_typename_t *jl_array_typename;
 extern jl_struct_type_t *jl_latin1_string_type;
 extern jl_struct_type_t *jl_utf8_string_type;
+extern jl_struct_type_t *jl_errorexception_type;
+extern jl_struct_type_t *jl_typeerror_type;
+extern jl_struct_type_t *jl_loaderror_type;
+extern jl_value_t *jl_stackovf_exception;
+extern jl_value_t *jl_divbyzero_exception;
+extern jl_value_t *jl_an_empty_string;
 
 extern jl_struct_type_t *jl_box_type;
 extern jl_type_t *jl_box_any_type;
@@ -444,6 +453,7 @@ DLLEXPORT jl_sym_t *jl_symbol(const char *str);
 DLLEXPORT jl_sym_t *jl_gensym();
 jl_array_t *jl_alloc_array_1d(jl_type_t *atype, size_t nr);
 DLLEXPORT jl_array_t *jl_cstr_to_array(char *str);
+jl_value_t *jl_pchar_to_string(char *str, size_t len);
 jl_array_t *jl_alloc_cell_1d(size_t n);
 jl_value_t *jl_arrayref(jl_array_t *a, size_t i);  // 0-indexed
 void jl_arrayset(jl_array_t *a, size_t i, jl_value_t *v);  // 0-indexed
@@ -488,7 +498,7 @@ void jl_error(const char *str);
 void jl_errorf(const char *fmt, ...);
 void jl_too_few_args(const char *fname, int min);
 void jl_too_many_args(const char *fname, int max);
-void jl_type_error(const char *fname, const char *expected, jl_value_t *got);
+void jl_type_error(const char *fname, jl_value_t *expected, jl_value_t *got);
 void jl_type_error_rt(const char *fname, const char *context,
                       jl_value_t *ty, jl_value_t *got);
 void jl_no_method_error(jl_sym_t *name, jl_value_t **args, size_t nargs);
@@ -584,9 +594,9 @@ JL_CALLABLE(jl_apply_generic);
 #define JL_NARGSV(fname, min)                           \
     if (nargs < min) jl_too_few_args(#fname, min);
 
-#define JL_TYPECHK(fname, type, v)              \
-    if (!jl_is_##type(v)) {                     \
-        jl_type_error(#fname, #type, (v));      \
+#define JL_TYPECHK(fname, type, v)                                      \
+    if (!jl_is_##type(v)) {                                             \
+        jl_type_error(#fname, (jl_value_t*)jl_##type##_type, (v));      \
     }
 
 // gc
@@ -667,10 +677,11 @@ typedef struct _jl_task_t {
 
 extern jl_task_t * volatile jl_current_task;
 extern jl_task_t *jl_root_task;
+extern jl_value_t *jl_exception_in_transit;
 
 jl_task_t *jl_new_task(jl_function_t *start, size_t ssize);
 jl_value_t *jl_switchto(jl_task_t *t, jl_value_t *arg);
-void jl_raise();
+void jl_raise(jl_value_t *e);
 
 static inline ios_t *jl_current_output_stream()
 {

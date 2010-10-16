@@ -15,7 +15,7 @@ JL_CALLABLE(jl_f_subtype);
 JL_CALLABLE(jl_f_isa);
 JL_CALLABLE(jl_f_typeassert);
 JL_CALLABLE(jl_f_apply);
-JL_CALLABLE(jl_f_error);
+JL_CALLABLE(jl_f_throw);
 JL_CALLABLE(jl_f_time_thunk);
 JL_CALLABLE(jl_f_load);
 JL_CALLABLE(jl_f_top_eval);

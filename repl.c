@@ -253,7 +253,8 @@ static void init_history() {
     } else if (errno == ENOENT) {
         write_history(history_file);
     } else {
-        jl_errorf("history file error: %s", strerror(errno));
+        ios_printf(ios_stderr, "history file error: %s\n", strerror(errno));
+        exit(1);
     }
 }
 
@@ -477,13 +478,13 @@ static int exec_program()
         jl_load(program);
     }
     JL_CATCH {
+        jl_show(jl_exception_in_transit);
         return 1;
     }
     return 0;
 }
 
 // TODO: sigfpe hack
-extern int jl_fpe_err_msg;
 static void awful_sigfpe_hack()
 {
     JL_TRY {
@@ -491,7 +492,6 @@ static void awful_sigfpe_hack()
     }
     JL_CATCH {
     }
-    jl_fpe_err_msg = 1;
 }
 
 void jl_lisp_prompt();
@@ -555,6 +555,7 @@ int main(int argc, char *argv[])
                 }
             }
             JL_CATCH {
+                jl_show(jl_exception_in_transit);
                 ios_printf(ios_stdout, "\n");
             }
         }
@@ -611,6 +612,7 @@ int main(int argc, char *argv[])
         }
     }
     JL_CATCH {
+        jl_show(jl_exception_in_transit);
         ios_printf(ios_stdout, "\n");
         goto again;
     }

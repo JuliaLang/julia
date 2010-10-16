@@ -432,7 +432,7 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
     at  = jl_interpret_toplevel_expr_with(args[3],
                                           &jl_tupleref(ctx->sp,0),
                                           ctx->sp->length/2);
-    JL_TYPECHK(ccall, cpointer, ptr);
+    JL_TYPECHK(ccall, pointer, ptr);
     JL_TYPECHK(ccall, type, rt);
     JL_TYPECHK(ccall, tuple, at);
     JL_TYPECHK(ccall, type, at);

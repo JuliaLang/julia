@@ -32,28 +32,32 @@ int jl_word_size()
 #endif
 }
 
-// --- exception raising ---
+// --- exceptions ---
 
 extern char *julia_home;
 
 void jl_error(const char *str)
 {
-    ios_printf(ios_stderr, "%s\n", str);
-    jl_raise();
+    jl_value_t *msg = jl_pchar_to_string((char*)str, strlen(str));
+    JL_GC_PUSH(&msg);
+    jl_raise(jl_new_struct(jl_errorexception_type, msg));
 }
 
 void jl_errorf(const char *fmt, ...)
 {
+    char buf[1024];
     va_list args;
     va_start(args, fmt);
-    ios_vprintf(ios_stderr, fmt, args);
-    ios_printf(ios_stderr, "\n");
+    int nc = vsnprintf(buf, sizeof(buf), fmt, args);
     va_end(args);
-    jl_raise();
+    jl_value_t *msg = jl_pchar_to_string(buf, nc);
+    JL_GC_PUSH(&msg);
+    jl_raise(jl_new_struct(jl_errorexception_type, msg));
 }
 
 void jl_too_few_args(const char *fname, int min)
 {
+    // TODO: ArgumentError
     jl_errorf("%s: too few arguments (expected %d)", fname, min);
 }
 
@@ -62,49 +66,46 @@ void jl_too_many_args(const char *fname, int max)
     jl_errorf("%s: too many arguments (expected %d)", fname, max);
 }
 
-void jl_type_error(const char *fname, const char *expected, jl_value_t *got)
+void jl_type_error(const char *fname, jl_value_t *expected, jl_value_t *got)
 {
-    jl_value_t *fty = NULL;
-    JL_GC_PUSH(&fty, &got);
-    fty = (jl_value_t*)jl_full_type(got);
-    char *tstr = jl_show_to_string(fty);
-    ios_printf(ios_stderr, "type error: %s: expected %c%s, got %s",
-               fname, toupper(expected[0]), &expected[1], tstr);
-    ios_printf(ios_stderr, "\n");
-    LLT_FREE(tstr);
-    JL_GC_POP();
-    jl_raise();
+    jl_value_t *ex = jl_new_struct(jl_typeerror_type, jl_symbol(fname),
+                                   jl_an_empty_string, expected, got);
+    jl_raise(ex);
 }
 
 void jl_type_error_rt(const char *fname, const char *context,
                       jl_value_t *ty, jl_value_t *got)
 {
-    jl_value_t *fty = NULL;
-    JL_GC_PUSH(&fty, &ty, &got);
-    fty = (jl_value_t*)jl_full_type(got);
-    char *tstr  = jl_show_to_string(ty);
-    char *ftstr = jl_show_to_string(fty);
-    ios_printf(ios_stderr, "type error: %s: in %s, expected %s, got %s",
-               fname, context, tstr, ftstr);
-    ios_printf(ios_stderr, "\n");
-    LLT_FREE(tstr);
-    LLT_FREE(ftstr);
-    JL_GC_POP();
-    jl_raise();
+    jl_value_t *ctxt = jl_pchar_to_string((char*)context, strlen(context));
+    JL_GC_PUSH(&ctxt);
+    jl_value_t *ex = jl_new_struct(jl_typeerror_type, jl_symbol(fname),
+                                   ctxt, ty, got);
+    jl_raise(ex);
 }
 
-jl_expr_t *jl_exprn(jl_sym_t *head, size_t n)
+JL_CALLABLE(jl_f_throw)
 {
-    jl_array_t *ar = jl_alloc_cell_1d(n);
-    JL_GC_PUSH(&ar);
-    jl_expr_t *ex = (jl_expr_t*)allocb(sizeof(jl_expr_t));
-    ex->type = (jl_type_t*)jl_expr_type;
-    ex->head = head;
-    ex->args = ar;
-    ex->etype = (jl_value_t*)jl_any_type;
-    JL_GC_POP();
-    return ex;
+    JL_NARGS(throw, 1, 1);
+    jl_raise(args[0]);
+    return (jl_value_t*)jl_null;
 }
+
+JL_CALLABLE(jl_f_trycatch)
+{
+    assert(nargs == 2);
+    assert(jl_is_function(args[0]));
+    assert(jl_is_function(args[1]));
+    jl_value_t *v;
+    JL_TRY {
+        v = jl_apply((jl_function_t*)args[0], NULL, 0);
+    }
+    JL_CATCH {
+        v = jl_apply((jl_function_t*)args[1], &jl_exception_in_transit, 1);
+    }
+    return v;
+}
+
+// --- primitives ---
 
 JL_CALLABLE(jl_f_is)
 {
@@ -150,8 +151,7 @@ JL_CALLABLE(jl_f_typeassert)
     if (!jl_is_typector(args[1]))
         JL_TYPECHK(typeassert, type, args[1]);
     if (!jl_subtype(args[0],args[1],1))
-        // TODO: string is leaked
-        jl_type_error("typeassert", jl_show_to_string(args[1]), args[0]);
+        jl_type_error("typeassert", args[1], args[0]);
     return args[0];
 }
 
@@ -177,15 +177,6 @@ JL_CALLABLE(jl_f_apply)
             newargs[n++] = jl_tupleref(t, j);
     }
     return jl_apply((jl_function_t*)args[0], newargs, n);
-}
-
-JL_CALLABLE(jl_f_error)
-{
-    JL_NARGS(error, 1, 1);
-    if (!jl_is_byte_string(args[0]))
-        jl_error("error: expected Latin1String or UTF8String");
-    jl_error(jl_string_data(args[0]));
-    return (jl_value_t*)jl_null;
 }
 
 // heuristic for whether a top-level input should be evaluated with
@@ -248,8 +239,12 @@ void jl_load_file_expr(char *fname, jl_value_t *ast)
         }
     }
     JL_CATCH {
-        ios_printf(ios_stderr, " %s:%d\n", fname, lineno);
-        jl_raise();
+        jl_value_t *fn=NULL, *ln=NULL;
+        JL_GC_PUSH(&fn, &ln);
+        fn = jl_pchar_to_string(fname, strlen(fname));
+        ln = jl_box_int32(lineno);
+        jl_raise(jl_new_struct(jl_loaderror_type, fn, ln,
+                               jl_exception_in_transit));
     }
 }
 
@@ -471,8 +466,7 @@ void jl_arrayset(jl_array_t *a, size_t i, jl_value_t *rhs)
     jl_value_t *el_type = jl_tparam0(jl_typeof(a));
     if (el_type != (jl_value_t*)jl_any_type) {
         if (!jl_subtype(rhs, el_type, 1))
-            // TODO: string is leaked
-            jl_type_error("arrayset", jl_show_to_string(el_type), rhs);
+            jl_type_error("arrayset", el_type, rhs);
     }
     if (jl_is_bits_type(el_type)) {
         size_t nb = jl_bitstype_nbits(el_type)/8;
@@ -631,7 +625,7 @@ char *jl_show_to_string(jl_value_t *v)
         jl_show(v);
     }
     JL_CATCH {
-        jl_raise();
+        jl_raise(jl_exception_in_transit);
     }
     size_t n;
     return ios_takebuf(&dest, &n);
@@ -881,6 +875,9 @@ JL_CALLABLE(jl_f_show_any)
     else if (jl_typeis(v,jl_intrinsic_type)) {
         ios_printf(s, "#<intrinsic-function %d>", *(uint32_t*)jl_bits_data(v));
     }
+    else if (v == (jl_value_t*)jl_function_type) {
+        ios_printf(s, "Function");
+    }
     else {
         jl_value_t *t = (jl_value_t*)jl_typeof(v);
         if (jl_is_bits_type(t)) {
@@ -940,7 +937,7 @@ JL_CALLABLE(jl_f_instantiate_type)
 {
     JL_NARGSV(instantiate_type, 1);
     if (!jl_is_some_tag_type(args[0]))
-        JL_TYPECHK(instantiate_type, TypeConstructor, args[0]);
+        JL_TYPECHK(instantiate_type, typector, args[0]);
     jl_tuple_t *tparams = (jl_tuple_t*)jl_f_tuple(NULL, &args[1], nargs-1);
     JL_GC_PUSH(&tparams);
     jl_value_t *v = jl_apply_type(args[0], tparams);
@@ -1295,7 +1292,7 @@ void jl_init_primitives()
     add_builtin_func("isa", jl_f_isa);
     add_builtin_func("typeassert", jl_f_typeassert);
     add_builtin_func("apply", jl_f_apply);
-    add_builtin_func("error", jl_f_error);
+    add_builtin_func("throw", jl_f_throw);
     add_builtin_func("load", jl_f_load);
     add_builtin_func("tuple", jl_f_tuple);
     add_builtin_func("Union", jl_f_union);
@@ -1324,6 +1321,7 @@ void jl_init_primitives()
     add_builtin_func("new_bits_type", jl_f_new_bits_type);
     add_builtin_func("new_generic_function", jl_f_new_generic_function);
     add_builtin_func("add_method", jl_f_add_method);
+    add_builtin_func("trycatch", jl_f_trycatch);
 
     // builtin types
     add_builtin("Any", (jl_value_t*)jl_any_type);

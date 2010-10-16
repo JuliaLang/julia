@@ -155,6 +155,7 @@ jl_task_t * volatile jl_current_task;
 jl_task_t *jl_root_task;
 static jl_value_t * volatile task_arg_in_transit;
 static volatile int n_args_in_transit;
+jl_value_t *jl_exception_in_transit;
 #ifdef JL_GC_MARKSWEEP
 // temporary GC root stack for use during init, before tasks exist
 // GC should be disabled during this time.
@@ -191,10 +192,11 @@ jl_value_t *jl_switchto(jl_task_t *t, jl_value_t *arg)
 }
 
 // yield to exception handler
-void jl_raise()
+void jl_raise(jl_value_t *e)
 {
     jl_task_t *eh = jl_current_task->state.eh_task;
     eh->state.err = 1;
+    jl_exception_in_transit = e;
     if (jl_current_task == eh) {
         longjmp(*eh->state.eh_ctx, 1);
     }
@@ -444,6 +446,8 @@ void jl_init_tasks(void *stack, size_t ssize)
 #endif
 
     jl_root_task = jl_current_task;
+
+    jl_exception_in_transit = (jl_value_t*)jl_null;
 
     jl_add_builtin("Task", (jl_value_t*)jl_task_type);
     jl_add_builtin_func("yieldto", jl_f_yieldto);

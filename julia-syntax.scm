@@ -348,6 +348,11 @@
 		   (receive (name params super) (analyze-type-sig sig)
 			    (struct-def-expr name params super fields)))
 
+   (pattern-lambda (try tryblk (-- var (-s)) catchblk)
+		   `(call (top trycatch)
+			  (-> (tuple) ,tryblk)
+			  (-> ,var ,catchblk)))
+
    )) ; binding-form-patterns
 
 ; local x, y=2, z => local x;local y;local z;y = 2

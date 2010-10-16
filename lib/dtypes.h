@@ -57,7 +57,7 @@
 #define BYTE_ORDER     __BYTE_ORDER
 #endif
 
-#if __STDC_VERSION__ >= 199901L
+#if (__STDC_VERSION__ >= 199901L) || defined(__GNUG__)
 // argument counting macros for C99
 #define VA_ARG_N(_1, _2, _3, _4, _5, _6, _7, _8, _9,_10,  \
                  _11,_12,_13,_14,_15,_16,_17,_18,_19,_20, \

@@ -91,7 +91,7 @@ t_func[instantiate_type] =
                          isType(args[1]) ?
                          args[1] :
                          Any))
-t_func[error] = (1, 1, x->None)
+t_func[throw] = (1, 1, x->None)
 t_func[boxsi8] = (1, 1, x->Int8)
 t_func[boxui8] = (1, 1, x->Uint8)
 t_func[boxsi16] = (1, 1, x->Int16)
