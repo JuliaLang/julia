@@ -280,17 +280,40 @@ static Function *value_to_pointer_func;
 static char *temp_arg_area;
 static const uint32_t arg_area_sz = 4196;
 static uint32_t arg_area_loc;
+#define N_TEMP_ARG_BLOCKS 1024
+static void *temp_arg_blocks[N_TEMP_ARG_BLOCKS];
+static uint32_t arg_block_n = 0;
 static Function *save_arg_area_loc_func;
 static Function *restore_arg_area_loc_func;
 
-static uint32_t save_arg_area_loc() { return arg_area_loc; }
-static void restore_arg_area_loc(uint32_t l) { arg_area_loc = l; }
+static uint64_t save_arg_area_loc()
+{
+    return (((uint64_t)arg_block_n)<<32) | ((uint64_t)arg_area_loc);
+}
+static void restore_arg_area_loc(uint64_t l)
+{
+    arg_area_loc = l&0xffffffff;
+    uint32_t ab = l>>32;
+    while (arg_block_n > ab) {
+        arg_block_n--;
+        free(temp_arg_blocks[arg_block_n]);
+    }
+}
 
 static void *alloc_temp_arg_space(uint32_t sz)
 {
     void *p;
     if (arg_area_loc+sz > arg_area_sz) {
+#ifdef BOEHM_GC
         p = allocb(sz);
+#elif defined(JL_GC_MARKSWEEP)
+        if (arg_block_n >= N_TEMP_ARG_BLOCKS)
+            jl_error("ccall: out of temporary argument space");
+        p = malloc(sz);
+        temp_arg_blocks[arg_block_n++] = p;
+#else
+        p = allocb(sz);
+#endif
     }
     else {
         p = &temp_arg_area[arg_area_loc];
@@ -337,6 +360,7 @@ extern "C" void *jl_value_to_pointer(jl_value_t *jt, jl_value_t *v, int argn)
         }
     }
     jl_errorf("ccall: expected Ptr{%s} as argument %d",
+              // TODO: string is leaked
               jl_show_to_string(jt), argn);
     return (jl_value_t*)jl_null;
 }
@@ -399,15 +423,15 @@ static Value *julia_to_native(const Type *ty, jl_value_t *jt, Value *jv,
 static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
 {
     JL_NARGSV(ccall, 3);
-    jl_value_t *ptr = jl_interpret_toplevel_expr(args[1]);
-    jl_value_t *rt  =
-        jl_interpret_toplevel_expr_with(args[2],
-                                        &jl_tupleref(ctx->sp,0),
-                                        ctx->sp->length/2);
-    jl_value_t *at  =
-        jl_interpret_toplevel_expr_with(args[3],
-                                        &jl_tupleref(ctx->sp,0),
-                                        ctx->sp->length/2);
+    jl_value_t *ptr=NULL, *rt=NULL, *at=NULL;
+    JL_GC_PUSH(&ptr, &rt, &at);
+    ptr = jl_interpret_toplevel_expr(args[1]);
+    rt  = jl_interpret_toplevel_expr_with(args[2],
+                                          &jl_tupleref(ctx->sp,0),
+                                          ctx->sp->length/2);
+    at  = jl_interpret_toplevel_expr_with(args[3],
+                                          &jl_tupleref(ctx->sp,0),
+                                          ctx->sp->length/2);
     JL_TYPECHK(ccall, cpointer, ptr);
     JL_TYPECHK(ccall, type, rt);
     JL_TYPECHK(ccall, tuple, at);
@@ -454,6 +478,7 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
         builder.CreateCall(restore_arg_area_loc_func, saveloc);
     }
 
+    JL_GC_POP();
     if (lrt == T_void)
         return literal_pointer_val((jl_value_t*)jl_null);
     return mark_julia_type(result, rt);
@@ -889,19 +914,23 @@ extern "C" void jl_init_intrinsic_functions()
     jl_ExecutionEngine->addGlobalMapping(value_to_pointer_func,
                                          (void*)&jl_value_to_pointer);
 
+#ifdef BOEHM_GC
     temp_arg_area = (char*)allocb(arg_area_sz);
+#else
+    temp_arg_area = (char*)alloc_permanent(arg_area_sz);
+#endif
     arg_area_loc = 0;
 
     std::vector<const Type*> noargs(0);
     save_arg_area_loc_func =
-        Function::Create(FunctionType::get(T_uint32, noargs, false),
+        Function::Create(FunctionType::get(T_uint64, noargs, false),
                          Function::ExternalLinkage, "save_arg_area_loc",
                          jl_Module);
     jl_ExecutionEngine->addGlobalMapping(save_arg_area_loc_func,
                                          (void*)&save_arg_area_loc);
 
     restore_arg_area_loc_func =
-        Function::Create(ft1arg(T_void, T_uint32),
+        Function::Create(ft1arg(T_void, T_uint64),
                          Function::ExternalLinkage, "restore_arg_area_loc",
                          jl_Module);
     jl_ExecutionEngine->addGlobalMapping(restore_arg_area_loc_func,
