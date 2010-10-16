@@ -564,9 +564,7 @@ sub2ind(dims, i::Index) = i
 
 sub2ind(dims, i::Index, j::Index) = (j-1)*dims[1] + i
 
-sub2ind(dims, i::Index, j::Index, k::Index...) = sub2ind_ND(dims, i, j, k...)
-
-function sub2ind_ND(dims, I::Index...)
+function sub2ind(dims, I::Index...)
     ndims = length(dims)
     index = I[1]
     stride = 1
