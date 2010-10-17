@@ -76,6 +76,10 @@ function promote_type{T,S}(::Type{T}, ::Type{S})
     end
 end
 
+function promote_type(S::Type, T::Type...)
+    promote_type(S, promote_type(T...))
+end
+
 promote() = ()
 promote(x) = (x,)
 function promote{T,S}(x::T, y::S)
@@ -144,14 +148,3 @@ div{T<:Int}(x::T, y::T) = no_op_err("div", T)
 ## miscellaneous ##
 
 copy(x::Any) = x
-
-function error(s::Union(Latin1String,UTF8String))
-    throw(ErrorException(s))
-end
-
-function assert(c)
-    if !c
-        error("Assertion failed.")
-    end
-    true
-end

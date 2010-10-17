@@ -1,9 +1,13 @@
+## array.j: Base Array functionality
+
+## Type aliases for convenience ##
+
 typealias Vector{T} Tensor{T,1}
 typealias Matrix{T} Tensor{T,2}
 typealias Indices{T} Union(Range,Range1,RangeFrom,RangeBy,RangeTo,Vector{T})
 typealias Indices2{T} Union(Index,Range,Range1,RangeFrom,RangeBy,RangeTo,Vector{T})
 
-# Basic functions
+## Basic functions ##
 size(a::Array) = a.dims
 
 size(t::Tensor, d) = size(t)[d]
@@ -18,7 +22,7 @@ reshape{T}(a::Array{T}, dims...) = (b = Array(T, dims...);
                                     b)
 reshape(a::Array, dims::Tuple) = reshape(a, dims...)
 
-# Constructors
+## Constructors ##
 
 jl_comprehension_zeros{T,n}(oneresult::Tensor{T,n}, dims...) = Array(T, dims...)
 jl_comprehension_zeros{T}(oneresult::T, dims...) = Array(T, dims...)
@@ -100,7 +104,7 @@ colon(start::Real, stop::Real, stride::Real) =
     ((start, stop, stride) = promote(start, stop, stride);
      [ i | i=start:stride:stop ])
 
-# Unary operators 
+## Unary operators ##
 
 (-)(x::Array) = reshape([ -x[i] | i=1:numel(x) ], size(x) )
 
@@ -117,7 +121,7 @@ real(x::Array) = reshape( [ real(x[i]) | i=1:numel(x) ], size(x) )
 imag{T <: Number}(x::Array{T}) = zeros(T, size(x))
 imag(x::Array) = reshape( [ imag(x[i]) | i=1:numel(x) ], size(x) )
 
-# Binary arithmetic operators
+## Binary arithmetic operators ##
 
 (+)(x::Array, y::Array)  = reshape( [ x[i] + y[i] | i=1:numel(x) ], size(x) )
 (+)(x::Number, y::Array) = reshape( [ x    + y[i] | i=1:numel(y) ], size(y) )
@@ -133,7 +137,7 @@ imag(x::Array) = reshape( [ imag(x[i]) | i=1:numel(x) ], size(x) )
 
 (*)(x::Number, y::Array) = reshape( [ x    * y[i] | i=1:numel(y) ], size(y) )
 (*)(x::Array, y::Number) = reshape( [ x[i] * y    | i=1:numel(x) ], size(x) )
-## blas.j defines these for floats; this handles other cases
+# blas.j defines these for floats; this handles other cases
 (*)(A::Matrix, B::Vector) = [ dot(A[i,:],B) | i=1:size(A,1) ]
 (*)(A::Matrix, B::Matrix) = [ dot(A[i,:],B[:,j]) | i=1:size(A,1), j=1:size(B,2) ]
 
@@ -144,7 +148,7 @@ imag(x::Array) = reshape( [ imag(x[i]) | i=1:numel(x) ], size(x) )
 (/)(x::Number, y::Array) = reshape( [ x    / y[i] | i=1:numel(y) ], size(y) )
 (/)(x::Array, y::Number) = reshape( [ x[i] / y    | i=1:numel(x) ], size(x) )
 
-# Binary comparison operators
+## Binary comparison operators ##
 
 (<)(x::Array, y::Array)  = reshape( [ x[i] < y[i] | i=1:numel(x) ], size(x) )
 (<)(x::Number, y::Array) = reshape( [ x    < y[i] | i=1:numel(y) ], size(y) )
@@ -174,7 +178,7 @@ end
 (!=)(x::Number, y::Array) = reshape( [ x    != y[i] | i=1:numel(y) ], size(y) )
 (!=)(x::Array, y::Number) = reshape( [ x[i] != y    | i=1:numel(x) ], size(x) )
 
-# Binary boolean operators
+## Binary boolean operators ##
 
 (&)(x::Array{Bool}, y::Array{Bool}) = reshape( [ x[i] & y[i] | i=1:numel(x) ], size(x) )
 (&)(x::Bool, y::Array{Bool})        = reshape( [ x    & y[i] | i=1:numel(y) ], size(y) )
@@ -188,7 +192,7 @@ end
 ($)(x::Bool, y::Array{Bool})        = reshape( [ x    $ y[i] | i=1:numel(y) ], size(y) )
 ($)(x::Array{Bool}, y::Bool)        = reshape( [ x[i] $ y    | i=1:numel(x) ], size(x) )
 
-## Indexing: ref
+## Indexing: ref ##
 
 ref(t::Tensor, r::Real...) = t[map(x->convert(Int32,round(x)),r)...]
 
@@ -255,7 +259,7 @@ function ref_ND{T}(A::Array{T}, I::Indices2...)
     return X
 end
 
-## Indexing: assign
+## Indexing: assign ##
 
 assign(t::Tensor, x, r::Real...) = (t[map(x->convert(Int32,round(x)),r)...] = x)
 
@@ -363,54 +367,87 @@ function assign_ND_all(A::Array, X, I::Indices2...)
     return A
 end
 
-# Concatenation
+## Concatenation ##
 
-hcat() = Array(None,0)
-hcat{T <: Scalar}(X::T...) = [ X[j] | i=1, j=1:length(X) ]
+cat(catdim::Int) = Array(None,0)
+
 vcat() = Array(None,0)
-vcat{T <: Scalar}(X::T...) = [ X[i] | i=1:length(X) ]
+hcat() = Array(None,0)
 
-hcat{T}(V::Vector{T}...) = [ V[j][i] | i=1:length(V[1]), j=1:length(V) ]
-
-function vcat{T}(V::Vector{T}...)
-    a = Array(T, sum(map(length, V)))
-    pos = 1
-    for k=1:length(V), i=1:length(V[k])
-        a[pos] = V[k][i]
-        pos += 1
+function cat(catdim::Int, X::Scalar...)
+    typeC = promote_type(map(typeof, X)...)
+    nargs = length(X)
+    if catdim == 1
+        dimsC = nargs
+    elseif catdim == 2
+        dimsC = (1, nargs)
     end
-    a
+    C = Array(typeC, dimsC)
+
+    for i=1:nargs
+        C[i] = convert(typeC, X[i])
+    end
+    return C
 end
 
-function hcat{T}(A::Matrix{T}...)
-    ncols = sum([ size(A[i], 2) | i=1:length(A) ])
-    nrows = size(A[1], 1)
-    B = Array(T, nrows, ncols)
+vcat(X::Scalar...) = cat(1, X...)
+hcat(X::Scalar...) = cat(2, X...)
 
-    pos = 1
-    for k=1:length(A), i=1:numel(A[k])
-        B[pos] = A[k][i]
-        pos = pos + 1
+function cat(catdim::Int, V::Vector...)
+    nargs = length(V)
+    typeC = promote_type(ntuple(nargs, i->typeof(V[i]).parameters[1])...)
+    if catdim == 1
+        C = Array(typeC, sum(map(length, V)))
+        pos = 1
+        for k=1:nargs, i=1:length(V[k])
+            C[pos] = convert(typeC, V[k][i])
+            pos += 1
+        end 
+    elseif catdim == 2
+        C = Array(typeC, (length(V[1]), nargs))
+        for i=1:n, j=1:nargs
+            C[i,j] = convert(typeC, V[j][i])
+        end
     end
-    
-    return B
+    return C
 end
 
-function vcat{T}(A::Matrix{T}...)
-    nrows = sum([size(A[i], 1) | i=1:length(A)])
-    ncols = size(A[1], 2)
-    B = Array(T, nrows, ncols)
+vcat(V::Vector...) = cat(1, V...)
+hcat(V::Vector...) = cat(2, V...)
 
-    pos = 1
-    for j=1:ncols, k=1:length(A), i=1:size(A[k], 1)
-        B[pos] = A[k][i,j]
-        pos = pos + 1
+function cat(catdim::Int, A::Matrix...)
+    nargs = length(A)
+    typeC = promote_type(ntuple(nargs, i->typeof(A[i]).parameters[1])...)
+    if catdim == 1
+        nrows = sum(ntuple(nargs, i->size(A[i],1)))
+        ncols = size(A[1], 2)
+        C = Array(typeC, nrows, ncols)
+
+        pos = 1
+        for j=1:ncols, k=1:nargs, i=1:size(A[k],1)
+            C[pos] = convert(typeC, A[k][i,j])
+            pos = pos + 1
+        end
+        return C
+    elseif catdim == 2
+        nrows = size(A[1], 1)
+        ncols = sum(ntuple(nargs, i->size(A[i],2)))
+        C = Array(typeC, nrows, ncols)
+
+        pos = 1
+        for k=1:length(A), i=1:numel(A[k])
+            C[pos] = convert(typeC, A[k][i])
+            pos = pos + 1
+        end    
+        return C        
     end
-    
-    return B
+
 end
 
-# Reductions
+vcat(A::Matrix...) = cat(1, A...)
+hcat(A::Matrix...) = cat(2, A...)
+
+## Reductions ##
 
 function sum(x::Matrix, dim::Int)
     if dim == 1
@@ -435,14 +472,14 @@ end
 cumsum(v::Vector) = scan(+, v)
 cumprod(v::Vector) = scan(*, v)
 
-# iteration support for arrays as ranges
+## iteration support for arrays as ranges ##
 
 start(a::Array) = 1
 next(a::Array,i) = (a[i],i+1)
 done(a::Array,i) = (i > numel(a))
 isempty(a::Array) = (numel(a) == 0)
 
-# map over vectors and matrices
+## map over arrays ##
 
 map(f, v::Vector) = [ f(v[i]) | i=1:length(v) ]
 map(f, M::Matrix) = [ f(M[i,j]) | i=1:size(M,1), j=1:size(M,2) ]
@@ -465,7 +502,7 @@ function cartesian_map(body, t::Tuple, it...)
     end
 end
 
-# Other array functions
+## Other array functions ##
 
 transpose(x::Matrix) = [ x[j,i] | i=1:size(x,2), j=1:size(x,1) ]
 ctranspose(x::Matrix) = [ conj(x[j,i]) | i=1:size(x,2), j=1:size(x,1) ]

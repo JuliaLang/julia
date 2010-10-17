@@ -3,6 +3,7 @@ load("range.j")
 load("tuple.j")
 load("cell.j")
 load("expr.j")
+load("error.j")
 
 # core numeric operations & types
 load("operators.j")
