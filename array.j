@@ -348,7 +348,7 @@ function assign_ND_all(A::Array, X, I::Indices2...)
         ndmap(store1, I_with_endpts)
     else
         refind = 1
-        function storeall(ind)
+        function store_all(ind)
             index = ind[1]
             for d=2:ndimsA
                 index += (ind[d]-1) * strides[d]
@@ -357,7 +357,7 @@ function assign_ND_all(A::Array, X, I::Indices2...)
             refind += 1
         end
         
-        ndmap(storeall, I_with_endpts)
+        ndmap(store_all, I_with_endpts)
     end
 
     return A
@@ -560,7 +560,7 @@ function find{T}(A::Array{T})
     I = ntuple(ndimsA, x->zeros(Size, nnzA))
 
     count = 1
-    function findone(ind)
+    function find_one(ind)
         Aind = A[ind...]
         if Aind != 0
             for i=1:ndimsA
@@ -570,7 +570,7 @@ function find{T}(A::Array{T})
         end
     end
 
-    ndmap(findone, ntuple(ndims(A), d->(1:A.dims[d])) )
+    ndmap(find_one, ntuple(ndims(A), d->(1:A.dims[d])) )
     return I
 end
 
@@ -588,6 +588,9 @@ function sub2ind(dims, I::Index...)
     end
     return index
 end
+
+sub2ind(dims, I::Vector...) =
+    [ sub2ind(dims, map(X->X[i], I)...) | i=1:length(I[1]) ]
 
 function ind2sub(dims, ind::Index)
     ndims = length(dims)
