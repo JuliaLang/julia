@@ -874,7 +874,7 @@ function inlineable(e::Expr, vars)
     sp = meth[2]::Tuple
     spvals = sp[2:2:]
     for i=1:length(spvals)
-        if !isleaftype(spvals[i])
+        if !isleaftype(spvals[i]) && !isa(spvals[i],Int32)
             return NF
         end
     end

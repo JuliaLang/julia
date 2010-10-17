@@ -531,7 +531,7 @@ issues 6/21/10
   . make Size the same as size_t
 - assigned(a,i) to tell if an object array location is assigned?
 
-- try/catch
+* try/catch
 - flatten memory layout for Array of Complex (immutability)
 - SPMD layer
 
@@ -546,7 +546,7 @@ issues 6/21/10
 - ccall calls convert
 * << >> precedence
 * break in value position
-- tintersect((Int,Int),(T,T)) is wrong when T is T<:Int, ok when T<:Any
+* tintersect((Int,Int),(T,T)) is wrong when T is T<:Int, ok when T<:Any
 - use Nothing instead of () where appropriate, codegen for tuple()
 
 method ordering tests:

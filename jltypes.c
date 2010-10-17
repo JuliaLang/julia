@@ -434,15 +434,15 @@ static jl_value_t *meet_tvar(jl_tvar_t *tv, jl_value_t *ty)
 {
     if (jl_is_typevar(ty))
         return (jl_value_t*)meet_tvars(tv, (jl_tvar_t*)ty);
-    if (jl_types_equal((jl_value_t*)tv->ub, ty))
-        return ty;
+    //if (jl_types_equal((jl_value_t*)tv->ub, ty))
+    //    return ty;
     if (jl_subtype((jl_value_t*)tv->ub, ty, 0))
         return (jl_value_t*)tv;
     // TODO: should we check type_intersection(tv->ub, ty) instead?
     if (!jl_subtype(ty, (jl_value_t*)tv->ub, 0))
         return (jl_value_t*)jl_bottom_type;
-    if (jl_types_equal((jl_value_t*)tv->lb, ty))
-        return ty;
+    //if (jl_types_equal((jl_value_t*)tv->lb, ty))
+    //    return ty;
     if (jl_subtype((jl_value_t*)tv->lb, ty, 0)) {
         if (jl_is_leaf_type(ty) || jl_is_int32(ty))
             return ty;
@@ -457,7 +457,7 @@ static jl_value_t *intersect_typevar(jl_tvar_t *a, jl_value_t *b,
                                      jl_tuple_t **penv)
 {
     if (jl_subtype(b, (jl_value_t*)a, 0)) {
-        if (!a->bound) return b;
+        //if (!a->bound) return b;
     }
     else if (jl_subtype((jl_value_t*)a, b, 0)) {
         if (!a->bound) return (jl_value_t*)a;
