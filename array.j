@@ -263,54 +263,55 @@ end
 
 assign(t::Tensor, x, r::Real...) = (t[map(x->convert(Int32,round(x)),r)...] = x)
 
-assign{T}(A::Array{T}, x, i::Index) = arrayset(A,i,convert(T,x))
+assign{T}(A::Array{T}, x, i::Index) = arrayset(A,i,convert(T, x))
 
 assign(A::Array{Any}, x, i::Index) = arrayset(A,i,x)
 
-function assign(A::Vector, x::Scalar, I::Indices)
+function assign{T}(A::Vector{T}, x::Scalar, I::Indices)
     I = jl_fill_endpts(A, 1, I)
     for i=I
-        A[i] = x
+        A[i] = convert(T, x)
     end
     return A
 end
 
-function assign(A::Vector, X::Vector, I::Indices)
+function assign{T}(A::Vector{T}, X::Vector, I::Indices)
     I = jl_fill_endpts(A, 1, I)
     count = 1
     for i=I
-        A[i] = X[count]
+        A[i] = convert(T, X[count])
         count += 1
     end
     return A
 end
 
-assign(A::Matrix, x::Scalar, i::Index, j::Index) = A[(j-1)*A.dims[1] + i] = x
+assign{T}(A::Matrix{T}, x::Scalar, i::Index, j::Index) = 
+    A[(j-1)*A.dims[1] + i] = convert(T, x)
 
-function assign(A::Matrix, x::Scalar, I::Indices2, J::Indices2)
+function assign{T}(A::Matrix{T}, x::Scalar, I::Indices2, J::Indices2)
     I = jl_fill_endpts(A, 1, I)
     J = jl_fill_endpts(A, 2, J)
     for i=I, j=J
-        A[i,j] = x
+        A[i,j] = convert(T, x)
     end
     return A
 end
 
-function assign(A::Matrix, X::Matrix, I::Indices2, J::Indices2)
+function assign{T}(A::Matrix{T}, X::Matrix, I::Indices2, J::Indices2)
     I = jl_fill_endpts(A, 1, I)
     J = jl_fill_endpts(A, 2, J)
     count = 1
     for i=I, j=J
-        A[i,j] = X[count]
+        A[i,j] = convert(T, X[count])
         count += 1
     end
     return A
 end
 
 assign(A::Array, x::Scalar, I::Index, J::Index, K::Index...) = 
-   assign_ND_scalar(A, x, I, J, K...)
+   jl_assign_ND_scalar(A, x, I, J, K...)
 
-function assign_ND_scalar(A::Array, x::Scalar, I::Index...)
+function jl_assign_ND_scalar{T}(A::Array{T}, x::Scalar, I::Index...)
     dims = A.dims
     ndims = length(I)
 
@@ -321,14 +322,14 @@ function assign_ND_scalar(A::Array, x::Scalar, I::Index...)
         index += (I[k]-1) * stride
     end
 
-    A[index] = x
+    A[index] = convert(T, x)
     return A
 end
 
 assign(A::Array, X, I::Indices2, J::Indices2, K::Indices2...) = 
-   assign_ND_all(A, X, I, J, K...)
+   jl_assign_ND_all(A, X, I, J, K...)
 
-function assign_ND_all(A::Array, X, I::Indices2...)
+function jl_assign_ND_all{T}(A::Array{T}, X, I::Indices2...)
     dims = A.dims
     ndimsA = length(dims)
 
@@ -346,7 +347,7 @@ function assign_ND_all(A::Array, X, I::Indices2...)
             for d=2:ndimsA
                 index += (ind[d]-1) * strides[d]
             end
-            A[index] = X
+            A[index] = convert(T, X)
         end
         
         cartesian_map(store_one, I_with_endpts)
@@ -357,7 +358,7 @@ function assign_ND_all(A::Array, X, I::Indices2...)
             for d=2:ndimsA
                 index += (ind[d]-1) * strides[d]
             end
-            A[index] = X[refind]
+            A[index] = convert(T, X[refind])
             refind += 1
         end
         
@@ -393,60 +394,54 @@ end
 vcat(X::Scalar...) = cat(1, X...)
 hcat(X::Scalar...) = cat(2, X...)
 
-function cat(catdim::Int, V::Vector...)
-    nargs = length(V)
-    typeC = promote_type(ntuple(nargs, i->typeof(V[i]).parameters[1])...)
-    if catdim == 1
-        C = Array(typeC, sum(map(length, V)))
-        pos = 1
-        for k=1:nargs, i=1:length(V[k])
-            C[pos] = convert(typeC, V[k][i])
-            pos += 1
+#function cat(catdim::Int, A::Union(Number,Array)...)
+#    cat(catdim, map(A, x->(isscalar(x) ? [x] : x))...)
+#end
+
+function cat(catdim::Int, A::Array...)
+    # ndims of all input arrays should be in [d-1, d]
+
+    nargs = length(A)
+    dimsA = ntuple(nargs, i->A[i].dims)
+    ndimsA = ntuple(nargs, i->length(dimsA[i]))
+    d_max = max(ndimsA)
+    d_min = min(ndimsA)
+
+    cat_ranges = ntuple(nargs, i->(catdim <= ndimsA[i] ? dimsA[i][catdim] : 1))
+
+    function compute_dims(d)
+        if d == catdim
+            if catdim <= d_max
+                return sum(cat_ranges)
+            else
+                return nargs
+            end
+        else
+            if d <= d_max
+                return dimsA[1][d]
+            else
+                return 1
+            end
         end
-    elseif catdim == 2
-        n = length(V[1])
-        C = Array(typeC, (n, nargs))
-        for i=1:n, j=1:nargs
-            C[i,j] = convert(typeC, V[j][i])
-        end
+    end
+
+    ndimsC = max(catdim, d_max)
+    dimsC = ntuple(ndimsC, compute_dims)
+    typeC = promote_type(ntuple(nargs, i->typeof(A[i]).parameters[1])...)
+    C = Array(typeC, dimsC)
+
+    cat_ranges = cumsum(1, cat_ranges...)
+    for k=1:nargs
+        cat_one = ntuple(ndimsC, i->(i != catdim ? 
+                                     Range(1,1,dimsC[i]) :
+                                     Range(cat_ranges[k],1,cat_ranges[k+1]-1) ))
+        C[cat_one...] = A[k]
     end
     return C
 end
 
-vcat(V::Vector...) = cat(1, V...)
-hcat(V::Vector...) = cat(2, V...)
-
-function cat(catdim::Int, A::Matrix...)
-    nargs = length(A)
-    typeC = promote_type(ntuple(nargs, i->typeof(A[i]).parameters[1])...)
-    if catdim == 1
-        nrows = sum(ntuple(nargs, i->size(A[i],1)))
-        ncols = size(A[1], 2)
-        C = Array(typeC, nrows, ncols)
-
-        pos = 1
-        for j=1:ncols, k=1:nargs, i=1:size(A[k],1)
-            C[pos] = convert(typeC, A[k][i,j])
-            pos = pos + 1
-        end
-        return C
-    elseif catdim == 2
-        nrows = size(A[1], 1)
-        ncols = sum(ntuple(nargs, i->size(A[i],2)))
-        C = Array(typeC, nrows, ncols)
-
-        pos = 1
-        for k=1:length(A), i=1:numel(A[k])
-            C[pos] = convert(typeC, A[k][i])
-            pos = pos + 1
-        end
-        return C
-    end
-
-end
-
-vcat(A::Matrix...) = cat(1, A...)
-hcat(A::Matrix...) = cat(2, A...)
+vcat(A::Array...) = cat(1, A...)
+hcat(A::Array...) = cat(2, A...)
 
 ## Reductions ##
 

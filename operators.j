@@ -63,6 +63,8 @@ one(x)  = oftype(x,1)
 
 ## promotion mechanism ##
 
+promote_type() = Int32
+
 promote_type{T}(::Type{T}, ::Type{T}) = T
 
 function promote_type{T,S}(::Type{T}, ::Type{S})
