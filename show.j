@@ -89,3 +89,101 @@ function dump{T}(x::T)
     end
     print(")\n")
 end
+
+# show arrays
+function showall{T}(a::Array{T,1})
+    if is(T,Any)
+        opn = "{"; cls = "}"
+    else
+        opn = "["; cls = "]";
+    end
+    show_comma_array(a, opn, cls)
+end
+
+function showall{T}(a::Array{T,2})
+    for i=1:size(a,1)
+        show_cols(a, 1, size(a,2), i)
+        print("\n")
+    end
+end
+
+function show{T}(a::Array{T,1})
+    if is(T,Any)
+        opn = "{"; cls = "}"
+    else
+        opn = "["; cls = "]";
+    end
+    n = a.dims[1]
+    if n <= 10
+        show_comma_array(a, opn, cls)
+    else
+        show_comma_array(a[1:5], opn, "")
+        print(",...,")
+        show_comma_array(a[(n-4):n], "", cls)
+    end
+end
+
+function show_cols(a, start, stop, i)
+    for j = start:stop
+        show(a[i,j])
+        print(" ")
+    end
+end
+
+function show{T}(a::Array{T,2})
+    m = a.dims[1]
+    n = a.dims[2]
+    print_hdots = false
+    print_vdots = false
+    if 10 < m; print_vdots = true; end
+    if 10 < n; print_hdots = true; end
+    if !print_vdots && !print_hdots
+        for i=1:m
+            show_cols(a, 1, n, i)
+            if i<m; print("\n"); end
+        end
+    elseif print_vdots && !print_hdots
+        for i=1:3
+            show_cols(a, 1, n, i)
+            print("\n")
+        end
+        print(":\n")
+        for i=m-2:m
+            show_cols(a, 1, n, i)
+            if i<m; print("\n"); end
+        end
+    elseif !print_vdots && print_hdots
+        for i=1:m
+            show_cols(a, 1, 3, i)
+            if i == 1 || i == m; print(": "); else; print("  "); end
+            show_cols(a, n-2, n, i)
+            if i<m; print("\n"); end
+        end
+    else
+        for i=1:3
+            show_cols(a, 1, 3, i)
+            if i == 1; print(": "); else; print("  "); end
+            show_cols(a, n-2, n, i)
+            print("\n")
+        end
+        print(":\n")
+        for i=m-2:m
+            show_cols(a, 1, 3, i)
+            if i == m; print(": "); else; print("  "); end
+            show_cols(a, n-2, n, i)
+            if i<m; print("\n"); end
+        end
+    end
+end
+
+show{T}(a::Array{T,0}) = print("Array(",T,")")
+
+function show(a::Array)
+    slice2d(a, idxs) = [ a[i, j, idxs...] | i=1:size(a,1), j=1:size(a,2) ]
+    tail = size(a)[3:]
+    ndmap(idxs->(print("[:, :, ");
+                 for i=1:(length(idxs)-1); print(idxs[i],", "); end;
+                 print(idxs[length(idxs)], "] =\n");
+                 print(slice2d(a, idxs), idxs==tail?"":"\n\n")),
+          map(x->Range1(1,x), tail))
+end

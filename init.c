@@ -194,7 +194,9 @@ int jl_load_startup_file()
     }
     JL_CATCH {
         ios_printf(ios_stderr, "error during startup:\n");
+        jl_typeinf_func = NULL;
         jl_show(jl_exception_in_transit);
+        ios_printf(ios_stdout, "\n");
         return 1;
     }
 #ifdef BOEHM_GC
