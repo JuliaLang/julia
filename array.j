@@ -270,7 +270,7 @@ assign(A::Array{Any}, x, i::Index) = arrayset(A,i,x)
 function assign{T}(A::Vector{T}, x::Scalar, I::Indices)
     I = jl_fill_endpts(A, 1, I)
     for i=I
-        A[i] = convert(T, x)
+        A[i] = x
     end
     return A
 end
@@ -279,20 +279,20 @@ function assign{T}(A::Vector{T}, X::Vector, I::Indices)
     I = jl_fill_endpts(A, 1, I)
     count = 1
     for i=I
-        A[i] = convert(T, X[count])
+        A[i] = X[count]
         count += 1
     end
     return A
 end
 
 assign{T}(A::Matrix{T}, x::Scalar, i::Index, j::Index) = 
-    A[(j-1)*A.dims[1] + i] = convert(T, x)
+    A[(j-1)*A.dims[1] + i] = x
 
 function assign{T}(A::Matrix{T}, x::Scalar, I::Indices2, J::Indices2)
     I = jl_fill_endpts(A, 1, I)
     J = jl_fill_endpts(A, 2, J)
     for i=I, j=J
-        A[i,j] = convert(T, x)
+        A[i,j] = x
     end
     return A
 end
@@ -302,7 +302,7 @@ function assign{T}(A::Matrix{T}, X::Matrix, I::Indices2, J::Indices2)
     J = jl_fill_endpts(A, 2, J)
     count = 1
     for i=I, j=J
-        A[i,j] = convert(T, X[count])
+        A[i,j] = X[count]
         count += 1
     end
     return A
@@ -322,7 +322,7 @@ function jl_assign_ND_scalar{T}(A::Array{T}, x::Scalar, I::Index...)
         index += (I[k]-1) * stride
     end
 
-    A[index] = convert(T, x)
+    A[index] = x
     return A
 end
 
@@ -347,7 +347,7 @@ function jl_assign_ND_all{T}(A::Array{T}, X, I::Indices2...)
             for d=2:ndimsA
                 index += (ind[d]-1) * strides[d]
             end
-            A[index] = convert(T, X)
+            A[index] = X
         end
         
         cartesian_map(store_one, I_with_endpts)
@@ -358,7 +358,7 @@ function jl_assign_ND_all{T}(A::Array{T}, X, I::Indices2...)
             for d=2:ndimsA
                 index += (ind[d]-1) * strides[d]
             end
-            A[index] = convert(T, X[refind])
+            A[index] = X[refind]
             refind += 1
         end
         
@@ -386,7 +386,7 @@ function cat(catdim::Int, X::Scalar...)
     C = Array(typeC, dimsC)
 
     for i=1:nargs
-        C[i] = convert(typeC, X[i])
+        C[i] = X[i]
     end
     return C
 end
@@ -480,10 +480,11 @@ isempty(a::Array) = (numel(a) == 0)
 map(f, v::Vector) = [ f(v[i]) | i=1:length(v) ]
 map(f, M::Matrix) = [ f(M[i,j]) | i=1:size(M,1), j=1:size(M,2) ]
 
-function map(f, A::Array)
-    F = Array(Any, size(A))
-    f_one(ind) = (F[ind...] = f(A[ind...]))
-    cartesian_map(f_one, ntuple(ndims(A), d->(1:A.dims[d])) )
+function map{T}(f, A::Array{T})
+    F = Array(T, size(A))
+    for i=1:numel(A)
+        F[i] = f(A[i])
+    end
     return F
 end
 

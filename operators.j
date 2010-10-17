@@ -63,9 +63,11 @@ one(x)  = oftype(x,1)
 
 ## promotion mechanism ##
 
-promote_type() = Int32
+promote_type{T}(::Type{T}) = T
 
 promote_type{T}(::Type{T}, ::Type{T}) = T
+
+promote_type(S::Type, T::Type...) = promote_type(S, promote_type(T...))
 
 function promote_type{T,S}(::Type{T}, ::Type{S})
     # print("promote_type: ",T,", ",S,"\n")
@@ -76,10 +78,6 @@ function promote_type{T,S}(::Type{T}, ::Type{S})
     else
         error(strcat("no promotion exists for ",string(T)," and ",string(S)))
     end
-end
-
-function promote_type(S::Type, T::Type...)
-    promote_type(S, promote_type(T...))
 end
 
 promote() = ()
