@@ -402,9 +402,10 @@ function cat(catdim::Int, V::Vector...)
         for k=1:nargs, i=1:length(V[k])
             C[pos] = convert(typeC, V[k][i])
             pos += 1
-        end 
+        end
     elseif catdim == 2
-        C = Array(typeC, (length(V[1]), nargs))
+        n = length(V[1])
+        C = Array(typeC, (n, nargs))
         for i=1:n, j=1:nargs
             C[i,j] = convert(typeC, V[j][i])
         end
@@ -438,8 +439,8 @@ function cat(catdim::Int, A::Matrix...)
         for k=1:length(A), i=1:numel(A[k])
             C[pos] = convert(typeC, A[k][i])
             pos = pos + 1
-        end    
-        return C        
+        end
+        return C
     end
 
 end
