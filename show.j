@@ -181,9 +181,9 @@ show{T}(a::Array{T,0}) = print("Array(",T,")")
 function show(a::Array)
     slice2d(a, idxs) = [ a[i, j, idxs...] | i=1:size(a,1), j=1:size(a,2) ]
     tail = size(a)[3:]
-    ndmap(idxs->(print("[:, :, ");
-                 for i=1:(length(idxs)-1); print(idxs[i],", "); end;
-                 print(idxs[length(idxs)], "] =\n");
-                 print(slice2d(a, idxs), idxs==tail?"":"\n\n")),
-          map(x->Range1(1,x), tail))
+    cartesian_map(idxs->(print("[:, :, ");
+                         for i=1:(length(idxs)-1); print(idxs[i],", "); end;
+                         print(idxs[length(idxs)], "] =\n");
+                         print(slice2d(a, idxs), idxs==tail?"":"\n\n")),
+                  map(x->Range1(1,x), tail))
 end

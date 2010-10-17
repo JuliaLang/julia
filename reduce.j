@@ -32,7 +32,7 @@ prod(x, y, z, rest...) = reduce(prod, prod(prod(x,y),z), rest)
 any(x, y, z, rest...)  = reduce(any,  any(any(x,y),z),   rest)
 all(x, y, z, rest...)  = reduce(all,  all(all(x,y),z),   rest)
 
-scan(op, x) = x
+scan(op, x) = tuple(x)
 scan(op, itr::Tuple) = scan(op, itr...)
 
 function scan(op, itr...)

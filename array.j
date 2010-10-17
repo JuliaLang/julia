@@ -251,7 +251,7 @@ function ref_ND{T}(A::Array{T}, I::Indices2...)
         storeind += 1
     end
 
-    ndmap(store, I_with_endpts)
+    cartesian_map(store, I_with_endpts)
     return X
 end
 
@@ -337,7 +337,7 @@ function assign_ND_all(A::Array, X, I::Indices2...)
     I_with_endpts = ntuple(length(I), i->jl_fill_endpts(A,i,I[i]))
 
     if isa(X, Scalar)
-        function store1(ind)
+        function store_one(ind)
             index = ind[1]
             for d=2:ndimsA
                 index += (ind[d]-1) * strides[d]
@@ -345,7 +345,7 @@ function assign_ND_all(A::Array, X, I::Indices2...)
             A[index] = X
         end
         
-        ndmap(store1, I_with_endpts)
+        cartesian_map(store_one, I_with_endpts)
     else
         refind = 1
         function store_all(ind)
@@ -357,7 +357,7 @@ function assign_ND_all(A::Array, X, I::Indices2...)
             refind += 1
         end
         
-        ndmap(store_all, I_with_endpts)
+        cartesian_map(store_all, I_with_endpts)
     end
 
     return A
@@ -436,22 +436,31 @@ cumsum(v::Vector) = scan(+, v)
 cumprod(v::Vector) = scan(*, v)
 
 # iteration support for arrays as ranges
+
 start(a::Array) = 1
 next(a::Array,i) = (a[i],i+1)
 done(a::Array,i) = (i > numel(a))
 isempty(a::Array) = (numel(a) == 0)
 
 # map over vectors and matrices
+
 map(f, v::Vector) = [ f(v[i]) | i=1:length(v) ]
 map(f, M::Matrix) = [ f(M[i,j]) | i=1:size(M,1), j=1:size(M,2) ]
 
-function ndmap(body, t::Tuple, it...)
+function map(f, A::Array)
+    F = Array(Any, size(A))
+    f_one(ind) = (F[ind...] = f(A[ind...]))
+    cartesian_map(f_one, ntuple(ndims(A), d->(1:A.dims[d])) )
+    return F
+end
+
+function cartesian_map(body, t::Tuple, it...)
     idx = length(t)-length(it)
     if idx == 0
         body(it)
     else
         for i = t[idx]
-            ndmap(body, t, i, it...)
+            cartesian_map(body, t, i, it...)
         end
     end
 end
@@ -570,7 +579,7 @@ function find{T}(A::Array{T})
         end
     end
 
-    ndmap(find_one, ntuple(ndims(A), d->(1:A.dims[d])) )
+    cartesian_map(find_one, ntuple(ndims(A), d->(1:A.dims[d])) )
     return I
 end
 
