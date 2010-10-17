@@ -723,6 +723,8 @@ static inline void jl_eh_restore_state(jl_savestate_t *ss)
     if (!setjmp(__handlr))                                              \
         for (i__tr=1; i__tr; i__tr=0, jl_eh_restore_state(&__ss))
 
+#define JL_EH_POP() jl_eh_restore_state(&__ss)
+
 #define JL_CATCH                                                \
     else                                                        \
         for (i__ca=1, jl_current_task->state.err = 0,           \

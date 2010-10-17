@@ -474,12 +474,19 @@ static jl_value_t *read_expr_ast(char *prompt, int *end, int *doprint) {
 
 static int exec_program()
 {
+    int err = 0;
+ again: ;
     JL_TRY {
+        if (err) {
+            jl_show(jl_exception_in_transit);
+            JL_EH_POP();
+            return 1;
+        }
         jl_load(program);
     }
     JL_CATCH {
-        jl_show(jl_exception_in_transit);
-        return 1;
+        err = 1;
+        goto again;
     }
     return 0;
 }
@@ -542,21 +549,29 @@ int main(int argc, char *argv[])
             return 1;
     }
     if (num_evals) {
-        int i;
+        int i, iserr=0;
         jl_value_t *ast=NULL, *value=NULL;
         JL_GC_PUSH(&ast, &value);
         for (i=0; i < num_evals; i++) {
+        try_again: ;
             JL_TRY {
-                ast = jl_parse_input_line(eval_exprs[i]);
-                value = jl_toplevel_eval_thunk((jl_lambda_info_t*)ast);
-                if (print_exprs[i]) {
-                    jl_show(value);
+                if (iserr) {
+                    jl_show(jl_exception_in_transit);
                     ios_printf(ios_stdout, "\n");
+                    iserr = 0;
+                }
+                if (i < num_evals) {
+                    ast = jl_parse_input_line(eval_exprs[i]);
+                    value = jl_toplevel_eval_thunk((jl_lambda_info_t*)ast);
+                    if (print_exprs[i]) {
+                        jl_show(value);
+                        ios_printf(ios_stdout, "\n");
+                    }
                 }
             }
             JL_CATCH {
-                jl_show(jl_exception_in_transit);
-                ios_printf(ios_stdout, "\n");
+                iserr = 1;
+                goto try_again;
             }
         }
         jl_shutdown_frontend();
@@ -582,9 +597,15 @@ int main(int argc, char *argv[])
 
     jl_value_t *ast=NULL;
     JL_GC_PUSH(&ast);
+    int iserr = 0;
  again:
     ;
     JL_TRY {
+        if (iserr) {
+            jl_show(jl_exception_in_transit);
+            ios_printf(ios_stdout, "\n");
+            iserr = 0;
+        }
         while (1) {
             ios_flush(ios_stdout);
 
@@ -612,8 +633,7 @@ int main(int argc, char *argv[])
         }
     }
     JL_CATCH {
-        jl_show(jl_exception_in_transit);
-        ios_printf(ios_stdout, "\n");
+        iserr = 1;
         goto again;
     }
     JL_GC_POP();
