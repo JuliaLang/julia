@@ -443,6 +443,47 @@ end
 vcat(A::Array...) = cat(1, A...)
 hcat(A::Array...) = cat(2, A...)
 
+## some special cases of cat ##
+hcat{T <: Scalar}(X::T...) = [ X[j] | i=1, j=1:length(X) ]
+vcat{T <: Scalar}(X::T...) = [ X[i] | i=1:length(X) ]
+
+hcat{T}(V::Array{T,1}...) = [ V[j][i] | i=1:length(V[1]), j=1:length(V) ]
+
+function vcat{T}(V::Array{T,1}...)
+    a = Array(T, sum(map(length, V)))
+    pos = 1
+    for k=1:length(V), i=1:length(V[k])
+        a[pos] = V[k][i]
+        pos += 1
+    end
+    a
+end
+
+function hcat{T}(A::Array{T,2}...)
+    ncols = sum([ size(A[i], 2) | i=1:length(A) ])
+    nrows = size(A[1], 1)
+    B = Array(T, nrows, ncols)
+    pos = 1
+    for k=1:length(A), i=1:numel(A[k])
+        B[pos] = A[k][i]
+        pos = pos + 1
+    end
+    return B
+end
+
+function vcat{T}(A::Array{T,2}...)
+    nrows = sum([size(A[i], 1) | i=1:length(A)])
+    ncols = size(A[1], 2)
+    B = Array(T, nrows, ncols)
+    pos = 1
+    for j=1:ncols, k=1:length(A), i=1:size(A[k], 1)
+        B[pos] = A[k][i,j]
+        pos = pos + 1
+    end
+    return B
+end
+## ##
+
 ## Reductions ##
 
 function sum(x::Matrix, dim::Int)
