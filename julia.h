@@ -99,6 +99,7 @@ typedef struct {
     // a type alias, for example, might make a type constructor that is
     // not the original.
     jl_value_t *primary;
+    void *cache;
 } jl_typename_t;
 
 typedef struct {

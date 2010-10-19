@@ -269,6 +269,8 @@ static void gc_mark_methlist(jl_methlist_t *ml)
     }
 }
 
+void jl_mark_type_cache(void *c);
+
 static void gc_markval_(jl_value_t *v)
 {
     assert(v != NULL);
@@ -319,6 +321,7 @@ static void gc_markval_(jl_value_t *v)
         jl_typename_t *tn = (jl_typename_t*)v;
         if (tn->primary != NULL)
             GC_Markval(tn->primary);
+        jl_mark_type_cache(tn->cache);
     }
     else if (jl_is_tag_type(v)) {
         jl_tag_type_t *tt = (jl_tag_type_t*)v;
@@ -402,7 +405,6 @@ static void gc_mark_module(jl_module_t *m)
     }
 }
 
-void jl_mark_type_cache();
 void jl_mark_box_caches();
 
 static void gc_mark()
@@ -428,9 +430,6 @@ static void gc_mark()
     GC_Markval(jl_null);
     GC_Markval(jl_true);
     GC_Markval(jl_false);
-
-    // types
-    jl_mark_type_cache();
 
     jl_mark_box_caches();
 }
