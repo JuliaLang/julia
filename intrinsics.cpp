@@ -329,6 +329,7 @@ static void *alloc_temp_arg_copy(void *obj, uint32_t sz)
     return p;
 }
 
+// this is a run-time function
 extern "C" void *jl_value_to_pointer(jl_value_t *jt, jl_value_t *v, int argn)
 {
     // this is a custom version of convert_to_ptr that is able to use
@@ -464,8 +465,21 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
 
     // emit arguments
     std::vector<Value*> argvals(0);
+    int last_depth = ctx->argDepth;
     for(i=4; i < nargs+1; i++) {
         Value *arg = emit_expr(args[i], ctx, true);
+#ifdef JL_GC_MARKSWEEP
+        // make sure args are rooted
+        if (fargt[i-4]->isPointerTy() &&
+            (fargt[i-4] == jl_pvalue_llvmt ||
+             !jl_is_bits_type(expr_type(args[i])))) {
+            Value *gcroot = builder.CreateGEP(ctx->argTemp,
+                                              ConstantInt::get(T_int32,
+                                                               ctx->argDepth));
+            builder.CreateStore(boxed(arg), gcroot);
+            ctx->argDepth++;
+        }
+#endif
         argvals.push_back(julia_to_native(fargt[i-4], jl_tupleref(tt,i-4),
                                           arg, i-3, ctx));
     }
@@ -477,6 +491,7 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
         assert(saveloc != NULL);
         builder.CreateCall(restore_arg_area_loc_func, saveloc);
     }
+    ctx->argDepth = last_depth;
 
     JL_GC_POP();
     if (lrt == T_void)

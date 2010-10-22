@@ -17,6 +17,8 @@
     bitvector_set;
     bitvector_get;
     bitvector_next;
+    jl_new_struct;
+    jl_new_structt;
     jl_word_size;
     jl_enable_inference;
     jl_symbol;
@@ -46,6 +48,8 @@
     ios_putc;
     ios_pututf8;
     ios_getc;
+    ios_getutf8;
+    jl_getutf8;
     ios_close;
     ios_flush;
     ios_read;

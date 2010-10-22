@@ -101,6 +101,11 @@ function read(s::IOStream, ::Type{Uint8})
     uint8(b)
 end
 
+function read(s::IOStream, ::Type{Char})
+    ccall(dlsym(JuliaDLHandle,"jl_getutf8"), Char, (Ptr{Void},),
+          s.ios)
+end
+
 function read{T}(s::IOStream, ::Type{T}, dims::Size...)
     if isa(T,BitsKind)
         a = Array(T, dims...)
@@ -135,7 +140,7 @@ let i = 1
     global ser_tag
     for t = {Any, Symbol, Bool, Int8, Uint8, Int16, Uint16, Int32, Uint32,
              Int64, Uint64, Float32, Float64,
-             TagKind, UnionKind, StructKind, Tuple, Array}
+             TagKind, UnionKind, BitsKind, StructKind, Tuple, Array}
         ser_tag[t] = i
         i += 1
     end
@@ -193,7 +198,13 @@ function serialize(s, x)
     end
     t = typeof(x)
     if isa(t,BitsKind)
-        writetag(s, t)
+        if has(ser_tag,t)
+            writetag(s, t)
+        else
+            writetag(s, BitsKind)
+            serialize(s, t.name.name)
+            serialize(s, t.parameters)
+        end
         write(s, x)
     elseif isa(t,StructKind)
         writetag(s, StructKind)
@@ -203,6 +214,7 @@ function serialize(s, x)
             serialize(s, getfield(x, n))
         end
     end
+    error("not serializable")
 end
 
 ## deserializing values ##
@@ -227,13 +239,14 @@ end
 
 deserialize(s, t::BitsKind) = read(s, t)
 
-function deserialize_tuple(s, len, elts...)
-    if len == 0
-        elts
-    else
-        deserialize_tuple(s, len-1, elts..., deserialize(s))
-    end
+function deserialize(s, ::Type{BitsKind})
+    name = deserialize(s)::Symbol
+    params = deserialize(s)
+    t = instantiate_type(eval(name), params...)
+    return read(s, t)
 end
+
+deserialize_tuple(s, len) = ntuple(len, i->deserialize(s))
 
 deserialize(s, ::Type{Symbol}) = symbol(read(s, Uint8, read(s, Int32)))
 
@@ -259,9 +272,34 @@ end
 function deserialize(s, ::Type{StructKind})
     name = deserialize(s)::Symbol
     params = deserialize(s)
-    t = eval(name)
-    for n = t.names
-        # TODO: need a way to construct object by reflection
-        deserialize(s)
+    t = instantiate_type(eval(name), params...)
+    # allow delegation to more specialized method
+    return deserialize(s, t)
+end
+
+# default struct deserializer
+function deserialize(s, t::Type)
+    assert(isa(t,StructKind))
+    nf = length(t.names)
+    if nf == 0
+        return ccall(dlsym(JuliaDLHandle,"jl_new_struct"), Any,
+                     (Any,), t)
+    elseif nf == 1
+        return ccall(dlsym(JuliaDLHandle,"jl_new_struct"), Any,
+                     (Any,Any), t, deserialize(s))
+    elseif nf == 2
+        return ccall(dlsym(JuliaDLHandle,"jl_new_struct"), Any,
+                     (Any,Any,Any), t, deserialize(s), deserialize(s))
+    elseif nf == 3
+        return ccall(dlsym(JuliaDLHandle,"jl_new_struct"), Any,
+                     (Any,Any,Any,Any), t, deserialize(s), deserialize(s),
+                     deserialize(s))
+    elseif nf == 4
+        return ccall(dlsym(JuliaDLHandle,"jl_new_struct"), Any,
+                     (Any,Any,Any,Any,Any), t, deserialize(s), deserialize(s),
+                     deserialize(s), deserialize(s))
+    else
+        return ccall(dlsym(JuliaDLHandle,"jl_new_structt"), Any,
+                     (Any,Any), t, ntuple(nf, i->deserialize(s)))
     end
 end

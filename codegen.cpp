@@ -231,6 +231,7 @@ typedef struct {
     const Argument *argArray;
     const Argument *argCount;
     AllocaInst *argTemp;
+    int argDepth;
     std::string funcName;
 } jl_codectx_t;
 
@@ -480,19 +481,23 @@ static Value *emit_lambda_closure(jl_value_t *expr, jl_codectx_t *ctx)
                                literal_pointer_val(expr), tuple);
 }
 
-static size_t biggest_call(jl_value_t *expr)
+static size_t max_arg_depth(jl_value_t *expr)
 {
     if (jl_is_expr(expr)) {
         size_t max = 0;
         jl_expr_t *e = (jl_expr_t*)expr;
         size_t i, m;
-        for(i=0; i < e->args->length; i++) {
-            m = biggest_call(jl_exprarg(e,i));
-            if (m > max) max = m;
-        }
         if (e->head == call_sym || e->head == call1_sym) {
-            if (e->args->length > max)
-                max = e->args->length;
+            for(i=0; i < e->args->length; i++) {
+                m = max_arg_depth(jl_exprarg(e,i));
+                if (m+i > max) max = m+i;
+            }
+        }
+        else {
+            for(i=0; i < e->args->length; i++) {
+                m = max_arg_depth(jl_exprarg(e,i));
+                if (m > max) max = m;
+            }
         }
         return max;
     }
@@ -519,13 +524,17 @@ static jl_value_t *expr_type(jl_value_t *e)
 static jl_tuple_t *call_arg_types(jl_value_t **args, size_t n)
 {
     jl_tuple_t *t = jl_alloc_tuple(n);
+    JL_GC_PUSH(&t);
     size_t i;
     for(i=0; i < n; i++) {
         jl_value_t *ty = expr_type(args[i]);
-        if (!jl_is_leaf_type(ty))
-            return NULL;
+        if (!jl_is_leaf_type(ty)) {
+            t = NULL;
+            break;
+        }
         jl_tupleset(t, i, ty);
     }
+    JL_GC_POP();
     return t;
 }
 
@@ -559,6 +568,8 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
         return emit_intrinsic((intrinsic)*(uint32_t*)jl_bits_data(ff),
                               args, nargs, ctx);
     }
+    jl_value_t *rt1=NULL, *rt2=NULL, *rt3=NULL;
+    JL_GC_PUSH(&rt1, &rt2, &rt3);
     if (jl_is_func(ff)) {
         jl_function_t *f = (jl_function_t*)ff;
         if (f->fptr == &jl_apply_generic) {
@@ -567,6 +578,7 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
             *theEnv = literal_pointer_val(f->env);
             if (ctx->linfo->specTypes != NULL) {
                 jl_tuple_t *aty = call_arg_types(&args[1], nargs);
+                rt1 = (jl_value_t*)aty;
                 // attempt compile-time specialization for inferred types
                 if (aty != NULL) {
                     /*
@@ -589,6 +601,7 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
             }
         }
         else if (f->fptr == &jl_f_is && nargs==2) {
+            JL_GC_POP();
             Value *arg1 = emit_expr(args[1], ctx, true);
             Value *arg2 = emit_expr(args[2], ctx, true);
             if (arg1->getType() != arg2->getType())
@@ -596,15 +609,16 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
             return builder.CreateICmpEQ(arg1, arg2);
         }
         else if (f->fptr == &jl_f_tuplelen && nargs==1) {
-            jl_value_t *aty = expr_type(args[1]);
+            jl_value_t *aty = expr_type(args[1]); rt1 = aty;
             if (jl_is_tuple(aty)) {
                 Value *arg1 = emit_expr(args[1], ctx, true);
+                JL_GC_POP();
                 return emit_tuplelen(arg1);
             }
         }
         else if (f->fptr == &jl_f_tupleref && nargs==2) {
-            jl_value_t *tty = expr_type(args[1]);
-            jl_value_t *ity = expr_type(args[2]);
+            jl_value_t *tty = expr_type(args[1]); rt1 = tty;
+            jl_value_t *ity = expr_type(args[2]); rt2 = ity;
             if (jl_is_tuple(tty) && ity==(jl_value_t*)jl_int32_type) {
                 Value *arg1 = emit_expr(args[1], ctx, true);
                 if (jl_is_int32(args[2])) {
@@ -615,6 +629,7 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
                           !jl_is_seq_type(jl_tupleref(tty,
                                                       ((jl_tuple_t*)tty)->length-1))))) {
                         // known to be in bounds
+                        JL_GC_POP();
                         return emit_nthptr(arg1, idx+1);
                     }
                 }
@@ -623,20 +638,22 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
                                         emit_unboxed(args[2], ctx));
                 emit_bounds_check(idx, tlen,
                                   "tupleref: index out of range", ctx);
+                JL_GC_POP();
                 return emit_nthptr(arg1,
                                    builder.CreateAdd(idx, ConstantInt::get(T_int32,1)));
             }
         }
         else if (f->fptr == &jl_f_arraylen && nargs==1) {
-            jl_value_t *aty = expr_type(args[1]);
+            jl_value_t *aty = expr_type(args[1]); rt1 = aty;
             if (jl_subtype(aty, (jl_value_t*)jl_array_type, 0)) {
                 Value *arg1 = emit_expr(args[1], ctx, true);
+                JL_GC_POP();
                 return emit_arraylen(arg1);
             }
         }
         else if (f->fptr == &jl_f_arrayref && nargs==2) {
-            jl_value_t *aty = expr_type(args[1]);
-            jl_value_t *ity = expr_type(args[2]);
+            jl_value_t *aty = expr_type(args[1]); rt1 = aty;
+            jl_value_t *ity = expr_type(args[2]); rt2 = ity;
             if (jl_subtype(aty, (jl_value_t*)jl_array_type, 0) &&
                 ity == (jl_value_t*)jl_int32_type) {
                 if (jl_is_bits_type(jl_tparam0(aty))) {
@@ -655,6 +672,7 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
                                           "arrayref: index out of range", ctx);
                     Value *elt=builder.CreateLoad(builder.CreateGEP(data, im1),
                                                   false);
+                    JL_GC_POP();
                     if (isbool)
                         return builder.CreateTrunc(elt, T_int1);
                     return mark_julia_type(elt, jl_tparam0(aty));
@@ -662,9 +680,9 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
             }
         }
         else if (f->fptr == &jl_f_arrayset && nargs==3) {
-            jl_value_t *aty = expr_type(args[1]);
-            jl_value_t *ity = expr_type(args[2]);
-            jl_value_t *vty = expr_type(args[3]);
+            jl_value_t *aty = expr_type(args[1]); rt1 = aty;
+            jl_value_t *ity = expr_type(args[2]); rt2 = ity;
+            jl_value_t *vty = expr_type(args[3]); rt3 = vty;
             if (jl_subtype(aty, (jl_value_t*)jl_array_type, 0) &&
                 ity == (jl_value_t*)jl_int32_type) {
                 jl_value_t *ety = jl_tparam0(aty);
@@ -684,12 +702,13 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
                         emit_bounds_check(idx, alen,
                                           "arrayset: index out of range", ctx);
                     builder.CreateStore(rhs, builder.CreateGEP(data, im1));
+                    JL_GC_POP();
                     return ary;
                 }
             }
         }
         else if (f->fptr == &jl_f_get_field && nargs==2) {
-            jl_value_t *sty = expr_type(args[1]);
+            jl_value_t *sty = expr_type(args[1]); rt1 = sty;
             if (jl_is_struct_type(sty) && jl_is_expr(args[2]) &&
                 ((jl_expr_t*)args[2])->head == quote_sym &&
                 jl_is_symbol(jl_exprarg(args[2],0))) {
@@ -697,12 +716,14 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
                                               (jl_sym_t*)jl_exprarg(args[2],0));
                 if (offs != (size_t)-1) {
                     Value *strct = emit_expr(args[1], ctx, true);
+                    JL_GC_POP();
                     return emit_nthptr(strct, offs+1);
                 }
             }
         }
         // TODO: other known builtins
     }
+    JL_GC_POP();
     return NULL;
 }
 
@@ -712,8 +733,9 @@ static Value *emit_call(jl_value_t **args, size_t arglen, jl_codectx_t *ctx)
     Value *theFptr=NULL, *theEnv=NULL;
     jl_binding_t *b=NULL;
     jl_value_t *a0 = args[0];
+    jl_value_t *a00 = args[0];
     jl_value_t *hdtype;
-    hdtype = expr_type(a0);
+
     if (jl_is_expr(a0) && ((jl_expr_t*)a0)->head==symbol_sym) {
         a0 = jl_exprarg(a0,0);
     }
@@ -741,19 +763,33 @@ static Value *emit_call(jl_value_t **args, size_t arglen, jl_codectx_t *ctx)
         Value *result = emit_known_call(f, args, nargs, ctx, &theFptr, &theEnv);
         if (result != NULL) return result;
     }
+    int last_depth = ctx->argDepth;
+    hdtype = expr_type(a00);
     if (theFptr == NULL) {
         Value *theFunc = emit_expr(args[0], ctx, true);
-        if (!jl_is_func_type(hdtype) && hdtype!=(jl_value_t*)jl_struct_kind) {
+#ifdef JL_GC_MARKSWEEP
+        Value *froot = builder.CreateGEP(ctx->argTemp,
+                                         ConstantInt::get(T_int32,
+                                                          ctx->argDepth));
+        builder.CreateStore(boxed(theFunc), froot);
+        ctx->argDepth++;
+#endif
+        if (!jl_is_func_type(hdtype) &&
+            hdtype!=(jl_value_t*)jl_struct_kind &&
+            !(jl_is_tag_type(hdtype) &&
+              ((jl_tag_type_t*)hdtype)->name==jl_type_type->name &&
+              jl_is_struct_type(jl_tparam0(hdtype)))) {
             emit_func_check(theFunc, "apply: expected function", ctx);
         }
-        // extract pieces of the function object
-        // TODO: try extractelement instead
         if (theFunc->getType() != jl_pvalue_llvmt) {
             // we know it's not a function, in fact it has been declared
             // not to be. the above error should therefore trigger.
+            ctx->argDepth = last_depth;
             return V_null;
         }
         else {
+            // extract pieces of the function object
+            // TODO: try extractelement instead
             theFptr =
                 builder.CreateBitCast(emit_nthptr(theFunc, 1), jl_fptr_llvmt);
             theEnv = emit_nthptr(theFunc, 2);
@@ -762,16 +798,16 @@ static Value *emit_call(jl_value_t **args, size_t arglen, jl_codectx_t *ctx)
     // emit arguments
     std::vector<Value*> argVs(0);
     size_t i;
+    int argStart = ctx->argDepth;
+    assert(nargs <= ((ConstantInt*)ctx->argTemp->getArraySize())->getZExtValue());
     for(i=0; i < nargs; i++) {
         Value *anArg = emit_expr(args[i+1], ctx, true);
         argVs.push_back(anArg);
-    }
-    assert(nargs <= ((ConstantInt*)ctx->argTemp->getArraySize())->getZExtValue());
-    // put into argument space
-    for(i=0; i < nargs; i++) {
-        Value *dest = builder.CreateGEP(ctx->argTemp,
-                                        ConstantInt::get(T_int32,i));
-        builder.CreateStore(boxed(argVs[i]), dest);
+        // put into argument space
+        Value *dest=builder.CreateGEP(ctx->argTemp,
+                                      ConstantInt::get(T_int32,ctx->argDepth));
+        builder.CreateStore(boxed(anArg), dest);
+        ctx->argDepth++;
     }
     /*
     Value *stacksave =
@@ -787,7 +823,9 @@ static Value *emit_call(jl_value_t **args, size_t arglen, jl_codectx_t *ctx)
     }
     */
     // call
-    Value *result = builder.CreateCall3(theFptr, theEnv, ctx->argTemp,
+    Value *myargs = builder.CreateGEP(ctx->argTemp,
+                                      ConstantInt::get(T_int32, argStart));
+    Value *result = builder.CreateCall3(theFptr, theEnv, myargs,
                                         ConstantInt::get(T_int32,nargs));
     // restore stack
     /*
@@ -795,6 +833,7 @@ static Value *emit_call(jl_value_t **args, size_t arglen, jl_codectx_t *ctx)
                                                  Intrinsic::stackrestore),
                        stacksave);
     */
+    ctx->argDepth = last_depth;
     return result;
 }
 
@@ -1052,6 +1091,7 @@ static void emit_function(jl_lambda_info_t *lam, Function *f)
     ctx.module = jl_system_module; //TODO
     ctx.ast = ast;
     ctx.sp = jl_tuple_tvars_to_symbols(lam->sparams);
+    JL_GC_PUSH(&ctx.sp);
     ctx.linfo = lam;
     ctx.envArg = &envArg;
     ctx.argArray = &argArray;
@@ -1110,7 +1150,8 @@ static void emit_function(jl_lambda_info_t *lam, Function *f)
     ctx.argTemp =
         builder.CreateAlloca(jl_pvalue_llvmt,
                              ConstantInt::get(T_int32,
-                                              (int32_t)biggest_call((jl_value_t*)ast)));
+                                              (int32_t)max_arg_depth((jl_value_t*)ast)));
+    ctx.argDepth = 0;
 
     // check arg count
     size_t nreq = largs->length;
@@ -1238,6 +1279,7 @@ static void emit_function(jl_lambda_info_t *lam, Function *f)
     if (builder.GetInsertBlock()->getTerminator() == NULL) {
         builder.CreateRet(V_null);
     }
+    JL_GC_POP();
 }
 
 static GlobalVariable *global_to_llvm(const std::string &cname, void *addr)

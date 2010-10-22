@@ -64,6 +64,13 @@ int jl_read_avail(ios_t *s)
     return 0;
 }
 
+DLLEXPORT uint32_t jl_getutf8(ios_t *s)
+{
+    uint32_t wc=0;
+    ios_getutf8(s, &wc);
+    return wc;
+}
+
 // --- io constructors ---
 
 DLLEXPORT

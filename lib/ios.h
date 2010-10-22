@@ -114,7 +114,7 @@ void hexdump(ios_t *dest, const char *buffer, size_t len, size_t startoffs);
 
 /* high-level stream functions - input */
 int ios_getnum(ios_t *s, char *data, uint32_t type);
-int ios_getutf8(ios_t *s, uint32_t *pwc);
+DLLEXPORT int ios_getutf8(ios_t *s, uint32_t *pwc);
 int ios_peekutf8(ios_t *s, uint32_t *pwc);
 int ios_ungetutf8(ios_t *s, uint32_t wc);
 int ios_getstringz(ios_t *dest, ios_t *src);

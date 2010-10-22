@@ -31,13 +31,14 @@ jl_value_t *jl_interpret_toplevel_expr_with(jl_value_t *e,
 static jl_value_t *do_call(jl_function_t *f, jl_value_t **args, size_t nargs,
                            jl_value_t **locals, size_t nl)
 {
-    jl_value_t **argv = alloca(nargs * sizeof(jl_value_t*));
+    jl_value_t **argv = alloca((nargs+1) * sizeof(jl_value_t*));
     size_t i;
-    for(i=0; i < nargs; i++) argv[i] = NULL;
-    JL_GC_PUSHARGS(argv, nargs);
+    argv[0] = (jl_value_t*)f;
+    for(i=1; i < nargs+1; i++) argv[i] = NULL;
+    JL_GC_PUSHARGS(argv, nargs+1);
     for(i=0; i < nargs; i++)
-        argv[i] = eval(args[i], locals, nl);
-    jl_value_t *result = jl_apply(f, argv, nargs);
+        argv[i+1] = eval(args[i], locals, nl);
+    jl_value_t *result = jl_apply(f, &argv[1], nargs);
     JL_GC_POP();
     return result;
 }
@@ -75,17 +76,15 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl)
         return do_call(f, &args[1], ex->args->length-1, locals, nl);
     }
     else if (ex->head == assign_sym) {
-        jl_value_t **bp = NULL;
         jl_value_t *sym = args[0];
         size_t i;
         for(i=0; i < nl; i++) {
             if (locals[i*2] == sym) {
-                bp = &locals[i*2+1];
-                break;
+                locals[i*2+1] = eval(args[1], locals, nl);
+                return (jl_value_t*)jl_null;
             }
         }
-        if (bp == NULL)
-            bp = jl_get_bindingp(jl_system_module, (jl_sym_t*)sym);
+        jl_value_t **bp = jl_get_bindingp(jl_system_module, (jl_sym_t*)sym);
         if (*bp==NULL || !jl_is_func(*bp))
             *bp = eval(args[1], locals, nl);
         return (jl_value_t*)jl_null;

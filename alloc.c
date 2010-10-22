@@ -99,8 +99,10 @@ void *allocb(size_t nb)
 }
 */
 
+DLLEXPORT
 jl_value_t *jl_new_struct(jl_struct_type_t *type, ...)
 {
+    if (type->instance != NULL) return type->instance;
     va_list args;
     size_t nf = type->names->length;
     size_t i;
@@ -110,6 +112,20 @@ jl_value_t *jl_new_struct(jl_struct_type_t *type, ...)
         ((jl_value_t**)jv)[i+1] = va_arg(args, jl_value_t*);
     }
     va_end(args);
+    return jv;
+}
+
+DLLEXPORT
+jl_value_t *jl_new_structt(jl_struct_type_t *type, jl_tuple_t *t)
+{
+    if (type->instance != NULL) return type->instance;
+    size_t nf = type->names->length;
+    assert(nf == t->length);
+    size_t i;
+    jl_value_t *jv = newobj((jl_type_t*)type, nf);
+    for(i=0; i < nf; i++) {
+        ((jl_value_t**)jv)[i+1] = jl_tupleref(t, i);
+    }
     return jv;
 }
 

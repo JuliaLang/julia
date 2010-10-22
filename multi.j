@@ -43,8 +43,12 @@ function jl_worker(fd)
         (f, args) = recv_msg(sock)
         #print("got ", tuple(f, map(typeof,args)...), "\n")
         # handle message
-        result = apply(eval(f), args)
-        send_msg(sock, result)
+        try
+            result = apply(eval(f), args)
+            send_msg(sock, result)
+        catch e
+            send_msg(sock, e)
+        end
     end
 end
 
