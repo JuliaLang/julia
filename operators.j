@@ -32,17 +32,24 @@ function (+)(x1, x2, x3, xs...)
     accum
 end
 
+(\)(x,y) = y/x
+
 # .<op> defaults to <op>
 (./)(x,y) = x/y
 (.\)(x,y) = y./x
 (.*)(x,y) = x*y
 (.^)(x,y) = x^y
 
-div(x::Number, y::Number) = truncate(x/y)
-(%)(x::Number, y::Number) = x-div(x,y)*y
-mod(x,y) = x%y
-mod1(x,y) = mod(x-one(x),y)+one(x) # TODO: broken <= 0
-(\)(x,y) = y/x
+div(x::Number, y::Number) = y != 0 ? truncate(x/y) :
+                            error("error: integer divide by zero")
+fld(x::Number, y::Number) = y != 0 ? int32(floor(x/y)) :
+                            error("error: integer divide by zero")
+
+rem(x::Number, y::Number) = x-y*div(x,y)
+mod(x::Number, y::Number) = x-y*fld(x,y)
+
+(%)(x,y) = mod(x,y)
+mod1(x,y) = (m=mod(x-one(x),y); m+one(m))
 
 oftype{T}(x::T,c) = convert(T,c)
 oftype{T}(x::Type{T},c) = convert(T,c)
@@ -119,8 +126,8 @@ end
 
 ## integer-specific promotions ##
 
-(%)(x::Int, y::Int) = (%)(promote(x,y)...)
 div(x::Int, y::Int) = div(promote(x,y)...)
+rem(x::Int, y::Int) = rem(promote(x,y)...)
 
 (&)(x::Int...) = (&)(promote(x...)...)
 (|)(x::Int...) = (|)(promote(x...)...)
@@ -136,8 +143,9 @@ no_op_err(name, T) = error(strcat(name," not defined for ",string(T)))
 (<){T<:Real}  (x::T, y::T) = no_op_err("<", T)
 (==){T<:Number}(x::T, y::T) = no_op_err("==", T)
 
-(%){T<:Int}(x::T, y::T) = no_op_err("%", T)
 div{T<:Int}(x::T, y::T) = no_op_err("div", T)
+rem{T<:Int}(x::T, y::T) = no_op_err("rem", T)
+
 (&){T<:Int}(x::T, y::T) = no_op_err("&", T)
 (|){T<:Int}(x::T, y::T) = no_op_err("|", T)
 ($){T<:Int}(x::T, y::T) = no_op_err("$", T)

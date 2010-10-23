@@ -50,8 +50,8 @@ end
 typealias Pixel Int32
 
 redval(p) = div(p,65536)
-greenval(p) = div(p,256)%256
-blueval(p) = p%256
+greenval(p) = div(p,256)%256 # TODO: rem? mod?
+blueval(p) = p%256 # TODO: rem? mod?
 
 pixel2vec(p) = [redval(p), greenval(p), blueval(p)]./255
 

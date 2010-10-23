@@ -165,6 +165,114 @@ assert((Complex(1,2) + 1//2) * 0.5 == Complex(0.75,1.0))
 assert((Complex(1,2)/Complex(2.5,3.0))*Complex(2.5,3.0) == Complex(1,2))
 assert(0.7 < real(sqrt(Complex(0,1))) < 0.707107)
 
+# div, fld, rem, mod
+for nr = {
+    Range1(1,6),
+    Range(0.25,0.25,6.0),
+    Range(1//4,1//4,6//1)
+}, ar = {
+    Range1(0,6),
+    Range(0.0,0.25,6.0),
+    Range(0//1,1//4,6//1)
+}
+    for n = nr, a = ar
+        # check basic div functionality
+        if 0n <= a < 1n
+            assert(div(+a,+n) == 0)
+            assert(div(+a,-n) == 0)
+            assert(div(-a,+n) == 0)
+            assert(div(-a,-n) == 0)
+        end
+        if 1n <= a < 2n
+            assert(div(+a,+n) == +1)
+            assert(div(+a,-n) == -1)
+            assert(div(-a,+n) == -1)
+            assert(div(-a,-n) == +1)
+        end
+        if 2n <= a < 3n
+            assert(div(+a,+n) == +2)
+            assert(div(+a,-n) == -2)
+            assert(div(-a,+n) == -2)
+            assert(div(-a,-n) == +2)
+        end
+
+        # check basic fld functionality
+        if 0n == a
+            assert(fld(+a,+n) == 0)
+            assert(fld(+a,-n) == 0)
+            assert(fld(-a,+n) == 0)
+            assert(fld(-a,-n) == 0)
+        end
+        if 0n < a < 1n
+            assert(fld(+a,+n) == +0)
+            assert(fld(+a,-n) == -1)
+            assert(fld(-a,+n) == -1)
+            assert(fld(-a,-n) == +0)
+        end
+        if 1n == a
+            assert(fld(+a,+n) == +1)
+            assert(fld(+a,-n) == -1)
+            assert(fld(-a,+n) == -1)
+            assert(fld(-a,-n) == +1)
+        end
+        if 1n < a < 2n
+            assert(fld(+a,+n) == +1)
+            assert(fld(+a,-n) == -2)
+            assert(fld(-a,+n) == -2)
+            assert(fld(-a,-n) == +1)
+        end
+        if 2n == a
+            assert(fld(+a,+n) == +2)
+            assert(fld(+a,-n) == -2)
+            assert(fld(-a,+n) == -2)
+            assert(fld(-a,-n) == +2)
+        end
+        if 2n < a < 3n
+            assert(fld(+a,+n) == +2)
+            assert(fld(+a,-n) == -3)
+            assert(fld(-a,+n) == -3)
+            assert(fld(-a,-n) == +2)
+        end
+
+        # check everything else in terms of div & fld
+        d = div(a,n)
+        f = fld(a,n)
+        r = rem(a,n)
+        m = mod(a,n)
+        t = promote_type(typeof(a),typeof(n))
+
+        assert(typeof(d) <: Int)
+        assert(typeof(f) <: Int)
+        assert(typeof(r) <: t)
+        assert(typeof(m) <: t)
+
+        assert(d == f)
+        assert(r == m)
+        assert(0 <= r < n)
+        assert(a == n*d + r)
+
+        for A=[-1,1], N=[-1,1]
+            S = A*N
+            sa = A*a
+            sn = N*n
+            sd = div(sa,sn)
+            sf = fld(sa,sn)
+            sr = rem(sa,sn)
+            sm = mod(sa,sn)
+
+            assert(typeof(sd) <: Int)
+            assert(typeof(sf) <: Int)
+            assert(typeof(sr) <: t)
+            assert(typeof(sm) <: t)
+
+            assert(sa < 0 ? -n < sr <= 0 : 0 <= sr < +n)
+            assert(sn < 0 ? -n < sm <= 0 : 0 <= sm < +n)
+            assert(sa == sn*sd + sr)
+            assert(sa == sn*sf + sm)
+        end
+    end
+end
+
 # a data structure
 l = dequeue(1,2,3)
 push(l,8)

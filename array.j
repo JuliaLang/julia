@@ -708,7 +708,7 @@ function ind2sub(dims, ind::Index)
 
     sub = ()
     for i=ndims:-1:1
-        rest = rem(ind-1, x[i]) + 1
+        rest = rem(ind-1, x[i]) + 1 # TODO: rem? mod?
         sub = tuple(div(ind - rest, x[i]) + 1, sub...)
         ind = rest
     end

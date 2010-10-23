@@ -183,7 +183,7 @@ end
 #     fac = one(k)
 #     for i=2:length(A)
 #         fac *= (i-1)
-#         j = i - div(k,fac)%i
+#         j = i - div(k,fac)%i # TODO: rem? mod?
 #         A[i], A[j] = A[j], A[i]
 #     end
 #     A

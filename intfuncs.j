@@ -1,27 +1,25 @@
 ## integer functions ##
 
-rem(x::Int, y::Int) = x - div(x,y)*y
-
-isodd(n::Int)  = ((n%2)==1)
-iseven(n::Int) = ((n%2)==0)
+isodd(n::Int) = bool(rem(n,2))
+iseven(n::Int) = !isodd(n)
 
 function gcd(a::Int, b::Int)
     while b != 0
         t = b
-        b = a % b
+        b = rem(a, b) # TODO: rem? mod?
         a = t
     end
     return a
 end
 
-lcm(a::Int, b::Int) = div(a*b,gcd(a,b))
+lcm(a::Int, b::Int) = div(a*b, gcd(a,b))
 
 # return (gcd(a,b),x,y) such that ax+by == gcd(a,b)
 function gcdx(a, b)
     if b == 0
         (a, 1, 0)
     else
-        m = a % b
+        m = rem(a, b) # TODO: rem? mod?
         k = div((a-m), b)
         (g, x, y) = gcdx(b, m)
         (g, y, x-k*y)
@@ -83,12 +81,12 @@ function powermod(x::Int, p::Int, m::Int)
     r = 1
     while true
         if p >= t
-            r = (r*x) % m
+            r = mod(r*x, m) # TODO: rem? mod?
             p -= t
         end
         t = div(t,2)
         if t > 0
-            r = (r*r) % m
+            r = mod(r*r, m) # TODO: rem? mod?
         else
             break
         end
@@ -117,11 +115,11 @@ function randint{T<:Int}(lo::T, hi::T)
         # power of 2 range
         return s&(r-1) + lo
     end
-    lim = m - (m%r+1)%r  # m - (m+1)%r
+    lim = m - mod(mod(m,r)+1, r) # TODO: rem? mod?
     while s > lim
         s = randint(T)
     end
-    return s%r + lo
+    return mod(s,r) + lo # TODO: rem? mod?
 end
 
 # random integer from 1 to n
