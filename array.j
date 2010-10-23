@@ -570,6 +570,38 @@ ctranspose(x::Matrix) = [ conj(x[j,i]) | i=1:size(x,2), j=1:size(x,1) ]
 transpose(x::Vector) = [ x[j] | i=1, j=1:size(x,1) ]
 ctranspose(x::Vector) = [ conj(x[j]) | i=1, j=1:size(x,1) ]
 
+function permute{T}(A::Array{T}, perm)
+    dimsA = A.dims
+    ndimsA = length(dimsA)
+    dimsP = ntuple(ndimsA, i->dimsA[perm[i]])
+    P = Array(T, dimsP)
+
+    count = 1
+    function permute_one(ind)
+        P[count] = A[ntuple(ndimsA, i->ind[perm[i]])...]
+        count += 1
+    end
+
+    cartesian_map(permute_one, ntuple(ndimsA, i->(Range(1,1,dimsP[i]))) )
+    return P
+end
+
+function ipermute{T}(A::Array{T}, perm)
+    dimsA = A.dims
+    ndimsA = length(dimsA)
+    dimsP = ntuple(ndimsA, i->dimsA[perm[i]])
+    P = Array(T, dimsP)
+
+    count = 1
+    function permute_one(ind)
+        P[ntuple(ndimsA, i->ind[perm[i]])...] = A[count]
+        count += 1
+    end
+
+    cartesian_map(permute_one, ntuple(ndimsA, i->(Range(1,1,dimsP[i]))) )
+    return P
+end
+
 reverse(v::Vector) = [ v[length(v)-i+1] | i=1:length(v) ]
 
 diff(a::Vector) = [ a[i+1] - a[i] | i=1:length(a)-1 ]

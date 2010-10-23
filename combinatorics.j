@@ -179,13 +179,13 @@ function randcycle(n::Int)
     return a
 end
 
-function permute(A, k::Int)
-    fac = one(k)
-    for i=2:length(A)
-        fac *= (i-1)
-        j = i - div(k,fac)%i
-        A[i], A[j] = A[j], A[i]
-    end
-    A
-end
+# function permute(A, k::Int)
+#     fac = one(k)
+#     for i=2:length(A)
+#         fac *= (i-1)
+#         j = i - div(k,fac)%i
+#         A[i], A[j] = A[j], A[i]
+#     end
+#     A
+# end
 
