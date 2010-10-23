@@ -1,26 +1,5 @@
 libLAPACK = dlopen("libLAPACK")
 
-function issymmetric(A::Matrix)
-    m, n = size(A)
-    if m != n; error("Input matrix must be square"); end
-    for i=1:(n-1), j=(i+1):n; if A[i,j] != A[j,i]; return false; end; end
-    return true
-end
-
-function isuppertriangular(A::Matrix)
-    m, n = size(A)
-    if m != n; error("Input matrix must be square"); end
-    for i=1:n, j=1:n; if A[i,j] != 0 && j < i; return false; end; end
-    return true
-end
-
-function islowertriangular(A::Matrix)
-    m, n = size(A)
-    if m != n; error("Input matrix must be square"); end
-    for i=1:n, j=n:-1:1; if A[i,j] != 0 && j > i; return false; end; end
-    return true
-end
-
 # SUBROUTINE DPOTRF( UPLO, N, A, LDA, INFO )
 # *     .. Scalar Arguments ..
 #       CHARACTER          UPLO

@@ -1,5 +1,38 @@
 ## Basic Linear Algebra functions ##
 
+function issymmetric(A::Matrix)
+    m, n = size(A)
+    if m != n; error("Input matrix must be square"); end
+    for i=1:(n-1), j=(i+1):n
+        if A[i,j] != A[j,i]
+            return false
+        end
+    end
+    return true
+end
+
+function isuppertriangular(A::Matrix)
+    m, n = size(A)
+    if m != n; error("Input matrix must be square"); end
+    for i=1:n, j=1:n
+        if A[i,j] != 0 && j < i
+            return false
+        end
+    end
+    return true
+end
+
+function islowertriangular(A::Matrix)
+    m, n = size(A)
+    if m != n; error("Input matrix must be square"); end
+    for i=1:n, j=n:-1:1
+        if A[i,j] != 0 && j > i
+            return false
+        end
+    end
+    return true
+end
+
 triu(M) = triu(M,0)
 tril(M) = tril(M,0)
 triu{T}(M::Matrix{T}, k) = [ j-i >= k ? M[i,j] : zero(T) |
@@ -8,7 +41,6 @@ tril{T}(M::Matrix{T}, k) = [ j-i <= k ? M[i,j] : zero(T) |
                             i=1:size(M,1), j=1:size(M,2) ]
 
 diff(a::Vector) = [ a[i+1] - a[i] | i=1:length(a)-1 ]
-diff(a::Matrix) = diff(a, 1)
 
 function diff(a::Matrix, dim) 
     if dim == 1
@@ -18,7 +50,10 @@ function diff(a::Matrix, dim)
     end
 end
 
+diff(a::Matrix) = diff(a, 1)
+
 diag(A::Matrix) = [ A[i,i] | i=1:min(size(A)) ]
+
 diagm{T}(v::Vector{T}) = (n=length(v);
                           a=zeros(T,n,n);
                           for i=1:n; a[i,i] = v[i]; end;
