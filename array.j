@@ -145,6 +145,10 @@ imag(x::Array) = reshape( [ imag(x[i]) | i=1:numel(x) ], size(x) )
 (./)(x::Number, y::Array) = reshape( [ x    ./ y[i] | i=1:numel(y) ], size(y) )
 (./)(x::Array, y::Number) = reshape( [ x[i] ./ y    | i=1:numel(x) ], size(x) )
 
+(.^)(x::Array, y::Array)  = reshape( [ x[i] .^ y[i] | i=1:numel(x) ], size(x) )
+(.^)(x::Number, y::Array) = reshape( [ x    .^ y[i] | i=1:numel(y) ], size(y) )
+(.^)(x::Array, y::Number) = reshape( [ x[i] .^ y    | i=1:numel(x) ], size(x) )
+
 (/)(x::Number, y::Array) = reshape( [ x    / y[i] | i=1:numel(y) ], size(y) )
 (/)(x::Array, y::Number) = reshape( [ x[i] / y    | i=1:numel(x) ], size(x) )
 

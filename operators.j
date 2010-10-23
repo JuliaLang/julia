@@ -36,6 +36,7 @@ end
 (./)(x,y) = x/y
 (.\)(x,y) = y./x
 (.*)(x,y) = x*y
+(.^)(x,y) = x^y
 
 div(x::Number, y::Number) = truncate(x/y)
 (%)(x::Number, y::Number) = x-div(x,y)*y
