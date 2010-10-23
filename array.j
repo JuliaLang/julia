@@ -563,7 +563,9 @@ function cartesian_map(body, t::Tuple, it...)
     end
 end
 
-## Other array functions ##
+## Transpose, Permute ##
+
+reverse(v::Vector) = [ v[length(v)-i+1] | i=1:length(v) ]
 
 transpose(x::Matrix) = [ x[j,i] | i=1:size(x,2), j=1:size(x,1) ]
 ctranspose(x::Matrix) = [ conj(x[j,i]) | i=1:size(x,2), j=1:size(x,1) ]
@@ -602,7 +604,7 @@ function ipermute{T}(A::Array{T}, perm)
     return P
 end
 
-reverse(v::Vector) = [ v[length(v)-i+1] | i=1:length(v) ]
+## Other array functions ##
 
 diff(a::Vector) = [ a[i+1] - a[i] | i=1:length(a)-1 ]
 diff(a::Matrix) = diff(a, 1)
@@ -623,7 +625,15 @@ diagm{T}(v::Vector{T}) = (n=length(v);
 
 dot(x::Vector, y::Vector) = sum(x.*y)
 
-trace(A::Matrix) = sum(diag(A))
+# trace(A::Matrix) = sum(diag(A))
+
+function trace(A::Matrix)
+    t = 0
+    for i=1:min(size(A))
+        t += A[i,i]
+    end
+    return t
+end
 
 mean(V::Vector) = sum(V) / length(V)
 
