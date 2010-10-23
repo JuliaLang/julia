@@ -114,3 +114,9 @@ kron(a::Matrix, b::Matrix) = reshape([ a[i,j]*b[k,l] | k=1:size(b,1),
                                      size(a,2)*size(b,2))
 
 det(a::Matrix) = prod(diag(qr(a)[2]))
+
+inv(a::Matrix) = a \ eye(size(a)[1])
+
+cond(a::Matrix, p) = norm(a, p) * norm(inv(a), p)
+
+cond(a::Matrix) = cond(a, 2)

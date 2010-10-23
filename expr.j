@@ -6,6 +6,8 @@ symbol(a::Array{Uint8,1}) =
     ccall(dlsym(JuliaDLHandle,"jl_symbol"), Any, (Ptr{Uint8},), a)::Symbol
 gensym() = ccall(dlsym(JuliaDLHandle,"jl_gensym"), Any, ())::Symbol
 
+(==)(x::Symbol, y::Symbol) = is(x, y)
+
 ## expressions ##
 
 expr(hd::Symbol, args...) = Expr(hd, {args...}, Any)
