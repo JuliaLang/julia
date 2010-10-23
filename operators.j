@@ -40,13 +40,13 @@ end
 (.*)(x,y) = x*y
 (.^)(x,y) = x^y
 
-div(x::Number, y::Number) = y != 0 ? truncate(x/y) :
-                            error("error: integer divide by zero")
-fld(x::Number, y::Number) = y != 0 ? int32(floor(x/y)) :
-                            error("error: integer divide by zero")
+div(x::Real, y::Real) = y != 0 ? truncate(x/y) :
+                        error("error: integer divide by zero")
+fld(x::Real, y::Real) = y != 0 ? int32(floor(x/y)) :
+                        error("error: integer divide by zero")
 
-rem(x::Number, y::Number) = x-y*div(x,y)
-mod(x::Number, y::Number) = x-y*fld(x,y)
+rem(x,y) = x-y*div(x,y)
+mod(x,y) = x-y*fld(x,y)
 
 (%)(x,y) = mod(x,y)
 mod1(x,y) = (m=mod(x-one(x),y); m+one(m))
