@@ -489,9 +489,9 @@ hcat(A::Array...) = cat(2, A...)
 
 function reduce{T}(op, A::Array{T,2}, dim::Int)
     if dim == 1
-        [ sum(A[:,i]) | i=1:size(A, 2) ]
+        [ reduce(op, A[:,i]) | i=1:size(A, 2) ]
     elseif dim == 2
-        [ sum(A[i,:]) | i=1:size(A, 1) ]
+        [ reduce(op, A[i,:]) | i=1:size(A, 1) ]
     end
 end
 
