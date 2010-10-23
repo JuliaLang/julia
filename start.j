@@ -28,6 +28,7 @@ load("intfuncs.j")
 load("floatfuncs.j")
 load("genericmath.j")
 load("combinatorics.j")
+load("linalg.j")
 
 # load libc
 libc = dlopen("libc")
