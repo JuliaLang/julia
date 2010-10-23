@@ -33,6 +33,7 @@ promote_rule(::Type{Char}, ::Type{Uint32}) = Uint64
 (-)(x::Char, y::Char) = int32(x) - int32(y)
 (*)(x::Char, y::Char) = int32(x) * int32(y)
 div(x::Char, y::Char) = div(int32(x), int32(y))
+fld(x::Char, y::Char) = div(int32(x), int32(y))
 rem(x::Char, y::Char) = rem(int32(x), int32(y))
 mod(x::Char, y::Char) = rem(int32(x), int32(y))
 (&)(x::Char, y::Char) = int32(x) & int32(y)
