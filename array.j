@@ -487,13 +487,35 @@ hcat(A::Array...) = cat(2, A...)
 
 ## Reductions ##
 
-function sum(x::Matrix, dim::Int)
+function reduce{T}(op, A::Array{T,2}, dim::Int)
     if dim == 1
-        [ sum(x[:,i]) | i=1:size(x, 2) ]
+        [ sum(A[:,i]) | i=1:size(A, 2) ]
     elseif dim == 2
-        [ sum(x[i,:]) | i=1:size(x, 1) ]
+        [ sum(A[i,:]) | i=1:size(A, 1) ]
     end
 end
+
+function reduce{T}(op, A::Array{T}, region)
+    dimsA = A.dims
+    ndimsA = length(dimsA)
+    dimsR = ntuple(ndimsA, i->(contains(region, i) ? 1 : dimsA[i]))
+    R = Array(T, dimsR)
+
+    function reduce_one(ind)
+        sliceA = ntuple(ndimsA, i->(contains(region, i) ?
+                                    Range(1,1,dimsA[i]) :
+                                    ind[i]))
+        R[ind...] = reduce(op, A[sliceA...])
+    end
+
+    cartesian_map(reduce_one, ntuple(ndimsA, i->(Range(1,1,dimsR[i]))) )
+    return R
+end
+
+max(A, region) = reduce(max, A, region)
+min(A, region) = reduce(min, A, region)
+sum(A, region) = reduce(+, A, region)
+prod(A, region) = reduce(.*, A, region)
 
 function scan{T}(op, v::Vector{T})
     n = length(v)
