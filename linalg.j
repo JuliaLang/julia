@@ -112,3 +112,5 @@ kron(a::Matrix, b::Matrix) = reshape([ a[i,j]*b[k,l] | k=1:size(b,1),
                                                        j=1:size(a,2)],
                                      size(a,1)*size(b,1),
                                      size(a,2)*size(b,2))
+
+det(a::Matrix) = prod(diag(qr(a)[2]))
