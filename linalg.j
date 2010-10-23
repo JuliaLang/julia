@@ -44,7 +44,7 @@ function norm(A::Matrix, p::Scalar)
     elseif p == 1
         return max(sum(abs(A)))
     elseif p == 2
-        return svd(A,2)
+        return max(diag(svd(A)[2]))
     elseif p == Inf
         max(sum(abs(A')))
     elseif p == "fro"
