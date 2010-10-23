@@ -244,8 +244,10 @@ end
 # *     .. Array Arguments ..
 #       DOUBLE PRECISION   A( LDA, * ), B( LDB, * )
 
-for (fname_lu, fname_lsq, fname_tri, eltype) = (("dgesv_", "dgels_", "dtrtrs_", Float64),
-                                                ("sgesv_", "sgels_", "strtrs_", Float32))
+for (fname_lu, fname_chol, fname_lsq, fname_tri, eltype) = 
+    (("dgesv_", "dposv_", "dgels_", "dtrtrs_", Float64),
+     ("sgesv_", "sposv_", "sgels_", "strtrs_", Float32))
+
     eval(`function \(A::DenseMatrix{$eltype}, B::DenseVecOrMat{$eltype})
         info = [0]
         m = size(A, 1)
@@ -255,20 +257,44 @@ for (fname_lu, fname_lsq, fname_tri, eltype) = (("dgesv_", "dgels_", "dtrtrs_", 
         X = copy(B)
 
         if m == n # Square
-            case = 0
-            if isuppertriangular(A); case = 1; end
-            if islowertriangular(A); case = 2; end
+            case = "general"
+            if isuppertriangular(A); case = "upper_triangular"; end
+            if islowertriangular(A); case = "lower_triangular"; end
 
-            if case == 0 # General
+            if case == "general" # General
                 ipiv = Array(Int32, n)
-                ccall(dlsym(libLAPACK, $fname_lu),
-                      Void,
-                      (Ptr{Int32}, Ptr{Int32}, Ptr{$eltype}, Ptr{Int32}, Ptr{Int32},
-                       Ptr{$eltype}, Ptr{Int32}, Ptr{Int32}),
-                      n, nrhs, Acopy, n, ipiv, X, n, info)
-            elseif case == 1 || case == 2 # Triangular
+
+                # Check for SPD matrix
+                if issymmetric(Acopy) && all([ Acopy[i,i] > 0 | i=1:n ])
+                      case = "spd"
+                end
+
+                if case == "spd"
+                      uplo = "U"
+                      ccall(dlsym(libLAPACK, $fname_chol),
+                            Void,
+                            (Ptr{Uint8}, Ptr{Int32}, Ptr{Int32}, Ptr{$eltype}, Ptr{Int32},
+                             Ptr{$eltype}, Ptr{Int32}, Ptr{Int32}),
+                            uplo, n, nrhs, Acopy, n, X, n, info)
+
+                      if info[1] != 0
+                         Acopy = copy(A)
+                         case = "general"
+                      end
+                end
+
+                if case == "general"
+                      info[1] = 0
+                      ccall(dlsym(libLAPACK, $fname_lu),
+                            Void,
+                            (Ptr{Int32}, Ptr{Int32}, Ptr{$eltype}, Ptr{Int32}, Ptr{Int32},
+                             Ptr{$eltype}, Ptr{Int32}, Ptr{Int32}),
+                            n, nrhs, Acopy, n, ipiv, X, n, info)
+                end
+
+            else # Triangular
                 uplo = "U"
-                if case == 2; uplo = "L"; end
+                if case == "lower_triangular"; uplo = "L"; end
                 ccall(dlsym(libLAPACK, $fname_tri),
                       Void,
                       (Ptr{Uint8}, Ptr{Uint8}, Ptr{Uint8}, Ptr{Int32}, Ptr{Int32},
