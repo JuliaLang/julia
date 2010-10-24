@@ -28,6 +28,14 @@ float64(x::Scalar) = convert(Float64, x)
 truncate(x::Float32) = convert(Int32, x)
 truncate(x::Float64) = convert(Int64, x)
 
+int(x::Float32) = int32(x)
+int(x::Float64) = int64(x)
+
+uint(x::Float32) = uint32(x)
+uint(x::Float64) = uint64(x)
+
+float(x::Float) = x
+
 ## floating point promotions ##
 
 promote_rule(::Type{Float64}, ::Type{Float32} ) = Float64

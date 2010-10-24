@@ -107,6 +107,23 @@ uint64(x::Scalar) = convert(Uint64, x)
 
 truncate(x::Int) = x
 
+int(x::Int) = x
+int(x::Uint8 ) = int16(x)
+int(x::Uint16) = int32(x)
+int(x::Uint32) = int64(x)
+int(x::Uint64) = int64(x) # LOSSY
+
+uint(x::Int) = x
+uint(x::Int8 ) = uint8(x)
+uint(x::Int16) = uint16(x)
+uint(x::Int32) = uint32(x)
+uint(x::Int64) = uint64(x)
+
+float(x::Int8 ) = float32(x)
+float(x::Int16) = float32(x)
+float(x::Int32) = float64(x)
+float(x::Int64) = float64(x) # TODO: should be Float80
+
 ## integer promotions ##
 
 promote_rule(::Type{Int16}, ::Type{Int8} ) = Int16
