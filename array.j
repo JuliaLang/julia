@@ -104,6 +104,10 @@ colon(start::Real, stop::Real, stride::Real) =
     ((start, stop, stride) = promote(start, stop, stride);
      [ i | i=start:stride:stop ])
 
+complex(re::Array, im::Array)  = reshape([ Complex(re[i],im[i]) | i=1:numel(re) ], size(re))
+complex(re::Array, im::Scalar) = reshape([ Complex(re[i],im   ) | i=1:numel(re) ], size(re))
+complex(re::Scalar, im::Array) = reshape([ Complex(re   ,im[i]) | i=1:numel(re) ], size(re))
+
 ## Unary operators ##
 
 (-)(x::Array) = reshape([ -x[i] | i=1:numel(x) ], size(x) )
