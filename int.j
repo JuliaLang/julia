@@ -123,12 +123,25 @@ promote_rule(::Type{Uint64}, ::Type{Uint8} ) = Uint64
 promote_rule(::Type{Uint64}, ::Type{Uint16}) = Uint64
 promote_rule(::Type{Uint64}, ::Type{Uint32}) = Uint64
 
-promote_rule(::Type{Int16}, ::Type{Uint8} ) = Int16
-promote_rule(::Type{Int32}, ::Type{Uint8} ) = Int32
-promote_rule(::Type{Int32}, ::Type{Uint16}) = Int32
-promote_rule(::Type{Int64}, ::Type{Uint8} ) = Int64
-promote_rule(::Type{Int64}, ::Type{Uint16}) = Int64
-promote_rule(::Type{Int64}, ::Type{Uint32}) = Int64
+promote_rule(::Type{Uint8} , ::Type{Int8} ) = Int16
+promote_rule(::Type{Uint8} , ::Type{Int16}) = Int16
+promote_rule(::Type{Uint8} , ::Type{Int32}) = Int32
+promote_rule(::Type{Uint8} , ::Type{Int64}) = Int64
+
+promote_rule(::Type{Uint16}, ::Type{Int8} ) = Int32
+promote_rule(::Type{Uint16}, ::Type{Int16}) = Int32
+promote_rule(::Type{Uint16}, ::Type{Int32}) = Int32
+promote_rule(::Type{Uint16}, ::Type{Int64}) = Int64
+
+promote_rule(::Type{Uint32}, ::Type{Int8} ) = Int64
+promote_rule(::Type{Uint32}, ::Type{Int16}) = Int64
+promote_rule(::Type{Uint32}, ::Type{Int32}) = Int64
+promote_rule(::Type{Uint32}, ::Type{Int64}) = Int64
+
+promote_rule(::Type{Uint64}, ::Type{Int8} ) = Int64 # LOSSY
+promote_rule(::Type{Uint64}, ::Type{Int16}) = Int64 # LOSSY
+promote_rule(::Type{Uint64}, ::Type{Int32}) = Int64 # LOSSY
+promote_rule(::Type{Uint64}, ::Type{Int64}) = Int64 # LOSSY
 
 ## integer arithmetic ##
 
@@ -142,15 +155,30 @@ promote_rule(::Type{Int64}, ::Type{Uint32}) = Int64
 (+)(x::Int32, y::Int32) = boxsi32(add_int(unbox32(x), unbox32(y)))
 (+)(x::Int64, y::Int64) = boxsi64(add_int(unbox64(x), unbox64(y)))
 
+(+)(x::Uint8 , y::Uint8 ) = boxui8 (add_int(unbox8 (x), unbox8 (y)))
+(+)(x::Uint16, y::Uint16) = boxui16(add_int(unbox16(x), unbox16(y)))
+(+)(x::Uint32, y::Uint32) = boxui32(add_int(unbox32(x), unbox32(y)))
+(+)(x::Uint64, y::Uint64) = boxui64(add_int(unbox64(x), unbox64(y)))
+
 (-)(x::Int8 , y::Int8 ) = boxsi8 (sub_int(unbox8 (x), unbox8 (y)))
 (-)(x::Int16, y::Int16) = boxsi16(sub_int(unbox16(x), unbox16(y)))
 (-)(x::Int32, y::Int32) = boxsi32(sub_int(unbox32(x), unbox32(y)))
 (-)(x::Int64, y::Int64) = boxsi64(sub_int(unbox64(x), unbox64(y)))
 
+(-)(x::Uint8 , y::Uint8 ) = boxui8 (sub_int(unbox8 (x), unbox8 (y)))
+(-)(x::Uint16, y::Uint16) = boxui16(sub_int(unbox16(x), unbox16(y)))
+(-)(x::Uint32, y::Uint32) = boxui32(sub_int(unbox32(x), unbox32(y)))
+(-)(x::Uint64, y::Uint64) = boxui64(sub_int(unbox64(x), unbox64(y)))
+
 (*)(x::Int8 , y::Int8 ) = boxsi8 (mul_int(unbox8 (x), unbox8 (y)))
 (*)(x::Int16, y::Int16) = boxsi16(mul_int(unbox16(x), unbox16(y)))
 (*)(x::Int32, y::Int32) = boxsi32(mul_int(unbox32(x), unbox32(y)))
 (*)(x::Int64, y::Int64) = boxsi64(mul_int(unbox64(x), unbox64(y)))
+
+(*)(x::Uint8 , y::Uint8 ) = boxui8 (mul_int(unbox8 (x), unbox8 (y)))
+(*)(x::Uint16, y::Uint16) = boxui16(mul_int(unbox16(x), unbox16(y)))
+(*)(x::Uint32, y::Uint32) = boxui32(mul_int(unbox32(x), unbox32(y)))
+(*)(x::Uint64, y::Uint64) = boxui64(mul_int(unbox64(x), unbox64(y)))
 
 (/)(x::Int, y::Int) = float64(x)/float64(y)
 
@@ -159,10 +187,30 @@ div(x::Int16, y::Int16) = boxsi16(sdiv_int(unbox16(x), unbox16(y)))
 div(x::Int32, y::Int32) = boxsi32(sdiv_int(unbox32(x), unbox32(y)))
 div(x::Int64, y::Int64) = boxsi64(sdiv_int(unbox64(x), unbox64(y)))
 
+div(x::Uint8 , y::Uint8 ) = boxui8 (udiv_int(unbox8 (x), unbox8 (y)))
+div(x::Uint16, y::Uint16) = boxui16(udiv_int(unbox16(x), unbox16(y)))
+div(x::Uint32, y::Uint32) = boxui32(udiv_int(unbox32(x), unbox32(y)))
+div(x::Uint64, y::Uint64) = boxui64(udiv_int(unbox64(x), unbox64(y)))
+
+fld(x::Uint8 , y::Uint8 ) = div(x,y)
+fld(x::Uint16, y::Uint16) = div(x,y)
+fld(x::Uint32, y::Uint32) = div(x,y)
+fld(x::Uint64, y::Uint64) = div(x,y)
+
 rem(x::Int8 , y::Int8 ) = boxsi8 (srem_int(unbox8 (x), unbox8 (y)))
 rem(x::Int16, y::Int16) = boxsi16(srem_int(unbox16(x), unbox16(y)))
 rem(x::Int32, y::Int32) = boxsi32(srem_int(unbox32(x), unbox32(y)))
 rem(x::Int64, y::Int64) = boxsi64(srem_int(unbox64(x), unbox64(y)))
+
+rem(x::Uint8 , y::Uint8 ) = boxui8 (urem_int(unbox8 (x), unbox8 (y)))
+rem(x::Uint16, y::Uint16) = boxui16(urem_int(unbox16(x), unbox16(y)))
+rem(x::Uint32, y::Uint32) = boxui32(urem_int(unbox32(x), unbox32(y)))
+rem(x::Uint64, y::Uint64) = boxui64(urem_int(unbox64(x), unbox64(y)))
+
+mod(x::Uint8 , y::Uint8 ) = rem(x,y)
+mod(x::Uint16, y::Uint16) = rem(x,y)
+mod(x::Uint32, y::Uint32) = rem(x,y)
+mod(x::Uint64, y::Uint64) = rem(x,y)
 
 ## integer bitwise operations ##
 
@@ -171,34 +219,73 @@ rem(x::Int64, y::Int64) = boxsi64(srem_int(unbox64(x), unbox64(y)))
 (~)(x::Int32) = boxsi32(not_int(unbox32(x)))
 (~)(x::Int64) = boxsi64(not_int(unbox64(x)))
 
+(~)(x::Uint8 ) = boxui8 (not_int(unbox8 (x)))
+(~)(x::Uint16) = boxui16(not_int(unbox16(x)))
+(~)(x::Uint32) = boxui32(not_int(unbox32(x)))
+(~)(x::Uint64) = boxui64(not_int(unbox64(x)))
+
 (&)(x::Int8 , y::Int8 ) = boxsi8 (and_int(unbox8 (x), unbox8 (y)))
 (&)(x::Int16, y::Int16) = boxsi16(and_int(unbox16(x), unbox16(y)))
 (&)(x::Int32, y::Int32) = boxsi32(and_int(unbox32(x), unbox32(y)))
 (&)(x::Int64, y::Int64) = boxsi64(and_int(unbox64(x), unbox64(y)))
+
+(&)(x::Uint8 , y::Uint8 ) = boxui8 (and_int(unbox8 (x), unbox8 (y)))
+(&)(x::Uint16, y::Uint16) = boxui16(and_int(unbox16(x), unbox16(y)))
+(&)(x::Uint32, y::Uint32) = boxui32(and_int(unbox32(x), unbox32(y)))
+(&)(x::Uint64, y::Uint64) = boxui64(and_int(unbox64(x), unbox64(y)))
 
 (|)(x::Int8 , y::Int8 ) = boxsi8 (or_int(unbox8 (x), unbox8 (y)))
 (|)(x::Int16, y::Int16) = boxsi16(or_int(unbox16(x), unbox16(y)))
 (|)(x::Int32, y::Int32) = boxsi32(or_int(unbox32(x), unbox32(y)))
 (|)(x::Int64, y::Int64) = boxsi64(or_int(unbox64(x), unbox64(y)))
 
+(|)(x::Uint8 , y::Uint8 ) = boxui8 (or_int(unbox8 (x), unbox8 (y)))
+(|)(x::Uint16, y::Uint16) = boxui16(or_int(unbox16(x), unbox16(y)))
+(|)(x::Uint32, y::Uint32) = boxui32(or_int(unbox32(x), unbox32(y)))
+(|)(x::Uint64, y::Uint64) = boxui64(or_int(unbox64(x), unbox64(y)))
+
 ($)(x::Int8 , y::Int8 ) = boxsi8 (xor_int(unbox8 (x), unbox8 (y)))
 ($)(x::Int16, y::Int16) = boxsi16(xor_int(unbox16(x), unbox16(y)))
 ($)(x::Int32, y::Int32) = boxsi32(xor_int(unbox32(x), unbox32(y)))
 ($)(x::Int64, y::Int64) = boxsi64(xor_int(unbox64(x), unbox64(y)))
 
-(<<) (x::Int8 , y::Int32) = boxsi8 ( shl_int(unbox8 (x), unbox32(y)))
-(<<) (x::Int16, y::Int32) = boxsi16( shl_int(unbox16(x), unbox32(y)))
-(<<) (x::Int32, y::Int32) = boxsi32( shl_int(unbox32(x), unbox32(y)))
-(<<) (x::Int64, y::Int32) = boxsi64( shl_int(unbox64(x), unbox32(y)))
-(>>) (x::Int8 , y::Int32) = boxsi8 (ashr_int(unbox8 (x), unbox32(y)))
-(>>) (x::Int16, y::Int32) = boxsi16(ashr_int(unbox16(x), unbox32(y)))
-(>>) (x::Int32, y::Int32) = boxsi32(ashr_int(unbox32(x), unbox32(y)))
-(>>) (x::Int64, y::Int32) = boxsi64(ashr_int(unbox64(x), unbox32(y)))
+($)(x::Uint8 , y::Uint8 ) = boxui8 (xor_int(unbox8 (x), unbox8 (y)))
+($)(x::Uint16, y::Uint16) = boxui16(xor_int(unbox16(x), unbox16(y)))
+($)(x::Uint32, y::Uint32) = boxui32(xor_int(unbox32(x), unbox32(y)))
+($)(x::Uint64, y::Uint64) = boxui64(xor_int(unbox64(x), unbox64(y)))
+
+(<<)(x::Int8 , y::Int32) = boxsi8 (shl_int(unbox8 (x), unbox32(y)))
+(<<)(x::Int16, y::Int32) = boxsi16(shl_int(unbox16(x), unbox32(y)))
+(<<)(x::Int32, y::Int32) = boxsi32(shl_int(unbox32(x), unbox32(y)))
+(<<)(x::Int64, y::Int32) = boxsi64(shl_int(unbox64(x), unbox32(y)))
+
+(<<)(x::Uint8 , y::Uint32) = boxui8 (shl_int(unbox8 (x), unbox32(y)))
+(<<)(x::Uint16, y::Uint32) = boxui16(shl_int(unbox16(x), unbox32(y)))
+(<<)(x::Uint32, y::Uint32) = boxui32(shl_int(unbox32(x), unbox32(y)))
+(<<)(x::Uint64, y::Uint32) = boxui64(shl_int(unbox64(x), unbox32(y)))
+
+(>>)(x::Int8 , y::Int32) = boxsi8 (ashr_int(unbox8 (x), unbox32(y)))
+(>>)(x::Int16, y::Int32) = boxsi16(ashr_int(unbox16(x), unbox32(y)))
+(>>)(x::Int32, y::Int32) = boxsi32(ashr_int(unbox32(x), unbox32(y)))
+(>>)(x::Int64, y::Int32) = boxsi64(ashr_int(unbox64(x), unbox32(y)))
+
+(>>)(x::Uint8 , y::Uint32) = boxui8 (ashr_int(unbox8 (x), unbox32(y)))
+(>>)(x::Uint16, y::Uint32) = boxui16(ashr_int(unbox16(x), unbox32(y)))
+(>>)(x::Uint32, y::Uint32) = boxui32(ashr_int(unbox32(x), unbox32(y)))
+(>>)(x::Uint64, y::Uint32) = boxui64(ashr_int(unbox64(x), unbox32(y)))
+
 (>>>)(x::Int8 , y::Int32) = boxsi8 (lshr_int(unbox8 (x), unbox32(y)))
 (>>>)(x::Int16, y::Int32) = boxsi16(lshr_int(unbox16(x), unbox32(y)))
 (>>>)(x::Int32, y::Int32) = boxsi32(lshr_int(unbox32(x), unbox32(y)))
 (>>>)(x::Int64, y::Int32) = boxsi64(lshr_int(unbox64(x), unbox32(y)))
 
+(>>>)(x::Uint8 , y::Uint32) = boxui8 (lshr_int(unbox8 (x), unbox32(y)))
+(>>>)(x::Uint16, y::Uint32) = boxui16(lshr_int(unbox16(x), unbox32(y)))
+(>>>)(x::Uint32, y::Uint32) = boxui32(lshr_int(unbox32(x), unbox32(y)))
+(>>>)(x::Uint64, y::Uint32) = boxui64(lshr_int(unbox64(x), unbox32(y)))
+
+bswap(x::Int8)   = x
+bswap(x::Uint8)  = x
 bswap(x::Int16)  = boxsi16(bswap_int(unbox16(x)))
 bswap(x::Uint16) = boxui16(bswap_int(unbox16(x)))
 bswap(x::Int32)  = boxsi32(bswap_int(unbox32(x)))
@@ -212,15 +299,22 @@ bswap(x::Uint64) = boxui64(bswap_int(unbox64(x)))
 ==(x::Int16, y::Int16) = eq_int(unbox16(x),unbox16(y))
 ==(x::Int32, y::Int32) = eq_int(unbox32(x),unbox32(y))
 ==(x::Int64, y::Int64) = eq_int(unbox64(x),unbox64(y))
+
 ==(x::Uint8 , y::Uint8 ) = eq_int(unbox8 (x),unbox8 (y))
 ==(x::Uint16, y::Uint16) = eq_int(unbox16(x),unbox16(y))
 ==(x::Uint32, y::Uint32) = eq_int(unbox32(x),unbox32(y))
 ==(x::Uint64, y::Uint64) = eq_int(unbox64(x),unbox64(y))
 
-< (x::Int8 , y::Int8 ) = slt_int(unbox8 (x),unbox8 (y))
-< (x::Int16, y::Int16) = slt_int(unbox16(x),unbox16(y))
-< (x::Int32, y::Int32) = slt_int(unbox32(x),unbox32(y))
-< (x::Int64, y::Int64) = slt_int(unbox64(x),unbox64(y))
+<(x::Int8 , y::Int8 ) = slt_int(unbox8 (x),unbox8 (y))
+<(x::Int16, y::Int16) = slt_int(unbox16(x),unbox16(y))
+<(x::Int32, y::Int32) = slt_int(unbox32(x),unbox32(y))
+<(x::Int64, y::Int64) = slt_int(unbox64(x),unbox64(y))
+
+<(x::Uint8 , y::Uint8 ) = ult_int(unbox8 (x),unbox8 (y))
+<(x::Uint16, y::Uint16) = ult_int(unbox16(x),unbox16(y))
+<(x::Uint32, y::Uint32) = ult_int(unbox32(x),unbox32(y))
+<(x::Uint64, y::Uint64) = ult_int(unbox64(x),unbox64(y))
+
 # negating a comparison is ok for integers
 <=(x::Int, y::Int) = !(x > y)
 >=(x::Int, y::Int) = !(x < y)
