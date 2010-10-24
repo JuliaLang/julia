@@ -41,9 +41,9 @@ end
 (.^)(x,y) = x^y
 
 div(x::Real, y::Real) = y != 0 ? truncate(x/y) :
-                        error("error: integer divide by zero")
+                        throw(DivideByZeroError())
 fld(x::Real, y::Real) = y != 0 ? int32(floor(x/y)) :
-                        error("error: integer divide by zero")
+                        throw(DivideByZeroError())
 
 rem(x,y) = x-y*div(x,y)
 mod(x,y) = x-y*fld(x,y)

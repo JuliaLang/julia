@@ -6,7 +6,7 @@ iseven(n::Int) = !isodd(n)
 function gcd(a::Int, b::Int)
     while b != 0
         t = b
-        b = rem(a, b) # TODO: rem? mod?
+        b = rem(a, b)
         a = t
     end
     return a
@@ -19,7 +19,7 @@ function gcdx(a, b)
     if b == 0
         (a, 1, 0)
     else
-        m = rem(a, b) # TODO: rem? mod?
+        m = rem(a, b)
         k = div((a-m), b)
         (g, x, y) = gcdx(b, m)
         (g, y, x-k*y)
@@ -81,12 +81,12 @@ function powermod(x::Int, p::Int, m::Int)
     r = 1
     while true
         if p >= t
-            r = mod(r*x, m) # TODO: rem? mod?
+            r = mod(r*x, m)
             p -= t
         end
         t = div(t,2)
         if t > 0
-            r = mod(r*r, m) # TODO: rem? mod?
+            r = mod(r*r, m)
         else
             break
         end
@@ -115,11 +115,12 @@ function randint{T<:Int}(lo::T, hi::T)
         # power of 2 range
         return s&(r-1) + lo
     end
-    lim = m - mod(mod(m,r)+1, r) # TODO: rem? mod?
+    # note: m>=0 && r>=0
+    lim = m - rem(rem(m,r)+1, r)
     while s > lim
         s = randint(T)
     end
-    return mod(s,r) + lo # TODO: rem? mod?
+    return rem(s,r) + lo
 end
 
 # random integer from 1 to n
