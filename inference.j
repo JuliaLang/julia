@@ -841,6 +841,10 @@ exprtype(s::Symbol) = Any
 exprtype(t::Type) = Type{t}
 exprtype(other) = typeof(other)
 
+# TODO: bug
+# getmethods(==,(Union(Latin1String,Symbol),Latin1String))
+# yields 1 possible method but it might also be a no-method error
+
 # for now, only inline functions whose bodies are of the form "return <expr>"
 # where <expr> doesn't contain any argument more than once.
 # functions with closure environments or varargs are also excluded.

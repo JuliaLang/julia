@@ -1295,10 +1295,8 @@ So far only the second case can actually occur.
   (cond ((symbol? e)          `(quote ,e))
 	((not (pair? e))      e)
 	((eq? (car e) '$)     (cadr e))
-	((eq? (car e) 'quote)
-	 (if (symbol? (cadr e))
-	     e
-	     (expand-backquote (expand-backquote (cadr e)))))
+	((eq? (car e) 'bquote)
+	 (expand-backquote (expand-backquote (cadr e))))
 	((not (any (lambda (x)
 		     (match '($ (tuple (... x))) x))
 		   e))
@@ -1319,11 +1317,8 @@ So far only the second case can actually occur.
 			       q))))))))
 
 (define (julia-expand-backquote e)
-  (cond ((not (pair? e)) e)
-	((eq? (car e) 'quote)
-	 (if (symbol? (cadr e))
-	     e
-	     (julia-expand-backquote (expand-backquote (cadr e)))))
+  (cond ((not (pair? e))      e)
+	((eq? (car e) 'bquote) (expand-backquote (cadr e)))
 	(else
 	 (map julia-expand-backquote e))))
 
