@@ -252,9 +252,9 @@ for nr = {
         assert(a == n*d + r)
 
         for A=[-1,1], N=[-1,1]
-            S = A*N
             sa = A*a
             sn = N*n
+
             sd = div(sa,sn)
             sf = fld(sa,sn)
             sr = rem(sa,sn)
