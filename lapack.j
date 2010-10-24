@@ -257,19 +257,19 @@ for (fname_lu, fname_chol, fname_lsq, fname_tri, eltype) =
         X = copy(B)
 
         if m == n # Square
-            case = "general"
-            if isuppertriangular(A); case = "upper_triangular"; end
-            if islowertriangular(A); case = "lower_triangular"; end
+            case = `general
+            if isuppertriangular(A); case = `upper_triangular; end
+            if islowertriangular(A); case = `lower_triangular; end
 
-            if case == "general" # General
+            if case == `general # General
                 ipiv = Array(Int32, n)
 
                 # Check for SPD matrix
                 if issymmetric(Acopy) && all([ Acopy[i,i] > 0 | i=1:n ])
-                      case = "spd"
+                      case = `spd
                 end
 
-                if case == "spd"
+                if case == `spd
                       uplo = "U"
                       ccall(dlsym(libLAPACK, $fname_chol),
                             Void,
@@ -279,11 +279,11 @@ for (fname_lu, fname_chol, fname_lsq, fname_tri, eltype) =
 
                       if info[1] != 0
                          Acopy = copy(A)
-                         case = "general"
+                         case = `general
                       end
                 end
 
-                if case == "general"
+                if case == `general
                       info[1] = 0
                       ccall(dlsym(libLAPACK, $fname_lu),
                             Void,
@@ -294,7 +294,7 @@ for (fname_lu, fname_chol, fname_lsq, fname_tri, eltype) =
 
             else # Triangular
                 uplo = "U"
-                if case == "lower_triangular"; uplo = "L"; end
+                if case == `lower_triangular; uplo = "L"; end
                 ccall(dlsym(libLAPACK, $fname_tri),
                       Void,
                       (Ptr{Uint8}, Ptr{Uint8}, Ptr{Uint8}, Ptr{Int32}, Ptr{Int32},
