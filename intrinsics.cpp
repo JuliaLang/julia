@@ -5,12 +5,18 @@ namespace JL_I {
         boxf32, boxf64, box,
         unbox8, unbox16, unbox32, unbox64, unbox,
         // arithmetic
-        neg_int, add_int, sub_int, mul_int, sdiv_int, udiv_int,
-        srem_int, urem_int,
-        neg_float, add_float, sub_float, mul_float, div_float,
+        neg_int, add_int, sub_int, mul_int,
+        sdiv_int, udiv_int, srem_int, urem_int,
+        neg_float, add_float, sub_float, mul_float, div_float, rem_float,
         // comparison
-        eq_int, slt_int, ult_int,
-        eq_float, lt_float, ne_float, le_float, ge_float,
+        eq_int, ne_int,
+        slt_int, ult_int,
+        sle_int, ule_int,
+        sgt_int, ugt_int,
+        sge_int, uge_int,
+        eq_float, ne_float,
+        lt_float, le_float,
+        gt_float, ge_float,
         // bitwise operators
         and_int, or_int, xor_int, not_int, shl_int, lshr_int, ashr_int,
         bswap_int,
@@ -657,6 +663,7 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
     HANDLE(boxf64,1)
         if (t != T_float64) x = builder.CreateBitCast(x, T_float64);
         return mark_julia_type(x, jl_float64_type);
+
     HANDLE(unbox8,1)
         return emit_unbox(T_int8, T_pint8, x);
     HANDLE(unbox16,1)
@@ -665,6 +672,7 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
         return emit_unbox(T_int32, T_pint32, x);
     HANDLE(unbox64,1)
         return emit_unbox(T_int64, T_pint64, x);
+
     HANDLE(neg_int,1)
         return builder.CreateSub(ConstantInt::get(t, 0), x);
     HANDLE(add_int,2)
@@ -681,6 +689,7 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
         return builder.CreateSRem(x, emit_expr(args[2],ctx,true));
     HANDLE(urem_int,2)
         return builder.CreateURem(x, emit_expr(args[2],ctx,true));
+
     HANDLE(neg_float,1)
         return builder.CreateFMul(ConstantFP::get(FT(t), -1.0), FP(x));
     HANDLE(add_float,2)
@@ -691,27 +700,49 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
         return builder.CreateFMul(FP(x), FP(emit_expr(args[2],ctx,true)));
     HANDLE(div_float,2)
         return builder.CreateFDiv(FP(x), FP(emit_expr(args[2],ctx,true)));
+    HANDLE(rem_float,2)
+        return builder.CreateFRem(FP(x), FP(emit_expr(args[2],ctx,true)));
+
     HANDLE(eq_int,2)
         return builder.CreateICmpEQ(x, emit_expr(args[2],ctx,true));
+    HANDLE(ne_int,2)
+        return builder.CreateICmpNE(x, emit_expr(args[2],ctx,true));
     HANDLE(slt_int,2)
         return builder.CreateICmpSLT(x, emit_expr(args[2],ctx,true));
     HANDLE(ult_int,2)
         return builder.CreateICmpULT(x, emit_expr(args[2],ctx,true));
+    HANDLE(sle_int,2)
+        return builder.CreateICmpSLE(x, emit_expr(args[2],ctx,true));
+    HANDLE(ule_int,2)
+        return builder.CreateICmpULE(x, emit_expr(args[2],ctx,true));
+    HANDLE(sgt_int,2)
+        return builder.CreateICmpSGT(x, emit_expr(args[2],ctx,true));
+    HANDLE(ugt_int,2)
+        return builder.CreateICmpUGT(x, emit_expr(args[2],ctx,true));
+    HANDLE(sge_int,2)
+        return builder.CreateICmpSGE(x, emit_expr(args[2],ctx,true));
+    HANDLE(uge_int,2)
+        return builder.CreateICmpUGE(x, emit_expr(args[2],ctx,true));
+
     HANDLE(eq_float,2)
         return builder.CreateFCmpOEQ(FP(x),
-                                     FP(emit_expr(args[2],ctx,true)));
-    HANDLE(lt_float,2)
-        return builder.CreateFCmpOLT(FP(x),
                                      FP(emit_expr(args[2],ctx,true)));
     HANDLE(ne_float,2)
         return builder.CreateFCmpONE(FP(x),
                                      FP(emit_expr(args[2],ctx,true)));
+    HANDLE(lt_float,2)
+        return builder.CreateFCmpOLT(FP(x),
+                                     FP(emit_expr(args[2],ctx,true)));
     HANDLE(le_float,2)
         return builder.CreateFCmpOLE(FP(x),
+                                     FP(emit_expr(args[2],ctx,true)));
+    HANDLE(gt_float,2)
+        return builder.CreateFCmpOGT(FP(x),
                                      FP(emit_expr(args[2],ctx,true)));
     HANDLE(ge_float,2)
         return builder.CreateFCmpOGE(FP(x),
                                      FP(emit_expr(args[2],ctx,true)));
+
     HANDLE(and_int,2)
         return builder.CreateAnd(x, emit_expr(args[2],ctx,true));
     HANDLE(or_int,2)
@@ -732,6 +763,7 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
                                                             Intrinsic::bswap,
                                                             &fxt, 1),
                                   x);
+
     HANDLE(sext16,1)
         return builder.CreateSExt(x, T_int16);
     HANDLE(zext16,1)
@@ -778,6 +810,7 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
         return builder.CreateFPTrunc(FP(x), T_float32);
     HANDLE(fpext64,1)
         return builder.CreateFPExt(FP(x), T_float64);
+
     HANDLE(sqrt_float,1)
         fx = FP(x);
         fxt = fx->getType();
@@ -873,11 +906,16 @@ extern "C" void jl_init_intrinsic_functions()
     ADD_I(unbox8); ADD_I(unbox16); ADD_I(unbox32); ADD_I(unbox64);
     ADD_I(neg_int); ADD_I(add_int); ADD_I(sub_int); ADD_I(mul_int);
     ADD_I(sdiv_int); ADD_I(udiv_int); ADD_I(srem_int); ADD_I(urem_int);
-    ADD_I(neg_float); ADD_I(add_float); ADD_I(sub_float);
-    ADD_I(mul_float); ADD_I(div_float);
-    ADD_I(eq_int); ADD_I(slt_int); ADD_I(ult_int);
-    ADD_I(eq_float); ADD_I(lt_float); ADD_I(ne_float);
-    ADD_I(le_float); ADD_I(ge_float);
+    ADD_I(neg_float); ADD_I(add_float); ADD_I(sub_float); ADD_I(mul_float);
+    ADD_I(div_float); ADD_I(rem_float);
+    ADD_I(eq_int); ADD_I(ne_int);
+    ADD_I(slt_int); ADD_I(ult_int);
+    ADD_I(sle_int); ADD_I(ule_int);
+    ADD_I(sgt_int); ADD_I(ugt_int);
+    ADD_I(sge_int); ADD_I(uge_int);
+    ADD_I(eq_float); ADD_I(ne_float);
+    ADD_I(lt_float); ADD_I(le_float);
+    ADD_I(gt_float); ADD_I(ge_float);
     ADD_I(and_int); ADD_I(or_int); ADD_I(xor_int); ADD_I(not_int);
     ADD_I(shl_int); ADD_I(lshr_int); ADD_I(ashr_int); ADD_I(bswap_int);
     ADD_I(sext16); ADD_I(zext16); ADD_I(sext32); ADD_I(zext32);

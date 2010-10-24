@@ -40,13 +40,14 @@ end
 (.*)(x,y) = x*y
 (.^)(x,y) = x^y
 
-div(x::Real, y::Real) = y != 0 ? truncate(x/y) :
-                        throw(DivideByZeroError())
-fld(x::Real, y::Real) = y != 0 ? int32(floor(x/y)) :
-                        throw(DivideByZeroError())
+div(x::Real, y::Real) = y != 0 ? truncate(x/y)        : throw(DivideByZeroError())
+fld(x::Real, y::Real) = y != 0 ? truncate(floor(x/y)) : throw(DivideByZeroError())
 
-rem(x,y) = x-y*div(x,y)
-mod(x,y) = x-y*fld(x,y)
+rem{T}(x::T, y::T) = convert(T, x-y*div(x,y))
+mod{T}(x::T, y::T) = convert(T, x-y*fld(x,y))
+
+rem(x,y) = rem(promote(x,y)...)
+mod(x,y) = mod(promote(x,y)...)
 
 (%)(x,y) = mod(x,y)
 mod1(x,y) = (m=mod(x-one(x),y); m+one(m))
@@ -72,9 +73,7 @@ one(x)  = oftype(x,1)
 ## promotion mechanism ##
 
 promote_type{T}(::Type{T}) = T
-
 promote_type{T}(::Type{T}, ::Type{T}) = T
-
 promote_type(S::Type, T::Type...) = promote_type(S, promote_type(T...))
 
 function promote_type{T,S}(::Type{T}, ::Type{S})

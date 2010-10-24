@@ -322,6 +322,16 @@ bswap(x::Uint64) = boxui64(bswap_int(unbox64(x)))
 ==(x::Uint32, y::Uint32) = eq_int(unbox32(x),unbox32(y))
 ==(x::Uint64, y::Uint64) = eq_int(unbox64(x),unbox64(y))
 
+!=(x::Int8 , y::Int8 ) = ne_int(unbox8 (x),unbox8 (y))
+!=(x::Int16, y::Int16) = ne_int(unbox16(x),unbox16(y))
+!=(x::Int32, y::Int32) = ne_int(unbox32(x),unbox32(y))
+!=(x::Int64, y::Int64) = ne_int(unbox64(x),unbox64(y))
+
+!=(x::Uint8 , y::Uint8 ) = ne_int(unbox8 (x),unbox8 (y))
+!=(x::Uint16, y::Uint16) = ne_int(unbox16(x),unbox16(y))
+!=(x::Uint32, y::Uint32) = ne_int(unbox32(x),unbox32(y))
+!=(x::Uint64, y::Uint64) = ne_int(unbox64(x),unbox64(y))
+
 <(x::Int8 , y::Int8 ) = slt_int(unbox8 (x),unbox8 (y))
 <(x::Int16, y::Int16) = slt_int(unbox16(x),unbox16(y))
 <(x::Int32, y::Int32) = slt_int(unbox32(x),unbox32(y))
@@ -332,12 +342,39 @@ bswap(x::Uint64) = boxui64(bswap_int(unbox64(x)))
 <(x::Uint32, y::Uint32) = ult_int(unbox32(x),unbox32(y))
 <(x::Uint64, y::Uint64) = ult_int(unbox64(x),unbox64(y))
 
-# negating a comparison is ok for integers
-<=(x::Int, y::Int) = !(x > y)
->=(x::Int, y::Int) = !(x < y)
+<=(x::Int8 , y::Int8 ) = sle_int(unbox8 (x),unbox8 (y))
+<=(x::Int16, y::Int16) = sle_int(unbox16(x),unbox16(y))
+<=(x::Int32, y::Int32) = sle_int(unbox32(x),unbox32(y))
+<=(x::Int64, y::Int64) = sle_int(unbox64(x),unbox64(y))
+
+<=(x::Uint8 , y::Uint8 ) = ule_int(unbox8 (x),unbox8 (y))
+<=(x::Uint16, y::Uint16) = ule_int(unbox16(x),unbox16(y))
+<=(x::Uint32, y::Uint32) = ule_int(unbox32(x),unbox32(y))
+<=(x::Uint64, y::Uint64) = ule_int(unbox64(x),unbox64(y))
+
+>(x::Int8 , y::Int8 ) = sgt_int(unbox8 (x),unbox8 (y))
+>(x::Int16, y::Int16) = sgt_int(unbox16(x),unbox16(y))
+>(x::Int32, y::Int32) = sgt_int(unbox32(x),unbox32(y))
+>(x::Int64, y::Int64) = sgt_int(unbox64(x),unbox64(y))
+
+>(x::Uint8 , y::Uint8 ) = ugt_int(unbox8 (x),unbox8 (y))
+>(x::Uint16, y::Uint16) = ugt_int(unbox16(x),unbox16(y))
+>(x::Uint32, y::Uint32) = ugt_int(unbox32(x),unbox32(y))
+>(x::Uint64, y::Uint64) = ugt_int(unbox64(x),unbox64(y))
+
+>=(x::Int8 , y::Int8 ) = sge_int(unbox8 (x),unbox8 (y))
+>=(x::Int16, y::Int16) = sge_int(unbox16(x),unbox16(y))
+>=(x::Int32, y::Int32) = sge_int(unbox32(x),unbox32(y))
+>=(x::Int64, y::Int64) = sge_int(unbox64(x),unbox64(y))
+
+>=(x::Uint8 , y::Uint8 ) = uge_int(unbox8 (x),unbox8 (y))
+>=(x::Uint16, y::Uint16) = uge_int(unbox16(x),unbox16(y))
+>=(x::Uint32, y::Uint32) = uge_int(unbox32(x),unbox32(y))
+>=(x::Uint64, y::Uint64) = uge_int(unbox64(x),unbox64(y))
 
 # not sure if we can safely generalize this to floats:
-cmp(x::Int, y::Int) = x < y ? -1 : x > y ? +1 : 0
+cmp(x::Int, y::Int) = x < y ? -1 :
+                      x > y ? +1 : 0
 
 ## traits ##
 

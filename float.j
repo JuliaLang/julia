@@ -75,6 +75,8 @@ promote_rule(::Type{Float64}, ::Type{Char}) = Float64
 (*)(x::Float64, y::Float64) = boxf64(mul_float(unbox64(x), unbox64(y)))
 (/)(x::Float32, y::Float32) = boxf32(div_float(unbox32(x), unbox32(y)))
 (/)(x::Float64, y::Float64) = boxf64(div_float(unbox64(x), unbox64(y)))
+rem(x::Float32, y::Float32) = boxf32(rem_float(unbox32(x), unbox32(y)))
+rem(x::Float64, y::Float64) = boxf64(rem_float(unbox64(x), unbox64(y)))
 
 ## floating point comparisons ##
 
@@ -82,14 +84,16 @@ promote_rule(::Type{Float64}, ::Type{Char}) = Float64
 ==(x::Float64, y::Float64) = eq_float(unbox64(x),unbox64(y))
 !=(x::Float32, y::Float32) = ne_float(unbox32(x),unbox32(y))
 !=(x::Float64, y::Float64) = ne_float(unbox64(x),unbox64(y))
-# negating a comparison is not ok for floats
-!=(x::Float, y::Float) = (!=)(promote(x,y)...)
 < (x::Float32, y::Float32) = lt_float(unbox32(x),unbox32(y))
 < (x::Float64, y::Float64) = lt_float(unbox64(x),unbox64(y))
 <=(x::Float32, y::Float32) = le_float(unbox32(x),unbox32(y))
 <=(x::Float64, y::Float64) = le_float(unbox64(x),unbox64(y))
+> (x::Float32, y::Float32) = gt_float(unbox32(x),unbox32(y))
+> (x::Float64, y::Float64) = gt_float(unbox64(x),unbox64(y))
 >=(x::Float32, y::Float32) = ge_float(unbox32(x),unbox32(y))
 >=(x::Float64, y::Float64) = ge_float(unbox64(x),unbox64(y))
+
+!=(x::Float, y::Float) = (!=)(promote(x,y)...)
 <=(x::Float, y::Float) = (<=)(promote(x,y)...)
 >=(x::Float, y::Float) = (>=)(promote(x,y)...)
 
