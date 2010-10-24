@@ -224,6 +224,9 @@ rem(x::Uint16, y::Uint16) = boxui16(urem_int(unbox16(x), unbox16(y)))
 rem(x::Uint32, y::Uint32) = boxui32(urem_int(unbox32(x), unbox32(y)))
 rem(x::Uint64, y::Uint64) = boxui64(urem_int(unbox64(x), unbox64(y)))
 
+# faster than generic for signed ints
+mod{T<:Int}(x::T, y::T) = rem(y+rem(x,y),y)
+
 mod(x::Uint8 , y::Uint8 ) = rem(x,y)
 mod(x::Uint16, y::Uint16) = rem(x,y)
 mod(x::Uint32, y::Uint32) = rem(x,y)

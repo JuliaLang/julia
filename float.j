@@ -78,6 +78,9 @@ promote_rule(::Type{Float64}, ::Type{Char}) = Float64
 rem(x::Float32, y::Float32) = boxf32(rem_float(unbox32(x), unbox32(y)))
 rem(x::Float64, y::Float64) = boxf64(rem_float(unbox64(x), unbox64(y)))
 
+# faster than generic for floats
+mod{T<:Float}(x::T, y::T) = rem(y+rem(x,y),y)
+
 ## floating point comparisons ##
 
 ==(x::Float32, y::Float32) = eq_float(unbox32(x),unbox32(y))
