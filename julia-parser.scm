@@ -846,7 +846,7 @@
 	  ; quote
 	  ((eqv? t #\` )
 	   (take-token s)
-	   (list 'quote (parse-decl s)))
+	   (list 'bquote (parse-decl s)))
 
 	  (else (take-token s)))))
 
