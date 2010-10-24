@@ -159,10 +159,10 @@ div(x::Int16, y::Int16) = boxsi16(sdiv_int(unbox16(x), unbox16(y)))
 div(x::Int32, y::Int32) = boxsi32(sdiv_int(unbox32(x), unbox32(y)))
 div(x::Int64, y::Int64) = boxsi64(sdiv_int(unbox64(x), unbox64(y)))
 
-rem(x::Int8 , y::Int8 ) = boxsi8 (smod_int(unbox8 (x), unbox8 (y)))
-rem(x::Int16, y::Int16) = boxsi16(smod_int(unbox16(x), unbox16(y)))
-rem(x::Int32, y::Int32) = boxsi32(smod_int(unbox32(x), unbox32(y)))
-rem(x::Int64, y::Int64) = boxsi64(smod_int(unbox64(x), unbox64(y)))
+rem(x::Int8 , y::Int8 ) = boxsi8 (srem_int(unbox8 (x), unbox8 (y)))
+rem(x::Int16, y::Int16) = boxsi16(srem_int(unbox16(x), unbox16(y)))
+rem(x::Int32, y::Int32) = boxsi32(srem_int(unbox32(x), unbox32(y)))
+rem(x::Int64, y::Int64) = boxsi64(srem_int(unbox64(x), unbox64(y)))
 
 ## integer bitwise operations ##
 

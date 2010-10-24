@@ -6,7 +6,7 @@ namespace JL_I {
         unbox8, unbox16, unbox32, unbox64, unbox,
         // arithmetic
         neg_int, add_int, sub_int, mul_int, sdiv_int, udiv_int,
-        smod_int, umod_int,
+        srem_int, urem_int,
         neg_float, add_float, sub_float, mul_float, div_float,
         // comparison
         eq_int, slt_int, ult_int,
@@ -677,9 +677,9 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
         return builder.CreateSDiv(x, emit_expr(args[2],ctx,true));
     HANDLE(udiv_int,2)
         return builder.CreateUDiv(x, emit_expr(args[2],ctx,true));
-    HANDLE(smod_int,2)
+    HANDLE(srem_int,2)
         return builder.CreateSRem(x, emit_expr(args[2],ctx,true));
-    HANDLE(umod_int,2)
+    HANDLE(urem_int,2)
         return builder.CreateURem(x, emit_expr(args[2],ctx,true));
     HANDLE(neg_float,1)
         return builder.CreateFMul(ConstantFP::get(FT(t), -1.0), FP(x));
@@ -872,7 +872,7 @@ extern "C" void jl_init_intrinsic_functions()
     ADD_I(boxf32); ADD_I(boxf64); ADD_I(box); ADD_I(unbox);
     ADD_I(unbox8); ADD_I(unbox16); ADD_I(unbox32); ADD_I(unbox64);
     ADD_I(neg_int); ADD_I(add_int); ADD_I(sub_int); ADD_I(mul_int);
-    ADD_I(sdiv_int); ADD_I(udiv_int); ADD_I(smod_int); ADD_I(umod_int);
+    ADD_I(sdiv_int); ADD_I(udiv_int); ADD_I(srem_int); ADD_I(urem_int);
     ADD_I(neg_float); ADD_I(add_float); ADD_I(sub_float);
     ADD_I(mul_float); ADD_I(div_float);
     ADD_I(eq_int); ADD_I(slt_int); ADD_I(ult_int);

@@ -1269,8 +1269,8 @@ end
 (make-builtin 'mul_int  "(Int,Int)-->Int" *)
 (make-builtin 'sdiv_int "(Int,Int)-->Int" div-int)
 (make-builtin 'udiv_int "(Int,Int)-->Int" div-int)
-(make-builtin 'smod_int "(Int,Int)-->Int" mod-int)
-(make-builtin 'umod_int "(Int,Int)-->Int" mod-int)
+(make-builtin 'srem_int "(Int,Int)-->Int" mod-int) ; TODO: rem-int?
+(make-builtin 'urem_int "(Int,Int)-->Int" mod-int) ; TODO: rem-int?
 (make-builtin 'neg_float "(Float,)-->Float"      -)
 (make-builtin 'add_float "(Float,Float)-->Float" +)
 (make-builtin 'sub_float "(Float,Float)-->Float" -)
