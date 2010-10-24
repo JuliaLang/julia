@@ -14,6 +14,8 @@ promote_rule{T}(::Type{Complex{T}}, ::Type{Real{T}}) = Complex{T}
 promote_rule{T,S}(::Type{Complex{T}}, ::Type{Real{S}}) = Complex{promote_type(T,S)}
 promote_rule{T,S}(::Type{Complex{T}}, ::Type{Complex{S}}) = Complex{promote_type(T,S)}
 
+complex(x::Real, y::Real) = Complex(x, y)
+
 function show(c::Complex)
     show(real(c))
     i = imag(c)
