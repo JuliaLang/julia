@@ -50,7 +50,7 @@ rem(x,y) = rem(promote(x,y)...)
 mod(x,y) = mod(promote(x,y)...)
 
 (%)(x,y) = mod(x,y)
-mod1(x,y) = (m=mod(x-one(x),y); m+one(m))
+mod1(x,y) = (m=mod(x-sign(y),y); m+sign(y))
 
 oftype{T}(x::T,c) = convert(T,c)
 oftype{T}(x::Type{T},c) = convert(T,c)
