@@ -841,10 +841,6 @@ exprtype(s::Symbol) = Any
 exprtype(t::Type) = Type{t}
 exprtype(other) = typeof(other)
 
-# TODO: bug
-# getmethods(==,(Union(Latin1String,Symbol),Latin1String))
-# yields 1 possible method but it might also be a no-method error
-
 # for now, only inline functions whose bodies are of the form "return <expr>"
 # where <expr> doesn't contain any argument more than once.
 # functions with closure environments or varargs are also excluded.
@@ -863,6 +859,12 @@ function inlineable(e::Expr, vars)
     #end
     #assert(is(meth[5],()))
     if !is(meth[5],())
+        return NF
+    end
+    # when 1 method matches the inferred types, there is still a chance
+    # of a no-method error at run time, unless the inferred types are a
+    # subset of the method signature.
+    if !subtype(atypes, meth[1])
         return NF
     end
     if is(meth[3],`convert) && length(atypes)==2
