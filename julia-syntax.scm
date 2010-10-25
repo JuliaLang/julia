@@ -1318,7 +1318,8 @@ So far only the second case can actually occur.
 
 (define (julia-expand-backquote e)
   (cond ((not (pair? e))      e)
-	((eq? (car e) 'bquote) (expand-backquote (cadr e)))
+	((eq? (car e) 'bquote)
+	 (julia-expand-backquote (expand-backquote (cadr e))))
 	(else
 	 (map julia-expand-backquote e))))
 
