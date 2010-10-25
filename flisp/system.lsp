@@ -36,8 +36,11 @@
   `(set-syntax! ',(car form)
 		(lambda ,(cdr form) ,@body)))
 
-(define-macro (label name fn)
-  `((lambda (,name) (set! ,name ,fn)) #f))
+(define-macro (letrec binds . body)
+  `((lambda ,(map car binds)
+      ,.(map (lambda (b) `(set! ,@b)) binds)
+      ,@body)
+    ,.(map (lambda (x) (void)) binds)))
 
 (define-macro (let binds . body)
   (let ((lname #f))
@@ -52,15 +55,9 @@
 	  (theargs
 	   (map (lambda (c) (if (pair? c) (cadr c) (void))) binds)))
       (cons (if lname
-		`(label ,lname ,thelambda)
+		`(letrec ((,lname ,thelambda)) ,lname)
 		thelambda)
 	    theargs))))
-
-(define-macro (letrec binds . body)
-  `((lambda ,(map car binds)
-      ,.(map (lambda (b) `(set! ,@b)) binds)
-      ,@body)
-    ,.(map (lambda (x) (void)) binds)))
 
 (define-macro (cond . clauses)
   (define (cond-clauses->if lst)

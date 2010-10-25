@@ -490,7 +490,7 @@ static size_t max_arg_depth(jl_value_t *expr)
         if (e->head == call_sym || e->head == call1_sym) {
             for(i=0; i < e->args->length; i++) {
                 m = max_arg_depth(jl_exprarg(e,i));
-                if (m+i > max) max = m+i;
+                if (m+i+1 > max) max = m+i+1;
             }
         }
         else {
@@ -503,8 +503,6 @@ static size_t max_arg_depth(jl_value_t *expr)
     }
     return 0;
 }
-
-#include "intrinsics.cpp"
 
 extern "C" jl_function_t *jl_get_specialization(jl_function_t *f, jl_tuple_t *types);
 
@@ -520,6 +518,8 @@ static jl_value_t *expr_type(jl_value_t *e)
         return (jl_value_t*)jl_wrap_Type(e);
     return (jl_value_t*)jl_typeof(e);
 }
+
+#include "intrinsics.cpp"
 
 static jl_tuple_t *call_arg_types(jl_value_t **args, size_t n)
 {
@@ -735,6 +735,7 @@ static Value *emit_call(jl_value_t **args, size_t arglen, jl_codectx_t *ctx)
     jl_value_t *a0 = args[0];
     jl_value_t *a00 = args[0];
     jl_value_t *hdtype;
+    bool headIsGlobal = false;
 
     if (jl_is_expr(a0) && ((jl_expr_t*)a0)->head==symbol_sym) {
         a0 = jl_exprarg(a0,0);
@@ -755,6 +756,7 @@ static Value *emit_call(jl_value_t **args, size_t arglen, jl_codectx_t *ctx)
     if (b != NULL) {
         // head is a constant global
         f = b->value;
+        headIsGlobal = true;
     }
     else if (jl_is_func(a0)) {
         f = a0;
@@ -768,11 +770,13 @@ static Value *emit_call(jl_value_t **args, size_t arglen, jl_codectx_t *ctx)
     if (theFptr == NULL) {
         Value *theFunc = emit_expr(args[0], ctx, true);
 #ifdef JL_GC_MARKSWEEP
-        Value *froot = builder.CreateGEP(ctx->argTemp,
-                                         ConstantInt::get(T_int32,
-                                                          ctx->argDepth));
-        builder.CreateStore(boxed(theFunc), froot);
-        ctx->argDepth++;
+        if (!headIsGlobal) {
+            Value *froot = builder.CreateGEP(ctx->argTemp,
+                                             ConstantInt::get(T_int32,
+                                                              ctx->argDepth));
+            builder.CreateStore(boxed(theFunc), froot);
+            ctx->argDepth++;
+        }
 #endif
         if (!jl_is_func_type(hdtype) &&
             hdtype!=(jl_value_t*)jl_struct_kind &&
@@ -799,7 +803,7 @@ static Value *emit_call(jl_value_t **args, size_t arglen, jl_codectx_t *ctx)
     std::vector<Value*> argVs(0);
     size_t i;
     int argStart = ctx->argDepth;
-    assert(nargs <= ((ConstantInt*)ctx->argTemp->getArraySize())->getZExtValue());
+    assert(nargs+ctx->argDepth <= ((ConstantInt*)ctx->argTemp->getArraySize())->getZExtValue());
     for(i=0; i < nargs; i++) {
         Value *anArg = emit_expr(args[i+1], ctx, true);
         argVs.push_back(anArg);

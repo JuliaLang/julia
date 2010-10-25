@@ -2,7 +2,7 @@
 #define __HASHING_H_
 
 uint_t nextipow2(uint_t i);
-u_int32_t int32hash(u_int32_t a);
+DLLEXPORT u_int32_t int32hash(u_int32_t a);
 DLLEXPORT u_int64_t int64hash(u_int64_t key);
 DLLEXPORT u_int32_t int64to32hash(u_int64_t key);
 #ifdef BITS64

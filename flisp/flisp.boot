@@ -38,17 +38,17 @@
   begin #fn("8000r2c0|}L3;" [set!])]) #fn(map) #.car cadr #fn("6000r1c040;" [#fn(gensym)])])  letrec #fn(">000s1c0c1L1c2c3|32L1c2c4|32c5}3134c2c6|32K;" [#fn(nconc)
   lambda #fn(map) #.car #fn("8000r1c0c1|31K;" [set! #fn(copy-list)])
   #fn(copy-list) #fn("6000r1e040;" [void])])  assert #fn("<000r1c0|]c1c2c3|L2L2L2L4;" [if
-  raise quote assert-failed])  label #fn(":000r2c0|L1c1|}L3L3^L2;" [lambda set!])  do #fn("A000s2c0qc130}Mc2c3|32c2e4|32c2c5|3245;" [#fn("A000r5c0|c1g2c2}c3c4\x7fN31Kc5c3L1c4i0231|g4KL133L4L3L2L1|g3KL3;" [letrec
+  raise quote assert-failed])  do #fn("A000s2c0qc130}Mc2c3|32c2e4|32c2c5|3245;" [#fn("A000r5c0|c1g2c2}c3c4\x7fN31Kc5c3L1c4i0231|g4KL133L4L3L2L1|g3KL3;" [letrec
   lambda if begin #fn(copy-list) #fn(nconc)])
   #fn(gensym) #fn(map) #.car cadr #fn("7000r1e0|31F680e1|41;|M;" [cddr caddr])])  quasiquote #fn("7000r1e0|41;" [bq-process])  when #fn("<000s1c0|c1}K^L4;" [if
   begin])  with-input-from #fn("=000s1c0c1L1c2|L2L1L1c3}3143;" [#fn(nconc)
 								with-bindings
 								*input-stream*
-								#fn(copy-list)])  dotimes #fn(";000s1c0q|M|\x8442;" [#fn("=000r2c0`c1}aL3c2c3L1|L1L1c4\x7f3133L4;" [for
-  - #fn(nconc) lambda #fn(copy-list)])])  unwind-protect #fn("8000r2c0qc130c13042;" [#fn("@000r2c0}c1_\x7fL3L2L1c2c3~c1|L1c4}L1c5|L2L3L3L3}L1L3L3;" [let
-  lambda prog1 trycatch begin raise]) #fn(gensym)])  define-macro #fn("?000s1c0c1|ML2c2c3L1|NL1c4}3133L3;" [set-syntax!
+								#fn(copy-list)])  unwind-protect #fn("8000r2c0qc130c13042;" [#fn("@000r2c0}c1_\x7fL3L2L1c2c3~c1|L1c4}L1c5|L2L3L3L3}L1L3L3;" [let
+  lambda prog1 trycatch begin raise]) #fn(gensym)])  dotimes #fn(";000s1c0q|M|\x8442;" [#fn("=000r2c0`c1}aL3c2c3L1|L1L1c4\x7f3133L4;" [for
+  - #fn(nconc) lambda #fn(copy-list)])])  define-macro #fn("?000s1c0c1|ML2c2c3L1|NL1c4}3133L3;" [set-syntax!
   quote #fn(nconc) lambda #fn(copy-list)])  receive #fn("@000s2c0c1_}L3c2c1L1|L1c3g23133L3;" [call-with-values
-  lambda #fn(nconc) #fn(copy-list)])  unless #fn("=000s1c0|^c1}KL4;" [if begin])  let #fn(":000s1c0q^41;" [#fn("<000r1~C6D0~m02\x7fMo002\x7fNo01530]2c0qc1c2L1c3c4~32L1c5\x7f3133c3c6~3242;" [#fn("8000r2~6;0c0~|L3530|}K;" [label])
+  lambda #fn(nconc) #fn(copy-list)])  unless #fn("=000s1c0|^c1}KL4;" [if begin])  let #fn(":000s1c0q^41;" [#fn("<000r1~C6D0~m02\x7fMo002\x7fNo01530]2c0qc1c2L1c3c4~32L1c5\x7f3133c3c6~3242;" [#fn("8000r2~6@0c0~|L2L1~L3530|}K;" [letrec])
   #fn(nconc) lambda #fn(map) #fn("6000r1|F650|M;|;" [])
   #fn(copy-list) #fn("6000r1|F650|\x84;e040;" [void])])])  cond #fn("9000s0c0q]41;" [#fn("7000r1c0qm02|~41;" [#fn("7000r1|?640^;c0q|M41;" [#fn(":000r1|Mc0<17702|M]<6@0|N\x8550|M;c1|NK;|N\x85@0c2|Mi10~N31L3;|\x84c3\x82W0e4e5|31316A0c6qe7e5|313141;c8qc93041;c:|Mc1|NKi10~N31L4;" [else
   begin or => 1arg-lambda? caddr #fn("=000r1c0|~ML2L1c1|c2e3e4~3131Ki20i10N31L4L3;" [let
@@ -218,9 +218,9 @@
 	  every #fn("8000r2}?17D02|}M3116:02e0|}N42;" [every] every) expand
 	  #fn("A000r1c0q]]]]]]]]]]]4;;" [#fn("8000r;c0m02c1qm12c2L1m22c3qm32c4qm42c5qm52c6qm62c7qm72c8qm82c9m92c:qm:2g:~_42;" [#fn("8000r2|E17902c0|}32@;" [#fn(assq)] top?)
   #fn("9000r1|?640|;|c0>640|;|MF16;02e1|31c2<6D0c3\x7fe4|3131\x7f|N3142;|M\x7f|N31K;" [((begin))
-  caar begin #fn(append) cdar] splice-begin) *expanded* #fn("9000r2|?640|;c0q~c1}32690\x7f|31530|41;" [#fn("9000r1c0qi10c1\x7f3241;" [#fn("8000r1c0q|6:0e1~31530_41;" [#fn(":000r1c0qc1c2c3|32i213241;" [#fn("8000r1i107=0c0c1qi2042;c2qc3q^31i203141;" [#fn(map)
+  caar begin #fn(append) cdar] splice-begin) *expanded* #fn("9000r2|?640|;c0q~c1}32690\x7f|31530|41;" [#fn("9000r1c0qi10c1\x7f3241;" [#fn("8000r1c0q|6:0e1~31530_41;" [#fn(":000r1c0qc1c2c3|32i213241;" [#fn("8000r1i107=0c0c1qi2042;c2qc3q]31i203141;" [#fn(map)
   #fn("8000r1i5:|~42;" []) #fn("7000r1c0q|41;" [#fn("9000r1]|F6]02i62e0|31<7A0|i6:|Mi1032O590|e1|31O2|Nm05\x02/2~;" [caar
-  cdar])]) #fn("6000r1c0qm0;" [#fn("9000r1|?640|;|MF16;02c0e1|31<6;0|M~|N31K;c2qi6:|Mi103241;" [define
+  cdar])]) #fn("6000r1c0qm02|;" [#fn("9000r1|?640|;|MF16;02c0e1|31<6;0|M~|N31K;c2qi6:|Mi103241;" [define
   caar #fn(":000r1c0c1c2e3|3132i2032o202i72|Ki10~N31K;" [#fn(nconc)
 							 #fn(map) #.list
 							 get-defined-vars])])])])
@@ -237,7 +237,7 @@
   #fn("6000r2|;" [] local-expansion-env) #fn("7000r2|?640|;c0q|M41;" [#fn("9000r1c0qc1|\x7f3241;" [#fn("7000r1c0qc1q41;" [#fn(":000r1~16602~NF6M0i3:~\x84i20NQ2i39e0~31i213242;~17A02i10C@17702i10E660|40;c1qe2i203141;" [caddr
   #fn("8000r1|6B0i4:|i30NQ2i3142;i20c0\x8260i30;i20c1\x82>0i46i30i3142;i20c2\x82>0i47i30i3142;i20c3\x82>0i48i30i3142;~40;" [quote
   lambda define let-syntax]) macrocall?])
-  #fn("7000r0c0q^31i2041;" [#fn("6000r1c0qm0;" [#fn("9000r1|?640|;|M?670|M5<0i4:|Mi3132~|N31K;" [])])])])
+  #fn("7000r0c0q]31i2041;" [#fn("6000r1c0qm02|;" [#fn("9000r1|?640|;|M?670|M5<0i4:|Mi3132~|N31K;" [])])])])
   #fn(assq)])] expand-in)])] expand)
 	  expand-define #fn("=000r1c0|\x84e1|31F6:0e1|315L0|\x84C6;0e230L15=0e3c4e5|313242;" [#fn("<000r2|C6:0c0|}ML3;c0|Mc1c2L1|NL1c3}31|M34L3;" [set!
   #fn(nconc) lambda #fn(copy-list)]) cddr void error "compile error: invalid syntax "
@@ -280,7 +280,7 @@
 	  #fn(":000r2e0}`32640_;|Me1|N}ax32K;" [<= list-head] list-head)
 	  list-ref #fn("8000r2e0|}32M;" [list-tail] list-ref) list-tail
 	  #fn("9000r2e0}`32640|;e1|N}ax42;" [<= list-tail] list-tail) list? #fn("7000r1|A17@02|F16902e0|N41;" [list?] list?)
-	  load #fn("9000r1c0qc1|c23241;" [#fn("7000r1c0qc1qt;" [#fn("9000r0c0q^31]]]43;" [#fn("6000r1c0qm0;" [#fn(":000r3c0i10317C0~c1i1031|e2}3143;c3i10312e2}41;" [#fn(io.eof?)
+	  load #fn("9000r1c0qc1|c23241;" [#fn("7000r1c0qc1qt;" [#fn("9000r0c0q]31]]]43;" [#fn("6000r1c0qm02|;" [#fn(":000r3c0i10317C0~c1i1031|e2}3143;c3i10312e2}41;" [#fn(io.eof?)
   #fn(read) load-process #fn(io.close)])])])
 								#fn("9000r1c0~312c1c2i10|L341;" [#fn(io.close)
   #fn(raise) load-error])]) #fn(file) :read] load)
@@ -293,8 +293,8 @@
 							macrocall?] macroexpand-1)
 	  make-code-emitter #fn("9000r0_c030`c1Z4;" [#fn(table) +inf.0] make-code-emitter)
 	  make-label #fn("6000r1c040;" [#fn(gensym)] make-label)
-	  make-perfect-hash-table #fn("7000r1c0q]41;" [#fn("8000r1c0m02c1q^31c2~3141;" [#fn("9000r2e0e1c2|3131}42;" [mod0
-  abs #fn(hash)] $hash-keyword) #fn("6000r1c0qm0;" [#fn("9000r1c0qc1b2|T2^3241;" [#fn("7000r1c0q^31i3041;" [#fn("6000r1c0qm0;" [#fn("8000r1|F6=0c0qe1|3141;i10;" [#fn(":000r1c0qb2i50|i3032T241;" [#fn("9000r1i30|[6=0i50i40aw41;i30|~\\2i30|awe0i1031\\2i20i10N41;" [cdar])])
+	  make-perfect-hash-table #fn("7000r1c0q]41;" [#fn("8000r1c0m02c1q]31c2~3141;" [#fn("9000r2e0e1c2|3131}42;" [mod0
+  abs #fn(hash)] $hash-keyword) #fn("6000r1c0qm02|;" [#fn("9000r1c0qc1b2|T2^3241;" [#fn("7000r1c0q]31i3041;" [#fn("6000r1c0qm02|;" [#fn("8000r1|F6=0c0qe1|3141;i10;" [#fn(":000r1c0qb2i50|i3032T241;" [#fn("9000r1i30|[6=0i50i40aw41;i30|~\\2i30|awe0i1031\\2i20i10N41;" [cdar])])
   caar])])]) #fn(vector.alloc)])]) #fn(length)])] make-perfect-hash-table)
 	  make-system-image #fn(";000r1c0c1|c2c3c434c542;" [#fn("8000r2c0qe1e242;" [#fn("7000r2]k02]k12c2qc3q41;" [*print-pretty*
   *print-readably* #fn("7000r1c0qc1qt|302;" [#fn(":000r0c0qe1c2qe3c4303132312c5i2041;" [#fn("=000r1c0c1c2c3|c2c4|3233Q2i20322c5i20e642;" [#fn(write)
@@ -359,7 +359,7 @@
 	  random #fn("8000r1c0|316<0e1c230|42;c330|T2;" [#fn(integer?) mod #fn(rand)
 							 #fn(rand.double)] random)
 	  read-all #fn("8000r1e0c1|42;" [read-all-of #fn(read)] read-all)
-	  read-all-of #fn("9000r2c0q^31_|}3142;" [#fn("6000r1c0qm0;" [#fn("9000r2c0i1131680e1|41;~}|Ki10i113142;" [#fn(io.eof?)
+	  read-all-of #fn("9000r2c0q]31_|}3142;" [#fn("6000r1c0qm02|;" [#fn("9000r2c0i1131680e1|41;~}|Ki10i113142;" [#fn(io.eof?)
   reverse!])])] read-all-of)
 	  ref-int16-LE #fn(";000r2e0c1|}`w[`32c1|}aw[b832w41;" [int16 #fn(ash)] ref-int16-LE)
 	  ref-int32-LE #fn("=000r2e0c1|}`w[`32c1|}aw[b832c1|}b2w[b@32c1|}b3w[bH32R441;" [int32

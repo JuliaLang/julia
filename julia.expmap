@@ -1,5 +1,6 @@
 {
   global:
+    int32hash;
     int64hash;
     int64to32hash;
     rand_double;
