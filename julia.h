@@ -631,7 +631,7 @@ extern jl_gcframe_t **jl_pgcstack;
   *jl_pgcstack = &__gc_stkf_;
 
 #define JL_GC_POP() \
-    (*jl_pgcstack = (*jl_pgcstack)->prev)
+    (*jl_pgcstack = __gc_stkf_.prev)
 
 void jl_gc_init();
 void jl_gc_markval(jl_value_t *v);

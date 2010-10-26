@@ -67,6 +67,9 @@ static const Type *T_pfloat32;
 static const Type *T_float64;
 static const Type *T_pfloat64;
 static const Type *T_void;
+#ifdef JL_GC_MARKSWEEP
+static const Type *T_gcframe;
+#endif
 
 // constants
 static Value *V_null;
@@ -76,6 +79,9 @@ static GlobalVariable *jltrue_var;
 static GlobalVariable *jlfalse_var;
 static GlobalVariable *jlnull_var;
 static GlobalVariable *jlsysmod_var;
+#ifdef JL_GC_MARKSWEEP
+static GlobalVariable *jlpgcstack_var;
+#endif
 
 // important functions
 static Function *jlerror_func;
@@ -90,20 +96,9 @@ static Function *jlclosure_func;
 static Function *jlconvert_func;
 
 /*
-  plan
-
-  The Simplest Thing That Could Possibly Work:
-  * simple code gen for all node types
-  * implement all low-level intrinsics
-  * instantiate-method to provide static parameters
-  * default conversion functions, instantiating conversion functions
-
   stuff to fix up:
-  * discard toplevel wrapper functions (now interpreted)
   * gensyms from the front end might conflict with real variables, fix it
-  - better error messages
-  - exceptions
-  - threads or other advanced control flow
+  * exceptions
 
   - source location tracking, var name metadata
   * rootlist to track pointers emitted into code
@@ -111,27 +106,26 @@ static Function *jlconvert_func;
   - experiment with llvm optimization passes, option to disable them
 
   optimizations round 1:
-  - constants, especially global. resolve functions statically.
-  - keep a table mapping fptr to Function* for compiling known calls
+  * constants, especially global. resolve functions statically.
+  * keep a table mapping fptr to Function* for compiling known calls
   - manually inline simple builtins (tuple,box,boxset,etc.)
-  - int and float constant table
   - dispatch optimizations
   * inline space for buffers
   * preallocate boxes for small integers
-  ? speed up type caching
+  * speed up type caching
   * do something about all the string copying from scheme
   * speed up scheme pattern matcher
 
   optimizations round 2:
-  - type inference
-  - mark non-null references and avoid null check
-  - static method lookup
+  * type inference
+  * mark non-null references and avoid null check
+  * static method lookup
   - avoid tuple allocation in (a,b)=(b,a)
   - varargs and ... optimizations
 
   optimizations round 3:
-  - inlining
-  - unboxing
+  * inlining
+  * unboxing
   - lambda lifting
   - mark pure (builtin) functions, CSE
 
@@ -1136,26 +1130,88 @@ static void emit_function(jl_lambda_info_t *lam, Function *f)
         declTypes[vname] = jl_cellref(vi,1);
     }
 
+    int n_roots = 0;
     // allocate local variables
     // must be first for the mem2reg pass to work
     for(i=0; i < largs->length; i++) {
         char *argname = jl_decl_var(jl_cellref(largs,i))->name;
-        argumentMap[argname] = alloc_local(argname, &ctx);
+        AllocaInst *lv = alloc_local(argname, &ctx);
+        argumentMap[argname] = lv;
+        if (lv->getAllocatedType() == jl_pvalue_llvmt) {
+            n_roots++;
+#ifdef JL_GC_MARKSWEEP
+            builder.CreateStore(V_null, lv);
+#endif
+        }
     }
     for(i=0; i < lvars->length; i++) {
         char *argname = ((jl_sym_t*)jl_cellref(lvars,i))->name;
         AllocaInst *lv = alloc_local(argname, &ctx);
-        if (isBoxed[argname])
-            builder.CreateStore(builder.CreateCall(jlbox_func, V_null), lv);
-        else if (lv->getAllocatedType() == jl_pvalue_llvmt)
+        if (lv->getAllocatedType() == jl_pvalue_llvmt) {
             builder.CreateStore(V_null, lv);
+            n_roots++;
+        }
     }
 
-    ctx.argTemp =
-        builder.CreateAlloca(jl_pvalue_llvmt,
-                             ConstantInt::get(T_int32,
-                                              (int32_t)max_arg_depth((jl_value_t*)ast)));
+    int32_t argdepth = (int32_t)max_arg_depth((jl_value_t*)ast);
+    ctx.argTemp = builder.CreateAlloca(jl_pvalue_llvmt,
+                                       ConstantInt::get(T_int32, argdepth));
     ctx.argDepth = 0;
+
+#ifdef JL_GC_MARKSWEEP
+    // create gc frame
+    n_roots += argdepth;
+    AllocaInst *gcframe = builder.CreateAlloca(T_gcframe, 0);
+    AllocaInst *gcroots =
+        builder.CreateAlloca(PointerType::get(jl_pvalue_llvmt,0),
+                             ConstantInt::get(T_int32, n_roots));
+    builder.CreateStore(gcroots,
+                        builder.CreateConstGEP2_32(gcframe, 0, 0));
+    builder.CreateStore(ConstantInt::get(T_int32, n_roots),
+                        builder.CreateConstGEP2_32(gcframe, 0, 1));
+    builder.CreateStore(ConstantInt::get(T_int32, 1),
+                        builder.CreateConstGEP2_32(gcframe, 0, 2));
+    builder.CreateStore(builder.CreateLoad
+                        (builder.CreateLoad(jlpgcstack_var, false), false),
+                        builder.CreateConstGEP2_32(gcframe, 0, 3));
+    builder.CreateStore(gcframe,
+                        builder.CreateLoad(jlpgcstack_var, false));
+    int rn = 0;
+    // push locations of all locals and argument temporaries as gc roots.
+    // not too efficient, but simple.
+    for(i=0; i < (size_t)argdepth; i++) {
+        Value *argTempi = builder.CreateConstGEP1_32(ctx.argTemp,i);
+        builder.CreateStore(V_null, argTempi);
+        builder.CreateStore(argTempi, builder.CreateConstGEP1_32(gcroots,rn));
+        rn++;
+    }
+    for(i=0; i < largs->length; i++) {
+        char *argname = jl_decl_var(jl_cellref(largs,i))->name;
+        AllocaInst *lv = localVars[argname];
+        if (lv->getAllocatedType() == jl_pvalue_llvmt) {
+            builder.CreateStore(lv, builder.CreateConstGEP1_32(gcroots,rn));
+            rn++;
+        }
+    }
+    for(i=0; i < lvars->length; i++) {
+        char *argname = ((jl_sym_t*)jl_cellref(lvars,i))->name;
+        AllocaInst *lv = localVars[argname];
+        if (lv->getAllocatedType() == jl_pvalue_llvmt) {
+            builder.CreateStore(lv, builder.CreateConstGEP1_32(gcroots,rn));
+            rn++;
+        }
+    }
+    assert(rn == n_roots);
+#endif
+
+    // create boxes for boxed locals
+    for(i=0; i < lvars->length; i++) {
+        char *argname = ((jl_sym_t*)jl_cellref(lvars,i))->name;
+        if (isBoxed[argname]) {
+            AllocaInst *lv = localVars[argname];
+            builder.CreateStore(builder.CreateCall(jlbox_func, V_null), lv);
+        }
+    }
 
     // check arg count
     size_t nreq = largs->length;
@@ -1227,12 +1283,11 @@ static void emit_function(jl_lambda_info_t *lam, Function *f)
                                 builder.CreateSub((Value*)&argCount,
                                                   ConstantInt::get(T_int32,nreq)));
         char *argname = jl_decl_var(jl_cellref(largs,nreq))->name;
-        AllocaInst *lv = builder.CreateAlloca(jl_pvalue_llvmt, 0, argname);
+        AllocaInst *lv = localVars[argname];
         if (isBoxed[argname])
             builder.CreateStore(builder.CreateCall(jlbox_func, restTuple), lv);
         else
             builder.CreateStore(restTuple, lv);
-        localVars[argname] = lv;
     }
 
     jl_array_t *stmts = jl_lam_body(ast);
@@ -1267,6 +1322,11 @@ static void emit_function(jl_lambda_info_t *lam, Function *f)
             prevlabel = false;
         }
         if (jl_is_expr(stmt) && ((jl_expr_t*)stmt)->head == return_sym) {
+#ifdef JL_GC_MARKSWEEP
+            // JL_GC_POP();
+            builder.CreateStore(builder.CreateLoad(builder.CreateConstGEP2_32(gcframe, 0, 3), false),
+                                builder.CreateLoad(jlpgcstack_var, false));
+#endif
             jl_expr_t *ex = (jl_expr_t*)stmt;
             builder.CreateRet(boxed(emit_expr(jl_exprarg(ex,0), &ctx, true)));
             if (i != stmts->length-1) {
@@ -1354,6 +1414,25 @@ static void init_julia_llvm_env(Module *m)
     jl_func_sig = FunctionType::get(jl_pvalue_llvmt, ftargs, false);
     assert(jl_func_sig != NULL);
     jl_fptr_llvmt = PointerType::get(jl_func_sig, 0);
+
+#ifdef JL_GC_MARKSWEEP
+    std::vector<const Type*> gcframeStructElts(0);
+    gcframeStructElts.push_back(PointerType::get(PointerType::get(jl_pvalue_llvmt,0),0));
+    gcframeStructElts.push_back(T_size);
+    gcframeStructElts.push_back(T_int32);
+    PATypeHolder tempTy2 = OpaqueType::get(getGlobalContext());
+    gcframeStructElts.push_back(PointerType::getUnqual(tempTy2));
+    StructType *gcfSt = StructType::get(getGlobalContext(),gcframeStructElts);
+    ((OpaqueType*)tempTy2.get())->refineAbstractTypeTo(gcfSt);
+    T_gcframe = tempTy2.get();
+
+    jlpgcstack_var =
+        new GlobalVariable(*jl_Module,
+                           PointerType::get(PointerType::get(T_gcframe,0),0),
+                           true, GlobalVariable::ExternalLinkage,
+                           NULL, "jl_pgcstack");
+    jl_ExecutionEngine->addGlobalMapping(jlpgcstack_var, (void*)&jl_pgcstack);
+#endif
 
     jltrue_var = global_to_llvm("jl_true", (void*)&jl_true);
     jlfalse_var = global_to_llvm("jl_false", (void*)&jl_false);
