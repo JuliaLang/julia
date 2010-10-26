@@ -17,10 +17,9 @@ ndims(x::Scalar) = 0
 numel(x::Scalar) = 1
 length(x::Scalar) = 1
 
-sign(x::Real) = (x < 0 ? -1 : (x > 0 ? +1 : 0))
-signbit(x::Real) = (x < 0 ? -1 : +1)
-
-abs(x::Real) = (x < 0 ? -x : x)
+signbit(x::Real) = x < 0 ? int8(-1) : int8(1)
+sign(x::Real) = x < 0 ? int8(-1) : x > 0 ? int8(1) : int8(0)
+abs(x::Real) = x < 0 ? -x : x
 
 conj(x::Scalar) = x
 transpose(x::Scalar) = x
