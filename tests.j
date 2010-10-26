@@ -165,6 +165,22 @@ assert((Complex(1,2) + 1//2) * 0.5 == Complex(0.75,1.0))
 assert((Complex(1,2)/Complex(2.5,3.0))*Complex(2.5,3.0) == Complex(1,2))
 assert(0.7 < real(sqrt(Complex(0,1))) < 0.707107)
 
+# check type of constructed rationals
+int_types = {Int8, Uint8, Int16, Uint16, Int32, Uint32, Int64, Uint64}
+for N = int_types, D = int_types
+    T = promote_type(N,D)
+    assert(typeof(convert(N,2)//convert(D,3)) <: Rational{T})
+end
+
+# check type of constructed complexes
+real_types = {Int8, Uint8, Int16, Uint16, Int32, Uint32, Int64, Uint64, Float32, Float64,
+              Rational{Int8}, Rational{Uint8}, Rational{Int16}, Rational{Uint16},
+              Rational{Int32}, Rational{Uint32}, Rational{Int64}, Rational{Uint64}}
+for A = real_types, B = real_types
+    T = promote_type(A,B)
+    assert(typeof(Complex(convert(A,2),convert(B,3))) <: Complex{T})
+end
+
 # div, fld, rem, mod
 for nr = {
     Range1(1,6),

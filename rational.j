@@ -17,11 +17,9 @@ function //{T}(num::T, den::T)
     if den == 0
         error("//: division by zero")
     end
-    g = gcd(num, den)
+    g = gcd(den, num)
     num = div(num, g)
     den = div(den, g)
-    num = sign(den)*num
-    den = sign(den)*den
     Rational(num, den)
 end
 
@@ -49,5 +47,5 @@ div(x::Rational, y::Rational) = div(x.num*y.den, x.den*y.num)
 div(x::Real    , y::Rational) = div(x*y.den, y.num)
 div(x::Rational, y::Real    ) = div(x.num, x.den*y)
 
-==(x::Rational, y::Rational) = (x.num == y.num && x.den == y.den)
-< (x::Rational, y::Rational) = (x.num*y.den < y.num*x.den)
+==(x::Rational, y::Rational) = (x.num*y.den == y.num*x.den)
+< (x::Rational, y::Rational) = (x.num*y.den <  y.num*x.den)

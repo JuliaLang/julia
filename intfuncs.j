@@ -4,15 +4,17 @@ isodd(n::Int) = bool(rem(n,2))
 iseven(n::Int) = !isodd(n)
 
 function gcd(a::Int, b::Int)
+    neg = a < 0
     while b != 0
         t = b
         b = rem(a, b)
         a = t
     end
-    return a
+    g = abs(a)
+    neg ? -g : g
 end
 
-lcm(a::Int, b::Int) = div(a*b, gcd(a,b))
+lcm(a::Int, b::Int) = div(a*b, gcd(b,a))
 
 # return (gcd(a,b),x,y) such that ax+by == gcd(a,b)
 function gcdx(a, b)
