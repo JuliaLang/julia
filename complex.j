@@ -2,9 +2,12 @@ struct Complex{T<:Real} <: Number{Complex}
     re::T
     im::T
 
-    Complex(x::Real, y::Real) = new(x, y)
-    Complex(x::Real) = new(x, convert(typeof(x),0))
+    Complex{T<:Real}(x::T, y::T) = new(x, y)
+    Complex(x::Real, y::Real) = Complex(promote(x,y)...)
+    Complex(x::Real) = new(x, zero(x))
 end
+
+complex(x, y) = Complex(x, y)
 
 convert{T}(::Type{Complex{T}}, x::T) = Complex(x, convert(T,0))
 convert{T}(::Type{Complex{T}}, x::Real) = Complex(convert(T,x), convert(T,0))
@@ -13,8 +16,6 @@ convert{T}(::Type{Complex{T}}, z::Complex) = Complex(convert(T,z.re),convert(T,z
 promote_rule{T}(::Type{Complex{T}}, ::Type{Real{T}}) = Complex{T}
 promote_rule{T,S}(::Type{Complex{T}}, ::Type{Real{S}}) = Complex{promote_type(T,S)}
 promote_rule{T,S}(::Type{Complex{T}}, ::Type{Complex{S}}) = Complex{promote_type(T,S)}
-
-complex(x::Real, y::Real) = Complex(x, y)
 
 function show(c::Complex)
     show(real(c))
