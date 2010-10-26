@@ -327,6 +327,9 @@ jl_tag_type_t *jl_new_tagtype(jl_value_t *name, jl_tag_type_t *super,
     t->super = super;
     unbind_tvars(parameters);
     t->parameters = parameters;
+    t->fptr = NULL;
+    t->env = NULL;
+    t->linfo = NULL;
     if (t->name->primary == NULL)
         t->name->primary = (jl_value_t*)t;
     JL_GC_POP();
@@ -539,6 +542,9 @@ jl_bits_type_t *jl_new_bitstype(jl_value_t *name, jl_tag_type_t *super,
         t->uid = 0;
     else
         t->uid = jl_assign_type_uid();
+    t->fptr = NULL;
+    t->env = NULL;
+    t->linfo = NULL;
     if (t->name->primary == NULL)
         t->name->primary = (jl_value_t*)t;
     JL_GC_POP();

@@ -102,7 +102,7 @@ void julia_init()
     jl_init_builtins();
     jl_an_empty_string = jl_pchar_to_string("", 0);
 #ifdef JL_GC_MARKSWEEP
-    //jl_gc_enable();
+    jl_gc_enable();
 #endif
 
     signal(SIGFPE, fpe_handler);

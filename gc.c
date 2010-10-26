@@ -27,10 +27,10 @@
 
 #define GC_PAGE_SZ 16384//bytes
 
-typedef struct _page_t {
-    struct _page_t *next;
+typedef struct _gcpage_t {
+    struct _gcpage_t *next;
     char data[GC_PAGE_SZ - sizeof(void*)];
-} page_t;
+} gcpage_t;
 
 typedef struct _gcval_t {
     union {
@@ -52,7 +52,7 @@ typedef struct _gcval_t {
 
 typedef struct _pool_t {
     size_t osize;
-    page_t *pages;
+    gcpage_t *pages;
     gcval_t *freelist;
 } pool_t;
 
@@ -155,7 +155,7 @@ static void sweep_big()
 
 static void add_page(pool_t *p)
 {
-    page_t *pg = malloc(sizeof(page_t));
+    gcpage_t *pg = malloc(sizeof(gcpage_t));
     gcval_t *v = (gcval_t*)&pg->data[0];
     char *lim = (char*)pg + GC_PAGE_SZ - p->osize;
     gcval_t *oldfl = p->freelist;
@@ -167,7 +167,7 @@ static void add_page(pool_t *p)
     }
     *pfl = oldfl;
     pg->next = p->pages;
-    p->pages = pg->next;
+    p->pages = pg;
 }
 
 static void *pool_alloc(pool_t *p)
@@ -186,8 +186,8 @@ static void sweep_pool(pool_t *p)
     int empty;
     gcval_t **prev_pfl;
     gcval_t *v;
-    page_t *pg = p->pages;
-    page_t **ppg = &p->pages;
+    gcpage_t *pg = p->pages;
+    gcpage_t **ppg = &p->pages;
     gcval_t **pfl = &p->freelist;
 
     while (pg != NULL) {
@@ -207,11 +207,14 @@ static void sweep_pool(pool_t *p)
             }
             v = (gcval_t*)((char*)v + p->osize);
         }
-        page_t *nextpg = pg->next;
+        gcpage_t *nextpg = pg->next;
         // if the whole page was already unused, free it
         if (empty) {
             pfl = prev_pfl;
             *ppg = nextpg;
+#ifdef DEBUG
+            memset(pg, 0xbb, sizeof(gcpage_t));
+#endif
             free(pg);
         }
         else {
@@ -283,7 +286,7 @@ static void gc_markval_(jl_value_t *v)
     if (jl_is_array(v)) {
         jl_array_t *a = (jl_array_t*)v;
         GC_Markval(a->dims);
-        if (a->data != &a->_space[0])
+        if (a->data && a->data != &a->_space[0])
             gc_setmark(a->data);
         jl_value_t *elty = jl_tparam0(jl_typeof(v));
         if (!jl_is_bits_type(elty)) {
@@ -304,18 +307,15 @@ static void gc_markval_(jl_value_t *v)
     }
     else if (jl_is_lambda_info(v)) {
         jl_lambda_info_t *li = (jl_lambda_info_t*)v;
-        GC_Markval(li->ast);
+        if (li->ast)
+            GC_Markval(li->ast);
         GC_Markval(li->sparams);
         GC_Markval(li->tfunc);
         GC_Markval(li->roots);
-        GC_Markval(li->specTypes);
+        if (li->specTypes)
+            GC_Markval(li->specTypes);
         if (li->unspecialized != NULL)
             GC_Markval(li->unspecialized);
-    }
-    else if (jl_is_func(v)) {
-        jl_function_t *f = (jl_function_t*)v;
-        if (f->env  !=NULL) GC_Markval(f->env);
-        if (f->linfo!=NULL) GC_Markval(f->linfo);
     }
     else if (jl_is_typename(v)) {
         jl_typename_t *tn = (jl_typename_t*)v;
@@ -358,6 +358,11 @@ static void gc_markval_(jl_value_t *v)
         GC_Markval(bt->parameters);
         GC_Markval(bt->bnbits);
     }
+    else if (jl_is_func(v)) {
+        jl_function_t *f = (jl_function_t*)v;
+        if (f->env  !=NULL) GC_Markval(f->env);
+        if (f->linfo!=NULL) GC_Markval(f->linfo);
+    }
     else if (jl_is_mtable(v)) {
         jl_methtable_t *mt = (jl_methtable_t*)v;
         size_t i;
@@ -371,14 +376,21 @@ static void gc_markval_(jl_value_t *v)
     else if (jl_is_task(v)) {
         jl_task_t *ta = (jl_task_t*)v;
         GC_Markval(ta->on_exit);
-        GC_Markval(ta->start);
-        GC_Markval(ta->result);
+        if (ta->start)
+            GC_Markval(ta->start);
+        if (ta->result)
+            GC_Markval(ta->result);
         gc_mark_stack(ta->state.gcstack);
         GC_Markval(ta->state.eh_task);
         if (ta->_stkbase != NULL)
             gc_setmark(ta->_stkbase);
         // TODO
         // GC_Markval(ta->state.current_output_stream);
+    }
+    else if (jl_is_box(v)) {
+        jl_value_t *contents = ((jl_value_t**)v)[1];
+        if (contents)
+            GC_Markval(contents);
     }
     else {
         assert(jl_is_struct_type(jl_typeof(v)));
@@ -471,6 +483,7 @@ void *alloc_permanent(size_t sz)
 {
     // we need 1 word before to allow marking
     char *ptr = (char*)malloc(sz+sizeof(void*));
+    *((uptrint_t*)ptr) = 0;
     return ptr+sizeof(void*);
 }
 

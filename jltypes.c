@@ -1096,6 +1096,9 @@ static jl_type_t *inst_type_w_(jl_value_t *t, jl_value_t **env, size_t n,
             ntt->super = jl_any_type;
             ntt->parameters = iparams_tuple;
             ntt->super = (jl_tag_type_t*)inst_type_w_((jl_value_t*)tagt->super,env,n,stack);
+            ntt->fptr = NULL;
+            ntt->env = NULL;
+            ntt->linfo = NULL;
             cache_type_(iparams, ntp, (jl_type_t*)ntt);
             result = (jl_type_t*)ntt;
         }
@@ -1116,6 +1119,9 @@ static jl_type_t *inst_type_w_(jl_value_t *t, jl_value_t **env, size_t n,
             nbt->nbits = bitst->nbits;
             nbt->bnbits = bitst->bnbits;
             nbt->super = (jl_tag_type_t*)inst_type_w_((jl_value_t*)bitst->super, env, n, stack);
+            nbt->fptr = NULL;
+            nbt->env = NULL;
+            nbt->linfo = NULL;
             cache_type_(iparams, ntp, (jl_type_t*)nbt);
             result = (jl_type_t*)nbt;
         }
@@ -1310,8 +1316,12 @@ int jl_subtype_le(jl_value_t *a, jl_value_t *b, int ta, int morespecific)
     }
     if (jl_is_tuple(a)) return 0;
 
-    if (jl_is_int32(a) && jl_is_int32(b))
-        return (jl_unbox_int32(a)==jl_unbox_int32(b));
+    if (jl_is_int32(a)) {
+        if (jl_is_int32(b))
+            return (jl_unbox_int32(a)==jl_unbox_int32(b));
+        return 0;
+    }
+    if (jl_is_int32(b)) return 0;
 
     if (jl_is_func_type(a)) {
         if (jl_is_func_type(b)) {
@@ -1471,18 +1481,24 @@ static jl_value_t *type_match_(jl_value_t *child, jl_value_t *parent,
         jl_tuple_t *np = jl_tuple(3, parent, child, (jl_value_t*)*env);
         return (jl_value_t*)np;
     }
+
+    if (child == parent) return (jl_value_t*)*env;
+
     if (jl_is_typevar(child)) {
         if (jl_subtype_le(child, parent, 0, morespecific))
             return (jl_value_t*)*env;
         return jl_false;
     }
-    if (jl_is_int32(child) && jl_is_int32(parent)) {
-        if (jl_unbox_int32((jl_value_t*)child) ==
-            jl_unbox_int32((jl_value_t*)parent))
-            return (jl_value_t*)*env;
+    if (jl_is_int32(child)) {
+        if (jl_is_int32(parent)) {
+            if (jl_unbox_int32((jl_value_t*)child) ==
+                jl_unbox_int32((jl_value_t*)parent))
+                return (jl_value_t*)*env;
+        }
         return jl_false;
     }
-    if (child == parent) return (jl_value_t*)*env;
+    if (jl_is_int32(parent))
+        return jl_false;
     if (parent == (jl_value_t*)jl_any_type) return (jl_value_t*)*env;
     if (child  == (jl_value_t*)jl_any_type) return jl_false;
 
@@ -1714,10 +1730,14 @@ void jl_init_types()
     jl_struct_kind->names = jl_tuple(5, jl_symbol("name"), jl_symbol("super"),
                                      jl_symbol("parameters"),
                                      jl_symbol("names"), jl_symbol("types"));
-    jl_struct_kind->types = jl_tuple(6, jl_typename_type, jl_type_type,
+    jl_struct_kind->types = jl_tuple(5, jl_typename_type, jl_type_type,
                                      jl_tuple_type, jl_tuple_type,
                                      jl_tuple_type);
     jl_struct_kind->fptr = jl_f_no_function;
+    jl_struct_kind->env = NULL;
+    jl_struct_kind->linfo = NULL;
+    jl_struct_kind->ctor_factory = NULL;
+    jl_struct_kind->instance = NULL;
     jl_struct_kind->uid = t_uid_ctr++;
 
     jl_tag_kind->name = jl_new_typename(jl_symbol("TagKind"));
@@ -1728,6 +1748,10 @@ void jl_init_types()
     jl_tag_kind->types = jl_tuple(3, jl_typename_type, jl_type_type,
                                   jl_tuple_type);
     jl_tag_kind->fptr = jl_f_no_function;
+    jl_tag_kind->env = NULL;
+    jl_tag_kind->linfo = NULL;
+    jl_tag_kind->ctor_factory = NULL;
+    jl_tag_kind->instance = NULL;
     jl_tag_kind->uid = t_uid_ctr++;
 
     jl_func_kind->name = jl_new_typename(jl_symbol("FuncKind"));
@@ -1736,6 +1760,10 @@ void jl_init_types()
     jl_func_kind->names = jl_tuple(2, jl_symbol("from"), jl_symbol("to"));
     jl_func_kind->types = jl_tuple(2, jl_type_type, jl_type_type);
     jl_func_kind->fptr = jl_f_no_function;
+    jl_func_kind->env = NULL;
+    jl_func_kind->linfo = NULL;
+    jl_func_kind->ctor_factory = NULL;
+    jl_func_kind->instance = NULL;
     jl_func_kind->uid = t_uid_ctr++;
 
     jl_typename_type->name = jl_new_typename(jl_symbol("TypeName"));
@@ -1744,6 +1772,11 @@ void jl_init_types()
     jl_typename_type->names = jl_tuple(1, jl_symbol("name"));
     jl_typename_type->types = jl_tuple(1, jl_sym_type);
     jl_typename_type->uid = t_uid_ctr++;
+    jl_typename_type->fptr = jl_f_no_function;
+    jl_typename_type->env = NULL;
+    jl_typename_type->linfo = NULL;
+    jl_typename_type->ctor_factory = NULL;
+    jl_typename_type->instance = NULL;
 
     jl_sym_type->name = jl_new_typename(jl_symbol("Symbol"));
     jl_sym_type->super = jl_any_type;
@@ -1751,15 +1784,25 @@ void jl_init_types()
     jl_sym_type->names = jl_null;
     jl_sym_type->types = jl_null;
     jl_sym_type->fptr = jl_f_no_function;
+    jl_sym_type->env = NULL;
+    jl_sym_type->linfo = NULL;
+    jl_sym_type->ctor_factory = NULL;
+    jl_sym_type->instance = NULL;
     jl_sym_type->uid = t_uid_ctr++;
 
     jl_any_type->name = jl_new_typename(jl_symbol("Any"));
     jl_any_type->super = jl_any_type;
     jl_any_type->parameters = jl_null;
+    jl_any_type->fptr = NULL;
+    jl_any_type->env = NULL;
+    jl_any_type->linfo = NULL;
 
     jl_type_type->name = jl_new_typename(jl_symbol("Type"));
     jl_type_type->name->primary = (jl_value_t*)jl_type_type;
     jl_type_type->super = jl_any_type;
+    jl_type_type->fptr = NULL;
+    jl_type_type->env = NULL;
+    jl_type_type->linfo = NULL;
 
     jl_tuple_typename = jl_new_typename(jl_symbol("Tuple"));
 
@@ -1871,6 +1914,15 @@ void jl_init_types()
                                     jl_any_type));
     jl_add_constructors(jl_expr_type);
 
+    jl_lambda_info_type =
+        jl_new_struct_type(jl_symbol("LambdaStaticData"),
+                           jl_any_type, jl_null,
+                           jl_tuple(4, jl_symbol("ast"), jl_symbol("sparams"),
+                                    jl_symbol("tfunc"), jl_symbol("name")),
+                           jl_tuple(4, jl_expr_type, jl_tuple_type,
+                                    jl_any_type, jl_sym_type));
+    jl_lambda_info_type->fptr = jl_f_no_function;
+
     tv = jl_typevars(1, "T");
     jl_box_type =
         jl_new_struct_type(jl_symbol("Box"),
@@ -1881,15 +1933,6 @@ void jl_init_types()
     jl_box_any_type =
         (jl_type_t*)jl_apply_type((jl_value_t*)jl_box_type,
                                   jl_tuple(1, jl_any_type));
-
-    jl_lambda_info_type =
-        jl_new_struct_type(jl_symbol("LambdaStaticData"),
-                           jl_any_type, jl_null,
-                           jl_tuple(4, jl_symbol("ast"), jl_symbol("sparams"),
-                                    jl_symbol("tfunc"), jl_symbol("name")),
-                           jl_tuple(4, jl_expr_type, jl_tuple_type,
-                                    jl_any_type, jl_sym_type));
-    jl_lambda_info_type->fptr = jl_f_no_function;
 
     jl_typector_type =
         jl_new_struct_type(jl_symbol("TypeConstructor"),

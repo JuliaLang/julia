@@ -337,6 +337,7 @@ jl_task_t *jl_new_task(jl_function_t *start, size_t ssize)
     t->on_exit = jl_current_task;
     t->done = 0;
     t->start = start;
+    t->result = NULL;
     t->state.err = 0;
     t->state.eh_task = jl_current_task->state.eh_task;
     // there is no active exception handler available on this stack yet
@@ -433,9 +434,11 @@ void jl_init_tasks(void *stack, size_t ssize)
     jl_current_task->type = (jl_type_t*)jl_task_type;
     jl_current_task->ssize = ssize;
     jl_current_task->stack = stack;
+    jl_current_task->_stkbase = NULL;
     jl_current_task->on_exit = jl_current_task;
     jl_current_task->done = 0;
     jl_current_task->start = jl_bottom_func;
+    jl_current_task->result = NULL;
     jl_current_task->state.err = 0;
     jl_current_task->state.eh_task = jl_current_task;
     jl_current_task->state.eh_ctx = NULL;
