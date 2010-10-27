@@ -49,7 +49,7 @@ u_int32_t *bitvector_resize(u_int32_t *b, uint64_t oldsz, uint64_t newsz,
     if (p == NULL) return NULL;
     if (initzero && newsz>oldsz) {
         size_t osz = ((oldsz+31)>>5) * sizeof(uint32_t);
-        memset(&p[osz], 0, sz-osz);
+        memset(&p[osz/sizeof(uint32_t)], 0, sz-osz);
     }
     return p;
 }
@@ -95,16 +95,20 @@ static int ntz(uint32_t x)
 // returns n if no set bits.
 uint32_t bitvector_next(uint32_t *b, uint64_t n0, uint64_t n)
 {
-    if (n == 0) return 0;
+    if (n0 >= n) return n;
 
     uint32_t i = n0>>5;
     uint32_t nb = n0&31;
     uint32_t nw = (n+31)>>5;
+    uint32_t w;
 
-    uint32_t w = b[i]>>nb;
+    if (i < nw-1)
+        w = b[i]>>nb;
+    else
+        w = (b[i]&lomask(n&31))>>nb;
     if (w != 0)
         return ntz(w)+n0;
-    if (nw == 1)
+    if (i == nw-1)
         return n;
     i++;
     while (i < nw-1) {

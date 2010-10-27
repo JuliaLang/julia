@@ -794,13 +794,11 @@ static Value *emit_call(jl_value_t **args, size_t arglen, jl_codectx_t *ctx)
         }
     }
     // emit arguments
-    std::vector<Value*> argVs(0);
     size_t i;
     int argStart = ctx->argDepth;
     assert(nargs+ctx->argDepth <= ((ConstantInt*)ctx->argTemp->getArraySize())->getZExtValue());
     for(i=0; i < nargs; i++) {
         Value *anArg = emit_expr(args[i+1], ctx, true);
-        argVs.push_back(anArg);
         // put into argument space
         Value *dest=builder.CreateGEP(ctx->argTemp,
                                       ConstantInt::get(T_int32,ctx->argDepth));
@@ -1322,13 +1320,14 @@ static void emit_function(jl_lambda_info_t *lam, Function *f)
             prevlabel = false;
         }
         if (jl_is_expr(stmt) && ((jl_expr_t*)stmt)->head == return_sym) {
+            jl_expr_t *ex = (jl_expr_t*)stmt;
+            Value *retval = boxed(emit_expr(jl_exprarg(ex,0), &ctx, true));
 #ifdef JL_GC_MARKSWEEP
             // JL_GC_POP();
             builder.CreateStore(builder.CreateLoad(builder.CreateConstGEP2_32(gcframe, 0, 3), false),
                                 builder.CreateLoad(jlpgcstack_var, false));
 #endif
-            jl_expr_t *ex = (jl_expr_t*)stmt;
-            builder.CreateRet(boxed(emit_expr(jl_exprarg(ex,0), &ctx, true)));
+            builder.CreateRet(retval);
             if (i != stmts->length-1) {
                 BasicBlock *bb =
                     BasicBlock::Create(getGlobalContext(), "ret", ctx.f);

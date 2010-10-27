@@ -884,6 +884,12 @@ function inlineable(e::Expr, vars)
             return NF
         end
     end
+    for vi = meth[3].ast.args[2].args[2]
+        if vi[3]
+            # captures variables (TODO)
+            return NF
+        end
+    end
     (ast, ty) = typeinf(meth[3], meth[1], meth[2], true)
     if is(ast,())
         return NF

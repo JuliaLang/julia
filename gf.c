@@ -696,13 +696,6 @@ jl_methlist_t *jl_method_list_insert(jl_methlist_t **pml, jl_tuple_t *type,
         }
         l = l->next;
     }
-    jl_tuple_t *tv = find_tvars((jl_value_t*)type, jl_null);
-    JL_GC_PUSH(&tv);
-    jl_methlist_t *newrec = (jl_methlist_t*)allocb(sizeof(jl_methlist_t));
-    newrec->sig = type;
-    newrec->tvars = tv;
-    newrec->has_tvars = (newrec->tvars != jl_null);
-    newrec->func = method;
     pl = pml;
     l = *pml;
     while (l != NULL) {
@@ -716,6 +709,13 @@ jl_methlist_t *jl_method_list_insert(jl_methlist_t **pml, jl_tuple_t *type,
         pl = &l->next;
         l = l->next;
     }
+    jl_tuple_t *tv = find_tvars((jl_value_t*)type, jl_null);
+    JL_GC_PUSH(&tv);
+    jl_methlist_t *newrec = (jl_methlist_t*)allocb(sizeof(jl_methlist_t));
+    newrec->sig = type;
+    newrec->tvars = tv;
+    newrec->has_tvars = (newrec->tvars != jl_null);
+    newrec->func = method;
     newrec->next = l;
     *pl = newrec;
     JL_GC_POP();
@@ -890,10 +890,11 @@ static jl_tuple_t *match_method(jl_value_t *type, jl_function_t *func,
                                 jl_sym_t *name, jl_tuple_t *next)
 {
     jl_tuple_t *env = jl_null;
-    jl_value_t *ti =
-        jl_type_intersection_matching((jl_value_t*)sig, type, &env);
     jl_value_t *temp=NULL;
+    jl_value_t *ti=NULL;
     JL_GC_PUSH(&env, &ti, &temp);
+
+    ti = jl_type_intersection_matching((jl_value_t*)sig, type, &env);
     jl_tuple_t *t = tvars;
     jl_tuple_t *env0 = env;
     while (t != jl_null) {

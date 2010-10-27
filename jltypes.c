@@ -1093,12 +1093,12 @@ static jl_type_t *inst_type_w_(jl_value_t *t, jl_value_t **env, size_t n,
             ntt->name = tn;
             // temporarily initialize all fields so object is valid during
             // allocation of other objects (possible GC)
-            ntt->super = jl_any_type;
-            ntt->parameters = iparams_tuple;
-            ntt->super = (jl_tag_type_t*)inst_type_w_((jl_value_t*)tagt->super,env,n,stack);
             ntt->fptr = NULL;
             ntt->env = NULL;
             ntt->linfo = NULL;
+            ntt->super = jl_any_type;
+            ntt->parameters = iparams_tuple;
+            ntt->super = (jl_tag_type_t*)inst_type_w_((jl_value_t*)tagt->super,env,n,stack);
             cache_type_(iparams, ntp, (jl_type_t*)ntt);
             result = (jl_type_t*)ntt;
         }
@@ -1114,14 +1114,14 @@ static jl_type_t *inst_type_w_(jl_value_t *t, jl_value_t **env, size_t n,
             top.next = stack;
             stack = &top;
             nbt->name = tn;
+            nbt->fptr = NULL;
+            nbt->env = NULL;
+            nbt->linfo = NULL;
             nbt->super = jl_any_type;
             nbt->parameters = iparams_tuple;
             nbt->nbits = bitst->nbits;
             nbt->bnbits = bitst->bnbits;
             nbt->super = (jl_tag_type_t*)inst_type_w_((jl_value_t*)bitst->super, env, n, stack);
-            nbt->fptr = NULL;
-            nbt->env = NULL;
-            nbt->linfo = NULL;
             cache_type_(iparams, ntp, (jl_type_t*)nbt);
             result = (jl_type_t*)nbt;
         }
