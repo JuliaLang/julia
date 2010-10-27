@@ -1165,7 +1165,7 @@ static void emit_function(jl_lambda_info_t *lam, Function *f)
                              ConstantInt::get(T_int32, n_roots));
     builder.CreateStore(gcroots,
                         builder.CreateConstGEP2_32(gcframe, 0, 0));
-    builder.CreateStore(ConstantInt::get(T_int32, n_roots),
+    builder.CreateStore(ConstantInt::get(T_size, n_roots),
                         builder.CreateConstGEP2_32(gcframe, 0, 1));
     builder.CreateStore(ConstantInt::get(T_int32, 1),
                         builder.CreateConstGEP2_32(gcframe, 0, 2));
