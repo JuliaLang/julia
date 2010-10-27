@@ -1,12 +1,12 @@
 CC = gcc
 CXX = g++
-CFLAGS =
+CFLAGS = -std=gnu99
 
 HFILEDIRS = /opt/local/include
 LIBDIRS = /opt/local/lib /usr/local/lib
 
 # BOEHM or MARKSWEEP
-JULIAGC = BOEHM
+JULIAGC = MARKSWEEP
 
 ifeq ($(JULIAGC),BOEHM)
 GCLIBS = -lgc
