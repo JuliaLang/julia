@@ -1,6 +1,6 @@
 /*
   task.c
-  lightweight processes (or asymmetric coroutines)
+  lightweight processes (symmetric coroutines)
 */
 #include <stdlib.h>
 #include <stdio.h>

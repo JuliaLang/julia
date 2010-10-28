@@ -102,7 +102,7 @@ uint32_t bitvector_next(uint32_t *b, uint64_t n0, uint64_t n)
     uint32_t nw = (n+31)>>5;
     uint32_t w;
 
-    if (i < nw-1)
+    if (i < nw-1 || (n&31)==0)
         w = b[i]>>nb;
     else
         w = (b[i]&lomask(n&31))>>nb;

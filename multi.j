@@ -248,9 +248,10 @@ function pmap_s(wpool, fname, lst)
     fut
 end
 
+# fv(a)=eig(a)[2][2]
 # A=randn(800,800);A=A*A';
 # wp=WorkPool(3)
-# pmap_d(wp, `eig, {A,A,A})
+# pmap_d(wp, `fv, {A,A,A})
 
 # p={Worker(),Worker()}
-# pmap_s(p,`eig,{A,A})
+# pmap_s(p,`fv,{A,A})

@@ -262,7 +262,7 @@ static jl_sym_t **symtab_lookup(jl_sym_t **ptree, const char *str)
     return ptree;
 }
 
-DLLEXPORT jl_sym_t *jl_symbol(const char *str)
+jl_sym_t *jl_symbol(const char *str)
 {
     jl_sym_t **pnode;
 
@@ -270,6 +270,14 @@ DLLEXPORT jl_sym_t *jl_symbol(const char *str)
     if (*pnode == NULL)
         *pnode = mk_symbol(str);
     return *pnode;
+}
+
+DLLEXPORT jl_sym_t *jl_symbol_n(const char *str, int32_t len)
+{
+    char name[len+1];
+    memcpy(name, str, len);
+    name[len] = '\0';
+    return jl_symbol(name);
 }
 
 DLLEXPORT jl_sym_t *jl_gensym()

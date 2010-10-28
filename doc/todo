@@ -556,6 +556,10 @@ promote_type: promote_type(Type{T},Type{T}) first
 ref: ref(Array{Any,1},Int32) before ref(Array{T,1},Int32)
 
 convert files for new GC:
-*alloc.c     codegen.cpp   *gf.c      *intrinsics.cpp
+*alloc.c    *codegen.cpp   *gf.c      *intrinsics.cpp
 *ast.c      *init.c        *io.c      *task.c
 *builtins.c *interpreter.c *jltypes.c *repl.c
+
+startup time, mem0, mem after tests.j, exe size:
+marksweep: 7.8s, 58356  43m, 69792  55m, 8285616
+boehm:     7.8s, 50236  35m, 78320  63m, 8376416

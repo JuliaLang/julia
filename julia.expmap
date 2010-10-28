@@ -22,7 +22,7 @@
     jl_new_structt;
     jl_word_size;
     jl_enable_inference;
-    jl_symbol;
+    jl_symbol_n;
     jl_matching_methods;
     jl_is_builtin;
     jl_is_genericfunc;

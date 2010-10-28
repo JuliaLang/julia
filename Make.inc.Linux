@@ -1,6 +1,6 @@
 CC = gcc
 CXX = g++
-CFLAGS = 
+CFLAGS = -std=gnu99
 
 PFX = /usr/local
 #PFX = /afs/csail.mit.edu/u/b/bezanson
@@ -8,7 +8,7 @@ HFILEDIRS = $(PFX)/include
 LIBDIRS = $(PFX)/lib
 
 # BOEHM or MARKSWEEP
-JULIAGC = BOEHM
+JULIAGC = MARKSWEEP
 
 ifeq ($(JULIAGC),BOEHM)
 GCLIBS = -l:libgc.a

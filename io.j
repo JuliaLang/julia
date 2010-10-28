@@ -213,8 +213,9 @@ function serialize(s, x)
         for n = t.names
             serialize(s, getfield(x, n))
         end
+    else
+        error("not serializable")
     end
-    error("not serializable")
 end
 
 ## deserializing values ##

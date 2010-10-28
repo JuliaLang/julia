@@ -642,8 +642,8 @@ function typeinf(linfo::LambdaStaticData, atypes::Tuple, sparams::Tuple, cop)
 
     n = length(body)
     s = { idtable() | i=1:n }
-    recpts = intset(n+1)  # statements that depend recursively on our value
-    W = intset(n+1)
+    recpts = IntSet(n+1)  # statements that depend recursively on our value
+    W = IntSet(n+1)
     # initial set of pc
     adjoin(W,1)
     # initial types

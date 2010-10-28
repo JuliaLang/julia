@@ -21,11 +21,11 @@
 /*
   integration steps:
   * convert idtable to use an Array
-  - give GC access to relevant C local variables
+  * give GC access to relevant C local variables
   - allocate ios objects with malloc, use finalizer
 */
 
-#define GC_PAGE_SZ 16384//bytes
+#define GC_PAGE_SZ (4096*sizeof(void*))//bytes
 
 typedef struct _gcpage_t {
     struct _gcpage_t *next;
@@ -83,46 +83,42 @@ typedef struct _bigval_t {
 
 static bigval_t *big_objects = NULL;
 
-#define N_POOLS 16
+#define N_POOLS 19
 static pool_t pools[N_POOLS];
 
 static size_t allocd_bytes = 0;
 static size_t collect_interval = 8192*1024;
 
 // size classes:
-// <=8, 16, 24, 32, 48, 64, 96, 128, 192, 256, 384, 512, 768, 1024, 1536, 2048
-//   0   1   2   3   4   5   6    7    8    9   10   11   12    13    14    15
+// <=8, 12, 16, 20, 24, 28, 32, 48, 64, 96, 128, 192, 256, 384, 512, 768, 1024, 1536, 2048
+//   0   1   2   3   4   5   6   7   8   9   10   11   12   13   14   15,   16,   17,   18
 
 static int szclass(size_t sz)
 {
     if (sz <= 8) return 0;
+    if (sz <= 32) return ((sz+3)>>2) - 2;
     if (sz <= 128) {
-        if (sz <= 16) return 1;
-        if (sz <= 32) {
-            if (sz <= 24) return 2;
-            return 3;
-        }
         if (sz <= 64) {
-            if (sz <= 48) return 4;
-            return 5;
+            if (sz <= 48) return 7;
+            return 8;
         }
-        if (sz <= 96) return 6;
-        return 7;
+        if (sz <= 96) return 9;
+        return 10;
     }
     if (sz <= 512) {
         if (sz <= 256) {
-            if (sz <= 192) return 8;
-            return 9;
+            if (sz <= 192) return 11;
+            return 12;
         }
-        if (sz <= 384) return 10;
-        return 11;
+        if (sz <= 384) return 13;
+        return 14;
     }
     if (sz <= 1024) {
-        if (sz <= 768) return 12;
-        return 13;
+        if (sz <= 768) return 15;
+        return 16;
     }
-    if (sz <= 1536) return 14;
-    return 15;
+    if (sz <= 1536) return 17;
+    return 18;
 }
 
 static void *alloc_big(size_t sz)
@@ -489,8 +485,8 @@ void *alloc_permanent(size_t sz)
 
 void jl_gc_init()
 {
-    int szc[N_POOLS] = { 8, 16, 24, 32, 48, 64, 96, 128, 192, 256, 384, 512,
-                         768, 1024, 1536, 2048 };
+    int szc[N_POOLS] = { 8, 12, 16, 20, 24, 28, 32, 48, 64, 96, 128, 192, 256,
+                         384, 512, 768, 1024, 1536, 2048 };
     int i;
     for(i=0; i < N_POOLS; i++) {
         pools[i].osize = szc[i]+sizeof(void*);

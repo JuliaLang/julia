@@ -3,7 +3,8 @@
 symbol(s::Latin1String) = symbol(s.data)
 symbol(s::UTF8String) = symbol(s.data)
 symbol(a::Array{Uint8,1}) =
-    ccall(dlsym(JuliaDLHandle,"jl_symbol"), Any, (Ptr{Uint8},), a)::Symbol
+    ccall(dlsym(JuliaDLHandle,"jl_symbol_n"), Any,
+          (Ptr{Uint8}, Int32), a, int32(length(a)))::Symbol
 gensym() = ccall(dlsym(JuliaDLHandle,"jl_gensym"), Any, ())::Symbol
 
 (==)(x::Symbol, y::Symbol) = is(x, y)

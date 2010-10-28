@@ -1,35 +1,29 @@
 struct IntSet
-    bits::Ptr{Uint32}
+    bits::Array{Uint32,1}
     limit::Int32  # todo: should be Int64
+    
+    IntSet() = IntSet(1024)
+    IntSet(max::Int32) = (lim = (max+31) & -32;
+                          new(zeros(Uint32,lim>>5), lim))
 end
-
-intset(max::Int32) =
-    IntSet(ccall(dlsym(JuliaDLHandle,"bitvector_new"), Ptr{Uint32},
-                 (Uint64, Int32),
-                 uint64(max), 1),
-           max)
-
-intset() = intset(1024)
 
 function adjoin(s::IntSet, n::Int)
     if n >= s.limit
         lim = int32(n + div(n,2))
-        s.bits = ccall(dlsym(JuliaDLHandle,"bitvector_resize"), Ptr{Uint32},
-                       (Ptr{Uint32}, Uint64, Uint64, Int32),
-                       s.bits, uint64(s.limit), uint64(lim), 1)
+        olsz = length(s.bits)
+        newbits = Array(Uint32,(lim+31)>>5)
+        newbits[1:olsz] = s.bits
+        for i=(olsz+1):length(newbits); newbits[i] = 0; end
+        s.bits = newbits
         s.limit = lim
     end
-    ccall(dlsym(JuliaDLHandle,"bitvector_set"), Void,
-          (Ptr{Uint32}, Uint64, Int32),
-          s.bits, uint64(n), 1)
+    s.bits[n>>5 + 1] |= (1<<(n&31))
     s
 end
 
 function remove(s::IntSet, n::Int)
     if n < s.limit
-        ccall(dlsym(JuliaDLHandle,"bitvector_set"), Void,
-              (Ptr{Uint32}, Uint64, Int32),
-              s.bits, uint64(n), 0)
+        s.bits[n>>5 + 1] &= ~(1<<(n&31))
     end
     s
 end
@@ -40,9 +34,7 @@ function contains(s::IntSet, n::Int)
     if n >= s.limit
         false
     else
-        (ccall(dlsym(JuliaDLHandle,"bitvector_get"), Int32,
-               (Ptr{Uint32}, Uint64),
-               s.bits, uint64(n)) != 0)
+        (s.bits[n>>5 + 1] & (1<<(n&31))) != 0
     end
 end
 
