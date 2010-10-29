@@ -161,6 +161,14 @@ jl_value_t *jl_full_type(jl_value_t *v)
     return (jl_value_t*)out;
 }
 
+typedef struct _jl_value_pair_t {
+    jl_value_t *a;
+    jl_value_t *b;
+    struct _jl_value_pair_t *next;
+} jl_value_pair_t;
+
+static int type_eqv_(jl_value_t *a, jl_value_t *b, jl_value_pair_t *stack);
+
 // --- union and intersection ---
 
 static int count_union_components(jl_tuple_t *types)
@@ -207,7 +215,7 @@ jl_tuple_t *jl_compute_type_union(jl_tuple_t *types)
         for(j=0; j < n; j++) {
             if (j != i && temp[i] && temp[j]) {
                 if (temp[i] == temp[j] ||
-                    jl_types_equal(temp[i], temp[j]) ||
+                    type_eqv_(temp[i], temp[j], NULL) ||
                     (jl_subtype(temp[i], temp[j], 0) /*&&
                      (temp[i] == (jl_value_t*)jl_bottom_type ||
                      !jl_has_typevars(temp[j]))*/)) {
@@ -393,7 +401,7 @@ static jl_value_t *intersect_tag(jl_tag_type_t *a, jl_tag_type_t *b,
             jl_has_typevars_(ap,1) || jl_has_typevars_(bp,1)) {
             ti = jl_type_intersect(ap,bp,penv);
         }
-        else if (jl_types_equal(ap,bp)) {
+        else if (type_eqv_(ap,bp,NULL)) {
             ti = ap;
         }
         else {
@@ -443,8 +451,8 @@ static jl_value_t *tvar_find(jl_tuple_t **penv, jl_value_t *b)
 static jl_value_t *meet_tvars(jl_tvar_t *a, jl_tvar_t *b)
 {
     jl_value_t *lb=NULL, *ub=NULL;
-    if (jl_types_equal((jl_value_t*)a->lb, (jl_value_t*)b->lb) &&
-        jl_types_equal((jl_value_t*)a->ub, (jl_value_t*)b->ub))
+    if (type_eqv_((jl_value_t*)a->lb, (jl_value_t*)b->lb, NULL) &&
+        type_eqv_((jl_value_t*)a->ub, (jl_value_t*)b->ub, NULL))
         return (jl_value_t*)b;
     ub = jl_type_intersection((jl_value_t*)a->ub, (jl_value_t*)b->ub);
     if (ub == (jl_value_t*)jl_bottom_type)
@@ -737,12 +745,6 @@ static int extensionally_same_type(jl_value_t *a, jl_value_t *b)
     return (jl_subtype(a, b, 0) && jl_subtype(b, a, 0));
 }
 
-typedef struct _jl_value_pair_t {
-    jl_value_t *a;
-    jl_value_t *b;
-    struct _jl_value_pair_t *next;
-} jl_value_pair_t;
-
 static int type_eqv_(jl_value_t *a, jl_value_t *b, jl_value_pair_t *stack)
 {
     jl_value_pair_t top;
@@ -930,7 +932,7 @@ static jl_type_t *lookup_type(typekey_stack_t *table,
         if (table->n == n && table->tn == tn) {
             size_t i;
             for(i=0; i < n; i++) {
-                if (!jl_types_equal(table->key[i], key[i]))
+                if (!type_eqv_(table->key[i], key[i], NULL))
                     break;
             }
             if (i==n) return table->type;
@@ -1365,7 +1367,7 @@ int jl_subtype_le(jl_value_t *a, jl_value_t *b, int ta, int morespecific)
                         goto check_Type;
                 }
                 else {
-                    if (!jl_types_equal(apara, bpara))
+                    if (!type_eqv_(apara, bpara, NULL))
                         goto check_Type;
                 }
             }
@@ -1471,7 +1473,7 @@ static jl_value_t *type_match_(jl_value_t *child, jl_value_t *parent,
                     }
                 }
                 else {
-                    if (jl_types_equal(child, pv))
+                    if (type_eqv_(child, pv, NULL))
                         return (jl_value_t*)*env;
                 }
                 return jl_false;

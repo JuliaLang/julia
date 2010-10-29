@@ -641,6 +641,9 @@ void jl_gc_disable();
 int jl_gc_is_enabled();
 void jl_gc_collect();
 #define jl_gc_setmark(v) (((uptrint_t*)(v))[-1]|=1)
+void *alloc_2w();
+void *alloc_3w();
+void *alloc_4w();
 
 #else
 

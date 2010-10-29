@@ -562,4 +562,5 @@ convert files for new GC:
 
 startup time, mem0, mem after tests.j, exe size:
 marksweep: 7.8s, 58356  43m, 69792  55m, 8285616
+ eagerfree:7.8s, 49784  34m  65452  51m
 boehm:     7.8s, 50236  35m, 78320  63m, 8376416

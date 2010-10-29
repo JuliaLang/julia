@@ -179,7 +179,7 @@ static void *pool_alloc(pool_t *p)
 
 static void sweep_pool(pool_t *p)
 {
-    int empty;
+    int empty, freedall;
     gcval_t **prev_pfl;
     gcval_t *v;
     gcpage_t *pg = p->pages;
@@ -190,22 +190,26 @@ static void sweep_pool(pool_t *p)
         char *lim = (char*)pg + GC_PAGE_SZ - p->osize;
         v = (gcval_t*)&pg->data[0];
         empty = 1;
+        freedall = 1;
         prev_pfl = pfl;
         while ((char*)v <= lim) {
-            if (!gcv_isfree(v))
-                empty = 0;
+            //if (!gcv_isfree(v))
+            //    empty = 0;
             if (gcv_isfree(v) || !v->marked) {
                 *pfl = v;
                 pfl = &v->next;
             }
             else {
                 v->marked = 0;
+                freedall = 0;
             }
             v = (gcval_t*)((char*)v + p->osize);
         }
         gcpage_t *nextpg = pg->next;
-        // if the whole page was already unused, free it
-        if (empty) {
+        // lazy version: (empty) if the whole page was already unused, free it
+        // eager version: (freedall) free page as soon as possible
+        // the eager one uses less memory.
+        if (freedall) {
             pfl = prev_pfl;
             *ppg = nextpg;
 #ifdef DEBUG
@@ -481,6 +485,42 @@ void *alloc_permanent(size_t sz)
     char *ptr = (char*)malloc(sz+sizeof(void*));
     *((uptrint_t*)ptr) = 0;
     return ptr+sizeof(void*);
+}
+
+void *alloc_2w()
+{
+    if (allocd_bytes > collect_interval)
+        jl_gc_collect();
+    allocd_bytes += (2*sizeof(void*));
+#ifdef BITS64
+    return pool_alloc(&pools[2]);
+#else
+    return pool_alloc(&pools[0]);
+#endif
+}
+
+void *alloc_3w()
+{
+    if (allocd_bytes > collect_interval)
+        jl_gc_collect();
+    allocd_bytes += (3*sizeof(void*));
+#ifdef BITS64
+    return pool_alloc(&pools[4]);
+#else
+    return pool_alloc(&pools[1]);
+#endif
+}
+
+void *alloc_4w()
+{
+    if (allocd_bytes > collect_interval)
+        jl_gc_collect();
+    allocd_bytes += (4*sizeof(void*));
+#ifdef BITS64
+    return pool_alloc(&pools[6]);
+#else
+    return pool_alloc(&pools[2]);
+#endif
 }
 
 void jl_gc_init()
