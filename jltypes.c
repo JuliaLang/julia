@@ -511,6 +511,7 @@ static jl_value_t *intersect_typevar(jl_tvar_t *a, jl_value_t *b,
     jl_tuple_t *p = *penv;
     while (p != jl_null) {
         if (jl_t0(p) == (jl_value_t*)a) {
+            assert(jl_t1(p) != (jl_value_t*)a);
             jl_value_t *ti = jl_type_intersect(jl_t1(p), b, penv);
             if (ti == (jl_value_t*)jl_bottom_type)
                 return (jl_value_t*)jl_bottom_type;
@@ -524,9 +525,11 @@ static jl_value_t *intersect_typevar(jl_tvar_t *a, jl_value_t *b,
     }
     if (jl_is_typevar(b))
         b = tvar_find(penv, b);
-    jl_tuple_t *np = jl_tuple(3, (jl_value_t*)a, b, (jl_value_t*)*penv);
-    *penv = np;
-    tvar_union(penv, a, b);
+    if ((jl_value_t*)a != b) {
+        jl_tuple_t *np = jl_tuple(3, (jl_value_t*)a, b, (jl_value_t*)*penv);
+        *penv = np;
+        tvar_union(penv, a, b);
+    }
     return (jl_value_t*)a;
 }
 

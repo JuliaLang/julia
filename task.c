@@ -369,7 +369,7 @@ jl_task_t *jl_new_task(jl_function_t *start, size_t ssize)
 #define JL_DEFAULT_STACK (12288*sizeof(void*))
 #else
 #define JL_MIN_STACK     (4096*sizeof(void*))
-#define JL_DEFAULT_STACK (12288*sizeof(void*))
+#define JL_DEFAULT_STACK (2*12288*sizeof(void*))
 #endif
 
 JL_CALLABLE(jl_f_task)

@@ -29,18 +29,7 @@ del(t::IdTable, key) = (ccall(dlsym(JuliaDLHandle,"jl_eqtable_del"),
                               Int32, (Any, Any), t.ht, key);
                         t)
 
-_secret_idtable_token_ = {`BOO}
-
-function ref(t::IdTable, key)
-    v = get(t, key, _secret_idtable_token_)
-    if is(v,_secret_idtable_token_)
-        error("key not found")
-    end
-    return v
-end
-
-has(t::IdTable, key) = !is(get(t, key, _secret_idtable_token_),
-                           _secret_idtable_token_)
+_secret_table_token_ = {`BOO}
 
 start(t::IdTable) = 0
 done(t::IdTable, i) = is(next(t,i),())
@@ -49,21 +38,6 @@ next(t::IdTable, i) = ccall(dlsym(JuliaDLHandle,"jl_eqtable_next"),
                             t.ht, uint32(i))
 
 isempty(t::IdTable) = is(next(t,0),())
-
-function show(t::IdTable)
-    if isempty(t)
-        print("idtable()")
-        return ()
-    end
-    print("{")
-    for (k, v) = t
-        show(k)
-        print("=>")
-        show(v)
-        print(", ")
-    end
-    print("}")
-end
 
 # hashing
 
@@ -81,3 +55,119 @@ hash(x::Union(Int32,Uint32)) =
 
 hash(x::Union(Int64,Uint64)) =
     ccall(dlsym(JuliaDLHandle,"int64hash"), Uint64, (Uint64,), uint64(x))
+
+# hash table
+
+struct HashTable{K,V}
+    keys::Array{K,1}
+    vals::Array{V,1}
+    used::IntSet
+
+    HashTable() = HashTable(Any,Any)
+    HashTable(k, v) = HashTable(k, v, 16)
+    HashTable(k, v, n) = (n = _tablesz(n);
+                          new(Array(k,n), Array(v,n), IntSet(n)))
+end
+
+function assign{K,V}(h::HashTable{K,V}, v, key)
+    hv = int32(hash(key))
+    sz = length(h.keys)
+    iter = 0
+    maxprobe = sz>>3
+    index = hv & (sz-1)
+    orig = index
+
+    while true
+        if !contains(h.used,index)
+            h.keys[index] = key
+            h.vals[index] = v
+            adjoin(h.used, index)
+            return h
+        end
+
+        if key == h.keys[index]
+            h.vals[index] = v
+            return h
+        end
+
+        index = (index+1) & (sz-1)
+        iter+=1
+        if iter > maxprobe || index==orig
+            break
+        end
+    end
+
+    oldk = h.keys
+    oldv = h.vals
+    oldu = h.used
+    newsz = sz*2
+    h.keys = Array(K,newsz)
+    h.vals = Array(V,newsz)
+    h.used = IntSet(newsz)
+
+    for i = oldu
+        h[oldk[i]] = oldv[i]
+    end
+
+    assign(h, key, v)
+end
+
+function get(h::HashTable, key, deflt)
+    hv = int32(hash(key))
+    sz = length(h.keys)
+    iter = 0
+    maxprobe = sz>>3
+    index = hv & (sz-1)
+    orig = index
+
+    while true
+        if !contains(h.used,index)
+            break
+        end
+        if key == h.keys[index]
+            return h.vals[index]
+        end
+
+        index = (index+1) & (sz-1)
+        iter+=1
+        if iter > maxprobe || index==orig
+            break
+        end
+    end
+
+    return deflt
+end
+
+start(t::HashTable) = 0
+done(t::HashTable, i) = done(t.used, i)
+next(t::HashTable, i) = ((n, nxt) = next(t.used, i);
+                         ((t.keys[n],t.vals[n]), nxt))
+
+isempty(t::HashTable) = done(t, start(t))
+
+function ref(t::Union(IdTable,HashTable), key)
+    v = get(t, key, _secret_table_token_)
+    if is(v,_secret_table_token_)
+        error("key not found")
+    end
+    return v
+end
+
+has(t::Union(IdTable,HashTable), key) =
+    !is(get(t, key, _secret_table_token_),
+        _secret_table_token_)
+
+function show(t::Union(IdTable,HashTable))
+    if isempty(t)
+        print(typeof(t).name.name,"()")
+    else
+        print("{")
+        for (k, v) = t
+            show(k)
+            print("=>")
+            show(v)
+            print(", ")
+        end
+        print("}")
+    end
+end

@@ -14,8 +14,6 @@
 #    name::Symbol
 #end
 
-show(tn::TypeName) = show(tn.name)
-
 #struct TagKind <: Type
 #    name::TypeName
 #    super::Type

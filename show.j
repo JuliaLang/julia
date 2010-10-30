@@ -3,6 +3,8 @@
 print(x) = show(x)
 print(x...) = (for i=x; print(i); end)
 
+show(tn::TypeName) = show(tn.name)
+
 function show_comma_array(ar, open, close)
     print(open)
     for i=1:length(ar)

@@ -76,7 +76,7 @@ function write(s::IOStream, b::Uint8)
 end
 
 function write(s::IOStream, c::Char)
-    ccall(dlsym(JuliaDLHandle,"ios_pututf8"), Int32, (Ptr{Void}, Int32),
+    ccall(dlsym(JuliaDLHandle,"ios_pututf8"), Int32, (Ptr{Void}, Char),
           s.ios, c)
 end
 
