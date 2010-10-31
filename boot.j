@@ -161,3 +161,6 @@ struct LoadError <: Exception
     line::Int32
     error
 end
+
+struct EOFError <: Exception
+end

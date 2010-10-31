@@ -40,14 +40,31 @@ function jl_worker(fd)
         if !wait_msg(fd)
             break
         end
-        (f, args) = recv_msg(sock)
-        #print("got ", tuple(f, map(typeof,args)...), "\n")
-        # handle message
+        local f, args
+        got_msg = false
         try
-            result = apply(eval(f), args)
-            send_msg(sock, result)
+            (f, args) = recv_msg(sock)
+            #print("got ", tuple(f, map(typeof,args)...), "\n")
+            got_msg = true
         catch e
-            send_msg(sock, e)
+            if isa(e,EOFError)
+                exit()
+            end
+            #print("deserialization error: ", e, "\n")
+            read(sock, Uint8, nb_available(sock))
+            #while nb_available(sock) > 0 #|| select(sock)
+            #    read(sock, Uint8)
+            #end
+        end
+        if got_msg
+            # handle message
+            try
+                result = apply(eval(f), args)
+                send_msg(sock, result)
+            catch e
+                show(e)
+                send_msg(sock, e)
+            end
         end
     end
 end

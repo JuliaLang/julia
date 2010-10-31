@@ -79,6 +79,8 @@ show(e::StackOverflowError) = print("error: stack overflow\n")
 
 show(e::ErrorException) = print(e.msg, "\n")
 
+show(e::EOFError) = print("read: end of file")
+
 dump(t::Type) = print(t)
 dump(t::Tuple) = print(t)
 

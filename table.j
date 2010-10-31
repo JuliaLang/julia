@@ -50,11 +50,23 @@ bitmix(a::Union(Int64,Uint64), b::Union(Int64, Uint64)) =
           xor_int(unbox64(a), or_int(lshr_int(unbox64(b),unbox32(32)),
                                      shl_int(unbox64(b),unbox32(32)))))
 
-hash(x::Union(Int32,Uint32)) =
+hash(x::Union(Int32,Uint32,Char)) =
     ccall(dlsym(JuliaDLHandle,"int32hash"), Uint32, (Uint32,), uint32(x))
 
 hash(x::Union(Int64,Uint64)) =
     ccall(dlsym(JuliaDLHandle,"int64hash"), Uint64, (Uint64,), uint64(x))
+
+function hash(t::Tuple)
+    h = 0
+    for i=1:length(t)
+        h = bitmix(h,hash(t[i]))
+    end
+    h
+end
+
+hash(s::Union(UTF8String,Latin1String)) =
+    ccall(dlsym(JuliaDLHandle,"memhash32"), Uint32,
+          (Ptr{Void}, Size), s.data, length(s.data))
 
 # hash table
 

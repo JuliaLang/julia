@@ -3,6 +3,8 @@
     int32hash;
     int64hash;
     int64to32hash;
+    memhash;
+    memhash32;
     rand_double;
     rand_float;
     genrand_int32;

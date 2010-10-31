@@ -89,19 +89,24 @@ function write{T}(s::IOStream, a::Array{T})
     end
 end
 
+ASYNCH = true
+
 function read(s::IOStream, ::Type{Uint8})
     # for asynch I/O
-    #if nb_available(s) < 1
-    #    io_wait(s)
-    #end
+    if ASYNCH && nb_available(s) < 1
+        io_wait(s)
+    end
     b = ccall(dlsym(JuliaDLHandle,"ios_getc"), Int32, (Ptr{Void},), s.ios)
     if b == -1
-        error("read: end of file")
+        throw(EOFError())
     end
     uint8(b)
 end
 
 function read(s::IOStream, ::Type{Char})
+    if ASYNCH && nb_available(s) < 1
+        io_wait(s)
+    end
     ccall(dlsym(JuliaDLHandle,"jl_getutf8"), Char, (Ptr{Void},),
           s.ios)
 end
@@ -109,8 +114,12 @@ end
 function read{T}(s::IOStream, ::Type{T}, dims::Size...)
     if isa(T,BitsKind)
         a = Array(T, dims...)
+        nb = numel(a)*sizeof(T)
+        if ASYNCH && nb_available(s) < nb
+            io_wait(s)
+        end
         ccall(dlsym(JuliaDLHandle,"ios_readall"), Size,
-              (Ptr{Void}, Ptr{Void}, Size), s.ios, a, numel(a)*sizeof(T))
+              (Ptr{Void}, Ptr{Void}, Size), s.ios, a, nb)
         a
     else
         invoke(read, (Any, Type, Size...), s, T, dims...)

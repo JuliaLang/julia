@@ -49,8 +49,7 @@
   `(with-bindings ((end-symbol #t))
 		  ,@body))
 
-; unused characters: @ prefix'
-; no character literals; unicode kind of makes them obsolete. strings instead.
+; unused characters: @
 
 (define unary-ops '(+ - ! ~ $ |<:| |>:|))
 
