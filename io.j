@@ -41,16 +41,16 @@ end
 
 takebuf_array(s::IOStream) =
     ccall(dlsym(JuliaDLHandle,"jl_takebuf_array"),
-          Any, (Ptr{Void},), s.ios)
+          Any, (Ptr{Void},), s.ios)::Array{Uint8,1}
 
 takebuf_string(s::IOStream) =
     ccall(dlsym(JuliaDLHandle,"jl_takebuf_string"),
-          Any, (Ptr{Void},), s.ios)
+          Any, (Ptr{Void},), s.ios)::String
 
 function print_to_array(size::Int32, f::Function, args...)
-  s = memio(size)
-  with_output_stream(s, f, args...)
-  takebuf_array(s)
+    s = memio(size)
+    with_output_stream(s, f, args...)
+    takebuf_array(s)
 end
 
 function print_to_string(size::Int32, f::Function, args...)
@@ -129,7 +129,7 @@ function write{T}(s::IOStream, a::Array{T})
     end
 end
 
-ASYNCH = true
+ASYNCH = false
 
 function read(s::IOStream, ::Type{Uint8})
     # for asynch I/O

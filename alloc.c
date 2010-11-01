@@ -1051,10 +1051,12 @@ jl_array_t *jl_cstr_to_array(char *str)
 jl_array_t *jl_pchar_to_array(char *str, size_t len)
 {
     jl_array_t *a = jl_alloc_array_1d(jl_array_uint8_type, len+1);
+    JL_GC_PUSH(&a);
     strcpy(a->data, str);
     ((char*)a->data)[len] = '\0';
     a->length--;
     jl_tupleset(a->dims, 0, jl_box_int32(len));
+    JL_GC_POP();
     return a;
 }
 
