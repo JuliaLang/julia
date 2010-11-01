@@ -2,6 +2,7 @@ struct IOStream
     ios::Ptr{Void}
 
     global fdio, open, memio, current_output_stream
+
     fdio(fd::Int) =
         new(ccall(dlsym(JuliaDLHandle,"jl_new_fdio"), Ptr{Void}, (Int32,),
                   int32(fd)))
@@ -21,6 +22,45 @@ struct IOStream
         new(ccall(dlsym(JuliaDLHandle,"jl_current_output_stream_noninline"),
                   Ptr{Void}, ()))
 end
+
+set_current_output_stream(s::IOStream) =
+    ccall(dlsym(JuliaDLHandle,"jl_set_current_output_stream_noninline"),
+          Void, (Ptr{Void},), s.ios)
+
+function with_output_stream(s::IOStream, f::Function, args...)
+    saved_output_stream = current_output_stream()
+    try
+        set_current_output_stream(s)
+        f(args...)
+    catch e
+        set_current_output_stream(saved_output_stream)
+        throw(e)
+    end
+    set_current_output_stream(saved_output_stream)
+end
+
+takebuf_array(s::IOStream) =
+    ccall(dlsym(JuliaDLHandle,"jl_takebuf_array"),
+          Any, (Ptr{Void},), s.ios)
+
+takebuf_string(s::IOStream) =
+    ccall(dlsym(JuliaDLHandle,"jl_takebuf_string"),
+          Any, (Ptr{Void},), s.ios)
+
+function print_to_array(size::Int32, f::Function, args...)
+  s = memio(size)
+  with_output_stream(s, f, args...)
+  takebuf_array(s)
+end
+
+function print_to_string(size::Int32, f::Function, args...)
+    s = memio(size)
+    with_output_stream(s, f, args...)
+    takebuf_string(s)
+end
+
+print_to_array(f::Function, args...) = print_to_array(0, f, args...)
+print_to_string(f::Function, args...) = print_to_string(0, f, args...)
 
 nthbyte(x::Int, n::Int) = (n > sizeof(x) ? uint8(0) : uint8((x>>>((n-1)<<3))))
 

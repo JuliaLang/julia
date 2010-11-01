@@ -1044,12 +1044,17 @@ JL_CALLABLE(jl_generic_array_ctor)
 
 jl_array_t *jl_cstr_to_array(char *str)
 {
-    size_t n = strlen(str);
-    jl_array_t *a = jl_alloc_array_1d(jl_array_uint8_type, n+1);
+    size_t len = strlen(str);
+    return jl_pchar_to_array(str, len);
+}
+
+jl_array_t *jl_pchar_to_array(char *str, size_t len)
+{
+    jl_array_t *a = jl_alloc_array_1d(jl_array_uint8_type, len+1);
     strcpy(a->data, str);
-    // '\0' terminator is there, but hidden from julia
+    ((char*)a->data)[len] = '\0';
     a->length--;
-    jl_tupleset(a->dims, 0, jl_box_int32(n));
+    jl_tupleset(a->dims, 0, jl_box_int32(len));
     return a;
 }
 

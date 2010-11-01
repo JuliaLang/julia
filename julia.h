@@ -456,6 +456,7 @@ DLLEXPORT jl_sym_t *jl_symbol_n(const char *str, int32_t len);
 DLLEXPORT jl_sym_t *jl_gensym();
 jl_array_t *jl_alloc_array_1d(jl_type_t *atype, size_t nr);
 DLLEXPORT jl_array_t *jl_cstr_to_array(char *str);
+jl_array_t *jl_pchar_to_array(char *str, size_t len);
 jl_value_t *jl_pchar_to_string(char *str, size_t len);
 jl_array_t *jl_alloc_cell_1d(size_t n);
 jl_value_t *jl_arrayref(jl_array_t *a, size_t i);  // 0-indexed
@@ -694,12 +695,16 @@ static inline ios_t *jl_current_output_stream()
     return jl_current_task->state.current_output_stream;
 }
 
-DLLEXPORT ios_t *jl_current_output_stream_noninline();
-
 static inline void jl_set_current_output_stream(ios_t *s)
 {
     jl_current_task->state.current_output_stream = s;
 }
+
+DLLEXPORT ios_t *jl_current_output_stream_noninline();
+DLLEXPORT void jl_set_current_output_stream_noninline();
+
+DLLEXPORT jl_array_t *jl_takebuf_array(ios_t *s);
+DLLEXPORT jl_value_t *jl_takebuf_string(ios_t *s);
 
 static inline void jl_eh_save_state(jl_savestate_t *ss)
 {
