@@ -15,7 +15,7 @@ function show(c::Char)
     print(c == '\'' ? "\\'" : escape_string(string(c)))
     print('\'')
 end
-show(s::String) = print(quote_string(s))
+show(s::String) = print_quoted(s)
 
 (*)(s::String...) = strcat(s...)
 (^)(s::String, r::Int) = repeat(s,r)
@@ -218,13 +218,13 @@ iswprint(c::Char) = bool(ccall(dlsym(libc,"iswprint"), Int32, (Char,), c))
 escape_nul(s::String, i::Index) =
     !done(s,i) && '0' <= next(s,i)[1] <= '7' ? "\\x00" : "\\0"
 
-function escape_string(s::String, unicode::Bool, quoted::Bool)
+function print_escaped(s::String, unicode::Bool, quoted::Bool)
     xmax = unicode ? 0x7F : 0xFF
-    e = quoted ? "\"" : ""
+    if quoted; print('"'); end
     i = start(s)
     while !done(s,i)
         c, j = next(s,i)
-        d = c == '\0'    ? escape_nul(s,j) :
+        e = c == '\0'    ? escape_nul(s,j) :
             c == '\\'    ? "\\\\" :
             c == '\e'    ? "\\e" :
   quoted && c == '\"'    ? "\\\"" :
@@ -233,16 +233,20 @@ function escape_string(s::String, unicode::Bool, quoted::Bool)
             c <= xmax    ? strcat("\\x", uint2str(c,16,2)) :
             c <= 0xFFFF  ? strcat("\\u", uint2str(c,16,4)) :
                            strcat("\\U", uint2str(c,16,8))
-        e = strcat(e,d)
+        print(e)
         i = j
     end
-    quoted ? strcat(e,"\"") : e
+    if quoted; print('"'); end
 end
 
-escape_string(s::Latin1String) = escape_string(s, false, false)
-quote_string(s::Latin1String)  = escape_string(s, false, true)
-escape_string(s::String)       = escape_string(s, true, false)
-quote_string(s::String)        = escape_string(s, true, true)
+print_escaped(s::Latin1String) = print_escaped(s, false, false)
+print_quoted(s::Latin1String)  = print_escaped(s, false, true)
+print_escaped(s::String)       = print_escaped(s, true, false)
+print_quoted(s::String)        = print_escaped(s, true, true)
+
+escape_string(s::String, u::Bool, q::Bool) = print_to_string(print_escaped, s, u, b)
+escape_string(s::String) = print_to_string(print_escaped, s)
+quote_string(s::String)  = print_to_string(print_quoted,  s)
 
 # TODO: unescaping needs to work on bytes to match the parser
 
