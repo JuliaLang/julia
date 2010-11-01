@@ -218,34 +218,32 @@ iswprint(c::Char) = bool(ccall(dlsym(libc,"iswprint"), Int32, (Char,), c))
 escape_nul(s::String, i::Index) =
     !done(s,i) && '0' <= next(s,i)[1] <= '7' ? "\\x00" : "\\0"
 
-function print_escaped(s::String, quoted::Bool, xmax::Char)
-    if quoted; print('"'); end
+function print_escaped(s::String, q::Bool, xmax::Char)
+    if q; print('"'); end
     i = start(s)
     while !done(s,i)
         c, j = next(s,i)
-        e = c == '\0'    ? escape_nul(s,j) :
-            c == '\\'    ? "\\\\" :
-            c == '\e'    ? "\\e" :
-  quoted && c == '\"'    ? "\\\"" :
-            iswprint(c)  ? string(c) :
-            7 <= c <= 13 ? string('\\', "abtnvfr"[c-6]) :
-            c <= xmax    ? strcat("\\x", uint2str(c,16,2)) :
-            c <= 0xFFFF  ? strcat("\\u", uint2str(c,16,4)) :
-                           strcat("\\U", uint2str(c,16,8))
-        print(e)
+        c == '\0'     ? print(escape_nul(s,j)) :
+        c == '\\'     ? print("\\\\") :
+        c == '\e'     ? print("\\e") :
+   q && c == '\"'     ? print("\\\"") :
+        iswprint(c)   ? print(c) :
+        7 <= c <= 13  ? print('\\', "abtnvfr"[c-6]) :
+        c <= xmax     ? print("\\x", uint2str(c,16,2)) :
+        c <= '\uffff' ? print("\\u", uint2str(c,16,4)) :
+                        print("\\U", uint2str(c,16,8))
         i = j
     end
-    if quoted; print('"'); end
+    if q; print('"'); end
 end
 
 print_escaped(s::Latin1String, q) = print_escaped(s, q, '\xff')
-print_escaped(s::String, q) = print_escaped(s, q, '\x7f')
-print_escaped(s::String) = print_escaped(s, false)
-print_quoted (s::String) = print_escaped(s, true)
+print_escaped(s::String, q)       = print_escaped(s, q, '\x7f')
+print_escaped(s::String)          = print_escaped(s, false)
+print_quoted (s::String)          = print_escaped(s, true)
 
 escape_string(s::String) = print_to_string(length(s),   print_escaped, s)
 quote_string (s::String) = print_to_string(length(s)+2, print_quoted,  s)
-escape_string(s::String, q) = print_to_string(length(s)+2, print_escaped, s, q)
 
 # TODO: unescaping needs to work on bytes to match the parser
 
@@ -377,6 +375,8 @@ end
 
 string(x) = string(ccall(dlsym(JuliaDLHandle,"jl_show_to_string"),
                          Ptr{Uint8}, (Any,), x))
+
+cstring(args...) = print_to_array(print, args...)
 
 ## lexicographically compare byte arrays (used by Latin-1 and UTF-8) ##
 
