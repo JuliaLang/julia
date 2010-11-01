@@ -218,8 +218,7 @@ iswprint(c::Char) = bool(ccall(dlsym(libc,"iswprint"), Int32, (Char,), c))
 escape_nul(s::String, i::Index) =
     !done(s,i) && '0' <= next(s,i)[1] <= '7' ? "\\x00" : "\\0"
 
-function print_escaped(s::String, unicode::Bool, quoted::Bool)
-    xmax = unicode ? 0x7F : 0xFF
+function print_escaped(s::String, quoted::Bool, xmax::Char)
     if quoted; print('"'); end
     i = start(s)
     while !done(s,i)
@@ -239,19 +238,18 @@ function print_escaped(s::String, unicode::Bool, quoted::Bool)
     if quoted; print('"'); end
 end
 
-print_escaped(s::Latin1String) = print_escaped(s, false, false)
-print_quoted(s::Latin1String)  = print_escaped(s, false, true)
-print_escaped(s::String)       = print_escaped(s, true, false)
-print_quoted(s::String)        = print_escaped(s, true, true)
+print_escaped(s::Latin1String, q) = print_escaped(s, q, '\xff')
+print_escaped(s::String, q) = print_escaped(s, q, '\x7f')
+print_escaped(s::String) = print_escaped(s, false)
+print_quoted (s::String) = print_escaped(s, true)
 
-escape_string(s::String, u::Bool, q::Bool) = print_to_string(print_escaped, s, u, b)
-escape_string(s::String) = print_to_string(print_escaped, s)
-quote_string(s::String)  = print_to_string(print_quoted,  s)
+escape_string(s::String) = print_to_string(length(s),   print_escaped, s)
+quote_string (s::String) = print_to_string(length(s)+2, print_quoted,  s)
+escape_string(s::String, q) = print_to_string(length(s)+2, print_escaped, s, q)
 
 # TODO: unescaping needs to work on bytes to match the parser
 
-function unescape_string(s::String)
-    u = ""
+function print_unescaped(s::String)
     i = start(s)
     while !done(s,i)
         c, i = next(s,i)
@@ -297,13 +295,14 @@ function unescape_string(s::String)
                     end
                     n
                 end : c
-            u = strcat(u,char(x))
+            print(char(x))
         else
-            u = strcat(u,c)
+            print(c)
         end
     end
-    u
 end
+
+unescape_string(s::String) = print_to_string(print_unescaped, s)
 
 function lpad(s::String, n::Int, p::String)
     m = n - strlen(s)
