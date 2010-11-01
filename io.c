@@ -71,6 +71,12 @@ DLLEXPORT uint32_t jl_getutf8(ios_t *s)
     return wc;
 }
 
+DLLEXPORT
+int32_t jl_nb_available(ios_t *s)
+{
+    return (int32_t)(s->size - s->bpos);
+}
+
 // --- io constructors ---
 
 DLLEXPORT
@@ -99,8 +105,34 @@ void *jl_new_memio(uint32_t sz)
     return s;
 }
 
-DLLEXPORT
-int32_t jl_nb_available(ios_t *s)
+// --- current output stream ---
+
+ios_t *jl_current_output_stream_noninline()
 {
-    return (int32_t)(s->size - s->bpos);
+    return jl_current_output_stream();
+}
+
+void jl_set_current_output_stream_noninline(ios_t *s)
+{
+    jl_set_current_output_stream(s);
+}
+
+// --- buffer manipulation ---
+
+jl_array_t *jl_takebuf_array(ios_t *s)
+{
+    size_t n;
+    char *b = ios_takebuf(s, &n);
+    jl_array_t *a = jl_pchar_to_array(b, n-1);
+    LLT_FREE(b);
+    return a;
+}
+
+jl_value_t *jl_takebuf_string(ios_t *s)
+{
+    size_t n;
+    char *b = ios_takebuf(s, &n);
+    jl_value_t *v = jl_pchar_to_string(b, n-1);
+    LLT_FREE(b);
+    return v;
 }
