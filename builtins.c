@@ -595,6 +595,25 @@ ios_t *jl_current_output_stream_noninline()
     return jl_current_output_stream();
 }
 
+void jl_set_current_output_stream_noninline(ios_t *s)
+{
+    jl_set_current_output_stream(s);
+}
+
+jl_array_t *jl_takebuf_array(ios_t *s)
+{
+    size_t n;
+    char *b = ios_takebuf(s, &n);
+    return jl_pchar_to_array(b, n-1);
+}
+
+jl_value_t *jl_takebuf_string(ios_t *s)
+{
+    size_t n;
+    char *b = ios_takebuf(s, &n);
+    return jl_pchar_to_string(b, n-1);
+}
+
 jl_function_t *jl_print_gf;
 
 JL_CALLABLE(jl_f_print_array_uint8)
