@@ -387,17 +387,15 @@ static void gc_markval_(jl_value_t *v)
         // TODO
         // GC_Markval(ta->state.current_output_stream);
     }
-    else if (jl_is_box(v)) {
-        jl_value_t *contents = ((jl_value_t**)v)[1];
-        if (contents)
-            GC_Markval(contents);
-    }
     else {
         assert(jl_is_struct_type(jl_typeof(v)));
         size_t nf = ((jl_struct_type_t*)jl_typeof(v))->names->length;
         size_t i;
-        for(i=0; i < nf; i++)
-            GC_Markval(((jl_value_t**)v)[i+1]);
+        for(i=0; i < nf; i++) {
+            jl_value_t *fld = ((jl_value_t**)v)[i+1];
+            if (fld)
+                GC_Markval(fld);
+        }
     }
 }
 
