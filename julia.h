@@ -619,7 +619,7 @@ typedef struct _jl_gcframe_t {
 // jl_value_t *x, *y; JL_GC_PUSH(&x, &y);
 // x = f(); y = g(); foo(x, y)
 
-extern jl_gcframe_t **jl_pgcstack;
+extern jl_gcframe_t ** volatile jl_pgcstack;
 
 #define JL_GC_PUSH(...)                                                 \
   void *__gc_rts[] = {__VA_ARGS__};                                     \

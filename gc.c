@@ -18,6 +18,10 @@
 #include "llt.h"
 #include "julia.h"
 
+// with MEMDEBUG, every object is allocated explicitly with malloc, and
+// filled with 0xbb before being freed.
+//#define MEMDEBUG
+
 /*
   integration steps:
   * convert idtable to use an Array
@@ -58,6 +62,7 @@ typedef struct _pool_t {
 
 typedef struct _bigval_t {
     struct _bigval_t *next;
+    size_t sz;
     union {
         uptrint_t flags;
         struct {
@@ -123,7 +128,9 @@ static int szclass(size_t sz)
 
 static void *alloc_big(size_t sz)
 {
-    bigval_t *v = (bigval_t*)malloc(sz + 2*sizeof(void*));
+    sz = (sz+3) & -4;
+    bigval_t *v = (bigval_t*)malloc(sz + 3*sizeof(void*));
+    v->sz = sz;
     v->next = big_objects;
     v->flags = 0;
     big_objects = v;
@@ -143,6 +150,9 @@ static void sweep_big()
         else {
             *pv = nxt;
             // todo: move to to-free list, free after finalization
+#ifdef MEMDEBUG
+            memset(v, 0xbb, v->sz+3*sizeof(void*));
+#endif
             free(v);
         }
         v = nxt;
@@ -472,6 +482,9 @@ void *allocb(size_t sz)
     if (allocd_bytes > collect_interval)
         jl_gc_collect();
     allocd_bytes += sz;
+#ifdef MEMDEBUG
+    return alloc_big(sz);
+#endif
     if (sz > 2048)
         return alloc_big(sz);
     return pool_alloc(&pools[szclass(sz)]);
@@ -490,6 +503,9 @@ void *alloc_2w()
     if (allocd_bytes > collect_interval)
         jl_gc_collect();
     allocd_bytes += (2*sizeof(void*));
+#ifdef MEMDEBUG
+    return alloc_big(2*sizeof(void*));
+#endif
 #ifdef BITS64
     return pool_alloc(&pools[2]);
 #else
@@ -502,6 +518,9 @@ void *alloc_3w()
     if (allocd_bytes > collect_interval)
         jl_gc_collect();
     allocd_bytes += (3*sizeof(void*));
+#ifdef MEMDEBUG
+    return alloc_big(3*sizeof(void*));
+#endif
 #ifdef BITS64
     return pool_alloc(&pools[4]);
 #else
@@ -514,6 +533,9 @@ void *alloc_4w()
     if (allocd_bytes > collect_interval)
         jl_gc_collect();
     allocd_bytes += (4*sizeof(void*));
+#ifdef MEMDEBUG
+    return alloc_big(4*sizeof(void*));
+#endif
 #ifdef BITS64
     return pool_alloc(&pools[6]);
 #else

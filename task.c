@@ -160,7 +160,7 @@ jl_value_t *jl_exception_in_transit;
 // temporary GC root stack for use during init, before tasks exist
 // GC should be disabled during this time.
 static jl_gcframe_t *dummy_pgcstack;
-jl_gcframe_t **jl_pgcstack = &dummy_pgcstack;
+jl_gcframe_t ** volatile jl_pgcstack = &dummy_pgcstack;
 #endif
 
 static jl_value_t *switchto(jl_task_t *t)

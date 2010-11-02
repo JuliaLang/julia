@@ -223,7 +223,11 @@ function pool_worker(p::WorkPool, worker)
             yield()
         end
         (consumer, f, args) = pop(p.q)
-        consumer(wait(remote_apply(worker, f, args...)))
+        f = remote_apply(worker, f, args...)
+        if isa(worker,Worker)
+            io_wait(worker.socket)
+        end
+        consumer(wait(f))
         p.ntasks -= 1
     end
 end
