@@ -354,8 +354,9 @@ jl_task_t *jl_new_task(jl_function_t *start, size_t ssize)
     stk = (char*)LLT_ALIGN((uptrint_t)stk, pagesz);
     // add a guard page to detect stack overflow
     // the GC might read this area, which is ok, just prevent writes
-    if (mprotect(stk, pagesz-1, PROT_READ) == -1)
-        jl_errorf("mprotect: %s", strerror(errno));
+    // TODO: add a finalizer to remove this!
+    //if (mprotect(stk, pagesz-1, PROT_READ) == -1)
+    //    jl_errorf("mprotect: %s", strerror(errno));
     t->stack = stk+pagesz;
 
     init_task(t);

@@ -151,6 +151,7 @@ static void sweep_big()
             *pv = nxt;
             // todo: move to to-free list, free after finalization
 #ifdef MEMDEBUG
+            size_t thesz = v->sz;
             memset(v, 0xbb, v->sz+3*sizeof(void*));
 #endif
             free(v);

@@ -914,7 +914,8 @@ jl_value_t *jl_new_closure_internal(jl_lambda_info_t *li, jl_value_t *env)
     assert(jl_is_lambda_info(li));
     assert(jl_is_tuple(env));
     jl_function_t *f=NULL;
-    JL_GC_PUSH(&f);
+    // note: env is pushed here to make codegen a little easier
+    JL_GC_PUSH(&f, &env);
     if (li->fptr != NULL) {
         // function has been compiled
         f = jl_new_closure(li->fptr, env);
