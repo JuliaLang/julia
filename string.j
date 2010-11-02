@@ -12,7 +12,11 @@ print(s::String) = for c = s; print(c); end
 
 function show(c::Char)
     print('\'')
-    print(c == '\'' ? "\\'" : escape_string(string(c)))
+    if c == '\''
+        print("\\'")
+    else
+        print_escaped(string(c))
+    end
     print('\'')
 end
 show(s::String) = print_quoted(s)
@@ -156,7 +160,7 @@ repeat(s::String, r::Int) = r <= 0 ? "" :
 ## ropes for efficient concatenation, etc. ##
 
 # Idea: instead of this standard binary tree structure,
-# how about we keep an array of substrings, with and
+# how about we keep an array of substrings, with an
 # offset array. We can do binary search on the offset
 # array so we get O(log(n)) indexing time still, but we
 # can compute the offsets lazily and avoid all the
@@ -292,7 +296,7 @@ function print_unescaped(s::String)
                         error("octal escape sequence out of range")
                     end
                     n
-                end : c
+                end : int32(c)
             print(char(x))
         else
             print(c)
@@ -308,7 +312,7 @@ function lpad(s::String, n::Int, p::String)
     l = strlen(p)
     q = div(m,l)
     r = m - q*l
-    # TODO: this is correct but inefficient
+    # TODO: this is correct but inefficient for long p
     p^q * (r > 0 ? p[1:strind(p,r)] : "") * s
 end
 
@@ -318,7 +322,7 @@ function rpad(s::String, n::Int, p::String)
     l = strlen(p)
     q = div(m,l)
     r = m - q*l
-    # TODO: this is correct but inefficient
+    # TODO: this is correct but inefficient for long p
     s * p^q * (r > 0 ? p[1:strind(p,r)] : "")
 end
 
