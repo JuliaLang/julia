@@ -56,5 +56,5 @@ done(r::RangeFrom, st) = false
 next{T}(r::RangeFrom{T}, st) =
     (st[2]::T, (st[1]::Int+1, r.start + st[1]::Int*r.step))
 
-start(r::RangeTo) = error("range has no initial value")
-start(r::RangeBy) = error("range has no initial value")
+start(r::RangeTo) = error("range ",r," has no initial value")
+start(r::RangeBy) = error("range ",r," has no initial value")

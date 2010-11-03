@@ -90,7 +90,7 @@ for (fname, fname2, eltype) = (("dgeqp3_", "dorgqr_", Float64),
                m, n, QR, m, jpvt, tau, work, lwork, info)
 
          if info[1] == 0; lwork = int32(work[1]); work = Array($eltype, lwork);
-         else error("Error in $fname"); end
+         else error("Error in ", $fname); end
 
          # Compute QR factorization
          ccall(dlsym(libLAPACK, $fname),
@@ -112,7 +112,7 @@ for (fname, fname2, eltype) = (("dgeqp3_", "dorgqr_", Float64),
                m, k, k, QR, m, tau, work, lwork2, info)
 
          if info[1] == 0; lwork = int32(work[1]); work = Array($eltype, lwork);
-         else error("Error in $fname2"); end
+         else error("Error in ", $fname2); end
 
          # Compute Q
          ccall(dlsym(libLAPACK, $fname2),
@@ -122,7 +122,7 @@ for (fname, fname2, eltype) = (("dgeqp3_", "dorgqr_", Float64),
                m, k, k, QR, m, tau, work, lwork2, info)
          
          if info[1] == 0; return (QR[:, 1:k], R[1:k, :], jpvt); end
-         error("Error in $fname");
+         error("Error in ", $fname);
 
          end
          )
@@ -157,7 +157,7 @@ for (fname, eltype) = (("dsyev_", Float64), ("ssyev_", Float32))
                jobz, uplo, n, EV, n, W, work, lwork, info)
 
          if info[1] == 0; lwork = int32(work[1]); work = Array($eltype, lwork);
-         else error("Error in $fname"); end
+         else error("Error in ", $fname); end
 
          # Compute eigenvalues, eigenvectors
          ccall(dlsym(libLAPACK, $fname),
@@ -204,7 +204,7 @@ for (fname, eltype) = (("dgesvd_", Float64), ("sgesvd_", Float32))
                jobu, jobvt, m, n, X, m, S, U, m, VT, n, work, lwork, info)
 
          if info[1] == 0; lwork = int32(work[1]); work = Array($eltype, lwork);
-         else error("Error in $fname"); end
+         else error("Error in ", $fname); end
 
          # Compute SVD
          ccall(dlsym(libLAPACK, $fname),
@@ -314,7 +314,7 @@ for (fname_lu, fname_chol, fname_lsq, fname_tri, eltype) =
                   "N", m, n, nrhs, Acopy, m, X, max(m,n), work, lwork, info)
 
             if info[1] == 0; lwork = int32(work[1]); work = Array($eltype, lwork);
-            else error("Error in $fname_lsq"); end
+            else error("Error in ", $fname_lsq); end
 
             ccall(dlsym(libLAPACK, $fname_lsq),
                   Void,

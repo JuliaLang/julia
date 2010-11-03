@@ -73,7 +73,7 @@ function powermod(x::Int, p::Int, m::Int)
     if p == 0
         return one(x)
     elseif p < 0
-        error("powermod: exponent must be >= 0")
+        error("powermod: exponent must be >= 0, got ", p)
     end
     t = 1
     while t <= p

@@ -27,7 +27,7 @@ show(s::String) = print_quoted(s)
 size(s::String) = (length(s),)
 function size(s::String, d::Index)
     if d != 1
-        error("in size: tupleref: index out of range")
+        error("in size: tupleref: index ",d," out of range")
     end
     length(s)
 end
@@ -355,17 +355,19 @@ hex(s::String) = parse_int(Int64, s, 16)
 
 ## integer to string functions ##
 
-function uint2str(n::Int, base::Int)
-    ndig = n==convert(typeof(n),0) ? 1 : int32(floor(log(n)/log(base)+1))
+function uint2str(n::Int, b::Int)
+    if n < 0; error("uint2str: negative argument ", n); end
+    if b < 2; error("uint2str: invalid base ", b); end
+    ndig = n==convert(typeof(n),0) ? 1 : int32(floor(log(n)/log(b)+1))
     sz = ndig+1
     data = Array(Uint8, sz)
     ccall(dlsym(JuliaDLHandle,"uint2str"), Ptr{Uint8},
           (Ptr{Uint8}, Size, Uint64, Uint32),
-          data, sz, uint64(n), uint32(base))
+          data, sz, uint64(n), uint32(b))
     Latin1String(data[:(sz-1)]) # cut out terminating NUL
 end
 
-uint2str(n::Int, base::Int, len::Int) = lpad(uint2str(n,base),len,'0')
+uint2str(n::Int, b::Int, len::Int) = lpad(uint2str(n,b),len,'0')
 
 ## conversion of general objects to strings ##
 

@@ -561,7 +561,7 @@ function findlabel(body, l)
             return i
         end
     end
-    error("label not found")
+    error("label ",l," not found")
 end
 
 f_argnames(ast) =

@@ -2,7 +2,7 @@
 
 function issymmetric(A::Matrix)
     m, n = size(A)
-    if m != n; error("Input matrix must be square"); end
+    if m != n; error("matrix must be square, got ",m,"x",n); end
     for i=1:(n-1), j=(i+1):n
         if A[i,j] != A[j,i]
             return false
@@ -13,7 +13,7 @@ end
 
 function isuppertriangular(A::Matrix)
     m, n = size(A)
-    if m != n; error("Input matrix must be square"); end
+    if m != n; error("matrix must be square, got ",m,"x",n); end
     for i=1:n, j=1:n
         if A[i,j] != 0 && j < i
             return false
@@ -24,7 +24,7 @@ end
 
 function islowertriangular(A::Matrix)
     m, n = size(A)
-    if m != n; error("Input matrix must be square"); end
+    if m != n; error("matrix must be square, got ",m,"x",n); end
     for i=1:n, j=n:-1:1
         if A[i,j] != 0 && j > i
             return false

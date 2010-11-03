@@ -64,8 +64,7 @@ print_to_string(f::Function, args...) = print_to_string(0, f, args...)
 
 nthbyte(x::Int, n::Int) = (n > sizeof(x) ? uint8(0) : uint8((x>>>((n-1)<<3))))
 
-write(s, x::Uint8) = error(strcat(string(typeof(s)),
-                                  " does not support byte I/O"))
+write(s, x::Uint8) = error(typeof(s)," does not support byte I/O")
 
 function write(s, x::Int)
     for n = 1:sizeof(x)
@@ -83,8 +82,7 @@ function write(s, a::Array)
     end
 end
 
-read(s, x::Type{Uint8}) = error(strcat(string(typeof(s)),
-                                       " does not support byte I/O"))
+read(s, x::Type{Uint8}) = error(typeof(s)," does not support byte I/O")
 
 function read{T <: Int}(s, ::Type{T})
     x = zero(T)
@@ -241,7 +239,7 @@ end
 
 function serialize(s, x)
     if has(ser_tag,x)
-        write(s, uint8(0))  # tag 0 indicates just a tag
+        write(s, uint8(0)) # tag 0 indicates just a tag
         writetag(s, x)
         return ()
     end
@@ -263,7 +261,7 @@ function serialize(s, x)
             serialize(s, getfield(x, n))
         end
     else
-        error("not serializable")
+        error(x," is not serializable")
     end
 end
 

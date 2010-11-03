@@ -56,7 +56,7 @@ oftype{T}(x::T,c) = convert(T,c)
 oftype{T}(x::Type{T},c) = convert(T,c)
 
 sizeof{T}(x::T) = sizeof(T)
-sizeof(t::Type) = error(strcat("size of type ",string(t)," unknown"))
+sizeof(t::Type) = error(strcat("size of type ",t," unknown"))
 
 zero(x) = oftype(x,0)
 one(x)  = oftype(x,1)
@@ -83,7 +83,7 @@ function promote_type{T,S}(::Type{T}, ::Type{S})
     elseif method_exists(promote_rule,(S,T))
         return promote_rule(S,T)
     else
-        error(strcat("no promotion exists for ",string(T)," and ",string(S)))
+        error("no promotion exists for ",T," and ",S)
     end
 end
 
@@ -134,7 +134,7 @@ rem(x::Int, y::Int) = rem(promote(x,y)...)
 
 ## promotion catch-alls for undefined operations ##
 
-no_op_err(name, T) = error(strcat(name," not defined for ",string(T)))
+no_op_err(name, T) = error(name," not defined for ",T)
 (+){T<:Number}(x::T, y::T) = no_op_err("+", T)
 (*){T<:Number}(x::T, y::T) = no_op_err("*", T)
 (-){T<:Number}(x::T, y::T) = no_op_err("-", T)
