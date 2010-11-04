@@ -100,13 +100,17 @@ one{T}(x::Array{T,2}) = (m=size(x,1); n=size(x,2);
                          a)
 zero{T}(x::Array{T,2}) = zeros(T,size(x))
 
-colon(start::Real, stop::Real, stride::Real) =
-    ((start, stop, stride) = promote(start, stop, stride);
-     [ i | i=start:stride:stop ])
-
 complex(re::Array, im::Array ) = reshape([ Complex(re[i],im[i]) | i=1:numel(re) ], size(re))
 complex(re::Array, im::Real  ) = reshape([ Complex(re[i],im   ) | i=1:numel(re) ], size(re))
 complex(re::Real , im::Array ) = reshape([ Complex(re   ,im[i]) | i=1:numel(im) ], size(im))
+
+linspace(start::Real, stop::Real, stride::Real) =
+    ((start, stop, stride) = promote(start, stop, stride);
+     [ i | i=start:stride:stop ])
+
+linspace(start::Real, stop::Real) =
+    ((start, stop) = promote(start, stop);
+     [ i | i=start:stop ])
 
 ## Unary operators ##
 

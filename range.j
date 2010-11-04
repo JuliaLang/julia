@@ -24,6 +24,7 @@ struct RangeBy{T}
 end
 
 numel(r::Union(Range,Range1)) = length(r)
+size(r::Union(Range,Range1)) = tuple(length(r))
 length{T<:Int}(r::Range{T}) = max(0, div((r.stop-r.start+r.step), r.step))
 length{T<:Int}(r::Range1{T}) = max(0, (r.stop-r.start + 1))
 length(r::Range) = max(0, int32((r.stop-r.start) / r.step + 1))
@@ -58,3 +59,8 @@ next{T}(r::RangeFrom{T}, st) =
 
 start(r::RangeTo) = error("range ",r," has no initial value")
 start(r::RangeBy) = error("range ",r," has no initial value")
+
+colon(start::Real, stop::Real, step::Real) = Range(promote(start, step, stop)...)
+
+ref(r::Range, i::Index) = (res = r.start + i*r.step; res > r.stop ? error("Out of bounds") : res)
+ref(r::Range1, i::Index) = (res = r.start + r.step; res > r.stop ? error("Out of bounds") : res)
