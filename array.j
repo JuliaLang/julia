@@ -149,12 +149,12 @@ imag(x::Array) = map(imag, x)
 
 ## Binary comparison operators ##
 
-( <)(x::Union(Array, Number), y::Union(Array, Number)) = map2(Bool, <, x, y)
-( >)(x::Union(Array, Number), y::Union(Array, Number)) = map2(Bool, >, x, y)
-(<=)(x::Union(Array, Number), y::Union(Array, Number)) = map2(Bool, <=, x, y)
-(>=)(x::Union(Array, Number), y::Union(Array, Number)) = map2(Bool, >=, x, y)
-(==)(x::Union(Array, Number), y::Union(Array, Number)) = map2(Bool, ==, x, y)
-(!=)(x::Union(Array, Number), y::Union(Array, Number)) = map2(Bool, !=, x, y)
+#( <)(x::Union(Array, Number), y::Union(Array, Number)) = map2(Bool, <, x, y)
+#( >)(x::Union(Array, Number), y::Union(Array, Number)) = map2(Bool, >, x, y)
+#(<=)(x::Union(Array, Number), y::Union(Array, Number)) = map2(Bool, <=, x, y)
+#(>=)(x::Union(Array, Number), y::Union(Array, Number)) = map2(Bool, >=, x, y)
+#(==)(x::Union(Array, Number), y::Union(Array, Number)) = map2(Bool, ==, x, y)
+#(!=)(x::Union(Array, Number), y::Union(Array, Number)) = map2(Bool, !=, x, y)
 
 function (==)(x::Array, y::Array)
     if x.dims != y.dims; return false; end
