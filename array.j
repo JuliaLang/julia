@@ -535,6 +535,7 @@ function map{T}(f, A::Array{T})
     return F
 end
 
+map2(Ftype::Type, f, A::Number, B::Number) = convert(Ftype, f(A,B))
 map2{S,T}(f, A::Number, B::Number) = f(A,B)
 
 map2{S,T}(f, A::Array{S}, B::Array{T}) = map2(promote_type(S,T), f, A, B)
@@ -582,10 +583,10 @@ end
 
 reverse(v::Vector) = [ v[length(v)-i+1] | i=1:length(v) ]
 
-transpose(x::Matrix) = [ x[j,i] | i=1:size(x,2), j=1:size(x,1) ]
+transpose(x::Matrix)  = [ x[j,i]       | i=1:size(x,2), j=1:size(x,1) ]
 ctranspose(x::Matrix) = [ conj(x[j,i]) | i=1:size(x,2), j=1:size(x,1) ]
-transpose(x::Vector) = [ x[j] | i=1, j=1:size(x,1) ]
-ctranspose(x::Vector) = [ conj(x[j]) | i=1, j=1:size(x,1) ]
+transpose(x::Vector)  = [ x[j]         | i=1, j=1:size(x,1) ]
+ctranspose(x::Vector) = [ conj(x[j])   | i=1, j=1:size(x,1) ]
 
 function permute{T}(A::Array{T}, perm)
     dimsA = A.dims
