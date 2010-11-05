@@ -518,7 +518,7 @@ issues 6/21/10
 * let
 * ans
 * Char type, more flexible bits types
-- make pmap_d work
+* make pmap_d work
 * bitstype syntax
 * boot.j
 - make optimized arrayset, arrayref work on all Arrays

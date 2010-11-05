@@ -42,19 +42,24 @@ function jl_worker(fd)
         end
         local f, args
         got_msg = false
+        quit = false
         try
             (f, args) = recv_msg(sock)
             #print("got ", tuple(f, map(typeof,args)...), "\n")
             got_msg = true
         catch e
             if isa(e,EOFError)
-                exit()
+                quit = true
+            else
+                print("deserialization error: ", e, "\n")
+                read(sock, Uint8, nb_available(sock))
+                #while nb_available(sock) > 0 #|| select(sock)
+                #    read(sock, Uint8)
+                #end
             end
-            #print("deserialization error: ", e, "\n")
-            read(sock, Uint8, nb_available(sock))
-            #while nb_available(sock) > 0 #|| select(sock)
-            #    read(sock, Uint8)
-            #end
+        end
+        if quit
+            break
         end
         if got_msg
             # handle message
@@ -207,11 +212,13 @@ struct WorkPool
     function WorkPool(n)
         # create a pool of Workers, each with a Task to feed it work from
         # a shared queue.
-        #w = { (i==1 ? LocalProcess() : Worker()) | i=1:n }
+        w = { Worker() | i=1:(n-1) }
         wp = new(Queue(), 0)
         make_scheduled(Task(()->pool_worker(wp, LocalProcess())))
         for i=1:(n-1)
-            make_scheduled(Task(()->pool_worker(wp, Worker())))
+            let wi=w[i]
+                make_scheduled(Task(()->pool_worker(wp, wi)))
+            end
         end
         return wp
     end
@@ -224,9 +231,9 @@ function pool_worker(p::WorkPool, worker)
         end
         (consumer, f, args) = pop(p.q)
         f = remote_apply(worker, f, args...)
-        if isa(worker,Worker)
-            io_wait(worker.socket)
-        end
+        #if isa(worker,Worker)
+        #    io_wait(worker.socket)
+        #end
         consumer(wait(f))
         p.ntasks -= 1
     end
