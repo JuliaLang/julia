@@ -114,47 +114,69 @@ linspace(start::Real, stop::Real) =
 
 ## Unary operators ##
 
-(-)(x::Array) = map(-, x)
+(-)(x::Array) = reshape([ -x[i] | i=1:numel(x) ], size(x) )
 
-(!)(x::Array{Bool}) = map(!, x)
+(!)(x::Array{Bool}) = reshape( [ !x[i] | i=1:numel(x) ], size(x) )
 
-(~)(x::Array{Bool}) = map(~, x)
+(~)(x::Array{Bool}) = reshape( [ ~x[i] | i=1:numel(x) ], size(x) )
 
 conj{T <: Number}(x::Array{T}) = x
-conj(x::Array) = map(conj, x)
+conj(x::Array) = reshape( [ conj(x[i]) | i=1:numel(x) ], size(x) )
 
 real{T <: Number}(x::Array{T}) = x
-real(x::Array) = map(real, x)
+real(x::Array) = reshape( [ real(x[i]) | i=1:numel(x) ], size(x) )
 
 imag{T <: Number}(x::Array{T}) = zeros(T, size(x))
-imag(x::Array) = map(imag, x)
+imag(x::Array) = reshape( [ imag(x[i]) | i=1:numel(x) ], size(x) )
 
 ## Binary arithmetic operators ##
 
-( +)(x::Union(Array, Number), y::Union(Array, Number)) = map2(+ , x, y)
-( -)(x::Union(Array, Number), y::Union(Array, Number)) = map2(- , x, y)
-(.*)(x::Union(Array, Number), y::Union(Array, Number)) = map2((.*), x, y)
-(./)(x::Union(Array, Number), y::Union(Array, Number)) = map2(./, x, y)
-(.^)(x::Union(Array, Number), y::Union(Array, Number)) = map2(.^, x, y)
+(+)(x::Array, y::Array)  = reshape( [ x[i] + y[i] | i=1:numel(x) ], size(x) )
+(+)(x::Number, y::Array) = reshape( [ x    + y[i] | i=1:numel(y) ], size(y) )
+(+)(x::Array, y::Number) = reshape( [ x[i] + y    | i=1:numel(x) ], size(x) )
 
-(/)(x::Array, y::Number) = map2(./, x, y)
-(/)(x::Number, y::Array) = map2(./, x, y)
+(-)(x::Array, y::Array)  = reshape( [ x[i] - y[i] | i=1:numel(x) ], size(x) )
+(-)(x::Number, y::Array) = reshape( [ x    - y[i] | i=1:numel(y) ], size(y) )
+(-)(x::Array, y::Number) = reshape( [ x[i] - y    | i=1:numel(x) ], size(x) )
 
-(*)(x::Array, y::Number) = map2(.*, x, y)
-(*)(x::Number, y::Array) = map2(.*, x, y)
+(.*)(x::Array, y::Array)  = reshape( [ x[i] .* y[i] | i=1:numel(x) ], size(x) )
+(.*)(x::Number, y::Array) = reshape( [ x    .* y[i] | i=1:numel(y) ], size(y) )
+(.*)(x::Array, y::Number) = reshape( [ x[i] .* y    | i=1:numel(x) ], size(x) )
 
+(*)(x::Number, y::Array) = reshape( [ x    * y[i] | i=1:numel(y) ], size(y) )
+(*)(x::Array, y::Number) = reshape( [ x[i] * y    | i=1:numel(x) ], size(x) )
 # blas.j defines these for floats; this handles other cases
 (*)(A::Matrix, B::Vector) = [ dot(A[i,:],B) | i=1:size(A,1) ]
 (*)(A::Matrix, B::Matrix) = [ dot(A[i,:],B[:,j]) | i=1:size(A,1), j=1:size(B,2) ]
 
+(./)(x::Array, y::Array)  = reshape( [ x[i] ./ y[i] | i=1:numel(x) ], size(x) )
+(./)(x::Number, y::Array) = reshape( [ x    ./ y[i] | i=1:numel(y) ], size(y) )
+(./)(x::Array, y::Number) = reshape( [ x[i] ./ y    | i=1:numel(x) ], size(x) )
+
+(.^)(x::Array, y::Array)  = reshape( [ x[i] .^ y[i] | i=1:numel(x) ], size(x) )
+(.^)(x::Number, y::Array) = reshape( [ x    .^ y[i] | i=1:numel(y) ], size(y) )
+(.^)(x::Array, y::Number) = reshape( [ x[i] .^ y    | i=1:numel(x) ], size(x) )
+
+(/)(x::Number, y::Array) = reshape( [ x    / y[i] | i=1:numel(y) ], size(y) )
+(/)(x::Array, y::Number) = reshape( [ x[i] / y    | i=1:numel(x) ], size(x) )
+
 ## Binary comparison operators ##
 
-#( <)(x::Union(Array, Number), y::Union(Array, Number)) = map2(Bool, <, x, y)
-#( >)(x::Union(Array, Number), y::Union(Array, Number)) = map2(Bool, >, x, y)
-#(<=)(x::Union(Array, Number), y::Union(Array, Number)) = map2(Bool, <=, x, y)
-#(>=)(x::Union(Array, Number), y::Union(Array, Number)) = map2(Bool, >=, x, y)
-#(==)(x::Union(Array, Number), y::Union(Array, Number)) = map2(Bool, ==, x, y)
-#(!=)(x::Union(Array, Number), y::Union(Array, Number)) = map2(Bool, !=, x, y)
+(<)(x::Array, y::Array)  = reshape( [ x[i] < y[i] | i=1:numel(x) ], size(x) )
+(<)(x::Number, y::Array) = reshape( [ x    < y[i] | i=1:numel(y) ], size(y) )
+(<)(x::Array, y::Number) = reshape( [ x[i] < y    | i=1:numel(x) ], size(x) )
+
+(>)(x::Array, y::Array)  = reshape( [ x[i] > y[i] | i=1:numel(x) ], size(x) )
+(>)(x::Number, y::Array) = reshape( [ x    > y[i] | i=1:numel(y) ], size(y) )
+(>)(x::Array, y::Number) = reshape( [ x[i] > y    | i=1:numel(x) ], size(x) )
+
+(<=)(x::Array, y::Array)  = reshape( [ x[i] <= y[i] | i=1:numel(x) ], size(x) )
+(<=)(x::Number, y::Array) = reshape( [ x    <= y[i] | i=1:numel(y) ], size(y) )
+(<=)(x::Array, y::Number) = reshape( [ x[i] <= y    | i=1:numel(x) ], size(x) )
+
+(>=)(x::Array, y::Array)  = reshape( [ x[i] >= y[i] | i=1:numel(x) ], size(x) )
+(>=)(x::Number, y::Array) = reshape( [ x    >= y[i] | i=1:numel(y) ], size(y) )
+(>=)(x::Array, y::Number) = reshape( [ x[i] >= y    | i=1:numel(x) ], size(x) )
 
 function (==)(x::Array, y::Array)
     if x.dims != y.dims; return false; end
@@ -162,18 +184,25 @@ function (==)(x::Array, y::Array)
     return true
 end
 
-function (!=)(x::Array, y::Array)
-    if x.dims != y.dims; return false; end
-    for i=1:numel(x); if x[i] == y[i]; return false; end; end
-    return true
-end
+(==)(x::Number, y::Array) = reshape( [ x    == y[i] | i=1:numel(y) ], size(y) )
+(==)(x::Array, y::Number) = reshape( [ x[i] == y    | i=1:numel(x) ], size(x) )
 
+(!=)(x::Number, y::Array) = reshape( [ x    != y[i] | i=1:numel(y) ], size(y) )
+(!=)(x::Array, y::Number) = reshape( [ x[i] != y    | i=1:numel(x) ], size(x) )
 
 ## Binary boolean operators ##
 
-(&)(x::Union(Array, Number), y::Union(Array, Number)) = map2(&, x, y)
-(|)(x::Union(Array, Number), y::Union(Array, Number)) = map2(|, x, y)
-($)(x::Union(Array, Number), y::Union(Array, Number)) = map2($, x, y)
+(&)(x::Array{Bool}, y::Array{Bool}) = reshape( [ x[i] & y[i] | i=1:numel(x) ], size(x) )
+(&)(x::Bool, y::Array{Bool})        = reshape( [ x    & y[i] | i=1:numel(y) ], size(y) )
+(&)(x::Array{Bool}, y::Bool)        = reshape( [ x[i] & y    | i=1:numel(x) ], size(x) )
+
+(|)(x::Array{Bool}, y::Array{Bool}) = reshape( [ (x[i] | y[i]) | i=1:numel(x) ], size(x) )
+(|)(x::Bool, y::Array{Bool})        = reshape( [ (x    | y[i]) | i=1:numel(y) ], size(y) )
+(|)(x::Array{Bool}, y::Bool)        = reshape( [ (x[i] | y   ) | i=1:numel(x) ], size(x) )
+
+($)(x::Array{Bool}, y::Array{Bool}) = reshape( [ x[i] $ y[i] | i=1:numel(x) ], size(x) )
+($)(x::Bool, y::Array{Bool})        = reshape( [ x    $ y[i] | i=1:numel(y) ], size(y) )
+($)(x::Array{Bool}, y::Bool)        = reshape( [ x[i] $ y    | i=1:numel(x) ], size(x) )
 
 ## Indexing: ref ##
 
@@ -535,39 +564,6 @@ function map{T}(f, A::Array{T})
     return F
 end
 
-map2(f, A::Number, B::Number) = f(A,B)
-map2(Ftype::Type, f, A::Number, B::Number) = convert(Ftype, f(A,B))
-
-map2{S,T}(f, A::Array{S}, B::Array{T}) = map2(promote_type(S,T), f, A, B)
-
-function map2{S,T}(Ftype::Type, f, A::Array{S}, B::Array{T})
-    F = Array(Ftype, size(A))
-    for i=1:numel(A)
-        F[i] = f(A[i], B[i])
-    end
-    return F
-end
-
-map2{T}(f, A::Number, B::Array{T}) = map2(promote_type(typeof(A),T), f, A, B)
-
-function map2{T}(Ftype::Type, f, A::Number, B::Array{T})
-    F = Array(Ftype, size(B))
-    for i=1:numel(B)
-        F[i] = f(A, B[i])
-    end
-    return F
-end
-
-map2{T}(f, A::Array{T}, B::Number) = map2(promote_type(T,typeof(B)), f, A, B)
-
-function map2{T}(Ftype::Type, f, A::Array{T}, B::Number)
-    F = Array(Ftype, size(A))
-    for i=1:numel(A)
-        F[i] = f(A[i], B)
-    end
-    return F
-end
-
 function cartesian_map(body, t::Tuple, it...)
     idx = length(t)-length(it)
     if idx == 0
@@ -583,10 +579,10 @@ end
 
 reverse(v::Vector) = [ v[length(v)-i+1] | i=1:length(v) ]
 
-transpose(x::Matrix)  = [ x[j,i]       | i=1:size(x,2), j=1:size(x,1) ]
+transpose(x::Matrix) = [ x[j,i] | i=1:size(x,2), j=1:size(x,1) ]
 ctranspose(x::Matrix) = [ conj(x[j,i]) | i=1:size(x,2), j=1:size(x,1) ]
-transpose(x::Vector)  = [ x[j]         | i=1, j=1:size(x,1) ]
-ctranspose(x::Vector) = [ conj(x[j])   | i=1, j=1:size(x,1) ]
+transpose(x::Vector) = [ x[j] | i=1, j=1:size(x,1) ]
+ctranspose(x::Vector) = [ conj(x[j]) | i=1, j=1:size(x,1) ]
 
 function permute{T}(A::Array{T}, perm)
     dimsA = A.dims
