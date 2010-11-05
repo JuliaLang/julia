@@ -143,12 +143,12 @@ imag(x::Array) = map(imag, x)
 (.*)(x::Number, y::Array) = map2(.*, x, y)
 (.*)(x::Array, y::Number) = map2(.*, x, y)
 
-(./)(x::Array, y::Array)  = map2(./, x, y)
-(./)(x::Number, y::Array) = map2(./, x, y)
-(./)(x::Array, y::Number) = map2(./, x, y)
+(./)(x::Array, y::Array)  = reshape( [ x[i] ./ y[i] | i=1:numel(x) ], size(x) )
+(./)(x::Number, y::Array) = reshape( [ x    ./ y[i] | i=1:numel(y) ], size(y) )
+(./)(x::Array, y::Number) = reshape( [ x[i] ./ y    | i=1:numel(x) ], size(x) )
 
-(/)(x::Array, y::Number) = map2(./, x, y)
-(/)(x::Number, y::Array) = map2(./, x, y)
+(/)(x::Array, y::Number) = reshape( [ x[i] ./ y    | i=1:numel(x) ], size(x) )
+(/)(x::Number, y::Array) = reshape( [ x    ./ y[i] | i=1:numel(y) ], size(y) )
 
 (*)(x::Array, y::Number) = map2(.*, x, y)
 (*)(x::Number, y::Array) = map2(.*, x, y)

@@ -47,7 +47,7 @@ for (fname, eltype) = (("dgetrf_", Float64), ("sgetrf_", Float32))
                m, n, LU, m, ipiv, info)
 
          if info[1] > 0; error("Matrix is singular"); end
-         P = 1:m
+         P = linspace(1,m)
          for i=1:m; t = P[i]; P[i] = P[ipiv[i]]; P[ipiv[i]] = t ; end
 
          if info[1] == 0; return (tril(LU, -1) + eye(m,n), triu(LU), P); end
