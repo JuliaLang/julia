@@ -535,8 +535,8 @@ function map{T}(f, A::Array{T})
     return F
 end
 
+map2(f, A::Number, B::Number) = f(A,B)
 map2(Ftype::Type, f, A::Number, B::Number) = convert(Ftype, f(A,B))
-map2{S,T}(f, A::Number, B::Number) = f(A,B)
 
 map2{S,T}(f, A::Array{S}, B::Array{T}) = map2(promote_type(S,T), f, A, B)
 
