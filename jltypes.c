@@ -1,6 +1,7 @@
 /*
   Types
   . type predicates (subtype) and type matching
+  . type union and intersection
   . builtin type definitions
 */
 #include <stdlib.h>

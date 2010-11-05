@@ -1040,7 +1040,9 @@ static AllocaInst *alloc_local(char *name, jl_codectx_t *ctx)
     // only store a variable unboxed if type inference has run, which
     // checks that the variable is not referenced undefined.
     if (ctx->linfo->inferred && jl_is_bits_type(jt) &&
-        !(*ctx->isCaptured)[name])
+        // don't unbox intrinsics, since inference depends on their having
+        // stable addresses for table lookup.
+        jt != (jl_value_t*)jl_intrinsic_type && !(*ctx->isCaptured)[name])
         vtype = julia_type_to_llvm(jt);
     else
         vtype = jl_pvalue_llvmt;

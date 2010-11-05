@@ -102,18 +102,29 @@ t_func[boxsi64] = (1, 1, x->Int64)
 t_func[boxui64] = (1, 1, x->Uint64)
 t_func[boxf32] = (1, 1, x->Float32)
 t_func[boxf64] = (1, 1, x->Float64)
+t_func[box] = (2, 2, (t,v)->(isType(t) ? t.parameters[1] : Any))
 t_func[eq_int] = (2, 2, cmp_tfunc)
+t_func[ne_int] = (2, 2, cmp_tfunc)
 t_func[slt_int] = (2, 2, cmp_tfunc)
 t_func[ult_int] = (2, 2, cmp_tfunc)
+t_func[sle_int] = (2, 2, cmp_tfunc)
+t_func[ule_int] = (2, 2, cmp_tfunc)
+t_func[sgt_int] = (2, 2, cmp_tfunc)
+t_func[ugt_int] = (2, 2, cmp_tfunc)
+t_func[sge_int] = (2, 2, cmp_tfunc)
+t_func[uge_int] = (2, 2, cmp_tfunc)
 t_func[eq_float] = (2, 2, cmp_tfunc)
-t_func[lt_float] = (2, 2, cmp_tfunc)
 t_func[ne_float] = (2, 2, cmp_tfunc)
+t_func[lt_float] = (2, 2, cmp_tfunc)
+t_func[le_float] = (2, 2, cmp_tfunc)
+t_func[gt_float] = (2, 2, cmp_tfunc)
+t_func[ge_float] = (2, 2, cmp_tfunc)
 t_func[ccall] =
     (3, Inf, (fptr, rt, at, a...)->(isType(rt) ? rt.parameters[1] : Any))
 t_func[is] = (2, 2, cmp_tfunc)
 t_func[subtype] = (2, 2, cmp_tfunc)
 t_func[isa] = (2, 2, cmp_tfunc)
-t_func[new_generic_function] = (1, 1, s->(None-->Any))
+t_func[new_generic_function] = (1, 1, s->(Any-->Any))
 t_func[tuplelen] = (1, 1, x->Int32)
 t_func[arraylen] = (1, 1, x->Int32)
 t_func[arrayref] = (2, 2, (a,i)->(isa(a,StructKind) && subtype(a,Array) ?
@@ -272,9 +283,15 @@ function abstract_eval(e::Expr, vtypes, sv::StaticVarInfo)
 end
 
 function a2t(a::Vector)
-    t = ()
-    for i=length(a):-1:1
-        t = tuple(a[i], t...)
+    n = length(a)
+    if n==2 return (a[1],a[2]) end
+    if n==1 return (a[1],) end
+    if n==3 return (a[1],a[2],a[3]) end
+    if n==0 return () end
+    t = (a[1],a[2],a[3],a[4])
+    if n==4 return t end
+    for i=5:n
+        t = tuple(t..., a[i])
     end
     t
 end
