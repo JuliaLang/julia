@@ -76,8 +76,9 @@ void jl_type_error(const char *fname, jl_value_t *expected, jl_value_t *got)
 void jl_type_error_rt(const char *fname, const char *context,
                       jl_value_t *ty, jl_value_t *got)
 {
-    jl_value_t *ctxt = jl_pchar_to_string((char*)context, strlen(context));
-    JL_GC_PUSH(&ctxt);
+    jl_value_t *ctxt=NULL;
+    JL_GC_PUSH(&ctxt, &got);
+    ctxt = jl_pchar_to_string((char*)context, strlen(context));
     jl_value_t *ex = jl_new_struct(jl_typeerror_type, jl_symbol(fname),
                                    ctxt, ty, got);
     jl_raise(ex);

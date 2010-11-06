@@ -728,7 +728,7 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
         return builder.CreateFCmpOEQ(FP(x),
                                      FP(emit_expr(args[2],ctx,true)));
     HANDLE(ne_float,2)
-        return builder.CreateFCmpONE(FP(x),
+        return builder.CreateFCmpUNE(FP(x),
                                      FP(emit_expr(args[2],ctx,true)));
     HANDLE(lt_float,2)
         return builder.CreateFCmpOLT(FP(x),

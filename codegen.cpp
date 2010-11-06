@@ -287,6 +287,8 @@ static void error_unless(Value *cond, const std::string &msg, jl_codectx_t *ctx)
     builder.SetInsertPoint(passBB);
 }
 
+static Value *boxed(Value *v);
+
 static void emit_typecheck(Value *x, jl_value_t *type, const std::string &msg,
                            jl_codectx_t *ctx)
 {
@@ -306,7 +308,7 @@ static void emit_typecheck(Value *x, jl_value_t *type, const std::string &msg,
                                        zeros.begin(), zeros.end());
     builder.CreateCall4(jltypeerror_func,
                         fname_val, msg_val,
-                        literal_pointer_val(type), x);
+                        literal_pointer_val(type), boxed(x));
 
     builder.CreateBr(passBB);
     ctx->f->getBasicBlockList().push_back(passBB);
