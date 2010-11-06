@@ -525,26 +525,13 @@ prod{T}(A::Array{T}, region::Union(Int, Tuple)) = reduce(T, .*, A, region)
 all{T}(A::Array{T}, region::Union(Int, Tuple)) = reduce(Bool, all, A, region)
 any{T}(A::Array{T}, region::Union(Int, Tuple)) = reduce(Bool, any, A, region)
 
-function equal(x::Array, y::Array)
+function isequal(x::Array, y::Array)
     if x.dims != y.dims
         return false
     end
 
     for i=1:numel(x)
         if x[i] != y[i]
-            return false
-        end
-    end
-    return true
-end
-
-function notequal(x::Array, y::Array)
-    if x.dims != y.dims
-        return false
-    end
-
-    for i=1:numel(x)
-        if x[i] == y[i]
             return false
         end
     end
