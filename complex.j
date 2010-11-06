@@ -141,7 +141,8 @@ function exp(z::Complex)
     Complex(er*cos(z.im), er*sin(z.im))
 end
 
-(^)(x::Union(Int8,Uint8,Int16,Uint16,Int32,Uint32), p::Float) = float64(x)^p
+# TODO: why is this in complex.j?
+(^)(x::Int, p::Float) = ^(promote(x,p)...)
 
 function (^)(x::Float, p::Float)
     if x >= 0
