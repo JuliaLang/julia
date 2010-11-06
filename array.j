@@ -159,9 +159,11 @@ imag(x::Array) = map(imag, x)
 
 ## Binary comparison operators ##
 
+(==)(x::Array, y::Array)  = map2(Bool, ==, x, y)
 (==)(x::Number, y::Array) = map2(Bool, ==, x, y)
 (==)(x::Array, y::Number) = map2(Bool, ==, x, y)
 
+(!=)(x::Array, y::Array)  = map2(Bool, !=, x, y)
 (!=)(x::Number, y::Array) = map2(Bool, !=, x, y)
 (!=)(x::Array, y::Number) = map2(Bool, !=, x, y)
 
@@ -181,17 +183,17 @@ imag(x::Array) = map(imag, x)
 (>=)(x::Number, y::Array) = map2(Bool, >=, x, y)
 (>=)(x::Array, y::Number) = map2(Bool, >=, x, y)
 
-function (==)(x::Array, y::Array)
-    if x.dims != y.dims; return false; end
-    for i=1:numel(x); if x[i] != y[i]; return false; end; end
-    return true
-end
+# function (==)(x::Array, y::Array)
+#     if x.dims != y.dims; return false; end
+#     for i=1:numel(x); if x[i] != y[i]; return false; end; end
+#     return true
+# end
 
-function (!=)(x::Array, y::Array)
-    if x.dims != y.dims; return false; end
-    for i=1:numel(x); if x[i] == y[i]; return false; end; end
-    return true
-end
+# function (!=)(x::Array, y::Array)
+#     if x.dims != y.dims; return false; end
+#     for i=1:numel(x); if x[i] == y[i]; return false; end; end
+#     return true
+# end
 
 ## Binary boolean operators ##
 
@@ -502,19 +504,20 @@ hcat(A::Array...) = cat(2, A...)
 
 ## Reductions ##
 
-function reduce{T}(op, A::Array{T,2}, dim::Int)
-    if dim == 1
-        [ reduce(op, A[:,i]) | i=1:size(A, 2) ]
-    elseif dim == 2
-        [ reduce(op, A[i,:]) | i=1:size(A, 1) ]
-    end
-end
+## Type inference doesn't work on op, resulting in cell arrays
+# function reduce{T}(op, A::Array{T,2}, dim::Int)
+#     if dim == 1
+#         [ reduce(op, A[:,i]) | i=1:size(A, 2) ]
+#     elseif dim == 2
+#         [ reduce(op, A[i,:]) | i=1:size(A, 1) ]
+#     end
+# end
 
-function reduce{T}(op, A::Array{T}, region)
+function reduce{T}(RType::Type, op, A::Array{T}, region)
     dimsA = A.dims
     ndimsA = length(dimsA)
     dimsR = ntuple(ndimsA, i->(contains(region, i) ? 1 : dimsA[i]))
-    R = Array(T, dimsR)
+    R = Array(RType, dimsR)
 
     function reduce_one(ind)
         sliceA = ntuple(ndimsA, i->(contains(region, i) ?
@@ -527,10 +530,13 @@ function reduce{T}(op, A::Array{T}, region)
     return R
 end
 
-max(A, region) = reduce(max, A, region)
-min(A, region) = reduce(min, A, region)
-sum(A, region) = reduce(+, A, region)
-prod(A, region) = reduce(.*, A, region)
+max{T}(A::Array{T}, region::Union(Int, Tuple)) = reduce(T, max, A, region)
+min{T}(A::Array{T}, region::Union(Int, Tuple)) = reduce(T, min, A, region)
+sum{T}(A::Array{T}, region::Union(Int, Tuple)) = reduce(T, +, A, region)
+prod{T}(A::Array{T}, region::Union(Int, Tuple)) = reduce(T, .*, A, region)
+all{T}(A::Array{T}, region::Union(Int, Tuple)) = reduce(Bool, all, A, region)
+any{T}(A::Array{T}, region::Union(Int, Tuple)) = reduce(Bool, any, A, region)
+equal(A::Array, B::Array) = all(A==B)
 
 function scan{T}(op, v::Vector{T})
     n = length(v)
