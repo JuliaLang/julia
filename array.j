@@ -183,18 +183,6 @@ imag(x::Array) = map(imag, x)
 (>=)(x::Number, y::Array) = map2(Bool, >=, x, y)
 (>=)(x::Array, y::Number) = map2(Bool, >=, x, y)
 
-# function (==)(x::Array, y::Array)
-#     if x.dims != y.dims; return false; end
-#     for i=1:numel(x); if x[i] != y[i]; return false; end; end
-#     return true
-# end
-
-# function (!=)(x::Array, y::Array)
-#     if x.dims != y.dims; return false; end
-#     for i=1:numel(x); if x[i] == y[i]; return false; end; end
-#     return true
-# end
-
 ## Binary boolean operators ##
 
 (&)(x::Array, y::Array)  = map2(Bool, &, x, y)
@@ -536,7 +524,18 @@ sum{T}(A::Array{T}, region::Union(Int, Tuple)) = reduce(T, +, A, region)
 prod{T}(A::Array{T}, region::Union(Int, Tuple)) = reduce(T, .*, A, region)
 all{T}(A::Array{T}, region::Union(Int, Tuple)) = reduce(Bool, all, A, region)
 any{T}(A::Array{T}, region::Union(Int, Tuple)) = reduce(Bool, any, A, region)
-equal(A::Array, B::Array) = all(A==B)
+
+function equal(x::Array, y::Array)
+    if x.dims != y.dims; return false; end
+    for i=1:numel(x); if x[i] != y[i]; return false; end; end
+    return true
+end
+
+function notequal(x::Array, y::Array)
+    if x.dims != y.dims; return false; end
+    for i=1:numel(x); if x[i] == y[i]; return false; end; end
+    return true
+end
 
 function scan{T}(op, v::Vector{T})
     n = length(v)
