@@ -490,8 +490,8 @@ function cat(catdim::Int, A::Array...)
     cat_ranges = cumsum(1, cat_ranges...)
     for k=1:nargs
         cat_one = ntuple(ndimsC, i->(i != catdim ? 
-                                     Range(1,1,dimsC[i]) :
-                                     Range(cat_ranges[k],1,cat_ranges[k+1]-1) ))
+                                     Range1(1,dimsC[i]) :
+                                     Range1(cat_ranges[k],cat_ranges[k+1]-1) ))
         C[cat_one...] = A[k]
     end
     return C
@@ -518,12 +518,12 @@ function reduce{T}(op, A::Array{T}, region)
 
     function reduce_one(ind)
         sliceA = ntuple(ndimsA, i->(contains(region, i) ?
-                                    Range(1,1,dimsA[i]) :
+                                    Range1(1,dimsA[i]) :
                                     ind[i]))
         R[ind...] = reduce(op, A[sliceA...])
     end
 
-    cartesian_map(reduce_one, ntuple(ndimsA, i->(Range(1,1,dimsR[i]))) )
+    cartesian_map(reduce_one, ntuple(ndimsA, i->(Range1(1,dimsR[i]))) )
     return R
 end
 
@@ -632,7 +632,7 @@ function permute{T}(A::Array{T}, perm)
         count += 1
     end
 
-    cartesian_map(permute_one, ntuple(ndimsA, i->(Range(1,1,dimsP[i]))) )
+    cartesian_map(permute_one, ntuple(ndimsA, i->(Range1(1,dimsP[i]))) )
     return P
 end
 
@@ -648,7 +648,7 @@ function ipermute{T}(A::Array{T}, perm)
         count += 1
     end
 
-    cartesian_map(permute_one, ntuple(ndimsA, i->(Range(1,1,dimsP[i]))) )
+    cartesian_map(permute_one, ntuple(ndimsA, i->(Range1(1,dimsP[i]))) )
     return P
 end
 
