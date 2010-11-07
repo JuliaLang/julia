@@ -613,10 +613,19 @@ end
 
 reverse(v::Vector) = [ v[length(v)-i+1] | i=1:length(v) ]
 
-transpose(x::Matrix)  = [ x[j,i]       | i=1:size(x,2), j=1:size(x,1) ]
-ctranspose(x::Matrix) = [ conj(x[j,i]) | i=1:size(x,2), j=1:size(x,1) ]
 transpose(x::Vector)  = [ x[j]         | i=1, j=1:size(x,1) ]
 ctranspose(x::Vector) = [ conj(x[j])   | i=1, j=1:size(x,1) ]
+
+#transpose(x::Matrix)  = [ x[j,i]       | i=1:size(x,2), j=1:size(x,1) ]
+ctranspose(x::Matrix) = [ conj(x[j,i]) | i=1:size(x,2), j=1:size(x,1) ]
+
+function transpose{T}(a::Matrix{T})
+    b = Array(T, a.dims[2], a.dims[1])
+    for i=1:a.dims[1], j=1:a.dims[2]
+        b[j,i] = a[i,j]
+    end
+    return b
+end
 
 function permute{T}(A::Array{T}, perm)
     dimsA = A.dims
