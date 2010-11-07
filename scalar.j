@@ -36,8 +36,8 @@ max(x::Real, y::Real) = x > y ? x : y
 min(x::Real, y::Real) = x < y ? x : y
 sum(x::Number, y::Number) = x + y
 prod(x::Number, y::Number) = x * y
-all{S,T}(x::Scalar{S}, y::Scalar{T}) = (x != zero(S)) && (y != zero(T)) ? true : false
-any{S,T}(x::Scalar{S}, y::Scalar{T}) = (x != zero(S)) || (y != zero(T)) ? true : false
+all(x::Bool, y::Bool) = x && y ? true : false
+any(x::Bool, y::Bool) = x || y ? true : false
 
 start(a::Real) = a
 next(a::Real, i) = (a, a+1)
