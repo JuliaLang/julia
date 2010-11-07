@@ -12,9 +12,6 @@ function accumtuple(t::Tuple, r, i, step, elts...)
     end
     accumtuple(t, r, i+step, step, elts..., t[i])
 end
-ref(t::Tuple, r::RangeFrom) = t[Range(r.start,r.step,length(t))]
-ref(t::Tuple, r::RangeTo)   = t[Range(1,r.step,r.stop)]
-ref(t::Tuple, r::RangeBy)   = t[Range(1,r.step,length(t))]
 
 ## iterating ##
 

@@ -4,8 +4,8 @@
 
 typealias Vector{T} Tensor{T,1}
 typealias Matrix{T} Tensor{T,2}
-typealias Indices{T} Union(Range,Range1,RangeFrom,RangeBy,RangeTo,Vector{T})
-typealias Indices2{T} Union(Index,Range,Range1,RangeFrom,RangeBy,RangeTo,Vector{T})
+typealias Indices{T} Union(Range,Range1,Vector{T})
+typealias Indices2{T} Union(Index,Range,Range1,Vector{T})
 
 ## Basic functions ##
 size(a::Array) = a.dims
@@ -207,18 +207,12 @@ ref(a::Array{Any,1}, i::Index) = arrayref(a,i)
 
 ref(a::Matrix, i::Index, j::Index) = arrayref(a, (j-1)*a.dims[1] + i)
 
-jl_fill_endpts(A,n,R::RangeBy)   = Range(1,R.step,size(A,n))
-jl_fill_endpts(A,n,R::RangeFrom) = Range(R.start,R.step,size(A,n))
-jl_fill_endpts(A,n,R::RangeTo)   = Range(1,R.step,R.stop)
-jl_fill_endpts(A,n,R)            = R
+ref(A::Vector,I::Indices) = [ A[i] | i = I ]
+ref(A::Array{Any,1},I::Indices) = { A[i] | i = I }
 
-ref(A::Vector,I::Indices) = [ A[i] | i = jl_fill_endpts(A,1,I) ]
-ref(A::Array{Any,1},I::Indices) = { A[i] | i = jl_fill_endpts(A,1,I) }
-
-ref(A::Matrix,I::Indices,J::Indices) = [ A[i,j] | i = jl_fill_endpts(A,1,I),
-                                                  j = jl_fill_endpts(A,2,J) ]
-ref(A::Matrix,i::Index,J::Indices) = [ A[i,j] | j = jl_fill_endpts(A,2,J) ]
-ref(A::Matrix,I::Indices,j::Index) = [ A[i,j] | i = jl_fill_endpts(A,1,I) ]
+ref(A::Matrix,I::Indices,J::Indices) = [ A[i,j] | i = I, j = J ]
+ref(A::Matrix,i::Index,J::Indices) = [ A[i,j] | j = J ]
+ref(A::Matrix,I::Indices,j::Index) = [ A[i,j] | i = I ]
 
 function ref(A::Array, I::Index...)
     dims = A.dims
@@ -247,7 +241,7 @@ function ref_ND{T}(A::Array{T}, I::Indices2...)
         strides[d] = strides[d-1] * dims[d-1]
     end
 
-    I_with_endpts = ntuple(length(I), i->jl_fill_endpts(A,i,I[i]))
+    I_with_endpts = I  #ntuple(length(I), i->jl_fill_endpts(A,i,I[i]))
     X = zeros(T, map(length, I_with_endpts))
 
     storeind = 1
@@ -273,7 +267,6 @@ assign{T}(A::Array{T}, x, i::Index) = arrayset(A,i,convert(T, x))
 assign(A::Array{Any}, x, i::Index) = arrayset(A,i,x)
 
 function assign{T}(A::Vector{T}, x::Scalar, I::Indices)
-    I = jl_fill_endpts(A, 1, I)
     for i=I
         A[i] = x
     end
@@ -281,7 +274,6 @@ function assign{T}(A::Vector{T}, x::Scalar, I::Indices)
 end
 
 function assign{T}(A::Vector{T}, X::Vector, I::Indices)
-    I = jl_fill_endpts(A, 1, I)
     count = 1
     for i=I
         A[i] = X[count]
@@ -294,8 +286,6 @@ assign{T}(A::Matrix{T}, x::Scalar, i::Index, j::Index) =
     A[(j-1)*A.dims[1] + i] = x
 
 function assign{T}(A::Matrix{T}, x::Scalar, I::Indices2, J::Indices2)
-    I = jl_fill_endpts(A, 1, I)
-    J = jl_fill_endpts(A, 2, J)
     for i=I, j=J
         A[i,j] = x
     end
@@ -303,8 +293,6 @@ function assign{T}(A::Matrix{T}, x::Scalar, I::Indices2, J::Indices2)
 end
 
 function assign{T}(A::Matrix{T}, X::Matrix, I::Indices2, J::Indices2)
-    I = jl_fill_endpts(A, 1, I)
-    J = jl_fill_endpts(A, 2, J)
     count = 1
     for i=I, j=J
         A[i,j] = X[count]
@@ -344,7 +332,7 @@ function jl_assign_ND_all{T}(A::Array{T}, X, I::Indices2...)
         strides[d] = strides[d-1] * dims[d-1]
     end
 
-    I_with_endpts = ntuple(length(I), i->jl_fill_endpts(A,i,I[i]))
+    I_with_endpts = I #ntuple(length(I), i->jl_fill_endpts(A,i,I[i]))
 
     if isa(X, Scalar)
         function store_one(ind)

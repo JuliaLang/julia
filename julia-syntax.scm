@@ -100,10 +100,12 @@
 		 ,(expand-compare-chain (cddr e)))))
       `(call ,(cadr e) ,(car e) ,(caddr e))))
 
+(define (end-val a n) `(call (top size) ,a ,n))
+
 ; replace end inside ex with (call (top size) a n)
 ; affects only the closest ref expression, so doesn't go inside nested refs
 (define (replace-end ex a n)
-  (cond ((eq? ex 'end)                `(call (top size) ,a ,n))
+  (cond ((eq? ex 'end)                (end-val a n))
 	((or (atom? ex) (quoted? ex)) ex)
 	((eq? (car ex) 'ref)          ex)
 	(else
@@ -124,18 +126,39 @@
 	(loop (cdr lst) (+ n 1)
 	      (cons
 	       (let ((x (replace-end (car lst) a n)))
-		 (cond ((eq? x ':) '(: (: 1 :)))
+		 (cond ((eq? x ':) `(call (top Range1) 1 ,(end-val a n)))
 		       ((and (pair? x)
-			     (eq? (car x) ':)
-			     (length= x 3)
-			     (not (eq? (caddr x) ':)))
-			`(call (top Range1) ,(cadr x) ,(caddr x)))
-		       ((and (pair? x)
-			     (eq? (car x) ':)
-			     (length= x 4)
-			     (not (eq? (cadddr x) ':)))
-			`(call (top Range) ,@(cdr x)))
-		       (else       x)))
+			     (eq? (car x) ':))
+			(cond
+			 ((length= x 2)
+			  (cond
+			   ((and (length= (cadr x) 3)
+				 (eq? (caadr x) ':)
+				 (eq? (caddr (cadr x)) ':))
+			    ;; (: (: a :)) :a:
+			    `(call (top Range) 1 ,(cadadr x) ,(end-val a n)))
+			   ((and (length= (cadr x) 3)
+				 (eq? (caadr x) ':))
+			    ;; (: (: a b)) :a:b
+			    `(call (top Range) 1 ,@(cdadr x)))
+			   (else
+			    ;; (: a) :a
+			    `(call (top Range1) 1 ,(cadr x)))))
+			 ((length= x 3)
+			  (if (eq? (caddr x) ':)
+			      ;; (: a :) a:
+			      `(call (top Range1) ,(cadr x) ,(end-val a n))
+			      ;; (: a b)
+			      `(call (top Range1) ,(cadr x) ,(caddr x))))
+			 ((length= x 4)
+			  (if (eq? (cadddr x) ':)
+			      ;; (: a b :) a:b:
+			      `(call (top Range) ,(cadr x) ,(caddr x)
+				     ,(end-val a n))
+			      ;; (: a b c)
+			      `(call (top Range) ,@(cdr x))))
+			 (else x)))
+		       (else x)))
 	       ret)))))
 
 (define (function-expr argl body)
@@ -589,16 +612,16 @@
    (pattern-lambda (>>>= a b)   (expand-update-operator '>>> a b))
 
    ;; colon
-   (pattern-lambda (: a (-/ :))
-		   `(call (top RangeFrom) ,a 1))
-   (pattern-lambda (: a b (-/ :))
-		   `(call (top RangeFrom) ,a ,b))
-   (pattern-lambda (: (: b (-/ :)))
-		   `(call (top RangeBy) ,b))
-   (pattern-lambda (: (: b c))
-		   `(call (top RangeTo) ,b ,c))
-   (pattern-lambda (: c)
-		   `(call (top RangeTo) 1 ,c))
+   ;;(pattern-lambda (: a (-/ :))     `(call (top RangeFrom) ,a 1))
+   ;;(pattern-lambda (: a b (-/ :))   `(call (top RangeFrom) ,a ,b))
+   ;;(pattern-lambda (: (: b (-/ :))) `(call (top RangeBy) ,b))
+   ;;(pattern-lambda (: (: b c))      `(call (top RangeTo) ,b ,c))
+   ;;(pattern-lambda (: c)            `(call (top RangeTo) 1 ,c))
+   (pattern-lambda (: a (-/ :))     (error "invalid ':' outside indexing"))
+   (pattern-lambda (: a b (-/ :))   (error "invalid ':' outside indexing"))
+   (pattern-lambda (: (: b (-/ :))) (error "invalid ':' outside indexing"))
+   (pattern-lambda (: (: b c))      (error "invalid ':' outside indexing"))
+   (pattern-lambda (: c)            (error "invalid ':' outside indexing"))
 
    (pattern-lambda
     (: a b (-? c))

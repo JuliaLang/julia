@@ -125,15 +125,6 @@ length(s::SubString) = s.length
 # that may require additional string interfaces
 
 ref(s::String, r::Range1{Index})    = SubString(s, r.start, r.stop)
-ref(s::String, r::RangeFrom{Index}) = SubString(s, r.start, length(s))
-ref(s::String, r::RangeTo{Index})   = SubString(s, 1,       r.stop)
-
-function ref(s::String, r::RangeBy{Index})
-    if r.step != 1
-        error("only unit steps supported for string slices")
-    end
-    return s
-end
 
 ## efficient representation of repeated strings ##
 
