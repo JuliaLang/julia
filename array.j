@@ -38,57 +38,61 @@ function array(t::Tuple)
     return A
 end
 
-function zeros(T::Type, dims::Size...)
-    a = Array(T, dims...)
-    z = zero(T)
-    for i=1:numel(a); a[i] = z; end
-    return a
+function jl_set_all{T}(A::Array{T}, x)
+    for i=1:numel(A)
+        A[i] = x
+    end
+    return A
 end
 
+zeros(T::Type, dims::Size...) = jl_set_all(Array(T, dims...), zero(T))
 zeros(dims::Size...) = zeros(Float64, dims...)
 zeros(T::Type, dims::Tuple) = zeros(T, dims...)
 zeros(dims::Tuple) = zeros(dims...)
 
-function ones(T::Type, dims::Size...)
-    a = Array(T, dims...)
-    o = one(T)
-    for i=1:numel(a); a[i] = o; end
-    return a
-end
-
+ones(T::Type, dims::Size...) = jl_set_all(Array(T, dims...), one(T))
 ones(dims::Size...) = ones(Float64, dims...)
 ones(T::Type, dims::Tuple) = ones (T, dims...)
 ones(dims::Tuple) = ones(dims...)
 
-function rand(dims::Size...)
-    a = Array(Float64, dims...)
-    for i=1:numel(a); a[i] = rand(); end
+function jl_set_rand{T}(a::Array{T})
+    for i=1:numel(a)
+        a[i] = rand()
+    end
     return a
 end
 
+rand(dims::Size...) = jl_set_rand(Array(Float64, dims...))
 rand(dims::Tuple) = rand(dims...)
 
-function randf(dims::Size...)
-    a = Array(Float32, dims...)
-    for i=1:numel(a); a[i] = randf(); end
+function jl_set_randf{T}(a::Array{T})
+    for i=1:numel(a)
+        a[i] = randf()
+    end
     return a
 end
 
+randf(dims::Size...) = jl_set_randf(Array(Float32, dims...))
 randf(dims::Tuple) = randf(dims...)
 
-function randn(dims::Size...)
-    a = Array(Float64, dims...)
-    for i=1:numel(a); a[i] = randn(); end
+function jl_set_randn{T}(a::Array{T})
+    for i=1:numel(a)
+        a[i] = randn()
+    end
     return a
 end
 
+randn(dims::Size...) = jl_set_randn(Array(Float64, dims...))
 randn(dims::Tuple) = randn(dims...)
 
-function copy{T}(a::Array{T})
-    b = Array(T, size(a))
-    for i=1:numel(a); b[i] = copy(a[i]); end
+function jl_copy(a::Array, b::Array)
+    for i=1:numel(a)
+        b[i] = copy(a[i])
+    end
     return b
 end
+
+copy{T}(a::Array{T}) = jl_copy(a, Array(T, size(a)...))
 
 eye(n::Size) = eye(n, n)
 eye(m::Size, n::Size) = (a = zeros(m,n);
