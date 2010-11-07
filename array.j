@@ -522,8 +522,8 @@ max{T}(A::Array{T}, region::Union(Int, Tuple)) = reduce(T, max, A, region)
 min{T}(A::Array{T}, region::Union(Int, Tuple)) = reduce(T, min, A, region)
 sum{T}(A::Array{T}, region::Union(Int, Tuple)) = reduce(T, +, A, region)
 prod{T}(A::Array{T}, region::Union(Int, Tuple)) = reduce(T, .*, A, region)
-all{T}(A::Array{T}, region::Union(Int, Tuple)) = reduce(Bool, all, A, region)
-any{T}(A::Array{T}, region::Union(Int, Tuple)) = reduce(Bool, any, A, region)
+all(A::Array{Bool}, region::Union(Int, Tuple)) = reduce(Bool, all, A, region)
+any(A::Array{Bool}, region::Union(Int, Tuple)) = reduce(Bool, any, A, region)
 
 function isequal(x::Array, y::Array)
     if x.dims != y.dims
