@@ -62,14 +62,14 @@ end
 
 function ref(l::Dequeue, i::Index)
     if i > l.size
-        error("out of bounds")
+        error(BoundsError)
     end
     return l.data[i+l.offset]
 end
 
 function assign(l::Dequeue, elt, i::Index)
     if i > l.size
-        error("out of bounds")
+        error(BoundsError)
     end
     l.data[i+l.offset] = elt
     l

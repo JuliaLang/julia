@@ -521,7 +521,6 @@ issues 6/21/10
 * make pmap_d work
 * bitstype syntax
 * boot.j
-- make optimized arrayset, arrayref work on all Arrays
 - calling convention optimization, w/ wrapper funcs for generic calling
 - intrinsic calls from command line (use compiler)
 ? new for loop, comprehension, reduction formulation
@@ -568,3 +567,6 @@ boehm:     7.8s, 50236  35m, 78320  63m, 8376416
 -------------------------------------------------------------------------------
 
 issues 11/6/10
+
+- make optimized arrayset, arrayref work on all Arrays
+- faster GC stack roots
