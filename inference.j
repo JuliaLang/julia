@@ -336,11 +336,13 @@ function abstract_call_gf(f, fargs, argtypes, e)
     ctr = 0
     while !is(x,())
         ctr += 1
-        # don't consider more than 3 methods. this trades off between
+        # don't consider more than N methods. this trades off between
         # compiler performance and generated code performance.
         # typically, considering many methods means spending lots of time
         # obtaining poor type information.
-        if ctr > 3
+        # It is important for N to be >= the number of methods in the error()
+        # function, so we can still know that error() is always None.
+        if ctr > 4
             rettype = Any
             break
         end
