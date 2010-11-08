@@ -86,15 +86,15 @@ assert(b[1]==2. && b[2]==2. && b[3]==2. && b[4]==2.)
 assert(length((1,)) == 1)
 assert(length((1,2)) == 2)
 
-assertall(1+[1,2,3] == [2,3,4])
-assertall([1,2,3]+1 == [2,3,4])
-assertall(1-[1,2,3] == [0,-1,-2])
-assertall([1,2,3]-1 == [0,1,2])
+assert(1+[1,2,3] == [2,3,4])
+assert([1,2,3]+1 == [2,3,4])
+assert(1-[1,2,3] == [0,-1,-2])
+assert([1,2,3]-1 == [0,1,2])
 
-assertall(5*[1,2,3] == [5,10,15])
-assertall([1,2,3]*5 == [5,10,15])
-assertall(1/[1,2,5] == [1.0,0.5,0.2])
-assertall([1,2,3]/5 == [0.2,0.4,0.6])
+assert(5*[1,2,3] == [5,10,15])
+assert([1,2,3]*5 == [5,10,15])
+assert(1/[1,2,5] == [1.0,0.5,0.2])
+assert([1,2,3]/5 == [0.2,0.4,0.6])
 
 a = ones(2,2)
 a[1,1] = 1
@@ -622,8 +622,8 @@ assert(length(Range(2.,.2,1.)) == 0)
 X = [ i+2j | i=1:5, j=1:5 ]
 assert(X[2,3] == 8)
 assert(X[4,5] == 14)
-assertall(ones(2,3) * ones(2,3)' == [3. 3., 3. 3.])
-assertall([ [1,2] | i=1:2, : ] == [1 2, 1 2])
+assert(ones(2,3) * ones(2,3)' == [3. 3., 3. 3.])
+assert([ [1,2] | i=1:2, : ] == [1 2, 1 2])
 # where element type is a Union. try to confuse type inference.
 foo32_64(x) = (x<2) ? int32(x) : int64(x)
 boo32_64() = [ foo32_64(i) | i=1:2 ]
@@ -632,8 +632,8 @@ let a36 = boo32_64()
 end
 
 # concatenation
-assertall( [ ones(2,2)  2*ones(2,1) ] == [ 1 1 2, 1 1 2 ] )
-assertall( [ ones(2,2), 2*ones(1,2) ] == [ 1 1, 1 1, 2 2 ] )
+assert([ones(2,2)  2*ones(2,1)] == [1 1 2, 1 1 2])
+assert([ones(2,2), 2*ones(1,2)] == [1 1, 1 1, 2 2])
 
 # "end"
 X = [ i+2j | i=1:5, j=1:5 ]
