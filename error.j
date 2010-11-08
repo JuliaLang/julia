@@ -1,3 +1,5 @@
+error(e::Exception) = throw(e)
+error{E<:Exception}(::Type{E}) = throw(E())
 error(s::Union(Latin1String,UTF8String)) = throw(ErrorException(s))
 error(s...) = error(print_to_string(print, s...))
 assert(c) = c ? true : error("Assertion failed.")
