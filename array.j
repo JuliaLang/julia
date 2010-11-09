@@ -4,8 +4,7 @@
 
 typealias Vector{T} Tensor{T,1}
 typealias Matrix{T} Tensor{T,2}
-typealias Indices{T} Union(Range,Range1,Vector{T})
-typealias Indices2{T} Union(Index,Range,Range1,Vector{T})
+typealias Indices{T} Union(Index,Vector{T})
 
 ## Basic functions ##
 size(a::Array) = a.dims
@@ -208,14 +207,11 @@ ref(a::Array, i::Index) = arrayref(a,i)
 ref{T}(a::Array{T,1}, i::Index) = arrayref(a,i)
 ref(a::Array{Any,1}, i::Index) = arrayref(a,i)
 
-ref(a::Matrix, i::Index, j::Index) = arrayref(a, (j-1)*a.dims[1] + i)
-
-ref(A::Vector,I::Indices) = [ A[i] | i = I ]
+ref{T}(A::Array{T,1},I::Indices) = [ A[i] | i = I ]
 ref(A::Array{Any,1},I::Indices) = { A[i] | i = I }
 
-ref(A::Matrix,I::Indices,J::Indices) = [ A[i,j] | i = I, j = J ]
-ref(A::Matrix,i::Index,J::Indices) = [ A[i,j] | j = J ]
-ref(A::Matrix,I::Indices,j::Index) = [ A[i,j] | i = I ]
+ref{T}(a::Array{T,2}, i::Index, j::Index) = arrayref(a, (j-1)*a.dims[1] + i)
+ref{T}(A::Array{T,2}, I::Indices, J::Indices) = [ A[i,j] | i = I, j = J ]
 
 function ref(A::Array, I::Index...)
     dims = A.dims
@@ -231,21 +227,17 @@ function ref(A::Array, I::Index...)
     return A[index]
 end
 
-ref(A::Array, I::Indices2, J::Indices2, K::Indices2...) =
-    ref_ND(A, I, J, K...)
-
-function ref_ND{T}(A::Array{T}, I::Indices2...)
+function ref{T}(A::Array{T}, I::Indices...)
     dims = A.dims
     ndimsA = length(dims)
 
-    strides = zeros(Size, ndimsA)
+    strides = Array(Size, ndimsA)
     strides[1] = 1
     for d=2:ndimsA
         strides[d] = strides[d-1] * dims[d-1]
     end
 
-    I_with_endpts = I  #ntuple(length(I), i->jl_fill_endpts(A,i,I[i]))
-    X = zeros(T, map(length, I_with_endpts))
+    X = Array(T, map(length, I))
 
     storeind = 1
     function store(ind)
@@ -257,7 +249,7 @@ function ref_ND{T}(A::Array{T}, I::Indices2...)
         storeind += 1
     end
 
-    cartesian_map(store, I_with_endpts)
+    cartesian_map(store, I)
     return X
 end
 
@@ -269,14 +261,14 @@ assign{T}(A::Array{T}, x, i::Index) = arrayset(A,i,convert(T, x))
 
 assign(A::Array{Any}, x, i::Index) = arrayset(A,i,x)
 
-function assign{T}(A::Vector{T}, x::Scalar, I::Indices)
+function assign(A::Vector, x::Scalar, I::Indices)
     for i=I
         A[i] = x
     end
     return A
 end
 
-function assign{T}(A::Vector{T}, X::Vector, I::Indices)
+function assign(A::Vector, X::Vector, I::Indices)
     count = 1
     for i=I
         A[i] = X[count]
@@ -285,17 +277,17 @@ function assign{T}(A::Vector{T}, X::Vector, I::Indices)
     return A
 end
 
-assign{T}(A::Matrix{T}, x::Scalar, i::Index, j::Index) = 
+assign(A::Matrix, x::Scalar, i::Index, j::Index) = 
     A[(j-1)*A.dims[1] + i] = x
 
-function assign{T}(A::Matrix{T}, x::Scalar, I::Indices2, J::Indices2)
+function assign(A::Matrix, x::Scalar, I::Indices, J::Indices)
     for i=I, j=J
         A[i,j] = x
     end
     return A
 end
 
-function assign{T}(A::Matrix{T}, X::Matrix, I::Indices2, J::Indices2)
+function assign(A::Matrix, X::Array, I::Indices, J::Indices)
     count = 1
     for i=I, j=J
         A[i,j] = X[count]
@@ -304,10 +296,7 @@ function assign{T}(A::Matrix{T}, X::Matrix, I::Indices2, J::Indices2)
     return A
 end
 
-assign(A::Array, x::Scalar, I::Index, J::Index, K::Index...) = 
-   jl_assign_ND_scalar(A, x, I, J, K...)
-
-function jl_assign_ND_scalar{T}(A::Array{T}, x::Scalar, I::Index...)
+function assign(A::Array, x::Scalar, I::Index...)
     dims = A.dims
     ndims = length(I)
 
@@ -322,45 +311,49 @@ function jl_assign_ND_scalar{T}(A::Array{T}, x::Scalar, I::Index...)
     return A
 end
 
-assign(A::Array, X, I::Indices2, J::Indices2, K::Indices2...) = 
-   jl_assign_ND_all(A, X, I, J, K...)
-
-function jl_assign_ND_all{T}(A::Array{T}, X, I::Indices2...)
+function assign(A::Array, x::Scalar, I::Indices...)
     dims = A.dims
     ndimsA = length(dims)
 
-    strides = zeros(Size, ndimsA)
+    strides = Array(Size, ndimsA)
     strides[1] = 1
     for d=2:ndimsA
         strides[d] = strides[d-1] * dims[d-1]
     end
 
-    I_with_endpts = I #ntuple(length(I), i->jl_fill_endpts(A,i,I[i]))
+    function store_one(ind)
+        index = ind[1]
+        for d=2:ndimsA
+            index += (ind[d]-1) * strides[d]
+        end
+        A[index] = X
+    end
+        
+    cartesian_map(store_one, I)
+    return A
+end
 
-    if isa(X, Scalar)
-        function store_one(ind)
-            index = ind[1]
-            for d=2:ndimsA
-                index += (ind[d]-1) * strides[d]
-            end
-            A[index] = X
-        end
-        
-        cartesian_map(store_one, I_with_endpts)
-    else
-        refind = 1
-        function store_all(ind)
-            index = ind[1]
-            for d=2:ndimsA
-                index += (ind[d]-1) * strides[d]
-            end
-            A[index] = X[refind]
-            refind += 1
-        end
-        
-        cartesian_map(store_all, I_with_endpts)
+function assign(A::Array, X::Array, I::Indices...)
+    dims = A.dims
+    ndimsA = length(dims)
+
+    strides = Array(Size, ndimsA)
+    strides[1] = 1
+    for d=2:ndimsA
+        strides[d] = strides[d-1] * dims[d-1]
     end
 
+    refind = 1
+    function store_all(ind)
+        index = ind[1]
+        for d=2:ndimsA
+            index += (ind[d]-1) * strides[d]
+        end
+        A[index] = X[refind]
+        refind += 1
+    end
+    
+    cartesian_map(store_all, I)
     return A
 end
 
@@ -671,7 +664,7 @@ repmat(a::Matrix, m::Size, n::Size) = reshape([ a[i,j] | i=1:size(a,1),
 accumarray(I::Vector, J::Vector, V) = accumarray (I, J, V, max(I), max(J))
 
 function accumarray{T}(I::Vector, J::Vector, V::Scalar{T}, m::Size, n::Size)
-    A = zeros(T, m, n)
+    A = Array(T, m, n)
     for k=1:length(I)
         A[I[k], J[k]] += V
     end
@@ -679,7 +672,7 @@ function accumarray{T}(I::Vector, J::Vector, V::Scalar{T}, m::Size, n::Size)
 end
 
 function accumarray{T}(I::Vector, J::Vector, V::Vector{T}, m::Size, n::Size)
-    A = zeros(T, m, n)
+    A = Array(T, m, n)
     for k=1:length(I)
         A[I[k], J[k]] += V[k]
     end
@@ -717,7 +710,7 @@ end
 function find{T}(A::Array{T})
     ndimsA = ndims(A)
     nnzA = nnz(A)
-    I = ntuple(ndimsA, x->zeros(Size, nnzA))
+    I = ntuple(ndimsA, x->Array(Size, nnzA))
 
     count = 1
     function find_one(ind)

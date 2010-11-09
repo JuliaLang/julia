@@ -1,10 +1,10 @@
-struct Range{T}
+struct Range{T} <: Tensor{T,1}
     start::T
     step::T
     stop::T
 end
 
-struct Range1{T}
+struct Range1{T} <: Tensor{T,1}
     start::T
     stop::T
 end
