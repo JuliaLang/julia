@@ -311,6 +311,28 @@ function assign(A::Array, x::Scalar, I::Index...)
     return A
 end
 
+function assign(A::Array, x::Scalar, I::Indices...)
+    dims = A.dims
+    ndimsA = length(dims)
+
+    strides = Array(Size, ndimsA)
+    strides[1] = 1
+    for d=2:ndimsA
+        strides[d] = strides[d-1] * dims[d-1]
+    end
+
+    function store_one(ind)
+        index = ind[1]
+        for d=2:ndimsA
+            index += (ind[d]-1) * strides[d]
+        end
+        A[index] = X
+    end
+        
+    cartesian_map(store_one, I)
+    return A
+end
+
 function assign(A::Array, X::Array, I::Indices...)
     dims = A.dims
     ndimsA = length(dims)
@@ -321,30 +343,17 @@ function assign(A::Array, X::Array, I::Indices...)
         strides[d] = strides[d-1] * dims[d-1]
     end
 
-    if isa(X, Scalar)
-        function store_one(ind)
-            index = ind[1]
-            for d=2:ndimsA
-                index += (ind[d]-1) * strides[d]
-            end
-            A[index] = X
+    refind = 1
+    function store_all(ind)
+        index = ind[1]
+        for d=2:ndimsA
+            index += (ind[d]-1) * strides[d]
         end
-        
-        cartesian_map(store_one, I)
-    else
-        refind = 1
-        function store_all(ind)
-            index = ind[1]
-            for d=2:ndimsA
-                index += (ind[d]-1) * strides[d]
-            end
-            A[index] = X[refind]
-            refind += 1
-        end
-        
-        cartesian_map(store_all, I)
+        A[index] = X[refind]
+        refind += 1
     end
-
+    
+    cartesian_map(store_all, I)
     return A
 end
 
