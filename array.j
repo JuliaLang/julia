@@ -50,24 +50,15 @@ function fill(A::Array, f::Function)
     return A
 end
 
-zeros(T::Type, dims::Tuple) = fill(Array(T, dims), zero(T))
-zeros(T::Type, dims::Size...) = zeros(T, dims)
-zeros(dims::Tuple) = zeros(Float64, dims)
-zeros(dims::Size...) = zeros(dims)
+zeros(T::Type, dims::Size...) = fill(Array(T, dims), zero(T))
+zeros(dims::Size...) = zeros(Float64, dims...)
 
-ones(T::Type, dims::Tuple) = fill(Array(T, dims), one(T))
-ones(T::Type, dims::Size...) = ones(T, dims)
-ones(dims::Tuple) = ones(Float64, dims)
-ones(dims::Size...) = ones(dims)
+ones(T::Type, dims::Size...) = fill(Array(T, dims), one(T))
+ones(dims::Size...) = ones(Float64, dims...)
 
-rand(dims::Tuple) = fill(Array(Float64, dims), rand)
-rand(dims::Size...) = rand(dims)
-
-randf(dims::Tuple) = fill(Array(Float32, dims), randf)
-randf(dims::Size...) = randf(dims)
-
-randn(dims::Tuple) = fill(Array(Float64, dims), randn)
-randn(dims::Size...) = randn(dims)
+rand(dims::Size...)  = fill(Array(Float64, dims), rand)
+randf(dims::Size...) = fill(Array(Float32, dims), randf)
+randn(dims::Size...) = fill(Array(Float64, dims), randn)
 
 function copy_to(dest::Array, src::Array)
     for i=1:numel(src)
@@ -103,9 +94,7 @@ linspace(start::Real, stop::Real) =
 ## Unary operators ##
 
 (-)(x::Array) = map(-, x)
-
 (!)(x::Array{Bool}) = map(!, x)
-
 (~)(x::Array{Bool}) = map(~, x)
 
 conj{T <: Number}(x::Array{T}) = x
@@ -712,7 +701,6 @@ function find{T}(A::Array{T})
 end
 
 sub2ind(dims, i::Index) = i
-
 sub2ind(dims, i::Index, j::Index) = (j-1)*dims[1] + i
 
 function sub2ind(dims, I::Index...)
