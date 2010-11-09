@@ -4,7 +4,7 @@
 
 typealias Vector{T} Tensor{T,1}
 typealias Matrix{T} Tensor{T,2}
-typealias Indices{T} Union(Index,Vector{T})
+typealias Indices Union(Index, Vector{Index})
 
 ## Basic functions ##
 size(a::Array) = a.dims
