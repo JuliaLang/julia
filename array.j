@@ -36,51 +36,37 @@ function array(t::Tuple)
     return A
 end
 
-function fill{T}(A::Array{T}, x)
-    for i=1:numel(A)
+function fill{T}(A::Array{T}, x::T)
+    for i = 1:numel(A)
         A[i] = x
     end
     return A
 end
 
+function fill(A::Array, f::Function)
+    for i = 1:numel(A)
+        A[i] = f()
+    end
+    return A
+end
+
 zeros(T::Type, dims::Tuple) = fill(Array(T, dims), zero(T))
-zeros(dims::Tuple) = zeros(Float64, dims)
 zeros(T::Type, dims::Size...) = zeros(T, dims)
+zeros(dims::Tuple) = zeros(Float64, dims)
 zeros(dims::Size...) = zeros(dims)
 
 ones(T::Type, dims::Tuple) = fill(Array(T, dims), one(T))
-ones(dims::Tuple) = ones(Float64, dims)
 ones(T::Type, dims::Size...) = ones(T, dims)
+ones(dims::Tuple) = ones(Float64, dims)
 ones(dims::Size...) = ones(dims)
 
-function fill_rand{T}(a::Array{T})
-    for i=1:numel(a)
-        a[i] = rand()
-    end
-    return a
-end
-
-rand(dims::Tuple) = fill_rand(Array(Float64, dims))
+rand(dims::Tuple) = fill(Array(Float64, dims), rand)
 rand(dims::Size...) = rand(dims)
 
-function fill_randf{T}(a::Array{T})
-    for i=1:numel(a)
-        a[i] = randf()
-    end
-    return a
-end
-
-randf(dims::Tuple) = fill_randf(Array(Float32, dims))
+randf(dims::Tuple) = fill(Array(Float32, dims), randf)
 randf(dims::Size...) = randf(dims)
 
-function fill_randn{T}(a::Array{T})
-    for i=1:numel(a)
-        a[i] = randn()
-    end
-    return a
-end
-
-randn(dims::Tuple) = fill_randn(Array(Float64, dims))
+randn(dims::Tuple) = fill(Array(Float64, dims), randn)
 randn(dims::Size...) = randn(dims)
 
 function copy_to(dest::Array, src::Array)
@@ -256,9 +242,7 @@ end
 ## Indexing: assign ##
 
 assign(t::Tensor, x, r::Real...) = (t[map(x->convert(Int32,round(x)),r)...] = x)
-
 assign{T}(A::Array{T}, x, i::Index) = arrayset(A,i,convert(T, x))
-
 assign(A::Array{Any}, x, i::Index) = arrayset(A,i,x)
 
 function assign(A::Vector, x::Scalar, I::Indices)
