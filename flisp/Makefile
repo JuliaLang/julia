@@ -17,7 +17,7 @@ FLAGS = -falign-functions -Wall -Wno-strict-aliasing -I$(LLTDIR) $(CFLAGS) \
 	$(CONFIG) -DUSE_COMPUTED_GOTO $(HFILEDIRS:%=-I%) $(LIBDIRS:%=-L%) \
 	-fvisibility=hidden
 LIBFILES = $(LLT)
-LIBS = $(LIBFILES) -lm -lgc
+LIBS = $(LIBFILES) -lm $(GCLIBS)
 
 DEBUGFLAGS = -g -ggdb3 -DDEBUG $(FLAGS)
 SHIPFLAGS = -O3 -DNDEBUG $(FLAGS)
