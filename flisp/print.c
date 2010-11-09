@@ -356,13 +356,23 @@ static void cvalue_print(ios_t *f, value_t v);
 static int print_circle_prefix(ios_t *f, value_t v)
 {
     value_t label;
+    char buf[64];
+    char *str;
     if ((label=(value_t)ptrhash_get(&printconses, (void*)v)) !=
         (value_t)HT_NOTFOUND) {
         if (!ismarked(v)) {
-            HPOS+=ios_printf(f, "#%ld#", numval(label));
+            //HPOS+=ios_printf(f, "#%ld#", numval(label));
+            outc('#', f);
+            str = uint2str(buf, sizeof(buf)-1, numval(label), 10);
+            outs(str, f);
+            outc('#', f);
             return 1;
         }
-        HPOS+=ios_printf(f, "#%ld=", numval(label));
+        //HPOS+=ios_printf(f, "#%ld=", numval(label));
+        outc('#', f);
+        str = uint2str(buf, sizeof(buf)-1, numval(label), 10);
+        outs(str, f);
+        outc('=', f);
     }
     if (ismanaged(v))
         unmark_cons(v);
