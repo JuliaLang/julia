@@ -1,10 +1,10 @@
-struct Range{T}
+struct Range{T} <: Tensor{T,1}
     start::T
     step::T
     stop::T
 end
 
-struct Range1{T}
+struct Range1{T} <: Tensor{T,1}
     start::T
     stop::T
 end
@@ -34,7 +34,9 @@ done{T}(r::Range{T}, st) =
 next{T}(r::Range{T}, st) =
     (st[2]::T, (st[1]::Int+1, r.start + st[1]::Int*r.step))
 
-colon(start::Real, stop::Real, step::Real) = Range(promote(start, step, stop)...)
+colon(start::Real, stop::Real, step::Real) = ( step == 1 ?
+                                              Range1(promote(start, stop)...) :
+                                              Range(promote(start, step, stop)...))
 
 ref(r::Range, i::Index) = (res = r.start + i*r.step; res > r.stop ? error("Out of bounds") : res)
 ref(r::Range1, i::Index) = (res = r.start + r.step; res > r.stop ? error("Out of bounds") : res)
