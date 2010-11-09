@@ -50,15 +50,24 @@ function fill(A::Array, f::Function)
     return A
 end
 
-zeros{T}(::Type{T}, dims::Size...) = fill(Array(T, dims), zero(T))
-zeros(dims::Size...) = zeros(Float64, dims...)
+zeros{T}(::Type{T}, dims::Tuple) = fill(Array(T, dims), zero(T))
+zeros(T::Type, dims::Size...) = zeros(T, dims)
+zeros(dims::Tuple) = zeros(Float64, dims)
+zeros(dims::Size...) = zeros(dims)
 
-ones{T}(::Type{T}, dims::Size...) = fill(Array(T, dims), one(T))
-ones(dims::Size...) = ones(Float64, dims...)
+ones{T}(::Type{T}, dims::Tuple) = fill(Array(T, dims), one(T))
+ones(T::Type, dims::Size...) = ones(T, dims)
+ones(dims::Tuple) = ones(Float64, dims)
+ones(dims::Size...) = ones(dims)
 
-rand(dims::Size...)  = fill(Array(Float64, dims), rand)
-randf(dims::Size...) = fill(Array(Float32, dims), randf)
-randn(dims::Size...) = fill(Array(Float64, dims), randn)
+rand(dims::Tuple) = fill(Array(Float64, dims), rand)
+rand(dims::Size...) = rand(dims)
+
+randf(dims::Tuple) = fill(Array(Float32, dims), randf)
+randf(dims::Size...) = randf(dims)
+
+randn(dims::Tuple) = fill(Array(Float64, dims), randn)
+randn(dims::Size...) = randn(dims)
 
 function copy_to(dest::Array, src::Array)
     for i=1:numel(src)
