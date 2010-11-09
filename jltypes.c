@@ -755,13 +755,12 @@ static int type_eqv_(jl_value_t *a, jl_value_t *b, jl_value_pair_t *stack)
     if (a == b) return 1;
     if (jl_is_typector(a)) a = (jl_value_t*)((jl_typector_t*)a)->body;
     if (jl_is_typector(b)) b = (jl_value_t*)((jl_typector_t*)b)->body;
-    if (jl_is_typevar(a) || jl_is_typevar(b)) return 0;
+    if (jl_is_typevar(a)) return 0;
     if (jl_is_int32(a)) {
         if (jl_is_int32(b))
             return (jl_unbox_int32(a) == jl_unbox_int32(b));
         return 0;
     }
-    if (jl_is_int32(b)) return 0;
     if (jl_is_tuple(a)) {
         if (jl_is_tuple(b)) {
             return extensionally_same_type(a, b);
@@ -774,7 +773,6 @@ static int type_eqv_(jl_value_t *a, jl_value_t *b, jl_value_pair_t *stack)
         }
         return 0;
     }
-    if (jl_is_tuple(b) || jl_is_union_type(b)) return 0;
     jl_value_pair_t *p = stack;
     while (p != NULL) {
         if (p->a == a && p->b == b)
@@ -794,18 +792,20 @@ static int type_eqv_(jl_value_t *a, jl_value_t *b, jl_value_pair_t *stack)
         }
         return 0;
     }
-    if (jl_is_func_type(b)) return 0;
     assert(jl_is_some_tag_type(a));
-    assert(jl_is_some_tag_type(b));
+    if (!jl_is_some_tag_type(b)) return 0;
     jl_tag_type_t *tta = (jl_tag_type_t*)a;
     jl_tag_type_t *ttb = (jl_tag_type_t*)b;
     if (tta->name != ttb->name) return 0;
     jl_tuple_t *ap = tta->parameters;
     jl_tuple_t *bp = ttb->parameters;
-    if (ap->length != bp->length) return 0;
+    assert(ap->length == bp->length);
     size_t i;
     for(i=0; i < ap->length; i++) {
-        if (!type_eqv_(jl_tupleref(ap,i), jl_tupleref(bp,i), stack))
+        jl_value_t *api = jl_tupleref(ap,i);
+        jl_value_t *bpi = jl_tupleref(bp,i);
+        if (api == bpi) continue;
+        if (!type_eqv_(api, bpi, stack))
             return 0;
     }
     return 1;

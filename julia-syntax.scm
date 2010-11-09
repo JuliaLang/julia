@@ -626,8 +626,8 @@
    (pattern-lambda
     (: a b (-? c))
     (if c
-	`(call colon ,a ,c ,b)
-	`(call colon ,a ,b 1)))
+	`(call (top colon) ,a ,c ,b)
+	`(call (top colon) ,a ,b)))
 
    ;; hcat, vcat
    (pattern-lambda (hcat . a)
