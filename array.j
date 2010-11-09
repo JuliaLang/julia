@@ -138,10 +138,13 @@ imag(x::Array) = map(imag, x)
 
 (*)(x::Array, y::Number) = map2(.*, x, y)
 (*)(x::Number, y::Array) = map2(.*, x, y)
-
 # blas.j defines these for floats; this handles other cases
 (*)(A::Matrix, B::Vector) = [ dot(A[i,:],B) | i=1:size(A,1) ]
 (*)(A::Matrix, B::Matrix) = [ dot(A[i,:],B[:,j]) | i=1:size(A,1), j=1:size(B,2) ]
+
+(.^)(x::Array, y::Array)  = map2(.^, x, y)
+(.^)(x::Number, y::Array) = map2(.^, x, y)
+(.^)(x::Array, y::Number) = map2(.^, x, y)
 
 ## Binary comparison operators ##
 
