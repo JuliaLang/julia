@@ -310,7 +310,7 @@ function assign(A::Array, x::Scalar, I::Indices...)
         for d=2:ndimsA
             index += (ind[d]-1) * strides[d]
         end
-        A[index] = X
+        A[index] = x
     end
         
     cartesian_map(store_one, I)
