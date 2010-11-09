@@ -4,7 +4,7 @@
 
 typealias Vector{T} Tensor{T,1}
 typealias Matrix{T} Tensor{T,2}
-typealias Indices{T} Union(Index,Vector{T})
+typealias Indices Union(Index, Vector{Index})
 
 ## Basic functions ##
 size(a::Array) = a.dims
@@ -54,11 +54,15 @@ for (t, f) = ((Float64, `rand), (Float32, `randf), (Float64, `randn))
     eval(`( ($f)(dims::Size...) = ($f)(dims) ))
 end
 
-zeros{T}(::Type{T}, dims::Size...) = fill(Array(T, dims), zero(T))
-zeros(dims::Size...) = zeros(Float64, dims...)
+zeros{T}(::Type{T}, dims::Tuple) = fill(Array(T, dims), zero(T))
+zeros(T::Type, dims::Size...) = zeros(T, dims)
+zeros(dims::Tuple) = zeros(Float64, dims)
+zeros(dims::Size...) = zeros(dims)
 
-ones{T}(::Type{T}, dims::Size...) = fill(Array(T, dims), one(T))
-ones(dims::Size...) = ones(Float64, dims...)
+ones{T}(::Type{T}, dims::Tuple) = fill(Array(T, dims), one(T))
+ones(T::Type, dims::Size...) = ones(T, dims)
+ones(dims::Tuple) = ones(Float64, dims)
+ones(dims::Size...) = ones(dims)
 
 function copy_to(dest::Array, src::Array)
     for i=1:numel(src)
@@ -125,10 +129,13 @@ imag(x::Array) = map(imag, x)
 
 (*)(x::Array, y::Number) = map2(.*, x, y)
 (*)(x::Number, y::Array) = map2(.*, x, y)
-
 # blas.j defines these for floats; this handles other cases
 (*)(A::Matrix, B::Vector) = [ dot(A[i,:],B) | i=1:size(A,1) ]
 (*)(A::Matrix, B::Matrix) = [ dot(A[i,:],B[:,j]) | i=1:size(A,1), j=1:size(B,2) ]
+
+(.^)(x::Array, y::Array)  = map2(.^, x, y)
+(.^)(x::Number, y::Array) = map2(.^, x, y)
+(.^)(x::Array, y::Number) = map2(.^, x, y)
 
 ## Binary comparison operators ##
 
