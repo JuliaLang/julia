@@ -50,10 +50,10 @@ function fill(A::Array, f::Function)
     return A
 end
 
-zeros(T::Type, dims::Size...) = fill(Array(T, dims), zero(T))
+zeros{T}(::Type{T}, dims::Size...) = fill(Array(T, dims), zero(T))
 zeros(dims::Size...) = zeros(Float64, dims...)
 
-ones(T::Type, dims::Size...) = fill(Array(T, dims), one(T))
+ones{T}(::Type{T}, dims::Size...) = fill(Array(T, dims), one(T))
 ones(dims::Size...) = ones(Float64, dims...)
 
 rand(dims::Size...)  = fill(Array(Float64, dims), rand)
