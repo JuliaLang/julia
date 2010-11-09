@@ -43,11 +43,15 @@ function fill{T}(A::Array{T}, x::T)
     return A
 end
 
-function fill(A::Array, f::Function)
-    for i = 1:numel(A)
-        A[i] = f()
-    end
-    return A
+for (t, f) = ((Float64, `rand), (Float32, `randf), (Float64, `randn))
+    eval(`function ($f)(dims::(Size...))
+              A = Array($t, dims)
+              for i = 1:numel(A)
+                  A[i] = ($f)()
+              end
+              return A
+          end)
+    eval(`( ($f)(dims::Size...) = ($f)(dims) ))
 end
 
 zeros{T}(::Type{T}, dims::Size...) = fill(Array(T, dims), zero(T))
@@ -55,10 +59,6 @@ zeros(dims::Size...) = zeros(Float64, dims...)
 
 ones{T}(::Type{T}, dims::Size...) = fill(Array(T, dims), one(T))
 ones(dims::Size...) = ones(Float64, dims...)
-
-rand(dims::Size...)  = fill(Array(Float64, dims), rand)
-randf(dims::Size...) = fill(Array(Float32, dims), randf)
-randn(dims::Size...) = fill(Array(Float64, dims), randn)
 
 function copy_to(dest::Array, src::Array)
     for i=1:numel(src)
@@ -78,10 +78,6 @@ one{T}(x::Array{T,2}) = (m=size(x,1); n=size(x,2);
                          for i=1:min(m,n); a[i,i]=1; end;
                          a)
 zero{T}(x::Array{T,2}) = zeros(T,size(x))
-
-complex(re::Array, im::Array ) = reshape([ Complex(re[i],im[i]) | i=1:numel(re) ], size(re))
-complex(re::Array, im::Real  ) = reshape([ Complex(re[i],im   ) | i=1:numel(re) ], size(re))
-complex(re::Real , im::Array ) = reshape([ Complex(re   ,im[i]) | i=1:numel(im) ], size(im))
 
 linspace(start::Real, stop::Real, stride::Real) =
     ((start, stop, stride) = promote(start, stop, stride);

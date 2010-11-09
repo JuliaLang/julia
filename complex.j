@@ -9,6 +9,10 @@ end
 
 complex(x, y) = Complex(x, y)
 
+complex(re::Array, im::Array ) = reshape([ Complex(re[i],im[i]) | i=1:numel(re) ], size(re))
+complex(re::Array, im::Real  ) = reshape([ Complex(re[i],im   ) | i=1:numel(re) ], size(re))
+complex(re::Real , im::Array ) = reshape([ Complex(re   ,im[i]) | i=1:numel(im) ], size(im))
+
 convert{T}(::Type{Complex{T}}, x::T) = Complex(x, convert(T,0))
 convert{T}(::Type{Complex{T}}, x::Real) = Complex(convert(T,x), convert(T,0))
 convert{T}(::Type{Complex{T}}, z::Complex) = Complex(convert(T,z.re),convert(T,z.im))
