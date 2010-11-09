@@ -890,7 +890,7 @@
 	(case (car e)
 	  ((=)
 	   (if (not (symbol? (cadr e)))
-	       (error "invalid assignment statement")
+	       (error (string "invalid assignment lvalue " (cadr e)))
 	       (let ((r (to-lff (caddr e) (cadr e) #f)))
 		 (cond ((symbol? dest)
 			(cons `(block ,(car r)

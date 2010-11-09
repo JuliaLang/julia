@@ -845,7 +845,7 @@ void jl_show_method_table(jl_function_t *gf)
     char *name = ((jl_sym_t*)jl_t1(gf->env))->name;
     jl_methtable_t *mt = (jl_methtable_t*)jl_t0(gf->env);
     print_methlist(name, mt->defs);
-    //ios_printf(ios_stdout, "cache:\n");
+    //ios_printf(ios_stdout, "\ncache:\n");
     //print_methlist(name, mt->cache);
 }
 

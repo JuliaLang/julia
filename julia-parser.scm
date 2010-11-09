@@ -584,7 +584,11 @@
     ((bitstype)
      (list 'bitstype (parse-atom s) (parse-ineq s)))
     ((typealias)
-     (list 'typealias (parse-call s) (parse-arrow s)))
+     (let ((lhs (parse-call s)))
+       (if (and (pair? lhs) (eq? (car lhs) 'call))
+	   ;; typealias X (...) is tuple type alias, not call
+	   (list 'typealias (cadr lhs) (cons 'tuple (cddr lhs)))
+	   (list 'typealias lhs (parse-arrow s)))))
     ((try)
      (let* ((try-block (if (eq? (require-token s) 'catch)
 			   '(block)

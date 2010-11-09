@@ -5,6 +5,7 @@
 typealias Vector{T} Tensor{T,1}
 typealias Matrix{T} Tensor{T,2}
 typealias Indices Union(Index, Vector{Index})
+typealias Dims (Size...)
 
 ## Basic functions ##
 size(a::Array) = a.dims
@@ -18,23 +19,13 @@ numel(a::Array) = arraylen(a)
 reshape{T}(a::Array{T}, dims...) = (b = Array(T, dims...);
                                     for i=1:numel(a); b[i] = a[i]; end;
                                     b)
-reshape(a::Array, dims::Tuple) = reshape(a, dims...)
+reshape(a::Array, dims::Dims) = reshape(a, dims...)
 
 ## Constructors ##
 
 jl_comprehension_zeros{T,n}(oneresult::Tensor{T,n}, dims...) = Array(T, dims...)
 jl_comprehension_zeros{T}(oneresult::T, dims...) = Array(T, dims...)
 jl_comprehension_zeros(oneresult::(), dims...) = Array(None, dims...)
-
-function array(t::Tuple)
-    len = length(t)
-    if len == 0; return []; end
-    A = Array(typeof(t[1]), len)
-    for i=1:len
-        A[i] = t[i]
-    end
-    return A
-end
 
 function fill{T}(A::Array{T}, x::T)
     for i = 1:numel(A)
@@ -44,7 +35,7 @@ function fill{T}(A::Array{T}, x::T)
 end
 
 for (t, f) = ((Float64, `rand), (Float32, `randf), (Float64, `randn))
-    eval(`function ($f)(dims::(Size...))
+    eval(`function ($f)(dims::Dims)
               A = Array($t, dims)
               for i = 1:numel(A)
                   A[i] = ($f)()
@@ -54,14 +45,14 @@ for (t, f) = ((Float64, `rand), (Float32, `randf), (Float64, `randn))
     eval(`( ($f)(dims::Size...) = ($f)(dims) ))
 end
 
-zeros{T}(::Type{T}, dims::Tuple) = fill(Array(T, dims), zero(T))
+zeros{T}(::Type{T}, dims::Dims) = fill(Array(T, dims), zero(T))
 zeros(T::Type, dims::Size...) = zeros(T, dims)
-zeros(dims::Tuple) = zeros(Float64, dims)
+zeros(dims::Dims) = zeros(Float64, dims)
 zeros(dims::Size...) = zeros(dims)
 
-ones{T}(::Type{T}, dims::Tuple) = fill(Array(T, dims), one(T))
+ones{T}(::Type{T}, dims::Dims) = fill(Array(T, dims), one(T))
 ones(T::Type, dims::Size...) = ones(T, dims)
-ones(dims::Tuple) = ones(Float64, dims)
+ones(dims::Dims) = ones(Float64, dims)
 ones(dims::Size...) = ones(dims)
 
 function copy_to(dest::Array, src::Array)
@@ -78,7 +69,7 @@ eye(m::Size, n::Size) = (a = zeros(m,n);
                          for i=1:min(m,n); a[i,i]=1; end;
                          a)
 one{T}(x::Array{T,2}) = (m=size(x,1); n=size(x,2);
-                         a = zeros(T,m,n);
+                         a = zeros(T,size(x));
                          for i=1:min(m,n); a[i,i]=1; end;
                          a)
 zero{T}(x::Array{T,2}) = zeros(T,size(x))

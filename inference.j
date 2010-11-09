@@ -131,9 +131,27 @@ t_func[arrayref] = (2, 2, (a,i)->(isa(a,StructKind) && subtype(a,Array) ?
                                   a.parameters[1] : Any))
 t_func[arrayset] = (3, 3, (a,i,v)->a)
 t_func[Array] =
-    (1, Inf, (T,dims...)->(nd = length(dims);
-                           et = isType(T) ? T.parameters[1] : T;
-                           Array{et,nd}))
+    (1, Inf,
+function (T, dims...)
+    nd = length(dims)
+    if nd==1
+        dt = dims[1]
+        if isa(dt,Tuple)
+            if length(dt) > 0 && isseqtype(dt[length(dt)])
+                # Array(T, (d...))
+                nd = Array.parameters[2]
+            else
+                # Array(T, (m, n))
+                nd = length(dt)
+            end
+        elseif subtype(Tuple, dt)
+            # Array(T, ??)
+            nd = Array.parameters[2]
+        end
+    end
+    et = isType(T) ? T.parameters[1] : T
+    Array{et,nd}
+end)
 
 static_convert(to, from) = (subtype(from, to) ? from : to)
 function static_convert(to::Tuple, from::Tuple)
