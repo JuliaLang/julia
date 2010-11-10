@@ -37,5 +37,8 @@ next{T}(r::Range{T}, st) =
 colon(start::Real, stop::Real, step::Real) = Range(promote(start, step, stop)...)
 colon(start::Real, stop::Real) = Range1(promote(start, stop)...)
 
-ref(r::Range, i::Index) = (res = r.start + i*r.step; res > r.stop ? error("Out of bounds") : res)
-ref(r::Range1, i::Index) = (res = r.start + r.step; res > r.stop ? error("Out of bounds") : res)
+ref(r::Range, i::Index) =
+    (x = r.start + (i-1)*r.step;
+     (r.step<0 ? (x<r.stop) : (x>r.stop)) ? throw(BoundsError()) : x)
+ref(r::Range1, i::Index) = (x = r.start + (i-1);
+                            done(r,x) ? throw(BoundsError()) : x)
