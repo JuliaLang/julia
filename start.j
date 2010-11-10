@@ -16,7 +16,7 @@ load("float.j")
 load("char.j")
 
 # core data structures
-load("array.j")
+load("tensor.j")
 load("intset.j")
 load("table.j")
 
