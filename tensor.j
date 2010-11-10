@@ -90,7 +90,7 @@ real{T <: Number}(x::Array{T}) = x
 imag{T <: Number}(x::Array{T}) = zeros(T, size(x))
 
 for f=(`-, `conj, `real, `imag)
-    eval(`function ($f){T}(A::Tensor{T})
+    eval(`function ($f){T}(A::Array{T})
             F = Array(T, size(A))
             for i=1:numel(A)
                F[i] = ($f)(A[i])
@@ -189,7 +189,7 @@ end
 
 ## Binary boolean operators ##
 
-for f=(`&, `|, `$, `(&&), `(||))
+for f=(`&, `|, `$)
     eval(`function ($f)(A::Tensor{Bool}, B::Tensor{Bool})
             F = Array(Bool, size(A))
             for i=1:numel(A)
