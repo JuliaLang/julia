@@ -9,12 +9,13 @@ typealias Dims (Size...)
 
 ## Basic functions ##
 size(a::Array) = a.dims
+numel(a::Array) = arraylen(a)
+
 size(t::Tensor, d) = size(t)[d]
 ndims(t::Tensor) = length(size(t))
 numel(t::Tensor) = prod(size(t))
 length(v::Vector) = numel(v)
-nnz(a::Array) = (n = 0; for i=1:numel(a); n += a[i] != 0 ? 1 : 0; end; n)
-numel(a::Array) = arraylen(a)
+nnz(a::Tensor) = (n = 0; for i=1:numel(a); n += a[i] != 0 ? 1 : 0; end; n)
 
 reshape{T}(a::Array{T}, dims...) = (b = Array(T, dims...);
                                     for i=1:numel(a); b[i] = a[i]; end;
@@ -84,106 +85,152 @@ linspace(start::Real, stop::Real) =
 
 ## Unary operators ##
 
-(-)(x::Array) = map(-, x)
-(!)(x::Array{Bool}) = map(!, x)
-(~)(x::Array{Bool}) = map(~, x)
-
 conj{T <: Number}(x::Array{T}) = x
-conj(x::Array) = map(conj, x)
-
 real{T <: Number}(x::Array{T}) = x
-real(x::Array) = map(real, x)
-
 imag{T <: Number}(x::Array{T}) = zeros(T, size(x))
-imag(x::Array) = map(imag, x)
+
+for f=(`-, `conj, `real, `imag)
+    eval(`function ($f){T}(A::Tensor{T})
+            F = Array(T, size(A))
+            for i=1:numel(A)
+               F[i] = ($f)(A[i])
+            end
+            return F
+         end)
+end
+
+for f=(`!, `~)
+    eval(`function ($f)(A::Tensor{Bool})
+            F = Array(T, size(A))
+            for i=1:numel(A)
+               F[i] = ($f)(A[i])
+            end
+            return F
+         end)
+end
 
 ## Binary arithmetic operators ##
 
-( +)(x::Array, y::Array)  = map2(+ , x, y)
-( +)(x::Number, y::Array) = map2(+ , x, y)
-( +)(x::Array, y::Number) = map2(+ , x, y)
+# blas.j defines these for floats; this handles other cases
+(*)(A::Matrix, B::Vector) = [ dot(A[i,:],B) | i=1:size(A,1) ]
+(*)(A::Matrix, B::Matrix) = [ dot(A[i,:],B[:,j]) | i=1:size(A,1), j=1:size(B,2) ]
 
-( -)(x::Array, y::Array)  = map2(- , x, y)
-( -)(x::Number, y::Array) = map2(- , x, y)
-( -)(x::Array, y::Number) = map2(- , x, y)
-
-(.*)(x::Array, y::Array)  = map2(.*, x, y)
-(.*)(x::Number, y::Array) = map2(.*, x, y)
-(.*)(x::Array, y::Number) = map2(.*, x, y)
+(*)(A::Number, B::Tensor) = A .* B
+(*)(A::Tensor, B::Number) = A .* B
 
 (./)(x::Array, y::Array)  = reshape( [ x[i] ./ y[i] | i=1:numel(x) ], size(x) )
 (./)(x::Number, y::Array) = reshape( [ x    ./ y[i] | i=1:numel(y) ], size(y) )
 (./)(x::Array, y::Number) = reshape( [ x[i] ./ y    | i=1:numel(x) ], size(x) )
 
-(/)(x::Array, y::Number) = reshape( [ x[i] ./ y    | i=1:numel(x) ], size(x) )
-(/)(x::Number, y::Array) = reshape( [ x    ./ y[i] | i=1:numel(y) ], size(y) )
+(/)(A::Number, B::Tensor) = A ./ B
+(/)(A::Tensor, B::Number) = A ./ B
 
-(*)(x::Array, y::Number) = map2(.*, x, y)
-(*)(x::Number, y::Array) = map2(.*, x, y)
-# blas.j defines these for floats; this handles other cases
-(*)(A::Matrix, B::Vector) = [ dot(A[i,:],B) | i=1:size(A,1) ]
-(*)(A::Matrix, B::Matrix) = [ dot(A[i,:],B[:,j]) | i=1:size(A,1), j=1:size(B,2) ]
+(.\)(x::Array, y::Array)  = reshape( [ x[i] .\ y[i] | i=1:numel(x) ], size(x) )
+(.\)(x::Number, y::Array) = reshape( [ x    .\ y[i] | i=1:numel(y) ], size(y) )
+(.\)(x::Array, y::Number) = reshape( [ x[i] .\ y    | i=1:numel(x) ], size(x) )
 
-(.^)(x::Array, y::Array)  = map2(.^, x, y)
-(.^)(x::Number, y::Array) = map2(.^, x, y)
-(.^)(x::Array, y::Number) = map2(.^, x, y)
+(\)(A::Number, B::Tensor) = A .\ B
+(\)(A::Tensor, B::Number) = A .\ B
+
+for f=(`+, `-, `(.*), `(.^))
+    eval(`function ($f){S,T}(A::Tensor{S}, B::Tensor{T})
+            F = Array(promote_type(S,T), size(A))
+            for i=1:numel(A)
+               F[i] = ($f)(A[i], B[i])
+            end
+            return F
+         end)
+
+    eval(`function ($f){T}(A::Number, B::Tensor{T})
+            F = Array(promote_type(typeof(A),T), size(B))
+            for i=1:numel(B)
+               F[i] = ($f)(A, B[i])
+            end
+            return F
+         end)
+
+    eval(`function ($f){T}(A::Tensor{T}, B::Number)
+            F = Array(promote_type(T,typeof(B)), size(A))
+            for i=1:numel(A)
+               F[i] = ($f)(A[i], B)
+            end
+            return F
+         end)
+end
 
 ## Binary comparison operators ##
 
-(==)(x::Array, y::Array)  = map2(Bool, ==, x, y)
-(==)(x::Number, y::Array) = map2(Bool, ==, x, y)
-(==)(x::Array, y::Number) = map2(Bool, ==, x, y)
+for f=(`(==), `(!=), `<, `>, `(<=), `(>=))
+    eval(`function ($f)(A::Array, B::Array)
+            F = Array(Bool, size(A))
+            for i=1:numel(A)
+               F[i] = ($f)(A[i], B[i])
+            end
+            return F
+         end)
 
-(!=)(x::Array, y::Array)  = map2(Bool, !=, x, y)
-(!=)(x::Number, y::Array) = map2(Bool, !=, x, y)
-(!=)(x::Array, y::Number) = map2(Bool, !=, x, y)
+    eval(`function ($f)(A::Number, B::Array)
+            F = Array(Bool, size(B))
+            for i=1:numel(B)
+               F[i] = ($f)(A, B[i])
+            end
+            return F
+         end)
 
-( <)(x::Array, y::Array)  = map2(Bool, <, x, y)
-( <)(x::Number, y::Array) = map2(Bool, <, x, y)
-( <)(x::Array, y::Number) = map2(Bool, <, x, y)
+    eval(`function ($f)(A::Array, B::Number)
+            F = Array(Bool, size(A))
+            for i=1:numel(A)
+               F[i] = ($f)(A[i], B)
+            end
+            return F
+         end)
+end
 
-( >)(x::Array, y::Array)  = map2(Bool, >, x, y)
-( >)(x::Number, y::Array) = map2(Bool, >, x, y)
-( >)(x::Array, y::Number) = map2(Bool, >, x, y)
-
-(<=)(x::Array, y::Array)  = map2(Bool, <=, x, y)
-(<=)(x::Number, y::Array) = map2(Bool, <=, x, y)
-(<=)(x::Array, y::Number) = map2(Bool, <=, x, y)
-
-(>=)(x::Array, y::Array)  = map2(Bool, >=, x, y)
-(>=)(x::Number, y::Array) = map2(Bool, >=, x, y)
-(>=)(x::Array, y::Number) = map2(Bool, >=, x, y)
 
 ## Binary boolean operators ##
 
-(&)(x::Array, y::Array)  = map2(Bool, &, x, y)
-(&)(x::Number, y::Array) = map2(Bool, &, x, y)
-(&)(x::Array, y::Number) = map2(Bool, &, x, y)
+for f=(`&, `|, `$, `(&&), `(||))
+    eval(`function ($f)(A::Tensor{Bool}, B::Tensor{Bool})
+            F = Array(Bool, size(A))
+            for i=1:numel(A)
+               F[i] = ($f)(A[i], B[i])
+            end
+            return F
+         end)
 
-(|)(x::Array, y::Array)  = map2(Bool, |, x, y)
-(|)(x::Number, y::Array) = map2(Bool, |, x, y)
-(|)(x::Array, y::Number) = map2(Bool, |, x, y)
+    eval(`function ($f)(A::Bool, B::Tensor{Bool})
+            F = Array(Bool, size(B))
+            for i=1:numel(B)
+               F[i] = ($f)(A, B[i])
+            end
+            return F
+         end)
 
-($)(x::Array, y::Array)  = map2(Bool, $, x, y)
-($)(x::Number, y::Array) = map2(Bool, $, x, y)
-($)(x::Array, y::Number) = map2(Bool, $, x, y)
+    eval(`function ($f)(A::Tensor{Bool}, B::Bool)
+            F = Array(Bool, size(A))
+            for i=1:numel(A)
+               F[i] = ($f)(A[i], B)
+            end
+            return F
+         end)
+end
 
 ## Indexing: ref ##
-
-ref(t::Tensor, r::Real...) = t[map(x->convert(Int32,round(x)),r)...]
 
 ref(a::Array, i::Index) = arrayref(a,i)
 ref{T}(a::Array{T,1}, i::Index) = arrayref(a,i)
 ref(a::Array{Any,1}, i::Index) = arrayref(a,i)
-
-ref{T}(A::Array{T,1},I::Indices) = [ A[i] | i = I ]
-ref(A::Array{Any,1},I::Indices) = { A[i] | i = I }
-
 ref{T}(a::Array{T,2}, i::Index, j::Index) = arrayref(a, (j-1)*a.dims[1] + i)
-ref{T}(A::Array{T,2}, I::Indices, J::Indices) = [ A[i,j] | i = I, j = J ]
 
-function ref(A::Array, I::Index...)
-    dims = A.dims
+ref(t::Tensor, r::Real...) = t[map(x->convert(Int32,round(x)),r)...]
+
+ref{T}(A::Tensor{T,1}, I::Indices) = [ A[i] | i = I ]
+ref(A::Tensor{Any,1}, I::Indices) = { A[i] | i = I }
+
+ref{T}(A::Tensor{T,2}, I::Indices, J::Indices) = [ A[i,j] | i = I, j = J ]
+
+function ref(A::Tensor, I::Index...)
+    dims = size(A)
     ndims = length(I)
 
     index = I[1]
@@ -196,8 +243,8 @@ function ref(A::Array, I::Index...)
     return A[index]
 end
 
-function ref{T}(A::Array{T}, I::Indices...)
-    dims = A.dims
+function ref{T}(A::Tensor{T}, I::Indices...)
+    dims = size(A)
     ndimsA = length(dims)
 
     strides = Array(Size, ndimsA)
@@ -224,9 +271,10 @@ end
 
 ## Indexing: assign ##
 
-assign(t::Tensor, x, r::Real...) = (t[map(x->convert(Int32,round(x)),r)...] = x)
 assign{T}(A::Array{T}, x, i::Index) = arrayset(A,i,convert(T, x))
 assign(A::Array{Any}, x, i::Index) = arrayset(A,i,x)
+
+assign(t::Tensor, x, r::Real...) = (t[map(x->convert(Int32,round(x)),r)...] = x)
 
 function assign(A::Vector, x::Scalar, I::Indices)
     for i=I
@@ -254,7 +302,7 @@ function assign(A::Matrix, x::Scalar, I::Indices, J::Indices)
     return A
 end
 
-function assign(A::Matrix, X::Array, I::Indices, J::Indices)
+function assign(A::Matrix, X::Tensor, I::Indices, J::Indices)
     count = 1
     for i=I, j=J
         A[i,j] = X[count]
@@ -263,8 +311,8 @@ function assign(A::Matrix, X::Array, I::Indices, J::Indices)
     return A
 end
 
-function assign(A::Array, x::Scalar, I::Index...)
-    dims = A.dims
+function assign(A::Tensor, x::Scalar, I::Index...)
+    dims = size(A)
     ndims = length(I)
 
     index = I[1]
@@ -278,8 +326,8 @@ function assign(A::Array, x::Scalar, I::Index...)
     return A
 end
 
-function assign(A::Array, x::Scalar, I::Indices...)
-    dims = A.dims
+function assign(A::Tensor, x::Scalar, I::Indices...)
+    dims = size(A)
     ndimsA = length(dims)
 
     strides = Array(Size, ndimsA)
@@ -300,8 +348,8 @@ function assign(A::Array, x::Scalar, I::Indices...)
     return A
 end
 
-function assign(A::Array, X::Array, I::Indices...)
-    dims = A.dims
+function assign(A::Tensor, X::Tensor, I::Indices...)
+    dims = size(A)
     ndimsA = length(dims)
 
     strides = Array(Size, ndimsA)
@@ -409,7 +457,7 @@ function cat(catdim::Int, A::Array...)
     # ndims of all input arrays should be in [d-1, d]
 
     nargs = length(A)
-    dimsA = ntuple(nargs, i->A[i].dims)
+    dimsA = ntuple(nargs, i->size(A[i]))
     ndimsA = ntuple(nargs, i->length(dimsA[i]))
     d_max = max(ndimsA)
     d_min = min(ndimsA)
@@ -462,7 +510,7 @@ hcat(A::Array...) = cat(2, A...)
 # end
 
 function reduce{T}(RType::Type, op, A::Array{T}, region)
-    dimsA = A.dims
+    dimsA = size(A)
     ndimsA = length(dimsA)
     dimsR = ntuple(ndimsA, i->(contains(region, i) ? 1 : dimsA[i]))
     R = Array(RType, dimsR)
@@ -533,39 +581,6 @@ function map{T}(f, A::Array{T})
     return F
 end
 
-map2(f, A::Number, B::Number) = f(A,B)
-map2(Ftype::Type, f, A::Number, B::Number) = convert(Ftype, f(A,B))
-
-map2{S,T}(f, A::Array{S}, B::Array{T}) = map2(promote_type(S,T), f, A, B)
-
-function map2{S,T}(Ftype::Type, f, A::Array{S}, B::Array{T})
-    F = Array(Ftype, size(A))
-    for i=1:numel(A)
-        F[i] = f(A[i], B[i])
-    end
-    return F
-end
-
-map2{T}(f, A::Number, B::Array{T}) = map2(promote_type(typeof(A),T), f, A, B)
-
-function map2{T}(Ftype::Type, f, A::Number, B::Array{T})
-    F = Array(Ftype, size(B))
-    for i=1:numel(B)
-        F[i] = f(A, B[i])
-    end
-    return F
-end
-
-map2{T}(f, A::Array{T}, B::Number) = map2(promote_type(T,typeof(B)), f, A, B)
-
-function map2{T}(Ftype::Type, f, A::Array{T}, B::Number)
-    F = Array(Ftype, size(A))
-    for i=1:numel(A)
-        F[i] = f(A[i], B)
-    end
-    return F
-end
-
 function cartesian_map(body, t::Tuple, it...)
     idx = length(t)-length(it)
     if idx == 0
@@ -588,15 +603,16 @@ ctranspose(x::Vector) = [ conj(x[j])   | i=1, j=1:size(x,1) ]
 ctranspose(x::Matrix) = [ conj(x[j,i]) | i=1:size(x,2), j=1:size(x,1) ]
 
 function transpose{T}(a::Matrix{T})
-    b = Array(T, a.dims[2], a.dims[1])
-    for i=1:a.dims[1], j=1:a.dims[2]
+    dims = size(a)
+    b = Array(T, dims[2], dims[1])
+    for i=1:dims[1], j=1:dims[2]
         b[j,i] = a[i,j]
     end
     return b
 end
 
 function permute{T}(A::Array{T}, perm)
-    dimsA = A.dims
+    dimsA = size(A)
     ndimsA = length(dimsA)
     dimsP = ntuple(ndimsA, i->dimsA[perm[i]])
     P = Array(T, dimsP)
@@ -612,7 +628,7 @@ function permute{T}(A::Array{T}, perm)
 end
 
 function ipermute{T}(A::Array{T}, perm)
-    dimsA = A.dims
+    dimsA = size(A)
     ndimsA = length(dimsA)
     dimsP = ntuple(ndimsA, i->dimsA[perm[i]])
     P = Array(T, dimsP)
@@ -699,7 +715,7 @@ function find{T}(A::Array{T})
         end
     end
 
-    cartesian_map(find_one, ntuple(ndims(A), d->(1:A.dims[d])) )
+    cartesian_map(find_one, ntuple(ndims(A), d->(1:size(A)[d])) )
     return I
 end
 
