@@ -340,9 +340,12 @@ hcat{T}(V::Array{T,1}...) = [ V[j][i] | i=1:length(V[1]), j=1:length(V) ]
 function vcat{T}(V::Array{T,1}...)
     a = Array(T, sum(map(length, V)))
     pos = 1
-    for k=1:length(V), i=1:length(V[k])
-        a[pos] = V[k][i]
-        pos += 1
+    for k=1:length(V)
+        Vk = V[k]
+        for i=1:length(Vk)
+            a[pos] = Vk[i]
+            pos += 1
+        end
     end
     a
 end
@@ -352,9 +355,12 @@ function hcat{T}(A::Array{T,2}...)
     nrows = size(A[1], 1)
     B = Array(T, nrows, ncols)
     pos = 1
-    for k=1:length(A), i=1:numel(A[k])
-        B[pos] = A[k][i]
-        pos = pos + 1
+    for k=1:length(A)
+        Ak = A[k]
+        for i=1:numel(Ak)
+            B[pos] = Ak[i]
+            pos = pos + 1
+        end
     end
     return B
 end
@@ -364,9 +370,12 @@ function vcat{T}(A::Array{T,2}...)
     ncols = size(A[1], 2)
     B = Array(T, nrows, ncols)
     pos = 1
-    for j=1:ncols, k=1:length(A), i=1:size(A[k], 1)
-        B[pos] = A[k][i,j]
-        pos = pos + 1
+    for j=1:ncols, k=1:length(A)
+        Ak = A[k]
+        for i=1:size(Ak, 1)
+            B[pos] = Ak[i,j]
+            pos = pos + 1
+        end
     end
     return B
 end

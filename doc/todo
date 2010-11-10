@@ -571,3 +571,4 @@ issues 11/6/10
 
 - make optimized arrayset, arrayref work on all Arrays
 - faster GC stack roots
+- optimize Array constructor (avoid checks and apply_type)
