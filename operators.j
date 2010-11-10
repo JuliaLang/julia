@@ -64,9 +64,9 @@ one(x)  = oftype(x,1)
 ## comparison ##
 
 !=(x::Union(Number,Bool), y::Union(Number,Bool)) = !(x == y)
-> (x::Union(Number,Bool), y::Union(Number,Bool)) = (y < x)
-<=(x::Union(Number,Bool), y::Union(Number,Bool)) = (x < y) || (x == y)
->=(x::Union(Number,Bool), y::Union(Number,Bool)) = (x > y) || (x == y)
+> (x::Number, y::Number) = (y < x)
+<=(x::Number, y::Number) = (x < y) || (x == y)
+>=(x::Number, y::Number) = (x > y) || (x == y)
 # <=(x::Real, y::Real) = (x < y) || (x == y)
 # >=(x::Real, y::Real) = (x > y) || (x == y)
 
