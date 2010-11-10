@@ -35,10 +35,10 @@ end
 (\)(x,y) = y/x
 
 # .<op> defaults to <op>
-(./)(x,y) = x/y
-(.\)(x,y) = y./x
-(.*)(x,y) = x*y
-(.^)(x,y) = x^y
+(./)(x::Number,y::Number) = x/y
+(.\)(x::Number,y::Number) = y./x
+(.*)(x::Number,y::Number) = x*y
+(.^)(x::Number,y::Number) = x^y
 
 div(x::Real, y::Real) = y != 0 ? truncate(x/y)        : throw(DivideByZeroError())
 fld(x::Real, y::Real) = y != 0 ? truncate(floor(x/y)) : throw(DivideByZeroError())
@@ -63,12 +63,12 @@ one(x)  = oftype(x,1)
 
 ## comparison ##
 
-!=(x, y) = !(x == y)
-> (x, y) = (y < x)
-<=(x, y) = (x < y) || (x == y)
->=(x, y) = (x > y) || (x == y)
-<=(x::Real, y::Real) = (x < y) || (x == y)
->=(x::Real, y::Real) = (x > y) || (x == y)
+!=(x::Union(Number,Bool), y::Union(Number,Bool)) = !(x == y)
+> (x::Union(Number,Bool), y::Union(Number,Bool)) = (y < x)
+<=(x::Union(Number,Bool), y::Union(Number,Bool)) = (x < y) || (x == y)
+>=(x::Union(Number,Bool), y::Union(Number,Bool)) = (x > y) || (x == y)
+# <=(x::Real, y::Real) = (x < y) || (x == y)
+# >=(x::Real, y::Real) = (x > y) || (x == y)
 
 ## promotion mechanism ##
 
