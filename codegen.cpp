@@ -210,10 +210,10 @@ extern "C" void jl_compile(jl_function_t *f)
 // function and module, and visible local variables and labels.
 typedef struct {
     Function *f;
-    std::map<std::string, AllocaInst*> *vars;
-    std::map<std::string, AllocaInst*> *arguments;
+    std::map<std::string, Value*> *vars;
+    std::map<std::string, Value*> *arguments;
     std::map<std::string, int> *closureEnv;
-    std::map<std::string, bool> *isBoxed;
+    std::map<std::string, bool> *isAssigned;
     std::map<std::string, bool> *isCaptured;
     std::map<std::string, jl_value_t*> *declTypes;
     std::map<int, BasicBlock*> *labels;
@@ -228,6 +228,11 @@ typedef struct {
     int argDepth;
     std::string funcName;
 } jl_codectx_t;
+
+static bool isBoxed(char *varname, jl_codectx_t *ctx)
+{
+    return (*ctx->isAssigned)[varname] && (*ctx->isCaptured)[varname];
+}
 
 static Value *mark_julia_type(Value *v, jl_value_t *jt);
 static jl_value_t *julia_type_of(Value *v);
@@ -390,14 +395,14 @@ static Value *var_binding_pointer(jl_sym_t *s, jl_codectx_t *ctx)
     std::map<std::string,int>::iterator it = ctx->closureEnv->find(s->name);
     if (it != ctx->closureEnv->end()) {
         int idx = (*it).second;
-        if ((*ctx->isBoxed)[s->name]) {
+        if (isBoxed(s->name, ctx)) {
             return emit_nthptr_addr(emit_nthptr((Value*)ctx->envArg, idx+2), 1);
         }
         return emit_nthptr_addr((Value*)ctx->envArg, idx+2);
     }
-    AllocaInst *l = (*ctx->vars)[s->name];
+    Value *l = (*ctx->vars)[s->name];
     if (l != NULL) {
-        if ((*ctx->isBoxed)[s->name]) {
+        if (isBoxed(s->name, ctx)) {
             return emit_nthptr_addr(builder.CreateLoad(l,false), 1);
         }
         return l;
@@ -459,7 +464,7 @@ static Value *emit_lambda_closure(jl_value_t *expr, jl_codectx_t *ctx)
             val = emit_nthptr((Value*)ctx->envArg, idx+2);
         }
         else {
-            AllocaInst *l = (*ctx->vars)[s->name];
+            Value *l = (*ctx->vars)[s->name];
             assert(l != NULL);
             val = builder.CreateLoad(l, false);
         }
@@ -853,7 +858,7 @@ static Value *emit_var(jl_sym_t *sym, jl_value_t *ty, jl_codectx_t *ctx)
         }
     }
     Value *bp = var_binding_pointer(sym, ctx);
-    AllocaInst *arg = (*ctx->arguments)[sym->name];
+    Value *arg = (*ctx->arguments)[sym->name];
     // arguments are always defined
     if (arg != NULL || !jl_subtype((jl_value_t*)jl_undef_type, ty, 0)) {
         return tpropagate(bp, builder.CreateLoad(bp, false));
@@ -1013,21 +1018,22 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool value)
 
 #define is_label(ex) (jl_is_expr(ex) && ((jl_expr_t*)ex)->head == label_sym)
 
-static bool vinfo_isboxed(jl_array_t *a)
+static bool store_unboxed_p(char *name, jl_codectx_t *ctx)
 {
-    return (jl_cellref(a,2)!=jl_false && jl_cellref(a,3)!=jl_false);
+    jl_value_t *jt = (*ctx->declTypes)[name];
+    // only store a variable unboxed if type inference has run, which
+    // checks that the variable is not referenced undefined.
+    return (ctx->linfo->inferred && jl_is_bits_type(jt) &&
+            // don't unbox intrinsics, since inference depends on their having
+            // stable addresses for table lookup.
+            jt != (jl_value_t*)jl_intrinsic_type && !(*ctx->isCaptured)[name]);
 }
 
 static AllocaInst *alloc_local(char *name, jl_codectx_t *ctx)
 {
     jl_value_t *jt = (*ctx->declTypes)[name];
     const Type *vtype;
-    // only store a variable unboxed if type inference has run, which
-    // checks that the variable is not referenced undefined.
-    if (ctx->linfo->inferred && jl_is_bits_type(jt) &&
-        // don't unbox intrinsics, since inference depends on their having
-        // stable addresses for table lookup.
-        jt != (jl_value_t*)jl_intrinsic_type && !(*ctx->isCaptured)[name])
+    if (store_unboxed_p(name, ctx))
         vtype = julia_type_to_llvm(jt);
     else
         vtype = jl_pvalue_llvmt;
@@ -1049,10 +1055,10 @@ static void emit_function(jl_lambda_info_t *lam, Function *f)
     //ios_printf(ios_stdout, "\n");
     BasicBlock *b0 = BasicBlock::Create(jl_LLVMContext, "top", f);
     builder.SetInsertPoint(b0);
-    std::map<std::string, AllocaInst*> localVars;
-    std::map<std::string, AllocaInst*> argumentMap;
+    std::map<std::string, Value*> localVars;
+    std::map<std::string, Value*> argumentMap;
     std::map<std::string, int> closureEnv;
-    std::map<std::string, bool> isBoxed;
+    std::map<std::string, bool> isAssigned;
     std::map<std::string, bool> isCaptured;
     std::map<std::string, jl_value_t*> declTypes;
     std::map<int, BasicBlock*> labels;
@@ -1067,7 +1073,7 @@ static void emit_function(jl_lambda_info_t *lam, Function *f)
     ctx.vars = &localVars;
     ctx.arguments = &argumentMap;
     ctx.closureEnv = &closureEnv;
-    ctx.isBoxed = &isBoxed;
+    ctx.isAssigned = &isAssigned;
     ctx.isCaptured = &isCaptured;
     ctx.declTypes = &declTypes;
     ctx.labels = &labels;
@@ -1094,13 +1100,20 @@ static void emit_function(jl_lambda_info_t *lam, Function *f)
     error_unless(sp_ok, "stack overflow", &ctx);
     */
     // process var-info lists to see what vars are captured, need boxing
+    size_t nreq = largs->length;
+    int va = 0;
+    if (nreq > 0 && jl_is_rest_arg(jl_cellref(largs,nreq-1))) {
+        nreq--;
+        va = 1;
+    }
+
     jl_array_t *vinfos = jl_lam_vinfo(ast);
     size_t i;
     for(i=0; i < vinfos->length; i++) {
         jl_array_t *vi = (jl_array_t*)jl_cellref(vinfos, i);
         assert(jl_is_array(vi));
         char *vname = ((jl_sym_t*)jl_cellref(vi,0))->name;
-        isBoxed[vname] = vinfo_isboxed(vi);
+        isAssigned[vname] = (jl_cellref(vi,3)!=jl_false);
         isCaptured[vname] = (jl_cellref(vi,2)!=jl_false);
         declTypes[vname] = jl_cellref(vi,1);
     }
@@ -1110,7 +1123,7 @@ static void emit_function(jl_lambda_info_t *lam, Function *f)
         assert(jl_is_array(vi));
         char *vname = ((jl_sym_t*)jl_cellref(vi,0))->name;
         closureEnv[vname] = i;
-        isBoxed[vname] = vinfo_isboxed(vi);
+        isAssigned[vname] = (jl_cellref(vi,3)!=jl_false);
         isCaptured[vname] = true;
         declTypes[vname] = jl_cellref(vi,1);
     }
@@ -1120,91 +1133,87 @@ static void emit_function(jl_lambda_info_t *lam, Function *f)
     // must be first for the mem2reg pass to work
     for(i=0; i < largs->length; i++) {
         char *argname = jl_decl_var(jl_cellref(largs,i))->name;
-        AllocaInst *lv = alloc_local(argname, &ctx);
-        argumentMap[argname] = lv;
-        if (lv->getAllocatedType() == jl_pvalue_llvmt) {
+        if (store_unboxed_p(argname, &ctx)) {
+            AllocaInst *lv = alloc_local(argname, &ctx);
+            argumentMap[argname] = lv;
+        }
+        else if (isAssigned[argname] || (va && i==largs->length-1)) {
             n_roots++;
-#ifdef JL_GC_MARKSWEEP
-            builder.CreateStore(V_null, lv);
-#endif
         }
     }
     for(i=0; i < lvars->length; i++) {
         char *argname = ((jl_sym_t*)jl_cellref(lvars,i))->name;
-        AllocaInst *lv = alloc_local(argname, &ctx);
-        if (lv->getAllocatedType() == jl_pvalue_llvmt) {
-            builder.CreateStore(V_null, lv);
+        if (store_unboxed_p(argname, &ctx)) {
+            alloc_local(argname, &ctx);
+        }
+        else {
             n_roots++;
         }
     }
 
     int32_t argdepth = (int32_t)max_arg_depth((jl_value_t*)ast);
+    n_roots += argdepth;
     ctx.argTemp = builder.CreateAlloca(jl_pvalue_llvmt,
-                                       ConstantInt::get(T_int32, argdepth));
+                                       ConstantInt::get(T_int32, n_roots));
     ctx.argDepth = 0;
 
 #ifdef JL_GC_MARKSWEEP
     // create gc frame
-    n_roots += argdepth;
     AllocaInst *gcframe = builder.CreateAlloca(T_gcframe, 0);
-    AllocaInst *gcroots =
-        builder.CreateAlloca(PointerType::get(jl_pvalue_llvmt,0),
-                             ConstantInt::get(T_int32, n_roots));
-    builder.CreateStore(gcroots,
+    builder.CreateStore(builder.CreateBitCast(ctx.argTemp,
+                                              PointerType::get(jl_ppvalue_llvmt,0)),
                         builder.CreateConstGEP2_32(gcframe, 0, 0));
     builder.CreateStore(ConstantInt::get(T_size, n_roots),
                         builder.CreateConstGEP2_32(gcframe, 0, 1));
-    builder.CreateStore(ConstantInt::get(T_int32, 1),
+    builder.CreateStore(ConstantInt::get(T_int32, 0),
                         builder.CreateConstGEP2_32(gcframe, 0, 2));
     builder.CreateStore(builder.CreateLoad
                         (builder.CreateLoad(jlpgcstack_var, false), false),
                         builder.CreateConstGEP2_32(gcframe, 0, 3));
     builder.CreateStore(gcframe,
                         builder.CreateLoad(jlpgcstack_var, false));
-    int rn = 0;
-    // push locations of all locals and argument temporaries as gc roots.
-    // not too efficient, but simple.
-    for(i=0; i < (size_t)argdepth; i++) {
+    // initialize stack roots to null
+    for(i=0; i < (size_t)n_roots; i++) {
         Value *argTempi = builder.CreateConstGEP1_32(ctx.argTemp,i);
         builder.CreateStore(V_null, argTempi);
-        builder.CreateStore(argTempi, builder.CreateConstGEP1_32(gcroots,rn));
-        rn++;
     }
+#endif
+
+    // get pointers for locals stored in the gc frame array (argTemp)
+    int varnum = argdepth;
     for(i=0; i < largs->length; i++) {
         char *argname = jl_decl_var(jl_cellref(largs,i))->name;
-        AllocaInst *lv = localVars[argname];
-        if (lv->getAllocatedType() == jl_pvalue_llvmt) {
-            builder.CreateStore(lv, builder.CreateConstGEP1_32(gcroots,rn));
-            rn++;
+        if (store_unboxed_p(argname, &ctx)) {
+        }
+        else if (isAssigned[argname] || (va && i==largs->length-1)) {
+            Value *av = builder.CreateConstGEP1_32(ctx.argTemp,varnum);
+            varnum++;
+            localVars[argname] = av;
+            argumentMap[argname] = av;
         }
     }
     for(i=0; i < lvars->length; i++) {
         char *argname = ((jl_sym_t*)jl_cellref(lvars,i))->name;
-        AllocaInst *lv = localVars[argname];
-        if (lv->getAllocatedType() == jl_pvalue_llvmt) {
-            builder.CreateStore(lv, builder.CreateConstGEP1_32(gcroots,rn));
-            rn++;
+        if (store_unboxed_p(argname, &ctx)) {
+        }
+        else {
+            Value *lv = builder.CreateConstGEP1_32(ctx.argTemp,varnum);
+            varnum++;
+            localVars[argname] = lv;
         }
     }
-    assert(rn == n_roots);
-#endif
+    assert(varnum == n_roots);
 
     // create boxes for boxed locals
     for(i=0; i < lvars->length; i++) {
         char *argname = ((jl_sym_t*)jl_cellref(lvars,i))->name;
-        if (isBoxed[argname]) {
-            AllocaInst *lv = localVars[argname];
+        if (isBoxed(argname, &ctx)) {
+            Value *lv = localVars[argname];
             builder.CreateStore(builder.CreateCall(jlbox_func, V_null), lv);
         }
     }
 
     // check arg count
-    size_t nreq = largs->length;
-    int va = 0;
-    if (nreq > 0 && jl_is_rest_arg(jl_cellref(largs,nreq-1))) {
-        nreq--;
-        va = 1;
-    }
     if (ctx.linfo->specTypes == NULL) {
         if (va) {
             Value *enough =
@@ -1239,24 +1248,29 @@ static void emit_function(jl_lambda_info_t *lam, Function *f)
     }
 
     // move args into local variables
-    // (probably possible to avoid this step with a little redesign)
-    // TODO: avoid for arguments that aren't assigned
     for(i=0; i < nreq; i++) {
         char *argname = jl_decl_var(jl_cellref(largs,i))->name;
-        AllocaInst *lv = localVars[argname];
-        Value *argPtr =
-            builder.CreateGEP((Value*)&argArray,
-                              ConstantInt::get(T_int32, i));
-        LoadInst *theArg = builder.CreateLoad(argPtr, false);
-        if (isBoxed[argname])
-            builder.CreateStore(builder.CreateCall(jlbox_func, theArg), lv);
-        else if (lv->getAllocatedType() == jl_pvalue_llvmt)
-            builder.CreateStore(theArg, lv);
-        else
-            builder.CreateStore(emit_unbox(lv->getAllocatedType(),
-                                           lv->getType(),
-                                           theArg),
-                                lv);
+        Value *argPtr = builder.CreateGEP((Value*)&argArray,
+                                          ConstantInt::get(T_int32, i));
+        Value *lv = localVars[argname];
+        if (lv == NULL) {
+            // if this argument hasn't been given space yet, we've decided
+            // to leave it in the input argument array.
+            localVars[argname] = argPtr;
+            argumentMap[argname] = argPtr;
+        }
+        else {
+            LoadInst *theArg = builder.CreateLoad(argPtr, false);
+            if (isBoxed(argname, &ctx))
+                builder.CreateStore(builder.CreateCall(jlbox_func, theArg), lv);
+            else if (dynamic_cast<GetElementPtrInst*>(lv) != NULL)
+                builder.CreateStore(theArg, lv);
+            else
+                builder.CreateStore(emit_unbox(dynamic_cast<AllocaInst*>(lv)->getAllocatedType(),
+                                               lv->getType(),
+                                               theArg),
+                                    lv);
+        }
     }
     // allocate rest argument if necessary
     if (va) {
@@ -1268,8 +1282,8 @@ static void emit_function(jl_lambda_info_t *lam, Function *f)
                                 builder.CreateSub((Value*)&argCount,
                                                   ConstantInt::get(T_int32,nreq)));
         char *argname = jl_decl_var(jl_cellref(largs,nreq))->name;
-        AllocaInst *lv = localVars[argname];
-        if (isBoxed[argname])
+        Value *lv = localVars[argname];
+        if (isBoxed(argname, &ctx))
             builder.CreateStore(builder.CreateCall(jlbox_func, restTuple), lv);
         else
             builder.CreateStore(restTuple, lv);
@@ -1403,7 +1417,7 @@ static void init_julia_llvm_env(Module *m)
 
 #ifdef JL_GC_MARKSWEEP
     std::vector<const Type*> gcframeStructElts(0);
-    gcframeStructElts.push_back(PointerType::get(PointerType::get(jl_pvalue_llvmt,0),0));
+    gcframeStructElts.push_back(PointerType::get(jl_ppvalue_llvmt,0));
     gcframeStructElts.push_back(T_size);
     gcframeStructElts.push_back(T_int32);
     PATypeHolder tempTy2 = OpaqueType::get(getGlobalContext());
