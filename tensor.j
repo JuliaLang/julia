@@ -224,8 +224,8 @@ ref{T}(a::Array{T,2}, i::Index, j::Index) = arrayref(a, (j-1)*a.dims[1] + i)
 
 ref(t::Tensor, r::Real...) = t[map(x->convert(Int32,round(x)),r)...]
 
-ref{T}(A::Tensor{T,1}, I::Indices) = [ A[i] | i = I ]
-ref(A::Tensor{Any,1}, I::Indices) = { A[i] | i = I }
+ref{T}(A::Tensor{T,1}, I::Vector{Index}) = [ A[i] | i = I ]
+ref(A::Tensor{Any,1}, I::Vector{Index}) = { A[i] | i = I }
 
 ref{T}(A::Tensor{T,2}, I::Indices, J::Indices) = [ A[i,j] | i = I, j = J ]
 
@@ -271,19 +271,19 @@ end
 
 ## Indexing: assign ##
 
-assign{T}(A::Array{T}, x, i::Index) = arrayset(A,i,convert(T, x))
 assign(A::Array{Any}, x, i::Index) = arrayset(A,i,x)
+assign{T}(A::Array{T}, x, i::Index) = arrayset(A,i,convert(T, x))
 
 assign(t::Tensor, x, r::Real...) = (t[map(x->convert(Int32,round(x)),r)...] = x)
 
-function assign(A::Vector, x::Scalar, I::Indices)
+function assign(A::Vector, x::Scalar, I::Vector{Index})
     for i=I
         A[i] = x
     end
     return A
 end
 
-function assign(A::Vector, X::Vector, I::Indices)
+function assign(A::Vector, X::Vector, I::Vector{Index})
     count = 1
     for i=I
         A[i] = X[count]
@@ -311,64 +311,54 @@ function assign(A::Matrix, X::Tensor, I::Indices, J::Indices)
     return A
 end
 
-function assign(A::Tensor, x::Scalar, I::Index...)
+function assign(A::Tensor, x::Scalar, I0::Index, I::Index...)
     dims = size(A)
-    ndims = length(I)
-
-    index = I[1]
+    index = I0
     stride = 1
-    for k=2:ndims
-        stride = stride * dims[k-1]
+    for k=1:length(I)
+        stride = stride * dims[k]
         index += (I[k]-1) * stride
     end
-
     A[index] = x
     return A
 end
 
-function assign(A::Tensor, x::Scalar, I::Indices...)
+
+function assign(A::Tensor, x::Scalar, I0::Indices, I::Indices...)
     dims = size(A)
     ndimsA = length(dims)
 
-    strides = Array(Size, ndimsA)
-    strides[1] = 1
-    for d=2:ndimsA
-        strides[d] = strides[d-1] * dims[d-1]
-    end
+    strides = cumprod(dims)
 
     function store_one(ind)
         index = ind[1]
         for d=2:ndimsA
-            index += (ind[d]-1) * strides[d]
+            index += (ind[d]-1) * strides[d-1]
         end
         A[index] = x
     end
         
-    cartesian_map(store_one, I)
+    cartesian_map(store_one, append(tuple(I0), I))
     return A
 end
 
-function assign(A::Tensor, X::Tensor, I::Indices...)
+function assign(A::Tensor, X::Tensor, I0::Indices, I::Indices...)
     dims = size(A)
     ndimsA = length(dims)
 
-    strides = Array(Size, ndimsA)
-    strides[1] = 1
-    for d=2:ndimsA
-        strides[d] = strides[d-1] * dims[d-1]
-    end
+    strides = cumprod(dims)
 
     refind = 1
     function store_all(ind)
         index = ind[1]
         for d=2:ndimsA
-            index += (ind[d]-1) * strides[d]
+            index += (ind[d]-1) * strides[d-1]
         end
         A[index] = X[refind]
         refind += 1
     end
     
-    cartesian_map(store_all, I)
+    cartesian_map(store_all, append(tuple(I0), I))
     return A
 end
 
