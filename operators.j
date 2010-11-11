@@ -32,7 +32,7 @@ function (+)(x1, x2, x3, xs...)
     accum
 end
 
-(\)(x,y) = y/x
+(\)(x::Number, y::Number) = y/x
 
 # .<op> defaults to <op>
 (./)(x::Number,y::Number) = x/y
