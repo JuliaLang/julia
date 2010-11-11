@@ -16,6 +16,7 @@ size(x::Scalar) = ()
 ndims(x::Scalar) = 0
 numel(x::Scalar) = 1
 length(x::Scalar) = 1
+ref(x::Scalar) = x
 
 signbit(x::Real) = x < 0 ? int8(-1) : int8(1)
 sign(x::Real) = x < 0 ? int8(-1) : x > 0 ? int8(1) : int8(0)

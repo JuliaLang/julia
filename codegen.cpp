@@ -807,30 +807,13 @@ static Value *emit_call(jl_value_t **args, size_t arglen, jl_codectx_t *ctx)
         builder.CreateStore(boxed(anArg), dest);
         ctx->argDepth++;
     }
-    /*
-    Value *stacksave =
-        builder.CreateCall(Intrinsic::getDeclaration(jl_Module,
-                                                     Intrinsic::stacksave));
-    Value *argl = builder.CreateAlloca(jl_pvalue_llvmt,
-                                       ConstantInt::get(T_int32, nargs));
-    size_t i;
-    for(i=0; i < nargs; i++) {
-        Value *anArg = emit_expr(args[i+1], ctx, true);
-        Value *dest = builder.CreateGEP(argl, ConstantInt::get(T_int32,i));
-        builder.CreateStore(boxed(anArg), dest);
-    }
-    */
+
     // call
     Value *myargs = builder.CreateGEP(ctx->argTemp,
                                       ConstantInt::get(T_int32, argStart));
     Value *result = builder.CreateCall3(theFptr, theEnv, myargs,
                                         ConstantInt::get(T_int32,nargs));
-    // restore stack
-    /*
-    builder.CreateCall(Intrinsic::getDeclaration(jl_Module,
-                                                 Intrinsic::stackrestore),
-                       stacksave);
-    */
+
     ctx->argDepth = last_depth;
     return result;
 }
