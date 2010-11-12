@@ -46,11 +46,12 @@ ref(r::Range1, i::Index) = (x = r.start + (i-1);
 struct NDRange{N}
     ranges::NTuple{N,Any}
     empty::Bool
-    NDRange(ranges) = new(ranges, any(map(isempty,ranges)))
     NDRange(r::())           =new(r,false)
     NDRange(r::(Any,))       =new(r,isempty(r[1]))
     NDRange(r::(Any,Any))    =new(r,isempty(r[1])||isempty(r[2]))
     NDRange(r::(Any,Any,Any))=new(r,isempty(r[1])||isempty(r[2])||isempty(r[3]))
+    NDRange(r::Tuple)        =new(r,any(map(isempty,r)))
+    NDRange(rs...) = NDRange(rs)
 end
 
 start(r::NDRange{0}) = false

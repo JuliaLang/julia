@@ -129,9 +129,9 @@ jl_value_t *jl_eqtable_next(jl_array_t *t, uint32_t i)
     jl_value_t *vi=NULL, *vt=NULL, *vv=NULL;
     JL_GC_PUSH(&vi, &vt);
     vi = jl_box_uint32(i+2);
-    vt = (jl_value_t*)jl_tuple(2, ((jl_value_t**)t->data)[i],
-                               ((jl_value_t**)t->data)[i+1]);
-    vv = (jl_value_t*)jl_tuple(2, vt, vi);
+    vt = (jl_value_t*)jl_tuple2(((jl_value_t**)t->data)[i],
+                                ((jl_value_t**)t->data)[i+1]);
+    vv = (jl_value_t*)jl_tuple2(vt, vi);
     JL_GC_POP();
     return vv;
 }

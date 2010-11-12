@@ -641,6 +641,20 @@ static void show_tuple(jl_tuple_t *t, char opn, char cls, int comma_one)
     ios_putc(cls, s);
 }
 
+static void show_function(jl_value_t *v)
+{
+    ios_t *s = jl_current_output_stream();
+    if (jl_is_gf(v)) {
+        ios_puts("Methods for generic function ", s);
+        ios_puts(jl_gf_name(v)->name, s);
+        ios_putc('\n', s);
+        jl_show_method_table((jl_function_t*)v);
+    }
+    else {
+        ios_puts("#<closure>", s);
+    }
+}
+
 static void show_type(jl_value_t *t)
 {
     ios_t *s = jl_current_output_stream();
@@ -664,24 +678,15 @@ static void show_type(jl_value_t *t)
     }
     else {
         assert(jl_is_some_tag_type(t));
-        ios_puts(((jl_tag_type_t*)t)->name->name->name, s);
-        jl_tuple_t *p = ((jl_tag_type_t*)t)->parameters;
+        jl_tag_type_t *tt = (jl_tag_type_t*)t;
+        ios_puts(tt->name->name->name, s);
+        jl_tuple_t *p = tt->parameters;
         if (p->length > 0)
             show_tuple(p, '{', '}', 0);
-    }
-}
-
-static void show_function(jl_value_t *v)
-{
-    ios_t *s = jl_current_output_stream();
-    if (jl_is_gf(v)) {
-        ios_puts("Methods for generic function ", s);
-        ios_puts(jl_gf_name(v)->name, s);
-        ios_putc('\n', s);
-        jl_show_method_table((jl_function_t*)v);
-    }
-    else {
-        ios_puts("#<closure>", s);
+        if (jl_is_struct_type(tt) && tt->name->primary==t && jl_is_gf(t)) {
+            ios_putc('\n', s);
+            show_function(t);
+        }
     }
 }
 
@@ -923,7 +928,7 @@ jl_value_t *jl_new_closure_internal(jl_lambda_info_t *li, jl_value_t *env)
     }
     else {
         f = jl_new_closure(jl_trampoline, NULL);
-        f->env = (jl_value_t*)jl_pair((jl_value_t*)f, env);
+        f->env = (jl_value_t*)jl_tuple2((jl_value_t*)f, env);
     }
     f->linfo = li;
     JL_GC_POP();
@@ -1258,7 +1263,7 @@ JL_CALLABLE(jl_f_hash_symbol)
 
 static void add_builtin_method1(jl_function_t *gf, jl_type_t *t, jl_fptr_t f)
 {
-    jl_add_method(gf, jl_tuple(1, t), jl_new_closure(f, NULL));
+    jl_add_method(gf, jl_tuple1(t), jl_new_closure(f, NULL));
 }
 
 static void add_builtin(const char *name, jl_value_t *v)
@@ -1385,10 +1390,10 @@ void jl_init_builtins()
 
     jl_convert_gf = jl_new_generic_function(jl_symbol("convert"));
     jl_add_method(jl_convert_gf,
-                  jl_tuple(2, jl_any_type, jl_any_type),
+                  jl_tuple2(jl_any_type, jl_any_type),
                   jl_new_closure(jl_f_convert, NULL));
     jl_add_method(jl_convert_gf,
-                  jl_tuple(2, jl_wrap_Type((jl_value_t*)jl_pointer_type), jl_any_type),
+                  jl_tuple2(jl_wrap_Type((jl_value_t*)jl_pointer_type), jl_any_type),
                   jl_new_closure(jl_f_convert_to_ptr, NULL));
 
     jl_hash_gf = jl_new_generic_function(jl_symbol("hash"));

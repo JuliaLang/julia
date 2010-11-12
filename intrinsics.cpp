@@ -223,7 +223,7 @@ static jl_value_t *llvm_type_to_julia(const Type *t)
     if (t->isPointerTy()) {
         jl_value_t *elty = llvm_type_to_julia(t->getContainedType(0));
         return (jl_value_t*)jl_apply_type((jl_value_t*)jl_pointer_type,
-                                          jl_tuple(1, elty));
+                                          jl_tuple1(elty));
     }
     jl_errorf("cannot convert type %s to a julia type",
               t->getDescription().c_str());

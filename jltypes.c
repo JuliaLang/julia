@@ -375,7 +375,7 @@ static jl_value_t *intersect_tuple(jl_tuple_t *a, jl_tuple_t *b,
             goto done_intersect_tuple;
         }
         if (aseq && bseq) {
-            ce = (jl_value_t*)jl_tuple(1, ce);
+            ce = (jl_value_t*)jl_tuple1(ce);
             ce = (jl_value_t*)jl_apply_type((jl_value_t*)jl_seq_type,
                                             (jl_tuple_t*)ce);
         }
@@ -459,7 +459,7 @@ static jl_value_t *meet_tvars(jl_tvar_t *a, jl_tvar_t *b)
     if (ub == (jl_value_t*)jl_bottom_type)
         return ub;
     JL_GC_PUSH(&lb, &ub);
-    lb = jl_type_union(jl_tuple(2, a->lb, b->lb));
+    lb = jl_type_union(jl_tuple2(a->lb, b->lb));
     if (!jl_subtype(lb, ub, 0)) {
         JL_GC_POP();
         return (jl_value_t*)jl_bottom_type;
@@ -527,7 +527,7 @@ static jl_value_t *intersect_typevar(jl_tvar_t *a, jl_value_t *b,
     if (jl_is_typevar(b))
         b = tvar_find(penv, b);
     if ((jl_value_t*)a != b) {
-        jl_tuple_t *np = jl_tuple(3, (jl_value_t*)a, b, (jl_value_t*)*penv);
+        jl_tuple_t *np = jl_tuple3((jl_value_t*)a, b, (jl_value_t*)*penv);
         *penv = np;
         tvar_union(penv, a, b);
     }
@@ -578,8 +578,8 @@ static jl_value_t *jl_type_intersect(jl_value_t *a, jl_value_t *b,
             return (jl_value_t*)jl_bottom_type;
         jl_value_t *t1=NULL, *t2=NULL;
         JL_GC_PUSH(&t1, &t2);
-        t1 = (jl_value_t*)jl_tuple(2,((jl_func_type_t*)a)->from,
-                                   ((jl_func_type_t*)b)->from);
+        t1 = (jl_value_t*)jl_tuple2(((jl_func_type_t*)a)->from,
+                                    ((jl_func_type_t*)b)->from);
         t1 = jl_type_union((jl_tuple_t*)t1);
         t2 = jl_type_intersect((jl_value_t*)((jl_func_type_t*)a)->to,
                                (jl_value_t*)((jl_func_type_t*)b)->to, penv);
@@ -1431,11 +1431,6 @@ static jl_value_t *tuple_match(jl_tuple_t *child, jl_tuple_t *parent,
     return (jl_value_t*)*env;
 }
 
-jl_tuple_t *jl_pair(jl_value_t *a, jl_value_t *b)
-{
-    return jl_tuple(2, a, b);
-}
-
 jl_tag_type_t *jl_wrap_Type(jl_value_t *t)
 {
     jl_value_t *env[2];
@@ -1484,7 +1479,7 @@ static jl_value_t *type_match_(jl_value_t *child, jl_value_t *parent,
             }
             p = (jl_tuple_t*)jl_nextpair(p);
         }
-        jl_tuple_t *np = jl_tuple(3, parent, child, (jl_value_t*)*env);
+        jl_tuple_t *np = jl_tuple3(parent, child, (jl_value_t*)*env);
         return (jl_value_t*)np;
     }
 
@@ -1564,8 +1559,8 @@ static jl_value_t *type_match_(jl_value_t *child, jl_value_t *parent,
                 return jl_false;
             }
             jl_tuple_t *p_seq =
-                jl_tuple(1, jl_apply_type((jl_value_t*)jl_seq_type,
-                                          jl_tuple(1,jl_tupleref(tp,1))));
+                jl_tuple1(jl_apply_type((jl_value_t*)jl_seq_type,
+                                        jl_tuple1(jl_tupleref(tp,1))));
             return tuple_match((jl_tuple_t*)child, p_seq,
                                env, morespecific);
         }

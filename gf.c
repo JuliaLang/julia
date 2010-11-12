@@ -241,7 +241,7 @@ jl_function_t *jl_instantiate_method(jl_function_t *f, jl_tuple_t *sp)
     if (f->env != NULL && jl_is_tuple(f->env) &&
         ((jl_tuple_t*)f->env)->length == 2 &&
         jl_t0(f->env) == (jl_value_t*)f) {
-        nf->env = (jl_value_t*)jl_pair((jl_value_t*)nf, jl_t1(f->env));
+        nf->env = (jl_value_t*)jl_tuple2((jl_value_t*)nf, jl_t1(f->env));
     }
     nf->linfo = jl_add_static_parameters(f->linfo, sp);
     JL_GC_POP();
@@ -386,7 +386,7 @@ static jl_function_t *cache_method(jl_methtable_t *mt, jl_tuple_t *type,
             if (jl_is_tag_type(lasttype) &&
                 ((jl_tag_type_t*)lasttype)->name == jl_type_type->name)
                 lasttype = (jl_value_t*)jl_type_type;
-            temp = (jl_value_t*)jl_tuple(1,lasttype);
+            temp = (jl_value_t*)jl_tuple1(lasttype);
             jl_tupleset(type, i, jl_apply_type((jl_value_t*)jl_seq_type,
                                                (jl_tuple_t*)temp));
         }
@@ -656,7 +656,7 @@ static jl_tuple_t *find_tvars(jl_value_t *v, jl_tuple_t *env)
                 return env;
             pe = (jl_tuple_t*)jl_t1(pe);
         }
-        return jl_tuple(2, v, env);
+        return jl_tuple2(v, env);
     }
     JL_GC_PUSH(&env);
     if (jl_is_func_type(v)) {
@@ -861,7 +861,7 @@ void jl_initialize_generic_function(jl_function_t *f, jl_sym_t *name)
     f->fptr = jl_apply_generic;
     jl_value_t *nmt = (jl_value_t*)new_method_table();
     JL_GC_PUSH(&nmt);
-    f->env = (jl_value_t*)jl_pair(nmt, (jl_value_t*)name);
+    f->env = (jl_value_t*)jl_tuple2(nmt, (jl_value_t*)name);
     JL_GC_POP();
 }
 
@@ -870,7 +870,7 @@ jl_function_t *jl_new_generic_function(jl_sym_t *name)
     jl_value_t *nmt = (jl_value_t*)new_method_table();
     jl_value_t *env = NULL;
     JL_GC_PUSH(&nmt, &env);
-    env = (jl_value_t*)jl_pair(nmt, (jl_value_t*)name);
+    env = (jl_value_t*)jl_tuple2(nmt, (jl_value_t*)name);
     jl_function_t *f = jl_new_closure(jl_apply_generic, env);
     JL_GC_POP();
     return f;
@@ -918,7 +918,7 @@ static jl_tuple_t *match_method(jl_value_t *type, jl_function_t *func,
         // bind type vars to themselves if they were not matched explicitly
         // during type intersection.
         if (!found)
-            env = jl_tuple(3, tv, tv, env);
+            env = jl_tuple3(tv, tv, env);
         t = (jl_tuple_t*)jl_t1(t);
     }
     env = jl_flatten_pairs(env);

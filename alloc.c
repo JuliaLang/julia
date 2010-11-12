@@ -99,6 +99,12 @@ void *allocb(size_t nb)
 }
 */
 
+#ifdef BOEHM_GC
+void *alloc_2w() { return allocb(2*sizeof(void*)); }
+void *alloc_3w() { return allocb(3*sizeof(void*)); }
+void *alloc_4w() { return allocb(4*sizeof(void*)); }
+#endif
+
 DLLEXPORT
 jl_value_t *jl_new_struct(jl_struct_type_t *type, ...)
 {
@@ -142,6 +148,36 @@ jl_tuple_t *jl_tuple(size_t n, ...)
     }
     va_end(args);
     return jv;
+}
+
+jl_tuple_t *jl_tuple1(void *a)
+{
+    jl_tuple_t *t = (jl_tuple_t*)alloc_3w();
+    t->type = (jl_type_t*)jl_tuple_type;
+    t->length = 1;
+    jl_tupleset(t, 0, a);
+    return t;
+}
+
+jl_tuple_t *jl_tuple2(void *a, void *b)
+{
+    jl_tuple_t *t = (jl_tuple_t*)alloc_4w();
+    t->type = (jl_type_t*)jl_tuple_type;
+    t->length = 2;
+    jl_tupleset(t, 0, a);
+    jl_tupleset(t, 1, b);
+    return t;
+}
+
+jl_tuple_t *jl_tuple3(void *a, void *b, void *c)
+{
+    jl_tuple_t *t = (jl_tuple_t*)allocb(5*sizeof(void*));
+    t->type = (jl_type_t*)jl_tuple_type;
+    t->length = 3;
+    jl_tupleset(t, 0, a);
+    jl_tupleset(t, 1, b);
+    jl_tupleset(t, 2, c);
+    return t;
 }
 
 jl_tuple_t *jl_alloc_tuple_uninit(size_t n)
@@ -355,7 +391,7 @@ jl_func_type_t *jl_new_functype(jl_type_t *a, jl_type_t *b)
     if (a != (jl_type_t*)jl_bottom_type &&
         !jl_subtype((jl_value_t*)a, (jl_value_t*)jl_tuple_type, 0) &&
         !jl_subtype((jl_value_t*)jl_tuple_type, (jl_value_t*)a, 0))
-        a = (jl_type_t*)jl_tuple(1, a);
+        a = (jl_type_t*)jl_tuple1(a);
     jl_func_type_t *t = (jl_func_type_t*)newobj((jl_type_t*)jl_func_kind, 2);
     t->from = a;
     t->to = b;
@@ -411,7 +447,7 @@ static void add_generic_ctor(jl_function_t *gf, jl_struct_type_t *t)
     t = (jl_struct_type_t*)jl_new_type_instantiation((jl_value_t*)t);
     gmeth->linfo = jl_new_lambda_info(NULL, jl_null);
     jl_add_method(gf, t->types, gmeth);
-    gmeth->env = (jl_value_t*)jl_pair((jl_value_t*)gmeth, (jl_value_t*)t);
+    gmeth->env = (jl_value_t*)jl_tuple2((jl_value_t*)gmeth, (jl_value_t*)t);
     if (!jl_is_struct_type(gf)) {
         gf->type =
             (jl_type_t*)jl_new_functype((jl_type_t*)t->types, (jl_type_t*)t);
@@ -986,7 +1022,7 @@ jl_array_t *jl_alloc_array_1d(jl_type_t *atype, size_t nr)
     jl_value_t *dim = jl_box_int32(nr);
     jl_tuple_t *dims=NULL;
     JL_GC_PUSH(&dim, &dims);
-    dims = jl_tuple(1, dim);
+    dims = jl_tuple1(dim);
     jl_array_t *a = jl_new_array(atype, dims);
     JL_GC_POP();
     return a;
@@ -1035,7 +1071,7 @@ JL_CALLABLE(jl_generic_array_ctor)
             jl_tupleset(d, i, args[i+1]);
     }
     vnd = jl_box_int32(nd);
-    vtp = (jl_value_t*)jl_tuple(2, args[0], vnd);
+    vtp = (jl_value_t*)jl_tuple2(args[0], vnd);
     vnt = jl_apply_type((jl_value_t*)jl_array_type, (jl_tuple_t*)vtp);
     jl_value_t *ar = (jl_value_t*)jl_new_array((jl_type_t*)vnt, d);
     JL_GC_POP();
@@ -1105,6 +1141,6 @@ void jl_init_builtin_types()
 
     jl_array_uint8_type =
         (jl_type_t*)jl_apply_type((jl_value_t*)jl_array_type,
-                                  jl_tuple(2, jl_uint8_type,
-                                           jl_box_int32(1)));
+                                  jl_tuple2(jl_uint8_type,
+                                            jl_box_int32(1)));
 }
