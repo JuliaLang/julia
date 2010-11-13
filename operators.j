@@ -63,12 +63,13 @@ one(x)  = oftype(x,1)
 
 ## comparison ##
 
-!=(x::Union(Number,Bool), y::Union(Number,Bool)) = !(x == y)
-> (x::Number, y::Number) = (y < x)
-<=(x::Number, y::Number) = (x < y) || (x == y)
->=(x::Number, y::Number) = (x > y) || (x == y)
-# <=(x::Real, y::Real) = (x < y) || (x == y)
-# >=(x::Real, y::Real) = (x > y) || (x == y)
+==(x::Number, y::Number) = (==)(promote(x,y)...)
+!=(x, y) = !(x == y)
+
+< (x::Real, y::Real) = (<)(promote(x,y)...)
+> (x::Real, y::Real) = (y < x)
+<=(x::Real, y::Real) = (x < y) || (x == y)
+>=(x::Real, y::Real) = (x > y) || (x == y)
 
 ## promotion mechanism ##
 
@@ -116,8 +117,6 @@ end
 
 ## promotion in comparisons ##
 
-(<) (x::Real, y::Real)     = (<)(promote(x,y)...)
-(==)(x::Number, y::Number) = (==)(promote(x,y)...)
 
 # these are defined for the fundamental < and == so that if a method is
 # not found for e.g. <=, it is translated to < and == first, then promotion
