@@ -1,4 +1,4 @@
-#show(s::Latin1String) = print(s.data)
+show(s::Latin1String) = print(s.data)
 # core operations & types
 load("range.j")
 load("tuple.j")

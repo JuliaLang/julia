@@ -490,38 +490,69 @@ hcat(A::Array...) = cat(2, A...)
 
 ## Reductions ##
 
-## Type inference doesn't work on op, resulting in cell arrays
-# function reduce{T}(op, A::Array{T,2}, dim::Int)
-#     if dim == 1
-#         [ reduce(op, A[:,i]) | i=1:size(A, 2) ]
-#     elseif dim == 2
-#         [ reduce(op, A[i,:]) | i=1:size(A, 1) ]
-#     end
-# end
+for f = (`max, `min, `sum, `prod) 
 
-function reduce{T}(RType::Type, op, A::Array{T}, region)
-    dimsA = size(A)
-    ndimsA = length(dimsA)
-    dimsR = ntuple(ndimsA, i->(contains(region, i) ? 1 : dimsA[i]))
-    R = Array(RType, dimsR)
+    eval(`function ($f){T}(A::Tensor{T,2}, dim::Union(Int,Tuple))
+            if isinteger(dim)
+               if dim == 1
+                 [ ($f)(A[:,i]) | i=1:size(A, 2) ]
+              elseif dim == 2
+                 [ ($f)(A[i,:]) | i=1:size(A, 1) ]
+              end
+            elseif dim == (1,2)
+                 ($f)(A)
+            end
+         end)
 
-    function reduce_one(ind)
-        sliceA = ntuple(ndimsA, i->(contains(region, i) ?
-                                    Range1(1,dimsA[i]) :
-                                    ind[i]))
-        R[ind...] = reduce(op, A[sliceA...])
-    end
+    eval(`function ($f){T}(A::Array{T}, region::Union(Int,Tuple))
+            dimsA = size(A)
+            ndimsA = length(dimsA)
+            dimsR = ntuple(ndimsA, i->(contains(region, i) ? 1 : dimsA[i]))
+            R = Array(T, dimsR)
 
-    cartesian_map(reduce_one, ntuple(ndimsA, i->(Range1(1,dimsR[i]))) )
-    return R
+            function reduce_one(ind)
+              sliceA = ntuple(ndimsA, i->(contains(region, i) ?
+                                           Range1(1,dimsA[i]) :
+                                           ind[i]))
+              R[ind...] = ($f)(A[sliceA...])
+            end
+
+            cartesian_map(reduce_one, ntuple(ndimsA, i->(Range1(1,dimsR[i]))) )
+            return R
+          end)
 end
 
-max{T}(A::Array{T}, region::Union(Int, Tuple)) = reduce(T, max, A, region)
-min{T}(A::Array{T}, region::Union(Int, Tuple)) = reduce(T, min, A, region)
-sum{T}(A::Array{T}, region::Union(Int, Tuple)) = reduce(T, +, A, region)
-prod{T}(A::Array{T}, region::Union(Int, Tuple)) = reduce(T, .*, A, region)
-all(A::Array{Bool}, region::Union(Int, Tuple)) = reduce(Bool, all, A, region)
-any(A::Array{Bool}, region::Union(Int, Tuple)) = reduce(Bool, any, A, region)
+for f = (`all, `any)
+
+    eval(`function ($f)(A::Tensor{Bool,2}, dim::Union(Int,Tuple))
+            if isinteger(dim)
+               if dim == 1
+                 [ ($f)(A[:,i]) | i=1:size(A, 2) ]
+              elseif dim == 2
+                 [ ($f)(A[i,:]) | i=1:size(A, 1) ]
+              end
+            elseif dim == (1,2)
+                 ($f)(A)
+            end
+         end)
+
+    eval(`function ($f)(A::Array{Bool}, region::Union(Int,Tuple))
+            dimsA = size(A)
+            ndimsA = length(dimsA)
+            dimsR = ntuple(ndimsA, i->(contains(region, i) ? 1 : dimsA[i]))
+            R = Array(Bool, dimsR)
+
+            function reduce_one(ind)
+              sliceA = ntuple(ndimsA, i->(contains(region, i) ?
+                                           Range1(1,dimsA[i]) :
+                                           ind[i]))
+              R[ind...] = ($f)(A[sliceA...])
+            end
+
+            cartesian_map(reduce_one, ntuple(ndimsA, i->(Range1(1,dimsR[i]))) )
+            return R
+          end)
+end
 
 function isequal(x::Array, y::Array)
     if x.dims != y.dims
@@ -536,20 +567,20 @@ function isequal(x::Array, y::Array)
     return true
 end
 
-function scan{T}(op, v::Vector{T})
-    n = length(v)
-    c = Array(T, n)
-    if n == 0; return c; end
+for (f, op) = ((`cumsum, `+), (`cumprod, `(.*)) )
 
-    c[1] = v[1]
-    for i=2:n
-        c[i] = op(v[i], c[i-1])
-    end
-    return c
+    eval(`function ($f){T}(v::Vector{T})
+            n = length(v)
+            c = Array(T, n)
+            if n == 0; return c; end
+
+            c[1] = v[1]
+            for i=2:n
+               c[i] = ($op)(v[i], c[i-1])
+            end
+            return c
+         end)
 end
-
-cumsum(v::Vector) = scan(+, v)
-cumprod(v::Vector) = scan(*, v)
 
 ## iteration support for arrays as ranges ##
 
