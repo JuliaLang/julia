@@ -89,7 +89,7 @@ conj{T <: Number}(x::Array{T}) = x
 real{T <: Number}(x::Array{T}) = x
 imag{T <: Number}(x::Array{T}) = zeros(T, size(x))
 
-for f=(`-, `conj, `real, `imag)
+for f=(`-, `~, `conj, `real, `imag)
     eval(`function ($f){T}(A::Array{T})
             F = Array(T, size(A))
             for i=1:numel(A)
@@ -99,14 +99,12 @@ for f=(`-, `conj, `real, `imag)
          end)
 end
 
-for f=(`!, `~)
-    eval(`function ($f)(A::Tensor{Bool})
-            F = Array(T, size(A))
-            for i=1:numel(A)
-               F[i] = ($f)(A[i])
-            end
-            return F
-         end)
+function !(A::Tensor{Bool})
+    F = Array(Bool, size(A))
+    for i=1:numel(A)
+        F[i] = !A[i]
+    end
+    return F
 end
 
 ## Binary arithmetic operators ##
@@ -491,7 +489,6 @@ hcat(A::Array...) = cat(2, A...)
 ## Reductions ##
 
 for f = (`max, `min, `sum, `prod) 
-
     eval(`function ($f){T}(A::Tensor{T,2}, dim::Union(Int,Tuple))
             if isinteger(dim)
                if dim == 1
@@ -503,27 +500,33 @@ for f = (`max, `min, `sum, `prod)
                  ($f)(A)
             end
          end)
-
-    eval(`function ($f){T}(A::Array{T}, region::Union(Int,Tuple))
-            dimsA = size(A)
-            ndimsA = length(dimsA)
-            dimsR = ntuple(ndimsA, i->(contains(region, i) ? 1 : dimsA[i]))
-            R = Array(T, dimsR)
-
-            function reduce_one(ind)
-              sliceA = ntuple(ndimsA, i->(contains(region, i) ?
-                                           Range1(1,dimsA[i]) :
-                                           ind[i]))
-              R[ind...] = ($f)(A[sliceA...])
-            end
-
-            cartesian_map(reduce_one, ntuple(ndimsA, i->(Range1(1,dimsR[i]))) )
-            return R
-          end)
 end
 
-for f = (`all, `any)
+function areduce{T}(f::Function, A::Array{T}, region::Union(Int,Tuple))
+    dimsA = size(A)
+    ndimsA = length(dimsA)
+    dimsR = ntuple(ndimsA, i->(contains(region, i) ? 1 : dimsA[i]))
+    R = Array(T, dimsR)
+    
+    function reduce_one(ind)
+        sliceA = ntuple(ndimsA, i->(contains(region, i) ?
+                                    Range1(1,dimsA[i]) :
+                                    ind[i]))
+        R[ind...] = f(A[sliceA...])
+    end
+    
+    cartesian_map(reduce_one, ntuple(ndimsA, i->(Range1(1,dimsR[i]))) )
+    return R
+end
 
+max (A::Array,       region::Union(Int,Tuple)) = areduce(max,  A, region)
+min (A::Array,       region::Union(Int,Tuple)) = areduce(min,  A, region)
+sum (A::Array,       region::Union(Int,Tuple)) = areduce(sum,  A, region)
+prod(A::Array,       region::Union(Int,Tuple)) = areduce(prod, A, region)
+all (A::Array{Bool}, region::Union(Int,Tuple)) = areduce(all,  A, region)
+any (A::Array{Bool}, region::Union(Int,Tuple)) = areduce(any,  A, region)
+
+for f = (`all, `any)
     eval(`function ($f)(A::Tensor{Bool,2}, dim::Union(Int,Tuple))
             if isinteger(dim)
                if dim == 1
@@ -535,23 +538,6 @@ for f = (`all, `any)
                  ($f)(A)
             end
          end)
-
-    eval(`function ($f)(A::Array{Bool}, region::Union(Int,Tuple))
-            dimsA = size(A)
-            ndimsA = length(dimsA)
-            dimsR = ntuple(ndimsA, i->(contains(region, i) ? 1 : dimsA[i]))
-            R = Array(Bool, dimsR)
-
-            function reduce_one(ind)
-              sliceA = ntuple(ndimsA, i->(contains(region, i) ?
-                                           Range1(1,dimsA[i]) :
-                                           ind[i]))
-              R[ind...] = ($f)(A[sliceA...])
-            end
-
-            cartesian_map(reduce_one, ntuple(ndimsA, i->(Range1(1,dimsR[i]))) )
-            return R
-          end)
 end
 
 function isequal(x::Array, y::Array)
