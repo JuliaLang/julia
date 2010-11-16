@@ -78,8 +78,11 @@
 	(cons (map (lambda (x)
 		     (if (pair? x)
 			 (let ((g (gensym)))
-			   (set! a (cons `(= ,g ,x) a))
-			   g)
+			   (if (eq? (car x) '...)
+			       (begin (set! a (cons `(= ,g ,(cadr x)) a))
+				      `(... ,g))
+			       (begin (set! a (cons `(= ,g ,x) a))
+				      g)))
 			 x))
 		   e)
 	      (reverse a)))))
@@ -100,66 +103,90 @@
 		 ,(expand-compare-chain (cddr e)))))
       `(call ,(cadr e) ,(car e) ,(caddr e))))
 
-(define (end-val a n) `(call (top size) ,a ,n))
+(define (end-val a n tuples)
+  (if (null? tuples)
+      `(call (top size) ,a ,n)
+      `(call (top size) ,a (call (top +) ,(- n (length tuples))
+				 ,@(map (lambda (t)
+					  `(call (top length) ,t))
+					tuples)))))
 
 ; replace end inside ex with (call (top size) a n)
 ; affects only the closest ref expression, so doesn't go inside nested refs
-(define (replace-end ex a n)
-  (cond ((eq? ex 'end)                (end-val a n))
+(define (replace-end ex a n tuples)
+  (cond ((eq? ex 'end)                (end-val a n tuples))
 	((or (atom? ex) (quoted? ex)) ex)
 	((eq? (car ex) 'ref)          ex)
 	(else
 	 (cons (car ex)
-	       (map (lambda (x) (replace-end x a n))
+	       (map (lambda (x) (replace-end x a n tuples))
 		    (cdr ex))))))
 
-; : inside indexing means :1:
+; translate index x from colons to ranges
+(define (expand-index-colon x)
+  (cond ((eq? x ':) `(call (top Range1) 1 end))
+	((and (pair? x)
+	      (eq? (car x) ':))
+	 (cond ((length= x 2)
+		(cond ((and (length= (cadr x) 3)
+			    (eq? (caadr x) ':)
+			    (eq? (caddr (cadr x)) ':))
+		       ;; (: (: a :)) :a:
+		       `(call (top Range) 1 ,(cadadr x) end))
+		      ((and (length= (cadr x) 3)
+			    (eq? (caadr x) ':))
+		       ;; (: (: a b)) :a:b
+		       `(call (top Range) 1 ,@(cdadr x)))
+		      (else
+		       ;; (: a) :a
+		       `(call (top Range1) 1 ,(cadr x)))))
+	       ((length= x 3)
+		(if (eq? (caddr x) ':)
+		    ;; (: a :) a:
+		    `(call (top Range1) ,(cadr x) end)
+		    ;; (: a b)
+		    `(call (top Range1) ,(cadr x) ,(caddr x))))
+	       ((length= x 4)
+		(if (eq? (cadddr x) ':)
+		    ;; (: a b :) a:b:
+		    `(call (top Range) ,(cadr x) ,(caddr x) end)
+		    ;; (: a b c)
+		    `(call (top Range) ,@(cdr x))))
+	       (else x)))
+	(else x)))
+
+; : inside indexing means 1:end
 ; a:b and a:b:c are ranges instead of calls to colon
 ; expand end to size(a,n)
 ; a = array being indexed, i = list of indexes
+; returns (values index-list stmts) where stmts are statements that need
+; to execute first.
 (define (process-indexes a i)
   (let loop ((lst i)
 	     (n   1)
+	     (stmts '())
+	     (tuples '())
 	     (ret '()))
     (if (null? lst)
-	(reverse ret)
-	(loop (cdr lst) (+ n 1)
-	      (cons
-	       (let ((x (replace-end (car lst) a n)))
-		 (cond ((eq? x ':) `(call (top Range1) 1 ,(end-val a n)))
-		       ((and (pair? x)
-			     (eq? (car x) ':))
-			(cond
-			 ((length= x 2)
-			  (cond
-			   ((and (length= (cadr x) 3)
-				 (eq? (caadr x) ':)
-				 (eq? (caddr (cadr x)) ':))
-			    ;; (: (: a :)) :a:
-			    `(call (top Range) 1 ,(cadadr x) ,(end-val a n)))
-			   ((and (length= (cadr x) 3)
-				 (eq? (caadr x) ':))
-			    ;; (: (: a b)) :a:b
-			    `(call (top Range) 1 ,@(cdadr x)))
-			   (else
-			    ;; (: a) :a
-			    `(call (top Range1) 1 ,(cadr x)))))
-			 ((length= x 3)
-			  (if (eq? (caddr x) ':)
-			      ;; (: a :) a:
-			      `(call (top Range1) ,(cadr x) ,(end-val a n))
-			      ;; (: a b)
-			      `(call (top Range1) ,(cadr x) ,(caddr x))))
-			 ((length= x 4)
-			  (if (eq? (cadddr x) ':)
-			      ;; (: a b :) a:b:
-			      `(call (top Range) ,(cadr x) ,(caddr x)
-				     ,(end-val a n))
-			      ;; (: a b c)
-			      `(call (top Range) ,@(cdr x))))
-			 (else x)))
-		       (else x)))
-	       ret)))))
+	(values (reverse ret) (reverse stmts))
+	(let ((idx (car lst)))
+	  (if (and (pair? idx) (eq? (car idx) '...))
+	      (if (symbol? (cadr idx))
+		  (loop (cdr lst) (+ n 1)
+			stmts
+			(cons (cadr idx) tuples)
+			(cons `(... ,(replace-end (cadr idx) a n tuples))
+			      ret))
+		  (let ((g (gensym)))
+		    (loop (cdr lst) (+ n 1)
+			  (cons `(= ,g ,(replace-end (cadr idx) a n tuples))
+				stmts)
+			  (cons g tuples)
+			  (cons `(... ,g) ret))))
+	      (loop (cdr lst) (+ n 1)
+		    stmts tuples
+		    (cons (replace-end (expand-index-colon idx) a n tuples)
+			  ret)))))))
 
 (define (function-expr argl body)
   (let ((t (llist-types argl))
@@ -455,20 +482,22 @@
 					       (+ i 1)))))))))
 
    (pattern-lambda (= (ref a . idxs) rhs)
-		   (if (pair? a)
-		       (let ((g (gensym)))
-			 `(block
-			   (= ,g ,a)
-			   (call assign ,g ,rhs ,@(process-indexes g idxs))))
-		       `(call assign ,a ,rhs ,@(process-indexes a idxs))))
+		   (let* ((arr   (if (pair? a) (gensym) a))
+			  (stmts (if (pair? a) `((= ,arr ,a)) '())))
+		     (receive
+		      (new-idxs stuff) (process-indexes arr idxs)
+		      `(block
+			,@(append stmts stuff)
+			(call assign ,arr ,rhs ,@new-idxs)))))
 
    (pattern-lambda (ref a . idxs)
-		   (if (pair? a)
-		       (let ((g (gensym)))
-			 `(block
-			   (= ,g ,a)
-			   (call ref ,g ,@(process-indexes g idxs))))
-		       `(call ref ,a ,@(process-indexes a idxs))))
+		   (let* ((arr   (if (pair? a) (gensym) a))
+			  (stmts (if (pair? a) `((= ,arr ,a)) '())))
+		     (receive
+		      (new-idxs stuff) (process-indexes arr idxs)
+		      `(block
+			,@(append stmts stuff)
+			(call ref ,arr ,@new-idxs)))))
 
    (pattern-lambda (curly type . elts)
 		   `(call (top instantiate_type) ,type ,@elts))

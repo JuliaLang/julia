@@ -490,6 +490,7 @@ static jl_value_t *meet_tvar(jl_tvar_t *tv, jl_value_t *ty)
     if (jl_subtype((jl_value_t*)tv->lb, ty, 0)) {
         if (jl_is_leaf_type(ty) || jl_is_int32(ty))
             return ty;
+        assert(ty != (jl_value_t*)jl_bottom_type);
         return (jl_value_t*)jl_new_typevar(jl_symbol("_"), tv->lb, ty);
     }
     return (jl_value_t*)jl_bottom_type;
@@ -543,12 +544,12 @@ static jl_value_t *jl_type_intersect(jl_value_t *a, jl_value_t *b,
     if (jl_is_typector(b))
         b = (jl_value_t*)((jl_typector_t*)b)->body;
     if (a == b) return a;
+    if (a == (jl_value_t*)jl_bottom_type || b == (jl_value_t*)jl_bottom_type)
+        return (jl_value_t*)jl_bottom_type;
     if (jl_is_typevar(a))
         return intersect_typevar((jl_tvar_t*)a, b, penv);
     if (jl_is_typevar(b))
         return intersect_typevar((jl_tvar_t*)b, a, penv);
-    if (a == (jl_value_t*)jl_bottom_type || b == (jl_value_t*)jl_bottom_type)
-        return (jl_value_t*)jl_bottom_type;
     if (!jl_has_typevars(a) && !jl_has_typevars(b)) {
         if (jl_subtype(a, b, 0))
             return a;
@@ -685,6 +686,7 @@ static jl_value_t *jl_type_intersect(jl_value_t *a, jl_value_t *b,
         while (e != (jl_value_t*)jl_null) {
             if (jl_t0(e) == tp) {
                 elt = jl_type_intersect(elt, jl_t1(e), penv);
+                assert(elt != (jl_value_t*)jl_bottom_type);
                 break;
             }
             e = jl_nextpair(e);

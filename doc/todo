@@ -571,6 +571,8 @@ issues 11/6/10
 - make optimized arrayset, arrayref work on all Arrays
 * faster GC stack roots
 - optimize Array constructor (avoid checks and apply_type)
+* fix A[I..., end]
+- implement longjmp block exits so return/break work across functions
 
 arr{T,N}(::Type{T}, d::NTuple{N,Size}) = Array{T,N}(d)
 arr{T}(::Type{T}, d::Size...)          = arr(T, d)

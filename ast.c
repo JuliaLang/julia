@@ -289,7 +289,7 @@ static jl_value_t *scm_to_julia_(value_t e)
 static value_t array_to_list(jl_array_t *a)
 {
     long i;
-    value_t lst=FL_NIL, temp;
+    value_t lst=FL_NIL, temp=FL_NIL;
     fl_gc_handle(&lst);
     fl_gc_handle(&temp);
     for(i=a->length-1; i >= 0; i--) {

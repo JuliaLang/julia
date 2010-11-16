@@ -34,20 +34,20 @@ static jl_methtable_t *new_method_table()
     return mt;
 }
 
-static int cache_match_by_type(jl_value_t **types, size_t n, jl_tuple_t *sig)
+static int cache_match_by_type(jl_value_t **types, size_t n, jl_tuple_t *sig,
+                               int va)
 {
-    if (sig->length > n) {
+    if (!va && n > sig->length)
         return 0;
-    }
-    if (sig->length < n) {
-        if (sig->length==0 || !jl_is_seq_type(jl_tupleref(sig,sig->length-1)))
+    if (sig->length > n) {
+        if (!(n == sig->length-1 && va))
             return 0;
     }
     size_t i;
     for(i=0; i < n; i++) {
         jl_value_t *decl = jl_tupleref(sig, i);
         if (i == sig->length-1) {
-            if (jl_is_seq_type(decl)) {
+            if (va) {
                 jl_value_t *t = jl_tparam0(decl);
                 for(; i < n; i++) {
                     if (!jl_subtype(types[i], t, 0))
@@ -85,36 +85,18 @@ static int cache_match_by_type(jl_value_t **types, size_t n, jl_tuple_t *sig)
     return 1;
 }
 
-static inline int cache_match(jl_value_t **args, size_t n, jl_tuple_t *sig)
+static inline int cache_match(jl_value_t **args, size_t n, jl_tuple_t *sig,
+                              int va)
 {
-#if 0
     if (sig->length > n) {
-        //if (!(n == sig->length-1 && jl_is_seq_type(jl_tupleref(sig,n))))
-        /*
-          in the cache, don't allow T... to match 0 args. here's why:
-          say we have these definitions:
-          f(x::Int32)
-          f(xs...)
-
-          say f(1,2) is called first. this is cached as f(Int32,Any...).
-          now I call f(1). If f(Int32,Any...) matched this, it would call
-          the cached f(xs...) definition, but it should call f(x::Int32).
-
-          alternatively, we could cache f(1,2) as f(Int32,Int32,Any...).
-          however this leads to more compilation.
-        */
-        return 0;
-    }
-#endif
-    if (sig->length < n) {
-        if (sig->length==0 || !jl_is_seq_type(jl_tupleref(sig,sig->length-1)))
+        if (n != sig->length-1)
             return 0;
     }
     size_t i;
     for(i=0; i < n; i++) {
         jl_value_t *decl = jl_tupleref(sig, i);
         if (i == sig->length-1) {
-            if (jl_is_seq_type(decl)) {
+            if (va) {
                 jl_value_t *t = jl_tparam0(decl);
                 for(; i < n; i++) {
                     if (!jl_subtype(args[i], t, 1))
@@ -174,7 +156,7 @@ static jl_function_t *jl_method_table_assoc_exact_by_type(jl_methtable_t *mt,
     jl_methlist_t *ml = mt->cache;
     while (ml != NULL) {
         if (cache_match_by_type(&jl_tupleref(types,0), types->length,
-                                (jl_tuple_t*)ml->sig)) {
+                                (jl_tuple_t*)ml->sig, ml->va)) {
             return ml->func;
         }
         ml = ml->next;
@@ -206,8 +188,8 @@ static jl_function_t *jl_method_table_assoc_exact(jl_methtable_t *mt,
     }
     jl_methlist_t *ml = mt->cache;
     while (ml != NULL) {
-        if (((jl_tuple_t*)ml->sig)->length <= n) {
-            if (cache_match(args, n, (jl_tuple_t*)ml->sig)) {
+        if (((jl_tuple_t*)ml->sig)->length == n || ml->va) {
+            if (cache_match(args, n, (jl_tuple_t*)ml->sig, ml->va)) {
                 return ml->func;
             }
         }
@@ -356,14 +338,17 @@ static jl_function_t *cache_method(jl_methtable_t *mt, jl_tuple_t *type,
     jl_value_t *temp=NULL;
     jl_function_t *newmeth=NULL;
     JL_GC_PUSH(&type, &temp, &newmeth);
-    // for varargs methods, only specialize up to max_args
+    // for varargs methods, only specialize up to max_args.
+    // in general, here we want to find the biggest type that's not a
+    // supertype of any other method signatures. so far we are conservative
+    // and the types we find should be bigger.
     if (type->length > mt->max_args &&
         jl_is_seq_type(jl_tupleref(decl,decl->length-1))) {
-        jl_tuple_t *limited = jl_alloc_tuple(mt->max_args+1);
-        for(i=0; i < mt->max_args; i++) {
+        jl_tuple_t *limited = jl_alloc_tuple(mt->max_args+2);
+        for(i=0; i < mt->max_args+1; i++) {
             jl_tupleset(limited, i, jl_tupleref(type, i));
         }
-        jl_value_t *lasttype = jl_tupleref(type,i);
+        jl_value_t *lasttype = jl_tupleref(type,i-1);
         // if all subsequent arguments are subtypes of lasttype, specialize
         // on that instead of decl. for example, if decl is
         // (Any...)
@@ -372,7 +357,7 @@ static jl_function_t *cache_method(jl_methtable_t *mt, jl_tuple_t *type,
         // then specialize as (Symbol...), but if type is
         // (Symbol, Int32, Expr)
         // then specialize as (Any...)
-        size_t j = i+1;
+        size_t j = i;
         int all_are_subtypes=1;
         for(; j < type->length; j++) {
             if (!jl_subtype(jl_tupleref(type,j), lasttype, 0)) {
@@ -698,6 +683,8 @@ jl_methlist_t *jl_method_list_insert(jl_methlist_t **pml, jl_tuple_t *type,
             l->sig = type;
             l->tvars = find_tvars((jl_value_t*)type, jl_null);
             l->has_tvars = (l->tvars != jl_null);
+            l->va = (type->length > 0 &&
+                     jl_is_seq_type(jl_tupleref(type,type->length-1)));
             l->func = method;
             return l;
         }
@@ -722,6 +709,8 @@ jl_methlist_t *jl_method_list_insert(jl_methlist_t **pml, jl_tuple_t *type,
     newrec->sig = type;
     newrec->tvars = tv;
     newrec->has_tvars = (newrec->tvars != jl_null);
+    newrec->va = (type->length > 0 &&
+                  jl_is_seq_type(jl_tupleref(type,type->length-1)));
     newrec->func = method;
     newrec->next = l;
     *pl = newrec;

@@ -644,6 +644,10 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
                                    builder.CreateAdd(idx, ConstantInt::get(T_int32,1)));
             }
         }
+        else if (f->fptr == &jl_f_tuple) {
+            if (nargs == 0)
+                return literal_pointer_val((jl_value_t*)jl_null);
+        }
         else if (f->fptr == &jl_f_arraylen && nargs==1) {
             jl_value_t *aty = expr_type(args[1]); rt1 = aty;
             if (jl_subtype(aty, (jl_value_t*)jl_array_type, 0)) {

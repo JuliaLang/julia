@@ -178,6 +178,7 @@ typedef struct _jl_methlist_t {
     // not first-class
     jl_tuple_t *sig;
     int has_tvars;
+    int va;
     jl_tuple_t *tvars;
     jl_function_t *func;
     struct _jl_methlist_t *next;

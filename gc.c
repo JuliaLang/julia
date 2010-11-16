@@ -223,7 +223,7 @@ static void sweep_pool(pool_t *p)
         if (freedall) {
             pfl = prev_pfl;
             *ppg = nextpg;
-#ifdef DEBUG
+#ifdef MEMDEBUG
             memset(pg, 0xbb, sizeof(gcpage_t));
 #endif
             free(pg);

@@ -6,12 +6,7 @@ ref(t::Tuple, i::Index) = tupleref(t, i)
 
 ref(t::Tuple, r::Range)  = accumtuple(t, r, start(r), r.step)
 ref(t::Tuple, r::Range1) = accumtuple(t, r, start(r), 1)
-function accumtuple(t::Tuple, r, i, step, elts...)
-    if done(r, i)
-        return elts
-    end
-    accumtuple(t, r, i+step, step, elts..., t[i])
-end
+accumtuple(t::Tuple, r, i, step) = ntuple(length(r), n->t[i+step*(n-1)])
 
 ## iterating ##
 
@@ -37,9 +32,7 @@ map(f, t::(Any,))               = (f(t[1]),)
 map(f, t::(Any, Any))           = (f(t[1]), f(t[2]))
 map(f, t::(Any, Any, Any))      = (f(t[1]), f(t[2]), f(t[3]))
 map(f, t::(Any, Any, Any, Any)) = (f(t[1]), f(t[2]), f(t[3]), f(t[4]))
-map(f, t::Tuple) = maptuple(f, t...)
-maptuple(f) = ()
-maptuple(f, first, rest...) = tuple(f(first), maptuple(f, rest...)...)
+map(f, t::Tuple)                = ntuple(length(t), i->f(t[i]))
 # 2 argument function
 map(f, t::(),        s::())        = ()
 map(f, t::(Any,),    s::(Any,))    = (f(t[1],s[1]),)
