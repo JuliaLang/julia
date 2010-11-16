@@ -566,6 +566,7 @@ jl_value_t *jl_interpret_toplevel_expr_with(jl_value_t *e,
 void jl_show_method_table(jl_function_t *gf);
 jl_function_t *jl_instantiate_method(jl_function_t *f, jl_tuple_t *sp);
 jl_lambda_info_t *jl_add_static_parameters(jl_lambda_info_t *l, jl_tuple_t *sp);
+jl_function_t *jl_method_lookup(jl_methtable_t *mt, jl_tuple_t *types);
 
 // AST access
 jl_array_t *jl_lam_args(jl_expr_t *l);

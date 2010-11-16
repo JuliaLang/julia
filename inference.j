@@ -619,18 +619,16 @@ end
 #Inference_Task = Task(typeinf_task, 2097152)
 #yieldto(Inference_Task, current_task())
 
-function typeinf_ext(linfo, atypes, sparams, cop)
-    return typeinf_ext_(linfo, atypes, sparams, cop)
-
+#function typeinf_ext(linfo, atypes, sparams, cop)
     #C = current_task()
     #args = (linfo, atypes, sparams, cop)
     #if is(C, Inference_Task)
     #    return typeinf_ext_(args...)
     #end
     #return yieldto(Inference_Task, C, args)
-end
+#end
 
-function typeinf_ext_(linfo, atypes, sparams, cop)
+function typeinf_ext(linfo, atypes, sparams, cop)
     global inference_stack
     last = inference_stack
     inference_stack = EmptyCallStack()

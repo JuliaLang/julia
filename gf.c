@@ -429,7 +429,7 @@ static jl_function_t *cache_method(jl_methtable_t *mt, jl_tuple_t *type,
     return retfunc;
 }
 
-static jl_function_t *mt_assoc_by_type(jl_methtable_t *mt, jl_tuple_t *tt)
+jl_function_t *jl_mt_assoc_by_type(jl_methtable_t *mt, jl_tuple_t *tt)
 {
     jl_methlist_t *m = mt->defs;
     size_t nargs = tt->length;
@@ -482,52 +482,6 @@ static jl_function_t *mt_assoc_by_type(jl_methtable_t *mt, jl_tuple_t *tt)
 }
 
 jl_tag_type_t *jl_wrap_Type(jl_value_t *t);
-
-jl_function_t *jl_method_table_assoc(jl_methtable_t *mt,
-                                     jl_value_t **args, size_t nargs)
-{
-    /*
-      search order:
-      look at concrete signatures
-      if there is an exact match, return it
-      otherwise look for a matching generic signature
-      if no concrete or generic match, raise error
-      if no generic match, use the concrete one even if inexact
-      otherwise instantiate the generic method and use it
-    */
-    jl_function_t *mfunc = jl_method_table_assoc_exact(mt, args, nargs);
-    if (mfunc != NULL) {
-        if (mfunc->linfo != NULL && 
-            (mfunc->linfo->inInference || mfunc->linfo->inCompile)) {
-            // if inference is running on this function, return a copy
-            // of the function to be compiled without inference and run.
-            jl_lambda_info_t *li = mfunc->linfo;
-            if (li->unspecialized == NULL) {
-                li->unspecialized = jl_instantiate_method(mfunc, jl_null);
-            }
-            return li->unspecialized;
-        }
-        return mfunc;
-    }
-
-    jl_tuple_t *tt = jl_alloc_tuple(nargs);
-    JL_GC_PUSH(&tt);
-    size_t i;
-    for(i=0; i < tt->length; i++) {
-        jl_value_t *a;
-        if (jl_is_some_tag_type(args[i])) {
-            a = (jl_value_t*)jl_wrap_Type(args[i]);
-        }
-        else {
-            a = (jl_value_t*)jl_full_type(args[i]);
-        }
-        jl_tupleset(tt, i, a);
-    }
-
-    jl_function_t *ff = mt_assoc_by_type(mt, tt);
-    JL_GC_POP();
-    return ff;
-}
 
 static int sigs_eq(jl_value_t *a, jl_value_t *b)
 {
@@ -780,16 +734,23 @@ static char *type_summary(jl_value_t *t)
 
 JL_CALLABLE(jl_trampoline);
 
+jl_function_t *jl_method_lookup(jl_methtable_t *mt, jl_tuple_t *types)
+{
+    jl_function_t *sf = jl_method_table_assoc_exact_by_type(mt, types);
+    if (sf == NULL) {
+        sf = jl_mt_assoc_by_type(mt, types);
+    }
+    return sf;
+}
+
 // compile-time method lookup
 jl_function_t *jl_get_specialization(jl_function_t *f, jl_tuple_t *types)
 {
     assert(jl_is_gf(f));
     jl_methtable_t *mt = (jl_methtable_t*)jl_t0(f->env);
-    jl_function_t *sf = jl_method_table_assoc_exact_by_type(mt, types);
+    jl_function_t *sf = jl_method_lookup(mt, types);
     if (sf == NULL) {
-        sf = mt_assoc_by_type(mt, types);
-        if (sf == NULL)
-            return NULL;
+        return NULL;
     }
     if (sf->linfo == NULL || sf->linfo->ast == NULL) {
         return NULL;
@@ -816,7 +777,45 @@ JL_CALLABLE(jl_apply_generic)
     }
     ios_printf(ios_stdout, ")\n");
 #endif
-    jl_function_t *mfunc = jl_method_table_assoc(mt, args, nargs);
+    /*
+      search order:
+      look at concrete signatures
+      if there is an exact match, return it
+      otherwise look for a matching generic signature
+      if no concrete or generic match, raise error
+      if no generic match, use the concrete one even if inexact
+      otherwise instantiate the generic method and use it
+    */
+    jl_function_t *mfunc = jl_method_table_assoc_exact(mt, args, nargs);
+    if (mfunc != NULL) {
+        if (mfunc->linfo != NULL && 
+            (mfunc->linfo->inInference || mfunc->linfo->inCompile)) {
+            // if inference is running on this function, return a copy
+            // of the function to be compiled without inference and run.
+            jl_lambda_info_t *li = mfunc->linfo;
+            if (li->unspecialized == NULL) {
+                li->unspecialized = jl_instantiate_method(mfunc, jl_null);
+            }
+            mfunc = li->unspecialized;
+        }
+    }
+    else {
+        jl_tuple_t *tt = jl_alloc_tuple(nargs);
+        JL_GC_PUSH(&tt);
+        size_t i;
+        for(i=0; i < tt->length; i++) {
+            jl_value_t *a;
+            if (jl_is_some_tag_type(args[i])) {
+                a = (jl_value_t*)jl_wrap_Type(args[i]);
+            }
+            else {
+                a = (jl_value_t*)jl_full_type(args[i]);
+            }
+            jl_tupleset(tt, i, a);
+        }
+        mfunc = jl_mt_assoc_by_type(mt, tt);
+        JL_GC_POP();
+    }
 
     if (mfunc == NULL) {
         jl_no_method_error((jl_sym_t*)jl_t1(env), args, nargs);
