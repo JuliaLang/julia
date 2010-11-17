@@ -645,6 +645,7 @@ void jl_gc_enable();
 void jl_gc_disable();
 int jl_gc_is_enabled();
 void jl_gc_collect();
+void jl_gc_add_finalizer(jl_value_t *v, jl_function_t *f);
 #define jl_gc_setmark(v) (((uptrint_t*)(v))[-1]|=1)
 void *alloc_2w();
 void *alloc_3w();

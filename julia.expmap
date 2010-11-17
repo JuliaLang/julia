@@ -15,10 +15,6 @@
     double_mantissa;
     float_exponent;
     float_mantissa;
-    bitvector_new;
-    bitvector_resize;
-    bitvector_set;
-    bitvector_get;
     bitvector_next;
     jl_new_struct;
     jl_new_structt;
@@ -66,6 +62,7 @@
     jl_wait_msg;
     jl_read_avail;
     jl_nb_available;
+    jl_gc_add_finalizer;
   local:
     *;
 };

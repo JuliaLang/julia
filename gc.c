@@ -94,6 +94,35 @@ static pool_t pools[N_POOLS];
 static size_t allocd_bytes = 0;
 static size_t collect_interval = 8192*1024;
 
+static htable_t finalizer_table;
+static arraylist_t to_finalize;
+
+static void schedule_finalization(void *o)
+{
+    gc_val(o)->finalize = 0;
+    arraylist_push(&to_finalize, o);
+}
+
+static void run_finalizers()
+{
+    void *o = NULL;
+    JL_GC_PUSH(&o);
+    while (to_finalize.len > 0) {
+        o = arraylist_pop(&to_finalize);
+        jl_function_t *f = (jl_function_t*)ptrhash_get(&finalizer_table, o);
+        assert(f != HT_NOTFOUND);
+        ptrhash_remove(&finalizer_table, o);
+        jl_apply(f, (jl_value_t**)&o, 1);
+    }
+    JL_GC_POP();
+}
+
+void jl_gc_add_finalizer(jl_value_t *v, jl_function_t *f)
+{
+    gc_val(v)->finalize = 1;
+    ptrhash_put(&finalizer_table, v, f);
+}
+
 // size classes:
 // <=8, 12, 16, 20, 24, 28, 32, 48, 64, 96, 128, 192, 256, 384, 512, 768, 1024, 1536, 2048
 //   0   1   2   3   4   5   6   7   8   9   10   11   12   13   14   15,   16,   17,   18
@@ -148,13 +177,20 @@ static void sweep_big()
             v->marked = 0;
         }
         else {
-            *pv = nxt;
-            // todo: move to to-free list, free after finalization
+            if (v->finalize) {
+                // keep for now
+                pv = &v->next;
+                v->marked = 0;
+                schedule_finalization(&v->_data[0]);
+            }
+            else {
+                *pv = nxt;
 #ifdef MEMDEBUG
-            size_t thesz = v->sz;
-            memset(v, 0xbb, v->sz+3*sizeof(void*));
+                size_t thesz = v->sz;
+                memset(v, 0xbb, v->sz+3*sizeof(void*));
 #endif
-            free(v);
+                free(v);
+            }
         }
         v = nxt;
     }
@@ -206,9 +242,20 @@ static void sweep_pool(pool_t *p)
         while ((char*)v <= lim) {
             //if (!gcv_isfree(v))
             //    empty = 0;
-            if (gcv_isfree(v) || !v->marked) {
+            if (gcv_isfree(v)) {
                 *pfl = v;
                 pfl = &v->next;
+            }
+            else if (!v->marked) {
+                if (v->finalize) {
+                    v->marked = 0;
+                    freedall = 0;
+                    schedule_finalization(&v->_data[0]);
+                }
+                else {
+                    *pfl = v;
+                    pfl = &v->next;
+                }
             }
             else {
                 v->marked = 0;
@@ -453,6 +500,15 @@ static void gc_mark()
     GC_Markval(jl_false);
 
     jl_mark_box_caches();
+
+    size_t i;
+    for(i=0; i < to_finalize.len; i++) {
+        GC_Markval(to_finalize.items[i]);
+    }
+    for(i=0; i < finalizer_table.size; i+=2) {
+        if (finalizer_table.table[i+1] != HT_NOTFOUND)
+            GC_Markval(finalizer_table.table[i+1]);
+    }
 }
 
 static int is_gc_enabled = 0;
@@ -474,6 +530,7 @@ void jl_gc_collect()
     if (is_gc_enabled) {
         gc_mark();
         gc_sweep();
+        run_finalizers();
     }
     allocd_bytes = 0;
 }
@@ -554,4 +611,7 @@ void jl_gc_init()
         pools[i].pages = NULL;
         pools[i].freelist = NULL;
     }
+
+    htable_new(&finalizer_table, 0);
+    arraylist_new(&to_finalize, 0);
 }
