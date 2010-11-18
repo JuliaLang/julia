@@ -71,6 +71,8 @@ one(x)  = oftype(x,1)
 <=(x::Real, y::Real) = (x < y) || (x == y)
 >=(x::Real, y::Real) = (x > y) || (x == y)
 
+isequal(x, y) = (x==y)
+
 ## promotion mechanism ##
 
 promote_type{T}(::Type{T}) = T

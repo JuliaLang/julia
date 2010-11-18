@@ -50,16 +50,28 @@ bitmix(a::Union(Int64,Uint64), b::Union(Int64, Uint64)) =
           xor_int(unbox64(a), or_int(lshr_int(unbox64(b),unbox32(32)),
                                      shl_int(unbox64(b),unbox32(32)))))
 
-hash(x::Union(Int32,Uint32,Char)) =
-    ccall(dlsym(JuliaDLHandle,"int32hash"), Uint32, (Uint32,), uint32(x))
+#hash(x::Union(Int32,Uint32,Char)) =
+#    ccall(dlsym(JuliaDLHandle,"int32hash"), Uint32, (Uint32,), uint32(x))
+#hash(x::Union(Int64,Uint64)) =
+#    ccall(dlsym(JuliaDLHandle,"int64hash"), Uint64, (Uint64,), uint64(x))
 
-hash(x::Union(Int64,Uint64)) =
-    ccall(dlsym(JuliaDLHandle,"int64hash"), Uint64, (Uint64,), uint64(x))
+hash(x::Number) = hash(float64(x))
+hash(x::Float64) =
+    ccall(dlsym(JuliaDLHandle,"int64hash"), Uint64, (Uint64,),
+          boxui64(unbox64(x)))
 
 function hash(t::Tuple)
-    h = 0
+    h = int64(0)
     for i=1:length(t)
         h = bitmix(h,hash(t[i]))
+    end
+    h
+end
+
+function hash(a::Array)
+    h = hash(size(a))+1
+    for i=1:length(a)
+        h = bitmix(h,hash(a[i]))
     end
     h
 end
@@ -97,7 +109,7 @@ function assign{K,V}(h::HashTable{K,V}, v, key)
             return h
         end
 
-        if key == h.keys[index]
+        if isequal(key, h.keys[index])
             h.vals[index] = v
             return h
         end
@@ -136,7 +148,7 @@ function get(h::HashTable, key, deflt)
         if !contains(h.used,index)
             break
         end
-        if key == h.keys[index]
+        if isequal(key, h.keys[index])
             return h.vals[index]
         end
 

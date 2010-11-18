@@ -523,6 +523,26 @@ static Value *FP(Value *v)
     return builder.CreateBitCast(v, FT(v->getType()));
 }
 
+// convert float type to same-size int type
+static const Type *INTT(const Type *t)
+{
+    if (t->isIntegerTy())
+        return t;
+    if (t->isPointerTy())
+        return T_size;
+    if (t == T_float32) return T_int32;
+    assert(t == T_float64);
+    return T_int64;
+}
+
+// reinterpret-cast to int
+static Value *INT(Value *v)
+{
+    if (v->getType()->isIntegerTy())
+        return v;
+    return builder.CreateBitCast(v, INTT(v->getType()));
+}
+
 static Value *uint_cnvt(const Type *to, Value *x)
 {
     const Type *t = x->getType();
@@ -704,9 +724,9 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
         return builder.CreateFRem(FP(x), FP(emit_expr(args[2],ctx,true)));
 
     HANDLE(eq_int,2)
-        return builder.CreateICmpEQ(x, emit_expr(args[2],ctx,true));
+        return builder.CreateICmpEQ(INT(x), INT(emit_expr(args[2],ctx,true)));
     HANDLE(ne_int,2)
-        return builder.CreateICmpNE(x, emit_expr(args[2],ctx,true));
+        return builder.CreateICmpNE(INT(x), INT(emit_expr(args[2],ctx,true)));
     HANDLE(slt_int,2)
         return builder.CreateICmpSLT(x, emit_expr(args[2],ctx,true));
     HANDLE(ult_int,2)

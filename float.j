@@ -100,6 +100,9 @@ mod{T<:Float}(x::T, y::T) = rem(y+rem(x,y),y)
 <=(x::Float, y::Float) = (<=)(promote(x,y)...)
 >=(x::Float, y::Float) = (>=)(promote(x,y)...)
 
+isequal(x::Float, y::Float) =
+    eq_int(unbox64(float64(x)), unbox64(float64(y)))
+
 ## traits ##
 
 eps(::Type{Float32}) = float32(1.1920928e-7)

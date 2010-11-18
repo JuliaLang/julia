@@ -503,6 +503,23 @@ static void awful_sigfpe_hack()
 
 void jl_lisp_prompt();
 
+void jl_show_function(jl_value_t *v);
+
+static void repl_show_value(jl_value_t *v)
+{
+    jl_show(v);
+    ios_t *s = jl_current_output_stream();
+    if (jl_is_struct_type(v)) {
+        // for convenience, show constructor methods when
+        // a type is shown at the top level.
+        jl_struct_type_t *tt = (jl_struct_type_t*)v;
+        if (tt->name->primary==v && jl_is_gf(v)) {
+            ios_putc('\n', s);
+            jl_show_function(v);
+        }
+    }
+}
+
 int main(int argc, char *argv[])
 {
     double julia_launch_tic = clock_now();
@@ -625,7 +642,7 @@ int main(int argc, char *argv[])
                     jl_toplevel_eval_thunk((jl_lambda_info_t*)ast);
                 jl_set_global(jl_system_module, jl_symbol("ans"), value);
                 if (show_value) {
-                    jl_show(value);
+                    repl_show_value(value);
                     ios_printf(ios_stdout, "\n");
                 }
             }

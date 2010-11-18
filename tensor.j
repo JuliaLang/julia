@@ -282,10 +282,8 @@ function assign(A::Vector, x::Scalar, I::Vector{Index})
 end
 
 function assign(A::Vector, X::Vector, I::Vector{Index})
-    count = 1
-    for i=I
-        A[i] = X[count]
-        count += 1
+    for i=1:length(I)
+        A[I[i]] = X[i]
     end
     return A
 end

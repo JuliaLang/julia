@@ -655,6 +655,11 @@ static void show_function(jl_value_t *v)
     }
 }
 
+void jl_show_function(jl_value_t *v)
+{
+    show_function(v);
+}
+
 static void show_type(jl_value_t *t)
 {
     ios_t *s = jl_current_output_stream();
@@ -683,10 +688,6 @@ static void show_type(jl_value_t *t)
         jl_tuple_t *p = tt->parameters;
         if (p->length > 0)
             show_tuple(p, '{', '}', 0);
-        if (jl_is_struct_type(tt) && tt->name->primary==t && jl_is_gf(t)) {
-            ios_putc('\n', s);
-            show_function(t);
-        }
     }
 }
 
