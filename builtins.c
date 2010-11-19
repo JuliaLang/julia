@@ -741,7 +741,7 @@ static void show_float64(double d, int single)
     if (!DFINITE(d)) {
         char *rep;
         if (isnan(d))
-            rep = sign_bit(d) ? "-NaN" : "NaN";
+            rep = "NaN";
         else
             rep = sign_bit(d) ? "-Inf" : "Inf";
         if (single)
