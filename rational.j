@@ -7,6 +7,7 @@ convert{T}(::Type{Rational{T}}, x::T) = Rational(x, convert(T,1))
 convert{T}(::Type{Rational{T}}, x::Int) = Rational(convert(T,x), convert(T,1))
 convert{T}(::Type{Rational{T}}, x::Rational) = Rational(convert(T,x.num),convert(T,x.den))
 convert{T}(::Type{Float{T}}, x::Rational) = convert(T,x.num)/convert(T,x.den)
+convert{T}(::Type{Int{T}}, x::Rational) = div(convert(T,x.num),convert(T,x.den))
 
 promote_rule{T}(::Type{Rational{T}}, ::Type{Int{T}}) = Rational{T}
 promote_rule{T,S}(::Type{Rational{T}}, ::Type{Int{S}}) = Rational{promote_type(T,S)}
