@@ -24,11 +24,22 @@ p = pipe(foo.stderr, bar.stdin)   # pipe stderr to bar
 p = pipe(foo.stdout, baz.stdin)   # pipe stdout to baz
 p = pipe(foo.output, bar)         # pipe both 
 
-## running a command:
+## running commands:
 
-run(cmd)                          # start executing a command object
+run(cmd)                          # execute and wait for command object
 run("sleep","10")                 # shortcut for run(Cmd("sleep","10"))
-run(pipe)                         # execute all commands in a pipeline
+run(pipe)                         # run an entire pipeline
+
+start(cmd)                        # start executing, but don't wait
+pid(cmd)                          # get the command pid
+pid(pipe)                         # get the process group pid
+                                  # (typically -pid of group leader)
+wait(123)                         # wait for process 123
+wait(cmd)                         # wait for running process cmd
+wait(pipe)                        # wait for running pipeline pipe
+kill(cmd)                         # send TERM signal to cmd
+kill(cmd, signal)                 # send signal to cmd
+kill(pipe, signal)                # send signal to pipe process group
 
 ## processing output (implicitly calls run if necessary):
 
@@ -56,5 +67,6 @@ pipe(foo, BytesFilter(1024, bytes->sum(bytes)))
 
 foo | bar                         # pipe(foo, bar)
 foo.stderr & foo.stdout           # composite desciptor object
-foo || bar                        # chain commands, checking return statuses
-foo && bar
+foo || bar                        # short-circuit OR command chain
+foo && bar                        # short-circuit AND command chain
+!foo                              # negate status code
