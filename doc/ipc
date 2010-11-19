@@ -8,13 +8,13 @@ cmd = Cmd("cat","/dev/random", env={PATH=>"/bin:/sbin"})
 
 ## access to command's file descriptors:
 
-cmd.fd(n)     # file descriptor n
-cmd.fd(n...)  # combined output of fds given as args
+cmd.fd(n)                         # file descriptor n
+cmd.fd(n...)                      # combined output of fds given as args
 cmd.stdin
-cmd.input     # same as stdin
+cmd.input                         # same as stdin
 cmd.stdout
 cmd.stderr
-cmd.output    # stdout & stderr, i.e. cmd.fd(1,2)
+cmd.output                        # stdout & stderr, i.e. cmd.fd(1,2)
 
 ## connect processes, making composite pipe object:
 
@@ -48,20 +48,24 @@ each_line(foo.stdout)             # iterator over stdout
 each_line(foo.output)             # iterator over stdout & stderr
 each_line(foo)                    # defaults to stdout
 
-each_byte(foo)                    # get each byte
 each_char(foo)                    # get each character
 each_char(foo, enc="UTF-32")      # read chars with UTF-32 encoding
+each_byte(foo)                    # get each byte
+each_block(foo, 1024)             # get blocks of bytes
+each_record(foo, Record)          # read and cast each blitable record
 
 all_lines(foo)                    # slurp all lines
-all_bytes(foo)                    # slurp all bytes
 all_chars(foo)                    # slurp all chars
+all_bytes(foo)                    # slurp all bytes
+all_records(foo, Record)          # slurp all records
 
 ## tossing julia into the mix:
 
 pipe(foo, LineFilter(line->strcat("prefix: ",line)))
 pipe(foo, CharFilter(char->upcase(char)))
 pipe(foo, ByteFilter(byte->0x7f & byte))
-pipe(foo, BytesFilter(1024, bytes->sum(bytes)))
+pipe(foo, BlockFilter(1024, bytes->sum(bytes)))
+pipe(foo, RecordFilter(Record, obj->obj.field))
 
 ## some potential nice syntax:
 
@@ -70,3 +74,7 @@ foo.stderr & foo.stdout           # composite desciptor object
 foo || bar                        # short-circuit OR command chain
 foo && bar                        # short-circuit AND command chain
 !foo                              # negate status code
+
+## mmap usage:
+
+A = mmap(file, Record)            # mmap a file and return an array
