@@ -1,0 +1,60 @@
+## doesn't execute, just creates command object:
+
+cmd = Cmd("cat","/dev/random")    # exec'd
+cmd = Cmd(["cat","/dev/random"])  # exec'd also
+cmd = Cmd("echo hello")           # shell'd
+cmd = Cmd("cat","/dev/random", env={PATH=>"/bin:/sbin"})
+                                  # exec with new env
+
+## access to command's file descriptors:
+
+cmd.fd(n)     # file descriptor n
+cmd.fd(n...)  # combined output of fds given as args
+cmd.stdin
+cmd.input     # same as stdin
+cmd.stdout
+cmd.stderr
+cmd.output    # stdout & stderr, i.e. cmd.fd(1,2)
+
+## connect processes, making composite pipe object:
+
+p = pipe(foo.stdout, bar.stdin)   # explicitly connect via pipe
+p = pipe(foo, bar)                # defaults to using stdout and stdin
+p = pipe(foo.stderr, bar.stdin)   # pipe stderr to bar
+p = pipe(foo.stdout, baz.stdin)   # pipe stdout to baz
+p = pipe(foo.output, bar)         # pipe both 
+
+## running a command:
+
+run(cmd)                          # start executing a command object
+run("sleep","10")                 # shortcut for run(Cmd("sleep","10"))
+run(pipe)                         # execute all commands in a pipeline
+
+## processing output (implicitly calls run if necessary):
+
+each_line(foo.fd(n))              # iterator over output of fd n
+each_line(foo.stdout)             # iterator over stdout
+each_line(foo.output)             # iterator over stdout & stderr
+each_line(foo)                    # defaults to stdout
+
+each_byte(foo)                    # get each byte
+each_char(foo)                    # get each character
+each_char(foo, enc="UTF-32")      # read chars with UTF-32 encoding
+
+all_lines(foo)                    # slurp all lines
+all_bytes(foo)                    # slurp all bytes
+all_chars(foo)                    # slurp all chars
+
+## tossing julia into the mix:
+
+pipe(foo, LineFilter(line->strcat("prefix: ",line)))
+pipe(foo, CharFilter(char->upcase(char)))
+pipe(foo, ByteFilter(byte->0x7f & byte))
+pipe(foo, BytesFilter(1024, bytes->sum(bytes)))
+
+## some potential nice syntax:
+
+foo | bar                         # pipe(foo, bar)
+foo.stderr & foo.stdout           # composite desciptor object
+foo || bar                        # chain commands, checking return statuses
+foo && bar
