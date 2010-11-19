@@ -347,7 +347,7 @@ hex(s::String) = parse_int(Int64, s, 16)
 ## integer to string functions ##
 
 function uint2str(n::Int, b::Int)
-    if n < 0; error("uint2str: negative argument ", n); end
+    if n < zero(n); error("uint2str: negative argument ", n); end
     if b < 2; error("uint2str: invalid base ", b); end
     ndig = n==convert(typeof(n),0) ? 1 : int32(floor(log(n)/log(b)+1))
     sz = ndig+1

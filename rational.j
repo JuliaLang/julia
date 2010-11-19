@@ -1,4 +1,4 @@
-struct Rational{T<:Int} <: Real{Rational}
+struct Rational{T<:Int} <: Real
     num::T
     den::T
 end
@@ -6,13 +6,13 @@ end
 convert{T}(::Type{Rational{T}}, x::T) = Rational(x, convert(T,1))
 convert{T}(::Type{Rational{T}}, x::Int) = Rational(convert(T,x), convert(T,1))
 convert{T}(::Type{Rational{T}}, x::Rational) = Rational(convert(T,x.num),convert(T,x.den))
-convert{T}(::Type{Float{T}}, x::Rational) = convert(T,x.num)/convert(T,x.den)
-convert{T}(::Type{Int{T}}, x::Rational) = div(convert(T,x.num),convert(T,x.den))
+convert{T<:Float}(::Type{T}, x::Rational) = convert(T,x.num)/convert(T,x.den)
+convert{T<:Int}(::Type{T}, x::Rational) = div(convert(T,x.num),convert(T,x.den))
 
-promote_rule{T}(::Type{Rational{T}}, ::Type{Int{T}}) = Rational{T}
-promote_rule{T,S}(::Type{Rational{T}}, ::Type{Int{S}}) = Rational{promote_type(T,S)}
+promote_rule{T<:Int}(::Type{Rational{T}}, ::Type{T}) = Rational{T}
+promote_rule{T,S<:Int}(::Type{Rational{T}}, ::Type{S}) = Rational{promote_type(T,S)}
 promote_rule{T,S}(::Type{Rational{T}}, ::Type{Rational{S}}) = Rational{promote_type(T,S)}
-promote_rule{T,S}(::Type{Rational{T}}, ::Type{Float{S}}) = promote_type(T,S)
+promote_rule{T,S<:Float}(::Type{Rational{T}}, ::Type{S}) = promote_type(T,S)
 
 function //{T}(num::T, den::T)
     if den == 0

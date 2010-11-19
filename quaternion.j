@@ -1,8 +1,8 @@
-struct Quaternion{T} <: Number{Quaternion}
-    q0::Real{T}
-    q1::Real{T}
-    q2::Real{T}
-    q3::Real{T}
+struct Quaternion{T<:Real} <: Number
+    q0::T
+    q1::T
+    q2::T
+    q3::T
 end
 
 convert{T}(::Type{Quaternion{T}}, x::Real) =

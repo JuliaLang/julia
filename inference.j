@@ -263,15 +263,6 @@ t_func[getfield] = (2, 2, getfield_tfunc)
 
 # other: apply, setfield
 
-# Scalar{T} => T
-normalize_numeric_type(t) = t
-function normalize_numeric_type(t::Type{Scalar})
-    if isa(t,TagKind) && length(t.parameters)==1 && subtype(t.parameters[1],t)
-        return t.parameters[1]
-    end
-    return t
-end
-
 function builtin_tfunction(f, args::Tuple, argtypes::Tuple)
     tf = get(t_func, f, false)
     if is(tf,false)
@@ -284,9 +275,9 @@ function builtin_tfunction(f, args::Tuple, argtypes::Tuple)
     end
     if is(f,typeassert) || is(f,tupleref) || is(f,getfield)
         # TODO: case of apply(), where we do not have the args
-        return normalize_numeric_type(tf[3](args, argtypes...))
+        return tf[3](args, argtypes...)
     end
-    return normalize_numeric_type(tf[3](argtypes...))
+    return tf[3](argtypes...)
 end
 
 struct StaticVarInfo

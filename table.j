@@ -55,10 +55,12 @@ bitmix(a::Union(Int64,Uint64), b::Union(Int64, Uint64)) =
 #hash(x::Union(Int64,Uint64)) =
 #    ccall(dlsym(JuliaDLHandle,"int64hash"), Uint64, (Uint64,), uint64(x))
 
-hash(x::Number) = hash(float64(x))
-hash(x::Float64) =
+hash_finite(x::Float64) =
     ccall(dlsym(JuliaDLHandle,"int64hash"), Uint64, (Uint64,),
           boxui64(unbox64(x)))
+
+hash(x::Number) = hash_finite(float64(x))
+hash(x::Float64) = (isnan(x) ? hash_finite(NaN) : hash_finite(x))
 
 function hash(t::Tuple)
     h = int64(0)

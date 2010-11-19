@@ -77,27 +77,27 @@
 
 #bitstype {32|64} Ptr{T}
 
-typealias Scalar{T} Tensor{T,0}
+type Scalar
+type Number <: Scalar
+type Real   <: Number
+type Int    <: Real
+type Uint   <: Int
+type Float  <: Real
 
-type Number{T} <: Scalar{T}
-type Real{T}   <: Number{T}
-type Int{T}    <: Real{T}
-type Float{T}  <: Real{T}
+bitstype 8  Bool <: Scalar
+bitstype 32 Char <: Int
 
-bitstype 8  Bool <: Scalar{Bool}
-bitstype 32 Char <: Int{Char}
+bitstype 8  Int8   <: Int
+bitstype 8  Uint8  <: Uint
+bitstype 16 Int16  <: Int
+bitstype 16 Uint16 <: Uint
+bitstype 32 Int32  <: Int
+bitstype 32 Uint32 <: Uint
+bitstype 64 Int64  <: Int
+bitstype 64 Uint64 <: Uint
 
-bitstype 8  Int8   <: Int{Int8}
-bitstype 8  Uint8  <: Int{Uint8}
-bitstype 16 Int16  <: Int{Int16}
-bitstype 16 Uint16 <: Int{Uint16}
-bitstype 32 Int32  <: Int{Int32}
-bitstype 32 Uint32 <: Int{Uint32}
-bitstype 64 Int64  <: Int{Int64}
-bitstype 64 Uint64 <: Int{Uint64}
-
-bitstype 32 Float32 <: Float{Float32}
-bitstype 64 Float64 <: Float{Float64}
+bitstype 32 Float32 <: Float
+bitstype 64 Float64 <: Float
 
 typealias Size Int32
 typealias Index Int32

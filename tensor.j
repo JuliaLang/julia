@@ -544,7 +544,8 @@ function isequal(x::Array, y::Array)
     end
 
     for i=1:numel(x)
-        if x[i] != y[i]
+        xi=x[i]; yi=y[i]
+        if xi!=yi && !isequal(xi, yi)
             return false
         end
     end
@@ -660,7 +661,7 @@ repmat(a::Matrix, m::Size, n::Size) = reshape([ a[i,j] | i=1:size(a,1),
 
 accumarray(I::Vector, J::Vector, V) = accumarray (I, J, V, max(I), max(J))
 
-function accumarray{T}(I::Vector, J::Vector, V::Scalar{T}, m::Size, n::Size)
+function accumarray{T<:Scalar}(I::Vector, J::Vector, V::T, m::Size, n::Size)
     A = Array(T, m, n)
     for k=1:length(I)
         A[I[k], J[k]] += V
@@ -726,6 +727,7 @@ end
 
 sub2ind(dims, i::Index) = i
 sub2ind(dims, i::Index, j::Index) = (j-1)*dims[1] + i
+sub2ind(dims) = 1
 
 function sub2ind(dims, I::Index...)
     ndims = length(dims)
