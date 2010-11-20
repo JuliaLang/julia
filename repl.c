@@ -520,6 +520,25 @@ static void repl_show_value(jl_value_t *v)
     }
 }
 
+#ifdef JL_GF_PROFILE
+static void print_profile()
+{
+    size_t i;
+    void **table = jl_system_module->bindings.table;
+    for(i=1; i < jl_system_module->bindings.size; i+=2) {
+        if (table[i] != HT_NOTFOUND) {
+            jl_binding_t *b = (jl_binding_t*)table[i];
+            if (b->value != NULL && jl_is_function(b->value) &&
+                jl_is_gf(b->value)) {
+                ios_printf(ios_stdout, "%d\t%s\n",
+                           jl_gf_mtable(b->value)->ncalls,
+                           jl_gf_name(b->value)->name);
+            }
+        }
+    }
+}
+#endif
+
 int main(int argc, char *argv[])
 {
     double julia_launch_tic = clock_now();
@@ -659,6 +678,8 @@ int main(int argc, char *argv[])
         ios_printf(ios_stdout, jl_color_normal);
         ios_flush(ios_stdout);
     }
-
+#ifdef JL_GF_PROFILE
+    print_profile();
+#endif
     return 0;
 }

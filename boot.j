@@ -164,3 +164,6 @@ end
 
 struct EOFError <: Exception
 end
+
+finalizer(o, f::Function) =
+    ccall(dlsym(JuliaDLHandle,`jl_gc_add_finalizer), Void, (Any,Any), o, f)

@@ -1028,14 +1028,21 @@
 	   (cons (to-blk (to-lff '(null) dest tail))
 		 (list e)))
 
+	  ((|::|)
+	   (if dest
+	       ;; convert to typeassert or decl based on whether it's in
+	       ;; value or statement position.
+	       (to-lff `(typeassert ,@(cdr e)) dest tail)
+	       (to-lff `(decl ,@(cdr e)) dest tail)))
+
 	  (else
 	   (let ((r (map (lambda (arg) (to-lff arg #t #f))
-			 e)))
+			 (cdr e))))
 	     (cond ((symbol? dest)
-		    (cons `(= ,dest ,(map car r))
+		    (cons `(= ,dest ,(cons (car e) (map car r)))
 			  (apply append (map cdr r))))
 		   (else
-		    (let ((ex (map car r)))
+		    (let ((ex (cons (car e) (map car r))))
 		      (cons (if tail `(return ,ex) ex)
 			    (apply append (map cdr r)))))))))))
   (to-blk (to-lff e #t #t)))
@@ -1228,9 +1235,15 @@ So far only the second case can actually occur.
 	 (if (pair? (cadr e))
 	     (analyze-vars (cadr e) env)
 	     '(null)))
-	((eq? (car e) '|::|)
+	((eq? (car e) 'typeassert)
 	 ; handle var::T declaration by storing the type in the var-info
-	 ; record. for non-symbols, emit a type assertion.
+	 ; record. for non-symbols or globals, emit a type assertion.
+	 (let ((vi (var-info-for (cadr e) env)))
+	   (if vi
+	       (begin (vinfo:set-type! vi (caddr e))
+		      (cadr e))
+	       `(call (top typeassert) ,(cadr e) ,(caddr e)))))
+	((or (eq? (car e) 'decl) (eq? (car e) '|::|))
 	 (let ((vi (var-info-for (cadr e) env)))
 	   (if vi
 	       (vinfo:set-type! vi (caddr e)))

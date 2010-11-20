@@ -149,10 +149,27 @@ static void clear_tfunc_caches()
         }
     }
 }
-
+/*
+static void clear_method_caches()
+{
+    htable_t *t = &jl_system_module->bindings;
+    size_t i;
+    for(i=0; i < t->size; i+=2) {
+        if (t->table[i+1] == HT_NOTFOUND)
+            continue;
+        jl_binding_t *b = (jl_binding_t*)t->table[i+1];
+        if (b->value != NULL && jl_is_func(b->value) && jl_is_gf(b->value)) {
+            jl_function_t *f = (jl_function_t*)b->value;
+            jl_methtable_t *mt = jl_gf_mtable(f);
+            mt->cache = NULL;
+        }
+    }
+}
+*/
 DLLEXPORT void jl_enable_inference()
 {
     if (jl_boundp(jl_system_module, jl_symbol("typeinf_ext"))) {
+        //clear_method_caches();
         jl_typeinf_func =
             (jl_function_t*)*(jl_get_bindingp(jl_system_module,
                                               jl_symbol("typeinf_ext")));

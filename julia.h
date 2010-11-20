@@ -184,6 +184,8 @@ typedef struct _jl_methlist_t {
     struct _jl_methlist_t *next;
 } jl_methlist_t;
 
+//#define JL_GF_PROFILE
+
 typedef struct _jl_methtable_t {
     JL_VALUE_STRUCT
     jl_methlist_t *defs;
@@ -192,6 +194,9 @@ typedef struct _jl_methtable_t {
     size_t n_1arg;
     int sealed;
     int max_args;  // max # of non-vararg arguments in a signature
+#ifdef JL_GF_PROFILE
+    int ncalls;
+#endif
 } jl_methtable_t;
 
 typedef struct {
@@ -645,7 +650,7 @@ void jl_gc_enable();
 void jl_gc_disable();
 int jl_gc_is_enabled();
 void jl_gc_collect();
-void jl_gc_add_finalizer(jl_value_t *v, jl_function_t *f);
+DLLEXPORT void jl_gc_add_finalizer(jl_value_t *v, jl_function_t *f);
 #define jl_gc_setmark(v) (((uptrint_t*)(v))[-1]|=1)
 void *alloc_2w();
 void *alloc_3w();

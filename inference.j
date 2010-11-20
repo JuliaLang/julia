@@ -264,7 +264,7 @@ t_func[getfield] = (2, 2, getfield_tfunc)
 # other: apply, setfield
 
 function builtin_tfunction(f, args::Tuple, argtypes::Tuple)
-    tf = get(t_func, f, false)
+    tf = get(t_func::IdTable, f, false)
     if is(tf,false)
         # unknown/unhandled builtin
         return Any
@@ -574,7 +574,7 @@ end
 function update(state, changes::Union(StateUpdate,VarTable), vars)
     for v = vars
         newtype = changes[v]
-        oldtype = get(state,v,NF)
+        oldtype = get(state::IdTable,v,NF)
         if tchanged(newtype, oldtype)
             state[v] = tmerge(oldtype, newtype)
         end
@@ -771,7 +771,7 @@ end
 
 function eval_annotate(e::Symbol, vtypes, sv, decls)
     t = abstract_eval(e, vtypes, sv)
-    otherTy = get(decls, e, false)
+    otherTy = get(decls::IdTable, e, false)
     # keep track of whether a variable is always the same type
     if !is(otherTy,false)
         if !is(otherTy, t)

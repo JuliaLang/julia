@@ -31,6 +31,9 @@ static jl_methtable_t *new_method_table()
     mt->n_1arg = 0;
     mt->sealed = 0;
     mt->max_args = 0;
+#ifdef JL_GF_PROFILE
+    mt->ncalls = 0;
+#endif
     return mt;
 }
 
@@ -767,7 +770,9 @@ jl_function_t *jl_get_specialization(jl_function_t *f, jl_tuple_t *types)
 JL_CALLABLE(jl_apply_generic)
 {
     jl_methtable_t *mt = (jl_methtable_t*)jl_t0(env);
-
+#ifdef JL_GF_PROFILE
+    mt->ncalls++;
+#endif
 #ifdef JL_TRACE
     ios_printf(ios_stdout, "%s(", ((jl_sym_t*)jl_t1(env))->name);
     size_t i;
