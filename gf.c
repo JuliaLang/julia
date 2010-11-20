@@ -315,6 +315,19 @@ static jl_function_t *cache_method(jl_methtable_t *mt, jl_tuple_t *type,
         }
         else if (jl_is_tag_type(elt) &&
                  ((jl_tag_type_t*)elt)->name==jl_type_type->name &&
+                 mt->defs->next==NULL && i < decl->length &&
+                 jl_tupleref(decl,i)==(jl_value_t*)jl_any_type) {
+            /*
+              here's a fairly complex heuristic: if a function has 1
+              definition, and this argument slot's declared type is Any,
+              then don't specialize for every Type that might be passed.
+              Since every type x has its own type Type{x}, this would be
+              excessive specialization for an Any slot.
+            */
+            jl_tupleset(type, i, (jl_value_t*)jl_typetype_type);
+        }
+        else if (jl_is_tag_type(elt) &&
+                 ((jl_tag_type_t*)elt)->name==jl_type_type->name &&
                  jl_is_tag_type(jl_tparam0(elt)) &&
                  ((jl_tag_type_t*)jl_tparam0(elt))->name==jl_type_type->name) {
             /*
@@ -406,11 +419,12 @@ static jl_function_t *cache_method(jl_methtable_t *mt, jl_tuple_t *type,
         if (jl_typeinf_func != NULL) {
             assert(newmeth->linfo->inInference == 0);
             newmeth->linfo->inInference = 1;
-            jl_value_t *fargs[4];
+            jl_value_t *fargs[5];
             fargs[0] = (jl_value_t*)newmeth->linfo;
             fargs[1] = (jl_value_t*)type;
             fargs[2] = (jl_value_t*)newmeth->linfo->sparams;
             fargs[3] = jl_false;
+            fargs[4] = (jl_value_t*)method->linfo;
 #ifdef TRACE_INFERENCE
             ios_printf(ios_stdout,"inference on %s(", newmeth->linfo->name->name);
             size_t i;
@@ -421,7 +435,7 @@ static jl_function_t *cache_method(jl_methtable_t *mt, jl_tuple_t *type,
             ios_printf(ios_stdout, ")\n");
 #endif
 #ifdef ENABLE_INFERENCE
-            jl_value_t *newast = jl_apply(jl_typeinf_func, fargs, 4);
+            jl_value_t *newast = jl_apply(jl_typeinf_func, fargs, 5);
             newmeth->linfo->ast = jl_tupleref(newast, 0);
             newmeth->linfo->inferred = 1;
 #endif
@@ -834,6 +848,10 @@ static void print_methlist(char *name, jl_methlist_t *ml)
     while (ml != NULL) {
         ios_printf(ios_stdout, "%s", name);
         jl_show((jl_value_t*)ml->sig);
+        //if (ml->func && ml->func->linfo && ml->func->linfo->ast &&
+        //    ml->func->linfo->inferred) {
+        //    jl_show(ml->func->linfo->ast);
+        //}
         if (ml->next != NULL)
             ios_printf(ios_stdout, "\n");
         ml = ml->next;

@@ -619,16 +619,20 @@ end
     #return yieldto(Inference_Task, C, args)
 #end
 
-function typeinf_ext(linfo, atypes, sparams, cop)
+function typeinf_ext(linfo, atypes, sparams, cop, def)
     global inference_stack
     last = inference_stack
     inference_stack = EmptyCallStack()
-    result = typeinf(linfo, atypes, sparams, cop)
+    result = typeinf(linfo, atypes, sparams, cop, def)
     inference_stack = last
     return result
 end
 
-function typeinf(linfo::LambdaStaticData, atypes::Tuple, sparams::Tuple, cop)
+typeinf(linfo,atypes,sparams,copy) = typeinf(linfo,atypes,sparams,copy,linfo)
+
+# def is the original unspecialized version of a method. we aggregate all
+# saved type inference data there.
+function typeinf(linfo::LambdaStaticData,atypes::Tuple,sparams::Tuple, cop, def)
     #dotrace = true#is(linfo,sizestr)
     # check cached t-functions
     tf = linfo.tfunc
@@ -742,7 +746,7 @@ function typeinf(linfo::LambdaStaticData, atypes::Tuple, sparams::Tuple, cop)
     end
     inference_stack = inference_stack.prev
     fulltree = type_annotate(ast, s, sv, frame.result, vars)
-    linfo.tfunc = (atypes, fulltree, linfo.tfunc)
+    def.tfunc = (atypes, fulltree, def.tfunc)
     fulltree.args[3] = inlining_pass(fulltree.args[3], s[1])
     #print("\n",fulltree,"\n")
     #print("==> ", frame.result,"\n")
