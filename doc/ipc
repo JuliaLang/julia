@@ -1,19 +1,17 @@
 ## doesn't execute, just creates command object:
 
-cmd = Cmd("cat","/dev/random")    # exec'd
-cmd = Cmd(["cat","/dev/random"])  # exec'd also
-cmd = Cmd("echo hello")           # shell'd
-cmd = Cmd("cat","/dev/random", env={PATH=>"/bin:/sbin"})
-                                  # exec with new env
+cmd = Cmd("cat","/dev/random")    # exec
+cmd = Cmd(["cat","/dev/random"])  # exec also
+cmd = Cmd("cat","/dev/random", env={"PATH"=>"/bin:/sbin"})
 
 ## access to command's file descriptors:
 
 cmd.fd(n)                         # file descriptor n
 cmd.fd(n...)                      # combined output of fds given as args
-cmd.stdin
+cmd.stdin                         # stdin, i.e. cmd.fd(0)
 cmd.input                         # same as stdin
-cmd.stdout
-cmd.stderr
+cmd.stdout                        # stdout, i.e. cmd.fd(1)
+cmd.stderr                        # stderr, i.e. cmd.fd(2)
 cmd.output                        # stdout & stderr, i.e. cmd.fd(1,2)
 
 ## connect processes, making composite pipe object:
@@ -71,10 +69,11 @@ pipe(foo, RecordFilter(Record, obj->obj.field))
 
 foo | bar                         # pipe(foo, bar)
 foo.stderr & foo.stdout           # composite desciptor object
-foo || bar                        # short-circuit OR command chain
-foo && bar                        # short-circuit AND command chain
-!foo                              # negate status code
+foo & bar                         # run in parallel with composite descriptors
+any(foo,bar)                      # short-circuit OR command chain
+all(foo,bar)                      # short-circuit AND command chain
+!foo                              # negate return code
 
 ## mmap usage:
 
-A = mmap(file, Record)            # mmap a file and return an array
+A = mmap(file, Record)            # return an mmapped array or records
