@@ -373,6 +373,8 @@ end
 string(x) = string(ccall(dlsym(JuliaDLHandle,"jl_show_to_string"),
                          Ptr{Uint8}, (Any,), x))
 
+## NOTE: the cstring function is used to convert strings internally!
+
 cstring(args...) = print_to_array(print, args...)
 
 ## lexicographically compare byte arrays (used by Latin-1 and UTF-8) ##

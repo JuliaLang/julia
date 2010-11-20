@@ -32,6 +32,19 @@ int jl_word_size()
 #endif
 }
 
+// --- julia string to C string ---
+
+char *jl_cstring(jl_value_t *v)
+{
+    if (jl_is_byte_string(v))
+        return jl_string_data(v);
+
+    jl_value_t *cstring_f = *jl_get_bindingp(jl_system_module,
+                                             jl_symbol("cstring"));
+    jl_value_t *s = jl_apply((jl_function_t*)cstring_f, &v, 1);
+    return (char*)jl_array_data(s);
+}
+
 // --- exceptions ---
 
 extern char *julia_home;
@@ -285,9 +298,9 @@ void jl_load(const char *fname)
 JL_CALLABLE(jl_f_load)
 {
     JL_NARGS(load, 1, 1);
-    if (!jl_is_byte_string(args[0]))
-        jl_error("load: expected Latin1String or UTF8String");
-    char *fname = jl_string_data(args[0]);
+    if (!jl_is_string(args[0]))
+        jl_error("load: expected String");
+    char *fname = jl_cstring(args[0]);
     jl_load(fname);
     return (jl_value_t*)jl_null;
 }
@@ -1214,9 +1227,9 @@ JL_CALLABLE(jl_f_invoke)
 JL_CALLABLE(jl_f_dlopen)
 {
     JL_NARGS(dlopen, 1, 1);
-    if (!jl_is_byte_string(args[0]))
-        jl_error("dlopen: expected Latin1String or UTF8String");
-    char *fname = jl_string_data(args[0]);
+    if (!jl_is_string(args[0]))
+        jl_error("dlopen: expected String");
+    char *fname = jl_cstring(args[0]);
     return jl_box_pointer(jl_pointer_void_type,
                           jl_load_dynamic_library(fname));
 }
@@ -1228,10 +1241,10 @@ JL_CALLABLE(jl_f_dlsym)
     char *sym=NULL;
     if (jl_is_symbol(args[1]))
         sym = ((jl_sym_t*)args[1])->name;
-    else if (jl_is_byte_string(args[1]))
-        sym = jl_string_data(args[1]);
+    else if (jl_is_string(args[1]))
+        sym = jl_cstring(args[1]);
     else
-        jl_error("dlsym: expected Latin1String or UTF8String");
+        jl_error("dlsym: expected String");
     void *hnd = jl_unbox_pointer(args[0]);
     return jl_box_pointer(jl_pointer_void_type, jl_dlsym(hnd, sym));
 }

@@ -236,6 +236,7 @@ extern jl_typector_t *jl_function_type;
 extern jl_tag_type_t *jl_tensor_type;
 extern jl_struct_type_t *jl_array_type;
 extern jl_typename_t *jl_array_typename;
+extern jl_struct_type_t *jl_string_type;
 extern jl_struct_type_t *jl_latin1_string_type;
 extern jl_struct_type_t *jl_utf8_string_type;
 extern jl_struct_type_t *jl_errorexception_type;
@@ -370,10 +371,12 @@ void *alloc_permanent(size_t sz);
 #define jl_is_latin1_string(v) jl_typeis(v,jl_latin1_string_type)
 #define jl_is_utf8_string(v) jl_typeis(v,jl_utf8_string_type)
 #define jl_is_byte_string(v) (jl_is_latin1_string(v) || jl_is_utf8_string(v))
+#define jl_is_string(v)      jl_subtype(v,(jl_value_t*)jl_string_type,1)
 #define jl_is_cpointer(v)    jl_is_cpointer_type(jl_typeof(v))
 #define jl_is_pointer(v)     jl_is_cpointer_type(jl_typeof(v))
 #define jl_is_gf(f)          (((jl_function_t*)(f))->fptr==jl_apply_generic)
 
+#define jl_array_data(a)  ((void*)((jl_array_t*)a)->data)
 #define jl_string_data(s) ((char*)((jl_array_t*)((jl_value_t**)(s))[1])->data)
 
 #define jl_gf_mtable(f) ((jl_methtable_t*)jl_t0(((jl_function_t*)(f))->env))
@@ -504,6 +507,9 @@ void *jl_unbox_pointer(jl_value_t *v);
 
 // word size
 DLLEXPORT int jl_word_size();
+
+// convert strings
+char *jl_cstring(jl_value_t *v);
 
 // exceptions
 void jl_error(const char *str);
