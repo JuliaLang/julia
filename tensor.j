@@ -298,7 +298,7 @@ function assign(A::Matrix, x::Scalar, I::Indices, J::Indices)
     return A
 end
 
-function assign(A::Matrix, X::Tensor, I::Indices, J::Indices)
+function assign(A::Matrix, X::Matrix, I::Indices, J::Indices)
     count = 1
     for i=I, j=J
         A[i,j] = X[count]
@@ -393,7 +393,7 @@ function hcat{T}(A::Array{T,2}...)
         Ak = A[k]
         for i=1:numel(Ak)
             B[pos] = Ak[i]
-            pos = pos + 1
+            pos += 1
         end
     end
     return B
@@ -408,7 +408,7 @@ function vcat{T}(A::Array{T,2}...)
         Ak = A[k]
         for i=1:size(Ak, 1)
             B[pos] = Ak[i,j]
-            pos = pos + 1
+            pos += 1
         end
     end
     return B

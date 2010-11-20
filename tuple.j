@@ -68,3 +68,5 @@ function append(t1::Tuple, ts::Tuple...)
     end
     return tuple(t1..., append(ts...)...)
 end
+
+isempty(x::Tuple) = length(x) == 0
