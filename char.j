@@ -23,7 +23,7 @@ promote_rule(::Type{Char}, ::Type{Uint16}) = Int32
 promote_rule(::Type{Char}, ::Type{Int32})  = Int32
 promote_rule(::Type{Char}, ::Type{Uint32}) = Uint32
 promote_rule(::Type{Char}, ::Type{Int64})  = Int64
-promote_rule(::Type{Char}, ::Type{Uint32}) = Uint64
+promote_rule(::Type{Char}, ::Type{Uint64}) = Uint64
 
 ## character operations & comparisons ##
 
@@ -40,10 +40,13 @@ mod(x::Char, y::Char) = rem(int32(x), int32(y))
 (|)(x::Char, y::Char) = int32(x) | int32(y)
 ($)(x::Char, y::Char) = int32(x) $ int32(y)
 (<<)(x::Char, y::Int32) = int32(x) << y
-(>>)(x::Char, y::Int32) = int32(x) >> y
+(>>)(x::Char, y::Int32) = int32(x) >>> y
 (>>>)(x::Char, y::Int32) = int32(x) >>> y
-==(x::Char, y::Char) = int32(x) == int32(y)
-< (x::Char, y::Char) = int32(x) <  int32(y)
+# char arithmetic as Int32, comparison as Uint32
+==(x::Char, y::Char) = uint32(x) == uint32(y)
+< (x::Char, y::Char) = uint32(x) <  uint32(y)
+< (x::Int, y::Char)  = uint32(x) <  uint32(y)
+< (x::Char, y::Int)  = uint32(x) <  uint32(y)
 
 ## traits ##
 

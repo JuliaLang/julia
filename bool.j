@@ -17,3 +17,9 @@ sizeof(::Type{Bool}) = 1
 (&)(x::Bool, y::Bool) = (x&&y)
 (|)(x::Bool, y::Bool) = (x||y)
 ($)(x::Bool, y::Bool) = (x!=y)
+
+any(x::Bool)  = x
+all(x::Bool)  = x
+
+any(x::Bool, y::Bool) = x || y ? true : false
+all(x::Bool, y::Bool) = x && y ? true : false

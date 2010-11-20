@@ -85,9 +85,9 @@ linspace(start::Real, stop::Real) =
 
 ## Unary operators ##
 
-conj{T <: Number}(x::Array{T}) = x
-real{T <: Number}(x::Array{T}) = x
-imag{T <: Number}(x::Array{T}) = zeros(T, size(x))
+conj{T <: Real}(x::Array{T}) = x
+real{T <: Real}(x::Array{T}) = x
+imag{T <: Real}(x::Array{T}) = zeros(T, size(x))
 
 for f=(`-, `~, `conj, `real, `imag)
     eval(`function ($f){T}(A::Array{T})
@@ -98,6 +98,9 @@ for f=(`-, `~, `conj, `real, `imag)
             return F
          end)
 end
+
+(+){T<:Number}(x::Tensor{T}) = x
+(*){T<:Number}(x::Tensor{T}) = x
 
 function !(A::Tensor{Bool})
     F = Array(Bool, size(A))
@@ -298,7 +301,7 @@ function assign(A::Matrix, x::Scalar, I::Indices, J::Indices)
     return A
 end
 
-function assign(A::Matrix, X::Tensor, I::Indices, J::Indices)
+function assign(A::Matrix, X::Matrix, I::Indices, J::Indices)
     count = 1
     for i=I, j=J
         A[i,j] = X[count]
@@ -393,7 +396,7 @@ function hcat{T}(A::Array{T,2}...)
         Ak = A[k]
         for i=1:numel(Ak)
             B[pos] = Ak[i]
-            pos = pos + 1
+            pos += 1
         end
     end
     return B
@@ -408,7 +411,7 @@ function vcat{T}(A::Array{T,2}...)
         Ak = A[k]
         for i=1:size(Ak, 1)
             B[pos] = Ak[i,j]
-            pos = pos + 1
+            pos += 1
         end
     end
     return B

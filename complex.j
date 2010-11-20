@@ -49,7 +49,6 @@ real(x::Real) = x
 imag(x::Real) = convert(typeof(x), 0)
 
 conj(z::Complex) = Complex(z.re,-z.im)
-conj(x::Real) = x
 norm(z::Complex) = z.re*z.re + z.im*z.im
 abs(z::Complex) = hypot(z.re, z.im)
 inv(z::Complex) = conj(z)/norm(z)
