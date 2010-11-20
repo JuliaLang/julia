@@ -32,19 +32,6 @@ int jl_word_size()
 #endif
 }
 
-// --- julia string to C string ---
-
-char *jl_cstring(jl_value_t *v)
-{
-    if (jl_is_byte_string(v))
-        return jl_string_data(v);
-
-    jl_value_t *cstring_f = *jl_get_bindingp(jl_system_module,
-                                             jl_symbol("cstring"));
-    jl_value_t *s = jl_apply((jl_function_t*)cstring_f, &v, 1);
-    return (char*)jl_array_data(s);
-}
-
 // --- exceptions ---
 
 extern char *julia_home;
@@ -612,6 +599,28 @@ JL_CALLABLE(jl_f_print_array_uint8)
     jl_array_t *b = (jl_array_t*)args[0];
     ios_write(s, (char*)b->data, b->length);
     return (jl_value_t*)jl_null;
+}
+
+// --- String to C string ---
+
+char *jl_cstring(jl_value_t *v)
+{
+    if (jl_is_byte_string(v))
+        return jl_string_data(v);
+
+    ios_t dest;
+    ios_mem(&dest, 0);
+    // use try/catch to reset the current output stream
+    // if an error occurs during printing.
+    JL_TRY {
+        jl_set_current_output_stream(&dest);
+        jl_apply(jl_print_gf, &v, 1);
+    }
+    JL_CATCH {
+        jl_raise(jl_exception_in_transit);
+    }
+    size_t n;
+    return ios_takebuf(&dest, &n);
 }
 
 // --- showing ---
