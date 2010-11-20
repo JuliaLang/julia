@@ -85,7 +85,7 @@ type Uint   <: Int
 type Float  <: Real
 
 bitstype 8  Bool <: Scalar
-bitstype 32 Char <: Int
+bitstype 32 Char <: Uint
 
 bitstype 8  Int8   <: Int
 bitstype 8  Uint8  <: Uint
