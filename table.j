@@ -55,12 +55,12 @@ bitmix(a::Union(Int64,Uint64), b::Union(Int64, Uint64)) =
 #hash(x::Union(Int64,Uint64)) =
 #    ccall(dlsym(JuliaDLHandle,"int64hash"), Uint64, (Uint64,), uint64(x))
 
-hash_finite(x::Float64) =
+hash_f64(x::Float64) =
     ccall(dlsym(JuliaDLHandle,"int64hash"), Uint64, (Uint64,),
           boxui64(unbox64(x)))
 
-hash(x::Number) = hash_finite(float64(x))
-hash(x::Float64) = (isnan(x) ? hash_finite(NaN) : hash_finite(x))
+hash(x::Float64) = (isnan(x) ? hash_f64(NaN) : hash_f64(x))
+hash(x::Number) = hash(float64(x))
 
 function hash(t::Tuple)
     h = int64(0)
@@ -77,6 +77,9 @@ function hash(a::Array)
     end
     h
 end
+
+# TODO: should we distinguish a UTF8String and
+# a Latin1String containing the same exact data?
 
 hash(s::Union(UTF8String,Latin1String)) =
     ccall(dlsym(JuliaDLHandle,"memhash32"), Uint32,
