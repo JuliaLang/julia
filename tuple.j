@@ -69,4 +69,5 @@ function append(t1::Tuple, ts::Tuple...)
     return tuple(t1..., append(ts...)...)
 end
 
-isempty(x::Tuple) = length(x) == 0
+isempty(x::()) = true
+isempty(x::Tuple) = false

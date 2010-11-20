@@ -22,9 +22,9 @@ signbit(x::Real) = x < 0 ? int8(-1) : int8(1)
 sign(x::Real) = x < 0 ? int8(-1) : x > 0 ? int8(1) : int8(0)
 abs(x::Real) = x < 0 ? -x : x
 
-conj(x::Real) = x
-transpose(x::Number) = x
-ctranspose(x::Number) = x
+conj(x::Number) = x
+transpose(x::Scalar) = x
+ctranspose(x::Number) = conj(transpose(x))
 
 max(x::Scalar)  = x
 min(x::Scalar)  = x
