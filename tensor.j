@@ -85,9 +85,9 @@ linspace(start::Real, stop::Real) =
 
 ## Unary operators ##
 
-conj{T <: Number}(x::Array{T}) = x
-real{T <: Number}(x::Array{T}) = x
-imag{T <: Number}(x::Array{T}) = zeros(T, size(x))
+conj{T <: Real}(x::Array{T}) = x
+real{T <: Real}(x::Array{T}) = x
+imag{T <: Real}(x::Array{T}) = zeros(T, size(x))
 
 for f=(`-, `~, `conj, `real, `imag)
     eval(`function ($f){T}(A::Array{T})
@@ -98,6 +98,9 @@ for f=(`-, `~, `conj, `real, `imag)
             return F
          end)
 end
+
+(+){T<:Number}(x::Tensor{T}) = x
+(*){T<:Number}(x::Tensor{T}) = x
 
 function !(A::Tensor{Bool})
     F = Array(Bool, size(A))

@@ -499,15 +499,14 @@ abstract_eval(x, vtypes, sv::StaticVarInfo) = abstract_eval_constant(x)
 typealias VarTable IdTable
 
 struct StateUpdate
-    changes::((Symbol,Any)...)
+    var::Symbol
+    vtype
     state::VarTable
 end
 
 function ref(x::StateUpdate, s::Symbol)
-    for (v,t) = x.changes
-        if is(v,s)
-            return t
-        end
+    if is(x.var,s)
+        return x.vtype
     end
     return get(x.state,s,NF)
 end
@@ -520,7 +519,7 @@ function interpret(e::Expr, vtypes, sv::StaticVarInfo)
         t = abstract_eval(e.args[2], vtypes, sv)
         lhs = e.args[1]
         assert(isa(lhs,Symbol))
-        return StateUpdate(((lhs, t),), vtypes)
+        return StateUpdate(lhs, t, vtypes)
     elseif is(e.head,`call) || is(e.head,`call1)
         abstract_eval(e, vtypes, sv)
     elseif is(e.head,`gotoifnot)
@@ -532,7 +531,8 @@ end
 tchanged(n, o) = is(o,NF) || (!is(n,NF) && !subtype(n,o))
 
 function changed(new::Union(StateUpdate,VarTable), old, vars)
-    for v = vars
+    for i = 1:length(vars)
+        v = vars[i]
         if tchanged(new[v], get(old,v,NF))
             return true
         end
@@ -552,18 +552,31 @@ function tmerge(typea, typeb)
     if is(typeb,NF)
         return typea
     end
+    if subtype(typea,typeb)
+        return typeb
+    end
+    if subtype(typeb,typea)
+        return typea
+    end
     t = ccall(dlsym(JuliaDLHandle,"jl_compute_type_union"),Any,(Any,),
               (typea, typeb))
-    if length(t)==1
-        return t[1]
-    elseif length(t)==0
+    #if length(t)==1
+    #    return t[1]
+    #else
+    #end
+    if length(t)==0
         return None
     end
     if badunion(t)
-        return subtype(Undef,t) ? Top : Any
+        for elt = t
+            if subtype(Undef,elt)
+                return Top
+            end
+        end
+        return Any
     end
     u = Union(t...)
-    if isa(u,UnionKind) && length(u.types) > MAX_TYPEUNION_SIZE
+    if length(u.types) > MAX_TYPEUNION_SIZE
         # don't let type unions get too big
         # TODO: something smarter, like a common supertype
         return subtype(Undef,u) ? Top : Any
@@ -572,7 +585,8 @@ function tmerge(typea, typeb)
 end
 
 function update(state, changes::Union(StateUpdate,VarTable), vars)
-    for v = vars
+    for i = 1:length(vars)
+        v = vars[i]
         newtype = changes[v]
         oldtype = get(state::IdTable,v,NF)
         if tchanged(newtype, oldtype)

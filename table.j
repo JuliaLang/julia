@@ -60,7 +60,8 @@ hash_f64(x::Float64) =
           boxui64(unbox64(x)))
 
 hash(x::Float64) = (isnan(x) ? hash_f64(NaN) : hash_f64(x))
-hash(x::Number) = hash(float64(x))
+hash(x::Float) = hash(float64(x))
+hash(x::Number) = hash_f64(float64(x))
 
 function hash(t::Tuple)
     h = int64(0)
