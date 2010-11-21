@@ -20,3 +20,9 @@
       (if (memq (car lst) (cdr lst))
 	  (unique (cdr lst))
 	  (cons (car lst) (unique (cdr lst))))))
+
+(define (contains p expr)
+  (or (p expr)
+      (and (pair? expr)
+	   (any (lambda (x) (contains p x))
+		expr))))

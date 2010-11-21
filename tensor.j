@@ -652,9 +652,9 @@ ctranspose(x::Vector) = [ conj(x[j])   | i=1, j=1:size(x,1) ]
 ctranspose(x::Matrix) = [ conj(x[j,i]) | i=1:size(x,2), j=1:size(x,1) ]
 
 function transpose(a::Matrix)
-    dims = size(a)
-    b = clone(a, dims[2], dims[1])
-    for i=1:dims[1], j=1:dims[2]
+    m,n = size(a)
+    b = clone(a, n, m)
+    for i=1:m, j=1:n
         b[j,i] = a[i,j]
     end
     return b

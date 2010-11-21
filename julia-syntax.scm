@@ -482,8 +482,14 @@
 					       (+ i 1)))))))))
 
    (pattern-lambda (= (ref a . idxs) rhs)
-		   (let* ((arr   (if (pair? a) (gensym) a))
-			  (stmts (if (pair? a) `((= ,arr ,a)) '())))
+		   (let* ((reuse (and (pair? a)
+				      (contains (lambda (x)
+						  (or (eq? x 'end)
+						      (and (pair? x)
+							   (eq? (car x) ':))))
+						idxs)))
+			  (arr   (if reuse (gensym) a))
+			  (stmts (if reuse `((= ,arr ,a)) '())))
 		     (receive
 		      (new-idxs stuff) (process-indexes arr idxs)
 		      `(block
@@ -491,8 +497,14 @@
 			(call assign ,arr ,rhs ,@new-idxs)))))
 
    (pattern-lambda (ref a . idxs)
-		   (let* ((arr   (if (pair? a) (gensym) a))
-			  (stmts (if (pair? a) `((= ,arr ,a)) '())))
+		   (let* ((reuse (and (pair? a)
+				      (contains (lambda (x)
+						  (or (eq? x 'end)
+						      (and (pair? x)
+							   (eq? (car x) ':))))
+						idxs)))
+			  (arr   (if reuse (gensym) a))
+			  (stmts (if reuse `((= ,arr ,a)) '())))
 		     (receive
 		      (new-idxs stuff) (process-indexes arr idxs)
 		      `(block
