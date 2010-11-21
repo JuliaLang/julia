@@ -1,6 +1,6 @@
 # libc = dlopen("libc")
 
-sleep(s::Scalar) = ccall(dlsym(libc,"usleep"), Uint32, (Uint32,), uint32(round(s*1e6)))
+sleep(s::Real) = ccall(dlsym(libc,"usleep"), Uint32, (Uint32,), uint32(round(s*1e6)))
 unixtime() = ccall(dlsym(libc,"time"), Uint32, (Ptr{Uint32},), C_NULL)
 function ftime()
     t = Array(Uint64,2)

@@ -96,14 +96,14 @@ convert(::Type{Uint64}, x::Int64  ) = boxui64(unbox64(x))
 convert(::Type{Uint64}, x::Float32) = boxui64(fptoui64(unbox32(x)))
 convert(::Type{Uint64}, x::Float64) = boxui64(fptoui64(unbox64(x)))
 
-int8  (x::Scalar) = convert(Int8,   x)
-uint8 (x::Scalar) = convert(Uint8,  x)
-int16 (x::Scalar) = convert(Int16,  x)
-uint16(x::Scalar) = convert(Uint16, x)
-int32 (x::Scalar) = convert(Int32,  x)
-uint32(x::Scalar) = convert(Uint32, x)
-int64 (x::Scalar) = convert(Int64,  x)
-uint64(x::Scalar) = convert(Uint64, x)
+int8  (x) = convert(Int8,   x)
+uint8 (x) = convert(Uint8,  x)
+int16 (x) = convert(Int16,  x)
+uint16(x) = convert(Uint16, x)
+int32 (x) = convert(Int32,  x)
+uint32(x) = convert(Uint32, x)
+int64 (x) = convert(Int64,  x)
+uint64(x) = convert(Uint64, x)
 
 truncate(x::Int) = x
 

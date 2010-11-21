@@ -13,7 +13,7 @@ for f = {`sin, `cos, `tan, `sinh, `cosh, `tanh, `asin, `acos, `atan, `log,
     eval(`begin
         ($f)(x::Float64) = ccall(dlsym(libm,$string(f)), Float64, (Float64,), x)
         ($f)(x::Float32) = ccall(dlsym(libm,$strcat(string(f),"f")), Float32, (Float32,), x)
-        ($f)(x::Scalar) = ($f)(convert(Float64,x))
+        ($f)(x::Real) = ($f)(convert(Float64,x))
         vectorize($f)
     end)
 end
@@ -52,7 +52,7 @@ for f = {`atan2, `pow, `fmod, `copysign, `hypot, `fmin, `fmax, `fdim}
                                              Float32,
                                              (Float32, Float32),
                                              x, y)
-        ($f)(x::Scalar, y::Scalar) = ($f)(convert(Float64,x),convert(Float64,y))
+        ($f)(x::Real, y::Real) = ($f)(convert(Float64,x),convert(Float64,y))
     end)
 end
 

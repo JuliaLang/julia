@@ -13,7 +13,7 @@ size(a::Array) = a.dims
 numel(a::Array) = arraylen(a)
 
 size(t::Tensor, d) = size(t)[d]
-ndims(t::Tensor) = length(size(t))
+ndims{T,n}(::Tensor{T,n}) = n
 numel(t::Tensor) = prod(size(t))
 length(v::Vector) = numel(v)
 nnz(a::Tensor) = (n = 0; for i=1:numel(a); n += a[i] != 0 ? 1 : 0; end; n)
@@ -100,6 +100,35 @@ linspace(start::Real, stop::Real, stride::Real) =
 linspace(start::Real, stop::Real) =
     ((start, stop) = promote(start, stop);
      [ i | i=start:stop ])
+
+## Conversions ##
+
+int8(x::Array{Int8}) = x
+int8(x::Array) = copy_to(Array(Int8,size(x)), x)
+uint8(x::Array{Uint8}) = x
+uint8(x::Array) = copy_to(Array(Uint8,size(x)), x)
+int16(x::Array{Int16}) = x
+int16(x::Array) = copy_to(Array(Int16,size(x)), x)
+uint16(x::Array{Uint16}) = x
+uint16(x::Array) = copy_to(Array(Uint16,size(x)), x)
+int32(x::Array{Int32}) = x
+int32(x::Array) = copy_to(Array(Int32,size(x)), x)
+uint32(x::Array{Uint32}) = x
+uint32(x::Array) = copy_to(Array(Uint32,size(x)), x)
+int64(x::Array{Int64}) = x
+int64(x::Array) = copy_to(Array(Int64,size(x)), x)
+uint64(x::Array{Uint64}) = x
+uint64(x::Array) = copy_to(Array(Uint64,size(x)), x)
+
+float32(x::Array{Float32}) = x
+float32(x::Array) = copy_to(Array(Float32,size(x)), x)
+float64(x::Array{Float64}) = x
+float64(x::Array) = copy_to(Array(Float64,size(x)), x)
+
+bool(x::Array{Bool}) = x
+bool(x::Array) = copy_to(Array(Bool,size(x)), x)
+char(x::Array{Char}) = x
+char(x::Array) = copy_to(Array(Char,size(x)), x)
 
 ## Unary operators ##
 
@@ -290,7 +319,7 @@ assign{T}(A::Array{T}, x, i::Index) = arrayset(A,i,convert(T, x))
 
 assign(t::Tensor, x, r::Real...) = (t[map(x->convert(Int32,round(x)),r)...] = x)
 
-function assign(A::Vector, x::Scalar, I::Vector{Index})
+function assign(A::Vector, x, I::Vector{Index})
     for i=I
         A[i] = x
     end
@@ -304,16 +333,17 @@ function assign(A::Vector, X::Vector, I::Vector{Index})
     return A
 end
 
-assign{T}(A::Array{T,2}, x::Scalar, i::Index, j::Index) = (A[(j-1)*A.dims[1] + i] = x)
+assign(A::Matrix, x, i::Index, j::Index) = (A[(j-1)*A.dims[1] + i] = x)
+assign(A::Matrix, x::Tensor, i::Index, j::Index) = (A[(j-1)*A.dims[1] + i] = x)
 
-function assign(A::Matrix, x::Scalar, I::Indices, J::Indices)
+function assign(A::Matrix, x, I::Indices, J::Indices)
     for i=I, j=J
         A[i,j] = x
     end
     return A
 end
 
-function assign(A::Matrix, X::Matrix, I::Indices, J::Indices)
+function assign(A::Matrix, X::Tensor, I::Indices, J::Indices)
     count = 1
     for i=I, j=J
         A[i,j] = X[count]
@@ -322,7 +352,11 @@ function assign(A::Matrix, X::Matrix, I::Indices, J::Indices)
     return A
 end
 
-function assign(A::Tensor, x::Scalar, I0::Index, I::Index...)
+assign(A::Tensor, x, I0::Index, I::Index...) = assign_scalarND(A,x,I0,I...)
+assign(A::Tensor, x::Tensor, I0::Index, I::Index...) =
+    assign_scalarND(A,x,I0,I...)
+
+function assign_scalarND(A, x, I0, I...)
     dims = size(A)
     index = I0
     stride = 1
@@ -335,7 +369,7 @@ function assign(A::Tensor, x::Scalar, I0::Index, I::Index...)
 end
 
 
-function assign(A::Tensor, x::Scalar, I0::Indices, I::Indices...)
+function assign(A::Tensor, x, I0::Indices, I::Indices...)
     dims = size(A)
     ndimsA = length(dims)
 
@@ -381,8 +415,8 @@ vcat() = Array(None,0)
 hcat() = Array(None,0)
 
 ## cat: special cases
-hcat{T <: Scalar}(X::T...) = [ X[j] | i=1, j=1:length(X) ]
-vcat{T <: Scalar}(X::T...) = [ X[i] | i=1:length(X) ]
+hcat{T}(X::T...) = [ X[j] | i=1, j=1:length(X) ]
+vcat{T}(X::T...) = [ X[i] | i=1:length(X) ]
 
 hcat{T}(V::Array{T,1}...) = [ V[j][i] | i=1:length(V[1]), j=1:length(V) ]
 
@@ -433,15 +467,15 @@ end
 
 ## cat: general case
 
-function cat(catdim::Int, X::Scalar...)
-   typeC = promote_type(map(typeof, X)...)
-   nargs = length(X)
-   if catdim == 1
-       dimsC = nargs
-   elseif catdim == 2
-       dimsC = (1, nargs)
-   end
-   C = Array(typeC, dimsC)
+function cat(catdim::Int, X...)
+    typeC = promote_type(map(typeof, X)...)
+    nargs = length(X)
+    if catdim == 1
+        dimsC = nargs
+    elseif catdim == 2
+        dimsC = (1, nargs)
+    end
+    C = Array(typeC, dimsC)
 
    for i=1:nargs
        C[i] = X[i]
@@ -449,8 +483,8 @@ function cat(catdim::Int, X::Scalar...)
    return C
 end
 
-vcat(X::Scalar...) = cat(1, X...)
-hcat(X::Scalar...) = cat(2, X...)
+vcat(X...) = cat(1, X...)
+hcat(X...) = cat(2, X...)
 
 #function cat(catdim::Int, A::Union(Number,Array)...)
 #    cat(catdim, map(A, x->(isscalar(x) ? [x] : x))...)
@@ -678,7 +712,8 @@ repmat(a::Matrix, m::Size, n::Size) = reshape([ a[i,j] | i=1:size(a,1),
 
 accumarray(I::Vector, J::Vector, V) = accumarray (I, J, V, max(I), max(J))
 
-function accumarray{T<:Scalar}(I::Vector, J::Vector, V::T, m::Size, n::Size)
+
+function accumarray{T<:Number}(I::Vector, J::Vector, V::T, m::Size, n::Size)
     A = clone(V, m, n)
     for k=1:length(I)
         A[I[k], J[k]] += V
@@ -686,7 +721,7 @@ function accumarray{T<:Scalar}(I::Vector, J::Vector, V::T, m::Size, n::Size)
     return A
 end
 
-function accumarray(I::Vector, J::Vector, V::Vector, m::Size, n::Size)
+function accumarray(I::Indices, J::Indices, V::Vector, m::Size, n::Size)
     A = clone(V, m, n)
     for k=1:length(I)
         A[I[k], J[k]] += V[k]

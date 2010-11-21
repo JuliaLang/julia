@@ -77,14 +77,13 @@
 
 #bitstype {32|64} Ptr{T}
 
-type Scalar
-type Number <: Scalar
+type Number
 type Real   <: Number
 type Int    <: Real
 type Uint   <: Int
 type Float  <: Real
 
-bitstype 8  Bool <: Scalar
+bitstype 8  Bool
 bitstype 32 Char <: Uint
 
 bitstype 8  Int8   <: Int

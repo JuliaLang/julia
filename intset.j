@@ -28,7 +28,7 @@ function remove(s::IntSet, n::Int)
     s
 end
 
-contains(s::Scalar, n::Int) = (s == n)
+contains(s::Number, n::Int) = (s == n)
 
 function contains(s::IntSet, n::Int)
     if n >= s.limit

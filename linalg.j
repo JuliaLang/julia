@@ -61,7 +61,7 @@ diagm{T}(v::Vector{T}) = (n=length(v);
 
 dot(x::Vector, y::Vector) = sum(x.*y)
 
-function norm(x::Vector, p::Scalar)
+function norm(x::Vector, p::Number)
     if p == Inf
         return max(abs(x))
     elseif p == -Inf
