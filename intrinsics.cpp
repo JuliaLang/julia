@@ -350,7 +350,8 @@ extern "C" void *jl_value_to_pointer(jl_value_t *jt, jl_value_t *v, int argn)
         size_t osz = jl_bitstype_nbits(jt)/8;
         return alloc_temp_arg_copy(jl_bits_data(v), osz);
     }
-    if ((jl_value_t*)jl_uint8_type == jt && jl_is_byte_string(v)) {
+    if (((jl_value_t*)jl_uint8_type == jt ||
+         (jl_value_t*)jl_int8_type == jt) && jl_is_byte_string(v)) {
         return jl_string_data(v);
     }
     if (jl_is_array(v)) {

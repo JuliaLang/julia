@@ -12,7 +12,7 @@ convert(::Type{Char}, x::Uint64 ) = box(Char,trunc32(unbox64(x)))
 convert(::Type{Char}, x::Float32) = box(Char,fptoui32(unbox32(x)))
 convert(::Type{Char}, x::Float64) = box(Char,fptoui32(unbox64(x)))
 
-char(x::Scalar) = convert(Char, x)
+char(x) = convert(Char, x)
 
 ## char promotions ##
 
