@@ -64,14 +64,10 @@ ones(T::Type, dims::Size...) = ones(T, dims)
 ones(dims::Dims) = ones(Float64, dims)
 ones(dims::Size...) = ones(dims)
 
-trues(::Type{Bool}, dims::Dims) = fill(Array(Bool, dims), true)
-trues(T::Type, dims::Size...) = trues(T, dims)
-trues(dims::Dims) = trues(Bool, dims)
+trues(dims::Dims) = fill(Array(Bool, dims), true)
 trues(dims::Size...) = trues(dims)
 
-falses(::Type{Bool}, dims::Dims) = fill(Array(Bool, dims), false)
-falses(T::Type, dims::Size...) = falses(T, dims)
-falses(dims::Dims) = falses(Bool, dims)
+falses(dims::Dims) = fill(Array(Bool, dims), false)
 falses(dims::Size...) = falses(dims)
 
 function copy_to(dest::Tensor, src::Tensor)
@@ -104,37 +100,37 @@ linspace(start::Real, stop::Real) =
 ## Conversions ##
 
 int8(x::Array{Int8}) = x
-int8(x::Array) = copy_to(clone(x,Int8,size(x)), x)
+int8(x::Array) = copy_to(clone(x,Int8), x)
 uint8(x::Array{Uint8}) = x
-uint8(x::Array) = copy_to(clone(x,Uint8,size(x)), x)
+uint8(x::Array) = copy_to(clone(x,Uint8), x)
 int16(x::Array{Int16}) = x
-int16(x::Array) = copy_to(clone(x,Int16,size(x)), x)
+int16(x::Array) = copy_to(clone(x,Int16), x)
 uint16(x::Array{Uint16}) = x
-uint16(x::Array) = copy_to(clone(x,Uint16,size(x)), x)
+uint16(x::Array) = copy_to(clone(x,Uint16), x)
 int32(x::Array{Int32}) = x
-int32(x::Array) = copy_to(clone(x,Int32,size(x)), x)
+int32(x::Array) = copy_to(clone(x,Int32), x)
 uint32(x::Array{Uint32}) = x
-uint32(x::Array) = copy_to(clone(x,Uint32,size(x)), x)
+uint32(x::Array) = copy_to(clone(x,Uint32), x)
 int64(x::Array{Int64}) = x
-int64(x::Array) = copy_to(clone(x,Int64,size(x)), x)
+int64(x::Array) = copy_to(clone(x,Int64), x)
 uint64(x::Array{Uint64}) = x
-uint64(x::Array) = copy_to(clone(x,Uint64,size(x)), x)
+uint64(x::Array) = copy_to(clone(x,Uint64), x)
 
 float32(x::Array{Float32}) = x
-float32(x::Array) = copy_to(clone(x,Float32,size(x)), x)
+float32(x::Array) = copy_to(clone(x,Float32), x)
 float64(x::Array{Float64}) = x
-float64(x::Array) = copy_to(clone(x,Float64,size(x)), x)
+float64(x::Array) = copy_to(clone(x,Float64), x)
 
 bool(x::Array{Bool}) = x
-bool(x::Array) = copy_to(clone(x,Bool,size(x)), x)
+bool(x::Array) = copy_to(clone(x,Bool), x)
 char(x::Array{Char}) = x
-char(x::Array) = copy_to(clone(x,Char,size(x)), x)
+char(x::Array) = copy_to(clone(x,Char), x)
 
 ## Unary operators ##
 
 conj{T <: Real}(x::Tensor{T}) = x
 real{T <: Real}(x::Tensor{T}) = x
-imag{T <: Real}(x::Tensor{T}) = zeros(T, size(x))
+imag{T <: Real}(x::Tensor{T}) = zero(x)
 
 for f=(`-, `~, `conj, `real, `imag)
     eval(`function ($f)(A::Tensor)
@@ -333,8 +329,8 @@ function assign(A::Vector, X::Vector, I::Vector{Index})
     return A
 end
 
-assign(A::Matrix, x, i::Index, j::Index) = (A[(j-1)*A.dims[1] + i] = x)
-assign(A::Matrix, x::Tensor, i::Index, j::Index) = (A[(j-1)*A.dims[1] + i] = x)
+assign(A::Matrix, x, i::Index, j::Index) = (A[(j-1)*size(A,1) + i] = x)
+assign(A::Matrix, x::Tensor, i::Index, j::Index) = (A[(j-1)*size(A,1) + i] = x)
 
 function assign(A::Matrix, x, I::Indices, J::Indices)
     for i=I, j=J
@@ -421,48 +417,48 @@ vcat{T}(X::T...) = [ X[i] | i=1:length(X) ]
 hcat{T}(V::Array{T,1}...) = [ V[j][i] | i=1:length(V[1]), j=1:length(V) ]
 
 function vcat{T}(V::Array{T,1}...)
-   a = clone(V[1], sum(map(length, V)))
-   pos = 1
-   for k=1:length(V)
-       Vk = V[k]
-       for i=1:length(Vk)
-           a[pos] = Vk[i]
-           pos += 1
-       end
-   end
-   a
+    a = clone(V[1], sum(map(length, V)))
+    pos = 1
+    for k=1:length(V)
+        Vk = V[k]
+        for i=1:length(Vk)
+            a[pos] = Vk[i]
+            pos += 1
+        end
+    end
+    a
 end
 
 function hcat{T}(A::Array{T,2}...)
-   nargs = length(A)
-   ncols = sum(ntuple(nargs, i->size(A[i], 2)))
-   nrows = size(A[1], 1)
-   B = clone(A[1], nrows, ncols)
-   pos = 1
-   for k=1:nargs
-       Ak = A[k]
-       for i=1:numel(Ak)
-           B[pos] = Ak[i]
-           pos += 1
-       end
-   end
-   return B
+    nargs = length(A)
+    ncols = sum(ntuple(nargs, i->size(A[i], 2)))
+    nrows = size(A[1], 1)
+    B = clone(A[1], nrows, ncols)
+    pos = 1
+    for k=1:nargs
+        Ak = A[k]
+        for i=1:numel(Ak)
+            B[pos] = Ak[i]
+            pos += 1
+        end
+    end
+    return B
 end
 
 function vcat{T}(A::Array{T,2}...)
-   nargs = length(A)
-   nrows = sum(ntuple(nargs, i->size(A[i], 1)))
-   ncols = size(A[1], 2)
-   B = clone(A[1], nrows, ncols)
-   pos = 1
-   for j=1:ncols, k=1:nargs
-       Ak = A[k]
-       for i=1:size(Ak, 1)
-           B[pos] = Ak[i,j]
-           pos += 1
-       end
-   end
-   return B
+    nargs = length(A)
+    nrows = sum(ntuple(nargs, i->size(A[i], 1)))
+    ncols = size(A[1], 2)
+    B = clone(A[1], nrows, ncols)
+    pos = 1
+    for j=1:ncols, k=1:nargs
+        Ak = A[k]
+        for i=1:size(Ak, 1)
+            B[pos] = Ak[i,j]
+            pos += 1
+        end
+    end
+    return B
 end
 
 ## cat: general case
@@ -477,55 +473,55 @@ function cat(catdim::Int, X...)
     end
     C = Array(typeC, dimsC)
 
-   for i=1:nargs
-       C[i] = X[i]
-   end
-   return C
+    for i=1:nargs
+        C[i] = X[i]
+    end
+    return C
 end
 
 vcat(X...) = cat(1, X...)
 hcat(X...) = cat(2, X...)
 
 function cat(catdim::Int, A::Array...)
-   # ndims of all input arrays should be in [d-1, d]
+    # ndims of all input arrays should be in [d-1, d]
 
-   nargs = length(A)
-   dimsA = ntuple(nargs, i->size(A[i]))
-   ndimsA = ntuple(nargs, i->length(dimsA[i]))
-   d_max = max(ndimsA)
-   d_min = min(ndimsA)
+    nargs = length(A)
+    dimsA = ntuple(nargs, i->size(A[i]))
+    ndimsA = ntuple(nargs, i->length(dimsA[i]))
+    d_max = max(ndimsA)
+    d_min = min(ndimsA)
 
-   cat_ranges = ntuple(nargs, i->(catdim <= ndimsA[i] ? dimsA[i][catdim] : 1))
+    cat_ranges = ntuple(nargs, i->(catdim <= ndimsA[i] ? dimsA[i][catdim] : 1))
 
-   function compute_dims(d)
-       if d == catdim
-           if catdim <= d_max
-               return sum(cat_ranges)
-           else
-               return nargs
-           end
-       else
-           if d <= d_max
-               return dimsA[1][d]
-           else
-               return 1
-           end
-       end
-   end
+    function compute_dims(d)
+        if d == catdim
+            if catdim <= d_max
+                return sum(cat_ranges)
+            else
+                return nargs
+            end
+        else
+            if d <= d_max
+                return dimsA[1][d]
+            else
+                return 1
+            end
+        end
+    end
 
-   ndimsC = max(catdim, d_max)
-   dimsC = ntuple(ndimsC, compute_dims)
-   typeC = promote_type(ntuple(nargs, i->typeof(A[i]).parameters[1])...)
-   C = Array(typeC, dimsC)
+    ndimsC = max(catdim, d_max)
+    dimsC = ntuple(ndimsC, compute_dims)
+    typeC = promote_type(ntuple(nargs, i->typeof(A[i]).parameters[1])...)
+    C = Array(typeC, dimsC)
 
-   cat_ranges = cumsum(1, cat_ranges...)
-   for k=1:nargs
-       cat_one = ntuple(ndimsC, i->(i != catdim ? 
-                                    Range1(1,dimsC[i]) :
-                                    Range1(cat_ranges[k],cat_ranges[k+1]-1) ))
-       C[cat_one...] = A[k]
-   end
-   return C
+    cat_ranges = cumsum(1, cat_ranges...)
+    for k=1:nargs
+        cat_one = ntuple(ndimsC, i->(i != catdim ? 
+                                     Range1(1,dimsC[i]) :
+                                     Range1(cat_ranges[k],cat_ranges[k+1]-1) ))
+        C[cat_one...] = A[k]
+    end
+    return C
 end
 
 vcat(A::Array...) = cat(1, A...)
@@ -586,7 +582,7 @@ for f = (`all, `any)
 end
 
 function isequal(x::Tensor, y::Tensor)
-    if x.dims != y.dims
+    if size(x) != size(y)
         return false
     end
 
@@ -727,7 +723,7 @@ end
 
 function find(A::Vector)
     nnzA = nnz(A)
-    I = clone(A, Size, nnzA)
+    I = zeros(Size, nnzA)
     count = 1
     for i=1:length(A)
         if A[i] != 0
@@ -740,8 +736,8 @@ end
 
 function find(A::Matrix)
     nnzA = nnz(A)
-    I = clone(A, Size, nnzA)
-    J = clone(A, Size, nnzA)
+    I = zeros(Size, nnzA)
+    J = zeros(Size, nnzA)
     count = 1
     for i=1:size(A,1), j=1:size(A,2)
         if A[i,j] != 0
@@ -756,7 +752,7 @@ end
 function find(A::Tensor)
     ndimsA = ndims(A)
     nnzA = nnz(A)
-    I = ntuple(ndimsA, x->clone(A, Size, nnzA))
+    I = ntuple(ndimsA, x->zeros(Size, nnzA))
 
     count = 1
     function find_one(ind)
