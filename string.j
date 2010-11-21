@@ -15,7 +15,7 @@ function show(c::Char)
     if c == '\''
         print("\\'")
     else
-        print_escaped(string(c))
+        print_escaped(string(c), false, '\xff')
     end
     print('\'')
 end
