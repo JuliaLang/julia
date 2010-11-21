@@ -9,6 +9,18 @@ struct Range1{T} <: Tensor{T,1}
     stop::T
 end
 
+function show(r::Union(Range,Range1))
+    if length(r) <= 10
+        print('[')
+        for i = 1:length(r)-1
+            print(r[i],',')
+        end
+        print(r[end],']')
+    else
+        print('[',r[1],',',r[2],',',r[3],",...,",r[end-1],',',r[end],']')
+    end
+end
+
 numel(r::Union(Range,Range1)) = length(r)
 size(r::Union(Range,Range1)) = tuple(length(r))
 length{T<:Int}(r::Range{T}) = max(0, div((r.stop-r.start+r.step), r.step))
@@ -41,7 +53,7 @@ ref(r::Range, i::Index) =
     (x = r.start + (i-1)*r.step;
      (r.step<0 ? (x<r.stop) : (x>r.stop)) ? throw(BoundsError()) : x)
 ref(r::Range1, i::Index) = (x = r.start + (i-1);
-                            done(r,x) ? throw(BoundsError()) : x)
+                            i < 1 || done(r,x) ? throw(BoundsError()) : x)
 
 struct NDRange{N}
     ranges::NTuple{N,Any}
