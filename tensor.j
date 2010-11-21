@@ -99,32 +99,21 @@ linspace(start::Real, stop::Real) =
 
 ## Conversions ##
 
-int8(x::Array{Int8}) = x
-int8(x::Array) = copy_to(clone(x,Int8), x)
-uint8(x::Array{Uint8}) = x
-uint8(x::Array) = copy_to(clone(x,Uint8), x)
-int16(x::Array{Int16}) = x
-int16(x::Array) = copy_to(clone(x,Int16), x)
-uint16(x::Array{Uint16}) = x
-uint16(x::Array) = copy_to(clone(x,Uint16), x)
-int32(x::Array{Int32}) = x
-int32(x::Array) = copy_to(clone(x,Int32), x)
-uint32(x::Array{Uint32}) = x
-uint32(x::Array) = copy_to(clone(x,Uint32), x)
-int64(x::Array{Int64}) = x
-int64(x::Array) = copy_to(clone(x,Int64), x)
-uint64(x::Array{Uint64}) = x
-uint64(x::Array) = copy_to(clone(x,Uint64), x)
+convert{T,n}(::Type{Array{T,n}}, x::Array{T,n}) = x
+convert{T,n,S}(::Type{Array{T,n}}, x::Array{S,n}) = copy_to(clone(x,T), x)
 
-float32(x::Array{Float32}) = x
-float32(x::Array) = copy_to(clone(x,Float32), x)
-float64(x::Array{Float64}) = x
-float64(x::Array) = copy_to(clone(x,Float64), x)
-
-bool(x::Array{Bool}) = x
-bool(x::Array) = copy_to(clone(x,Bool), x)
-char(x::Array{Char}) = x
-char(x::Array) = copy_to(clone(x,Char), x)
+int8   {T,n}(x::Array{T,n}) = convert(Array{Int8   ,n}, x)
+uint8  {T,n}(x::Array{T,n}) = convert(Array{Uint8  ,n}, x)
+int16  {T,n}(x::Array{T,n}) = convert(Array{Int16  ,n}, x)
+uint16 {T,n}(x::Array{T,n}) = convert(Array{Uint16 ,n}, x)
+int32  {T,n}(x::Array{T,n}) = convert(Array{Int32  ,n}, x)
+uint32 {T,n}(x::Array{T,n}) = convert(Array{Uint32 ,n}, x)
+int64  {T,n}(x::Array{T,n}) = convert(Array{Int64  ,n}, x)
+uint64 {T,n}(x::Array{T,n}) = convert(Array{Uint64 ,n}, x)
+bool   {T,n}(x::Array{T,n}) = convert(Array{Bool   ,n}, x)
+char   {T,n}(x::Array{T,n}) = convert(Array{Char   ,n}, x)
+float32{T,n}(x::Array{T,n}) = convert(Array{Float32,n}, x)
+float64{T,n}(x::Array{T,n}) = convert(Array{Float64,n}, x)
 
 ## Unary operators ##
 
