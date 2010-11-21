@@ -54,6 +54,26 @@ ref(r::Range, i::Index) =
 ref(r::Range1, i::Index) = (x = r.start + (i-1);
                             i < 1 || done(r,x) ? throw(BoundsError()) : x)
 
+## linear operations on 1-d ranges ##
+
+(-)(r::Union(Range,Range1)) = Range(-r.start, -one(r.start), -r.stop)
+
+(+)(x::Real, r::Range ) = Range(x+r.start, r.step, x+r.stop)
+(+)(x::Real, r::Range1) = Range1(x+r.start, x+r.stop)
+(+)(r::Union(Range,Range1), x::Real) = x+r
+
+(-)(x::Real, r::Range ) = Range(x-r.start, -r.step, x-r.stop)
+(-)(x::Real, r::Range1) = Range(x-r.start, -one(x), x-r.stop)
+(-)(r::Range , x::Real) = Range(r.start-x, r.step, r.stop-x)
+(-)(r::Range1, x::Real) = Range1(r.start-x, r.stop-x)
+
+(*)(x::Real, r::Range ) = Range(x*r.start, x*r.step, x*r.stop)
+(*)(x::Real, r::Range1) = Range(x*r.start, x, x*r.stop)
+(*)(r::Union(Range,Range1), x::Real) = x*r
+
+(/)(r::Range , x::Real) = Range(r.start/x, r.step/x, r.stop/x)
+(/)(r::Range1, x::Real) = Range(r.start/x, inv(x), r.stop/x)
+
 ## N-dimensional ranges ##
 
 struct NDRange{N}

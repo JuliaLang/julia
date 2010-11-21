@@ -22,6 +22,7 @@ abs(x::Real) = x < 0 ? -x : x
 conj(x::Number) = x
 transpose(x) = x
 ctranspose(x::Number) = conj(transpose(x))
+inv(x::Number) = one(x)/x
 
 max(x::Real)  = x
 min(x::Real)  = x
