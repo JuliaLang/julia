@@ -1,12 +1,20 @@
+## 1-dimensional ranges ##
+
 struct Range{T} <: Tensor{T,1}
     start::T
     step::T
     stop::T
+
+    Range{T}(start::T, step::T, stop::T) = new(start, step, stop)
+    Range(start, step, stop) = new(promote(start, step, stop)...)
 end
 
 struct Range1{T} <: Tensor{T,1}
     start::T
     stop::T
+
+    Range1{T}(start::T, stop::T) = new(start, stop)
+    Range1(start, stop) = new(promote(start, stop)...)
 end
 
 show(r::Range)  = print(r.start,':',r.step,':',r.stop)
@@ -37,14 +45,16 @@ done{T}(r::Range{T}, st) =
 next{T}(r::Range{T}, st) =
     (st[2]::T, (st[1]::Int+1, r.start + st[1]::Int*r.step))
 
-colon(start::Real, stop::Real, step::Real) = Range(promote(start, step, stop)...)
-colon(start::Real, stop::Real) = Range1(promote(start, stop)...)
+colon(start::Real, stop::Real, step::Real) = Range(start, step, stop)
+colon(start::Real, stop::Real) = Range1(start, stop)
 
 ref(r::Range, i::Index) =
     (x = r.start + (i-1)*r.step;
      (r.step<0 ? (x<r.stop) : (x>r.stop)) ? throw(BoundsError()) : x)
 ref(r::Range1, i::Index) = (x = r.start + (i-1);
                             i < 1 || done(r,x) ? throw(BoundsError()) : x)
+
+## N-dimensional ranges ##
 
 struct NDRange{N}
     ranges::NTuple{N,Any}
