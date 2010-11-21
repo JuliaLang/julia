@@ -151,14 +151,14 @@ end
 (*)(A::Number, B::Tensor) = A .* B
 (*)(A::Tensor, B::Number) = A .* B
 
-(./)(x::Tensor, y::Tensor)  = reshape( [ x[i] ./ y[i] | i=1:numel(x) ], size(x) )
+(./)(x::Tensor, y::Tensor) = reshape( [ x[i] ./ y[i] | i=1:numel(x) ], size(x) )
 (./)(x::Number, y::Tensor) = reshape( [ x    ./ y[i] | i=1:numel(y) ], size(y) )
 (./)(x::Tensor, y::Number) = reshape( [ x[i] ./ y    | i=1:numel(x) ], size(x) )
 
 (/)(A::Number, B::Tensor) = A ./ B
 (/)(A::Tensor, B::Number) = A ./ B
 
-(.\)(x::Tensor, y::Tensor)  = reshape( [ x[i] .\ y[i] | i=1:numel(x) ], size(x) )
+(.\)(x::Tensor, y::Tensor) = reshape( [ x[i] .\ y[i] | i=1:numel(x) ], size(x) )
 (.\)(x::Number, y::Tensor) = reshape( [ x    .\ y[i] | i=1:numel(y) ], size(y) )
 (.\)(x::Tensor, y::Number) = reshape( [ x[i] .\ y    | i=1:numel(x) ], size(x) )
 
