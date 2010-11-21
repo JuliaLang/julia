@@ -83,6 +83,35 @@ linspace(start::Real, stop::Real) =
     ((start, stop) = promote(start, stop);
      [ i | i=start:stop ])
 
+## Conversions ##
+
+int8(x::Array{Int8}) = x
+int8(x::Array) = copy_to(Array(Int8,size(x)), x)
+uint8(x::Array{Uint8}) = x
+uint8(x::Array) = copy_to(Array(Uint8,size(x)), x)
+int16(x::Array{Int16}) = x
+int16(x::Array) = copy_to(Array(Int16,size(x)), x)
+uint16(x::Array{Uint16}) = x
+uint16(x::Array) = copy_to(Array(Uint16,size(x)), x)
+int32(x::Array{Int32}) = x
+int32(x::Array) = copy_to(Array(Int32,size(x)), x)
+uint32(x::Array{Uint32}) = x
+uint32(x::Array) = copy_to(Array(Uint32,size(x)), x)
+int64(x::Array{Int64}) = x
+int64(x::Array) = copy_to(Array(Int64,size(x)), x)
+uint64(x::Array{Uint64}) = x
+uint64(x::Array) = copy_to(Array(Uint64,size(x)), x)
+
+float32(x::Array{Float32}) = x
+float32(x::Array) = copy_to(Array(Float32,size(x)), x)
+float64(x::Array{Float64}) = x
+float64(x::Array) = copy_to(Array(Float64,size(x)), x)
+
+bool(x::Array{Bool}) = x
+bool(x::Array) = copy_to(Array(Bool,size(x)), x)
+char(x::Array{Char}) = x
+char(x::Array) = copy_to(Array(Char,size(x)), x)
+
 ## Unary operators ##
 
 conj{T <: Real}(x::Array{T}) = x
