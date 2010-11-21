@@ -486,10 +486,6 @@ end
 vcat(X...) = cat(1, X...)
 hcat(X...) = cat(2, X...)
 
-#function cat(catdim::Int, A::Union(Number,Array)...)
-#    cat(catdim, map(A, x->(isscalar(x) ? [x] : x))...)
-#end
-
 function cat(catdim::Int, A::Array...)
    # ndims of all input arrays should be in [d-1, d]
 

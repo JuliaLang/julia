@@ -1,7 +1,5 @@
 ## generic operations on scalars ##
 
-isscalar(x) = (ndims(x)==0)
-
 isreal(x::Real) = true
 isreal(x) = false
 
