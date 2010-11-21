@@ -388,11 +388,15 @@ function vcat{T}(V::Array{T,1}...)
 end
 
 function hcat{T}(A::Array{T,2}...)
-    ncols = sum([ size(A[i], 2) | i=1:length(A) ])
+    nargs = length(A)
+
+    assert( ntuple(nargs, i->size(A[i], 1)) == ntuple(nargs, i->size(A[1], 1)) )
+
+    ncols = sum(ntuple(nargs, i->size(A[i], 2)))
     nrows = size(A[1], 1)
     B = Array(T, nrows, ncols)
     pos = 1
-    for k=1:length(A)
+    for k=1:nargs
         Ak = A[k]
         for i=1:numel(Ak)
             B[pos] = Ak[i]
@@ -403,11 +407,15 @@ function hcat{T}(A::Array{T,2}...)
 end
 
 function vcat{T}(A::Array{T,2}...)
-    nrows = sum([size(A[i], 1) | i=1:length(A)])
+    nargs = length(A)
+
+    assert( ntuple(nargs, i->size(A[i], 2)) == ntuple(nargs, i->size(A[1], 2)) )
+
+    nrows = sum(ntuple(nargs, i->size(A[i], 1)))
     ncols = size(A[1], 2)
     B = Array(T, nrows, ncols)
     pos = 1
-    for j=1:ncols, k=1:length(A)
+    for j=1:ncols, k=1:nargs
         Ak = A[k]
         for i=1:size(Ak, 1)
             B[pos] = Ak[i,j]
