@@ -1,6 +1,6 @@
 ## 1-dimensional ranges ##
 
-struct Range{T} <: Tensor{T,1}
+struct Range{T<:Real} <: Tensor{T,1}
     start::T
     step::T
     stop::T
@@ -9,7 +9,7 @@ struct Range{T} <: Tensor{T,1}
     Range(start, step, stop) = new(promote(start, step, stop)...)
 end
 
-struct Range1{T} <: Tensor{T,1}
+struct Range1{T<:Real} <: Tensor{T,1}
     start::T
     stop::T
 
