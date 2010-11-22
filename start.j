@@ -16,6 +16,7 @@ load("char.j")
 load("number.j")
 
 # core data structures
+load("array.j")
 load("tensor.j")
 load("intset.j")
 load("table.j")
@@ -51,8 +52,8 @@ load("tree.j")
 # external libraries
 load("libc.j")
 load("math.j")
-load("blas.j")
-load("lapack.j")
+load("linalg_blas.j")
+load("linalg_lapack.j")
 
 # I/O and concurrency
 load("io.j")
