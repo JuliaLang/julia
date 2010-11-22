@@ -385,11 +385,16 @@ void *alloc_permanent(size_t sz);
 // get a pointer to the data in a value of bits type
 #define jl_bits_data(v) (&((void**)(v))[1])
 
+static inline int jl_is_array_type(void *t)
+{
+    return (jl_is_struct_type(t) &&
+            ((jl_struct_type_t*)(t))->name == jl_array_typename);
+}
+
 static inline int jl_is_array(void *v)
 {
     jl_type_t *t = jl_typeof(v);
-    return (jl_is_struct_type(t) &&
-            ((jl_struct_type_t*)(t))->name == jl_array_typename);
+    return jl_is_array_type(t);
 }
 
 static inline int jl_is_box(void *v)

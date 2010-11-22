@@ -650,7 +650,7 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
         }
         else if (f->fptr == &jl_f_arraylen && nargs==1) {
             jl_value_t *aty = expr_type(args[1]); rt1 = aty;
-            if (jl_subtype(aty, (jl_value_t*)jl_array_type, 0)) {
+            if (jl_is_array_type(aty)) {
                 Value *arg1 = emit_expr(args[1], ctx, true);
                 JL_GC_POP();
                 return emit_arraylen(arg1);
@@ -659,7 +659,7 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
         else if (f->fptr == &jl_f_arrayref && nargs==2) {
             jl_value_t *aty = expr_type(args[1]); rt1 = aty;
             jl_value_t *ity = expr_type(args[2]); rt2 = ity;
-            if (jl_subtype(aty, (jl_value_t*)jl_array_type, 0) &&
+            if (jl_is_array_type(aty) &&
                 ity == (jl_value_t*)jl_int32_type) {
                 if (jl_is_bits_type(jl_tparam0(aty))) {
                     Value *ary = emit_expr(args[1], ctx, true);
@@ -688,7 +688,7 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
             jl_value_t *aty = expr_type(args[1]); rt1 = aty;
             jl_value_t *ity = expr_type(args[2]); rt2 = ity;
             jl_value_t *vty = expr_type(args[3]); rt3 = vty;
-            if (jl_subtype(aty, (jl_value_t*)jl_array_type, 0) &&
+            if (jl_is_array_type(aty) &&
                 ity == (jl_value_t*)jl_int32_type) {
                 jl_value_t *ety = jl_tparam0(aty);
                 if (jl_is_bits_type(ety) && jl_subtype(vty, ety, 0)) {
