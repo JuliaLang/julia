@@ -74,6 +74,41 @@ ref(r::Range1, i::Index) = (x = r.start + (i-1);
 (/)(r::Range , x::Real) = Range(r.start/x, r.step/x, r.stop/x)
 (/)(r::Range1, x::Real) = Range(r.start/x, inv(x), r.stop/x)
 
+## adding and subtracting ranges ##
+
+# TODO: if steps combine to zero, create sparse zero vector
+
+function (+)(r1::Range, r2::Range)
+    if length(r1) != length(r2); error("shape mismatch"); end
+    Range(r1.start+r2.start, r1.step+r2.step, r1.stop+r2.stop)
+end
+
+function (+)(r1::Range, r2::Range1)
+    if length(r1) != length(r2); error("shape mismatch"); end
+    Range(r1.start+r2.start, r1.step+one(r2.start), r1.stop+r2.stop)
+end
+(+)(r1::Range1, r2::Range) = r2+r1
+
+function (+)(r1::Range1, r2::Range1)
+    if length(r1) != length(r2); error("shape mismatch"); end
+    Range(r1.start+r2.start, one(r1.start)+one(r2.start), r1.stop+r2.stop)
+end
+
+function (-)(r1::Range, r2::Range)
+    if length(r1) != length(r2); error("shape mismatch"); end
+    Range(r1.start-r2.start, r1.step-r2.step, r1.stop-r2.stop)
+end
+
+function (-)(r1::Range, r2::Range1)
+    if length(r1) != length(r2); error("shape mismatch"); end
+    Range(r1.start-r2.start, r1.step-one(r2.start), r1.stop-r2.stop)
+end
+
+function (-)(r1::Range1, r2::Range)
+    if length(r1) != length(r2); error("shape mismatch"); end
+    Range(r1.start-r2.start, one(r1.start)-r2.step, r1.stop-r2.stop)
+end
+
 ## N-dimensional ranges ##
 
 struct NDRange{N}
