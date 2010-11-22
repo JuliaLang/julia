@@ -24,9 +24,9 @@ transpose(x) = x
 ctranspose(x::Number) = conj(transpose(x))
 inv(x::Number) = one(x)/x
 
-max(x::Real)  = x
-min(x::Real)  = x
-sum(x::Number)  = x
+max(x::Real) = x
+min(x::Real) = x
+sum(x::Number) = x
 prod(x::Number) = x
 
 max(x::Real, y::Real) = x > y ? x : y

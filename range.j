@@ -17,11 +17,16 @@ struct Range1{T} <: Tensor{T,1}
     Range1(start, stop) = new(promote(start, stop)...)
 end
 
+typealias Ranges Union(Range,Range1)
+
+step(r::Range)  = r.step
+step(r::Range1) = one(r.start)
+
 show(r::Range)  = print(r.start,':',r.step,':',r.stop)
 show(r::Range1) = print(r.start,':',r.stop)
 
-numel(r::Union(Range,Range1)) = length(r)
-size(r::Union(Range,Range1)) = tuple(length(r))
+numel(r::Ranges) = length(r)
+size(r::Ranges) = tuple(length(r))
 length{T<:Int}(r::Range{T}) = max(0, div((r.stop-r.start+r.step), r.step))
 length{T<:Int}(r::Range1{T}) = max(0, (r.stop-r.start + 1))
 length(r::Range) = max(0, int32((r.stop-r.start) / r.step + 1))
@@ -50,63 +55,39 @@ colon(start::Real, stop::Real) = Range1(start, stop)
 
 ref(r::Range, i::Index) =
     (x = r.start + (i-1)*r.step;
-     (r.step<0 ? (x<r.stop) : (x>r.stop)) ? throw(BoundsError()) : x)
+     (r.step < 0 ? (x < r.stop) : (x > r.stop)) ? throw(BoundsError()) : x)
 ref(r::Range1, i::Index) = (x = r.start + (i-1);
                             i < 1 || done(r,x) ? throw(BoundsError()) : x)
 
 ## linear operations on 1-d ranges ##
 
-(-)(r::Union(Range,Range1)) = Range(-r.start, -one(r.start), -r.stop)
+(-)(r::Ranges) = Range(-r.start, -step(r), -r.stop)
 
 (+)(x::Real, r::Range ) = Range(x+r.start, r.step, x+r.stop)
 (+)(x::Real, r::Range1) = Range1(x+r.start, x+r.stop)
-(+)(r::Union(Range,Range1), x::Real) = x+r
+(+)(r::Ranges, x::Real) = x+r
 
-(-)(x::Real, r::Range ) = Range(x-r.start, -r.step, x-r.stop)
-(-)(x::Real, r::Range1) = Range(x-r.start, -one(x), x-r.stop)
+(-)(x::Real, r::Ranges) = Range(x-r.start, -step(r), x-r.stop)
 (-)(r::Range , x::Real) = Range(r.start-x, r.step, r.stop-x)
 (-)(r::Range1, x::Real) = Range1(r.start-x, r.stop-x)
 
-(*)(x::Real, r::Range ) = Range(x*r.start, x*r.step, x*r.stop)
-(*)(x::Real, r::Range1) = Range(x*r.start, x, x*r.stop)
-(*)(r::Union(Range,Range1), x::Real) = x*r
+(*)(x::Real, r::Ranges) = Range(x*r.start, x*step(r), x*r.stop)
+(*)(r::Ranges, x::Real) = x*r
 
-(/)(r::Range , x::Real) = Range(r.start/x, r.step/x, r.stop/x)
-(/)(r::Range1, x::Real) = Range(r.start/x, inv(x), r.stop/x)
+(/)(r::Ranges, x::Real) = Range(r.start/x, step(r)/x, r.stop/x)
 
 ## adding and subtracting ranges ##
 
 # TODO: if steps combine to zero, create sparse zero vector
 
-function (+)(r1::Range, r2::Range)
+function (+)(r1::Ranges, r2::Ranges)
     if length(r1) != length(r2); error("shape mismatch"); end
-    Range(r1.start+r2.start, r1.step+r2.step, r1.stop+r2.stop)
+    Range(r1.start+r2.start, step(r1)+step(r2), r1.stop+r2.stop)
 end
 
-function (+)(r1::Range, r2::Range1)
+function (-)(r1::Ranges, r2::Ranges)
     if length(r1) != length(r2); error("shape mismatch"); end
-    Range(r1.start+r2.start, r1.step+one(r2.start), r1.stop+r2.stop)
-end
-(+)(r1::Range1, r2::Range) = r2+r1
-
-function (+)(r1::Range1, r2::Range1)
-    if length(r1) != length(r2); error("shape mismatch"); end
-    Range(r1.start+r2.start, one(r1.start)+one(r2.start), r1.stop+r2.stop)
-end
-
-function (-)(r1::Range, r2::Range)
-    if length(r1) != length(r2); error("shape mismatch"); end
-    Range(r1.start-r2.start, r1.step-r2.step, r1.stop-r2.stop)
-end
-
-function (-)(r1::Range, r2::Range1)
-    if length(r1) != length(r2); error("shape mismatch"); end
-    Range(r1.start-r2.start, r1.step-one(r2.start), r1.stop-r2.stop)
-end
-
-function (-)(r1::Range1, r2::Range)
-    if length(r1) != length(r2); error("shape mismatch"); end
-    Range(r1.start-r2.start, one(r1.start)-r2.step, r1.stop-r2.stop)
+    Range(r1.start-r2.start, step(r1)-step(r2), r1.stop-r2.stop)
 end
 
 ## N-dimensional ranges ##
