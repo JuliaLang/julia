@@ -1,37 +1,12 @@
-## Basic Linear Algebra functions ##
+## linalg.j: Basic Linear Algebra functions ##
 
-function issymmetric(A::Matrix)
-    m, n = size(A)
-    if m != n; error("matrix must be square, got ", m,"x",n); end
-    for i=1:(n-1), j=(i+1):n
-        if A[i,j] != A[j,i]
-            return false
-        end
-    end
-    return true
-end
+dot(x::Vector, y::Vector) = sum(x.*y)
+# Take care of dot product of vectors that are actually matrices or N-d
+dot(x::Matrix, y::Matrix) = dot(reshape(x, prod(size(x))), reshape(y, prod(size(y))) )
 
-function isuppertriangular(A::Matrix)
-    m, n = size(A)
-    if m != n; error("matrix must be square, got ", m,"x",n); end
-    for i=1:n, j=1:n
-        if A[i,j] != 0 && j < i
-            return false
-        end
-    end
-    return true
-end
-
-function islowertriangular(A::Matrix)
-    m, n = size(A)
-    if m != n; error("matrix must be square, got ", m,"x",n); end
-    for i=1:n, j=n:-1:1
-        if A[i,j] != 0 && j > i
-            return false
-        end
-    end
-    return true
-end
+# blas.j defines these for floats; this handles other cases
+(*)(A::Matrix, B::Vector) = [ dot(A[i,:],B) | i=1:size(A,1) ]
+(*)(A::Matrix, B::Matrix) = [ dot(A[i,:],B[:,j]) | i=1:size(A,1), j=1:size(B,2) ]
 
 triu(M) = triu(M,0)
 tril(M) = tril(M,0)
@@ -58,8 +33,6 @@ diagm{T}(v::Vector{T}) = (n=length(v);
                           a=zeros(T,n,n);
                           for i=1:n; a[i,i] = v[i]; end;
                           a)
-
-dot(x::Vector, y::Vector) = sum(x.*y)
 
 function norm(x::Vector, p::Number)
     if p == Inf
@@ -120,3 +93,36 @@ inv(a::Matrix) = a \ eye(size(a)[1])
 cond(a::Matrix, p) = norm(a, p) * norm(inv(a), p)
 
 cond(a::Matrix) = cond(a, 2)
+
+function issymmetric(A::Matrix)
+    m, n = size(A)
+    if m != n; error("matrix must be square, got ", m,"x",n); end
+    for i=1:(n-1), j=(i+1):n
+        if A[i,j] != A[j,i]
+            return false
+        end
+    end
+    return true
+end
+
+function isuppertriangular(A::Matrix)
+    m, n = size(A)
+    if m != n; error("matrix must be square, got ", m,"x",n); end
+    for i=1:n, j=1:n
+        if A[i,j] != 0 && j < i
+            return false
+        end
+    end
+    return true
+end
+
+function islowertriangular(A::Matrix)
+    m, n = size(A)
+    if m != n; error("matrix must be square, got ", m,"x",n); end
+    for i=1:n, j=n:-1:1
+        if A[i,j] != 0 && j > i
+            return false
+        end
+    end
+    return true
+end

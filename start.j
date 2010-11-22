@@ -52,8 +52,8 @@ load("tree.j")
 # external libraries
 load("libc.j")
 load("math.j")
-load("blas.j")
-load("lapack.j")
+load("linalg_blas.j")
+load("linalg_lapack.j")
 
 # I/O and concurrency
 load("io.j")

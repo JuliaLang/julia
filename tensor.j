@@ -86,10 +86,6 @@ end
 
 ## Binary arithmetic operators ##
 
-# blas.j defines these for floats; this handles other cases
-(*)(A::Matrix, B::Vector) = [ dot(A[i,:],B) | i=1:size(A,1) ]
-(*)(A::Matrix, B::Matrix) = [ dot(A[i,:],B[:,j]) | i=1:size(A,1), j=1:size(B,2) ]
-
 (*)(A::Number, B::Tensor) = A .* B
 (*)(A::Tensor, B::Number) = A .* B
 
