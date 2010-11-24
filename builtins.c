@@ -106,6 +106,19 @@ JL_CALLABLE(jl_f_trycatch)
     return v;
 }
 
+int jl_errno()
+{
+    return errno;
+}
+
+jl_value_t *jl_strerror(int errnum)
+{
+    char *str = strerror(errnum);
+    jl_value_t *msg = jl_pchar_to_string((char*)str, strlen(str));
+    JL_GC_PUSH(&msg);
+    return msg;
+}
+
 // --- primitives ---
 
 JL_CALLABLE(jl_f_is)

@@ -505,8 +505,10 @@ double jl_unbox_float64(jl_value_t *v);
 jl_value_t *jl_box_pointer(jl_bits_type_t *ty, void *p);
 void *jl_unbox_pointer(jl_value_t *v);
 
-// word size
+// system information
 DLLEXPORT int jl_word_size();
+DLLEXPORT int jl_errno();
+DLLEXPORT jl_value_t *jl_strerror(int errnum);
 
 // convert strings
 char *jl_cstring(jl_value_t *v);
