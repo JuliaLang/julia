@@ -73,7 +73,7 @@ function show(e::LoadError)
     print(" ", e.file, ":", e.line, "\n")
 end
 
-show(e::SystemError) = print(e.prefix, ": ", strerror(e.errnum))
+show(e::SystemError) = print(e.prefix, ": ", strerror(e.errnum), "\n")
 show(e::DivideByZeroError) = print("error: integer divide by zero\n")
 show(e::StackOverflowError) = print("error: stack overflow\n")
 show(e::ErrorException) = print(e.msg, "\n")

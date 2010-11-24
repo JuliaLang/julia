@@ -1,7 +1,7 @@
 ## doesn't execute, just creates command object:
 
-cmd = Cmd("cat","/dev/random")    # exec
-cmd = Cmd(["cat","/dev/random"])  # exec also
+cmd = Cmd("cat","/dev/random")
+cmd = Cmd(["cat","/dev/random"])
 cmd = Cmd("cat","/dev/random", env={"PATH"=>"/bin:/sbin"})
 
 ## access to command's file descriptors:
@@ -35,9 +35,10 @@ pid(pipe)                         # get the process group pid
 wait(123)                         # wait for process 123
 wait(cmd)                         # wait for running process cmd
 wait(pipe)                        # wait for running pipeline pipe
-kill(cmd)                         # send TERM signal to cmd
-kill(cmd, signal)                 # send signal to cmd
-kill(pipe, signal)                # send signal to pipe process group
+wait(foo, bar, baz)               # wait for several cmds or pipes
+kill(signal, cmd)                 # send signal to cmd
+kill(signal, pipe)                # send signal to pipe process group
+kill(signal, foo...)              # send signal to multiple entities
 
 ## processing output (implicitly calls run if necessary):
 
@@ -45,17 +46,18 @@ each_line(foo.fd(n))              # iterator over output of fd n
 each_line(foo.stdout)             # iterator over stdout
 each_line(foo.output)             # iterator over stdout & stderr
 each_line(foo)                    # defaults to stdout
+each_line(foo...)                 # read sequentially from several sources
 
 each_char(foo)                    # get each character
 each_char(foo, enc="UTF-32")      # read chars with UTF-32 encoding
 each_byte(foo)                    # get each byte
-each_block(foo, 1024)             # get blocks of bytes
-each_record(foo, Record)          # read and cast each blitable record
+each_block(1024, foo)             # get blocks of bytes
+each_record(Record, foo)          # read and cast each blitable record
 
 all_lines(foo)                    # slurp all lines
 all_chars(foo)                    # slurp all chars
 all_bytes(foo)                    # slurp all bytes
-all_records(foo, Record)          # slurp all records
+all_records(Record, foo)          # slurp all records
 
 ## tossing julia into the mix:
 
@@ -70,8 +72,6 @@ pipe(foo, RecordFilter(Record, obj->obj.field))
 foo | bar                         # pipe(foo, bar)
 foo.stderr & foo.stdout           # composite desciptor object
 foo & bar                         # run in parallel with composite descriptors
-any(foo,bar)                      # short-circuit OR command chain
-all(foo,bar)                      # short-circuit AND command chain
 !foo                              # negate return code
 
 ## mmap usage:

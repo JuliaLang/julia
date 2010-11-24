@@ -510,6 +510,15 @@ DLLEXPORT int jl_word_size();
 DLLEXPORT int jl_errno();
 DLLEXPORT jl_value_t *jl_strerror(int errnum);
 
+// child process status
+DLLEXPORT int jl_process_exited(int status);
+DLLEXPORT int jl_process_signaled(int status);
+DLLEXPORT int jl_process_stopped(int status);
+
+DLLEXPORT int jl_process_exit_status(int status);
+DLLEXPORT int jl_process_term_signal(int status);
+DLLEXPORT int jl_process_stop_signal(int status);
+
 // convert strings
 char *jl_cstring(jl_value_t *v);
 

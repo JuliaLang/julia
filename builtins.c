@@ -119,6 +119,16 @@ jl_value_t *jl_strerror(int errnum)
     return msg;
 }
 
+// -- child process status --
+
+int jl_process_exited(int status)      { return WIFEXITED(status); }
+int jl_process_signaled(int status)    { return WIFSIGNALED(status); }
+int jl_process_stopped(int status)     { return WIFSTOPPED(status); }
+
+int jl_process_exit_status(int status) { return WEXITSTATUS(status); }
+int jl_process_term_signal(int status) { return WTERMSIG(status); }
+int jl_process_stop_signal(int status) { return WSTOPSIG(status); }
+
 // --- primitives ---
 
 JL_CALLABLE(jl_f_is)
