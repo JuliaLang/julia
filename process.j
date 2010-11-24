@@ -36,3 +36,16 @@ function run(cmd::String, args...)
     end
     process_status(wait(pid))
 end
+
+struct FileDes; fd::Int32; end
+
+global STDIN  = FileDes((()->ccall(dlsym(JuliaDLHandle,"jl_stdin"),  Int32, ()))())
+global STDOUT = FileDes((()->ccall(dlsym(JuliaDLHandle,"jl_stdout"), Int32, ()))())
+global STDERR = FileDes((()->ccall(dlsym(JuliaDLHandle,"jl_stderr"), Int32, ()))())
+
+function make_pipe()
+    fds = Array(Int32, 2)
+    ret = ccall(dlsym(libc,"pipe"), Int32, (Ptr{Int32},), fds)
+    system_error("make_pipe", ret != 0)
+    FileDes(fds[1]), FileDes(fds[2])
+end

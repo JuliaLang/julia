@@ -129,6 +129,12 @@ int jl_process_exit_status(int status) { return WEXITSTATUS(status); }
 int jl_process_term_signal(int status) { return WTERMSIG(status); }
 int jl_process_stop_signal(int status) { return WSTOPSIG(status); }
 
+// -- access to std filehandles --
+
+int jl_stdin()  { return STDIN_FILENO; }
+int jl_stdout() { return STDOUT_FILENO; }
+int jl_stderr() { return STDERR_FILENO; }
+
 // --- primitives ---
 
 JL_CALLABLE(jl_f_is)

@@ -519,6 +519,11 @@ DLLEXPORT int jl_process_exit_status(int status);
 DLLEXPORT int jl_process_term_signal(int status);
 DLLEXPORT int jl_process_stop_signal(int status);
 
+// access to std filehandles
+DLLEXPORT int jl_stdin();
+DLLEXPORT int jl_stdout();
+DLLEXPORT int jl_stderr();
+
 // convert strings
 char *jl_cstring(jl_value_t *v);
 
