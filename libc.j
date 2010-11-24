@@ -24,7 +24,7 @@ function fork()
     return pid
 end
 
-function exec(cmd::String, args::String...)
+function exec(cmd::String, args...)
     cmd = cstring(cmd)
     arr = Array(Ptr{Uint8}, length(args)+2)
     arr[1] = cmd
@@ -34,6 +34,15 @@ function exec(cmd::String, args::String...)
           (Ptr{Uint8}, Ptr{Ptr{Uint8}}),
           cmd, arr)
     system_error("exec", true)
+end
+
+function wait(pid::Int32)
+    status = Array(Int32,1)
+    ret = ccall(dlsym(libc,"waitpid"), Int32,
+              (Int32, Ptr{Int32}, Int32),
+              pid, status, 0)
+    system_error("wait", ret == -1)
+    status[1]
 end
 
 exit(n) = ccall(dlsym(libc,"exit"), Void, (Int32,), int32(n))
