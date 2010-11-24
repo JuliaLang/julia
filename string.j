@@ -373,6 +373,7 @@ end
 string(x) = string(ccall(dlsym(JuliaDLHandle,"jl_show_to_string"),
                          Ptr{Uint8}, (Any,), x))
 
+cstring(str::Union(Latin1String,UTF8String)) = str.data
 cstring(args...) = print_to_array(print, args...)
 
 ## lexicographically compare byte arrays (used by Latin-1 and UTF-8) ##
