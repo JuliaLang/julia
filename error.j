@@ -15,3 +15,4 @@ strerror(e::Int32) =
           Any, (Int32,), e)::Union(Latin1String,UTF8String)
 strerror(e::Int) = strerror(int32(e))
 strerror() = strerror(errno())
+system_error(p::String, b::Bool) = b ? error(SystemError(p)) : true
