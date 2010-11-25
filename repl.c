@@ -63,8 +63,9 @@ static char *history_file = NULL;
 static int print_banner = 1;
 static int no_readline = 0;
 static int tab_width = 2;
-static int load_start_j = 1;
+static char *post_boot = NULL;
 static int lisp_prompt = 0;
+static int load_start_j = 1;
 static char *program = NULL;
 
 int num_evals = 0;
@@ -73,22 +74,25 @@ int *print_exprs = NULL;
 
 static const char *usage = "julia [options] [program] [args...]\n";
 static const char *opts =
-    " -q --quiet         Quiet startup without banner\n"
-    " -R --no-readline   Disable readline functionality\n"
-    " -e --eval=<expr>   Evaluate <expr>, don't print\n"
-    " -E --print=<expr>  Evaluate and print <expr>\n"
-    " -H --home=<dir>    Load files relative to <dir>\n"
-    " -T --tab=<size>    Set REPL tab width to <size>\n"
-    " -b --bare          Bare REPL: don't load start.j\n"
-    " -L --lisp          Start with Lisp prompt not Julia\n"
-    " -h --help          Print this message\n";
+    " -q --quiet               Quiet startup without banner\n"
+    " -R --no-readline         Disable readline functionality\n"
+    " -e --eval=<expr>         Evaluate <expr> and don't print\n"
+    " -E --print=<expr>        Evaluate and print <expr>\n"
+    " -P --post-boot=<expr>    Evaluate <expr> right after boot\n"
+    " -H --home=<dir>          Load files relative to <dir>\n"
+    " -T --tab=<size>          Set REPL tab width to <size>\n"
+    " -L --lisp                Start with Lisp prompt not Julia\n"
+    " -b --bare                Bare REPL: don't load start.j\n"
+    " -h --help                Print this message\n";
 
 void parse_opts(int *argcp, char ***argvp) {
+    static char* shortopts = "qRe:E:P:H:T:bLh";
     static struct option longopts[] = {
         { "quiet",       no_argument,       0, 'q' },
         { "no-readline", no_argument,       0, 'R' },
         { "eval",        required_argument, 0, 'e' },
         { "print",       required_argument, 0, 'E' },
+        { "post-boot",   required_argument, 0, 'P' },
         { "home",        required_argument, 0, 'H' },
         { "tab",         required_argument, 0, 'T' },
         { "bare",        no_argument,       0, 'b' },
@@ -97,7 +101,7 @@ void parse_opts(int *argcp, char ***argvp) {
         { 0, 0, 0, 0 }
     };
     int c;
-    while ((c = getopt_long(*argcp,*argvp,"qRe:E:H:T:bLh",longopts,0)) != -1) {
+    while ((c = getopt_long(*argcp,*argvp,shortopts,longopts,0)) != -1) {
         switch (c) {
         case 'q':
             print_banner = 0;
@@ -113,6 +117,9 @@ void parse_opts(int *argcp, char ***argvp) {
             print_exprs = (int*)realloc(print_exprs, num_evals*sizeof(int));
             eval_exprs[num_evals-1] = optarg;
             print_exprs[num_evals-1] = (c == 'E');
+            break;
+        case 'P':
+            post_boot = strdup(optarg);
             break;
         case 'H':
             julia_home = strdup(optarg);
@@ -138,6 +145,10 @@ void parse_opts(int *argcp, char ***argvp) {
             ios_printf(ios_stderr, "This is a bug, please report it.\n");
             exit(1);
         }
+    }
+    if (!post_boot) {
+        post_boot = getenv("JL_POST_BOOT");
+        if (post_boot) post_boot = strdup(post_boot);
     }
     if (!julia_home) {
         julia_home = getenv("JULIA_HOME");
@@ -549,6 +560,10 @@ int main(int argc, char *argv[])
     llt_init();
     parse_opts(&argc, &argv);
     julia_init();
+    if (post_boot) {
+        jl_value_t *ast = jl_parse_input_line(post_boot);
+        jl_toplevel_eval_thunk((jl_lambda_info_t*)ast);
+    }
 
     jl_array_t *args = jl_alloc_cell_1d(argc);
     jl_set_const(jl_system_module, jl_symbol("ARGS"), (jl_value_t*)args);
