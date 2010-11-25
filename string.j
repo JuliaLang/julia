@@ -9,6 +9,7 @@ string(s::String) = s
 
 print(c::Char) = (write(current_output_stream(), c); ())
 print(s::String) = for c = s; print(c); end
+println(args...) = print(args..., "\n")
 
 function show(c::Char)
     print('\'')
