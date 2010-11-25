@@ -349,6 +349,17 @@ static int line_kill_callback(int count, int key) {
     return 0;
 }
 
+static int backspace_callback(int count, int key) {
+    if (rl_point > 0) {
+        int j = rl_point;
+        int i = line_start(rl_point);
+        rl_point = (i == 0 || rl_point-i > prompt_length) ?
+            rl_point-1 : i-1;
+        rl_delete_text(rl_point, j);
+    }
+    return 0;
+}
+
 static int left_callback(int count, int key) {
     if (rl_point > 0) {
         int i = line_start(rl_point);
@@ -580,6 +591,7 @@ int main(int argc, char *argv[])
         rl_bind_key('\r', return_callback);
         rl_bind_key('\n', return_callback);
         rl_bind_key('\v', line_kill_callback);
+        rl_bind_key('\b', backspace_callback);
         rl_bind_key('\001', line_start_callback);
         rl_bind_key('\005', line_end_callback);
         rl_bind_key('\002', left_callback);
