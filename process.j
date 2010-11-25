@@ -49,3 +49,42 @@ function make_pipe()
     system_error("make_pipe", ret != 0)
     FileDes(fds[1]), FileDes(fds[2])
 end
+
+function dup2(fd1::FileDes, fd2::FileDes)
+    ret = ccall(dlsym(libc,"dup2"), Int32, (Int32, Int32), fd1.fd, fd2.fd)
+    system_error("dup2", ret == -1)
+end
+
+function close(fd::FileDes)
+    ret = ccall(dlsym(libc,"close"), Int32, (Int32,), fd.fd)
+    system_error("close", ret != 0)
+end
+
+function pipe(cmd1, cmd2)
+    r,w = make_pipe()
+    pid1 = fork()
+    if pid1 == 0
+        try
+            close(r)
+            dup2(w,STDOUT)
+            exec(cmd1...)
+        catch e
+            show(e)
+            exit(0xff)
+        end
+    end
+    close(w)
+    pid2 = fork()
+    if pid2 == 0
+        try
+            dup2(r,STDIN)
+            exec(cmd2...)
+        catch e
+            show(e)
+            exit(0xff)
+        end
+    end
+    close(r)
+    wait(pid1)
+    process_status(wait(pid2))
+end
