@@ -120,7 +120,6 @@ end
 struct SystemError <: Exception
     prefix::String
     errnum::Int32
-    SystemError(p::String, e::Int32) = new(p, e)
     SystemError(p::String, e::Int) = new(p, int32(e))
     SystemError(p::String) = new(p, errno())
 end

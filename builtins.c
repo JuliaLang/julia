@@ -8,6 +8,7 @@
 #include <setjmp.h>
 #include <assert.h>
 #include <sys/types.h>
+#include <sys/wait.h>
 #include <limits.h>
 #include <errno.h>
 #include <math.h>
@@ -114,9 +115,7 @@ int jl_errno()
 jl_value_t *jl_strerror(int errnum)
 {
     char *str = strerror(errnum);
-    jl_value_t *msg = jl_pchar_to_string((char*)str, strlen(str));
-    JL_GC_PUSH(&msg);
-    return msg;
+    return jl_pchar_to_string((char*)str, strlen(str));
 }
 
 // -- child process status --
