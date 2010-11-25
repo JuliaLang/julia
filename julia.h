@@ -510,8 +510,24 @@ double jl_unbox_float64(jl_value_t *v);
 jl_value_t *jl_box_pointer(jl_bits_type_t *ty, void *p);
 void *jl_unbox_pointer(jl_value_t *v);
 
-// word size
+// system information
 DLLEXPORT int jl_word_size();
+DLLEXPORT int jl_errno();
+DLLEXPORT jl_value_t *jl_strerror(int errnum);
+
+// child process status
+DLLEXPORT int jl_process_exited(int status);
+DLLEXPORT int jl_process_signaled(int status);
+DLLEXPORT int jl_process_stopped(int status);
+
+DLLEXPORT int jl_process_exit_status(int status);
+DLLEXPORT int jl_process_term_signal(int status);
+DLLEXPORT int jl_process_stop_signal(int status);
+
+// access to std filehandles
+DLLEXPORT int jl_stdin();
+DLLEXPORT int jl_stdout();
+DLLEXPORT int jl_stderr();
 
 // convert strings
 char *jl_cstring(jl_value_t *v);

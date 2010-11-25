@@ -106,6 +106,35 @@ JL_CALLABLE(jl_f_trycatch)
     return v;
 }
 
+int jl_errno()
+{
+    return errno;
+}
+
+jl_value_t *jl_strerror(int errnum)
+{
+    char *str = strerror(errnum);
+    jl_value_t *msg = jl_pchar_to_string((char*)str, strlen(str));
+    JL_GC_PUSH(&msg);
+    return msg;
+}
+
+// -- child process status --
+
+int jl_process_exited(int status)      { return WIFEXITED(status); }
+int jl_process_signaled(int status)    { return WIFSIGNALED(status); }
+int jl_process_stopped(int status)     { return WIFSTOPPED(status); }
+
+int jl_process_exit_status(int status) { return WEXITSTATUS(status); }
+int jl_process_term_signal(int status) { return WTERMSIG(status); }
+int jl_process_stop_signal(int status) { return WSTOPSIG(status); }
+
+// -- access to std filehandles --
+
+int jl_stdin()  { return STDIN_FILENO; }
+int jl_stdout() { return STDOUT_FILENO; }
+int jl_stderr() { return STDERR_FILENO; }
+
 // --- primitives ---
 
 JL_CALLABLE(jl_f_is)

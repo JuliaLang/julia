@@ -59,6 +59,7 @@ load("linalg_lapack.j")
 load("io.j")
 load("task.j")
 load("multi.j")
+load("process.j")
 
 # misc
 load("util.j")
