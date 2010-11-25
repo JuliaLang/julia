@@ -25,13 +25,6 @@ load("table.j")
 load("inference.j")
 (()->ccall(dlsym(JuliaDLHandle,"jl_enable_inference"),Void,()))()
 
-# core math functions
-load("intfuncs.j")
-load("floatfuncs.j")
-load("genericmath.j")
-load("combinatorics.j")
-load("linalg.j")
-
 # load libc
 libc = dlopen("libc")
 
@@ -41,6 +34,16 @@ load("latin1.j")
 load("utf8.j")
 load("show.j")
 
+# core math functions
+load("intfuncs.j")
+load("floatfuncs.j")
+load("math.j")
+load("math_libm.j")
+load("combinatorics.j")
+load("linalg.j")
+load("linalg_blas.j")
+load("linalg_lapack.j")
+
 # additional data types
 load("rational.j")
 load("complex.j")
@@ -49,12 +52,6 @@ load("dequeue.j")
 load("sparse.j")
 load("tree.j")
 
-# external libraries
-load("libc.j")
-load("math.j")
-load("linalg_blas.j")
-load("linalg_lapack.j")
-
 # I/O and concurrency
 load("io.j")
 load("task.j")
@@ -62,6 +59,7 @@ load("multi.j")
 load("process.j")
 
 # misc
+load("libc.j")
 load("util.j")
 
 scheduler = Task(schedule)
