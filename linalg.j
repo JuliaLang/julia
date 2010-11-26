@@ -62,6 +62,10 @@ end
 
 norm(A::Matrix) = norm(A, 2)
 
+rank(A::Matrix, tol::Real) = count(diag(svd(A)[2]) > tol)
+
+rank(A::Matrix) = rank(A, 0)
+
 # trace(A::Matrix) = sum(diag(A))
 
 function trace(A::Matrix)

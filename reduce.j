@@ -7,10 +7,11 @@ sum() = 0
 prod() = 1
 any() = false
 all() = true
+count() = 0
 
 reduce(op, itr) = reduce(op, op(), itr)
 
-function reduce(op, v0, itr)
+function reduce(op::Function, v0, itr)
     v = v0
     for x = itr
         v = op(v,x)
@@ -32,18 +33,33 @@ prod(x, y, z, rest...) = reduce(prod, prod(prod(x,y),z), rest)
 any(x, y, z, rest...)  = reduce(any,  any(any(x,y),z),   rest)
 all(x, y, z, rest...)  = reduce(all,  all(all(x,y),z),   rest)
 
-scan(op, x) = (x,)
-scan(op, itr::Tuple) = scan(op, itr...)
+function count(itr)
+    c = 0
+    for x = itr
+        c += count(x)
+    end
+    return c
+end
 
-function scan(op, itr...)
-    n = length(itr)
-    if n == 0; return (); end
-    s = tuple(itr[1])
+## scans ##
+
+## Base cases ##
+cumsum() = ()
+cumprod() = ()
+
+scan(op, x) = (x,)
+
+function scan(op::Function, x::Tuple)
+    n = length(x)
+    s = (x[1],)
     for i=2:n
-        s = tuple(s..., op(s[i-1], itr[i]))
+        s = tuple(s..., op(s[i-1], x[i]))
     end
     return s
 end
 
+cumsum(itr)  = scan(+, itr)
 cumsum(itr...) = scan(+, itr)
+
+cumprod(itr) = scan(*, itr)
 cumprod(itr...) = scan(*, itr)

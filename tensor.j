@@ -23,7 +23,7 @@ reshape(a::Tensor, dims::Dims) = (b = clone(a, dims);
                                   b)
 reshape(a::Tensor, dims::Size...) = reshape(a, dims)
 
-function fill{T}(A::Tensor{T}, x::T)
+function fill{T}(A::Tensor{T}, x)
     for i = 1:numel(A)
         A[i] = x
     end
@@ -324,6 +324,27 @@ end
 
 ## Reductions ##
 
+function areduce{T}(f::Function, A::Tensor{T}, region::Region)
+    areduce(f, A, region, T)
+end
+
+function areduce(f::Function, A::Tensor, region::Region, RType::Type)
+    dimsA = size(A)
+    ndimsA = length(dimsA)
+    dimsR = ntuple(ndimsA, i->(contains(region, i) ? 1 : dimsA[i]))
+    R = clone(A, RType, dimsR)
+    
+    function reduce_one(ind)
+        sliceA = ntuple(ndimsA, i->(contains(region, i) ?
+                                    Range1(1,dimsA[i]) :
+                                    ind[i]))
+        R[ind...] = f(A[sliceA...])
+    end
+    
+    cartesian_map(reduce_one, ntuple(ndimsA, i->(Range1(1,dimsR[i]))) )
+    return R
+end
+
 for f = (`max, `min, `sum, `prod) 
     eval(`function ($f){T}(A::Tensor{T,2}, dim::Region)
             if isinteger(dim)
@@ -338,31 +359,12 @@ for f = (`max, `min, `sum, `prod)
          end)
 end
 
-function areduce(f::Function, A::Tensor, region::Region)
-    dimsA = size(A)
-    ndimsA = length(dimsA)
-    dimsR = ntuple(ndimsA, i->(contains(region, i) ? 1 : dimsA[i]))
-    R = clone(A, dimsR)
-    
-    function reduce_one(ind)
-        sliceA = ntuple(ndimsA, i->(contains(region, i) ?
-                                    Range1(1,dimsA[i]) :
-                                    ind[i]))
-        R[ind...] = f(A[sliceA...])
-    end
-    
-    cartesian_map(reduce_one, ntuple(ndimsA, i->(Range1(1,dimsR[i]))) )
-    return R
-end
-
-max (A::Tensor,       region::Region) = areduce(max,  A, region)
-min (A::Tensor,       region::Region) = areduce(min,  A, region)
-sum (A::Tensor,       region::Region) = areduce(sum,  A, region)
+ max(A::Tensor,       region::Region) = areduce(max,  A, region)
+ min(A::Tensor,       region::Region) = areduce(min,  A, region)
+ sum(A::Tensor,       region::Region) = areduce(sum,  A, region)
 prod(A::Tensor,       region::Region) = areduce(prod, A, region)
-all (A::Tensor{Bool}, region::Region) = areduce(all,  A, region)
-any (A::Tensor{Bool}, region::Region) = areduce(any,  A, region)
 
-for f = (`all, `any)
+for f = (`all, `any, `count)
     eval(`function ($f)(A::Tensor{Bool,2}, dim::Region)
             if isinteger(dim)
                if dim == 1
@@ -375,6 +377,10 @@ for f = (`all, `any)
             end
          end)
 end
+
+all(A::Tensor{Bool}, region::Region) = areduce(all,  A, region)
+any(A::Tensor{Bool}, region::Region) = areduce(any,  A, region)
+count (A::Tensor{Bool}, region::Region) = areduce(count,  A, region, Int)
 
 function isequal(x::Tensor, y::Tensor)
     if size(x) != size(y)
