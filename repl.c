@@ -268,6 +268,31 @@ static void init_history() {
     }
 }
 
+static int last_hist_is_temp = 0;
+
+static void add_history_temporary(char *input) {
+    if (last_hist_is_temp) {
+        history_rem(history_length);
+        last_hist_is_temp = 0;
+    }
+    if (!input || !*input) return;
+    add_history(input);
+    last_hist_is_temp = 1;
+}
+
+static void add_history_permanent(char *input) {
+    if (last_hist_is_temp) {
+        history_rem(history_length);
+        last_hist_is_temp = 0;
+    }
+    if (!input || !*input) return;
+    HIST_ENTRY *entry = history_get(history_length);
+    if (entry && !strcmp(input, entry->line)) return;
+    add_history(input);
+    if (history_file)
+        append_history(1, history_file);
+}
+
 static int line_start(int point) {
     if (!point) return 0;
     int i = point-1;
@@ -294,6 +319,7 @@ static int return_callback(int count, int key) {
         ios_printf(ios_stdout, jl_answer_color);
         ios_flush(ios_stdout);
     }
+    add_history_temporary(rl_line_buffer);
     rl_ast = jl_parse_input_line(rl_line_buffer);
     rl_done = !rl_ast || !jl_is_expr(rl_ast) ||
         (((jl_expr_t*)rl_ast)->head != continue_sym);
@@ -422,15 +448,7 @@ static jl_value_t *read_expr_ast_readline(char *prompt, int *end, int *doprint)
     if (rl_ast == NULL) return NULL;
 
     *doprint = !ends_with_semicolon(input);
-    if (input && *input) {
-        HIST_ENTRY *entry = history_get(history_length);
-        if (!entry || strcmp(input, entry->line)) {
-            add_history(input);
-            if (history_file)
-                append_history(1, history_file);
-        }
-    }
-
+    add_history_permanent(input);
     ios_printf(ios_stdout, "\n");
 
     free(input);
