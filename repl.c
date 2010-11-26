@@ -223,7 +223,6 @@ static int ends_with_semicolon(const char *input)
 #ifdef USE_READLINE
 
 static jl_value_t *rl_ast;
-static int history_offset = -1;
 
 // yes, readline uses inconsistent indexing internally.
 #define history_rem(n) remove_history(n-history_base)
@@ -391,10 +390,6 @@ static int up_callback(int count, int key) {
         rl_point += j - i;
         if (rl_point >= i) rl_point = i - 1;
     } else {
-        if (history_offset >= 0) {
-            history_set_pos(history_offset+1);
-            history_offset = -1;
-        }
         rl_get_previous_history(count, key);
         rl_point = line_end(0);
         return 0;
@@ -411,10 +406,6 @@ static int down_callback(int count, int key) {
         int k = line_end(j+1);
         if (rl_point > k) rl_point = k;
     } else {
-        if (history_offset >= 0) {
-            history_set_pos(history_offset);
-            history_offset = -1;
-        }
         return rl_get_next_history(count, key);
     }
     return 0;
@@ -432,14 +423,11 @@ static jl_value_t *read_expr_ast_readline(char *prompt, int *end, int *doprint)
 
     *doprint = !ends_with_semicolon(input);
     if (input && *input) {
-        HIST_ENTRY *entry = current_history();
+        HIST_ENTRY *entry = history_get(history_length);
         if (!entry || strcmp(input, entry->line)) {
             add_history(input);
-            history_offset = -1;
             if (history_file)
                 append_history(1, history_file);
-        } else {
-            history_offset = where_history();
         }
     }
 
