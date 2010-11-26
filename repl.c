@@ -360,6 +360,14 @@ static int backspace_callback(int count, int key) {
     return 0;
 }
 
+static int delete_callback(int count, int key) {
+    int j = rl_point;
+    j += (rl_line_buffer[j] == '\n') ? prompt_length+1 : 1;
+    if (rl_end < j) j = rl_end;
+    rl_delete_text(rl_point, j);
+    return 0;
+}
+
 static int left_callback(int count, int key) {
     if (rl_point > 0) {
         int i = line_start(rl_point);
@@ -387,7 +395,9 @@ static int up_callback(int count, int key) {
             history_set_pos(history_offset+1);
             history_offset = -1;
         }
-        return rl_get_previous_history(count, key);
+        rl_get_previous_history(count, key);
+        rl_point = line_end(0);
+        return 0;
     }
     return 0;
 }
@@ -409,18 +419,6 @@ static int down_callback(int count, int key) {
     }
     return 0;
 }
-
-/*
-static int backspace_callback(int count, int key) {
-    return 0;
-    if (rl_point > 0) {
-        int i = line_start(rl_point);
-        int j = (i == 0 || rl_point-i > prompt_length) ? rl_point-1 : i-1;
-        rl_delete_text(j, i);
-    }
-    return 0;
-}
-*/
 
 static jl_value_t *read_expr_ast_readline(char *prompt, int *end, int *doprint)
 {
@@ -596,10 +594,11 @@ int main(int argc, char *argv[])
         rl_bind_key('\005', line_end_callback);
         rl_bind_key('\002', left_callback);
         rl_bind_key('\006', right_callback);
-        rl_bind_keyseq("\033[A", up_callback);
-        rl_bind_keyseq("\033[B", down_callback);
-        rl_bind_keyseq("\033[D", left_callback);
-        rl_bind_keyseq("\033[C", right_callback);
+        rl_bind_keyseq("\e[A", up_callback);
+        rl_bind_keyseq("\e[B", down_callback);
+        rl_bind_keyseq("\e[D", left_callback);
+        rl_bind_keyseq("\e[C", right_callback);
+        rl_bind_keyseq("\\C-d", delete_callback);
     }
 #endif
 
