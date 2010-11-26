@@ -41,15 +41,9 @@ function count(itr)
     return c
 end
 
-## scans ##
+## Scans ##
 
-## Base cases ##
-cumsum() = ()
-cumprod() = ()
-
-scan(op, x) = (x,)
-
-function scan(op::Function, x::Tuple)
+function scan(op::Function, x)
     n = length(x)
     s = (x[1],)
     for i=2:n
@@ -58,8 +52,16 @@ function scan(op::Function, x::Tuple)
     return s
 end
 
-cumsum(itr)  = scan(+, itr)
-cumsum(itr...) = scan(+, itr)
+cumsum() = ()
+cumsum(x::Number) = (x,)
+cumsum(x::Number, y::Number) = (x, x+y)
+cumsum(x::Number, y::Number, z::Number) = (x, x+y, x+y+z)
+cumsum(itr::(Number...))  = scan(+, itr)
+cumsum(itr::Number...) = scan(+, itr)
 
-cumprod(itr) = scan(*, itr)
-cumprod(itr...) = scan(*, itr)
+cumprod() = ()
+cumprod(x::Number) = (x,)
+cumprod(x::Number, y::Number) = (x, x*y)
+cumprod(x::Number, y::Number, z::Number) = (x, x*y, x*y*z)
+cumprod(itr::(Number...)) = scan(*, itr)
+cumprod(itr::Number...) = scan(*, itr)
