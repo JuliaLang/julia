@@ -65,7 +65,7 @@ pipe(foo, LineFilter(line->strcat("prefix: ",line)))
 pipe(foo, CharFilter(char->upcase(char)))
 pipe(foo, ByteFilter(byte->0x7f & byte))
 pipe(foo, BlockFilter(1024, bytes->sum(bytes)))
-pipe(foo, RecordFilter(Record, obj->obj.field))
+pipe(foo, RecordFilter(Record, rec->rec.field))
 
 ## some potential nice syntax:
 
@@ -77,3 +77,20 @@ foo & bar                         # run in parallel with composite descriptors
 ## mmap usage:
 
 A = mmap(file, Record)            # return an mmapped array or records
+
+## potential `` syntax:
+
+# Summary: split on words but leave interpolations whole
+#
+#   - e.g. `cat -n $file` => Cmd("cat","-n",file)
+#   - it feels like using the shell but its safer
+#     and more efficient since there's no shell or
+#     shell quoting and unquoting issues
+#   - interpolating vectors or tuples should make
+#     multiple words like so:
+#        `cat $files` => Cmd("cat", files...)
+#
+
+for line = each_line(`bzcat $files` | `sort -k1n` | `cut -f2-`)
+  # do something with the rest of the line
+end
