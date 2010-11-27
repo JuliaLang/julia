@@ -269,25 +269,29 @@ static void init_history() {
 }
 
 static int last_hist_is_temp = 0;
+static int last_hist_offset = -1;
 
 static void add_history_temporary(char *input) {
+    if (!input || !*input) return;
     if (last_hist_is_temp) {
         history_rem(history_length);
         last_hist_is_temp = 0;
     }
-    if (!input || !*input) return;
+    last_hist_offset = -1;
     add_history(input);
     last_hist_is_temp = 1;
 }
 
 static void add_history_permanent(char *input) {
+    if (!input || !*input) return;
     if (last_hist_is_temp) {
         history_rem(history_length);
         last_hist_is_temp = 0;
     }
-    if (!input || !*input) return;
+    last_hist_offset = -1;
     HIST_ENTRY *entry = history_get(history_length);
     if (entry && !strcmp(input, entry->line)) return;
+    last_hist_offset = where_history();
     add_history(input);
     if (history_file)
         append_history(1, history_file);
@@ -416,6 +420,7 @@ static int up_callback(int count, int key) {
         rl_point += j - i;
         if (rl_point >= i) rl_point = i - 1;
     } else {
+        last_hist_offset = -1;
         rl_get_previous_history(count, key);
         rl_point = line_end(0);
         return 0;
@@ -432,6 +437,10 @@ static int down_callback(int count, int key) {
         int k = line_end(j+1);
         if (rl_point > k) rl_point = k;
     } else {
+        if (last_hist_offset >= 0) {
+            history_set_pos(last_hist_offset);
+            last_hist_offset = -1;
+        }
         return rl_get_next_history(count, key);
     }
     return 0;
