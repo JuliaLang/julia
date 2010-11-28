@@ -213,14 +213,14 @@ function ref(A::Tensor, I::Indices...)
     dims = size(A)
     ndimsA = length(dims)
 
-    strides = [1 cumprod(dims)...]
+    strides = cumprod(dims)
     X = clone(A, map(length, I))
 
     storeind = 1
     function store(ind)
         index = ind[1]
         for d=2:ndimsA
-            index += (ind[d]-1) * strides[d]
+            index += (ind[d]-1) * strides[d-1]
         end
         X[storeind] = A[index]
         storeind += 1
