@@ -111,6 +111,8 @@ struct UTF8String <: String
     data::Array{Uint8,1}
 end
 
+typealias ByteString Union(Latin1String,UTF8String)
+
 type Exception
 
 struct ErrorException <: Exception
