@@ -1079,12 +1079,6 @@ JL_CALLABLE(jl_generic_array_ctor)
     return ar;
 }
 
-jl_array_t *jl_cstr_to_array(char *str)
-{
-    size_t len = strlen(str);
-    return jl_pchar_to_array(str, len);
-}
-
 jl_array_t *jl_pchar_to_array(char *str, size_t len)
 {
     jl_array_t *a = jl_alloc_array_1d(jl_array_uint8_type, len+1);
@@ -1097,6 +1091,12 @@ jl_array_t *jl_pchar_to_array(char *str, size_t len)
     return a;
 }
 
+jl_array_t *jl_cstr_to_array(char *str)
+{
+    size_t len = strlen(str);
+    return jl_pchar_to_array(str, len);
+}
+
 jl_value_t *jl_pchar_to_string(char *str, size_t len)
 {
     jl_array_t *a = jl_pchar_to_array(str, len);
@@ -1106,6 +1106,12 @@ jl_value_t *jl_pchar_to_string(char *str, size_t len)
     jl_value_t *s = jl_apply((jl_function_t*)string_type, (jl_value_t**)&a, 1);
     JL_GC_POP();
     return s;
+}
+
+jl_value_t *jl_cstr_to_string(char *str)
+{
+    size_t len = strlen(str);
+    return jl_pchar_to_string(str, len);
 }
 
 jl_array_t *jl_alloc_cell_1d(size_t n)

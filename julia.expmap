@@ -34,7 +34,7 @@
     jl_set_current_output_stream_noninline;
     jl_takebuf_array;
     jl_takebuf_string;
-    jl_cstr_to_array;
+    jl_cstr_to_string;
     jl_show_to_string;
     jl_is_rest_arg;
     jl_is_leaf_type;

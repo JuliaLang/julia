@@ -367,8 +367,8 @@ function string(p::Ptr{Uint8})
     if p == C_NULL
         error("cannot convert NULL to string")
     end
-    UTF8String(ccall(dlsym(JuliaDLHandle,"jl_cstr_to_array"),
-                     Any, (Ptr{Uint8},), p)::Array{Uint8,1})
+    ccall(dlsym(JuliaDLHandle,"jl_cstr_to_string"),
+          Any, (Ptr{Uint8},), p)::String
 end
 
 string(x) = string(ccall(dlsym(JuliaDLHandle,"jl_show_to_string"),
