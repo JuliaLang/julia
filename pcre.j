@@ -1,3 +1,5 @@
+load("pcre_h.j")
+
 libpcre = dlopen("libpcre")
 
 function pcre_compile(pattern::String)

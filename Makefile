@@ -60,13 +60,20 @@ $(LLT): $(LLTDIR)/*.h $(LLTDIR)/*.c
 $(FLISP): $(FLISPDIR)/*.h $(FLISPDIR)/*.c $(LLT)
 	cd $(FLISPDIR) && $(MAKE)
 
+PCRE_CONST_RE = 0x[0-9a-fA-F]+|[-+]?\s*[0-9]+
+
+pcre_h.j:
+	cpp -dM $(word 1,$(HFILEDIRS))/pcre.h | perl -nle ' \
+		/^\s*#define\s+(PCRE\w*)\s*\(?($(PCRE_CONST_RE))\)?\s*$$/ \
+			and print "$$1 = $$2"' | sort > $@
+
 julia-debug: $(DOBJS) $(LIBFILES)
 	$(CXX) $(DEBUGFLAGS) $(DOBJS) -o $@ $(LIBS)
 
 julia-release: $(OBJS) $(LIBFILES)
 	$(CXX) $(SHIPFLAGS) $(OBJS) -o $@ $(LIBS)
 
-debug release: %: julia-%
+debug release: %: julia-% pcre_h.j
 	ln -sf julia-$@ julia
 
 test: debug
