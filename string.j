@@ -374,6 +374,9 @@ end
 string(x) = string(ccall(dlsym(JuliaDLHandle,"jl_show_to_string"),
                          Ptr{Uint8}, (Any,), x))
 
+bstring(str::ByteString) = str
+bstring(args...) = print_to_string(print, args...)
+
 cstring(str::ByteString) = str.data
 cstring(args...) = print_to_array(print, args...)
 
