@@ -70,13 +70,15 @@ struct Regex
     regex::Ptr{Void}
     extra::Ptr{Void}
 
-    function Regex(p::String, o::Int)
+    function Regex(p::String, o::Int, s::Bool)
         re = new(p, int32(o), C_NULL, C_NULL)
         re.regex = pcre_compile(re.pattern, re.options)
-        re.extra = pcre_study(re.regex, re.options)
+        if s; re.extra = pcre_study(re.regex, re.options); end
         re
     end
-    Regex(p::String) = Regex(p, 0)
+    Regex(p::String, o::Int)  = Regex(p, o, true)
+    Regex(p::String, s::Bool) = Regex(p, 0, s)
+    Regex(p::String)          = Regex(p, 0, true)
 end
 
 function show(re::Regex)
@@ -104,4 +106,4 @@ function match(re::Regex, str::String)
     RegexMatch(mat, cap)
 end
 
-match(pattern::String, str::String) = match(Regex(pattern), str)
+match(pattern::String, str::String) = match(Regex(pattern, false), str)

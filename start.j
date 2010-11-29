@@ -32,6 +32,7 @@ load("string.j")
 load("latin1.j")
 load("utf8.j")
 load("show.j")
+load("pcre.j")
 
 # core math functions
 load("intfuncs.j")
