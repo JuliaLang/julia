@@ -90,10 +90,9 @@ function show(re::Regex)
 end
 
 struct RegexMatch{N}
+    offset::Index
     match::Union((),String)
     captures::NTuple{N,String}
-    first::Index
-    last::Index
 end
 
 show(m::RegexMatch) = show(m.match)
@@ -107,7 +106,7 @@ function match(re::Regex, str::String)
     for i = 3:2:length(m)
         cap = append(cap, (bstr[m[i]+1:m[i+1]],))
     end
-    RegexMatch(mat, cap, m[1]+1, m[2])
+    RegexMatch(m[1]+1, mat, cap)
 end
 
 match(pattern::String, str::String) = match(Regex(pattern, false), str)
