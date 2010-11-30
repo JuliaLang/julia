@@ -16,7 +16,7 @@ include ./Make.inc.$(shell uname)
 
 FLAGS = -falign-functions -Wall -Wno-strict-aliasing \
 	-I$(FLISPDIR) -I$(LLTDIR) $(HFILEDIRS:%=-I%) $(LIBDIRS:%=-L%) \
-	$(CFLAGS) $(CONFIG) -I$(shell llvm-config --includedir) \
+	$(CONFIG) -I$(shell llvm-config --includedir) \
 	-fvisibility=hidden
 LIBFILES = $(FLISP) $(LLT)
 LIBS = $(LIBFILES) -lutil -ldl -lm -lreadline $(OSLIBS) \
@@ -28,9 +28,9 @@ SHIPFLAGS = -O3 -DNDEBUG $(FLAGS)
 default: debug
 
 %.o: %.c julia.h
-	$(CC) $(SHIPFLAGS) -c $< -o $@
+	$(CC) $(CFLAGS) $(SHIPFLAGS) -c $< -o $@
 %.do: %.c julia.h
-	$(CC) $(DEBUGFLAGS) -c $< -o $@
+	$(CC) $(CFLAGS) $(DEBUGFLAGS) -c $< -o $@
 %.o: %.cpp julia.h
 	$(CXX) $(SHIPFLAGS) $(shell llvm-config --cppflags) -c $< -o $@
 %.do: %.cpp julia.h
@@ -61,12 +61,10 @@ $(LLT): $(LLTDIR)/*.h $(LLTDIR)/*.c
 $(FLISP): $(FLISPDIR)/*.h $(FLISPDIR)/*.c $(LLT)
 	cd $(FLISPDIR) && $(MAKE)
 
-PCRE_CONST_RE = 0x[0-9a-fA-F]+|[-+]?\s*[0-9]+
+PCRE_CONST = 0x[0-9a-fA-F]+|[-+]?\s*[0-9]+
 
 pcre_h.j:
-	cpp -dM $(word 1,$(HFILEDIRS))/pcre.h | perl -nle ' \
-		/^\s*#define\s+(PCRE\w*)\s*\(?($(PCRE_CONST_RE))\)?\s*$$/ \
-			and print "$$1 = $$2"' | sort > $@
+	cpp -dM $(word 1,$(HFILEDIRS))/pcre.h | perl -nle '/^\s*#define\s+(PCRE\w*)\s*\(?($(PCRE_CONST))\)?\s*$$/ and print "$$1 = $$2"' | sort > $@
 
 julia-debug: $(DOBJS) $(LIBFILES)
 	$(CXX) $(DEBUGFLAGS) $(DOBJS) -o $@ $(LIBS)
@@ -75,7 +73,7 @@ julia-release: $(OBJS) $(LIBFILES)
 	$(CXX) $(SHIPFLAGS) $(OBJS) -o $@ $(LIBS)
 
 debug release: %: julia-% pcre_h.j
-	ln -sf julia-$@ julia
+	ln -f julia-$@ julia
 
 test: debug
 	./julia tests.j
@@ -103,6 +101,7 @@ clean:
 	rm -f julia_flisp.boot
 	rm -f julia_flisp.boot.inc
 	rm -f $(EXENAME)
+	rm -f pcre_h.j
 	rm -f *~ *#
 
 cleanall: clean
