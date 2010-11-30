@@ -96,10 +96,11 @@ read(s, ::Type{Bool})    = (read(s,Uint8)!=0)
 read(s, ::Type{Float32}) = boxf32(unbox32(read(s,Int32)))
 read(s, ::Type{Float64}) = boxf64(unbox64(read(s,Int64)))
 
-read{T}(s, t::Type{T}, dims::Tuple) = read(s, t, dims...)
+read{T}(s, t::Type{T}, d1::Size, dims::Size...) =
+    read(s, t, tuple(d1,dims...))
 
-function read{T}(s, ::Type{T}, dims::Size...)
-    a = Array(T, dims...)
+function read{T}(s, ::Type{T}, dims::Dims)
+    a = Array(T, dims)
     for i = 1:numel(a)
         a[i] = read(s, T)
     end
@@ -149,7 +150,7 @@ function read(s::IOStream, ::Type{Char})
           s.ios)
 end
 
-function read{T}(s::IOStream, ::Type{T}, dims::Size...)
+function read{T}(s::IOStream, ::Type{T}, dims::Dims)
     if isa(T,BitsKind)
         a = Array(T, dims...)
         nb = numel(a)*sizeof(T)

@@ -5,7 +5,7 @@
 typealias Vector{T} Tensor{T,1}
 typealias Matrix{T} Tensor{T,2}
 typealias Indices Union(Index, Vector{Index})
-#typealias Dims (Size...)
+typealias Dims (Size...)
 typealias Region Union(Size,Dims)
 
 ## Basic functions ##

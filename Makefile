@@ -47,6 +47,7 @@ boot.j.inc: boot.j preparse.scm julia_flisp.boot
 	$(FLISPDIR)/flisp ./preparse.scm < $< | $(FLISPDIR)/flisp ./bin2hex.scm > $@
 
 codegen.o codegen.do: intrinsics.cpp
+builtins.o builtins.do: table.c
 
 julia-defs.s.bc: julia-defs$(NBITS).s
 	llvm-as -f $< -o $@

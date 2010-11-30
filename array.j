@@ -1,7 +1,5 @@
 ## array.j: Base Array functionality
 
-typealias Dims (Size...)
-
 ## Basic functions ##
 
 size(a::Array) = a.dims
@@ -74,7 +72,9 @@ ref{T}(a::Array{T,2}, i::Index, j::Index) = arrayref(a, (j-1)*a.dims[1] + i)
 
 ## Indexing: assign ##
 
+assign(A::Array{Any}, x::Tensor, i::Index) = arrayset(A,i,x)
 assign(A::Array{Any}, x, i::Index) = arrayset(A,i,x)
+assign{T}(A::Array{T}, x::Tensor, i::Index) = arrayset(A,i,convert(T, x))
 assign{T}(A::Array{T}, x, i::Index) = arrayset(A,i,convert(T, x))
 
 ## Concatenation ##

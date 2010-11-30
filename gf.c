@@ -549,6 +549,11 @@ static jl_tuple_t *without_typectors(jl_tuple_t *t)
     return tc;
 }
 
+static int is_va_tuple(jl_tuple_t *t)
+{
+    return (t->length>0 && jl_is_seq_type(jl_tupleref(t,t->length-1)));
+}
+
 /*
   warn about ambiguous method priorities
   
@@ -571,8 +576,10 @@ static void check_ambiguous(jl_methlist_t *ml, jl_tuple_t *type,
                             jl_tuple_t *sig, jl_sym_t *fname)
 {
     // we know !args_morespecific(type, sig)
-    if (type->length==sig->length && !args_morespecific((jl_value_t*)sig,
-                                                        (jl_value_t*)type)) {
+    if ((type->length==sig->length ||
+         (type->length==sig->length+1 && is_va_tuple(type)) ||
+         (type->length+1==sig->length && is_va_tuple(sig))) &&
+        !args_morespecific((jl_value_t*)sig, (jl_value_t*)type)) {
         jl_value_t *isect = jl_type_intersection((jl_value_t*)type,
                                                  (jl_value_t*)sig);
         if (isect == (jl_value_t*)jl_bottom_type)
