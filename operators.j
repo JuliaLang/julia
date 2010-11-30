@@ -71,6 +71,7 @@ one(x)  = oftype(x,1)
 <=(x::Real, y::Real) = (x < y) || (x == y)
 >=(x::Real, y::Real) = (x > y) || (x == y)
 
+==(x, y) = false
 isequal(x, y) = (x==y)
 
 ## promotion mechanism ##
