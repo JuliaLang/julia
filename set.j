@@ -19,7 +19,8 @@ function add(set::Set, x)
     set
 end
 
-add(set::Set, xs...) = (for x = xs; add(set, x); end; set)
+add(set::Set, xs...)   = (for x = xs; add(set, x); end; set)
+add(set::Set, s2::Set) = (for x = s2; add(set, x); end; set)
 
 function del(set::Set, x)
     if has(set,x)
@@ -36,4 +37,9 @@ function del(set::Set, x)
     set
 end
 
-del(set::Set, xs...) = (for x = xs; del(set, x); end; set)
+del(set::Set, xs...)   = (for x = xs; del(set, x); end; set)
+del(set::Set, s2::Set) = (for x = s2; del(set, x); end; set)
+
+start(set::Set) = start(set.items)
+done(set::Set, x) = done(set.items, x)
+next(set::Set, x) = next(set.items, x)
