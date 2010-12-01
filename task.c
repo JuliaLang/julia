@@ -163,12 +163,8 @@ static jl_gcframe_t *dummy_pgcstack;
 jl_gcframe_t ** volatile jl_pgcstack = &dummy_pgcstack;
 #endif
 
-static jl_value_t *switchto(jl_task_t *t)
+static void ctx_switch(jl_task_t *t, jmp_buf *where)
 {
-    if (t->done) {
-        task_arg_in_transit = (jl_value_t*)jl_null;
-        return t->result;
-    }
     if (!setjmp(jl_current_task->ctx)) {
 #ifdef BOEHM_GC
         GC_stackbottom = t->stack+t->ssize;
@@ -177,8 +173,17 @@ static jl_value_t *switchto(jl_task_t *t)
 #ifdef JL_GC_MARKSWEEP
         jl_pgcstack = &jl_current_task->state.gcstack;
 #endif
-        longjmp(t->ctx, 1);
+        longjmp(*where, 1);
     }
+}
+
+static jl_value_t *switchto(jl_task_t *t)
+{
+    if (t->done) {
+        task_arg_in_transit = (jl_value_t*)jl_null;
+        return t->result;
+    }
+    ctx_switch(t, &t->ctx);
     jl_value_t *val = task_arg_in_transit;
     task_arg_in_transit = (jl_value_t*)jl_null;
     return val;
@@ -189,6 +194,16 @@ jl_value_t *jl_switchto(jl_task_t *t, jl_value_t *arg)
     task_arg_in_transit = arg;
     n_args_in_transit = 1;
     return switchto(t);
+}
+
+static void finish_task(jl_task_t *t, jl_value_t *resultval)
+{
+    assert(!t->done);
+    t->done = 1;
+    t->result = resultval;
+    t->_stkbase = NULL;
+    t->stack = NULL;
+    t->start = NULL;
 }
 
 // yield to exception handler
@@ -206,16 +221,10 @@ void jl_raise(jl_value_t *e)
             ios_printf(ios_stderr, "warning: exception handler exited\n");
             eh = jl_root_task;
         }
-        if (!setjmp(jl_current_task->ctx)) {
-            jl_current_task = eh;
-#ifdef JL_GC_MARKSWEEP
-            jl_pgcstack = &jl_current_task->state.gcstack;
-#endif
-            longjmp(*eh->state.eh_ctx, 1);
-        }
-        else {
-            // TODO: continued exception
-        }
+        // for now, exit the task
+        finish_task(jl_current_task, e);
+        ctx_switch(eh, eh->state.eh_ctx);
+        // TODO: continued exception
     }
 }
 
@@ -294,29 +303,27 @@ static void rebase_state(jmp_buf *ctx, intptr_t local_sp, intptr_t new_sp)
 static void init_task(jl_task_t *t)
 {
     if (setjmp(t->ctx)) {
-        jl_value_t *arg = task_arg_in_transit;
-        JL_GC_PUSH(&arg);
         // this runs the first time we switch to t
+        jl_value_t *arg = task_arg_in_transit;
+        jl_value_t *res;
+        JL_GC_PUSH(&arg);
         if (n_args_in_transit == 0) {
-            t->result = jl_apply(t->start, NULL, 0);
+            res = jl_apply(t->start, NULL, 0);
         }
         else if (n_args_in_transit == 1) {
-            t->result = jl_apply(t->start, &arg, 1);
+            res = jl_apply(t->start, &arg, 1);
         }
         else {
             assert(jl_is_tuple(task_arg_in_transit));
-            t->result = jl_apply(t->start, &jl_tupleref(task_arg_in_transit,0),
-                                 n_args_in_transit);
+            res = jl_apply(t->start, &jl_tupleref(task_arg_in_transit,0),
+                           n_args_in_transit);
         }
         JL_GC_POP();
-        t->done = 1;
+        finish_task(t, res);
         jl_task_t *cont = t->on_exit;
         // if parent task has exited, try its parent, and so on
         while (cont->done)
             cont = cont->on_exit;
-        t->_stkbase = NULL;
-        t->stack = NULL;
-        t->start = NULL;
         jl_switchto(cont, t->result);
         assert(0);
     }
