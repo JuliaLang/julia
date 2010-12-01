@@ -23,6 +23,7 @@
 # parameters limiting potentially-infinite types
 MAX_TYPEUNION_SIZE = 3
 MAX_TUPLETYPE_LEN  = 10
+MAX_TUPLE_DEPTH = 4
 
 struct NotFound
 end
@@ -81,7 +82,7 @@ isType(t) = isa(t,TagKind) && is(t.name,Type.name)
 isseqtype(t) = isa(t,TagKind) && is(t.name.name,`...)
 
 t_func = idtable()
-t_func[tuple] = (0, Inf, (args...)->args)
+t_func[tuple] = (0, Inf, (args...)->limit_tuple_depth(args))
 # TODO: handle e.g. instantiate_type(T, R::Union(Type{Int32},Type{Float64}))
 t_func[instantiate_type] =
     (1, Inf, (args...)->(all(map(isType,args)) ?
@@ -315,6 +316,18 @@ function isconstantfunc(f, vtypes, sv::StaticVarInfo)
 end
 
 isvatuple(t) = (n = length(t); n > 0 && isseqtype(t[n]))
+
+limit_tuple_depth(t) = limit_tuple_depth(t,0)
+
+function limit_tuple_depth(t,d)
+    if !isa(t,Tuple)
+        return t
+    end
+    if d > MAX_TUPLE_DEPTH
+        return Tuple
+    end
+    map(x->limit_tuple_depth(x,d+1), t)
+end
 
 function limit_tuple_type(t)
     n = length(t)
