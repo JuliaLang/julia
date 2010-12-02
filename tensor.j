@@ -23,7 +23,7 @@ reshape(a::Tensor, dims::Dims) = (b = clone(a, dims);
                                   b)
 reshape(a::Tensor, dims::Size...) = reshape(a, dims)
 
-function fill{T}(A::Tensor{T}, x)
+function fill(A::Tensor, x)
     for i = 1:numel(A)
         A[i] = x
     end

@@ -576,6 +576,7 @@ issues 11/6/10
 - fix circular struct decls
 - something about uninitialized objects in constructors
 - implement longjmp block exits so return/break work across functions
+- splicing tuples in ` with $...?
 
 - optimize Array constructor (avoid checks and apply_type)
 arr{T,N}(::Type{T}, d::NTuple{N,Size}) = Array{T,N}(d)

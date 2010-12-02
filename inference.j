@@ -711,7 +711,7 @@ function typeinf(linfo::LambdaStaticData,atypes::Tuple,sparams::Tuple, cop, def)
     if la > 0
         lastarg = ast.args[1][la]
         if is_rest_arg(lastarg)
-            s[1][args[la]] = atypes[la:]
+            s[1][args[la]] = limit_tuple_depth(atypes[la:])
             la -= 1
         end
     end

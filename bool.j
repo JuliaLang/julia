@@ -20,7 +20,7 @@ sizeof(::Type{Bool}) = 1
 
 any(x::Bool)  = x
 all(x::Bool)  = x
-count(x::Bool) = (x == true ? 1 : 0)
+count(x::Bool) = (x ? 1 : 0)
 
 any(x::Bool, y::Bool) = x || y ? true : false
 all(x::Bool, y::Bool) = x && y ? true : false
