@@ -135,12 +135,13 @@ stderr(cmd::Cmd) = fd(cmd,STDERR)
 
 function pipe(src::Port, dst::Port)
     r, w = make_pipe()
+    add(src.cmd.close, r, w)
+    add(src.cmd.close, dst.cmd.close)
+    dst.cmd.close = src.cmd.close
     add(src.cmd.spawn, dst.cmd)
     add(src.cmd.dup2, (w, src.fd))
-    add(src.cmd.close, r)
     add(dst.cmd.spawn, src.cmd)
     add(dst.cmd.dup2, (r, dst.fd))
-    add(dst.cmd.close, w)
     dst.cmd
 end
 
@@ -154,7 +155,7 @@ running(cmd::Cmd) = (cmd.pid > 0)
 
 exec(cmd::Cmd) = exec(cmd.cmd, cmd.args...)
 
-function spawn(cmd::Cmd)
+function spawn(cmd::Cmd, root::Bool)
     if running(cmd)
         error("already running: ", cmd)
     end
@@ -162,10 +163,13 @@ function spawn(cmd::Cmd)
     cmd.pid = fork()
     if cmd.pid == 0
         try
+            cl = Set(FileDes)
+            add(cl,cmd.close)
             for (fd1,fd2) = cmd.dup2
                 dup2(fd1,fd2)
+                del(cl,fd1)
             end
-            for fd = cmd.close
+            for fd = cl
                 close(fd)
             end
             exec(cmd)
@@ -179,16 +183,20 @@ function spawn(cmd::Cmd)
     add(cmds, cmd)
     for c = cmd.spawn
         if !running(c)
-            add(cmds, spawn(c))
+            add(cmds, spawn(c,false))
         end
     end
-    # close child desciptors
-    for (fd1,fd2) = cmd.dup2
-        close(fd1)
+    # close all child desciptors
+    if root
+        for fd = cmd.close
+            close(fd)
+        end
     end
     # return spawned commands
     cmds
 end
+
+spawn(cmd::Cmd) = spawn(cmd,true)
 
 function run(cmd::Cmd)
     statuses = Set(ProcessStatus)
