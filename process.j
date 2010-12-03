@@ -68,30 +68,26 @@ function close(fd::FileDes)
     system_error("close", ret != 0)
 end
 
+typealias Executable Union((String,Tuple),Function)
+
+exec(cmd::(String,Tuple)) = exec(cmd[1], cmd[2]...)
+exec(thunk::Function) = thunk()
+
 struct Cmd
-    cmd::String
-    args::Tuple
+    exec::Executable
     spawn::Set{Cmd}
     close::Set{FileDes}
     dup2::Set # TODO: Set{(FileDes,FileDes)}
     pid::Int32
 
-    Cmd(cmd::String, args...) =
-        new(cmd, args, Set(Cmd), Set(FileDes), Set(), 0)
+    Cmd(exec::Executable) = new(exec, Set(Cmd), Set(FileDes), Set(), 0)
+    Cmd(cmd::String, args...) = Cmd((cmd,args))
 end
+
+show(cmd::Cmd) = show(cmd.exec)
+exec(cmd::Cmd) = exec(cmd.exec)
 
 ==(c1::Cmd, c2::Cmd) = is(c1,c2)
-
-function show(c::Cmd)
-    print('`', c.cmd)
-    for i = 1:length(c.args)
-        print(' ', c.args[i])
-    end
-    print('`')
-    if c.pid > 0
-        print(" [pid=", c.pid, ']')
-    end
-end
 
 struct Port
     cmd::Cmd
@@ -124,8 +120,6 @@ pipe(src::Cmd , dst::Cmd ) = pipe(stdout(src), stdin(dst))
 
 running(cmd::Cmd) = (cmd.pid > 0)
 
-exec(cmd::Cmd) = exec(cmd.cmd, cmd.args...)
-
 function spawn(cmd::Cmd, root::Bool)
     if running(cmd)
         error("already running: ", cmd)
@@ -150,6 +144,7 @@ function spawn(cmd::Cmd, root::Bool)
             show(err)
             exit(0xff)
         end
+        exit(0)
     end
     # spawn rest of pipeline
     cmds = Set(Cmd)
