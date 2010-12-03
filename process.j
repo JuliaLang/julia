@@ -68,35 +68,6 @@ function close(fd::FileDes)
     system_error("close", ret != 0)
 end
 
-# function pipe(cmd1::Tuple, cmd2::Tuple)
-#     r,w = make_pipe()
-#     pid1 = fork()
-#     if pid1 == 0
-#         try
-#             close(r)
-#             dup2(w,STDOUT)
-#             exec(cmd1...)
-#         catch e
-#             show(e)
-#             exit(0xff)
-#         end
-#     end
-#     close(w)
-#     pid2 = fork()
-#     if pid2 == 0
-#         try
-#             dup2(r,STDIN)
-#             exec(cmd2...)
-#         catch e
-#             show(e)
-#             exit(0xff)
-#         end
-#     end
-#     close(r)
-#     wait(pid1)
-#     process_status(wait(pid2))
-# end
-
 struct Cmd
     cmd::String
     args::Tuple
@@ -166,8 +137,10 @@ function spawn(cmd::Cmd, root::Bool)
             cl = Set(FileDes)
             add(cl,cmd.close)
             for (fd1,fd2) = cmd.dup2
-                dup2(fd1,fd2)
-                del(cl,fd1)
+                if fd1 != fd2
+                    dup2(fd1,fd2)
+                    del(cl,fd1)
+                end
             end
             for fd = cl
                 close(fd)
