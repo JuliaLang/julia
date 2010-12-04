@@ -94,3 +94,27 @@ A = mmap(file, Record)            # return an mmapped array or records
 for line = each_line(`bzcat $files` | `sort -k1n` | `cut -f2-`)
   # do something with the rest of the line
 end
+
+## some multi-tap pipe examples:
+
+A = Cmd("echo","hello");
+B = Cmd("echo","world");
+C = Cmd("sort");
+pipe(A,C);
+B.close = C.close;
+add(B.dup2,A.dup2);
+add(C.spawn,B);
+add(B.spawn,C);
+
+run(C)
+
+A = Cmd("perl","-le","BEGIN{$|=1} for(1..10){ sleep 1; print }");
+B = Cmd("perl","-nle","sleep 2; print 'B: ', $_");
+C = Cmd("perl","-nle","sleep 2; print 'C: ', $_");
+pipe(A,B);
+C.close = B.close;
+add(C.dup2,B.dup2);
+add(C.spawn,A);
+add(A.spawn,C);
+
+run(A)
