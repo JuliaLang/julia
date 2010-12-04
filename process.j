@@ -39,9 +39,9 @@ end
 
 struct FileDes; fd::Int32; end
 
-global STDIN  = FileDes((()->ccall(dlsym(JuliaDLHandle,"jl_stdin"),  Int32, ()))())
-global STDOUT = FileDes((()->ccall(dlsym(JuliaDLHandle,"jl_stdout"), Int32, ()))())
-global STDERR = FileDes((()->ccall(dlsym(JuliaDLHandle,"jl_stderr"), Int32, ()))())
+global STDIN  = FileDes(ccall(dlsym(JuliaDLHandle,"jl_stdin"),  Int32, ()))
+global STDOUT = FileDes(ccall(dlsym(JuliaDLHandle,"jl_stdout"), Int32, ()))
+global STDERR = FileDes(ccall(dlsym(JuliaDLHandle,"jl_stderr"), Int32, ()))
 
 ==(fd1::FileDes, fd2::FileDes) = (fd1.fd == fd2.fd)
 

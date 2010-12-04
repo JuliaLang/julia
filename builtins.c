@@ -208,16 +208,41 @@ JL_CALLABLE(jl_f_apply)
     return jl_apply((jl_function_t*)args[0], newargs, n);
 }
 
+static int is_intrinsic(jl_sym_t *s)
+{
+    jl_value_t **bp = jl_get_bindingp(jl_system_module, s);
+    return (*bp != NULL && jl_typeof(*bp)==(jl_type_t*)jl_intrinsic_type);
+}
+
+static int has_intrinsics(jl_expr_t *e)
+{
+    if (e->head == call_sym && jl_is_symbol(jl_exprarg(e,0)) &&
+        is_intrinsic((jl_sym_t*)jl_exprarg(e,0)))
+        return 1;
+    int i;
+    for(i=0; i < e->args->length; i++) {
+        jl_value_t *a = jl_exprarg(e,i);
+        if (jl_is_expr(a) && has_intrinsics((jl_expr_t*)a))
+            return 1;
+    }
+    return 0;
+}
+
 // heuristic for whether a top-level input should be evaluated with
 // the compiler or the interpreter.
-static int eval_with_compiler_p(jl_array_t *body)
+static int eval_with_compiler_p(jl_array_t *body, int compileloops)
 {
     size_t i;
     for(i=0; i < body->length; i++) {
         jl_value_t *stmt = jl_cellref(body,i);
-        if (jl_is_expr(stmt) && (((jl_expr_t*)stmt)->head == goto_sym ||
-                                 ((jl_expr_t*)stmt)->head == goto_ifnot_sym)) {
-            return 1;
+        if (jl_is_expr(stmt)) {
+            if (compileloops &&
+                (((jl_expr_t*)stmt)->head == goto_sym ||
+                 ((jl_expr_t*)stmt)->head == goto_ifnot_sym)) {
+                return 1;
+            }
+            if (has_intrinsics((jl_expr_t*)stmt))
+                return 1;
         }
     }
     return 0;
@@ -225,13 +250,13 @@ static int eval_with_compiler_p(jl_array_t *body)
 
 jl_value_t *jl_new_closure_internal(jl_lambda_info_t *li, jl_value_t *env);
 
-jl_value_t *jl_toplevel_eval_thunk(jl_lambda_info_t *thk)
+jl_value_t *jl_toplevel_eval_thunk_flex(jl_lambda_info_t *thk, int fast)
 {
     //jl_show(thk);
     //ios_printf(ios_stdout, "\n");
     assert(jl_typeof(thk) == (jl_type_t*)jl_lambda_info_type);
     assert(jl_is_expr(thk->ast));
-    if (eval_with_compiler_p(jl_lam_body((jl_expr_t*)thk->ast))) {
+    if (eval_with_compiler_p(jl_lam_body((jl_expr_t*)thk->ast), fast)) {
         jl_value_t *thunk=NULL;
         jl_function_t *gf=NULL;
         JL_GC_PUSH(&thunk, &gf);
@@ -244,6 +269,11 @@ jl_value_t *jl_toplevel_eval_thunk(jl_lambda_info_t *thk)
         return result;
     }
     return jl_interpret_toplevel_thunk(thk);
+}
+
+jl_value_t *jl_toplevel_eval_thunk(jl_lambda_info_t *thk)
+{
+    return jl_toplevel_eval_thunk_flex(thk, 1);
 }
 
 int asprintf(char **strp, const char *fmt, ...);
@@ -263,7 +293,8 @@ void jl_load_file_expr(char *fname, jl_value_t *ast)
             }
             else {
                 jl_lambda_info_t *lam = (jl_lambda_info_t*)form;
-                (void)jl_interpret_toplevel_thunk(lam);
+                //(void)jl_interpret_toplevel_thunk(lam);
+                (void)jl_toplevel_eval_thunk_flex(lam, 0);
             }
         }
     }

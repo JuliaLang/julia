@@ -22,7 +22,7 @@ load("table.j")
 
 # compiler
 load("inference.j")
-(()->ccall(dlsym(JuliaDLHandle,"jl_enable_inference"),Void,()))()
+ccall(dlsym(JuliaDLHandle,"jl_enable_inference"),Void,())
 
 # load libc
 libc = dlopen("libc")

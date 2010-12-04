@@ -506,10 +506,10 @@ issues 6/21/10
     that's currently created in add_generic_ctor
   . in non-generic case, add static parameters
 * limit specialization of vararg functions
-- be able to cache results obtained by recursive inference in method
+? be able to cache results obtained by recursive inference in method
   table cache when appropriate. instead of calling typeinf() recursively,
   call specialize(), which will do something more like cache_method.
-- method cache invalidation, also invalidate all caches once type inference
+* method cache invalidation, also invalidate all caches once type inference
   is available (after loading start.j)
 ? don't specialize on arguments declared as Any. make the default type
   an unconstrained typevar, and specialize those.
@@ -522,7 +522,7 @@ issues 6/21/10
 * bitstype syntax
 * boot.j
 - calling convention optimization, w/ wrapper funcs for generic calling
-- intrinsic calls from command line (use compiler)
+* intrinsic calls from command line (use compiler)
 ? new for loop, comprehension, reduction formulation
 * faster I/O (not byte at a time!)
 - expose word size in the language?
@@ -577,6 +577,7 @@ issues 11/6/10
 - something about uninitialized objects in constructors
 - implement longjmp block exits so return/break work across functions
 - splicing tuples in ` with $...?
+- readall, readline
 
 - optimize Array constructor (avoid checks and apply_type)
 arr{T,N}(::Type{T}, d::NTuple{N,Size}) = Array{T,N}(d)
