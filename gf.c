@@ -217,6 +217,8 @@ jl_lambda_info_t *jl_add_static_parameters(jl_lambda_info_t *l, jl_tuple_t *sp)
 
 void jl_specialize_ast(jl_lambda_info_t *li);
 
+JL_CALLABLE(jl_trampoline);
+
 jl_function_t *jl_instantiate_method(jl_function_t *f, jl_tuple_t *sp)
 {
     if (f->linfo == NULL)
@@ -403,6 +405,22 @@ static jl_function_t *cache_method(jl_methtable_t *mt, jl_tuple_t *type,
     else
     */
     newmeth = jl_instantiate_method(method, sparams);
+    /*
+      if "method" itself can ever be compiled, for example for use as
+      an unspecialized method (see below), then newmeth->fptr might point
+      to some slow compiled code instead of jl_trampoline, meaning our
+      type-inferred code would never get compiled. this can be fixed with
+      the commented-out snippet below.
+    */
+    assert(!(newmeth->linfo && newmeth->linfo->ast) ||
+           newmeth->fptr == &jl_trampoline);
+    /*
+    if (newmeth->linfo&&newmeth->linfo->ast&&newmeth->fptr!=&jl_trampoline) {
+        newmeth->fptr = &jl_trampoline;
+        newmeth->env =
+            (jl_value_t*)jl_tuple2((jl_value_t*)newmeth, newmeth->env);
+    }
+    */
 
     jl_function_t *retfunc = jl_method_cache_insert(mt, type, newmeth);
     assert(retfunc == newmeth);
@@ -410,7 +428,11 @@ static jl_function_t *cache_method(jl_methtable_t *mt, jl_tuple_t *type,
     if (newmeth->linfo != NULL && newmeth->linfo->sparams == jl_null) {
         // when there are no static parameters, one unspecialized version
         // of a function can be shared among all cached specializations.
-        newmeth->linfo->unspecialized = method;
+        if (method->linfo->unspecialized == NULL) {
+            method->linfo->unspecialized =
+                jl_instantiate_method(method, jl_null);
+        }
+        newmeth->linfo->unspecialized = method->linfo->unspecialized;
     }
 
     if (newmeth->linfo != NULL && newmeth->linfo->ast != NULL) {
@@ -755,8 +777,6 @@ static char *type_summary(jl_value_t *t)
     return NULL;
 }
 #endif
-
-JL_CALLABLE(jl_trampoline);
 
 jl_function_t *jl_method_lookup(jl_methtable_t *mt, jl_tuple_t *types)
 {
