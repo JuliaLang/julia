@@ -108,7 +108,7 @@ add(B.spawn,C);
 
 run(C)
 
-A = Cmd("perl","-le","BEGIN{$|=1} for(1..10){ sleep 1; print }");
+A = Cmd("perl","-le","$|=1; for(1..10){ sleep 1; print }");
 B = Cmd("perl","-nle","sleep 2; print 'B: ', $_");
 C = Cmd("perl","-nle","sleep 2; print 'C: ', $_");
 pipe(A,B);
@@ -118,3 +118,11 @@ add(C.spawn,A);
 add(A.spawn,C);
 
 run(A)
+
+# proposed syntax for the above examples:
+
+`echo hello` & `echo world` | `sort`
+
+`perl -le '$|=1; for(1..10){ sleep 1; print }'` |
+  `perl -nle 'sleep 2; print "B: ", $_'` &
+  `perl -nle 'sleep 2; print "C: ", $_'`
