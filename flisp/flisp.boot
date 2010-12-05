@@ -156,7 +156,7 @@
   largc lvargc vargc argc compile-in lastcdr caddr ret values #fn(function)
   encode-byte-code bcode:code const-to-idx-vec]) filter keyword-arg?])
   #fn(length)]) #fn(length)]) make-code-emitter lastcdr lambda-vars filter #.pair?
-  lambda])] #0=[#:g689 ()])
+  lambda])] #0=[#:g691 ()])
 	  compile-for #fn(":000r5e0g4316X0e1|}^g2342e1|}^g3342e1|}^g4342e2|c342;e4c541;" [1arg-lambda?
   compile-in emit for error "for: third form must be a 1-argument lambda"] compile-for)
 	  compile-if #fn("<000r4c0qe1|31e1|31g3\x84e2g331e3g331F6;0e4g331560e53045;" [#fn(";000r5g2]\x82>0e0~\x7fi02g344;g2^\x82>0e0~\x7fi02g444;e0~\x7f^g2342e1~c2|332e0~\x7fi02g3342i026<0e1~c3325:0e1~c4}332e5~|322e0~\x7fi02g4342e5~}42;" [compile-in
@@ -373,8 +373,9 @@
 				       #fn("7000r1e0|312];" [top-level-exception-handler])
 				       newline] reploop) newline])] repl)
 	  revappend #fn("8000r2c0e1|31}42;" [#fn(nconc) reverse] revappend)
-	  reverse #fn("9000r1e0c1_|43;" [foldl #.cons] reverse) reverse!
+	  reverse #fn("8000r1e0_|42;" [reverse-] reverse) reverse!
 	  #fn("7000r1c0q_41;" [#fn("9000r1]~F6C02~N~|~m02P2o005\x1c/2|;" [])] reverse!)
+	  reverse- #fn("8000r2}\x8540|;e0}M|K}N42;" [reverse-] reverse-)
 	  self-evaluating? #fn("8000r1|?16602|C@17K02c0|3116A02|C16:02|c1|31<;" [#fn(constant?)
   #fn(top-level-value)] self-evaluating?)
 	  separate #fn("7000r2c0q]41;" [#fn(":000r1c0m02|~\x7f_L1_L144;" [#fn(";000r4c0g2g3K]}F6Z02|}M316?0g2}M_KPNm25<0g3}M_KPNm32}Nm15\x05/241;" [#fn("8000r1e0|MN|NN42;" [values])] separate-)])] separate)

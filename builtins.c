@@ -8,30 +8,17 @@
 #include <setjmp.h>
 #include <assert.h>
 #include <sys/types.h>
-#include <sys/wait.h>
 #include <limits.h>
 #include <errno.h>
 #include <math.h>
 #include <ctype.h>
+#include <fcntl.h>
+#include <unistd.h>
 #ifdef BOEHM_GC
 #include <gc.h>
 #endif
 #include "llt.h"
 #include "julia.h"
-
-#include <fcntl.h>
-#include <unistd.h>
-
-// --- system word size ---
-
-int jl_word_size()
-{
-#ifdef BITS64
-    return 64;
-#else
-    return 32;
-#endif
-}
 
 // --- exceptions ---
 
@@ -106,33 +93,6 @@ JL_CALLABLE(jl_f_trycatch)
     }
     return v;
 }
-
-int jl_errno()
-{
-    return errno;
-}
-
-jl_value_t *jl_strerror(int errnum)
-{
-    char *str = strerror(errnum);
-    return jl_pchar_to_string((char*)str, strlen(str));
-}
-
-// -- child process status --
-
-int jl_process_exited(int status)      { return WIFEXITED(status); }
-int jl_process_signaled(int status)    { return WIFSIGNALED(status); }
-int jl_process_stopped(int status)     { return WIFSTOPPED(status); }
-
-int jl_process_exit_status(int status) { return WEXITSTATUS(status); }
-int jl_process_term_signal(int status) { return WTERMSIG(status); }
-int jl_process_stop_signal(int status) { return WSTOPSIG(status); }
-
-// -- access to std filehandles --
-
-int jl_stdin()  { return STDIN_FILENO; }
-int jl_stdout() { return STDOUT_FILENO; }
-int jl_stderr() { return STDERR_FILENO; }
 
 // --- primitives ---
 
@@ -1084,7 +1044,6 @@ JL_CALLABLE(jl_f_new_struct_fields)
     jl_struct_type_t *st = (jl_struct_type_t*)t;
     if (st->types != NULL)
         jl_error("you can't do that.");
-    jl_tuple_t *pft = NULL;
     jl_tuple_t *fnames = st->names;
 
     assert(jl_is_type(super));
@@ -1100,13 +1059,15 @@ JL_CALLABLE(jl_f_new_struct_fields)
         assert(jl_is_tag_type(super));
     }
 
+    /*
     if (jl_is_struct_type(super))
         pft = ((jl_struct_type_t*)super)->types;
     else if (jl_is_tag_type(super))
         pft = jl_null;
     else
         assert(0);
-    st->types = jl_tuple_append(pft, ftypes);
+    */
+    st->types = ftypes;
     jl_add_constructors(st);
     return (jl_value_t*)jl_null;
 }
@@ -1247,7 +1208,7 @@ static void check_type_tuple(jl_tuple_t *t)
 JL_CALLABLE(jl_f_add_method)
 {
     JL_NARGS(add_method, 3, 3);
-    assert(jl_is_function(args[0]));
+    JL_TYPECHK(add_method, function, args[0]);
     if (!jl_is_gf(args[0]))
         jl_error("add_method: not a generic function");
     JL_TYPECHK(add_method, tuple, args[1]);

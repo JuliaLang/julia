@@ -1,6 +1,6 @@
 /*
-  io.c
-  I/O utility functions
+  sys.c
+  I/O and operating system utility functions
 */
 #include <stdlib.h>
 #include <stdio.h>
@@ -10,17 +10,32 @@
 #include <assert.h>
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <sys/wait.h>
 #include <limits.h>
 #include <errno.h>
 #include <math.h>
 #include <signal.h>
 #include <libgen.h>
+#include <fcntl.h>
 #include <unistd.h>
 #ifdef BOEHM_GC
 #include <gc.h>
 #endif
 #include "llt.h"
 #include "julia.h"
+
+// --- system word size ---
+
+int jl_word_size()
+{
+#ifdef BITS64
+    return 64;
+#else
+    return 32;
+#endif
+}
+
+// --- io and select ---
 
 void jl__not__used__()
 {
@@ -136,3 +151,32 @@ jl_value_t *jl_takebuf_string(ios_t *s)
     LLT_FREE(b);
     return v;
 }
+
+// -- syscall utilities --
+
+int jl_errno()
+{
+    return errno;
+}
+
+jl_value_t *jl_strerror(int errnum)
+{
+    char *str = strerror(errnum);
+    return jl_pchar_to_string((char*)str, strlen(str));
+}
+
+// -- child process status --
+
+int jl_process_exited(int status)      { return WIFEXITED(status); }
+int jl_process_signaled(int status)    { return WIFSIGNALED(status); }
+int jl_process_stopped(int status)     { return WIFSTOPPED(status); }
+
+int jl_process_exit_status(int status) { return WEXITSTATUS(status); }
+int jl_process_term_signal(int status) { return WTERMSIG(status); }
+int jl_process_stop_signal(int status) { return WSTOPSIG(status); }
+
+// -- access to std filehandles --
+
+int jl_stdin()  { return STDIN_FILENO; }
+int jl_stdout() { return STDOUT_FILENO; }
+int jl_stderr() { return STDERR_FILENO; }

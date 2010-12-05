@@ -296,7 +296,11 @@
   (if (null? lst) zero
       (foldl f (f (car lst) zero) (cdr lst))))
 
-(define (reverse lst) (foldl cons () lst))
+(define (reverse- zero lst)
+  (if (null? lst) zero
+      (reverse- (cons (car lst) zero) (cdr lst))))
+
+(define (reverse lst) (reverse- () lst))
 
 (define (reverse! l)
   (let ((prev ()))
