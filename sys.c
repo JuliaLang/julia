@@ -79,7 +79,8 @@ int jl_read_avail(ios_t *s)
     return 0;
 }
 
-DLLEXPORT uint32_t jl_getutf8(ios_t *s)
+DLLEXPORT
+uint32_t jl_getutf8(ios_t *s)
 {
     uint32_t wc=0;
     ios_getutf8(s, &wc);
@@ -154,10 +155,7 @@ jl_value_t *jl_takebuf_string(ios_t *s)
 
 // -- syscall utilities --
 
-int jl_errno()
-{
-    return errno;
-}
+int jl_errno() { return errno; }
 
 jl_value_t *jl_strerror(int errnum)
 {
