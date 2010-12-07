@@ -113,6 +113,7 @@ end
 
 run(Cmd("perl","-le","$|=1; for(0..9){ print; sleep 1 }") |
     prefixer(2,"A") & prefixer(2,"B"))
+
 run(Cmd("perl","-le","$|=1; for(0..9){ print; sleep 1 }") |
     prefixer(2,"A") & prefixer(2,"B") | Cmd("sort"))
 
@@ -130,15 +131,24 @@ run(Cmd("perl","-le","$|=1; for(0..9){ sleep 1; print }") |
 `echo hello` & `echo world` | `sort`
 `echo hello` & `echo world` | `sort` | `tac`
 
-`perl -le '$|=1; for(1..10){ sleep 1; print }'` |
-  `perl -nle 'sleep 2; print "B: ", $_'` &
-  `perl -nle 'sleep 2; print "C: ", $_'`
-
-`perl -le '$|=1; for(1..10){ sleep 1; print }'` |
-  `perl -nle 'sleep 2; print "B: ", $_'` &
-  `perl -nle 'sleep 2; print "C: ", $_'` | `sort`
-
 `perl -e 'warn "world\n"; print "hello\n"'`
 `perl -e 'warn "world\n"; print "hello\n"'` | `sort`
 stderr(`perl -e 'warn "world\n"; print "hello\n"'`) | `sort`
 output(`perl -e 'warn "world\n"; print "hello\n"'`) | `sort`
+
+prefixer(sleep, prefix) =
+  `perl -nle '$|=1; print "'$prefix'\t", $_; sleep '$sleep''`
+
+`perl -le '$|=1; for(0..9){ print; sleep 1 }'` |
+  prefixer(2,"A") & prefixer(2,"B"))
+
+`perl -le '$|=1; for(0..9){ print; sleep 1 }'` |
+  prefixer(2,"A") & prefixer(2,"B")) | `sort`
+
+`perl -le '$|=1; for(0..9){ print; sleep 1 }'` |
+  prefixer(3,"X") & prefixer(3,"Y") & prefixer(3,"Z") |
+  prefixer(2,"A") & prefixer(2,"B"))
+
+`perl -le '$|=1; for(0..9){ print; sleep 1 }'` |
+  prefixer(3,"X") & prefixer(3,"Y") & prefixer(3,"Z") |
+  prefixer(2,"A") & prefixer(2,"B")) | `sort`
