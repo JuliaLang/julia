@@ -234,41 +234,37 @@ running(cmd::Cmd) = (cmd.pid > 0)
 function spawn(cmd::Cmd)
     fds = Set(FileDes)
     for c = cmd.pipeline
+        if running(c)
+            error("already running: ", c)
+        end
         for (f,p) = c.pipes
             add(fds, fd(p), other(p))
         end
     end
     for c = cmd.pipeline
-        spawn(c, fds)
+        c.pid = fork()
+        c.status = ProcessRunning()
+        if c.pid == 0
+            try
+                for (f,p) = c.pipes
+                    dup2(fd(p), f)
+                    del(fds, fd(p))
+                end
+                for f = fds
+                    close(f)
+                end
+                exec(c)
+            catch err
+                show(err)
+                exit(0xff)
+            end
+            exit(0)
+        end
     end
     for f = fds
         close(f)
     end
     cmd.pipeline
-end
-
-function spawn(cmd::Cmd, fds::Set{FileDes})
-    if running(cmd)
-        error("already running: ", cmd)
-    end
-    cmd.pid = fork()
-    cmd.status = ProcessRunning()
-    if cmd.pid == 0
-        try
-            for (f,p) = cmd.pipes
-                dup2(fd(p), f)
-                del(fds, fd(p))
-            end
-            for f = fds
-                close(f)
-            end
-            exec(cmd)
-        catch err
-            show(err)
-            exit(0xff)
-        end
-        exit(0)
-    end
 end
 
 function run(cmds::Cmds)
