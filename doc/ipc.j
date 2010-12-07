@@ -125,6 +125,10 @@ run(Cmd("perl","-le","$|=1; for(0..9){ sleep 1; print }") |
     prefixer(3,"X") & prefixer(3,"Y") & prefixer(3,"Z") |
     prefixer(2,"A") & prefixer(2,"B") | Cmd("sort"))
 
+gen = Cmd("perl","-le","$|=1; for(0..9){ print; sleep 1 }")
+dup = Cmd("perl","-pe","$|=1; warn $_; sleep 1")
+run(gen | dup | dup)
+
 # proposed syntax for the above examples:
 
 `echo hello` & `echo world`
