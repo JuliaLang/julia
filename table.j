@@ -196,7 +196,7 @@ function show(t::Union(IdTable,HashTable))
             show(k)
             print("=>")
             show(v)
-            print(", ")
+            print(",")
         end
         print("}")
     end

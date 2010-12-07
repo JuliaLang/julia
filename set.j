@@ -5,6 +5,9 @@ struct Set{T}
     Set{T}(T::Type) = new(Array(T,0))
 end
 
+set{T}(x::T...) = (s = Set(T); add(s, x...))
+
+isempty(set::Set) = isempty(set.items)
 has(set::Set, x) = any([ isequal(x,y) | y=set.items ])
 
 function add(set::Set, x)

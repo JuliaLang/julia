@@ -1,4 +1,6 @@
 type ProcessStatus
+struct ProcessNotRun   <: ProcessStatus; end
+struct ProcessRunning  <: ProcessStatus; end
 struct ProcessExited   <: ProcessStatus; status::Int32; end
 struct ProcessSignaled <: ProcessStatus; signal::Int32; end
 struct ProcessStopped  <: ProcessStatus; signal::Int32; end
@@ -24,6 +26,9 @@ function process_status(s::Int32)
     error("process status error")
 end
 
+process_success(s::ProcessStatus) = false
+process_success(s::ProcessExited) = (s.status == 0)
+
 function run(cmd::String, args...)
     pid = fork()
     if pid == 0
@@ -45,17 +50,51 @@ global STDERR = FileDes(ccall(dlsym(JuliaDLHandle,"jl_stderr"), Int32, ()))
 
 ==(fd1::FileDes, fd2::FileDes) = (fd1.fd == fd2.fd)
 
+hash(fd::FileDes) = hash(fd.fd)
+
 show(fd::FileDes) =
     fd == STDIN  ? print("STDIN")  :
     fd == STDOUT ? print("STDOUT") :
     fd == STDERR ? print("STDERR") :
     invoke(show, (Any,), fd)
 
+struct Pipe
+    in::FileDes
+    out::FileDes
+
+    function Pipe(in::FileDes, out::FileDes)
+        if in == out
+            error("identical in and out file descriptors")
+        end
+        new(in,out)
+    end
+end
+
+==(p1::Pipe, p2::Pipe) = (p1.in == p2.in && p1.out == p2.out)
+
+type PipeEnd
+struct PipeIn  <: PipeEnd; pipe::Pipe; end
+struct PipeOut <: PipeEnd; pipe::Pipe; end
+
+==(p1::PipeEnd, p2::PipeEnd) = false
+==(p1::PipeIn , p2::PipeIn ) = (p1.pipe == p2.pipe)
+==(p1::PipeOut, p2::PipeOut) = (p1.pipe == p2.pipe)
+
+in (p::Pipe) = PipeIn(p)
+out(p::Pipe) = PipeOut(p)
+in (p::PipeEnd) = in(p.pipe)
+out(p::PipeEnd) = out(p.pipe)
+
+fd(p::PipeIn)  = p.pipe.in
+fd(p::PipeOut) = p.pipe.out
+other(p::PipeIn)  = p.pipe.out
+other(p::PipeOut) = p.pipe.in
+
 function make_pipe()
     fds = Array(Int32, 2)
     ret = ccall(dlsym(libc,"pipe"), Int32, (Ptr{Int32},), fds)
     system_error("make_pipe", ret != 0)
-    FileDes(fds[1]), FileDes(fds[2])
+    Pipe(FileDes(fds[2]), FileDes(fds[1]))
 end
 
 function dup2(fd1::FileDes, fd2::FileDes)
@@ -75,16 +114,38 @@ exec(thunk::Function) = thunk()
 
 struct Cmd
     exec::Executable
-    spawn::Set{Cmd}
-    close::Set{FileDes}
-    dup2::Set # TODO: Set{(FileDes,FileDes)}
+    pipes::HashTable{FileDes,PipeEnd}
+    pipeline::Set{Cmd}
     pid::Int32
+    status::ProcessStatus
 
-    Cmd(exec::Executable) = new(exec, Set(Cmd), Set(FileDes), Set(), 0)
+    function Cmd(exec::Executable)
+        this = new(exec,
+                   HashTable(FileDes,PipeEnd),
+                   Set(Cmd),
+                   0,
+                   ProcessNotRun())
+        add(this.pipeline, this)
+        this
+    end
     Cmd(cmd::String, args...) = Cmd((cmd,args))
 end
 
-show(cmd::Cmd) = show(cmd.exec)
+function show(cmd::Cmd)
+    if isa(cmd.exec,(String,Tuple))
+        print('`', cmd.exec[1])
+        for arg = cmd.exec[2]
+            print(' ', arg)
+        end
+        print('`')
+        if cmd.pid > 0
+            print('[',cmd.pid,']')
+        end
+    else
+        invoke(show, (Any,), cmd)
+    end
+end
+
 exec(cmd::Cmd) = exec(cmd.exec)
 
 ==(c1::Cmd, c2::Cmd) = is(c1,c2)
@@ -96,48 +157,109 @@ end
 
 fd(cmd::Cmd, f::FileDes) = Port(cmd,f)
 
-stdin (cmd::Cmd) = fd(cmd,STDIN)
-stdout(cmd::Cmd) = fd(cmd,STDOUT)
-stderr(cmd::Cmd) = fd(cmd,STDERR)
-
-function pipe(src::Port, dst::Port)
-    r, w = make_pipe()
-    add(src.cmd.close, r, w)
-    add(src.cmd.close, dst.cmd.close)
-    dst.cmd.close = src.cmd.close
-    add(src.cmd.spawn, dst.cmd)
-    add(src.cmd.dup2, (w, src.fd))
-    add(dst.cmd.spawn, src.cmd)
-    add(dst.cmd.dup2, (r, dst.fd))
-    dst.cmd
+function fd(cmds::Set{Cmd}, f::FileDes)
+    set = Set(Port)
+    for cmd = cmds
+        if !has(cmd.pipes, f)
+            add(set, fd(cmd,f))
+        end
+    end
+    if isempty(set)
+        error("no ", f, " available: ", cmds)
+    end
+    set
 end
 
-pipe(src::Port, dst::Cmd ) = pipe(src, stdin(dst))
-pipe(src::Cmd , dst::Port) = pipe(stdout(src), dst)
-pipe(src::Cmd , dst::Cmd ) = pipe(stdout(src), stdin(dst))
+typealias Cmds  Union(Cmd,Set{Cmd})
+typealias Ports Union(Port,Set{Port})
 
-(|)(src::Union(Cmd,Port), dst::Union(Cmd,Port)) = pipe(src,dst)
+stdin (cmds::Cmds) = fd(cmds,STDIN)
+stdout(cmds::Cmds) = fd(cmds,STDOUT)
+stderr(cmds::Cmds) = fd(cmds,STDERR)
+
+function (&)(cmds::Cmds...)
+    set = Set(Cmd)
+    for cmd = cmds
+        add(set, cmd)
+    end
+    set
+end
+
+function (&)(ports::Ports...)
+    set = Set(Port)
+    for port = ports
+        add(set, port)
+    end
+    set
+end
+
+output(cmds::Cmds) = stdout(cmds) & stderr(cmds)
+
+function connect(port::Port, pend::PipeEnd)
+    if has(port.cmd.pipes, port.fd)
+        error(port.cmd, " is already connected to ",
+              fd(port.cmd.pipes[port.fd]))
+    end
+    port.cmd.pipes[port.fd] = pend
+end
+
+function (|)(src::Port, dst::Port)
+    if has(dst.cmd.pipes, dst.fd)
+        connect(src, in(dst.cmd.pipes[dst.fd]))
+    elseif has(src.cmd.pipes, src.fd)
+        connect(dst, out(src.cmd.pipes[src.fd]))
+    else
+        p = make_pipe()
+        connect(src, in(p))
+        connect(dst, out(p))
+    end
+    pipeline = union(src.cmd.pipeline, dst.cmd.pipeline)
+    for cmd = pipeline
+        cmd.pipeline = pipeline
+    end
+    return ()
+end
+
+(|)(src::Port, dsts::Ports) = for dst = dsts; src | dst; end
+(|)(srcs::Ports, dst::Port) = for src = srcs; src | dst; end
+(|)(srcs::Ports, dsts::Ports) = for src = srcs, dst = dsts; src | dst; end
+
+(|)(src::Cmds, dst::Ports) = stdout(src) | dst
+(|)(src::Ports, dst::Cmds) = (src | stdin(dst); dst)
+(|)(src::Cmds,  dst::Cmds) = (stdout(src)| stdin(dst); src & dst)
 
 running(cmd::Cmd) = (cmd.pid > 0)
 
-function spawn(cmd::Cmd, root::Bool)
+function spawn(cmd::Cmd)
+    fds = Set(FileDes)
+    for c = cmd.pipeline
+        for (f,p) = c.pipes
+            add(fds, fd(p), other(p))
+        end
+    end
+    for c = cmd.pipeline
+        spawn(c, fds)
+    end
+    for f = fds
+        close(f)
+    end
+    cmd.pipeline
+end
+
+function spawn(cmd::Cmd, fds::Set{FileDes})
     if running(cmd)
         error("already running: ", cmd)
     end
-    # spawn this process
     cmd.pid = fork()
+    cmd.status = ProcessRunning()
     if cmd.pid == 0
         try
-            cl = Set(FileDes)
-            add(cl,cmd.close)
-            for (fd1,fd2) = cmd.dup2
-                if fd1 != fd2
-                    dup2(fd1,fd2)
-                    del(cl,fd1)
-                end
+            for (f,p) = cmd.pipes
+                dup2(fd(p), f)
+                del(fds, fd(p))
             end
-            for fd = cl
-                close(fd)
+            for f = fds
+                close(f)
             end
             exec(cmd)
         catch err
@@ -146,30 +268,20 @@ function spawn(cmd::Cmd, root::Bool)
         end
         exit(0)
     end
-    # spawn rest of pipeline
-    cmds = Set(Cmd)
-    add(cmds, cmd)
-    for c = cmd.spawn
-        if !running(c)
-            add(cmds, spawn(c,false))
-        end
-    end
-    # close all child desciptors
-    if root
-        for fd = cmd.close
-            close(fd)
-        end
-    end
-    # return spawned commands
-    cmds
 end
 
-spawn(cmd::Cmd) = spawn(cmd,true)
-
-function run(cmd::Cmd)
-    statuses = Set(ProcessStatus)
-    for cmd = spawn(cmd)
-        add(statuses, process_status(wait(cmd.pid)))
+function run(cmds::Cmds)
+    pipeline = Set(Cmd)
+    add(pipeline, cmds)
+    for cmd = pipeline
+        if !running(cmd)
+            spawn(cmd)
+        end
     end
-    statuses
+    success = true
+    for cmd = pipeline
+        cmd.status = process_status(wait(cmd.pid))
+        success &= process_success(cmd.status)
+    end
+    success
 end

@@ -97,32 +97,38 @@ end
 
 ## some multi-tap pipe examples:
 
-A = Cmd("echo","hello");
-B = Cmd("echo","world");
-C = Cmd("sort");
-pipe(A,C);
-B.close = C.close;
-add(B.dup2,A.dup2);
-add(C.spawn,B);
-add(B.spawn,C);
+run(Cmd("echo","hello") & Cmd("echo","world"))
+run(Cmd("echo","hello") & Cmd("echo","world") | Cmd("sort"))
+run(Cmd("echo","hello") & Cmd("echo","world") | Cmd("sort") | Cmd("tac"))
 
-run(C)
+run(Cmd("perl","-le","$|=1; for(0..9){ sleep 1; print }") |
+    Cmd("perl","-nle","sleep 2; print 'B: ', $_") &
+    Cmd("perl","-nle","sleep 2; print 'C: ', $_"))
 
-A = Cmd("perl","-le","$|=1; for(1..10){ sleep 1; print }");
-B = Cmd("perl","-nle","sleep 2; print 'B: ', $_");
-C = Cmd("perl","-nle","sleep 2; print 'C: ', $_");
-pipe(A,B);
-C.close = B.close;
-add(C.dup2,B.dup2);
-add(C.spawn,A);
-add(A.spawn,C);
+run(Cmd("perl","-le","$|=1; for(0..9){ sleep 1; print }") |
+    Cmd("perl","-nle","sleep 2; print 'B: ', $_") &
+    Cmd("perl","-nle","sleep 2; print 'C: ', $_") | Cmd("sort"))
 
-run(A)
+run(Cmd("perl","-e","warn 'world\n'; print 'hello\n'"))
+run(Cmd("perl","-e","warn 'world\n'; print 'hello\n'") | Cmd("sort"))
+run(stderr(Cmd("perl","-e","warn 'world\n'; print 'hello\n'")) | Cmd("sort"))
+run(output(Cmd("perl","-e","warn 'world\n'; print 'hello\n'")) | Cmd("sort"))
 
 # proposed syntax for the above examples:
 
+`echo hello` & `echo world`
 `echo hello` & `echo world` | `sort`
+`echo hello` & `echo world` | `sort` | `tac`
 
 `perl -le '$|=1; for(1..10){ sleep 1; print }'` |
   `perl -nle 'sleep 2; print "B: ", $_'` &
   `perl -nle 'sleep 2; print "C: ", $_'`
+
+`perl -le '$|=1; for(1..10){ sleep 1; print }'` |
+  `perl -nle 'sleep 2; print "B: ", $_'` &
+  `perl -nle 'sleep 2; print "C: ", $_'` | `sort`
+
+`perl -e 'warn "world\n"; print "hello\n"'`
+`perl -e 'warn "world\n"; print "hello\n"'` | `sort`
+stderr(`perl -e 'warn "world\n"; print "hello\n"'`) | `sort`
+output(`perl -e 'warn "world\n"; print "hello\n"'`) | `sort`
