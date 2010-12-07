@@ -43,3 +43,11 @@ del(set::Set, s2::Set) = (for x = s2; del(set, x); end; set)
 start(set::Set) = start(set.items)
 done(set::Set, x) = done(set.items, x)
 next(set::Set, x) = next(set.items, x)
+
+function union{T}(sets::Set{T}...)
+    u = Set(T)
+    for set = sets
+        add(u,set)
+    end
+    return u
+end
