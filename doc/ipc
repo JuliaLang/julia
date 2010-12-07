@@ -95,24 +95,34 @@ for line = each_line(`bzcat $files` | `sort -k1n` | `cut -f2-`)
   # do something with the rest of the line
 end
 
-## some multi-tap pipe examples:
+## some parallel pipe examples:
 
 run(Cmd("echo","hello") & Cmd("echo","world"))
 run(Cmd("echo","hello") & Cmd("echo","world") | Cmd("sort"))
 run(Cmd("echo","hello") & Cmd("echo","world") | Cmd("sort") | Cmd("tac"))
 
-run(Cmd("perl","-le","$|=1; for(0..9){ sleep 1; print }") |
-    Cmd("perl","-nle","sleep 2; print 'B: ', $_") &
-    Cmd("perl","-nle","sleep 2; print 'C: ', $_"))
-
-run(Cmd("perl","-le","$|=1; for(0..9){ sleep 1; print }") |
-    Cmd("perl","-nle","sleep 2; print 'B: ', $_") &
-    Cmd("perl","-nle","sleep 2; print 'C: ', $_") | Cmd("sort"))
-
 run(Cmd("perl","-e","warn 'world\n'; print 'hello\n'"))
 run(Cmd("perl","-e","warn 'world\n'; print 'hello\n'") | Cmd("sort"))
 run(stderr(Cmd("perl","-e","warn 'world\n'; print 'hello\n'")) | Cmd("sort"))
 run(output(Cmd("perl","-e","warn 'world\n'; print 'hello\n'")) | Cmd("sort"))
+
+function prefixer(sleep, prefix)
+  perl = strcat("$|=1; print \"", prefix, "\\t\", $_; sleep ", sleep)
+  return Cmd("perl","-nle", perl)
+end
+
+run(Cmd("perl","-le","$|=1; for(0..9){ print; sleep 1 }") |
+    prefixer(2,"A") & prefixer(2,"B"))
+run(Cmd("perl","-le","$|=1; for(0..9){ print; sleep 1 }") |
+    prefixer(2,"A") & prefixer(2,"B") | Cmd("sort"))
+
+run(Cmd("perl","-le","$|=1; for(0..9){ sleep 1; print }") |
+    prefixer(3,"X") & prefixer(3,"Y") & prefixer(3,"Z") |
+    prefixer(2,"A") & prefixer(2,"B"))
+
+run(Cmd("perl","-le","$|=1; for(0..9){ sleep 1; print }") |
+    prefixer(3,"X") & prefixer(3,"Y") & prefixer(3,"Z") |
+    prefixer(2,"A") & prefixer(2,"B") | Cmd("sort"))
 
 # proposed syntax for the above examples:
 
