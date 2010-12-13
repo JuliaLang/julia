@@ -96,15 +96,16 @@ struct HashTable{K,V}
     HashTable() = HashTable(Any,Any)
     HashTable(k, v) = HashTable(k, v, 16)
     HashTable(k, v, n) = (n = _tablesz(n);
-                          new(Array(k,n), Array(v,n), IntSet(n)))
+                          new(Array(k,n), Array(v,n), IntSet(n+1)))
 end
 
+hashindex(key, sz) = (int32(hash(key)) & (sz-1)) + 1
+
 function assign{K,V}(h::HashTable{K,V}, v, key)
-    hv = int32(hash(key))
     sz = length(h.keys)
     iter = 0
     maxprobe = sz>>3
-    index = hv & (sz-1)
+    index = hashindex(key, sz)
     orig = index
 
     while true
@@ -120,7 +121,7 @@ function assign{K,V}(h::HashTable{K,V}, v, key)
             return h
         end
 
-        index = (index+1) & (sz-1)
+        index = (index & (sz-1)) + 1
         iter+=1
         if iter > maxprobe || index==orig
             break
@@ -133,21 +134,21 @@ function assign{K,V}(h::HashTable{K,V}, v, key)
     newsz = sz*2
     h.keys = Array(K,newsz)
     h.vals = Array(V,newsz)
-    h.used = IntSet(newsz)
+    h.used = IntSet(newsz+1)
 
     for i = oldu
         h[oldk[i]] = oldv[i]
     end
 
-    assign(h, key, v)
+    assign(h, v, key)
 end
 
-function get(h::HashTable, key, deflt)
-    hv = int32(hash(key))
+# get the index where a key is stored, or -1 if not present
+function ht_keyindex(h::HashTable, key)
     sz = length(h.keys)
     iter = 0
     maxprobe = sz>>3
-    index = hv & (sz-1)
+    index = hashindex(key, sz)
     orig = index
 
     while true
@@ -155,17 +156,47 @@ function get(h::HashTable, key, deflt)
             break
         end
         if isequal(key, h.keys[index])
-            return h.vals[index]
+            return index
         end
 
-        index = (index+1) & (sz-1)
+        index = (index & (sz-1)) + 1
         iter+=1
         if iter > maxprobe || index==orig
             break
         end
     end
 
-    return deflt
+    return -1
+end
+
+function get(h::HashTable, key, deflt)
+    index = ht_keyindex(h, key)
+    return (index<0) ? deflt : h.vals[index]
+end
+
+function del(h::HashTable, key)
+    index = ht_keyindex(h, key)
+    if index > 0
+        sz = length(h.keys)
+        iter = 0
+        maxprobe = sz>>3
+        orig = index
+        del(h.used, index)
+        index = (index & (sz-1)) + 1
+        while (iter < maxprobe && index != orig &&
+               contains(h.used, index) &&
+               hashindex(h.keys[index],sz) < index)
+            h.keys[index-1] = h.keys[index]
+            h.vals[index-1] = h.vals[index]
+            adjoin(h.used, index-1)
+            del(h.used, index)
+            index = (index & (sz-1)) + 1
+            iter += 1
+        end
+        assert(!contains(h.used, index) ||
+               hashindex(h.keys[index],sz) == index)
+    end
+    h
 end
 
 start(t::HashTable) = 0

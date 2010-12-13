@@ -736,7 +736,7 @@ function typeinf(linfo::LambdaStaticData,atypes::Tuple,sparams::Tuple, cop, def)
         pc = choose(W)
         while true
             #print(pc,": ",s[pc],"\n")
-            remove(W, pc)
+            del(W, pc)
             stmt = body[pc]
             changes = interpret(stmt, s[pc], sv)
             if frame.recurred

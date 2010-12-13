@@ -3,7 +3,7 @@
 // compute empirical max-probe for a given size
 #define max_probe(size) ((size)<=(HT_N_INLINE*2) ? (HT_N_INLINE/2) : (size)>>3)
 
-#define khash(k)       inthash((uptrint_t)(k))
+#define keyhash(k)     inthash((uptrint_t)(k))
 #define h2index(hv,sz) (index_t)(((hv) & ((sz)-1))*2)
 
 static void **jl_table_lookup_bp(jl_array_t **pa, void *key)
@@ -16,7 +16,7 @@ static void **jl_table_lookup_bp(jl_array_t **pa, void *key)
     void **tab = (void**)a->data;
     void **ol;
 
-    hv = khash(key);
+    hv = keyhash(key);
  retry_bp:
     iter = 0;
     index = h2index(hv,sz);
@@ -74,7 +74,7 @@ static void **jl_table_peek_bp(jl_array_t *a, void *key)
     size_t sz = hash_size(a);
     size_t maxprobe = max_probe(sz);
     void **tab = (void**)a->data;
-    uint_t hv = khash(key);
+    uint_t hv = keyhash(key);
     size_t index = h2index(hv, sz);
     sz *= 2;
     size_t orig = index;

@@ -21,7 +21,7 @@ function adjoin(s::IntSet, n::Int)
     s
 end
 
-function remove(s::IntSet, n::Int)
+function del(s::IntSet, n::Int)
     if n < s.limit
         s.bits[n>>5 + 1] &= ~(1<<(n&31))
     end
