@@ -18,6 +18,34 @@ function append(a1::Array{Any,1}, as::Array{Any,1}...)
     a
 end
 
+function append(a1::Array{Any,1}, a2::Tuple)
+    n = arraylen(a1)+tuplelen(a2)
+    a = Array(Any,n)
+    for i = 1:arraylen(a1)
+        arrayset(a,i,arrayref(a1,i))
+    end
+    i = arraylen(a1)+1
+    for j = 1:tuplelen(a2)
+        arrayset(a,i,tupleref(a2,j))
+        i += 1
+    end
+    a
+end
+
+function append(a1::Tuple, a2::Array{Any,1})
+    n = arraylen(a2)+tuplelen(a1)
+    a = Array(Any,n)
+    for j = 1:tuplelen(a1)
+        arrayset(a,j,tupleref(a1,j))
+    end
+    j = tuplelen(a1)+1
+    for i = 1:arraylen(a2)
+        arrayset(a,j,arrayref(a2,i))
+        j += 1
+    end
+    a
+end
+
 function cell_1d(xs...)
     n = length(xs)
     a = Array(Any,n)

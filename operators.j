@@ -158,3 +158,4 @@ rem{T<:Int}(x::T, y::T) = no_op_err("rem", T)
 ## miscellaneous ##
 
 copy(x::Any) = x
+append(a, b, c, rest...) = append(a, append(b, append(c, rest...)))
