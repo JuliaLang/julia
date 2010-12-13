@@ -1229,7 +1229,18 @@ JL_CALLABLE(jl_f_methodexists)
         jl_error("method_exists: not a generic function");
     JL_TYPECHK(method_exists, tuple, args[1]);
     check_type_tuple((jl_tuple_t*)args[1]);
-    return jl_method_lookup(jl_gf_mtable(args[0]), (jl_tuple_t*)args[1]) ?
+    return jl_method_lookup_by_type(jl_gf_mtable(args[0]),
+                                    (jl_tuple_t*)args[1]) ?
+        jl_true : jl_false;
+}
+
+JL_CALLABLE(jl_f_applicable)
+{
+    JL_NARGSV(applicable, 1);
+    JL_TYPECHK(applicable, function, args[0]);
+    if (!jl_is_gf(args[0]))
+        jl_error("applicable: not a generic function");
+    return jl_method_lookup(jl_gf_mtable(args[0]), &args[1], nargs-1) ?
         jl_true : jl_false;
 }
 
@@ -1245,7 +1256,7 @@ JL_CALLABLE(jl_f_invoke)
                           ((jl_tuple_t*)args[1])->length, 1, 0))
         jl_error("invoke: argument type error");
     jl_function_t *mlfunc =
-        jl_method_lookup(jl_gf_mtable(args[0]), (jl_tuple_t*)args[1]);
+        jl_method_lookup_by_type(jl_gf_mtable(args[0]), (jl_tuple_t*)args[1]);
     if (mlfunc == NULL)
         jl_no_method_error(jl_gf_name(args[0]), &args[2], nargs-2);
     return jl_apply(mlfunc, &args[2], nargs-2);
@@ -1335,6 +1346,7 @@ void jl_init_primitives()
     add_builtin_func("tuple", jl_f_tuple);
     add_builtin_func("Union", jl_f_union);
     add_builtin_func("method_exists", jl_f_methodexists);
+    add_builtin_func("applicable", jl_f_applicable);
     add_builtin_func("invoke", jl_f_invoke);
     add_builtin_func("dlopen", jl_f_dlopen);
     add_builtin_func("dlsym", jl_f_dlsym);

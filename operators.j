@@ -82,9 +82,9 @@ promote_type(S::Type, T::Type...) = promote_type(S, promote_type(T...))
 
 function promote_type{T,S}(::Type{T}, ::Type{S})
     # print("promote_type: ",T,", ",S,"\n")
-    if method_exists(promote_rule,(Type{T},Type{S}))
+    if applicable(promote_rule, T, S)
         return promote_rule(T,S)
-    elseif method_exists(promote_rule,(Type{S},Type{T}))
+    elseif applicable(promote_rule, S, T)
         return promote_rule(S,T)
     else
         error("no promotion exists for ",T," and ",S)

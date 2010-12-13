@@ -778,11 +778,42 @@ static char *type_summary(jl_value_t *t)
 }
 #endif
 
-jl_function_t *jl_method_lookup(jl_methtable_t *mt, jl_tuple_t *types)
+static jl_tuple_t *arg_type_tuple(jl_value_t **args, size_t nargs)
+{
+    jl_tuple_t *tt = jl_alloc_tuple(nargs);
+    JL_GC_PUSH(&tt);
+    size_t i;
+    for(i=0; i < tt->length; i++) {
+        jl_value_t *a;
+        if (jl_is_some_tag_type(args[i])) {
+            a = (jl_value_t*)jl_wrap_Type(args[i]);
+        }
+        else {
+            a = (jl_value_t*)jl_full_type(args[i]);
+        }
+        jl_tupleset(tt, i, a);
+    }
+    JL_GC_POP();
+    return tt;
+}
+
+jl_function_t *jl_method_lookup_by_type(jl_methtable_t *mt, jl_tuple_t *types)
 {
     jl_function_t *sf = jl_method_table_assoc_exact_by_type(mt, types);
     if (sf == NULL) {
         sf = jl_mt_assoc_by_type(mt, types);
+    }
+    return sf;
+}
+
+jl_function_t *jl_method_lookup(jl_methtable_t *mt, jl_value_t **args, size_t nargs)
+{
+    jl_function_t *sf = jl_method_table_assoc_exact(mt, args, nargs);
+    if (sf == NULL) {
+        jl_tuple_t *tt = arg_type_tuple(args, nargs);
+        JL_GC_PUSH(&tt);
+        sf = jl_mt_assoc_by_type(mt, tt);
+        JL_GC_POP();
     }
     return sf;
 }
@@ -792,7 +823,7 @@ jl_function_t *jl_get_specialization(jl_function_t *f, jl_tuple_t *types)
 {
     assert(jl_is_gf(f));
     jl_methtable_t *mt = (jl_methtable_t*)jl_t0(f->env);
-    jl_function_t *sf = jl_method_lookup(mt, types);
+    jl_function_t *sf = jl_method_lookup_by_type(mt, types);
     if (sf == NULL) {
         return NULL;
     }
@@ -846,19 +877,8 @@ JL_CALLABLE(jl_apply_generic)
         }
     }
     else {
-        jl_tuple_t *tt = jl_alloc_tuple(nargs);
+        jl_tuple_t *tt = arg_type_tuple(args, nargs);
         JL_GC_PUSH(&tt);
-        size_t i;
-        for(i=0; i < tt->length; i++) {
-            jl_value_t *a;
-            if (jl_is_some_tag_type(args[i])) {
-                a = (jl_value_t*)jl_wrap_Type(args[i]);
-            }
-            else {
-                a = (jl_value_t*)jl_full_type(args[i]);
-            }
-            jl_tupleset(tt, i, a);
-        }
         mfunc = jl_mt_assoc_by_type(mt, tt);
         JL_GC_POP();
     }
