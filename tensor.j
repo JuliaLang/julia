@@ -63,13 +63,15 @@ conj{T <: Real}(x::Tensor{T}) = x
 real{T <: Real}(x::Tensor{T}) = x
 imag{T <: Real}(x::Tensor{T}) = zero(x)
 
-for f=(`-, `~, `conj, `real, `imag)
-    eval(`function ($f)(A::Tensor)
+for f=(:-, :~, :conj, :real, :imag)
+    eval(quote
+         function ($f)(A::Tensor)
             F = clone(A)
             for i=1:numel(A)
                F[i] = ($f)(A[i])
             end
             return F
+         end
          end)
 end
 
@@ -103,87 +105,96 @@ end
 (\)(A::Number, B::Tensor) = A .\ B
 (\)(A::Tensor, B::Number) = A .\ B
 
-for f=(`+, `-, `(.*), `(.^))
-    eval(`function ($f){S,T}(A::Tensor{S}, B::Tensor{T})
+for f=(:+, :-, :(.*), :(.^))
+    eval(quote
+         function ($f){S,T}(A::Tensor{S}, B::Tensor{T})
             F = clone(A, promote_type(S,T))
             for i=1:numel(A)
                F[i] = ($f)(A[i], B[i])
             end
             return F
-         end)
+         end end)
 
-    eval(`function ($f){T}(A::Number, B::Tensor{T})
+    eval(quote
+         function ($f){T}(A::Number, B::Tensor{T})
             F = clone(B, promote_type(typeof(A),T))
             for i=1:numel(B)
                F[i] = ($f)(A, B[i])
             end
             return F
-         end)
+         end end)
 
-    eval(`function ($f){T}(A::Tensor{T}, B::Number)
+    eval(quote
+         function ($f){T}(A::Tensor{T}, B::Number)
             F = clone(A, promote_type(T,typeof(B)))
             for i=1:numel(A)
                F[i] = ($f)(A[i], B)
             end
             return F
-         end)
+         end end)
 end
 
 ## Binary comparison operators ##
 
-for f=(`(==), `(!=), `<, `>, `(<=), `(>=))
-    eval(`function ($f)(A::Tensor, B::Tensor)
+for f=(:(==), :(!=), :(<), :(>), :(<=), :(>=))
+    eval(quote
+         function ($f)(A::Tensor, B::Tensor)
             F = clone(A, Bool)
             for i=1:numel(A)
                F[i] = ($f)(A[i], B[i])
             end
             return F
-         end)
+         end end)
 
-    eval(`function ($f)(A::Number, B::Tensor)
+    eval(quote
+         function ($f)(A::Number, B::Tensor)
             F = clone(B, Bool)
             for i=1:numel(B)
                F[i] = ($f)(A, B[i])
             end
             return F
-         end)
+         end end)
 
-    eval(`function ($f)(A::Tensor, B::Number)
+    eval(quote
+         function ($f)(A::Tensor, B::Number)
             F = clone(A, Bool)
             for i=1:numel(A)
                F[i] = ($f)(A[i], B)
             end
             return F
-         end)
+         end end)
 end
 
 
 ## Binary boolean operators ##
 
-for f=(`&, `|, `$)
-    eval(`function ($f)(A::Tensor{Bool}, B::Tensor{Bool})
+for f=(:&, :|, :$)
+    eval(quote
+         function ($f)(A::Tensor{Bool}, B::Tensor{Bool})
             F = clone(A, Bool)
             for i=1:numel(A)
                F[i] = ($f)(A[i], B[i])
             end
             return F
-         end)
+         end end)
 
-    eval(`function ($f)(A::Bool, B::Tensor{Bool})
+    eval(quote
+         function ($f)(A::Bool, B::Tensor{Bool})
             F = clone(B, Bool)
             for i=1:numel(B)
                F[i] = ($f)(A, B[i])
             end
             return F
-         end)
+         end end)
 
-    eval(`function ($f)(A::Tensor{Bool}, B::Bool)
+    eval(quote
+         function ($f)(A::Tensor{Bool}, B::Bool)
             F = clone(A, Bool)
             for i=1:numel(A)
                F[i] = ($f)(A[i], B)
             end
             return F
-         end)
+         end end)
 end
 
 ## Indexing: ref ##
@@ -345,8 +356,9 @@ function areduce(f::Function, A::Tensor, region::Region, RType::Type)
     return R
 end
 
-for f = (`max, `min, `sum, `prod) 
-    eval(`function ($f){T}(A::Tensor{T,2}, dim::Region)
+for f = (:max, :min, :sum, :prod) 
+    eval(quote
+         function ($f){T}(A::Tensor{T,2}, dim::Region)
             if isinteger(dim)
                if dim == 1
                  [ ($f)(A[:,i]) | i=1:size(A, 2) ]
@@ -356,7 +368,7 @@ for f = (`max, `min, `sum, `prod)
             elseif dim == (1,2)
                  ($f)(A)
             end
-         end)
+         end end)
 end
 
  max(A::Tensor,       region::Region) = areduce(max,  A, region)
@@ -364,8 +376,9 @@ end
  sum(A::Tensor,       region::Region) = areduce(sum,  A, region)
 prod(A::Tensor,       region::Region) = areduce(prod, A, region)
 
-for f = (`all, `any, `count)
-    eval(`function ($f)(A::Tensor{Bool,2}, dim::Region)
+for f = (:all, :any, :count)
+    eval(quote
+         function ($f)(A::Tensor{Bool,2}, dim::Region)
             if isinteger(dim)
                if dim == 1
                  [ ($f)(A[:,i]) | i=1:size(A, 2) ]
@@ -375,7 +388,7 @@ for f = (`all, `any, `count)
             elseif dim == (1,2)
                  ($f)(A)
             end
-         end)
+         end end)
 end
 
 all(A::Tensor{Bool}, region::Region) = areduce(all,  A, region)
@@ -396,9 +409,10 @@ function isequal(x::Tensor, y::Tensor)
     return true
 end
 
-for (f, op) = ((`cumsum, `+), (`cumprod, `(.*)) )
+for (f, op) = ((:cumsum, :+), (:cumprod, :(.*)) )
 
-    eval(`function ($f)(v::Vector)
+    eval(quote
+         function ($f)(v::Vector)
             n = length(v)
             c = clone(v, n)
             if n == 0; return c; end
@@ -408,7 +422,7 @@ for (f, op) = ((`cumsum, `+), (`cumprod, `(.*)) )
                c[i] = ($op)(v[i], c[i-1])
             end
             return c
-         end)
+         end end)
 end
 
 ## iteration support for arrays as ranges ##

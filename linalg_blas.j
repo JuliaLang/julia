@@ -6,11 +6,12 @@ typealias DenseVecOrMat{T} Union(DenseVector{T}, DenseMatrix{T})
 
 # SUBROUTINE DCOPY(N,DX,INCX,DY,INCY) 
 
-for (fname, shape, eltype) = (("dcopy_", `DenseVector, Float64),
-                              ("scopy_", `DenseVector, Float32),
-                              ("dcopy_", `DenseMatrix, Float64),
-                              ("scopy_", `DenseMatrix, Float32))
-    eval (`function copy(X::($shape){$eltype})
+for (fname, shape, eltype) = (("dcopy_", :DenseVector, Float64),
+                              ("scopy_", :DenseVector, Float32),
+                              ("dcopy_", :DenseMatrix, Float64),
+                              ("scopy_", :DenseMatrix, Float32))
+    eval (quote
+          function copy(X::($shape){$eltype})
           sz = size(X)
           Y = Array($eltype, sz)
           ccall(dlsym(libBLAS, $fname),
@@ -18,31 +19,33 @@ for (fname, shape, eltype) = (("dcopy_", `DenseVector, Float64),
                 (Ptr{Int32}, Ptr{$eltype}, Ptr{Int32}, Ptr{$eltype}, Ptr{Int32}),
                 prod(sz), X, 1, Y, 1)
           return Y
-          end
+          end end
           )
 end
 
 # DOUBLE PRECISION FUNCTION DDOT(N,DX,INCX,DY,INCY)
 
 for (fname, eltype) = (("ddot_", Float64), ("sdot_", Float32))
-    eval(`function dot(x::DenseVector{$eltype}, y::DenseVector{$eltype})
+    eval(quote
+         function dot(x::DenseVector{$eltype}, y::DenseVector{$eltype})
          ccall(dlsym(libBLAS, $fname),
                $eltype,
                (Ptr{Int32}, Ptr{$eltype}, Ptr{Int32}, Ptr{$eltype}, Ptr{Int32}),
                length(x), x, 1, y, 1)
-         end
+         end end
          )
 end
 
 # DOUBLE PRECISION FUNCTION DNRM2(N,X,INCX)
 
 for (fname, eltype) = (("ddot_", Float64), ("sdot_", Float32))
-    eval(`function norm(x::DenseVector{$eltype})
+    eval(quote
+         function norm(x::DenseVector{$eltype})
          ccall(dlsym(libBLAS, $fname),
                $eltype,
                (Ptr{Int32}, Ptr{$eltype}, Ptr{Int32}),
                length(x), x, 1)
-         end
+         end end
          )
 end
 
@@ -55,7 +58,8 @@ end
 #       DOUBLE PRECISION A(LDA,*),B(LDB,*),C(LDC,*)
 
 for (fname, eltype) = (("dgemm_", Float64), ("sgemm_", Float32))
-    eval(`function *(A::DenseVecOrMat{$eltype}, B::DenseVecOrMat{$eltype})
+    eval(quote
+         function *(A::DenseVecOrMat{$eltype}, B::DenseVecOrMat{$eltype})
          m = size(A, 1)
          if isa(B, Vector); n = 1; else n = size(B, 2); end
          if isa(A, Vector); k = 1; else k = size(A, 2); end
@@ -74,6 +78,6 @@ for (fname, eltype) = (("dgemm_", Float64), ("sgemm_", Float32))
              "N", "N", m, n, k, 1.0, A, m, B, k, 0.0, C, m)
 
          return C
-         end
+         end end
          )
 end

@@ -127,20 +127,7 @@
   (cond ((eq? x ':) `(call (top Range1) 1 end))
 	((and (pair? x)
 	      (eq? (car x) ':))
-	 (cond ((length= x 2)
-		(cond ((and (length= (cadr x) 3)
-			    (eq? (caadr x) ':)
-			    (eq? (caddr (cadr x)) ':))
-		       ;; (: (: a :)) :a:
-		       `(call (top Range) 1 ,(cadadr x) end))
-		      ((and (length= (cadr x) 3)
-			    (eq? (caadr x) ':))
-		       ;; (: (: a b)) :a:b
-		       `(call (top Range) 1 ,@(cdadr x)))
-		      (else
-		       ;; (: a) :a
-		       `(call (top Range1) 1 ,(cadr x)))))
-	       ((length= x 3)
+	 (cond ((length= x 3)
 		(if (eq? (caddr x) ':)
 		    ;; (: a :) a:
 		    `(call (top Range1) ,(cadr x) end)

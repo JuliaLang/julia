@@ -72,14 +72,14 @@ isleaftype(t) = ccall(dlsym(JuliaDLHandle,"jl_is_leaf_type"), Int32, (Any,),
 # TODO
 isconstant(s::Symbol) = isbound(s) && (e=eval(s);
                                        isa(e,Function) || isa(e,Type))
-isconstant(s::Expr) = is(s.head,`quote)
+isconstant(s::Expr) = is(s.head,:quote)
 isconstant(x) = true
 
 cmp_tfunc = (x,y)->Bool
 
 isType(t) = isa(t,TagKind) && is(t.name,Type.name)
 
-isseqtype(t) = isa(t,TagKind) && is(t.name.name,`...)
+isseqtype(t) = isa(t,TagKind) && is(t.name.name,:...)
 
 t_func = idtable()
 t_func[tuple] = (0, Inf, (args...)->limit_tuple_depth(args))
@@ -189,7 +189,7 @@ function static_convert(to::Tuple, from::Tuple)
     end
     a2t(result)
 end
-t_func[`convert] =
+t_func[:convert] =
     (2, 2, (t,x)->(if isa(t,Tuple) && all(map(isType,t))
                        t = Type{map(t->t.parameters[1],t)}
                    end;
@@ -250,7 +250,7 @@ function getfield_tfunc(A, s, name)
     if !isa(s,StructKind)
         return Any
     end
-    if isa(A[2],Expr) && is(A[2].head,`quote) && isa(A[2].args[1],Symbol)
+    if isa(A[2],Expr) && is(A[2].head,:quote) && isa(A[2].args[1],Symbol)
         fld = A[2].args[1]
         for i=1:length(s.names)
             if is(s.names[i],fld)
@@ -309,7 +309,7 @@ function a2t(a::Vector)
 end
 
 function isconstantfunc(f, vtypes, sv::StaticVarInfo)
-    if isa(f,Expr) && is(f.head,`top)
+    if isa(f,Expr) && is(f.head,:top)
         abstract_eval(f, vtypes, sv)
         assert(isa(f.args[1],Symbol))
         return (true, f.args[1])
@@ -352,9 +352,9 @@ function abstract_call_gf(f, fargs, argtypes, e)
     if isa(e,Expr)
         if !is(x,()) && is(x[5],())
             # method match is unique; mark it
-            e.head = `call1
+            e.head = :call1
         else
-            e.head = `call
+            e.head = :call
         end
     end
     ctr = 0
@@ -400,7 +400,7 @@ function abstract_call(f, fargs, argtypes, vtypes, sv::StaticVarInfo, e)
                 aargtypes = argtypes[2:]
                 if all(map(x->isa(x,Tuple),aargtypes)) &&
                     !any(map(isvatuple,aargtypes[1:(length(aargtypes)-1)]))
-                    e.head = `call1
+                    e.head = :call1
                     # apply with known func with known tuple types
                     # can be collapsed to a call to the applied func
                     at = length(aargtypes) > 0 ?
@@ -447,17 +447,17 @@ end
 function abstract_eval_expr(e, vtypes, sv::StaticVarInfo)
     # handle:
     # call  lambda  quote  null  top  unbound static_typeof
-    if is(e.head,`call) || is(e.head,`call1)
+    if is(e.head,:call) || is(e.head,:call1)
         return abstract_eval_call(e, vtypes, sv)
-    elseif is(e.head,`top)
+    elseif is(e.head,:top)
         return abstract_eval_global(e.args[1])
-    elseif is(e.head,`unbound)
+    elseif is(e.head,:unbound)
         return Bool
-    elseif is(e.head,`null)
+    elseif is(e.head,:null)
         return ()
-    elseif is(e.head,`quote)
+    elseif is(e.head,:quote)
         return typeof(e.args[1])
-    elseif is(e.head,`static_typeof)
+    elseif is(e.head,:static_typeof)
         t = abstract_eval(e.args[1], vtypes, sv)
         # intersect with Any to remove Undef
         t = tintersect(t, Any)
@@ -535,9 +535,9 @@ function interpret(e::Expr, vtypes, sv::StaticVarInfo)
         lhs = e.args[1]
         assert(isa(lhs,Symbol))
         return StateUpdate(lhs, t, vtypes)
-    elseif is(e.head,`call) || is(e.head,`call1)
+    elseif is(e.head,:call) || is(e.head,:call1)
         abstract_eval(e, vtypes, sv)
-    elseif is(e.head,`gotoifnot)
+    elseif is(e.head,:gotoifnot)
         abstract_eval(e.args[1], vtypes, sv)
     end
     return vtypes
@@ -614,7 +614,7 @@ end
 function findlabel(body, l)
     for i=1:length(body)
         b = body[i]
-        if isa(b,Expr) && is(b.head,`label) && b.args[1]==l
+        if isa(b,Expr) && is(b.head,:label) && b.args[1]==l
             return i
         end
     end
@@ -693,7 +693,7 @@ function typeinf(linfo::LambdaStaticData,atypes::Tuple,sparams::Tuple, cop, def)
 
     ast = cop ? copy(ast0) : ast0
 
-    assert(is(ast.head,`lambda))
+    assert(is(ast.head,:lambda))
     args = f_argnames(ast)
     locals = ast.args[2].args[1].args
     vars = append(args, locals)
@@ -745,9 +745,9 @@ function typeinf(linfo::LambdaStaticData,atypes::Tuple,sparams::Tuple, cop, def)
             end
             pc´ = pc+1
             if isa(stmt,Expr)
-                if is(stmt.head,`goto)
+                if is(stmt.head,:goto)
                     pc´ = findlabel(body,stmt.args[1])
-                elseif is(stmt.head,`gotoifnot)
+                elseif is(stmt.head,:gotoifnot)
                     l = findlabel(body,stmt.args[2])
                     if changed(changes, s[l], vars)
                         adjoin(W, l)
@@ -783,16 +783,16 @@ function typeinf(linfo::LambdaStaticData,atypes::Tuple,sparams::Tuple, cop, def)
 end
 
 function eval_annotate(e::Expr, vtypes, sv, decls)
-    if is(e.head,`quote) || is(e.head,`top) || is(e.head,`goto) ||
-        is(e.head,`label) || is(e.head,`static_typeof)
+    if is(e.head,:quote) || is(e.head,:top) || is(e.head,:goto) ||
+        is(e.head,:label) || is(e.head,:static_typeof)
         return e
-    elseif is(e.head,`gotoifnot) || is(e.head,symbol("return"))
+    elseif is(e.head,:gotoifnot) || is(e.head,symbol("return"))
         e.type = Any
     elseif is(e.head,symbol("="))
         e.type = Any
         s = e.args[1]
         # assignment LHS not subject to all-same-type variable checking
-        e.args[1] = Expr(`symbol, {s}, abstract_eval(s, vtypes, sv))
+        e.args[1] = Expr(:symbol, {s}, abstract_eval(s, vtypes, sv))
         e.args[2] = eval_annotate(e.args[2], vtypes, sv, decls)
         return e
     end
@@ -813,7 +813,7 @@ function eval_annotate(e::Symbol, vtypes, sv, decls)
     else
         decls[e] = t
     end
-    Expr(`symbol, {e}, t)
+    Expr(:symbol, {e}, t)
 end
 
 eval_annotate(s, vtypes, sv, decls) = s
@@ -838,11 +838,11 @@ function type_annotate(ast::Expr, states::Array, sv, rettype, vnames)
 end
 
 function sym_replace(e::Expr, from, to)
-    if is(e.head,`quote) || is(e.head,`top) || is(e.head,`goto) ||
-        is(e.head,`label)
+    if is(e.head,:quote) || is(e.head,:top) || is(e.head,:goto) ||
+        is(e.head,:label)
         return e
     end
-    if is(e.head,`symbol)
+    if is(e.head,:symbol)
         s = e.args[1]
         for i=1:length(from)
             if is(from[i],s)
@@ -870,8 +870,8 @@ sym_replace(x, from, to) = x
 
 # count occurrences up to n+1
 function occurs_more(e::Expr, pred, n)
-    if is(e.head,`quote) || is(e.head,`top) || is(e.head,`goto) ||
-        is(e.head,`label)
+    if is(e.head,:quote) || is(e.head,:top) || is(e.head,:goto) ||
+        is(e.head,:label)
         return 0
     end
     c = 0
@@ -926,7 +926,7 @@ function inlineable(e::Expr, vars)
     if !subtype(atypes, meth[1])
         return NF
     end
-    if is(meth[3],`convert) && length(atypes)==2
+    if is(meth[3],:convert) && length(atypes)==2
         # builtin case of convert. convert(T,x::S) => x, when S<:T
         if isType(atypes[1]) && subtype(atypes[2],atypes[1].parameters[1])
             # todo: if T expression has side effects??!
@@ -992,8 +992,8 @@ function inlining_pass(e::Expr, vars)
     for i=1:length(e.args)
         e.args[i] = inlining_pass(e.args[i], vars)
     end
-    if is(e.head,`call1)
-        e.head = `call
+    if is(e.head,:call1)
+        e.head = :call
         body = inlineable(e, vars)
         if !is(body,NF)
             #print("inlining ", e, " => ", body, "\n")
@@ -1002,8 +1002,8 @@ function inlining_pass(e::Expr, vars)
         if is(eval(e.args[1]),apply)
             if length(e.args) == 3
                 aarg = e.args[3]
-                if isa(aarg,Expr) && is(aarg.head,`call) &&
-                    isa(aarg.args[1],Expr) && is(aarg.args[1].head,`top) &&
+                if isa(aarg,Expr) && is(aarg.head,:call) &&
+                    isa(aarg.args[1],Expr) && is(aarg.args[1].head,:top) &&
                     is(eval(aarg.args[1]),tuple)
                     # apply(f,tuple(x,y,...)) => f(x,y,...)
                     e.args = append({e.args[2]}, aarg.args[2:])
@@ -1029,13 +1029,13 @@ tfunc(f,t) = (getmethods(f,t)[3]).tfunc
 
 # stuff for testing
 
-# T=typevar(`T)
-# S=typevar(`S)
-# R=typevar(`R)
-# a=typevar(`a)
-# b=typevar(`b)
-# c=typevar(`c)
-# d=typevar(`d)
+# T=typevar(:T)
+# S=typevar(:S)
+# R=typevar(:R)
+# a=typevar(:a)
+# b=typevar(:b)
+# c=typevar(:c)
+# d=typevar(:d)
 
 # m = getmethods(fact,(Int32,))
 # ast = m[3]

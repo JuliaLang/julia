@@ -7,7 +7,7 @@
      ; the way the lexer works, every prefix of an operator must also
      ; be an operator.
      (-> <- -- -->)
-     (> < >= <= == != |.>| |.<| |.>=| |.<=| |.==| |.!=| |.=| |.!| |<:| |:>| |>:|)
+     (> < >= <= == != |.>| |.<| |.>=| |.<=| |.==| |.!=| |.=| |.!| |<:| |>:|)
      (: ..)
      (+ - |\|| $)
      (<< >> >>>)
@@ -63,7 +63,7 @@
 (define syntactic-unary-operators '($))
 
 (define reserved-words '(begin while if for try return break continue
-			 function macro let local global const
+			 function macro quote let local global const
 			 type typealias struct bitstype
 			 module import export))
 
@@ -326,34 +326,30 @@
 ; 1:2   => (: 1 2)
 ; 1:2:3 => (: 1 2 3)
 ; 1:    => (: 1 :)
-; :2    => (: 2)
 ; 1:2:  => (: 1 2 :)
-; :1:2  => (: (: 1 2))
-; :1:   => (: (: 1 :))
+;; not enabled:
+;;; :2    => (: 2)
+;;; :1:2  => (: (: 1 2))
+;;; :1:   => (: (: 1 :))
 ; a simple state machine is up to the task.
 ; we will leave : expressions as a syntax form, not a call to ':',
 ; so they can be processed by syntax passes.
 (define (parse-range s)
   (if (not range-colon-enabled)
       (return (parse-expr s)))
-  (if (eq? (peek-token s) ':)
-      (begin (take-token s)
-	     (if (closing-token? (peek-token s))
-		 ':
-		 (list ': (parse-range s))))
-      (let loop ((ex (parse-expr s))
-		 (first? #t))
-	(let ((t (peek-token s)))
-	  (if (not (eq? t ':))
-	      ex
-	      (begin (take-token s)
-		     (let ((argument
-			    (if (closing-token? (peek-token s))
-				':  ; missing last argument
-				(parse-expr s))))
-		       (if first?
-			   (loop (list t ex argument) #f)
-			   (loop (append ex (list argument)) #t)))))))))
+  (let loop ((ex (parse-expr s))
+	     (first? #t))
+    (let ((t (peek-token s)))
+      (if (not (eq? t ':))
+	  ex
+	  (begin (take-token s)
+		 (let ((argument
+			(if (closing-token? (peek-token s))
+			    ':  ; missing last argument
+			    (parse-expr s))))
+		   (if first?
+		       (loop (list t ex argument) #f)
+		       (loop (append ex (list argument)) #t))))))))
 
 ; the principal non-terminals follow, in increasing precedence order
 
@@ -538,6 +534,8 @@
   (case word
     ((begin)  (begin0 (parse-block s)
 		      (expect-end s)))
+    ((quote)  (begin0 (list 'bquote (parse-block s))
+		      (expect-end s)))
     ((while)  (begin0 (list 'while (parse-cond s) (parse-block s))
 		      (expect-end s)))
     ((for)
@@ -721,7 +719,7 @@
 	((#\,)
 	 (take-token s)
 	 (if (eqv? (require-token s) #\))
-	     ; allow ending with ,
+	     ;; allow ending with ,
 	     (begin (take-token s)
 		    (cons 'tuple (reverse (cons nxt lst))))
 	     (loop (cons nxt lst) (parse-eq* s))))
@@ -737,7 +735,7 @@
   (let ((t (require-token s)))
     (cond ((or (string? t) (number? t)) (take-token s))
 
-	  ; char literal
+	  ;; char literal
 	  ((eq? t '|'|)
 	   (take-token s)
 	   (let ((firstch (read-char (ts:port s))))
@@ -768,32 +766,40 @@
 		       (wchar (aref str 0))
 		       (string.char str 0))))))))
 
-	  ; identifier
+	  ;; symbol/expression quote
+	  ((eq? t ':)
+	   (take-token s)
+	   (if (closing-token? (peek-token s))
+	       ':
+	       (let ((ex (parse-atom s)))
+		 (list 'bquote ex))))
+
+	  ;; identifier
 	  ((symbol? t) (take-token s))
 
-	  ; parens or tuple
+	  ;; parens or tuple
 	  ((eqv? t #\( )
 	   (take-token s)
 	   (with-normal-ops
 	   (if (eqv? (require-token s) #\) )
-	       ; empty tuple ()
+	       ;; empty tuple ()
 	       (begin (take-token s) '(tuple))
-	       ; here we parse the first subexpression separately, so
-	       ; we can look for a comma to see if it's a tuple. this lets us
-	       ; distinguish (x) from (x,)
+	       ;; here we parse the first subexpression separately, so
+	       ;; we can look for a comma to see if it's a tuple. this lets us
+	       ;; distinguish (x) from (x,)
 	       (let* ((ex (parse-eq* s))
 		      (t (require-token s)))
 		 (cond ((eqv? t #\) )
 			(take-token s)
-			; value in parentheses (x)
+			;; value in parentheses (x)
 			(if (and (pair? ex) (eq? (car ex) '...))
 			    `(tuple ,ex)
 			    ex))
 		       ((eqv? t #\, )
-			; tuple (x,) (x,y) (x...) etc.
+			;; tuple (x,) (x,y) (x...) etc.
 			(parse-tuple s ex))
 		       ((eqv? t #\;)
-			; parenthesized block (a;b;c)
+			;; parenthesized block (a;b;c)
 			(take-token s)
 			(let* ((blk (parse-stmts-within-expr s))
 			       (tok (require-token s)))
@@ -808,7 +814,7 @@
 		       (else
 			(error "missing separator in tuple")))))))
 
-	  ; cell expression
+	  ;; cell expression
 	  ((eqv? t #\{ )
 	   (take-token s)
 	   (if (eqv? (require-token s) #\})
@@ -822,7 +828,7 @@
 			(if (and (pair? (cadr vex)) (eq? (caadr vex) 'hcat))
 			    (let ((nr (length (cdr vex)))
 				  (nc (length (cdadr vex))))
-			      ; make sure all rows are the same length
+			      ;; make sure all rows are the same length
 			      (if (not (every
 					(lambda (x)
 					  (and (pair? x)
@@ -832,7 +838,7 @@
 				  (error "inconsistent shape in cell expression"))
 			      `(call (top cell_2d) ,nr ,nc
 				     ,@(apply append
-					      ; transpose to storage order
+					      ;; transpose to storage order
 					      (apply map list
 						     (map cdr (cdr vex))))))
 			    (if (any (lambda (x) (and (pair? x)
@@ -841,15 +847,10 @@
 				(error "inconsistent shape in cell expression")
 				`(call (top cell_1d) ,@(cdr vex)))))))))
 
-	  ; cat expression
+	  ;; cat expression
 	  ((eqv? t #\[ )
 	   (take-token s)
 	   (parse-cat s #\]))
-
-	  ; quote
-	  ((eqv? t #\` )
-	   (take-token s)
-	   (list 'bquote (parse-decl s)))
 
 	  (else (take-token s)))))
 

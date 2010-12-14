@@ -45,8 +45,8 @@
      (concat "\\<\\("
          (mapconcat
           'identity
-          '("if" "else" "elseif" "while" "for" "begin" "end"
-            "try" "catch" "return" "local" "type" "function"
+          '("if" "else" "elseif" "while" "for" "begin" "end" "quote"
+            "try" "catch" "return" "local" "type" "function" "macro"
 	    "typealias" "break" "continue" "struct" "global"
 	    "module" "import" "export" "const" "let" "bitstype")
           "\\|") "\\)\\>")
@@ -54,7 +54,8 @@
     '("\\\\\\s-*\".*?\"" . font-lock-string-face)))
 
 (defconst julia-block-start-keywords
-  (list "if" "while" "for" "begin" "try" "function" "struct" "let"))
+  (list "if" "while" "for" "begin" "try" "function" "struct" "let" "macro"
+	"quote"))
 
 (defconst julia-block-other-keywords
   (list "else" "elseif"))

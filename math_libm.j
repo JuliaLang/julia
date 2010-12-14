@@ -1,16 +1,16 @@
 libm = dlopen("libm")
 
 function vectorize(f)
-    eval(`begin
+    eval(quote
         ($f)(x::Vector) = [ ($f)(x[i]) | i=1:length(x) ]
         ($f)(x::Matrix) = [ ($f)(x[i,j]) | i=1:size(x,1), j=1:size(x,2) ]
     end)
 end
 
-for f = {`sin, `cos, `tan, `sinh, `cosh, `tanh, `asin, `acos, `atan, `log,
-         `log2, `log10, `log1p, `logb, `exp, `exp2, `expm1, `erf, `erfc,
-         `sqrt, `cbrt, `ceil, `floor, `nearbyint, `round, `rint, `trunc}
-    eval(`begin
+for f = {:sin, :cos, :tan, :sinh, :cosh, :tanh, :asin, :acos, :atan, :log,
+         :log2, :log10, :log1p, :logb, :exp, :exp2, :expm1, :erf, :erfc,
+         :sqrt, :cbrt, :ceil, :floor, :nearbyint, :round, :rint, :trunc}
+    eval(quote
         ($f)(x::Float64) = ccall(dlsym(libm,$string(f)), Float64, (Float64,), x)
         ($f)(x::Float32) = ccall(dlsym(libm,$strcat(string(f),"f")), Float32, (Float32,), x)
         ($f)(x::Real) = ($f)(convert(Float64,x))
@@ -21,8 +21,8 @@ end
 ipart(x) = trunc(x)
 fpart(x) = x - trunc(x)
 
-for f = {`isinf, `isnan}
-    eval(`begin
+for f = {:isinf, :isnan}
+    eval(quote
         ($f)(x::Float64) = (0 != ccall(dlsym(libm,$string(f)), Int32, (Float64,), x))
         ($f)(x::Float32) = (0 != ccall(dlsym(libm,$strcat(string(f),"f")), Int32, (Float32,), x))
         ($f)(x::Int) = false
@@ -30,8 +30,8 @@ for f = {`isinf, `isnan}
     end)
 end
 
-for f = {`lrint, `lround, `ilogb}
-    eval(`begin
+for f = {:lrint, :lround, :ilogb}
+    eval(quote
         ($f)(x::Float64) = ccall(dlsym(libm,$string(f)), Int32, (Float64,), x)
         ($f)(x::Float32) = ccall(dlsym(libm,$strcat(string(f),"f")), Int32, (Float32,), x)
         vectorize($f)
@@ -40,10 +40,10 @@ end
 
 abs(x::Float64) = ccall(dlsym(libm,"fabs"), Float64, (Float64,), x)
 abs(x::Float32) = ccall(dlsym(libm,"fabsf"), Float32, (Float32,), x)
-vectorize(`abs)
+vectorize(:abs)
 
-for f = {`atan2, `pow, `fmod, `copysign, `hypot, `fmin, `fmax, `fdim}
-    eval(`begin
+for f = {:atan2, :pow, :fmod, :copysign, :hypot, :fmin, :fmax, :fdim}
+    eval(quote
         ($f)(x::Float64, y::Float64) = ccall(dlsym(libm,$string(f)),
                                              Float64,
                                              (Float64, Float64,),

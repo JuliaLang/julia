@@ -67,10 +67,10 @@ nttest1{n}(x::NTuple{n,Int32}) = n
 assert(nttest1(()) == 0)
 assert(nttest1((1,2)) == 2)
 assert(NTuple <: Tuple)
-assert(NTuple{typevar(`T),Int32} <: (Int32...))
-assert(!(NTuple{typevar(`T),Int32} <: (Int32,Int32...)))
-assert((Int32...) <: NTuple{typevar(`T),Int32})
-assert((Int32,Int32...) <: NTuple{typevar(`T),Int32})
+assert(NTuple{typevar(:T),Int32} <: (Int32...))
+assert(!(NTuple{typevar(:T),Int32} <: (Int32,Int32...)))
+assert((Int32...) <: NTuple{typevar(:T),Int32})
+assert((Int32,Int32...) <: NTuple{typevar(:T),Int32})
 
 # basic arithmetic and indexing
 assert(2+3 == 5)
@@ -549,10 +549,10 @@ assert(sptest1(1,2) == 42)
 assert(sptest1(1,"b") == 43)
 
 sptest2{T}(x::T) = T
-assert(is(sptest2(`a),Symbol))
+assert(is(sptest2(:a),Symbol))
 
 sptest3{T}(x::T) = y->T
-m = sptest3(`a)
+m = sptest3(:a)
 assert(is(m(0),Symbol))
 
 # closures

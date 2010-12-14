@@ -6,7 +6,7 @@
 ##
 ## remote_apply(w, func, args...) -
 ##     tell a worker to call a function on the given arguments.
-##     for now, functions are passed as symbols, e.g. `randn
+##     for now, functions are passed as symbols, e.g. :randn
 ##     returns a Future.
 ##
 ## wait(f) - wait for, then return the value represented by a Future
@@ -279,7 +279,7 @@ end
 # fv(a)=eig(a)[2][2]
 # A=randn(800,800);A=A*A';
 # wp=WorkPool(3)
-# pmap_d(wp, `fv, {A,A,A})
+# pmap_d(wp, :fv, {A,A,A})
 
 # p={Worker(),Worker()}
-# pmap_s(p,`fv,{A,A})
+# pmap_s(p,:fv,{A,A})

@@ -8,7 +8,8 @@ libLAPACK = dlopen("libLAPACK")
 #       DOUBLE PRECISION   A( LDA, * )
 
 for (fname, eltype) = (("dpotrf_", Float64), ("spotrf_", Float32))
-    eval(`function chol(A::DenseMatrix{$eltype})
+    eval(quote
+         function chol(A::DenseMatrix{$eltype})
          info = [0]
          n = size(A, 1)
          R = triu(A)
@@ -22,7 +23,7 @@ for (fname, eltype) = (("dpotrf_", Float64), ("spotrf_", Float32))
          if info[1] > 0; error("Matrix not Positive Definite"); end
          error("Error in CHOL")
 
-         end
+         end end
          )
 end
 
@@ -34,7 +35,8 @@ end
 #       DOUBLE PRECISION   A( LDA, * )
 
 for (fname, eltype) = (("dgetrf_", Float64), ("sgetrf_", Float32))
-    eval(`function lu(A::DenseMatrix{$eltype})
+    eval(quote
+         function lu(A::DenseMatrix{$eltype})
          info = [0]
          m, n = size(A)
          LU = copy(A)
@@ -53,7 +55,7 @@ for (fname, eltype) = (("dgetrf_", Float64), ("sgetrf_", Float32))
          if info[1] == 0; return (tril(LU, -1) + eye(m,n), triu(LU), P); end
          error("Error in LU")
 
-         end
+         end end
          )
 end
 
@@ -72,7 +74,8 @@ end
 
 for (fname, fname2, eltype) = (("dgeqp3_", "dorgqr_", Float64),
                                ("sgeqp3_", "sorgqr_", Float32))
-    eval(`function qr(A::DenseMatrix{$eltype})
+    eval(quote
+         function qr(A::DenseMatrix{$eltype})
          info = [0]
          m, n = size(A)
          QR = copy(A)
@@ -124,7 +127,7 @@ for (fname, fname2, eltype) = (("dgeqp3_", "dorgqr_", Float64),
          if info[1] == 0; return (QR[:, 1:k], R[1:k, :], jpvt); end
          error("Error in ", $fname);
 
-         end
+         end end
          )
 end
 
@@ -136,7 +139,8 @@ end
 #       DOUBLE PRECISION   A( LDA, * ), W( * ), WORK( * )
 
 for (fname, eltype) = (("dsyev_", Float64), ("ssyev_", Float32))
-    eval(`function eig(A::DenseMatrix{$eltype})
+    eval(quote
+         function eig(A::DenseMatrix{$eltype})
 
          if !issymmetric(A); error("Matrix must be symmetric"); end
 
@@ -169,7 +173,7 @@ for (fname, eltype) = (("dsyev_", Float64), ("ssyev_", Float32))
          if info[1] == 0; return (EV, W); end
          error("Error in EIG");
 
-         end
+         end end
          )
 end
 
@@ -182,7 +186,8 @@ end
 #      $                   VT( LDVT, * ), WORK( * )
 
 for (fname, eltype) = (("dgesvd_", Float64), ("sgesvd_", Float32))
-    eval(`function svd(A::DenseMatrix{$eltype})
+    eval(quote
+         function svd(A::DenseMatrix{$eltype})
          jobu = "A"
          jobvt = "A"
          m, n = size(A)
@@ -220,7 +225,7 @@ for (fname, eltype) = (("dgesvd_", Float64), ("sgesvd_", Float32))
          if info[1] == 0; return (U,SIGMA,VT); end
          error("Error in SVD");
 
-         end
+         end end
          )
 end
 
@@ -248,7 +253,8 @@ for (fname_lu, fname_chol, fname_lsq, fname_tri, eltype) =
     (("dgesv_", "dposv_", "dgels_", "dtrtrs_", Float64),
      ("sgesv_", "sposv_", "sgels_", "strtrs_", Float32))
 
-    eval(`function \(A::DenseMatrix{$eltype}, B::DenseVecOrMat{$eltype})
+    eval(quote
+        function \(A::DenseMatrix{$eltype}, B::DenseVecOrMat{$eltype})
         info = [0]
         m = size(A, 1)
         n = size(A, 2)
@@ -257,19 +263,19 @@ for (fname_lu, fname_chol, fname_lsq, fname_tri, eltype) =
         X = copy(B)
 
         if m == n # Square
-            case = `general
-            if isuppertriangular(A); case = `upper_triangular; end
-            if islowertriangular(A); case = `lower_triangular; end
+            case = :general
+            if isuppertriangular(A); case = :upper_triangular; end
+            if islowertriangular(A); case = :lower_triangular; end
 
-            if case == `general # General
+            if case == :general # General
                 ipiv = Array(Int32, n)
 
                 # Check for SPD matrix
                 if issymmetric(Acopy) && all([ Acopy[i,i] > 0 | i=1:n ])
-                      case = `spd
+                      case = :spd
                 end
 
-                if case == `spd
+                if case == :spd
                       uplo = "U"
                       ccall(dlsym(libLAPACK, $fname_chol),
                             Void,
@@ -279,11 +285,11 @@ for (fname_lu, fname_chol, fname_lsq, fname_tri, eltype) =
 
                       if info[1] != 0
                          Acopy = copy(A)
-                         case = `general
+                         case = :general
                       end
                 end
 
-                if case == `general
+                if case == :general
                       info[1] = 0
                       ccall(dlsym(libLAPACK, $fname_lu),
                             Void,
@@ -294,7 +300,7 @@ for (fname_lu, fname_chol, fname_lsq, fname_tri, eltype) =
 
             else # Triangular
                 uplo = "U"
-                if case == `lower_triangular; uplo = "L"; end
+                if case == :lower_triangular; uplo = "L"; end
                 ccall(dlsym(libLAPACK, $fname_tri),
                       Void,
                       (Ptr{Uint8}, Ptr{Uint8}, Ptr{Uint8}, Ptr{Int32}, Ptr{Int32},
@@ -327,7 +333,7 @@ for (fname_lu, fname_chol, fname_lsq, fname_tri, eltype) =
          if info[1] == 0; return X; end
          error("Error in solving A*X = B")
 
-    end # function \ ...
+    end end # quote function \ ...
          )
 end
 
