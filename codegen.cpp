@@ -1293,7 +1293,7 @@ static void emit_function(jl_lambda_info_t *lam, Function *f)
             builder.CreateStore(restTuple, lv);
     }
 
-    jl_array_t *stmts = jl_lam_body(ast);
+    jl_array_t *stmts = jl_lam_body(ast)->args;
     // associate labels with basic blocks so forward jumps can be resolved
     BasicBlock *prev=NULL;
     for(i=0; i < stmts->length; i++) {

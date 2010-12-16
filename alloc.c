@@ -45,6 +45,7 @@ jl_struct_type_t *jl_errorexception_type;
 jl_struct_type_t *jl_typeerror_type;
 jl_struct_type_t *jl_loaderror_type;
 jl_value_t *jl_an_empty_string;
+jl_value_t *jl_an_empty_cell;
 jl_value_t *jl_stackovf_exception;
 jl_value_t *jl_divbyzero_exception;
 
@@ -61,9 +62,9 @@ jl_sym_t *goto_sym;    jl_sym_t *goto_ifnot_sym;
 jl_sym_t *label_sym;   jl_sym_t *return_sym;
 jl_sym_t *lambda_sym;  jl_sym_t *assign_sym;
 jl_sym_t *null_sym;    jl_sym_t *body_sym;
-jl_sym_t *unbound_sym;
+jl_sym_t *unbound_sym; jl_sym_t *macro_sym;
 jl_sym_t *locals_sym;  jl_sym_t *colons_sym;
-jl_sym_t *symbol_sym;
+jl_sym_t *symbol_sym;  jl_sym_t *unexpanded_sym;
 jl_sym_t *Any_sym;
 jl_sym_t *static_typeof_sym;
 

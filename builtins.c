@@ -190,50 +190,70 @@ static int has_intrinsics(jl_expr_t *e)
 
 // heuristic for whether a top-level input should be evaluated with
 // the compiler or the interpreter.
-static int eval_with_compiler_p(jl_array_t *body, int compileloops)
+static int eval_with_compiler_p(jl_expr_t *expr, int compileloops)
 {
-    size_t i;
-    for(i=0; i < body->length; i++) {
-        jl_value_t *stmt = jl_cellref(body,i);
-        if (jl_is_expr(stmt)) {
-            if (compileloops &&
-                (((jl_expr_t*)stmt)->head == goto_sym ||
-                 ((jl_expr_t*)stmt)->head == goto_ifnot_sym)) {
-                return 1;
+    if (expr->head==body_sym) {
+        jl_array_t *body = expr->args;
+        size_t i;
+        for(i=0; i < body->length; i++) {
+            jl_value_t *stmt = jl_cellref(body,i);
+            if (jl_is_expr(stmt)) {
+                // TODO: only backward branches
+                if (compileloops &&
+                    (((jl_expr_t*)stmt)->head == goto_sym ||
+                     ((jl_expr_t*)stmt)->head == goto_ifnot_sym)) {
+                    return 1;
+                }
             }
-            if (has_intrinsics((jl_expr_t*)stmt))
-                return 1;
         }
     }
+    if (has_intrinsics(expr))
+        return 1;
     return 0;
 }
 
 jl_value_t *jl_new_closure_internal(jl_lambda_info_t *li, jl_value_t *env);
 
-jl_value_t *jl_toplevel_eval_thunk_flex(jl_lambda_info_t *thk, int fast)
+jl_value_t *jl_toplevel_eval_flex(jl_value_t *ex, int fast)
 {
-    //jl_show(thk);
+    //jl_show(ex);
     //ios_printf(ios_stdout, "\n");
-    assert(jl_typeof(thk) == (jl_type_t*)jl_lambda_info_type);
-    assert(jl_is_expr(thk->ast));
-    if (eval_with_compiler_p(jl_lam_body((jl_expr_t*)thk->ast), fast)) {
-        jl_value_t *thunk=NULL;
-        jl_function_t *gf=NULL;
-        JL_GC_PUSH(&thunk, &gf);
+    jl_lambda_info_t *thk;
+    int ewc = 0;
+    if (jl_typeof(ex) != (jl_type_t*)jl_lambda_info_type) {
+        if (jl_is_expr(ex) && eval_with_compiler_p((jl_expr_t*)ex, fast)) {
+            thk = jl_wrap_expr(ex);
+            ewc = 1;
+        }
+        else {
+            return jl_interpret_toplevel_expr(ex);
+        }
+    }
+    else {
+        thk = (jl_lambda_info_t*)ex;
+        ewc = eval_with_compiler_p(jl_lam_body((jl_expr_t*)thk->ast), fast);
+    }
+    jl_value_t *thunk=NULL;
+    jl_function_t *gf=NULL;
+    jl_value_t *result;
+    JL_GC_PUSH(&thunk, &gf, &thk);
+    if (ewc) {
         thunk = jl_new_closure_internal(thk, (jl_value_t*)jl_null);
         // use a generic function so type inference runs
         gf = jl_new_generic_function(lambda_sym);
         jl_add_method(gf, jl_null, (jl_function_t*)thunk);
-        jl_value_t *result = jl_apply(gf, NULL, 0);
-        JL_GC_POP();
-        return result;
+        result = jl_apply(gf, NULL, 0);
     }
-    return jl_interpret_toplevel_thunk(thk);
+    else {
+        result = jl_interpret_toplevel_thunk(thk);
+    }
+    JL_GC_POP();
+    return result;
 }
 
-jl_value_t *jl_toplevel_eval_thunk(jl_lambda_info_t *thk)
+jl_value_t *jl_toplevel_eval(jl_value_t *v)
 {
-    return jl_toplevel_eval_thunk_flex(thk, 1);
+    return jl_toplevel_eval_flex(v, 1);
 }
 
 int asprintf(char **strp, const char *fmt, ...);
@@ -245,18 +265,26 @@ void jl_load_file_expr(char *fname, jl_value_t *ast)
     size_t i;
     volatile size_t lineno=0;
     JL_TRY {
+        jl_value_t *form=NULL;
+        JL_GC_PUSH(&form);
         for(i=0; i < b->length; i++) {
             // process toplevel form
-            jl_value_t *form = jl_cellref(b, i);
+            form = jl_cellref(b, i);
             if (jl_is_expr(form) && ((jl_expr_t*)form)->head == line_sym) {
                 lineno = jl_unbox_int32(jl_exprarg(form, 0));
             }
             else {
-                jl_lambda_info_t *lam = (jl_lambda_info_t*)form;
-                //(void)jl_interpret_toplevel_thunk(lam);
-                (void)jl_toplevel_eval_thunk_flex(lam, 0);
+                if (jl_is_expr(form) &&
+                    ((jl_expr_t*)form)->head == unexpanded_sym) {
+                    // delayed expansion, for macro calls
+                    form = jl_exprarg(form, 0);
+                    form = jl_expand(form);
+                }
+                //(void)jl_interpret_toplevel_thunk(form);
+                (void)jl_toplevel_eval_flex(form, 0);
             }
         }
+        JL_GC_POP();
     }
     JL_CATCH {
         jl_value_t *fn=NULL, *ln=NULL;
@@ -324,10 +352,10 @@ JL_CALLABLE(jl_f_top_eval)
         // expression types simple enough not to need expansion
         return jl_interpret_toplevel_expr(e);
     }
-    jl_lambda_info_t *exex = NULL;
+    jl_value_t *exex = NULL;
     JL_GC_PUSH(&exex);
     exex = jl_expand(e);
-    jl_value_t *result = jl_interpret_toplevel_thunk(exex);
+    jl_value_t *result = jl_toplevel_eval(exex);
     JL_GC_POP();
     return result;
 }

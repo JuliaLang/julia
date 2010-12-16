@@ -4,6 +4,8 @@
 (load "julia-parser.scm")
 (load "julia-syntax.scm")
 
+;; exception handler for parser. turns known errors into special expressions,
+;; and prevents throwing an exception past a C caller.
 (define (parser-wrap thk)
   (with-exception-catcher
    (lambda (e)
@@ -54,22 +56,42 @@
   (if (or (boolean? e) (eof-object? e) (and (pair? e) (eq? (car e) 'line)))
       e
       (let* ((ex (julia-expand0 e))
-	     (gv (toplevel-expr-globals ex)))
-	(julia-expand1
-	 `(lambda ()
-	    (scope-block
-	     (block ,@(map (lambda (v) `(global ,v)) gv)
-		    ,ex)))))))
+	     (gv (toplevel-expr-globals ex))
+	     (th (julia-expand1
+		  `(lambda ()
+		     (scope-block
+		      (block ,@(map (lambda (v) `(global ,v)) gv)
+			     ,ex))))))
+	(if (null? (cdr (cadr (caddr th))))
+	    ;; if no locals, return just body of function
+	    (let ((body (cadddr th)))
+	      body)
+	    th))))
 
 (define (jl-parse-string s)
   (parser-wrap (lambda ()
 		 (toplevel-expr (julia-parse s)))))
 
+(define (has-macrocalls? e)
+  (or (and (pair? e) (eq? (car e) 'macrocall))
+      (and (not (and (pair? e) (eq? (car e) 'bquote)))
+	   (any has-macrocalls? e))))
+
+;; in a file, we want to expand in advance as many expressions as possible.
+;; we can't do this for expressions with macro calls, because the needed
+;; macros might not have been defined yet (since that is done by the
+;; evaluator). or, in the case of saving pre-lowered code, macros might be
+;; defined in other files, creating implicit dependencies.
+(define (file-toplevel-expr e)
+  (if (has-macrocalls? e)
+      `(unexpanded ,e)
+      (toplevel-expr e)))
+
 (define (jl-parse-source s)
   (let ((infile (open-input-file s)))
     (begin0
      (parser-wrap (lambda ()
-		    (cons 'file (map toplevel-expr
+		    (cons 'file (map file-toplevel-expr
 				     (julia-parse-file s infile)))))
      (io.close infile))))
 

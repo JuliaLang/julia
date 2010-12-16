@@ -49,8 +49,6 @@
   `(with-bindings ((end-symbol #t))
 		  ,@body))
 
-; unused characters: @
-
 (define unary-ops '(+ - ! ~ $ |<:| |>:|))
 
 ; operators that are both unary and binary
@@ -87,7 +85,7 @@
 ; --- lexer ---
 
 (define special-char?
-  (let ((chrs (string->list "()[]{},;`")))
+  (let ((chrs (string->list "()[]{},;`@")))
     (lambda (c) (memv c chrs))))
 (define (newline? c) (eqv? c #\newline))
 (define (identifier-char? c) (or (and (char>=? c #\A)
@@ -180,12 +178,15 @@
 (define (next-token port s)
   (aset! s 2 (eq? (skip-ws port #f) #t))
   (let ((c (peek-char port)))
-    (cond ((or (eof-object? c) (newline? c) (special-char? c))
-	   (read-char port))
+    (cond ((or (eof-object? c) (newline? c))  (read-char port))
 
-	  ((eqv? c #\#) (skip-to-eol port) (next-token port s))
+	  ((char-numeric? c)    (read-number port))
 	  
-	  ((char-numeric? c) (read-number port))
+	  ((identifier-char? c) (accum-julia-symbol c port))
+
+	  ((special-char? c)    (read-char port))
+
+	  ((eqv? c #\#)         (skip-to-eol port) (next-token port s))
 	  
 	  ; . is difficult to handle; it could start a number or operator
 	  ((and (eqv? c #\.)
@@ -201,8 +202,6 @@
 			(else '|.|)))))
 	  
 	  ((opchar? c)  (read-operator port c))
-
-	  ((identifier-char? c) (accum-julia-symbol c port))
 
 	  ((eqv? c #\")
 	   (with-exception-catcher
@@ -730,6 +729,32 @@
 	(else
 	 (error "missing separator in tuple"))))))
 
+(define (not-eof-2 c)
+  (if (eof-object? c)
+      (error "incomplete: invalid ` syntax")
+      c))
+
+(define (parse-backquote s)
+  (let ((b (open-output-string)))
+    (let loop ((c (read-char (ts:port s))))
+      (if (eqv? c #\`)
+	  #t
+	  (begin (if (eqv? c #\\)
+		     (let ((nextch (read-char (ts:port s))))
+		       (if (eqv? nextch #\`)
+			   (write-char #\` b)
+			   (begin (write-char #\\ b)
+				  (write-char (not-eof-2 nextch) b))))
+		     (write-char (not-eof-2 c) b))
+		 (loop (read-char (ts:port s))))))
+    (let ((str (io.tostring! b)))
+      `(macrocall cmd ,str))))
+
+(define (not-eof-1 c)
+  (if (eof-object? c)
+      (error "incomplete: invalid character literal")
+      c))
+
 ; parse numbers, identifiers, parenthesized expressions, lists, vectors, etc.
 (define (parse-atom s)
   (let ((t (require-token s)))
@@ -748,13 +773,12 @@
 	       (begin (read-char (ts:port s)) firstch)
 	       (let ((b (open-output-string)))
 		 (let loop ((c firstch))
-		   (if (eof-object? c)
-		       (error "incomplete: invalid character literal"))
 		   (if (eqv? c #\')
 		       #t
-		       (begin (write-char c b)
+		       (begin (write-char (not-eof-1 c) b)
 			      (if (eqv? c #\\)
-				  (write-char (read-char (ts:port s)) b))
+				  (write-char
+				   (not-eof-1 (read-char (ts:port s))) b))
 			      (loop (read-char (ts:port s))))))
 		 (let ((str (read (open-input-string
 				   (string #\" (io.tostring! b) #\")))))
@@ -851,6 +875,19 @@
 	  ((eqv? t #\[ )
 	   (take-token s)
 	   (parse-cat s #\]))
+
+	  ;; macro call
+	  ((eqv? t #\@)
+	   (take-token s)
+	   (let ((head (parse-atom s)))
+	     (if (not (symbol? head))
+		 (error (string "invalid macro use @" head)))
+	     `(macrocall ,head ,(parse-eq s))))
+
+	  ;; command syntax
+	  ((eqv? t #\`)
+	   (take-token s)
+	   (parse-backquote s))
 
 	  (else (take-token s)))))
 

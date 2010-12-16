@@ -16,6 +16,7 @@
 #include "builtin_proto.h"
 
 static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl);
+static jl_value_t *eval_body(jl_array_t *stmts, jl_value_t **locals, size_t nl);
 
 jl_value_t *jl_interpret_toplevel_expr(jl_value_t *e)
 {
@@ -98,20 +99,32 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl)
     else if (ex->head == symbol_sym) {
         return eval(jl_exprarg(ex,0), locals, nl);
     }
-    else if (ex->head == unbound_sym) {
-        jl_value_t **bp = jl_get_bindingp(jl_system_module, (jl_sym_t*)args[0]);
-        if (*bp == NULL)
-            return jl_true;
-        return jl_false;
-    }
     else if (ex->head == quote_sym) {
         return args[0];
     }
     else if (ex->head == null_sym) {
         return (jl_value_t*)jl_null;
     }
+    else if (ex->head == body_sym) {
+        return eval_body(ex->args, locals, nl);
+    }
+    else if (ex->head == unbound_sym) {
+        jl_value_t **bp = jl_get_bindingp(jl_system_module, (jl_sym_t*)args[0]);
+        if (*bp == NULL)
+            return jl_true;
+        return jl_false;
+    }
     else if (ex->head == static_typeof_sym) {
         return (jl_value_t*)jl_any_type;
+    }
+    else if (ex->head == macro_sym) {
+        // macro definition
+        jl_sym_t *nm = (jl_sym_t*)eval(args[0], locals, nl);
+        assert(jl_is_symbol(nm));
+        jl_function_t *f = (jl_function_t*)eval(args[1], locals, nl);
+        assert(jl_is_function(f));
+        jl_set_expander(jl_system_module, nm, f);
+        return (jl_value_t*)jl_null;
     }
     jl_error("not supported");
     return (jl_value_t*)jl_null;
@@ -130,21 +143,9 @@ static int label_idx(jl_value_t *tgt, jl_array_t *stmts)
     return j;
 }
 
-jl_value_t *jl_interpret_toplevel_thunk(jl_lambda_info_t *lam)
+static jl_value_t *eval_body(jl_array_t *stmts, jl_value_t **locals, size_t nl)
 {
-    jl_expr_t *ast = (jl_expr_t*)lam->ast;
-    jl_array_t *stmts = jl_lam_body(ast);
-    jl_array_t *l = jl_lam_locals(ast);
-    jl_value_t **names = &((jl_value_t**)l->data)[0];
-    jl_value_t **locals = (jl_value_t**)alloca(l->length*2*sizeof(void*));
-    jl_value_t *r = (jl_value_t*)jl_null;
     size_t i=0;
-    for(i=0; i < l->length; i++) {
-        locals[i*2]   = names[i];
-        locals[i*2+1] = NULL;
-    }
-    JL_GC_PUSHARGS(locals,l->length*2);
-    i = 0;
     while (1) {
         jl_value_t *stmt = jl_cellref(stmts,i);
         if (jl_is_expr(stmt)) {
@@ -156,25 +157,43 @@ jl_value_t *jl_interpret_toplevel_thunk(jl_lambda_info_t *lam)
                 continue;
             }
             else if (head == goto_ifnot_sym) {
-                jl_value_t *cond = eval(jl_exprarg(stmt,0), locals, l->length);
+                jl_value_t *cond = eval(jl_exprarg(stmt,0), locals, nl);
                 if (cond == jl_false) {
                     i = label_idx(jl_exprarg(stmt,1), stmts);
                     continue;
                 }
             }
             else if (head == return_sym) {
-                r = eval(jl_exprarg(stmt,0), locals, l->length);
-                break;
+                return eval(jl_exprarg(stmt,0), locals, nl);
             }
             else {
-                eval(stmt, locals, l->length);
+                eval(stmt, locals, nl);
             }
         }
         else {
-            eval(stmt, locals, l->length);
+            eval(stmt, locals, nl);
         }
         i++;
     }
+    assert(0);
+    return NULL;
+}
+
+jl_value_t *jl_interpret_toplevel_thunk(jl_lambda_info_t *lam)
+{
+    jl_expr_t *ast = (jl_expr_t*)lam->ast;
+    jl_array_t *stmts = jl_lam_body(ast)->args;
+    jl_array_t *l = jl_lam_locals(ast);
+    jl_value_t **names = &((jl_value_t**)l->data)[0];
+    jl_value_t **locals = (jl_value_t**)alloca(l->length*2*sizeof(void*));
+    jl_value_t *r = (jl_value_t*)jl_null;
+    size_t i=0;
+    for(i=0; i < l->length; i++) {
+        locals[i*2]   = names[i];
+        locals[i*2+1] = NULL;
+    }
+    JL_GC_PUSHARGS(locals, l->length*2);
+    r = eval_body(stmts, locals, l->length);
     JL_GC_POP();
     return r;
 }

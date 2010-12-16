@@ -1,4 +1,7 @@
-(define (prn x) (display x) (newline) x)
+(define (prn x)
+  (with-output-to *stderr*
+		  (display x) (newline))
+  x)
 
 (define (lookup elt alst default)
   (let ((a (assq elt alst)))

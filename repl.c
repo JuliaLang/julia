@@ -586,7 +586,7 @@ int main(int argc, char *argv[])
     julia_init();
     if (post_boot) {
         jl_value_t *ast = jl_parse_input_line(post_boot);
-        jl_toplevel_eval_thunk((jl_lambda_info_t*)ast);
+        jl_toplevel_eval(ast);
     }
 
     jl_array_t *args = jl_alloc_cell_1d(argc);
@@ -639,7 +639,7 @@ int main(int argc, char *argv[])
                 }
                 if (i < num_evals) {
                     ast = jl_parse_input_line(eval_exprs[i]);
-                    value = jl_toplevel_eval_thunk((jl_lambda_info_t*)ast);
+                    value = jl_toplevel_eval(ast);
                     if (print_exprs[i]) {
                         jl_show(value);
                         ios_printf(ios_stdout, "\n");
@@ -698,8 +698,7 @@ int main(int argc, char *argv[])
                 ios_flush(ios_stdout);
             }
             if (ast != NULL) {
-                jl_value_t *value =
-                    jl_toplevel_eval_thunk((jl_lambda_info_t*)ast);
+                jl_value_t *value = jl_toplevel_eval(ast);
                 jl_set_global(jl_system_module, jl_symbol("ans"), value);
                 if (show_value) {
                     repl_show_value(value);

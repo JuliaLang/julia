@@ -170,6 +170,7 @@ typedef struct _jl_module_t {
     // not first-class
     jl_sym_t *name;
     htable_t bindings;
+    htable_t macros;
     htable_t modules;
     arraylist_t imports;
 } jl_module_t;
@@ -245,6 +246,7 @@ extern jl_struct_type_t *jl_loaderror_type;
 extern jl_value_t *jl_stackovf_exception;
 extern jl_value_t *jl_divbyzero_exception;
 extern jl_value_t *jl_an_empty_string;
+extern jl_value_t *jl_an_empty_cell;
 
 extern jl_struct_type_t *jl_box_type;
 extern jl_type_t *jl_box_any_type;
@@ -295,9 +297,9 @@ extern jl_sym_t *goto_sym;    extern jl_sym_t *goto_ifnot_sym;
 extern jl_sym_t *label_sym;   extern jl_sym_t *return_sym;
 extern jl_sym_t *lambda_sym;  extern jl_sym_t *assign_sym;
 extern jl_sym_t *null_sym;    extern jl_sym_t *body_sym;
-extern jl_sym_t *unbound_sym;
+extern jl_sym_t *unbound_sym; extern jl_sym_t *macro_sym;
 extern jl_sym_t *locals_sym;  extern jl_sym_t *colons_sym;
-extern jl_sym_t *symbol_sym;
+extern jl_sym_t *symbol_sym;  extern jl_sym_t *unexpanded_sym;
 extern jl_sym_t *Any_sym;
 extern jl_sym_t *static_typeof_sym;
 
@@ -561,7 +563,8 @@ void jl_load_boot_j();
 // front end interface
 jl_value_t *jl_parse_input_line(const char *str);
 jl_value_t *jl_parse_file(const char *fname);
-jl_lambda_info_t *jl_expand(jl_value_t *expr);
+jl_value_t *jl_expand(jl_value_t *expr);
+jl_lambda_info_t *jl_wrap_expr(jl_value_t *expr);
 
 // some useful functions
 void jl_show(jl_value_t *v);
@@ -580,6 +583,8 @@ void jl_set_const(jl_module_t *m, jl_sym_t *var, jl_value_t *val);
 jl_module_t *jl_add_module(jl_module_t *m, jl_module_t *child);
 jl_module_t *jl_get_module(jl_module_t *m, jl_sym_t *name);
 jl_module_t *jl_import_module(jl_module_t *to, jl_module_t *from);
+jl_function_t *jl_get_expander(jl_module_t *m, jl_sym_t *macroname);
+void jl_set_expander(jl_module_t *m, jl_sym_t *macroname, jl_function_t *f);
 
 // external libraries
 void *jl_load_dynamic_library(char *fname);
@@ -588,7 +593,7 @@ void *jl_dlsym(void *handle, char *symbol);
 // compiler
 void jl_compile(jl_function_t *f);
 void jl_generate_fptr(jl_function_t *f);
-jl_value_t *jl_toplevel_eval_thunk(jl_lambda_info_t *thk);
+jl_value_t *jl_toplevel_eval(jl_value_t *v);
 void jl_load(const char *fname);
 void jl_load_file_expr(char *fname, jl_value_t *ast);
 jl_value_t *jl_interpret_toplevel_thunk(jl_lambda_info_t *lam);
@@ -607,7 +612,7 @@ jl_array_t *jl_lam_args(jl_expr_t *l);
 jl_array_t *jl_lam_locals(jl_expr_t *l);
 jl_array_t *jl_lam_vinfo(jl_expr_t *l);
 jl_array_t *jl_lam_capt(jl_expr_t *l);
-jl_array_t *jl_lam_body(jl_expr_t *l);
+jl_expr_t *jl_lam_body(jl_expr_t *l);
 jl_sym_t *jl_decl_var(jl_value_t *ex);
 DLLEXPORT int jl_is_rest_arg(jl_value_t *ex);
 

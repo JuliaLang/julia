@@ -330,11 +330,11 @@
 ; patterns that introduce lambdas
 (define binding-form-patterns
   (pattern-set
-   ; function with static parameters
+   ;; function with static parameters
    (pattern-lambda (function (call (curly name . sparams) . argl) body)
 		   (generic-function-def-expr name sparams argl body))
 
-   ; function definition
+   ;; function definition
    (pattern-lambda (function (call name . argl) body)
 		   (generic-function-def-expr name '() argl body))
 
@@ -343,12 +343,18 @@
    (pattern-lambda (function (tuple . args) body)
 		   `(-> (tuple ,@args) ,body))
 
-   ; expression form function definition
+   ;; macro definition
+   (pattern-lambda (macro (call name . argl) body)
+		   `(macro (quote ,name)
+		      (-> (tuple ,@argl) ,body)))
+
+   ;; expression form function definition
    (pattern-lambda (= (call (curly name . sparams) . argl) body)
 		   `(function (call (curly ,name . ,sparams) . ,argl) ,body))
    (pattern-lambda (= (call name . argl) body)
 		   `(function (call ,name ,@argl) ,body))
 
+   ;; anonymous function
    (pattern-lambda (-> a b)
 		   (let ((a (if (and (pair? a)
 				     (eq? (car a) 'tuple))
@@ -357,6 +363,7 @@
 					; TODO: anonymous generic function
 		     (function-expr a b)))
 
+   ;; let
    (pattern-lambda (let binds ex)
 		   (let loop ((binds binds)
 			      (args  ())
@@ -380,7 +387,7 @@
 				 locls))
 			  (else (error "invalid let syntax"))))))
 
-   ; type definition
+   ;; type definition
    (pattern-lambda (struct sig (block . fields))
 		   (receive (name params super) (analyze-type-sig sig)
 			    (struct-def-expr name params super fields)))
@@ -1380,12 +1387,22 @@ So far only the second case can actually occur.
 				      ,(expand-backquote (car p)))
 			       q))))))))
 
-(define (julia-expand-backquote e)
+(define (julia-expand-macros e)
   (cond ((not (pair? e))      e)
 	((eq? (car e) 'bquote)
-	 (julia-expand-backquote (expand-backquote (cadr e))))
+	 ;; backquote is essentially a built-in macro at the moment
+	 (julia-expand-macros (expand-backquote (cadr e))))
+	((eq? (car e) 'macrocall)
+	 ;; expand macro
+	 (let ((form
+		(invoke-julia-macro (cadr e) (caddr e))))
+	   (if (not form)
+	       (error (string "macro " (cadr e) " not defined")))
+	   (if (equal? form '(error))
+	       (error (string "error expanding macro " (cadr e))))
+	   (julia-expand-macros form)))
 	(else
-	 (map julia-expand-backquote e))))
+	 (map julia-expand-macros e))))
 
 (define (julia-expand1 ex)
   (to-goto-form
@@ -1398,7 +1415,7 @@ So far only the second case can actually occur.
    (pattern-expand patterns
     (pattern-expand lower-comprehensions
      (pattern-expand binding-form-patterns
-      (julia-expand-backquote ex))))))
+      (julia-expand-macros ex))))))
 
 (define (julia-expand ex)
   (julia-expand1 (julia-expand0 ex)))
