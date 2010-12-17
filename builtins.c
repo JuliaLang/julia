@@ -871,6 +871,7 @@ JL_CALLABLE(jl_f_show_pointer)
 JL_CALLABLE(jl_f_show_symbol)
 {
     ios_t *s = jl_current_output_stream();
+    ios_putc(':', s);
     ios_puts(((jl_sym_t*)args[0])->name, s);
     return (jl_value_t*)jl_null;
 }
