@@ -24,6 +24,7 @@ jl_module_t *jl_new_module(jl_sym_t *name)
     jl_module_t *m = (jl_module_t*)allocb(sizeof(jl_module_t));
     m->name = name;
     htable_new(&m->bindings, 0);
+    htable_new(&m->macros, 0);
     htable_new(&m->modules, 0);
     arraylist_new(&m->imports, 0);
     return m;
@@ -75,6 +76,20 @@ jl_value_t **jl_get_bindingp(jl_module_t *m, jl_sym_t *var)
 {
     jl_binding_t *b = jl_get_binding(m, var);
     return &b->value;
+}
+
+jl_function_t *jl_get_expander(jl_module_t *m, jl_sym_t *macroname)
+{
+    jl_function_t *f = (jl_function_t*)ptrhash_get(&m->macros, macroname);
+    if (f == HT_NOTFOUND)
+        return NULL;
+    return f;
+}
+
+void jl_set_expander(jl_module_t *m, jl_sym_t *macroname, jl_function_t *f)
+{
+    jl_function_t **bp = (jl_function_t**)ptrhash_bp(&m->macros, macroname);
+    *bp = f;
 }
 
 void jl_init_modules()

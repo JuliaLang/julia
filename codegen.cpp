@@ -94,6 +94,7 @@ static Function *jlalloc_func;
 static Function *jlbox_func;
 static Function *jlclosure_func;
 static Function *jlconvert_func;
+static Function *jlmethod_func;
 
 /*
   stuff to fix up:
@@ -493,6 +494,13 @@ static size_t max_arg_depth(jl_value_t *expr)
                 m = max_arg_depth(jl_exprarg(e,i));
                 if (m+i+1 > max) max = m+i+1;
             }
+        }
+        else if (e->head == method_sym) {
+            m = max_arg_depth(jl_exprarg(e,1));
+            if (m > max) max = m;
+            m = max_arg_depth(jl_exprarg(e,2));
+            if (m+1 > max) max = m+1;
+            if (2 > max) max = 2;
         }
         else {
             for(i=0; i < e->args->length; i++) {
@@ -960,6 +968,9 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool value)
     else if (ex->head == assign_sym) {
         assert(!value);
         emit_assignment(args[0], args[1], ctx);
+        if (value) {
+            return literal_pointer_val((jl_value_t*)jl_null);
+        }
     }
     else if (ex->head == top_sym) {
         jl_binding_t *b = jl_get_binding(ctx->module, (jl_sym_t*)args[0]);
@@ -971,6 +982,24 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool value)
         }
         return emit_checked_var(bp, ((jl_sym_t*)args[0])->name, ctx);
     }
+    else if (ex->head == method_sym) {
+        assert(jl_is_symbol(args[0]));
+        Value *name = literal_pointer_val(args[0]);
+        Value *bp = var_binding_pointer((jl_sym_t*)args[0], ctx);
+        Value *a1 = emit_expr(args[1], ctx, true);
+        Value *dest=builder.CreateGEP(ctx->argTemp,
+                                      ConstantInt::get(T_int32,ctx->argDepth));
+        builder.CreateStore(boxed(a1), dest);
+        ctx->argDepth++;
+        Value *a2 = emit_expr(args[2], ctx, true);
+        dest=builder.CreateGEP(ctx->argTemp,
+                               ConstantInt::get(T_int32,ctx->argDepth));
+        builder.CreateStore(boxed(a2), dest);
+        Value *m = builder.CreateCall4(jlmethod_func, name, bp, a1, a2);
+        ctx->argDepth--;
+        return m;
+    }
+    /*
     else if (ex->head == unbound_sym) {
         Value *bp = var_binding_pointer((jl_sym_t*)args[0], ctx);
         // unboxed vars will never be referenced undefined
@@ -979,7 +1008,7 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool value)
         Value *v = builder.CreateLoad(bp, false);
         Value *isnull = builder.CreateICmpEQ(v, V_null);
         return isnull;
-    }
+    }*/
 
     else if (ex->head == quote_sym) {
         jl_value_t *jv = args[0];
@@ -1293,7 +1322,7 @@ static void emit_function(jl_lambda_info_t *lam, Function *f)
             builder.CreateStore(restTuple, lv);
     }
 
-    jl_array_t *stmts = jl_lam_body(ast);
+    jl_array_t *stmts = jl_lam_body(ast)->args;
     // associate labels with basic blocks so forward jumps can be resolved
     BasicBlock *prev=NULL;
     for(i=0; i < stmts->length; i++) {
@@ -1527,6 +1556,17 @@ static void init_julia_llvm_env(Module *m)
                          Function::ExternalLinkage,
                          "jl_tuple", jl_Module);
     jl_ExecutionEngine->addGlobalMapping(jlntuple_func, (void*)&jl_tuple);
+
+    std::vector<const Type*> mdargs(0);
+    mdargs.push_back(jl_pvalue_llvmt);
+    mdargs.push_back(jl_ppvalue_llvmt);
+    mdargs.push_back(jl_pvalue_llvmt);
+    mdargs.push_back(jl_pvalue_llvmt);
+    jlmethod_func =
+        Function::Create(FunctionType::get(jl_pvalue_llvmt, mdargs, false),
+                         Function::ExternalLinkage,
+                         "jl_method_def", jl_Module);
+    jl_ExecutionEngine->addGlobalMapping(jlmethod_func, (void*)*jl_method_def);
 
     // set up optimization passes
     FPM = new FunctionPassManager(jl_Module);

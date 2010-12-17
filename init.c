@@ -95,6 +95,7 @@ void julia_init()
     jl_init_tasks(jl_stack_lo, jl_stack_hi-jl_stack_lo);
     jl_init_primitives();
     jl_init_codegen();
+    jl_an_empty_cell = (jl_value_t*)jl_alloc_cell_1d(0);
     jl_load_boot_j();
     jl_get_builtin_hooks();
     jl_boot_file_loaded = 1;

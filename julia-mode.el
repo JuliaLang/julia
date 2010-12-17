@@ -9,6 +9,7 @@
 (defvar julia-mode-syntax-table
   (let ((table (make-syntax-table)))
     (modify-syntax-entry ?_ "w" table)   ; underscores in words
+    (modify-syntax-entry ?@ "w" table)
     (modify-syntax-entry ?# "<" table)   ; #  single-line comment start
     (modify-syntax-entry ?\n ">" table)  ; \n single-line comment end
     (modify-syntax-entry ?\{ "(} " table)
@@ -47,7 +48,7 @@
           'identity
           '("if" "else" "elseif" "while" "for" "begin" "end" "quote"
             "try" "catch" "return" "local" "type" "function" "macro"
-	    "typealias" "break" "continue" "struct" "global"
+	    "typealias" "break" "continue" "struct" "global" "@\\w+"
 	    "module" "import" "export" "const" "let" "bitstype")
           "\\|") "\\)\\>")
      'font-lock-keyword-face)

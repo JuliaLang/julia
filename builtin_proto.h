@@ -51,8 +51,6 @@ JL_CALLABLE(jl_f_new_type_constructor);
 JL_CALLABLE(jl_f_new_tag_type);
 JL_CALLABLE(jl_f_typevar);
 JL_CALLABLE(jl_f_union);
-JL_CALLABLE(jl_f_new_generic_function);
-JL_CALLABLE(jl_f_add_method);
 JL_CALLABLE(jl_f_methodexists);
 JL_CALLABLE(jl_f_invoke);
 JL_CALLABLE(jl_f_dlopen);

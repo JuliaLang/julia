@@ -1988,6 +1988,8 @@ void jl_init_types()
     label_sym = jl_symbol("label");
     return_sym = jl_symbol("return");
     lambda_sym = jl_symbol("lambda");
+    macro_sym = jl_symbol("macro");
+    unexpanded_sym = jl_symbol("unexpanded");
     assign_sym = jl_symbol("=");
     null_sym = jl_symbol("null");
     unbound_sym = jl_symbol("unbound");
@@ -1995,6 +1997,7 @@ void jl_init_types()
     body_sym = jl_symbol("body");
     locals_sym = jl_symbol("locals");
     colons_sym = jl_symbol("::");
+    method_sym = jl_symbol("method");
     Any_sym = jl_symbol("Any");
     static_typeof_sym = jl_symbol("static_typeof");
 }
