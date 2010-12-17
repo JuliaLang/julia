@@ -189,15 +189,7 @@
       (map (lambda (x ub) `(call (top typevar) ',x ,ub)) sl upperbounds)))
 
 (define (gf-def-expr- name argl argtypes body)
-  `(block
-    ,(if (symbol? name)
-	 `(if (unbound ,name)
-	      (= ,name (call (top new_generic_function) (quote ,name))))
-	 `(null))
-    (call (top add_method)
-	  ,name
-	  ,argtypes
-	  ,(function-expr argl body))))
+  `(= ,name (method ,name ,argtypes ,(function-expr argl body))))
 
 (define (sparam-name-bounds sparams names bounds)
   (cond ((null? sparams)

@@ -300,7 +300,7 @@ extern jl_sym_t *null_sym;    extern jl_sym_t *body_sym;
 extern jl_sym_t *unbound_sym; extern jl_sym_t *macro_sym;
 extern jl_sym_t *locals_sym;  extern jl_sym_t *colons_sym;
 extern jl_sym_t *symbol_sym;  extern jl_sym_t *unexpanded_sym;
-extern jl_sym_t *Any_sym;
+extern jl_sym_t *Any_sym;     extern jl_sym_t *method_sym;
 extern jl_sym_t *static_typeof_sym;
 
 #ifdef BITS64
@@ -483,6 +483,8 @@ void jl_arrayset(jl_array_t *a, size_t i, jl_value_t *v);  // 0-indexed
 jl_expr_t *jl_exprn(jl_sym_t *head, size_t n);
 jl_function_t *jl_new_generic_function(jl_sym_t *name);
 void jl_add_method(jl_function_t *gf, jl_tuple_t *types, jl_function_t *meth);
+jl_value_t *jl_method_def(jl_sym_t *name, jl_value_t **bp,
+                          jl_tuple_t *argtypes, jl_function_t *f);
 jl_value_t *jl_box_int8(int8_t x);
 jl_value_t *jl_box_uint8(uint8_t x);
 jl_value_t *jl_box_int16(int16_t x);

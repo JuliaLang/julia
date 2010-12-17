@@ -44,19 +44,21 @@ static jl_value_t *do_call(jl_function_t *f, jl_value_t **args, size_t nargs,
     return result;
 }
 
+static jl_value_t **var_bp(jl_sym_t *s, jl_value_t **locals, size_t nl)
+{
+    size_t i;
+    for(i=0; i < nl; i++) {
+        if (locals[i*2] == (jl_value_t*)s) {
+            return &locals[i*2+1];
+        }
+    }
+    return jl_get_bindingp(jl_system_module, s);
+}
+
 static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl)
 {
     if (jl_is_symbol(e)) {
-        jl_value_t **bp = NULL;
-        size_t i;
-        for(i=0; i < nl; i++) {
-            if (locals[i*2] == e) {
-                bp = &locals[i*2+1];
-                break;
-            }
-        }
-        if (bp == NULL)
-            bp = jl_get_bindingp(jl_system_module, (jl_sym_t*)e);
+        jl_value_t **bp = var_bp((jl_sym_t*)e, locals, nl);
         if (*bp == NULL)
             jl_errorf("%s not defined", ((jl_sym_t*)e)->name);
         return *bp;
@@ -86,8 +88,9 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl)
             }
         }
         jl_value_t **bp = jl_get_bindingp(jl_system_module, (jl_sym_t*)sym);
+        jl_value_t *rhs = eval(args[1], locals, nl);
         if (*bp==NULL || !jl_is_func(*bp))
-            *bp = eval(args[1], locals, nl);
+            *bp = rhs;
         return (jl_value_t*)jl_null;
     }
     else if (ex->head == top_sym) {
@@ -108,14 +111,28 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl)
     else if (ex->head == body_sym) {
         return eval_body(ex->args, locals, nl);
     }
+    /*
     else if (ex->head == unbound_sym) {
-        jl_value_t **bp = jl_get_bindingp(jl_system_module, (jl_sym_t*)args[0]);
+        jl_value_t **bp = var_bp((jl_sym_t*)args[0], locals, nl);
         if (*bp == NULL)
             return jl_true;
         return jl_false;
     }
+    */
     else if (ex->head == static_typeof_sym) {
         return (jl_value_t*)jl_any_type;
+    }
+    else if (ex->head == method_sym) {
+        jl_sym_t *fname = (jl_sym_t*)args[0];
+        jl_value_t **bp = var_bp(fname, locals, nl);
+        jl_value_t *atypes=NULL, *meth=NULL;
+        JL_GC_PUSH(&atypes, &meth);
+        atypes = eval(args[1], locals, nl);
+        meth = eval(args[2], locals, nl);
+        jl_value_t *gf = jl_method_def(fname, bp, (jl_tuple_t*)atypes,
+                                       (jl_function_t*)meth);
+        JL_GC_POP();
+        return gf;
     }
     else if (ex->head == macro_sym) {
         // macro definition

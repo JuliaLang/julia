@@ -77,6 +77,12 @@
       (and (not (and (pair? e) (eq? (car e) 'bquote)))
 	   (any has-macrocalls? e))))
 
+;; (body (= v _) (return v)) => (= v _)
+(define (simple-assignment? e)
+  (and (length= e 3) (eq? (car e) 'body)
+       (pair? (cadr e)) (eq? (caadr e) '=) (symbol? (cadadr e))
+       (eq? (cadr (caddr e)) (cadadr e))))
+
 ;; in a file, we want to expand in advance as many expressions as possible.
 ;; we can't do this for expressions with macro calls, because the needed
 ;; macros might not have been defined yet (since that is done by the
@@ -85,7 +91,10 @@
 (define (file-toplevel-expr e)
   (if (has-macrocalls? e)
       `(unexpanded ,e)
-      (toplevel-expr e)))
+      (let ((ex (toplevel-expr e)))
+	(if (simple-assignment? ex)
+	    (cadr ex)
+	    ex))))
 
 (define (jl-parse-source s)
   (let ((infile (open-input-file s)))

@@ -127,7 +127,7 @@ t_func[subtype] = (2, 2, cmp_tfunc)
 t_func[isa] = (2, 2, cmp_tfunc)
 t_func[method_exists] = (2, 2, cmp_tfunc)
 t_func[applicable] = (1, Inf, (f, args...)->Bool)
-t_func[new_generic_function] = (1, 1, s->(Any-->Any))
+#t_func[new_generic_function] = (1, 1, s->(Any-->Any))
 t_func[tuplelen] = (1, 1, x->Int32)
 t_func[arraylen] = (1, 1, x->Int32)
 t_func[arrayref] = (2, 2, (a,i)->(isa(a,StructKind) && subtype(a,Array) ?
@@ -451,8 +451,10 @@ function abstract_eval_expr(e, vtypes, sv::StaticVarInfo)
         return abstract_eval_call(e, vtypes, sv)
     elseif is(e.head,:top)
         return abstract_eval_global(e.args[1])
-    elseif is(e.head,:unbound)
-        return Bool
+    #elseif is(e.head,:unbound)
+    #    return Bool
+    elseif is(e.head,:method)
+        return Any-->Any
     elseif is(e.head,:null)
         return ()
     elseif is(e.head,:quote)

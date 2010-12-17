@@ -1213,13 +1213,6 @@ JL_CALLABLE(jl_f_union)
 
 // --- generic function primitives ---
 
-JL_CALLABLE(jl_f_new_generic_function)
-{
-    JL_NARGS(new_generic_function, 1, 1);
-    JL_TYPECHK(new_generic_function, symbol, args[0]);
-    return (jl_value_t*)jl_new_generic_function((jl_sym_t*)args[0]);
-}
-
 static void check_type_tuple(jl_tuple_t *t)
 {
     size_t i;
@@ -1233,18 +1226,23 @@ static void check_type_tuple(jl_tuple_t *t)
     }
 }
 
-JL_CALLABLE(jl_f_add_method)
+jl_value_t *jl_method_def(jl_sym_t *name, jl_value_t **bp,
+                          jl_tuple_t *argtypes, jl_function_t *f)
 {
-    JL_NARGS(add_method, 3, 3);
-    JL_TYPECHK(add_method, function, args[0]);
-    if (!jl_is_gf(args[0]))
-        jl_error("add_method: not a generic function");
-    JL_TYPECHK(add_method, tuple, args[1]);
-    check_type_tuple((jl_tuple_t*)args[1]);
-    JL_TYPECHK(add_method, function, args[2]);
-    jl_add_method((jl_function_t*)args[0], (jl_tuple_t*)args[1],
-                  (jl_function_t*)args[2]);
-    return args[0];
+    jl_value_t *gf;
+    if (*bp == NULL) {
+        gf = (jl_value_t*)jl_new_generic_function(name);
+    }
+    else {
+        gf = *bp;
+        if (!jl_is_gf(gf))
+            jl_error("in method definition: not a generic function");
+    }
+    assert(jl_is_function(f));
+    assert(jl_is_tuple(argtypes));
+    check_type_tuple(argtypes);
+    jl_add_method((jl_function_t*)gf, argtypes, f);
+    return gf;
 }
 
 // --- generic function reflection ---
@@ -1397,8 +1395,6 @@ void jl_init_primitives()
     add_builtin_func("new_tag_type", jl_f_new_tag_type);
     add_builtin_func("new_tag_type_super", jl_f_new_tag_type_super);
     add_builtin_func("new_bits_type", jl_f_new_bits_type);
-    add_builtin_func("new_generic_function", jl_f_new_generic_function);
-    add_builtin_func("add_method", jl_f_add_method);
     add_builtin_func("trycatch", jl_f_trycatch);
 
     // builtin types
