@@ -189,6 +189,8 @@
       (map (lambda (x ub) `(call (top typevar) ',x ,ub)) sl upperbounds)))
 
 (define (gf-def-expr- name argl argtypes body)
+  (if (not (symbol? name))
+      (error (string "invalid method name " name)))
   `(= ,name (method ,name ,argtypes ,(function-expr argl body))))
 
 (define (sparam-name-bounds sparams names bounds)

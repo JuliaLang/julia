@@ -966,7 +966,6 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool value)
         return emit_var((jl_sym_t*)args[0], ex->etype, ctx);
     }
     else if (ex->head == assign_sym) {
-        assert(!value);
         emit_assignment(args[0], args[1], ctx);
         if (value) {
             return literal_pointer_val((jl_value_t*)jl_null);
@@ -983,9 +982,16 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool value)
         return emit_checked_var(bp, ((jl_sym_t*)args[0])->name, ctx);
     }
     else if (ex->head == method_sym) {
-        assert(jl_is_symbol(args[0]));
-        Value *name = literal_pointer_val(args[0]);
-        Value *bp = var_binding_pointer((jl_sym_t*)args[0], ctx);
+        jl_value_t *mn;
+        if (jl_is_expr(args[0]) && ((jl_expr_t*)args[0])->head==symbol_sym) {
+            mn = jl_exprarg(args[0],0);
+        }
+        else {
+            mn = args[0];
+        }
+        assert(jl_is_symbol(mn));
+        Value *name = literal_pointer_val(mn);
+        Value *bp = var_binding_pointer((jl_sym_t*)mn, ctx);
         Value *a1 = emit_expr(args[1], ctx, true);
         Value *dest=builder.CreateGEP(ctx->argTemp,
                                       ConstantInt::get(T_int32,ctx->argDepth));
