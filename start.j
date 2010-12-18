@@ -1,4 +1,5 @@
 # core operations & types
+load("macros.j")
 load("range.j")
 load("tuple.j")
 load("cell.j")
