@@ -285,14 +285,19 @@ end
 
 ## implement shell-like parsing of `cmd` strings ##
 
-macro cmd(str)
+function shell_split(str::String)
+    in_single_quotes = false
+    in_double_quotes = false
     args = ()
+    arg = ""
     i = start(str)
     j = i
     while !done(str,j)
         c, k = next(str,j)
-        if iswspace(c)
-            args = append(args, (str[i:j-1],))
+        if !in_single_quotes &&
+           !in_double_quotes && iswspace(c)
+            args = append(args,(strcat(arg,str[i:j-1]),))
+            arg = ""
             j = k
             while !done(str,j)
                 c, k = next(str,j)
@@ -303,9 +308,41 @@ macro cmd(str)
                 j = k
             end
         else
+            if !in_double_quotes && c == '\''
+                in_single_quotes = !in_single_quotes
+                arg = strcat(arg,str[i:j-1])
+                i = k
+            elseif !in_single_quotes && c == '"'
+                in_double_quotes = !in_double_quotes
+                arg = strcat(arg,str[i:j-1])
+                i = k
+            elseif c == '\\'
+                if in_double_quotes
+                    if done(str,k)
+                        error("unterminated double quote")
+                    end
+                    if str[k] == '"'
+                        arg = strcat(arg,str[i:j-1])
+                        i = k
+                        c, k = next(str,k)
+                    end
+                elseif !in_single_quotes
+                    if done(str,k)
+                        error("dangling backslash")
+                    end
+                    arg = strcat(arg,str[i:j-1])
+                    i = k
+                    c, k = next(str,k)
+                end
+            end
             j = k
         end
     end
-    args = append(args, (str[i:],))
-    quote Cmd(($args)...) end
+    if in_single_quotes; error("unterminated single quote"); end
+    if in_double_quotes; error("unterminated double quote"); end
+    args = append(args,(strcat(arg,str[i:]),))
+end
+
+macro cmd(str)
+    quote Cmd(($shell_split(str))...) end
 end
