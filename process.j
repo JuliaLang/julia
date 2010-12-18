@@ -282,3 +282,30 @@ function run(cmds::Cmds)
     end
     success
 end
+
+## implement shell-like parsing of `cmd` strings ##
+
+macro cmd(str)
+    args = ()
+    i = start(str)
+    j = i
+    while !done(str,j)
+        c, k = next(str,j)
+        if iswspace(c)
+            args = append(args, (str[i:j-1],))
+            j = k
+            while !done(str,j)
+                c, k = next(str,j)
+                if !iswspace(c)
+                    i = j
+                    break
+                end
+                j = k
+            end
+        else
+            j = k
+        end
+    end
+    args = append(args, (str[i:],))
+    quote Cmd(($args)...) end
+end
