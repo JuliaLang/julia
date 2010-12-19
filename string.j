@@ -43,6 +43,38 @@ function at_string_end(s::String)
     return i, n
 end
 
+function ind2chr(s::String, ind::Int)
+    if ind < 1
+        error("in next: arrayref: index out of range")
+    end
+    i = 1
+    j = start(s)
+    while true
+        c, k = next(s,j)
+        if ind <= j
+            return i
+        end
+        i += 1
+        j = k
+    end
+end
+
+function chr2ind(s::String, chr::Int)
+    if chr < 1
+        error("in next: arrayref: index out of range")
+    end
+    i = 1
+    j = start(s)
+    while true
+        c, k = next(s,j)
+        if chr == i
+            return j
+        end
+        i += 1
+        j = k
+    end
+end
+
 function strind(s::String, i::Int)
     j = start(s)
     for k = 1:i-1; c, j = next(s,j); end
@@ -207,9 +239,35 @@ strcat(x...) = strcat(map(string,x)...)
 
 print(s::RopeString) = print(s.head,s.tail)
 
+## conversion of general objects to strings ##
+
+function string(p::Ptr{Uint8})
+    if p == C_NULL
+        error("cannot convert NULL to string")
+    end
+    ccall(dlsym(JuliaDLHandle,"jl_cstr_to_string"),
+          Any, (Ptr{Uint8},), p)::String
+end
+
+string(x) = string(ccall(dlsym(JuliaDLHandle,"jl_show_to_string"),
+                         Ptr{Uint8}, (Any,), x))
+
+bstring(str::ByteString) = str
+bstring(args...) = print_to_string(print, args...)
+
+cstring(str::ByteString) = str.data
+cstring(args...) = print_to_array(print, args...)
+
 ## generic string utilities ##
 
-iswprint(c::Char) = bool(ccall(dlsym(libc,"iswprint"), Int32, (Char,), c))
+for f = {:iswalnum, :iswalpha, :iswascii, :iswblank, :iswcntrl, :iswdigit,
+         :iswgraph, :iswhexnumber, :iswideogram, :iswlower, :iswnumber,
+         :iswphonogram, :iswprint, :iswpunct, :iswrune, :iswspace,
+         :iswspecial, :iswupper, :iswxdigit}
+    eval(quote
+        ($f)(c::Char) = bool(ccall(dlsym(libc,$string(f)), Int32, (Char,), c))
+    end)
+end
 
 escape_nul(s::String, i::Index) =
     !done(s,i) && '0' <= next(s,i)[1] <= '7' ? "\\x00" : "\\0"
@@ -298,6 +356,111 @@ end
 
 unescape_string(s::String) = print_to_string(print_unescaped, s)
 
+## implement shell-like parsing ##
+
+function shell_split(str::String)
+    in_single_quotes = false
+    in_double_quotes = false
+    args = ()
+    arg = ""
+    i = start(str)
+    j = i
+    while !done(str,j)
+        c, k = next(str,j)
+        if !in_single_quotes &&
+           !in_double_quotes && iswspace(c)
+            args = append(args,(strcat(arg,str[i:j-1]),))
+            arg = ""
+            j = k
+            while !done(str,j)
+                c, k = next(str,j)
+                if !iswspace(c)
+                    i = j
+                    break
+                end
+                j = k
+            end
+        else
+            if !in_double_quotes && c == '\''
+                in_single_quotes = !in_single_quotes
+                arg = strcat(arg,str[i:j-1])
+                i = k
+            elseif !in_single_quotes && c == '"'
+                in_double_quotes = !in_double_quotes
+                arg = strcat(arg,str[i:j-1])
+                i = k
+            elseif c == '\\'
+                if in_double_quotes
+                    if done(str,k)
+                        error("unterminated double quote")
+                    end
+                    if str[k] == '"'
+                        arg = strcat(arg,str[i:j-1])
+                        i = k
+                        c, k = next(str,k)
+                    end
+                elseif !in_single_quotes
+                    if done(str,k)
+                        error("dangling backslash")
+                    end
+                    arg = strcat(arg,str[i:j-1])
+                    i = k
+                    c, k = next(str,k)
+                end
+            end
+            j = k
+        end
+    end
+    if in_single_quotes; error("unterminated single quote"); end
+    if in_double_quotes; error("unterminated double quote"); end
+    args = append(args,(strcat(arg,str[i:]),))
+end
+
+function print_shell_word(word::String)
+    has_spaces = false
+    has_backsl = false
+    has_single = false
+    has_double = false
+    for c = word
+        if iswspace(c)
+            has_spaces = true
+        elseif c == '\\'
+            has_backsl = true
+        elseif c == '\''
+            has_single = true
+        elseif c == '"'
+            has_double = true
+        end
+    end
+    if !(has_spaces || has_backsl || has_single || has_double)
+        print(word)
+    elseif !has_single
+        print('\'', word, '\'')
+    else
+        print('"')
+        for c = word
+            if c == '"'
+                print('\\')
+            end
+            print(c)
+        end
+        print('"')
+    end
+end
+
+function print_shell_escaped(cmd::String, args::String...)
+    print_shell_word(cmd)
+    for arg = args
+        print(' ')
+        print_shell_word(arg)
+    end
+end
+
+shell_escape(cmd::String, args::String...) =
+    print_to_string(print_shell_escaped, cmd, args...)
+
+## miscellaneous string functions ##
+
 function lpad(s::String, n::Int, p::String)
     m = n - strlen(s)
     if m <= 0; return s; end
@@ -305,7 +468,7 @@ function lpad(s::String, n::Int, p::String)
     q = div(m,l)
     r = m - q*l
     # TODO: this is correct but inefficient for long p
-    p^q * (r > 0 ? p[1:strind(p,r)] : "") * s
+    p^q * (r > 0 ? p[1:chr2ind(p,r)] : "") * s
 end
 
 function rpad(s::String, n::Int, p::String)
@@ -315,11 +478,14 @@ function rpad(s::String, n::Int, p::String)
     q = div(m,l)
     r = m - q*l
     # TODO: this is correct but inefficient for long p
-    s * p^q * (r > 0 ? p[1:strind(p,r)] : "")
+    s * p^q * (r > 0 ? p[1:chr2ind(p,r)] : "")
 end
 
 lpad(s, n::Int, p) = lpad(string(s), n, string(p))
 rpad(s, n::Int, p) = rpad(string(s), n, string(p))
+
+lpad(s, n::Int) = lpad(string(s), n, " ")
+rpad(s, n::Int) = rpad(string(s), n, " ")
 
 ## string to integer functions ##
 
@@ -360,25 +526,6 @@ function uint2str(n::Int, b::Int)
 end
 
 uint2str(n::Int, b::Int, len::Int) = lpad(uint2str(n,b),len,'0')
-
-## conversion of general objects to strings ##
-
-function string(p::Ptr{Uint8})
-    if p == C_NULL
-        error("cannot convert NULL to string")
-    end
-    ccall(dlsym(JuliaDLHandle,"jl_cstr_to_string"),
-          Any, (Ptr{Uint8},), p)::String
-end
-
-string(x) = string(ccall(dlsym(JuliaDLHandle,"jl_show_to_string"),
-                         Ptr{Uint8}, (Any,), x))
-
-bstring(str::ByteString) = str
-bstring(args...) = print_to_string(print, args...)
-
-cstring(str::ByteString) = str.data
-cstring(args...) = print_to_array(print, args...)
 
 ## lexicographically compare byte arrays (used by Latin-1 and UTF-8) ##
 

@@ -133,14 +133,15 @@ end
 
 function show(cmd::Cmd)
     if isa(cmd.exec,(String,Tuple))
-        print('`', cmd.exec[1])
-        for arg = cmd.exec[2]
-            print(' ', arg)
+        esc = shell_escape(cmd.exec[1], cmd.exec[2]...)
+        print('`')
+        for c = esc
+            if c == '`'
+                print('\\')
+            end
+            print(c)
         end
         print('`')
-        if cmd.pid > 0
-            print('[',cmd.pid,']')
-        end
     else
         invoke(show, (Any,), cmd)
     end
@@ -281,4 +282,8 @@ function run(cmds::Cmds)
         success &= process_success(cmd.status)
     end
     success
+end
+
+macro cmd(str)
+    quote Cmd(($shell_split(str))...) end
 end
