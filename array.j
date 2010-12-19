@@ -19,16 +19,16 @@ clone{T}(a::Array, T::Type, dims::Dims) = Array(T, dims)
 clone{T}(a::Array, T::Type, dims::Size...) = Array(T, dims)
 
 for (t, f) = ((Float64, :rand), (Float32, :randf), (Float64, :randn))
-    eval(quote
-          function ($f)(dims::Dims)
-              A = Array($t, dims)
-              for i = 1:numel(A)
-                  A[i] = ($f)()
-              end
-              return A
-          end
-         end)
-    eval(:( ($f)(dims::Size...) = ($f)(dims) ))
+    @eval begin
+        function ($f)(dims::Dims)
+            A = Array($t, dims)
+            for i = 1:numel(A)
+                A[i] = ($f)()
+            end
+            return A
+        end
+        ($f)(dims::Size...) = ($f)(dims)
+    end
 end
 
 zeros{T}(::Type{T}, dims::Dims) = fill(Array(T, dims), zero(T))

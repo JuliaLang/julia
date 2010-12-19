@@ -264,10 +264,8 @@ for f = {:iswalnum, :iswalpha, :iswascii, :iswblank, :iswcntrl, :iswdigit,
          :iswgraph, :iswhexnumber, :iswideogram, :iswlower, :iswnumber,
          :iswphonogram, :iswprint, :iswpunct, :iswrune, :iswspace,
          :iswspecial, :iswupper, :iswxdigit}
-    eval(quote
-        ($f)(c::Char) = bool(ccall(dlsym(libc,$expr(:quote,f)),
-              Int32, (Char,), c))
-    end)
+    @eval ($f)(c::Char) = bool(ccall(dlsym(libc,$expr(:quote,f)),
+                                     Int32, (Char,), c))
 end
 
 escape_nul(s::String, i::Index) =
