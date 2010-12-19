@@ -14,3 +14,9 @@ gensym() = ccall(dlsym(JuliaDLHandle,"jl_gensym"), Any, ())::Symbol
 expr(hd::Symbol, args...) = Expr(hd, {args...}, Any)
 expr(hd::Symbol, args::Array{Any,1}) = Expr(hd, args, Any)
 copy(e::Expr) = Expr(e.head, copy(e.args), e.type)
+
+## misc syntax ##
+
+macro eval(x)
+    quote eval($expr(:quote,x)) end
+end
