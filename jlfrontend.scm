@@ -83,6 +83,9 @@
        (pair? (cadr e)) (eq? (caadr e) '=) (symbol? (cadadr e))
        (eq? (cadr (caddr e)) (cadadr e))))
 
+(define (lambda-ex? e)
+  (and (pair? e) (eq? (car e) 'lambda)))
+
 ;; in a file, we want to expand in advance as many expressions as possible.
 ;; we can't do this for expressions with macro calls, because the needed
 ;; macros might not have been defined yet (since that is done by the
@@ -92,9 +95,11 @@
   (if (has-macrocalls? e)
       `(unexpanded ,e)
       (let ((ex (toplevel-expr e)))
-	(if (simple-assignment? ex)
-	    (cadr ex)
-	    ex))))
+	(cond ((simple-assignment? ex)  (cadr ex))
+	      ((and (length= ex 2) (eq? (car ex) 'body)
+		    (not (lambda-ex? (cadadr ex))))
+	       (cadadr ex))
+	      (else ex)))))
 
 (define (jl-parse-source s)
   (let ((infile (open-input-file s)))

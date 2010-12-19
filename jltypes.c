@@ -1988,6 +1988,7 @@ void jl_init_types()
     label_sym = jl_symbol("label");
     return_sym = jl_symbol("return");
     lambda_sym = jl_symbol("lambda");
+    vinf_sym = jl_symbol("vinf");
     macro_sym = jl_symbol("macro");
     unexpanded_sym = jl_symbol("unexpanded");
     assign_sym = jl_symbol("=");

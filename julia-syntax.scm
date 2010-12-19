@@ -17,6 +17,20 @@
 (define (lam:vinfo x) (caddr x))
 (define (lam:body x) (cadddr x))
 
+#|
+(define *gensyms* '())
+(define *current-gensyms* '())
+(define (gensy)
+  (if (null? *current-gensyms*)
+      (let ((g (gensym)))
+	(set! *gensyms* (cons g *gensyms*))
+	g)
+      (begin0 (car *current-gensyms*)
+	      (set! *current-gensyms* (cdr *current-gensyms*)))))
+(define (reset-gensyms)
+  (set! *current-gensyms* *gensyms*))
+|#
+
 ; convert x => (x), (tuple x y) => (x y)
 ; used to normalize function signatures like "x->y" and "function +(a,b)"
 (define (fsig-to-lambda-list arglist)
@@ -500,7 +514,7 @@
 			(call ref ,arr ,@new-idxs)))))
 
    (pattern-lambda (curly type . elts)
-		   `(call (top instantiate_type) ,type ,@elts))
+		   `(call (top apply_type) ,type ,@elts))
 
    ; call with splat
    (pattern-lambda (call f ... (... _) ...)
@@ -1222,7 +1236,7 @@ So far only the second case can actually occur.
 	(else (unique (apply nconc (map free-vars (cdr e)))))))
 
 ; convert each lambda's (locals ...) to
-;   (var-info (locals ...) var-info-lst captured-var-infos)
+;   (vinf (locals ...) var-info-lst captured-var-infos)
 ; where var-info-lst is a list of var-info records
 (define (analyze-vars e env)
   (cond ((or (atom? e) (quoted? e)) e)
@@ -1276,7 +1290,7 @@ So far only the second case can actually occur.
 	   (for-each (lambda (v) (vinfo:set-capt! v #t))
 		     cv)
 	   `(lambda ,args
-	      (var-info ,(caddr e) ,vi ,cv ())
+	      (vinf ,(caddr e) ,vi ,cv ())
 	      ,bod)))
 	(else (cons (car e)
 		    (map (lambda (x) (analyze-vars x env))

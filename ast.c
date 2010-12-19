@@ -253,7 +253,6 @@ static jl_value_t *scm_to_julia_(value_t e)
         value_t hd = car_(e);
         if (issymbol(hd)) {
             jl_sym_t *sym = scmsym_to_julia(hd);
-            char *s = sym->name;
             /* tree node types:
                goto  gotoifnot  label  return
                lambda  call  =  quote
@@ -276,7 +275,7 @@ static jl_value_t *scm_to_julia_(value_t e)
                 return
                     (jl_value_t*)jl_new_lambda_info((jl_value_t*)ex, jl_null);
             }
-            if (!strcmp(s, "var-info")) {
+            if (sym == vinf_sym) {
                 jl_expr_t *ex = jl_exprn(sym, n);
                 e = cdr_(e);
                 jl_cellset(ex->args, 0, scm_to_julia_(car_(e)));
@@ -395,12 +394,12 @@ jl_value_t *jl_expand(jl_value_t *expr)
 // wrap expr in a thunk AST
 jl_lambda_info_t *jl_wrap_expr(jl_value_t *expr)
 {
-    // `(lambda () (var-info (locals) () () ()) ,expr)
+    // `(lambda () (vinf (locals) () () ()) ,expr)
     jl_expr_t *le=NULL, *vi=NULL, *lo=NULL, *bo=NULL;
     jl_value_t *mt = jl_an_empty_cell;
     JL_GC_PUSH(&le, &vi, &lo, &bo);
     le = jl_exprn(lambda_sym, 3);
-    vi = jl_exprn(jl_symbol("var-info"), 4);
+    vi = jl_exprn(vinf_sym, 4);
     lo = jl_exprn(locals_sym, 0);
     jl_cellset(le->args, 0, mt);
     jl_cellset(le->args, 1, (jl_value_t*)vi);

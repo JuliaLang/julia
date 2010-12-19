@@ -83,12 +83,12 @@ isseqtype(t) = isa(t,TagKind) && is(t.name.name,:...)
 
 t_func = idtable()
 t_func[tuple] = (0, Inf, (args...)->limit_tuple_depth(args))
-# TODO: handle e.g. instantiate_type(T, R::Union(Type{Int32},Type{Float64}))
-t_func[instantiate_type] =
+# TODO: handle e.g. apply_type(T, R::Union(Type{Int32},Type{Float64}))
+t_func[apply_type] =
     (1, Inf, (args...)->(all(map(isType,args)) ?
-                         Type{instantiate_type(args[1].parameters[1],
-                                               map(t->t.parameters[1],
-                                                   args[2:])...)} :
+                         Type{apply_type(args[1].parameters[1],
+                                         map(t->t.parameters[1],
+                                             args[2:])...)} :
                          isType(args[1]) ?
                          args[1] :
                          Any))

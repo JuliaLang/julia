@@ -291,7 +291,7 @@ deserialize(s, t::BitsKind) = read(s, t)
 function deserialize(s, ::Type{BitsKind})
     name = deserialize(s)::Symbol
     params = deserialize(s)
-    t = instantiate_type(eval(name), params...)
+    t = apply_type(eval(name), params...)
     return read(s, t)
 end
 
@@ -315,13 +315,13 @@ end
 function deserialize(s, ::Type{TagKind})
     name = deserialize(s)::Symbol
     params = deserialize(s)
-    instantiate_type(eval(name), params...)
+    apply_type(eval(name), params...)
 end
 
 function deserialize(s, ::Type{StructKind})
     name = deserialize(s)::Symbol
     params = deserialize(s)
-    t = instantiate_type(eval(name), params...)
+    t = apply_type(eval(name), params...)
     # allow delegation to more specialized method
     return deserialize(s, t)
 end

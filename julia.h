@@ -293,6 +293,7 @@ extern jl_sym_t *quote_sym;
 extern jl_sym_t *top_sym;
 extern jl_sym_t *line_sym;
 extern jl_sym_t *continue_sym;
+extern jl_sym_t *vinf_sym;
 extern jl_sym_t *goto_sym;    extern jl_sym_t *goto_ifnot_sym;
 extern jl_sym_t *label_sym;   extern jl_sym_t *return_sym;
 extern jl_sym_t *lambda_sym;  extern jl_sym_t *assign_sym;

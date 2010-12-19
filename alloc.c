@@ -55,7 +55,7 @@ jl_bits_type_t *jl_pointer_void_type;
 jl_sym_t *call_sym;    jl_sym_t *dots_sym;
 jl_sym_t *call1_sym;
 jl_sym_t *dollar_sym;  jl_sym_t *quote_sym;
-jl_sym_t *top_sym;
+jl_sym_t *top_sym;     jl_sym_t *vinf_sym;
 jl_sym_t *line_sym;    jl_sym_t *continue_sym;
 // head symbols for each expression type
 jl_sym_t *goto_sym;    jl_sym_t *goto_ifnot_sym;
