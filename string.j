@@ -424,7 +424,8 @@ function print_shell_escaped(cmd::String, args::String...)
     end
 end
 
-shell_escape(args::String...) = print_to_string(print_shell_escaped, args...)
+shell_escape(cmd::String, args::String...) =
+    print_to_string(print_shell_escaped, cmd, args...)
 
 ## miscellaneous string functions ##
 
