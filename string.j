@@ -265,7 +265,8 @@ for f = {:iswalnum, :iswalpha, :iswascii, :iswblank, :iswcntrl, :iswdigit,
          :iswphonogram, :iswprint, :iswpunct, :iswrune, :iswspace,
          :iswspecial, :iswupper, :iswxdigit}
     eval(quote
-        ($f)(c::Char) = bool(ccall(dlsym(libc,$string(f)), Int32, (Char,), c))
+        ($f)(c::Char) = bool(ccall(dlsym(libc,$expr(:quote,f)),
+              Int32, (Char,), c))
     end)
 end
 

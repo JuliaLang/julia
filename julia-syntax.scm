@@ -1372,7 +1372,7 @@ So far only the second case can actually occur.
 
 (define (expand-backquote e)
   (cond ((symbol? e)          `(quote ,e))
-	((not (pair? e))      e)
+        ((not (pair? e))      e)
 	((eq? (car e) '$)     (cadr e))
 	((eq? (car e) 'bquote)
 	 (expand-backquote (expand-backquote (cadr e))))
@@ -1395,8 +1395,17 @@ So far only the second case can actually occur.
 				      ,(expand-backquote (car p)))
 			       q))))))))
 
+;; rename quote to bquote, so that quoted expressions are always identified
+;; by "quote", but we can distinguish which things were originally quoted
+;; from quoted symbols produced by expand-backquote.
+(define (quote->bquote e)
+  (cond ((atom? e) e)
+	((eq? (car e) 'quote)
+	 (cons 'bquote (map quote->bquote (cdr e))))
+	(else (map quote->bquote e))))
+
 (define (julia-expand-macros e)
-  (cond ((not (pair? e))      e)
+  (cond ((not (pair? e))     e)
 	((eq? (car e) 'bquote)
 	 ;; backquote is essentially a built-in macro at the moment
 	 (julia-expand-macros (expand-backquote (cadr e))))
@@ -1408,7 +1417,7 @@ So far only the second case can actually occur.
 	       (error (string "macro " (cadr e) " not defined")))
 	   (if (equal? form '(error))
 	       (error (string "error expanding macro " (cadr e))))
-	   (julia-expand-macros form)))
+	   (julia-expand-macros (quote->bquote form))))
 	(else
 	 (map julia-expand-macros e))))
 
@@ -1423,7 +1432,7 @@ So far only the second case can actually occur.
    (pattern-expand patterns
     (pattern-expand lower-comprehensions
      (pattern-expand binding-form-patterns
-      (julia-expand-macros ex))))))
+      (julia-expand-macros (quote->bquote ex)))))))
 
 (define (julia-expand ex)
   (julia-expand1 (julia-expand0 ex)))

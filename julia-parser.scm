@@ -533,7 +533,7 @@
   (case word
     ((begin)  (begin0 (parse-block s)
 		      (expect-end s)))
-    ((quote)  (begin0 (list 'bquote (parse-block s))
+    ((quote)  (begin0 (list 'quote (parse-block s))
 		      (expect-end s)))
     ((while)  (begin0 (list 'while (parse-cond s) (parse-block s))
 		      (expect-end s)))
@@ -796,7 +796,7 @@
 	   (if (closing-token? (peek-token s))
 	       ':
 	       (let ((ex (parse-atom s)))
-		 (list 'bquote ex))))
+		 (list 'quote ex))))
 
 	  ;; identifier
 	  ((symbol? t) (take-token s))

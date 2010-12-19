@@ -39,7 +39,6 @@ JL_CALLABLE(jl_f_show_bool);
 JL_CALLABLE(jl_f_show_float32);
 JL_CALLABLE(jl_f_show_float64);
 JL_CALLABLE(jl_f_show_pointer);
-JL_CALLABLE(jl_f_show_symbol);
 JL_CALLABLE(jl_f_show_typename);
 JL_CALLABLE(jl_f_show_typevar);
 JL_CALLABLE(jl_f_show_linfo);

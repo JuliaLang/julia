@@ -896,7 +896,7 @@ JL_CALLABLE(jl_f_show_pointer)
     return (jl_value_t*)jl_null;
 }
 
-JL_CALLABLE(jl_f_show_symbol)
+JL_CALLABLE(jl_f_print_symbol)
 {
     ios_t *s = jl_current_output_stream();
     ios_puts(((jl_sym_t*)args[0])->name, s);
@@ -1439,11 +1439,12 @@ void jl_init_builtins()
     add_builtin_method1(jl_print_gf,
                         (jl_type_t*)jl_array_uint8_type,
                         jl_f_print_array_uint8);
+    add_builtin_method1(jl_print_gf, (jl_type_t*)jl_sym_type,
+                        jl_f_print_symbol);
 
     jl_show_gf = jl_new_generic_function(jl_symbol("show"));
 
     add_builtin_method1(jl_show_gf, (jl_type_t*)jl_any_type,         jl_f_show_any);
-    add_builtin_method1(jl_show_gf, (jl_type_t*)jl_sym_type,         jl_f_show_symbol);
     add_builtin_method1(jl_show_gf, (jl_type_t*)jl_tvar_type,        jl_f_show_typevar);
     add_builtin_method1(jl_show_gf, (jl_type_t*)jl_lambda_info_type, jl_f_show_linfo);
     add_builtin_method1(jl_show_gf, (jl_type_t*)jl_float32_type,     jl_f_show_float32);

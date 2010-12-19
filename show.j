@@ -5,6 +5,8 @@ print(x...) = (for i=x; print(i); end)
 
 show(tn::TypeName) = show(tn.name)
 
+show(s::Symbol) = print(s)
+
 function show_comma_array(ar, open, close)
     print(open)
     for i=1:length(ar)
@@ -24,15 +26,20 @@ function show(e::Expr)
     elseif is(hd,:(=))
         print(e.args[1], " = ", e.args[2])
     elseif is(hd,:quote)
-        if isa(e.args[1],Expr) && (is(e.args[1].hd,:body) ||
-                                   is(e.args[1].hd,:block))
+        a1 = e.args[1]
+        if isa(e.args[1],Expr) && (is(a1.head,:body) ||
+                                   is(a1.head,:block))
             print("\nquote\n")
-            for a=(e.args[1]).args
+            for a=a1.args
                 print("  ", a, "\n")
             end
             print("end\n")            
         else
-            print(":", e.args[1])
+            if isa(a1,Symbol) && !is(a1,:(:))
+                print(":", a1)
+            else
+                print(":(", a1, ")")
+            end
         end
     elseif is(hd,:null)
         print("()")

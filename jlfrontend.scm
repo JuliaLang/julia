@@ -74,7 +74,7 @@
 
 (define (has-macrocalls? e)
   (or (and (pair? e) (eq? (car e) 'macrocall))
-      (and (not (and (pair? e) (eq? (car e) 'bquote)))
+      (and (not (and (pair? e) (eq? (car e) 'quote)))
 	   (any has-macrocalls? e))))
 
 ;; (body (= v _) (return v)) => (= v _)
