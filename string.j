@@ -2,6 +2,7 @@
 
 start(s::String) = 1
 done(s::String,i) = (i > length(s))
+isempty(s::String) = done(s,start(s))
 ref(s::String, i::Index) = next(s,i)[1]
 length(s::String) = at_string_end(s)[1]
 strlen(s::String) = at_string_end(s)[2]
@@ -366,8 +367,7 @@ function shell_split(str::String)
     j = i
     while !done(str,j)
         c, k = next(str,j)
-        if !in_single_quotes &&
-           !in_double_quotes && iswspace(c)
+        if !in_single_quotes && !in_double_quotes && iswspace(c)
             args = append(args,(strcat(arg,str[i:j-1]),))
             arg = ""
             j = k
