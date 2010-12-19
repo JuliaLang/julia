@@ -6,6 +6,19 @@
 ## definitions providing basic traits of arithmetic operators ##
 
 # fallback definitions for emulating N-arg operators with 2-arg definitions
+(+)() = 0
+(+)(x::Number) = x
+(+)(a,b,c) = (+)((+)(a,b),c)
+(+)(a,b,c,d) = (+)((+)((+)(a,b),c),d)
+(+)(a,b,c,d,e) = (+)((+)((+)((+)(a,b),c),d),e)
+function (+)(x1, x2, x3, xs...)
+    accum = (+)((+)(x1,x2),x3)
+    for x = xs
+        accum = accum + x
+    end
+    accum
+end
+
 (*)() = 1
 (*)(x::Number) = x
 (*)(a,b,c) = (*)((*)(a,b),c)
@@ -19,18 +32,9 @@ function (*)(x1, x2, x3, xs...)
     accum
 end
 
-(+)() = 0
-(+)(x::Number) = x
-(+)(a,b,c) = (+)((+)(a,b),c)
-(+)(a,b,c,d) = (+)((+)((+)(a,b),c),d)
-(+)(a,b,c,d,e) = (+)((+)((+)((+)(a,b),c),d),e)
-function (+)(x1, x2, x3, xs...)
-    accum = (+)((+)(x1,x2),x3)
-    for x = xs
-        accum = accum + x
-    end
-    accum
-end
+(&)() = error("zero-argument & is ambiguous")
+(|)() = error("zero-argument | is ambiguous")
+($)() = error("zero-argument $ is ambiguous")
 
 (\)(x::Number, y::Number) = y/x
 
@@ -117,9 +121,6 @@ end
 (*)(x::Number, y::Number) = (*)(promote(x,y)...)
 (-)(x::Number, y::Number) = (-)(promote(x,y)...)
 (/)(x::Number, y::Number) = (/)(promote(x,y)...)
-
-## promotion in comparisons ##
-
 
 # these are defined for the fundamental < and == so that if a method is
 # not found for e.g. <=, it is translated to < and == first, then promotion
