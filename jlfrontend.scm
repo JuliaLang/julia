@@ -68,6 +68,9 @@
 	      body)
 	    th))))
 
+(define (jl-just-parse-string s)
+  (parser-wrap (lambda () (julia-parse s))))
+
 (define (jl-parse-string s)
   (parser-wrap (lambda ()
 		 (toplevel-expr (julia-parse s)))))

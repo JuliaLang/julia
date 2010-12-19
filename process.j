@@ -285,5 +285,5 @@ function run(cmds::Cmds)
 end
 
 macro cmd(str)
-    quote Cmd(($shell_split(str))...) end
+    quote Cmd(($shell_split(str)...)) end
 end

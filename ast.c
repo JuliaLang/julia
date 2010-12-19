@@ -370,6 +370,17 @@ jl_value_t *jl_parse_input_line(const char *str)
     return scm_to_julia(e);
 }
 
+DLLEXPORT jl_value_t *jl_parse_string(const char *str)
+{
+    value_t e = fl_applyn(1, symbol_value(symbol("jl-just-parse-string")),
+                          cvalue_static_cstring(str));
+    if (e == FL_T || e == FL_F || e == FL_EOF)
+        return NULL;
+    syntax_error_check(e);
+    
+    return scm_to_julia(e);
+}
+
 jl_value_t *jl_parse_file(const char *fname)
 {
     value_t e = fl_applyn(1, symbol_value(symbol("jl-parse-file")),

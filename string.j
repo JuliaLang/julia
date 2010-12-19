@@ -460,6 +460,11 @@ end
 shell_escape(cmd::String, args::String...) =
     print_to_string(print_shell_escaped, cmd, args...)
 
+## interface to parser ##
+
+parse(s::String) = ccall(dlsym(JuliaDLHandle,:jl_parse_string), Any,
+                              (Ptr{Uint8},), cstring(s))
+
 ## miscellaneous string functions ##
 
 function lpad(s::String, n::Int, p::String)
