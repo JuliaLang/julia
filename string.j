@@ -43,6 +43,38 @@ function at_string_end(s::String)
     return i, n
 end
 
+function ind2chr(s::String, ind::Int)
+    if ind < 1
+        error("in next: arrayref: index out of range")
+    end
+    i = 1
+    j = start(s)
+    while true
+        c, k = next(s,j)
+        if ind <= j
+            return i
+        end
+        i += 1
+        j = k
+    end
+end
+
+function chr2ind(s::String, chr::Int)
+    if chr < 1
+        error("in next: arrayref: index out of range")
+    end
+    i = 1
+    j = start(s)
+    while true
+        c, k = next(s,j)
+        if chr == i
+            return j
+        end
+        i += 1
+        j = k
+    end
+end
+
 function strind(s::String, i::Int)
     j = start(s)
     for k = 1:i-1; c, j = next(s,j); end
@@ -429,23 +461,6 @@ shell_escape(cmd::String, args::String...) =
 
 ## miscellaneous string functions ##
 
-function strchr(str::String, ch::Char)
-    i = start(str)
-    while !done(str,i)
-        c, j = next(str,i)
-        if c == ch
-            return i
-        end
-    end
-    return 0
-end
-
-# function strchr(str::Array{Uint8,1}, ch::Char)
-#     ptr = ccall(dlsym(libc,"memchr"), Int32,
-#                 (Ptr{Uint8}, Char, Size),
-#                 str, ch, length(str))
-# end
-
 function lpad(s::String, n::Int, p::String)
     m = n - strlen(s)
     if m <= 0; return s; end
@@ -453,7 +468,7 @@ function lpad(s::String, n::Int, p::String)
     q = div(m,l)
     r = m - q*l
     # TODO: this is correct but inefficient for long p
-    p^q * (r > 0 ? p[1:strind(p,r)] : "") * s
+    p^q * (r > 0 ? p[1:chr2ind(p,r)] : "") * s
 end
 
 function rpad(s::String, n::Int, p::String)
@@ -463,11 +478,14 @@ function rpad(s::String, n::Int, p::String)
     q = div(m,l)
     r = m - q*l
     # TODO: this is correct but inefficient for long p
-    s * p^q * (r > 0 ? p[1:strind(p,r)] : "")
+    s * p^q * (r > 0 ? p[1:chr2ind(p,r)] : "")
 end
 
 lpad(s, n::Int, p) = lpad(string(s), n, string(p))
 rpad(s, n::Int, p) = rpad(string(s), n, string(p))
+
+lpad(s, n::Int) = lpad(string(s), n, " ")
+rpad(s, n::Int) = rpad(string(s), n, " ")
 
 ## string to integer functions ##
 

@@ -8,8 +8,10 @@ next(s::Latin1String, i::Index) = (char(s.data[i]), i+1)
 ## overload methods for efficiency ##
 
 length(s::Latin1String) = length(s.data)
-strind(s::Latin1String, i::Index) = s[i]
+strind(s::Latin1String, i::Int) = s[i]
 cmp(a::Latin1String, b::Latin1String) = lexcmp(a.data, b.data)
+ind2chr(s::Latin1String, i::Int) = i
+chr2ind(s::Latin1String, i::Int) = i
 
 ## outputing Latin-1 strings ##
 
