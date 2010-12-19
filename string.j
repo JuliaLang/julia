@@ -416,10 +416,11 @@ function print_shell_word(word::String)
     end
 end
 
-function print_shell_escaped(args::String...)
-    for i = 1:length(args)
-        if i > 1; print(' '); end
-        print_shell_word(args[i])
+function print_shell_escaped(cmd::String, args::String...)
+    print_shell_word(cmd)
+    for arg = args
+        print(' ')
+        print_shell_word(arg)
     end
 end
 
