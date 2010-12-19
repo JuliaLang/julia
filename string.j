@@ -324,6 +324,126 @@ end
 
 unescape_string(s::String) = print_to_string(print_unescaped, s)
 
+## implement shell-like parsing ##
+
+function shell_split(str::String)
+    in_single_quotes = false
+    in_double_quotes = false
+    args = ()
+    arg = ""
+    i = start(str)
+    j = i
+    while !done(str,j)
+        c, k = next(str,j)
+        if !in_single_quotes &&
+           !in_double_quotes && iswspace(c)
+            args = append(args,(strcat(arg,str[i:j-1]),))
+            arg = ""
+            j = k
+            while !done(str,j)
+                c, k = next(str,j)
+                if !iswspace(c)
+                    i = j
+                    break
+                end
+                j = k
+            end
+        else
+            if !in_double_quotes && c == '\''
+                in_single_quotes = !in_single_quotes
+                arg = strcat(arg,str[i:j-1])
+                i = k
+            elseif !in_single_quotes && c == '"'
+                in_double_quotes = !in_double_quotes
+                arg = strcat(arg,str[i:j-1])
+                i = k
+            elseif c == '\\'
+                if in_double_quotes
+                    if done(str,k)
+                        error("unterminated double quote")
+                    end
+                    if str[k] == '"'
+                        arg = strcat(arg,str[i:j-1])
+                        i = k
+                        c, k = next(str,k)
+                    end
+                elseif !in_single_quotes
+                    if done(str,k)
+                        error("dangling backslash")
+                    end
+                    arg = strcat(arg,str[i:j-1])
+                    i = k
+                    c, k = next(str,k)
+                end
+            end
+            j = k
+        end
+    end
+    if in_single_quotes; error("unterminated single quote"); end
+    if in_double_quotes; error("unterminated double quote"); end
+    args = append(args,(strcat(arg,str[i:]),))
+end
+
+function print_shell_word(word::String)
+    has_spaces = false
+    has_backsl = false
+    has_single = false
+    has_double = false
+    for c = word
+        if iswspace(c)
+            has_spaces = true
+        elseif c == '\\'
+            has_backsl = true
+        elseif c == '\''
+            has_single = true
+        elseif c == '"'
+            has_double = true
+        end
+    end
+    if !(has_spaces || has_backsl || has_single || has_double)
+        print(word)
+    elseif !has_single
+        print('\'', word, '\'')
+    else
+        print('"')
+        for c = word
+            if c == '"'
+                print('\\')
+            end
+            print(c)
+        end
+        print('"')
+    end
+end
+
+function print_shell_escaped(args::String...)
+    for i = 1:length(args)
+        if i > 1; print(' '); end
+        print_shell_word(args[i])
+    end
+end
+
+shell_escape(args::String...) = print_to_string(print_shell_escaped, args...)
+
+## miscellaneous string functions ##
+
+function strchr(str::String, ch::Char)
+    i = start(str)
+    while !done(str,i)
+        c, j = next(str,i)
+        if c == ch
+            return i
+        end
+    end
+    return 0
+end
+
+# function strchr(str::Array{Uint8,1}, ch::Char)
+#     ptr = ccall(dlsym(libc,"memchr"), Int32,
+#                 (Ptr{Uint8}, Char, Size),
+#                 str, ch, length(str))
+# end
+
 function lpad(s::String, n::Int, p::String)
     m = n - strlen(s)
     if m <= 0; return s; end

@@ -133,14 +133,15 @@ end
 
 function show(cmd::Cmd)
     if isa(cmd.exec,(String,Tuple))
-        print('`', cmd.exec[1])
-        for arg = cmd.exec[2]
-            print(' ', arg)
+        esc = shell_escape(cmd.exec[1], cmd.exec[2]...)
+        print('`')
+        for c = esc
+            if c == '`'
+                print('\\')
+            end
+            print(c)
         end
         print('`')
-        if cmd.pid > 0
-            print('[',cmd.pid,']')
-        end
     else
         invoke(show, (Any,), cmd)
     end
@@ -281,66 +282,6 @@ function run(cmds::Cmds)
         success &= process_success(cmd.status)
     end
     success
-end
-
-## implement shell-like parsing of `cmd` strings ##
-
-function shell_split(str::String)
-    in_single_quotes = false
-    in_double_quotes = false
-    args = ()
-    arg = ""
-    i = start(str)
-    j = i
-    while !done(str,j)
-        c, k = next(str,j)
-        if !in_single_quotes &&
-           !in_double_quotes && iswspace(c)
-            args = append(args,(strcat(arg,str[i:j-1]),))
-            arg = ""
-            j = k
-            while !done(str,j)
-                c, k = next(str,j)
-                if !iswspace(c)
-                    i = j
-                    break
-                end
-                j = k
-            end
-        else
-            if !in_double_quotes && c == '\''
-                in_single_quotes = !in_single_quotes
-                arg = strcat(arg,str[i:j-1])
-                i = k
-            elseif !in_single_quotes && c == '"'
-                in_double_quotes = !in_double_quotes
-                arg = strcat(arg,str[i:j-1])
-                i = k
-            elseif c == '\\'
-                if in_double_quotes
-                    if done(str,k)
-                        error("unterminated double quote")
-                    end
-                    if str[k] == '"'
-                        arg = strcat(arg,str[i:j-1])
-                        i = k
-                        c, k = next(str,k)
-                    end
-                elseif !in_single_quotes
-                    if done(str,k)
-                        error("dangling backslash")
-                    end
-                    arg = strcat(arg,str[i:j-1])
-                    i = k
-                    c, k = next(str,k)
-                end
-            end
-            j = k
-        end
-    end
-    if in_single_quotes; error("unterminated single quote"); end
-    if in_double_quotes; error("unterminated double quote"); end
-    args = append(args,(strcat(arg,str[i:]),))
 end
 
 macro cmd(str)
