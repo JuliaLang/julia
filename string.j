@@ -358,18 +358,31 @@ unescape_string(s::String) = print_to_string(print_unescaped, s)
 
 ## implement shell-like parsing ##
 
-function shell_split(str::String)
+function shell_parse(str::String, interp::Bool)
+
     in_single_quotes = false
     in_double_quotes = false
+
     args = ()
-    arg = ""
+    arg = ()
     i = start(str)
     j = i
+
+    update_arg = (s)->begin
+        if !isa(s,String) || !isempty(s)
+            arg = append(arg,(s,))
+        end
+    end
+    append_arg = ()->begin
+        args = append(args,(arg,))
+        arg = ()
+    end
+
     while !done(str,j)
         c, k = next(str,j)
         if !in_single_quotes && !in_double_quotes && iswspace(c)
-            args = append(args,(strcat(arg,str[i:j-1]),))
-            arg = ""
+            update_arg(str[i:j-1])
+            append_arg()
             j = k
             while !done(str,j)
                 c, k = next(str,j)
@@ -379,41 +392,55 @@ function shell_split(str::String)
                 end
                 j = k
             end
+        elseif interp && !in_single_quotes && c == '$'
+            update_arg(str[i:j-1]); i = k
+            j = k
+            while !done(str,j)
+                c, k = next(str,j)
+                if !iswalnum(c) && c != '_'
+                    break
+                end
+                j = k
+            end
+            update_arg(symbol(bstring(str[i:j-1]))); i = j
         else
             if !in_double_quotes && c == '\''
                 in_single_quotes = !in_single_quotes
-                arg = strcat(arg,str[i:j-1])
-                i = k
+                update_arg(str[i:j-1]); i = k
             elseif !in_single_quotes && c == '"'
                 in_double_quotes = !in_double_quotes
-                arg = strcat(arg,str[i:j-1])
-                i = k
+                update_arg(str[i:j-1]); i = k
             elseif c == '\\'
                 if in_double_quotes
                     if done(str,k)
                         error("unterminated double quote")
                     end
                     if str[k] == '"'
-                        arg = strcat(arg,str[i:j-1])
-                        i = k
+                        update_arg(str[i:j-1]); i = k
                         c, k = next(str,k)
                     end
                 elseif !in_single_quotes
                     if done(str,k)
                         error("dangling backslash")
                     end
-                    arg = strcat(arg,str[i:j-1])
-                    i = k
+                    update_arg(str[i:j-1]); i = k
                     c, k = next(str,k)
                 end
             end
             j = k
         end
     end
+
     if in_single_quotes; error("unterminated single quote"); end
     if in_double_quotes; error("unterminated double quote"); end
-    args = append(args,(strcat(arg,str[i:]),))
+
+    update_arg(str[i:j-1])
+    append_arg()
+    args
 end
+
+shell_split(str::String) =
+    map(x->strcat(x...), shell_parse(str, false))
 
 function print_shell_word(word::String)
     has_spaces = false
