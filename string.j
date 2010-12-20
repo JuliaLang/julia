@@ -439,8 +439,14 @@ function shell_parse(str::String, interp::Bool)
     args
 end
 
-shell_split(str::String) =
-    map(x->strcat(x...), shell_parse(str, false))
+function shell_split(str::String)
+    parsed = shell_parse(str, false)
+    args = ()
+    for arg = parsed
+        args = append(args,(strcat(arg...),))
+    end
+    args
+end
 
 function print_shell_word(word::String)
     has_spaces = false
