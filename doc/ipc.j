@@ -97,62 +97,25 @@ end
 
 ## some parallel pipe examples:
 
-run(Cmd("echo","hello") & Cmd("echo","world"))
-run(Cmd("echo","hello") & Cmd("echo","world") | Cmd("sort"))
-run(Cmd("echo","hello") & Cmd("echo","world") | Cmd("sort") | Cmd("tac"))
+run(`echo hello` & `echo world`)
+run(`echo hello` & `echo world` | `sort`)
+run(`echo hello` & `echo world` | `sort` | `tac`)
 
-run(Cmd("perl","-e","warn 'world\n'; print 'hello\n'"))
-run(Cmd("perl","-e","warn 'world\n'; print 'hello\n'") | Cmd("sort"))
-run(stderr(Cmd("perl","-e","warn 'world\n'; print 'hello\n'")) | Cmd("sort"))
-run(output(Cmd("perl","-e","warn 'world\n'; print 'hello\n'")) | Cmd("sort"))
-
-function prefixer(sleep, prefix)
-  perl = strcat("$|=1; print \"", prefix, "\\t\", $_; sleep ", sleep)
-  return Cmd("perl","-nle", perl)
-end
-
-run(Cmd("perl","-le","$|=1; for(0..9){ print; sleep 1 }") |
-    prefixer(2,"A") & prefixer(2,"B"))
-
-run(Cmd("perl","-le","$|=1; for(0..9){ print; sleep 1 }") |
-    prefixer(2,"A") & prefixer(2,"B") | Cmd("sort"))
-
-run(Cmd("perl","-le","$|=1; for(0..9){ sleep 1; print }") |
-    prefixer(3,"X") & prefixer(3,"Y") & prefixer(3,"Z") |
-    prefixer(2,"A") & prefixer(2,"B"))
-
-run(Cmd("perl","-le","$|=1; for(0..9){ sleep 1; print }") |
-    prefixer(3,"X") & prefixer(3,"Y") & prefixer(3,"Z") |
-    prefixer(2,"A") & prefixer(2,"B") | Cmd("sort"))
-
-gen = Cmd("perl","-le","$|=1; for(0..9){ print; sleep 1 }")
-dup = Cmd("perl","-pe","$|=1; warn $_; sleep 1")
-run(gen | dup | dup)
-
-# proposed syntax for the above examples:
-
-`echo hello` & `echo world`
-`echo hello` & `echo world` | `sort`
-`echo hello` & `echo world` | `sort` | `tac`
-
-`perl -e 'warn "world\n"; print "hello\n"'`
-`perl -e 'warn "world\n"; print "hello\n"'` | `sort`
-stderr(`perl -e 'warn "world\n"; print "hello\n"'`) | `sort`
-output(`perl -e 'warn "world\n"; print "hello\n"'`) | `sort`
+run(`perl -e 'warn "world\n"; print "hello\n"'`)
+run(`perl -e 'warn "world\n"; print "hello\n"'` | `sort`)
+run(stderr(`perl -e 'warn "world\n"; print "hello\n"'`) | `sort`)
+run(output(`perl -e 'warn "world\n"; print "hello\n"'`) | `sort`)
 
 prefixer(sleep, prefix) =
   `perl -nle '$|=1; print "'$prefix'\t", $_; sleep '$sleep''`
 
-`perl -le '$|=1; for(0..9){ print; sleep 1 }'` |
-  prefixer(2,"A") & prefixer(2,"B"))
+run(`perl -le '$|=1; for(0..9){ print; sleep 1 }'` |
+    prefixer(2,"A") & prefixer(2,"B"))
 
-`perl -le '$|=1; for(0..9){ print; sleep 1 }'` |
-  prefixer(2,"A") & prefixer(2,"B")) | `sort`
+run(`perl -le '$|=1; for(0..9){ print; sleep 1 }'` |
+    prefixer(3,"X") & prefixer(3,"Y") & prefixer(3,"Z") |
+    prefixer(2,"A") & prefixer(2,"B"))
 
-`perl -le '$|=1; for(0..9){ print; sleep 1 }'` |
-  prefixer(3,"X") & prefixer(3,"Y") & prefixer(3,"Z") |
-  prefixer(2,"A") & prefixer(2,"B"))
-
-`perl -le '$|=1; for(0..9){ print; sleep 1 }'` |
-  prefixer(3,"X") & prefixer(3,"Y") & prefixer(3,"Z") |
-  prefixer(2,"A") & prefixer(2,"B")) | `sort`
+gen = `perl -le '$|=1; for(0..9){ print; sleep 1 }'`
+dup = `perl -pe '$|=1; warn $_; sleep 1'`
+run(gen | dup | dup)
