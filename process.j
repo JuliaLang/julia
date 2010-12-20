@@ -284,6 +284,38 @@ function run(cmds::Cmds)
     success
 end
 
+arg_gen(x::String) = (x,)
+
+function arg_gen(head)
+    if applicable(start,head)
+        vals = ()
+        for x = head
+            vals = append(vals,(string(x),))
+        end
+        return vals
+    else
+        return (string(head),)
+    end
+end
+
+function arg_gen(head, tail...)
+    head = arg_gen(head)
+    tail = arg_gen(tail...)
+    vals = ()
+    for h = head, t = tail
+        vals = append(vals,(strcat(h,t),))
+    end
+    vals
+end
+
+function cmd_gen(parsed::Tuple...)
+    args = ()
+    for arg = parsed
+        args = append(args,arg_gen(arg...))
+    end
+    Cmd(args...)
+end
+
 macro cmd(str)
-    quote Cmd($shell_split(str)...) end
+    quote cmd_gen(eval($shell_parse(str))...) end
 end

@@ -436,8 +436,20 @@ function shell_parse(str::String, interp::Bool)
 
     update_arg(str[i:j-1])
     append_arg()
-    args
+
+    if !interp
+        return args
+    end
+
+    # construct an expression
+    exprs = ()
+    for arg = args
+        exprs = append(exprs,(expr(:tuple,arg...),))
+    end
+    expr(:tuple,exprs...)
 end
+
+shell_parse(str::String) = shell_parse(str,true)
 
 function shell_split(str::String)
     parsed = shell_parse(str, false)
