@@ -83,15 +83,6 @@ isseqtype(t) = isa(t,TagKind) && is(t.name.name,:...)
 
 t_func = idtable()
 t_func[tuple] = (0, Inf, (args...)->limit_tuple_depth(args))
-# TODO: handle e.g. apply_type(T, R::Union(Type{Int32},Type{Float64}))
-t_func[apply_type] =
-    (1, Inf, (args...)->(all(map(isType,args)) ?
-                         Type{apply_type(args[1].parameters[1],
-                                         map(t->t.parameters[1],
-                                             args[2:])...)} :
-                         isType(args[1]) ?
-                         args[1] :
-                         Any))
 t_func[throw] = (1, 1, x->None)
 t_func[boxsi8] = (1, 1, x->Int8)
 t_func[boxui8] = (1, 1, x->Uint8)
@@ -200,7 +191,7 @@ t_func[typeof] =
     (1, 1, t->(isType(t)      ? Type{typeof(t.parameters[1])} :
                isa(t,TagKind) ? Type{t} :
                typeof(t)))
-# involving constants: typeassert, tupleref, getfield
+# involving constants: typeassert, tupleref, getfield, apply_type
 # therefore they get their arguments unevaluated
 t_func[typeassert] =
     (2, 2, (A, v, t)->(isType(t) ? tintersect(v,t.parameters[1]) :
@@ -264,11 +255,35 @@ function getfield_tfunc(A, s, name)
 end
 t_func[getfield] = (2, 2, getfield_tfunc)
 
+# TODO: handle e.g. apply_type(T, R::Union(Type{Int32},Type{Float64}))
+function apply_type_tfunc(A, args...)
+    if !isType(args[1])
+        return Any
+    end
+    tparams = ()
+    for i=2:length(A)
+        if isType(args[i])
+            tparams = append(tparams, (args[i].parameters[1],))
+        elseif isa(A[i],Int32)
+            tparams = append(tparams, (A[i],))
+        else
+            return args[1]
+        end
+    end
+    # good, all arguments understood
+    Type{apply_type(args[1].parameters[1], tparams...)}
+end
+t_func[apply_type] = (1, Inf, apply_type_tfunc)
+
 # other: apply, setfield
 
 function builtin_tfunction(f, args::Tuple, argtypes::Tuple)
     tf = get(t_func::IdTable, f, false)
     if is(tf,false)
+        # struct constructor
+        if isa(f, StructKind)
+            return f
+        end
         # unknown/unhandled builtin
         return Any
     end
@@ -276,7 +291,7 @@ function builtin_tfunction(f, args::Tuple, argtypes::Tuple)
         # wrong # of args
         return None
     end
-    if is(f,typeassert) || is(f,tupleref) || is(f,getfield)
+    if is(f,typeassert) || is(f,tupleref) || is(f,getfield) || is(f,apply_type)
         # TODO: case of apply(), where we do not have the args
         return tf[3](args, argtypes...)
     end
@@ -431,7 +446,12 @@ function abstract_eval_call(e, vtypes, sv::StaticVarInfo)
         # TODO: lambda expression (let)
         ft = abstract_eval(e.args[1], vtypes, sv)
         if isa(ft,FuncKind)
+            # use inferred function type
             return ft_tfunc(ft, argtypes)
+        elseif isType(ft) && isbuiltin(ft.parameters[1]) &&
+            # struct constructor
+            isa(ft.parameters[1],StructKind)
+            return ft.parameters[1]
         end
         return Any
     end
@@ -969,7 +989,7 @@ function inlineable(e::Expr, vars)
         return NF
     end
     # see if each argument occurs only once in the body expression
-    # todo: make sure side effects aren't skipped if argument doesn't occur?
+    # TODO: make sure side effects aren't skipped if argument doesn't occur
     expr = body[1].args[1]
     for i=1:length(args)
         a = args[i]
