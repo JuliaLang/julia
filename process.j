@@ -308,7 +308,7 @@ function arg_gen(head, tail...)
     vals
 end
 
-function cmd_gen(parsed::Tuple...)
+function cmd_gen(parsed)
     args = ()
     for arg = parsed
         args = append(args,arg_gen(arg...))
@@ -317,5 +317,5 @@ function cmd_gen(parsed::Tuple...)
 end
 
 macro cmd(str)
-    quote cmd_gen(eval($shell_parse(str))...) end
+    quote cmd_gen(eval($shell_parse(str))) end
 end
