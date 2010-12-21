@@ -6,6 +6,7 @@ isempty(s::String) = done(s,start(s))
 ref(s::String, i::Index) = next(s,i)[1]
 length(s::String) = at_string_end(s)[1]
 strlen(s::String) = at_string_end(s)[2]
+symbol(s::String) = symbol(bstring(s))
 string(s::String) = s
 
 print(c::Char) = (write(current_output_stream(), c); ())
@@ -356,7 +357,40 @@ end
 
 unescape_string(s::String) = print_to_string(print_unescaped, s)
 
-## implement shell-like parsing ##
+## string interpolation parsing ##
+
+function interp_parse(str::String)
+    strs = ()
+    i = j = start(str)
+    while !done(str,j)
+        c, k = next(str,j)
+        if c == '$'
+            strs = append(strs,(str[i:j-1],))
+            i = j = k
+            while !done(str,j)
+                c, k = next(str,j)
+                if !iswalnum(c) && c != '_'
+                    break
+                end
+                j = k
+            end
+            strs = append(strs,(symbol(str[i:j-1]),))
+            i = j
+        elseif c == '\\' && !done(str,k) && str[k] == '$'
+            c, j = next(str,k)
+        else
+            j = k
+        end
+    end
+    strs = append(strs,(str[i:],))
+    length(strs) == 1 ? strs[1] : expr(:call,:strcat,strs...)
+end
+
+macro str(raw)
+    quote eval($interp_parse(raw)) end
+end
+
+## shell-like command parsing ##
 
 function shell_parse(str::String, interp::Bool)
 
@@ -402,7 +436,7 @@ function shell_parse(str::String, interp::Bool)
                 end
                 j = k
             end
-            update_arg(symbol(bstring(str[i:j-1]))); i = j
+            update_arg(symbol(str[i:j-1])); i = j
         else
             if !in_double_quotes && c == '\''
                 in_single_quotes = !in_single_quotes
@@ -434,7 +468,7 @@ function shell_parse(str::String, interp::Bool)
     if in_single_quotes; error("unterminated single quote"); end
     if in_double_quotes; error("unterminated double quote"); end
 
-    update_arg(str[i:j-1])
+    update_arg(str[i:])
     append_arg()
 
     if !interp
