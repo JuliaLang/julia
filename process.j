@@ -317,5 +317,7 @@ function cmd_gen(parsed)
 end
 
 macro cmd(str)
-    quote cmd_gen(eval($shell_parse(str))) end
+    isa(str,String) ?
+        :(cmd_gen(eval($shell_parse(str)))) :
+        :(cmd_gen(eval(shell_parse($str))))
 end
