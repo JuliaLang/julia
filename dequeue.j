@@ -39,26 +39,35 @@ start(q::Queue) = q.head
 done(q::Queue, elt) = is(elt,())
 next(q::Queue, elt) = (elt.a, elt.b)
 
-struct Dequeue{T}
+struct Dequeue{T} <: Tensor{T,1}
     maxsize:: Size
     size:: Size
     offset:: Size
     data:: Array{T,1}
+
+    function Dequeue(T::Type, n::Size)
+        if n < 4
+            maxsize = 4
+        else
+            maxsize = n
+        end
+        data = Array(T,maxsize)
+        return new(maxsize, n, 0, data)
+    end
 end
 
-function dequeue(elts...)
+function deq(elts...)
     n = length(elts)
-    if n < 4
-        maxsize = 4
-    else
-        maxsize = n
-    end
-    data = Array(Any,maxsize)
+    d = Dequeue(Any, n)
+    data = d.data
     for i = 1:n
         data[i] = elts[i]
     end
-    return Dequeue(maxsize, n, 0, data)
+    return d
 end
+
+clone(d::Dequeue, T::Type, dim::Size)     = Dequeue(T, dim)
+clone(d::Dequeue, T::Type, dims::(Size,)) = Dequeue(T, dims[1])
 
 function ref(l::Dequeue, i::Index)
     if i > l.size
@@ -66,6 +75,9 @@ function ref(l::Dequeue, i::Index)
     end
     return l.data[i+l.offset]
 end
+
+numel(l::Dequeue) = l.size
+size(l::Dequeue) = (l.size,)
 
 function assign(l::Dequeue, elt, i::Index)
     if i > l.size
@@ -75,10 +87,8 @@ function assign(l::Dequeue, elt, i::Index)
     l
 end
 
-length(l::Dequeue) = l.size
-
 function show(l::Dequeue)
-    print("dequeue(")
+    print("deq(")
     for i=1:length(l)
         if i > 1
             print(", ")

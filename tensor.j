@@ -18,6 +18,13 @@ nnz(a::Tensor) = (n = 0; for i=1:numel(a); n += a[i] != 0 ? 1 : 0; end; n)
 
 ## Constructors ##
 
+# default arguments to clone()
+clone{T}(a::Tensor{T})                      = clone(a, T, size(a))
+clone   (a::Tensor, T::Type)                = clone(a, T, size(a))
+clone{T}(a::Tensor{T}, dims::Dims)          = clone(a, T, dims)
+clone{T}(a::Tensor{T}, dims::Size...)       = clone(a, T, dims)
+clone   (a::Tensor, T::Type, dims::Size...) = clone(a, T, dims)
+
 reshape(a::Tensor, dims::Dims) = (b = clone(a, dims);
                                   for i=1:numel(a); b[i] = a[i]; end;
                                   b)

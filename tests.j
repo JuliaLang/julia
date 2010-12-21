@@ -290,7 +290,7 @@ for nr = {
 end
 
 # a data structure
-l = dequeue(1,2,3)
+l = deq(1,2,3)
 push(l,8)
 assert(l[1]==1 && l[2]==2 && l[3]==3 && l[4]==8)
 v = pop(l)

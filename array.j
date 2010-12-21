@@ -11,12 +11,7 @@ jl_comprehension_zeros{T,n}(oneresult::Tensor{T,n}, dims...) = Array(T, dims...)
 jl_comprehension_zeros{T}(oneresult::T, dims...) = Array(T, dims...)
 jl_comprehension_zeros(oneresult::(), dims...) = Array(None, dims...)
 
-clone{T}(a::Array{T}) = Array(T, size(a))
-clone{T}(a::Array{T}, dims::Dims) = Array(T, dims)
-clone{T}(a::Array{T}, dims::Size...) = Array(T, dims)
-clone{T}(a::Array, T::Type) = Array(T, size(a))
-clone{T}(a::Array, T::Type, dims::Dims) = Array(T, dims)
-clone{T}(a::Array, T::Type, dims::Size...) = Array(T, dims)
+clone(a::Array, T::Type, dims::Dims) = Array(T, dims)
 
 for (t, f) = ((Float64, :rand), (Float32, :randf), (Float64, :randn))
     @eval begin
