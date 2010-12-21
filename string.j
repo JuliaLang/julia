@@ -387,9 +387,7 @@ function interp_parse(str::String)
 end
 
 macro str(raw)
-    isa(raw,String) ?
-        :(eval($interp_parse(raw))) :
-        :(eval(interp_parse($raw)))
+    :(eval($interp_parse(raw)))
 end
 
 ## shell-like command parsing ##
