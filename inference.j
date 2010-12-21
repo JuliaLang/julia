@@ -804,6 +804,22 @@ function typeinf(linfo::LambdaStaticData,atypes::Tuple,sparams::Tuple, cop, def)
     return (fulltree, frame.result)
 end
 
+function record_var_type(e::Symbol, t, decls)
+    otherTy = get(decls::IdTable, e, false)
+    # keep track of whether a variable is always the same type
+    if !is(otherTy,false)
+        if !is(otherTy, t)
+            decls[e] = Any
+        end
+    else
+        decls[e] = t
+    end
+end
+
+expr_type(e::Expr) = e.type
+expr_type(s::Symbol) = Any
+expr_type(x) = typeof(x)
+
 function eval_annotate(e::Expr, vtypes, sv, decls)
     if is(e.head,:quote) || is(e.head,:top) || is(e.head,:goto) ||
         is(e.head,:label) || is(e.head,:static_typeof)
@@ -813,9 +829,12 @@ function eval_annotate(e::Expr, vtypes, sv, decls)
     elseif is(e.head,symbol("="))
         e.type = Any
         s = e.args[1]
-        # assignment LHS not subject to all-same-type variable checking
+        # assignment LHS not subject to all-same-type variable checking,
+        # but the type of the RHS counts as one of its types.
         e.args[1] = Expr(:symbol, {s}, abstract_eval(s, vtypes, sv))
         e.args[2] = eval_annotate(e.args[2], vtypes, sv, decls)
+        # TODO: if this def does not reach any uses, maybe don't do this
+        record_var_type(s, expr_type(e.args[2]), decls)
         return e
     end
     for i=1:length(e.args)
@@ -826,15 +845,7 @@ end
 
 function eval_annotate(e::Symbol, vtypes, sv, decls)
     t = abstract_eval(e, vtypes, sv)
-    otherTy = get(decls::IdTable, e, false)
-    # keep track of whether a variable is always the same type
-    if !is(otherTy,false)
-        if !is(otherTy, t)
-            decls[e] = Any
-        end
-    else
-        decls[e] = t
-    end
+    record_var_type(e, t, decls)
     Expr(:symbol, {e}, t)
 end
 
