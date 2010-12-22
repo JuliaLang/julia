@@ -45,7 +45,7 @@ static void al_grow(arraylist_t *a, size_t n)
             size_t nm = a->max*2;
             if (nm == 0) nm = 1;
             while (a->len+n > nm) nm*=2;
-            void **p = LLT_REALLOC(a->items, nm);
+            void **p = LLT_REALLOC(a->items, nm*sizeof(void*));
             if (p == NULL) return;
             a->items = p;
             a->max = nm;

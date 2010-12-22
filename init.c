@@ -128,6 +128,7 @@ void julia_init()
 }
 
 jl_function_t *jl_typeinf_func=NULL;
+jl_function_t *jl_memio_func=NULL;
 
 static void clear_tfunc_caches()
 {
@@ -205,6 +206,11 @@ DLLEXPORT void jl_enable_inference()
     }
 }
 
+static jl_value_t *global(char *name)
+{
+    return *jl_get_bindingp(jl_system_module, jl_symbol(name));
+}
+
 int jl_load_startup_file()
 {
     JL_TRY {
@@ -217,18 +223,18 @@ int jl_load_startup_file()
         ios_printf(ios_stdout, "\n");
         return 1;
     }
+    jl_value_t *ios = global("stdout_stream");
+    if (ios) {
+        jl_set_current_output_stream_obj(ios);
+    }
 #ifdef BOEHM_GC
     GC_gcollect();
 #endif
 #ifdef JL_GC_MARKSWEEP
     jl_gc_collect();
 #endif
+    jl_memio_func = (jl_function_t*)global("memio");
     return 0;
-}
-
-static jl_value_t *global(char *name)
-{
-    return *jl_get_bindingp(jl_system_module, jl_symbol(name));
 }
 
 void jl_get_builtin_hooks()

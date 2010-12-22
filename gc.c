@@ -22,13 +22,6 @@
 // filled with 0xbb before being freed.
 //#define MEMDEBUG
 
-/*
-  integration steps:
-  * convert idtable to use an Array
-  * give GC access to relevant C local variables
-  - allocate ios objects with malloc, use finalizer
-*/
-
 #define GC_PAGE_SZ (4096*sizeof(void*))//bytes
 
 typedef struct _gcpage_t {
@@ -42,7 +35,7 @@ typedef struct _gcval_t {
         uptrint_t flags;
         struct {
             uptrint_t marked:1;
-            uptrint_t finalize:1;
+            //uptrint_t finalize:1;
             //uptrint_t typed:1;
 #ifdef BITS64
             uptrint_t otherbits:62;
@@ -67,7 +60,7 @@ typedef struct _bigval_t {
         uptrint_t flags;
         struct {
             uptrint_t marked:1;
-            uptrint_t finalize:1;
+            //uptrint_t finalize:1;
             //uptrint_t typed:1;
 #ifdef BITS64
             uptrint_t otherbits:62;
@@ -99,19 +92,28 @@ static arraylist_t to_finalize;
 
 static void schedule_finalization(void *o)
 {
-    gc_val(o)->finalize = 0;
     arraylist_push(&to_finalize, o);
 }
 
 static void run_finalizers()
 {
     void *o = NULL;
-    JL_GC_PUSH(&o);
+    jl_function_t *f=NULL;
+    jl_value_t *ff=NULL;
+    JL_GC_PUSH(&o, &f, &ff);
     while (to_finalize.len > 0) {
         o = arraylist_pop(&to_finalize);
-        jl_function_t *f = (jl_function_t*)ptrhash_get(&finalizer_table, o);
-        assert(f != HT_NOTFOUND);
+        ff = (jl_value_t*)ptrhash_get(&finalizer_table, o);
+        assert(ff != HT_NOTFOUND);
         ptrhash_remove(&finalizer_table, o);
+        while (jl_is_tuple(ff)) {
+            f = (jl_function_t*)jl_t0(ff);
+            assert(jl_is_function(f));
+            jl_apply(f, (jl_value_t**)&o, 1);
+            ff = jl_t1(ff);
+        }
+        f = (jl_function_t*)ff;
+        assert(jl_is_function(f));
         jl_apply(f, (jl_value_t**)&o, 1);
     }
     JL_GC_POP();
@@ -119,8 +121,13 @@ static void run_finalizers()
 
 void jl_gc_add_finalizer(jl_value_t *v, jl_function_t *f)
 {
-    gc_val(v)->finalize = 1;
-    ptrhash_put(&finalizer_table, v, f);
+    jl_value_t **bp = (jl_value_t**)ptrhash_bp(&finalizer_table, v);
+    if (*bp == HT_NOTFOUND) {
+        *bp = (jl_value_t*)f;
+    }
+    else {
+        *bp = (jl_value_t*)jl_tuple2((jl_value_t*)f, *bp);
+    }
 }
 
 // size classes:
@@ -177,20 +184,12 @@ static void sweep_big()
             v->marked = 0;
         }
         else {
-            if (v->finalize) {
-                // keep for now
-                pv = &v->next;
-                v->marked = 0;
-                schedule_finalization(&v->_data[0]);
-            }
-            else {
-                *pv = nxt;
+            *pv = nxt;
 #ifdef MEMDEBUG
-                size_t thesz = v->sz;
-                memset(v, 0xbb, v->sz+3*sizeof(void*));
+            size_t thesz = v->sz;
+            memset(v, 0xbb, v->sz+3*sizeof(void*));
 #endif
-                free(v);
-            }
+            free(v);
         }
         v = nxt;
     }
@@ -247,15 +246,8 @@ static void sweep_pool(pool_t *p)
                 pfl = &v->next;
             }
             else if (!v->marked) {
-                if (v->finalize) {
-                    v->marked = 0;
-                    freedall = 0;
-                    schedule_finalization(&v->_data[0]);
-                }
-                else {
-                    *pfl = v;
-                    pfl = &v->next;
-                }
+                *pfl = v;
+                pfl = &v->next;
             }
             else {
                 v->marked = 0;
@@ -442,8 +434,11 @@ static void gc_markval_(jl_value_t *v)
         GC_Markval(ta->state.eh_task);
         if (ta->_stkbase != NULL)
             gc_setmark(ta->_stkbase);
-        // TODO
-        // GC_Markval(ta->state.current_output_stream);
+        jl_savestate_t *ss = &ta->state;
+        while (ss != NULL) {
+            GC_Markval(ss->ostream_obj);
+            ss = ss->prev;
+        }
     }
     else {
         assert(jl_is_struct_type(jl_typeof(v)));
@@ -513,8 +508,14 @@ static void gc_mark()
         GC_Markval(to_finalize.items[i]);
     }
     for(i=0; i < finalizer_table.size; i+=2) {
-        if (finalizer_table.table[i+1] != HT_NOTFOUND)
+        if (finalizer_table.table[i+1] != HT_NOTFOUND) {
             GC_Markval(finalizer_table.table[i+1]);
+            jl_value_t *v = finalizer_table.table[i];
+            if (!gc_marked(v)) {
+                GC_Markval(v);
+                schedule_finalization(v);
+            }
+        }
     }
 }
 
@@ -537,7 +538,7 @@ void jl_gc_collect()
     if (is_gc_enabled) {
         gc_mark();
         gc_sweep();
-        run_finalizers();
+        run_finalizers(); 
     }
     allocd_bytes = 0;
 }

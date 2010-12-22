@@ -54,6 +54,7 @@ load("tree.j")
 
 # I/O and concurrency
 load("io.j")
+set_current_output_stream(stdout_stream)
 load("task.j")
 load("multi.j")
 load("set.j")

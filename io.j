@@ -1,42 +1,63 @@
+sizeof_ios_t = ccall(dlsym(JuliaDLHandle,:jl_sizeof_ios_t), Int32, ())
+
 struct IOStream
-    ios::Ptr{Void}
+    ios::Array{Uint8,1}
 
-    global fdio, open, memio, current_output_stream
+    global stdout_stream, close
 
-    fdio(fd::Int) =
-        new(ccall(dlsym(JuliaDLHandle,"jl_new_fdio"), Ptr{Void}, (Int32,),
-                  int32(fd)))
+    function close(s::IOStream)
+        ccall(dlsym(JuliaDLHandle,"ios_close"), Void, (Ptr{Void},), s.ios)
+    end
 
-    open(fname::String, rd::Bool, wr::Bool, cr::Bool, tr::Bool) =
-        new(ccall(dlsym(JuliaDLHandle,"jl_new_fileio"), Ptr{Void},
-                  (Ptr{Uint8}, Int32, Int32, Int32, Int32),
-                  fname, int32(rd), int32(wr), int32(cr), int32(tr)))
-    open(fname::String) = open(fname, true, true, true, false)
+    IOStream() = (x = new(zeros(Uint8,sizeof_ios_t));
+                  finalizer(x, close);
+                  x)
 
-    memio() = memio(0)
-    memio(x::Int) =
-        new(ccall(dlsym(JuliaDLHandle,"jl_new_memio"), Ptr{Void}, (Uint32,),
-                  uint32(x)))
-
-    current_output_stream() =
-        new(ccall(dlsym(JuliaDLHandle,"jl_current_output_stream_noninline"),
-                  Ptr{Void}, ()))
+    stdout_stream =
+        new(ccall(dlsym(JuliaDLHandle,"jl_stdout_stream"), Any, ()))
 end
 
+fdio(fd::Int) = (s = IOStream();
+                 ccall(dlsym(JuliaDLHandle,"ios_fd"), Void,
+                       (Ptr{Uint8}, Int32, Int32), s.ios, fd, 0);
+                 s)
+
+open(fname::String, rd::Bool, wr::Bool, cr::Bool, tr::Bool) =
+    (s = IOStream();
+     if ccall(dlsym(JuliaDLHandle,"ios_file"), Ptr{Void},
+              (Ptr{Uint8}, Ptr{Uint8}, Int32, Int32, Int32, Int32),
+              s.ios, cstring(fname),
+              int32(rd), int32(wr), int32(cr), int32(tr))==C_NULL
+         error("could not open file ", fname)
+     end;
+     s)
+
+open(fname::String) = open(fname, true, true, true, false)
+
+memio() = memio(0)
+memio(x::Int) =
+    (s = IOStream();
+     ccall(dlsym(JuliaDLHandle,"ios_mem"), Ptr{Void},
+           (Ptr{Uint8}, Uint32), s.ios, uint32(x));
+     s)
+
+convert(T::Type{Ptr}, s::IOStream) = convert(T, s.ios)
+
+current_output_stream() =
+    ccall(dlsym(JuliaDLHandle,"jl_current_output_stream_obj"),
+          Any, ())::IOStream
+
 set_current_output_stream(s::IOStream) =
-    ccall(dlsym(JuliaDLHandle,"jl_set_current_output_stream_noninline"),
-          Void, (Ptr{Void},), s.ios)
+    ccall(dlsym(JuliaDLHandle,"jl_set_current_output_stream_obj"),
+          Void, (Any,), s)
 
 function with_output_stream(s::IOStream, f::Function, args...)
-    saved_output_stream = current_output_stream()
     try
         set_current_output_stream(s)
         f(args...)
     catch e
-        set_current_output_stream(saved_output_stream)
         throw(e)
     end
-    set_current_output_stream(saved_output_stream)
 end
 
 takebuf_array(s::IOStream) =
@@ -163,10 +184,6 @@ function read{T}(s::IOStream, ::Type{T}, dims::Dims)
     else
         invoke(read, (Any, Type, Size...), s, T, dims...)
     end
-end
-
-function close(s::IOStream)
-    ccall(dlsym(JuliaDLHandle,"ios_close"), Void, (Ptr{Void},), s.ios)
 end
 
 function flush(s::IOStream)

@@ -30,8 +30,8 @@
     jl_type_match;
     jl_type_intersection;
     jl_types_equal;
-    jl_current_output_stream_noninline;
-    jl_set_current_output_stream_noninline;
+    jl_current_output_stream_obj;
+    jl_set_current_output_stream_obj;
     jl_takebuf_array;
     jl_takebuf_string;
     jl_cstr_to_string;
@@ -45,9 +45,11 @@
     jl_eqtable_get;
     jl_eqtable_del;
     jl_eqtable_next;
-    jl_new_fdio;
-    jl_new_fileio;
-    jl_new_memio;
+    jl_sizeof_ios_t;
+    jl_stdout_stream;
+    ios_fd;
+    ios_mem;
+    ios_file;
     ios_putc;
     ios_pututf8;
     ios_getc;

@@ -334,6 +334,7 @@ JL_CALLABLE(jl_f_load)
     JL_NARGS(load, 1, 1);
     if (!jl_is_string(args[0]))
         jl_error("load: expected String");
+    // TODO: string might be leaked
     char *fname = jl_cstring(args[0]);
     jl_load(fname);
     return (jl_value_t*)jl_null;
@@ -625,7 +626,8 @@ JL_CALLABLE(jl_f_convert_to_ptr)
     else if (jl_is_cpointer(v)) {
         p = jl_unbox_pointer(v);
     }
-    else if (jl_is_array(v) && jl_tparam0(jl_typeof(v)) == elty) {
+    else if (jl_is_array(v) && (elty == (jl_value_t*)jl_bottom_type ||
+                                jl_tparam0(jl_typeof(v)) == elty)) {
         p = ((jl_array_t*)v)->data;
     }
     else {
@@ -655,19 +657,32 @@ char *jl_cstring(jl_value_t *v)
     if (jl_is_byte_string(v))
         return jl_string_data(v);
 
-    ios_t dest;
-    ios_mem(&dest, 0);
+    ios_t tmp, *dest=NULL;
+    jl_value_t *ioo = NULL;
+    // make a proper IOStream object if available, otherwise go underneath
+    if (jl_memio_func != NULL) {
+        ioo = jl_apply(jl_memio_func, NULL, 0);
+    }
     // use try/catch to reset the current output stream
     // if an error occurs during printing.
     JL_TRY {
-        jl_set_current_output_stream(&dest);
+        if (ioo) {
+            jl_set_current_output_stream_obj(ioo);
+            dest = jl_current_output_stream();
+        }
+        else {
+            ios_mem(&tmp, 0);
+            dest = &tmp;
+            jl_current_task->state.current_output_stream = dest;
+        }
         jl_apply(jl_print_gf, &v, 1);
     }
     JL_CATCH {
         jl_raise(jl_exception_in_transit);
     }
     size_t n;
-    return ios_takebuf(&dest, &n);
+    assert(dest != NULL);
+    return ios_takebuf(dest, &n);
 }
 
 // --- showing ---
@@ -681,19 +696,31 @@ void jl_show(jl_value_t *v)
 
 char *jl_show_to_string(jl_value_t *v)
 {
-    ios_t dest;
-    ios_mem(&dest, 0);
+    ios_t tmp, *dest=NULL;
+    jl_value_t *ioo = NULL;
+    if (jl_memio_func != NULL) {
+        ioo = jl_apply(jl_memio_func, NULL, 0);
+    }
     // use try/catch to reset the current output stream
     // if an error occurs during printing.
     JL_TRY {
-        jl_set_current_output_stream(&dest);
+        if (ioo) {
+            jl_set_current_output_stream_obj(ioo);
+            dest = jl_current_output_stream();
+        }
+        else {
+            ios_mem(&tmp, 0);
+            dest = &tmp;
+            jl_current_task->state.current_output_stream = dest;
+        }
         jl_show(v);
     }
     JL_CATCH {
         jl_raise(jl_exception_in_transit);
     }
     size_t n;
-    return ios_takebuf(&dest, &n);
+    assert(dest != NULL);
+    return ios_takebuf(dest, &n);
 }
 
 // comma_one prints a comma for 1 element, e.g. "(x,)"
@@ -1295,6 +1322,7 @@ JL_CALLABLE(jl_f_dlopen)
     JL_NARGS(dlopen, 1, 1);
     if (!jl_is_string(args[0]))
         jl_error("dlopen: expected String");
+    // TODO: string might be leaked
     char *fname = jl_cstring(args[0]);
     return jl_box_pointer(jl_pointer_void_type,
                           jl_load_dynamic_library(fname));
@@ -1308,6 +1336,7 @@ JL_CALLABLE(jl_f_dlsym)
     if (jl_is_symbol(args[1]))
         sym = ((jl_sym_t*)args[1])->name;
     else if (jl_is_string(args[1]))
+        // TODO: string might be leaked
         sym = jl_cstring(args[1]);
     else
         jl_error("dlsym: expected String");

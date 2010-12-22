@@ -95,42 +95,33 @@ int32_t jl_nb_available(ios_t *s)
 
 // --- io constructors ---
 
-DLLEXPORT
-void *jl_new_fdio(int fd)
-{
-    ios_t *s = (ios_t*)alloc_cobj(sizeof(ios_t));
-    ios_fd(s, fd, 0);
-    return s;
-}
+DLLEXPORT int jl_sizeof_ios_t() { return sizeof(ios_t); }
 
-DLLEXPORT
-void *jl_new_fileio(char *fname, int rd, int wr, int create, int trunc)
+DLLEXPORT jl_value_t *jl_stdout_stream()
 {
-    ios_t *s = (ios_t*)alloc_cobj(sizeof(ios_t));
-    if (ios_file(s, fname, rd, wr, create, trunc) == NULL)
-        jl_errorf("could not open file %s", fname);
-    return s;
-}
-
-DLLEXPORT
-void *jl_new_memio(uint32_t sz)
-{
-    ios_t *s = (ios_t*)alloc_cobj(sizeof(ios_t));
-    if (ios_mem(s, sz) == NULL)
-        jl_errorf("error creating memory I/O stream");
-    return s;
+    jl_array_t *a = jl_alloc_array_1d(jl_array_uint8_type, sizeof(ios_t));
+    a->data = (void*)ios_stdout;
+    return (jl_value_t*)a;
 }
 
 // --- current output stream ---
 
-ios_t *jl_current_output_stream_noninline()
+jl_value_t *jl_current_output_stream_obj()
 {
-    return jl_current_output_stream();
+    return jl_current_task->state.ostream_obj;
 }
 
-void jl_set_current_output_stream_noninline(ios_t *s)
+ios_t *jl_current_output_stream()
 {
-    jl_set_current_output_stream(s);
+    return jl_current_task->state.current_output_stream;
+}
+
+void jl_set_current_output_stream_obj(jl_value_t *v)
+{
+    jl_current_task->state.ostream_obj = v;
+    jl_value_t *ptr = jl_convert((jl_type_t*)jl_pointer_void_type, v);
+    jl_current_task->state.current_output_stream =
+        (ios_t*)jl_unbox_pointer(ptr);
 }
 
 // --- buffer manipulation ---

@@ -798,16 +798,19 @@ ios_t *ios_stdin = NULL;
 ios_t *ios_stdout = NULL;
 ios_t *ios_stderr = NULL;
 
+// allocate with 1 extra word at the front
+#define alloc_julia_compat(n) (void*)(((void**)LLT_ALLOC(n+sizeof(void*)))+1)
+
 void ios_init_stdstreams()
 {
-    ios_stdin = LLT_ALLOC(sizeof(ios_t));
+    ios_stdin = alloc_julia_compat(sizeof(ios_t));
     ios_fd(ios_stdin, STDIN_FILENO, 0);
 
-    ios_stdout = LLT_ALLOC(sizeof(ios_t));
+    ios_stdout = alloc_julia_compat(sizeof(ios_t));
     ios_fd(ios_stdout, STDOUT_FILENO, 0);
     ios_stdout->bm = bm_line;
 
-    ios_stderr = LLT_ALLOC(sizeof(ios_t));
+    ios_stderr = alloc_julia_compat(sizeof(ios_t));
     ios_fd(ios_stderr, STDERR_FILENO, 0);
     ios_stderr->bm = bm_none;
 }

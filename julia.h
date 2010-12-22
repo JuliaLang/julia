@@ -283,6 +283,7 @@ extern jl_func_type_t *jl_any_func;
 
 extern jl_function_t *jl_show_gf;
 extern jl_function_t *jl_bottom_func;
+extern jl_function_t *jl_memio_func;
 
 // some important symbols
 extern jl_sym_t *call_sym;
@@ -709,10 +710,12 @@ typedef struct _jl_savestate_t {
     // eh_ctx is where I go to handle an exception yielded to me
     jmp_buf *eh_ctx;
     int err;
+    jl_value_t *ostream_obj;
     ios_t *current_output_stream;
 #ifdef JL_GC_MARKSWEEP
     jl_gcframe_t *gcstack;
 #endif
+    struct _jl_savestate_t *prev;
 } jl_savestate_t;
 
 typedef struct _jl_task_t {
@@ -737,18 +740,9 @@ jl_task_t *jl_new_task(jl_function_t *start, size_t ssize);
 jl_value_t *jl_switchto(jl_task_t *t, jl_value_t *arg);
 void jl_raise(jl_value_t *e);
 
-static inline ios_t *jl_current_output_stream()
-{
-    return jl_current_task->state.current_output_stream;
-}
-
-static inline void jl_set_current_output_stream(ios_t *s)
-{
-    jl_current_task->state.current_output_stream = s;
-}
-
-DLLEXPORT ios_t *jl_current_output_stream_noninline();
-DLLEXPORT void jl_set_current_output_stream_noninline();
+DLLEXPORT jl_value_t *jl_current_output_stream_obj();
+ios_t *jl_current_output_stream();
+DLLEXPORT void jl_set_current_output_stream_obj(jl_value_t *v);
 
 DLLEXPORT jl_array_t *jl_takebuf_array(ios_t *s);
 DLLEXPORT jl_value_t *jl_takebuf_string(ios_t *s);
@@ -757,7 +751,9 @@ static inline void jl_eh_save_state(jl_savestate_t *ss)
 {
     ss->eh_task = jl_current_task->state.eh_task;
     ss->eh_ctx = jl_current_task->state.eh_ctx;
+    ss->ostream_obj = jl_current_task->state.ostream_obj;
     ss->current_output_stream = jl_current_task->state.current_output_stream;
+    ss->prev = jl_current_task->state.prev;
 #ifdef JL_GC_MARKSWEEP
     ss->gcstack = jl_current_task->state.gcstack;
 #endif
@@ -767,7 +763,9 @@ static inline void jl_eh_restore_state(jl_savestate_t *ss)
 {
     jl_current_task->state.eh_task = ss->eh_task;
     jl_current_task->state.eh_ctx = ss->eh_ctx;
+    jl_current_task->state.ostream_obj = ss->ostream_obj;
     jl_current_task->state.current_output_stream = ss->current_output_stream;
+    jl_current_task->state.prev = ss->prev;
 #ifdef JL_GC_MARKSWEEP
     jl_current_task->state.gcstack = ss->gcstack;
 #endif
@@ -776,6 +774,7 @@ static inline void jl_eh_restore_state(jl_savestate_t *ss)
 #define JL_TRY                                                          \
     int i__tr, i__ca; jl_savestate_t __ss; jmp_buf __handlr;            \
     jl_eh_save_state(&__ss);                                            \
+    jl_current_task->state.prev = &__ss;                                \
     jl_current_task->state.eh_task = jl_current_task;                   \
     jl_current_task->state.eh_ctx = &__handlr;                          \
     if (!setjmp(__handlr))                                              \
