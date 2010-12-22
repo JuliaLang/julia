@@ -186,6 +186,22 @@ function read{T}(s::IOStream, ::Type{T}, dims::Dims)
     end
 end
 
+function readuntil(s::IOStream, delim::Uint8)
+    dest = memio()
+    ccall(dlsym(JuliaDLHandle,"ios_copyuntil"), Size,
+          (Ptr{Void}, Ptr{Void}, Uint8), dest.ios, s.ios, delim)
+    takebuf_string(dest)
+end
+
+function readall(s::IOStream)
+    dest = memio()
+    ccall(dlsym(JuliaDLHandle,"ios_copyall"), Size,
+          (Ptr{Void}, Ptr{Void}), dest.ios, s.ios)
+    takebuf_string(dest)
+end
+
+readline(s::IOStream) = readuntil(s, uint8('\n'))
+
 function flush(s::IOStream)
     ccall(dlsym(JuliaDLHandle,"ios_flush"), Void, (Ptr{Void},), s.ios)
 end

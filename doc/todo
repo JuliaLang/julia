@@ -577,7 +577,7 @@ issues 11/6/10
 - something about uninitialized objects in constructors
 - implement longjmp block exits so return/break work across functions
 * splicing tuples in ` with $...
-- readall, readline
+* readall, readline
 
 - statically evaluate apply_type when possible
 - optimize Array constructor (avoid checks and apply_type)

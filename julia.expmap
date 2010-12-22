@@ -60,6 +60,9 @@
     ios_read;
     ios_readall;
     ios_write;
+    ios_copy;
+    ios_copyall;
+    ios_copyuntil;
     connect_to_host;
     open_any_tcp_port;
     jl_wait_msg;
