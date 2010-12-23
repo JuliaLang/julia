@@ -33,18 +33,13 @@ typedef struct _gcval_t {
     union {
         struct _gcval_t *next;
         uptrint_t flags;
+        uptrint_t data0;  // overlapped
         struct {
             uptrint_t marked:1;
             //uptrint_t finalize:1;
             //uptrint_t typed:1;
-#ifdef BITS64
-            uptrint_t otherbits:62;
-#else
-            uptrint_t otherbits:30;
-#endif
         };
     };
-    char _data[1];
 } gcval_t;
 
 typedef struct _pool_t {
@@ -60,13 +55,9 @@ typedef struct _bigval_t {
         uptrint_t flags;
         struct {
             uptrint_t marked:1;
+            uptrint_t isobj:1;
             //uptrint_t finalize:1;
             //uptrint_t typed:1;
-#ifdef BITS64
-            uptrint_t otherbits:62;
-#else
-            uptrint_t otherbits:30;
-#endif
         };
     };
     char _data[1];
@@ -75,9 +66,8 @@ typedef struct _bigval_t {
 #define gc_val(o)     ((gcval_t*)(((void**)(o))-1))
 #define gc_marked(o)  (gc_val(o)->marked)
 #define gc_setmark(o) (gc_val(o)->marked=1)
-#define gc_unmark(o)  (gc_val(o)->marked=0)
-
-#define gcv_isfree(v)  ((v)->otherbits!=0)
+#define gc_marked_obj(o)  (((gcval_t*)(o))->marked)
+#define gc_setmark_obj(o) (((gcval_t*)(o))->marked=1)
 
 static bigval_t *big_objects = NULL;
 
@@ -162,16 +152,19 @@ static int szclass(size_t sz)
     return 18;
 }
 
-static void *alloc_big(size_t sz)
+static void *alloc_big(size_t sz, int isobj)
 {
     sz = (sz+3) & -4;
     bigval_t *v = (bigval_t*)malloc(sz + 3*sizeof(void*));
     v->sz = sz;
     v->next = big_objects;
     v->flags = 0;
+    v->isobj = isobj;
     big_objects = v;
     return &v->_data[0];
 }
+
+#define bigval_word0(v) (((uptrint_t*)(&((bigval_t*)(v))->_data[0]))[0])
 
 static void sweep_big()
 {
@@ -179,7 +172,11 @@ static void sweep_big()
     bigval_t **pv = &big_objects;
     while (v != NULL) {
         bigval_t *nxt = v->next;
-        if (v->marked) {
+        if (v->isobj && (bigval_word0(v)&1)) {
+            pv = &v->next;
+            bigval_word0(v) &= ~1UL;
+        }
+        else if (!v->isobj && v->marked) {
             pv = &v->next;
             v->marked = 0;
         }
@@ -220,7 +217,7 @@ static void *pool_alloc(pool_t *p)
     gcval_t *v = p->freelist;
     p->freelist = p->freelist->next;
     v->flags = 0;
-    return &v->_data[0];
+    return v;
 }
 
 static void sweep_pool(pool_t *p)
@@ -239,13 +236,7 @@ static void sweep_pool(pool_t *p)
         freedall = 1;
         prev_pfl = pfl;
         while ((char*)v <= lim) {
-            //if (!gcv_isfree(v))
-            //    empty = 0;
-            if (gcv_isfree(v)) {
-                *pfl = v;
-                pfl = &v->next;
-            }
-            else if (!v->marked) {
+            if (!v->marked) {
                 *pfl = v;
                 pfl = &v->next;
             }
@@ -275,12 +266,15 @@ static void sweep_pool(pool_t *p)
     *pfl = NULL;
 }
 
+extern void jl_unmark_symbols();
+
 static void gc_sweep()
 {
     sweep_big();
     int i;
     for(i=0; i < N_POOLS; i++)
         sweep_pool(&pools[i]);
+    jl_unmark_symbols();
 }
 
 #define GC_Markval(v) gc_markval_((jl_value_t*)(v))
@@ -324,22 +318,27 @@ static void gc_mark_methlist(jl_methlist_t *ml)
 
 void jl_mark_type_cache(void *c);
 
+#define gc_typeof(v) ((jl_value_t*)(((uptrint_t)jl_typeof(v))&~1UL))
+
 static void gc_markval_(jl_value_t *v)
 {
     assert(v != NULL);
-    if (gc_marked(v)) return;
-    gc_setmark(v);
+    if (gc_marked_obj(v)) return;
+    jl_value_t *vt = (jl_value_t*)jl_typeof(v);
+    jl_value_t *vtt = gc_typeof(vt);
+    gc_setmark_obj(v);
 
-    if (jl_is_bits_type(jl_typeof(v))) return;
+    if (vtt==(jl_value_t*)jl_bits_kind) return;
 
     // some values have special representations
-    if (jl_is_array(v)) {
+    if (vtt == (jl_value_t*)jl_struct_kind && 
+        ((jl_struct_type_t*)(vt))->name == jl_array_typename) {
         jl_array_t *a = (jl_array_t*)v;
         GC_Markval(a->dims);
         if (a->data && a->data != &a->_space[0])
             gc_setmark(a->data);
-        jl_value_t *elty = jl_tparam0(jl_typeof(v));
-        if (!jl_is_bits_type(elty)) {
+        jl_value_t *elty = jl_tparam0(vt);
+        if (gc_typeof(elty) != (jl_value_t*)jl_bits_kind) {
             size_t i;
             for(i=0; i < a->length; i++) {
                 jl_value_t *elt = ((jl_value_t**)a->data)[i];
@@ -347,7 +346,7 @@ static void gc_markval_(jl_value_t *v)
             }
         }
     }
-    else if (jl_is_tuple(v)) {
+    else if (vt == (jl_value_t*)jl_tuple_type) {
         size_t i;
         for(i=0; i < ((jl_tuple_t*)v)->length; i++) {
             jl_value_t *elt = ((jl_tuple_t*)v)->data[i];
@@ -355,7 +354,7 @@ static void gc_markval_(jl_value_t *v)
                 GC_Markval(elt);
         }
     }
-    else if (jl_is_lambda_info(v)) {
+    else if (vt == (jl_value_t*)jl_lambda_info_type) {
         jl_lambda_info_t *li = (jl_lambda_info_t*)v;
         if (li->ast)
             GC_Markval(li->ast);
@@ -367,23 +366,13 @@ static void gc_markval_(jl_value_t *v)
         if (li->unspecialized != NULL)
             GC_Markval(li->unspecialized);
     }
-    else if (jl_is_typename(v)) {
+    else if (vt == (jl_value_t*)jl_typename_type) {
         jl_typename_t *tn = (jl_typename_t*)v;
         if (tn->primary != NULL)
             GC_Markval(tn->primary);
         jl_mark_type_cache(tn->cache);
     }
-    else if (jl_is_tag_type(v)) {
-        jl_tag_type_t *tt = (jl_tag_type_t*)v;
-        assert(tt->env == NULL);
-        assert(tt->linfo == NULL);
-        //if (tt->env  !=NULL) GC_Markval(tt->env);
-        //if (tt->linfo!=NULL) GC_Markval(tt->linfo);
-        GC_Markval(tt->name);
-        GC_Markval(tt->super);
-        GC_Markval(tt->parameters);
-    }
-    else if (jl_is_struct_type(v)) {
+    else if (vt == (jl_value_t*)jl_struct_kind) {
         jl_struct_type_t *st = (jl_struct_type_t*)v;
         if (st->env  !=NULL) GC_Markval(st->env);
         if (st->linfo!=NULL) GC_Markval(st->linfo);
@@ -397,7 +386,7 @@ static void gc_markval_(jl_value_t *v)
         if (st->instance != NULL)
             GC_Markval(st->instance);
     }
-    else if (jl_is_bits_type(v)) {
+    else if (vt == (jl_value_t*)jl_bits_kind) {
         jl_bits_type_t *bt = (jl_bits_type_t*)v;
         assert(bt->env == NULL);
         assert(bt->linfo == NULL);
@@ -408,12 +397,22 @@ static void gc_markval_(jl_value_t *v)
         GC_Markval(bt->parameters);
         GC_Markval(bt->bnbits);
     }
-    else if (jl_is_func(v)) {
+    else if (vt == (jl_value_t*)jl_tag_kind) {
+        jl_tag_type_t *tt = (jl_tag_type_t*)v;
+        assert(tt->env == NULL);
+        assert(tt->linfo == NULL);
+        //if (tt->env  !=NULL) GC_Markval(tt->env);
+        //if (tt->linfo!=NULL) GC_Markval(tt->linfo);
+        GC_Markval(tt->name);
+        GC_Markval(tt->super);
+        GC_Markval(tt->parameters);
+    }
+    else if (vtt == (jl_value_t*)jl_func_kind) {
         jl_function_t *f = (jl_function_t*)v;
         if (f->env  !=NULL) GC_Markval(f->env);
         if (f->linfo!=NULL) GC_Markval(f->linfo);
     }
-    else if (jl_is_mtable(v)) {
+    else if (vt == (jl_value_t*)jl_methtable_type) {
         jl_methtable_t *mt = (jl_methtable_t*)v;
         size_t i;
         gc_mark_methlist(mt->defs);
@@ -423,7 +422,7 @@ static void gc_markval_(jl_value_t *v)
                 GC_Markval(mt->cache_1arg[i]);
         }
     }
-    else if (jl_is_task(v)) {
+    else if (vt == (jl_value_t*)jl_task_type) {
         jl_task_t *ta = (jl_task_t*)v;
         GC_Markval(ta->on_exit);
         if (ta->start)
@@ -441,8 +440,8 @@ static void gc_markval_(jl_value_t *v)
         }
     }
     else {
-        assert(jl_is_struct_type(jl_typeof(v)));
-        size_t nf = ((jl_struct_type_t*)jl_typeof(v))->names->length;
+        assert(vtt == (jl_value_t*)jl_struct_kind);
+        size_t nf = ((jl_struct_type_t*)vt)->names->length;
         size_t i;
         for(i=0; i < nf; i++) {
             jl_value_t *fld = ((jl_value_t**)v)[i+1];
@@ -511,7 +510,7 @@ static void gc_mark()
         if (finalizer_table.table[i+1] != HT_NOTFOUND) {
             GC_Markval(finalizer_table.table[i+1]);
             jl_value_t *v = finalizer_table.table[i];
-            if (!gc_marked(v)) {
+            if (!gc_marked_obj(v)) {
                 GC_Markval(v);
                 schedule_finalization(v);
             }
@@ -547,16 +546,31 @@ void *allocb(size_t sz)
 {
     if (allocd_bytes > collect_interval)
         jl_gc_collect();
+    sz += sizeof(void*);
     allocd_bytes += sz;
 #ifdef MEMDEBUG
-    return alloc_big(sz);
+    return alloc_big(sz-sizeof(void*), 0);
 #endif
     if (sz > 2048)
-        return alloc_big(sz);
+        return alloc_big(sz-sizeof(void*), 0);
+    void *b = pool_alloc(&pools[szclass(sz)]);
+    return (void*)((void**)b + 1);
+}
+
+void *allocobj(size_t sz)
+{
+    if (allocd_bytes > collect_interval)
+        jl_gc_collect();
+    allocd_bytes += sz;
+#ifdef MEMDEBUG
+    return alloc_big(sz, 1);
+#endif
+    if (sz > 2048)
+        return alloc_big(sz, 1);
     return pool_alloc(&pools[szclass(sz)]);
 }
 
-void *alloc_permanent(size_t sz)
+void *allocb_permanent(size_t sz)
 {
     // we need 1 word before to allow marking
     char *ptr = (char*)malloc(sz+sizeof(void*));
@@ -570,7 +584,7 @@ void *alloc_2w()
         jl_gc_collect();
     allocd_bytes += (2*sizeof(void*));
 #ifdef MEMDEBUG
-    return alloc_big(2*sizeof(void*));
+    return alloc_big(2*sizeof(void*), 1);
 #endif
 #ifdef BITS64
     return pool_alloc(&pools[2]);
@@ -585,7 +599,7 @@ void *alloc_3w()
         jl_gc_collect();
     allocd_bytes += (3*sizeof(void*));
 #ifdef MEMDEBUG
-    return alloc_big(3*sizeof(void*));
+    return alloc_big(3*sizeof(void*), 1);
 #endif
 #ifdef BITS64
     return pool_alloc(&pools[4]);
@@ -600,7 +614,7 @@ void *alloc_4w()
         jl_gc_collect();
     allocd_bytes += (4*sizeof(void*));
 #ifdef MEMDEBUG
-    return alloc_big(4*sizeof(void*));
+    return alloc_big(4*sizeof(void*), 1);
 #endif
 #ifdef BITS64
     return pool_alloc(&pools[6]);
@@ -615,7 +629,7 @@ void jl_gc_init()
                          384, 512, 768, 1024, 1536, 2048 };
     int i;
     for(i=0; i < N_POOLS; i++) {
-        pools[i].osize = szc[i]+sizeof(void*);
+        pools[i].osize = szc[i];
         pools[i].pages = NULL;
         pools[i].freelist = NULL;
     }

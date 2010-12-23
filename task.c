@@ -337,7 +337,7 @@ static void init_task(jl_task_t *t)
 jl_task_t *jl_new_task(jl_function_t *start, size_t ssize)
 {
     size_t pagesz = jl_page_size;
-    jl_task_t *t = (jl_task_t*)allocb(sizeof(jl_task_t));
+    jl_task_t *t = (jl_task_t*)allocobj(sizeof(jl_task_t));
     t->type = (jl_type_t*)jl_task_type;
     ssize = LLT_ALIGN(ssize, pagesz);
     t->ssize = ssize;
@@ -440,7 +440,7 @@ void jl_init_tasks(void *stack, size_t ssize)
     jl_tupleset(jl_task_type->types, 0, (jl_value_t*)jl_task_type);
     jl_task_type->fptr = jl_f_task;
 
-    jl_current_task = (jl_task_t*)allocb(sizeof(jl_task_t));
+    jl_current_task = (jl_task_t*)allocobj(sizeof(jl_task_t));
     jl_current_task->type = (jl_type_t*)jl_task_type;
     jl_current_task->ssize = ssize;
     jl_current_task->stack = stack;

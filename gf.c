@@ -23,7 +23,7 @@
 
 static jl_methtable_t *new_method_table()
 {
-    jl_methtable_t *mt = (jl_methtable_t*)allocb(sizeof(jl_methtable_t));
+    jl_methtable_t *mt = (jl_methtable_t*)allocobj(sizeof(jl_methtable_t));
     mt->type = (jl_type_t*)jl_methtable_type;
     mt->defs = NULL;
     mt->cache = NULL;

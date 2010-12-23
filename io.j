@@ -9,6 +9,8 @@ struct IOStream
         ccall(dlsym(JuliaDLHandle,"ios_close"), Void, (Ptr{Void},), s.ios)
     end
 
+    # TODO: delay adding finalizer, e.g. for memio with a small buffer, or
+    # in the case where we takebuf it.
     IOStream() = (x = new(zeros(Uint8,sizeof_ios_t));
                   finalizer(x, close);
                   x)

@@ -3,7 +3,7 @@
 
 static inline jl_value_t *newobj(jl_type_t *type, size_t nfields)
 {
-    jl_value_t *jv = (jl_value_t*)allocb((1+nfields) * sizeof(void*));
+    jl_value_t *jv = (jl_value_t*)allocobj((1+nfields) * sizeof(void*));
     jv->type = type;
     return jv;
 }

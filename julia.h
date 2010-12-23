@@ -313,19 +313,19 @@ extern jl_sym_t *static_typeof_sym;
 
 #ifdef BOEHM_GC
 #define allocb(nb)    GC_MALLOC(nb)
+#define allocobj(nb)  GC_MALLOC(nb)
 #define alloc_pod(nb) GC_MALLOC_ATOMIC(nb)
-#define alloc_permanent(nb) malloc(nb)
-#define alloc_cobj(nb) allocb(nb)
+#define allocb_permanent(nb) malloc(nb)
 #elif defined(JL_GC_MARKSWEEP)
 void *allocb(size_t sz);
+void *allocobj(size_t sz);
 #define alloc_pod(nb) allocb(nb)
-void *alloc_permanent(size_t sz);
-#define alloc_cobj(nb) malloc(nb)
+void *allocb_permanent(size_t sz);
 #else
 #define allocb(nb)    malloc(nb)
+#define allocobj(nb)  malloc(nb)
 #define alloc_pod(nb) malloc(nb)
-#define alloc_permanent(nb) malloc(nb)
-#define alloc_cobj(nb) malloc(nb)
+#define allocb_permanent(nb) malloc(nb)
 #endif
 
 #define jl_tupleref(t,i) (((jl_value_t**)(t))[2+(i)])

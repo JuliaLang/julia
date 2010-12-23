@@ -799,6 +799,8 @@ ios_t *ios_stdout = NULL;
 ios_t *ios_stderr = NULL;
 
 // allocate with 1 extra word at the front
+// allows ios_t's to be stored as the data of an Array, since it will be
+// safe to "mark" them.
 #define alloc_julia_compat(n) (void*)(((void**)LLT_ALLOC(n+sizeof(void*)))+1)
 
 void ios_init_stdstreams()

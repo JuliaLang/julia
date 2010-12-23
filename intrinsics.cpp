@@ -992,7 +992,7 @@ extern "C" void jl_init_intrinsic_functions()
 #ifdef BOEHM_GC
     temp_arg_area = (char*)allocb(arg_area_sz);
 #else
-    temp_arg_area = (char*)alloc_permanent(arg_area_sz);
+    temp_arg_area = (char*)allocb_permanent(arg_area_sz);
 #endif
     arg_area_loc = 0;
 

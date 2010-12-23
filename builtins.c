@@ -459,8 +459,9 @@ JL_CALLABLE(jl_f_arraylen)
 static jl_value_t *new_scalar(jl_bits_type_t *bt)
 {
     size_t nb = jl_bitstype_nbits(bt)/8;
-    jl_value_t *v = (jl_value_t*)allocb((NWORDS(LLT_ALIGN(nb,sizeof(void*)))+1)*
-                                        sizeof(void*));
+    jl_value_t *v = 
+        (jl_value_t*)allocobj((NWORDS(LLT_ALIGN(nb,sizeof(void*)))+1)*
+                              sizeof(void*));
     v->type = (jl_type_t*)bt;
     return v;
 }

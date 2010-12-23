@@ -173,7 +173,7 @@ jl_tuple_t *jl_tuple2(void *a, void *b)
 
 jl_tuple_t *jl_tuple3(void *a, void *b, void *c)
 {
-    jl_tuple_t *t = (jl_tuple_t*)allocb(5*sizeof(void*));
+    jl_tuple_t *t = (jl_tuple_t*)allocobj(5*sizeof(void*));
     t->type = (jl_type_t*)jl_tuple_type;
     t->length = 3;
     jl_tupleset(t, 0, a);
@@ -277,7 +277,7 @@ static jl_sym_t *mk_symbol(const char *str)
     jl_sym_t *sym;
     size_t len = strlen(str);
 
-    sym = (jl_sym_t*)alloc_permanent(sizeof(jl_sym_t)-sizeof(void*) + len + 1);
+    sym = (jl_sym_t*)malloc(sizeof(jl_sym_t)-sizeof(void*) + len + 1);
     sym->type = (jl_type_t*)jl_sym_type;
     sym->left = sym->right = NULL;
 #ifdef BITS64
@@ -288,6 +288,17 @@ static jl_sym_t *mk_symbol(const char *str)
     strcpy(&sym->name[0], str);
     return sym;
 }
+
+static void unmark_symbols_(jl_sym_t *root)
+{
+    while (root != NULL) {
+        root->type = (jl_type_t*)(((uptrint_t)root->type)&~1UL);
+        unmark_symbols_(root->left);
+        root = root->right;
+    }
+}
+
+void jl_unmark_symbols() { unmark_symbols_(symtab); }
 
 static jl_sym_t **symtab_lookup(jl_sym_t **ptree, const char *str)
 {
@@ -333,7 +344,7 @@ DLLEXPORT jl_sym_t *jl_gensym()
     gs_ctr++;
     jl_sym_t *sym;
     size_t len = (&name[sizeof(name)-1])-n-1;
-    sym = (jl_sym_t*)allocb(sizeof(jl_sym_t)-sizeof(void*) + len + 1);
+    sym = (jl_sym_t*)allocobj(sizeof(jl_sym_t)-sizeof(void*) + len + 1);
     sym->type = (jl_type_t*)jl_sym_type;
     sym->left = sym->right = NULL;
     sym->hash = (uptrint_t)sym;
@@ -852,16 +863,16 @@ void jl_mark_box_caches()
 {
     int64_t i;
     for(i=0; i < 256; i++) {
-        jl_gc_setmark(boxed_int8_cache[i]);
-        jl_gc_setmark(boxed_uint8_cache[i]);
+        jl_gc_markval(boxed_int8_cache[i]);
+        jl_gc_markval(boxed_uint8_cache[i]);
     }
     for(i=0; i < NBOX_C; i++) {
-        jl_gc_setmark(boxed_int16_cache[i]);
-        jl_gc_setmark(boxed_int32_cache[i]);
-        jl_gc_setmark(boxed_int64_cache[i]);
-        jl_gc_setmark(boxed_uint16_cache[i]);
-        jl_gc_setmark(boxed_uint32_cache[i]);
-        jl_gc_setmark(boxed_uint64_cache[i]);
+        jl_gc_markval(boxed_int16_cache[i]);
+        jl_gc_markval(boxed_int32_cache[i]);
+        jl_gc_markval(boxed_int64_cache[i]);
+        jl_gc_markval(boxed_uint16_cache[i]);
+        jl_gc_markval(boxed_uint32_cache[i]);
+        jl_gc_markval(boxed_uint64_cache[i]);
     }
 }
 #endif
@@ -969,7 +980,7 @@ jl_array_t *jl_new_array(jl_type_t *atype, jl_tuple_t *dims)
         tot = sizeof(void*) * nel;
 
     if (tot <= ARRAY_INLINE_NBYTES) {
-        a = allocb(sizeof(jl_array_t) + (tot - sizeof(void*)));
+        a = allocobj(sizeof(jl_array_t) + (tot - sizeof(void*)));
         a->type = atype;
         a->dims = dims;
         data = &a->_space[0];
@@ -981,7 +992,7 @@ jl_array_t *jl_new_array(jl_type_t *atype, jl_tuple_t *dims)
 #ifdef JL_GC_MARKSWEEP
         a = alloc_4w();
 #else
-        a = allocb(sizeof(jl_array_t));
+        a = allocobj(sizeof(jl_array_t));
 #endif
         a->type = atype;
         a->dims = dims;
@@ -1127,7 +1138,7 @@ jl_expr_t *jl_exprn(jl_sym_t *head, size_t n)
 #ifdef JL_GC_MARKSWEEP
     jl_expr_t *ex = (jl_expr_t*)alloc_4w();
 #else
-    jl_expr_t *ex = (jl_expr_t*)allocb(sizeof(jl_expr_t));
+    jl_expr_t *ex = (jl_expr_t*)allocobj(sizeof(jl_expr_t));
 #endif
     ex->type = (jl_type_t*)jl_expr_type;
     ex->head = head;

@@ -97,6 +97,10 @@ int32_t jl_nb_available(ios_t *s)
 
 DLLEXPORT int jl_sizeof_ios_t() { return sizeof(ios_t); }
 
+// hack to expose ios_stdout to julia. we could create a new iostream pointing
+// to stdout, but then there would be two buffers for one descriptor, and
+// ios_stdout is used before julia IOStream is available, creating a potential
+// mess.
 DLLEXPORT jl_value_t *jl_stdout_stream()
 {
     jl_array_t *a = jl_alloc_array_1d(jl_array_uint8_type, sizeof(ios_t));
@@ -126,6 +130,7 @@ void jl_set_current_output_stream_obj(jl_value_t *v)
 
 // --- buffer manipulation ---
 
+// TODO: avoid the extra copy
 jl_array_t *jl_takebuf_array(ios_t *s)
 {
     size_t n;

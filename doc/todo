@@ -594,3 +594,10 @@ issues 12/21/10
 - inference in inner functions
 - allow anything iterable to be spliced by ...
 - more flexible string literals
+
+before removing the 1-word overhead:
+initial   , after tests.j
+51524  36m, 68484  53m
+
+after:
+48564  33m, 62844  48m
