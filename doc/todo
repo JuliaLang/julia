@@ -598,6 +598,5 @@ issues 12/21/10
 before removing the 1-word overhead:
 initial   , after tests.j
 51524  36m, 68484  53m
-
 after:
 48564  33m, 62844  48m

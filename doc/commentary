@@ -1,0 +1,165 @@
+advantages of dynamic languages (with emphasis on scientific computing)
+not all of these features inherently require a dynamic language, but they
+were available in dynamic languages first (before it had been discovered how
+to handle them at compile time), and so explain why programmers have turned
+to dynamic languages.
+
+
+people tend to think about programs operationally, i.e. what it *does* when
+it runs. for example writing
+if false
+  code
+end
+the code does not "occur" and therefore does not need to be valid
+
+
+there is less to learn. with static languages you have to learn what happens
+at both compile time and run time, when only run time really matters.
+
+
+there is a desire to parameterize as much as possible. functions
+accept parameters, so function calling ought to be sufficient to express
+any desired parameterization.
+
+
+inevitably there is a need to refer to a datatype at run time. the best
+example is file I/O, where you might want to say "read 500 double-precision
+numbers from file X". in static languages the syntax and identifiers used
+to specify such run-time types must be different from those used to specify
+static types. in C you see defined constants such as DATATYPE_DOUBLE.
+
+
+static types are approximations of dynamic types, so languages with static
+types inevitably assign two types to a location (both a static type and a
+dynamic type) where one would do. in some languages, like C++, the desire
+for performance or ease of implementation leads the compiler to make some
+decisions based on static types. this is confusing. if type declarations
+can be omitted, as in a type-inferred language, the situation is even worse
+since the static type of a value might not be apparent.
+
+
+programs, in general, deal with values of widely varying disjoint types:
+functions, numbers, lists, network sockets, etc. type systems
+are good at sorting out values of these different types. however, in
+mathematical code most values are numbers. numerical properties (such as
+positive, negative, even, odd, greater than 1, etc.) are what matter,
+and these are highly dynamic. the lattices involved are generally not of
+finite height.
+
+
+different number representations exist only for efficiency, and are often
+incidental to the meaning of a piece of code. for example people want
+"y = sqrt(x)" to compute the square root of x whether it is positive or
+negative, and give a real or complex result accordingly. as another
+example, in many cases it is convenient not to need to worry about
+integer overflow.
+
+
+multiple common features underlie mathematical objects of different
+types (e.g. numbers, sets, matrices). in some cases it makes sense to
+consider numbers and matrices as the same kind of thing, and in other
+cases it doesn't matter. A given type system is likely not to have
+anticipated the particular common features that matter to your program,
+making it more difficult to express an idea. A concrete example is
+the matlab fragment
+if condition
+  idx = ':'
+else
+  idx = 1
+end
+where we want to select either an entire dimension or the first position
+alone. The ':' and 1 are both indexes in this context, though they would
+be of disjoint types in most programming languages.
+
+-------------------------------------------------------------------------------
+
+advantages of julia (over e.g. matlab):
+
+- consistent and powerful generic function model
+- good performance
+- better performance for user-defined types
+- low syntactic overhead to define new types
+- redefinable low-level behavior
+- high-level constructs for parallelism
+- FOSS
+- array comprehensions
+- supports modularity
+- rich type system
+- better handling of numeric types
+- more floating point types
+- cleaner syntax
+- macros
+- powerful shell-like capabilities for managing other processes
+- keyword arguments
+
+-------------------------------------------------------------------------------
+
+proposal points:
+- very high level with good performance
+dynamic language gives high expressivity, JIT compiler gives performance
+and lets the system adapt to run-time conditions better. compilation does
+not require communication and it can be done with little overhead, so
+compiling entirely in advance is the wrong decision for today's big machines.
+- some features
+n-d array comprehensions, unifying multiple-dispatch
+small, few dependencies, open source => easy to deploy
+llvm supports many back ends
+- parallelism.
+nested model, pipeline
+spawn/wait with a scheduler on top of that
+- goals.
+high-level code, C/fortran/MPI performance
+develop on the desktop, run the unmodified code on the cloud
+
+-------------------------------------------------------------------------------
+
+goals for end of 1/2011:
+- get basic parallel stuff working right out of the box
+- demo system available on darwin or something similar
+- athena locker available, start julia + do ppeval instantly at MIT.
+- start learning vCloud details, do a bootcamp session @VMW
+- 2 page outline of intro-to-julia paper
+- start wiki documentation. hopefully useful to first users at MIT.
+
+-------------------------------------------------------------------------------
+
+Julia: A Next-Generation Technical Computing Language
+
+explaining our motivation and approach to developing a new high-level
+language for numerical computing, parallel computing, and high-productivity
+computing in general.
+
+Scientific computing has traditionally required the highest performance,
+yet domain experts have largely moved to slower dynamic languages for
+daily work. We believe there are many good reasons to prefer dynamic languages
+for these applications, and we don't expect their use to diminish any time
+soon. Fortunately, modern language design and compiler techniques make it
+possible to mostly eliminate the performance trade-off and provide a
+single environment productive enough for prototyping and performant enough
+for deploying applications. However, an open-source language with these
+characteristics has not emerged. Our project, Julia, fills this gap.
+
+MATLAB generally dominates the field of programming languages for the
+applied sciences. We take note of some of the reasons for its success:
+it is well-suited to linear algebra and array manipulation, easy to use, and
+achieves impressive performance due to a JIT compiler (introduced in 2003).
+Several open source systems (Python/NumPy, R, Octave, SciLab) offer comparable
+advantages, but in particular have not kept up in the last category.
+
+Closing this performance gap is a primary goal of ours, but at the same time
+we feel there is room to increase power, flexibility, and simplicity.
+The rising importance of parallel computing and cloud computing provides
+further motivation to design a new system with those concerns in mind from
+the beginning.
+
+numeric types. no numeric types, only bit strings. methods can be defined
+on types themselves, leading to our promotion mechanism.
+
+system tries to dictate as little as possible. arithmetic
+is not built in; you can implement different arithmetic and get good
+performance.
+
+dynamically typed, multiple dispatch, heuristic separation of ad-hoc and
+parametric polymorphism.
+
+needed widening operators, specialization-limiting heuristics.
