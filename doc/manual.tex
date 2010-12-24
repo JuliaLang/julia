@@ -12,8 +12,6 @@ Stefan Karpinski \vspace{0.5em}\\
 Viral Shah \vspace{0.5em}
 }
 
-\newcommand{\til}{\raise.17ex\hbox{$\scriptstyle\sim$}}
-
 \begin{document}
 
 \maketitle
@@ -166,10 +164,10 @@ The following basic operations are supported between various combinations of bui
   \end{itemize}
   \item bitwise operations (integer only):
   \begin{itemize}
-    \item \verb|\til x| — bitwise not.
-    \item \verb|x \& y| — bitwise and.
-    \item \verb|x | y| — bitwise or.
-    \item \verb|x \$ y| — bitwise xor.
+    \item \verb|~x| — bitwise not.
+    \item \verb|x & y| — bitwise and.
+    \item \texttt{x | y} — bitwise or.
+    \item \verb|x $ y| — bitwise xor.
   \end{itemize}
 \end{itemize}
 Here are some simple examples:
