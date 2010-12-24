@@ -1,1 +1,6 @@
 /types.png
+*.aux
+*.log
+*.out
+*.pdf
+*.synctex.gz
