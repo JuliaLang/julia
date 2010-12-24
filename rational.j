@@ -17,8 +17,8 @@ struct Rational{T<:Int} <: Real
 end
 
 //(n::Int, d::Int) = Rational(n,d)
-//{T<:Int}(x::Rational{T}, y::T) = x.num // (x.den*y)
-//{T<:Int}(x::T, y::Rational{T}) = (x*y.den) // y.num
+//(x::Rational, y::Int) = x.num // (x.den*y)
+//(x::Int, y::Rational) = (x*y.den) // y.num
 
 function show(x::Rational)
     show(num(x))
@@ -48,7 +48,7 @@ sign(x::Rational) = sign(x.num)*sign(x.den)
 (/)(x::Rational, y::Rational) = (x.num*y.den) // (x.den*y.num)
 
 ==(x::Rational, y::Rational) = (x.num*y.den == y.num*x.den)
-< (x::Rational, y::Rational) = (x.num*y.den <  y.num*x.den) # TODO: sign bug here.
+< (x::Rational, y::Rational) = (x.num*y.den <  y.num*x.den)
 
 div(x::Rational, y::Rational) = div(x.num*y.den, x.den*y.num)
 div(x::Real    , y::Rational) = div(x*y.den, y.num)

@@ -741,8 +741,8 @@
 	  #t
 	  (begin (if (eqv? c #\\)
 		     (let ((nextch (read-char (ts:port s))))
-		       (if (eqv? nextch #\`)
-			   (write-char #\` b)
+		       (if (or (eqv? nextch #\`) (eqv? nextch #\\))
+			   (write-char nextch b)
 			   (begin (write-char #\\ b)
 				  (write-char (not-eof-2 nextch) b))))
 		     (write-char (not-eof-2 c) b))
