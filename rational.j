@@ -3,8 +3,9 @@ struct Rational{T<:Int} <: Real
     den::T
 
     function Rational{T<:Int}(num::T, den::T)
-        if den == 0
-            error("//: division by zero")
+        if num == den == 0
+            z = zero(num)
+            return new(z, z)
         end
         g = gcd(den, num)
         num = div(num, g)
@@ -57,3 +58,6 @@ div(x::Rational, y::Real    ) = div(x.num, x.den*y)
 fld(x::Rational, y::Rational) = fld(x.num*y.den, x.den*y.num)
 fld(x::Real    , y::Rational) = fld(x*y.den, y.num)
 fld(x::Rational, y::Real    ) = fld(x.num, x.den*y)
+
+int(x::Rational) = div(x.num, x.den)
+float(x::Rational) = x.num/x.den
