@@ -12,23 +12,39 @@ Stefan Karpinski \vspace{0.5em}\\
 Viral Shah \vspace{0.5em}
 }
 
+\renewcommand{\sec}[1]{\label{sec:#1}}
+\newcommand{\fig}[1]{\label{fig:#1}}
+\newcommand{\tab}[1]{\label{tab:#1}}
+
+\newcommand{\Section}[1]{\hyperref[sec:#1]{Section~\ref*{sec:#1}}}
+\newcommand{\Figure}[1]{\hyperref[fig:#1]{Figure~\ref*{fig:#1}}}
+\newcommand{\Table}[1]{\hyperref[tab:#1]{Table~\ref*{tab:#1}}}
+
+\renewcommand{\bullet}{{$\diamond$}}
+\renewcommand{\labelitemi}{\bullet}
+\renewcommand{\labelitemii}{\bullet}
+\renewcommand{\labelitemiii}{\bullet}
+
 \begin{document}
 
 \maketitle
 
-Scientific computing has traditionally required the highest performance,
-yet domain experts have largely moved to slower dynamic languages for
-daily work. We believe there are many good reasons to prefer dynamic languages
-for these applications, and we don't expect their use to diminish any time
-soon. Fortunately, modern language design and compiler techniques make it
-possible to mostly eliminate the performance trade-off and provide a
-single environment productive enough for prototyping and performant enough
-for deploying applications. However, an open-source language with these
-characteristics has not emerged. Our project, Julia, fills this gap.
+Scientific computing has traditionally required the highest performance, yet domain experts have largely moved to slower dynamic languages for daily work.
+We believe there are many good reasons to prefer dynamic languages for these applications, and we don't expect their use to diminish any time soon.
+Fortunately, modern language design and compiler techniques make it possible to mostly eliminate the performance trade-off and provide a single environment productive enough for prototyping and performant enough for deploying applications.
+However, an open-source language with these characteristics has not emerged.
+Our project, Julia, fills this gap.
 
-\section{Getting started}
-\subsection{How to obtain and install julia}
-\subsection{Running code}
+The syntax of Julia is directly derived from Matlab and as a consequence, any Matlab programmer should feel immediately comfortable with Julia.
+While Matlab is quite effective for prototyping and exploring numerical linear algebra, for programming tasks outside of this relatively narrow scope, Matlab has severe limitations.
+Julia maintains the ease and expressiveness of Matlab for high-level numerical computing but transcends these general programming limitations.
+To that end, it borrows heavily from the C programming language.
+It is additionally strongly influenced, conceptually, if not syntactically, by the lineage of dynamic programming languages:
+Lisp, Perl, Python and Ruby.
+
+\section{Getting Started}
+\subsection{How to Obtain and Install Julia}
+\subsection{Running Code}
 
 Here's how you start and interact with the Julia read-eval-print loop (repl):
 
@@ -52,25 +68,25 @@ Here's how you start and interact with the Julia read-eval-print loop (repl):
 The \verb|load| function reads and evaluates the contents of the given file.
 
 \section{Numbers and Arithmetic}
-Julia supports a broad range of basic numeric types together with the full complement of arithmetic and bitwise operations on them.
-The following are the built-in basic numeric types:
+Julia supports a broad range of numeric types together with the full complement of arithmetic and bitwise operations.
+The following are Julia's built-in primitive numeric types:
 
 \begin{itemize}
-  \item Integer types:
+  \item integer types:
   \begin{itemize}
-    \item \verb|Int8|: signed 8-bit integers ranging from $-2^7$ to $2^7-1$.
-    \item \verb|Uint8|: unsigned 8-bit integers ranging from 0 to $2^8-1$.
-    \item \verb|Int16|: signed 16-bit integers ranging from $-2^{15}$ to $2^{15}-1$.
-    \item \verb|Uint16|: unsigned 16-bit integers ranging from 0 to $2^{16}-1$.
-    \item \verb|Int32|: signed 32-bit integers ranging from $-2^{31}$ to $2^{31}-1$.
-    \item \verb|Uint32|: unsigned 32-bit integers ranging from 0 to $2^{32}-1$.
-    \item \verb|Int64|: signed 64-bit integers ranging from $-2^{63}$ to $2^{63}-1$.
-    \item \verb|Uint64|: unsigned 64-bit integers ranging from 0 to $2^{64}-1$.
+    \item \verb|Int8|~: signed 8-bit integers ranging from $-2^7$ to $2^7-1$.
+    \item \verb|Uint8|~: unsigned 8-bit integers ranging from 0 to $2^8-1$.
+    \item \verb|Int16|~: signed 16-bit integers ranging from $-2^{15}$ to $2^{15}-1$.
+    \item \verb|Uint16|~: unsigned 16-bit integers ranging from 0 to $2^{16}-1$.
+    \item \verb|Int32|~: signed 32-bit integers ranging from $-2^{31}$ to $2^{31}-1$.
+    \item \verb|Uint32|~: unsigned 32-bit integers ranging from 0 to $2^{32}-1$.
+    \item \verb|Int64|~: signed 64-bit integers ranging from $-2^{63}$ to $2^{63}-1$.
+    \item \verb|Uint64|~: unsigned 64-bit integers ranging from 0 to $2^{64}-1$.
   \end{itemize}
-  \item Floating point types:
+  \item floating point types:
   \begin{itemize}
-    \item \verb|Float32|: IEEE 754 32-bit floating point numbers.
-    \item \verb|Float64|: IEEE 754 64-bit floating point numbers.
+    \item \verb|Float32|~: IEEE 754 32-bit floating point numbers.
+    \item \verb|Float64|~: IEEE 754 64-bit floating point numbers.
   \end{itemize}
 \end{itemize}
 
@@ -86,7 +102,7 @@ Larger integer literals that cannot be represented in 32 bits but can be represe
   julia> typeof(4294967296)
   Int64
 \end{verbatim}
-Integers can be input in hexadecimal using the \verb|0x| prefix as in C:
+Integers can be input in hexadecimal form using the \verb|0x| prefix as in C:
 \begin{verbatim}
   julia> 0xff
   255
@@ -114,7 +130,6 @@ There is no literal input format for integer types other than \verb|Int32| and \
   julia> typeof(ans)
   Uint8
 \end{verbatim}
-and so on.
 
 \subsection{Floating Point Literals}
 
@@ -138,10 +153,10 @@ Floating point numbers are input in the standard formats:
   julia> 1e10
   1e+10
 
-  julia> 1e100
-  1e+100
+  julia> 1e-4
+  0.0001
 \end{verbatim}
-These above results are all \verb|Float64| values. There is no literal input format for \verb|Float32|, but you can convert values to \verb|Float32| easily:
+The above results are all \verb|Float64| values. There is no literal format for \verb|Float32|, but you can convert values to \verb|Float32| easily:
 \begin{verbatim}
   julia> float32(-1.5)
   -1.5
@@ -152,23 +167,23 @@ These above results are all \verb|Float64| values. There is no literal input for
 
 \subsection{Arithmetic and Bitwise Operations}
 
-The following basic operations are supported between various combinations of built-in arithmetic types:
-
+The following arithmetic and bitwise operations are supported on built-in arithmetic types:
 \begin{itemize}
   \item arithmetic operations (integer and floating point):
   \begin{itemize}
-    \item \verb|-x|\,: unary minus maps values to their additive inverses.
-    \item \verb|x + y|\,: plus performs addition.
-    \item \verb|x - y|\,: binary minus performs subtraction.
-    \item \verb|x * y|\,: times performs multiplication.
-    \item \verb|x / y|\,: divide performs division.
+    \item \verb|+x|~: unary plus is the identity.
+    \item \verb|-x|~: unary minus maps values to their additive inverses.
+    \item \verb|x + y|~: plus performs addition.
+    \item \verb|x - y|~: binary minus performs subtraction.
+    \item \verb|x * y|~: times performs multiplication.
+    \item \verb|x / y|~: divide performs division.
   \end{itemize}
   \item bitwise operations (integer only)\,:
   \begin{itemize}
-    \item \verb|~x|\,: bitwise not.
-    \item \verb|x & y|\,: bitwise and.
-    \item \texttt{x | y}\,: bitwise or.
-    \item \verb|x $ y|\,: bitwise xor.
+    \item \verb|~x|~: bitwise not.
+    \item \verb|x & y|~: bitwise and.
+    \item \texttt{x | y}~: bitwise or.
+    \item \verb|x $ y|~: bitwise xor.
   \end{itemize}
 \end{itemize}
 Here are some simple examples:
@@ -182,7 +197,7 @@ Here are some simple examples:
   julia> 3*2/12
   0.5
 \end{verbatim}
-Julia has a powerful and flexible type promotion system that allows arithmetic operations on all various mixtures of argument types to work naturally:
+Julia has a powerful and flexible type promotion system that allows arithmetic operations on mixtures of argument types to work naturally:
 \begin{verbatim}
   julia> 1+2.5
   3.5
@@ -193,7 +208,8 @@ Julia has a powerful and flexible type promotion system that allows arithmetic o
   julia> 3*2/12+1
   1.5
 \end{verbatim}
-All of the above operations promote to \verb|Float64|, but more nuanced promotions also work:
+The above operations all promote to \verb|Float64|s since that is the smallest floating point type that can faithfully represent all \verb|Int32| values.
+However, more nuanced promotions also work:
 \begin{verbatim}
   julia> uint8(12)-int8(15)
   -3
@@ -215,6 +231,9 @@ Here are some examples with bitwise operations:
   julia> ~uint32(123)
   4294967172
 
+  julia> ~uint8(123)
+  132
+
   julia> 123 & 234
   106
 
@@ -233,8 +252,136 @@ Here are some examples with bitwise operations:
   julia> 123 $ 234
   145
 \end{verbatim}
+As a general rule of thumb, arguments are promoted to the smallest type that can accurately represent all of the arguments. See \Section{conversion-and-promotion} for further details.
+
+\subsection{Numeric Comparisons}
+
+Standard comparison operations are defined for primitive numeric types:
+\begin{itemize}
+  \item \verb|==|~: equality.
+  \item \verb|!=|~: inequality.
+  \item \verb|<|~: less than.
+  \item \verb|<=|~: less than or equal to.
+  \item \verb|>|~: greater than.
+  \item \verb|>=|~: greater than or equal to.
+\end{itemize}
+Here are some simple examples:
+\begin{verbatim}
+  julia> 1 == 1
+  true
+
+  julia> 1 == 2
+  false
+
+  julia> 1 != 2
+  true
+  
+  julia> 1 == 1.0
+  true
+
+  julia> 1 < 2
+  true
+
+  julia> 1.0 > 3
+  false
+
+  julia> 1 >= 1.0
+  true
+
+  julia> -1 <= 1
+  true
+
+  julia> -1 <= -1
+  true
+
+  julia> -1 <= -2
+  false
+
+  julia> 3 < -0.5
+  false
+\end{verbatim}
+As you can see, promotion also applies to comparisons:
+the comparisons are performed in whatever type the arguments are promoted to, which is generally the smallest type they can all be represented faithfully in.
+
+After promotion to a common type, integers are compared in the standard manner:
+by comparison of bits.
+Floating point numbers are compared according to the IEEE 754 standard:
+finite numbers are compared bitwise, positive infinite values are equal to each other, negative infinite values are equal to each other, and \verb|NaN| values are unequal to everything including each other.
+For comparisons where \verb|NaN != NaN| is undesirable, the function \verb|isequal| is also provided, which considers \verb|NaN| to be equal to \verb|NaN|:
+\begin{verbatim}
+  julia> isequal(NaN,NaN)
+  true
+\end{verbatim}
+Unlike most languages, comparisons can be arbitrarily chained:
+\begin{verbatim}
+  julia> 1 < 2 <= 2 < 3 == 3 > 2 >= 1 == 1 < 3 != 5
+  true
+\end{verbatim}
+Chaining comparisons is quite convenient in many numerical codes.
 
 \subsection{Rational Numbers}
+
+There is a special\footnote{It's actually not that special: the \texttt{//} operator exists a priori, but its meaning of constructing rational numbers is defined entirely in the language itself.} input syntax for rational numbers in Julia:
+\begin{verbatim}
+  julia> 2//3
+  2//3
+
+  julia> typeof(ans)
+  Rational{Int32}
+\end{verbatim}
+The type of a rational number is a parametric type, a concept which is explained in detail later on in \Section{struct-constructors}.
+For the moment, it suffices to explain that \verb|2//3| is a ratio of \verb|Int32| values.
+If you construct a \verb|Rational| from values that are not in lowest terms, they will be normalized to lowest terms:
+\begin{verbatim}
+  julia> 6//9
+  2//3
+
+  julia> -4//8
+  -1//2
+
+  julia> 5//-15
+  -1//3
+
+  julia> -4//-12
+  1//3
+\end{verbatim}
+All arithmetic operations are also defined on \verb|Rational|s:
+\begin{verbatim}
+  julia> 2//4 + 1//6
+  2//3
+
+  julia> 5//12 - 1//4
+  1//6
+
+  julia> 5//8 * 3//12
+  5//32
+
+  julia> (6//5) / (10//7)
+  21//25
+\end{verbatim} % TODO: fix example once precedence is fixed.
+\verb|Rational|s can be easily converted to floating point numbers:
+\begin{verbatim}
+  julia> float(3//4)
+  0.75
+\end{verbatim}
+All such conversions obey the following identity for all integral \verb|a| and \verb|b|:
+\begin{verbatim}
+  julia> isequal(float(a//b), a/b)
+  true
+\end{verbatim} % TODO: add this to tests.j
+This includes cases where \verb|a == 0| or \verb|b == 0|, in which cases the conversion from rational to float produces the appropriate $\pm$\verb|Inf| or \verb|NaN| value.
+
+\section{Defining Functions}
+\subsection{Syntax}
+\subsection{Control Flow}
+\subsection{Specializing Functions for Given Types}
+\subsection{Functional Equivalents of Operators}
+\subsection{Anonymous Functions}
+\subsection{Returning Multiple Values}
+\subsection{Varargs Functions}
+\section{Defining Types}
+\subsection{Tag Types}
+\subsection{Struct Types}
 
 Julia comes with pre-defined rational and complex numeric types, but they are just defined in the language in terms of the more basic numeric types given above using the standard facility for defining new types. For example, the declaration of the \verb|Rational| type is the following:
 \begin{verbatim}
@@ -300,7 +447,7 @@ Despite being effectively user-defined types, \verb|Rational| values interoperat
   julia> 1//2 + 1.5
   2.0
 \end{verbatim}
-If you want to use ``exotic'' rational types like \verb|Rational{Uint8}| all you need to do is use \verb|| values to construct them:
+If you want to create an ``exotic'' rational object of a type like \verb|Rational{Uint8}| all you need to do is use \verb|Uint8| values to construct them:
 \begin{verbatim}
   julia> uint8(123)//uint8(234)
   41//78
@@ -317,34 +464,28 @@ If you use mixed types to construct a \verb|Rational|, the same promotions that 
   Rational{Int16}
 \end{verbatim}
 
-\section{Defining functions}
-\subsection{Syntax}
-\subsection{Control flow}
-\subsection{Specializing functions for given types}
-\subsection{Functional equivalents of operators}
-\subsection{Anonymous functions}
-\subsection{Returning multiple values}
-\subsection{Varargs functions}
-\section{Defining types}
-\subsection{Tag types}
-\subsection{Struct types}
-\subsection{Struct constructors}
-\subsection{Bits types}
-\subsection{Converting and promoting types}
-\subsection{Other kinds of types}
-\section{Tensors and comprehensions}
+\subsection{Struct Constructors}
+\sec{struct-constructors}
+
+\subsection{Bits Types}
+
+\subsection{Conversion and Promotion}
+\sec{conversion-and-promotion}
+
+\subsection{Other Kinds of Types}
+\section{Tensors and Comprehensions}
 \section{Strings}
 \section{I/O}
-\section{Data structures}
-\subsection{Hash tables}
+\section{Data Structures}
+\subsection{Hash Tables}
 \subsection{Sets}
-\subsection{Queues and dequeues}
+\subsection{Queues and Dequeues}
 \subsection{Trees}
 \subsection{Lists}
-\section{Parallel computing}
-\section{C interface}
-\section{Shell interface}
+\section{Parallel Computing}
+\section{C Interface}
+\section{Shell Interface}
 \section{Macros}
-\section{Julia command-line options}
+\section{Julia Command-Line Options}
 
 \end{document}
