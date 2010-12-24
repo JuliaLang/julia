@@ -1,6 +1,29 @@
 struct Rational{T<:Int} <: Real
     num::T
     den::T
+
+    function Rational{T<:Int}(num::T, den::T)
+        if den == 0
+            error("//: division by zero")
+        end
+        g = gcd(den, num)
+        num = div(num, g)
+        den = div(den, g)
+        new(num, den)
+    end
+
+    Rational(n::Int, d::Int) = Rational(promote(n,d)...)
+    Rational(n::Int) = new(n, one(n))
+end
+
+//(n::Int, d::Int) = Rational(n,d)
+//{T<:Int}(x::Rational{T}, y::T) = x.num // (x.den*y)
+//{T<:Int}(x::T, y::Rational{T}) = (x*y.den) // y.num
+
+function show(x::Rational)
+    show(num(x))
+    print("//")
+    show(den(x))
 end
 
 convert{T}(::Type{Rational{T}}, x::T) = Rational(x, convert(T,1))
@@ -13,26 +36,6 @@ promote_rule{T<:Int}(::Type{Rational{T}}, ::Type{T}) = Rational{T}
 promote_rule{T,S<:Int}(::Type{Rational{T}}, ::Type{S}) = Rational{promote_type(T,S)}
 promote_rule{T,S}(::Type{Rational{T}}, ::Type{Rational{S}}) = Rational{promote_type(T,S)}
 promote_rule{T,S<:Float}(::Type{Rational{T}}, ::Type{S}) = promote_type(T,S)
-
-function //{T}(num::T, den::T)
-    if den == 0
-        error("//: division by zero")
-    end
-    g = gcd(den, num)
-    num = div(num, g)
-    den = div(den, g)
-    Rational(num, den)
-end
-
-//(num, den) = //(promote(num, den)...)
-//{T<:Int}(x::Rational{T}, y::T) = x.num // (x.den*y)
-//{T<:Int}(x::T, y::Rational{T}) = (x*y.den) // y.num
-
-function show(x::Rational)
-    show(num(x))
-    print("//")
-    show(den(x))
-end
 
 num(x::Rational) = x.num
 den(x::Rational) = x.den
