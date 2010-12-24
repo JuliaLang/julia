@@ -13,6 +13,8 @@ Viral Shah \vspace{0.5em}
 % ~~~
 }
 
+\newcommand{\til}{\raise.17ex\hbox{$\scriptstyle\sim$}}
+
 \begin{document}
 
 \maketitle
@@ -26,5 +28,327 @@ possible to mostly eliminate the performance trade-off and provide a
 single environment productive enough for prototyping and performant enough
 for deploying applications. However, an open-source language with these
 characteristics has not emerged. Our project, Julia, fills this gap.
+
+\section{Getting started}
+\subsection{How to obtain and install julia}
+\subsection{Running code}
+
+Here's how you start and interact with the Julia read-eval-print-loop (repl):
+
+\begin{verbatim}
+  $ julia
+                 _      
+     _       _ _(_)_     |
+    (_)     | (_) (_)    |  
+     _ _   _| |_  __ _   |
+    | | | | | | |/ _` |  |
+    | | |_| | | | (_| |  |  ©2009-2010 contributors
+   _/ |\__'_|_|_|\__'_|  |  
+  |__/                   |
+
+  julia> 1+2
+  3
+
+  julia> load("file.j")
+  ()
+\end{verbatim}
+
+\section{Numbers and Arithmetic}
+Julia supports a broad range of basic numeric types together with the full complement of arithmetic and bitwise operations on them.
+The following are the built-in basic numeric types:
+
+\begin{itemize}
+  \item Integer types:
+  \begin{itemize}
+    \item \texttt{Int8}: signed 8-bit integers ranging from $-2^7$ to $2^7-1$.
+    \item \texttt{Uint8}: unsigned 8-bit integers ranging from 0 to $2^8-1$.
+    \item \texttt{Int16}: signed 16-bit integers ranging from $-2^{15}$ to $2^{15}-1$.
+    \item \texttt{Uint16}: unsigned 16-bit integers ranging from 0 to $2^{16}-1$.
+    \item \texttt{Int32}: signed 32-bit integers ranging from $-2^{31}$ to $2^{31}-1$.
+    \item \texttt{Uint32}: unsigned 32-bit integers ranging from 0 to $2^{32}-1$.
+    \item \texttt{Int64}: signed 64-bit integers ranging from $-2^{63}$ to $2^{63}-1$.
+    \item \texttt{Uint64}: unsigned 64-bit integers ranging from 0 to $2^{64}-1$.
+  \end{itemize}
+  \item Floating point types:
+  \begin{itemize}
+    \item \texttt{Float32}: IEEE 754 32-bit floating point numbers.
+    \item \texttt{Float64}: IEEE 754 64-bit floating point numbers.
+  \end{itemize}
+\end{itemize}
+
+\subsection{Integer Literals}
+
+The default value for an integer literal is Int32:
+\begin{verbatim}
+  julia> typeof(1)
+  Int32
+\end{verbatim}
+Larger integer literals that cannot be represented in 32 bits but can be represented in 64 bits will create 64-bit integers:
+\begin{verbatim}
+  julia> typeof(4294967296)
+  Int64
+\end{verbatim}
+Integers can be input in hexadecimal using the 0x prefix as in C:
+\begin{verbatim}
+  julia> 0xff
+  255
+
+  julia> typeof(ans)
+  Int32
+
+  julia> 0xffffffff
+  4294967295
+
+  julia> typeof(ans)
+  Int64
+\end{verbatim}
+There is no literal input format for integer types other than Int32 and Int64. You can, however convert Int32 and Int64 values to other types easily:
+\begin{verbatim}
+  julia> int8(-15)
+  -15
+
+  julia> typeof(ans)
+  Int8
+
+  julia> uint8(231)
+  231
+
+  julia> typeof(ans)
+  Uint8
+\end{verbatim}
+and so on.
+
+\subsection{Floating Point Literals}
+
+Floating point number are input in the standard formats:
+\begin{verbatim}
+  julia> 1.0
+  1.0
+
+  julia> 1.
+  1.0
+
+  julia> 0.5
+  0.5
+
+  julia> .5
+  0.5
+
+  julia> -1.23
+  -1.23
+
+  julia> 1e10
+  1e+10
+
+  julia> 1e100
+  1e+100
+\end{verbatim}
+These above results are all Float64 values. There is no literal format for Float32, but you can convert values to Float32 easily:
+\begin{verbatim}
+  julia> float32(-1.5)
+  -1.5
+
+  julia> typeof(ans)
+  Float32
+\end{verbatim}
+
+\subsection{Arithmetic and Bitwise Operations}
+
+The following basic operations are supported between various combinations of built-in arithmetic types:
+
+\begin{itemize}
+  \item arithmetic operations (integer and floating point):
+  \begin{itemize}
+    \item \texttt{-x} — unary minus maps values to their additive inverses.
+    \item \texttt{x + y} — plus performs addition.
+    \item \texttt{x - y} — binary minus performs subtraction.
+    \item \texttt{x * y} — times performs multiplication.
+    \item \texttt{x / y} — divide performs division.
+  \end{itemize}
+  \item bitwise operations (integer only):
+  \begin{itemize}
+    \item \texttt{\til x} — bitwise not.
+    \item \texttt{x \& y} — bitwise and.
+    \item \texttt{x | y} — bitwise or.
+    \item \texttt{x \$ y} — bitwise xor.
+  \end{itemize}
+\end{itemize}
+Here are some simple examples:
+\begin{verbatim}
+  julia> 1+2+3
+  6
+
+  julia> 1-2
+  -1
+
+  julia> 3*2/12
+  0.5
+\end{verbatim}
+
+Julia has a powerful type promotion system that allows arithmetic operations on all meaningful combinations of argument types to work naturally:
+\begin{verbatim}
+  julia> 1+2.5
+  3.5
+
+  julia> 0.5*12
+  6.0
+
+  julia> 3*2/12+1
+  1.5
+\end{verbatim}
+All of the above operations promote to Float64, but more nuanced promotions also work:
+\begin{verbatim}
+  julia> uint8(12)-int8(15)
+  -3
+
+  julia> typeof(ans)
+  Int16
+
+  julia> uint8(12)-float32(1.5)
+  10.5
+
+  julia> typeof(ans)
+  Float32
+\end{verbatim}
+Here are some examples with bitwise operations:
+\begin{verbatim}
+  julia> ~123
+  -124
+
+  julia> ~uint32(123)
+  4294967172
+
+  julia> 123 & 234
+  106
+
+  julia> 123 | 234
+  251
+
+  julia> typeof(ans)
+  Int32
+
+  julia> uint8(123) | uint16(234)
+  251
+
+  julia> typeof(ans)
+  Uint16
+
+  julia> 123 $ 234
+  145
+\end{verbatim}
+
+\subsection{Rational Numbers}
+
+Julia comes with pre-defined rational and complex numeric types, but they are just defined in the language in terms of the more basic numeric types given above using the standard facility for defining new types. For example, the declaration of the \texttt{Rational} type is the following:
+\begin{verbatim}
+  struct Rational{T<:Int} <: Real
+    num::T
+    den::T
+  end
+\end{verbatim}
+A few facts are in order before you can understand this declaration:
+\begin{itemize}
+\item A \texttt{struct} type is a named bundle of fields as in the C language. In this case the fields are \texttt{num} and \texttt{den} which are used to store the numerator and the denominator, respectively, of a rational number.
+\item The \texttt{Foo\{T\}} syntax is used for parametric types. This declaration defines \texttt{Rational} with respect to a type parameter, \texttt{T}.
+\item The \texttt{<:} operator asserts that the value on the left is a subtype of the value on the right. In this case it is used twice:
+  \begin{itemize}
+    \item to assert that the type parameter, \texttt{T}, is a subtype of \texttt{Int}, which includes all of the above integer types;
+    \item to assert that \texttt{Rational} itself is a subtype of \texttt{Real}, which includes the integer and floating-point types as well.
+  \end{itemize}
+\item The \texttt{::} operator asserts that the name on the left will always be bound to a value of the type on the right. Thus whatever the parameter \texttt{T} is given as, the numerator and denominator of the rational number must be of that type.
+\end{itemize}
+
+This is all somewhat complicated, but the result is easy to use:
+\begin{verbatim}
+  julia> Rational(1,2)
+  1//2
+
+  julia> typeof(ans)
+  Rational{Int32}
+\end{verbatim}
+Applying the Rational type to a pair of values (1,2) creates a Rational with those values bound to the num and den fields. The output notation 1//2 is also acceptable as input notation:
+\begin{verbatim}
+  julia> 1//2
+  1//2
+\end{verbatim}
+In fact, it is preferred because Rational directly constructs a Rational number, while the // form puts it into lowest terms first:
+\begin{verbatim}
+  julia> Rational(2,4)
+  2//4
+
+  julia> 2//4
+  1//2
+
+  julia> Rational(2,-3)
+  2//-3
+
+  julia> 2//-3
+  -2//3
+
+  julia> Rational(-3,-9)
+  -3//-9
+
+  julia> -3//-9
+  1//3
+\end{verbatim}
+The Rational form is retained to give you the ability to construct Rationals with arbitrary numerators and denominators should you care to do so. Operations on Rationals are smart enough to handle this gracefully:
+\begin{verbatim}
+  julia> Rational(2,4) == Rational(1,2)
+  true
+\end{verbatim}
+Despite being effectively user-defined types, Rational values interoperate completely transparently with other numeric types:
+\begin{verbatim}
+  julia> 1//2 + 2
+  5//2
+
+  julia> 1//2 + 1.5
+  2.0
+\end{verbatim}
+If you want to use ``exotic'' rational types like Rational\{Uint8\} all you need to do is use Uint8 values to construct them:
+\begin{verbatim}
+  julia> uint8(123)//uint8(234)
+  41//78
+
+  julia> typeof(ans)
+  Rational{Uint8}
+\end{verbatim}
+If you use mixed types to construct a Rational, the same promotions that are used for arithmetic apply:
+\begin{verbatim}
+  julia> uint8(123)//int8(-12)
+  -41//4
+
+  julia> typeof(ans)
+  Rational{Int16}
+\end{verbatim}
+
+\section{Defining functions}
+\subsection{Syntax}
+\subsection{Control flow}
+\subsection{Specializing functions for given types}
+\subsection{Functional equivalents of operators}
+\subsection{Anonymous functions}
+\subsection{Returning multiple values}
+\subsection{Varargs functions}
+\section{Defining types}
+\subsection{Tag types}
+\subsection{Struct types}
+\subsection{Struct constructors}
+\subsection{Bits types}
+\subsection{Converting and promoting types}
+\subsection{Other kinds of types}
+\section{Tensors and comprehensions}
+\section{Strings}
+\section{I/O}
+\section{Data structures}
+\subsection{Hash tables}
+\subsection{Sets}
+\subsection{Queues and dequeues}
+\subsection{Trees}
+\subsection{Lists}
+\section{Parallel computing}
+\section{C interface}
+\section{Shell interface}
+\section{Macros}
+\section{Julia command-line options}
 
 \end{document}
