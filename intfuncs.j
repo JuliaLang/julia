@@ -16,6 +16,12 @@ end
 
 lcm(a::Int, b::Int) = div(a*b, gcd(b,a))
 
+gcd(a::Int) = a
+lcm(a::Int) = a
+
+gcd(a::Int, b::Int...) = gcd(a, gcd(b...))
+lcm(a::Int, b::Int...) = lcm(a, lcm(b...))
+
 # return (gcd(a,b),x,y) such that ax+by == gcd(a,b)
 function gcdx(a, b)
     if b == 0
