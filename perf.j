@@ -24,7 +24,7 @@ fib(n) = n < 2 ? n : fib(n-1) + fib(n-2)
 
 print("recursive fib(20): ")
 f = fib(20)
-assert(f == 6765)
+@assert f == 6765
 timeit(fib, 20)
 
 ## parse int ##
@@ -39,21 +39,21 @@ function parseintperf()
     n
 end
 
-assert(parseintperf() == 252645135)
+@assert parseintperf() == 252645135
 timeit(parseintperf)
 
 ## array constructors ##
 
 print("ones: ")
 o = ones(200,200)
-assert(all(o==1))
+@assert o == 1
 timeit(ones, 200, 200)
 
 ## matmul and transpose ##
 
 print("A * transpose(A): ")
 matmul(o) = o * o.'
-assert(all(matmul(o)==200))
+@assert all(matmul(o)==200)
 timeit(matmul, o)
 
 ## mandelbrot set: complex arithmetic and comprehensions ##
@@ -72,7 +72,7 @@ end
 
 print("mandelbrot: ")
 mandelperf() = [ mandel(Complex(r,i)) | r = -2.0:.1:0.5, i = -1.:.1:1. ]
-assert(sum(mandelperf()) == 14791)
+@assert sum(mandelperf()) == 14791
 timeit(mandelperf)
 
 ## numeric vector sort ##
@@ -82,7 +82,7 @@ function sortperf(n)
   v = rand(n)
   v = sort(v)
 end
-assert(issorted(sortperf(5000)))
+@assert issorted(sortperf(5000))
 timeit(sortperf, 5000)
 
 ## slow pi series ##
@@ -100,7 +100,7 @@ end
 
 print("pi sum: ")
 s = pisum()
-assert(abs(s-1.644834071848065) < 1e-12)
+@assert abs(s-1.644834071848065) < 1e-12
 timeit(pisum)
 
 ## Random matrix statistics ##
@@ -124,5 +124,5 @@ end
 
 print("random matrix statistics: ")
 (s1, s2) = randmatstat(1000)
-assert(s1 > 0.5 && s1 < 1.0)
+@assert s1 > 0.5 && s1 < 1.0
 timeit(randmatstat, 1000)
