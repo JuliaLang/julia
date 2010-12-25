@@ -67,16 +67,17 @@ one(x)  = oftype(x,1)
 
 ## comparison ##
 
-==(x::Number, y::Number) = (==)(promote(x,y)...)
+==(x, y) = false
 !=(x, y) = !(x == y)
+==(x::Number, y::Number) = (==)(promote(x,y)...)
 
 < (x::Real, y::Real) = (<)(promote(x,y)...)
 > (x::Real, y::Real) = (y < x)
 <=(x::Real, y::Real) = (x < y) || (x == y)
 >=(x::Real, y::Real) = (x > y) || (x == y)
 
-==(x, y) = false
-isequal(x, y) = (x==y)
+isequal{T}(x::T, y::T) = (x==y)
+isequal(x, y) = isequal(promote(x,y)...)
 
 ## promotion mechanism ##
 
