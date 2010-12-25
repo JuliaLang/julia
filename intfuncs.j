@@ -3,6 +3,8 @@
 isodd(n::Int) = bool(rem(n,2))
 iseven(n::Int) = !isodd(n)
 
+copysign(x::Int, y::Real) = y < 0 ? -abs(x) : abs(x) # TODO: make more efficient
+
 function gcd(a::Int, b::Int)
     neg = a < 0
     while b != 0

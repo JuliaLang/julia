@@ -41,6 +41,8 @@ promote_rule{T,S<:Float}(::Type{Rational{T}}, ::Type{S}) = promote_type(T,S)
 num(x::Rational) = x.num
 den(x::Rational) = x.den
 sign(x::Rational) = sign(x.num)*sign(x.den)
+copysign(x::Rational, y::Real) = copysign(x.num,y) // x.den
+copysign(x::Rational, y::Rational) = copysign(x.num,y.num) // x.den
 
 (-)(x::Rational) = (-x.num) // x.den
 (+)(x::Rational, y::Rational) = (x.num*y.den + x.den*y.num) // (x.den*y.den)
