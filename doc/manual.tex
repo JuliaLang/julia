@@ -35,9 +35,9 @@ Fortunately, modern language design and compiler techniques make it possible to 
 However, an open-source language with these characteristics has not emerged.
 Our project, Julia, fills this gap.
 
-The syntax of Julia is directly derived from Matlab and as a consequence, any Matlab programmer should feel immediately comfortable with Julia.
+The syntax of Julia is directly derived from Matlab, and as a consequence, any Matlab programmer should feel immediately comfortable with Julia.
 While Matlab is quite effective for prototyping and exploring numerical linear algebra, for programming tasks outside of this relatively narrow scope, Matlab has severe limitations.
-Julia maintains the ease and expressiveness of Matlab for high-level numerical computing but transcends these general programming limitations.
+Julia maintains the ease and expressiveness of Matlab for high-level numerical computing, but transcends its general programming limitations.
 To that end, it borrows heavily from the C programming language.
 It is additionally strongly influenced, conceptually, if not syntactically, by the lineage of dynamic programming languages:
 Lisp, Perl, Python and Ruby.
@@ -211,13 +211,13 @@ Julia has a powerful and flexible type promotion system that allows arithmetic o
 The above operations all promote to \verb|Float64|s since that is the smallest floating point type that can faithfully represent all \verb|Int32| values.
 However, more nuanced promotions also work:
 \begin{verbatim}
-  julia> uint8(12)-int8(15)
+  julia> uint8(12) - int8(15)
   -3
 
   julia> typeof(ans)
   Int16
 
-  julia> uint8(12)-float32(1.5)
+  julia> uint8(12) - float32(1.5)
   10.5
 
   julia> typeof(ans)
@@ -306,8 +306,15 @@ the comparisons are performed in whatever type the arguments are promoted to, wh
 After promotion to a common type, integers are compared in the standard manner:
 by comparison of bits.
 Floating point numbers are compared according to the IEEE 754 standard:
-finite numbers are compared bitwise, positive infinite values are equal to each other, negative infinite values are equal to each other, and \verb|NaN| values are unequal to everything including each other.
-For comparisons where \verb|NaN != NaN| is undesirable, the function \verb|isequal| is also provided, which considers \verb|NaN| to be equal to \verb|NaN|:
+finite numbers are compared bitwise and given their usual ordering;
+positive infinite values are equal to each other and greater than everything else besides \verb|NaN|;
+negative infinite values are equal to each other and less then everything else besides \verb|NaN|;
+all comparisons with \verb|NaN|s values are false, including equality with itself:
+\begin{verbatim}
+  julia> NaN == NaN
+  false
+\end{verbatim}
+For situations where one wants to compare floating point values in such a way that \verb|NaN == NaN|, e.g. hash key comparisons, the function \verb|isequal| is also provided, which considers \verb|NaN|s to be equal:
 \begin{verbatim}
   julia> isequal(NaN,NaN)
   true
@@ -370,6 +377,35 @@ All such conversions obey the following identity for all integral \verb|a| and \
   true
 \end{verbatim} % TODO: add this to tests.j
 This includes cases where \verb|a == 0| or \verb|b == 0|, in which cases the conversion from rational to float produces the appropriate $\pm$\verb|Inf| or \verb|NaN| value.
+\begin{verbatim}
+  julia> 5//0
+  1//0
+
+  julia> float(5//0)
+  Inf
+
+  julia> isequal(float(5//0),5/0)
+  true
+
+  julia> 0//0
+  0//0
+
+  julia> float(0//0)
+  NaN
+
+  julia> isequal(float(0//0),0/0)
+  true
+
+  julia> -3//0
+  -1//0
+
+  julia> float(-3//0)
+  -Inf
+
+  julia> isequal(float(-3//0),-3/0)
+  true
+\end{verbatim}
+In a sense, Julia \verb|Rational|s are a convenient way of deferring the computation of integer ratios, thereby avoiding floating point errors.
 
 \section{Defining Functions}
 \subsection{Syntax}
