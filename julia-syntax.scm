@@ -372,7 +372,7 @@
 		     (function-expr a b)))
 
    ;; let
-   (pattern-lambda (let binds ex)
+   (pattern-lambda (let ex . binds)
 		   (let loop ((binds binds)
 			      (args  ())
 			      (inits ())

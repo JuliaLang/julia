@@ -563,7 +563,7 @@
      (let* ((binds (parse-comma-separated-assignments s))
 	    (ex    (parse-block s)))
        (expect-end s)
-       `(let ,binds ,ex)))
+       `(let ,ex ,@binds)))
     ((local)  (list 'local  (cons 'vars
 				  (parse-comma-separated-assignments s))))
     ((global) (list 'global (cons 'vars

@@ -655,8 +655,7 @@ X = [ i+2j | i=1:5, j=1:5 ]
 foo32_64(x) = (x<2) ? int32(x) : int64(x)
 boo32_64() = [ foo32_64(i) | i=1:2 ]
 let a36 = boo32_64()
-    # TODO: macro version causes malformed tree
-    assert(a36[1]==1 && a36[2]==2)
+    @assert a36[1]==1 && a36[2]==2
 end
 
 # concatenation
