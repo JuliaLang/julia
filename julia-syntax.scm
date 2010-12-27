@@ -379,7 +379,7 @@
 			      (locls ()))
 		     (if (null? binds)
 			 `(call (-> (tuple ,@args)
-				    (block (local (tuple ,@locls))
+				    (block (local (vars ,@locls))
 					   ,ex))
 				,@inits)
 			 (cond
@@ -409,7 +409,7 @@
 
 ; local x, y=2, z => local x;local y;local z;y = 2
 (define (expand-decls what binds)
-  (if (not (pair? binds))
+  (if (not (list? binds))
       (error (string "invalid " what " declaration")))
   (let loop ((b       binds)
 	     (vars    '())

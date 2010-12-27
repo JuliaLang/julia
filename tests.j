@@ -578,8 +578,9 @@ sptest2{T}(x::T) = T
 @assert is(sptest2(:a),Symbol)
 
 sptest3{T}(x::T) = y->T
-m = sptest3(:a)
-@assert is(m(0),Symbol)
+let m = sptest3(:a)
+    @assert is(m(0),Symbol)
+end
 
 # closures
 function clotest()
@@ -597,9 +598,11 @@ function clotest()
     @assert (()->c)() == 1
     return (n->(c+=n), ()->c)
 end
-(inc, C) = clotest()
-inc(11)
-@assert C() == 12
+let T = clotest()
+    (inc, C) = T
+    inc(11)
+    @assert C() == 12
+end
 
 Yc(f) = (h->f(x->h(h)(x)))(h->f(x->h(h)(x)))
 yfib = Yc(fib->(n->(n < 2 ? n : fib(n-1) + fib(n-2))))
