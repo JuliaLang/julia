@@ -2,7 +2,7 @@
 
 WORD_SIZE = ccall(dlsym(JuliaDLHandle,"jl_word_size"), Int32, ())
 
-## pointer conversions ##
+## converting pointers to an appropriate uint ##
 
 POINTER_INT_TYPE = WORD_SIZE == 64 ? Uint64 : Uint32
 
@@ -15,38 +15,9 @@ convert{T<:Int}(::Type{T}, x::Ptr) = convert(T,uint(x))
 
 pointer{T}(x::Array{T}) = convert(Ptr{T},x)
 
-## pointer promotions ##
-
-promote_rule(::Type{Ptr}, T::Type{Int8})   = promote_type(POINTER_INT_TYPE,T)
-promote_rule(::Type{Ptr}, T::Type{Uint8})  = promote_type(POINTER_INT_TYPE,T)
-promote_rule(::Type{Ptr}, T::Type{Int16})  = promote_type(POINTER_INT_TYPE,T)
-promote_rule(::Type{Ptr}, T::Type{Uint16}) = promote_type(POINTER_INT_TYPE,T)
-promote_rule(::Type{Ptr}, T::Type{Char})   = promote_type(POINTER_INT_TYPE,T)
-promote_rule(::Type{Ptr}, T::Type{Int32})  = promote_type(POINTER_INT_TYPE,T)
-promote_rule(::Type{Ptr}, T::Type{Uint32}) = promote_type(POINTER_INT_TYPE,T)
-promote_rule(::Type{Ptr}, I::Type{Int64})  = promote_type(POINTER_INT_TYPE,T)
-promote_rule(::Type{Ptr}, I::Type{Uint64}) = promote_type(POINTER_INT_TYPE,T)
-
-## pointer arithmetic ##
-
--(x::Ptr) = -uint(x)
-~(x::Ptr) = ~uint(x)
-(+)(x::Ptr, y::Ptr) = uint(x) + uint(y)
-(-)(x::Ptr, y::Ptr) = uint(x) - uint(y)
-(*)(x::Ptr, y::Ptr) = uint(x) * uint(y)
-div(x::Ptr, y::Ptr) = div(uint(x), uint(y))
-fld(x::Ptr, y::Ptr) = div(uint(x), uint(y))
-rem(x::Ptr, y::Ptr) = rem(uint(x), uint(y))
-mod(x::Ptr, y::Ptr) = rem(uint(x), uint(y))
-(&)(x::Ptr, y::Ptr) = uint(x) & uint(y)
-(|)(x::Ptr, y::Ptr) = uint(x) | uint(y)
-($)(x::Ptr, y::Ptr) = uint(x) $ uint(y)
-(<<)(x::Ptr, y::Int32) = uint(x) << y
-(>>)(x::Ptr, y::Int32) = uint(x) >>> y
-(>>>)(x::Ptr, y::Int32) = uint(x) >>> y
-==(x::Ptr, y::Ptr) = uint(x) == uint(y)
-< (x::Ptr, y::Ptr) = uint(x) <  uint(y)
-
-## traits ##
-
 sizeof{T}(::Type{Ptr{T}}) = WORD_SIZE
+
+## pointer subtraction & comparison ##
+
+(-)(x::Ptr, y::Ptr) = uint(x) - uint(y)
+==(x::Ptr, y::Ptr) = uint(x) == uint(y)
