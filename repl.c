@@ -36,7 +36,11 @@ static char jl_banner_plain[] =
     "               _      \n"
     "   _       _ _(_)_     |\n"
     "  (_)     | (_) (_)    |  pre-release version\n"
+#ifdef DEBUG
+    "   _ _   _| |_  __ _   |  debug build\n"
+#else
     "   _ _   _| |_  __ _   |\n"
+#endif
     "  | | | | | | |/ _` |  |\n"
     "  | | |_| | | | (_| |  |  \302\2512009-2010 contributors\n"
     " _/ |\\__'_|_|_|\\__'_|  |  \n"
@@ -46,7 +50,11 @@ static char jl_banner_color[] =
     "\033[1m               \033[32m_\033[37m      \n"
     "   \033[34m_\033[37m       _ \033[31m_\033[32m(_)\033[35m_\033[37m     |\n"
     "  \033[34m(_)\033[37m     | \033[31m(_) \033[35m(_)\033[37m    |  pre-release version\n"
+#ifdef DEBUG
+    "   _ _   _| |_  __ _   |  debug build\n"
+#else
     "   _ _   _| |_  __ _   |\n"
+#endif
     "  | | | | | | |/ _` |  |\n"
     "  | | |_| | | | (_| |  |  \302\2512009-2010 contributors\n"
     " _/ |\\__'_|_|_|\\__'_|  |  \n"

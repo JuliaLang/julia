@@ -13,8 +13,9 @@ load("int.j")
 load("float.j")
 load("char.j")
 load("number.j")
+load("pointer.j")
 
-# core data structures
+# core data structures (used by type inference)
 load("tensor.j")
 load("array.j")
 load("intset.j")
@@ -26,9 +27,6 @@ ccall(dlsym(JuliaDLHandle,"jl_enable_inference"),Void,())
 
 # load libc
 libc = dlopen("libc")
-
-# pointers
-load("pointer.j")
 
 # strings & printing
 load("string.j")
@@ -54,13 +52,13 @@ load("list.j")
 load("dequeue.j")
 load("sparse.j")
 load("tree.j")
+load("set.j")
 
 # I/O and concurrency
 load("io.j")
 set_current_output_stream(stdout_stream)
 load("task.j")
 load("multi.j")
-load("set.j")
 load("process.j")
 
 # misc

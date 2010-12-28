@@ -4,18 +4,21 @@ WORD_SIZE = ccall(dlsym(JuliaDLHandle,"jl_word_size"), Int32, ())
 
 ## converting pointers to an appropriate uint ##
 
-POINTER_INT_TYPE = WORD_SIZE == 64 ? Uint64 : Uint32
+if WORD_SIZE == 64
+    typealias PtrInt Uint64
+else
+    typealias PtrInt Uint32
+end
 
-convert(::Type{POINTER_INT_TYPE}, x::Ptr) =
-    box(POINTER_INT_TYPE,unbox(POINTER_INT_TYPE,x))
+convert(::Type{PtrInt}, x::Ptr) = box(PtrInt,unbox(PtrInt,x))
 
-uint(x::Ptr) = convert(POINTER_INT_TYPE, x)
+uint(x::Ptr) = convert(PtrInt, x)
 
 convert{T<:Int}(::Type{T}, x::Ptr) = convert(T,uint(x))
 
 pointer{T}(x::Array{T}) = convert(Ptr{T},x)
 
-sizeof{T}(::Type{Ptr{T}}) = WORD_SIZE
+@eval sizeof{T}(::Type{Ptr{T}}) = $div(WORD_SIZE,8)
 
 ## pointer subtraction & comparison ##
 
