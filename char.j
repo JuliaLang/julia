@@ -49,8 +49,6 @@ mod(x::Char, y::Char) = rem(int32(x), int32(y))
 # char arithmetic as Int32, comparison as Uint32
 ==(x::Char, y::Char) = uint32(x) == uint32(y)
 < (x::Char, y::Char) = uint32(x) <  uint32(y)
-< (x::Int, y::Char)  = uint32(x) <  uint32(y)
-< (x::Char, y::Int)  = uint32(x) <  uint32(y)
 
 ## traits ##
 

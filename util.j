@@ -1,7 +1,3 @@
-## system word size ##
-
-WORD_SIZE = ccall(dlsym(JuliaDLHandle,"jl_word_size"), Int32, ())
-
 # shell
 
 ls() = system("ls")

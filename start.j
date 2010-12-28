@@ -27,6 +27,9 @@ ccall(dlsym(JuliaDLHandle,"jl_enable_inference"),Void,())
 # load libc
 libc = dlopen("libc")
 
+# pointers
+load("pointer.j")
+
 # strings & printing
 load("string.j")
 load("latin1.j")

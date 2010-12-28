@@ -153,10 +153,6 @@ rem{T<:Int}(x::T, y::T) = no_op_err("rem", T)
 (|){T<:Int}(x::T, y::T) = no_op_err("|", T)
 ($){T<:Int}(x::T, y::T) = no_op_err("$", T)
 
-## pointer comparison ##
-
-==(x::Ptr, y::Ptr) = eq_int(unbox(Ptr,x),unbox(Ptr,y))
-
 ## miscellaneous ##
 
 copy(x::Any) = x
