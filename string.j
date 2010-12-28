@@ -97,12 +97,12 @@ end
 strchr(s::String, c::Char) = strchr(s, c, start(s))
 
 function chars(s::String)
-    cx = Array(Char,length(s))
+    cx = Array(Char,strlen(s))
     i = 0
     for c = s
         cx[i += 1] = c
     end
-    cx[1:i]
+    cx
 end
 
 (<) (a::String, b::String) = cmp(a,b) < 0
