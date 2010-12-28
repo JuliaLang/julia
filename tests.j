@@ -326,7 +326,7 @@ v = pop(l)
 @assert length(l)==2
 
 # string escaping & unescaping
-chars = {
+cx = {
     0x00000000      '\0'        "\\0"
     0x00000001      '\x01'      "\\x01"
     0x00000006      '\x06'      "\\x06"
@@ -378,14 +378,14 @@ chars = {
     0x0010ffff      '\U10ffff'  "\\U0010ffff"
 }
 
-for i = 1:size(chars,1)
-    @assert chars[i,1] == chars[i,2]
-    @assert string(chars[i,2]) == unescape_string(chars[i,3])
-    if chars[i,1] < 0x80
-        @assert chars[i,3] == escape_string(string(chars[i,2]))
+for i = 1:size(cx,1)
+    @assert cx[i,1] == cx[i,2]
+    @assert string(cx[i,2]) == unescape_string(cx[i,3])
+    if cx[i,1] < 0x80
+        @assert cx[i,3] == escape_string(string(cx[i,2]))
     end
-    for j = 1:size(chars,1)
-        str = string(chars[i,2], chars[j,2])
+    for j = 1:size(cx,1)
+        str = string(cx[i,2], cx[j,2])
         @assert str == unescape_string(escape_string(str))
     end
 end
@@ -395,7 +395,6 @@ end
 for i = 0:255, p = {"","\0","x","xxx","\x7f","\uFF","\uFFF",
                     "\uFFFF","\U10000","\U10FFF","\U10FFFF"}
     c = char(i)
-    # print(i,", ",escape_string(p),"\n")
     cp = strcat(c,p)
     @assert strcat(unescape_string(strcat("\\",uint2str(i,8,1),p))) == cp
     @assert strcat(unescape_string(strcat("\\",uint2str(i,8,2),p))) == cp

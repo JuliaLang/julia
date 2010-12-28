@@ -17,3 +17,12 @@ chr2ind(s::Latin1String, i::Int) = i
 
 print(s::Latin1String) = print(s.data)
 write(io, s::Latin1String) = write(io, s.data)
+
+## transcoding to Latin-1 ##
+
+latin1(s::Latin1String) = s
+function latin1(s::String)
+    f = c -> (c <= 0xff ? uint8(c) :
+        error("invalid Latin-1 character: ",c," (",int(c),")"))
+    Latin1String(map(f, chars(s)))
+end

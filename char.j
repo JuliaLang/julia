@@ -14,6 +14,10 @@ convert(::Type{Char}, x::Float64) = box(Char,fptoui32(unbox64(x)))
 
 char(x) = convert(Char, x)
 
+int(x::Char) = int32(x)
+uint(x::Char) = uint32(x)
+float(x::Char) = float32(x)
+
 ## char promotions ##
 
 promote_rule(::Type{Char}, ::Type{Int8})   = Int32

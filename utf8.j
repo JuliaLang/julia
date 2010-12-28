@@ -56,3 +56,9 @@ cmp(a::UTF8String, b::UTF8String) = lexcmp(a.data, b.data)
 
 print(s::UTF8String) = print(s.data)
 write(io, s::UTF8String) = write(io, s.data)
+
+## transcoding to UTF-8 ##
+
+utf8(s::UTF8String) = s
+utf8(s::String) =
+    UTF8String(print_to_string(()->for c=s; print(c); end).data)
