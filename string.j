@@ -622,8 +622,21 @@ uint2str(n::Int, b::Int, len::Int) = lpad(uint2str(n,b),len,'0')
 ## lexicographically compare byte arrays (used by Latin-1 and UTF-8) ##
 
 function lexcmp(a::Array{Uint8,1}, b::Array{Uint8,1})
-    d = ccall(dlsym(libc,"memcmp"), Int32,
+    c = ccall(dlsym(libc,"memcmp"), Int32,
               (Ptr{Uint8}, Ptr{Uint8}, Size),
               a, b, min(length(a),length(b)))
-    d < 0 ? -1 : d > 0 ? +1 : cmp(length(a),length(b))
+    c < 0 ? -1 : c > 0 ? +1 : cmp(length(a),length(b))
+end
+
+## find the index of a byte in a byte array ##
+
+function memchr(a::Array{Uint8,1}, b::Int)
+    p = pointer(a)
+    q = ccall(dlsym(libc,"memchr"), Ptr{Uint8},
+              (Ptr{Uint8}, Int32, Size),
+              p, int32(b), length(a))
+    if q == C_NULL
+        error("char not found")
+    end
+    q - p + 1
 end

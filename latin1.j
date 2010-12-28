@@ -12,6 +12,8 @@ strind(s::Latin1String, i::Int) = s[i]
 cmp(a::Latin1String, b::Latin1String) = lexcmp(a.data, b.data)
 ind2chr(s::Latin1String, i::Int) = i
 chr2ind(s::Latin1String, i::Int) = i
+strchr(s::Latin1String, c::Char) =
+    c <= 0xff ? memchr(s.data, c) : error("char not found")
 
 ## outputing Latin-1 strings ##
 

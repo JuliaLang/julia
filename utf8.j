@@ -51,6 +51,8 @@ end
 
 length(s::UTF8String) = length(s.data)
 cmp(a::UTF8String, b::UTF8String) = lexcmp(a.data, b.data)
+strchr(s::UTF8String, c::Char) =
+    c < 0x80 ? memchr(s.data, c) : invoke(strchr, (String,Char), s, c)
 
 ## outputing UTF-8 strings ##
 
