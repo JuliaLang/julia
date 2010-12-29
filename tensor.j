@@ -250,7 +250,7 @@ function assign(A::Vector, x, I::Vector{Index})
     return A
 end
 
-function assign(A::Vector, X::Vector, I::Vector{Index})
+function assign(A::Vector, X::Tensor, I::Vector{Index})
     for i=1:length(I)
         A[I[i]] = X[i]
     end
