@@ -195,6 +195,8 @@ end
 
 ## Indexing: ref ##
 
+ref(t::Tensor) = t
+
 ref(t::Tensor, r::Real...) = t[map(x->convert(Int32,round(x)),r)...]
 
 ref(A::Vector, I::Vector{Index}) = [ A[i] | i = I ]
