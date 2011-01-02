@@ -153,8 +153,8 @@ Floating point numbers are input in the standard formats:
   julia> 1e10
   1e+10
 
-  julia> 1e-4
-  0.0001
+  julia> 2.5e-4
+  0.00025
 \end{verbatim}
 The above results are all \verb|Float64| values. There is no literal format for \verb|Float32|, but you can convert values to \verb|Float32| easily:
 \begin{verbatim}
@@ -164,6 +164,44 @@ The above results are all \verb|Float64| values. There is no literal format for 
   julia> typeof(ans)
   Float32
 \end{verbatim}
+There are three specified floating point values that do not correspond to a point on the real number line: plus and minus infinity, and not-a-number (NaN).
+Here are their literal input forms:
+\begin{verbatim}
+  julia> Inf
+  Inf
+
+  julia> -Inf
+  -Inf
+
+  julia> NaN
+  NaN
+\end{verbatim}
+As specified by the IEEE 754 standard, these floating point values are the results of certain arithmetic operations:
+\begin{verbatim}
+  julia> 1/0
+  Inf
+
+  julia> -5/0
+  -Inf
+
+  julia> 0.000001/0
+  Inf
+
+  julia> 0/0
+  NaN
+
+  julia> 500 + Inf
+  Inf
+
+  julia> 500 - Inf
+  -Inf
+
+  julia> Inf - Inf
+  NaN
+
+  julia> Inf/Inf
+  NaN
+\end{verbatim}
 
 \subsection{Arithmetic and Bitwise Operations}
 
@@ -171,7 +209,7 @@ The following arithmetic and bitwise operations are supported on built-in arithm
 \begin{itemize}
   \item arithmetic operations (integer and floating point):
   \begin{itemize}
-    \item \verb|+x|~: unary plus is the identity.
+    \item \verb|+x|~: unary plus is the identity operation.
     \item \verb|-x|~: unary minus maps values to their additive inverses.
     \item \verb|x + y|~: plus performs addition.
     \item \verb|x - y|~: binary minus performs subtraction.
@@ -300,7 +338,7 @@ Here are some simple examples:
   julia> 3 < -0.5
   false
 \end{verbatim}
-As you can see, promotion also applies to comparisons:
+As can be seen here, promotion also applies to comparisons:
 the comparisons are performed in whatever type the arguments are promoted to, which is generally the smallest type they can all be represented faithfully in.
 
 After promotion to a common type, integers are compared in the standard manner:
@@ -309,7 +347,7 @@ Floating point numbers are compared according to the IEEE 754 standard:
 finite numbers are compared bitwise and given their usual ordering;
 positive infinite values are equal to each other and greater than everything else besides \verb|NaN|;
 negative infinite values are equal to each other and less then everything else besides \verb|NaN|;
-all comparisons with \verb|NaN|s values are false, including equality with itself:
+all comparisons with \verb|NaN| values are false, including equality with itself:
 \begin{verbatim}
   julia> NaN == NaN
   false
@@ -328,7 +366,7 @@ Chaining comparisons is quite convenient in many numerical codes.
 
 \subsection{Rational Numbers}
 
-There is a special\footnote{It's actually not that special: the \texttt{//} operator exists a priori, but its meaning of constructing rational numbers is defined entirely in the language itself.} input syntax for rational numbers in Julia:
+There is a special\footnote{Actually, it's not that special: the \texttt{//} operator exists \emph{a priori}, but its usage for constructing rational numbers is defined entirely in the language itself.} input syntax for rational numbers in Julia:
 \begin{verbatim}
   julia> 2//3
   2//3
@@ -375,8 +413,8 @@ All such conversions obey the following identity for all integral \verb|a| and \
 \begin{verbatim}
   julia> isequal(float(a//b), a/b)
   true
-\end{verbatim} % TODO: add this to tests.j
-This includes cases where \verb|a == 0| or \verb|b == 0|, in which cases the conversion from rational to float produces the appropriate $\pm$\verb|Inf| or \verb|NaN| value.
+\end{verbatim}
+This includes cases where \verb|a == 0| or \verb|b == 0|, in which situations the conversion from rational to float produces the appropriate $\pm$\verb|Inf| or \verb|NaN| value:
 \begin{verbatim}
   julia> 5//0
   1//0
@@ -384,7 +422,7 @@ This includes cases where \verb|a == 0| or \verb|b == 0|, in which cases the con
   julia> float(5//0)
   Inf
 
-  julia> isequal(float(5//0),5/0)
+  julia> isequal(float(5//0), 5/0)
   true
 
   julia> 0//0
@@ -393,7 +431,7 @@ This includes cases where \verb|a == 0| or \verb|b == 0|, in which cases the con
   julia> float(0//0)
   NaN
 
-  julia> isequal(float(0//0),0/0)
+  julia> isequal(float(0//0), 0/0)
   true
 
   julia> -3//0
@@ -402,14 +440,94 @@ This includes cases where \verb|a == 0| or \verb|b == 0|, in which cases the con
   julia> float(-3//0)
   -Inf
 
-  julia> isequal(float(-3//0),-3/0)
+  julia> isequal(float(-3//0), -3/0)
   true
 \end{verbatim}
-In a sense, Julia \verb|Rational|s are a convenient way of deferring the computation of integer ratios, thereby avoiding floating point errors.
+In a sense, Julia \verb|Rational|s are a convenient way of deferring the computation of integer ratios, thereby avoiding the accumulation of floating point errors.
 
-\section{Defining Functions}
-\subsection{Syntax}
-\subsection{Control Flow}
+\section{Control Flow}
+
+
+
+\section{Functions}
+
+The basic syntax for defining functions in Julia is similar to Matlab:
+\begin{verbatim}
+  function f(x,y)
+    x + y
+  end
+\end{verbatim}
+In fact, this precise declaration of \verb|f| will work in both Julia and Matlab, defining a function named \verb|f| returning the sum of its two arguments.
+There are, however, already some significant differences to note:
+\begin{itemize}
+\item In Matlab, this definition must be in its own file, named \verb|f.m|.
+In Julia, this expression can appear anywhere, including at the repl prompt.
+\item In Matlab, the closing \verb|end| is optional, being implied by the end of the file.
+In Julia, the terminating \verb|end| is required.
+\end{itemize}
+In general, while the function definition is reminiscent of Matlab, the similarity is largely superficial.
+Rather than continually comparing the two, in what follows, we will simply describe the behavior of functions in Julia.
+
+There is a second, more compact syntax for defining a function in Julia.
+The traditional function declaration syntax demonstrated above is equivalent to the following terse form:
+\begin{verbatim}
+  f(x,y) = x + y
+\end{verbatim}
+In this short form, the body of the function must be a single expression, although it can be a complex compound expression.
+Short, simple function definitions are quite common in Julia.
+The short function syntax is accordingly quite idiomatic, and considerably reduces both typing and visual noise.
+
+\subsection{The \texttt{return} Keyword}
+
+The returned value of a function is the value of the last expression evaluated, which is, by default, the last expression in the body of the function definition.
+In the example function \verb|f|, this is simply the value of the expression \verb|x + y|.
+As in C, and most other imperative or functional languages, the \verb|return| keyword can cause the function to return from any point, optionally providing an expression whose value is returned:
+\begin{verbatim}
+  function g(x,y)
+    return x * y
+    x + y
+  end
+\end{verbatim}
+Since functions definitions can be entered directly into the repl, it is easy to try these definitions out to compare them:
+\begin{verbatim}
+  julia> function g(x,y)
+           return x * y
+           x + y
+         end
+  Methods for generic function g
+  g(Any,Any)
+
+  julia> g(2,3)
+  6
+
+  julia> f(x,y) = x + y
+  Methods for generic function f
+  f(Any,Any)
+
+  julia> f(2,3)
+  5
+\end{verbatim}
+Of course, in a purely linear function body like \verb|g|, the usage of \verb|return| is pointless since the expression \verb|x + y| is never evaluated and we could simply make \verb|x * y| the last expression in the function and omit the \verb|return|.
+In conjunction with other control flow, however, \verb|return| is of real use.
+Here, for example is a function which computes the hypotenuse length of a right triangle with sides of length $x$ and $y$, carefully avoiding numerical problems in corner cases:
+\begin{verbatim}
+  function hypot(x,y)
+      x = abs(x)
+      y = abs(y)
+      if x > y
+          r = y/x
+          return x*sqrt(1+r*r)
+      end
+      if y == 0
+          return zero(x)
+      end
+      r = x/y
+      return y*sqrt(1+r*r)
+  end
+\end{verbatim}
+There are three possible points of return from this function, returning the values of three different expressions, depending on the values of $x$ and $y$.
+The return on the last line can be omitted since it is the last expression in the function.
+
 \subsection{Specializing Functions for Given Types}
 \subsection{Functional Equivalents of Operators}
 \subsection{Anonymous Functions}
