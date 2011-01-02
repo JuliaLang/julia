@@ -152,26 +152,17 @@ struct KeyError <: Exception
     key
 end
 
-struct DivideByZeroError <: Exception
-end
-
-struct MemoryError <: Exception
-end
-
-struct IOError <: Exception
-end
-
-struct StackOverflowError <: Exception
-end
-
 struct LoadError <: Exception
     file::String
     line::Int32
     error
 end
 
-struct EOFError <: Exception
-end
+struct DivideByZeroError  <: Exception end
+struct MemoryError        <: Exception end
+struct IOError            <: Exception end
+struct StackOverflowError <: Exception end
+struct EOFError           <: Exception end
 
 finalizer(o, f::Function) =
     ccall(dlsym(JuliaDLHandle, :jl_gc_add_finalizer), Void, (Any,Any), o, f)
