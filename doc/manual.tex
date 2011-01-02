@@ -43,8 +43,13 @@ It is additionally strongly influenced, conceptually, if not syntactically, by t
 Lisp, Perl, Python and Ruby.
 
 \section{Getting Started}
+\sec{getting-started}
+
 \subsection{How to Obtain and Install Julia}
+\sec{obtaining-and-installing}
+
 \subsection{Running Code}
+\sec{running-code}
 
 Here's how you start and interact with the Julia read-eval-print loop (repl):
 
@@ -66,6 +71,8 @@ Here's how you start and interact with the Julia read-eval-print loop (repl):
   ()
 \end{verbatim}
 The \verb|load| function reads and evaluates the contents of the given file.
+The \verb|julia| program takes a variety of command-line options, similar to the \verb|perl| and \verb|ruby| programs.
+See \Section{command-line-options} for details.
 
 \section{Numbers and Arithmetic}
 Julia supports a broad range of numeric types together with the full complement of arithmetic and bitwise operations.
@@ -116,7 +123,7 @@ Integers can be input in hexadecimal form using the \verb|0x| prefix as in C:
   julia> typeof(ans)
   Int64
 \end{verbatim}
-There is no literal input format for integer types other than \verb|Int32| and \verb|Int64|. You can, however convert \verb|Int32| and \verb|Int64| values to other types easily:
+There is no literal input format for integer types besides \verb|Int32| and \verb|Int64|. You can, however convert \verb|Int32| and \verb|Int64| values to other types easily:
 \begin{verbatim}
   julia> int8(-15)
   -15
@@ -292,6 +299,35 @@ Here are some examples with bitwise operations:
 \end{verbatim}
 As a general rule of thumb, arguments are promoted to the smallest type that can accurately represent all of the arguments. See \Section{conversion-and-promotion} for further details.
 
+\subsection{Numeric Literal Coefficients}
+
+To make common numeric formulas and expressions clearer, Julia allows variables to be immediately preceded by a numeric literal, implying multiplication.
+This makes writing polynomial expressions much cleaner:
+\begin{verbatim}
+  julia> x = 3
+  3
+
+  julia> 2x + 1
+  7
+
+  julia> 2x^2 - 3x + 1
+  10
+
+  julia> 1.5x^2 - .5x + 1
+  13.0
+\end{verbatim}
+Numeric literal coefficients conflict with two numeric literal syntaxes:
+hexadecimal integer literals and engineering notation for floating point literals:
+\begin{itemize}
+\item The hexadecimal integer literal expression \verb|0xff| could also be interpreted as the numeric literal \verb|0| multiplied by the variable \verb|xff|.
+\item The floating point literal expression \verb|1e10| could also be interpreted as the numeric literal \verb|1| multiplied by the variable \verb|e10|, and likewise with \verb|E|.
+\end{itemize}
+In both cases, we resolve the ambiguity in favor of the numeric literals:
+\begin{itemize}
+\item Expressions starting with \verb|0x| are always hexadecimal literals.
+\item Expressions starting with $d.dd$\,\verb|e| or $d.dd$\,\verb|E| are always floating point literals.
+\end{itemize}
+
 \subsection{Numeric Comparisons}
 
 Standard comparison operations are defined for primitive numeric types:
@@ -445,25 +481,30 @@ This includes cases where \verb|a == 0| or \verb|b == 0|, in which situations th
 \end{verbatim}
 In a sense, Julia \verb|Rational|s are a convenient way of deferring the computation of integer ratios, thereby avoiding the accumulation of floating point errors.
 
+\subsection{Complex Numbers}
+
 \section{Control Flow}
 
 
 
 \section{Functions}
 
-The basic syntax for defining functions in Julia is similar to Matlab:
+The basic syntax for defining functions in Julia is:
 \begin{verbatim}
   function f(x,y)
     x + y
   end
 \end{verbatim}
-In fact, this precise declaration of \verb|f| will work in both Julia and Matlab, defining a function named \verb|f| returning the sum of its two arguments.
-There are, however, already some significant differences to note:
+This syntax is similar to Matlab, but there are some significant differences:
 \begin{itemize}
-\item In Matlab, this definition must be in its own file, named \verb|f.m|.
+\item In Matlab, this definition must be saved in a file, named \verb|f.m|.
 In Julia, this expression can appear anywhere, including at the repl prompt.
 \item In Matlab, the closing \verb|end| is optional, being implied by the end of the file.
 In Julia, the terminating \verb|end| is required.
+\item in Matlab, this function would print the value $x + y$ but not return any value.
+In Julia, the last expression evaluated is a function's return value.
+\item Expression values are not printed automatically except in the repl.
+Semicolons are only required to separate expressions on the same line.
 \end{itemize}
 In general, while the function definition is reminiscent of Matlab, the similarity is largely superficial.
 Rather than continually comparing the two, in what follows, we will simply describe the behavior of functions in Julia.
@@ -475,12 +516,12 @@ The traditional function declaration syntax demonstrated above is equivalent to 
 \end{verbatim}
 In this short form, the body of the function must be a single expression, although it can be a complex compound expression.
 Short, simple function definitions are quite common in Julia.
-The short function syntax is accordingly quite idiomatic, and considerably reduces both typing and visual noise.
+The short function syntax is accordingly quite idiomatic, considerably reducing both typing and visual noise.
 
 \subsection{The \texttt{return} Keyword}
 
-The returned value of a function is the value of the last expression evaluated, which is, by default, the last expression in the body of the function definition.
-In the example function \verb|f|, this is simply the value of the expression \verb|x + y|.
+The value returned by a function is the value of the last expression evaluated, which, by default, is the last expression in the body of the function definition.
+In the example function, \verb|f|, this is simply the value of the expression \verb|x + y|.
 As in C, and most other imperative or functional languages, the \verb|return| keyword can cause the function to return from any point, optionally providing an expression whose value is returned:
 \begin{verbatim}
   function g(x,y)
@@ -526,9 +567,161 @@ Here, for example is a function which computes the hypotenuse length of a right 
   end
 \end{verbatim}
 There are three possible points of return from this function, returning the values of three different expressions, depending on the values of $x$ and $y$.
-The return on the last line can be omitted since it is the last expression in the function.
+The \verb|return| on the last line could be omitted since it is the last expression.
 
 \subsection{Specializing Functions for Given Types}
+
+Julia allows multiple dispatch based on the types of function arguments:
+\begin{verbatim}
+  f(x,y) = x + y
+  f(x::Float64, y::Float64) = x * y
+\end{verbatim}
+The appropriate version will be called based on the types of the argument values:
+\begin{verbatim}
+  julia> f(2,3)
+  5
+
+  julia> f(2.0,3.0)
+  6.0
+\end{verbatim}
+Dispatch is done on all argument types and the most specific method that applies is called:
+\begin{verbatim}
+  julia> f(2,3.0)
+  5.0
+\end{verbatim}
+Here, the first method of \verb|f| is applied since \verb|2| is not a \verb|Float64|, so the specialized second method does not apply.
+
+If you've been entering these definitions in the repl, you'll have noticed that it shows you all the methods defined for a given ``generic function'' when a new method is defined or if ask the repl to show the function object:
+\begin{verbatim}
+  julia> f(x,y) = x + y
+  Methods for generic function f
+  f(Any,Any)
+
+  julia> f(x::Float64, y::Float64) = x * y
+  Methods for generic function f
+  f(Float64,Float64)
+  f(Any,Any)
+
+  julia> f
+  Methods for generic function f
+  f(Float64,Float64)
+  f(Any,Any)
+\end{verbatim}
+The \verb|Any| type is the default when no type is specified:
+all Julia objects match \verb|Any|.
+In formal type system literature, \verb|Any| is commonly called Top.\footnote{Julia also has a Bottom type called \texttt{None} which no object matches.}
+
+Although it seems a simple concept, multiple dispatch on the types of values is perhaps the single most powerful and central feature of the Julia language.
+Core operations typically have dozens of methods defined:
+\begin{verbatim}
+  julia> +
+  Methods for generic function +
+  +(Real,Range{T<:Real})
+  +(Real,Range1{T<:Real})
+  +(Union(Range{T<:Real},Range1{T<:Real}),Real)
+  +(Union(Range{T<:Real},Range1{T<:Real}),
+    Union(Range{T<:Real},Range1{T<:Real}))
+  +()
+  +(Number,)
+  +(Any,Any,Any)
+  +(Any,Any,Any,Any)
+  +(Any,Any,Any,Any,Any)
+  +(Any,Any,Any,Any...)
+  +(Int8,Int8)
+  +(Int16,Int16)
+  +(Int32,Int32)
+  +(Int64,Int64)
+  +(Uint8,Uint8)
+  +(Uint16,Uint16)
+  +(Uint32,Uint32)
+  +(Uint64,Uint64)
+  +(Float32,Float32)
+  +(Float64,Float64)
+  +(Char,Char)
+  +(Rational{T<:Int},Rational{T<:Int})
+  +(Complex{T<:Real},Complex{T<:Real})
+  +(T<:Number,T<:Number)
+  +(Number,Number)
+  +(Tensor{T<:Number,N},)
+  +(Tensor{S,N},Tensor{T,N})
+  +(Number,Tensor{T,N})
+  +(Tensor{T,N},Number)
+\end{verbatim}
+Multiple dispatch together with the flexible parametric type system, which allows us to express which values methods may be applied to, give Julia its ability to abstractly express high-level algorithms decoupled from implementation details, yet generate efficient specialized code at run time.
+
+\subsection{Method Ambiguities}
+
+It is possible to define a set of function methods such that ambiguous cases exist where for some combinations of argument types there is no unique most specific method which applies:
+\begin{verbatim}
+  julia> f(x,y) = x + y
+  Methods for generic function f
+  f(Any,Any)
+
+  julia> f(x::Float64, y) = 2x + y
+  Methods for generic function f
+  f(Float64,Any)
+  f(Any,Any)
+
+  julia> f(x, y::Float64) = x + 2y
+  Warning: new definition f(Any,Float64) is ambiguous with
+  f(Float64,Any). Make sure f(Float64,Float64) is also defined.
+  Methods for generic function f
+  f(Float64,Any)
+  f(Any,Float64)
+  f(Any,Any)
+
+  julia> f(2,3)
+  5
+
+  julia> f(2.0,3)
+  7.0
+
+  julia> f(2,3.0)
+  8.0
+
+  julia> f(2.0,3.0)
+  7.0
+\end{verbatim}
+Here the arguments \verb|2.0| and \verb|3.0| could be handled by either the \verb|f(Float64,Any)| or the \verb|f(Any,Float64)| method, and neither is more specific than the other.
+In such cases, Julia warns you about this ambiguity, but allows you to proceed, arbitrarily picking a method.
+You should avoid method ambiguities by specifying an appropriate method for the intersection case:
+\begin{verbatim}
+  julia> f(x,y) = x + y
+  Methods for generic function f
+  f(Any,Any)
+
+  julia> f(x::Float64, y::Float64) = 2x + 2y
+  Methods for generic function f
+  f(Float64,Float64)
+  f(Any,Any)
+
+  julia> f(x::Float64, y) = 2x + y
+  Methods for generic function f
+  f(Float64,Float64)
+  f(Float64,Any)
+  f(Any,Any)
+
+  julia> f(x, y::Float64) = x + 2y
+  Methods for generic function f
+  f(Float64,Float64)
+  f(Float64,Any)
+  f(Any,Float64)
+  f(Any,Any)
+
+  julia> f(2,3)
+  5
+
+  julia> f(2.0,3)
+  7.0
+
+  julia> f(2,3.0)
+  8.0
+
+  julia> f(2.0,3.0)
+  10.0
+\end{verbatim}
+% To suppress the warning, the intersection method must be defined first.
+
 \subsection{Functional Equivalents of Operators}
 \subsection{Anonymous Functions}
 \subsection{Returning Multiple Values}
@@ -638,8 +831,13 @@ If you use mixed types to construct a \verb|Rational|, the same promotions that 
 \subsection{Lists}
 \section{Parallel Computing}
 \section{C Interface}
-\section{Shell Interface}
+\section{Running External Programs}
+
+
+
 \section{Macros}
-\section{Julia Command-Line Options}
+
+\section{Command-Line Options}
+\sec{command-line-options}
 
 \end{document}
