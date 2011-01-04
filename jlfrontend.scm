@@ -68,8 +68,12 @@
 	      body)
 	    th))))
 
-(define (jl-just-parse-string s)
-  (parser-wrap (lambda () (julia-parse s))))
+(define (jl-just-parse-string s pos0)
+  (let ((inp (open-input-string s)))
+    (io.seek inp pos0)
+    (let ((expr
+	   (parser-wrap (lambda () (julia-parse inp parse-atom)))))
+      (cons expr (io.pos inp)))))
 
 (define (jl-parse-string s)
   (parser-wrap (lambda ()

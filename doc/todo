@@ -601,6 +601,9 @@ issues 12/21/10
     v
   end
   . can be specialized, allows removing checks and converts
+- {} for dequeues
+- type=>abstract, struct=>type
+
 
 before removing the 1-word overhead:
 initial   , after tests.j

@@ -647,10 +647,12 @@ int main(int argc, char *argv[])
                 }
                 if (i < num_evals) {
                     ast = jl_parse_input_line(eval_exprs[i]);
-                    value = jl_toplevel_eval(ast);
-                    if (print_exprs[i]) {
-                        jl_show(value);
-                        ios_printf(ios_stdout, "\n");
+                    if (ast != NULL) {
+                        value = jl_toplevel_eval(ast);
+                        if (print_exprs[i]) {
+                            jl_show(value);
+                            ios_printf(ios_stdout, "\n");
+                        }
                     }
                 }
             }

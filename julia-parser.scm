@@ -893,11 +893,14 @@
 
 ; --- main entry point ---
 
-(define (julia-parse s)
+; can optionally specify which grammar production to parse.
+; default is parse-stmts.
+(define (julia-parse s . production)
   (cond ((string? s)
-	 (julia-parse (make-token-stream (open-input-string s))))
+	 (apply julia-parse (make-token-stream (open-input-string s))
+		production))
 	((port? s)
-	 (julia-parse (make-token-stream s)))
+	 (apply julia-parse (make-token-stream s) production))
 	((eof-object? s)
 	 s)
 	(else
@@ -908,7 +911,8 @@
 	 (let ((t (peek-token s)))
 	   (if (eof-object? t)
 	       t
-	       (parse-stmts s))))))
+	       ((if (null? production) parse-stmts (car production))
+		s))))))
 
 (define (check-end-of-input s)
   (skip-ws-and-comments (ts:port s))

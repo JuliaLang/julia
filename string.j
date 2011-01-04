@@ -548,8 +548,10 @@ shell_escape(cmd::String, args::String...) =
 
 ## interface to parser ##
 
-parse(s::String) = ccall(dlsym(JuliaDLHandle,:jl_parse_string), Any,
-                              (Ptr{Uint8},), cstring(s))
+parse(s::String) = parse(s, 0)
+# returns (expr, end_pos). expr is () in case of parse error.
+parse(s::String, pos) = ccall(dlsym(JuliaDLHandle,:jl_parse_string), Any,
+                              (Ptr{Uint8},Int32), cstring(s), int32(pos))
 
 ## miscellaneous string functions ##
 

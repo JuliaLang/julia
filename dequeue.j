@@ -39,7 +39,7 @@ start(q::Queue) = q.head
 done(q::Queue, elt) = is(elt,())
 next(q::Queue, elt) = (elt.a, elt.b)
 
-struct Dequeue{T} <: Tensor{T,1}
+struct Dequeue{T}
     maxsize:: Size
     size:: Size
     offset:: Size
@@ -78,6 +78,7 @@ end
 
 numel(l::Dequeue) = l.size
 size(l::Dequeue) = (l.size,)
+length(l::Dequeue) = numel(l)
 
 function assign(l::Dequeue, elt, i::Index)
     if i > l.size
