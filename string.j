@@ -409,6 +409,7 @@ function shell_parse(str::String, interp::Bool)
         end
     end
     append_arg = ()->begin
+        if arg == (); arg = ("",); end
         args = append(args,(arg,))
         arg = ()
     end
@@ -490,6 +491,9 @@ function shell_split(str::String)
 end
 
 function print_shell_word(word::String)
+    if isempty(word)
+        print("''")
+    end
     has_spaces = false
     has_backsl = false
     has_single = false
