@@ -375,16 +375,8 @@ function interp_parse(str::String)
         c, k = next(str,j)
         if c == '$'
             strs = append(strs,(str[i:j-1],))
-            i = j = k
-            while !done(str,j)
-                c, k = next(str,j)
-                if !iswalnum(c) && c != '_'
-                    break
-                end
-                j = k
-            end
-            strs = append(strs,(symbol(str[i:j-1]),))
-            i = j
+            ex, j = parse(str,k)
+            strs = append(strs,(ex,)); i = j
         elseif c == '\\' && !done(str,k) && str[k] == '$'
             c, j = next(str,k)
         else
@@ -438,14 +430,8 @@ function shell_parse(str::String, interp::Bool)
         elseif interp && !in_single_quotes && c == '$'
             update_arg(str[i:j-1]); i = k
             j = k
-            while !done(str,j)
-                c, k = next(str,j)
-                if !iswalnum(c) && c != '_'
-                    break
-                end
-                j = k
-            end
-            update_arg(symbol(str[i:j-1])); i = j
+            ex, j = parse(str,j)
+            update_arg(ex); i = j
         else
             if !in_double_quotes && c == '\''
                 in_single_quotes = !in_single_quotes
@@ -553,6 +539,7 @@ parse(s::String) = parse(s, 1)
 function parse(s::String, pos)
     ex, pos = ccall(dlsym(JuliaDLHandle,:jl_parse_string), Any,
                     (Ptr{Uint8},Int32), cstring(s), int32(pos)-1)
+    if ex == (); error(ParseError); end
     ex, pos+1
 end
 
