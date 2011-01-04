@@ -676,7 +676,7 @@ int main(int argc, char *argv[])
 
     if (print_banner) {
         ios_printf(ios_stdout, "%s", banner);
-	ios_printf(ios_stdout, "Startup time: %.1f seconds\n\n", 
+	ios_printf(ios_stdout, "Startup time: %.2f seconds\n\n", 
 		   (clock_now()-julia_launch_tic));
     }
 

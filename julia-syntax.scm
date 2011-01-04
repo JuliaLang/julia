@@ -254,6 +254,16 @@
    (let ((field-names (map decl-var fields))
 	 (field-types (map decl-type fields))
 	 (T (gensym)))
+     (if (and (null? defs) (null? params))
+	 `(block
+	   (= ,name
+	      (call (top new_struct_type)
+		    (quote ,name)
+		    (tuple ,@params)
+		    (tuple ,@(map (lambda (x) `',x) field-names))
+		    (null)))
+	   (call (top new_struct_fields)
+		 ,name ,super (tuple ,@field-types)))
      `(call
        (lambda (,@params)
 	 ; the static parameters are bound to new TypeVars in here,
@@ -290,35 +300,47 @@
 	  ; now add the type fields, which might reference the type itself.
 	  (call (top new_struct_fields)
 		,name ,super (tuple ,@field-types))))
-       ,@(symbols->typevars params bounds)))))
+       ,@(symbols->typevars params bounds))))))
 
 (define (type-def-expr name params super)
   (receive
    (params bounds)
    (sparam-name-bounds params '() '())
-   `(block
-     (call
-      (lambda ,params
-	(block
+   (if (null? params)
+       `(block
 	 (= ,name
 	    (call (top new_tag_type)
 		  (quote ,name) (tuple ,@params)))
-	 (call (top new_tag_type_super) ,name ,super)))
-      ,@(symbols->typevars params bounds)))))
+	 (call (top new_tag_type_super) ,name ,super))
+       `(block
+	 (call
+	  (lambda ,params
+	    (block
+	     (= ,name
+		(call (top new_tag_type)
+		      (quote ,name) (tuple ,@params)))
+	     (call (top new_tag_type_super) ,name ,super)))
+	  ,@(symbols->typevars params bounds))))))
 
 (define (bits-def-expr n name params super)
   (receive
    (params bounds)
    (sparam-name-bounds params '() '())
-   `(block
-     (call
-      (lambda ,params
-	(block
+   (if (null? params)
+       `(block
 	 (= ,name
 	    (call (top new_bits_type)
 		  (quote ,name) (tuple ,@params) ,n))
-	 (call (top new_tag_type_super) ,name ,super)))
-      ,@(symbols->typevars params bounds)))))
+	 (call (top new_tag_type_super) ,name ,super))
+       `(block
+	 (call
+	  (lambda ,params
+	    (block
+	     (= ,name
+		(call (top new_bits_type)
+		      (quote ,name) (tuple ,@params) ,n))
+	     (call (top new_tag_type_super) ,name ,super)))
+	  ,@(symbols->typevars params bounds))))))
 
 ; take apart a type signature, e.g. T{X} <: S{Y}
 (define (analyze-type-sig ex)

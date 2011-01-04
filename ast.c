@@ -380,7 +380,7 @@ DLLEXPORT jl_value_t *jl_parse_string(const char *str, int pos0)
 
     value_t e = car_(p);
     if (e == FL_T || e == FL_F || e == FL_EOF) {
-        expr = jl_null;
+        expr = (jl_value_t*)jl_null;
     }
     else {
         syntax_error_check(e);
@@ -388,7 +388,7 @@ DLLEXPORT jl_value_t *jl_parse_string(const char *str, int pos0)
     }
 
     pos1 = jl_box_int32(toulong(cdr_(p),"parse"));
-    jl_value_t *result = jl_tuple2(expr, pos1);
+    jl_value_t *result = (jl_value_t*)jl_tuple2(expr, pos1);
     JL_GC_POP();
     return result;
 }

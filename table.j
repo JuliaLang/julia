@@ -29,7 +29,7 @@ del(t::IdTable, key) = (ccall(dlsym(JuliaDLHandle,"jl_eqtable_del"),
                               Int32, (Any, Any), t.ht, key);
                         t)
 
-_secret_table_token_ = {:BOO}
+_secret_table_token_ = (:BOO,)
 
 start(t::IdTable) = 0
 done(t::IdTable, i) = is(next(t,i),())

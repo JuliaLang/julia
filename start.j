@@ -56,6 +56,7 @@ load("set.j")
 
 # I/O and concurrency
 load("io.j")
+stdout_stream = make_stdout_stream()
 set_current_output_stream(stdout_stream)
 load("task.j")
 load("multi.j")

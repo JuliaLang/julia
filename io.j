@@ -3,7 +3,7 @@ sizeof_ios_t = ccall(dlsym(JuliaDLHandle,:jl_sizeof_ios_t), Int32, ())
 struct IOStream
     ios::Array{Uint8,1}
 
-    global stdout_stream, close
+    global make_stdout_stream, close
 
     function close(s::IOStream)
         ccall(dlsym(JuliaDLHandle,"ios_close"), Void, (Ptr{Void},), s.ios)
@@ -15,7 +15,7 @@ struct IOStream
                   finalizer(x, close);
                   x)
 
-    stdout_stream =
+    make_stdout_stream() =
         new(ccall(dlsym(JuliaDLHandle,"jl_stdout_stream"), Any, ()))
 end
 
@@ -256,6 +256,7 @@ function serialize(s, a::Array)
     if isa(elty,BitsKind)
         write(s, a)
     else
+        # TODO: handle uninitialized elements
         for i = 1:numel(a)
             serialize(s, a[i])
         end
