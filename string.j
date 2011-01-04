@@ -6,7 +6,7 @@ isempty(s::String) = done(s,start(s))
 ref(s::String, i::Index) = next(s,i)[1]
 length(s::String) = at_string_end(s)[1]
 strlen(s::String) = at_string_end(s)[2]
-symbol(s::String) = symbol(bstring(s))
+symbol(s::String) = symbol(cstring(s))
 string(s::String) = s
 
 print(c::Char) = (write(current_output_stream(), c); ())
@@ -263,11 +263,8 @@ end
 string(x) = string(ccall(dlsym(JuliaDLHandle,"jl_show_to_string"),
                          Ptr{Uint8}, (Any,), x))
 
-bstring(str::ByteString) = str
-bstring(args...) = print_to_string(print, args...)
-
 cstring(str::ByteString) = str.data
-cstring(args...) = print_to_array(print, args...)
+cstring(args...) = print_to_string(print, args...)
 
 ## generic string utilities ##
 

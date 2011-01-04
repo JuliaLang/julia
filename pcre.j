@@ -98,12 +98,12 @@ end
 show(m::RegexMatch) = show(m.match)
 
 function match(re::Regex, str::String)
-    bstr = bstring(str)
-    m = pcre_exec(re.regex, re.extra, bstr, 1, re.options)
+    cstr = cstring(str)
+    m = pcre_exec(re.regex, re.extra, cstr, 1, re.options)
     if isempty(m); return RegexMatch((),(),-1); end
     mat = bstr[m[1]+1:m[2]]
     cap = ntuple(div(length(m),2)-1,
-                 i->bstr[m[2i+1]+1:m[2i+2]])
+                 i->cstr[m[2i+1]+1:m[2i+2]])
     RegexMatch(mat, cap, m[1]+1)
 end
 
