@@ -1264,22 +1264,22 @@ the same function call semantics, i.e. you can't ``tell'' that it
 happened. Macros are just the opposite.  For example, say I have a
 function that contains an inner function:
 
-\begin{quote}
+\begin{verbatim}
 function foo()
   bar(x) = XXX
   ...
   bar(...)
 end
-\end{quote}
+\end{verbatim}
 
 Now I want to abstract away the definition of bar. Maybe I want to use
 it in multiple functions and I don't want to copy and paste it. With
 macros I can do this:
 
-\begin{quote}
+\begin{verbatim}
 macro definestuff(name)
   quote
-    (\$name)(x) = XXX
+    ($name)(x) = XXX
   end
 end
 
@@ -1287,7 +1287,7 @@ function foo()
   @definestuff bar
   ...
 end
-\end{quote}
+\end{verbatim}
 
 This is not possible without macros. If you passed :bar to a function,
 that function has no way to define a local bar inside foo. If it used
@@ -1299,13 +1299,13 @@ And this example hardly shows the full power, since the argument to
 the macro is only a symbol. This is just to show the semantic
 differences.  Another example is spawn:
 
-\begin{quote}
+\begin{verbatim}
 macro spawn(expr)
   quote
-    spawn(()->(\$expr))
+    spawn(()->($expr))
   end
 end
-\end{quote}
+\end{verbatim}
 
 Now you can write {\tt @spawn a+b} and it will call a function spawn()
 on {\tt a+b} wrapped in a thunk. It should be clear that this syntax
