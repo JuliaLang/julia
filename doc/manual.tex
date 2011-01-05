@@ -892,6 +892,25 @@ By changing the string abstraction, we can support arbitrary string encodings at
 \subsection{Lists}
 
 \section{Parallel Computing}
+\begin{itemize}
+  \item {\tt Worker()} - create a new local worker
+
+  \item {\tt remote\_apply(w, func, args...)} -
+     tell a worker to call a function on the given arguments.
+     for now, functions are passed as symbols, e.g. :randn
+     returns a Future.
+
+   \item {\tt wait(f)} - wait for, then return the value represented by a Future
+
+   \item {\tt pmap(pool, func, lst)} -
+     call a function on each element of lst (some 1-d thing), in
+     parallel. pool is a list of available Workers.
+
+   \item {\tt send\_msg(socket, x)} - send a Julia object through a socket
+
+   \item {\tt recv\_msg(socket)} - read the next Julia object from a socket
+\end{itemize}
+
 \section{Calling C Functions}
 \section{Running External Programs}
 
@@ -1147,6 +1166,72 @@ The final example never terminates since the \verb|dup| process reads its own ou
 \section{Standard Library Reference}
 
 \section{Macros}
+
+Macros are totally different from inlining. Macros are a hook into the
+compiler that lets you examine and rewrite the syntax of a piece of
+the program. You can use them to implement entirely new syntactic
+constructs like spawn, parfor, pattern matching, stefan's command
+syntax, etc.
+
+Macros also run at an earlier binding time than functions and so have
+different semantics. Inlining moves code around in a way that keeps
+the same function call semantics, i.e. you can't ``tell'' that it
+happened. Macros are just the opposite.  For example, say I have a
+function that contains an inner function:
+
+\begin{quote}
+function foo()
+  bar(x) = XXX
+  ...
+  bar(...)
+end
+\end{quote}
+
+Now I want to abstract away the definition of bar. Maybe I want to use
+it in multiple functions and I don't want to copy and paste it. With
+macros I can do this:
+
+\begin{quote}
+macro definestuff(name)
+  quote
+    (\$name)(x) = XXX
+  end
+end
+
+function foo()
+  @definestuff bar
+  ...
+end
+\end{quote}
+
+This is not possible without macros. If you passed :bar to a function,
+that function has no way to define a local bar inside foo. If it used
+eval, it would define a top-level function called bar. Since the macro
+runs so much earlier, it can change the code of foo itself, so it can
+easily modify local variables.
+
+And this example hardly shows the full power, since the argument to
+the macro is only a symbol. This is just to show the semantic
+differences.  Another example is spawn:
+
+\begin{quote}
+macro spawn(expr)
+  quote
+    spawn(()->(\$expr))
+  end
+end
+\end{quote}
+
+Now you can write {\tt @spawn a+b} and it will call a function spawn()
+on {\tt a+b} wrapped in a thunk. It should be clear that this syntax
+improvement requires macros. The function call f(a+b) couldn't work
+since a+b will be fully evaluated before f is called. f(:(a+b)) is
+ugly, and also wouldn't work since f cannot use :(a+b) to access the
+values of local variables a and b.
+
+People often compare macros to inlining (for example, the designer(s)
+of C++), but this is a pun. There is only a superficial similarity of
+inserting code into other code.
 
 \section{Command-Line Options}
 \sec{command-line-options}
