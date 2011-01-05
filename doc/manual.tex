@@ -25,6 +25,8 @@ Viral Shah \vspace{0.5em}
 \renewcommand{\labelitemii}{\bullet}
 \renewcommand{\labelitemiii}{\bullet}
 
+\renewcommand{\O}{\ensuremath{\operatorname{O}}}
+
 \begin{document}
 
 \maketitle
@@ -831,7 +833,79 @@ If you use mixed types to construct a \verb|Rational|, the same promotions that 
 \subsection{Other Kinds of Types}
 
 \section{Tensors and Comprehensions}
+
 \section{Strings}
+\sec{strings}
+
+Traditionally, strings are conceptualized as sequences of characters, which mathematically is a function from indices to characters.
+When all characters are exactly one byte, this can be conveniently and efficiently represented with a plain old array of bytes.
+It's simple and efficient.
+End of story.
+
+Unicode complicates things because common encodings like UTF-8 and UTF-16 are variable-width, meaning that characters require different numbers of bytes in their representation.
+In UTF-8, for example, all of the ASCII characters are one byte, encoded just as in ASCII.
+All other characters, however, take between two and four bytes to represent.
+This means that you can't efficiently look up the $k$th character of a string by doing array indexing anymore:
+the $k$th byte of the representation is no longer the $k$th character.
+Worse still, some bytes are not the beginning of a character at all---they're right in the middle of a character.
+This is called a ``continuation character.''
+Fortunately, both UTF-8 and UTF-16 are carefully designed so that you can immediately tell which category the byte at an index falls into.
+
+If you allow people direct access to the bytes of an encoded string, they can and will do all sorts of bad things that produce invalid Unicode and broken behaviors when Unicode input is received.
+To provide a string abstraction that makes strings behave like functions from indices to Unicode characters (i.e. code points), then you have to chose one of the following:
+\begin{enumerate}
+
+\item Have fast, natural random access to characters, but store strings so that every character is big enough to accommodate the entire Unicode character set.
+The natural choice of encoding for this is UTF-32, in which each code point (integer value representing a unique character) is simply represented by its 32-bit integer value.
+This also requires processing every string before accessing or manipulating it to convert it from its input encoding (usually UTF-8) to UTF-32.
+Transcoding introduces a lot of overhead, in terms of forcing every string to be transcoded, typically both on input and output, as well as inflating memory usage for all strings.
+
+\item Sacrifice the ability to represent every Unicode character and use only the two-byte characters of a 16-bit encoding like UTF-16.
+With this you can represent virtually all modern languages, but you cannot write in ancient languages like Egyptian hieroglyphs, Linear B, or certain (modern) unified Han ideographs.
+This allows fast random access, and reduces the memory inflation compared to the UTF-32 approach, but still requires transcoding almost every string on input and output.
+
+\item Keep strings in their input form, but make indexing into a string an $\O(n)$ operation which requires scanning the entire string from the beginning to find the $k$th character from there.
+This turns a lot of trivial $\O(n)$ string processing algorithms into $\O(n^2)$ algorithms unless you completely avoid indexing into strings altogether.
+
+\item Represent strings by a clever, relatively complex data structure that allows strings to remain encoded, but somehow makes indexing the $k$th character look like it's faster than $\O(n)$, when it is amortized over many operations.
+One possible way to do this is to remember the last few indices that were accessed and figure out new indices relative to them.
+
+\item Do not allow indexing into strings. Instead, only provide interfaces, such as iterating characters, which are Unicode safe as well as being efficiently implementable without transcoding strings.
+
+\item Ignore the whole issue, just equate strings with byte arrays and let Unicode go f$\star$ck itself (a.k.a.~the C approach\footnote{To be fair, the C language long predates the Unicode standard.}).
+
+\end{enumerate}
+Technically, option 5 doesn't actually keep the abstraction of strings as functions from indices to characters, so perhaps it doesn't belong here;
+and option 6 isn't a solution at all, but rather a matter of deciding that you just don't care.
+Option 2 is not really a solution, either, but a pragmatic compromise that gets you 90\% of the way (unless you happen to want to process hieroglyphs).
+Frankly, none of these options is good enough for something as fundamental and performance-critical as string processing.
+
+\subsection{The Partial Function Approach}
+
+Our approach is to change the abstraction of what a string is instead of choosing any of the above.
+Rather than conceptualizing a string as a function from indices to characters, we conceptualize a string as a \emph{partial function} from indices to characters.
+What does this mean?
+It means that when indexing into a string, for some indices no character value is returned:
+instead of returning a value, the language throws an exception.
+So in short \verb|str[k]| will throw an exception if $k$ doesn't correspond to a character.
+For UTF-8 strings that are plain ASCII this will never happen.
+For UTF-32 strings it will never happen.
+For UTF-16 strings including only the common two-byte characters it will never happen.
+For other encoded strings, it could happen, however.
+
+How does this modified abstraction help?
+It recognizes that bytes and characters are not one-to-one in many encodings, but still allows you store strings in their native encoding and retrieve characters efficiently by a byte index, rather than a character index.
+If you try to get or set a character at an index that isn't the start of a character, it's an exception---indicating that the partial function isn't defined there.
+The ``string''---as one normally thinks of it---is the sequence characters returned by the string as the indices range from one to the maximum index.
+The gotcha is that some indices don't return a character.
+
+Code that na\"ively iterates through all indices will work and work with C-like performance, until it encounters strange input data, at which point it will throw a nice clean exception letting you know exactly what the problem is.
+You can probably just modify the code to catch the exception and move on to the next index.
+Alternately, you can rewrite the code to use a Unicode character iterator instead.
+Moreover, if you always consider string indices as opaque objects, and never do arithmetic with them (iterating through indices counts as arithmetic: \verb|k+=1|), then as long as you only index into a string with an index given to you by a string function, this kind of thing will never happen.
+
+By changing the string abstraction, we can support arbitrary string encodings at C efficiency and with a nice, safe, clean programmatic interface.
+
 \section{I/O}
 \section{Data Structures}
 \subsection{Hash Tables}
