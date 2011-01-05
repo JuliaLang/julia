@@ -263,7 +263,6 @@ end
 string(x) = string(ccall(dlsym(JuliaDLHandle,"jl_show_to_string"),
                          Ptr{Uint8}, (Any,), x))
 
-cstring(str::ByteString) = str
 cstring(args...) = print_to_string(print, args...)
 
 ## generic string utilities ##
@@ -574,7 +573,7 @@ rpad(s, n::Int) = rpad(string(s), n, " ")
 
 ## string to integer functions ##
 
-function parse_int(T::Type{Int}, s::String, base::Int)
+function parse_int{T<:Int}(::Type{T}, s::String, base::Int)
     n = zero(T)
     base = convert(T,base)
     for c = s

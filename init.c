@@ -77,10 +77,13 @@ void segv_handler(int sig, siginfo_t *info, void *context)
 
 static void jl_get_builtin_hooks();
 
+void *jl_dl_handle;
+
 void julia_init()
 {
     jl_page_size = sysconf(_SC_PAGESIZE);
     jl_find_stack_bottom();
+    jl_dl_handle = jl_load_dynamic_library(NULL);
 #ifdef BOEHM_GC
     GC_expand_hp(12000000);  //shaves a tiny bit off startup time
     GC_time_limit = GC_TIME_UNLIMITED;

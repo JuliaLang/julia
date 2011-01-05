@@ -17,7 +17,6 @@ JL_CALLABLE(jl_f_typeassert);
 JL_CALLABLE(jl_f_apply);
 JL_CALLABLE(jl_f_throw);
 JL_CALLABLE(jl_f_time_thunk);
-JL_CALLABLE(jl_f_load);
 JL_CALLABLE(jl_f_top_eval);
 JL_CALLABLE(jl_f_isbound);
 JL_CALLABLE(jl_f_tuple);
@@ -52,8 +51,6 @@ JL_CALLABLE(jl_f_typevar);
 JL_CALLABLE(jl_f_union);
 JL_CALLABLE(jl_f_methodexists);
 JL_CALLABLE(jl_f_invoke);
-JL_CALLABLE(jl_f_dlopen);
-JL_CALLABLE(jl_f_dlsym);
 JL_CALLABLE(jl_f_hash_symbol);
 JL_CALLABLE(jl_apply_generic);
 

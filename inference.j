@@ -1019,10 +1019,34 @@ function inlineable(e::Expr, vars)
                        append(argexprs,spvals))
 end
 
+function remove_call1(e)
+    if isa(e,Expr)
+        for i=1:length(e.args)
+            e.args[i] = remove_call1(e.args[i])
+        end
+        if is(e.head,:call1)
+            e.head = :call
+        end
+    end
+    e
+end
+
 inlining_pass(x, vars) = x
 
 function inlining_pass(e::Expr, vars)
-    for i=1:length(e.args)
+    # don't inline first argument of ccall, as this needs to be evaluated
+    # by the interpreter and inlining might put in something it can't handle,
+    # like another ccall.
+    if is(e.head,:call) && isa(e.args[1],Expr) &&
+       is(e.args[1].head,:symbol) && is(e.args[1].args[1],:ccall)
+        if length(e.args)>1
+            e.args[2] = remove_call1(e.args[2])
+        end
+        i0 = 3
+    else
+        i0 = 1
+    end
+    for i=i0:length(e.args)
         e.args[i] = inlining_pass(e.args[i], vars)
     end
     if is(e.head,:call1)

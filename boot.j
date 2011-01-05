@@ -165,4 +165,19 @@ struct StackOverflowError <: Exception end
 struct EOFError           <: Exception end
 
 finalizer(o, f::Function) =
-    ccall(dlsym(JuliaDLHandle, :jl_gc_add_finalizer), Void, (Any,Any), o, f)
+    ccall(:jl_gc_add_finalizer, Void, (Any,Any), o, f)
+
+cstring(str::ByteString) = str
+
+dlsym(hnd, s::String) =
+    ccall(:jl_dlsym, Ptr{Void}, (Ptr{Void}, Ptr{Uint8}), hnd, cstring(s))
+
+dlsym(hnd, s::Symbol) =
+    ccall(:jl_dlsym, Ptr{Void}, (Ptr{Void}, Ptr{Uint8}),
+          hnd, convert(Ptr{Uint8}, s))
+
+dlopen(fname::String) =
+    ccall(:jl_load_dynamic_library, Ptr{Void}, (Ptr{Uint8},), cstring(fname))
+
+load(fname::String) =
+    ccall(:jl_load, Void, (Ptr{Uint8},), cstring(fname))

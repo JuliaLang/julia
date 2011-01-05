@@ -285,6 +285,8 @@ extern jl_function_t *jl_show_gf;
 extern jl_function_t *jl_bottom_func;
 extern jl_function_t *jl_memio_func;
 
+extern void *jl_dl_handle;
+
 // some important symbols
 extern jl_sym_t *call_sym;
 extern jl_sym_t *call1_sym;
@@ -536,9 +538,6 @@ DLLEXPORT int jl_stdin();
 DLLEXPORT int jl_stdout();
 DLLEXPORT int jl_stderr();
 
-// convert strings
-char *jl_cstring(jl_value_t *v);
-
 // exceptions
 void jl_error(const char *str);
 void jl_errorf(const char *fmt, ...);
@@ -591,14 +590,14 @@ jl_function_t *jl_get_expander(jl_module_t *m, jl_sym_t *macroname);
 void jl_set_expander(jl_module_t *m, jl_sym_t *macroname, jl_function_t *f);
 
 // external libraries
-void *jl_load_dynamic_library(char *fname);
-void *jl_dlsym(void *handle, char *symbol);
+DLLEXPORT void *jl_load_dynamic_library(char *fname);
+DLLEXPORT void *jl_dlsym(void *handle, char *symbol);
 
 // compiler
 void jl_compile(jl_function_t *f);
 void jl_generate_fptr(jl_function_t *f);
 jl_value_t *jl_toplevel_eval(jl_value_t *v);
-void jl_load(const char *fname);
+DLLEXPORT void jl_load(const char *fname);
 void jl_load_file_expr(char *fname, jl_value_t *ast);
 jl_value_t *jl_interpret_toplevel_thunk(jl_lambda_info_t *lam);
 jl_value_t *jl_interpret_toplevel_expr(jl_value_t *e);

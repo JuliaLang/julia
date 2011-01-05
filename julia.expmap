@@ -79,6 +79,9 @@
     jl_process_term_signal;
     jl_process_stop_signal;
     jl_errno;
+    jl_load;
+    jl_dlsym;
+    jl_load_dynamic_library;
   local:
     *;
 };

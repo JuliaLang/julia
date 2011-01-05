@@ -602,6 +602,8 @@ issues 12/21/10
   end
   . can be specialized, allows removing checks and converts
 - {} for dequeues
+  . or add dequeue functionality to 1-d arrays
+    new array axioms: arraygrow(a,n), arraydel(a,i0,i1)
 - type=>abstract, struct=>type
 
 
