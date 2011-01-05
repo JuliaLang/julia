@@ -265,15 +265,6 @@ string(x) = string(ccall(dlsym(JuliaDLHandle,"jl_show_to_string"),
 
 cstring(args...) = print_to_string(print, args...)
 
-## generic string utilities ##
-
-for f = {:iswalnum, :iswalpha, :iswascii, :iswblank, :iswcntrl, :iswdigit,
-         :iswgraph, :iswhexnumber, :iswideogram, :iswlower, :iswnumber,
-         :iswphonogram, :iswprint, :iswpunct, :iswrune, :iswspace,
-         :iswspecial, :iswupper, :iswxdigit}
-    @eval ($f)(c::Char) = bool(ccall(dlsym(libc,$expr(:quote,f)),
-                                     Int32, (Char,), c))
-end
 
 escape_nul(s::String, i::Index) =
     !done(s,i) && '0' <= next(s,i)[1] <= '7' ? "\\x00" : "\\0"

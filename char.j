@@ -53,3 +53,13 @@ mod(x::Char, y::Char) = rem(int32(x), int32(y))
 ## traits ##
 
 sizeof(::Type{Char}) = 4
+
+## libc character class testing functions ##
+
+for f = (:iswalnum, :iswalpha, :iswascii, :iswblank, :iswcntrl, :iswdigit,
+         :iswgraph, :iswhexnumber, :iswideogram, :iswlower, :iswnumber,
+         :iswphonogram, :iswprint, :iswpunct, :iswrune, :iswspace,
+         :iswspecial, :iswupper, :iswxdigit)
+    @eval ($f)(c::Char) = bool(ccall(dlsym(libc,$expr(:quote,f)),
+                                     Int32, (Char,), c))
+end
