@@ -148,24 +148,50 @@ JL_CALLABLE(jl_f_apply)
 {
     JL_NARGSV(apply, 1);
     JL_TYPECHK(apply, function, args[0]);
-    if (nargs == 2) {
-        JL_TYPECHK(apply, tuple, args[1]);
+    if (nargs == 2 && jl_is_tuple(args[1])) {
         return jl_apply((jl_function_t*)args[0], &jl_tupleref(args[1],0),
                         ((jl_tuple_t*)args[1])->length);
     }
     size_t n=0, i, j;
     for(i=1; i < nargs; i++) {
-        JL_TYPECHK(apply, tuple, args[i]);
-        n += ((jl_tuple_t*)args[i])->length;
+        if (jl_is_tuple(args[i])) {
+            n += ((jl_tuple_t*)args[i])->length;
+        }
+        else if (jl_typeis(args[i], jl_array_any_type)) {
+            n += jl_array_len(args[i]);
+        }
+        else {
+            if (jl_append_any_func == NULL) {
+                // error if append_any not available
+                JL_TYPECHK(apply, tuple, args[i]);
+            }
+            goto fancy_apply;
+        }
     }
     jl_value_t **newargs = alloca(n * sizeof(jl_value_t*));
     n = 0;
     for(i=1; i < nargs; i++) {
-        jl_tuple_t *t = (jl_tuple_t*)args[i];
-        for(j=0; j < t->length; j++)
-            newargs[n++] = jl_tupleref(t, j);
+        if (jl_is_tuple(args[i])) {
+            jl_tuple_t *t = (jl_tuple_t*)args[i];
+            for(j=0; j < t->length; j++)
+                newargs[n++] = jl_tupleref(t, j);
+        }
+        else {
+            size_t al = jl_array_len(args[i]);
+            for(j=0; j < al; j++)
+                newargs[n++] = jl_cellref(args[i], j);
+        }
     }
     return jl_apply((jl_function_t*)args[0], newargs, n);
+
+ fancy_apply: ;
+    jl_value_t *argarr = jl_apply(jl_append_any_func, &args[1], nargs-1);
+    JL_GC_PUSH(&argarr);
+    assert(jl_typeis(argarr, jl_array_any_type));
+    jl_value_t *result = jl_apply((jl_function_t*)args[0],
+                                  jl_cell_data(argarr), jl_array_len(argarr));
+    JL_GC_POP();
+    return result;
 }
 
 static int is_intrinsic(jl_sym_t *s)
