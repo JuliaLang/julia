@@ -364,13 +364,17 @@ unescape_string(s::String) = print_to_string(print_unescaped, s)
 
 ## string interpolation parsing ##
 
-function interp_parse(str::String)
+function interp_parse(str::String, unescape::Bool)
     strs = ()
     i = j = start(str)
     while !done(str,j)
         c, k = next(str,j)
         if c == '$'
-            strs = append(strs,(str[i:j-1],))
+            if !isempty(str[i:j-1])
+                s = str[i:j-1]
+                s = unescape ? unescape_string(s) : s
+                strs = append(strs,(s,))
+            end
             ex, j = parse(str,k)
             strs = append(strs,(ex,)); i = j
         elseif c == '\\' && !done(str,k) && str[k] == '$'
@@ -379,9 +383,15 @@ function interp_parse(str::String)
             j = k
         end
     end
-    strs = append(strs,(str[i:],))
+    if !isempty(str[i:])
+        s = str[i:j-1]
+        s = unescape ? unescape_string(s) : s
+        strs = append(strs,(s,))
+    end
     length(strs) == 1 ? strs[1] : expr(:call,:strcat,strs...)
 end
+
+interp_parse(str::String) = interp_parse(str, true)
 
 macro str(raw)
     :($interp_parse(raw))
