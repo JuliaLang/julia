@@ -329,17 +329,6 @@ void jl_load(const char *fname)
     if (fpath != fname) free(fpath);
 }
 
-JL_CALLABLE(jl_f_load)
-{
-    JL_NARGS(load, 1, 1);
-    if (!jl_is_string(args[0]))
-        jl_error("load: expected String");
-    // TODO: string might be leaked
-    char *fname = jl_cstring(args[0]);
-    jl_load(fname);
-    return (jl_value_t*)jl_null;
-}
-
 JL_CALLABLE(jl_f_top_eval)
 {
     JL_NARGS(eval, 1, 1);
@@ -631,6 +620,9 @@ JL_CALLABLE(jl_f_convert_to_ptr)
                                 jl_tparam0(jl_typeof(v)) == elty)) {
         p = ((jl_array_t*)v)->data;
     }
+    else if (jl_is_symbol(v) && elty == (jl_value_t*)jl_uint8_type) {
+        p = ((jl_sym_t*)v)->name;
+    }
     else {
         // TODO: string is leaked
         jl_errorf("cannot convert %s to %s",
@@ -651,41 +643,6 @@ JL_CALLABLE(jl_f_print_array_uint8)
     return (jl_value_t*)jl_null;
 }
 
-// --- String to C string ---
-
-char *jl_cstring(jl_value_t *v)
-{
-    if (jl_is_byte_string(v))
-        return jl_string_data(v);
-
-    ios_t tmp, *dest=NULL;
-    jl_value_t *ioo = NULL;
-    // make a proper IOStream object if available, otherwise go underneath
-    if (jl_memio_func != NULL) {
-        ioo = jl_apply(jl_memio_func, NULL, 0);
-    }
-    // use try/catch to reset the current output stream
-    // if an error occurs during printing.
-    JL_TRY {
-        if (ioo) {
-            jl_set_current_output_stream_obj(ioo);
-            dest = jl_current_output_stream();
-        }
-        else {
-            ios_mem(&tmp, 0);
-            dest = &tmp;
-            jl_current_task->state.current_output_stream = dest;
-        }
-        jl_apply(jl_print_gf, &v, 1);
-    }
-    JL_CATCH {
-        jl_raise(jl_exception_in_transit);
-    }
-    size_t n;
-    assert(dest != NULL);
-    return ios_takebuf(dest, &n);
-}
-
 // --- showing ---
 
 jl_function_t *jl_show_gf;
@@ -699,6 +656,7 @@ char *jl_show_to_string(jl_value_t *v)
 {
     ios_t tmp, *dest=NULL;
     jl_value_t *ioo = NULL;
+    // make a proper IOStream object if available, otherwise go underneath
     if (jl_memio_func != NULL) {
         ioo = jl_apply(jl_memio_func, NULL, 0);
     }
@@ -1316,35 +1274,6 @@ JL_CALLABLE(jl_f_invoke)
     return jl_apply(mlfunc, &args[2], nargs-2);
 }
 
-// --- c interface ---
-
-JL_CALLABLE(jl_f_dlopen)
-{
-    JL_NARGS(dlopen, 1, 1);
-    if (!jl_is_string(args[0]))
-        jl_error("dlopen: expected String");
-    // TODO: string might be leaked
-    char *fname = jl_cstring(args[0]);
-    return jl_box_pointer(jl_pointer_void_type,
-                          jl_load_dynamic_library(fname));
-}
-
-JL_CALLABLE(jl_f_dlsym)
-{
-    JL_NARGS(dlsym, 2, 2);
-    JL_TYPECHK(dlsym, pointer, args[0]);
-    char *sym=NULL;
-    if (jl_is_symbol(args[1]))
-        sym = ((jl_sym_t*)args[1])->name;
-    else if (jl_is_string(args[1]))
-        // TODO: string might be leaked
-        sym = jl_cstring(args[1]);
-    else
-        jl_error("dlsym: expected String");
-    void *hnd = jl_unbox_pointer(args[0]);
-    return jl_box_pointer(jl_pointer_void_type, jl_dlsym(hnd, sym));
-}
-
 // --- eq hash table ---
 
 #include "table.c"
@@ -1398,14 +1327,11 @@ void jl_init_primitives()
     add_builtin_func("typeassert", jl_f_typeassert);
     add_builtin_func("apply", jl_f_apply);
     add_builtin_func("throw", jl_f_throw);
-    add_builtin_func("load", jl_f_load);
     add_builtin_func("tuple", jl_f_tuple);
     add_builtin_func("Union", jl_f_union);
     add_builtin_func("method_exists", jl_f_methodexists);
     add_builtin_func("applicable", jl_f_applicable);
     add_builtin_func("invoke", jl_f_invoke);
-    add_builtin_func("dlopen", jl_f_dlopen);
-    add_builtin_func("dlsym", jl_f_dlsym);
     add_builtin_func("eval", jl_f_top_eval);
     add_builtin_func("isbound", jl_f_isbound);
     
@@ -1458,7 +1384,7 @@ void jl_init_primitives()
     add_builtin("UnionKind", (jl_value_t*)jl_union_kind);
 
     add_builtin("JuliaDLHandle", jl_box_pointer(jl_pointer_void_type,
-                                                jl_load_dynamic_library(NULL)));
+                                                jl_dl_handle));
     add_builtin("C_NULL", jl_box_pointer(jl_pointer_void_type, NULL));
 }
 
@@ -1474,6 +1400,7 @@ void jl_init_builtins()
 
     jl_show_gf = jl_new_generic_function(jl_symbol("show"));
 
+    //add_builtin_method1(jl_show_gf, (jl_type_t*)jl_sym_type,         jl_f_print_symbol);
     add_builtin_method1(jl_show_gf, (jl_type_t*)jl_any_type,         jl_f_show_any);
     add_builtin_method1(jl_show_gf, (jl_type_t*)jl_tvar_type,        jl_f_show_typevar);
     add_builtin_method1(jl_show_gf, (jl_type_t*)jl_lambda_info_type, jl_f_show_linfo);

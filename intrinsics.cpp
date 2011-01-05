@@ -441,14 +441,21 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
     at  = jl_interpret_toplevel_expr_with(args[3],
                                           &jl_tupleref(ctx->sp,0),
                                           ctx->sp->length/2);
-    JL_TYPECHK(ccall, pointer, ptr);
+    void *fptr;
+    if (jl_is_symbol(ptr)) {
+        // just symbol, default to JuliaDLHandle
+        fptr = jl_dlsym(jl_dl_handle, ((jl_sym_t*)ptr)->name);
+    }
+    else {
+        JL_TYPECHK(ccall, pointer, ptr);
+        fptr = *(void**)jl_bits_data(ptr);
+    }
     JL_TYPECHK(ccall, type, rt);
     JL_TYPECHK(ccall, tuple, at);
     JL_TYPECHK(ccall, type, at);
     jl_tuple_t *tt = (jl_tuple_t*)at;
     if (tt->length != nargs-3)
         jl_error("ccall: wrong number of arguments to C function");
-    void *fptr = *(void**)jl_bits_data(ptr);
     std::vector<const Type *> fargt(0);
     const Type *lrt = julia_type_to_llvm(rt);
     size_t i;
