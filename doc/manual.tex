@@ -1,5 +1,7 @@
 \documentclass{article}
 
+\usepackage{a4wide}
+
 \newcommand{\thetitle}{The Julia Programming Language}
 
 \usepackage{amsmath}
@@ -812,6 +814,89 @@ If you use mixed types to construct a \verb|Rational|, the same promotions that 
 \subsection{Other Kinds of Types}
 
 \section{Tensors and Comprehensions}
+
+Julia introduces a new programming construct called a multidimensional
+array comprehension or just an array comprehension for short. Array
+comprehensions are similar to the notion of list comprehensions in
+other languages such as Python, Haskell and OCaml, but extend this
+notion to manipulate and generate arrays of arbitrary dimension. Each
+dummy variable used in the array comprehension corresponds to a
+dimension of the output array; if the comprehension expression value
+itself has non-zero dimension then the total dimension of the output
+is the number of dummy variables plus the dimension of the value. If
+we view n-d arrays as rank-n tensors, and thus see 1-d arrays as
+vectors and 2-d arrays as matrices, many common vector, matrix and
+tensor operations can be expressed concisely and clearly using array
+comprehensions.
+
+Array comprehensions are envisioned to be a key construct of the julia
+language that will differentiate it from other languages. On one hand,
+Matlab is pretty fast, and it is almost impossible to beat Matlab at
+what it does. On the other hand, Matlab codes when rewritten in C
+often run 10 times faster. What gives? The key idea behind array
+comprehensions is to express almost all operations at a higher level,
+close to their mathematical definitions. Optimizations can then be
+applied to this high level to produce heavily optimized low-level
+code, for multiple comprehensions and compounded comprehensions. This
+scheme should allow the generation of optimized low-level code from a
+high level specification that matches the structure of optimized C
+code written by a good C programmer.
+
+\subsection{Array Comprehension Notations}
+
+The following sections give three increasingly succinct syntaxes for writing array comprehensions. Through the forms, we follow the basic example of how to express the row sum and column sums of a matrix. We first present the most general, verbose notation for array comprehensions together with its meaning, and then present two increasingly abbreviated but equivalent forms.
+
+\subsubsection{Explicit range}
+This is the most general form for writing array comprehensions. The general form is:
+\begin{verbatim}
+A = [ F(x,y,...) | x=rx, y=ry, ... ]
+\end{verbatim}
+
+The meaning of this form is that F(x,y,...) is evaluated with the
+variables x, y, etc. taking on each value in their given list of
+values. Values can be specified as any iterable object, but will
+commonly be ranges like 1:n or 2:(n-1), or explicit arrays of values
+like [1.2, 3.4, 5.7]. The result is a tensor object with dimensions
+that are the concatenation of the dimensions of the dummy variable
+ranges rx, ry, etc. and the dimension of the result of each F(x,y,...)
+evaluations—which must all have identical shape. See below for details
+on array comprehensions of non-scalar expression.
+
+To clarify, let's consider the concrete example of computing row and
+column sums of a matrix, A. For a single dummy variable, the array
+comprehension notation with explicit variable ranges is similar to
+list comprehensions in other languages:
+\begin{verbatim}
+row_sums = [ sum(A[i,:]) | i=1:size(A,1) ]
+col_sums = [ sum(A[:,j]) | j=1:size(A,2) ]
+\end{verbatim}
+
+\subsection{Array Comprehensions of Non-Scalar Expressions}
+If the computed expression of an array comprehension is not a scalar,
+then all the values produced must be arrays of identical shape. The
+dummy variable vectorization dimensions come before the expression
+dimensions making the total dimension of the output array the number
+of dummy variables plus the dimension of the inner expression. This
+convention can be expressed by the following identity. If F is a
+function mapping scalars to vectors, the following holds:
+\begin{verbatim}
+[ F(i) | i=ri ] == [ F(i)[j] | i=ri, j=rj ]
+\end{verbatim}
+
+\subsection{Examples}
+
+\begin{itemize}
+\item Diagonal of a matrix is computed as:
+\begin{verbatim}
+d = [ A[i,i] | i=1:min(dim(A)) ]
+\end{verbatim}
+\item Matrix product is computed as:
+\begin{verbatim}
+C = [ sum([ A[i,j].*B[j,k] | j ]) | i=1:size(A,1), k=1:size(B,2) ]
+\end{verbatim}
+
+
+\end{itemize}
 
 \section{Strings}
 \sec{strings}
