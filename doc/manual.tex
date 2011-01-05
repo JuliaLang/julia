@@ -413,7 +413,7 @@ Chaining comparisons is quite convenient in many numerical codes.
 
 \subsection{Rational Numbers}
 
-There is a special\footnote{Actually, it's not that special: the \texttt{//} operator exists \emph{a priori}, but its usage for constructing rational numbers is defined entirely in the language itself.} input syntax for rational numbers in Julia:
+Rational numbers can be constructed using the \texttt{//} operator:
 \begin{verbatim}
   julia> 2//3
   2//3
@@ -421,8 +421,8 @@ There is a special\footnote{Actually, it's not that special: the \texttt{//} ope
   julia> typeof(ans)
   Rational{Int32}
 \end{verbatim}
-The type of a rational number is a parametric type, a concept which is explained in detail later on in \Section{struct-constructors}.
-For the moment, it suffices to explain that \verb|2//3| is a ratio of \verb|Int32| values.
+The type of a rational number is a parametric type, a concept explained in detail later in \Section{struct-constructors}.
+For the moment, it suffices to say that \verb|2//3| is a ratio of \verb|Int32| values.
 If you construct a \verb|Rational| from values that are not in lowest terms, they will be normalized to lowest terms:
 \begin{verbatim}
   julia> 6//9
@@ -561,7 +561,7 @@ Since functions definitions can be entered directly into the repl, it is easy to
 \end{verbatim}
 Of course, in a purely linear function body like \verb|g|, the usage of \verb|return| is pointless since the expression \verb|x + y| is never evaluated and we could simply make \verb|x * y| the last expression in the function and omit the \verb|return|.
 In conjunction with other control flow, however, \verb|return| is of real use.
-Here, for example is a function which computes the hypotenuse length of a right triangle with sides of length $x$ and $y$, carefully avoiding numerical problems in corner cases:
+Here, for example, is a function that computes the hypotenuse length of a right triangle with sides of length $x$ and $y$, carefully avoiding overflow of intermediate results:
 \begin{verbatim}
   function hypot(x,y)
       x = abs(x)
@@ -767,37 +767,12 @@ This is all somewhat complicated, but the result is easy to use:
   julia> typeof(ans)
   Rational{Int32}
 \end{verbatim}
-Applying the \verb|Rational| type to a pair of values (1,2) creates a \verb|Rational| with those values bound to the num and den fields. The output notation 1//2 is also acceptable as input notation:
+Applying the \verb|Rational| type to a pair of values (1,2) creates a \verb|Rational|. The output notation 1//2 is also acceptable as input notation:
 \begin{verbatim}
   julia> 1//2
   1//2
 \end{verbatim}
-In fact, it is preferred because \verb|Rational| directly constructs a Rational number, while the \verb|//| form puts it into lowest terms first:
-\begin{verbatim}
-  julia> Rational(2,4)
-  2//4
-
-  julia> 2//4
-  1//2
-
-  julia> Rational(2,-3)
-  2//-3
-
-  julia> 2//-3
-  -2//3
-
-  julia> Rational(-3,-9)
-  -3//-9
-
-  julia> -3//-9
-  1//3
-\end{verbatim}
-The \verb|Rational| form is retained to give you the ability to construct \verb|Rational|s with arbitrary numerators and denominators should you care to do so. Operations on \verb|Rational|s are smart enough to handle this gracefully:
-\begin{verbatim}
-  julia> Rational(2,4) == Rational(1,2)
-  true
-\end{verbatim}
-Despite being effectively user-defined types, \verb|Rational| values interoperate completely transparently with other numeric types:
+Despite being effectively user-defined types, \verb|Rational| values interoperate completely with other numeric types:
 \begin{verbatim}
   julia> 1//2 + 2
   5//2
@@ -847,9 +822,7 @@ In UTF-8, for example, all of the ASCII characters are one byte, encoded just as
 All other characters, however, take between two and four bytes to represent.
 This means that you can't efficiently look up the $k$th character of a string by doing array indexing anymore:
 the $k$th byte of the representation is no longer the $k$th character.
-Worse still, some bytes are not the beginning of a character at all---they're right in the middle of a character.
-This is called a ``continuation character.''
-Fortunately, both UTF-8 and UTF-16 are carefully designed so that you can immediately tell which category the byte at an index falls into.
+Worse still, a byte might not be the beginning of a character at all, but right in the middle of a character (this is called a ``continuation byte'').
 
 If you allow people direct access to the bytes of an encoded string, they can and will do all sorts of bad things that produce invalid Unicode and broken behaviors when Unicode input is received.
 To provide a string abstraction that makes strings behave like functions from indices to Unicode characters (i.e. code points), then you have to chose one of the following:
