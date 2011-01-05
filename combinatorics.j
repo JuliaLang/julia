@@ -79,8 +79,7 @@ sortperm{T}(a::Vector{T}) =
               Array(T, length(a)), Array(Size, length(a)))
 
 function insertionsort(a::Vector, lo, hi)
-    n = hi-lo+1
-    for i=(lo+1):(lo+n-1)
+    for i=(lo+1):hi
         j = i
         x = a[i]
         while j > lo
@@ -120,8 +119,7 @@ function quicksort(a::Vector, lo, hi)
 end
 
 function insertionsort(a::Vector, p::Vector{Size}, lo, hi)
-    n = hi-lo+1
-    for i=(lo+1):(lo+n-1)
+    for i=(lo+1):hi
         j = i
         x = a[i]
         xp = p[i]

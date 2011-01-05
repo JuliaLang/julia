@@ -284,6 +284,7 @@ extern jl_func_type_t *jl_any_func;
 extern jl_function_t *jl_show_gf;
 extern jl_function_t *jl_bottom_func;
 extern jl_function_t *jl_memio_func;
+extern jl_function_t *jl_append_any_func;
 
 extern void *jl_dl_handle;
 
@@ -382,7 +383,9 @@ void *allocb_permanent(size_t sz);
 #define jl_is_pointer(v)     jl_is_cpointer_type(jl_typeof(v))
 #define jl_is_gf(f)          (((jl_function_t*)(f))->fptr==jl_apply_generic)
 
+#define jl_array_len(a)   (((jl_array_t*)a)->length)
 #define jl_array_data(a)  ((void*)((jl_array_t*)a)->data)
+#define jl_cell_data(a)   ((jl_value_t**)((jl_array_t*)a)->data)
 #define jl_string_data(s) ((char*)((jl_array_t*)((jl_value_t**)(s))[1])->data)
 
 #define jl_gf_mtable(f) ((jl_methtable_t*)jl_t0(((jl_function_t*)(f))->env))

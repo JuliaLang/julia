@@ -132,6 +132,7 @@ void julia_init()
 
 jl_function_t *jl_typeinf_func=NULL;
 jl_function_t *jl_memio_func=NULL;
+jl_function_t *jl_append_any_func=NULL;
 
 static void clear_tfunc_caches()
 {
@@ -267,4 +268,6 @@ void jl_get_builtin_hooks()
         jl_apply((jl_function_t*)global("StackOverflowError"), NULL, 0);
     jl_divbyzero_exception =
         jl_apply((jl_function_t*)global("DivideByZeroError"), NULL, 0);
+
+    jl_append_any_func = (jl_function_t*)global("append_any");
 }

@@ -41,6 +41,24 @@ function count(itr)
     return c
 end
 
+function anyp(pred, itr)
+    for x = itr
+        if pred(x)
+            return true
+        end
+    end
+    return false
+end
+
+function allp(pred, itr)
+    for x = itr
+        if !pred(x)
+            return false
+        end
+    end
+    return true
+end
+
 ## Scans ##
 
 function scan(op::Function, x)

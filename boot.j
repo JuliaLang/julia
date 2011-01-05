@@ -181,3 +181,22 @@ dlopen(fname::String) =
 
 load(fname::String) =
     ccall(:jl_load, Void, (Ptr{Uint8},), cstring(fname))
+
+function append_any(xs...)
+    # used by apply() and quote
+    n = 0
+    for x = xs
+        n += length(x)
+    end
+    out = Array{Any,1}((n,))
+    i = 1
+    for x = xs
+        for y = x
+            arrayset(out, i, y)
+            i += 1
+        end
+    end
+    out
+end
+
+append(xs...) = append_any(xs...)

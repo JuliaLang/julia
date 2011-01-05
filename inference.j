@@ -181,7 +181,7 @@ function static_convert(to::Tuple, from::Tuple)
     a2t(result)
 end
 t_func[:convert] =
-    (2, 2, (t,x)->(if isa(t,Tuple) && all(map(isType,t))
+    (2, 2, (t,x)->(if isa(t,Tuple) && allp(isType,t)
                        t = Type{map(t->t.parameters[1],t)}
                    end;
                    isType(t) ? static_convert(t.parameters[1],x) :
@@ -413,8 +413,8 @@ function abstract_call(f, fargs, argtypes, vtypes, sv::StaticVarInfo, e)
             (isfunc, af) = isconstantfunc(fargs[1], vtypes, sv)
             if isfunc && isbound(af)
                 aargtypes = argtypes[2:]
-                if all(map(x->isa(x,Tuple),aargtypes)) &&
-                    !any(map(isvatuple,aargtypes[1:(length(aargtypes)-1)]))
+                if allp(x->isa(x,Tuple), aargtypes) &&
+                   !anyp(isvatuple, aargtypes[1:(length(aargtypes)-1)])
                     e.head = :call1
                     # apply with known func with known tuple types
                     # can be collapsed to a call to the applied func
