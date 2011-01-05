@@ -580,6 +580,8 @@ Here, for example, is a function that computes the hypotenuse length of a right 
 There are three possible points of return from this function, returning the values of three different expressions, depending on the values of $x$ and $y$.
 The \verb|return| on the last line could be omitted since it is the last expression.
 
+\subsection{Variable Scope and Declarations}
+
 \subsection{Specializing Functions for Given Types}
 
 Julia allows multiple dispatch based on the types of function arguments:
@@ -737,6 +739,8 @@ To suppress Julia's warning, the disambiguating method must be defined first.
 \subsection{Anonymous Functions}
 \subsection{Returning Multiple Values}
 \subsection{Varargs Functions}
+
+
 \section{Defining Types}
 \subsection{Tag Types}
 \subsection{Struct Types}
@@ -1139,6 +1143,8 @@ Now we're just going to showboat a bit (apologies for excessive Perlage):
   ...3
 \end{verbatim}
 The final example never terminates since the \verb|dup| process reads its own output and duplicates it to \verb|stderr| forever.
+
+\section{Standard Library Reference}
 
 \section{Macros}
 

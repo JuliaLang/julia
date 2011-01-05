@@ -56,9 +56,9 @@ function nCr{T <: Int}(n::T, r::T)
         nn += 1
     end
     if neg
-        return oftype(T,-ans)
+        return convert(T,-ans)
     end
-    return oftype(T,ans)
+    return convert(T,ans)
 end
 
 # sort() should be stable
@@ -74,32 +74,79 @@ function sort{T}(a::Vector{T})
     return x
 end
 
-sortperm{T}(a::Vector{T}) = mergesort(copy(a), 1:length(a), 1, length(a),
-                                      Array(T, length(a)), Array(Size, length(a)) )
+sortperm{T}(a::Vector{T}) =
+    mergesort(copy(a), linspace(1,length(a)), 1, length(a),
+              Array(T, length(a)), Array(Size, length(a)))
 
-function quicksort(a::Vector, lo, hi)
-    i, j = lo, hi
-    pivot = a[div((lo+hi),2)]
-    # Partition
-    while i <= j
-        while a[i] < pivot; i += 1; end
-        while a[j] > pivot; j -= 1; end
-        if i <= j
-            a[i], a[j] = a[j], a[i]
-            i += 1
+function insertionsort(a::Vector, lo, hi)
+    n = hi-lo+1
+    for i=(lo+1):(lo+n-1)
+        j = i
+        x = a[i]
+        while j > lo
+            if x > a[j-1]
+                break
+            end
+            a[j] = a[j-1]
             j -= 1
         end
+        a[j] = x
     end
-    # Recursion for quicksort
-    if lo < j; quicksort(a, lo, j); end
-    if i < hi; quicksort(a, i, hi); end
+    a
+end
+
+function quicksort(a::Vector, lo, hi)
+    while hi > lo
+        if (hi-lo < 15)
+            return insertionsort(a, lo, hi)
+        end
+        i, j = lo, hi
+        pivot = a[div((lo+hi),2)]
+        # Partition
+        while i <= j
+            while a[i] < pivot; i += 1; end
+            while a[j] > pivot; j -= 1; end
+            if i <= j
+                a[i], a[j] = a[j], a[i]
+                i += 1
+                j -= 1
+            end
+        end
+        # Recursion for quicksort
+        if lo < j; quicksort(a, lo, j); end
+        lo = i
+    end
     return a
+end
+
+function insertionsort(a::Vector, p::Vector{Size}, lo, hi)
+    n = hi-lo+1
+    for i=(lo+1):(lo+n-1)
+        j = i
+        x = a[i]
+        xp = p[i]
+        while j > lo
+            if x > a[j-1]
+                break
+            end
+            a[j] = a[j-1]
+            p[j] = p[j-1]
+            j -= 1
+        end
+        a[j] = x
+        p[j] = xp
+    end
+    a
 end
 
 function mergesort(a::Vector, p::Vector{Size}, lo, hi,
                    b::Vector, pb::Vector{Size})
 
     if lo < hi
+        if (hi-lo < 20)
+            return insertionsort(a, p, lo, hi)
+        end
+
         m = div ((lo + hi), 2)
         mergesort(a, p, lo, m, b, pb)
         mergesort(a, p, m+1, hi, b, pb)
