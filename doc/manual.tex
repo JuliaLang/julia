@@ -1172,4 +1172,18 @@ The final example never terminates since the \verb|dup| process reads its own ou
 \section{Command-Line Options}
 \sec{command-line-options}
 
+\begin{verbatim}
+julia [options] [program] [args...]
+ -q --quiet               Quiet startup without banner
+ -R --no-readline         Disable readline functionality
+ -e --eval=<expr>         Evaluate <expr> and don't print
+ -E --print=<expr>        Evaluate and print <expr>
+ -P --post-boot=<expr>    Evaluate <expr> right after boot
+ -H --home=<dir>          Load files relative to <dir>
+ -T --tab=<size>          Set REPL tab width to <size>
+ -L --lisp                Start with Lisp prompt not Julia
+ -b --bare                Bare REPL: don't load start.j
+ -h --help                Print this message
+\end{verbatim}
+
 \end{document}
