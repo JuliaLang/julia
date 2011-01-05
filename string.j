@@ -263,7 +263,7 @@ end
 string(x) = string(ccall(dlsym(JuliaDLHandle,"jl_show_to_string"),
                          Ptr{Uint8}, (Any,), x))
 
-cstring(str::ByteString) = str.data
+cstring(str::ByteString) = str
 cstring(args...) = print_to_string(print, args...)
 
 ## generic string utilities ##
