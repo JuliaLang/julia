@@ -32,9 +32,9 @@ function (*)(x1, x2, x3, xs...)
     accum
 end
 
-(&)() = error("zero-argument & is ambiguous")
-(|)() = error("zero-argument | is ambiguous")
-($)() = error("zero-argument $ is ambiguous")
+(&)() = error(L"zero-argument & is ambiguous")
+(|)() = error(L"zero-argument | is ambiguous")
+($)() = error(L"zero-argument $ is ambiguous")
 
 (\)(x::Number, y::Number) = y/x
 
@@ -151,7 +151,7 @@ rem{T<:Int}(x::T, y::T) = no_op_err("rem", T)
 
 (&){T<:Int}(x::T, y::T) = no_op_err("&", T)
 (|){T<:Int}(x::T, y::T) = no_op_err("|", T)
-($){T<:Int}(x::T, y::T) = no_op_err("$", T)
+($){T<:Int}(x::T, y::T) = no_op_err('$', T)
 
 ## miscellaneous ##
 

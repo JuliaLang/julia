@@ -1,3 +1,6 @@
+# literal strings
+macro L_str(s); s; end
+
 # core operations & types
 load("range.j")
 load("tuple.j")

@@ -16,7 +16,7 @@ println(args...) = print(args..., '\n')
 function show(c::Char)
     print('\'')
     if c == '\''
-        print("\\'")
+        print(L"\'")
     else
         print_escaped(string(c), false, '\xff')
     end
@@ -265,9 +265,10 @@ string(x) = string(ccall(dlsym(JuliaDLHandle,"jl_show_to_string"),
 
 cstring(args...) = print_to_string(print, args...)
 
+## string escaping ##
 
 escape_nul(s::String, i::Index) =
-    !done(s,i) && '0' <= next(s,i)[1] <= '7' ? "\\x00" : "\\0"
+    !done(s,i) && '0' <= next(s,i)[1] <= '7' ? L"\x00" : L"\0"
 
 function print_escaped(s::String, q::Bool, xmax::Char)
     if q; print('"'); end
@@ -275,14 +276,14 @@ function print_escaped(s::String, q::Bool, xmax::Char)
     while !done(s,i)
         c, j = next(s,i)
         c == '\0'     ? print(escape_nul(s,j)) :
-        c == '\\'     ? print("\\\\") :
-        c == '\e'     ? print("\\e") :
-   q && c == '\"'     ? print("\\\"") :
+        c == '\\'     ? print(L"\\") :
+        c == '\e'     ? print(L"\e") :
+   q && c == '\"'     ? print(L"\\\"") :
         iswprint(c)   ? print(c) :
         7 <= c <= 13  ? print('\\', "abtnvfr"[c-6]) :
-        c <= xmax     ? print("\\x", uint2str(c,16,2)) :
-        c <= '\uffff' ? print("\\u", uint2str(c,16,4)) :
-                        print("\\U", uint2str(c,16,8))
+        c <= xmax     ? print(L"\x", uint2str(c,16,2)) :
+        c <= '\uffff' ? print(L"\u", uint2str(c,16,4)) :
+                        print(L"\U", uint2str(c,16,8))
         i = j
     end
     if q; print('"'); end
@@ -296,7 +297,7 @@ print_quoted (s::String)          = print_escaped(s, true)
 escape_string(s::String) = print_to_string(length(s),   print_escaped, s)
 quote_string (s::String) = print_to_string(length(s)+2, print_quoted,  s)
 
-# TODO: unescaping needs to work on bytes to match the parser
+## string unescaping ##
 
 function print_unescaped(s::String)
     i = start(s)
@@ -327,7 +328,7 @@ function print_unescaped(s::String)
                         i = j
                     end
                     if k == 1
-                        error("\\x used with no following hex digits")
+                        error(L"\x used with no following hex digits")
                     end
                     n
                 end :
