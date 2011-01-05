@@ -1,5 +1,7 @@
 \documentclass{article}
 
+\usepackage{a4wide}
+
 \newcommand{\thetitle}{The Julia Programming Language}
 
 \usepackage{amsmath}
@@ -813,6 +815,89 @@ If you use mixed types to construct a \verb|Rational|, the same promotions that 
 
 \section{Tensors and Comprehensions}
 
+Julia introduces a new programming construct called a multidimensional
+array comprehension or just an array comprehension for short. Array
+comprehensions are similar to the notion of list comprehensions in
+other languages such as Python, Haskell and OCaml, but extend this
+notion to manipulate and generate arrays of arbitrary dimension. Each
+dummy variable used in the array comprehension corresponds to a
+dimension of the output array; if the comprehension expression value
+itself has non-zero dimension then the total dimension of the output
+is the number of dummy variables plus the dimension of the value. If
+we view n-d arrays as rank-n tensors, and thus see 1-d arrays as
+vectors and 2-d arrays as matrices, many common vector, matrix and
+tensor operations can be expressed concisely and clearly using array
+comprehensions.
+
+Array comprehensions are envisioned to be a key construct of the julia
+language that will differentiate it from other languages. On one hand,
+Matlab is pretty fast, and it is almost impossible to beat Matlab at
+what it does. On the other hand, Matlab codes when rewritten in C
+often run 10 times faster. What gives? The key idea behind array
+comprehensions is to express almost all operations at a higher level,
+close to their mathematical definitions. Optimizations can then be
+applied to this high level to produce heavily optimized low-level
+code, for multiple comprehensions and compounded comprehensions. This
+scheme should allow the generation of optimized low-level code from a
+high level specification that matches the structure of optimized C
+code written by a good C programmer.
+
+\subsection{Array Comprehension Notations}
+
+The following sections give three increasingly succinct syntaxes for writing array comprehensions. Through the forms, we follow the basic example of how to express the row sum and column sums of a matrix. We first present the most general, verbose notation for array comprehensions together with its meaning, and then present two increasingly abbreviated but equivalent forms.
+
+\subsubsection{Explicit range}
+This is the most general form for writing array comprehensions. The general form is:
+\begin{verbatim}
+A = [ F(x,y,...) | x=rx, y=ry, ... ]
+\end{verbatim}
+
+The meaning of this form is that F(x,y,...) is evaluated with the
+variables x, y, etc. taking on each value in their given list of
+values. Values can be specified as any iterable object, but will
+commonly be ranges like 1:n or 2:(n-1), or explicit arrays of values
+like [1.2, 3.4, 5.7]. The result is a tensor object with dimensions
+that are the concatenation of the dimensions of the dummy variable
+ranges rx, ry, etc. and the dimension of the result of each F(x,y,...)
+evaluations—which must all have identical shape. See below for details
+on array comprehensions of non-scalar expression.
+
+To clarify, let's consider the concrete example of computing row and
+column sums of a matrix, A. For a single dummy variable, the array
+comprehension notation with explicit variable ranges is similar to
+list comprehensions in other languages:
+\begin{verbatim}
+row_sums = [ sum(A[i,:]) | i=1:size(A,1) ]
+col_sums = [ sum(A[:,j]) | j=1:size(A,2) ]
+\end{verbatim}
+
+\subsection{Array Comprehensions of Non-Scalar Expressions}
+If the computed expression of an array comprehension is not a scalar,
+then all the values produced must be arrays of identical shape. The
+dummy variable vectorization dimensions come before the expression
+dimensions making the total dimension of the output array the number
+of dummy variables plus the dimension of the inner expression. This
+convention can be expressed by the following identity. If F is a
+function mapping scalars to vectors, the following holds:
+\begin{verbatim}
+[ F(i) | i=ri ] == [ F(i)[j] | i=ri, j=rj ]
+\end{verbatim}
+
+\subsection{Examples}
+
+\begin{itemize}
+\item Diagonal of a matrix is computed as:
+\begin{verbatim}
+d = [ A[i,i] | i=1:min(dim(A)) ]
+\end{verbatim}
+\item Matrix product is computed as:
+\begin{verbatim}
+C = [ sum([ A[i,j].*B[j,k] | j ]) | i=1:size(A,1), k=1:size(B,2) ]
+\end{verbatim}
+
+
+\end{itemize}
+
 \section{Strings}
 \sec{strings}
 
@@ -892,6 +977,25 @@ By changing the string abstraction, we can support arbitrary string encodings at
 \subsection{Lists}
 
 \section{Parallel Computing}
+\begin{itemize}
+  \item {\tt Worker()} - create a new local worker
+
+  \item {\tt remote\_apply(w, func, args...)} -
+     tell a worker to call a function on the given arguments.
+     for now, functions are passed as symbols, e.g. :randn
+     returns a Future.
+
+   \item {\tt wait(f)} - wait for, then return the value represented by a Future
+
+   \item {\tt pmap(pool, func, lst)} -
+     call a function on each element of lst (some 1-d thing), in
+     parallel. pool is a list of available Workers.
+
+   \item {\tt send\_msg(socket, x)} - send a Julia object through a socket
+
+   \item {\tt recv\_msg(socket)} - read the next Julia object from a socket
+\end{itemize}
+
 \section{Calling C Functions}
 \section{Running External Programs}
 
@@ -1148,7 +1252,87 @@ The final example never terminates since the \verb|dup| process reads its own ou
 
 \section{Macros}
 
+Macros are totally different from inlining. Macros are a hook into the
+compiler that lets you examine and rewrite the syntax of a piece of
+the program. You can use them to implement entirely new syntactic
+constructs like spawn, parfor, pattern matching, stefan's command
+syntax, etc.
+
+Macros also run at an earlier binding time than functions and so have
+different semantics. Inlining moves code around in a way that keeps
+the same function call semantics, i.e. you can't ``tell'' that it
+happened. Macros are just the opposite.  For example, say I have a
+function that contains an inner function:
+
+\begin{verbatim}
+function foo()
+  bar(x) = XXX
+  ...
+  bar(...)
+end
+\end{verbatim}
+
+Now I want to abstract away the definition of bar. Maybe I want to use
+it in multiple functions and I don't want to copy and paste it. With
+macros I can do this:
+
+\begin{verbatim}
+macro definestuff(name)
+  quote
+    ($name)(x) = XXX
+  end
+end
+
+function foo()
+  @definestuff bar
+  ...
+end
+\end{verbatim}
+
+This is not possible without macros. If you passed :bar to a function,
+that function has no way to define a local bar inside foo. If it used
+eval, it would define a top-level function called bar. Since the macro
+runs so much earlier, it can change the code of foo itself, so it can
+easily modify local variables.
+
+And this example hardly shows the full power, since the argument to
+the macro is only a symbol. This is just to show the semantic
+differences.  Another example is spawn:
+
+\begin{verbatim}
+macro spawn(expr)
+  quote
+    spawn(()->($expr))
+  end
+end
+\end{verbatim}
+
+Now you can write {\tt @spawn a+b} and it will call a function spawn()
+on {\tt a+b} wrapped in a thunk. It should be clear that this syntax
+improvement requires macros. The function call f(a+b) couldn't work
+since a+b will be fully evaluated before f is called. f(:(a+b)) is
+ugly, and also wouldn't work since f cannot use :(a+b) to access the
+values of local variables a and b.
+
+People often compare macros to inlining (for example, the designer(s)
+of C++), but this is a pun. There is only a superficial similarity of
+inserting code into other code.
+
 \section{Command-Line Options}
 \sec{command-line-options}
+
+\begin{verbatim}
+julia [options] [program] [args...]
+ -q --quiet               Quiet startup without banner
+ -R --no-readline         Disable readline functionality
+ -e --eval=<expr>         Evaluate <expr> and don't print
+ -E --print=<expr>        Evaluate and print <expr>
+ -P --post-boot=<expr>    Evaluate <expr> right after boot
+ -H --home=<dir>          Load files relative to <dir>
+ -T --tab=<size>          Set REPL tab width to <size>
+ -L --lisp                Start with Lisp prompt not Julia
+ -b --bare                Bare REPL: don't load start.j
+ -h --help                Print this message
+\end{verbatim}
 
 \end{document}
