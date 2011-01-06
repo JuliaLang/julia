@@ -168,7 +168,7 @@ length(s::SubString) = s.length
 # can this be delegated efficiently somehow?
 # that may require additional string interfaces
 
-ref(s::String, r::Range1{Index})    = SubString(s, r.start, r.stop)
+ref(s::String, r::Range1{Index}) = SubString(s, r.start, r.stop)
 
 ## efficient representation of repeated strings ##
 
@@ -265,6 +265,7 @@ string(x) = string(ccall(dlsym(JuliaDLHandle,"jl_show_to_string"),
 
 cstring(args...) = print_to_string(print, args...)
 
+## string escaping & unescaping ##
 
 escape_nul(s::String, i::Index) =
     !done(s,i) && '0' <= next(s,i)[1] <= '7' ? "\\x00" : "\\0"
@@ -278,6 +279,7 @@ function print_escaped(s::String, q::Bool, xmax::Char)
         c == '\\'     ? print("\\\\") :
         c == '\e'     ? print("\\e") :
    q && c == '\"'     ? print("\\\"") :
+        c == '$'      ? print("\\\$") :
         iswprint(c)   ? print(c) :
         7 <= c <= 13  ? print('\\', "abtnvfr"[c-6]) :
         c <= xmax     ? print("\\x", uint2str(c,16,2)) :
@@ -353,6 +355,10 @@ end
 
 unescape_string(s::String) = print_to_string(print_unescaped, s)
 
+macro Q_str(raw)
+    :($unescape_string(raw))
+end
+
 ## string interpolation parsing ##
 
 function interp_parse(str::String, unescape::Bool)
@@ -387,6 +393,12 @@ interp_parse(str::String) = interp_parse(str, true)
 macro str(raw)
     :($interp_parse(raw))
 end
+
+macro S_str(raw)
+    :($interp_parse(raw))
+end
+
+# TODO: S"foo\xe2\x88\x80" == "foo\xe2\x88\x80"
 
 ## shell-like command parsing ##
 
