@@ -5,19 +5,13 @@ struct ProcessExited   <: ProcessStatus; status::Int32; end
 struct ProcessSignaled <: ProcessStatus; signal::Int32; end
 struct ProcessStopped  <: ProcessStatus; signal::Int32; end
 
-process_exited(s::Int32) =
-    ccall(dlsym(JuliaDLHandle,"jl_process_exited"),   Int32, (Int32,), s) != 0
-process_signaled(s::Int32) =
-    ccall(dlsym(JuliaDLHandle,"jl_process_signaled"), Int32, (Int32,), s) != 0
-process_stopped(s::Int32) =
-    ccall(dlsym(JuliaDLHandle,"jl_process_stopped"),  Int32, (Int32,), s) != 0
+process_exited(s::Int32)   = ccall(:jl_process_exited,   Int32, (Int32,), s) != 0
+process_signaled(s::Int32) = ccall(:jl_process_signaled, Int32, (Int32,), s) != 0
+process_stopped(s::Int32)  = ccall(:jl_process_stopped,  Int32, (Int32,), s) != 0
 
-process_exit_status(s::Int32) =
-    ccall(dlsym(JuliaDLHandle,"jl_process_exit_status"), Int32, (Int32,), s)
-process_term_signal(s::Int32) =
-    ccall(dlsym(JuliaDLHandle,"jl_process_term_signal"), Int32, (Int32,), s)
-process_stop_signal(s::Int32) =
-    ccall(dlsym(JuliaDLHandle,"jl_process_stop_signal"), Int32, (Int32,), s)
+process_exit_status(s::Int32) = ccall(:jl_process_exit_status, Int32, (Int32,), s)
+process_term_signal(s::Int32) = ccall(:jl_process_term_signal, Int32, (Int32,), s)
+process_stop_signal(s::Int32) = ccall(:jl_process_stop_signal, Int32, (Int32,), s)
 
 function process_status(s::Int32)
     process_exited  (s) ? ProcessExited  (process_exit_status(s)) :
@@ -44,9 +38,9 @@ end
 
 struct FileDes; fd::Int32; end
 
-global STDIN  = FileDes(ccall(dlsym(JuliaDLHandle,"jl_stdin"),  Int32, ()))
-global STDOUT = FileDes(ccall(dlsym(JuliaDLHandle,"jl_stdout"), Int32, ()))
-global STDERR = FileDes(ccall(dlsym(JuliaDLHandle,"jl_stderr"), Int32, ()))
+global STDIN  = FileDes(ccall(:jl_stdin,  Int32, ()))
+global STDOUT = FileDes(ccall(:jl_stdout, Int32, ()))
+global STDERR = FileDes(ccall(:jl_stderr, Int32, ()))
 
 ==(fd1::FileDes, fd2::FileDes) = (fd1.fd == fd2.fd)
 

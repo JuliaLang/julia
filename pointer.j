@@ -1,6 +1,6 @@
 ## system word size ##
 
-WORD_SIZE = ccall(dlsym(JuliaDLHandle,"jl_word_size"), Int32, ())
+WORD_SIZE = ccall(:jl_word_size, Int32, ())
 
 ## converting pointers to an appropriate uint ##
 

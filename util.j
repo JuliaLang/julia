@@ -6,7 +6,7 @@ catfile(file::String) = system(strcat("cat ", file))
 
 # timing
 
-clock() = ccall(dlsym(JuliaDLHandle,"clock_now"), Float64, ())
+clock() = ccall(:clock_now, Float64, ())
 
 _TIMERS = ()
 

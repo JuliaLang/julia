@@ -1,4 +1,4 @@
-sizeof_ios_t = ccall(dlsym(JuliaDLHandle,:jl_sizeof_ios_t), Int32, ())
+sizeof_ios_t = ccall(:jl_sizeof_ios_t, Int32, ())
 
 struct IOStream
     ios::Array{Uint8,1}
@@ -6,7 +6,7 @@ struct IOStream
     global make_stdout_stream, close
 
     function close(s::IOStream)
-        ccall(dlsym(JuliaDLHandle,"ios_close"), Void, (Ptr{Void},), s.ios)
+        ccall(:ios_close, Void, (Ptr{Void},), s.ios)
     end
 
     # TODO: delay adding finalizer, e.g. for memio with a small buffer, or
@@ -16,17 +16,17 @@ struct IOStream
                   x)
 
     make_stdout_stream() =
-        new(ccall(dlsym(JuliaDLHandle,"jl_stdout_stream"), Any, ()))
+        new(ccall(:jl_stdout_stream, Any, ()))
 end
 
 fdio(fd::Int) = (s = IOStream();
-                 ccall(dlsym(JuliaDLHandle,"ios_fd"), Void,
+                 ccall(:ios_fd, Void,
                        (Ptr{Uint8}, Int32, Int32), s.ios, fd, 0);
                  s)
 
 open(fname::String, rd::Bool, wr::Bool, cr::Bool, tr::Bool) =
     (s = IOStream();
-     if ccall(dlsym(JuliaDLHandle,"ios_file"), Ptr{Void},
+     if ccall(:ios_file, Ptr{Void},
               (Ptr{Uint8}, Ptr{Uint8}, Int32, Int32, Int32, Int32),
               s.ios, cstring(fname),
               int32(rd), int32(wr), int32(cr), int32(tr))==C_NULL
@@ -37,21 +37,19 @@ open(fname::String, rd::Bool, wr::Bool, cr::Bool, tr::Bool) =
 open(fname::String) = open(fname, true, true, true, false)
 
 memio() = memio(0)
-memio(x::Int) =
-    (s = IOStream();
-     ccall(dlsym(JuliaDLHandle,"ios_mem"), Ptr{Void},
-           (Ptr{Uint8}, Uint32), s.ios, uint32(x));
-     s)
+function memio(x::Int)
+    s = IOStream()
+    ccall(:ios_mem, Ptr{Void}, (Ptr{Uint8}, Uint32), s.ios, uint32(x))
+    s
+end
 
 convert(T::Type{Ptr}, s::IOStream) = convert(T, s.ios)
 
 current_output_stream() =
-    ccall(dlsym(JuliaDLHandle,"jl_current_output_stream_obj"),
-          Any, ())::IOStream
+    ccall(:jl_current_output_stream_obj, Any, ())::IOStream
 
 set_current_output_stream(s::IOStream) =
-    ccall(dlsym(JuliaDLHandle,"jl_set_current_output_stream_obj"),
-          Void, (Any,), s)
+    ccall(:jl_set_current_output_stream_obj, Void, (Any,), s)
 
 function with_output_stream(s::IOStream, f::Function, args...)
     try
@@ -63,12 +61,10 @@ function with_output_stream(s::IOStream, f::Function, args...)
 end
 
 takebuf_array(s::IOStream) =
-    ccall(dlsym(JuliaDLHandle,"jl_takebuf_array"),
-          Any, (Ptr{Void},), s.ios)::Array{Uint8,1}
+    ccall(:jl_takebuf_array, Any, (Ptr{Void},), s.ios)::Array{Uint8,1}
 
 takebuf_string(s::IOStream) =
-    ccall(dlsym(JuliaDLHandle,"jl_takebuf_string"),
-          Any, (Ptr{Void},), s.ios)::String
+    ccall(:jl_takebuf_string, Any, (Ptr{Void},), s.ios)::String
 
 function print_to_array(size::Int32, f::Function, args...)
     s = memio(size)
@@ -132,19 +128,15 @@ end
 
 ## low-level calls ##
 
-function write(s::IOStream, b::Uint8)
-    ccall(dlsym(JuliaDLHandle,"ios_putc"), Int32, (Int32, Ptr{Void}),
-          int32(b), s.ios)
-end
+write(s::IOStream, b::Uint8) =
+    ccall(:ios_putc, Int32, (Int32, Ptr{Void}), int32(b), s.ios)
 
-function write(s::IOStream, c::Char)
-    ccall(dlsym(JuliaDLHandle,"ios_pututf8"), Int32, (Ptr{Void}, Char),
-          s.ios, c)
-end
+write(s::IOStream, c::Char) =
+    ccall(:ios_pututf8, Int32, (Ptr{Void}, Char), s.ios, c)
 
 function write{T}(s::IOStream, a::Array{T})
     if isa(T,BitsKind)
-        ccall(dlsym(JuliaDLHandle,"ios_write"), Size,
+        ccall(:ios_write, Size,
               (Ptr{Void}, Ptr{Void}, Size), s.ios, a, numel(a)*sizeof(T))
     else
         invoke(write, (Any, Array), s, a)
@@ -158,7 +150,7 @@ function read(s::IOStream, ::Type{Uint8})
     if ASYNCH && nb_available(s) < 1
         io_wait(s)
     end
-    b = ccall(dlsym(JuliaDLHandle,"ios_getc"), Int32, (Ptr{Void},), s.ios)
+    b = ccall(:ios_getc, Int32, (Ptr{Void},), s.ios)
     if b == -1
         throw(EOFError())
     end
@@ -169,8 +161,7 @@ function read(s::IOStream, ::Type{Char})
     if ASYNCH && nb_available(s) < 1
         io_wait(s)
     end
-    ccall(dlsym(JuliaDLHandle,"jl_getutf8"), Char, (Ptr{Void},),
-          s.ios)
+    ccall(:jl_getutf8, Char, (Ptr{Void},), s.ios)
 end
 
 function read{T}(s::IOStream, ::Type{T}, dims::Dims)
@@ -180,7 +171,7 @@ function read{T}(s::IOStream, ::Type{T}, dims::Dims)
         if ASYNCH && nb_available(s) < nb
             io_wait(s)
         end
-        ccall(dlsym(JuliaDLHandle,"ios_readall"), Size,
+        ccall(:ios_readall, Size,
               (Ptr{Void}, Ptr{Void}, Size), s.ios, a, nb)
         a
     else
@@ -190,23 +181,21 @@ end
 
 function readuntil(s::IOStream, delim::Uint8)
     dest = memio()
-    ccall(dlsym(JuliaDLHandle,"ios_copyuntil"), Size,
+    ccall(:ios_copyuntil, Size,
           (Ptr{Void}, Ptr{Void}, Uint8), dest.ios, s.ios, delim)
     takebuf_string(dest)
 end
 
 function readall(s::IOStream)
     dest = memio()
-    ccall(dlsym(JuliaDLHandle,"ios_copyall"), Size,
+    ccall(:ios_copyall, Size,
           (Ptr{Void}, Ptr{Void}), dest.ios, s.ios)
     takebuf_string(dest)
 end
 
 readline(s::IOStream) = readuntil(s, uint8('\n'))
 
-function flush(s::IOStream)
-    ccall(dlsym(JuliaDLHandle,"ios_flush"), Void, (Ptr{Void},), s.ios)
-end
+flush(s::IOStream) = ccall(:ios_flush, Void, (Ptr{Void},), s.ios)
 
 struct IOTally
     nbytes::Size
@@ -367,24 +356,22 @@ function deserialize(s, t::Type)
     assert(isa(t,StructKind))
     nf = length(t.names)
     if nf == 0
-        return ccall(dlsym(JuliaDLHandle,"jl_new_struct"), Any,
-                     (Any,), t)
+        return ccall(:jl_new_struct, Any, (Any,), t)
     elseif nf == 1
-        return ccall(dlsym(JuliaDLHandle,"jl_new_struct"), Any,
-                     (Any,Any), t, deserialize(s))
+        return ccall(:jl_new_struct, Any, (Any,Any), t, deserialize(s))
     elseif nf == 2
-        return ccall(dlsym(JuliaDLHandle,"jl_new_struct"), Any,
+        return ccall(:jl_new_struct, Any,
                      (Any,Any,Any), t, deserialize(s), deserialize(s))
     elseif nf == 3
-        return ccall(dlsym(JuliaDLHandle,"jl_new_struct"), Any,
+        return ccall(:jl_new_struct, Any,
                      (Any,Any,Any,Any), t, deserialize(s), deserialize(s),
                      deserialize(s))
     elseif nf == 4
-        return ccall(dlsym(JuliaDLHandle,"jl_new_struct"), Any,
+        return ccall(:jl_new_struct, Any,
                      (Any,Any,Any,Any,Any), t, deserialize(s), deserialize(s),
                      deserialize(s), deserialize(s))
     else
-        return ccall(dlsym(JuliaDLHandle,"jl_new_structt"), Any,
+        return ccall(:jl_new_structt, Any,
                      (Any,Any), t, ntuple(nf, i->deserialize(s)))
     end
 end

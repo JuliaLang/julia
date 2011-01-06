@@ -7,9 +7,7 @@ next(t::Task, val) = (val, yieldto(t))
 Runnable_Q = Queue()
 Waiting_Set = idtable()
 
-select(s::IOStream) =
-    ccall(dlsym(JuliaDLHandle,"jl_read_avail"), Int32, (Ptr{Void},),
-          s.ios)!=0
+select(s::IOStream) = ccall(:jl_read_avail, Int32, (Ptr{Void},), s.ios) != 0
 
 function schedule()
     global Runnable_Q
@@ -82,9 +80,7 @@ function wait(t::Task)
 end
 
 # num bytes available without blocking
-nb_available(s::IOStream) =
-    ccall(dlsym(JuliaDLHandle,"jl_nb_available"), Int32, (Ptr{Void},),
-          s.ios)
+nb_available(s::IOStream) = ccall(:jl_nb_available, Int32, (Ptr{Void},), s.ios)
 
 # non-blocking read
 function nbread(s::IOStream, what)

@@ -41,7 +41,7 @@ end
 start(s::IntSet) = 0
 done(s::IntSet, i) = (next(s,i)[1] >= s.limit)
 function next(s::IntSet, i) 
-    n = ccall(dlsym(JuliaDLHandle,"bitvector_next"), Int32,
+    n = ccall(:bitvector_next, Int32,
               (Ptr{Uint32}, Uint64, Uint64),
               s.bits, uint64(i), uint64(s.limit))
     (n, n+1)

@@ -256,12 +256,10 @@ function string(p::Ptr{Uint8})
     if p == C_NULL
         error("cannot convert NULL to string")
     end
-    ccall(dlsym(JuliaDLHandle,"jl_cstr_to_string"),
-          Any, (Ptr{Uint8},), p)::String
+    ccall(:jl_cstr_to_string, Any, (Ptr{Uint8},), p)::String
 end
 
-string(x) = string(ccall(dlsym(JuliaDLHandle,"jl_show_to_string"),
-                         Ptr{Uint8}, (Any,), x))
+string(x) = string(ccall(:jl_show_to_string, Ptr{Uint8}, (Any,), x))
 
 cstring(args...) = print_to_string(print, args...)
 
@@ -550,7 +548,7 @@ shell_escape(cmd::String, args::String...) =
 parse(s::String) = parse(s, 1)
 # returns (expr, end_pos). expr is () in case of parse error.
 function parse(s::String, pos)
-    ex, pos = ccall(dlsym(JuliaDLHandle,:jl_parse_string), Any,
+    ex, pos = ccall(:jl_parse_string, Any,
                     (Ptr{Uint8},Int32), cstring(s), int32(pos)-1)
     if ex == (); error(ParseError); end
     ex, pos+1
@@ -616,7 +614,7 @@ function uint2str(n::Int, b::Int)
     ndig = n==convert(typeof(n),0) ? 1 : int32(floor(log(n)/log(b)+1))
     sz = ndig+1
     data = Array(Uint8, sz)
-    ccall(dlsym(JuliaDLHandle,"uint2str"), Ptr{Uint8},
+    ccall(:uint2str, Ptr{Uint8},
           (Ptr{Uint8}, Size, Uint64, Uint32),
           data, sz, uint64(n), uint32(b))
     Latin1String(data[1:(sz-1)]) # cut out terminating NUL

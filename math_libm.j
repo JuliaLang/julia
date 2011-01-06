@@ -59,7 +59,7 @@ end
 ldexp(x::Float64,e::Int32) = ccall(dlsym(libm,"ldexp"), Float64, (Float64,Int32), x, e)
 ldexp(x::Float32,e::Int32) = ccall(dlsym(libm,"ldexpf"), Float32, (Float32,Int32), x, e)
 
-rand() = ccall(dlsym(JuliaDLHandle,"rand_double"), Float64, ())
-randf() = ccall(dlsym(JuliaDLHandle,"rand_float"), Float32, ())
-randui32() = ccall(dlsym(JuliaDLHandle,"genrand_int32"), Uint32, ())
-randn() = ccall(dlsym(JuliaDLHandle,"randn"), Float64, ())
+rand() = ccall(:rand_double, Float64, ())
+randf() = ccall(:rand_float, Float32, ())
+randui32() = ccall(:genrand_int32, Uint32, ())
+randn() = ccall(:randn, Float64, ())
