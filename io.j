@@ -252,7 +252,7 @@ function serialize(s, a::Array)
     writetag(s, Array)
     elty = typeof(a).parameters[1]
     serialize(s, elty)
-    serialize(s, a.dims)
+    serialize(s, size(a))
     if isa(elty,BitsKind)
         write(s, a)
     else

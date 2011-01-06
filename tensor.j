@@ -574,7 +574,7 @@ function find(A::Tensor)
         end
     end
 
-    cartesian_map(find_one, ntuple(ndims(A), d->(1:size(A)[d])) )
+    cartesian_map(find_one, ntuple(ndims(A), d->(1:size(A,d))) )
     return I
 end
 

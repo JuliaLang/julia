@@ -603,7 +603,9 @@ issues 12/21/10
   . can be specialized, allows removing checks and converts
 - {} for dequeues
   . or add dequeue functionality to 1-d arrays
-    new array axioms: arraygrow(a,n), arraydel(a,i0,i1)
+    new array axioms:
+    array_grow_end, array_del_end, array_grow_beg, array_del_beg,
+    array_size(a, n), array_size(a)
 - type=>abstract, struct=>type
 
 

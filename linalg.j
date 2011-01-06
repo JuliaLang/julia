@@ -47,7 +47,7 @@ end
 norm(x::Vector) = sqrt(sum(x.*x))
 
 function norm(A::Matrix, p)
-    if A.dims[1] == 1 || A.dims[2] == 1
+    if size(A,1) == 1 || size(A,2) == 1
         return norm(reshape(A, numel(A)), p)
     elseif p == 1
         return max(sum(abs(A)))

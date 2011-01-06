@@ -131,7 +131,7 @@ function show{T}(a::Array{T,1})
     else
         opn = "["; cls = "]";
     end
-    n = a.dims[1]
+    n = size(a,1)
     if n <= 10
         show_comma_array(a, opn, cls)
     else
@@ -149,8 +149,8 @@ function show_cols(a, start, stop, i)
 end
 
 function show{T}(a::Array{T,2})
-    m = a.dims[1]
-    n = a.dims[2]
+    m = size(a,1)
+    n = size(a,2)
     print_hdots = false
     print_vdots = false
     if 10 < m; print_vdots = true; end

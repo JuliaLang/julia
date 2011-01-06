@@ -102,7 +102,7 @@ end
 
 function hcat{T}(A::Array{T,2}...)
     nargs = length(A)
-    ncols = sum(ntuple(nargs, i->size(A[i], 2)))
+    ncols = sum(a->size(a, 2), A)
     nrows = size(A[1], 1)
     B = clone(A[1], nrows, ncols)
     pos = 1
@@ -118,7 +118,7 @@ end
 
 function vcat{T}(A::Array{T,2}...)
     nargs = length(A)
-    nrows = sum(ntuple(nargs, i->size(A[i], 1)))
+    nrows = sum(a->size(a, 1), A)
     ncols = size(A[1], 2)
     B = clone(A[1], nrows, ncols)
     pos = 1
@@ -157,8 +157,8 @@ function cat(catdim::Int, A::Array...)
     # ndims of all input arrays should be in [d-1, d]
 
     nargs = length(A)
-    dimsA = ntuple(nargs, i->size(A[i]))
-    ndimsA = ntuple(nargs, i->length(dimsA[i]))
+    dimsA = map(size, A)
+    ndimsA = map(ndims, A)
     d_max = max(ndimsA)
     d_min = min(ndimsA)
 

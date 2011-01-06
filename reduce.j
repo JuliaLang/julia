@@ -19,12 +19,29 @@ function reduce(op::Function, v0, itr)
     return v
 end
 
+mapreduce(op::Function, f::Function, itr) = mapreduce(op, f, op(), itr)
+
+function mapreduce(op::Function, f::Function, v0, itr)
+    v = v0
+    for x = itr
+        v = op(v,f(x))
+    end
+    return v
+end
+
 max(itr)  = reduce(max, itr)
 min(itr)  = reduce(min, itr)
 sum(itr)  = reduce(+,   itr)
 prod(itr) = reduce(*,   itr)
 any(itr)  = reduce(any, itr)
 all(itr)  = reduce(all, itr)
+
+max(f::Function, itr)  = mapreduce(max, f, itr)
+min(f::Function, itr)  = mapreduce(min, f, itr)
+sum(f::Function, itr)  = mapreduce(+,   f, itr)
+prod(f::Function, itr) = mapreduce(*,   f, itr)
+any(f::Function, itr)  = mapreduce(any, f, itr)
+all(f::Function, itr)  = mapreduce(all, f, itr)
 
 max(x, y, z, rest...)  = reduce(max,  max(max(x,y),z),   rest)
 min(x, y, z, rest...)  = reduce(min,  min(min(x,y),z),   rest)
