@@ -604,9 +604,10 @@ Dispatch is done on all argument types and the most specific method that applies
   julia> f(2,3.0)
   5.0
 \end{verbatim}
-Here, the first method of \verb|f| is applied since \verb|2| is not a \verb|Float64|, so the specialized second method does not apply.
+Here, the second method of \verb|f| cannot be applied since \verb|2| is not a \verb|Float64|.
+In the first method, the argument types are unconstrained, so this serves as a catchall method, and is called here.
 
-If you've been entering these definitions in the repl, you'll have noticed that it shows you all the methods defined for a given ``generic function'' when a new method is defined or if ask the repl to show the function object:
+If you've been entering these definitions in the repl, you'll have noticed that it shows you all the methods defined for a given ``generic function'' when a new method is defined or if you ask the repl to show the function object:
 \begin{verbatim}
   julia> f(x,y) = x + y
   Methods for generic function f
@@ -914,27 +915,27 @@ the $k$th byte of the representation is no longer the $k$th character.
 Worse still, a byte might not be the beginning of a character at all, but right in the middle of a character (this is called a ``continuation byte'').
 
 If you allow people direct access to the bytes of an encoded string, they can and will do all sorts of bad things that produce invalid Unicode and broken behaviors when Unicode input is received.
-To provide a string abstraction that makes strings behave like functions from indices to Unicode characters (i.e. code points), then you have to chose one of the following:
+To provide a string abstraction that makes strings behave like functions from indices to Unicode characters (i.e. code points), you have to chose one of the following:
 \begin{enumerate}
 
 \item Have fast, natural random access to characters, but store strings so that every character is big enough to accommodate the entire Unicode character set.
 The natural choice of encoding for this is UTF-32, in which each code point (integer value representing a unique character) is simply represented by its 32-bit integer value.
 This also requires processing every string before accessing or manipulating it to convert it from its input encoding (usually UTF-8) to UTF-32.
-Transcoding introduces a lot of overhead, in terms of forcing every string to be transcoded, typically both on input and output, as well as inflating memory usage for all strings.
+Transcoding introduces a lot of overhead, forcing every string to be transcoded, typically both on input and output, as well as inflating memory usage for all strings.
 
 \item Sacrifice the ability to represent every Unicode character and use only the two-byte characters of a 16-bit encoding like UTF-16.
-With this you can represent virtually all modern languages, but you cannot write in ancient languages like Egyptian hieroglyphs, Linear B, or certain (modern) unified Han ideographs.
+With this you can represent virtually all modern languages, but you cannot write in ancient languages like Egyptian hieroglyphs, Linear B, or represent some unusual modern characters such as certain unified Han ideographs.
 This allows fast random access, and reduces the memory inflation compared to the UTF-32 approach, but still requires transcoding almost every string on input and output.
 
-\item Keep strings in their input form, but make indexing into a string an $\O(n)$ operation which requires scanning the entire string from the beginning to find the $k$th character from there.
+\item Keep strings in their input form, but make indexing into a string an $\O(k)$ operation which requires scanning the entire string from the beginning to find the $k$th character from there.
 This turns a lot of trivial $\O(n)$ string processing algorithms into $\O(n^2)$ algorithms unless you completely avoid indexing into strings altogether.
 
-\item Represent strings by a clever, relatively complex data structure that allows strings to remain encoded, but somehow makes indexing the $k$th character look like it's faster than $\O(n)$, when it is amortized over many operations.
+\item Represent strings by a clever, relatively complex data structure that allows strings to remain encoded, but somehow makes indexing the $k$th character look like it's faster than $\O(k)$, when it is amortized over many operations.
 One possible way to do this is to remember the last few indices that were accessed and figure out new indices relative to them.
 
 \item Do not allow indexing into strings. Instead, only provide interfaces, such as iterating characters, which are Unicode safe as well as being efficiently implementable without transcoding strings.
 
-\item Ignore the whole issue, just equate strings with byte arrays and let Unicode go f$\star$ck itself (a.k.a.~the C approach\footnote{To be fair, the C language long predates the Unicode standard.}).
+\item Ignore the whole issue and just equate strings with byte arrays and let Unicode go f$\star$ck itself (a.k.a.~the C approach\footnote{To be fair, the C language long predates the Unicode standard.}).
 
 \end{enumerate}
 Technically, option 5 doesn't actually keep the abstraction of strings as functions from indices to characters, so perhaps it doesn't belong here;
@@ -978,22 +979,26 @@ By changing the string abstraction, we can support arbitrary string encodings at
 
 \section{Parallel Computing}
 \begin{itemize}
-  \item {\tt Worker()} - create a new local worker
+  \item \verb|Worker()| ---
+     create a new local worker
 
-  \item {\tt remote\_apply(w, func, args...)} -
+  \item \verb|remote_apply(w, func, args...)| ---
      tell a worker to call a function on the given arguments.
-     for now, functions are passed as symbols, e.g. :randn
+     for now, functions are passed as symbols, e.g. \verb|:randn|
      returns a Future.
 
-   \item {\tt wait(f)} - wait for, then return the value represented by a Future
+   \item \verb|wait(f)| ---
+     wait for, then return the value represented by a Future
 
-   \item {\tt pmap(pool, func, lst)} -
-     call a function on each element of lst (some 1-d thing), in
+   \item \verb|pmap(pool, func, lst)| ---
+     call a function on each element of \verb|lst| (some 1-d thing), in
      parallel. pool is a list of available Workers.
 
-   \item {\tt send\_msg(socket, x)} - send a Julia object through a socket
+   \item \verb|send_msg(socket, x)| ---
+     send a Julia object through a socket
 
-   \item {\tt recv\_msg(socket)} - read the next Julia object from a socket
+   \item \verb|recv_msg(socket)| ---
+     read the next Julia object from a socket
 \end{itemize}
 
 \section{Calling C Functions}
@@ -1252,87 +1257,81 @@ The final example never terminates since the \verb|dup| process reads its own ou
 
 \section{Macros}
 
-Macros are totally different from inlining. Macros are a hook into the
-compiler that lets you examine and rewrite the syntax of a piece of
-the program. You can use them to implement entirely new syntactic
-constructs like spawn, parfor, pattern matching, stefan's command
-syntax, etc.
+Macros are totally different from inlining.
+Macros are a hook into the compiler that lets you examine and rewrite the syntax of a piece of the program.
+You can use them to implement entirely new syntactic constructs like remote spawn, parallel for loops, string interpolation, pattern matching, Julia's command syntax, etc.
 
-Macros also run at an earlier binding time than functions and so have
-different semantics. Inlining moves code around in a way that keeps
-the same function call semantics, i.e. you can't ``tell'' that it
-happened. Macros are just the opposite.  For example, say I have a
-function that contains an inner function:
+Macros also run at an earlier binding time than functions and so have different semantics.
+Inlining moves code around in a way that keeps the same function call semantics, i.e. you can't ``tell'' that it happened.
+Macros are just the opposite.
+For example, say I have a function that contains an inner function:
 
 \begin{verbatim}
-function foo()
-  bar(x) = XXX
-  ...
-  bar(...)
-end
-\end{verbatim}
-
-Now I want to abstract away the definition of bar. Maybe I want to use
-it in multiple functions and I don't want to copy and paste it. With
-macros I can do this:
-
-\begin{verbatim}
-macro definestuff(name)
-  quote
-    ($name)(x) = XXX
+  function foo()
+    bar(x) = XXX
+    ...
+    bar(...)
   end
-end
-
-function foo()
-  @definestuff bar
-  ...
-end
 \end{verbatim}
 
-This is not possible without macros. If you passed :bar to a function,
-that function has no way to define a local bar inside foo. If it used
-eval, it would define a top-level function called bar. Since the macro
-runs so much earlier, it can change the code of foo itself, so it can
-easily modify local variables.
+Now I want to abstract away the definition of \verb|bar|.
+Maybe I want to use it in multiple functions and I don't want to copy and paste it.
+With macros I can do this:
+
+\begin{verbatim}
+  macro definestuff(name)
+    quote
+      ($name)(x) = XXX
+    end
+  end
+
+  function foo()
+    @definestuff bar
+    ...
+  end
+\end{verbatim}
+
+This is not possible without macros.
+If you passed \verb|:bar| to a function, that function has no way to define a local \verb|bar| inside \verb|foo|.
+If it used \verb|eval|, it would define a top-level function called \verb|bar|. 
+Since the macro runs so much earlier, it can change the code of \verb|foo| itself, so it can easily modify local variables.
 
 And this example hardly shows the full power, since the argument to
-the macro is only a symbol. This is just to show the semantic
-differences.  Another example is spawn:
+the macro is only a symbol.
+This is just to show the semantic differences.
+Another example is \verb|spawn|:
 
 \begin{verbatim}
-macro spawn(expr)
-  quote
-    spawn(()->($expr))
+  macro spawn(expr)
+    quote
+      spawn(()->($expr))
+    end
   end
-end
 \end{verbatim}
 
-Now you can write {\tt @spawn a+b} and it will call a function spawn()
-on {\tt a+b} wrapped in a thunk. It should be clear that this syntax
-improvement requires macros. The function call f(a+b) couldn't work
-since a+b will be fully evaluated before f is called. f(:(a+b)) is
-ugly, and also wouldn't work since f cannot use :(a+b) to access the
-values of local variables a and b.
+Now you can write \verb|@spawn a+b| and it will call a function \verb|spawn| on \verb|a+b| wrapped in a thunk.
+This syntax improvement requires macros:
+the function call \verb|spawn(a+b)| couldn't work since \verb|a+b| will be fully evaluated before \verb|spawn| is called.
+\verb|spawn(:(a+b))| is ugly, and also wouldn't work since \verb|spawn| cannot use \verb|:(a+b)| to access the values of local variables \verb|a| and \verb|b|.
 
-People often compare macros to inlining (for example, the designer(s)
-of C++), but this is a pun. There is only a superficial similarity of
-inserting code into other code.
+People often compare macros to inlining (for example, the designer(s) of C++), but this is a pun.
+There is only a superficial similarity of inserting code into other code.
 
 \section{Command-Line Options}
 \sec{command-line-options}
 
 \begin{verbatim}
-julia [options] [program] [args...]
- -q --quiet               Quiet startup without banner
- -R --no-readline         Disable readline functionality
- -e --eval=<expr>         Evaluate <expr> and don't print
- -E --print=<expr>        Evaluate and print <expr>
- -P --post-boot=<expr>    Evaluate <expr> right after boot
- -H --home=<dir>          Load files relative to <dir>
- -T --tab=<size>          Set REPL tab width to <size>
- -L --lisp                Start with Lisp prompt not Julia
- -b --bare                Bare REPL: don't load start.j
- -h --help                Print this message
+  julia [options] [program] [args...]
+   -q --quiet               Quiet startup without banner
+   -R --no-readline         Disable readline functionality
+   -e --eval=<expr>         Evaluate <expr> and don't print
+   -E --print=<expr>        Evaluate and print <expr>
+   -P --post-boot=<expr>    Evaluate <expr> right after boot
+   -H --home=<dir>          Load files relative to <dir>
+   -T --tab=<size>          Set REPL tab width to <size>
+   -L --lisp                Start with Lisp prompt not Julia
+   -b --bare                Bare REPL: don't load start.j
+   -h --help                Print this message
 \end{verbatim}
 
 \end{document}
