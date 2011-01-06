@@ -368,7 +368,7 @@ function interp_parse(str::String, unescape::Bool)
             end
             ex, j = parse(str,k)
             strs = append(strs,(ex,)); i = j
-        elseif c == '\\' && !done(str,k) && str[k] == '$'
+        elseif c == '\\' && !done(str,k)
             c, j = next(str,k)
         else
             j = k

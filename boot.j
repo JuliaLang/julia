@@ -200,3 +200,5 @@ function append_any(xs...)
 end
 
 append(xs...) = append_any(xs...)
+
+macro L_str(s); s; end

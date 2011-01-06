@@ -85,7 +85,7 @@
 ; --- lexer ---
 
 (define special-char?
-  (let ((chrs (string->list "()[]{},;`@")))
+  (let ((chrs (string->list "()[]{},;\"`@")))
     (lambda (c) (memv c chrs))))
 (define (newline? c) (eqv? c #\newline))
 (define (identifier-char? c) (or (and (char>=? c #\A)
@@ -203,7 +203,7 @@
 	  
 	  ((opchar? c)  (read-operator port c))
 
-	  ((eqv? c #\")
+	  #;((eqv? c #\")
 	   (with-exception-catcher
 	    (lambda (e)
 	      (error "invalid string literal"))
@@ -415,7 +415,13 @@
     (let loop ((ex       (parse-unary s))
 	       (chain-op #f))
       (let ((t (peek-token s)))
-	(cond ((and (juxtapose? ex t)
+	(cond ((and (symbol? ex) (eqv? t #\") (not (operator? ex)))
+	       ;; custom prefixed string literals, x"s" does @x_str "s"
+	       (let ((str (begin (take-token s)
+				 (parse-string-literal s)))
+		     (macname (symbol (string ex '_str))))
+		 `(macrocall ,macname ,(car str))))
+	      ((and (juxtapose? ex t)
 		    (not (ts:space? s)))
 	       (if (eq? chain-op '*)
 		   (loop (append ex (list (parse-unary s)))
@@ -735,20 +741,46 @@
       c))
 
 (define (parse-backquote s)
-  (let ((b (open-output-string)))
-    (let loop ((c (read-char (ts:port s))))
+  (let ((b (open-output-string))
+	(p (ts:port s)))
+    (let loop ((c (read-char p)))
       (if (eqv? c #\`)
 	  #t
 	  (begin (if (eqv? c #\\)
-		     (let ((nextch (read-char (ts:port s))))
-		       (if (or (eqv? nextch #\`) (eqv? nextch #\\))
+		     (let ((nextch (read-char p)))
+		       (if (eqv? nextch #\`)
 			   (write-char nextch b)
 			   (begin (write-char #\\ b)
 				  (write-char (not-eof-2 nextch) b))))
 		     (write-char (not-eof-2 c) b))
-		 (loop (read-char (ts:port s))))))
+		 (loop (read-char p)))))
     (let ((str (io.tostring! b)))
       `(macrocall cmd ,str))))
+
+(define (not-eof-3 c)
+  (if (eof-object? c)
+      (error "incomplete: invalid string syntax")
+      c))
+
+; reads a raw string literal with no processing.
+; quote can be escaped with \, but the \ is left in place.
+(define (parse-string-literal s)
+  (let ((b (open-output-string))
+	(p (ts:port s))
+	(interpolate #f))
+    (let loop ((c (read-char p)))
+      (if (eqv? c #\")
+	  #t
+	  (begin (if (eqv? c #\\)
+		     (let ((nextch (read-char p)))
+		       (begin (write-char #\\ b)
+			      (write-char (not-eof-3 nextch) b)))
+		     (begin
+		       (if (eqv? c #\$)
+			   (set! interpolate #t))
+		       (write-char (not-eof-3 c) b)))
+		 (loop (read-char p)))))
+    (cons (io.tostring! b) interpolate)))
 
 (define (not-eof-1 c)
   (if (eof-object? c)
@@ -875,6 +907,16 @@
 	  ((eqv? t #\[ )
 	   (take-token s)
 	   (parse-cat s #\]))
+
+	  ;; string literal
+	  ((eqv? t #\")
+	   (take-token s)
+	   (let ((ps (parse-string-literal s)))
+	     (if (cdr ps)
+		 `(macrocall str ,(car ps))
+		 ;; process escape sequences using lisp read
+		 (read (open-input-string
+			(string #\" (car ps) #\"))))))
 
 	  ;; macro call
 	  ((eqv? t #\@)
