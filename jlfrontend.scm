@@ -108,12 +108,15 @@
 	       (cadadr ex))
 	      (else ex)))))
 
+(define (jl-parse-named-stream name stream)
+  (parser-wrap (lambda ()
+		 (cons 'file (map file-toplevel-expr
+				  (julia-parse-file name stream))))))
+
 (define (jl-parse-source s)
   (let ((infile (open-input-file s)))
     (begin0
-     (parser-wrap (lambda ()
-		    (cons 'file (map file-toplevel-expr
-				     (julia-parse-file s infile)))))
+     (jl-parse-named-stream s infile)
      (io.close infile))))
 
 (define (jl-parse-file s)

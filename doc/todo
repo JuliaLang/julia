@@ -593,7 +593,7 @@ issues 12/21/10
 
 - inference in inner functions
 * allow anything iterable to be spliced by ...
-- more flexible string literals
+* more flexible string literals
 - consider generating code for constructors, e.g.
   function new{T}(re::T, im::T)
     v = newstruct(Complex{T})

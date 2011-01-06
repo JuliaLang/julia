@@ -3,8 +3,6 @@
 (with-bindings
  ((*print-pretty* #f))
  (print
-  (parser-wrap (lambda ()
-		 (cons 'file
-		       (map toplevel-expr
-			    (julia-parse-file "stdin" *input-stream*)))))))
+  (jl-parse-named-stream "stdin" *input-stream*)))
+
 (newline)

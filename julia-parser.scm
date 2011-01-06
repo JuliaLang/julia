@@ -6,13 +6,14 @@
      ; note: there are some strange-looking things in here because
      ; the way the lexer works, every prefix of an operator must also
      ; be an operator.
-     (-> <- -- -->)
+     (<- -- -->)
      (> < >= <= == != |.>| |.<| |.>=| |.<=| |.==| |.!=| |.=| |.!| |<:| |>:|)
      (: ..)
      (+ - |\|| $)
      (<< >> >>>)
-     (* / // .// |./| % & |.*| |\\| |.\\|)
+     (* / |./| % & |.*| |\\| |.\\|)
      (^ |.^|)
+     (// .//)
      (|::|)
      (|.|)))
 
@@ -72,7 +73,7 @@
 (define ctrans-op (string->symbol "'"))
 (define vararg-op (string->symbol "..."))
 
-(define operators (list* '~ '! ctrans-op trans-op vararg-op
+(define operators (list* '~ '! '-> ctrans-op trans-op vararg-op
 			 (delete-duplicates
 			  (apply append (vector->list ops-by-prec)))))
 
@@ -415,13 +416,7 @@
     (let loop ((ex       (parse-unary s))
 	       (chain-op #f))
       (let ((t (peek-token s)))
-	(cond ((and (symbol? ex) (eqv? t #\") (not (operator? ex)))
-	       ;; custom prefixed string literals, x"s" does @x_str "s"
-	       (let ((str (begin (take-token s)
-				 (parse-string-literal s)))
-		     (macname (symbol (string ex '_str))))
-		 `(macrocall ,macname ,(car str))))
-	      ((and (juxtapose? ex t)
+	(cond ((and (juxtapose? ex t)
 		    (not (ts:space? s)))
 	       (if (eq? chain-op '*)
 		   (loop (append ex (list (parse-unary s)))
@@ -491,9 +486,11 @@
 ; -2^3 is parsed as -(2^3), so call parse-decl for the first argument,
 ; and parse-unary from then on (to handle 2^-3)
 (define (parse-factor s)
-  (parse-factor-h s parse-decl (prec-ops 10)))
+  (parse-factor-h s parse-rational (prec-ops 10)))
 
-(define (parse-decl s) (parse-LtoR s parse-call (prec-ops 11)))
+(define (parse-rational s) (parse-LtoR s parse-decl (prec-ops 11)))
+
+(define (parse-decl s) (parse-LtoR s parse-call (prec-ops 12)))
 
 ; parse function call, indexing, dot, and transpose expressions
 ; also handles looking for syntactic reserved words
@@ -504,7 +501,7 @@
 	(let loop ((ex ex))
 	  (let ((t (peek-token s)))
 	    (if (and space-sensitive (ts:space? s)
-		     (memv t '(#\( #\[ #\{ |'|)))
+		     (memv t '(#\( #\[ #\{ |'| #\")))
 		ex
 		(case t
 		  ((#\( )   (take-token s)
@@ -524,9 +521,21 @@
 		   (loop (list 'call 'ctranspose ex)))
 		  ((#\{ )   (take-token s)
 		   (loop (list* 'curly ex (parse-arglist s #\} ))))
+		  ((#\")
+		   (if (and (symbol? ex) (not (operator? ex)))
+		       ;; custom prefixed string literals, x"s" => @x_str "s"
+		       (let ((str (begin (take-token s)
+					 (parse-string-literal s)))
+			     (macname (symbol (string ex '_str))))
+			 (loop `(macrocall ,macname ,(car str))))
+		       ex))
+		  ((->)  (take-token s)
+		   ;; -> is unusual: it binds tightly on the left and
+		   ;; loosely on the right.
+		   (list '-> ex (parse-eq* s)))
 		  (else ex))))))))
 
-;(define (parse-dot s)  (parse-LtoR s parse-atom (prec-ops 12)))
+;(define (parse-dot s)  (parse-LtoR s parse-atom (prec-ops 13)))
 
 ; parse expressions or blocks introduced by syntactic reserved words
 (define (parse-resword s word)
