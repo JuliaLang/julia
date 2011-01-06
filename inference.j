@@ -50,23 +50,16 @@ end
 # TODO thread local
 inference_stack = EmptyCallStack()
 
-tintersect(a,b) = ccall(dlsym(JuliaDLHandle,"jl_type_intersection"), Any,
-                        (Any,Any), a, b)
-tmatch(a,b) = ccall(dlsym(JuliaDLHandle,"jl_type_match"), Any,
-                    (Any,Any), a, b)
+tintersect(a,b) = ccall(:jl_type_intersection, Any, (Any,Any), a, b)
+tmatch(a,b) = ccall(:jl_type_match, Any, (Any,Any), a, b)
 
-getmethods(f,t) = ccall(dlsym(JuliaDLHandle,"jl_matching_methods"), Any,
-                        (Any,Any), f, t)::Tuple
+getmethods(f,t) = ccall(:jl_matching_methods, Any, (Any,Any), f, t)::Tuple
 
 typeseq(a,b) = subtype(a,b)&&subtype(b,a)
 
-isbuiltin(f) = ccall(dlsym(JuliaDLHandle,"jl_is_builtin"), Int32, (Any,),
-                     f) != 0
-isgeneric(f) = ccall(dlsym(JuliaDLHandle,"jl_is_genericfunc"), Int32, (Any,),
-                     f) != 0
-
-isleaftype(t) = ccall(dlsym(JuliaDLHandle,"jl_is_leaf_type"), Int32, (Any,),
-                      t) != 0
+isbuiltin(f) = ccall(:jl_is_builtin, Int32, (Any,), f) != 0
+isgeneric(f) = ccall(:jl_is_genericfunc, Int32, (Any,), f) != 0
+isleaftype(t) = ccall(:jl_is_leaf_type, Int32, (Any,), t) != 0
 
 # for now assume all global functions constant
 # TODO
@@ -435,7 +428,7 @@ function abstract_call(f, fargs, argtypes, vtypes, sv::StaticVarInfo, e)
     end
 end
 
-ft_tfunc(ft, argtypes) = ccall(dlsym(JuliaDLHandle,"jl_func_type_tfunc"), Any,
+ft_tfunc(ft, argtypes) = ccall(:jl_func_type_tfunc, Any,
                                (Any, Any), ft, argtypes)
 
 function abstract_eval_call(e, vtypes, sv::StaticVarInfo)
@@ -577,8 +570,7 @@ function changed(new::Union(StateUpdate,VarTable), old, vars)
     return false
 end
 
-badunion(t) = ccall(dlsym(JuliaDLHandle,"jl_union_too_complex"),
-                    Int32, (Any,), t)!=0
+badunion(t) = ccall(:jl_union_too_complex, Int32, (Any,), t) != 0
 
 typealias Top Union(Any,Undef)
 
@@ -595,8 +587,7 @@ function tmerge(typea, typeb)
     if subtype(typeb,typea)
         return typea
     end
-    t = ccall(dlsym(JuliaDLHandle,"jl_compute_type_union"),Any,(Any,),
-              (typea, typeb))
+    t = ccall(:jl_compute_type_union,Any,(Any,), (typea, typeb))
     #if length(t)==1
     #    return t[1]
     #else
@@ -647,8 +638,7 @@ f_argnames(ast) =
     map(x->(isa(x,Expr) ? x.args[1] : x), ast.args[1]::Array{Any,1})
 
 is_rest_arg(arg) = (isa(arg,Expr) && is(arg.head,symbol("::")) &&
-                    ccall(dlsym(JuliaDLHandle,"jl_is_rest_arg"),Int32,(Any,),
-                          arg)!=0)
+                    ccall(:jl_is_rest_arg,Int32,(Any,), arg) != 0)
 
 function typeinf_task(caller)
     result = ()

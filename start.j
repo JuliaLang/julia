@@ -23,12 +23,13 @@ load("table.j")
 
 # compiler
 load("inference.j")
-ccall(dlsym(JuliaDLHandle,"jl_enable_inference"),Void,())
+ccall(:jl_enable_inference,Void,())
 
 # load libc
 libc = dlopen("libc")
 
-# strings & printing
+# io, strings & printing
+load("io.j")
 load("string.j")
 load("latin1.j")
 load("utf8.j")
@@ -54,8 +55,7 @@ load("sparse.j")
 load("tree.j")
 load("set.j")
 
-# I/O and concurrency
-load("io.j")
+# concurrency & ipc
 stdout_stream = make_stdout_stream()
 set_current_output_stream(stdout_stream)
 load("task.j")

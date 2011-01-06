@@ -22,9 +22,7 @@
 
 recv_msg(s) = deserialize(s)
 send_msg(s, x) = (serialize(s, x); flush(s))
-
-wait_msg(fd) =
-    ccall(dlsym(JuliaDLHandle,"jl_wait_msg"), Int32, (Int32,), fd)==0
+wait_msg(fd) = ccall(:jl_wait_msg, Int32, (Int32,), fd) == 0
 
 # todo:
 # - recover from i/o errors
@@ -82,7 +80,7 @@ function start_local_worker()
 
     if fork()==0
         port = [int16(9009)]
-        sockfd = ccall(dlsym(JuliaDLHandle,"open_any_tcp_port"), Int32,
+        sockfd = ccall(:open_any_tcp_port, Int32,
                        (Ptr{Int16},), port)
         if sockfd == -1
             error("could not bind socket")
@@ -109,7 +107,7 @@ function start_local_worker()
 end
 
 function connect_to_worker(hostname, port)
-    fdio(ccall(dlsym(JuliaDLHandle,"connect_to_host"), Int32,
+    fdio(ccall(:connect_to_host, Int32,
                (Ptr{Uint8}, Int16), hostname, port))
 end
 

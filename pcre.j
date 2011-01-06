@@ -13,9 +13,9 @@ function pcre_compile(pattern::String, options::Int32)
                        (Ptr{Uint8}, Int32, Ptr{Ptr{Uint8}}, Ptr{Int32}, Ptr{Uint8}),
                        cstring(pattern), options, errstr, erroff, C_NULL))()
     if regex == C_NULL
-        error("pcre_compile: ", string(errstr[1]),
-              " at position ", erroff[1]+1,
-              " in \"", pattern, "\"")
+        error("pcre_compile: $(errstr[1])",
+              " at position $(erroff[1]+1)",
+              " in $(quote_string(pattern))")
     end
     regex
 end
@@ -81,6 +81,14 @@ struct Regex
     Regex(p::String)          = Regex(p, 0, true)
 end
 
+# TODO: make sure thing are escaped in a way PCRE
+# likes so that Julia all the Julia string quoting
+# constructs are correctly handled.
+
+macro r_str(s)
+    Regex(s)
+end
+
 function show(re::Regex)
     print("Regex(")
     show(re.pattern)
@@ -101,7 +109,7 @@ function match(re::Regex, str::String)
     cstr = cstring(str)
     m = pcre_exec(re.regex, re.extra, cstr, 1, re.options)
     if isempty(m); return RegexMatch((),(),-1); end
-    mat = bstr[m[1]+1:m[2]]
+    mat = cstr[m[1]+1:m[2]]
     cap = ntuple(div(length(m),2)-1,
                  i->cstr[m[2i+1]+1:m[2i+2]])
     RegexMatch(mat, cap, m[1]+1)

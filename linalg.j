@@ -28,7 +28,6 @@ end
 diff(a::Matrix) = diff(a, 1)
 
 diag(A::Matrix) = [ A[i,i] | i=1:min(size(A)) ]
-
 diagm{T}(v::Vector{T}) = (n=length(v);
                           a=zeros(T,n,n);
                           for i=1:n; a[i,i] = v[i]; end;
@@ -61,9 +60,7 @@ function norm(A::Matrix, p)
 end
 
 norm(A::Matrix) = norm(A, 2)
-
 rank(A::Matrix, tol::Real) = count(diag(svd(A)[2]) > tol)
-
 rank(A::Matrix) = rank(A, 0)
 
 # trace(A::Matrix) = sum(diag(A))
@@ -77,12 +74,10 @@ function trace(A::Matrix)
 end
 
 mean(V::Vector) = sum(V) / length(V)
-
 std(V::Vector) = (m = mean(V);
                   sqrt( sum([ (V[i] - m)^2 | i=1:length(V) ]) / (length(V)-1) ))
 
 kron(a::Vector, b::Vector) = [ a[i]*b[j] | i=1:length(a), j=1:length(b) ]
-
 kron(a::Matrix, b::Matrix) = reshape([ a[i,j]*b[k,l] | k=1:size(b,1),
                                                        i=1:size(a,1),
                                                        l=1:size(b,2),
@@ -91,17 +86,14 @@ kron(a::Matrix, b::Matrix) = reshape([ a[i,j]*b[k,l] | k=1:size(b,1),
                                      size(a,2)*size(b,2))
 
 det(a::Matrix) = prod(diag(qr(a)[2]))
-
 inv(a::Matrix) = a \ eye(size(a)[1])
-
 cond(a::Matrix, p) = norm(a, p) * norm(inv(a), p)
-
 cond(a::Matrix) = cond(a, 2)
 
 function issymmetric(A::Matrix)
     m, n = size(A)
-    if m != n; error("matrix must be square, got ", m,"x",n); end
-    for i=1:(n-1), j=(i+1):n
+    if m != n; error("matrix must be square, got $(m)x$(n)"); end
+    for i = 1:(n-1), j = (i+1):n
         if A[i,j] != A[j,i]
             return false
         end
@@ -111,8 +103,8 @@ end
 
 function isuppertriangular(A::Matrix)
     m, n = size(A)
-    if m != n; error("matrix must be square, got ", m,"x",n); end
-    for i=1:n, j=1:n
+    if m != n; error("matrix must be square, got $(m)x$(n)"); end
+    for i = 1:n, j = 1:n
         if A[i,j] != 0 && j < i
             return false
         end
@@ -122,8 +114,8 @@ end
 
 function islowertriangular(A::Matrix)
     m, n = size(A)
-    if m != n; error("matrix must be square, got ", m,"x",n); end
-    for i=1:n, j=n:-1:1
+    if m != n; error("matrix must be square, got $(m)x$(n)"); end
+    for i = 1:n, j = n:-1:1
         if A[i,j] != 0 && j > i
             return false
         end

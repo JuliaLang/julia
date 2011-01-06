@@ -82,11 +82,11 @@ ctranspose(S::SparseMatrix) = ((I,J,V) = find(S);
 function show(S::SparseMatrix)
     for col = 1 : S.n
         for k = S.colptr[col] : (S.colptr[col+1]-1)
-            print("(")
+            print('(')
             show(S.rowval[k])
-            print(",", col, ")   ")
+            print(",$col)   ")
             show(S.nzval[k])
-            print("\n")
+            println()
         end
     end
 end
