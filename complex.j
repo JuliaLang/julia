@@ -31,7 +31,7 @@ function show(c::Complex)
         print(" + ")
     end
     show(i)
-    print("i")
+    print('i')
 end
 
 iscomplex(x::Complex) = true

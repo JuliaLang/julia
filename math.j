@@ -22,7 +22,7 @@ logb(b,x) = log(x)/log(b)
 
 function realsqrt(x::Real)
     if x < 0
-        error("realsqrt: expected non-negative argument, got ", x)
+        error("realsqrt: expected non-negative argument, got $x")
     end
     return sqrt(x)::Real
 end

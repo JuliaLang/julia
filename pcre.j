@@ -13,9 +13,9 @@ function pcre_compile(pattern::String, options::Int32)
                        (Ptr{Uint8}, Int32, Ptr{Ptr{Uint8}}, Ptr{Int32}, Ptr{Uint8}),
                        cstring(pattern), options, errstr, erroff, C_NULL))()
     if regex == C_NULL
-        error("pcre_compile: ", string(errstr[1]),
-              " at position ", erroff[1]+1,
-              " in \"", pattern, "\"")
+        error("pcre_compile: $(errstr[1])",
+              " at position $(erroff[1]+1)",
+              " in $(quote_string(pattern))")
     end
     regex
 end
