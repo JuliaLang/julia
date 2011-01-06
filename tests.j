@@ -167,7 +167,7 @@ b = rand()
 @assert (-1)//3 == -(1//3)
 @assert 1//2 + 3//4 == 5//4
 @assert 1//3 * 3//4 == 1//4
-@assert (1//2) / (3//4) == 2//3
+@assert 1//2 / 3//4 == 2//3
 
 for a = -5:5, b = -5:5
     @assert isequal(a/b, a/b)
