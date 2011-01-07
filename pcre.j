@@ -68,12 +68,10 @@ struct Regex
     pattern::String
     options::Int32
     regex::Ptr{Void}
-    extra::Ptr{Void}
 
     function Regex(p::String, o::Int, s::Bool)
-        re = new(p, int32(o), C_NULL, C_NULL)
+        re = new(p, int32(o), C_NULL)
         re.regex = pcre_compile(re.pattern, re.options)
-        if s; re.extra = pcre_study(re.regex, re.options); end
         re
     end
     Regex(p::String, o::Int)  = Regex(p, o, true)
@@ -85,9 +83,14 @@ end
 # likes so that Julia all the Julia string quoting
 # constructs are correctly handled.
 
-macro r_str(s)
-    Regex(s)
-end
+macro r_str(s); Regex(s); end
+macro ri_str(s); Regex(s, PCRE_CASELESS); end
+macro rm_str(s); Regex(s, PCRE_MULTILINE); end
+macro rs_str(s); Regex(s, PCRE_DOTALL); end
+macro rim_str(s); Regex(s, PCRE_CASELESS|PCRE_MULTILINE); end
+macro ris_str(s); Regex(s, PCRE_CASELESS|PCRE_DOTALL); end
+macro rms_str(s); Regex(s, PCRE_MULTILINE|PCRE_DOTALL); end
+macro rims_str(s); Regex(s, PCRE_CASELESS|PCRE_MULTILINE|PCRE_DOTALL); end
 
 function show(re::Regex)
     print("Regex(")
@@ -107,7 +110,7 @@ show(m::RegexMatch) = show(m.match)
 
 function match(re::Regex, str::String)
     cstr = cstring(str)
-    m = pcre_exec(re.regex, re.extra, cstr, 1, re.options)
+    m = pcre_exec(re.regex, C_NULL, cstr, 1, 0)
     if isempty(m); return RegexMatch((),(),-1); end
     mat = cstr[m[1]+1:m[2]]
     cap = ntuple(div(length(m),2)-1,

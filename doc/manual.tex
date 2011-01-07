@@ -1168,7 +1168,7 @@ Julia lets you pipe the output from these parallel processes to another program 
   world
   true
 \end{verbatim}
-That's something you simply cannot do in the shell, and while you can do it in Perl, Python, or Ruby, it requires unpleasant and tricky mucking around with the \verb|pipe|, \verb|dup2|, \verb|fork|, and \verb|exec| system calls.
+That's something you cannot do in the shell, and while you can do it in Perl, Python, or Ruby, it requires unpleasant and tricky mucking around with the \verb|pipe|, \verb|dup2|, \verb|fork|, and \verb|exec| system calls.
 
 Now we're just going to showboat a bit (apologies for excessive Perlage):
 \begin{verbatim}
@@ -1251,6 +1251,7 @@ Now we're just going to showboat a bit (apologies for excessive Perlage):
   ...3
 \end{verbatim}
 The final example never terminates since the \verb|dup| process reads its own output and duplicates it to \verb|stderr| forever.
+We strongly encourage you to try all these examples to see how they work.
 
 \section{Standard Library Reference}
 
