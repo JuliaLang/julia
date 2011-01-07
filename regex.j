@@ -4,14 +4,53 @@ libpcre = dlopen("libpcre")
 
 PCRE_VERSION = string(ccall(dlsym(libpcre,"pcre_version"), Ptr{Uint8}, ()))
 
+## masks for supported sets of options ##
+
+PCRE_SUPPORTED_COMPILE_OPTIONS =
+    PCRE_ANCHORED              |
+    PCRE_CASELESS              |
+    PCRE_DOLLAR_ENDONLY        |
+    PCRE_DOTALL                |
+    PCRE_EXTENDED              |
+    PCRE_FIRSTLINE             |
+    PCRE_MULTILINE             |
+    PCRE_NEWLINE_CR            |
+    PCRE_NEWLINE_LF            |
+    PCRE_NEWLINE_CRLF          |
+    PCRE_NEWLINE_ANYCRLF       |
+    PCRE_NEWLINE_ANY           |
+    PCRE_NO_AUTO_CAPTURE       |
+    PCRE_NO_START_OPTIMIZE     |
+    PCRE_UCP                   |
+    PCRE_UNGREEDY              |
+    PCRE_NO_UTF8_CHECK
+
+PCRE_SUPPORTED_EXEC_OPTIONS    =
+    PCRE_NEWLINE_CR            |
+    PCRE_NEWLINE_LF            |
+    PCRE_NEWLINE_CRLF          |
+    PCRE_NEWLINE_ANYCRLF       |
+    PCRE_NEWLINE_ANY           |
+    PCRE_NOTBOL                |
+    PCRE_NOTEOL                |
+    PCRE_NOTEMPTY              |
+    PCRE_NOTEMPTY_ATSTART      |
+    PCRE_NO_START_OPTIMIZE     |
+    PCRE_NO_UTF8_CHECK         |
+    PCRE_PARTIAL_HARD          |
+    PCRE_PARTIAL_SOFT
+
+PCRE_SUPPORTED_OPTIONS = PCRE_SUPPORTED_COMPILE_OPTIONS |
+                         PCRE_SUPPORTED_EXEC_OPTIONS
+
 ## low-level PCRE interface ##
 
-function pcre_compile(pattern::String, options::Int32)
+function pcre_compile(pattern::String, options::Int)
     errstr = Array(Ptr{Uint8},1)
     erroff = Array(Int32,1)
     regex = (()->ccall(dlsym(libpcre,"pcre_compile"), Ptr{Void},
                        (Ptr{Uint8}, Int32, Ptr{Ptr{Uint8}}, Ptr{Int32}, Ptr{Uint8}),
-                       cstring(pattern), options, errstr, erroff, C_NULL))()
+                       cstring(pattern), int32(options), errstr, erroff, C_NULL))()
     if regex == C_NULL
         error("pcre_compile: $(errstr[1])",
               " at position $(erroff[1]+1)",
@@ -20,11 +59,13 @@ function pcre_compile(pattern::String, options::Int32)
     regex
 end
 
-function pcre_study(regex::Ptr{Void}, options::Int32)
+# NOTE: options should always be zero in current PCRE
+
+function pcre_study(regex::Ptr{Void}, options::Int)
     errstr = Array(Ptr{Uint8},1)
     extra = (()->ccall(dlsym(libpcre,"pcre_study"), Ptr{Void},
-                      (Ptr{Void}, Int32, Ptr{Ptr{Uint8}}),
-                      regex, options, errstr))()
+                       (Ptr{Void}, Int32, Ptr{Ptr{Uint8}}),
+                       regex, int32(options), errstr))()
     if errstr[1] != C_NULL
         error("pcre_study: ", string(errstr[1]))
     end
@@ -48,14 +89,14 @@ end
 
 function pcre_exec(regex::Ptr{Void}, extra::Ptr{Void},
                    string::ByteString,
-                   offset::Index, options::Int32)
+                   offset::Index, options::Int)
     ncap = pcre_info(regex, extra, PCRE_INFO_CAPTURECOUNT, Int32)
     ovec = Array(Int32, 3*(ncap+1))
     n = ccall(dlsym(libpcre,"pcre_exec"), Int32,
                 (Ptr{Void}, Ptr{Void}, Ptr{Uint8}, Int32, Int32,
                 Int32, Ptr{Int32}, Int32),
                 regex, extra, string, length(string), offset-1,
-                options, ovec, length(ovec))
+                int32(options), ovec, length(ovec))
     if n < -1
         error("pcre_exec: error ", n)
     end
@@ -68,14 +109,23 @@ struct Regex
     pattern::String
     options::Int32
     regex::Ptr{Void}
+    extra::Ptr{Void}
 
-    function Regex(p::String, o::Int, s::Bool)
-        re = new(p, int32(o), C_NULL)
-        re.regex = pcre_compile(re.pattern, re.options)
+    function Regex(pat::String, opts::Int, study::Bool)
+        opts = int32(opts)
+        if (opts & ~PCRE_SUPPORTED_OPTIONS) != 0
+            error("invalid regex option(s)")
+        end
+        re = new(pat, opts, C_NULL, C_NULL)
+        opts &= PCRE_SUPPORTED_COMPILE_OPTIONS
+        re.regex = pcre_compile(re.pattern, opts)
+        if study
+            re.extra = pcre_study(re.regex, 0)
+        end
         re
     end
-    Regex(p::String, o::Int)  = Regex(p, o, true)
     Regex(p::String, s::Bool) = Regex(p, 0, s)
+    Regex(p::String, o::Int)  = Regex(p, o, true)
     Regex(p::String)          = Regex(p, 0, true)
 end
 
@@ -87,10 +137,10 @@ macro r_str(s); Regex(s); end
 macro ri_str(s); Regex(s, PCRE_CASELESS); end
 macro rm_str(s); Regex(s, PCRE_MULTILINE); end
 macro rs_str(s); Regex(s, PCRE_DOTALL); end
-macro rim_str(s); Regex(s, PCRE_CASELESS|PCRE_MULTILINE); end
-macro ris_str(s); Regex(s, PCRE_CASELESS|PCRE_DOTALL); end
-macro rms_str(s); Regex(s, PCRE_MULTILINE|PCRE_DOTALL); end
-macro rims_str(s); Regex(s, PCRE_CASELESS|PCRE_MULTILINE|PCRE_DOTALL); end
+macro rim_str(s); Regex(s, PCRE_CASELESS | PCRE_MULTILINE); end
+macro ris_str(s); Regex(s, PCRE_CASELESS | PCRE_DOTALL); end
+macro rms_str(s); Regex(s, PCRE_MULTILINE | PCRE_DOTALL); end
+macro rims_str(s); Regex(s, PCRE_CASELESS | PCRE_MULTILINE | PCRE_DOTALL); end
 
 function show(re::Regex)
     print("Regex(")
@@ -108,14 +158,14 @@ end
 
 show(m::RegexMatch) = show(m.match)
 
-function match(re::Regex, str::String)
+function match(re::Regex, str::String, opts::Int)
     cstr = cstring(str)
-    m = pcre_exec(re.regex, C_NULL, cstr, 1, 0)
+    m = pcre_exec(re.regex, C_NULL, cstr, 1, int32(opts))
     if isempty(m); return RegexMatch((),(),-1); end
     mat = cstr[m[1]+1:m[2]]
-    cap = ntuple(div(length(m),2)-1,
-                 i->cstr[m[2i+1]+1:m[2i+2]])
+    cap = ntuple(div(length(m),2)-1, i->cstr[m[2i+1]+1:m[2i+2]])
     RegexMatch(mat, cap, m[1]+1)
 end
 
-match(pattern::String, str::String) = match(Regex(pattern, false), str)
+match(re::Regex, str::String) =
+    match(re, str, re.options & PCRE_SUPPORTED_EXEC_OPTIONS)
