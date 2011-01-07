@@ -227,10 +227,6 @@ int jl_load_startup_file()
         ios_printf(ios_stdout, "\n");
         return 1;
     }
-    jl_value_t *ios = global("stdout_stream");
-    if (ios) {
-        jl_set_current_output_stream_obj(ios);
-    }
 #ifdef BOEHM_GC
     GC_gcollect();
 #endif
