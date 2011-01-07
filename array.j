@@ -205,4 +205,4 @@ function reinterpret{T,S}(::Type{T}, a::Array{S})
           b, a, length(b)*sizeof(T))
     b
 end
-reinterpret(t,x) = reinterpret(t,[x])
+reinterpret(t,x) = reinterpret(t,[x])[1]
