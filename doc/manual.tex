@@ -1,11 +1,10 @@
 \documentclass{article}
 
-\usepackage{a4wide}
-
 \newcommand{\thetitle}{The Julia Programming Language}
 
 \usepackage{amsmath}
 \usepackage[hyperfigures,bookmarks,bookmarksopen,bookmarksnumbered,colorlinks,linkcolor=black,citecolor=black,filecolor=blue,menucolor=black,pagecolor=blue,frenchlinks=true,pdftitle={\thetitle}]{hyperref}
+\usepackage[left=1in,top=1in,right=1in,bottom=1.25in,nohead]{geometry}
 
 \title{\thetitle}
 \author{
@@ -1312,7 +1311,7 @@ Another example is \verb|spawn|:
 Now you can write \verb|@spawn a+b| and it will call a function \verb|spawn| on \verb|a+b| wrapped in a thunk.
 This syntax improvement requires macros:
 the function call \verb|spawn(a+b)| couldn't work since \verb|a+b| will be fully evaluated before \verb|spawn| is called.
-\verb|spawn(:(a+b))| is ugly, and also wouldn't work since \verb|spawn| cannot use \verb|:(a+b)| to access the values of local variables \verb|a| and \verb|b|.
+Calling a quoted expression, as in \verb|spawn(:(a+b))|, is ugly and moreover simply wouldn't work since \verb|spawn| cannot use the expression \verb|:(a+b)| by itself to access the values of local variables \verb|a| and \verb|b|.
 
 People often compare macros to inlining (for example, the designer(s) of C++), but this is a pun.
 There is only a superficial similarity of inserting code into other code.
