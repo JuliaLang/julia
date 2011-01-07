@@ -52,7 +52,7 @@
     (filter defined-julia-global (find-possible-globals e)))))
 
 ; return a lambda expression representing a thunk for a top-level expression
-(define (toplevel-expr e)
+(define (expand-toplevel-expr e)
   (if (or (boolean? e) (eof-object? e) (and (pair? e) (eq? (car e) 'line)))
       e
       (let* ((ex (julia-expand0 e))
@@ -77,7 +77,7 @@
 
 (define (jl-parse-string s)
   (parser-wrap (lambda ()
-		 (toplevel-expr (julia-parse s)))))
+		 (expand-toplevel-expr (julia-parse s)))))
 
 (define (has-macrocalls? e)
   (or (and (pair? e) (eq? (car e) 'macrocall))
@@ -101,7 +101,7 @@
 (define (file-toplevel-expr e)
   (if (has-macrocalls? e)
       `(unexpanded ,e)
-      (let ((ex (toplevel-expr e)))
+      (let ((ex (expand-toplevel-expr e)))
 	(cond ((simple-assignment? ex)  (cadr ex))
 	      ((and (length= ex 2) (eq? (car ex) 'body)
 		    (not (lambda-ex? (cadadr ex))))
@@ -140,6 +140,6 @@
 ; expand a piece of raw surface syntax to an executable thunk
 (define (jl-expand-to-thunk expr)
   (parser-wrap (lambda ()
-		 (toplevel-expr expr))))
+		 (expand-toplevel-expr expr))))
 
 ;(load "profile.scm")

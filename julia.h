@@ -690,6 +690,9 @@ void jl_gc_enable();
 void jl_gc_disable();
 int jl_gc_is_enabled();
 void jl_gc_collect();
+void jl_gc_preserve(jl_value_t *v);
+void jl_gc_unpreserve();
+int jl_gc_n_preserved_values();
 DLLEXPORT void jl_gc_add_finalizer(jl_value_t *v, jl_function_t *f);
 #define jl_gc_setmark(v) (((uptrint_t*)(v))[-1]|=1)
 void *alloc_2w();
@@ -701,6 +704,10 @@ void *alloc_4w();
 #define JL_GC_PUSH(...) ;
 #define JL_GC_PUSHARGS(rts,n) ;
 #define JL_GC_POP()
+
+#define jl_gc_preserve(v) ((void)(v))
+#define jl_gc_unpreserve()
+#define jl_gc_n_preserved_values() (0)
 #endif
 
 // tasks
