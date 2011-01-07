@@ -1,7 +1,6 @@
 # showing fundamental objects
 
 print(x) = show(x)
-print(x...) = (for i=x; print(i); end)
 
 show(tn::TypeName) = show(tn.name)
 

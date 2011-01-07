@@ -11,6 +11,7 @@ string(s::String) = s
 
 print(c::Char) = (write(current_output_stream(), c); ())
 print(s::String) = for c = s; print(c); end
+print(x...) = (for i=x; print(i); end)
 println(args...) = print(args..., '\n')
 
 function show(c::Char)
@@ -389,11 +390,11 @@ end
 interp_parse(str::String) = interp_parse(str, true)
 
 macro str(raw)
-    :($interp_parse(raw))
+    interp_parse(raw)
 end
 
 macro S_str(raw)
-    :($interp_parse(raw))
+    interp_parse(raw)
 end
 
 # TODO: S"foo\xe2\x88\x80" == "foo\xe2\x88\x80"

@@ -19,5 +19,5 @@ assert_test(b::Tensor{Bool}) = all(b)
 assert(x) = assert_test(x) ? true : error("Assertion failed.")
 
 macro assert(ex)
-    :(assert_test($ex) ? true : error("Assertion failed: $string(ex)"))
+    :(assert_test($ex) ? true : error("Assertion failed: ", $string(ex)))
 end

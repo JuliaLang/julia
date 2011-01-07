@@ -80,8 +80,7 @@ function start_local_worker()
 
     if fork()==0
         port = [int16(9009)]
-        sockfd = ccall(:open_any_tcp_port, Int32,
-                       (Ptr{Int16},), port)
+        sockfd = ccall(:open_any_tcp_port, Int32, (Ptr{Int16},), port)
         if sockfd == -1
             error("could not bind socket")
         end
