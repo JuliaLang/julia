@@ -28,13 +28,13 @@ ccall(:jl_enable_inference,Void,())
 # load libc
 libc = dlopen("libc")
 
-# io, strings & printing
+# io, strings, printing & regexen
 load("io.j")
 load("string.j")
 load("latin1.j")
 load("utf8.j")
 load("show.j")
-load("pcre.j")
+load("regex.j")
 
 # core math functions
 load("intfuncs.j")
