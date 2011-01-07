@@ -39,3 +39,5 @@ next(a::Real, i) = (a, a+1)
 done(a::Real, i) = (i > a)
 
 isempty(a::Number) = false
+
+reinterpret{T<:Real,S<:Real}(::Type{T}, x::S) = box(T, unbox(S,x))

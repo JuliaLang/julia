@@ -30,6 +30,8 @@ libc = dlopen("libc")
 
 # io, strings, printing & regexen
 load("io.j")
+stdout_stream = make_stdout_stream()
+set_current_output_stream(stdout_stream)
 load("string.j")
 load("latin1.j")
 load("utf8.j")
@@ -56,8 +58,6 @@ load("tree.j")
 load("set.j")
 
 # concurrency & ipc
-stdout_stream = make_stdout_stream()
-set_current_output_stream(stdout_stream)
 load("task.j")
 load("multi.j")
 load("process.j")

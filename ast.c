@@ -64,6 +64,12 @@ value_t fl_invoke_julia_macro(value_t *args, uint32_t nargs)
         JL_GC_POP();
         return fl_cons(symbol("error"), FL_NIL);
     }
+    // protect result from GC, otherwise it could be freed during future
+    // macro expansions, since it will be referenced only from scheme and
+    // not julia.
+    // all calls to invoke-julia-macro happen under a single call to jl_expand,
+    // so the preserved value stack is popped there.
+    jl_gc_preserve(result);
     value_t scm = julia_to_scm(result);
     JL_GC_POP();
     return scm;
@@ -406,12 +412,21 @@ jl_value_t *jl_parse_file(const char *fname)
 // returns either an expression or a thunk
 jl_value_t *jl_expand(jl_value_t *expr)
 {
+    int np = jl_gc_n_preserved_values();
     value_t e = fl_applyn(1, symbol_value(symbol("jl-expand-to-thunk")),
                           julia_to_scm(expr));
-    if (e == FL_T || e == FL_F || e == FL_EOF)
-        return NULL;
-    syntax_error_check(e);
-    return scm_to_julia(e);
+    jl_value_t *result;
+    if (e == FL_T || e == FL_F || e == FL_EOF) {
+        result = NULL;
+    }
+    else {
+        syntax_error_check(e);
+        result = scm_to_julia(e);
+    }
+    while (jl_gc_n_preserved_values() > np) {
+        jl_gc_unpreserve();
+    }
+    return result;
 }
 
 // wrap expr in a thunk AST

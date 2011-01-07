@@ -622,6 +622,9 @@ static Value *generic_box(jl_value_t *targ, jl_value_t *x, jl_codectx_t *ctx)
     Value *vx = emit_unboxed(x, ctx);
     if (vx->getType()->getPrimitiveSizeInBits() != nb)
         jl_errorf("box: expected argument with %d bits", nb);
+    const Type *llvmt = julia_type_to_llvm(bt);
+    if (vx->getType() != llvmt)
+        vx = builder.CreateBitCast(vx, llvmt);
     return mark_julia_type(vx, bt);
 }
 

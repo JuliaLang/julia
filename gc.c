@@ -80,6 +80,23 @@ static size_t collect_interval = 8192*1024;
 static htable_t finalizer_table;
 static arraylist_t to_finalize;
 
+static arraylist_t preserved_values;
+
+int jl_gc_n_preserved_values()
+{
+    return preserved_values.len;
+}
+
+void jl_gc_preserve(jl_value_t *v)
+{
+    arraylist_push(&preserved_values, (void*)v);
+}
+
+void jl_gc_unpreserve()
+{
+    (void)arraylist_pop(&preserved_values);
+}
+
 static void schedule_finalization(void *o)
 {
     arraylist_push(&to_finalize, o);
@@ -503,9 +520,18 @@ static void gc_mark()
     jl_mark_box_caches();
 
     size_t i;
+
+    // stuff randomly preserved
+    for(i=0; i < preserved_values.len; i++) {
+        GC_Markval((jl_value_t*)preserved_values.items[i]);
+    }
+
+    // objects currently being finalized
     for(i=0; i < to_finalize.len; i++) {
         GC_Markval(to_finalize.items[i]);
     }
+    // find unmarked objects that need to be finalized.
+    // this must happen last.
     for(i=0; i < finalizer_table.size; i+=2) {
         if (finalizer_table.table[i+1] != HT_NOTFOUND) {
             GC_Markval(finalizer_table.table[i+1]);
@@ -636,4 +662,5 @@ void jl_gc_init()
 
     htable_new(&finalizer_table, 0);
     arraylist_new(&to_finalize, 0);
+    arraylist_new(&preserved_values, 0);
 }
