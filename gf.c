@@ -281,6 +281,9 @@ extern jl_function_t *jl_typeinf_func;
 static char *type_summary(jl_value_t *t);
 #endif
 
+static jl_tuple_t *ml_matches(jl_methlist_t *ml, jl_value_t *type,
+                              jl_tuple_t *t, jl_sym_t *name);
+
 static jl_function_t *cache_method(jl_methtable_t *mt, jl_tuple_t *type,
                                    jl_function_t *method, jl_tuple_t *decl,
                                    jl_tuple_t *sparams)
@@ -362,8 +365,9 @@ static jl_function_t *cache_method(jl_methtable_t *mt, jl_tuple_t *type,
     // and the types we find should be bigger.
     if (type->length > mt->max_args &&
         jl_is_seq_type(jl_tupleref(decl,decl->length-1))) {
-        jl_tuple_t *limited = jl_alloc_tuple(mt->max_args+2);
-        for(i=0; i < mt->max_args+1; i++) {
+        size_t nspec = mt->max_args+2;
+        jl_tuple_t *limited = jl_alloc_tuple(nspec);
+        for(i=0; i < nspec-1; i++) {
             jl_tupleset(limited, i, jl_tupleref(type, i));
         }
         jl_value_t *lasttype = jl_tupleref(type,i-1);
@@ -395,6 +399,19 @@ static jl_function_t *cache_method(jl_methtable_t *mt, jl_tuple_t *type,
         }
         else {
             jl_tupleset(type, i, jl_tupleref(decl,decl->length-1));
+        }
+        // now there is a problem: the computed signature is more
+        // general than just the given arguments, so it might conflict
+        // with another definition that doesn't have cache instances yet.
+        // to fix this, we insert dummy cache entries for all intersections
+        // of this signature and definitions. those dummy entries will
+        // supersede this one in conflicted cases, alerting us that there
+        // should actually be a cache miss.
+        temp = (jl_value_t*)
+            ml_matches(mt->defs, (jl_value_t*)type, jl_null, lambda_sym);
+        while (temp != (jl_value_t*)jl_null) {
+            jl_method_cache_insert(mt, (jl_tuple_t*)jl_tupleref(temp, 0), NULL);
+            temp = jl_tupleref(temp, 4);
         }
     }
 
@@ -895,6 +912,8 @@ static void print_methlist(char *name, jl_methlist_t *ml)
     while (ml != NULL) {
         ios_printf(ios_stdout, "%s", name);
         jl_show((jl_value_t*)ml->sig);
+        if (ml->func == NULL)  // mark dummy cache entries
+            ios_printf(ios_stdout, " *");
         //if (ml->func && ml->func->linfo && ml->func->linfo->ast &&
         //    ml->func->linfo->inferred) {
         //    jl_show(ml->func->linfo->ast);

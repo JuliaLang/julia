@@ -328,7 +328,8 @@ static void gc_mark_methlist(jl_methlist_t *ml)
         gc_setmark(ml);
         GC_Markval(ml->sig);
         GC_Markval(ml->tvars);
-        GC_Markval(ml->func);
+        if (ml->func != NULL)
+            GC_Markval(ml->func);
         ml = ml->next;
     }
 }

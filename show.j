@@ -80,7 +80,7 @@ end
 function show(e::TypeError)
     ctx = isempty(e.context) ? "" : "in $(e.context), "
     println("type error: $(e.func): ",
-            "$ctx expected $(e.expected), ",
+            "$(ctx)expected $(e.expected), ",
             "got $(typeof(e.got))")
 end
 
