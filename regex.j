@@ -143,11 +143,19 @@ macro rms_str(s); Regex(s, PCRE_MULTILINE | PCRE_DOTALL); end
 macro rims_str(s); Regex(s, PCRE_CASELESS | PCRE_MULTILINE | PCRE_DOTALL); end
 
 function show(re::Regex)
-    print("Regex(")
-    show(re.pattern)
-    print(',')
-    show(re.options)
-    print(')')
+    if (re.options & ~(PCRE_CASELESS | PCRE_MULTILINE | PCRE_DOTALL)) == 0
+        print('r')
+        if re.options & PCRE_CASELESS  != 0; print('i'); end
+        if re.options & PCRE_MULTILINE != 0; print('m'); end
+        if re.options & PCRE_DOTALL    != 0; print('s'); end
+        print_quoted_literal(re.pattern)
+    else
+        print("Regex(")
+        show(re.pattern)
+        print(',')
+        show(re.options)
+        print(')')
+    end
 end
 
 struct RegexMatch
