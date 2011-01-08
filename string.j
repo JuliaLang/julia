@@ -573,7 +573,6 @@ function lpad(s::String, n::Int, p::String)
     l = strlen(p)
     q = div(m,l)
     r = m - q*l
-    # TODO: this is correct but inefficient for long p
     p^q * (r > 0 ? p[1:chr2ind(p,r)] : "") * s
 end
 
@@ -583,7 +582,6 @@ function rpad(s::String, n::Int, p::String)
     l = strlen(p)
     q = div(m,l)
     r = m - q*l
-    # TODO: this is correct but inefficient for long p
     s * p^q * (r > 0 ? p[1:chr2ind(p,r)] : "")
 end
 
@@ -612,10 +610,10 @@ function parse_int{T<:Int}(::Type{T}, s::String, base::Int)
     return n
 end
 
-bin(s::String) = parse_int(Int64, s,  2)
-oct(s::String) = parse_int(Int64, s,  8)
-dec(s::String) = parse_int(Int64, s, 10)
-hex(s::String) = parse_int(Int64, s, 16)
+bin_parse(s::String) = parse_int(Int64, s,  2)
+oct_parse(s::String) = parse_int(Int64, s,  8)
+dec_parse(s::String) = parse_int(Int64, s, 10)
+hex_parse(s::String) = parse_int(Int64, s, 16)
 
 ## integer to string functions ##
 
@@ -632,6 +630,13 @@ function uint2str(n::Int, b::Int)
 end
 
 uint2str(n::Int, b::Int, len::Int) = lpad(uint2str(n,b),len,'0')
+
+# TODO: support all kinds of Ints
+
+bin(n::Int) = uint2str(n,  2)
+oct(n::Int) = uint2str(n,  8)
+dec(n::Int) = uint2str(n, 10)
+hex(n::Int) = uint2str(n, 16)
 
 ## lexicographically compare byte arrays (used by Latin-1 and UTF-8) ##
 
