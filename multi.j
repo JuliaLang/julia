@@ -74,7 +74,7 @@ end
 
 function start_local_worker()
     fds = Array(Int32, 2)
-    ccall(dlsym(libc,"pipe"), Int32, (Ptr{Int32},), fds)
+    ccall(dlsym(libc, :pipe), Int32, (Ptr{Int32},), fds)
     rdfd = fds[1]
     wrfd = fds[2]
 
@@ -88,15 +88,15 @@ function start_local_worker()
         write(io, port[1])
         close(io)
         # close stdin; workers will not use it
-        ccall(dlsym(libc,"close"), Int32, (Int32,), 0)
+        ccall(dlsym(libc, :close), Int32, (Int32,), 0)
 
-        connectfd = ccall(dlsym(libc,"accept"), Int32,
+        connectfd = ccall(dlsym(libc, :accept), Int32,
                           (Int32, Ptr{Void}, Ptr{Void}),
                           sockfd, C_NULL, C_NULL)
         jl_worker(connectfd)
-        ccall(dlsym(libc,"close"), Int32, (Int32,), connectfd)
-        ccall(dlsym(libc,"close"), Int32, (Int32,), sockfd)
-        ccall(dlsym(libc,"exit") , Void , (Int32,), 0)
+        ccall(dlsym(libc, :close), Int32, (Int32,), connectfd)
+        ccall(dlsym(libc, :close), Int32, (Int32,), sockfd)
+        ccall(dlsym(libc, :exit) , Void , (Int32,), 0)
     end
     io = fdio(rdfd)
     port = read(io, Int16)

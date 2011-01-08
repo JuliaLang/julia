@@ -86,19 +86,19 @@ other(p::PipeOut) = p.pipe.in
 
 function make_pipe()
     fds = Array(Int32, 2)
-    ret = ccall(dlsym(libc,"pipe"), Int32, (Ptr{Int32},), fds)
-    system_error("make_pipe", ret != 0)
+    ret = ccall(dlsym(libc, :pipe), Int32, (Ptr{Int32},), fds)
+    system_error(:make_pipe, ret != 0)
     Pipe(FileDes(fds[2]), FileDes(fds[1]))
 end
 
 function dup2(fd1::FileDes, fd2::FileDes)
-    ret = ccall(dlsym(libc,"dup2"), Int32, (Int32, Int32), fd1.fd, fd2.fd)
-    system_error("dup2", ret == -1)
+    ret = ccall(dlsym(libc, :dup2), Int32, (Int32, Int32), fd1.fd, fd2.fd)
+    system_error(:dup2, ret == -1)
 end
 
 function close(fd::FileDes)
-    ret = ccall(dlsym(libc,"close"), Int32, (Int32,), fd.fd)
-    system_error("close", ret != 0)
+    ret = ccall(dlsym(libc, :close), Int32, (Int32,), fd.fd)
+    system_error(:close, ret != 0)
 end
 
 typealias Executable Union((String,Tuple),Function)

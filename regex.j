@@ -2,7 +2,7 @@ load("pcre_h.j")
 
 libpcre = dlopen("libpcre")
 
-PCRE_VERSION = string(ccall(dlsym(libpcre,"pcre_version"), Ptr{Uint8}, ()))
+PCRE_VERSION = string(ccall(dlsym(libpcre, :pcre_version), Ptr{Uint8}, ()))
 
 ## masks for supported sets of options ##
 
@@ -52,7 +52,7 @@ PCRE_OPTIONS_MASK = PCRE_COMPILE_MASK | PCRE_EXECUTE_MASK
 function pcre_compile(pattern::String, options::Int)
     errstr = Array(Ptr{Uint8},1)
     erroff = Array(Int32,1)
-    regex = (()->ccall(dlsym(libpcre,"pcre_compile"), Ptr{Void},
+    regex = (()->ccall(dlsym(libpcre, :pcre_compile), Ptr{Void},
                        (Ptr{Uint8}, Int32, Ptr{Ptr{Uint8}}, Ptr{Int32}, Ptr{Uint8}),
                        cstring(pattern), int32(options), errstr, erroff, C_NULL))()
     if regex == C_NULL
@@ -67,7 +67,7 @@ end
 
 function pcre_study(regex::Ptr{Void}, options::Int)
     errstr = Array(Ptr{Uint8},1)
-    extra = (()->ccall(dlsym(libpcre,"pcre_study"), Ptr{Void},
+    extra = (()->ccall(dlsym(libpcre, :pcre_study), Ptr{Void},
                        (Ptr{Void}, Int32, Ptr{Ptr{Uint8}}),
                        regex, int32(options), errstr))()
     if errstr[1] != C_NULL
@@ -78,7 +78,7 @@ end
 
 function pcre_info{T}(regex::Ptr{Void}, extra::Ptr{Void}, what::Int32, ::Type{T})
     buf = Array(Uint8,sizeof(T))
-    ret = ccall(dlsym(libpcre,"pcre_fullinfo"), Int32,
+    ret = ccall(dlsym(libpcre, :pcre_fullinfo), Int32,
                 (Ptr{Void}, Ptr{Void}, Int32, Ptr{Uint8}),
                 regex, extra, what, buf)
     if ret != 0
@@ -96,7 +96,7 @@ function pcre_exec(regex::Ptr{Void}, extra::Ptr{Void},
                    offset::Index, options::Int)
     ncap = pcre_info(regex, extra, PCRE_INFO_CAPTURECOUNT, Int32)
     ovec = Array(Int32, 3*(ncap+1))
-    n = ccall(dlsym(libpcre,"pcre_exec"), Int32,
+    n = ccall(dlsym(libpcre, :pcre_exec), Int32,
                 (Ptr{Void}, Ptr{Void}, Ptr{Uint8}, Int32, Int32,
                 Int32, Ptr{Int32}, Int32),
                 regex, extra, string, length(string), offset-1,

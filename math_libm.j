@@ -38,8 +38,8 @@ for f = {:lrint, :lround, :ilogb}
     end
 end
 
-abs(x::Float64) = ccall(dlsym(libm,"fabs"), Float64, (Float64,), x)
-abs(x::Float32) = ccall(dlsym(libm,"fabsf"), Float32, (Float32,), x)
+abs(x::Float64) = ccall(dlsym(libm, :fabs), Float64, (Float64,), x)
+abs(x::Float32) = ccall(dlsym(libm, :fabsf), Float32, (Float32,), x)
 @vectorize abs
 
 for f = {:atan2, :pow, :fmod, :copysign, :hypot, :fmin, :fmax, :fdim}
@@ -56,8 +56,8 @@ for f = {:atan2, :pow, :fmod, :copysign, :hypot, :fmin, :fmax, :fdim}
     end
 end
 
-ldexp(x::Float64,e::Int32) = ccall(dlsym(libm,"ldexp"), Float64, (Float64,Int32), x, e)
-ldexp(x::Float32,e::Int32) = ccall(dlsym(libm,"ldexpf"), Float32, (Float32,Int32), x, e)
+ldexp(x::Float64,e::Int32) = ccall(dlsym(libm, :ldexp), Float64, (Float64,Int32), x, e)
+ldexp(x::Float32,e::Int32) = ccall(dlsym(libm, :ldexpf), Float32, (Float32,Int32), x, e)
 
 rand() = ccall(:rand_double, Float64, ())
 randf() = ccall(:rand_float, Float32, ())

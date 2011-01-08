@@ -646,7 +646,7 @@ hex(n::Int, l::Int) = lpad(hex(n), l, '0')
 ## lexicographically compare byte arrays (used by Latin-1 and UTF-8) ##
 
 function lexcmp(a::Array{Uint8,1}, b::Array{Uint8,1})
-    c = ccall(dlsym(libc,"memcmp"), Int32,
+    c = ccall(dlsym(libc, :memcmp), Int32,
               (Ptr{Uint8}, Ptr{Uint8}, Size),
               a, b, min(length(a),length(b)))
     c < 0 ? -1 : c > 0 ? +1 : cmp(length(a),length(b))
@@ -656,7 +656,7 @@ end
 
 function memchr(a::Array{Uint8,1}, b::Int)
     p = pointer(a)
-    q = ccall(dlsym(libc,"memchr"), Ptr{Uint8},
+    q = ccall(dlsym(libc, :memchr), Ptr{Uint8},
               (Ptr{Uint8}, Int32, Size),
               p, int32(b), length(a))
     if q == C_NULL
