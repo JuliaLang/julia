@@ -110,13 +110,13 @@ end
 ## object-oriented Regex interface ##
 
 struct Regex
-    pattern::String
+    pattern::ByteString
     options::Int32
     regex::Ptr{Void}
     extra::Ptr{Void}
 
     function Regex(pat::String, opts::Int, study::Bool)
-        opts = int32(opts)
+        pat = cstring(pat); opts = int32(opts)
         if (opts & ~PCRE_OPTIONS_MASK) != 0
             error("invalid regex option(s)")
         end
