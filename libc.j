@@ -27,12 +27,14 @@ end
 function exec(cmd::String, args...)
     cmd = cstring(cmd)
     arr = Array(Ptr{Uint8}, length(args)+2)
-    arr[1] = cmd
-    for i = 1:length(args); arr[i+1] = cstring(args[i]); end
+    arr[1] = cmd.data
+    for i = 1:length(args)
+        arr[i+1] = cstring(args[i]).data
+    end
     arr[length(args)+2] = C_NULL
     ccall(dlsym(libc, :execvp), Int32,
           (Ptr{Uint8}, Ptr{Ptr{Uint8}}),
-          cmd, arr)
+          arr[1], arr)
     system_error(:exec, true)
 end
 
