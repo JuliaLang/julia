@@ -1,22 +1,26 @@
 ## char conversions ##
 
-check_char(x::Char) =
-    ('\ud800' <= x <= '\udfff' || '\U10ffff' < x) ?
-        error("invalid Unicode code point: U+", hex(x)) : x
-
-convert(::Type{Char}, x::Bool   ) = check_char(box(Char,sext32(unbox8(x))))
-convert(::Type{Char}, x::Int8   ) = check_char(box(Char,sext32(unbox8(x))))
-convert(::Type{Char}, x::Uint8  ) = check_char(box(Char,zext32(unbox8(x))))
-convert(::Type{Char}, x::Int16  ) = check_char(box(Char,sext32(unbox16(x))))
-convert(::Type{Char}, x::Uint16 ) = check_char(box(Char,zext32(unbox16(x))))
-convert(::Type{Char}, x::Int32  ) = check_char(box(Char,unbox32(x)))
-convert(::Type{Char}, x::Uint32 ) = check_char(box(Char,unbox32(x)))
-convert(::Type{Char}, x::Int64  ) = check_char(box(Char,trunc32(unbox64(x))))
-convert(::Type{Char}, x::Uint64 ) = check_char(box(Char,trunc32(unbox64(x))))
-convert(::Type{Char}, x::Float32) = check_char(box(Char,fptoui32(unbox32(x))))
-convert(::Type{Char}, x::Float64) = check_char(box(Char,fptoui32(unbox64(x))))
+convert(::Type{Char}, x::Bool   ) = box(Char,sext32(unbox8(x)))
+convert(::Type{Char}, x::Int8   ) = box(Char,sext32(unbox8(x)))
+convert(::Type{Char}, x::Uint8  ) = box(Char,zext32(unbox8(x)))
+convert(::Type{Char}, x::Int16  ) = box(Char,sext32(unbox16(x)))
+convert(::Type{Char}, x::Uint16 ) = box(Char,zext32(unbox16(x)))
+convert(::Type{Char}, x::Int32  ) = box(Char,unbox32(x))
+convert(::Type{Char}, x::Uint32 ) = box(Char,unbox32(x))
+convert(::Type{Char}, x::Int64  ) = box(Char,trunc32(unbox64(x)))
+convert(::Type{Char}, x::Uint64 ) = box(Char,trunc32(unbox64(x)))
+convert(::Type{Char}, x::Float32) = box(Char,fptoui32(unbox32(x)))
+convert(::Type{Char}, x::Float64) = box(Char,fptoui32(unbox64(x)))
 
 char(x) = convert(Char, x)
+
+function safe_char(x)
+    c = char(x)
+    if '\ud800' <= c <= '\udfff' || '\U10ffff' < c
+        error("invalid Unicode code point: U+", hex(c))
+    end
+    c
+end
 
 int(x::Char) = int32(x)
 uint(x::Char) = uint32(x)

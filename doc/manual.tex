@@ -944,6 +944,7 @@ Option 2 is not really a solution, either, but a pragmatic compromise that gets 
 Frankly, none of these options is good enough for something as fundamental and performance-critical as string processing.
 
 \subsection{The Partial Function Approach}
+\sec{partial-function-strings}
 
 Our approach is to change the abstraction of what a string is instead of choosing any of the above.
 Rather than conceptualizing a string as a function from indices to characters, we conceptualize a string as a \emph{partial function} from indices to characters.
@@ -1065,11 +1066,29 @@ Arithmetic with \verb|Char| values promotes them to \verb|Int32|, however, requi
   julia> char(ans)
   'B'
 \end{verbatim}
-This allows a series of intermediate computations to be done efficiently, while safely checking that the final value is a valid Unicode code point when converting it back to \verb|Char|.
+For performance, the \verb|char| conversion does not check that the character value is a valid Unicode code point.
+If you want to check for valid code points, use the \verb|safe_char| conversion instead:
+\begin{verbatim}
+  julia> char(0x110000)
+  '\U00110000'
+
+  julia> safe_char(0x110000)
+  invalid Unicode code point: U+110000
+\end{verbatim}
+The fact that any arithmetic with \verb|Char|s promotes to \verb|Int32| allows a series of intermediate computations to be done efficiently, only checking that the final value is a valid Unicode code point.
 
 \subsection{String Literals}
 
-Before we can proceed with concrete examples of string processing, we present string literals:
+As described in the abstract in \Section{partial-function-strings}, in Julia, strings are abstracted as partial functions from indices to characters.
+Thus, the \verb|Char| type is the building block of all strings.
+Usually, (but not necessarily), indices correspond to byte offsets into some sort of underlying encoding of a string.
+
+In Julia, bare string literals always produce one of two types of strings:
+\verb|Latin1String| or \verb|UTF8String|.
+Both of these types of strings are based on a byte encoding of \verb|Char| values.
+\verb|Latin1String| uses a fixed-width, single-byte encoding, while \verb|UTF8String| uses the variable-width, UTF-8 encoding.
+
+Here is the most basic string literal example:
 \begin{verbatim}
   julia> "hello, world"
   "hello, world"
@@ -1080,7 +1099,7 @@ What is the actual type and structure this string object?
   julia> dump(ans)
   Latin1String(data=[104,101,108,108,111,...,119,111,114,108,100],)
 \end{verbatim}
-Here is the actual declaration of the basic string types from \verb|boot.j|:
+Here are the actual declarations of the basic string types from Julia's bootstrapping code:
 \begin{verbatim}
   type String
 
@@ -1093,7 +1112,7 @@ Here is the actual declaration of the basic string types from \verb|boot.j|:
   end
 \end{verbatim}
 \verb|String| is an abstract supertype, used to refer to all concrete implementations of the string interface.
-The \verb|Latin1String| and \verb|UTF8String| classes are both then wrappers around an array of bytes (\verb|Uint8| values).
+The \verb|Latin1String| and \verb|UTF8String| classes are both thin wrappers around an array of bytes (\verb|Uint8| values), holding the .
 The only difference is in their interpretation:
 \begin{enumerate}
 \item In a \verb|Latin1String| bytes and characters are one-to-one, and each byte encodes its Unicode code point directly, the way classic C strings are used.
