@@ -92,8 +92,8 @@ end
 show(e::SystemError) = println("$(e.prefix): $(strerror(e.errnum))")
 show(e::DivideByZeroError) = println("error: integer divide by zero")
 show(e::StackOverflowError) = println("error: stack overflow")
-show(e::ErrorException) = println("error: $(e.msg)")
 show(e::EOFError) = println("read: end of file")
+show(e::ErrorException) = println(e.msg)
 
 dump(t::Type) = print(t)
 dump(t::Tuple) = print(t)
