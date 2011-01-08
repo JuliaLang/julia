@@ -11,7 +11,7 @@ accumtuple(t::Tuple, r, i, step) = ntuple(length(r), n->t[i+step*(n-1)])
 ## iterating ##
 
 start(t::Tuple) = 1
-done(t::Tuple, i) = (i > length(t))
+done(t::Tuple, i) = (length(t) < i)
 next(t::Tuple, i) = (t[i], i+1)
 
 ## mapping ##

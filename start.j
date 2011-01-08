@@ -7,13 +7,13 @@ load("error.j")
 
 # core numeric operations & types
 load("bool.j")
+load("number.j")
 load("int.j")
 load("float.j")
-load("number.j")
 load("pointer.j")
+load("char.j")
 load("operators.j")
 load("reduce.j")
-load("char.j")
 
 # core data structures (used by type inference)
 load("tensor.j")
