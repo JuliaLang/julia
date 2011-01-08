@@ -3,38 +3,48 @@
 (<:)(T, S) = subtype(T,S)
 (>:)(T, S) = subtype(S,T)
 
+## comparison ##
+
+==(x, y) = false
+!=(x, y) = !(x == y)
+==(x::Number, y::Number) = (==)(promote(x,y)...)
+
+< (x::Real, y::Real) = (<)(promote(x,y)...)
+> (x::Real, y::Real) = (y < x)
+<=(x::Real, y::Real) = (x < y) || (x == y)
+>=(x::Real, y::Real) = (x > y) || (x == y)
+
+isequal{T}(x::T, y::T) = (x==y)
+isequal(x, y) = isequal(promote(x,y)...)
+
 ## definitions providing basic traits of arithmetic operators ##
 
-# fallback definitions for emulating N-arg operators with 2-arg definitions
 (+)() = 0
-(+)(x::Number) = x
-(+)(a,b,c) = (+)((+)(a,b),c)
-(+)(a,b,c,d) = (+)((+)((+)(a,b),c),d)
-(+)(a,b,c,d,e) = (+)((+)((+)((+)(a,b),c),d),e)
-function (+)(x1, x2, x3, xs...)
-    accum = (+)((+)(x1,x2),x3)
-    for x = xs
-        accum = accum + x
-    end
-    accum
-end
-
 (*)() = 1
-(*)(x::Number) = x
-(*)(a,b,c) = (*)((*)(a,b),c)
-(*)(a,b,c,d) = (*)((*)((*)(a,b),c),d)
-(*)(a,b,c,d,e) = (*)((*)((*)((*)(a,b),c),d),e)
-function (*)(x1, x2, x3, xs...)
-    accum = (*)((*)(x1,x2),x3)
-    for x = xs
-        accum = accum * x
-    end
-    accum
-end
-
 (&)() = error("zero-argument & is ambiguous")
 (|)() = error("zero-argument | is ambiguous")
 ($)() = error("zero-argument \$ is ambiguous")
+
+(+)(x::Number) = x
+(*)(x::Number) = x
+(&)(x::Int) = x
+(|)(x::Int) = x
+($)(x::Int) = x
+
+for op = (:+, :*, :&, :|, :$)
+    @eval begin
+        ($op)(a,b,c) = ($op)(($op)(a,b),c)
+        ($op)(a,b,c,d) = ($op)(($op)(($op)(a,b),c),d)
+        ($op)(a,b,c,d,e) = ($op)(($op)(($op)(($op)(a,b),c),d),e)
+        function ($op)(a, b, c, xs...)
+            accum = ($op)(($op)(a,b),c)
+            for x = xs
+                accum = ($op)(accum,x)
+            end
+            accum
+        end
+    end
+end
 
 (\)(x::Number, y::Number) = y/x
 
@@ -64,20 +74,6 @@ sizeof(t::Type) = error(strcat("size of type ",t," unknown"))
 
 zero(x) = oftype(x,0)
 one(x)  = oftype(x,1)
-
-## comparison ##
-
-==(x, y) = false
-!=(x, y) = !(x == y)
-==(x::Number, y::Number) = (==)(promote(x,y)...)
-
-< (x::Real, y::Real) = (<)(promote(x,y)...)
-> (x::Real, y::Real) = (y < x)
-<=(x::Real, y::Real) = (x < y) || (x == y)
->=(x::Real, y::Real) = (x > y) || (x == y)
-
-isequal{T}(x::T, y::T) = (x==y)
-isequal(x, y) = isequal(promote(x,y)...)
 
 ## promotion mechanism ##
 

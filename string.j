@@ -264,6 +264,16 @@ string(x) = string(ccall(:jl_show_to_string, Ptr{Uint8}, (Any,), x))
 
 cstring(args...) = print_to_string(print, args...)
 
+## printing literal quoted string data ##
+
+function print_quoted_literal(s::String)
+    print('"')
+    for c = s
+        c == '"' ? print("\\\"") : print(c)
+    end
+    print('"')
+end
+
 ## string escaping & unescaping ##
 
 escape_nul(s::String, i::Index) =
@@ -277,7 +287,7 @@ function print_escaped(s::String, q::Bool, xmax::Char)
         c == '\0'     ? print(escape_nul(s,j)) :
         c == '\\'     ? print("\\\\") :
         c == '\e'     ? print("\\e") :
-   q && c == '\"'     ? print("\\\"") :
+   q && c == '"'      ? print("\\\"") :
         c == '$'      ? print("\\\$") :
         iswprint(c)   ? print(c) :
         7 <= c <= 13  ? print('\\', "abtnvfr"[c-6]) :
