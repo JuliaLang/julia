@@ -291,9 +291,9 @@ function print_escaped(s::String, q::Bool, xmax::Char)
         c == '$'      ? print(L"\$") :
         iswprint(c)   ? print(c) :
         7 <= c <= 13  ? print('\\', "abtnvfr"[c-6]) :
-        c <= xmax     ? print(L"\x", uint2str(c,16,2)) :
-        c <= '\uffff' ? print(L"\u", uint2str(c,16,4)) :
-                        print(L"\U", uint2str(c,16,8))
+        c <= xmax     ? print(L"\x", hex(c,2)) :
+        c <= '\uffff' ? print(L"\u", hex(c,4)) :
+                        print(L"\U", hex(c,8))
         i = j
     end
     if q; print('"'); end
@@ -631,12 +631,17 @@ end
 
 uint2str(n::Int, b::Int, len::Int) = lpad(uint2str(n,b),len,'0')
 
-# TODO: support all kinds of Ints
+# TODO: support signed Ints too
 
 bin(n::Int) = uint2str(n,  2)
 oct(n::Int) = uint2str(n,  8)
 dec(n::Int) = uint2str(n, 10)
 hex(n::Int) = uint2str(n, 16)
+
+bin(n::Int, l::Int) = lpad(bin(n), l, '0')
+oct(n::Int, l::Int) = lpad(oct(n), l, '0')
+dec(n::Int, l::Int) = lpad(dec(n), l, '0')
+hex(n::Int, l::Int) = lpad(hex(n), l, '0')
 
 ## lexicographically compare byte arrays (used by Latin-1 and UTF-8) ##
 
