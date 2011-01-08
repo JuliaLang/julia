@@ -623,8 +623,17 @@ static Value *generic_box(jl_value_t *targ, jl_value_t *x, jl_codectx_t *ctx)
     if (vx->getType()->getPrimitiveSizeInBits() != nb)
         jl_errorf("box: expected argument with %d bits", nb);
     const Type *llvmt = julia_type_to_llvm(bt);
-    if (vx->getType() != llvmt)
-        vx = builder.CreateBitCast(vx, llvmt);
+    if (vx->getType() != llvmt) {
+        if (vx->getType()->isPointerTy() && !llvmt->isPointerTy()) {
+            vx = builder.CreatePtrToInt(vx, llvmt);
+        }
+        else if (!vx->getType()->isPointerTy() && llvmt->isPointerTy()) {
+            vx = builder.CreateIntToPtr(vx, llvmt);
+        }
+        else {
+            vx = builder.CreateBitCast(vx, llvmt);
+        }
+    }
     return mark_julia_type(vx, bt);
 }
 
