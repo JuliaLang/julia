@@ -5,6 +5,7 @@
 \usepackage{amsmath}
 \usepackage[hyperfigures,bookmarks,bookmarksopen,bookmarksnumbered,colorlinks,linkcolor=black,citecolor=black,filecolor=blue,menucolor=black,pagecolor=blue,frenchlinks=true,pdftitle={\thetitle}]{hyperref}
 \usepackage[left=1in,top=1in,right=1in,bottom=1.25in,nohead]{geometry}
+\usepackage[utf8x]{inputenc}
 
 \title{\thetitle}
 \author{
@@ -38,11 +39,11 @@ Fortunately, modern language design and compiler techniques make it possible to 
 However, an open-source language with these characteristics has not emerged.
 Our project, Julia, fills this gap.
 
-The syntax of Julia is directly derived from Matlab, and as a consequence, any Matlab programmer should feel immediately comfortable with Julia.
+The syntax of Julia is directly derived from Matlab, and consequently, any Matlab programmer should feel immediately comfortable with Julia.
 While Matlab is quite effective for prototyping and exploring numerical linear algebra, for programming tasks outside of this relatively narrow scope, Matlab has severe limitations.
 Julia maintains the ease and expressiveness of Matlab for high-level numerical computing, but transcends its general programming limitations.
 To that end, it borrows heavily from the C programming language.
-It is additionally strongly influenced, conceptually, if not syntactically, by the lineage of dynamic programming languages:
+It is additionally strongly influenced conceptually by the lineage of dynamic programming languages:
 Lisp, Perl, Python and Ruby.
 
 \section{Getting Started}
@@ -107,7 +108,7 @@ The default type for an integer literal is \verb|Int32|:
   julia> typeof(1)
   Int32
 \end{verbatim}
-Larger integer literals that cannot be represented in 32 bits but can be represented in 64 bits will create 64-bit integers:
+Larger integer literals that cannot be represented in 32 bits but that can be represented in 64 bits will create 64-bit integers:
 \begin{verbatim}
   julia> typeof(4294967296)
   Int64
@@ -174,7 +175,7 @@ The above results are all \verb|Float64| values. There is no literal format for 
   julia> typeof(ans)
   Float32
 \end{verbatim}
-There are three specified floating point values that do not correspond to a point on the real number line: plus and minus infinity, and not-a-number (NaN).
+There are three specified standard floating point values that do not correspond to a point on the real number line: plus infinity, minus infinity, and not-a-number (NaN).
 Here are their literal input forms:
 \begin{verbatim}
   julia> Inf
@@ -186,7 +187,7 @@ Here are their literal input forms:
   julia> NaN
   NaN
 \end{verbatim}
-As specified by the IEEE 754 standard, these floating point values are the results of certain arithmetic operations:
+By the IEEE 754 standard, these floating point values are the results of certain arithmetic operations:
 \begin{verbatim}
   julia> 1/0
   Inf
@@ -967,6 +968,49 @@ Alternately, you can rewrite the code to use a Unicode character iterator instea
 Moreover, if you always consider string indices as opaque objects, and never do arithmetic with them (iterating through indices counts as arithmetic: \verb|k+=1|), then as long as you only index into a string with an index given to you by a string function, this kind of thing will never happen.
 
 By changing the string abstraction, we can support arbitrary string encodings at C efficiency and with a nice, safe, clean programmatic interface.
+
+\subsection{String Literals}
+
+Before we can proceed with concrete examples of string processing, we present string literals:
+\begin{verbatim}
+  julia> "hello, world"
+  "hello, world"
+\end{verbatim}
+Well, that's simple enough.
+What is the actual type and structure this string object?
+\begin{verbatim}
+  julia> dump(ans)
+  Latin1String(data=[104,101,108,108,111,...,119,111,114,108,100],)
+\end{verbatim}
+Here is the actual declaration of the basic string types from \verb|boot.j|:
+\begin{verbatim}
+  type String
+
+  struct Latin1String <: String
+      data::Array{Uint8,1}
+  end
+
+  struct UTF8String <: String
+      data::Array{Uint8,1}
+  end
+\end{verbatim}
+\verb|String| is an abstract supertype, used to refer to all concrete implementations of the string interface.
+The \verb|Latin1String| and \verb|UTF8String| classes are both then wrappers around an array of bytes (\verb|Uint8| values).
+The only difference is in their interpretation:
+\begin{enumerate}
+\item In a \verb|Latin1String| bytes and characters are one-to-one, and each byte encodes its Unicode code point directly, the way classic C strings are used.
+This encoding is called, as you may have guessed, Latin-1.
+\item In a \verb|UTF8String| bytes and characters are not one-to-one, but instead uses the UTF-8 encoding, which matches ASCII and Latin-1 up to \verb|0x7f|, and uses two, three of four bytes to encode Unicode characters with higher code points.
+\end{enumerate}
+How does one generate a \verb|UTF8String| object?
+One does so just by using a Unicode character escape sequence above \verb|0x7f| in a string literal:
+\begin{verbatim}
+  julia> "\u2200 x \u2203 y > x"
+  "∀ x ∃ y > x"
+
+  julia> dump(ans)
+  UTF8String(data=[226,136,128,32,120,...,121,32,62,32,120],)
+\end{verbatim}
 
 \section{I/O}
 \section{Data Structures}
