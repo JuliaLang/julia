@@ -2,7 +2,7 @@
 
 check_char(x::Char) =
     ('\ud800' <= x <= '\udfff' || '\U10ffff' < x) ?
-        error("invalid Unicode code point: 0x", hex(x)) : x
+        error("invalid Unicode code point: U+", hex(x)) : x
 
 convert(::Type{Char}, x::Bool   ) = check_char(box(Char,sext32(unbox8(x))))
 convert(::Type{Char}, x::Int8   ) = check_char(box(Char,sext32(unbox8(x))))

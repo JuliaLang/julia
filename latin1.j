@@ -25,6 +25,6 @@ write(io, s::Latin1String) = write(io, s.data)
 latin1(s::Latin1String) = s
 function latin1(s::String)
     f = c -> (c <= 0xff) ? uint8(c) :
-        error("invalid Latin-1 character: $c (0x$(hex(c)))")
+        error("invalid Latin-1 code point: U+$(hex(c))")
     Latin1String(map(f, chars(s)))
 end

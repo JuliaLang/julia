@@ -971,7 +971,7 @@ By changing the string abstraction, we can support arbitrary string encodings an
 
 \subsection{Characters}
 
-Like C, but unlike Perl, Python, or Ruby, Julia has a type for character values: \verb|Char|.
+Like C (but unlike Perl, Python, or Ruby), Julia has a type for individual character values: \verb|Char|.
 A \verb|Char| is really just a 32-bit integer with a special literal representation and some specific arithmetic behaviors.
 Here is how \verb|Char| values are input and shown:
 \begin{verbatim}
@@ -997,10 +997,10 @@ You can convert an integer value back to a \verb|Char| just as easily:
 Not all possible integer values are valid Unicode code points:
 \begin{verbatim}
   julia> char(0xd800)
-  invalid Unicode code point: 0xd800
+  invalid Unicode code point: U+d800
 
   julia> char(0x110000)
-  invalid Unicode code point: 0x110000
+  invalid Unicode code point: U+110000
 \end{verbatim}
 As of this writing, the Unicode code points are \verb|U+0000| through \verb|U+d7ff| and \verb|U+e000| through \verb|U+10ffff|.
 They are not all yet assigned intelligible meanings, nor are they necessarily interpretable by applications, but all such values are considered valid Unicode.
