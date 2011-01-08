@@ -967,7 +967,105 @@ You can probably just modify the code to catch the exception and move on to the 
 Alternately, you can rewrite the code to use a Unicode character iterator instead.
 Moreover, if you always consider string indices as opaque objects, and never do arithmetic with them (iterating through indices counts as arithmetic: \verb|k+=1|), then as long as you only index into a string with an index given to you by a string function, this kind of thing will never happen.
 
-By changing the string abstraction, we can support arbitrary string encodings at C efficiency and with a nice, safe, clean programmatic interface.
+By changing the string abstraction, we can support arbitrary string encodings and other representations at C-like efficiency and with a nice, safe, clean programmatic interface.
+
+\subsection{Characters}
+
+Like C, but unlike Perl, Python, or Ruby, Julia has a type for character values: \verb|Char|.
+A \verb|Char| is really just a 32-bit integer with a special literal representation and some specific arithmetic behaviors.
+Here is how \verb|Char| values are input and shown:
+\begin{verbatim}
+  julia> 'x'
+  'x'
+
+  julia> typeof(ans)
+  Char
+\end{verbatim}
+You can convert a Char to its integer value (Unicode cope point) easily:
+\begin{verbatim}
+  julia> int('x')
+  120
+
+  julia> typeof(ans)
+  Int32
+\end{verbatim}
+You can convert an integer value back to a \verb|Char| just as easily:
+\begin{verbatim}
+  julia> char(120)
+  'x'
+\end{verbatim}
+Not all possible integer values are valid Unicode code points:
+\begin{verbatim}
+  julia> char(0xd800)
+  invalid Unicode code point: 0xd800
+
+  julia> char(0x110000)
+  invalid Unicode code point: 0x110000
+\end{verbatim}
+As of this writing, the Unicode code points are \verb|U+0000| through \verb|U+d7ff| and \verb|U+e000| through \verb|U+10ffff|.
+They are not all yet assigned intelligible meanings, nor are they necessarily interpretable by applications, but all such values are considered valid Unicode.
+
+You can input any Unicode character in single quotes using \verb|\u| followed by up to four hexadecimal digits or \verb|\U| followed by up to eight hexadecimal digits (the longest valid value only requires six):
+\begin{verbatim}
+  julia> '\u0'
+  '\0'
+
+  julia> '\u78'
+  'x'
+
+  julia> '\u2200'
+  '∀'
+
+  julia> '\U10ffff'
+  '\U0010ffff'
+\end{verbatim}
+Julia uses your system's locale and language settings to determine which characters can be printed as-is and which must be output using the \verb|\u| or \verb|\U| forms.
+In addition to these Unicode forms, all of the C language's input forms are usable as well, including literal plain ASCII characters:
+\begin{verbatim}
+  julia> int('\0')
+  0
+
+  julia> int('\t')
+  9
+
+  julia> int('\n')
+  10
+
+  julia> int('\e')
+  27
+
+  julia> int('@')
+  64
+
+  julia> int('\x7f')
+  127
+
+  julia> int('\177')
+  127
+\end{verbatim}
+Like any integers, you can do arithmetic and comparisons with \verb|Char| values:
+\begin{verbatim}
+  julia> 'x' - 'a'
+  23
+
+  julia> 'A' < 'a'
+  true
+
+  julia> 'A' <= 'a' <= 'Z'
+  false
+
+  julia> 'A' <= 'X' <= 'Z'
+  true
+\end{verbatim}
+Arithmetic with \verb|Char| values promotes them to \verb|Int32|, however, requiring explicit conversion back to \verb|Char|:
+\begin{verbatim}
+  julia> 'A' + 1
+  66
+
+  julia> char(ans)
+  'B'
+\end{verbatim}
+This allows a series of intermediate computations to be done efficiently, while safely checking that the final value is a valid Unicode code point when converting it back to \verb|Char|.
 
 \subsection{String Literals}
 
