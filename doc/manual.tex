@@ -233,6 +233,9 @@ The following arithmetic and bitwise operations are supported on built-in arithm
     \item \verb|x & y|~: bitwise and.
     \item \texttt{x | y}~: bitwise or.
     \item \verb|x $ y|~: bitwise xor.
+    \item \verb|x << y|~: logical shift left.
+    \item \verb|x >> y|~: logical shift right.
+    \item \verb|x >>> y|~: ??
   \end{itemize}
 \end{itemize}
 Here are some simple examples:
@@ -935,7 +938,7 @@ One possible way to do this is to remember the last few indices that were access
 
 \item Do not allow indexing into strings. Instead, only provide interfaces, such as iterating characters, which are Unicode safe as well as being efficiently implementable without transcoding strings.
 
-\item Ignore the whole issue and just equate strings with byte arrays and let Unicode go f$\star$ck itself (a.k.a.~the C approach\footnote{To be fair, the C language long predates the Unicode standard.}).
+\item Ignore the whole issue and just equate strings with byte arrays and let Unicode bugger itself (a.k.a.~the C approach\footnote{To be fair, the C language long predates the Unicode standard.}).
 
 \end{enumerate}
 Technically, option 5 doesn't actually keep the abstraction of strings as functions from indices to characters, so perhaps it doesn't belong here;
@@ -982,7 +985,7 @@ Here is how \verb|Char| values are input and shown:
   julia> typeof(ans)
   Char
 \end{verbatim}
-You can convert a Char to its integer value (Unicode cope point) easily:
+You can convert a Char to its integer value (code point) easily:
 \begin{verbatim}
   julia> int('x')
   120
@@ -995,12 +998,22 @@ You can convert an integer value back to a \verb|Char| just as easily:
   julia> char(120)
   'x'
 \end{verbatim}
-Not all possible integer values are valid Unicode code points:
+Not all possible integer values are valid Unicode code points, but for performance, the \verb|char| conversion does not check that the given character value is a valid Unicode code point.
+If you want to check code points for validity, use the \verb|safe_char| conversion instead:
 \begin{verbatim}
   julia> char(0xd800)
+  '???'
+
+  julia> safe_char(0xd800)
   invalid Unicode code point: U+d800
 
   julia> char(0x110000)
+  '\U00110000'
+
+  julia> safe_char(0xd800)
+  invalid Unicode code point: U+d800
+
+  julia> safe_char(0x110000)
   invalid Unicode code point: U+110000
 \end{verbatim}
 As of this writing, the Unicode code points are \verb|U+0000| through \verb|U+d7ff| and \verb|U+e000| through \verb|U+10ffff|.
@@ -1066,15 +1079,6 @@ Arithmetic with \verb|Char| values promotes them to \verb|Int32|, however, requi
   julia> char(ans)
   'B'
 \end{verbatim}
-For performance, the \verb|char| conversion does not check that the character value is a valid Unicode code point.
-If you want to check for valid code points, use the \verb|safe_char| conversion instead:
-\begin{verbatim}
-  julia> char(0x110000)
-  '\U00110000'
-
-  julia> safe_char(0x110000)
-  invalid Unicode code point: U+110000
-\end{verbatim}
 The fact that any arithmetic with \verb|Char|s promotes to \verb|Int32| allows a series of intermediate computations to be done efficiently, only checking that the final value is a valid Unicode code point.
 
 \subsection{String Literals}
@@ -1083,12 +1087,12 @@ As described in the abstract in \Section{partial-function-strings}, in Julia, st
 Thus, the \verb|Char| type is the building block of all strings.
 Usually, (but not necessarily), indices correspond to byte offsets into some sort of underlying encoding of a string.
 
-In Julia, bare string literals always produce one of two types of strings:
+In Julia, basic string literals always produce one of two types of strings:
 \verb|Latin1String| or \verb|UTF8String|.
 Both of these types of strings are based on a byte encoding of \verb|Char| values.
 \verb|Latin1String| uses a fixed-width, single-byte encoding, while \verb|UTF8String| uses the variable-width, UTF-8 encoding.
 
-Here is the most basic string literal example:
+Here is a basic string literal:
 \begin{verbatim}
   julia> "hello, world"
   "hello, world"
@@ -1112,11 +1116,11 @@ Here are the actual declarations of the basic string types from Julia's bootstra
   end
 \end{verbatim}
 \verb|String| is an abstract supertype, used to refer to all concrete implementations of the string interface.
-The \verb|Latin1String| and \verb|UTF8String| classes are both thin wrappers around an array of bytes (\verb|Uint8| values), holding the .
+The \verb|Latin1String| and \verb|UTF8String| classes are both just thin wrappers around an array of bytes (\verb|Uint8| values), holding the string's encoded data.
 The only difference is in their interpretation:
 \begin{enumerate}
 \item In a \verb|Latin1String| bytes and characters are one-to-one, and each byte encodes its Unicode code point directly, the way classic C strings are used.
-This encoding is called, as you may have guessed, Latin-1.
+As you may have guessed, this encoding is called Latin-1.
 \item In a \verb|UTF8String| bytes and characters are not one-to-one, but instead uses the UTF-8 encoding, which matches ASCII and Latin-1 up to \verb|0x7f|, and uses two, three of four bytes to encode Unicode characters with higher code points.
 \end{enumerate}
 How does one generate a \verb|UTF8String| object?
