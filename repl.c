@@ -62,7 +62,7 @@ static char jl_banner_color[] =
 
 static char jl_prompt_plain[] = "julia> ";
 static char jl_prompt_color[] = "\001\033[1m\033[32m\002julia> \001\033[37m\002";
-static char jl_answer_color[] = "\033[0m\033[37m";
+static char jl_answer_color[] = "\033[1m\033[36m";
 static char jl_input_color[]  = "\033[1m\033[37m";
 static char jl_color_normal[] = "\033[0m\033[37m";
 
@@ -703,14 +703,18 @@ int main(int argc, char *argv[])
                 ios_printf(ios_stdout, "\n");
                 break;
             }
-            if (have_color) {
-                ios_printf(ios_stdout, jl_answer_color);
-                ios_flush(ios_stdout);
-            }
             if (ast != NULL) {
+                if (have_color) {
+                    ios_printf(ios_stdout, jl_color_normal);
+                    ios_flush(ios_stdout);
+                }
                 jl_value_t *value = jl_toplevel_eval(ast);
                 jl_set_global(jl_system_module, jl_symbol("ans"), value);
                 if (show_value) {
+                    if (have_color) {
+                        ios_printf(ios_stdout, jl_answer_color);
+                        ios_flush(ios_stdout);
+                    }
                     repl_show_value(value);
                     ios_printf(ios_stdout, "\n");
                 }
