@@ -277,7 +277,7 @@ end
 ## string escaping & unescaping ##
 
 escape_nul(s::String, i::Index) =
-    !done(s,i) && '0' <= next(s,i)[1] <= '7' ? "\\x00" : "\\0"
+    !done(s,i) && '0' <= next(s,i)[1] <= '7' ? L"\x00" : L"\0"
 
 function print_escaped(s::String, q::Bool, xmax::Char)
     if q; print('"'); end
@@ -286,14 +286,14 @@ function print_escaped(s::String, q::Bool, xmax::Char)
         c, j = next(s,i)
         c == '\0'     ? print(escape_nul(s,j)) :
         c == '\\'     ? print("\\\\") :
-        c == '\e'     ? print("\\e") :
+        c == '\e'     ? print(L"\e") :
    q && c == '"'      ? print("\\\"") :
-        c == '$'      ? print("\\\$") :
+        c == '$'      ? print(L"\$") :
         iswprint(c)   ? print(c) :
         7 <= c <= 13  ? print('\\', "abtnvfr"[c-6]) :
-        c <= xmax     ? print("\\x", uint2str(c,16,2)) :
-        c <= '\uffff' ? print("\\u", uint2str(c,16,4)) :
-                        print("\\U", uint2str(c,16,8))
+        c <= xmax     ? print(L"\x", uint2str(c,16,2)) :
+        c <= '\uffff' ? print(L"\u", uint2str(c,16,4)) :
+                        print(L"\U", uint2str(c,16,8))
         i = j
     end
     if q; print('"'); end
