@@ -6,42 +6,47 @@ PCRE_VERSION = string(ccall(dlsym(libpcre,"pcre_version"), Ptr{Uint8}, ()))
 
 ## masks for supported sets of options ##
 
-PCRE_SUPPORTED_COMPILE_OPTIONS =
-    PCRE_ANCHORED              |
-    PCRE_CASELESS              |
-    PCRE_DOLLAR_ENDONLY        |
-    PCRE_DOTALL                |
-    PCRE_EXTENDED              |
-    PCRE_FIRSTLINE             |
-    PCRE_MULTILINE             |
-    PCRE_NEWLINE_CR            |
-    PCRE_NEWLINE_LF            |
-    PCRE_NEWLINE_CRLF          |
-    PCRE_NEWLINE_ANYCRLF       |
-    PCRE_NEWLINE_ANY           |
-    PCRE_NO_AUTO_CAPTURE       |
-    PCRE_NO_START_OPTIMIZE     |
-    PCRE_UCP                   |
-    PCRE_UNGREEDY              |
+PCRE_COMPILE_OPTIONS = [
+    PCRE_ANCHORED
+    PCRE_CASELESS
+    PCRE_DOLLAR_ENDONLY
+    PCRE_DOTALL
+    PCRE_EXTENDED
+    PCRE_FIRSTLINE
+    PCRE_MULTILINE
+    PCRE_NEWLINE_CR
+    PCRE_NEWLINE_LF
+    PCRE_NEWLINE_CRLF
+    PCRE_NEWLINE_ANYCRLF
+    PCRE_NEWLINE_ANY
+    PCRE_NO_AUTO_CAPTURE
+    PCRE_NO_START_OPTIMIZE
+    PCRE_UCP
+    PCRE_UNGREEDY
     PCRE_NO_UTF8_CHECK
+]
 
-PCRE_SUPPORTED_EXEC_OPTIONS    =
-    PCRE_NEWLINE_CR            |
-    PCRE_NEWLINE_LF            |
-    PCRE_NEWLINE_CRLF          |
-    PCRE_NEWLINE_ANYCRLF       |
-    PCRE_NEWLINE_ANY           |
-    PCRE_NOTBOL                |
-    PCRE_NOTEOL                |
-    PCRE_NOTEMPTY              |
-    PCRE_NOTEMPTY_ATSTART      |
-    PCRE_NO_START_OPTIMIZE     |
-    PCRE_NO_UTF8_CHECK         |
-    PCRE_PARTIAL_HARD          |
+PCRE_EXECUTE_OPTIONS = [
+    PCRE_NEWLINE_CR
+    PCRE_NEWLINE_LF
+    PCRE_NEWLINE_CRLF
+    PCRE_NEWLINE_ANYCRLF
+    PCRE_NEWLINE_ANY
+    PCRE_NOTBOL
+    PCRE_NOTEOL
+    PCRE_NOTEMPTY
+    PCRE_NOTEMPTY_ATSTART
+    PCRE_NO_START_OPTIMIZE
+    PCRE_NO_UTF8_CHECK
+    PCRE_PARTIAL_HARD
     PCRE_PARTIAL_SOFT
+]
 
-PCRE_SUPPORTED_OPTIONS = PCRE_SUPPORTED_COMPILE_OPTIONS |
-                         PCRE_SUPPORTED_EXEC_OPTIONS
+PCRE_OPTIONS = [PCRE_COMPILE_OPTIONS,PCRE_EXECUTE_OPTIONS]
+
+PCRE_COMPILE_MASK = (|)(PCRE_COMPILE_OPTIONS...)
+PCRE_EXECUTE_MASK = (|)(PCRE_EXECUTE_OPTIONS...)
+PCRE_OPTIONS_MASK = PCRE_COMPILE_MASK | PCRE_EXECUTE_MASK
 
 ## low-level PCRE interface ##
 
@@ -113,16 +118,12 @@ struct Regex
 
     function Regex(pat::String, opts::Int, study::Bool)
         opts = int32(opts)
-        if (opts & ~PCRE_SUPPORTED_OPTIONS) != 0
+        if (opts & ~PCRE_OPTIONS_MASK) != 0
             error("invalid regex option(s)")
         end
-        re = new(pat, opts, C_NULL, C_NULL)
-        opts &= PCRE_SUPPORTED_COMPILE_OPTIONS
-        re.regex = pcre_compile(re.pattern, opts)
-        if study
-            re.extra = pcre_study(re.regex, 0)
-        end
-        re
+        re = pcre_compile(pat, opts & PCRE_COMPILE_MASK)
+        ex = study ? pcre_study(re, 0) : C_NULL
+        new(pat, opts, re, ex)
     end
     Regex(p::String, s::Bool) = Regex(p, 0, s)
     Regex(p::String, o::Int)  = Regex(p, o, true)
@@ -176,4 +177,4 @@ function match(re::Regex, str::String, opts::Int)
 end
 
 match(re::Regex, str::String) =
-    match(re, str, re.options & PCRE_SUPPORTED_EXEC_OPTIONS)
+    match(re, str, re.options & PCRE_EXECUTE_MASK)
