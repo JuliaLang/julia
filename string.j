@@ -370,16 +370,14 @@ end
 
 ## string interpolation parsing ##
 
-function interp_parse(str::String, unescape::Bool)
+function interp_parse(str::String, unescape::Function)
     strs = ()
     i = j = start(str)
     while !done(str,j)
         c, k = next(str,j)
         if c == '$'
             if !isempty(str[i:j-1])
-                s = str[i:j-1]
-                s = unescape ? unescape_string(s) : s
-                strs = append(strs,(s,))
+                strs = append(strs,(unescape(str[i:j-1]),))
             end
             ex, j = parse(str,k)
             strs = append(strs,(ex,)); i = j
@@ -390,14 +388,12 @@ function interp_parse(str::String, unescape::Bool)
         end
     end
     if !isempty(str[i:])
-        s = str[i:j-1]
-        s = unescape ? unescape_string(s) : s
-        strs = append(strs,(s,))
+        strs = append(strs,(unescape(str[i:j-1]),))
     end
     length(strs) == 1 ? strs[1] : expr(:call,:strcat,strs...)
 end
 
-interp_parse(str::String) = interp_parse(str, true)
+interp_parse(str::String) = interp_parse(str, unescape_string)
 
 macro str(raw)
     interp_parse(raw)
@@ -405,6 +401,10 @@ end
 
 macro S_str(raw)
     interp_parse(raw)
+end
+
+macro I_str(raw)
+    interp_parse(raw, x->x)
 end
 
 # TODO: S"foo\xe2\x88\x80" == "foo\xe2\x88\x80"
