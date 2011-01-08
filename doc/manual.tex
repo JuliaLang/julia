@@ -1115,13 +1115,13 @@ Here are the actual declarations of the basic string types from Julia's bootstra
       data::Array{Uint8,1}
   end
 \end{verbatim}
-\verb|String| is an abstract supertype, used to refer to all concrete implementations of the string interface.
-The \verb|Latin1String| and \verb|UTF8String| classes are both just thin wrappers around an array of bytes (\verb|Uint8| values), holding the string's encoded data.
+\verb|String| is an abstract supertype, which is used to refer to all concrete implementations of the string interface.
+The \verb|Latin1String| and \verb|UTF8String| classes are both thin wrappers around an array of bytes (\verb|Uint8| values), holding the string's encoded data.
 The only difference is in their interpretation:
 \begin{enumerate}
-\item In a \verb|Latin1String| bytes and characters are one-to-one, and each byte encodes its Unicode code point directly, the way classic C strings are used.
+\item In a \verb|Latin1String|, bytes and characters are one-to-one, and each byte encodes its Unicode code point directly, the way classic C strings do.
 As you may have guessed, this encoding is called Latin-1.
-\item In a \verb|UTF8String| bytes and characters are not one-to-one, but instead uses the UTF-8 encoding, which matches ASCII and Latin-1 up to \verb|0x7f|, and uses two, three of four bytes to encode Unicode characters with higher code points.
+\item In a \verb|UTF8String|, bytes and characters are not one-to-one, but instead uses the UTF-8 encoding, which matches ASCII and Latin-1 up to \verb|0x7f|, and uses two, three of four bytes to encode Unicode characters with higher code points.
 \end{enumerate}
 How does one generate a \verb|UTF8String| object?
 One does so just by using a Unicode character escape sequence above \verb|0x7f| in a string literal:
@@ -1132,6 +1132,27 @@ One does so just by using a Unicode character escape sequence above \verb|0x7f| 
   julia> dump(ans)
   UTF8String(data=[226,136,128,32,120,...,121,32,62,32,120],)
 \end{verbatim}
+Also, absent other indications, string input from the outside world is assumed to be encoded as UTF-8, and therefore creates \verb|UTF8String| objects.
+String literals created in Julia without escapes, however, can be safely represented using Latin-1, which, being a fixed-width encoding, has much better performance characteristics than UTF-8.
+In particular, \verb|Latin1String|s have zero decoding overhead because each character is represented directly by its byte value.
+Therefore, Julia uses \verb|Latin1String|s internally whenever it can.
+
+Fortunately, the distinction between different types of strings is almost entirely transparent in Julia:
+you can perform all string operations with any combination of string types, and they will work.
+Specialized fast methods are provided in cases where the specific representation of a string can be leveraged somehow, but the casual user need never think about this:
+generic operations will just work.
+
+Consider, for example, comparing the lexicographic ordering of two strings:
+\begin{verbatim}
+  julia> "abracadabra" < "xylophone"
+  true
+\end{verbatim}
+There is a generic string \verb|<| method which can compare any two strings, character by character, regardless of encoding or implementation.
+In this case, however, both strings are \verb|Latin1String| objects, and a much faster method of comparison exists:
+the \verb|libc| library's \verb|memcmp| function.
+An overloaded \verb|<| method is provided to compare two \verb|Latin1String|s using this much faster method.
+The usage is completely transparent, however:
+regardless of what kinds of strings you have, you simple call \verb|a < b| to compare them.
 
 \section{I/O}
 \section{Data Structures}
