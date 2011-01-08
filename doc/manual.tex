@@ -1137,11 +1137,17 @@ String literals created in Julia without escapes, however, can be safely represe
 In particular, \verb|Latin1String|s have zero decoding overhead because each character is represented directly by its byte value.
 Therefore, Julia uses \verb|Latin1String|s internally whenever it can.
 
-Fortunately, the distinction between different types of strings is almost entirely transparent in Julia:
-you can perform all string operations with any combination of string types, and they will work.
-Specialized fast methods are provided in cases where the specific representation of a string can be leveraged somehow, but the casual user need never think about this:
-generic operations will just work.
+\subsection{Many Types of Strings}
 
+Since there are so many ways a sequence of characters can be represented in the real world, Julia has many different string types, with different underlying encodings and implementations.
+Moreover, programmers can easily define their own new types.
+Fortunately, the distinction between different string implementations is almost entirely transparent in Julia:
+you can perform all string operations with any combination of string types, and they will just work because they are implemented in terms of a minimal core set of methods which a string much provide.
+
+Generic implementations of string methods are often less efficient than optimal.
+However, Julia's dispatch system makes it simple to provide specialized, fast methods in cases where the specific representation of a string can be leveraged somehow.
+The casual user never needs to think about this:
+just call the right generic function and the work will be dispatched to the appropriate method.
 Consider, for example, comparing the lexicographic ordering of two strings:
 \begin{verbatim}
   julia> "abracadabra" < "xylophone"
@@ -1150,9 +1156,42 @@ Consider, for example, comparing the lexicographic ordering of two strings:
 There is a generic string \verb|<| method which can compare any two strings, character by character, regardless of encoding or implementation.
 In this case, however, both strings are \verb|Latin1String| objects, and a much faster method of comparison exists:
 the \verb|libc| library's \verb|memcmp| function.
-An overloaded \verb|<| method is provided to compare two \verb|Latin1String|s using this much faster method.
+So a specialized \verb|<| method is provided to compare two \verb|Latin1String|s using this much faster method.
 The usage is completely transparent, however:
-regardless of what kinds of strings you have, you simple call \verb|a < b| to compare them.
+regardless of what kinds of strings you have, you simply call \verb|a < b| to compare them.
+If \verb|memcmp| can be used, it will be;
+if not, the comparison will work, albeit not quite as quickly.
+
+Departing from having a single canonical string implementations provides great flexibility.
+For example, Julia performs string concatenation using a simple ropes implementation:
+\begin{verbatim}
+  julia> strcat("foo","bar")
+  "foobar"
+
+  julia> dump(ans)
+  RopeString(head="foo",tail="bar",depth=1,length=6,)
+\end{verbatim}
+This makes concatenation, which is by far one of the most common string operations, take $\O(1)$ time rather than $O(n)$ time, as it does if a new string buffer must be allocated and both strings copied into it.
+A slightly less common operation is repeating a string:
+\begin{verbatim}
+  julia> zzz = repeat(".:Z:.", 100000);
+
+  julia> zzz[end>>1-15:end>>1+16]
+  "..:Z:..:Z:..:Z:..:Z:..:Z:..:Z:.."
+\end{verbatim}
+In julia this requires very little memory because the repeat operation just creates a special kind of string:
+\begin{verbatim}
+  julia> dump(zzz)
+  RepString(string=".:Z:.",repeat=100000,)
+\end{verbatim}
+The resulting object behaves as though you had a 5MB string in memory, but does so using mod operations rather than by actually allocating 5MB.
+If you actually want to allocate all that memory, you can force that by coercing the \verb|RepString| into a byte-backed ``C string'':
+\begin{verbatim}
+  julia> zzz = cstring(zzz);
+
+  julia> typeof(zzz)
+  Latin1String
+\end{verbatim}
 
 \section{I/O}
 \section{Data Structures}
