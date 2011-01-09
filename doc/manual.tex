@@ -38,7 +38,7 @@ We believe there are many good reasons to prefer dynamic languages for these app
 Fortunately, modern language design and compiler techniques make it possible to mostly eliminate the performance trade-off and provide a single environment productive enough for prototyping and performant enough for deploying applications.
 However, an open-source language with these characteristics has not emerged.
 Our project, Julia, fills this gap:
-it is a flexible dynamic language, designed expressly for scientific computing, but achieving performance similar to traditional compiled languages.
+it is a flexible dynamic language, designed expressly for scientific computing, and achieving performance comparable to traditional compiled languages.
 
 The syntax of Julia is directly derived from Matlab, and consequently, any Matlab programmer should feel immediately comfortable with Julia.
 While Matlab is quite effective for prototyping and exploring numerical linear algebra, for programming tasks outside of this relatively narrow scope, Matlab has severe limitations.
@@ -233,17 +233,17 @@ The following arithmetic and bitwise operations are supported on built-in arithm
     \item \verb|x & y|~: bitwise and.
     \item \texttt{x | y}~: bitwise or.
     \item \verb|x $ y|~: bitwise xor.
-    \item \verb|x << y|~: logical shift left.
-    \item \verb|x >> y|~: logical shift right.
+    \item \verb|x << y|~: shift left.
+    \item \verb|x >> y|~: shift right.
     \item \verb|x >>> y|~: ??
   \end{itemize}
 \end{itemize}
-Here are some simple examples:
+Here are some simple examples:\,\footnote{By convention, we tend to space less tightly binding operations less tightly, but there are no syntactic constraints.}
 \begin{verbatim}
-  julia> 1+2+3
+  julia> 1 + 2 + 3
   6
 
-  julia> 1-2
+  julia> 1 - 2
   -1
 
   julia> 3*2/12
@@ -251,13 +251,13 @@ Here are some simple examples:
 \end{verbatim}
 Julia has a powerful and flexible type promotion system that allows arithmetic operations on mixtures of argument types to work naturally:
 \begin{verbatim}
-  julia> 1+2.5
+  julia> 1 + 2.5
   3.5
 
   julia> 0.5*12
   6.0
 
-  julia> 3*2/12+1
+  julia> 3*2/12 + 1
   1.5
 \end{verbatim}
 The above operations all promote to \verb|Float64|s since that is the smallest floating point type that can faithfully represent all \verb|Int32| values.
@@ -326,8 +326,8 @@ This makes writing polynomial expressions much cleaner:
 Juxtaposed numeric coefficients conflict with two numeric literal syntaxes:
 hexadecimal integer literals and engineering notation for floating point literals:
 \begin{itemize}
-\item The hexadecimal integer literal expression \verb|0xff| could also be interpreted as the numeric literal \verb|0| multiplied by the variable \verb|xff|.
-\item The floating point literal expression \verb|1e10| could also be interpreted as the numeric literal \verb|1| multiplied by the variable \verb|e10|, and likewise with \verb|E|.
+\item For example, the hexadecimal integer literal expression \verb|0xff| could also be interpreted as the numeric literal \verb|0| multiplied by the variable \verb|xff|.
+\item Likewise, the floating point literal expression \verb|1e10| could be interpreted as the numeric literal \verb|1| multiplied by the variable \verb|e10|, and similarly with the equivalent \verb|E| form.
 \end{itemize}
 In both cases, we resolve the ambiguity in favor of the numeric literals:
 \begin{itemize}
