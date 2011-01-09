@@ -909,17 +909,18 @@ JL_CALLABLE(jl_apply_generic)
 
 static void print_methlist(char *name, jl_methlist_t *ml)
 {
+    ios_t *s = jl_current_output_stream();
     while (ml != NULL) {
-        ios_printf(ios_stdout, "%s", name);
+        ios_printf(s, "%s", name);
         jl_show((jl_value_t*)ml->sig);
         if (ml->func == NULL)  // mark dummy cache entries
-            ios_printf(ios_stdout, " *");
+            ios_printf(s, " *");
         //if (ml->func && ml->func->linfo && ml->func->linfo->ast &&
         //    ml->func->linfo->inferred) {
         //    jl_show(ml->func->linfo->ast);
         //}
         if (ml->next != NULL)
-            ios_printf(ios_stdout, "\n");
+            ios_printf(s, "\n");
         ml = ml->next;
     }
 }

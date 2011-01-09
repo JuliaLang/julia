@@ -62,7 +62,7 @@ static char jl_banner_color[] =
 
 static char jl_prompt_plain[] = "julia> ";
 static char jl_prompt_color[] = "\001\033[1m\033[32m\002julia> \001\033[37m\002";
-static char jl_answer_color[] = "\033[1m\033[36m";
+static char jl_answer_color[] = "\033[1m\033[34m";
 static char jl_input_color[]  = "\033[1m\033[37m";
 static char jl_color_normal[] = "\033[0m\033[37m";
 
@@ -689,6 +689,10 @@ int main(int argc, char *argv[])
     ;
     JL_TRY {
         if (iserr) {
+            if (have_color) {
+                ios_printf(ios_stdout, jl_color_normal);
+                ios_flush(ios_stdout);
+            }
             jl_show(jl_exception_in_transit);
             ios_printf(ios_stdout, "\n");
             iserr = 0;

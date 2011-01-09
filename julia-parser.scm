@@ -817,6 +817,13 @@
       (error "incomplete: invalid character literal")
       c))
 
+(define (unescape-string s)
+  (with-exception-catcher
+   (lambda (e) (error "invalid escape sequence"))
+   (lambda ()
+     ;; process escape sequences using lisp read
+     (read (open-input-string (string #\" s #\"))))))
+
 ; parse numbers, identifiers, parenthesized expressions, lists, vectors, etc.
 (define (parse-atom s)
   (let ((t (require-token s)))
@@ -842,8 +849,7 @@
 				  (write-char
 				   (not-eof-1 (read-char (ts:port s))) b))
 			      (loop (read-char (ts:port s))))))
-		 (let ((str (read (open-input-string
-				   (string #\" (io.tostring! b) #\")))))
+		 (let ((str (unescape-string (io.tostring! b))))
 		   (if (not (= (string-length str) 1))
 		       (error "invalid character literal"))
 		   (if (= (length str) 1)
@@ -944,9 +950,7 @@
 	   (let ((ps (parse-string-literal s #f)))
 	     (if (cdr ps)
 		 `(macrocall str ,(car ps))
-		 ;; process escape sequences using lisp read
-		 (read (open-input-string
-			(string #\" (car ps) #\"))))))
+		 (unescape-string (car ps)))))
 
 	  ;; macro call
 	  ((eqv? t #\@)
