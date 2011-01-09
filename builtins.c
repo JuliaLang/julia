@@ -19,6 +19,7 @@
 #endif
 #include "llt.h"
 #include "julia.h"
+#include "builtin_proto.h"
 
 // --- exceptions ---
 
@@ -193,6 +194,8 @@ JL_CALLABLE(jl_f_apply)
     JL_GC_POP();
     return result;
 }
+
+// eval -----------------------------------------------------------------------
 
 static int is_intrinsic(jl_sym_t *s)
 {
@@ -383,6 +386,8 @@ JL_CALLABLE(jl_f_isbound)
     return jl_boundp(jl_system_module, (jl_sym_t*)args[0]) ? jl_true : jl_false;
 }
 
+// tuples ---------------------------------------------------------------------
+
 JL_CALLABLE(jl_f_tuple)
 {
     size_t i;
@@ -412,6 +417,8 @@ JL_CALLABLE(jl_f_tuplelen)
     JL_TYPECHK(tuplelen, tuple, args[0]);
     return jl_box_int32(((jl_tuple_t*)args[0])->length);
 }
+
+// structs --------------------------------------------------------------------
 
 static size_t field_offset(jl_struct_type_t *t, jl_sym_t *fld, int err)
 {
@@ -462,108 +469,6 @@ JL_CALLABLE(jl_f_set_field)
     ((jl_value_t**)v)[1+i] = jl_convert((jl_type_t*)jl_tupleref(st->types,i),
                                         args[2]);
     return v;
-}
-
-JL_CALLABLE(jl_f_arraylen)
-{
-    JL_NARGS(arraylen, 1, 1);
-    JL_TYPECHK(arraylen, array, args[0]);
-    return jl_box_int32(((jl_array_t*)args[0])->length);
-}
-
-static jl_value_t *new_scalar(jl_bits_type_t *bt)
-{
-    size_t nb = jl_bitstype_nbits(bt)/8;
-    jl_value_t *v = 
-        (jl_value_t*)allocobj((NWORDS(LLT_ALIGN(nb,sizeof(void*)))+1)*
-                              sizeof(void*));
-    v->type = (jl_type_t*)bt;
-    return v;
-}
-
-jl_value_t *jl_arrayref(jl_array_t *a, size_t i)
-{
-    jl_type_t *el_type = (jl_type_t*)jl_tparam0(jl_typeof(a));
-    jl_value_t *elt;
-    if (jl_is_bits_type(el_type)) {
-        if (el_type == (jl_type_t*)jl_bool_type) {
-            if (((int8_t*)a->data)[i] != 0)
-                return jl_true;
-            return jl_false;
-        }
-        elt = new_scalar((jl_bits_type_t*)el_type);
-        size_t nb = jl_bitstype_nbits(el_type)/8;
-        switch (nb) {
-        case 1:
-            *(int8_t*)jl_bits_data(elt)  = ((int8_t*)a->data)[i];  break;
-        case 2:
-            *(int16_t*)jl_bits_data(elt) = ((int16_t*)a->data)[i]; break;
-        case 4:
-            *(int32_t*)jl_bits_data(elt) = ((int32_t*)a->data)[i]; break;
-        case 8:
-            *(int64_t*)jl_bits_data(elt) = ((int64_t*)a->data)[i]; break;
-        default:
-            memcpy(jl_bits_data(elt), &((char*)a->data)[i*nb], nb);
-        }
-    }
-    else {
-        elt = ((jl_value_t**)a->data)[i];
-        if (elt == NULL)
-            jl_errorf("array[%d]: uninitialized reference error", i+1);
-    }
-    return elt;
-}
-
-JL_CALLABLE(jl_f_arrayref)
-{
-    JL_NARGS(arrayref, 2, 2);
-    JL_TYPECHK(arrayref, array, args[0]);
-    JL_TYPECHK(arrayref, int32, args[1]);
-    jl_array_t *a = (jl_array_t*)args[0];
-    size_t i = jl_unbox_int32(args[1])-1;
-    if (i >= a->length)
-        jl_errorf("array[%d]: index out of range", i+1);
-    return jl_arrayref(a, i);
-}
-
-void jl_arrayset(jl_array_t *a, size_t i, jl_value_t *rhs)
-{
-    jl_value_t *el_type = jl_tparam0(jl_typeof(a));
-    if (el_type != (jl_value_t*)jl_any_type) {
-        if (!jl_subtype(rhs, el_type, 1))
-            jl_type_error("arrayset", el_type, rhs);
-    }
-    if (jl_is_bits_type(el_type)) {
-        size_t nb = jl_bitstype_nbits(el_type)/8;
-        switch (nb) {
-        case 1:
-            ((int8_t*)a->data)[i]  = *(int8_t*)jl_bits_data(rhs);  break;
-        case 2:
-            ((int16_t*)a->data)[i] = *(int16_t*)jl_bits_data(rhs); break;
-        case 4:
-            ((int32_t*)a->data)[i] = *(int32_t*)jl_bits_data(rhs); break;
-        case 8:
-            ((int64_t*)a->data)[i] = *(int64_t*)jl_bits_data(rhs); break;
-        default:
-            memcpy(&((char*)a->data)[i*nb], jl_bits_data(rhs), nb);
-        }
-    }
-    else {
-        ((jl_value_t**)a->data)[i] = rhs;
-    }
-}
-
-JL_CALLABLE(jl_f_arrayset)
-{
-    JL_NARGS(arrayset, 3, 3);
-    JL_TYPECHK(arrayset, array, args[0]);
-    JL_TYPECHK(arrayset, int32, args[1]);
-    jl_array_t *b = (jl_array_t*)args[0];
-    size_t i = jl_unbox_int32(args[1])-1;
-    if (i >= b->length)
-        jl_errorf("array[%d]: index out of range", i+1);
-    jl_arrayset(b, i, args[2]);
-    return args[0];
 }
 
 // --- conversions ---
@@ -1306,15 +1211,9 @@ JL_CALLABLE(jl_f_invoke)
 
 // --- hashing ---
 
-jl_function_t *jl_hash_gf;
-
-JL_CALLABLE(jl_f_hash_symbol)
+uptrint_t jl_hash_symbol(jl_sym_t *s)
 {
-#ifdef BITS64
-    return jl_box_uint64(((jl_sym_t*)args[0])->hash);
-#else
-    return jl_box_uint32(((jl_sym_t*)args[0])->hash);
-#endif
+    return s->hash;
 }
 
 // --- init ---
@@ -1452,12 +1351,7 @@ void jl_init_builtins()
                   jl_tuple2(jl_wrap_Type((jl_value_t*)jl_pointer_type), jl_any_type),
                   jl_new_closure(jl_f_convert_to_ptr, NULL));
 
-    jl_hash_gf = jl_new_generic_function(jl_symbol("hash"));
-
-    add_builtin_method1(jl_hash_gf, (jl_type_t*)jl_sym_type, jl_f_hash_symbol);
-
     add_builtin("print",    (jl_value_t*)jl_print_gf);
     add_builtin("show",     (jl_value_t*)jl_show_gf);
     add_builtin("convert",  (jl_value_t*)jl_convert_gf);
-    add_builtin("hash",     (jl_value_t*)jl_hash_gf);
 }

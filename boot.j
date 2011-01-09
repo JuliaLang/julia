@@ -184,6 +184,8 @@ load(fname::String) =
 
 function append_any(xs...)
     # used by apply() and quote
+    # must be a separate function from append(), since apply() needs this
+    # exact function.
     n = 0
     for x = xs
         n += length(x)

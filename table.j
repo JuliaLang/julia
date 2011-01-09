@@ -52,6 +52,12 @@ bitmix(a::Union(Int64,Uint64), b::Union(Int64, Uint64)) =
 hash_f64(x::Float64) =
     ccall(:int64hash, Uint64, (Uint64,), boxui64(unbox64(x)))
 
+if WORD_SIZE == 64
+    hash(s::Symbol) = ccall(:jl_hash_symbol, Uint64, (Any,), s)
+else
+    hash(s::Symbol) = ccall(:jl_hash_symbol, Uint32, (Any,), s)
+end
+
 hash(x::Float64) = (isnan(x) ? hash_f64(NaN) : hash_f64(x))
 hash(x::Float) = hash(float64(x))
 hash(x::Number) = hash_f64(float64(x))
