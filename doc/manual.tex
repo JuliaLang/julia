@@ -71,12 +71,12 @@ Here's how you start and interact with the Julia read-eval-print loop (repl):
   julia> 1+2
   3
 
-  julia> load("file.j")
-  ()
+  julia> load("file.j");
 \end{verbatim}
 The \verb|load| function reads and evaluates the contents of the given file.
 The \verb|julia| program takes a variety of command-line options, similar to the \verb|perl| and \verb|ruby| programs.
 See \Section{command-line-options} for details.
+The semicolon at the end of a repl line suppresses output of the expression value.
 
 \section{Numbers and Arithmetic}
 Julia supports a broad range of numeric types together with the full complement of arithmetic and bitwise operations.
@@ -233,9 +233,9 @@ The following arithmetic and bitwise operations are supported on built-in arithm
     \item \verb|x & y|~: bitwise and.
     \item \texttt{x | y}~: bitwise or.
     \item \verb|x $ y|~: bitwise xor.
-    \item \verb|x << y|~: shift left.
-    \item \verb|x >> y|~: shift right.
-    \item \verb|x >>> y|~: ??
+    \item \verb|x << y|~: logical shift left.
+    \item \verb|x >> y|~: logical shift right.
+    \item \verb|x >>> y|~: arithmetic shift right.
   \end{itemize}
 \end{itemize}
 Here are some simple examples:\,\footnote{By convention, we tend to space less tightly binding operations less tightly, but there are no syntactic constraints.}
@@ -382,7 +382,7 @@ Here are some simple examples:
   false
 \end{verbatim}
 As can be seen here, promotion also applies to comparisons:
-the comparisons are performed in whatever type the arguments are promoted to, which is generally the smallest type they can all be represented faithfully in.
+the comparisons are performed in whatever type the arguments are promoted to, which is generally the smallest type by which they can all be faithfully represented.
 
 After promotion to a common type, integers are compared in the standard manner:
 by comparison of bits.
@@ -931,7 +931,7 @@ With this you can represent virtually all modern languages, but you cannot write
 This allows fast random access, and reduces the memory inflation compared to the UTF-32 approach, but still requires transcoding almost every string on input and output.
 
 \item Keep strings in their input form, but make indexing into a string an $\O(k)$ operation which requires scanning the entire string from the beginning to find the $k$th character from there.
-This turns a lot of trivial $\O(n)$ string processing algorithms into $\O(n^2)$ algorithms unless you completely avoid indexing into strings altogether.
+This turns a lot of straightforward $\O(n)$ string processing algorithms into $\O(n^2)$ algorithms unless you completely avoid indexing into strings altogether.
 
 \item Represent strings by a clever, relatively complex data structure that allows strings to remain encoded, but somehow makes indexing the $k$th character look like it's faster than $\O(k)$, when it is amortized over many operations.
 One possible way to do this is to remember the last few indices that were accessed and figure out new indices relative to them.
@@ -958,7 +958,7 @@ So in short \verb|str[k]| will throw an exception if $k$ doesn't correspond to a
 For UTF-8 strings that are plain ASCII this will never happen.
 For UTF-32 strings it will never happen.
 For UTF-16 strings including only the common two-byte characters it will never happen.
-For other encoded strings, it could happen, however.
+For other instances of encoded strings, it could happen, however.
 
 How does this modified abstraction help?
 It recognizes that bytes and characters are not one-to-one in many encodings, but still allows you store strings in their native encoding and retrieve characters efficiently by a byte index, rather than a character index.
@@ -1084,12 +1084,12 @@ The fact that any arithmetic with \verb|Char|s promotes to \verb|Int32| allows a
 \subsection{String Literals}
 
 As described in the abstract in \Section{partial-function-strings}, in Julia, strings are abstracted as partial functions from indices to characters.
-Thus, the \verb|Char| type is the building block of all strings.
-Usually, (but not necessarily), indices correspond to byte offsets into some sort of underlying encoding of a string.
+Thus, the \verb|Char| type is the basic building block of all strings.
+Typically, (but not necessarily), indices correspond to byte offsets into some underlying encoding of a string.
 
-In Julia, basic string literals always produce one of two types of strings:
+In Julia, standard string literals always produce one of two types of strings:
 \verb|Latin1String| or \verb|UTF8String|.
-Both of these types of strings are based on a byte encoding of \verb|Char| values.
+Both of these types of strings are implemented using a byte array encoding \verb|Char| values.
 \verb|Latin1String| uses a fixed-width, single-byte encoding, while \verb|UTF8String| uses the variable-width, UTF-8 encoding.
 
 Here is a basic string literal:
@@ -1132,21 +1132,22 @@ One does so just by using a Unicode character escape sequence above \verb|0x7f| 
   julia> dump(ans)
   UTF8String(data=[226,136,128,32,120,...,121,32,62,32,120],)
 \end{verbatim}
-Also, absent other indications, string input from the outside world is assumed to be encoded as UTF-8, and therefore creates \verb|UTF8String| objects.
+Also, absent other indications, external text input is assumed to be encoded as UTF-8, and therefore creates \verb|UTF8String| objects.
 String literals created in Julia without escapes, however, can be safely represented using Latin-1, which, being a fixed-width encoding, has much better performance characteristics than UTF-8.
 In particular, \verb|Latin1String|s have zero decoding overhead because each character is represented directly by its byte value.
 Therefore, Julia uses \verb|Latin1String|s internally whenever it can.
 
 \subsection{Many Types of Strings}
 
-Since there are so many ways a sequence of characters can be represented in the real world, Julia has many different string types, with different underlying encodings and implementations.
-Moreover, programmers can easily define their own new types.
-Fortunately, the distinction between different string implementations is almost entirely transparent in Julia:
-you can perform all string operations with any combination of string types, and they will just work because they are implemented in terms of a minimal core set of methods which a string much provide.
+Because there are many different ways a sequence of characters can be represented, Julia has many different string types, each with a different underlying implementation.
+Also, programmers can easily define their own new string types.
+The distinction between different string implementations is transparent to the casual observer in Julia.
+You can perform string operations with all combinations of types of strings, and they will work:
+all string functions are implemented generically in terms of a minimal core set of methods which any string must provide.
 
 Generic implementations of string methods are often less efficient than optimal.
-However, Julia's dispatch system makes it simple to provide specialized, fast methods in cases where the specific representation of a string can be leveraged somehow.
-The casual user never needs to think about this:
+Julia's dispatch system fortunately makes it simple to provide specialized, fast methods in cases where the specific representation of a string can be leveraged somehow.
+The typical user never needs to think about this:
 just call the right generic function and the work will be dispatched to the appropriate method.
 Consider, for example, comparing the lexicographic ordering of two strings:
 \begin{verbatim}
@@ -1162,8 +1163,8 @@ regardless of what kinds of strings you have, you simply call \verb|a < b| to co
 If \verb|memcmp| can be used, it will be;
 if not, the comparison will work, albeit not quite as quickly.
 
-Departing from having a single canonical string implementations provides great flexibility.
-For example, Julia performs string concatenation using a simple ropes implementation:
+Not having a single canonical string implementation provides significant flexibility.
+For example, Julia performs string concatenation using a simple but effective ropes implementation:
 \begin{verbatim}
   julia> strcat("foo","bar")
   "foobar"
@@ -1176,6 +1177,9 @@ A slightly less common operation is repeating a string:
 \begin{verbatim}
   julia> zzz = repeat(".:Z:.", 100000);
 
+  julia> strlen(zzz)
+  500000
+
   julia> zzz[end>>1-15:end>>1+16]
   "..:Z:..:Z:..:Z:..:Z:..:Z:..:Z:.."
 \end{verbatim}
@@ -1184,8 +1188,8 @@ In julia this requires very little memory because the repeat operation just crea
   julia> dump(zzz)
   RepString(string=".:Z:.",repeat=100000,)
 \end{verbatim}
-The resulting object behaves as though you had a 5MB string in memory, but does so using mod operations rather than by actually allocating 5MB.
-If you actually want to allocate all that memory, you can force that by coercing the \verb|RepString| into a byte-backed ``C string'':
+The resulting object behaves as though you had a 5MB string in memory, but does so using mod operations when indexing rather than by actually allocating 5MB.
+If you actually want to allocate all that memory, you can force Julia to do so by coercing the \verb|RepString| into a byte-backed ``C string'':
 \begin{verbatim}
   julia> zzz = cstring(zzz);
 
