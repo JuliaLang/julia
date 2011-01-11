@@ -29,12 +29,8 @@ show(s::String) = print_quoted(s)
 (^)(s::String, r::Int) = repeat(s,r)
 
 size(s::String) = (length(s),)
-function size(s::String, d::Index)
-    if d != 1
-        error("in size: tupleref: index ",d," out of range")
-    end
-    length(s)
-end
+size(s::String, d::Index) = d == 1 ? length(s) :
+    error("in size: tupleref: index ",d," out of range")
 
 function at_string_end(s::String)
     n = 0
@@ -279,9 +275,7 @@ print(s::RopeString) = print(s.head, s.tail)
 ## conversion of general objects to strings ##
 
 function string(p::Ptr{Uint8})
-    if p == C_NULL
-        error("cannot convert NULL to string")
-    end
+    p == C_NULL ? error("cannot convert NULL to string") :
     ccall(:jl_cstr_to_string, Any, (Ptr{Uint8},), p)::String
 end
 
@@ -293,9 +287,7 @@ cstring(args...) = print_to_string(print, args...)
 
 function print_quoted_literal(s::String)
     print('"')
-    for c = s
-        c == '"' ? print("\\\"") : print(c)
-    end
+    for c = s; c == '"' ? print("\\\"") : print(c); end
     print('"')
 end
 
@@ -389,10 +381,6 @@ end
 
 unescape_string(s::String) = print_to_string(print_unescaped, s)
 
-macro Q_str(raw)
-    :($unescape_string(raw))
-end
-
 ## string interpolation parsing ##
 
 function interp_parse(str::String, unescape::Function)
@@ -420,17 +408,12 @@ end
 
 interp_parse(str::String) = interp_parse(str, unescape_string)
 
-macro str(raw)
-    interp_parse(raw)
-end
+## core string macros ##
 
-macro S_str(raw)
-    interp_parse(raw)
-end
-
-macro I_str(raw)
-    interp_parse(raw, x->x)
-end
+macro   str(raw); interp_parse(raw); end
+macro S_str(raw); interp_parse(raw); end
+macro I_str(raw); interp_parse(raw, x->x); end
+macro Q_str(raw); unescape_string(raw); end
 
 # TODO: S"foo\xe2\x88\x80" == "foo\xe2\x88\x80"
 
