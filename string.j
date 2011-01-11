@@ -78,12 +78,6 @@ function chr2ind(s::String, chr::Int)
     end
 end
 
-function strind(s::String, i::Int)
-    j = start(s)
-    for k = 1:i-1; c, j = next(s,j); end
-    return j
-end
-
 function strchr(s::String, c::Char, i::Int)
     while !done(s,i)
         d, j = next(s,i)
