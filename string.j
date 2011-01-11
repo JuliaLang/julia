@@ -46,6 +46,36 @@ function at_string_end(s::String)
     return i, n
 end
 
+function nextind(s::String, ind::Int)
+    for i = ind:length(s)
+        valid = true
+        try
+            c = s[i]
+        catch
+            valid = false
+        end
+        if valid
+            return i
+        end
+    end
+    length(s) + 1
+end
+
+function prevind(s::String, ind::Int)
+    for i = ind-1:-1:1
+        valid = true
+        try
+            c = s[i]
+        catch
+            valid = false
+        end
+        if valid
+            return i
+        end
+    end
+    0
+end
+
 function ind2chr(s::String, ind::Int)
     if ind < 1
         error("in next: arrayref: index out of range")
