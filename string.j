@@ -78,6 +78,8 @@ function chr2ind(s::String, chr::Int)
     end
 end
 
+# TODO: strchr("xyl\uffphone"[2:end], 'o', 4)
+
 function strchr(s::String, c::Char, i::Int)
     while !done(s,i)
         d, j = next(s,i)

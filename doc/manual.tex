@@ -36,9 +36,8 @@ Viral Shah \vspace{0.5em}
 Scientific computing has traditionally required the highest performance, yet domain experts have largely moved to slower dynamic languages for daily work.
 We believe there are many good reasons to prefer dynamic languages for these applications, and we do not expect their use to diminish.
 Fortunately, modern language design and compiler techniques make it possible to mostly eliminate the performance trade-off and provide a single environment productive enough for prototyping and performant enough for deploying applications.
-However, an open-source language with these characteristics has not emerged.
-Our project, Julia, fills this gap:
-it is a flexible dynamic language, designed expressly for scientific computing, and achieving performance comparable to traditional compiled languages.
+The Julia programming language fills this role:
+it is a flexible and dynamic language, designed expressly for scientific computing, and achieving performance comparable to traditional compiled languages.
 
 The syntax of Julia is directly derived from Matlab, and consequently, any Matlab programmer should feel immediately comfortable with Julia.
 While Matlab is quite effective for prototyping and exploring numerical linear algebra, for programming tasks outside of this relatively narrow scope, Matlab has severe limitations.
@@ -905,77 +904,90 @@ C = [ sum([ A[i,j].*B[j,k] | j ]) | i=1:size(A,1), k=1:size(B,2) ]
 \section{Strings}
 \sec{strings}
 
-Traditionally, strings are conceptualized as sequences of characters, which mathematically is a function from indices to characters.
-When all characters are exactly one byte, this can be conveniently and efficiently represented with a plain old array of bytes.
-It's simple and efficient.
-End of story.
+% Traditionally, strings are conceptualized as sequences of characters, which mathematically is a function from indices to characters.
+% When all characters are exactly one byte, this can be conveniently and efficiently represented with a plain old array of bytes.
+% It's simple and efficient.
+% End of story.
+% 
+% Unicode complicates things because common encodings like UTF-8 and UTF-16 are variable-width, meaning that characters require different numbers of bytes in their representation.
+% In UTF-8, for example, all of the ASCII characters are one byte, encoded just as in ASCII.
+% All other characters, however, take between two and four bytes to represent.
+% This means that you can't efficiently look up the $k$th character of a string by doing array indexing anymore:
+% the $k$th byte of the representation is no longer the $k$th character.
+% Worse still, a byte might not be the beginning of a character at all, but right in the middle of a character (this is called a ``continuation byte'').
+% 
+% If you allow people direct access to the bytes of an encoded string, they can and will do all sorts of bad things that produce invalid Unicode and broken behaviors when Unicode input is received.
+% To provide a string abstraction that makes strings behave like functions from indices to Unicode characters (i.e. code points), you have to chose one of the following:
+% \begin{enumerate}
+% 
+% \item Have fast, natural random access to characters, but store strings so that every character is big enough to accommodate the entire Unicode character set.
+% The natural choice of encoding for this is UTF-32, in which each code point (integer value representing a unique character) is simply represented by its 32-bit integer value.
+% This also requires processing every string before accessing or manipulating it to convert it from its input encoding (usually UTF-8) to UTF-32.
+% Transcoding introduces a lot of overhead, forcing every string to be transcoded, typically both on input and output, as well as inflating memory usage for all strings.
+% 
+% \item Sacrifice the ability to represent every Unicode character and use only the two-byte characters of a 16-bit encoding like UTF-16.
+% With this you can represent virtually all modern languages, but you cannot write in ancient languages like Egyptian hieroglyphs, Linear B, or represent some unusual modern characters such as certain unified Han ideographs.
+% This allows fast random access, and reduces the memory inflation compared to the UTF-32 approach, but still requires transcoding almost every string on input and output.
+% 
+% \item Keep strings in their input form, but make indexing into a string an $\O(k)$ operation which requires scanning the entire string from the beginning to find the $k$th character from there.
+% This turns a lot of straightforward $\O(n)$ string processing algorithms into $\O(n^2)$ algorithms unless you completely avoid indexing into strings altogether.
+% 
+% \item Represent strings by a clever, relatively complex data structure that allows strings to remain encoded, but somehow makes indexing the $k$th character look like it's faster than $\O(k)$, when it is amortized over many operations.
+% One possible way to do this is to remember the last few indices that were accessed and figure out new indices relative to them.
+% 
+% \item Do not allow indexing into strings. Instead, only provide interfaces, such as iterating characters, which are Unicode safe as well as being efficiently implementable without transcoding strings.
+% 
+% \item Ignore the whole issue and just equate strings with byte arrays and let Unicode bugger itself (a.k.a.~the C approach\footnote{To be fair, the C language long predates the Unicode standard.}).
+% 
+% \end{enumerate}
+% Technically, option 5 doesn't actually keep the abstraction of strings as functions from indices to characters, so perhaps it doesn't belong here;
+% and option 6 isn't a solution at all, but rather a matter of deciding that you just don't care.
+% Option 2 is not really a solution, either, but a pragmatic compromise that gets you 90\% of the way (unless you happen to want to process hieroglyphs).
+% Frankly, none of these options is good enough for something as fundamental and performance-critical as string processing.
+% 
+% \subsection{The Partial Function Approach}
+% \sec{partial-function-strings}
+% 
+% Our approach is to change the abstraction of what a string is instead of choosing any of the above.
+% Rather than conceptualizing a string as a function from indices to characters, we conceptualize a string as a \emph{partial function} from indices to characters.
+% What does this mean?
+% It means that when indexing into a string, for some indices no character value is returned:
+% instead of returning a value, the language throws an exception.
+% So in short \verb|str[k]| will throw an exception if $k$ doesn't correspond to a character.
+% For UTF-8 strings that are plain ASCII this will never happen.
+% For UTF-32 strings it will never happen.
+% For UTF-16 strings including only the common two-byte characters it will never happen.
+% For other instances of encoded strings, it could happen, however.
+% 
+% How does this modified abstraction help?
+% It recognizes that bytes and characters are not one-to-one in many encodings, but still allows you store strings in their native encoding and retrieve characters efficiently by a byte index, rather than a character index.
+% If you try to get or set a character at an index that isn't the start of a character, it's an exception---indicating that the partial function isn't defined there.
+% The ``string''---as one normally thinks of it---is the sequence characters returned by the string as the indices range from one to the maximum index.
+% The gotcha is that some indices don't return a character.
+% 
+% Code that na\"ively iterates through all indices will work and work with C-like performance, until it encounters strange input data, at which point it will throw a nice clean exception letting you know exactly what the problem is.
+% You can probably just modify the code to catch the exception and move on to the next index.
+% Alternately, you can rewrite the code to use a Unicode character iterator instead.
+% Moreover, if you always consider string indices as opaque objects, and never do arithmetic with them (iterating through indices counts as arithmetic: \verb|k+=1|), then as long as you only index into a string with an index given to you by a string function, this kind of thing will never happen.
+% 
+% By changing the string abstraction, we can support arbitrary string encodings and other representations at C-like efficiency and with a nice, safe, clean programmatic interface.
 
-Unicode complicates things because common encodings like UTF-8 and UTF-16 are variable-width, meaning that characters require different numbers of bytes in their representation.
-In UTF-8, for example, all of the ASCII characters are one byte, encoded just as in ASCII.
-All other characters, however, take between two and four bytes to represent.
-This means that you can't efficiently look up the $k$th character of a string by doing array indexing anymore:
-the $k$th byte of the representation is no longer the $k$th character.
-Worse still, a byte might not be the beginning of a character at all, but right in the middle of a character (this is called a ``continuation byte'').
-
-If you allow people direct access to the bytes of an encoded string, they can and will do all sorts of bad things that produce invalid Unicode and broken behaviors when Unicode input is received.
-To provide a string abstraction that makes strings behave like functions from indices to Unicode characters (i.e. code points), you have to chose one of the following:
+There are a few notable high-level features about Julia's approach to strings:
 \begin{enumerate}
-
-\item Have fast, natural random access to characters, but store strings so that every character is big enough to accommodate the entire Unicode character set.
-The natural choice of encoding for this is UTF-32, in which each code point (integer value representing a unique character) is simply represented by its 32-bit integer value.
-This also requires processing every string before accessing or manipulating it to convert it from its input encoding (usually UTF-8) to UTF-32.
-Transcoding introduces a lot of overhead, forcing every string to be transcoded, typically both on input and output, as well as inflating memory usage for all strings.
-
-\item Sacrifice the ability to represent every Unicode character and use only the two-byte characters of a 16-bit encoding like UTF-16.
-With this you can represent virtually all modern languages, but you cannot write in ancient languages like Egyptian hieroglyphs, Linear B, or represent some unusual modern characters such as certain unified Han ideographs.
-This allows fast random access, and reduces the memory inflation compared to the UTF-32 approach, but still requires transcoding almost every string on input and output.
-
-\item Keep strings in their input form, but make indexing into a string an $\O(k)$ operation which requires scanning the entire string from the beginning to find the $k$th character from there.
-This turns a lot of straightforward $\O(n)$ string processing algorithms into $\O(n^2)$ algorithms unless you completely avoid indexing into strings altogether.
-
-\item Represent strings by a clever, relatively complex data structure that allows strings to remain encoded, but somehow makes indexing the $k$th character look like it's faster than $\O(k)$, when it is amortized over many operations.
-One possible way to do this is to remember the last few indices that were accessed and figure out new indices relative to them.
-
-\item Do not allow indexing into strings. Instead, only provide interfaces, such as iterating characters, which are Unicode safe as well as being efficiently implementable without transcoding strings.
-
-\item Ignore the whole issue and just equate strings with byte arrays and let Unicode bugger itself (a.k.a.~the C approach\footnote{To be fair, the C language long predates the Unicode standard.}).
-
+\item Like C, but unlike other dynamic languages, Julia has a first-class type representing a single character, called \verb|Char|.
+A \verb|Char| is a special kind of 32-bit integer, whose numeric value represents a single Unicode code point.
+\item Conceptually, a \verb|String| is a \emph{partial function} from indices to \verb|Char| values --- for some index values, no character values is returned, and instead an exception is thrown.
+This for allows efficient indexing into strings by the byte index of an encoded representation rather than by character index, which cannot be implemented efficiently and simply in most encodings.
+\item There are many different classes implementing the \verb|String| interface, not a single special one.
+They all implement a common programming interface, however, and any string type can be used in any function expecting a \verb|String|.
+The predefined string types are no more special than user-defined ones.
+\item Strings are immutable: the value of a \verb|String| object cannot be changed.
+To construct a different string value, you construct a new string object.
 \end{enumerate}
-Technically, option 5 doesn't actually keep the abstraction of strings as functions from indices to characters, so perhaps it doesn't belong here;
-and option 6 isn't a solution at all, but rather a matter of deciding that you just don't care.
-Option 2 is not really a solution, either, but a pragmatic compromise that gets you 90\% of the way (unless you happen to want to process hieroglyphs).
-Frankly, none of these options is good enough for something as fundamental and performance-critical as string processing.
-
-\subsection{The Partial Function Approach}
-\sec{partial-function-strings}
-
-Our approach is to change the abstraction of what a string is instead of choosing any of the above.
-Rather than conceptualizing a string as a function from indices to characters, we conceptualize a string as a \emph{partial function} from indices to characters.
-What does this mean?
-It means that when indexing into a string, for some indices no character value is returned:
-instead of returning a value, the language throws an exception.
-So in short \verb|str[k]| will throw an exception if $k$ doesn't correspond to a character.
-For UTF-8 strings that are plain ASCII this will never happen.
-For UTF-32 strings it will never happen.
-For UTF-16 strings including only the common two-byte characters it will never happen.
-For other instances of encoded strings, it could happen, however.
-
-How does this modified abstraction help?
-It recognizes that bytes and characters are not one-to-one in many encodings, but still allows you store strings in their native encoding and retrieve characters efficiently by a byte index, rather than a character index.
-If you try to get or set a character at an index that isn't the start of a character, it's an exception---indicating that the partial function isn't defined there.
-The ``string''---as one normally thinks of it---is the sequence characters returned by the string as the indices range from one to the maximum index.
-The gotcha is that some indices don't return a character.
-
-Code that na\"ively iterates through all indices will work and work with C-like performance, until it encounters strange input data, at which point it will throw a nice clean exception letting you know exactly what the problem is.
-You can probably just modify the code to catch the exception and move on to the next index.
-Alternately, you can rewrite the code to use a Unicode character iterator instead.
-Moreover, if you always consider string indices as opaque objects, and never do arithmetic with them (iterating through indices counts as arithmetic: \verb|k+=1|), then as long as you only index into a string with an index given to you by a string function, this kind of thing will never happen.
-
-By changing the string abstraction, we can support arbitrary string encodings and other representations at C-like efficiency and with a nice, safe, clean programmatic interface.
 
 \subsection{Characters}
 
-Like C (but unlike Perl, Python, or Ruby), Julia has a type for individual character values: \verb|Char|.
+Like C, but unlike Perl, Python, or Ruby, Julia has a type for individual character values: \verb|Char|.
 A \verb|Char| is really just a 32-bit integer with a special literal representation and some specific arithmetic behaviors.
 Here is how \verb|Char| values are input and shown:
 \begin{verbatim}
@@ -1017,7 +1029,7 @@ If you want to check code points for validity, use the \verb|safe_char| conversi
   invalid Unicode code point: U+110000
 \end{verbatim}
 As of this writing, the Unicode code points are \verb|U+0000| through \verb|U+d7ff| and \verb|U+e000| through \verb|U+10ffff|.
-They are not all yet assigned intelligible meanings, nor are they necessarily interpretable by applications, but all such values are considered valid Unicode.
+They are not all yet assigned intelligible meanings, nor are they necessarily interpretable by applications, but all such values are considered to be valid Unicode.
 
 You can input any Unicode character in single quotes using \verb|\u| followed by up to four hexadecimal digits or \verb|\U| followed by up to eight hexadecimal digits (the longest valid value only requires six):
 \begin{verbatim}
@@ -1081,28 +1093,146 @@ Arithmetic with \verb|Char| values promotes them to \verb|Int32|, however, requi
 \end{verbatim}
 The fact that any arithmetic with \verb|Char|s promotes to \verb|Int32| allows a series of intermediate computations to be done efficiently, only checking that the final value is a valid Unicode code point.
 
-\subsection{String Literals}
-
-As described in the abstract in \Section{partial-function-strings}, in Julia, strings are abstracted as partial functions from indices to characters.
-Thus, the \verb|Char| type is the basic building block of all strings.
-Typically, (but not necessarily), indices correspond to byte offsets into some underlying encoding of a string.
-
-In Julia, standard string literals always produce one of two types of strings:
-\verb|Latin1String| or \verb|UTF8String|.
-Both of these types of strings are implemented using a byte array encoding \verb|Char| values.
-\verb|Latin1String| uses a fixed-width, single-byte encoding, while \verb|UTF8String| uses the variable-width, UTF-8 encoding.
+\subsection{String Basics}
 
 Here is a basic string literal:
 \begin{verbatim}
-  julia> "hello, world"
-  "hello, world"
+  julia> str = "Hello, world.\n"
+  "Hello, world.\n"
 \end{verbatim}
+If you want to extract a character from a string, you index into it:
+\begin{verbatim}
+  julia> str[1]
+  'H'
+
+  julia> str[6]
+  ','
+
+  julia> str[end]
+  '\n'
+
+  julia> str[end-1]
+  '.'
+\end{verbatim}
+Like all other indexing in Julia, it is 1-based, not 0-based.
+Using an index less than 1 or more than \verb|end| will raise an error:
+\begin{verbatim}
+  julia> str[0]
+  in next: arrayref: index out of range
+
+  julia> str[end+1]
+  in next: arrayref: index out of range
+\end{verbatim}
+You can also a extract a substring using range indexing:
+\begin{verbatim}
+  julia> str[4:9]
+  "lo, wo"
+\end{verbatim}
+Note the distinction between \verb|str[6]| and \verb|str[6:6]|:
+\begin{verbatim}
+  julia> str[6]
+  ','
+
+  julia> typeof(ans)
+  Char
+
+  julia> str[6:6]
+  ","
+
+  julia> typeof(ans)
+  SubString
+\end{verbatim}
+The former is a single character value of type \verb|Char|, while the latter is a string value of type \verb|SubString| (we'll get into the nitty-gritty details later).
+
+One of the most useful string operations is concatenation:
+\begin{verbatim}
+  julia> greet = "Hello"
+  "Hello"
+
+  julia> who = "world"
+  "world"
+
+  julia> strcat(greet, ", ", who, ".\n")
+  "Hello, world.\n"
+\end{verbatim}
+As in Perl, you can interpolate values and expressions into strings using \verb|$|:
+\begin{verbatim}
+  julia> "$greet, $who.\n"
+  "Hello, world.\n"
+\end{verbatim}
+This simpler and more readable, and completely equivalent to the above string concatenation---the system rewrites this apparent single string literal into a concatenation of string literals and values.
+The shortest valid expression after an unescaped \verb|$| is used as the interpolated value:
+\begin{verbatim}
+  julia> "1 + 2 = $(1 + 2)"
+  "1 + 2 = 3"
+\end{verbatim}
+Both concatenation and string interpolation call the \verb|string| function to convert objects into \verb|String| form.
+Most non-\verb|String| objects are converted to strings the same way they are shown in the Julia repl:
+\begin{verbatim}
+  julia> v = [1,2,3]
+  [1,2,3]
+
+  julia> "vector: $v"
+  "vector: [1,2,3]"
+\end{verbatim}
+\verb|String|s and \verb|Char|s are interpolated as themselves:
+\begin{verbatim}
+  julia> c = 'x'
+  'x'
+
+  julia> "hi, $c"
+  "hi, x"
+\end{verbatim}
+Another useful string function is \verb|repeat|:
+\begin{verbatim}
+  julia> repeat(".:Z:.", 10)
+  ".:Z:..:Z:..:Z:..:Z:..:Z:..:Z:..:Z:..:Z:..:Z:..:Z:."
+\end{verbatim}
+You can lexicographically compare strings using the standard comparison operators:
+\begin{verbatim}
+  julia> "abracadabra" < "xylophone"
+  true
+
+  julia> "abracadabra" == "xylophone"
+  false
+
+  julia> "Hello, world." != "Goodbye, world."
+  true
+
+  julia> "1 + 2 = 3" == "1 + 2 = $(1 + 2)"
+  true
+\end{verbatim}
+You can search for the index of a particular character using the \verb|strchr| function:
+\begin{verbatim}
+  julia> strchr("xylophone", 'x')
+  1
+
+  julia> strchr("xylophone", 'p')
+  5
+
+  julia> strchr("xylophone", 'z')
+  char not found
+\end{verbatim}
+You can start the search for a character at a given offset by providing a third argument:
+\begin{verbatim}
+  julia> strchr("xylophone", 'o')
+  4
+
+  julia> strchr("xylophone", 'o', 5)
+  7
+\end{verbatim}
+
+\newpage
 Well, that's simple enough.
 What is the actual type and structure this string object?
 \begin{verbatim}
   julia> dump(ans)
   Latin1String(data=[104,101,108,108,111,...,119,111,114,108,100],)
 \end{verbatim}
+Standard string literals like the above always produce either a \verb|Latin1String| or a \verb|UTF8String|.
+Both of these types of strings are implemented using a byte array encoding \verb|Char| values.
+\verb|Latin1String| uses a fixed-width, single-byte encoding, while \verb|UTF8String| uses the variable-width, UTF-8 encoding.
+
 Here are the actual declarations of the basic string types from Julia's bootstrapping code:
 \begin{verbatim}
   type String
