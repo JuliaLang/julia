@@ -271,11 +271,8 @@ strlen(s::RopeString) = strlen(s.head) + strlen(s.tail)
 strcat() = ""
 strcat(s::String) = s
 strcat(x...) = strcat(map(string,x)...)
-
-function strcat(s::String, t::String...)
-    t = strcat(t...)
-    isempty(s) ? t : isempty(t) ? s : RopeString(s, t)
-end
+strcat(s::String, t::String...) =
+    (t = strcat(t...); isempty(s) ? t : isempty(t) ? s : RopeString(s, t))
 
 print(s::RopeString) = print(s.head, s.tail)
 
