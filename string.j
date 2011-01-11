@@ -234,8 +234,6 @@ struct RopeString <: String
     depth::Int32
     length::Index
 
-    # TODO: be more clever about cases like empty strings.
-
     RopeString(h::RopeString, t::RopeString) =
         depth(h.tail) + depth(t) < depth(h.head) ?
             RopeString(h.head, RopeString(h.tail, t)) :
@@ -272,10 +270,14 @@ strlen(s::RopeString) = strlen(s.head) + strlen(s.tail)
 
 strcat() = ""
 strcat(s::String) = s
-strcat(s::String, t::String...) = RopeString(s, strcat(t...))
 strcat(x...) = strcat(map(string,x)...)
 
-print(s::RopeString) = print(s.head,s.tail)
+function strcat(s::String, t::String...)
+    t = strcat(t...)
+    isempty(s) ? t : isempty(t) ? s : RopeString(s, t)
+end
+
+print(s::RopeString) = print(s.head, s.tail)
 
 ## conversion of general objects to strings ##
 
