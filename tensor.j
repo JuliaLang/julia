@@ -241,6 +241,12 @@ end
 
 ## Indexing: assign ##
 
+# 1-d indexing is assumed defined on subtypes
+assign(t::Tensor, x, i::Index) =
+    error("assign not defined for ",typeof(t))
+assign(t::Tensor, x::Tensor, i::Index) =
+    error("assign not defined for ",typeof(t))
+
 assign(t::Tensor, x, r::Real...) = (t[map(x->convert(Int32,round(x)),r)...] = x)
 
 function assign(A::Vector, x, I::Vector{Index})
