@@ -67,7 +67,7 @@ Here's how you start and interact with the Julia read-eval-print loop (repl):
    _/ |\__'_|_|_|\__'_|  |  
   |__/                   |
 
-  julia> 1+2
+  julia> 1 + 2
   3
 
   julia> load("file.j");
@@ -380,8 +380,8 @@ Here are some simple examples:
   julia> 3 < -0.5
   false
 \end{verbatim}
-As can be seen here, promotion also applies to comparisons:
-the comparisons are performed in whatever type the arguments are promoted to, which is generally the smallest type by which they can all be faithfully represented.
+As is evident here, promotion also applies to comparisons:
+the comparisons are performed in whatever type the arguments are promoted to, which is generally the smallest type in which all the values can be faithfully represented.
 
 After promotion to a common type, integers are compared in the standard manner:
 by comparison of bits.
@@ -972,12 +972,12 @@ C = [ sum([ A[i,j].*B[j,k] | j ]) | i=1:size(A,1), k=1:size(B,2) ]
 % 
 % By changing the string abstraction, we can support arbitrary string encodings and other representations at C-like efficiency and with a nice, safe, clean programmatic interface.
 
-There are a few notable high-level features about Julia's approach to strings:
+There are a few noteworthy high-level features about Julia's approach to strings:
 \begin{enumerate}
 \item Like C, but unlike other dynamic languages, Julia has a first-class type representing a single character, called \verb|Char|.
 A \verb|Char| is a special kind of 32-bit integer, whose numeric value represents a single Unicode code point.
 \item Conceptually, a \verb|String| is a \emph{partial function} from indices to \verb|Char| values --- for some index values, no character values is returned, and instead an exception is thrown.
-This for allows efficient indexing into strings by the byte index of an encoded representation rather than by character index, which cannot be implemented efficiently and simply in most encodings.
+This for allows efficient indexing into strings by the byte index of an encoded representation rather than by character index, which cannot be implemented efficiently and simply in variable-width encodings.
 \item There are many different classes implementing the \verb|String| interface, not a single special one.
 They all implement a common programming interface, however, and any string type can be used in any function expecting a \verb|String|.
 The predefined string types are no more special than user-defined ones.
@@ -1022,14 +1022,11 @@ If you want to check code points for validity, use the \verb|safe_char| conversi
   julia> char(0x110000)
   '\U00110000'
 
-  julia> safe_char(0xd800)
-  invalid Unicode code point: U+d800
-
   julia> safe_char(0x110000)
   invalid Unicode code point: U+110000
 \end{verbatim}
 As of this writing, the Unicode code points are \verb|U+0000| through \verb|U+d7ff| and \verb|U+e000| through \verb|U+10ffff|.
-They are not all yet assigned intelligible meanings, nor are they necessarily interpretable by applications, but all such values are considered to be valid Unicode.
+They are not all yet assigned intelligible meanings, nor are they necessarily interpretable by applications, but all such values are considered to be valid Unicode characters.
 
 You can input any Unicode character in single quotes using \verb|\u| followed by up to four hexadecimal digits or \verb|\U| followed by up to eight hexadecimal digits (the longest valid value only requires six):
 \begin{verbatim}
@@ -1114,8 +1111,8 @@ If you want to extract a character from a string, you index into it:
   julia> str[end-1]
   '.'
 \end{verbatim}
-Like all other indexing in Julia, it is 1-based, not 0-based.
-Using an index less than 1 or more than \verb|end| will raise an error:
+Like all indexing in Julia, string indexing is 1-based, not 0-based.
+Using an index less than 1 or more than \verb|end| raises an error:
 \begin{verbatim}
   julia> str[0]
   in next: arrayref: index out of range
@@ -1128,7 +1125,7 @@ You can also a extract a substring using range indexing:
   julia> str[4:9]
   "lo, wo"
 \end{verbatim}
-Note the distinction between \verb|str[6]| and \verb|str[6:6]|:
+Note the distinction between \verb|str[k]| and \verb|str[k:k]|:
 \begin{verbatim}
   julia> str[6]
   ','
@@ -1142,7 +1139,8 @@ Note the distinction between \verb|str[6]| and \verb|str[6:6]|:
   julia> typeof(ans)
   SubString
 \end{verbatim}
-The former is a single character value of type \verb|Char|, while the latter is a string value of type \verb|SubString| (we'll get into the nitty-gritty details later).
+The former is a single character value of type \verb|Char|, while the latter is a string value of type \verb|SubString| (we'll get into the nitty-gritty details later), having a string length of one.
+These are very different things.
 
 One of the most useful string operations is concatenation:
 \begin{verbatim}
@@ -1220,6 +1218,9 @@ You can start the search for a character at a given offset by providing a third 
 
   julia> strchr("xylophone", 'o', 5)
   7
+
+  julia> strchr("xylophone", 'o', 8)
+  char not found
 \end{verbatim}
 
 \newpage
