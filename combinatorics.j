@@ -69,7 +69,7 @@ end
 sort{T <: Real}(a::Vector{T}) = quicksort(copy(a), 1, length(a))
 
 function sort{T}(a::Vector{T})
-    (x,p) = mergesort(copy(a), 1:length(a), 1, length(a),
+    (x,p) = mergesort(copy(a), linspace(1,length(a)), 1, length(a),
                       Array(T, length(a)), Array(Size, length(a)) )
     return x
 end
@@ -134,7 +134,7 @@ function insertionsort(a::Vector, p::Vector{Size}, lo, hi)
         a[j] = x
         p[j] = xp
     end
-    a
+    (a, p)
 end
 
 function mergesort(a::Vector, p::Vector{Size}, lo, hi,

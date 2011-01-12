@@ -13,6 +13,8 @@ ind2chr(s::Latin1String, i::Int) = i
 chr2ind(s::Latin1String, i::Int) = i
 strchr(s::Latin1String, c::Char) =
     c <= 0xff ? memchr(s.data, c) : error("char not found")
+nextind(s::Latin1String, i::Int) = i
+prevind(s::Latin1String, i::Int) = i-1
 
 ## outputing Latin-1 strings ##
 
