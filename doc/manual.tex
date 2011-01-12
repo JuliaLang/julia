@@ -1222,12 +1222,33 @@ You can start the search for a character at a given offset by providing a third 
   julia> strchr("xylophone", 'o', 8)
   char not found
 \end{verbatim}
+Some other useful functions include:
+\begin{itemize}
+\item \verb|length(str)| gives the maximal (byte) index that can be used to index into \verb|str|.
 
-\newpage
-Well, that's simple enough.
-What is the actual type and structure this string object?
+\item \verb|strlen(str)| the number of characters in \verb|str|.
+This is \emph{not} the same as \verb|length(str)|, but we do always have the identity \verb|strlen(str)| $\le$ \verb|length(str)|.
+
+\item \verb|i = start(str)| gives the first valid index at which a character can be found in \verb|str| (typically 1).
+
+\item \verb|c, j = next(str,i)| returns next character at or after the index \verb|i| and the next valid character index following that.
+With the \verb|start| and \verb|length|, can be used to iterate through the characters in \verb|str|.
+
+% TODO: figure this out and fix it.
+
+\item \verb|c, j = prev(str,i)| returns the character at or before index \verb|i| and the index at which it occurs.
+With \verb|length| and \verb|start| can be used to iterate through the characters in \verb|str| in reverse.
+
+\item \verb|ind2chr(str,i)| gives the number of characters in \verb|str| up to and including any at index \verb|i|.
+
+\item \verb|chr2int(str,j)| gives the index at which the \verb|j|th character in \verb|str| occurs.
+\end{itemize}
+
+\subsection{String Internals}
+
+What is the actual type and structure a string object?
 \begin{verbatim}
-  julia> dump(ans)
+  julia> dump("Hello, world.\n")
   Latin1String(data=[104,101,108,108,111,...,119,111,114,108,100],)
 \end{verbatim}
 Standard string literals like the above always produce either a \verb|Latin1String| or a \verb|UTF8String|.
@@ -1268,9 +1289,7 @@ String literals created in Julia without escapes, however, can be safely represe
 In particular, \verb|Latin1String|s have zero decoding overhead because each character is represented directly by its byte value.
 Therefore, Julia uses \verb|Latin1String|s internally whenever it can.
 
-\subsection{Many Types of Strings}
-
-Because there are many different ways a sequence of characters can be represented, Julia has many different string types, each with a different underlying implementation.
+Because there are so many different ways a sequence of characters can be represented, Julia has many different string types, each with a different underlying implementation.
 Also, programmers can easily define their own new string types.
 The distinction between different string implementations is transparent to the casual observer in Julia.
 You can perform string operations with all combinations of types of strings, and they will work:
@@ -1293,9 +1312,11 @@ The usage is completely transparent, however:
 regardless of what kinds of strings you have, you simply call \verb|a < b| to compare them.
 If \verb|memcmp| can be used, it will be;
 if not, the comparison will work, albeit not quite as quickly.
+The same trick applies to comparing a pair of \verb|UTF8String|s:
+UTF-8 is carefully designed to allow using \verb|memcmp|.
 
-Not having a single canonical string implementation provides significant flexibility.
-For example, Julia performs string concatenation using a simple but effective ropes implementation:
+Allowing many different string representations to coexist and interoperate smoothly provides significant flexibility and power.
+For example, Julia performs string concatenation using ropes:
 \begin{verbatim}
   julia> strcat("foo","bar")
   "foobar"
@@ -1303,8 +1324,8 @@ For example, Julia performs string concatenation using a simple but effective ro
   julia> dump(ans)
   RopeString(head="foo",tail="bar",depth=1,length=6,)
 \end{verbatim}
-This makes concatenation, which is by far one of the most common string operations, take $\O(1)$ time rather than $O(n)$ time, as it does if a new string buffer must be allocated and both strings copied into it.
-A slightly less common operation is repeating a string:
+This makes concatenation, which is by far one of the most common string operations, take $\O(1)$ time rather than $O(n)$ time, as it does if a new memory buffer must be allocated and both strings copied into it.
+Another very useful operation is repeating a string:
 \begin{verbatim}
   julia> zzz = repeat(".:Z:.", 100000);
 
