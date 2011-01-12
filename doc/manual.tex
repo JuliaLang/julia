@@ -1384,38 +1384,218 @@ If you actually want to allocate all that memory, you can force Julia to do so b
 \section{Calling C Functions}
 \section{Running External Programs}
 
-Perl, Python, and Ruby are well known for their ability to easily run and interact with other programs.
-In Perl and Ruby, backticks provide a powerful and simple way to call a program and capture its output as as a string:
-\begin{verbatim}
-  #!/usr/bin/env perl
-  $greeting = `echo -n hello`;
-  print "$greeting, world.\n";
-\end{verbatim}
-In this rather simplistic example, the \verb|echo| program prints the string \verb|"hello"| and that output is captured into the variable \verb|$greeting|.
-Arbitrary shell commands can be spawned in backticks because backticks actually spawn a shell to interpret and run these commands.
-Thus, much of the power of this approach comes from the shell---the programming language just spawns the shell and arranges to capture the output.
-You can pass data to the programs spawned by interpolating values into the shell command:
-\begin{verbatim}
-  #!/usr/bin/env perl
-  $sorted = `sort -n $file`;
-\end{verbatim}
-Here things become a bit dangerous:
-if the value of the variable \verb|$file| contains characters that are specially interpreted by the shell, they will be.
-For example, if \verb|$file| is the string \verb|"/Volumes/External HD/data.csv"|, then the above command will attempt to sort the contents of two files named \verb|/Volumes/External| and \verb|HD/data.csv|, which are likely to either not exist, or possibly worse, not be the intended files.
+% Perl, Python, and Ruby are well known for their ability to easily run and interact with other programs.
+% In Perl and Ruby, backticks provide a powerful and simple way to call a program and capture its output as as a string:
+% \begin{verbatim}
+%   #!/usr/bin/env perl
+%   $greeting = `echo -n hello`;
+%   print "$greeting, world.\n";
+% \end{verbatim}
+% In this rather simplistic example, the \verb|echo| program prints the string \verb|"hello"| and that output is captured into the variable \verb|$greeting|.
+% Arbitrary shell commands can be spawned in backticks because backticks actually spawn a shell to interpret and run these commands.
+% Thus, much of the power of this approach comes from the shell---the programming language just spawns the shell and arranges to capture the output.
+% You can pass data to the programs spawned by interpolating values into the shell command:
+% \begin{verbatim}
+%   #!/usr/bin/env perl
+%   $sorted = `sort -n $file`;
+% \end{verbatim}
+% Here things become a bit dangerous:
+% if the value of the variable \verb|$file| contains characters that are specially interpreted by the shell, they will be.
+% For example, if \verb|$file| is the string \verb|"/Volumes/External HD/data.csv"|, then the above command will attempt to sort the contents of two files named \verb|/Volumes/External| and \verb|HD/data.csv|, which are likely to either not exist, or possibly worse, not be the intended files.
+% 
+% There are two approaches one can take to address this issue: escape all the shell metacharacters in the the string \verb|$file| before interpolating it, or avoid using the shell by calling a lower level function like \verb|exec|.
+% Both Perl and Ruby provide some ability to start a program and then read from its output file descriptor, but these approaches rapidly become quite cumbersome.
+% Shell metacharacter escaping is provided by some third party modules, but is not a standard part of the installation of any of the scripting languages, and is hard to get right:
+% the shell itself has a lot of complexity and syntax.
+% In practice, programmers calling external programs simply tend to just hope that there are no strange characters in their file names.
+% A few of the more paranoid will wrap arguments in single quotes within the backticks, writing \verb|`sort -n '$file'`|.
+% This, however, is quite ugly, annoying, and worst of all, doesn't actually fix the problem.
+% 
+% Julia takes the second approach:
+% instead of calling a shell to spawn external commands, Julia performs all the tricky UNIX pipe plumbing for you.
+% Moreover, it allows you to easily create pipelines \emph{in Julia} where one command pipes output to another.
+% In essence, Julia aims to be a better shell than the shell.
 
-There are two approaches one can take to address this issue: escape all the shell metacharacters in the the string \verb|$file| before interpolating it, or avoid using the shell by calling a lower level function like \verb|exec|.
-Both Perl and Ruby provide some ability to start a program and then read from its output file descriptor, but these approaches rapidly become quite cumbersome.
-Shell metacharacter escaping is provided by some third party modules, but is not a standard part of the installation of any of the scripting languages, and is hard to get right:
-the shell itself has a lot of complexity and syntax.
-In practice, programmers calling external programs simply tend to just hope that there are no strange characters in their file names.
-A few of the more paranoid will wrap arguments in single quotes within the backticks, writing \verb|`sort -n '$file'`|.
-This, however, is quite ugly, annoying, and worst of all, doesn't actually fix the problem.
+Julia borrows backtick notation for commands from shells, Perl, and Ruby.
+However, in Julia, writing
+\begin{verbatim}
+  julia> `echo hello`
+  `echo hello`
+\end{verbatim}
+differs in a several aspects from the behavior in shells, Perl, or Ruby:
+\begin{itemize}
 
-Julia takes the second approach:
-instead of calling a shell to spawn external commands, Julia performs all the tricky UNIX pipe plumbing for you.
-Moreover, it allows you to easily create pipelines \emph{in Julia} where one command pipes output to another.
-In essence, Julia aims to be a better shell than the shell.
-Backtick notation is retained, but in Julia it doesn't run the command immediately, but rather creates a \verb|Cmd| object:
+\item Instead of immediately running the command, backticks create a \verb|Cmd| object to represent the command.
+You can use this \verb|Cmd| object to connect this command to others via UNIX pipes, run it, write to it and read from it.
+
+\item When the command is run, Julia doesn't capture its output unless you specifically arrange for it to.
+Rather, the output of the command by default goes to \verb|stdout| as it would using \verb|libc|'s \verb|system| call.
+
+\item The command is never run with a shell.
+Instead, Julia parses the command syntax directly, appropriately interpolating variables and splitting on words as the shell would, respecting shell quoting syntax.
+The command is run as \verb|julia|'s immediate child process, using \verb|fork| and \verb|exec| calls.
+
+\end{itemize}
+Here's a simple example of actually running an external program:
+\begin{verbatim}
+  julia> run(`echo hello`)
+  hello
+  true
+\end{verbatim}
+The \verb|hello| is the output of the \verb|echo| command, while the \verb|true| is the return value of the command, indicating that it succeeded.
+(These are colored differently by the repl if your terminal supports color.)
+
+\subsection{Interpolation}
+
+Suppose you want to do something a bit more complicated and use the name of a file in the variable \verb|file| as an argument to a command.
+You can use \verb|$| for interpolation much as you would in a string literal:
+\begin{verbatim}
+  julia> file = "/etc/passwd"
+  "/etc/passwd"
+
+  julia> `sort $file`
+  `sort /etc/passwd`
+\end{verbatim}
+A common pitfall when running external programs via a shell is that if a file name contains characters that are special to the shell, they may cause undesirable behavior.
+Suppose, for example, rather than \verb|/etc/passwd|, we wanted to sort the contents of the file \verb|/Volumes/External HD/data.csv|.
+Let's try it:
+\begin{verbatim}
+  julia> file = "/Volumes/External HD/data.csv"
+  "/Volumes/External HD/data.csv"
+
+  julia> `sort -n $file`
+  `sort -n '/Volumes/External HD/data.csv'`
+\end{verbatim}
+Julia knows that \verb|file| is supposed to interpolated as a whole word, so it quotes the argument as necessary.\footnote{This is a bit inaccurate:
+the value of \texttt{file} is never interpreted by a shell, so there's no need for actual quoting.
+The quotes are inserted only for presentation to the user such that you can cut and paste it back into the repl.}
+This will even work if you interpolate a value as just part of a shell word:
+\begin{verbatim}
+  julia> path = "/Volumes/External HD"
+  "/Volumes/External HD"
+
+  julia> name = "data"
+  "data"
+
+  julia> ext = "csv"
+  "csv"
+
+  julia> `sort $path/$name.$ext`
+  `sort '/Volumes/External HD/data.csv'`
+\end{verbatim}
+But what if you \emph{want} to interpolate multiple words?
+Just use an array (or any other iterable container):
+\begin{verbatim}
+  julia> files = ["/etc/passwd","/Volumes/External HD/data.csv"]
+  ["/etc/passwd","/Volumes/External HD/data.csv"]
+
+  julia> `grep foo $files`
+  `grep foo /etc/passwd '/Volumes/External HD/data.csv'`
+\end{verbatim}
+If you interpolate an array as part of a shell word, Julia emulates the shell \verb|{a,b,c}| shell generation behavior:
+\begin{verbatim}
+  julia> names = ["foo","bar","baz"]
+  ["foo","bar","baz"]
+
+  julia> `grep xylophone $names.txt`
+  `grep xylophone foo.txt bar.txt baz.txt`
+\end{verbatim}
+If you interpolate multiple arrays, the shell's Cartesian product generation behavior is emulated:
+\begin{verbatim}
+  julia> names = ["foo","bar","baz"]
+  ["foo","bar","baz"]
+
+  julia> exts = ["aux","log"]
+  ["aux","log"]
+
+  julia> `rm -f $names.$exts`
+  `rm -f foo.aux foo.log bar.aux bar.log baz.aux baz.log`
+\end{verbatim}
+
+\subsection{Quoting}
+
+Inevitably, one wants to write commands that aren't quite so simple, and it becomes necessary to use quotes.
+Here's a typical example of a perl one-liner at shell prompt:
+\begin{verbatim}
+  $ perl -le '$|=1; for (0..3) { print }'
+  0
+  1
+  2
+  3
+\end{verbatim}
+One wants to use single quotes around the Perl expression for two reasons:
+so that spaces don't break it into multiple shell words, and uses of variables like \texttt{\$|} (yes, that's a variable), don't cause shell interpolation.
+In other instances, you want to use double quotes so that interpolation does occur:
+\begin{verbatim}
+  $ first="A"
+  $ second="B"
+  $ perl -le '$|=1; print for @ARGV' "1: $first" "2: $second"
+  1: A
+  2: B
+\end{verbatim}
+The Julia backtick syntax is specifically designed so that you can simply cut-and-paste shell commands as-is directly into it and they will work.
+Let's try the above two examples:
+\begin{verbatim}
+  julia> `perl -le '$|=1; for (0..3) { print }'`
+  `perl -le '$|=1; for (0..3) { print }'`
+
+  julia> run(ans)
+  0
+  1
+  2
+  3
+  true
+
+  julia> first = "A"
+  "A"
+
+  julia> second = "B"
+  "B"
+
+  julia> `perl -le 'print for @ARGV' "1: $first" "2: $second"`
+  `perl -le 'print for @ARGV' '1: A' '2: B'`
+
+  julia> run(ans)
+  1: A
+  2: B
+  true
+\end{verbatim}
+In short, quoting of words, interpolation, and escaping inside of Julia's backticks all behave exactly the same way as they do in a shell.
+When in doubt, cut and paste.
+Since Julia shows commands to you before running them, you can easily and safely just examine its interpretation before doing anything.
+
+\subsection{Pipelines}
+
+One thing that does not work inside of Julia's backticks like it does in the shell are metacharacters like \texttt{|}, \verb|&|, and \verb|>|.
+Unlike in the shell, inside of Julia's backticks, a pipe is always just a pipe:
+\begin{verbatim}
+  julia> run(`echo hello | sort`)
+  hello | sort
+  true
+\end{verbatim}
+This command prints the word ``hello'' followed by a literal pipe character followed by the word ``sort.''
+Then how does one construct a pipeline?
+Use Julia's \texttt{|} operator on \verb|Cmd| objects instead:
+\begin{verbatim}
+  julia> run(`echo hello` | `sort`)
+  hello
+  true
+\end{verbatim}
+This pipes the output of the \verb|echo| command to the \verb|sort| command.
+Of course, this isn't terribly interesting since there's only one line to sort, but we can certainly do much more interesting things:
+\begin{verbatim}
+  julia> run(`cut -d: -f3 /etc/passwd` | `sort -n` | `tail -n5`)
+  210
+  211
+  212
+  213
+  214
+  true
+\end{verbatim}
+This prints the highest five user IDs on a UNIX system.
+
+\newpage
+is retained, but in Julia it doesn't run the command immediately, but rather creates a \verb|Cmd| object:
 \begin{verbatim}
   julia> cmd = `echo hello`
   `echo hello`
