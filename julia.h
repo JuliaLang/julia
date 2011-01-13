@@ -720,7 +720,7 @@ typedef struct _jl_savestate_t {
     struct _jl_task_t *eh_task;
     // eh_ctx is where I go to handle an exception yielded to me
     jmp_buf *eh_ctx;
-    int err;
+    ptrint_t err;
     jl_value_t *ostream_obj;
     ios_t *current_output_stream;
 #ifdef JL_GC_MARKSWEEP

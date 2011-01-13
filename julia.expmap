@@ -66,6 +66,13 @@
     ios_copyuntil;
     connect_to_host;
     open_any_tcp_port;
+    jl_sizeof_fd_set;
+    jl_sizeof_timeval;
+    jl_set_timeval;
+    jl_fd_clr;
+    jl_fd_isset;
+    jl_fd_set;
+    jl_fd_zero;
     jl_wait_msg;
     jl_read_avail;
     jl_nb_available;

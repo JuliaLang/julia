@@ -1,4 +1,5 @@
 sizeof_ios_t = ccall(:jl_sizeof_ios_t, Int32, ())
+sizeof_fd_set = ccall(:jl_sizeof_fd_set, Int32, ())
 
 struct IOStream
     ios::Array{Uint8,1}
@@ -351,7 +352,7 @@ function deserialize(s, ::Type{StructKind})
     return deserialize(s, t)
 end
 
-# default struct deserializer
+# default structure deserializer
 function deserialize(s, t::Type)
     assert(isa(t,StructKind))
     nf = length(t.names)
@@ -374,4 +375,71 @@ function deserialize(s, t::Type)
         return ccall(:jl_new_structt, Any,
                      (Any,Any), t, ntuple(nf, i->deserialize(s)))
     end
+end
+
+## select interface ##
+
+struct FDSet
+    data::Array{Uint8,1}
+    nfds::Int32
+
+    function FDSet()
+        ar = Array(Uint8, sizeof_fd_set)
+        ccall(:jl_fd_zero, Void, (Ptr{Void},), ar)
+        new(ar, 0)
+    end
+end
+
+isempty(s::FDSet) = (s.nfds==0)
+
+function add(s::FDSet, i::Int)
+    if i >= sizeof_fd_set/8
+        error("descriptor number too high")
+    end
+    ccall(:jl_fd_set, Void, (Ptr{Void}, Int32), s.data, int32(i))
+    if i >= s.nfds
+        s.nfds = i+1
+    end
+    s
+end
+
+function has(s::FDSet, i::Int)
+    if i < sizeof_fd_set/8
+        return ccall(:jl_fd_isset, Int32,
+                     (Ptr{Void}, Int32), s.data, int32(i))!=0
+    end
+    return false
+end
+
+function del(s::FDSet, i::Int)
+    if i < sizeof_fd_set/8
+        ccall(:jl_fd_clr, Void, (Ptr{Void}, Int32), s.data, int32(i))
+        if i == s.nfds-1
+            s.nfds -= 1
+            while s.nfds>0 && !has(s, s.nfds-1)
+                s.nfds -= 1
+            end
+        end
+    end
+    s
+end
+
+function del_all(s::FDSet)
+    ccall(:jl_fd_zero, Void, (Ptr{Void},), s.data)
+    s.nfds = 0
+    s
+end
+
+function select_read(readfds::FDSet, timeout::Real)
+    if timeout == Inf
+        tout = C_NULL
+    else
+        tv = Array(Uint8, ccall(:jl_sizeof_timeval, Int32, ()))
+        ccall(:jl_set_timeval, Void, (Ptr{Void}, Float64),
+              tv, float64(timeout))
+        tout = convert(Ptr{Void}, tv)
+    end
+    return ccall(dlsym(libc, :select), Int32,
+                 (Int32, Ptr{Void}, Ptr{Void}, Ptr{Void}, Ptr{Void}),
+                 readfds.nfds, readfds.data, C_NULL, C_NULL, tout)
 end

@@ -44,6 +44,36 @@ void jl__not__used__()
     open_any_tcp_port(&p);
 }
 
+DLLEXPORT size_t jl_sizeof_fd_set() { return sizeof(fd_set); }
+
+DLLEXPORT size_t jl_sizeof_timeval() { return sizeof(struct timeval); }
+
+DLLEXPORT void jl_set_timeval(struct timeval *tv, double tout)
+{
+    tv->tv_sec = (int)tout;
+    tv->tv_usec = (int)((tout-trunc(tout))*1.0e6);
+}
+
+DLLEXPORT void jl_fd_clr(fd_set *set, int fd)
+{
+    FD_CLR(fd, set);
+}
+
+DLLEXPORT int jl_fd_isset(fd_set *set, int fd)
+{
+    return FD_ISSET(fd, set);
+}
+
+DLLEXPORT void jl_fd_set(fd_set *set, int fd)
+{
+    FD_SET(fd, set);
+}
+
+DLLEXPORT void jl_fd_zero(fd_set *set)
+{
+    FD_ZERO(set);
+}
+
 DLLEXPORT
 int jl_wait_msg(int fd)
 {

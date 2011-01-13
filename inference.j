@@ -717,7 +717,7 @@ function typeinf(linfo::LambdaStaticData,atypes::Tuple,sparams::Tuple, cop, def)
     recpts = IntSet(n+1)  # statements that depend recursively on our value
     W = IntSet(n+1)
     # initial set of pc
-    adjoin(W,1)
+    add(W,1)
     # initial types
     for v=vars
         s[1][v] = Undef
@@ -762,14 +762,14 @@ function typeinf(linfo::LambdaStaticData,atypes::Tuple,sparams::Tuple, cop, def)
             stmt = body[pc]
             changes = interpret(stmt, s[pc], sv)
             if frame.recurred
-                adjoin(recpts, pc)
+                add(recpts, pc)
                 frame.recurred = false
             end
             if !is(cur_hand,())
                 # propagate type info to exception handler
                 l = cur_hand[1]::Int32
                 if changed(changes, s[l], vars)
-                    adjoin(W, l)
+                    add(W, l)
                     update(s[l], changes, vars)
                 end
             end
@@ -782,7 +782,7 @@ function typeinf(linfo::LambdaStaticData,atypes::Tuple,sparams::Tuple, cop, def)
                     l = findlabel(body,stmt.args[2])
                     handler_at[l] = cur_hand
                     if changed(changes, s[l], vars)
-                        adjoin(W, l)
+                        add(W, l)
                         update(s[l], changes, vars)
                     end
                 elseif is(hd,symbol("return"))
@@ -792,7 +792,7 @@ function typeinf(linfo::LambdaStaticData,atypes::Tuple,sparams::Tuple, cop, def)
                         frame.result = tmerge(frame.result, rt)
                         # revisit states that recursively depend on this
                         for r=recpts
-                            adjoin(W,r)
+                            add(W,r)
                         end
                     end
                 elseif is(hd,:enter)
@@ -938,7 +938,7 @@ end
 
 occurs_more(e, pred, n) = pred(e) ? 1 : 0
 
-function contains(arr, item)
+function contains_is(arr, item)
     for i = 1:length(arr)
         if is(arr[i],item)
             return true
@@ -1029,7 +1029,7 @@ function inlineable(e::Expr, vars)
     end
     # avoid capture if the function has free variables with the same name
     # as our vars
-    if occurs_more(expr, x->(has(vars,x)&&!contains(args,x)), 0) > 0
+    if occurs_more(expr, x->(has(vars,x)&&!contains_is(args,x)), 0) > 0
         return NF
     end
     # ok, substitute argument expressions for argument names in the body

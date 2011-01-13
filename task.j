@@ -7,7 +7,8 @@ next(t::Task, val) = (val, yieldto(t))
 Runnable_Q = Queue()
 Waiting_Set = idtable()
 
-select(s::IOStream) = ccall(:jl_read_avail, Int32, (Ptr{Void},), s.ios) != 0
+available(s::IOStream) =
+    ccall(:jl_read_avail, Int32, (Ptr{Void},), s.ios) != 0
 
 function schedule()
     global Runnable_Q
@@ -25,7 +26,7 @@ function schedule()
         # make waiting tasks runnable where possible
         to_wake = Queue()
         for (t, ios) = Waiting_Set
-            if select(ios)
+            if available(ios)
                 enq(to_wake, t)
                 if !is(t, task)
                     enq(Runnable_Q, t)
