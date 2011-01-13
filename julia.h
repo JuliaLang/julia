@@ -306,6 +306,8 @@ extern jl_sym_t *unbound_sym; extern jl_sym_t *macro_sym;
 extern jl_sym_t *locals_sym;  extern jl_sym_t *colons_sym;
 extern jl_sym_t *symbol_sym;  extern jl_sym_t *unexpanded_sym;
 extern jl_sym_t *Any_sym;     extern jl_sym_t *method_sym;
+extern jl_sym_t *enter_sym;   extern jl_sym_t *leave_sym;
+extern jl_sym_t *exc_sym;
 extern jl_sym_t *static_typeof_sym;
 
 #ifdef BITS64
@@ -780,12 +782,12 @@ static inline void jl_eh_restore_state(jl_savestate_t *ss)
 #endif
 }
 
+void jl_enter_handler(jl_savestate_t *ss, jmp_buf *handlr);
+void jl_pop_handler(int n);
+
 #define JL_TRY                                                          \
     int i__tr, i__ca; jl_savestate_t __ss; jmp_buf __handlr;            \
-    jl_eh_save_state(&__ss);                                            \
-    jl_current_task->state.prev = &__ss;                                \
-    jl_current_task->state.eh_task = jl_current_task;                   \
-    jl_current_task->state.eh_ctx = &__handlr;                          \
+    jl_enter_handler(&__ss, &__handlr);                                 \
     if (!setjmp(__handlr))                                              \
         for (i__tr=1; i__tr; i__tr=0, jl_eh_restore_state(&__ss))
 

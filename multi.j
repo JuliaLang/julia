@@ -40,14 +40,13 @@ function jl_worker(fd)
         end
         local f, args
         got_msg = false
-        quit = false
         try
             (f, args) = recv_msg(sock)
             #print("got ", tuple(f, map(typeof,args)...), "\n")
             got_msg = true
         catch e
             if isa(e,EOFError)
-                quit = true
+                break
             else
                 print("deserialization error: ", e, "\n")
                 read(sock, Uint8, nb_available(sock))
@@ -55,9 +54,6 @@ function jl_worker(fd)
                 #    read(sock, Uint8)
                 #end
             end
-        end
-        if quit
-            break
         end
         if got_msg
             # handle message
@@ -72,6 +68,46 @@ function jl_worker(fd)
     end
 end
 
+# the entry point for julia worker processes. does not return.
+# argument is descriptor to write listening port # to.
+function start_worker(wrfd)
+    port = [int16(9009)]
+    sockfd = ccall(:open_any_tcp_port, Int32, (Ptr{Int16},), port)
+    if sockfd == -1
+        error("could not bind socket")
+    end
+    io = fdio(wrfd)
+    write(io, port[1])
+    flush(io)
+    #close(io)
+    # close stdin; workers will not use it
+    ccall(dlsym(libc, :close), Int32, (Int32,), 0)
+
+    connectfd = ccall(dlsym(libc, :accept), Int32,
+                      (Int32, Ptr{Void}, Ptr{Void}),
+                      sockfd, C_NULL, C_NULL)
+    jl_worker(connectfd)
+    ccall(dlsym(libc, :close), Int32, (Int32,), connectfd)
+    ccall(dlsym(libc, :close), Int32, (Int32,), sockfd)
+    ccall(dlsym(libc, :exit) , Void , (Int32,), 0)
+end
+
+# establish an SSH tunnel to a remote worker
+# returns P such that localhost:P connects to host:port
+function worker_tunnel(host, port)
+    localp = 9201
+    while !run(`ssh -f -o ExitOnForwardFailure=yes julia@$host -L $localp:$host:$port -N`)
+        localp += 1
+    end
+    localp
+end
+
+function start_remote_worker(host)
+    proc = `ssh -f julia@$host julia -e 'start_worker(1)'`
+    port = 9009 # TODO: run proc and read real port
+    port
+end
+
 function start_local_worker()
     fds = Array(Int32, 2)
     ccall(dlsym(libc, :pipe), Int32, (Ptr{Int32},), fds)
@@ -79,28 +115,12 @@ function start_local_worker()
     wrfd = fds[2]
 
     if fork()==0
-        port = [int16(9009)]
-        sockfd = ccall(:open_any_tcp_port, Int32, (Ptr{Int16},), port)
-        if sockfd == -1
-            error("could not bind socket")
-        end
-        io = fdio(wrfd)
-        write(io, port[1])
-        close(io)
-        # close stdin; workers will not use it
-        ccall(dlsym(libc, :close), Int32, (Int32,), 0)
-
-        connectfd = ccall(dlsym(libc, :accept), Int32,
-                          (Int32, Ptr{Void}, Ptr{Void}),
-                          sockfd, C_NULL, C_NULL)
-        jl_worker(connectfd)
-        ccall(dlsym(libc, :close), Int32, (Int32,), connectfd)
-        ccall(dlsym(libc, :close), Int32, (Int32,), sockfd)
-        ccall(dlsym(libc, :exit) , Void , (Int32,), 0)
+        start_worker(wrfd)
     end
     io = fdio(rdfd)
     port = read(io, Int16)
-    close(io)
+    ccall(dlsym(libc,:close), Int32, (Int32,), rdfd)
+    ccall(dlsym(libc,:close), Int32, (Int32,), wrfd)
     #print("started worker on port ", port, "\n")
     port
 end
@@ -121,6 +141,8 @@ struct Worker
     completed::BTree{Int32,Any}
 
     Worker() = Worker("localhost", start_local_worker())
+
+    Worker(host) = Worker(host, start_remote_worker(host))
 
     function Worker(host, port)
         sock = connect_to_worker(host, port)

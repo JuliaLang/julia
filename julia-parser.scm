@@ -611,7 +611,7 @@
 	 ((end)   try-block)
 	 ((catch) (let* ((var
 			  (if (eqv? (peek-token s) #\newline)
-			      (gensym)
+			      #f
 			      (let ((v (parse-atom s)))
 				(if (not (symbol? v))
 				    (error "expected variable in catch"))

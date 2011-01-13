@@ -59,8 +59,8 @@ load("set.j")
 
 # concurrency & ipc
 load("task.j")
-load("multi.j")
 load("process.j")
+load("multi.j")
 
 # misc
 load("libc.j")

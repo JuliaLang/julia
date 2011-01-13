@@ -80,19 +80,20 @@ JL_CALLABLE(jl_f_throw)
     return (jl_value_t*)jl_null;
 }
 
-JL_CALLABLE(jl_f_trycatch)
+void jl_enter_handler(jl_savestate_t *ss, jmp_buf *handlr)
 {
-    assert(nargs == 2);
-    assert(jl_is_function(args[0]));
-    assert(jl_is_function(args[1]));
-    jl_value_t *v;
-    JL_TRY {
-        v = jl_apply((jl_function_t*)args[0], NULL, 0);
+    jl_eh_save_state(ss);
+    jl_current_task->state.prev = ss;
+    jl_current_task->state.eh_task = jl_current_task;
+    jl_current_task->state.eh_ctx = handlr;
+}
+
+void jl_pop_handler(int n)
+{
+    while (n > 0) {
+        jl_eh_restore_state(jl_current_task->state.prev);
+        n--;
     }
-    JL_CATCH {
-        v = jl_apply((jl_function_t*)args[1], &jl_exception_in_transit, 1);
-    }
-    return v;
 }
 
 // --- primitives ---
@@ -1276,7 +1277,6 @@ void jl_init_primitives()
     add_builtin_func("new_tag_type", jl_f_new_tag_type);
     add_builtin_func("new_tag_type_super", jl_f_new_tag_type_super);
     add_builtin_func("new_bits_type", jl_f_new_bits_type);
-    add_builtin_func("trycatch", jl_f_trycatch);
 
     // builtin types
     add_builtin("Any", (jl_value_t*)jl_any_type);

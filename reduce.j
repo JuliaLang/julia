@@ -78,7 +78,8 @@ end
 
 ## Scans ##
 
-function scan(op::Function, x)
+scan(op::Function, x::()) = ()
+function scan(op::Function, x::Tuple)
     n = length(x)
     s = (x[1],)
     for i=2:n

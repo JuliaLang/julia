@@ -478,6 +478,7 @@ function abstract_eval_expr(e, vtypes, sv::StaticVarInfo)
         t = tintersect(t, Any)
         return Type{t}
     end
+    Any
 end
 
 ast_rettype(ast) = ast.args[3].type
@@ -744,28 +745,47 @@ function typeinf(linfo::LambdaStaticData,atypes::Tuple,sparams::Tuple, cop, def)
     frame = CallStack(ast0, atypes, inference_stack)
     inference_stack = frame
 
+    # exception handlers
+    cur_hand = ()
+    handler_at = { () | i=1:n }
+
     while !isempty(W)
         pc = choose(W)
         while true
             #print(pc,": ",s[pc],"\n")
             del(W, pc)
+            if is(handler_at[pc],())
+                handler_at[pc] = cur_hand
+            else
+                cur_hand = handler_at[pc]
+            end
             stmt = body[pc]
             changes = interpret(stmt, s[pc], sv)
             if frame.recurred
                 adjoin(recpts, pc)
                 frame.recurred = false
             end
+            if !is(cur_hand,())
+                # propagate type info to exception handler
+                l = cur_hand[1]::Int32
+                if changed(changes, s[l], vars)
+                    adjoin(W, l)
+                    update(s[l], changes, vars)
+                end
+            end
             pc´ = pc+1
             if isa(stmt,Expr)
-                if is(stmt.head,:goto)
+                hd = stmt.head
+                if is(hd,:goto)
                     pc´ = findlabel(body,stmt.args[1])
-                elseif is(stmt.head,:gotoifnot)
+                elseif is(hd,:gotoifnot)
                     l = findlabel(body,stmt.args[2])
+                    handler_at[l] = cur_hand
                     if changed(changes, s[l], vars)
                         adjoin(W, l)
                         update(s[l], changes, vars)
                     end
-                elseif is(stmt.head,symbol("return"))
+                elseif is(hd,symbol("return"))
                     pc´ = n+1
                     rt = abstract_eval(stmt.args[1], s[pc], sv)
                     if tchanged(rt, frame.result)
@@ -775,9 +795,18 @@ function typeinf(linfo::LambdaStaticData,atypes::Tuple,sparams::Tuple, cop, def)
                             adjoin(W,r)
                         end
                     end
+                elseif is(hd,:enter)
+                    l = findlabel(body,stmt.args[1]::Int32)
+                    cur_hand = (l,cur_hand)
+                    handler_at[l] = cur_hand
+                elseif is(hd,:leave)
+                    for i=1:((stmt.args[1])::Int32)
+                        cur_hand = cur_hand[2]
+                    end
                 end
             end
-            if pc´<=n && changed(changes, s[pc´], vars)
+            if pc´<=n && (handler_at[pc´] = cur_hand; true) &&
+               changed(changes, s[pc´], vars)
                 update(s[pc´], changes, vars)
                 pc = pc´
             else

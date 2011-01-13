@@ -11,6 +11,7 @@
 #include "llvm/Transforms/Scalar.h"
 #include "llvm/Support/IRBuilder.h"
 #include "llvm/Support/StandardPasses.h"
+#include <setjmp.h>
 #include <cstdio>
 #include <string>
 #include <sstream>
@@ -82,6 +83,7 @@ static GlobalVariable *jlsysmod_var;
 #ifdef JL_GC_MARKSWEEP
 static GlobalVariable *jlpgcstack_var;
 #endif
+static GlobalVariable *jlexc_var;
 
 // important functions
 static Function *jlerror_func;
@@ -90,11 +92,13 @@ static Function *jlgetbindingp_func;
 static Function *jltuple_func;
 static Function *jlntuple_func;
 static Function *jlapplygeneric_func;
-static Function *jlalloc_func;
 static Function *jlbox_func;
 static Function *jlclosure_func;
 static Function *jlconvert_func;
 static Function *jlmethod_func;
+static Function *jlenter_func;
+static Function *jlleave_func;
+static Function *setjmp_func;
 
 /*
   stuff to fix up:
@@ -218,6 +222,8 @@ typedef struct {
     std::map<std::string, bool> *isCaptured;
     std::map<std::string, jl_value_t*> *declTypes;
     std::map<int, BasicBlock*> *labels;
+    std::map<int, Value*> *savestates;
+    std::map<int, Value*> *jmpbufs;
     jl_module_t *module;
     jl_expr_t *ast;
     jl_tuple_t *sp;
@@ -1046,6 +1052,32 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool value)
         return literal_pointer_val((jl_value_t*)jl_any_type);
         */
     }
+    else if (ex->head == exc_sym) {
+        return builder.CreateLoad(jlexc_var, true);
+    }
+    else if (ex->head == leave_sym) {
+        assert(jl_is_int32(args[0]));
+        builder.CreateCall(jlleave_func,
+                           ConstantInt::get(T_int32, jl_unbox_int32(args[0])));
+    }
+    else if (ex->head == enter_sym) {
+        assert(jl_is_int32(args[0]));
+        int labl = jl_unbox_int32(args[0]);
+        Value *jbuf = builder.CreateGEP((*ctx->jmpbufs)[labl],
+                                        ConstantInt::get(T_int32,0));
+        builder.CreateCall2(jlenter_func,
+                            builder.CreateGEP((*ctx->savestates)[labl],
+                                              ConstantInt::get(T_int32,0)),
+                            jbuf);
+        Value *sj = builder.CreateCall(setjmp_func, jbuf);
+        Value *isz = builder.CreateICmpEQ(sj, ConstantInt::get(T_int32,0));
+        BasicBlock *tryblk = BasicBlock::Create(getGlobalContext(), "try",
+                                                ctx->f);
+        BasicBlock *handlr = (*ctx->labels)[labl];
+        assert(handlr);
+        builder.CreateCondBr(isz, tryblk, handlr);
+        builder.SetInsertPoint(tryblk);
+    }
     if (!strcmp(ex->head->name, "$")) {
         jl_error("syntax error: prefix $ outside backquote");
     }
@@ -1101,6 +1133,8 @@ static void emit_function(jl_lambda_info_t *lam, Function *f)
     std::map<std::string, bool> isCaptured;
     std::map<std::string, jl_value_t*> declTypes;
     std::map<int, BasicBlock*> labels;
+    std::map<int, Value*> savestates;
+    std::map<int, Value*> jmpbufs;
     jl_array_t *largs = jl_lam_args(ast);
     jl_array_t *lvars = jl_lam_locals(ast);
     Function::arg_iterator AI = f->arg_begin();
@@ -1116,6 +1150,8 @@ static void emit_function(jl_lambda_info_t *lam, Function *f)
     ctx.isCaptured = &isCaptured;
     ctx.declTypes = &declTypes;
     ctx.labels = &labels;
+    ctx.savestates = &savestates;
+    ctx.jmpbufs = &jmpbufs;
     ctx.module = jl_system_module; //TODO
     ctx.ast = ast;
     ctx.sp = jl_tuple_tvars_to_symbols(lam->sparams);
@@ -1252,6 +1288,25 @@ static void emit_function(jl_lambda_info_t *lam, Function *f)
         }
     }
 
+    jl_array_t *stmts = jl_lam_body(ast)->args;
+    // allocate space for exception handler contexts
+    for(i=0; i < stmts->length; i++) {
+        jl_value_t *stmt = jl_cellref(stmts,i);
+        if (jl_is_expr(stmt) && ((jl_expr_t*)stmt)->head == enter_sym) {
+            int labl = jl_unbox_int32(jl_exprarg(stmt,0));
+            Value *svst =
+                builder.CreateAlloca(T_int8,
+                                     ConstantInt::get(T_int32,
+                                                      sizeof(jl_savestate_t)));
+            Value *jmpb =
+                builder.CreateAlloca(T_int8,
+                                     ConstantInt::get(T_int32,
+                                                      sizeof(jmp_buf)));
+            savestates[labl] = svst;
+            jmpbufs[labl] = jmpb;
+        }
+    }
+
     // check arg count
     if (ctx.linfo->specTypes == NULL) {
         if (va) {
@@ -1328,7 +1383,6 @@ static void emit_function(jl_lambda_info_t *lam, Function *f)
             builder.CreateStore(restTuple, lv);
     }
 
-    jl_array_t *stmts = jl_lam_body(ast)->args;
     // associate labels with basic blocks so forward jumps can be resolved
     BasicBlock *prev=NULL;
     for(i=0; i < stmts->length; i++) {
@@ -1477,6 +1531,8 @@ static void init_julia_llvm_env(Module *m)
     jlfalse_var = global_to_llvm("jl_false", (void*)&jl_false);
     jlnull_var = global_to_llvm("jl_null", (void*)&jl_null);
     jlsysmod_var = global_to_llvm("jl_system_module", (void*)&jl_system_module);
+    jlexc_var = global_to_llvm("jl_exception_in_transit",
+                               (void*)&jl_exception_in_transit);
 
     std::vector<const Type*> args1(0);
     args1.push_back(T_pint8);
@@ -1485,6 +1541,12 @@ static void init_julia_llvm_env(Module *m)
                          Function::ExternalLinkage,
                          "jl_error", jl_Module);
     jl_ExecutionEngine->addGlobalMapping(jlerror_func, (void*)&jl_error);
+
+    setjmp_func =
+        Function::Create(FunctionType::get(T_int32, args1, false),
+                         Function::ExternalLinkage, "_setjmp", jl_Module);
+    jl_ExecutionEngine->addGlobalMapping(setjmp_func, (void*)&_setjmp);
+
     std::vector<const Type*> te_args(0);
     te_args.push_back(T_pint8);
     te_args.push_back(T_pint8);
@@ -1516,19 +1578,6 @@ static void init_julia_llvm_env(Module *m)
     aargs.push_back(T_uint64);
 #else
     aargs.push_back(T_uint32);
-#endif
-#ifdef BOEHM_GC
-    jlalloc_func =
-        Function::Create(FunctionType::get(T_pint8, aargs, false),
-                         Function::ExternalLinkage,
-                         "GC_malloc", jl_Module);
-    jl_ExecutionEngine->addGlobalMapping(jlalloc_func, (void*)&GC_malloc);
-#else
-    jlalloc_func =
-        Function::Create(FunctionType::get(T_pint8, aargs, false),
-                         Function::ExternalLinkage,
-                         "malloc", jl_Module);
-    jl_ExecutionEngine->addGlobalMapping(jlalloc_func, (void*)&malloc);
 #endif
 
     std::vector<const Type*> args3(0);
@@ -1572,7 +1621,24 @@ static void init_julia_llvm_env(Module *m)
         Function::Create(FunctionType::get(jl_pvalue_llvmt, mdargs, false),
                          Function::ExternalLinkage,
                          "jl_method_def", jl_Module);
-    jl_ExecutionEngine->addGlobalMapping(jlmethod_func, (void*)*jl_method_def);
+    jl_ExecutionEngine->addGlobalMapping(jlmethod_func, (void*)&jl_method_def);
+
+    std::vector<const Type*> ehargs(0);
+    ehargs.push_back(T_pint8);
+    ehargs.push_back(T_pint8);
+    jlenter_func =
+        Function::Create(FunctionType::get(T_void, ehargs, false),
+                         Function::ExternalLinkage,
+                         "jl_enter_handler", jl_Module);
+    jl_ExecutionEngine->addGlobalMapping(jlenter_func, (void*)&jl_enter_handler);
+
+    std::vector<const Type*> lhargs(0);
+    lhargs.push_back(T_int32);
+    jlleave_func =
+        Function::Create(FunctionType::get(T_void, lhargs, false),
+                         Function::ExternalLinkage,
+                         "jl_pop_handler", jl_Module);
+    jl_ExecutionEngine->addGlobalMapping(jlleave_func, (void*)&jl_pop_handler);
 
     // set up optimization passes
     FPM = new FunctionPassManager(jl_Module);

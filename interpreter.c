@@ -16,7 +16,8 @@
 #include "builtin_proto.h"
 
 static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl);
-static jl_value_t *eval_body(jl_array_t *stmts, jl_value_t **locals, size_t nl);
+static jl_value_t *eval_body(jl_array_t *stmts, jl_value_t **locals, size_t nl,
+                             int start);
 
 jl_value_t *jl_interpret_toplevel_expr(jl_value_t *e)
 {
@@ -109,7 +110,7 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl)
         return (jl_value_t*)jl_null;
     }
     else if (ex->head == body_sym) {
-        return eval_body(ex->args, locals, nl);
+        return eval_body(ex->args, locals, nl, 0);
     }
     /*
     else if (ex->head == unbound_sym) {
@@ -119,6 +120,9 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl)
         return jl_false;
     }
     */
+    else if (ex->head == exc_sym) {
+        return jl_exception_in_transit;
+    }
     else if (ex->head == static_typeof_sym) {
         return (jl_value_t*)jl_any_type;
     }
@@ -160,9 +164,14 @@ static int label_idx(jl_value_t *tgt, jl_array_t *stmts)
     return j;
 }
 
-static jl_value_t *eval_body(jl_array_t *stmts, jl_value_t **locals, size_t nl)
+static int hand_n_leave = 0;
+
+static jl_value_t *eval_body(jl_array_t *stmts, jl_value_t **locals, size_t nl,
+                             int start)
 {
-    size_t i=0;
+    jl_savestate_t __ss;
+    jmp_buf __handlr;
+    size_t i=start;
     while (1) {
         jl_value_t *stmt = jl_cellref(stmts,i);
         if (jl_is_expr(stmt)) {
@@ -182,6 +191,28 @@ static jl_value_t *eval_body(jl_array_t *stmts, jl_value_t **locals, size_t nl)
             }
             else if (head == return_sym) {
                 return eval(jl_exprarg(stmt,0), locals, nl);
+            }
+            else if (head == enter_sym) {
+                jl_enter_handler(&__ss, &__handlr);
+                if (!setjmp(__handlr)) {
+                    i = (int)eval_body(stmts, locals, nl, i+1);
+                    continue;
+                }
+                else {
+                    i = label_idx(jl_exprarg(stmt,0), stmts);
+                    continue;
+                }
+            }
+            else if (head == leave_sym) {
+                if (hand_n_leave == 0) {
+                    hand_n_leave = jl_unbox_int32(jl_exprarg(stmt,0));
+                }
+                jl_pop_handler(1);
+                hand_n_leave--;
+                if (hand_n_leave==0)
+                    return (jl_value_t*)(i+1);
+                else
+                    return (jl_value_t*)(i);
             }
             else {
                 eval(stmt, locals, nl);
@@ -210,7 +241,7 @@ jl_value_t *jl_interpret_toplevel_thunk(jl_lambda_info_t *lam)
         locals[i*2+1] = NULL;
     }
     JL_GC_PUSHARGS(locals, l->length*2);
-    r = eval_body(stmts, locals, l->length);
+    r = eval_body(stmts, locals, l->length, 0);
     JL_GC_POP();
     return r;
 }
