@@ -174,7 +174,7 @@ The above results are all \verb|Float64| values. There is no literal format for 
   julia> typeof(ans)
   Float32
 \end{verbatim}
-There are three specified standard floating point values that do not correspond to a point on the real number line: plus infinity, minus infinity, and not-a-number (NaN).
+There are three specified standard floating point values that do not correspond to a point on the real number line: infinity (\verb|Inf|), minus infinity (\verb|-Inf|), and not-a-number (\verb|NaN|).
 Here are their literal input forms:
 \begin{verbatim}
   julia> Inf
@@ -259,7 +259,7 @@ Julia has a powerful and flexible type promotion system that allows arithmetic o
   julia> 3*2/12 + 1
   1.5
 \end{verbatim}
-The above operations all promote to \verb|Float64|s since that is the smallest floating point type that can faithfully represent all \verb|Int32| values.
+The above operations all promote to \verb|Float64| since that is the smallest floating point type that can faithfully represent all \verb|Int32| values.
 However, more nuanced promotions also work:
 \begin{verbatim}
   julia> uint8(12) - int8(15)
@@ -974,7 +974,7 @@ C = [ sum([ A[i,j].*B[j,k] | j ]) | i=1:size(A,1), k=1:size(B,2) ]
 
 There are a few noteworthy high-level features about Julia's approach to strings:
 \begin{enumerate}
-\item Like C, but unlike other dynamic languages, Julia has a first-class type representing a single character, called \verb|Char|.
+\item Like C, but unlike most dynamic languages, Julia has a first-class type representing a single character, called \verb|Char|.
 A \verb|Char| is a special kind of 32-bit integer, whose numeric value represents a single Unicode code point.
 \item Conceptually, a \verb|String| is a \emph{partial function} from indices to \verb|Char| values --- for some index values, no character values is returned, and instead an exception is thrown.
 This for allows efficient indexing into strings by the byte index of an encoded representation rather than by character index, which cannot be implemented efficiently and simply in variable-width encodings.
@@ -982,13 +982,13 @@ This for allows efficient indexing into strings by the byte index of an encoded 
 They all implement a common programming interface, however, and any string type can be used in any function expecting a \verb|String|.
 The predefined string types are no more special than user-defined ones.
 \item Strings are immutable: the value of a \verb|String| object cannot be changed.
-To construct a different string value, you construct a new string object.
+To construct a different string value, you construct a new string object from parts of other string objects and literals.
 \end{enumerate}
 
 \subsection{Characters}
 
-Like C, but unlike Perl, Python, or Ruby, Julia has a type for individual character values: \verb|Char|.
-A \verb|Char| is really just a 32-bit integer with a special literal representation and some specific arithmetic behaviors.
+Like C, but unlike Perl, Python, or Ruby, Julia has a type for individual characters: \verb|Char|.
+A \verb|Char| is just a 32-bit integer with a special literal representation and some specific arithmetic behaviors.
 Here is how \verb|Char| values are input and shown:
 \begin{verbatim}
   julia> 'x'
@@ -1010,7 +1010,7 @@ You can convert an integer value back to a \verb|Char| just as easily:
   julia> char(120)
   'x'
 \end{verbatim}
-Not all possible integer values are valid Unicode code points, but for performance, the \verb|char| conversion does not check that the given character value is a valid Unicode code point.
+Not all integer values are valid Unicode code points, but for performance, the \verb|char| conversion does not check that every character value is a valid Unicode code point.
 If you want to check code points for validity, use the \verb|safe_char| conversion instead:
 \begin{verbatim}
   julia> char(0xd800)
@@ -1025,8 +1025,8 @@ If you want to check code points for validity, use the \verb|safe_char| conversi
   julia> safe_char(0x110000)
   invalid Unicode code point: U+110000
 \end{verbatim}
-As of this writing, the Unicode code points are \verb|U+0000| through \verb|U+d7ff| and \verb|U+e000| through \verb|U+10ffff|.
-They are not all yet assigned intelligible meanings, nor are they necessarily interpretable by applications, but all such values are considered to be valid Unicode characters.
+As of this writing, the valid Unicode code points are \verb|U+0000| through \verb|U+d7ff| and \verb|U+e000| through \verb|U+10ffff|.
+They have not all yet been assigned intelligible meanings, nor are they necessarily interpretable by applications, but all of these values are considered to be valid Unicode characters.
 
 You can input any Unicode character in single quotes using \verb|\u| followed by up to four hexadecimal digits or \verb|\U| followed by up to eight hexadecimal digits (the longest valid value only requires six):
 \begin{verbatim}
@@ -1080,7 +1080,8 @@ Like any integers, you can do arithmetic and comparisons with \verb|Char| values
   julia> 'A' <= 'X' <= 'Z'
   true
 \end{verbatim}
-Arithmetic with \verb|Char| values promotes them to \verb|Int32|, however, requiring explicit conversion back to \verb|Char|:
+Arithmetic with \verb|Char| values always promotes them to \verb|Int32|.
+To create a new \verb|Char| value, explicit conversion is required:
 \begin{verbatim}
   julia> 'A' + 1
   66
@@ -1088,7 +1089,7 @@ Arithmetic with \verb|Char| values promotes them to \verb|Int32|, however, requi
   julia> char(ans)
   'B'
 \end{verbatim}
-The fact that any arithmetic with \verb|Char|s promotes to \verb|Int32| allows a series of intermediate computations to be done efficiently, only checking that the final value is a valid Unicode code point.
+Requiring explicit conversion allows a series of intermediate computations to be done efficiently, only checking that the final value is a valid Unicode code point.
 
 \subsection{String Basics}
 
@@ -1139,8 +1140,8 @@ Note the distinction between \verb|str[k]| and \verb|str[k:k]|:
   julia> typeof(ans)
   SubString
 \end{verbatim}
-The former is a single character value of type \verb|Char|, while the latter is a string value of type \verb|SubString| (we'll get into the nitty-gritty details later), having a string length of one.
-These are very different things.
+The former is a single character value of type \verb|Char|, while the latter is a string value of type \verb|SubString| (we'll get into the nitty-gritty details later), a \verb|String| instance containing only a single character.
+In Julia these are very different things.
 
 One of the most useful string operations is concatenation:
 \begin{verbatim}
@@ -1164,8 +1165,8 @@ The shortest valid expression after an unescaped \verb|$| is used as the interpo
   julia> "1 + 2 = $(1 + 2)"
   "1 + 2 = 3"
 \end{verbatim}
-Both concatenation and string interpolation call the \verb|string| function to convert objects into \verb|String| form.
-Most non-\verb|String| objects are converted to strings the same way they are shown in the Julia repl:
+Both concatenation and string interpolation call the generic \verb|string| function to convert objects into \verb|String| form.
+Most non-\verb|String| objects are converted to strings the they are shown in the Julia repl:
 \begin{verbatim}
   julia> v = [1,2,3]
   [1,2,3]
@@ -1428,7 +1429,7 @@ differs in a several aspects from the behavior in shells, Perl, or Ruby:
 \item Instead of immediately running the command, backticks create a \verb|Cmd| object to represent the command.
 You can use this \verb|Cmd| object to connect this command to others via UNIX pipes, run it, write to it and read from it.
 
-\item When the command is run, Julia doesn't capture its output unless you specifically arrange for it to.
+\item When the command is run, Julia does not capture its output unless you specifically arrange for it to.
 Rather, the output of the command by default goes to \verb|stdout| as it would using \verb|libc|'s \verb|system| call.
 
 \item The command is never run with a shell.
@@ -1466,10 +1467,11 @@ Let's try it:
   julia> `sort -n $file`
   `sort -n '/Volumes/External HD/data.csv'`
 \end{verbatim}
-Julia knows that \verb|file| is supposed to interpolated as a whole word, so it quotes the argument as necessary.\footnote{This is a bit inaccurate:
+How did the file name get quoted?
+Julia knows that \verb|file| is meant to be interpolated as a single argument, so it quotes the word for you.\footnote{This not quite accurate:
 the value of \texttt{file} is never interpreted by a shell, so there's no need for actual quoting.
 The quotes are inserted only for presentation to the user such that you can cut and paste it back into the repl.}
-This will even work if you interpolate a value as just part of a shell word:
+This will even work if you interpolate a value as part of a shell word:
 \begin{verbatim}
   julia> path = "/Volumes/External HD"
   "/Volumes/External HD"
@@ -1515,7 +1517,7 @@ If you interpolate multiple arrays, the shell's Cartesian product generation beh
 \subsection{Quoting}
 
 Inevitably, one wants to write commands that aren't quite so simple, and it becomes necessary to use quotes.
-Here's a typical example of a perl one-liner at shell prompt:
+Here's a typical example of a perl one-liner at a shell prompt:
 \begin{verbatim}
   $ perl -le '$|=1; for (0..3) { print }'
   0
@@ -1523,8 +1525,8 @@ Here's a typical example of a perl one-liner at shell prompt:
   2
   3
 \end{verbatim}
-One wants to use single quotes around the Perl expression for two reasons:
-so that spaces don't break it into multiple shell words, and uses of variables like \texttt{\$|} (yes, that's a variable), don't cause shell interpolation.
+You need to use single quotes around the Perl expression for two reasons:
+so that spaces don't break the expression into multiple shell words, and so that uses of variables like \texttt{\$|} (yes, that's a variable), don't cause interpolation.
 In other instances, you want to use double quotes so that interpolation does occur:
 \begin{verbatim}
   $ first="A"
@@ -1533,8 +1535,8 @@ In other instances, you want to use double quotes so that interpolation does occ
   1: A
   2: B
 \end{verbatim}
-The Julia backtick syntax is specifically designed so that you can simply cut-and-paste shell commands as-is directly into it and they will work.
-Let's try the above two examples:
+The Julia backtick syntax is specifically designed so that you can simply cut-and-paste shell commands as-is and they will work.
+Let's try the above two examples in Julia:
 \begin{verbatim}
   julia> `perl -le '$|=1; for (0..3) { print }'`
   `perl -le '$|=1; for (0..3) { print }'`
@@ -1560,14 +1562,14 @@ Let's try the above two examples:
   2: B
   true
 \end{verbatim}
-In short, quoting of words, interpolation, and escaping inside of Julia's backticks all behave exactly the same way as they do in a shell.
+The results are identical, and Julia's interpolation behavior mimics the shell's with some improvements due to the fact that Julia supports first-class iterable objects while most shells use strings split on spaces for this, introducing ambiguities.
 When in doubt, cut and paste.
-Since Julia shows commands to you before running them, you can easily and safely just examine its interpretation before doing anything.
+Since Julia shows commands to you before running them, you can easily and safely just examine its interpretation before running anything.
 
 \subsection{Pipelines}
 
-One thing that does not work inside of Julia's backticks like it does in the shell are metacharacters like \texttt{|}, \verb|&|, and \verb|>|.
-Unlike in the shell, inside of Julia's backticks, a pipe is always just a pipe:
+Shell metacharacters, such as \texttt{|}, \verb|&|, and \verb|>|, are not special inside of Julia's backticks:
+unlike in the shell, inside of Julia's backticks, a pipe is always just a pipe:
 \begin{verbatim}
   julia> run(`echo hello | sort`)
   hello | sort
