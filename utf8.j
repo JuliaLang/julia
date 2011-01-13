@@ -54,7 +54,7 @@ cmp(a::UTF8String, b::UTF8String) = lexcmp(a.data, b.data)
 strchr(s::UTF8String, c::Char) =
     c < 0x80 ? memchr(s.data, c) : invoke(strchr, (String,Char), s, c)
 
-function nextind(s::String, ind::Int)
+function nextind(s::UTF8String, ind::Int)
     for i = ind:length(s)
         if is_utf8_start(s.data[i])
             return i
@@ -63,7 +63,7 @@ function nextind(s::String, ind::Int)
     length(s) + 1
 end
 
-function prevind(s::String, ind::Int)
+function prevind(s::UTF8String, ind::Int)
     for i = ind-1:-1:1
         if is_utf8_start(s.data[i])
             return i
