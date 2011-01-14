@@ -478,6 +478,7 @@ function abstract_eval_expr(e, vtypes, sv::StaticVarInfo)
         t = tintersect(t, Any)
         return Type{t}
     end
+    Any
 end
 
 ast_rettype(ast) = ast.args[3].type
@@ -716,7 +717,7 @@ function typeinf(linfo::LambdaStaticData,atypes::Tuple,sparams::Tuple, cop, def)
     recpts = IntSet(n+1)  # statements that depend recursively on our value
     W = IntSet(n+1)
     # initial set of pc
-    adjoin(W,1)
+    add(W,1)
     # initial types
     for v=vars
         s[1][v] = Undef
@@ -744,40 +745,68 @@ function typeinf(linfo::LambdaStaticData,atypes::Tuple,sparams::Tuple, cop, def)
     frame = CallStack(ast0, atypes, inference_stack)
     inference_stack = frame
 
+    # exception handlers
+    cur_hand = ()
+    handler_at = { () | i=1:n }
+
     while !isempty(W)
         pc = choose(W)
         while true
             #print(pc,": ",s[pc],"\n")
             del(W, pc)
+            if is(handler_at[pc],())
+                handler_at[pc] = cur_hand
+            else
+                cur_hand = handler_at[pc]
+            end
             stmt = body[pc]
             changes = interpret(stmt, s[pc], sv)
             if frame.recurred
-                adjoin(recpts, pc)
+                add(recpts, pc)
                 frame.recurred = false
+            end
+            if !is(cur_hand,())
+                # propagate type info to exception handler
+                l = cur_hand[1]::Int32
+                if changed(changes, s[l], vars)
+                    add(W, l)
+                    update(s[l], changes, vars)
+                end
             end
             pc´ = pc+1
             if isa(stmt,Expr)
-                if is(stmt.head,:goto)
+                hd = stmt.head
+                if is(hd,:goto)
                     pc´ = findlabel(body,stmt.args[1])
-                elseif is(stmt.head,:gotoifnot)
+                elseif is(hd,:gotoifnot)
                     l = findlabel(body,stmt.args[2])
+                    handler_at[l] = cur_hand
                     if changed(changes, s[l], vars)
-                        adjoin(W, l)
+                        add(W, l)
                         update(s[l], changes, vars)
                     end
-                elseif is(stmt.head,symbol("return"))
+                elseif is(hd,symbol("return"))
                     pc´ = n+1
                     rt = abstract_eval(stmt.args[1], s[pc], sv)
                     if tchanged(rt, frame.result)
                         frame.result = tmerge(frame.result, rt)
                         # revisit states that recursively depend on this
                         for r=recpts
-                            adjoin(W,r)
+                            add(W,r)
                         end
+                    end
+                elseif is(hd,:enter)
+                    l = findlabel(body,stmt.args[1]::Int32)
+                    cur_hand = (l,cur_hand)
+                    handler_at[l] = cur_hand
+                elseif is(hd,:leave)
+                    for i=1:((stmt.args[1])::Int32)
+                        cur_hand = cur_hand[2]
                     end
                 end
             end
-            if pc´<=n && changed(changes, s[pc´], vars)
+            if pc´<=n && (handler_at[pc´] = cur_hand; true) &&
+               changed(changes, s[pc´], vars)
                 update(s[pc´], changes, vars)
                 pc = pc´
             else
@@ -909,7 +938,7 @@ end
 
 occurs_more(e, pred, n) = pred(e) ? 1 : 0
 
-function contains(arr, item)
+function contains_is(arr, item)
     for i = 1:length(arr)
         if is(arr[i],item)
             return true
@@ -1000,7 +1029,7 @@ function inlineable(e::Expr, vars)
     end
     # avoid capture if the function has free variables with the same name
     # as our vars
-    if occurs_more(expr, x->(has(vars,x)&&!contains(args,x)), 0) > 0
+    if occurs_more(expr, x->(has(vars,x)&&!contains_is(args,x)), 0) > 0
         return NF
     end
     # ok, substitute argument expressions for argument names in the body

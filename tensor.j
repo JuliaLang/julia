@@ -343,6 +343,17 @@ function areduce{T}(f::Function, A::Tensor{T}, region::Region)
     areduce(f, A, region, T)
 end
 
+function contains(itr, x)
+    for y=itr
+        if y==x
+            return true
+        end
+    end
+    return false
+end
+
+contains(s::Number, n::Int) = (s == n)
+
 function areduce(f::Function, A::Tensor, region::Region, RType::Type)
     dimsA = size(A)
     ndimsA = length(dimsA)

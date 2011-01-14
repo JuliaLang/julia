@@ -422,10 +422,12 @@
 		   (receive (name params super) (analyze-type-sig sig)
 			    (struct-def-expr name params super fields)))
 
-   (pattern-lambda (try tryblk (-- var (-s)) catchblk)
-		   `(call (top trycatch)
-			  (-> (tuple) ,tryblk)
-			  (-> ,var ,catchblk)))
+   (pattern-lambda (try tryblk var catchblk)
+		   (if (symbol? var)
+		       `(trycatch ,tryblk (scope-block
+					   (block (= ,var (the_exception))
+						  ,catchblk)))
+		       `(trycatch ,tryblk ,catchblk)))
 
    )) ; binding-form-patterns
 
@@ -977,7 +979,23 @@
 			  (cdr r))))
 		 (else (let ((g (gensym)))
 			 (cons g
-			       (to-lff e g #f))))))
+			       (cons `(local! ,g) (to-lff e g #f)))))))
+
+	  ((trycatch)
+	   (cond (tail
+		  (let ((g (gensym)))
+		    (to-lff `(block (local! ,g)
+				    (= ,g ,e)
+				    (return ,g))
+			    #f #f)))
+		 ((eq? dest #t)
+		  (let ((g (gensym)))
+		    (cons g
+			  (cons `(local! ,g) (to-lff e g #f)))))
+		 (else
+		  (cons `(trycatch ,(to-blk (to-lff (cadr e) dest tail))
+				   ,(to-blk (to-lff (caddr e) dest tail)))
+			()))))
 
 	  ((&&)
 	   (to-lff (expand-and e) dest tail))
@@ -1330,7 +1348,8 @@ So far only the second case can actually occur.
 (define (goto-form e)
   (let ((code '())
 	(ip   0)
-	(label-counter 0))
+	(label-counter 0)
+	(handler-level 0))
     (define (emit c)
       (set! code (cons c code))
       (set! ip (+ ip 1)))
@@ -1371,14 +1390,40 @@ So far only the second case can actually occur.
 			(mark-label endl)))
 	    ((break-block) (let ((endl (make-label)))
 			     (compile (caddr e)
-				      (cons (cons (cadr e) endl)
+				      (cons (list (cadr e) endl handler-level)
 					    break-labels)
 				      vi)
 			     (mark-label endl)))
 	    ((break) (let ((labl (assq (cadr e) break-labels)))
 		       (if (not labl)
 			   (error "break or continue outside loop")
-			   (emit `(goto ,(cdr labl))))))
+			   (begin
+			     (if (> handler-level (caddr labl))
+				 (emit `(leave
+					 ,(- handler-level (caddr labl)))))
+			     (emit `(goto ,(cadr labl)))))))
+	    ((return) (begin
+			(if (> handler-level 0)
+			    (emit `(leave ,handler-level)))
+			(emit (goto-form e))))
+	    ;; exception handlers are lowered using
+	    ;; (enter L) - push handler with catch block at label L
+	    ;; (leave n) - pop N exception handlers
+	    ;; (the_exception) - get the thrown object
+	    ((trycatch)
+	     (let ((catch (make-label))
+		   (endl  (make-label)))
+	       (emit `(enter ,catch))
+	       (set! handler-level (+ handler-level 1))
+	       (compile (cadr e) break-labels vi)
+	       (set! handler-level (- handler-level 1))
+	       (emit `(leave 1))
+	       (emit `(goto ,endl))
+	       (mark-label catch)
+	       (emit `(leave 1))
+	       (compile (caddr e) break-labels vi)
+	       (mark-label endl)))
+
 	    ((global) #f)  ; remove global declarations
 	    (else  (emit (goto-form e))))))
     (cond ((or (not (pair? e)) (quoted? e)) e)
@@ -1387,7 +1432,8 @@ So far only the second case can actually occur.
 					   (cadddr (caddr e))))
 	   `(lambda ,(cadr e) ,(caddr e)
 		    ,(cons 'body (reverse code))))
-	  (else (map goto-form e)))))
+	  (else (cons (car e)
+		      (map goto-form (cdr e)))))))
 
 (define (to-goto-form e)
   (goto-form e))

@@ -7,7 +7,7 @@ struct IntSet
                           new(zeros(Uint32,lim>>5), lim))
 end
 
-function adjoin(s::IntSet, n::Int)
+function add(s::IntSet, n::Int)
     if n >= s.limit
         lim = int32(n + div(n,2))
         olsz = length(s.bits)
@@ -28,9 +28,7 @@ function del(s::IntSet, n::Int)
     s
 end
 
-contains(s::Number, n::Int) = (s == n)
-
-function contains(s::IntSet, n::Int)
+function has(s::IntSet, n::Int)
     if n >= s.limit
         false
     else

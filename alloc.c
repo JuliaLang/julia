@@ -66,6 +66,8 @@ jl_sym_t *unbound_sym; jl_sym_t *macro_sym;
 jl_sym_t *locals_sym;  jl_sym_t *colons_sym;
 jl_sym_t *symbol_sym;  jl_sym_t *unexpanded_sym;
 jl_sym_t *Any_sym;     jl_sym_t *method_sym;
+jl_sym_t *enter_sym;   jl_sym_t *leave_sym;
+jl_sym_t *exc_sym;
 jl_sym_t *static_typeof_sym;
 
 /*

@@ -1999,6 +1999,9 @@ void jl_init_types()
     locals_sym = jl_symbol("locals");
     colons_sym = jl_symbol("::");
     method_sym = jl_symbol("method");
+    exc_sym = jl_symbol("the_exception");
+    enter_sym = jl_symbol("enter");
+    leave_sym = jl_symbol("leave");
     Any_sym = jl_symbol("Any");
     static_typeof_sym = jl_symbol("static_typeof");
 }

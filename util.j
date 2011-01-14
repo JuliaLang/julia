@@ -33,3 +33,6 @@ end
 
 qtoc() = _toc(false)
 toc()  = _toc(true)
+
+macro qtime(ex); :(tic(); $ex; qtoc()); end
+macro time(ex); :(tic(); $ex; toc()); end

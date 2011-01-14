@@ -44,14 +44,10 @@ end
 
 function nextind(s::String, ind::Int)
     for i = ind:length(s)
-        valid = true
         try
             c = s[i]
-        catch
-            valid = false
-        end
-        if valid
             return i
+        catch
         end
     end
     length(s) + 1
@@ -59,14 +55,10 @@ end
 
 function prevind(s::String, ind::Int)
     for i = ind-1:-1:1
-        valid = true
         try
             c = s[i]
-        catch
-            valid = false
-        end
-        if valid
             return i
+        catch
         end
     end
     0
@@ -104,9 +96,8 @@ function chr2ind(s::String, chr::Int)
     end
 end
 
-# TODO: strchr("xyl\uffphone"[2:end], 'o', 4)
-
 function strchr(s::String, c::Char, i::Int)
+    i = nextind(s,i)
     while !done(s,i)
         d, j = next(s,i)
         if c == d

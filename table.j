@@ -107,10 +107,10 @@ function assign{K,V}(h::HashTable{K,V}, v, key)
     orig = index
 
     while true
-        if !contains(h.used,index)
+        if !has(h.used,index)
             h.keys[index] = key
             h.vals[index] = v
-            adjoin(h.used, index)
+            add(h.used, index)
             return h
         end
 
@@ -150,7 +150,7 @@ function ht_keyindex(h::HashTable, key)
     orig = index
 
     while true
-        if !contains(h.used,index)
+        if !has(h.used,index)
             break
         end
         if isequal(key, h.keys[index])
@@ -182,16 +182,16 @@ function del(h::HashTable, key)
         del(h.used, index)
         index = (index & (sz-1)) + 1
         while (iter < maxprobe && index != orig &&
-               contains(h.used, index) &&
+               has(h.used, index) &&
                hashindex(h.keys[index],sz) < index)
             h.keys[index-1] = h.keys[index]
             h.vals[index-1] = h.vals[index]
-            adjoin(h.used, index-1)
+            add(h.used, index-1)
             del(h.used, index)
             index = (index & (sz-1)) + 1
             iter += 1
         end
-        assert(!contains(h.used, index) ||
+        assert(!has(h.used, index) ||
                hashindex(h.keys[index],sz) == index)
     end
     h
