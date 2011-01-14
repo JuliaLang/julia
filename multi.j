@@ -21,8 +21,13 @@
 ## recv_msg(socket) - read the next Julia object from a socket
 
 recv_msg(s) = deserialize(s)
-send_msg(s, x) = (serialize(s, x); flush(s))
-wait_msg(fd) = ccall(:jl_wait_msg, Int32, (Int32,), fd) == 0
+function send_msg(s, x)
+    buf = memio()
+    serialize(buf, x)
+    ccall(:ios_write_direct, Int32, (Ptr{Void}, Ptr{Void}),
+          s.ios, buf.ios)
+    ()
+end
 
 # todo:
 # - recover from i/o errors
@@ -31,38 +36,169 @@ wait_msg(fd) = ccall(:jl_wait_msg, Int32, (Int32,), fd) == 0
 # - asynch i/o with coroutines to overlap computing with communication
 # - all-to-all communication
 
-function jl_worker(fd)
-    sock = fdio(fd)
+struct Location
+    host::String
+    port::Int16
+end
+
+struct ProcessGroup
+    myid::Int32
+    workers::Array{Any,1}
+end
+
+myid() = (global PGRP; isbound(:PGRP) ? PGRP.myid : -1)
+
+function foreach(f, itr)
+    for x=itr
+        f(x)
+    end
+    ()
+end
+
+function make_process_group(np)
+    w = { Worker() | i=1:np }
+    global PGRP = ProcessGroup(0, w)
+    locs = map(x->Location(x.host,x.port), w)
+    fut = cell(np)
+    for i=1:np
+        fut[i] = remote_apply(w[i], :join_process_group, i, locs)
+    end
+    foreach(wait, fut)
+
+    #for i=(np-1):-1:1
+    #    for j=np:-1:(i+1)
+    #        wait(remote_apply(w[i], :connect_to, j))
+    #    end
+    #end
+
+    for i=(np-1):-1:1
+        fut[i] = remote_apply(w[i], :connect_to, 0)
+    end
+    for i=(np-1):-1:1
+        wait(fut[i])
+    end
+    PGRP
+end
+
+function pfor(grp::ProcessGroup, fname, args...)
+    w = grp.workers
+    np = length(w)
+    fut = cell(np)
+    for i=1:np
+        fut[i] = remote_apply(w[i], fname, args...)
+    end
+    foreach(wait, fut)  # TODO: needs to be asynchronous
+end
+
+function all2all()
+    global PGRP
+    pfor(PGRP, :hello_from, PGRP.myid)
+end
+
+function hello_from(i)
+    global PGRP
+    print("message from $i to $(PGRP.myid)\n")
+end
+
+function join_process_group(myid, locs)
+    np = length(locs)
+    w = cell(np)
+    w[myid] = LocalProcess()
+    global PGRP = ProcessGroup(myid, w)
+    global PLOCS = locs
+    ()
+end
+
+function connect_to(other)
+    global PGRP, PLOCS
+    myid = PGRP.myid
+    w = PGRP.workers
+    locs = PLOCS
+    np = length(locs)
+
+    for i=(myid+1):np
+        w[i] = Worker(locs[i].host, locs[i].port)
+        wait(remote_apply(w[i], :identify_socket, myid))
+    end
+
+    #i = other
+    #w[i] = Worker(locs[i].host, locs[i].port)
+    #write(stdout_stream, latin1("$(PGRP.myid) connected to $i\n"))
+    #wait(remote_apply(w[i], :identify_socket, myid))
+    ()
+end
+
+function identify_socket(otherid, sock)
+    global PGRP, PLOCS
+    i = otherid
+    assert(i < PGRP.myid)
+    PGRP.workers[i] = Worker(PLOCS[i].host, PLOCS[i].port, sock)
+    #write(stdout_stream, latin1("$(PGRP.myid) heard from $i\n"))
+    ()
+end
+
+function jl_worker_loop(accept_fd)
+    sockets = HashTable()
+    fdset = FDSet()
 
     while true
-        if !wait_msg(fd)
-            break
+        del_all(fdset)
+        add(fdset, accept_fd)
+        for (fd,_) = sockets
+            add(fdset, fd)
         end
-        local f, args
-        got_msg = false
-        try
-            (f, args) = recv_msg(sock)
-            #print("got ", tuple(f, map(typeof,args)...), "\n")
-            got_msg = true
-        catch e
-            if isa(e,EOFError)
-                break
+
+        nselect = select_read(fdset, 1)
+
+        if has(fdset, accept_fd)
+            connectfd = ccall(dlsym(libc, :accept), Int32,
+                              (Int32, Ptr{Void}, Ptr{Void}),
+                              accept_fd, C_NULL, C_NULL)
+            #print("accepted.\n")
+            if connectfd==-1
+                print("accept error: ", strerror(), "\n")
             else
-                print("deserialization error: ", e, "\n")
-                read(sock, Uint8, nb_available(sock))
-                #while nb_available(sock) > 0 #|| select(sock)
-                #    read(sock, Uint8)
-                #end
+                sockets[connectfd] = fdio(connectfd)
             end
         end
-        if got_msg
-            # handle message
-            try
-                result = apply(eval(f), args)
-                send_msg(sock, result)
-            catch e
-                show(e)
-                send_msg(sock, e)
+
+        for (fd, sock) = sockets
+            if has(fdset, fd) || nb_available(sock)>0
+                #print("nb= ", nb_available(sock), "\n")
+                local f, args
+                got_msg = false
+                try
+                    (f, args) = recv_msg(sock)
+                    #print("$(myid()) got ",tuple(f,map(typeof,args)...),"\n")
+                    got_msg = true
+                catch e
+                    if isa(e,EOFError)
+                        #print("eof. exiting\n")
+                        return()
+                    else
+                        print("deserialization error: ", e, "\n")
+                        read(sock, Uint8, nb_available(sock))
+                        #while nb_available(sock) > 0 #|| select(sock)
+                        #    read(sock, Uint8)
+                        #end
+                    end
+                end
+                if got_msg
+                    # handle message
+                    try
+                        if is(f,:identify_socket)
+                            result = identify_socket(args[1], sock)
+                        else
+                            result = apply(eval(f), args)
+                        end
+                        send_msg(sock, result)
+                    catch e
+                        #show(e)
+                        print("exception on ", myid(), ": ")
+                        dump(e)
+                        send_msg(sock, e)
+                    end
+                end
             end
         end
     end
@@ -83,11 +219,8 @@ function start_worker(wrfd)
     # close stdin; workers will not use it
     ccall(dlsym(libc, :close), Int32, (Int32,), 0)
 
-    connectfd = ccall(dlsym(libc, :accept), Int32,
-                      (Int32, Ptr{Void}, Ptr{Void}),
-                      sockfd, C_NULL, C_NULL)
-    jl_worker(connectfd)
-    ccall(dlsym(libc, :close), Int32, (Int32,), connectfd)
+    jl_worker_loop(sockfd)
+
     ccall(dlsym(libc, :close), Int32, (Int32,), sockfd)
     ccall(dlsym(libc, :exit) , Void , (Int32,), 0)
 end
@@ -126,8 +259,12 @@ function start_local_worker()
 end
 
 function connect_to_worker(hostname, port)
-    fdio(ccall(:connect_to_host, Int32,
-               (Ptr{Uint8}, Int16), hostname, port))
+    fd = ccall(:connect_to_host, Int32,
+               (Ptr{Uint8}, Int16), hostname, port)
+    if fd == -1
+        error("could not connect to $hostname:$port, errno=$(errno())\n")
+    end
+    fdio(fd)
 end
 
 struct Worker
@@ -142,10 +279,14 @@ struct Worker
 
     Worker() = Worker("localhost", start_local_worker())
 
-    Worker(host) = Worker(host, start_remote_worker(host))
+    Worker(host) = Worker(host,
+                          host=="localhost" ?
+                          start_local_worker() :
+                          start_remote_worker(host))
 
-    function Worker(host, port)
-        sock = connect_to_worker(host, port)
+    Worker(host, port) = Worker(host, port, connect_to_worker(host,port))
+
+    function Worker(host, port, sock)
         new(host, port, sock, Queue(), false, 0, 0, BTree(Int32,Any))
     end
 end
