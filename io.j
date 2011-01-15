@@ -393,8 +393,8 @@ end
 isempty(s::FDSet) = (s.nfds==0)
 
 function add(s::FDSet, i::Int)
-    if i >= sizeof_fd_set/8
-        error("descriptor number too high")
+    if !(0 <= i < sizeof_fd_set*8)
+        error("invalid descriptor ", i)
     end
     ccall(:jl_fd_set, Void, (Ptr{Void}, Int32), s.data, int32(i))
     if i >= s.nfds
@@ -404,7 +404,7 @@ function add(s::FDSet, i::Int)
 end
 
 function has(s::FDSet, i::Int)
-    if i < sizeof_fd_set/8
+    if i < sizeof_fd_set*8 && i>=0
         return ccall(:jl_fd_isset, Int32,
                      (Ptr{Void}, Int32), s.data, int32(i))!=0
     end
@@ -412,7 +412,7 @@ function has(s::FDSet, i::Int)
 end
 
 function del(s::FDSet, i::Int)
-    if i < sizeof_fd_set/8
+    if i < sizeof_fd_set*8 && i>=0
         ccall(:jl_fd_clr, Void, (Ptr{Void}, Int32), s.data, int32(i))
         if i == s.nfds-1
             s.nfds -= 1

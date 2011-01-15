@@ -24,6 +24,7 @@ jl_array_t *jl_new_array(jl_type_t *atype, jl_tuple_t *dims)
     size_t i, tot;
     size_t nel=1;
     size_t ndims = dims->length;
+    int isbytes=0;
     void *data;
     jl_array_t *a=NULL;
     JL_GC_PUSH(&a);
@@ -37,10 +38,18 @@ jl_array_t *jl_new_array(jl_type_t *atype, jl_tuple_t *dims)
     }
     jl_type_t *el_type = (jl_type_t*)jl_tparam0(atype);
 
-    if (jl_is_bits_type(el_type))
-        tot = jl_bitstype_nbits(el_type)/8 * nel;
-    else
+    if (jl_is_bits_type(el_type)) {
+        size_t nby = jl_bitstype_nbits(el_type)/8;
+        tot = nby * nel;
+        if (nby==1 && ndims==1) {
+            // hidden 0 terminator for all byte arrays
+            isbytes = 1;
+            tot++;
+        }
+    }
+    else {
         tot = sizeof(void*) * nel;
+    }
 
     if (tot <= ARRAY_INLINE_NBYTES) {
         a = allocobj(sizeof(jl_array_t) + (tot - sizeof(void*)));
@@ -87,6 +96,7 @@ jl_array_t *jl_new_array(jl_type_t *atype, jl_tuple_t *dims)
     }
 
     a->data = data;
+    if (isbytes) ((char*)data)[tot-1] = '\0';
     a->length = nel;
 
     JL_GC_POP();
@@ -156,13 +166,8 @@ JL_CALLABLE(jl_generic_array_ctor)
 
 jl_array_t *jl_pchar_to_array(char *str, size_t len)
 {
-    jl_array_t *a = jl_alloc_array_1d(jl_array_uint8_type, len+1);
-    JL_GC_PUSH(&a);
+    jl_array_t *a = jl_alloc_array_1d(jl_array_uint8_type, len);
     memcpy(a->data, str, len);
-    ((char*)a->data)[len] = '\0';
-    a->length--;
-    jl_tupleset(a->dims, 0, jl_box_int32(len));
-    JL_GC_POP();
     return a;
 }
 

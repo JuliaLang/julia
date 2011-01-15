@@ -75,25 +75,6 @@ DLLEXPORT void jl_fd_zero(fd_set *set)
 }
 
 DLLEXPORT
-int jl_wait_msg(int fd)
-{
-    fd_set fds, efds;
-    FD_ZERO(&fds);
-    FD_ZERO(&efds);
-    FD_SET(fd, &fds);
-    FD_SET(fd, &efds);
-    select(fd+1, &fds, NULL, &efds, NULL);
-    if (FD_ISSET(fd, &efds)) {
-        ios_printf(ios_stderr, "error fd\n");
-        return 1;
-    }
-    if (FD_ISSET(fd, &fds)) {
-        return 0;
-    }
-    return 1;
-}
-
-DLLEXPORT
 int jl_read_avail(ios_t *s)
 {
     int fd = s->fd;

@@ -61,6 +61,7 @@
     ios_read;
     ios_readall;
     ios_write;
+    ios_write_direct;
     ios_copy;
     ios_copyall;
     ios_copyuntil;
@@ -73,10 +74,10 @@
     jl_fd_isset;
     jl_fd_set;
     jl_fd_zero;
-    jl_wait_msg;
     jl_read_avail;
     jl_nb_available;
     jl_gc_add_finalizer;
+    jl_strerror;
     jl_stdin;
     jl_stdout;
     jl_stderr;

@@ -356,6 +356,16 @@ static void _write_update_pos(ios_t *s)
     if (s->bpos > s->size)   s->size = s->bpos;
 }
 
+// directly copy a buffer to a descriptor
+DLLEXPORT size_t ios_write_direct(ios_t *dest, ios_t *src)
+{
+    char *data = src->buf;
+    size_t n = src->size;
+    size_t nwr;
+    _os_write_all(dest->fd, data, n, &nwr);
+    return nwr;
+}
+
 size_t ios_write(ios_t *s, char *data, size_t n)
 {
     if (s->readonly) return 0;
