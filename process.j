@@ -233,7 +233,7 @@ function spawn(cmd::Cmd)
             error("already running: ", c)
         end
         for (f,p) = c.pipes
-            add(fds, fd(p), other(p))
+            add(fds, fd(p))
         end
     end
     for c = cmd.pipeline
