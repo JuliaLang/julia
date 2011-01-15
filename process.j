@@ -1,3 +1,5 @@
+## process status ##
+
 type ProcessStatus
 struct ProcessNotRun   <: ProcessStatus; end
 struct ProcessRunning  <: ProcessStatus; end
@@ -23,18 +25,7 @@ end
 process_success(s::ProcessStatus) = false
 process_success(s::ProcessExited) = (s.status == 0)
 
-function run(cmd::String, args...)
-    pid = fork()
-    if pid == 0
-        try
-            exec(cmd, args...)
-        catch e
-            show(e)
-            exit(0xff)
-        end
-    end
-    process_status(wait(pid))
-end
+## file descriptors and pipes ##
 
 struct FileDes; fd::Int32; end
 
@@ -135,6 +126,8 @@ function close(fd::FileDes)
     system_error(:close, ret != 0)
 end
 
+## Executable: things that can be exec'd ##
+
 typealias Executable Union((String,Tuple),Function)
 
 exec(cmd::(String,Tuple)) = exec(cmd[1], cmd[2]...)
@@ -179,6 +172,8 @@ exec(cmd::Cmd) = exec(cmd.exec)
 
 ==(c1::Cmd, c2::Cmd) = is(c1,c2)
 
+## Port: a file descriptor on a particular command ##
+
 struct Port
     cmd::Cmd
     fd::FileDes
@@ -206,6 +201,18 @@ stdin (cmds::Cmds) = fd(cmds,STDIN)
 stdout(cmds::Cmds) = fd(cmds,STDOUT)
 stderr(cmds::Cmds) = fd(cmds,STDERR)
 
+cmds(port::Port) = set(port.cmd)
+
+function cmds(ports::Ports)
+    c = Set(Cmd)
+    for port = ports
+        add(c, port.cmd)
+    end
+    return c
+end
+
+## building connected and disconnected pipelines ##
+
 function (&)(cmds::Cmds...)
     set = Set(Cmd)
     for cmd = cmds
@@ -231,7 +238,40 @@ function connect(port::Port, pend::PipeEnd)
         error(port.cmd, " is already connected to ",
               fd(port.cmd.pipes[port.fd]))
     end
+    return pend
 end
+
+function connect(ports::Ports, pend::PipeEnd)
+    for port = ports
+        connect(port, pend)
+    end
+    return pend
+end
+
+function join(cmds::Cmds)
+    if length(cmds) > 1
+        pipeline = Set(Cmd)
+        for cmd = cmds
+            add(pipeline, cmd.pipeline)
+        end
+        for cmd = pipeline
+            cmd.pipeline = pipeline
+        end
+    end
+end
+
+function read_from(ports::Ports)
+    join(cmds(ports))
+    other(connect(ports, in(make_pipe())))
+end
+
+function write_to(ports::Ports)
+    join(cmds(ports))
+    other(connect(ports, out(make_pipe())))
+end
+
+read_from(cmds::Cmds) = read_from(stdout(cmds))
+write_to(cmds::Cmds) = write_to(stdin(cmds))
 
 function (|)(src::Port, dst::Port)
     if has(dst.cmd.pipes, dst.fd)
@@ -243,11 +283,7 @@ function (|)(src::Port, dst::Port)
         connect(src, in(p))
         connect(dst, out(p))
     end
-    pipeline = union(src.cmd.pipeline, dst.cmd.pipeline)
-    for cmd = pipeline
-        cmd.pipeline = pipeline
-    end
-    return ()
+    join(src.cmd & dst.cmd)
 end
 
 (|)(src::Port, dsts::Ports) = for dst = dsts; src | dst; end
@@ -258,7 +294,11 @@ end
 (|)(src::Ports, dst::Cmds) = (src | stdin(dst); dst)
 (|)(src::Cmds,  dst::Cmds) = (stdout(src)| stdin(dst); src & dst)
 
+## running commands and pipelines ##
+
 running(cmd::Cmd) = (cmd.pid > 0)
+
+# spawn(cmd) starts all processes connected to cmd
 
 function spawn(cmd::Cmd)
     fds = Set(FileDes)
@@ -293,24 +333,59 @@ function spawn(cmd::Cmd)
     for f = fds
         close(f)
     end
-    cmd.pipeline
 end
 
-function run(cmds::Cmds)
-    pipeline = Set(Cmd)
-    add(pipeline, cmds)
-    for cmd = pipeline
+# spawn(cmds) starts all pipelines of a set of commands
+#   they may not be connected, e.g.: `foo` & `bar`
+
+function spawn(cmds::Cmds)
+    for cmd = cmds
         if !running(cmd)
             spawn(cmd)
         end
     end
+end
+
+# wait for a single command process to finish
+
+function wait(cmd::Cmd)
+    cmd.status = process_status(wait(cmd.pid))
+    process_success(cmd.status)
+end
+
+# wait for a set of command processes to finish
+
+function wait(cmds::Cmds)
     success = true
-    for cmd = pipeline
-        cmd.status = process_status(wait(cmd.pid))
-        success &= process_success(cmd.status)
+    for cmd = cmds
+        success &= wait(cmd)
     end
     success
 end
+
+# spawn and wait for a set of commands
+
+function run(cmds::Cmds)
+    spawn(cmds)
+    wait(cmds)
+end
+
+# run some commands and read all output
+
+function readall(ports::Ports, cmds::Cmds)
+    r = read_from(ports)
+    spawn(cmds)
+    o = readall(fdio(r.fd))
+    if !wait(cmds)
+        error("pipeline failed: $cmds")
+    end
+    return o
+end
+
+readall(ports::Ports) = readall(ports, cmds(ports))
+readall(cmds::Cmds) = readall(stdout(cmds), cmds)
+
+## implementation of `cmd` syntax ##
 
 arg_gen(x::String) = (x,)
 

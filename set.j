@@ -8,6 +8,8 @@ end
 set{T}(x::T...) = (s = Set(T); add(s, x...))
 
 isempty(set::Set) = isempty(set.items)
+length(set::Set) = length(set.items)
+
 has(set::Set, x) = anyp(y->isequal(x,y), set.items)
 
 function add(set::Set, x)
