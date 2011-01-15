@@ -91,6 +91,40 @@ function make_pipe()
     Pipe(FileDes(fds[2]), FileDes(fds[1]))
 end
 
+## core system calls for processes ##
+
+function fork()
+    pid = ccall(dlsym(libc, :fork), Int32, ())
+    system_error(:fork, pid < 0)
+    return pid
+end
+
+function exec(cmd::String, args...)
+    cmd = cstring(cmd)
+    arr = Array(Ptr{Uint8}, length(args)+2)
+    arr[1] = cmd.data
+    for i = 1:length(args)
+        arr[i+1] = cstring(args[i]).data
+    end
+    arr[length(args)+2] = C_NULL
+    ccall(dlsym(libc, :execvp), Int32,
+          (Ptr{Uint8}, Ptr{Ptr{Uint8}}),
+          arr[1], arr)
+    system_error(:exec, true)
+end
+
+function wait(pid::Int32)
+    status = Array(Int32,1)
+    ret = ccall(dlsym(libc, :waitpid), Int32,
+              (Int32, Ptr{Int32}, Int32),
+              pid, status, 0)
+    system_error(:wait, ret == -1)
+    status[1]
+end
+
+exit(n) = ccall(dlsym(libc, :exit), Void, (Int32,), int32(n))
+exit() = exit(0)
+
 function dup2(fd1::FileDes, fd2::FileDes)
     ret = ccall(dlsym(libc, :dup2), Int32, (Int32, Int32), fd1.fd, fd2.fd)
     system_error(:dup2, ret == -1)
