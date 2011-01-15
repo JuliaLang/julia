@@ -61,6 +61,7 @@ load("set.j")
 # concurrency & ipc
 load("task.j")
 load("process.j")
+load("serialize.j")
 load("multi.j")
 
 # misc
