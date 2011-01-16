@@ -263,6 +263,33 @@ strcat(s::String, t::String...) =
 
 print(s::RopeString) = print(s.head, s.tail)
 
+## transformed strings ##
+
+struct TransformedString <: String
+    transform::Function
+    string::String
+end
+
+length(s::TransformedString) = length(s.string)
+length(s::TransformedString) = strlen(s.string)
+
+function next(s::TransformedString, i::Index)
+    c, j = next(s.string,i)
+    c = s.transform(c, i)
+    return c, j
+end
+
+## uppercase and lowercase transformations ##
+
+uc(c::Char) = ccall(dlsym(libc, :towupper), Char, (Char,), c)
+lc(c::Char) = ccall(dlsym(libc, :towlower), Char, (Char,), c)
+
+uc(str::String) = TransformedString((c,i)->uc(c), str)
+lc(str::String) = TransformedString((c,i)->lc(c), str)
+
+ucfirst(str::String) = TransformedString((c,i)->i==1 ? uc(c) : c, str)
+lcfirst(str::String) = TransformedString((c,i)->i==1 ? lc(c) : c, str)
+
 ## conversion of general objects to strings ##
 
 function string(p::Ptr{Uint8})
