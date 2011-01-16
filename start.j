@@ -65,6 +65,7 @@ load("serialize.j")
 load("multi.j")
 
 # misc
+load("env.j")
 load("libc.j")
 load("util.j")
 
