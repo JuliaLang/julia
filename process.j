@@ -385,6 +385,21 @@ end
 readall(ports::Ports) = readall(ports, cmds(ports))
 readall(cmds::Cmds) = readall(stdout(cmds), cmds)
 
+function each_line(ports::Ports, cmds::Cmds)
+    local fh
+    create = @thunk begin
+        r = read_from(ports)
+        spawn(cmds)
+        fh = fdio(r.fd)
+        LineIterator(fh)
+    end
+    destroy = @thunk close(fh)
+    ShivaIterator(create, destroy)
+end
+
+each_line(ports::Ports) = each_line(ports, cmds(ports))
+each_line(cmds::Cmds) = each_line(stdout(cmds), cmds)
+
 ## implementation of `cmd` syntax ##
 
 arg_gen(x::String) = (x,)
