@@ -7,7 +7,10 @@ struct Complex{T<:Real} <: Number
     Complex(x::Real) = new(x, zero(x))
 end
 
+im = Complex(0,1)
+
 complex(x, y) = Complex(x, y)
+complex(x) = Complex(x)
 
 complex(re::Array, im::Array ) = reshape([ Complex(re[i],im[i]) | i=1:numel(re) ], size(re))
 complex(re::Array, im::Real  ) = reshape([ Complex(re[i],im   ) | i=1:numel(re) ], size(re))
@@ -22,16 +25,19 @@ promote_rule{T,S<:Real}(::Type{Complex{T}}, ::Type{S}) = Complex{promote_type(T,
 promote_rule{T,S}(::Type{Complex{T}}, ::Type{Complex{S}}) = Complex{promote_type(T,S)}
 
 function show(c::Complex)
-    show(real(c))
+    r = real(c)
+    if r != 0
+        show(real(c))
+    end
     i = imag(c)
     if signbit(i) == -1
         i = -i
         print(" - ")
-    else
+    elseif r != 0
         print(" + ")
     end
     show(i)
-    print('i')
+    print("im")
 end
 
 iscomplex(x::Complex) = true
@@ -144,7 +150,6 @@ function exp(z::Complex)
     Complex(er*cos(z.im), er*sin(z.im))
 end
 
-# TODO: why is this in complex.j?
 (^)(x::Int, p::Float) = ^(promote(x,p)...)
 
 function (^)(x::Float, p::Float)
