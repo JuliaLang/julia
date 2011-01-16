@@ -330,6 +330,11 @@ isvatuple(t) = (n = length(t); n > 0 && isseqtype(t[n]))
 limit_tuple_depth(t) = limit_tuple_depth(t,0)
 
 function limit_tuple_depth(t,d)
+    if isa(t,UnionKind)
+        # also limit within Union types.
+        # may have to recur into other stuff in the future too.
+        return Union(limit_tuple_depth(t.types,d)...)
+    end
     if !isa(t,Tuple)
         return t
     end
@@ -702,7 +707,7 @@ function typeinf(linfo::LambdaStaticData,atypes::Tuple,sparams::Tuple, cop, def)
         f = f.prev
     end
 
-    #print("typeinf ", linfo.name, atypes, "\n")
+    #print(linfo.name); show(atypes); print('\n')
 
     ast = cop ? copy(ast0) : ast0
 
