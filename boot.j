@@ -203,4 +203,5 @@ end
 
 append(xs...) = append_any(xs...)
 
+macro thunk(ex); :(()->$ex); end
 macro L_str(s); s; end
