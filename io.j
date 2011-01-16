@@ -272,3 +272,19 @@ function select_read(readfds::FDSet, timeout::Real)
                  (Int32, Ptr{Void}, Ptr{Void}, Ptr{Void}, Ptr{Void}),
                  readfds.nfds, readfds.data, C_NULL, C_NULL, tout)
 end
+
+## high-level iterator interfaces ##
+
+struct LineIterator
+    stream::IOStream
+end
+
+start(itr::LineIterator) = readline(itr.stream)
+done(itr::LineIterator, line::ByteString) = isempty(line)
+
+function next(itr::LineIterator, this_line::ByteString)
+    next_line = readline(itr.stream)
+    this_line, next_line
+end
+
+each_line(stream::IOStream) = LineIterator(stream)
