@@ -59,6 +59,7 @@ load("tree.j")
 load("set.j")
 
 # concurrency & ipc
+load("iterator.j")
 load("task.j")
 load("process.j")
 load("serialize.j")
