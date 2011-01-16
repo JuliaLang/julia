@@ -62,7 +62,7 @@ static char jl_banner_color[] =
 
 static char jl_prompt_plain[] = "julia> ";
 static char jl_prompt_color[] = "\001\033[1m\033[32m\002julia> \001\033[37m\002";
-static char jl_answer_color[] = "\033[1m\033[34m";
+static char *jl_answer_color  = "\033[1m\033[34m";
 static char jl_input_color[]  = "\033[1m\033[37m";
 static char jl_color_normal[] = "\033[0m\033[37m";
 
@@ -168,6 +168,25 @@ void parse_opts(int *argcp, char ***argvp) {
             julia_home = strdup(dirname(julia_path));
             free(julia_path);
         }
+    }
+    char *answer_color = getenv("JL_ANSWER_COLOR");
+    if (answer_color) {
+        if (!strcmp(answer_color,"black"))
+            jl_answer_color  = "\033[1m\033[30m";
+        else if (!strcmp(answer_color,"red"))
+            jl_answer_color  = "\033[1m\033[31m";
+        else if (!strcmp(answer_color,"green"))
+            jl_answer_color  = "\033[1m\033[32m";
+        else if (!strcmp(answer_color,"yellow"))
+            jl_answer_color  = "\033[1m\033[33m";
+        else if (!strcmp(answer_color,"blue"))
+            jl_answer_color  = "\033[1m\033[34m";
+        else if (!strcmp(answer_color,"magenta"))
+            jl_answer_color  = "\033[1m\033[35m";
+        else if (!strcmp(answer_color,"cyan"))
+            jl_answer_color  = "\033[1m\033[36m";
+        else if (!strcmp(answer_color,"white"))
+            jl_answer_color  = "\033[1m\033[37m";
     }
     char *pwd = getenv("PWD");
     if (julia_home && pwd) {
