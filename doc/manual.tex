@@ -473,26 +473,17 @@ This includes cases where \verb|a == 0| or \verb|b == 0|, in which situations th
   julia> float(5//0)
   Inf
 
-  julia> isequal(float(5//0), 5/0)
-  true
-
   julia> 0//0
   0//0
 
   julia> float(0//0)
   NaN
 
-  julia> isequal(float(0//0), 0/0)
-  true
-
   julia> -3//0
   -1//0
 
   julia> float(-3//0)
   -Inf
-
-  julia> isequal(float(-3//0), -3/0)
-  true
 \end{verbatim}
 In a sense, Julia \verb|Rational|s are a convenient way of deferring the computation of integer ratios, thereby avoiding the accumulation of floating point errors.
 
@@ -500,7 +491,20 @@ In a sense, Julia \verb|Rational|s are a convenient way of deferring the computa
 
 \section{Control Flow}
 
+Julia has all the standard Matlab-derived control flow constructs, plus a few additional constructs borrowed from other languages:
+\begin{itemize}
+\item Conditional evaluation: \verb|if|, \verb|else|, \verb|ifelse|, \verb|&&|, \texttt{||}, \verb|?:|.
+\item Repeated evaluation: \verb|while|, \verb|for|.
+\item Exceptions: \verb|try|, \verb|catch|, \verb|throw|, \verb|error|.
+\end{itemize}
+In addition to these constructs, Julia has symmetric continuations, a powerful non-local control flow construct similar to continuations.
+In fact, both exception handling and cooperative multitasking are implemented using coroutines.
+However, everyday Julia programming requires no direct usage of this powerful feature.
 
+\subsection{Conditional Evaluation}\sec{conditional-evaluation}
+\subsection{Repeated Evaluation}\sec{repeated-evaluation}
+\subsection{Exceptions}\sec{exceptions}
+\subsection{Coroutines}\sec{coroutines}
 
 \section{Functions}
 
@@ -516,7 +520,7 @@ This syntax is similar to Matlab, but there are some significant differences:
 In Julia, this expression can appear anywhere, including at the repl prompt.
 \item In Matlab, the closing \verb|end| is optional, being implied by the end of the file.
 In Julia, the terminating \verb|end| is required.
-\item in Matlab, this function would print the value $x + y$ but would not return any value.
+\item in Matlab, this function would print the value \verb|x + y| but would not return any value.
 In Julia, the last expression evaluated is a function's return value.
 \item Expression values are never printed automatically except in the repl.
 Semicolons are only required to separate expressions on the same line.
