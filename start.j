@@ -69,10 +69,3 @@ load("multi.j")
 load("env.j")
 load("libc.j")
 load("util.j")
-
-scheduler = Task(schedule)
-# bootstrap the current task into the scheduler.
-# this way every future call to the scheduler enters/exits through the
-# scheduler's internal "yieldto" call.
-make_scheduled(current_task())
-yieldto(scheduler)
