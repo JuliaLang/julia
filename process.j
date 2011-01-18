@@ -372,7 +372,7 @@ end
 
 # run some commands and read all output
 
-function readall(ports::Ports, cmds::Cmds)
+function _readall(ports::Ports, cmds::Cmds)
     r = read_from(ports)
     spawn(cmds)
     o = readall(fdio(r.fd))
@@ -382,10 +382,10 @@ function readall(ports::Ports, cmds::Cmds)
     return o
 end
 
-readall(ports::Ports) = readall(ports, cmds(ports))
-readall(cmds::Cmds) = readall(stdout(cmds), cmds)
+readall(ports::Ports) = _readall(ports, cmds(ports))
+readall(cmds::Cmds) = _readall(stdout(cmds), cmds)
 
-function each_line(ports::Ports, cmds::Cmds)
+function _each_line(ports::Ports, cmds::Cmds)
     local fh
     create = @thunk begin
         r = read_from(ports)
@@ -397,8 +397,8 @@ function each_line(ports::Ports, cmds::Cmds)
     ShivaIterator(create, destroy)
 end
 
-each_line(ports::Ports) = each_line(ports, cmds(ports))
-each_line(cmds::Cmds) = each_line(stdout(cmds), cmds)
+each_line(ports::Ports) = _each_line(ports, cmds(ports))
+each_line(cmds::Cmds) = _each_line(stdout(cmds), cmds)
 
 ## implementation of `cmd` syntax ##
 
