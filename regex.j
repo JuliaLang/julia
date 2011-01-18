@@ -109,7 +109,7 @@ end
 
 ## object-oriented Regex interface ##
 
-struct Regex
+type Regex
     pattern::ByteString
     options::Int32
     regex::Ptr{Void}
@@ -158,7 +158,7 @@ function show(re::Regex)
     end
 end
 
-struct RegexMatch
+type RegexMatch
     match::Union((),String)
     captures::Tuple
     offset::Index

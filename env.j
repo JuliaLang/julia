@@ -27,7 +27,7 @@ end
 
 ## ENV: hash interface ##
 
-struct EnvHash; end
+type EnvHash; end
 
 ENV = EnvHash()
 

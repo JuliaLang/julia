@@ -25,15 +25,15 @@ MAX_TYPEUNION_SIZE = 3
 MAX_TUPLETYPE_LEN  = 10
 MAX_TUPLE_DEPTH = 4
 
-struct NotFound
+type NotFound
 end
 
 NF = NotFound()
 
-struct EmptyCallStack
+type EmptyCallStack
 end
 
-struct CallStack
+type CallStack
     ast
     types::Tuple
     n::Int32
@@ -291,7 +291,7 @@ function builtin_tfunction(f, args::Tuple, argtypes::Tuple)
     return tf[3](argtypes...)
 end
 
-struct StaticVarInfo
+type StaticVarInfo
     sp::Tuple
     cenv::IdTable   # types of closed vars
 end
@@ -534,7 +534,7 @@ abstract_eval(x, vtypes, sv::StaticVarInfo) = abstract_eval_constant(x)
 
 typealias VarTable IdTable
 
-struct StateUpdate
+type StateUpdate
     var::Symbol
     vtype
     state::VarTable

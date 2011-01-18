@@ -1,16 +1,16 @@
-type Tree{K,V}
+abstract Tree{K,V}
 
-struct EmptyTree{K,V} <: Tree{K,V}
+type EmptyTree{K,V} <: Tree{K,V}
 end
 
-struct TreeNode{K,V} <: Tree{K,V}
+type TreeNode{K,V} <: Tree{K,V}
     key::  K
     data:: V
     left:: Tree{K,V}
     right::Tree{K,V}
 end
 
-struct BTree{K,V}
+type BTree{K,V}
     root:: Tree{K,V}
 
     BTree(k,v) = new(EmptyTree{k,v}())

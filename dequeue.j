@@ -1,9 +1,9 @@
-struct Pair
+type Pair
     a
     b
 end
 
-struct Queue
+type Queue
     head::Union((),Pair)
     tail::Union((),Pair)
 
@@ -39,7 +39,7 @@ start(q::Queue) = q.head
 done(q::Queue, elt) = is(elt,())
 next(q::Queue, elt) = (elt.a, elt.b)
 
-struct Dequeue{T}
+type Dequeue{T}
     maxsize:: Size
     size:: Size
     offset:: Size

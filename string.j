@@ -141,7 +141,7 @@ end
 
 ## plain old character arrays ##
 
-struct CharString <: String
+type CharString <: String
     chars::Array{Char,1}
 
     CharString(a::Array{Char,1}) = new(a)
@@ -158,7 +158,7 @@ string(c::Char, x::Char...) = CharString(c, x...)
 
 ## substrings reference original strings ##
 
-struct SubString <: String
+type SubString <: String
     string::String
     offset::Index
     length::Index
@@ -186,7 +186,7 @@ ref(s::String, r::Range1{Index}) = SubString(s, r.start, r.stop)
 
 ## efficient representation of repeated strings ##
 
-struct RepString <: String
+type RepString <: String
     string::String
     repeat::Int
 end
@@ -215,7 +215,7 @@ repeat(s::String, r::Int) = r <= 0 ? "" :
 # can compute the offsets lazily and avoid all the
 # futzing around while the string is being constructed.
 
-struct RopeString <: String
+type RopeString <: String
     head::String
     tail::String
     depth::Int32
@@ -265,7 +265,7 @@ print(s::RopeString) = print(s.head, s.tail)
 
 ## transformed strings ##
 
-struct TransformedString <: String
+type TransformedString <: String
     transform::Function
     string::String
 end

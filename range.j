@@ -1,6 +1,6 @@
 ## 1-dimensional ranges ##
 
-struct Range{T<:Real} <: Tensor{T,1}
+type Range{T<:Real} <: Tensor{T,1}
     start::T
     step::T
     stop::T
@@ -9,7 +9,7 @@ struct Range{T<:Real} <: Tensor{T,1}
     Range(start, step, stop) = new(promote(start, step, stop)...)
 end
 
-struct Range1{T<:Real} <: Tensor{T,1}
+type Range1{T<:Real} <: Tensor{T,1}
     start::T
     stop::T
 
@@ -95,7 +95,7 @@ end
 
 ## N-dimensional ranges ##
 
-struct NDRange{N}
+type NDRange{N}
     ranges::NTuple{N,Any}
     empty::Bool
     NDRange(r::())           =new(r,false)

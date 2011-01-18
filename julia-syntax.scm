@@ -302,7 +302,7 @@
 		,name ,super (tuple ,@field-types))))
        ,@(symbols->typevars params bounds))))))
 
-(define (type-def-expr name params super)
+(define (abstract-type-def-expr name params super)
   (receive
    (params bounds)
    (sparam-name-bounds params '() '())
@@ -418,7 +418,7 @@
 			  (else (error "invalid let syntax"))))))
 
    ;; type definition
-   (pattern-lambda (struct sig (block . fields))
+   (pattern-lambda (type sig (block . fields))
 		   (receive (name params super) (analyze-type-sig sig)
 			    (struct-def-expr name params super fields)))
 
@@ -462,9 +462,9 @@
    (pattern-lambda (= (|.| a b) rhs)
 		   `(call (top setfield) ,a (quote ,b) ,rhs))
 
-   (pattern-lambda (type sig)
+   (pattern-lambda (abstract sig)
 		   (receive (name params super) (analyze-type-sig sig)
-			    (type-def-expr name params super)))
+			    (abstract-type-def-expr name params super)))
 
    (pattern-lambda (bitstype n sig)
 		   (receive (name params super) (analyze-type-sig sig)

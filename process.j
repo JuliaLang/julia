@@ -1,11 +1,11 @@
 ## process status ##
 
-type ProcessStatus
-struct ProcessNotRun   <: ProcessStatus; end
-struct ProcessRunning  <: ProcessStatus; end
-struct ProcessExited   <: ProcessStatus; status::Int32; end
-struct ProcessSignaled <: ProcessStatus; signal::Int32; end
-struct ProcessStopped  <: ProcessStatus; signal::Int32; end
+abstract ProcessStatus
+type ProcessNotRun   <: ProcessStatus; end
+type ProcessRunning  <: ProcessStatus; end
+type ProcessExited   <: ProcessStatus; status::Int32; end
+type ProcessSignaled <: ProcessStatus; signal::Int32; end
+type ProcessStopped  <: ProcessStatus; signal::Int32; end
 
 process_exited(s::Int32)   = ccall(:jl_process_exited,   Int32, (Int32,), s) != 0
 process_signaled(s::Int32) = ccall(:jl_process_signaled, Int32, (Int32,), s) != 0
@@ -27,7 +27,7 @@ process_success(s::ProcessExited) = (s.status == 0)
 
 ## file descriptors and pipes ##
 
-struct FileDes; fd::Int32; end
+type FileDes; fd::Int32; end
 
 global STDIN  = FileDes(ccall(:jl_stdin,  Int32, ()))
 global STDOUT = FileDes(ccall(:jl_stdout, Int32, ()))
@@ -43,7 +43,7 @@ show(fd::FileDes) =
     fd == STDERR ? print("STDERR") :
     invoke(show, (Any,), fd)
 
-struct Pipe
+type Pipe
     in::FileDes
     out::FileDes
 
@@ -57,9 +57,9 @@ end
 
 ==(p1::Pipe, p2::Pipe) = (p1.in == p2.in && p1.out == p2.out)
 
-type PipeEnd
-struct PipeIn  <: PipeEnd; pipe::Pipe; end
-struct PipeOut <: PipeEnd; pipe::Pipe; end
+abstract PipeEnd
+type PipeIn  <: PipeEnd; pipe::Pipe; end
+type PipeOut <: PipeEnd; pipe::Pipe; end
 
 ==(p1::PipeEnd, p2::PipeEnd) = false
 ==(p1::PipeIn , p2::PipeIn ) = (p1.pipe == p2.pipe)
@@ -133,7 +133,7 @@ typealias Executable Union((String,Tuple),Function)
 exec(cmd::(String,Tuple)) = exec(cmd[1], cmd[2]...)
 exec(thunk::Function) = thunk()
 
-struct Cmd
+type Cmd
     exec::Executable
     pipes::HashTable{FileDes,PipeEnd}
     pipeline::Set{Cmd}
@@ -174,7 +174,7 @@ exec(cmd::Cmd) = exec(cmd.exec)
 
 ## Port: a file descriptor on a particular command ##
 
-struct Port
+type Port
     cmd::Cmd
     fd::FileDes
 end

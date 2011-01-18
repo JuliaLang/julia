@@ -1,4 +1,4 @@
-struct UTF32String
+type UTF32String
     data::Array{Int32,1}
 end
 

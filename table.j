@@ -1,4 +1,4 @@
-struct IdTable
+type IdTable
     ht::Array{Any,1}
 end
 
@@ -86,7 +86,7 @@ hash(s::Union(UTF8String,Latin1String)) =
 
 # hash table
 
-struct HashTable{K,V}
+type HashTable{K,V}
     keys::Array{K,1}
     vals::Array{V,1}
     used::IntSet

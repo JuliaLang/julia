@@ -1,4 +1,4 @@
-struct Set{T}
+type Set{T}
     items::Array{T,1}
 
     Set() = new(Array(Any,0))

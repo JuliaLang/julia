@@ -1,4 +1,4 @@
-struct Complex{T<:Real} <: Number
+type Complex{T<:Real} <: Number
     re::T
     im::T
 

@@ -1,5 +1,5 @@
 ## from boot.j:
-# struct UTF8String <: String
+# type UTF8String <: String
 #     data::Array{Uint8,1}
 # end
 

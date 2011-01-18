@@ -1,26 +1,26 @@
 # commented-out definitions are implemented in C
 
-#type Any <: Any
-#type Type{T}
+#abstract Any <: Any
+#abstract Type{T}
 
-#type ...{T}
+#abstract ...{T}
 #Tuple = (Any...)
 
-#struct Symbol
+#type Symbol
 #    #opaque
 #end
 
-#struct TypeName
+#type TypeName
 #    name::Symbol
 #end
 
-#struct TagKind <: Type
+#type TagKind <: Type
 #    name::TypeName
 #    super::Type
 #    parameters::Tuple
 #end
 
-#struct StructKind <: TagKind
+#type StructKind <: TagKind
 #    #name::TypeName
 #    #super::Type
 #    #parameters::Tuple
@@ -28,47 +28,47 @@
 #    types::Tuple
 #end
 
-#struct BitsKind <: TagKind
+#type BitsKind <: TagKind
 #    #name::TypeName
 #    #super::Type
 #    #parameters::Tuple
 #end
 
-#struct FuncKind <: Type
+#type FuncKind <: Type
 #    from::Type
 #    to::Type
 #end
 
-#struct UnionKind <: Type
+#type UnionKind <: Type
 #    types::Tuple
 #end
 
 #None = Union()
 
-#struct TypeVar
+#type TypeVar
 #    name::Symbol
 #    lb::Type
 #    ub::Type
 #end
 
-#struct TypeConstructor
+#type TypeConstructor
 #    parameters::Tuple
 #    body
 #end
 
-#type Tensor{T,N}
+#abstract Tensor{T,N}
 
-#struct Array{T,N} <: Tensor{T,N}
+#type Array{T,N} <: Tensor{T,N}
 #    dims::NTuple{N,Int32}
 #end
 
-#struct Expr
+#type Expr
 #    head::Symbol
 #    args::Array{Any,1}
 #    type::Any
 #end
 
-#struct LambdaStaticData
+#type LambdaStaticData
 #    ast::Expr
 #    sparams::Tuple
 #    tfunc
@@ -77,11 +77,11 @@
 
 #bitstype {32|64} Ptr{T}
 
-type Number
-type Real   <: Number
-type Int    <: Real
-type Uint   <: Int
-type Float  <: Real
+abstract Number
+abstract Real   <: Number
+abstract Int    <: Real
+abstract Uint   <: Int
+abstract Float  <: Real
 
 bitstype 8  Bool
 bitstype 32 Char <: Uint
@@ -101,68 +101,68 @@ bitstype 64 Float64 <: Float
 typealias Size Int32
 typealias Index Int32
 
-type String
+abstract String
 
-struct Latin1String <: String
+type Latin1String <: String
     data::Array{Uint8,1}
 end
 
-struct UTF8String <: String
+type UTF8String <: String
     data::Array{Uint8,1}
 end
 
 typealias ByteString Union(Latin1String,UTF8String)
 
-type Exception
+abstract Exception
 
-struct ErrorException <: Exception
+type ErrorException <: Exception
     msg::String
 end
 
-struct SystemError <: Exception
+type SystemError <: Exception
     prefix::String
     errnum::Int32
     SystemError(p::String, e::Int) = new(p, int32(e))
     SystemError(p::String) = new(p, errno())
 end
 
-struct TypeError <: Exception
+type TypeError <: Exception
     func::Symbol
     context::String
     expected::Type
     got
 end
 
-struct ParseError <: Exception
+type ParseError <: Exception
     msg::String
 end
 
-struct ArgumentError <: Exception
+type ArgumentError <: Exception
     msg::String
 end
 
-struct BoundsError <: Exception
+type BoundsError <: Exception
 end
 
-struct UnboundError <: Exception
+type UnboundError <: Exception
     var::Symbol
 end
 
-struct KeyError <: Exception
+type KeyError <: Exception
     key
 end
 
-struct LoadError <: Exception
+type LoadError <: Exception
     file::String
     line::Int32
     error
 end
 
-struct DivideByZeroError  <: Exception end
-struct MemoryError        <: Exception end
-struct IOError            <: Exception end
-struct StackOverflowError <: Exception end
-struct EOFError           <: Exception end
+type DivideByZeroError  <: Exception end
+type MemoryError        <: Exception end
+type IOError            <: Exception end
+type StackOverflowError <: Exception end
+type EOFError           <: Exception end
 
 finalizer(o, f::Function) =
     ccall(:jl_gc_add_finalizer, Void, (Any,Any), o, f)

@@ -611,8 +611,9 @@ Array(Int32, (2,2), 0, 1, 2, 3)
 Array{Int32,1}(5, 0, 1, 2, 3, 4)
 Array{Int32,2}((2,2), 0, 1, 2, 3)
 
-- type=>abstract, struct=>type
+* type=>abstract, struct=>type
 - do something about "global X+=1"
+? make sure chained comparisons evaluate left to right
 
 before removing the 1-word overhead:
 initial   , after tests.j

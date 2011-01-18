@@ -1,4 +1,4 @@
-struct SparseMatrix{T} <: Matrix{T}
+type SparseMatrix{T} <: Matrix{T}
     m::Size
     n::Size
     colptr::Vector{Size}

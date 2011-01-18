@@ -1,4 +1,4 @@
-struct IntSet
+type IntSet
     bits::Array{Uint32,1}
     limit::Int32  # todo: should be Int64
     

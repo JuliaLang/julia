@@ -41,7 +41,7 @@ end
 
 ## process group creation ##
 
-struct Worker
+type Worker
     host::String
     port::Int16
     fd::Int32
@@ -59,15 +59,15 @@ struct Worker
     Worker(host, port, fd, sock) = new(host, port, fd, sock)
 end
 
-struct LocalProcess
+type LocalProcess
 end
 
-struct Location
+type Location
     host::String
     port::Int16
 end
 
-struct ProcessGroup
+type ProcessGroup
     myid::Int32
     workers::Array{Any,1}
 end
@@ -117,7 +117,7 @@ end
 
 ## remote refs and core messages: do, call, fetch, wait ##
 
-struct RemoteRef
+type RemoteRef
     where::Int32
     whence::Int32
     id::Int32
@@ -132,8 +132,6 @@ end
 function remote_call(w::LocalProcess, f, args...)
     return spawn(()->apply(eval(f), args))
 end
-
-fetch(t::Task) = wait(t)
 
 function remote_do(w::Worker, f, args...)
     send_msg(w.socket, (:do, tuple(f, args...)))
@@ -176,6 +174,8 @@ end
 wait(r::RemoteRef) = msg_roundtrip(:sync, r)
 fetch(r::RemoteRef) = msg_roundtrip(:fetch, r)
 
+fetch(t::Task) = wait(t)
+
 ## higher-level functions ##
 
 at_each(fname::Symbol, args...) = at_each(PGRP, fname, args...)
@@ -199,7 +199,7 @@ end
 
 ## worker event loop ##
 
-struct WorkItem
+type WorkItem
     thunk
     task   # the Task working on this item, or ()
     done::Bool
@@ -210,11 +210,11 @@ struct WorkItem
     WorkItem(thunk) = new(thunk, (), false, (), (), ())
 end
 
-struct FinalValue
+type FinalValue
     value
 end
 
-struct WaitFor
+type WaitFor
     msg::Symbol
     ref::RemoteRef
 end

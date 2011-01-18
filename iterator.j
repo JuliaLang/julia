@@ -1,6 +1,6 @@
 ## various useful iterator constructs ##
 
-struct ShivaIterator
+type ShivaIterator
     create::Function
     destroy::Function
 end

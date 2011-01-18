@@ -1,4 +1,4 @@
-struct Rational{T<:Int} <: Real
+type Rational{T<:Int} <: Real
     num::T
     den::T
 

@@ -1,5 +1,5 @@
 ## from boot.j:
-# struct Latin1String <: String
+# type Latin1String <: String
 #     data::Array{Uint8,1}
 # end
 

@@ -1,4 +1,4 @@
-struct Quaternion{T<:Real} <: Number
+type Quaternion{T<:Real} <: Number
     q0::T
     q1::T
     q2::T

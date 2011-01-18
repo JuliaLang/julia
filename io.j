@@ -1,7 +1,7 @@
 sizeof_ios_t = ccall(:jl_sizeof_ios_t, Int32, ())
 sizeof_fd_set = ccall(:jl_sizeof_fd_set, Int32, ())
 
-struct IOStream
+type IOStream
     ios::Array{Uint8,1}
 
     global make_stdout_stream, close
@@ -198,7 +198,7 @@ readline(s::IOStream) = readuntil(s, uint8('\n'))
 
 flush(s::IOStream) = ccall(:ios_flush, Void, (Ptr{Void},), s.ios)
 
-struct IOTally
+type IOTally
     nbytes::Size
     IOTally() = new(zero(Size))
 end
@@ -208,7 +208,7 @@ flush(s::IOTally) = ()
 
 ## select interface ##
 
-struct FDSet
+type FDSet
     data::Array{Uint8,1}
     nfds::Int32
 
@@ -275,7 +275,7 @@ end
 
 ## high-level iterator interfaces ##
 
-struct LineIterator
+type LineIterator
     stream::IOStream
 end
 

@@ -1,9 +1,9 @@
-type List{T}
+abstract List{T}
 
-struct Nil{T} <: List{T}
+type Nil{T} <: List{T}
 end
 
-struct Cons{T} <: List{T}
+type Cons{T} <: List{T}
     head::T
     tail::List{T}
 end

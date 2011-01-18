@@ -63,7 +63,7 @@
 
 (define reserved-words '(begin while if for try return break continue
 			 function macro quote let local global const
-			 type typealias struct bitstype
+			 abstract typealias type bitstype
 			 module import export))
 
 (define (syntactic-op? op) (memq op syntactic-operators))
@@ -587,12 +587,12 @@
      (let ((sig (parse-call s)))
        (begin0 (list word sig (parse-block s))
 	       (expect-end s))))
-    ((struct)
+    ((abstract)
+     (list 'abstract (parse-ineq s)))
+    ((type)
      (let ((sig (parse-ineq s)))
        (begin0 (list word sig (parse-block s))
 	       (expect-end s))))
-    ((type)
-     (list 'type (parse-ineq s)))
     ((bitstype)
      (list 'bitstype (parse-atom s) (parse-ineq s)))
     ((typealias)
