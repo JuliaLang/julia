@@ -593,34 +593,39 @@ The \verb|return| on the last line could be omitted since it is the last express
 The \emph{scope} of a variable is the section of code within which a variable
 is visible. Understanding variable scope allows you to avoid conflicts when
 a variable name is reused. The concept is intuitive; for example, it is
-probably clear that two functions can both have arguments called \texttt{x}
-without the two \texttt{x}s referring to the same thing. There are
+probably clear that two functions can both have arguments called \verb|x|
+without the two \verb|x|s referring to the same thing. There are
 other scope rules however, and this section will spell them out in detail.
 
 Certain constructs in the language introduce \emph{scope blocks}, which
 are regions of code that are eligible to be the scope of some set of variables.
 The scope of a variable cannot be an arbitrary set of
 source lines, but will always line up with one of these blocks. These
-constructs are: function bodies (as introduced by any of the syntaxes for
-functions), for loops, while loops, try blocks, catch blocks, let blocks,
-and type declarations.
-
-Next, there are constructs that introduce new variables into scopes. When
-a variable is introduced into a scope, it is also inherited by all inner
-scopes unless one of the inner scopes explicitly overrides it. These
-constructs are as follows:
+constructs are:
 \begin{itemize}
+\item function bodies (any syntax)
+\item while loops
+\item for loops
+\item try blocks
+\item catch blocks
+\item let blocks
+\item type declaration blocks.
+\end{itemize}
+Certain constructs introduce new variables into the current innermost scope. When
+a variable is introduced into a scope, it is also inherited by all its inner
+scopes unless one of those inner scopes explicitly overrides it. These
+constructs which introduce new variables into the current scope are as follows:
+\begin{itemize}
+\item A declaration \verb|local x| introduces a new local variable.
+\item A declaration \verb|global x| makes \verb|x| in the current scope
+and inner scopes refer to the global variable of that name.
 \item A function's arguments are introduced as new local variables into the
 function's body scope.
-\item A declaration \verb|local x| introduces a new local variable.
-\item A declaration \verb|global x| makes \texttt{x} in the current scope
-and inner scopes refer to the global variable of that name.
-\item An assignment \verb|x = y| introduces a new local variable \texttt{x}
-only if \texttt{x} is neither declared global nor explicitly introduced as local
-by any enclosing scope.
+\item An assignment \verb|x = y| introduces a new local variable \verb|x|
+only if \verb|x| is neither declared global nor explicitly introduced as local
+by any enclosing scope, \emph{before or after} the current line of code.
 \end{itemize}
-
-In the following example, there is only one \texttt{x} assigned both inside
+In the following example, there is only one \verb|x| assigned both inside
 and outside a loop:
 \begin{verbatim}
   function foo(n)
@@ -630,9 +635,11 @@ and outside a loop:
       end
       x
   end
+  
+  julia> foo(10)
+  10
 \end{verbatim}
-
-In the following example, the loop has a separate \texttt{x} and the function
+In the next example, the loop has a separate \verb|x| and the function
 always returns zero:
 \begin{verbatim}
   function foo(n)
@@ -643,11 +650,13 @@ always returns zero:
       end
       x
   end
-\end{verbatim}
 
-In the following example, an \texttt{x} exists only inside the loop, and
+  julia> foo(10)
+  0
+\end{verbatim}
+In this example, an \verb|x| exists only inside the loop, and
 the function encounters an undefined variable error on its last line
-(unless there is a global variable \texttt{x}):
+(unless there is a global variable \verb|x|):
 \begin{verbatim}
   function foo(n)
       for i = 1:n
@@ -655,17 +664,39 @@ the function encounters an undefined variable error on its last line
       end
       x
   end
+
+  julia> foo(10)
+  in foo: x not defined
 \end{verbatim}
-
-A variable that is not assigned to and not introduced defaults to global,
-so this function would actually return the value of the global \texttt{x}
-if there is such a variable.
-
-Observe, however, that the only way to assign to a global variable inside
-another scope is to explicitly declare the variable as global, since
-otherwise the assignment would introduce a new local. This rule works out
+A variable that is not assigned to or otherwise introduced locally defaults to global,
+so this function would return the value of the global \verb|x|
+if there is such a variable, or produce an error if no such global exists.
+As a consequence, the only way to assign to a global variable inside
+a non-top-level scope is to explicitly declare the variable as global within some scope, since
+otherwise the assignment would introduce a new local rather than assigning to the global. This rule works out
 well in practice, since the vast majority of variables assigned inside
-functions are intended to be local variables.
+functions are intended to be local variables, and using global variables, should be the exception rather than the rule, especially assigning new values to them.
+
+One last example shows that an outer assignment introducing \verb|x| need not come before an inner usage:
+\begin{verbatim}
+  function foo(n)
+      f = y -> n + x + y
+      x = 1
+      f(2)
+  end
+
+  julia> foo(10)
+  13
+\end{verbatim}
+This last example may seem slightly odd for a normal variable, but allows for named functions\,---\,which are just normal variables holding function objects\,---\,to be used before they are defined.
+This allows functions to be defined in whatever order is intuitive and convenient, rather than forcing bottom up ordering or requiring forward declarations, both of which one typically sees in C programs:
+\begin{verbatim}
+  f(x) = g(x) + g(x-1)
+  g(x) = x^2 + 2x - 1
+
+  julia> f(3)
+  21
+\end{verbatim}
 
 At the interactive prompt, variable scope works the same way as anywhere
 else. The prompt behaves as if there is scope block wrapped around everything
@@ -687,13 +718,12 @@ This is especially apparent in the case of assignments:
   julia> y
   10
 \end{verbatim}
-
-As you can see, in the first case \texttt{y} only exists inside the loop.
+In the first case \verb|y| only exists inside the loop.
 In the second case, an outer y has been introduced and so is inherited
 within the loop. Due to the special identification of the prompt's scope
 block with the global scope, it is not necessary to declare
 \verb|global y| inside the loop. However, outside the interactive prompt
-this declaration would be necessary to modify a global variable.
+this declaration would be necessary in order to modify a global variable.
 
 \subsection{Specializing Functions for Given Types}
 
