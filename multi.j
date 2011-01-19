@@ -183,7 +183,7 @@ function remote_call(w::LocalProcess, f, args...)
     rr
 end
 
-function msg_roundtrip(verb::Symbol, r::RemoteRef)
+function sync_msg(verb::Symbol, r::RemoteRef)
     global PGRP
     # NOTE: currently other workers can't request stuff from the client
     # (id 0), since they wouldn't get it until the user typed yield().
@@ -206,8 +206,8 @@ function msg_roundtrip(verb::Symbol, r::RemoteRef)
     return is(verb,:fetch) ? v : r
 end
 
-wait(r::RemoteRef) = msg_roundtrip(:sync, r)
-fetch(r::RemoteRef) = msg_roundtrip(:fetch, r)
+wait(r::RemoteRef) = sync_msg(:sync, r)
+fetch(r::RemoteRef) = sync_msg(:fetch, r)
 
 yield() = (global PGRP; yieldto(PGRP.scheduler))
 

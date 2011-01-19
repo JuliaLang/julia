@@ -39,8 +39,8 @@ Fortunately, modern language design and compiler techniques make it possible to 
 The Julia programming language fills this role:
 it is a flexible and dynamic language, designed expressly for scientific computing, and achieving performance comparable to traditional compiled languages.
 
-The syntax of Julia is directly derived from Matlab, and consequently, any Matlab programmer should feel immediately comfortable with Julia.
-While Matlab is quite effective for prototyping and exploring numerical linear algebra, for programming tasks outside of this relatively narrow scope, Matlab has severe limitations.
+The syntax of Julia is similar to that of Matlab, and consequently, any Matlab programmer should feel immediately comfortable with Julia.
+While Matlab is quite effective for prototyping and exploring numerical linear algebra, it has limitations for programming tasks outside of this relatively narrow scope.
 Julia maintains the ease and expressiveness of Matlab for high-level numerical computing, but transcends its general programming limitations.
 To that end, it borrows heavily from the C programming language, but it is also strongly influenced by the lineage of dynamic languages:
 Lisp, Perl, Python and Ruby.
@@ -491,7 +491,7 @@ In a sense, Julia \verb|Rational|s are just a convenient way of deferring the co
 
 \section{Control Flow}
 
-Julia supports the standard Matlab-derived control flow constructs, plus a few additional constructs borrowed from other programming languages:
+Julia supports several standard control flow constructs:
 \begin{itemize}
 \item Compound expressions: \verb|begin| and \verb|(;)|.
 \item Conditional evaluation: \verb|if|-\verb|esleif|-\verb|else|, and \verb|?:| (ternary operator).
@@ -538,7 +538,7 @@ Here is the anatomy of the \verb|if|-\verb|esleif|-\verb|else| conditional evalu
     println("x is equal to y")
   end
 \end{verbatim}
-The syntax and semantics are identical to Matlab, and the behavior is just what you'd expect:
+The semantics are just what you'd expect:
 if the condition expression \verb|x < y| is true, then the corresponding block is evaluated;
 otherwise the condition expression \verb|x > y| is evaluated, and if it is true, the corresponding block is evaluated;
 if neither expression is true, the \verb|else| block is evaluated.
@@ -577,7 +577,7 @@ Here it is in action:
          end
   x is equal to y
 \end{verbatim}
-The \verb|elseif| and \verb|else| blocks are optional, and as many \verb|elsif| blocks as desired can be used.
+The \verb|elseif| and \verb|else| blocks are optional, and as many \verb|elseif| blocks as desired can be used.
 The condition expressions in the \verb|if|-\verb|elseif|-\verb|else| construct are evaluated until the first one evaluates to \verb|true|, after which the associated block is evaluated, and no further conditional expressions are evaluated, and no other blocks are evaluated.
 
 Unlike C, Matlab, Perl, Python, and Ruby\,---\,but like Java, and a few other stricter typed languages\,---\,it is an error if the value of a conditional expression is not a one of the two \verb|Boolean| values, \verb|true| or \verb|false|:

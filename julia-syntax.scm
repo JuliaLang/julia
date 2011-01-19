@@ -424,10 +424,12 @@
 
    (pattern-lambda (try tryblk var catchblk)
 		   (if (symbol? var)
-		       `(trycatch ,tryblk (scope-block
-					   (block (= ,var (the_exception))
-						  ,catchblk)))
-		       `(trycatch ,tryblk ,catchblk)))
+		       `(trycatch (scope-block ,tryblk)
+				  (scope-block
+				   (block (= ,var (the_exception))
+					  ,catchblk)))
+		       `(trycatch (scope-block ,tryblk)
+				  (scope-block ,catchblk))))
 
    )) ; binding-form-patterns
 
