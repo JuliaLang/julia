@@ -39,8 +39,8 @@ Fortunately, modern language design and compiler techniques make it possible to 
 The Julia programming language fills this role:
 it is a flexible and dynamic language, designed expressly for scientific computing, and achieving performance comparable to traditional compiled languages.
 
-The syntax of Julia is directly derived from Matlab, and consequently, any Matlab programmer should feel immediately comfortable with Julia.
-While Matlab is quite effective for prototyping and exploring numerical linear algebra, for programming tasks outside of this relatively narrow scope, Matlab has severe limitations.
+The syntax of Julia is similar to that of Matlab, and consequently, any Matlab programmer should feel immediately comfortable with Julia.
+While Matlab is quite effective for prototyping and exploring numerical linear algebra, it has limitations for programming tasks outside of this relatively narrow scope.
 Julia maintains the ease and expressiveness of Matlab for high-level numerical computing, but transcends its general programming limitations.
 To that end, it borrows heavily from the C programming language, but it is also strongly influenced by the lineage of dynamic languages:
 Lisp, Perl, Python and Ruby.
@@ -491,9 +491,9 @@ In a sense, Julia \verb|Rational|s are a convenient way of deferring the computa
 
 \section{Control Flow}
 
-Julia supports the standard Matlab-derived control flow constructs, plus a few additional constructs borrowed from other programming languages:
+Julia supports several standard control flow constructs:
 \begin{itemize}
-\item Conditional evaluation: \verb|if|-\verb|esleif|-\verb|else|, and \verb|?:| (ternary operator).
+\item Conditional evaluation: \verb|if|-\verb|elseif|-\verb|else|, and \verb|?:| (ternary operator).
 \item Short-circuit evaluation: \verb|&&|, \texttt{||}, and chained comparisons.
 \item Repeated evaluation: \verb|while| and \verb|for|.
 \item Non-local return: \verb|try|-\verb|catch| and \verb|throw|.
@@ -512,7 +512,7 @@ Here is the general anatomy of the \verb|if|-\verb|esleif|-\verb|else| condition
     println("x is greater than y")
   end
 \end{verbatim}
-The syntax and semantics are identical to Matlab, and are precisely what you'd expect:
+The syntax and semantics are precisely what you'd expect:
 \begin{verbatim}
   julia> x = 1; y = 2;
 
@@ -547,11 +547,11 @@ The syntax and semantics are identical to Matlab, and are precisely what you'd e
          end
   x is greater than y
 \end{verbatim}
-The \verb|elseif| and \verb|else| blocks are optional, and as many \verb|elsif| blocks as desired can be used.
+The \verb|elseif| and \verb|else| blocks are optional, and as many \verb|elseif| blocks as desired can be used.
 The condition expressions in the \verb|if|-\verb|elseif|-\verb|else| construct are evaluated until the first one evaluates to \verb|true|, after which the associated block is evaluated, and no further conditional expressions are evaluated, and no other blocks are evaluated.
 Unlike C 
 
-The so-called ``ternary operator,'' \,\verb|?:|, is closely related to the \verb|if|, \verb|elsif|, \verb|else| form, but is used where a conditional choice between single expression values is required, as opposed to conditional execution of longer blocks of code.
+The so-called ``ternary operator,'' \,\verb|?:|, is closely related to the \verb|if|, \verb|elseif|, \verb|else| form, but is used where a conditional choice between single expression values is required, as opposed to conditional execution of longer blocks of code.
 
 % The essential conditional evaluation keyword is \verb|if|, used with the same syntax as Matlab:
 % \begin{verbatim}
