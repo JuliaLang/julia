@@ -73,9 +73,14 @@ Here's how you start and interact with the Julia read-eval-print loop (repl):
   julia> load("file.j");
 \end{verbatim}
 The \verb|load| function reads and evaluates the contents of the given file.
-The \verb|julia| program takes a variety of command-line options, similar to the \verb|perl| and \verb|ruby| programs.
-See \Section{command-line-options} for details.
 The semicolon at the end of a repl line suppresses output of the expression value.
+To run code in a file non-interactively, you can give it as the first argument to the julia command:
+\begin{verbatim}
+  $ julia script.j arg1 arg2...
+\end{verbatim}
+As the example implies, the following command-line arguments to julia are taken as command-line arguments to the program \verb|script.j|.
+There are a variety of other ways to run Julia code and provide options to the \verb|julia| program, similar to the \verb|perl| and \verb|ruby| programs.
+See \Section{command-line-options} for details.
 
 \section{Numbers and Arithmetic}
 Julia supports a broad range of numeric types together with the full complement of arithmetic and bitwise operations.
@@ -259,7 +264,7 @@ Julia has a powerful and flexible type promotion system that allows arithmetic o
   julia> 3*2/12 + 1
   1.5
 \end{verbatim}
-The above operations all promote to \verb|Float64| since that is the smallest floating point type that can faithfully represent all \verb|Int32| values.
+The above operations all promote to \verb|Float64| since that is the smallest floating point type that can faithfully represent all possible \verb|Int32| values.
 However, more nuanced promotions also work:
 \begin{verbatim}
   julia> uint8(12) - int8(15)
@@ -499,9 +504,9 @@ Julia supports several standard control flow constructs:
 \item Repeated evaluation: \verb|while| and \verb|for|.
 \item Non-local return: \verb|try|-\verb|catch| and \verb|throw|.
 \end{itemize}
-In addition to these constructs, Julia has symmetric coroutines, a powerful non-local control flow construct similar to continuations.
+In addition to these constructs, Julia has symmetric coroutines\,---\,a powerful non-local control flow construct similar to continuations.
 In fact, both exception handling and cooperative multitasking are implemented in Julia using coroutines.
-However, everyday programming requires no direct usage of this feature.
+Everyday programming, however, requires no direct usage of coroutines.
 
 \subsection{Compound Expressions}
 
@@ -539,8 +544,8 @@ Here is the anatomy of the \verb|if|-\verb|esleif|-\verb|else| conditional evalu
   end
 \end{verbatim}
 The semantics are just what you'd expect:
-if the condition expression \verb|x < y| is true, then the corresponding block is evaluated;
-otherwise the condition expression \verb|x > y| is evaluated, and if it is true, the corresponding block is evaluated;
+if the condition expression \verb|x < y| is \verb|true|, then the corresponding block is evaluated;
+otherwise the condition expression \verb|x > y| is evaluated, and if it is \verb|true|, the corresponding block is evaluated;
 if neither expression is true, the \verb|else| block is evaluated.
 Here it is in action:
 \begin{verbatim}
@@ -590,12 +595,12 @@ Unlike C, Matlab, Perl, Python, and Ruby\,---\,but like Java, and a few other st
 This error indicates that the conditional was of the wrong type:
 \verb|Int32| rather than the required \verb|Bool|.
 
-The so-called ``ternary operator,'' \,\verb|?:|, is closely related to the \verb|if|-\verb|elseif|-\verb|else| form, but is used where a conditional choice between single expression values is required, as opposed to conditional execution of longer blocks of code.
+The so-called ``ternary operator,'' \,\verb|?:|, is closely related to the \verb|if|-\verb|elseif|-\verb|else| syntax, but is used where a conditional choice between single expression values is required, as opposed to conditional execution of longer blocks of code.
 It gets its name from being the only operator in most languages taking three operands:
 \begin{quote}
   \emph{a} \verb|?| \emph{b} \verb|:| \emph{c}
 \end{quote}
-The expression \emph{a} before the \verb|?| is a condition expression, and the ternary operation evaluates the expression \emph{b} before the \verb|:| if the condition is \verb|true| and the expression \emph{c} after the \verb|:| if the condition is \verb|false|.
+The expression \emph{a} before the \verb|?| is a condition expression, and the ternary operation evaluates the expression \emph{b} before the \verb|:| if the condition \emph{a} is \verb|true| or the expression \emph{c} after the \verb|:| if it is \verb|false|.
 
 The easiest way to understand this behavior is to see an example.
 In the previous example, the \verb|println| call is shared by all three branches:
@@ -638,7 +643,7 @@ To facilitate chaining, the operator associates from right to left.
 
 Short-circuit evaluation is quite similar to conditional evaluation.
 The behavior is found in most imperative programming languages having the \verb|&&| and \texttt{||} boolean operators:
-in a series of boolean expressions connected by these operators, only as many expressions as are required to determine the final boolean value of the entire chain, are actually evaluated.
+in a series of boolean expressions connected by these operators, only the minimum number of expressions are evaluated as are necessary to determine the final boolean value of the entire chain.
 Explicitly, this means that:
 \begin{itemize}
   \item In the expression \emph{a} \verb|&&| \emph{b}, the subexpression \emph{b} is only evaluated if \emph{a} evaluates to \verb|false|.
@@ -693,6 +698,12 @@ It's easy to experiment with the evaluation behavior of these operators:
   1
   2
 \end{verbatim}
+Like condition expressions provided \verb|if|, \verb|elsif| or ternary operator, the values given to \verb|&&| or \texttt{||} must be boolean values (\verb|true| or \verb|false|).
+Using a non-boolean value is an error:
+\begin{verbatim}
+  julia> 1 && 2
+  type error: lambda: in if, expected Bool, got Int32
+\end{verbatim}
 Recall from \Section{numeric-comparisons} that numeric comparisons in Julia can be chained:
 \begin{verbatim}
   julia> a = 1; b = 2; c = 3;
@@ -721,17 +732,20 @@ Let's see this in action:
   0
   false
 \end{verbatim} % TODO: THIS IS NOT THE ACTUAL OUTPUT
-The first pair of expressions will always be evaluated, since the first comparison must always be evaluated, but subsequent expressions need not be evaluated if an earlier comparison in the chain fails to be true.
-Note that in the first case, the middle expression, \verb|v(2)|, is only evaluated once, rather than twice as it would be if this expression were actually textually expanded as \verb|v(1) < v(2) && v(2) <= v(3)|.
+The first pair of expressions will always be evaluated, since the first comparison must always be evaluated and requires both values.
+Subsequent expressions, however, need not be evaluated if a comparison earlier in the chain is \verb|false|.
+Note that the middle expression is only evaluated once, rather than twice as it would be if the expression were written as \verb|v(1) < v(2) && v(2) <= v(3)|.
 
 \section{Variable Scope and Declarations}
 
-The \emph{scope} of a variable is the section of code within which a variable
-is visible. Understanding variable scope allows you to avoid conflicts when
-a variable name is reused. The concept is intuitive; for example, it is
-probably clear that two functions can both have arguments called \verb|x|
-without the two \verb|x|s referring to the same thing. There are
-other scope rules however, and this section will spell them out in detail.
+The \emph{scope} of a variable is the region of code within which a variable
+is visible.
+Variable scoping helps avoid variable naming conflicts.
+The concept is intuitive:
+two functions can both have arguments called \verb|x| without the two \verb|x|'s referring to the same thing.
+Similarly there are many other cases where different blocks of code can use the same name without referring to the same thing.
+The rules for when the same variable name does or doesn't refer to the same thing are called scope rules;
+this section spells them out in detail.
 
 Certain constructs in the language introduce \emph{scope blocks}, which
 are regions of code that are eligible to be the scope of some set of variables.
