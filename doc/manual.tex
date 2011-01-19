@@ -334,7 +334,7 @@ In both cases, we resolve the ambiguity in favor of the numeric literals:
 \item Expressions starting with $d.dd$\,\verb|e| or $d.dd$\,\verb|E| are always floating point literals.
 \end{itemize}
 
-\subsection{Numeric Comparisons}
+\subsection{Numeric Comparisons}\sec{numeric-comparisons}
 
 Standard comparison operations are defined for primitive numeric types:
 \begin{itemize}
@@ -470,22 +470,22 @@ This includes cases where \verb|a == 0| or \verb|b == 0|, in which situations th
   julia> 5//0
   1//0
 
-  julia> float(5//0)
+  julia> float(ans)
   Inf
 
   julia> 0//0
   0//0
 
-  julia> float(0//0)
+  julia> float(ans)
   NaN
 
   julia> -3//0
   -1//0
 
-  julia> float(-3//0)
+  julia> float(ans)
   -Inf
 \end{verbatim}
-In a sense, Julia \verb|Rational|s are a convenient way of deferring the computation of integer ratios, thereby avoiding the accumulation of floating point errors.
+In a sense, Julia \verb|Rational|s are just a convenient way of deferring the computation of integer ratios, thereby avoiding the accumulation of floating point errors in intermediate calculations.
 
 \subsection{Complex Numbers}
 
@@ -493,6 +493,7 @@ In a sense, Julia \verb|Rational|s are a convenient way of deferring the computa
 
 Julia supports the standard Matlab-derived control flow constructs, plus a few additional constructs borrowed from other programming languages:
 \begin{itemize}
+\item Compound expressions: \verb|begin| and \verb|(;)|.
 \item Conditional evaluation: \verb|if|-\verb|esleif|-\verb|else|, and \verb|?:| (ternary operator).
 \item Short-circuit evaluation: \verb|&&|, \texttt{||}, and chained comparisons.
 \item Repeated evaluation: \verb|while| and \verb|for|.
@@ -502,92 +503,226 @@ In addition to these constructs, Julia has symmetric coroutines, a powerful non-
 In fact, both exception handling and cooperative multitasking are implemented in Julia using coroutines.
 However, everyday programming requires no direct usage of this feature.
 
-Here is the general anatomy of the \verb|if|-\verb|esleif|-\verb|else| conditional evaluation syntax:
+\subsection{Compound Expressions}
+
+Sometimes it is convenient to have a single expression which evaluates several subexpressions.
+There are two Julia constructs that accomplish this:
+\verb|begin| blocks and \verb|(;)| chains.
+The value of both compound expression constructs is the last subexpression evaluated.
+Here's an example of a \verb|begin| block:
+\begin{verbatim}
+  julia> z = begin
+           x = 1
+           y = 2
+           x + y
+         end
+  3
+\end{verbatim}
+Since these are fairly small, simple expressions, they could easily be placed onto a single line, which is where the \verb|(;)| chain syntax comes in handy:
+\begin{verbatim}
+  julia> z = (x = 1; y = 2; x + y)
+  3
+\end{verbatim}
+This syntax is particularly useful with the terse single-line function definition form introduced in \Section{functions}.
+
+\subsection{Conditional Evaluation}
+
+Conditional evaluation allows portions of code to be evaluated or not depending on the value of an expression when the program executes.
+Here is the anatomy of the \verb|if|-\verb|esleif|-\verb|else| conditional evaluation syntax:
 \begin{verbatim}
   if x < y
     println("x is less than y")
-  elseif x == y
-    println("x is equal to y")
-  else
+  elseif x > y
     println("x is greater than y")
+  else
+    println("x is equal to y")
   end
 \end{verbatim}
-The syntax and semantics are identical to Matlab, and are precisely what you'd expect:
+The syntax and semantics are identical to Matlab, and the behavior is just what you'd expect:
+if the condition expression \verb|x < y| is true, then the corresponding block is evaluated;
+otherwise the condition expression \verb|x > y| is evaluated, and if it is true, the corresponding block is evaluated;
+if neither expression is true, the \verb|else| block is evaluated.
+Here it is in action:
 \begin{verbatim}
   julia> x = 1; y = 2;
 
   julia> if x < y
            println("x is less than y")
-         elseif x == y
-           println("x is equal to y")
-         else
+         elseif x > y
            println("x is greater than y")
+         else
+           println("x is equal to y")
          end
   x is less than y
-
-  julia> x = 1; y = 1;
-
-  julia> if x < y
-           println("x is less than y")
-         elseif x == y
-           println("x is equal to y")
-         else
-           println("x is greater than y")
-         end
-  x is equal to y
 
   julia> x = 2; y = 1;
 
   julia> if x < y
            println("x is less than y")
-         elseif x == y
-           println("x is equal to y")
-         else
+         elseif x > y
            println("x is greater than y")
+         else
+           println("x is equal to y")
          end
   x is greater than y
+
+  julia> x = 1; y = 1;
+
+  julia> if x < y
+           println("x is less than y")
+         elseif x > y
+           println("x is greater than y")
+         else
+           println("x is equal to y")
+         end
+  x is equal to y
 \end{verbatim}
 The \verb|elseif| and \verb|else| blocks are optional, and as many \verb|elsif| blocks as desired can be used.
 The condition expressions in the \verb|if|-\verb|elseif|-\verb|else| construct are evaluated until the first one evaluates to \verb|true|, after which the associated block is evaluated, and no further conditional expressions are evaluated, and no other blocks are evaluated.
-Unlike C 
 
-The so-called ``ternary operator,'' \,\verb|?:|, is closely related to the \verb|if|, \verb|elsif|, \verb|else| form, but is used where a conditional choice between single expression values is required, as opposed to conditional execution of longer blocks of code.
+Unlike C, Matlab, Perl, Python, and Ruby\,---\,but like Java, and a few other stricter typed languages\,---\,it is an error if the value of a conditional expression is not a one of the two \verb|Boolean| values, \verb|true| or \verb|false|:
+\begin{verbatim}
+  julia> if 1
+           println("true")
+         end
+  type error: lambda: in if, expected Bool, got Int32
+\end{verbatim}
+This error indicates that the conditional was of the wrong type:
+\verb|Int32| rather than the required \verb|Bool|.
 
-% The essential conditional evaluation keyword is \verb|if|, used with the same syntax as Matlab:
-% \begin{verbatim}
-%   julia> if true
-%            println("printing a line")
-%          end
-%   printing a line
-% 
-%   julia> if false
-%            println("printing a line")
-%          end
-% \end{verbatim}
-% The first time the expression is evaluated, it prints a line, while the second time it does not.
-% In these cases, the condition expressions are the literal booleans \verb|true| and \verb|false|, but in general, since this is not actually conditional in practice, expressions which evaluate to \verb|true| or \verb|false| are used instead:
-% \begin{verbatim}
-%   julia> if x < y
-%            println("$x is less than $y")
-%          end
-%   1 is less than 2
-% 
-%   julia> x = 2; y = 1;
-% 
-%   julia> if x < y
-%            println("$x is less than $y")
-%          end
-% \end{verbatim}
-% Again, in the first case a line is printed\,---\,``x is less than y''\,---\,in the second case, it is not.
-% Typically, one wants to 
+The so-called ``ternary operator,'' \,\verb|?:|, is closely related to the \verb|if|-\verb|elsif|-\verb|else| form, but is used where a conditional choice between single expression values is required, as opposed to conditional execution of longer blocks of code.
+It gets its name from being the only operator in most languages taking three operands:
+\begin{quote}
+  \emph{a} \verb|?| \emph{b} \verb|:| \emph{c}
+\end{quote}
+The expression \emph{a} before the \verb|?| is a condition expression, and the ternary operation evaluates the expression \emph{b} before the \verb|:| if the condition is \verb|true| and the expression \emph{c} after the \verb|:| if the condition is \verb|false|.
 
-% \paragraph{Short-Circuit Evaluation}\sec{short-circuit-evaluation}
+The easiest way to understand this behavior is to see an example.
+In the previous example, the \verb|println| call is shared by all three branches:
+the only real choice is which literal string to print.
+This could be written more concisely using the ternary operator.
+For the sake of clarity, let's try a two-way version first:
+\begin{verbatim}
+  julia> x = 1; y = 2;
 
-% \paragraph{Repeated Evaluation}\sec{repeated-evaluation}
+  julia> println(x < y ? "less than" : "not less than")
+  less than
 
-% \paragraph{Exceptions}\sec{exceptions}
+  julia> x = 1; y = 0;
 
-% \paragraph{Coroutines}\sec{coroutines}
+  julia> println(x < y ? "less than" : "not less than")
+  not less than
+\end{verbatim}
+If the expression \verb|x < y| is true, the entire ternary operator expression evaluates to the string \verb|"less than"| and otherwise it evaluates to the string \verb|"not less than"|.
+The original three-way example requires chaining multiple instances of the ternary operator:
+\begin{verbatim}
+  julia> println(x < y ? "x is less than y"    :
+                 x > y ? "x is greater than y" : "x is equal to y")
+  x is less than y
+
+  julia> x = 2; y = 1;
+
+  julia> println(x < y ? "x is less than y"    :
+                 x > y ? "x is greater than y" : "x is equal to y")
+  x is greater than y
+
+  julia> x = 1; y = 1;
+
+  julia> println(x < y ? "x is less than y"    :
+                 x > y ? "x is greater than y" : "x is equal to y")
+  x is equal to y
+\end{verbatim}
+To facilitate chaining, the operator associates from right to left.
+
+\subsection{Short-Circuit Evaluation}
+
+Short-circuit evaluation is quite similar to conditional evaluation.
+The behavior is found in most imperative programming languages having the \verb|&&| and \texttt{||} boolean operators:
+in a series of boolean expressions connected by these operators, only as many expressions as are required to determine the final boolean value of the entire chain, are actually evaluated.
+Explicitly, this means that:
+\begin{itemize}
+  \item In the expression \emph{a} \verb|&&| \emph{b}, the subexpression \emph{b} is only evaluated if \emph{a} evaluates to \verb|false|.
+  \item In the expression \emph{a} \texttt{||} \emph{b}, the subexpression \emph{b} is only evaluated if \emph{a} evaluates to \verb|true|.
+\end{itemize}
+Both \verb|&&| and \texttt{||} associate to the right, but \verb|&&| has higher precedence than than \texttt{||} does.
+It's easy to experiment with the evaluation behavior of these operators:
+\begin{verbatim}
+  t(x) = (println(x); true)
+  f(x) = (println(x); false)
+
+  julia> t(1) && t(2)
+  1
+  2
+  true
+
+  julia> f(1) && t(2)
+  1
+  false
+
+  julia> f(1) && f(2)
+  1
+  false
+
+  julia> t(1) && t(2) && t(3)
+  1
+  2
+  3
+  true
+
+  julia> t(1) && t(2) || t(3)
+  1
+  2
+  true
+
+  julia> f(1) && t(2) || t(3)
+  1
+  3
+  true
+
+  julia> t(1) && f(2) || t(3)
+  1
+  2
+  3
+  true
+
+  julia> t(1) || f(2) && t(3)
+  1
+  true
+
+  julia> f(1) || f(2) && t(3)
+  1
+  2
+\end{verbatim}
+Recall from \Section{numeric-comparisons} that numeric comparisons in Julia can be chained:
+\begin{verbatim}
+  julia> a = 1; b = 2; c = 3;
+
+  julia> a < b <= c
+  true
+\end{verbatim}
+This last expression is equivalent to the less convenient expression:
+\begin{verbatim}
+  julia> a < b && b <= c
+  true
+\end{verbatim}
+In particular, this implies that chained comparisons exhibit short-circuit behavior.
+Let's see this in action:
+\begin{verbatim}
+  v(x) = (println(x); x)
+
+  julia> v(1) < v(2) <= v(3)
+  1
+  2
+  3
+  true
+
+  julia> v(1) < v(0) <= v(3)
+  1
+  0
+  false
+\end{verbatim} % TODO: THIS IS NOT THE ACTUAL OUTPUT
+The first pair of expressions will always be evaluated, since the first comparison is always evaluated, but subsequent expressions need not be evaluated if an earlier comparison in the chain fails to be true.
+Note that in the first case above, the middle expression, \verb|v(2)|, is only evaluated once, rather than twice as it would be if this expression were actually written out as \verb|v(1) < v(2) && v(2) <= v(3)|.
 
 \section{Variable Scope and Declarations}
 
@@ -732,7 +867,7 @@ block with the global scope, it is not necessary to declare
 \verb|global y| inside the loop. However, outside the interactive prompt
 this declaration would be necessary in order to modify a global variable.
 
-\section{Functions}
+\section{Functions}\sec{functions}
 
 The basic syntax for defining functions in Julia is:
 \begin{verbatim}
