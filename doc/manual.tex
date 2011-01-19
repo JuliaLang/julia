@@ -39,10 +39,10 @@ Fortunately, modern language design and compiler techniques make it possible to 
 The Julia programming language fills this role:
 it is a flexible and dynamic language, designed expressly for scientific computing, and achieving performance comparable to traditional compiled languages.
 
-The syntax of Julia is similar to that of Matlab, and consequently any Matlab programmer should feel immediately comfortable with Julia.
-Matlab is quite effective for prototyping and exploring numerical linear algebra, but it has some limitations for programming tasks outside of this relatively narrow scope.
+The syntax of Julia is similar to that of Matlab, and consequently Matlab programmers should feel immediately comfortable with Julia.
+While Matlab is quite effective for prototyping and exploring numerical linear algebra, it has limitations for programming tasks outside of this relatively narrow scope.
 Julia keeps Matlab's ease and expressiveness for high-level numerical computing, but transcends its general programming limitations.
-To that end, it borrows heavily from the C programming language, but it is also strongly influenced by the lineage of dynamic languages:
+To that end, it borrows much from the C programming language, and is also strongly influenced by the lineage of dynamic languages:
 Lisp, Perl, Python and Ruby.
 
 \section{Getting Started}
@@ -508,7 +508,7 @@ However, everyday programming requires no direct usage of this feature.
 Sometimes it is convenient to have a single expression which evaluates several subexpressions.
 There are two Julia constructs that accomplish this:
 \verb|begin| blocks and \verb|(;)| chains.
-The value of both compound expression constructs is the last subexpression evaluated.
+The value of both compound expression constructs is that of the last subexpression.
 Here's an example of a \verb|begin| block:
 \begin{verbatim}
   julia> z = begin
@@ -527,7 +527,7 @@ This syntax is particularly useful with the terse single-line function definitio
 
 \subsection{Conditional Evaluation}
 
-Conditional evaluation allows portions of code to be evaluated or not depending on the value of an expression when the program executes.
+Conditional evaluation allows portions of code to be evaluated or not evaluated depending on the value of another expression.
 Here is the anatomy of the \verb|if|-\verb|esleif|-\verb|else| conditional evaluation syntax:
 \begin{verbatim}
   if x < y
@@ -721,8 +721,8 @@ Let's see this in action:
   0
   false
 \end{verbatim} % TODO: THIS IS NOT THE ACTUAL OUTPUT
-The first pair of expressions will always be evaluated, since the first comparison is always evaluated, but subsequent expressions need not be evaluated if an earlier comparison in the chain fails to be true.
-Note that in the first case above, the middle expression, \verb|v(2)|, is only evaluated once, rather than twice as it would be if this expression were actually written out as \verb|v(1) < v(2) && v(2) <= v(3)|.
+The first pair of expressions will always be evaluated, since the first comparison must always be evaluated, but subsequent expressions need not be evaluated if an earlier comparison in the chain fails to be true.
+Note that in the first case, the middle expression, \verb|v(2)|, is only evaluated once, rather than twice as it would be if this expression were actually textually expanded as \verb|v(1) < v(2) && v(2) <= v(3)|.
 
 \section{Variable Scope and Declarations}
 
