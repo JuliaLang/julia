@@ -7,6 +7,8 @@ PFX = /usr/local
 HFILEDIRS = $(PFX)/include
 LIBDIRS = $(PFX)/lib
 
+PCRE_DIR = $(word 1,$(HFILEDIRS))
+
 # BOEHM or MARKSWEEP
 JULIAGC = MARKSWEEP
 

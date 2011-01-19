@@ -413,8 +413,8 @@ function jl_worker_loop(accept_fd, clientmode)
                 sockets[connectfd] = sock
                 if first
                     # first connection; get process group info from client
-                    (myid, locs) = recv_msg(sock)
-                    PGRP = ProcessGroup(myid, locs, sockets)
+                    (_myid, locs) = recv_msg(sock)
+                    PGRP = ProcessGroup(_myid, locs, sockets)
                     PGRP.refs = refs
                     PGRP.waiting = waiting
                     PGRP.workqueue = workqueue
@@ -425,6 +425,7 @@ function jl_worker_loop(accept_fd, clientmode)
         for (fd, sock) = sockets
             if has(fdset, fd) || nb_available(sock)>0
                 #print("nb= ", nb_available(sock), "\n")
+                #print("$(myid()) reading fd= ", fd, "\n")
                 try
                     (msg, args) = recv_msg(sock)
                     #print("$(myid()) got ", tuple(msg, args[1],
@@ -467,7 +468,7 @@ function jl_worker_loop(accept_fd, clientmode)
                     end
                 catch e
                     if isa(e,EOFError)
-                        #print("eof. exiting\n")
+                        #print("eof. $(myid()) exiting\n")
                         return()
                     else
                         print("deserialization error: ", e, "\n")
