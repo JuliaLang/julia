@@ -146,6 +146,9 @@ end
 
 ASYNCH = false
 
+# num bytes available without blocking
+nb_available(s::IOStream) = ccall(:jl_nb_available, Int32, (Ptr{Void},), s.ios)
+
 function read(s::IOStream, ::Type{Uint8})
     # for asynch I/O
     if ASYNCH && nb_available(s) < 1
