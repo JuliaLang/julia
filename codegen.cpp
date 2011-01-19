@@ -301,16 +301,9 @@ static void error_unless(Value *cond, const std::string &msg, jl_codectx_t *ctx)
 
 static Value *boxed(Value *v);
 
-static void emit_typecheck(Value *x, jl_value_t *type, const std::string &msg,
-                           jl_codectx_t *ctx)
+static void emit_type_error(Value *x, jl_value_t *type, const std::string &msg,
+                            jl_codectx_t *ctx)
 {
-    Value *istype =
-        builder.CreateICmpEQ(emit_typeof(x), literal_pointer_val(type));
-    BasicBlock *failBB = BasicBlock::Create(getGlobalContext(),"fail",ctx->f);
-    BasicBlock *passBB = BasicBlock::Create(getGlobalContext(),"pass");
-    builder.CreateCondBr(istype, passBB, failBB);
-    builder.SetInsertPoint(failBB);
-
     std::vector<Value *> zeros(0);
     zeros.push_back(ConstantInt::get(T_int32, 0));
     zeros.push_back(ConstantInt::get(T_int32, 0));
@@ -321,6 +314,19 @@ static void emit_typecheck(Value *x, jl_value_t *type, const std::string &msg,
     builder.CreateCall4(jltypeerror_func,
                         fname_val, msg_val,
                         literal_pointer_val(type), boxed(x));
+}
+
+static void emit_typecheck(Value *x, jl_value_t *type, const std::string &msg,
+                           jl_codectx_t *ctx)
+{
+    Value *istype =
+        builder.CreateICmpEQ(emit_typeof(x), literal_pointer_val(type));
+    BasicBlock *failBB = BasicBlock::Create(getGlobalContext(),"fail",ctx->f);
+    BasicBlock *passBB = BasicBlock::Create(getGlobalContext(),"pass");
+    builder.CreateCondBr(istype, passBB, failBB);
+    builder.SetInsertPoint(failBB);
+
+    emit_type_error(x, type, msg, ctx);
 
     builder.CreateBr(passBB);
     ctx->f->getBasicBlockList().push_back(passBB);
@@ -336,7 +342,7 @@ static Value *emit_bounds_check(Value *i, Value *len, const std::string &msg,
     return im1;
 }
 
-static void emit_func_check(Value *x, const std::string &msg, jl_codectx_t *ctx)
+static void emit_func_check(Value *x, jl_codectx_t *ctx)
 {
     Value *istype1 =
         builder.CreateICmpEQ(emit_typeof(emit_typeof(x)),
@@ -344,14 +350,17 @@ static void emit_func_check(Value *x, const std::string &msg, jl_codectx_t *ctx)
     BasicBlock *elseBB1 = BasicBlock::Create(getGlobalContext(),"a", ctx->f);
     BasicBlock *mergeBB1 = BasicBlock::Create(getGlobalContext(),"b");
     builder.CreateCondBr(istype1, mergeBB1, elseBB1);
+
     builder.SetInsertPoint(elseBB1);
     Value *istype2 =
         builder.CreateICmpEQ(emit_typeof(x),
                              literal_pointer_val((jl_value_t*)jl_struct_kind));
     BasicBlock *elseBB2 = BasicBlock::Create(getGlobalContext(),"a", ctx->f);
     builder.CreateCondBr(istype2, mergeBB1, elseBB2);
+
     builder.SetInsertPoint(elseBB2);
-    emit_error(msg, ctx);
+    emit_type_error(x, (jl_value_t*)jl_function_type, "apply", ctx);
+
     builder.CreateBr(mergeBB1);
     ctx->f->getBasicBlockList().push_back(mergeBB1);
     builder.SetInsertPoint(mergeBB1);
@@ -802,7 +811,7 @@ static Value *emit_call(jl_value_t **args, size_t arglen, jl_codectx_t *ctx)
             !(jl_is_tag_type(hdtype) &&
               ((jl_tag_type_t*)hdtype)->name==jl_type_type->name &&
               jl_is_struct_type(jl_tparam0(hdtype)))) {
-            emit_func_check(theFunc, "apply: expected function", ctx);
+            emit_func_check(theFunc, ctx);
         }
         if (theFunc->getType() != jl_pvalue_llvmt) {
             // we know it's not a function, in fact it has been declared
