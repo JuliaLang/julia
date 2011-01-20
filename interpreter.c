@@ -76,7 +76,8 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl)
     if (ex->head == call_sym) {
         jl_function_t *f = (jl_function_t*)eval(args[0], locals, nl);
         if (!jl_is_func(f))
-            jl_error("apply: expected function");
+            jl_type_error("apply", (jl_value_t*)jl_function_type,
+                          (jl_value_t*)f);
         return do_call(f, &args[1], ex->args->length-1, locals, nl);
     }
     else if (ex->head == assign_sym) {
@@ -195,7 +196,7 @@ static jl_value_t *eval_body(jl_array_t *stmts, jl_value_t **locals, size_t nl,
             else if (head == enter_sym) {
                 jl_enter_handler(&__ss, &__handlr);
                 if (!setjmp(__handlr)) {
-                    i = (int)eval_body(stmts, locals, nl, i+1);
+                    i = (size_t)eval_body(stmts, locals, nl, i+1);
                     continue;
                 }
                 else {

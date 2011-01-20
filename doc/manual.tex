@@ -1126,11 +1126,26 @@ You should avoid method ambiguities by specifying an appropriate method for the 
 \end{verbatim}
 To suppress Julia's warning, the disambiguating method must be defined first.
 
-\subsection{Functional Equivalents of Operators}
+\subsection{Operators Are Functions}
+
+In Julia, most operators are all just functions with a special syntax.
+As we saw above, the \verb|+| generic function has many methods.
+To add a new method to the \verb|+| operator, you just define a new method using the name of the operator in parentheses.
+For example, addition of \verb|Complex| values is defined like this:
+\begin{verbatim}
+  (+)(z::Complex, w::Complex) = Complex(z.re + w.re, z.im + w.im)
+\end{verbatim}
+You can use the \verb|+| function in its functional form just as well as in infix form:
+\begin{verbatim}
+  julia> (+)(1,2,3)
+  6
+\end{verbatim}
+The only thing that's actually special about operators is that when they are used in infix form, special syntax applies, transforming a chain of infix addition operations into a single call to the \verb|+| function.
+In other words, \verb|1 + 2 + 3| becomes \verb|(+)(1,2,3)|, which is in turn defined to add its arguments one pair at a time.
+
 \subsection{Anonymous Functions}
 \subsection{Returning Multiple Values}
 \subsection{Varargs Functions}
-
 
 \section{Defining Types}
 \subsection{Tag Types}
