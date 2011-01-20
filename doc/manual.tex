@@ -87,7 +87,7 @@ Julia supports a broad range of numeric types together with the full complement 
 The following are Julia's built-in primitive numeric types:
 
 \begin{itemize}
-  \item integer types:
+  \item Integer types:
   \begin{itemize}
     \item \verb|Int8|~: signed 8-bit integers ranging from $-2^7$ to $2^7-1$.
     \item \verb|Uint8|~: unsigned 8-bit integers ranging from 0 to $2^8-1$.
@@ -98,7 +98,7 @@ The following are Julia's built-in primitive numeric types:
     \item \verb|Int64|~: signed 64-bit integers ranging from $-2^{63}$ to $2^{63}-1$.
     \item \verb|Uint64|~: unsigned 64-bit integers ranging from 0 to $2^{64}-1$.
   \end{itemize}
-  \item floating point types:
+  \item Floating point types:
   \begin{itemize}
     \item \verb|Float32|~: IEEE 754 32-bit floating point numbers.
     \item \verb|Float64|~: IEEE 754 64-bit floating point numbers.
@@ -503,8 +503,11 @@ Julia supports several standard control flow constructs:
 \item Short-circuit evaluation: \verb|&&|, \texttt{||}, and chained comparisons.
 \item Repeated evaluation: \verb|while| and \verb|for|.
 \item Non-local return: \verb|try|-\verb|catch| and \verb|throw|.
+\item Symmetric coroutines: \verb|yieldto|.
 \end{itemize}
-In addition to these constructs, Julia has symmetric coroutines\,---\,a powerful non-local control flow construct similar to continuations.
+The first five control flow constructs are fairly standard to high-level programming languages.
+The last item is less common and more powerful:
+Julia has coroutines\,---\,a powerful non-local control flow construct similar to continuations.
 In fact, both exception handling and cooperative multitasking are implemented in Julia using coroutines.
 Everyday programming, however, requires no direct usage of coroutines.
 
@@ -736,7 +739,13 @@ The first pair of expressions will always be evaluated, since the first comparis
 Subsequent expressions, however, need not be evaluated if a comparison earlier in the chain is \verb|false|.
 Note that the middle expression is only evaluated once, rather than twice as it would be if the expression were written as \verb|v(1) < v(2) && v(2) <= v(3)|.
 
-\section{Variable Scope and Declarations}
+\subsection{Repeated Evaluation}
+
+\subsection{Non-Local Returns}
+
+\subsection{Coroutines}
+
+\section{Variable Scoping}
 
 The \emph{scope} of a variable is the region of code within which a variable
 is visible.
@@ -1007,7 +1016,7 @@ all Julia objects match \verb|Any|.
 In formal type system literature, \verb|Any| is commonly called Top.\footnote{Julia also has a Bottom type called \texttt{None} which no object matches.}
 
 Although it seems a simple concept, multiple dispatch on the types of values is perhaps the single most powerful and central feature of the Julia language.
-Core operations typically have dozens of methods defined:
+Core operations typically have dozens of methods:
 \begin{verbatim}
   julia> +
   Methods for generic function +
