@@ -5,6 +5,8 @@ CFLAGS = -std=gnu99
 HFILEDIRS = /opt/local/include
 LIBDIRS = /opt/local/lib /usr/local/lib
 
+PCRE_DIR = $(word 1,$(HFILEDIRS))
+
 # BOEHM or MARKSWEEP
 JULIAGC = MARKSWEEP
 
