@@ -1162,6 +1162,29 @@ For others, the parentheses can be omitted:
 Since \verb|+| can be used in unary form, this syntax is parsed as unary application of \verb|+| to the tuple value \verb|(1,2,3)|, rather than the application of the \verb|+| function to the values 1, 2, and 3.
 
 \subsection{Anonymous Functions}
+
+Functions in Julia are first-class objects:
+they can be assigned to variables, called using the standard function call syntax via the variable they have been assigned to, be it local or global;
+they can be passed as arguments, and returned as values.
+They can also be created anonymously:
+\begin{verbatim}
+  julia> x -> x^2 + 2x - 1
+  #<closure>
+\end{verbatim}
+This creates an unnamed function taking one argument and returning the value of the polynomial $x^2 + 2x - 1$ at that value.
+The primary use for anonymous functions is passing them to functions which take functions as arguments.
+A classic example is the \verb|map| function, which applies a function to each value of an array and returns a new array containing the resulting values:
+\begin{verbatim}
+  julia> map(round, [1.2,3.5,1.7])
+  [1.0,4.0,2.0]
+\end{verbatim} % TOOD: make sure type inference gets the right return type.
+That's all well and good if a named function effecting precisely the transform one wants already exists, to pass as the first argument to \verb|map|.
+Often, however, a named function doing exactly what one wants does not exist, and in such cases, the anonymous function construct allows easy creation of a single-use function:
+\begin{verbatim}
+  julia> map(x -> x^2 + 2x - 1, [1.2,3.5,1.7])
+  {2.8399999999999999,18.25,5.2899999999999991}
+\end{verbatim}
+
 \subsection{Returning Multiple Values}
 \subsection{Varargs Functions}
 
