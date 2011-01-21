@@ -49,11 +49,6 @@ type Worker
 
     Worker() = Worker("localhost", start_local_worker())
 
-    Worker(host) = Worker(host,
-                          host=="localhost" ?
-                          start_local_worker() :
-                          start_remote_worker(host))
-
     Worker(host, port) = Worker(host, port, connect_to_worker(host,port)...)
 
     Worker(host, port, fd, sock) = new(host, port, fd, sock)
@@ -79,8 +74,20 @@ type ProcessGroup
     waiting
 
     function ProcessGroup(np::Int)
-        # "client side", or initiator of process group
+        # n local workers
         w = { Worker() | i=1:np }
+        ProcessGroup(w, np)
+    end
+
+    function ProcessGroup(machines)
+        # workers on remote machines
+        w = start_remote_workers(machines)
+        np = length(machines)
+        ProcessGroup(w, np)
+    end
+
+    function ProcessGroup(w::Array{Any,1}, np::Int)
+        # "client side", or initiator of process group
         locs = map(x->Location(x.host,x.port), w)
         sched = Task(jl_worker_loop)
         global PGRP = new(0, w, locs, sched, (), (), ())
@@ -516,10 +523,23 @@ function worker_tunnel(host, port)
     localp
 end
 
+worker_ssh_command(host) =
+    `ssh $host "bash -l -c \"julia -e start_worker\(1\)\""`
+
 function start_remote_worker(host)
-    proc = `ssh -f julia@$host julia -e 'start_worker(1)'`
-    port = 9009 # TODO: run proc and read real port
-    port
+    proc = worker_ssh_command(host)
+    out = cmd_stdout_stream(proc)
+    spawn(proc)
+    Worker(host, read(out, Int16))
+end
+
+function start_remote_workers(machines)
+    cmds = map(worker_ssh_command, machines)
+    outs = map(cmd_stdout_stream, cmds)
+    for c = cmds
+        spawn(c)
+    end
+    { Worker(machines[i], read(outs[i],Int16)) | i=1:length(machines) }
 end
 
 function start_local_worker()

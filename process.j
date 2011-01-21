@@ -400,6 +400,8 @@ end
 each_line(ports::Ports) = _each_line(ports, cmds(ports))
 each_line(cmds::Cmds) = _each_line(stdout(cmds), cmds)
 
+cmd_stdout_stream(cmds::Cmds) = fdio(read_from(stdout(cmds)).fd)
+
 ## implementation of `cmd` syntax ##
 
 arg_gen(x::String) = (x,)
