@@ -1045,7 +1045,7 @@ Since \verb|+| can be used in unary form, this syntax is parsed as unary applica
 Functions in Julia are first-class objects:
 they can be assigned to variables, called using the standard function call syntax via the variable they have been assigned to, be it local or global;
 they can be passed as arguments, and returned as values.
-They can also be created anonymously:
+They can also be created anonymously, without giving them a name:
 \begin{verbatim}
   julia> x -> x^2 + 2x - 1
   #<closure>
@@ -1057,11 +1057,12 @@ A classic example is the \verb|map| function, which applies a function to each v
   julia> map(round, [1.2,3.5,1.7])
   [1.0,4.0,2.0]
 \end{verbatim} % TOOD: make sure type inference gets the right return type.
-That's all well and good if a named function effecting precisely the transform one wants already exists, to pass as the first argument to \verb|map|.
-Often, however, a named function doing exactly what one wants does not exist, and in such cases, the anonymous function construct allows easy creation of a single-use function:
+This is fine if a named function effecting the transform one wants already exists to pass as the first argument to \verb|map|.
+Often, however, a such a named function does not exist.
+In these situations, the anonymous function construct allows easy creation of a single-use function object without needing a name:
 \begin{verbatim}
-  julia> map(x -> x^2 + 2x - 1, [1.2,3.5,1.7])
-  {2.8399999999999999,18.25,5.2899999999999991}
+  julia> map(x -> x^2 + 2x - 1, [1,3,-1])
+  [2,14,-2]
 \end{verbatim}
 
 \subsection{Returning Multiple Values}
@@ -1082,7 +1083,7 @@ Certain constructs in the language introduce \emph{scope blocks}, which
 are regions of code that are eligible to be the scope of some set of variables.
 The scope of a variable cannot be an arbitrary set of
 source lines, but will always line up with one of these blocks. These
-constructs are:
+constructs introducing such blocks are:
 \begin{itemize}
 \item function bodies (any syntax)
 \item \verb|while| loops
@@ -1443,12 +1444,12 @@ There are a few noteworthy high-level features about Julia's approach to strings
 \item Like C, but unlike most dynamic languages, Julia has a first-class type representing a single character, called \verb|Char|.
 A \verb|Char| is a special kind of 32-bit integer, whose numeric value represents a single Unicode code point.
 \item Conceptually, a \verb|String| is a \emph{partial function} from indices to \verb|Char| values --- for some index values, no character values is returned, and instead an exception is thrown.
-This for allows efficient indexing into strings by the byte index of an encoded representation rather than by character index, which cannot be implemented efficiently and simply in variable-width encodings.
+This for allows efficient indexing into strings by the byte index of an encoded representation rather than by character index, which cannot be implemented efficiently and simply for variable-width string encodings.
 \item There are many different classes implementing the \verb|String| interface, not a single special one.
 They all implement a common programming interface, however, and any string type can be used in any function expecting a \verb|String|.
 The predefined string types are no more special than user-defined ones.
 \item Strings are immutable: the value of a \verb|String| object cannot be changed.
-To construct a different string value, you construct a new string object from parts of other string objects and literals.
+To construct a different string value, you construct a new string object from parts of other string objects.
 \end{enumerate}
 
 \subsection{Characters}
@@ -1509,7 +1510,7 @@ You can input any Unicode character in single quotes using \verb|\u| followed by
   '\U0010ffff'
 \end{verbatim}
 Julia uses your system's locale and language settings to determine which characters can be printed as-is and which must be output using the \verb|\u| or \verb|\U| forms.
-In addition to these Unicode forms, all of the C language's input forms are usable as well, including literal plain ASCII characters:
+In addition to these Unicode forms, all of C's escaped input forms are usable as well:
 \begin{verbatim}
   julia> int('\0')
   0
@@ -1523,14 +1524,14 @@ In addition to these Unicode forms, all of the C language's input forms are usab
   julia> int('\e')
   27
 
-  julia> int('@')
-  64
-
   julia> int('\x7f')
   127
 
   julia> int('\177')
   127
+
+  julia> int('\xff')
+  255
 \end{verbatim}
 Like any integers, you can do arithmetic and comparisons with \verb|Char| values:
 \begin{verbatim}
@@ -1579,7 +1580,7 @@ If you want to extract a character from a string, you index into it:
   '.'
 \end{verbatim}
 Like all indexing in Julia, string indexing is 1-based, not 0-based.
-Using an index less than 1 or more than \verb|end| raises an error:
+Using an index less than 1 or greater than \verb|end| raises an error:
 \begin{verbatim}
   julia> str[0]
   in next: arrayref: index out of range
@@ -1587,7 +1588,7 @@ Using an index less than 1 or more than \verb|end| raises an error:
   julia> str[end+1]
   in next: arrayref: index out of range
 \end{verbatim}
-You can also a extract a substring using range indexing:
+You can also extract a substring using range indexing:
 \begin{verbatim}
   julia> str[4:9]
   "lo, wo"
@@ -1625,11 +1626,19 @@ As in Perl, you can interpolate values and expressions into strings using \verb|
   julia> "$greet, $who.\n"
   "Hello, world.\n"
 \end{verbatim}
-This simpler and more readable, and completely equivalent to the above string concatenation---the system rewrites this apparent single string literal into a concatenation of string literals and values.
-The shortest valid expression after an unescaped \verb|$| is used as the interpolated value:
+This more readable and convenient, and completely equivalent to the above string concatenation---the system rewrites this apparent single string literal into a concatenation of string literals with values.
+The shortest valid expression after an unescaped \verb|$| is used as the interpolated value.
+Thus, you can interpolate the value of any expression into a string using parentheses:
 \begin{verbatim}
   julia> "1 + 2 = $(1 + 2)"
   "1 + 2 = 3"
+\end{verbatim}
+However, you can also interpolate a literal array like this:
+\begin{verbatim}
+  julia> x = 2; y = 3; z = 5;
+
+  julia> "x,y,z: $[x,y,z]."
+  "x,y,z: [2,3,5]."
 \end{verbatim}
 Both concatenation and string interpolation call the generic \verb|string| function to convert objects into \verb|String| form.
 Most non-\verb|String| objects are converted to strings the they are shown in the Julia repl:
@@ -1724,13 +1733,13 @@ Both of these types of strings are implemented using a byte array encoding \verb
 
 Here are the actual declarations of the basic string types from Julia's bootstrapping code:
 \begin{verbatim}
-  type String
+  abstract String
 
-  struct Latin1String <: String
+  type Latin1String <: String
       data::Array{Uint8,1}
   end
 
-  struct UTF8String <: String
+  type UTF8String <: String
       data::Array{Uint8,1}
   end
 \end{verbatim}
@@ -1742,7 +1751,7 @@ The only difference is in their interpretation:
 As you may have guessed, this encoding is called Latin-1.
 \item In a \verb|UTF8String|, bytes and characters are not one-to-one, but instead uses the UTF-8 encoding, which matches ASCII and Latin-1 up to \verb|0x7f|, and uses two, three of four bytes to encode Unicode characters with higher code points.
 \end{enumerate}
-How does one generate a \verb|UTF8String| object?
+How does one generate a \verb|UTF8String| object rather than a \verb|Latin1String| object?
 One does so just by using a Unicode character escape sequence above \verb|0x7f| in a string literal:
 \begin{verbatim}
   julia> "\u2200 x \u2203 y > x"
@@ -1979,11 +1988,16 @@ If you interpolate multiple arrays, the shell's Cartesian product generation beh
   julia> `rm -f $names.$exts`
   `rm -f foo.aux foo.log bar.aux bar.log baz.aux baz.log`
 \end{verbatim}
+Since you can interpolate literal arrays, you can easily use this generative functionality without needing to create temporary array objects first:
+\begin{verbatim}
+  julia> `rm -rf ${"foo","bar","baz"}.${"aux","log"}`
+  `rm -rf foo.aux foo.log bar.aux bar.log baz.aux baz.log`
+\end{verbatim}
 
 \subsection{Quoting}
 
 Inevitably, one wants to write commands that aren't quite so simple, and it becomes necessary to use quotes.
-Here's a typical example of a perl one-liner at a shell prompt:
+Here's a simple example of a perl one-liner at a shell prompt:
 \begin{verbatim}
   $ perl -le '$|=1; for (0..3) { print }'
   0
@@ -1991,9 +2005,9 @@ Here's a typical example of a perl one-liner at a shell prompt:
   2
   3
 \end{verbatim}
-You need to use single quotes around the Perl expression for two reasons:
+You need to surround the Perl expression in single quotes for two reasons:
 so that spaces don't break the expression into multiple shell words, and so that uses of variables like \texttt{\$|} (yes, that's a variable), don't cause interpolation.
-In other instances, you want to use double quotes so that interpolation does occur:
+In other instances, you may want to use double quotes so that interpolation \emph{does} occur:
 \begin{verbatim}
   $ first="A"
   $ second="B"
@@ -2001,7 +2015,7 @@ In other instances, you want to use double quotes so that interpolation does occ
   1: A
   2: B
 \end{verbatim}
-The Julia backtick syntax is specifically designed so that you can simply cut-and-paste shell commands as-is and they will work.
+In general, the Julia backtick syntax is carefully designed so that you can just cut-and-paste shell commands as-is into backticks and they will work.
 Let's try the above two examples in Julia:
 \begin{verbatim}
   julia> `perl -le '$|=1; for (0..3) { print }'`
@@ -2014,11 +2028,7 @@ Let's try the above two examples in Julia:
   3
   true
 
-  julia> first = "A"
-  "A"
-
-  julia> second = "B"
-  "B"
+  julia> first = "A"; second = "B";
 
   julia> `perl -le 'print for @ARGV' "1: $first" "2: $second"`
   `perl -le 'print for @ARGV' '1: A' '2: B'`
@@ -2028,9 +2038,9 @@ Let's try the above two examples in Julia:
   2: B
   true
 \end{verbatim}
-The results are identical, and Julia's interpolation behavior mimics the shell's with some improvements due to the fact that Julia supports first-class iterable objects while most shells use strings split on spaces for this, introducing ambiguities.
-When in doubt, cut and paste.
-Since Julia shows commands to you before running them, you can easily and safely just examine its interpretation before running anything.
+The results are identical, and Julia's interpolation behavior mimics the shell's with some improvements due to the fact that Julia supports first-class iterable objects while most shells use strings split on spaces for this, which introduces ambiguities.
+When trying to port shell commands to Julia, try cut and pasting first.
+Since Julia shows commands to you before running them, you can easily and safely just examine its interpretation without doing any damage.
 
 \subsection{Pipelines}
 
@@ -2062,154 +2072,31 @@ Of course, this isn't terribly interesting since there's only one line to sort, 
 \end{verbatim}
 This prints the highest five user IDs on a UNIX system.
 
-\newpage
-is retained, but in Julia it doesn't run the command immediately, but rather creates a \verb|Cmd| object:
-\begin{verbatim}
-  julia> cmd = `echo hello`
-  `echo hello`
-
-  julia> dump(cmd)
-  Cmd(exec=("echo",("hello",)),
-      pipes=HashTable(),pipeline=Set([`echo hello`]),
-      pid=0,status=ProcessNotRun(),)
-\end{verbatim}
-The \verb|Cmd| object is a structure encoding what command to run as well as metadata about the resulting process and other related commands.
-For convenience, however, it is shown in the input format.
-The immediately obvious thing to do with a \verb|Cmd| object is to run it:
-\begin{verbatim}
-  julia> run(cmd)
-  hello
-  true
-\end{verbatim}
-The \verb|hello| part above is the output from the echo command, while the \verb|true| part is the value retuned by the \verb|run| function, indicating that all the subprocesses spawned by \verb|run| succeeded.
-Here we see one advantage of spawning processes directly:
-the program has access to the status of each spawned child program, thereby avoiding not only the overhead of starting a shell, but also the potential it causes for hiding programming errors.
-Metadata about the completed process is retained in the \verb|cmd| object after the process completes:
-\begin{verbatim}
-  julia> dump(cmd)
-  Cmd(exec=("echo",("hello",)),
-      pipes=HashTable(),pipeline=Set([`echo hello`]),
-      pid=79300,status=ProcessExited(0),)
-\end{verbatim}
-
-If you want to pass data to a program as an argument, it looks very similar to the previous example in Perl:
-\begin{verbatim}
-  julia> file = "/Volumes/External HD/data.csv"
-  "/Volumes/External HD/data.csv"
-
-  julia> `sort -n $file`
-  `sort -n '/Volumes/External HD/data.csv'`
-\end{verbatim}
-Wait? How did the file argument get quoted?
-The Julia backtick syntax understands both shell argument quoting \emph{and} how the arguments are interpolated.
-It knows that \verb|$file| is supposed to be a single argument and correctly generates arguments to an \verb|exec| call that safely do what you intended.
-When showing the \verb|Cmd| object, the output is generated so that if evaluated, it creates an equivalent command object.
-
-The fact that the backtick syntax is intelligently integrated with the language is quite powerful.
-Arrays are interpolated correctly as multiple arguments:
-\begin{verbatim}
-  julia> files = {
-           "/Volumes/External HD/data.csv"
-           "tmp/other.csv"
-         }
-  {"/Volumes/External HD/data.csv","tmp/other.csv"}
-
-  julia> `sort -n $files`
-  `sort -n '/Volumes/External HD/data.csv' tmp/other.csv`
-\end{verbatim}
-Note that this is interpolated correctly as two arguments, the first containing a space, rather than incorrectly as three arguments as it would in Perl or Ruby.
-If a collection is interpolated as part of a larger command argument, Julia emulates the shell \verb|{a,b,c}| argument generation syntax:
-\begin{verbatim}
-  julia> names = {"foo","bar","baz"}
-  {"foo","bar","baz"}
-
-  julia> `rm -f $names.txt`
-  `rm -f foo.txt bar.txt baz.txt`
-\end{verbatim}
-If multiple collections are interpolated into a single argument, it produces the cartesian product of their concatenations, again emulating the behavior of the shell's \verb|{a,b,c}| syntax:
-\begin{verbatim}
-  julia> exts = {"aux","log"}
-  {"aux","log"}
-
-  julia> `rm -f $names.$exts`
-  `rm -f foo.aux foo.log bar.aux bar.log baz.aux baz.log`
-\end{verbatim}
-
-Especially when calling other programming languages, it may become necessary to use spaces, escapes, or quotes.
-In these matters, Julia emulates the shell:
-it respects shell-style semantics for spaces, escapes, quoting, and interpolation.
-In particular, variable interpolation does not occur inside of single quotes:
-\begin{verbatim}
-  julia> a = 9; b = 1; c = "hello";
-
-  julia> `perl -le 'print "'$a'"; print $_ for @ARGV' $b "c: $c"`
-  `perl -le 'print "9"; print $_ for @ARGV' 1 'c: hello'`
-
-  julia> run(ans)
-  9
-  1
-  c: hello
-  true
-\end{verbatim}
-Here a Perl program is provided via the \verb|-e| option and is protected from interpolation by single quotes.
-The \verb|$a| is interpolated, however, because the single quotes are closed and opened again;
-the \verb|$_| is not interpolated because it is still protected by single quotes;
-the \verb|$b| is a bare argument, and is thus interpolated, and the \verb|$c| is interpolated as part of an argument because double quotes do not prevent interpolation.
-This may seem quite complex, but it is carefully designed so that you can basically just cut and paste commands from the shell and expect backticks to do the right thing, safely and correctly.
-
-Unlike the shell, besides escapes, quotes, and spaces, no other characters are treated specially---a pipe is always just a pipe:
-\begin{verbatim}
-  julia> run(`echo | sort`)
-  | sort
-  true
-\end{verbatim}
-This just prints a literal pipe character and the word ``sort.''
-Other shell meta-characters, like \verb|!| and \verb|&| are similarly interpreted literally.
-For complex shell-like programming, you use Julia's operators to manipulate \verb|Cmd| objects instead:
-\begin{verbatim}
-  julia> run(`cut -d: -f3 /etc/passwd` |
-             `perl -nle 'print unless /^\s*#/'` |
-             `sort -n` | `head`)
-  -2
-  0
-  1
-  4
-  26
-  27
-  54
-  55
-  56
-  58
-  true
-\end{verbatim}
-It's simple to run multiple programs in parallel and wait for them all to finish:
+Another pipelining facility that Julia provides is running multiple commands in parallel:
 \begin{verbatim}
   julia> run(`echo hello` & `echo world`)
   world
   hello
   true
 \end{verbatim}
-The order of the output here is non-deterministic because the two \verb|echo| processes are started nearly simultaneously, and race make the first write to the \verb|stdout| descriptor they share with each other and with their parent \verb|julia| process.
-Julia lets you pipe the output from these parallel processes to another program easily:
+The order of the output here is non-deterministic because the two \verb|echo| processes are started nearly simultaneously, and race to make the first write to the \verb|stdout| descriptor they share with each other and the \verb|julia| parent process.
+Julia lets you pipe the output from both of these processes to another program:
 \begin{verbatim}
   julia> run(`echo world` & `echo hello` | `sort`)
   hello
   world
   true
 \end{verbatim}
-That's something you cannot do in the shell, and while you can do it in Perl, Python, or Ruby, it requires unpleasant and tricky mucking around with the \verb|pipe|, \verb|dup2|, \verb|fork|, and \verb|exec| system calls.
+In terms of UNIX plumbing, what's happening here is that a single UNIX pipe object is created and written to by both \verb|echo| processes, and the other end of the pipe is read from by the \verb|sort| command.
 
-Now we're just going to showboat a bit (apologies for excessive Perlage):
+The combination of a programming language, a first-class command abstraction, and automatic setup of pipes between processes is a powerful one.
+To give some sense of the complex pipelines that can be created easily, here are some more sophisticated examples (apologies for excessive Perlage):
 \begin{verbatim}
-  julia> prefixer(sleep, prefix) =
-           `perl -nle '$|=1;
-                       print "'$prefix' ", $_;
-                       sleep '$sleep';'`
-  Methods for generic function prefixer
-  prefixer(Any,Any)
+  prefixer(prefix, sleep) =
+      `perl -nle '$|=1; print "'$prefix' ", $_; sleep '$sleep';'`
 
   julia> run(`perl -le '$|=1; for(0..9){ print; sleep 1 }'` |
-             prefixer(2,"A") & prefixer(2,"B"))
+             prefixer("A",2) & prefixer("B",2))
   A	0
   B	1
   A	2
@@ -2221,10 +2108,17 @@ Now we're just going to showboat a bit (apologies for excessive Perlage):
   A	8
   B	9
   true
+\end{verbatim}
+This is a classic example of a single producer feeding two concurrent consumers:
+one \verb|perl| process generates lines with the numbers 0 through 9 on them, while two parallel processes process that output, one prefixing lines with the letter ``A,'' the other with the letter ``B.''
+Which consumer gets the first line is non-deterministic, but once the race has been one, the lines are consumed alternately by one process and then the other.\footnote{Setting \texttt{\$|=1} in Perl causes each print statement to flush the \texttt{stdout} handle, which is necessary for this example to work.
+Otherwise all the output is buffered and printed to the pipe at once, to be read by a single consumer process at once.}
 
+Here is an even more complex multi-stage producer-consumer example:
+\begin{verbatim}
   julia> run(`perl -le '$|=1; for(0..9){ print; sleep 1 }'` |
-             prefixer(3,"X") & prefixer(3,"Y") & prefixer(3,"Z") |
-             prefixer(2,"A") & prefixer(2,"B"))
+             prefixer("X",3) & prefixer("Y",3) & prefixer("Z",3) |
+             prefixer("A",2) & prefixer("B",2))
   B	Y	0
   A	Z	1
   B	X	2
@@ -2236,7 +2130,11 @@ Now we're just going to showboat a bit (apologies for excessive Perlage):
   B	X	8
   A	Y	9
   true
+\end{verbatim}
+This example works is similar to the previous one, except there are two stages of consumers, and the stages have different latency so they use a different number of parallel workers, to maintain saturated throughput.
 
+Finally, we have an example of how you can make a process read from itself:
+\begin{verbatim}
   julia> gen = `perl -le '$|=1; for(0..9){ print; sleep 1 }'`
   `perl -le '$|=1; for(0..9){ print; sleep 1 }'`
 
@@ -2279,7 +2177,7 @@ Now we're just going to showboat a bit (apologies for excessive Perlage):
   ..6
   ...3
 \end{verbatim}
-The final example never terminates since the \verb|dup| process reads its own output and duplicates it to \verb|stderr| forever.
+This example never terminates since the \verb|dup| process reads its own output and duplicates it to \verb|stderr| forever.
 We strongly encourage you to try all these examples to see how they work.
 
 \section{Standard Library Reference}
