@@ -42,7 +42,12 @@ end
 has(::EnvHash, k::String) = hasenv(k)
 del(::EnvHash, k::String) = unsetenv(k)
 
-assign(::EnvHash, v::String, k::String) = setenv(k, v)
+assign(::EnvHash, v::String, k::String) = setenv(k,v)
+
+# TODO: make this implement Hash interface
+# it should thereby inherit the ability to
+# iterate its key-value pairs and display
+# iteself to the world.
 
 ## misc environment functionality ##
 
