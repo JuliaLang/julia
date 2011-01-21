@@ -496,18 +496,18 @@ In a sense, Julia \verb|Rational|s are just a convenient way of deferring the co
 
 \section{Control Flow}
 
-Julia supports several standard control flow constructs:
+Julia provides a variety of control flow constructs:
 \begin{itemize}
 \item Compound expressions: \verb|begin| and \verb|(;)|.
-\item Conditional evaluation: \verb|if|-\verb|esleif|-\verb|else|, and \verb|?:| (ternary operator).
-\item Short-circuit evaluation: \verb|&&|, \texttt{||}, and chained comparisons.
+\item Conditional evaluation: \verb|if|-\verb|esleif|-\verb|else| and \verb|?:| (ternary operator).
+\item Short-circuit evaluation: \verb|&&|, \texttt{||} and chained comparisons.
 \item Repeated evaluation: \verb|while| and \verb|for|.
-\item Non-local return: \verb|try|-\verb|catch| and \verb|throw|.
+\item Catch and throw: \verb|try|-\verb|catch| and \verb|throw|.
 \item Symmetric coroutines: \verb|yieldto|.
 \end{itemize}
-The first five control flow constructs are fairly standard to high-level programming languages.
-The last item is less common and more powerful:
-Julia has coroutines\,---\,a powerful non-local control flow construct similar to continuations.
+The first five control flow mechanisms are standard to high-level programming languages.
+Symmetric coroutines are not so standard:
+they provide non-local control flow, similar to continuations.
 In fact, both exception handling and cooperative multitasking are implemented in Julia using coroutines.
 Everyday programming, however, requires no direct usage of coroutines.
 
@@ -532,11 +532,21 @@ Since these are fairly small, simple expressions, they could easily be placed on
   3
 \end{verbatim}
 This syntax is particularly useful with the terse single-line function definition form introduced in \Section{functions}.
+Although it is typical, there is no requirement that \verb|begin| be multiline or that \verb|(;)| be single-line:
+\begin{verbatim}
+  julia> begin x = 1; y = 2; x + y end
+  3
+
+  julia> (x = 1;
+          y = 2;
+          x + y)
+  3
+\end{verbatim}
 
 \subsection{Conditional Evaluation}
 
 Conditional evaluation allows portions of code to be evaluated or not evaluated depending on the value of another expression.
-Here is the anatomy of the \verb|if|-\verb|esleif|-\verb|else| conditional evaluation syntax:
+Here is the anatomy of the \verb|if|-\verb|esleif|-\verb|else| conditional syntax:
 \begin{verbatim}
   if x < y
     println("x is less than y")
@@ -586,9 +596,9 @@ Here it is in action:
   x is equal to y
 \end{verbatim}
 The \verb|elseif| and \verb|else| blocks are optional, and as many \verb|elseif| blocks as desired can be used.
-The condition expressions in the \verb|if|-\verb|elseif|-\verb|else| construct are evaluated until the first one evaluates to \verb|true|, after which the associated block is evaluated, and no further conditional expressions are evaluated, and no other blocks are evaluated.
+The condition expressions in the \verb|if|-\verb|elseif|-\verb|else| construct are evaluated until the first one evaluates to \verb|true|, after which the associated block is evaluated, and no further condition expressions or blocks are evaluated.
 
-Unlike C, Matlab, Perl, Python, and Ruby\,---\,but like Java, and a few other stricter typed languages\,---\,it is an error if the value of a conditional expression is not a one of the two \verb|Boolean| values, \verb|true| or \verb|false|:
+Unlike C, Matlab, Perl, Python, and Ruby\,---\,but like Java, and a few other stricter, typed languages\,---\,it is an error if the value of a conditional expression is not \verb|true| or \verb|false|:
 \begin{verbatim}
   julia> if 1
            println("true")
@@ -598,12 +608,12 @@ Unlike C, Matlab, Perl, Python, and Ruby\,---\,but like Java, and a few other st
 This error indicates that the conditional was of the wrong type:
 \verb|Int32| rather than the required \verb|Bool|.
 
-The so-called ``ternary operator,'' \,\verb|?:|, is closely related to the \verb|if|-\verb|elseif|-\verb|else| syntax, but is used where a conditional choice between single expression values is required, as opposed to conditional execution of longer blocks of code.
+The so-called ``ternary operator,'' \verb|?:|, is closely related to the \verb|if|-\verb|elseif|-\verb|else| syntax, but is used where a conditional choice between single expression values is required, as opposed to conditional execution of longer blocks of code.
 It gets its name from being the only operator in most languages taking three operands:
 \begin{quote}
   \emph{a} \verb|?| \emph{b} \verb|:| \emph{c}
 \end{quote}
-The expression \emph{a} before the \verb|?| is a condition expression, and the ternary operation evaluates the expression \emph{b} before the \verb|:| if the condition \emph{a} is \verb|true| or the expression \emph{c} after the \verb|:| if it is \verb|false|.
+The expression \emph{a}, before the \verb|?|, is a condition expression, and the ternary operation evaluates the expression \emph{b}, before the \verb|:|, if the condition \emph{a} is \verb|true| or the expression \emph{c}, after the \verb|:|, if it is \verb|false|.
 
 The easiest way to understand this behavior is to see an example.
 In the previous example, the \verb|println| call is shared by all three branches:
@@ -642,6 +652,19 @@ The original three-way example requires chaining multiple instances of the terna
 \end{verbatim}
 To facilitate chaining, the operator associates from right to left.
 
+It is significant that like \verb|if|-\verb|elseif|-\verb|else|, the expressions before and after the \verb|:| are only evaluated if the condition expression evaluates to \verb|true| or \verb|false|, respectively:
+\begin{verbatim}
+  v(x) = (println(x); x)
+
+  julia> 1 < 2 ? v("yes") : v("no")
+  yes
+  "yes"
+
+  julia> 1 > 2 ? v("yes") : v("no")
+  no
+  "no"
+\end{verbatim}
+
 \subsection{Short-Circuit Evaluation}
 
 Short-circuit evaluation is quite similar to conditional evaluation.
@@ -652,8 +675,9 @@ Explicitly, this means that:
   \item In the expression \emph{a} \verb|&&| \emph{b}, the subexpression \emph{b} is only evaluated if \emph{a} evaluates to \verb|false|.
   \item In the expression \emph{a} \texttt{||} \emph{b}, the subexpression \emph{b} is only evaluated if \emph{a} evaluates to \verb|true|.
 \end{itemize}
+The reasoning is that \emph{a} \verb|&&| \emph{b} must be \verb|false| if \emph{a} is \verb|false|, regardless of the value of \emph{b}, and likewise, the value of \emph{a} \texttt{||} \emph{b} must be true if \emph{a} is \verb|true|, regardless of the value of \emph{b}.
 Both \verb|&&| and \texttt{||} associate to the right, but \verb|&&| has higher precedence than than \texttt{||} does.
-It's easy to experiment with the evaluation behavior of these operators:
+It's easy to experiment with this behavior:
 \begin{verbatim}
   t(x) = (println(x); true)
   f(x) = (println(x); false)
@@ -730,9 +754,9 @@ Let's see this in action:
   3
   true
 
-  julia> v(1) < v(0) <= v(3)
+  julia> v(1) > v(2) <= v(3)
   1
-  0
+  2
   false
 \end{verbatim} % TODO: THIS IS NOT THE ACTUAL OUTPUT
 The first pair of expressions will always be evaluated, since the first comparison must always be evaluated and requires both values.
@@ -741,154 +765,9 @@ Note that the middle expression is only evaluated once, rather than twice as it 
 
 \subsection{Repeated Evaluation}
 
-\subsection{Non-Local Returns}
+\subsection{Catch and Throw}
 
 \subsection{Coroutines}
-
-\section{Variable Scoping}
-
-The \emph{scope} of a variable is the region of code within which a variable
-is visible.
-Variable scoping helps avoid variable naming conflicts.
-The concept is intuitive:
-two functions can both have arguments called \verb|x| without the two \verb|x|'s referring to the same thing.
-Similarly there are many other cases where different blocks of code can use the same name without referring to the same thing.
-The rules for when the same variable name does or doesn't refer to the same thing are called scope rules;
-this section spells them out in detail.
-
-Certain constructs in the language introduce \emph{scope blocks}, which
-are regions of code that are eligible to be the scope of some set of variables.
-The scope of a variable cannot be an arbitrary set of
-source lines, but will always line up with one of these blocks. These
-constructs are:
-\begin{itemize}
-\item function bodies (any syntax)
-\item \verb|while| loops
-\item \verb|for| loops
-\item \verb|try| blocks
-\item \verb|catch| blocks
-\item \verb|let| blocks
-\item \verb|type| blocks.
-\end{itemize}
-Certain constructs introduce new variables into the current innermost scope. When
-a variable is introduced into a scope, it is also inherited by all its inner
-scopes unless one of those inner scopes explicitly overrides it. These
-constructs which introduce new variables into the current scope are as follows:
-\begin{itemize}
-\item A declaration \verb|local x| introduces a new local variable.
-\item A declaration \verb|global x| makes \verb|x| in the current scope
-and inner scopes refer to the global variable of that name.
-\item A function's arguments are introduced as new local variables into the
-function's body scope.
-\item An assignment \verb|x = y| introduces a new local variable \verb|x|
-only if \verb|x| is neither declared global nor explicitly introduced as local
-by any enclosing scope, \emph{before or after} the current line of code.
-\end{itemize}
-In the following example, there is only one \verb|x| assigned both inside
-and outside a loop:
-\begin{verbatim}
-  function foo(n)
-      x = 0
-      for i = 1:n
-          x = x + 1
-      end
-      x
-  end
-  
-  julia> foo(10)
-  10
-\end{verbatim}
-In the next example, the loop has a separate \verb|x| and the function
-always returns zero:
-\begin{verbatim}
-  function foo(n)
-      x = 0
-      for i = 1:n
-          local x
-          x = i
-      end
-      x
-  end
-
-  julia> foo(10)
-  0
-\end{verbatim}
-In this example, an \verb|x| exists only inside the loop, and
-the function encounters an undefined variable error on its last line
-(unless there is a global variable \verb|x|):
-\begin{verbatim}
-  function foo(n)
-      for i = 1:n
-          x = i
-      end
-      x
-  end
-
-  julia> foo(10)
-  in foo: x not defined
-\end{verbatim}
-A variable that is not assigned to or otherwise introduced locally defaults to global,
-so this function would return the value of the global \verb|x|
-if there is such a variable, or produce an error if no such global exists.
-As a consequence, the only way to assign to a global variable inside
-a non-top-level scope is to explicitly declare the variable as global within some scope, since
-otherwise the assignment would introduce a new local rather than assigning to the global. This rule works out
-well in practice, since the vast majority of variables assigned inside
-functions are intended to be local variables, and using global variables, should be the exception rather than the rule, especially assigning new values to them.
-
-One last example shows that an outer assignment introducing \verb|x| need not come before an inner usage:
-\begin{verbatim}
-  function foo(n)
-      f = y -> n + x + y
-      x = 1
-      f(2)
-  end
-
-  julia> foo(10)
-  13
-\end{verbatim}
-This last example may seem slightly odd for a normal variable, but allows for named functions\,---\,which are just normal variables holding function objects\,---\,to be used before they are defined.
-This allows functions to be defined in whatever order is intuitive and convenient, rather than forcing bottom up ordering or requiring forward declarations, both of which one typically sees in C programs.
-In particular, mutual recursion is very simple to write.
-Here's a rather inefficient way to test if positive integers are even or odd:\,\footnote{Julia provides built-in, efficient functions to test this called \texttt{iseven} and \texttt{isodd}.}
-\begin{verbatim}
-  even(n) = n == 0 ? true  :  odd(n-1)
-  odd(n)  = n == 0 ? false : even(n-1)
-
-  julia> even(3)
-  false
-
-  julia> odd(3)
-  true
-\end{verbatim}
-Since functions can be used before they are defined as long as they are defined by the time they are actually called, no syntax for forward declarations is necessary, and definitions can be ordered arbitrarily.
-
-At the interactive prompt, variable scope works the same way as anywhere
-else. The prompt behaves as if there is scope block wrapped around everything
-you type, except that this scope block is identified with the global scope.
-This is especially apparent in the case of assignments:
-\begin{verbatim}
-  julia> for i=1:1; y = 10; end
-  ()
-  
-  julia> y
-  y not defined
-  
-  julia> y = 0
-  0
-  
-  julia> for i=1:1; y = 10; end
-  ()
-  
-  julia> y
-  10
-\end{verbatim}
-In the first case \verb|y| only exists inside the loop.
-In the second case, an outer y has been introduced and so is inherited
-within the loop. Due to the special identification of the prompt's scope
-block with the global scope, it is not necessary to declare
-\verb|global y| inside the loop. However, outside the interactive prompt
-this declaration would be necessary in order to modify a global variable.
 
 \section{Functions}\sec{functions}
 
@@ -1187,6 +1066,151 @@ Often, however, a named function doing exactly what one wants does not exist, an
 
 \subsection{Returning Multiple Values}
 \subsection{Varargs Functions}
+
+\section{Variable Scoping}
+
+The \emph{scope} of a variable is the region of code within which a variable
+is visible.
+Variable scoping helps avoid variable naming conflicts.
+The concept is intuitive:
+two functions can both have arguments called \verb|x| without the two \verb|x|'s referring to the same thing.
+Similarly there are many other cases where different blocks of code can use the same name without referring to the same thing.
+The rules for when the same variable name does or doesn't refer to the same thing are called scope rules;
+this section spells them out in detail.
+
+Certain constructs in the language introduce \emph{scope blocks}, which
+are regions of code that are eligible to be the scope of some set of variables.
+The scope of a variable cannot be an arbitrary set of
+source lines, but will always line up with one of these blocks. These
+constructs are:
+\begin{itemize}
+\item function bodies (any syntax)
+\item \verb|while| loops
+\item \verb|for| loops
+\item \verb|try| blocks
+\item \verb|catch| blocks
+\item \verb|let| blocks
+\item \verb|type| blocks.
+\end{itemize}
+Certain constructs introduce new variables into the current innermost scope. When
+a variable is introduced into a scope, it is also inherited by all inner
+scopes unless one of those inner scopes explicitly overrides it. These
+constructs which introduce new variables into the current scope are as follows:
+\begin{itemize}
+\item A declaration \verb|local x| introduces a new local variable.
+\item A declaration \verb|global x| makes \verb|x| in the current scope
+and inner scopes refer to the global variable of that name.
+\item A function's arguments are introduced as new local variables into the
+function's body scope.
+\item An assignment \verb|x = y| introduces a new local variable \verb|x|
+only if \verb|x| is neither declared global nor explicitly introduced as local
+by any enclosing scope, \emph{before or after} the current line of code.
+\end{itemize}
+In the following example, there is only one \verb|x| assigned both inside
+and outside a loop:
+\begin{verbatim}
+  function foo(n)
+      x = 0
+      for i = 1:n
+          x = x + 1
+      end
+      x
+  end
+  
+  julia> foo(10)
+  10
+\end{verbatim}
+In the next example, the loop has a separate \verb|x| and the function
+always returns zero:
+\begin{verbatim}
+  function foo(n)
+      x = 0
+      for i = 1:n
+          local x
+          x = i
+      end
+      x
+  end
+
+  julia> foo(10)
+  0
+\end{verbatim}
+In this example, an \verb|x| exists only inside the loop, and
+the function encounters an undefined variable error on its last line
+(unless there is a global variable \verb|x|):
+\begin{verbatim}
+  function foo(n)
+      for i = 1:n
+          x = i
+      end
+      x
+  end
+
+  julia> foo(10)
+  in foo: x not defined
+\end{verbatim}
+A variable that is not assigned to or otherwise introduced locally defaults to global,
+so this function would return the value of the global \verb|x|
+if there is such a variable, or produce an error if no such global exists.
+As a consequence, the only way to assign to a global variable inside
+a non-top-level scope is to explicitly declare the variable as global within some scope, since
+otherwise the assignment would introduce a new local rather than assigning to the global. This rule works out
+well in practice, since the vast majority of variables assigned inside
+functions are intended to be local variables, and using global variables, should be the exception rather than the rule, especially assigning new values to them.
+
+One last example shows that an outer assignment introducing \verb|x| need not come before an inner usage:
+\begin{verbatim}
+  function foo(n)
+      f = y -> n + x + y
+      x = 1
+      f(2)
+  end
+
+  julia> foo(10)
+  13
+\end{verbatim}
+This last example may seem slightly odd for a normal variable, but allows for named functions\,---\,which are just normal variables holding function objects\,---\,to be used before they are defined.
+This allows functions to be defined in whatever order is intuitive and convenient, rather than forcing bottom up ordering or requiring forward declarations, both of which one typically sees in C programs.
+In particular, mutual recursion is very simple to write.
+Here's a rather inefficient way to test if positive integers are even or odd:\,\footnote{Julia provides built-in, efficient functions to test this called \texttt{iseven} and \texttt{isodd}.}
+\begin{verbatim}
+  even(n) = n == 0 ? true  :  odd(n-1)
+  odd(n)  = n == 0 ? false : even(n-1)
+
+  julia> even(3)
+  false
+
+  julia> odd(3)
+  true
+\end{verbatim}
+Since functions can be used before they are defined as long as they are defined by the time they are actually called, no syntax for forward declarations is necessary, and definitions can be ordered arbitrarily.
+
+At the interactive prompt, variable scope works the same way as anywhere
+else. The prompt behaves as if there is scope block wrapped around everything
+you type, except that this scope block is identified with the global scope.
+This is especially apparent in the case of assignments:
+\begin{verbatim}
+  julia> for i=1:1; y = 10; end
+  ()
+  
+  julia> y
+  y not defined
+  
+  julia> y = 0
+  0
+  
+  julia> for i=1:1; y = 10; end
+  ()
+  
+  julia> y
+  10
+\end{verbatim}
+In the first case \verb|y| only exists inside the loop.
+In the second case, an outer y has been introduced and so is inherited
+within the loop. Due to the special identification of the prompt's scope
+block with the global scope, it is not necessary to declare
+\verb|global y| inside the loop. However, outside the interactive prompt
+this declaration would be necessary in order to modify a global variable.
 
 \section{Defining Types}
 \subsection{Tag Types}
