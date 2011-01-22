@@ -504,8 +504,10 @@
 	(parse-resword s ex)
 	(let loop ((ex ex))
 	  (let ((t (peek-token s)))
-	    (if (and space-sensitive (ts:space? s)
-		     (memv t '(#\( #\[ #\{ |'| #\")))
+	    (if (or (and space-sensitive (ts:space? s)
+			 (memv t '(#\( #\[ #\{ |'| #\")))
+		    (and (number? ex)  ;; 2(...) is multiply, not call
+			 (eqv? t #\()))
 		ex
 		(case t
 		  ((#\( )   (take-token s)
