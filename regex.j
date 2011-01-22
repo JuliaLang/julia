@@ -95,7 +95,7 @@ function pcre_exec(regex::Ptr{Void}, extra::Ptr{Void},
                    string::ByteString,
                    offset::Index, options::Int)
     ncap = pcre_info(regex, extra, PCRE_INFO_CAPTURECOUNT, Int32)
-    ovec = Array(Int32, 3*(ncap+1))
+    ovec = Array(Int32, 3(ncap+1))
     n = ccall(dlsym(libpcre, :pcre_exec), Int32,
                 (Ptr{Void}, Ptr{Void}, Ptr{Uint8}, Int32, Int32,
                 Int32, Ptr{Int32}, Int32),

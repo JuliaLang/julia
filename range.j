@@ -64,31 +64,31 @@ end
 
 ## linear operations on 1-d ranges ##
 
-(-)(r::Ranges) = Range(-r.start, -step(r), -r.stop)
+-(r::Ranges) = Range(-r.start, -step(r), -r.stop)
 
-(+)(x::Real, r::Range ) = Range(x+r.start, r.step, x+r.stop)
-(+)(x::Real, r::Range1) = Range1(x+r.start, x+r.stop)
-(+)(r::Ranges, x::Real) = x+r
++(x::Real, r::Range ) = Range(x+r.start, r.step, x+r.stop)
++(x::Real, r::Range1) = Range1(x+r.start, x+r.stop)
++(r::Ranges, x::Real) = x+r
 
-(-)(x::Real, r::Ranges) = Range(x-r.start, -step(r), x-r.stop)
-(-)(r::Range , x::Real) = Range(r.start-x, r.step, r.stop-x)
-(-)(r::Range1, x::Real) = Range1(r.start-x, r.stop-x)
+-(x::Real, r::Ranges) = Range(x-r.start, -step(r), x-r.stop)
+-(r::Range , x::Real) = Range(r.start-x, r.step, r.stop-x)
+-(r::Range1, x::Real) = Range1(r.start-x, r.stop-x)
 
-(*)(x::Real, r::Ranges) = Range(x*r.start, x*step(r), x*r.stop)
-(*)(r::Ranges, x::Real) = x*r
+*(x::Real, r::Ranges) = Range(x*r.start, x*step(r), x*r.stop)
+*(r::Ranges, x::Real) = x*r
 
-(/)(r::Ranges, x::Real) = Range(r.start/x, step(r)/x, r.stop/x)
+/(r::Ranges, x::Real) = Range(r.start/x, step(r)/x, r.stop/x)
 
 ## adding and subtracting ranges ##
 
 # TODO: if steps combine to zero, create sparse zero vector
 
-function (+)(r1::Ranges, r2::Ranges)
+function +(r1::Ranges, r2::Ranges)
     if length(r1) != length(r2); error("shape mismatch"); end
     Range(r1.start+r2.start, step(r1)+step(r2), r1.stop+r2.stop)
 end
 
-function (-)(r1::Ranges, r2::Ranges)
+function -(r1::Ranges, r2::Ranges)
     if length(r1) != length(r2); error("shape mismatch"); end
     Range(r1.start-r2.start, step(r1)-step(r2), r1.stop-r2.stop)
 end

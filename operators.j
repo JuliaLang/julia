@@ -1,7 +1,7 @@
 ## types ##
 
-(<:)(T, S) = subtype(T,S)
-(>:)(T, S) = subtype(S,T)
+<:(T, S) = subtype(T,S)
+>:(T, S) = subtype(S,T)
 
 ## comparison ##
 
@@ -19,17 +19,17 @@ isequal(x, y) = isequal(promote(x,y)...)
 
 ## definitions providing basic traits of arithmetic operators ##
 
-(+)() = 0
-(*)() = 1
-(&)() = error("zero-argument & is ambiguous")
-(|)() = error("zero-argument | is ambiguous")
-($)() = error("zero-argument \$ is ambiguous")
++() = 0
+*() = 1
+&() = error("zero-argument & is ambiguous")
+|() = error("zero-argument | is ambiguous")
+$() = error("zero-argument \$ is ambiguous")
 
-(+)(x::Number) = x
-(*)(x::Number) = x
-(&)(x::Int) = x
-(|)(x::Int) = x
-($)(x::Int) = x
++(x::Number) = x
+*(x::Number) = x
+&(x::Int) = x
+|(x::Int) = x
+$(x::Int) = x
 
 for op = (:+, :*, :&, :|, :$)
     @eval begin
@@ -46,13 +46,13 @@ for op = (:+, :*, :&, :|, :$)
     end
 end
 
-(\)(x::Number, y::Number) = y/x
+\(x::Number, y::Number) = y/x
 
 # .<op> defaults to <op>
-(./)(x::Number,y::Number) = x/y
-(.\)(x::Number,y::Number) = y./x
-(.*)(x::Number,y::Number) = x*y
-(.^)(x::Number,y::Number) = x^y
+./(x::Number,y::Number) = x/y
+.\(x::Number,y::Number) = y./x
+.*(x::Number,y::Number) = x*y
+.^(x::Number,y::Number) = x^y
 
 div(x::Real, y::Real) = y != 0 ? truncate(x/y)        : throw(DivideByZeroError())
 fld(x::Real, y::Real) = y != 0 ? truncate(floor(x/y)) : throw(DivideByZeroError())
@@ -63,7 +63,7 @@ mod{T}(x::T, y::T) = convert(T, x-y*fld(x,y))
 rem(x,y) = rem(promote(x,y)...)
 mod(x,y) = mod(promote(x,y)...)
 
-(%)(x,y) = mod(x,y)
+%(x,y) = mod(x,y)
 mod1(x,y) = (m=mod(x-sign(y),y); m+sign(y))
 
 oftype{T}(x::T,c) = convert(T,c)
@@ -114,10 +114,10 @@ end
 
 ## promotion in arithmetic ##
 
-(+)(x::Number, y::Number) = (+)(promote(x,y)...)
-(*)(x::Number, y::Number) = (*)(promote(x,y)...)
-(-)(x::Number, y::Number) = (-)(promote(x,y)...)
-(/)(x::Number, y::Number) = (/)(promote(x,y)...)
++(x::Number, y::Number) = +(promote(x,y)...)
+*(x::Number, y::Number) = *(promote(x,y)...)
+-(x::Number, y::Number) = -(promote(x,y)...)
+/(x::Number, y::Number) = /(promote(x,y)...)
 
 # these are defined for the fundamental < and == so that if a method is
 # not found for e.g. <=, it is translated to < and == first, then promotion
@@ -128,9 +128,9 @@ end
 div(x::Int, y::Int) = div(promote(x,y)...)
 rem(x::Int, y::Int) = rem(promote(x,y)...)
 
-(&)(x::Int...) = (&)(promote(x...)...)
-(|)(x::Int...) = (|)(promote(x...)...)
-($)(x::Int...) = ($)(promote(x...)...)
+&(x::Int...) = &(promote(x...)...)
+|(x::Int...) = |(promote(x...)...)
+$(x::Int...) = $(promote(x...)...)
 
 ## promotion catch-alls for undefined operations ##
 

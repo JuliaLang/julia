@@ -16,11 +16,11 @@ end
 
 # where the Wraps type defines (perhaps implicitly)
 
-(+)(x::Wraps, y::Wraps) = wrap(unwrap(x)+unwrap(y), x, y)
++(x::Wraps, y::Wraps) = wrap(unwrap(x)+unwrap(y), x, y)
 
 # OR there could be a version that makes a closure for lazy evaluation:
 
-(+)(x::WrapsLazily, y::WrapsLazily) = wrap(()->(unwrap(x)+unwrap(y)), x, y)
++(x::WrapsLazily, y::WrapsLazily) = wrap(()->(unwrap(x)+unwrap(y)), x, y)
 
 # Then we can write
 

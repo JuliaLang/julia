@@ -45,11 +45,11 @@ signbit(x::Rational) = signbit(x.num)
 copysign(x::Rational, y::Real) = copysign(x.num,y) // x.den
 copysign(x::Rational, y::Rational) = copysign(x.num,y.num) // x.den
 
-(-)(x::Rational) = (-x.num) // x.den
-(+)(x::Rational, y::Rational) = (x.num*y.den + x.den*y.num) // (x.den*y.den)
-(-)(x::Rational, y::Rational) = (x.num*y.den - x.den*y.num) // (x.den*y.den)
-(*)(x::Rational, y::Rational) = (x.num*y.num) // (x.den*y.den)
-(/)(x::Rational, y::Rational) = (x.num*y.den) // (x.den*y.num)
+-(x::Rational) = (-x.num) // x.den
++(x::Rational, y::Rational) = (x.num*y.den + x.den*y.num) // (x.den*y.den)
+-(x::Rational, y::Rational) = (x.num*y.den - x.den*y.num) // (x.den*y.den)
+*(x::Rational, y::Rational) = (x.num*y.num) // (x.den*y.den)
+/(x::Rational, y::Rational) = (x.num*y.den) // (x.den*y.num)
 
 ==(x::Rational, y::Rational) = (x.num == y.num && x.den == y.den)
 !=(x::Rational, y::Rational) = (x.num != y.num || x.den != y.den)
