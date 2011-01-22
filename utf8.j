@@ -53,6 +53,8 @@ length(s::UTF8String) = length(s.data)
 cmp(a::UTF8String, b::UTF8String) = lexcmp(a.data, b.data)
 strchr(s::UTF8String, c::Char) =
     c < 0x80 ? memchr(s.data, c) : invoke(strchr, (String,Char), s, c)
+strcat(s::UTF8String, t::UTF8String, x::UTF8String...) =
+    UTF8String(strdatacat(s, t, x...))
 
 function nextind(s::UTF8String, ind::Int)
     for i = ind:length(s)
