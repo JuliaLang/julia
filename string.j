@@ -669,7 +669,9 @@ oct(n::Int, l::Int) = lpad(oct(n), l, '0')
 dec(n::Int, l::Int) = lpad(dec(n), l, '0')
 hex(n::Int, l::Int) = lpad(hex(n), l, '0')
 
-## lexicographically compare byte arrays (used by Latin-1 and UTF-8) ##
+## fast C-based memory functions for string implementations ##
+
+# lexicographically compare byte arrays (used by Latin-1 and UTF-8)
 
 function lexcmp(a::Array{Uint8,1}, b::Array{Uint8,1})
     c = ccall(dlsym(libc, :memcmp), Int32,
@@ -678,7 +680,7 @@ function lexcmp(a::Array{Uint8,1}, b::Array{Uint8,1})
     c < 0 ? -1 : c > 0 ? +1 : cmp(length(a),length(b))
 end
 
-## find the index of a byte in a byte array ##
+# find the index of a byte in a byte array
 
 function memchr(a::Array{Uint8,1}, b::Int)
     p = pointer(a)
@@ -689,4 +691,23 @@ function memchr(a::Array{Uint8,1}, b::Int)
         error("char not found")
     end
     q - p + 1
+end
+
+# concatenate byte arrays into a single array
+
+function memcat(arrays::Array{Uint8,1}...)
+    n = 0
+    for a = arrays
+        n += length(a)
+    end
+    arr = Array(Uint8, n)
+    ptr = pointer(arr)
+    offset = 0
+    for a = arrays
+        ccall(dlsym(libc, :memcpy), Ptr{Uint8},
+              (Ptr{Uint8}, Ptr{Uint8}, Int32),
+              ptr + offset, pointer(a), length(a))
+        offset += length(a)
+    end
+    return arr
 end
