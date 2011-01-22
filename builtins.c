@@ -632,19 +632,27 @@ static void show_function(jl_value_t *v)
 {
     ios_t *s = jl_current_output_stream();
     if (jl_is_gf(v)) {
+        ios_putc('(', s);
+        ios_puts(jl_gf_name(v)->name, s);
+        ios_putc(')', s);
+    }
+    else {
+        ios_puts("#<function>", s);
+    }
+}
+
+void jl_show_full_function(jl_value_t *v)
+{
+    ios_t *s = jl_current_output_stream();
+    if (jl_is_gf(v)) {
         ios_puts("Methods for generic function ", s);
         ios_puts(jl_gf_name(v)->name, s);
         ios_putc('\n', s);
         jl_show_method_table((jl_function_t*)v);
     }
     else {
-        ios_puts("#<closure>", s);
+        show_function(v);
     }
-}
-
-void jl_show_function(jl_value_t *v)
-{
-    show_function(v);
 }
 
 static void show_type(jl_value_t *t)

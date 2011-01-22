@@ -565,19 +565,24 @@ static void awful_sigfpe_hack()
 
 void jl_lisp_prompt();
 
-void jl_show_function(jl_value_t *v);
+void jl_show_full_function(jl_value_t *v);
 
 static void repl_show_value(jl_value_t *v)
 {
+    if (jl_is_function(v) && !jl_is_struct_type(v)) {
+        // show method table when a function is shown at the top level.
+        jl_show_full_function(v);
+        return;
+    }
     jl_show(v);
-    ios_t *s = jl_current_output_stream();
     if (jl_is_struct_type(v)) {
+        ios_t *s = jl_current_output_stream();
         // for convenience, show constructor methods when
         // a type is shown at the top level.
         jl_struct_type_t *tt = (jl_struct_type_t*)v;
         if (tt->name->primary==v && jl_is_gf(v)) {
             ios_putc('\n', s);
-            jl_show_function(v);
+            jl_show_full_function(v);
         }
     }
 }

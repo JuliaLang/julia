@@ -614,6 +614,8 @@ Array{Int32,2}((2,2), 0, 1, 2, 3)
 * type=>abstract, struct=>type
 - do something about "global X+=1"
 ? make sure chained comparisons evaluate left to right
+* +(a,b) should be a 2-argument call, not unary op of a tuple
+- 2(...) as multiplication
 
 before removing the 1-word overhead:
 initial   , after tests.j
