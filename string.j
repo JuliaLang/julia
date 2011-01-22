@@ -711,3 +711,22 @@ function memcat(arrays::Array{Uint8,1}...)
     end
     return arr
 end
+
+# concatenate the data fields of byte strings
+
+function strdatacat(strs::ByteString...)
+    n = 0
+    for s = strs
+        n += length(s)
+    end
+    data = Array(Uint8, n)
+    ptr = pointer(data)
+    offset = 0
+    for s = strs
+        ccall(dlsym(libc, :memcpy), Ptr{Uint8},
+              (Ptr{Uint8}, Ptr{Uint8}, Int32),
+              ptr + offset, pointer(s.data), length(s))
+        offset += length(s)
+    end
+    data
+end
