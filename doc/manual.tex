@@ -180,17 +180,6 @@ The above results are all \verb|Float64| values. There is no literal format for 
   Float32
 \end{verbatim}
 There are three specified standard floating point values that do not correspond to a point on the real number line: infinity (\verb|Inf|), minus infinity (\verb|-Inf|), and not-a-number (\verb|NaN|).
-Here are their literal input forms:
-\begin{verbatim}
-  julia> Inf
-  Inf
-
-  julia> -Inf
-  -Inf
-
-  julia> NaN
-  NaN
-\end{verbatim}
 By the IEEE 754 standard, these floating point values are the results of certain arithmetic operations:
 \begin{verbatim}
   julia> 1/0
@@ -338,6 +327,11 @@ In both cases, we resolve the ambiguity in favor of the numeric literals:
 \item Expressions starting with \verb|0x| are always hexadecimal literals.
 \item Expressions starting with $d.dd$\,\verb|e| or $d.dd$\,\verb|E| are always floating point literals.
 \end{itemize}
+Julia also supports using numeric literal coefficients immediately before parenthesized expressions:
+\begin{verbatim}
+  julia> 2(x-1)^2 - 3(x-1) + 1
+  3
+\end{verbatim}
 
 \subsection{Numeric Comparisons}\sec{numeric-comparisons}
 
@@ -511,7 +505,7 @@ they provide non-local control flow, similar to continuations.
 In fact, both exception handling and cooperative multitasking are implemented in Julia using coroutines.
 Everyday programming, however, requires no direct usage of coroutines.
 
-\subsection{Compound Expressions}
+\subsection{Compound Expressions}\sec{compound-expressions}
 
 Sometimes it is convenient to have a single expression which evaluates several subexpressions.
 There are two Julia constructs that accomplish this:
@@ -546,7 +540,7 @@ Although it is typical, there is no requirement that \verb|begin| be multiline o
 \subsection{Conditional Evaluation}
 
 Conditional evaluation allows portions of code to be evaluated or not evaluated depending on the value of another expression.
-Here is the anatomy of the \verb|if|-\verb|esleif|-\verb|else| conditional syntax:
+Here is the anatomy of the \verb|if|-\verb|elseif|-\verb|else| conditional syntax:
 \begin{verbatim}
   if x < y
     println("x is less than y")
@@ -598,7 +592,7 @@ Here it is in action:
 The \verb|elseif| and \verb|else| blocks are optional, and as many \verb|elseif| blocks as desired can be used.
 The condition expressions in the \verb|if|-\verb|elseif|-\verb|else| construct are evaluated until the first one evaluates to \verb|true|, after which the associated block is evaluated, and no further condition expressions or blocks are evaluated.
 
-Unlike C, Matlab, Perl, Python, and Ruby\,---\,but like Java, and a few other stricter, typed languages\,---\,it is an error if the value of a conditional expression is not \verb|true| or \verb|false|:
+Unlike C, Matlab, Perl, Python, and Ruby\,---\,but like Java, and a few other stricter, typed languages\,---\,it is an error if the value of a conditional expression is anything but \verb|true| or \verb|false|:
 \begin{verbatim}
   julia> if 1
            println("true")
@@ -632,7 +626,7 @@ For the sake of clarity, let's try a two-way version first:
   not less than
 \end{verbatim}
 If the expression \verb|x < y| is true, the entire ternary operator expression evaluates to the string \verb|"less than"| and otherwise it evaluates to the string \verb|"not less than"|.
-The original three-way example requires chaining multiple instances of the ternary operator:
+The original three-way example requires chaining multiple uses of the ternary operator together:
 \begin{verbatim}
   julia> println(x < y ? "x is less than y"    :
                  x > y ? "x is greater than y" : "x is equal to y")
@@ -725,7 +719,7 @@ It's easy to experiment with this behavior:
   1
   2
 \end{verbatim}
-Like condition expressions provided \verb|if|, \verb|elsif| or ternary operator, the values given to \verb|&&| or \texttt{||} must be boolean values (\verb|true| or \verb|false|).
+Like condition expressions used in \verb|if|, \verb|elseif| or ternary operator, the operands of \verb|&&| or \texttt{||} must be boolean values (\verb|true| or \verb|false|).
 Using a non-boolean value is an error:
 \begin{verbatim}
   julia> 1 && 2
@@ -796,7 +790,7 @@ The traditional function declaration syntax demonstrated above is equivalent to 
 \begin{verbatim}
   f(x,y) = x + y
 \end{verbatim}
-In the assignment form, the body of the function must be a single expression, although it can be a complex compound expression.
+In the assignment form, the body of the function must be a single expression, although it can be a compound expression (see \Section{compound-expressions}).
 Short, simple function definitions are common in Julia.
 The short function syntax is accordingly quite idiomatic, considerably reducing both typing and visual noise.
 
@@ -832,7 +826,7 @@ Since functions definitions can be entered directly into the repl, it is easy to
 \end{verbatim}
 Of course, in a purely linear function body like \verb|g|, the usage of \verb|return| is pointless since the expression \verb|x + y| is never evaluated and we could simply make \verb|x * y| the last expression in the function and omit the \verb|return|.
 In conjunction with other control flow, however, \verb|return| is of real use.
-Here, for example, is a function that computes the hypotenuse length of a right triangle with sides of length $x$ and $y$, carefully avoiding overflow of intermediate results:
+Here, for example, is a function that computes the hypotenuse length of a right triangle with sides of length $x$ and $y$, carefully avoiding numerical errors or instabilities:
 \begin{verbatim}
   function hypot(x,y)
       x = abs(x)
@@ -1007,13 +1001,14 @@ To suppress Julia's warning, the disambiguating method must be defined first.
 
 \subsection{Operators Are Functions}
 
-In Julia, most operators are just functions with support for special syntax.\footnote{The exceptions are operators with special semantics like \texttt{\&\&} and \texttt{||} which cause short-circuit evaluation.}
-As such, they have an alternate purely ``functional'' form:
+In Julia, most operators are just functions with support for special syntax.\footnote{The exceptions are operators with special evaluation semantics like \texttt{\&\&} and \texttt{||} which cause short-circuit evaluation.
+These operators cannot be defined as normal functions because their operands are not evaluated as normal function arguments.}
+Accordingly, you can also apply them using parenthesized argument lists as you would any other function:
 \begin{verbatim}
   julia> 1 + 2 + 3
   6
 
-  julia> (+)(1,2,3)
+  julia> +(1,2,3)
   6
 \end{verbatim}
 The infix form is exactly equivalent to the function application form\,---\,in fact the former is parsed to produce precisely the function call internally.
@@ -1021,25 +1016,8 @@ Since operators like \verb|+| are just Julia functions, you can add new methods 
 To add a new method to the \verb|+| operator, you define a new method using the name of the operator where the name of the function goes.
 The addition method for \verb|Complex| numbers is defined as:
 \begin{verbatim}
-  (+)(z::Complex, w::Complex) = Complex(z.re + w.re, z.im + w.im)
+  +(z::Complex, w::Complex) = Complex(z.re + w.re, z.im + w.im)
 \end{verbatim}
-Other than special syntax support, operators are no different than other functions.
-When using an operator as a function, to be safe you can always wrap it in parentheses like \verb|(+)| above, but that is only necessary for those operators that have a unary form: \verb|+|, \verb|-|, \verb|~|, and \verb|!|.
-For others, the parentheses can be omitted:
-\begin{verbatim}
-  julia> (*)(1,2,3)
-  6
-
-  julia> *(1,2,3)
-  6
-
-  julia> (+)(1,2,3)
-  6
-
-  julia> +(1,2,3)
-  no method +((Int32,Int32,Int32),)
-\end{verbatim}
-Since \verb|+| can be used in unary form, this syntax is parsed as unary application of \verb|+| to the tuple value \verb|(1,2,3)|, rather than the application of the \verb|+| function to the values 1, 2, and 3.
 
 \subsection{Anonymous Functions}
 
@@ -1059,7 +1037,7 @@ A classic example is the \verb|map| function, which applies a function to each v
   [1.0,4.0,2.0]
 \end{verbatim} % TOOD: make sure type inference gets the right return type.
 This is fine if a named function effecting the transform one wants already exists to pass as the first argument to \verb|map|.
-Often, however, a such a named function does not exist.
+Often, however, a ready-to-use, named function does not exist.
 In these situations, the anonymous function construct allows easy creation of a single-use function object without needing a name:
 \begin{verbatim}
   julia> map(x -> x^2 + 2x - 1, [1,3,-1])
