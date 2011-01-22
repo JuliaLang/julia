@@ -83,7 +83,7 @@ There are a variety of other ways to run Julia code and provide options to the \
 See \Section{command-line-options} for details.
 
 \section{Numbers and Arithmetic}
-Julia supports a broad range of numeric types together with the full complement of arithmetic and bitwise operations.
+Julia supports a broad range of numeric types together with the full complement of arithmetic and bitwise operations on them.
 The following are Julia's built-in primitive numeric types:
 
 \begin{itemize}
@@ -804,7 +804,7 @@ The short function syntax is accordingly quite idiomatic, considerably reducing 
 
 The value returned by a function is the value of the last expression evaluated, which, by default, is the last expression in the body of the function definition.
 In the example function, \verb|f|, this is simply the value of the expression \verb|x + y|.
-As in C, and most other imperative or functional languages, the \verb|return| keyword can cause the function to return from any point, optionally providing an expression whose value is returned:
+As in C and most other imperative or functional languages, the \verb|return| keyword causes the function to return from any point, optionally providing an expression whose value is returned: % TODO: make return value actually optional.
 \begin{verbatim}
   function g(x,y)
     return x * y
@@ -871,10 +871,10 @@ Dispatch is done on all argument types and the most specific method that applies
   julia> f(2,3.0)
   5.0
 \end{verbatim}
-Here, the second method of \verb|f| cannot be applied since \verb|2| is not a \verb|Float64|.
+Here, the second method of \verb|f| cannot be applied since 2 is not a \verb|Float64|.
 In the first method, the argument types are unconstrained, so this serves as a catchall method, and is called here.
 
-If you've been entering these definitions in the repl, you'll have noticed that it shows you all the methods defined for a given ``generic function'' when a new method is defined or if you ask the repl to show the function object:
+If you've been entering these definitions in the repl, you'll have noticed that it shows you all the methods defined for a given ``generic function'' when a new method is defined:
 \begin{verbatim}
   julia> f(x,y) = x + y
   Methods for generic function f
@@ -1007,8 +1007,8 @@ To suppress Julia's warning, the disambiguating method must be defined first.
 
 \subsection{Operators Are Functions}
 
-In Julia, most operators are all just functions with support for special syntax.
-However, they can be used as normal functions as well:
+In Julia, most operators are just functions with support for special syntax.\footnote{The exceptions are operators with special semantics like \texttt{\&\&} and \texttt{||} which cause short-circuit evaluation.}
+As such, they have an alternate purely ``functional'' form:
 \begin{verbatim}
   julia> 1 + 2 + 3
   6
@@ -1017,13 +1017,14 @@ However, they can be used as normal functions as well:
   6
 \end{verbatim}
 The infix form is exactly equivalent to the function application form\,---\,in fact the former is parsed to produce precisely the function call internally.
-To add a new method to the \verb|+| operator, you just define a new method using the name of the operator.
-For example, addition method for \verb|Complex| values is defined as:
+Since operators like \verb|+| are just Julia functions, you can add new methods for them.
+To add a new method to the \verb|+| operator, you define a new method using the name of the operator where the name of the function goes.
+The addition method for \verb|Complex| numbers is defined as:
 \begin{verbatim}
   (+)(z::Complex, w::Complex) = Complex(z.re + w.re, z.im + w.im)
 \end{verbatim}
-Otherwise operators are no different than any other function in Julia.
-When using an operator as a function, to be safe you can always wrap it in parentheses like \verb|(+)| above, but that is only strictly necessary for those operators that can be used in unary form: \verb|+|, \verb|-|, \verb|~|, and \verb|!|.
+Other than special syntax support, operators are no different than other functions.
+When using an operator as a function, to be safe you can always wrap it in parentheses like \verb|(+)| above, but that is only necessary for those operators that have a unary form: \verb|+|, \verb|-|, \verb|~|, and \verb|!|.
 For others, the parentheses can be omitted:
 \begin{verbatim}
   julia> (*)(1,2,3)
@@ -2182,7 +2183,11 @@ We strongly encourage you to try all these examples to see how they work.
 
 \section{Standard Library Reference}
 
-\section{Macros}
+\section{Metaprogramming}
+
+\subsection{Expressions and Eval}
+
+\subsection{Macros}
 
 Macros are totally different from inlining.
 Macros are a hook into the compiler that lets you examine and rewrite the syntax of a piece of the program.
