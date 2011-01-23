@@ -80,8 +80,8 @@ for f=(:-, :~, :conj, :real, :imag)
     end
 end
 
-(+){T<:Number}(x::Tensor{T}) = x
-(*){T<:Number}(x::Tensor{T}) = x
++{T<:Number}(x::Tensor{T}) = x
+*{T<:Number}(x::Tensor{T}) = x
 
 function !(A::Tensor{Bool})
     F = clone(A)

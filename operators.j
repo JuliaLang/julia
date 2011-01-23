@@ -135,19 +135,19 @@ $(x::Int...) = $(promote(x...)...)
 ## promotion catch-alls for undefined operations ##
 
 no_op_err(name, T) = error(name," not defined for ",T)
-(+){T<:Number}(x::T, y::T) = no_op_err("+", T)
-(*){T<:Number}(x::T, y::T) = no_op_err("*", T)
-(-){T<:Number}(x::T, y::T) = no_op_err("-", T)
-(/){T<:Number}(x::T, y::T) = no_op_err("/", T)
-(<){T<:Real}  (x::T, y::T) = no_op_err("<", T)
-(==){T<:Number}(x::T, y::T) = no_op_err("==", T)
++{T<:Number}(x::T, y::T) = no_op_err("+", T)
+*{T<:Number}(x::T, y::T) = no_op_err("*", T)
+-{T<:Number}(x::T, y::T) = no_op_err("-", T)
+/{T<:Number}(x::T, y::T) = no_op_err("/", T)
+<{T<:Real}  (x::T, y::T) = no_op_err("<", T)
+=={T<:Number}(x::T, y::T) = no_op_err("==", T)
 
 div{T<:Int}(x::T, y::T) = no_op_err("div", T)
 rem{T<:Int}(x::T, y::T) = no_op_err("rem", T)
 
-(&){T<:Int}(x::T, y::T) = no_op_err("&", T)
-(|){T<:Int}(x::T, y::T) = no_op_err("|", T)
-($){T<:Int}(x::T, y::T) = no_op_err("\$", T)
+&{T<:Int}(x::T, y::T) = no_op_err("&", T)
+|{T<:Int}(x::T, y::T) = no_op_err("|", T)
+${T<:Int}(x::T, y::T) = no_op_err("\$", T)
 
 ## miscellaneous ##
 
