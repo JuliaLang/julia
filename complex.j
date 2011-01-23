@@ -25,15 +25,12 @@ promote_rule{T,S<:Real}(::Type{Complex{T}}, ::Type{S}) = Complex{promote_type(T,
 promote_rule{T,S}(::Type{Complex{T}}, ::Type{Complex{S}}) = Complex{promote_type(T,S)}
 
 function show(c::Complex)
-    r = real(c)
-    if r != 0
-        show(real(c))
-    end
+    show(real(c))
     i = imag(c)
     if signbit(i) == -1
         i = -i
         print(" - ")
-    elseif r != 0
+    else
         print(" + ")
     end
     show(i)
