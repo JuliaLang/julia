@@ -427,6 +427,35 @@ Unlike most languages, comparisons can be arbitrarily chained:
 \end{verbatim}
 Chaining comparisons is quite convenient in many numerical codes.
 
+\subsection{Mathematical Functions}
+
+Julia provides a comprehensive set of mathematical functions and operators.
+These mathematical operations are defined over as broad a class of numerical values as it is possible to sensibly define them.
+The following is a partial list of functions and operators provided:
+\begin{itemize}
+  \item \verb|div(a,b)| --- integral division, rounded towards zero.
+  \item \verb|rem(a,b)| --- remainder, satisfies \verb|a == b*div(a,b) + rem(a,b)|, implying that sign matches \verb|a|.
+  \item \verb|fld(a,b)| --- integral division, rounded towards $-\infty$.
+  \item \verb|mod(a,b)| --- modulus, satisfies \verb|a == b*fld(a,b) + mod(a,b)|, implying that sign matches \verb|b|.
+  \item \verb|a % b| --- equivalent to \verb|mod(a,b)|.
+  \item \verb|gcd(a,b...)| --- greatest common divisor of \verb|a|, \verb|b|... with sign matching \verb|a|.
+  \item \verb|lcm(a,b...)| --- least common multiple of \verb|a|, \verb|b|... with sign matching \verb|a|.
+  \item \verb|sign(x)| --- indicate the sign of \verb|x| using $-1$, $0$, $+1$.
+  \item \verb|signbit(x)| --- indicate the sign bit of \verb|x| using $-1$, $+1$.\footnote{For IEEE floating point values, this has precise specified semantics.
+  In particular, there are both positive and negative zero and \texttt{NaN} values.
+  For other numeric types, this is essentially just a test of whether \texttt{x < 0}.}
+  \item \verb|copysign(x,y)| --- a value with the magnitude of \verb|a| and the sign of \verb|b|.
+  \item \verb|sqrt(x)| --- the square root of \verb|x|.
+  \item \verb|exp(x)| --- the natural exponential function $e^x$ at \verb|x|.
+  \item \verb|x^y| --- \verb|x| raised to the exponent \verb|y|.
+  \item \verb|log(x)| --- the natural logarithm of \verb|x|.
+  \item \verb|log2(x)| --- the base 2 logarithm of \verb|x|.
+  \item \verb|log10(x)| --- the base 10 logarithm of \verb|x|.
+  \item \verb|log(b,x)| --- the base \verb|b| logarithm of \verb|x|.
+\end{itemize}
+In addition all the standard trigonometric functions are defined:
+\verb|sin|, \verb|cos|, \verb|tan|, \verb|cot|, \verb|sec|, \verb|csc|, \verb|sinh|, \verb|cosh|, \verb|tanh|, \verb|asin|, \verb|acos|, \verb|atan|, \verb|asec|, \verb|acsc|, \verb|acot|, \verb|sech|, \verb|csch|, \verb|coth|, \verb|asech|, \verb|acsch|, \verb|acoth|, \verb|sinc|, \verb|cosc|.
+
 \subsection{Rational Numbers}
 
 Rational numbers can be constructed using the \texttt{//} operator:
