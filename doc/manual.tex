@@ -299,6 +299,19 @@ Here are some examples with bitwise operations:
 \end{verbatim}
 As a general rule of thumb, arguments are promoted to the smallest type that can accurately represent all of the arguments. See \Section{conversion-and-promotion} for further details.
 
+Almost every Julia operator also comes in an update form.
+The update form of \verb|+| is the \verb|+=| operator:
+\begin{verbatim}
+  julia> x = 1
+  1
+
+  julia> x += 3
+  4
+
+  julia> x
+  4
+\end{verbatim}
+
 \subsection{Numeric Literal Coefficients}
 
 To make common numeric formulas and expressions clearer, Julia allows variables to be immediately preceded by a numeric literal, implying multiplication.
@@ -573,7 +586,7 @@ The full gamut of mathematical functions are defined for complex numbers as well
 Julia provides a variety of control flow constructs:
 \begin{itemize}
 \item Compound expressions: \verb|begin| and \verb|(;)|.
-\item Conditional evaluation: \verb|if|-\verb|esleif|-\verb|else| and \verb|?:| (ternary operator).
+\item Conditional evaluation: \verb|if|-\verb|elseif|-\verb|else| and \verb|?:| (ternary operator).
 \item Short-circuit evaluation: \verb|&&|, \texttt{||} and chained comparisons.
 \item Repeated evaluation: \verb|while| and \verb|for|.
 \item Catch and throw: \verb|try|-\verb|catch| and \verb|throw|.
@@ -838,6 +851,123 @@ Subsequent expressions, however, need not be evaluated if a comparison earlier i
 Note that the middle expression is only evaluated once, rather than twice as it would be if the expression were written as \verb|v(1) < v(2) && v(2) <= v(3)|.
 
 \subsection{Repeated Evaluation}
+
+There are two constructs for repeated evaluation in Julia: the \verb|while| loop and the \verb|for| loop.
+Here is an example of a \verb|while| loop:
+\begin{verbatim}
+  julia> i = 1;
+
+  julia> while i <= 5
+           println(i)
+           i += 1
+         end
+  1
+  2
+  3
+  4
+  5
+\end{verbatim}
+The \verb|while| loop evaluates the condition expression (\verb|i < n| in this case), and as long it remains \verb|true|, keeps also evaluating the body of the \verb|while| loop.
+If the condition expression is \verb|false| when the \verb|while| loop is first reached, the body is never evaluated.
+
+The \verb|for| loop makes common repeated evaluation idioms easier to write.
+Since counting up and down like the above \verb|while| loop does is so common, it can be expressed more concisely with a \verb|for| loop:
+\begin{verbatim}
+  julia> for i = 1:5
+           println(i)
+         end
+  1
+  2
+  3
+  4
+  5
+\end{verbatim}
+Here the \verb|1:5| is a \verb|Range| object, representing the sequence of numbers 1, 2, 3, 4, 5.
+The \verb|for| loop iterates through these values, assigning each one in turn to the variable \verb|i|.
+One rather important distinction between the previous \verb|while| loop form and the \verb|for| loop form is the scope during which the variable is visible.
+If the variable \verb|i| has not been introduced in an other scope, in the \verb|for| loop form, it is visible only inside of the \verb|for| loop, and not afterwards.
+You'll either need a new repl instance or a different variable name to test this:
+\begin{verbatim}
+  julia> for j = 1:5
+           println(j)
+         end
+  1
+  2
+  3
+  4
+  5
+  ()
+
+  julia> j
+  j not defined
+\end{verbatim}
+See \Section{variable-scoping} for a detailed explanation of variable scope and how it works in Julia.
+
+In general, the \verb|for| loop construct can iterate over all sorts of containers:
+\begin{verbatim}
+  julia> for i = [1,4,-1]
+           println(i)
+         end
+  1
+  4
+  -1
+
+  julia> for s = ["foo","bar","baz"]
+           println(s)
+         end
+  foo
+  bar
+  baz
+\end{verbatim}
+Various types of iterable containers will be introduced and discussed in later section.
+
+It is sometimes convenient to terminate the repetition of a \verb|while| before the test condition is falsified or stop iterating in a \verb|for| loop before the end of the iterable object is reached.
+This can be accomplished with the \verb|break| keyword:
+\begin{verbatim}
+  julia> i = 1;
+
+  julia> while true
+           println(i) 
+           i += 1
+           if i >= 5 
+             break
+           end
+         end
+  1
+  2
+  3
+  4
+
+  julia> for i = 1:1000
+           println(i)               
+           if i % 5 == 0
+             break
+           end
+         end
+  1
+  2
+  3
+  4
+  5
+\end{verbatim}
+The above \verb|while| loop would never terminate on its own, and the \verb|for| loop would iterate up to 1000.
+These loops are both exited early by using the \verb|break| keyword.
+
+In other circumstances, it is handy to be able to stop an iteration and move on to the next one immediately.
+The \verb|continue| keyword accomplishes this:
+\begin{verbatim}
+  julia> for i = 1:10
+           if i % 3 != 0
+             continue
+           end
+           println(i)
+         end
+  3
+  6
+  9
+\end{verbatim}
+This is a somewhat contrived example since we could produce the same behavior more clearly by negating the condition and placing the \verb|println| call inside the \verb|if| block.
+In realistic usage there is more code to be evaluated after the \verb|continue|, and often there are multiple points from which one calls \verb|continue|.
 
 \subsection{Catch and Throw}
 
@@ -1127,7 +1257,7 @@ In these situations, the anonymous function construct allows easy creation of a 
 \subsection{Returning Multiple Values}
 \subsection{Varargs Functions}
 
-\section{Variable Scoping}
+\section{Variable Scoping}\sec{variable-scoping}
 
 The \emph{scope} of a variable is the region of code within which a variable
 is visible.
