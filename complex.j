@@ -272,7 +272,7 @@ function atan(z::Complex)
 end
 
 function sinh(z::Complex)
-    y = exp(z.re)
+    u = exp(z.re)
     v = 1/u
     u = 0.5(u+v)
     v = u-v
