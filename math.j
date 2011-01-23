@@ -18,7 +18,7 @@ acoth(y) = atanh(1 ./y)
 sinc(x) = x==0 ? one(x)  : (pix = pi(x)*x; sin(pix)/pix)
 cosc(x) = x==0 ? zero(x) : (pix = pi(x)*x; cos(pix)/x - sin(pix)/(pix*x))
 
-logb(b,x) = log(x)/log(b)
+log(b,x) = log(x)/log(b)
 
 function realsqrt(x::Real)
     if x < 0
