@@ -881,7 +881,7 @@ Note that the middle expression is only evaluated once, rather than twice as it 
 
 \subsection{Repeated Evaluation}
 
-There are two constructs for repeated evaluation in Julia: the \verb|while| loop and the \verb|for| loop.
+There are two constructs for repeated evaluation of expressions in Julia: the \verb|while| loop and the \verb|for| loop.
 Here is an example of a \verb|while| loop:
 \begin{verbatim}
   julia> i = 1;
@@ -1000,6 +1000,54 @@ In realistic usage there is more code to be evaluated after the \verb|continue|,
 
 \subsection{Catch and Throw}
 
+Occasionally, especially when something unexpected occurs, a function cannot return a reasonable value to its immediate caller.
+In such cases, it may be best to unwind the call stack many levels and pass some value back to an outer level of execution, which can deal with the situation more appropriately.
+The \verb|try|-\verb|catch| and \verb|throw| constructs are designed to allow you to do precisely this.
+The following is a contrived example of \verb|try|-\verb|catch| and \verb|throw| in action:
+\begin{verbatim}
+  function foo(x)
+    try
+      y = bar(x)
+      println("returned: $y")
+    catch z
+      println("thrown: $z")
+    end
+  end
+
+  function bar(x)
+    2*baz(x)+1
+  end
+
+  function baz(x)
+    x >= 0 ? sqrt(x) : throw("oops!")
+  end
+
+  julia> foo(1)
+  returned: 3.0
+
+  julia> foo(0)
+  returned: 1.0
+
+  julia> foo(-1)
+  thrown: oops!
+\end{verbatim}
+If the function definitions used here are unclear, see \Section{functions}.
+The essential point demonstrated here is that when the \verb|baz| function gets a negative value of \verb|x|, rather than returning a value to \verb|baz|'s call site in \verb|bar|, as it normally would, it instead calls \verb|throw|, which causes execution to return immediately to the innermost \verb|try|-\verb|catch| block, binding the thrown value, \verb|"oops!"|, to the variable \verb|z|.
+
+The \verb|throw| function is really a low-level control-flow construct, meant to be used to build other higher level functionality.
+The most common use case for \verb|try|-\verb|catch| handling errors or other unexpected occurrences.
+In error handling, the object thrown is an \verb|Exception| object, indicating what kind of error occurred, together with any potentially useful diagnostic information.
+To throw an error, use the \verb|error| command:
+\begin{verbatim}
+  function bar(x)
+    if x < 0
+      error("bar can't handle negative values")
+    end
+  end
+\end{verbatim}
+The \verb|error| function constructs an \verb|ErrorException| object with the message provided, and throws it, allowing it to be caught at a higher level, and handled, or to escape to the outermost level of execution and gracefully terminate the program with a hopefully informative error message.
+The \verb|try|-\verb|catch| style of exception handling allows programmers to concentrate on the non-exceptional case, and avoid spending most of their time writing error checking code.
+
 \subsection{Coroutines}
 
 \section{Functions}\sec{functions}
@@ -1012,12 +1060,10 @@ The basic syntax for defining functions in Julia is:
 \end{verbatim}
 This syntax is similar to Matlab, but there are some significant differences:
 \begin{itemize}
-\item In Matlab, this definition must be saved in a file, named \verb|f.m|.
-In Julia, this expression can appear anywhere, including at the repl prompt.
+\item In Matlab, this definition must be saved in a file, named \verb|f.m|, whereas in Julia, this expression can appear anywhere, including at the repl prompt.
 \item In Matlab, the closing \verb|end| is optional, being implied by the end of the file.
 In Julia, the terminating \verb|end| is required.
-\item in Matlab, this function would print the value \verb|x + y| but would not return any value.
-In Julia, the last expression evaluated is a function's return value.
+\item in Matlab, this function would print the value \verb|x + y| but would not return any value, whereas in Julia, the last expression evaluated is a function's return value.
 \item Expression values are never printed automatically except in the repl.
 Semicolons are only required to separate expressions on the same line.
 \end{itemize}
