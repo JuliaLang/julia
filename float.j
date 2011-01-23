@@ -65,16 +65,16 @@ promote_rule(::Type{Float64}, ::Type{Char}) = Float64
 
 ## floating point arithmetic ##
 
-(-)(x::Float32) = boxf32(neg_float(unbox32(x)))
-(-)(x::Float64) = boxf64(neg_float(unbox64(x)))
-(+)(x::Float32, y::Float32) = boxf32(add_float(unbox32(x), unbox32(y)))
-(+)(x::Float64, y::Float64) = boxf64(add_float(unbox64(x), unbox64(y)))
-(-)(x::Float32, y::Float32) = boxf32(sub_float(unbox32(x), unbox32(y)))
-(-)(x::Float64, y::Float64) = boxf64(sub_float(unbox64(x), unbox64(y)))
-(*)(x::Float32, y::Float32) = boxf32(mul_float(unbox32(x), unbox32(y)))
-(*)(x::Float64, y::Float64) = boxf64(mul_float(unbox64(x), unbox64(y)))
-(/)(x::Float32, y::Float32) = boxf32(div_float(unbox32(x), unbox32(y)))
-(/)(x::Float64, y::Float64) = boxf64(div_float(unbox64(x), unbox64(y)))
+-(x::Float32) = boxf32(neg_float(unbox32(x)))
+-(x::Float64) = boxf64(neg_float(unbox64(x)))
++(x::Float32, y::Float32) = boxf32(add_float(unbox32(x), unbox32(y)))
++(x::Float64, y::Float64) = boxf64(add_float(unbox64(x), unbox64(y)))
+-(x::Float32, y::Float32) = boxf32(sub_float(unbox32(x), unbox32(y)))
+-(x::Float64, y::Float64) = boxf64(sub_float(unbox64(x), unbox64(y)))
+*(x::Float32, y::Float32) = boxf32(mul_float(unbox32(x), unbox32(y)))
+*(x::Float64, y::Float64) = boxf64(mul_float(unbox64(x), unbox64(y)))
+/(x::Float32, y::Float32) = boxf32(div_float(unbox32(x), unbox32(y)))
+/(x::Float64, y::Float64) = boxf64(div_float(unbox64(x), unbox64(y)))
 rem(x::Float32, y::Float32) = boxf32(rem_float(unbox32(x), unbox32(y)))
 rem(x::Float64, y::Float64) = boxf64(rem_float(unbox64(x), unbox64(y)))
 
@@ -101,6 +101,10 @@ mod{T<:Float}(x::T, y::T) = rem(y+rem(x,y),y)
 >=(x::Float, y::Float) = (>=)(promote(x,y)...)
 
 isequal(x::Float, y::Float) = (x == y) || (isnan(x) && isnan(y))
+
+cmp(x::Float, y::Float) =
+    !isnan(x) && !isnan(y) ? (x < y ? -1 : x > y ? +1 : 0) :
+        error("applying cmp to NaN us undefined")
 
 ## traits ##
 
