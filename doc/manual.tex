@@ -488,6 +488,86 @@ In a sense, Julia \verb|Rational|s are just a convenient way of deferring the co
 
 \subsection{Complex Numbers}
 
+The global constant \verb|im| is bound to the complex number $i$, representing one of the square roots of $-1$.
+Since Julia allows numeric literals as juxtaposed coefficients, this binding alone suffices to give a convenient input syntax for complex numbers:
+\begin{verbatim}
+  julia> 1 + 2im
+  1 + 2im
+\end{verbatim}
+You can perform all the standard arithmetic operations with complex numbers:
+\begin{verbatim}
+  julia> (1 + 2im)*(2 - 3im)
+  8 + 1im
+
+  julia> (1 + 2im)/(1 - 2im)
+  -0.6 + 0.8im
+
+  julia> (1 + 2im) + (1 - 2im)
+  2 + 0im
+
+  julia> (-3 + 2im) - (5 - 1im)
+  -8 + 3im
+
+  julia> (-1 + 2im)^2
+  -3 - 4im
+
+  julia> (-1 + 2im)^2.5
+  2.7296244647840089 - 6.9606644595719001im
+
+  julia> 3(2 - 5im)
+  6 - 15im
+
+  julia> 3(2 - 5im)^2
+  -63 - 60im
+
+  julia> 3(2 - 5im)^-1
+  0.2068965517241379 + 0.5172413793103448im
+\end{verbatim}
+The promotion mechanism ensures that combinations of operands of different types simply work:
+\begin{verbatim}
+  julia> (1 + 2im) + 0.5im
+  1.0 + 2.5im
+
+  julia> 1 + 2//3im
+  1//1 + 2//3im
+
+  julia> (1 + 2//3im) + (0.5 + 1/3im)
+  1.5 + 1.0im
+\end{verbatim}
+Note that \verb|1/3im| parses as \verb|1/3*im|, which, since division and multiplication have equal precedence, is equivalent to \verb|(1/3)*im| rather than \verb|1/(3im)|.
+
+Standard functions to manipulate complex values are provided:
+\begin{verbatim}
+  julia> real(1 + 2.5im)
+  1.0
+
+  julia> imag(1 + 2.5im)
+  2.5
+
+  julia> norm(1 + 2.5im)
+  7.25
+
+  julia> conj(1 + 2.5im)
+  1.0 - 2.5im
+\end{verbatim}
+The full gamut of mathematical functions are defined for complex numbers as well:
+\begin{verbatim}
+  julia> sqrt(im)
+  0.7071067811865476 + 0.7071067811865475im
+
+  julia> sqrt(1 + 2im)
+  1.272019649514069 + 0.7861513777574233im
+
+  julia> cos(1 + 2im)
+  2.0327230070196656 - 3.0518977991517997im
+
+  julia> exp(1 + 2im)
+  -1.1312043837568135 + 2.4717266720048188im
+
+  julia> sinh(1 + 2im)
+  -0.4890562590412937 + 1.4031192506220405im
+\end{verbatim}
+
 \section{Control Flow}
 
 Julia provides a variety of control flow constructs:
