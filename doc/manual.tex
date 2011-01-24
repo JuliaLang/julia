@@ -83,7 +83,7 @@ There are a variety of other ways to run Julia code and provide options to the \
 See \Section{command-line-options} for details.
 
 \section{Numbers and Arithmetic}
-Julia supports a broad range of numeric types together with the full complement of arithmetic and bitwise operations on them.
+Julia supports a broad range of numeric types together with the full complement of standard arithmetic and bitwise operations on them.
 The following are Julia's built-in primitive numeric types:
 
 \begin{itemize}
@@ -207,7 +207,7 @@ By the IEEE 754 standard, these floating point values are the results of certain
   NaN
 \end{verbatim}
 
-\subsection{Arithmetic and Bitwise Operations}
+\subsection{Arithmetic and Bitwise Operators}
 
 The following arithmetic and bitwise operations are supported on built-in arithmetic types:
 \begin{itemize}
@@ -312,40 +312,6 @@ The update form of \verb|+| is the \verb|+=| operator:
   4
 \end{verbatim}
 
-\subsection{Numeric Literal Coefficients}
-
-To make common numeric formulas and expressions clearer, Julia allows variables to be immediately preceded by a numeric literal, implying multiplication.
-This makes writing polynomial expressions much cleaner:
-\begin{verbatim}
-  julia> x = 3
-  3
-
-  julia> 2x + 1
-  7
-
-  julia> 2x^2 - 3x + 1
-  10
-
-  julia> 1.5x^2 - .5x + 1
-  13.0
-\end{verbatim}
-Juxtaposed numeric coefficients conflict with two numeric literal syntaxes:
-hexadecimal integer literals and engineering notation for floating point literals:
-\begin{itemize}
-\item For example, the hexadecimal integer literal expression \verb|0xff| could also be interpreted as the numeric literal \verb|0| multiplied by the variable \verb|xff|.
-\item Likewise, the floating point literal expression \verb|1e10| could be interpreted as the numeric literal \verb|1| multiplied by the variable \verb|e10|, and similarly with the equivalent \verb|E| form.
-\end{itemize}
-In both cases, we resolve the ambiguity in favor of the numeric literals:
-\begin{itemize}
-\item Expressions starting with \verb|0x| are always hexadecimal literals.
-\item Expressions starting with $d.dd$\,\verb|e| or $d.dd$\,\verb|E| are always floating point literals.
-\end{itemize}
-Julia also supports using numeric literal coefficients immediately before parenthesized expressions:
-\begin{verbatim}
-  julia> 2(x-1)^2 - 3(x-1) + 1
-  3
-\end{verbatim}
-
 \subsection{Numeric Comparisons}\sec{numeric-comparisons}
 
 Standard comparison operations are defined for primitive numeric types:
@@ -443,7 +409,7 @@ The following is a partial list of functions and operators provided:
   \item \verb|sign(x)| --- indicate the sign of \verb|x| using $-1$, $0$, $+1$.
   \item \verb|signbit(x)| --- indicate the sign bit of \verb|x| using $-1$, $+1$.\footnote{For IEEE floating point values, this has precise specified semantics.
   In particular, there are both positive and negative zero and \texttt{NaN} values.
-  For other numeric types, this is essentially just a test of whether \texttt{x < 0}.}
+  For other numeric types, this is essentially just a test of whether \texttt{x < 0} or not.}
   \item \verb|copysign(x,y)| --- a value with the magnitude of \verb|a| and the sign of \verb|b|.
   \item \verb|sqrt(x)| --- the square root of \verb|x|.
   \item \verb|exp(x)| --- the natural exponential function $e^x$ at \verb|x|.
@@ -453,85 +419,48 @@ The following is a partial list of functions and operators provided:
   \item \verb|log10(x)| --- the base 10 logarithm of \verb|x|.
   \item \verb|log(b,x)| --- the base \verb|b| logarithm of \verb|x|.
 \end{itemize}
-In addition all the standard trigonometric functions are defined:
+Additionally, all the standard trigonometric functions are defined:
 \verb|sin|, \verb|cos|, \verb|tan|, \verb|cot|, \verb|sec|, \verb|csc|, \verb|sinh|, \verb|cosh|, \verb|tanh|, \verb|asin|, \verb|acos|, \verb|atan|, \verb|asec|, \verb|acsc|, \verb|acot|, \verb|sech|, \verb|csch|, \verb|coth|, \verb|asech|, \verb|acsch|, \verb|acoth|, \verb|sinc|, \verb|cosc|.
 
-\subsection{Rational Numbers}
+\subsection{Numeric Literal Coefficients}
 
-Rational numbers can be constructed using the \texttt{//} operator:
+To make common numeric formulas and expressions clearer, Julia allows variables to be immediately preceded by a numeric literal, implying multiplication.
+This makes writing polynomial expressions much cleaner:
 \begin{verbatim}
-  julia> 2//3
-  2//3
+  julia> x = 3
+  3
 
-  julia> typeof(ans)
-  Rational{Int32}
+  julia> 2x^2 - 3x + 1
+  10
+
+  julia> 1.5x^2 - .5x + 1
+  13.0
 \end{verbatim}
-The type of a rational number is a parametric type, a concept explained in detail later in \Section{struct-constructors}.
-For the moment, it suffices to say that \verb|2//3| is a ratio of \verb|Int32| values.
-If you construct a \verb|Rational| from values that are not in lowest terms, they will be normalized to lowest terms:
+You can also use a numeric literal coefficients with parenthesized expressions:
 \begin{verbatim}
-  julia> 6//9
-  2//3
-
-  julia> -4//8
-  -1//2
-
-  julia> 5//-15
-  -1//3
-
-  julia> -4//-12
-  1//3
+  julia> 2(x-1)^2 - 3(x-1) + 1
+  3
 \end{verbatim}
-All arithmetic operations are also defined on \verb|Rational|s:
-\begin{verbatim}
-  julia> 2//4 + 1//6
-  2//3
+These two simple syntactic enhancements significantly reduce the visual noise incurred when writing common mathematical formulae.
+Note that no space may come between a numeric literal coefficient and the identifier or parenthesized expression that it multiplies.
 
-  julia> 5//12 - 1//4
-  1//6
-
-  julia> 5//8 * 3//12
-  5//32
-
-  julia> 6//5 / 10//7
-  21//25
-\end{verbatim}
-\verb|Rational|s can be easily converted to floating point numbers:
-\begin{verbatim}
-  julia> float(3//4)
-  0.75
-\end{verbatim}
-All such conversions obey the following identity for all integral \verb|a| and \verb|b|:
-\begin{verbatim}
-  julia> isequal(float(a//b), a/b)
-  true
-\end{verbatim}
-This includes cases where \verb|a == 0| or \verb|b == 0|, in which situations the conversion from rational to float produces the appropriate $\pm$\verb|Inf| or \verb|NaN| value:
-\begin{verbatim}
-  julia> 5//0
-  1//0
-
-  julia> float(ans)
-  Inf
-
-  julia> 0//0
-  0//0
-
-  julia> float(ans)
-  NaN
-
-  julia> -3//0
-  -1//0
-
-  julia> float(ans)
-  -Inf
-\end{verbatim}
-In a sense, Julia \verb|Rational|s are just a convenient way of deferring the computation of integer ratios, thereby avoiding the accumulation of floating point errors in intermediate calculations.
+Juxtaposed coefficients conflict with two numeric literal syntaxes:
+hexadecimal integer literals and engineering notation for floating point literals.
+Here are the situations where such syntactic conflicts arise:
+\begin{itemize}
+\item The hexadecimal integer literal expression \verb|0xff| could be interpreted as the numeric literal \verb|0| multiplied by the variable \verb|xff|.
+\item The floating point literal expression \verb|1e10| could be interpreted as the numeric literal \verb|1| multiplied by the variable \verb|e10|, and similarly with the equivalent \verb|E| form.
+\end{itemize}
+In both cases, we resolve the ambiguity in favor of interpretation as a numeric literals:
+\begin{itemize}
+\item Expressions starting with \verb|0x| are always hexadecimal literals.
+\item Expressions starting with $d.dd$\,\verb|e| or $d.dd$\,\verb|E| are always floating point literals.
+\end{itemize}
 
 \subsection{Complex Numbers}
 
 The global constant \verb|im| is bound to the complex number $i$, representing one of the square roots of $-1$.
-Since Julia allows numeric literals as juxtaposed coefficients, this binding alone suffices to give a convenient input syntax for complex numbers:
+Since Julia allows numeric literals to be juxtaposed with identifiers as coefficients, this binding suffices to allow a convenient syntax for complex numbers, similar to the traditional mathematical notation:\,\footnote{It was deemed harmful to co-opt the name \texttt{i} for a global constant, since that would preclude its use as a variable.}
 \begin{verbatim}
   julia> 1 + 2im
   1 + 2im
@@ -565,18 +494,33 @@ You can perform all the standard arithmetic operations with complex numbers:
   julia> 3(2 - 5im)^-1
   0.2068965517241379 + 0.5172413793103448im
 \end{verbatim}
-The promotion mechanism ensures that combinations of operands of different types simply work:
+The promotion mechanism ensures that combinations of operands of different types just work:
 \begin{verbatim}
-  julia> (1 + 2im) + 0.5im
+  julia> 2(1 - 1im)
+  2 - 2im
+
+  julia> (2 + 3im) - 1
+  1 + 3im
+
+  julia> (1 + 2im) + 0.5
   1.0 + 2.5im
 
-  julia> 1 + 2//3im
-  1//1 + 2//3im
+  julia> (2 + 3im) - 0.5im
+  2.0 + 2.5im
 
-  julia> (1 + 2//3im) + (0.5 + 1/3im)
-  1.5 + 1.0im
+  julia> 0.75(1 + 2im)
+  0.75 + 1.5im
+
+  julia> (2 + 3im) / 2
+  1.0 + 1.5im
+
+  julia> (1 - 3im) / (2 + 2im)
+  -0.5 - 1.0im
+
+  julia> 1 + 3/4im
+  1.0 + 0.75im
 \end{verbatim}
-Note that \verb|1/3im| parses as \verb|1/3*im|, which, since division and multiplication have equal precedence, is equivalent to \verb|(1/3)*im| rather than \verb|1/(3im)|.
+Note that \verb|3/4im| parses as \verb|3/4*im|, which, since division and multiplication have equal precedence, is equivalent to \verb|(3/4)*im| rather than the quite different value, \verb|3/(4im) == -(3/4)im|.
 
 Standard functions to manipulate complex values are provided:
 \begin{verbatim}
@@ -586,11 +530,14 @@ Standard functions to manipulate complex values are provided:
   julia> imag(1 + 2.5im)
   2.5
 
+  julia> conj(1 + 2.5im)
+  1.0 - 2.5im
+
   julia> norm(1 + 2.5im)
   7.25
 
-  julia> conj(1 + 2.5im)
-  1.0 - 2.5im
+  julia> abs(1 + 2.5im)
+  2.6925824035672519
 \end{verbatim}
 The full gamut of mathematical functions are defined for complex numbers as well:
 \begin{verbatim}
@@ -610,6 +557,131 @@ The full gamut of mathematical functions are defined for complex numbers as well
   -0.4890562590412937 + 1.4031192506220405im
 \end{verbatim}
 
+\subsection{Rational Numbers}
+
+Julia has rational numbers to represent exact ratios of integers.
+Rationals are constructed by the \texttt{//} operator:
+\begin{verbatim}
+  julia> 2//3
+  2//3
+\end{verbatim}
+If the numerator and denominator of a rational have common factors, they are reduced to lowest terms such that the denominator is non-negative:
+\begin{verbatim}
+  julia> 6//9
+  2//3
+
+  julia> -4//8
+  -1//2
+
+  julia> 5//-15
+  -1//3
+
+  julia> -4//-12
+  1//3
+\end{verbatim}
+This reduced form of a ratio of integers is unique, so equality of rational values can be checked by testing for equality of the numerator and denominator.
+The standardized numerator and denominator of a rational value can be extracted using the \verb|num| and \verb|den| functions:
+\begin{verbatim}
+  julia> num(2//3)
+  2
+
+  julia> den(2//3)
+  3
+\end{verbatim}
+This is not usually necessary, however, since the standard arithmetic and comparison operations are defined for rational values:
+\begin{verbatim}
+  julia> 2//3 == 6//9
+  true
+
+  julia> 2//3 == 9//27
+  false
+
+  julia> 3//7 < 1//2
+  true
+
+  julia> 3//4 > 2//3
+  true
+
+  julia> 2//4 + 1//6
+  2//3
+
+  julia> 5//12 - 1//4
+  1//6
+
+  julia> 5//8 * 3//12
+  5//32
+
+  julia> 6//5 / 10//7
+  21//25
+\end{verbatim}
+Rationals can be easily converted to floating point numbers:
+\begin{verbatim}
+  julia> float(3//4)
+  0.75
+\end{verbatim}
+All such conversions obey the following identity for all integral numerator and denominator values:
+\begin{verbatim}
+  julia> isequal(float(a//b), a/b)
+  true
+\end{verbatim}
+This includes cases where \verb|a == 0| or \verb|b == 0|, in which situations the conversion from rational to float produces the appropriate $\pm$\verb|Inf| or \verb|NaN| value:
+\begin{verbatim}
+  julia> 5//0
+  1//0
+
+  julia> float(ans)
+  Inf
+
+  julia> 0//0
+  0//0
+
+  julia> float(ans)
+  NaN
+
+  julia> -3//0
+  -1//0
+
+  julia> float(ans)
+  -Inf
+\end{verbatim}
+In a sense, Julia's rational values are a convenient way of deferring the computation of integer ratios, thereby allowing exact canceling of common factors and avoiding accumulation of floating point errors.
+
+As usual, the promotion system makes interactions with other numeric types natural and effortless:
+\begin{verbatim}
+  julia> 3//5 + 1
+  8//5
+
+  julia> 3//5 - 0.5
+  0.1
+
+  julia> 2//7 * (1 + 2im)
+  2//7 + 4//7im
+
+  julia> 2//7 * (1.5 + 2im)
+  0.4285714285714285 + 0.5714285714285714im
+
+  julia> 3//2 / (1 + 2im)
+  3//10 - 3//5im
+
+  julia> 1//2 + 2im
+  1//2 + 2//1im
+
+  julia> 1 + 2//3im
+  1//1 + 2//3im
+
+  julia> 0.5 == 1//2
+  true
+
+  julia> 0.33 == 1//3
+  false
+
+  julia> 0.33 < 1//3
+  true
+
+  julia> 1//3 - 0.33
+  0.0033333333333333
+\end{verbatim}
+
 \section{Control Flow}
 
 Julia provides a variety of control flow constructs:
@@ -618,7 +690,7 @@ Julia provides a variety of control flow constructs:
 \item Conditional evaluation: \verb|if|-\verb|elseif|-\verb|else| and \verb|?:| (ternary operator).
 \item Short-circuit evaluation: \verb|&&|, \texttt{||} and chained comparisons.
 \item Repeated evaluation: \verb|while| and \verb|for|.
-\item Catch and throw: \verb|try|-\verb|catch| and \verb|throw|.
+\item Exception handling: \verb|try|-\verb|catch|, \verb|error| and \verb|throw|.
 \item Symmetric coroutines: \verb|yieldto|.
 \end{itemize}
 The first five control flow mechanisms are standard to high-level programming languages.
@@ -934,12 +1006,12 @@ See \Section{variable-scoping} for a detailed explanation of variable scope and 
 
 In general, the \verb|for| loop construct can iterate over all sorts of containers:
 \begin{verbatim}
-  julia> for i = [1,4,-1]
+  julia> for i = [1,4,0]
            println(i)
          end
   1
   4
-  -1
+  0
 
   julia> for s = ["foo","bar","baz"]
            println(s)
@@ -957,19 +1029,20 @@ This can be accomplished with the \verb|break| keyword:
 
   julia> while true
            println(i) 
-           i += 1
            if i >= 5 
              break
            end
+           i += 1
          end
   1
   2
   3
   4
+  5
 
   julia> for i = 1:1000
            println(i)               
-           if i % 5 == 0
+           if i >= 5
              break
            end
          end
@@ -998,7 +1071,7 @@ The \verb|continue| keyword accomplishes this:
 This is a somewhat contrived example since we could produce the same behavior more clearly by negating the condition and placing the \verb|println| call inside the \verb|if| block.
 In realistic usage there is more code to be evaluated after the \verb|continue|, and often there are multiple points from which one calls \verb|continue|.
 
-\subsection{Catch and Throw}
+\subsection{Exception Handling}
 
 Occasionally, especially when something unexpected occurs, a function cannot return a reasonable value to its immediate caller.
 In such cases, it may be best to unwind the call stack many levels and pass some value back to an outer level of execution, which can deal with the situation more appropriately.
@@ -2376,7 +2449,7 @@ To give some sense of the complex pipelines that can be created easily, here are
 This is a classic example of a single producer feeding two concurrent consumers:
 one \verb|perl| process generates lines with the numbers 0 through 9 on them, while two parallel processes process that output, one prefixing lines with the letter ``A,'' the other with the letter ``B.''
 Which consumer gets the first line is non-deterministic, but once the race has been one, the lines are consumed alternately by one process and then the other.\footnote{Setting \texttt{\$|=1} in Perl causes each print statement to flush the \texttt{stdout} handle, which is necessary for this example to work.
-Otherwise all the output is buffered and printed to the pipe at once, to be read by a single consumer process at once.}
+Otherwise all the output is buffered and printed to the pipe at once, to be read by a single consumer process.}
 
 Here is an even more complex multi-stage producer-consumer example:
 \begin{verbatim}
