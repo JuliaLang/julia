@@ -38,6 +38,8 @@ promote_rule{T,S<:Int}(::Type{Rational{T}}, ::Type{S}) = Rational{promote_type(T
 promote_rule{T,S}(::Type{Rational{T}}, ::Type{Rational{S}}) = Rational{promote_type(T,S)}
 promote_rule{T,S<:Float}(::Type{Rational{T}}, ::Type{S}) = promote_type(T,S)
 
+num(x::Int) = x
+den(x::Int) = one(x)
 num(x::Rational) = x.num
 den(x::Rational) = x.den
 sign(x::Rational) = sign(x.num)
