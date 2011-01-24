@@ -59,13 +59,14 @@ inv(z::Complex) = conj(z)/norm(z)
 -(z::Complex) = Complex(-z.re, -z.im)
 +(z::Complex, w::Complex) = Complex(z.re + w.re, z.im + w.im)
 -(z::Complex, w::Complex) = Complex(z.re - w.re, z.im - w.im)
-*(z::Complex, w::Complex) = Complex(z.re*w.re - z.im*w.im,
-                                      z.re*w.im + z.im*w.re)
+*(z::Complex, w::Complex) = Complex(z.re * w.re - z.im * w.im,
+                                    z.re * w.im + z.im * w.re)
 
 ==(z::Complex, w::Complex) = (z.re == w.re && z.im == w.im)
 
 /(z::Number, w::Complex) = z*inv(w)
 /(z::Complex, x::Real) = Complex(z.re/x, z.im/x)
+/(x::Rational, z::Complex) = inv(z/x)
 
 function /(a::Complex, b::Complex)
     are = a.re; aim = a.im; bre = b.re; bim = b.im
