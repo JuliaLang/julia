@@ -43,7 +43,7 @@ The syntax of Julia is similar to Matlab, and consequently Matlab programmers sh
 While Matlab is quite effective for prototyping and exploring numerical linear algebra, it has limitations for programming tasks outside of this relatively narrow scope.
 Julia keeps Matlab's ease and expressiveness for high-level numerical computing, but transcends its general programming limitations.
 To achieve this, it borrows much from the C programming language, and is strongly influenced by the lineage of dynamic languages:
-Lisp, Perl, Python and Ruby.
+Lisp, Perl, Python, Lua and Ruby.
 
 \section{Getting Started}\sec{getting-started}
 
@@ -51,8 +51,7 @@ Lisp, Perl, Python and Ruby.
 
 \subsection{Running Code}\sec{running-code}
 
-Here's how you start and interact with the Julia read-eval-print loop (repl):
-
+The easiest way to learn and experiment with Julia is by running the read-eval-print loop (repl):
 \begin{verbatim}
   $ julia
                  _      
@@ -60,17 +59,24 @@ Here's how you start and interact with the Julia read-eval-print loop (repl):
     (_)     | (_) (_)    |  
      _ _   _| |_  __ _   |
     | | | | | | |/ _` |  |
-    | | |_| | | | (_| |  |  2009-2010 contributors
+    | | |_| | | | (_| |  |  2009-2011 contributors
    _/ |\__'_|_|_|\__'_|  |  
   |__/                   |
 
   julia> 1 + 2
   3
 
+  julia> ans
+  3
+
   julia> load("file.j");
 \end{verbatim}
+When run in repl mode, \verb|julia| displays a banner and prompts the user for input.
+Once the user has entered a complete expression, such as \verb|1 + 2|, and hits enter, the repl evaluates the expression and shows its value.
+If expression entered into the repl ends with a semicolon, no value is shown.
+The variable \verb|ans| is bound to value of the last evaluated expression whether it is shown or not.
 The \verb|load| function reads and evaluates the contents of the given file.
-The semicolon at the end of a repl line suppresses output of the expression value.
+
 To run code in a file non-interactively, you can give it as the first argument to the julia command:
 \begin{verbatim}
   $ julia script.j arg1 arg2...
@@ -81,9 +87,8 @@ See \Section{command-line-options} for details.
 
 \section{Numbers and Arithmetic}\sec{numbers-and-arithmetic}
 
-Julia supports a broad range of numeric types together with the full complement of standard arithmetic and bitwise operations on them.
-The following are Julia's built-in primitive numeric types:
-
+Julia provides a broad range of numeric types together with a full complement of arithmetic operators, bitwise operators, and common mathematical functions on them.
+The following are Julia's primitive numeric types:
 \begin{itemize}
   \item Integer types:
   \begin{itemize}
@@ -102,6 +107,9 @@ The following are Julia's built-in primitive numeric types:
     \item \verb|Float64|~: IEEE 754 64-bit floating point numbers.
   \end{itemize}
 \end{itemize}
+Full support for complex and rational numbers is built on top of these primitive numeric types.
+All numeric types interoperate naturally without explicit casting, thanks to a flexible type promotion system.
+Moreover, this promotion system (detailed in \Section{conversion-and-promotion}) is user-extensible, so user-defined numeric types can be made to interoperate just as naturally with built in numerics and with each other.
 
 \subsection{Integer Literals}\sec{integer-literals}
 
@@ -110,7 +118,7 @@ The default type for an integer literal is \verb|Int32|:
   julia> typeof(1)
   Int32
 \end{verbatim}
-Larger integer literals that cannot be represented in 32 bits but that can be represented in 64 bits will create 64-bit integers:
+Larger integer literals which cannot be represented using only 32 bits but can be represented in 64 bits create 64-bit integers:
 \begin{verbatim}
   julia> typeof(4294967296)
   Int64
@@ -207,9 +215,9 @@ By the IEEE 754 standard, these floating point values are the results of certain
 
 \subsection{Arithmetic Operators}\sec{arithmetic-operators}
 
-The following arithmetic and bitwise operations are supported on built-in arithmetic types:
+The following arithmetic and bitwise operators are supported on numeric types:
 \begin{itemize}
-  \item arithmetic operations (integer and floating point):
+  \item Arithmetic operators (all numeric types):
   \begin{itemize}
     \item \verb|+x|~: unary plus is the identity operation.
     \item \verb|-x|~: unary minus maps values to their additive inverses.
@@ -218,7 +226,7 @@ The following arithmetic and bitwise operations are supported on built-in arithm
     \item \verb|x * y|~: times performs multiplication.
     \item \verb|x / y|~: divide performs division.
   \end{itemize}
-  \item bitwise operations (integer only)\,:
+  \item Bitwise operators (integer types only)\,:
   \begin{itemize}
     \item \verb|~x|~: bitwise not.
     \item \verb|x & y|~: bitwise and.
@@ -229,7 +237,7 @@ The following arithmetic and bitwise operations are supported on built-in arithm
     \item \verb|x >>> y|~: arithmetic shift right.
   \end{itemize}
 \end{itemize}
-Here are some simple examples:\,\footnote{By convention, we tend to space less tightly binding operations less tightly, but there are no syntactic constraints.}
+Here are some simple examples using arithmetic operators:\,\footnote{By convention, we tend to space less tightly binding operators less tightly, but there are no syntactic constraints.}
 \begin{verbatim}
   julia> 1 + 2 + 3
   6
@@ -251,7 +259,7 @@ Julia has a type promotion system that allows arithmetic operations on mixtures 
   julia> 3*2/12 + 1
   1.5
 \end{verbatim}
-The above operations all promote to \verb|Float64| since that is the smallest floating point type that can faithfully represent all possible \verb|Int32| values.
+The above expressions all promote to \verb|Float64| since that is the smallest floating point type that can faithfully represent all possible \verb|Int32| values.
 However, more nuanced promotions also work:
 \begin{verbatim}
   julia> uint8(12) - int8(15)
@@ -266,7 +274,7 @@ However, more nuanced promotions also work:
   julia> typeof(ans)
   Float32
 \end{verbatim}
-Here are some examples with bitwise operations:
+Here are some examples with bitwise operators:
 \begin{verbatim}
   julia> ~123
   -124
@@ -297,9 +305,9 @@ Here are some examples with bitwise operations:
 \end{verbatim}
 As a general rule of thumb, arguments are promoted to the smallest type that can accurately represent all of the arguments.
 
-Almost every arithmetic operator has an updating form that assigns the result back into its left operand.
-The updating form of \verb|+| is the \verb|+=| operator;
-writing \verb|x += 3| is equivalent to writing \verb|x = x + 3|:
+Every binary arithmetic and bitwise operator also has an updating version that assigns the result of the operation back into its left operand.
+For example, the updating form of \verb|+| is the \verb|+=| operator.
+Writing \verb|x += 3| is equivalent to writing \verb|x = x + 3|:
 \begin{verbatim}
   julia> x = 1
   1
@@ -310,42 +318,8 @@ writing \verb|x += 3| is equivalent to writing \verb|x = x + 3|:
   julia> x
   4
 \end{verbatim}
-
-This form is equivalent to \verb|x = x + 3|.
-
-\subsection{Numeric Literal Coefficients}
-
-To make common numeric formulas and expressions clearer, Julia allows variables to be immediately preceded by a numeric literal, implying multiplication.
-This makes writing polynomial expressions much cleaner:
-\begin{verbatim}
-  julia> x = 3
-  3
-
-  julia> 2x + 1
-  7
-
-  julia> 2x^2 - 3x + 1
-  10
-
-  julia> 1.5x^2 - .5x + 1
-  13.0
-\end{verbatim}
-Juxtaposed numeric coefficients conflict with two numeric literal syntaxes:
-hexadecimal integer literals and engineering notation for floating point literals:
-\begin{itemize}
-\item For example, the hexadecimal integer literal expression \verb|0xff| could also be interpreted as the numeric literal \verb|0| multiplied by the variable \verb|xff|.
-\item Likewise, the floating point literal expression \verb|1e10| could be interpreted as the numeric literal \verb|1| multiplied by the variable \verb|e10|, and similarly with the equivalent \verb|E| form.
-\end{itemize}
-In both cases, we resolve the ambiguity in favor of the numeric literals:
-\begin{itemize}
-\item Expressions starting with \verb|0x| are always hexadecimal literals.
-\item Expressions starting with $d.dd$\,\verb|e| or $d.dd$\,\verb|E| are always floating point literals.
-\end{itemize}
-Julia also supports using numeric literal coefficients immediately before parenthesized expressions:
-\begin{verbatim}
-  julia> 2(x-1)^2 - 3(x-1) + 1
-  3
-\end{verbatim}
+The updating versions of arithmetic and bitwise operators are:
+\verb|+= -= *= /= &=|\hspace{1.3ex}\texttt{|=}\hspace{1.3ex}\verb|$= <<= >>= >>>=|\,.
 
 \subsection{Numeric Comparisons}\sec{numeric-comparisons}
 
@@ -426,12 +400,14 @@ Unlike most languages, comparisons can be arbitrarily chained:
   julia> 1 < 2 <= 2 < 3 == 3 > 2 >= 1 == 1 < 3 != 5
   true
 \end{verbatim}
-Chaining comparisons is quite convenient in many numerical codes.
+Chaining comparisons is often quite convenient in numerical code.
+Only as many initial comparisons and their operand expressions as are necessary to determine the final truth value of the entire chain are evaluated.
+See \Section{short-circuit-evaluation} for further discussion of this behavior.
 
 \subsection{Mathematical Functions}
 
 Julia provides a comprehensive set of mathematical functions and operators.
-These mathematical operations are defined over as broad a class of numerical values as it is possible to sensibly define them.
+These mathematical operations are defined over as broad a class of numerical values as permit sensible definitions.
 The following is a partial list of functions and operators provided:
 \begin{itemize}
   \item \verb|div(x,y)| --- truncated division; quotient rounded towards zero.
@@ -455,7 +431,26 @@ The following is a partial list of functions and operators provided:
   \item \verb|log(b,x)| --- the base \verb|b| logarithm of \verb|x|.
 \end{itemize}
 Additionally, all the standard trigonometric functions are defined:
-\verb|sin|, \verb|cos|, \verb|tan|, \verb|cot|, \verb|sec|, \verb|csc|, \verb|sinh|, \verb|cosh|, \verb|tanh|, \verb|asin|, \verb|acos|, \verb|atan|, \verb|asec|, \verb|acsc|, \verb|acot|, \verb|sech|, \verb|csch|, \verb|coth|, \verb|asech|, \verb|acsch|, \verb|acoth|, \verb|sinc|, \verb|cosc|.
+\verb|sin|,   \verb|cos|,   \verb|tan|,   \verb|cot|,  \verb|sec|,  \verb|csc|,
+\verb|sinh|,  \verb|cosh|,  \verb|tanh|,  \verb|coth|, \verb|sech|, \verb|csch|,
+\verb|asin|,  \verb|acos|,  \verb|atan|,  \verb|acot|, \verb|asec|, \verb|acsc|,
+\verb|acoth|, \verb|asech|, \verb|acsch|, \verb|sinc|, \verb|cosc|.
+
+The mathematical functions with operator notation, \verb|%| and \verb|^|, both also have an updating form, like the arithmetic and bitwise operators:
+\begin{verbatim}
+  julia> x = 2
+  2
+
+  julia> x ^= 5
+  32
+
+  julia> x = 7
+  7
+
+  julia> x %= 4
+  3
+\end{verbatim}
+Like the updating forms of other operators, \verb|x ^= y| means \verb|x = x^y| and \verb|x %= y| means \verb|x = x % y|.
 
 \subsection{Numeric Literal Coefficients}
 
@@ -481,7 +476,7 @@ Note that no space may come between a numeric literal coefficient and the identi
 
 Juxtaposed coefficients conflict with two numeric literal syntaxes:
 hexadecimal integer literals and engineering notation for floating point literals.
-These are situations where such syntactic conflicts arise:
+Here are some situations where syntactic conflicts arise:
 \begin{itemize}
 \item The hexadecimal integer literal expression \verb|0xff| could be interpreted as the numeric literal \verb|0| multiplied by the variable \verb|xff|.
 \item The floating point literal expression \verb|1e10| could be interpreted as the numeric literal \verb|1| multiplied by the variable \verb|e10|, and similarly with the equivalent \verb|E| form.
@@ -491,6 +486,17 @@ In both cases, we resolve the ambiguity in favor of interpretation as a numeric 
 \item Expressions starting with \verb|0x| are always hexadecimal literals.
 \item Expressions starting with $d.dd$\,\verb|e| or $d.dd$\,\verb|E| are always floating point literals.
 \end{itemize}
+One final note is that parenthesized expressions can also be used as coefficients to variables:
+\begin{verbatim}
+  julia> (x-1)x
+  6
+\end{verbatim}
+Juxtaposing two parenthesized expressions, however, does not imply multiplication. Rather it is an error:
+\begin{verbatim}
+  julia> (x-1)(x+1)
+  type error: apply: expected Function, got Int32
+\end{verbatim}
+The error occurs since parentheses following an expression which is not a numeric literal introduces a function call, not multiplication, and the value \verb|(x-1)| is an integer, not a function.
 
 \subsection{Complex Numbers}
 
@@ -519,6 +525,9 @@ You can perform all the standard arithmetic operations with complex numbers:
 
   julia> (-1 + 2im)^2.5
   2.7296244647840089 - 6.9606644595719001im
+
+  julia> (-1 + 2im)^(1 + 1im)
+  -0.2791038107582666 + 0.0870805341410243im
 
   julia> 3(2 - 5im)
   6 - 15im
@@ -574,7 +583,7 @@ Standard functions to manipulate complex values are provided:
   julia> abs(1 + 2.5im)
   2.6925824035672519
 \end{verbatim}
-The full gamut of mathematical functions are defined for complex numbers:
+The full gamut of mathematical functions are also defined for complex numbers:
 \begin{verbatim}
   julia> sqrt(im)
   0.7071067811865476 + 0.7071067811865475im
@@ -590,6 +599,14 @@ The full gamut of mathematical functions are defined for complex numbers:
 
   julia> sinh(1 + 2im)
   -0.4890562590412937 + 1.4031192506220405im
+\end{verbatim}
+
+If you need to construct a complex number using variables, the literal numeric coefficient notation will not work, so you have to explicitly write the multiplication operation:
+\begin{verbatim}
+  julia> a = 1; b = 2;
+
+  julia> a + b*im
+  1 + 2im
 \end{verbatim}
 
 \subsection{Rational Numbers}
@@ -614,7 +631,7 @@ If the numerator and denominator of a rational have common factors, they are red
   julia> -4//-12
   1//3
 \end{verbatim}
-This normalized form for a ratio of integers is unique, so equality of rational values can be checked by testing for equality of the numerator and denominator.
+This normalized form for a ratio of integers is unique, so equality of rational values can be tested by checking for equality of the numerator and denominator.
 The standardized numerator and denominator of a rational value can be extracted using the \verb|num| and \verb|den| functions:
 \begin{verbatim}
   julia> num(2//3)
@@ -623,7 +640,7 @@ The standardized numerator and denominator of a rational value can be extracted 
   julia> den(2//3)
   3
 \end{verbatim}
-Direct comparison of the numerator and denominator is not usually necessary, since the standard arithmetic and comparison operations are defined for rational values:
+Direct comparison of the numerator and denominator is generally not necessary, since the standard arithmetic and comparison operations are defined for rational values:
 \begin{verbatim}
   julia> 2//3 == 6//9
   true
@@ -654,7 +671,7 @@ Rationals can be easily converted to floating point numbers:
   julia> float(3//4)
   0.75
 \end{verbatim}
-All such conversions obey the following identity for any integral values, \verb|a| and \verb|b|:
+Conversion from rational to floating point respects the following identity for any integral values of \verb|a| and \verb|b|:
 \begin{verbatim}
   julia> isequal(float(a//b), a/b)
   true
