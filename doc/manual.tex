@@ -35,24 +35,21 @@ Viral Shah \vspace{0.5em}
 
 Scientific computing has traditionally required the highest performance, yet domain experts have largely moved to slower dynamic languages for daily work.
 We believe there are many good reasons to prefer dynamic languages for these applications, and we do not expect their use to diminish.
-Fortunately, modern language design and compiler techniques make it possible to mostly eliminate the performance trade-off and provide a single environment productive enough for prototyping and performant enough for deploying applications.
+Fortunately, modern language design and compiler techniques make it possible to mostly eliminate the performance trade-off and provide a single environment productive enough for prototyping and efficient enough for deploying applications.
 The Julia programming language fills this role:
-it is a flexible and dynamic language, designed expressly for scientific computing, and achieving performance comparable to traditional compiled languages.
+it is a flexible, dynamic language, designed expressly for scientific computing, and achieving performance comparable to traditional compiled languages.
 
-The syntax of Julia is similar to that of Matlab, and consequently Matlab programmers should feel immediately comfortable with Julia.
+The syntax of Julia is similar to Matlab, and consequently Matlab programmers should feel immediately comfortable with Julia.
 While Matlab is quite effective for prototyping and exploring numerical linear algebra, it has limitations for programming tasks outside of this relatively narrow scope.
 Julia keeps Matlab's ease and expressiveness for high-level numerical computing, but transcends its general programming limitations.
-To that end, it borrows much from the C programming language, and is also strongly influenced by the lineage of dynamic languages:
+To achieve this, it borrows much from the C programming language, and is strongly influenced by the lineage of dynamic languages:
 Lisp, Perl, Python and Ruby.
 
-\section{Getting Started}
-\sec{getting-started}
+\section{Getting Started}\sec{getting-started}
 
-\subsection{How to Obtain and Install Julia}
-\sec{obtaining-and-installing}
+\subsection{Obtaining and Installing Julia}\sec{obtaining-and-installing}
 
-\subsection{Running Code}
-\sec{running-code}
+\subsection{Running Code}\sec{running-code}
 
 Here's how you start and interact with the Julia read-eval-print loop (repl):
 
@@ -82,8 +79,9 @@ As the example implies, the following command-line arguments to julia are taken 
 There are a variety of other ways to run Julia code and provide options to the \verb|julia| program, similar to the \verb|perl| and \verb|ruby| programs.
 See \Section{command-line-options} for details.
 
-\section{Numbers and Arithmetic}
-Julia supports a broad range of numeric types together with the full complement of arithmetic and bitwise operations on them.
+\section{Numbers and Arithmetic}\sec{numbers-and-arithmetic}
+
+Julia supports a broad range of numeric types together with the full complement of standard arithmetic and bitwise operations on them.
 The following are Julia's built-in primitive numeric types:
 
 \begin{itemize}
@@ -105,7 +103,7 @@ The following are Julia's built-in primitive numeric types:
   \end{itemize}
 \end{itemize}
 
-\subsection{Integer Literals}
+\subsection{Integer Literals}\sec{integer-literals}
 
 The default type for an integer literal is \verb|Int32|:
 \begin{verbatim}
@@ -146,7 +144,7 @@ There is no literal input format for integer types besides \verb|Int32| and \ver
   Uint8
 \end{verbatim}
 
-\subsection{Floating Point Literals}
+\subsection{Floating Point Literals}\sec{floating-point-literals}
 
 Floating point numbers are input in the standard formats:
 \begin{verbatim}
@@ -207,7 +205,7 @@ By the IEEE 754 standard, these floating point values are the results of certain
   NaN
 \end{verbatim}
 
-\subsection{Arithmetic and Bitwise Operations}
+\subsection{Arithmetic Operators}\sec{arithmetic-operators}
 
 The following arithmetic and bitwise operations are supported on built-in arithmetic types:
 \begin{itemize}
@@ -215,7 +213,7 @@ The following arithmetic and bitwise operations are supported on built-in arithm
   \begin{itemize}
     \item \verb|+x|~: unary plus is the identity operation.
     \item \verb|-x|~: unary minus maps values to their additive inverses.
-    \item \verb|x + y|~: plus performs addition.
+    \item \verb|x + y|~: binary plus performs addition.
     \item \verb|x - y|~: binary minus performs subtraction.
     \item \verb|x * y|~: times performs multiplication.
     \item \verb|x / y|~: divide performs division.
@@ -242,7 +240,7 @@ Here are some simple examples:\,\footnote{By convention, we tend to space less t
   julia> 3*2/12
   0.5
 \end{verbatim}
-Julia has a powerful and flexible type promotion system that allows arithmetic operations on mixtures of argument types to work naturally:
+Julia has a type promotion system that allows arithmetic operations on mixtures of argument types to ``just work'' naturally and automatically (see \Section{conversion-and-promotion} for details of the promotion system):
 \begin{verbatim}
   julia> 1 + 2.5
   3.5
@@ -297,10 +295,11 @@ Here are some examples with bitwise operations:
   julia> 123 $ 234
   145
 \end{verbatim}
-As a general rule of thumb, arguments are promoted to the smallest type that can accurately represent all of the arguments. See \Section{conversion-and-promotion} for further details.
+As a general rule of thumb, arguments are promoted to the smallest type that can accurately represent all of the arguments.
 
-Almost every Julia operator also comes in an update form.
-The update form of \verb|+| is the \verb|+=| operator:
+Almost every arithmetic operator has an updating form that assigns the result back into its left operand.
+The updating form of \verb|+| is the \verb|+=| operator;
+writing \verb|x += 3| is equivalent to writing \verb|x = x + 3|:
 \begin{verbatim}
   julia> x = 1
   1
@@ -400,10 +399,10 @@ the comparisons are performed in whatever type the arguments are promoted to, wh
 After promotion to a common type, integers are compared in the standard manner:
 by comparison of bits.
 Floating point numbers are compared according to the IEEE 754 standard:
-finite numbers are compared bitwise and given their usual ordering;
-positive infinite values are equal to each other and greater than everything else besides \verb|NaN|;
-negative infinite values are equal to each other and less then everything else besides \verb|NaN|;
-\verb|NaN| is not equal to, less than, or greater than anything, including itself:
+finite numbers are ordered in the usual manner;
+infinity is equal to itself and greater than everything else except \verb|NaN|;
+minus infinity is equal to itself and less then everything else except \verb|NaN|;
+and \verb|NaN| is not equal to, less than, or greater than anything, including itself:
 \begin{verbatim}
   julia> NaN == NaN
   false
@@ -417,7 +416,7 @@ negative infinite values are equal to each other and less then everything else b
   julia> NaN > NaN
   false
 \end{verbatim}
-For situations where one wants to compare floating point values in such a way that \verb|NaN == NaN|, e.g. hash key comparisons, the function \verb|isequal| is also provided, which considers \verb|NaN|s to be equal:
+For situations where one wants to compare floating point values so that \verb|NaN| equals \verb|NaN|, such as hash key comparisons, the function \verb|isequal| is also provided, which considers \verb|NaN|s to be equal to each other:
 \begin{verbatim}
   julia> isequal(NaN,NaN)
   true
@@ -435,105 +434,68 @@ Julia provides a comprehensive set of mathematical functions and operators.
 These mathematical operations are defined over as broad a class of numerical values as it is possible to sensibly define them.
 The following is a partial list of functions and operators provided:
 \begin{itemize}
-  \item \verb|div(a,b)| --- integral division, rounded towards zero.
-  \item \verb|rem(a,b)| --- remainder, satisfies \verb|a == b*div(a,b) + rem(a,b)|, implying that sign matches \verb|a|.
-  \item \verb|fld(a,b)| --- integral division, rounded towards $-\infty$.
-  \item \verb|mod(a,b)| --- modulus, satisfies \verb|a == b*fld(a,b) + mod(a,b)|, implying that sign matches \verb|b|.
-  \item \verb|a % b| --- equivalent to \verb|mod(a,b)|.
-  \item \verb|gcd(a,b...)| --- greatest common divisor of \verb|a|, \verb|b|... with sign matching \verb|a|.
-  \item \verb|lcm(a,b...)| --- least common multiple of \verb|a|, \verb|b|... with sign matching \verb|a|.
-  \item \verb|sign(x)| --- indicate the sign of \verb|x| using $-1$, $0$, $+1$.
-  \item \verb|signbit(x)| --- indicate the sign bit of \verb|x| using $-1$, $+1$.\footnote{For IEEE floating point values, this has precise specified semantics.
+  \item \verb|div(x,y)| --- truncated division; quotient rounded towards zero.
+  \item \verb|fld(x,y)| --- floored division; quotient rounded towards $-\infty$.
+  \item \verb|rem(x,y)| --- remainder; satisfies \verb|x == div(x,y)*y + rem(x,y)|, implying that sign matches \verb|x|.
+  \item \verb|mod(x,y)| --- modulus; satisfies \verb|x == fld(x,y)*y + mod(x,y)|, implying that sign matches \verb|y|.
+  \item \verb|x % y| --- equivalent to \verb|mod(x,y)|.
+  \item \verb|gcd(x,y...)| --- greatest common divisor of \verb|x|, \verb|y|... with sign matching \verb|x|.
+  \item \verb|lcm(x,y...)| --- least common multiple of \verb|x|, \verb|y|... with sign matching \verb|x|.
+  \item \verb|sign(x)| --- indicates the sign of \verb|x| using $-1$, $0$, $+1$.
+  \item \verb|signbit(x)| --- indicates the sign bit of \verb|x| using $-1$, $+1$.\footnote{For IEEE floating point values, this has precise specified semantics.
   In particular, there are both positive and negative zero and \texttt{NaN} values.
-  For other numeric types, this is essentially just a test of whether \texttt{x < 0}.}
-  \item \verb|copysign(x,y)| --- a value with the magnitude of \verb|a| and the sign of \verb|b|.
+  For other numeric types, this is essentially just a test of whether \texttt{x < 0} or not.}
+  \item \verb|copysign(x,y)| --- a value with the magnitude of \verb|x| and the sign of \verb|y|.
   \item \verb|sqrt(x)| --- the square root of \verb|x|.
   \item \verb|exp(x)| --- the natural exponential function $e^x$ at \verb|x|.
-  \item \verb|x^y| --- \verb|x| raised to the exponent \verb|y|.
+  \item \verb|x^y| --- \verb|x| raised to the exponent \verb|y| ($x^y$).
   \item \verb|log(x)| --- the natural logarithm of \verb|x|.
   \item \verb|log2(x)| --- the base 2 logarithm of \verb|x|.
   \item \verb|log10(x)| --- the base 10 logarithm of \verb|x|.
   \item \verb|log(b,x)| --- the base \verb|b| logarithm of \verb|x|.
 \end{itemize}
-In addition all the standard trigonometric functions are defined:
+Additionally, all the standard trigonometric functions are defined:
 \verb|sin|, \verb|cos|, \verb|tan|, \verb|cot|, \verb|sec|, \verb|csc|, \verb|sinh|, \verb|cosh|, \verb|tanh|, \verb|asin|, \verb|acos|, \verb|atan|, \verb|asec|, \verb|acsc|, \verb|acot|, \verb|sech|, \verb|csch|, \verb|coth|, \verb|asech|, \verb|acsch|, \verb|acoth|, \verb|sinc|, \verb|cosc|.
 
-\subsection{Rational Numbers}
+\subsection{Numeric Literal Coefficients}
 
-Rational numbers can be constructed using the \texttt{//} operator:
+To make common numeric formulas and expressions clearer, Julia allows variables to be immediately preceded by a numeric literal, implying multiplication.
+This makes writing polynomial expressions much cleaner:
 \begin{verbatim}
-  julia> 2//3
-  2//3
+  julia> x = 3
+  3
 
-  julia> typeof(ans)
-  Rational{Int32}
+  julia> 2x^2 - 3x + 1
+  10
+
+  julia> 1.5x^2 - .5x + 1
+  13.0
 \end{verbatim}
-The type of a rational number is a parametric type, a concept explained in detail later in \Section{struct-constructors}.
-For the moment, it suffices to say that \verb|2//3| is a ratio of \verb|Int32| values.
-If you construct a \verb|Rational| from values that are not in lowest terms, they will be normalized to lowest terms:
+You can also use a numeric literal coefficients with parenthesized expressions:
 \begin{verbatim}
-  julia> 6//9
-  2//3
-
-  julia> -4//8
-  -1//2
-
-  julia> 5//-15
-  -1//3
-
-  julia> -4//-12
-  1//3
+  julia> 2(x-1)^2 - 3(x-1) + 1
+  3
 \end{verbatim}
-All arithmetic operations are also defined on \verb|Rational|s:
-\begin{verbatim}
-  julia> 2//4 + 1//6
-  2//3
+These two simple syntactic enhancements significantly reduce the visual noise incurred when writing common mathematical formulae.
+Note that no space may come between a numeric literal coefficient and the identifier or parenthesized expression which it multiplies.
 
-  julia> 5//12 - 1//4
-  1//6
-
-  julia> 5//8 * 3//12
-  5//32
-
-  julia> 6//5 / 10//7
-  21//25
-\end{verbatim}
-\verb|Rational|s can be easily converted to floating point numbers:
-\begin{verbatim}
-  julia> float(3//4)
-  0.75
-\end{verbatim}
-All such conversions obey the following identity for all integral \verb|a| and \verb|b|:
-\begin{verbatim}
-  julia> isequal(float(a//b), a/b)
-  true
-\end{verbatim}
-This includes cases where \verb|a == 0| or \verb|b == 0|, in which situations the conversion from rational to float produces the appropriate $\pm$\verb|Inf| or \verb|NaN| value:
-\begin{verbatim}
-  julia> 5//0
-  1//0
-
-  julia> float(ans)
-  Inf
-
-  julia> 0//0
-  0//0
-
-  julia> float(ans)
-  NaN
-
-  julia> -3//0
-  -1//0
-
-  julia> float(ans)
-  -Inf
-\end{verbatim}
-In a sense, Julia \verb|Rational|s are just a convenient way of deferring the computation of integer ratios, thereby avoiding the accumulation of floating point errors in intermediate calculations.
+Juxtaposed coefficients conflict with two numeric literal syntaxes:
+hexadecimal integer literals and engineering notation for floating point literals.
+These are situations where such syntactic conflicts arise:
+\begin{itemize}
+\item The hexadecimal integer literal expression \verb|0xff| could be interpreted as the numeric literal \verb|0| multiplied by the variable \verb|xff|.
+\item The floating point literal expression \verb|1e10| could be interpreted as the numeric literal \verb|1| multiplied by the variable \verb|e10|, and similarly with the equivalent \verb|E| form.
+\end{itemize}
+In both cases, we resolve the ambiguity in favor of interpretation as a numeric literals:
+\begin{itemize}
+\item Expressions starting with \verb|0x| are always hexadecimal literals.
+\item Expressions starting with $d.dd$\,\verb|e| or $d.dd$\,\verb|E| are always floating point literals.
+\end{itemize}
 
 \subsection{Complex Numbers}
 
 The global constant \verb|im| is bound to the complex number $i$, representing one of the square roots of $-1$.
-Since Julia allows numeric literals as juxtaposed coefficients, this binding alone suffices to give a convenient input syntax for complex numbers:
+Since Julia allows numeric literals to be juxtaposed with identifiers as coefficients, this binding suffices to allow a convenient syntax for complex numbers, similar to the traditional mathematical notation, $1 + 2i$:\,\footnote{It was deemed harmful to co-opt the name \texttt{i} for a global constant, as that would preclude its use as a variable.}
 \begin{verbatim}
   julia> 1 + 2im
   1 + 2im
@@ -567,18 +529,33 @@ You can perform all the standard arithmetic operations with complex numbers:
   julia> 3(2 - 5im)^-1
   0.2068965517241379 + 0.5172413793103448im
 \end{verbatim}
-The promotion mechanism ensures that combinations of operands of different types simply work:
+The promotion mechanism ensures that combinations of operands of different types just work:
 \begin{verbatim}
-  julia> (1 + 2im) + 0.5im
+  julia> 2(1 - 1im)
+  2 - 2im
+
+  julia> (2 + 3im) - 1
+  1 + 3im
+
+  julia> (1 + 2im) + 0.5
   1.0 + 2.5im
 
-  julia> 1 + 2//3im
-  1//1 + 2//3im
+  julia> (2 + 3im) - 0.5im
+  2.0 + 2.5im
 
-  julia> (1 + 2//3im) + (0.5 + 1/3im)
-  1.5 + 1.0im
+  julia> 0.75(1 + 2im)
+  0.75 + 1.5im
+
+  julia> (2 + 3im) / 2
+  1.0 + 1.5im
+
+  julia> (1 - 3im) / (2 + 2im)
+  -0.5 - 1.0im
+
+  julia> 1 + 3/4im
+  1.0 + 0.75im
 \end{verbatim}
-Note that \verb|1/3im| parses as \verb|1/3*im|, which, since division and multiplication have equal precedence, is equivalent to \verb|(1/3)*im| rather than \verb|1/(3im)|.
+Note that \verb|3/4im| parses as \verb|3/4*im|, which, since division and multiplication have equal precedence, is equivalent to \verb|(3/4)*im| rather than the quite different value, \verb|3/(4im) == -(3/4)im|.
 
 Standard functions to manipulate complex values are provided:
 \begin{verbatim}
@@ -588,13 +565,16 @@ Standard functions to manipulate complex values are provided:
   julia> imag(1 + 2.5im)
   2.5
 
+  julia> conj(1 + 2.5im)
+  1.0 - 2.5im
+
   julia> norm(1 + 2.5im)
   7.25
 
-  julia> conj(1 + 2.5im)
-  1.0 - 2.5im
+  julia> abs(1 + 2.5im)
+  2.6925824035672519
 \end{verbatim}
-The full gamut of mathematical functions are defined for complex numbers as well:
+The full gamut of mathematical functions are defined for complex numbers:
 \begin{verbatim}
   julia> sqrt(im)
   0.7071067811865476 + 0.7071067811865475im
@@ -612,7 +592,132 @@ The full gamut of mathematical functions are defined for complex numbers as well
   -0.4890562590412937 + 1.4031192506220405im
 \end{verbatim}
 
-\section{Control Flow}
+\subsection{Rational Numbers}
+
+Julia has rational numbers to represent exact ratios of integers.
+Rationals are constructed by the \texttt{//} operator:
+\begin{verbatim}
+  julia> 2//3
+  2//3
+\end{verbatim}
+If the numerator and denominator of a rational have common factors, they are reduced to lowest terms such that the denominator is non-negative:
+\begin{verbatim}
+  julia> 6//9
+  2//3
+
+  julia> -4//8
+  -1//2
+
+  julia> 5//-15
+  -1//3
+
+  julia> -4//-12
+  1//3
+\end{verbatim}
+This normalized form for a ratio of integers is unique, so equality of rational values can be checked by testing for equality of the numerator and denominator.
+The standardized numerator and denominator of a rational value can be extracted using the \verb|num| and \verb|den| functions:
+\begin{verbatim}
+  julia> num(2//3)
+  2
+
+  julia> den(2//3)
+  3
+\end{verbatim}
+Direct comparison of the numerator and denominator is not usually necessary, since the standard arithmetic and comparison operations are defined for rational values:
+\begin{verbatim}
+  julia> 2//3 == 6//9
+  true
+
+  julia> 2//3 == 9//27
+  false
+
+  julia> 3//7 < 1//2
+  true
+
+  julia> 3//4 > 2//3
+  true
+
+  julia> 2//4 + 1//6
+  2//3
+
+  julia> 5//12 - 1//4
+  1//6
+
+  julia> 5//8 * 3//12
+  5//32
+
+  julia> 6//5 / 10//7
+  21//25
+\end{verbatim}
+Rationals can be easily converted to floating point numbers:
+\begin{verbatim}
+  julia> float(3//4)
+  0.75
+\end{verbatim}
+All such conversions obey the following identity for any integral values, \verb|a| and \verb|b|:
+\begin{verbatim}
+  julia> isequal(float(a//b), a/b)
+  true
+\end{verbatim}
+This includes cases where \verb|a == 0| or \verb|b == 0|, in which situations the conversion from rational value to floating point produces the appropriate $\pm$\verb|Inf| or \verb|NaN| value:
+\begin{verbatim}
+  julia> 5//0
+  1//0
+
+  julia> float(ans)
+  Inf
+
+  julia> 0//0
+  0//0
+
+  julia> float(ans)
+  NaN
+
+  julia> -3//0
+  -1//0
+
+  julia> float(ans)
+  -Inf
+\end{verbatim}
+In a sense, Julia's rational values are a convenient way of deferring the computation of integer ratios, thereby allowing exact canceling of common factors and avoiding accumulation of floating point errors.
+
+As usual, the promotion system makes interactions with other numeric types natural and effortless:
+\begin{verbatim}
+  julia> 3//5 + 1
+  8//5
+
+  julia> 3//5 - 0.5
+  0.1
+
+  julia> 2//7 * (1 + 2im)
+  2//7 + 4//7im
+
+  julia> 2//7 * (1.5 + 2im)
+  0.4285714285714285 + 0.5714285714285714im
+
+  julia> 3//2 / (1 + 2im)
+  3//10 - 3//5im
+
+  julia> 1//2 + 2im
+  1//2 + 2//1im
+
+  julia> 1 + 2//3im
+  1//1 + 2//3im
+
+  julia> 0.5 == 1//2
+  true
+
+  julia> 0.33 == 1//3
+  false
+
+  julia> 0.33 < 1//3
+  true
+
+  julia> 1//3 - 0.33
+  0.0033333333333333
+\end{verbatim}
+
+\section{Control Flow}\sec{control-flow}
 
 Julia provides a variety of control flow constructs:
 \begin{itemize}
@@ -620,7 +725,7 @@ Julia provides a variety of control flow constructs:
 \item Conditional evaluation: \verb|if|-\verb|elseif|-\verb|else| and \verb|?:| (ternary operator).
 \item Short-circuit evaluation: \verb|&&|, \texttt{||} and chained comparisons.
 \item Repeated evaluation: \verb|while| and \verb|for|.
-\item Catch and throw: \verb|try|-\verb|catch| and \verb|throw|.
+\item Exception handling: \verb|try|-\verb|catch|, \verb|error| and \verb|throw|.
 \item Symmetric coroutines: \verb|yieldto|.
 \end{itemize}
 The first five control flow mechanisms are standard to high-level programming languages.
@@ -661,7 +766,7 @@ Although it is typical, there is no requirement that \verb|begin| be multiline o
   3
 \end{verbatim}
 
-\subsection{Conditional Evaluation}
+\subsection{Conditional Evaluation}\sec{conditional-evaluation}
 
 Conditional evaluation allows portions of code to be evaluated or not evaluated depending on the value of another expression.
 Here is the anatomy of the \verb|if|-\verb|elseif|-\verb|else| conditional syntax:
@@ -783,7 +888,7 @@ It is significant that like \verb|if|-\verb|elseif|-\verb|else|, the expressions
   "no"
 \end{verbatim}
 
-\subsection{Short-Circuit Evaluation}
+\subsection{Short-Circuit Evaluation}\sec{short-circuit-evaluation}
 
 Short-circuit evaluation is quite similar to conditional evaluation.
 The behavior is found in most imperative programming languages having the \verb|&&| and \texttt{||} boolean operators:
@@ -805,6 +910,11 @@ It's easy to experiment with this behavior:
   2
   true
 
+  julia> t(1) && f(2)
+  1
+  2
+  false
+
   julia> f(1) && t(2)
   1
   false
@@ -813,50 +923,42 @@ It's easy to experiment with this behavior:
   1
   false
 
-  julia> t(1) && t(2) && t(3)
+  julia> t(1) || t(2)
+  1
+  true
+
+  julia> t(1) || f(2)
+  1
+  true
+
+  julia> f(1) || t(2)
   1
   2
-  3
   true
 
-  julia> t(1) && t(2) || t(3)
+  julia> f(1) || f(2)
   1
   2
-  true
-
-  julia> f(1) && t(2) || t(3)
-  1
-  3
-  true
-
-  julia> t(1) && f(2) || t(3)
-  1
-  2
-  3
-  true
-
-  julia> t(1) || f(2) && t(3)
-  1
-  true
-
-  julia> f(1) || f(2) && t(3)
-  1
-  2
+  false
 \end{verbatim}
-Like condition expressions used in \verb|if|, \verb|elseif| or ternary operator, the operands of \verb|&&| or \texttt{||} must be boolean values (\verb|true| or \verb|false|).
+You can easily experiment in the same way with the associativity and precedence of various combinations of \verb|&&| and \texttt{||} operators.
+
+Just like condition expressions used in \verb|if|, \verb|elseif| or the ternary operator, the operands of \verb|&&| or \texttt{||} must be boolean values (\verb|true| or \verb|false|).
 Using a non-boolean value is an error:
 \begin{verbatim}
   julia> 1 && 2
   type error: lambda: in if, expected Bool, got Int32
 \end{verbatim}
-Recall from \Section{numeric-comparisons} that numeric comparisons in Julia can be chained:
+
+Chained numeric comparisons also exhibit short-circuit evaluation behavior.
+Recall from \Section{numeric-comparisons} that numeric comparisons in Julia can be arbitrarily chained:
 \begin{verbatim}
   julia> a = 1; b = 2; c = 3;
 
   julia> a < b <= c
   true
 \end{verbatim}
-This last expression is equivalent to the less convenient expression:
+This last expression is equivalent to the less concise:
 \begin{verbatim}
   julia> a < b && b <= c
   true
@@ -877,11 +979,11 @@ Let's see this in action:
   2
   false
 \end{verbatim} % TODO: THIS IS NOT THE ACTUAL OUTPUT
-The first pair of expressions will always be evaluated, since the first comparison must always be evaluated and requires both values.
+The first two expressions in a comparison chain are always evaluated, since their values are required to check the first comparison, which must be checked.
 Subsequent expressions, however, need not be evaluated if a comparison earlier in the chain is \verb|false|.
 Note that the middle expression is only evaluated once, rather than twice as it would be if the expression were written as \verb|v(1) < v(2) && v(2) <= v(3)|.
 
-\subsection{Repeated Evaluation}
+\subsection{Repeated Evaluation}\sec{repeated-evaluation}
 
 There are two constructs for repeated evaluation of expressions in Julia: the \verb|while| loop and the \verb|for| loop.
 Here is an example of a \verb|while| loop:
@@ -936,12 +1038,12 @@ See \Section{variable-scoping} for a detailed explanation of variable scope and 
 
 In general, the \verb|for| loop construct can iterate over all sorts of containers:
 \begin{verbatim}
-  julia> for i = [1,4,-1]
+  julia> for i = [1,4,0]
            println(i)
          end
   1
   4
-  -1
+  0
 
   julia> for s = ["foo","bar","baz"]
            println(s)
@@ -959,19 +1061,20 @@ This can be accomplished with the \verb|break| keyword:
 
   julia> while true
            println(i) 
-           i += 1
            if i >= 5 
              break
            end
+           i += 1
          end
   1
   2
   3
   4
+  5
 
   julia> for i = 1:1000
            println(i)               
-           if i % 5 == 0
+           if i >= 5
              break
            end
          end
@@ -1000,7 +1103,7 @@ The \verb|continue| keyword accomplishes this:
 This is a somewhat contrived example since we could produce the same behavior more clearly by negating the condition and placing the \verb|println| call inside the \verb|if| block.
 In realistic usage there is more code to be evaluated after the \verb|continue|, and often there are multiple points from which one calls \verb|continue|.
 
-\subsection{Catch and Throw}
+\subsection{Exception Handling}\sec{exception-handling}
 
 Occasionally, especially when something unexpected occurs, a function cannot return a reasonable value to its immediate caller.
 In such cases, it may be best to unwind the call stack many levels and pass some value back to an outer level of execution, which can deal with the situation more appropriately.
@@ -1050,7 +1153,7 @@ To throw an error, use the \verb|error| command:
 The \verb|error| function constructs an \verb|ErrorException| object with the message provided, and throws it, allowing it to be caught at a higher level, and handled, or to escape to the outermost level of execution and gracefully terminate the program with a hopefully informative error message.
 The \verb|try|-\verb|catch| style of exception handling allows programmers to concentrate on the non-exceptional case, and avoid spending most of their time writing error checking code.
 
-\subsection{Coroutines}
+\subsection{Coroutines}\sec{coroutines}
 
 \section{Functions}\sec{functions}
 
@@ -1081,35 +1184,31 @@ In the assignment form, the body of the function must be a single expression, al
 Short, simple function definitions are common in Julia.
 The short function syntax is accordingly quite idiomatic, considerably reducing both typing and visual noise.
 
-\subsection{The \texttt{return} Keyword}
+\subsection{The \texttt{return} Keyword}\sec{the-return-keyword}
 
 The value returned by a function is the value of the last expression evaluated, which, by default, is the last expression in the body of the function definition.
-In the example function, \verb|f|, this is simply the value of the expression \verb|x + y|.
-As in C and most other imperative or functional languages, the \verb|return| keyword causes the function to return from any point, optionally providing an expression whose value is returned: % TODO: make return value actually optional.
+In the example function, \verb|f|, from the previous section this is the value of the expression \verb|x + y|.
+As in C and most other imperative or functional languages, the \verb|return| keyword causes a function to return immediately, providing an expression whose value is returned: % TODO: make return value actually optional.
 \begin{verbatim}
   function g(x,y)
     return x * y
     x + y
   end
 \end{verbatim}
-Since functions definitions can be entered directly into the repl, it is easy to try these definitions out to compare them:
+Since functions definitions can be entered into the repl, it is easy to compare these definitions:
 \begin{verbatim}
-  julia> function g(x,y)
-           return x * y
-           x + y
-         end
-  Methods for generic function g
-  g(Any,Any)
+  f(x,y) = x + y
 
-  julia> g(2,3)
-  6
-
-  julia> f(x,y) = x + y
-  Methods for generic function f
-  f(Any,Any)
+  function g(x,y)
+    return x * y
+    x + y
+  end
 
   julia> f(2,3)
   5
+
+  julia> g(2,3)
+  6
 \end{verbatim}
 Of course, in a purely linear function body like \verb|g|, the usage of \verb|return| is pointless since the expression \verb|x + y| is never evaluated and we could simply make \verb|x * y| the last expression in the function and omit the \verb|return|.
 In conjunction with other control flow, however, \verb|return| is of real use.
@@ -1132,7 +1231,7 @@ Here, for example, is a function that computes the hypotenuse length of a right 
 There are three possible points of return from this function, returning the values of three different expressions, depending on the values of $x$ and $y$.
 The \verb|return| on the last line could be omitted since it is the last expression.
 
-\subsection{Specializing Functions for Given Types}
+\subsection{Specializing Functions}\sec{specializing-functions}
 
 Julia allows multiple dispatch based on the types of function arguments:
 \begin{verbatim}
@@ -1213,7 +1312,7 @@ Core operations typically have dozens of methods:
 \end{verbatim}
 Multiple dispatch together with the flexible parametric type system, give Julia its ability to abstractly express high-level algorithms decoupled from implementation details, yet generate efficient specialized code at run time.
 
-\subsection{Method Ambiguities}
+\subsection{Method Ambiguities}\sec{method-ambiguities}
 
 It is possible to define a set of function methods such that ambiguous cases exist where for some combinations of argument types there is no unique most specific method which applies:
 \begin{verbatim}
@@ -1286,10 +1385,10 @@ You should avoid method ambiguities by specifying an appropriate method for the 
 \end{verbatim}
 To suppress Julia's warning, the disambiguating method must be defined first.
 
-\subsection{Operators Are Functions}
+\subsection{Operators Are Functions}\sec{operators-are-functions}
 
-In Julia, most operators are just functions with support for special syntax.\footnote{The exceptions are operators with special evaluation semantics like \texttt{\&\&} and \texttt{||} which cause short-circuit evaluation.
-These operators cannot be defined as normal functions because their operands are not evaluated as normal function arguments.}
+In Julia, most operators are just functions with support for special syntax.\footnote{The exceptions are operators with special evaluation semantics like \texttt{\&\&} and \texttt{||}.
+These operators cannot be functions since short-circuit evaluation (see \Section{short-circuit-evaluation}) requires that their operands are not evaluated before evaluation of the operator.}
 Accordingly, you can also apply them using parenthesized argument lists as you would any other function:
 \begin{verbatim}
   julia> 1 + 2 + 3
@@ -1298,26 +1397,25 @@ Accordingly, you can also apply them using parenthesized argument lists as you w
   julia> +(1,2,3)
   6
 \end{verbatim}
-The infix form is exactly equivalent to the function application form\,---\,in fact the former is parsed to produce precisely the function call internally.
-Since operators like \verb|+| are just Julia functions, you can add new methods for them.
-To add a new method to the \verb|+| operator, you define a new method using the name of the operator where the name of the function goes.
-The addition method for \verb|Complex| numbers is defined as:
+The infix form is exactly equivalent to the function application form\,---\,in fact the former is parsed to produce the function call internally.
+Since operators like \verb|+| are just normal Julia functions, you can add new methods for them.
+For example, the addition method for complex numbers is defined as:
 \begin{verbatim}
   +(z::Complex, w::Complex) = Complex(z.re + w.re, z.im + w.im)
 \end{verbatim}
+For more about types like \verb|Complex|, their structure and how to define them, see \Section{types}.
 
-\subsection{Anonymous Functions}
+\subsection{Anonymous Functions}\sec{anonymous-functions}
 
 Functions in Julia are first-class objects:
-they can be assigned to variables, called using the standard function call syntax via the variable they have been assigned to, be it local or global;
-they can be passed as arguments, and returned as values.
+they can be assigned to variables, called using the standard function call syntax via the variable they have been assigned to, they can be passed as arguments, and they can be returned as values.
 They can also be created anonymously, without giving them a name:
 \begin{verbatim}
   julia> x -> x^2 + 2x - 1
   #<closure>
 \end{verbatim}
 This creates an unnamed function taking one argument and returning the value of the polynomial $x^2 + 2x - 1$ at that value.
-The primary use for anonymous functions is passing them to functions which take functions as arguments.
+The primary use for anonymous functions is passing them to functions which take other functions as arguments.
 A classic example is the \verb|map| function, which applies a function to each value of an array and returns a new array containing the resulting values:
 \begin{verbatim}
   julia> map(round, [1.2,3.5,1.7])
@@ -1331,7 +1429,7 @@ In these situations, the anonymous function construct allows easy creation of a 
   [2,14,-2]
 \end{verbatim}
 
-\subsection{Returning Multiple Values}
+\subsection{Multiple Return Values}
 \subsection{Varargs Functions}
 
 \section{Variable Scoping}\sec{variable-scoping}
@@ -1371,7 +1469,7 @@ and inner scopes refer to the global variable of that name.
 function's body scope.
 \item An assignment \verb|x = y| introduces a new local variable \verb|x|
 only if \verb|x| is neither declared global nor explicitly introduced as local
-by any enclosing scope, \emph{before or after} the current line of code.
+by any enclosing scope, before or \emph{after} the current line of code.
 \end{itemize}
 In the following example, there is only one \verb|x| assigned both inside
 and outside a loop:
@@ -1438,8 +1536,7 @@ One last example shows that an outer assignment introducing \verb|x| need not co
 \end{verbatim}
 This last example may seem slightly odd for a normal variable, but allows for named functions\,---\,which are just normal variables holding function objects\,---\,to be used before they are defined.
 This allows functions to be defined in whatever order is intuitive and convenient, rather than forcing bottom up ordering or requiring forward declarations, both of which one typically sees in C programs.
-In particular, mutual recursion is very simple to write.
-Here's a rather inefficient way to test if positive integers are even or odd:\,\footnote{Julia provides built-in, efficient functions to test this called \texttt{iseven} and \texttt{isodd}.}
+As an example, here is an inefficient, mutually recursive way to test if positive integers are even or odd:\,\footnote{Julia provides built-in, efficient functions to test this called \texttt{iseven} and \texttt{isodd}.}
 \begin{verbatim}
   even(n) = n == 0 ? true  :  odd(n-1)
   odd(n)  = n == 0 ? false : even(n-1)
@@ -1450,15 +1547,14 @@ Here's a rather inefficient way to test if positive integers are even or odd:\,\
   julia> odd(3)
   true
 \end{verbatim}
-Since functions can be used before they are defined as long as they are defined by the time they are actually called, no syntax for forward declarations is necessary, and definitions can be ordered arbitrarily.
+Since functions can be used before they are defined, as long as they are defined by the time they are actually called, no syntax for forward declarations is necessary, and definitions can be ordered arbitrarily.
 
 At the interactive prompt, variable scope works the same way as anywhere
 else. The prompt behaves as if there is scope block wrapped around everything
 you type, except that this scope block is identified with the global scope.
 This is especially apparent in the case of assignments:
 \begin{verbatim}
-  julia> for i=1:1; y = 10; end
-  ()
+  julia> for i = 1:1; y = 10; end
   
   julia> y
   y not defined
@@ -1466,20 +1562,20 @@ This is especially apparent in the case of assignments:
   julia> y = 0
   0
   
-  julia> for i=1:1; y = 10; end
-  ()
+  julia> for i = 1:1; y = 10; end
   
   julia> y
   10
 \end{verbatim}
-In the first case \verb|y| only exists inside the loop.
-In the second case, an outer y has been introduced and so is inherited
+In the first case, \verb|y| only exists inside the \verb|for| loop.
+In the second case, an outer \verb|y| has been introduced and so is inherited
 within the loop. Due to the special identification of the prompt's scope
 block with the global scope, it is not necessary to declare
-\verb|global y| inside the loop. However, outside the interactive prompt
+\verb|global y| inside the loop. However, in code not entered into the interactive prompt
 this declaration would be necessary in order to modify a global variable.
 
-\section{Defining Types}
+\section{Types}\sec{types}
+
 \subsection{Tag Types}
 \subsection{Struct Types}
 
@@ -1539,13 +1635,11 @@ If you use mixed types to construct a \verb|Rational|, the same promotions that 
   Rational{Int16}
 \end{verbatim}
 
-\subsection{Struct Constructors}
-\sec{struct-constructors}
+\subsection{Struct Constructors}\sec{struct-constructors}
 
 \subsection{Bits Types}
 
-\subsection{Conversion and Promotion}
-\sec{conversion-and-promotion}
+\subsection{Conversion and Promotion}\sec{conversion-and-promotion}
 
 \subsection{Other Kinds of Types}
 
@@ -2158,20 +2252,20 @@ If you actually want to allocate all that memory, you can force Julia to do so b
 % Moreover, it allows you to easily create pipelines \emph{in Julia} where one command pipes output to another.
 % In essence, Julia aims to be a better shell than the shell.
 
-Julia borrows backtick notation for commands from shells, Perl, and Ruby.
+Julia borrows backtick notation for commands from the shell, Perl, and Ruby.
 However, in Julia, writing
 \begin{verbatim}
   julia> `echo hello`
   `echo hello`
 \end{verbatim}
-differs in a several aspects from the behavior in shells, Perl, or Ruby:
+differs in a several aspects from the behavior in various shells, Perl, or Ruby:
 \begin{itemize}
 
 \item Instead of immediately running the command, backticks create a \verb|Cmd| object to represent the command.
-You can use this \verb|Cmd| object to connect this command to others via UNIX pipes, run it, write to it and read from it.
+You can use this object to connect the command to others via pipes, run it, and read or write to it.
 
 \item When the command is run, Julia does not capture its output unless you specifically arrange for it to.
-Rather, the output of the command by default goes to \verb|stdout| as it would using \verb|libc|'s \verb|system| call.
+Instead, the output of the command by default goes to \verb|stdout| as it would using \verb|libc|'s \verb|system| call.
 
 \item The command is never run with a shell.
 Instead, Julia parses the command syntax directly, appropriately interpolating variables and splitting on words as the shell would, respecting shell quoting syntax.
@@ -2211,7 +2305,7 @@ Let's try it:
 How did the file name get quoted?
 Julia knows that \verb|file| is meant to be interpolated as a single argument, so it quotes the word for you.\footnote{This not quite accurate:
 the value of \texttt{file} is never interpreted by a shell, so there's no need for actual quoting.
-The quotes are inserted only for presentation to the user such that you can cut and paste it back into the repl.}
+The quotes are inserted only for presentation to the user, and so that you can cut and paste it back into the repl.}
 This will even work if you interpolate a value as part of a shell word:
 \begin{verbatim}
   julia> path = "/Volumes/External HD"
@@ -2226,8 +2320,9 @@ This will even work if you interpolate a value as part of a shell word:
   julia> `sort $path/$name.$ext`
   `sort '/Volumes/External HD/data.csv'`
 \end{verbatim}
+As you can see, the space in the \verb|path| variable is appropriately escaped.
 But what if you \emph{want} to interpolate multiple words?
-Just use an array (or any other iterable container):
+In that case, just use an array (or any other iterable container):
 \begin{verbatim}
   julia> files = ["/etc/passwd","/Volumes/External HD/data.csv"]
   ["/etc/passwd","/Volumes/External HD/data.csv"]
@@ -2235,7 +2330,7 @@ Just use an array (or any other iterable container):
   julia> `grep foo $files`
   `grep foo /etc/passwd '/Volumes/External HD/data.csv'`
 \end{verbatim}
-If you interpolate an array as part of a shell word, Julia emulates the shell \verb|{a,b,c}| shell generation behavior:
+If you interpolate an array as part of a shell word, Julia emulates the shell's \verb|{a,b,c}| argument generation:
 \begin{verbatim}
   julia> names = ["foo","bar","baz"]
   ["foo","bar","baz"]
@@ -2271,7 +2366,7 @@ Here's a simple example of a perl one-liner at a shell prompt:
   2
   3
 \end{verbatim}
-You need to surround the Perl expression in single quotes for two reasons:
+The Perl expression needs to be in single quotes for two reasons:
 so that spaces don't break the expression into multiple shell words, and so that uses of variables like \texttt{\$|} (yes, that's a variable), don't cause interpolation.
 In other instances, you may want to use double quotes so that interpolation \emph{does} occur:
 \begin{verbatim}
@@ -2281,7 +2376,9 @@ In other instances, you may want to use double quotes so that interpolation \emp
   1: A
   2: B
 \end{verbatim}
-In general, the Julia backtick syntax is carefully designed so that you can just cut-and-paste shell commands as-is into backticks and they will work.
+In general, the Julia backtick syntax is carefully designed so that you can just cut-and-paste shell commands as-is into backticks and they will work:
+the escaping, quoting, and interpolation behaviors are the same as the shell's.
+The only difference is that the interpolation is integrated and aware of Julia's notion of what is a single string value, and what is a container for multiple values.
 Let's try the above two examples in Julia:
 \begin{verbatim}
   julia> `perl -le '$|=1; for (0..3) { print }'`
@@ -2376,9 +2473,9 @@ To give some sense of the complex pipelines that can be created easily, here are
   true
 \end{verbatim}
 This is a classic example of a single producer feeding two concurrent consumers:
-one \verb|perl| process generates lines with the numbers 0 through 9 on them, while two parallel processes process that output, one prefixing lines with the letter ``A,'' the other with the letter ``B.''
-Which consumer gets the first line is non-deterministic, but once the race has been one, the lines are consumed alternately by one process and then the other.\footnote{Setting \texttt{\$|=1} in Perl causes each print statement to flush the \texttt{stdout} handle, which is necessary for this example to work.
-Otherwise all the output is buffered and printed to the pipe at once, to be read by a single consumer process at once.}
+one \verb|perl| process generates lines with the numbers 0 through 9 on them, while two parallel processes consume that output, one prefixing lines with the letter ``A,'' the other with the letter ``B.''
+Which consumer gets the first line is non-deterministic, but once that race has been won, the lines are consumed alternately by one process and then the other.\footnote{Setting \texttt{\$|=1} in Perl causes each print statement to flush the \texttt{stdout} handle, which is necessary for this example to work.
+Otherwise all the output is buffered and printed to the pipe at once, to be read by a single consumer process.}
 
 Here is an even more complex multi-stage producer-consumer example:
 \begin{verbatim}
@@ -2397,7 +2494,7 @@ Here is an even more complex multi-stage producer-consumer example:
   A	Y	9
   true
 \end{verbatim}
-This example works is similar to the previous one, except there are two stages of consumers, and the stages have different latency so they use a different number of parallel workers, to maintain saturated throughput.
+This example is similar to the previous one, except there are two stages of consumers, and the stages have different latency so they use a different number of parallel workers, to maintain saturated throughput.
 
 Finally, we have an example of how you can make a process read from itself:
 \begin{verbatim}
