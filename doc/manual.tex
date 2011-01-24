@@ -1500,8 +1500,7 @@ One last example shows that an outer assignment introducing \verb|x| need not co
 \end{verbatim}
 This last example may seem slightly odd for a normal variable, but allows for named functions\,---\,which are just normal variables holding function objects\,---\,to be used before they are defined.
 This allows functions to be defined in whatever order is intuitive and convenient, rather than forcing bottom up ordering or requiring forward declarations, both of which one typically sees in C programs.
-In particular, mutual recursion is very simple to write.
-Here's a rather inefficient way to test if positive integers are even or odd:\,\footnote{Julia provides built-in, efficient functions to test this called \texttt{iseven} and \texttt{isodd}.}
+As an example, here is an inefficient, mutually recursive way to test if positive integers are even or odd:\,\footnote{Julia provides built-in, efficient functions to test this called \texttt{iseven} and \texttt{isodd}.}
 \begin{verbatim}
   even(n) = n == 0 ? true  :  odd(n-1)
   odd(n)  = n == 0 ? false : even(n-1)
@@ -1512,7 +1511,7 @@ Here's a rather inefficient way to test if positive integers are even or odd:\,\
   julia> odd(3)
   true
 \end{verbatim}
-Since functions can be used before they are defined as long as they are defined by the time they are actually called, no syntax for forward declarations is necessary, and definitions can be ordered arbitrarily.
+Since functions can be used before they are defined, as long as they are defined by the time they are actually called, no syntax for forward declarations is necessary, and definitions can be ordered arbitrarily.
 
 At the interactive prompt, variable scope works the same way as anywhere
 else. The prompt behaves as if there is scope block wrapped around everything
@@ -2217,20 +2216,20 @@ If you actually want to allocate all that memory, you can force Julia to do so b
 % Moreover, it allows you to easily create pipelines \emph{in Julia} where one command pipes output to another.
 % In essence, Julia aims to be a better shell than the shell.
 
-Julia borrows backtick notation for commands from shells, Perl, and Ruby.
+Julia borrows backtick notation for commands from the shell, Perl, and Ruby.
 However, in Julia, writing
 \begin{verbatim}
   julia> `echo hello`
   `echo hello`
 \end{verbatim}
-differs in a several aspects from the behavior in shells, Perl, or Ruby:
+differs in a several aspects from the behavior in various shells, Perl, or Ruby:
 \begin{itemize}
 
 \item Instead of immediately running the command, backticks create a \verb|Cmd| object to represent the command.
-You can use this \verb|Cmd| object to connect this command to others via UNIX pipes, run it, write to it and read from it.
+You can use this object to connect the command to others via pipes, run it, and read or write to it.
 
 \item When the command is run, Julia does not capture its output unless you specifically arrange for it to.
-Rather, the output of the command by default goes to \verb|stdout| as it would using \verb|libc|'s \verb|system| call.
+Instead, the output of the command by default goes to \verb|stdout| as it would using \verb|libc|'s \verb|system| call.
 
 \item The command is never run with a shell.
 Instead, Julia parses the command syntax directly, appropriately interpolating variables and splitting on words as the shell would, respecting shell quoting syntax.
@@ -2270,7 +2269,7 @@ Let's try it:
 How did the file name get quoted?
 Julia knows that \verb|file| is meant to be interpolated as a single argument, so it quotes the word for you.\footnote{This not quite accurate:
 the value of \texttt{file} is never interpreted by a shell, so there's no need for actual quoting.
-The quotes are inserted only for presentation to the user such that you can cut and paste it back into the repl.}
+The quotes are inserted only for presentation to the user, and so that you can cut and paste it back into the repl.}
 This will even work if you interpolate a value as part of a shell word:
 \begin{verbatim}
   julia> path = "/Volumes/External HD"
@@ -2285,8 +2284,9 @@ This will even work if you interpolate a value as part of a shell word:
   julia> `sort $path/$name.$ext`
   `sort '/Volumes/External HD/data.csv'`
 \end{verbatim}
+As you can see, the space in the \verb|path| variable is appropriately escaped.
 But what if you \emph{want} to interpolate multiple words?
-Just use an array (or any other iterable container):
+In that case, just use an array (or any other iterable container):
 \begin{verbatim}
   julia> files = ["/etc/passwd","/Volumes/External HD/data.csv"]
   ["/etc/passwd","/Volumes/External HD/data.csv"]
@@ -2294,7 +2294,7 @@ Just use an array (or any other iterable container):
   julia> `grep foo $files`
   `grep foo /etc/passwd '/Volumes/External HD/data.csv'`
 \end{verbatim}
-If you interpolate an array as part of a shell word, Julia emulates the shell \verb|{a,b,c}| shell generation behavior:
+If you interpolate an array as part of a shell word, Julia emulates the shell's \verb|{a,b,c}| argument generation:
 \begin{verbatim}
   julia> names = ["foo","bar","baz"]
   ["foo","bar","baz"]
@@ -2330,7 +2330,7 @@ Here's a simple example of a perl one-liner at a shell prompt:
   2
   3
 \end{verbatim}
-You need to surround the Perl expression in single quotes for two reasons:
+The Perl expression needs to be in single quotes for two reasons:
 so that spaces don't break the expression into multiple shell words, and so that uses of variables like \texttt{\$|} (yes, that's a variable), don't cause interpolation.
 In other instances, you may want to use double quotes so that interpolation \emph{does} occur:
 \begin{verbatim}
@@ -2340,7 +2340,9 @@ In other instances, you may want to use double quotes so that interpolation \emp
   1: A
   2: B
 \end{verbatim}
-In general, the Julia backtick syntax is carefully designed so that you can just cut-and-paste shell commands as-is into backticks and they will work.
+In general, the Julia backtick syntax is carefully designed so that you can just cut-and-paste shell commands as-is into backticks and they will work:
+the escaping, quoting, and interpolation behaviors are the same as the shell's.
+The only difference is that the interpolation is integrated and aware of Julia's notion of what is a single string value, and what is a container for multiple values.
 Let's try the above two examples in Julia:
 \begin{verbatim}
   julia> `perl -le '$|=1; for (0..3) { print }'`
@@ -2435,8 +2437,8 @@ To give some sense of the complex pipelines that can be created easily, here are
   true
 \end{verbatim}
 This is a classic example of a single producer feeding two concurrent consumers:
-one \verb|perl| process generates lines with the numbers 0 through 9 on them, while two parallel processes process that output, one prefixing lines with the letter ``A,'' the other with the letter ``B.''
-Which consumer gets the first line is non-deterministic, but once the race has been one, the lines are consumed alternately by one process and then the other.\footnote{Setting \texttt{\$|=1} in Perl causes each print statement to flush the \texttt{stdout} handle, which is necessary for this example to work.
+one \verb|perl| process generates lines with the numbers 0 through 9 on them, while two parallel processes consume that output, one prefixing lines with the letter ``A,'' the other with the letter ``B.''
+Which consumer gets the first line is non-deterministic, but once that race has been won, the lines are consumed alternately by one process and then the other.\footnote{Setting \texttt{\$|=1} in Perl causes each print statement to flush the \texttt{stdout} handle, which is necessary for this example to work.
 Otherwise all the output is buffered and printed to the pipe at once, to be read by a single consumer process.}
 
 Here is an even more complex multi-stage producer-consumer example:
@@ -2456,7 +2458,7 @@ Here is an even more complex multi-stage producer-consumer example:
   A	Y	9
   true
 \end{verbatim}
-This example works is similar to the previous one, except there are two stages of consumers, and the stages have different latency so they use a different number of parallel workers, to maintain saturated throughput.
+This example is similar to the previous one, except there are two stages of consumers, and the stages have different latency so they use a different number of parallel workers, to maintain saturated throughput.
 
 Finally, we have an example of how you can make a process read from itself:
 \begin{verbatim}
