@@ -50,6 +50,8 @@
   `(with-bindings ((end-symbol #t))
 		  ,@body))
 
+(define assignment-ops (prec-ops 0))
+
 (define unary-ops '(+ - ! ~ $ |<:| |>:|))
 
 ; operators that are both unary and binary

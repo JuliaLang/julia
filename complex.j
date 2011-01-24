@@ -60,7 +60,7 @@ inv(z::Complex) = conj(z)/norm(z)
 +(z::Complex, w::Complex) = Complex(z.re + w.re, z.im + w.im)
 -(z::Complex, w::Complex) = Complex(z.re - w.re, z.im - w.im)
 *(z::Complex, w::Complex) = Complex(z.re*w.re - z.im*w.im,
-                                      z.re*w.im + z.im*w.re)
+                                    z.re*w.im + z.im*w.re)
 
 ==(z::Complex, w::Complex) = (z.re == w.re && z.im == w.im)
 
