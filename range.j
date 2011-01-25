@@ -102,7 +102,7 @@ type NDRange{N}
     NDRange(r::(Any,))       =new(r,isempty(r[1]))
     NDRange(r::(Any,Any))    =new(r,isempty(r[1])||isempty(r[2]))
     NDRange(r::(Any,Any,Any))=new(r,isempty(r[1])||isempty(r[2])||isempty(r[3]))
-    NDRange(r::Tuple)        =new(r,any(map(isempty,r)))
+    NDRange(r::Tuple)        =new(r,anyp(isempty,r))
     NDRange(rs...) = NDRange(rs)
 end
 
