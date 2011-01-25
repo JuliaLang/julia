@@ -743,13 +743,14 @@ Julia provides a variety of control flow constructs:
 \item Short-circuit evaluation: \verb|&&|, \texttt{||} and chained comparisons.
 \item Repeated evaluation: \verb|while| and \verb|for|.
 \item Exception handling: \verb|try|-\verb|catch|, \verb|error| and \verb|throw|.
-\item Symmetric coroutines: \verb|yieldto|.
+\item Tasks: \verb|yieldto|.
 \end{itemize}
 The first five control flow mechanisms are standard to high-level programming languages.
-Symmetric coroutines are not so standard:
-they provide non-local control flow, similar to continuations.
-In fact, both exception handling and cooperative multitasking are implemented in Julia using coroutines.
-Everyday programming, however, requires no direct usage of coroutines.
+Tasks are not so standard:
+they provide non-local control flow, making it possible to switch between
+temporarily-suspended computations.
+In fact, both exception handling and cooperative multitasking are implemented in Julia using tasks.
+Everyday programming, however, requires no direct usage of tasks.
 
 \subsection{Compound Expressions}\sec{compound-expressions}
 
@@ -1188,7 +1189,35 @@ If the \verb|catch| block succeeds without incident (it can in turn raise an exc
 % It is not uncommon for well-written C programs to devote as much code to checking for errors as it does to performing useful work.
 % Virtually all modern programming languages have facilities for raising and catching exceptions.
 
-\subsection{Coroutines}\sec{coroutines}
+\subsection{Tasks}\sec{tasks}
+
+Tasks are a control flow feature that allows computations to be suspended
+and resumed in a flexible manner. This feature is sometimes called by other
+names, such as symmetric coroutines, lightweight threads,
+cooperative multitasking, or one-shot continuations.
+
+When a piece of computing work (in practice, executing a particular function)
+is designated as a \verb|Task|, it becomes possible to interrupt it by
+switching to another \verb|Task|. The original \verb|Task| can later be
+resumed, at which point it will pick up right where it left off. At first,
+this may seem similar to a function call. However there are two key
+differences. First, switching tasks does not use any space, so any number
+of task switches can occur without consuming the call stack. Second, you
+may switch among tasks in any order, unlike function calls, where the called
+function must finish executing before control returns to the calling
+function.
+
+This kind of control flow can make it much easier to solve certain problems.
+In some problems, the various pieces of required work are not naturally
+related by function calls; there is no obvious ``caller''
+or ``callee'' among the jobs that need to be done. An example is the
+producer-consumer problem, where one complex procedure is generating values
+and another complex procedure is consuming them. The consumer cannot simply
+call a producer function to get a value, because the producer may have
+more values to generate and so might not yet be ready to return. With
+\verb|Task|s, the producer and consumer can both run as long as they need to,
+passing values back and forth as necessary.
+
 
 \section{Functions}\sec{functions}
 

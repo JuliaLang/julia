@@ -566,7 +566,7 @@ end
 
 tchanged(n, o) = is(o,NF) || (!is(n,NF) && !subtype(n,o))
 
-function changed(new::Union(StateUpdate,VarTable), old, vars)
+function stchanged(new::Union(StateUpdate,VarTable), old, vars)
     for i = 1:length(vars)
         v = vars[i]
         if tchanged(new[v], get(old,v,NF))
@@ -618,7 +618,7 @@ function tmerge(typea, typeb)
     return u
 end
 
-function update(state, changes::Union(StateUpdate,VarTable), vars)
+function stupdate(state, changes::Union(StateUpdate,VarTable), vars)
     for i = 1:length(vars)
         v = vars[i]
         newtype = changes[v]
@@ -773,9 +773,9 @@ function typeinf(linfo::LambdaStaticData,atypes::Tuple,sparams::Tuple, cop, def)
             if !is(cur_hand,())
                 # propagate type info to exception handler
                 l = cur_hand[1]::Int32
-                if changed(changes, s[l], vars)
+                if stchanged(changes, s[l], vars)
                     add(W, l)
-                    update(s[l], changes, vars)
+                    stupdate(s[l], changes, vars)
                 end
             end
             pc´ = pc+1
@@ -786,9 +786,9 @@ function typeinf(linfo::LambdaStaticData,atypes::Tuple,sparams::Tuple, cop, def)
                 elseif is(hd,:gotoifnot)
                     l = findlabel(body,stmt.args[2])
                     handler_at[l] = cur_hand
-                    if changed(changes, s[l], vars)
+                    if stchanged(changes, s[l], vars)
                         add(W, l)
-                        update(s[l], changes, vars)
+                        stupdate(s[l], changes, vars)
                     end
                 elseif is(hd,symbol("return"))
                     pc´ = n+1
@@ -811,8 +811,8 @@ function typeinf(linfo::LambdaStaticData,atypes::Tuple,sparams::Tuple, cop, def)
                 end
             end
             if pc´<=n && (handler_at[pc´] = cur_hand; true) &&
-               changed(changes, s[pc´], vars)
-                update(s[pc´], changes, vars)
+               stchanged(changes, s[pc´], vars)
+                stupdate(s[pc´], changes, vars)
                 pc = pc´
             else
                 break
