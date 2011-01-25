@@ -1274,7 +1274,8 @@ Julia allows multiple dispatch based on the types of function arguments:
   f(x,y) = x + y
   f(x::Float64, y::Float64) = x * y
 \end{verbatim}
-The appropriate version will be called based on the types of the argument values:
+The value \verb|f| is called a generic function, while individual definitions provided for it for specific combinations of argument types are called methods of that function.
+When a function is applied to values, the appropriate method will be called based on the types of these arguments:
 \begin{verbatim}
   julia> f(2,3)
   5
@@ -1282,12 +1283,16 @@ The appropriate version will be called based on the types of the argument values
   julia> f(2.0,3.0)
   6.0
 \end{verbatim}
-Dispatch is done on all argument types and the most specific method that applies is called:
+The choice of which method to invoke is called dispatch, and is based on the types all arguments.
+The most specific method that applies to the given arguments is called.
+The \verb|f(Float64,Float64)| method cannot be applied to the arguments \verb|2,3| because \verb|2| and \verb|3| are of type \verb|Int32|, not \verb|Float64|.
+This method does apply to the arguments \verb|2.0,3.0|, however, since they are both \verb|Float64| values.
+All arguments types must match for a method to be applicable:
 \begin{verbatim}
   julia> f(2,3.0)
   5.0
 \end{verbatim}
-Here, the second method of \verb|f| cannot be applied since 2 is not a \verb|Float64|.
+Here, the \verb|Float64| method of \verb|f| cannot be applied since 2 is not a \verb|Float64|.
 In the first method, the argument types are unconstrained, so this serves as a catchall method, and is called here.
 
 If you've been entering these definitions in the repl, you'll have noticed that it shows you all the methods defined for a given ``generic function'' when a new method is defined:
@@ -1905,8 +1910,8 @@ You can input any Unicode character in single quotes using \verb|\u| followed by
   julia> '\U10ffff'
   '\U0010ffff'
 \end{verbatim}
-Julia uses your system's locale and language settings to determine which characters can be printed as-is and which must be output using the \verb|\u| or \verb|\U| forms.
-In addition to these Unicode forms, all of C's escaped input forms are usable as well:
+Julia uses your system's locale and language settings to determine which characters can be printed as-is and which must be output using the generic, escaped \verb|\u| or \verb|\U| input forms.
+In addition to these Unicode escape forms, all of C's traditional escaped input forms are usable as well:
 \begin{verbatim}
   julia> int('\0')
   0
