@@ -491,8 +491,7 @@ One final note is that parenthesized expressions can also be used as coefficient
   julia> (x-1)x
   6
 \end{verbatim}
-Juxtaposing two parenthesized expressions, however, does not imply multiplication.
-This is an error:
+Juxtaposing two parenthesized expressions, however, does not imply multiplication:
 \begin{verbatim}
   julia> (x-1)(x+1)
   type error: apply: expected Function, got Int32
