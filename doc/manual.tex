@@ -1603,8 +1603,8 @@ This is especially apparent in the case of assignments:
   julia> y
   10
 \end{verbatim}
-In the first case, \verb|y| only exists inside the \verb|for| loop.
-In the second case, an outer \verb|y| has been introduced and so is inherited
+In the former case, \verb|y| only exists inside of the \verb|for| loop.
+In the latter case, an outer \verb|y| has been introduced and so is inherited
 within the loop. Due to the special identification of the prompt's scope
 block with the global scope, it is not necessary to declare
 \verb|global y| inside the loop. However, in code not entered into the interactive prompt
@@ -1839,8 +1839,8 @@ There are a few noteworthy high-level features about Julia's approach to strings
 \begin{enumerate}
 \item Like C, but unlike most dynamic languages, Julia has a first-class type representing a single character, called \verb|Char|.
 A \verb|Char| is a special kind of 32-bit integer, whose numeric value represents a single Unicode code point.
-\item Conceptually, a \verb|String| is a \emph{partial function} from indices to \verb|Char| values --- for some index values, no character values is returned, and instead an exception is thrown.
-This for allows efficient indexing into strings by the byte index of an encoded representation rather than by character index, which cannot be implemented efficiently and simply for variable-width string encodings.
+\item Conceptually, a \verb|String| is a \emph{partial function} from indices to \verb|Char| values --- for some index values, no character value is returned, and instead an exception is thrown.
+This for allows efficient indexing into strings by the byte index of an encoded representation rather than by a character index, which cannot be implemented efficiently and simply for variable-width encodings of Unicode strings.
 \item There are many different classes implementing the \verb|String| interface, not a single special one.
 They all implement a common programming interface, however, and any string type can be used in any function expecting a \verb|String|.
 The predefined string types are no more special than user-defined ones.
@@ -1851,7 +1851,7 @@ To construct a different string value, you construct a new string object from pa
 \subsection{Characters}
 
 Like C, but unlike Perl, Python, or Ruby, Julia has a type for individual characters: \verb|Char|.
-A \verb|Char| is just a 32-bit integer with a special literal representation and some specific arithmetic behaviors.
+A \verb|Char| is just a 32-bit integer with a special literal representation and some specific arithmetic behaviors, interpreted as a Unicode code point.
 Here is how \verb|Char| values are input and shown:
 \begin{verbatim}
   julia> 'x'
@@ -1860,7 +1860,7 @@ Here is how \verb|Char| values are input and shown:
   julia> typeof(ans)
   Char
 \end{verbatim}
-You can convert a Char to its integer value (code point) easily:
+You can convert a Char to its integer value, i.e. code point, easily:
 \begin{verbatim}
   julia> int('x')
   120
@@ -1873,8 +1873,8 @@ You can convert an integer value back to a \verb|Char| just as easily:
   julia> char(120)
   'x'
 \end{verbatim}
-Not all integer values are valid Unicode code points, but for performance, the \verb|char| conversion does not check that every character value is a valid Unicode code point.
-If you want to check code points for validity, use the \verb|safe_char| conversion instead:
+Not all integer values are valid Unicode code points, but for performance, the \verb|char| conversion does not check that every character value is valid.
+If you want to check that each converted value is a value code point, use the \verb|safe_char| conversion instead:
 \begin{verbatim}
   julia> char(0xd800)
   '???'
@@ -1889,7 +1889,7 @@ If you want to check code points for validity, use the \verb|safe_char| conversi
   invalid Unicode code point: U+110000
 \end{verbatim}
 As of this writing, the valid Unicode code points are \verb|U+0000| through \verb|U+d7ff| and \verb|U+e000| through \verb|U+10ffff|.
-They have not all yet been assigned intelligible meanings, nor are they necessarily interpretable by applications, but all of these values are considered to be valid Unicode characters.
+These have not all been assigned intelligible meanings yet, nor are they necessarily interpretable by applications, but all of these values are considered to be valid Unicode characters.
 
 You can input any Unicode character in single quotes using \verb|\u| followed by up to four hexadecimal digits or \verb|\U| followed by up to eight hexadecimal digits (the longest valid value only requires six):
 \begin{verbatim}
@@ -1944,7 +1944,7 @@ Like any integers, you can do arithmetic and comparisons with \verb|Char| values
   true
 \end{verbatim}
 Arithmetic with \verb|Char| values always promotes them to \verb|Int32|.
-To create a new \verb|Char| value, explicit conversion is required:
+To create a new \verb|Char| value, explicit conversion back to the \verb|Char| type is required:
 \begin{verbatim}
   julia> 'A' + 1
   66
@@ -1952,11 +1952,11 @@ To create a new \verb|Char| value, explicit conversion is required:
   julia> char(ans)
   'B'
 \end{verbatim}
-Requiring explicit conversion allows a series of intermediate computations to be done efficiently, only checking that the final value is a valid Unicode code point.
+% Requiring explicit conversion allows a series of intermediate computations to be done efficiently, only checking that the final value is a valid Unicode code point.
 
 \subsection{String Basics}
 
-Here is a basic string literal:
+Here a variable is initialized with a simple string literal:
 \begin{verbatim}
   julia> str = "Hello, world.\n"
   "Hello, world.\n"
@@ -1994,16 +1994,10 @@ Note the distinction between \verb|str[k]| and \verb|str[k:k]|:
   julia> str[6]
   ','
 
-  julia> typeof(ans)
-  Char
-
   julia> str[6:6]
   ","
-
-  julia> typeof(ans)
-  SubString
 \end{verbatim}
-The former is a single character value of type \verb|Char|, while the latter is a string value of type \verb|SubString| (we'll get into the nitty-gritty details later), a \verb|String| instance containing only a single character.
+The former is a single character value of type \verb|Char|, while the latter is a string value that happens to contain only a single character.
 In Julia these are very different things.
 
 One of the most useful string operations is concatenation:
@@ -2022,7 +2016,7 @@ As in Perl, you can interpolate values and expressions into strings using \verb|
   julia> "$greet, $who.\n"
   "Hello, world.\n"
 \end{verbatim}
-This more readable and convenient, and completely equivalent to the above string concatenation---the system rewrites this apparent single string literal into a concatenation of string literals with values.
+This is more readable and convenient and exactly equivalent to the above string concatenation---the system rewrites this apparent single string literal into a concatenation of string literals with variables.
 The shortest valid expression after an unescaped \verb|$| is used as the interpolated value.
 Thus, you can interpolate the value of any expression into a string using parentheses:
 \begin{verbatim}
@@ -2037,15 +2031,15 @@ However, you can also interpolate a literal array like this:
   "x,y,z: [2,3,5]."
 \end{verbatim}
 Both concatenation and string interpolation call the generic \verb|string| function to convert objects into \verb|String| form.
-Most non-\verb|String| objects are converted to strings the they are shown in the Julia repl:
+Most non-\verb|String| objects are converted to strings as they are shown in the Julia repl:
 \begin{verbatim}
   julia> v = [1,2,3]
   [1,2,3]
 
-  julia> "vector: $v"
-  "vector: [1,2,3]"
+  julia> "v: $v"
+  "v: [1,2,3]"
 \end{verbatim}
-\verb|String|s and \verb|Char|s are interpolated as themselves:
+\verb|String|s and \verb|Char|s are interpolated as themselves, unquoted and unescaped:
 \begin{verbatim}
   julia> c = 'x'
   'x'
