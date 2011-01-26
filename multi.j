@@ -147,7 +147,7 @@ function deserialize(s, t::Type{RemoteRef})
     if rr.where == myid()
         wi = PGRP.refs[rr2id(rr)]
         if wi.done
-            #return wi.result
+            return wi.result
         end
     end
     rr
@@ -210,9 +210,9 @@ function sync_msg(verb::Symbol, r::RemoteRef)
     # NOTE: currently other workers can't request stuff from the client
     # (id 0), since they wouldn't get it until the user typed yield().
     # this should be fixed though.
+    oid = rr2id(r)
     w = r.where==myid() ? LocalProcess() : PGRP.workers[r.where]
     if isa(w,LocalProcess)
-        oid = rr2id(r)
         wi = PGRP.refs[oid]
         if wi.done
             return is(verb,:fetch) ? wi.result : r
@@ -221,7 +221,7 @@ function sync_msg(verb::Symbol, r::RemoteRef)
             wi.notify = ((), verb, oid, wi.notify)
         end
     else
-        send_msg(w.socket, (verb, (r,)))
+        send_msg(w.socket, (verb, (oid,)))
     end
     # yield to worker loop, return here when answer arrives
     v = yieldto(PGRP.scheduler, WaitFor(verb, r))
@@ -484,8 +484,7 @@ function jl_worker_loop(accept_fd, clientmode)
                         deliver_result((), mkind, oid, val)
                     else
                         # the synchronization messages
-                        rr = args[1]::RemoteRef
-                        oid = rr2id(rr)
+                        oid = args[1]
                         wi = refs[oid]
                         if wi.done
                             deliver_result(sock, msg, oid, wi.result)

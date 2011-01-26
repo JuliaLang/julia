@@ -633,7 +633,7 @@ issues 1/24/11
   . make sure process group setup works
   * function reflection and serialization
     . lambda-numbering to make it faster
-  . automatically resolve local remote references to their values
+  * automatically resolve local remote references to their values
   . @spawn
   . distributed GC
 
