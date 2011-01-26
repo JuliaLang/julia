@@ -498,9 +498,11 @@ function abstract_eval_constant(x)
     return typeof(x)
 end
 
+typealias Top Union(Any,Undef)
+
 function abstract_eval_global(s::Symbol)
     if !isbound(s)
-        return Undef
+        return Top
     end
     if isconstant(s)
         return abstract_eval_constant(eval(s))
@@ -515,7 +517,7 @@ function abstract_eval(s::Symbol, vtypes, sv::StaticVarInfo)
         # consider closed vars to always have their propagated (declared) type
         return sv.cenv[s]
     end
-    t = get(vtypes,s,NF)
+    t = is(vtypes,()) ? NF : get(vtypes,s,NF)
     if is(t,NF)
         sp = sv.sp
         for i=1:2:length(sp)
@@ -551,7 +553,7 @@ interpret(e, vtypes, sv::StaticVarInfo) = vtypes
 
 function interpret(e::Expr, vtypes, sv::StaticVarInfo)
     # handle assignment
-    if is(e.head,symbol("="))
+    if is(e.head,:(=))
         t = abstract_eval(e.args[2], vtypes, sv)
         lhs = e.args[1]
         assert(isa(lhs,Symbol))
@@ -567,6 +569,9 @@ end
 tchanged(n, o) = is(o,NF) || (!is(n,NF) && !subtype(n,o))
 
 function stchanged(new::Union(StateUpdate,VarTable), old, vars)
+    if is(old,())
+        return true
+    end
     for i = 1:length(vars)
         v = vars[i]
         if tchanged(new[v], get(old,v,NF))
@@ -577,8 +582,6 @@ function stchanged(new::Union(StateUpdate,VarTable), old, vars)
 end
 
 badunion(t) = ccall(:jl_union_too_complex, Int32, (Any,), t) != 0
-
-typealias Top Union(Any,Undef)
 
 function tmerge(typea, typeb)
     if is(typea,NF)
@@ -619,6 +622,9 @@ function tmerge(typea, typeb)
 end
 
 function stupdate(state, changes::Union(StateUpdate,VarTable), vars)
+    if is(state,())
+        state = idtable()
+    end
     for i = 1:length(vars)
         v = vars[i]
         newtype = changes[v]
@@ -718,12 +724,13 @@ function typeinf(linfo::LambdaStaticData,atypes::Tuple,sparams::Tuple, cop, def)
     body = ast.args[3].args
 
     n = length(body)
-    s = { idtable() | i=1:n }
+    s = { () | i=1:n }
     recpts = IntSet(n+1)  # statements that depend recursively on our value
     W = IntSet(n+1)
     # initial set of pc
     add(W,1)
     # initial types
+    s[1] = idtable()
     for v=vars
         s[1][v] = Undef
     end
@@ -775,7 +782,7 @@ function typeinf(linfo::LambdaStaticData,atypes::Tuple,sparams::Tuple, cop, def)
                 l = cur_hand[1]::Int32
                 if stchanged(changes, s[l], vars)
                     add(W, l)
-                    stupdate(s[l], changes, vars)
+                    s[l] = stupdate(s[l], changes, vars)
                 end
             end
             pc´ = pc+1
@@ -788,9 +795,9 @@ function typeinf(linfo::LambdaStaticData,atypes::Tuple,sparams::Tuple, cop, def)
                     handler_at[l] = cur_hand
                     if stchanged(changes, s[l], vars)
                         add(W, l)
-                        stupdate(s[l], changes, vars)
+                        s[l] = stupdate(s[l], changes, vars)
                     end
-                elseif is(hd,symbol("return"))
+                elseif is(hd,:return)
                     pc´ = n+1
                     rt = abstract_eval(stmt.args[1], s[pc], sv)
                     if tchanged(rt, frame.result)
@@ -812,7 +819,7 @@ function typeinf(linfo::LambdaStaticData,atypes::Tuple,sparams::Tuple, cop, def)
             end
             if pc´<=n && (handler_at[pc´] = cur_hand; true) &&
                stchanged(changes, s[pc´], vars)
-                stupdate(s[pc´], changes, vars)
+                s[pc´] = stupdate(s[pc´], changes, vars)
                 pc = pc´
             else
                 break
@@ -848,9 +855,9 @@ function eval_annotate(e::Expr, vtypes, sv, decls)
     if is(e.head,:quote) || is(e.head,:top) || is(e.head,:goto) ||
         is(e.head,:label) || is(e.head,:static_typeof)
         return e
-    elseif is(e.head,:gotoifnot) || is(e.head,symbol("return"))
+    elseif is(e.head,:gotoifnot) || is(e.head,:return)
         e.type = Any
-    elseif is(e.head,symbol("="))
+    elseif is(e.head,:(=))
         e.type = Any
         s = e.args[1]
         # assignment LHS not subject to all-same-type variable checking,
@@ -1016,7 +1023,7 @@ function inlineable(e::Expr, vars)
         return NF
     end
     assert(isa(body[1],Expr))
-    assert(is(body[1].head,symbol("return")))
+    assert(is(body[1].head,:return))
     # check for vararg function
     args = f_argnames(ast)
     na = length(args)

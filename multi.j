@@ -117,7 +117,7 @@ type ProcessGroup
     end
 end
 
-myid() = (global PGRP; isbound(:PGRP) ? PGRP.myid : -1)
+myid() = (global PGRP; isbound(:PGRP) ? (PGRP::ProcessGroup).myid : -1)
 
 # establish a Worker connection for processes that connected to us
 function identify_socket(otherid, fd, sock)
@@ -140,6 +140,18 @@ type RemoteRef
 end
 
 rr2id(r::RemoteRef) = (r.whence, r.id)
+
+function deserialize(s, t::Type{RemoteRef})
+    global PGRP
+    rr = invoke(deserialize, (Any, Type), s, t)
+    if rr.where == myid()
+        wi = PGRP.refs[rr2id(rr)]
+        if wi.done
+            #return wi.result
+        end
+    end
+    rr
+end
 
 function remote_do(w::LocalProcess, f, args...)
     # the LocalProcess version just performs in local memory what a worker
