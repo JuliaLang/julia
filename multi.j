@@ -2,18 +2,21 @@
 ##
 ## higher-level interface:
 ##
-## Worker() - create a new local worker
+## ProcessGroup(np) - create a group of np processors
 ##
-## remote_apply(w, func, args...) -
+## remote_call(w, func, args...) -
 ##     tell a worker to call a function on the given arguments.
-##     for now, functions are passed as symbols, e.g. :randn
-##     returns a Future.
+##     returns a RemoteRef to the result.
 ##
-## wait(f) - wait for, then return the value represented by a Future
+## remote_do(w, f, args...) - remote function call with no result
 ##
-## pmap(pool, func, lst) -
+## wait(rr) - wait for a RemoteRef to be finished computing
+##
+## fetch(rr) - wait for and get the value of a RemoteRef
+##
+## pmap(func, lst) -
 ##     call a function on each element of lst (some 1-d thing), in
-##     parallel. pool is a list of available Workers.
+##     parallel.
 ##
 ## lower-level interface:
 ##
@@ -37,7 +40,7 @@ end
 # * all-to-all communication
 # - send pings at some interval to detect failed/hung machines
 # - integrate event loop with other kinds of i/o (non-messages)
-# - serializing closures
+# * serializing closures
 
 ## process group creation ##
 
@@ -108,7 +111,7 @@ type ProcessGroup
         for i=(myid+1):np
             w[i] = Worker(locs[i].host, locs[i].port)
             sockets[w[i].fd] = w[i].socket
-            remote_do(w[i], :identify_socket, myid)
+            remote_do(w[i], identify_socket, myid)
         end
         PGRP
     end
@@ -143,7 +146,7 @@ function remote_do(w::LocalProcess, f, args...)
     # does when it gets a :do message.
     # same for other messages on LocalProcess.
     global PGRP
-    enq(PGRP.workqueue, WorkItem(()->apply(eval(f),args)))
+    enq(PGRP.workqueue, WorkItem(()->apply(f,args)))
     ()
 end
 
@@ -184,7 +187,7 @@ end
 function remote_call(w::LocalProcess, f, args...)
     global PGRP
     rr = assign_rr(w)
-    wi = WorkItem(()->apply(eval(f), args))
+    wi = WorkItem(()->apply(f, args))
     PGRP.refs[rr2id(rr)] = wi
     enq(PGRP.workqueue, wi)
     rr
@@ -220,18 +223,18 @@ yield() = (global PGRP; yieldto(PGRP.scheduler))
 
 ## higher-level functions ##
 
-at_each(fname::Symbol, args...) = at_each(PGRP, fname, args...)
+at_each(f, args...) = at_each(PGRP, f, args...)
 
-function at_each(grp::ProcessGroup, fname, args...)
+function at_each(grp::ProcessGroup, f, args...)
     w = grp.workers
     np = length(w)
     fut = cell(np)
     for i=1:np
-        remote_do(w[i], fname, args...)
+        remote_do(w[i], f, args...)
     end
 end
 
-pmap(f::Symbol, lst) = pmap(PGRP, f, lst)
+pmap(f, lst) = pmap(PGRP, f, lst)
 
 function pmap(grp::ProcessGroup, f, lst)
     np = length(grp.workers)
@@ -281,7 +284,13 @@ function deliver_result(sock::IOStream, msg, oid, value)
         assert(is(msg, :sync))
         val = oid
     end
-    send_msg(sock, (:result, (msg, oid, val)))
+    try
+        send_msg(sock, (:result, (msg, oid, val)))
+    catch e
+        # send exception in case of serialization error; otherwise
+        # request side would hang.
+        send_msg(sock, (:result, (msg, oid, e)))
+    end
 end
 
 function deliver_result(sock::(), msg, oid, value)
@@ -441,18 +450,18 @@ function jl_worker_loop(accept_fd, clientmode)
                     if is(msg, :call)
                         id = args[1]
                         f = args[2]
-                        let func=eval(f), ar=args[3:]
+                        let func=f, ar=args[3:]
                             wi = WorkItem(()->apply(func,ar))
                             refs[id] = wi
                             enq(workqueue, wi)
                         end
                     elseif is(msg, :do)
                         f = args[1]
-                        if is(f,:identify_socket)
+                        if is(f,identify_socket)
                             # special case
                             args = (0, args[2], fd, sock)
                         end
-                        let func=eval(f), ar=args[2:]
+                        let func=f, ar=args[2:]
                             enq(workqueue, WorkItem(()->apply(func,ar)))
                         end
                     elseif is(msg, :result)
@@ -571,12 +580,12 @@ end
 
 ## demos ##
 
-# fv(a)=eig(a)[2][2]
+fv(a)=eig(a)[2][2]
 # g = ProcessGroup(3)
 # A=randn(800,800);A=A*A';
-# pmap(g, :fv, {A,A,A})
+# pmap(fv, {A,A,A})
 
-all2all() = at_each(:hello_from, myid())
+all2all() = at_each(hello_from, myid())
 
 hello_from(i) = print("message from $i to $(myid())\n")
 
@@ -585,7 +594,7 @@ hit_barrier() = (global BARRIER_COUNT; BARRIER_COUNT+=1; ())
 function barrier()
     print("$(myid()) reached barrier\n")
     global PGRP, BARRIER_COUNT
-    at_each(:hit_barrier)
+    at_each(hit_barrier)
     while BARRIER_COUNT < length(PGRP.workers)
         yield()
     end

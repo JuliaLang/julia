@@ -5,11 +5,18 @@ let i = 1
     global ser_tag
     for t = {Any, Symbol, Bool, Int8, Uint8, Int16, Uint16, Int32, Uint32,
              Int64, Uint64, Float32, Float64,
-             TagKind, UnionKind, BitsKind, StructKind, Tuple, Array}
+             TagKind, UnionKind, BitsKind, StructKind, FuncKind,
+             Tuple, Array}
         ser_tag[t] = i
         i += 1
     end
 end
+
+deser_tag = idtable()
+for (k, v) = ser_tag
+    deser_tag[v] = k
+end
+
 
 writetag(s, x) = write(s, uint8(ser_tag[x]))
 
@@ -56,6 +63,29 @@ function serialize(s, t::TagKind)
     end
 end
 
+function serialize(s, f::Function)
+    writetag(s, FuncKind)
+    env = ccall(:jl_closure_env, Any, (Any,), f)
+    linfo = ccall(:jl_closure_linfo, Any, (Any,), f)
+    if isa(linfo,Symbol)
+        if isbound(linfo) && is(f,eval(linfo))
+            # toplevel named func
+            write(s, uint8(0))
+            serialize(s, linfo)
+        else
+            error(f," is not serializable")
+        end
+    elseif is(linfo,())
+        error(f," is not serializable")
+    else
+        assert(isa(linfo,LambdaStaticData))
+        write(s, uint8(1))
+        serialize(s, linfo.ast)
+        serialize(s, linfo.sparams)
+        serialize(s, env)
+    end
+end
+
 function serialize(s, x)
     if has(ser_tag,x)
         write(s, uint8(0)) # tag 0 indicates just a tag
@@ -85,11 +115,6 @@ function serialize(s, x)
 end
 
 ## deserializing values ##
-
-deser_tag = idtable()
-for (k, v) = ser_tag
-    deser_tag[v] = k
-end
 
 function deserialize(s)
     b = int32(read(s, Uint8))
@@ -142,6 +167,19 @@ function deserialize(s, ::Type{StructKind})
     t = apply_type(eval(name), params...)
     # allow delegation to more specialized method
     return deserialize(s, t)
+end
+
+function deserialize(s, ::Type{FuncKind})
+    b = read(s, Uint8)
+    if b==0
+        name = deserialize(s)::Symbol
+        return eval(name)
+    end
+    ast = deserialize(s)
+    sparams = deserialize(s)
+    env = deserialize(s)
+    linfo = ccall(:jl_new_lambda_info, Any, (Any, Any), ast, sparams)
+    ccall(:jl_new_closure_internal, Any, (Any, Any), linfo, env)::Function
 end
 
 # default structure deserializer

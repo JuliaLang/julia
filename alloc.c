@@ -251,6 +251,7 @@ jl_function_t *jl_new_closure(jl_fptr_t proc, jl_value_t *env)
     return f;
 }
 
+DLLEXPORT
 jl_lambda_info_t *jl_new_lambda_info(jl_value_t *ast, jl_tuple_t *sparams)
 {
     jl_lambda_info_t *li =

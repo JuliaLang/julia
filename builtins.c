@@ -911,6 +911,7 @@ JL_CALLABLE(jl_trampoline)
     return jl_apply(f, args, nargs);
 }
 
+DLLEXPORT
 jl_value_t *jl_new_closure_internal(jl_lambda_info_t *li, jl_value_t *env)
 {
     assert(jl_is_lambda_info(li));
@@ -1212,6 +1213,25 @@ JL_CALLABLE(jl_f_invoke)
     if (mlfunc == NULL)
         jl_no_method_error(jl_gf_name(args[0]), &args[2], nargs-2);
     return jl_apply(mlfunc, &args[2], nargs-2);
+}
+
+DLLEXPORT
+jl_value_t *jl_closure_env(jl_function_t *f)
+{
+    if (jl_is_tuple(f->env) && ((jl_tuple_t*)f->env)->length==2 &&
+        jl_tupleref(f->env,0) == (jl_value_t*)f)
+        return jl_tupleref(f->env,1);
+    return f->env;
+}
+
+DLLEXPORT
+jl_value_t *jl_closure_linfo(jl_function_t *f)
+{
+    if (jl_is_gf(f))
+        return (jl_value_t*)jl_gf_name(f);
+    if (f->linfo == NULL)
+        return (jl_value_t*)jl_null;
+    return (jl_value_t*)f->linfo;
 }
 
 // --- eq hash table ---

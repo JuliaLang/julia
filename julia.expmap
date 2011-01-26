@@ -19,6 +19,10 @@
     bitvector_next;
     jl_new_struct;
     jl_new_structt;
+    jl_new_lambda_info;
+    jl_new_closure_internal;
+    jl_closure_env;
+    jl_closure_linfo;
     jl_word_size;
     jl_enable_inference;
     jl_symbol_n;
