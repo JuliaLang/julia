@@ -40,7 +40,7 @@ open(fname::String) = open(fname, true, true, true, false)
 memio() = memio(0)
 function memio(x::Int)
     s = IOStream()
-    ccall(:ios_mem, Ptr{Void}, (Ptr{Uint8}, Uint32), s.ios, uint32(x))
+    ccall(:ios_mem, Ptr{Void}, (Ptr{Uint8}, PtrInt), s.ios, convert(PtrInt,x))
     s
 end
 
@@ -137,8 +137,9 @@ write(s::IOStream, c::Char) =
 
 function write{T}(s::IOStream, a::Array{T})
     if isa(T,BitsKind)
-        ccall(:ios_write, Size,
-              (Ptr{Void}, Ptr{Void}, Size), s.ios, a, numel(a)*sizeof(T))
+        ccall(:ios_write, PtrInt,
+              (Ptr{Void}, Ptr{Void}, PtrInt),
+              s.ios, a, convert(PtrInt, numel(a)*sizeof(T)))
     else
         invoke(write, (Any, Array), s, a)
     end
@@ -175,8 +176,8 @@ function read{T}(s::IOStream, ::Type{T}, dims::Dims)
         if ASYNCH && nb_available(s) < nb
             io_wait(s)
         end
-        ccall(:ios_readall, Size,
-              (Ptr{Void}, Ptr{Void}, Size), s.ios, a, nb)
+        ccall(:ios_readall, PtrInt,
+              (Ptr{Void}, Ptr{Void}, PtrInt), s.ios, a, convert(PtrInt,nb))
         a
     else
         invoke(read, (Any, Type, Size...), s, T, dims...)
@@ -185,14 +186,14 @@ end
 
 function readuntil(s::IOStream, delim::Uint8)
     dest = memio()
-    ccall(:ios_copyuntil, Size,
+    ccall(:ios_copyuntil, PtrInt,
           (Ptr{Void}, Ptr{Void}, Uint8), dest.ios, s.ios, delim)
     takebuf_string(dest)
 end
 
 function readall(s::IOStream)
     dest = memio()
-    ccall(:ios_copyall, Size,
+    ccall(:ios_copyall, PtrInt,
           (Ptr{Void}, Ptr{Void}), dest.ios, s.ios)
     takebuf_string(dest)
 end
@@ -200,6 +201,10 @@ end
 readline(s::IOStream) = readuntil(s, uint8('\n'))
 
 flush(s::IOStream) = ccall(:ios_flush, Void, (Ptr{Void},), s.ios)
+
+truncate(s::IOStream, n::Int) =
+    ccall(:ios_trunc, PtrInt, (Ptr{Void}, PtrInt),
+          s.ios, convert(PtrInt, n))
 
 type IOTally
     nbytes::Size

@@ -44,9 +44,9 @@ void jl__not__used__()
     open_any_tcp_port(&p);
 }
 
-DLLEXPORT size_t jl_sizeof_fd_set() { return sizeof(fd_set); }
+DLLEXPORT int jl_sizeof_fd_set() { return sizeof(fd_set); }
 
-DLLEXPORT size_t jl_sizeof_timeval() { return sizeof(struct timeval); }
+DLLEXPORT int jl_sizeof_timeval() { return sizeof(struct timeval); }
 
 DLLEXPORT void jl_set_timeval(struct timeval *tv, double tout)
 {

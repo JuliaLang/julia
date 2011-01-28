@@ -668,8 +668,10 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
             }
         }
         else if (f->fptr == &jl_f_tuple) {
-            if (nargs == 0)
+            if (nargs == 0) {
+                JL_GC_POP();
                 return literal_pointer_val((jl_value_t*)jl_null);
+            }
         }
         else if (f->fptr == &jl_f_arraylen && nargs==1) {
             jl_value_t *aty = expr_type(args[1]); rt1 = aty;

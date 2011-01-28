@@ -2259,20 +2259,22 @@ If you actually want to allocate all that memory, you can force Julia to do so b
 
 \section{Parallel Computing}
 \begin{itemize}
-  \item \verb|Worker()| ---
-     create a new local worker
-
-  \item \verb|remote_apply(w, func, args...)| ---
+   \item \verb|remote_call(w, func, args...)| ---
      tell a worker to call a function on the given arguments.
-     for now, functions are passed as symbols, e.g. \verb|:randn|
-     returns a Future.
+     returns a \verb|RemoteRef| for the result.
 
-   \item \verb|wait(f)| ---
-     wait for, then return the value represented by a Future
+   \item \verb|remote_do(w, func, args...)| ---
+     remote function call with no result
 
-   \item \verb|pmap(pool, func, lst)| ---
+   \item \verb|wait(r)| ---
+     wait for a \verb|RemoteRef| to finish computing
+
+   \item \verb|fetch(r)| ---
+     wait for and get the value of a \verb|RemoteRef|
+
+   \item \verb|pmap(func, lst)| ---
      call a function on each element of \verb|lst| (some 1-d thing), in
-     parallel. pool is a list of available Workers.
+     parallel.
 
    \item \verb|send_msg(socket, x)| ---
      send a Julia object through a socket

@@ -20,17 +20,19 @@
 ##
 ## lower-level interface:
 ##
-## send_msg(socket, x) - send a Julia object through a socket
-## recv_msg(socket) - read the next Julia object from a socket
+## send_msg(socket|Worker, x) - send a Julia object
+## recv_msg(socket|Worker)    - read the next Julia object from a connection
 
 ## message i/o ##
 
 recv_msg(s) = deserialize(s)
-function send_msg(s, x)
-    buf = memio()
-    serialize(buf, x)
-    ccall(:ios_write_direct, Int32, (Ptr{Void}, Ptr{Void}),
-          s.ios, buf.ios)
+
+SENDBUF = memio()
+function send_msg(s::IOStream, x)
+    truncate(SENDBUF, 0)
+    serialize(SENDBUF, x)
+    ccall(:ios_write_direct, PtrInt, (Ptr{Void}, Ptr{Void}),
+          s.ios, SENDBUF.ios)
     ()
 end
 
@@ -49,13 +51,26 @@ type Worker
     port::Int16
     fd::Int32
     socket::IOStream
+    sendbuf::IOStream
+    id::Int32
 
     Worker() = Worker("localhost", start_local_worker())
 
     Worker(host, port) = Worker(host, port, connect_to_worker(host,port)...)
 
-    Worker(host, port, fd, sock) = new(host, port, fd, sock)
+    Worker(host, port, fd, sock) = new(host, port, fd, sock, memio(), 0)
 end
+
+function send_msg(w::Worker, x)
+    buf = w.sendbuf
+    truncate(buf, 0)
+    serialize(buf, x)
+    ccall(:ios_write_direct, PtrInt, (Ptr{Void}, Ptr{Void}),
+          w.socket.ios, buf.ios)
+    ()
+end
+
+recv_msg(w::Worker) = recv_msg(w.socket)
 
 type LocalProcess
 end
@@ -69,12 +84,14 @@ type ProcessGroup
     myid::Int32
     workers::Array{Any,1}
     locs::Array{Any,1}
+    np::Int32
 
     # event loop state
     scheduler::Task
     refs
     workqueue
     waiting
+    client
 
     function ProcessGroup(np::Int)
         # n local workers
@@ -93,9 +110,10 @@ type ProcessGroup
         # "client side", or initiator of process group
         locs = map(x->Location(x.host,x.port), w)
         sched = Task(jl_worker_loop)
-        global PGRP = new(0, w, locs, sched, (), (), ())
+        global PGRP = new(0, w, locs, np, sched, (), (), (), ())
         for i=1:np
-            send_msg(w[i].socket, (i, locs))
+            w[i].id = i
+            send_msg(w[i], (i, locs))
         end
         # bootstrap the current task into the scheduler
         yieldto(sched, -1, true)
@@ -107,9 +125,10 @@ type ProcessGroup
         np = length(locs)
         w = cell(np)
         w[myid] = LocalProcess()
-        PGRP = new(myid, w, locs, current_task(), (), (), ())
+        PGRP = new(myid, w, locs, np, current_task(), (), (), (), ())
         for i=(myid+1):np
             w[i] = Worker(locs[i].host, locs[i].port)
+            w[i].id = i
             sockets[w[i].fd] = w[i].socket
             remote_do(w[i], identify_socket, myid)
         end
@@ -126,6 +145,7 @@ function identify_socket(otherid, fd, sock)
     locs = PGRP.locs
     assert(i < PGRP.myid)
     PGRP.workers[i] = Worker(locs[i].host, locs[i].port, fd, sock)
+    PGRP.workers[i].id = i
     #write(stdout_stream, latin1("$(PGRP.myid) heard from $i\n"))
     ()
 end
@@ -163,22 +183,18 @@ function remote_do(w::LocalProcess, f, args...)
 end
 
 function remote_do(w::Worker, f, args...)
-    send_msg(w.socket, (:do, tuple(f, args...)))
+    send_msg(w, (:do, tuple(f, args...)))
     ()
 end
+
+remote_do(id::Int, f, args...) =
+    (global PGRP; remote_do(PGRP.workers[id], f, args...))
 
 REQ_ID = 0
 
 function assign_rr(w::Worker)
     global REQ_ID, PGRP
-    wid = 0
-    for i=1:length(PGRP.workers)
-        if is(w,PGRP.workers[i])
-            wid = i
-            break
-        end
-    end
-    rr = RemoteRef(wid, myid(), REQ_ID)
+    rr = RemoteRef(w.id, myid(), REQ_ID)
     REQ_ID += 1
     rr
 end
@@ -187,12 +203,6 @@ function assign_rr(w::LocalProcess)
     global REQ_ID
     rr = RemoteRef(myid(), myid(), REQ_ID)
     REQ_ID += 1
-    rr
-end
-
-function remote_call(w::Worker, f, args...)
-    rr = assign_rr(w)
-    send_msg(w.socket, (:call, tuple(rr2id(rr), f, args...)))
     rr
 end
 
@@ -205,14 +215,23 @@ function remote_call(w::LocalProcess, f, args...)
     rr
 end
 
+function remote_call(w::Worker, f, args...)
+    rr = assign_rr(w)
+    send_msg(w, (:call, tuple(rr2id(rr), f, args...)))
+    rr
+end
+
+remote_call(id::Int, f, args...) =
+    (global PGRP; remote_call(PGRP.workers[id], f, args...))
+
 function sync_msg(verb::Symbol, r::RemoteRef)
     global PGRP
     # NOTE: currently other workers can't request stuff from the client
     # (id 0), since they wouldn't get it until the user typed yield().
     # this should be fixed though.
     oid = rr2id(r)
-    w = r.where==myid() ? LocalProcess() : PGRP.workers[r.where]
-    if isa(w,LocalProcess)
+    if r.where==myid() || (r.where > 0 && isa(PGRP.workers[r.where],
+                                              LocalProcess))
         wi = PGRP.refs[oid]
         if wi.done
             return is(verb,:fetch) ? wi.result : r
@@ -220,11 +239,13 @@ function sync_msg(verb::Symbol, r::RemoteRef)
             # add to WorkItem's notify list
             wi.notify = ((), verb, oid, wi.notify)
         end
+    elseif r.where == 0
+        send_msg(PGRP.client, (verb, (oid,)))
     else
-        send_msg(w.socket, (verb, (oid,)))
+        send_msg(PGRP.workers[r.where], (verb, (oid,)))
     end
     # yield to worker loop, return here when answer arrives
-    v = yieldto(PGRP.scheduler, WaitFor(verb, r))
+    v = yieldto(PGRP.scheduler, WaitFor(verb, oid))
     return is(verb,:fetch) ? v : r
 end
 
@@ -239,7 +260,7 @@ at_each(f, args...) = at_each(PGRP, f, args...)
 
 function at_each(grp::ProcessGroup, f, args...)
     w = grp.workers
-    np = length(w)
+    np = grp.np
     fut = cell(np)
     for i=1:np
         remote_do(w[i], f, args...)
@@ -249,7 +270,7 @@ end
 pmap(f, lst) = pmap(PGRP, f, lst)
 
 function pmap(grp::ProcessGroup, f, lst)
-    np = length(grp.workers)
+    np = grp.np
     { remote_call(grp.workers[(i-1)%np+1], f, lst[i]) |
      i = 1:length(lst) }
 end
@@ -274,7 +295,7 @@ end
 
 type WaitFor
     msg::Symbol
-    ref::RemoteRef
+    oid
 end
 
 # to be used as a re-usable Task for executing thunks
@@ -295,6 +316,18 @@ function deliver_result(sock::IOStream, msg, oid, value)
     else
         assert(is(msg, :sync))
         val = oid
+    end
+    global PGRP
+    if is(sock,PGRP.client.socket)
+        sock = PGRP.client
+    else
+        for i=1:PGRP.np
+            # TODO: this search shouldn't be necessary
+            if is(sock,PGRP.workers[i].socket)
+                sock = PGRP.workers[i]
+                break
+            end
+        end
     end
     try
         send_msg(sock, (:result, (msg, oid, val)))
@@ -359,10 +392,7 @@ function perform_work(workqueue, waiting, runner)
         runner = job.task  # Task now free to be shared
         job.task = ()
         # do notifications
-        while !is(job.notify,())
-            (sock, msg, oid, job.notify) = job.notify
-            deliver_result(sock, msg, oid, job.result)
-        end
+        notify_done(job)
     else
         # job interrupted
         if is(job.task,runner)
@@ -372,14 +402,20 @@ function perform_work(workqueue, waiting, runner)
         if isa(result,WaitFor)
             # add to waiting set to wait on a sync event
             wf::WaitFor = result
-            oid = rr2id(wf.ref)
-            waiting[oid] = (wf.msg, job, get(waiting, oid, ()))
+            waiting[wf.oid] = (wf.msg, job, get(waiting, wf.oid, ()))
         elseif !task_done(job.task)
             # otherwise return to queue
             enq(workqueue, job)
         end
     end
     return (workqueue, waiting, runner)
+end
+
+function notify_done(job::WorkItem)
+    while !is(job.notify,())
+        (sock, msg, oid, job.notify) = job.notify
+        deliver_result(sock, msg, oid, job.result)
+    end
 end
 
 function make_scheduled(t::Task)
@@ -402,6 +438,7 @@ function jl_worker_loop(accept_fd, clientmode)
         PGRP.refs = refs
         PGRP.waiting = waiting
         PGRP.workqueue = workqueue
+        PGRP.client = LocalProcess()
         make_scheduled(current_task().parent)
         for wrkr = PGRP.workers
             sockets[wrkr.fd] = wrkr.socket
@@ -446,6 +483,7 @@ function jl_worker_loop(accept_fd, clientmode)
                     PGRP.refs = refs
                     PGRP.waiting = waiting
                     PGRP.workqueue = workqueue
+                    PGRP.client = Worker("", 0, connectfd, sock)
                 end
             end
         end
@@ -589,6 +627,89 @@ function connect_to_worker(hostname, port)
     (fd, fdio(fd))
 end
 
+## global objects and collective operations ##
+
+type GlobalObject
+    locval
+    refs::Array{RemoteRef,1}
+
+    global empty_global_object, my_global_object, init_global_object
+    function empty_global_object()
+        global PGRP
+        r = Array(RemoteRef, PGRP.np)
+        new((), r)
+    end
+
+    function my_global_object()
+        # new G.O. with only the reference to my copy filled in
+        r = remote_call(myid(), empty_global_object)
+        go = fetch(r)
+        go.refs[myid()] = r
+        go
+    end
+
+    function init_global_object(rgo, refs)
+        if isa(rgo,RemoteRef)
+            rgo = fetch(rgo)
+        end
+        for i=1:length(refs)
+            if i!=myid()
+                rgo.refs[i] = refs[i]
+            end
+        end
+    end
+
+    function GlobalObject()
+        # makes remote object cycles, but we should be able to take
+        # advantage of the known topology to avoid fully-general
+        # cycle collection.
+        # . add WeakRef type
+        # . keep a weak table of all client RemoteRefs, unique them
+        # . send add_client when adding a new client for an object
+        # . send del_client when an RR is collected
+        # . the refs inside a GlobalObject somehow don't count
+        #   . initially the creator of the GO is the only client
+        #     everybody has {creator} as the client set
+        #   . when a GO arrives via message, add a client to everybody
+        #     . sender knows whether recipient is a client already by
+        #       looking at the client set for its own copy, so it can
+        #       avoid the client add message in this case.
+        #   . send del_client when there are no references to the GO
+        #     except the one in PGRP.refs
+        #     . done by adding a finalizer to the GO that revives it and
+        #       puts it back in the refs table until the client set is empty
+        global PGRP
+        r = Array(RemoteRef, PGRP.np)
+        for i=1:length(r)
+            r[i] = remote_call(i, my_global_object)
+        end
+        if myid()==0
+            go = new((), r)
+        else
+            go = fetch(r[myid()])
+        end
+        for i=1:length(r)
+            remote_do(i, init_global_object, r[i], r)
+        end
+        go
+    end
+end
+
+function serialize(s, g::GlobalObject)
+    global PGRP
+    # a GO is sent to a machine by sending just the RemoteRef for its
+    # copy. much smaller message.
+    wid = 0
+    for i=1:PGRP.np
+        w = PGRP.workers[i]
+        if is(s, w.socket) || is(s, w.sendbuf)
+            wid = i
+            break
+        end
+    end
+    serialize(s, g.refs[wid])
+end
+
 ## demos ##
 
 fv(a)=eig(a)[2][2]
@@ -599,21 +720,3 @@ fv(a)=eig(a)[2][2]
 all2all() = at_each(hello_from, myid())
 
 hello_from(i) = print("message from $i to $(myid())\n")
-
-BARRIER_COUNT = 0
-hit_barrier() = (global BARRIER_COUNT; BARRIER_COUNT+=1; ())
-function barrier()
-    print("$(myid()) reached barrier\n")
-    global PGRP, BARRIER_COUNT
-    at_each(hit_barrier)
-    while BARRIER_COUNT < length(PGRP.workers)
-        yield()
-    end
-    BARRIER_COUNT = 0
-    print("$(myid()) passed barrier\n")
-end
-
-function barrier_demo()
-    system("sleep $(myid())")
-    barrier()
-end
