@@ -110,6 +110,9 @@ cmp(x::Float, y::Float) =
 
 eps(::Type{Float32}) = float32(1.1920928e-7)
 eps(::Type{Float64}) = 2.2204460492503131e-16
+eps(x::Float) = abs(x)*eps(typeof(x))
+eps(x::Number) = eps(float(x))
+
 typemin(::Type{Float32}) = float32(1.175494351e-38)
 typemax(::Type{Float32}) = float32(3.402823466e+38)
 typemin(::Type{Float64}) = 2.2250738585072014e-308
