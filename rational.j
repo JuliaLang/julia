@@ -89,6 +89,7 @@ rational(x::Rational) = x
 rational(x::Int) = x//one(x)
 rational(x::Float32) = convert(Rational{Int32}, x)
 rational(x::Float64) = convert(Rational{Int64}, x)
+rational(z::Complex) = Complex(rational(real(z)), rational(imag(z)))
 
 int(x::Rational) = div(x.num, x.den)
 float(x::Rational) = x.num/x.den
