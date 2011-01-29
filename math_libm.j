@@ -24,7 +24,7 @@ fpart(x) = x - trunc(x)
 for f = {:isinf, :isnan}
     @eval begin
         ($f)(x::Float64) = (0 != ccall(dlsym(libm,$string(f)), Int32, (Float64,), x))
-        ($f)(x::Float32) = (0 != ccall(dlsym(libm,$strcat(string(f),"f")), Int32, (Float32,), x))
+        ($f)(x::Float32) = ($f)(float64(x))
         ($f)(x::Int) = false
         @vectorize $f
     end
