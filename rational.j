@@ -33,6 +33,23 @@ convert{T}(::Type{Rational{T}}, x::Rational) = Rational(convert(T,x.num),convert
 convert{T<:Float}(::Type{T}, x::Rational) = convert(T,x.num)/convert(T,x.den)
 convert{T<:Int}(::Type{T}, x::Rational) = div(convert(T,x.num),convert(T,x.den))
 
+function convert{T}(::Type{Rational{T}}, x::Float)
+    if isnan(x); return zero(T)//zero(T); end
+    if isinf(x); return sign(x)//zero(T); end
+
+    f = x
+    r = (one(T), zero(T))
+    s = (zero(T), one(T))
+    while true
+        d = convert(T,round(f)); f -= d
+        r, s = (d*r[1]+s[1], d*r[2]+s[2]), r
+        if f == 0 || abs(r[1]/r[2]-x) <= eps(x)
+            return r[1]//r[2]
+        end
+        f = 1/f
+    end
+end
+
 promote_rule{T<:Int}(::Type{Rational{T}}, ::Type{T}) = Rational{T}
 promote_rule{T,S<:Int}(::Type{Rational{T}}, ::Type{S}) = Rational{promote_type(T,S)}
 promote_rule{T,S}(::Type{Rational{T}}, ::Type{Rational{S}}) = Rational{promote_type(T,S)}
@@ -67,6 +84,11 @@ div(x::Rational, y::Real    ) = div(x.num, x.den*y)
 fld(x::Rational, y::Rational) = fld(x.num*y.den, x.den*y.num)
 fld(x::Real    , y::Rational) = fld(x*y.den, y.num)
 fld(x::Rational, y::Real    ) = fld(x.num, x.den*y)
+
+rational(x::Rational) = x
+rational(x::Int) = x//one(x)
+rational(x::Float32) = convert(Rational{Int32}, x)
+rational(x::Float64) = convert(Rational{Int64}, x)
 
 int(x::Rational) = div(x.num, x.den)
 float(x::Rational) = x.num/x.den
