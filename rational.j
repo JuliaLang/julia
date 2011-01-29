@@ -37,16 +37,16 @@ function convert{T}(::Type{Rational{T}}, x::Float)
     if isnan(x); return zero(T)//zero(T); end
     if isinf(x); return sign(x)//zero(T); end
 
-    f = x
-    r = (one(T), zero(T))
-    s = (zero(T), one(T))
+    y = x
+    a = d = one(T)
+    b = c = zero(T)
     while true
-        d = convert(T,round(f)); f -= d
-        r, s = (d*r[1]+s[1], d*r[2]+s[2]), r
-        if f == 0 || abs(r[1]/r[2]-x) <= eps(x)
-            return r[1]//r[2]
+        f = convert(T,round(y)); y -= f
+        a, b, c, d = f*a+c, f*b+d, a, b
+        if y == 0 || abs(a/b-x) <= eps(x)
+            return a//b
         end
-        f = 1/f
+        y = 1/y
     end
 end
 
