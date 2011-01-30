@@ -50,8 +50,8 @@ load("linalg_blas.j")
 load("linalg_lapack.j")
 
 # additional data types
-load("rational.j")
 load("complex.j")
+load("rational.j")
 load("list.j")
 load("dequeue.j")
 load("sparse.j")

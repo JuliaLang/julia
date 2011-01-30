@@ -66,7 +66,6 @@ inv(z::Complex) = conj(z)/norm(z)
 
 /(z::Number, w::Complex) = z*inv(w)
 /(z::Complex, x::Real) = Complex(z.re/x, z.im/x)
-/(x::Rational, z::Complex) = inv(z/x)
 
 function /(a::Complex, b::Complex)
     are = a.re; aim = a.im; bre = b.re; bim = b.im

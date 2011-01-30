@@ -3,13 +3,11 @@ type Rational{T<:Int} <: Real
     den::T
 
     function Rational{T<:Int}(num::T, den::T)
-        if num == den == 0
-            z = zero(num)
-            return new(z, z)
+        if num != 0 || den != 0
+            g = gcd(den, num)
+            num = div(num, g)
+            den = div(den, g)
         end
-        g = gcd(den, num)
-        num = div(num, g)
-        den = div(den, g)
         new(num, den)
     end
 
@@ -36,7 +34,6 @@ convert{T<:Int}(::Type{T}, x::Rational) = div(convert(T,x.num),convert(T,x.den))
 function convert{T}(::Type{Rational{T}}, x::Float)
     if isnan(x); return zero(T)//zero(T); end
     if isinf(x); return sign(x)//zero(T); end
-
     y = x
     a = d = one(T)
     b = c = zero(T)
@@ -69,6 +66,7 @@ copysign(x::Rational, y::Rational) = copysign(x.num,y.num) // x.den
 -(x::Rational, y::Rational) = (x.num*y.den - x.den*y.num) // (x.den*y.den)
 *(x::Rational, y::Rational) = (x.num*y.num) // (x.den*y.den)
 /(x::Rational, y::Rational) = (x.num*y.den) // (x.den*y.num)
+/(x::Rational, z::Complex) = inv(z/x)
 
 ==(x::Rational, y::Rational) = (x.num == y.num && x.den == y.den)
 !=(x::Rational, y::Rational) = (x.num != y.num || x.den != y.den)
