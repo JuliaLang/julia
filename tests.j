@@ -158,6 +158,42 @@ b = rand()
 @assert signbit(-0//0) == 1
 @assert signbit(-1//0) == -1
 
+@assert isnan(1)     == false
+@assert isnan(1.0)   == false
+@assert isnan(-1.0)  == false
+@assert isnan(Inf)   == false
+@assert isnan(-Inf)  == false
+@assert isnan(NaN)   == true
+@assert isnan(1//2)  == false
+@assert isnan(-2//3) == false
+@assert isnan(5//0)  == false
+@assert isnan(-3//0) == false
+@assert isnan(0//0)  == true
+
+@assert isinf(1)     == false
+@assert isinf(1.0)   == false
+@assert isinf(-1.0)  == false
+@assert isinf(Inf)   == true
+@assert isinf(-Inf)  == true
+@assert isinf(NaN)   == false
+@assert isinf(1//2)  == false
+@assert isinf(-2//3) == false
+@assert isinf(5//0)  == true
+@assert isinf(-3//0) == true
+@assert isinf(0//0)  == false
+
+@assert isfinite(1)     == true
+@assert isfinite(1.0)   == true
+@assert isfinite(-1.0)  == true
+@assert isfinite(Inf)   == false
+@assert isfinite(-Inf)  == false
+@assert isfinite(NaN)   == false
+@assert isfinite(1//2)  == true
+@assert isfinite(-2//3) == true
+@assert isfinite(5//0)  == false
+@assert isfinite(-3//0) == false
+@assert isfinite(0//0)  == false
+
 @assert 1//1 == 1
 @assert 2//2 == 1
 @assert 1//1 == 1//1

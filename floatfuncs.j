@@ -2,6 +2,18 @@
 
 rem(x::Float, y::Float) = fmod(x, y)
 
+isnan(x::Float) = (x != x)
+isnan(x::Real) = isnan(float(x))
+isnan(x::Int) = false
+
+isinf(x::Float) = (abs(x) == Inf)
+isinf(x::Real) = isinf(float(x))
+isinf(x::Int) = false
+
+isfinite(x::Float) = (x-x == 0)
+isfinite(x::Real) = isfinite(float(x))
+isfinite(x::Int) = true
+
 signbit(x::Float) = (x < 0 ? int8(-1) : (x > 0 ? int8(1) : (1.0/x < 0 ? int8(-1) : int8(1))))
 signbit(x::Float64) = (boxsi64(unbox64(x)) < int64(0) ? int8(-1) : int8(1))
 signbit(x::Float32) = (boxsi32(unbox32(x)) < int32(0) ? int8(-1) : int8(1))
