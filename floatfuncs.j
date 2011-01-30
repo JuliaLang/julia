@@ -35,6 +35,10 @@ cos(x::Float32) = boxf32(cos_float(unbox32(x)))
 ^(x::Float64, p::Int32) = boxf64(powi_float(unbox64(x),unbox32(p)))
 ^(x::Float32, p::Int32) = boxf32(powi_float(unbox32(x),unbox32(p)))
 
+sqrt(x::Real) = sqrt(float(x))
+sin(x::Real) = sin(float(x))
+cos(x::Real) = cos(float(x))
+
 num2hex(x::Float32) = uint2str(boxui32(unbox32(x)),16,16)
 num2hex(x::Float64) = uint2str(boxui64(unbox64(x)),16,16)
 
