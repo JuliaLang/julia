@@ -214,7 +214,6 @@ for a = -5:5, b = -5:5
     @assert isequal(a//b, a/b)
     @assert isequal(a//b, a//b)
     for c = -5:5, d = -5:5
-        println("a=$a b=$b c=$c d=$d")
         @assert isequal(a//b, c//d) == isequal(a/b, c/d)
         @assert (a//b == c//d) == (a/b == c/d)
         @assert (a//b != c//d) == (a/b != c/d)
