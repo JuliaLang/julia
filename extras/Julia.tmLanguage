@@ -190,6 +190,12 @@
 					<key>name</key>
 					<string>keyword.operator.dots.julia</string>
 				</dict>
+				<dict>
+					<key>match</key>
+					<string>(?&lt;=\w)'</string>
+					<key>name</key>
+					<string>keyword.operator.transpose.julia</string>
+				</dict>
 			</array>
 		</dict>
 		<key>string</key>
@@ -297,7 +303,7 @@
 			<array>
 				<dict>
 					<key>match</key>
-					<string>\\.</string>
+					<string>\\"</string>
 					<key>name</key>
 					<string>constant.character.escape.julia</string>
 				</dict>
@@ -309,15 +315,9 @@
 			<array>
 				<dict>
 					<key>match</key>
-					<string>\\(\\|[abefnprtv'"?]|[0-3]\d{,2}|[4-7]\d?|x[a-fA-F0-9]{,2}|u[a-fA-F0-9]{,4}|U[a-fA-F0-9]{,8})</string>
+					<string>\\(\\|[0-3]\d{,2}|[4-7]\d?|x[a-fA-F0-9]{,2}|u[a-fA-F0-9]{,4}|U[a-fA-F0-9]{,8}|.)</string>
 					<key>name</key>
 					<string>constant.character.escape.julia</string>
-				</dict>
-				<dict>
-					<key>match</key>
-					<string>\\.</string>
-					<key>name</key>
-					<string>invalid.illegal.unknown-escape.julia</string>
 				</dict>
 			</array>
 		</dict>
