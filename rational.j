@@ -62,11 +62,6 @@ sign(x::Rational) = sign(x.num)
 signbit(x::Rational) = signbit(x.num)
 copysign(x::Rational, y::Real) = copysign(x.num,y) // x.den
 copysign(x::Rational, y::Rational) = copysign(x.num,y.num) // x.den
-isequal(x::Rational, y::Rational) = x.num == y.num && x.den == y.den
-
-isnan(x::Rational) = x.den == 0 && x.num == 0
-isinf(x::Rational) = x.den == 0 && x.num != 0
-isfinite(x::Rational) = x.den != 0
 
 -(x::Rational) = (-x.num) // x.den
 +(x::Rational, y::Rational) = (x.num*y.den + x.den*y.num) // (x.den*y.den)
@@ -75,10 +70,18 @@ isfinite(x::Rational) = x.den != 0
 /(x::Rational, y::Rational) = (x.num*y.den) // (x.den*y.num)
 /(x::Rational, z::Complex) = inv(z/x)
 
-==(x::Rational, y::Rational) = !isnan(x) && !isnan(y) && x.num == y.num && x.den == y.den
-!=(x::Rational, y::Rational) =  isnan(x) ||  isnan(y) || x.num != y.num || x.den != y.den
+isnan(x::Rational) = x.den == 0 && x.num == 0
+isinf(x::Rational) = x.den == 0 && x.num != 0
+isfinite(x::Rational) = x.den != 0
+
+isequal(x::Rational, y::Rational) = x.num == y.num && x.den == y.den
+isequal(x::Rational, y::Int) = x.den == 1 && x.num == y
+isequal(x::Number, y::Rational) = isequal(y, x)
+
+==(x::Rational, y::Rational) = !isnan(x) && x.num == y.num && x.den == y.den
+!=(x::Rational, y::Rational) =  isnan(x) || x.num != y.num || x.den != y.den
 <=(x::Rational, y::Rational) = !isnan(x) && !isnan(y) && x.num*y.den <= y.num*x.den
-< (x::Rational, y::Rational) = !isnan(x) && !isnan(y) && x.num*y.den < y.num*x.den
+< (x::Rational, y::Rational) = !isnan(x) && x.num*y.den < y.num*x.den
 >=(x::Rational, y::Rational) = y <= x
 > (x::Rational, y::Rational) = y < x
 
