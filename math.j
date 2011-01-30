@@ -20,9 +20,16 @@ cosc(x) = x==0 ? zero(x) : (pix = pi(x)*x; cos(pix)/x - sin(pix)/(pix*x))
 
 log(b,x) = log(x)/log(b)
 
-function realsqrt(x::Real)
-    if x < 0
-        error("realsqrt: expected non-negative argument, got $x")
+function hypot(x::Real, y::Real)
+    x = abs(x)
+    y = abs(y)
+    if x > y
+        r = y/x
+        return x*sqrt(1+r*r)
     end
-    return sqrt(x)::Real
+    if y == 0
+        return zero(x)
+    end
+    r = x/y
+    return y*sqrt(1+r*r)
 end

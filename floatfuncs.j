@@ -23,20 +23,6 @@ cos(x::Float32) = boxf32(cos_float(unbox32(x)))
 ^(x::Float64, p::Int32) = boxf64(powi_float(unbox64(x),unbox32(p)))
 ^(x::Float32, p::Int32) = boxf32(powi_float(unbox32(x),unbox32(p)))
 
-function hypot(x::Real, y::Real)
-    x = abs(x)
-    y = abs(y)
-    if x > y
-        r = y/x
-        return x*sqrt(1+r*r)
-    end
-    if y == 0
-        return zero(x)
-    end
-    r = x/y
-    return y*sqrt(1+r*r)
-end
-
 num2hex(x::Float32) = uint2str(boxui32(unbox32(x)),16,16)
 num2hex(x::Float64) = uint2str(boxui64(unbox64(x)),16,16)
 
