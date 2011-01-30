@@ -209,33 +209,20 @@ b = rand()
 @assert -1//0 == -1//0
 @assert -7//0 == -1//0
 
-@assert isequal(0//0, 0//0)
-@assert 0//0 != 0//0
-@assert 0//0 != 1//2
-@assert 0//0 != -1//2
-@assert 0//0 != 1//0
-@assert 0//0 != -1//0
-@assert !(0//0 <= 1//2)
-@assert !(0//0 <= -1//2)
-@assert !(0//0 <= 1//0)
-@assert !(0//0 <= -1//0)
-@assert !(0//0 >= 1//2)
-@assert !(0//0 >= -1//2)
-@assert !(0//0 >= 1//0)
-@assert !(0//0 >= -1//0)
-@assert !(0//0 < 1//2)
-@assert !(0//0 < -1//2)
-@assert !(0//0 < 1//0)
-@assert !(0//0 < -1//0)
-@assert !(0//0 > 1//2)
-@assert !(0//0 > -1//2)
-@assert !(0//0 > 1//0)
-@assert !(0//0 > -1//0)
-
 for a = -5:5, b = -5:5
     @assert isequal(a/b, a/b)
     @assert isequal(a//b, a/b)
     @assert isequal(a//b, a//b)
+    for c = -5:5, d = -5:5
+        println("a=$a b=$b c=$c d=$d")
+        @assert isequal(a//b, c//d) == isequal(a/b, c/d)
+        @assert (a//b == c//d) == (a/b == c/d)
+        @assert (a//b != c//d) == (a/b != c/d)
+        @assert (a//b <= c//d) == (a/b <= c/d)
+        @assert (a//b <  c//d) == (a/b <  c/d)
+        @assert (a//b >= c//d) == (a/b >= c/d)
+        @assert (a//b >  c//d) == (a/b >  c/d)
+    end
 end
 
 @assert 1+1.5 == 2.5

@@ -80,8 +80,8 @@ isequal(x::Number, y::Rational) = isequal(y, x)
 
 ==(x::Rational, y::Rational) = !isnan(x) && x.num == y.num && x.den == y.den
 !=(x::Rational, y::Rational) =  isnan(x) || x.num != y.num || x.den != y.den
-<=(x::Rational, y::Rational) = !isnan(x) && !isnan(y) && x.num*y.den <= y.num*x.den
-< (x::Rational, y::Rational) = x.num*y.den < y.num*x.den
+<=(x::Rational, y::Rational) = float(x) <= float(y)
+< (x::Rational, y::Rational) = float(x) < float(y)
 >=(x::Rational, y::Rational) = y <= x
 > (x::Rational, y::Rational) = y < x
 
