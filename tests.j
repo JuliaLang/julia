@@ -204,6 +204,33 @@ b = rand()
 @assert 1//2 + 3//4 == 5//4
 @assert 1//3 * 3//4 == 1//4
 @assert 1//2 / 3//4 == 2//3
+@assert 1//0 == 1//0
+@assert 5//0 == 1//0
+@assert -1//0 == -1//0
+@assert -7//0 == -1//0
+
+@assert isequal(0//0, 0//0)
+@assert 0//0 != 0//0
+@assert 0//0 != 1//2
+@assert 0//0 != -1//2
+@assert 0//0 != 1//0
+@assert 0//0 != -1//0
+@assert !(0//0 <= 1//2)
+@assert !(0//0 <= -1//2)
+@assert !(0//0 <= 1//0)
+@assert !(0//0 <= -1//0)
+@assert !(0//0 >= 1//2)
+@assert !(0//0 >= -1//2)
+@assert !(0//0 >= 1//0)
+@assert !(0//0 >= -1//0)
+@assert !(0//0 < 1//2)
+@assert !(0//0 < -1//2)
+@assert !(0//0 < 1//0)
+@assert !(0//0 < -1//0)
+@assert !(0//0 > 1//2)
+@assert !(0//0 > -1//2)
+@assert !(0//0 > 1//0)
+@assert !(0//0 > -1//0)
 
 for a = -5:5, b = -5:5
     @assert isequal(a/b, a/b)
