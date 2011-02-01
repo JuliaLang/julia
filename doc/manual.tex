@@ -735,6 +735,173 @@ As usual, the promotion system makes interactions with other numeric types natur
   0.0033333333333333
 \end{verbatim}
 
+\section{Functions}\sec{functions}
+
+The basic syntax for defining functions in Julia is:
+\begin{verbatim}
+  function f(x,y)
+    x + y
+  end
+\end{verbatim}
+This syntax is similar to Matlab, but there are some significant differences:
+\begin{itemize}
+\item In Matlab, this definition must be saved in a file, named \verb|f.m|, whereas in Julia, this expression can appear anywhere, including at the repl prompt.
+\item In Matlab, the closing \verb|end| is optional, being implied by the end of the file.
+In Julia, the terminating \verb|end| is required.
+\item in Matlab, this function would print the value \verb|x + y| but would not return any value, whereas in Julia, the last expression evaluated is a function's return value.
+\item Expression values are never printed automatically except in the repl.
+Semicolons are only required to separate expressions on the same line.
+\end{itemize}
+In general, while the function definition syntax is reminiscent of Matlab, the similarity is largely superficial.
+Therefore, rather than continually comparing the two, in what follows, we will simply describe the behavior of functions in Julia directly.
+
+There is a second, more terse syntax for defining a function in Julia.
+The traditional function declaration syntax demonstrated above is equivalent to the following compact ``assignment form'':
+\begin{verbatim}
+  f(x,y) = x + y
+\end{verbatim}
+In the assignment form, the body of the function must be a single expression, although it can be a compound expression (see \Section{compound-expressions}).
+Short, simple function definitions are common in Julia.
+The short function syntax is accordingly quite idiomatic, considerably reducing both typing and visual noise.
+
+\subsection{The \texttt{return} Keyword}\sec{the-return-keyword}
+
+The value returned by a function is the value of the last expression evaluated, which, by default, is the last expression in the body of the function definition.
+In the example function, \verb|f|, from the previous section this is the value of the expression \verb|x + y|.
+As in C and most other imperative or functional languages, the \verb|return| keyword causes a function to return immediately, providing an expression whose value is returned: % TODO: make return value actually optional.
+\begin{verbatim}
+  function g(x,y)
+    return x * y
+    x + y
+  end
+\end{verbatim}
+Since functions definitions can be entered into the repl, it is easy to compare these definitions:
+\begin{verbatim}
+  f(x,y) = x + y
+
+  function g(x,y)
+    return x * y
+    x + y
+  end
+
+  julia> f(2,3)
+  5
+
+  julia> g(2,3)
+  6
+\end{verbatim}
+Of course, in a purely linear function body like \verb|g|, the usage of \verb|return| is pointless since the expression \verb|x + y| is never evaluated and we could simply make \verb|x * y| the last expression in the function and omit the \verb|return|.
+In conjunction with other control flow, however, \verb|return| is of real use.
+Here, for example, is a function that computes the hypotenuse length of a right triangle with sides of length $x$ and $y$, carefully avoiding numerical errors or instabilities:
+\begin{verbatim}
+  function hypot(x,y)
+      x = abs(x)
+      y = abs(y)
+      if x > y
+          r = y/x
+          return x*sqrt(1+r*r)
+      end
+      if y == 0
+          return zero(x)
+      end
+      r = x/y
+      return y*sqrt(1+r*r)
+  end
+\end{verbatim}
+There are three possible points of return from this function, returning the values of three different expressions, depending on the values of $x$ and $y$.
+The \verb|return| on the last line could be omitted since it is the last expression.
+
+\subsection{Operators Are Functions}\sec{operators-are-functions}
+
+In Julia, most operators are just functions with support for special syntax.\footnote{The exceptions are operators with special evaluation semantics like \texttt{\&\&} and \texttt{||}.
+These operators cannot be functions since short-circuit evaluation (see \Section{short-circuit-evaluation}) requires that their operands are not evaluated before evaluation of the operator.}
+Accordingly, you can also apply them using parenthesized argument lists as you would any other function:
+\begin{verbatim}
+  julia> 1 + 2 + 3
+  6
+
+  julia> +(1,2,3)
+  6
+\end{verbatim}
+The infix form is exactly equivalent to the function application form\,---\,in fact the former is parsed to produce the function call internally.
+This also means that you can pass and assign operators such as \verb|+| and \verb|*| into variables just like you can with other functions:
+\begin{verbatim}
+  julia> f = +;
+
+  julia> f(1,2,3)
+  6
+\end{verbatim}
+Under the name, \verb|f|, the function does not support infix notation.
+
+% Since operators like \verb|+| are just normal Julia functions, you can add new methods for them.
+% For example, the addition method for complex numbers is defined as:
+% \begin{verbatim}
+%   +(z::Complex, w::Complex) = Complex(z.re + w.re, z.im + w.im)
+% \end{verbatim}
+% For more about types like \verb|Complex|, their structure and how to define them, see \Section{types}.
+
+\subsection{Anonymous Functions}\sec{anonymous-functions}
+
+Functions in Julia are first-class objects:
+they can be assigned to variables, called using the standard function call syntax via the variable they have been assigned to, they can be passed as arguments, and they can be returned as values.
+They can also be created anonymously, without giving them a name:
+\begin{verbatim}
+  julia> x -> x^2 + 2x - 1
+  #<closure>
+\end{verbatim}
+This creates an unnamed function taking one argument and returning the value of the polynomial $x^2 + 2x - 1$ at that value.
+The primary use for anonymous functions is passing them to functions which take other functions as arguments.
+A classic example is the \verb|map| function, which applies a function to each value of an array and returns a new array containing the resulting values:
+\begin{verbatim}
+  julia> map(round, [1.2,3.5,1.7])
+  [1.0,4.0,2.0]
+\end{verbatim} % TOOD: make sure type inference gets the right return type.
+This is fine if a named function effecting the transform one wants already exists to pass as the first argument to \verb|map|.
+Often, however, a ready-to-use, named function does not exist.
+In these situations, the anonymous function construct allows easy creation of a single-use function object without needing a name:
+\begin{verbatim}
+  julia> map(x -> x^2 + 2x - 1, [1,3,-1])
+  [2,14,-2]
+\end{verbatim}
+
+\subsection{Multiple Return Values}
+
+In Julia, one returns a single tuple value in order to simulate returning multiple values.
+However, tuples can be created and destructured without needing parentheses, thereby providing an illusion that multiple values are being returned, rather than a single tuple value.
+For example, the following function returns a pair of values:
+\begin{verbatim}
+  function foo(a,b)
+    a+b, a*b
+  end
+\end{verbatim}
+If you call it at the repl, you will see the tuple returned:
+\begin{verbatim}
+  julia> foo(2,3)
+  (5,6)
+\end{verbatim}
+A typical usage of such a pair of return values, however, is to extract each one into its own variable.
+Julia supports simple tuple ``destructuring'' that facilitates this:
+\begin{verbatim}
+  julia> x, y = foo(2,3);
+
+  julia> x
+  5
+
+  julia> y
+  6
+\end{verbatim}
+You can also return multiple values via an explicit return:
+\begin{verbatim}
+  function foo(a,b)
+    return a+b, a*b
+  end
+\end{verbatim}
+This has the exact same effect as the previous definition of \verb|foo|.
+
+\subsection{Varargs Functions}
+
+
+
 \section{Control Flow}\sec{control-flow}
 
 Julia provides a variety of control flow constructs:
@@ -1219,84 +1386,149 @@ more values to generate and so might not yet be ready to return. With
 \verb|Task|s, the producer and consumer can both run as long as they need to,
 passing values back and forth as necessary.
 
+\section{Variable Scoping}\sec{variable-scoping}
 
-\section{Functions}\sec{functions}
+The \emph{scope} of a variable is the region of code within which a variable
+is visible.
+Variable scoping helps avoid variable naming conflicts.
+The concept is intuitive:
+two functions can both have arguments called \verb|x| without the two \verb|x|'s referring to the same thing.
+Similarly there are many other cases where different blocks of code can use the same name without referring to the same thing.
+The rules for when the same variable name does or doesn't refer to the same thing are called scope rules;
+this section spells them out in detail.
 
-The basic syntax for defining functions in Julia is:
-\begin{verbatim}
-  function f(x,y)
-    x + y
-  end
-\end{verbatim}
-This syntax is similar to Matlab, but there are some significant differences:
+Certain constructs in the language introduce \emph{scope blocks}, which
+are regions of code that are eligible to be the scope of some set of variables.
+The scope of a variable cannot be an arbitrary set of
+source lines, but will always line up with one of these blocks. These
+constructs introducing such blocks are:
 \begin{itemize}
-\item In Matlab, this definition must be saved in a file, named \verb|f.m|, whereas in Julia, this expression can appear anywhere, including at the repl prompt.
-\item In Matlab, the closing \verb|end| is optional, being implied by the end of the file.
-In Julia, the terminating \verb|end| is required.
-\item in Matlab, this function would print the value \verb|x + y| but would not return any value, whereas in Julia, the last expression evaluated is a function's return value.
-\item Expression values are never printed automatically except in the repl.
-Semicolons are only required to separate expressions on the same line.
+\item function bodies (any syntax)
+\item \verb|while| loops
+\item \verb|for| loops
+\item \verb|try| blocks
+\item \verb|catch| blocks
+\item \verb|let| blocks
+\item \verb|type| blocks.
 \end{itemize}
-In general, while the function definition syntax is reminiscent of Matlab, the similarity is largely superficial.
-Therefore, rather than continually comparing the two, in what follows, we will simply describe the behavior of functions in Julia directly.
-
-There is a second, more terse syntax for defining a function in Julia.
-The traditional function declaration syntax demonstrated above is equivalent to the following compact ``assignment form'':
+Certain constructs introduce new variables into the current innermost scope. When
+a variable is introduced into a scope, it is also inherited by all inner
+scopes unless one of those inner scopes explicitly overrides it. These
+constructs which introduce new variables into the current scope are as follows:
+\begin{itemize}
+\item A declaration \verb|local x| introduces a new local variable.
+\item A declaration \verb|global x| makes \verb|x| in the current scope
+and inner scopes refer to the global variable of that name.
+\item A function's arguments are introduced as new local variables into the
+function's body scope.
+\item An assignment \verb|x = y| introduces a new local variable \verb|x|
+only if \verb|x| is neither declared global nor explicitly introduced as local
+by any enclosing scope, before or \emph{after} the current line of code.
+\end{itemize}
+In the following example, there is only one \verb|x| assigned both inside
+and outside a loop:
 \begin{verbatim}
-  f(x,y) = x + y
-\end{verbatim}
-In the assignment form, the body of the function must be a single expression, although it can be a compound expression (see \Section{compound-expressions}).
-Short, simple function definitions are common in Julia.
-The short function syntax is accordingly quite idiomatic, considerably reducing both typing and visual noise.
-
-\subsection{The \texttt{return} Keyword}\sec{the-return-keyword}
-
-The value returned by a function is the value of the last expression evaluated, which, by default, is the last expression in the body of the function definition.
-In the example function, \verb|f|, from the previous section this is the value of the expression \verb|x + y|.
-As in C and most other imperative or functional languages, the \verb|return| keyword causes a function to return immediately, providing an expression whose value is returned: % TODO: make return value actually optional.
-\begin{verbatim}
-  function g(x,y)
-    return x * y
-    x + y
-  end
-\end{verbatim}
-Since functions definitions can be entered into the repl, it is easy to compare these definitions:
-\begin{verbatim}
-  f(x,y) = x + y
-
-  function g(x,y)
-    return x * y
-    x + y
-  end
-
-  julia> f(2,3)
-  5
-
-  julia> g(2,3)
-  6
-\end{verbatim}
-Of course, in a purely linear function body like \verb|g|, the usage of \verb|return| is pointless since the expression \verb|x + y| is never evaluated and we could simply make \verb|x * y| the last expression in the function and omit the \verb|return|.
-In conjunction with other control flow, however, \verb|return| is of real use.
-Here, for example, is a function that computes the hypotenuse length of a right triangle with sides of length $x$ and $y$, carefully avoiding numerical errors or instabilities:
-\begin{verbatim}
-  function hypot(x,y)
-      x = abs(x)
-      y = abs(y)
-      if x > y
-          r = y/x
-          return x*sqrt(1+r*r)
+  function foo(n)
+      x = 0
+      for i = 1:n
+          x = x + 1
       end
-      if y == 0
-          return zero(x)
-      end
-      r = x/y
-      return y*sqrt(1+r*r)
+      x
   end
+  
+  julia> foo(10)
+  10
 \end{verbatim}
-There are three possible points of return from this function, returning the values of three different expressions, depending on the values of $x$ and $y$.
-The \verb|return| on the last line could be omitted since it is the last expression.
+In the next example, the loop has a separate \verb|x| and the function
+always returns zero:
+\begin{verbatim}
+  function foo(n)
+      x = 0
+      for i = 1:n
+          local x
+          x = i
+      end
+      x
+  end
 
-\subsection{Specializing Functions}\sec{specializing-functions}
+  julia> foo(10)
+  0
+\end{verbatim}
+In this example, an \verb|x| exists only inside the loop, and
+the function encounters an undefined variable error on its last line
+(unless there is a global variable \verb|x|):
+\begin{verbatim}
+  function foo(n)
+      for i = 1:n
+          x = i
+      end
+      x
+  end
+
+  julia> foo(10)
+  in foo: x not defined
+\end{verbatim}
+A variable that is not assigned to or otherwise introduced locally defaults to global,
+so this function would return the value of the global \verb|x|
+if there is such a variable, or produce an error if no such global exists.
+As a consequence, the only way to assign to a global variable inside
+a non-top-level scope is to explicitly declare the variable as global within some scope, since
+otherwise the assignment would introduce a new local rather than assigning to the global. This rule works out
+well in practice, since the vast majority of variables assigned inside
+functions are intended to be local variables, and using global variables, should be the exception rather than the rule, especially assigning new values to them.
+
+One last example shows that an outer assignment introducing \verb|x| need not come before an inner usage:
+\begin{verbatim}
+  function foo(n)
+      f = y -> n + x + y
+      x = 1
+      f(2)
+  end
+
+  julia> foo(10)
+  13
+\end{verbatim}
+This last example may seem slightly odd for a normal variable, but allows for named functions\,---\,which are just normal variables holding function objects\,---\,to be used before they are defined.
+This allows functions to be defined in whatever order is intuitive and convenient, rather than forcing bottom up ordering or requiring forward declarations, both of which one typically sees in C programs.
+As an example, here is an inefficient, mutually recursive way to test if positive integers are even or odd:\,\footnote{Julia provides built-in, efficient functions to test this called \texttt{iseven} and \texttt{isodd}.}
+\begin{verbatim}
+  even(n) = n == 0 ? true  :  odd(n-1)
+  odd(n)  = n == 0 ? false : even(n-1)
+
+  julia> even(3)
+  false
+
+  julia> odd(3)
+  true
+\end{verbatim}
+Since functions can be used before they are defined, as long as they are defined by the time they are actually called, no syntax for forward declarations is necessary, and definitions can be ordered arbitrarily.
+
+At the interactive prompt, variable scope works the same way as anywhere
+else. The prompt behaves as if there is scope block wrapped around everything
+you type, except that this scope block is identified with the global scope.
+This is especially apparent in the case of assignments:
+\begin{verbatim}
+  julia> for i = 1:1; y = 10; end
+  
+  julia> y
+  y not defined
+  
+  julia> y = 0
+  0
+  
+  julia> for i = 1:1; y = 10; end
+  
+  julia> y
+  10
+\end{verbatim}
+In the former case, \verb|y| only exists inside of the \verb|for| loop.
+In the latter case, an outer \verb|y| has been introduced and so is inherited
+within the loop. Due to the special identification of the prompt's scope
+block with the global scope, it is not necessary to declare
+\verb|global y| inside the loop. However, in code not entered into the interactive prompt
+this declaration would be necessary in order to modify a global variable.
+
+\section{Methods}
 
 Julia allows multiple dispatch based on the types of function arguments:
 \begin{verbatim}
@@ -1455,348 +1687,159 @@ You should avoid method ambiguities by specifying an appropriate method for the 
 \end{verbatim}
 To suppress Julia's warning, the disambiguating method must be defined first.
 
-\subsection{Operators Are Functions}\sec{operators-are-functions}
-
-In Julia, most operators are just functions with support for special syntax.\footnote{The exceptions are operators with special evaluation semantics like \texttt{\&\&} and \texttt{||}.
-These operators cannot be functions since short-circuit evaluation (see \Section{short-circuit-evaluation}) requires that their operands are not evaluated before evaluation of the operator.}
-Accordingly, you can also apply them using parenthesized argument lists as you would any other function:
-\begin{verbatim}
-  julia> 1 + 2 + 3
-  6
-
-  julia> +(1,2,3)
-  6
-\end{verbatim}
-The infix form is exactly equivalent to the function application form\,---\,in fact the former is parsed to produce the function call internally.
-Since operators like \verb|+| are just normal Julia functions, you can add new methods for them.
-For example, the addition method for complex numbers is defined as:
-\begin{verbatim}
-  +(z::Complex, w::Complex) = Complex(z.re + w.re, z.im + w.im)
-\end{verbatim}
-For more about types like \verb|Complex|, their structure and how to define them, see \Section{types}.
-
-\subsection{Anonymous Functions}\sec{anonymous-functions}
-
-Functions in Julia are first-class objects:
-they can be assigned to variables, called using the standard function call syntax via the variable they have been assigned to, they can be passed as arguments, and they can be returned as values.
-They can also be created anonymously, without giving them a name:
-\begin{verbatim}
-  julia> x -> x^2 + 2x - 1
-  #<closure>
-\end{verbatim}
-This creates an unnamed function taking one argument and returning the value of the polynomial $x^2 + 2x - 1$ at that value.
-The primary use for anonymous functions is passing them to functions which take other functions as arguments.
-A classic example is the \verb|map| function, which applies a function to each value of an array and returns a new array containing the resulting values:
-\begin{verbatim}
-  julia> map(round, [1.2,3.5,1.7])
-  [1.0,4.0,2.0]
-\end{verbatim} % TOOD: make sure type inference gets the right return type.
-This is fine if a named function effecting the transform one wants already exists to pass as the first argument to \verb|map|.
-Often, however, a ready-to-use, named function does not exist.
-In these situations, the anonymous function construct allows easy creation of a single-use function object without needing a name:
-\begin{verbatim}
-  julia> map(x -> x^2 + 2x - 1, [1,3,-1])
-  [2,14,-2]
-\end{verbatim}
-
-\subsection{Multiple Return Values}
-\subsection{Varargs Functions}
-
-\section{Variable Scoping}\sec{variable-scoping}
-
-The \emph{scope} of a variable is the region of code within which a variable
-is visible.
-Variable scoping helps avoid variable naming conflicts.
-The concept is intuitive:
-two functions can both have arguments called \verb|x| without the two \verb|x|'s referring to the same thing.
-Similarly there are many other cases where different blocks of code can use the same name without referring to the same thing.
-The rules for when the same variable name does or doesn't refer to the same thing are called scope rules;
-this section spells them out in detail.
-
-Certain constructs in the language introduce \emph{scope blocks}, which
-are regions of code that are eligible to be the scope of some set of variables.
-The scope of a variable cannot be an arbitrary set of
-source lines, but will always line up with one of these blocks. These
-constructs introducing such blocks are:
-\begin{itemize}
-\item function bodies (any syntax)
-\item \verb|while| loops
-\item \verb|for| loops
-\item \verb|try| blocks
-\item \verb|catch| blocks
-\item \verb|let| blocks
-\item \verb|type| blocks.
-\end{itemize}
-Certain constructs introduce new variables into the current innermost scope. When
-a variable is introduced into a scope, it is also inherited by all inner
-scopes unless one of those inner scopes explicitly overrides it. These
-constructs which introduce new variables into the current scope are as follows:
-\begin{itemize}
-\item A declaration \verb|local x| introduces a new local variable.
-\item A declaration \verb|global x| makes \verb|x| in the current scope
-and inner scopes refer to the global variable of that name.
-\item A function's arguments are introduced as new local variables into the
-function's body scope.
-\item An assignment \verb|x = y| introduces a new local variable \verb|x|
-only if \verb|x| is neither declared global nor explicitly introduced as local
-by any enclosing scope, before or \emph{after} the current line of code.
-\end{itemize}
-In the following example, there is only one \verb|x| assigned both inside
-and outside a loop:
-\begin{verbatim}
-  function foo(n)
-      x = 0
-      for i = 1:n
-          x = x + 1
-      end
-      x
-  end
-  
-  julia> foo(10)
-  10
-\end{verbatim}
-In the next example, the loop has a separate \verb|x| and the function
-always returns zero:
-\begin{verbatim}
-  function foo(n)
-      x = 0
-      for i = 1:n
-          local x
-          x = i
-      end
-      x
-  end
-
-  julia> foo(10)
-  0
-\end{verbatim}
-In this example, an \verb|x| exists only inside the loop, and
-the function encounters an undefined variable error on its last line
-(unless there is a global variable \verb|x|):
-\begin{verbatim}
-  function foo(n)
-      for i = 1:n
-          x = i
-      end
-      x
-  end
-
-  julia> foo(10)
-  in foo: x not defined
-\end{verbatim}
-A variable that is not assigned to or otherwise introduced locally defaults to global,
-so this function would return the value of the global \verb|x|
-if there is such a variable, or produce an error if no such global exists.
-As a consequence, the only way to assign to a global variable inside
-a non-top-level scope is to explicitly declare the variable as global within some scope, since
-otherwise the assignment would introduce a new local rather than assigning to the global. This rule works out
-well in practice, since the vast majority of variables assigned inside
-functions are intended to be local variables, and using global variables, should be the exception rather than the rule, especially assigning new values to them.
-
-One last example shows that an outer assignment introducing \verb|x| need not come before an inner usage:
-\begin{verbatim}
-  function foo(n)
-      f = y -> n + x + y
-      x = 1
-      f(2)
-  end
-
-  julia> foo(10)
-  13
-\end{verbatim}
-This last example may seem slightly odd for a normal variable, but allows for named functions\,---\,which are just normal variables holding function objects\,---\,to be used before they are defined.
-This allows functions to be defined in whatever order is intuitive and convenient, rather than forcing bottom up ordering or requiring forward declarations, both of which one typically sees in C programs.
-As an example, here is an inefficient, mutually recursive way to test if positive integers are even or odd:\,\footnote{Julia provides built-in, efficient functions to test this called \texttt{iseven} and \texttt{isodd}.}
-\begin{verbatim}
-  even(n) = n == 0 ? true  :  odd(n-1)
-  odd(n)  = n == 0 ? false : even(n-1)
-
-  julia> even(3)
-  false
-
-  julia> odd(3)
-  true
-\end{verbatim}
-Since functions can be used before they are defined, as long as they are defined by the time they are actually called, no syntax for forward declarations is necessary, and definitions can be ordered arbitrarily.
-
-At the interactive prompt, variable scope works the same way as anywhere
-else. The prompt behaves as if there is scope block wrapped around everything
-you type, except that this scope block is identified with the global scope.
-This is especially apparent in the case of assignments:
-\begin{verbatim}
-  julia> for i = 1:1; y = 10; end
-  
-  julia> y
-  y not defined
-  
-  julia> y = 0
-  0
-  
-  julia> for i = 1:1; y = 10; end
-  
-  julia> y
-  10
-\end{verbatim}
-In the former case, \verb|y| only exists inside of the \verb|for| loop.
-In the latter case, an outer \verb|y| has been introduced and so is inherited
-within the loop. Due to the special identification of the prompt's scope
-block with the global scope, it is not necessary to declare
-\verb|global y| inside the loop. However, in code not entered into the interactive prompt
-this declaration would be necessary in order to modify a global variable.
-
-\section{Types}\sec{types}
-
-\subsection{Tag Types}
-\subsection{Struct Types}
-
-Julia comes with pre-defined rational and complex numeric types, but they are just defined in the language in terms of the more basic numeric types given above using the standard facility for defining new types. For example, the declaration of the \verb|Rational| type is the following:
-\begin{verbatim}
-  struct Rational{T<:Int} <: Real
-    num::T
-    den::T
-  end
-\end{verbatim}
-A few facts are in order before you can understand this declaration:
-\begin{itemize}
-\item A \verb|struct| type is a named bundle of fields as in the C language. In this case the fields are \verb|num| and \verb|den| which are used to store the numerator and the denominator, respectively, of a rational number.
-\item The \verb|Rational{T}| syntax is used for parametric types. This declaration defines \verb|Rational| with respect to a type parameter, \verb|T|.
-\item The \verb|<:| operator asserts that the value on the left is a subtype of the value on the right. In this case it is used twice:
-  \begin{itemize}
-    \item to assert that the type parameter, \verb|T|, is a subtype of \verb|Int|, which includes all of the above integer types;
-    \item to assert that \verb|Rational| itself is a subtype of \verb|Real|, which includes the integer and floating-point types as well.
-  \end{itemize}
-\item The \verb|::| operator asserts that the name on the left will be bound to a value of the type on the right. Thus whatever type parameter \verb|T| is given as, the numerator and denominator of the rational number are of that type.
-\end{itemize}
-This is all somewhat complicated, but the result is easy to use:
-\begin{verbatim}
-  julia> Rational(1,2)
-  1//2
-
-  julia> typeof(ans)
-  Rational{Int32}
-\end{verbatim}
-Applying the \verb|Rational| type to a pair of values (1,2) creates a \verb|Rational|. The output notation 1//2 is also acceptable as input notation:
-\begin{verbatim}
-  julia> 1//2
-  1//2
-\end{verbatim}
-Despite being effectively user-defined types, \verb|Rational| values interoperate completely with other numeric types:
-\begin{verbatim}
-  julia> 1//2 + 2
-  5//2
-
-  julia> 1//2 + 1.5
-  2.0
-\end{verbatim}
-If you want to create an ``exotic'' rational object of a type like \verb|Rational{Uint8}| all you need to do is use \verb|Uint8| values to construct them:
-\begin{verbatim}
-  julia> uint8(123)//uint8(234)
-  41//78
-
-  julia> typeof(ans)
-  Rational{Uint8}
-\end{verbatim}
-If you use mixed types to construct a \verb|Rational|, the same promotions that are used for arithmetic apply:
-\begin{verbatim}
-  julia> uint8(123)//int8(-12)
-  -41//4
-
-  julia> typeof(ans)
-  Rational{Int16}
-\end{verbatim}
-
-\subsection{Struct Constructors}\sec{struct-constructors}
-
-\subsection{Bits Types}
-
-\subsection{Conversion and Promotion}\sec{conversion-and-promotion}
-
-\subsection{Other Kinds of Types}
-
-\section{Tensors and Comprehensions}
-
-Julia introduces a new programming construct called a multidimensional
-array comprehension or just an array comprehension for short. Array
-comprehensions are similar to the notion of list comprehensions in
-other languages such as Python, Haskell and OCaml, but extend this
-notion to manipulate and generate arrays of arbitrary dimension. Each
-dummy variable used in the array comprehension corresponds to a
-dimension of the output array; if the comprehension expression value
-itself has non-zero dimension then the total dimension of the output
-is the number of dummy variables plus the dimension of the value. If
-we view n-d arrays as rank-n tensors, and thus see 1-d arrays as
-vectors and 2-d arrays as matrices, many common vector, matrix and
-tensor operations can be expressed concisely and clearly using array
-comprehensions.
-
-Array comprehensions are envisioned to be a key construct of the julia
-language that will differentiate it from other languages. On one hand,
-Matlab is pretty fast, and it is almost impossible to beat Matlab at
-what it does. On the other hand, Matlab codes when rewritten in C
-often run 10 times faster. What gives? The key idea behind array
-comprehensions is to express almost all operations at a higher level,
-close to their mathematical definitions. Optimizations can then be
-applied to this high level to produce heavily optimized low-level
-code, for multiple comprehensions and compounded comprehensions. This
-scheme should allow the generation of optimized low-level code from a
-high level specification that matches the structure of optimized C
-code written by a good C programmer.
-
-\subsection{Array Comprehension Notations}
-
-The following sections give three increasingly succinct syntaxes for writing array comprehensions. Through the forms, we follow the basic example of how to express the row sum and column sums of a matrix. We first present the most general, verbose notation for array comprehensions together with its meaning, and then present two increasingly abbreviated but equivalent forms.
-
-\subsubsection{Explicit range}
-This is the most general form for writing array comprehensions. The general form is:
-\begin{verbatim}
-A = [ F(x,y,...) | x=rx, y=ry, ... ]
-\end{verbatim}
-
-The meaning of this form is that F(x,y,...) is evaluated with the
-variables x, y, etc. taking on each value in their given list of
-values. Values can be specified as any iterable object, but will
-commonly be ranges like 1:n or 2:(n-1), or explicit arrays of values
-like [1.2, 3.4, 5.7]. The result is a tensor object with dimensions
-that are the concatenation of the dimensions of the dummy variable
-ranges rx, ry, etc. and the dimension of the result of each F(x,y,...)
-evaluations—which must all have identical shape. See below for details
-on array comprehensions of non-scalar expression.
-
-To clarify, let's consider the concrete example of computing row and
-column sums of a matrix, A. For a single dummy variable, the array
-comprehension notation with explicit variable ranges is similar to
-list comprehensions in other languages:
-\begin{verbatim}
-row_sums = [ sum(A[i,:]) | i=1:size(A,1) ]
-col_sums = [ sum(A[:,j]) | j=1:size(A,2) ]
-\end{verbatim}
-
-\subsection{Array Comprehensions of Non-Scalar Expressions}
-If the computed expression of an array comprehension is not a scalar,
-then all the values produced must be arrays of identical shape. The
-dummy variable vectorization dimensions come before the expression
-dimensions making the total dimension of the output array the number
-of dummy variables plus the dimension of the inner expression. This
-convention can be expressed by the following identity. If F is a
-function mapping scalars to vectors, the following holds:
-\begin{verbatim}
-[ F(i) | i=ri ] == [ F(i)[j] | i=ri, j=rj ]
-\end{verbatim}
-
-\subsection{Examples}
-
-\begin{itemize}
-\item Diagonal of a matrix is computed as:
-\begin{verbatim}
-d = [ A[i,i] | i=1:min(dim(A)) ]
-\end{verbatim}
-\item Matrix product is computed as:
-\begin{verbatim}
-C = [ sum([ A[i,j].*B[j,k] | j ]) | i=1:size(A,1), k=1:size(B,2) ]
-\end{verbatim}
-
-
-\end{itemize}
+% \section{Types}\sec{types}
+% 
+% \subsection{Tag Types}
+% \subsection{Struct Types}
+% 
+% Julia comes with pre-defined rational and complex numeric types, but they are just defined in the language in terms of the more basic numeric types given above using the standard facility for defining new types. For example, the declaration of the \verb|Rational| type is the following:
+% \begin{verbatim}
+%   struct Rational{T<:Int} <: Real
+%     num::T
+%     den::T
+%   end
+% \end{verbatim}
+% A few facts are in order before you can understand this declaration:
+% \begin{itemize}
+% \item A \verb|struct| type is a named bundle of fields as in the C language. In this case the fields are \verb|num| and \verb|den| which are used to store the numerator and the denominator, respectively, of a rational number.
+% \item The \verb|Rational{T}| syntax is used for parametric types. This declaration defines \verb|Rational| with respect to a type parameter, \verb|T|.
+% \item The \verb|<:| operator asserts that the value on the left is a subtype of the value on the right. In this case it is used twice:
+%   \begin{itemize}
+%     \item to assert that the type parameter, \verb|T|, is a subtype of \verb|Int|, which includes all of the above integer types;
+%     \item to assert that \verb|Rational| itself is a subtype of \verb|Real|, which includes the integer and floating-point types as well.
+%   \end{itemize}
+% \item The \verb|::| operator asserts that the name on the left will be bound to a value of the type on the right. Thus whatever type parameter \verb|T| is given as, the numerator and denominator of the rational number are of that type.
+% \end{itemize}
+% This is all somewhat complicated, but the result is easy to use:
+% \begin{verbatim}
+%   julia> Rational(1,2)
+%   1//2
+% 
+%   julia> typeof(ans)
+%   Rational{Int32}
+% \end{verbatim}
+% Applying the \verb|Rational| type to a pair of values (1,2) creates a \verb|Rational|. The output notation 1//2 is also acceptable as input notation:
+% \begin{verbatim}
+%   julia> 1//2
+%   1//2
+% \end{verbatim}
+% Despite being effectively user-defined types, \verb|Rational| values interoperate completely with other numeric types:
+% \begin{verbatim}
+%   julia> 1//2 + 2
+%   5//2
+% 
+%   julia> 1//2 + 1.5
+%   2.0
+% \end{verbatim}
+% If you want to create an ``exotic'' rational object of a type like \verb|Rational{Uint8}| all you need to do is use \verb|Uint8| values to construct them:
+% \begin{verbatim}
+%   julia> uint8(123)//uint8(234)
+%   41//78
+% 
+%   julia> typeof(ans)
+%   Rational{Uint8}
+% \end{verbatim}
+% If you use mixed types to construct a \verb|Rational|, the same promotions that are used for arithmetic apply:
+% \begin{verbatim}
+%   julia> uint8(123)//int8(-12)
+%   -41//4
+% 
+%   julia> typeof(ans)
+%   Rational{Int16}
+% \end{verbatim}
+% 
+% \subsection{Struct Constructors}\sec{struct-constructors}
+% 
+% \subsection{Bits Types}
+% 
+% \subsection{Conversion and Promotion}\sec{conversion-and-promotion}
+% 
+% \subsection{Other Kinds of Types}
+% 
+% \section{Tensors and Comprehensions}
+% 
+% Julia introduces a new programming construct called a multidimensional
+% array comprehension or just an array comprehension for short. Array
+% comprehensions are similar to the notion of list comprehensions in
+% other languages such as Python, Haskell and OCaml, but extend this
+% notion to manipulate and generate arrays of arbitrary dimension. Each
+% dummy variable used in the array comprehension corresponds to a
+% dimension of the output array; if the comprehension expression value
+% itself has non-zero dimension then the total dimension of the output
+% is the number of dummy variables plus the dimension of the value. If
+% we view n-d arrays as rank-n tensors, and thus see 1-d arrays as
+% vectors and 2-d arrays as matrices, many common vector, matrix and
+% tensor operations can be expressed concisely and clearly using array
+% comprehensions.
+% 
+% Array comprehensions are envisioned to be a key construct of the julia
+% language that will differentiate it from other languages. On one hand,
+% Matlab is pretty fast, and it is almost impossible to beat Matlab at
+% what it does. On the other hand, Matlab codes when rewritten in C
+% often run 10 times faster. What gives? The key idea behind array
+% comprehensions is to express almost all operations at a higher level,
+% close to their mathematical definitions. Optimizations can then be
+% applied to this high level to produce heavily optimized low-level
+% code, for multiple comprehensions and compounded comprehensions. This
+% scheme should allow the generation of optimized low-level code from a
+% high level specification that matches the structure of optimized C
+% code written by a good C programmer.
+% 
+% \subsection{Array Comprehension Notations}
+% 
+% The following sections give three increasingly succinct syntaxes for writing array comprehensions. Through the forms, we follow the basic example of how to express the row sum and column sums of a matrix. We first present the most general, verbose notation for array comprehensions together with its meaning, and then present two increasingly abbreviated but equivalent forms.
+% 
+% \subsubsection{Explicit range}
+% This is the most general form for writing array comprehensions. The general form is:
+% \begin{verbatim}
+% A = [ F(x,y,...) | x=rx, y=ry, ... ]
+% \end{verbatim}
+% 
+% The meaning of this form is that F(x,y,...) is evaluated with the
+% variables x, y, etc. taking on each value in their given list of
+% values. Values can be specified as any iterable object, but will
+% commonly be ranges like 1:n or 2:(n-1), or explicit arrays of values
+% like [1.2, 3.4, 5.7]. The result is a tensor object with dimensions
+% that are the concatenation of the dimensions of the dummy variable
+% ranges rx, ry, etc. and the dimension of the result of each F(x,y,...)
+% evaluations—which must all have identical shape. See below for details
+% on array comprehensions of non-scalar expression.
+% 
+% To clarify, let's consider the concrete example of computing row and
+% column sums of a matrix, A. For a single dummy variable, the array
+% comprehension notation with explicit variable ranges is similar to
+% list comprehensions in other languages:
+% \begin{verbatim}
+% row_sums = [ sum(A[i,:]) | i=1:size(A,1) ]
+% col_sums = [ sum(A[:,j]) | j=1:size(A,2) ]
+% \end{verbatim}
+% 
+% \subsection{Array Comprehensions of Non-Scalar Expressions}
+% If the computed expression of an array comprehension is not a scalar,
+% then all the values produced must be arrays of identical shape. The
+% dummy variable vectorization dimensions come before the expression
+% dimensions making the total dimension of the output array the number
+% of dummy variables plus the dimension of the inner expression. This
+% convention can be expressed by the following identity. If F is a
+% function mapping scalars to vectors, the following holds:
+% \begin{verbatim}
+% [ F(i) | i=ri ] == [ F(i)[j] | i=ri, j=rj ]
+% \end{verbatim}
+% 
+% \subsection{Examples}
+% 
+% \begin{itemize}
+% \item Diagonal of a matrix is computed as:
+% \begin{verbatim}
+% d = [ A[i,i] | i=1:min(dim(A)) ]
+% \end{verbatim}
+% \item Matrix product is computed as:
+% \begin{verbatim}
+% C = [ sum([ A[i,j].*B[j,k] | j ]) | i=1:size(A,1), k=1:size(B,2) ]
+% \end{verbatim}
+% 
+% 
+% \end{itemize}
 
 \section{Strings}
 \sec{strings}
@@ -2249,13 +2292,13 @@ If you actually want to allocate all that memory, you can force Julia to do so b
   Latin1String
 \end{verbatim}
 
-\section{I/O}
-\section{Data Structures}
-\subsection{Hash Tables}
-\subsection{Sets}
-\subsection{Queues and Dequeues}
-\subsection{Trees}
-\subsection{Lists}
+% \section{I/O}
+% \section{Data Structures}
+% \subsection{Hash Tables}
+% \subsection{Sets}
+% \subsection{Queues and Dequeues}
+% \subsection{Trees}
+% \subsection{Lists}
 
 \section{Parallel Computing}
 \begin{itemize}
@@ -2283,7 +2326,7 @@ If you actually want to allocate all that memory, you can force Julia to do so b
      read the next Julia object from a socket
 \end{itemize}
 
-\section{Calling C Functions}
+% \section{Calling C Functions}
 \section{Running External Programs}
 
 % Perl, Python, and Ruby are well known for their ability to easily run and interact with other programs.
@@ -2609,73 +2652,73 @@ Finally, we have an example of how you can make a process read from itself:
 This example never terminates since the \verb|dup| process reads its own output and duplicates it to \verb|stderr| forever.
 We strongly encourage you to try all these examples to see how they work.
 
-\section{Standard Library Reference}
-
-\section{Metaprogramming}
-
-\subsection{Expressions and Eval}
-
-\subsection{Macros}
-
-Macros are totally different from inlining.
-Macros are a hook into the compiler that lets you examine and rewrite the syntax of a piece of the program.
-You can use them to implement entirely new syntactic constructs like remote spawn, parallel for loops, string interpolation, pattern matching, Julia's command syntax, etc.
-
-Macros also run at an earlier binding time than functions and so have different semantics.
-Inlining moves code around in a way that keeps the same function call semantics, i.e. you can't ``tell'' that it happened.
-Macros are just the opposite.
-For example, say I have a function that contains an inner function:
-
-\begin{verbatim}
-  function foo()
-    bar(x) = XXX
-    ...
-    bar(...)
-  end
-\end{verbatim}
-
-Now I want to abstract away the definition of \verb|bar|.
-Maybe I want to use it in multiple functions and I don't want to copy and paste it.
-With macros I can do this:
-
-\begin{verbatim}
-  macro definestuff(name)
-    quote
-      ($name)(x) = XXX
-    end
-  end
-
-  function foo()
-    @definestuff bar
-    ...
-  end
-\end{verbatim}
-
-This is not possible without macros.
-If you passed \verb|:bar| to a function, that function has no way to define a local \verb|bar| inside \verb|foo|.
-If it used \verb|eval|, it would define a top-level function called \verb|bar|. 
-Since the macro runs so much earlier, it can change the code of \verb|foo| itself, so it can easily modify local variables.
-
-And this example hardly shows the full power, since the argument to
-the macro is only a symbol.
-This is just to show the semantic differences.
-Another example is \verb|spawn|:
-
-\begin{verbatim}
-  macro spawn(expr)
-    quote
-      spawn(()->($expr))
-    end
-  end
-\end{verbatim}
-
-Now you can write \verb|@spawn a+b| and it will call a function \verb|spawn| on \verb|a+b| wrapped in a thunk.
-This syntax improvement requires macros:
-the function call \verb|spawn(a+b)| couldn't work since \verb|a+b| will be fully evaluated before \verb|spawn| is called.
-Calling a quoted expression, as in \verb|spawn(:(a+b))|, is ugly and moreover simply wouldn't work since \verb|spawn| cannot use the expression \verb|:(a+b)| by itself to access the values of local variables \verb|a| and \verb|b|.
-
-People often compare macros to inlining (for example, the designer(s) of C++), but this is a pun.
-There is only a superficial similarity of inserting code into other code.
+% \section{Standard Library Reference}
+% 
+% \section{Metaprogramming}
+% 
+% \subsection{Expressions and Eval}
+% 
+% \subsection{Macros}
+% 
+% Macros are totally different from inlining.
+% Macros are a hook into the compiler that lets you examine and rewrite the syntax of a piece of the program.
+% You can use them to implement entirely new syntactic constructs like remote spawn, parallel for loops, string interpolation, pattern matching, Julia's command syntax, etc.
+% 
+% Macros also run at an earlier binding time than functions and so have different semantics.
+% Inlining moves code around in a way that keeps the same function call semantics, i.e. you can't ``tell'' that it happened.
+% Macros are just the opposite.
+% For example, say I have a function that contains an inner function:
+% 
+% \begin{verbatim}
+%   function foo()
+%     bar(x) = XXX
+%     ...
+%     bar(...)
+%   end
+% \end{verbatim}
+% 
+% Now I want to abstract away the definition of \verb|bar|.
+% Maybe I want to use it in multiple functions and I don't want to copy and paste it.
+% With macros I can do this:
+% 
+% \begin{verbatim}
+%   macro definestuff(name)
+%     quote
+%       ($name)(x) = XXX
+%     end
+%   end
+% 
+%   function foo()
+%     @definestuff bar
+%     ...
+%   end
+% \end{verbatim}
+% 
+% This is not possible without macros.
+% If you passed \verb|:bar| to a function, that function has no way to define a local \verb|bar| inside \verb|foo|.
+% If it used \verb|eval|, it would define a top-level function called \verb|bar|. 
+% Since the macro runs so much earlier, it can change the code of \verb|foo| itself, so it can easily modify local variables.
+% 
+% And this example hardly shows the full power, since the argument to
+% the macro is only a symbol.
+% This is just to show the semantic differences.
+% Another example is \verb|spawn|:
+% 
+% \begin{verbatim}
+%   macro spawn(expr)
+%     quote
+%       spawn(()->($expr))
+%     end
+%   end
+% \end{verbatim}
+% 
+% Now you can write \verb|@spawn a+b| and it will call a function \verb|spawn| on \verb|a+b| wrapped in a thunk.
+% This syntax improvement requires macros:
+% the function call \verb|spawn(a+b)| couldn't work since \verb|a+b| will be fully evaluated before \verb|spawn| is called.
+% Calling a quoted expression, as in \verb|spawn(:(a+b))|, is ugly and moreover simply wouldn't work since \verb|spawn| cannot use the expression \verb|:(a+b)| by itself to access the values of local variables \verb|a| and \verb|b|.
+% 
+% People often compare macros to inlining (for example, the designer(s) of C++), but this is a pun.
+% There is only a superficial similarity of inserting code into other code.
 
 \section{Command-Line Options}
 \sec{command-line-options}
