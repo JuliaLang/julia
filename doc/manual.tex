@@ -735,6 +735,725 @@ As usual, the promotion system makes interactions with other numeric types natur
   0.0033333333333333
 \end{verbatim}
 
+\section{Strings}
+\sec{strings}
+
+% Traditionally, strings are conceptualized as sequences of characters, which mathematically is a function from indices to characters.
+% When all characters are exactly one byte, this can be conveniently and efficiently represented with a plain old array of bytes.
+% It's simple and efficient.
+% End of story.
+% 
+% Unicode complicates things because common encodings like UTF-8 and UTF-16 are variable-width, meaning that characters require different numbers of bytes in their representation.
+% In UTF-8, for example, all of the ASCII characters are one byte, encoded just as in ASCII.
+% All other characters, however, take between two and four bytes to represent.
+% This means that you can't efficiently look up the $k$th character of a string by doing array indexing anymore:
+% the $k$th byte of the representation is no longer the $k$th character.
+% Worse still, a byte might not be the beginning of a character at all, but right in the middle of a character (this is called a ``continuation byte'').
+% 
+% If you allow people direct access to the bytes of an encoded string, they can and will do all sorts of bad things that produce invalid Unicode and broken behaviors when Unicode input is received.
+% To provide a string abstraction that makes strings behave like functions from indices to Unicode characters (i.e. code points), you have to chose one of the following:
+% \begin{enumerate}
+% 
+% \item Have fast, natural random access to characters, but store strings so that every character is big enough to accommodate the entire Unicode character set.
+% The natural choice of encoding for this is UTF-32, in which each code point (integer value representing a unique character) is simply represented by its 32-bit integer value.
+% This also requires processing every string before accessing or manipulating it to convert it from its input encoding (usually UTF-8) to UTF-32.
+% Transcoding introduces a lot of overhead, forcing every string to be transcoded, typically both on input and output, as well as inflating memory usage for all strings.
+% 
+% \item Sacrifice the ability to represent every Unicode character and use only the two-byte characters of a 16-bit encoding like UTF-16.
+% With this you can represent virtually all modern languages, but you cannot write in ancient languages like Egyptian hieroglyphs, Linear B, or represent some unusual modern characters such as certain unified Han ideographs.
+% This allows fast random access, and reduces the memory inflation compared to the UTF-32 approach, but still requires transcoding almost every string on input and output.
+% 
+% \item Keep strings in their input form, but make indexing into a string an $\O(k)$ operation which requires scanning the entire string from the beginning to find the $k$th character from there.
+% This turns a lot of straightforward $\O(n)$ string processing algorithms into $\O(n^2)$ algorithms unless you completely avoid indexing into strings altogether.
+% 
+% \item Represent strings by a clever, relatively complex data structure that allows strings to remain encoded, but somehow makes indexing the $k$th character look like it's faster than $\O(k)$, when it is amortized over many operations.
+% One possible way to do this is to remember the last few indices that were accessed and figure out new indices relative to them.
+% 
+% \item Do not allow indexing into strings. Instead, only provide interfaces, such as iterating characters, which are Unicode safe as well as being efficiently implementable without transcoding strings.
+% 
+% \item Ignore the whole issue and just equate strings with byte arrays and let Unicode bugger itself (a.k.a.~the C approach\footnote{To be fair, the C language long predates the Unicode standard.}).
+% 
+% \end{enumerate}
+% Technically, option 5 doesn't actually keep the abstraction of strings as functions from indices to characters, so perhaps it doesn't belong here;
+% and option 6 isn't a solution at all, but rather a matter of deciding that you just don't care.
+% Option 2 is not really a solution, either, but a pragmatic compromise that gets you 90\% of the way (unless you happen to want to process hieroglyphs).
+% Frankly, none of these options is good enough for something as fundamental and performance-critical as string processing.
+% 
+% \subsection{The Partial Function Approach}
+% \sec{partial-function-strings}
+% 
+% Our approach is to change the abstraction of what a string is instead of choosing any of the above.
+% Rather than conceptualizing a string as a function from indices to characters, we conceptualize a string as a \emph{partial function} from indices to characters.
+% What does this mean?
+% It means that when indexing into a string, for some indices no character value is returned:
+% instead of returning a value, the language throws an exception.
+% So in short \verb|str[k]| will throw an exception if $k$ doesn't correspond to a character.
+% For UTF-8 strings that are plain ASCII this will never happen.
+% For UTF-32 strings it will never happen.
+% For UTF-16 strings including only the common two-byte characters it will never happen.
+% For other instances of encoded strings, it could happen, however.
+% 
+% How does this modified abstraction help?
+% It recognizes that bytes and characters are not one-to-one in many encodings, but still allows you store strings in their native encoding and retrieve characters efficiently by a byte index, rather than a character index.
+% If you try to get or set a character at an index that isn't the start of a character, it's an exception---indicating that the partial function isn't defined there.
+% The ``string''---as one normally thinks of it---is the sequence characters returned by the string as the indices range from one to the maximum index.
+% The gotcha is that some indices don't return a character.
+% 
+% Code that na\"ively iterates through all indices will work and work with C-like performance, until it encounters strange input data, at which point it will throw a nice clean exception letting you know exactly what the problem is.
+% You can probably just modify the code to catch the exception and move on to the next index.
+% Alternately, you can rewrite the code to use a Unicode character iterator instead.
+% Moreover, if you always consider string indices as opaque objects, and never do arithmetic with them (iterating through indices counts as arithmetic: \verb|k+=1|), then as long as you only index into a string with an index given to you by a string function, this kind of thing will never happen.
+% 
+% By changing the string abstraction, we can support arbitrary string encodings and other representations at C-like efficiency and with a nice, safe, clean programmatic interface.
+
+There are a few noteworthy high-level features about Julia's approach to strings:
+\begin{itemize}
+\item Like C, but unlike most dynamic languages, Julia has a first-class type representing a single character, called \verb|Char|.
+A \verb|Char| is a special kind of 32-bit integer, whose numeric value represents a single Unicode code point.
+\item Conceptually, a \verb|String| is a \emph{partial function} from indices to \verb|Char| values --- for some index values, no character value is returned, and instead an exception is thrown.
+This for allows efficient indexing into strings by the byte index of an encoded representation rather than by a character index, which cannot be implemented efficiently and simply for variable-width encodings of Unicode strings.
+\item There are many different classes implementing the \verb|String| interface, not a single special one.
+They all implement a common programming interface, however, and any string type can be used in any function expecting a \verb|String|.
+The predefined string types are no more special than user-defined ones.
+\item Strings are immutable: the value of a \verb|String| object cannot be changed.
+To construct a different string value, you construct a new string object from parts of other string objects.
+\end{itemize}
+Although there are many implementations of the \verb|String| interface, we do not delve into the details of these implementations here:
+you can use all strings transparently in the same way in all string operations.
+
+\subsection{Characters}
+
+Like C, but unlike Perl, Python, or Ruby, Julia has a type for individual characters: \verb|Char|.
+A \verb|Char| is just a 32-bit integer with a special literal representation and some specific arithmetic behaviors, interpreted as a Unicode code point.
+Here is how \verb|Char| values are input and shown:
+\begin{verbatim}
+  julia> 'x'
+  'x'
+
+  julia> typeof(ans)
+  Char
+\end{verbatim}
+You can convert a Char to its integer value, i.e. code point, easily:
+\begin{verbatim}
+  julia> int('x')
+  120
+
+  julia> typeof(ans)
+  Int32
+\end{verbatim}
+You can convert an integer value back to a \verb|Char| just as easily:
+\begin{verbatim}
+  julia> char(120)
+  'x'
+\end{verbatim}
+Not all integer values are valid Unicode code points, but for performance, the \verb|char| conversion does not check that every character value is valid.
+If you want to check that each converted value is a value code point, use the \verb|safe_char| conversion instead:
+\begin{verbatim}
+  julia> char(0xd800)
+  '???'
+
+  julia> safe_char(0xd800)
+  invalid Unicode code point: U+d800
+
+  julia> char(0x110000)
+  '\U00110000'
+
+  julia> safe_char(0x110000)
+  invalid Unicode code point: U+110000
+\end{verbatim}
+As of this writing, the valid Unicode code points are \verb|U+0000| through \verb|U+d7ff| and \verb|U+e000| through \verb|U+10ffff|.
+These have not all been assigned intelligible meanings yet, nor are they necessarily interpretable by applications, but all of these values are considered to be valid Unicode characters.
+
+You can input any Unicode character in single quotes using \verb|\u| followed by up to four hexadecimal digits or \verb|\U| followed by up to eight hexadecimal digits (the longest valid value only requires six):
+\begin{verbatim}
+  julia> '\u0'
+  '\0'
+
+  julia> '\u78'
+  'x'
+
+  julia> '\u2200'
+  '∀'
+
+  julia> '\U10ffff'
+  '\U0010ffff'
+\end{verbatim}
+Julia uses your system's locale and language settings to determine which characters can be printed as-is and which must be output using the generic, escaped \verb|\u| or \verb|\U| input forms.
+In addition to these Unicode escape forms, all of C's traditional escaped input forms are usable as well:
+\begin{verbatim}
+  julia> int('\0')
+  0
+
+  julia> int('\t')
+  9
+
+  julia> int('\n')
+  10
+
+  julia> int('\e')
+  27
+
+  julia> int('\x7f')
+  127
+
+  julia> int('\177')
+  127
+
+  julia> int('\xff')
+  255
+\end{verbatim}
+Like any integers, you can do arithmetic and comparisons with \verb|Char| values:
+\begin{verbatim}
+  julia> 'x' - 'a'
+  23
+
+  julia> 'A' < 'a'
+  true
+
+  julia> 'A' <= 'a' <= 'Z'
+  false
+
+  julia> 'A' <= 'X' <= 'Z'
+  true
+\end{verbatim}
+Arithmetic with \verb|Char| values always promotes them to \verb|Int32|.
+To create a new \verb|Char| value, explicit conversion back to the \verb|Char| type is required:
+\begin{verbatim}
+  julia> 'A' + 1
+  66
+
+  julia> char(ans)
+  'B'
+\end{verbatim}
+% Requiring explicit conversion allows a series of intermediate computations to be done efficiently, only checking that the final value is a valid Unicode code point.
+
+\subsection{String Basics}
+
+Here a variable is initialized with a simple string literal:
+\begin{verbatim}
+  julia> str = "Hello, world.\n"
+  "Hello, world.\n"
+\end{verbatim}
+If you want to extract a character from a string, you index into it:
+\begin{verbatim}
+  julia> str[1]
+  'H'
+
+  julia> str[6]
+  ','
+
+  julia> str[end]
+  '\n'
+
+  julia> str[end-1]
+  '.'
+\end{verbatim}
+Like all indexing in Julia, string indexing is 1-based, not 0-based.
+Using an index less than 1 or greater than \verb|end| raises an error:
+\begin{verbatim}
+  julia> str[0]
+  in next: arrayref: index out of range
+
+  julia> str[end+1]
+  in next: arrayref: index out of range
+\end{verbatim}
+You can also extract a substring using range indexing:
+\begin{verbatim}
+  julia> str[4:9]
+  "lo, wo"
+\end{verbatim}
+Note the distinction between \verb|str[k]| and \verb|str[k:k]|:
+\begin{verbatim}
+  julia> str[6]
+  ','
+
+  julia> str[6:6]
+  ","
+\end{verbatim}
+The former is a single character value of type \verb|Char|, while the latter is a string value that happens to contain only a single character.
+In Julia these are very different things.
+
+\subsection{Interpolation}
+
+One of the most common and useful string operations is concatenation:
+\begin{verbatim}
+  julia> greet = "Hello"
+  "Hello"
+
+  julia> who = "world"
+  "world"
+
+  julia> strcat(greet, ", ", who, ".\n")
+  "Hello, world.\n"
+\end{verbatim}
+Constructing strings like this can become a bit cumbersome, however.
+To reduce the need for these explicit calls to \verb|strcat|, Julia allows interpolation into string literals using \verb|$|, as in Perl:
+\begin{verbatim}
+  julia> "$greet, $who.\n"
+  "Hello, world.\n"
+\end{verbatim}
+This is more readable and convenient and exactly equivalent to the above string concatenation---the system rewrites this apparent single string literal into a concatenation of string literals with variables.
+
+The shortest complete expression after the \verb|$| is taken as the expression whose value is to be interpolated into the string.
+Thus, you can interpolate any expression into a string using parentheses:
+\begin{verbatim}
+  julia> "1 + 2 = $(1 + 2)"
+  "1 + 2 = 3"
+\end{verbatim}
+The expression need not be contained in parentheses, however.
+For example, since a literal array expression is not complete until the opening \verb|[| is closed by a matching \verb|]|, you can interpolate an array like this:
+\begin{verbatim}
+  julia> x = 2; y = 3; z = 5;
+
+  julia> "x,y,z: $[x,y,z]."
+  "x,y,z: [2,3,5]."
+\end{verbatim}
+Both concatenation and string interpolation call the generic \verb|string| function to convert objects into \verb|String| form.
+Most non-\verb|String| objects are converted to strings as they are shown in the Julia repl:
+\begin{verbatim}
+  julia> v = [1,2,3]
+  [1,2,3]
+
+  julia> "v: $v"
+  "v: [1,2,3]"
+\end{verbatim}
+The \verb|string| function is the identity for \verb|String|s and \verb|Char|s values, so these are interpolated into strings as themselves, unquoted and unescaped:
+\begin{verbatim}
+  julia> c = 'x'
+  'x'
+
+  julia> "hi, $c"
+  "hi, x"
+\end{verbatim}
+
+\subsection{Common Operations}
+
+Another useful string function is \verb|repeat|:
+\begin{verbatim}
+  julia> repeat(".:Z:.", 10)
+  ".:Z:..:Z:..:Z:..:Z:..:Z:..:Z:..:Z:..:Z:..:Z:..:Z:."
+\end{verbatim}
+You can lexicographically compare strings using the standard comparison operators:
+\begin{verbatim}
+  julia> "abracadabra" < "xylophone"
+  true
+
+  julia> "abracadabra" == "xylophone"
+  false
+
+  julia> "Hello, world." != "Goodbye, world."
+  true
+
+  julia> "1 + 2 = 3" == "1 + 2 = $(1 + 2)"
+  true
+\end{verbatim}
+You can search for the index of a particular character using the \verb|strchr| function:
+\begin{verbatim}
+  julia> strchr("xylophone", 'x')
+  1
+
+  julia> strchr("xylophone", 'p')
+  5
+
+  julia> strchr("xylophone", 'z')
+  char not found
+\end{verbatim}
+You can start the search for a character at a given offset by providing a third argument:
+\begin{verbatim}
+  julia> strchr("xylophone", 'o')
+  4
+
+  julia> strchr("xylophone", 'o', 5)
+  7
+
+  julia> strchr("xylophone", 'o', 8)
+  char not found
+\end{verbatim}
+Some other useful functions include:
+\begin{itemize}
+\item \verb|length(str)| gives the maximal (byte) index that can be used to index into \verb|str|.
+
+\item \verb|strlen(str)| the number of characters in \verb|str|.
+This is \emph{not} the same as \verb|length(str)|, but we do always have the identity \verb|strlen(str)| $\le$ \verb|length(str)|.
+
+\item \verb|i = start(str)| gives the first valid index at which a character can be found in \verb|str| (typically 1).
+
+\item \verb|c, j = next(str,i)| returns next character at or after the index \verb|i| and the next valid character index following that.
+With the \verb|start| and \verb|length|, can be used to iterate through the characters in \verb|str|.
+
+% TODO: figure this out and fix it.
+
+\item \verb|c, j = prev(str,i)| returns the character at or before index \verb|i| and the index at which it occurs.
+With \verb|length| and \verb|start| can be used to iterate through the characters in \verb|str| in reverse.
+
+\item \verb|ind2chr(str,i)| gives the number of characters in \verb|str| up to and including any at index \verb|i|.
+
+\item \verb|chr2int(str,j)| gives the index at which the \verb|j|th character in \verb|str| occurs.
+\end{itemize}
+
+% \subsection{String Internals}
+% 
+% What is the actual type and structure a string object?
+% \begin{verbatim}
+%   julia> dump("Hello, world.\n")
+%   Latin1String(data=[104,101,108,108,111,...,119,111,114,108,100],)
+% \end{verbatim}
+% Standard string literals like the above always produce either a \verb|Latin1String| or a \verb|UTF8String|.
+% Both of these types of strings are implemented using a byte array encoding \verb|Char| values.
+% \verb|Latin1String| uses a fixed-width, single-byte encoding, while \verb|UTF8String| uses the variable-width, UTF-8 encoding.
+% 
+% Here are the actual declarations of the basic string types from Julia's bootstrapping code:
+% \begin{verbatim}
+%   abstract String
+% 
+%   type Latin1String <: String
+%       data::Array{Uint8,1}
+%   end
+% 
+%   type UTF8String <: String
+%       data::Array{Uint8,1}
+%   end
+% \end{verbatim}
+% \verb|String| is an abstract supertype, which is used to refer to all concrete implementations of the string interface.
+% The \verb|Latin1String| and \verb|UTF8String| classes are both thin wrappers around an array of bytes (\verb|Uint8| values), holding the string's encoded data.
+% The only difference is in their interpretation:
+% \begin{enumerate}
+% \item In a \verb|Latin1String|, bytes and characters are one-to-one, and each byte encodes its Unicode code point directly, the way classic C strings do.
+% As you may have guessed, this encoding is called Latin-1.
+% \item In a \verb|UTF8String|, bytes and characters are not one-to-one, but instead uses the UTF-8 encoding, which matches ASCII and Latin-1 up to \verb|0x7f|, and uses two, three of four bytes to encode Unicode characters with higher code points.
+% \end{enumerate}
+% How does one generate a \verb|UTF8String| object rather than a \verb|Latin1String| object?
+% One does so just by using a Unicode character escape sequence above \verb|0x7f| in a string literal:
+% \begin{verbatim}
+%   julia> "\u2200 x \u2203 y > x"
+%   "∀ x ∃ y > x"
+% 
+%   julia> dump(ans)
+%   UTF8String(data=[226,136,128,32,120,...,121,32,62,32,120],)
+% \end{verbatim}
+% Also, absent other indications, external text input is assumed to be encoded as UTF-8, and therefore creates \verb|UTF8String| objects.
+% String literals created in Julia without escapes, however, can be safely represented using Latin-1, which, being a fixed-width encoding, has much better performance characteristics than UTF-8.
+% In particular, \verb|Latin1String|s have zero decoding overhead because each character is represented directly by its byte value.
+% Therefore, Julia uses \verb|Latin1String|s internally whenever it can.
+% 
+% Because there are so many different ways a sequence of characters can be represented, Julia has many different string types, each with a different underlying implementation.
+% Also, programmers can easily define their own new string types.
+% The distinction between different string implementations is transparent to the casual observer in Julia.
+% You can perform string operations with all combinations of types of strings, and they will work:
+% all string functions are implemented generically in terms of a minimal core set of methods which any string must provide.
+% 
+% Generic implementations of string methods are often less efficient than optimal.
+% Julia's dispatch system fortunately makes it simple to provide specialized, fast methods in cases where the specific representation of a string can be leveraged somehow.
+% The typical user never needs to think about this:
+% just call the right generic function and the work will be dispatched to the appropriate method.
+% Consider, for example, comparing the lexicographic ordering of two strings:
+% \begin{verbatim}
+%   julia> "abracadabra" < "xylophone"
+%   true
+% \end{verbatim}
+% There is a generic string \verb|<| method which can compare any two strings, character by character, regardless of encoding or implementation.
+% In this case, however, both strings are \verb|Latin1String| objects, and a much faster method of comparison exists:
+% the \verb|libc| library's \verb|memcmp| function.
+% So a specialized \verb|<| method is provided to compare two \verb|Latin1String|s using this much faster method.
+% The usage is completely transparent, however:
+% regardless of what kinds of strings you have, you simply call \verb|a < b| to compare them.
+% If \verb|memcmp| can be used, it will be;
+% if not, the comparison will work, albeit not quite as quickly.
+% The same trick applies to comparing a pair of \verb|UTF8String|s:
+% UTF-8 is carefully designed to allow using \verb|memcmp|.
+% 
+% Allowing many different string representations to coexist and interoperate smoothly provides significant flexibility and power.
+% For example, Julia performs string concatenation using ropes:
+% \begin{verbatim}
+%   julia> strcat("foo","bar")
+%   "foobar"
+% 
+%   julia> dump(ans)
+%   RopeString(head="foo",tail="bar",depth=1,length=6,)
+% \end{verbatim}
+% This makes concatenation, which is by far one of the most common string operations, take $\O(1)$ time rather than $O(n)$ time, as it does if a new memory buffer must be allocated and both strings copied into it.
+% Another very useful operation is repeating a string:
+% \begin{verbatim}
+%   julia> zzz = repeat(".:Z:.", 100000);
+% 
+%   julia> strlen(zzz)
+%   500000
+% 
+%   julia> zzz[end>>1-15:end>>1+16]
+%   "..:Z:..:Z:..:Z:..:Z:..:Z:..:Z:.."
+% \end{verbatim}
+% In julia this requires very little memory because the repeat operation just creates a special kind of string:
+% \begin{verbatim}
+%   julia> dump(zzz)
+%   RepString(string=".:Z:.",repeat=100000,)
+% \end{verbatim}
+% The resulting object behaves as though you had a 5MB string in memory, but does so using mod operations when indexing rather than by actually allocating 5MB.
+% If you actually want to allocate all that memory, you can force Julia to do so by coercing the \verb|RepString| into a byte-backed ``C string'':
+% \begin{verbatim}
+%   julia> zzz = cstring(zzz);
+% 
+%   julia> typeof(zzz)
+%   Latin1String
+% \end{verbatim}
+
+\section{Functions}\sec{functions}
+
+The basic syntax for defining functions in Julia is:
+\begin{verbatim}
+  function f(x,y)
+    x + y
+  end
+\end{verbatim}
+This syntax is similar to Matlab, but there are some significant differences:
+\begin{itemize}
+\item In Matlab, this definition must be saved in a file, named \verb|f.m|, whereas in Julia, this expression can appear anywhere, including at the repl prompt.
+\item In Matlab, the closing \verb|end| is optional, being implied by the end of the file.
+In Julia, the terminating \verb|end| is required.
+\item in Matlab, this function would print the value \verb|x + y| but would not return any value, whereas in Julia, the last expression evaluated is a function's return value.
+\item Expression values are never printed automatically except in the repl.
+Semicolons are only required to separate expressions on the same line.
+\end{itemize}
+In general, while the function definition syntax is reminiscent of Matlab, the similarity is largely superficial.
+Therefore, rather than continually comparing the two, in what follows, we will simply describe the behavior of functions in Julia directly.
+
+There is a second, more terse syntax for defining a function in Julia.
+The traditional function declaration syntax demonstrated above is equivalent to the following compact ``assignment form'':
+\begin{verbatim}
+  f(x,y) = x + y
+\end{verbatim}
+In the assignment form, the body of the function must be a single expression, although it can be a compound expression (see \Section{compound-expressions}).
+Short, simple function definitions are common in Julia.
+The short function syntax is accordingly quite idiomatic, considerably reducing both typing and visual noise.
+
+\subsection{The \texttt{return} Keyword}\sec{the-return-keyword}
+
+The value returned by a function is the value of the last expression evaluated, which, by default, is the last expression in the body of the function definition.
+In the example function, \verb|f|, from the previous section this is the value of the expression \verb|x + y|.
+As in C and most other imperative or functional languages, the \verb|return| keyword causes a function to return immediately, providing an expression whose value is returned: % TODO: make return value actually optional.
+\begin{verbatim}
+  function g(x,y)
+    return x * y
+    x + y
+  end
+\end{verbatim}
+Since functions definitions can be entered into the repl, it is easy to compare these definitions:
+\begin{verbatim}
+  f(x,y) = x + y
+
+  function g(x,y)
+    return x * y
+    x + y
+  end
+
+  julia> f(2,3)
+  5
+
+  julia> g(2,3)
+  6
+\end{verbatim}
+Of course, in a purely linear function body like \verb|g|, the usage of \verb|return| is pointless since the expression \verb|x + y| is never evaluated and we could simply make \verb|x * y| the last expression in the function and omit the \verb|return|.
+In conjunction with other control flow, however, \verb|return| is of real use.
+Here, for example, is a function that computes the hypotenuse length of a right triangle with sides of length $x$ and $y$, carefully avoiding numerical errors or instabilities:
+\begin{verbatim}
+  function hypot(x,y)
+      x = abs(x)
+      y = abs(y)
+      if x > y
+          r = y/x
+          return x*sqrt(1+r*r)
+      end
+      if y == 0
+          return zero(x)
+      end
+      r = x/y
+      return y*sqrt(1+r*r)
+  end
+\end{verbatim}
+There are three possible points of return from this function, returning the values of three different expressions, depending on the values of $x$ and $y$.
+The \verb|return| on the last line could be omitted since it is the last expression.
+
+\subsection{Operators Are Functions}\sec{operators-are-functions}
+
+In Julia, most operators are just functions with support for special syntax.\footnote{The exceptions are operators with special evaluation semantics like \texttt{\&\&} and \texttt{||}.
+These operators cannot be functions since short-circuit evaluation (see \Section{short-circuit-evaluation}) requires that their operands are not evaluated before evaluation of the operator.}
+Accordingly, you can also apply them using parenthesized argument lists as you would any other function:
+\begin{verbatim}
+  julia> 1 + 2 + 3
+  6
+
+  julia> +(1,2,3)
+  6
+\end{verbatim}
+The infix form is exactly equivalent to the function application form\,---\,in fact the former is parsed to produce the function call internally.
+This also means that you can pass and assign operators such as \verb|+| and \verb|*| into variables just like you can with other functions:
+\begin{verbatim}
+  julia> f = +;
+
+  julia> f(1,2,3)
+  6
+\end{verbatim}
+Under the name, \verb|f|, the function does not support infix notation.
+
+% Since operators like \verb|+| are just normal Julia functions, you can add new methods for them.
+% For example, the addition method for complex numbers is defined as:
+% \begin{verbatim}
+%   +(z::Complex, w::Complex) = Complex(z.re + w.re, z.im + w.im)
+% \end{verbatim}
+% For more about types like \verb|Complex|, their structure and how to define them, see \Section{types}.
+
+\subsection{Anonymous Functions}\sec{anonymous-functions}
+
+Functions in Julia are first-class objects:
+they can be assigned to variables, called using the standard function call syntax via the variable they have been assigned to, they can be passed as arguments, and they can be returned as values.
+They can also be created anonymously, without giving them a name:
+\begin{verbatim}
+  julia> x -> x^2 + 2x - 1
+  #<closure>
+\end{verbatim}
+This creates an unnamed function taking one argument and returning the value of the polynomial $x^2 + 2x - 1$ at that value.
+The primary use for anonymous functions is passing them to functions which take other functions as arguments.
+A classic example is the \verb|map| function, which applies a function to each value of an array and returns a new array containing the resulting values:
+\begin{verbatim}
+  julia> map(round, [1.2,3.5,1.7])
+  [1.0,4.0,2.0]
+\end{verbatim} % TOOD: make sure type inference gets the right return type.
+This is fine if a named function effecting the transform one wants already exists to pass as the first argument to \verb|map|.
+Often, however, a ready-to-use, named function does not exist.
+In these situations, the anonymous function construct allows easy creation of a single-use function object without needing a name:
+\begin{verbatim}
+  julia> map(x -> x^2 + 2x - 1, [1,3,-1])
+  [2,14,-2]
+\end{verbatim}
+
+\subsection{Multiple Return Values}
+
+In Julia, one returns a single tuple value in order to simulate returning multiple values.
+However, tuples can be created and destructured without needing parentheses, thereby providing an illusion that multiple values are being returned, rather than a single tuple value.
+For example, the following function returns a pair of values:
+\begin{verbatim}
+  function foo(a,b)
+    a+b, a*b
+  end
+\end{verbatim}
+If you call it at the repl, you will see the tuple returned:
+\begin{verbatim}
+  julia> foo(2,3)
+  (5,6)
+\end{verbatim}
+A typical usage of such a pair of return values, however, is to extract each one into its own variable.
+Julia supports simple tuple ``destructuring'' that facilitates this:
+\begin{verbatim}
+  julia> x, y = foo(2,3);
+
+  julia> x
+  5
+
+  julia> y
+  6
+\end{verbatim}
+You can also return multiple values via an explicit return:
+\begin{verbatim}
+  function foo(a,b)
+    return a+b, a*b
+  end
+\end{verbatim}
+This has the exact same effect as the previous definition of \verb|foo|.
+
+\subsection{Varargs Functions}
+
+It is often convenient to be able to write functions taking an arbitrary number of arguments.
+Such functions are traditionally known as ``varargs'' functions, which is short for ``\emph{var}iable number of \emph{arg}ument\emph{s}.''
+You can define a varargs function by appending the last argument with ``\verb|...|'':
+\begin{verbatim}
+  bar(a,b,x...) = (a,b,x)
+\end{verbatim}
+The variables \verb|a| and \verb|b| are bound to the first two argument values as usual, and the variable \verb|x| is bound to an iterable collection of the zero or more values passed to \verb|bar|:
+\begin{verbatim}
+  julia> bar(1,2)
+  (1,2,())
+
+  julia> bar(1,2,3)
+  (1,2,(3,))
+
+  julia> bar(1,2,3,4)
+  (1,2,(3,4))
+
+  julia> bar(1,2,3,4,5,6)
+  (1,2,(3,4,5,6))
+\end{verbatim}
+In these cases, \verb|x| is bound to a tuple of the trailing values passed to \verb|bar|.
+
+On the other hand, it is often handy to ``splice'' the values contained in an iterable collection into a call to a function.
+To do this, one also uses ``\verb|...|'' placed after and argument in a function call:
+\begin{verbatim}
+  julia> x = (3,4)
+  (3,4)
+
+  julia> bar(1,2,x...)
+  (1,2,(3,4))
+\end{verbatim}
+In this case a tuple of values is spliced into a varargs call precisely where the variable number of arguments go.
+This need not be the case, however:
+\begin{verbatim}
+  julia> x = (2,3,4)
+  (2,3,4)
+
+  julia> bar(1,x...)
+  (1,2,(3,4))
+
+  julia> x = (1,2,3,4)
+  (1,2,3,4)
+
+  julia> bar(x...)
+  (1,2,(3,4))
+\end{verbatim}
+Furthermore, the iterable object spliced into a function call need not be a tuple:
+\begin{verbatim}
+  julia> x = [3,4]
+  [3,4]
+
+  julia> bar(1,2,x...)
+  (1,2,(3,4))
+
+  julia> x = [1,2,3,4]
+  [1,2,3,4]
+
+  julia> bar(x...)
+  (1,2,(3,4))
+\end{verbatim}
+As a final example, you can sum the values in any collection using the \verb|+| operator and splicing:
+\begin{verbatim}
+  julia> x = [1,2,3,4]
+  [1,2,3,4]
+
+  julia> +(x...)
+  10
+
+  julia> x = 1:100
+  1:100
+
+  julia> +(x...)
+  5050
+\end{verbatim}
+Note that in this last example, the range object, \verb|1:100|, is never materialized in memory as a vector, rather it is a computed vector-like object, and the most general definition of the \verb|+| operator iterates over its collection of arguments, summing them into an accumulator like this:
+\begin{verbatim}
+  function +(a, b, c, xs...)
+      accum = a + b + c
+      for x = xs
+          accum += x
+      end
+      accum
+  end
+\end{verbatim}
+Therefore, the \verb|+(x...)| call is actually quite efficient in terms of both memory usage and speed.
+
+\subsection{Further Reading}
+
+We should mention here that this is far from a complete picture of defining functions.
+Julia has a sophisticated types system and allows multiple dispatch on argument types.
+None of the examples given here provide any type annotations on their arguments, meaning that they are applicable to any argument types.
+The type system is described in \Section{types} and defining a function in terms of methods chosen by multiple dispatch on the runtime types of a function's arguments is described in detail in \Section{methods}.
+
 \section{Control Flow}\sec{control-flow}
 
 Julia provides a variety of control flow constructs:
@@ -1219,84 +1938,255 @@ more values to generate and so might not yet be ready to return. With
 \verb|Task|s, the producer and consumer can both run as long as they need to,
 passing values back and forth as necessary.
 
+\section{Variables}
 
-\section{Functions}\sec{functions}
+Until now, we have used variables without any explanation.
+Julia's usage of variables closely resembles that of other dynamic languages, so we have hopefully gotten away with this liberty.
+In this section, we correct this oversight and provide details of how variables are used, declared, and scoped in Julia.
 
-The basic syntax for defining functions in Julia is:
-\begin{verbatim}
-  function f(x,y)
-    x + y
-  end
-\end{verbatim}
-This syntax is similar to Matlab, but there are some significant differences:
+\subsection{Scoping}\sec{scoping}
+
+The \emph{scope} of a variable is the region of code within which a variable
+is visible.
+Variable scoping helps avoid variable naming conflicts.
+The concept is intuitive:
+two functions can both have arguments called \verb|x| without the two \verb|x|'s referring to the same thing.
+Similarly there are many other cases where different blocks of code can use the same name without referring to the same thing.
+The rules for when the same variable name does or doesn't refer to the same thing are called scope rules;
+this section spells them out in detail.
+
+Certain constructs in the language introduce \emph{scope blocks}, which
+are regions of code that are eligible to be the scope of some set of variables.
+The scope of a variable cannot be an arbitrary set of
+source lines, but will always line up with one of these blocks. These
+constructs introducing such blocks are:
 \begin{itemize}
-\item In Matlab, this definition must be saved in a file, named \verb|f.m|, whereas in Julia, this expression can appear anywhere, including at the repl prompt.
-\item In Matlab, the closing \verb|end| is optional, being implied by the end of the file.
-In Julia, the terminating \verb|end| is required.
-\item in Matlab, this function would print the value \verb|x + y| but would not return any value, whereas in Julia, the last expression evaluated is a function's return value.
-\item Expression values are never printed automatically except in the repl.
-Semicolons are only required to separate expressions on the same line.
+\item function bodies (any syntax)
+\item \verb|while| loops
+\item \verb|for| loops
+\item \verb|try| blocks
+\item \verb|catch| blocks
+\item \verb|let| blocks
+\item \verb|type| blocks.
 \end{itemize}
-In general, while the function definition syntax is reminiscent of Matlab, the similarity is largely superficial.
-Therefore, rather than continually comparing the two, in what follows, we will simply describe the behavior of functions in Julia directly.
-
-There is a second, more terse syntax for defining a function in Julia.
-The traditional function declaration syntax demonstrated above is equivalent to the following compact ``assignment form'':
+Certain constructs introduce new variables into the current innermost scope. When
+a variable is introduced into a scope, it is also inherited by all inner
+scopes unless one of those inner scopes explicitly overrides it. These
+constructs which introduce new variables into the current scope are as follows:
+\begin{itemize}
+\item A declaration \verb|local x| introduces a new local variable.
+\item A declaration \verb|global x| makes \verb|x| in the current scope
+and inner scopes refer to the global variable of that name.
+\item A function's arguments are introduced as new local variables into the
+function's body scope.
+\item An assignment \verb|x = y| introduces a new local variable \verb|x|
+only if \verb|x| is neither declared global nor explicitly introduced as local
+by any enclosing scope, before or \emph{after} the current line of code.
+\end{itemize}
+In the following example, there is only one \verb|x| assigned both inside
+and outside a loop:
 \begin{verbatim}
-  f(x,y) = x + y
-\end{verbatim}
-In the assignment form, the body of the function must be a single expression, although it can be a compound expression (see \Section{compound-expressions}).
-Short, simple function definitions are common in Julia.
-The short function syntax is accordingly quite idiomatic, considerably reducing both typing and visual noise.
-
-\subsection{The \texttt{return} Keyword}\sec{the-return-keyword}
-
-The value returned by a function is the value of the last expression evaluated, which, by default, is the last expression in the body of the function definition.
-In the example function, \verb|f|, from the previous section this is the value of the expression \verb|x + y|.
-As in C and most other imperative or functional languages, the \verb|return| keyword causes a function to return immediately, providing an expression whose value is returned: % TODO: make return value actually optional.
-\begin{verbatim}
-  function g(x,y)
-    return x * y
-    x + y
-  end
-\end{verbatim}
-Since functions definitions can be entered into the repl, it is easy to compare these definitions:
-\begin{verbatim}
-  f(x,y) = x + y
-
-  function g(x,y)
-    return x * y
-    x + y
-  end
-
-  julia> f(2,3)
-  5
-
-  julia> g(2,3)
-  6
-\end{verbatim}
-Of course, in a purely linear function body like \verb|g|, the usage of \verb|return| is pointless since the expression \verb|x + y| is never evaluated and we could simply make \verb|x * y| the last expression in the function and omit the \verb|return|.
-In conjunction with other control flow, however, \verb|return| is of real use.
-Here, for example, is a function that computes the hypotenuse length of a right triangle with sides of length $x$ and $y$, carefully avoiding numerical errors or instabilities:
-\begin{verbatim}
-  function hypot(x,y)
-      x = abs(x)
-      y = abs(y)
-      if x > y
-          r = y/x
-          return x*sqrt(1+r*r)
+  function foo(n)
+      x = 0
+      for i = 1:n
+          x = x + 1
       end
-      if y == 0
-          return zero(x)
-      end
-      r = x/y
-      return y*sqrt(1+r*r)
+      x
   end
+  
+  julia> foo(10)
+  10
 \end{verbatim}
-There are three possible points of return from this function, returning the values of three different expressions, depending on the values of $x$ and $y$.
-The \verb|return| on the last line could be omitted since it is the last expression.
+In the next example, the loop has a separate \verb|x| and the function
+always returns zero:
+\begin{verbatim}
+  function foo(n)
+      x = 0
+      for i = 1:n
+          local x
+          x = i
+      end
+      x
+  end
 
-\subsection{Specializing Functions}\sec{specializing-functions}
+  julia> foo(10)
+  0
+\end{verbatim}
+In this example, an \verb|x| exists only inside the loop, and
+the function encounters an undefined variable error on its last line
+(unless there is a global variable \verb|x|):
+\begin{verbatim}
+  function foo(n)
+      for i = 1:n
+          x = i
+      end
+      x
+  end
+
+  julia> foo(10)
+  in foo: x not defined
+\end{verbatim}
+A variable that is not assigned to or otherwise introduced locally defaults to global,
+so this function would return the value of the global \verb|x|
+if there is such a variable, or produce an error if no such global exists.
+As a consequence, the only way to assign to a global variable inside
+a non-top-level scope is to explicitly declare the variable as global within some scope, since
+otherwise the assignment would introduce a new local rather than assigning to the global. This rule works out
+well in practice, since the vast majority of variables assigned inside
+functions are intended to be local variables, and using global variables, should be the exception rather than the rule, especially assigning new values to them.
+
+One last example shows that an outer assignment introducing \verb|x| need not come before an inner usage:
+\begin{verbatim}
+  function foo(n)
+      f = y -> n + x + y
+      x = 1
+      f(2)
+  end
+
+  julia> foo(10)
+  13
+\end{verbatim}
+This last example may seem slightly odd for a normal variable, but allows for named functions\,---\,which are just normal variables holding function objects\,---\,to be used before they are defined.
+This allows functions to be defined in whatever order is intuitive and convenient, rather than forcing bottom up ordering or requiring forward declarations, both of which one typically sees in C programs.
+As an example, here is an inefficient, mutually recursive way to test if positive integers are even or odd:\,\footnote{Julia provides built-in, efficient functions to test this called \texttt{iseven} and \texttt{isodd}.}
+\begin{verbatim}
+  even(n) = n == 0 ? true  :  odd(n-1)
+  odd(n)  = n == 0 ? false : even(n-1)
+
+  julia> even(3)
+  false
+
+  julia> odd(3)
+  true
+\end{verbatim}
+Since functions can be used before they are defined, as long as they are defined by the time they are actually called, no syntax for forward declarations is necessary, and definitions can be ordered arbitrarily.
+
+At the interactive prompt, variable scope works the same way as anywhere
+else. The prompt behaves as if there is scope block wrapped around everything
+you type, except that this scope block is identified with the global scope.
+This is especially apparent in the case of assignments:
+\begin{verbatim}
+  julia> for i = 1:1; y = 10; end
+  
+  julia> y
+  y not defined
+  
+  julia> y = 0
+  0
+  
+  julia> for i = 1:1; y = 10; end
+  
+  julia> y
+  10
+\end{verbatim}
+In the former case, \verb|y| only exists inside of the \verb|for| loop.
+In the latter case, an outer \verb|y| has been introduced and so is inherited
+within the loop. Due to the special identification of the prompt's scope
+block with the global scope, it is not necessary to declare
+\verb|global y| inside the loop. However, in code not entered into the interactive prompt
+this declaration would be necessary in order to modify a global variable.
+
+\section{Types}\sec{types}
+
+Julia has a nominative, parametric, dependent type system:
+generic types can be parameterized by values, including but not limited to other types, and the relationships between types in the hierarchy is explicitly declared, rather than implied by compatible structure.
+Parametric typing allows one to concisely an elegantly define and talk about a type like \verb|List|, without caring or specifying what type of objects the list holds\,---\,for many list algorithms, the type of values is unimportant.
+In situations where the type of objects contained in a list is of importance, one can simply write \verb|List{Int32}|, for example, to specify that a list contains only 32-bit integers.
+The nominative type hierarchy prevents one type from being used in the place of another when they happen to have similar structure, allowing distinctions to be drawn between an \verb|Int32| and a \verb|Char|, even though they have the same underlying implementation as a 32-bit integer values.
+
+There are some high-level aspects of Julia's type system that are worth mentioning up front:
+\begin{itemize}
+
+\item Like Lisp, Perl, Python, Lua, Ruby, and Matlab but unlike C or Java, only values, not variables, have types.
+There is no meaningful concept of a compile-time type versus a run-time type:
+the only type of a value is its actual run-time type.
+Variables have no type: they are just names bound to values.
+
+\item The type hierarchy, is not flat:
+abstract types may have many subtypes and implementations.
+Unlike traditional object-oriented (OO) programming languages, however, all concrete type implementations are final:
+one implementation may never be a subtype of another implementation.
+
+\item Julia supports multiple inheritance:
+a type may explicitly declare that it is a subtype of many abstract types.
+The absence of implementation inheritance removes traditional data representation problems encountered in the presence of multiple inheritance.%
+\footnote{The other problems classically caused by multiple inheritance are method dispatch ambiguities and instabilities introduced when different methods for the same function are dispatched on non-disjoint types, sharing common descendant subtypes.
+Such problems are prevented by a simple and sensible rule described in \Section{method-ambiguities}.}
+
+\end{itemize}
+In general, the Julia type system is designed to be powerful and expressive, but unobtrusive and intuitive to use.
+Much useful Julia programming can be done without ever explicitly using types.
+When additional power is needed, however, it is easy to gradually introduce types into previously typeless programs.
+Doing so will typically increase both the performance and robustness of these systems.
+
+% \subsection{Tag Types}
+% \subsection{Struct Types}
+% 
+% Julia comes with pre-defined rational and complex numeric types, but they are just defined in the language in terms of the more basic numeric types given above using the standard facility for defining new types. For example, the declaration of the \verb|Rational| type is the following:
+% \begin{verbatim}
+%   struct Rational{T<:Int} <: Real
+%     num::T
+%     den::T
+%   end
+% \end{verbatim}
+% A few facts are in order before you can understand this declaration:
+% \begin{itemize}
+% \item A \verb|struct| type is a named bundle of fields as in the C language. In this case the fields are \verb|num| and \verb|den| which are used to store the numerator and the denominator, respectively, of a rational number.
+% \item The \verb|Rational{T}| syntax is used for parametric types. This declaration defines \verb|Rational| with respect to a type parameter, \verb|T|.
+% \item The \verb|<:| operator asserts that the value on the left is a subtype of the value on the right. In this case it is used twice:
+%   \begin{itemize}
+%     \item to assert that the type parameter, \verb|T|, is a subtype of \verb|Int|, which includes all of the above integer types;
+%     \item to assert that \verb|Rational| itself is a subtype of \verb|Real|, which includes the integer and floating-point types as well.
+%   \end{itemize}
+% \item The \verb|::| operator asserts that the name on the left will be bound to a value of the type on the right. Thus whatever type parameter \verb|T| is given as, the numerator and denominator of the rational number are of that type.
+% \end{itemize}
+% This is all somewhat complicated, but the result is easy to use:
+% \begin{verbatim}
+%   julia> Rational(1,2)
+%   1//2
+% 
+%   julia> typeof(ans)
+%   Rational{Int32}
+% \end{verbatim}
+% Applying the \verb|Rational| type to a pair of values (1,2) creates a \verb|Rational|. The output notation 1//2 is also acceptable as input notation:
+% \begin{verbatim}
+%   julia> 1//2
+%   1//2
+% \end{verbatim}
+% Despite being effectively user-defined types, \verb|Rational| values interoperate completely with other numeric types:
+% \begin{verbatim}
+%   julia> 1//2 + 2
+%   5//2
+% 
+%   julia> 1//2 + 1.5
+%   2.0
+% \end{verbatim}
+% If you want to create an ``exotic'' rational object of a type like \verb|Rational{Uint8}| all you need to do is use \verb|Uint8| values to construct them:
+% \begin{verbatim}
+%   julia> uint8(123)//uint8(234)
+%   41//78
+% 
+%   julia> typeof(ans)
+%   Rational{Uint8}
+% \end{verbatim}
+% If you use mixed types to construct a \verb|Rational|, the same promotions that are used for arithmetic apply:
+% \begin{verbatim}
+%   julia> uint8(123)//int8(-12)
+%   -41//4
+% 
+%   julia> typeof(ans)
+%   Rational{Int16}
+% \end{verbatim}
+% 
+% \subsection{Struct Constructors}\sec{struct-constructors}
+% 
+% \subsection{Bits Types}
+% 
+% \subsection{Conversion and Promotion}\sec{conversion-and-promotion}
+% 
+% \subsection{Other Kinds of Types}
+
+\section{Methods}\sec{methods}
 
 Julia allows multiple dispatch based on the types of function arguments:
 \begin{verbatim}
@@ -1455,807 +2345,98 @@ You should avoid method ambiguities by specifying an appropriate method for the 
 \end{verbatim}
 To suppress Julia's warning, the disambiguating method must be defined first.
 
-\subsection{Operators Are Functions}\sec{operators-are-functions}
-
-In Julia, most operators are just functions with support for special syntax.\footnote{The exceptions are operators with special evaluation semantics like \texttt{\&\&} and \texttt{||}.
-These operators cannot be functions since short-circuit evaluation (see \Section{short-circuit-evaluation}) requires that their operands are not evaluated before evaluation of the operator.}
-Accordingly, you can also apply them using parenthesized argument lists as you would any other function:
-\begin{verbatim}
-  julia> 1 + 2 + 3
-  6
-
-  julia> +(1,2,3)
-  6
-\end{verbatim}
-The infix form is exactly equivalent to the function application form\,---\,in fact the former is parsed to produce the function call internally.
-Since operators like \verb|+| are just normal Julia functions, you can add new methods for them.
-For example, the addition method for complex numbers is defined as:
-\begin{verbatim}
-  +(z::Complex, w::Complex) = Complex(z.re + w.re, z.im + w.im)
-\end{verbatim}
-For more about types like \verb|Complex|, their structure and how to define them, see \Section{types}.
-
-\subsection{Anonymous Functions}\sec{anonymous-functions}
-
-Functions in Julia are first-class objects:
-they can be assigned to variables, called using the standard function call syntax via the variable they have been assigned to, they can be passed as arguments, and they can be returned as values.
-They can also be created anonymously, without giving them a name:
-\begin{verbatim}
-  julia> x -> x^2 + 2x - 1
-  #<closure>
-\end{verbatim}
-This creates an unnamed function taking one argument and returning the value of the polynomial $x^2 + 2x - 1$ at that value.
-The primary use for anonymous functions is passing them to functions which take other functions as arguments.
-A classic example is the \verb|map| function, which applies a function to each value of an array and returns a new array containing the resulting values:
-\begin{verbatim}
-  julia> map(round, [1.2,3.5,1.7])
-  [1.0,4.0,2.0]
-\end{verbatim} % TOOD: make sure type inference gets the right return type.
-This is fine if a named function effecting the transform one wants already exists to pass as the first argument to \verb|map|.
-Often, however, a ready-to-use, named function does not exist.
-In these situations, the anonymous function construct allows easy creation of a single-use function object without needing a name:
-\begin{verbatim}
-  julia> map(x -> x^2 + 2x - 1, [1,3,-1])
-  [2,14,-2]
-\end{verbatim}
-
-\subsection{Multiple Return Values}
-\subsection{Varargs Functions}
-
-\section{Variable Scoping}\sec{variable-scoping}
-
-The \emph{scope} of a variable is the region of code within which a variable
-is visible.
-Variable scoping helps avoid variable naming conflicts.
-The concept is intuitive:
-two functions can both have arguments called \verb|x| without the two \verb|x|'s referring to the same thing.
-Similarly there are many other cases where different blocks of code can use the same name without referring to the same thing.
-The rules for when the same variable name does or doesn't refer to the same thing are called scope rules;
-this section spells them out in detail.
-
-Certain constructs in the language introduce \emph{scope blocks}, which
-are regions of code that are eligible to be the scope of some set of variables.
-The scope of a variable cannot be an arbitrary set of
-source lines, but will always line up with one of these blocks. These
-constructs introducing such blocks are:
-\begin{itemize}
-\item function bodies (any syntax)
-\item \verb|while| loops
-\item \verb|for| loops
-\item \verb|try| blocks
-\item \verb|catch| blocks
-\item \verb|let| blocks
-\item \verb|type| blocks.
-\end{itemize}
-Certain constructs introduce new variables into the current innermost scope. When
-a variable is introduced into a scope, it is also inherited by all inner
-scopes unless one of those inner scopes explicitly overrides it. These
-constructs which introduce new variables into the current scope are as follows:
-\begin{itemize}
-\item A declaration \verb|local x| introduces a new local variable.
-\item A declaration \verb|global x| makes \verb|x| in the current scope
-and inner scopes refer to the global variable of that name.
-\item A function's arguments are introduced as new local variables into the
-function's body scope.
-\item An assignment \verb|x = y| introduces a new local variable \verb|x|
-only if \verb|x| is neither declared global nor explicitly introduced as local
-by any enclosing scope, before or \emph{after} the current line of code.
-\end{itemize}
-In the following example, there is only one \verb|x| assigned both inside
-and outside a loop:
-\begin{verbatim}
-  function foo(n)
-      x = 0
-      for i = 1:n
-          x = x + 1
-      end
-      x
-  end
-  
-  julia> foo(10)
-  10
-\end{verbatim}
-In the next example, the loop has a separate \verb|x| and the function
-always returns zero:
-\begin{verbatim}
-  function foo(n)
-      x = 0
-      for i = 1:n
-          local x
-          x = i
-      end
-      x
-  end
-
-  julia> foo(10)
-  0
-\end{verbatim}
-In this example, an \verb|x| exists only inside the loop, and
-the function encounters an undefined variable error on its last line
-(unless there is a global variable \verb|x|):
-\begin{verbatim}
-  function foo(n)
-      for i = 1:n
-          x = i
-      end
-      x
-  end
-
-  julia> foo(10)
-  in foo: x not defined
-\end{verbatim}
-A variable that is not assigned to or otherwise introduced locally defaults to global,
-so this function would return the value of the global \verb|x|
-if there is such a variable, or produce an error if no such global exists.
-As a consequence, the only way to assign to a global variable inside
-a non-top-level scope is to explicitly declare the variable as global within some scope, since
-otherwise the assignment would introduce a new local rather than assigning to the global. This rule works out
-well in practice, since the vast majority of variables assigned inside
-functions are intended to be local variables, and using global variables, should be the exception rather than the rule, especially assigning new values to them.
-
-One last example shows that an outer assignment introducing \verb|x| need not come before an inner usage:
-\begin{verbatim}
-  function foo(n)
-      f = y -> n + x + y
-      x = 1
-      f(2)
-  end
-
-  julia> foo(10)
-  13
-\end{verbatim}
-This last example may seem slightly odd for a normal variable, but allows for named functions\,---\,which are just normal variables holding function objects\,---\,to be used before they are defined.
-This allows functions to be defined in whatever order is intuitive and convenient, rather than forcing bottom up ordering or requiring forward declarations, both of which one typically sees in C programs.
-As an example, here is an inefficient, mutually recursive way to test if positive integers are even or odd:\,\footnote{Julia provides built-in, efficient functions to test this called \texttt{iseven} and \texttt{isodd}.}
-\begin{verbatim}
-  even(n) = n == 0 ? true  :  odd(n-1)
-  odd(n)  = n == 0 ? false : even(n-1)
-
-  julia> even(3)
-  false
-
-  julia> odd(3)
-  true
-\end{verbatim}
-Since functions can be used before they are defined, as long as they are defined by the time they are actually called, no syntax for forward declarations is necessary, and definitions can be ordered arbitrarily.
-
-At the interactive prompt, variable scope works the same way as anywhere
-else. The prompt behaves as if there is scope block wrapped around everything
-you type, except that this scope block is identified with the global scope.
-This is especially apparent in the case of assignments:
-\begin{verbatim}
-  julia> for i = 1:1; y = 10; end
-  
-  julia> y
-  y not defined
-  
-  julia> y = 0
-  0
-  
-  julia> for i = 1:1; y = 10; end
-  
-  julia> y
-  10
-\end{verbatim}
-In the former case, \verb|y| only exists inside of the \verb|for| loop.
-In the latter case, an outer \verb|y| has been introduced and so is inherited
-within the loop. Due to the special identification of the prompt's scope
-block with the global scope, it is not necessary to declare
-\verb|global y| inside the loop. However, in code not entered into the interactive prompt
-this declaration would be necessary in order to modify a global variable.
-
-\section{Types}\sec{types}
-
-\subsection{Tag Types}
-\subsection{Struct Types}
-
-Julia comes with pre-defined rational and complex numeric types, but they are just defined in the language in terms of the more basic numeric types given above using the standard facility for defining new types. For example, the declaration of the \verb|Rational| type is the following:
-\begin{verbatim}
-  struct Rational{T<:Int} <: Real
-    num::T
-    den::T
-  end
-\end{verbatim}
-A few facts are in order before you can understand this declaration:
-\begin{itemize}
-\item A \verb|struct| type is a named bundle of fields as in the C language. In this case the fields are \verb|num| and \verb|den| which are used to store the numerator and the denominator, respectively, of a rational number.
-\item The \verb|Rational{T}| syntax is used for parametric types. This declaration defines \verb|Rational| with respect to a type parameter, \verb|T|.
-\item The \verb|<:| operator asserts that the value on the left is a subtype of the value on the right. In this case it is used twice:
-  \begin{itemize}
-    \item to assert that the type parameter, \verb|T|, is a subtype of \verb|Int|, which includes all of the above integer types;
-    \item to assert that \verb|Rational| itself is a subtype of \verb|Real|, which includes the integer and floating-point types as well.
-  \end{itemize}
-\item The \verb|::| operator asserts that the name on the left will be bound to a value of the type on the right. Thus whatever type parameter \verb|T| is given as, the numerator and denominator of the rational number are of that type.
-\end{itemize}
-This is all somewhat complicated, but the result is easy to use:
-\begin{verbatim}
-  julia> Rational(1,2)
-  1//2
-
-  julia> typeof(ans)
-  Rational{Int32}
-\end{verbatim}
-Applying the \verb|Rational| type to a pair of values (1,2) creates a \verb|Rational|. The output notation 1//2 is also acceptable as input notation:
-\begin{verbatim}
-  julia> 1//2
-  1//2
-\end{verbatim}
-Despite being effectively user-defined types, \verb|Rational| values interoperate completely with other numeric types:
-\begin{verbatim}
-  julia> 1//2 + 2
-  5//2
-
-  julia> 1//2 + 1.5
-  2.0
-\end{verbatim}
-If you want to create an ``exotic'' rational object of a type like \verb|Rational{Uint8}| all you need to do is use \verb|Uint8| values to construct them:
-\begin{verbatim}
-  julia> uint8(123)//uint8(234)
-  41//78
-
-  julia> typeof(ans)
-  Rational{Uint8}
-\end{verbatim}
-If you use mixed types to construct a \verb|Rational|, the same promotions that are used for arithmetic apply:
-\begin{verbatim}
-  julia> uint8(123)//int8(-12)
-  -41//4
-
-  julia> typeof(ans)
-  Rational{Int16}
-\end{verbatim}
-
-\subsection{Struct Constructors}\sec{struct-constructors}
-
-\subsection{Bits Types}
-
-\subsection{Conversion and Promotion}\sec{conversion-and-promotion}
-
-\subsection{Other Kinds of Types}
-
-\section{Tensors and Comprehensions}
-
-Julia introduces a new programming construct called a multidimensional
-array comprehension or just an array comprehension for short. Array
-comprehensions are similar to the notion of list comprehensions in
-other languages such as Python, Haskell and OCaml, but extend this
-notion to manipulate and generate arrays of arbitrary dimension. Each
-dummy variable used in the array comprehension corresponds to a
-dimension of the output array; if the comprehension expression value
-itself has non-zero dimension then the total dimension of the output
-is the number of dummy variables plus the dimension of the value. If
-we view n-d arrays as rank-n tensors, and thus see 1-d arrays as
-vectors and 2-d arrays as matrices, many common vector, matrix and
-tensor operations can be expressed concisely and clearly using array
-comprehensions.
-
-Array comprehensions are envisioned to be a key construct of the julia
-language that will differentiate it from other languages. On one hand,
-Matlab is pretty fast, and it is almost impossible to beat Matlab at
-what it does. On the other hand, Matlab codes when rewritten in C
-often run 10 times faster. What gives? The key idea behind array
-comprehensions is to express almost all operations at a higher level,
-close to their mathematical definitions. Optimizations can then be
-applied to this high level to produce heavily optimized low-level
-code, for multiple comprehensions and compounded comprehensions. This
-scheme should allow the generation of optimized low-level code from a
-high level specification that matches the structure of optimized C
-code written by a good C programmer.
-
-\subsection{Array Comprehension Notations}
-
-The following sections give three increasingly succinct syntaxes for writing array comprehensions. Through the forms, we follow the basic example of how to express the row sum and column sums of a matrix. We first present the most general, verbose notation for array comprehensions together with its meaning, and then present two increasingly abbreviated but equivalent forms.
-
-\subsubsection{Explicit range}
-This is the most general form for writing array comprehensions. The general form is:
-\begin{verbatim}
-A = [ F(x,y,...) | x=rx, y=ry, ... ]
-\end{verbatim}
-
-The meaning of this form is that F(x,y,...) is evaluated with the
-variables x, y, etc. taking on each value in their given list of
-values. Values can be specified as any iterable object, but will
-commonly be ranges like 1:n or 2:(n-1), or explicit arrays of values
-like [1.2, 3.4, 5.7]. The result is a tensor object with dimensions
-that are the concatenation of the dimensions of the dummy variable
-ranges rx, ry, etc. and the dimension of the result of each F(x,y,...)
-evaluations—which must all have identical shape. See below for details
-on array comprehensions of non-scalar expression.
-
-To clarify, let's consider the concrete example of computing row and
-column sums of a matrix, A. For a single dummy variable, the array
-comprehension notation with explicit variable ranges is similar to
-list comprehensions in other languages:
-\begin{verbatim}
-row_sums = [ sum(A[i,:]) | i=1:size(A,1) ]
-col_sums = [ sum(A[:,j]) | j=1:size(A,2) ]
-\end{verbatim}
-
-\subsection{Array Comprehensions of Non-Scalar Expressions}
-If the computed expression of an array comprehension is not a scalar,
-then all the values produced must be arrays of identical shape. The
-dummy variable vectorization dimensions come before the expression
-dimensions making the total dimension of the output array the number
-of dummy variables plus the dimension of the inner expression. This
-convention can be expressed by the following identity. If F is a
-function mapping scalars to vectors, the following holds:
-\begin{verbatim}
-[ F(i) | i=ri ] == [ F(i)[j] | i=ri, j=rj ]
-\end{verbatim}
-
-\subsection{Examples}
-
-\begin{itemize}
-\item Diagonal of a matrix is computed as:
-\begin{verbatim}
-d = [ A[i,i] | i=1:min(dim(A)) ]
-\end{verbatim}
-\item Matrix product is computed as:
-\begin{verbatim}
-C = [ sum([ A[i,j].*B[j,k] | j ]) | i=1:size(A,1), k=1:size(B,2) ]
-\end{verbatim}
-
-
-\end{itemize}
-
-\section{Strings}
-\sec{strings}
-
-% Traditionally, strings are conceptualized as sequences of characters, which mathematically is a function from indices to characters.
-% When all characters are exactly one byte, this can be conveniently and efficiently represented with a plain old array of bytes.
-% It's simple and efficient.
-% End of story.
+% \section{Tensors and Comprehensions}
 % 
-% Unicode complicates things because common encodings like UTF-8 and UTF-16 are variable-width, meaning that characters require different numbers of bytes in their representation.
-% In UTF-8, for example, all of the ASCII characters are one byte, encoded just as in ASCII.
-% All other characters, however, take between two and four bytes to represent.
-% This means that you can't efficiently look up the $k$th character of a string by doing array indexing anymore:
-% the $k$th byte of the representation is no longer the $k$th character.
-% Worse still, a byte might not be the beginning of a character at all, but right in the middle of a character (this is called a ``continuation byte'').
+% Julia introduces a new programming construct called a multidimensional
+% array comprehension or just an array comprehension for short. Array
+% comprehensions are similar to the notion of list comprehensions in
+% other languages such as Python, Haskell and OCaml, but extend this
+% notion to manipulate and generate arrays of arbitrary dimension. Each
+% dummy variable used in the array comprehension corresponds to a
+% dimension of the output array; if the comprehension expression value
+% itself has non-zero dimension then the total dimension of the output
+% is the number of dummy variables plus the dimension of the value. If
+% we view n-d arrays as rank-n tensors, and thus see 1-d arrays as
+% vectors and 2-d arrays as matrices, many common vector, matrix and
+% tensor operations can be expressed concisely and clearly using array
+% comprehensions.
 % 
-% If you allow people direct access to the bytes of an encoded string, they can and will do all sorts of bad things that produce invalid Unicode and broken behaviors when Unicode input is received.
-% To provide a string abstraction that makes strings behave like functions from indices to Unicode characters (i.e. code points), you have to chose one of the following:
-% \begin{enumerate}
+% Array comprehensions are envisioned to be a key construct of the julia
+% language that will differentiate it from other languages. On one hand,
+% Matlab is pretty fast, and it is almost impossible to beat Matlab at
+% what it does. On the other hand, Matlab codes when rewritten in C
+% often run 10 times faster. What gives? The key idea behind array
+% comprehensions is to express almost all operations at a higher level,
+% close to their mathematical definitions. Optimizations can then be
+% applied to this high level to produce heavily optimized low-level
+% code, for multiple comprehensions and compounded comprehensions. This
+% scheme should allow the generation of optimized low-level code from a
+% high level specification that matches the structure of optimized C
+% code written by a good C programmer.
 % 
-% \item Have fast, natural random access to characters, but store strings so that every character is big enough to accommodate the entire Unicode character set.
-% The natural choice of encoding for this is UTF-32, in which each code point (integer value representing a unique character) is simply represented by its 32-bit integer value.
-% This also requires processing every string before accessing or manipulating it to convert it from its input encoding (usually UTF-8) to UTF-32.
-% Transcoding introduces a lot of overhead, forcing every string to be transcoded, typically both on input and output, as well as inflating memory usage for all strings.
+% \subsection{Array Comprehension Notations}
 % 
-% \item Sacrifice the ability to represent every Unicode character and use only the two-byte characters of a 16-bit encoding like UTF-16.
-% With this you can represent virtually all modern languages, but you cannot write in ancient languages like Egyptian hieroglyphs, Linear B, or represent some unusual modern characters such as certain unified Han ideographs.
-% This allows fast random access, and reduces the memory inflation compared to the UTF-32 approach, but still requires transcoding almost every string on input and output.
+% The following sections give three increasingly succinct syntaxes for writing array comprehensions. Through the forms, we follow the basic example of how to express the row sum and column sums of a matrix. We first present the most general, verbose notation for array comprehensions together with its meaning, and then present two increasingly abbreviated but equivalent forms.
 % 
-% \item Keep strings in their input form, but make indexing into a string an $\O(k)$ operation which requires scanning the entire string from the beginning to find the $k$th character from there.
-% This turns a lot of straightforward $\O(n)$ string processing algorithms into $\O(n^2)$ algorithms unless you completely avoid indexing into strings altogether.
+% \subsubsection{Explicit range}
+% This is the most general form for writing array comprehensions. The general form is:
+% \begin{verbatim}
+% A = [ F(x,y,...) | x=rx, y=ry, ... ]
+% \end{verbatim}
 % 
-% \item Represent strings by a clever, relatively complex data structure that allows strings to remain encoded, but somehow makes indexing the $k$th character look like it's faster than $\O(k)$, when it is amortized over many operations.
-% One possible way to do this is to remember the last few indices that were accessed and figure out new indices relative to them.
+% The meaning of this form is that F(x,y,...) is evaluated with the
+% variables x, y, etc. taking on each value in their given list of
+% values. Values can be specified as any iterable object, but will
+% commonly be ranges like 1:n or 2:(n-1), or explicit arrays of values
+% like [1.2, 3.4, 5.7]. The result is a tensor object with dimensions
+% that are the concatenation of the dimensions of the dummy variable
+% ranges rx, ry, etc. and the dimension of the result of each F(x,y,...)
+% evaluations—which must all have identical shape. See below for details
+% on array comprehensions of non-scalar expression.
 % 
-% \item Do not allow indexing into strings. Instead, only provide interfaces, such as iterating characters, which are Unicode safe as well as being efficiently implementable without transcoding strings.
+% To clarify, let's consider the concrete example of computing row and
+% column sums of a matrix, A. For a single dummy variable, the array
+% comprehension notation with explicit variable ranges is similar to
+% list comprehensions in other languages:
+% \begin{verbatim}
+% row_sums = [ sum(A[i,:]) | i=1:size(A,1) ]
+% col_sums = [ sum(A[:,j]) | j=1:size(A,2) ]
+% \end{verbatim}
 % 
-% \item Ignore the whole issue and just equate strings with byte arrays and let Unicode bugger itself (a.k.a.~the C approach\footnote{To be fair, the C language long predates the Unicode standard.}).
+% \subsection{Array Comprehensions of Non-Scalar Expressions}
+% If the computed expression of an array comprehension is not a scalar,
+% then all the values produced must be arrays of identical shape. The
+% dummy variable vectorization dimensions come before the expression
+% dimensions making the total dimension of the output array the number
+% of dummy variables plus the dimension of the inner expression. This
+% convention can be expressed by the following identity. If F is a
+% function mapping scalars to vectors, the following holds:
+% \begin{verbatim}
+% [ F(i) | i=ri ] == [ F(i)[j] | i=ri, j=rj ]
+% \end{verbatim}
 % 
-% \end{enumerate}
-% Technically, option 5 doesn't actually keep the abstraction of strings as functions from indices to characters, so perhaps it doesn't belong here;
-% and option 6 isn't a solution at all, but rather a matter of deciding that you just don't care.
-% Option 2 is not really a solution, either, but a pragmatic compromise that gets you 90\% of the way (unless you happen to want to process hieroglyphs).
-% Frankly, none of these options is good enough for something as fundamental and performance-critical as string processing.
+% \subsection{Examples}
 % 
-% \subsection{The Partial Function Approach}
-% \sec{partial-function-strings}
+% \begin{itemize}
+% \item Diagonal of a matrix is computed as:
+% \begin{verbatim}
+% d = [ A[i,i] | i=1:min(dim(A)) ]
+% \end{verbatim}
+% \item Matrix product is computed as:
+% \begin{verbatim}
+% C = [ sum([ A[i,j].*B[j,k] | j ]) | i=1:size(A,1), k=1:size(B,2) ]
+% \end{verbatim}
 % 
-% Our approach is to change the abstraction of what a string is instead of choosing any of the above.
-% Rather than conceptualizing a string as a function from indices to characters, we conceptualize a string as a \emph{partial function} from indices to characters.
-% What does this mean?
-% It means that when indexing into a string, for some indices no character value is returned:
-% instead of returning a value, the language throws an exception.
-% So in short \verb|str[k]| will throw an exception if $k$ doesn't correspond to a character.
-% For UTF-8 strings that are plain ASCII this will never happen.
-% For UTF-32 strings it will never happen.
-% For UTF-16 strings including only the common two-byte characters it will never happen.
-% For other instances of encoded strings, it could happen, however.
 % 
-% How does this modified abstraction help?
-% It recognizes that bytes and characters are not one-to-one in many encodings, but still allows you store strings in their native encoding and retrieve characters efficiently by a byte index, rather than a character index.
-% If you try to get or set a character at an index that isn't the start of a character, it's an exception---indicating that the partial function isn't defined there.
-% The ``string''---as one normally thinks of it---is the sequence characters returned by the string as the indices range from one to the maximum index.
-% The gotcha is that some indices don't return a character.
-% 
-% Code that na\"ively iterates through all indices will work and work with C-like performance, until it encounters strange input data, at which point it will throw a nice clean exception letting you know exactly what the problem is.
-% You can probably just modify the code to catch the exception and move on to the next index.
-% Alternately, you can rewrite the code to use a Unicode character iterator instead.
-% Moreover, if you always consider string indices as opaque objects, and never do arithmetic with them (iterating through indices counts as arithmetic: \verb|k+=1|), then as long as you only index into a string with an index given to you by a string function, this kind of thing will never happen.
-% 
-% By changing the string abstraction, we can support arbitrary string encodings and other representations at C-like efficiency and with a nice, safe, clean programmatic interface.
+% \end{itemize}
 
-There are a few noteworthy high-level features about Julia's approach to strings:
-\begin{enumerate}
-\item Like C, but unlike most dynamic languages, Julia has a first-class type representing a single character, called \verb|Char|.
-A \verb|Char| is a special kind of 32-bit integer, whose numeric value represents a single Unicode code point.
-\item Conceptually, a \verb|String| is a \emph{partial function} from indices to \verb|Char| values --- for some index values, no character value is returned, and instead an exception is thrown.
-This for allows efficient indexing into strings by the byte index of an encoded representation rather than by a character index, which cannot be implemented efficiently and simply for variable-width encodings of Unicode strings.
-\item There are many different classes implementing the \verb|String| interface, not a single special one.
-They all implement a common programming interface, however, and any string type can be used in any function expecting a \verb|String|.
-The predefined string types are no more special than user-defined ones.
-\item Strings are immutable: the value of a \verb|String| object cannot be changed.
-To construct a different string value, you construct a new string object from parts of other string objects.
-\end{enumerate}
-
-\subsection{Characters}
-
-Like C, but unlike Perl, Python, or Ruby, Julia has a type for individual characters: \verb|Char|.
-A \verb|Char| is just a 32-bit integer with a special literal representation and some specific arithmetic behaviors, interpreted as a Unicode code point.
-Here is how \verb|Char| values are input and shown:
-\begin{verbatim}
-  julia> 'x'
-  'x'
-
-  julia> typeof(ans)
-  Char
-\end{verbatim}
-You can convert a Char to its integer value, i.e. code point, easily:
-\begin{verbatim}
-  julia> int('x')
-  120
-
-  julia> typeof(ans)
-  Int32
-\end{verbatim}
-You can convert an integer value back to a \verb|Char| just as easily:
-\begin{verbatim}
-  julia> char(120)
-  'x'
-\end{verbatim}
-Not all integer values are valid Unicode code points, but for performance, the \verb|char| conversion does not check that every character value is valid.
-If you want to check that each converted value is a value code point, use the \verb|safe_char| conversion instead:
-\begin{verbatim}
-  julia> char(0xd800)
-  '???'
-
-  julia> safe_char(0xd800)
-  invalid Unicode code point: U+d800
-
-  julia> char(0x110000)
-  '\U00110000'
-
-  julia> safe_char(0x110000)
-  invalid Unicode code point: U+110000
-\end{verbatim}
-As of this writing, the valid Unicode code points are \verb|U+0000| through \verb|U+d7ff| and \verb|U+e000| through \verb|U+10ffff|.
-These have not all been assigned intelligible meanings yet, nor are they necessarily interpretable by applications, but all of these values are considered to be valid Unicode characters.
-
-You can input any Unicode character in single quotes using \verb|\u| followed by up to four hexadecimal digits or \verb|\U| followed by up to eight hexadecimal digits (the longest valid value only requires six):
-\begin{verbatim}
-  julia> '\u0'
-  '\0'
-
-  julia> '\u78'
-  'x'
-
-  julia> '\u2200'
-  '∀'
-
-  julia> '\U10ffff'
-  '\U0010ffff'
-\end{verbatim}
-Julia uses your system's locale and language settings to determine which characters can be printed as-is and which must be output using the generic, escaped \verb|\u| or \verb|\U| input forms.
-In addition to these Unicode escape forms, all of C's traditional escaped input forms are usable as well:
-\begin{verbatim}
-  julia> int('\0')
-  0
-
-  julia> int('\t')
-  9
-
-  julia> int('\n')
-  10
-
-  julia> int('\e')
-  27
-
-  julia> int('\x7f')
-  127
-
-  julia> int('\177')
-  127
-
-  julia> int('\xff')
-  255
-\end{verbatim}
-Like any integers, you can do arithmetic and comparisons with \verb|Char| values:
-\begin{verbatim}
-  julia> 'x' - 'a'
-  23
-
-  julia> 'A' < 'a'
-  true
-
-  julia> 'A' <= 'a' <= 'Z'
-  false
-
-  julia> 'A' <= 'X' <= 'Z'
-  true
-\end{verbatim}
-Arithmetic with \verb|Char| values always promotes them to \verb|Int32|.
-To create a new \verb|Char| value, explicit conversion back to the \verb|Char| type is required:
-\begin{verbatim}
-  julia> 'A' + 1
-  66
-
-  julia> char(ans)
-  'B'
-\end{verbatim}
-% Requiring explicit conversion allows a series of intermediate computations to be done efficiently, only checking that the final value is a valid Unicode code point.
-
-\subsection{String Basics}
-
-Here a variable is initialized with a simple string literal:
-\begin{verbatim}
-  julia> str = "Hello, world.\n"
-  "Hello, world.\n"
-\end{verbatim}
-If you want to extract a character from a string, you index into it:
-\begin{verbatim}
-  julia> str[1]
-  'H'
-
-  julia> str[6]
-  ','
-
-  julia> str[end]
-  '\n'
-
-  julia> str[end-1]
-  '.'
-\end{verbatim}
-Like all indexing in Julia, string indexing is 1-based, not 0-based.
-Using an index less than 1 or greater than \verb|end| raises an error:
-\begin{verbatim}
-  julia> str[0]
-  in next: arrayref: index out of range
-
-  julia> str[end+1]
-  in next: arrayref: index out of range
-\end{verbatim}
-You can also extract a substring using range indexing:
-\begin{verbatim}
-  julia> str[4:9]
-  "lo, wo"
-\end{verbatim}
-Note the distinction between \verb|str[k]| and \verb|str[k:k]|:
-\begin{verbatim}
-  julia> str[6]
-  ','
-
-  julia> str[6:6]
-  ","
-\end{verbatim}
-The former is a single character value of type \verb|Char|, while the latter is a string value that happens to contain only a single character.
-In Julia these are very different things.
-
-One of the most useful string operations is concatenation:
-\begin{verbatim}
-  julia> greet = "Hello"
-  "Hello"
-
-  julia> who = "world"
-  "world"
-
-  julia> strcat(greet, ", ", who, ".\n")
-  "Hello, world.\n"
-\end{verbatim}
-As in Perl, you can interpolate values and expressions into strings using \verb|$|:
-\begin{verbatim}
-  julia> "$greet, $who.\n"
-  "Hello, world.\n"
-\end{verbatim}
-This is more readable and convenient and exactly equivalent to the above string concatenation---the system rewrites this apparent single string literal into a concatenation of string literals with variables.
-The shortest valid expression after an unescaped \verb|$| is used as the interpolated value.
-Thus, you can interpolate the value of any expression into a string using parentheses:
-\begin{verbatim}
-  julia> "1 + 2 = $(1 + 2)"
-  "1 + 2 = 3"
-\end{verbatim}
-However, you can also interpolate a literal array like this:
-\begin{verbatim}
-  julia> x = 2; y = 3; z = 5;
-
-  julia> "x,y,z: $[x,y,z]."
-  "x,y,z: [2,3,5]."
-\end{verbatim}
-Both concatenation and string interpolation call the generic \verb|string| function to convert objects into \verb|String| form.
-Most non-\verb|String| objects are converted to strings as they are shown in the Julia repl:
-\begin{verbatim}
-  julia> v = [1,2,3]
-  [1,2,3]
-
-  julia> "v: $v"
-  "v: [1,2,3]"
-\end{verbatim}
-\verb|String|s and \verb|Char|s are interpolated as themselves, unquoted and unescaped:
-\begin{verbatim}
-  julia> c = 'x'
-  'x'
-
-  julia> "hi, $c"
-  "hi, x"
-\end{verbatim}
-Another useful string function is \verb|repeat|:
-\begin{verbatim}
-  julia> repeat(".:Z:.", 10)
-  ".:Z:..:Z:..:Z:..:Z:..:Z:..:Z:..:Z:..:Z:..:Z:..:Z:."
-\end{verbatim}
-You can lexicographically compare strings using the standard comparison operators:
-\begin{verbatim}
-  julia> "abracadabra" < "xylophone"
-  true
-
-  julia> "abracadabra" == "xylophone"
-  false
-
-  julia> "Hello, world." != "Goodbye, world."
-  true
-
-  julia> "1 + 2 = 3" == "1 + 2 = $(1 + 2)"
-  true
-\end{verbatim}
-You can search for the index of a particular character using the \verb|strchr| function:
-\begin{verbatim}
-  julia> strchr("xylophone", 'x')
-  1
-
-  julia> strchr("xylophone", 'p')
-  5
-
-  julia> strchr("xylophone", 'z')
-  char not found
-\end{verbatim}
-You can start the search for a character at a given offset by providing a third argument:
-\begin{verbatim}
-  julia> strchr("xylophone", 'o')
-  4
-
-  julia> strchr("xylophone", 'o', 5)
-  7
-
-  julia> strchr("xylophone", 'o', 8)
-  char not found
-\end{verbatim}
-Some other useful functions include:
-\begin{itemize}
-\item \verb|length(str)| gives the maximal (byte) index that can be used to index into \verb|str|.
-
-\item \verb|strlen(str)| the number of characters in \verb|str|.
-This is \emph{not} the same as \verb|length(str)|, but we do always have the identity \verb|strlen(str)| $\le$ \verb|length(str)|.
-
-\item \verb|i = start(str)| gives the first valid index at which a character can be found in \verb|str| (typically 1).
-
-\item \verb|c, j = next(str,i)| returns next character at or after the index \verb|i| and the next valid character index following that.
-With the \verb|start| and \verb|length|, can be used to iterate through the characters in \verb|str|.
-
-% TODO: figure this out and fix it.
-
-\item \verb|c, j = prev(str,i)| returns the character at or before index \verb|i| and the index at which it occurs.
-With \verb|length| and \verb|start| can be used to iterate through the characters in \verb|str| in reverse.
-
-\item \verb|ind2chr(str,i)| gives the number of characters in \verb|str| up to and including any at index \verb|i|.
-
-\item \verb|chr2int(str,j)| gives the index at which the \verb|j|th character in \verb|str| occurs.
-\end{itemize}
-
-\subsection{String Internals}
-
-What is the actual type and structure a string object?
-\begin{verbatim}
-  julia> dump("Hello, world.\n")
-  Latin1String(data=[104,101,108,108,111,...,119,111,114,108,100],)
-\end{verbatim}
-Standard string literals like the above always produce either a \verb|Latin1String| or a \verb|UTF8String|.
-Both of these types of strings are implemented using a byte array encoding \verb|Char| values.
-\verb|Latin1String| uses a fixed-width, single-byte encoding, while \verb|UTF8String| uses the variable-width, UTF-8 encoding.
-
-Here are the actual declarations of the basic string types from Julia's bootstrapping code:
-\begin{verbatim}
-  abstract String
-
-  type Latin1String <: String
-      data::Array{Uint8,1}
-  end
-
-  type UTF8String <: String
-      data::Array{Uint8,1}
-  end
-\end{verbatim}
-\verb|String| is an abstract supertype, which is used to refer to all concrete implementations of the string interface.
-The \verb|Latin1String| and \verb|UTF8String| classes are both thin wrappers around an array of bytes (\verb|Uint8| values), holding the string's encoded data.
-The only difference is in their interpretation:
-\begin{enumerate}
-\item In a \verb|Latin1String|, bytes and characters are one-to-one, and each byte encodes its Unicode code point directly, the way classic C strings do.
-As you may have guessed, this encoding is called Latin-1.
-\item In a \verb|UTF8String|, bytes and characters are not one-to-one, but instead uses the UTF-8 encoding, which matches ASCII and Latin-1 up to \verb|0x7f|, and uses two, three of four bytes to encode Unicode characters with higher code points.
-\end{enumerate}
-How does one generate a \verb|UTF8String| object rather than a \verb|Latin1String| object?
-One does so just by using a Unicode character escape sequence above \verb|0x7f| in a string literal:
-\begin{verbatim}
-  julia> "\u2200 x \u2203 y > x"
-  "∀ x ∃ y > x"
-
-  julia> dump(ans)
-  UTF8String(data=[226,136,128,32,120,...,121,32,62,32,120],)
-\end{verbatim}
-Also, absent other indications, external text input is assumed to be encoded as UTF-8, and therefore creates \verb|UTF8String| objects.
-String literals created in Julia without escapes, however, can be safely represented using Latin-1, which, being a fixed-width encoding, has much better performance characteristics than UTF-8.
-In particular, \verb|Latin1String|s have zero decoding overhead because each character is represented directly by its byte value.
-Therefore, Julia uses \verb|Latin1String|s internally whenever it can.
-
-Because there are so many different ways a sequence of characters can be represented, Julia has many different string types, each with a different underlying implementation.
-Also, programmers can easily define their own new string types.
-The distinction between different string implementations is transparent to the casual observer in Julia.
-You can perform string operations with all combinations of types of strings, and they will work:
-all string functions are implemented generically in terms of a minimal core set of methods which any string must provide.
-
-Generic implementations of string methods are often less efficient than optimal.
-Julia's dispatch system fortunately makes it simple to provide specialized, fast methods in cases where the specific representation of a string can be leveraged somehow.
-The typical user never needs to think about this:
-just call the right generic function and the work will be dispatched to the appropriate method.
-Consider, for example, comparing the lexicographic ordering of two strings:
-\begin{verbatim}
-  julia> "abracadabra" < "xylophone"
-  true
-\end{verbatim}
-There is a generic string \verb|<| method which can compare any two strings, character by character, regardless of encoding or implementation.
-In this case, however, both strings are \verb|Latin1String| objects, and a much faster method of comparison exists:
-the \verb|libc| library's \verb|memcmp| function.
-So a specialized \verb|<| method is provided to compare two \verb|Latin1String|s using this much faster method.
-The usage is completely transparent, however:
-regardless of what kinds of strings you have, you simply call \verb|a < b| to compare them.
-If \verb|memcmp| can be used, it will be;
-if not, the comparison will work, albeit not quite as quickly.
-The same trick applies to comparing a pair of \verb|UTF8String|s:
-UTF-8 is carefully designed to allow using \verb|memcmp|.
-
-Allowing many different string representations to coexist and interoperate smoothly provides significant flexibility and power.
-For example, Julia performs string concatenation using ropes:
-\begin{verbatim}
-  julia> strcat("foo","bar")
-  "foobar"
-
-  julia> dump(ans)
-  RopeString(head="foo",tail="bar",depth=1,length=6,)
-\end{verbatim}
-This makes concatenation, which is by far one of the most common string operations, take $\O(1)$ time rather than $O(n)$ time, as it does if a new memory buffer must be allocated and both strings copied into it.
-Another very useful operation is repeating a string:
-\begin{verbatim}
-  julia> zzz = repeat(".:Z:.", 100000);
-
-  julia> strlen(zzz)
-  500000
-
-  julia> zzz[end>>1-15:end>>1+16]
-  "..:Z:..:Z:..:Z:..:Z:..:Z:..:Z:.."
-\end{verbatim}
-In julia this requires very little memory because the repeat operation just creates a special kind of string:
-\begin{verbatim}
-  julia> dump(zzz)
-  RepString(string=".:Z:.",repeat=100000,)
-\end{verbatim}
-The resulting object behaves as though you had a 5MB string in memory, but does so using mod operations when indexing rather than by actually allocating 5MB.
-If you actually want to allocate all that memory, you can force Julia to do so by coercing the \verb|RepString| into a byte-backed ``C string'':
-\begin{verbatim}
-  julia> zzz = cstring(zzz);
-
-  julia> typeof(zzz)
-  Latin1String
-\end{verbatim}
-
-\section{I/O}
-\section{Data Structures}
-\subsection{Hash Tables}
-\subsection{Sets}
-\subsection{Queues and Dequeues}
-\subsection{Trees}
-\subsection{Lists}
+% \section{I/O}
+% \section{Data Structures}
+% \subsection{Hash Tables}
+% \subsection{Sets}
+% \subsection{Queues and Dequeues}
+% \subsection{Trees}
+% \subsection{Lists}
 
 \section{Parallel Computing}
 \begin{itemize}
@@ -2283,7 +2464,7 @@ If you actually want to allocate all that memory, you can force Julia to do so b
      read the next Julia object from a socket
 \end{itemize}
 
-\section{Calling C Functions}
+% \section{Calling C Functions}
 \section{Running External Programs}
 
 % Perl, Python, and Ruby are well known for their ability to easily run and interact with other programs.
@@ -2609,73 +2790,73 @@ Finally, we have an example of how you can make a process read from itself:
 This example never terminates since the \verb|dup| process reads its own output and duplicates it to \verb|stderr| forever.
 We strongly encourage you to try all these examples to see how they work.
 
-\section{Standard Library Reference}
-
-\section{Metaprogramming}
-
-\subsection{Expressions and Eval}
-
-\subsection{Macros}
-
-Macros are totally different from inlining.
-Macros are a hook into the compiler that lets you examine and rewrite the syntax of a piece of the program.
-You can use them to implement entirely new syntactic constructs like remote spawn, parallel for loops, string interpolation, pattern matching, Julia's command syntax, etc.
-
-Macros also run at an earlier binding time than functions and so have different semantics.
-Inlining moves code around in a way that keeps the same function call semantics, i.e. you can't ``tell'' that it happened.
-Macros are just the opposite.
-For example, say I have a function that contains an inner function:
-
-\begin{verbatim}
-  function foo()
-    bar(x) = XXX
-    ...
-    bar(...)
-  end
-\end{verbatim}
-
-Now I want to abstract away the definition of \verb|bar|.
-Maybe I want to use it in multiple functions and I don't want to copy and paste it.
-With macros I can do this:
-
-\begin{verbatim}
-  macro definestuff(name)
-    quote
-      ($name)(x) = XXX
-    end
-  end
-
-  function foo()
-    @definestuff bar
-    ...
-  end
-\end{verbatim}
-
-This is not possible without macros.
-If you passed \verb|:bar| to a function, that function has no way to define a local \verb|bar| inside \verb|foo|.
-If it used \verb|eval|, it would define a top-level function called \verb|bar|. 
-Since the macro runs so much earlier, it can change the code of \verb|foo| itself, so it can easily modify local variables.
-
-And this example hardly shows the full power, since the argument to
-the macro is only a symbol.
-This is just to show the semantic differences.
-Another example is \verb|spawn|:
-
-\begin{verbatim}
-  macro spawn(expr)
-    quote
-      spawn(()->($expr))
-    end
-  end
-\end{verbatim}
-
-Now you can write \verb|@spawn a+b| and it will call a function \verb|spawn| on \verb|a+b| wrapped in a thunk.
-This syntax improvement requires macros:
-the function call \verb|spawn(a+b)| couldn't work since \verb|a+b| will be fully evaluated before \verb|spawn| is called.
-Calling a quoted expression, as in \verb|spawn(:(a+b))|, is ugly and moreover simply wouldn't work since \verb|spawn| cannot use the expression \verb|:(a+b)| by itself to access the values of local variables \verb|a| and \verb|b|.
-
-People often compare macros to inlining (for example, the designer(s) of C++), but this is a pun.
-There is only a superficial similarity of inserting code into other code.
+% \section{Standard Library Reference}
+% 
+% \section{Metaprogramming}
+% 
+% \subsection{Expressions and Eval}
+% 
+% \subsection{Macros}
+% 
+% Macros are totally different from inlining.
+% Macros are a hook into the compiler that lets you examine and rewrite the syntax of a piece of the program.
+% You can use them to implement entirely new syntactic constructs like remote spawn, parallel for loops, string interpolation, pattern matching, Julia's command syntax, etc.
+% 
+% Macros also run at an earlier binding time than functions and so have different semantics.
+% Inlining moves code around in a way that keeps the same function call semantics, i.e. you can't ``tell'' that it happened.
+% Macros are just the opposite.
+% For example, say I have a function that contains an inner function:
+% 
+% \begin{verbatim}
+%   function foo()
+%     bar(x) = XXX
+%     ...
+%     bar(...)
+%   end
+% \end{verbatim}
+% 
+% Now I want to abstract away the definition of \verb|bar|.
+% Maybe I want to use it in multiple functions and I don't want to copy and paste it.
+% With macros I can do this:
+% 
+% \begin{verbatim}
+%   macro definestuff(name)
+%     quote
+%       ($name)(x) = XXX
+%     end
+%   end
+% 
+%   function foo()
+%     @definestuff bar
+%     ...
+%   end
+% \end{verbatim}
+% 
+% This is not possible without macros.
+% If you passed \verb|:bar| to a function, that function has no way to define a local \verb|bar| inside \verb|foo|.
+% If it used \verb|eval|, it would define a top-level function called \verb|bar|. 
+% Since the macro runs so much earlier, it can change the code of \verb|foo| itself, so it can easily modify local variables.
+% 
+% And this example hardly shows the full power, since the argument to
+% the macro is only a symbol.
+% This is just to show the semantic differences.
+% Another example is \verb|spawn|:
+% 
+% \begin{verbatim}
+%   macro spawn(expr)
+%     quote
+%       spawn(()->($expr))
+%     end
+%   end
+% \end{verbatim}
+% 
+% Now you can write \verb|@spawn a+b| and it will call a function \verb|spawn| on \verb|a+b| wrapped in a thunk.
+% This syntax improvement requires macros:
+% the function call \verb|spawn(a+b)| couldn't work since \verb|a+b| will be fully evaluated before \verb|spawn| is called.
+% Calling a quoted expression, as in \verb|spawn(:(a+b))|, is ugly and moreover simply wouldn't work since \verb|spawn| cannot use the expression \verb|:(a+b)| by itself to access the values of local variables \verb|a| and \verb|b|.
+% 
+% People often compare macros to inlining (for example, the designer(s) of C++), but this is a pun.
+% There is only a superficial similarity of inserting code into other code.
 
 \section{Command-Line Options}
 \sec{command-line-options}
