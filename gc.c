@@ -82,6 +82,8 @@ static arraylist_t to_finalize;
 
 static arraylist_t preserved_values;
 
+static arraylist_t weak_refs;
+
 int jl_gc_n_preserved_values()
 {
     return preserved_values.len;
@@ -95,6 +97,40 @@ void jl_gc_preserve(jl_value_t *v)
 void jl_gc_unpreserve()
 {
     (void)arraylist_pop(&preserved_values);
+}
+
+jl_weakref_t *jl_gc_new_weakref(jl_value_t *value)
+{
+    jl_weakref_t *wr = (jl_weakref_t*)alloc_2w();
+    wr->type = (jl_type_t*)jl_weakref_type;
+    wr->value = value;
+    arraylist_push(&weak_refs, wr);
+    return wr;
+}
+
+static void sweep_weak_refs()
+{
+    size_t n=0, ndel=0, l=weak_refs.len;
+    jl_weakref_t *wr;
+    void **lst = weak_refs.items;
+    void *tmp;
+#define SWAP_wr(a,b) (tmp=a,a=b,b=tmp,1)
+    if (l == 0)
+        return;
+    do {
+        wr = (jl_weakref_t*)lst[n];
+        if (gc_marked_obj(wr)) {
+            // weakref itself is alive
+            if (!gc_marked_obj(wr->value))
+                wr->value = (jl_value_t*)jl_null;
+            n++;
+        }
+        else {
+            ndel++;
+        }
+    } while ((n < l-ndel) && SWAP_wr(lst[n],lst[n+ndel]));
+
+    weak_refs.len -= ndel;
 }
 
 static void schedule_finalization(void *o)
@@ -457,6 +493,9 @@ static void gc_markval_(jl_value_t *v)
             ss = ss->prev;
         }
     }
+    else if (vt == (jl_value_t*)jl_weakref_type) {
+        // don't mark contents
+    }
     else {
         assert(vtt == (jl_value_t*)jl_struct_kind);
         size_t nf = ((jl_struct_type_t*)vt)->names->length;
@@ -563,8 +602,9 @@ void jl_gc_collect()
 {
     if (is_gc_enabled) {
         gc_mark();
+        sweep_weak_refs();
         gc_sweep();
-        run_finalizers(); 
+        run_finalizers();
     }
     allocd_bytes = 0;
 }
@@ -664,4 +704,5 @@ void jl_gc_init()
     htable_new(&finalizer_table, 0);
     arraylist_new(&to_finalize, 0);
     arraylist_new(&preserved_values, 0);
+    arraylist_new(&weak_refs, 0);
 }

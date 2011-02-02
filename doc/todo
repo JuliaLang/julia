@@ -623,9 +623,10 @@ issues 1/24/11
     array_grow_end, array_del_end, array_grow_beg, array_del_beg,
     array_size(a, n), array_size(a)
 - array constructors including initialization
+  Array(Int32, (4,),  0, 1, 2, 3)
   Array(Int32, (2,2), 0, 1, 2, 3)
-  Array{Int32,1}(5, 0, 1, 2, 3, 4)
-  Array{Int32,2}((2,2), 0, 1, 2, 3)
+  Array{Int32,1}(5,    0, 1, 2, 3, 4)
+  Array{Int32,2}(2,2,  0, 1, 2, 3)
 - keyword args
   f(x; a=1, b=0)
   f(x; kws...)

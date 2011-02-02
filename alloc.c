@@ -34,6 +34,7 @@ jl_struct_type_t *jl_array_type;
 jl_typename_t *jl_array_typename;
 jl_type_t *jl_array_uint8_type;
 jl_type_t *jl_array_any_type;
+jl_struct_type_t *jl_weakref_type;
 jl_struct_type_t *jl_string_type;
 jl_struct_type_t *jl_latin1_string_type;
 jl_struct_type_t *jl_utf8_string_type;
@@ -724,6 +725,16 @@ JL_CALLABLE(jl_generic_ctor)
     if (nargs == 0)
         tp->instance = v;
     return v;
+}
+
+JL_CALLABLE(jl_weakref_ctor)
+{
+    if (nargs > 1) {
+        JL_NARGS(WeakRef, 1, 1);
+    }
+    if (nargs == 1)
+        return (jl_value_t*)jl_gc_new_weakref(args[0]);
+    return (jl_value_t*)jl_gc_new_weakref((jl_value_t*)jl_null);
 }
 
 // bits constructors ----------------------------------------------------------

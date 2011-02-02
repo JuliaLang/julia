@@ -101,6 +101,15 @@ bitstype 64 Float64 <: Float
 typealias Size Int32
 typealias Index Int32
 
+type WeakRef
+    value
+end
+
+hash(w::WeakRef) = hash(w.value)
+isequal(w::WeakRef, v::WeakRef) = isequal(w.value, v.value)
+isequal(w::WeakRef, v) = isequal(w.value, v)
+isequal(w, v::WeakRef) = isequal(w, v.value)
+
 abstract String
 
 type Latin1String <: String
