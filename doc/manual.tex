@@ -439,16 +439,10 @@ Additionally, all the standard trigonometric functions are defined:
 
 The mathematical functions with operator notation, \verb|%| and \verb|^|, both also have an updating form, like the arithmetic and bitwise operators:
 \begin{verbatim}
-  julia> x = 2
-  2
-
-  julia> x ^= 5
+  julia> x = 2; x ^= 5; x
   32
 
-  julia> x = 7
-  7
-
-  julia> x %= 4
+  julia> x = 7; x %= 4; x
   3
 \end{verbatim}
 Like the updating forms of other operators, \verb|x ^= y| means \verb|x = x^y| and \verb|x %= y| means \verb|x = x % y|.
@@ -467,6 +461,7 @@ This makes writing polynomial expressions much cleaner:
   julia> 1.5x^2 - .5x + 1
   13.0
 \end{verbatim}
+% TODO: note about variables and assignment.
 You can also use a numeric literal coefficients with parenthesized expressions:
 \begin{verbatim}
   julia> 2(x-1)^2 - 3(x-1) + 1
@@ -497,12 +492,12 @@ Juxtaposing two parenthesized expressions, however, does not imply multiplicatio
   julia> (x-1)(x+1)
   type error: apply: expected Function, got Int32
 \end{verbatim}
-The error occurs since parentheses following an expression which is not a numeric literal introduces a function call, not multiplication, and the value \verb|(x-1)| is an integer, not a function.
+The error occurs since parentheses following an expression which is not a numeric literal introduces a function call, not multiplication, and the value of \verb|(x-1)| is an integer rather than a function.
 
 \subsection{Complex Numbers}
 
 The global constant \verb|im| is bound to the complex number $i$, representing one of the square roots of $-1$.
-Since Julia allows numeric literals to be juxtaposed with identifiers as coefficients, this binding suffices to allow a convenient syntax for complex numbers, similar to the traditional mathematical notation, $1 + 2i$:\,\footnote{It was deemed harmful to co-opt the name \texttt{i} for a global constant, as that would preclude its use as a variable.}
+Since Julia allows numeric literals to be juxtaposed with identifiers as coefficients, this binding suffices to provide convenient syntax for complex numbers, similar to the traditional mathematical notation, $1 + 2i$:\,\footnote{It was deemed harmful to co-opt the name \texttt{i} for a global constant, as that would preclude its use as a variable.}
 \begin{verbatim}
   julia> 1 + 2im
   1 + 2im
@@ -604,9 +599,7 @@ The full gamut of mathematical functions are also defined for complex numbers:
 
 If you need to construct a complex number using variables, the literal numeric coefficient notation will not work, so you have to explicitly write the multiplication operation:
 \begin{verbatim}
-  julia> a = 1; b = 2;
-
-  julia> a + b*im
+  julia> a = 1; b = 2; a + b*im
   1 + 2im
 \end{verbatim}
 
@@ -818,7 +811,7 @@ The predefined string types are no more special than user-defined ones.
 \item Strings are immutable: the value of a \verb|String| object cannot be changed.
 To construct a different string value, you construct a new string object from parts of other string objects.
 \end{itemize}
-Although there are many implementations of the \verb|String| interface, we do not delve into the details of these implementations here:
+Although there are various implementations of the \verb|String| interface, we do not delve into the details of these variations here:
 you can use all strings transparently in the same way in all string operations.
 
 \subsection{Characters}
@@ -833,7 +826,7 @@ Here is how \verb|Char| values are input and shown:
   julia> typeof(ans)
   Char
 \end{verbatim}
-You can convert a Char to its integer value, i.e. code point, easily:
+You can convert a \verb|Char| to its integer value, i.e. code point, easily:
 \begin{verbatim}
   julia> int('x')
   120
@@ -944,11 +937,25 @@ If you want to extract a character from a string, you index into it:
 
   julia> str[end]
   '\n'
+\end{verbatim}
+All indexing in Julia is 1-based like Matlab and Mathematica, rather than 0-based like most other programming languages:
+the first element of any integer-indexed object is found at index \verb|1|, not index \verb|0|, and the last element is found at index \verb|n| rather than \verb|n-1|, when the object has a length of \verb|n|.
 
+In any indexing expression, the keyword, \verb|end|, can be used as a shorthand for \verb|length(x)|, where \verb|x| is the object being indexed into, whether it is a string, an array, or some other indexable object.
+You can perform arithmetic and other operations with \verb|end|, just like a normal value:
+\begin{verbatim}
   julia> str[end-1]
   '.'
+
+  julia> str[end/2]
+  ' '
+
+  julia> str[end*1/3]
+  'o'
+
+  julia> str[end*2/3]
+  'o'
 \end{verbatim}
-Like all indexing in Julia, string indexing is 1-based, not 0-based.
 Using an index less than 1 or greater than \verb|end| raises an error:
 \begin{verbatim}
   julia> str[0]
@@ -987,12 +994,12 @@ One of the most common and useful string operations is concatenation:
   "Hello, world.\n"
 \end{verbatim}
 Constructing strings like this can become a bit cumbersome, however.
-To reduce the need for these explicit calls to \verb|strcat|, Julia allows interpolation into string literals using \verb|$|, as in Perl:
+To reduce the need for these verbose calls to \verb|strcat|, Julia allows interpolation into string literals using \verb|$|, as in Perl:
 \begin{verbatim}
   julia> "$greet, $who.\n"
   "Hello, world.\n"
 \end{verbatim}
-This is more readable and convenient and exactly equivalent to the above string concatenation---the system rewrites this apparent single string literal into a concatenation of string literals with variables.
+This is more readable and convenient and exactly equivalent to the above string concatenation\,---\,the system rewrites this apparent single string literal into a concatenation of string literals with variables.
 
 The shortest complete expression after the \verb|$| is taken as the expression whose value is to be interpolated into the string.
 Thus, you can interpolate any expression into a string using parentheses:
@@ -1024,6 +1031,11 @@ The \verb|string| function is the identity for \verb|String|s and \verb|Char|s v
 
   julia> "hi, $c"
   "hi, x"
+\end{verbatim}
+To include a literal \verb|$| in a string literal, escape it with a backslash:
+\begin{verbatim}
+  julia> println("I have \$100 in my account.");
+  I have $100 in my account.
 \end{verbatim}
 
 \subsection{Common Operations}
@@ -1276,7 +1288,7 @@ The \verb|return| on the last line could be omitted since it is the last express
 
 In Julia, most operators are just functions with support for special syntax.\footnote{The exceptions are operators with special evaluation semantics like \texttt{\&\&} and \texttt{||}.
 These operators cannot be functions since short-circuit evaluation (see \Section{short-circuit-evaluation}) requires that their operands are not evaluated before evaluation of the operator.}
-Accordingly, you can also apply them using parenthesized argument lists as you would any other function:
+Accordingly, you can also apply them using parenthesized argument lists, just as you would any other function:
 \begin{verbatim}
   julia> 1 + 2 + 3
   6
@@ -1285,14 +1297,14 @@ Accordingly, you can also apply them using parenthesized argument lists as you w
   6
 \end{verbatim}
 The infix form is exactly equivalent to the function application form\,---\,in fact the former is parsed to produce the function call internally.
-This also means that you can pass and assign operators such as \verb|+| and \verb|*| into variables just like you can with other functions:
+This also means that you can assign and pass around operators such as \verb|+| and \verb|*| just like you would with other function values:
 \begin{verbatim}
   julia> f = +;
 
   julia> f(1,2,3)
   6
 \end{verbatim}
-Under the name, \verb|f|, the function does not support infix notation.
+Under the name, \verb|f|, the function does not support infix notation, however.
 
 % Since operators like \verb|+| are just normal Julia functions, you can add new methods for them.
 % For example, the addition method for complex numbers is defined as:
@@ -1304,7 +1316,8 @@ Under the name, \verb|f|, the function does not support infix notation.
 \subsection{Anonymous Functions}\sec{anonymous-functions}
 
 Functions in Julia are first-class objects:
-they can be assigned to variables, called using the standard function call syntax via the variable they have been assigned to, they can be passed as arguments, and they can be returned as values.
+they can be assigned to variables, called using the standard function call syntax from the variable they have been assigned to.
+They can be used as arguments, and they can be returned as values.
 They can also be created anonymously, without giving them a name:
 \begin{verbatim}
   julia> x -> x^2 + 2x - 1
@@ -1319,7 +1332,7 @@ A classic example is the \verb|map| function, which applies a function to each v
 \end{verbatim} % TOOD: make sure type inference gets the right return type.
 This is fine if a named function effecting the transform one wants already exists to pass as the first argument to \verb|map|.
 Often, however, a ready-to-use, named function does not exist.
-In these situations, the anonymous function construct allows easy creation of a single-use function object without needing a name:
+In these situations, the anonymous function construct allows easy creation of a single use function object without needing a name:
 \begin{verbatim}
   julia> map(x -> x^2 + 2x - 1, [1,3,-1])
   [2,14,-2]
@@ -1327,7 +1340,7 @@ In these situations, the anonymous function construct allows easy creation of a 
 
 \subsection{Multiple Return Values}
 
-In Julia, one returns a single tuple value in order to simulate returning multiple values.
+In Julia, one returns a tuple of values to simulate returning multiple values.
 However, tuples can be created and destructured without needing parentheses, thereby providing an illusion that multiple values are being returned, rather than a single tuple value.
 For example, the following function returns a pair of values:
 \begin{verbatim}
@@ -1335,12 +1348,12 @@ For example, the following function returns a pair of values:
     a+b, a*b
   end
 \end{verbatim}
-If you call it at the repl, you will see the tuple returned:
+If you call it at the repl without assigning the return value anywhere, you will see the tuple returned:
 \begin{verbatim}
   julia> foo(2,3)
   (5,6)
 \end{verbatim}
-A typical usage of such a pair of return values, however, is to extract each one into its own variable.
+A typical usage of such a pair of return values, however, extracts each value into a variable.
 Julia supports simple tuple ``destructuring'' that facilitates this:
 \begin{verbatim}
   julia> x, y = foo(2,3);
@@ -1351,7 +1364,7 @@ Julia supports simple tuple ``destructuring'' that facilitates this:
   julia> y
   6
 \end{verbatim}
-You can also return multiple values via an explicit return:
+You can also return multiple values via an explicit usage of the \verb|return| keyword:
 \begin{verbatim}
   function foo(a,b)
     return a+b, a*b
@@ -1367,7 +1380,7 @@ You can define a varargs function by appending the last argument with ``\verb|..
 \begin{verbatim}
   bar(a,b,x...) = (a,b,x)
 \end{verbatim}
-The variables \verb|a| and \verb|b| are bound to the first two argument values as usual, and the variable \verb|x| is bound to an iterable collection of the zero or more values passed to \verb|bar|:
+The variables \verb|a| and \verb|b| are bound to the first two argument values as usual, and the variable \verb|x| is bound to an iterable collection of the zero or more values passed to \verb|bar| after its first two arguments:
 \begin{verbatim}
   julia> bar(1,2)
   (1,2,())
@@ -1381,10 +1394,10 @@ The variables \verb|a| and \verb|b| are bound to the first two argument values a
   julia> bar(1,2,3,4,5,6)
   (1,2,(3,4,5,6))
 \end{verbatim}
-In these cases, \verb|x| is bound to a tuple of the trailing values passed to \verb|bar|.
+In all these cases, \verb|x| is bound to a tuple of the trailing values passed to \verb|bar|.
 
-On the other hand, it is often handy to ``splice'' the values contained in an iterable collection into a call to a function.
-To do this, one also uses ``\verb|...|'' placed after and argument in a function call:
+On the flip side, it is often handy to ``splice'' the values contained in an iterable collection into a function call as individual arguments.
+To do this, one also uses ``\verb|...|'' but in the function call instead:
 \begin{verbatim}
   julia> x = (3,4)
   (3,4)
@@ -1421,6 +1434,24 @@ Furthermore, the iterable object spliced into a function call need not be a tupl
   julia> bar(x...)
   (1,2,(3,4))
 \end{verbatim}
+Also, the function that arguments are spliced into need not be a varargs function (although it often is):
+\begin{verbatim}
+  baz(a,b) = a + b
+
+  julia> args = [1,2]
+  [1,2]
+
+  julia> baz(args...)
+  3
+
+  julia> args = [1,2,3]
+  [1,2,3]
+
+  julia> baz(args...)
+  no method baz(Int32,Int32,Int32)
+\end{verbatim}
+As you can see, if the wrong number of elements are in the spliced container, then the function call will fail, just as it would if too many arguments were given explicitly.
+
 As a final example, you can sum the values in any collection using the \verb|+| operator and splicing:
 \begin{verbatim}
   julia> x = [1,2,3,4]
@@ -1435,7 +1466,9 @@ As a final example, you can sum the values in any collection using the \verb|+| 
   julia> +(x...)
   5050
 \end{verbatim}
-Note that in this last example, the range object, \verb|1:100|, is never materialized in memory as a vector, rather it is a computed vector-like object, and the most general definition of the \verb|+| operator iterates over its collection of arguments, summing them into an accumulator like this:
+In this example, the range object, \verb|1:100|, is never materialized in memory as a full dense vector.
+Instead, it is a lazily computed, vector-like object.
+The definition of the \verb|+| operator with many arguments iterates over its collection of arguments, summing them into an accumulator:
 \begin{verbatim}
   function +(a, b, c, xs...)
       accum = a + b + c
@@ -1445,13 +1478,14 @@ Note that in this last example, the range object, \verb|1:100|, is never materia
       accum
   end
 \end{verbatim}
-Therefore, the \verb|+(x...)| call is actually quite efficient in terms of both memory usage and speed.
+Thus, the \verb|+(x...)| call is actually quite efficient:
+the values 1 through 100 are produced lazily, one at a time, and are accumulated as they are generated by the \verb|+| function.
 
 \subsection{Further Reading}
 
 We should mention here that this is far from a complete picture of defining functions.
 Julia has a sophisticated types system and allows multiple dispatch on argument types.
-None of the examples given here provide any type annotations on their arguments, meaning that they are applicable to any argument types.
+None of the examples given here provide any type annotations on their arguments, meaning that they are applicable to all types of arguments.
 The type system is described in \Section{types} and defining a function in terms of methods chosen by multiple dispatch on the runtime types of a function's arguments is described in detail in \Section{methods}.
 
 \section{Control Flow}\sec{control-flow}
@@ -1723,7 +1757,8 @@ Note that the middle expression is only evaluated once, rather than twice as it 
 
 \subsection{Repeated Evaluation}\sec{repeated-evaluation}
 
-There are two constructs for repeated evaluation of expressions in Julia: the \verb|while| loop and the \verb|for| loop.
+There are two constructs for repeated evaluation of expressions:
+the \verb|while| loop and the \verb|for| loop.
 Here is an example of a \verb|while| loop:
 \begin{verbatim}
   julia> i = 1;
@@ -1772,7 +1807,7 @@ You'll either need a new repl instance or a different variable name to test this
   julia> j
   j not defined
 \end{verbatim}
-See \Section{variable-scoping} for a detailed explanation of variable scope and how it works in Julia.
+See \Section{scoping} for a detailed explanation of variable scope and how it works in Julia.
 
 In general, the \verb|for| loop construct can iterate over all sorts of containers:
 \begin{verbatim}
@@ -2089,21 +2124,20 @@ this declaration would be necessary in order to modify a global variable.
 \section{Types}\sec{types}
 
 Type systems have traditionally fallen into two very different camps:
-static type systems, where every value must have a fully specified type, computable before the execution of a program, and dynamic type systems, where nothing is known about the types of values flowing through a piece of code until run-time, when the values themselves are available.
-Object orientation and generic programming inject some flexibility into the world of statically type languages by allowing code to be written without the exact type of values being known at compile time.
+static type systems, where every value must have a fully specified type, computable before the execution of a program, and dynamic type systems, where nothing is known about types of values flowing through a piece of code until run-time, when the values themselves are available.
+Object orientation and generic programming inject some flexibility into the world of statically type languages by allowing code to be written without the precise type of values being known at compile time.
 This ability to write code that can operate on different types is called polymorphism.
 All code in dynamically typed languages is polymorphic:
-only by explicitly checking types, or because certain types don't support certain operations at run-time, are the types of any values ever restricted.
+only by explicitly checking types, or when types don't support operations at run-time, are the types of any values ever restricted.
 
 Julia's type system strikes a balance between dynamic typing and static typing.
 Fundamentally, the type system is dynamic, but it is possible to provide annotations that certain values are of specific types.
 More importantly, it is possible to perform method dispatch on the types of function arguments.
 Method dispatch is explored in detail in \Section{methods}, but is fundamentally rooted in the type system presented here.
-The upshot of the balance struck between dynamic and static typing is that one can write many useful Julia programs without ever explicitly mentioning a type.
-When additional power is needed, however, it is easy to gradually introduce types into previously ``untyped'' code.
-Doing so will typically increase both the performance and robustness of these systems.
+The upshot of this mixture of dynamic and static typing is that one can write many useful Julia programs without ever explicitly mentioning a type, but when additional power is needed, it is easy to gradually introduce explicit types into previously ``untyped'' code.
+Doing so will typically increase both the performance and robustness of these systems, and counterintuitively, often drastically simplify them.
 
-To describe Julia's type system in the lingo of types, it is dynamic, nominative, parametric and dependent.
+Describing Julia's type system in the lingo of types, it is dynamic, nominative, parametric and dependent.
 Generic types can be parameterized by values, including but not limited to other types, and the relationships between types in the hierarchy is explicitly declared, rather than implied by compatible structure.
 Parametric typing allows concisely and elegantly defining and talking about a type like \verb|List|, without caring or specifying what type of objects the list holds\,---\,for many list algorithms, the type of values is unimportant.
 In situations where the type of objects contained in a list is important, one can simply write \verb|List{Int32}|, for example, to specify that a list contains only 32-bit integers.
@@ -2115,8 +2149,8 @@ High-level aspects of Julia's type system that should be mentioned up front are:
 
 \item Like traditional dynamically typed languages, but unlike statically typed languages like C or Java, only values, not variables, have types.
 There is no meaningful concept of a compile-time type as opposed to a run-time type:
-the only type of a value is its actual type.
-Talking about the static type of a value in Julia is meaningless.
+the only type of a value is its actual type when the program is running.
+Talking about the static type of a value or variable in Julia is meaningless.
 
 \item Variables have no type: they are simply names bound to values.
 While type annotations may restrict the possible types of a value, the variable mentioned can still be bound to values of any type.
@@ -2129,14 +2163,14 @@ all concrete types, specifying an actual, instantiable implementation of a type 
 
 \item The type graph is not flat, however:
 the other nodes in the type graph are abstract\,---\,they serve only to describe various collections of concrete types.
-In particular, all types are subtypes of the abstract default type, \verb|Any|.%
+In particular, all types are subtypes of the abstract default type called \verb|Any|.%
 \footnote{In type theory, the abstract type, \texttt{Any}, of which all objects are instances, and all types are subtypes, is called ``top'' because it is at the apex of the type graph.
 Julia also has a ``bottom'' type, called \texttt{None}, another abstract type, of which no object is an instance, and of which all other types are supertypes;
 thus it is at the nadir of the type graph.}
 
 \item Julia types\,---\,both concrete and abstract\,---\,can be paramaterized by other types or by arbitrary values.
 This allows algorithms to be written generically and reused for specific instances without repetition.
-Type parameters may be completely omitted when they need not be explicitly referenced.
+Type parameters may be completely omitted when they need not be referenced explicitly.
 
 \item Julia supports multiple inheritance:
 a type may declare that it is a subtype of several abstract types.
@@ -2148,7 +2182,7 @@ These problems are prevented by a simple and sensible rule described in \Section
 \end{itemize}
 The Julia type system is designed to be powerful and expressive, yet unobtrusive and intuitive.
 Many Julia programmers may never feel the need to write code that explicitly uses types.
-Some programming, however, becomes easier, faster, and more robust with judicious use of types.
+Some programming, however, becomes easier, faster, simpler, and more robust with judicious use of types.
 
 % \subsection{Tag Types}
 % \subsection{Struct Types}
@@ -2468,32 +2502,6 @@ To suppress Julia's warning, the disambiguating method must be defined first.
 % \subsection{Queues and Dequeues}
 % \subsection{Trees}
 % \subsection{Lists}
-
-\section{Parallel Computing}
-\begin{itemize}
-   \item \verb|remote_call(w, func, args...)| ---
-     tell a worker to call a function on the given arguments.
-     returns a \verb|RemoteRef| for the result.
-
-   \item \verb|remote_do(w, func, args...)| ---
-     remote function call with no result
-
-   \item \verb|wait(r)| ---
-     wait for a \verb|RemoteRef| to finish computing
-
-   \item \verb|fetch(r)| ---
-     wait for and get the value of a \verb|RemoteRef|
-
-   \item \verb|pmap(func, lst)| ---
-     call a function on each element of \verb|lst| (some 1-d thing), in
-     parallel.
-
-   \item \verb|send_msg(socket, x)| ---
-     send a Julia object through a socket
-
-   \item \verb|recv_msg(socket)| ---
-     read the next Julia object from a socket
-\end{itemize}
 
 % \section{Calling C Functions}
 \section{Running External Programs}
@@ -2820,6 +2828,32 @@ Finally, we have an example of how you can make a process read from itself:
 \end{verbatim}
 This example never terminates since the \verb|dup| process reads its own output and duplicates it to \verb|stderr| forever.
 We strongly encourage you to try all these examples to see how they work.
+
+\section{Parallel Computing}
+\begin{itemize}
+   \item \verb|remote_call(w, func, args...)| ---
+     tell a worker to call a function on the given arguments.
+     returns a \verb|RemoteRef| for the result.
+
+   \item \verb|remote_do(w, func, args...)| ---
+     remote function call with no result
+
+   \item \verb|wait(r)| ---
+     wait for a \verb|RemoteRef| to finish computing
+
+   \item \verb|fetch(r)| ---
+     wait for and get the value of a \verb|RemoteRef|
+
+   \item \verb|pmap(func, lst)| ---
+     call a function on each element of \verb|lst| (some 1-d thing), in
+     parallel.
+
+   \item \verb|send_msg(socket, x)| ---
+     send a Julia object through a socket
+
+   \item \verb|recv_msg(socket)| ---
+     read the next Julia object from a socket
+\end{itemize}
 
 % \section{Standard Library Reference}
 % 
