@@ -2088,36 +2088,67 @@ this declaration would be necessary in order to modify a global variable.
 
 \section{Types}\sec{types}
 
-Julia has a nominative, parametric, dependent type system:
-generic types can be parameterized by values, including but not limited to other types, and the relationships between types in the hierarchy is explicitly declared, rather than implied by compatible structure.
-Parametric typing allows one to concisely an elegantly define and talk about a type like \verb|List|, without caring or specifying what type of objects the list holds\,---\,for many list algorithms, the type of values is unimportant.
-In situations where the type of objects contained in a list is of importance, one can simply write \verb|List{Int32}|, for example, to specify that a list contains only 32-bit integers.
-The nominative type hierarchy prevents one type from being used in the place of another when they happen to have similar structure, allowing distinctions to be drawn between an \verb|Int32| and a \verb|Char|, even though they have the same underlying implementation as a 32-bit integer values.
+Type systems have traditionally fallen into two very different camps:
+static type systems, where every value must have a fully specified type, computable before the execution of a program, and dynamic type systems, where nothing is known about the types of values flowing through a piece of code until run-time, when the values themselves are available.
+Object orientation and generic programming inject some flexibility into the world of statically type languages by allowing code to be written without the exact type of values being known at compile time.
+This ability to write code that can operate on different types is called polymorphism.
+All code in dynamically typed languages is polymorphic:
+only by explicitly checking types, or because certain types don't support certain operations at run-time, are the types of any values ever restricted.
 
-There are some high-level aspects of Julia's type system that are worth mentioning up front:
+Julia's type system strikes a balance between dynamic typing and static typing.
+Fundamentally, the type system is dynamic, but it is possible to provide annotations that certain values are of specific types.
+More importantly, it is possible to perform method dispatch on the types of function arguments.
+Method dispatch is explored in detail in \Section{methods}, but is fundamentally rooted in the type system presented here.
+The upshot of the balance struck between dynamic and static typing is that one can write many useful Julia programs without ever explicitly mentioning a type.
+When additional power is needed, however, it is easy to gradually introduce types into previously ``untyped'' code.
+Doing so will typically increase both the performance and robustness of these systems.
+
+To describe Julia's type system in the lingo of types, it is dynamic, nominative, parametric and dependent.
+Generic types can be parameterized by values, including but not limited to other types, and the relationships between types in the hierarchy is explicitly declared, rather than implied by compatible structure.
+Parametric typing allows concisely and elegantly defining and talking about a type like \verb|List|, without caring or specifying what type of objects the list holds\,---\,for many list algorithms, the type of values is unimportant.
+In situations where the type of objects contained in a list is important, one can simply write \verb|List{Int32}|, for example, to specify that a list contains only 32-bit integers.
+The nominative hierarchy of types prevents one type from being used in the place of another simply because they happen to have the same structure.
+This allows an \verb|Int32| to be distinguished from a \verb|Char|, although they happen to have the same underlying implementation as 32-bit integer values.
+
+High-level aspects of Julia's type system that should be mentioned up front are:
 \begin{itemize}
 
-\item Like Lisp, Perl, Python, Lua, Ruby, and Matlab but unlike C or Java, only values, not variables, have types.
-There is no meaningful concept of a compile-time type versus a run-time type:
-the only type of a value is its actual run-time type.
-Variables have no type: they are just names bound to values.
+\item Like traditional dynamically typed languages, but unlike statically typed languages like C or Java, only values, not variables, have types.
+There is no meaningful concept of a compile-time type as opposed to a run-time type:
+the only type of a value is its actual type.
+Talking about the static type of a value in Julia is meaningless.
 
-\item The type hierarchy, is not flat:
-abstract types may have many subtypes and implementations.
-Unlike traditional object-oriented (OO) programming languages, however, all concrete type implementations are final:
-one implementation may never be a subtype of another implementation.
+\item Variables have no type: they are simply names bound to values.
+While type annotations may restrict the possible types of a value, the variable mentioned can still be bound to values of any type.
+
+\item There is no distinction between objects and non-objects:
+all values in Julia are true objects having a type that belongs to a single, unified, fully connected type hierarchy (directed, acyclic graph).
+
+\item There is no structural inheritance:
+all concrete types, specifying an actual, instantiable implementation of a type are final and may not be inherited from or subclassed by other concrete types.
+
+\item The type graph is not flat, however:
+the other nodes in the type graph are abstract\,---\,they serve only to describe various collections of concrete types.
+In particular, all types are subtypes of the abstract default type, \verb|Any|.%
+\footnote{In type theory, the abstract type, \texttt{Any}, of which all objects are instances, and all types are subtypes, is called ``top'' because it is at the apex of the type graph.
+Julia also has a ``bottom'' type, called \texttt{None}, another abstract type, of which no object is an instance, and of which all other types are supertypes;
+thus it is at the nadir of the type graph.}
+
+\item Julia types\,---\,both concrete and abstract\,---\,can be paramaterized by other types or by arbitrary values.
+This allows algorithms to be written generically and reused for specific instances without repetition.
+Type parameters may be completely omitted when they need not be explicitly referenced.
 
 \item Julia supports multiple inheritance:
-a type may explicitly declare that it is a subtype of many abstract types.
-The absence of implementation inheritance removes traditional data representation problems encountered in the presence of multiple inheritance.%
-\footnote{The other problems classically caused by multiple inheritance are method dispatch ambiguities and instabilities introduced when different methods for the same function are dispatched on non-disjoint types, sharing common descendant subtypes.
-Such problems are prevented by a simple and sensible rule described in \Section{method-ambiguities}.}
+a type may declare that it is a subtype of several abstract types.
+% Thus, the type hierarchy is a directed, acyclic graph rather than a tree.
+The absence of implementation inheritance eliminates data representation problems classically encountered in the presence of multiple inheritance.%
+\footnote{The other problems classically caused by multiple inheritance are ambiguities and instabilities in method dispatch introduced when different methods of the same function are dispatched on non-disjoint types, sharing common descendant subtypes.
+These problems are prevented by a simple and sensible rule described in \Section{method-ambiguities}.}
 
 \end{itemize}
-In general, the Julia type system is designed to be powerful and expressive, but unobtrusive and intuitive to use.
-Much useful Julia programming can be done without ever explicitly using types.
-When additional power is needed, however, it is easy to gradually introduce types into previously typeless programs.
-Doing so will typically increase both the performance and robustness of these systems.
+The Julia type system is designed to be powerful and expressive, yet unobtrusive and intuitive.
+Many Julia programmers may never feel the need to write code that explicitly uses types.
+Some programming, however, becomes easier, faster, and more robust with judicious use of types.
 
 % \subsection{Tag Types}
 % \subsection{Struct Types}
@@ -2232,7 +2263,7 @@ If you've been entering these definitions in the repl, you'll have noticed that 
 \end{verbatim}
 The \verb|Any| type is the default when no type is specified:
 all Julia objects match \verb|Any|.
-In formal type system literature, \verb|Any| is commonly called Top.\footnote{Julia also has a Bottom type called \texttt{None} which no object matches.}
+In formal type system literature, \verb|Any| is commonly called Top.
 
 Although it seems a simple concept, multiple dispatch on the types of values is perhaps the single most powerful and central feature of the Julia language.
 Core operations typically have dozens of methods:
