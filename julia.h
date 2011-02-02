@@ -5,15 +5,15 @@
 #include "arraylist.h"
 #include <setjmp.h>
 
-#define JL_VALUE_STRUCT \
+#define JL_STRUCT_TYPE \
     struct _jl_type_t *type;
 
 typedef struct _jl_value_t {
-    JL_VALUE_STRUCT
+    JL_STRUCT_TYPE
 } jl_value_t;
 
 typedef struct _jl_sym_t {
-    JL_VALUE_STRUCT
+    JL_STRUCT_TYPE
     struct _jl_sym_t *left;
     struct _jl_sym_t *right;
     uptrint_t hash;    // precomputed hash value
@@ -24,7 +24,7 @@ typedef struct _jl_sym_t {
 } jl_sym_t;
 
 typedef struct {
-    JL_VALUE_STRUCT
+    JL_STRUCT_TYPE
     size_t length;
     jl_value_t *data[1];
 } jl_tuple_t;
@@ -32,7 +32,7 @@ typedef struct {
 #define ARRAY_INLINE_NBYTES (4*4*sizeof(double))
 
 typedef struct {
-    JL_VALUE_STRUCT
+    JL_STRUCT_TYPE
     jl_tuple_t *dims;
     void *data;
     size_t length;
@@ -43,13 +43,13 @@ typedef struct {
 } jl_array_t;
 
 typedef struct _jl_type_t {
-    JL_VALUE_STRUCT
+    JL_STRUCT_TYPE
 } jl_type_t;
 
 typedef jl_value_t *(*jl_fptr_t)(jl_value_t*, jl_value_t**, uint32_t);
 
 typedef struct _jl_lambda_info_t {
-    JL_VALUE_STRUCT
+    JL_STRUCT_TYPE
     // this holds the static data for a function:
     // a syntax tree, static parameters, and (if it has been compiled)
     // a function pointer.
@@ -81,18 +81,18 @@ typedef struct _jl_lambda_info_t {
     jl_lambda_info_t *linfo;
 
 typedef struct _jl_function_t {
-    JL_VALUE_STRUCT
+    JL_STRUCT_TYPE
     JL_FUNC_FIELDS
 } jl_function_t;
 
 typedef struct {
-    JL_VALUE_STRUCT
+    JL_STRUCT_TYPE
     jl_tuple_t *parameters;
     jl_type_t *body;
 } jl_typector_t;
 
 typedef struct {
-    JL_VALUE_STRUCT
+    JL_STRUCT_TYPE
     jl_sym_t *name;
     // if this is the name of a parametric type, this field points to the
     // original type.
@@ -103,18 +103,18 @@ typedef struct {
 } jl_typename_t;
 
 typedef struct {
-    JL_VALUE_STRUCT
+    JL_STRUCT_TYPE
     jl_type_t *from;
     jl_type_t *to;
 } jl_func_type_t;
 
 typedef struct {
-    JL_VALUE_STRUCT
+    JL_STRUCT_TYPE
     jl_tuple_t *types;
 } jl_uniontype_t;
 
 typedef struct _jl_tag_type_t {
-    JL_VALUE_STRUCT
+    JL_STRUCT_TYPE
     JL_FUNC_FIELDS
     jl_typename_t *name;
     struct _jl_tag_type_t *super;
@@ -122,7 +122,7 @@ typedef struct _jl_tag_type_t {
 } jl_tag_type_t;
 
 typedef struct {
-    JL_VALUE_STRUCT
+    JL_STRUCT_TYPE
     JL_FUNC_FIELDS
     jl_typename_t *name;
     jl_tag_type_t *super;
@@ -137,7 +137,7 @@ typedef struct {
 } jl_struct_type_t;
 
 typedef struct {
-    JL_VALUE_STRUCT
+    JL_STRUCT_TYPE
     JL_FUNC_FIELDS
     jl_typename_t *name;
     jl_tag_type_t *super;
@@ -150,12 +150,17 @@ typedef struct {
 } jl_bits_type_t;
 
 typedef struct {
-    JL_VALUE_STRUCT
+    JL_STRUCT_TYPE
     jl_sym_t *name;
     jl_value_t *lb;   // lower bound
     jl_value_t *ub;   // upper bound
     uptrint_t bound;  // part of a constraint environment
 } jl_tvar_t;
+
+typedef struct {
+    JL_STRUCT_TYPE
+    jl_value_t *value;
+} jl_weakref_t;
 
 typedef struct {
     // not first-class
@@ -188,7 +193,7 @@ typedef struct _jl_methlist_t {
 //#define JL_GF_PROFILE
 
 typedef struct _jl_methtable_t {
-    JL_VALUE_STRUCT
+    JL_STRUCT_TYPE
     jl_methlist_t *defs;
     jl_methlist_t *cache;
     jl_function_t **cache_1arg;
@@ -201,7 +206,7 @@ typedef struct _jl_methtable_t {
 } jl_methtable_t;
 
 typedef struct {
-    JL_VALUE_STRUCT
+    JL_STRUCT_TYPE
     jl_sym_t *head;
     jl_array_t *args;
     jl_value_t *etype;
@@ -237,6 +242,7 @@ extern jl_typector_t *jl_function_type;
 extern jl_tag_type_t *jl_tensor_type;
 extern jl_struct_type_t *jl_array_type;
 extern jl_typename_t *jl_array_typename;
+extern jl_struct_type_t *jl_weakref_type;
 extern jl_struct_type_t *jl_string_type;
 extern jl_struct_type_t *jl_latin1_string_type;
 extern jl_struct_type_t *jl_utf8_string_type;
@@ -696,6 +702,7 @@ void jl_gc_preserve(jl_value_t *v);
 void jl_gc_unpreserve();
 int jl_gc_n_preserved_values();
 DLLEXPORT void jl_gc_add_finalizer(jl_value_t *v, jl_function_t *f);
+jl_weakref_t *jl_gc_new_weakref(jl_value_t *value);
 #define jl_gc_setmark(v) (((uptrint_t*)(v))[-1]|=1)
 void *alloc_2w();
 void *alloc_3w();
@@ -730,7 +737,7 @@ typedef struct _jl_savestate_t {
 } jl_savestate_t;
 
 typedef struct _jl_task_t {
-    JL_VALUE_STRUCT
+    JL_STRUCT_TYPE
     struct _jl_task_t *on_exit;
     jmp_buf ctx;
     void *stack;

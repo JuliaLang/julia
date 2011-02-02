@@ -47,7 +47,7 @@ function convert{T}(::Type{Rational{T}}, x::Float, tol::Real)
     end
 end
 
-convert{T}(::Type{Rational{T}}, x::Float) = convert(T,x,eps(x))
+convert{T}(rt::Type{Rational{T}}, x::Float) = convert(rt,x,eps(x))
 
 promote_rule{T<:Int}(::Type{Rational{T}}, ::Type{T}) = Rational{T}
 promote_rule{T,S<:Int}(::Type{Rational{T}}, ::Type{S}) = Rational{promote_type(T,S)}

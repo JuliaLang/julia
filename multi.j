@@ -40,6 +40,7 @@ end
 # * recover from i/o errors
 # * handle remote execution errors
 # * all-to-all communication
+# - distributed GC
 # - send pings at some interval to detect failed/hung machines
 # - integrate event loop with other kinds of i/o (non-messages)
 # * serializing closures
@@ -676,8 +677,8 @@ type GlobalObject
         #       avoid the client add message in this case.
         #   . send del_client when there are no references to the GO
         #     except the one in PGRP.refs
-        #     . done by adding a finalizer to the GO that revives it and
-        #       puts it back in the refs table until the client set is empty
+        #     . done by adding a finalizer to the GO that revives it by
+        #       reregistering the finalizer until the client set is empty
         global PGRP
         r = Array(RemoteRef, PGRP.np)
         for i=1:length(r)
@@ -699,15 +700,13 @@ function serialize(s, g::GlobalObject)
     global PGRP
     # a GO is sent to a machine by sending just the RemoteRef for its
     # copy. much smaller message.
-    wid = 0
     for i=1:PGRP.np
         w = PGRP.workers[i]
         if is(s, w.socket) || is(s, w.sendbuf)
-            wid = i
-            break
+            return serialize(s, g.refs[i])
         end
     end
-    serialize(s, g.refs[wid])
+    invoke(serialize, (Any, Any), s, g)
 end
 
 ## demos ##
