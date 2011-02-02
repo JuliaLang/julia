@@ -44,7 +44,9 @@ function next(s::IntSet, i)
     (n, n+1)
 end
 
-isempty(s::IntSet) = (next(s,0)[1] >= s.limit)
+isempty(s::IntSet) =
+    ccall(:bitvector_any1, Uint32, (Ptr{Uint32}, Uint32, Uint32),
+          s.bits, uint32(0), uint32(s.limit))==0
 
 function choose(s::IntSet)
     n = next(s,0)[1]
@@ -53,3 +55,7 @@ function choose(s::IntSet)
     end
     n
 end
+
+numel(s::IntSet) =
+    int32(ccall(:bitvector_count, Uint64, (Ptr{Uint32}, Uint32, Uint64),
+                s.bits, uint32(0), uint64(s.limit)))

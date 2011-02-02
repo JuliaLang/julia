@@ -90,11 +90,12 @@ type HashTable{K,V}
     keys::Array{K,1}
     vals::Array{V,1}
     used::IntSet
+    deleter::Function
 
     HashTable() = HashTable(Any,Any)
     HashTable(k, v) = HashTable(k, v, 16)
     HashTable(k, v, n) = (n = _tablesz(n);
-                          new(Array(k,n), Array(v,n), IntSet(n+1)))
+                          new(Array(k,n), Array(v,n), IntSet(n+1), identity))
 end
 
 hashindex(key, sz) = (int32(hash(key)) & (sz-1)) + 1
@@ -215,6 +216,21 @@ end
 has(t::Union(IdTable,HashTable), key) =
     !is(get(t, key, _secret_table_token_),
         _secret_table_token_)
+
+function add_weak_key(t::HashTable, k, v)
+    if is(t.deleter, identity)
+        t.deleter = x->del(t, x)
+    end
+    t[WeakRef(k)] = v
+    finalizer(k, t.deleter)
+    t
+end
+
+function add_weak_value(t::HashTable, k, v)
+    t[k] = WeakRef(v)
+    finalizer(v, x->del(t, k))
+    t
+end
 
 function show(t::Union(IdTable,HashTable))
     if isempty(t)

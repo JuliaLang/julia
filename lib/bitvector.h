@@ -64,8 +64,10 @@ void bitvector_or_to(u_int32_t *dest, u_int32_t doffs,
 void bitvector_xor_to(u_int32_t *dest, u_int32_t doffs,
                       u_int32_t *a, u_int32_t aoffs,
                       u_int32_t *b, u_int32_t boffs, u_int32_t nbits);
+DLLEXPORT
 u_int64_t bitvector_count(u_int32_t *b, u_int32_t offs, u_int64_t nbits);
 u_int32_t bitvector_any0(u_int32_t *b, u_int32_t offs, u_int32_t nbits);
+DLLEXPORT
 u_int32_t bitvector_any1(u_int32_t *b, u_int32_t offs, u_int32_t nbits);
 
 #endif

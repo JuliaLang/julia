@@ -17,6 +17,8 @@
     float_exponent;
     float_mantissa;
     bitvector_next;
+    bitvector_count;
+    bitvector_any1;
     jl_new_struct;
     jl_new_structt;
     jl_new_lambda_info;

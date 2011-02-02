@@ -574,12 +574,12 @@ static void gc_mark()
     // this must happen last.
     for(i=0; i < finalizer_table.size; i+=2) {
         if (finalizer_table.table[i+1] != HT_NOTFOUND) {
-            GC_Markval(finalizer_table.table[i+1]);
             jl_value_t *v = finalizer_table.table[i];
             if (!gc_marked_obj(v)) {
                 GC_Markval(v);
                 schedule_finalization(v);
             }
+            GC_Markval(finalizer_table.table[i+1]);
         }
     }
 }

@@ -127,3 +127,66 @@ uint32_t bitvector_next(uint32_t *b, uint64_t n0, uint64_t n)
         return n;
     return i + (n-nb);
 }
+
+u_int64_t bitvector_count(u_int32_t *b, u_int32_t offs, u_int64_t nbits)
+{
+    size_t i, nw;
+    u_int32_t ntail;
+    u_int64_t ans;
+
+    if (nbits == 0) return 0;
+    nw = ((u_int64_t)offs+nbits+31)>>5;
+
+    if (nw == 1) {
+        if (nbits == 32)
+            return count_bits(b[0] & (ONES32<<offs));
+        return count_bits(b[0] & (lomask(nbits)<<offs));
+    }
+
+    ans = count_bits(b[0]>>offs);  // first end cap
+
+    for(i=1; i < nw-1; i++) {
+        ans += count_bits(b[i]);
+    }
+
+    ntail = (offs+(u_int32_t)nbits)&31;
+    ans += count_bits(b[i]&(ntail>0?lomask(ntail):ONES32));  // last end cap
+
+    return ans;
+}
+
+u_int32_t bitvector_any1(u_int32_t *b, u_int32_t offs, u_int32_t nbits)
+{
+    index_t i;
+    u_int32_t nw, tail;
+    u_int32_t mask;
+
+    if (nbits == 0) return 0;
+    nw = (offs+nbits+31)>>5;
+
+    if (nw == 1) {
+        if (nbits == 32)
+            mask = (ONES32<<offs);
+        else
+            mask = (lomask(nbits)<<offs);
+        if ((b[0] & mask) != 0) return 1;
+        return 0;
+    }
+
+    mask = ~lomask(offs);
+    if ((b[0] & mask) != 0) return 1;
+
+    for(i=1; i < nw-1; i++) {
+        if (b[i] != 0) return 1;
+    }
+
+    tail = (offs+nbits)&31;
+    if (tail==0) {
+        if (b[i] != 0) return 1;
+    }
+    else {
+        mask = lomask(tail);
+        if ((b[i] & mask) != 0) return 1;
+    }
+    return 0;
+}
