@@ -1210,6 +1210,12 @@ With \verb|length| and \verb|start| can be used to iterate through the character
 
 \section{Functions}\sec{functions}
 
+In Julia, a function is an object that maps tuples of arguments to tuples of arguments, or throws an exception when the arguments cannot be appropriately mapped to return values.
+Julia is not a pure functional language in the sense that functions can alter and be affected by the global state of the program:
+they are not pure mathematical functions (or they are, but implicitly take the global program state as an argument).
+They are also not total functions since they may fail to map an input to an output.
+This may happen when dispatch fails to find an appropriate method to execute for the given function and arguments, or when a function fails to return a value because it raises an exception during its execution.
+
 The basic syntax for defining functions in Julia is:
 \begin{verbatim}
   function f(x,y)
@@ -1236,6 +1242,26 @@ The traditional function declaration syntax demonstrated above is equivalent to 
 In the assignment form, the body of the function must be a single expression, although it can be a compound expression (see \Section{compound-expressions}).
 Short, simple function definitions are common in Julia.
 The short function syntax is accordingly quite idiomatic, considerably reducing both typing and visual noise.
+
+A function is called using the traditional parenthesis syntax:
+\begin{verbatim}
+  julia> f(2,3)
+  5
+\end{verbatim}
+Without parentheses, the expression \verb|f| refers to the function object, and can be passed around like any value:
+\begin{verbatim}
+  julia> g = f;
+
+  julia> g(2,3)
+  5
+\end{verbatim}
+There are two other ways that functions can be applied:
+in the case of special functions that have operator syntax, using a predefined syntax (see \Section{operators-are-functions}), or with the \verb|apply| function:
+\begin{verbatim}
+  julia> apply(f,2,3)
+  5
+\end{verbatim}
+The \verb|apply| function applies its first argument\,---\,a function object\,---\,to its remaining arguments.
 
 \subsection{The \texttt{return} Keyword}\sec{the-return-keyword}
 
@@ -2253,13 +2279,29 @@ Some programming, however, becomes easier, faster, simpler, and more robust with
 
 \section{Methods}\sec{methods}
 
-Julia allows multiple dispatch based on the types of function arguments:
+Recall that a function is an object that maps a tuple of arguments to a tuple of return values, or throws an exception if no appropriate values can be returned.
+It is common for a function to behave quite differently for different types of arguments.
+Adding two integers is a different operation than adding two floating point numbers, and adding an integer to a floating point number is different still.
+In Julia, these behaviors belong to a single generic function object: the \verb|+| function.
+
+Since different behaviors are required for different types of arguments, it is convenient to be able to choose a specific behavior based on the number and types of arguments.
+This choice is called dispatch.
+The individual behaviors that are chosen between are called \emph{methods}, and each function can have many different methods, each specialized for different types of argument values.
+Together, all of a function's methods specify how the function behaves for all possible tuples of argument values.
+
+Julia allows the dispatch process to choose which of a function's methods to call based on the types of all of a function's arguments.
+This is different than most object-oriented languages, where dispatch only occurs based on the first argument, which often has a special argument syntax, and is sometimes implied rather than explicitly given as an argument.
+Using all of a function's arguments to choose which method should be invoked, rather than just the first, is known as \emph{multiple dispatch}.
+
+The \verb|::| operator is used after the name of a function parameter in a method declaration to describe what types of values the method should be used for:
 \begin{verbatim}
   f(x,y) = x + y
   f(x::Float64, y::Float64) = x * y
 \end{verbatim}
-The value \verb|f| is called a generic function, while individual definitions provided for it for specific combinations of argument types are called methods of that function.
-When a function is applied to values, the appropriate method will be called based on the types of these arguments:
+In the absence of a type declaration, the type of an argument is by default \verb|Any|, the type which all objects are an instance of and which all types are a subtype of.
+Thus, the above two lines define two methods for the generic function, \verb|f|:
+one which applies to any pair of values, and one which applies only to a pair of \verb|Float64| values.
+When a function is applied to actual arguments, the appropriate method will be called based on the types of these arguments:
 \begin{verbatim}
   julia> f(2,3)
   5
@@ -2267,7 +2309,6 @@ When a function is applied to values, the appropriate method will be called base
   julia> f(2.0,3.0)
   6.0
 \end{verbatim}
-The choice of which method to invoke is called dispatch, and is based on the types all arguments.
 The most specific method that applies to the given arguments is called.
 The \verb|f(Float64,Float64)| method cannot be applied to the arguments \verb|2,3| because \verb|2| and \verb|3| are of type \verb|Int32|, not \verb|Float64|.
 This method does apply to the arguments \verb|2.0,3.0|, however, since they are both \verb|Float64| values.
@@ -2279,7 +2320,7 @@ All arguments types must match for a method to be applicable:
 Here, the \verb|Float64| method of \verb|f| cannot be applied since 2 is not a \verb|Float64|.
 In the first method, the argument types are unconstrained, so this serves as a catchall method, and is called here.
 
-If you've been entering these definitions in the repl, you'll have noticed that it shows you all the methods defined for a given ``generic function'' when a new method is defined:
+If you've been entering these definitions in the repl, you'll have noticed that it shows you all the methods defined for a given generic function when a new method is defined:
 \begin{verbatim}
   julia> f(x,y) = x + y
   Methods for generic function f
@@ -2295,9 +2336,6 @@ If you've been entering these definitions in the repl, you'll have noticed that 
   f(Float64,Float64)
   f(Any,Any)
 \end{verbatim}
-The \verb|Any| type is the default when no type is specified:
-all Julia objects match \verb|Any|.
-In formal type system literature, \verb|Any| is commonly called Top.
 
 Although it seems a simple concept, multiple dispatch on the types of values is perhaps the single most powerful and central feature of the Julia language.
 Core operations typically have dozens of methods:
