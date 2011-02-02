@@ -2149,26 +2149,29 @@ this declaration would be necessary in order to modify a global variable.
 
 \section{Types}\sec{types}
 
-Type systems have traditionally fallen into two very different camps:
+Type systems have traditionally fallen into two quite different camps:
 static type systems, where every value must have a fully specified type, computable before the execution of a program, and dynamic type systems, where nothing is known about types of values flowing through a piece of code until run-time, when the values themselves are available.
-Object orientation and generic programming inject some flexibility into the world of statically type languages by allowing code to be written without the precise type of values being known at compile time.
-This ability to write code that can operate on different types is called polymorphism.
-All code in dynamically typed languages is polymorphic:
-only by explicitly checking types, or when types don't support operations at run-time, are the types of any values ever restricted.
+Object orientation and generic programming allow some flexibility in statically type languages by letting code to be written without the precise type of values being known at compile time.
+This ability to write code that operates on different types is called polymorphism.
+In stark contrast, all code in dynamically typed languages is polymorphic:
+only by explicitly checking types, or when objects fail to support operations at run-time, are the types of any values ever restricted.
 
 Julia's type system strikes a balance between dynamic typing and static typing.
-Fundamentally, the type system is dynamic, but it is possible to provide annotations that certain values are of specific types.
+Fundamentally, the type system is dynamic, but it is possible to indicate that certain values are of specific types.
 More importantly, it is possible to perform method dispatch on the types of function arguments.
-Method dispatch is explored in detail in \Section{methods}, but is fundamentally rooted in the type system presented here.
-The upshot of this mixture of dynamic and static typing is that one can write many useful Julia programs without ever explicitly mentioning a type, but when additional power is needed, it is easy to gradually introduce explicit types into previously ``untyped'' code.
-Doing so will typically increase both the performance and robustness of these systems, and counterintuitively, often drastically simplify them.
+Method dispatch is explored in detail in \Section{methods}, but is rooted in the type system presented here.
+The default behavior in Julia when types are omitted is always classical dynamic behavior:
+a program without type annotations is dynamically typed code.
+Thus, one can write many useful Julia programs without ever explicitly using types, but when additional expressiveness is needed, it is easy to gradually introduce explicit type annotations into previously ``untyped'' code.
+Doing so will typically increase both the performance and robustness of these systems, and counterintuitively, often significantly simplify them.
 
 Describing Julia's type system in the lingo of types, it is dynamic, nominative, parametric and dependent.
 Generic types can be parameterized by values, including but not limited to other types, and the relationships between types in the hierarchy is explicitly declared, rather than implied by compatible structure.
 Parametric typing allows concisely and elegantly defining and talking about a type like \verb|List|, without caring or specifying what type of objects the list holds\,---\,for many list algorithms, the type of values is unimportant.
-In situations where the type of objects contained in a list is important, one can simply write \verb|List{Int32}|, for example, to specify that a list contains only 32-bit integers.
-The nominative hierarchy of types prevents one type from being used in the place of another simply because they happen to have the same structure.
-This allows an \verb|Int32| to be distinguished from a \verb|Char|, although they happen to have the same underlying implementation as 32-bit integer values.
+In situations where the type of objects contained in a list is significant, one can simply write \verb|List{Int32}|, for example, to specify that a list contains only 32-bit integers.
+Concrete types may not subtype each other, so all actual types of run-time values are never interchangeable without conversion.
+Thus, the type system is nominative:
+an \verb|Int32| may not be used as a \verb|Char|, even though they have the same 32-bit integer structure.
 
 High-level aspects of Julia's type system that should be mentioned up front are:
 \begin{itemize}
@@ -2182,7 +2185,7 @@ Talking about the static type of a value or variable in Julia is meaningless.
 While type annotations may restrict the possible types of a value, the variable mentioned can still be bound to values of any type.
 
 \item There is no distinction between objects and non-objects:
-all values in Julia are true objects having a type that belongs to a single, unified, fully connected type hierarchy (directed, acyclic graph).
+all values in Julia are true objects having a type that belongs to the unified, fully connected type hierarchy (directed, acyclic graph).
 
 \item There is no structural inheritance:
 all concrete types, specifying an actual, instantiable implementation of a type are final and may not be inherited from or subclassed by other concrete types.
