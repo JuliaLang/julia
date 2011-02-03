@@ -2220,43 +2220,43 @@ Rather, they are nodes in the type graph describing sets of related concrete typ
 all those concrete types which are subtypes of the abstract type in question.
 Recall that in \Section{numbers-and-arithmetic}, we introduced a variety of types of numeric values:
 \verb|Int8|, \verb|Uint8|, \verb|Int16|, \verb|Uint16|, \verb|Int32|, \verb|Uint32|, \verb|Int64|, \verb|Uint64|, \verb|Float32|, and \verb|Float64|.
-It is common for a pieces of code to make sense only if its arguments are integers, but it doesn't really matter what particular \emph{kind} of integers they are, as long as the right low-level operations are used.
+It is common for a piece of code to make sense only if its arguments are some kind of integers, but not really depend on what particular \emph{kind} of integers, as long as the right low-level operations are used.
 For example, the greatest common denominator algorithm works for any kinds of integers, but will not work for floating point numbers.
 Abstract types allow us to talk easily about any type that is an integer, without needing to program to any specific integer type.
 
 To make this concrete, here are the actual declarations of all the integer and floating point types:
 \begin{verbatim}
   abstract Number
-  abstract Real   <: Number
-  abstract Int    <: Real
-  abstract Uint   <: Int
-  abstract Float  <: Real
+  abstract Real  <: Number
+  abstract Int   <: Real
+  abstract Uint  <: Int
+  abstract Float <: Real
 
   bitstype 8  Int8   <: Int
-  bitstype 8  Uint8  <: Uint
   bitstype 16 Int16  <: Int
-  bitstype 16 Uint16 <: Uint
   bitstype 32 Int32  <: Int
-  bitstype 32 Uint32 <: Uint
   bitstype 64 Int64  <: Int
-  bitstype 64 Uint64 <: Uint
 
-  bitstype 32 Char <: Uint
+  bitstype 8  Uint8  <: Uint
+  bitstype 16 Uint16 <: Uint
+  bitstype 32 Uint32 <: Uint
+  bitstype 64 Uint64 <: Uint
+  bitstype 32 Char   <: Uint
 
   bitstype 32 Float32 <: Float
   bitstype 64 Float64 <: Float
 \end{verbatim}
-The \verb|abstract| introduces new abstract types, while the \verb|bitstype| keyword introduces new bits types, which will be discussed in \Section{bits-types}.
-The \verb|<:| operator means ``is a subtype of,'' and used in declarations like this, declares the right-hand types to be the immediate supertypes of the new type being declared.
+The \verb|abstract| keyword introduces new abstract types, and the \verb|bitstype| keyword introduces new bits types (to be discussed in \Section{bits-types}).
+The \verb|<:| operator means ``is a subtype of,'' and, used in declarations like this, declares the right-hand types to be the immediate supertypes of the new type being declared.
 If no supertype is given, the default supertype is \verb|Any|.
 In the above declarations, each type has exactly one supertype.
-These declarations define the following type hierarchy for integers and floats:
+These declarations imply the following type hierarchy for integers and floats:
 \begin{center}
 \begin{tikzpicture}[>=latex,line join=bevel,font=\small\tt,scale=0.45]
-% dot -Txdot ints_and_floats.dot | dot2tex-2.6 --codeonly > ints_and_floats.tex
 \input{ints_and_floats}
 \end{tikzpicture}
 \end{center}
+The bottom row of types are concrete bits types, while the types above are all abstract types.
 
 \subsection{Bits Types}\sec{bits-types}
 
@@ -2338,7 +2338,7 @@ These declarations define the following type hierarchy for integers and floats:
 \section{Methods}\sec{methods}
 
 Recall from \Section{functions} that a function is an object that maps a tuple of arguments to a tuple of return values, or throws an exception if no appropriate values can be returned.
-It is common for a function to behave quite differently for different types of arguments.
+It is quite common for a function to behave quite differently for different types of arguments.
 In terms of implementation, adding two integers is a very different operation than adding two floating point numbers, both of which are quite different from adding an integer to a floating point number.
 Despite their implementations differences, these operations all fall under the general concept of ``addition.''
 Accordingly, in Julia, these behaviors belong to a single generic function object: the \verb|+| function.

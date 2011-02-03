@@ -78,10 +78,12 @@
 #bitstype {32|64} Ptr{T}
 
 abstract Number
-abstract Real   <: Number
-abstract Int    <: Real
-abstract Uint   <: Int
-abstract Float  <: Real
+abstract Real  <: Number
+abstract Int   <: Real
+abstract Uint  <: Int
+abstract Float <: Real
+
+bitstype 32 Char <: Uint
 
 bitstype 8  Int8   <: Int
 bitstype 8  Uint8  <: Uint
@@ -94,8 +96,6 @@ bitstype 64 Uint64 <: Uint
 
 bitstype 32 Float32 <: Float
 bitstype 64 Float64 <: Float
-
-bitstype 32 Char <: Uint
 
 bitstype 8 Bool
 
