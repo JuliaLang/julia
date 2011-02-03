@@ -6,6 +6,7 @@
 \usepackage[hyperfigures,bookmarks,bookmarksopen,bookmarksnumbered,colorlinks,linkcolor=black,citecolor=black,filecolor=blue,menucolor=black,pagecolor=blue,frenchlinks=true,pdftitle={\thetitle}]{hyperref}
 \usepackage[left=1in,top=1in,right=1in,bottom=1.25in,nohead]{geometry}
 \usepackage[utf8x]{inputenc}
+\usepackage{tikz}
 
 \title{\thetitle}
 \author{
@@ -1355,7 +1356,8 @@ A classic example is the \verb|map| function, which applies a function to each v
 \begin{verbatim}
   julia> map(round, [1.2,3.5,1.7])
   [1.0,4.0,2.0]
-\end{verbatim} % TOOD: make sure type inference gets the right return type.
+\end{verbatim}
+% TOOD: make sure type inference gets the right return type.
 This is fine if a named function effecting the transform one wants already exists to pass as the first argument to \verb|map|.
 Often, however, a ready-to-use, named function does not exist.
 In these situations, the anonymous function construct allows easy creation of a single use function object without needing a name:
@@ -1776,7 +1778,8 @@ Let's see this in action:
   1
   2
   false
-\end{verbatim} % TODO: THIS IS NOT THE ACTUAL OUTPUT
+\end{verbatim}
+% TODO: THIS IS NOT THE ACTUAL OUTPUT
 The first two expressions in a comparison chain are always evaluated, since their values are required to check the first comparison, which must be checked.
 Subsequent expressions, however, need not be evaluated if a comparison earlier in the chain is \verb|false|.
 Note that the middle expression is only evaluated once, rather than twice as it would be if the expression were written as \verb|v(1) < v(2) && v(2) <= v(3)|.
@@ -2182,7 +2185,7 @@ the only type of a value is its actual type when the program is running.
 Talking about the static type of a value or variable in Julia is meaningless.
 
 \item Variables have no type: they are simply names bound to values.
-While type annotations may restrict the possible types of a value, the variable mentioned can still be bound to values of any type.
+Although type annotations can restrict the possible types of a value, the variable mentioned can be re-bound to values of any type.
 
 \item There is no distinction between objects and non-objects:
 all values in Julia are true objects having a type that belongs to the unified, fully connected type hierarchy (directed, acyclic graph).
@@ -2206,12 +2209,78 @@ a type may declare that it is a subtype of several abstract types.
 % Thus, the type hierarchy is a directed, acyclic graph rather than a tree.
 The absence of implementation inheritance eliminates data representation problems classically encountered in the presence of multiple inheritance.%
 \footnote{The other problems classically caused by multiple inheritance are ambiguities and instabilities in method dispatch introduced when different methods of the same function are dispatched on non-disjoint types, sharing common descendant subtypes.
-These problems are prevented by a simple and sensible rule described in \Section{method-ambiguities}.}
+These problems are prevented by a straightforward rule described in \Section{dispatch-and-inheritance}.}
 
 \end{itemize}
 The Julia type system is designed to be powerful and expressive, yet unobtrusive and intuitive.
 Many Julia programmers may never feel the need to write code that explicitly uses types.
 Some programming, however, becomes easier, faster, simpler, and more robust with judicious use of types.
+
+\subsection{Abstract Types}\sec{abstract-types}
+
+Abstract types cannot be instantiated.
+Rather, they are nodes in the type graph describing sets of related concrete types:
+all those concrete types which are subtypes of the abstract type in question.
+Recall that in \Section{numbers-and-arithmetic}, we introduced a variety of types of numeric values:
+\verb|Int8|, \verb|Uint8|, \verb|Int16|, \verb|Uint16|, \verb|Int32|, \verb|Uint32|, \verb|Int64|, \verb|Uint64|, \verb|Float32|, and \verb|Float64|.
+It is common for a piece of code to make sense only if its arguments are some kind of integers, but not really depend on what particular \emph{kind} of integers, as long as the right low-level operations are used.
+For example, the greatest common denominator algorithm works for any kinds of integers, but will not work for floating point numbers.
+Abstract types allow us to talk easily about any type that is an integer, without needing to program to any specific integer type.
+
+To make this concrete, here are the actual declarations of all the integer and floating point types:
+\begin{verbatim}
+  abstract Number
+  abstract Real  <: Number
+  abstract Int   <: Real
+  abstract Uint  <: Int
+  abstract Float <: Real
+
+  bitstype 8  Int8   <: Int
+  bitstype 16 Int16  <: Int
+  bitstype 32 Int32  <: Int
+  bitstype 64 Int64  <: Int
+
+  bitstype 8  Uint8  <: Uint
+  bitstype 16 Uint16 <: Uint
+  bitstype 32 Uint32 <: Uint
+  bitstype 64 Uint64 <: Uint
+  bitstype 32 Char   <: Uint
+
+  bitstype 32 Float32 <: Float
+  bitstype 64 Float64 <: Float
+\end{verbatim}
+The \verb|abstract| keyword introduces new abstract types, and the \verb|bitstype| keyword introduces new bits types (to be discussed in \Section{bits-types}).
+The \verb|<:| operator means ``is a subtype of,'' and, used in declarations like this, declares the right-hand types to be the immediate supertypes of the new type being declared.
+If no supertype is given, the default supertype is \verb|Any|.
+In the above declarations, each type has exactly one supertype.
+These declarations imply the following type hierarchy for integers and floats:
+\begin{center}
+\begin{tikzpicture}[>=latex,line join=bevel,font=\small\tt,scale=0.45]
+\input{ints_and_floats}
+\end{tikzpicture}
+\end{center}
+The bottom row of types are concrete bits types, while the types above are all abstract types, dividing and subdividing the concrete types into convenient subsets.
+This diagram is incomplete:
+there are other subtypes of both \verb|Number| and \verb|Real|.
+These are, however, all the numeric bits types in Julia.
+
+\subsection{Bits Types}\sec{bits-types}
+
+\subsection{Structural Types}\sec{structural-types}
+
+\subsection{Parametric Types}\sec{parametric-types}
+
+\subsection{Other Kinds of Types}\sec{other-kinds-of-types}
+
+\subsection{Conversion and Promotion}\sec{conversion-and-promotion}
+
+\subsection{Summary of Numeric Types}
+
+\begin{center}
+\begin{tikzpicture}[>=latex,line join=bevel,font=\small\tt,scale=0.45]
+\input{numbers}
+\end{tikzpicture}
+\end{center}
 
 % \subsection{Tag Types}
 % \subsection{Struct Types}
@@ -2282,29 +2351,34 @@ Some programming, however, becomes easier, faster, simpler, and more robust with
 
 \section{Methods}\sec{methods}
 
-Recall that a function is an object that maps a tuple of arguments to a tuple of return values, or throws an exception if no appropriate values can be returned.
-It is common for a function to behave quite differently for different types of arguments.
-Adding two integers is a different operation than adding two floating point numbers, and adding an integer to a floating point number is different still.
-In Julia, these behaviors belong to a single generic function object: the \verb|+| function.
+Recall from \Section{functions} that a function is an object that maps a tuple of arguments to a tuple of return values, or throws an exception if no appropriate values can be returned.
+It is quite common for a function to behave quite differently for different types of arguments.
+In terms of implementation, adding two integers is a very different operation than adding two floating point numbers, both of which are quite different from adding an integer to a floating point number.
+Despite their implementations differences, these operations all fall under the general concept of ``addition.''
+Accordingly, in Julia, these behaviors belong to a single generic function object: the \verb|+| function.
 
-Since different behaviors are required for different types of arguments, it is convenient to be able to choose a specific behavior based on the number and types of arguments.
+Since different implementations are required for different types of arguments, it is convenient to be able to choose a specific behavior based on the number and types of arguments.
 This choice is called dispatch.
 The individual behaviors that are chosen between are called \emph{methods}, and each function can have many different methods, each specialized for different types of argument values.
-Together, all of a function's methods specify how the function behaves for all possible tuples of argument values.
+Together, all of a function's various methods define how the function behaves for all possible tuples of argument values.
+Until now, we have defined only functions with a single method that handles all argument types.
 
 Julia allows the dispatch process to choose which of a function's methods to call based on the types of all of a function's arguments.
-This is different than most object-oriented languages, where dispatch only occurs based on the first argument, which often has a special argument syntax, and is sometimes implied rather than explicitly given as an argument.
+This is different than typical object-oriented languages, where dispatch occurs based only on the first argument, which often has a special argument syntax, and is sometimes implied rather than explicitly given as an argument.
 Using all of a function's arguments to choose which method should be invoked, rather than just the first, is known as \emph{multiple dispatch}.
+Multiple dispatch is particularly useful for mathematical operations, where it makes little sense to artificially deem the operations to ``belong'' to one argument more than any of the others.
+Does the addition operation in \verb|x + y| belong to \verb|x| any more than it does to \verb|y|?
+The implementation of mathematical operations usually depends on all arguments.
 
 The \verb|::| operator is used after the name of a function parameter in a method declaration to describe what types of values the method should be used for:
 \begin{verbatim}
   f(x,y) = x + y
   f(x::Float64, y::Float64) = x * y
 \end{verbatim}
-In the absence of a type declaration, the type of an argument is by default \verb|Any|, the type which all objects are an instance of and which all types are a subtype of.
+In the absence of a type declaration with \verb|::|, the type of an argument is \verb|Any| by default, so any value will match the method signature.
 Thus, the above two lines define two methods for the generic function, \verb|f|:
 one which applies to any pair of values, and one which applies only to a pair of \verb|Float64| values.
-When a function is applied to actual arguments, the appropriate method will be called based on the types of these arguments:
+When a function is applied to actual arguments, the most specific method applicable to the arguments given is used:
 \begin{verbatim}
   julia> f(2,3)
   5
@@ -2450,6 +2524,8 @@ You should avoid method ambiguities by specifying an appropriate method for the 
   10.0
 \end{verbatim}
 To suppress Julia's warning, the disambiguating method must be defined first.
+
+\subsection{Dispatch and Inheritance}\sec{dispatch-and-inheritance}
 
 % \section{Tensors and Comprehensions}
 % 
