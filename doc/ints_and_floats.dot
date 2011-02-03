@@ -1,0 +1,43 @@
+digraph Types {
+
+  node [shape=box]
+  node [color=gray]
+
+  Any -> Number -> Real
+  Real -> Int -> Uint
+  Real -> Float
+
+  node [color=black]
+
+  Int -> Int8
+  Int -> Int16
+  Int -> Int32
+  Int -> Int64
+
+  Uint -> Char
+  Uint -> Uint8
+  Uint -> Uint16
+  Uint -> Uint32
+  Uint -> Uint64
+
+  Float -> Float32
+  Float -> Float64
+
+  subgraph Concrete {
+    rank = same;
+
+    Int8
+    Int16
+    Int32
+    Int64
+
+    Char
+    Uint8
+    Uint16
+    Uint32
+    Uint64
+
+    Float32
+    Float64
+  }
+}
