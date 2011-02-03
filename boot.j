@@ -83,9 +83,6 @@ abstract Int    <: Real
 abstract Uint   <: Int
 abstract Float  <: Real
 
-bitstype 8  Bool
-bitstype 32 Char <: Uint
-
 bitstype 8  Int8   <: Int
 bitstype 8  Uint8  <: Uint
 bitstype 16 Int16  <: Int
@@ -97,6 +94,10 @@ bitstype 64 Uint64 <: Uint
 
 bitstype 32 Float32 <: Float
 bitstype 64 Float64 <: Float
+
+bitstype 32 Char <: Uint
+
+bitstype 8 Bool
 
 typealias Size Int32
 typealias Index Int32
