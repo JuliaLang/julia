@@ -6,9 +6,7 @@
 \usepackage[hyperfigures,bookmarks,bookmarksopen,bookmarksnumbered,colorlinks,linkcolor=black,citecolor=black,filecolor=blue,menucolor=black,pagecolor=blue,frenchlinks=true,pdftitle={\thetitle}]{hyperref}
 \usepackage[left=1in,top=1in,right=1in,bottom=1.25in,nohead]{geometry}
 \usepackage[utf8x]{inputenc}
-\usepackage{dot2texi}
 \usepackage{tikz}
-\usetikzlibrary{shapes,arrows}
 
 \title{\thetitle}
 \author{
@@ -2252,14 +2250,13 @@ The \verb|abstract| introduces new abstract types, while the \verb|bitstype| key
 The \verb|<:| operator means ``is a subtype of,'' and used in declarations like this, declares the right-hand types to be the immediate supertypes of the new type being declared.
 If no supertype is given, the default supertype is \verb|Any|.
 In the above declarations, each type has exactly one supertype.
-
-% These declarations define the following type hierarchy for integers and floats:
-% \begin{dot2tex}[neato,mathmode]
-%   digraph G {
-%     node [shape="circle"];
-%     a_1 -> a_2 -> a_3 -> a_4 -> a_1;
-%   }
-% \end{dot2tex}
+These declarations define the following type hierarchy for integers and floats:
+\begin{center}
+\begin{tikzpicture}[>=latex,line join=bevel,font=\small\tt,scale=0.45]
+% dot -Txdot ints_and_floats.dot | dot2tex-2.6 --codeonly > ints_and_floats.tex
+\input{ints_and_floats}
+\end{tikzpicture}
+\end{center}
 
 \subsection{Bits Types}\sec{bits-types}
 

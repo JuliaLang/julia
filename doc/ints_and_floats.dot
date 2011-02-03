@@ -1,13 +1,9 @@
 digraph Types {
-
-  node [shape=box]
-  node [color=gray]
+  node [shape=none,width=1]
 
   Any -> Number -> Real
   Real -> Int -> Uint
   Real -> Float
-
-  node [color=black]
 
   Int -> Int8
   Int -> Int16
