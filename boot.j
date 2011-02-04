@@ -77,6 +77,8 @@
 
 #bitstype {32|64} Ptr{T}
 
+bitstype 8 Bool
+
 abstract Number
 abstract Real  <: Number
 abstract Int   <: Real
@@ -96,8 +98,6 @@ bitstype 64 Uint64 <: Uint
 
 bitstype 32 Float32 <: Float
 bitstype 64 Float64 <: Float
-
-bitstype 8 Bool
 
 typealias Size Int32
 typealias Index Int32

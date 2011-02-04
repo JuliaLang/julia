@@ -2,6 +2,8 @@ digraph Numbers {
   ordering = out;
   node [shape=none,width=0.9]
 
+  Number [width=1.1]
+
   subgraph RealComplex {
     rank = same;
     Real

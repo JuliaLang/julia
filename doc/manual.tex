@@ -31,6 +31,8 @@ Alan Edelman \vspace{0.5em}
 
 \renewcommand{\O}{\ensuremath{\operatorname{O}}}
 
+\newcommand{\placeholder}[1]{$\left<\text{\emph{#1}}\right>$}
+
 \begin{document}
 
 \maketitle
@@ -2212,33 +2214,23 @@ The absence of implementation inheritance eliminates data representation problem
 These problems are prevented by a straightforward rule described in \Section{dispatch-and-inheritance}.}
 
 \end{itemize}
-The Julia type system is designed to be powerful and expressive, yet unobtrusive and intuitive.
+The Julia type system is designed to be powerful and expressive, yet intuitive and unobtrusive.
 Many Julia programmers may never feel the need to write code that explicitly uses types.
-Some programming, however, becomes easier, faster, simpler, and more robust with judicious use of types.
+Some programming, however, becomes easier, faster and more robust with judicious use of types.
 
-\subsection{Abstract Types}\sec{abstract-types}
+\subsection{Bits Types}\sec{bits-types}
 
-Abstract types cannot be instantiated.
-Rather, they are nodes in the type graph describing sets of related concrete types:
-all those concrete types which are subtypes of the abstract type in question.
-Recall that in \Section{numbers-and-arithmetic}, we introduced a variety of types of numeric values:
-\verb|Int8|, \verb|Uint8|, \verb|Int16|, \verb|Uint16|, \verb|Int32|, \verb|Uint32|, \verb|Int64|, \verb|Uint64|, \verb|Float32|, and \verb|Float64|.
-It is common for a piece of code to make sense only if its arguments are some kind of integers, but not really depend on what particular \emph{kind} of integers, as long as the right low-level operations are used.
-For example, the greatest common denominator algorithm works for any kinds of integers, but will not work for floating point numbers.
-Abstract types allow us to talk easily about any type that is an integer, without needing to program to any specific integer type.
-
-To make this concrete, here are the actual declarations of all the integer and floating point types:
+A bits type is a concrete type whose data consists of plain old bits.
+Classic examples of bits types are integers and floating point values.
+Unlike most languages, Julia lets you declare bits types, rather than just providing a fixed set of built in bits types.
+In fact, the primitive bits types are all defined in Julia itself:
 \begin{verbatim}
-  abstract Number
-  abstract Real  <: Number
-  abstract Int   <: Real
-  abstract Uint  <: Int
-  abstract Float <: Real
+  bitstype 8 Bool
 
-  bitstype 8  Int8   <: Int
-  bitstype 16 Int16  <: Int
-  bitstype 32 Int32  <: Int
-  bitstype 64 Int64  <: Int
+  bitstype 8  Int8  <: Int
+  bitstype 16 Int16 <: Int
+  bitstype 32 Int32 <: Int
+  bitstype 64 Int64 <: Int
 
   bitstype 8  Uint8  <: Uint
   bitstype 16 Uint16 <: Uint
@@ -2249,9 +2241,57 @@ To make this concrete, here are the actual declarations of all the integer and f
   bitstype 32 Float32 <: Float
   bitstype 64 Float64 <: Float
 \end{verbatim}
-The \verb|abstract| keyword introduces new abstract types, and the \verb|bitstype| keyword introduces new bits types (to be discussed in \Section{bits-types}).
+The general syntax of a bitstype declaration is
+\begin{quote}
+  \verb|bitstype| \placeholder{bits} \placeholder{name} [\,\verb|<:| \placeholder{supertype}[\verb|,| \placeholder{supertype} ...\,]\,]
+\end{quote}
+The number of bits indicates how much storage the type requires and the name gives the new type a name.
+A bits type can optionally be declared to be a subtype of one or more supertypes.
 The \verb|<:| operator means ``is a subtype of,'' and, used in declarations like this, declares the right-hand types to be the immediate supertypes of the new type being declared.
-If no supertype is given, the default supertype is \verb|Any|.
+If supertypes are omitted, then the type defaults to having \verb|Any| as its immediate supertype.
+The declaration of \verb|Bool| above therefore means that a boolean value takes eight bits to store, and has \verb|Any| as its only supertype.
+
+Not all sizes of bits types are supported in \verb|bitstype| declarations:
+currently, only 8, 16, 32, and 64 bits are supported.
+Accordingly, boolean values, although they really only need a single bit, cannot be declared to be any smaller then eight bits.
+
+The types \verb|Bool|, \verb|Int8| and \verb|Uint8| all have identical representations:
+they are eight-bit chunks of memory.
+Since Julia's type system is nominative, they are not interchangeable despite having the same structure.
+The other difference between them is that they have different supertypes:
+\verb|Bool|'s direct supertype is \verb|Any|, while \verb|Int8|'s is \verb|Int|, and \verb|Uint8|'s is \verb|Uint|.
+Since concrete types cannot be subtyped in Julia, \verb|Any|, \verb|Int|, and \verb|Uint| cannot be concrete types.
+Rather, they are abstract types, to be discussed in \Section{abstract-types}.
+
+If primitive types like \verb|Int32| and \verb|Float64| are declared in Julia, one may wonder how they get behavior?
+How does adding two \verb|Int32| values work, if Julia only knows that they are 32-bit chunks of memory?
+Once a type is declared, one can start to define behavior for it by teaching various functions like \verb|+| how to operate on values of that type.
+How to do this is the subject of \Section{methods}, which introduces \emph{methods}:
+Julia's mechanism for defining the behavior of a function based on the types of its arguments.
+
+\subsection{Abstract Types}\sec{abstract-types}
+
+Abstract types cannot be instantiated.
+Rather, they are nodes in the type graph describing sets of related concrete types:
+all those concrete types which are subtypes of the abstract type in question.
+
+Recall that in \Section{numbers-and-arithmetic}, we introduced a variety of types of numeric values:
+\verb|Int8|, \verb|Uint8|, \verb|Int16|, \verb|Uint16|, \verb|Int32|, \verb|Uint32|, \verb|Int64|, \verb|Uint64|, \verb|Float32|, and \verb|Float64|.
+It is common for a piece of code to make sense only if its arguments are some kind of integers, but not really depend on what particular \emph{kind} of integers, as long as the right low-level operations are used.
+For example, the greatest common denominator algorithm works for any kinds of integers, but will not work for floating point numbers.
+Abstract types allow us to easily talk about any type that is an integer, without restricting an algorithm to any specific integer type.
+
+As an example, let's consider the actual declaration of the abstract type hierarchy for Julia's integer and floating point types, all bits types whose declarations were given in \Section{bits-types}.
+The abstract types in this part of the type hierarchy are declared using the \verb|abstract| keyword:
+\begin{verbatim}
+  abstract Number
+  abstract Real  <: Number
+  abstract Int   <: Real
+  abstract Uint  <: Int
+  abstract Float <: Real
+\end{verbatim}
+The \verb|abstract| keyword introduces a new abstract type, and like the \verb|bitstype| declaration, can be optionally followed by supertypes, indicating that the newly declared abstract type is a subtype of those other types.
+Again, if no supertype is given, the default supertype is \verb|Any|.
 In the above declarations, each type has exactly one supertype.
 These declarations imply the following type hierarchy for integers and floats:
 \begin{center}
@@ -2259,12 +2299,9 @@ These declarations imply the following type hierarchy for integers and floats:
 \input{ints_and_floats}
 \end{tikzpicture}
 \end{center}
-The bottom row of types are concrete bits types, while the types above are all abstract types, dividing and subdividing the concrete types into convenient subsets.
+The bottom row of types are concrete bits types, while the types above are all abstract types, dividing and subdividing the concrete types into convenient classes.
 This diagram is incomplete:
-there are other subtypes of both \verb|Number| and \verb|Real|.
-These are, however, all the numeric bits types in Julia.
-
-\subsection{Bits Types}\sec{bits-types}
+there are other subtypes of both \verb|Number| and \verb|Real|, which will be introduced in later sections.
 
 \subsection{Structural Types}\sec{structural-types}
 
