@@ -636,7 +636,7 @@ issues 1/24/11
     . lambda-numbering to make it faster
   * automatically resolve local remote references to their values
   . @spawn
-  . distributed GC
+  * distributed GC
 
 something about update operators, in-place operations in general
 

@@ -173,6 +173,11 @@ function get(h::HashTable, key, deflt)
     return (index<0) ? deflt : h.vals[index]
 end
 
+function key(h::HashTable, key, deflt)
+    index = ht_keyindex(h, key)
+    return (index<0) ? deflt : h.keys[index]
+end
+
 function del(h::HashTable, key)
     index = ht_keyindex(h, key)
     if index > 0
@@ -246,3 +251,30 @@ function show(t::Union(IdTable,HashTable))
         print("}")
     end
 end
+
+type WeakKeyHashTable{K,V}
+    ht::HashTable{K,V}
+
+    WeakKeyHashTable() = new(HashTable())
+    WeakKeyHashTable(k, v) = new(HashTable(k, v))
+end
+
+assign(wkh::WeakKeyHashTable, v, key) = add_weak_key(wkh.ht, key, v)
+
+function key(wkh::WeakKeyHashTable, kk, deflt)
+    k = key(wkh.ht, kk, _secret_table_token_)
+    if is(k, _secret_table_token_)
+        return deflt
+    end
+    return k.value
+end
+
+get(wkh::WeakKeyHashTable, key, deflt) = get(wkh.ht, key, deflt)
+del(wkh::WeakKeyHashTable, key) = del(wkh.ht, key)
+has(wkh::WeakKeyHashTable, key) = has(wkh.ht, key)
+ref(wkh::WeakKeyHashTable, key) = ref(wkh.ht, key)
+isempty(wkh::WeakKeyHashTable) = isempty(wkh.ht)
+
+start(t::WeakKeyHashTable) = start(t.ht)
+done(t::WeakKeyHashTable, i) = done(t.ht, i)
+next(t::WeakKeyHashTable, i) = next(t.ht, i)

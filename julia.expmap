@@ -84,6 +84,8 @@
     jl_read_avail;
     jl_nb_available;
     jl_gc_add_finalizer;
+    jl_gc_collect;
+    jl_gc_lookfor;
     jl_strerror;
     jl_stdin;
     jl_stdout;

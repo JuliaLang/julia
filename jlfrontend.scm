@@ -47,7 +47,7 @@
   (delete-duplicates
    (append
     ;; vars assigned at the outer level
-    (find-assigned-vars e '())
+    (filter (lambda (x) (not (gensym? x))) (find-assigned-vars e '()))
     ;; vars assigned anywhere, if they have been defined as global
     (filter defined-julia-global (find-possible-globals e)))))
 

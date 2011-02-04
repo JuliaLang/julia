@@ -7,6 +7,14 @@ type IntSet
                           new(zeros(Uint32,lim>>5), lim))
 end
 
+function intset(args...)
+    s = IntSet()
+    for i = args
+        add(s, i)
+    end
+    s
+end
+
 function add(s::IntSet, n::Int)
     if n >= s.limit
         lim = int32(n + div(n,2))
@@ -59,3 +67,16 @@ end
 numel(s::IntSet) =
     int32(ccall(:bitvector_count, Uint64, (Ptr{Uint32}, Uint32, Uint64),
                 s.bits, uint32(0), uint64(s.limit)))
+
+function show(s::IntSet)
+    print("intset(")
+    first = true
+    for n = s
+        if !first
+            print(", ")
+        end
+        print(n)
+        first = false
+    end
+    print(")")
+end

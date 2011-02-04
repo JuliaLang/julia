@@ -697,7 +697,7 @@ void jl_gc_markval(jl_value_t *v);
 void jl_gc_enable();
 void jl_gc_disable();
 int jl_gc_is_enabled();
-void jl_gc_collect();
+DLLEXPORT void jl_gc_collect();
 void jl_gc_preserve(jl_value_t *v);
 void jl_gc_unpreserve();
 int jl_gc_n_preserved_values();

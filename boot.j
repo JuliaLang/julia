@@ -177,6 +177,8 @@ type EOFError           <: Exception end
 finalizer(o, f::Function) =
     ccall(:jl_gc_add_finalizer, Void, (Any,Any), o, f)
 
+gc() = ccall(:jl_gc_collect, Void, ())
+
 cstring(str::ByteString) = str
 
 dlsym(hnd, s::String) =

@@ -374,9 +374,16 @@ void jl_mark_type_cache(void *c);
 
 #define gc_typeof(v) ((jl_value_t*)(((uptrint_t)jl_typeof(v))&~1UL))
 
+// for chasing down unwanted references
+/*
+static jl_value_t *lookforme = NULL;
+DLLEXPORT void jl_gc_lookfor(jl_value_t *v) { lookforme = v; }
+*/
+
 static void gc_markval_(jl_value_t *v)
 {
     assert(v != NULL);
+    //assert(v != lookforme);
     if (gc_marked_obj(v)) return;
     jl_value_t *vt = (jl_value_t*)jl_typeof(v);
     jl_value_t *vtt = gc_typeof(vt);
