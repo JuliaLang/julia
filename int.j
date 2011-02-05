@@ -106,6 +106,7 @@ int64 (x) = convert(Int64,  x)
 uint64(x) = convert(Uint64, x)
 
 truncate(x::Int) = x
+round(x::Int) = x
 
 int(x::Int) = x
 int(x::Uint8 ) = int16(x)
