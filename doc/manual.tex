@@ -2222,8 +2222,8 @@ Some programming, however, becomes easier, faster and more robust with judicious
 
 A bits type is a concrete type whose data consists of plain old bits.
 Classic examples of bits types are integers and floating point values.
-Unlike most languages, Julia lets you declare bits types, rather than just providing a fixed set of built in bits types.
-In fact, the primitive bits types are all defined in Julia itself:
+Unlike most languages, Julia lets you declare bits types, rather than just providing a fixed set of built-in bits types.
+In fact, the standard bits types are all defined in Julia itself:
 \begin{verbatim}
   bitstype 8 Bool
 
@@ -2243,7 +2243,7 @@ In fact, the primitive bits types are all defined in Julia itself:
 \end{verbatim}
 The general syntax of a bitstype declaration is
 \begin{quote}
-  \verb|bitstype| \placeholder{bits} \placeholder{name} [\,\verb|<:| \placeholder{supertype}[\verb|,| \placeholder{supertype} ...\,]\,]
+  \verb|bitstype| \placeholder{bits} \placeholder{name} [~\verb|<:| \placeholder{supertype}\:[\verb|,|\,\placeholder{supertype}\,]$^+$\,]
 \end{quote}
 The number of bits indicates how much storage the type requires and the name gives the new type a name.
 A bits type can optionally be declared to be a subtype of one or more supertypes.
@@ -2252,8 +2252,8 @@ If supertypes are omitted, then the type defaults to having \verb|Any| as its im
 The declaration of \verb|Bool| above therefore means that a boolean value takes eight bits to store, and has \verb|Any| as its only supertype.
 
 Not all sizes of bits types are supported in \verb|bitstype| declarations:
-currently, only 8, 16, 32, and 64 bits are supported.
-Accordingly, boolean values, although they really only need a single bit, cannot be declared to be any smaller then eight bits.
+currently 8, 16, 32, and 64 bits are supported.
+Therefore, boolean values, although they really only need a single bit, cannot be declared to be any smaller then eight bits.
 
 The types \verb|Bool|, \verb|Int8| and \verb|Uint8| all have identical representations:
 they are eight-bit chunks of memory.
@@ -2278,8 +2278,8 @@ all those concrete types which are subtypes of the abstract type in question.
 Recall that in \Section{numbers-and-arithmetic}, we introduced a variety of types of numeric values:
 \verb|Int8|, \verb|Uint8|, \verb|Int16|, \verb|Uint16|, \verb|Int32|, \verb|Uint32|, \verb|Int64|, \verb|Uint64|, \verb|Float32|, and \verb|Float64|.
 It is common for a piece of code to make sense only if its arguments are some kind of integers, but not really depend on what particular \emph{kind} of integers, as long as the right low-level operations are used.
-For example, the greatest common denominator algorithm works for any kinds of integers, but will not work for floating point numbers.
-Abstract types allow us to easily talk about any type that is an integer, without restricting an algorithm to any specific integer type.
+For example, the greatest common denominator algorithm works for all kinds of integers, but will not work for floating point numbers.
+Abstract types allow you to easily talk about any type that is an integer, without restricting an algorithm to any specific integer type.
 
 As an example, let's consider the actual declaration of the abstract type hierarchy for Julia's integer and floating point types, all bits types whose declarations were given in \Section{bits-types}.
 The abstract types in this part of the type hierarchy are declared using the \verb|abstract| keyword:
@@ -2301,9 +2301,113 @@ These declarations imply the following type hierarchy for integers and floats:
 \end{center}
 The bottom row of types are concrete bits types, while the types above are all abstract types, dividing and subdividing the concrete types into convenient classes.
 This diagram is incomplete:
-there are other subtypes of both \verb|Number| and \verb|Real|, which will be introduced in later sections.
+there are other subtypes of both \verb|Number| and \verb|Real|, which will be introduced in \Section{parametric-types}.
 
-\subsection{Structural Types}\sec{structural-types}
+\subsection{Record Types}\sec{record-types}
+
+Record types are called records, structures (``structs'' in C), or objects in various languages.
+They are types whose values are a collection of named fields which can be used as a single composite values.
+In mainstream object oriented languages, such as C++ and Java, record types also have named functions associated with them, and the combination is called an ``object.''
+In purer object-oriented languages, such as Smalltalk or Ruby, every value is an object and need not be of a record type, but functions are still bundled with those object and called methods.
+
+In Julia, since record types are the most common form of concrete type, they are simply introduced with the \verb|type| keyword, and include a list of fields with optional type annotations:
+% , followed optionally by a series of definitions of constructor functions for the new type:
+\begin{verbatim}
+  type Foo
+    bar::Int32
+    baz::Float64
+  end
+\end{verbatim}
+The new type, \verb|Foo|, is a first-class Julia object, and in addition to being a type, it behaves like a function\,---\,one that constructs new \verb|Foo| objects from their individual pieces:
+\begin{verbatim}
+  julia> foo = Foo(2,1.5)
+  Foo(2,1.5)
+
+  julia> typeof(foo)
+  Foo
+
+  julia> foo.bar
+  2
+
+  julia> foo.baz
+  1.5
+\end{verbatim}
+As you can see here, the fields of a \verb|Foo| object like \verb|foo| are accessed using the traditional dot (``\verb|.|'') notation.
+Let's see what happens if you try to construct a \verb|Foo| object with \verb|bar| and \verb|baz| values of the wrong type:
+\begin{verbatim}
+  julia> ok = Foo(1.5,2.5)
+  Foo(1,2.5)
+
+  julia> bad = Foo(1,"hello")
+  cannot convert "hello" to Float64
+\end{verbatim}
+The language tries to convert the values to the appropriate types if it can.
+Julia knows how to convert many values to other types, and promote different types to a common super type (see \Section{conversion-and-promotion}).
+Floating point values are converted to integers by truncation so the value \verb|ok| create has \verb|ok.bar == 1|.
+On the other hand, there is no built in conversion from string values to floating point, so the construction of \verb|bad| fails.
+
+The declaration block of a new record type can also include explicitly declared constructor methods for the type.
+Let's say we want to be able construct \verb|Foo| values passing a float into the \verb|bar| position, but instead of truncating the value, we want to round to the nearest integer.
+To do this, we would change the declaration of \verb|Foo| to include an explicit constructor method:
+\begin{verbatim}
+  type Foo
+    bar::Int32
+    baz::Float64
+
+    Foo(bar, baz) = new(round(bar), baz)
+  end
+\end{verbatim}
+Inside of a \verb|type| block, the local variable \verb|new| is bound to the raw constructor function for the type being declared:
+it takes an argument for each field and constructs a new object by setting the fields to those values, converting values to the appropriate types as necessary, and failing if no conversion exists.
+In the absence of any explicit constructors, the \verb|new| function is externally exposed as the default constructor for a type.
+When constructor methods \emph{are} provided, the \verb|new| function is not exposed so that the type declaration controls all the ways to make a new object of the declared type.
+
+With this new definition, we can try constructing some \verb|Foo| objects again:
+\begin{verbatim}
+  julia> Foo(1,2.5)
+  Foo(1,2.5)
+
+  julia> Foo(1.5,2.5)
+  Foo(2,2.5)
+
+  julia> Foo("hello",2.5)
+  no method round(Latin1String,)
+
+  julia> Foo(1,"world")
+  cannot convert "world" to Float64
+\end{verbatim}
+The explicit constructor for \verb|Foo| objects now always calls \verb|round| on its first argument:
+in the first call to the \verb|Foo| constructor, 1 is left alone by the \verb|round| function, while in the second, 1.5 is rounded to 2.0, which is in turn converted to the \verb|Int32| value, 2, and assigned into the \verb|bar| slot of a new \verb|Foo| object.
+In the third usage, the constructor attempts to call \verb|round| on the string \verb|"hello"|, but there is no \verb|round| method for strings.
+In the last usage, the second argument cannot be converted from string to floating point, just as before.
+
+\Section{methods} introduces methods, allowing functions to be defined in terms of different behaviors for different types of arguments.
+This is of great utility in defining specific behaviors for type constructors:
+when used as a function to construct \verb|Foo| objects, \verb|Foo| is a function like any other Julia function, and can have as many different methods defined on it as are necessary to specify the desired behavior.
+We will cover examples of using multiple methods to construct new objects of record type in that section.
+
+One final note:
+record types can have abstract supertypes.
+As before, these are declared when the type is declared, using the \verb|<:| operator immediately after the name of the new type:
+\begin{verbatim}
+  abstract SuperFoo
+
+  type Foo <: SuperFoo
+    bar::Int32
+    baz::Float64
+
+    Foo(bar, baz) = new(round(bar), baz)
+  end
+\end{verbatim}
+Here, \verb|SuperFoo| is a subtype of \verb|Any| and \verb|Foo| is a subtype of \verb|SuperFoo|.
+This is of little use if \verb|Foo| is the only concrete subtype of \verb|SuperFoo|, since there's only one choice of implementation for the \verb|SuperFoo| abstract type.
+However, we also could define an alternate implementation of the \verb|SuperFoo| type:
+\begin{verbatim}
+  type AltFoo <: SuperFoo
+    shazzam::String
+  end
+\end{verbatim}
+This new type, \verb|AltFoo|, has a completely different implememtation from \verb|Foo|, but is also a type of \verb|SuperFoo|, and either \verb|Foo| or \verb|AltFoo| objects can be used anywhere a \verb|SuperFoo| type of object is needed.
 
 \subsection{Parametric Types}\sec{parametric-types}
 
