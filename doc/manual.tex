@@ -1947,7 +1947,7 @@ If \verb|fussy_sqrt| is called with a negative value from another function, inst
   before fussy_sqrt
   negative x not allowed
 \end{verbatim}
-Now suppose we want to handle this situation rather than just giving up and printing the error in the repl.
+Now suppose we want to handle this circumstance rather than just giving with an error.
 To catch an error, you use the \verb|try| and \verb|catch| keywords.
 Here is a rather contrived example that computes the square root of the absolute value of \verb|x| by handling the error raised by \verb|fussy_sqrt|:
 \begin{verbatim}
@@ -1970,6 +1970,8 @@ However, this demonstrates how \verb|try| and \verb|catch| operate:
 the \verb|try| block is executed initially, and the value the entire construct is the value of the last expression if no exceptions are thrown during execution;
 if an exception is thrown during the evaluation of the \verb|try| block, however, execution of the \verb|try| code ceases immediately and the \verb|catch| block is evaluated instead.
 If the \verb|catch| block succeeds without incident (it can in turn raise an exception, which would unwind the call stack further), the value of the entire \verb|try|-\verb|catch| construct is that of the last expression in the \verb|catch| block.
+
+% TODO: catch with and argument.
 
 % The use of \verb|error| to indicate an ``uncontinuable'' unexpected condition, and \verb|try|-\verb|catch| to handle such errors gracefully saves programmers from spending half of their time and effort checking for errors.
 % It is not uncommon for well-written C programs to devote as much code to checking for errors as it does to performing useful work.
@@ -2308,17 +2310,24 @@ there are other subtypes of both \verb|Number| and \verb|Real|, which will be in
 Record types are called records, structures (``structs'' in C), or objects in various languages.
 They are types whose values are a collection of named fields which can be used as a single composite values.
 In mainstream object oriented languages, such as C++ and Java, record types also have named functions associated with them, and the combination is called an ``object.''
-In purer object-oriented languages, such as Smalltalk or Ruby, every value is an object and need not be of a record type, but functions are still bundled with those object and called methods.
+In purer object-oriented languages, such as Smalltalk or Ruby, all values are objects and need not be records, but functions are still bundled with objects and called methods.
+In Julia, functions are not bundled with the objects they operate on;
+they are dispatched on all of their arguments, so associating a method with any particular argument is inappropriate.
+See \Section{methods} for details of Julia's polymorphic dispatch mechanism.
 
-In Julia, since record types are the most common form of concrete type, they are simply introduced with the \verb|type| keyword, and include a list of fields with optional type annotations:
-% , followed optionally by a series of definitions of constructor functions for the new type:
+Since record types are the most common form of concrete type, they are simply introduced with the \verb|type| keyword followed by a block listing field names.
+The fields have optional type annotations indicated with the \verb|::| operator followed by a type value.
+Fields with no type annotation default to \verb|Any|, and can accordingly hold any type of value.
+Here's an example declaration for the \verb|Foo| record type:
 \begin{verbatim}
   type Foo
     bar::Int32
     baz::Float64
   end
 \end{verbatim}
-The new type, \verb|Foo|, is a first-class Julia object, and in addition to being a type, it behaves like a function\,---\,one that constructs new \verb|Foo| objects from their individual pieces:
+The new type, \verb|Foo|, declared here, is a first-class Julia object:
+you can manipulate it like any other value.
+In addition to being a type value, \verb|Foo| also acts like a function\,---\,one that constructs new \verb|Foo| objects from the pieces that make up a \verb|Foo|:
 \begin{verbatim}
   julia> foo = Foo(2,1.5)
   Foo(2,1.5)
@@ -2332,7 +2341,7 @@ The new type, \verb|Foo|, is a first-class Julia object, and in addition to bein
   julia> foo.baz
   1.5
 \end{verbatim}
-As you can see here, the fields of a \verb|Foo| object like \verb|foo| are accessed using the traditional dot (``\verb|.|'') notation.
+As you can see, the fields of a \verb|Foo| object like \verb|foo| are accessed using conventional dot (``\verb|.|'') notation.
 Let's see what happens if you try to construct a \verb|Foo| object with \verb|bar| and \verb|baz| values of the wrong type:
 \begin{verbatim}
   julia> ok = Foo(1.5,2.5)
@@ -2341,12 +2350,12 @@ Let's see what happens if you try to construct a \verb|Foo| object with \verb|ba
   julia> bad = Foo(1,"hello")
   cannot convert "hello" to Float64
 \end{verbatim}
-The language tries to convert the values to the appropriate types if it can.
-Julia knows how to convert many values to other types, and promote different types to a common super type (see \Section{conversion-and-promotion}).
-Floating point values are converted to integers by truncation so the value \verb|ok| create has \verb|ok.bar == 1|.
+The constructor automatically tries to convert values to the appropriate types if it can by calling the \verb|convert| function on them.
+By default, Julia knows how to convert many values to other types and new conversions are easily defined by adding new methods to \verb|convert| (see \Section{conversion-and-promotion}).
+Floating point values are converted to integers by truncation so here the value \verb|ok| created has \verb|ok.bar == 1|.
 On the other hand, there is no built in conversion from string values to floating point, so the construction of \verb|bad| fails.
 
-The declaration block of a new record type can also include explicitly declared constructor methods for the type.
+The declaration block of new record types can also include explicitly declared constructor methods for the type.
 Let's say we want to be able construct \verb|Foo| values passing a float into the \verb|bar| position, but instead of truncating the value, we want to round to the nearest integer.
 To do this, we would change the declaration of \verb|Foo| to include an explicit constructor method:
 \begin{verbatim}
@@ -2357,12 +2366,12 @@ To do this, we would change the declaration of \verb|Foo| to include an explicit
     Foo(bar, baz) = new(round(bar), baz)
   end
 \end{verbatim}
-Inside of a \verb|type| block, the local variable \verb|new| is bound to the raw constructor function for the type being declared:
+Inside of a \verb|type| block, the variable \verb|new| is bound to the raw constructor function for the type being declared:
 it takes an argument for each field and constructs a new object by setting the fields to those values, converting values to the appropriate types as necessary, and failing if no conversion exists.
 In the absence of any explicit constructors, the \verb|new| function is externally exposed as the default constructor for a type.
-When constructor methods \emph{are} provided, the \verb|new| function is not exposed so that the type declaration controls all the ways to make a new object of the declared type.
+When constructor methods \emph{are} provided, the \verb|new| function is not exposed and since \verb|new| is only visible within the scope of the \verb|type| block, the type declaration controls all the ways to make a new object of that type.
 
-With this new definition, we can try constructing some \verb|Foo| objects again:
+Using this new definition of \verb|Foo|, we can try constructing some \verb|Foo| objects again:
 \begin{verbatim}
   julia> Foo(1,2.5)
   Foo(1,2.5)
@@ -2376,38 +2385,40 @@ With this new definition, we can try constructing some \verb|Foo| objects again:
   julia> Foo(1,"world")
   cannot convert "world" to Float64
 \end{verbatim}
-The explicit constructor for \verb|Foo| objects now always calls \verb|round| on its first argument:
-in the first call to the \verb|Foo| constructor, 1 is left alone by the \verb|round| function, while in the second, 1.5 is rounded to 2.0, which is in turn converted to the \verb|Int32| value, 2, and assigned into the \verb|bar| slot of a new \verb|Foo| object.
+The new explicit constructor for \verb|Foo| objects always calls \verb|round| on its first argument:
+in the first usage of the \verb|Foo| constructor, \verb|1| is unaltered by the \verb|round| function, while in the second, \verb|1.5| is rounded to \verb|2.0|, which is in turn converted to the \verb|Int32| value, \verb|2|, and assigned into the \verb|bar| slot of a new \verb|Foo| object.
 In the third usage, the constructor attempts to call \verb|round| on the string \verb|"hello"|, but there is no \verb|round| method for strings.
-In the last usage, the second argument cannot be converted from string to floating point, just as before.
+In the last case, the second argument cannot be converted from string to floating point, just as before.
 
 \Section{methods} introduces methods, allowing functions to be defined in terms of different behaviors for different types of arguments.
-This is of great utility in defining specific behaviors for type constructors:
-when used as a function to construct \verb|Foo| objects, \verb|Foo| is a function like any other Julia function, and can have as many different methods defined on it as are necessary to specify the desired behavior.
-We will cover examples of using multiple methods to construct new objects of record type in that section.
+This is useful for defining behaviors of type constructors on arguments of various types:
+when used as a function to construct \verb|Foo| objects, \verb|Foo| is just like any other function, and can have as many different methods defined on it as are necessary to specify its overall behavior.
 
 One final note:
-record types can have abstract supertypes.
-As before, these are declared when the type is declared, using the \verb|<:| operator immediately after the name of the new type:
+record types, like all other types, can be declared to have one or more abstract supertypes.
+These are optionally listed following the \verb|<:| operator after the name of the new type:
 \begin{verbatim}
-  abstract SuperFoo
+  abstract Fooish
 
-  type Foo <: SuperFoo
+  type Foo <: Fooish
     bar::Int32
     baz::Float64
 
     Foo(bar, baz) = new(round(bar), baz)
   end
 \end{verbatim}
-Here, \verb|SuperFoo| is a subtype of \verb|Any| and \verb|Foo| is a subtype of \verb|SuperFoo|.
-This is of little use if \verb|Foo| is the only concrete subtype of \verb|SuperFoo|, since there's only one choice of implementation for the \verb|SuperFoo| abstract type.
-However, we also could define an alternate implementation of the \verb|SuperFoo| type:
+In the absence of such a declaration, the default supertype is \verb|Any|.
+In the above example, \verb|Fooish| is a subtype of \verb|Any| and \verb|Foo| is a subtype of \verb|Fooish|.
+This would be of little use if \verb|Foo| were the only concrete subtype of \verb|Fooish|, since there's only one choice of implementation for the \verb|Fooish| abstraction.
+However, we can now define an alternate implementation of the \verb|Fooish| type:
 \begin{verbatim}
-  type AltFoo <: SuperFoo
-    shazzam::String
+  type AltFoo <: Fooish
+    mrt::String
   end
 \end{verbatim}
-This new type, \verb|AltFoo|, has a completely different implememtation from \verb|Foo|, but is also a type of \verb|SuperFoo|, and either \verb|Foo| or \verb|AltFoo| objects can be used anywhere a \verb|SuperFoo| type of object is needed.
+This new type, \verb|AltFoo|, has a completely different and unrelated implememtation than \verb|Foo|, but is also a type of \verb|Fooish|.
+Thus, either \verb|Foo| or \verb|AltFoo| objects can be used anywhere a \verb|Fooish| type of object is needed.
+Of course, to make this meaningful or useful, both \verb|Foo| and \verb|AltFoo| need to implement some common interfaces, and other behaviors need to be defined in terms of the \verb|Fooish| abstraction.
 
 \subsection{Parametric Types}\sec{parametric-types}
 
