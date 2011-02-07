@@ -37,17 +37,38 @@ Alan Edelman \vspace{0.5em}
 
 \maketitle
 
-Scientific computing has traditionally required the highest performance, yet domain experts have largely moved to slower dynamic languages for daily work.
-We believe there are many good reasons to prefer dynamic languages for these applications, and we do not expect their use to diminish.
-Fortunately, modern language design and compiler techniques make it possible to mostly eliminate the performance trade-off and provide a single environment productive enough for prototyping and efficient enough for deploying applications.
-The Julia programming language fills this role:
-it is a flexible, dynamic language, designed expressly for scientific computing, and achieving performance comparable to traditional compiled languages.
+\clearpage
 
-The syntax of Julia is similar to Matlab, and consequently Matlab programmers should feel immediately comfortable with Julia.
-While Matlab is quite effective for prototyping and exploring numerical linear algebra, it has limitations for programming tasks outside of this relatively narrow scope.
-Julia keeps Matlab's ease and expressiveness for high-level numerical computing, but transcends its general programming limitations.
-To achieve this, it borrows much from the C programming language, and is strongly influenced by the lineage of dynamic languages:
-Lisp, Perl, Python, Lua and Ruby.
+\section*{Preface}
+
+Scientific computing has traditionally required the highest
+performance, yet domain experts have largely moved to slower dynamic
+languages for daily work.  We believe there are many good reasons to
+prefer dynamic languages for these applications, and we do not expect
+their use to diminish.  Fortunately, modern language design and
+compiler techniques make it possible to mostly eliminate the
+performance trade-off and provide a single environment productive
+enough for prototyping and efficient enough for deploying
+applications.  The Julia programming language fills this role: it is a
+flexible, dynamic language, designed expressly for scientific
+computing, and achieving performance comparable to traditional
+compiled languages.
+
+The syntax of Julia is similar to Matlab, and consequently Matlab
+programmers should feel immediately comfortable with Julia.  While
+Matlab is quite effective for prototyping and exploring numerical
+linear algebra, it has limitations for programming tasks outside of
+this relatively narrow scope.  Julia keeps Matlab's ease and
+expressiveness for high-level numerical computing, but transcends its
+general programming limitations.  To achieve this, it borrows much
+from the C programming language, and is strongly influenced by the
+lineage of dynamic languages: Lisp, Perl, Python, Lua and Ruby.
+
+\clearpage
+
+\tableofcontents
+
+\clearpage
 
 \section{Getting Started}\sec{getting-started}
 
@@ -87,7 +108,23 @@ To run code in a file non-interactively, you can give it as the first argument t
 \end{verbatim}
 As the example implies, the following command-line arguments to julia are taken as command-line arguments to the program \verb|script.j|.
 There are various ways to run Julia code and provide options, similar to those taken by the \verb|perl| and \verb|ruby| programs.
-See \Section{command-line-options} for details.
+
+\subsection{command-line-options}
+
+\begin{verbatim}
+  julia [options] [program] [args...]
+   -q --quiet               Quiet startup without banner
+   -R --no-readline         Disable readline functionality
+   -e --eval=<expr>         Evaluate <expr> and don't print
+   -E --print=<expr>        Evaluate and print <expr>
+   -P --post-boot=<expr>    Evaluate <expr> right after boot
+   -H --home=<dir>          Load files relative to <dir>
+   -T --tab=<size>          Set REPL tab width to <size>
+   -L --lisp                Start with Lisp prompt not Julia
+   -b --bare                Bare REPL: don't load start.j
+   -h --help                Print this message
+\end{verbatim}
+
 
 \section{Numbers and Arithmetic}\sec{numbers-and-arithmetic}
 
@@ -3191,22 +3228,5 @@ We strongly encourage you to try all these examples to see how they work.
 % 
 % People often compare macros to inlining (for example, the designer(s) of C++), but this is a pun.
 % There is only a superficial similarity of inserting code into other code.
-
-\section{Command-Line Options}
-\sec{command-line-options}
-
-\begin{verbatim}
-  julia [options] [program] [args...]
-   -q --quiet               Quiet startup without banner
-   -R --no-readline         Disable readline functionality
-   -e --eval=<expr>         Evaluate <expr> and don't print
-   -E --print=<expr>        Evaluate and print <expr>
-   -P --post-boot=<expr>    Evaluate <expr> right after boot
-   -H --home=<dir>          Load files relative to <dir>
-   -T --tab=<size>          Set REPL tab width to <size>
-   -L --lisp                Start with Lisp prompt not Julia
-   -b --bare                Bare REPL: don't load start.j
-   -h --help                Print this message
-\end{verbatim}
 
 \end{document}
