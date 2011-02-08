@@ -5,4 +5,5 @@
 *.out
 *.pdf
 *.tmp
+*.toc
 *.synctex.gz
