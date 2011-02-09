@@ -8,7 +8,7 @@
 \usepackage[utf8x]{inputenc}
 \usepackage{tikz}
 
-\title{\thetitle}
+\title{\vspace{2.5in}\thetitle}
 \author{
 Jeff Bezanson \vspace{0.5em}\\
 Stefan Karpinski \vspace{0.5em}\\
@@ -107,9 +107,7 @@ To run code in a file non-interactively, you can give it as the first argument t
   $ julia script.j arg1 arg2...
 \end{verbatim}
 As the example implies, the following command-line arguments to julia are taken as command-line arguments to the program \verb|script.j|.
-There are various ways to run Julia code and provide options, similar to those taken by the \verb|perl| and \verb|ruby| programs.
-
-\subsection{command-line-options}
+There are various ways to run Julia code and provide options, similar to those taken by the \verb|perl| and \verb|ruby| programs:
 
 \begin{verbatim}
   julia [options] [program] [args...]
@@ -2221,29 +2219,28 @@ High-level aspects of Julia's type system that should be mentioned up front are:
 \begin{itemize}
 
 \item Like traditional dynamically typed languages, but unlike statically typed languages like C or Java, only values, not variables, have types.
-There is no meaningful concept of a compile-time type as opposed to a run-time type:
+There is no meaningful concept of the compile-time type of anything:
 the only type of a value is its actual type when the program is running.
-Talking about the static type of a value or variable in Julia is meaningless.
 
 \item Variables have no type: they are simply names bound to values.
 Although type annotations can restrict the possible types of a value, the variable mentioned can be re-bound to values of any type.
 
-\item There is no distinction between objects and non-objects:
-all values in Julia are true objects having a type that belongs to the unified, fully connected type hierarchy (directed, acyclic graph).
+\item There is no distinction between object and non-object types:
+all values in Julia are true objects having a type that belongs to the single, fully connected type graph.
 
 \item There is no structural inheritance:
 all concrete types, specifying an actual, instantiable implementation of a type are final and may not be inherited from or subclassed by other concrete types.
 
-\item The type graph is not flat, however:
-the other nodes in the type graph are abstract\,---\,they serve only to describe various collections of concrete types.
-In particular, all types are subtypes of the abstract default type called \verb|Any|.%
+\item The type graph is not flat:
+all other nodes in the type graph are abstract, however\,---\,they serve only to describe various subsets of concrete types.
+Every type is a subtype of the abstract type called \verb|Any|.%
 \footnote{In type theory, the abstract type, \texttt{Any}, of which all objects are instances, and all types are subtypes, is called ``top'' because it is at the apex of the type graph.
 Julia also has a ``bottom'' type, called \texttt{None}, another abstract type, of which no object is an instance, and of which all other types are supertypes;
 thus it is at the nadir of the type graph.}
 
 \item Julia types\,---\,both concrete and abstract\,---\,can be paramaterized by other types or by arbitrary values.
-This allows algorithms to be written generically and reused for specific instances without repetition.
-Type parameters may be completely omitted when they need not be referenced explicitly.
+This allows algorithms to be written generically and reused without repetition.
+Type parameters may be completely omitted when they do not need to be referenced explicitly.
 
 \item Julia supports multiple inheritance:
 a type may declare that it is a subtype of several abstract types.
@@ -2255,14 +2252,14 @@ These problems are prevented by a straightforward rule described in \Section{dis
 \end{itemize}
 The Julia type system is designed to be powerful and expressive, yet intuitive and unobtrusive.
 Many Julia programmers may never feel the need to write code that explicitly uses types.
-Some programming, however, becomes easier, faster and more robust with judicious use of types.
+Some kinds of programming, however, becomes easier, faster and more robust with judicious use of types.
 
 \subsection{Bits Types}\sec{bits-types}
 
 A bits type is a concrete type whose data consists of plain old bits.
 Classic examples of bits types are integers and floating point values.
 Unlike most languages, Julia lets you declare bits types, rather than just providing a fixed set of built-in bits types.
-In fact, the standard bits types are all defined in Julia itself:
+In fact, the standard bits types are all defined in the language itself:
 \begin{verbatim}
   bitstype 8 Bool
 
@@ -2286,27 +2283,24 @@ The general syntax of a bitstype declaration is
 \end{quote}
 The number of bits indicates how much storage the type requires and the name gives the new type a name.
 A bits type can optionally be declared to be a subtype of one or more supertypes.
-The \verb|<:| operator means ``is a subtype of,'' and, used in declarations like this, declares the right-hand types to be the immediate supertypes of the new type being declared.
+The \verb|<:| operator means ``is a subtype of,'' and, used in declarations like this, declares the right-hand types to be immediate supertypes of the newly declared type.
 If supertypes are omitted, then the type defaults to having \verb|Any| as its immediate supertype.
 The declaration of \verb|Bool| above therefore means that a boolean value takes eight bits to store, and has \verb|Any| as its only supertype.
 
 Not all sizes of bits types are supported in \verb|bitstype| declarations:
-currently 8, 16, 32, and 64 bits are supported.
-Therefore, boolean values, although they really only need a single bit, cannot be declared to be any smaller then eight bits.
+currently only 8, 16, 32, and 64 bits are supported.
+Therefore, boolean values, although they really need just a single bit, cannot be declared to be any smaller then eight bits.
 
 The types \verb|Bool|, \verb|Int8| and \verb|Uint8| all have identical representations:
 they are eight-bit chunks of memory.
 Since Julia's type system is nominative, they are not interchangeable despite having the same structure.
-The other difference between them is that they have different supertypes:
-\verb|Bool|'s direct supertype is \verb|Any|, while \verb|Int8|'s is \verb|Int|, and \verb|Uint8|'s is \verb|Uint|.
-Since concrete types cannot be subtyped in Julia, \verb|Any|, \verb|Int|, and \verb|Uint| cannot be concrete types.
-Rather, they are abstract types, to be discussed in \Section{abstract-types}.
-
-If primitive types like \verb|Int32| and \verb|Float64| are declared in Julia, one may wonder how they get behavior?
-How does adding two \verb|Int32| values work, if Julia only knows that they are 32-bit chunks of memory?
-Once a type is declared, one can start to define behavior for it by teaching various functions like \verb|+| how to operate on values of that type.
-How to do this is the subject of \Section{methods}, which introduces \emph{methods}:
-Julia's mechanism for defining the behavior of a function based on the types of its arguments.
+Another fundamental difference between them is that they have different supertypes:
+\verb|Bool|'s direct supertype is \verb|Any|, \verb|Int8|'s is \verb|Int|, and \verb|Uint8|'s is \verb|Uint|.
+Concrete types cannot be subtyped in Julia, so \verb|Any|, \verb|Int|, and \verb|Uint| must be abstract types, to be introduced in the next section (\Section{abstract-types}).
+All other differences between \verb|Bool|, \verb|Int8|, and \verb|Uint8| are all matters of behavior:
+the way functions are defined to act when given objects of these types as arguments.
+The necessity of a nominative type system becomes apparent from this:
+otherwise, it would be impossible to make \verb|Bool| behave any differently than \verb|Int8| or \verb|Uint8|.
 
 \subsection{Abstract Types}\sec{abstract-types}
 
@@ -2444,18 +2438,18 @@ These are optionally listed following the \verb|<:| operator after the name of t
     Foo(bar, baz) = new(round(bar), baz)
   end
 \end{verbatim}
-In the absence of such a declaration, the default supertype is \verb|Any|.
+In the absence of such declarations, the default supertype is \verb|Any|.
 In the above example, \verb|Fooish| is a subtype of \verb|Any| and \verb|Foo| is a subtype of \verb|Fooish|.
 This would be of little use if \verb|Foo| were the only concrete subtype of \verb|Fooish|, since there's only one choice of implementation for the \verb|Fooish| abstraction.
-However, we can now define an alternate implementation of the \verb|Fooish| type:
+However, we can define an alternate implementation of the \verb|Fooish| type now:
 \begin{verbatim}
   type AltFoo <: Fooish
     mrt::String
   end
 \end{verbatim}
-This new type, \verb|AltFoo|, has a completely different and unrelated implememtation than \verb|Foo|, but is also a type of \verb|Fooish|.
-Thus, either \verb|Foo| or \verb|AltFoo| objects can be used anywhere a \verb|Fooish| type of object is needed.
-Of course, to make this meaningful or useful, both \verb|Foo| and \verb|AltFoo| need to implement some common interfaces, and other behaviors need to be defined in terms of the \verb|Fooish| abstraction.
+This new type, \verb|AltFoo|, has a completely different implementation than \verb|Foo|, but yet is also a type of \verb|Fooish|.
+Thus, either \verb|Foo| or \verb|AltFoo| objects can be used when a \verb|Fooish| type of object is needed.
+To make this useful, of course, \verb|Foo| and \verb|AltFoo| need to implement some common interfaces, and generic \verb|Fooish| behavior should be defined in terms of the \verb|Fooish| abstraction.
 
 \subsection{Parametric Types}\sec{parametric-types}
 
