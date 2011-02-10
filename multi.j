@@ -239,7 +239,7 @@ function serialize(s, rr::RemoteRef)
     if i != -1
         send_add_client(i, rr)
     end
-    invoke(serialize, (Any, Any), s, r)
+    invoke(serialize, (Any, Any), s, rr)
 end
 
 function deserialize(s, t::Type{RemoteRef})
@@ -251,6 +251,7 @@ function deserialize(s, t::Type{RemoteRef})
             v = work_result(wi)
             if isa(v,GlobalObject)
                 add_client(rr2id(rr), myid())
+                return v.local_identity
             end
             return v
         else
@@ -727,14 +728,19 @@ end
 ## global objects and collective operations ##
 
 type GlobalObject
-    locval
+    local_identity
     refs::Array{RemoteRef,1}
+
+    function GlobalObject(refs::Array{RemoteRef,1})
+        g = new((), refs)
+        g.local_identity = g
+        g
+    end
 
     global empty_global_object, init_global_object
     function empty_global_object()
         global PGRP
-        r = Array(RemoteRef, PGRP.np)
-        new((), r)
+        GlobalObject(Array(RemoteRef, PGRP.np))
     end
 
     function init_global_object(rids)
@@ -792,7 +798,7 @@ type GlobalObject
             r[i] = remote_call(i, empty_global_object)
         end
         if myid()==0
-            go = new((), r)
+            go = GlobalObject(r)
         else
             go = fetch(r[myid()])
         end
@@ -804,6 +810,8 @@ type GlobalObject
     end
 end
 
+show(g::GlobalObject) = print("GlobalObject()")
+
 function serialize(s, g::GlobalObject)
     global PGRP
     # a GO is sent to a machine by sending just the RemoteRef for its
@@ -811,9 +819,14 @@ function serialize(s, g::GlobalObject)
     i = worker_id_from_socket(s)
     if i != -1
         mi = myid()
-        myref = g.refs[mi]
-        wi = PGRP.refs[rr2id(myref)]
-        if !has(wi.clientset, i)
+        if mi==0
+            addnew = true
+        else
+            myref = g.refs[mi]
+            wi = PGRP.refs[rr2id(myref)]
+            addnew = !has(wi.clientset, i)
+        end
+        if addnew
             # adding new client to this GO
             for p=1:PGRP.np
                 if p != i

@@ -119,8 +119,9 @@ read(s, ::Type{Float64}) = boxf64(unbox64(read(s,Int64)))
 read{T}(s, t::Type{T}, d1::Size, dims::Size...) =
     read(s, t, tuple(d1,dims...))
 
-function read{T}(s, ::Type{T}, dims::Dims)
-    a = Array(T, dims)
+read{T}(s, ::Type{T}, dims::Dims) = read(s, Array(T, dims))
+
+function read{T}(s, a::Array{T})
     for i = 1:numel(a)
         a[i] = read(s, T)
     end
@@ -169,9 +170,8 @@ function read(s::IOStream, ::Type{Char})
     ccall(:jl_getutf8, Char, (Ptr{Void},), s.ios)
 end
 
-function read{T}(s::IOStream, ::Type{T}, dims::Dims)
+function read{T}(s::IOStream, a::Array{T})
     if isa(T,BitsKind)
-        a = Array(T, dims...)
         nb = numel(a)*sizeof(T)
         if ASYNCH && nb_available(s) < nb
             io_wait(s)
@@ -180,7 +180,7 @@ function read{T}(s::IOStream, ::Type{T}, dims::Dims)
               (Ptr{Void}, Ptr{Void}, PtrInt), s.ios, a, convert(PtrInt,nb))
         a
     else
-        invoke(read, (Any, Type, Size...), s, T, dims...)
+        invoke(read, (Any, Array), s, a)
     end
 end
 
