@@ -843,6 +843,36 @@ function serialize(s, g::GlobalObject)
     end
 end
 
+spawnat(p, thunk) = remote_call(p, thunk)
+
+let lastp = 1
+    global spawn
+    function spawn(thunk::Function)
+        p = -1
+        env = ccall(:jl_closure_env, Any, (Any,), thunk)
+        if isa(env,Tuple)
+            for v = env
+                if isa(v,Box)
+                    v = v.contents
+                end
+                if isa(v,RemoteRef)
+                    p = v.where; break
+                end
+            end
+        end
+        if p == -1
+            p = lastp; lastp += 1
+            global PGRP
+            if lastp > PGRP.np
+                lastp = 1
+            end
+        end
+        spawnat(p, thunk)
+    end
+end
+
+macro spawn(thk); :(spawn(()->($thk))); end
+
 ## demos ##
 
 fv(a)=eig(a)[2][2]

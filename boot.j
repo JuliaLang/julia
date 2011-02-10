@@ -75,6 +75,10 @@
 #    name::Symbol
 #end
 
+#type Box{T}
+#    contents::T
+#end
+
 #bitstype {32|64} Ptr{T}
 
 bitstype 8 Bool
