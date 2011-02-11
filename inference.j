@@ -515,7 +515,6 @@ end
 function abstract_eval(s::Symbol, vtypes, sv::StaticVarInfo)
     if has(sv.cenv,s)
         # consider closed vars to always have their propagated (declared) type
-            #assert(!isa(sv.cenv[s],Symbol))
         return sv.cenv[s]
     end
     t = is(vtypes,()) ? NF : get(vtypes,s,NF)
@@ -716,7 +715,7 @@ function typeinf(linfo::LambdaStaticData,atypes::Tuple,sparams::Tuple, cop, def)
 
     #print(linfo.name); show(atypes); print('\n')
 
-    ast = cop ? copy(ast0) : ast0
+    ast = cop ? ccall(:jl_prepare_ast, Any, (Any,Any), ast0,sparams) : ast0
 
     assert(is(ast.head,:lambda))
     args = f_argnames(ast)
@@ -749,7 +748,6 @@ function typeinf(linfo::LambdaStaticData,atypes::Tuple,sparams::Tuple, cop, def)
     # types of closed vars
     cenv = idtable()
     for vi = ast.args[2].args[3]
-        assert(!isa(vi[2],Symbol)) ###################
         cenv[vi[1]] = vi[2]
         s[1][vi[1]] = vi[2]
     end

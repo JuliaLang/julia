@@ -586,14 +586,21 @@ jl_tuple_t *jl_tuple_tvars_to_symbols(jl_tuple_t *t)
 // of the tree with declared types evaluated and static parameters passed
 // on to all enclosed functions.
 // this tree can then be further mutated by optimization passes.
-void jl_specialize_ast(jl_lambda_info_t *li)
+DLLEXPORT
+jl_value_t *jl_prepare_ast(jl_value_t *l_ast, jl_tuple_t *sparams)
 {
-    if (li->ast == NULL) return;
-    jl_tuple_t *spenv = jl_tuple_tvars_to_symbols(li->sparams);
-    jl_value_t *ast = copy_ast(li->ast, li->sparams);
-    li->ast = ast;
+    jl_tuple_t *spenv = jl_tuple_tvars_to_symbols(sparams);
+    jl_value_t *ast = copy_ast(l_ast, sparams);
     JL_GC_PUSH(&spenv);
     eval_decl_types(jl_lam_vinfo((jl_expr_t*)ast), spenv);
     eval_decl_types(jl_lam_capt((jl_expr_t*)ast), spenv);
     JL_GC_POP();
+    return ast;
+}
+
+void jl_specialize_ast(jl_lambda_info_t *li)
+{
+    if (li->ast == NULL) return;
+    jl_value_t *ast = jl_prepare_ast(li->ast, li->sparams);
+    li->ast = ast;
 }
