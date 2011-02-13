@@ -1211,7 +1211,7 @@ JL_CALLABLE(jl_f_invoke)
     jl_function_t *mlfunc =
         jl_method_lookup_by_type(jl_gf_mtable(args[0]), (jl_tuple_t*)args[1]);
     if (mlfunc == NULL)
-        jl_no_method_error(jl_gf_name(args[0]), &args[2], nargs-2);
+        return jl_no_method_error((jl_function_t*)args[0], &args[2], nargs-2);
     return jl_apply(mlfunc, &args[2], nargs-2);
 }
 

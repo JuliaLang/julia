@@ -362,8 +362,17 @@ function abstract_call_gf(f, fargs, argtypes, e)
     applicable = getmethods(f, argtypes)
     rettype = None
     x = applicable
+    if is(x,())
+        # no methods match
+        if is(f,method_missing)
+            # match failure due to None (error) argument, propagate
+            return None
+        end
+        return abstract_call_gf(method_missing, tuple(f, fargs...),
+                                tuple(Function, argtypes...), ())
+    end
     if isa(e,Expr)
-        if !is(x,()) && is(x[5],())
+        if is(x[5],())
             # method match is unique; mark it
             e.head = :call1
         else

@@ -767,16 +767,14 @@ jl_methlist_t *jl_method_table_insert(jl_methtable_t *mt, jl_tuple_t *type,
     return ml;
 }
 
-void jl_no_method_error(jl_sym_t *name, jl_value_t **args, size_t nargs)
+jl_value_t *jl_no_method_error(jl_function_t *f, jl_value_t **args, size_t na)
 {
-    jl_tuple_t *argt = (jl_tuple_t*)jl_f_tuple(NULL, args, nargs);
-    jl_value_t *ft = NULL;
-    JL_GC_PUSH(&argt, &ft);
-    ft = jl_full_type((jl_value_t*)argt);
-    // TODO: string is leaked
-    char *argt_str = jl_show_to_string(ft);
-    JL_GC_POP();
-    jl_errorf("no method %s%s", name->name, argt_str);
+    jl_value_t **a = alloca(na+1);
+    a[0] = (jl_value_t*)f;
+    int i;
+    for(i=0; i < na; i++)
+        a[i+1] = args[i];
+    return jl_apply(jl_method_missing_func, a, na+1);
 }
 
 //#define JL_TRACE
@@ -901,7 +899,7 @@ JL_CALLABLE(jl_apply_generic)
     }
 
     if (mfunc == NULL) {
-        jl_no_method_error((jl_sym_t*)jl_t1(env), args, nargs);
+        return jl_no_method_error((jl_function_t*)jl_t2(env), args, nargs);
     }
 
     return jl_apply(mfunc, args, nargs);
@@ -948,8 +946,9 @@ jl_function_t *jl_new_generic_function(jl_sym_t *name)
     jl_value_t *nmt = (jl_value_t*)new_method_table();
     jl_value_t *env = NULL;
     JL_GC_PUSH(&nmt, &env);
-    env = (jl_value_t*)jl_tuple2(nmt, (jl_value_t*)name);
+    env = (jl_value_t*)jl_tuple3(nmt, (jl_value_t*)name, jl_null);
     jl_function_t *f = jl_new_closure(jl_apply_generic, env);
+    jl_t2(env) = (jl_value_t*)f;
     JL_GC_POP();
     return f;
 }
@@ -1133,4 +1132,10 @@ DLLEXPORT
 int jl_is_genericfunc(jl_value_t *v)
 {
     return (jl_is_func(v) && jl_is_gf(v));
+}
+
+DLLEXPORT
+jl_sym_t *jl_genericfunc_name(jl_value_t *v)
+{
+    return jl_gf_name(v);
 }

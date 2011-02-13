@@ -291,6 +291,7 @@ extern jl_function_t *jl_show_gf;
 extern jl_function_t *jl_bottom_func;
 extern jl_function_t *jl_memio_func;
 extern jl_function_t *jl_append_any_func;
+extern jl_function_t *jl_method_missing_func;
 
 extern void *jl_dl_handle;
 
@@ -557,7 +558,7 @@ void jl_too_many_args(const char *fname, int max);
 void jl_type_error(const char *fname, jl_value_t *expected, jl_value_t *got);
 void jl_type_error_rt(const char *fname, const char *context,
                       jl_value_t *ty, jl_value_t *got);
-void jl_no_method_error(jl_sym_t *name, jl_value_t **args, size_t nargs);
+jl_value_t *jl_no_method_error(jl_function_t *f, jl_value_t **args, size_t na);
 
 // initialization functions
 void julia_init();

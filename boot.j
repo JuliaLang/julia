@@ -172,6 +172,11 @@ type LoadError <: Exception
     error
 end
 
+type MethodError <: Exception
+    f::Function
+    args
+end
+
 type DivideByZeroError  <: Exception end
 type MemoryError        <: Exception end
 type IOError            <: Exception end
@@ -223,3 +228,5 @@ identity = x->x
 
 macro thunk(ex); :(()->$ex); end
 macro L_str(s); s; end
+
+method_missing(f, args...) = throw(MethodError(f, args))

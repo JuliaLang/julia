@@ -95,6 +95,11 @@ show(e::StackOverflowError) = println("error: stack overflow")
 show(e::EOFError) = println("read: end of file")
 show(e::ErrorException) = println(e.msg)
 
+function show(e::MethodError)
+    name = ccall(:jl_genericfunc_name, Any, (Any,), e.f)
+    println("no method $(name)$(typeof(e.args))")
+end
+
 dump(t::Type) = print(t)
 dump(t::Tuple) = print(t)
 
