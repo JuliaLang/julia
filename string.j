@@ -618,6 +618,32 @@ rpad(s, n::Int, p) = rpad(string(s), n, string(p))
 lpad(s, n::Int) = lpad(string(s), n, " ")
 rpad(s, n::Int) = rpad(string(s), n, " ")
 
+function split(s::String, delims, include_empty)
+    i = 1
+    strs = deq()
+    len = length(s)
+    while true
+        tokstart = tokend = i
+        while !done(s,i)
+            (c,i) = next(s,i)
+            if has(delims, c)
+                break
+            end
+            tokend = i
+        end
+        tok = s[tokstart:(tokend-1)]
+        if !isempty(tok) || include_empty
+            push(strs, tok)
+        end
+        if !((i <= len) || (i==len+1 && tokend!=i))
+            break
+        end
+    end
+    strs
+end
+
+split(s::String, delims) = split(s, delims, true)
+
 ## string to integer functions ##
 
 function parse_int{T<:Int}(::Type{T}, s::String, base::Int)

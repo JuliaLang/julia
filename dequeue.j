@@ -66,6 +66,10 @@ function deq(elts...)
     return d
 end
 
+start(d::Dequeue) = 1
+done(d::Dequeue, i) = (i > d.size)
+next(d::Dequeue, i) = (d[i], i+1)
+
 clone(d::Dequeue, T::Type, dim::Size)     = Dequeue(T, dim)
 clone(d::Dequeue, T::Type, dims::(Size,)) = Dequeue(T, dims[1])
 

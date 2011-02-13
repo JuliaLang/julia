@@ -37,6 +37,11 @@ function send_msg(s::IOStream, x)
 end
 
 # todo:
+# - method_missing for waiting
+# - GOs/darrays on a subset of nodes
+# - dynamically adding nodes
+# - more dynamic scheduling
+# - aggregate GC messages
 # * recover from i/o errors
 # * handle remote execution errors
 # * all-to-all communication
