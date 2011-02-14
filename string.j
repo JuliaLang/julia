@@ -183,7 +183,12 @@ length(s::SubString) = s.length
 # can this be delegated efficiently somehow?
 # that may require additional string interfaces
 
-ref(s::String, r::Range1{Index}) = SubString(s, r.start, r.stop)
+function ref(s::String, r::Range1{Index})
+    if r.start < 1 || length(s) < r.stop
+        error("in substring slice: index out of range")
+    end
+    SubString(s, r.start, r.stop)
+end
 
 ## efficient representation of repeated strings ##
 
