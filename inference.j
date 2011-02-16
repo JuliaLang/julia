@@ -724,7 +724,12 @@ function typeinf(linfo::LambdaStaticData,atypes::Tuple,sparams::Tuple, cop, def)
 
     #print(linfo.name); show(atypes); print('\n')
 
-    ast = cop ? ccall(:jl_prepare_ast, Any, (Any,Any), ast0,sparams) : ast0
+    if cop
+        sparams = append(sparams, linfo.sparams)
+        ast = ccall(:jl_prepare_ast, Any, (Any,Any), ast0, sparams)
+    else
+        ast = ast0
+    end
 
     assert(is(ast.head,:lambda))
     args = f_argnames(ast)

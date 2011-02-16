@@ -33,14 +33,14 @@ float rand_float()
     return f.f - 1.0;
 }
 
+static double randn_next = -42;
 double randn()
 {
     double s, vre, vim, ure, uim;
-    static double next = -42;
 
-    if (next != -42) {
-        s = next;
-        next = -42;
+    if (randn_next != -42) {
+        s = randn_next;
+        randn_next = -42;
         return s;
     }
     do {
@@ -51,12 +51,23 @@ double randn()
         s = vre*vre + vim*vim;
     } while (s >= 1);
     s = sqrt(-2*log(s)/s);
-    next = s * vre;
+    randn_next = s * vre;
     return s * vim;
+}
+
+void randomseed32(uint32_t s)
+{
+    init_genrand(s);
+    randn_next = -42;
+}
+
+void randomseed64(uint64_t s)
+{
+    init_by_array((uint32_t*)&s, 2);
+    randn_next = -42;
 }
 
 void randomize()
 {
-    u_int64_t tm = i64time();
-    init_by_array((uint32_t*)&tm, 2);
+    randomseed64(i64time());
 }
