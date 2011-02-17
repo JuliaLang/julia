@@ -376,11 +376,11 @@ jl_value_t *jl_parse_input_line(const char *str)
     return scm_to_julia(e);
 }
 
-DLLEXPORT jl_value_t *jl_parse_string(const char *str, int pos0)
+DLLEXPORT jl_value_t *jl_parse_string(const char *str, int pos0, int greedy)
 {
     value_t s = cvalue_static_cstring(str);
-    value_t p = fl_applyn(2, symbol_value(symbol("jl-just-parse-string")),
-                          s, fixnum(pos0));
+    value_t p = fl_applyn(3, symbol_value(symbol("jl-just-parse-string")),
+                          s, fixnum(pos0), greedy?FL_T:FL_F);
     jl_value_t *expr=NULL, *pos1=NULL;
     JL_GC_PUSH(&expr, &pos1);
 

@@ -267,18 +267,20 @@ function del_all(s::FDSet)
     s
 end
 
-function select_read(readfds::FDSet, timeout::Real)
-    if timeout == Inf
-        tout = C_NULL
-    else
-        tv = Array(Uint8, ccall(:jl_sizeof_timeval, Int32, ()))
-        ccall(:jl_set_timeval, Void, (Ptr{Void}, Float64),
-              tv, float64(timeout))
-        tout = convert(Ptr{Void}, tv)
+let tv = Array(Uint8, ccall(:jl_sizeof_timeval, Int32, ()))
+    global select_read
+    function select_read(readfds::FDSet, timeout::Real)
+        if timeout == Inf
+            tout = C_NULL
+        else
+            ccall(:jl_set_timeval, Void, (Ptr{Void}, Float64),
+                  tv, float64(timeout))
+            tout = convert(Ptr{Void}, tv)
+        end
+        return ccall(dlsym(libc, :select), Int32,
+                     (Int32, Ptr{Void}, Ptr{Void}, Ptr{Void}, Ptr{Void}),
+                     readfds.nfds, readfds.data, C_NULL, C_NULL, tout)
     end
-    return ccall(dlsym(libc, :select), Int32,
-                 (Int32, Ptr{Void}, Ptr{Void}, Ptr{Void}, Ptr{Void}),
-                 readfds.nfds, readfds.data, C_NULL, C_NULL, tout)
 end
 
 ## high-level iterator interfaces ##
@@ -296,3 +298,18 @@ function next(itr::LineIterator, this_line::ByteString)
 end
 
 each_line(stream::IOStream) = LineIterator(stream)
+
+## file formats ##
+
+load_ascii_array(f::String, nr, nc) = load_ascii_array(open(f), nr, nc)
+function load_ascii_array(f, nr, nc)
+    a = Array(Float64, (nr, nc))
+    delims = set(' ','\t')
+    for i=1:nr
+        row = split(readline(f), delims, false)
+        for j=1:nc
+            a[i,j] = eval(parse(row[j])[1])
+        end
+    end
+    a
+end

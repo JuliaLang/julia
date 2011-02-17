@@ -43,6 +43,7 @@ end
 # - more dynamic scheduling
 # - call&wait and call&fetch combined messages
 # - aggregate GC messages
+# - fetch/wait latency seems to be excessive
 # * recover from i/o errors
 # * handle remote execution errors
 # * all-to-all communication
