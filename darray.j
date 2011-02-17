@@ -120,7 +120,7 @@ function ref{T}(d::DArray{T,1}, i::Index)
         offs = (p==1) ? 0 : d.dist[p-1]
         return localdata(d)[i-offs]
     end
-    return fetch(remote_call(d.pmap[p], ref, d, i))
+    return remote_call_fetch(d.pmap[p], ref, d, i)
 end
 
 assign{T}(d::DArray{T,1}, v::Tensor{T,1}, i::Index) =
@@ -148,7 +148,7 @@ function ref(d::DArray, i::Index)
         end
         return localdata(d)[sub...]
     end
-    return fetch(remote_call(d.pmap[p], ref, d, i))
+    return remote_call_fetch(d.pmap[p], ref, d, i)
 end
 
 assign(d::DArray, v::Tensor, i::Index) =
