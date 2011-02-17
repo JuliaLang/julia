@@ -1,6 +1,6 @@
 type DArray{T,N} <: Tensor{T,N}
-    dims
-    locl #::Array{T,N}
+    dims::NTuple{N,Size}
+    locl::Union((),RemoteRef,Array{T,N})
     # the distributed array has N pieces
     # pmap[i]==p ⇒ processor p has piece i
     pmap::Vector{Int32}
@@ -12,8 +12,7 @@ type DArray{T,N} <: Tensor{T,N}
     localpiece::Int32  # my piece #; pmap[localpiece]==myid()
     go::GlobalObject
 
-    global init_darray
-    function init_darray(go, T, distdim, dims, initializer)
+    function DArray(go, T, distdim, dims, initializer)
         global PGRP
         np = PGRP.np
         mi = myid()
@@ -42,6 +41,7 @@ type DArray{T,N} <: Tensor{T,N}
         da
     end
 
+    # don't use DArray() directly; use darray() below instead
     function DArray(T, distdim, dims, initializer)
         global PGRP
         np = PGRP.np
@@ -49,10 +49,10 @@ type DArray{T,N} <: Tensor{T,N}
         go = GlobalObject()
         for i=1:np
             if i != mi
-                remote_do(i, init_darray, go, T, distdim, dims, initializer)
+                remote_do(i, DArray, go, T, distdim, dims, initializer)
             end
         end
-        init_darray(go, T, distdim, dims, initializer)
+        DArray(go, T, distdim, dims, initializer)
     end
 end
 
@@ -68,13 +68,11 @@ function localdata(d::DArray)
     d.locl
 end
 
+# find which piece holds index i in the distributed dimension
 function locate(d::DArray, i::Index)
     p = 1
     while i > d.dist[p]
         p += 1
-        if p > length(d.dist)
-            error("invalid index")
-        end
     end
     p
 end
@@ -90,10 +88,16 @@ function maxdim(dims)
     end
 end
 
-darray{T}(init, ::Type{T}, dims::Dims) = DArray(T,maxdim(dims),dims,init)
+darray{T,N}(init, ::Type{T}, dims::NTuple{N,Size}, distdim) =
+    DArray{T,N}(T,distdim,dims,init)
+darray{T}(init, ::Type{T}, dims::Dims) = darray(init,T,dims,maxdim(dims))
 darray(init, T::Type, dims::Size...) = darray(init, T, dims)
 darray(init, dims::Dims) = darray(init, Float64, dims)
 darray(init, dims::Size...) = darray(init, dims)
+
+clone(d::DArray, T::Type, dims::Dims) =
+    darray((T,d,da)->Array(T,d), T, dims,
+           d.distdim>length(dims) ? maxdim(dims) : d.distdim)
 
 dzeros(args...) = darray((T,d,da)->zeros(T,d), args...)
 dones(args...)  = darray((T,d,da)->ones(T,d), args...)
@@ -101,33 +105,69 @@ drand(args...)  = darray((T,d,da)->rand(d), args...)
 drandf(args...) = darray((T,d,da)->randf(d), args...)
 drandn(args...) = darray((T,d,da)->randn(d), args...)
 
+## Transpose and redist ##
+
+transpose{T}(a::DArray{T,2}) = darray((T,d,da)->transpose(localdata(a)),
+                                      T, (size(a,2),size(a,1)), (3-a.distdim))
+ctranspose{T}(a::DArray{T,2}) = darray((T,d,da)->ctranspose(localdata(a)),
+                                       T, (size(a,2),size(a,1)), (3-a.distdim))
+
 ## Indexing ##
 
 function ref{T}(d::DArray{T,1}, i::Index)
     p = locate(d, i)
     if p==d.localpiece
-        if p == 1
-            return localdata(d)[i]
-        else
-            return localdata(d)[i-d.dist[p-1]]
-        end
+        offs = (p==1) ? 0 : d.dist[p-1]
+        return localdata(d)[i-offs]
     end
     return fetch(remote_call(d.pmap[p], ref, d, i))
 end
 
 assign{T}(d::DArray{T,1}, v::Tensor{T,1}, i::Index) =
-    invoke(assign, (DArray, Any, Index), d, v, i)
+    invoke(assign, (DArray{T,1}, Any, Index), d, v, i)
 
 function assign{T}(d::DArray{T,1}, v, i::Index)
     p = locate(d, i)
     if p==d.localpiece
-        if p == 1
-            localdata(d)[i] = v
-        else
-            localdata(d)[i-d.dist[p-1]] = v
-        end
+        offs = (p==1) ? 0 : d.dist[p-1]
+        localdata(d)[i-offs] = v
     else
         remote_do(d.pmap[p], assign, d, v, i)
     end
     d
 end
+
+function ref(d::DArray, i::Index)
+    sub = ind2sub(d.dims, i)
+    p = locate(d, sub[d.distdim])
+    if p==d.localpiece
+        offs = (p==1) ? 0 : d.dist[p-1]
+        if offs > 0
+            sub = ntuple(length(sub),
+                         ind->(ind==d.distdim ? sub[ind]-offs : sub[ind]))
+        end
+        return localdata(d)[sub...]
+    end
+    return fetch(remote_call(d.pmap[p], ref, d, i))
+end
+
+assign(d::DArray, v::Tensor, i::Index) =
+    invoke(assign, (DArray, Any, Index), d, v, i)
+
+function assign(d::DArray, v, i::Index)
+    sub = ind2sub(d.dims, i)
+    p = locate(d, sub[d.distdim])
+    if p==d.localpiece
+        offs = (p==1) ? 0 : d.dist[p-1]
+        if offs > 0
+            sub = ntuple(length(sub),
+                         ind->(ind==d.distdim ? sub[ind]-offs : sub[ind]))
+        end
+        localdata(d)[sub...] = v
+    else
+        remote_do(d.pmap[p], assign, d, v, i)
+    end
+    d
+end
+
+full{T}(d::DArray{T}) = copy_to(Array(T, size(d)), d)

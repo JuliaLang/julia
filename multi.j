@@ -41,6 +41,7 @@ end
 # - GOs/darrays on a subset of nodes
 # - dynamically adding nodes
 # - more dynamic scheduling
+# - call&wait and call&fetch combined messages
 # - aggregate GC messages
 # * recover from i/o errors
 # * handle remote execution errors

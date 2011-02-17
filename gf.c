@@ -937,18 +937,16 @@ void jl_initialize_generic_function(jl_function_t *f, jl_sym_t *name)
     f->fptr = jl_apply_generic;
     jl_value_t *nmt = (jl_value_t*)new_method_table();
     JL_GC_PUSH(&nmt);
-    f->env = (jl_value_t*)jl_tuple2(nmt, (jl_value_t*)name);
+    f->env = (jl_value_t*)jl_tuple3(nmt, (jl_value_t*)name, jl_null);
+    jl_t2(f->env) = (jl_value_t*)f;
     JL_GC_POP();
 }
 
 jl_function_t *jl_new_generic_function(jl_sym_t *name)
 {
-    jl_value_t *nmt = (jl_value_t*)new_method_table();
-    jl_value_t *env = NULL;
-    JL_GC_PUSH(&nmt, &env);
-    env = (jl_value_t*)jl_tuple3(nmt, (jl_value_t*)name, jl_null);
-    jl_function_t *f = jl_new_closure(jl_apply_generic, env);
-    jl_t2(env) = (jl_value_t*)f;
+    jl_function_t *f = jl_new_closure(NULL, NULL);
+    JL_GC_PUSH(&f);
+    jl_initialize_generic_function(f, name);
     JL_GC_POP();
     return f;
 }
