@@ -105,6 +105,32 @@ drand(args...)  = darray((T,d,da)->rand(d), args...)
 drandf(args...) = darray((T,d,da)->randf(d), args...)
 drandn(args...) = darray((T,d,da)->randn(d), args...)
 
+distribute(a::Array) = distribute(a, maxdim(size(a)))
+
+function distribute{T}(a::Array{T}, distdim)
+    sz = size(a)
+    owner = myid()
+    # create a remotely-visible reference to the array
+    rr = remote_call(LocalProcess(), identity, a)
+    wait(rr)
+    darray((T,lsz,da)->get_my_piece(T,lsz,da,distdim,owner,rr),
+           T, size(a), distdim)
+end
+
+# fetch one processor's piece of an array being distributed
+function get_my_piece(T, lsz, da, distdim, owner, orig_array)
+    if prod(lsz)==0
+        return Array(T, lsz)
+    end
+    p = da.localpiece
+    i1 = (p==1) ? 1 : da.dist[p-1]+1  # my first index in distdim
+    iend = i1+lsz[distdim]-1
+    # indexes of original array I will take
+    idxs = ntuple(length(da.dims),
+                  i->(i==distdim ? (i1:iend) : (1:lsz[i])))
+    remote_call_fetch(owner, ref, orig_array, idxs...)
+end
+
 ## Transpose and redist ##
 
 transpose{T}(a::DArray{T,2}) = darray((T,d,da)->transpose(localdata(a)),
