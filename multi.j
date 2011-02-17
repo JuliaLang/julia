@@ -363,12 +363,13 @@ function at_each(grp::ProcessGroup, f, args...)
     end
 end
 
-pmap(f, lst) = pmap(PGRP, f, lst)
+pmap(f, lsts...) = pmap(PGRP, f, lsts...)
+pmap(grp::ProcessGroup, f) = f()
 
-function pmap(grp::ProcessGroup, f, lst)
+function pmap(grp::ProcessGroup, f, lsts...)
     np = grp.np
-    { remote_call(grp.workers[(i-1)%np+1], f, lst[i]) |
-     i = 1:length(lst) }
+    { remote_call(grp.workers[(i-1)%np+1], f, map(L->L[i], lsts)...) |
+     i = 1:length(lsts[1]) }
 end
 
 ## worker event loop ##
@@ -593,7 +594,8 @@ function jl_worker_loop(accept_fd, clientmode)
         end
 
         for (fd, sock) = sockets
-            if has(fdset, fd) || nb_available(sock)>0
+            while has(fdset, fd) || nb_available(sock)>0
+                del(fdset, fd)
                 #print("nb= ", nb_available(sock), "\n")
                 #print("$(myid()) reading fd= ", fd, "\n")
                 try
