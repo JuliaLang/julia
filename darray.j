@@ -3,10 +3,10 @@ type DArray{T,N} <: Tensor{T,N}
     locl::Union((),RemoteRef,Array{T,N})
     # the distributed array has N pieces
     # pmap[i]==p ⇒ processor p has piece i
-    pmap::Vector{Int32}
+    pmap::Array{Int32,1}
     # piece i consists of indexes dist[i-1]+1 to dist[i]. dist[0]==0
     #  == prefix sum of the sizes of the pieces
-    dist::Vector{Int32}
+    dist::Array{Int32,1}
     # dimension of distribution
     distdim::Int32
     localpiece::Int32  # my piece #; pmap[localpiece]==myid()
@@ -61,11 +61,11 @@ size(d::DArray) = d.dims
 serialize(s, d::DArray) = serialize(s, d.go)
 
 # when we actually need the data, wait for it
-function localdata(d::DArray)
+function localdata{T,N}(d::DArray{T,N})
     if isa(d.locl, RemoteRef)
         d.locl = fetch(d.locl)
     end
-    d.locl
+    d.locl::Array{T,N}
 end
 
 # find which piece holds index i in the distributed dimension
@@ -86,17 +86,20 @@ function maxdim(dims)
             return i
         end
     end
+    error("unreachable")
 end
 
-darray{T,N}(init, ::Type{T}, dims::NTuple{N,Size}, distdim) =
-    DArray{T,N}(T,distdim,dims,init)
+# initializer is a function accepting (el_type, local_size, darray) where
+# the last argument is the full DArray being constructed.
+darray{T}(init, ::Type{T}, dims::Dims, distdim) =
+    DArray{T,length(dims)}(T,distdim,dims,init)
 darray{T}(init, ::Type{T}, dims::Dims) = darray(init,T,dims,maxdim(dims))
 darray(init, T::Type, dims::Size...) = darray(init, T, dims)
 darray(init, dims::Dims) = darray(init, Float64, dims)
 darray(init, dims::Size...) = darray(init, dims)
 
 clone(d::DArray, T::Type, dims::Dims) =
-    darray((T,d,da)->Array(T,d), T, dims,
+    darray((T,lsz,da)->Array(T,lsz), T, dims,
            d.distdim>length(dims) ? maxdim(dims) : d.distdim)
 
 dzeros(args...) = darray((T,d,da)->zeros(T,d), args...)
@@ -108,7 +111,6 @@ drandn(args...) = darray((T,d,da)->randn(d), args...)
 distribute(a::Array) = distribute(a, maxdim(size(a)))
 
 function distribute{T}(a::Array{T}, distdim)
-    sz = size(a)
     owner = myid()
     # create a remotely-visible reference to the array
     rr = remote_call(LocalProcess(), identity, a)
@@ -124,10 +126,10 @@ function get_my_piece(T, lsz, da, distdim, owner, orig_array)
     end
     p = da.localpiece
     i1 = (p==1) ? 1 : da.dist[p-1]+1  # my first index in distdim
-    iend = i1+lsz[distdim]-1
+    iend = i1+lsz[distdim]-1          # my last  "
     # indexes of original array I will take
-    idxs = ntuple(length(da.dims),
-                  i->(i==distdim ? (i1:iend) : (1:lsz[i])))
+    idxs = { 1:lsz[i] | i=1:length(da.dims) }
+    idxs[distdim] = (i1:iend)
     remote_call_fetch(owner, ref, orig_array, idxs...)
 end
 
@@ -146,7 +148,7 @@ function ref{T}(d::DArray{T,1}, i::Index)
         offs = (p==1) ? 0 : d.dist[p-1]
         return localdata(d)[i-offs]
     end
-    return remote_call_fetch(d.pmap[p], ref, d, i)
+    return remote_call_fetch(d.pmap[p], ref, d, i)::T
 end
 
 assign{T}(d::DArray{T,1}, v::Tensor{T,1}, i::Index) =
@@ -163,7 +165,7 @@ function assign{T}(d::DArray{T,1}, v, i::Index)
     d
 end
 
-function ref(d::DArray, i::Index)
+function ref{T}(d::DArray{T}, i::Index)
     sub = ind2sub(d.dims, i)
     p = locate(d, sub[d.distdim])
     if p==d.localpiece
@@ -174,7 +176,7 @@ function ref(d::DArray, i::Index)
         end
         return localdata(d)[sub...]
     end
-    return remote_call_fetch(d.pmap[p], ref, d, i)
+    return remote_call_fetch(d.pmap[p], ref, d, i)::T
 end
 
 assign(d::DArray, v::Tensor, i::Index) =
@@ -196,4 +198,5 @@ function assign(d::DArray, v, i::Index)
     d
 end
 
+# todo: too slow
 full{T}(d::DArray{T}) = copy_to(Array(T, size(d)), d)
