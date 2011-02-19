@@ -213,7 +213,7 @@ isempty(t::HashTable) = done(t, start(t))
 function ref(t::Union(IdTable,HashTable), key)
     v = get(t, key, _secret_table_token_)
     if is(v,_secret_table_token_)
-        error("key not found")
+        throw(KeyError(key))
     end
     return v
 end

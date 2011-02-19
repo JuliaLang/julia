@@ -94,6 +94,7 @@ show(e::DivideByZeroError) = println("error: integer divide by zero")
 show(e::StackOverflowError) = println("error: stack overflow")
 show(e::EOFError) = println("read: end of file")
 show(e::ErrorException) = println(e.msg)
+show(e::KeyError) = println("key not found: $(e.key)")
 
 function show(e::MethodError)
     name = ccall(:jl_genericfunc_name, Any, (Any,), e.f)
