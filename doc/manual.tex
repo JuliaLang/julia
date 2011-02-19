@@ -2193,9 +2193,9 @@ this declaration would be necessary in order to modify a global variable.
 
 Type systems have traditionally fallen into two quite different camps:
 static type systems, where every value must have a fully specified type, computable before the execution of a program, and dynamic type systems, where nothing is known about types of values flowing through a piece of code until run-time, when the values themselves are available.
-Object orientation and generic programming allow some flexibility in statically type languages by letting code to be written without the precise type of values being known at compile time.
-This ability to write code that operates on different types is called polymorphism.
-In stark contrast, all code in dynamically typed languages is polymorphic:
+Object orientation and generic programming allow some flexibility in statically type languages by letting code be written without the precise type of values being known at compile time.
+This ability to write code that can operate on different types is called polymorphism.
+In stark contrast, all code in classical dynamically typed languages is polymorphic:
 only by explicitly checking types, or when objects fail to support operations at run-time, are the types of any values ever restricted.
 
 Julia's type system strikes a balance between dynamic typing and static typing.
@@ -2250,9 +2250,9 @@ The absence of implementation inheritance eliminates data representation problem
 These problems are prevented by a straightforward rule described in \Section{dispatch-and-inheritance}.}
 
 \end{itemize}
-The Julia type system is designed to be powerful and expressive, yet intuitive and unobtrusive.
+The Julia type system is designed to be powerful and expressive, yet clear, intuitive and unobtrusive.
 Many Julia programmers may never feel the need to write code that explicitly uses types.
-Some kinds of programming, however, becomes easier, faster and more robust with judicious use of types.
+However, some kinds of programming becomes easier, faster and more robust with judicious use of explicit types.
 
 \subsection{Bits Types}\sec{bits-types}
 
