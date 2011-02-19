@@ -76,6 +76,7 @@
     ios_copyall;
     ios_copyuntil;
     ios_trunc;
+    ios_pos;
     connect_to_host;
     open_any_tcp_port;
     jl_sizeof_fd_set;
