@@ -37,22 +37,13 @@ type DArray{T,N} <: Tensor{T,N}
                  (), #Array(T, locsz),
                  pmap, dist, distdim, lp, go)
         da.locl = remote_call(LocalProcess(), initializer, T, locsz, da)
-        go.local_identity = da
         da
     end
 
     # don't use DArray() directly; use darray() below instead
     function DArray(T, distdim, dims, initializer)
-        global PGRP
-        np = PGRP.np
-        mi = myid()
-        go = GlobalObject()
-        for i=1:np
-            if i != mi
-                remote_do(i, DArray, go, T, distdim, dims, initializer)
-            end
-        end
-        DArray(go, T, distdim, dims, initializer)
+        GlobalObject(g->DArray(g, T, distdim, dims, initializer))
+        #go.local_identity
     end
 end
 
@@ -61,6 +52,7 @@ size(d::DArray) = d.dims
 serialize(s, d::DArray) = serialize(s, d.go)
 
 # when we actually need the data, wait for it
+localdata(r::RemoteRef) = localdata(fetch(r))
 function localdata{T,N}(d::DArray{T,N})
     if isa(d.locl, RemoteRef)
         d.locl = fetch(d.locl)
@@ -142,6 +134,16 @@ ctranspose{T}(a::DArray{T,2}) = darray((T,d,da)->ctranspose(localdata(a)),
 
 ## Indexing ##
 
+ref(r::RemoteRef) = invoke(ref, (RemoteRef, Any...), r)
+function ref(r::RemoteRef, args...)
+    global PGRP
+    if r.where==myid()
+        ref(fetch(r), args...)
+    else
+        remote_call_fetch(r.where, ref, r, args...)
+    end
+end
+
 function ref{T}(d::DArray{T,1}, i::Index)
     p = locate(d, i)
     if p==d.localpiece
@@ -149,6 +151,15 @@ function ref{T}(d::DArray{T,1}, i::Index)
         return localdata(d)[i-offs]
     end
     return remote_call_fetch(d.pmap[p], ref, d, i)::T
+end
+
+function assign(r::RemoteRef, args...)
+    global PGRP
+    if r.where==myid()
+        assign(fetch(r), args...)
+    else
+        remote_do(r.where, assign, r, args...)
+    end
 end
 
 assign{T}(d::DArray{T,1}, v::Tensor{T,1}, i::Index) =

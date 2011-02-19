@@ -655,3 +655,8 @@ a = *(b, c, dest=a)
 
 a:=b could be a[:,:,...]=b
 maybe (a+=b) => (a=a+b) but (a[i]+=b) => (a[i]:=a[i]+b) ?
+
+bug:
+on inexact method matches, e.g. only f(Int32) exists and we don't know the
+type of the argument, must merge in the result type of method_missing,
+and emit a type check if we inline

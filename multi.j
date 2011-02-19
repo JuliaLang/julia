@@ -117,7 +117,7 @@ type ProcessGroup
     function ProcessGroup(w::Array{Any,1}, np::Int)
         # "client side", or initiator of process group
         locs = map(x->Location(x.host,x.port), w)
-        sched = Task(jl_worker_loop)
+        sched = Task(jl_worker_loop, 512*1024)
         global PGRP = new(0, w, locs, np, sched, (), (), (), ())
         for i=1:np
             w[i].id = i
@@ -168,7 +168,7 @@ function identify_socket(otherid, fd, sock)
     global PGRP
     i = otherid
     locs = PGRP.locs
-    assert(i < PGRP.myid)
+    @assert i < PGRP.myid
     PGRP.workers[i] = Worker(locs[i].host, locs[i].port, fd, sock)
     PGRP.workers[i].id = i
     #write(stdout_stream, latin1("$(PGRP.myid) heard from $i\n"))
@@ -261,7 +261,11 @@ function deserialize(s, t::Type{RemoteRef})
     if rr.where == myid()
         wi = PGRP.refs[rr2id(rr)]
         if wi.done
-            v = work_result(wi)
+            v = wi.result
+            # NOTE: this duplicates work_result()
+            if isa(v,WeakRef)
+                v = v.value
+            end
             if isa(v,GlobalObject)
                 add_client(rr2id(rr), myid())
                 return v.local_identity
@@ -290,7 +294,7 @@ function remote_do(w::Worker, f, args...)
 end
 
 remote_do(id::Int, f, args...) =
-    (global PGRP; remote_do(PGRP.workers[id], f, args...))
+    (global PGRP; remote_do(id==0?PGRP.client:PGRP.workers[id], f, args...))
 
 REQ_ID = 0
 
@@ -423,8 +427,16 @@ type WorkItem
     WorkItem(task::Task) = new(()->(), task, false, (), (), (), IntSet(64))
 end
 
-work_result(w::WorkItem) = (v = w.result;
-                            isa(v,WeakRef) ? v.value : v)
+function work_result(w::WorkItem)
+    v = w.result
+    if isa(v,WeakRef)
+        v = v.value
+    end
+    if isa(v,GlobalObject)
+        v = v.local_identity
+    end
+    v
+end
 
 type FinalValue
     value
@@ -452,7 +464,7 @@ function deliver_result(sock::IOStream, msg, oid, value)
     if is(msg,:fetch)
         val = value
     else
-        assert(is(msg, :sync))
+        @assert is(msg, :sync)
         val = oid
     end
     try
@@ -510,7 +522,7 @@ function perform_work(workqueue, waiting, runner)
     catch e
         #show(e)
         print("exception on ", myid(), ": ")
-        dump(e)
+        show(e)
         result = FinalValue(e)
         job.task = ()  # task is toast. would be better to reuse it somehow.
     end
@@ -518,6 +530,9 @@ function perform_work(workqueue, waiting, runner)
         # job done
         job.done = true
         job.result = result.value
+    end
+    # job.done might also get set to true hackishly by GlobalObject
+    if job.done
         runner = job.task  # Task now free to be shared
         job.task = ()
         # do notifications
@@ -635,7 +650,9 @@ function jl_worker_loop(accept_fd, clientmode)
                             wi = WorkItem(()->apply(func,ar))
                             refs[id] = wi
                             add(wi.clientset, id[1])
-                            enq(workqueue, wi)
+                            if !is(func,never_finish) # TODO: hack
+                                enq(workqueue, wi)
+                            end
                             if is(msg, :call_fetch)
                                 wi.notify = (sock, :fetch, id, wi.notify)
                             elseif is(msg, :call_wait)
@@ -702,7 +719,11 @@ function start_worker(wrfd)
     # close stdin; workers will not use it
     ccall(dlsym(libc, :close), Int32, (Int32,), 0)
 
-    jl_worker_loop(sockfd, false)
+    try
+        jl_worker_loop(sockfd, false)
+    catch e
+        print("unhandled exception on $(myid()): $e\nexiting.\n")
+    end
 
     ccall(dlsym(libc, :close), Int32, (Int32,), sockfd)
     ccall(dlsym(libc, :exit) , Void , (Int32,), 0)
@@ -766,33 +787,25 @@ end
 
 ## global objects and collective operations ##
 
+never_finish() = while true; yield(); end
+
 type GlobalObject
     local_identity
     refs::Array{RemoteRef,1}
 
-    function GlobalObject(refs::Array{RemoteRef,1})
-        g = new((), refs)
-        g.local_identity = g
-        g
-    end
-
-    global empty_global_object, init_global_object
-    function empty_global_object()
+    function GlobalObject(rids, initializer)
         global PGRP
-        GlobalObject(Array(RemoteRef, PGRP.np))
-    end
+        go = new((), Array(RemoteRef, PGRP.np))
 
-    function init_global_object(rids)
-        global PGRP
         mi = myid()
         myrid = rids[mi]
         myref = WeakRemoteRef(mi, myrid[1], myrid[2])
-        go = fetch(myref)
         # make our reference to it weak so we can detect when there are
         # no local users of the object.
+        if !has(PGRP.refs,myrid)
+            error("GlobalObject was hoping to find something")
+        end
         wi = PGRP.refs[myrid]
-        assert(is(go, wi.result))
-        wi.result = WeakRef(go)
         function del_go_client(go)
             if has(wi.clientset, mi)
                 for i=1:PGRP.np
@@ -812,9 +825,14 @@ type GlobalObject
                 go.refs[i] = WeakRemoteRef(i, rids[i][1], rids[i][2])
             end
         end
+        go.local_identity = initializer(go)
+        wi.result = WeakRef(go)
+        wi.done = true
     end
 
-    function GlobalObject()
+    # initializer is a function that will be called on the new G.O., and its
+    # result will be used to set go.local_identity
+    function GlobalObject(initializer::Function)
         # makes remote object cycles, but we can take advantage of the known
         # topology to avoid fully-general cycle collection.
         # . keep a weak table of all client RemoteRefs, unique them
@@ -834,19 +852,24 @@ type GlobalObject
         global PGRP
         r = Array(RemoteRef, PGRP.np)
         for i=1:length(r)
-            r[i] = remote_call(i, empty_global_object)
-        end
-        if myid()==0
-            go = GlobalObject(r)
-        else
-            go = fetch(r[myid()])
+            # create a set of refs, but don't let them finish yet, because
+            # GlobalObject() is what we really want to wait for.
+            r[i] = remote_call(i, never_finish)
         end
         rids = { rr2id(r[i]) | i=1:length(r) }
         for i=1:length(r)
-            remote_do(i, init_global_object, rids)
+            remote_do(i, GlobalObject, rids, initializer)
         end
-        go
+        if myid()==0
+            go = new((), r)
+            go.local_identity = initializer(go)
+            go.local_identity
+        else
+            fetch(r[myid()])
+        end
     end
+
+    GlobalObject() = GlobalObject(identity)
 end
 
 show(g::GlobalObject) = print("GlobalObject()")
