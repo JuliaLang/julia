@@ -63,6 +63,11 @@ function serialize(s, t::TagKind)
     end
 end
 
+function serialize(s, u::UnionKind)
+    writetag(s, UnionKind)
+    serialize(s, u.types)
+end
+
 function serialize(s, f::Function)
     writetag(s, FuncKind)
     env = ccall(:jl_closure_env, Any, (Any,), f)
@@ -125,6 +130,8 @@ function deserialize(s)
     if is(tag,Tuple)
         len = read(s, Int32)
         return deserialize_tuple(s, len)
+    elseif is(tag,FuncKind)
+        return deserialize_function(s)
     end
     return deserialize(s, tag)
 end
@@ -138,9 +145,26 @@ function deserialize(s, ::Type{BitsKind})
     return read(s, t)
 end
 
+function deserialize(s, ::Type{UnionKind})
+    Union(deserialize(s)...)
+end
+
 deserialize_tuple(s, len) = ntuple(len, i->deserialize(s))
 
 deserialize(s, ::Type{Symbol}) = symbol(read(s, Uint8, read(s, Int32)))
+
+function deserialize_function(s)
+    b = read(s, Uint8)
+    if b==0
+        name = deserialize(s)::Symbol
+        return eval(name)
+    end
+    ast = deserialize(s)
+    sparams = deserialize(s)
+    env = deserialize(s)
+    linfo = ccall(:jl_new_lambda_info, Any, (Any, Any), ast, sparams)
+    ccall(:jl_new_closure_internal, Any, (Any, Any), linfo, env)::Function
+end
 
 function deserialize(s, ::Type{Array})
     elty = deserialize(s)
@@ -167,19 +191,6 @@ function deserialize(s, ::Type{StructKind})
     t = apply_type(eval(name), params...)
     # allow delegation to more specialized method
     return deserialize(s, t)
-end
-
-function deserialize(s, ::Type{FuncKind})
-    b = read(s, Uint8)
-    if b==0
-        name = deserialize(s)::Symbol
-        return eval(name)
-    end
-    ast = deserialize(s)
-    sparams = deserialize(s)
-    env = deserialize(s)
-    linfo = ccall(:jl_new_lambda_info, Any, (Any, Any), ast, sparams)
-    ccall(:jl_new_closure_internal, Any, (Any, Any), linfo, env)::Function
 end
 
 # default structure deserializer

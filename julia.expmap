@@ -9,6 +9,8 @@
     rand_double;
     rand_float;
     genrand_int32;
+    randomseed32;
+    randomseed64;
     randn;
     clock_now;
     uint2str;
@@ -74,6 +76,7 @@
     ios_copyall;
     ios_copyuntil;
     ios_trunc;
+    ios_pos;
     connect_to_host;
     open_any_tcp_port;
     jl_sizeof_fd_set;

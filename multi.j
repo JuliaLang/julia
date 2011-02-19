@@ -41,7 +41,9 @@ end
 # - GOs/darrays on a subset of nodes
 # - dynamically adding nodes
 # - more dynamic scheduling
+# - call&wait and call&fetch combined messages
 # - aggregate GC messages
+# - fetch/wait latency seems to be excessive
 # * recover from i/o errors
 # * handle remote execution errors
 # * all-to-all communication
@@ -148,9 +150,15 @@ function worker_id_from_socket(s)
     global PGRP
     for i=1:PGRP.np
         w = PGRP.workers[i]
-        if is(s, w.socket) || is(s, w.sendbuf)
-            return i
+        if isa(w,Worker)
+            if is(s, w.socket) || is(s, w.sendbuf)
+                return i
+            end
         end
+    end
+    if isa(PGRP.client,Worker) && (is(s,PGRP.client.socket) ||
+                                   is(s,PGRP.client.sendbuf))
+        return 0
     end
     return -1
 end
@@ -316,13 +324,43 @@ function remote_call(w::Worker, f, args...)
 end
 
 remote_call(id::Int, f, args...) =
-    (global PGRP; remote_call(PGRP.workers[id], f, args...))
+    (global PGRP; remote_call(id==0?PGRP.client:PGRP.workers[id], f, args...))
+
+# faster version of fetch(remote_call(...))
+remote_call_fetch(w::LocalProcess, f, args...) = f(args...)
+
+function remote_call_fetch(w::Worker, f, args...)
+    global PGRP
+    rr = assign_rr(w)
+    oid = rr2id(rr)
+    send_msg(w, (:call_fetch, tuple(oid, f, args...)))
+    yieldto(PGRP.scheduler, WaitFor(:fetch, oid))
+end
+
+remote_call_fetch(id::Int, f, args...) =
+    (global PGRP;
+     remote_call_fetch(id==0?PGRP.client:PGRP.workers[id], f, args...))
+
+# faster version of wait(remote_call(...))
+remote_call_wait(w::LocalProcess, f, args...) = wait(remote_call(w,f,args...))
+
+function remote_call_wait(w::Worker, f, args...)
+    global PGRP
+    rr = assign_rr(w)
+    oid = rr2id(rr)
+    send_msg(w, (:call_wait, tuple(oid, f, args...)))
+    yieldto(PGRP.scheduler, WaitFor(:sync, oid))
+end
+
+remote_call_wait(id::Int, f, args...) =
+    (global PGRP;
+     remote_call_wait(id==0?PGRP.client:PGRP.workers[id], f, args...))
 
 function sync_msg(verb::Symbol, r::RemoteRef)
     global PGRP
-    # NOTE: currently other workers can't request stuff from the client
-    # (id 0), since they wouldn't get it until the user typed yield().
-    # this should be fixed though.
+    # NOTE: if other workers request stuff from the client
+    # (id 0), they won't get it until the user yield()s somehow.
+    # this should be fixed.
     oid = rr2id(r)
     if r.where==myid() || (r.where > 0 && isa(PGRP.workers[r.where],
                                               LocalProcess))
@@ -361,12 +399,13 @@ function at_each(grp::ProcessGroup, f, args...)
     end
 end
 
-pmap(f, lst) = pmap(PGRP, f, lst)
+pmap(f, lsts...) = pmap(PGRP, f, lsts...)
+pmap(grp::ProcessGroup, f) = f()
 
-function pmap(grp::ProcessGroup, f, lst)
+function pmap(grp::ProcessGroup, f, lsts...)
     np = grp.np
-    { remote_call(grp.workers[(i-1)%np+1], f, lst[i]) |
-     i = 1:length(lst) }
+    { remote_call(grp.workers[(i-1)%np+1], f, map(L->L[i], lsts)...) |
+     i = 1:length(lsts[1]) }
 end
 
 ## worker event loop ##
@@ -415,18 +454,6 @@ function deliver_result(sock::IOStream, msg, oid, value)
     else
         assert(is(msg, :sync))
         val = oid
-    end
-    global PGRP
-    if is(sock,PGRP.client.socket)
-        sock = PGRP.client
-    else
-        for i=1:PGRP.np
-            # TODO: this search shouldn't be necessary
-            if is(sock,PGRP.workers[i].socket)
-                sock = PGRP.workers[i]
-                break
-            end
-        end
     end
     try
         send_msg(sock, (:result, (msg, oid, val)))
@@ -591,7 +618,8 @@ function jl_worker_loop(accept_fd, clientmode)
         end
 
         for (fd, sock) = sockets
-            if has(fdset, fd) || nb_available(sock)>0
+            while has(fdset, fd) || nb_available(sock)>0
+                del(fdset, fd)
                 #print("nb= ", nb_available(sock), "\n")
                 #print("$(myid()) reading fd= ", fd, "\n")
                 try
@@ -599,7 +627,8 @@ function jl_worker_loop(accept_fd, clientmode)
                     #print("$(myid()) got ", tuple(msg, args[1],
                     #                              map(typeof,args[2:])), "\n")
                     # handle message
-                    if is(msg, :call)
+                    if is(msg, :call) || is(msg, :call_fetch) ||
+                        is(msg, :call_wait)
                         id = args[1]
                         f = args[2]
                         let func=f, ar=args[3:]
@@ -607,6 +636,11 @@ function jl_worker_loop(accept_fd, clientmode)
                             refs[id] = wi
                             add(wi.clientset, id[1])
                             enq(workqueue, wi)
+                            if is(msg, :call_fetch)
+                                wi.notify = (sock, :fetch, id, wi.notify)
+                            elseif is(msg, :call_wait)
+                                wi.notify = (sock, :sync, id, wi.notify)
+                            end
                         end
                     elseif is(msg, :do)
                         f = args[1]

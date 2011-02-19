@@ -6,7 +6,8 @@ DLLEXPORT float rand_float();
 DLLEXPORT double randn();
 void randomize();
 DLLEXPORT uint32_t genrand_int32();
-void init_genrand(uint32_t s);
 u_int64_t i64time();
+DLLEXPORT void randomseed32(uint32_t s);
+DLLEXPORT void randomseed64(uint64_t s);
 
 #endif

@@ -29,7 +29,7 @@ function has(t::TreeNode, key)
     end
 end
 
-ref(t::EmptyTree, k) = error("key not found")
+ref(t::EmptyTree, k) = throw(KeyError(k))
 ref(t::BTree, k) = t.root[k]
 
 function ref(t::TreeNode, key)
@@ -56,7 +56,7 @@ function assign(t::TreeNode, v, k)
     t
 end
 
-del(t::EmptyTree, k) = error("key not found")
+del(t::EmptyTree, k) = throw(KeyError(k))
 del(t::BTree, k) = (t.root = del(t.root, k); t)
 
 function del(t::TreeNode, k)

@@ -35,7 +35,7 @@ function ref(::EnvHash, k::String)
     try
         getenv(k)
     catch
-        error("key not found")
+        throw(KeyError(k))
     end
 end
 

@@ -173,7 +173,7 @@ type LoadError <: Exception
 end
 
 type MethodError <: Exception
-    f::Function
+    f
     args
 end
 

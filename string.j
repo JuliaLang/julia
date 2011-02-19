@@ -416,7 +416,7 @@ function interp_parse(str::String, unescape::Function)
             if !isempty(str[i:j-1])
                 strs = append(strs,(unescape(str[i:j-1]),))
             end
-            ex, j = parse(str,k)
+            ex, j = parseatom(str,k)
             strs = append(strs,(ex,)); i = j
         elseif c == '\\' && !done(str,k)
             c, j = next(str,k)
@@ -481,7 +481,7 @@ function shell_parse(str::String, interp::Bool)
         elseif interp && !in_single_quotes && c == '$'
             update_arg(str[i:j-1]); i = k
             j = k
-            ex, j = parse(str,j)
+            ex, j = parseatom(str,j)
             update_arg(ex); i = j
         else
             if !in_double_quotes && c == '\''
@@ -588,11 +588,15 @@ shell_escape(cmd::String, args::String...) =
 
 ## interface to parser ##
 
-parse(s::String) = parse(s, 1)
+parse(s::String)          = parse(s, 1, true)
+parse(s::String, pos)     = parse(s, pos, true)
+parseatom(s::String)      = parse(s, 1, false)
+parseatom(s::String, pos) = parse(s, pos, false)
 # returns (expr, end_pos). expr is () in case of parse error.
-function parse(s::String, pos)
+function parse(s::String, pos, greedy)
     ex, pos = ccall(:jl_parse_string, Any,
-                    (Ptr{Uint8},Int32), cstring(s), int32(pos)-1)
+                    (Ptr{Uint8},Int32,Int32),
+                    cstring(s), int32(pos)-1, greedy?1:0)
     if ex == (); error(ParseError); end
     ex, pos+1
 end

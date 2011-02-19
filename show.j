@@ -94,6 +94,7 @@ show(e::DivideByZeroError) = println("error: integer divide by zero")
 show(e::StackOverflowError) = println("error: stack overflow")
 show(e::EOFError) = println("read: end of file")
 show(e::ErrorException) = println(e.msg)
+show(e::KeyError) = println("key not found: $(e.key)")
 
 function show(e::MethodError)
     name = ccall(:jl_genericfunc_name, Any, (Any,), e.f)
@@ -114,7 +115,12 @@ function dump{T}(x::T)
 end
 
 # show arrays
+showempty{T}(a::Array{T}) = print("Array($T,$(size(a)))")
+
 function showall{T}(a::Array{T,1})
+    if isempty(a)
+        return showempty(a)
+    end
     if is(T,Any)
         opn = '{'; cls = '}'
     else
@@ -124,6 +130,9 @@ function showall{T}(a::Array{T,1})
 end
 
 function showall{T}(a::Array{T,2})
+    if isempty(a)
+        return showempty(a)
+    end
     for i = 1:size(a,1)
         show_cols(a, 1, size(a,2), i)
         print('\n')
@@ -131,6 +140,9 @@ function showall{T}(a::Array{T,2})
 end
 
 function show{T}(a::Array{T,1})
+    if isempty(a)
+        return showempty(a)
+    end
     if is(T,Any)
         opn = '{'; cls = '}'
     else
@@ -154,6 +166,9 @@ function show_cols(a, start, stop, i)
 end
 
 function show{T}(a::Array{T,2})
+    if isempty(a)
+        return showempty(a)
+    end
     m = size(a,1)
     n = size(a,2)
     print_hdots = false
@@ -199,9 +214,12 @@ function show{T}(a::Array{T,2})
     end
 end
 
-show{T}(a::Array{T,0}) = print("Array($T)")
+show{T}(a::Array{T,0}) = print("Array($T,())")
 
 function show(a::Array)
+    if isempty(a)
+        return showempty(a)
+    end
     slice2d(a, idxs) = [ a[i, j, idxs...] | i=1:size(a,1), j=1:size(a,2) ]
     tail = size(a)[3:]
     cartesian_map(idxs->(print("[:, :, ");
