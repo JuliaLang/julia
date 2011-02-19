@@ -197,8 +197,8 @@ function del(h::HashTable, key)
             index = (index & (sz-1)) + 1
             iter += 1
         end
-        assert(!has(h.used, index) ||
-               hashindex(h.keys[index],sz) == index)
+        assert(!has(h.used, index) || hashindex(h.keys[index],sz)==index,
+               "table.j:200")
     end
     h
 end

@@ -62,6 +62,10 @@ function show(e::Expr)
             println("  $a")
         end
         println("end")
+    elseif is(hd,:comparison)
+        print(e.args...)
+    elseif is(hd,:(.))
+        print(e.args[1],'.',e.args[2])
     else
         print(hd)
         show_comma_array(e.args,'(',')')

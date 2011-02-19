@@ -17,7 +17,8 @@ system_error(s::Symbol, b::Bool) = system_error(string(s), b)
 
 assert_test(b::Bool) = b
 assert_test(b::Tensor{Bool}) = all(b)
-assert(x) = assert_test(x) ? true : error("Assertion failed.")
+assert(x) = assert(x,'?')
+assert(x,labl) = assert_test(x) ? true : error("Assertion failed: ", labl)
 
 macro assert(ex)
     :(assert_test($ex) ? true : error("Assertion failed: ", $string(ex)))

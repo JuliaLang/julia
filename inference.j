@@ -319,7 +319,7 @@ end
 function isconstantfunc(f, vtypes, sv::StaticVarInfo)
     if isa(f,Expr) && is(f.head,:top)
         abstract_eval(f, vtypes, sv)
-        assert(isa(f.args[1],Symbol))
+        assert(isa(f.args[1],Symbol), "inference.j:322")
         return (true, f.args[1])
     end
     return (isa(f,Symbol) && !has(vtypes,f), f)
@@ -565,7 +565,7 @@ function interpret(e::Expr, vtypes, sv::StaticVarInfo)
     if is(e.head,:(=))
         t = abstract_eval(e.args[2], vtypes, sv)
         lhs = e.args[1]
-        assert(isa(lhs,Symbol))
+        assert(isa(lhs,Symbol), "inference.j:568")
         return StateUpdate(lhs, t, vtypes)
     elseif is(e.head,:call) || is(e.head,:call1)
         abstract_eval(e, vtypes, sv)
@@ -731,7 +731,7 @@ function typeinf(linfo::LambdaStaticData,atypes::Tuple,sparams::Tuple, cop, def)
         ast = ast0
     end
 
-    assert(is(ast.head,:lambda))
+    assert(is(ast.head,:lambda), "inference.j:734")
     args = f_argnames(ast)
     locals = ast.args[2].args[1].args
     vars = append(args, locals)
@@ -1036,8 +1036,8 @@ function inlineable(e::Expr, vars)
     if length(body) > 1
         return NF
     end
-    assert(isa(body[1],Expr))
-    assert(is(body[1].head,:return))
+    assert(isa(body[1],Expr), "inference.j:1039")
+    assert(is(body[1].head,:return), "inference.j:1040")
     # check for vararg function
     args = f_argnames(ast)
     na = length(args)

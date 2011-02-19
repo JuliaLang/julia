@@ -30,6 +30,7 @@ libc = dlopen("libc")
 
 # io, strings, printing & regexen
 load("io.j")
+ccall(:jl_set_memio_func, Void, ())
 stdout_stream = make_stdout_stream()
 set_current_output_stream(stdout_stream)
 stderr_stream = fdio(ccall(:jl_stderr, Int32, ()))

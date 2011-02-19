@@ -607,13 +607,13 @@ int jl_gc_is_enabled() { return is_gc_enabled; }
 
 void jl_gc_collect()
 {
+    allocd_bytes = 0;
     if (is_gc_enabled) {
         gc_mark();
         sweep_weak_refs();
         gc_sweep();
         run_finalizers();
     }
-    allocd_bytes = 0;
 }
 
 void *allocb(size_t sz)

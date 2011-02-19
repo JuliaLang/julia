@@ -29,6 +29,7 @@
     jl_closure_linfo;
     jl_word_size;
     jl_enable_inference;
+    jl_set_memio_func;
     jl_symbol_n;
     jl_matching_methods;
     jl_is_builtin;
