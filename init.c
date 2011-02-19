@@ -216,6 +216,11 @@ static jl_value_t *global(char *name)
     return *jl_get_bindingp(jl_system_module, jl_symbol(name));
 }
 
+DLLEXPORT void jl_set_memio_func()
+{
+    jl_memio_func = (jl_function_t*)global("memio");
+}
+
 int jl_load_startup_file()
 {
     JL_TRY {
@@ -234,7 +239,6 @@ int jl_load_startup_file()
 #ifdef JL_GC_MARKSWEEP
     jl_gc_collect();
 #endif
-    jl_memio_func = (jl_function_t*)global("memio");
     return 0;
 }
 

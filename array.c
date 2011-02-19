@@ -258,8 +258,9 @@ JL_CALLABLE(jl_f_arrayref)
     JL_TYPECHK(arrayref, int32, args[1]);
     jl_array_t *a = (jl_array_t*)args[0];
     size_t i = jl_unbox_int32(args[1])-1;
-    if (i >= a->length)
-        jl_errorf("array[%d]: index out of range", i+1);
+    if (i >= a->length) {
+        jl_errorf("ref array[%d]: index out of range", i+1);
+    }
     return jl_arrayref(a, i);
 }
 
@@ -297,8 +298,9 @@ JL_CALLABLE(jl_f_arrayset)
     JL_TYPECHK(arrayset, int32, args[1]);
     jl_array_t *b = (jl_array_t*)args[0];
     size_t i = jl_unbox_int32(args[1])-1;
-    if (i >= b->length)
-        jl_errorf("array[%d]: index out of range", i+1);
+    if (i >= b->length) {
+        jl_errorf("assign array[%d]: index out of range", i+1);
+    }
     jl_arrayset(b, i, args[2]);
     return args[0];
 }

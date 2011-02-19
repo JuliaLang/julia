@@ -83,7 +83,7 @@ function serialize(s, f::Function)
     elseif is(linfo,())
         error(f," is not serializable")
     else
-        assert(isa(linfo,LambdaStaticData))
+        @assert (isa(linfo,LambdaStaticData))
         write(s, uint8(1))
         serialize(s, linfo.ast)
         serialize(s, linfo.sparams)
@@ -195,7 +195,7 @@ end
 
 # default structure deserializer
 function deserialize(s, t::Type)
-    assert(isa(t,StructKind))
+    @assert (isa(t,StructKind))
     nf = length(t.names)
     if nf == 0
         return ccall(:jl_new_struct, Any, (Any,), t)
