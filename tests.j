@@ -747,3 +747,42 @@ x = triu(a) \ b
 @assert sum(triu(a)*x-b) < 1e-8
 x = tril(a) \ b
 @assert sum(tril(a)*x-b) < 1e-8
+
+# hash table
+h = HashTable()
+for i=1:10000
+    h[i] = i+1
+end
+for i=1:10000
+    @assert (h[i] == i+1)
+end
+for i=1:2:10000
+    del(h, i)
+end
+for i=1:2:10000
+    h[i] = i+1
+end
+for i=1:10000
+    @assert (h[i] == i+1)
+end
+for i=1:10000
+    del(h, i)
+end
+@assert isempty(h)
+h[77] = 100
+@assert h[77]==100
+for i=1:10000
+    h[i] = i+1
+end
+for i=1:2:10000
+    del(h, i)
+end
+for i=10001:20000
+    h[i] = i+1
+end
+for i=2:2:10000
+    @assert h[i]==i+1
+end
+for i=10000:20000
+    @assert h[i]==i+1
+end

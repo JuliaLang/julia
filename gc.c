@@ -558,6 +558,7 @@ static void gc_mark()
     GC_Markval(jl_an_empty_string);
     GC_Markval(jl_an_empty_cell);
     GC_Markval(jl_exception_in_transit);
+    GC_Markval(jl_unprotect_stack_func);
 
     // constants
     GC_Markval(jl_null);

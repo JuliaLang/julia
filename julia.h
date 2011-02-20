@@ -292,6 +292,7 @@ extern jl_function_t *jl_bottom_func;
 extern jl_function_t *jl_memio_func;
 extern jl_function_t *jl_append_any_func;
 extern jl_function_t *jl_method_missing_func;
+extern jl_function_t *jl_unprotect_stack_func;
 
 extern void *jl_dl_handle;
 

@@ -36,6 +36,11 @@ function del(s::IntSet, n::Int)
     s
 end
 
+function del_all(s::IntSet)
+    s.bits[:] = 0
+    s
+end
+
 function has(s::IntSet, n::Int)
     if n >= s.limit
         false

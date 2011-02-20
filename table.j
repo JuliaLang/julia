@@ -90,15 +90,35 @@ type HashTable{K,V}
     keys::Array{K,1}
     vals::Array{V,1}
     used::IntSet
+    deleted::IntSet
     deleter::Function
 
     HashTable() = HashTable(Any,Any)
     HashTable(k, v) = HashTable(k, v, 16)
     HashTable(k, v, n) = (n = _tablesz(n);
-                          new(Array(k,n), Array(v,n), IntSet(n+1), identity))
+                          new(Array(k,n), Array(v,n), IntSet(n+1), IntSet(n+1),
+                              identity))
 end
 
 hashindex(key, sz) = (int32(hash(key)) & (sz-1)) + 1
+
+function rehash{K,V}(h::HashTable{K,V}, newsz)
+    oldk = h.keys
+    oldv = h.vals
+    oldu = h.used
+    oldd = h.deleted
+    h.keys = Array(K,newsz)
+    h.vals = Array(V,newsz)
+    h.used = IntSet(newsz+1)
+    h.deleted = IntSet(newsz+1)
+
+    for i = oldu
+        if !has(oldd,i)
+            h[oldk[i]] = oldv[i]
+        end
+    end
+    h
+end
 
 function assign{K,V}(h::HashTable{K,V}, v, key)
     sz = length(h.keys)
@@ -114,6 +134,12 @@ function assign{K,V}(h::HashTable{K,V}, v, key)
             add(h.used, index)
             return h
         end
+        if has(h.deleted,index)
+            h.keys[index] = key
+            h.vals[index] = v
+            del(h.deleted, index)
+            return h
+        end
 
         if isequal(key, h.keys[index])
             h.vals[index] = v
@@ -127,17 +153,7 @@ function assign{K,V}(h::HashTable{K,V}, v, key)
         end
     end
 
-    oldk = h.keys
-    oldv = h.vals
-    oldu = h.used
-    newsz = sz*2
-    h.keys = Array(K,newsz)
-    h.vals = Array(V,newsz)
-    h.used = IntSet(newsz+1)
-
-    for i = oldu
-        h[oldk[i]] = oldv[i]
-    end
+    rehash(h, sz*2)
 
     assign(h, v, key)
 end
@@ -154,7 +170,7 @@ function ht_keyindex(h::HashTable, key)
         if !has(h.used,index)
             break
         end
-        if isequal(key, h.keys[index])
+        if !has(h.deleted,index) && isequal(key, h.keys[index])
             return index
         end
 
@@ -181,32 +197,30 @@ end
 function del(h::HashTable, key)
     index = ht_keyindex(h, key)
     if index > 0
-        sz = length(h.keys)
-        iter = 0
-        maxprobe = sz>>3
-        orig = index
-        del(h.used, index)
-        index = (index & (sz-1)) + 1
-        while (iter < maxprobe && index != orig &&
-               has(h.used, index) &&
-               hashindex(h.keys[index],sz) < index)
-            h.keys[index-1] = h.keys[index]
-            h.vals[index-1] = h.vals[index]
-            add(h.used, index-1)
-            del(h.used, index)
-            index = (index & (sz-1)) + 1
-            iter += 1
+        add(h.deleted, index)
+        if numel(h.deleted) >= (length(h.keys)>>2)
+            rehash(h, length(h.keys))
         end
-        assert(!has(h.used, index) || hashindex(h.keys[index],sz)==index,
-               "table.j:200")
     end
     h
 end
 
-start(t::HashTable) = 0
+function skip_deleted(used, deleted, i)
+    while !done(used, i)
+        (i, ip1) = next(used, i)
+        if !has(deleted,i)
+            break
+        end
+        i = ip1
+    end
+    return i
+end
+
+start(t::HashTable) = skip_deleted(t.used, t.deleted, 0)
 done(t::HashTable, i) = done(t.used, i)
 next(t::HashTable, i) = ((n, nxt) = next(t.used, i);
-                         ((t.keys[n],t.vals[n]), nxt))
+                         ((t.keys[n],t.vals[n]),
+                          skip_deleted(t.used,t.deleted,nxt)))
 
 isempty(t::HashTable) = done(t, start(t))
 
