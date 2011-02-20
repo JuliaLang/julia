@@ -201,9 +201,6 @@ static void finish_task(jl_task_t *t, jl_value_t *resultval)
     assert(!t->done);
     t->done = 1;
     t->result = resultval;
-    t->_stkbase = NULL;
-    t->stack = NULL;
-    t->start = NULL;
 }
 
 // yield to exception handler
@@ -363,14 +360,23 @@ jl_task_t *jl_new_task(jl_function_t *start, size_t ssize)
     stk = (char*)LLT_ALIGN((uptrint_t)stk, pagesz);
     // add a guard page to detect stack overflow
     // the GC might read this area, which is ok, just prevent writes
-    // TODO: add a finalizer to remove this!
-    //if (mprotect(stk, pagesz-1, PROT_READ) == -1)
-    //    jl_errorf("mprotect: %s", strerror(errno));
+    if (mprotect(stk, pagesz-1, PROT_READ) == -1)
+        jl_errorf("mprotect: %s", strerror(errno));
     t->stack = stk+pagesz;
+    jl_gc_add_finalizer((jl_value_t*)t, jl_unprotect_stack_func);
 
     init_task(t);
     JL_GC_POP();
     return t;
+}
+
+JL_CALLABLE(jl_unprotect_stack)
+{
+    jl_task_t *t = (jl_task_t*)args[0];
+    char *stk = t->stack-jl_page_size;
+    // unprotect stack so it can be reallocated for something else
+    mprotect(stk, jl_page_size-1, PROT_READ|PROT_WRITE|PROT_EXEC);
+    return (jl_value_t*)jl_null;
 }
 
 #ifdef BOEHM_GC
@@ -430,6 +436,8 @@ JL_CALLABLE(jl_f_taskdone)
     return ((jl_task_t*)args[0])->done ? jl_true : jl_false;
 }
 
+jl_function_t *jl_unprotect_stack_func;
+
 void jl_init_tasks(void *stack, size_t ssize)
 {
     _probe_arch();
@@ -463,6 +471,7 @@ void jl_init_tasks(void *stack, size_t ssize)
     jl_root_task = jl_current_task;
 
     jl_exception_in_transit = (jl_value_t*)jl_null;
+    jl_unprotect_stack_func = jl_new_closure(jl_unprotect_stack, NULL);
 
     jl_add_builtin("Task", (jl_value_t*)jl_task_type);
     jl_add_builtin_func("yieldto", jl_f_yieldto);
