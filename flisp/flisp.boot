@@ -326,7 +326,7 @@
 								    #fn(io.write)
 								    *linefeed*] newline)
 	  nnn #fn("8000r1e0c1|42;" [count #fn("6000r1|A@;" [])] nnn) nreconc
-	  #fn("8000r2c0e1|31}42;" [#fn(nconc) reverse!] nreconc) odd? #fn("7000r1e0|31@;" [even?] odd?)
+	  #fn("8000r2e0}|42;" [reverse!-] nreconc) odd? #fn("7000r1e0|31@;" [even?] odd?)
 	  positive? #fn("8000r1e0|`42;" [>] positive?) princ
 	  #fn("9000s0c0qe141;" [#fn("7000r1^k02c1qc2q41;" [*print-readably* #fn("7000r1c0qc1qt|302;" [#fn("8000r0e0c1i2042;" [for-each
   #fn(write)]) #fn("7000r1~302c0|41;" [#fn(raise)])])
@@ -372,9 +372,9 @@
   #fn("7000r0c0qc1t6;0e2302\x7f40;^;" [#fn("7000r0~3016702e040;" [newline])
 				       #fn("7000r1e0|312];" [top-level-exception-handler])
 				       newline] reploop) newline])] repl)
-	  revappend #fn("8000r2c0e1|31}42;" [#fn(nconc) reverse] revappend)
-	  reverse #fn("8000r1e0_|42;" [reverse-] reverse) reverse!
-	  #fn("7000r1c0q_41;" [#fn("9000r1]~F6C02~N~|~m02P2o005\x1c/2|;" [])] reverse!)
+	  revappend #fn("8000r2e0}|42;" [reverse-] revappend) reverse
+	  #fn("8000r1e0_|42;" [reverse-] reverse) reverse! #fn("8000r1e0_|42;" [reverse!-] reverse!)
+	  reverse!- #fn("9000r2]}F6B02}N}|}m02P2m15\x1d/2|;" [] reverse!-)
 	  reverse- #fn("8000r2}\x8540|;e0}M|K}N42;" [reverse-] reverse-)
 	  self-evaluating? #fn("8000r1|?16602|C@17K02c0|3116A02|C16:02|c1|31<;" [#fn(constant?)
   #fn(top-level-value)] self-evaluating?)

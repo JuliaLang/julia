@@ -302,13 +302,14 @@
 
 (define (reverse lst) (reverse- () lst))
 
-(define (reverse! l)
-  (let ((prev ()))
-    (while (pair? l)
-	   (set! l (prog1 (cdr l)
-			  (set-cdr! l (prog1 prev
-					     (set! prev l))))))
-    prev))
+(define (reverse!- prev l)
+  (while (pair? l)
+	 (set! l (prog1 (cdr l)
+			(set-cdr! l (prog1 prev
+					   (set! prev l))))))
+  prev)
+
+(define (reverse! l) (reverse!- () l))
 
 (define (delete-duplicates lst)
   (if (atom? lst)
@@ -322,8 +323,8 @@
 
 ; backquote -------------------------------------------------------------------
 
-(define (revappend l1 l2) (nconc (reverse  l1) l2))
-(define (nreconc   l1 l2) (nconc (reverse! l1) l2))
+(define (revappend l1 l2) (reverse-  l2 l1))
+(define (nreconc   l1 l2) (reverse!- l2 l1))
 
 (define (self-evaluating? x)
   (or (and (atom? x)

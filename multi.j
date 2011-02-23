@@ -37,11 +37,12 @@ function send_msg(s::IOStream, x)
 end
 
 # todo:
-# - method_missing for waiting
+# - add readline to event loop
 # - GOs/darrays on a subset of nodes
-# - dynamically adding nodes
+# - dynamically adding nodes (then always start with 1 and just grow/shrink)
+# - method_missing for waiting (ref/assign/localdata seems to cover a lot)
 # - more dynamic scheduling
-# - call&wait and call&fetch combined messages
+# * call&wait and call&fetch combined messages
 # - aggregate GC messages
 # - fetch/wait latency seems to be excessive
 # * recover from i/o errors
