@@ -1,39 +1,72 @@
 ## serializing values ##
 
+# dummy types to tell number of bytes used to store length (4 or 1)
+abstract LongSymbol
+abstract LongTuple
+abstract LongExpr
+
 ser_tag = idtable()
+deser_tag = idtable()
 let i = 1
-    global ser_tag
-    for t = {Any, Symbol, Bool, Int8, Uint8, Int16, Uint16, Int32, Uint32,
+    global ser_tag, deser_tag
+    for t = {Symbol, Bool, Int8, Uint8, Int16, Uint16, Int32, Uint32,
              Int64, Uint64, Float32, Float64,
              TagKind, UnionKind, BitsKind, StructKind, FuncKind,
-             Tuple, Array}
+             Tuple, Array, Expr, LongSymbol, LongTuple, LongExpr,
+
+             (), Any, :Any, :body, :return, :lambda, :locals,
+             :T, :call, symbol("::"), :Array, :vinf, :TypeVar, :FuncKind,
+             :Box, :i, :j, :k, :l, :m, :n, :x, :y, :z, :a, :b}
         ser_tag[t] = i
+        deser_tag[i] = t
         i += 1
     end
 end
 
-deser_tag = idtable()
-for (k, v) = ser_tag
-    deser_tag[v] = k
-end
-
+# tags >= this just represent themselves, their whole representation is 1 byte
+VALUE_TAGS = ser_tag[()]
 
 writetag(s, x) = write(s, uint8(ser_tag[x]))
 
+function write_as_tag(s, x)
+    t = ser_tag[x]
+    if t < VALUE_TAGS
+        write(s, uint8(0))
+    end
+    write(s, uint8(t))
+end
+
 serialize(s, x::Bool) = (writetag(s,Bool); write(s, uint8(x)))
 
+serialize(s, ::()) = write_as_tag(s, ())
+
 function serialize(s, t::Tuple)
-    writetag(s, Tuple)
-    write(s, int32(length(t)))
-    for i = 1:length(t)
+    l = length(t)
+    if l <= 255
+        writetag(s, Tuple)
+        write(s, uint8(l))
+    else
+        writetag(s, LongTuple)
+        write(s, int32(l))
+    end
+    for i = 1:l
         serialize(s, t[i])
     end
 end
 
 function serialize(s, x::Symbol)
-    writetag(s, Symbol)
+    if has(ser_tag, x)
+        return write_as_tag(s, x)
+    end
     name = string(x)
-    write(s, int32(length(name)))
+    ln = length(name)
+    if ln <= 255
+        writetag(s, Symbol)
+        write(s, uint8(ln))
+    else
+        writetag(s, LongSymbol)
+        write(s, int32(length(name)))
+    end
     write(s, name)
 end
 
@@ -52,10 +85,25 @@ function serialize(s, a::Array)
     end
 end
 
+function serialize(s, e::Expr)
+    l = length(e.args)
+    if l <= 255
+        writetag(s, Expr)
+        write(s, uint8(l))
+    else
+        writetag(s, LongExpr)
+        write(s, int32(l))
+    end
+    serialize(s, e.head)
+    serialize(s, e.type)
+    for a = e.args
+        serialize(s, a)
+    end
+end
+
 function serialize(s, t::TagKind)
     if has(ser_tag,t)
-        write(s, uint8(0))
-        writetag(s, t)
+        write_as_tag(s, t)
     else
         writetag(s, TagKind)
         serialize(s, t.name.name)
@@ -93,9 +141,7 @@ end
 
 function serialize(s, x)
     if has(ser_tag,x)
-        write(s, uint8(0)) # tag 0 indicates just a tag
-        writetag(s, x)
-        return ()
+        return write_as_tag(s, x)
     end
     t = typeof(x)
     if isa(t,BitsKind)
@@ -127,7 +173,12 @@ function deserialize(s)
         return deser_tag[int32(read(s, Uint8))]
     end
     tag = deser_tag[b]
-    if is(tag,Tuple)
+    if b >= VALUE_TAGS
+        return tag
+    elseif is(tag,Tuple)
+        len = int32(read(s, Uint8))
+        return deserialize_tuple(s, len)
+    elseif is(tag,LongTuple)
         len = read(s, Int32)
         return deserialize_tuple(s, len)
     elseif is(tag,FuncKind)
@@ -151,7 +202,8 @@ end
 
 deserialize_tuple(s, len) = ntuple(len, i->deserialize(s))
 
-deserialize(s, ::Type{Symbol}) = symbol(read(s, Uint8, read(s, Int32)))
+deserialize(s, ::Type{Symbol}) = symbol(read(s, Uint8, int32(read(s, Uint8))))
+deserialize(s, ::Type{LongSymbol}) = symbol(read(s, Uint8, read(s, Int32)))
 
 function deserialize_function(s)
     b = read(s, Uint8)
@@ -177,6 +229,17 @@ function deserialize(s, ::Type{Array})
         A[i] = deserialize(s)
     end
     return A
+end
+
+deserialize(s, ::Type{Expr})     = deserialize_expr(s, int32(read(s, Uint8)))
+deserialize(s, ::Type{LongExpr}) = deserialize_expr(s, read(s, Int32))
+
+function deserialize_expr(s, len)
+    hd = deserialize(s)::Symbol
+    ty = deserialize(s)
+    e = expr(hd, { deserialize(s) | i=1:len })
+    e.type = ty
+    e
 end
 
 function deserialize(s, ::Type{TagKind})
