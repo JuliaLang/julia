@@ -631,7 +631,10 @@ static Value *generic_box(jl_value_t *targ, jl_value_t *x, jl_codectx_t *ctx)
             vx = builder.CreateIntToPtr(vx, llvmt);
         }
         else {
-            vx = builder.CreateBitCast(vx, llvmt);
+            if (llvmt == T_int1)
+                vx = builder.CreateTrunc(vx, llvmt);
+            else
+                vx = builder.CreateBitCast(vx, llvmt);
         }
     }
     return mark_julia_type(vx, bt);
