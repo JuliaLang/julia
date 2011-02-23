@@ -626,10 +626,8 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
         }
         else if (f->fptr == &jl_f_is && nargs==2) {
             JL_GC_POP();
-            Value *arg1 = emit_expr(args[1], ctx, true);
-            Value *arg2 = emit_expr(args[2], ctx, true);
-            if (arg1->getType() != arg2->getType())
-                return ConstantInt::get(T_int1,0);
+            Value *arg1 = boxed(emit_expr(args[1], ctx, true));
+            Value *arg2 = boxed(emit_expr(args[2], ctx, true));
             return builder.CreateICmpEQ(arg1, arg2);
         }
         else if (f->fptr == &jl_f_tuplelen && nargs==1) {

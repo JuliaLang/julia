@@ -7,16 +7,19 @@ abstract LongExpr
 
 ser_tag = idtable()
 deser_tag = idtable()
-let i = 1
+let i = 2
     global ser_tag, deser_tag
-    for t = {Symbol, Bool, Int8, Uint8, Int16, Uint16, Int32, Uint32,
+    for t = {Symbol, Int8, Uint8, Int16, Uint16, Int32, Uint32,
              Int64, Uint64, Float32, Float64,
              TagKind, UnionKind, BitsKind, StructKind, FuncKind,
              Tuple, Array, Expr, LongSymbol, LongTuple, LongExpr,
 
-             (), Any, :Any, :body, :return, :lambda, :locals,
-             :T, :call, symbol("::"), :Array, :vinf, :TypeVar, :FuncKind,
-             :Box, :i, :j, :k, :l, :m, :n, :x, :y, :z, :a, :b}
+             (), Bool, Any, :Any, :Array, :TypeVar, :FuncKind, :Box,
+             :lambda, :vinf, :locals, :body, :return, :call, symbol("::"),
+             :null, :goto, :gotoifnot, :label, :symbol, :string, :T, :S,
+             :a, :b, :c, :d, :e, :f, :g, :h, :i, :j, :k, :l, :m, :n, :o,
+             :p, :q, :r, :s, :t, :u, :v, :w, :x, :y, :z,
+             false, true, 0, 1, 2, 3, 4}
         ser_tag[t] = i
         deser_tag[i] = t
         i += 1
@@ -36,7 +39,7 @@ function write_as_tag(s, x)
     write(s, uint8(t))
 end
 
-serialize(s, x::Bool) = (writetag(s,Bool); write(s, uint8(x)))
+serialize(s, x::Bool) = write_as_tag(s, x)
 
 serialize(s, ::()) = write_as_tag(s, ())
 
