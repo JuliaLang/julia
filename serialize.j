@@ -10,7 +10,7 @@ deser_tag = idtable()
 let i = 2
     global ser_tag, deser_tag
     for t = {Symbol, Int8, Uint8, Int16, Uint16, Int32, Uint32,
-             Int64, Uint64, Float32, Float64,
+             Int64, Uint64, Float32, Float64, Char, Ptr,
              TagKind, UnionKind, BitsKind, StructKind, FuncKind,
              Tuple, Array, Expr, LongSymbol, LongTuple, LongExpr,
 

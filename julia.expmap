@@ -106,6 +106,10 @@
     jl_load;
     jl_dlsym;
     jl_load_dynamic_library;
+    jl_input_line_callback_readline;
+    jl_input_line_callback_no_readline;
+    jl_stdin_callback;
+    jl_handle_user_input;
   local:
     *;
 };

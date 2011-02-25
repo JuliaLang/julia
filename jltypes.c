@@ -1983,6 +1983,7 @@ void jl_init_types()
     dollar_sym = jl_symbol("$");
     line_sym = jl_symbol("line");
     continue_sym = jl_symbol("continue");
+    error_sym = jl_symbol("error");
     goto_sym = jl_symbol("goto");
     goto_ifnot_sym = jl_symbol("gotoifnot");
     label_sym = jl_symbol("label");

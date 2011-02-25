@@ -140,27 +140,6 @@ static jl_sym_t *scmsym_to_julia(value_t s)
     return jl_symbol(symbol_name(s));
 }
 
-static char *scmsym_to_str(value_t s)
-{
-    assert(issymbol(s));
-    return symbol_name(s);
-}
-
-static void syntax_error_check(value_t e)
-{
-    if (iscons(e)) {
-        value_t hd = car_(e);
-        if (issymbol(hd)) {
-            char *s = scmsym_to_str(hd);
-            if (!strcmp(s,"error")) {
-                // TODO: line number
-                jl_errorf("\nsyntax error: %s",
-                          (char*)cvalue_data(car_(cdr_(e))));
-            }
-        }
-    }
-}
-
 static size_t scm_list_length(value_t x)
 {
     return llength(x);
@@ -371,7 +350,6 @@ jl_value_t *jl_parse_input_line(const char *str)
                           cvalue_static_cstring(str));
     if (e == FL_T || e == FL_F || e == FL_EOF)
         return NULL;
-    syntax_error_check(e);
     
     return scm_to_julia(e);
 }
@@ -389,7 +367,6 @@ DLLEXPORT jl_value_t *jl_parse_string(const char *str, int pos0, int greedy)
         expr = (jl_value_t*)jl_null;
     }
     else {
-        syntax_error_check(e);
         expr = scm_to_julia(e);
     }
 
@@ -403,7 +380,6 @@ jl_value_t *jl_parse_file(const char *fname)
 {
     value_t e = fl_applyn(1, symbol_value(symbol("jl-parse-file")),
                           cvalue_static_cstring(fname));
-    syntax_error_check(e);
     if (!iscons(e))
         return (jl_value_t*)jl_null;
     return scm_to_julia(e);
@@ -420,7 +396,6 @@ jl_value_t *jl_expand(jl_value_t *expr)
         result = NULL;
     }
     else {
-        syntax_error_check(e);
         result = scm_to_julia(e);
     }
     while (jl_gc_n_preserved_values() > np) {

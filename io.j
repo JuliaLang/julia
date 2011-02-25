@@ -146,16 +146,10 @@ function write{T}(s::IOStream, a::Array{T})
     end
 end
 
-ASYNCH = false
-
 # num bytes available without blocking
 nb_available(s::IOStream) = ccall(:jl_nb_available, Int32, (Ptr{Void},), s.ios)
 
 function read(s::IOStream, ::Type{Uint8})
-    # for asynch I/O
-    if ASYNCH && nb_available(s) < 1
-        io_wait(s)
-    end
     b = ccall(:ios_getc, Int32, (Ptr{Void},), s.ios)
     if b == -1
         throw(EOFError())
@@ -164,20 +158,15 @@ function read(s::IOStream, ::Type{Uint8})
 end
 
 function read(s::IOStream, ::Type{Char})
-    if ASYNCH && nb_available(s) < 1
-        io_wait(s)
-    end
     ccall(:jl_getutf8, Char, (Ptr{Void},), s.ios)
 end
 
 function read{T}(s::IOStream, a::Array{T})
     if isa(T,BitsKind)
         nb = numel(a)*sizeof(T)
-        if ASYNCH && nb_available(s) < nb
-            io_wait(s)
-        end
         ccall(:ios_readall, PtrInt,
               (Ptr{Void}, Ptr{Void}, PtrInt), s.ios, a, convert(PtrInt,nb))
+        # TODO: detect eof
         a
     else
         invoke(read, (Any, Array), s, a)
