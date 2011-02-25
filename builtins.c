@@ -368,7 +368,7 @@ JL_CALLABLE(jl_f_top_eval)
     jl_expr_t *ex = (jl_expr_t*)e;
     if (ex->head == symbol_sym || ex->head == top_sym ||
         ex->head == quote_sym || ex->head == null_sym ||
-        ex->head == unbound_sym) {
+        ex->head == unbound_sym || ex->head == error_sym) {
         // expression types simple enough not to need expansion
         return jl_interpret_toplevel_expr(e);
     }
@@ -1336,8 +1336,6 @@ void jl_init_primitives()
     add_builtin("TagKind", (jl_value_t*)jl_tag_kind);
     add_builtin("UnionKind", (jl_value_t*)jl_union_kind);
 
-    add_builtin("JuliaDLHandle", jl_box_pointer(jl_pointer_void_type,
-                                                jl_dl_handle));
     add_builtin("C_NULL", jl_box_pointer(jl_pointer_void_type, NULL));
 }
 

@@ -62,6 +62,7 @@ static char jl_banner_color[] =
 
 static char jl_prompt_plain[] = "julia> ";
 static char jl_prompt_color[] = "\001\033[1m\033[32m\002julia> \001\033[37m\002";
+static char jl_prompt_color_no_readline[] = "\033[1m\033[32mjulia> \033[37m";
 static char *jl_answer_color  = "\033[1m\033[34m";
 static char jl_input_color[]  = "\033[1m\033[37m";
 static char jl_color_normal[] = "\033[0m\033[37m";
@@ -69,7 +70,11 @@ static char jl_color_normal[] = "\033[0m\033[37m";
 char *julia_home = NULL; // load is relative to here
 static char *history_file = NULL;
 static int print_banner = 1;
+#ifdef USE_READLINE
 static int no_readline = 0;
+#else
+static int no_readline = 1;
+#endif
 static int tab_width = 2;
 static char *post_boot = NULL;
 static int lisp_prompt = 0;
@@ -235,6 +240,7 @@ static int detect_color()
 
 static int have_color;
 static int prompt_length;
+static char *prompt_string;
 
 static int ends_with_semicolon(const char *input)
 {
@@ -246,6 +252,8 @@ static int ends_with_semicolon(const char *input)
     }
     return 0;
 }
+
+static void handle_input(jl_value_t *ast, int end, int show_value);
 
 #ifdef USE_READLINE
 
@@ -473,22 +481,29 @@ static int down_callback(int count, int key) {
     return 0;
 }
 
-static jl_value_t *read_expr_ast_readline(char *prompt, int *end, int *doprint)
+DLLEXPORT void jl_input_line_callback_readline(char *input)
+{
+    int end=0, doprint=1;
+    if (!input || ios_eof(ios_stdin)) {
+        end = 1;
+        rl_ast = NULL;
+    }
+
+    if (rl_ast != NULL) {
+        doprint = !ends_with_semicolon(input);
+        add_history_permanent(input);
+        ios_printf(ios_stdout, "\n");
+        free(input);
+    }
+
+    handle_input(rl_ast, end, doprint);
+}
+
+static void read_expr_readline(char *prompt)
 {
     rl_ast = NULL;
     char *input = readline(prompt);
-    if (!input || ios_eof(ios_stdin)) {
-        *end = 1;
-        return NULL;
-    }
-    if (rl_ast == NULL) return NULL;
-
-    *doprint = !ends_with_semicolon(input);
-    add_history_permanent(input);
-    ios_printf(ios_stdout, "\n");
-
-    free(input);
-    return rl_ast;
+    jl_input_line_callback_readline(input);
 }
 
 #endif
@@ -502,36 +517,59 @@ static char *ios_readline(ios_t *s)
     return ios_takebuf(&dest, &n);
 }
 
-static jl_value_t *read_expr_ast_no_readline(char *prompt, int *end, int *doprint)
+DLLEXPORT void jl_input_line_callback_no_readline(char *input)
 {
-    char *input;
-    ios_printf(ios_stdout, prompt);
-    ios_flush(ios_stdout);
-    input = ios_readline(ios_stdin);
-    ios_purge(ios_stdin);
+    jl_value_t *ast;
+    int end=0, doprint=1;
 
     if (!input || ios_eof(ios_stdin)) {
-        *end = 1;
-        return NULL;
+        end = 1;
+        ast = NULL;
     }
-
-    jl_value_t *ast = jl_parse_input_line(input);
-    if (ast == NULL) return NULL;
-    if (jl_is_expr(ast) && ((jl_expr_t*)ast)->head == continue_sym)
-        return read_expr_ast_no_readline(prompt, end, doprint);
-
-    *doprint = !ends_with_semicolon(input);
-    return ast;
+    else {
+        ast = jl_parse_input_line(input);
+        // TODO
+        //if (jl_is_expr(ast) && ((jl_expr_t*)ast)->head == continue_sym)
+        //return read_expr_ast_no_readline(prompt, end, doprint);
+        doprint = !ends_with_semicolon(input);
+    }
+    handle_input(ast, end, doprint);
 }
 
-static jl_value_t *read_expr_ast(char *prompt, int *end, int *doprint) {
+static void read_expr_no_readline(char *prompt)
+{
+    char *input;
+    //ios_printf(ios_stdout, prompt);
+    //ios_flush(ios_stdout);
+    input = ios_readline(ios_stdin);
+    ios_purge(ios_stdin);
+    jl_input_line_callback_no_readline(input);
+}
+
+static void block_for_input(char *prompt)
+{
+    if (no_readline) {
+        read_expr_no_readline(prompt);
+    }
+    else {
 #ifdef USE_READLINE
-    return no_readline ?
-        read_expr_ast_no_readline(prompt, end, doprint) :
-        read_expr_ast_readline(prompt, end, doprint);
-#else
-    return read_expr_ast_no_readline(prompt, end, doprint);
+        read_expr_readline(prompt);
 #endif
+    }
+}
+
+DLLEXPORT void jl_stdin_callback()
+{
+    if (no_readline) {
+        char *input = ios_readline(ios_stdin);
+        ios_purge(ios_stdin);
+        jl_input_line_callback_no_readline(input);
+    }
+    else {
+#ifdef USE_READLINE
+        rl_callback_read_char();
+#endif
+    }
 }
 
 static int exec_program()
@@ -553,17 +591,22 @@ static int exec_program()
     return 0;
 }
 
-// TODO: sigfpe hack
-static void awful_sigfpe_hack()
+static void exit_repl(int code)
 {
-    JL_TRY {
-        kill(getpid(), SIGFPE);
+#ifdef USE_READLINE
+    if (!no_readline) {
+        rl_callback_handler_remove();
     }
-    JL_CATCH {
+#endif
+    if (have_color) {
+        ios_printf(ios_stdout, jl_color_normal);
+        ios_flush(ios_stdout);
     }
+#ifdef JL_GF_PROFILE
+    print_profile();
+#endif
+    exit(code);
 }
-
-void jl_lisp_prompt();
 
 void jl_show_full_function(jl_value_t *v);
 
@@ -586,6 +629,103 @@ static void repl_show_value(jl_value_t *v)
         }
     }
 }
+
+DLLEXPORT void jl_handle_user_input(jl_value_t *ast, int show_value)
+{
+#ifdef USE_READLINE
+    if (!no_readline) {
+        if (load_start_j) {
+            // with multi.j loaded the readline callback can return
+            // before the command finishes running, so we have to
+            // disable rl to prevent the prompt from reappearing too soon.
+            rl_callback_handler_remove();
+        }
+    }
+#endif
+    JL_GC_PUSH(&ast);
+    assert(ast != NULL);
+    int iserr = 0;
+ again:
+    ;
+    JL_TRY {
+        if (have_color) {
+            ios_printf(ios_stdout, jl_color_normal);
+            ios_flush(ios_stdout);
+        }
+        if (iserr) {
+            jl_show(jl_exception_in_transit);
+            ios_printf(ios_stdout, "\n");
+            JL_EH_POP();
+            break;  // leave JL_TRY
+        }
+        jl_value_t *value = jl_toplevel_eval(ast);
+        jl_set_global(jl_system_module, jl_symbol("ans"), value);
+        if (show_value) {
+            if (have_color) {
+                ios_printf(ios_stdout, jl_answer_color);
+                ios_flush(ios_stdout);
+            }
+            repl_show_value(value);
+            ios_printf(ios_stdout, "\n");
+        }
+    }
+    JL_CATCH {
+        iserr = 1;
+        goto again;
+    }
+    ios_printf(ios_stdout, "\n");
+    ios_flush(ios_stdout);
+    JL_GC_POP();
+    if (no_readline) {
+        ios_printf(ios_stdout, prompt_string);
+        ios_flush(ios_stdout);
+    }
+    else {
+#ifdef USE_READLINE
+        if (load_start_j) {
+            rl_callback_handler_install(prompt_string,
+                                        jl_input_line_callback_readline);
+        }
+#endif
+    }
+}
+
+// handle a command line input event
+static void handle_input(jl_value_t *ast, int end, int show_value)
+{
+    if (end) {
+        ios_printf(ios_stdout, "\n");
+        exit_repl(0);
+    }
+    if (ast == NULL) {
+        ios_printf(ios_stdout, "\n");
+        if (no_readline) {
+            ios_printf(ios_stdout, prompt_string);
+        }
+        ios_flush(ios_stdout);
+        return;
+    }
+    jl_value_t *f=jl_get_global(jl_system_module,jl_symbol("repl_callback"));
+    if (f == NULL) {
+        jl_handle_user_input(ast, show_value);
+    }
+    else {
+        jl_value_t *fargs[] = { ast, jl_box_int32(show_value) };
+        jl_apply((jl_function_t*)f, fargs, 2);
+    }
+}
+
+// TODO: sigfpe hack
+static void awful_sigfpe_hack()
+{
+    JL_TRY {
+        kill(getpid(), SIGFPE);
+    }
+    JL_CATCH {
+    }
+}
+
+void jl_lisp_prompt();
 
 #ifdef JL_GF_PROFILE
 static void print_profile()
@@ -653,6 +793,9 @@ int main(int argc, char *argv[])
         jl_lisp_prompt();
         return 0;
     }
+
+    awful_sigfpe_hack();
+
     if (load_start_j) {
         if (jl_load_startup_file())
             return 1;
@@ -682,6 +825,7 @@ int main(int argc, char *argv[])
             }
             JL_CATCH {
                 iserr = 1;
+                i++;
                 goto try_again;
             }
         }
@@ -695,8 +839,11 @@ int main(int argc, char *argv[])
 
     have_color = detect_color();
     char *banner = have_color ? jl_banner_color : jl_banner_plain;
-    char *prompt = have_color ? jl_prompt_color : jl_prompt_plain;
+    char *prompt = have_color ?
+        (no_readline ? jl_prompt_color_no_readline : jl_prompt_color) :
+        jl_prompt_plain;
     prompt_length = strlen(jl_prompt_plain);
+    prompt_string = prompt;
 
     if (print_banner) {
         ios_printf(ios_stdout, "%s", banner);
@@ -704,64 +851,49 @@ int main(int argc, char *argv[])
 		   (clock_now()-julia_launch_tic));
     }
 
-    awful_sigfpe_hack();
+    jl_function_t *start_client =
+        (jl_function_t*)
+        jl_get_global(jl_system_module, jl_symbol("start_client"));
 
-    jl_value_t *ast=NULL;
-    JL_GC_PUSH(&ast);
-    int iserr = 0;
- again:
-    ;
-    JL_TRY {
-        if (iserr) {
-            if (have_color) {
-                ios_printf(ios_stdout, jl_color_normal);
-                ios_flush(ios_stdout);
-            }
-            jl_show(jl_exception_in_transit);
-            ios_printf(ios_stdout, "\n");
-            iserr = 0;
-        }
-        while (1) {
-            ios_flush(ios_stdout);
-
-            int end = 0;
-            int show_value = 1;
-            ast = read_expr_ast(prompt, &end, &show_value);
-            if (end) {
-                ios_printf(ios_stdout, "\n");
-                break;
-            }
-            if (ast != NULL) {
+    if (no_readline) {
+        ios_printf(ios_stdout, prompt_string);
+        ios_flush(ios_stdout);
+    }
+    if (start_client == NULL) {
+        // client event loop not available; use fallback blocking version
+        int iserr = 0;
+    again:
+        ;
+        JL_TRY {
+            if (iserr) {
                 if (have_color) {
                     ios_printf(ios_stdout, jl_color_normal);
                     ios_flush(ios_stdout);
                 }
-                jl_value_t *value = jl_toplevel_eval(ast);
-                jl_set_global(jl_system_module, jl_symbol("ans"), value);
-                if (show_value) {
-                    if (have_color) {
-                        ios_printf(ios_stdout, jl_answer_color);
-                        ios_flush(ios_stdout);
-                    }
-                    repl_show_value(value);
-                    ios_printf(ios_stdout, "\n");
-                }
+                jl_show(jl_exception_in_transit);
+                ios_printf(ios_stdout, "\n\n");
+                ios_flush(ios_stdout);
+                iserr = 0;
             }
-            ios_printf(ios_stdout, "\n");
+            while (1) {
+                block_for_input(prompt);
+            }
+        }
+        JL_CATCH {
+            iserr = 1;
+            goto again;
         }
     }
-    JL_CATCH {
-        iserr = 1;
-        goto again;
-    }
-    JL_GC_POP();
-
-    if (have_color) {
-        ios_printf(ios_stdout, jl_color_normal);
-        ios_flush(ios_stdout);
-    }
-#ifdef JL_GF_PROFILE
-    print_profile();
+    else {
+        if (!no_readline) {
+#ifdef USE_READLINE
+            rl_callback_handler_install(prompt_string,
+                                        jl_input_line_callback_readline);
 #endif
+        }
+        jl_apply(start_client, NULL, 0);
+    }
+
+    exit_repl(0);
     return 0;
 }

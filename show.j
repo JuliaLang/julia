@@ -83,26 +83,26 @@ end
 
 function show(e::TypeError)
     ctx = isempty(e.context) ? "" : "in $(e.context), "
-    println("type error: $(e.func): ",
-            "$(ctx)expected $(e.expected), ",
-            "got $(typeof(e.got))")
+    print("type error: $(e.func): ",
+          "$(ctx)expected $(e.expected), ",
+          "got $(typeof(e.got))")
 end
 
 function show(e::LoadError)
     show(e.error)
-    println(" $(e.file):$(e.line)")
+    print(" $(e.file):$(e.line)")
 end
 
-show(e::SystemError) = println("$(e.prefix): $(strerror(e.errnum))")
-show(e::DivideByZeroError) = println("error: integer divide by zero")
-show(e::StackOverflowError) = println("error: stack overflow")
-show(e::EOFError) = println("read: end of file")
-show(e::ErrorException) = println(e.msg)
-show(e::KeyError) = println("key not found: $(e.key)")
+show(e::SystemError) = print("$(e.prefix): $(strerror(e.errnum))")
+show(e::DivideByZeroError) = print("error: integer divide by zero")
+show(e::StackOverflowError) = print("error: stack overflow")
+show(e::EOFError) = print("read: end of file")
+show(e::ErrorException) = print(e.msg)
+show(e::KeyError) = print("key not found: $(e.key)")
 
 function show(e::MethodError)
     name = ccall(:jl_genericfunc_name, Any, (Any,), e.f)
-    println("no method $(name)$(typeof(e.args))")
+    print("no method $(name)$(typeof(e.args))")
 end
 
 dump(t::Type) = print(t)

@@ -96,10 +96,7 @@ type ProcessGroup
     np::Int32
 
     # event loop state
-    scheduler::Task
     refs
-    workqueue
-    waiting
     client
 
     function ProcessGroup(np::Int)
@@ -115,17 +112,24 @@ type ProcessGroup
         ProcessGroup(w, np)
     end
 
+    function ProcessGroup(myid::Int32, w::Array{Any,1}, locs::Array{Any,1},
+                          np::Int32)
+        return new(myid, w, locs, np, HashTable(), ())
+    end
+
     function ProcessGroup(w::Array{Any,1}, np::Int)
         # "client side", or initiator of process group
         locs = map(x->Location(x.host,x.port), w)
-        sched = Task(jl_worker_loop, 512*1024)
-        global PGRP = new(0, w, locs, np, sched, (), (), (), ())
+        global PGRP = ProcessGroup(0, w, locs, np)
+        PGRP.client = LocalProcess()
+        sockets = HashTable()
+        handler = fd->message_handler(fd, sockets)
         for i=1:np
             w[i].id = i
             send_msg(w[i], (i, locs))
+            sockets[w[i].fd] = w[i].socket
+            add_fd_handler(w[i].fd, handler)
         end
-        # bootstrap the current task into the scheduler
-        yieldto(sched, -1, true)
         PGRP
     end
 
@@ -134,7 +138,7 @@ type ProcessGroup
         np = length(locs)
         w = cell(np)
         w[myid] = LocalProcess()
-        PGRP = new(myid, w, locs, np, current_task(), (), (), (), ())
+        PGRP = ProcessGroup(myid, w, locs, np)
         for i=(myid+1):np
             w[i] = Worker(locs[i].host, locs[i].port)
             w[i].id = i
@@ -284,8 +288,7 @@ function remote_do(w::LocalProcess, f, args...)
     # the LocalProcess version just performs in local memory what a worker
     # does when it gets a :do message.
     # same for other messages on LocalProcess.
-    global PGRP
-    enq(PGRP.workqueue, WorkItem(()->apply(f,args)))
+    enq_work(WorkItem(()->apply(f,args)))
     ()
 end
 
@@ -318,7 +321,7 @@ function remote_call(w::LocalProcess, f, args...)
     rr = assign_rr(w)
     wi = WorkItem(()->apply(f, args))
     PGRP.refs[rr2id(rr)] = wi
-    enq(PGRP.workqueue, wi)
+    enq_work(wi)
     rr
 end
 
@@ -339,7 +342,7 @@ function remote_call_fetch(w::Worker, f, args...)
     rr = assign_rr(w)
     oid = rr2id(rr)
     send_msg(w, (:call_fetch, tuple(oid, f, args...)))
-    yieldto(PGRP.scheduler, WaitFor(:fetch, oid))
+    yieldto(Scheduler, WaitFor(:fetch, oid))
 end
 
 remote_call_fetch(id::Int, f, args...) =
@@ -354,7 +357,7 @@ function remote_call_wait(w::Worker, f, args...)
     rr = assign_rr(w)
     oid = rr2id(rr)
     send_msg(w, (:call_wait, tuple(oid, f, args...)))
-    yieldto(PGRP.scheduler, WaitFor(:sync, oid))
+    yieldto(Scheduler, WaitFor(:sync, oid))
 end
 
 remote_call_wait(id::Int, f, args...) =
@@ -381,15 +384,15 @@ function sync_msg(verb::Symbol, r::RemoteRef)
     else
         send_msg(PGRP.workers[r.where], (verb, (oid,)))
     end
-    # yield to worker loop, return here when answer arrives
-    v = yieldto(PGRP.scheduler, WaitFor(verb, oid))
+    # yield to event loop, return here when answer arrives
+    v = yieldto(Scheduler, WaitFor(verb, oid))
     return is(verb,:fetch) ? v : r
 end
 
 wait(r::RemoteRef) = sync_msg(:sync, r)
 fetch(r::RemoteRef) = sync_msg(:fetch, r)
 
-yield() = (global PGRP; yieldto(PGRP.scheduler))
+yield() = yieldto(Scheduler)
 
 ## higher-level functions ##
 
@@ -398,7 +401,6 @@ at_each(f, args...) = at_each(PGRP, f, args...)
 function at_each(grp::ProcessGroup, f, args...)
     w = grp.workers
     np = grp.np
-    fut = cell(np)
     for i=1:np
         remote_do(w[i], f, args...)
     end
@@ -423,9 +425,12 @@ type WorkItem
     notify
     argument  # value to pass task next time it is restarted
     clientset::IntSet
+    requeue::Bool
 
-    WorkItem(thunk::Function) = new(thunk, (), false, (), (), (), IntSet(64))
-    WorkItem(task::Task) = new(()->(), task, false, (), (), (), IntSet(64))
+    WorkItem(thunk::Function) = new(thunk, (), false, (), (), (), IntSet(64),
+                                    true)
+    WorkItem(task::Task) = new(()->(), task, false, (), (), (), IntSet(64),
+                               true)
 end
 
 function work_result(w::WorkItem)
@@ -478,10 +483,9 @@ function deliver_result(sock::IOStream, msg, oid, value)
 end
 
 function deliver_result(sock::(), msg, oid, value)
-    global PGRP
-    waiting = PGRP.waiting
+    global Waiting
     # restart task that's waiting on oid
-    jobs = get(waiting, oid, ())
+    jobs = get(Waiting, oid, ())
     newjobs = ()  # waiting list with one removed
     found = false
     while !is(jobs,())
@@ -489,21 +493,34 @@ function deliver_result(sock::(), msg, oid, value)
             found = true
             job = jobs[2]
             job.argument = value
-            enq(PGRP.workqueue, job)
+            enq_work(job)
         else
             newjobs = (jobs[1], jobs[2], newjobs)
         end
         jobs = jobs[3]
     end
-    waiting[oid] = newjobs
+    Waiting[oid] = newjobs
     if is(newjobs,())
-        del(waiting, oid)
+        del(Waiting, oid)
     end
     ()
 end
 
-function perform_work(workqueue, waiting, runner)
-    job = pop(workqueue)
+function enq_work(wi::WorkItem)
+    global Workqueue
+    enq(Workqueue, wi)
+end
+
+let runner = ()
+global perform_work
+function perform_work()
+    global Workqueue
+    job = pop(Workqueue)
+    perform_work(job)
+end
+
+function perform_work(job::WorkItem)
+    global Waiting, Workqueue
     local result
     try
         if isa(job.task,Task)
@@ -547,13 +564,13 @@ function perform_work(workqueue, waiting, runner)
         if isa(result,WaitFor)
             # add to waiting set to wait on a sync event
             wf::WaitFor = result
-            waiting[wf.oid] = (wf.msg, job, get(waiting, wf.oid, ()))
-        elseif !task_done(job.task)
+            Waiting[wf.oid] = (wf.msg, job, get(Waiting, wf.oid, ()))
+        elseif !task_done(job.task) && job.requeue
             # otherwise return to queue
-            enq(workqueue, job)
+            enq_work(job)
         end
     end
-    return (workqueue, waiting, runner)
+end
 end
 
 function notify_done(job::WorkItem)
@@ -564,146 +581,107 @@ function notify_done(job::WorkItem)
 end
 
 function make_scheduled(t::Task)
-    global PGRP
-    enq(PGRP.workqueue, WorkItem(t))
+    enq_work(WorkItem(t))
     t
 end
 
-function jl_worker_loop(accept_fd, clientmode)
+## worker creation and setup ##
+
+# activity on accept fd
+function accept_handler(accept_fd, sockets)
     global PGRP
-    sockets = HashTable()  # connections to peers
-    fdset = FDSet()        # set of FDs for a select call
-    refs = HashTable()     # locally-owned objects with remote refs
-    waiting = HashTable()  # refs our tasks are waiting for events on
-    workqueue = Queue()    # queue of runnable tasks
-    runner = ()            # a reusable Task object
-
-    if clientmode
-        # add the task of perpetually handling user input
-        PGRP.refs = refs
-        PGRP.waiting = waiting
-        PGRP.workqueue = workqueue
-        PGRP.client = LocalProcess()
-        make_scheduled(current_task().parent)
-        for wrkr = PGRP.workers
-            sockets[wrkr.fd] = wrkr.socket
+    connectfd = ccall(dlsym(libc, :accept), Int32,
+                      (Int32, Ptr{Void}, Ptr{Void}),
+                      accept_fd, C_NULL, C_NULL)
+    #print("accepted.\n")
+    if connectfd==-1
+        print("accept error: ", strerror(), "\n")
+    else
+        first = isempty(sockets)
+        sock = fdio(connectfd)
+        sockets[connectfd] = sock
+        if first
+            # first connection; get process group info from client
+            (_myid, locs) = recv_msg(sock)
+            PGRP = ProcessGroup(_myid, locs, sockets)
+            PGRP.client = Worker("", 0, connectfd, sock)
         end
+        add_fd_handler(connectfd, fd->message_handler(fd, sockets))
     end
+end
 
-    while true
-        del_all(fdset)
-        if accept_fd > -1
-            add(fdset, accept_fd)
-        end
-        for (fd,_) = sockets
-            add(fdset, fd)
-        end
+type DisconnectException <: Exception end
 
-        # if no work to do, block waiting for requests. otherwise just poll,
-        # so we can get right to work if there are no new requests.
-        nselect = select_read(fdset, isempty(workqueue) ? 2 : 0)
-        if nselect == 0
-            # no i/o requests; do some work
-            if !isempty(workqueue)
-                (workqueue, waiting, runner) =
-                    perform_work(workqueue, waiting, runner)
-            end
-        end
-
-        if has(fdset, accept_fd)
-            connectfd = ccall(dlsym(libc, :accept), Int32,
-                              (Int32, Ptr{Void}, Ptr{Void}),
-                              accept_fd, C_NULL, C_NULL)
-            #print("accepted.\n")
-            if connectfd==-1
-                print("accept error: ", strerror(), "\n")
+# activity on message socket
+function message_handler(fd, sockets)
+    global PGRP
+    refs = PGRP.refs
+    sock = sockets[fd]
+    first = true
+    while first || nb_available(sock)>0
+        first = false
+        try
+            (msg, args) = recv_msg(sock)
+            #print("$(myid()) got ", tuple(msg, args[1],
+            #                              map(typeof,args[2:])), "\n")
+            # handle message
+            if is(msg, :call) || is(msg, :call_fetch) ||
+                is(msg, :call_wait)
+                id = args[1]
+                f = args[2]
+                let func=f, ar=args[3:]
+                    wi = WorkItem(()->apply(func,ar))
+                    refs[id] = wi
+                    add(wi.clientset, id[1])
+                    if !is(func,never_finish) # TODO: hack
+                        enq_work(wi)
+                    end
+                    if is(msg, :call_fetch)
+                        wi.notify = (sock, :fetch, id, wi.notify)
+                    elseif is(msg, :call_wait)
+                        wi.notify = (sock, :sync, id, wi.notify)
+                    end
+                end
+            elseif is(msg, :do)
+                f = args[1]
+                if is(f,identify_socket)
+                    # special case
+                    args = (0, args[2], fd, sock)
+                end
+                let func=f, ar=args[2:]
+                    enq_work(WorkItem(()->apply(func,ar)))
+                end
+            elseif is(msg, :result)
+                # used to deliver result of sync or fetch
+                mkind = args[1]
+                oid = args[2]
+                val = args[3]
+                deliver_result((), mkind, oid, val)
             else
-                first = isempty(sockets)
-                sock = fdio(connectfd)
-                sockets[connectfd] = sock
-                if first
-                    # first connection; get process group info from client
-                    (_myid, locs) = recv_msg(sock)
-                    PGRP = ProcessGroup(_myid, locs, sockets)
-                    PGRP.refs = refs
-                    PGRP.waiting = waiting
-                    PGRP.workqueue = workqueue
-                    PGRP.client = Worker("", 0, connectfd, sock)
+                # the synchronization messages
+                oid = args[1]
+                wi = refs[oid]
+                if wi.done
+                    deliver_result(sock, msg, oid, work_result(wi))
+                else
+                    # add to WorkItem's notify list
+                    wi.notify = (sock, msg, oid, wi.notify)
                 end
             end
-        end
-
-        for (fd, sock) = sockets
-            while has(fdset, fd) || nb_available(sock)>0
-                del(fdset, fd)
-                #print("nb= ", nb_available(sock), "\n")
-                #print("$(myid()) reading fd= ", fd, "\n")
-                try
-                    (msg, args) = recv_msg(sock)
-                    #print("$(myid()) got ", tuple(msg, args[1],
-                    #                              map(typeof,args[2:])), "\n")
-                    # handle message
-                    if is(msg, :call) || is(msg, :call_fetch) ||
-                        is(msg, :call_wait)
-                        id = args[1]
-                        f = args[2]
-                        let func=f, ar=args[3:]
-                            wi = WorkItem(()->apply(func,ar))
-                            refs[id] = wi
-                            add(wi.clientset, id[1])
-                            if !is(func,never_finish) # TODO: hack
-                                enq(workqueue, wi)
-                            end
-                            if is(msg, :call_fetch)
-                                wi.notify = (sock, :fetch, id, wi.notify)
-                            elseif is(msg, :call_wait)
-                                wi.notify = (sock, :sync, id, wi.notify)
-                            end
-                        end
-                    elseif is(msg, :do)
-                        f = args[1]
-                        if is(f,identify_socket)
-                            # special case
-                            args = (0, args[2], fd, sock)
-                        end
-                        let func=f, ar=args[2:]
-                            enq(workqueue, WorkItem(()->apply(func,ar)))
-                        end
-                    elseif is(msg, :result)
-                        # used to deliver result of sync or fetch
-                        mkind = args[1]
-                        oid = args[2]
-                        val = args[3]
-                        deliver_result((), mkind, oid, val)
-                    else
-                        # the synchronization messages
-                        oid = args[1]
-                        wi = refs[oid]
-                        if wi.done
-                            deliver_result(sock, msg, oid, work_result(wi))
-                        else
-                            # add to WorkItem's notify list
-                            wi.notify = (sock, msg, oid, wi.notify)
-                        end
-                    end
-                catch e
-                    if isa(e,EOFError)
-                        #print("eof. $(myid()) exiting\n")
-                        return()
-                    else
-                        print("deserialization error: ", e, "\n")
-                        read(sock, Uint8, nb_available(sock))
-                        #while nb_available(sock) > 0 #|| select(sock)
-                        #    read(sock, Uint8)
-                        #end
-                    end
-                end
+        catch e
+            if isa(e,EOFError)
+                #print("eof. $(myid()) exiting\n")
+                throw(DisconnectException())
+            else
+                print("deserialization error: ", e, "\n")
+                read(sock, Uint8, nb_available(sock))
+                #while nb_available(sock) > 0 #|| select(sock)
+                    #    read(sock, Uint8)
+                #end
             end
         end
     end
 end
-
-## worker creation and setup ##
 
 # the entry point for julia worker processes. does not return.
 # argument is descriptor to write listening port # to.
@@ -720,8 +698,15 @@ function start_worker(wrfd)
     # close stdin; workers will not use it
     ccall(dlsym(libc, :close), Int32, (Int32,), 0)
 
+    global Workqueue = Queue()
+    global Waiting = HashTable()
+    global Scheduler = current_task()
+
+    worker_sockets = HashTable()
+    add_fd_handler(sockfd, fd->accept_handler(fd, worker_sockets))
+
     try
-        jl_worker_loop(sockfd, false)
+        event_loop(false)
     catch e
         print("unhandled exception on $(myid()): $e\nexiting.\n")
     end
@@ -946,3 +931,74 @@ fv(a)=eig(a)[2][2]
 all2all() = at_each(hello_from, myid())
 
 hello_from(i) = print("message from $i to $(myid())\n")
+
+## event processing ##
+
+fd_handlers = HashTable()
+
+add_fd_handler(fd, H) = (fd_handlers[fd]=H)
+del_fd_handler(fd) = del(fd_handlers, fd)
+
+function event_loop(client)
+    fdset = FDSet()
+    iserr, lasterr = false, ()
+    
+    while true
+        try
+            if iserr
+                show(lasterr)
+                iserr, lasterr = false, ()
+            end
+            while true
+                del_all(fdset)
+                for (fd,_) = fd_handlers
+                    add(fdset, fd)
+                end
+                
+                nselect = select_read(fdset, isempty(Workqueue) ? 10 : 0)
+                if nselect == 0
+                    if !isempty(Workqueue)
+                        perform_work()
+                    end
+                end
+                
+                for fd=0:(fdset.nfds-1)
+                    if has(fdset,fd)
+                        h = fd_handlers[fd]
+                        h(fd)
+                    end
+                end
+            end
+        catch e
+            if isa(e,DisconnectException) && !client
+                return()
+            end
+            iserr, lasterr = true, e
+        end
+    end
+end
+
+roottask = current_task()
+
+function repl_callback(ast, show_value)
+    # use root task to execute user input
+    cmd = WorkItem(roottask)
+    cmd.argument = (ast, show_value)
+    cmd.requeue = false
+    perform_work(cmd)
+end
+
+# start as a node that accepts interactive input
+function start_client()
+    global Workqueue = Queue()
+    global Waiting = HashTable()
+    global Scheduler = Task(()->event_loop(true))
+
+    while true
+        add_fd_handler(STDIN.fd, fd->ccall(:jl_stdin_callback, Void, ()))
+        (ast, show_value) = yield()
+        del_fd_handler(STDIN.fd)
+        ccall(:jl_handle_user_input, Void, (Any, Int32),
+              ast, show_value)
+    end
+end

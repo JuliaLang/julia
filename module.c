@@ -51,6 +51,14 @@ int jl_boundp(jl_module_t *m, jl_sym_t *var)
     return (b != HT_NOTFOUND && b->value != NULL);
 }
 
+jl_value_t *jl_get_global(jl_module_t *m, jl_sym_t *var)
+{
+    jl_binding_t *b = (jl_binding_t*)ptrhash_get(&m->bindings, var);
+    if (b == HT_NOTFOUND)
+        return NULL;
+    return b->value;
+}
+
 void jl_set_global(jl_module_t *m, jl_sym_t *var, jl_value_t *val)
 {
     jl_binding_t *bp = jl_get_binding(m, var);
