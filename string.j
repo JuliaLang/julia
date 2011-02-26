@@ -453,12 +453,12 @@ function shell_parse(str::String, interp::Bool)
     i = start(str)
     j = i
 
-    update_arg = (s)->begin
+    function update_arg(s)
         if !isa(s,String) || !isempty(s)
             arg = append(arg,(s,))
         end
     end
-    append_arg = ()->begin
+    function append_arg()
         if arg == (); arg = ("",); end
         args = append(args,(arg,))
         arg = ()
