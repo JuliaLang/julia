@@ -558,6 +558,7 @@ static void block_for_input(char *prompt)
     }
 }
 
+// called when we detect an event on stdin
 DLLEXPORT void jl_stdin_callback()
 {
     if (no_readline) {
@@ -630,7 +631,7 @@ static void repl_show_value(jl_value_t *v)
     }
 }
 
-DLLEXPORT void jl_handle_user_input(jl_value_t *ast, int show_value)
+DLLEXPORT void jl_eval_user_input(jl_value_t *ast, int show_value)
 {
 #ifdef USE_READLINE
     if (!no_readline) {
@@ -707,7 +708,7 @@ static void handle_input(jl_value_t *ast, int end, int show_value)
     }
     jl_value_t *f=jl_get_global(jl_system_module,jl_symbol("repl_callback"));
     if (f == NULL) {
-        jl_handle_user_input(ast, show_value);
+        jl_eval_user_input(ast, show_value);
     }
     else {
         jl_value_t *fargs[] = { ast, jl_box_int32(show_value) };

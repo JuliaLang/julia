@@ -531,7 +531,7 @@ function perform_work(job::WorkItem)
         else
             if is(runner,())
                 # make new task to use
-                runner = Task(taskrunner, 512*1024)
+                runner = Task(taskrunner, 1024*1024)
                 yieldto(runner)
             end
             job.task = runner
@@ -960,12 +960,12 @@ function event_loop(client)
                     if !isempty(Workqueue)
                         perform_work()
                     end
-                end
-                
-                for fd=0:(fdset.nfds-1)
-                    if has(fdset,fd)
-                        h = fd_handlers[fd]
-                        h(fd)
+                else
+                    for fd=0:(fdset.nfds-1)
+                        if has(fdset,fd)
+                            h = fd_handlers[fd]
+                            h(fd)
+                        end
                     end
                 end
             end
@@ -992,13 +992,17 @@ end
 function start_client()
     global Workqueue = Queue()
     global Waiting = HashTable()
-    global Scheduler = Task(()->event_loop(true))
+    global Scheduler = Task(()->event_loop(true), 1024*1024)
 
-    while true
-        add_fd_handler(STDIN.fd, fd->ccall(:jl_stdin_callback, Void, ()))
-        (ast, show_value) = yield()
-        del_fd_handler(STDIN.fd)
-        ccall(:jl_handle_user_input, Void, (Any, Int32),
-              ast, show_value)
+    try
+        while true
+            add_fd_handler(STDIN.fd, fd->ccall(:jl_stdin_callback, Void, ()))
+            (ast, show_value) = yield()
+            del_fd_handler(STDIN.fd)
+            ccall(:jl_eval_user_input, Void, (Any, Int32),
+                  ast, show_value)
+        end
+    catch e
+        show(e)
     end
 end

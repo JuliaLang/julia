@@ -109,7 +109,7 @@ static void _infer_jmpbuf_offsets(struct _probe_data *pb)
                      ? pb->probe_local - min_frame
                      : min_frame - pb->probe_local);
     */
-    _frame_offset = labs(prior_diff);
+    _frame_offset = labs(prior_diff)*2;
 }
 
 static void _infer_direction_from(int *first_addr)
