@@ -24,7 +24,7 @@ GCFLAGS = -DJL_GC_MARKSWEEP
 GCSRCS = gc
 endif
 
-OSLIBS = $(GCLIBS) -Wl,--export-dynamic -Wl,--version-script=$(JULIAHOME)/julia.expmap
+OSLIBS = $(GCLIBS) -lncurses -Wl,--export-dynamic -Wl,--version-script=$(JULIAHOME)/julia.expmap
 
 ifeq ($(NBITS),32)
 CONFIG = -DLINUX -DARCH_X86 -DUSE_READLINE $(GCFLAGS)
