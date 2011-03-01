@@ -79,6 +79,7 @@ static int tab_width = 2;
 static char *post_boot = NULL;
 static int lisp_prompt = 0;
 static int load_start_j = 1;
+static int have_event_loop = 0;
 static char *program = NULL;
 
 int num_evals = 0;
@@ -635,7 +636,7 @@ DLLEXPORT void jl_eval_user_input(jl_value_t *ast, int show_value)
 {
 #ifdef USE_READLINE
     if (!no_readline) {
-        if (load_start_j) {
+        if (have_event_loop) {
             // with multi.j loaded the readline callback can return
             // before the command finishes running, so we have to
             // disable rl to prevent the prompt from reappearing too soon.
@@ -683,7 +684,7 @@ DLLEXPORT void jl_eval_user_input(jl_value_t *ast, int show_value)
     }
     else {
 #ifdef USE_READLINE
-        if (load_start_j) {
+        if (have_event_loop) {
             rl_callback_handler_install(prompt_string,
                                         jl_input_line_callback_readline);
         }
@@ -747,6 +748,11 @@ static void print_profile()
 }
 #endif
 
+#ifdef COPY_STACKS
+void jl_switch_stack(jl_task_t *t, jmp_buf *where);
+extern jmp_buf * volatile jl_jmp_target;
+#endif
+
 int main(int argc, char *argv[])
 {
     double julia_launch_tic = clock_now();
@@ -757,6 +763,13 @@ int main(int argc, char *argv[])
     llt_init();
     parse_opts(&argc, &argv);
     julia_init();
+#ifdef COPY_STACKS
+    // initialize base context of root task
+    jl_root_task->stackbase = (char*)&argc;
+    if (setjmp(jl_root_task->base_ctx)) {
+        jl_switch_stack(jl_current_task, jl_jmp_target);
+    }
+#endif
     if (post_boot) {
         jl_value_t *ast = jl_parse_input_line(post_boot);
         jl_toplevel_eval(ast);
@@ -886,6 +899,7 @@ int main(int argc, char *argv[])
         }
     }
     else {
+        have_event_loop = 1;
         if (!no_readline) {
 #ifdef USE_READLINE
             rl_callback_handler_install(prompt_string,

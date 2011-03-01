@@ -537,6 +537,7 @@ static void eval_decl_types(jl_array_t *vi, jl_tuple_t *spenv)
     size_t i;
     for(i=0; i < vi->length; i++) {
         jl_array_t *v = (jl_array_t*)jl_cellref(vi, i);
+        assert(v->length > 1);
         jl_value_t *ty =
             jl_interpret_toplevel_expr_with(jl_cellref(v,1),
                                             &jl_tupleref(spenv,0),
@@ -564,9 +565,11 @@ jl_tuple_t *jl_tuple_tvars_to_symbols(jl_tuple_t *t)
 DLLEXPORT
 jl_value_t *jl_prepare_ast(jl_value_t *l_ast, jl_tuple_t *sparams)
 {
-    jl_tuple_t *spenv = jl_tuple_tvars_to_symbols(sparams);
-    jl_value_t *ast = copy_ast(l_ast, sparams);
-    JL_GC_PUSH(&spenv);
+    jl_tuple_t *spenv = NULL;
+    jl_value_t *ast = NULL;
+    JL_GC_PUSH(&spenv, &ast);
+    spenv = jl_tuple_tvars_to_symbols(sparams);
+    ast = copy_ast(l_ast, sparams);
     eval_decl_types(jl_lam_vinfo((jl_expr_t*)ast), spenv);
     eval_decl_types(jl_lam_capt((jl_expr_t*)ast), spenv);
     JL_GC_POP();
