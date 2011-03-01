@@ -627,15 +627,17 @@ issues 1/24/11
   Array(Int32, (2,2), 0, 1, 2, 3)
   Array{Int32,1}(5,    0, 1, 2, 3, 4)
   Array{Int32,2}(2,2,  0, 1, 2, 3)
+- modules
 - keyword args
   f(x; a=1, b=0)
   f(x; kws...)
+- saving system image
 - parallel
   . make sure process group setup works
   * function reflection and serialization
     . lambda-numbering to make it faster
   * automatically resolve local remote references to their values
-  . @spawn
+  * @spawn
   * distributed GC
 
 something about update operators, in-place operations in general

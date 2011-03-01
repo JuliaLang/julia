@@ -676,7 +676,7 @@ function message_handler(fd, sockets)
                 print("deserialization error: ", e, "\n")
                 read(sock, Uint8, nb_available(sock))
                 #while nb_available(sock) > 0 #|| select(sock)
-                    #    read(sock, Uint8)
+                #    read(sock, Uint8)
                 #end
             end
         end

@@ -65,9 +65,14 @@ void segv_handler(int sig, siginfo_t *info, void *context)
     sigaddset(&sset, SIGSEGV);
     sigprocmask(SIG_UNBLOCK, &sset, NULL);
 
+#ifdef COPY_STACKS
+    if ((char*)info->si_addr > (char*)jl_stack_lo-8192 &&
+        (char*)info->si_addr < (char*)jl_stack_hi) {
+#else
     if ((char*)info->si_addr > (char*)jl_current_task->stack-8192 &&
         (char*)info->si_addr <
         (char*)jl_current_task->stack+jl_current_task->ssize) {
+#endif
         jl_raise(jl_stackovf_exception);
     }
     else {

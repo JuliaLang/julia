@@ -335,6 +335,30 @@ void jl_gc_markval(jl_value_t *v)
     gc_markval_(v);
 }
 
+#ifdef COPY_STACKS
+static void gc_mark_stack(jl_gcframe_t *s, ptrint_t offset)
+{
+    while (s != NULL) {
+        s = (jl_gcframe_t*)((char*)s + offset);
+        size_t i;
+        jl_value_t ***rts = (jl_value_t***)((char*)s->roots + offset);
+        if (s->indirect) {
+            for(i=0; i < s->nroots; i++) {
+                jl_value_t **ptr = (jl_value_t**)((char*)rts[i] + offset);
+                if (*ptr != NULL)
+                    GC_Markval(*ptr);
+            }
+        }
+        else {
+            for(i=0; i < s->nroots; i++) {
+                if (rts[i] != NULL)
+                    GC_Markval(rts[i]);
+            }
+        }
+        s = s->prev;
+    }
+}
+#else
 static void gc_mark_stack(jl_gcframe_t *s)
 {
     while (s != NULL) {
@@ -354,6 +378,7 @@ static void gc_mark_stack(jl_gcframe_t *s)
         s = s->prev;
     }
 }
+#endif
 
 static void gc_mark_methlist(jl_methlist_t *ml)
 {
@@ -487,15 +512,28 @@ static void gc_markval_(jl_value_t *v)
             GC_Markval(ta->start);
         if (ta->result)
             GC_Markval(ta->result);
-        gc_mark_stack(ta->state.gcstack);
         GC_Markval(ta->state.eh_task);
-        if (ta->_stkbase != NULL)
-            gc_setmark(ta->_stkbase);
+        if (ta->stkbuf != NULL)
+            gc_setmark(ta->stkbuf);
+#ifdef COPY_STACKS
+        ptrint_t offset = (ta == jl_current_task ? 0 :
+                           (ta->stkbuf - (ta->stackbase-ta->ssize)));
+        gc_mark_stack(ta->state.gcstack, offset);
+        jl_savestate_t *ss = &ta->state;
+        while (ss != NULL) {
+            GC_Markval(ss->ostream_obj);
+            ss = ss->prev;
+            if (ss != NULL)
+                ss = (jl_savestate_t*)((char*)ss + offset);
+        }
+#else
+        gc_mark_stack(ta->state.gcstack);
         jl_savestate_t *ss = &ta->state;
         while (ss != NULL) {
             GC_Markval(ss->ostream_obj);
             ss = ss->prev;
         }
+#endif
     }
     else if (vt == (jl_value_t*)jl_weakref_type) {
         // don't mark contents
@@ -536,6 +574,8 @@ static void gc_mark_module(jl_module_t *m)
 
 void jl_mark_box_caches();
 
+extern jl_value_t * volatile jl_task_arg_in_transit;
+
 static void gc_mark()
 {
     // mark all roots
@@ -555,6 +595,7 @@ static void gc_mark()
     GC_Markval(jl_an_empty_string);
     GC_Markval(jl_an_empty_cell);
     GC_Markval(jl_exception_in_transit);
+    GC_Markval(jl_task_arg_in_transit);
     GC_Markval(jl_unprotect_stack_func);
 
     // constants

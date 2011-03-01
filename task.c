@@ -109,7 +109,7 @@ static void _infer_jmpbuf_offsets(struct _probe_data *pb)
                      ? pb->probe_local - min_frame
                      : min_frame - pb->probe_local);
     */
-    _frame_offset = labs(prior_diff)*2;
+    _frame_offset = labs(prior_diff);
 }
 
 static void _infer_direction_from(int *first_addr)
@@ -153,7 +153,7 @@ extern size_t jl_page_size;
 jl_struct_type_t *jl_task_type;
 jl_task_t * volatile jl_current_task;
 jl_task_t *jl_root_task;
-static jl_value_t * volatile task_arg_in_transit;
+jl_value_t * volatile jl_task_arg_in_transit;
 static volatile int n_args_in_transit;
 jl_value_t *jl_exception_in_transit;
 #ifdef JL_GC_MARKSWEEP
@@ -163,67 +163,102 @@ static jl_gcframe_t *dummy_pgcstack;
 jl_gcframe_t ** volatile jl_pgcstack = &dummy_pgcstack;
 #endif
 
+static void start_task(jl_task_t *t);
+
+#ifdef COPY_STACKS
+jmp_buf * volatile jl_jmp_target;
+
+static void save_stack(jl_task_t *t)
+{
+    volatile int _x;
+    size_t nb = (char*)t->stackbase - (char*)&_x;
+    char *buf;
+    if (t->stkbuf == NULL || t->bufsz < nb) {
+        free(t->stkbuf);
+        buf = malloc(nb);
+        t->stkbuf = buf;
+        t->bufsz = nb;
+    }
+    else {
+        buf = t->stkbuf;
+    }
+    t->ssize = nb;
+    memcpy(buf, (char*)&_x, nb);
+}
+
+static void restore_stack(jl_task_t *t, jmp_buf *where)
+{
+    volatile int _x[16];
+
+    if ((char*)&_x[0] > (char*)(t->stackbase-t->ssize)) {
+        restore_stack(t, where);
+    }
+    jl_jmp_target = where;
+    if (t->stkbuf != NULL) {
+        memcpy(t->stackbase-t->ssize, t->stkbuf, t->ssize);
+    }
+    longjmp(*jl_jmp_target, 1);
+}
+
+static void switch_stack(jl_task_t *t, jmp_buf *where)
+{
+    assert(t == jl_current_task);
+    if (t->stkbuf == NULL) {
+        start_task(t);
+        // doesn't return
+    }
+    else {
+        restore_stack(t, where);
+    }
+}
+
+void jl_switch_stack(jl_task_t *t, jmp_buf *where)
+{
+    switch_stack(t, where);
+}
+#endif
+
 static void ctx_switch(jl_task_t *t, jmp_buf *where)
 {
+    if (t == jl_current_task)
+        return;
     if (!setjmp(jl_current_task->ctx)) {
-#ifdef BOEHM_GC
+#ifdef COPY_STACKS
+        jl_task_t *lastt = jl_current_task;
+#endif
+
+        // set up global state for new task
+        jl_current_task = t;
+#if defined(BOEHM_GC) && !defined(COPY_STACKS)
         GC_stackbottom = t->stack+t->ssize;
 #endif
-        jl_current_task = t;
 #ifdef JL_GC_MARKSWEEP
         jl_pgcstack = &jl_current_task->state.gcstack;
 #endif
+
+#ifdef COPY_STACKS
+        save_stack(lastt);
+        jl_jmp_target = where;
+        longjmp(lastt->base_ctx, 1);
+#else
         longjmp(*where, 1);
+#endif
     }
 }
 
 static jl_value_t *switchto(jl_task_t *t)
 {
     if (t->done) {
-        task_arg_in_transit = (jl_value_t*)jl_null;
+        jl_task_arg_in_transit = (jl_value_t*)jl_null;
         return t->result;
     }
     ctx_switch(t, &t->ctx);
-    jl_value_t *val = task_arg_in_transit;
-    task_arg_in_transit = (jl_value_t*)jl_null;
+    jl_value_t *val = jl_task_arg_in_transit;
+    jl_task_arg_in_transit = (jl_value_t*)jl_null;
     return val;
 }
 
-jl_value_t *jl_switchto(jl_task_t *t, jl_value_t *arg)
-{
-    task_arg_in_transit = arg;
-    n_args_in_transit = 1;
-    return switchto(t);
-}
-
-static void finish_task(jl_task_t *t, jl_value_t *resultval)
-{
-    assert(!t->done);
-    t->done = 1;
-    t->result = resultval;
-}
-
-// yield to exception handler
-void jl_raise(jl_value_t *e)
-{
-    jl_task_t *eh = jl_current_task->state.eh_task;
-    eh->state.err = 1;
-    jl_exception_in_transit = e;
-    if (jl_current_task == eh) {
-        longjmp(*eh->state.eh_ctx, 1);
-    }
-    else {
-        if (eh->done || eh->state.eh_ctx==NULL) {
-            // our handler is not available, use root task
-            ios_printf(ios_stderr, "warning: exception handler exited\n");
-            eh = jl_root_task;
-        }
-        // for now, exit the task
-        finish_task(jl_current_task, e);
-        ctx_switch(eh, eh->state.eh_ctx);
-        // TODO: continued exception
-    }
-}
+#ifndef COPY_STACKS
 
 #ifdef LINUX
 #if defined(ARCH_X86)
@@ -297,38 +332,91 @@ static void rebase_state(jmp_buf *ctx, intptr_t local_sp, intptr_t new_sp)
 #endif
 }
 
+#endif /* !COPY_STACKS */
+
+jl_value_t *jl_switchto(jl_task_t *t, jl_value_t *arg)
+{
+    jl_task_arg_in_transit = arg;
+    n_args_in_transit = 1;
+    return switchto(t);
+}
+
+static void finish_task(jl_task_t *t, jl_value_t *resultval)
+{
+    assert(!t->done);
+    t->done = 1;
+    t->result = resultval;
+}
+
+static void start_task(jl_task_t *t)
+{
+#ifdef COPY_STACKS
+    ptrint_t local_sp = (ptrint_t)&t;
+    t->stackbase = (void*)(local_sp + _frame_offset);
+    if (setjmp(t->base_ctx)) {
+        // we get here to remove our data from the process stack
+        switch_stack(jl_current_task, jl_jmp_target);
+    }
+#endif
+    // this runs the first time we switch to t
+    jl_value_t *arg = jl_task_arg_in_transit;
+    jl_value_t *res;
+    JL_GC_PUSH(&arg);
+    if (n_args_in_transit == 0) {
+        res = jl_apply(t->start, NULL, 0);
+    }
+    else if (n_args_in_transit == 1) {
+        res = jl_apply(t->start, &arg, 1);
+    }
+    else {
+        assert(jl_is_tuple(jl_task_arg_in_transit));
+        res = jl_apply(t->start, &jl_tupleref(jl_task_arg_in_transit,0),
+                       n_args_in_transit);
+    }
+    JL_GC_POP();
+    finish_task(t, res);
+    jl_task_t *cont = t->on_exit;
+    // if parent task has exited, try its parent, and so on
+    while (cont->done)
+        cont = cont->on_exit;
+    jl_switchto(cont, t->result);
+    assert(0);
+}
+
+#ifndef COPY_STACKS
 static void init_task(jl_task_t *t)
 {
     if (setjmp(t->ctx)) {
-        // this runs the first time we switch to t
-        jl_value_t *arg = task_arg_in_transit;
-        jl_value_t *res;
-        JL_GC_PUSH(&arg);
-        if (n_args_in_transit == 0) {
-            res = jl_apply(t->start, NULL, 0);
-        }
-        else if (n_args_in_transit == 1) {
-            res = jl_apply(t->start, &arg, 1);
-        }
-        else {
-            assert(jl_is_tuple(task_arg_in_transit));
-            res = jl_apply(t->start, &jl_tupleref(task_arg_in_transit,0),
-                           n_args_in_transit);
-        }
-        JL_GC_POP();
-        finish_task(t, res);
-        jl_task_t *cont = t->on_exit;
-        // if parent task has exited, try its parent, and so on
-        while (cont->done)
-            cont = cont->on_exit;
-        jl_switchto(cont, t->result);
-        assert(0);
+        start_task(t);
     }
     // this runs when the task is created
     ptrint_t local_sp = (ptrint_t)&t;
     ptrint_t new_sp = (ptrint_t)t->stack + t->ssize - _frame_offset;
     memcpy((void*)new_sp, (void*)local_sp, _frame_offset);
     rebase_state(&t->ctx, local_sp, new_sp);
+}
+#endif
+
+// yield to exception handler
+void jl_raise(jl_value_t *e)
+{
+    jl_task_t *eh = jl_current_task->state.eh_task;
+    eh->state.err = 1;
+    jl_exception_in_transit = e;
+    if (jl_current_task == eh) {
+        longjmp(*eh->state.eh_ctx, 1);
+    }
+    else {
+        if (eh->done || eh->state.eh_ctx==NULL) {
+            // our handler is not available, use root task
+            ios_printf(ios_stderr, "warning: exception handler exited\n");
+            eh = jl_root_task;
+        }
+        // for now, exit the task
+        finish_task(jl_current_task, e);
+        ctx_switch(eh, eh->state.eh_ctx);
+        // TODO: continued exception
+    }
 }
 
 jl_task_t *jl_new_task(jl_function_t *start, size_t ssize)
@@ -352,30 +440,40 @@ jl_task_t *jl_new_task(jl_function_t *start, size_t ssize)
 #ifdef JL_GC_MARKSWEEP
     t->state.gcstack = NULL;
 #endif
-    t->_stkbase = NULL;
+    t->stkbuf = NULL;
 
+#ifdef COPY_STACKS
+    t->bufsz = 0;
+#else
     JL_GC_PUSH(&t);
+
     char *stk = allocb(ssize+pagesz+(pagesz-1));
-    t->_stkbase = stk;
+    t->stkbuf = stk;
     stk = (char*)LLT_ALIGN((uptrint_t)stk, pagesz);
     // add a guard page to detect stack overflow
     // the GC might read this area, which is ok, just prevent writes
     if (mprotect(stk, pagesz-1, PROT_READ) == -1)
         jl_errorf("mprotect: %s", strerror(errno));
     t->stack = stk+pagesz;
-    jl_gc_add_finalizer((jl_value_t*)t, jl_unprotect_stack_func);
 
     init_task(t);
     JL_GC_POP();
+#endif
+    jl_gc_add_finalizer((jl_value_t*)t, jl_unprotect_stack_func);
+
     return t;
 }
 
 JL_CALLABLE(jl_unprotect_stack)
 {
     jl_task_t *t = (jl_task_t*)args[0];
+#ifdef COPY_STACKS
+    free(t->stkbuf);
+#else
     char *stk = t->stack-jl_page_size;
     // unprotect stack so it can be reallocated for something else
     mprotect(stk, jl_page_size-1, PROT_READ|PROT_WRITE|PROT_EXEC);
+#endif
     return (jl_value_t*)jl_null;
 }
 
@@ -412,13 +510,13 @@ JL_CALLABLE(jl_f_yieldto)
     JL_TYPECHK(yieldto, task, args[0]);
     n_args_in_transit = nargs-1;
     if (nargs == 2) {
-        task_arg_in_transit = args[1];
+        jl_task_arg_in_transit = args[1];
     }
     else if (nargs > 2) {
-        task_arg_in_transit = jl_f_tuple(NULL, &args[1], n_args_in_transit);
+        jl_task_arg_in_transit = jl_f_tuple(NULL, &args[1], n_args_in_transit);
     }
     else {
-        task_arg_in_transit = (jl_value_t*)jl_null;
+        jl_task_arg_in_transit = (jl_value_t*)jl_null;
     }
     return switchto((jl_task_t*)args[0]);
 }
@@ -450,9 +548,15 @@ void jl_init_tasks(void *stack, size_t ssize)
 
     jl_current_task = (jl_task_t*)allocobj(sizeof(jl_task_t));
     jl_current_task->type = (jl_type_t*)jl_task_type;
-    jl_current_task->ssize = ssize;
+#ifdef COPY_STACKS
+    jl_current_task->stackbase = stack+ssize;
+    jl_current_task->ssize = 0;  // size of saved piece
+    jl_current_task->bufsz = 0;
+#else
     jl_current_task->stack = stack;
-    jl_current_task->_stkbase = NULL;
+    jl_current_task->ssize = ssize;
+#endif
+    jl_current_task->stkbuf = NULL;
     jl_current_task->on_exit = jl_current_task;
     jl_current_task->done = 0;
     jl_current_task->start = jl_bottom_func;
@@ -471,6 +575,7 @@ void jl_init_tasks(void *stack, size_t ssize)
     jl_root_task = jl_current_task;
 
     jl_exception_in_transit = (jl_value_t*)jl_null;
+    jl_task_arg_in_transit = (jl_value_t*)jl_null;
     jl_unprotect_stack_func = jl_new_closure(jl_unprotect_stack, NULL);
 
     jl_add_builtin("Task", (jl_value_t*)jl_task_type);
