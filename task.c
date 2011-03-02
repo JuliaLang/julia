@@ -188,7 +188,7 @@ static void save_stack(jl_task_t *t)
 
 static void restore_stack(jl_task_t *t, jmp_buf *where)
 {
-    volatile int _x[16];
+    volatile int _x[64];
 
     if ((char*)&_x[0] > (char*)(t->stackbase-t->ssize)) {
         restore_stack(t, where);

@@ -671,6 +671,8 @@ function message_handler(fd, sockets)
         catch e
             if isa(e,EOFError)
                 #print("eof. $(myid()) exiting\n")
+                del_fd_handler(fd)
+                # TODO: remove machine from group
                 throw(DisconnectException())
             else
                 print("deserialization error: ", e, "\n")
