@@ -350,18 +350,23 @@ static void finish_task(jl_task_t *t, jl_value_t *resultval)
 
 static void start_task(jl_task_t *t)
 {
+    // this runs the first time we switch to t
+    jl_value_t *arg = jl_task_arg_in_transit;
+    jl_value_t *res;
+    JL_GC_PUSH(&arg);
+
 #ifdef COPY_STACKS
-    ptrint_t local_sp = (ptrint_t)&t;
+    ptrint_t local_sp = (ptrint_t)*jl_pgcstack;
+    // here we attempt to figure out how big our stack frame is, since we
+    // might need to copy all of it later. this is a bit of a fuzzy guess.
+    local_sp += sizeof(jl_gcframe_t);
+    local_sp += 12*sizeof(void*);
     t->stackbase = (void*)(local_sp + _frame_offset);
     if (setjmp(t->base_ctx)) {
         // we get here to remove our data from the process stack
         switch_stack(jl_current_task, jl_jmp_target);
     }
 #endif
-    // this runs the first time we switch to t
-    jl_value_t *arg = jl_task_arg_in_transit;
-    jl_value_t *res;
-    JL_GC_PUSH(&arg);
     if (n_args_in_transit == 0) {
         res = jl_apply(t->start, NULL, 0);
     }

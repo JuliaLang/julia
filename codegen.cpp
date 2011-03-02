@@ -1164,7 +1164,8 @@ static void emit_function(jl_lambda_info_t *lam, Function *f)
     ctx.module = jl_system_module; //TODO
     ctx.ast = ast;
     ctx.sp = jl_tuple_tvars_to_symbols(lam->sparams);
-    JL_GC_PUSH(&ctx.sp);
+    //JL_GC_PUSH(&ctx.sp);
+    jl_gc_preserve((jl_value_t*)ctx.sp);
     ctx.linfo = lam;
     ctx.envArg = &envArg;
     ctx.argArray = &argArray;
@@ -1445,7 +1446,8 @@ static void emit_function(jl_lambda_info_t *lam, Function *f)
     if (builder.GetInsertBlock()->getTerminator() == NULL) {
         builder.CreateRet(V_null);
     }
-    JL_GC_POP();
+    //JL_GC_POP();
+    jl_gc_unpreserve();
 }
 
 static GlobalVariable *global_to_llvm(const std::string &cname, void *addr)
