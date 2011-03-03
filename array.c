@@ -245,8 +245,9 @@ jl_value_t *jl_arrayref(jl_array_t *a, size_t i)
     }
     else {
         elt = ((jl_value_t**)a->data)[i];
-        if (elt == NULL)
+        if (elt == NULL) {
             jl_errorf("array[%d]: uninitialized reference error", i+1);
+        }
     }
     return elt;
 }

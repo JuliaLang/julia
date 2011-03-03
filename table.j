@@ -3,8 +3,11 @@ type IdTable
 end
 
 function _tablesz(i::Int)
-    if i < 32
-        return 32
+    if i < 16
+        return 16
+    end
+    if i&(i-1) == 0
+        return i
     end
     while (i&(i-1) != 0)
         i = i&(i-1)
@@ -12,7 +15,7 @@ function _tablesz(i::Int)
     return i<<1
 end
 
-idtable(sz::Int) = IdTable(cell(_tablesz(sz)))
+idtable(sz::Int) = IdTable(cell(2*_tablesz(sz)))
 idtable() = idtable(0)
 
 function assign(t::IdTable, v, k)
@@ -94,6 +97,7 @@ type HashTable{K,V}
     deleter::Function
 
     HashTable() = HashTable(Any,Any)
+    HashTable(n::Int) = HashTable(Any,Any,n)
     HashTable(k, v) = HashTable(k, v, 16)
     HashTable(k, v, n) = (n = _tablesz(n);
                           new(Array(k,n), Array(v,n), IntSet(n+1), IntSet(n+1),
@@ -107,21 +111,28 @@ function rehash{K,V}(h::HashTable{K,V}, newsz)
     oldv = h.vals
     oldu = h.used
     oldd = h.deleted
-    h.keys = Array(K,newsz)
-    h.vals = Array(V,newsz)
-    h.used = IntSet(newsz+1)
-    h.deleted = IntSet(newsz+1)
+    newht = HashTable(K,V,newsz)
 
     for i = oldu
         if !has(oldd,i)
-            h[oldk[i]] = oldv[i]
+            newht[oldk[i]] = oldv[i]
         end
     end
+
+    h.keys = newht.keys
+    h.vals = newht.vals
+    h.used = newht.used
+    h.deleted = newht.deleted
     h
 end
 
 function assign{K,V}(h::HashTable{K,V}, v, key)
     sz = length(h.keys)
+
+    if numel(h.deleted) >= ((3*sz)>>2)
+        rehash(h, sz)
+    end
+
     iter = 0
     maxprobe = sz>>3
     index = hashindex(key, sz)
@@ -198,9 +209,6 @@ function del(h::HashTable, key)
     index = ht_keyindex(h, key)
     if index > 0
         add(h.deleted, index)
-        if numel(h.deleted) >= (length(h.keys)>>2)
-            rehash(h, length(h.keys))
-        end
     end
     h
 end

@@ -718,7 +718,7 @@ function start_worker(wrfd)
     ccall(dlsym(libc, :close), Int32, (Int32,), 0)
 
     global Workqueue = Queue()
-    global Waiting = HashTable()
+    global Waiting = HashTable(64)
     global Scheduler = current_task()
 
     worker_sockets = HashTable()
@@ -1011,7 +1011,7 @@ end
 function start_client()
     try
         global Workqueue = Queue()
-        global Waiting = HashTable()
+        global Waiting = HashTable(64)
         global Scheduler = Task(()->event_loop(true), 1024*1024)
 
         while true
