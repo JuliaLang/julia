@@ -295,6 +295,10 @@ void jl_load_file_expr(char *fname, jl_value_t *ast)
     size_t i;
     volatile size_t lineno=0;
     JL_TRY {
+        // handle syntax error
+        if (((jl_expr_t*)ast)->head == error_sym) {
+            jl_interpret_toplevel_expr(ast);
+        }
         jl_value_t *form=NULL;
         JL_GC_PUSH(&form);
         for(i=0; i < b->length; i++) {

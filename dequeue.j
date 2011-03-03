@@ -151,3 +151,8 @@ function insert(a::Dequeue, i::Int, item)
     end
     a[i] = item
 end
+
+function del_all(a::Dequeue)
+    a.size = 0
+    a
+end

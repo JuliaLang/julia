@@ -37,13 +37,13 @@ function send_msg(s::IOStream, x)
 end
 
 # todo:
-# - add readline to event loop
+# * add readline to event loop
 # - GOs/darrays on a subset of nodes
 # - dynamically adding nodes (then always start with 1 and just grow/shrink)
 # - method_missing for waiting (ref/assign/localdata seems to cover a lot)
 # - more dynamic scheduling
 # * call&wait and call&fetch combined messages
-# - aggregate GC messages
+# * aggregate GC messages
 # - fetch/wait latency seems to be excessive
 # * recover from i/o errors
 # * handle remote execution errors
@@ -62,12 +62,13 @@ type Worker
     socket::IOStream
     sendbuf::IOStream
     id::Int32
+    del_msgs::Dequeue
 
     Worker() = Worker("localhost", start_local_worker())
 
     Worker(host, port) = Worker(host, port, connect_to_worker(host,port)...)
 
-    Worker(host, port, fd, sock) = new(host, port, fd, sock, memio(), 0)
+    Worker(host, port, fd, sock) = new(host, port, fd, sock, memio(), 0, deq())
 end
 
 function send_msg(w::Worker, x)
@@ -168,6 +169,11 @@ function worker_id_from_socket(s)
     return -1
 end
 
+function worker_from_id(id)
+    global PGRP
+    id==0 ? PGRP.client : PGRP.workers[id]
+end
+
 # establish a Worker connection for processes that connected to us
 function identify_socket(otherid, fd, sock)
     global PGRP
@@ -225,12 +231,23 @@ function del_client(id, client)
     ()
 end
 
+function del_clients(pairs::(Any,Any)...)
+    for p=pairs
+        del_client(p[1], p[2])
+    end
+end
+
 function send_del_client(rr::RemoteRef)
     if rr.where == myid()
         del_client(rr2id(rr), myid())
     else
-        #print("sending delete of $rr\n")
-        remote_do(rr.where, del_client, rr2id(rr), myid())
+        W = worker_from_id(rr.where)
+        push(W.del_msgs, (rr2id(rr), myid()))
+        if length(W.del_msgs) >= 16
+            #print("sending delete of $(W.del_msgs)\n")
+            remote_do(rr.where, del_clients, W.del_msgs...)
+            del_all(W.del_msgs)
+        end
     end
 end
 
@@ -992,11 +1009,11 @@ end
 
 # start as a node that accepts interactive input
 function start_client()
-    global Workqueue = Queue()
-    global Waiting = HashTable()
-    global Scheduler = Task(()->event_loop(true), 1024*1024)
-
     try
+        global Workqueue = Queue()
+        global Waiting = HashTable()
+        global Scheduler = Task(()->event_loop(true), 1024*1024)
+
         while true
             add_fd_handler(STDIN.fd, fd->ccall(:jl_stdin_callback, Void, ()))
             (ast, show_value) = yield()
