@@ -120,10 +120,10 @@ uint(x::Int16) = uint16(x)
 uint(x::Int32) = uint32(x)
 uint(x::Int64) = uint64(x)
 
-float(x::Int8 ) = float32(x)
-float(x::Int16) = float32(x)
-float(x::Int32) = float64(x)
-float(x::Int64) = float64(x) # TODO: should be Float80
+float(x::Union(Int8 ,Uint8) ) = float32(x)
+float(x::Union(Int16,Uint16)) = float32(x)
+float(x::Union(Int32,Uint32)) = float64(x)
+float(x::Union(Int64,Uint64)) = float64(x) # TODO: should be Float80
 
 ## integer promotions ##
 

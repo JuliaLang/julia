@@ -46,6 +46,17 @@ end
 ldexp(x::Float64,e::Int32) = ccall(dlsym(libm, :ldexp),  Float64, (Float64,Int32), x, e)
 ldexp(x::Float32,e::Int32) = ccall(dlsym(libm, :ldexpf), Float32, (Float32,Int32), x, e)
 
+function frexp(x::Float64)
+    exp = zeros(Int32,1)
+    s = ccall(dlsym(libm,:frexp), Float64, (Float64, Ptr{Int32}), x, exp)
+    (s, exp[1])
+end
+function frexp(x::Float32)
+    exp = zeros(Int32,1)
+    s = ccall(dlsym(libm,:frexpf), Float32, (Float32, Ptr{Int32}), x, exp)
+    (s, exp[1])
+end
+
 rand()     = ccall(:rand_double,   Float64, ())
 randf()    = ccall(:rand_float,    Float32, ())
 randui32() = ccall(:genrand_int32, Uint32,  ())
