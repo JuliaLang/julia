@@ -275,7 +275,7 @@ end
 
 function assign(A::Matrix, X::Tensor, I::Indices, J::Indices)
     count = 1
-    for i=I, j=J
+    for j=J, i=I
         A[i,j] = X[count]
         count += 1
     end
