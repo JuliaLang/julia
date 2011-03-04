@@ -804,7 +804,6 @@ type GlobalObject
 
         mi = myid()
         myrid = rids[mi]
-        myref = WeakRemoteRef(mi, myrid[1], myrid[2])
         # make our reference to it weak so we can detect when there are
         # no local users of the object.
         if !has(PGRP.refs,myrid)
@@ -824,15 +823,12 @@ type GlobalObject
         end
         finalizer(go, del_go_client)
         for i=1:length(rids)
-            if i==mi
-                go.refs[i] = myref
-            else
-                go.refs[i] = WeakRemoteRef(i, rids[i][1], rids[i][2])
-            end
+            go.refs[i] = WeakRemoteRef(i, rids[i][1], rids[i][2])
         end
         go.local_identity = initializer(go)
         wi.result = WeakRef(go)
         wi.done = true
+        notify_done(wi)
     end
 
     # initializer is a function that will be called on the new G.O., and its
