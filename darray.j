@@ -209,5 +209,14 @@ function assign(d::DArray, v, i::Index)
     d
 end
 
-# todo: too slow
-full{T}(d::DArray{T}) = copy_to(Array(T, size(d)), d)
+function full{T,N}(d::DArray{T,N})
+    a = Array(T, size(d))
+    lasti = 1
+    idxs = { 1:size(a,i) | i=1:N }
+    for p = 1:length(d.dist)
+        idxs[d.distdim] = lasti:d.dist[p]
+        a[idxs...] = remote_call_fetch(d.pmap[p], localdata, d)
+        lasti = d.dist[p]+1
+    end
+    a
+end
