@@ -4,8 +4,7 @@ type DArray{T,N} <: Tensor{T,N}
     # the distributed array has N pieces
     # pmap[i]==p ⇒ processor p has piece i
     pmap::Array{Int32,1}
-    # piece i consists of indexes dist[i-1]+1 to dist[i]. dist[0]==0
-    #  == prefix sum of the sizes of the pieces
+    # piece i consists of indexes dist[i] through dist[i+1]-1
     dist::Array{Int32,1}
     # dimension of distribution
     distdim::Int32
@@ -21,10 +20,10 @@ type DArray{T,N} <: Tensor{T,N}
         # determine size of local pieces
         sdd = dims[distdim]
         each = div(sdd,np)
-        dist = fill(Array(Int32,np), each)
-        dist[end] += rem(sdd,np)
+        sizes = fill(Array(Int32,np), each)
+        sizes[end] += rem(sdd,np)
         # todo: in general, if we're not part of this array
-        mysz = (mi==0 ? 0 : dist[mi])
+        mysz = (mi==0 ? 0 : sizes[mi])
         locsz = ntuple(length(dims), i->(i==distdim?mysz:dims[i]))
         lp = 0
         for i=1:length(pmap)
@@ -32,7 +31,7 @@ type DArray{T,N} <: Tensor{T,N}
                 lp=i; break
             end
         end
-        dist = cumsum(dist)
+        dist = [[1], cumsum(sizes)+1]
         da = new(dims,
                  (), #Array(T, locsz),
                  pmap, dist, distdim, lp, go)
@@ -63,7 +62,7 @@ end
 # find which piece holds index i in the distributed dimension
 function locate(d::DArray, i::Index)
     p = 1
-    while i > d.dist[p]
+    while i >= d.dist[p+1]
         p += 1
     end
     p
@@ -94,6 +93,8 @@ clone(d::DArray, T::Type, dims::Dims) =
     darray((T,lsz,da)->Array(T,lsz), T, dims,
            d.distdim>length(dims) ? maxdim(dims) : d.distdim)
 
+copy{T}(d::DArray{T}) = darray((T,lsz,da)->localdata(d), T, size(d), d.distdim)
+
 dzeros(args...) = darray((T,d,da)->zeros(T,d), args...)
 dones(args...)  = darray((T,d,da)->ones(T,d), args...)
 drand(args...)  = darray((T,d,da)->rand(d), args...)
@@ -105,8 +106,7 @@ distribute(a::Array) = distribute(a, maxdim(size(a)))
 function distribute{T}(a::Array{T}, distdim)
     owner = myid()
     # create a remotely-visible reference to the array
-    rr = remote_call(LocalProcess(), identity, a)
-    wait(rr)
+    rr = wait(remote_call(LocalProcess(), identity, a))
     darray((T,lsz,da)->get_my_piece(T,lsz,da,distdim,owner,rr),
            T, size(a), distdim)
 end
@@ -117,8 +117,8 @@ function get_my_piece(T, lsz, da, distdim, owner, orig_array)
         return Array(T, lsz)
     end
     p = da.localpiece
-    i1 = (p==1) ? 1 : da.dist[p-1]+1  # my first index in distdim
-    iend = i1+lsz[distdim]-1          # my last  "
+    i1 = da.dist[p]             # my first index in distdim
+    iend = i1+lsz[distdim]-1    # my last  "
     # indexes of original array I will take
     idxs = { 1:lsz[i] | i=1:length(da.dims) }
     idxs[distdim] = (i1:iend)
@@ -147,7 +147,7 @@ end
 function ref{T}(d::DArray{T,1}, i::Index)
     p = locate(d, i)
     if p==d.localpiece
-        offs = (p==1) ? 0 : d.dist[p-1]
+        offs = d.dist[p]-1
         return localdata(d)[i-offs]
     end
     return remote_call_fetch(d.pmap[p], ref, d, i)::T
@@ -168,7 +168,7 @@ assign{T}(d::DArray{T,1}, v::Tensor{T,1}, i::Index) =
 function assign{T}(d::DArray{T,1}, v, i::Index)
     p = locate(d, i)
     if p==d.localpiece
-        offs = (p==1) ? 0 : d.dist[p-1]
+        offs = d.dist[p]-1
         localdata(d)[i-offs] = v
     else
         remote_do(d.pmap[p], assign, d, v, i)
@@ -180,7 +180,7 @@ function ref{T}(d::DArray{T}, i::Index)
     sub = ind2sub(d.dims, i)
     p = locate(d, sub[d.distdim])
     if p==d.localpiece
-        offs = (p==1) ? 0 : d.dist[p-1]
+        offs = d.dist[p]-1
         if offs > 0
             sub = ntuple(length(sub),
                          ind->(ind==d.distdim ? sub[ind]-offs : sub[ind]))
@@ -197,7 +197,7 @@ function assign(d::DArray, v, i::Index)
     sub = ind2sub(d.dims, i)
     p = locate(d, sub[d.distdim])
     if p==d.localpiece
-        offs = (p==1) ? 0 : d.dist[p-1]
+        offs = d.dist[p]-1
         if offs > 0
             sub = ntuple(length(sub),
                          ind->(ind==d.distdim ? sub[ind]-offs : sub[ind]))
@@ -211,12 +211,10 @@ end
 
 function full{T,N}(d::DArray{T,N})
     a = Array(T, size(d))
-    lasti = 1
     idxs = { 1:size(a,i) | i=1:N }
-    for p = 1:length(d.dist)
-        idxs[d.distdim] = lasti:d.dist[p]
+    for p = 1:length(d.dist)-1
+        idxs[d.distdim] = d.dist[p]:(d.dist[p+1]-1)
         a[idxs...] = remote_call_fetch(d.pmap[p], localdata, d)
-        lasti = d.dist[p]+1
     end
     a
 end
@@ -227,11 +225,10 @@ function (*){T}(A::DArray{T,2}, B::DArray{T,2})
 
     C = dzeros(size(A,1), size(B,2)).'
 
-    rows = [[0], A.dist];
-    cols = [[0], B.dist];
-    for p=1:length(A.dist)
+    cols = B.dist
+    for p=1:length(A.dist)-1
         r = remote_call_fetch(p, localdata, B)
-        A.locl[:, cols[p]+1:cols[p+1]] = A.loc * r
+        A.locl[:, cols[p]:cols[p+1]-1] = A.loc * r
     end
 
     return C
