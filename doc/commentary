@@ -163,3 +163,67 @@ dynamically typed, multiple dispatch, heuristic separation of ad-hoc and
 parametric polymorphism.
 
 needed widening operators, specialization-limiting heuristics.
+
+-------------------------------------------------------------------------------
+
+parallelism
+
+core question: what is a good way to express parallelism in a program?
+goals:
+  - allow as much parallelism as possible in the sense that a computation
+    is only "held up" if it *must* wait for data it needs. we want as
+    narrow a definition of "must" as possible.
+  - make it as easy as possible for the user to express what parallelism
+    should be exploited and how it can be scheduled
+
+the abstraction spectrum looks something like this:
+
+- specify computation at a very high level (e.g. math notation) and rely on
+  a magic compiler (PetaBricks, maybe Fortress)
+- write within a constrained framework (mapreduce, dataflow e.g. dryad)
+- or all-manual as in MPI
+
+We are not really happy with any of these.
+
+Example:
+A single-assignment program can be translated into a dataflow program
+easily:
+
+A = load(file)
+B = f(A) + 1
+C = A * A'
+D = B' - C
+
+This can be done at run time using operator overloading. Arrays are created
+lazily. Creating an array appears to take almost no time, and subsequent
+operations can begin to try using it. If they need data from it, they will
+wait. So B and C wait for A, and they can both begin computing as blocks of
+A become available (e.g. from disk). D waits for both B and C. However, as
+soon as some blocks of B and C become available D can start using them. So
+all operations on all four lines of code can be running together.
+
+Nice, but this depends on writing a pure function to express the value of
+each variable and each array block. This can always be done, but you don't
+always want to program this way.
+
+Example:
+Some functions have two or more outputs. This is common in linear algebra
+where you might compute some vector as a side result of computing some
+matrix or another vector. It might be drastically easier or more efficient
+to compute them together. Using such a function in this framework is easy:
+
+(M, v) = f(A)
+
+But how do we write such a function f?
+We need to be able to "send" a value to multiple continuations.
+No problem; we see how computations can wait for and "pull" values, so why
+not be able to "push" them too?
+
+F = dcontainer(m, n)
+...
+F[i:j] = X
+
+We first create an empty array and assign into it whenever we feel like.
+Waiting for a piece of the array will wait for somebody to assign to it.
+This greatly frees how we can write code without giving up any of the
+parallelism allowed by the functional model.

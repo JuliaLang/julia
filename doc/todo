@@ -639,6 +639,8 @@ issues 1/24/11
   * automatically resolve local remote references to their values
   * @spawn
   * distributed GC
+  . some kind of atomic update, e.g. a[a:b,c:d]=X where once the write begins
+    future reads from that region will wait for it to complete
 
 something about update operators, in-place operations in general
 
