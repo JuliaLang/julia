@@ -220,3 +220,19 @@ function full{T,N}(d::DArray{T,N})
     end
     a
 end
+
+function (*){T}(A::DArray{T,2}, B::DArray{T,2})
+    if A.distdim != 1; A = A.'; end
+    if B.distdim != 2; B = B.'; end
+
+    C = dzeros(size(A,1), size(B,2)).'
+
+    rows = [[0], A.dist];
+    cols = [[0], B.dist];
+    for p=1:length(A.dist)
+        r = remote_call_fetch(p, localdata, B)
+        A.locl[:, cols[p]+1:cols[p+1]] = A.loc * r
+    end
+
+    return C
+end
