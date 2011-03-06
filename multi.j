@@ -140,10 +140,12 @@ type ProcessGroup
         w = cell(np)
         w[myid] = LocalProcess()
         PGRP = ProcessGroup(myid, w, locs, np)
+        handler = fd->message_handler(fd, sockets)
         for i=(myid+1):np
             w[i] = Worker(locs[i].host, locs[i].port)
             w[i].id = i
             sockets[w[i].fd] = w[i].socket
+            add_fd_handler(w[i].fd, handler)
             remote_do(w[i], identify_socket, myid)
         end
         PGRP
