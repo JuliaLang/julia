@@ -219,16 +219,36 @@ function full{T,N}(d::DArray{T,N})
     a
 end
 
-function (*){T}(A::DArray{T,2}, B::DArray{T,2})
-    if A.distdim != 1; A = A.'; end
-    if B.distdim != 2; B = B.'; end
+# TODO: Do the right thing here
+function changedist{T}(A::DArray{T}, dist)
+    if A.distdim == dist; return A; end
+    Af = full(A)
+    return distribute(Af, dist)
+end
 
-    C = dzeros(size(A,1), size(B,2)).'
-
+function node_multiply(A, B, C)
     cols = B.dist
     for p=1:length(A.dist)-1
         r = remote_call_fetch(p, localdata, B)
-        A.locl[:, cols[p]:cols[p+1]-1] = A.loc * r
+        C.locl[:, cols[p]:cols[p+1]-1] = A.locl * r
+    end
+    return 1
+end
+
+function (*){T}(A::DArray{T,2}, B::DArray{T,2})
+    np = length(A.dist)
+    A = changedist(A, 1)
+    B = changedist(B, 2)
+
+    C = changedist (dzeros(size(A,1), size(B,2)), 1)
+
+    fut = { 0 | i=1:np}
+    for p=1:np-1
+        fut[p] = remote_call(p, node_multiply, A, B, C)
+    end
+    
+    for p=1:np-1
+        wait(fut[p])
     end
 
     return C
