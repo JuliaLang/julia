@@ -581,6 +581,7 @@ static int exec_program()
     JL_TRY {
         if (err) {
             jl_show(jl_exception_in_transit);
+            ios_printf(ios_stdout, "\n");
             JL_EH_POP();
             return 1;
         }

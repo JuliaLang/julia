@@ -346,10 +346,10 @@ void jl_load(const char *fname)
         if (fid == -1) {
             asprintf(&fpath, "%s/%s.j", julia_home, fname);
             fid = open (fpath, O_RDONLY);
-            if (fid == -1) {
-                jl_errorf("could not open file %s", fpath);
-            }
         }
+    }
+    if (fid == -1) {
+        jl_errorf("could not open file %s", fpath);
     }
     close(fid);
 
