@@ -226,30 +226,22 @@ function changedist{T}(A::DArray{T}, dist)
     return distribute(Af, dist)
 end
 
-function node_multiply(A, B, C)
-    cols = B.dist
-    for p=1:length(A.dist)-1
-        r = remote_call_fetch(p, localdata, B)
-        C.locl[:, cols[p]:cols[p+1]-1] = A.locl * r
+function node_multiply{T}(A::Tensor{T}, B, sz)
+    locl = Array(T, sz)
+    if !isempty(locl)
+        cols = B.dist
+        Adata = localdata(A)
+        for p=1:length(A.dist)-1
+            r = remote_call_fetch(p, localdata, B)
+            locl[:, cols[p]:cols[p+1]-1] = Adata * r
+        end
     end
-    return 1
+    locl
 end
 
 function (*){T}(A::DArray{T,2}, B::DArray{T,2})
-    np = length(A.dist)
     A = changedist(A, 1)
     B = changedist(B, 2)
 
-    C = changedist (dzeros(size(A,1), size(B,2)), 1)
-
-    fut = { 0 | i=1:np}
-    for p=1:np-1
-        fut[p] = remote_call(p, node_multiply, A, B, C)
-    end
-    
-    for p=1:np-1
-        wait(fut[p])
-    end
-
-    return C
+    darray((T,sz,da)->node_multiply(A,B,sz), T, (size(A,1),size(B,2)), 1)
 end

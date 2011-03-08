@@ -39,12 +39,14 @@ void bzero(void *s, size_t n)
 /* returns a socket on which to accept() connections */
 int open_tcp_port(short portno)
 {
-    int sockfd;
+    int sockfd, val;
     struct sockaddr_in serv_addr;
 
     sockfd = mysocket(PF_INET, SOCK_STREAM, IPPROTO_TCP);
     if (sockfd < 0)
         return -1;
+    val = 1;
+    //setsockopt(sockfd, SOL_TCP, TCP_NODELAY, &val, sizeof(val));
     bzero(&serv_addr, sizeof(serv_addr));
     serv_addr.sin_family = AF_INET;
     serv_addr.sin_addr.s_addr = htonl(INADDR_ANY);
@@ -62,12 +64,14 @@ int open_tcp_port(short portno)
 int open_any_tcp_port(short *portno)
 
 {
-    int sockfd;
+    int sockfd, val;
     struct sockaddr_in serv_addr;
 
     sockfd = mysocket(PF_INET, SOCK_STREAM, IPPROTO_TCP);
     if (sockfd < 0)
         return -1;
+    val = 1;
+    //setsockopt(sockfd, SOL_TCP, TCP_NODELAY, &val, sizeof(val));
     bzero(&serv_addr, sizeof(serv_addr));
     serv_addr.sin_family = AF_INET;
     serv_addr.sin_addr.s_addr = htonl(INADDR_ANY);
@@ -88,7 +92,7 @@ int open_any_udp_port(short *portno)
     int sockfd;
     struct sockaddr_in serv_addr;
 
-    sockfd = mysocket(PF_INET, SOCK_DGRAM, IPPROTO_TCP);
+    sockfd = mysocket(PF_INET, SOCK_DGRAM, 0);
     if (sockfd < 0)
         return -1;
     bzero(&serv_addr, sizeof(serv_addr));

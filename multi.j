@@ -222,9 +222,21 @@ isequal(r::RemoteRef, s::RemoteRef) = (r.whence==s.whence && r.id==s.id)
 
 rr2id(r::RemoteRef) = (r.whence, r.id)
 
+function lookup_ref(id)
+    global PGRP
+    wi = get(PGRP.refs, id, ())
+    if is(wi, ())
+        # first we've heard of this ref
+        wi = WorkItem(+)  # this WorkItem is just a place holder
+        PGRP.refs[id] = wi
+        add(wi.clientset, id[1])
+    end
+    wi
+end
+
 function del_client(id, client)
     global PGRP
-    wi = PGRP.refs[id]
+    wi = lookup_ref(id)
     del(wi.clientset, client)
     if isempty(wi.clientset)
         del(PGRP.refs, id)
@@ -255,7 +267,7 @@ end
 
 function add_client(id, client)
     global PGRP
-    wi = PGRP.refs[id]
+    wi = lookup_ref(id)
     add(wi.clientset, client)
     ()
 end
@@ -283,7 +295,8 @@ function deserialize(s, t::Type{RemoteRef})
     global PGRP
     rr = invoke(deserialize, (Any, Type), s, t)
     if rr.where == myid()
-        wi = PGRP.refs[rr2id(rr)]
+        rid = rr2id(rr)
+        wi = lookup_ref(rid)
         if wi.done
             v = wi.result
             # NOTE: this duplicates work_result()
@@ -291,17 +304,85 @@ function deserialize(s, t::Type{RemoteRef})
                 v = v.value
             end
             if isa(v,GlobalObject)
-                add_client(rr2id(rr), myid())
+                add_client(rid, myid())
                 return v.local_identity
             end
             return v
         else
-            add_client(rr2id(rr), myid())
+            add_client(rid, myid())
         end
     end
     # make sure this rr gets added to the client_refs table
     RemoteRef(rr)
 end
+
+REQ_ID = 0
+
+function assign_rr(w::Worker)
+    global REQ_ID
+    rr = RemoteRef(w.id, myid(), REQ_ID)
+    REQ_ID += 1
+    rr
+end
+
+function assign_rr(w::LocalProcess)
+    global REQ_ID
+    rr = RemoteRef(myid(), myid(), REQ_ID)
+    REQ_ID += 1
+    rr
+end
+
+assign_rr(id::Int) = assign_rr(worker_from_id(id))
+remote_ref(x) = assign_rr(x)
+
+function schedule_call(rid, f, args)
+    global PGRP
+    wi = WorkItem(()->apply(f, args))
+    PGRP.refs[rid] = wi
+    add(wi.clientset, rid[1])
+    enq_work(wi)
+    wi
+end
+
+function remote_call(w::LocalProcess, f, args...)
+    rr = assign_rr(w)
+    schedule_call(rr2id(rr), f, args)
+    rr
+end
+
+function remote_call(w::Worker, f, args...)
+    rr = assign_rr(w)
+    send_msg(w, (:call, tuple(rr2id(rr), f, args...)))
+    rr
+end
+
+remote_call(id::Int, f, args...) = remote_call(worker_from_id(id), f, args...)
+
+# faster version of fetch(remote_call(...))
+remote_call_fetch(w::LocalProcess, f, args...) = f(args...)
+
+function remote_call_fetch(w::Worker, f, args...)
+    rr = assign_rr(w)
+    oid = rr2id(rr)
+    send_msg(w, (:call_fetch, tuple(oid, f, args...)))
+    yieldto(Scheduler, WaitFor(:fetch, oid))
+end
+
+remote_call_fetch(id::Int, f, args...) =
+    remote_call_fetch(worker_from_id(id), f, args...)
+
+# faster version of wait(remote_call(...))
+remote_call_wait(w::LocalProcess, f, args...) = wait(remote_call(w,f,args...))
+
+function remote_call_wait(w::Worker, f, args...)
+    rr = assign_rr(w)
+    oid = rr2id(rr)
+    send_msg(w, (:call_wait, tuple(oid, f, args...)))
+    yieldto(Scheduler, WaitFor(:wait, oid))
+end
+
+remote_call_wait(id::Int, f, args...) =
+    remote_call_wait(worker_from_id(id), f, args...)
 
 function remote_do(w::LocalProcess, f, args...)
     # the LocalProcess version just performs in local memory what a worker
@@ -316,72 +397,7 @@ function remote_do(w::Worker, f, args...)
     ()
 end
 
-remote_do(id::Int, f, args...) =
-    (global PGRP; remote_do(id==0?PGRP.client:PGRP.workers[id], f, args...))
-
-REQ_ID = 0
-
-function assign_rr(w::Worker)
-    global REQ_ID, PGRP
-    rr = RemoteRef(w.id, myid(), REQ_ID)
-    REQ_ID += 1
-    rr
-end
-
-function assign_rr(w::LocalProcess)
-    global REQ_ID
-    rr = RemoteRef(myid(), myid(), REQ_ID)
-    REQ_ID += 1
-    rr
-end
-
-function remote_call(w::LocalProcess, f, args...)
-    global PGRP
-    rr = assign_rr(w)
-    wi = WorkItem(()->apply(f, args))
-    PGRP.refs[rr2id(rr)] = wi
-    enq_work(wi)
-    rr
-end
-
-function remote_call(w::Worker, f, args...)
-    rr = assign_rr(w)
-    send_msg(w, (:call, tuple(rr2id(rr), f, args...)))
-    rr
-end
-
-remote_call(id::Int, f, args...) =
-    (global PGRP; remote_call(id==0?PGRP.client:PGRP.workers[id], f, args...))
-
-# faster version of fetch(remote_call(...))
-remote_call_fetch(w::LocalProcess, f, args...) = f(args...)
-
-function remote_call_fetch(w::Worker, f, args...)
-    global PGRP
-    rr = assign_rr(w)
-    oid = rr2id(rr)
-    send_msg(w, (:call_fetch, tuple(oid, f, args...)))
-    yieldto(Scheduler, WaitFor(:fetch, oid))
-end
-
-remote_call_fetch(id::Int, f, args...) =
-    (global PGRP;
-     remote_call_fetch(id==0?PGRP.client:PGRP.workers[id], f, args...))
-
-# faster version of wait(remote_call(...))
-remote_call_wait(w::LocalProcess, f, args...) = wait(remote_call(w,f,args...))
-
-function remote_call_wait(w::Worker, f, args...)
-    global PGRP
-    rr = assign_rr(w)
-    oid = rr2id(rr)
-    send_msg(w, (:call_wait, tuple(oid, f, args...)))
-    yieldto(Scheduler, WaitFor(:sync, oid))
-end
-
-remote_call_wait(id::Int, f, args...) =
-    (global PGRP;
-     remote_call_wait(id==0?PGRP.client:PGRP.workers[id], f, args...))
+remote_do(id::Int, f, args...) = remote_do(worker_from_id(id), f, args...)
 
 function sync_msg(verb::Symbol, r::RemoteRef)
     global PGRP
@@ -391,7 +407,7 @@ function sync_msg(verb::Symbol, r::RemoteRef)
     oid = rr2id(r)
     if r.where==myid() || (r.where > 0 && isa(PGRP.workers[r.where],
                                               LocalProcess))
-        wi = PGRP.refs[oid]
+        wi = lookup_ref(oid)
         if wi.done
             return is(verb,:fetch) ? work_result(wi) : r
         else
@@ -408,8 +424,29 @@ function sync_msg(verb::Symbol, r::RemoteRef)
     return is(verb,:fetch) ? v : r
 end
 
-wait(r::RemoteRef) = sync_msg(:sync, r)
+wait(r::RemoteRef) = sync_msg(:wait, r)
 fetch(r::RemoteRef) = sync_msg(:fetch, r)
+
+# writing to an uninitialized ref
+function put_ref(id, val)
+    wi = lookup_ref(rid)
+    if wi.done
+        error("invalid put()")
+    end
+    wi.result = val
+    wi.done = true
+    notify_done(wi)
+end
+
+function put(rr::RemoteRef, val)
+    rid = rr2id(rr)
+    if rr.where == myid()
+        put_ref(rid, val)
+    else
+        remote_do(rr.where, put_ref, rid, val)
+    end
+    val
+end
 
 yield() = yieldto(Scheduler)
 
@@ -489,7 +526,7 @@ function deliver_result(sock::IOStream, msg, oid, value)
     if is(msg,:fetch)
         val = value
     else
-        @assert is(msg, :sync)
+        @assert is(msg, :wait)
         val = oid
     end
     try
@@ -530,6 +567,9 @@ function enq_work(wi::WorkItem)
     enq(Workqueue, wi)
 end
 
+enq_work(f::Function) = enq_work(WorkItem(f))
+enq_work(t::Task) = enq_work(WorkItem(t))
+
 let runner = ()
 global perform_work
 function perform_work()
@@ -568,7 +608,6 @@ function perform_work(job::WorkItem)
         job.done = true
         job.result = result.value
     end
-    # job.done might also get set to true hackishly by GlobalObject
     if job.done
         runner = job.task  # Task now free to be shared
         job.task = ()
@@ -644,22 +683,14 @@ function message_handler(fd, sockets)
             #print("$(myid()) got ", tuple(msg, args[1],
             #                              map(typeof,args[2:])), "\n")
             # handle message
-            if is(msg, :call) || is(msg, :call_fetch) ||
-                is(msg, :call_wait)
+            if is(msg, :call) || is(msg, :call_fetch) || is(msg, :call_wait)
                 id = args[1]
                 f = args[2]
-                let func=f, ar=args[3:]
-                    wi = WorkItem(()->apply(func,ar))
-                    refs[id] = wi
-                    add(wi.clientset, id[1])
-                    if !is(func,never_finish) # TODO: hack
-                        enq_work(wi)
-                    end
-                    if is(msg, :call_fetch)
-                        wi.notify = (sock, :fetch, id, wi.notify)
-                    elseif is(msg, :call_wait)
-                        wi.notify = (sock, :sync, id, wi.notify)
-                    end
+                wi = schedule_call(id, f, args[3:])
+                if is(msg, :call_fetch)
+                    wi.notify = (sock, :fetch, id, wi.notify)
+                elseif is(msg, :call_wait)
+                    wi.notify = (sock, :wait, id, wi.notify)
                 end
             elseif is(msg, :do)
                 f = args[1]
@@ -671,7 +702,7 @@ function message_handler(fd, sockets)
                     enq_work(WorkItem(()->apply(func,ar)))
                 end
             elseif is(msg, :result)
-                # used to deliver result of sync or fetch
+                # used to deliver result of wait or fetch
                 mkind = args[1]
                 oid = args[2]
                 val = args[3]
@@ -679,7 +710,7 @@ function message_handler(fd, sockets)
             else
                 # the synchronization messages
                 oid = args[1]
-                wi = refs[oid]
+                wi = lookup_ref(oid)
                 if wi.done
                     deliver_result(sock, msg, oid, work_result(wi))
                 else
@@ -794,8 +825,6 @@ end
 
 ## global objects and collective operations ##
 
-never_finish() = while true; yield(); end
-
 type GlobalObject
     local_identity
     refs::Array{RemoteRef,1}
@@ -808,10 +837,10 @@ type GlobalObject
         myrid = rids[mi]
         # make our reference to it weak so we can detect when there are
         # no local users of the object.
-        if !has(PGRP.refs,myrid)
-            error("GlobalObject was hoping to find something")
-        end
-        wi = PGRP.refs[myrid]
+        #if !has(PGRP.refs,myrid)
+        #    error("GlobalObject was hoping to find something")
+        #end
+        wi = lookup_ref(myrid)
         function del_go_client(go)
             if has(wi.clientset, mi)
                 for i=1:PGRP.np
@@ -827,6 +856,7 @@ type GlobalObject
         for i=1:length(rids)
             go.refs[i] = WeakRemoteRef(i, rids[i][1], rids[i][2])
         end
+        # NOTE: this is put(go.refs[mi], WeakRef(go))
         go.local_identity = initializer(go)
         wi.result = WeakRef(go)
         wi.done = true
@@ -855,9 +885,8 @@ type GlobalObject
         global PGRP
         r = Array(RemoteRef, PGRP.np)
         for i=1:length(r)
-            # create a set of refs, but don't let them finish yet, because
-            # GlobalObject() is what we really want to wait for.
-            r[i] = remote_call(i, never_finish)
+            # create a set of refs to be initialized by GlobalObject above
+            r[i] = remote_ref(i)
         end
         rids = { rr2id(r[i]) | i=1:length(r) }
         for i=1:length(r)
