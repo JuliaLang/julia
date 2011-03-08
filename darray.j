@@ -243,5 +243,6 @@ function (*){T}(A::DArray{T,2}, B::DArray{T,2})
     A = changedist(A, 1)
     B = changedist(B, 2)
 
-    darray((T,sz,da)->node_multiply(A,B,sz), T, (size(A,1),size(B,2)), 1)
+    darray((T,sz,da)->(a = fetch(A); b = fetch(B); node_multiply(a,b,sz)),
+           T, (size(A,1),size(B,2)), 1)
 end

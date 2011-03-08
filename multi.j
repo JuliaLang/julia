@@ -426,6 +426,7 @@ end
 
 wait(r::RemoteRef) = sync_msg(:wait, r)
 fetch(r::RemoteRef) = sync_msg(:fetch, r)
+fetch(x) = x
 
 # writing to an uninitialized ref
 function put_ref(id, val)
