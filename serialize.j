@@ -170,6 +170,15 @@ end
 
 ## deserializing values ##
 
+force(x) = x
+force(x::Function) = x()
+
+# deserialize(s) returns either a simple value or a thunk. calling the
+# thunk gives the true value. this allows deserialization to happen in two
+# phases: first we do all the I/O and figure out its structure, and second
+# we actually make objects. this allows for constructing objects that might
+# interfere with I/O by reading, writing, blocking, etc.
+
 function deserialize(s)
     b = int32(read(s, Uint8))
     if b == 0
@@ -194,16 +203,18 @@ deserialize(s, t::BitsKind) = read(s, t)
 
 function deserialize(s, ::Type{BitsKind})
     name = deserialize(s)::Symbol
-    params = deserialize(s)
+    params = force(deserialize(s))
     t = apply_type(eval(name), params...)
     return read(s, t)
 end
 
 function deserialize(s, ::Type{UnionKind})
-    Union(deserialize(s)...)
+    args = deserialize(s)
+    ()->Union(force(args)...)
 end
 
-deserialize_tuple(s, len) = ntuple(len, i->deserialize(s))
+deserialize_tuple(s, len) = (a = ntuple(len, i->deserialize(s));
+                             ()->map(force, a))
 
 deserialize(s, ::Type{Symbol}) = symbol(read(s, Uint8, int32(read(s, Uint8))))
 deserialize(s, ::Type{LongSymbol}) = symbol(read(s, Uint8, read(s, Int32)))
@@ -212,26 +223,36 @@ function deserialize_function(s)
     b = read(s, Uint8)
     if b==0
         name = deserialize(s)::Symbol
-        return eval(name)
+        return ()->eval(name)
     end
     ast = deserialize(s)
     sparams = deserialize(s)
     env = deserialize(s)
-    linfo = ccall(:jl_new_lambda_info, Any, (Any, Any), ast, sparams)
-    ccall(:jl_new_closure_internal, Any, (Any, Any), linfo, env)::Function
+    function ()
+        linfo = ccall(:jl_new_lambda_info, Any, (Any, Any),
+                      force(ast), force(sparams))
+        ccall(:jl_new_closure_internal, Any, (Any, Any),
+              linfo, force(env))::Function
+    end
 end
 
 function deserialize(s, ::Type{Array})
-    elty = deserialize(s)
-    dims = deserialize(s)
+    elty = force(deserialize(s))
+    dims = force(deserialize(s))
     if isa(elty,BitsKind)
         return read(s, elty, dims...)
     end
-    A = Array(elty, dims...)
-    for i = 1:numel(A)
-        A[i] = deserialize(s)
+    temp = Array(Any, dims...)
+    for i = 1:numel(temp)
+        temp[i] = deserialize(s)
     end
-    return A
+    function ()
+        A = Array(elty, dims...)
+        for i = 1:numel(A)
+            A[i] = force(temp[i])
+        end
+        return A
+    end
 end
 
 deserialize(s, ::Type{Expr})     = deserialize_expr(s, int32(read(s, Uint8)))
@@ -239,21 +260,24 @@ deserialize(s, ::Type{LongExpr}) = deserialize_expr(s, read(s, Int32))
 
 function deserialize_expr(s, len)
     hd = deserialize(s)::Symbol
-    ty = deserialize(s)
-    e = expr(hd, { deserialize(s) | i=1:len })
-    e.type = ty
-    e
+    ty = force(deserialize(s))
+    args = { deserialize(s) | i=1:len }
+    function ()
+        e = expr(hd, map(force, args))
+        e.type = ty
+        e
+    end
 end
 
 function deserialize(s, ::Type{TagKind})
     name = deserialize(s)::Symbol
-    params = deserialize(s)
+    params = force(deserialize(s))
     apply_type(eval(name), params...)
 end
 
 function deserialize(s, ::Type{StructKind})
     name = deserialize(s)::Symbol
-    params = deserialize(s)
+    params = force(deserialize(s))
     t = apply_type(eval(name), params...)
     # allow delegation to more specialized method
     return deserialize(s, t)
@@ -266,20 +290,28 @@ function deserialize(s, t::Type)
     if nf == 0
         return ccall(:jl_new_struct, Any, (Any,), t)
     elseif nf == 1
-        return ccall(:jl_new_struct, Any, (Any,Any), t, deserialize(s))
+        f1 = deserialize(s)
+        ()->ccall(:jl_new_struct, Any, (Any,Any), t, force(f1))
     elseif nf == 2
-        return ccall(:jl_new_struct, Any,
-                     (Any,Any,Any), t, deserialize(s), deserialize(s))
+        f1 = deserialize(s)
+        f2 = deserialize(s)
+        ()->ccall(:jl_new_struct, Any, (Any,Any,Any), t, force(f1), force(f2))
     elseif nf == 3
-        return ccall(:jl_new_struct, Any,
-                     (Any,Any,Any,Any), t, deserialize(s), deserialize(s),
-                     deserialize(s))
+        f1 = deserialize(s)
+        f2 = deserialize(s)
+        f3 = deserialize(s)
+        ()->ccall(:jl_new_struct, Any,
+                  (Any,Any,Any,Any), t, force(f1), force(f2), force(f3))
     elseif nf == 4
-        return ccall(:jl_new_struct, Any,
-                     (Any,Any,Any,Any,Any), t, deserialize(s), deserialize(s),
-                     deserialize(s), deserialize(s))
+        f1 = deserialize(s)
+        f2 = deserialize(s)
+        f3 = deserialize(s)
+        f4 = deserialize(s)
+        ()->ccall(:jl_new_struct, Any,
+                  (Any,Any,Any,Any,Any), t, force(f1), force(f2), force(f3),
+                  force(f4))
     else
-        return ccall(:jl_new_structt, Any,
-                     (Any,Any), t, ntuple(nf, i->deserialize(s)))
+        f = ntuple(nf, i->deserialize(s))
+        return ccall(:jl_new_structt, Any, (Any,Any), t, map(force, f))
     end
 end

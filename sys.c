@@ -18,6 +18,7 @@
 #include <libgen.h>
 #include <fcntl.h>
 #include <unistd.h>
+#include <pthread.h>
 #ifdef BOEHM_GC
 #include <gc.h>
 #endif
@@ -96,6 +97,12 @@ uint32_t jl_getutf8(ios_t *s)
     uint32_t wc=0;
     ios_getutf8(s, &wc);
     return wc;
+}
+
+DLLEXPORT
+size_t jl_ios_size(ios_t *s)
+{
+    return s->size;
 }
 
 DLLEXPORT
@@ -193,3 +200,77 @@ int jl_process_stop_signal(int status) { return WSTOPSIG(status); }
 int jl_stdin()  { return STDIN_FILENO; }
 int jl_stdout() { return STDOUT_FILENO; }
 int jl_stderr() { return STDERR_FILENO; }
+
+// I/O thread
+
+static pthread_t io_thread;
+static pthread_mutex_t q_mut;
+static pthread_mutex_t wake_mut;
+static pthread_cond_t wake_cond;
+
+typedef struct _sendreq_t {
+    int fd;
+    void *buf;
+    size_t n;
+    struct _sendreq_t *next;
+} sendreq_t;
+
+static sendreq_t *ioq = NULL;
+
+int _os_write_all(long fd, void *buf, size_t n, size_t *nwritten);
+
+static void *run_io_thr(void *arg)
+{
+    while (1) {
+        pthread_mutex_lock(&wake_mut);
+        pthread_cond_wait(&wake_cond, &wake_mut);
+        pthread_mutex_unlock(&wake_mut);
+
+        pthread_mutex_lock(&q_mut);
+        while (ioq != NULL) {
+            sendreq_t *r = ioq;
+            ioq = ioq->next;
+            pthread_mutex_unlock(&q_mut);
+            size_t nw;
+            _os_write_all(r->fd, r->buf, r->n, &nw);
+            LLT_FREE(r->buf);
+            free(r);
+            pthread_mutex_lock(&q_mut);
+        }
+        pthread_mutex_unlock(&q_mut);
+    }
+    return NULL;
+}
+
+DLLEXPORT
+void jl_enq_send_req(ios_t *dest, ios_t *buf)
+{
+    sendreq_t *req = (sendreq_t*)malloc(sizeof(sendreq_t));
+    req->fd = dest->fd;
+    size_t sz;
+    req->n = buf->size;
+    req->buf = ios_takebuf(buf, &sz);
+    req->next = NULL;
+    pthread_mutex_lock(&q_mut);
+    if (ioq == NULL) {
+        ioq = req;
+    }
+    else {
+        sendreq_t *r = ioq;
+        while (r->next != NULL) {
+            r = r->next;
+        }
+        r->next = req;
+    }
+    pthread_mutex_unlock(&q_mut);
+    pthread_cond_signal(&wake_cond);
+}
+
+DLLEXPORT
+void jl_start_io_thread()
+{
+    pthread_mutex_init(&q_mut, NULL);
+    pthread_mutex_init(&wake_mut, NULL);
+    pthread_cond_init(&wake_cond, NULL);
+    pthread_create(&io_thread, NULL, run_io_thr, NULL);
+}

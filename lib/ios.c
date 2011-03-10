@@ -144,7 +144,7 @@ static int _os_write(long fd, void *buf, size_t n, size_t *nwritten)
     return 0;
 }
 
-static int _os_write_all(long fd, void *buf, size_t n, size_t *nwritten)
+int _os_write_all(long fd, void *buf, size_t n, size_t *nwritten)
 {
     size_t wrote;
 

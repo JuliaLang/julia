@@ -17,24 +17,23 @@
 ## pmap(func, lst) -
 ##     call a function on each element of lst (some 1-d thing), in
 ##     parallel.
-##
-## lower-level interface:
-##
-## send_msg(socket|Worker, x) - send a Julia object
-## recv_msg(socket|Worker)    - read the next Julia object from a connection
 
 ## message i/o ##
 
-recv_msg(s) = deserialize(s)
+function send_msg(s::IOStream, buf::IOStream, kind, args)
+    truncate(buf, 0)
+    serialize(buf, kind)
+    for arg=args
+        serialize(buf, arg)
+    end
+    ccall(:jl_enq_send_req, Void, (Ptr{Void}, Ptr{Void}),
+          s.ios, buf.ios)
+    #ccall(:ios_write_direct, PtrInt, (Ptr{Void}, Ptr{Void}),
+    #      s.ios, buf.ios)
+end
 
 SENDBUF = memio()
-function send_msg(s::IOStream, x)
-    truncate(SENDBUF, 0)
-    serialize(SENDBUF, x)
-    ccall(:ios_write_direct, PtrInt, (Ptr{Void}, Ptr{Void}),
-          s.ios, SENDBUF.ios)
-    ()
-end
+send_msg(s::IOStream, kind, args...) = send_msg(s, SENDBUF, kind, args)
 
 # todo:
 # * add readline to event loop
@@ -71,16 +70,7 @@ type Worker
     Worker(host, port, fd, sock) = new(host, port, fd, sock, memio(), 0, deq())
 end
 
-function send_msg(w::Worker, x)
-    buf = w.sendbuf
-    truncate(buf, 0)
-    serialize(buf, x)
-    ccall(:ios_write_direct, PtrInt, (Ptr{Void}, Ptr{Void}),
-          w.socket.ios, buf.ios)
-    ()
-end
-
-recv_msg(w::Worker) = recv_msg(w.socket)
+send_msg(w::Worker, kind, args...) = send_msg(w.socket, w.sendbuf, kind, args)
 
 type LocalProcess
 end
@@ -127,7 +117,7 @@ type ProcessGroup
         handler = fd->message_handler(fd, sockets)
         for i=1:np
             w[i].id = i
-            send_msg(w[i], (i, locs))
+            send_msg(w[i], i, locs)
             sockets[w[i].fd] = w[i].socket
             add_fd_handler(w[i].fd, handler)
         end
@@ -146,7 +136,7 @@ type ProcessGroup
             w[i].id = i
             sockets[w[i].fd] = w[i].socket
             add_fd_handler(w[i].fd, handler)
-            remote_do(w[i], identify_socket, myid)
+            send_msg(w[i], :identify_socket, myid)
         end
         PGRP
     end
@@ -208,8 +198,6 @@ type RemoteRef
         finalizer(r, send_del_client)
         r
     end
-
-    RemoteRef(rr::RemoteRef) = RemoteRef(rr.where, rr.whence, rr.id)
 
     global WeakRemoteRef
     function WeakRemoteRef(w, wh, id)
@@ -292,12 +280,16 @@ function serialize(s, rr::RemoteRef)
 end
 
 function deserialize(s, t::Type{RemoteRef})
-    global PGRP
-    rr = invoke(deserialize, (Any, Type), s, t)
-    if rr.where == myid()
-        rid = rr2id(rr)
-        wi = lookup_ref(rid)
-        if wi.done
+    rr = force(invoke(deserialize, (Any, Type), s, t))
+    rid = rr2id(rr)
+    where = rr.where
+    rr = ()
+    function ()
+        if where == myid()
+            wi = lookup_ref(rid)
+            if !wi.done
+                wait(WeakRemoteRef(where, rid[1], rid[2]))
+            end
             v = wi.result
             # NOTE: this duplicates work_result()
             if isa(v,WeakRef)
@@ -305,15 +297,14 @@ function deserialize(s, t::Type{RemoteRef})
             end
             if isa(v,GlobalObject)
                 add_client(rid, myid())
-                return v.local_identity
+                v = v.local_identity
             end
             return v
         else
-            add_client(rid, myid())
+            # make sure this rr gets added to the client_refs table
+            RemoteRef(where, rid[1], rid[2])
         end
     end
-    # make sure this rr gets added to the client_refs table
-    RemoteRef(rr)
 end
 
 REQ_ID = 0
@@ -335,9 +326,12 @@ end
 assign_rr(id::Int) = assign_rr(worker_from_id(id))
 remote_ref(x) = assign_rr(x)
 
-function schedule_call(rid, f, args)
+schedule_call(rid, f_thk, args_thk) =
+    schedule_call(rid, ()->apply(force(f_thk),force(args_thk)))
+
+function schedule_call(rid, thunk)
     global PGRP
-    wi = WorkItem(()->apply(f, args))
+    wi = WorkItem(thunk)
     PGRP.refs[rid] = wi
     add(wi.clientset, rid[1])
     enq_work(wi)
@@ -346,13 +340,13 @@ end
 
 function remote_call(w::LocalProcess, f, args...)
     rr = assign_rr(w)
-    schedule_call(rr2id(rr), f, args)
+    schedule_call(rr2id(rr), ()->f(args...))
     rr
 end
 
 function remote_call(w::Worker, f, args...)
     rr = assign_rr(w)
-    send_msg(w, (:call, tuple(rr2id(rr), f, args...)))
+    send_msg(w, :call, rr2id(rr), f, args)
     rr
 end
 
@@ -364,7 +358,7 @@ remote_call_fetch(w::LocalProcess, f, args...) = f(args...)
 function remote_call_fetch(w::Worker, f, args...)
     rr = assign_rr(w)
     oid = rr2id(rr)
-    send_msg(w, (:call_fetch, tuple(oid, f, args...)))
+    send_msg(w, :call_fetch, oid, f, args)
     yieldto(Scheduler, WaitFor(:fetch, oid))
 end
 
@@ -377,7 +371,7 @@ remote_call_wait(w::LocalProcess, f, args...) = wait(remote_call(w,f,args...))
 function remote_call_wait(w::Worker, f, args...)
     rr = assign_rr(w)
     oid = rr2id(rr)
-    send_msg(w, (:call_wait, tuple(oid, f, args...)))
+    send_msg(w, :call_wait, oid, f, args)
     yieldto(Scheduler, WaitFor(:wait, oid))
 end
 
@@ -393,7 +387,7 @@ function remote_do(w::LocalProcess, f, args...)
 end
 
 function remote_do(w::Worker, f, args...)
-    send_msg(w, (:do, tuple(f, args...)))
+    send_msg(w, :do, f, args)
     ()
 end
 
@@ -415,13 +409,13 @@ function sync_msg(verb::Symbol, r::RemoteRef)
             wi.notify = ((), verb, oid, wi.notify)
         end
     elseif r.where == 0
-        send_msg(PGRP.client, (verb, (oid,)))
+        send_msg(PGRP.client, verb, oid)
     else
-        send_msg(PGRP.workers[r.where], (verb, (oid,)))
+        send_msg(PGRP.workers[r.where], verb, oid)
     end
     # yield to event loop, return here when answer arrives
     v = yieldto(Scheduler, WaitFor(verb, oid))
-    return is(verb,:fetch) ? v : r
+    return is(verb,:fetch) ? force(v) : r
 end
 
 wait(r::RemoteRef) = sync_msg(:wait, r)
@@ -531,15 +525,15 @@ function deliver_result(sock::IOStream, msg, oid, value)
         val = oid
     end
     try
-        send_msg(sock, (:result, (msg, oid, val)))
+        send_msg(sock, :result, msg, oid, val)
     catch e
         # send exception in case of serialization error; otherwise
         # request side would hang.
-        send_msg(sock, (:result, (msg, oid, e)))
+        send_msg(sock, :result, msg, oid, e)
     end
 end
 
-function deliver_result(sock::(), msg, oid, value)
+function deliver_result(sock::(), msg, oid, value_thunk)
     global Waiting
     # restart task that's waiting on oid
     jobs = get(Waiting, oid, ())
@@ -549,7 +543,7 @@ function deliver_result(sock::(), msg, oid, value)
         if jobs[1]==msg && !found
             found = true
             job = jobs[2]
-            job.argument = value
+            job.argument = value_thunk
             enq_work(job)
         else
             newjobs = (jobs[1], jobs[2], newjobs)
@@ -635,7 +629,13 @@ end
 function notify_done(job::WorkItem)
     while !is(job.notify,())
         (sock, msg, oid, job.notify) = job.notify
-        deliver_result(sock, msg, oid, work_result(job))
+        let wr = work_result(job)
+            if is(sock,())
+                deliver_result(sock, msg, oid, ()->wr)
+            else
+                deliver_result(sock, msg, oid, wr)
+            end
+        end
     end
 end
 
@@ -661,7 +661,8 @@ function accept_handler(accept_fd, sockets)
         sockets[connectfd] = sock
         if first
             # first connection; get process group info from client
-            (_myid, locs) = recv_msg(sock)
+            _myid = force(deserialize(sock))
+            locs = force(deserialize(sock))
             PGRP = ProcessGroup(_myid, locs, sockets)
             PGRP.client = Worker("", 0, connectfd, sock)
         end
@@ -680,37 +681,38 @@ function message_handler(fd, sockets)
     while first || nb_available(sock)>0
         first = false
         try
-            (msg, args) = recv_msg(sock)
+            msg = force(deserialize(sock))
             #print("$(myid()) got ", tuple(msg, args[1],
             #                              map(typeof,args[2:])), "\n")
             # handle message
             if is(msg, :call) || is(msg, :call_fetch) || is(msg, :call_wait)
-                id = args[1]
-                f = args[2]
-                wi = schedule_call(id, f, args[3:])
+                id = force(deserialize(sock))
+                f = deserialize(sock)
+                args = deserialize(sock)
+                wi = schedule_call(id, f, args)
                 if is(msg, :call_fetch)
                     wi.notify = (sock, :fetch, id, wi.notify)
                 elseif is(msg, :call_wait)
                     wi.notify = (sock, :wait, id, wi.notify)
                 end
             elseif is(msg, :do)
-                f = args[1]
-                if is(f,identify_socket)
-                    # special case
-                    args = (0, args[2], fd, sock)
-                end
-                let func=f, ar=args[2:]
-                    enq_work(WorkItem(()->apply(func,ar)))
+                f = deserialize(sock)
+                args = deserialize(sock)
+                let func=f, ar=args
+                    enq_work(WorkItem(()->apply(force(func),force(ar))))
                 end
             elseif is(msg, :result)
                 # used to deliver result of wait or fetch
-                mkind = args[1]
-                oid = args[2]
-                val = args[3]
+                mkind = force(deserialize(sock))
+                oid = force(deserialize(sock))
+                val = deserialize(sock)
                 deliver_result((), mkind, oid, val)
+            elseif is(msg, :identify_socket)
+                otherid = force(deserialize(sock))
+                identify_socket(otherid, fd, sock)
             else
                 # the synchronization messages
-                oid = args[1]
+                oid = force(deserialize(sock))
                 wi = lookup_ref(oid)
                 if wi.done
                     deliver_result(sock, msg, oid, work_result(wi))
@@ -739,6 +741,7 @@ end
 # the entry point for julia worker processes. does not return.
 # argument is descriptor to write listening port # to.
 function start_worker(wrfd)
+    ccall(:jl_start_io_thread, Void, ())
     port = [int16(9009)]
     sockfd = ccall(:open_any_tcp_port, Int32, (Ptr{Int16},), port)
     if sockfd == -1
@@ -1037,6 +1040,7 @@ end
 
 # start as a node that accepts interactive input
 function start_client()
+    ccall(:jl_start_io_thread, Void, ())
     try
         global Workqueue = Queue()
         global Waiting = HashTable(64)

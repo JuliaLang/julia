@@ -88,6 +88,7 @@
     jl_fd_set;
     jl_fd_zero;
     jl_read_avail;
+    jl_ios_size;
     jl_nb_available;
     jl_gc_add_finalizer;
     jl_gc_collect;
@@ -110,6 +111,8 @@
     jl_input_line_callback_no_readline;
     jl_stdin_callback;
     jl_eval_user_input;
+    jl_enq_send_req;
+    jl_start_io_thread;
   local:
     *;
 };
