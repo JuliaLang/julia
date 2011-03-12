@@ -642,7 +642,8 @@
 
 (define (parse-space-separated-exprs s)
   (let loop ((exprs '()))
-    (if (closing-token? (peek-token s))
+    (if (or (closing-token? (peek-token s))
+	    (and space-sensitive (eq? (peek-token s) '|\||)))
 	(reverse! exprs)
 	(let ((e (parse-eq s)))
 	  (case (peek-token s)
