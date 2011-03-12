@@ -1,6 +1,7 @@
 CC = gcc
 CXX = g++
-CFLAGS = -std=gnu99
+CFLAGS = -std=gnu99 -pthread
+CXXFLAGS = -pthread
 
 HFILEDIRS = /opt/local/include
 LIBDIRS = /opt/local/lib /usr/local/lib

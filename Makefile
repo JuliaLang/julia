@@ -20,7 +20,7 @@ FLAGS = -falign-functions -Wall -Wno-strict-aliasing \
 	-fvisibility=hidden
 LIBFILES = $(FLISP) $(LLT)
 LIBS = $(LIBFILES) -lutil -ldl -lm -lreadline $(OSLIBS) \
-	$(shell llvm-config --ldflags --libs engine) -lpthread
+	$(shell llvm-config --ldflags --libs engine) -pthread
 
 DEBUGFLAGS = -ggdb3 -DDEBUG $(FLAGS)
 SHIPFLAGS = -O3 -DNDEBUG $(FLAGS)
@@ -32,9 +32,9 @@ default: debug
 %.do: %.c julia.h
 	$(CC) $(CFLAGS) $(DEBUGFLAGS) -c $< -o $@
 %.o: %.cpp julia.h
-	$(CXX) $(SHIPFLAGS) $(shell llvm-config --cppflags) -c $< -o $@
+	$(CXX) $(CXXFLAGS) $(SHIPFLAGS) $(shell llvm-config --cppflags) -c $< -o $@
 %.do: %.cpp julia.h
-	$(CXX) $(DEBUGFLAGS) $(shell llvm-config --cppflags) -c $< -o $@
+	$(CXX) $(CXXFLAGS) $(DEBUGFLAGS) $(shell llvm-config --cppflags) -c $< -o $@
 
 ast.o ast.do: julia_flisp.boot.inc boot.j.inc
 julia_flisp.boot.inc: julia_flisp.boot $(FLISP)
