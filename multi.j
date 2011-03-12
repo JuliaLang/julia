@@ -178,7 +178,7 @@ function identify_socket(otherid, fd, sock)
     ()
 end
 
-## remote refs and core messages: do, call, fetch, wait ##
+## remote refs and core messages: do, call, fetch, wait, ref, put ##
 
 client_refs = WeakKeyHashTable()
 
@@ -443,30 +443,7 @@ function put(rr::RemoteRef, val)
     val
 end
 
-yield() = yieldto(Scheduler)
-
-## higher-level functions ##
-
-at_each(f, args...) = at_each(PGRP, f, args...)
-
-function at_each(grp::ProcessGroup, f, args...)
-    w = grp.workers
-    np = grp.np
-    for i=1:np
-        remote_do(w[i], f, args...)
-    end
-end
-
-pmap(f, lsts...) = pmap(PGRP, f, lsts...)
-pmap(grp::ProcessGroup, f) = f()
-
-function pmap(grp::ProcessGroup, f, lsts...)
-    np = grp.np
-    { remote_call(grp.workers[(i-1)%np+1], f, map(L->L[i], lsts)...) |
-     i = 1:length(lsts[1]) }
-end
-
-## worker event loop ##
+## work queue ##
 
 type WorkItem
     thunk::Function
@@ -639,12 +616,7 @@ function notify_done(job::WorkItem)
     end
 end
 
-function make_scheduled(t::Task)
-    enq_work(WorkItem(t))
-    t
-end
-
-## worker creation and setup ##
+## message event handlers ##
 
 # activity on accept fd
 function accept_handler(accept_fd, sockets)
@@ -737,6 +709,8 @@ function message_handler(fd, sockets)
         end
     end
 end
+
+## worker creation and setup ##
 
 # the entry point for julia worker processes. does not return.
 # argument is descriptor to write listening port # to.
@@ -941,7 +915,31 @@ function serialize(s, g::GlobalObject)
     end
 end
 
-spawnat(p, thunk) = remote_call(p, thunk)
+## higher-level functions: spawn, pmap, pfor, etc. ##
+
+_SPAWNS = ()
+
+sync_begin() = (global _SPAWNS = (deq(),_SPAWNS))
+function sync_end()
+    global _SPAWNS
+    if is(_SPAWNS,())
+        error("sync_end() without sync_begin()")
+    end
+    refs = _SPAWNS[1]
+    _SPAWNS = _SPAWNS[2]
+    for r = refs
+        wait(r)
+    end
+end
+
+function spawnat(p, thunk)
+    global _SPAWNS
+    r = remote_call(p, thunk)
+    if !is(_SPAWNS,())
+        push(_SPAWNS[1], r)
+    end
+    r
+end
 
 let lastp = 1
     global spawn
@@ -971,6 +969,47 @@ end
 
 macro spawn(thk); :(spawn(()->($thk))); end
 
+at_each(f, args...) = at_each(PGRP, f, args...)
+
+function at_each(grp::ProcessGroup, f, args...)
+    w = grp.workers
+    np = grp.np
+    for i=1:np
+        remote_do(w[i], f, args...)
+    end
+end
+
+pmap(f, lsts...) = pmap(PGRP, f, lsts...)
+pmap(grp::ProcessGroup, f) = f()
+
+function pmap(grp::ProcessGroup, f, lsts...)
+    np = grp.np
+    { remote_call(grp.workers[(i-1)%np+1], f, map(L->L[i], lsts)...) |
+     i = 1:length(lsts[1]) }
+end
+
+function pfor(reducer, f, r::Range1)
+    global PGRP
+    np = PGRP.np
+    N = length(r)
+    each = div(N,np)
+    rest = rem(N,np)
+    results = cell(np)
+    for i=1:np
+        lo = r.start + (i-1)*each
+        hi = lo + each-1
+        if i==np
+            hi += rest
+        end
+        results[i] = @spawn begin
+            v = reducer()
+            for j=lo:hi; v = reducer(v,f(j)); end
+            v
+        end
+    end
+    mapreduce(reducer, fetch, results)
+end
+
 ## demos ##
 
 fv(a)=eig(a)[2][2]
@@ -982,14 +1021,21 @@ all2all() = at_each(hello_from, myid())
 
 hello_from(i) = print("message from $i to $(myid())\n")
 
-## event processing ##
+## event processing, I/O and work scheduling ##
+
+function make_scheduled(t::Task)
+    enq_work(WorkItem(t))
+    t
+end
+
+yield() = yieldto(Scheduler)
 
 fd_handlers = HashTable()
 
 add_fd_handler(fd, H) = (fd_handlers[fd]=H)
 del_fd_handler(fd) = del(fd_handlers, fd)
 
-function event_loop(client)
+function event_loop(isclient)
     fdset = FDSet()
     iserr, lasterr = false, ()
     
@@ -1020,7 +1066,7 @@ function event_loop(client)
                 end
             end
         catch e
-            if isa(e,DisconnectException) && !client
+            if isa(e,DisconnectException) && !isclient
                 return()
             end
             iserr, lasterr = true, e

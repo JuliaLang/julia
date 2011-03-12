@@ -209,8 +209,10 @@ function assign(d::DArray, v, i::Index)
     d
 end
 
-function full{T,N}(d::DArray{T,N})
-    a = Array(T, size(d))
+convert{T,N}(::Type{Array}, d::DArray{T,N}) = convert(Array{T,N}, d)
+
+function convert{S,T,N}(::Type{Array{S,N}}, d::DArray{T,N})
+    a = Array(S, size(d))
     idxs = { 1:size(a,i) | i=1:N }
     for p = 1:length(d.dist)-1
         idxs[d.distdim] = d.dist[p]:(d.dist[p+1]-1)
@@ -222,7 +224,7 @@ end
 # TODO: Do the right thing here
 function changedist{T}(A::DArray{T}, dist)
     if A.distdim == dist; return A; end
-    Af = full(A)
+    Af = convert(Array, A)
     return distribute(Af, dist)
 end
 
