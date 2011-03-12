@@ -640,6 +640,15 @@
 	((#\,)  (take-token s) (loop (cons r ranges)))
 	(else   (reverse! (cons r ranges)))))))
 
+(define (parse-space-separated-exprs s)
+  (let loop ((exprs '()))
+    (if (closing-token? (peek-token s))
+	(reverse! exprs)
+	(let ((e (parse-eq s)))
+	  (case (peek-token s)
+	    ((#\newline)   (reverse! (cons e exprs)))
+	    (else          (loop (cons e exprs))))))))
+
 ; handle function call argument list, or any comma-delimited list.
 ; . an extra comma at the end is allowed
 ; . expressions after a ; are enclosed in (parameters ...)
@@ -797,6 +806,7 @@
 
 ; reads a raw string literal with no processing.
 ; quote can be escaped with \, but the \ is left in place.
+; returns ("str" . b), b is a boolean telling whether interpolation is used
 (define (parse-string-literal s unescape-q)
   (let ((b (open-output-string))
 	(p (ts:port s))
@@ -966,7 +976,7 @@
 	   (let ((head (parse-atom s)))
 	     (if (not (symbol? head))
 		 (error (string "invalid macro use @" head)))
-	     `(macrocall ,head ,(parse-eq s))))
+	     `(macrocall ,head ,@(parse-space-separated-exprs s))))
 
 	  ;; command syntax
 	  ((eqv? t #\`)

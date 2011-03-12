@@ -46,19 +46,27 @@ value_t fl_defined_julia_global(value_t *args, uint32_t nargs)
 
 value_t fl_invoke_julia_macro(value_t *args, uint32_t nargs)
 {
-    if (nargs < 2)
-        argcount("invoke-julia-macro", nargs, 2);
+    if (nargs < 1)
+        argcount("invoke-julia-macro", nargs, 1);
     (void)tosymbol(args[0], "invoke-julia-macro");
     jl_sym_t *name = jl_symbol(symbol_name(args[0]));
     jl_function_t *f = jl_get_expander(jl_system_module, name);
     if (f == NULL)
         return FL_F;
-    jl_value_t *arg = scm_to_julia(args[1]);
-    jl_value_t *result = NULL;
-    // TODO: so far we only support macros with 1 argument
-    JL_GC_PUSH(&arg, &result);
+    jl_value_t **margs;
+    int na = nargs-1;
+    if (na > 0)
+        margs = alloca(na * sizeof(jl_value_t*));
+    else
+        margs = NULL;
+    int i;
+    for(i=0; i < na; i++) margs[i] = NULL;
+    JL_GC_PUSHARGS(margs, na);
+    for(i=0; i < na; i++) margs[i] = scm_to_julia(args[i+1]);
+    jl_value_t *result;
+
     JL_TRY {
-        result = jl_apply(f, &arg, 1);
+        result = jl_apply(f, margs, na);
     }
     JL_CATCH {
         JL_GC_POP();
