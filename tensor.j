@@ -267,7 +267,7 @@ assign(A::Matrix, x, i::Index, j::Index) = (A[(j-1)*size(A,1) + i] = x)
 assign(A::Matrix, x::Tensor, i::Index, j::Index) = (A[(j-1)*size(A,1) + i] = x)
 
 function assign(A::Matrix, x, I::Indices, J::Indices)
-    for i=I, j=J
+    for j=J, i=I
         A[i,j] = x
     end
     return A
