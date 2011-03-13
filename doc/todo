@@ -639,8 +639,14 @@ issues 1/24/11
   * automatically resolve local remote references to their values
   * @spawn
   * distributed GC
+  . uninitialized darrays that wait for assignment
+  . be able to wait for more general conditions on shared objects, e.g.
+    a channel could be a GlobalObject on 2 processors, and you wait for a
+    message on the channel. or a DArray might be updated multiple times, and
+    you want to wait for the next write (not just the first)
   . some kind of atomic update, e.g. a[a:b,c:d]=X where once the write begins
     future reads from that region will wait for it to complete
+  . isready()
 
 something about update operators, in-place operations in general
 

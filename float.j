@@ -1,5 +1,6 @@
 ## floating point conversions ##
 
+convert(::Type{Float32}, x::Bool)    = boxf32(sitofp32(unbox8(x)))
 convert(::Type{Float32}, x::Int8)    = boxf32(sitofp32(unbox8(x)))
 convert(::Type{Float32}, x::Int16)   = boxf32(sitofp32(unbox16(x)))
 convert(::Type{Float32}, x::Int32)   = boxf32(sitofp32(unbox32(x)))
@@ -11,6 +12,7 @@ convert(::Type{Float32}, x::Char)    = boxf32(uitofp32(unbox32(x)))
 convert(::Type{Float32}, x::Uint64)  = boxf32(uitofp32(unbox64(x)))
 convert(::Type{Float32}, x::Float64) = boxf32(fptrunc32(unbox64(x)))
 
+convert(::Type{Float64}, x::Bool)    = boxf64(sitofp64(unbox8(x)))
 convert(::Type{Float64}, x::Int8)    = boxf64(sitofp64(unbox8(x)))
 convert(::Type{Float64}, x::Int16)   = boxf64(sitofp64(unbox16(x)))
 convert(::Type{Float64}, x::Int32)   = boxf64(sitofp64(unbox32(x)))

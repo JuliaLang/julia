@@ -115,7 +115,7 @@ for (fname, fname2, eltype) = (("dgeqp3_", "dorgqr_", Float64),
               Void,
               (Ptr{Int32}, Ptr{Int32}, Ptr{Int32}, Ptr{$eltype},
                Ptr{Int32}, Ptr{$eltype}, Ptr{$eltype}, Ptr{Int32}, Ptr{Int32}),
-              m, k, k, QR, m, tau, work, lwork2, info)
+              m, k, k, QR, m, tau, work, lwork, info)
         
         if info[1] == 0; return (QR[:, 1:k], R[1:k, :], jpvt); end
         error("Error in ", $fname);

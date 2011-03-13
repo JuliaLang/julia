@@ -979,6 +979,9 @@ function at_each(grp::ProcessGroup, f, args...)
     end
 end
 
+macro bcast(thk); :($thk;
+                    at_each(()->eval($expr(:quote,thk)))); end
+
 pmap(f, lsts...) = pmap(PGRP, f, lsts...)
 pmap(grp::ProcessGroup, f) = f()
 
