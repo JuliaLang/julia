@@ -967,7 +967,9 @@ let lastp = 1
     end
 end
 
-macro spawn(thk); :(spawn(()->($thk))); end
+macro spawn(thk)
+    :(spawn(()->($thk)))
+end
 
 at_each(f, args...) = at_each(PGRP, f, args...)
 
@@ -979,8 +981,12 @@ function at_each(grp::ProcessGroup, f, args...)
     end
 end
 
-macro bcast(thk); :($thk;
-                    at_each(()->eval($expr(:quote,thk)))); end
+macro bcast(thk)
+    quote
+        $thk
+        at_each(()->eval($expr(:quote,thk)))
+    end
+end
 
 pmap(f, lsts...) = pmap(PGRP, f, lsts...)
 pmap(grp::ProcessGroup, f) = f()
@@ -1011,6 +1017,14 @@ function pfor(reducer, f, r::Range1)
         end
     end
     mapreduce(reducer, fetch, results)
+end
+
+macro pfor(reducer, range, body)
+    var = range.args[1]
+    r = range.args[2]
+    quote
+        pfor($reducer, ($var)->($body), $r)
+    end
 end
 
 ## demos ##

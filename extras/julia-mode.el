@@ -70,24 +70,34 @@
     (or (equal item (car lst))
 	(member item (cdr lst)))))
 
-; TODO: skip keywords inside strings and comments
+; TODO: skip keywords inside strings
+
+(defun in-comment ()
+  (equal (char-after (+ (line-beginning-position) (current-indentation)))
+	 ?#))
 
 (defun at-keyword (kw-list)
-  ; not a keyword if used as a field name, X.word
+  ; not a keyword if used as a field name, X.word, or quoted, :word
   (and (or (= (point) 1)
-	   (not (equal (char-before (point)) ?.)))
+	   (and (not (equal (char-before (point)) ?.))
+		(not (equal (char-before (point)) ?:))))
+       (not (in-comment))
        (member (current-word) kw-list)))
 
 ; get the column of the last open block
-(defun last-open-block (min count)
-  (cond ((> count 0) (+ 4 (current-indentation)))
-        ((<= (point) min) nil)
-        (t (backward-word 1)
-           (cond ((at-keyword julia-block-start-keywords)
-                  (last-open-block min (+ count 1)))
-                 ((equal (current-word) "end")
-                  (last-open-block min (- count 1)))
-                 (t (last-open-block min count))))))
+(defun last-open-block (min)
+  (do ((count 0
+	      (cond ((at-keyword julia-block-start-keywords)
+		     (+ count 1))
+		    ((and (equal (current-word) "end")
+			  (not (in-comment)))
+		     (- count 1))
+		    (t count))))
+      ((or (> count 0) (<= (point) min))
+       (if (> count 0)
+	   (+ 4 (current-indentation))
+	 nil))
+    (backward-word 1)))
 
 ; return indent implied by a special form opening on the previous line, if any
 (defun form-indent ()
@@ -139,20 +149,18 @@
                            (beginning-of-line)
                            (forward-to-indentation 0)
                            (at-keyword julia-block-end-keywords))))
-             (error2nil (+ (last-open-block (point-min) 0)
+             (error2nil (+ (last-open-block (point-min))
                            (if endtok -4 0)))))
-; take same indentation as previous line
-;      (save-excursion (beginning-of-line)
-;                      (forward-line -1)
-;                      (forward-to-indentation 0)
-;                      (current-column))
-		 (save-excursion
-		   (if (and (not (equal (point-min) (line-beginning-position)))
-					(progn
-					  (forward-line -1)
-					  (end-of-line) (backward-char 1)
-					  (equal (char-after (point)) ?=)))
-			   4 nil))
+	 ;; take same indentation as previous line
+	 (save-excursion (forward-line -1)
+			 (current-indentation))
+		 ;(save-excursion
+		 ;  (if (and (not (equal (point-min) (line-beginning-position)))
+		;			(progn
+		;			  (forward-line -1)
+		;			  (end-of-line) (backward-char 1)
+		;			  (equal (char-after (point)) ?=)))
+		;	   4 nil))
          0))
 	(when (at-keyword julia-block-end-keywords)
 	  (forward-word 1)))
