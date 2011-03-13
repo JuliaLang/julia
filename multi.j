@@ -782,7 +782,7 @@ function worker_tunnel(host, port)
 end
 
 worker_ssh_command(host) =
-    `ssh $host "bash -l -c \"julia -e start_worker\(1\)\""`
+    `ssh -n $host "bash -l -c \"cd ~/src/julia && ./julia -e start_worker\(1\)\""`
 
 function start_remote_worker(host)
     proc = worker_ssh_command(host)
