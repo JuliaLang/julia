@@ -18,6 +18,7 @@ pointer{T}(::Type{T}, x::PtrInt) = convert(Ptr{T}, x)
 pointer{T}(x::Array{T}) = convert(Ptr{T},x)
 
 uint(x::Ptr) = convert(PtrInt, x)
+ptrint(x) = convert(PtrInt, x)
 
 @eval sizeof{T}(::Type{Ptr{T}}) = $div(WORD_SIZE,8)
 

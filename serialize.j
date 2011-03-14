@@ -240,14 +240,14 @@ function deserialize(s, ::Type{Array})
     elty = force(deserialize(s))
     dims = force(deserialize(s))
     if isa(elty,BitsKind)
-        return read(s, elty, dims...)
+        return read(s, elty, dims)
     end
-    temp = Array(Any, dims...)
+    temp = Array(Any, dims)
     for i = 1:numel(temp)
         temp[i] = deserialize(s)
     end
     function ()
-        A = Array(elty, dims...)
+        A = Array(elty, dims)
         for i = 1:numel(A)
             A[i] = force(temp[i])
         end
@@ -288,30 +288,29 @@ function deserialize(s, t::Type)
     @assert (isa(t,StructKind))
     nf = length(t.names)
     if nf == 0
-        return ccall(:jl_new_struct, Any, (Any,), t)
+        return ccall(:jl_new_struct, Any, (Any,Any...), t)
     elseif nf == 1
         f1 = deserialize(s)
-        ()->ccall(:jl_new_struct, Any, (Any,Any), t, force(f1))
+        ()->ccall(:jl_new_struct, Any, (Any,Any...), t, force(f1))
     elseif nf == 2
         f1 = deserialize(s)
         f2 = deserialize(s)
-        ()->ccall(:jl_new_struct, Any, (Any,Any,Any), t, force(f1), force(f2))
+        ()->ccall(:jl_new_struct, Any, (Any,Any...), t, force(f1), force(f2))
     elseif nf == 3
         f1 = deserialize(s)
         f2 = deserialize(s)
         f3 = deserialize(s)
-        ()->ccall(:jl_new_struct, Any,
-                  (Any,Any,Any,Any), t, force(f1), force(f2), force(f3))
+        ()->ccall(:jl_new_struct, Any, (Any,Any...),
+                  t, force(f1), force(f2), force(f3))
     elseif nf == 4
         f1 = deserialize(s)
         f2 = deserialize(s)
         f3 = deserialize(s)
         f4 = deserialize(s)
-        ()->ccall(:jl_new_struct, Any,
-                  (Any,Any,Any,Any,Any), t, force(f1), force(f2), force(f3),
-                  force(f4))
+        ()->ccall(:jl_new_struct, Any, (Any,Any...),
+                  t, force(f1), force(f2), force(f3), force(f4))
     else
         f = ntuple(nf, i->deserialize(s))
-        return ccall(:jl_new_structt, Any, (Any,Any), t, map(force, f))
+        ()->ccall(:jl_new_structt, Any, (Any,Any), t, map(force, f))
     end
 end

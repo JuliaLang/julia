@@ -454,20 +454,30 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
     JL_TYPECHK(ccall, tuple, at);
     JL_TYPECHK(ccall, type, at);
     jl_tuple_t *tt = (jl_tuple_t*)at;
-    if (tt->length != nargs-3)
-        jl_error("ccall: wrong number of arguments to C function");
     std::vector<const Type *> fargt(0);
+    std::vector<const Type *> fargt_sig(0);
     const Type *lrt = julia_type_to_llvm(rt);
     size_t i;
     bool haspointers = false;
+    bool isVa = false;
     for(i=0; i < tt->length; i++) {
-        const Type *t = julia_type_to_llvm(jl_tupleref(tt,i));
+        jl_value_t *tti = jl_tupleref(tt,i);
+        if (jl_is_seq_type(tti)) {
+            isVa = true;
+            tti = jl_tparam0(tti);
+        }
+        const Type *t = julia_type_to_llvm(tti);
         haspointers = haspointers || (t->isPointerTy() && t!=jl_pvalue_llvmt);
         fargt.push_back(t);
+        if (!isVa)
+            fargt_sig.push_back(t);
     }
+    if ((!isVa && tt->length  != nargs-3) ||
+        ( isVa && tt->length-1 > nargs-3))
+        jl_error("ccall: wrong number of arguments to C function");
     // make LLVM function object for the target
     Function *llvmf =
-        Function::Create(FunctionType::get(lrt, fargt, false),
+        Function::Create(FunctionType::get(lrt, fargt_sig, isVa),
                          Function::ExternalLinkage,
                          "ccall_", jl_Module);
     jl_ExecutionEngine->addGlobalMapping(llvmf, fptr);
@@ -481,12 +491,23 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
     // emit arguments
     std::vector<Value*> argvals(0);
     int last_depth = ctx->argDepth;
+    int nargty = tt->length;
     for(i=4; i < nargs+1; i++) {
         Value *arg = emit_expr(args[i], ctx, true);
+        const Type *largty;
+        jl_value_t *jargty;
+        if (isVa && (int)(i-4) >= nargty-1) {
+            largty = fargt[nargty-1];
+            jargty = jl_tparam0(jl_tupleref(tt,nargty-1));
+        }
+        else {
+            largty = fargt[i-4];
+            jargty = jl_tupleref(tt,i-4);
+        }
 #ifdef JL_GC_MARKSWEEP
         // make sure args are rooted
-        if (fargt[i-4]->isPointerTy() &&
-            (fargt[i-4] == jl_pvalue_llvmt ||
+        if (largty->isPointerTy() &&
+            (largty == jl_pvalue_llvmt ||
              !jl_is_bits_type(expr_type(args[i])))) {
             Value *gcroot = builder.CreateGEP(ctx->argTemp,
                                               ConstantInt::get(T_int32,
@@ -495,8 +516,7 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
             ctx->argDepth++;
         }
 #endif
-        argvals.push_back(julia_to_native(fargt[i-4], jl_tupleref(tt,i-4),
-                                          arg, i-3, ctx));
+        argvals.push_back(julia_to_native(largty, jargty, arg, i-3, ctx));
     }
     // the actual call
     Value *result = builder.CreateCall(llvmf, argvals.begin(), argvals.end());

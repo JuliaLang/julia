@@ -72,7 +72,7 @@ static bigval_t *big_objects = NULL;
 static pool_t pools[N_POOLS];
 
 static size_t allocd_bytes = 0;
-static size_t collect_interval = 8192*1024;
+static size_t collect_interval = 4096*1024*sizeof(void*);
 
 static htable_t finalizer_table;
 static arraylist_t to_finalize;
