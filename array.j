@@ -201,8 +201,8 @@ hcat(A::Array...) = cat(2, A...)
 function reinterpret{T,S}(::Type{T}, a::Array{S})
     b = Array(T, div(numel(a)*sizeof(S),sizeof(T)))
     ccall(dlsym(libc, :memcpy),
-          Ptr{T}, (Ptr{T}, Ptr{S}, Size),
-          b, a, length(b)*sizeof(T))
+          Ptr{T}, (Ptr{T}, Ptr{S}, Ulong),
+          b, a, ulong(length(b)*sizeof(T)))
     b
 end
 reinterpret(t,x) = reinterpret(t,[x])[1]

@@ -6,8 +6,12 @@ WORD_SIZE = ccall(:jl_word_size, Int32, ())
 
 if WORD_SIZE == 64
     typealias PtrInt Uint64
+    typealias Long Int64
+    typealias Ulong Uint64
 else
     typealias PtrInt Uint32
+    typealias Long Int32
+    typealias Ulong Uint32
 end
 
 convert(::Type{PtrInt}, x::Ptr) = box(PtrInt,unbox(PtrInt,x))
@@ -19,6 +23,8 @@ pointer{T}(x::Array{T}) = convert(Ptr{T},x)
 
 uint(x::Ptr) = convert(PtrInt, x)
 ptrint(x) = convert(PtrInt, x)
+long(x) = convert(Long, x)
+ulong(x) = convert(Ulong, x)
 
 @eval sizeof{T}(::Type{Ptr{T}}) = $div(WORD_SIZE,8)
 

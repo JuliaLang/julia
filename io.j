@@ -22,7 +22,7 @@ end
 
 fdio(fd::Int) = (s = IOStream();
                  ccall(:ios_fd, Void,
-                       (Ptr{Uint8}, Int32, Int32), s.ios, fd, 0);
+                       (Ptr{Uint8}, Long, Int32), s.ios, fd, 0);
                  s)
 
 open(fname::String, rd::Bool, wr::Bool, cr::Bool, tr::Bool) =
@@ -40,7 +40,7 @@ open(fname::String) = open(fname, true, true, true, false)
 memio() = memio(0)
 function memio(x::Int)
     s = IOStream()
-    ccall(:ios_mem, Ptr{Void}, (Ptr{Uint8}, PtrInt), s.ios, convert(PtrInt,x))
+    ccall(:ios_mem, Ptr{Void}, (Ptr{Uint8}, Ulong), s.ios, ulong(x))
     s
 end
 
@@ -138,9 +138,9 @@ write(s::IOStream, c::Char) =
 
 function write{T}(s::IOStream, a::Array{T})
     if isa(T,BitsKind)
-        ccall(:ios_write, PtrInt,
-              (Ptr{Void}, Ptr{Void}, PtrInt),
-              s.ios, a, convert(PtrInt, numel(a)*sizeof(T)))
+        ccall(:ios_write, Ulong,
+              (Ptr{Void}, Ptr{Void}, Ulong),
+              s.ios, a, ulong(numel(a)*sizeof(T)))
     else
         invoke(write, (Any, Array), s, a)
     end
@@ -164,8 +164,8 @@ end
 function read{T}(s::IOStream, a::Array{T})
     if isa(T,BitsKind)
         nb = numel(a)*sizeof(T)
-        ccall(:ios_readall, PtrInt,
-              (Ptr{Void}, Ptr{Void}, PtrInt), s.ios, a, convert(PtrInt,nb))
+        ccall(:ios_readall, Ulong,
+              (Ptr{Void}, Ptr{Void}, Ulong), s.ios, a, ulong(nb))
         # TODO: detect eof
         a
     else
@@ -175,14 +175,14 @@ end
 
 function readuntil(s::IOStream, delim::Uint8)
     dest = memio()
-    ccall(:ios_copyuntil, PtrInt,
+    ccall(:ios_copyuntil, Ulong,
           (Ptr{Void}, Ptr{Void}, Uint8), dest.ios, s.ios, delim)
     takebuf_string(dest)
 end
 
 function readall(s::IOStream)
     dest = memio()
-    ccall(:ios_copyall, PtrInt,
+    ccall(:ios_copyall, Ulong,
           (Ptr{Void}, Ptr{Void}), dest.ios, s.ios)
     takebuf_string(dest)
 end
@@ -192,8 +192,8 @@ readline(s::IOStream) = readuntil(s, uint8('\n'))
 flush(s::IOStream) = ccall(:ios_flush, Void, (Ptr{Void},), s.ios)
 
 truncate(s::IOStream, n::Int) =
-    ccall(:ios_trunc, PtrInt, (Ptr{Void}, PtrInt),
-          s.ios, convert(PtrInt, n))
+    ccall(:ios_trunc, Ulong, (Ptr{Void}, Ulong),
+          s.ios, ulong(n))
 
 type IOTally
     nbytes::Size

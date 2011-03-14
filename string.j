@@ -686,8 +686,8 @@ function uint2str(n::Int, b::Int)
     sz = ndig+1
     data = Array(Uint8, sz)
     ccall(:uint2str, Ptr{Uint8},
-          (Ptr{Uint8}, Size, Uint64, Uint32),
-          data, sz, uint64(n), uint32(b))
+          (Ptr{Uint8}, Ulong, Uint64, Uint32),
+          data, ulong(sz), uint64(n), uint32(b))
     Latin1String(data[1:(sz-1)]) # cut out terminating NUL
 end
 
@@ -711,8 +711,8 @@ hex(n::Int, l::Int) = lpad(hex(n), l, '0')
 
 function lexcmp(a::Array{Uint8,1}, b::Array{Uint8,1})
     c = ccall(dlsym(libc, :memcmp), Int32,
-              (Ptr{Uint8}, Ptr{Uint8}, Size),
-              a, b, min(length(a),length(b)))
+              (Ptr{Uint8}, Ptr{Uint8}, Ulong),
+              a, b, ulong(min(length(a),length(b))))
     c < 0 ? -1 : c > 0 ? +1 : cmp(length(a),length(b))
 end
 
@@ -721,8 +721,8 @@ end
 function memchr(a::Array{Uint8,1}, b::Int)
     p = pointer(a)
     q = ccall(dlsym(libc, :memchr), Ptr{Uint8},
-              (Ptr{Uint8}, Int32, Size),
-              p, int32(b), length(a))
+              (Ptr{Uint8}, Int32, Ulong),
+              p, int32(b), ulong(length(a)))
     if q == C_NULL
         error("char not found")
     end
@@ -741,8 +741,8 @@ function memcat(arrays::Array{Uint8,1}...)
     offset = 0
     for a = arrays
         ccall(dlsym(libc, :memcpy), Ptr{Uint8},
-              (Ptr{Uint8}, Ptr{Uint8}, Int32),
-              ptr + offset, pointer(a), length(a))
+              (Ptr{Uint8}, Ptr{Uint8}, Ulong),
+              ptr + offset, pointer(a), ulong(length(a)))
         offset += length(a)
     end
     return arr
@@ -760,8 +760,8 @@ function strdatacat(strs::ByteString...)
     offset = 0
     for s = strs
         ccall(dlsym(libc, :memcpy), Ptr{Uint8},
-              (Ptr{Uint8}, Ptr{Uint8}, Int32),
-              ptr + offset, pointer(s.data), length(s))
+              (Ptr{Uint8}, Ptr{Uint8}, Ulong),
+              ptr + offset, pointer(s.data), ulong(length(s)))
         offset += length(s)
     end
     data
