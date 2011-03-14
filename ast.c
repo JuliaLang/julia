@@ -435,8 +435,9 @@ jl_lambda_info_t *jl_wrap_expr(jl_value_t *expr)
     jl_cellset(vi->args, 1, mt);
     jl_cellset(vi->args, 2, mt);
     jl_cellset(vi->args, 3, mt);
+    jl_lambda_info_t *li = jl_new_lambda_info((jl_value_t*)le, jl_null);
     JL_GC_POP();
-    return jl_new_lambda_info((jl_value_t*)le, jl_null);
+    return li;
 }
 
 // syntax tree accessors
