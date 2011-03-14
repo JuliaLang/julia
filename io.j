@@ -22,7 +22,7 @@ end
 
 fdio(fd::Int) = (s = IOStream();
                  ccall(:ios_fd, Void,
-                       (Ptr{Uint8}, Long, Int32), s.ios, fd, 0);
+                       (Ptr{Uint8}, Long, Int32), s.ios, long(fd), 0);
                  s)
 
 open(fname::String, rd::Bool, wr::Bool, cr::Bool, tr::Bool) =
