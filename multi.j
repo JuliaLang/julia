@@ -1083,8 +1083,11 @@ function event_loop(isclient)
                 end
             end
         catch e
-            if isa(e,DisconnectException) && !isclient
-                return()
+            if isa(e,DisconnectException)
+                # TODO: wake up tasks waiting for failed process
+                if !isclient
+                    return()
+                end
             end
             iserr, lasterr = true, e
         end
