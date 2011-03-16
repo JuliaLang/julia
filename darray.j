@@ -1,4 +1,4 @@
-type DArray{T,N} <: Tensor{T,N}
+type DArray{T,N,distdim} <: Tensor{T,N}
     dims::NTuple{N,Size}
     locl::Union((),RemoteRef,Array{T,N})
     # the distributed array has N pieces
@@ -83,7 +83,7 @@ end
 # initializer is a function accepting (el_type, local_size, darray) where
 # the last argument is the full DArray being constructed.
 darray{T}(init, ::Type{T}, dims::Dims, distdim) =
-    DArray{T,length(dims)}(T,distdim,dims,init)
+    DArray{T,length(dims),distdim}(T,distdim,dims,init)
 darray{T}(init, ::Type{T}, dims::Dims) = darray(init,T,dims,maxdim(dims))
 darray(init, T::Type, dims::Size...) = darray(init, T, dims)
 darray(init, dims::Dims) = darray(init, Float64, dims)
@@ -241,9 +241,13 @@ function node_multiply{T}(A::Tensor{T}, B, sz)
     locl
 end
 
+function (*){T}(A::DArray{T,2,1}, B::DArray{T,2,2})
+    darray((T,sz,da)->node_multiply(A,B,sz), T, (size(A,1),size(B,2)), 1)
+end
+
 function (*){T}(A::DArray{T,2}, B::DArray{T,2})
     A = changedist(A, 1)
     B = changedist(B, 2)
 
-    darray((T,sz,da)->node_multiply(A,B,sz), T, (size(A,1),size(B,2)), 1)
+    return A*B
 end
