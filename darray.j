@@ -222,10 +222,39 @@ function convert{S,T,N}(::Type{Array{S,N}}, d::DArray{T,N})
 end
 
 # TODO: Do the right thing here
-function changedist{T}(A::DArray{T}, dist)
-    if A.distdim == dist; return A; end
+function changedist{T}(A::DArray{T}, to_dist)
     Af = convert(Array, A)
     return distribute(Af, dist)
+end
+
+function node_ref(A::DArray, to_dist, range)
+    Al = localdata(A)
+    locdims = size(Al)
+    slice = { i == to_dist ? range : (1:locdims[i]) | i=1:ndims(A) }
+    Al[slice...]
+end
+
+function node_changedist{T}(A::DArray{T}, to_dist, local_size)
+    locl = Array(T, local_size)
+    from_dist = A.distdim
+    dimsA = size(A)
+    np = PGRP.np
+    sdd = dimsA[to_dist]
+    each = div(sdd, np)
+    newdist = fill(Array(Int32,np), each)
+    newdist[end] += rem(sdd, np)
+    
+    for p = 1:length(A.dist)-1
+        R = remote_call_fetch(A.pmap[p], node_ref, A, to_dist, newdist[p]:newdist[p+1]-1)
+        sliceR = { i == from_dist ? (A.dist[p]:A.dist[p+1]-1) : (1:local_size[i]) | i=1:ndims(A) }
+        locl[sliceR...] = R
+    end
+    locl
+end
+
+function changedist_new{T}(A::DArray{T}, to_dist)
+    if A.distdim == to_dist; return A; end
+    return darray((T,sz,da)->node_changedist(A, to_dist, sz), T, size(A), to_dist)
 end
 
 function node_multiply{T}(A::Tensor{T}, B, sz)
@@ -241,13 +270,6 @@ function node_multiply{T}(A::Tensor{T}, B, sz)
     locl
 end
 
-function (*){T}(A::DArray{T,2,1}, B::DArray{T,2,2})
-    darray((T,sz,da)->node_multiply(A,B,sz), T, (size(A,1),size(B,2)), 1)
-end
+(*){T}(A::DArray{T,2,1}, B::DArray{T,2,2}) = darray((T,sz,da)->node_multiply(A,B,sz), T, (size(A,1),size(B,2)), 1)
 
-function (*){T}(A::DArray{T,2}, B::DArray{T,2})
-    A = changedist(A, 1)
-    B = changedist(B, 2)
-
-    return A*B
-end
+(*){T}(A::DArray{T,2}, B::DArray{T,2}) = changedist(A, 1) * changedist(B, 2)
