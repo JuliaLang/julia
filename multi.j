@@ -722,7 +722,13 @@ function start_worker(wrfd)
         error("could not bind socket")
     end
     io = fdio(wrfd)
-    write(io, port[1])
+    write(io, port[1])  # print port
+    hn = Array(Uint8, 128)
+    ccall(dlsym(libc,:gethostname), Int32, (Ptr{Uint8}, Ulong),
+          hn, ulong(128))
+    hns = string(convert(Ptr{Uint8},hn))
+    write(io, hns)  # print hostname
+    write(io, '\n')
     flush(io)
     #close(io)
     # close stdin; workers will not use it
@@ -772,6 +778,49 @@ function start_remote_workers(machines)
         spawn(c)
     end
     { Worker(machines[i], read(outs[i],Int16)) | i=1:length(machines) }
+end
+
+SGE(n) = ProcessGroup(start_sge_workers(n), n)
+
+function start_sge_workers(n)
+    home = "/home/bezanson/src/julia"
+    sgedir = "$home/SGE"
+    run(`mkdir -p $sgedir`)
+    qsub_cmd = `qsub -terse -e $sgedir -o $sgedir -t 1:$n`
+    `echo $home/julia -e start_worker\\(1\\)` | qsub_cmd
+    out = cmd_stdout_stream(qsub_cmd)
+    run(qsub_cmd)
+    id = split(readline(out),set('.'))[1]
+    #println("job id is $id")
+    print("waiting for job to start"); flush(stdout_stream)
+    workers = cell(n)
+    for i=1:n
+        fname = "$sgedir/STDIN.o$(id).$(i)"
+        local fl, port
+        fexists = false
+        sleep(0.5)
+        while !fexists
+            try
+                fl = open(fname,true,false,false,false)
+                try
+                    port = read(fl,Int16)
+                catch e
+                    close(fl)
+                    throw(e)
+                end
+                fexists = true
+            catch
+                print("."); flush(stdout_stream)
+                sleep(0.5)
+            end
+        end
+        hostname = cstring(readline(fl)[1:end-1])
+        #print("hostname=$hostname, port=$port\n")
+        workers[i] = Worker(hostname, port)
+        close(fl)
+    end
+    print("\n")
+    workers
 end
 
 function start_local_worker()

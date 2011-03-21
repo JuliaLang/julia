@@ -40,6 +40,7 @@ load("latin1.j")
 load("utf8.j")
 load("show.j")
 load("regex.j")
+load("env.j")
 
 # core math functions
 load("intfuncs.j")
@@ -69,6 +70,5 @@ load("multi.j")
 load("darray.j")
 
 # misc
-load("env.j")
 load("libc.j")
 load("util.j")

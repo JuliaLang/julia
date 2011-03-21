@@ -1,3 +1,4 @@
+setenv("GOTO_NUM_THREADS", "1")
 libBLAS = dlopen("libBLAS")
 
 typealias DenseVector{T} Array{T,1}
