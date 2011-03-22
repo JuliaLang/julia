@@ -782,6 +782,8 @@ int main(int argc, char *argv[])
     for (i=0; i < argc; i++) {
         jl_arrayset(args, i, (jl_value_t*)jl_cstr_to_string(argv[i]));
     }
+    //jl_set_const(jl_system_module, jl_symbol("JULIA_HOME"),
+    //             jl_cstr_to_string(julia_home));
 
 #ifdef USE_READLINE
     if (!no_readline) {

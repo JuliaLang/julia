@@ -170,6 +170,11 @@ void jl_gc_add_finalizer(jl_value_t *v, jl_function_t *f)
     }
 }
 
+htable_t *jl_gc_get_finalizer_table()
+{
+    return &finalizer_table;
+}
+
 // size classes:
 // <=8, 12, 16, 20, 24, 28, 32, 48, 64, 96, 128, 192, 256, 384, 512, 768, 1024, 1536, 2048
 //   0   1   2   3   4   5   6   7   8   9   10   11   12   13   14   15,   16,   17,   18

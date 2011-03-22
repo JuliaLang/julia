@@ -309,21 +309,15 @@ end
 
 REQ_ID = 0
 
-function assign_rr(w::Worker)
+function assign_rr(pid::Int)
     global REQ_ID
-    rr = RemoteRef(w.id, myid(), REQ_ID)
+    rr = RemoteRef(pid, myid(), REQ_ID)
     REQ_ID += 1
     rr
 end
 
-function assign_rr(w::LocalProcess)
-    global REQ_ID
-    rr = RemoteRef(myid(), myid(), REQ_ID)
-    REQ_ID += 1
-    rr
-end
-
-assign_rr(id::Int) = assign_rr(worker_from_id(id))
+assign_rr(w::LocalProcess) = assign_rr(myid())
+assign_rr(w::Worker) = assign_rr(w.id)
 remote_ref(x) = assign_rr(x)
 
 schedule_call(rid, f_thk, args_thk) =
