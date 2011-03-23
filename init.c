@@ -113,21 +113,16 @@ void julia_init(char *imageFile)
 
     if (imageFile) {
         jl_restore_system_image(imageFile);
-
-        jl_print_gf = (jl_function_t*)global("print");
-        jl_show_gf = (jl_function_t*)global("show");
-        jl_convert_gf = (jl_function_t*)global("convert");
     }
     else {
         jl_init_primitives();
         jl_load_boot_j();
         jl_get_builtin_hooks();
+        jl_boot_file_loaded = 1;
         jl_init_builtins();
         jl_init_box_caches();
+        jl_an_empty_string = jl_pchar_to_string("", 0);
     }
-
-    jl_boot_file_loaded = 1;
-    jl_an_empty_string = jl_pchar_to_string("", 0);
 
 #ifdef JL_GC_MARKSWEEP
     jl_gc_enable();

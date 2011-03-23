@@ -116,6 +116,9 @@
 		 (cons 'file (map file-toplevel-expr
 				  (julia-parse-file name stream))))))
 
+(define (jl-parse-source-string str)
+  (jl-parse-named-stream "string" (open-input-string str)))
+
 (define (jl-parse-source s)
   (let ((infile (open-input-file s)))
     (begin0

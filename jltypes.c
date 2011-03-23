@@ -932,7 +932,7 @@ typedef struct _typekey_stack_t {
 static jl_type_t *lookup_type(typekey_stack_t *table,
                               jl_typename_t *tn, jl_value_t **key, size_t n)
 {
-    assert(n > 0);
+    if (n==0) return NULL;
     while (table != NULL) {
         assert(table->n > 0);
         if (table->n == n && table->tn == tn) {
@@ -962,12 +962,12 @@ int jl_assign_type_uid()
 static void cache_type_(jl_value_t **key, size_t n, jl_type_t *type)
 {
     // only cache concrete types
-    if (jl_has_typevars((jl_value_t*)type))
+    if (jl_has_typevars((jl_value_t*)type) || n==0)
         return;
     // assign uid
-    if (jl_is_struct_type(type))
+    if (jl_is_struct_type(type) && ((jl_struct_type_t*)type)->uid==0)
         ((jl_struct_type_t*)type)->uid = t_uid_ctr++;
-    else if (jl_is_bits_type(type)) 
+    else if (jl_is_bits_type(type) && ((jl_bits_type_t*)type)->uid==0)
         ((jl_bits_type_t*)type)->uid = t_uid_ctr++;
     typekey_stack_t *tc =
         (typekey_stack_t*)((jl_tag_type_t*)type)->name->cache;
@@ -983,6 +983,16 @@ static void cache_type_(jl_value_t **key, size_t n, jl_type_t *type)
     size_t i;
     for(i=0; i < n; i++) tk->key[i] = key[i];
     tk->n = n;
+}
+
+void jl_cache_type_(jl_tuple_t *params, jl_value_t *type)
+{
+    cache_type_(&params->data[0], params->length, (jl_type_t*)type);
+}
+
+jl_type_t *jl_lookup_type_(jl_typename_t *tn, jl_tuple_t *params)
+{
+    return lookup_type(tn->cache, tn, &params->data[0], params->length);
 }
 
 #ifdef JL_GC_MARKSWEEP
@@ -1133,6 +1143,7 @@ static jl_type_t *inst_type_w_(jl_value_t *t, jl_value_t **env, size_t n,
             nbt->nbits = bitst->nbits;
             nbt->bnbits = bitst->bnbits;
             nbt->super = (jl_tag_type_t*)inst_type_w_((jl_value_t*)bitst->super, env, n, stack);
+            nbt->uid = 0;
             cache_type_(iparams, ntp, (jl_type_t*)nbt);
             result = (jl_type_t*)nbt;
         }

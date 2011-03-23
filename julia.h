@@ -582,12 +582,13 @@ void jl_init_tasks(void *stack, size_t ssize);
 void jl_init_serializer();
 void jl_load_boot_j();
 
-void jl_save_system_image(char *fname);
+void jl_save_system_image(char *fname, char *startscriptname);
 void jl_restore_system_image(char *fname);
 
 // front end interface
 jl_value_t *jl_parse_input_line(const char *str);
 jl_value_t *jl_parse_file(const char *fname);
+jl_value_t *jl_parse_file_string(const char *text);
 jl_value_t *jl_expand(jl_value_t *expr);
 jl_lambda_info_t *jl_wrap_expr(jl_value_t *expr);
 

@@ -6,15 +6,29 @@
 #define keyhash(k)     inthash((uptrint_t)(k))
 #define h2index(hv,sz) (index_t)(((hv) & ((sz)-1))*2)
 
+static void **jl_table_lookup_bp(jl_array_t **pa, void *key);
+
+void jl_idtable_rehash(jl_array_t **pa, size_t newsz)
+{
+    size_t sz = (*pa)->length;
+    size_t i;
+    void **ol = (void**)(*pa)->data;
+    *pa = jl_alloc_cell_1d(newsz);
+    for(i=0; i < sz; i+=2) {
+        if (ol[i+1] != NULL) {
+            (*jl_table_lookup_bp(pa, ol[i])) = ol[i+1];
+        }
+    }
+}
+
 static void **jl_table_lookup_bp(jl_array_t **pa, void *key)
 {
     uint_t hv;
     jl_array_t *a = *pa;
-    size_t i, orig, index, iter;
+    size_t orig, index, iter;
     size_t newsz, sz = hash_size(a);
     size_t maxprobe = max_probe(sz);
     void **tab = (void**)a->data;
-    void **ol;
 
     hv = keyhash(key);
  retry_bp:
@@ -43,19 +57,13 @@ static void **jl_table_lookup_bp(jl_array_t **pa, void *key)
     /* it's important to grow the table really fast; otherwise we waste */
     /* lots of time rehashing all the keys over and over. */
     sz = a->length;
-    ol = (void**)a->data;
     if (sz >= (1<<19) || (sz <= (1<<8)))
         newsz = sz<<1;
     else if (sz <= HT_N_INLINE)
         newsz = HT_N_INLINE;
     else
         newsz = sz<<2;
-    *pa = jl_alloc_cell_1d(newsz);
-    for(i=0; i < sz; i+=2) {
-        if (ol[i+1] != NULL) {
-            (*jl_table_lookup_bp(pa, ol[i])) = ol[i+1];
-        }
-    }
+    jl_idtable_rehash(pa, newsz);
 
     a = *pa;
     tab = (void**)a->data;    

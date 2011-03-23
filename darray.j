@@ -224,7 +224,7 @@ end
 # TODO: Do the right thing here
 function changedist{T}(A::DArray{T}, to_dist)
     Af = convert(Array, A)
-    return distribute(Af, dist)
+    return distribute(Af, to_dist)
 end
 
 function node_ref(A::DArray, to_dist, range)

@@ -393,6 +393,15 @@ jl_value_t *jl_parse_file(const char *fname)
     return scm_to_julia(e);
 }
 
+jl_value_t *jl_parse_file_string(const char *text)
+{
+    value_t e = fl_applyn(1, symbol_value(symbol("jl-parse-source-string")),
+                          cvalue_static_cstring(text));
+    if (!iscons(e))
+        return (jl_value_t*)jl_null;
+    return scm_to_julia(e);
+}
+
 // returns either an expression or a thunk
 jl_value_t *jl_expand(jl_value_t *expr)
 {

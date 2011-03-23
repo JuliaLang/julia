@@ -45,8 +45,8 @@ jl_struct_type_t *jl_lambda_info_type;
 jl_struct_type_t *jl_errorexception_type;
 jl_struct_type_t *jl_typeerror_type;
 jl_struct_type_t *jl_loaderror_type;
-jl_value_t *jl_an_empty_string;
-jl_value_t *jl_an_empty_cell;
+jl_value_t *jl_an_empty_string=NULL;
+jl_value_t *jl_an_empty_cell=NULL;
 jl_value_t *jl_stackovf_exception;
 jl_value_t *jl_divbyzero_exception;
 

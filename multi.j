@@ -32,8 +32,14 @@ function send_msg(s::IOStream, buf::IOStream, kind, args)
     #      s.ios, buf.ios)
 end
 
-SENDBUF = memio()
-send_msg(s::IOStream, kind, args...) = send_msg(s, SENDBUF, kind, args)
+SENDBUF = ()
+function send_msg(s::IOStream, kind, args...)
+    global SENDBUF
+    if is(SENDBUF,())
+        SENDBUF = memio()
+    end
+    send_msg(s, SENDBUF, kind, args)
+end
 
 # todo:
 # * add readline to event loop
