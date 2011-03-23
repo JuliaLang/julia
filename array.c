@@ -19,7 +19,7 @@
 // array constructors ---------------------------------------------------------
 
 static
-jl_array_t *jl_new_array(jl_type_t *atype, jl_tuple_t *dims)
+jl_array_t *_new_array(jl_type_t *atype, jl_tuple_t *dims)
 {
     size_t i, tot;
     size_t nel=1;
@@ -103,13 +103,18 @@ jl_array_t *jl_new_array(jl_type_t *atype, jl_tuple_t *dims)
     return a;
 }
 
+jl_array_t *jl_new_array(jl_type_t *atype, jl_tuple_t *dims)
+{
+    return _new_array(atype, dims);
+}
+
 jl_array_t *jl_alloc_array_1d(jl_type_t *atype, size_t nr)
 {
     jl_value_t *dim = jl_box_int32(nr);
     jl_tuple_t *dims=NULL;
     JL_GC_PUSH(&dim, &dims);
     dims = jl_tuple1(dim);
-    jl_array_t *a = jl_new_array(atype, dims);
+    jl_array_t *a = _new_array(atype, dims);
     JL_GC_POP();
     return a;
 }
@@ -129,7 +134,7 @@ JL_CALLABLE(jl_new_array_internal)
     for(i=0; i < d->length; i++) {
         JL_TYPECHK(Array, int32, jl_tupleref(d,i));
     }
-    return (jl_value_t*)jl_new_array((jl_type_t*)atype, d);
+    return (jl_value_t*)_new_array((jl_type_t*)atype, d);
 }
 
 JL_CALLABLE(jl_generic_array_ctor)
@@ -159,7 +164,7 @@ JL_CALLABLE(jl_generic_array_ctor)
     vnd = jl_box_int32(nd);
     vtp = (jl_value_t*)jl_tuple2(args[0], vnd);
     vnt = jl_apply_type((jl_value_t*)jl_array_type, (jl_tuple_t*)vtp);
-    jl_value_t *ar = (jl_value_t*)jl_new_array((jl_type_t*)vnt, d);
+    jl_value_t *ar = (jl_value_t*)_new_array((jl_type_t*)vnt, d);
     JL_GC_POP();
     return ar;
 }

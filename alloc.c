@@ -856,7 +856,7 @@ void jl_init_int32_cache()
     }
 }
 
-static void init_box_caches()
+void jl_init_box_caches()
 {
     int64_t i;
     for(i=0; i < 256; i++) {
@@ -984,16 +984,4 @@ jl_expr_t *jl_exprn(jl_sym_t *head, size_t n)
     ex->etype = (jl_value_t*)jl_any_type;
     JL_GC_POP();
     return ex;
-}
-
-// initialization -------------------------------------------------------------
-
-void jl_init_builtin_types()
-{
-    init_box_caches();
-
-    jl_array_uint8_type =
-        (jl_type_t*)jl_apply_type((jl_value_t*)jl_array_type,
-                                  jl_tuple2(jl_uint8_type,
-                                            jl_box_int32(1)));
 }

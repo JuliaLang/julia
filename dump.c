@@ -33,14 +33,15 @@ static const int BackRef_tag    = 255;
 static int VALUE_TAGS;
 
 #define write_uint8(s, n) ios_putc((n), (s))
-#define read_uint8(s) ((uint8_t)ios_getc(s)
+#define read_uint8(s) ((uint8_t)ios_getc(s))
 #define write_int8(s, n) write_uint8(s, n)
 #define read_int8(s) read_uint8(s)
 
+/*
 static void write_int16(ios_t *s, int16_t i)
 {
-    write_uint8(i       & 0xff);
-    write_uint8((i>> 8) & 0xff);
+    write_uint8(s, i       & 0xff);
+    write_uint8(s, (i>> 8) & 0xff);
 }
 
 static int16_t read_int16(ios_t *s)
@@ -49,13 +50,14 @@ static int16_t read_int16(ios_t *s)
     int b1 = read_uint8(s);
     return (int16_t)(b0 | (b1<<8));
 }
+*/
 
 static void write_int32(ios_t *s, int32_t i)
 {
-    write_uint8(i       & 0xff);
-    write_uint8((i>> 8) & 0xff);
-    write_uint8((i>>16) & 0xff);
-    write_uint8((i>>24) & 0xff);
+    write_uint8(s, i       & 0xff);
+    write_uint8(s, (i>> 8) & 0xff);
+    write_uint8(s, (i>>16) & 0xff);
+    write_uint8(s, (i>>24) & 0xff);
 }
 
 static int32_t read_int32(ios_t *s)
@@ -67,16 +69,17 @@ static int32_t read_int32(ios_t *s)
     return b0 | (b1<<8) | (b2<<16) | (b3<<24);
 }
 
+/*
 static void write_int64(ios_t *s, int64_t i)
 {
-    write_uint8(i       & 0xff);
-    write_uint8((i>> 8) & 0xff);
-    write_uint8((i>>16) & 0xff);
-    write_uint8((i>>24) & 0xff);
-    write_uint8((i>>32) & 0xff);
-    write_uint8((i>>40) & 0xff);
-    write_uint8((i>>48) & 0xff);
-    write_uint8((i>>56) & 0xff);
+    write_uint8(s, i       & 0xff);
+    write_uint8(s, (i>> 8) & 0xff);
+    write_uint8(s, (i>>16) & 0xff);
+    write_uint8(s, (i>>24) & 0xff);
+    write_uint8(s, (i>>32) & 0xff);
+    write_uint8(s, (i>>40) & 0xff);
+    write_uint8(s, (i>>48) & 0xff);
+    write_uint8(s, (i>>56) & 0xff);
 }
 
 static int64_t read_int64(ios_t *s)
@@ -92,10 +95,11 @@ static int64_t read_int64(ios_t *s)
     return b0 | (b1<<8) | (b2<<16) | (b3<<24) | (b4<<32) | (b5<<40) |
         (b6<<48) | (b7<<56);
 }
+*/
 
-static void writetag(ios_t *s, jl_value_t *v)
+static void writetag(ios_t *s, void *v)
 {
-    write_uint8(s, (uint8_t)ptrhash_get(&ser_tag, v));
+    write_uint8(s, (uint8_t)(ptrint_t)ptrhash_get(&ser_tag, v));
 }
 
 static void write_as_tag(ios_t *s, uint8_t tag)
@@ -108,6 +112,10 @@ static void write_as_tag(ios_t *s, uint8_t tag)
 
 // --- serialize ---
 
+#define jl_serialize_value(s, v) jl_serialize_value_(s,(jl_value_t*)(v))
+
+void jl_serialize_value_(ios_t *s, jl_value_t *v);
+
 void jl_serialize_tag_type(ios_t *s, jl_value_t *v)
 {
     jl_typename_t *tn = ((jl_tag_type_t*)v)->name;
@@ -116,23 +124,23 @@ void jl_serialize_tag_type(ios_t *s, jl_value_t *v)
     // need to save the name and parameters.
     int longform = (v == tn->primary);
     if (jl_is_struct_type(v)) {
-        writetag(s, jl_struct_kind);
+        writetag(s, (jl_value_t*)jl_struct_kind);
         jl_serialize_value(s, jl_struct_kind->name);
         jl_serialize_value(s, jl_null);
         if (longform) {
             write_uint8(s, 1);
             jl_serialize_value(s, ((jl_struct_type_t*)v)->name);
-            jl_serialize_value(s, ((jl_struct_type_t*)tt)->super);
-            jl_serialize_value(s, ((jl_struct_type_t*)tt)->parameters);
-            jl_serialize_value(s, ((jl_struct_type_t*)tt)->names);
-            jl_serialize_value(s, ((jl_struct_type_t*)tt)->types);
-            write_int32(((jl_struct_type_t*)v)->uid);
+            jl_serialize_value(s, ((jl_struct_type_t*)v)->super);
+            jl_serialize_value(s, ((jl_struct_type_t*)v)->parameters);
+            jl_serialize_value(s, ((jl_struct_type_t*)v)->names);
+            jl_serialize_value(s, ((jl_struct_type_t*)v)->types);
+            write_int32(s, ((jl_struct_type_t*)v)->uid);
         }
         else {
             write_uint8(s, 0);
             jl_serialize_value(s, ((jl_struct_type_t*)v)->name);
             jl_serialize_value(s, ((jl_struct_type_t*)v)->parameters);
-            write_int32(((jl_struct_type_t*)v)->uid);
+            write_int32(s, ((jl_struct_type_t*)v)->uid);
         }
     }
     else if (jl_is_bits_type(v)) {
@@ -142,10 +150,10 @@ void jl_serialize_tag_type(ios_t *s, jl_value_t *v)
         if (longform) {
             write_uint8(s, 1);
             jl_serialize_value(s, ((jl_tag_type_t*)v)->name);
-            jl_serialize_value(s, ((jl_bits_type_t*)tt)->super);
-            jl_serialize_value(s, ((jl_bits_type_t*)tt)->parameters);
-            write_int32(((jl_bits_type_t*)tt)->nbits);
-            write_int32(((jl_bits_type_t*)tt)->uid);
+            jl_serialize_value(s, ((jl_bits_type_t*)v)->parameters);
+            write_int32(s, ((jl_bits_type_t*)v)->nbits);
+            jl_serialize_value(s, ((jl_bits_type_t*)v)->super);
+            write_int32(s, ((jl_bits_type_t*)v)->uid);
         }
         else {
             write_uint8(s, 0);
@@ -159,8 +167,8 @@ void jl_serialize_tag_type(ios_t *s, jl_value_t *v)
         if (longform) {
             write_uint8(s, 1);
             jl_serialize_value(s, ((jl_tag_type_t*)v)->name);
-            jl_serialize_value(s, ((jl_tag_type_t*)tt)->super);
-            jl_serialize_value(s, ((jl_tag_type_t*)tt)->parameters);
+            jl_serialize_value(s, ((jl_tag_type_t*)v)->super);
+            jl_serialize_value(s, ((jl_tag_type_t*)v)->parameters);
         }
         else {
             write_uint8(s, 0);
@@ -186,7 +194,7 @@ void jl_serialize_methlist(ios_t *s, jl_methlist_t *ml)
     jl_serialize_value(s, NULL);
 }
 
-void jl_serialize_value(ios_t *s, jl_value_t *v)
+void jl_serialize_value_(ios_t *s, jl_value_t *v)
 {
     if (v == NULL) {
         write_uint8(s, Null_tag);
@@ -195,7 +203,7 @@ void jl_serialize_value(ios_t *s, jl_value_t *v)
 
     void **bp = ptrhash_bp(&ser_tag, v);
     if (*bp != HT_NOTFOUND) {
-        write_as_tag(s, (uint8_t)*bp);
+        write_as_tag(s, (uint8_t)(ptrint_t)*bp);
         return;
     }
 
@@ -205,7 +213,7 @@ void jl_serialize_value(ios_t *s, jl_value_t *v)
         write_int32(s, (int)*bp);
         return;
     }
-    ptrhash_put(&backref_table, v, ios_pos(s));
+    ptrhash_put(&backref_table, v, (void*)(ptrint_t)ios_pos(s));
 
     size_t i;
     if (jl_is_tuple(v)) {
@@ -280,21 +288,22 @@ void jl_serialize_value(ios_t *s, jl_value_t *v)
     }
     else if (jl_is_function(v)) {
         writetag(s, jl_func_kind);
+        jl_serialize_value(s, v->type);
         jl_function_t *f = (jl_function_t*)v;
         jl_serialize_value(s, (jl_value_t*)f->linfo);
         jl_serialize_value(s, f->env);
-        if (f->linfo && f->ptr != &jl_trampoline) {
+        if (f->linfo && f->fptr != &jl_trampoline) {
             write_int32(s, 0);
         }
         else {
-            void **pbp = ptrhash_bp(&fptr_to_id, f->ptr);
+            void **pbp = ptrhash_bp(&fptr_to_id, f->fptr);
             if (*pbp == HT_NOTFOUND)
                 jl_error("unknown function pointer");
             write_int32(s, *(ptrint_t*)pbp);
         }
     }
     else if (jl_is_lambda_info(v)) {
-        jl_serialize_value(s, jl_lambda_info_type);
+        writetag(s, jl_lambda_info_type);
         jl_lambda_info_t *li = (jl_lambda_info_t*)v;
         jl_serialize_value(s, li->ast);
         jl_serialize_value(s, (jl_value_t*)li->sparams);
@@ -304,7 +313,7 @@ void jl_serialize_value(ios_t *s, jl_value_t *v)
         write_int8(s, li->inferred);
     }
     else if (jl_typeis(v, jl_methtable_type)) {
-        jl_serialize_value(s, jl_methtable_type);
+        writetag(s, jl_methtable_type);
         jl_methtable_t *mt = (jl_methtable_t*)v;
         jl_serialize_methlist(s, mt->defs);
         jl_serialize_methlist(s, mt->cache);
@@ -326,7 +335,7 @@ void jl_serialize_value(ios_t *s, jl_value_t *v)
             void *data = jl_bits_data(v);
             bp = ptrhash_bp(&ser_tag, t);
             if (*bp != HT_NOTFOUND) {
-                write_uint8(s, (uint8_t)*bp);
+                write_uint8(s, (uint8_t)(ptrint_t)*bp);
             }
             else {
                 writetag(s, jl_bits_kind);
@@ -391,9 +400,81 @@ void jl_serialize_finalizers(ios_t *s)
 
 // --- deserialize ---
 
-jl_value_t *jl_deserialize_tag_type(ios_t *s)
+jl_value_t *jl_deserialize_value(ios_t *s);
+
+jl_value_t *jl_deserialize_tag_type(ios_t *s, jl_typename_t *tname, int pos)
 {
-    // todo
+    int longform = read_uint8(s);
+    if (tname == jl_struct_kind->name) {
+        if (longform) {
+            jl_struct_type_t *st =
+                (jl_struct_type_t*)newobj((jl_type_t*)jl_struct_kind,
+                                          STRUCT_TYPE_NW);
+            ptrhash_put(&backref_table, (void*)(ptrint_t)pos, st);
+            st->name = (jl_typename_t*)jl_deserialize_value(s);
+            st->super = (jl_tag_type_t*)jl_deserialize_value(s);
+            st->parameters = (jl_tuple_t*)jl_deserialize_value(s);
+            st->names = (jl_tuple_t*)jl_deserialize_value(s);
+            st->types = (jl_tuple_t*)jl_deserialize_value(s);
+            st->uid = read_int32(s);
+            return (jl_value_t*)st;
+        }
+        else {
+            jl_value_t *name = jl_deserialize_value(s);
+            jl_tuple_t *para = (jl_tuple_t*)jl_deserialize_value(s);
+            jl_struct_type_t *st =
+                (jl_struct_type_t*)
+                jl_apply_type(((jl_typename_t*)name)->primary, para);
+            ptrhash_put(&backref_table, (void*)(ptrint_t)pos, st);
+            st->uid = read_int32(s);
+            return (jl_value_t*)st;
+        }
+    }
+    else if (tname == jl_bits_kind->name) {
+        if (longform) {
+            jl_value_t *name = jl_deserialize_value(s);
+            jl_tuple_t *para = (jl_tuple_t*)jl_deserialize_value(s);
+            size_t nbits = read_int32(s);
+            jl_bits_type_t *bt=jl_new_bitstype(name, jl_any_type, para, nbits);
+            ptrhash_put(&backref_table, (void*)(ptrint_t)pos, bt);
+            bt->super = (jl_tag_type_t*)jl_deserialize_value(s);
+            bt->uid = read_int32(s);
+            return (jl_value_t*)bt;
+        }
+        else {
+            jl_value_t *name = jl_deserialize_value(s);
+            jl_tuple_t *para = (jl_tuple_t*)jl_deserialize_value(s);
+            jl_bits_type_t *bt =
+                (jl_bits_type_t*)
+                jl_apply_type(((jl_typename_t*)name)->primary, para);
+            ptrhash_put(&backref_table, (void*)(ptrint_t)pos, bt);
+            bt->uid = read_int32(s);
+            return (jl_value_t*)bt;
+        }
+    }
+    else {
+        assert(tname == jl_tag_kind->name);
+        if (longform) {
+            jl_tag_type_t *tt =
+                (jl_tag_type_t*)newobj((jl_type_t*)jl_tag_kind, TAG_TYPE_NW);
+            ptrhash_put(&backref_table, (void*)(ptrint_t)pos, tt);
+            tt->name = (jl_typename_t*)jl_deserialize_value(s);
+            tt->super = (jl_tag_type_t*)jl_deserialize_value(s);
+            tt->parameters = (jl_tuple_t*)jl_deserialize_value(s);
+            return (jl_value_t*)tt;
+        }
+        else {
+            jl_value_t *name = jl_deserialize_value(s);
+            jl_tuple_t *para = (jl_tuple_t*)jl_deserialize_value(s);
+            jl_tag_type_t *tt =
+                (jl_tag_type_t*)
+                jl_apply_type(((jl_typename_t*)name)->primary, para);
+            ptrhash_put(&backref_table, (void*)(ptrint_t)pos, tt);
+            return (jl_value_t*)tt;
+        }
+    }
+    assert(0);
+    return NULL;
 }
 
 jl_methlist_t *jl_deserialize_methlist(ios_t *s)
@@ -405,11 +486,11 @@ jl_methlist_t *jl_deserialize_methlist(ios_t *s)
         if (sig == NULL)
             break;
         jl_methlist_t *node = (jl_methlist_t*)allocb(sizeof(jl_methlist_t));
-        node->sig = sig;
+        node->sig = (jl_tuple_t*)sig;
         node->has_tvars = read_int8(s);
         node->va = read_int8(s);
-        node->tvars = jl_deserialize_value(s);
-        node->func = jl_deserialize_value(s);
+        node->tvars = (jl_tuple_t*)jl_deserialize_value(s);
+        node->func = (jl_function_t*)jl_deserialize_value(s);
         node->next = NULL;
         *pnext = node;
         pnext = &node->next;
@@ -419,60 +500,62 @@ jl_methlist_t *jl_deserialize_methlist(ios_t *s)
 
 jl_value_t *jl_deserialize_value(ios_t *s)
 {
-    int8_t tag = read_uint8(s);
+    int pos = ios_pos(s);
+    int32_t tag = read_uint8(s);
     if (tag == Null_tag)
         return NULL;
     if (tag == 0) {
         tag = read_uint8(s);
-        return (jl_value_t*)ptrhash_get(&deser_tag, tag);
+        return (jl_value_t*)ptrhash_get(&deser_tag, (void*)(ptrint_t)tag);
     }
     if (tag == BackRef_tag) {
         ptrint_t offs = read_int32(s);
-        void **bp = ptrhash_bp(&backref_table, offs);
+        void **bp = ptrhash_bp(&backref_table, (void*)(ptrint_t)offs);
         assert(*bp != HT_NOTFOUND);
         return (jl_value_t*)*bp;
     }
 
-    jl_value_t *vtag = (jl_value_t*)ptrhash_get(&deser_tag, tag);
+    jl_value_t *vtag=(jl_value_t*)ptrhash_get(&deser_tag,(void*)(ptrint_t)tag);
     if (tag >= VALUE_TAGS) {
         return vtag;
     }
-    int pos = ios_pos(s);
 
     size_t i;
-    if (vtag == jl_tuple_type || vtag == (jl_value_t*)LongTuple_tag) {
+    if (vtag == (jl_value_t*)jl_tuple_type ||
+        vtag == (jl_value_t*)LongTuple_tag) {
         size_t len;
-        if (vtag == jl_tuple_type)
+        if (vtag == (jl_value_t*)jl_tuple_type)
             len = read_uint8(s);
         else
             len = read_int32(s);
         jl_tuple_t *tu = jl_alloc_tuple_uninit(len);
-        ptrhash_put(&backref_table, pos, (jl_value_t*)tu);
+        ptrhash_put(&backref_table, (void*)(ptrint_t)pos, (jl_value_t*)tu);
         for(i=0; i < len; i++)
             jl_tupleset(tu, i, jl_deserialize_value(s));
         return (jl_value_t*)tu;
     }
-    else if (vtag == jl_symbol_type || vtag == (jl_value_t*)LongSymbol_tag) {
+    else if (vtag == (jl_value_t*)jl_symbol_type ||
+             vtag == (jl_value_t*)LongSymbol_tag) {
         size_t len;
-        if (vtag == jl_symbol_type)
+        if (vtag == (jl_value_t*)jl_symbol_type)
             len = read_uint8(s);
         else
             len = read_int32(s);
         char *name = alloca(len);
         ios_read(s, name, len);
-        jl_value_t *s = jl_symbol_n(name, len);
-        ptrhash_put(&backref_table, pos, s);
+        jl_value_t *s = (jl_value_t*)jl_symbol_n(name, len);
+        ptrhash_put(&backref_table, (void*)(ptrint_t)pos, s);
         return s;
     }
-    else if (vtag == jl_array_type) {
+    else if (vtag == (jl_value_t*)jl_array_type) {
         jl_value_t *elty = jl_deserialize_value(s);
-        jl_value_t *dims = jl_deserialize_value(s);
+        jl_tuple_t *dims = (jl_tuple_t*)jl_deserialize_value(s);
         jl_value_t *atype =
             jl_apply_type((jl_value_t*)jl_array_type,
                           jl_tuple2(elty,
                                     jl_box_int32(((jl_tuple_t*)dims)->length)));
         jl_array_t *a = jl_new_array((jl_type_t*)atype, dims);
-        ptrhash_put(&backref_table, pos, (jl_value_t*)a);
+        ptrhash_put(&backref_table, (void*)(ptrint_t)pos, (jl_value_t*)a);
         if (jl_is_bits_type(elty)) {
             size_t tot = a->length * jl_bitstype_nbits(elty)/8;
             ios_read(s, a->data, tot);
@@ -484,34 +567,74 @@ jl_value_t *jl_deserialize_value(ios_t *s)
         }
         return (jl_value_t*)a;
     }
-    else if (vtag == jl_expr_type || vtag == (jl_value_t*)LongExpr_tag) {
+    else if (vtag == (jl_value_t*)jl_expr_type ||
+             vtag == (jl_value_t*)LongExpr_tag) {
         size_t len;
-        if (vtag == jl_expr_type)
+        if (vtag == (jl_value_t*)jl_expr_type)
             len = read_uint8(s);
         else
             len = read_int32(s);
-        jl_expr_t *e = jl_exprn(jl_deserialize_value(s), len);
-        ptrhash_put(&backref_table, pos, (jl_value_t*)e);
+        jl_expr_t *e = jl_exprn((jl_sym_t*)jl_deserialize_value(s), len);
+        ptrhash_put(&backref_table, (void*)(ptrint_t)pos, (jl_value_t*)e);
         e->etype = jl_deserialize_value(s);
         for(i=0; i < len; i++) {
             jl_cellset(e->args, i, jl_deserialize_value(s));
         }
     }
-    else if (vtag == jl_typename_type) {
-        // todo
+    else if (vtag == (jl_value_t*)jl_typename_type) {
+        jl_value_t *name = jl_deserialize_value(s);
+        jl_typename_t *tn = jl_new_typename((jl_sym_t*)name);
+        ptrhash_put(&backref_table, (void*)(ptrint_t)pos, tn);
+        tn->primary = jl_deserialize_value(s);
+        return (jl_value_t*)tn;
     }
-    else if (vtag == jl_union_kind) {
-        // todo
+    else if (vtag == (jl_value_t*)jl_union_kind) {
+        jl_uniontype_t *ut =
+            (jl_uniontype_t*)newobj((jl_type_t*)jl_union_kind, 1);
+        ptrhash_put(&backref_table, (void*)(ptrint_t)pos, ut);
+        ut->types = (jl_tuple_t*)jl_deserialize_value(s);
+        return (jl_value_t*)ut;
     }
-    else if (vtag == jl_func_kind) {
-        // todo
+    else if (vtag == (jl_value_t*)jl_func_kind) {
+        jl_value_t *ftype = jl_deserialize_value(s);
+        jl_function_t *f = (jl_function_t*)newobj((jl_type_t*)ftype, 3);
+        ptrhash_put(&backref_table, (void*)(ptrint_t)pos, f);
+        f->linfo = (jl_lambda_info_t*)jl_deserialize_value(s);
+        f->env = jl_deserialize_value(s);
+        int fptr = read_int32(s);
+        if (fptr == 0) {
+            f->fptr = &jl_trampoline;
+            f->env = (jl_value_t*)jl_tuple2((jl_value_t*)f, f->env);
+        }
+        else {
+            void **pbp = ptrhash_bp(&id_to_fptr, (void*)(ptrint_t)fptr);
+            if (*pbp == HT_NOTFOUND)
+                jl_error("unknown function pointer ID");
+            f->fptr = *(jl_fptr_t*)pbp;
+        }
+        return (jl_value_t*)f;
     }
-    else if (vtag == jl_lambda_info_type) {
-        // todo
+    else if (vtag == (jl_value_t*)jl_lambda_info_type) {
+        jl_lambda_info_t *li =
+            (jl_lambda_info_t*)newobj((jl_type_t*)jl_lambda_info_type, 12);
+        li->ast = jl_deserialize_value(s);
+        li->sparams = (jl_tuple_t*)jl_deserialize_value(s);
+        li->tfunc = jl_deserialize_value(s);
+        li->name = (jl_sym_t*)jl_deserialize_value(s);
+        li->specTypes = jl_deserialize_value(s);
+        li->inferred = read_int8(s);
+
+        li->fptr = NULL;
+        li->roots = jl_null;
+        li->functionObject = NULL;
+        li->inInference = 0;
+        li->inCompile = 0;
+        li->unspecialized = NULL;
+        return (jl_value_t*)li;
     }
-    else if (vtag == jl_methtable_type) {
+    else if (vtag == (jl_value_t*)jl_methtable_type) {
         jl_methtable_t *mt = (jl_methtable_t*)allocobj(sizeof(jl_methtable_t));
-        ptrhash_put(&backref_table, pos, mt);
+        ptrhash_put(&backref_table, (void*)(ptrint_t)pos, mt);
         mt->type = (jl_type_t*)jl_methtable_type;
         mt->defs = jl_deserialize_methlist(s);
         mt->cache = jl_deserialize_methlist(s);
@@ -519,7 +642,7 @@ jl_value_t *jl_deserialize_value(ios_t *s)
         if (mt->n_1arg > 0) {
             mt->cache_1arg = LLT_ALLOC(mt->n_1arg*sizeof(void*));
             for(i=0; i < mt->n_1arg; i++) {
-                mt->cache_1arg[i] = jl_deserialize_value(s);
+                mt->cache_1arg[i] = (jl_function_t*)jl_deserialize_value(s);
             }
         }
         else {
@@ -529,11 +652,11 @@ jl_value_t *jl_deserialize_value(ios_t *s)
         mt->max_args = read_int32(s);
         return (jl_value_t*)mt;
     }
-    else if (jl_is_bits_type(vtag) || vtag == jl_bits_kind) {
+    else if (jl_is_bits_type(vtag) || vtag == (jl_value_t*)jl_bits_kind) {
         jl_bits_type_t *bt;
-        if (vtag == jl_bits_kind) {
-            jl_value_t *tname = jl_deserialize_value(s);
-            jl_value_t *tpara = jl_deserialize_value(s);
+        if (vtag == (jl_value_t*)jl_bits_kind) {
+            jl_typename_t *tname = (jl_typename_t*)jl_deserialize_value(s);
+            jl_tuple_t *tpara = (jl_tuple_t*)jl_deserialize_value(s);
             bt = (jl_bits_type_t*)jl_apply_type(tname->primary, tpara);
         }
         else {
@@ -569,28 +692,31 @@ jl_value_t *jl_deserialize_value(ios_t *s)
             default: assert(0);
             }
         }
-        ptrhash_put(&backref_table, pos, v);
+        ptrhash_put(&backref_table, (void*)(ptrint_t)pos, v);
         return v;
     }
-    else if (vtag == jl_struct_kind) {
+    else if (vtag == (jl_value_t*)jl_struct_kind) {
         jl_typename_t *tname = (jl_typename_t*)jl_deserialize_value(s);
         jl_tuple_t *tpara = (jl_tuple_t*)jl_deserialize_value(s);
-        if (tname == jl_struct_kind->name || tname == jl_bits_kind->name ||
-            tname == jl_tag_kind->name)
-            return jl_deserialize_tag_type(s);
+        if (tname == jl_struct_kind->name || tname == jl_bits_kind->name)
+            return jl_deserialize_tag_type(s, tname, pos);
         jl_struct_type_t *typ =
             (jl_struct_type_t*)jl_apply_type(tname->primary, tpara);
         size_t nf = typ->names->length;
         jl_value_t *v = newobj((jl_type_t*)typ, nf);
-        ptrhash_put(&backref_table, pos, v);
+        ptrhash_put(&backref_table, (void*)(ptrint_t)pos, v);
         for(i=0; i < nf; i++) {
             ((jl_value_t**)v)[i+1] = jl_deserialize_value(s);
         }
         return v;
     }
+    else if (vtag == (jl_value_t*)jl_tag_kind) {
+        return jl_deserialize_tag_type(s, jl_tag_kind->name, pos);
+    }
     else {
         assert(0);
     }
+    return NULL;
 }
 
 void jl_deserialize_module(ios_t *s, jl_module_t *m)
@@ -601,7 +727,7 @@ void jl_deserialize_module(ios_t *s, jl_module_t *m)
             break;
         jl_binding_t *b = jl_get_binding(m, (jl_sym_t*)name);
         b->value = jl_deserialize_value(s);
-        b->type = jl_deserialize_value(s);
+        b->type = (jl_type_t*)jl_deserialize_value(s);
         b->constp = read_int8(s);
         b->exportp = read_int8(s);
     }
@@ -621,10 +747,48 @@ void jl_deserialize_finalizers(ios_t *s)
         jl_value_t *v = jl_deserialize_value(s);
         if (v == NULL)
             break;
-        jl_value_t **bp = ptrhash_bp(finalizer_table, v);
+        void **bp = ptrhash_bp(finalizer_table, v);
         *bp = jl_deserialize_value(s);
     }
 }
+
+// --- entry points ---
+
+DLLEXPORT
+void jl_save_system_image(char *fname)
+{
+    ios_t f;
+    ios_file(&f, fname, 1, 1, 1, 1);
+    jl_serialize_module(&f, jl_system_module);
+    jl_serialize_finalizers(&f);
+    htable_reset(&backref_table, 100000);
+    ios_close(&f);
+}
+
+extern jl_function_t *jl_typeinf_func;
+
+DLLEXPORT
+void jl_restore_system_image(char *fname)
+{
+    ios_t f;
+    ios_file(&f, fname, 1, 0, 0, 0);
+#ifdef JL_GC_MARKSWEEP
+    int en = jl_gc_is_enabled();
+    jl_gc_disable();
+#endif
+    jl_deserialize_module(&f, jl_system_module);
+    jl_deserialize_finalizers(&f);
+    htable_reset(&backref_table, 100000);
+    ios_close(&f);
+    jl_typeinf_func =
+        (jl_function_t*)*(jl_get_bindingp(jl_system_module,
+                                          jl_symbol("typeinf_ext")));
+#ifdef JL_GC_MARKSWEEP
+    if (en) jl_gc_enable();
+#endif
+}
+
+// --- init ---
 
 void jl_init_serializer()
 {
@@ -634,19 +798,16 @@ void jl_init_serializer()
     htable_new(&id_to_fptr, 0);
     htable_new(&backref_table, 100000);
 
-    void *tags[] = { jl_symbol_type, jl_int8_type, jl_uint8_type,
-                     jl_int16_type, jl_uint16_type, jl_int32_type,
-                     jl_uint32_type, jl_int64_type, jl_uint64_type,
-                     jl_float32_type, jl_float64_type,
-                     jl_char_type, jl_pointer_type,
+    void *tags[] = { jl_symbol_type, jl_pointer_type, jl_int32_type,
                      jl_tag_kind, jl_union_kind, jl_bits_kind, jl_struct_kind,
                      jl_func_kind, jl_tuple_type, jl_array_type, jl_expr_type,
                      (void*)LongSymbol_tag, (void*)LongTuple_tag,
-                     (void*)LongExpr_tag,
+                     (void*)LongExpr_tag, jl_intrinsic_type, jl_methtable_type,
+                     jl_typename_type, jl_lambda_info_type,
 
                      jl_null, jl_bool_type, jl_any_type, jl_symbol("Any"),
                      jl_symbol("Array"), jl_symbol("TypeVar"),
-                     jl_symbol("FuncKind"), jl_symbol("Box").
+                     jl_symbol("FuncKind"), jl_symbol("Box"),
                      lambda_sym, vinf_sym, locals_sym, body_sym, return_sym,
                      call_sym, colons_sym, null_sym, goto_sym, goto_ifnot_sym,
                      label_sym, symbol_sym, jl_symbol("string"),
@@ -664,22 +825,15 @@ void jl_init_serializer()
                      jl_box_int32(0), jl_box_int32(1), jl_box_int32(2),
                      jl_box_int32(3), jl_box_int32(4),
 
-                     jl_typename_type, jl_type_type, jl_methtable_type,
-                     jl_bottom_type, jl_tvar_type,
+                     jl_type_type, jl_bottom_type, jl_tvar_type,
                      jl_seq_type, jl_ntuple_type, jl_tensor_type,
-                     jl_lambda_info_type, jl_box_type,
-                     jl_typector_type, jl_intrinsic_type, jl_undef_type,
-                     jl_any_func,
+                     jl_box_type, jl_typector_type, jl_undef_type, jl_any_func,
 
-                     jl_symbol_type->name, jl_int8_type->name, jl_uint8_type->name,
-                     jl_int16_type->name, jl_uint16_type->name, jl_int32_type->name,
-                     jl_uint32_type->name, jl_int64_type->name, jl_uint64_type->name,
-                     jl_float32_type->name, jl_float64_type->name,
-                     jl_char_type->name, jl_pointer_type->name,
+                     jl_symbol_type->name, jl_pointer_type->name,
                      jl_tag_kind->name, jl_union_kind->name, jl_bits_kind->name, jl_struct_kind->name,
-                     jl_func_kind->name, jl_tuple_type->name, jl_array_type->name, jl_expr_type->name,
+                     jl_func_kind->name, jl_tuple_typename, jl_array_type->name, jl_expr_type->name,
                      jl_typename_type->name, jl_type_type->name, jl_methtable_type->name,
-                     jl_bottom_type->name, jl_tvar_type->name,
+                     jl_tvar_type->name,
                      jl_seq_type->name, jl_ntuple_type->name, jl_tensor_type->name,
                      jl_lambda_info_type->name, jl_box_type->name,
                      jl_typector_type->name, jl_intrinsic_type->name, jl_undef_type->name,

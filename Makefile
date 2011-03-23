@@ -1,6 +1,6 @@
 NAME = julia
 SRCS = jltypes gf ast repl builtins module codegen interpreter alloc dlload \
-	sys init task array $(GCSRCS)
+	sys init task array dump $(GCSRCS)
 OBJS = $(SRCS:%=%.o)
 DOBJS = $(SRCS:%=%.do)
 EXENAME = $(NAME)

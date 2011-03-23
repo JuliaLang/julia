@@ -113,6 +113,8 @@
     jl_eval_user_input;
     jl_enq_send_req;
     jl_start_io_thread;
+    jl_save_system_image;
+    jl_restore_system_image;
   local:
     *;
 };

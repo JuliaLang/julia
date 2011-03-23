@@ -490,6 +490,7 @@ jl_tuple_t *jl_flatten_pairs(jl_tuple_t *t);
 jl_sym_t *jl_symbol(const char *str);
 DLLEXPORT jl_sym_t *jl_symbol_n(const char *str, int32_t len);
 DLLEXPORT jl_sym_t *jl_gensym();
+jl_array_t *jl_new_array(jl_type_t *atype, jl_tuple_t *dims);
 jl_array_t *jl_alloc_array_1d(jl_type_t *atype, size_t nr);
 jl_array_t *jl_pchar_to_array(char *str, size_t len);
 jl_array_t *jl_cstr_to_array(char *str);
@@ -503,6 +504,7 @@ jl_function_t *jl_new_generic_function(jl_sym_t *name);
 void jl_add_method(jl_function_t *gf, jl_tuple_t *types, jl_function_t *meth);
 jl_value_t *jl_method_def(jl_sym_t *name, jl_value_t **bp,
                           jl_tuple_t *argtypes, jl_function_t *f);
+jl_value_t *jl_box_bool(int8_t x);
 jl_value_t *jl_box_int8(int8_t x);
 jl_value_t *jl_box_uint8(uint8_t x);
 jl_value_t *jl_box_int16(int16_t x);
@@ -566,7 +568,7 @@ jl_value_t *jl_no_method_error(jl_function_t *f, jl_value_t **args, size_t na);
 void julia_init();
 int jl_load_startup_file();
 void jl_init_types();
-void jl_init_builtin_types();
+void jl_init_box_caches();
 void jl_init_frontend();
 void jl_shutdown_frontend();
 void jl_init_primitives();
@@ -575,6 +577,7 @@ void jl_init_modules();
 void jl_init_codegen();
 void jl_init_intrinsic_functions();
 void jl_init_tasks(void *stack, size_t ssize);
+void jl_init_serializer();
 void jl_load_boot_j();
 
 // front end interface

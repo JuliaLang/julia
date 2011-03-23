@@ -1728,6 +1728,7 @@ void jl_init_types()
 
     // initialize them. lots of cycles.
     jl_struct_kind->name = jl_new_typename(jl_symbol("StructKind"));
+    jl_struct_kind->name->primary = (jl_value_t*)jl_struct_kind;
     jl_struct_kind->super = (jl_tag_type_t*)jl_tag_kind;
     jl_struct_kind->parameters = jl_null;
     jl_struct_kind->names = jl_tuple(5, jl_symbol("name"), jl_symbol("super"),
@@ -1744,6 +1745,7 @@ void jl_init_types()
     jl_struct_kind->uid = t_uid_ctr++;
 
     jl_tag_kind->name = jl_new_typename(jl_symbol("TagKind"));
+    jl_tag_kind->name->primary = (jl_value_t*)jl_tag_kind;
     jl_tag_kind->super = jl_type_type;
     jl_tag_kind->parameters = jl_null;
     jl_tag_kind->names = jl_tuple(3, jl_symbol("name"), jl_symbol("super"),
@@ -1758,6 +1760,7 @@ void jl_init_types()
     jl_tag_kind->uid = t_uid_ctr++;
 
     jl_func_kind->name = jl_new_typename(jl_symbol("FuncKind"));
+    jl_func_kind->name->primary = (jl_value_t*)jl_func_kind;
     jl_func_kind->super = jl_type_type;
     jl_func_kind->parameters = jl_null;
     jl_func_kind->names = jl_tuple(2, jl_symbol("from"), jl_symbol("to"));
@@ -1770,6 +1773,7 @@ void jl_init_types()
     jl_func_kind->uid = t_uid_ctr++;
 
     jl_typename_type->name = jl_new_typename(jl_symbol("TypeName"));
+    jl_typename_type->name->primary = (jl_value_t*)jl_typename_type;
     jl_typename_type->super = jl_any_type;
     jl_typename_type->parameters = jl_null;
     jl_typename_type->names = jl_tuple(1, jl_symbol("name"));
@@ -1782,6 +1786,7 @@ void jl_init_types()
     jl_typename_type->instance = NULL;
 
     jl_sym_type->name = jl_new_typename(jl_symbol("Symbol"));
+    jl_sym_type->name->primary = (jl_value_t*)jl_sym_type;
     jl_sym_type->super = jl_any_type;
     jl_sym_type->parameters = jl_null;
     jl_sym_type->names = jl_null;
@@ -1794,6 +1799,7 @@ void jl_init_types()
     jl_sym_type->uid = t_uid_ctr++;
 
     jl_any_type->name = jl_new_typename(jl_symbol("Any"));
+    jl_any_type->name->primary = (jl_value_t*)jl_any_type;
     jl_any_type->super = jl_any_type;
     jl_any_type->parameters = jl_null;
     jl_any_type->fptr = NULL;

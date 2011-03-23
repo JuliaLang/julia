@@ -101,15 +101,20 @@ void julia_init()
     jl_init_types();
     jl_init_modules();
     jl_init_tasks(jl_stack_lo, jl_stack_hi-jl_stack_lo);
-    jl_init_primitives();
     jl_init_codegen();
     jl_an_empty_cell = (jl_value_t*)jl_alloc_cell_1d(0);
+
+    jl_init_serializer();
+
+    jl_init_primitives();
     jl_load_boot_j();
     jl_get_builtin_hooks();
     jl_boot_file_loaded = 1;
-    jl_init_builtin_types();
     jl_init_builtins();
+
     jl_an_empty_string = jl_pchar_to_string("", 0);
+    jl_init_box_caches();
+
 #ifdef JL_GC_MARKSWEEP
     jl_gc_enable();
 #endif
@@ -282,4 +287,9 @@ void jl_get_builtin_hooks()
 
     jl_append_any_func = (jl_function_t*)global("append_any");
     jl_method_missing_func = (jl_function_t*)global("method_missing");
+
+    jl_array_uint8_type =
+        (jl_type_t*)jl_apply_type((jl_value_t*)jl_array_type,
+                                  jl_tuple2(jl_uint8_type,
+                                            jl_box_int32(1)));
 }
