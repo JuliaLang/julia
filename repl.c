@@ -85,6 +85,7 @@ static char *program = NULL;
 int num_evals = 0;
 char **eval_exprs = NULL;
 int *print_exprs = NULL;
+char *imageFile = NULL;
 
 static const char *usage = "julia [options] [program] [args...]\n";
 static const char *opts =
@@ -97,10 +98,11 @@ static const char *opts =
     " -T --tab=<size>          Set REPL tab width to <size>\n"
     " -L --lisp                Start with Lisp prompt not Julia\n"
     " -b --bare                Bare REPL: don't load start.j\n"
+    " -J --sysimage=file       Start up with the given system image file\n"
     " -h --help                Print this message\n";
 
 void parse_opts(int *argcp, char ***argvp) {
-    static char* shortopts = "qRe:E:P:H:T:bLh";
+    static char* shortopts = "qRe:E:P:H:T:bLhJ:";
     static struct option longopts[] = {
         { "quiet",       no_argument,       0, 'q' },
         { "no-readline", no_argument,       0, 'R' },
@@ -112,6 +114,7 @@ void parse_opts(int *argcp, char ***argvp) {
         { "bare",        no_argument,       0, 'b' },
         { "lisp",        no_argument,       0, 'L' },
         { "help",        no_argument,       0, 'h' },
+        { "sysimage",    required_argument, 0, 'J' },
         { 0, 0, 0, 0 }
     };
     int c;
@@ -147,6 +150,10 @@ void parse_opts(int *argcp, char ***argvp) {
             break;
         case 'L':
             lisp_prompt = 1;
+            break;
+        case 'J':
+            imageFile = optarg;
+            load_start_j = 0;
             break;
         case 'h':
             printf("%s%s", usage, opts);
@@ -763,7 +770,7 @@ int main(int argc, char *argv[])
 #endif
     llt_init();
     parse_opts(&argc, &argv);
-    julia_init();
+    julia_init(imageFile);
 #ifdef COPY_STACKS
     // initialize base context of root task
     jl_root_task->stackbase = (char*)&argc;

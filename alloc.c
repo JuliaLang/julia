@@ -35,7 +35,7 @@ jl_typename_t *jl_array_typename;
 jl_type_t *jl_array_uint8_type;
 jl_type_t *jl_array_any_type;
 jl_struct_type_t *jl_weakref_type;
-jl_struct_type_t *jl_string_type;
+jl_tag_type_t *jl_string_type;
 jl_struct_type_t *jl_latin1_string_type;
 jl_struct_type_t *jl_utf8_string_type;
 jl_struct_type_t *jl_expr_type;

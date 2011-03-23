@@ -243,7 +243,7 @@ extern jl_tag_type_t *jl_tensor_type;
 extern jl_struct_type_t *jl_array_type;
 extern jl_typename_t *jl_array_typename;
 extern jl_struct_type_t *jl_weakref_type;
-extern jl_struct_type_t *jl_string_type;
+extern jl_tag_type_t *jl_string_type;
 extern jl_struct_type_t *jl_latin1_string_type;
 extern jl_struct_type_t *jl_utf8_string_type;
 extern jl_struct_type_t *jl_errorexception_type;
@@ -288,6 +288,8 @@ extern jl_value_t *jl_false;
 extern jl_func_type_t *jl_any_func;
 
 extern jl_function_t *jl_show_gf;
+extern jl_function_t *jl_print_gf;
+extern jl_function_t *jl_convert_gf;
 extern jl_function_t *jl_bottom_func;
 extern jl_function_t *jl_memio_func;
 extern jl_function_t *jl_append_any_func;
@@ -565,7 +567,7 @@ void jl_type_error_rt(const char *fname, const char *context,
 jl_value_t *jl_no_method_error(jl_function_t *f, jl_value_t **args, size_t na);
 
 // initialization functions
-void julia_init();
+void julia_init(char *imageFile);
 int jl_load_startup_file();
 void jl_init_types();
 void jl_init_box_caches();
@@ -579,6 +581,9 @@ void jl_init_intrinsic_functions();
 void jl_init_tasks(void *stack, size_t ssize);
 void jl_init_serializer();
 void jl_load_boot_j();
+
+void jl_save_system_image(char *fname);
+void jl_restore_system_image(char *fname);
 
 // front end interface
 jl_value_t *jl_parse_input_line(const char *str);

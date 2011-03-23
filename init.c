@@ -84,7 +84,12 @@ static void jl_get_builtin_hooks();
 
 void *jl_dl_handle;
 
-void julia_init()
+static jl_value_t *global(char *name)
+{
+    return *jl_get_bindingp(jl_system_module, jl_symbol(name));
+}
+
+void julia_init(char *imageFile)
 {
     jl_page_size = sysconf(_SC_PAGESIZE);
     jl_find_stack_bottom();
@@ -106,14 +111,23 @@ void julia_init()
 
     jl_init_serializer();
 
-    jl_init_primitives();
-    jl_load_boot_j();
-    jl_get_builtin_hooks();
-    jl_boot_file_loaded = 1;
-    jl_init_builtins();
+    if (imageFile) {
+        jl_restore_system_image(imageFile);
 
+        jl_print_gf = (jl_function_t*)global("print");
+        jl_show_gf = (jl_function_t*)global("show");
+        jl_convert_gf = (jl_function_t*)global("convert");
+    }
+    else {
+        jl_init_primitives();
+        jl_load_boot_j();
+        jl_get_builtin_hooks();
+        jl_init_builtins();
+        jl_init_box_caches();
+    }
+
+    jl_boot_file_loaded = 1;
     jl_an_empty_string = jl_pchar_to_string("", 0);
-    jl_init_box_caches();
 
 #ifdef JL_GC_MARKSWEEP
     jl_gc_enable();
@@ -221,11 +235,6 @@ DLLEXPORT void jl_enable_inference()
     }
 }
 
-static jl_value_t *global(char *name)
-{
-    return *jl_get_bindingp(jl_system_module, jl_symbol(name));
-}
-
 DLLEXPORT void jl_set_memio_func()
 {
     jl_memio_func = (jl_function_t*)global("memio");
@@ -273,7 +282,7 @@ void jl_get_builtin_hooks()
     jl_weakref_type->fptr = jl_weakref_ctor;
     jl_weakref_type->env = NULL;
     jl_weakref_type->linfo = NULL;
-    jl_string_type = (jl_struct_type_t*)global("String");
+    jl_string_type = (jl_tag_type_t*)global("String");
     jl_latin1_string_type = (jl_struct_type_t*)global("Latin1String");
     jl_utf8_string_type = (jl_struct_type_t*)global("UTF8String");
     jl_errorexception_type = (jl_struct_type_t*)global("ErrorException");

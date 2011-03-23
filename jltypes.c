@@ -950,6 +950,9 @@ static jl_type_t *lookup_type(typekey_stack_t *table,
 
 static int t_uid_ctr = 1;  // TODO: lock
 
+int  jl_get_t_uid_ctr() { return t_uid_ctr; }
+void jl_set_t_uid_ctr(int i) { t_uid_ctr=i; }
+
 int jl_assign_type_uid()
 {
     return t_uid_ctr++;
