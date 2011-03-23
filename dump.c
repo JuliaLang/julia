@@ -24,13 +24,13 @@ static htable_t backref_table;
 static htable_t fptr_to_id;
 static htable_t id_to_fptr;
 
-static const int LongSymbol_tag = 23;
-static const int LongTuple_tag  = 24;
-static const int LongExpr_tag   = 25;
-static const int Null_tag       = 254;
-static const int BackRef_tag    = 255;
+static const ptrint_t LongSymbol_tag = 23;
+static const ptrint_t LongTuple_tag  = 24;
+static const ptrint_t LongExpr_tag   = 25;
+static const ptrint_t Null_tag       = 254;
+static const ptrint_t BackRef_tag    = 255;
 
-static int VALUE_TAGS;
+static ptrint_t VALUE_TAGS;
 
 #define write_uint8(s, n) ios_putc((n), (s))
 #define read_uint8(s) ((uint8_t)ios_getc(s))
@@ -210,7 +210,7 @@ void jl_serialize_value_(ios_t *s, jl_value_t *v)
     bp = ptrhash_bp(&backref_table, v);
     if (*bp != HT_NOTFOUND) {
         write_uint8(s, BackRef_tag);
-        write_int32(s, (int)*bp);
+        write_int32(s, (ptrint_t)*bp);
         return;
     }
     ptrhash_put(&backref_table, v, (void*)(ptrint_t)ios_pos(s));
@@ -664,7 +664,7 @@ jl_value_t *jl_deserialize_value(ios_t *s)
         }
         char *data = alloca(bt->nbits/8);
         ios_read(s, data, bt->nbits/8);
-        jl_value_t *v;
+        jl_value_t *v=NULL;
         if (bt == jl_int8_type)
             v = jl_box_int8(*(int8_t*)data);
         else if (bt == jl_uint8_type)
@@ -841,13 +841,13 @@ void jl_init_serializer()
                      jl_root_task,
 
                      NULL };
-    int i=2;
+    ptrint_t i=2;
     while (tags[i-2] != NULL) {
         ptrhash_put(&ser_tag, tags[i-2], (void*)i);
         ptrhash_put(&deser_tag, (void*)i, tags[i-2]);
         i += 1;
     }
-    VALUE_TAGS = (int)ptrhash_get(&ser_tag, jl_null);
+    VALUE_TAGS = (ptrint_t)ptrhash_get(&ser_tag, jl_null);
 
     void *fptrs[] = { jl_new_struct_internal, 
                       jl_generic_ctor, 
