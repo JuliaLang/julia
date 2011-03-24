@@ -1,7 +1,7 @@
 CC = gcc
 CXX = g++
-CFLAGS = -std=gnu99 -pthread
-CXXFLAGS = -pthread
+CFLAGS = -std=gnu99 
+CXXFLAGS = 
 
 PFX = /usr/local
 #PFX = /afs/csail.mit.edu/u/b/bezanson
