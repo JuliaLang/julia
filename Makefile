@@ -20,7 +20,7 @@ FLAGS = -falign-functions -Wall -Wno-strict-aliasing \
 	-fvisibility=hidden
 LIBFILES = $(FLISP) $(LLT)
 LIBS = $(LIBFILES) -lutil -ldl -lm -lreadline $(OSLIBS) \
-	$(shell llvm-config --ldflags --libs engine) -pthread
+	$(shell llvm-config --ldflags --libs engine) -lpthread
 
 DEBUGFLAGS = -ggdb3 -DDEBUG $(FLAGS)
 SHIPFLAGS = -O3 -DNDEBUG $(FLAGS)
