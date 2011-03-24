@@ -121,7 +121,6 @@ void julia_init(char *imageFile)
         jl_boot_file_loaded = 1;
         jl_init_builtins();
         jl_init_box_caches();
-        jl_an_empty_string = jl_pchar_to_string("", 0);
     }
 
 #ifdef JL_GC_MARKSWEEP

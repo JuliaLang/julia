@@ -84,8 +84,8 @@
        (not (in-comment))
        (member (current-word) kw-list)))
 
-; get the column of the last open block
-(defun last-open-block (min)
+; get the position of the last open block
+(defun last-open-block-pos (min)
   (do ((count 0
 	      (cond ((at-keyword julia-block-start-keywords)
 		     (+ count 1))
@@ -95,9 +95,17 @@
 		    (t count))))
       ((or (> count 0) (<= (point) min))
        (if (> count 0)
-	   (+ 4 (current-indentation))
+	   (point)
 	 nil))
     (backward-word 1)))
+
+; get indent for last open block
+(defun last-open-block (min)
+  (let ((pos (last-open-block-pos min)))
+    (and pos
+	 (progn
+	   (goto-char pos)
+	   (+ 4 (current-indentation))))))
 
 ; return indent implied by a special form opening on the previous line, if any
 (defun form-indent ()
@@ -121,8 +129,14 @@
 (defmacro error2nil (body) `(condition-case nil ,body (error nil)))
 
 (defun paren-indent ()
-  (let* ((p (parse-partial-sexp (point-min) (progn (beginning-of-line)
-                                                   (point))))
+  (let* ((p (parse-partial-sexp (save-excursion
+				  ;; only indent by paren if the last open
+				  ;; paren is closer than the last open
+				  ;; block
+				  (or (last-open-block-pos (point-min))
+				      (point-min)))
+				(progn (beginning-of-line)
+				       (point))))
          (pos (cadr p)))
     (if (or (= 0 (car p)) (null pos))
         nil
@@ -151,19 +165,21 @@
                            (at-keyword julia-block-end-keywords))))
              (error2nil (+ (last-open-block (point-min))
                            (if endtok -4 0)))))
+	 ;; previous line ends in =
+	 (save-excursion
+	   (if (and (not (equal (point-min) (line-beginning-position)))
+		    (progn
+		      (forward-line -1)
+		      (end-of-line) (backward-char 1)
+		      (equal (char-after (point)) ?=)))
+	       (+ 4 (current-indentation))
+	     nil))
 	 ;; take same indentation as previous line
 	 (save-excursion (forward-line -1)
 			 (current-indentation))
-		 ;(save-excursion
-		 ;  (if (and (not (equal (point-min) (line-beginning-position)))
-		;			(progn
-		;			  (forward-line -1)
-		;			  (end-of-line) (backward-char 1)
-		;			  (equal (char-after (point)) ?=)))
-		;	   4 nil))
          0))
-	(when (at-keyword julia-block-end-keywords)
-	  (forward-word 1)))
+    (when (at-keyword julia-block-end-keywords)
+      (forward-word 1)))
 
 (defun julia-mode ()
   "Major mode for editing julia code"

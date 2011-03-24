@@ -597,7 +597,6 @@ static void gc_mark()
     GC_Markval(jl_methtable_type);
     GC_Markval(jl_bottom_func);
     GC_Markval(jl_any_func);
-    if (jl_an_empty_string) GC_Markval(jl_an_empty_string);
     if (jl_an_empty_cell) GC_Markval(jl_an_empty_cell);
     GC_Markval(jl_exception_in_transit);
     GC_Markval(jl_task_arg_in_transit);

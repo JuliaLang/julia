@@ -10,11 +10,6 @@ stderr_stream = fdio(ccall(:jl_stderr, Int32, ()))
 # files not part of core image
 # mostly involving external libraries
 load("regex.j")
-load("env.j")
-
 load("math_libm.j")
 load("linalg_blas.j")
 load("linalg_lapack.j")
-
-load("libc.j")
-load("util.j")

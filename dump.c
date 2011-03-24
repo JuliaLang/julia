@@ -731,6 +731,7 @@ jl_value_t *jl_deserialize_value(ios_t *s)
             jl_idtable_rehash(&((jl_array_t**)v)[1],
                               ((jl_array_t**)v)[1]->length);
         }
+        // TODO: put WeakRefs on the weak_refs list
         return v;
     }
     else if (vtag == (jl_value_t*)jl_tag_kind) {
@@ -883,7 +884,6 @@ void jl_restore_system_image(char *fname)
     jl_typeinf_func =
         (jl_function_t*)*(jl_get_bindingp(jl_system_module,
                                           jl_symbol("typeinf_ext")));
-    jl_print_gf = (jl_function_t*)jl_get_global(jl_system_module,jl_symbol("print"));
     jl_show_gf = (jl_function_t*)jl_get_global(jl_system_module,jl_symbol("show"));
     jl_convert_gf = (jl_function_t*)jl_get_global(jl_system_module,jl_symbol("convert"));
     jl_set_global(jl_system_module, jl_symbol("libc"),
@@ -894,12 +894,11 @@ void jl_restore_system_image(char *fname)
 #ifdef JL_GC_MARKSWEEP
     if (en) jl_gc_enable();
 #endif
-    jl_an_empty_string = jl_pchar_to_string("", 0);
 
     jl_value_t *fexpr = jl_parse_file_string(ss.buf);
     JL_GC_PUSH(&fexpr);
     ios_close(&ss);
-    jl_load_file_expr("start", fexpr);
+    jl_load_file_expr(fname, fexpr);
     JL_GC_POP();
 }
 

@@ -59,6 +59,10 @@ load("serialize.j")
 load("multi.j")
 load("darray.j")
 
+# misc
+load("env.j")
+load("libc.j")
+load("util.j")
 
 ccall(:jl_save_system_image, Void, (Ptr{Uint8},Ptr{Uint8}),
       cstring("sys.ji"), cstring("start_image.j"))

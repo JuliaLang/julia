@@ -102,7 +102,11 @@ show(e::KeyError) = print("key not found: $(e.key)")
 
 function show(e::MethodError)
     name = ccall(:jl_genericfunc_name, Any, (Any,), e.f)
-    print("no method $(name)$(typeof(e.args))")
+    if is(e.f,convert)
+        print("no method $(name)(Type{$(e.args[1])},$(typeof(e.args[2])))")
+    else
+        print("no method $(name)$(typeof(e.args))")
+    end
 end
 
 dump(t::Type) = print(t)

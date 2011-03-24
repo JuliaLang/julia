@@ -251,7 +251,6 @@ extern jl_struct_type_t *jl_typeerror_type;
 extern jl_struct_type_t *jl_loaderror_type;
 extern jl_value_t *jl_stackovf_exception;
 extern jl_value_t *jl_divbyzero_exception;
-extern jl_value_t *jl_an_empty_string;
 extern jl_value_t *jl_an_empty_cell;
 
 extern jl_struct_type_t *jl_box_type;
@@ -288,7 +287,6 @@ extern jl_value_t *jl_false;
 extern jl_func_type_t *jl_any_func;
 
 extern jl_function_t *jl_show_gf;
-extern jl_function_t *jl_print_gf;
 extern jl_function_t *jl_convert_gf;
 extern jl_function_t *jl_bottom_func;
 extern jl_function_t *jl_memio_func;

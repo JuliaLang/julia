@@ -55,13 +55,6 @@ void jl_too_many_args(const char *fname, int max)
     jl_errorf("%s: too many arguments (expected %d)", fname, max);
 }
 
-void jl_type_error(const char *fname, jl_value_t *expected, jl_value_t *got)
-{
-    jl_value_t *ex = jl_new_struct(jl_typeerror_type, jl_symbol(fname),
-                                   jl_an_empty_string, expected, got);
-    jl_raise(ex);
-}
-
 void jl_type_error_rt(const char *fname, const char *context,
                       jl_value_t *ty, jl_value_t *got)
 {
@@ -71,6 +64,11 @@ void jl_type_error_rt(const char *fname, const char *context,
     jl_value_t *ex = jl_new_struct(jl_typeerror_type, jl_symbol(fname),
                                    ctxt, ty, got);
     jl_raise(ex);
+}
+
+void jl_type_error(const char *fname, jl_value_t *expected, jl_value_t *got)
+{
+    jl_type_error_rt(fname, "", expected, got);
 }
 
 JL_CALLABLE(jl_f_throw)
@@ -452,9 +450,7 @@ JL_CALLABLE(jl_f_get_field)
     JL_TYPECHK(getfield, symbol, args[1]);
     jl_value_t *v = args[0];
     if (!jl_is_struct_type(jl_typeof(v)))
-        // TODO: string is leaked
-        jl_errorf("getfield: argument must be a struct, got %s",
-                  jl_show_to_string(v));
+        jl_type_error("getfield", (jl_value_t*)jl_struct_kind, v);
     size_t i = field_offset((jl_struct_type_t*)jl_typeof(v),
                             (jl_sym_t*)args[1], 1);
     return ((jl_value_t**)v)[1+i];
@@ -466,9 +462,7 @@ JL_CALLABLE(jl_f_set_field)
     JL_TYPECHK(setfield, symbol, args[1]);
     jl_value_t *v = args[0];
     if (!jl_is_struct_type(jl_typeof(v)))
-        // TODO: string is leaked
-        jl_errorf("setfield: argument must be a struct, got %s",
-                  jl_show_to_string(v));
+        jl_type_error("setfield", (jl_value_t*)jl_struct_kind, v);
     jl_struct_type_t *st = (jl_struct_type_t*)jl_typeof(v);
     size_t i = field_offset(st, (jl_sym_t*)args[1], 1);
     ((jl_value_t**)v)[1+i] = jl_convert((jl_type_t*)jl_tupleref(st->types,i),
@@ -478,14 +472,16 @@ JL_CALLABLE(jl_f_set_field)
 
 // --- conversions ---
 
-static jl_tuple_t *convert_tuple(jl_tuple_t *to, jl_tuple_t *x)
+JL_CALLABLE(jl_f_convert_tuple)
 {
+    jl_tuple_t *to = (jl_tuple_t*)args[0];
+    jl_tuple_t *x = (jl_tuple_t*)args[1];
     if (to == jl_tuple_type)
-        return x;
+        return (jl_value_t*)x;
     size_t i, cl=x->length, pl=to->length;
     jl_tuple_t *out = jl_alloc_tuple(cl);
     JL_GC_PUSH(&out);
-    jl_value_t *ce, *pe;
+    jl_value_t *ce, *pe=NULL;
     int pseq=0;
     for(i=0; i < cl; i++) {
         ce = jl_tupleref(x,i);
@@ -502,10 +498,13 @@ static jl_tuple_t *convert_tuple(jl_tuple_t *to, jl_tuple_t *x)
             out = NULL;
             break;
         }
+        assert(pe != NULL);
         jl_tupleset(out, i, jl_convert((jl_type_t*)pe, ce));
     }
     JL_GC_POP();
-    return out;
+    if (out == NULL)
+        jl_error("convert: invalid tuple conversion");
+    return (jl_value_t*)out;
 }
 
 jl_function_t *jl_convert_gf;
@@ -524,19 +523,10 @@ JL_CALLABLE(jl_f_convert)
         JL_TYPECHK(convert, type, args[0]);
     jl_type_t *to = (jl_type_t*)args[0];
     jl_value_t *x = args[1];
-    jl_value_t *out;
-    if (jl_is_tuple(x) && jl_is_tuple(to)) {
-        out = (jl_value_t*)convert_tuple((jl_tuple_t*)to, (jl_tuple_t*)x);
-        if (out == NULL)
-            jl_error("convert: invalid tuple conversion");
-        return out;
+    if (!jl_subtype(x, (jl_value_t*)to, 1)) {
+        jl_no_method_error(jl_convert_gf, args, 2);
     }
-    if (jl_subtype(x, (jl_value_t*)to, 1))
-        return x;
-    // TODO: string is leaked
-    jl_errorf("cannot convert %s to %s",
-              jl_show_to_string(x), jl_show_to_string((jl_value_t*)to));
-    return (jl_value_t*)jl_null;
+    return x;
 }
 
 JL_CALLABLE(jl_f_convert_to_ptr)
@@ -560,16 +550,12 @@ JL_CALLABLE(jl_f_convert_to_ptr)
         p = ((jl_sym_t*)v)->name;
     }
     else {
-        // TODO: string is leaked
-        jl_errorf("cannot convert %s to %s",
-                  jl_show_to_string(v), jl_show_to_string(args[0]));
+        jl_no_method_error(jl_convert_gf, args, 2);
     }
     return jl_box_pointer((jl_bits_type_t*)args[0], p);
 }
 
 // --- printing ---
-
-jl_function_t *jl_print_gf;
 
 JL_CALLABLE(jl_f_print_array_uint8)
 {
@@ -1144,15 +1130,13 @@ JL_CALLABLE(jl_f_union)
 
 // --- generic function primitives ---
 
-static void check_type_tuple(jl_tuple_t *t)
+static void check_type_tuple(jl_tuple_t *t, jl_sym_t *name, const char *ctx)
 {
     size_t i;
     for(i=0; i < t->length; i++) {
         jl_value_t *elt = jl_tupleref(t,i);
         if (!jl_is_type(elt) && !jl_is_typector(elt) && !jl_is_typevar(elt)) {
-            // TODO: string is leaked
-            char *argstr = jl_show_to_string(elt);
-            jl_errorf("invalid type %s in method definition", argstr);
+            jl_type_error_rt(name->name, ctx, (jl_value_t*)jl_type_type, elt);
         }
     }
 }
@@ -1171,7 +1155,7 @@ jl_value_t *jl_method_def(jl_sym_t *name, jl_value_t **bp,
     }
     assert(jl_is_function(f));
     assert(jl_is_tuple(argtypes));
-    check_type_tuple(argtypes);
+    check_type_tuple(argtypes, name, "method definition");
     jl_add_method((jl_function_t*)gf, argtypes, f);
     return gf;
 }
@@ -1185,7 +1169,8 @@ JL_CALLABLE(jl_f_methodexists)
     if (!jl_is_gf(args[0]))
         jl_error("method_exists: not a generic function");
     JL_TYPECHK(method_exists, tuple, args[1]);
-    check_type_tuple((jl_tuple_t*)args[1]);
+    check_type_tuple((jl_tuple_t*)args[1], jl_gf_name(args[0]),
+                     "method_exists");
     return jl_method_lookup_by_type(jl_gf_mtable(args[0]),
                                     (jl_tuple_t*)args[1]) ?
         jl_true : jl_false;
@@ -1208,7 +1193,7 @@ JL_CALLABLE(jl_f_invoke)
     if (!jl_is_gf(args[0]))
         jl_error("invoke: not a generic function");
     JL_TYPECHK(invoke, tuple, args[1]);
-    check_type_tuple((jl_tuple_t*)args[1]);
+    check_type_tuple((jl_tuple_t*)args[1], jl_gf_name(args[0]), "invoke");
     if (!jl_tuple_subtype(&args[2], nargs-2, &jl_tupleref(args[1],0),
                           ((jl_tuple_t*)args[1])->length, 1, 0))
         jl_error("invoke: argument type error");
@@ -1345,7 +1330,7 @@ void jl_init_primitives()
 
 void jl_init_builtins()
 {
-    jl_print_gf = jl_new_generic_function(jl_symbol("print"));
+    jl_function_t *jl_print_gf = jl_new_generic_function(jl_symbol("print"));
 
     add_builtin_method1(jl_print_gf,
                         (jl_type_t*)jl_array_uint8_type,
@@ -1380,6 +1365,9 @@ void jl_init_builtins()
     jl_add_method(jl_convert_gf,
                   jl_tuple2(jl_wrap_Type((jl_value_t*)jl_pointer_type), jl_any_type),
                   jl_new_closure(jl_f_convert_to_ptr, NULL));
+    jl_add_method(jl_convert_gf,
+                  jl_tuple2(jl_tuple_type, jl_tuple_type),
+                  jl_new_closure(jl_f_convert_tuple, NULL));
 
     add_builtin("print",    (jl_value_t*)jl_print_gf);
     add_builtin("show",     (jl_value_t*)jl_show_gf);
