@@ -156,15 +156,13 @@ void jl_serialize_tag_type(ios_t *s, jl_value_t *v)
         jl_serialize_value(s, ((jl_bits_type_t*)v)->super);
         write_int32(s, ((jl_bits_type_t*)v)->uid);
     }
-    else if (jl_is_tag_type(v)) {
+    else {
+        assert(jl_is_tag_type(v));
         writetag(s, jl_tag_kind);
         write_uint8(s, ((jl_tag_type_t*)v)->name->primary==v ? 1 : 0);
         jl_serialize_value(s, ((jl_tag_type_t*)v)->name);
         jl_serialize_value(s, ((jl_tag_type_t*)v)->parameters);
         jl_serialize_value(s, ((jl_tag_type_t*)v)->super);
-    }
-    else {
-        assert(0);
     }
 }
 
@@ -276,10 +274,6 @@ void jl_serialize_value_(ios_t *s, jl_value_t *v)
         jl_serialize_value(s, ((jl_tvar_t*)v)->ub);
         write_int8(s, ((jl_tvar_t*)v)->bound);
     }
-    else if (jl_is_union_type(v)) {
-        writetag(s, jl_union_kind);
-        jl_serialize_value(s, ((jl_uniontype_t*)v)->types);
-    }
     else if (jl_is_function(v)) {
         writetag(s, jl_func_kind);
         jl_serialize_value(s, v->type);
@@ -338,6 +332,9 @@ void jl_serialize_value_(ios_t *s, jl_value_t *v)
                 jl_value_t *fld = ((jl_value_t**)v)[i+1];
                 jl_serialize_value(s, fld);
             }
+        }
+        else {
+            assert(0);
         }
     }
 }
@@ -616,13 +613,6 @@ jl_value_t *jl_deserialize_value(ios_t *s)
         tv->ub = jl_deserialize_value(s);
         tv->bound = read_int8(s);
         return (jl_value_t*)tv;
-    }
-    else if (vtag == (jl_value_t*)jl_union_kind) {
-        jl_uniontype_t *ut =
-            (jl_uniontype_t*)newobj((jl_type_t*)jl_union_kind, 1);
-        ptrhash_put(&backref_table, (void*)(ptrint_t)pos, ut);
-        ut->types = (jl_tuple_t*)jl_deserialize_value(s);
-        return (jl_value_t*)ut;
     }
     else if (vtag == (jl_value_t*)jl_func_kind) {
         jl_value_t *ftype = jl_deserialize_value(s);
@@ -912,8 +902,7 @@ void jl_init_serializer()
     htable_new(&id_to_fptr, 0);
     htable_new(&backref_table, 100000);
 
-    void *tags[] = { jl_symbol_type,
-                     jl_tag_kind, jl_union_kind, jl_bits_kind, jl_struct_kind,
+    void *tags[] = { jl_symbol_type, jl_tag_kind, jl_bits_kind, jl_struct_kind,
                      jl_func_kind, jl_tuple_type, jl_array_type, jl_expr_type,
                      (void*)LongSymbol_tag, (void*)LongTuple_tag,
                      (void*)LongExpr_tag, jl_intrinsic_type, jl_methtable_type,
@@ -942,7 +931,7 @@ void jl_init_serializer()
                      jl_type_type, jl_bottom_type, jl_pointer_type,
                      jl_seq_type, jl_ntuple_type, jl_tensor_type,
                      jl_box_type, jl_typector_type, jl_undef_type, jl_any_func,
-                     jl_task_type,
+                     jl_task_type, jl_union_kind,
 
                      jl_symbol_type->name, jl_pointer_type->name,
                      jl_tag_kind->name, jl_union_kind->name, jl_bits_kind->name, jl_struct_kind->name,
@@ -992,6 +981,7 @@ void jl_init_serializer()
                       jl_f_instantiate_type, 
                       jl_f_convert, 
                       jl_f_convert_to_ptr, 
+                      jl_f_convert_tuple,
                       jl_f_print_array_uint8, 
                       jl_f_show_bool, 
                       jl_f_show_char, 

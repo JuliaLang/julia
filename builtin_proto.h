@@ -30,6 +30,7 @@ JL_CALLABLE(jl_f_arrayset);
 JL_CALLABLE(jl_f_instantiate_type);
 JL_CALLABLE(jl_f_convert);
 JL_CALLABLE(jl_f_convert_to_ptr);
+JL_CALLABLE(jl_f_convert_tuple);
 JL_CALLABLE(jl_f_print_array_uint8);
 JL_CALLABLE(jl_f_show_bool);
 JL_CALLABLE(jl_f_show_char);

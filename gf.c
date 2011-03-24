@@ -634,16 +634,23 @@ static void check_ambiguous(jl_methlist_t *ml, jl_tuple_t *type,
         char *n = fname->name;
         t1 = (jl_value_t*)without_typectors(type);
         t2 = (jl_value_t*)without_typectors(sig);
-        char *s1 = jl_show_to_string(t1);
-        char *s2 = jl_show_to_string(t2);
-        char *s3 = jl_show_to_string(isect);
-        ios_printf(ios_stdout,
-                   "Warning: new definition %s%s is ambiguous with %s%s. "
-                   "Make sure %s%s is also defined.\n",
-                   n, s1, n, s2, n, s3);
-        LLT_FREE(s1);
-        LLT_FREE(s2);
-        LLT_FREE(s3);
+        jl_value_t *errstream = jl_get_global(jl_system_module,
+                                              jl_symbol("stderr_stream"));
+        JL_TRY {
+            if (errstream)
+                jl_set_current_output_stream_obj(errstream);
+            ios_t *s = jl_current_output_stream();
+            ios_printf(s, "Warning: new definition %s", n);
+            jl_show(t1);
+            ios_printf(s, " is ambiguous with %s", n);
+            jl_show(t2);
+            ios_printf(s, ". Make sure %s", n);
+            jl_show(isect);
+            ios_printf(s, " is also defined.\n");
+        }
+        JL_CATCH {
+            jl_raise(jl_exception_in_transit);
+        }
     done_chk_amb:
         JL_GC_POP();
     }

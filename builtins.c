@@ -1128,7 +1128,7 @@ JL_CALLABLE(jl_f_union)
     return u;
 }
 
-// --- generic function primitives ---
+// --- method definition ---
 
 static void check_type_tuple(jl_tuple_t *t, jl_sym_t *name, const char *ctx)
 {
