@@ -72,7 +72,7 @@ julia-debug: $(DOBJS) $(LIBFILES)
 julia-release: $(OBJS) $(LIBFILES)
 	$(CXX) $(SHIPFLAGS) $(OBJS) -o $@ $(LIBS)
 
-sys.ji: sysimg.j dump.c
+sys.ji: sysimg.j start_image.j boot.j dump.c
 	./julia -b sysimg.j
 
 julia-debug-link:

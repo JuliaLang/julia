@@ -1,5 +1,6 @@
 # set up non-serializable state
 libc = dlopen("libc")
+libm = dlopen("libm")
 
 ccall(:jl_set_memio_func, Void, ())
 stdout_stream = make_stdout_stream()
@@ -10,6 +11,7 @@ stderr_stream = fdio(ccall(:jl_stderr, Int32, ()))
 # files not part of core image
 # mostly involving external libraries
 load("regex.j")
-load("math_libm.j")
-load("linalg_blas.j")
-load("linalg_lapack.j")
+
+setenv("GOTO_NUM_THREADS", "1")
+libBLAS = dlopen("libBLAS")
+libLAPACK = dlopen("libLAPACK")

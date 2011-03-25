@@ -37,12 +37,17 @@ load("latin1.j")
 load("utf8.j")
 load("show.j")
 
+load("env.j")
+
 # core math functions
 load("intfuncs.j")
 load("floatfuncs.j")
 load("math.j")
+load("math_libm.j")
 load("combinatorics.j")
 load("linalg.j")
+load("linalg_blas.j")
+load("linalg_lapack.j")
 
 # additional data types
 load("complex.j")
@@ -62,7 +67,6 @@ load("multi.j")
 load("darray.j")
 
 # misc
-load("env.j")
 load("libc.j")
 load("util.j")
 
