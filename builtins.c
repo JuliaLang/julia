@@ -565,6 +565,13 @@ JL_CALLABLE(jl_f_print_array_uint8)
     return (jl_value_t*)jl_null;
 }
 
+JL_CALLABLE(jl_f_print_symbol)
+{
+    ios_t *s = jl_current_output_stream();
+    ios_puts(((jl_sym_t*)args[0])->name, s);
+    return (jl_value_t*)jl_null;
+}
+
 // --- showing ---
 
 jl_function_t *jl_show_gf;
@@ -809,13 +816,6 @@ JL_CALLABLE(jl_f_show_pointer)
 #else
     ios_printf(s, " @0x%08x", (uptrint_t)ptr);
 #endif
-    return (jl_value_t*)jl_null;
-}
-
-JL_CALLABLE(jl_f_print_symbol)
-{
-    ios_t *s = jl_current_output_stream();
-    ios_puts(((jl_sym_t*)args[0])->name, s);
     return (jl_value_t*)jl_null;
 }
 

@@ -647,6 +647,11 @@ issues 1/24/11
   . some kind of atomic update, e.g. a[a:b,c:d]=X where once the write begins
     future reads from that region will wait for it to complete
   . isready()
+? try to remove @ from macro syntax
+- either add "do" to loops or use
+  @parallel for i=1:n
+    ...
+  end
 
 something about update operators, in-place operations in general
 
