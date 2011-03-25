@@ -328,7 +328,9 @@ void jl_load_file_expr(char *fname, jl_value_t *ast)
     }
 }
 
-void jl_load(const char *fname)
+// locate a file in the search path
+// fpath needs to be freed if != fname
+char *jl_find_file_in_path(const char *fname)
 {
     char *fpath = (char*)fname;
     int fid = open (fpath, O_RDONLY);
@@ -337,7 +339,7 @@ void jl_load(const char *fname)
         asprintf(&fpath, "%s.j", fname);
         fid = open (fpath, O_RDONLY);
     }
-    // try adding julia home and .j
+    // try adding julia home, then julia home and .j
     if (fid == -1 && julia_home && fname[0] != '/') {
         asprintf(&fpath, "%s/%s", julia_home, fname);
         fid = open (fpath, O_RDONLY);
@@ -347,14 +349,22 @@ void jl_load(const char *fname)
         }
     }
     if (fid == -1) {
+        if (fpath != fname) free(fpath);
         jl_errorf("could not open file %s", fpath);
     }
     close(fid);
 
-    jl_value_t *ast = jl_parse_file(fpath);
-    if (ast == (jl_value_t*)jl_null) 
-	jl_errorf("could not open file %s", fpath);
+    return fpath;
+}
 
+void jl_load(const char *fname)
+{
+    char *fpath = jl_find_file_in_path(fname);
+    jl_value_t *ast = jl_parse_file(fpath);
+    if (ast == (jl_value_t*)jl_null)  {
+        if (fpath != fname) free(fpath);
+	jl_errorf("could not open file %s", fpath);
+    }
     JL_GC_PUSH(&ast);
     jl_load_file_expr(fpath, ast);
     JL_GC_POP();

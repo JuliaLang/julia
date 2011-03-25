@@ -72,8 +72,16 @@ julia-debug: $(DOBJS) $(LIBFILES)
 julia-release: $(OBJS) $(LIBFILES)
 	$(CXX) $(SHIPFLAGS) $(OBJS) -o $@ $(LIBS)
 
-debug release: %: julia-% pcre_h.j
-	ln -f julia-$@ julia
+sys.ji: sysimg.j dump.c
+	./julia -b sysimg.j
+
+julia-debug-link:
+	ln -f julia-debug julia
+
+julia-release-link:
+	ln -f julia-release julia
+
+debug release: %: julia-% julia-%-link pcre_h.j sys.ji
 
 test: debug
 	./julia tests.j
@@ -98,6 +106,7 @@ clean:
 	rm -f *.bc
 	rm -f *.bc.inc
 	rm -f *.jp
+	rm -f *.ji
 	rm -f julia_flisp.boot
 	rm -f julia_flisp.boot.inc
 	rm -f $(EXENAME)

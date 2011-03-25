@@ -234,27 +234,6 @@ DLLEXPORT void jl_set_memio_func()
     jl_memio_func = (jl_function_t*)global("memio");
 }
 
-int jl_load_startup_file()
-{
-    JL_TRY {
-        jl_load("start.j");
-    }
-    JL_CATCH {
-        ios_printf(ios_stderr, "error during startup:\n");
-        jl_typeinf_func = NULL;
-        jl_show(jl_exception_in_transit);
-        ios_printf(ios_stdout, "\n");
-        return 1;
-    }
-#ifdef BOEHM_GC
-    GC_gcollect();
-#endif
-#ifdef JL_GC_MARKSWEEP
-    jl_gc_collect();
-#endif
-    return 0;
-}
-
 JL_CALLABLE(jl_weakref_ctor);
 
 void jl_get_builtin_hooks()

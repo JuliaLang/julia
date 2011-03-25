@@ -566,7 +566,6 @@ jl_value_t *jl_no_method_error(jl_function_t *f, jl_value_t **args, size_t na);
 
 // initialization functions
 void julia_init(char *imageFile);
-int jl_load_startup_file();
 void jl_init_types();
 void jl_init_box_caches();
 void jl_init_frontend();
@@ -619,6 +618,7 @@ DLLEXPORT void *jl_dlsym(void *handle, char *symbol);
 void jl_compile(jl_function_t *f);
 void jl_generate_fptr(jl_function_t *f);
 jl_value_t *jl_toplevel_eval(jl_value_t *v);
+char *jl_find_file_in_path(const char *fname);
 DLLEXPORT void jl_load(const char *fname);
 void jl_load_file_expr(char *fname, jl_value_t *ast);
 jl_value_t *jl_interpret_toplevel_thunk(jl_lambda_info_t *lam);

@@ -823,6 +823,7 @@ DLLEXPORT
 void jl_restore_system_image(char *fname)
 {
     ios_t f;
+    char *fpath = jl_find_file_in_path(fname);
     ios_file(&f, fname, 1, 0, 0, 0);
 #ifdef JL_GC_MARKSWEEP
     int en = jl_gc_is_enabled();
@@ -870,6 +871,7 @@ void jl_restore_system_image(char *fname)
     ios_mem(&ss, 0);
     ios_copyuntil(&ss, &f, '\0');
     ios_close(&f);
+    if (fpath != fname) free(fpath);
 
     jl_typeinf_func =
         (jl_function_t*)*(jl_get_bindingp(jl_system_module,

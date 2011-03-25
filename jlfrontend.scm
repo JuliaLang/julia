@@ -126,8 +126,8 @@
      (io.close infile))))
 
 (define (jl-parse-file s)
-  ;;(jl-parse-source s)
-  (let ((preparsed-fname (string (string.sub s 0 (- (length s) 2))
+  (jl-parse-source s)
+  #;(let ((preparsed-fname (string (string.sub s 0 (- (length s) 2))
 				 ".jp")))
     (let ((ppmt  (file-mod-time preparsed-fname))
 	  (srcmt (file-mod-time s)))

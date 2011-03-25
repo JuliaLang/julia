@@ -78,31 +78,34 @@ static int no_readline = 1;
 static int tab_width = 2;
 static char *post_boot = NULL;
 static int lisp_prompt = 0;
-static int load_start_j = 1;
 static int have_event_loop = 0;
 static char *program = NULL;
 
 int num_evals = 0;
 char **eval_exprs = NULL;
 int *print_exprs = NULL;
-char *imageFile = NULL;
+char *image_file = "sys.ji";
+char *load_file = NULL;
 
 static const char *usage = "julia [options] [program] [args...]\n";
 static const char *opts =
     " -q --quiet               Quiet startup without banner\n"
     " -R --no-readline         Disable readline functionality\n"
+    " -H --home=<dir>          Load files relative to <dir>\n"
+    " -T --tab=<size>          Set REPL tab width to <size>\n\n"
+
     " -e --eval=<expr>         Evaluate <expr> and don't print\n"
     " -E --print=<expr>        Evaluate and print <expr>\n"
     " -P --post-boot=<expr>    Evaluate <expr> right after boot\n"
-    " -H --home=<dir>          Load files relative to <dir>\n"
-    " -T --tab=<size>          Set REPL tab width to <size>\n"
-    " -L --lisp                Start with Lisp prompt not Julia\n"
-    " -b --bare                Bare REPL: don't load start.j\n"
+    " -L --load=file           Load <file> right after boot\n"
+    " -b --bare                Bare: don't load default startup files\n"
     " -J --sysimage=file       Start up with the given system image file\n"
+    "    --lisp                Start with Lisp prompt not Julia\n\n"
+
     " -h --help                Print this message\n";
 
 void parse_opts(int *argcp, char ***argvp) {
-    static char* shortopts = "qRe:E:P:H:T:bLhJ:";
+    static char* shortopts = "qRe:E:P:H:T:bL:hJ:";
     static struct option longopts[] = {
         { "quiet",       no_argument,       0, 'q' },
         { "no-readline", no_argument,       0, 'R' },
@@ -112,7 +115,8 @@ void parse_opts(int *argcp, char ***argvp) {
         { "home",        required_argument, 0, 'H' },
         { "tab",         required_argument, 0, 'T' },
         { "bare",        no_argument,       0, 'b' },
-        { "lisp",        no_argument,       0, 'L' },
+        { "lisp",        no_argument,       &lisp_prompt, 1 },
+        { "load",        required_argument, 0, 'L' },
         { "help",        no_argument,       0, 'h' },
         { "sysimage",    required_argument, 0, 'J' },
         { 0, 0, 0, 0 }
@@ -120,6 +124,8 @@ void parse_opts(int *argcp, char ***argvp) {
     int c;
     while ((c = getopt_long(*argcp,*argvp,shortopts,longopts,0)) != -1) {
         switch (c) {
+        case 0:
+            break;
         case 'q':
             print_banner = 0;
             break;
@@ -146,14 +152,13 @@ void parse_opts(int *argcp, char ***argvp) {
             tab_width = atoi(optarg);
             break;
         case 'b':
-            load_start_j = 0;
+            image_file = NULL;
             break;
         case 'L':
-            lisp_prompt = 1;
+            load_file = optarg;
             break;
         case 'J':
-            imageFile = optarg;
-            load_start_j = 0;
+            image_file = optarg;
             break;
         case 'h':
             printf("%s%s", usage, opts);
@@ -601,6 +606,28 @@ static int exec_program()
     return 0;
 }
 
+// load a file at startup before proceeding with REPL or program
+int jl_load_startup_file(char *fname)
+{
+    JL_TRY {
+        jl_load(fname);
+    }
+    JL_CATCH {
+        ios_printf(ios_stderr, "error during startup:\n");
+        //jl_typeinf_func = NULL;
+        jl_show(jl_exception_in_transit);
+        ios_printf(ios_stdout, "\n");
+        return 1;
+    }
+#ifdef BOEHM_GC
+    GC_gcollect();
+#endif
+#ifdef JL_GC_MARKSWEEP
+    jl_gc_collect();
+#endif
+    return 0;
+}
+
 static void exit_repl(int code)
 {
 #ifdef USE_READLINE
@@ -770,7 +797,7 @@ int main(int argc, char *argv[])
 #endif
     llt_init();
     parse_opts(&argc, &argv);
-    julia_init(imageFile);
+    julia_init(lisp_prompt ? NULL : image_file);
 #ifdef COPY_STACKS
     // initialize base context of root task
     jl_root_task->stackbase = (char*)&argc;
@@ -778,9 +805,10 @@ int main(int argc, char *argv[])
         jl_switch_stack(jl_current_task, jl_jmp_target);
     }
 #endif
-    if (post_boot) {
-        jl_value_t *ast = jl_parse_input_line(post_boot);
-        jl_toplevel_eval(ast);
+
+    if (lisp_prompt) {
+        jl_lisp_prompt();
+        return 0;
     }
 
     jl_array_t *args = jl_alloc_cell_1d(argc);
@@ -792,38 +820,20 @@ int main(int argc, char *argv[])
     //jl_set_const(jl_system_module, jl_symbol("JULIA_HOME"),
     //             jl_cstr_to_string(julia_home));
 
-#ifdef USE_READLINE
-    if (!no_readline) {
-        init_history();
-        rl_bind_key(' ', space_callback);
-        rl_bind_key('\t', tab_callback);
-        rl_bind_key('\r', return_callback);
-        rl_bind_key('\n', return_callback);
-        rl_bind_key('\v', line_kill_callback);
-        rl_bind_key('\b', backspace_callback);
-        rl_bind_key('\001', line_start_callback);
-        rl_bind_key('\005', line_end_callback);
-        rl_bind_key('\002', left_callback);
-        rl_bind_key('\006', right_callback);
-        rl_bind_keyseq("\e[A", up_callback);
-        rl_bind_keyseq("\e[B", down_callback);
-        rl_bind_keyseq("\e[D", left_callback);
-        rl_bind_keyseq("\e[C", right_callback);
-        rl_bind_keyseq("\\C-d", delete_callback);
-    }
-#endif
-
-    if (lisp_prompt) {
-        jl_lisp_prompt();
-        return 0;
-    }
-
     awful_sigfpe_hack();
 
-    if (load_start_j) {
-        if (jl_load_startup_file())
+    // post boot phase: do -P and -L actions
+    if (post_boot) {
+        jl_value_t *ast = jl_parse_input_line(post_boot);
+        jl_toplevel_eval(ast);
+    }
+
+    if (load_file) {
+        if (jl_load_startup_file(load_file))
             return 1;
     }
+
+    // handle -e and -E
     if (num_evals) {
         int i, iserr=0;
         jl_value_t *ast=NULL, *value=NULL;
@@ -857,9 +867,32 @@ int main(int argc, char *argv[])
         JL_GC_POP();
         return 0;
     }
+
+    // run program if specified, otherwise enter REPL
     if (program) {
         return exec_program();
     }
+
+#ifdef USE_READLINE
+    if (!no_readline) {
+        init_history();
+        rl_bind_key(' ', space_callback);
+        rl_bind_key('\t', tab_callback);
+        rl_bind_key('\r', return_callback);
+        rl_bind_key('\n', return_callback);
+        rl_bind_key('\v', line_kill_callback);
+        rl_bind_key('\b', backspace_callback);
+        rl_bind_key('\001', line_start_callback);
+        rl_bind_key('\005', line_end_callback);
+        rl_bind_key('\002', left_callback);
+        rl_bind_key('\006', right_callback);
+        rl_bind_keyseq("\e[A", up_callback);
+        rl_bind_keyseq("\e[B", down_callback);
+        rl_bind_keyseq("\e[D", left_callback);
+        rl_bind_keyseq("\e[C", right_callback);
+        rl_bind_keyseq("\\C-d", delete_callback);
+    }
+#endif
 
     have_color = detect_color();
     char *banner = have_color ? jl_banner_color : jl_banner_plain;

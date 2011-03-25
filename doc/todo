@@ -652,6 +652,12 @@ issues 1/24/11
   @parallel for i=1:n
     ...
   end
+- clean up some type system stuff:
+  . remove tvar->bound, methlist->has_tvars, find_tvars, etc. instead use
+    a TypeConstructor as the signature of functions with {}
+  . type_match only uses tvars from a given constraint environment, i.e.
+    the parameters of the TypeConstructor
+  . make cache_1arg an array
 
 something about update operators, in-place operations in general
 
