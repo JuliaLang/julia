@@ -35,7 +35,11 @@ type DArray{T,N,distdim} <: Tensor{T,N}
         da = new(dims,
                  (), #Array(T, locsz),
                  pmap, dist, distdim, lp, go)
-        da.locl = remote_call(LocalProcess(), initializer, T, locsz, da)
+        if is(initializer,RemoteRef)
+            da.locl = RemoteRef()
+        else
+            da.locl = remote_call(LocalProcess(), initializer, T, locsz, da)
+        end
         da
     end
 
@@ -44,6 +48,8 @@ type DArray{T,N,distdim} <: Tensor{T,N}
         GlobalObject(g->DArray(g, T, distdim, dims, initializer))
         #go.local_identity
     end
+
+    DArray(T, distdim, dims) = DArray(T, distdim, dims, RemoteRef)
 end
 
 size(d::DArray) = d.dims
@@ -51,8 +57,8 @@ size(d::DArray) = d.dims
 serialize(s, d::DArray) = serialize(s, d.go)
 
 # when we actually need the data, wait for it
-localdata(r::RemoteRef) = localdata(fetch(r))
-function localdata{T,N}(d::DArray{T,N})
+localize(r::RemoteRef) = localize(fetch(r))
+function localize{T,N}(d::DArray{T,N})
     if isa(d.locl, RemoteRef)
         d.locl = fetch(d.locl)
     end
@@ -93,7 +99,7 @@ clone(d::DArray, T::Type, dims::Dims) =
     darray((T,lsz,da)->Array(T,lsz), T, dims,
            d.distdim>length(dims) ? maxdim(dims) : d.distdim)
 
-copy{T}(d::DArray{T}) = darray((T,lsz,da)->localdata(d), T, size(d), d.distdim)
+copy{T}(d::DArray{T}) = darray((T,lsz,da)->localize(d), T, size(d), d.distdim)
 
 dzeros(args...) = darray((T,d,da)->zeros(T,d), args...)
 dones(args...)  = darray((T,d,da)->ones(T,d), args...)
@@ -106,7 +112,8 @@ distribute(a::Array) = distribute(a, maxdim(size(a)))
 function distribute{T}(a::Array{T}, distdim)
     owner = myid()
     # create a remotely-visible reference to the array
-    rr = wait(remote_call(LocalProcess(), identity, a))
+    rr = RemoteRef()
+    put(rr, a)
     darray((T,lsz,da)->get_my_piece(T,lsz,da,distdim,owner,rr),
            T, size(a), distdim)
 end
@@ -127,9 +134,9 @@ end
 
 ## Transpose and redist ##
 
-transpose{T}(a::DArray{T,2}) = darray((T,d,da)->transpose(localdata(a)),
+transpose{T}(a::DArray{T,2}) = darray((T,d,da)->transpose(localize(a)),
                                       T, (size(a,2),size(a,1)), (3-a.distdim))
-ctranspose{T}(a::DArray{T,2}) = darray((T,d,da)->ctranspose(localdata(a)),
+ctranspose{T}(a::DArray{T,2}) = darray((T,d,da)->ctranspose(localize(a)),
                                        T, (size(a,2),size(a,1)), (3-a.distdim))
 
 ## Indexing ##
@@ -148,7 +155,7 @@ function ref{T}(d::DArray{T,1}, i::Index)
     p = locate(d, i)
     if p==d.localpiece
         offs = d.dist[p]-1
-        return localdata(d)[i-offs]
+        return localize(d)[i-offs]
     end
     return remote_call_fetch(d.pmap[p], ref, d, i)::T
 end
@@ -169,7 +176,7 @@ function assign{T}(d::DArray{T,1}, v, i::Index)
     p = locate(d, i)
     if p==d.localpiece
         offs = d.dist[p]-1
-        localdata(d)[i-offs] = v
+        localize(d)[i-offs] = v
     else
         remote_do(d.pmap[p], assign, d, v, i)
     end
@@ -185,7 +192,7 @@ function ref{T}(d::DArray{T}, i::Index)
             sub = ntuple(length(sub),
                          ind->(ind==d.distdim ? sub[ind]-offs : sub[ind]))
         end
-        return localdata(d)[sub...]
+        return localize(d)[sub...]
     end
     return remote_call_fetch(d.pmap[p], ref, d, i)::T
 end
@@ -202,7 +209,7 @@ function assign(d::DArray, v, i::Index)
             sub = ntuple(length(sub),
                          ind->(ind==d.distdim ? sub[ind]-offs : sub[ind]))
         end
-        localdata(d)[sub...] = v
+        localize(d)[sub...] = v
     else
         remote_do(d.pmap[p], assign, d, v, i)
     end
@@ -216,7 +223,7 @@ function convert{S,T,N}(::Type{Array{S,N}}, d::DArray{T,N})
     idxs = { 1:size(a,i) | i=1:N }
     for p = 1:length(d.dist)-1
         idxs[d.distdim] = d.dist[p]:(d.dist[p+1]-1)
-        a[idxs...] = remote_call_fetch(d.pmap[p], localdata, d)
+        a[idxs...] = remote_call_fetch(d.pmap[p], localize, d)
     end
     a
 end
@@ -228,7 +235,7 @@ function changedist{T}(A::DArray{T}, to_dist)
 end
 
 function node_ref(A::DArray, to_dist, range)
-    Al = localdata(A)
+    Al = localize(A)
     locdims = size(Al)
     slice = { i == to_dist ? range : (1:locdims[i]) | i=1:ndims(A) }
     Al[slice...]
@@ -261,9 +268,9 @@ function node_multiply{T}(A::Tensor{T}, B, sz)
     locl = Array(T, sz)
     if !isempty(locl)
         cols = B.dist
-        Adata = localdata(A)
+        Adata = localize(A)
         for p=1:length(A.dist)-1
-            r = remote_call_fetch(p, localdata, B)
+            r = remote_call_fetch(p, localize, B)
             locl[:, cols[p]:cols[p+1]-1] = Adata * r
         end
     end

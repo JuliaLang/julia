@@ -398,23 +398,38 @@
 		   (let loop ((binds binds)
 			      (args  ())
 			      (inits ())
-			      (locls ()))
+			      (locls ())
+			      (stmts ()))
 		     (if (null? binds)
 			 `(call (-> (tuple ,@args)
 				    (block (local (vars ,@locls))
+					   ,@stmts
 					   ,ex))
 				,@inits)
 			 (cond
 			  ((symbol? (car binds))
+			   ;; just symbol -> add local
 			   (loop (cdr binds) args inits
-				 (cons (car binds) locls)))
+				 (cons (car binds) locls)
+				 stmts))
 			  ((and (length= (car binds) 3)
-				(eq? (caar binds) '=)
-				(symbol? (cadar binds)))
-			   (loop (cdr binds)
-				 (cons (cadar binds) args)
-				 (cons (caddar binds) inits)
-				 locls))
+				(eq? (caar binds) '=))
+			   ;; some kind of assignment
+			   (cond
+			    ((symbol? (cadar binds))
+			     ;; a=b -> add argument
+			     (loop (cdr binds)
+				   (cons (cadar binds) args)
+				   (cons (caddar binds) inits)
+				   locls stmts))
+			    ((and (pair? (cadar binds))
+				  (eq? (caadar binds) 'call))
+			     ;; f()=c
+			     (let ((asgn (cadr (julia-expand0 (car binds)))))
+			       (loop (cdr binds) args inits
+				     (cons (cadr asgn) locls)
+				     (cons asgn stmts))))
+			    (else (error "invalid let syntax"))))
 			  (else (error "invalid let syntax"))))))
 
    ;; type definition

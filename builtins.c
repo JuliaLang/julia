@@ -1317,7 +1317,7 @@ void jl_init_primitives()
     add_builtin("Type", (jl_value_t*)jl_type_type);
     add_builtin("Symbol", (jl_value_t*)jl_sym_type);
     add_builtin("...", (jl_value_t*)jl_seq_type);
-    add_builtin("Function", (jl_value_t*)jl_functype_ctor);
+    add_builtin("Function", (jl_value_t*)jl_function_type);
     add_builtin("Tensor", (jl_value_t*)jl_tensor_type);
     add_builtin("Array", (jl_value_t*)jl_array_type);
 

@@ -44,8 +44,10 @@ end
 # todo:
 # * add readline to event loop
 # - GOs/darrays on a subset of nodes
+# - more indexing
+# - take() to empty a Ref (full/empty variables)
 # - dynamically adding nodes (then always start with 1 and just grow/shrink)
-# - method_missing for waiting (ref/assign/localdata seems to cover a lot)
+# ? method_missing for waiting (ref/assign/localdata seems to cover a lot)
 # - more dynamic scheduling
 # * call&wait and call&fetch combined messages
 # * aggregate GC messages
@@ -209,6 +211,17 @@ type RemoteRef
     function WeakRemoteRef(w, wh, id)
         return new(w, wh, id)
     end
+
+    REQ_ID::Int32 = 0
+    function RemoteRef(pid::Int)
+        rr = RemoteRef(pid, myid(), REQ_ID)
+        REQ_ID += 1
+        rr
+    end
+
+    RemoteRef(w::LocalProcess) = RemoteRef(myid())
+    RemoteRef(w::Worker) = RemoteRef(w.id)
+    RemoteRef() = RemoteRef(myid())
 end
 
 hash(r::RemoteRef) = hash(r.whence)+3*hash(r.id)
@@ -216,16 +229,36 @@ isequal(r::RemoteRef, s::RemoteRef) = (r.whence==s.whence && r.id==s.id)
 
 rr2id(r::RemoteRef) = (r.whence, r.id)
 
-function lookup_ref(id)
-    global PGRP
-    wi = get(PGRP.refs, id, ())
-    if is(wi, ())
-        # first we've heard of this ref
-        wi = WorkItem(+)  # this WorkItem is just a place holder
-        PGRP.refs[id] = wi
-        add(wi.clientset, id[1])
+let bottom_func() = assert(false)
+    global lookup_ref
+    function lookup_ref(id)
+        global PGRP
+        wi = get(PGRP.refs, id, ())
+        if is(wi, ())
+            # first we've heard of this ref
+            wi = WorkItem(bottom_func)
+            # this WorkItem is just for storing the result value
+            PGRP.refs[id] = wi
+            add(wi.clientset, id[1])
+        end
+        wi
     end
-    wi
+    # is a ref uninitialized? (for locally-owned refs only)
+    function ref_uninitialized(id)
+        wi = lookup_ref(id)
+        !wi.done && is(wi.thunk,bottom_func)
+    end
+    ref_uninitialized(r::RemoteRef) = (assert(r.where==myid());
+                                       ref_uninitialized(rr2id(r)))
+end
+
+function isready(rr::RemoteRef)
+    rid = rr2id(rr)
+    if rr.where == myid()
+        lookup_ref(rid).done
+    else
+        remote_call_fetch(rr.where, id->lookup_ref(id).done, rid)
+    end
 end
 
 function del_client(id, client)
@@ -313,19 +346,6 @@ function deserialize(s, t::Type{RemoteRef})
     end
 end
 
-REQ_ID = 0
-
-function assign_rr(pid::Int)
-    global REQ_ID
-    rr = RemoteRef(pid, myid(), REQ_ID)
-    REQ_ID += 1
-    rr
-end
-
-assign_rr(w::LocalProcess) = assign_rr(myid())
-assign_rr(w::Worker) = assign_rr(w.id)
-remote_ref(x) = assign_rr(x)
-
 schedule_call(rid, f_thk, args_thk) =
     schedule_call(rid, ()->apply(force(f_thk),force(args_thk)))
 
@@ -339,13 +359,13 @@ function schedule_call(rid, thunk)
 end
 
 function remote_call(w::LocalProcess, f, args...)
-    rr = assign_rr(w)
+    rr = RemoteRef(w)
     schedule_call(rr2id(rr), ()->f(args...))
     rr
 end
 
 function remote_call(w::Worker, f, args...)
-    rr = assign_rr(w)
+    rr = RemoteRef(w)
     send_msg(w, :call, rr2id(rr), f, args)
     rr
 end
@@ -356,7 +376,7 @@ remote_call(id::Int, f, args...) = remote_call(worker_from_id(id), f, args...)
 remote_call_fetch(w::LocalProcess, f, args...) = f(args...)
 
 function remote_call_fetch(w::Worker, f, args...)
-    rr = assign_rr(w)
+    rr = RemoteRef(w)
     oid = rr2id(rr)
     send_msg(w, :call_fetch, oid, f, args)
     yieldto(Scheduler, WaitFor(:fetch, oid))
@@ -369,7 +389,7 @@ remote_call_fetch(id::Int, f, args...) =
 remote_call_wait(w::LocalProcess, f, args...) = wait(remote_call(w,f,args...))
 
 function remote_call_wait(w::Worker, f, args...)
-    rr = assign_rr(w)
+    rr = RemoteRef(w)
     oid = rr2id(rr)
     send_msg(w, :call_wait, oid, f, args)
     yieldto(Scheduler, WaitFor(:wait, oid))
@@ -423,7 +443,7 @@ fetch(r::RemoteRef) = sync_msg(:fetch, r)
 fetch(x) = x
 
 # writing to an uninitialized ref
-function put_ref(id, val)
+function put_ref(rid, val)
     wi = lookup_ref(rid)
     if wi.done
         error("invalid put()")
@@ -913,7 +933,7 @@ type GlobalObject
         r = Array(RemoteRef, PGRP.np)
         for i=1:length(r)
             # create a set of refs to be initialized by GlobalObject above
-            r[i] = remote_ref(i)
+            r[i] = RemoteRef(i)
         end
         rids = { rr2id(r[i]) | i=1:length(r) }
         for i=1:length(r)

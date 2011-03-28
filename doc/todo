@@ -627,11 +627,11 @@ issues 1/24/11
   Array(Int32, (2,2), 0, 1, 2, 3)
   Array{Int32,1}(5,    0, 1, 2, 3, 4)
   Array{Int32,2}(2,2,  0, 1, 2, 3)
-- modules
 - keyword args
   f(x; a=1, b=0)
   f(x; kws...)
-- saving system image
+- modules
+* saving system image
 - parallel
   . make sure process group setup works
   * function reflection and serialization
@@ -658,6 +658,7 @@ issues 1/24/11
   . type_match only uses tvars from a given constraint environment, i.e.
     the parameters of the TypeConstructor
   . make cache_1arg an array
+- finish getting rid of jl_show_to_string
 
 something about update operators, in-place operations in general
 

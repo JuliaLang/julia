@@ -1965,11 +1965,10 @@ void jl_init_types()
                            jl_tuple(2, jl_tuple_type, jl_any_type));
 
     tv = jl_typevars(2, "A", "B");
-    jl_functype_ctor =
+    jl_function_type =
         jl_new_type_ctor(tv,
                          (jl_type_t*)jl_new_functype((jl_type_t*)jl_tupleref(tv,0),
                                                      (jl_type_t*)jl_tupleref(tv,1)));
-    jl_function_type = jl_functype_ctor;
 
     jl_intrinsic_type = jl_new_bitstype((jl_value_t*)jl_symbol("IntrinsicFunction"),
                                         jl_any_type, jl_null, 32);
