@@ -492,6 +492,7 @@ function shell_parse(str::String, interp::Bool)
                 update_arg(str[i:j-1]); i = k
             elseif c == '\\'
                 if in_double_quotes
+                    # TODO: handle \$ in double quotes
                     if done(str,k)
                         error("unterminated double quote")
                     end
@@ -548,6 +549,7 @@ function print_shell_word(word::String)
     has_backsl = false
     has_single = false
     has_double = false
+    has_dollar = false
     for c = word
         if iswspace(c)
             has_spaces = true
@@ -557,16 +559,18 @@ function print_shell_word(word::String)
             has_single = true
         elseif c == '"'
             has_double = true
+        elseif c == '$'
+            has_dollar = true
         end
     end
-    if !(has_spaces || has_backsl || has_single || has_double)
+    if !(has_spaces || has_backsl || has_single || has_double || has_dollar)
         print(word)
     elseif !has_single
         print('\'', word, '\'')
     else
         print('"')
         for c = word
-            if c == '"'
+            if c == '"' || c == '$'
                 print('\\')
             end
             print(c)
@@ -652,6 +656,18 @@ function split(s::String, delims, include_empty)
 end
 
 split(s::String, delims) = split(s, delims, true)
+split(s::String, c::Char) = split(s, set(c))
+
+function print_joined(delim, strings)
+    for i = 1:length(strings)
+        print(strings[i])
+        if (i < length(strings))
+            print(delim)
+        end
+    end
+end
+
+join(delim, strings) = print_to_string(print_joined, delim, strings)
 
 ## string to integer functions ##
 
@@ -662,10 +678,10 @@ function parse_int{T<:Int}(::Type{T}, s::String, base::Int)
         d = '0' <= c <= '9' ? c-'0' :
             'A' <= c <= 'Z' ? c-'A'+10 :
             'a' <= c <= 'z' ? c-'a'+10 :
-            error("non alphanumeric digit")
+            error(c, " is non an alphanumeric digit")
         d = convert(T,d)
         if base <= d
-            error("digit not valid in base")
+            error(c, " is not a valid digit in base ", base)
         end
         n = n*base + d
     end

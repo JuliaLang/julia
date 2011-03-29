@@ -152,3 +152,4 @@ ${T<:Int}(x::T, y::T) = no_op_err("\$", T)
 ## miscellaneous ##
 
 copy(x::Any) = x
+each(f::Function, itr) = for x = itr; f(x); end
