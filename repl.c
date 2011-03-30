@@ -790,7 +790,7 @@ extern jmp_buf * volatile jl_jmp_target;
 
 int main(int argc, char *argv[])
 {
-    double julia_launch_tic = clock_now();
+    //double julia_launch_tic = clock_now();
 
 #ifdef BOEHM_GC
     GC_init();
@@ -904,8 +904,10 @@ int main(int argc, char *argv[])
 
     if (print_banner) {
         ios_printf(ios_stdout, "%s", banner);
+        /*
 	ios_printf(ios_stdout, "Startup time: %.2f seconds\n\n", 
 		   (clock_now()-julia_launch_tic));
+        */
     }
 
     jl_function_t *start_client =

@@ -71,9 +71,14 @@ type Worker
     id::Int32
     del_msgs::Dequeue
 
-    Worker() = Worker("localhost", start_local_worker())
-
-    Worker(host, port) = Worker(host, port, connect_to_worker(host,port)...)
+    function Worker(host, port)
+        fd = ccall(:connect_to_host, Int32,
+                   (Ptr{Uint8}, Int16), host, port)
+        if fd == -1
+            error("could not connect to $hostname:$port, errno=$(errno())\n")
+        end
+        Worker(host, port, fd, fdio(fd))
+    end
 
     Worker(host, port, fd, sock) = new(host, port, fd, sock, memio(), 0, deq())
 end
@@ -100,14 +105,17 @@ type ProcessGroup
 
     function ProcessGroup(np::Int)
         # n local workers
-        w = { Worker() | i=1:np }
+        w = { start_local_worker() | i=1:np }
         ProcessGroup(w, np)
     end
 
     function ProcessGroup(machines)
+        np = length(machines)
+        if np > 0 && isa(machines[1],Worker)
+            return ProcessGroup(machines, np)
+        end
         # workers on remote machines
         w = start_remote_workers(machines)
-        np = length(machines)
         ProcessGroup(w, np)
     end
 
@@ -734,6 +742,7 @@ end
 
 # the entry point for julia worker processes. does not return.
 # argument is descriptor to write listening port # to.
+start_worker() = start_worker(1)
 function start_worker(wrfd)
     ccall(:jl_start_io_thread, Void, ())
     port = [int16(9009)]
@@ -782,14 +791,7 @@ function worker_tunnel(host, port)
 end
 
 worker_ssh_command(host) =
-    `ssh -n $host "bash -l -c \"cd ~/src/julia && ./julia -e start_worker\(1\)\""`
-
-function start_remote_worker(host)
-    proc = worker_ssh_command(host)
-    out = cmd_stdout_stream(proc)
-    spawn(proc)
-    Worker(host, read(out, Int16))
-end
+    `ssh -n $host "bash -l -c \"cd ~/src/julia && ./julia -e start_worker\(\)\""`
 
 function start_remote_workers(machines)
     cmds = map(worker_ssh_command, machines)
@@ -807,7 +809,7 @@ function start_sge_workers(n)
     sgedir = "$home/SGE"
     run(`mkdir -p $sgedir`)
     qsub_cmd = `qsub -terse -e $sgedir -o $sgedir -t 1:$n`
-    `echo $home/julia -e start_worker\\(1\\)` | qsub_cmd
+    `echo $home/julia -e start_worker\\(\\)` | qsub_cmd
     out = cmd_stdout_stream(qsub_cmd)
     run(qsub_cmd)
     id = split(readline(out),set('.'))[1]
@@ -858,16 +860,7 @@ function start_local_worker()
     ccall(dlsym(libc,:close), Int32, (Int32,), wrfd)
     #print("started worker on port ", port, "\n")
     sleep(0.1)
-    port
-end
-
-function connect_to_worker(hostname, port)
-    fd = ccall(:connect_to_host, Int32,
-               (Ptr{Uint8}, Int16), hostname, port)
-    if fd == -1
-        error("could not connect to $hostname:$port, errno=$(errno())\n")
-    end
-    (fd, fdio(fd))
+    Worker("localhost", port)
 end
 
 ## global objects and collective operations ##
@@ -998,6 +991,16 @@ function sync_end()
     _SPAWNS = _SPAWNS[2]
     for r = refs
         wait(r)
+    end
+end
+
+macro sync(block)
+    v = gensym()
+    quote
+        sync_begin()
+        $v = $block
+        sync_end()
+        $v
     end
 end
 
