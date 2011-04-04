@@ -445,8 +445,8 @@ isempty(a::Tensor) = (numel(a) == 0)
 
 ## map over arrays ##
 
-map(f, v::Vector) = [ f(v[i]) | i=1:length(v) ]
-map(f, M::Matrix) = [ f(M[i,j]) | i=1:size(M,1), j=1:size(M,2) ]
+#map(f, v::Vector) = [ f(v[i]) | i=1:length(v) ]
+#map(f, M::Matrix) = [ f(M[i,j]) | i=1:size(M,1), j=1:size(M,2) ]
 
 function map(f, A::Tensor)
     F = clone(A, size(A))

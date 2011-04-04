@@ -32,6 +32,7 @@ end
 abs(x::Float64) = ccall(dlsym(libm, :fabs),  Float64, (Float64,), x)
 abs(x::Float32) = ccall(dlsym(libm, :fabsf), Float32, (Float32,), x)
 @vectorize abs
+@vectorize sqrt
 
 for f = {:atan2, :pow, :fmod, :copysign, :hypot, :fmin, :fmax, :fdim}
     @eval begin
