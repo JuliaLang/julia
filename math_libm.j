@@ -77,6 +77,8 @@ end
 
 ipart(x) = trunc(x)
 fpart(x) = x - trunc(x)
+@vectorize ipart
+@vectorize fpart
 
 abs(x::Float64) = ccall(dlsym(libm, :fabs),  Float64, (Float64,), x)
 abs(x::Float32) = ccall(dlsym(libm, :fabsf), Float32, (Float32,), x)
