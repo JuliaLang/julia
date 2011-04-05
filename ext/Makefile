@@ -9,6 +9,9 @@ readline:
 pcre:
 	curl -O ftp://ftp.csx.cam.ac.uk/pub/software/programming/pcre/pcre-8.10.tar.bz2 && tar jxvf pcre-8.10.tar.bz2 && cd pcre-8.10 && ./configure --enable-utf8 --enable-unicode-properties && sudo make install
 
+fdlibm:
+	cd fdlibm-5.3 && tar zxvf fdlibm.tar.gz && cd fdlibm && sh configure && make
+
 clean:
-	rm -fr readline-6.1 llvm-2.7 pcre-8.10
+	rm -fr readline-6.1 llvm-2.7 pcre-8.10 fdlibm-5.3/fdlibm
 
