@@ -601,7 +601,10 @@ function parse(s::String, pos, greedy)
     ex, pos = ccall(:jl_parse_string, Any,
                     (Ptr{Uint8},Int32,Int32),
                     cstring(s), int32(pos)-1, greedy?1:0)
-    if ex == (); error(ParseError); end
+    if isa(ex,Expr) && is(ex.head,:error)
+        throw(ParseError(ex.args[1]))
+    end
+    if ex == (); throw(ParseError("end of input")); end
     ex, pos+1
 end
 
