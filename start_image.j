@@ -15,3 +15,5 @@ load("regex.j")
 setenv("GOTO_NUM_THREADS", "1")
 libBLAS = dlopen("libBLAS")
 libLAPACK = dlopen("libLAPACK")
+
+load("custom.j")

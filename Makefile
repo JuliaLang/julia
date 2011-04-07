@@ -81,7 +81,10 @@ julia-debug-link:
 julia-release-link:
 	ln -f julia-release julia
 
-debug release: %: julia-% julia-%-link pcre_h.j sys.ji
+custom.j:
+	if [ ! -f custom.j ]; then touch custom.j; fi
+
+debug release: %: julia-% julia-%-link pcre_h.j sys.ji custom.j
 
 test: debug
 	./julia tests.j

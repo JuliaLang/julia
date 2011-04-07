@@ -86,18 +86,19 @@
 
 ; get the position of the last open block
 (defun last-open-block-pos (min)
-  (do ((count 0
-	      (cond ((at-keyword julia-block-start-keywords)
-		     (+ count 1))
-		    ((and (equal (current-word) "end")
-			  (not (in-comment)))
-		     (- count 1))
-		    (t count))))
-      ((or (> count 0) (<= (point) min))
-       (if (> count 0)
-	   (point)
-	 nil))
-    (backward-word 1)))
+  (let ((count 0))
+    (while (not (or (> count 0) (<= (point) min)))
+      (backward-word 1)
+      (setq count
+	    (cond ((at-keyword julia-block-start-keywords)
+		   (+ count 1))
+		  ((and (equal (current-word) "end")
+			(not (in-comment)))
+		   (- count 1))
+		  (t count))))
+    (if (> count 0)
+	(point)
+      nil)))
 
 ; get indent for last open block
 (defun last-open-block (min)
