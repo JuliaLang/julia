@@ -595,7 +595,8 @@ jl_bits_type_t *jl_new_bitstype(jl_value_t *name, jl_tag_type_t *super,
         else if (!strcmp(((jl_sym_t*)name)->name, "Bool"))
             t = jl_bool_type;
     }
-    if (t == NULL)
+    int makenew = (t==NULL);
+    if (makenew)
         t = (jl_bits_type_t*)newobj((jl_type_t*)jl_bits_kind, BITS_TYPE_NW);
     t->name = tn;
     t->super = super;
@@ -608,7 +609,7 @@ jl_bits_type_t *jl_new_bitstype(jl_value_t *name, jl_tag_type_t *super,
     t->nbits = nbits;
     if (jl_has_typevars((jl_value_t*)parameters))
         t->uid = 0;
-    else
+    else if (makenew)
         t->uid = jl_assign_type_uid();
     t->fptr = NULL;
     t->env = NULL;

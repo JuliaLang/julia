@@ -966,9 +966,9 @@ static void cache_type_(jl_value_t **key, size_t n, jl_type_t *type)
         return;
     // assign uid
     if (jl_is_struct_type(type) && ((jl_struct_type_t*)type)->uid==0)
-        ((jl_struct_type_t*)type)->uid = t_uid_ctr++;
+        ((jl_struct_type_t*)type)->uid = jl_assign_type_uid();
     else if (jl_is_bits_type(type) && ((jl_bits_type_t*)type)->uid==0)
-        ((jl_bits_type_t*)type)->uid = t_uid_ctr++;
+        ((jl_bits_type_t*)type)->uid = jl_assign_type_uid();
     typekey_stack_t *tc =
         (typekey_stack_t*)((jl_tag_type_t*)type)->name->cache;
     typekey_stack_t *tk = (typekey_stack_t*)allocb(sizeof(typekey_stack_t));
@@ -1756,7 +1756,7 @@ void jl_init_types()
     jl_struct_kind->linfo = NULL;
     jl_struct_kind->ctor_factory = NULL;
     jl_struct_kind->instance = NULL;
-    jl_struct_kind->uid = t_uid_ctr++;
+    jl_struct_kind->uid = jl_assign_type_uid();
 
     jl_tag_kind->name = jl_new_typename(jl_symbol("TagKind"));
     jl_tag_kind->name->primary = (jl_value_t*)jl_tag_kind;
@@ -1771,7 +1771,7 @@ void jl_init_types()
     jl_tag_kind->linfo = NULL;
     jl_tag_kind->ctor_factory = NULL;
     jl_tag_kind->instance = NULL;
-    jl_tag_kind->uid = t_uid_ctr++;
+    jl_tag_kind->uid = jl_assign_type_uid();
 
     jl_func_kind->name = jl_new_typename(jl_symbol("FuncKind"));
     jl_func_kind->name->primary = (jl_value_t*)jl_func_kind;
@@ -1784,7 +1784,7 @@ void jl_init_types()
     jl_func_kind->linfo = NULL;
     jl_func_kind->ctor_factory = NULL;
     jl_func_kind->instance = NULL;
-    jl_func_kind->uid = t_uid_ctr++;
+    jl_func_kind->uid = jl_assign_type_uid();
 
     jl_typename_type->name = jl_new_typename(jl_symbol("TypeName"));
     jl_typename_type->name->primary = (jl_value_t*)jl_typename_type;
@@ -1792,7 +1792,7 @@ void jl_init_types()
     jl_typename_type->parameters = jl_null;
     jl_typename_type->names = jl_tuple(1, jl_symbol("name"));
     jl_typename_type->types = jl_tuple(1, jl_sym_type);
-    jl_typename_type->uid = t_uid_ctr++;
+    jl_typename_type->uid = jl_assign_type_uid();
     jl_typename_type->fptr = jl_f_no_function;
     jl_typename_type->env = NULL;
     jl_typename_type->linfo = NULL;
@@ -1810,7 +1810,7 @@ void jl_init_types()
     jl_sym_type->linfo = NULL;
     jl_sym_type->ctor_factory = NULL;
     jl_sym_type->instance = NULL;
-    jl_sym_type->uid = t_uid_ctr++;
+    jl_sym_type->uid = jl_assign_type_uid();
 
     jl_any_type->name = jl_new_typename(jl_symbol("Any"));
     jl_any_type->name->primary = (jl_value_t*)jl_any_type;

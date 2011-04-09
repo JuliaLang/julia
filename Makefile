@@ -11,17 +11,18 @@ FLISP = $(FLISPDIR)/libflisp.a
 
 JULIAHOME = $(shell pwd)
 ROOT = $(JULIAHOME)/ext/root
+LLVMROOT = $(ROOT)
 
 NBITS = $(shell (test -e nbits || $(CC) nbits.c -o nbits) && ./nbits)
 include ./Make.inc.$(shell uname)
 
 FLAGS = -falign-functions -Wall -Wno-strict-aliasing \
 	-I$(FLISPDIR) -I$(LLTDIR) $(HFILEDIRS:%=-I%) $(LIBDIRS:%=-L%) \
-	$(CONFIG) -I$(shell $(ROOT)/bin/llvm-config --includedir) \
+	$(CONFIG) -I$(shell $(LLVMROOT)/bin/llvm-config --includedir) \
 	-fvisibility=hidden
 LIBFILES = $(FLISP) $(LLT)
 LIBS = $(LIBFILES) -L$(ROOT)/lib -lutil -ldl -lm -lreadline $(OSLIBS) \
-	$(shell $(ROOT)/bin/llvm-config --ldflags --libs engine) -lpthread
+	$(shell $(LLVMROOT)/bin/llvm-config --ldflags --libs engine) -lpthread
 
 DEBUGFLAGS = -ggdb3 -DDEBUG $(FLAGS)
 SHIPFLAGS = -O3 -DNDEBUG $(FLAGS)
@@ -33,9 +34,9 @@ default: debug
 %.do: %.c julia.h
 	$(CC) $(CFLAGS) $(DEBUGFLAGS) -c $< -o $@
 %.o: %.cpp julia.h
-	$(CXX) $(CXXFLAGS) $(SHIPFLAGS) $(shell $(ROOT)/bin/llvm-config --cppflags) -c $< -o $@
+	$(CXX) $(CXXFLAGS) $(SHIPFLAGS) $(shell $(LLVMROOT)/bin/llvm-config --cppflags) -c $< -o $@
 %.do: %.cpp julia.h
-	$(CXX) $(CXXFLAGS) $(DEBUGFLAGS) $(shell $(ROOT)/bin/llvm-config --cppflags) -c $< -o $@
+	$(CXX) $(CXXFLAGS) $(DEBUGFLAGS) $(shell $(LLVMROOT)/bin/llvm-config --cppflags) -c $< -o $@
 
 ast.o ast.do: julia_flisp.boot.inc boot.j.inc
 julia_flisp.boot.inc: julia_flisp.boot $(FLISP)
@@ -51,7 +52,7 @@ codegen.o codegen.do: intrinsics.cpp
 builtins.o builtins.do: table.c
 
 julia-defs.s.bc: julia-defs$(NBITS).s
-	$(ROOT)/bin/llvm-as -f $< -o $@
+	$(LLVMROOT)/bin/llvm-as -f $< -o $@
 
 julia-defs.s.bc.inc: julia-defs.s.bc bin2hex.scm $(FLISP)
 	$(FLISPDIR)/flisp ./bin2hex.scm < $< > $@

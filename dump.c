@@ -421,11 +421,12 @@ jl_value_t *jl_deserialize_tag_type(ios_t *s, jl_struct_type_t *kind, int pos)
         st->env = jl_deserialize_value(s);
         st->linfo = (jl_lambda_info_t*)jl_deserialize_value(s);
         st->fptr = jl_deserialize_fptr(s);
-        st->uid = read_int32(s);
+        uptrint_t uid = read_int32(s);
         st->instance = NULL;
         if (lkup != NULL)
             return (jl_value_t*)lkup;
         jl_cache_type_(st->parameters, (jl_value_t*)st);
+        st->uid = uid;
         return (jl_value_t*)st;
     }
     else if (kind == jl_bits_kind) {
@@ -455,10 +456,11 @@ jl_value_t *jl_deserialize_tag_type(ios_t *s, jl_struct_type_t *kind, int pos)
         bt->env = NULL;
         bt->linfo = NULL;
         bt->super = (jl_tag_type_t*)jl_deserialize_value(s);
-        bt->uid = read_int32(s);
+        uptrint_t uid = read_int32(s);
         if (lkup != NULL)
             return (jl_value_t*)lkup;
         jl_cache_type_(bt->parameters, (jl_value_t*)bt);
+        bt->uid = uid;
         return (jl_value_t*)bt;
     }
     else {

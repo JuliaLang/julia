@@ -574,7 +574,6 @@ issues 11/6/10
 * make Tasks exit on exceptions (not ready for continuable-exc yet)
 * quote syntax change
 - fix circular struct decls
-- something about uninitialized objects in constructors
 - implement longjmp block exits so return/break work across functions
 * splicing tuples in ` with $...
 * readall, readline
@@ -594,13 +593,26 @@ issues 12/21/10
 - inference in inner functions
 * allow anything iterable to be spliced by ...
 * more flexible string literals
-- consider generating code for constructors, e.g.
+- something about uninitialized objects in constructors
+  consider generating code for constructors, e.g.
   function new{T}(re::T, im::T)
     v = newstruct(Complex{T})
     v.re = re; v.im = im
     v
   end
   . can be specialized, allows removing checks and converts
+  or have uninitialized objects passed in, e.g.
+  Range1{T}(r::Range1{T}, start, stop) = (r.start=start;r.stop=stop;r)
+  Range1{T}(start::T, stop::T) = Range1{T}(start, stop)
+
+  every type MyType with no parameters gets this defined automatically:
+  MyType(args...) = MyType(new_internal(MyType), args...)
+  and you need to define MyType(m::MyType, ...)
+  if MyType has parameters, then instantiated versions behave that way.
+  So Complex{Int32} would have just the single method
+      function (args...) = Complex(new_internal(Complex{Int32}), args...)
+  and you would define Complex(z::Complex, ...)
+  you can also define e.g. Complex{T}(r::T) = Complex{T}(r, 0)
 
 * type=>abstract, struct=>type
 * do something about "global X+=1"
