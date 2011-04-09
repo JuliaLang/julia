@@ -2,11 +2,7 @@ CC = gcc
 CXX = g++
 CFLAGS = -std=gnu99 
 CXXFLAGS = 
-
-HFILEDIRS = /opt/local/include
-LIBDIRS = /opt/local/lib /usr/local/lib
-
-PCRE_DIR = $(word 1,$(HFILEDIRS))
+SHLIB_EXT = "dylib"
 
 # BOEHM or MARKSWEEP
 JULIAGC = MARKSWEEP

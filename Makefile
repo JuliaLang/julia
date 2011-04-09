@@ -9,18 +9,19 @@ FLISPDIR = flisp
 LLT = $(LLTDIR)/libllt.a
 FLISP = $(FLISPDIR)/libflisp.a
 
-JULIAHOME = .
+JULIAHOME = $(shell pwd)
+ROOT = $(JULIAHOME)/ext/root
 
 NBITS = $(shell (test -e nbits || $(CC) nbits.c -o nbits) && ./nbits)
 include ./Make.inc.$(shell uname)
 
 FLAGS = -falign-functions -Wall -Wno-strict-aliasing \
 	-I$(FLISPDIR) -I$(LLTDIR) $(HFILEDIRS:%=-I%) $(LIBDIRS:%=-L%) \
-	$(CONFIG) -I$(shell llvm-config --includedir) \
+	$(CONFIG) -I$(shell $(ROOT)/bin/llvm-config --includedir) \
 	-fvisibility=hidden
 LIBFILES = $(FLISP) $(LLT)
-LIBS = $(LIBFILES) -lutil -ldl -lm -lreadline $(OSLIBS) \
-	$(shell llvm-config --ldflags --libs engine) -lpthread
+LIBS = $(LIBFILES) -L$(ROOT)/lib -lutil -ldl -lm -lreadline $(OSLIBS) \
+	$(shell $(ROOT)/bin/llvm-config --ldflags --libs engine) -lpthread
 
 DEBUGFLAGS = -ggdb3 -DDEBUG $(FLAGS)
 SHIPFLAGS = -O3 -DNDEBUG $(FLAGS)
@@ -32,9 +33,9 @@ default: debug
 %.do: %.c julia.h
 	$(CC) $(CFLAGS) $(DEBUGFLAGS) -c $< -o $@
 %.o: %.cpp julia.h
-	$(CXX) $(CXXFLAGS) $(SHIPFLAGS) $(shell llvm-config --cppflags) -c $< -o $@
+	$(CXX) $(CXXFLAGS) $(SHIPFLAGS) $(shell $(ROOT)/bin/llvm-config --cppflags) -c $< -o $@
 %.do: %.cpp julia.h
-	$(CXX) $(CXXFLAGS) $(DEBUGFLAGS) $(shell llvm-config --cppflags) -c $< -o $@
+	$(CXX) $(CXXFLAGS) $(DEBUGFLAGS) $(shell $(ROOT)/bin/llvm-config --cppflags) -c $< -o $@
 
 ast.o ast.do: julia_flisp.boot.inc boot.j.inc
 julia_flisp.boot.inc: julia_flisp.boot $(FLISP)
@@ -50,7 +51,7 @@ codegen.o codegen.do: intrinsics.cpp
 builtins.o builtins.do: table.c
 
 julia-defs.s.bc: julia-defs$(NBITS).s
-	llvm-as -f $< -o $@
+	$(ROOT)/bin/llvm-as -f $< -o $@
 
 julia-defs.s.bc.inc: julia-defs.s.bc bin2hex.scm $(FLISP)
 	$(FLISPDIR)/flisp ./bin2hex.scm < $< > $@
@@ -64,7 +65,7 @@ $(FLISP): $(FLISPDIR)/*.h $(FLISPDIR)/*.c $(LLT)
 PCRE_CONST = 0x[0-9a-fA-F]+|[-+]?\s*[0-9]+
 
 pcre_h.j:
-	cpp -dM $(PCRE_DIR)/pcre.h | perl -nle '/^\s*#define\s+(PCRE\w*)\s*\(?($(PCRE_CONST))\)?\s*$$/ and print "$$1 = $$2"' | sort > $@
+	cpp -dM $(ROOT)/include/pcre.h | perl -nle '/^\s*#define\s+(PCRE\w*)\s*\(?($(PCRE_CONST))\)?\s*$$/ and print "$$1 = $$2"' | sort > $@
 
 julia-debug: $(DOBJS) $(LIBFILES)
 	$(CXX) $(DEBUGFLAGS) $(DOBJS) -o $@ $(LIBS)
