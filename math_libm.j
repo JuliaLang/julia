@@ -67,9 +67,6 @@ end
 @libmfunc2 fmod
 @libmfunc2 copysign
 @libmfunc2 hypot
-@libmfunc2 fmin
-@libmfunc2 fmax
-@libmfunc2 fdim
 
 @libmfunc3 lrint
 @libmfunc3 lround
