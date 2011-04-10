@@ -23,7 +23,7 @@ typedef void * module_handle_t;
 static char *extensions[] = { "", ".so" };
 #define N_EXTENSIONS 2
 
-#elif defined(MACOSX) || defined(MACINTEL)
+#elif defined(MACOSX)
 #include <unistd.h>
 #include <dlfcn.h>
 #define GET_FUNCTION_FROM_MODULE dlsym
@@ -37,6 +37,7 @@ static char *extensions[] = { "", ".dylib", ".bundle" };
 #ifdef BOEHM_GC
 #include <gc.h>
 #endif
+
 #include "llt.h"
 #include "julia.h"
 
@@ -86,6 +87,14 @@ void *jl_load_dynamic_library(char *fname)
                 /* now try julia home */
                 strncpy(path, julia_home, PATHBUF-1);
                 strncat(path, "/", PATHBUF-1-strlen(path));
+                strncat(path, modname, PATHBUF-1-strlen(path));
+                strncat(path, ext, PATHBUF-1-strlen(path));
+                handle = dlopen(path, RTLD_NOW);
+                if (handle != NULL) return handle;
+
+                /* now try julia_home/lib */
+                strncpy(path, julia_home, PATHBUF-1);
+                strncat(path, "/lib/", PATHBUF-1-strlen(path));
                 strncat(path, modname, PATHBUF-1-strlen(path));
                 strncat(path, ext, PATHBUF-1-strlen(path));
                 handle = dlopen(path, RTLD_NOW);

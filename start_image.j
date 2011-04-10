@@ -1,6 +1,7 @@
 # set up non-serializable state
 libc = dlopen("libc")
 libm = dlopen("libm")
+libfdm = dlopen("libfdm")
 
 ccall(:jl_set_memio_func, Void, ())
 stdout_stream = make_stdout_stream()
