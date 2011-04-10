@@ -35,8 +35,7 @@ pcre-8.12.tar.bz2:
 pcre-8.12: pcre-8.12.tar.bz2
 	tar jxvf pcre-8.12.tar.bz2
 $(PCRE_OBJ): pcre-8.12
-	cd pcre-8.12 && ./configure --prefix=$(EXTROOT) --enable-utf8 --enable-unicode-properties
-	make install
+	cd pcre-8.12 && ./configure --prefix=$(EXTROOT) --enable-utf8 --enable-unicode-properties && make install
 pcre_install: $(PCRE_OBJ) $(JULIALIB)
 	ln -sf $(PCRE_OBJ) $(JULIALIB)/libpcre.$(SHLIB_EXT)
 	ln -sf $(EXTROOTLIB)/libpcreposix.$(SHLIB_EXT) $(JULIALIB)/libpcreposix.$(SHLIB_EXT)
