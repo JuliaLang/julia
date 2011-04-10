@@ -28,7 +28,7 @@ fdlibm_install:
 	ln -sf $(EXTROOTLIB)/libfdm.$(SHLIB_EXT) $(JULIALIB)/libfdm.$(SHLIB_EXT)
 
 lapack:
-	curl -O http://www.netlib.org/lapack/lapack-3.3.0.tgz && cd lapack-3.3.0 && cp INSTALL/make.inc.gfortran ./make.inc && make blaslib lapacklib OPTS="-O2 -fPIC" FORTRAN=$(FC) && $(FC) -shared BLAS/SRC/*.o -o $(EXTROOT)/libBLAS.$(SHLIB_EXT) && $(FC) -shared lapack_LINUX.a -o $(EXTROOT)/libLAPACK.$(SHLIB_EXT)
+	curl -O http://www.netlib.org/lapack/lapack-3.3.0.tgz && tar zxf lapack-3.3.0.tgz && cd lapack-3.3.0 && cp INSTALL/make.inc.gfortran ./make.inc && make blaslib lapacklib OPTS="-O2 -fPIC" FORTRAN=$(FC) && $(FC) -shared BLAS/SRC/*.o -o $(EXTROOT)/libBLAS.$(SHLIB_EXT) && $(FC) -shared lapack_LINUX.a -o $(EXTROOT)/libLAPACK.$(SHLIB_EXT)
 
 blas_install:
 	ln -sf $(EXTROOTLIB)/libBLAS.$(SHLIB_EXT) $(JULIALIB)/libBLAS.$(SHLIB_EXT)
