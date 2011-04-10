@@ -69,7 +69,7 @@ for (fname, eltype) = (("dgemm_", Float64), ("sgemm_", Float32))
              Ptr{$eltype}, Ptr{$eltype}, Ptr{Int32},
              Ptr{$eltype}, Ptr{Int32},
              Ptr{$eltype}, Ptr{$eltype}, Ptr{Int32}),
-            "N", "N", m, n, k, 1.0, A, m, B, k, 0.0, C, m)
+            "N", "N", m, n, k, convert($eltype, 1.0), A, m, B, k, convert($eltype, 0.0), C, m)
      
         return C
     end
