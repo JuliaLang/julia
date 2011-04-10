@@ -11,8 +11,7 @@ readline:
 
 readline_install:
 	ln -sf $(EXTROOTLIB)/libreadline.$(SHLIB_EXT) $(JULIALIB)/libreadline.$(SHLIB_EXT)
-	ln -sf $(EXTROOTLIB)/libreadline.6.$(SHLIB_EXT) $(JULIALIB)/libreadline.6.$(SHLIB_EXT)
-	ln -sf $(EXTROOTLIB)/libreadline.6.2.$(SHLIB_EXT) $(JULIALIB)/libreadline.6.2.$(SHLIB_EXT)
+	ln -sf $(EXTROOTLIB)/libhistory.$(SHLIB_EXT) $(JULIALIB)/libhistory.$(SHLIB_EXT)
 
 pcre:
 	curl -O ftp://ftp.csx.cam.ac.uk/pub/software/programming/pcre/pcre-8.12.tar.bz2 && tar jxvf pcre-8.12.tar.bz2 && cd pcre-8.12 && ./configure --prefix=$(EXTROOT) --enable-utf8 --enable-unicode-properties && make install
@@ -22,13 +21,13 @@ pcre_install:
 	ln -sf $(EXTROOTLIB)/libpcreposix.$(SHLIB_EXT) $(JULIALIB)/libpcreposix.$(SHLIB_EXT)
 
 fdlibm:
-	curl -O -u anonymous:julia@juliamath.com ftp://netlib.org/fdlibm.tar.gz && tar zxf fdlibm.tar.gz && cd fdlibm && make CC=$(CC) CFLAGS="-D_IEEE_LIBM -fPIC" && $(CC) -shared *.o -o $(EXTROOT)/libfdm.$(SHLIB_EXT)
+	curl -O -u anonymous:julia@juliamath.com ftp://netlib.org/fdlibm.tar.gz && tar zxf fdlibm.tar.gz && cd fdlibm && make CC=$(CC) CFLAGS="-D_IEEE_LIBM -fPIC" && $(CC) -shared *.o -o $(EXTROOTLIB)/libfdm.$(SHLIB_EXT)
 
 fdlibm_install:
 	ln -sf $(EXTROOTLIB)/libfdm.$(SHLIB_EXT) $(JULIALIB)/libfdm.$(SHLIB_EXT)
 
 lapack:
-	curl -O http://www.netlib.org/lapack/lapack-3.3.0.tgz && tar zxf lapack-3.3.0.tgz && cd lapack-3.3.0 && cp INSTALL/make.inc.gfortran ./make.inc && make blaslib lapacklib OPTS="-O2 -fPIC" FORTRAN=$(FC) && $(FC) -shared BLAS/SRC/*.o -o $(EXTROOT)/libBLAS.$(SHLIB_EXT) && $(FC) -shared lapack_LINUX.a -o $(EXTROOT)/libLAPACK.$(SHLIB_EXT)
+	curl -O http://www.netlib.org/lapack/lapack-3.3.0.tgz && tar zxf lapack-3.3.0.tgz && cd lapack-3.3.0 && cp INSTALL/make.inc.gfortran ./make.inc && make blaslib lapacklib NOOPT="-O0 -fPIC" OPTS="-O2 -fPIC" FORTRAN=$(FC) && $(FC) -shared BLAS/SRC/*.o -o $(EXTROOTLIB)/libBLAS.$(SHLIB_EXT) && $(FC) -shared SRC/*.o BLAS/SRC/*.o INSTALL/dlamch.o INSTALL/dsecnd_INT_ETIME.o INSTALL/ilaver.o INSTALL/lsame.o INSTALL/slamch.o -o $(EXTROOTLIB)/libLAPACK.$(SHLIB_EXT) -L$(EXTROOTLIB) -lBLAS 
 
 blas_install:
 	ln -sf $(EXTROOTLIB)/libBLAS.$(SHLIB_EXT) $(JULIALIB)/libBLAS.$(SHLIB_EXT)
