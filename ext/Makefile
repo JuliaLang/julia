@@ -15,9 +15,7 @@ llvm-$(LLVM_VER).tgz:
 llvm-$(LLVM_VER): llvm-$(LLVM_VER).tgz
 	tar zxf llvm-$(LLVM_VER).tgz
 $(LLVM_OBJ): llvm-$(LLVM_VER)
-	cd llvm-$(LLVM_VER)
-	./configure --prefix=$(EXTROOT) --disable-threads --enable-optimized --disable-profiling --disable-assertions --enable-shared --enable-targets=x86,x86_64 --disable-bindings --disable-docs
-	make install
+	cd llvm-$(LLVM_VER) && ./configure --prefix=$(EXTROOT) --disable-threads --enable-optimized --disable-profiling --disable-assertions --enable-shared --enable-targets=x86,x86_64 --disable-bindings --disable-docs && make install
 llvm: $(LLVM_OBJ)
 
 READLINE_OBJ = $(EXTROOTLIB)/libreadline.$(SHLIB_EXT)
@@ -26,9 +24,7 @@ readline-6.2.tar.gz:
 readline-6.2: readline-6.2.tar.gz
 	tar zxf readline-6.2.tar.gz
 $(READLINE_OBJ): readline-6.2
-	cd readline-6.2
-	./configure --prefix=$(EXTROOT)
-	make install
+	cd readline-6.2 && ./configure --prefix=$(EXTROOT) && make install
 readline_install: $(READLINE_OBJ) $(JULIALIB)
 	ln -sf $(READLINE_OBJ) $(JULIALIB)/libreadline.$(SHLIB_EXT)
 	ln -sf $(EXTROOTLIB)/libhistory.$(SHLIB_EXT) $(JULIALIB)/libhistory.$(SHLIB_EXT)
@@ -39,8 +35,7 @@ pcre-8.12.tar.bz2:
 pcre-8.12: pcre-8.12.tar.bz2
 	tar jxvf pcre-8.12.tar.bz2
 $(PCRE_OBJ): pcre-8.12
-	cd pcre-8.12
-	./configure --prefix=$(EXTROOT) --enable-utf8 --enable-unicode-properties
+	cd pcre-8.12 && ./configure --prefix=$(EXTROOT) --enable-utf8 --enable-unicode-properties
 	make install
 pcre_install: $(PCRE_OBJ) $(JULIALIB)
 	ln -sf $(PCRE_OBJ) $(JULIALIB)/libpcre.$(SHLIB_EXT)
@@ -63,11 +58,11 @@ lapack-3.3.0.tgz:
 lapack-3.3.0: lapack-3.3.0.tgz
 	tar zxf lapack-3.3.0.tgz
 $(LAPACK_OBJ): lapack-3.3.0
-	cd lapack-3.3.0
-	cp INSTALL/make.inc.gfortran ./make.inc
-	make blaslib lapacklib NOOPT="-O0 -fPIC" OPTS="-O2 -fPIC" FORTRAN=$(FC)
-	$(FC) -shared BLAS/SRC/*.o -o $(BLAS_OBJ)
-	$(FC) -shared SRC/*.o BLAS/SRC/*.o INSTALL/dlamch.o INSTALL/dsecnd_INT_ETIME.o INSTALL/ilaver.o INSTALL/lsame.o INSTALL/slamch.o -o $(LAPACK_OBJ) -L$(EXTROOTLIB) -lBLAS 
+	cd lapack-3.3.0 && \
+	cp INSTALL/make.inc.gfortran ./make.inc && \
+	make blaslib lapacklib NOOPT="-O0 -fPIC" OPTS="-O2 -fPIC" FORTRAN=$(FC) && \
+	$(FC) -shared BLAS/SRC/*.o -o $(BLAS_OBJ) && \
+	$(FC) -shared SRC/*.o BLAS/SRC/*.o INSTALL/dlamch.o INSTALL/dsecnd_INT_ETIME.o INSTALL/ilaver.o INSTALL/lsame.o INSTALL/slamch.o -o $(LAPACK_OBJ) -L$(EXTROOTLIB) -lBLAS
 lapack_install: $(LAPACK_OBJ) $(JULIALIB)
 	ln -sf $(BLAS_OBJ) $(JULIALIB)/libBLAS.$(SHLIB_EXT)
 	ln -sf $(LAPACK_OBJ) $(JULIALIB)/libLAPACK.$(SHLIB_EXT)
