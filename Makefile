@@ -4,7 +4,7 @@ SRCS = jltypes gf ast repl builtins module codegen interpreter alloc dlload \
 OBJS = $(SRCS:%=%.o)
 DOBJS = $(SRCS:%=%.do)
 EXENAME = $(NAME)
-LLTDIR = lib
+LLTDIR = supportlib
 FLISPDIR = flisp
 LLT = $(LLTDIR)/libllt.a
 FLISP = $(FLISPDIR)/libflisp.a

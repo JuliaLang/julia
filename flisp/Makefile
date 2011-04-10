@@ -10,7 +10,7 @@ OBJS = $(SRCS:%.c=%.o)
 DOBJS = $(SRCS:%.c=%.do)
 EXENAME = $(NAME)
 LIBTARGET = lib$(NAME)
-LLTDIR = ../lib
+LLTDIR = ../supportlib
 LLT = $(LLTDIR)/libllt.a
 
 FLAGS = -falign-functions -Wall -Wno-strict-aliasing -I$(LLTDIR) $(CFLAGS) \

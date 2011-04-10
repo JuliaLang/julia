@@ -206,6 +206,7 @@ void parse_opts(int *argcp, char ***argvp) {
         else if (!strcmp(answer_color,"white"))
             jl_answer_color  = "\033[1m\033[37m";
     }
+    /*
     char *pwd = getenv("PWD");
     if (julia_home && pwd) {
         int i, prefix = 1;
@@ -226,6 +227,7 @@ void parse_opts(int *argcp, char ***argvp) {
             }
         }
     }
+    */
     *argvp += optind;
     *argcp -= optind;
     if (!num_evals && *argcp > 0) {
@@ -817,8 +819,8 @@ int main(int argc, char *argv[])
     for (i=0; i < argc; i++) {
         jl_arrayset(args, i, (jl_value_t*)jl_cstr_to_string(argv[i]));
     }
-    //jl_set_const(jl_system_module, jl_symbol("JULIA_HOME"),
-    //             jl_cstr_to_string(julia_home));
+    jl_set_const(jl_system_module, jl_symbol("JULIA_HOME"),
+                 jl_cstr_to_string(julia_home));
 
     awful_sigfpe_hack();
 
