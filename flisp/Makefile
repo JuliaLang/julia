@@ -1,7 +1,5 @@
 JULIAHOME = ..
-
-NBITS = $(shell (test -e ../nbits || $(CC) ../nbits.c -o ../nbits) && ../nbits)
-include ../Make.inc.$(shell uname)
+include ../Make.inc
 
 NAME = flisp
 SRCS = $(NAME).c builtins.c string.c equalhash.c table.c iostream.c \

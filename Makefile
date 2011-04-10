@@ -1,5 +1,4 @@
 JULIAHOME = $(shell pwd)
-NBITS = $(shell (test -e nbits || $(CC) nbits.c -o nbits) && ./nbits)
 include ./Make.inc
 
 SRCS = jltypes gf ast repl builtins module codegen interpreter alloc dlload \
@@ -11,6 +10,17 @@ LLTDIR = supportlib
 FLISPDIR = flisp
 LLT = $(LLTDIR)/libllt.a
 FLISP = $(FLISPDIR)/libflisp.a
+
+FLAGS = -falign-functions -Wall -Wno-strict-aliasing \
+	-I$(FLISPDIR) -I$(LLTDIR) $(HFILEDIRS:%=-I%) $(LIBDIRS:%=-L%) \
+	$(CONFIG) -I$(shell $(LLVMROOT)/bin/llvm-config --includedir) \
+	-fvisibility=hidden
+DEBUGFLAGS = -ggdb3 -DDEBUG $(FLAGS)
+SHIPFLAGS = -O3 -DNDEBUG $(FLAGS)
+
+LIBFILES = $(FLISP) $(LLT)
+LIBS = $(LIBFILES) -L$(EXTROOT)/lib -lutil -ldl -lm -lreadline $(OSLIBS) \
+	$(shell $(LLVMROOT)/bin/llvm-config --ldflags --libs engine) -lpthread
 
 default: debug
 
@@ -51,7 +61,7 @@ $(FLISP): $(FLISPDIR)/*.h $(FLISPDIR)/*.c $(LLT)
 PCRE_CONST = 0x[0-9a-fA-F]+|[-+]?\s*[0-9]+
 
 pcre_h.j:
-	cpp -dM $(ROOT)/include/pcre.h | perl -nle '/^\s*#define\s+(PCRE\w*)\s*\(?($(PCRE_CONST))\)?\s*$$/ and print "$$1 = $$2"' | sort > $@
+	cpp -dM $(EXTROOT)/include/pcre.h | perl -nle '/^\s*#define\s+(PCRE\w*)\s*\(?($(PCRE_CONST))\)?\s*$$/ and print "$$1 = $$2"' | sort > $@
 
 julia-debug: $(DOBJS) $(LIBFILES)
 	$(CXX) $(DEBUGFLAGS) $(DOBJS) -o $@ $(LIBS)
