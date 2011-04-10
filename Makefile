@@ -1,3 +1,4 @@
+JULIAHOME = $(shell pwd)
 NBITS = $(shell (test -e nbits || $(CC) nbits.c -o nbits) && ./nbits)
 include ./Make.inc
 

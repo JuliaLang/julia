@@ -1,3 +1,4 @@
+JULIAHOME = $(shell pwd)/..
 include ../Make.inc
 
 all: llvm readline pcre fdlibm lapack
