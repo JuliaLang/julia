@@ -1,4 +1,6 @@
-NAME = julia
+NBITS = $(shell (test -e nbits || $(CC) nbits.c -o nbits) && ./nbits)
+include ./Make.inc
+
 SRCS = jltypes gf ast repl builtins module codegen interpreter alloc dlload \
 	sys init task array dump $(GCSRCS)
 OBJS = $(SRCS:%=%.o)
@@ -8,24 +10,6 @@ LLTDIR = supportlib
 FLISPDIR = flisp
 LLT = $(LLTDIR)/libllt.a
 FLISP = $(FLISPDIR)/libflisp.a
-
-JULIAHOME = $(shell pwd)
-ROOT = $(JULIAHOME)/ext/root
-LLVMROOT = $(ROOT)
-
-NBITS = $(shell (test -e nbits || $(CC) nbits.c -o nbits) && ./nbits)
-include ./Make.inc.$(shell uname)
-
-FLAGS = -falign-functions -Wall -Wno-strict-aliasing \
-	-I$(FLISPDIR) -I$(LLTDIR) $(HFILEDIRS:%=-I%) $(LIBDIRS:%=-L%) \
-	$(CONFIG) -I$(shell $(LLVMROOT)/bin/llvm-config --includedir) \
-	-fvisibility=hidden
-LIBFILES = $(FLISP) $(LLT)
-LIBS = $(LIBFILES) -L$(ROOT)/lib -lutil -ldl -lm -lreadline $(OSLIBS) \
-	$(shell $(LLVMROOT)/bin/llvm-config --ldflags --libs engine) -lpthread
-
-DEBUGFLAGS = -ggdb3 -DDEBUG $(FLAGS)
-SHIPFLAGS = -O3 -DNDEBUG $(FLAGS)
 
 default: debug
 

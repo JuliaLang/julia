@@ -2,7 +2,8 @@ CC = gcc
 CXX = g++
 CFLAGS = -std=gnu99 
 CXXFLAGS = 
-SHLIB_EXT = "dylib"
+FC = gfortran
+SHLIB_EXT = dylib
 
 # BOEHM or MARKSWEEP
 JULIAGC = MARKSWEEP

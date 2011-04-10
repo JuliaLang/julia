@@ -2,7 +2,8 @@ CC = gcc
 CXX = g++
 CFLAGS = -std=gnu99 
 CXXFLAGS = 
-SHLIB_EXT = "so"
+FC = gfortran
+SHLIB_EXT = so
 
 # BOEHM or MARKSWEEP
 JULIAGC = MARKSWEEP
