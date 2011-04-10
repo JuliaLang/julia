@@ -350,7 +350,13 @@ char *jl_find_file_in_path(const char *fname)
     }
     if (fid == -1) {
         if (fpath != fname) free(fpath);
-        jl_errorf("could not open file %s", fpath);
+        if (jl_errorexception_type == NULL) {
+            ios_printf(ios_stderr, "could not open file %s\n", fname);
+            exit(1);
+        }
+        else {
+            jl_errorf("could not open file %s", fname);
+        }
     }
     close(fid);
 

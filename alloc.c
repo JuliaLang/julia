@@ -41,7 +41,7 @@ jl_struct_type_t *jl_expr_type;
 jl_bits_type_t *jl_intrinsic_type;
 jl_struct_type_t *jl_methtable_type;
 jl_struct_type_t *jl_lambda_info_type;
-jl_struct_type_t *jl_errorexception_type;
+jl_struct_type_t *jl_errorexception_type=NULL;
 jl_struct_type_t *jl_typeerror_type;
 jl_struct_type_t *jl_loaderror_type;
 jl_value_t *jl_an_empty_cell=NULL;
