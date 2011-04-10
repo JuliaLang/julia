@@ -1,39 +1,76 @@
 JULIAHOME = $(shell pwd)/..
 include ../Make.inc
 
-all: llvm readline pcre fdlibm lapack
+default: all
 
-llvm:
-	curl -O http://llvm.org/releases/2.9/llvm-2.9.tgz && tar zxf llvm-2.9.tgz && cd llvm-2.9 && ./configure --prefix=$(EXTROOT) --disable-threads --enable-optimized --disable-profiling --disable-assertions --enable-shared --enable-targets=x86,x86_64 --disable-bindings --disable-docs && make install
+all: llvm readline_install pcre_install fdlibm_install lapack_install
 
-readline:
-	curl -O ftp://ftp.gnu.org/gnu/readline/readline-6.2.tar.gz && tar zxf readline-6.2.tar.gz && cd readline-6.2 && ./configure --prefix=$(EXTROOT) && make install
+$(JULIALIB):
+	mkdir -p $(JULIALIB)
 
-readline_install:
-	ln -sf $(EXTROOTLIB)/libreadline.$(SHLIB_EXT) $(JULIALIB)/libreadline.$(SHLIB_EXT)
+LLVM_VER = 2.9
+LLVM_OBJ = $(EXTROOTLIB)/libLLVM-$(LLVM_VER).$(SHLIB_EXT)
+llvm-$(LLVM_VER).tgz:
+	curl -O http://llvm.org/releases/$(LLVM_VER)/llvm-$(LLVM_VER).tgz
+llvm-$(LLVM_VER): llvm-$(LLVM_VER).tgz
+	tar zxf llvm-$(LLVM_VER).tgz
+$(LLVM_OBJ): llvm-$(LLVM_VER)
+	cd llvm-$(LLVM_VER)
+	./configure --prefix=$(EXTROOT) --disable-threads --enable-optimized --disable-profiling --disable-assertions --enable-shared --enable-targets=x86,x86_64 --disable-bindings --disable-docs
+	make install
+llvm: $(LLVM_OBJ)
+
+READLINE_OBJ = $(EXTROOTLIB)/libreadline.$(SHLIB_EXT)
+readline-6.2.tar.gz:
+	curl -O ftp://ftp.gnu.org/gnu/readline/readline-6.2.tar.gz
+readline-6.2: readline-6.2.tar.gz
+	tar zxf readline-6.2.tar.gz
+$(READLINE_OBJ): readline-6.2
+	cd readline-6.2
+	./configure --prefix=$(EXTROOT)
+	make install
+readline_install: $(READLINE_OBJ) $(JULIALIB)
+	ln -sf $(READLINE_OBJ) $(JULIALIB)/libreadline.$(SHLIB_EXT)
 	ln -sf $(EXTROOTLIB)/libhistory.$(SHLIB_EXT) $(JULIALIB)/libhistory.$(SHLIB_EXT)
 
-pcre:
-	curl -O ftp://ftp.csx.cam.ac.uk/pub/software/programming/pcre/pcre-8.12.tar.bz2 && tar jxvf pcre-8.12.tar.bz2 && cd pcre-8.12 && ./configure --prefix=$(EXTROOT) --enable-utf8 --enable-unicode-properties && make install
-
-pcre_install:
-	ln -sf $(EXTROOTLIB)/libpcre.$(SHLIB_EXT) $(JULIALIB)/libpcre.$(SHLIB_EXT)
+PCRE_OBJ = $(EXTROOTLIB)/libpcre.$(SHLIB_EXT)
+pcre-8.12.tar.bz2:
+	curl -O ftp://ftp.csx.cam.ac.uk/pub/software/programming/pcre/pcre-8.12.tar.bz2
+pcre-8.12: pcre-8.12.tar.bz2
+	tar jxvf pcre-8.12.tar.bz2
+$(PCRE_OBJ): pcre-8.12
+	cd pcre-8.12
+	./configure --prefix=$(EXTROOT) --enable-utf8 --enable-unicode-properties
+	make install
+pcre_install: $(PCRE_OBJ) $(JULIALIB)
+	ln -sf $(PCRE_OBJ) $(JULIALIB)/libpcre.$(SHLIB_EXT)
 	ln -sf $(EXTROOTLIB)/libpcreposix.$(SHLIB_EXT) $(JULIALIB)/libpcreposix.$(SHLIB_EXT)
 
-fdlibm:
-	curl -O -u anonymous:julia@juliamath.com ftp://netlib.org/fdlibm.tar.gz && tar zxf fdlibm.tar.gz && cd fdlibm && make CC=$(CC) CFLAGS="-D_IEEE_LIBM -fPIC" && $(CC) -shared *.o -o $(EXTROOTLIB)/libfdm.$(SHLIB_EXT)
+FDLIBM_OBJ = $(EXTROOTLIB)/libfdm.$(SHLIB_EXT)
+fdlibm.tar.gz:
+	curl -O -u anonymous:julia@juliamath.com ftp://netlib.org/fdlibm.tar.gz
+fdlibm: fdlibm.tar.gz
+	tar zxf fdlibm.tar.gz
+$(FDLIBM_OBJ): fdlibm
+	cd fdlibm && make CC=$(CC) CFLAGS="-D_IEEE_LIBM -fPIC" && $(CC) -shared *.o -o $@
+fdlibm_install: $(FDLIBM_OBJ) $(JULIALIB)
+	ln -sf $< $(JULIALIB)/libfdm.$(SHLIB_EXT)
 
-fdlibm_install:
-	ln -sf $(EXTROOTLIB)/libfdm.$(SHLIB_EXT) $(JULIALIB)/libfdm.$(SHLIB_EXT)
-
-lapack:
-	curl -O http://www.netlib.org/lapack/lapack-3.3.0.tgz && tar zxf lapack-3.3.0.tgz && cd lapack-3.3.0 && cp INSTALL/make.inc.gfortran ./make.inc && make blaslib lapacklib NOOPT="-O0 -fPIC" OPTS="-O2 -fPIC" FORTRAN=$(FC) && $(FC) -shared BLAS/SRC/*.o -o $(EXTROOTLIB)/libBLAS.$(SHLIB_EXT) && $(FC) -shared SRC/*.o BLAS/SRC/*.o INSTALL/dlamch.o INSTALL/dsecnd_INT_ETIME.o INSTALL/ilaver.o INSTALL/lsame.o INSTALL/slamch.o -o $(EXTROOTLIB)/libLAPACK.$(SHLIB_EXT) -L$(EXTROOTLIB) -lBLAS 
-
-blas_install:
-	ln -sf $(EXTROOTLIB)/libBLAS.$(SHLIB_EXT) $(JULIALIB)/libBLAS.$(SHLIB_EXT)
-
-lapack_install:
-	ln -sf $(EXTROOTLIB)/libLAPACK.$(SHLIB_EXT) $(JULIALIB)/libLAPACK.$(SHLIB_EXT)
+LAPACK_OBJ = $(EXTROOTLIB)/libLAPACK.$(SHLIB_EXT)
+BLAS_OBJ = $(EXTROOTLIB)/libBLAS.$(SHLIB_EXT)
+lapack-3.3.0.tgz:
+	curl -O http://www.netlib.org/lapack/lapack-3.3.0.tgz
+lapack-3.3.0: lapack-3.3.0.tgz
+	tar zxf lapack-3.3.0.tgz
+$(LAPACK_OBJ): lapack-3.3.0
+	cd lapack-3.3.0
+	cp INSTALL/make.inc.gfortran ./make.inc
+	make blaslib lapacklib NOOPT="-O0 -fPIC" OPTS="-O2 -fPIC" FORTRAN=$(FC)
+	$(FC) -shared BLAS/SRC/*.o -o $(BLAS_OBJ)
+	$(FC) -shared SRC/*.o BLAS/SRC/*.o INSTALL/dlamch.o INSTALL/dsecnd_INT_ETIME.o INSTALL/ilaver.o INSTALL/lsame.o INSTALL/slamch.o -o $(LAPACK_OBJ) -L$(EXTROOTLIB) -lBLAS 
+lapack_install: $(LAPACK_OBJ) $(JULIALIB)
+	ln -sf $(BLAS_OBJ) $(JULIALIB)/libBLAS.$(SHLIB_EXT)
+	ln -sf $(LAPACK_OBJ) $(JULIALIB)/libLAPACK.$(SHLIB_EXT)
 
 clean:
-	rm -fr readline-6.2 llvm-2.9 pcre-8.12 fdlibm lapack-3.3.0 *gz
+	rm -fr readline-6.2 llvm-$(LLVM_VER) pcre-8.12 fdlibm lapack-3.3.0 *gz
