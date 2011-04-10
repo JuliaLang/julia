@@ -4,13 +4,6 @@ CFLAGS = -std=gnu99
 CXXFLAGS = 
 SHLIB_EXT = "so"
 
-PFX = /usr/local
-#PFX = /afs/csail.mit.edu/u/b/bezanson
-HFILEDIRS = $(PFX)/include
-LIBDIRS = $(PFX)/lib
-
-PCRE_DIR = $(word 1,$(HFILEDIRS))
-
 # BOEHM or MARKSWEEP
 JULIAGC = MARKSWEEP
 

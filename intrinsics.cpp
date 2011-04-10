@@ -115,7 +115,7 @@ static jl_value_t *julia_type_of(Value *v)
         !((Instruction*)v)->hasMetadata()) {
         return julia_type_of_without_metadata(v);
     }
-    MDNode *mdn = ((Instruction*)v)->getMetadata((unsigned int)0);
+    MDNode *mdn = ((Instruction*)v)->getMetadata("julia_type");
     MDString *md = (MDString*)mdn->getOperand(0);
     const char *vts = md->getString().data();
     int id = (vts[0]-1) + (vts[1]-1)*255;
@@ -160,7 +160,7 @@ static Value *mark_julia_type(Value *v, jl_value_t *jt)
     MDString *md = MDString::get(jl_LLVMContext, name);
     Value *const vals[1] = {md};
     MDNode *mdn = MDNode::get(jl_LLVMContext, vals, 1);
-    ((Instruction*)v)->setMetadata((unsigned int)0, mdn);
+    ((Instruction*)v)->setMetadata("julia_type", mdn);
     return v;
 }
 

@@ -4,7 +4,7 @@ ROOT=$(shell pwd)/root
 all: llvm readline pcre fdlibm lapack
 
 llvm:
-	curl -O http://llvm.org/releases/2.7/llvm-2.7.tgz && tar zxf llvm-2.7.tgz && cd llvm-2.7 && ./configure --prefix=$(ROOT) --disable-threads --enable-optimized --disable-profiling --disable-assertions --enable-shared --enable-targets=x86,x86_64 && make install
+	curl -O http://llvm.org/releases/2.9/llvm-2.9.tgz && tar zxf llvm-2.9.tgz && cd llvm-2.9 && ./configure --prefix=$(ROOT) --disable-threads --enable-optimized --disable-profiling --disable-assertions --enable-shared --enable-targets=x86,x86_64 --disable-bindings --disable-docs && make install
 
 readline:
 	curl -O ftp://ftp.gnu.org/gnu/readline/readline-6.2.tar.gz && tar zxf readline-6.2.tar.gz && cd readline-6.2 && ./configure --prefix=$(ROOT) && make install
@@ -19,4 +19,4 @@ lapack:
 	curl -O http://www.netlib.org/lapack/lapack-3.3.0.tgz && cd lapack-3.3.0 && cp INSTALL/make.inc.gfortran ./make.inc && make blaslib lapacklib OPTS="-O2 -fPIC" FORTRAN=$(FC) && $(CC) -shared blas_LINUX.a -o $(ROOT)/libBLAS.$(SHLIB_EXT) && $(CC) -shared lapack_LINUX.a -o $(ROOT)/libLAPACK.$(SHLIB_EXT)
 
 clean:
-	rm -fr readline-6.2 llvm-2.7 pcre-8.12 fdlibm lapack-3.3.0 *gz
+	rm -fr readline-6.2 llvm-2.9 pcre-8.12 fdlibm lapack-3.3.0 *gz
