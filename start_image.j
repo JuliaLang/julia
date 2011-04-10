@@ -14,7 +14,7 @@ stderr_stream = fdio(ccall(:jl_stderr, Int32, ()))
 load("regex.j")
 
 setenv("GOTO_NUM_THREADS", "1")
-libBLAS = dlopen("libBLAS")
+libBLAS = dlopen("libLAPACK")
 libLAPACK = dlopen("libLAPACK")
 
 load("custom.j")

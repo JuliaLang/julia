@@ -3,10 +3,13 @@ include ../Make.inc
 
 default: all
 
-all: llvm readline_install pcre_install fdlibm_install lapack_install
+all: llvm readline_install pcre_install fdlibm_install lapack_install libc_install
 
 $(JULIALIB):
 	mkdir -p $(JULIALIB)
+
+libc_install: $(JULIALIB)
+	ln -sf /lib/libc.so.6 $(JULIALIB)/libc.so
 
 LLVM_VER = 2.9
 LLVM_OBJ = $(EXTROOTLIB)/libLLVM-$(LLVM_VER).$(SHLIB_EXT)
@@ -35,8 +38,7 @@ pcre-8.12.tar.bz2:
 pcre-8.12: pcre-8.12.tar.bz2
 	tar jxvf pcre-8.12.tar.bz2
 $(PCRE_OBJ): pcre-8.12
-	cd pcre-8.12 && ./configure --prefix=$(EXTROOT) --enable-utf8 --enable-unicode-properties
-	make install
+	cd pcre-8.12 && ./configure --prefix=$(EXTROOT) --enable-utf8 --enable-unicode-properties && make install
 pcre_install: $(PCRE_OBJ) $(JULIALIB)
 	ln -sf $(PCRE_OBJ) $(JULIALIB)/libpcre.$(SHLIB_EXT)
 	ln -sf $(EXTROOTLIB)/libpcreposix.$(SHLIB_EXT) $(JULIALIB)/libpcreposix.$(SHLIB_EXT)
@@ -52,7 +54,6 @@ fdlibm_install: $(FDLIBM_OBJ) $(JULIALIB)
 	ln -sf $< $(JULIALIB)/libfdm.$(SHLIB_EXT)
 
 LAPACK_OBJ = $(EXTROOTLIB)/libLAPACK.$(SHLIB_EXT)
-BLAS_OBJ = $(EXTROOTLIB)/libBLAS.$(SHLIB_EXT)
 lapack-3.3.0.tgz:
 	curl -O http://www.netlib.org/lapack/lapack-3.3.0.tgz
 lapack-3.3.0: lapack-3.3.0.tgz
@@ -61,10 +62,9 @@ $(LAPACK_OBJ): lapack-3.3.0
 	cd lapack-3.3.0 && \
 	cp INSTALL/make.inc.gfortran ./make.inc && \
 	make blaslib lapacklib NOOPT="-O0 -fPIC" OPTS="-O2 -fPIC" FORTRAN=$(FC) && \
-	$(FC) -shared BLAS/SRC/*.o -o $(BLAS_OBJ) && \
-	$(FC) -shared SRC/*.o BLAS/SRC/*.o INSTALL/dlamch.o INSTALL/dsecnd_INT_ETIME.o INSTALL/ilaver.o INSTALL/lsame.o INSTALL/slamch.o -o $(LAPACK_OBJ) -L$(EXTROOTLIB) -lBLAS
+	rm -f BLAS/SRC/xerbla_array.o && rm -f BLAS/SRC/xerbla.o && \
+	$(FC) -shared SRC/*.o BLAS/SRC/*.o INSTALL/dlamch.o INSTALL/dsecnd_INT_ETIME.o INSTALL/ilaver.o INSTALL/slamch.o -o $(LAPACK_OBJ) -L$(EXTROOTLIB)
 lapack_install: $(LAPACK_OBJ) $(JULIALIB)
-	ln -sf $(BLAS_OBJ) $(JULIALIB)/libBLAS.$(SHLIB_EXT)
 	ln -sf $(LAPACK_OBJ) $(JULIALIB)/libLAPACK.$(SHLIB_EXT)
 
 clean:
