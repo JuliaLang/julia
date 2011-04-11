@@ -11,8 +11,6 @@ type DArray{T,N,distdim} <: Tensor{T,N}
     localpiece::Int32  # my piece #; pmap[localpiece]==myid()
     go::GlobalObject
 
-    global pseudo_darray = new
-
     function DArray(go, T, distdim, dims, initializer, pmap, dist)
         mi = myid()
         lp = 0
@@ -56,14 +54,16 @@ end
 
 size(d::DArray) = d.dims
 
-function serialize{T}(s, d::DArray{T})
+function serialize{T,N,dd}(s, d::DArray{T,N,dd})
     i = worker_id_from_socket(s)
     if is(member(d.go,i), false)
         sz = size(d)
         emptylocl = Array(T, ntuple(length(sz), i->(i==d.distdim?0:sz[i])))
         invoke(serialize, (Any, Any),
-               s, pseudo_darray(sz, emptylocl, d.pmap, d.dist,
-                                d.distdim, 0, d.go))
+               s,
+               ccall(:jl_new_structt, Any, (Any, Any),
+                     DArray{T,N,dd},
+                     (sz, emptylocl, d.pmap, d.dist, d.distdim, 0, d.go)))
     else
         serialize(s, d.go)
     end

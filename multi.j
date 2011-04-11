@@ -527,6 +527,7 @@ function taskrunner()
 end
 
 function deliver_result(sock::IOStream, msg, oid, value)
+    #print("$(myid()) sending result\n")
     if is(msg,:fetch)
         val = value
     else
@@ -693,6 +694,7 @@ function message_handler(fd, sockets)
                 id = force(deserialize(sock))
                 f = deserialize(sock)
                 args = deserialize(sock)
+                #print("$(myid()) got call\n")
                 wi = schedule_call(id, f, args)
                 if is(msg, :call_fetch)
                     wi.notify = (sock, :fetch, id, wi.notify)
