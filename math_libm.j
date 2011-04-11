@@ -20,7 +20,7 @@ end
 macro libfdmfunc1(f)
     quote
         ($f)(x::Float64) = ccall(dlsym(libfdm,$string(f)), Float64, (Float64,), x)
-        ($f)(x::Float32) = ccall(dlsym(libfdm,$strcat(string(f),"f")), Float32, (Float32,), x)
+        ($f)(x::Float32) = ccall(dlsym(libm,$strcat(string(f),"f")), Float32, (Float32,), x)
         ($f)(x::Real) = ($f)(float(x))
         @vectorize $f
     end
@@ -29,7 +29,7 @@ end
 macro libfdmfunc2(f)
     quote
         ($f)(x::Float64, y::Float64) = ccall(dlsym(libfdm,$string(f)), Float64, (Float64, Float64,), x, y)
-        ($f)(x::Float32, y::Float32) = ccall(dlsym(libfdm,$strcat(string(f),"f")), Float32, (Float32, Float32), x, y)
+        ($f)(x::Float32, y::Float32) = ccall(dlsym(libm,$strcat(string(f),"f")), Float32, (Float32, Float32), x, y)
         ($f)(x::Real, y::Real) = ($f)(float(x),float(y))
     end
 end
@@ -42,8 +42,7 @@ macro libmfunc3(f)
     end
 end
 
-@vectorize sqrt
-
+@libfdmfunc1 sqrt
 @libfdmfunc1 sin
 @libfdmfunc1 cos
 @libfdmfunc1 tan 

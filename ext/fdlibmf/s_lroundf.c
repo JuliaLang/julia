@@ -29,9 +29,9 @@
 
 #include <math.h>
 #include <sys/types.h>
-#include <sys/limits.h>
-#include <ieeefp.h>
-#include <machine/ieee.h>
+#include <limits.h>
+//#include <ieeefp.h>
+//#include <machine/ieee.h>
 #include "math_private.h"
 
 #ifndef LROUNDNAME
