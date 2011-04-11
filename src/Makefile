@@ -81,6 +81,7 @@ clean:
 	rm -f *.ji
 	rm -f julia_flisp.boot
 	rm -f julia_flisp.boot.inc
+	rm -f boot.j.inc
 	rm -f ../$(EXENAME)
 	rm -f *~ *#
 
