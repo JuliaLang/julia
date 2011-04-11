@@ -35,9 +35,9 @@ macro libfdmfunc3(f)
 end
 
 @vectorize sqrt
-@vectorize sin
-@vectorize cos
 
+@libfdmfunc1 sin
+@libfdmfunc1 cos
 @libfdmfunc1 tan 
 @libfdmfunc1 sinh 
 @libfdmfunc1 cosh 
