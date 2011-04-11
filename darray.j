@@ -250,12 +250,6 @@ function convert{S,T,N}(::Type{Array{S,N}}, d::DArray{T,N})
     a
 end
 
-# TODO: Do the right thing here
-function changedist{T}(A::DArray{T}, to_dist)
-    Af = convert(Array, A)
-    return distribute(Af, to_dist)
-end
-
 function node_ref(A::DArray, to_dist, range)
     Al = localize(A)
     locdims = size(Al)
@@ -282,7 +276,7 @@ function node_changedist{T}(A::DArray{T}, da, local_size)
     locl
 end
 
-function changedist_new{T}(A::DArray{T}, to_dist)
+function changedist{T}(A::DArray{T}, to_dist)
     if A.distdim == to_dist; return A; end
     return darray((T,sz,da)->node_changedist(A, da, sz), T, size(A), to_dist)
 end

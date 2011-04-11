@@ -339,7 +339,9 @@ function deserialize(s, t::Type{RemoteRef})
         if where == myid()
             wi = lookup_ref(rid)
             if !wi.done
+                #println("$(myid()) waiting for $where,$(rid[1]),$(rid[2])")
                 wait(WeakRemoteRef(where, rid[1], rid[2]))
+                #println("...ok")
             end
             v = wi.result
             # NOTE: this duplicates work_result()
@@ -879,18 +881,22 @@ type GlobalObject
     refs::Array{RemoteRef,1}
 
     global init_GlobalObject
-    function init_GlobalObject(procs, rids, initializer)
+    function init_GlobalObject(mi, procs, rids, initializer)
         np = length(procs)
-        go = new((), Array(RemoteRef, np))
-        mi = myid()
+        refs = Array(RemoteRef, np)
         local myrid
 
         for i=1:np
-            go.refs[i] = WeakRemoteRef(procs[i], rids[i][1], rids[i][2])
+            refs[i] = WeakRemoteRef(procs[i], rids[i][1], rids[i][2])
             if procs[i] == mi
                 myrid = rids[i]
             end
         end
+        init_GlobalObject(mi, procs, rids, initializer, refs, myrid)
+    end
+    function init_GlobalObject(mi, procs, rids, initializer, refs, myrid)
+        np = length(procs)
+        go = new((), refs)
 
         wi = lookup_ref(myrid)
         function del_go_client(go)
@@ -935,25 +941,30 @@ type GlobalObject
         #       reregistering the finalizer until the client set is empty
         np = length(procs)
         r = Array(RemoteRef, np)
-        participate = false
         mi = myid()
+        participate = false
+        midx = 0
         for i=1:np
             # create a set of refs to be initialized by GlobalObject above
             r[i] = RemoteRef(procs[i])
             if procs[i] == mi
                 participate = true
+                midx = i
             end
         end
         rids = { rr2id(r[i]) | i=1:np }
         for p=procs
-            remote_do(p, init_GlobalObject, procs, rids, initializer)
+            if p != mi
+                remote_do(p, init_GlobalObject, p, procs, rids, initializer)
+            end
         end
         if !participate
             go = new((), r)
-            go.local_identity = initializer(go)
+            go.local_identity = initializer(go)  # ???
             go.local_identity
         else
-            fetch(r[mi])
+            init_GlobalObject(mi, procs, rids, initializer, r, rr2id(r[midx]))
+            fetch(r[midx])
         end
     end
 

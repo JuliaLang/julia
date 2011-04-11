@@ -70,6 +70,8 @@ value_t fl_invoke_julia_macro(value_t *args, uint32_t nargs)
     }
     JL_CATCH {
         JL_GC_POP();
+        ios_printf(jl_current_output_stream(), "\n");
+        jl_show(jl_exception_in_transit);
         return fl_cons(symbol("error"), FL_NIL);
     }
     // protect result from GC, otherwise it could be freed during future
