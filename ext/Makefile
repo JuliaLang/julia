@@ -49,7 +49,7 @@ pcre_install: $(PCRE_OBJ) $(JULIALIB)
 
 fdlibmf: fdlibmf/libmf.a
 fdlibmf/libmf.a: fdlibmf/*.c
-	cd fdlibmf && make CC=$(CC) CFLAGS="-D_IEEE_LIBM -Dx86 -fPIC"
+	cd fdlibmf && make CC=$(CC) CFLAGS="-D_IEEE_LIBM -Dx86 -fPIC $(CONFIG)"
 
 FDLIBM_OBJ = $(EXTROOTLIB)/libfdm.$(SHLIB_EXT)
 fdlibm.tar.gz:

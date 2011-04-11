@@ -1,98 +1,106 @@
 libfdm = dlopen("libfdm")
 libm = dlopen("libm")
 
-macro vectorize(f)
+macro vectorize_1arg(f)
     quote
         ($f)(x::Vector) = [ ($f)(x[i]) | i=1:length(x) ]
         ($f)(x::Matrix) = [ ($f)(x[i,j]) | i=1:size(x,1), j=1:size(x,2) ]
     end
 end
 
-macro libmfunc1(f)
+macro vectorize_2arg(f)
+    quote
+        ($f)(x::Vector, y::Vector) = [ ($f)(x[i], y[i]) | i=1:length(x) ]
+        ($f)(x::Matrix, y::Matrix) = [ ($f)(x[i,j], y[i,j]) | i=1:size(x,1), j=1:size(x,2) ]
+    end
+end
+
+macro libmfunc_1arg_float(f)
     quote
         ($f)(x::Float64) = ccall(dlsym(libm,$string(f)), Float64, (Float64,), x)
         ($f)(x::Float32) = ccall(dlsym(libm,$strcat(string(f),"f")), Float32, (Float32,), x)
         ($f)(x::Real) = ($f)(float(x))
-        @vectorize $f
+        @vectorize_1arg $f
     end
 end
 
-macro libfdmfunc1(f)
+macro libfdmfunc_1arg_float(f)
     quote
         ($f)(x::Float64) = ccall(dlsym(libfdm,$string(f)), Float64, (Float64,), x)
         ($f)(x::Float32) = ccall(dlsym(libfdm,$strcat(string(f),"f")), Float32, (Float32,), x)
         ($f)(x::Real) = ($f)(float(x))
-        @vectorize $f
+        @vectorize_1arg $f
     end
 end
 
-macro libfdmfunc2(f)
+macro libmfunc_1arg_int(f)
+    quote
+        ($f)(x::Float64) = ccall(dlsym(libm,$string(f)), Int32, (Float64,), x)
+        ($f)(x::Float32) = ccall(dlsym(libm,$strcat(string(f),"f")), Int32, (Float32,), x)
+        @vectorize_1arg $f
+    end
+end
+
+macro libfdmfunc_2arg(f)
     quote
         ($f)(x::Float64, y::Float64) = ccall(dlsym(libfdm,$string(f)), Float64, (Float64, Float64,), x, y)
         ($f)(x::Float32, y::Float32) = ccall(dlsym(libfdm,$strcat(string(f),"f")), Float32, (Float32, Float32), x, y)
         ($f)(x::Real, y::Real) = ($f)(float(x),float(y))
-	@vectorize $f
+	@vectorize_2arg $f
     end
 end
 
-macro libmfunc3(f)
-    quote
-        ($f)(x::Float64) = ccall(dlsym(libm,$string(f)), Int32, (Float64,), x)
-        ($f)(x::Float32) = ccall(dlsym(libm,$strcat(string(f),"f")), Int32, (Float32,), x)
-        @vectorize $f
-    end
-end
+@libfdmfunc_1arg_float sqrt
+@libfdmfunc_1arg_float sin
+@libfdmfunc_1arg_float cos
+@libfdmfunc_1arg_float tan 
+@libfdmfunc_1arg_float sinh 
+@libfdmfunc_1arg_float cosh 
+@libfdmfunc_1arg_float tanh 
+@libfdmfunc_1arg_float asin 
+@libfdmfunc_1arg_float acos 
+@libfdmfunc_1arg_float atan 
+@libfdmfunc_1arg_float log 
+@libfdmfunc_1arg_float log2         
+@libfdmfunc_1arg_float log10 
+@libfdmfunc_1arg_float log1p 
+@libfdmfunc_1arg_float logb 
+@libfdmfunc_1arg_float exp 
+@libfdmfunc_1arg_float exp2 
+@libfdmfunc_1arg_float expm1
+@libfdmfunc_1arg_float erf 
+@libfdmfunc_1arg_float erfc
+@libfdmfunc_1arg_float cbrt 
+@libfdmfunc_1arg_float ceil 
+@libfdmfunc_1arg_float floor 
+@libfdmfunc_1arg_float rint 
 
-@libfdmfunc1 sqrt
-@libfdmfunc1 sin
-@libfdmfunc1 cos
-@libfdmfunc1 tan 
-@libfdmfunc1 sinh 
-@libfdmfunc1 cosh 
-@libfdmfunc1 tanh 
-@libfdmfunc1 asin 
-@libfdmfunc1 acos 
-@libfdmfunc1 atan 
-@libfdmfunc1 log 
-@libfdmfunc1 log2         
-@libfdmfunc1 log10 
-@libfdmfunc1 log1p 
-@libfdmfunc1 logb 
-@libfdmfunc1 exp 
-@libfdmfunc1 exp2 
-@libfdmfunc1 expm1
-@libfdmfunc1 erf 
-@libfdmfunc1 erfc
-@libfdmfunc1 cbrt 
-@libfdmfunc1 ceil 
-@libfdmfunc1 floor 
-@libfdmfunc1 rint 
+@libmfunc_1arg_float nearbyint 
+@libmfunc_1arg_float trunc
+@libmfunc_1arg_float round 
 
-@libfdmfunc2 atan2
-@libfdmfunc2 pow
-@libfdmfunc2 fmod
-@libfdmfunc2 copysign
-@libfdmfunc2 hypot
+@libmfunc_1arg_int lrint
+@libmfunc_1arg_int lround
+@libmfunc_1arg_int ilogb
 
-@libmfunc1 nearbyint 
-@libmfunc1 trunc
-@libmfunc1 round 
-@libmfunc3 lrint
-@libmfunc3 lround
-@libmfunc3 ilogb
+@libfdmfunc_2arg atan2
+@libfdmfunc_2arg pow
+@libfdmfunc_2arg fmod
+@libfdmfunc_2arg copysign
+@libfdmfunc_2arg hypot
 
 ipart(x) = trunc(x)
 fpart(x) = x - trunc(x)
-@vectorize ipart
-@vectorize fpart
+@vectorize_1arg ipart
+@vectorize_1arg fpart
 
 abs(x::Float64) = ccall(dlsym(libfdm, :fabs),  Float64, (Float64,), x)
 abs(x::Float32) = ccall(dlsym(libfdm, :fabsf), Float32, (Float32,), x)
-@vectorize abs
+@vectorize_1arg abs
 
 ldexp(x::Float64,e::Int32) = ccall(dlsym(libfdm, :ldexp),  Float64, (Float64,Int32), x, e)
 ldexp(x::Float32,e::Int32) = ccall(dlsym(libfdm, :ldexpf), Float32, (Float32,Int32), x, e)
-@vectorize ldexp
+@vectorize_2arg ldexp
 
 function frexp(x::Float64)
     exp = zeros(Int32,1)
@@ -106,7 +114,7 @@ function frexp(x::Float32)
     (s, exp[1])
 end
 
-@vectorize frexp
+@vectorize_1arg frexp
 
 rand()     = ccall(:rand_double,   Float64, ())
 randf()    = ccall(:rand_float,    Float32, ())
