@@ -8,6 +8,15 @@ macro vectorize(f)
     end
 end
 
+macro libmfunc1(f)
+    quote
+        ($f)(x::Float64) = ccall(dlsym(libm,$string(f)), Float64, (Float64,), x)
+        ($f)(x::Float32) = ccall(dlsym(libm,$strcat(string(f),"f")), Float32, (Float32,), x)
+        ($f)(x::Real) = ($f)(float(x))
+        @vectorize $f
+    end
+end
+
 macro libfdmfunc1(f)
     quote
         ($f)(x::Float64) = ccall(dlsym(libfdm,$string(f)), Float64, (Float64,), x)
@@ -22,14 +31,13 @@ macro libfdmfunc2(f)
         ($f)(x::Float64, y::Float64) = ccall(dlsym(libfdm,$string(f)), Float64, (Float64, Float64,), x, y)
         ($f)(x::Float32, y::Float32) = ccall(dlsym(libfdm,$strcat(string(f),"f")), Float32, (Float32, Float32), x, y)
         ($f)(x::Real, y::Real) = ($f)(float(x),float(y))
-        @vectorize $f
     end
 end
 
-macro libfdmfunc3(f)
+macro libmfunc3(f)
     quote
-        ($f)(x::Float64) = ccall(dlsym(libfdm,$string(f)), Int32, (Float64,), x)
-        ($f)(x::Float32) = ccall(dlsym(libfdm,$strcat(string(f),"f")), Int32, (Float32,), x)
+        ($f)(x::Float64) = ccall(dlsym(libm,$string(f)), Int32, (Float64,), x)
+        ($f)(x::Float32) = ccall(dlsym(libm,$strcat(string(f),"f")), Int32, (Float32,), x)
         @vectorize $f
     end
 end
@@ -58,10 +66,7 @@ end
 @libfdmfunc1 cbrt 
 @libfdmfunc1 ceil 
 @libfdmfunc1 floor 
-@libfdmfunc1 nearbyint 
-@libfdmfunc1 round 
 @libfdmfunc1 rint 
-@libfdmfunc1 trunc
 
 @libfdmfunc2 atan2
 @libfdmfunc2 pow
@@ -69,9 +74,12 @@ end
 @libfdmfunc2 copysign
 @libfdmfunc2 hypot
 
-@libfdmfunc3 lrint
-@libfdmfunc3 lround
-@libfdmfunc3 ilogb
+@libmfunc1 nearbyint 
+@libmfunc1 trunc
+@libmfunc1 round 
+@libmfunc3 lrint
+@libmfunc3 lround
+@libmfunc3 ilogb
 
 ipart(x) = trunc(x)
 fpart(x) = x - trunc(x)
