@@ -1,4 +1,4 @@
-(load "flisp/aliases.scm")
+(load "../flisp/aliases.scm")
 (load "utils.scm")
 (load "match.scm")
 (load "julia-parser.scm")

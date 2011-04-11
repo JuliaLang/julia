@@ -900,6 +900,7 @@ void jl_restore_system_image(char *fname)
     jl_value_t *fexpr = jl_parse_file_string(ss.buf);
     JL_GC_PUSH(&fexpr);
     ios_close(&ss);
+    // TODO: there is no exception handler here!
     jl_load_file_expr(fname, fexpr);
     JL_GC_POP();
 }
