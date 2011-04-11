@@ -124,6 +124,10 @@ static void _infer_stack_direction()
     _infer_direction_from(&first);
 }
 
+static int mangle_pointers;
+extern char *jl_stack_lo;
+extern char *jl_stack_hi;
+
 static void _probe_arch()
 {
     struct _probe_data p;
@@ -138,6 +142,18 @@ static void _probe_arch()
     fill(&p);
     /* do a probe without filler */
     boundlow(&p);
+
+    char **s = (char**)p.ref_probe;
+#if defined(LINUX) && defined(ARCH_X86)
+    mangle_pointers = !(s[4] > jl_stack_lo &&
+                        s[4] < jl_stack_hi);
+#elif defined(LINUX) && defined(ARCH_X86_64)
+    mangle_pointers = !(s[6] > jl_stack_lo &&
+                        s[6] < jl_stack_hi);
+#else
+    mangle_pointers = 0;
+#endif
+
     _infer_jmpbuf_offsets(&p);
 }
 
@@ -313,10 +329,19 @@ static void rebase_state(jmp_buf *ctx, intptr_t local_sp, intptr_t new_sp)
     ptrint_t diff = new_sp - local_sp; /* subtract old base, and add new base */
 #if defined(LINUX) && defined(ARCH_X86)
     s[3] += diff;
-    s[4] = ptr_mangle(ptr_demangle(s[4])+diff);
+    if (mangle_pointers)
+        s[4] = ptr_mangle(ptr_demangle(s[4])+diff);
+    else
+        s[4] += diff;
 #elif defined(LINUX) && defined(ARCH_X86_64)
-    s[1] = ptr_mangle(ptr_demangle(s[1])+diff);
-    s[6] = ptr_mangle(ptr_demangle(s[6])+diff);
+    if (mangle_pointers) {
+        s[1] = ptr_mangle(ptr_demangle(s[1])+diff);
+        s[6] = ptr_mangle(ptr_demangle(s[6])+diff);
+    }
+    else {
+        s[1] += diff;
+        s[6] += diff;
+    }
 #elif defined(MACOSX) && defined(ARCH_X86)
     s[8] += diff;
     s[9] += diff;
