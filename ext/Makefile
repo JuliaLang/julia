@@ -1,9 +1,13 @@
 JULIAHOME = $(shell pwd)/..
 include ../Make.inc
 
-default: all
+OS = $(shell uname)
 
-all: llvm readline_install pcre_install fdlibm_install lapack_install libc_install
+default: defaultlibs_$(OS)
+
+defaultlibs_Linux: llvm pcre_install fdlibm_install lapack_install libc_install
+
+defaultlibs_Darwin: llvm readline_install pcre_install fdlibm_install lapack_install libc_install
 
 $(JULIALIB):
 	mkdir -p $(JULIALIB)
@@ -43,13 +47,17 @@ pcre_install: $(PCRE_OBJ) $(JULIALIB)
 	ln -sf $(PCRE_OBJ) $(JULIALIB)/libpcre.$(SHLIB_EXT)
 	ln -sf $(EXTROOTLIB)/libpcreposix.$(SHLIB_EXT) $(JULIALIB)/libpcreposix.$(SHLIB_EXT)
 
+fdlibmf: fdlibmf/libmf.a
+fdlibmf/libmf.a: fdlibmf/*.c
+	cd fdlibmf && make CC=$(CC) CFLAGS="-D_IEEE_LIBM -Dx86 -fPIC"
+
 FDLIBM_OBJ = $(EXTROOTLIB)/libfdm.$(SHLIB_EXT)
 fdlibm.tar.gz:
 	curl -O -u anonymous:julia@juliamath.com ftp://netlib.org/fdlibm.tar.gz
 fdlibm: fdlibm.tar.gz
 	tar zxf fdlibm.tar.gz
-$(FDLIBM_OBJ): fdlibm
-	cd fdlibm && make CC=$(CC) CFLAGS="-D_IEEE_LIBM -Dx86 -fPIC" && $(CC) -shared *.o -o $@
+$(FDLIBM_OBJ): fdlibm fdlibmf
+	cd fdlibm && make CC=$(CC) CFLAGS="-D_IEEE_LIBM -Dx86 -fPIC" && $(CC) -shared *.o ../fdlibmf/*.o -o $@
 fdlibm_install: $(FDLIBM_OBJ) $(JULIALIB)
 	ln -sf $< $(JULIALIB)/libfdm.$(SHLIB_EXT)
 
