@@ -31,6 +31,7 @@ macro libfdmfunc2(f)
         ($f)(x::Float64, y::Float64) = ccall(dlsym(libfdm,$string(f)), Float64, (Float64, Float64,), x, y)
         ($f)(x::Float32, y::Float32) = ccall(dlsym(libm,$strcat(string(f),"f")), Float32, (Float32, Float32), x, y)
         ($f)(x::Real, y::Real) = ($f)(float(x),float(y))
+	@vectorize $f
     end
 end
 
