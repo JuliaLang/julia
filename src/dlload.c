@@ -29,7 +29,7 @@ static char *extensions[] = { "", ".so" };
 #define GET_FUNCTION_FROM_MODULE dlsym
 #define CLOSE_MODULE dlclose
 typedef void * module_handle_t;
-static char *extensions[] = { "", ".dylib", ".bundle" };
+static char *extensions[] = { "", ".bundle", ".dylib" };
 #define N_EXTENSIONS 3
 
 #endif
