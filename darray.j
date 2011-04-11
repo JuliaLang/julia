@@ -11,27 +11,19 @@ type DArray{T,N,distdim} <: Tensor{T,N}
     localpiece::Int32  # my piece #; pmap[localpiece]==myid()
     go::GlobalObject
 
-    function DArray(go, T, distdim, dims, initializer)
-        global PGRP
-        np = PGRP.np
+    global pseudo_darray = new
+
+    function DArray(go, T, distdim, dims, initializer, pmap, dist)
         mi = myid()
-        # for now assume layout will be 1:n
-        pmap = linspace(1,np)
-        # determine size of local pieces
-        sdd = dims[distdim]
-        each = div(sdd,np)
-        sizes = fill(Array(Int32,np), each)
-        sizes[end] += rem(sdd,np)
-        # todo: in general, if we're not part of this array
-        mysz = (mi==0 ? 0 : sizes[mi])
-        locsz = ntuple(length(dims), i->(i==distdim?mysz:dims[i]))
         lp = 0
         for i=1:length(pmap)
             if pmap[i]==mi
                 lp=i; break
             end
         end
-        dist = [[1], cumsum(sizes)+1]
+
+        mysz = lp==0 ? 0 : (dist[lp+1]-dist[lp])
+        locsz = ntuple(length(dims), i->(i==distdim?mysz:dims[i]))
         da = new(dims,
                  (), #Array(T, locsz),
                  pmap, dist, distdim, lp, go)
@@ -44,9 +36,19 @@ type DArray{T,N,distdim} <: Tensor{T,N}
     end
 
     # don't use DArray() directly; use darray() below instead
-    function DArray(T, distdim, dims, initializer)
-        GlobalObject(g->DArray(g, T, distdim, dims, initializer))
+    function DArray(T, distdim, dims, initializer, procs, dist)
+        GlobalObject(g->DArray(g, T, distdim, dims, initializer, procs, dist))
         #go.local_identity
+    end
+
+    DArray(T, distdim, dims, procs::Vector, dist::Vector) =
+        DArray(T, distdim, dims, RemoteRef, procs, dist)
+
+    function DArray(T, distdim, dims, initializer::Function)
+        global PGRP
+        procs = linspace(1,PGRP.np)
+        dist = defaultdist(distdim, dims, length(procs))
+        DArray(T, distdim, dims, initializer, procs, dist)
     end
 
     DArray(T, distdim, dims) = DArray(T, distdim, dims, RemoteRef)
@@ -54,7 +56,27 @@ end
 
 size(d::DArray) = d.dims
 
-serialize(s, d::DArray) = serialize(s, d.go)
+function serialize{T}(s, d::DArray{T})
+    i = worker_id_from_socket(s)
+    if is(member(d.go,i), false)
+        sz = size(d)
+        emptylocl = Array(T, ntuple(length(sz), i->(i==d.distdim?0:sz[i])))
+        invoke(serialize, (Any, Any),
+               s, pseudo_darray(sz, emptylocl, d.pmap, d.dist,
+                                d.distdim, 0, d.go))
+    else
+        serialize(s, d.go)
+    end
+end
+
+# compute balanced dist vector
+function defaultdist(distdim, dims, np)
+    sdd = dims[distdim]
+    each = div(sdd,np)
+    sizes = fill(Array(Int32,np), each)
+    sizes[end] += rem(sdd,np)
+    [[1], cumsum(sizes)+1]
+end
 
 # when we actually need the data, wait for it
 localize(r::RemoteRef) = localize(fetch(r))
@@ -241,18 +263,19 @@ function node_ref(A::DArray, to_dist, range)
     Al[slice...]
 end
 
-function node_changedist{T}(A::DArray{T}, to_dist, local_size)
+function node_changedist{T}(A::DArray{T}, da, local_size)
     locl = Array(T, local_size)
+    if isempty(locl)
+        return locl
+    end
+    to_dist = da.distdim
+    newdist = da.dist
     from_dist = A.distdim
     dimsA = size(A)
-    np = PGRP.np
-    sdd = dimsA[to_dist]
-    each = div(sdd, np)
-    newdist = fill(Array(Int32,np), each)
-    newdist[end] += rem(sdd, np)
+    myidxs = newdist[da.localpiece]:newdist[da.localpiece+1]-1
     
     for p = 1:length(A.dist)-1
-        R = remote_call_fetch(A.pmap[p], node_ref, A, to_dist, newdist[p]:newdist[p+1]-1)
+        R = remote_call_fetch(A.pmap[p], node_ref, A, to_dist, myidxs)
         sliceR = { i == from_dist ? (A.dist[p]:A.dist[p+1]-1) : (1:local_size[i]) | i=1:ndims(A) }
         locl[sliceR...] = R
     end
@@ -261,7 +284,7 @@ end
 
 function changedist_new{T}(A::DArray{T}, to_dist)
     if A.distdim == to_dist; return A; end
-    return darray((T,sz,da)->node_changedist(A, to_dist, sz), T, size(A), to_dist)
+    return darray((T,sz,da)->node_changedist(A, da, sz), T, size(A), to_dist)
 end
 
 function node_multiply{T}(A::Tensor{T}, B, sz)

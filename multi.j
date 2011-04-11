@@ -34,6 +34,10 @@ end
 
 SENDBUF = ()
 function send_msg(s::IOStream, kind, args...)
+    id = worker_id_from_socket(s)
+    if id > -1
+        return send_msg(worker_from_id(id), kind, args...)
+    end
     global SENDBUF
     if is(SENDBUF,())
         SENDBUF = memio()
@@ -43,7 +47,7 @@ end
 
 # todo:
 # * add readline to event loop
-# - GOs/darrays on a subset of nodes
+# * GOs/darrays on a subset of nodes
 # - more indexing
 # - take() to empty a Ref (full/empty variables)
 # - dynamically adding nodes (then always start with 1 and just grow/shrink)
@@ -387,7 +391,7 @@ function remote_call_fetch(w::Worker, f, args...)
     rr = RemoteRef(w)
     oid = rr2id(rr)
     send_msg(w, :call_fetch, oid, f, args)
-    yieldto(Scheduler, WaitFor(:fetch, oid))
+    force(yieldto(Scheduler, WaitFor(:fetch, oid)))
 end
 
 remote_call_fetch(id::Int, f, args...) =
@@ -698,6 +702,7 @@ function message_handler(fd, sockets)
             elseif is(msg, :do)
                 f = deserialize(sock)
                 args = deserialize(sock)
+                #print("$(myid()) got $args\n")
                 let func=f, ar=args
                     enq_work(WorkItem(()->apply(force(func),force(ar))))
                 end
@@ -718,6 +723,8 @@ function message_handler(fd, sockets)
                     deliver_result(sock, msg, oid, work_result(wi))
                 else
                     # add to WorkItem's notify list
+                    # TODO: should store the worker here, not the socket,
+                    # so we don't need to look up the worker later
                     wi.notify = (sock, msg, oid, wi.notify)
                 end
             end
@@ -869,21 +876,24 @@ type GlobalObject
     local_identity
     refs::Array{RemoteRef,1}
 
-    function GlobalObject(rids, initializer)
-        global PGRP
-        go = new((), Array(RemoteRef, PGRP.np))
-
+    global init_GlobalObject
+    function init_GlobalObject(procs, rids, initializer)
+        np = length(procs)
+        go = new((), Array(RemoteRef, np))
         mi = myid()
-        myrid = rids[mi]
-        # make our reference to it weak so we can detect when there are
-        # no local users of the object.
-        #if !has(PGRP.refs,myrid)
-        #    error("GlobalObject was hoping to find something")
-        #end
+        local myrid
+
+        for i=1:np
+            go.refs[i] = WeakRemoteRef(procs[i], rids[i][1], rids[i][2])
+            if procs[i] == mi
+                myrid = rids[i]
+            end
+        end
+
         wi = lookup_ref(myrid)
         function del_go_client(go)
             if has(wi.clientset, mi)
-                for i=1:PGRP.np
+                for i=1:np
                     send_del_client(go.refs[i])
                 end
             end
@@ -893,11 +903,10 @@ type GlobalObject
             end
         end
         finalizer(go, del_go_client)
-        for i=1:length(rids)
-            go.refs[i] = WeakRemoteRef(i, rids[i][1], rids[i][2])
-        end
         # NOTE: this is put(go.refs[mi], WeakRef(go))
         go.local_identity = initializer(go)
+        # make our reference to it weak so we can detect when there are
+        # no local users of the object.
         wi.result = WeakRef(go)
         wi.done = true
         notify_done(wi)
@@ -905,7 +914,7 @@ type GlobalObject
 
     # initializer is a function that will be called on the new G.O., and its
     # result will be used to set go.local_identity
-    function GlobalObject(initializer::Function)
+    function GlobalObject(procs, initializer::Function)
         # makes remote object cycles, but we can take advantage of the known
         # topology to avoid fully-general cycle collection.
         # . keep a weak table of all client RemoteRefs, unique them
@@ -922,59 +931,82 @@ type GlobalObject
         #     except the one in PGRP.refs
         #     . done by adding a finalizer to the GO that revives it by
         #       reregistering the finalizer until the client set is empty
-        global PGRP
-        r = Array(RemoteRef, PGRP.np)
-        for i=1:length(r)
+        np = length(procs)
+        r = Array(RemoteRef, np)
+        participate = false
+        mi = myid()
+        for i=1:np
             # create a set of refs to be initialized by GlobalObject above
-            r[i] = RemoteRef(i)
+            r[i] = RemoteRef(procs[i])
+            if procs[i] == mi
+                participate = true
+            end
         end
-        rids = { rr2id(r[i]) | i=1:length(r) }
-        for i=1:length(r)
-            remote_do(i, GlobalObject, rids, initializer)
+        rids = { rr2id(r[i]) | i=1:np }
+        for p=procs
+            remote_do(p, init_GlobalObject, procs, rids, initializer)
         end
-        if myid()==0
+        if !participate
             go = new((), r)
             go.local_identity = initializer(go)
             go.local_identity
         else
-            fetch(r[myid()])
+            fetch(r[mi])
         end
     end
 
+    function GlobalObject(initializer::Function)
+        global PGRP
+        GlobalObject(1:PGRP.np, initializer)
+    end
     GlobalObject() = GlobalObject(identity)
 end
 
 show(g::GlobalObject) = print("GlobalObject()")
+
+function member(g::GlobalObject, p::Int)
+    for i=1:length(g.refs)
+        r = g.refs[i]
+        if r.where == p
+            return r
+        end
+    end
+    return false
+end
 
 function serialize(s, g::GlobalObject)
     global PGRP
     # a GO is sent to a machine by sending just the RemoteRef for its
     # copy. much smaller message.
     i = worker_id_from_socket(s)
-    if i != -1
-        mi = myid()
-        if mi==0
-            addnew = true
-        else
-            myref = g.refs[mi]
-            wi = PGRP.refs[rr2id(myref)]
-            addnew = !has(wi.clientset, i)
-        end
-        if addnew
-            # adding new client to this GO
-            for p=1:PGRP.np
-                if p != i
-                    send_add_client(p, g.refs[p])
-                end
-            end
-        end
-        serialize(s, g.refs[i])
-    else
-        # TODO: be able to make GlobalObjects that span only a subset of all
-        # processors, and allow them to have outside clients.
+    if i == -1
         error("global object cannot be sent outside its process group")
-        #invoke(serialize, (Any, Any), s, g)
     end
+    ri = member(g, i)
+    if is(ri, false)
+        li = g.local_identity
+        g.local_identity = ()
+        invoke(serialize, (Any, Any), s, g)
+        g.local_identity = li
+        return ()
+    end
+    mi = myid()
+    myref = member(g, mi)
+    if is(myref, false)
+        addnew = true
+    else
+        wi = PGRP.refs[rr2id(myref)]
+        addnew = !has(wi.clientset, i)
+    end
+    if addnew
+        # adding new client to this GO
+        # node doing the serializing is responsible for notifying others of
+        # new references.
+        for rr = g.refs
+            send_add_client(i, rr)
+        end
+    end
+    serialize(s, ri)
 end
 
 ## higher-level functions: spawn, pmap, pfor, etc. ##
@@ -1127,6 +1159,7 @@ del_fd_handler(fd) = del(fd_handlers, fd)
 function event_loop(isclient)
     fdset = FDSet()
     iserr, lasterr = false, ()
+    #repl_callback(0, 0)
     
     while true
         try
