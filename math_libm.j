@@ -98,6 +98,14 @@ abs(x::Float64) = ccall(dlsym(libfdm, :fabs),  Float64, (Float64,), x)
 abs(x::Float32) = ccall(dlsym(libfdm, :fabsf), Float32, (Float32,), x)
 @vectorize_1arg abs
 
+max(x::Float64, y::Float64) = ccall(dlsym(libm, :fmax),  Float64, (Float64,Float64), x, y)
+max(x::Float32, y::Float32) = ccall(dlsym(libm, :fmax), Float32, (Float32,Float32), x, y)
+@vectorize_2arg max
+
+min(x::Float64, y::Float64) = ccall(dlsym(libm, :fmin),  Float64, (Float64,Float64), x, y)
+min(x::Float32, y::Float32) = ccall(dlsym(libm, :fmin), Float32, (Float32,Float32), x, y)
+@vectorize_2arg min
+
 ldexp(x::Float64,e::Int32) = ccall(dlsym(libfdm, :ldexp),  Float64, (Float64,Int32), x, e)
 ldexp(x::Float32,e::Int32) = ccall(dlsym(libfdm, :ldexpf), Float32, (Float32,Int32), x, e)
 @vectorize_2arg ldexp

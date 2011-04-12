@@ -9,7 +9,7 @@ julia-debug-build:
 julia-release-build:
 	cd src && make release
 
-sys.ji: sysimg.j start_image.j src/boot.j src/dump.c
+sys.ji: sysimg.j start_image.j src/boot.j src/dump.c *.j
 	./julia -b sysimg.j
 
 custom.j:
