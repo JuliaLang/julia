@@ -1299,9 +1299,12 @@ void jl_init_primitives()
     add_builtin_func("tuplelen", jl_f_tuplelen);
     add_builtin_func("getfield", jl_f_get_field);
     add_builtin_func("setfield", jl_f_set_field);
+
     add_builtin_func("arraylen", jl_f_arraylen);
     add_builtin_func("arrayref", jl_f_arrayref);
     add_builtin_func("arrayset", jl_f_arrayset);
+    add_builtin_func("arraysize", jl_f_arraysize);
+
     add_builtin_func("apply_type", jl_f_instantiate_type);
     add_builtin_func("typevar", jl_f_typevar);
     add_builtin_func("new_struct_type", jl_f_new_struct_type);

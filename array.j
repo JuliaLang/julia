@@ -2,7 +2,8 @@
 
 ## Basic functions ##
 
-size(a::Array) = a.dims
+size(a::Array) = arraysize(a)
+size(a::Array, d) = arraysize(a, d)
 numel(a::Array) = arraylen(a)
 
 ## Constructors ##
@@ -65,7 +66,7 @@ float64{T,n}(x::Array{T,n}) = convert(Array{Float64,n}, x)
 ref(a::Array, i::Index) = arrayref(a,i)
 ref{T}(a::Array{T,1}, i::Index) = arrayref(a,i)
 ref(a::Array{Any,1}, i::Index) = arrayref(a,i)
-ref{T}(a::Array{T,2}, i::Index, j::Index) = arrayref(a, (j-1)*a.dims[1] + i)
+ref{T}(a::Array{T,2}, i::Index, j::Index) = arrayref(a, (j-1)*arraysize(a,1)+i)
 
 ## Indexing: assign ##
 

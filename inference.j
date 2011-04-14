@@ -117,6 +117,17 @@ t_func[arraylen] = (1, 1, x->Int32)
 t_func[arrayref] = (2, 2, (a,i)->(isa(a,StructKind) && subtype(a,Array) ?
                                   a.parameters[1] : Any))
 t_func[arrayset] = (3, 3, (a,i,v)->a)
+t_func[arraysize] = (1, 2,
+function (a, d...)
+    if is(d,())
+        if isa(a,StructKind) && subtype(a,Array)
+            return NTuple{a.parameters[2],Int32}
+        else
+            return NTuple{Array.parameters[2],Int32}
+        end
+    end
+    return Int32
+end)
 t_func[Array] =
     (1, Inf,
 function (T, dims...)

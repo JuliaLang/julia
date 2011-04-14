@@ -1914,10 +1914,7 @@ void jl_init_types()
                            (jl_tag_type_t*)
                            jl_apply_type((jl_value_t*)jl_tensor_type, tv),
                            tv,
-                           jl_tuple(1, jl_symbol("dims")),
-                           jl_tuple(1, jl_apply_type((jl_value_t*)jl_ntuple_type,
-                                                     jl_tuple(2, jl_tupleref(tv,1),
-                                                              jl_int32_type))));
+                           jl_null, jl_null);
     jl_array_typename = jl_array_type->name;
     jl_array_type->fptr = jl_generic_array_ctor;
     jl_array_type->env = NULL;

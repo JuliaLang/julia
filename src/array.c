@@ -19,26 +19,23 @@
 // array constructors ---------------------------------------------------------
 
 static
-jl_array_t *_new_array(jl_type_t *atype, jl_tuple_t *dims)
+jl_array_t *_new_array(jl_type_t *atype, jl_tuple_t *dimst,
+                       uint32_t ndims, size_t *dims)
 {
     size_t i, tot;
     size_t nel=1;
-    size_t ndims = dims->length;
-    int isbytes=0;
+    int isbytes=0, isunboxed=0;
     void *data;
-    jl_array_t *a=NULL;
-    JL_GC_PUSH(&a);
+    jl_array_t *a;
 
     if (ndims == 0) nel = 0;
     for(i=0; i < ndims; i++) {
-        jl_value_t *dimarg = jl_tupleref(dims, i);
-        assert(jl_is_int32(dimarg));
-        size_t d = jl_unbox_int32(dimarg);
-        nel *= d;
+        nel *= dims[i];
     }
     jl_type_t *el_type = (jl_type_t*)jl_tparam0(atype);
 
-    if (jl_is_bits_type(el_type)) {
+    isunboxed = jl_is_bits_type(el_type);
+    if (isunboxed) {
         size_t nby = jl_bitstype_nbits(el_type)/8;
         tot = nby * nel;
         if (nby==1 && ndims==1) {
@@ -51,28 +48,29 @@ jl_array_t *_new_array(jl_type_t *atype, jl_tuple_t *dims)
         tot = sizeof(void*) * nel;
     }
 
+    int ndimwords = (ndims > 3 ? (ndims-3) : 0);
+#ifdef JL_GC_MARKSWEEP
+    if (1) {
+#else
     if (tot <= ARRAY_INLINE_NBYTES) {
-        a = allocobj(sizeof(jl_array_t) + (tot - sizeof(void*)));
+#endif
+        a = allocobj(sizeof(jl_array_t) + tot + (ndimwords-1)*sizeof(size_t));
         a->type = atype;
-        a->dims = dims;
-        data = &a->_space[0];
-        if (tot > 0 && !jl_is_bits_type(el_type)) {
+        a->dims = dimst;
+        data = (&a->_space[0] + ndimwords*sizeof(size_t));
+        if (tot > 0 && !isunboxed) {
             memset(data, 0, tot);
         }
     }
     else {
-#ifdef JL_GC_MARKSWEEP
-        a = alloc_4w();
-#else
-        a = allocobj(sizeof(jl_array_t));
-#endif
+        a = allocobj(sizeof(jl_array_t) + (ndimwords-1)*sizeof(size_t));
         a->type = atype;
-        a->dims = dims;
+        a->dims = dimst;
         // temporarily initialize to make gc-safe
         a->data = NULL;
         a->length = 0;
         if (tot > 0) {
-            if (jl_is_bits_type(el_type)) {
+            if (isunboxed) {
 #ifdef BOEHM_GC
                 if (tot >= 200000)
                     data = GC_malloc_atomic_ignore_off_page(tot);
@@ -98,25 +96,33 @@ jl_array_t *_new_array(jl_type_t *atype, jl_tuple_t *dims)
     a->data = data;
     if (isbytes) ((char*)data)[tot-1] = '\0';
     a->length = nel;
-
-    JL_GC_POP();
+    size_t *adims = &a->nrows;
+    if (ndims == 1) {
+        a->nrows = nel;
+        a->maxsize = tot;
+        a->offset = 0;
+    }
+    else {
+        for(i=0; i < ndims; i++)
+            adims[i] = dims[i];
+    }
+    
     return a;
 }
 
 jl_array_t *jl_new_array(jl_type_t *atype, jl_tuple_t *dims)
 {
-    return _new_array(atype, dims);
+    size_t ndims = dims->length;
+    size_t *adims = alloca(ndims*sizeof(size_t));
+    size_t i;
+    for(i=0; i < ndims; i++)
+        adims[i] = jl_unbox_int32(jl_tupleref(dims,i));
+    return _new_array(atype, dims, ndims, adims);
 }
 
 jl_array_t *jl_alloc_array_1d(jl_type_t *atype, size_t nr)
 {
-    jl_value_t *dim = jl_box_int32(nr);
-    jl_tuple_t *dims=NULL;
-    JL_GC_PUSH(&dim, &dims);
-    dims = jl_tuple1(dim);
-    jl_array_t *a = _new_array(atype, dims);
-    JL_GC_POP();
-    return a;
+    return _new_array(atype, NULL, 1, &nr);
 }
 
 JL_CALLABLE(jl_new_array_internal)
@@ -134,7 +140,7 @@ JL_CALLABLE(jl_new_array_internal)
     for(i=0; i < d->length; i++) {
         JL_TYPECHK(Array, int32, jl_tupleref(d,i));
     }
-    return (jl_value_t*)_new_array((jl_type_t*)atype, d);
+    return (jl_value_t*)jl_new_array((jl_type_t*)atype, d);
 }
 
 JL_CALLABLE(jl_generic_array_ctor)
@@ -164,7 +170,7 @@ JL_CALLABLE(jl_generic_array_ctor)
     vnd = jl_box_int32(nd);
     vtp = (jl_value_t*)jl_tuple2(args[0], vnd);
     vnt = jl_apply_type((jl_value_t*)jl_array_type, (jl_tuple_t*)vtp);
-    jl_value_t *ar = (jl_value_t*)_new_array((jl_type_t*)vnt, d);
+    jl_value_t *ar = (jl_value_t*)jl_new_array((jl_type_t*)vnt, d);
     JL_GC_POP();
     return ar;
 }
@@ -211,6 +217,37 @@ JL_CALLABLE(jl_f_arraylen)
     JL_NARGS(arraylen, 1, 1);
     JL_TYPECHK(arraylen, array, args[0]);
     return jl_box_int32(((jl_array_t*)args[0])->length);
+}
+
+jl_tuple_t *jl_construct_array_size(jl_array_t *a, size_t nd)
+{
+    if (a->dims) return a->dims;
+
+    jl_tuple_t *d = jl_alloc_tuple(nd);
+    a->dims = d;
+    size_t i;
+    for(i=0; i < nd; i++)
+        jl_tupleset(d, i, jl_box_int32((&a->nrows)[i]));
+    return d;
+}
+
+JL_CALLABLE(jl_f_arraysize)
+{
+    JL_TYPECHK(arraysize, array, args[0]);
+    jl_array_t *a = (jl_array_t*)args[0];
+    size_t nd = jl_array_ndims(a);
+    if (nargs == 2) {
+        JL_TYPECHK(arraysize, int32, args[1]);
+        int dno = jl_unbox_int32(args[1]);
+        if (dno < 1 || dno > nd)
+            jl_error("arraysize: dimension out of range");
+        return jl_box_int32((&a->nrows)[dno-1]);
+    }
+    else {
+        JL_NARGS(arraysize, 1, 1);
+    }
+    if (a->dims) return (jl_value_t*)a->dims;
+    return (jl_value_t*)jl_construct_array_size(a, nd);
 }
 
 static jl_value_t *new_scalar(jl_bits_type_t *bt)

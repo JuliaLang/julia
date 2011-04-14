@@ -573,6 +573,24 @@ static Value *emit_tuplelen(Value *t)
 #endif
 }
 
+static Value *emit_arraysize(Value *t, Value *dim)
+{
+    Value *dbits =
+        emit_nthptr(t, builder.CreateAdd(dim,
+                                         ConstantInt::get(T_int32, 3)));
+#ifdef BITS64
+    return builder.CreateTrunc(builder.CreatePtrToInt(dbits, T_int64),
+                               T_int32);
+#else
+    return builder.CreatePtrToInt(dbits, T_int32);
+#endif
+}
+
+static Value *emit_arraysize(Value *t, int dim)
+{
+    return emit_arraysize(t, ConstantInt::get(T_int32, dim));
+}
+
 static Value *emit_arraylen(Value *t)
 {
     Value *lenbits = emit_nthptr(t, 3);
@@ -679,11 +697,37 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
                 return emit_arraylen(arg1);
             }
         }
+        else if (f->fptr == &jl_f_arraysize && nargs==2) {
+            jl_value_t *aty = expr_type(args[1]); rt1 = aty;
+            jl_value_t *ity = expr_type(args[2]); rt2 = ity;
+            if (jl_is_array_type(aty) && ity == (jl_value_t*)jl_int32_type) {
+                jl_value_t *ndp = jl_tparam1(aty);
+                if (jl_is_int32(ndp)) {
+                    Value *ary = emit_expr(args[1], ctx, true);
+                    size_t ndims = jl_unbox_int32(ndp);
+                    if (jl_is_int32(args[2])) {
+                        uint32_t idx = (uint32_t)jl_unbox_int32(args[2]);
+                        if (idx > 0 && idx <= ndims) {
+                            JL_GC_POP();
+                            return emit_arraysize(ary, idx);
+                        }
+                    }
+                    else {
+                        Value *idx = emit_unbox(T_int32, T_pint32,
+                                                emit_unboxed(args[2], ctx));
+                        emit_bounds_check(idx, ConstantInt::get(T_int32,ndims),
+                                          "arraysize: dimension out of range",
+                                          ctx);
+                        JL_GC_POP();
+                        return emit_arraysize(ary, idx);
+                    }
+                }
+            }
+        }
         else if (f->fptr == &jl_f_arrayref && nargs==2) {
             jl_value_t *aty = expr_type(args[1]); rt1 = aty;
             jl_value_t *ity = expr_type(args[2]); rt2 = ity;
-            if (jl_is_array_type(aty) &&
-                ity == (jl_value_t*)jl_int32_type) {
+            if (jl_is_array_type(aty) && ity == (jl_value_t*)jl_int32_type) {
                 if (jl_is_bits_type(jl_tparam0(aty))) {
                     Value *ary = emit_expr(args[1], ctx, true);
                     const Type *elty = julia_type_to_llvm(jl_tparam0(aty));

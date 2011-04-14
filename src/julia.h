@@ -36,6 +36,19 @@ typedef struct {
     jl_tuple_t *dims;
     void *data;
     size_t length;
+    size_t nrows;
+    union {
+        struct {
+            // 1d
+            size_t maxsize;
+            size_t offset;
+        };
+        struct {
+            // Nd
+            size_t ncols;
+            size_t n3;
+        };
+    };
     union {
         char _space[1];
         void *_pad;
@@ -354,6 +367,7 @@ void *allocb_permanent(size_t sz);
 #define jl_exprarg(e,n) jl_cellref(((jl_expr_t*)(e))->args,n)
 
 #define jl_tparam0(t) jl_tupleref(((jl_tag_type_t*)(t))->parameters, 0)
+#define jl_tparam1(t) jl_tupleref(((jl_tag_type_t*)(t))->parameters, 1)
 
 #define jl_typeof(v) (((jl_value_t*)(v))->type)
 #define jl_typeis(v,t) (jl_typeof(v)==(jl_type_t*)(t))
@@ -395,6 +409,7 @@ void *allocb_permanent(size_t sz);
 
 #define jl_array_len(a)   (((jl_array_t*)a)->length)
 #define jl_array_data(a)  ((void*)((jl_array_t*)a)->data)
+#define jl_array_ndims(a) jl_unbox_int32(jl_tupleref(((jl_struct_type_t*)jl_typeof(a))->parameters,1))
 #define jl_cell_data(a)   ((jl_value_t**)((jl_array_t*)a)->data)
 #define jl_string_data(s) ((char*)((jl_array_t*)((jl_value_t**)(s))[1])->data)
 
@@ -489,15 +504,6 @@ jl_tuple_t *jl_flatten_pairs(jl_tuple_t *t);
 jl_sym_t *jl_symbol(const char *str);
 DLLEXPORT jl_sym_t *jl_symbol_n(const char *str, int32_t len);
 DLLEXPORT jl_sym_t *jl_gensym();
-jl_array_t *jl_new_array(jl_type_t *atype, jl_tuple_t *dims);
-jl_array_t *jl_alloc_array_1d(jl_type_t *atype, size_t nr);
-jl_array_t *jl_pchar_to_array(char *str, size_t len);
-jl_array_t *jl_cstr_to_array(char *str);
-jl_value_t *jl_pchar_to_string(char *str, size_t len);
-DLLEXPORT jl_value_t *jl_cstr_to_string(char *str);
-jl_array_t *jl_alloc_cell_1d(size_t n);
-jl_value_t *jl_arrayref(jl_array_t *a, size_t i);  // 0-indexed
-void jl_arrayset(jl_array_t *a, size_t i, jl_value_t *v);  // 0-indexed
 jl_expr_t *jl_exprn(jl_sym_t *head, size_t n);
 jl_function_t *jl_new_generic_function(jl_sym_t *name);
 void jl_add_method(jl_function_t *gf, jl_tuple_t *types, jl_function_t *meth);
@@ -533,6 +539,18 @@ float jl_unbox_float32(jl_value_t *v);
 double jl_unbox_float64(jl_value_t *v);
 jl_value_t *jl_box_pointer(jl_bits_type_t *ty, void *p);
 void *jl_unbox_pointer(jl_value_t *v);
+
+// arrays
+jl_array_t *jl_new_array(jl_type_t *atype, jl_tuple_t *dims);
+jl_array_t *jl_alloc_array_1d(jl_type_t *atype, size_t nr);
+jl_array_t *jl_pchar_to_array(char *str, size_t len);
+jl_array_t *jl_cstr_to_array(char *str);
+jl_value_t *jl_pchar_to_string(char *str, size_t len);
+DLLEXPORT jl_value_t *jl_cstr_to_string(char *str);
+jl_array_t *jl_alloc_cell_1d(size_t n);
+jl_tuple_t *jl_construct_array_size(jl_array_t *a, size_t nd);
+jl_value_t *jl_arrayref(jl_array_t *a, size_t i);  // 0-indexed
+void jl_arrayset(jl_array_t *a, size_t i, jl_value_t *v);  // 0-indexed
 
 // system information
 DLLEXPORT int jl_word_size();

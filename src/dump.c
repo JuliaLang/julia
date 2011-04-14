@@ -231,7 +231,9 @@ void jl_serialize_value_(ios_t *s, jl_value_t *v)
         writetag(s, (jl_value_t*)jl_array_type);
         jl_value_t *elty = jl_tparam0(jl_typeof(v));
         jl_serialize_value(s, elty);
-        jl_serialize_value(s, ((jl_array_t*)v)->dims);
+        jl_serialize_value(s,
+                           jl_construct_array_size((jl_array_t*)v,
+                                                   jl_array_ndims(v)));
         if (jl_is_bits_type(elty)) {
             size_t tot = ((jl_array_t*)v)->length * jl_bitstype_nbits(elty)/8;
             ios_write(s, ((jl_array_t*)v)->data, tot);
@@ -991,6 +993,7 @@ void jl_init_serializer()
                       jl_f_arraylen, 
                       jl_f_arrayref, 
                       jl_f_arrayset, 
+                      jl_f_arraysize, 
                       jl_f_instantiate_type, 
                       jl_f_convert, 
                       jl_f_convert_to_ptr, 
