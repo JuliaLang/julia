@@ -1,4 +1,4 @@
-type SparseMatrix{T} <: Matrix{T}
+type SparseArray2d{T} <: Matrix{T}
     m::Size
     n::Size
     colptr::Vector{Size}
@@ -6,8 +6,9 @@ type SparseMatrix{T} <: Matrix{T}
     nzval::Vector{T}
 end
 
-nnz(S::SparseMatrix) = S.colptr[S.n+1] - 1
+nnz(S::SparseArray2d) = S.colptr[S.n+1] - 1
 
+# Does not detect duplicate (i,j) pairs yet
 function sparse{T}(I::Vector{Size}, 
                    J::Vector{Size}, 
                    V::Vector{T}, 
@@ -32,10 +33,10 @@ function sparse{T}(I::Vector{Size},
     rowval = copy(I)
     nzval = copy(V)
 
-    return SparseMatrix(m,n,colptr,rowval,nzval)
+    return SparseArray2d(m,n,colptr,rowval,nzval)
 end
 
-function find{T}(S::SparseMatrix{T})
+function find{T}(S::SparseArray2d{T})
     numnz = nnz(S)
     I = Array(Size, numnz)
     J = Array(Size, numnz)
@@ -74,12 +75,13 @@ function sprand_rng(m, n, density, rng)
     S = sparse(I, J, V, m, n)
 end
 
-transpose(S::SparseMatrix) = ((I,J,V) = find(S); 
-                              sparse (J, I, V, S.n, S.m) )
-ctranspose(S::SparseMatrix) = ((I,J,V) = find(S); 
-                               sparse (J, I, conj(V), S.n, S.m) )
+transpose(S::SparseArray2d) = ((I,J,V) = find(S); 
+                               sparse (J, I, V, S.n, S.m) )
 
-function show(S::SparseMatrix)
+ctranspose(S::SparseArray2d) = ((I,J,V) = find(S); 
+                                sparse (J, I, conj(V), S.n, S.m) )
+
+function show(S::SparseArray2d)
     for col = 1 : S.n
         for k = S.colptr[col] : (S.colptr[col+1]-1)
             print('(')
@@ -90,3 +92,16 @@ function show(S::SparseMatrix)
         end
     end
 end
+
+function convert{T}(::Type{Array{T}}, S::SparseArray2d{T})
+    A = zeros(T, size(S))
+    for col = 1 : S.n
+        for k = S.colptr[col] : (S.colptr[col+1]-1)
+            A[S.rowval[k], col] = S.nzval[k]
+        end
+    end
+    return A
+
+end
+
+speye(n::Size) = sparse(1:n, 1:n, ones(n), n, n)
