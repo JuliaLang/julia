@@ -18,13 +18,40 @@
 
 // array constructors ---------------------------------------------------------
 
-static
-jl_array_t *_new_array(jl_type_t *atype, jl_tuple_t *dimst,
-                       uint32_t ndims, size_t *dims)
+static void *alloc_array_buffer(size_t nbytes, int isunboxed)
+{
+    void *data;
+    if (nbytes > 0) {
+        if (isunboxed) {
+#ifdef BOEHM_GC
+            if (nbytes >= 200000)
+                data = GC_malloc_atomic_ignore_off_page(nbytes);
+            else
+#endif
+                data = alloc_pod(nbytes);
+        }
+        else {
+#ifdef BOEHM_GC
+            if (nbytes >= 200000)
+                data = GC_malloc_ignore_off_page(nbytes);
+            else
+#endif
+                data = allocb(nbytes);
+            memset(data, 0, nbytes);
+        }
+    }
+    else {
+        data = NULL;
+    }
+    return data;
+}
+
+static jl_array_t *_new_array(jl_type_t *atype, jl_tuple_t *dimst,
+                              uint32_t ndims, size_t *dims)
 {
     size_t i, tot;
     size_t nel=1;
-    int isbytes=0, isunboxed=0;
+    int isbytes=0, isunboxed=0, elsz;
     void *data;
     jl_array_t *a;
 
@@ -36,24 +63,21 @@ jl_array_t *_new_array(jl_type_t *atype, jl_tuple_t *dimst,
 
     isunboxed = jl_is_bits_type(el_type);
     if (isunboxed) {
-        size_t nby = jl_bitstype_nbits(el_type)/8;
-        tot = nby * nel;
-        if (nby==1 && ndims==1) {
+        elsz = jl_bitstype_nbits(el_type)/8;
+        tot = elsz * nel;
+        if (elsz==1 && ndims==1) {
             // hidden 0 terminator for all byte arrays
             isbytes = 1;
             tot++;
         }
     }
     else {
+        elsz = sizeof(void*);
         tot = sizeof(void*) * nel;
     }
 
     int ndimwords = (ndims > 3 ? (ndims-3) : 0);
-#ifdef JL_GC_MARKSWEEP
-    if (1) {
-#else
     if (tot <= ARRAY_INLINE_NBYTES) {
-#endif
         a = allocobj(sizeof(jl_array_t) + tot + (ndimwords-1)*sizeof(size_t));
         a->type = atype;
         a->dims = dimst;
@@ -64,38 +88,21 @@ jl_array_t *_new_array(jl_type_t *atype, jl_tuple_t *dimst,
     }
     else {
         a = allocobj(sizeof(jl_array_t) + (ndimwords-1)*sizeof(size_t));
+        jl_gc_preserve((jl_value_t*)a);
         a->type = atype;
         a->dims = dimst;
         // temporarily initialize to make gc-safe
         a->data = NULL;
         a->length = 0;
-        if (tot > 0) {
-            if (isunboxed) {
-#ifdef BOEHM_GC
-                if (tot >= 200000)
-                    data = GC_malloc_atomic_ignore_off_page(tot);
-                else
-#endif
-                    data = alloc_pod(tot);
-            }
-            else {
-#ifdef BOEHM_GC
-                if (tot >= 200000)
-                    data = GC_malloc_ignore_off_page(tot);
-                else
-#endif
-                    data = allocb(tot);
-                memset(data, 0, tot);
-            }
-        }
-        else {
-            data = NULL;
-        }
+        data = alloc_array_buffer(tot, isunboxed);
+        jl_gc_unpreserve();
     }
 
     a->data = data;
     if (isbytes) ((char*)data)[tot-1] = '\0';
     a->length = nel;
+    a->ndims = ndims;
+    a->elsize = elsz;
     size_t *adims = &a->nrows;
     if (ndims == 1) {
         a->nrows = nel;
@@ -148,29 +155,38 @@ JL_CALLABLE(jl_generic_array_ctor)
     JL_NARGSV(Array, 1);
     JL_TYPECHK(Array, type, args[0]);
     size_t i, nd;
+    size_t *dims=NULL;
     jl_tuple_t *d=NULL;
     jl_value_t *vnd=NULL, *vtp=NULL, *vnt=NULL;
     JL_GC_PUSH(&vnd, &vtp, &vnt, &d);
     if (nargs==2 && jl_is_tuple(args[1])) {
         d = (jl_tuple_t*)args[1];
-        for(i=0; i < d->length; i++) {
+        nd = d->length;
+        for(i=0; i < nd; i++) {
             JL_TYPECHK(Array, int32, jl_tupleref(d,i));
         }
-        nd = d->length;
     }
     else {
+        nd = nargs-1;
+        dims = alloca(nd * sizeof(size_t));
         for(i=1; i < nargs; i++) {
             JL_TYPECHK(Array, int32, args[i]);
+            dims[i-1] = jl_unbox_int32(args[i]);
         }
-        nd = nargs-1;
+        /*
         d = jl_alloc_tuple_uninit(nd);
         for(i=0; i < nd; i++)
             jl_tupleset(d, i, args[i+1]);
+        */
     }
     vnd = jl_box_int32(nd);
     vtp = (jl_value_t*)jl_tuple2(args[0], vnd);
     vnt = jl_apply_type((jl_value_t*)jl_array_type, (jl_tuple_t*)vtp);
-    jl_value_t *ar = (jl_value_t*)jl_new_array((jl_type_t*)vnt, d);
+    jl_value_t *ar;
+    if (d != NULL)
+        ar = (jl_value_t*)jl_new_array((jl_type_t*)vnt, d);
+    else
+        ar = (jl_value_t*)_new_array((jl_type_t*)vnt, NULL, nd, dims);
     JL_GC_POP();
     return ar;
 }
@@ -271,7 +287,7 @@ jl_value_t *jl_arrayref(jl_array_t *a, size_t i)
             return jl_false;
         }
         elt = new_scalar((jl_bits_type_t*)el_type);
-        size_t nb = jl_bitstype_nbits(el_type)/8;
+        size_t nb = a->elsize;
         switch (nb) {
         case 1:
             *(int8_t*)jl_bits_data(elt)  = ((int8_t*)a->data)[i];  break;
@@ -315,7 +331,7 @@ void jl_arrayset(jl_array_t *a, size_t i, jl_value_t *rhs)
             jl_type_error("arrayset", el_type, rhs);
     }
     if (jl_is_bits_type(el_type)) {
-        size_t nb = jl_bitstype_nbits(el_type)/8;
+        size_t nb = a->elsize;
         switch (nb) {
         case 1:
             ((int8_t*)a->data)[i]  = *(int8_t*)jl_bits_data(rhs);  break;
@@ -346,4 +362,49 @@ JL_CALLABLE(jl_f_arrayset)
     }
     jl_arrayset(b, i, args[2]);
     return args[0];
+}
+
+static void *array_new_buffer(jl_array_t *a, size_t newsize)
+{
+    size_t nbytes = newsize * a->elsize;
+    int isbytes = 0;
+    if (a->elsize == 1) {
+        isbytes = 1;
+        nbytes++;
+    }
+    int isunboxed = jl_is_bits_type(jl_tparam0(jl_typeof(a)));
+    char *newdata = alloc_array_buffer(nbytes, isunboxed);
+    if (isbytes) newdata[nbytes-1] = '\0';
+    return newdata;
+}
+
+void jl_array_grow_end(jl_array_t *a, size_t inc)
+{
+    if (inc == 0)
+        return;
+    if (a->length + inc > a->maxsize - a->offset) {
+        size_t newsize = a->maxsize==0 ? inc : a->maxsize*2;
+        while (a->length+inc > newsize-a->offset)
+            newsize *= 2;
+        char *newdata = array_new_buffer(a, newsize);
+        newdata += a->offset;
+        memcpy(newdata, (char*)a->data, a->length*a->elsize);
+        a->maxsize = newsize;
+        a->data = newdata;
+    }
+    a->length += inc; a->nrows += inc;
+    a->dims = NULL;
+}
+
+JL_CALLABLE(jl_f_array_grow_end)
+{
+    JL_NARGS(array_grow_end, 2, 2);
+    JL_TYPECHK(array_grow_end, array, args[0]);
+    JL_TYPECHK(array_grow_end, int32, args[1]);
+    jl_array_t *a = (jl_array_t*)args[0];
+    if (jl_array_ndims(a) != 1)
+        jl_error("array_grow_end: array must be 1d");
+    size_t inc = jl_unbox_int32(args[1]);
+    jl_array_grow_end(a, inc);
+    return (jl_value_t*)a;
 }

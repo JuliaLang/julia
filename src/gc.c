@@ -423,8 +423,14 @@ static void gc_markval_(jl_value_t *v)
         ((jl_struct_type_t*)(vt))->name == jl_array_typename) {
         jl_array_t *a = (jl_array_t*)v;
         if (a->dims) GC_Markval(a->dims);
-        if (a->data && a->data != &a->_space[0])
-            gc_setmark(a->data);
+        int ndims = jl_array_ndims(a);
+        if (a->data && a->data != (&a->_space[0] +
+                                   (ndims>3 ? (ndims-3) : 0)*sizeof(size_t))) {
+            if (ndims == 1)
+                gc_setmark((char*)a->data - a->offset);
+            else
+                gc_setmark(a->data);
+        }
         jl_value_t *elty = jl_tparam0(vt);
         if (gc_typeof(elty) != (jl_value_t*)jl_bits_kind) {
             size_t i;

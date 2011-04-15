@@ -29,13 +29,22 @@ typedef struct {
     jl_value_t *data[1];
 } jl_tuple_t;
 
-#define ARRAY_INLINE_NBYTES (4*4*sizeof(double))
+// how much space we're willing to waste if an array outgrows its
+// original object
+#define ARRAY_INLINE_NBYTES (1024*sizeof(void*))
 
 typedef struct {
     JL_STRUCT_TYPE
     jl_tuple_t *dims;
     void *data;
     size_t length;
+    union {
+        struct {
+            uint16_t ndims;
+            uint16_t elsize;
+        };
+        void *_pad_word;
+    };
     size_t nrows;
     union {
         struct {
@@ -409,7 +418,7 @@ void *allocb_permanent(size_t sz);
 
 #define jl_array_len(a)   (((jl_array_t*)a)->length)
 #define jl_array_data(a)  ((void*)((jl_array_t*)a)->data)
-#define jl_array_ndims(a) jl_unbox_int32(jl_tupleref(((jl_struct_type_t*)jl_typeof(a))->parameters,1))
+#define jl_array_ndims(a) ((int32_t)(((jl_array_t*)a)->ndims))
 #define jl_cell_data(a)   ((jl_value_t**)((jl_array_t*)a)->data)
 #define jl_string_data(s) ((char*)((jl_array_t*)((jl_value_t**)(s))[1])->data)
 
@@ -551,6 +560,7 @@ jl_array_t *jl_alloc_cell_1d(size_t n);
 jl_tuple_t *jl_construct_array_size(jl_array_t *a, size_t nd);
 jl_value_t *jl_arrayref(jl_array_t *a, size_t i);  // 0-indexed
 void jl_arrayset(jl_array_t *a, size_t i, jl_value_t *v);  // 0-indexed
+void jl_array_grow_end(jl_array_t *a, size_t inc);
 
 // system information
 DLLEXPORT int jl_word_size();

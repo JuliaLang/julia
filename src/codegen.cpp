@@ -577,7 +577,7 @@ static Value *emit_arraysize(Value *t, Value *dim)
 {
     Value *dbits =
         emit_nthptr(t, builder.CreateAdd(dim,
-                                         ConstantInt::get(T_int32, 3)));
+                                         ConstantInt::get(T_int32, 4)));
 #ifdef BITS64
     return builder.CreateTrunc(builder.CreatePtrToInt(dbits, T_int64),
                                T_int32);
