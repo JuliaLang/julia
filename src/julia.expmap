@@ -57,6 +57,10 @@
     jl_eqtable_get;
     jl_eqtable_del;
     jl_eqtable_next;
+    jl_array_grow_end;
+    jl_array_del_end;
+    jl_array_grow_beg;
+    jl_array_del_beg;
     jl_sizeof_ios_t;
     jl_stdout_stream;
     ios_fd;

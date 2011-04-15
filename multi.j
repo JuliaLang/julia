@@ -73,7 +73,7 @@ type Worker
     socket::IOStream
     sendbuf::IOStream
     id::Int32
-    del_msgs::Dequeue
+    del_msgs::Array{Any,1}
 
     function Worker(host, port)
         fd = ccall(:connect_to_host, Int32,
@@ -84,7 +84,7 @@ type Worker
         Worker(host, port, fd, fdio(fd))
     end
 
-    Worker(host, port, fd, sock) = new(host, port, fd, sock, memio(), 0, deq())
+    Worker(host, port, fd, sock) = new(host, port, fd, sock, memio(), 0, {})
 end
 
 send_msg(w::Worker, kind, args...) = send_msg(w.socket, w.sendbuf, kind, args)
@@ -1026,7 +1026,7 @@ end
 
 _SPAWNS = ()
 
-sync_begin() = (global _SPAWNS = (deq(),_SPAWNS))
+sync_begin() = (global _SPAWNS = ({},_SPAWNS))
 function sync_end()
     global _SPAWNS
     if is(_SPAWNS,())

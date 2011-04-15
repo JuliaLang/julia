@@ -28,7 +28,6 @@ JL_CALLABLE(jl_f_arraylen);
 JL_CALLABLE(jl_f_arrayref);
 JL_CALLABLE(jl_f_arrayset);
 JL_CALLABLE(jl_f_arraysize);
-JL_CALLABLE(jl_f_array_grow_end);
 JL_CALLABLE(jl_f_instantiate_type);
 JL_CALLABLE(jl_f_convert);
 JL_CALLABLE(jl_f_convert_to_ptr);

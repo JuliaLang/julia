@@ -994,7 +994,6 @@ void jl_init_serializer()
                       jl_f_arrayref, 
                       jl_f_arrayset, 
                       jl_f_arraysize, 
-                      jl_f_array_grow_end,
                       jl_f_instantiate_type, 
                       jl_f_convert, 
                       jl_f_convert_to_ptr, 

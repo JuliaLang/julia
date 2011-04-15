@@ -636,7 +636,7 @@ rpad(s, n::Int) = rpad(string(s), n, " ")
 
 function split(s::String, delims, include_empty)
     i = 1
-    strs = deq()
+    strs = {}
     len = length(s)
     while true
         tokstart = tokend = i
@@ -660,6 +660,7 @@ end
 
 split(s::String, delims) = split(s, delims, true)
 split(s::String, c::Char) = split(s, set(c))
+split(s::String, c::Char, incl) = split(s, set(c), incl)
 
 function print_joined(delim, strings)
     for i = 1:length(strings)

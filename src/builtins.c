@@ -1304,7 +1304,6 @@ void jl_init_primitives()
     add_builtin_func("arrayref", jl_f_arrayref);
     add_builtin_func("arrayset", jl_f_arrayset);
     add_builtin_func("arraysize", jl_f_arraysize);
-    add_builtin_func("array_grow_end", jl_f_array_grow_end);
 
     add_builtin_func("apply_type", jl_f_instantiate_type);
     add_builtin_func("typevar", jl_f_typevar);

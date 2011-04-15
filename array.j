@@ -75,6 +75,74 @@ assign(A::Array{Any}, x, i::Index) = arrayset(A,i,x)
 assign{T}(A::Array{T}, x::Tensor, i::Index) = arrayset(A,i,convert(T, x))
 assign{T}(A::Array{T}, x, i::Index) = arrayset(A,i,convert(T, x))
 
+## Dequeue functionality ##
+
+function push{T}(a::Array{T,1}, item)
+    ccall(:jl_array_grow_end, Void, (Any, Ulong), a, ulong(1))
+    a[end] = item
+    return a
+end
+
+function pop{T}(a::Array{T,1})
+    if isempty(a)
+        error("pop: array is empty")
+    end
+    item = a[end]
+    ccall(:jl_array_del_end, Void, (Any, Ulong), a, ulong(1))
+    return item
+end
+
+function enq{T}(a::Array{T,1}, item)
+    ccall(:jl_array_grow_beg, Void, (Any, Ulong), a, ulong(1))
+    a[1] = item
+    return a
+end
+
+function insert{T}(a::Array{T,1}, i::Int, item)
+    if i < 1
+        throw(BoundsError())
+    end
+    l = length(a)
+    if i > l
+        ccall(:jl_array_grow_end, Void, (Any, Ulong), a, ulong(i-l))
+    elseif i > div(l,2)
+        ccall(:jl_array_grow_end, Void, (Any, Ulong), a, ulong(1))
+        for k=l+1:-1:i+1
+            a[k] = a[k-1]
+        end
+    else
+        ccall(:jl_array_grow_beg, Void, (Any, Ulong), a, ulong(1))
+        for k=1:(i-1)
+            a[k] = a[k+1]
+        end
+    end
+    a[i] = item
+end
+
+function del{T}(a::Array{T,1}, i::Int)
+    l = length(a)
+    if !(1 <= i <= l)
+        throw(BoundsError())
+    end
+    if i > div(l,2)
+        for k=i:l-1
+            a[k] = a[k+1]
+        end
+        ccall(:jl_array_del_end, Void, (Any, Ulong), a, ulong(1))
+    else
+        for k=i:-1:2
+            a[k] = a[k-1]
+        end
+        ccall(:jl_array_del_beg, Void, (Any, Ulong), a, ulong(1))
+    end
+    a
+end
+
+function del_all{T}(a::Array{T,1})
+    ccall(:jl_array_del_end, Void, (Any, Ulong), a, ulong(length(a)))
+    a
+end
+
 ## Concatenation ##
 
 cat(catdim::Int) = Array(None,0)

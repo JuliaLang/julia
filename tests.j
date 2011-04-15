@@ -364,8 +364,8 @@ for nr = {
     end
 end
 
-# a data structure
-l = deq(1,2,3)
+# arrays as dequeues
+l = {1,2,3}
 push(l,8)
 @assert l[1]==1 && l[2]==2 && l[3]==3 && l[4]==8
 v = pop(l)

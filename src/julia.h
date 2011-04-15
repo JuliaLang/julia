@@ -560,7 +560,10 @@ jl_array_t *jl_alloc_cell_1d(size_t n);
 jl_tuple_t *jl_construct_array_size(jl_array_t *a, size_t nd);
 jl_value_t *jl_arrayref(jl_array_t *a, size_t i);  // 0-indexed
 void jl_arrayset(jl_array_t *a, size_t i, jl_value_t *v);  // 0-indexed
-void jl_array_grow_end(jl_array_t *a, size_t inc);
+DLLEXPORT void jl_array_grow_end(jl_array_t *a, size_t inc);
+DLLEXPORT void jl_array_del_end(jl_array_t *a, size_t dec);
+DLLEXPORT void jl_array_grow_beg(jl_array_t *a, size_t inc);
+DLLEXPORT void jl_array_del_beg(jl_array_t *a, size_t dec);
 
 // system information
 DLLEXPORT int jl_word_size();
