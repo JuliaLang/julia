@@ -427,6 +427,7 @@ jl_value_t *jl_deserialize_tag_type(ios_t *s, jl_struct_type_t *kind, int pos)
         st->instance = NULL;
         if (lkup != NULL)
             return (jl_value_t*)lkup;
+        st->uid = 0;
         jl_cache_type_(st->parameters, (jl_value_t*)st);
         st->uid = uid;
         return (jl_value_t*)st;
@@ -461,6 +462,7 @@ jl_value_t *jl_deserialize_tag_type(ios_t *s, jl_struct_type_t *kind, int pos)
         uptrint_t uid = read_int32(s);
         if (lkup != NULL)
             return (jl_value_t*)lkup;
+        bt->uid = 0;
         jl_cache_type_(bt->parameters, (jl_value_t*)bt);
         bt->uid = uid;
         return (jl_value_t*)bt;
@@ -569,6 +571,7 @@ jl_value_t *jl_deserialize_value(ios_t *s)
     else if (vtag == (jl_value_t*)jl_array_type) {
         jl_value_t *elty = jl_deserialize_value(s);
         jl_tuple_t *dims = (jl_tuple_t*)jl_deserialize_value(s);
+        assert(jl_is_tuple(dims));
         jl_value_t *atype =
             jl_apply_type((jl_value_t*)jl_array_type,
                           jl_tuple2(elty,
@@ -778,6 +781,8 @@ void jl_save_system_image(char *fname, char *startscriptname)
 {
     jl_gc_collect();
     jl_gc_collect();
+    int en = jl_gc_is_enabled();
+    jl_gc_disable();
     ios_t f;
     ios_file(&f, fname, 1, 1, 1, 1);
 
@@ -818,6 +823,7 @@ void jl_save_system_image(char *fname, char *startscriptname)
     ios_putc(0, &f);
 
     ios_close(&f);
+    if (en) jl_gc_enable();
 }
 
 extern jl_function_t *jl_typeinf_func;

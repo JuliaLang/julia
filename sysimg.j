@@ -52,10 +52,10 @@ load("linalg_lapack.j")
 # additional data types
 load("complex.j")
 load("rational.j")
-load("list.j")
+#load("list.j")
 load("queue.j")
 load("sparse.j")
-load("tree.j")
+#load("tree.j")
 load("set.j")
 
 # I/O and concurrency
