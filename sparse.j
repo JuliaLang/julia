@@ -30,10 +30,7 @@ function sparse{T}(I::Vector{Size},
     for k=1:numnz; w[J[k] + 1] += 1; end
     colptr = cumsum(w)
 
-    rowval = copy(I)
-    nzval = copy(V)
-
-    return SparseArray2d(m,n,colptr,rowval,nzval)
+    return SparseArray2d(m, n, colptr, I, V)
 end
 
 function find{T}(S::SparseArray2d{T})
