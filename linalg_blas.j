@@ -44,7 +44,7 @@ end
 
 # DOUBLE PRECISION FUNCTION DNRM2(N,X,INCX)
 
-macro blas_nrm2(fname, eltype)
+macro blas_norm(fname, eltype)
     quote
         function norm(x::DenseVector{$eltype})
             ccall(dlsym(libBLAS, $fname),
@@ -55,8 +55,8 @@ macro blas_nrm2(fname, eltype)
     end
 end
 
-@blas_nrm2 "ddot_" Float64
-@blas_nrm2 "sdot_" Float32
+@blas_norm "dnrm2_" Float64
+@blas_norm "snrm2_" Float32
 
 # SUBROUTINE DGEMM(TRANSA,TRANSB,M,N,K,ALPHA,A,LDA,B,LDB,BETA,C,LDC)
 # *     .. Scalar Arguments ..
@@ -66,7 +66,7 @@ end
 # *     .. Array Arguments ..
 #       DOUBLE PRECISION A(LDA,*),B(LDB,*),C(LDC,*)
 
-macro blas_gemm(fname, eltype)
+macro blas_matrix_multiply(fname, eltype)
    quote
        function *(A::DenseVecOrMat{$eltype}, B::DenseVecOrMat{$eltype})
            m = size(A, 1)
@@ -91,5 +91,5 @@ macro blas_gemm(fname, eltype)
    end
 end
 
-@blas_gemm "dgemm_" Float64
-@blas_gemm "sgemm_" Float32
+@blas_matrix_multiply "dgemm_" Float64
+@blas_matrix_multiply "sgemm_" Float32
