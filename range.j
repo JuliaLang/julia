@@ -1,5 +1,7 @@
 ## 1-dimensional ranges ##
 
+typealias Dims (Size...)
+
 type Range{T<:Real} <: Tensor{T,1}
     start::T
     step::T
@@ -16,6 +18,9 @@ type Range1{T<:Real} <: Tensor{T,1}
     Range1{T}(start::T, stop::T) = new(start, stop)
     Range1(start, stop) = new(promote(start, stop)...)
 end
+
+clone(r::Range, T::Type, dims::Dims) = Range(convert(T, r.start), convert(T, r.step), convert(T, r.stop))
+clone(r::Range1, T::Type, dims::Dims) = Range1(convert(T, r.start), convert(T, r.stop))
 
 typealias Ranges Union(Range,Range1)
 

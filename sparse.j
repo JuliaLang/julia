@@ -104,4 +104,4 @@ function convert{T}(::Type{Array{T}}, S::SparseArray2d{T})
 
 end
 
-speye(n::Size) = sparse(1:n, 1:n, ones(n), n, n)
+speye(n::Size) = sparse(linspace(1,10), linspace(1,10), ones(n), n, n)
