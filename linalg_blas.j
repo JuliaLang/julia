@@ -7,24 +7,24 @@ typealias DenseVecOrMat{T} Union(DenseVector{T}, DenseMatrix{T})
 
 # SUBROUTINE DCOPY(N,DX,INCX,DY,INCY) 
 
-# macro blas_copy(fname, shape, eltype)
-#     quote 
-#         function copy(X::($shape){$eltype})
-#             sz = size(X)
-#             Y = Array($eltype, sz)
-#             ccall(dlsym(libBLAS, $fname),
-#                   Void,
-#                   (Ptr{Int32}, Ptr{$eltype}, Ptr{Int32}, Ptr{$eltype}, Ptr{Int32}),
-#                   prod(sz), X, 1, Y, 1)
-#             return Y
-#         end
-#     end
-# end
+macro blas_copy(fname, shape, eltype)
+    quote 
+        function copy(X::($shape){$eltype})
+            sz = size(X)
+            Y = Array($eltype, sz)
+            ccall(dlsym(libBLAS, $fname),
+                  Void,
+                  (Ptr{Int32}, Ptr{$eltype}, Ptr{Int32}, Ptr{$eltype}, Ptr{Int32}),
+                  prod(sz), X, 1, Y, 1)
+            return Y
+        end
+    end
+end
 
-# @blas_copy "dcopy_" :DenseVector Float64
-# @blas_copy "scopy_" :DenseVector Float32
-# @blas_copy "dcopy_" :DenseMatrix Float64
-# @blas_copy "scopy_" :DenseMatrix Float32
+@blas_copy "dcopy_" DenseVector Float64
+@blas_copy "scopy_" DenseVector Float32
+@blas_copy "dcopy_" DenseMatrix Float64
+@blas_copy "scopy_" DenseMatrix Float32
 
 # DOUBLE PRECISION FUNCTION DDOT(N,DX,INCX,DY,INCY)
 
