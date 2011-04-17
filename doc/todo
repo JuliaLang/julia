@@ -568,12 +568,10 @@ boehm:     7.8s, 50236  35m, 78320  63m, 8376416
 
 issues 11/6/10
 
-- make optimized arrayset, arrayref work on all Arrays
 * faster GC stack roots
 * fix A[I..., end]
 * make Tasks exit on exceptions (not ready for continuable-exc yet)
 * quote syntax change
-- fix circular struct decls
 - implement longjmp block exits so return/break work across functions
 * splicing tuples in ` with $...
 * readall, readline
@@ -644,6 +642,7 @@ issues 1/24/11
   f(x; kws...)
 - modules
 * saving system image
+- make optimized arrayset, arrayref work on all Arrays
 - parallel
   . make sure process group setup works
   * function reflection and serialization
@@ -694,3 +693,17 @@ bug:
 on inexact method matches, e.g. only f(Int32) exists and we don't know the
 type of the argument, must merge in the result type of method_missing,
 and emit a type check if we inline
+
+-------------------------------------------------------------------------------
+
+issues 4/16/11
+
+clone(Array{Any,1}) matches both
+clone{T}(a::Tensor{T})                      = clone(a, T, size(a))
+and
+clone{T}(a::Tensor{T}, dims::Size...)       = clone(a, T, dims)
+but the first one should block the second one.
+
+wrong:
+julia> tintersect(Array{Float64,1},Tensor{Any,1})
+Array{Float64,1}

@@ -398,16 +398,23 @@ static jl_value_t *intersect_tag(jl_tag_type_t *a, jl_tag_type_t *b,
         jl_value_t *ap = jl_tupleref(a->parameters,i);
         jl_value_t *bp = jl_tupleref(b->parameters,i);
         jl_value_t *ti;
-        if (a->name == jl_ntuple_typename || jl_is_tag_type(a) ||
-            jl_has_typevars_(ap,1) || jl_has_typevars_(bp,1)) {
+        int atv = jl_has_typevars_(ap,1);
+        int btv = jl_has_typevars_(bp,1);
+        if (a->name == jl_ntuple_typename/* || jl_is_tag_type(a)*/ ||
+            (atv && btv)) {
             ti = jl_type_intersect(ap,bp,penv);
+        }
+        else if (atv && jl_type_intersect(ap,bp,penv)!=(jl_value_t*)jl_bottom_type) {
+            ti = bp;
+        }
+        else if (btv && jl_type_intersect(ap,bp,penv)!=(jl_value_t*)jl_bottom_type) {
+            ti = ap;
         }
         else if (type_eqv_(ap,bp,NULL)) {
             ti = ap;
         }
         else {
-            JL_GC_POP();
-            return (jl_value_t*)jl_bottom_type;
+            ti = (jl_value_t*)jl_bottom_type;
         }
         if (ti == (jl_value_t*)jl_bottom_type) {
             JL_GC_POP();
