@@ -1,0 +1,7 @@
+/root
+/llvm-*
+/readline-*
+/pcre-*
+/fdlibm
+/fdlibm.tar.gz
+/lapack-*
