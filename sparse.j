@@ -9,7 +9,7 @@ end
 size(S::SparseArray2d) = (S.m, S.n)
 nnz(S::SparseArray2d) = S.colptr[S.n+1] - 1
 
-# Does not detect duplicate (i,j) values yet
+# TODO: Does not detect duplicate (i,j) values yet
 # Assumes no such duplicates occur
 function sparse{T}(I::Vector{Size}, 
                    J::Vector{Size}, 
@@ -105,55 +105,72 @@ end
 
 speye(n::Size) = sparse(linspace(1,n), linspace(1,n), ones(n), n, n)
 
-function (+){T1,T2}(A::SparseArray2d{T1}, B::SparseArray2d{T2})
+function +{T1,T2}(A::SparseArray2d{T1}, B::SparseArray2d{T2})
     assert(size(A) == size(B))
     (m, n) = size(A)
-
+    
     typeS = promote_type(T1, T2)
-    nnzS = nnz(A) + nnz(B)
+    # TODO: Need better method to allocate result
+    nnzS = nnz(A) + nnz(B) 
     colptrS = Array(Size, A.n+1)
     rowvalS = Array(Size, nnzS)
     nzvalS = Array(typeS, nnzS)
-
+    
     colptrA = A.colptr
     rowvalA = A.rowval
     nzvalA = A.nzval
-
+    
     colptrB = B.colptr
     rowvalB = B.rowval
     nzvalB = B.nzval
 
     ptrS = 1
     colptrS[1] = 1
-
-#     for col = 1:n
-#         ptrA = colptrA[col]
-#         stopA = colptrA[col+1]-1
-#         ptrB = colptrB[col]
-#         stopB = colptrB[col+1]-1
-        
-#         while ptrA < stopA && ptrB < stopB
-#             rowA = rowvalA[ptrA]
-#             rowB = rowvalB[ptrB]
-#             if rowA < rowB
-#                 rowvalS[ptrS] = rowA
-#                 nzvalS[ptrS] = nzvalA[ptrA]
-#                 ptrA += 1
-#             elseif rowB < rowA
-#                 rowvalS[ptrS] = rowB
-#                 nzvalS[ptrS] = nzvalB[ptrB]
-#                 ptrB += 1
-#             else
-#                 rowvalS[ptrS] = rowA
-#                 nzvalS[ptrS] = nzvalA[ptrA] + nzvalB[ptrB]
-#                 ptrA += 1
-#                 ptrB += 1
-#             end
-#             ptrS += 1
-#         end
     
-#         colptrS[col+1] = ptrS
-#    end
+    for col = 1:n
+        ptrA = colptrA[col]
+        stopA = colptrA[col+1]
+        ptrB = colptrB[col]
+        stopB = colptrB[col+1]
+        
+        while ptrA < stopA && ptrB < stopB
+            rowA = rowvalA[ptrA]
+            rowB = rowvalB[ptrB]
+            if rowA < rowB
+                rowvalS[ptrS] = rowA
+                nzvalS[ptrS] = nzvalA[ptrA]
+                ptrA += 1
+            elseif rowB < rowA
+                rowvalS[ptrS] = rowB
+                nzvalS[ptrS] = nzvalB[ptrB]
+                ptrB += 1
+            else
+                rowvalS[ptrS] = rowA
+                nzvalS[ptrS] = nzvalA[ptrA] + nzvalB[ptrB]
+                ptrA += 1
+                ptrB += 1
+            end
+            ptrS += 1
+        end
+        
+        while ptrA < stopA
+            rowA = rowvalA[ptrA]
+            rowvalS[ptrS] = rowA
+            nzvalS[ptrS] = nzvalA[ptrA]
+            ptrA += 1
+            ptrS += 1
+        end
+        
+        while ptrB < stopB
+            rowB = rowvalB[ptrB]
+            rowvalS[ptrS] = rowB
+            nzvalS[ptrS] = nzvalB[ptrB]
+            ptrB += 1
+            ptrS += 1
+        end
 
+        colptrS[col+1] = ptrS
+    end
+    
     return SparseArray2d(m, n, colptrS, rowvalS, nzvalS)
 end
