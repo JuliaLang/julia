@@ -187,6 +187,8 @@
   (interactive)
   (kill-all-local-variables)
   (set-syntax-table julia-mode-syntax-table)
+  (set (make-local-variable 'comment-start) "# ")
+  (set (make-local-variable 'comment-start-skip) "#+\\s-*")
   (set (make-local-variable 'font-lock-defaults) '(julia-font-lock-keywords))
 ;  (set (make-local-variable 'font-lock-syntactic-keywords)
 ;      (list
