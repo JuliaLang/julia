@@ -7,22 +7,27 @@ libLAPACK = dlopen("libLAPACK")
 # *     .. Array Arguments ..
 #       DOUBLE PRECISION   A( LDA, * )
 
-for (fname, eltype) = (("dpotrf_", Float64), ("spotrf_", Float32))
-    @eval function chol(A::DenseMatrix{$eltype})
-        info = [0]
-        n = size(A, 1)
-        R = triu(A)
-  
-        ccall(dlsym(libLAPACK, $fname),
-              Void,
-              (Ptr{Uint8}, Ptr{Int32}, Ptr{$eltype}, Ptr{Int32}, Ptr{Int32}),
-              "U", n, R, n, info)
-  
-        if info[1] == 0; return R; end
-        if info[1] > 0; error("Matrix not Positive Definite"); end
-        error("Error in CHOL")
+macro lapack_chol(fname, eltype)
+    quote
+        function chol(A::DenseMatrix{$eltype})
+            info = [0]
+            n = size(A, 1)
+            R = triu(A)
+            
+            ccall(dlsym(libLAPACK, $fname),
+                  Void,
+                  (Ptr{Uint8}, Ptr{Int32}, Ptr{$eltype}, Ptr{Int32}, Ptr{Int32}),
+                  "U", n, R, n, info)
+            
+            if info[1] == 0; return R; end
+            if info[1] > 0; error("Matrix not Positive Definite"); end
+            error("Error in CHOL")
+        end
     end
 end
+
+@lapack_chol "dpotrf_" Float64
+@lapack_chol "spotrf_" Float32
 
 # SUBROUTINE DGETRF( M, N, A, LDA, IPIV, INFO )
 # *     .. Scalar Arguments ..
@@ -31,27 +36,32 @@ end
 #       INTEGER            IPIV( * )
 #       DOUBLE PRECISION   A( LDA, * )
 
-for (fname, eltype) = (("dgetrf_", Float64), ("sgetrf_", Float32))
-    @eval function lu(A::DenseMatrix{$eltype})
-        info = [0]
-        m, n = size(A)
-        LU = copy(A)
-        ipiv = Array(Int32, min(m,n))
-        
-        ccall(dlsym(libLAPACK, $fname),
-              Void,
-              (Ptr{Int32}, Ptr{Int32}, Ptr{$eltype},
-               Ptr{Int32}, Ptr{Int32}, Ptr{Int32}),
-              m, n, LU, m, ipiv, info)
-        
-        if info[1] > 0; error("Matrix is singular"); end
-        P = linspace(1,m)
-        for i=1:m; t = P[i]; P[i] = P[ipiv[i]]; P[ipiv[i]] = t ; end
-        
-        if info[1] == 0; return (tril(LU, -1) + eye(m,n), triu(LU), P); end
-        error("Error in LU")
+macro lapack_lu(fname, eltype)
+    quote
+        function lu(A::DenseMatrix{$eltype})
+            info = [0]
+            m, n = size(A)
+            LU = copy(A)
+            ipiv = Array(Int32, min(m,n))
+            
+            ccall(dlsym(libLAPACK, $fname),
+                  Void,
+                  (Ptr{Int32}, Ptr{Int32}, Ptr{$eltype},
+                   Ptr{Int32}, Ptr{Int32}, Ptr{Int32}),
+                  m, n, LU, m, ipiv, info)
+            
+            if info[1] > 0; error("Matrix is singular"); end
+            P = linspace(1,m)
+            for i=1:m; t = P[i]; P[i] = P[ipiv[i]]; P[ipiv[i]] = t ; end
+            
+            if info[1] == 0; return (tril(LU, -1) + eye(m,n), triu(LU), P); end
+            error("Error in LU")
+        end
     end
 end
+
+@lapack_lu "dgetrf_" Float64
+@lapack_lu "sgetrf_" Float32
 
 # SUBROUTINE DGEQP3( M, N, A, LDA, JPVT, TAU, WORK, LWORK, INFO )
 # *     .. Scalar Arguments ..
@@ -66,61 +76,65 @@ end
 # *     .. Array Arguments ..
 #       DOUBLE PRECISION   A( LDA, * ), TAU( * ), WORK( * )
 
-for (fname, fname2, eltype) = (("dgeqp3_", "dorgqr_", Float64),
-                               ("sgeqp3_", "sorgqr_", Float32))
-    @eval function qr(A::DenseMatrix{$eltype})
-        info = [0]
-        m, n = size(A)
-        QR = copy(A)
-        jpvt = zeros(Int32, n)
-        k = min(m,n)
-        tau = Array($eltype, k)
-        
-        # Workspace query for QR factorization
-        work = [0.0]
-        lwork = -1
-        ccall(dlsym(libLAPACK, $fname),
-              Void,
-              (Ptr{Int32}, Ptr{Int32}, Ptr{$eltype}, Ptr{Int32}, 
-               Ptr{Int32}, Ptr{$eltype}, Ptr{$eltype}, Ptr{Int32}, Ptr{Int32}),
-              m, n, QR, m, jpvt, tau, work, lwork, info)
-        
-        if info[1] == 0; lwork = int32(work[1]); work = Array($eltype, lwork);
-        else error("Error in ", $fname); end
-        
-        # Compute QR factorization
-        ccall(dlsym(libLAPACK, $fname),
-              Void,
-              (Ptr{Int32}, Ptr{Int32}, Ptr{$eltype}, Ptr{Int32}, 
-               Ptr{Int32}, Ptr{$eltype}, Ptr{$eltype}, Ptr{Int32}, Ptr{Int32}),
-              m, n, QR, m, jpvt, tau, work, lwork, info)
-        
-        if info[1] > 0; error("Matrix is singular"); end
-        
-        R = triu(QR)
-        
-        # Workspace query to form Q
-        lwork2 = -1
-        ccall(dlsym(libLAPACK, $fname2),
-              Void,
-              (Ptr{Int32}, Ptr{Int32}, Ptr{Int32}, Ptr{$eltype},
-               Ptr{Int32}, Ptr{$eltype}, Ptr{$eltype}, Ptr{Int32}, Ptr{Int32}),
-              m, k, k, QR, m, tau, work, lwork2, info)
-        
-        if info[1] == 0; lwork = int32(work[1]); work = Array($eltype, lwork);
-        else error("Error in ", $fname2); end
-        
-        # Compute Q
-        ccall(dlsym(libLAPACK, $fname2),
-              Void,
-              (Ptr{Int32}, Ptr{Int32}, Ptr{Int32}, Ptr{$eltype},
-               Ptr{Int32}, Ptr{$eltype}, Ptr{$eltype}, Ptr{Int32}, Ptr{Int32}),
-              m, k, k, QR, m, tau, work, lwork, info)
-        
-        if info[1] == 0; return (QR[:, 1:k], R[1:k, :], jpvt); end
-        error("Error in ", $fname);
+macro lapack_qr(fname, fname2, eltype)
+    quote 
+        function qr(A::DenseMatrix{$eltype})
+            info = [0]
+            m, n = size(A)
+            QR = copy(A)
+            jpvt = zeros(Int32, n)
+            k = min(m,n)
+            tau = Array($eltype, k)
+            
+            # Workspace query for QR factorization
+            work = [0.0]
+            lwork = -1
+            ccall(dlsym(libLAPACK, $fname),
+                  Void,
+                  (Ptr{Int32}, Ptr{Int32}, Ptr{$eltype}, Ptr{Int32}, 
+                   Ptr{Int32}, Ptr{$eltype}, Ptr{$eltype}, Ptr{Int32}, Ptr{Int32}),
+                  m, n, QR, m, jpvt, tau, work, lwork, info)
+            
+            if info[1] == 0; lwork = int32(work[1]); work = Array($eltype, lwork);
+            else error("Error in ", $fname); end
+            
+            # Compute QR factorization
+            ccall(dlsym(libLAPACK, $fname),
+                  Void,
+                  (Ptr{Int32}, Ptr{Int32}, Ptr{$eltype}, Ptr{Int32}, 
+                   Ptr{Int32}, Ptr{$eltype}, Ptr{$eltype}, Ptr{Int32}, Ptr{Int32}),
+                  m, n, QR, m, jpvt, tau, work, lwork, info)
+            
+            if info[1] > 0; error("Matrix is singular"); end
+            
+            R = triu(QR)
+            
+            # Workspace query to form Q
+            lwork2 = -1
+            ccall(dlsym(libLAPACK, $fname2),
+                  Void,
+                  (Ptr{Int32}, Ptr{Int32}, Ptr{Int32}, Ptr{$eltype},
+                   Ptr{Int32}, Ptr{$eltype}, Ptr{$eltype}, Ptr{Int32}, Ptr{Int32}),
+                  m, k, k, QR, m, tau, work, lwork2, info)
+            
+            if info[1] == 0; lwork = int32(work[1]); work = Array($eltype, lwork);
+            else error("Error in ", $fname2); end
+            
+            # Compute Q
+            ccall(dlsym(libLAPACK, $fname2),
+                  Void,
+                  (Ptr{Int32}, Ptr{Int32}, Ptr{Int32}, Ptr{$eltype},
+                   Ptr{Int32}, Ptr{$eltype}, Ptr{$eltype}, Ptr{Int32}, Ptr{Int32}),
+                  m, k, k, QR, m, tau, work, lwork, info)
+            
+            if info[1] == 0; return (QR[:, 1:k], R[1:k, :], jpvt); end
+            error("Error in ", $fname);
+        end
     end
 end
+
+@lapack_qr "dgeqp3_" "dorgqr_" Float64
+@lapack_qr "sgeqp3_" "sorgqr_" Float32
 
 #       SUBROUTINE DSYEV( JOBZ, UPLO, N, A, LDA, W, WORK, LWORK, INFO )
 # *     .. Scalar Arguments ..
@@ -129,40 +143,45 @@ end
 # *     .. Array Arguments ..
 #       DOUBLE PRECISION   A( LDA, * ), W( * ), WORK( * )
 
-for (fname, eltype) = (("dsyev_", Float64), ("ssyev_", Float32))
-    @eval function eig(A::DenseMatrix{$eltype})
-        if !issymmetric(A); error("Matrix must be symmetric"); end
-        
-        jobz = "V"
-        uplo = "U"
-        n = size(A, 1)
-        EV = copy(A)
-        W = Array($eltype, n)
-        info = [0]
-        
-        # Workspace query
-        work = [0.0]
-        lwork = -1
-        ccall(dlsym(libLAPACK, $fname),
-              Void,
-              (Ptr{Uint8}, Ptr{Uint8}, Ptr{Int32}, Ptr{$eltype}, Ptr{Int32},
-               Ptr{$eltype}, Ptr{$eltype}, Ptr{Int32}, Ptr{Int32}),
-              jobz, uplo, n, EV, n, W, work, lwork, info)
-        
-        if info[1] == 0; lwork = int32(work[1]); work = Array($eltype, lwork);
-        else error("Error in ", $fname); end
-        
-        # Compute eigenvalues, eigenvectors
-        ccall(dlsym(libLAPACK, $fname),
-              Void,
-              (Ptr{Uint8}, Ptr{Uint8}, Ptr{Int32}, Ptr{$eltype}, Ptr{Int32}, 
-               Ptr{$eltype}, Ptr{$eltype}, Ptr{Int32}, Ptr{Int32}),
-              jobz, uplo, n, EV, n, W, work, lwork, info)
-        
-        if info[1] == 0; return (EV, W); end
-        error("Error in EIG");
+macro lapack_eig(fname, eltype)
+    quote 
+        function eig(A::DenseMatrix{$eltype})
+            if !issymmetric(A); error("Matrix must be symmetric"); end
+            
+            jobz = "V"
+            uplo = "U"
+            n = size(A, 1)
+            EV = copy(A)
+            W = Array($eltype, n)
+            info = [0]
+            
+            # Workspace query
+            work = [0.0]
+            lwork = -1
+            ccall(dlsym(libLAPACK, $fname),
+                  Void,
+                  (Ptr{Uint8}, Ptr{Uint8}, Ptr{Int32}, Ptr{$eltype}, Ptr{Int32},
+                   Ptr{$eltype}, Ptr{$eltype}, Ptr{Int32}, Ptr{Int32}),
+                  jobz, uplo, n, EV, n, W, work, lwork, info)
+            
+            if info[1] == 0; lwork = int32(work[1]); work = Array($eltype, lwork);
+            else error("Error in ", $fname); end
+            
+            # Compute eigenvalues, eigenvectors
+            ccall(dlsym(libLAPACK, $fname),
+                  Void,
+                  (Ptr{Uint8}, Ptr{Uint8}, Ptr{Int32}, Ptr{$eltype}, Ptr{Int32}, 
+                   Ptr{$eltype}, Ptr{$eltype}, Ptr{Int32}, Ptr{Int32}),
+                  jobz, uplo, n, EV, n, W, work, lwork, info)
+            
+            if info[1] == 0; return (EV, W); end
+            error("Error in EIG");
+        end
     end
 end
+
+@lapack_eig "dsyev_" Float64
+@lapack_eig "ssyev_" Float32
 
 # SUBROUTINE DGESVD( JOBU, JOBVT, M, N, A, LDA, S, U, LDU, VT, LDVT, WORK, LWORK, INFO )
 # *     .. Scalar Arguments ..
@@ -172,46 +191,51 @@ end
 #       DOUBLE PRECISION   A( LDA, * ), S( * ), U( LDU, * ),
 #      $                   VT( LDVT, * ), WORK( * )
 
-for (fname, eltype) = (("dgesvd_", Float64), ("sgesvd_", Float32))
-    @eval function svd(A::DenseMatrix{$eltype})
-        jobu = "A"
-        jobvt = "A"
-        m, n = size(A)
-        k = min(m,n)
-        X = copy(A)
-        S = Array($eltype, k)
-        U = Array($eltype, m, m)
-        VT = Array($eltype, n, n)
-        info = [0]
-        
-        # Workspace query
-        work = [0.0]
-        lwork = -1
-        ccall(dlsym(libLAPACK, $fname),
-              Void,
-              (Ptr{Uint8}, Ptr{Uint8}, Ptr{Int32}, Ptr{Int32}, Ptr{$eltype}, Ptr{Int32},
-               Ptr{$eltype}, Ptr{$eltype}, Ptr{Int32}, Ptr{$eltype}, Ptr{Int32},
-               Ptr{$eltype}, Ptr{Int32}, Ptr{Int32}),
-              jobu, jobvt, m, n, X, m, S, U, m, VT, n, work, lwork, info)
-        
-        if info[1] == 0; lwork = int32(work[1]); work = Array($eltype, lwork);
-        else error("Error in ", $fname); end
-        
-        # Compute SVD
-        ccall(dlsym(libLAPACK, $fname),
-              Void,
-              (Ptr{Uint8}, Ptr{Uint8}, Ptr{Int32}, Ptr{Int32}, Ptr{$eltype}, Ptr{Int32},
-               Ptr{$eltype}, Ptr{$eltype}, Ptr{Int32}, Ptr{$eltype}, Ptr{Int32},
-               Ptr{$eltype}, Ptr{Int32}, Ptr{Int32}),
-              jobu, jobvt, m, n, X, m, S, U, m, VT, n, work, lwork, info)
-        
-        SIGMA = zeros($eltype, m, n)
-        for i=1:k; SIGMA[i,i] = S[i]; end
-        
-        if info[1] == 0; return (U,SIGMA,VT); end
-        error("Error in SVD");
+macro lapack_svd(fname, eltype)
+    quote 
+        function svd(A::DenseMatrix{$eltype})
+            jobu = "A"
+            jobvt = "A"
+            m, n = size(A)
+            k = min(m,n)
+            X = copy(A)
+            S = Array($eltype, k)
+            U = Array($eltype, m, m)
+            VT = Array($eltype, n, n)
+            info = [0]
+            
+            # Workspace query
+            work = [0.0]
+            lwork = -1
+            ccall(dlsym(libLAPACK, $fname),
+                  Void,
+                  (Ptr{Uint8}, Ptr{Uint8}, Ptr{Int32}, Ptr{Int32}, Ptr{$eltype}, Ptr{Int32},
+                   Ptr{$eltype}, Ptr{$eltype}, Ptr{Int32}, Ptr{$eltype}, Ptr{Int32},
+                   Ptr{$eltype}, Ptr{Int32}, Ptr{Int32}),
+                  jobu, jobvt, m, n, X, m, S, U, m, VT, n, work, lwork, info)
+            
+            if info[1] == 0; lwork = int32(work[1]); work = Array($eltype, lwork);
+            else error("Error in ", $fname); end
+            
+            # Compute SVD
+            ccall(dlsym(libLAPACK, $fname),
+                  Void,
+                  (Ptr{Uint8}, Ptr{Uint8}, Ptr{Int32}, Ptr{Int32}, Ptr{$eltype}, Ptr{Int32},
+                   Ptr{$eltype}, Ptr{$eltype}, Ptr{Int32}, Ptr{$eltype}, Ptr{Int32},
+                   Ptr{$eltype}, Ptr{Int32}, Ptr{Int32}),
+                  jobu, jobvt, m, n, X, m, S, U, m, VT, n, work, lwork, info)
+            
+            SIGMA = zeros($eltype, m, n)
+            for i=1:k; SIGMA[i,i] = S[i]; end
+            
+            if info[1] == 0; return (U,SIGMA,VT); end
+            error("Error in SVD");
+        end
     end
 end
+
+@lapack_svd "dgesvd_" Float64
+@lapack_svd "sgesvd_" Float32
 
 # SUBROUTINE DGESV( N, NRHS, A, LDA, IPIV, B, LDB, INFO )
 # *     .. Scalar Arguments ..
@@ -233,90 +257,95 @@ end
 # *     .. Array Arguments ..
 #       DOUBLE PRECISION   A( LDA, * ), B( LDB, * )
 
-for (fname_lu, fname_chol, fname_lsq, fname_tri, eltype) = 
-    (("dgesv_", "dposv_", "dgels_", "dtrtrs_", Float64),
-     ("sgesv_", "sposv_", "sgels_", "strtrs_", Float32))
-
-    @eval function \(A::DenseMatrix{$eltype}, B::DenseVecOrMat{$eltype})
-        info = [0]
-        m = size(A, 1)
-        n = size(A, 2)
-        if isa(B, Vector); nrhs = 1; else nrhs = size(B, 2); end
-        Acopy = copy(A)
-        X = copy(B)
-
-        if m == n # Square
-            case = :general
-            if isuppertriangular(A); case = :upper_triangular; end
-            if islowertriangular(A); case = :lower_triangular; end
-
-            if case == :general # General
-                ipiv = Array(Int32, n)
-
-                # Check for SPD matrix
-                if issymmetric(Acopy) && all([ Acopy[i,i] > 0 | i=1:n ])
-                      case = :spd
+macro lapack_backslash(fname_lu, fname_chol, fname_lsq, fname_tri, eltype)
+    quote 
+        function \(A::DenseMatrix{$eltype}, B::DenseVecOrMat{$eltype})
+            info = [0]
+            m = size(A, 1)
+            n = size(A, 2)
+            if isa(B, Vector); nrhs = 1; else nrhs = size(B, 2); end
+            Acopy = copy(A)
+            X = copy(B)
+            
+            if m == n # Square
+                case = :general
+                if isuppertriangular(A); case = :upper_triangular; end
+                if islowertriangular(A); case = :lower_triangular; end
+                
+                if case == :general # General
+                    ipiv = Array(Int32, n)
+                    
+                    # Check for SPD matrix
+                    if issymmetric(Acopy) && all([ Acopy[i,i] > 0 | i=1:n ])
+                        case = :spd
+                    end
+                    
+                    if case == :spd
+                        uplo = "U"
+                        ccall(dlsym(libLAPACK, $fname_chol),
+                              Void,
+                              (Ptr{Uint8}, Ptr{Int32}, Ptr{Int32}, Ptr{$eltype}, Ptr{Int32},
+                               Ptr{$eltype}, Ptr{Int32}, Ptr{Int32}),
+                              uplo, n, nrhs, Acopy, n, X, n, info)
+                        
+                        if info[1] != 0
+                            Acopy = copy(A)
+                            case = :general
+                        end
+                    end
+                    
+                    if case == :general
+                        info[1] = 0
+                        ccall(dlsym(libLAPACK, $fname_lu),
+                              Void,
+                              (Ptr{Int32}, Ptr{Int32}, Ptr{$eltype}, Ptr{Int32}, Ptr{Int32},
+                               Ptr{$eltype}, Ptr{Int32}, Ptr{Int32}),
+                              n, nrhs, Acopy, n, ipiv, X, n, info)
+                    end
+                    
+                else # Triangular
+                    uplo = "U"
+                    if case == :lower_triangular; uplo = "L"; end
+                    ccall(dlsym(libLAPACK, $fname_tri),
+                          Void,
+                          (Ptr{Uint8}, Ptr{Uint8}, Ptr{Uint8}, Ptr{Int32}, Ptr{Int32},
+                           Ptr{$eltype}, Ptr{Int32}, Ptr{$eltype}, Ptr{Int32}, Ptr{Int32}),
+                          uplo, "N", "N", n, nrhs, Acopy, n, X, n, info)
                 end
-
-                if case == :spd
-                      uplo = "U"
-                      ccall(dlsym(libLAPACK, $fname_chol),
-                            Void,
-                            (Ptr{Uint8}, Ptr{Int32}, Ptr{Int32}, Ptr{$eltype}, Ptr{Int32},
-                             Ptr{$eltype}, Ptr{Int32}, Ptr{Int32}),
-                            uplo, n, nrhs, Acopy, n, X, n, info)
-
-                      if info[1] != 0
-                         Acopy = copy(A)
-                         case = :general
-                      end
-                end
-
-                if case == :general
-                      info[1] = 0
-                      ccall(dlsym(libLAPACK, $fname_lu),
-                            Void,
-                            (Ptr{Int32}, Ptr{Int32}, Ptr{$eltype}, Ptr{Int32}, Ptr{Int32},
-                             Ptr{$eltype}, Ptr{Int32}, Ptr{Int32}),
-                            n, nrhs, Acopy, n, ipiv, X, n, info)
-                end
-
-            else # Triangular
-                uplo = "U"
-                if case == :lower_triangular; uplo = "L"; end
-                ccall(dlsym(libLAPACK, $fname_tri),
+                
+            else # Rectangular
+                
+                # Workspace query
+                lwork = -1
+                work = [0.0]
+                ccall(dlsym(libLAPACK, $fname_lsq),
                       Void,
-                      (Ptr{Uint8}, Ptr{Uint8}, Ptr{Uint8}, Ptr{Int32}, Ptr{Int32},
+                      (Ptr{Uint8}, Ptr{Int32}, Ptr{Int32}, Ptr{Int32}, Ptr{$eltype}, Ptr{Int32}, 
                        Ptr{$eltype}, Ptr{Int32}, Ptr{$eltype}, Ptr{Int32}, Ptr{Int32}),
-                      uplo, "N", "N", n, nrhs, Acopy, n, X, n, info)
-            end
+                      "N", m, n, nrhs, Acopy, m, X, max(m,n), work, lwork, info)
+                
+                if info[1] == 0; lwork = int32(work[1]); work = Array($eltype, lwork);
+                else error("Error in ", $fname_lsq); end
+                
+                ccall(dlsym(libLAPACK, $fname_lsq),
+                      Void,
+                      (Ptr{Uint8}, Ptr{Int32}, Ptr{Int32}, Ptr{Int32}, Ptr{$eltype}, Ptr{Int32}, 
+                       Ptr{$eltype}, Ptr{Int32}, Ptr{$eltype}, Ptr{Int32}, Ptr{Int32}),
+                      "N", m, n, nrhs, Acopy, m, X, max(m,n), work, lwork, info)
+                
+            end # if m == n...
+                
+            if info[1] == 0; return X; end
+            error("Error in solving A*X = B")
+            
+        end # function...
+    end # quote...
+end # macro...
 
-        else # Rectangular
+@lapack_backslash "dgesv_" "dposv_" "dgels_" "dtrtrs_" Float64
+@lapack_backslash "sgesv_" "sposv_" "sgels_" "strtrs_" Float32
 
-            # Workspace query
-            lwork = -1
-            work = [0.0]
-            ccall(dlsym(libLAPACK, $fname_lsq),
-                  Void,
-                  (Ptr{Uint8}, Ptr{Int32}, Ptr{Int32}, Ptr{Int32}, Ptr{$eltype}, Ptr{Int32}, 
-                   Ptr{$eltype}, Ptr{Int32}, Ptr{$eltype}, Ptr{Int32}, Ptr{Int32}),
-                  "N", m, n, nrhs, Acopy, m, X, max(m,n), work, lwork, info)
-
-            if info[1] == 0; lwork = int32(work[1]); work = Array($eltype, lwork);
-            else error("Error in ", $fname_lsq); end
-
-            ccall(dlsym(libLAPACK, $fname_lsq),
-                  Void,
-                  (Ptr{Uint8}, Ptr{Int32}, Ptr{Int32}, Ptr{Int32}, Ptr{$eltype}, Ptr{Int32}, 
-                   Ptr{$eltype}, Ptr{Int32}, Ptr{$eltype}, Ptr{Int32}, Ptr{Int32}),
-                  "N", m, n, nrhs, Acopy, m, X, max(m,n), work, lwork, info)
-
-        end # if m == n...
-
-        if info[1] == 0; return X; end
-        error("Error in solving A*X = B")
-    end
-end
+## BIDIAG ##
 
 bidiag(A) = bidiag(A, max(1,div(min(size(A)),2)), 2)
 
