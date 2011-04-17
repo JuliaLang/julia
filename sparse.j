@@ -103,7 +103,10 @@ function convert{T}(::Type{Array{T}}, S::SparseArray2d{T})
 
 end
 
-speye(n::Size) = sparse(linspace(1,n), linspace(1,n), ones(n), n, n)
+speye(n::Size) = sparse(linspace(1,n), linspace(1,n), ones(Int32, n), n, n)
+
+(.*)(A::SparseArray2d, x::Number) = SparseArray2d(A.m, A.n, A.colptr, A.rowval, x .* A.nzval)
+(.*)(x::Number, A::SparseArray2d) = A .* x
 
 function +{T1,T2}(A::SparseArray2d{T1}, B::SparseArray2d{T2})
     assert(size(A) == size(B))
