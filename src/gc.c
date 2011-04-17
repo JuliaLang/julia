@@ -508,13 +508,9 @@ static void gc_markval_(jl_value_t *v)
     }
     else if (vt == (jl_value_t*)jl_methtable_type) {
         jl_methtable_t *mt = (jl_methtable_t*)v;
-        size_t i;
         gc_mark_methlist(mt->defs);
         gc_mark_methlist(mt->cache);
-        for(i=0; i < mt->n_1arg; i++) {
-            if (mt->cache_1arg[i] != NULL)
-                GC_Markval(mt->cache_1arg[i]);
-        }
+        if (mt->cache_1arg) GC_Markval(mt->cache_1arg);
     }
     else if (vt == (jl_value_t*)jl_task_type) {
         jl_task_t *ta = (jl_task_t*)v;

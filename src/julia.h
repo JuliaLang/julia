@@ -218,8 +218,7 @@ typedef struct _jl_methtable_t {
     JL_STRUCT_TYPE
     jl_methlist_t *defs;
     jl_methlist_t *cache;
-    jl_function_t **cache_1arg;
-    size_t n_1arg;
+    jl_array_t *cache_1arg;
     int sealed;
     int max_args;  // max # of non-vararg arguments in a signature
 #ifdef JL_GF_PROFILE
@@ -371,7 +370,7 @@ void *allocb_permanent(size_t sz);
 #define jl_nextpair(p) jl_t2(p)
 
 #define jl_cellref(a,i) (((jl_value_t**)((jl_array_t*)a)->data)[(i)])
-#define jl_cellset(a,i,x) ((((jl_value_t**)((jl_array_t*)a)->data)[(i)])=(x))
+#define jl_cellset(a,i,x) ((((jl_value_t**)((jl_array_t*)a)->data)[(i)])=((jl_value_t*)(x)))
 
 #define jl_exprarg(e,n) jl_cellref(((jl_expr_t*)(e))->args,n)
 

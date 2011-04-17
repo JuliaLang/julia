@@ -28,7 +28,6 @@ static jl_methtable_t *new_method_table()
     mt->defs = NULL;
     mt->cache = NULL;
     mt->cache_1arg = NULL;
-    mt->n_1arg = 0;
     mt->sealed = 0;
     mt->max_args = 0;
 #ifdef JL_GF_PROFILE
@@ -149,8 +148,8 @@ static jl_function_t *jl_method_table_assoc_exact_by_type(jl_methtable_t *mt,
         if (jl_is_struct_type(ty) || jl_is_bits_type(ty)) {
             uptrint_t uid = ((jl_struct_type_t*)ty)->uid;
             assert(uid > 0);
-            if (uid < mt->n_1arg) {
-                jl_function_t *m = mt->cache_1arg[uid];
+            if (mt->cache_1arg && uid < jl_array_len(mt->cache_1arg)) {
+                jl_function_t *m = (jl_function_t*)jl_cellref(mt->cache_1arg, uid);
                 if (m)
                     return m;
             }
@@ -182,8 +181,9 @@ static jl_function_t *jl_method_table_assoc_exact(jl_methtable_t *mt,
         jl_value_t *ty = (jl_value_t*)jl_typeof(args[0]);
         if (jl_is_struct_type(ty) || jl_is_bits_type(ty)) {
             uptrint_t uid = ((jl_struct_type_t*)ty)->uid;
-            if (uid > 0 && uid < mt->n_1arg) {
-                jl_function_t *m = mt->cache_1arg[uid];
+            if (uid > 0 && mt->cache_1arg &&
+                uid < jl_array_len(mt->cache_1arg)) {
+                jl_function_t *m = (jl_function_t*)jl_cellref(mt->cache_1arg, uid);
                 if (m)
                     return m;
             }
@@ -254,19 +254,12 @@ jl_function_t *jl_method_cache_insert(jl_methtable_t *mt, jl_tuple_t *type,
         else if (jl_is_bits_type(t0))
             uid = ((jl_bits_type_t*)t0)->uid;
         if (uid > 0) {
-            if (uid >= mt->n_1arg) {
-                size_t nsz = uid+10;
-                jl_function_t **nc =
-                    (jl_function_t**)LLT_REALLOC(mt->cache_1arg,
-                                                 nsz*sizeof(void*));
-                assert(nc);
-                size_t i;
-                for(i=mt->n_1arg; i < nsz; i++)
-                    nc[i] = NULL;
-                mt->cache_1arg = nc;
-                mt->n_1arg = nsz;
+            if (mt->cache_1arg == NULL)
+                mt->cache_1arg = jl_alloc_cell_1d(0);
+            if (uid > jl_array_len(mt->cache_1arg)) {
+                jl_array_grow_end(mt->cache_1arg, uid+10-jl_array_len(mt->cache_1arg));
             }
-            mt->cache_1arg[uid] = method;
+            jl_cellset(mt->cache_1arg, uid, method);
             return method;
         }
     }
@@ -761,7 +754,6 @@ jl_methlist_t *jl_method_table_insert(jl_methtable_t *mt, jl_tuple_t *type,
     }
     if (type->length == 1) {
         mt->cache_1arg = NULL;
-        mt->n_1arg = 0;
     }
     // update max_args
     jl_tuple_t *t = (jl_tuple_t*)type;

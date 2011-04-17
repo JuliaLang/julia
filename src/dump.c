@@ -305,11 +305,7 @@ void jl_serialize_value_(ios_t *s, jl_value_t *v)
         jl_methtable_t *mt = (jl_methtable_t*)v;
         jl_serialize_methlist(s, mt->defs);
         jl_serialize_methlist(s, mt->cache);
-        write_int32(s, mt->n_1arg);
-        int i;
-        for(i=0; i < mt->n_1arg; i++) {
-            jl_serialize_value(s, mt->cache_1arg[i]);
-        }
+        jl_serialize_value(s, mt->cache_1arg);
         write_int8(s, mt->sealed);
         write_int32(s, mt->max_args);
     }
@@ -659,16 +655,7 @@ jl_value_t *jl_deserialize_value(ios_t *s)
         mt->type = (jl_type_t*)jl_methtable_type;
         mt->defs = jl_deserialize_methlist(s);
         mt->cache = jl_deserialize_methlist(s);
-        mt->n_1arg = read_int32(s);
-        if (mt->n_1arg > 0) {
-            mt->cache_1arg = LLT_ALLOC(mt->n_1arg*sizeof(void*));
-            for(i=0; i < mt->n_1arg; i++) {
-                mt->cache_1arg[i] = (jl_function_t*)jl_deserialize_value(s);
-            }
-        }
-        else {
-            mt->cache_1arg = NULL;
-        }
+        mt->cache_1arg = (jl_array_t*)jl_deserialize_value(s);
         mt->sealed = read_int8(s);
         mt->max_args = read_int32(s);
         return (jl_value_t*)mt;
