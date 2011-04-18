@@ -588,7 +588,11 @@ static jl_value_t *jl_type_intersect(jl_value_t *a, jl_value_t *b,
             }
             else if (jl_is_typevar(lenvar)) {
                 temp = jl_box_int32(alen);
-                intersect_typevar((jl_tvar_t*)lenvar, temp, penv);
+                if (intersect_typevar((jl_tvar_t*)lenvar, temp, penv) ==
+                    (jl_value_t*)jl_bottom_type) {
+                    JL_GC_POP();
+                    return (jl_value_t*)jl_bottom_type;
+                }
             }
         }
         if (!jl_is_tuple(b)) {
