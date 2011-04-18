@@ -75,5 +75,9 @@ $(LAPACK_OBJ): lapack-3.3.0
 lapack_install: $(LAPACK_OBJ) $(JULIALIB)
 	ln -sf $(LAPACK_OBJ) $(JULIALIB)/libLAPACK.$(SHLIB_EXT)
 
-clean:
-	rm -fr readline-6.2 llvm-$(LLVM_VER) pcre-8.12 fdlibm lapack-3.3.0 *gz
+cleanall:
+	rm -rf llvm-$(LLVM_VER){,.tgz}
+	rm -rf readline-6.2{,.tar.gz}
+	rm -rf pcre-8.12{,.tar.bz2}
+	rm -rf fdlibm{,.tar.gz}
+	rm -rf lapack-3.3.0{,.tgz}

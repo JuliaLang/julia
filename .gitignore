@@ -5,10 +5,15 @@
 *.a
 *.jp
 *.ji
+
+/lib
 /tmp
+
 /julia
 /julia-debug
 /julia-release
 /julia-efence
 /nbits
+
 /pcre_h.j
+/custom.j
