@@ -1,13 +1,26 @@
+# Compressed sparse columns data structure
 type SparseArray2d{T} <: Matrix{T}
-    m::Size
-    n::Size
-    colptr::Vector{Size}
-    rowval::Vector{Size}
-    nzval::Vector{T}
+    m::Size                # Number of rows
+    n::Size                # Number of columns
+    colptr::Vector{Size}   # Column i is in colptr[i]:(colptr[i+1]-1)
+    rowval::Vector{Size}   # Row values of nonzeros
+    nzval::Vector{T}       # Nonzero values
 end
 
 size(S::SparseArray2d) = (S.m, S.n)
 nnz(S::SparseArray2d) = S.colptr[S.n+1] - 1
+
+function convert{T}(::Type{Array{T}}, S::SparseArray2d{T})
+    A = zeros(T, size(S))
+    for col = 1 : S.n
+        for k = S.colptr[col] : (S.colptr[col+1]-1)
+            A[S.rowval[k], col] = S.nzval[k]
+        end
+    end
+    return A
+end
+
+full{T}(S::SparseArray2d{T}) = convert(Array{T}, S)
 
 # TODO: Does not detect duplicate (i,j) values yet
 # Assumes no such duplicates occur
@@ -62,10 +75,6 @@ function find{T}(S::SparseArray2d{T})
     return (I, J, V)
 end
 
-sprand(m,n,density) = sprand_rng (m,n,density,rand)
-sprandn(m,n,density) = sprand_rng (m,n,density,randn)
-#sprandint(m,n,density) = sprand_rng (m,n,density,randint)
-
 function sprand_rng(m, n, density, rng)
     numnz = int32(m*n*density)
     I = [ randint(1, m) | i=1:numnz ]
@@ -74,106 +83,123 @@ function sprand_rng(m, n, density, rng)
     S = sparse(I, J, V, m, n)
 end
 
-transpose(S::SparseArray2d) = ((I,J,V) = find(S); 
-                               sparse (J, I, V, S.n, S.m) )
+sprand(m,n,density) = sprand_rng (m,n,density,rand)
+sprandn(m,n,density) = sprand_rng (m,n,density,randn)
+#sprandint(m,n,density) = sprand_rng (m,n,density,randint)
 
-ctranspose(S::SparseArray2d) = ((I,J,V) = find(S); 
-                                sparse (J, I, conj(V), S.n, S.m) )
+speye(n::Size) = ( L = linspace(1,n); sparse(L, L, ones(Int32, n), n, n) )
+speye(m::Size, n::Size) = ( x = min(m,n); L = linspace(1,x); sparse(L, L, ones(Int32, x), m, n) )
+
+transpose(S::SparseArray2d) = ( (I,J,V) = find(S); sparse(J, I, V, S.n, S.m) )
+ctranspose(S::SparseArray2d) = ( (I,J,V) = find(S); sparse(J, I, conj(V), S.n, S.m) )
 
 function show(S::SparseArray2d)
-    for col = 1 : S.n
+    println(S.m, "-by-", S.n, " sparse matrix with ", nnz(S), " nonzeros:")
+    for col = 1:S.n
         for k = S.colptr[col] : (S.colptr[col+1]-1)
-            print('(')
+            print("\t[")
             show(S.rowval[k])
-            print(",$col)   ")
+            print(",\t", col, "] =\t")
             show(S.nzval[k])
             println()
         end
     end
 end
 
-function convert{T}(::Type{Array{T}}, S::SparseArray2d{T})
-    A = zeros(T, size(S))
-    for col = 1 : S.n
-        for k = S.colptr[col] : (S.colptr[col+1]-1)
-            A[S.rowval[k], col] = S.nzval[k]
-        end
-    end
-    return A
+macro sparse_binary_op_sparse_res(op)
+    quote
+        function ($op){T1,T2}(A::SparseArray2d{T1}, B::SparseArray2d{T2})
+            assert(size(A) == size(B))
+            (m, n) = size(A)
+            
+            typeS = promote_type(T1, T2)
+            # TODO: Need better method to allocate result
+            nnzS = nnz(A) + nnz(B) 
+            colptrS = Array(Size, A.n+1)
+            rowvalS = Array(Size, nnzS)
+            nzvalS = Array(typeS, nnzS)
 
-end
-
-speye(n::Size) = sparse(linspace(1,n), linspace(1,n), ones(Int32, n), n, n)
-
-(.*)(A::SparseArray2d, x::Number) = SparseArray2d(A.m, A.n, A.colptr, A.rowval, x .* A.nzval)
-(.*)(x::Number, A::SparseArray2d) = A .* x
-
-function +{T1,T2}(A::SparseArray2d{T1}, B::SparseArray2d{T2})
-    assert(size(A) == size(B))
-    (m, n) = size(A)
-    
-    typeS = promote_type(T1, T2)
-    # TODO: Need better method to allocate result
-    nnzS = nnz(A) + nnz(B) 
-    colptrS = Array(Size, A.n+1)
-    rowvalS = Array(Size, nnzS)
-    nzvalS = Array(typeS, nnzS)
-    
-    colptrA = A.colptr
-    rowvalA = A.rowval
-    nzvalA = A.nzval
-    
-    colptrB = B.colptr
-    rowvalB = B.rowval
-    nzvalB = B.nzval
-
-    ptrS = 1
-    colptrS[1] = 1
-    
-    for col = 1:n
-        ptrA = colptrA[col]
-        stopA = colptrA[col+1]
-        ptrB = colptrB[col]
-        stopB = colptrB[col+1]
-        
-        while ptrA < stopA && ptrB < stopB
-            rowA = rowvalA[ptrA]
-            rowB = rowvalB[ptrB]
-            if rowA < rowB
-                rowvalS[ptrS] = rowA
-                nzvalS[ptrS] = nzvalA[ptrA]
-                ptrA += 1
-            elseif rowB < rowA
-                rowvalS[ptrS] = rowB
-                nzvalS[ptrS] = nzvalB[ptrB]
-                ptrB += 1
-            else
-                rowvalS[ptrS] = rowA
-                nzvalS[ptrS] = nzvalA[ptrA] + nzvalB[ptrB]
-                ptrA += 1
-                ptrB += 1
+            zero = convert(typeS, 0)
+            
+            colptrA = A.colptr
+            rowvalA = A.rowval
+            nzvalA = A.nzval
+            
+            colptrB = B.colptr
+            rowvalB = B.rowval
+            nzvalB = B.nzval
+            
+            ptrS = 1
+            colptrS[1] = 1
+            
+            for col = 1:n
+                ptrA = colptrA[col]
+                stopA = colptrA[col+1]
+                ptrB = colptrB[col]
+                stopB = colptrB[col+1]
+                
+                while ptrA < stopA && ptrB < stopB
+                    rowA = rowvalA[ptrA]
+                    rowB = rowvalB[ptrB]
+                    if rowA < rowB
+                        res = ($op)(nzvalA[ptrA], zero)
+                        if res != zero
+                            rowvalS[ptrS] = rowA
+                            nzvalS[ptrS] = ($op)(nzvalA[ptrA], zero)
+                            ptrS += 1
+                        end
+                        ptrA += 1
+                    elseif rowB < rowA
+                        res = ($op)(zero, nzvalB[ptrB])
+                        if res != zero
+                            rowvalS[ptrS] = rowB
+                            nzvalS[ptrS] = res
+                            ptrS += 1
+                        end
+                        ptrB += 1
+                    else
+                        res = ($op)(nzvalA[ptrA], nzvalB[ptrB])
+                        if res != zero
+                            rowvalS[ptrS] = rowA
+                            nzvalS[ptrS] = res
+                            ptrS += 1
+                        end
+                        ptrA += 1
+                        ptrB += 1
+                    end
+                end
+                
+                while ptrA < stopA
+                    res = ($op)(nzvalA[ptrA], zero)
+                    if res != zero
+                        rowvalS[ptrS] = rowA
+                        nzvalS[ptrS] = ($op)(nzvalA[ptrA], zero)
+                        ptrS += 1
+                    end
+                    ptrA += 1
+                end
+                
+                while ptrB < stopB
+                    res = ($op)(zero, nzvalB[ptrB])
+                    if res != zero
+                        rowvalS[ptrS] = rowB
+                        nzvalS[ptrS] = res
+                        ptrS += 1
+                    end
+                    ptrB += 1
+                end
+                
+                colptrS[col+1] = ptrS
             end
-            ptrS += 1
-        end
-        
-        while ptrA < stopA
-            rowA = rowvalA[ptrA]
-            rowvalS[ptrS] = rowA
-            nzvalS[ptrS] = nzvalA[ptrA]
-            ptrA += 1
-            ptrS += 1
-        end
-        
-        while ptrB < stopB
-            rowB = rowvalB[ptrB]
-            rowvalS[ptrS] = rowB
-            nzvalS[ptrS] = nzvalB[ptrB]
-            ptrB += 1
-            ptrS += 1
-        end
-
-        colptrS[col+1] = ptrS
-    end
     
-    return SparseArray2d(m, n, colptrS, rowvalS, nzvalS)
+            return SparseArray2d(m, n, colptrS, rowvalS, nzvalS)
+        end
+    end
 end
+
+@sparse_binary_op_sparse_res (+)
+@sparse_binary_op_sparse_res (-)
+@sparse_binary_op_sparse_res (.*)
+
+(.*)(A::SparseArray2d, x::Number) = SparseArray2d(A.m, A.n, A.colptr, A.rowval, A.nzval .* x)
+(.*)(x::Number, A::SparseArray2d) = A .* x
