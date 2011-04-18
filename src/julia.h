@@ -458,6 +458,12 @@ static inline int jl_is_seq_type(jl_value_t *v)
             ((jl_tag_type_t*)(v))->name == jl_seq_type->name);
 }
 
+static inline int jl_is_ntuple_type(jl_value_t *v)
+{
+    return (jl_is_tag_type(v) &&
+            ((jl_tag_type_t*)v)->name == jl_ntuple_typename);
+}
+
 // type info accessors
 jl_value_t *jl_full_type(jl_value_t *v);
 size_t jl_field_offset(jl_struct_type_t *t, jl_sym_t *fld);
@@ -508,12 +514,14 @@ jl_tuple_t *jl_tuple3(void *a, void *b, void *c);
 jl_tuple_t *jl_alloc_tuple(size_t n);
 jl_tuple_t *jl_alloc_tuple_uninit(size_t n);
 jl_tuple_t *jl_tuple_append(jl_tuple_t *a, jl_tuple_t *b);
+jl_tuple_t *jl_tuple_fill(size_t n, jl_value_t *v);
 jl_tuple_t *jl_flatten_pairs(jl_tuple_t *t);
 jl_sym_t *jl_symbol(const char *str);
 DLLEXPORT jl_sym_t *jl_symbol_n(const char *str, int32_t len);
 DLLEXPORT jl_sym_t *jl_gensym();
 jl_expr_t *jl_exprn(jl_sym_t *head, size_t n);
 jl_function_t *jl_new_generic_function(jl_sym_t *name);
+void jl_initialize_generic_function(jl_function_t *f, jl_sym_t *name);
 void jl_add_method(jl_function_t *gf, jl_tuple_t *types, jl_function_t *meth);
 jl_value_t *jl_method_def(jl_sym_t *name, jl_value_t **bp,
                           jl_tuple_t *argtypes, jl_function_t *f);

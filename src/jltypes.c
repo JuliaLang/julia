@@ -401,6 +401,7 @@ static jl_value_t *intersect_tag(jl_tag_type_t *a, jl_tag_type_t *b,
         int atv = jl_has_typevars_(ap,1);
         int btv = jl_has_typevars_(bp,1);
         if (a->name == jl_ntuple_typename/* || jl_is_tag_type(a)*/ ||
+            // NOTE: tuples are covariant, so NTuple is too
             (atv && btv)) {
             ti = jl_type_intersect(ap,bp,penv);
         }
@@ -542,7 +543,6 @@ static jl_value_t *intersect_typevar(jl_tvar_t *a, jl_value_t *b,
     return (jl_value_t*)a;
 }
 
-// TODO: handle NTuple
 static jl_value_t *jl_type_intersect(jl_value_t *a, jl_value_t *b,
                                      jl_tuple_t **penv)
 {
@@ -574,12 +574,34 @@ static jl_value_t *jl_type_intersect(jl_value_t *a, jl_value_t *b,
     if (b == (jl_value_t*)jl_any_type) return a;
     // tuple
     if (jl_is_tuple(a)) {
-        if (!jl_is_tuple(b))
+        jl_value_t *temp=NULL;
+        JL_GC_PUSH(&b, &temp);
+        if (jl_is_ntuple_type(b)) {
+            size_t alen = ((jl_tuple_t*)a)->length;
+            jl_value_t *lenvar = jl_tparam0(b);
+            jl_value_t *elty = jl_tparam1(b);
+            b = (jl_value_t*)jl_tuple_fill(alen, elty);
+            if (alen > 0 && jl_is_seq_type(jl_tupleref(a,alen-1))) {
+                temp = (jl_value_t*)jl_tuple1(elty);
+                jl_tupleset(b, alen-1, jl_apply_type((jl_value_t*)jl_seq_type,
+                                                     (jl_tuple_t*)temp));
+            }
+            else if (jl_is_typevar(lenvar)) {
+                temp = jl_box_int32(alen);
+                intersect_typevar((jl_tvar_t*)lenvar, temp, penv);
+            }
+        }
+        if (!jl_is_tuple(b)) {
+            JL_GC_POP();
             return (jl_value_t*)jl_bottom_type;
-        return intersect_tuple((jl_tuple_t*)a, (jl_tuple_t*)b, penv);
+        }
+        a = intersect_tuple((jl_tuple_t*)a, (jl_tuple_t*)b, penv);
+        JL_GC_POP();
+        return a;
     }
-    if (jl_is_tuple(b))
-        return (jl_value_t*)jl_bottom_type;
+    if (jl_is_tuple(b)) {
+        return jl_type_intersect(b, a, penv);
+    }
     // function
     if (jl_is_func_type(a)) {
         if (!jl_is_func_type(b))
@@ -882,15 +904,8 @@ static jl_value_t *apply_type_(jl_value_t *tc, jl_value_t **params, size_t n)
     if (tc == (jl_value_t*)jl_ntuple_type && (n==1||n==2) &&
         jl_is_int32(params[0])) {
         size_t nt = jl_unbox_int32(params[0]);
-        if (nt == 0) return (jl_value_t*)jl_null;
-        if (n==2) {
-            jl_tuple_t *tup = jl_alloc_tuple_uninit(nt);
-            jl_value_t *eltype = params[1];
-            for(i=0; i < nt; i++) {
-                jl_tupleset(tup, i, eltype);
-            }
-            return (jl_value_t*)tup;
-        }
+        return (jl_value_t*)jl_tuple_fill(nt, (n==2) ? params[1] :
+                                          (jl_value_t*)jl_any_type);
     }
     if (n > tp->length)
         jl_errorf("too many parameters for type %s", tname);
@@ -1923,9 +1938,11 @@ void jl_init_types()
                            tv,
                            jl_null, jl_null);
     jl_array_typename = jl_array_type->name;
+    jl_array_type->linfo = NULL;
+    //jl_initialize_generic_function((jl_function_t*)jl_array_type,
+    //                               jl_array_typename->name);
     jl_array_type->fptr = jl_generic_array_ctor;
     jl_array_type->env = NULL;
-    jl_array_type->linfo = NULL;
 
     jl_array_any_type =
         (jl_type_t*)jl_apply_type((jl_value_t*)jl_array_type,

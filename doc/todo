@@ -583,6 +583,8 @@ arr{T}(::Type{T}, d::Size...)          = arr(T, d)
 arr{T}(::Type{T}, m::Size,n::Size)     = Array{T,2}((m,n))
 julia> tic(); for i=1:100000; a=Array(Int32,2,3); end; toc()
 elapsed time: 0.0483038425445557 sec
+elapsed time: 0.0244669914245605 sec
+elapsed time: 0.0549869537353516 sec
 
 -------------------------------------------------------------------------------
 
@@ -703,7 +705,21 @@ clone{T}(a::Tensor{T})                      = clone(a, T, size(a))
 and
 clone{T}(a::Tensor{T}, dims::Size...)       = clone(a, T, dims)
 but the first one should block the second one.
+(fixed)
 
 wrong:
 julia> tintersect(Array{Float64,1},Tensor{Any,1})
 Array{Float64,1}
+(fixed)
+
+need to distinguish covariant from invariant contexts in type intersection
+we currently get this:
+julia> getmethods(clone,(Array{Any,1},))
+((Array{Any,1},),
+ (N,1,T,T),  # ***
+ AST(lambda({a::top(apply_type)(Tensor,T)},vinf(locals(),{{a,Any,false,false}},Array(Any,(0,)),()),
+ ...
+problem is matching Tensor{T} with Array{Any,1} yields the constraint T<:Any,
+which it already is. it should yield T==Any instead.
+
+this (and tintersect on NTuple) is needed to define Array() methods in boot.j

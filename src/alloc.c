@@ -217,6 +217,17 @@ jl_tuple_t *jl_tuple_append(jl_tuple_t *a, jl_tuple_t *b)
     return c;
 }
 
+jl_tuple_t *jl_tuple_fill(size_t n, jl_value_t *v)
+{
+    if (n==0) return jl_null;
+    jl_tuple_t *tup = jl_alloc_tuple_uninit(n);
+    size_t i;
+    for(i=0; i < n; i++) {
+        jl_tupleset(tup, i, v);
+    }
+    return tup;
+}
+
 // convert (a, b, (c, d, (... ()))) to (a, b, c, d, ...)
 jl_tuple_t *jl_flatten_pairs(jl_tuple_t *t)
 {
@@ -416,8 +427,6 @@ jl_func_type_t *jl_new_functype(jl_type_t *a, jl_type_t *b)
 
 JL_CALLABLE(jl_new_struct_internal);
 JL_CALLABLE(jl_generic_ctor);
-
-void jl_initialize_generic_function(jl_function_t *f, jl_sym_t *name);
 
 // instantiate a type with new variables
 jl_value_t *jl_new_type_instantiation(jl_value_t *t)

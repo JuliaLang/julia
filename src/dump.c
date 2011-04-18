@@ -797,6 +797,7 @@ void jl_save_system_image(char *fname, char *startscriptname)
     jl_serialize_value(&f, jl_method_missing_func);
     jl_serialize_value(&f, jl_get_global(jl_system_module,
                                          jl_symbol("IdTable")));
+    jl_serialize_value(&f, jl_array_type->env);
 
     jl_serialize_module(&f, jl_system_module);
     //jl_serialize_finalizers(&f);
@@ -862,6 +863,7 @@ void jl_restore_system_image(char *fname)
     jl_append_any_func = (jl_function_t*)jl_deserialize_value(&f);
     jl_method_missing_func = (jl_function_t*)jl_deserialize_value(&f);
     jl_idtable_type = (jl_struct_type_t*)jl_deserialize_value(&f);
+    jl_array_type->env = jl_deserialize_value(&f);
     jl_array_uint8_type =
         (jl_type_t*)jl_apply_type((jl_value_t*)jl_array_type,
                                   jl_tuple2(jl_uint8_type,
