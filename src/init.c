@@ -112,6 +112,8 @@ void julia_init(char *imageFile)
     jl_init_serializer();
 
     if (imageFile) {
+        // TODO: currently we cannot handle errors in here since some
+        // stuff in main() has not been set up yet (root task, etc.)
         jl_restore_system_image(imageFile);
     }
     else {
