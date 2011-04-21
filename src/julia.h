@@ -242,7 +242,6 @@ extern jl_struct_type_t *jl_typector_type;
 extern jl_struct_type_t *jl_sym_type;
 extern jl_struct_type_t *jl_symbol_type;
 extern jl_tuple_t *jl_tuple_type;
-extern jl_typename_t *jl_tuple_typename;
 extern jl_tag_type_t *jl_ntuple_type;
 extern jl_typename_t *jl_ntuple_typename;
 extern jl_struct_type_t *jl_tvar_type;
@@ -462,6 +461,15 @@ static inline int jl_is_ntuple_type(jl_value_t *v)
 {
     return (jl_is_tag_type(v) &&
             ((jl_tag_type_t*)v)->name == jl_ntuple_typename);
+}
+
+static inline int jl_is_nontuple_type(jl_value_t *v)
+{
+    return (jl_typeis(v, jl_union_kind) ||
+            jl_typeis(v, jl_struct_kind) ||
+            jl_typeis(v, jl_func_kind) ||
+            jl_typeis(v, jl_tag_kind) ||
+            jl_typeis(v, jl_bits_kind));
 }
 
 // type info accessors

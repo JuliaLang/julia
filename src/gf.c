@@ -114,8 +114,9 @@ static inline int cache_match(jl_value_t **args, size_t n, jl_tuple_t *sig,
             if (!jl_subtype(a, decl, 1))
                 return 0;
         }
-        else if (jl_is_some_tag_type(a) && jl_is_tag_type(decl) &&
-                 ((jl_tag_type_t*)decl)->name == jl_type_type->name) {
+        else if (jl_is_tag_type(decl) &&
+                 ((jl_tag_type_t*)decl)->name == jl_type_type->name &&
+                 jl_is_nontuple_type(a)) {   //***
             if (jl_tparam0(decl) == (jl_value_t*)jl_type_type) {
                 // in the case of Type{Type{...}}, the types don't have
                 // to match exactly either. this is cached as Type{Type}.
@@ -799,7 +800,7 @@ static jl_tuple_t *arg_type_tuple(jl_value_t **args, size_t nargs)
     size_t i;
     for(i=0; i < tt->length; i++) {
         jl_value_t *a;
-        if (jl_is_some_tag_type(args[i])) {
+        if (jl_is_nontuple_type(args[i])) {  //***
             a = (jl_value_t*)jl_wrap_Type(args[i]);
         }
         else {

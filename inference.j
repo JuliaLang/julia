@@ -509,7 +509,8 @@ end
 ast_rettype(ast) = ast.args[3].type
 
 function abstract_eval_constant(x)
-    if isa(x,TagKind) || isa(x,TypeVar)
+    if isa(x,TagKind) || isa(x,BitsKind) || isa(x,StructKind) ||
+        isa(x,FuncKind) || isa(x,UnionKind)
         return Type{x}
     end
     if isa(x,LambdaStaticData)
