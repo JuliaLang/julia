@@ -397,6 +397,7 @@ static jl_value_t *intersect_tag(jl_tag_type_t *a, jl_tag_type_t *b,
     jl_value_t *ti;
     size_t i;
     if (a->name == jl_ntuple_typename) {
+        assert(p->length == 2);
         // NOTE: tuples are covariant, so NTuple element type is too
         ti = jl_type_intersect(jl_tparam0(a),jl_tparam0(b),penv,eqc,invariant);
         jl_tupleset(p, 0, ti);
@@ -480,7 +481,8 @@ static jl_value_t *meet_tvars(jl_tvar_t *a, jl_tvar_t *b)
     if (ub == (jl_value_t*)jl_bottom_type)
         return ub;
     JL_GC_PUSH(&lb, &ub);
-    lb = jl_type_union(jl_tuple2(a->lb, b->lb));
+    lb = (jl_value_t*)jl_tuple2(a->lb, b->lb);
+    lb = jl_type_union((jl_tuple_t*)lb);
     if (!jl_subtype(lb, ub, 0)) {
         JL_GC_POP();
         return (jl_value_t*)jl_bottom_type;
