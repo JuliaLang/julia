@@ -23,12 +23,16 @@
 #ifdef BOEHM_GC
 #include <gc.h>
 #endif
-#ifdef USE_READLINE
+
+#if defined(USE_READLINE)
 #include <readline/readline.h>
 #include <readline/history.h>
+#elif defined(USE_EDITLINE)
+#include <editline/readline.h>
 #else
 #include <ctype.h>
 #endif
+
 #include "llt.h"
 #include "julia.h"
 
@@ -70,7 +74,7 @@ static char jl_color_normal[] = "\033[0m\033[37m";
 char *julia_home = NULL; // load is relative to here
 static char *history_file = NULL;
 static int print_banner = 1;
-#ifdef USE_READLINE
+#if defined(USE_READLINE) || defined(USE_EDITLINE)
 static int no_readline = 0;
 #else
 static int no_readline = 1;
@@ -270,9 +274,12 @@ static int ends_with_semicolon(const char *input)
 
 static void handle_input(jl_value_t *ast, int end, int show_value);
 
-#ifdef USE_READLINE
+#if defined(USE_READLINE) || defined(USE_EDITLINE)
 
 static jl_value_t *rl_ast;
+#if defined(USE_EDITLINE)
+static int rl_done;
+#endif
 
 // yes, readline uses inconsistent indexing internally.
 #define history_rem(n) remove_history(n-history_base)
@@ -285,12 +292,14 @@ static void init_history() {
     struct stat stat_info;
     if (!stat(history_file, &stat_info)) {
         read_history(history_file);
+#if defined(USE_READLINE)
         for (;;) {
             HIST_ENTRY *entry = history_get(history_base);
             if (entry && isspace(entry->line[0]))
                 free_history_entry(history_rem(history_base));
             else break;
         }
+#endif
         int i, j, k;
         for (i=1 ;; i++) {
             HIST_ENTRY *first = history_get(i);
@@ -307,7 +316,9 @@ static void init_history() {
             for (k = i+1; k < j; k++) {
                 *p = '\n';
                 p = stpcpy(p+1, history_get(i+1)->line);
+#if defined(USE_READLINE)
                 free_history_entry(history_rem(i+1));
+#endif
             }
         }
     } else if (errno == ENOENT) {
@@ -343,8 +354,10 @@ static void add_history_permanent(char *input) {
     if (entry && !strcmp(input, entry->line)) return;
     last_hist_offset = where_history();
     add_history(input);
+#if defined(USE_READLINE)
     if (history_file)
         append_history(1, history_file);
+#endif
 }
 
 static int line_start(int point) {
@@ -434,7 +447,9 @@ static int backspace_callback(int count, int key) {
         int i = line_start(rl_point);
         rl_point = (i == 0 || rl_point-i > prompt_length) ?
             rl_point-1 : i-1;
+#if defined(USE_READLINE)
         rl_delete_text(rl_point, j);
+#endif
     }
     return 0;
 }
@@ -567,7 +582,7 @@ static void block_for_input(char *prompt)
         read_expr_no_readline(prompt);
     }
     else {
-#ifdef USE_READLINE
+#if defined(USE_READLINE) || defined(USE_EDITLINE)
         read_expr_readline(prompt);
 #endif
     }
@@ -582,7 +597,7 @@ DLLEXPORT void jl_stdin_callback()
         jl_input_line_callback_no_readline(input);
     }
     else {
-#ifdef USE_READLINE
+#if defined(USE_READLINE) || defined(USE_EDITLINE)
         rl_callback_read_char();
 #endif
     }
@@ -632,7 +647,7 @@ int jl_load_startup_file(char *fname)
 
 static void exit_repl(int code)
 {
-#ifdef USE_READLINE
+#if defined(USE_READLINE) || defined(USE_EDITLINE)
     if (!no_readline) {
         rl_callback_handler_remove();
     }
@@ -671,7 +686,7 @@ static void repl_show_value(jl_value_t *v)
 
 DLLEXPORT void jl_eval_user_input(jl_value_t *ast, int show_value)
 {
-#ifdef USE_READLINE
+#if defined(USE_READLINE) || defined(USE_EDITLINE)
     if (!no_readline) {
         if (have_event_loop) {
             // with multi.j loaded the readline callback can return
@@ -720,7 +735,7 @@ DLLEXPORT void jl_eval_user_input(jl_value_t *ast, int show_value)
         ios_flush(ios_stdout);
     }
     else {
-#ifdef USE_READLINE
+#if defined(USE_READLINE) || defined(USE_EDITLINE)
         if (have_event_loop) {
             rl_callback_handler_install(prompt_string,
                                         jl_input_line_callback_readline);
@@ -875,7 +890,7 @@ int main(int argc, char *argv[])
         return exec_program();
     }
 
-#ifdef USE_READLINE
+#if defined(USE_READLINE) || defined(USE_EDITLINE)
     if (!no_readline) {
         init_history();
         rl_bind_key(' ', space_callback);
@@ -888,11 +903,13 @@ int main(int argc, char *argv[])
         rl_bind_key('\005', line_end_callback);
         rl_bind_key('\002', left_callback);
         rl_bind_key('\006', right_callback);
+#if defined(USE_READLINE)
         rl_bind_keyseq("\e[A", up_callback);
         rl_bind_keyseq("\e[B", down_callback);
         rl_bind_keyseq("\e[D", left_callback);
         rl_bind_keyseq("\e[C", right_callback);
         rl_bind_keyseq("\\C-d", delete_callback);
+#endif
     }
 #endif
 
@@ -948,7 +965,7 @@ int main(int argc, char *argv[])
     else {
         have_event_loop = 1;
         if (!no_readline) {
-#ifdef USE_READLINE
+#if defined(USE_READLINE) || defined(USE_EDITLINE)
             rl_callback_handler_install(prompt_string,
                                         jl_input_line_callback_readline);
 #endif
