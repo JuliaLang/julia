@@ -62,12 +62,12 @@ fdlibm_install: $(FDLIBM_OBJ) $(JULIALIB)
 	ln -sf $< $(JULIALIB)/libfdm.$(SHLIB_EXT)
 
 LAPACK_OBJ = $(EXTROOTLIB)/libLAPACK.$(SHLIB_EXT)
-lapack-3.3.0.tgz:
-	curl -O http://www.netlib.org/lapack/lapack-3.3.0.tgz
-lapack-3.3.0: lapack-3.3.0.tgz
-	tar zxf lapack-3.3.0.tgz
-$(LAPACK_OBJ): lapack-3.3.0
-	cd lapack-3.3.0 && \
+lapack-3.3.1.tgz:
+	curl -O http://www.netlib.org/lapack/lapack-3.3.1.tgz
+lapack-3.3.1: lapack-3.3.1.tgz
+	tar zxf lapack-3.3.1.tgz
+$(LAPACK_OBJ): lapack-3.3.1
+	cd lapack-3.3.1 && \
 	cp INSTALL/make.inc.gfortran ./make.inc && \
 	make blaslib lapacklib NOOPT="-O0 -fPIC" OPTS="-O2 -fPIC" FORTRAN=$(FC) && \
 	rm -f BLAS/SRC/xerbla_array.o && rm -f BLAS/SRC/xerbla.o && \
@@ -80,4 +80,4 @@ cleanall:
 	rm -rf readline-6.2{,.tar.gz}
 	rm -rf pcre-8.12{,.tar.bz2}
 	rm -rf fdlibm{,.tar.gz}
-	rm -rf lapack-3.3.0{,.tgz}
+	rm -rf lapack-3.3.1{,.tgz}
