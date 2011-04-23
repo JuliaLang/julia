@@ -75,9 +75,16 @@ $(LAPACK_OBJ): lapack-3.3.1
 lapack_install: $(LAPACK_OBJ) $(JULIALIB)
 	ln -sf $(LAPACK_OBJ) $(JULIALIB)/libLAPACK.$(SHLIB_EXT)
 
+mongoose-2.11.tgz:
+	curl -O http://mongoose.googlecode.com/files/mongoose-2.11.tgz
+mongoose-2.11: mongoose-2.11.tgz
+	tar zxf mongoose-2.11.tgz
+mongoose_install: mongoose-2.11
+
 cleanall:
 	rm -rf llvm-$(LLVM_VER){,.tgz}
 	rm -rf readline-6.2{,.tar.gz}
 	rm -rf pcre-8.12{,.tar.bz2}
 	rm -rf fdlibm{,.tar.gz}
 	rm -rf lapack-3.3.1{,.tgz}
+	rm -rf mongoose-2.11{,.tgz}
