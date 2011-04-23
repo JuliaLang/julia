@@ -2,39 +2,8 @@
   repl.c
   system startup, main(), and console interaction
 */
-#include <stdlib.h>
-#include <stdio.h>
-#include <string.h>
-#include <stdarg.h>
-#include <setjmp.h>
-#include <signal.h>
-#include <assert.h>
-#include <time.h>
-#if defined(LINUX) || defined(MACOSX)
-#include <sys/types.h>
-#include <sys/stat.h>
-#endif
-#include <unistd.h>
-#include <limits.h>
-#include <errno.h>
-#include <math.h>
-#include <libgen.h>
-#include <getopt.h>
-#ifdef BOEHM_GC
-#include <gc.h>
-#endif
 
-#if defined(USE_READLINE)
-#include <readline/readline.h>
-#include <readline/history.h>
-#elif defined(USE_EDITLINE)
-#include <editline/readline.h>
-#else
-#include <ctype.h>
-#endif
-
-#include "llt.h"
-#include "julia.h"
+#include "repl.h"
 
 static char jl_banner_plain[] =
     "               _      \n"
@@ -65,31 +34,28 @@ static char jl_banner_color[] =
     "|__/                   |\033[0m\n\n";
 
 static char jl_prompt_plain[] = "julia> ";
-static char jl_prompt_color[] = "\001\033[1m\033[32m\002julia> \001\033[37m\002";
-static char jl_prompt_color_no_readline[] = "\033[1m\033[32mjulia> \033[37m";
-static char *jl_answer_color  = "\033[1m\033[34m";
-static char jl_input_color[]  = "\033[1m\033[37m";
 static char jl_color_normal[] = "\033[0m\033[37m";
+char *jl_answer_color  = "\033[1m\033[34m";
 
 char *julia_home = NULL; // load is relative to here
-static char *history_file = NULL;
 static int print_banner = 1;
-#if defined(USE_READLINE) || defined(USE_EDITLINE)
-static int no_readline = 0;
-#else
-static int no_readline = 1;
-#endif
-static int tab_width = 2;
 static char *post_boot = NULL;
 static int lisp_prompt = 0;
 static int have_event_loop = 0;
 static char *program = NULL;
+static char *prompt_string;
 
 int num_evals = 0;
 char **eval_exprs = NULL;
 int *print_exprs = NULL;
 char *image_file = "sys.ji";
 char *load_file = NULL;
+
+jl_value_t *rl_ast = NULL;
+int tab_width = 2;
+int prompt_length = 0;
+int have_color = 1;
+int no_readline = 1;
 
 static const char *usage = "julia [options] [program] [args...]\n";
 static const char *opts =
@@ -243,6 +209,17 @@ void parse_opts(int *argcp, char ***argvp) {
     }
 }
 
+int ends_with_semicolon(const char *input)
+{
+  char *p = strrchr(input, ';');
+  if (p++) {
+    while (isspace(*p)) p++;
+    if (*p == '\0' || *p == '#')
+      return 1;
+  }
+  return 0;
+}
+
 static int detect_color()
 {
 #ifdef WIN32
@@ -257,288 +234,7 @@ static int detect_color()
 #endif
 }
 
-static int have_color;
-static int prompt_length;
-static char *prompt_string;
-
-static int ends_with_semicolon(const char *input)
-{
-    char *p = strrchr(input, ';');
-    if (p++) {
-        while (isspace(*p)) p++;
-        if (*p == '\0' || *p == '#')
-            return 1;
-    }
-    return 0;
-}
-
-static void handle_input(jl_value_t *ast, int end, int show_value);
-
-#if defined(USE_READLINE) || defined(USE_EDITLINE)
-
-static jl_value_t *rl_ast;
-#if defined(USE_EDITLINE)
-static int rl_done;
-#endif
-
-// yes, readline uses inconsistent indexing internally.
-#define history_rem(n) remove_history(n-history_base)
-
-static void init_history() {
-    using_history();
-    char *home = getenv("HOME");
-    if (!home) return;
-    asprintf(&history_file, "%s/.julia_history", home);
-    struct stat stat_info;
-    if (!stat(history_file, &stat_info)) {
-        read_history(history_file);
-#if defined(USE_READLINE)
-        for (;;) {
-            HIST_ENTRY *entry = history_get(history_base);
-            if (entry && isspace(entry->line[0]))
-                free_history_entry(history_rem(history_base));
-            else break;
-        }
-#endif
-        int i, j, k;
-        for (i=1 ;; i++) {
-            HIST_ENTRY *first = history_get(i);
-            if (!first) break;
-            int length = strlen(first->line)+1;
-            for (j = i+1 ;; j++) {
-                HIST_ENTRY *child = history_get(j);
-                if (!child || !isspace(child->line[0])) break;
-                length += strlen(child->line)+1;
-            }
-            if (j == i+1) continue;
-            first->line = (char*)realloc(first->line, length);
-            char *p = strchr(first->line, '\0');
-            for (k = i+1; k < j; k++) {
-                *p = '\n';
-                p = stpcpy(p+1, history_get(i+1)->line);
-#if defined(USE_READLINE)
-                free_history_entry(history_rem(i+1));
-#endif
-            }
-        }
-    } else if (errno == ENOENT) {
-        write_history(history_file);
-    } else {
-        ios_printf(ios_stderr, "history file error: %s\n", strerror(errno));
-        exit(1);
-    }
-}
-
-static int last_hist_is_temp = 0;
-static int last_hist_offset = -1;
-
-static void add_history_temporary(char *input) {
-    if (!input || !*input) return;
-    if (last_hist_is_temp) {
-        history_rem(history_length);
-        last_hist_is_temp = 0;
-    }
-    last_hist_offset = -1;
-    add_history(input);
-    last_hist_is_temp = 1;
-}
-
-static void add_history_permanent(char *input) {
-    if (!input || !*input) return;
-    if (last_hist_is_temp) {
-        history_rem(history_length);
-        last_hist_is_temp = 0;
-    }
-    last_hist_offset = -1;
-    HIST_ENTRY *entry = history_get(history_length);
-    if (entry && !strcmp(input, entry->line)) return;
-    last_hist_offset = where_history();
-    add_history(input);
-#if defined(USE_READLINE)
-    if (history_file)
-        append_history(1, history_file);
-#endif
-}
-
-static int line_start(int point) {
-    if (!point) return 0;
-    int i = point-1;
-    for (; i && rl_line_buffer[i] != '\n'; i--) ;
-    return i ? i+1 : 0;
-}
-
-static int line_end(int point) {
-    char *nl = strchr(rl_line_buffer + point, '\n');
-    if (!nl) return rl_end;
-    return nl - rl_line_buffer;
-}
-
-static int newline_callback(int count, int key) {
-    rl_insert_text("\n");
-    int i;
-    for (i = 0; i < prompt_length; i++)
-        rl_insert_text(" ");
-    return 0;
-}
-
-static int return_callback(int count, int key) {
-    if (have_color) {
-        ios_printf(ios_stdout, jl_answer_color);
-        ios_flush(ios_stdout);
-    }
-    add_history_temporary(rl_line_buffer);
-    rl_ast = jl_parse_input_line(rl_line_buffer);
-    rl_done = !rl_ast || !jl_is_expr(rl_ast) ||
-        (((jl_expr_t*)rl_ast)->head != continue_sym);
-    if (!rl_done && have_color) {
-        ios_printf(ios_stdout, jl_input_color);
-        ios_flush(ios_stdout);
-    }
-    if (!rl_done) {
-        newline_callback(count, key);
-    } else {
-        rl_point = rl_end;
-        rl_redisplay();
-    }
-    return 0;
-}
-
-static int space_callback(int count, int key) {
-    if (rl_point > 0)
-        rl_insert_text(" ");
-    return 0;
-}
-
-static int tab_callback(int count, int key) {
-    if (rl_point > 0) {
-        int i;
-        for (i=0; i < tab_width; i++)
-            rl_insert_text(" ");
-    }
-    return 0;
-}
-
-static int line_start_callback(int count, int key) {
-    int start = line_start(rl_point);
-    int flush_left = rl_point == 0 || rl_point == start + prompt_length;
-    rl_point = flush_left ? 0 : (!start ? start : start + prompt_length);
-    return 0;
-}
-
-static int line_end_callback(int count, int key) {
-    int end = line_end(rl_point);
-    int flush_right = rl_point == end;
-    rl_point = flush_right ? rl_end : end;
-    return 0;
-}
-
-static int line_kill_callback(int count, int key) {
-    int end = line_end(rl_point);
-    int flush_right = rl_point == end;
-    int kill = flush_right ? end + prompt_length + 1 : end;
-    if (kill > rl_end) kill = rl_end;
-    rl_kill_text(rl_point, kill);
-    return 0;
-}
-
-static int backspace_callback(int count, int key) {
-    if (rl_point > 0) {
-        int j = rl_point;
-        int i = line_start(rl_point);
-        rl_point = (i == 0 || rl_point-i > prompt_length) ?
-            rl_point-1 : i-1;
-#if defined(USE_READLINE)
-        rl_delete_text(rl_point, j);
-#endif
-    }
-    return 0;
-}
-
-static int delete_callback(int count, int key) {
-    int j = rl_point;
-    j += (rl_line_buffer[j] == '\n') ? prompt_length+1 : 1;
-    if (rl_end < j) j = rl_end;
-    rl_delete_text(rl_point, j);
-    return 0;
-}
-
-static int left_callback(int count, int key) {
-    if (rl_point > 0) {
-        int i = line_start(rl_point);
-        rl_point = (i == 0 || rl_point-i > prompt_length) ?
-            rl_point-1 : i-1;
-    }
-    return 0;
-}
-
-static int right_callback(int count, int key) {
-    rl_point += (rl_line_buffer[rl_point] == '\n') ? prompt_length+1 : 1;
-    if (rl_end < rl_point) rl_point = rl_end;
-    return 0;
-}
-
-static int up_callback(int count, int key) {
-    int i = line_start(rl_point);
-    if (i > 0) {
-        int j = line_start(i-1);
-        if (j == 0) rl_point -= prompt_length;
-        rl_point += j - i;
-        if (rl_point >= i) rl_point = i - 1;
-    } else {
-        last_hist_offset = -1;
-        rl_get_previous_history(count, key);
-        rl_point = line_end(0);
-        return 0;
-    }
-    return 0;
-}
-
-static int down_callback(int count, int key) {
-    int j = line_end(rl_point);
-    if (j < rl_end) {
-        int i = line_start(rl_point);
-        if (i == 0) rl_point += prompt_length;
-        rl_point += j - i + 1;
-        int k = line_end(j+1);
-        if (rl_point > k) rl_point = k;
-    } else {
-        if (last_hist_offset >= 0) {
-            history_set_pos(last_hist_offset);
-            last_hist_offset = -1;
-        }
-        return rl_get_next_history(count, key);
-    }
-    return 0;
-}
-
-DLLEXPORT void jl_input_line_callback_readline(char *input)
-{
-    int end=0, doprint=1;
-    if (!input || ios_eof(ios_stdin)) {
-        end = 1;
-        rl_ast = NULL;
-    }
-
-    if (rl_ast != NULL) {
-        doprint = !ends_with_semicolon(input);
-        add_history_permanent(input);
-        ios_printf(ios_stdout, "\n");
-        free(input);
-    }
-
-    handle_input(rl_ast, end, doprint);
-}
-
-static void read_expr_readline(char *prompt)
-{
-    rl_ast = NULL;
-    char *input = readline(prompt);
-    jl_input_line_callback_readline(input);
-}
-
-#endif
-
-static char *ios_readline(ios_t *s)
+char *ios_readline(ios_t *s)
 {
     ios_t dest;
     ios_mem(&dest, 0);
@@ -547,54 +243,13 @@ static char *ios_readline(ios_t *s)
     return ios_takebuf(&dest, &n);
 }
 
-DLLEXPORT void jl_input_line_callback_no_readline(char *input)
-{
-    jl_value_t *ast;
-    int end=0, doprint=1;
-
-    if (!input || ios_eof(ios_stdin)) {
-        end = 1;
-        ast = NULL;
-    }
-    else {
-        ast = jl_parse_input_line(input);
-        // TODO
-        //if (jl_is_expr(ast) && ((jl_expr_t*)ast)->head == continue_sym)
-        //return read_expr_ast_no_readline(prompt, end, doprint);
-        doprint = !ends_with_semicolon(input);
-    }
-    handle_input(ast, end, doprint);
-}
-
-static void read_expr_no_readline(char *prompt)
-{
-    char *input;
-    //ios_printf(ios_stdout, prompt);
-    //ios_flush(ios_stdout);
-    input = ios_readline(ios_stdin);
-    ios_purge(ios_stdin);
-    jl_input_line_callback_no_readline(input);
-}
-
-static void block_for_input(char *prompt)
-{
-    if (no_readline) {
-        read_expr_no_readline(prompt);
-    }
-    else {
-#if defined(USE_READLINE) || defined(USE_EDITLINE)
-        read_expr_readline(prompt);
-#endif
-    }
-}
-
 // called when we detect an event on stdin
 DLLEXPORT void jl_stdin_callback()
 {
     if (no_readline) {
         char *input = ios_readline(ios_stdin);
         ios_purge(ios_stdin);
-        jl_input_line_callback_no_readline(input);
+        jl_input_line_callback(input);
     }
     else {
 #if defined(USE_READLINE) || defined(USE_EDITLINE)
@@ -647,11 +302,9 @@ int jl_load_startup_file(char *fname)
 
 static void exit_repl(int code)
 {
-#if defined(USE_READLINE) || defined(USE_EDITLINE)
-    if (!no_readline) {
-        rl_callback_handler_remove();
-    }
-#endif
+
+    exit_repl_environment();
+
     if (have_color) {
         ios_printf(ios_stdout, jl_color_normal);
         ios_flush(ios_stdout);
@@ -733,19 +386,18 @@ DLLEXPORT void jl_eval_user_input(jl_value_t *ast, int show_value)
     if (no_readline) {
         ios_printf(ios_stdout, prompt_string);
         ios_flush(ios_stdout);
-    }
-    else {
+    } else {
 #if defined(USE_READLINE) || defined(USE_EDITLINE)
         if (have_event_loop) {
             rl_callback_handler_install(prompt_string,
-                                        jl_input_line_callback_readline);
+                                        jl_input_line_callback);
         }
 #endif
     }
 }
 
 // handle a command line input event
-static void handle_input(jl_value_t *ast, int end, int show_value)
+void handle_input(jl_value_t *ast, int end, int show_value)
 {
     if (end) {
         ios_printf(ios_stdout, "\n");
@@ -807,8 +459,6 @@ extern jmp_buf * volatile jl_jmp_target;
 
 int main(int argc, char *argv[])
 {
-    //double julia_launch_tic = clock_now();
-
 #ifdef BOEHM_GC
     GC_init();
 #endif
@@ -890,43 +540,16 @@ int main(int argc, char *argv[])
         return exec_program();
     }
 
-#if defined(USE_READLINE) || defined(USE_EDITLINE)
-    if (!no_readline) {
-        init_history();
-        rl_bind_key(' ', space_callback);
-        rl_bind_key('\t', tab_callback);
-        rl_bind_key('\r', return_callback);
-        rl_bind_key('\n', return_callback);
-        rl_bind_key('\v', line_kill_callback);
-        rl_bind_key('\b', backspace_callback);
-        rl_bind_key('\001', line_start_callback);
-        rl_bind_key('\005', line_end_callback);
-        rl_bind_key('\002', left_callback);
-        rl_bind_key('\006', right_callback);
-#if defined(USE_READLINE)
-        rl_bind_keyseq("\e[A", up_callback);
-        rl_bind_keyseq("\e[B", down_callback);
-        rl_bind_keyseq("\e[D", left_callback);
-        rl_bind_keyseq("\e[C", right_callback);
-        rl_bind_keyseq("\\C-d", delete_callback);
-#endif
-    }
-#endif
+    init_repl_environment();
 
     have_color = detect_color();
     char *banner = have_color ? jl_banner_color : jl_banner_plain;
-    char *prompt = have_color ?
-        (no_readline ? jl_prompt_color_no_readline : jl_prompt_color) :
-        jl_prompt_plain;
+    char *prompt = have_color ? jl_prompt_color : jl_prompt_plain;
     prompt_length = strlen(jl_prompt_plain);
     prompt_string = prompt;
 
     if (print_banner) {
         ios_printf(ios_stdout, "%s", banner);
-        /*
-	ios_printf(ios_stdout, "Startup time: %.2f seconds\n\n", 
-		   (clock_now()-julia_launch_tic));
-        */
     }
 
     jl_function_t *start_client =
@@ -954,7 +577,7 @@ int main(int argc, char *argv[])
                 iserr = 0;
             }
             while (1) {
-                block_for_input(prompt);
+                read_expr(prompt);
             }
         }
         JL_CATCH {
@@ -967,7 +590,7 @@ int main(int argc, char *argv[])
         if (!no_readline) {
 #if defined(USE_READLINE) || defined(USE_EDITLINE)
             rl_callback_handler_install(prompt_string,
-                                        jl_input_line_callback_readline);
+                                        jl_input_line_callback);
 #endif
         }
         jl_apply(start_client, NULL, 0);

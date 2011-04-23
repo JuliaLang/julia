@@ -19,8 +19,16 @@ DEBUGFLAGS = -ggdb3 -DDEBUG $(FLAGS)
 SHIPFLAGS = -O3 -DNDEBUG $(FLAGS)
 
 LIBFILES = $(FLISP) $(LLT)
-LIBS = $(LIBFILES) -L$(EXTROOT)/lib -lutil -ldl -lm -lreadline $(OSLIBS) \
-	$(shell $(LLVMROOT)/bin/llvm-config --ldflags --libs engine) -lpthread
+LIBS = $(LIBFILES) -L$(EXTROOT)/lib -lutil -ldl -lm $(OSLIBS) \
+	$(shell $(LLVMROOT)/bin/llvm-config --ldflags --libs engine) -lpthread 
+
+ifeq ($(USE_READLINE), 1)
+FLAGS += -DUSE_READLINE
+SRCS += repl-readline
+LIBS += -lreadline
+else
+SRCS += repl-basic
+endif
 
 %.o: %.c julia.h
 	$(CC) $(CFLAGS) $(SHIPFLAGS) -c $< -o $@
