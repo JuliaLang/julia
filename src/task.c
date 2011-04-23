@@ -16,9 +16,6 @@
 #include <signal.h>
 #include <libgen.h>
 #include <unistd.h>
-#ifdef BOEHM_GC
-#include <gc.h>
-#endif
 #include "llt.h"
 #include "julia.h"
 
@@ -245,9 +242,6 @@ static void ctx_switch(jl_task_t *t, jmp_buf *where)
 
         // set up global state for new task
         jl_current_task = t;
-#if defined(BOEHM_GC) && !defined(COPY_STACKS)
-        GC_stackbottom = t->stack+t->ssize;
-#endif
 #ifdef JL_GC_MARKSWEEP
         jl_pgcstack = &jl_current_task->state.gcstack;
 #endif
@@ -512,14 +506,8 @@ JL_CALLABLE(jl_unprotect_stack)
     return (jl_value_t*)jl_null;
 }
 
-#ifdef BOEHM_GC
-// boehm GC's LOCAL_MARK_STACK_SIZE makes it stack-allocate 8192*wordsize bytes
-#define JL_MIN_STACK     (4096*(2*sizeof(void*)+1))
-#define JL_DEFAULT_STACK (12288*sizeof(void*))
-#else
 #define JL_MIN_STACK     (4096*sizeof(void*))
 #define JL_DEFAULT_STACK (2*12288*sizeof(void*))
-#endif
 
 JL_CALLABLE(jl_f_task)
 {

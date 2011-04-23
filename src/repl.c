@@ -290,9 +290,6 @@ int jl_load_startup_file(char *fname)
         ios_printf(ios_stdout, "\n");
         return 1;
     }
-#ifdef BOEHM_GC
-    GC_gcollect();
-#endif
 #ifdef JL_GC_MARKSWEEP
     jl_gc_collect();
 #endif
@@ -453,9 +450,6 @@ extern jmp_buf * volatile jl_jmp_target;
 
 int main(int argc, char *argv[])
 {
-#ifdef BOEHM_GC
-    GC_init();
-#endif
     llt_init();
     parse_opts(&argc, &argv);
     julia_init(lisp_prompt ? NULL : image_file);

@@ -74,18 +74,9 @@
 #define VA_NARG(...) VA_NARG_(__VA_ARGS__,VA_RSEQ_N())
 #endif
 
-#ifdef BOEHM_GC
-// boehm GC allocator
-#include <gc.h>
-#define LLT_ALLOC(n) GC_MALLOC(n)
-#define LLT_REALLOC(p,n) GC_REALLOC((p),(n))
-#define LLT_FREE(x) ((void)(x))
-#else
-// standard allocator
 #define LLT_ALLOC(n) malloc(n)
 #define LLT_REALLOC(p,n) realloc((p),(n))
 #define LLT_FREE(x) free(x)
-#endif
 
 typedef int bool_t;
 

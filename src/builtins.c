@@ -14,9 +14,6 @@
 #include <ctype.h>
 #include <fcntl.h>
 #include <unistd.h>
-#ifdef BOEHM_GC
-#include <gc.h>
-#endif
 #include "llt.h"
 #include "julia.h"
 #include "builtin_proto.h"

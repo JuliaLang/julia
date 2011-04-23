@@ -344,12 +344,7 @@ extern jl_sym_t *static_typeof_sym;
 #define NWORDS(sz) (((sz)+3)>>2)
 #endif
 
-#ifdef BOEHM_GC
-#define allocb(nb)    GC_MALLOC(nb)
-#define allocobj(nb)  GC_MALLOC(nb)
-#define alloc_pod(nb) GC_MALLOC_ATOMIC(nb)
-#define allocb_permanent(nb) malloc(nb)
-#elif defined(JL_GC_MARKSWEEP)
+#ifdef JL_GC_MARKSWEEP
 void *allocb(size_t sz);
 void *allocobj(size_t sz);
 #define alloc_pod(nb) allocb(nb)

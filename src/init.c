@@ -21,9 +21,6 @@
 #include <signal.h>
 #include <libgen.h>
 #include <getopt.h>
-#ifdef BOEHM_GC
-#include <gc.h>
-#endif
 #include "llt.h"
 #include "julia.h"
 
@@ -94,10 +91,6 @@ void julia_init(char *imageFile)
     jl_page_size = sysconf(_SC_PAGESIZE);
     jl_find_stack_bottom();
     jl_dl_handle = jl_load_dynamic_library(NULL);
-#ifdef BOEHM_GC
-    GC_expand_hp(12000000);  //shaves a tiny bit off startup time
-    GC_time_limit = GC_TIME_UNLIMITED;
-#endif
 #ifdef JL_GC_MARKSWEEP
     jl_gc_init();
     jl_gc_disable();

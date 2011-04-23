@@ -13,9 +13,6 @@
 #include <limits.h>
 #include <errno.h>
 #include <math.h>
-#ifdef BOEHM_GC
-#include <gc.h>
-#endif
 #include "llt.h"
 #include "julia.h"
 #include "newobj_internal.h"

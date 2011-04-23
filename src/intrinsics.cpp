@@ -310,9 +310,7 @@ static void *alloc_temp_arg_space(uint32_t sz)
 {
     void *p;
     if (arg_area_loc+sz > arg_area_sz) {
-#ifdef BOEHM_GC
-        p = allocb(sz);
-#elif defined(JL_GC_MARKSWEEP)
+#ifdef JL_GC_MARKSWEEP
         if (arg_block_n >= N_TEMP_ARG_BLOCKS)
             jl_error("ccall: out of temporary argument space");
         p = malloc(sz);
@@ -1031,11 +1029,7 @@ extern "C" void jl_init_intrinsic_functions()
     jl_ExecutionEngine->addGlobalMapping(value_to_pointer_func,
                                          (void*)&jl_value_to_pointer);
 
-#ifdef BOEHM_GC
-    temp_arg_area = (char*)allocb(arg_area_sz);
-#else
     temp_arg_area = (char*)allocb_permanent(arg_area_sz);
-#endif
     arg_area_loc = 0;
 
     std::vector<const Type*> noargs(0);

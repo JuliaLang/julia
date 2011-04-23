@@ -34,10 +34,6 @@ static char *extensions[] = { "", ".bundle", ".dylib" };
 
 #endif
 
-#ifdef BOEHM_GC
-#include <gc.h>
-#endif
-
 #include "llt.h"
 #include "julia.h"
 
