@@ -1,4 +1,4 @@
-#ifdef BITS64
+#ifdef __LP64__
 #define NWORDS(sz) (((sz)+7)>>3)
 #else
 #define NWORDS(sz) (((sz)+3)>>2)
@@ -303,7 +303,7 @@ num_ctor(int64, int64, T_INT64)
 num_ctor(uint64, uint64, T_UINT64)
 num_ctor(byte,  uint8, T_UINT8)
 num_ctor(wchar, int32, T_INT32)
-#ifdef BITS64
+#ifdef __LP64__
 num_ctor(long, int64, T_INT64)
 num_ctor(ulong, uint64, T_UINT64)
 #else
@@ -548,7 +548,7 @@ size_t ctype_sizeof(value_t type, int *palign)
         return 8;
     }
     if (type == longsym || type == ulongsym) {
-#ifdef BITS64
+#ifdef __LP64__
         *palign = ALIGN8;
         return 8;
 #else
@@ -735,25 +735,25 @@ static numerictype_t sym_to_numtype(value_t type)
         return T_INT16;
     else if (type == uint16sym)
         return T_UINT16;
-#ifdef BITS64
+#ifdef __LP64__
     else if (type == int32sym || type == wcharsym)
 #else
     else if (type == int32sym || type == wcharsym || type == longsym)
 #endif
         return T_INT32;
-#ifdef BITS64
+#ifdef __LP64__
     else if (type == uint32sym)
 #else
     else if (type == uint32sym || type == ulongsym)
 #endif
         return T_UINT32;
-#ifdef BITS64
+#ifdef __LP64__
     else if (type == int64sym || type == longsym)
 #else
     else if (type == int64sym)
 #endif
         return T_INT64;
-#ifdef BITS64
+#ifdef __LP64__
     else if (type == uint64sym || type == ulongsym)
 #else
     else if (type == uint64sym)
@@ -987,7 +987,7 @@ static void cvalues_init()
     mk_primtype(uint32);
     mk_primtype(int64);
     mk_primtype(uint64);
-#ifdef BITS64
+#ifdef __LP64__
     mk_primtype_(long,int64);
     mk_primtype_(ulong,uint64);
 #else

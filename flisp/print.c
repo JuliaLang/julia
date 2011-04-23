@@ -614,7 +614,7 @@ static void cvalue_printdata(ios_t *f, void *data, size_t len, value_t type,
         }
     }
     else if (type == uint64sym
-#ifdef BITS64
+#ifdef __LP64__
              || type == ulongsym
 #endif
              ) {

@@ -275,7 +275,7 @@ value_t fl_equal(value_t a, value_t b)
   * less redundant tag checking, 3-bit tags
 */
 
-#ifdef BITS64
+#ifdef __LP64__
 #define MIX(a, b) int64hash((int64_t)(a) ^ (int64_t)(b));
 #define doublehash(a) int64hash(a)
 #else

@@ -92,7 +92,7 @@ typedef int bool_t;
 #if defined(__INTEL_COMPILER) && defined(WIN32)
 # define STATIC_INLINE static
 # define INLINE
-# ifdef BITS64
+# ifdef __LP64__
 typedef unsigned long size_t;
 # else
 typedef unsigned int size_t;
@@ -110,7 +110,7 @@ typedef long long int64_t;
 typedef unsigned char u_int8_t;
 typedef unsigned short u_int16_t;
 typedef unsigned int u_int32_t;
-#ifdef BITS64
+#ifdef __LP64__
 typedef unsigned long u_int64_t;
 #else
 typedef unsigned long long u_int64_t;
@@ -124,7 +124,7 @@ typedef int int32_t;
 #include <sys/types.h>
 #endif
 
-#ifdef BITS64
+#ifdef __LP64__
 #define TOP_BIT 0x8000000000000000
 #define NBITS 64
 typedef unsigned long uint_t;  // preferred int type on platform
@@ -200,7 +200,7 @@ typedef enum { T_INT8, T_UINT8, T_INT16, T_UINT16, T_INT32, T_UINT32,
 
 #define N_NUMTYPES ((int)T_DOUBLE+1)
 
-#ifdef BITS64
+#ifdef __LP64__
 # define T_LONG T_INT64
 # define T_ULONG T_UINT64
 #else

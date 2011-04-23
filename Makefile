@@ -35,7 +35,6 @@ clean:
 	rm -f *~ *#
 
 cleanall: clean
-	rm -f nbits
 	$(MAKE) -C src cleanother
 
 .PHONY: debug release test testall clean cleanall

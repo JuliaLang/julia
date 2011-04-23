@@ -827,7 +827,7 @@ JL_CALLABLE(jl_f_show_pointer)
         ios_printf(s, "Ptr{Void}");
     else
         jl_show((jl_value_t*)jl_typeof(args[0]));
-#ifdef BITS64
+#ifdef __LP64__
     ios_printf(s, " @0x%016x", (uptrint_t)ptr);
 #else
     ios_printf(s, " @0x%08x", (uptrint_t)ptr);

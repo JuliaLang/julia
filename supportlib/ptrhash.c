@@ -14,7 +14,7 @@
 
 #define OP_EQ(x,y) ((x)==(y))
 
-#ifdef BITS64
+#ifdef __LP64__
 static u_int64_t _pinthash(u_int64_t key)
 {
     key = (~key) + (key << 21);            // key = (key << 21) - key - 1;

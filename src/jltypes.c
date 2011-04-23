@@ -2048,7 +2048,7 @@ void jl_init_types()
     tv = jl_typevars(1, "T");
     jl_pointer_type =
         jl_new_bitstype((jl_value_t*)jl_symbol("Ptr"), jl_any_type, tv,
-#ifdef BITS64
+#ifdef __LP64__
                         64
 #else
                         32

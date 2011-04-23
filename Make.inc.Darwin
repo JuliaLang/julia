@@ -6,6 +6,7 @@ FC = gfortran
 SHLIB_EXT = dylib
 
 USE_READLINE = 1
+USE_COPY_STACKS = 1
 
 # BOEHM or MARKSWEEP
 JULIAGC = MARKSWEEP
@@ -23,8 +24,8 @@ GCSRCS = gc
 endif
 
 OSLIBS = $(GCLIBS) -Wl,-w -framework ApplicationServices -framework vecLib
-CONFIG = $(GCFLAGS)
+CONFIG = $(GCFLAGS) 
 
-ifeq ($(NBITS),64)
-CONFIG += -DBITS64 -DCOPY_STACKS
+ifeq ($(USE_COPY_STACKS),1)
+CONFIG += -DCOPY_STACKS
 endif

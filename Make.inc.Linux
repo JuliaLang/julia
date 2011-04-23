@@ -6,6 +6,7 @@ FC = gfortran
 SHLIB_EXT = so
 
 USE_READLINE = 1
+USE_COPY_STACKS = 1
 
 # BOEHM or MARKSWEEP
 JULIAGC = MARKSWEEP
@@ -26,6 +27,6 @@ OSLIBS = $(GCLIBS) -lncurses -Wl,--export-dynamic -Wl,--version-script=$(JULIAHO
 
 CONFIG = $(GCFLAGS) -D_FORTIFY_SOURCE=0
 
-ifeq ($(NBITS),64)
-CONFIG += -DBITS64 -DCOPY_STACKS
+ifeq ($(USE_COPY_STACKS),1)
+CONFIG += -DCOPY_STACKS
 endif

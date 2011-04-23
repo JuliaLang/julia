@@ -247,7 +247,7 @@ static Value *tpropagate(Value *a, Value *b);
 
 static Value *literal_pointer_val(void *p, const Type *t)
 {
-#ifdef BITS64
+#ifdef __LP64__
     return ConstantExpr::getIntToPtr(ConstantInt::get(T_int64, (uint64_t)p),
                                      t);
 #else
@@ -565,7 +565,7 @@ static jl_tuple_t *call_arg_types(jl_value_t **args, size_t n)
 static Value *emit_tuplelen(Value *t)
 {
     Value *lenbits = emit_nthptr(t, 1);
-#ifdef BITS64
+#ifdef __LP64__
     return builder.CreateTrunc(builder.CreatePtrToInt(lenbits, T_int64),
                                T_int32);
 #else
@@ -578,7 +578,7 @@ static Value *emit_arraysize(Value *t, Value *dim)
     Value *dbits =
         emit_nthptr(t, builder.CreateAdd(dim,
                                          ConstantInt::get(T_int32, 4)));
-#ifdef BITS64
+#ifdef __LP64__
     return builder.CreateTrunc(builder.CreatePtrToInt(dbits, T_int64),
                                T_int32);
 #else
@@ -594,7 +594,7 @@ static Value *emit_arraysize(Value *t, int dim)
 static Value *emit_arraylen(Value *t)
 {
     Value *lenbits = emit_nthptr(t, 3);
-#ifdef BITS64
+#ifdef __LP64__
     return builder.CreateTrunc(builder.CreatePtrToInt(lenbits, T_int64),
                                T_int32);
 #else
@@ -1533,7 +1533,7 @@ static void init_julia_llvm_env(Module *m)
     T_pint64 = PointerType::get(T_int64, 0);
     T_uint8 = T_int8;   T_uint16 = T_int16;
     T_uint32 = T_int32; T_uint64 = T_int64;
-#ifdef BITS64
+#ifdef __LP64__
     T_size = T_uint64;
 #else
     T_size = T_uint32;
@@ -1629,7 +1629,7 @@ static void init_julia_llvm_env(Module *m)
         jlfunc_to_llvm("jl_apply_generic", (void*)*jl_apply_generic);
 
     std::vector<const Type*> aargs(0);
-#ifdef BITS64
+#ifdef __LP64__
     aargs.push_back(T_uint64);
 #else
     aargs.push_back(T_uint32);

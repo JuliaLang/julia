@@ -293,7 +293,7 @@ static jl_sym_t *mk_symbol(const char *str)
     sym = (jl_sym_t*)malloc(sizeof(jl_sym_t)-sizeof(void*) + len + 1);
     sym->type = (jl_type_t*)jl_sym_type;
     sym->left = sym->right = NULL;
-#ifdef BITS64
+#ifdef __LP64__
     sym->hash = memhash(str, len)^0xAAAAAAAAAAAAAAAAL;
 #else
     sym->hash = memhash32(str, len)^0xAAAAAAAA;
@@ -772,7 +772,7 @@ BOX_FUNC(int16,   int16_t,  jl_new_box, 2)
 BOX_FUNC(uint16,  uint16_t, jl_new_box, 2)
 BOX_FUNC(int32,   int32_t,  jl_new_box, 2)
 BOX_FUNC(uint32,  uint32_t, jl_new_box, 2)
-#ifdef BITS64
+#ifdef __LP64__
 BOX_FUNC(int64,   int64_t,  jl_new_box, 2)
 BOX_FUNC(uint64,  uint64_t, jl_new_box, 2)
 BOX_FUNC(float32, float,    jl_box, 2)
@@ -837,7 +837,7 @@ SIBOX_FUNC(int16,  int16_t, 2)
 SIBOX_FUNC(int32,  int32_t, 2)
 UIBOX_FUNC(uint16, uint16_t, 2)
 UIBOX_FUNC(uint32, uint32_t, 2)
-#ifdef BITS64
+#ifdef __LP64__
 SIBOX_FUNC(int64,  int64_t, 2)
 UIBOX_FUNC(uint64, uint64_t, 2)
 #else
@@ -932,7 +932,7 @@ jl_value_t *jl_box##nb(jl_bits_type_t *t, int##nb##_t x)                \
 BOXN_FUNC(8,  2)
 BOXN_FUNC(16, 2)
 BOXN_FUNC(32, 2)
-#ifdef BITS64
+#ifdef __LP64__
 BOXN_FUNC(64, 2)
 #else
 BOXN_FUNC(64, 3)

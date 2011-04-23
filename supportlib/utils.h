@@ -47,7 +47,7 @@ int64_t conv_to_int64(void *data, numerictype_t tag);
 uint64_t conv_to_uint64(void *data, numerictype_t tag);
 int32_t conv_to_int32(void *data, numerictype_t tag);
 uint32_t conv_to_uint32(void *data, numerictype_t tag);
-#ifdef BITS64
+#ifdef __LP64__
 #define conv_to_long conv_to_int64
 #define conv_to_ulong conv_to_uint64
 #else

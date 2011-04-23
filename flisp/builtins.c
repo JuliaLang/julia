@@ -401,7 +401,7 @@ static value_t fl_rand(value_t *args, u_int32_t nargs)
 {
     (void)args; (void)nargs;
     fixnum_t r;
-#ifdef BITS64
+#ifdef __LP64__
     r = ((((uint64_t)random())<<32) | random()) & 0x1fffffffffffffffLL;
 #else
     r = random() & 0x1fffffff;
@@ -412,7 +412,7 @@ static value_t fl_rand32(value_t *args, u_int32_t nargs)
 {
     (void)args; (void)nargs;
     unsigned long r = random();
-#ifdef BITS64
+#ifdef __LP64__
     return fixnum(r);
 #else
     return mk_uint32(r);

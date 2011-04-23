@@ -29,7 +29,7 @@
 
 int jl_word_size()
 {
-#ifdef BITS64
+#ifdef __LP64__
     return 64;
 #else
     return 32;

@@ -338,7 +338,7 @@ extern jl_sym_t *enter_sym;   extern jl_sym_t *leave_sym;
 extern jl_sym_t *exc_sym;
 extern jl_sym_t *static_typeof_sym;
 
-#ifdef BITS64
+#ifdef __LP64__
 #define NWORDS(sz) (((sz)+7)>>3)
 #else
 #define NWORDS(sz) (((sz)+3)>>2)

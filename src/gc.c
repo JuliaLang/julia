@@ -705,7 +705,7 @@ void *alloc_2w()
 #ifdef MEMDEBUG
     return alloc_big(2*sizeof(void*), 1);
 #endif
-#ifdef BITS64
+#ifdef __LP64__
     return pool_alloc(&pools[2]);
 #else
     return pool_alloc(&pools[0]);
@@ -720,7 +720,7 @@ void *alloc_3w()
 #ifdef MEMDEBUG
     return alloc_big(3*sizeof(void*), 1);
 #endif
-#ifdef BITS64
+#ifdef __LP64__
     return pool_alloc(&pools[4]);
 #else
     return pool_alloc(&pools[1]);
@@ -735,7 +735,7 @@ void *alloc_4w()
 #ifdef MEMDEBUG
     return alloc_big(4*sizeof(void*), 1);
 #endif
-#ifdef BITS64
+#ifdef __LP64__
     return pool_alloc(&pools[6]);
 #else
     return pool_alloc(&pools[2]);

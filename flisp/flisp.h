@@ -3,7 +3,7 @@
 
 typedef uptrint_t value_t;
 typedef int_t fixnum_t;
-#ifdef BITS64
+#ifdef __LP64__
 #define T_FIXNUM T_INT64
 #else
 #define T_FIXNUM T_INT32
@@ -51,7 +51,7 @@ typedef struct {
 #define tagptr(p,t) (((value_t)(p)) | (t))
 #define fixnum(x) ((value_t)(((fixnum_t)(x))<<2))
 #define numval(x)  (((fixnum_t)(x))>>2)
-#ifdef BITS64
+#ifdef __LP64__
 #define fits_fixnum(x) (((x)>>61) == 0 || (~((x)>>61)) == 0)
 #else
 #define fits_fixnum(x) (((x)>>29) == 0 || (~((x)>>29)) == 0)
