@@ -2292,11 +2292,11 @@ static void lisp_init(size_t initial_heapsize)
     setc(symbol("procedure?"), builtin(OP_FUNCTIONP));
     setc(symbol("top-level-bound?"), builtin(OP_BOUNDP));
 
-#ifdef LINUX
+#ifdef __linux
     set(symbol("*os-name*"), symbol("linux"));
 #elif defined(WIN32) || defined(WIN64)
     set(symbol("*os-name*"), symbol("win32"));
-#elif defined(MACOSX)
+#elif defined(__APPLE__)
     set(symbol("*os-name*"), symbol("macos"));
 #else
     set(symbol("*os-name*"), symbol("unknown"));

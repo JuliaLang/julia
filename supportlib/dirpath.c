@@ -60,7 +60,7 @@ void path_to_dirname(char *path)
     }
 }
 
-#ifdef LINUX
+#ifdef __linux
 char *get_exename(char *buf, size_t size)
 {
     char linkname[64]; /* /proc/<pid>/exe */
@@ -97,7 +97,7 @@ char *get_exename(char *buf, size_t size)
 
     return buf;
 }
-#elif defined(MACOSX)
+#elif defined(__APPLE__)
 #include "/Developer/Headers/FlatCarbon/Processes.h"
 #include "/Developer/Headers/FlatCarbon/Files.h"
 char *get_exename(char *buf, size_t size)

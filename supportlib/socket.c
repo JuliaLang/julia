@@ -7,7 +7,7 @@
 
 #include "dtypes.h"
 
-#if defined(MACOSX)
+#if defined(__APPLE__)
 #include <sys/time.h>
 #include <sys/select.h>
 #include <sys/types.h>

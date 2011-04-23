@@ -24,7 +24,7 @@ endif
 
 OSLIBS = $(GCLIBS) -lncurses -Wl,--export-dynamic -Wl,--version-script=$(JULIAHOME)/src/julia.expmap
 
-CONFIG = -DLINUX $(GCFLAGS) -D_FORTIFY_SOURCE=0
+CONFIG = $(GCFLAGS) -D_FORTIFY_SOURCE=0
 
 ifeq ($(NBITS),64)
 CONFIG += -DBITS64 -DCOPY_STACKS

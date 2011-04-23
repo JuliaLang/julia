@@ -45,7 +45,7 @@ typedef unsigned int uint32_t;
 typedef unsigned char uint8_t;
 typedef unsigned short uint16_t;
 #endif
-#ifdef LINUX
+#ifdef __linux
 # include <endian.h>    /* attempt to define endianness */
 #endif
 

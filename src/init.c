@@ -8,7 +8,7 @@
 #include <stdarg.h>
 #include <setjmp.h>
 #include <assert.h>
-#if defined(LINUX) || defined(MACOSX)
+#if defined(__linux) || defined(__APPLE__)
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <sys/resource.h>
@@ -36,7 +36,7 @@ size_t jl_page_size;
 static void jl_find_stack_bottom()
 {
     size_t stack_size;
-#if defined(LINUX) || defined(MACOSX)
+#if defined(__linux) || defined(__APPLE__)
     struct rlimit rl;
     getrlimit(RLIMIT_STACK, &rl);
     stack_size = rl.rlim_cur;

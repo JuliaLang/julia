@@ -23,7 +23,7 @@ GCSRCS = gc
 endif
 
 OSLIBS = $(GCLIBS) -Wl,-w -framework ApplicationServices -framework vecLib
-CONFIG = -DMACOSX $(GCFLAGS)
+CONFIG = $(GCFLAGS)
 
 ifeq ($(NBITS),64)
 CONFIG += -DBITS64 -DCOPY_STACKS

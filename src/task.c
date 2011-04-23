@@ -144,10 +144,10 @@ static void _probe_arch()
     boundlow(&p);
 
     char **s = (char**)p.ref_probe;
-#if defined(LINUX) && defined(__i386__)
+#if defined(__linux) && defined(__i386__)
     mangle_pointers = !(s[4] > jl_stack_lo &&
                         s[4] < jl_stack_hi);
-#elif defined(LINUX) && defined(__x86_64__)
+#elif defined(__linux) && defined(__x86_64__)
     mangle_pointers = !(s[6] > jl_stack_lo &&
                         s[6] < jl_stack_hi);
 #else
@@ -276,7 +276,7 @@ static jl_value_t *switchto(jl_task_t *t)
 
 #ifndef COPY_STACKS
 
-#ifdef LINUX
+#ifdef __linux
 #if defined(__i386__)
 static intptr_t ptr_mangle(intptr_t p)
 {
@@ -320,20 +320,20 @@ static intptr_t ptr_demangle(intptr_t p)
     return ret;
 }
 #endif
-#endif //LINUX
+#endif //__linux
 
 /* rebase any values in saved state to the new stack */
 static void rebase_state(jmp_buf *ctx, intptr_t local_sp, intptr_t new_sp)
 {
     ptrint_t *s = (ptrint_t*)ctx;
     ptrint_t diff = new_sp - local_sp; /* subtract old base, and add new base */
-#if defined(LINUX) && defined(__i386__)
+#if defined(__linux) && defined(__i386__)
     s[3] += diff;
     if (mangle_pointers)
         s[4] = ptr_mangle(ptr_demangle(s[4])+diff);
     else
         s[4] += diff;
-#elif defined(LINUX) && defined(__x86_64__)
+#elif defined(__linux) && defined(__x86_64__)
     if (mangle_pointers) {
         s[1] = ptr_mangle(ptr_demangle(s[1])+diff);
         s[6] = ptr_mangle(ptr_demangle(s[6])+diff);
@@ -342,10 +342,10 @@ static void rebase_state(jmp_buf *ctx, intptr_t local_sp, intptr_t new_sp)
         s[1] += diff;
         s[6] += diff;
     }
-#elif defined(MACOSX) && defined(__i386__)
+#elif defined(__APPLE__) && defined(__i386__)
     s[8] += diff;
     s[9] += diff;
-#elif defined(MACOSX) && defined(__x86_64__)
+#elif defined(__APPLE__) && defined(__x86_64__)
     s[1] += diff;
     s[2] += diff;
 #else

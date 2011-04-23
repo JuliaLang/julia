@@ -14,7 +14,7 @@ typedef HINSTANCE module_handle_t;
 static char *extensions[] = { "", ".dll" };
 #define N_EXTENSIONS 2
 
-#elif defined(LINUX)
+#elif defined(__linux)
 #include <unistd.h>
 #include <dlfcn.h>
 #define GET_FUNCTION_FROM_MODULE dlsym
@@ -23,7 +23,7 @@ typedef void * module_handle_t;
 static char *extensions[] = { "", ".so" };
 #define N_EXTENSIONS 2
 
-#elif defined(MACOSX)
+#elif defined(__APPLE__)
 #include <unistd.h>
 #include <dlfcn.h>
 #define GET_FUNCTION_FROM_MODULE dlsym

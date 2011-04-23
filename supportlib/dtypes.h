@@ -28,7 +28,7 @@
 #define DLLEXPORT __attribute__ ((visibility("default")))
 #endif
 
-#ifdef LINUX
+#ifdef __linux
 #include <features.h>
 #include <endian.h>
 #define LITTLE_ENDIAN  __LITTLE_ENDIAN
@@ -37,7 +37,7 @@
 #define BYTE_ORDER     __BYTE_ORDER
 #endif
 
-#ifdef MACOSX
+#ifdef __APPLE__
 #include <machine/endian.h>
 #define __LITTLE_ENDIAN  LITTLE_ENDIAN
 #define __BIG_ENDIAN     BIG_ENDIAN
