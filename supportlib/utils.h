@@ -60,13 +60,13 @@ int cmp_lt(void *a, numerictype_t atag, void *b, numerictype_t btag);
 int cmp_eq(void *a, numerictype_t atag, void *b, numerictype_t btag,
            int equalnans);
 
-#ifdef ARCH_X86_64
+#ifdef __x86_64__
 #  define LEGACY_REGS "=Q"
 #else
 #  define LEGACY_REGS "=q"
 #endif
 
-#if !defined(__INTEL_COMPILER) && (defined(ARCH_X86) || defined(ARCH_X86_64))
+#if !defined(__INTEL_COMPILER) && (defined(__i386__) || defined(__x86_64__))
 STATIC_INLINE u_int16_t ByteSwap16(u_int16_t x)
 {
   __asm("xchgb %b0,%h0" :
@@ -88,7 +88,7 @@ STATIC_INLINE u_int32_t ByteSwap32(u_int32_t x)
 
 STATIC_INLINE u_int64_t ByteSwap64(u_int64_t x)
 {
-#ifdef ARCH_X86_64
+#ifdef __x86_64__
   __asm("bswap	%0":
         "=r" (x)     :
         "0" (x));

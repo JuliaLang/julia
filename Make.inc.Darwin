@@ -25,9 +25,6 @@ endif
 OSLIBS = $(GCLIBS) -Wl,-w -framework ApplicationServices -framework vecLib
 CONFIG = -DMACOSX $(GCFLAGS)
 
-ifeq ($(NBITS),32)
-CONFIG += -DARCH_X86 
-endif
 ifeq ($(NBITS),64)
-CONFIG += -DARCH_X86_64 -DBITS64 -DCOPY_STACKS
+CONFIG += -DBITS64 -DCOPY_STACKS
 endif
