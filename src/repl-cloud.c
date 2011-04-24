@@ -1,13 +1,5 @@
 /*
- * This file is part of the Mongoose project, http://code.google.com/p/mongoose
- * It implements an online chat server. For more details,
- * see the documentation on the project web site.
- * To test the application,
- *  1. type "make" in the directory where this file lives
- *  2. point your browser to http://127.0.0.1:8081
- *
- * NOTE(lsm): this file follows Google style, not BSD style as the rest of
- * Mongoose code.
+ *  To use julia from the browser, point your browser to https://localhost:8080/
  */
 
 #include <stdio.h>
@@ -29,7 +21,7 @@
 #define MAX_USER_LEN  20
 #define MAX_MESSAGE_LEN  1000
 #define MAX_MESSAGES 5
-#define MAX_SESSIONS 2
+#define MAX_SESSIONS 5
 #define SESSION_TTL 120
 
 static const char *authorize_url = "/authorize";
@@ -370,27 +362,13 @@ static int is_authorized(const struct mg_connection *conn,
   return authorized;
 }
 
-static void redirect_to_ssl(struct mg_connection *conn,
-                            const struct mg_request_info *request_info) {
-  const char *p, *host = mg_get_header(conn, "Host");
-  if (host != NULL && (p = strchr(host, ':')) != NULL) {
-    mg_printf(conn, "HTTP/1.1 302 Found\r\n"
-              "Location: https://%.*s:8082/%s:8082\r\n\r\n",
-              p - host, host, request_info->uri);
-  } else {
-    mg_printf(conn, "%s", "HTTP/1.1 500 Error\r\n\r\nHost: header is not set");
-  }
-}
-
 static void *event_handler(enum mg_event event,
                            struct mg_connection *conn,
                            const struct mg_request_info *request_info) {
   void *processed = "yes";
 
   if (event == MG_NEW_REQUEST) {
-    if (!request_info->is_ssl) {
-      redirect_to_ssl(conn, request_info);
-    } else if (!is_authorized(conn, request_info)) {
+    if (!is_authorized(conn, request_info)) {
       redirect_to_login(conn, request_info);
     } else if (strcmp(request_info->uri, authorize_url) == 0) {
       authorize(conn, request_info);
@@ -413,7 +391,7 @@ static void *event_handler(enum mg_event event,
 
 static const char *options[] = {
   "document_root", "repl-html",
-  "listening_ports", "8081,8082s",
+  "listening_ports", "8080s",
   "ssl_certificate", "ssl_cert.pem",
   "num_threads", "5",
   NULL

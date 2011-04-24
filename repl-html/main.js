@@ -18,11 +18,11 @@ chat.normalizeText = function(text) {
 chat.refresh = function(data) {
   $.each(data, function(index, entry) {
     var row = $('<div>').addClass('message-row').appendTo('#mml');
-    var timestamp = (new Date(entry.timestamp * 1000)).toLocaleTimeString();
-    $('<span>')
-      .addClass('message-timestamp')
-      .html('[' + timestamp + ']')
-      .prependTo(row);
+    // var timestamp = (new Date(entry.timestamp * 1000)).toLocaleTimeString();
+    //$('<span>')
+    //  .addClass('message-timestamp')
+    //  .html('[' + timestamp + ']')
+    //  .prependTo(row);
     $('<span>')
       .addClass('message-user')
       .addClass(entry.user ? '' : 'message-user-server')
