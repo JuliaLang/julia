@@ -412,7 +412,7 @@ static void *event_handler(enum mg_event event,
 }
 
 static const char *options[] = {
-  "document_root", "html",
+  "document_root", "repl-html",
   "listening_ports", "8081,8082s",
   "ssl_certificate", "ssl_cert.pem",
   "num_threads", "5",
