@@ -1,13 +1,12 @@
 #include "repl.h"
 
+#include <readline/readline.h>
+#include <readline/history.h>
+
 char jl_prompt_color[] = "\001\033[1m\033[32m\002julia> \001\033[37m\002";
 static char jl_input_color[]  = "\033[1m\033[37m";
 
 static char *history_file = NULL;
-
-#if defined(USE_EDITLINE)
-static int rl_done;
-#endif
 
 // yes, readline uses inconsistent indexing internally.
 #define history_rem(n) remove_history(n-history_base)
@@ -20,14 +19,12 @@ static void init_history() {
     struct stat stat_info;
     if (!stat(history_file, &stat_info)) {
         read_history(history_file);
-#if defined(USE_READLINE)
         for (;;) {
             HIST_ENTRY *entry = history_get(history_base);
             if (entry && isspace(entry->line[0]))
                 free_history_entry(history_rem(history_base));
             else break;
         }
-#endif
         int i, j, k;
         for (i=1 ;; i++) {
             HIST_ENTRY *first = history_get(i);
@@ -44,9 +41,7 @@ static void init_history() {
             for (k = i+1; k < j; k++) {
                 *p = '\n';
                 p = stpcpy(p+1, history_get(i+1)->line);
-#if defined(USE_READLINE)
                 free_history_entry(history_rem(i+1));
-#endif
             }
         }
     } else if (errno == ENOENT) {
@@ -82,10 +77,8 @@ static void add_history_permanent(char *input) {
     if (entry && !strcmp(input, entry->line)) return;
     last_hist_offset = where_history();
     add_history(input);
-#if defined(USE_READLINE)
     if (history_file)
         append_history(1, history_file);
-#endif
 }
 
 static int line_start(int point) {
@@ -175,9 +168,7 @@ static int backspace_callback(int count, int key) {
         int i = line_start(rl_point);
         rl_point = (i == 0 || rl_point-i > prompt_length) ?
             rl_point-1 : i-1;
-#if defined(USE_READLINE)
         rl_delete_text(rl_point, j);
-#endif
     }
     return 0;
 }
@@ -280,13 +271,11 @@ void init_repl_environment()
     rl_bind_key('\005', line_end_callback);
     rl_bind_key('\002', left_callback);
     rl_bind_key('\006', right_callback);
-#if defined(USE_READLINE)
     rl_bind_keyseq("\e[A", up_callback);
     rl_bind_keyseq("\e[B", down_callback);
     rl_bind_keyseq("\e[D", left_callback);
     rl_bind_keyseq("\e[C", right_callback);
     rl_bind_keyseq("\\C-d", delete_callback);
-#endif
     }
 }
 
@@ -295,4 +284,19 @@ void exit_repl_environment()
     if (!no_readline) {
         rl_callback_handler_remove();
     }
+}
+
+void repl_callback_enable()
+{
+  rl_callback_handler_install(prompt_string, jl_input_line_callback);
+}
+
+void repl_callback_disable()
+{
+  rl_callback_handler_remove();
+}
+
+void repl_stdin_callback()
+{
+  rl_callback_read_char();
 }
