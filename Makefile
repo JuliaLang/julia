@@ -33,12 +33,15 @@ SLOCCOUNT = sloccount \
 	--addlang makefile \
 	--personcost 100000 \
 	--effort 3.6 1.2 \
-	--schedule 2.5 0.32
+	--schedule 2.5 0.32 \
+	--
+
+J_FILES = $(shell git ls-files | grep '.j$$')
 
 sloccount:
-	for x in $$(find -name '*.j'); do cp $$x $${x%.j}.hs; done
+	@for x in $(J_FILES); do cp $$x $${x%.j}.hs; done
 	git ls-files | sed 's/\.j$$/.hs/' | xargs $(SLOCCOUNT) | sed 's/haskell/*julia*/g'
-	for x in $$(find -name '*.j'); do rm -f $${x%.j}.hs; done
+	@for x in $(J_FILES); do rm -f $${x%.j}.hs; done
 
 clean:
 	$(MAKE) -C src clean
