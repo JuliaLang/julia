@@ -86,17 +86,6 @@ julia-release-link:
 
 debug release: %: ../julia-% julia-%-link
 
-SLOCCOUNT = sloccount \
-	--addlang makefile \
-	--personcost 100000 \
-	--effort 3.6 1.2 \
-	--schedule 2.5 0.32
-
-sloccount:
-	for x in *.j; do cp $$x $${x%.j}.hs; done
-	$(SLOCCOUNT) . | perl -ple 's/haskell/_julia_/g'
-	rm *.hs
-
 clean:
 	rm -f *.o
 	rm -f *.do
@@ -114,4 +103,4 @@ cleanother:
 
 cleanall: clean cleanother
 
-.PHONY: debug release sloccount clean cleanall cleanother
+.PHONY: debug release clean cleanall cleanother
