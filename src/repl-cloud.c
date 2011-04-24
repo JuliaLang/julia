@@ -185,8 +185,16 @@ static void ajax_send_message(struct mg_connection *conn,
 
   get_qsvar(request_info, "text", text, sizeof(text));
 
+  repl_result = NULL;
   jl_input_line_callback(text);
-  sleep(1);
+  while (1) {
+    if (repl_result != NULL) 
+      break;
+    usleep(100000);
+  }
+  int result_size = (strlen(repl_result) < MAX_MESSAGE_LEN) ? strlen(repl_result) : MAX_MESSAGE_LEN;
+  memcpy(text, repl_result, result_size);
+  free(repl_result);
 
   if (text[0] != '\0') {
     // We have a message to store. Write-lock the ringbuffer,
@@ -450,5 +458,3 @@ void repl_stdin_callback()
 {
   return;
 }
-
-

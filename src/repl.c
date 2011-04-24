@@ -46,7 +46,6 @@ static int lisp_prompt = 0;
 static int have_event_loop = 0;
 static char *program = NULL;
 
-
 int num_evals = 0;
 char **eval_exprs = NULL;
 int *print_exprs = NULL;
@@ -58,6 +57,10 @@ int tab_width = 2;
 int prompt_length = 0;
 int have_color = 1;
 int no_readline = 1;
+
+#ifdef CLOUD_REPL
+char *repl_result;
+#endif
 
 static const char *usage = "julia [options] [program] [args...]\n";
 static const char *opts =
@@ -324,6 +327,9 @@ static void repl_show_value(jl_value_t *v)
         return;
     }
     jl_show(v);
+#ifdef CLOUD_REPL
+    repl_result = jl_show_to_string(v);
+#endif
     if (jl_is_struct_type(v)) {
         ios_t *s = jl_current_output_stream();
         // for convenience, show constructor methods when
