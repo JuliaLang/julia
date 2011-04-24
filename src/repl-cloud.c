@@ -184,18 +184,6 @@ static void ajax_send_message(struct mg_connection *conn,
   is_jsonp = handle_jsonp(conn, request_info);
 
   get_qsvar(request_info, "text", text, sizeof(text));
-
-  repl_result = NULL;
-  jl_input_line_callback(text);
-  while (1) {
-    if (repl_result != NULL) 
-      break;
-    usleep(100000);
-  }
-  int result_size = (strlen(repl_result) < MAX_MESSAGE_LEN) ? strlen(repl_result) : MAX_MESSAGE_LEN;
-  memcpy(text, repl_result, result_size);
-  free(repl_result);
-
   if (text[0] != '\0') {
     // We have a message to store. Write-lock the ringbuffer,
     // grab the next message and copy data into it.
@@ -215,6 +203,51 @@ static void ajax_send_message(struct mg_connection *conn,
     mg_printf(conn, "%s", ")");
   }
   
+}
+
+static void ajax_send_julia_response(struct mg_connection *conn,
+				     const struct mg_request_info *request_info) {
+  struct message *message;
+  struct session *session;
+  char text[sizeof(message->text) - 1];
+  int is_jsonp;
+
+  mg_printf(conn, "%s", ajax_reply_start);
+  is_jsonp = handle_jsonp(conn, request_info);
+
+  get_qsvar(request_info, "text", text, sizeof(text));
+
+  repl_result = NULL;
+  jl_input_line_callback(text);
+  while (1) {
+    if (repl_result != NULL) 
+      break;
+    usleep(50000);
+  }
+  int repl_result_size = strlen(repl_result);
+  int result_size = (repl_result_size < MAX_MESSAGE_LEN) ? repl_result_size : MAX_MESSAGE_LEN;
+  memcpy(text, repl_result, result_size+1);
+  text[MAX_MESSAGE_LEN-1] = '\0';
+  //free(repl_result);
+
+  if (text[0] != '\0') {
+    // We have a message to store. Write-lock the ringbuffer,
+    // grab the next message and copy data into it.
+    pthread_rwlock_wrlock(&rwlock);
+    message = new_message();
+    // TODO(lsm): JSON-encode all text strings
+    session = get_session(conn);
+    assert(session != NULL);
+    my_strlcpy(message->text, text, sizeof(text));
+    my_strlcpy(message->user, "Julia", sizeof("Julia"));
+    pthread_rwlock_unlock(&rwlock);
+  }
+
+  mg_printf(conn, "%s", text[0] == '\0' ? "false" : "true");
+
+  if (is_jsonp) {
+    mg_printf(conn, "%s", ")");
+  }
 }
 
 // Redirect user to the login form. In the cookie, store the original URL
@@ -365,6 +398,7 @@ static void *event_handler(enum mg_event event,
       ajax_get_messages(conn, request_info);
     } else if (strcmp(request_info->uri, "/ajax/send_message") == 0) {
       ajax_send_message(conn, request_info);
+      ajax_send_julia_response(conn, request_info);
     } else {
       // No suitable handler found, mark as not processed. Mongoose will
       // try to serve the request.
