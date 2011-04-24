@@ -42,3 +42,17 @@ void read_expr(char *prompt)
     jl_input_line_callback(input);
 }
 
+void repl_callback_enable()
+{
+  return;
+}
+
+void repl_callback_disable()
+{
+  return;
+}
+
+void repl_stdin_callback()
+{
+  return;
+}

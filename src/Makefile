@@ -22,12 +22,26 @@ LIBFILES = $(FLISP) $(LLT)
 LIBS = $(LIBFILES) -L$(EXTROOT)/lib -lutil -ldl -lm $(OSLIBS) \
 	$(shell $(LLVMROOT)/bin/llvm-config --ldflags --libs engine) -lpthread 
 
-ifeq ($(USE_READLINE), 1)
-FLAGS += -DUSE_READLINE
+ifeq ($(REPL_READLINE), 1)
 SRCS += repl-readline
 LIBS += -lreadline
-else
+endif
+
+ifeq ($(REPL_BASIC), 1)
 SRCS += repl-basic
+endif
+
+ifeq ($(REPL_CLOUD), 1)
+MONGOOSE = $(JULIAHOME)/ext/mongoose
+FLAGS += -I$(MONGOOSE)
+SRCS += mongoose repl-cloud
+LIBS += -lssl -lcrypto
+
+mongoose.o:
+	$(CC) $(CFLAGS) $(SHIPFLAGS) -c $(MONGOOSE)/mongoose.c -o $@
+
+mongoose.do:
+	$(CC) $(CFLAGS) $(DEBUGFLAGS) -c $(MONGOOSE)/mongoose.c -o $@
 endif
 
 %.o: %.c julia.h

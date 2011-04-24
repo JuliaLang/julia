@@ -33,17 +33,19 @@ static char jl_banner_color[] =
     " _/ |\\__'_|_|_|\\__'_|  |  \n"
     "|__/                   |\033[0m\n\n";
 
+
+char *jl_answer_color  = "\033[1m\033[34m";
+char *julia_home = NULL; // load is relative to here
+char *prompt_string;
+
 static char jl_prompt_plain[] = "julia> ";
 static char jl_color_normal[] = "\033[0m\033[37m";
-char *jl_answer_color  = "\033[1m\033[34m";
-
-char *julia_home = NULL; // load is relative to here
 static int print_banner = 1;
 static char *post_boot = NULL;
 static int lisp_prompt = 0;
 static int have_event_loop = 0;
 static char *program = NULL;
-static char *prompt_string;
+
 
 int num_evals = 0;
 char **eval_exprs = NULL;
@@ -250,11 +252,8 @@ DLLEXPORT void jl_stdin_callback()
         char *input = ios_readline(ios_stdin);
         ios_purge(ios_stdin);
         jl_input_line_callback(input);
-    }
-    else {
-#if defined(USE_READLINE) || defined(USE_EDITLINE)
-        rl_callback_read_char();
-#endif
+    } else {
+        repl_stdin_callback();
     }
 }
 
@@ -339,16 +338,14 @@ static void repl_show_value(jl_value_t *v)
 
 DLLEXPORT void jl_eval_user_input(jl_value_t *ast, int show_value)
 {
-#if defined(USE_READLINE) || defined(USE_EDITLINE)
     if (!no_readline) {
         if (have_event_loop) {
             // with multi.j loaded the readline callback can return
             // before the command finishes running, so we have to
             // disable rl to prevent the prompt from reappearing too soon.
-            rl_callback_handler_remove();
+	    repl_callback_disable();
         }
     }
-#endif
     JL_GC_PUSH(&ast);
     assert(ast != NULL);
     int iserr = 0;
@@ -387,12 +384,9 @@ DLLEXPORT void jl_eval_user_input(jl_value_t *ast, int show_value)
         ios_printf(ios_stdout, prompt_string);
         ios_flush(ios_stdout);
     } else {
-#if defined(USE_READLINE) || defined(USE_EDITLINE)
         if (have_event_loop) {
-            rl_callback_handler_install(prompt_string,
-                                        jl_input_line_callback);
+	  repl_callback_enable();
         }
-#endif
     }
 }
 
@@ -588,10 +582,7 @@ int main(int argc, char *argv[])
     else {
         have_event_loop = 1;
         if (!no_readline) {
-#if defined(USE_READLINE) || defined(USE_EDITLINE)
-            rl_callback_handler_install(prompt_string,
-                                        jl_input_line_callback);
-#endif
+	  repl_callback_enable();
         }
         jl_apply(start_client, NULL, 0);
     }
