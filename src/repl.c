@@ -364,6 +364,9 @@ DLLEXPORT void jl_eval_user_input(jl_value_t *ast, int show_value)
         }
         if (iserr) {
             jl_show(jl_exception_in_transit);
+#ifdef CLOUD_REPL
+	    repl_result = jl_show_to_string(jl_exception_in_transit);
+#endif
             ios_printf(ios_stdout, "\n");
             JL_EH_POP();
             break;  // leave JL_TRY
