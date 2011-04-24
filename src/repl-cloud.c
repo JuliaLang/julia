@@ -219,7 +219,6 @@ static void ajax_send_julia_response(struct mg_connection *conn,
   int repl_result_size = strlen(repl_result);
   int result_size = (repl_result_size < MAX_MESSAGE_LEN) ? repl_result_size : MAX_MESSAGE_LEN;
   memcpy(text, repl_result, result_size+1);
-  text[MAX_MESSAGE_LEN-1] = '\0';
   //free(repl_result);
 
   if (text[0] != '\0') {
