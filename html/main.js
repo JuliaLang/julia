@@ -4,11 +4,11 @@ var chat = {
   // Backend URL, string.
   // 'http://backend.address.com' or '' if backend is the same as frontend
   backendUrl: '',
-  maxVisibleMessages: 10,
+  maxVisibleMessages: 20,
   errorMessageFadeOutTimeoutMs: 2000,
   errorMessageFadeOutTimer: null,
   lastMessageId: 0,
-  getMessagesIntervalMs: 1000,
+  getMessagesIntervalMs: 500,
 };
 
 chat.normalizeText = function(text) {
@@ -26,7 +26,7 @@ chat.refresh = function(data) {
     $('<span>')
       .addClass('message-user')
       .addClass(entry.user ? '' : 'message-user-server')
-      .html(chat.normalizeText((entry.user || '[server]') + ':'))
+      .html(chat.normalizeText((entry.user || '[server]') + '>'))
       .appendTo(row);
     $('<span>')
       .addClass('message-text')
