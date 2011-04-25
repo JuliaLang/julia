@@ -19,15 +19,6 @@
 #include <getopt.h>
 #include <ctype.h>
 
-#if defined(USE_READLINE)
-#include <readline/readline.h>
-#include <readline/history.h>
-#elif defined(USE_EDITLINE)
-#include <editline/readline.h>
-#else
-#include <ctype.h>
-#endif
-
 #include "llt.h"
 #include "julia.h"
 
