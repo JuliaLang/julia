@@ -6,12 +6,9 @@ default: debug
 
 debug release: %: julia-% pcre_h.j sys.ji custom.j
 
-julia-debug julia-release: %: src/%
-	ln -f $< $@
-	ln -f $< julia
-
-src/julia-debug src/julia-release: src/%:
-	$(MAKE) -C src $*
+julia-debug julia-release:
+	$(MAKE) -C src $@
+	ln -f src/$@ julia
 
 sys.ji: sysimg.j start_image.j src/boot.j src/dump.c *.j
 	./julia -b sysimg.j
@@ -45,7 +42,7 @@ sloccount:
 	@for x in $(J_FILES); do rm -f $${x%.j}.hs; done
 
 clean:
-	rm -f julia julia-{debug,release}
+	rm -f julia
 	rm -f pcre_h.j
 	rm -f *.ji
 	rm -f *~ *#
@@ -54,4 +51,4 @@ clean:
 cleanall: clean
 	$(MAKE) -C src cleanother
 
-.PHONY: debug release test testall sloccount clean cleanall
+.PHONY: default debug release julia-debug julia-release test testall sloccount clean cleanall
