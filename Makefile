@@ -4,10 +4,12 @@ include ./Make.inc
 
 default: debug
 
-julia-debug: src/*
+SOURCES = src/*.h src/*.c src/*.cpp src/*.scm
+
+julia-debug: $(SOURCES)
 	cd src && make debug
 
-julia-release: src/*
+julia-release: $(SOURCES)
 	cd src && make release
 
 sys.ji: sysimg.j start_image.j src/boot.j src/dump.c *.j
