@@ -4,13 +4,14 @@ include ./Make.inc
 
 default: debug
 
-SOURCES = src/*.h src/*.c src/*.cpp src/*.scm
+debug release: %: julia-% pcre_h.j sys.ji custom.j
 
-julia-debug: $(SOURCES)
-	cd src && make debug
+julia-debug julia-release: %: src/%
+	ln -f $< $@
+	ln -f $< julia
 
-julia-release: $(SOURCES)
-	cd src && make release
+src/julia-debug src/julia-release: src/%:
+	$(MAKE) -C src $*
 
 sys.ji: sysimg.j start_image.j src/boot.j src/dump.c *.j
 	./julia -b sysimg.j
@@ -22,8 +23,6 @@ PCRE_CONST = 0x[0-9a-fA-F]+|[-+]?\s*[0-9]+
 
 pcre_h.j:
 	cpp -dM $(EXTROOT)/include/pcre.h | perl -nle '/^\s*#define\s+(PCRE\w*)\s*\(?($(PCRE_CONST))\)?\s*$$/ and print "$$1 = $$2"' | sort > $@
-
-debug release: %: julia-% pcre_h.j sys.ji custom.j
 
 test: debug
 	./julia tests.j
@@ -46,10 +45,11 @@ sloccount:
 	@for x in $(J_FILES); do rm -f $${x%.j}.hs; done
 
 clean:
-	$(MAKE) -C src clean
-	rm -f *.ji
+	rm -f julia julia-{debug,release}
 	rm -f pcre_h.j
+	rm -f *.ji
 	rm -f *~ *#
+	$(MAKE) -C src clean
 
 cleanall: clean
 	$(MAKE) -C src cleanother

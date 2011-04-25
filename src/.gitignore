@@ -1,3 +1,5 @@
+/julia-debug
+/julia-release
 /julia_flisp.boot
 /julia_flisp.boot.inc
 /boot.j.inc
