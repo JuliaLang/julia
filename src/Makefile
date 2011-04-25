@@ -78,7 +78,7 @@ julia-debug: $(DOBJS) $(LIBFILES)
 julia-release: $(OBJS) $(LIBFILES)
 	$(CXX) $(SHIPFLAGS) $(OBJS) -o $@ $(LIBS)
 
-debug release: %: ../julia-%
+debug release: %: julia-%
 
 clean:
 	rm -f julia-{debug,release}
@@ -91,7 +91,6 @@ clean:
 	rm -f *~ *#
 
 cleanother:
-	rm -rf ../$(EXENAME)-{debug,release}
 	$(MAKE) -C $(LLTDIR) clean
 	$(MAKE) -C $(FLISPDIR) clean
 

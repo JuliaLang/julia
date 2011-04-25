@@ -2,7 +2,7 @@ JULIAHOME = $(shell pwd)
 
 include ./Make.inc
 
-default: debug
+default: release
 
 debug release: %: julia-% pcre_h.j sys.ji custom.j
 
