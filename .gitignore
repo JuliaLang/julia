@@ -1,19 +1,11 @@
 *~
-*.dvi
-*.o
-*.do
-*.a
-*.jp
-*.ji
+*#
 
 /lib
 /tmp
 
 /julia
+/sys.ji
 
 /pcre_h.j
 /custom.j
-
-/boot.j.inc
-/julia_flisp.boot.inc
-/julia_flisp.boot
