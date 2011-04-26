@@ -5,8 +5,8 @@ CXXFLAGS =
 FC = gfortran
 SHLIB_EXT = so
 
-REPL_READLINE = 1
-#REPL_BASIC = 1
+#REPL_READLINE = 1
+REPL_BASIC = 1
 #REPL_CLOUD = 1
 
 JULIAGC = MARKSWEEP
@@ -15,7 +15,7 @@ USE_COPY_STACKS = 1
 
 OSLIBS = -Wl,--export-dynamic -Wl,--version-script=$(JULIAHOME)/src/julia.expmap
 
-ifeq($(REPL_READLINE), 1)
+ifeq ($(REPL_READLINE), 1)
 OSLIBS += -lncurses
 endif
 
