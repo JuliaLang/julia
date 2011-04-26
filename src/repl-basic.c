@@ -4,13 +4,11 @@ char jl_prompt_color[] = "\033[1m\033[32mjulia> \033[37m";
 
 void init_repl_environment()
 {
-  no_readline = 1;
-  return;
+    no_readline = 1;
 }
 
 void exit_repl_environment()
 {
-  return;
 }
 
 DLLEXPORT void jl_input_line_callback(char *input)
@@ -44,15 +42,12 @@ void read_expr(char *prompt)
 
 void repl_callback_enable()
 {
-  return;
 }
 
 void repl_callback_disable()
 {
-  return;
 }
 
 void repl_stdin_callback()
 {
-  return;
 }
