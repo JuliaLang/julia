@@ -1,5 +1,4 @@
 #ifndef JL_REPL_H
-
 #define JL_REPL_H
 
 #include <stdlib.h>
@@ -19,10 +18,6 @@
 #include <libgen.h>
 #include <getopt.h>
 #include <ctype.h>
-
-#ifdef BOEHM_GC
-#include <gc.h>
-#endif
 
 #include "llt.h"
 #include "julia.h"

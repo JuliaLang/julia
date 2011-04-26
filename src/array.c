@@ -10,9 +10,6 @@
 #include <limits.h>
 #include <errno.h>
 #include <math.h>
-#ifdef BOEHM_GC
-#include <gc.h>
-#endif
 #include "llt.h"
 #include "julia.h"
 
@@ -23,20 +20,10 @@ static void *alloc_array_buffer(size_t nbytes, int isunboxed)
     void *data;
     if (nbytes > 0) {
         if (isunboxed) {
-#ifdef BOEHM_GC
-            if (nbytes >= 200000)
-                data = GC_malloc_atomic_ignore_off_page(nbytes);
-            else
-#endif
-                data = alloc_pod(nbytes);
+            data = alloc_pod(nbytes);
         }
         else {
-#ifdef BOEHM_GC
-            if (nbytes >= 200000)
-                data = GC_malloc_ignore_off_page(nbytes);
-            else
-#endif
-                data = allocb(nbytes);
+            data = allocb(nbytes);
             memset(data, 0, nbytes);
         }
     }

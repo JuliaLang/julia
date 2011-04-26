@@ -2,13 +2,13 @@ JULIAHOME = $(shell pwd)
 
 include ./Make.inc
 
-default: debug
+default: release
 
-julia-debug: src/*
-	cd src && make debug
+debug release: %: julia-% pcre_h.j sys.ji custom.j
 
-julia-release: src/*
-	cd src && make release
+julia-debug julia-release:
+	$(MAKE) -C src $@
+	ln -f src/$@ julia
 
 sys.ji: sysimg.j start_image.j src/boot.j src/dump.c *.j
 	./julia -b sysimg.j
@@ -20,8 +20,6 @@ PCRE_CONST = 0x[0-9a-fA-F]+|[-+]?\s*[0-9]+
 
 pcre_h.j:
 	cpp -dM $(EXTROOT)/include/pcre.h | perl -nle '/^\s*#define\s+(PCRE\w*)\s*\(?($(PCRE_CONST))\)?\s*$$/ and print "$$1 = $$2"' | sort > $@
-
-debug release: %: julia-% pcre_h.j sys.ji custom.j
 
 test: debug
 	./julia tests.j
@@ -44,12 +42,13 @@ sloccount:
 	@for x in $(J_FILES); do rm -f $${x%.j}.hs; done
 
 clean:
-	$(MAKE) -C src clean
-	rm -f *.ji
+	rm -f julia
 	rm -f pcre_h.j
+	rm -f *.ji
 	rm -f *~ *#
+	$(MAKE) -C src clean
 
 cleanall: clean
 	$(MAKE) -C src cleanother
 
-.PHONY: debug release test testall sloccount clean cleanall
+.PHONY: default debug release julia-debug julia-release test testall sloccount clean cleanall

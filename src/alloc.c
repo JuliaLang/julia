@@ -10,9 +10,6 @@
 #include <limits.h>
 #include <errno.h>
 #include <math.h>
-#ifdef BOEHM_GC
-#include <gc.h>
-#endif
 #include "llt.h"
 #include "julia.h"
 #include "newobj_internal.h"
@@ -101,12 +98,6 @@ void *allocb(size_t nb)
     return GC_MALLOC(nb);
 }
 */
-
-#ifdef BOEHM_GC
-void *alloc_2w() { return allocb(2*sizeof(void*)); }
-void *alloc_3w() { return allocb(3*sizeof(void*)); }
-void *alloc_4w() { return allocb(4*sizeof(void*)); }
-#endif
 
 DLLEXPORT
 jl_value_t *jl_new_struct(jl_struct_type_t *type, ...)

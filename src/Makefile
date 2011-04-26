@@ -72,32 +72,25 @@ $(LLT): $(LLTDIR)/*.h $(LLTDIR)/*.c
 $(FLISP): $(FLISPDIR)/*.h $(FLISPDIR)/*.c $(LLT)
 	cd $(FLISPDIR) && $(MAKE)
 
-../julia-debug: $(DOBJS) $(LIBFILES)
+julia-debug: $(DOBJS) $(LIBFILES)
 	$(CXX) $(DEBUGFLAGS) $(DOBJS) -o $@ $(LIBS)
 
-../julia-release: $(OBJS) $(LIBFILES)
+julia-release: $(OBJS) $(LIBFILES)
 	$(CXX) $(SHIPFLAGS) $(OBJS) -o $@ $(LIBS)
 
-julia-debug-link:
-	ln -sf julia-debug ../julia
-
-julia-release-link:
-	ln -sf julia-release ../julia
-
-debug release: %: ../julia-% julia-%-link
+debug release: %: julia-%
 
 clean:
-	rm -f *.o
-	rm -f *.do
-	rm -f *.ji
+	rm -f julia-{debug,release}
 	rm -f julia_flisp.boot
 	rm -f julia_flisp.boot.inc
 	rm -f boot.j.inc
-	rm -f ../$(EXENAME)
+	rm -f *.do
+	rm -f *.o
+	rm -f *.ji
 	rm -f *~ *#
 
 cleanother:
-	rm -rf ../$(EXENAME)-{debug,release}
 	$(MAKE) -C $(LLTDIR) clean
 	$(MAKE) -C $(FLISPDIR) clean
 

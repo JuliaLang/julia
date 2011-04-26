@@ -2333,9 +2333,6 @@ extern void fl_init_julia_extensions();
 
 void fl_init(size_t initial_heapsize)
 {
-#ifdef BOEHM_GC
-    GC_init();
-#endif
     lisp_init(initial_heapsize);
     fl_init_julia_extensions();
 }

@@ -19,9 +19,6 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <pthread.h>
-#ifdef BOEHM_GC
-#include <gc.h>
-#endif
 #include "llt.h"
 #include "julia.h"
 

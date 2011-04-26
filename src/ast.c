@@ -12,9 +12,6 @@
 #include <errno.h>
 #include <math.h>
 #include <setjmp.h>
-#ifdef BOEHM_GC
-#include <gc.h>
-#endif
 #include "llt.h"
 #include "julia.h"
 

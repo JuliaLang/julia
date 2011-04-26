@@ -10,9 +10,6 @@
 #include <math.h>
 #include <setjmp.h>
 #include <unistd.h>
-#ifdef BOEHM_GC
-#include <gc.h>
-#endif
 #include "llt.h"
 #include "flisp.h"
 
