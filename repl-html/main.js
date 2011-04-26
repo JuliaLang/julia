@@ -31,7 +31,7 @@ chat.refresh = function(data) {
     $('<span>')
       .addClass('message-text')
       .addClass(entry.user ? '' : 'message-text-server')
-      .html(chat.normalizeText(entry.text))
+      .html(entry.text)
       .appendTo(row);
     chat.lastMessageId = Math.max(chat.lastMessageId, entry.id) + 1;
   });

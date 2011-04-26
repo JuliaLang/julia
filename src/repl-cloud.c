@@ -216,9 +216,37 @@ static void ajax_send_julia_response(struct mg_connection *conn,
       break;
     usleep(50000);
   }
+
   int repl_result_size = strlen(repl_result);
+  int num_nl = 0;
+  for (int i=0; i<repl_result_size; ++i) {
+    if (repl_result[i] == '\n') {
+      ++num_nl;
+    }
+  }
+  // Escape '\n' to "<br>" for displaying newlines in browser
+  char *repl_result_esc = malloc(repl_result_size + 3*num_nl + 5);
+  int k=0;
+  repl_result_esc[k++] = '<';
+  repl_result_esc[k++] = 'b';
+  repl_result_esc[k++] = 'r';
+  repl_result_esc[k++] = '>';
+  for (int i=0; i<repl_result_size; ++i, ++k) {
+    if (repl_result[i] == '\n') {
+      repl_result_esc[k++] = '<';
+      repl_result_esc[k++] = 'b';
+      repl_result_esc[k++] = 'r';
+      repl_result_esc[k++] = '>';
+      ++i;
+    }
+    repl_result_esc[k] = repl_result[i];
+  }
+  repl_result_esc[k] = '\0';
+
+  repl_result_size = strlen(repl_result_esc);
   int result_size = (repl_result_size < MAX_MESSAGE_LEN) ? repl_result_size : MAX_MESSAGE_LEN;
-  memcpy(text, repl_result, result_size+1);
+  memcpy(text, repl_result_esc, result_size+1);
+  free(repl_result_esc);
   //free(repl_result);
 
   if (text[0] != '\0') {
@@ -239,6 +267,7 @@ static void ajax_send_julia_response(struct mg_connection *conn,
   if (is_jsonp) {
     mg_printf(conn, "%s", ")");
   }
+
 }
 
 // Redirect user to the login form. In the cookie, store the original URL
