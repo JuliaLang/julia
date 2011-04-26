@@ -1,8 +1,16 @@
 JULIAHOME = $(shell pwd)/..
 include ../Make.inc
 
+ifeq ($(JULIAGC),MARKSWEEP)
+CONFIG += -DJL_GC_MARKSWEEP
+endif
+
+ifeq ($(USE_COPY_STACKS),1)
+CONFIG += -DCOPY_STACKS
+endif
+
 SRCS = jltypes gf ast repl builtins module codegen interpreter alloc dlload \
-	sys init task array dump $(GCSRCS)
+	sys init task array dump gc
 OBJS = $(SRCS:%=%.o)
 DOBJS = $(SRCS:%=%.do)
 EXENAME = $(NAME)
