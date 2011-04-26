@@ -257,25 +257,25 @@ void read_expr(char *prompt)
 
 void init_repl_environment()
 {
-  no_readline = 0;
-
-  if (!no_readline) {
-    init_history();
-    rl_bind_key(' ', space_callback);
-    rl_bind_key('\t', tab_callback);
-    rl_bind_key('\r', return_callback);
-    rl_bind_key('\n', return_callback);
-    rl_bind_key('\v', line_kill_callback);
-    rl_bind_key('\b', backspace_callback);
-    rl_bind_key('\001', line_start_callback);
-    rl_bind_key('\005', line_end_callback);
-    rl_bind_key('\002', left_callback);
-    rl_bind_key('\006', right_callback);
-    rl_bind_keyseq("\e[A", up_callback);
-    rl_bind_keyseq("\e[B", down_callback);
-    rl_bind_keyseq("\e[D", left_callback);
-    rl_bind_keyseq("\e[C", right_callback);
-    rl_bind_keyseq("\\C-d", delete_callback);
+    no_readline = 0;
+    
+    if (!no_readline) {
+        init_history();
+        rl_bind_key(' ', space_callback);
+        rl_bind_key('\t', tab_callback);
+        rl_bind_key('\r', return_callback);
+        rl_bind_key('\n', return_callback);
+        rl_bind_key('\v', line_kill_callback);
+        rl_bind_key('\b', backspace_callback);
+        rl_bind_key('\001', line_start_callback);
+        rl_bind_key('\005', line_end_callback);
+        rl_bind_key('\002', left_callback);
+        rl_bind_key('\006', right_callback);
+        rl_bind_keyseq("\e[A", up_callback);
+        rl_bind_keyseq("\e[B", down_callback);
+        rl_bind_keyseq("\e[D", left_callback);
+        rl_bind_keyseq("\e[C", right_callback);
+        rl_bind_keyseq("\\C-d", delete_callback);
     }
 }
 
@@ -288,15 +288,15 @@ void exit_repl_environment()
 
 void repl_callback_enable()
 {
-  rl_callback_handler_install(prompt_string, jl_input_line_callback);
+    rl_callback_handler_install(prompt_string, jl_input_line_callback);
 }
 
 void repl_callback_disable()
 {
-  rl_callback_handler_remove();
+    rl_callback_handler_remove();
 }
 
 void repl_stdin_callback()
 {
-  rl_callback_read_char();
+    rl_callback_read_char();
 }

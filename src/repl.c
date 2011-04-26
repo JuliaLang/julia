@@ -46,7 +46,6 @@ static int lisp_prompt = 0;
 static int have_event_loop = 0;
 static char *program = NULL;
 
-
 int num_evals = 0;
 char **eval_exprs = NULL;
 int *print_exprs = NULL;
@@ -213,13 +212,13 @@ void parse_opts(int *argcp, char ***argvp) {
 
 int ends_with_semicolon(const char *input)
 {
-  char *p = strrchr(input, ';');
-  if (p++) {
-    while (isspace(*p)) p++;
-    if (*p == '\0' || *p == '#')
-      return 1;
-  }
-  return 0;
+    char *p = strrchr(input, ';');
+    if (p++) {
+        while (isspace(*p)) p++;
+        if (*p == '\0' || *p == '#')
+            return 1;
+    }
+    return 0;
 }
 
 static int detect_color()
@@ -298,7 +297,6 @@ int jl_load_startup_file(char *fname)
 
 static void exit_repl(int code)
 {
-
     exit_repl_environment();
 
     if (have_color) {
