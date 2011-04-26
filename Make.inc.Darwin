@@ -9,19 +9,8 @@ SHLIB_EXT = dylib
 #REPL_BASIC = 1
 REPL_CLOUD = 1
 
-USE_COPY_STACKS = 1
-
 JULIAGC = MARKSWEEP
 
-ifeq ($(JULIAGC),MARKSWEEP)
-GCLIBS =
-GCFLAGS = -DJL_GC_MARKSWEEP
-GCSRCS = gc
-endif
+USE_COPY_STACKS = 1
 
-OSLIBS = $(GCLIBS) -Wl,-w -framework ApplicationServices -framework vecLib
-CONFIG = $(GCFLAGS) 
-
-ifeq ($(USE_COPY_STACKS),1)
-CONFIG += -DCOPY_STACKS
-endif
+OSLIBS = -Wl,-w -framework ApplicationServices -framework vecLib
