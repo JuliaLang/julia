@@ -1,15 +1,11 @@
 *~
-*.dvi
-*.o
-*.do
-*.a
-*.jp
-*.ji
+*#
 
 /lib
 /tmp
 
 /julia
+/sys.ji
 
 /pcre_h.j
 /custom.j
