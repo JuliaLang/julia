@@ -443,7 +443,7 @@ void init_repl_environment() {
   assert(ctx != NULL);
 
   // Wait until enter is pressed, then exit
-  printf("Julia server started on ports %s.\n", mg_get_option(ctx, "listening_ports"));
+  printf("Julia is listening for exciting science on port %s.\n", mg_get_option(ctx, "listening_ports"));
 
   no_readline = 1;
 
