@@ -378,9 +378,10 @@ DLLEXPORT void jl_eval_user_input(jl_value_t *ast, int show_value)
     if (no_readline) {
         ios_printf(ios_stdout, prompt_string);
         ios_flush(ios_stdout);
-    } else {
+    }
+    else {
         if (have_event_loop) {
-	  repl_callback_enable();
+            repl_callback_enable();
         }
     }
 }
@@ -574,7 +575,7 @@ int main(int argc, char *argv[])
     else {
         have_event_loop = 1;
         if (!no_readline) {
-	  repl_callback_enable();
+            repl_callback_enable();
         }
         jl_apply(start_client, NULL, 0);
     }
