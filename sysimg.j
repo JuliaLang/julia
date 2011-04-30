@@ -63,8 +63,8 @@ load("iterator.j")
 load("task.j")
 load("process.j")
 load("serialize.j")
-load("multi.j")
-load("darray.j")
+#load("multi.j")
+#load("darray.j")
 
 # misc
 load("libc.j")
