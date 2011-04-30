@@ -5,9 +5,13 @@ OS = $(shell uname)
 
 default: defaultlibs_$(OS)
 
-defaultlibs_Linux: llvm pcre_install fdlibm_install lapack_install libc_install
+defaultlibs_Linux: \
+	llvm pcre_install fdlibm_install lapack_install libc_install \
+	mongoose_install
 
-defaultlibs_Darwin: llvm readline_install pcre_install fdlibm_install lapack_install libc_install
+defaultlibs_Darwin: \
+	llvm readline_install pcre_install fdlibm_install lapack_install \
+	libc_install mongoose_install
 
 $(JULIALIB):
 	mkdir -p $(JULIALIB)

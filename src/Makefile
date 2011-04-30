@@ -41,7 +41,7 @@ endif
 
 ifeq ($(REPL_CLOUD), 1)
 MONGOOSE = $(JULIAHOME)/ext/mongoose
-FLAGS += -I$(MONGOOSE)
+FLAGS += -DCLOUD_REPL -I$(MONGOOSE)
 SRCS += mongoose repl-cloud
 LIBS += -lssl -lcrypto
 
