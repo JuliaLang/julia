@@ -1,16 +1,8 @@
 JULIAHOME = $(shell pwd)/..
 include ../Make.inc
 
-ifeq ($(JULIAGC),MARKSWEEP)
-CONFIG += -DJL_GC_MARKSWEEP
-endif
-
-ifeq ($(USE_COPY_STACKS),1)
-CONFIG += -DCOPY_STACKS
-endif
-
 SRCS = jltypes gf ast repl builtins module codegen interpreter alloc dlload \
-	sys init task array dump gc
+	sys init task array dump
 OBJS = $(SRCS:%=%.o)
 DOBJS = $(SRCS:%=%.do)
 EXENAME = $(NAME)
@@ -29,6 +21,15 @@ SHIPFLAGS = -O3 -DNDEBUG $(FLAGS)
 LIBFILES = $(FLISP) $(LLT)
 LIBS = $(LIBFILES) -L$(EXTROOT)/lib -lutil -ldl -lm $(OSLIBS) \
 	$(shell $(LLVMROOT)/bin/llvm-config --ldflags --libs engine) -lpthread 
+
+ifeq ($(JULIAGC),MARKSWEEP)
+CONFIG += -DJL_GC_MARKSWEEP
+SRCS += gc
+endif
+
+ifeq ($(USE_COPY_STACKS),1)
+CONFIG += -DCOPY_STACKS
+endif
 
 ifeq ($(REPL_READLINE), 1)
 SRCS += repl-readline
