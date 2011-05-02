@@ -19,7 +19,6 @@ $(JULIALIB):
 libc_install: $(JULIALIB)
 	ln -sf /lib/libc.so.6 $(JULIALIB)/libc.so
 
-LLVM_VER = 2.9
 LLVM_OBJ = $(EXTROOTLIB)/libLLVM-$(LLVM_VER).$(SHLIB_EXT)
 llvm-$(LLVM_VER).tgz:
 	curl -O http://llvm.org/releases/$(LLVM_VER)/llvm-$(LLVM_VER).tgz
@@ -30,23 +29,23 @@ $(LLVM_OBJ): llvm-$(LLVM_VER)
 llvm: $(LLVM_OBJ)
 
 READLINE_OBJ = $(EXTROOTLIB)/libreadline.$(SHLIB_EXT)
-readline-6.2.tar.gz:
-	curl -O ftp://ftp.gnu.org/gnu/readline/readline-6.2.tar.gz
-readline-6.2: readline-6.2.tar.gz
-	tar zxf readline-6.2.tar.gz
-$(READLINE_OBJ): readline-6.2
-	cd readline-6.2 && ./configure --prefix=$(EXTROOT) && make install
+readline-$(READLINE_VER).tar.gz:
+	curl -O ftp://ftp.gnu.org/gnu/readline/readline-$(READLINE_VER).tar.gz
+readline-$(READLINE_VER): readline-$(READLINE_VER).tar.gz
+	tar zxf readline-$(READLINE_VER).tar.gz
+$(READLINE_OBJ): readline-$(READLINE_VER)
+	cd readline-$(READLINE_VER) && ./configure --prefix=$(EXTROOT) && make install
 readline_install: $(READLINE_OBJ) $(JULIALIB)
 	ln -sf $(READLINE_OBJ) $(JULIALIB)/libreadline.$(SHLIB_EXT)
 	ln -sf $(EXTROOTLIB)/libhistory.$(SHLIB_EXT) $(JULIALIB)/libhistory.$(SHLIB_EXT)
 
 PCRE_OBJ = $(EXTROOTLIB)/libpcre.$(SHLIB_EXT)
-pcre-8.12.tar.bz2:
-	curl -O ftp://ftp.csx.cam.ac.uk/pub/software/programming/pcre/pcre-8.12.tar.bz2
-pcre-8.12: pcre-8.12.tar.bz2
-	tar jxvf pcre-8.12.tar.bz2
-$(PCRE_OBJ): pcre-8.12
-	cd pcre-8.12 && ./configure --prefix=$(EXTROOT) --enable-utf8 --enable-unicode-properties && make install
+pcre-$(PCRE_VER).tar.bz2:
+	curl -O ftp://ftp.csx.cam.ac.uk/pub/software/programming/pcre/pcre-$(PCRE_VER).tar.bz2
+pcre-$(PCRE_VER): pcre-$(PCRE_VER).tar.bz2
+	tar jxvf pcre-$(PCRE_VER).tar.bz2
+$(PCRE_OBJ): pcre-$(PCRE_VER)
+	cd pcre-$(PCRE_VER) && ./configure --prefix=$(EXTROOT) --enable-utf8 --enable-unicode-properties && make install
 pcre_install: $(PCRE_OBJ) $(JULIALIB)
 	ln -sf $(PCRE_OBJ) $(JULIALIB)/libpcre.$(SHLIB_EXT)
 	ln -sf $(EXTROOTLIB)/libpcreposix.$(SHLIB_EXT) $(JULIALIB)/libpcreposix.$(SHLIB_EXT)
@@ -66,12 +65,12 @@ fdlibm_install: $(FDLIBM_OBJ) $(JULIALIB)
 	ln -sf $< $(JULIALIB)/libfdm.$(SHLIB_EXT)
 
 LAPACK_OBJ = $(EXTROOTLIB)/libLAPACK.$(SHLIB_EXT)
-lapack-3.3.1.tgz:
-	curl -O http://www.netlib.org/lapack/lapack-3.3.1.tgz
-lapack-3.3.1: lapack-3.3.1.tgz
-	tar zxf lapack-3.3.1.tgz
-$(LAPACK_OBJ): lapack-3.3.1
-	cd lapack-3.3.1 && \
+lapack-$(LAPACK_VER).tgz:
+	curl -O http://www.netlib.org/lapack/lapack-$(LAPACK_VER).tgz
+lapack-$(LAPACK_VER): lapack-$(LAPACK_VER).tgz
+	tar zxf lapack-$(LAPACK_VER).tgz
+$(LAPACK_OBJ): lapack-$(LAPACK_VER)
+	cd lapack-$(LAPACK_VER) && \
 	cp INSTALL/make.inc.gfortran ./make.inc && \
 	make blaslib lapacklib NOOPT="-O0 -fPIC" OPTS="-O2 -fPIC" FORTRAN=$(FC) && \
 	rm -f BLAS/SRC/xerbla_array.o && rm -f BLAS/SRC/xerbla.o && \
@@ -79,16 +78,16 @@ $(LAPACK_OBJ): lapack-3.3.1
 lapack_install: $(LAPACK_OBJ) $(JULIALIB)
 	ln -sf $(LAPACK_OBJ) $(JULIALIB)/libLAPACK.$(SHLIB_EXT)
 
-mongoose-2.11.tgz:
-	curl -O http://mongoose.googlecode.com/files/mongoose-2.11.tgz
-mongoose-2.11: mongoose-2.11.tgz
-	tar zxf mongoose-2.11.tgz
-mongoose_install: mongoose-2.11
+mongoose-$(MONGOOSE_VER).tgz:
+	curl -O http://mongoose.googlecode.com/files/mongoose-$(MONGOOSE_VER).tgz
+mongoose-$(MONGOOSE_VER): mongoose-$(MONGOOSE_VER).tgz
+	tar zxf mongoose-$(MONGOOSE_VER).tgz
+mongoose_install: mongoose-$(MONGOOSE_VER)
 
 cleanall:
 	rm -rf llvm-$(LLVM_VER){,.tgz}
-	rm -rf readline-6.2{,.tar.gz}
-	rm -rf pcre-8.12{,.tar.bz2}
+	rm -rf readline-$(READLINE_VER){,.tar.gz}
+	rm -rf pcre-$(PCRE_VER){,.tar.bz2}
 	rm -rf fdlibm{,.tar.gz}
-	rm -rf lapack-3.3.1{,.tgz}
-	rm -rf mongoose-2.11{,.tgz}
+	rm -rf lapack-$(LAPACK_VER){,.tgz}
+	rm -rf mongoose-$(MONGOOSE_VER){,.tgz}
