@@ -117,15 +117,10 @@ isequal(w, v::WeakRef) = isequal(w, v.value)
 
 abstract String
 
-type Latin1String <: String
-    data::Array{Uint8,1}
-end
+type ASCIIString <: String; data::Array{Uint8,1}; end
+type UTF8String  <: String; data::Array{Uint8,1}; end
 
-type UTF8String <: String
-    data::Array{Uint8,1}
-end
-
-typealias ByteString Union(Latin1String,UTF8String)
+typealias ByteString Union(ASCIIString,UTF8String)
 
 abstract Exception
 

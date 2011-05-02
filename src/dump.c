@@ -785,7 +785,7 @@ void jl_save_system_image(char *fname, char *startscriptname)
     jl_serialize_value(&f, jl_float64_type);
     jl_serialize_value(&f, jl_weakref_type);
     jl_serialize_value(&f, jl_string_type);
-    jl_serialize_value(&f, jl_latin1_string_type);
+    jl_serialize_value(&f, jl_ascii_string_type);
     jl_serialize_value(&f, jl_utf8_string_type);
     jl_serialize_value(&f, jl_errorexception_type);
     jl_serialize_value(&f, jl_typeerror_type);
@@ -852,7 +852,7 @@ void jl_restore_system_image(char *fname)
     jl_weakref_type->env = NULL;
     jl_weakref_type->linfo = NULL;
     jl_string_type = (jl_tag_type_t*)jl_deserialize_value(&f);
-    jl_latin1_string_type = (jl_struct_type_t*)jl_deserialize_value(&f);
+    jl_ascii_string_type = (jl_struct_type_t*)jl_deserialize_value(&f);
     jl_utf8_string_type = (jl_struct_type_t*)jl_deserialize_value(&f);
     jl_errorexception_type = (jl_struct_type_t*)jl_deserialize_value(&f);
     jl_typeerror_type = (jl_struct_type_t*)jl_deserialize_value(&f);

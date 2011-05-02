@@ -1,7 +1,5 @@
-## from boot.j:
-# type UTF8String <: String
-#     data::Array{Uint8,1}
-# end
+## from src/boot.j:
+# type UTF8String <: String; data::Array{Uint8,1}; end
 
 ## basic UTF-8 decoding & iteration ##
 

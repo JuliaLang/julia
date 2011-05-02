@@ -340,7 +340,9 @@ function print_escaped(s::String, q::Bool, xmax::Char)
     if q; print('"'); end
 end
 
-print_escaped(s::Latin1String, q) = print_escaped(s, q, '\xff')
+# TODO: make sure ASCII, Latin-1 and UTF-8 strings all get
+# printed so that when input back they are equivalent.
+
 print_escaped(s::String, q)       = print_escaped(s, q, '\x7f')
 print_escaped(s::String)          = print_escaped(s, false)
 print_quoted (s::String)          = print_escaped(s, true)
@@ -708,7 +710,7 @@ function uint2str(n::Int, b::Int)
     ccall(:uint2str, Ptr{Uint8},
           (Ptr{Uint8}, Ulong, Uint64, Uint32),
           data, ulong(sz), uint64(n), uint32(b))
-    Latin1String(data[1:(sz-1)]) # cut out terminating NUL
+    ASCIIString(data[1:(sz-1)]) # cut out terminating NUL
 end
 
 uint2str(n::Int, b::Int, len::Int) = lpad(uint2str(n,b),len,'0')

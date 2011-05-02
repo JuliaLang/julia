@@ -251,7 +251,7 @@ void jl_get_builtin_hooks()
     jl_weakref_type->env = NULL;
     jl_weakref_type->linfo = NULL;
     jl_string_type = (jl_tag_type_t*)global("String");
-    jl_latin1_string_type = (jl_struct_type_t*)global("Latin1String");
+    jl_ascii_string_type = (jl_struct_type_t*)global("ASCIIString");
     jl_utf8_string_type = (jl_struct_type_t*)global("UTF8String");
     jl_errorexception_type = (jl_struct_type_t*)global("ErrorException");
     jl_typeerror_type = (jl_struct_type_t*)global("TypeError");
