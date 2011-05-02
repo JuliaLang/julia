@@ -33,7 +33,7 @@ load("io.j")
 ccall(:jl_set_memio_func, Void, ())
 set_current_output_stream(make_stdout_stream())  # for error reporting
 load("string.j")
-load("latin1.j")
+load("ascii.j")
 load("utf8.j")
 load("show.j")
 

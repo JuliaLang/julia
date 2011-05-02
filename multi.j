@@ -194,7 +194,7 @@ function identify_socket(otherid, fd, sock)
     @assert i < PGRP.myid
     PGRP.workers[i] = Worker(locs[i].host, locs[i].port, fd, sock)
     PGRP.workers[i].id = i
-    #write(stdout_stream, latin1("$(PGRP.myid) heard from $i\n"))
+    #write(stdout_stream, "$(PGRP.myid) heard from $i\n")
     ()
 end
 

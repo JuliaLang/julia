@@ -24,8 +24,10 @@ pcre_h.j:
 test: debug
 	./julia tests.j
 
-testall: test
+test-utf8:
 	./julia test_utf8.j
+
+testall: test test-utf8
 
 SLOCCOUNT = sloccount \
 	--addlang makefile \
@@ -51,4 +53,4 @@ clean:
 cleanall: clean
 	$(MAKE) -C src cleanother
 
-.PHONY: default debug release julia-debug julia-release test testall sloccount clean cleanall
+.PHONY: default debug release julia-debug julia-release test test-* testall sloccount clean cleanall

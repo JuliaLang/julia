@@ -263,7 +263,7 @@ extern jl_struct_type_t *jl_array_type;
 extern jl_typename_t *jl_array_typename;
 extern jl_struct_type_t *jl_weakref_type;
 extern jl_tag_type_t *jl_string_type;
-extern jl_struct_type_t *jl_latin1_string_type;
+extern jl_struct_type_t *jl_ascii_string_type;
 extern jl_struct_type_t *jl_utf8_string_type;
 extern jl_struct_type_t *jl_errorexception_type;
 extern jl_struct_type_t *jl_typeerror_type;
@@ -401,9 +401,9 @@ void *allocb_permanent(size_t sz);
 #define jl_is_task(v)        jl_typeis(v,jl_task_type)
 #define jl_is_func(v)        (jl_is_func_type(jl_typeof(v)) || jl_is_struct_type(v))
 #define jl_is_function(v)    jl_is_func(v)
-#define jl_is_latin1_string(v) jl_typeis(v,jl_latin1_string_type)
+#define jl_is_ascii_string(v) jl_typeis(v,jl_ascii_string_type)
 #define jl_is_utf8_string(v) jl_typeis(v,jl_utf8_string_type)
-#define jl_is_byte_string(v) (jl_is_latin1_string(v) || jl_is_utf8_string(v))
+#define jl_is_byte_string(v) (jl_is_ascii_string(v) || jl_is_utf8_string(v))
 #define jl_is_string(v)      jl_subtype(v,(jl_value_t*)jl_string_type,1)
 #define jl_is_cpointer(v)    jl_is_cpointer_type(jl_typeof(v))
 #define jl_is_pointer(v)     jl_is_cpointer_type(jl_typeof(v))

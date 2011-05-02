@@ -81,11 +81,7 @@ function hash(a::Array)
     h
 end
 
-# TODO: should we distinguish a UTF8String and
-# a Latin1String containing the same exact data?
-
-hash(s::Union(UTF8String,Latin1String)) =
-    ccall(:memhash32, Uint32, (Ptr{Void}, Size), s.data, length(s.data))
+hash(s::ByteString) = ccall(:memhash32, Uint32, (Ptr{Void}, Size), s.data, length(s.data))
 
 # hash table
 
