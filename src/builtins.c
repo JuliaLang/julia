@@ -336,7 +336,7 @@ char *jl_find_file_in_path(const char *fname)
         asprintf(&fpath, "%s.j", fname);
         fid = open (fpath, O_RDONLY);
     }
-    // try adding julia home, then julia home and .j
+    // try adding julia home, then julia home, then julia_home/j/ and .j
     if (fid == -1 && julia_home && fname[0] != '/') {
         asprintf(&fpath, "%s/%s", julia_home, fname);
         fid = open (fpath, O_RDONLY);

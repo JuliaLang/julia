@@ -1,18 +1,19 @@
 JULIAHOME = $(shell pwd)/..
-include ../Make.inc
+include $(JULIAHOME)/Make.inc
 
-SRCS = jltypes gf ast repl builtins module codegen interpreter alloc dlload \
-	sys init task array dump
+SRCS = jltypes gf ast builtins module codegen interpreter alloc dlload \
+	sys init task array dump repl
 OBJS = $(SRCS:%=%.o)
 DOBJS = $(SRCS:%=%.do)
 EXENAME = $(NAME)
-LLTDIR = ../supportlib
-FLISPDIR = ../flisp
+LLTDIR = ./support
+FLISPDIR = ./flisp
 LLT = $(LLTDIR)/libllt.a
 FLISP = $(FLISPDIR)/libflisp.a
 
 FLAGS = -falign-functions -Wall -Wno-strict-aliasing \
 	-I$(FLISPDIR) -I$(LLTDIR) $(HFILEDIRS:%=-I%) $(LIBDIRS:%=-L%) \
+	-I$(JULIAHOME)/src -I$(JULIAHOME)/ui \
 	$(CONFIG) -I$(shell $(LLVMROOT)/bin/llvm-config --includedir) \
 	-fvisibility=hidden
 DEBUGFLAGS = -ggdb3 -DDEBUG $(FLAGS)
@@ -32,19 +33,37 @@ CONFIG += -DCOPY_STACKS
 endif
 
 ifeq ($(REPL_READLINE), 1)
-SRCS += repl-readline
+SRCS += ../ui/repl-readline
 LIBS += -lreadline
+
+repl-readline.o:
+	$(CC) $(CFLAGS) $(SHIPFLAGS) -c ../ui/repl-readline.c -o $@
+
+repl-readline.do:
+	$(CC) $(CFLAGS) $(DEBUGFLAGS) -c ../ui/repl-readline.c -o $@
 endif
 
 ifeq ($(REPL_BASIC), 1)
-SRCS += repl-basic
+SRCS += ../ui/repl-basic
+
+repl-basic.o:
+	$(CC) $(CFLAGS) $(SHIPFLAGS) -c ../ui/repl-basic.c -o $@
+
+repl-basic.do:
+	$(CC) $(CFLAGS) $(DEBUGFLAGS) -c ../ui/repl-basic.c -o $@
 endif
 
 ifeq ($(REPL_CLOUD), 1)
-MONGOOSE = $(JULIAHOME)/ext/mongoose
+MONGOOSE = $(JULIAHOME)/external/mongoose
 FLAGS += -DCLOUD_REPL -I$(MONGOOSE)
-SRCS += mongoose repl-cloud
+SRCS += mongoose ../ui/repl-cloud
 LIBS += -lssl -lcrypto
+
+repl-cloud.o:
+	$(CC) $(CFLAGS) $(SHIPFLAGS) -c ../ui/repl-cloud.c -o $@
+
+repl-cloud.do:
+	$(CC) $(CFLAGS) $(DEBUGFLAGS) -c ../ui/repl-cloud.c -o $@
 
 mongoose.o:
 	$(CC) $(CFLAGS) $(SHIPFLAGS) -c $(MONGOOSE)/mongoose.c -o $@

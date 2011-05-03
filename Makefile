@@ -10,24 +10,27 @@ julia-debug julia-release:
 	$(MAKE) -C src $@
 	ln -f src/$@ julia
 
-sys.ji: sysimg.j start_image.j src/boot.j src/dump.c *.j
-	./julia -b sysimg.j
+sys.ji: ./j/sysimg.j ./j/start_image.j src/boot.j src/dump.c j/*.j
+	(cd j && ../julia -b sysimg.j)
 
 custom.j:
-	if [ ! -f custom.j ]; then touch custom.j; fi
+	if [ ! -f ./j/custom.j ]; then touch ./j/custom.j; fi
 
 PCRE_CONST = 0x[0-9a-fA-F]+|[-+]?\s*[0-9]+
 
 pcre_h.j:
-	cpp -dM $(EXTROOT)/include/pcre.h | perl -nle '/^\s*#define\s+(PCRE\w*)\s*\(?($(PCRE_CONST))\)?\s*$$/ and print "$$1 = $$2"' | sort > $@
+	cpp -dM $(EXTROOT)/include/pcre.h | perl -nle '/^\s*#define\s+(PCRE\w*)\s*\(?($(PCRE_CONST))\)?\s*$$/ and print "$$1 = $$2"' | sort > ./j/$@
 
 test: debug
-	./julia tests.j
+	(cd j && ../julia ../test/tests.j)
 
 test-utf8:
-	./julia test_utf8.j
+	(cd j && ../julia ../test/test_utf8.j)
 
-testall: test test-utf8
+perf: release
+	(cd j && ../julia ../test/perf.j)
+
+testall: test test-utf8 perf
 
 SLOCCOUNT = sloccount \
 	--addlang makefile \
