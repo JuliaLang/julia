@@ -4,31 +4,31 @@ include ./Make.inc
 
 default: release
 
-debug release: %: julia-% pcre_h.j sys.ji custom.j
+debug release: %: julia-% j/pcre_h.j sys.ji j/custom.j
 
 julia-debug julia-release:
 	$(MAKE) -C src $@
 	ln -f src/$@ julia
 
 sys.ji: ./j/sysimg.j ./j/start_image.j src/boot.j src/dump.c j/*.j
-	(cd j && ../julia -b sysimg.j)
+	./julia -b sysimg.j
 
-custom.j:
+j/custom.j:
 	if [ ! -f ./j/custom.j ]; then touch ./j/custom.j; fi
 
 PCRE_CONST = 0x[0-9a-fA-F]+|[-+]?\s*[0-9]+
 
-pcre_h.j:
+j/pcre_h.j:
 	cpp -dM $(EXTROOT)/include/pcre.h | perl -nle '/^\s*#define\s+(PCRE\w*)\s*\(?($(PCRE_CONST))\)?\s*$$/ and print "$$1 = $$2"' | sort > ./j/$@
 
 test: debug
-	(cd j && ../julia ../test/tests.j)
+	./julia test/tests.j
 
 test-utf8:
-	(cd j && ../julia ../test/test_utf8.j)
+	./julia test/test_utf8.j
 
 perf: release
-	(cd j && ../julia ../test/perf.j)
+	./julia test/perf.j
 
 testall: test test-utf8 perf
 
@@ -48,7 +48,7 @@ sloccount:
 
 clean:
 	rm -f julia
-	rm -f pcre_h.j
+	rm -f j/pcre_h.j
 	rm -f *.ji
 	rm -f *~ *#
 	$(MAKE) -C src clean
