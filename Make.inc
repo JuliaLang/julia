@@ -1,6 +1,6 @@
 NAME = julia
 JULIALIB = $(JULIAHOME)/lib
-EXTROOT = $(JULIAHOME)/ext/root
+EXTROOT = $(JULIAHOME)/external/root
 EXTROOTLIB = $(EXTROOT)/lib
 LLVMROOT = $(EXTROOT)
 

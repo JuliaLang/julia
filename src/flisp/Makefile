@@ -1,5 +1,5 @@
-JULIAHOME = ..
-include ../Make.inc
+JULIAHOME = $(shell pwd)/../..
+include $(JULIAHOME)/Make.inc
 
 NAME = flisp
 SRCS = $(NAME).c builtins.c string.c equalhash.c table.c iostream.c \
@@ -8,7 +8,7 @@ OBJS = $(SRCS:%.c=%.o)
 DOBJS = $(SRCS:%.c=%.do)
 EXENAME = $(NAME)
 LIBTARGET = lib$(NAME)
-LLTDIR = ../supportlib
+LLTDIR = ../support
 LLT = $(LLTDIR)/libllt.a
 
 FLAGS = -falign-functions -Wall -Wno-strict-aliasing -I$(LLTDIR) $(CFLAGS) \
