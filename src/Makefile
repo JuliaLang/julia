@@ -109,7 +109,7 @@ libjulia-debug: $(DOBJS) $(LIBFILES)
 	$(CXX) $(DEBUGFLAGS) $(DOBJS) -shared -o libjulia-debug.$(SHLIB_EXT) $(LIBS)
 
 libjulia-release: $(OBJS) $(LIBFILES)
-	$(CXX) $(SHIPFLAGS) $(OBJS) -shared -o libjulia-debug.$(SHLIB_EXT) $(LIBS)
+	$(CXX) $(SHIPFLAGS) $(OBJS) -shared -o libjulia.$(SHLIB_EXT) $(LIBS)
 
 debug release: %: julia-%
 
