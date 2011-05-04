@@ -5,7 +5,6 @@ SRCS = jltypes gf ast builtins module codegen interpreter alloc dlload \
 	sys init task array dump repl
 OBJS = $(SRCS:%=%.o)
 DOBJS = $(SRCS:%=%.do)
-EXENAME = $(NAME)
 LLTDIR = ./support
 FLISPDIR = ./flisp
 LLT = $(LLTDIR)/libllt.a
@@ -105,6 +104,12 @@ julia-debug: $(DOBJS) $(LIBFILES)
 
 julia-release: $(OBJS) $(LIBFILES)
 	$(CXX) $(SHIPFLAGS) $(OBJS) -o $@ $(LIBS)
+
+libjulia-debug: $(DOBJS) $(LIBFILES)
+	$(CXX) $(DEBUGFLAGS) $(DOBJS) -shared -o libjulia-debug.$(SHLIB_EXT) $(LIBS)
+
+libjulia-release: $(OBJS) $(LIBFILES)
+	$(CXX) $(SHIPFLAGS) $(OBJS) -shared -o libjulia-debug.$(SHLIB_EXT) $(LIBS)
 
 debug release: %: julia-%
 

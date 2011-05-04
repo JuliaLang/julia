@@ -51,10 +51,6 @@ debug: $(DOBJS) $(LIBFILES) $(LIBTARGET)-debug.a flmain.do
 	$(CC) $(DEBUGFLAGS) $(DOBJS) flmain.do -o $(EXENAME) $(LIBS) $(LIBTARGET).a $(OSLIBS)
 	make test
 
-efence: $(DOBJS) $(LIBFILES) $(LIBTARGET)-debug.a flmain.do
-	$(CC) $(DEBUGFLAGS) $(DOBJS) flmain.do -o $(EXENAME) $(EFENCE) $(LIBS) $(LIBTARGET).a $(OSLIBS)
-	make test
-
 release: $(OBJS) $(LIBFILES) $(LIBTARGET).a flmain.o
 	$(CC) $(SHIPFLAGS) $(OBJS) flmain.o -o $(EXENAME) $(LIBS) $(LIBTARGET).a $(OSLIBS)
 
