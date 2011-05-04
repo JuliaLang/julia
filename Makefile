@@ -4,7 +4,7 @@ include ./Make.inc
 
 default: release
 
-debug release: %: julia-% j/pcre_h.j sys.ji j/custom.j
+debug release: %: julia-% j/pcre_h.j sys.ji custom.j
 
 julia-debug julia-release:
 	$(MAKE) -C src $@
@@ -13,8 +13,8 @@ julia-debug julia-release:
 sys.ji: ./j/sysimg.j ./j/start_image.j src/boot.j src/dump.c j/*.j
 	./julia -b sysimg.j
 
-j/custom.j:
-	if [ ! -f ./j/custom.j ]; then touch ./j/custom.j; fi
+custom.j:
+	if [ ! -f ./custom.j ]; then touch ./custom.j; fi
 
 PCRE_CONST = 0x[0-9a-fA-F]+|[-+]?\s*[0-9]+
 
