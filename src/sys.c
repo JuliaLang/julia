@@ -130,7 +130,7 @@ jl_value_t *jl_current_output_stream_obj()
     return jl_current_task->state.ostream_obj;
 }
 
-ios_t *jl_current_output_stream()
+DLLEXPORT ios_t *jl_current_output_stream()
 {
     return jl_current_task->state.current_output_stream;
 }

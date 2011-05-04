@@ -164,7 +164,7 @@ static void _probe_arch()
 
 extern size_t jl_page_size;
 jl_struct_type_t *jl_task_type;
-jl_task_t * volatile jl_current_task;
+DLLEXPORT jl_task_t * volatile jl_current_task;
 jl_task_t *jl_root_task;
 jl_value_t * volatile jl_task_arg_in_transit;
 static volatile int n_args_in_transit;

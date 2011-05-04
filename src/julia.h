@@ -807,7 +807,7 @@ typedef struct _jl_task_t {
     jl_savestate_t state;
 } jl_task_t;
 
-extern jl_task_t * volatile jl_current_task;
+DLLEXPORT extern jl_task_t * volatile jl_current_task;
 extern jl_task_t *jl_root_task;
 extern jl_value_t *jl_exception_in_transit;
 
@@ -816,7 +816,7 @@ jl_value_t *jl_switchto(jl_task_t *t, jl_value_t *arg);
 void jl_raise(jl_value_t *e);
 
 DLLEXPORT jl_value_t *jl_current_output_stream_obj();
-ios_t *jl_current_output_stream();
+DLLEXPORT ios_t *jl_current_output_stream();
 DLLEXPORT void jl_set_current_output_stream_obj(jl_value_t *v);
 
 DLLEXPORT jl_array_t *jl_takebuf_array(ios_t *s);

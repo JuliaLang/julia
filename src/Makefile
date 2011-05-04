@@ -2,7 +2,7 @@ JULIAHOME = $(shell pwd)/..
 include $(JULIAHOME)/Make.inc
 
 SRCS = jltypes gf ast builtins module codegen interpreter alloc dlload \
-	sys init task array dump repl
+	sys init task array dump
 OBJS = $(SRCS:%=%.o)
 DOBJS = $(SRCS:%=%.do)
 LLTDIR = ./support
@@ -13,8 +13,7 @@ FLISP = $(FLISPDIR)/libflisp.a
 FLAGS = -falign-functions -Wall -Wno-strict-aliasing \
 	-I$(FLISPDIR) -I$(LLTDIR) $(HFILEDIRS:%=-I%) $(LIBDIRS:%=-L%) \
 	-I$(JULIAHOME)/src -I$(JULIAHOME)/ui \
-	$(CONFIG) -I$(shell $(LLVMROOT)/bin/llvm-config --includedir) \
-	-fvisibility=hidden
+	$(CONFIG) -I$(shell $(LLVMROOT)/bin/llvm-config --includedir) #	-fvisibility=hidden
 DEBUGFLAGS = -ggdb3 -DDEBUG $(FLAGS)
 SHIPFLAGS = -O3 -DNDEBUG $(FLAGS)
 
@@ -29,46 +28,6 @@ endif
 
 ifeq ($(USE_COPY_STACKS),1)
 CONFIG += -DCOPY_STACKS
-endif
-
-ifeq ($(REPL_READLINE), 1)
-SRCS += ../ui/repl-readline
-LIBS += -lreadline
-
-repl-readline.o:
-	$(CC) $(CFLAGS) $(SHIPFLAGS) -c ../ui/repl-readline.c -o $@
-
-repl-readline.do:
-	$(CC) $(CFLAGS) $(DEBUGFLAGS) -c ../ui/repl-readline.c -o $@
-endif
-
-ifeq ($(REPL_BASIC), 1)
-SRCS += ../ui/repl-basic
-
-repl-basic.o:
-	$(CC) $(CFLAGS) $(SHIPFLAGS) -c ../ui/repl-basic.c -o $@
-
-repl-basic.do:
-	$(CC) $(CFLAGS) $(DEBUGFLAGS) -c ../ui/repl-basic.c -o $@
-endif
-
-ifeq ($(REPL_CLOUD), 1)
-MONGOOSE = $(JULIAHOME)/external/mongoose
-FLAGS += -DCLOUD_REPL -I$(MONGOOSE)
-SRCS += mongoose ../ui/repl-cloud
-LIBS += -lssl -lcrypto
-
-repl-cloud.o:
-	$(CC) $(CFLAGS) $(SHIPFLAGS) -c ../ui/repl-cloud.c -o $@
-
-repl-cloud.do:
-	$(CC) $(CFLAGS) $(DEBUGFLAGS) -c ../ui/repl-cloud.c -o $@
-
-mongoose.o:
-	$(CC) $(CFLAGS) $(SHIPFLAGS) -c $(MONGOOSE)/mongoose.c -o $@
-
-mongoose.do:
-	$(CC) $(CFLAGS) $(DEBUGFLAGS) -c $(MONGOOSE)/mongoose.c -o $@
 endif
 
 %.o: %.c julia.h
@@ -99,17 +58,11 @@ $(LLT): $(LLTDIR)/*.h $(LLTDIR)/*.c
 $(FLISP): $(FLISPDIR)/*.h $(FLISPDIR)/*.c $(LLT)
 	cd $(FLISPDIR) && $(MAKE)
 
-julia-debug: $(DOBJS) $(LIBFILES)
-	$(CXX) $(DEBUGFLAGS) $(DOBJS) -o $@ $(LIBS)
-
-julia-release: $(OBJS) $(LIBFILES)
-	$(CXX) $(SHIPFLAGS) $(OBJS) -o $@ $(LIBS)
-
 libjulia-debug: $(DOBJS) $(LIBFILES)
 	$(CXX) $(DEBUGFLAGS) $(DOBJS) -shared -o libjulia-debug.$(SHLIB_EXT) $(LIBS)
 
 libjulia-release: $(OBJS) $(LIBFILES)
-	$(CXX) $(SHIPFLAGS) $(OBJS) -shared -o libjulia-debug.$(SHLIB_EXT) $(LIBS)
+	$(CXX) $(SHIPFLAGS) $(OBJS) -shared -o libjulia-release.$(SHLIB_EXT) $(LIBS)
 
 debug release: %: julia-%
 

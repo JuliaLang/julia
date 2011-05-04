@@ -30,6 +30,7 @@ extern int tab_width;
 extern jl_value_t *rl_ast;
 extern char *jl_answer_color;
 extern char *prompt_string;
+extern char *julia_home;
 
 extern void init_repl_environment();
 extern void exit_repl_environment();

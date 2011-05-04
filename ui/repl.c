@@ -35,7 +35,6 @@ static char jl_banner_color[] =
 
 
 char *jl_answer_color  = "\033[1m\033[34m";
-char *julia_home = NULL; // load is relative to here
 char *prompt_string;
 
 static char jl_prompt_plain[] = "julia> ";

@@ -20,7 +20,7 @@
 
 // --- exceptions ---
 
-extern char *julia_home;
+char *julia_home = NULL;
 
 void jl_error(const char *str)
 {

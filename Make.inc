@@ -9,6 +9,8 @@ CXX = g++
 CFLAGS = -std=gnu99 -fPIC
 CXXFLAGS = -fPIC
 FC = gfortran
+DEBUGFLAGS = -ggdb3 -DDEBUG $(FLAGS)
+SHIPFLAGS = -O3 -DNDEBUG $(FLAGS)
 
 # Different REPLs. Currently, only one of these can be chosen
 REPL_READLINE = 1
