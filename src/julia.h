@@ -793,13 +793,12 @@ typedef struct _jl_task_t {
     JL_STRUCT_TYPE
     struct _jl_task_t *on_exit;
     jmp_buf ctx;
-#ifdef COPY_STACKS
-    void *stackbase;
+    union {
+        void *stackbase;
+        void *stack;
+    };
     jmp_buf base_ctx;
     size_t bufsz;
-#else
-    void *stack;
-#endif
     void *stkbuf;
     size_t ssize;
     jl_function_t *start;

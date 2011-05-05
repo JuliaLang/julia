@@ -292,9 +292,6 @@ int jl_load_startup_file(char *fname)
         ios_printf(ios_stdout, "\n");
         return 1;
     }
-#ifdef JL_GC_MARKSWEEP
-    jl_gc_collect();
-#endif
     return 0;
 }
 
