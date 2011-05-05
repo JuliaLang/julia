@@ -2,6 +2,15 @@ JULIAHOME = $(shell pwd)/..
 include ../Make.inc
 
 OS = $(shell uname)
+ARCH = $(shell arch)
+
+ifeq ($(ARCH), i386)
+LIBC = /lib/libc.so.6
+endif
+
+ifeq ($(ARCH), x86_64)
+LIBC = /lib64/libc.so.6
+endif
 
 default: defaultlibs_$(OS)
 
@@ -11,13 +20,13 @@ defaultlibs_Linux: \
 
 defaultlibs_Darwin: \
 	llvm readline_install pcre_install fdlibm_install lapack_install \
-	libc_install mongoose_install
+	mongoose_install
 
 $(JULIALIB):
 	mkdir -p $(JULIALIB)
 
 libc_install: $(JULIALIB)
-	ln -sf /lib/libc.so.6 $(JULIALIB)/libc.so
+	ln -sf $(LIBC) $(JULIALIB)/libc.so
 
 LLVM_OBJ = $(EXTROOTLIB)/libLLVM-$(LLVM_VER).$(SHLIB_EXT)
 llvm-$(LLVM_VER).tgz:
