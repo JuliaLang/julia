@@ -50,7 +50,7 @@ sloccount:
 
 clean:
 	rm -f julia
-	rm -f libjulia-*.so
+	rm -f libjulia-*.$(SHLIB_EXT)
 	rm -f j/pcre_h.j
 	rm -f *.ji
 	rm -f *~ *#
