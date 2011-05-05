@@ -451,23 +451,11 @@ static void print_profile()
 }
 #endif
 
-#ifdef COPY_STACKS
-void jl_switch_stack(jl_task_t *t, jmp_buf *where);
-extern jmp_buf * volatile jl_jmp_target;
-#endif
-
 int main(int argc, char *argv[])
 {
     llt_init();
     parse_opts(&argc, &argv);
-    julia_init(lisp_prompt ? NULL : image_file);
-#ifdef COPY_STACKS
-    // initialize base context of root task
-    jl_root_task->stackbase = (char*)&argc;
-    if (setjmp(jl_root_task->base_ctx)) {
-        jl_switch_stack(jl_current_task, jl_jmp_target);
-    }
-#endif
+    julia_init(lisp_prompt ? NULL : image_file, &argc);
 
     if (lisp_prompt) {
         jl_lisp_prompt();

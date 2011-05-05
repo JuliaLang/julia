@@ -1,6 +1,8 @@
 #ifndef _JULIA_H_
 #define _JULIA_H_
 
+#define JL_GC_MARKSWEEP
+
 #include "htable.h"
 #include "arraylist.h"
 #include <setjmp.h>
@@ -605,7 +607,7 @@ void jl_type_error_rt(const char *fname, const char *context,
 jl_value_t *jl_no_method_error(jl_function_t *f, jl_value_t **args, size_t na);
 
 // initialization functions
-void julia_init(char *imageFile);
+void julia_init(char *imageFile, int *pargc);
 void jl_init_types();
 void jl_init_box_caches();
 void jl_init_frontend();
@@ -821,18 +823,6 @@ DLLEXPORT void jl_set_current_output_stream_obj(jl_value_t *v);
 
 DLLEXPORT jl_array_t *jl_takebuf_array(ios_t *s);
 DLLEXPORT jl_value_t *jl_takebuf_string(ios_t *s);
-
-static inline void jl_eh_save_state(jl_savestate_t *ss)
-{
-    ss->eh_task = jl_current_task->state.eh_task;
-    ss->eh_ctx = jl_current_task->state.eh_ctx;
-    ss->ostream_obj = jl_current_task->state.ostream_obj;
-    ss->current_output_stream = jl_current_task->state.current_output_stream;
-    ss->prev = jl_current_task->state.prev;
-#ifdef JL_GC_MARKSWEEP
-    ss->gcstack = jl_current_task->state.gcstack;
-#endif
-}
 
 static inline void jl_eh_restore_state(jl_savestate_t *ss)
 {

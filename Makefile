@@ -6,11 +6,11 @@ default: release
 
 debug release: %: julia-% j/pcre_h.j sys.ji custom.j
 
-julia-release:
+julia-debug julia-release:
 	$(MAKE) -C src lib$@
 	ln -f src/lib$@.$(SHLIB_EXT) .
-	$(MAKE) -C ui
-	ln -f ui/julia-readline julia
+	$(MAKE) -C ui $@
+	ln -f ui/$@-readline julia
 
 sys.ji: ./j/sysimg.j ./j/start_image.j src/boot.j src/dump.c j/*.j
 	./julia -b sysimg.j
@@ -50,10 +50,12 @@ sloccount:
 
 clean:
 	rm -f julia
+	rm -f libjulia-*.so
 	rm -f j/pcre_h.j
 	rm -f *.ji
 	rm -f *~ *#
 	$(MAKE) -C src clean
+	$(MAKE) -C ui clean
 
 cleanall: clean
 	$(MAKE) -C src cleanother

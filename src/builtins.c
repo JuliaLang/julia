@@ -77,7 +77,15 @@ JL_CALLABLE(jl_f_throw)
 
 void jl_enter_handler(jl_savestate_t *ss, jmp_buf *handlr)
 {
-    jl_eh_save_state(ss);
+    ss->eh_task = jl_current_task->state.eh_task;
+    ss->eh_ctx = jl_current_task->state.eh_ctx;
+    ss->ostream_obj = jl_current_task->state.ostream_obj;
+    ss->current_output_stream = jl_current_task->state.current_output_stream;
+    ss->prev = jl_current_task->state.prev;
+#ifdef JL_GC_MARKSWEEP
+    ss->gcstack = jl_current_task->state.gcstack;
+#endif
+
     jl_current_task->state.prev = ss;
     jl_current_task->state.eh_task = jl_current_task;
     jl_current_task->state.eh_ctx = handlr;

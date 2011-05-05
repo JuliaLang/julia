@@ -22,7 +22,6 @@ LIBS = $(LIBFILES) -L$(EXTROOT)/lib -lutil -ldl -lm $(OSLIBS) \
 	$(shell $(LLVMROOT)/bin/llvm-config --ldflags --libs engine) -lpthread 
 
 ifeq ($(JULIAGC),MARKSWEEP)
-CONFIG += -DJL_GC_MARKSWEEP
 SRCS += gc
 endif
 
@@ -62,13 +61,13 @@ libjulia-debug: $(DOBJS) $(LIBFILES)
 	$(CXX) $(DEBUGFLAGS) $(DOBJS) -shared -o libjulia-debug.$(SHLIB_EXT) $(LIBS)
 
 libjulia-release: $(OBJS) $(LIBFILES)
-	$(CXX) $(SHIPFLAGS) $(OBJS) -shared -o libjulia.$(SHLIB_EXT) $(LIBS)
+	$(CXX) $(SHIPFLAGS) $(OBJS) -shared -o libjulia-release.$(SHLIB_EXT) $(LIBS)
 
 
 debug release: %: julia-%
 
 clean:
-	rm -f julia-{debug,release}
+	rm -f libjulia-*.so
 	rm -f julia_flisp.boot
 	rm -f julia_flisp.boot.inc
 	rm -f boot.j.inc

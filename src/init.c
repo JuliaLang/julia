@@ -86,7 +86,12 @@ static jl_value_t *global(char *name)
     return *jl_get_bindingp(jl_system_module, jl_symbol(name));
 }
 
-void julia_init(char *imageFile)
+#ifdef COPY_STACKS
+void jl_switch_stack(jl_task_t *t, jmp_buf *where);
+extern jmp_buf * volatile jl_jmp_target;
+#endif
+
+void julia_init(char *imageFile, int *pargc)
 {
     jl_page_size = sysconf(_SC_PAGESIZE);
     jl_find_stack_bottom();
@@ -141,6 +146,14 @@ void julia_init(char *imageFile)
         ios_printf(ios_stderr, "sigaction: %s\n", strerror(errno));
         exit(1);
     }
+
+#ifdef COPY_STACKS
+    // initialize base context of root task
+    jl_root_task->stackbase = (char*)pargc;
+    if (setjmp(jl_root_task->base_ctx)) {
+        jl_switch_stack(jl_current_task, jl_jmp_target);
+    }
+#endif
 }
 
 jl_function_t *jl_typeinf_func=NULL;
