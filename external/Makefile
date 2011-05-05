@@ -4,7 +4,7 @@ include ../Make.inc
 OS = $(shell uname)
 ARCH = $(shell arch)
 
-ifeq ($(ARCH), i386)
+ifeq ($(ARCH), $(filter $(ARCH), i386 i486 i586 i686))
 LIBC = /lib/libc.so.6
 endif
 
