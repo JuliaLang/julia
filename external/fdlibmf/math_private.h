@@ -270,9 +270,4 @@ struct Double {
 double __exp__D(double, double);
 struct Double __log__D(double);
 
-#ifdef MACOSX
-#define isinff(x) isinf(x)
-#define finitef(x) isfinite(x)
-#endif
-
 #endif /* _MATH_PRIVATE_H_ */
