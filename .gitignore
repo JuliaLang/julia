@@ -7,3 +7,5 @@
 /julia
 /custom.j
 /sys.ji
+/libjulia-release.so
+/libjulia-debug.so

@@ -4,7 +4,6 @@ char jl_prompt_color[] = "\033[1m\033[32mjulia> \033[37m";
 
 void init_repl_environment()
 {
-    no_readline = 1;
 }
 
 void exit_repl_environment()
@@ -24,7 +23,6 @@ DLLEXPORT void jl_input_line_callback(char *input)
         ast = jl_parse_input_line(input);
         // TODO
         //if (jl_is_expr(ast) && ((jl_expr_t*)ast)->head == continue_sym)
-        //return read_expr_ast_no_readline(prompt, end, doprint);
         doprint = !ends_with_semicolon(input);
     }
     handle_input(ast, end, doprint);
@@ -42,6 +40,8 @@ void read_expr(char *prompt)
 
 void repl_callback_enable()
 {
+    ios_printf(ios_stdout, prompt_string);
+    ios_flush(ios_stdout);
 }
 
 void repl_callback_disable()
@@ -50,4 +50,12 @@ void repl_callback_disable()
 
 void repl_stdin_callback()
 {
+    char *input = ios_readline(ios_stdin);
+    ios_purge(ios_stdin);
+    jl_input_line_callback(input);
+}
+
+void repl_print_prompt()
+{
+    ios_printf(ios_stdout, prompt_string);
 }

@@ -22,7 +22,6 @@
 #include "llt.h"
 #include "julia.h"
 
-extern int no_readline;
 extern char jl_prompt_color[];
 extern int prompt_length;
 extern int have_color;
@@ -31,6 +30,7 @@ extern jl_value_t *rl_ast;
 extern char *jl_answer_color;
 extern char *prompt_string;
 extern char *julia_home;
+extern int jl_have_event_loop;
 
 extern void init_repl_environment();
 extern void exit_repl_environment();
@@ -42,6 +42,7 @@ extern char *ios_readline(ios_t *s);
 extern void repl_callback_enable();
 extern void repl_callback_disable();
 extern void repl_stdin_callback();
+extern void repl_print_prompt();
 
 
 #ifdef CLOUD_REPL

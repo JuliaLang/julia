@@ -1,2 +1,5 @@
 /*.o
 /*.do
+/julia-release-basic
+/julia-release-cloud
+/julia-release-readline

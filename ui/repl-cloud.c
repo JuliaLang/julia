@@ -445,8 +445,6 @@ void init_repl_environment() {
   // Wait until enter is pressed, then exit
   printf("Julia is listening for exciting science on port %s.\n", mg_get_option(ctx, "listening_ports"));
 
-  no_readline = 1;
-
   return;
 }
 
@@ -468,7 +466,6 @@ DLLEXPORT void jl_input_line_callback(char *input)
         ast = jl_parse_input_line(input);
         // TODO
         //if (jl_is_expr(ast) && ((jl_expr_t*)ast)->head == continue_sym)
-        //return read_expr_ast_no_readline(prompt, end, doprint);
         doprint = !ends_with_semicolon(input);
     }
     handle_input(ast, end, doprint);
@@ -486,15 +483,16 @@ void read_expr(char *prompt)
 
 void repl_callback_enable()
 {
-  return;
 }
 
 void repl_callback_disable()
 {
-  return;
 }
 
 void repl_stdin_callback()
 {
-  return;
+}
+
+void repl_print_prompt()
+{
 }

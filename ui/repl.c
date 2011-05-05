@@ -42,7 +42,7 @@ static char jl_color_normal[] = "\033[0m\033[37m";
 static int print_banner = 1;
 static char *post_boot = NULL;
 static int lisp_prompt = 0;
-static int have_event_loop = 0;
+int jl_have_event_loop = 0;
 static char *program = NULL;
 
 int num_evals = 0;
@@ -55,7 +55,6 @@ jl_value_t *rl_ast = NULL;
 int tab_width = 2;
 int prompt_length = 0;
 int have_color = 1;
-int no_readline = 1;
 
 #ifdef CLOUD_REPL
 char *repl_result;
@@ -64,7 +63,6 @@ char *repl_result;
 static const char *usage = "julia [options] [program] [args...]\n";
 static const char *opts =
     " -q --quiet               Quiet startup without banner\n"
-    " -R --no-readline         Disable readline functionality\n"
     " -H --home=<dir>          Load files relative to <dir>\n"
     " -T --tab=<size>          Set REPL tab width to <size>\n\n"
 
@@ -79,10 +77,9 @@ static const char *opts =
     " -h --help                Print this message\n";
 
 void parse_opts(int *argcp, char ***argvp) {
-    static char* shortopts = "qRe:E:P:H:T:bL:hJ:";
+    static char* shortopts = "qe:E:P:H:T:bL:hJ:";
     static struct option longopts[] = {
         { "quiet",       no_argument,       0, 'q' },
-        { "no-readline", no_argument,       0, 'R' },
         { "eval",        required_argument, 0, 'e' },
         { "print",       required_argument, 0, 'E' },
         { "post-boot",   required_argument, 0, 'P' },
@@ -103,12 +100,8 @@ void parse_opts(int *argcp, char ***argvp) {
         case 'q':
             print_banner = 0;
             break;
-        case 'R':
-            no_readline = 1;
-            break;
         case 'e':
         case 'E':
-            no_readline = 1;
             num_evals++;
             eval_exprs = (char**)realloc(eval_exprs, num_evals*sizeof(char*));
             print_exprs = (int*)realloc(print_exprs, num_evals*sizeof(int));
@@ -206,7 +199,6 @@ void parse_opts(int *argcp, char ***argvp) {
     *argcp -= optind;
     if (!num_evals && *argcp > 0) {
         if (strcmp((*argvp)[0], "-")) {
-            no_readline = 1;
             program = (*argvp)[0];
         }
         ++*argvp; --*argcp;
@@ -238,25 +230,10 @@ static int detect_color()
 #endif
 }
 
-char *ios_readline(ios_t *s)
-{
-    ios_t dest;
-    ios_mem(&dest, 0);
-    ios_copyuntil(&dest, s, '\n');
-    size_t n;
-    return ios_takebuf(&dest, &n);
-}
-
 // called when we detect an event on stdin
 DLLEXPORT void jl_stdin_callback()
 {
-    if (no_readline) {
-        char *input = ios_readline(ios_stdin);
-        ios_purge(ios_stdin);
-        jl_input_line_callback(input);
-    } else {
-        repl_stdin_callback();
-    }
+    repl_stdin_callback();
 }
 
 static int exec_program()
@@ -336,13 +313,11 @@ static void repl_show_value(jl_value_t *v)
 
 DLLEXPORT void jl_eval_user_input(jl_value_t *ast, int show_value)
 {
-    if (!no_readline) {
-        if (have_event_loop) {
-            // with multi.j loaded the readline callback can return
-            // before the command finishes running, so we have to
-            // disable rl to prevent the prompt from reappearing too soon.
-	    repl_callback_disable();
-        }
+    if (jl_have_event_loop) {
+        // with multi.j loaded the command line input callback can return
+        // before the command finishes running, so we have to
+        // disable rl to prevent the prompt from reappearing too soon.
+        repl_callback_disable();
     }
     JL_GC_PUSH(&ast);
     assert(ast != NULL);
@@ -381,15 +356,7 @@ DLLEXPORT void jl_eval_user_input(jl_value_t *ast, int show_value)
     ios_printf(ios_stdout, "\n");
     ios_flush(ios_stdout);
     JL_GC_POP();
-    if (no_readline) {
-        ios_printf(ios_stdout, prompt_string);
-        ios_flush(ios_stdout);
-    }
-    else {
-        if (have_event_loop) {
-            repl_callback_enable();
-        }
-    }
+    repl_callback_enable();
 }
 
 // handle a command line input event
@@ -401,9 +368,7 @@ void handle_input(jl_value_t *ast, int end, int show_value)
     }
     if (ast == NULL) {
         ios_printf(ios_stdout, "\n");
-        if (no_readline) {
-            ios_printf(ios_stdout, prompt_string);
-        }
+        repl_print_prompt();
         ios_flush(ios_stdout);
         return;
     }
@@ -537,11 +502,9 @@ int main(int argc, char *argv[])
         (jl_function_t*)
         jl_get_global(jl_system_module, jl_symbol("start_client"));
 
-    if (no_readline) {
-        ios_printf(ios_stdout, prompt_string);
-        ios_flush(ios_stdout);
-    }
     if (start_client == NULL) {
+        repl_print_prompt();
+        ios_flush(ios_stdout);
         // client event loop not available; use fallback blocking version
         int iserr = 0;
     again:
@@ -567,10 +530,8 @@ int main(int argc, char *argv[])
         }
     }
     else {
-        have_event_loop = 1;
-        if (!no_readline) {
-            repl_callback_enable();
-        }
+        jl_have_event_loop = 1;
+        repl_callback_enable();
         jl_apply(start_client, NULL, 0);
     }
 

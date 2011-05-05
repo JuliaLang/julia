@@ -118,9 +118,10 @@ int ios_getnum(ios_t *s, char *data, uint32_t type);
 DLLEXPORT int ios_getutf8(ios_t *s, uint32_t *pwc);
 int ios_peekutf8(ios_t *s, uint32_t *pwc);
 int ios_ungetutf8(ios_t *s, uint32_t wc);
-int ios_getstringz(ios_t *dest, ios_t *src);
-int ios_getstringn(ios_t *dest, ios_t *src, size_t nchars);
-int ios_getline(ios_t *s, char **pbuf, size_t *psz);
+//int ios_getstringz(ios_t *dest, ios_t *src);
+//int ios_getstringn(ios_t *dest, ios_t *src, size_t nchars);
+//int ios_getline(ios_t *s, char **pbuf, size_t *psz);
+char *ios_readline(ios_t *s);
 
 // discard data buffered for reading
 void ios_purge(ios_t *s);
