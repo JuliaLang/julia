@@ -14,6 +14,6 @@
 #include "dirpath.h"
 #include "random.h"
 
-void llt_init();
+DLLEXPORT void llt_init();
 
 #endif

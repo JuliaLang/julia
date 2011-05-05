@@ -2070,7 +2070,7 @@ void jl_init_types()
     dots_sym = jl_symbol("...");
     dollar_sym = jl_symbol("$");
     line_sym = jl_symbol("line");
-    continue_sym = jl_symbol("continue");
+    jl_continue_sym = jl_symbol("continue");
     error_sym = jl_symbol("error");
     goto_sym = jl_symbol("goto");
     goto_ifnot_sym = jl_symbol("gotoifnot");

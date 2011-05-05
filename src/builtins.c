@@ -20,7 +20,7 @@
 
 // --- exceptions ---
 
-char *julia_home = NULL;
+DLLEXPORT char *julia_home = NULL;
 
 void jl_error(const char *str)
 {

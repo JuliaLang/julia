@@ -28,7 +28,7 @@ OSLIBS =
 
 ifeq ($(OS), Linux)
 SHLIB_EXT = so
-OSLIBS += -Wl,--export-dynamic
+OSLIBS += -Wl,--export-dynamic -Wl,--version-script=$(JULIAHOME)/src/julia.expmap
 endif
 
 ifeq ($(OS), Darwin)

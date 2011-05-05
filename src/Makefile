@@ -13,7 +13,7 @@ FLISP = $(FLISPDIR)/libflisp.a
 FLAGS = -falign-functions -Wall -Wno-strict-aliasing \
 	-I$(FLISPDIR) -I$(LLTDIR) $(HFILEDIRS:%=-I%) $(LIBDIRS:%=-L%) \
 	-I$(JULIAHOME)/src -I$(JULIAHOME)/ui \
-	$(CONFIG) -I$(shell $(LLVMROOT)/bin/llvm-config --includedir) #	-fvisibility=hidden
+	$(CONFIG) -I$(shell $(LLVMROOT)/bin/llvm-config --includedir) -fvisibility=hidden
 DEBUGFLAGS = -ggdb3 -DDEBUG $(FLAGS)
 SHIPFLAGS = -O3 -DNDEBUG $(FLAGS)
 

@@ -22,7 +22,7 @@ DLLEXPORT void jl_input_line_callback(char *input)
     else {
         ast = jl_parse_input_line(input);
         // TODO
-        //if (jl_is_expr(ast) && ((jl_expr_t*)ast)->head == continue_sym)
+        //if (jl_is_expr(ast) && ((jl_expr_t*)ast)->head == jl_continue_sym)
         doprint = !ends_with_semicolon(input);
     }
     handle_input(ast, end, doprint);

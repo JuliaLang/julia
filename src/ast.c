@@ -28,7 +28,7 @@ extern fltype_t *iostreamtype;
 static jl_value_t *scm_to_julia(value_t e);
 static value_t julia_to_scm(jl_value_t *v);
 
-void jl_lisp_prompt()
+DLLEXPORT void jl_lisp_prompt()
 {
     fl_applyn(1, symbol_value(symbol("__start")), fl_cons(FL_NIL,FL_NIL));
 }
@@ -113,7 +113,7 @@ void jl_init_frontend()
     assign_global_builtins(julia_flisp_ast_ext);
 }
 
-void jl_shutdown_frontend()
+DLLEXPORT void jl_shutdown_frontend()
 {
     //fl_applyn(0, symbol_value(symbol("show-profiles")));
 }

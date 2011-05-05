@@ -67,25 +67,25 @@ typedef struct {
 DLLEXPORT size_t ios_read(ios_t *s, char *dest, size_t n);
 DLLEXPORT size_t ios_readall(ios_t *s, char *dest, size_t n);
 DLLEXPORT size_t ios_write(ios_t *s, char *data, size_t n);
-off_t ios_seek(ios_t *s, off_t pos);   // absolute seek
-off_t ios_seek_end(ios_t *s);
-off_t ios_skip(ios_t *s, off_t offs);  // relative seek
+DLLEXPORT off_t ios_seek(ios_t *s, off_t pos);   // absolute seek
+DLLEXPORT off_t ios_seek_end(ios_t *s);
+DLLEXPORT off_t ios_skip(ios_t *s, off_t offs);  // relative seek
 DLLEXPORT off_t ios_pos(ios_t *s);  // get current position
 DLLEXPORT size_t ios_trunc(ios_t *s, size_t size);
-int ios_eof(ios_t *s);
+DLLEXPORT int ios_eof(ios_t *s);
 DLLEXPORT int ios_flush(ios_t *s);
 DLLEXPORT void ios_close(ios_t *s);
-char *ios_takebuf(ios_t *s, size_t *psize);  // release buffer to caller
+DLLEXPORT char *ios_takebuf(ios_t *s, size_t *psize);  // release buffer to caller
 // set buffer space to use
-int ios_setbuf(ios_t *s, char *buf, size_t size, int own);
-int ios_bufmode(ios_t *s, bufmode_t mode);
-void ios_set_readonly(ios_t *s);
-void ios_bswap(ios_t *s, int bswap);
+DLLEXPORT int ios_setbuf(ios_t *s, char *buf, size_t size, int own);
+DLLEXPORT int ios_bufmode(ios_t *s, bufmode_t mode);
+DLLEXPORT void ios_set_readonly(ios_t *s);
+DLLEXPORT void ios_bswap(ios_t *s, int bswap);
 DLLEXPORT size_t ios_copy(ios_t *to, ios_t *from, size_t nbytes);
 DLLEXPORT size_t ios_copyall(ios_t *to, ios_t *from);
 DLLEXPORT size_t ios_copyuntil(ios_t *to, ios_t *from, char delim);
 // ensure at least n bytes are buffered if possible. returns # available.
-size_t ios_readprep(ios_t *from, size_t n);
+DLLEXPORT size_t ios_readprep(ios_t *from, size_t n);
 //void ios_lock(ios_t *s);
 //int ios_trylock(ios_t *s);
 //int ios_unlock(ios_t *s);
@@ -98,9 +98,9 @@ ios_t *ios_str(ios_t *s, char *str);
 ios_t *ios_static_buffer(ios_t *s, char *buf, size_t sz);
 DLLEXPORT ios_t *ios_fd(ios_t *s, long fd, int isfile);
 // todo: ios_socket
-extern ios_t *ios_stdin;
-extern ios_t *ios_stdout;
-extern ios_t *ios_stderr;
+extern DLLEXPORT ios_t *ios_stdin;
+extern DLLEXPORT ios_t *ios_stdout;
+extern DLLEXPORT ios_t *ios_stderr;
 void ios_init_stdstreams();
 
 /* high-level functions - output */
@@ -108,8 +108,8 @@ int ios_putnum(ios_t *s, char *data, uint32_t type);
 int ios_putint(ios_t *s, int n);
 DLLEXPORT int ios_pututf8(ios_t *s, uint32_t wc);
 int ios_putstringz(ios_t *s, char *str, bool_t do_write_nulterm);
-int ios_printf(ios_t *s, const char *format, ...);
-int ios_vprintf(ios_t *s, const char *format, va_list args);
+DLLEXPORT int ios_printf(ios_t *s, const char *format, ...);
+DLLEXPORT int ios_vprintf(ios_t *s, const char *format, va_list args);
 
 void hexdump(ios_t *dest, const char *buffer, size_t len, size_t startoffs);
 
@@ -121,10 +121,10 @@ int ios_ungetutf8(ios_t *s, uint32_t wc);
 //int ios_getstringz(ios_t *dest, ios_t *src);
 //int ios_getstringn(ios_t *dest, ios_t *src, size_t nchars);
 //int ios_getline(ios_t *s, char **pbuf, size_t *psz);
-char *ios_readline(ios_t *s);
+DLLEXPORT char *ios_readline(ios_t *s);
 
 // discard data buffered for reading
-void ios_purge(ios_t *s);
+DLLEXPORT void ios_purge(ios_t *s);
 
 // seek by utf8 sequence increments
 int ios_nextutf8(ios_t *s);
