@@ -8,7 +8,7 @@ OBJS = $(SRCS:%.c=%.o)
 DOBJS = $(SRCS:%.c=%.do)
 TARGET = libllt.a
 
-FLAGS = -Wall -Wno-strict-aliasing $(CFLAGS) $(CONFIG) $(HFILEDIRS:%=-I%) -fvisibility=hidden
+FLAGS = -Wall -Wno-strict-aliasing $(CFLAGS) $(HFILEDIRS:%=-I%) -fvisibility=hidden
 LIBS =
 
 DEBUGFLAGS = -g -DDEBUG $(FLAGS)

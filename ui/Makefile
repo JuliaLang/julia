@@ -15,7 +15,7 @@ endif
 
 FLAGS = -falign-functions -Wall -Wno-strict-aliasing \
 	-I$(JULIAHOME)/src -I$(LLTDIR) -I$(FLISPDIR) \
-	-I$(EXTROOT)/include $(CONFIG) $(CFLAGS)
+	-I$(EXTROOT)/include $(CFLAGS)
 DEBUGFLAGS = -ggdb3 -DDEBUG $(FLAGS)
 SHIPFLAGS = -O3 -DNDEBUG $(FLAGS)
 
@@ -23,6 +23,9 @@ LIBJULIA_RELEASE = $(JULIAHOME)/libjulia-release.$(SHLIB_EXT)
 LIBJULIA_DEBUG = $(JULIAHOME)/libjulia-debug.$(SHLIB_EXT)
 
 julia-debug julia-release: %: %-basic %-readline %-cloud
+
+debug release:
+	$(MAKE) julia-$@
 
 %.o: %.c repl.h
 	$(CC) $(CFLAGS) $(SHIPFLAGS) -c $< -o $@

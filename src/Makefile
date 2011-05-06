@@ -12,8 +12,7 @@ FLISP = $(FLISPDIR)/libflisp.a
 
 FLAGS = -falign-functions -Wall -Wno-strict-aliasing \
 	-I$(FLISPDIR) -I$(LLTDIR) $(HFILEDIRS:%=-I%) $(LIBDIRS:%=-L%) \
-	-I$(JULIAHOME)/src -I$(JULIAHOME)/ui \
-	$(CONFIG) -I$(shell $(LLVMROOT)/bin/llvm-config --includedir) -fvisibility=hidden
+	-I$(shell $(LLVMROOT)/bin/llvm-config --includedir) -fvisibility=hidden
 DEBUGFLAGS = -ggdb3 -DDEBUG $(FLAGS)
 SHIPFLAGS = -O3 -DNDEBUG $(FLAGS)
 
@@ -26,7 +25,7 @@ SRCS += gc
 endif
 
 ifeq ($(USE_COPY_STACKS),1)
-CONFIG += -DCOPY_STACKS
+CFLAGS += -DCOPY_STACKS
 endif
 
 %.o: %.c julia.h
