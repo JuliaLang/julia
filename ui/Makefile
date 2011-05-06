@@ -15,7 +15,7 @@ endif
 
 FLAGS = -falign-functions -Wall -Wno-strict-aliasing \
 	-I$(JULIAHOME)/src -I$(LLTDIR) -I$(FLISPDIR) \
-	-I$(EXTROOT)/include $(CONFIG) $(CFLAGS)
+	-I$(EXTROOT)/include $(CFLAGS)
 DEBUGFLAGS = -ggdb3 -DDEBUG $(FLAGS)
 SHIPFLAGS = -O3 -DNDEBUG $(FLAGS)
 
