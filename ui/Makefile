@@ -24,6 +24,9 @@ LIBJULIA_DEBUG = $(JULIAHOME)/libjulia-debug.$(SHLIB_EXT)
 
 julia-debug julia-release: %: %-basic %-readline %-cloud
 
+debug release:
+	$(MAKE) julia-$@
+
 %.o: %.c repl.h
 	$(CC) $(CFLAGS) $(SHIPFLAGS) -c $< -o $@
 %.do: %.c repl.h
