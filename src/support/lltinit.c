@@ -3,11 +3,7 @@
 #include <stdarg.h>
 #include <math.h>
 #include <locale.h>
-#include "dtypes.h"
-#include "timefuncs.h"
-#include "ios.h"
-#include "random.h"
-#include "utf8.h"
+#include "llt.h"
 
 double D_PNAN;
 double D_NNAN;
