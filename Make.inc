@@ -6,8 +6,8 @@ OS = $(shell uname)
 
 CC = gcc 
 CXX = g++
-CFLAGS = -std=gnu99 -fPIC
-CXXFLAGS = -fPIC
+CFLAGS = -std=gnu99 -fPIC -D_FORTIFY_SOURCE=0
+CXXFLAGS = -fPIC -D_FORTIFY_SOURCE=0
 FC = gfortran
 DEBUGFLAGS = -ggdb3 -DDEBUG $(FLAGS)
 SHIPFLAGS = -O3 -DNDEBUG $(FLAGS)
@@ -19,12 +19,8 @@ REPL_READLINE = 1
 
 JULIAGC = MARKSWEEP
 USE_COPY_STACKS = 1
-CONFIG = -D_FORTIFY_SOURCE=0
 
 # OS specific stuff
-
-SHLIB_EXT =
-OSLIBS = 
 
 ifeq ($(OS), Linux)
 SHLIB_EXT = so
