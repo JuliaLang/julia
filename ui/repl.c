@@ -12,7 +12,7 @@ static char jl_banner_plain[] =
 #ifdef DEBUG
     "   _ _   _| |_  __ _   |  pre-release version (debug build)\n"
 #else
-    "   _ _   _| |_  __ _   |  pre-release version.\n"
+    "   _ _   _| |_  __ _   |  pre-release version\n"
 #endif
     "  | | | | | | |/ _` |  |\n"
     "  | | |_| | | | (_| |  |\n"  // \302\2512009-2011, Jeff Bezanson, Stefan Karpinski, Viral B. Shah.\n" 
@@ -26,7 +26,7 @@ static char jl_banner_color[] =
 #ifdef DEBUG
     "   _ _   _| |_  __ _   |  pre-release version (debug build)\n"
 #else
-    "   _ _   _| |_  __ _   |  pre-release version.\n"
+    "   _ _   _| |_  __ _   |  pre-release version\n"
 #endif
     "  | | | | | | |/ _` |  |\n"
     "  | | |_| | | | (_| |  |\n" //  \302\2512009-2011, Jeff Bezanson, Stefan Karpinski, Viral B. Shah. \n"
@@ -372,11 +372,13 @@ void handle_input(jl_value_t *ast, int end, int show_value)
         ios_flush(ios_stdout);
         return;
     }
-    jl_value_t *f=jl_get_global(jl_system_module,jl_symbol("repl_callback"));
-    if (f == NULL) {
+    if (!jl_have_event_loop) {
         jl_eval_user_input(ast, show_value);
     }
     else {
+        jl_value_t *f = 
+            jl_get_global(jl_system_module,jl_symbol("repl_callback"));
+        assert(f != NULL);
         jl_value_t *fargs[] = { ast, jl_box_int32(show_value) };
         jl_apply((jl_function_t*)f, fargs, 2);
     }

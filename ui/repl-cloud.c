@@ -473,12 +473,7 @@ DLLEXPORT void jl_input_line_callback(char *input)
 
 void read_expr(char *prompt)
 {
-    char *input;
-    //ios_printf(ios_stdout, prompt);
-    //ios_flush(ios_stdout);
-    input = ios_readline(ios_stdin);
-    ios_purge(ios_stdin);
-    jl_input_line_callback(input);
+    sleep(1000);
 }
 
 void repl_callback_enable()

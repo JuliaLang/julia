@@ -56,10 +56,12 @@ $(LLT): $(LLTDIR)/*.h $(LLTDIR)/*.c
 $(FLISP): $(FLISPDIR)/*.h $(FLISPDIR)/*.c $(LLT)
 	cd $(FLISPDIR) && $(MAKE)
 
-libjulia-debug: $(DOBJS) $(LIBFILES)
+libjulia-debug: libjulia-debug.$(SHLIB_EXT)
+libjulia-debug.$(SHLIB_EXT): $(DOBJS) $(LIBFILES)
 	$(CXX) $(DEBUGFLAGS) $(DOBJS) -shared -o libjulia-debug.$(SHLIB_EXT) $(LIBS)
 
-libjulia-release: $(OBJS) $(LIBFILES)
+libjulia-release: libjulia-release.$(SHLIB_EXT)
+libjulia-release.$(SHLIB_EXT): $(OBJS) $(LIBFILES)
 	$(CXX) $(SHIPFLAGS) $(OBJS) -shared -o libjulia-release.$(SHLIB_EXT) $(LIBS)
 
 
