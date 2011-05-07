@@ -10,7 +10,10 @@ julia-debug julia-release:
 	$(MAKE) -C src lib$@
 	ln -f src/lib$@.$(SHLIB_EXT) .
 	$(MAKE) -C ui $@
-	ln -f ui/$@-readline julia
+	ln -f ui/$@-$(DEFAULT_REPL) julia
+	ln -f ui/$@-cloud .
+	ln -f ui/$@-readline .
+	ln -f ui/$@-basic .
 
 sys.ji: ./j/sysimg.j ./j/start_image.j src/boot.j src/dump.c j/*.j
 	./julia -b sysimg.j

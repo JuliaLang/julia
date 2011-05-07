@@ -13,6 +13,7 @@ DEBUGFLAGS = -ggdb3 -DDEBUG $(FLAGS)
 SHIPFLAGS = -O3 -DNDEBUG $(FLAGS)
 
 # Different REPLs. Currently, only one of these can be chosen
+DEFAULT_REPL = readline
 REPL_READLINE = 1
 #REPL_BASIC = 1
 #REPL_CLOUD = 1
