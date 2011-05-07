@@ -498,9 +498,13 @@ int main(int argc, char *argv[])
         ios_printf(ios_stdout, "%s", banner);
     }
 
+#ifdef CLOUD_REPL
+    jl_function_t *start_client = NULL;
+#else
     jl_function_t *start_client =
         (jl_function_t*)
         jl_get_global(jl_system_module, jl_symbol("start_client"));
+#endif
 
     if (start_client == NULL) {
         repl_print_prompt();

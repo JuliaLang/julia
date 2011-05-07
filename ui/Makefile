@@ -42,9 +42,9 @@ julia-release-readline: repl.o repl-readline.o
 julia-debug-readline: repl.do repl-readline.do
 	$(CC) $(DEBUGFLAGS) $^ -o $@ $(LIBJULIA_DEBUG) $(READLINE) $(LIBS)
 
-julia-release-cloud:
+julia-release-cloud: repl.c repl-cloud.c
 	$(CC) $(SHIPFLAGS) -I$(MONGOOSE) -DCLOUD_REPL repl.c repl-cloud.c $(MONGOOSE)/mongoose.c -o $@ $(LIBJULIA_RELEASE) -lssl -lcrypto $(LIBS)
-julia-debug-cloud:
+julia-debug-cloud: repl.c repl-cloud.c
 	$(CC) $(DEBUGFLAGS) -I$(MONGOOSE) -DCLOUD_REPL repl.c repl-cloud.c $(MONGOOSE)/mongoose.c -o $@ $(LIBJULIA_DEBUG) -lssl -lcrypto $(LIBS)
 
 clean:
