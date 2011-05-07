@@ -8,28 +8,28 @@
 static char jl_banner_plain[] =
     "               _      \n"
     "   _       _ _(_)_     |\n"
-    "  (_)     | (_) (_)    |  pre-release version\n"
+    "  (_)     | (_) (_)    |  A fresh approach to technical computing.\n"
 #ifdef DEBUG
-    "   _ _   _| |_  __ _   |  debug build\n"
+    "   _ _   _| |_  __ _   |  pre-release version (debug build)\n"
 #else
-    "   _ _   _| |_  __ _   |\n"
+    "   _ _   _| |_  __ _   |  pre-release version\n"
 #endif
     "  | | | | | | |/ _` |  |\n"
-    "  | | |_| | | | (_| |  |  \302\2512009-2011 contributors\n"
+    "  | | |_| | | | (_| |  |  \302\2512009-2011, Jeff Bezanson, Stefan Karpinski, Viral B. Shah.\n"
     " _/ |\\__'_|_|_|\\__'_|  |  \n"
     "|__/                   |\n\n";
 
 static char jl_banner_color[] =
     "\033[1m               \033[32m_\033[37m      \n"
     "   \033[34m_\033[37m       _ \033[31m_\033[32m(_)\033[35m_\033[37m     |\n"
-    "  \033[34m(_)\033[37m     | \033[31m(_) \033[35m(_)\033[37m    |  pre-release version\n"
+    "  \033[34m(_)\033[37m     | \033[31m(_) \033[35m(_)\033[37m    |  A fresh approach to technical computing.\n"
 #ifdef DEBUG
-    "   _ _   _| |_  __ _   |  debug build\n"
+    "   _ _   _| |_  __ _   |  pre-release version (debug build)\n"
 #else
-    "   _ _   _| |_  __ _   |\n"
+    "   _ _   _| |_  __ _   |  pre-release version\n"
 #endif
     "  | | | | | | |/ _` |  |\n"
-    "  | | |_| | | | (_| |  |  \302\2512009-2011 contributors\n"
+    "  | | |_| | | | (_| |  |  \302\2512009-2011, Jeff Bezanson, Stefan Karpinski, Viral B. Shah. \n"
     " _/ |\\__'_|_|_|\\__'_|  |  \n"
     "|__/                   |\033[0m\n\n";
 
