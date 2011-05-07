@@ -12,11 +12,11 @@ static char jl_banner_plain[] =
 #ifdef DEBUG
     "   _ _   _| |_  __ _   |  pre-release version (debug build)\n"
 #else
-    "   _ _   _| |_  __ _   |  pre-release version\n"
+    "   _ _   _| |_  __ _   |  pre-release version.\n"
 #endif
     "  | | | | | | |/ _` |  |\n"
-    "  | | |_| | | | (_| |  |  \302\2512009-2011, Jeff Bezanson, Stefan Karpinski, Viral B. Shah.\n"
-    " _/ |\\__'_|_|_|\\__'_|  |  \n"
+    "  | | |_| | | | (_| |  |\n"  // \302\2512009-2011, Jeff Bezanson, Stefan Karpinski, Viral B. Shah.\n" 
+    " _/ |\\__'_|_|_|\\__'_|  |\n" // All rights reserved.\n"
     "|__/                   |\n\n";
 
 static char jl_banner_color[] =
@@ -26,11 +26,11 @@ static char jl_banner_color[] =
 #ifdef DEBUG
     "   _ _   _| |_  __ _   |  pre-release version (debug build)\n"
 #else
-    "   _ _   _| |_  __ _   |  pre-release version\n"
+    "   _ _   _| |_  __ _   |  pre-release version.\n"
 #endif
     "  | | | | | | |/ _` |  |\n"
-    "  | | |_| | | | (_| |  |  \302\2512009-2011, Jeff Bezanson, Stefan Karpinski, Viral B. Shah. \n"
-    " _/ |\\__'_|_|_|\\__'_|  |  \n"
+    "  | | |_| | | | (_| |  |\n" //  \302\2512009-2011, Jeff Bezanson, Stefan Karpinski, Viral B. Shah. \n"
+    " _/ |\\__'_|_|_|\\__'_|  |\n" //  All rights reserved.\n"
     "|__/                   |\033[0m\n\n";
 
 
