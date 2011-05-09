@@ -14,6 +14,7 @@ ndims{T,n}(::Tensor{T,n}) = n
 numel(t::Tensor) = prod(size(t))
 length(v::Vector) = numel(v)
 nnz(a::Tensor) = (n = 0; for i=1:numel(a); n += a[i] != 0 ? 1 : 0; end; n)
+nnz(a::Tensor{Bool}) = (n = 0; for i=1:numel(a); n += a[i] == true ? 1 : 0; end; n)
 
 ## Constructors ##
 
@@ -546,53 +547,62 @@ function accumarray(I::Indices, J::Indices, V::Vector, m::Size, n::Size)
     return A
 end
 
-function find(A::Vector)
-    nnzA = nnz(A)
-    I = zeros(Size, nnzA)
-    count = 1
-    for i=1:length(A)
-        if A[i] != 0
-            I[count] = i
-            count += 1
-        end
-    end
-    return I
-end
+macro find_macro(T, zero)
+    quote
 
-function find(A::Matrix)
-    nnzA = nnz(A)
-    I = zeros(Size, nnzA)
-    J = zeros(Size, nnzA)
-    count = 1
-    for i=1:size(A,1), j=1:size(A,2)
-        if A[i,j] != 0
-            I[count] = i
-            J[count] = j
-            count += 1
-        end
-    end
-    return (I, J)
-end
-
-function find(A::Tensor)
-    ndimsA = ndims(A)
-    nnzA = nnz(A)
-    I = ntuple(ndimsA, x->zeros(Size, nnzA))
-
-    count = 1
-    function find_one(ind)
-        Aind = A[ind...]
-        if Aind != 0
-            for i=1:ndimsA
-                I[i][count] = ind[i]
+        function find(A::Vector{$T})
+            nnzA = nnz(A)
+            I = zeros(Size, nnzA)
+            count = 1
+            for i=1:length(A)
+                if A[i] != $zero
+                    I[count] = i
+                    count += 1
+                end
             end
-            count += 1
+            return I
         end
-    end
 
-    cartesian_map(find_one, ntuple(ndims(A), d->(1:size(A,d))) )
-    return I
-end
+        function find(A::Matrix{$T})
+            nnzA = nnz(A)
+            I = zeros(Size, nnzA)
+            J = zeros(Size, nnzA)
+            count = 1
+            for i=1:size(A,1), j=1:size(A,2)
+                if A[i,j] != $zero
+                    I[count] = i
+                    J[count] = j
+                    count += 1
+                end
+            end
+            return (I, J)
+        end
+        
+        function find(A::Tensor{$T})
+            ndimsA = ndims(A)
+            nnzA = nnz(A)
+            I = ntuple(ndimsA, x->zeros(Size, nnzA))
+            
+            count = 1
+            function find_one(ind)
+                Aind = A[ind...]
+                if Aind != $zero
+                    for i=1:ndimsA
+                        I[i][count] = ind[i]
+                    end
+                    count += 1
+                end
+            end
+            
+            cartesian_map(find_one, ntuple(ndims(A), d->(1:size(A,d))) )
+            return I
+        end
+
+    end # quote
+end # macro
+
+@find_macro Any 0
+@find_macro Bool false
 
 sub2ind(dims, i::Index) = i
 sub2ind(dims, i::Index, j::Index) = (j-1)*dims[1] + i
