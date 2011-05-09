@@ -22,8 +22,9 @@ end
 
 full{T}(S::SparseArray2d{T}) = convert(Array{T}, S)
 
-# TODO: Does not detect duplicate (i,j) values yet
-# Assumes no such duplicates occur
+sparse(I,J,V) = sparse(I,J,V,max(I),max(J))
+sparse(I,J,V::Number,m,n) = sparse(I,J,V*ones(typeof(V),length(I)),max(I),max(J))
+
 function sparse{T}(I::Vector{Size}, 
                    J::Vector{Size}, 
                    V::Vector{T}, 
@@ -37,6 +38,22 @@ function sparse{T}(I::Vector{Size},
     (J,p) = sortperm(J)
     I = I[p]
     V = V[p]
+
+    lastdup = 1
+    for k=2:length(I)
+        if I[k] == I[lastdup] && J[k] == J[lastdup]
+            I[k] = -1
+            J[k] = -1
+            V[lastdup] += V[k]
+        else
+            lastdup = k
+        end
+    end
+
+    select = find(I > 0)
+    I = I[select]
+    J = J[select]
+    V = V[select]
 
     numnz = length(I)
 
