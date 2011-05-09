@@ -4,5 +4,8 @@
 /boot.j.inc
 /julia_flisp.boot
 /julia_flisp.boot.inc
-/libjulia-release.so
+
 /libjulia-debug.so
+/libjulia-debug.dylib
+/libjulia-release.so
+/libjulia-release.dylib

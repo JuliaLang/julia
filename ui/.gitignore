@@ -1,5 +1,10 @@
 /*.o
 /*.do
+/*.dSYM
+
+/julia-debug-basic
+/julia-debug-cloud
+/julia-debug-readline
 /julia-release-basic
 /julia-release-cloud
 /julia-release-readline

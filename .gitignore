@@ -5,7 +5,19 @@
 /tmp
 
 /julia
+/julia-debug-basic
+/julia-debug-cloud
+/julia-debug-readline
+/julia-release-basic
+/julia-release-cloud
+/julia-release-readline
+
+/libjulia.so
+/libjulia.dylib
+/libjulia-debug.so
+/libjulia-debug.dylib
+/libjulia-release.so
+/libjulia-release.dylib
+
 /custom.j
 /sys.ji
-/libjulia-release.so
-/libjulia-debug.so
