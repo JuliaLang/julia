@@ -10,6 +10,19 @@ end
 size(S::SparseArray2d) = (S.m, S.n)
 nnz(S::SparseArray2d) = S.colptr[S.n+1] - 1
 
+function show(S::SparseArray2d)
+    println(S.m, "-by-", S.n, " sparse matrix with ", nnz(S), " nonzeros:")
+    for col = 1:S.n
+        for k = S.colptr[col] : (S.colptr[col+1]-1)
+            print("\t[")
+            show(S.rowval[k])
+            print(",\t", col, "] =\t")
+            show(S.nzval[k])
+            println()
+        end
+    end
+end
+
 function convert{T}(::Type{Array{T}}, S::SparseArray2d{T})
     A = zeros(T, size(S))
     for col = 1 : S.n
@@ -22,8 +35,10 @@ end
 
 full{T}(S::SparseArray2d{T}) = convert(Array{T}, S)
 
+#sparse(A::Array) = ( (I,J,V) = find(A); sparse(I,J,V,dims(A,1),dims(A,2)) )
+
 sparse(I,J,V) = sparse(I,J,V,max(I),max(J))
-sparse(I,J,V::Number,m,n) = sparse(I,J,V*ones(typeof(V),length(I)),max(I),max(J))
+sparse(I,J,V::Number,m,n) = sparse(I,J,fill(Array(typeof(V),length(I)),V),max(I),max(J))
 
 function sparse{T}(I::Vector{Size}, 
                    J::Vector{Size}, 
@@ -109,19 +124,6 @@ speye(m::Size, n::Size) = ( x = min(m,n); L = linspace(1,x); sparse(L, L, ones(I
 
 transpose(S::SparseArray2d) = ( (I,J,V) = find(S); sparse(J, I, V, S.n, S.m) )
 ctranspose(S::SparseArray2d) = ( (I,J,V) = find(S); sparse(J, I, conj(V), S.n, S.m) )
-
-function show(S::SparseArray2d)
-    println(S.m, "-by-", S.n, " sparse matrix with ", nnz(S), " nonzeros:")
-    for col = 1:S.n
-        for k = S.colptr[col] : (S.colptr[col+1]-1)
-            print("\t[")
-            show(S.rowval[k])
-            print(",\t", col, "] =\t")
-            show(S.nzval[k])
-            println()
-        end
-    end
-end
 
 macro sparse_binary_op_sparse_res(op)
     quote
