@@ -547,62 +547,56 @@ function accumarray(I::Indices, J::Indices, V::Vector, m::Size, n::Size)
     return A
 end
 
-macro find_macro(T, zero)
-    quote
-
-        function find(A::Vector{$T})
-            nnzA = nnz(A)
-            I = zeros(Size, nnzA)
-            count = 1
-            for i=1:length(A)
-                if A[i] != $zero
-                    I[count] = i
-                    count += 1
-                end
-            end
-            return I
+function find{T}(A::Vector{T})
+    nnzA = nnz(A)
+    I = zeros(Size, nnzA)
+    z = zero(T)
+    count = 1
+    for i=1:length(A)
+        if A[i] != z
+            I[count] = i
+            count += 1
         end
+    end
+    return I
+end
 
-        function find(A::Matrix{$T})
-            nnzA = nnz(A)
-            I = zeros(Size, nnzA)
-            J = zeros(Size, nnzA)
-            count = 1
-            for i=1:size(A,1), j=1:size(A,2)
-                if A[i,j] != $zero
-                    I[count] = i
-                    J[count] = j
-                    count += 1
-                end
-            end
-            return (I, J)
+function find{T}(A::Matrix{T})
+    nnzA = nnz(A)
+    I = zeros(Size, nnzA)
+    J = zeros(Size, nnzA)
+    z = zero(T)
+    count = 1
+    for i=1:size(A,1), j=1:size(A,2)
+        if A[i,j] != z
+            I[count] = i
+            J[count] = j
+            count += 1
         end
-        
-        function find(A::Tensor{$T})
-            ndimsA = ndims(A)
-            nnzA = nnz(A)
-            I = ntuple(ndimsA, x->zeros(Size, nnzA))
-            
-            count = 1
-            function find_one(ind)
-                Aind = A[ind...]
-                if Aind != $zero
-                    for i=1:ndimsA
-                        I[i][count] = ind[i]
-                    end
-                    count += 1
-                end
+    end
+    return (I, J)
+end
+
+function find{T}(A::Tensor{T})
+    ndimsA = ndims(A)
+    nnzA = nnz(A)
+    I = ntuple(ndimsA, x->zeros(Size, nnzA))
+    z = zero(T)
+
+    count = 1
+    function find_one(ind)
+        Aind = A[ind...]
+        if Aind != z
+            for i=1:ndimsA
+                I[i][count] = ind[i]
             end
-            
-            cartesian_map(find_one, ntuple(ndims(A), d->(1:size(A,d))) )
-            return I
+            count += 1
         end
+    end
 
-    end # quote
-end # macro
-
-@find_macro Any 0
-@find_macro Bool false
+    cartesian_map(find_one, ntuple(ndims(A), d->(1:size(A,d))) )
+    return I
+end
 
 sub2ind(dims, i::Index) = i
 sub2ind(dims, i::Index, j::Index) = (j-1)*dims[1] + i

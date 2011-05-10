@@ -35,15 +35,19 @@ end
 
 full{T}(S::SparseArray2d{T}) = convert(Array{T}, S)
 
-#sparse(A::Array) = ( (I,J,V) = find(A); sparse(I,J,V,dims(A,1),dims(A,2)) )
-
-sparse(I,J,V) = sparse(I,J,V,max(I),max(J))
+sparse(I,J,V) = sparse(I, J, V, max(I), max(J))
 sparse(I,J,V::Number,m,n) = sparse(I,J,fill(Array(typeof(V),length(I)),V),max(I),max(J))
 
-function sparse{T}(I::Vector{Size}, 
-                   J::Vector{Size}, 
-                   V::Vector{T}, 
-                   m::Size, 
+function sparse(A::Array) 
+    m, n = size(A)
+    I, J = find(A)
+    sparse(I, J, reshape(A, m*n), m, n) 
+end
+
+function sparse{T}(I::Vector{Size},
+                   J::Vector{Size},
+                   V::Vector{T},
+                   m::Size,
                    n::Size)
 
     (I,p) = sortperm(I)
@@ -117,7 +121,7 @@ end
 
 sprand(m,n,density) = sprand_rng (m,n,density,rand)
 sprandn(m,n,density) = sprand_rng (m,n,density,randn)
-#sprandint(m,n,density) = sprand_rng (m,n,density,randint)
+sprandi(m,n,density) = sprand_rng (m,n,density,randint)
 
 speye(n::Size) = ( L = linspace(1,n); sparse(L, L, ones(Int32, n), n, n) )
 speye(m::Size, n::Size) = ( x = min(m,n); L = linspace(1,x); sparse(L, L, ones(Int32, x), m, n) )
