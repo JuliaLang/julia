@@ -45,7 +45,7 @@ SLOCCOUNT = sloccount \
 	--schedule 2.5 0.32 \
 	--
 
-J_FILES = $(shell git ls-files | grep '.j$$')
+J_FILES = $(shell git ls-files | grep '\.j$$')
 
 sloccount:
 	@for x in $(J_FILES); do cp $$x $${x%.j}.hs; done
