@@ -17,4 +17,4 @@ setenv("GOTO_NUM_THREADS", "1")
 libBLAS = dlopen("libLAPACK")
 libLAPACK = dlopen("libLAPACK")
 
-load("j/custom.j")
+load("custom.j")
