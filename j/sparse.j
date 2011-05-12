@@ -129,7 +129,7 @@ speye(m::Size, n::Size) = ( x = min(m,n); L = linspace(1,x); sparse(L, L, ones(I
 transpose(S::SparseMatrixCSC) = ( (I,J,V) = find(S); sparse(J, I, V, S.n, S.m) )
 ctranspose(S::SparseMatrixCSC) = ( (I,J,V) = find(S); sparse(J, I, conj(V), S.n, S.m) )
 
-macro sparse_binary_op_A_sparse_B_sparse_res_sparse(op)
+macro binary_op_A_sparse_B_sparse_res_sparse(op)
     quote
 
         function ($op){T1,T2}(A::SparseMatrixCSC{T1}, B::SparseMatrixCSC{T2})
@@ -224,20 +224,32 @@ end # macro
 
 (+)(A::SparseMatrixCSC, B::Union(Array,Number)) = (+)(full(A), B)
 (+)(A::Union(Array,Number), B::SparseMatrixCSC) = (+)(A, full(B))
-@sparse_binary_op_A_sparse_B_sparse_res_sparse (+)
+@binary_op_A_sparse_B_sparse_res_sparse (+)
 
 (-)(A::SparseMatrixCSC, B::Union(Array,Number)) = (-)(full(A), B)
 (-)(A::Union(Array,Number), B::SparseMatrixCSC) = (-)(A, full(B))
-@sparse_binary_op_A_sparse_B_sparse_res_sparse (-)
+@binary_op_A_sparse_B_sparse_res_sparse (-)
 
 (.*)(A::SparseMatrixCSC, B::Number) = SparseMatrixCSC(A.m, A.n, A.colptr, A.rowval, A.nzval .* B)
 (.*)(A::Number, B::SparseMatrixCSC) = SparseMatrixCSC(B.m, B.n, B.colptr, B.rowval, A .* B.nzval)
 (.*)(A::SparseMatrixCSC, B::Array) = (.*)(A, sparse(B))
 (.*)(A::Array, B::SparseMatrixCSC) = (.*)(sparse(A), B)
-@sparse_binary_op_A_sparse_B_sparse_res_sparse (.*)
+@binary_op_A_sparse_B_sparse_res_sparse (.*)
 
 (./)(A::SparseMatrixCSC, B::Number) = SparseMatrixCSC(A.m, A.n, A.colptr, A.rowval, A.nzval ./ B)
 (./)(A::Number, B::SparseMatrixCSC) = (./)(A, full(B))
 (./)(A::SparseMatrixCSC, B::Array) = (./)(full(A), B)
 (./)(A::Array, B::SparseMatrixCSC) = (./)(A, full(B))
 (./)(A::SparseMatrixCSC, B::SparseMatrixCSC) = (./)(full(A), full(B))
+
+(.\)(A::SparseMatrixCSC, B::Number) = (.\)(full(A), B)
+(.\)(A::Number, B::SparseMatrixCSC) = SparseMatrixCSC(B.m, B.n, B.colptr, B.rowval, B.nzval .\ A)
+(.\)(A::SparseMatrixCSC, B::Array) = (.\)(full(A), B)
+(.\)(A::Array, B::SparseMatrixCSC) = (.\)(A, full(B))
+(.\)(A::SparseMatrixCSC, B::SparseMatrixCSC) = (.\)(full(A), full(B))
+
+(.^)(A::SparseMatrixCSC, B::Number) = SparseMatrixCSC(A.m, A.n, A.colptr, A.rowval, A.nzval .^ B)
+(.^)(A::Number, B::SparseMatrixCSC) = (.^)(A, full(B))
+(.^)(A::SparseMatrixCSC, B::Array) = (.^)(full(A), B)
+(.^)(A::Array, B::SparseMatrixCSC) = (.^)(A, full(B))
+@binary_op_A_sparse_B_sparse_res_sparse (.^)
