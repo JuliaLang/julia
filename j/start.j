@@ -72,3 +72,6 @@ load("darray.j")
 # misc
 load("libc.j")
 load("util.j")
+load("repl.j")
+
+print_banner()
