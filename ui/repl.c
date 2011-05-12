@@ -350,16 +350,6 @@ void handle_input(jl_value_t *ast, int end, int show_value)
     }
 }
 
-// TODO: sigfpe hack
-static void awful_sigfpe_hack()
-{
-    JL_TRY {
-        kill(getpid(), SIGFPE);
-    }
-    JL_CATCH {
-    }
-}
-
 void jl_lisp_prompt();
 
 #ifdef JL_GF_PROFILE
@@ -400,8 +390,6 @@ int main(int argc, char *argv[])
     }
     jl_set_const(jl_system_module, jl_symbol("JULIA_HOME"),
                  jl_cstr_to_string(julia_home));
-
-    awful_sigfpe_hack();
 
     // post boot phase: do -P and -L actions
     if (post_boot) {
