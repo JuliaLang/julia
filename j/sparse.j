@@ -253,3 +253,29 @@ end # macro
 (.^)(A::SparseMatrixCSC, B::Array) = (.^)(full(A), B)
 (.^)(A::Array, B::SparseMatrixCSC) = (.^)(A, full(B))
 @binary_op_A_sparse_B_sparse_res_sparse (.^)
+
+# In matrix-vector multiplication, the right orientation of the vector is assumed.
+function (*){T1,T2}(A::SparseMatrixCSC{T1}, X::Vector{T2})
+    Y = Array(promote_type(T1,T2), A.m)
+    for col = 1 : A.n
+        for k = A.colptr[col] : (A.colptr[col+1]-1)
+            row = A.rowval[k]
+            nz = A.nzval[k]
+            Y[row] = nz * X[col]
+        end
+    end
+    return Y
+end
+
+# In matrix-vector multiplication, the right orientation of the vector is assumed.
+function (*){T1,T2}(X::Vector{T1}, A::SparseMatrixCSC{T2})
+    Y = Array(promote_type(T1,T2), A.n)
+    for col = 1 : A.n
+        for k = A.colptr[col] : (A.colptr[col+1]-1)
+            row = A.rowval[k]
+            nz = A.nzval[k]
+            Y[col] = X[row] * nz
+        end
+    end
+    return Y
+end
