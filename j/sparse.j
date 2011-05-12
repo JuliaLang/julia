@@ -132,14 +132,6 @@ ctranspose(S::SparseMatrixCSC) = ( (I,J,V) = find(S); sparse(J, I, conj(V), S.n,
 macro sparse_binary_op_A_sparse_B_sparse_res_sparse(op)
     quote
 
-        function ($op){T1}(A::SparseMatrixCSC{T1}, B::Number)
-            return SparseMatrixCSC(A.m, A.n, A.colptr, A.rowval, ($op)(A.nzval, B))
-        end
-
-        function ($op){T2}(A::Number, B::SparseMatrixCSC{T2})
-            return SparseMatrixCSC(A.m, A.n, A.colptr, A.rowval, ($op)(A, B.nzval))
-        end
-
         function ($op){T1,T2}(A::SparseMatrixCSC{T1}, B::SparseMatrixCSC{T2})
             assert(size(A) == size(B))
             (m, n) = size(A)
