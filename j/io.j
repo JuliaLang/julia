@@ -35,7 +35,7 @@ open(fname::String, rd::Bool, wr::Bool, cr::Bool, tr::Bool) =
      end;
      s)
 
-open(fname::String) = open(fname, true, true, true, false)
+open(fname::String) = open(fname, true, true, false, false)
 
 memio() = memio(0)
 function memio(x::Int)
