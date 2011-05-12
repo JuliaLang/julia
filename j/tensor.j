@@ -70,15 +70,25 @@ conj{T <: Real}(x::Tensor{T}) = x
 real{T <: Real}(x::Tensor{T}) = x
 imag{T <: Real}(x::Tensor{T}) = zero(x)
 
-for f=(:-, :~, :conj, :real, :imag)
-    @eval function ($f)(A::Tensor)
-       F = clone(A)
-       for i=1:numel(A)
-          F[i] = ($f)(A[i])
-       end
-       return F
-    end
-end
+macro unary_op(f)
+    quote
+        
+        function ($f)(A::Tensor)            
+            F = clone(A)
+            for i=1:numel(A)
+                F[i] = ($f)(A[i])
+            end
+            return F
+        end
+
+    end # quote
+end # macro
+
+@unary_op (-)
+@unary_op (~)
+@unary_op (conj)
+@unary_op (real)
+@unary_op (imag)
 
 +{T<:Number}(x::Tensor{T}) = x
 *{T<:Number}(x::Tensor{T}) = x
@@ -110,8 +120,9 @@ end
 \(A::Number, B::Tensor) = A .\ B
 \(A::Tensor, B::Number) = A .\ B
 
-for f=(:+, :-, :(.*), :(.^))
-    @eval begin
+macro binary_arithmetic_op(f)
+    quote
+
         function ($f){S,T}(A::Tensor{S}, B::Tensor{T})
            F = clone(A, promote_type(S,T))
            for i=1:numel(A)
@@ -133,13 +144,20 @@ for f=(:+, :-, :(.*), :(.^))
            end
            return F
         end
-    end
-end
+
+    end # quote
+end # macro
+
+@binary_arithmetic_op (+)
+@binary_arithmetic_op (-)
+@binary_arithmetic_op (.*)
+@binary_arithmetic_op (.^)
 
 ## Binary comparison operators ##
 
-for f=(:(==), :(!=), :(<), :(>), :(<=), :(>=))
-    @eval begin
+macro binary_comparison_op(f)
+    quote
+
         function ($f)(A::Tensor, B::Tensor)
            F = clone(A, Bool)
            for i=1:numel(A)
@@ -164,11 +182,18 @@ for f=(:(==), :(!=), :(<), :(>), :(<=), :(>=))
     end
 end
 
+@binary_comparison_op (==)
+@binary_comparison_op (!=)
+@binary_comparison_op (<)
+@binary_comparison_op (>)
+@binary_comparison_op (<=)
+@binary_comparison_op (>=)
 
 ## Binary boolean operators ##
 
-for f=(:&, :|, :$)
-    @eval begin
+macro binary_boolean_op(f)
+    quote
+
         function ($f)(A::Tensor{Bool}, B::Tensor{Bool})
            F = clone(A, Bool)
            for i=1:numel(A)
@@ -190,8 +215,13 @@ for f=(:&, :|, :$)
            end
            return F
         end
-    end
-end
+
+    end # quote
+end # macro
+
+@binary_boolean_op (&)
+@binary_boolean_op (|)
+@binary_boolean_op ($)
 
 ## Indexing: ref ##
 

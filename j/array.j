@@ -14,8 +14,9 @@ jl_comprehension_zeros(oneresult::(), dims...) = Array(None, dims...)
 
 clone(a::Array, T::Type, dims::Dims) = Array(T, dims)
 
-for (t, f) = ((Float64, :rand), (Float32, :randf), (Float64, :randn))
-    @eval begin
+macro matrix_builder(t, f)
+    quote
+
         function ($f)(dims::Dims)
             A = Array($t, dims)
             for i = 1:numel(A)
@@ -23,9 +24,16 @@ for (t, f) = ((Float64, :rand), (Float32, :randf), (Float64, :randn))
             end
             return A
         end
+        
         ($f)(dims::Size...) = ($f)(dims)
-    end
-end
+
+    end # quote
+end # macro
+
+@matrix_builder Float64 rand
+@matrix_builder Float32 randf
+@matrix_builder Float64 randn
+@matrix_builder Uint32 randui32
 
 zeros{T}(::Type{T}, dims::Dims) = fill(Array(T, dims), zero(T))
 zeros(T::Type, dims::Size...) = zeros(T, dims)
