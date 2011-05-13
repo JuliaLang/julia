@@ -61,22 +61,6 @@ static int _fd_available(long fd)
 }
 */
 
-// poll for read, unless forwrite!=0
-static void _fd_poll(long fd, int forwrite)
-{
-#ifndef WIN32
-    fd_set set;
-
-    FD_ZERO(&set);
-    FD_SET(fd, &set);
-    if (forwrite)
-        select(fd+1, NULL, &set, NULL, NULL);
-    else
-        select(fd+1, &set, NULL, NULL, NULL);
-#else
-#endif
-}
-
 static int _enonfatal(int err)
 {
     return (err == EAGAIN || err == EINPROGRESS || err == EINTR ||
@@ -117,10 +101,8 @@ static int _os_read_all(long fd, void *buf, size_t n, size_t *nread)
         n -= got;
         *nread += got;
         buf += got;
-        if (err)
+        if (err || got==0)
             return err;
-        if (got == 0)
-            _fd_poll(fd, 0);
     }
     return 0;
 }
@@ -157,8 +139,6 @@ int _os_write_all(long fd, void *buf, size_t n, size_t *nwritten)
         buf += wrote;
         if (err)
             return err;
-        if (wrote == 0)
-            _fd_poll(fd, 1);
     }
     return 0;
 }
@@ -283,7 +263,7 @@ static size_t _ios_read(ios_t *s, char *dest, size_t n, int all)
             else
                 result = _os_read(s->fd, dest, n, &got);
             tot += got;
-            if (got < n)
+            if (got == 0)
                 s->_eof = 1;
             return tot;
         }
@@ -294,13 +274,8 @@ static size_t _ios_read(ios_t *s, char *dest, size_t n, int all)
                 return tot;
             }
             if (got == 0) {
-                if (all) {
-                    _fd_poll(s->fd, 0);
-                }
-                else {
-                    s->_eof = 1;
-                    return tot;
-                }
+                s->_eof = 1;
+                return tot;
             }
             s->size = got;
         }

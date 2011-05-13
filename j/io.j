@@ -164,9 +164,10 @@ end
 function read{T}(s::IOStream, a::Array{T})
     if isa(T,BitsKind)
         nb = numel(a)*sizeof(T)
-        ccall(:ios_readall, Ulong,
-              (Ptr{Void}, Ptr{Void}, Ulong), s.ios, a, ulong(nb))
-        # TODO: detect eof
+        if ccall(:ios_readall, Ulong,
+                 (Ptr{Void}, Ptr{Void}, Ulong), s.ios, a, ulong(nb)) < nb
+            throw(EOFError())
+        end
         a
     else
         invoke(read, (Any, Array), s, a)
