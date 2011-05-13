@@ -5,11 +5,41 @@
 
 #include "repl.h"
 
+static char jl_banner_plain[] =
+    "               _      \n"
+    "   _       _ _(_)_     |\n"
+    "  (_)     | (_) (_)    |  A fresh approach to technical computing.\n"
+#ifdef DEBUG
+    "   _ _   _| |_  __ _   |  pre-release version (debug build)\n"
+#else
+    "   _ _   _| |_  __ _   |  pre-release version\n"
+#endif
+    "  | | | | | | |/ _` |  |\n"
+    "  | | |_| | | | (_| |  |\n"  // \302\2512009-2011, Jeff Bezanson, Stefan Karpinski, Viral B. Shah.\n" 
+    " _/ |\\__'_|_|_|\\__'_|  |\n" // All rights reserved.\n"
+    "|__/                   |\n\n";
+
+static char jl_banner_color[] =
+    "\033[1m               \033[32m_\033[37m      \n"
+    "   \033[34m_\033[37m       _ \033[31m_\033[32m(_)\033[35m_\033[37m     |\n"
+    "  \033[34m(_)\033[37m     | \033[31m(_) \033[35m(_)\033[37m    |  A fresh approach to technical computing.\n"
+#ifdef DEBUG
+    "   _ _   _| |_  __ _   |  pre-release version (debug build)\n"
+#else
+    "   _ _   _| |_  __ _   |  pre-release version\n"
+#endif
+    "  | | | | | | |/ _` |  |\n"
+    "  | | |_| | | | (_| |  |\n" //  \302\2512009-2011, Jeff Bezanson, Stefan Karpinski, Viral B. Shah. \n"
+    " _/ |\\__'_|_|_|\\__'_|  |\n" //  All rights reserved.\n"
+    "|__/                   |\033[0m\n\n";
+
+
 char *jl_answer_color  = "\033[1m\033[34m";
 char *prompt_string;
 
 static char jl_prompt_plain[] = "julia> ";
 static char jl_color_normal[] = "\033[0m\033[37m";
+static int print_banner = 1;
 static char *post_boot = NULL;
 static int lisp_prompt = 0;
 int jl_have_event_loop = 0;
@@ -32,6 +62,7 @@ char *repl_result;
 
 static const char *usage = "julia [options] [program] [args...]\n";
 static const char *opts =
+    " -q --quiet               Quiet startup without banner\n"
     " -H --home=<dir>          Load files relative to <dir>\n"
     " -T --tab=<size>          Set REPL tab width to <size>\n\n"
 
@@ -65,6 +96,9 @@ void parse_opts(int *argcp, char ***argvp) {
     while ((c = getopt_long(*argcp,*argvp,shortopts,longopts,0)) != -1) {
         switch (c) {
         case 0:
+            break;
+        case 'q':
+            print_banner = 0;
             break;
         case 'e':
         case 'E':
@@ -445,9 +479,14 @@ int main(int argc, char *argv[])
     init_repl_environment();
 
     have_color = detect_color();
+    char *banner = have_color ? jl_banner_color : jl_banner_plain;
     char *prompt = have_color ? jl_prompt_color : jl_prompt_plain;
     prompt_length = strlen(jl_prompt_plain);
     prompt_string = prompt;
+
+    if (print_banner) {
+        ios_printf(ios_stdout, "%s", banner);
+    }
 
 #ifdef CLOUD_REPL
     jl_function_t *start_client = NULL;
