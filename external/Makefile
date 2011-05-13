@@ -39,7 +39,7 @@ llvm: $(LLVM_OBJ)
 
 READLINE_OBJ = $(EXTROOTLIB)/libreadline.$(SHLIB_EXT)
 readline-$(READLINE_VER).tar.gz:
-	curl -O ftp://ftp.gnu.org/gnu/readline/readline-$(READLINE_VER).tar.gz
+	$(DOWNLOAD) ftp://ftp.gnu.org/gnu/readline/readline-$(READLINE_VER).tar.gz
 readline-$(READLINE_VER): readline-$(READLINE_VER).tar.gz
 	tar zxf readline-$(READLINE_VER).tar.gz
 $(READLINE_OBJ): readline-$(READLINE_VER)
@@ -50,7 +50,7 @@ readline_install: $(READLINE_OBJ) $(JULIALIB)
 
 PCRE_OBJ = $(EXTROOTLIB)/libpcre.$(SHLIB_EXT)
 pcre-$(PCRE_VER).tar.bz2:
-	curl -O ftp://ftp.csx.cam.ac.uk/pub/software/programming/pcre/pcre-$(PCRE_VER).tar.bz2
+	$(DOWNLOAD) ftp://ftp.csx.cam.ac.uk/pub/software/programming/pcre/pcre-$(PCRE_VER).tar.bz2
 pcre-$(PCRE_VER): pcre-$(PCRE_VER).tar.bz2
 	tar jxvf pcre-$(PCRE_VER).tar.bz2
 $(PCRE_OBJ): pcre-$(PCRE_VER)
@@ -65,7 +65,7 @@ fdlibmf/libmf.a: fdlibmf/*.c
 
 FDLIBM_OBJ = $(EXTROOTLIB)/libfdm.$(SHLIB_EXT)
 fdlibm.tar.gz:
-	curl -O -u anonymous:julia@juliamath.com ftp://netlib.org/fdlibm.tar.gz
+	$(DOWNLOAD) -u anonymous:julia@juliamath.com ftp://netlib.org/fdlibm.tar.gz
 fdlibm: fdlibm.tar.gz
 	tar zxf fdlibm.tar.gz
 $(FDLIBM_OBJ): fdlibm fdlibmf
@@ -75,7 +75,7 @@ fdlibm_install: $(FDLIBM_OBJ) $(JULIALIB)
 
 LAPACK_OBJ = $(EXTROOTLIB)/libLAPACK.$(SHLIB_EXT)
 lapack-$(LAPACK_VER).tgz:
-	curl -O http://www.netlib.org/lapack/lapack-$(LAPACK_VER).tgz
+	$(DOWNLOAD) http://www.netlib.org/lapack/lapack-$(LAPACK_VER).tgz
 lapack-$(LAPACK_VER): lapack-$(LAPACK_VER).tgz
 	tar zxf lapack-$(LAPACK_VER).tgz
 $(LAPACK_OBJ): lapack-$(LAPACK_VER)
@@ -87,8 +87,12 @@ $(LAPACK_OBJ): lapack-$(LAPACK_VER)
 lapack_install: $(LAPACK_OBJ) $(JULIALIB)
 	ln -sf $(LAPACK_OBJ) $(JULIALIB)/libLAPACK.$(SHLIB_EXT)
 
+arpack:
+	$(DOWNLOAD) http://www.caam.rice.edu/software/ARPACK/SRC/parpack96.tar.gz
+	curl -O	http://www.caam.rice.edu/software/ARPACK/SRC/ppatch.tar.gz
+
 mongoose-$(MONGOOSE_VER).tgz:
-	curl -O http://mongoose.googlecode.com/files/mongoose-$(MONGOOSE_VER).tgz
+	$(DOWNLOAD) http://mongoose.googlecode.com/files/mongoose-$(MONGOOSE_VER).tgz
 mongoose-$(MONGOOSE_VER): mongoose-$(MONGOOSE_VER).tgz
 	tar zxf mongoose-$(MONGOOSE_VER).tgz
 mongoose_install: mongoose-$(MONGOOSE_VER)

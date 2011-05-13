@@ -3,6 +3,8 @@ EXTROOT = $(JULIAHOME)/external/root
 EXTROOTLIB = $(EXTROOT)/lib
 LLVMROOT = $(EXTROOT)
 OS = $(shell uname)
+DOWNLOAD = curl -O
+#DOWNLOAD = wget
 
 CC = gcc 
 CXX = g++
