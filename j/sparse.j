@@ -196,8 +196,9 @@ macro binary_op_A_sparse_B_sparse_res_sparse(op)
                 while ptrA < stopA
                     res = ($op)(nzvalA[ptrA], zero)
                     if res != zero
+                        rowA = rowvalA[ptrA]
                         rowvalS[ptrS] = rowA
-                        nzvalS[ptrS] = ($op)(nzvalA[ptrA], zero)
+                        nzvalS[ptrS] = res
                         ptrS += 1
                     end
                     ptrA += 1
@@ -206,6 +207,7 @@ macro binary_op_A_sparse_B_sparse_res_sparse(op)
                 while ptrB < stopB
                     res = ($op)(zero, nzvalB[ptrB])
                     if res != zero
+                        rowB = rowvalB[ptrB]                        
                         rowvalS[ptrS] = rowB
                         nzvalS[ptrS] = res
                         ptrS += 1
