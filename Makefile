@@ -8,8 +8,7 @@ debug release: %: julia-% j/pcre_h.j sys.ji custom.j
 
 julia-debug julia-release:
 	$(MAKE) -C src lib$@
-	ln -f src/lib$@.$(SHLIB_EXT) libjulia.$(SHLIB_EXT)
-	ln -f src/lib$@.$(SHLIB_EXT) .
+	ln -f lib$@.$(SHLIB_EXT) libjulia.$(SHLIB_EXT)
 	$(MAKE) -C ui $@
 	ln -f ui/$@-$(DEFAULT_REPL) julia
 	ln -f ui/$@-cloud .
