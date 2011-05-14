@@ -48,6 +48,7 @@ load("combinatorics.j")
 load("linalg.j")
 load("linalg_blas.j")
 load("linalg_lapack.j")
+load("linalg_arpack.j")
 
 # additional data types
 load("complex.j")
