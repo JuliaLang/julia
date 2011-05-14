@@ -537,7 +537,8 @@
 		  ((#\{ )   (take-token s)
 		   (loop (list* 'curly ex (parse-arglist s #\} ))))
 		  ((#\")
-		   (if (and (symbol? ex) (not (operator? ex)))
+		   (if (and (symbol? ex) (not (operator? ex))
+			    (not (ts:space? s)))
 		       ;; custom prefixed string literals, x"s" => @x_str "s"
 		       (let ((str (begin (take-token s)
 					 (parse-string-literal s #t)))
