@@ -284,7 +284,7 @@ static jl_value_t *intersect_union(jl_uniontype_t *a, jl_value_t *b,
     JL_GC_PUSH(&t);
     size_t i;
     for(i=0; i < t->length; i++) {
-        jl_tupleset(t, i, jl_type_intersect(jl_tupleref(a->types,i),b,penv,eqc,var));
+        jl_tupleset(t, i, jl_type_intersection(jl_tupleref(a->types,i),b));
     }
     // problem: an intermediate union type we make here might be too
     // complex, even though the final type after typevars are replaced

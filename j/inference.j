@@ -142,12 +142,18 @@ function (T, dims...)
                 # Array(T, (m, n))
                 nd = length(dt)
             end
-        elseif subtype(Tuple, dt)
+        else #if subtype(Tuple, dt)
             # Array(T, ??)
             nd = Array.parameters[2]
         end
     end
-    et = isType(T) ? T.parameters[1] : T
+    if isType(T)
+        et = T.parameters[1]
+    elseif isa(T,TypeVar)
+        et = T
+    else
+        et = Array.parameters[1]
+    end
     Array{et,nd}
 end)
 
@@ -544,7 +550,12 @@ function abstract_eval(s::Symbol, vtypes, sv::StaticVarInfo)
         for i=1:2:length(sp)
             if is(sp[i].name,s)
                 # static parameter
-                return abstract_eval_constant(sp[i+1])
+                val = sp[i+1]
+                if isa(val,TypeVar)
+                    # static param bound to typevar
+                    return val
+                end
+                return abstract_eval_constant(val)
             end
         end
         # global

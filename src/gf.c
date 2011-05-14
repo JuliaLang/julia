@@ -320,6 +320,9 @@ static jl_function_t *cache_method(jl_methtable_t *mt, jl_tuple_t *type,
               Since every type x has its own type Type{x}, this would be
               excessive specialization for an Any slot.
             */
+            // TODO: instead of only working for 1-definition functions,
+            // in general do this if no definition overlaps with Type for
+            // this slot.
             jl_tupleset(type, i, (jl_value_t*)jl_typetype_type);
         }
         else if (jl_is_tag_type(elt) &&

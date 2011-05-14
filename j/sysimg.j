@@ -70,6 +70,22 @@ load("darray.j")
 # misc
 load("libc.j")
 load("util.j")
+load("regex.j")
+
+# prime method cache with some things we know we'll need right after startup
+length(1:2:3)
+(HashTable(0)[1])=()->()
+numel(intset())
+has(intset(),2)
+del_all(FDSet())
+start(HashTable(0))
+done(HashTable(0),0)
+get(HashTable(0), 0, ())
+add(FDSet(),0)
+isempty(Queue())
+2==2.0
+has(FDSet(),0)
+isequal(2,2)
 
 ccall(:jl_save_system_image, Void, (Ptr{Uint8},Ptr{Uint8}),
       cstring("sys.ji"), cstring("j/start_image.j"))

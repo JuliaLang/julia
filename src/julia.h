@@ -211,6 +211,8 @@ typedef struct _jl_methlist_t {
     int va;
     jl_tuple_t *tvars;
     jl_function_t *func;
+    // TODO: pointer from specialized to original method
+    //jl_function_t *orig_method;
     struct _jl_methlist_t *next;
 } jl_methlist_t;
 

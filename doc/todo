@@ -506,9 +506,6 @@ issues 6/21/10
     that's currently created in add_generic_ctor
   . in non-generic case, add static parameters
 * limit specialization of vararg functions
-? be able to cache results obtained by recursive inference in method
-  table cache when appropriate. instead of calling typeinf() recursively,
-  call specialize(), which will do something more like cache_method.
 * method cache invalidation, also invalidate all caches once type inference
   is available (after loading start.j)
 ? don't specialize on arguments declared as Any. make the default type
@@ -665,13 +662,23 @@ issues 1/24/11
   @parallel for i=1:n
     ...
   end
-- clean up some type system stuff:
+? clean up some type system stuff:
   . remove tvar->bound, methlist->has_tvars, find_tvars, etc. instead use
     a TypeConstructor as the signature of functions with {}
   . type_match only uses tvars from a given constraint environment, i.e.
     the parameters of the TypeConstructor
   * make cache_1arg an array
 - finish getting rid of jl_show_to_string
+- make sure inference results can be shared across instantiations of
+  inner generic functions
+- some kind of no-specialize hint for slots like x in
+  assign(A::Array{Any}, x, i::Index) = arrayset(A,i,x)
+  where we know the function is identical for all types of x
+  - maybe make x::Any different from no type decl
+  - reuse specialized methods for multiple types in an Any slot
+- be able to cache results obtained by recursive inference in method
+  table cache when appropriate. instead of calling typeinf() recursively,
+  call specialize(), which will do cache_method.
 
 something about update operators, in-place operations in general
 
