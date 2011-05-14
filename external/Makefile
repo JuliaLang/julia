@@ -94,7 +94,7 @@ arpack$(ARPACK_VER).tar.gz:
 arpack$(ARPACK_VER): arpack$(ARPACK_VER).tar.gz
 	tar zxf arpack$(ARPACK_VER).tar.gz
 	tar zxf patch.tar.gz
-	sed -i .bak -e s/"EXTERNAL           ETIME"// ./ARPACK/UTIL/second.f
+	sed -i.bak -e s/"EXTERNAL           ETIME"// ./ARPACK/UTIL/second.f
 $(ARPACK_OBJ): arpack$(ARPACK_VER)
 	cd ARPACK && make lib MAKE=make PLAT= home=`pwd` FC=$(FC) FFLAGS="-O3 -fPIC" && \
 	ar x libarpack_.a && \
