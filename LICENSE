@@ -45,3 +45,13 @@ repl-readline.c is licensed under the GNU General Public License Version 2.
      You should have received a copy of the GNU General Public License along
      with this program; if not, write to the Free Software Foundation, Inc.,
      51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+
+External libraries, if used, include their own licenses:
+
+ARPACK
+FDLIBM
+LAPACK
+LLVM
+MONGOOSE
+PCRE
+READLINE
