@@ -160,6 +160,19 @@ value_t fl_ioputc(value_t *args, u_int32_t nargs)
     return fixnum(ios_pututf8(s, wc));
 }
 
+value_t fl_ioungetc(value_t *args, u_int32_t nargs)
+{
+    argcount("io.ungetc", nargs, 2);
+    ios_t *s = toiostream(args[0], "io.ungetc");
+    if (!iscprim(args[1]) || ((cprim_t*)ptr(args[1]))->type != wchartype)
+        type_error("io.ungetc", "wchar", args[1]);
+    uint32_t wc = *(uint32_t*)cp_data((cprim_t*)ptr(args[1]));
+    if (wc >= 0x80) {
+        lerror(ArgError, "io_ungetc: unicode not yet supported");
+    }
+    return fixnum(ios_ungetc((int)wc,s));
+}
+
 value_t fl_ioflush(value_t *args, u_int32_t nargs)
 {
     argcount("io.flush", nargs, 1);
@@ -419,6 +432,7 @@ static builtinspec_t iostreamfunc_info[] = {
     { "io.seek" , fl_ioseek },
     { "io.pos",   fl_iopos },
     { "io.getc" , fl_iogetc },
+    { "io.ungetc", fl_ioungetc },
     { "io.putc" , fl_ioputc },
     { "io.peekc" , fl_iopeekc },
     { "io.discardbuffer", fl_iopurge },

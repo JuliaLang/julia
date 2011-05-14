@@ -99,7 +99,10 @@
 				      (char<=? c #\9))
 				 (char>=? c #\uA1)
 				 (eqv? c #\_)))
+;; characters that can be in an operator
 (define (opchar? c) (string.find op-chars c))
+;; characters that can follow . in an operator
+(define (dot-opchar? c) (and (char? c) (string.find "*^/\\" c)))
 (define (operator? c) (memq c operators))
 
 (define (skip-to-eol port)
@@ -159,9 +162,13 @@
 					(and (>= c #\A) (<= c #\F)))))))
 	    (allow #\.)))
     (read-digs)
-    (allow #\.)
-    (read-digs)
-    (disallow #\.)
+    (if (eqv? (peek-char port) #\.)
+	(begin (read-char port)
+	       (if (dot-opchar? (peek-char port))
+		   (io.ungetc port #\.)
+		   (begin (write-char #\. str)
+			  (read-digs)
+			  (disallow #\.)))))
     (if (or (allow #\e) (allow #\E))
 	(begin (or (allow #\+) (allow #\-))
 	       (read-digs)
@@ -183,12 +190,10 @@
   (let ((c (peek-char port)))
     (cond ((or (eof-object? c) (newline? c))  (read-char port))
 
-	  ((char-numeric? c)    (read-number port))
-	  
-	  ((identifier-char? c) (accum-julia-symbol c port))
-
 	  ((special-char? c)    (read-char port))
 
+	  ((char-numeric? c)    (read-number port))
+	  
 	  ((eqv? c #\#)         (skip-to-eol port) (next-token port s))
 	  
 	  ; . is difficult to handle; it could start a number or operator
@@ -205,6 +210,8 @@
 			(else '|.|)))))
 	  
 	  ((opchar? c)  (read-operator port c))
+
+	  ((identifier-char? c) (accum-julia-symbol c port))
 
 	  #;((eqv? c #\")
 	   (with-exception-catcher

@@ -76,6 +76,7 @@ nttest1{n}(x::NTuple{n,Int32}) = n
 @assert 2+3 == 5
 @assert 2.+3. == 5.
 @assert 2*3 == 6
+@assert 2.*3 == 6
 @assert 2. * 3. == 6.
 @assert min(1.0,1) == 1
 
