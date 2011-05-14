@@ -8,7 +8,7 @@ type SparseMatrixCSC{T} <: Matrix{T}
 end
 
 size(S::SparseMatrixCSC) = (S.m, S.n)
-nnz(S::SparseMatrixCSC) = S.colptr[S.n+1] - 1
+nnz(S::SparseMatrixCSC) = nnz(S.nzval)
 
 function show(S::SparseMatrixCSC)
     println(S.m, "-by-", S.n, " sparse matrix with ", nnz(S), " nonzeros:")
@@ -16,7 +16,7 @@ function show(S::SparseMatrixCSC)
         for k = S.colptr[col] : (S.colptr[col+1]-1)
             print("\t[")
             show(S.rowval[k])
-            print(",\t", col, "] =\t")
+            print(",\t", col, "]\t= ")
             show(S.nzval[k])
             println()
         end
@@ -280,4 +280,8 @@ function (*){T1,T2}(X::Vector{T1}, A::SparseMatrixCSC{T2})
         end
     end
     return Y
+end
+
+function issymmetric(A::SparseMatrixCSC)
+    nnz(A - A.') == 0 ? true : false
 end
