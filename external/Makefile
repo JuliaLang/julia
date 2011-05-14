@@ -16,11 +16,11 @@ default: defaultlibs_$(OS)
 
 defaultlibs_Linux: \
 	llvm pcre_install fdlibm_install lapack_install libc_install \
-	mongoose_install
+	arpack_install mongoose_install
 
 defaultlibs_Darwin: \
 	llvm readline_install pcre_install fdlibm_install lapack_install \
-	mongoose_install
+	arpack_install mongoose_install
 
 $(JULIALIB):
 	mkdir -p $(JULIALIB)
@@ -87,9 +87,20 @@ $(LAPACK_OBJ): lapack-$(LAPACK_VER)
 lapack_install: $(LAPACK_OBJ) $(JULIALIB)
 	ln -sf $(LAPACK_OBJ) $(JULIALIB)/libLAPACK.$(SHLIB_EXT)
 
-arpack:
-	$(DOWNLOAD) http://www.caam.rice.edu/software/ARPACK/SRC/parpack96.tar.gz
-	curl -O	http://www.caam.rice.edu/software/ARPACK/SRC/ppatch.tar.gz
+ARPACK_OBJ = $(EXTROOTLIB)/libarpack.$(SHLIB_EXT)
+arpack$(ARPACK_VER).tar.gz:
+	$(DOWNLOAD) http://www.caam.rice.edu/software/ARPACK/SRC/arpack$(ARPACK_VER).tar.gz
+	$(DOWNLOAD) http://www.caam.rice.edu/software/ARPACK/SRC/patch.tar.gz
+arpack$(ARPACK_VER): arpack$(ARPACK_VER).tar.gz
+	tar zxf arpack$(ARPACK_VER).tar.gz
+	tar zxf patch.tar.gz
+	sed -i .bak -e s/"EXTERNAL           ETIME"// ./ARPACK/UTIL/second.f
+$(ARPACK_OBJ): arpack$(ARPACK_VER)
+	cd ARPACK && make lib MAKE=make PLAT= home=`pwd` FC=$(FC) FFLAGS="-O3 -fPIC" && \
+	ar x libarpack_.a && \
+	$(FC) -shared *.o -o $(EXTROOTLIB)/libarpack.$(SHLIB_EXT)
+arpack_install: $(ARPACK_OBJ) $(JULIALIB)
+	ln -sf $(ARPACK_OBJ) $(JULIALIB)/libarpack.$(SHLIB_EXT)
 
 mongoose-$(MONGOOSE_VER).tgz:
 	$(DOWNLOAD) http://mongoose.googlecode.com/files/mongoose-$(MONGOOSE_VER).tgz
