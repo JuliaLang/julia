@@ -144,6 +144,8 @@ static Value *NoOpCast(Value *v)
 
 static Value *mark_julia_type(Value *v, jl_value_t *jt)
 {
+    if (jt == (jl_value_t*)jl_any_type)
+        return v;
     if (has_julia_type(v) && julia_type_of(v) == jt)
         return v;
     if (julia_type_of_without_metadata(v) == jt)

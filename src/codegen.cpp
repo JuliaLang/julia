@@ -725,9 +725,14 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
             jl_value_t *aty = expr_type(args[1]); rt1 = aty;
             jl_value_t *ity = expr_type(args[2]); rt2 = ity;
             if (jl_is_array_type(aty) && ity == (jl_value_t*)jl_int32_type) {
-                if (jl_is_bits_type(jl_tparam0(aty))) {
+                jl_value_t *ety = jl_tparam0(aty);
+                //if (jl_is_bits_type(ety)) {
+                if (!jl_is_typevar(ety)) {
+                    if (!jl_is_bits_type(ety)) {
+                        ety = (jl_value_t*)jl_any_type;
+                    }
                     Value *ary = emit_expr(args[1], ctx, true);
-                    const Type *elty = julia_type_to_llvm(jl_tparam0(aty));
+                    const Type *elty = julia_type_to_llvm(ety);
                     bool isbool=false;
                     if (elty==T_int1) { elty = T_int8; isbool=true; }
                     Value *data =
@@ -741,10 +746,16 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
                                           "arrayref: index out of range", ctx);
                     Value *elt=builder.CreateLoad(builder.CreateGEP(data, im1),
                                                   false);
+                    if (ety == (jl_value_t*)jl_any_type) {
+                        // NULL pointer check
+                        error_unless(builder.CreateICmpNE(elt, V_null),
+                                     "arrayref: uninitialized reference error",
+                                     ctx);
+                    }
                     JL_GC_POP();
                     if (isbool)
                         return builder.CreateTrunc(elt, T_int1);
-                    return mark_julia_type(elt, jl_tparam0(aty));
+                    return mark_julia_type(elt, ety);
                 }
             }
         }
@@ -755,7 +766,11 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
             if (jl_is_array_type(aty) &&
                 ity == (jl_value_t*)jl_int32_type) {
                 jl_value_t *ety = jl_tparam0(aty);
-                if (jl_is_bits_type(ety) && jl_subtype(vty, ety, 0)) {
+                //if (jl_is_bits_type(ety) && jl_subtype(vty, ety, 0)) {
+                if (!jl_is_typevar(ety) && jl_subtype(vty, ety, 0)) {
+                    if (!jl_is_bits_type(ety)) {
+                        ety = (jl_value_t*)jl_any_type;
+                    }
                     Value *ary = emit_expr(args[1], ctx, true);
                     const Type *elty = julia_type_to_llvm(ety);
                     if (elty==T_int1) { elty = T_int8; }
@@ -765,8 +780,14 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
                     Value *alen = emit_arraylen(ary);
                     Value *idx = emit_unbox(T_int32, T_pint32,
                                             emit_unboxed(args[2], ctx));
-                    Value *rhs = emit_unbox(elty, PointerType::get(elty,0),
-                                            emit_unboxed(args[3], ctx));
+                    Value *rhs;
+                    if (jl_is_bits_type(ety)) {
+                        rhs = emit_unbox(elty, PointerType::get(elty,0),
+                                         emit_unboxed(args[3], ctx));
+                    }
+                    else {
+                        rhs = boxed(emit_expr(args[3], ctx, true));
+                    }
                     Value *im1 =
                         emit_bounds_check(idx, alen,
                                           "arrayset: index out of range", ctx);

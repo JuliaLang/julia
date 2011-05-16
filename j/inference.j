@@ -109,6 +109,12 @@ t_func[ccall] =
 t_func[is] = (2, 2, cmp_tfunc)
 t_func[subtype] = (2, 2, cmp_tfunc)
 t_func[isa] = (2, 2, cmp_tfunc)
+t_func[Union] = (0, Inf,
+                 (args...)->(if allp(isType,args)
+                                 Type{Union(map(t->t.parameters[1],args)...)}
+                             else
+                                 Type
+                             end))
 t_func[method_exists] = (2, 2, cmp_tfunc)
 t_func[applicable] = (1, Inf, (f, args...)->Bool)
 #t_func[new_generic_function] = (1, 1, s->(Any-->Any))
@@ -142,7 +148,7 @@ function (T, dims...)
                 # Array(T, (m, n))
                 nd = length(dt)
             end
-        else #if subtype(Tuple, dt)
+        elseif !subtype(dt,Int)
             # Array(T, ??)
             nd = Array.parameters[2]
         end
