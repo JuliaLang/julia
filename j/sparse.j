@@ -123,8 +123,8 @@ sprand(m,n,density) = sprand_rng (m,n,density,rand)
 sprandn(m,n,density) = sprand_rng (m,n,density,randn)
 sprandi(m,n,density) = sprand_rng (m,n,density,randint)
 
-speye(n::Size) = ( L = linspace(1,n); sparse(L, L, ones(Int32, n), n, n) )
-speye(m::Size, n::Size) = ( x = min(m,n); L = linspace(1,x); sparse(L, L, ones(Int32, x), m, n) )
+speye(n::Size) = ( L = linspace(1,n); sparse(L, L, ones(Float64, n), n, n) )
+speye(m::Size, n::Size) = ( x = min(m,n); L = linspace(1,x); sparse(L, L, ones(Float64, x), m, n) )
 
 transpose(S::SparseMatrixCSC) = ( (I,J,V) = find(S); sparse(J, I, V, S.n, S.m) )
 ctranspose(S::SparseMatrixCSC) = ( (I,J,V) = find(S); sparse(J, I, conj(V), S.n, S.m) )
@@ -261,32 +261,54 @@ end # macro
 (.^)(A::Array, B::SparseMatrixCSC) = (.^)(A, full(B))
 @binary_op_A_sparse_B_sparse_res_sparse (.^)
 
-# In matrix-vector multiplication, the right orientation of the vector is assumed.
-function (*){T1,T2}(A::SparseMatrixCSC{T1}, X::Vector{T2})
-    Y = Array(promote_type(T1,T2), A.m)
-    for col = 1 : A.n
-        for k = A.colptr[col] : (A.colptr[col+1]-1)
-            row = A.rowval[k]
-            nz = A.nzval[k]
-            Y[row] = nz * X[col]
-        end
-    end
-    return Y
-end
-
-# In matrix-vector multiplication, the right orientation of the vector is assumed.
-function (*){T1,T2}(X::Vector{T1}, A::SparseMatrixCSC{T2})
-    Y = Array(promote_type(T1,T2), A.n)
-    for col = 1 : A.n
-        for k = A.colptr[col] : (A.colptr[col+1]-1)
-            row = A.rowval[k]
-            nz = A.nzval[k]
-            Y[col] = X[row] * nz
-        end
-    end
-    return Y
-end
-
 function issymmetric(A::SparseMatrixCSC)
     nnz(A - A.') == 0 ? true : false
+end
+
+# In matrix-vector multiplication, the right orientation of the vector is assumed.
+function (*){T1,T2}(A::SparseMatrixCSC{T1}, X::Vector{T2})
+    Y = zeros(promote_type(T1,T2), A.m)
+    for col = 1 : A.n
+        for k = A.colptr[col] : (A.colptr[col+1]-1)
+            Y[A.rowval[k]] += A.nzval[k] * X[col]
+        end
+    end
+    return Y
+end
+
+# In vector-matrix multiplication, the right orientation of the vector is assumed.
+function (*){T1,T2}(X::Vector{T1}, A::SparseMatrixCSC{T2})
+    Y = zeros(promote_type(T1,T2), A.n)
+    for col = 1 : A.n
+        for k = A.colptr[col] : (A.colptr[col+1]-1)
+            Y[col] += X[A.rowval[k]] * A.nzval[k]
+        end
+    end
+    return Y
+end
+
+function (*){T1,T2}(A::SparseMatrixCSC{T1}, X::Matrix{T2})
+    mX, nX = size(X)
+    Y = zeros(promote_type(T1,T2), A.m, nX)
+    for multivec_col = 1:nX
+        for col = 1 : A.n
+            for k = A.colptr[col] : (A.colptr[col+1]-1)
+                Y[A.rowval[k], multivec_col] += A.nzval[k] * X[col, multivec_col]
+            end
+        end
+    end
+    return Y
+end
+
+function (*){T1,T2}(X::Matrix{T1}, A::SparseMatrixCSC{T2})
+    mX, nX = size(X)
+    Y = Array(promote_type(T1,T2), mX, A.n)
+    for multivec_row = 1:mX
+        for col = 1 : A.n
+            for k = A.colptr[col] : (A.colptr[col+1]-1)
+                Y[multivec_row, col] += X[multivec_row, A.rowval[k]] * A.nzval[k]
+            end
+        end
+    end
+    return Y
 end
