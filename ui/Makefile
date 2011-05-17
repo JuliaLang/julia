@@ -6,7 +6,7 @@ LIBS = -L$(EXTROOT)/lib -lutil -ldl -lm $(OSLIBS) -lpthread
 LLTDIR = $(JULIAHOME)/src/support
 FLISPDIR = $(JULIAHOME)/src/flisp
 MONGOOSE = $(JULIAHOME)/external/mongoose
-READLINE = -L$(JULIAHOME)/lib/ -lncurses -lreadline
+READLINE = -lncurses -lreadline
 
 FLAGS = -falign-functions -Wall -Wno-strict-aliasing \
 	-I$(JULIAHOME)/src -I$(LLTDIR) -I$(FLISPDIR) \
