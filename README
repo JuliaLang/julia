@@ -7,6 +7,76 @@
  _/ |\__'_|_|_|\__'_|  | Mailing list: julia-math@googlegroups.com
 |__/                   |
 
+Compiling
+---------
+
+Required tools: gcc, g++, gfortran, curl, gnu make
+Supported platforms: GNU/Linux on x86 and x86/64, Mac OS X on x86/64
+
+Run "make" in external/ to download and build external dependencies.
+
+Run "make" in the top-level directory to build julia.
+
+No installation is necessary; julia can be run from the directory where
+it was built.
+
+
+Directories
+-----------
+
+contrib/       emacs and textmate support for julia
+doc/           TeX manual and other notes
+external/      external dependencies
+j/             source code for julia's standard library
+lib/           shared libraries loaded by julia's standard libraries
+src/           source for julia language core
+ui/            source for various frontends
+test/          some tests
+
+
+Emacs setup
+-----------
+
+Add the following line to ~/.emacs
+
+(require 'julia-mode "JULIA_PATH/contrib/julia-mode.el")
+
+where JULIA_PATH is the location of the top-level julia directory.
+
+
+Brief introduction
+------------------
+
+Julia is a very high level dynamic language with good performance,
+implemented as a JIT compiler using the LLVM toolchain.
+Julia is multi-paradigm, combining features of functional, object-oriented,
+and imperative languages. The primary unifying feature is multiple dispatch:
+defining functions on different combinations of datatypes, and defining
+new datatypes. Operators are functions. This model fits mathematical
+programming well, where it is most common to define new functions on
+existing datatypes, and it is not natural for one datatype to "own" an
+operation (as in typical single-dispatch OO languages). The compiler uses
+type inference to eliminate dispatch overhead where possible.
+
+Advantages of julia over other comparable systems are as follows:
+
+- Consistent and powerful generic function model
+- High performance
+- Better performance for user-defined types
+- Low syntactic overhead to define new types
+- Redefinable low-level behavior
+- High-level constructs for parallelism
+- Free and open source
+- Multi-dimensional array comprehensions
+- Rich type system
+- Better handling of numeric types
+- Macros
+- Powerful shell-like capabilities for managing other processes
+
+
+Rationale
+---------
+
 Scientific computing has traditionally required the highest performance,
 yet domain experts have largely moved to slower dynamic languages for
 daily work. We believe there are many good reasons to prefer dynamic languages
@@ -29,44 +99,3 @@ we feel there is room to increase power, flexibility, and simplicity.
 The rising importance of parallel computing and cloud computing provides
 further motivation to design a new system with those concerns in mind from
 the beginning.
-
-Julia is designed around a flexible type system. Programs, in general,
-deal with values of widely varying disjoint types: functions, numbers,
-lists, network sockets, etc. Type systems are good at sorting out
-values of these different types. However, in mathematical codes, most
-values are numbers. Numerical properties (such as positive, negative,
-even, odd, greater than 1, etc.) are what matter, and these are highly
-dynamic. The lattices involved are generally not of finite height.
-
-Different number representations exist only for efficiency, and are
-often incidental to the meaning of a piece of code. For example people
-want "y = sqrt(x)" to compute the square root of x whether it is
-positive or negative, and give a real or complex result
-accordingly. As another example, in many cases it is convenient not to
-need to worry about integer overflow. Multiple common features
-underlie mathematical objects of different types (e.g. numbers, sets,
-matrices). In some cases, it makes sense to consider numbers and
-matrices as the same kind of thing, and in other cases it doesn't
-matter. A given type system is likely not to have anticipated the
-particular common features that matter to your program, making it more
-difficult to express an idea. 
-
-Julia is a very high level dynamic language with good performance,
-implemented as a JIT compiler using the LLVM toolchain that lets the
-system adapt to run-time conditions better. Advantages of julia over
-other comparable systems are as follows:
-
-- Consistent and powerful generic function model
-- High performance
-- Better performance for user-defined types
-- Low syntactic overhead to define new types
-- Redefinable low-level behavior
-- High-level constructs for parallelism
-- Free and open source
-- Multi-dimensional array comprehensions
-- Rich type system
-- Better handling of numeric types
-- More floating point types
-- Cleaner syntax
-- Macros
-- Powerful shell-like capabilities for managing other processes
