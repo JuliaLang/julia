@@ -8,7 +8,6 @@ JL_CALLABLE(jl_generic_ctor);
 JL_CALLABLE(jl_constructor_factory_trampoline);
 JL_CALLABLE(jl_weakref_ctor);
 JL_CALLABLE(jl_new_array_internal);
-JL_CALLABLE(jl_generic_array_ctor);
 JL_CALLABLE(jl_f_throw);
 JL_CALLABLE(jl_f_is);
 JL_CALLABLE(jl_f_no_function);

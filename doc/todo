@@ -573,8 +573,8 @@ issues 11/6/10
 * splicing tuples in ` with $...
 * readall, readline
 
-- statically evaluate apply_type when possible
-- optimize Array constructor (avoid checks and apply_type)
+* statically evaluate apply_type when possible
+* optimize Array constructor (avoid checks and apply_type)
 arr{T,N}(::Type{T}, d::NTuple{N,Size}) = Array{T,N}(d)
 arr{T}(::Type{T}, d::Size...)          = arr(T, d)
 arr{T}(::Type{T}, m::Size,n::Size)     = Array{T,2}((m,n))
@@ -591,6 +591,7 @@ issues 12/21/10
 * allow anything iterable to be spliced by ...
 * more flexible string literals
 - something about uninitialized objects in constructors
+  old news (for reference):
   consider generating code for constructors, e.g.
   function new{T}(re::T, im::T)
     v = newstruct(Complex{T})
@@ -610,6 +611,23 @@ issues 12/21/10
       function (args...) = Complex(new_internal(Complex{Int32}), args...)
   and you would define Complex(z::Complex, ...)
   you can also define e.g. Complex{T}(r::T) = Complex{T}(r, 0)
+
+  actual new design:
+ struct Rational{T<:Int} <: Real
+     num::T
+     den::T
+ 
+     Rational(n::Int, d::Int) = (l=lcd(n,d);
+                                 # can use T here
+                                 this.num=div(n,l); this.den=div(d,l))
+ end
+ Rational{T}(n::T, d::T) = Rational{T}(n,d)
+ Rational(n::Int, d::Int) = Rational(promote(n,d)...)
+ Rational(n::Int) = Rational(n,1)
+
+default ctors would be
+  inside type block: Rational(n, d) = (this.num=n;this.den=d)
+  outside:           Rational{T}(n::T, d::T) = Rational{T}(n,d)
 
 * type=>abstract, struct=>type
 * do something about "global X+=1"
@@ -639,6 +657,12 @@ issues 1/24/11
 - keyword args
   f(x; a=1, b=0)
   f(x; kws...)
+  . add nkwargs to calling convention
+  . add callkw AST node. pass keywords as alternating symbol/value, but
+    callkw sets nkwargs to something nonzero.
+  . insert code to handle kw arg assignment, default values
+  . insert code to convert unused kw args to some object if requested
+  . f(x, b...; a=v, k...) does (call applykw 1 f (x,) b :a v k)
 - modules
 * saving system image
 * make optimized arrayset, arrayref work on all Arrays
@@ -676,9 +700,6 @@ issues 1/24/11
   where we know the function is identical for all types of x
   - maybe make x::Any different from no type decl
   - reuse specialized methods for multiple types in an Any slot
-- be able to cache results obtained by recursive inference in method
-  table cache when appropriate. instead of calling typeinf() recursively,
-  call specialize(), which will do cache_method.
 
 something about update operators, in-place operations in general
 

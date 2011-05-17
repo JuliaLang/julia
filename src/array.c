@@ -137,47 +137,6 @@ JL_CALLABLE(jl_new_array_internal)
     return (jl_value_t*)jl_new_array((jl_type_t*)atype, d);
 }
 
-JL_CALLABLE(jl_generic_array_ctor)
-{
-    JL_NARGSV(Array, 1);
-    JL_TYPECHK(Array, type, args[0]);
-    size_t i, nd;
-    size_t *dims=NULL;
-    jl_tuple_t *d=NULL;
-    jl_value_t *vnd=NULL, *vtp=NULL, *vnt=NULL;
-    JL_GC_PUSH(&vnd, &vtp, &vnt, &d);
-    if (nargs==2 && jl_is_tuple(args[1])) {
-        d = (jl_tuple_t*)args[1];
-        nd = d->length;
-        for(i=0; i < nd; i++) {
-            JL_TYPECHK(Array, int32, jl_tupleref(d,i));
-        }
-    }
-    else {
-        nd = nargs-1;
-        dims = alloca(nd * sizeof(size_t));
-        for(i=1; i < nargs; i++) {
-            JL_TYPECHK(Array, int32, args[i]);
-            dims[i-1] = jl_unbox_int32(args[i]);
-        }
-        /*
-        d = jl_alloc_tuple_uninit(nd);
-        for(i=0; i < nd; i++)
-            jl_tupleset(d, i, args[i+1]);
-        */
-    }
-    vnd = jl_box_int32(nd);
-    vtp = (jl_value_t*)jl_tuple2(args[0], vnd);
-    vnt = jl_apply_type((jl_value_t*)jl_array_type, (jl_tuple_t*)vtp);
-    jl_value_t *ar;
-    if (d != NULL)
-        ar = (jl_value_t*)jl_new_array((jl_type_t*)vnt, d);
-    else
-        ar = (jl_value_t*)_new_array((jl_type_t*)vnt, NULL, nd, dims);
-    JL_GC_POP();
-    return ar;
-}
-
 jl_array_t *jl_pchar_to_array(char *str, size_t len)
 {
     jl_array_t *a = jl_alloc_array_1d(jl_array_uint8_type, len);

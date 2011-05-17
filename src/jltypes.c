@@ -1789,7 +1789,6 @@ static jl_tuple_t *jl_typevars(size_t n, ...)
 }
 
 extern void jl_init_int32_cache();
-extern JL_CALLABLE(jl_generic_array_ctor);
 
 void jl_init_types()
 {
@@ -1987,10 +1986,8 @@ void jl_init_types()
                            jl_null, jl_null);
     jl_array_typename = jl_array_type->name;
     jl_array_type->linfo = NULL;
-    //jl_initialize_generic_function((jl_function_t*)jl_array_type,
-    //                               jl_array_typename->name);
-    jl_array_type->fptr = jl_generic_array_ctor;
-    jl_array_type->env = NULL;
+    jl_initialize_generic_function((jl_function_t*)jl_array_type,
+                                   jl_array_typename->name);
 
     jl_array_any_type =
         (jl_type_t*)jl_apply_type((jl_value_t*)jl_array_type,

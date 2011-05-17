@@ -1147,6 +1147,13 @@ function inlining_pass(e::Expr, vars)
                 end
             end
         end
+    elseif is(e.head,:call)
+        farg = e.args[1]
+        if isa(farg,Expr) && is(farg.head,:top) &&
+            is(eval(farg),apply_type) &&
+            isType(e.type) && isleaftype(e.type.parameters[1])
+            return e.type.parameters[1]
+        end
     end
     e
 end

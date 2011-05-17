@@ -968,7 +968,6 @@ void jl_init_serializer()
                       jl_constructor_factory_trampoline, 
                       jl_weakref_ctor, 
                       jl_new_array_internal, 
-                      jl_generic_array_ctor, 
                       jl_f_throw, 
                       jl_f_is, 
                       jl_f_no_function, 
