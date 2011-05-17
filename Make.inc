@@ -6,20 +6,17 @@ OS = $(shell uname)
 DOWNLOAD = curl -O
 #DOWNLOAD = wget
 
-CC = gcc 
+CC = gcc
 CXX = g++
+FC = gfortran
+#CC = $(EXTROOT)/bin/clang
+#CXX = $(EXTROOT)/bin/clang++
 CFLAGS = -std=gnu99 -fPIC -D_FORTIFY_SOURCE=0
 CXXFLAGS = -fPIC -D_FORTIFY_SOURCE=0
-FC = gfortran
 DEBUGFLAGS = -ggdb3 -DDEBUG $(FLAGS)
 SHIPFLAGS = -O3 -DNDEBUG $(FLAGS)
 
-# Different REPLs. Currently, only one of these can be chosen
 DEFAULT_REPL = readline
-REPL_READLINE = 1
-#REPL_BASIC = 1
-#REPL_CLOUD = 1
-
 JULIAGC = MARKSWEEP
 USE_COPY_STACKS = 1
 

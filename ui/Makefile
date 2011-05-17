@@ -6,12 +6,7 @@ LIBS = -L$(EXTROOT)/lib -lutil -ldl -lm $(OSLIBS) -lpthread
 LLTDIR = $(JULIAHOME)/src/support
 FLISPDIR = $(JULIAHOME)/src/flisp
 MONGOOSE = $(JULIAHOME)/external/mongoose
-ifeq ($(OS), Darwin)
-READLINE = $(JULIAHOME)/lib/libreadline.$(SHLIB_EXT)
-endif
-ifeq ($(OS), Linux)
-READLINE = -lncurses -lreadline
-endif
+READLINE = -L$(JULIAHOME)/lib/ -lncurses -lreadline
 
 FLAGS = -falign-functions -Wall -Wno-strict-aliasing \
 	-I$(JULIAHOME)/src -I$(LLTDIR) -I$(FLISPDIR) \
