@@ -28,19 +28,19 @@ debug release:
 	$(CC) $(CFLAGS) $(DEBUGFLAGS) -c $< -o $@
 
 julia-release-basic: repl.o repl-basic.o
-	$(CC) $(SHIPFLAGS) $^ -o $@ $(LIBJULIA_RELEASE) $(LIBS)
+	$(CC) $(SHIPFLAGS) $^ -o ../$@ $(LIBJULIA_RELEASE) $(LIBS)
 julia-debug-basic: repl.do repl-basic.do
-	$(CC) $(DEBUGFLAGS) $^ -o $@ $(LIBJULIA_DEBUG) $(LIBS)
+	$(CC) $(DEBUGFLAGS) $^ -o ../$@ $(LIBJULIA_DEBUG) $(LIBS)
 
 julia-release-readline: repl.o repl-readline.o
-	$(CC) $(SHIPFLAGS) $^ -o $@ $(LIBJULIA_RELEASE) $(READLINE) $(LIBS)
+	$(CC) $(SHIPFLAGS) $^ -o ../$@ $(LIBJULIA_RELEASE) $(READLINE) $(LIBS)
 julia-debug-readline: repl.do repl-readline.do
-	$(CC) $(DEBUGFLAGS) $^ -o $@ $(LIBJULIA_DEBUG) $(READLINE) $(LIBS)
+	$(CC) $(DEBUGFLAGS) $^ -o ../$@ $(LIBJULIA_DEBUG) $(READLINE) $(LIBS)
 
 julia-release-cloud: repl.c repl-cloud.c
-	$(CC) $(SHIPFLAGS) -I$(MONGOOSE) -DCLOUD_REPL repl.c repl-cloud.c $(MONGOOSE)/mongoose.c -o $@ $(LIBJULIA_RELEASE) -lssl -lcrypto $(LIBS)
+	$(CC) $(SHIPFLAGS) -I$(MONGOOSE) -DCLOUD_REPL repl.c repl-cloud.c $(MONGOOSE)/mongoose.c -o ../$@ $(LIBJULIA_RELEASE) -lssl -lcrypto $(LIBS)
 julia-debug-cloud: repl.c repl-cloud.c
-	$(CC) $(DEBUGFLAGS) -I$(MONGOOSE) -DCLOUD_REPL repl.c repl-cloud.c $(MONGOOSE)/mongoose.c -o $@ $(LIBJULIA_DEBUG) -lssl -lcrypto $(LIBS)
+	$(CC) $(DEBUGFLAGS) -I$(MONGOOSE) -DCLOUD_REPL repl.c repl-cloud.c $(MONGOOSE)/mongoose.c -o ../$@ $(LIBJULIA_DEBUG) -lssl -lcrypto $(LIBS)
 
 clean:
 	rm -f *.o *.do julia-*-basic julia-*-readline julia-*-cloud
