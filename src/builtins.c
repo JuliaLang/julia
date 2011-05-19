@@ -265,6 +265,16 @@ jl_value_t *jl_toplevel_eval_flex(jl_value_t *ex, int fast)
     else {
         thk = (jl_lambda_info_t*)ex;
         ewc = eval_with_compiler_p(jl_lam_body((jl_expr_t*)thk->ast), fast);
+        if (!ewc) {
+            jl_array_t *vinfos = jl_lam_vinfo((jl_expr_t*)thk->ast);
+            int i;
+            for(i=0; i < vinfos->length; i++) {
+                if (jl_cellref(jl_cellref(vinfos,i),2)!=jl_false) {
+                    ewc = 1;
+                    break;
+                }
+            }
+        }
     }
     jl_value_t *thunk=NULL;
     jl_function_t *gf=NULL;
@@ -691,9 +701,14 @@ static void show_type(jl_value_t *t)
 {
     ios_t *s = jl_current_output_stream();
     if (jl_is_func_type(t)) {
-        jl_show((jl_value_t*)((jl_func_type_t*)t)->from);
-        ios_write(s, "-->", 3);
-        jl_show((jl_value_t*)((jl_func_type_t*)t)->to);
+        if (t == (jl_value_t*)jl_any_func) {
+            ios_printf(s, "Function");
+        }
+        else {
+            jl_show((jl_value_t*)((jl_func_type_t*)t)->from);
+            ios_write(s, "-->", 3);
+            jl_show((jl_value_t*)((jl_func_type_t*)t)->to);
+        }
     }
     else if (jl_is_union_type(t)) {
         if (t == (jl_value_t*)jl_bottom_type) {
@@ -1012,6 +1027,8 @@ JL_CALLABLE(jl_f_new_struct_type)
 
 void jl_add_constructors(jl_struct_type_t *t);
 
+static void check_type_tuple(jl_tuple_t *t, jl_sym_t *name, const char *ctx);
+
 JL_CALLABLE(jl_f_new_struct_fields)
 {
     JL_NARGS(new_struct_fields, 3, 3);
@@ -1024,9 +1041,9 @@ JL_CALLABLE(jl_f_new_struct_fields)
     jl_struct_type_t *st = (jl_struct_type_t*)t;
     if (st->types != NULL)
         jl_error("you can't do that.");
+    check_type_tuple(ftypes, st->name->name, "type definition");
     jl_tuple_t *fnames = st->names;
 
-    assert(jl_is_type(super));
     check_supertype(super, st->name->name->name);
     st->super = (jl_tag_type_t*)super;
     if (jl_is_struct_type(super)) {
@@ -1056,10 +1073,11 @@ JL_CALLABLE(jl_f_new_type_constructor)
 {
     JL_NARGS(new_type_constructor, 2, 2);
     JL_TYPECHK(new_type_constructor, tuple, args[0]);
-    assert(jl_is_type(args[1]));
+    if (!jl_is_type(args[1]))
+        jl_type_error("typealias", (jl_value_t*)jl_type_type, args[1]);
     jl_tuple_t *p = (jl_tuple_t*)args[0];
     if (!all_typevars(p)) {
-        jl_errorf("invalid type parameter list in typealias");
+        jl_errorf("typealias: invalid type parameter list");
     }
     return (jl_value_t*)jl_new_type_ctor(p, (jl_type_t*)args[1]);
 }
