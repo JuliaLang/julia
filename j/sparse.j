@@ -224,17 +224,12 @@ macro binary_op_A_sparse_B_sparse_res_sparse(op)
     end # quote
 end # macro
 
-(+)(A::SparseMatrixCSC, B::Number) = (+)(full(A), B)
-(+)(A::Number, B::SparseMatrixCSC) = (+)(A, full(B))
-(+)(A::SparseMatrixCSC, B::Array) = (+)(full(A), B)
-(+)(A::Array, B::SparseMatrixCSC) = (+)(A, full(B))
-(+)(A::SparseMatrixCSC, B::Array) = (+)(full(A), B)
+(+)(A::SparseMatrixCSC, B::Union(Array,Number)) = (+)(full(A), B)
+(+)(A::Union(Array,Number), B::SparseMatrixCSC) = (+)(A, full(B))
 @binary_op_A_sparse_B_sparse_res_sparse (+)
 
-(-)(A::SparseMatrixCSC, B::Number) = (-)(full(A), B)
-(-)(A::Number, B::SparseMatrixCSC) = (-)(A, full(B))
-(-)(A::SparseMatrixCSC, B::Array) = (-)(full(A), B)
-(-)(A::Array, B::SparseMatrixCSC) = (-)(A, full(B))
+(-)(A::SparseMatrixCSC, B::Union(Array,Number)) = (-)(full(A), B)
+(-)(A::Union(Array,Number), B::SparseMatrixCSC) = (-)(A, full(B))
 @binary_op_A_sparse_B_sparse_res_sparse (-)
 
 (.*)(A::SparseMatrixCSC, B::Number) = SparseMatrixCSC(A.m, A.n, A.colptr, A.rowval, A.nzval .* B)

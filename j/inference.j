@@ -181,7 +181,7 @@ function static_convert(to::Tuple, from::Tuple)
                 pseq = true
             end
         else
-            return Union()
+            return None
         end
         # tuple conversion calls convert recursively
         if isseqtype(ce)

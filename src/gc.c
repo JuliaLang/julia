@@ -277,7 +277,8 @@ static void *pool_alloc(pool_t *p)
 
 static void sweep_pool(pool_t *p)
 {
-    int empty, freedall;
+    //int empty;
+    int freedall;
     gcval_t **prev_pfl;
     gcval_t *v;
     gcpage_t *pg = p->pages;
@@ -287,7 +288,7 @@ static void sweep_pool(pool_t *p)
     while (pg != NULL) {
         char *lim = (char*)pg + GC_PAGE_SZ - p->osize;
         v = (gcval_t*)&pg->data[0];
-        empty = 1;
+        //empty = 1;
         freedall = 1;
         prev_pfl = pfl;
         while ((char*)v <= lim) {

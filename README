@@ -68,6 +68,7 @@ Advantages of julia over other comparable systems are as follows:
 - High-level constructs for parallelism
 - Free and open source
 - Multi-dimensional array comprehensions
+- Coroutines and cooperative threading
 - Rich type system
 - Better handling of numeric types
 - Macros

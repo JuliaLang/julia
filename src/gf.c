@@ -687,6 +687,18 @@ static jl_tuple_t *find_tvars(jl_value_t *v, jl_tuple_t *env)
     return env;
 }
 
+static int has_unions(jl_tuple_t *type)
+{
+    int i;
+    for(i=0; i < type->length; i++) {
+        jl_value_t *t = jl_tupleref(type,i);
+        if (jl_is_union_type(t) ||
+            (jl_is_seq_type(t) && jl_is_union_type(jl_tparam0(t))))
+            return 1;
+    }
+    return 0;
+}
+
 static
 jl_methlist_t *jl_method_list_insert(jl_methlist_t **pml, jl_tuple_t *type,
                                      jl_function_t *method, int check_amb)
@@ -733,6 +745,33 @@ jl_methlist_t *jl_method_list_insert(jl_methlist_t **pml, jl_tuple_t *type,
     newrec->next = l;
     *pl = newrec;
     JL_GC_POP();
+    // if this contains Union types, methods after it might actually be
+    // more specific than it. we need to re-sort them.
+    if (has_unions(type)) {
+        jl_methlist_t *item = newrec->next, *next;
+        jl_methlist_t **pitem = &newrec->next, **pnext;
+        while (item != NULL) {
+            pl = pml;
+            l = *pml;
+            next = item->next;
+            pnext = &item->next;
+            while (l != newrec->next) {
+                if (args_morespecific((jl_value_t*)item->sig,
+                                      (jl_value_t*)l->sig)) {
+                    // reinsert item earlier in the list
+                    *pitem = next;
+                    item->next = l;
+                    *pl = item;
+                    pnext = pitem;
+                    break;
+                }
+                pl = &l->next;
+                l = l->next;
+            }
+            item = next;
+            pitem = pnext;
+        }
+    }
     return newrec;
 }
 
