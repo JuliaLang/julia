@@ -68,7 +68,7 @@ libjulia-release.$(SHLIB_EXT): $(OBJS) $(LIBFILES)
 debug release: %: julia-%
 
 clean:
-	rm -f libjulia-*.so
+	rm -f $(JULIAHOME)/libjulia*.$(SHLIB_EXT)
 	rm -f julia_flisp.boot
 	rm -f julia_flisp.boot.inc
 	rm -f boot.j.inc
