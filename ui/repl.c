@@ -405,12 +405,8 @@ static void print_profile()
 }
 #endif
 
-int main(int argc, char *argv[])
+int true_main(int argc, char *argv[])
 {
-    llt_init();
-    parse_opts(&argc, &argv);
-    julia_init(lisp_prompt ? NULL : image_file, &argc);
-
     if (lisp_prompt) {
         jl_lisp_prompt();
         return 0;
@@ -531,4 +527,12 @@ int main(int argc, char *argv[])
 
     exit_repl(0);
     return 0;
+}
+
+int main(int argc, char *argv[])
+{
+    llt_init();
+    parse_opts(&argc, &argv);
+    julia_init(lisp_prompt ? NULL : image_file);
+    return julia_trampoline(argc, argv, true_main);
 }

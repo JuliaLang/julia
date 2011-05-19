@@ -609,7 +609,9 @@ void jl_type_error_rt(const char *fname, const char *context,
 jl_value_t *jl_no_method_error(jl_function_t *f, jl_value_t **args, size_t na);
 
 // initialization functions
-DLLEXPORT void julia_init(char *imageFile, int *pargc);
+DLLEXPORT void julia_init(char *imageFile);
+DLLEXPORT
+int julia_trampoline(int argc, char *argv[], int (*pmain)(int ac,char *av[]));
 void jl_init_types();
 void jl_init_box_caches();
 void jl_init_frontend();

@@ -816,19 +816,20 @@ end
 SGE(n) = ProcessGroup(start_sge_workers(n), n)
 
 function start_sge_workers(n)
-    home = "/home/bezanson/src/julia"
+    home = JULIA_HOME
     sgedir = "$home/SGE"
     run(`mkdir -p $sgedir`)
-    qsub_cmd = `qsub -terse -e $sgedir -o $sgedir -t 1:$n`
+    qsub_cmd = `qsub -N JULIA -terse -e $sgedir -o $sgedir -t 1:$n`
     `echo $home/julia -e start_worker\\(\\)` | qsub_cmd
     out = cmd_stdout_stream(qsub_cmd)
     run(qsub_cmd)
     id = split(readline(out),set('.'))[1]
-    #println("job id is $id")
+    println("job id is $id")
     print("waiting for job to start"); flush(stdout_stream)
     workers = cell(n)
     for i=1:n
-        fname = "$sgedir/STDIN.o$(id).$(i)"
+        # wait for each output stream file to get created
+        fname = "$sgedir/JULIA.o$(id).$(i)"
         local fl, port
         fexists = false
         sleep(0.5)

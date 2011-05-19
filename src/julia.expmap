@@ -143,6 +143,7 @@
     jl_current_output_stream;
     jl_apply_generic;
     julia_init;
+    julia_trampoline;
     jl_alloc_cell_1d;
     julia_home;
     jl_arrayref;
