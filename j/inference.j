@@ -276,18 +276,22 @@ function apply_type_tfunc(A, args...)
     if !isType(args[1])
         return Any
     end
+    headtype = args[1].parameters[1]
     tparams = ()
     for i=2:length(A)
         if isType(args[i])
             tparams = append(tparams, (args[i].parameters[1],))
         elseif isa(A[i],Int32)
             tparams = append(tparams, (A[i],))
+        # TODO: evaluate Int32 static parameter!
+        #elseif 
         else
-            return args[1]
+            #return args[1]
+            tparams = append(tparams, (headtype.parameters[i-1],))
         end
     end
     # good, all arguments understood
-    Type{apply_type(args[1].parameters[1], tparams...)}
+    Type{apply_type(headtype, tparams...)}
 end
 t_func[apply_type] = (1, Inf, apply_type_tfunc)
 

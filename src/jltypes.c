@@ -536,9 +536,18 @@ static jl_value_t *intersect_typevar(jl_tvar_t *a, jl_value_t *b,
         p = *eqc;
         while (p != jl_null) {
             if (jl_t0(p) == (jl_value_t*)a) {
-                if (!jl_has_typevars(jl_t1(p)) && !jl_has_typevars(b)) {
+                if (!jl_has_typevars_(jl_t1(p),1) && !jl_has_typevars_(b,1)) {
                     if (!jl_types_equal(jl_t1(p), b))
                         return (jl_value_t*)jl_bottom_type;
+                }
+                else {
+                    jl_value_t *ti = jl_type_intersect(jl_t1(p),b,penv,eqc,var);
+                    if (ti == (jl_value_t*)jl_bottom_type)
+                        return (jl_value_t*)jl_bottom_type;
+                    if (jl_is_typevar(ti))
+                        ti = tvar_find(penv, ti);
+                    jl_t1(p) = ti;
+                    tvar_union(eqc, a, ti);
                 }
                 break;
             }
