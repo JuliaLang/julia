@@ -10,8 +10,10 @@
 Compiling
 ---------
 
-Required build tools: gcc, g++, gfortran, curl (to download third party tool source), GNU make
+Required build tools: gcc, g++, gfortran, curl (to download third party tool source), GNU make.
+
 Supported platforms: x86 and x86/64 GNU/Linux; x86/64 OS X.
+
 To compile:
 
 - Run "make" in external/ to download and build external dependencies.
