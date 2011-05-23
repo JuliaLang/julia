@@ -38,7 +38,7 @@ char *jl_answer_color  = "\033[1m\033[34m";
 char *prompt_string;
 
 static char jl_prompt_plain[] = "julia> ";
-static char jl_color_normal[] = "\033[0m\033[37m";
+static char jl_color_normal[] = "\033[0m";
 static int print_banner = 1;
 static char *post_boot = NULL;
 static int lisp_prompt = 0;

@@ -19,7 +19,7 @@ To compile:
 - Run `make` in `external/` to download and build external dependencies.
 - Run `make` in the top-level directory to build julia.
 
-No installation is necessary — julia can currently only be run from the directory where it was built.
+No installation is necessary — julia can be run from the directory where it was built. You might want to make a symbolic link for the executable, for example `ln -s JULIA_PATH/julia ~/bin/julia`.
 
 
 Directories

@@ -802,7 +802,7 @@ function worker_tunnel(host, port)
 end
 
 worker_ssh_command(host) =
-    `ssh -n $host "bash -l -c \"cd ~/src/julia && ./julia -e start_worker\(\)\""`
+    `ssh -n $host "bash -l -c \"cd $JULIA_HOME && ./julia -e start_worker\(\)\""`
 
 function start_remote_workers(machines)
     cmds = map(worker_ssh_command, machines)

@@ -30,7 +30,7 @@ libc_install: $(JULIALIB)
 
 LLVM_OBJ = $(EXTROOTLIB)/libLLVM-$(LLVM_VER).$(SHLIB_EXT)
 llvm-$(LLVM_VER).tgz:
-	curl -O http://llvm.org/releases/$(LLVM_VER)/llvm-$(LLVM_VER).tgz
+	$(DOWNLOAD) http://llvm.org/releases/$(LLVM_VER)/llvm-$(LLVM_VER).tgz
 llvm-$(LLVM_VER): llvm-$(LLVM_VER).tgz
 	tar zxf llvm-$(LLVM_VER).tgz
 $(LLVM_OBJ): llvm-$(LLVM_VER)

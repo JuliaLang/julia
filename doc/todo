@@ -1,20 +1,3 @@
-* some kind of macros as an alternative to auto conversion
-* convert when assigning to typed locations
-- architecture of real implementation
--------------------------------------------------------------------------------
-
-fixes
-* fix method cache bug
-* fix ctranspose
-* provide default unique generic type parameters if none given
-* for conversions, make generic parameters present in destination type
-  available in the function body
-* only skip generic matching if an existing method matches exactly
-- update wiki
-* allow partial type application; fill in missing with dummy typevars
-* add NTuple
--------------------------------------------------------------------------------
-
 features
 * f(x) = x syntax
 * write up module design ideas
@@ -23,15 +6,9 @@ features
 - common_supertype
 - improve the situation with numeric literals somehow
 
-- where clauses
-? allow chains of conversions
-? extend search space used by (conform )
-  . conform (Rational[Int32],Float64) (Complex[`T],Complex[`T])
-? coerce()
 -------------------------------------------------------------------------------
 
 speculation
-* i wish we could write an elementwise() macro to generate operators
 - complex number syntax?
 * declaring abstract types
 - a type with plain-old-data fields can be treated as a value type if it
@@ -71,12 +48,10 @@ except permits the required nesting!
   express "field types". For example
   Array[dims, data] where dims<:Buffer[Size], data<:Buffer
 
-- implicit constructors instead of needing to define boilerplate functions
-  like complex() and rational()
 * explicit different kinds of types. e.g. StructType, NumericType
   . conceptually helpful, because you can only use new(T,...) on struct types.
     new(Int8) doesn't work, and new(Symbol) doesn't work...
-- use {} for type parameters, e.g. Complex{Float64}
+* use {} for type parameters, e.g. Complex{Float64}
 
 - idea: only allow field access (dot) on variables whose type is statically
   known. this (1) guarantees that field access is fast, and (2) allows us
@@ -332,10 +307,6 @@ big deal.
 -------------------------------------------------------------------------------
 
 issues 5/31/10
-
-- covariance
-  . we will use T{S<:R} type patterns instead of covariance.
-  . T{S} is covariant iff T is abstract.
 
 - unions, tagged unions
   consider Cons(Cons(`a,nil), Cons(nil, nil)), or {{a}, {}}
