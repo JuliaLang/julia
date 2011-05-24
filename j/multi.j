@@ -1115,7 +1115,7 @@ function pmap(grp::ProcessGroup, f, lsts...)
      i = 1:length(lsts[1]) }
 end
 
-function pfor(reducer, f, r::Range1)
+function preduce(reducer, f, r::Range1)
     global PGRP
     np = PGRP.np
     N = length(r)
@@ -1137,11 +1137,57 @@ function pfor(reducer, f, r::Range1)
     mapreduce(reducer, fetch, results)
 end
 
+function pfor(f, r::Range1)
+    global PGRP
+    np = PGRP.np
+    N = length(r)
+    each = div(N,np)
+    rest = rem(N,np)
+    for i=1:np
+        lo = r.start + (i-1)*each
+        hi = lo + each-1
+        if i==np
+            hi += rest
+        end
+        @spawn begin
+            for j=lo:hi; f(j); end
+        end
+    end
+    ()
+end
+
 macro pfor(reducer, range, body)
     var = range.args[1]
     r = range.args[2]
     quote
-        pfor($reducer, ($var)->($body), $r)
+        preduce($reducer, ($var)->($body), $r)
+    end
+end
+
+macro parallel(args...)
+    na = length(args)
+    if na==1
+        loop = args[1]
+    elseif na==2
+        reducer = args[1]
+        loop = args[2]
+    else
+        throw(ArgumentError("wrong number of arguments to @parallel"))
+    end
+    if !isa(loop,Expr) || !is(loop.head,:for)
+        error("malformed @parallel loop")
+    end
+    var = loop.args[1].args[1]
+    r = loop.args[1].args[2]
+    body = loop.args[2]
+    if na==1
+        quote
+            pfor(($var)->($body), $r)
+        end
+    else
+        quote
+            preduce($reducer, ($var)->($body), $r)
+        end
     end
 end
 
@@ -1155,6 +1201,15 @@ fv(a)=eig(a)[2][2]
 all2all() = at_each(hello_from, myid())
 
 hello_from(i) = print("message from $i to $(myid())\n")
+
+# monte carlo estimate of pi
+function buffon(niter)
+    nc =
+    @parallel (+) for i=1:niter
+        rand() <= sin(rand()*pi()/2) ? 1 : 0
+    end
+    2/(nc/niter)
+end
 
 ## event processing, I/O and work scheduling ##
 
