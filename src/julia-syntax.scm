@@ -1309,18 +1309,19 @@ So far only the second case can actually occur.
 	     (analyze-vars (cadr e) env)
 	     '(null)))
 	((eq? (car e) 'typeassert)
+	 ;(let ((vi (var-info-for (cadr e) env)))
+	 ;  (if vi
+	 ;      (begin (vinfo:set-type! vi (caddr e))
+	 ;             (cadr e))
+	 `(call (top typeassert) ,(cadr e) ,(caddr e)))
+	((or (eq? (car e) 'decl) (eq? (car e) '|::|))
 	 ; handle var::T declaration by storing the type in the var-info
 	 ; record. for non-symbols or globals, emit a type assertion.
 	 (let ((vi (var-info-for (cadr e) env)))
 	   (if vi
 	       (begin (vinfo:set-type! vi (caddr e))
-		      (cadr e))
+		      '(null))
 	       `(call (top typeassert) ,(cadr e) ,(caddr e)))))
-	((or (eq? (car e) 'decl) (eq? (car e) '|::|))
-	 (let ((vi (var-info-for (cadr e) env)))
-	   (if vi
-	       (vinfo:set-type! vi (caddr e)))
-	   '(null)))
 	((eq? (car e) 'lambda)
 	 (letrec ((args (lam:args e))
 		  (locl (cdr (caddr e)))
