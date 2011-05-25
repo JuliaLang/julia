@@ -153,23 +153,53 @@ void jl_set_current_output_stream_obj(jl_value_t *v)
 
 // --- buffer manipulation ---
 
-// TODO: avoid the extra copy
 jl_array_t *jl_takebuf_array(ios_t *s)
 {
     size_t n;
-    char *b = ios_takebuf(s, &n);
-    jl_array_t *a = jl_pchar_to_array(b, n-1);
-    LLT_FREE(b);
+    jl_array_t *a;
+    if (s->buf == &s->local[0]) {
+        // small data case. copies, but this can be avoided using the
+        // technique of jl_readuntil below.
+        a = jl_pchar_to_array(s->buf, s->size);
+        ios_trunc(s, 0);
+    }
+    else {
+        assert(s->julia_alloc);
+        char *b = ios_takebuf(s, &n);
+        a = jl_alloc_array_1d(jl_array_uint8_type, 0);
+        a->data = b;
+        a->length = n-1;
+        a->nrows = n-1;
+        jl_gc_acquire_buffer(b);
+    }
     return a;
 }
 
 jl_value_t *jl_takebuf_string(ios_t *s)
 {
-    size_t n;
-    char *b = ios_takebuf(s, &n);
-    jl_value_t *v = jl_pchar_to_string(b, n-1);
-    LLT_FREE(b);
-    return v;
+    jl_array_t *a = jl_takebuf_array(s);
+    JL_GC_PUSH(&a);
+    jl_value_t *str = jl_array_to_string(a);
+    JL_GC_POP();
+    return str;
+}
+
+jl_array_t *jl_readuntil(ios_t *s, uint8_t delim)
+{
+    jl_array_t *a = jl_alloc_array_1d(jl_array_uint8_type, 80);
+    ios_t dest;
+    jl_ios_mem(&dest, 0);
+    ios_setbuf(&dest, a->data, 80, 0);
+    size_t n = ios_copyuntil(&dest, s, delim);
+    if (dest.buf != a->data) {
+        return jl_takebuf_array(&dest);
+    }
+    else {
+        a->length = n;
+        a->nrows = n;
+        ((char*)a->data)[n] = '\0';
+    }
+    return a;
 }
 
 // -- syscall utilities --

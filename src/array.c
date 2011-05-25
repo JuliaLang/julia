@@ -150,13 +150,19 @@ jl_array_t *jl_cstr_to_array(char *str)
     return jl_pchar_to_array(str, len);
 }
 
+jl_value_t *jl_array_to_string(jl_array_t *a)
+{
+    size_t len = a->length;
+    jl_struct_type_t* string_type = u8_isvalid(a->data, len) == 1 ? // ASCII
+        jl_ascii_string_type : jl_utf8_string_type;
+    return jl_apply((jl_function_t*)string_type, (jl_value_t**)&a, 1);
+}
+
 jl_value_t *jl_pchar_to_string(char *str, size_t len)
 {
     jl_array_t *a = jl_pchar_to_array(str, len);
     JL_GC_PUSH(&a);
-    jl_struct_type_t* string_type = u8_isvalid(a->data, len) == 1 ? // ASCII
-        jl_ascii_string_type : jl_utf8_string_type;
-    jl_value_t *s = jl_apply((jl_function_t*)string_type, (jl_value_t**)&a, 1);
+    jl_value_t *s = jl_array_to_string(a);
     JL_GC_POP();
     return s;
 }

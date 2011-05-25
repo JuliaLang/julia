@@ -40,7 +40,7 @@ open(fname::String) = open(fname, true, true, false, false)
 memio() = memio(0)
 function memio(x::Int)
     s = IOStream()
-    ccall(:ios_mem, Ptr{Void}, (Ptr{Uint8}, Ulong), s.ios, ulong(x))
+    ccall(:jl_ios_mem, Ptr{Void}, (Ptr{Uint8}, Ulong), s.ios, ulong(x))
     s
 end
 
@@ -175,10 +175,9 @@ function read{T}(s::IOStream, a::Array{T})
 end
 
 function readuntil(s::IOStream, delim::Uint8)
-    dest = memio()
-    ccall(:ios_copyuntil, Ulong,
-          (Ptr{Void}, Ptr{Void}, Uint8), dest.ios, s.ios, delim)
-    takebuf_string(dest)
+    a = ccall(:jl_readuntil, Any, (Ptr{Void}, Uint8), s.ios, delim)
+    # TODO: faster versions that avoid this encoding check
+    ccall(:jl_array_to_string, Any, (Any,), a)::ByteString
 end
 
 function readall(s::IOStream)
@@ -280,14 +279,22 @@ type LineIterator
 end
 
 start(itr::LineIterator) = readline(itr.stream)
-done(itr::LineIterator, line::ByteString) = isempty(line)
+done(itr::LineIterator, line) = isempty(line)
 
-function next(itr::LineIterator, this_line::ByteString)
+function next(itr::LineIterator, this_line)
     next_line = readline(itr.stream)
     this_line, next_line
 end
 
 each_line(stream::IOStream) = LineIterator(stream)
+
+function readlines(s)
+    a = {}
+    for l = each_line(s)
+        push(a, l)
+    end
+    a
+end
 
 ## file formats ##
 

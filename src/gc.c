@@ -219,6 +219,16 @@ static void *alloc_big(size_t sz, int isobj)
     return &v->_data[0];
 }
 
+void jl_gc_acquire_buffer(void *b)
+{
+    bigval_t *v = (bigval_t*)(((void**)b)-3);
+    v->sz = 0;  // ???
+    v->next = big_objects;
+    v->flags = 0;
+    v->isobj = 0;
+    big_objects = v;
+}
+
 #define bigval_word0(v) (((uptrint_t*)(&((bigval_t*)(v))->_data[0]))[0])
 
 static void sweep_big()

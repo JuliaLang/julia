@@ -51,7 +51,7 @@ Array(Int16, (2,2,3))
 
 
 # =============================================================================
-# function definitions, loops
+# function definitions, control flow
 # =============================================================================
 
 # 1. long form (for multiple statements)

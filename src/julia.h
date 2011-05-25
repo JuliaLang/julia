@@ -570,6 +570,7 @@ DLLEXPORT jl_array_t *jl_pchar_to_array(char *str, size_t len);
 DLLEXPORT jl_array_t *jl_cstr_to_array(char *str);
 DLLEXPORT jl_value_t *jl_pchar_to_string(char *str, size_t len);
 DLLEXPORT jl_value_t *jl_cstr_to_string(char *str);
+DLLEXPORT jl_value_t *jl_array_to_string(jl_array_t *a);
 DLLEXPORT jl_array_t *jl_alloc_cell_1d(size_t n);
 jl_tuple_t *jl_construct_array_size(jl_array_t *a, size_t nd);
 DLLEXPORT jl_value_t *jl_arrayref(jl_array_t *a, size_t i);  // 0-indexed
@@ -762,6 +763,7 @@ int jl_gc_n_preserved_values();
 DLLEXPORT void jl_gc_add_finalizer(jl_value_t *v, jl_function_t *f);
 jl_weakref_t *jl_gc_new_weakref(jl_value_t *value);
 #define jl_gc_setmark(v) (((uptrint_t*)(v))[-1]|=1)
+void jl_gc_acquire_buffer(void *b);
 void *alloc_2w();
 void *alloc_3w();
 void *alloc_4w();
@@ -827,6 +829,7 @@ DLLEXPORT void jl_set_current_output_stream_obj(jl_value_t *v);
 
 DLLEXPORT jl_array_t *jl_takebuf_array(ios_t *s);
 DLLEXPORT jl_value_t *jl_takebuf_string(ios_t *s);
+DLLEXPORT jl_array_t *jl_readuntil(ios_t *s, uint8_t delim);
 
 static inline void jl_eh_restore_state(jl_savestate_t *ss)
 {

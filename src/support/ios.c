@@ -27,6 +27,29 @@
 #include "ios.h"
 #include "timefuncs.h"
 
+// allocate a buffer that can be used as a bigval_t in julia's GC
+void *julia_malloc(size_t n)
+{
+    void *b = LLT_ALLOC(n+sizeof(void*)*3);
+    if (b == NULL)
+        return b;
+    return (void*)(((void**)b)+3);
+}
+
+void julia_free(void *b)
+{
+    LLT_FREE((void*)(((void**)b)-3));
+}
+
+void *julia_realloc(void *b, size_t n)
+{
+    void *p = (b==NULL ? NULL : (void*)(((void**)b)-3));
+    p = LLT_REALLOC(p, n + sizeof(void*)*3);
+    if (p == NULL)
+        return p;
+    return (void*)(((void**)p)+3);
+}
+
 #define MOST_OF(x) ((x) - ((x)>>4))
 
 /* OS-level primitive wrappers */
@@ -165,12 +188,18 @@ static char *_buf_realloc(ios_t *s, size_t sz)
         // if we own the buffer we're free to resize it
         // always allocate 1 bigger in case user wants to add a NUL
         // terminator after taking over the buffer
-        temp = LLT_REALLOC(s->buf, sz+1);
+        if (s->julia_alloc)
+            temp = julia_realloc(s->buf, sz+1);
+        else
+            temp = LLT_REALLOC(s->buf, sz+1);
         if (temp == NULL)
             return NULL;
     }
     else {
-        temp = LLT_ALLOC(sz+1);
+        if (s->julia_alloc)
+            temp = julia_malloc(sz+1);
+        else
+            temp = LLT_ALLOC(sz+1);
         if (temp == NULL)
             return NULL;
         s->ownbuf = 1;
@@ -541,8 +570,12 @@ void ios_close(ios_t *s)
     if (s->fd != -1 && s->ownfd)
         close(s->fd);
     s->fd = -1;
-    if (s->buf!=NULL && s->ownbuf && s->buf!=&s->local[0])
-        LLT_FREE(s->buf);
+    if (s->buf!=NULL && s->ownbuf && s->buf!=&s->local[0]) {
+        if (s->julia_alloc)
+            julia_free(s->buf);
+        else
+            LLT_FREE(s->buf);
+    }
     s->buf = NULL;
     s->size = s->maxsize = s->bpos = 0;
 }
@@ -568,7 +601,10 @@ char *ios_takebuf(ios_t *s, size_t *psize)
     ios_flush(s);
 
     if (s->buf == &s->local[0]) {
-        buf = LLT_ALLOC(s->size+1);
+        if (s->julia_alloc)
+            buf = julia_malloc(s->size+1);
+        else
+            buf = LLT_ALLOC(s->size+1);
         if (buf == NULL)
             return NULL;
         if (s->size)
@@ -601,8 +637,12 @@ int ios_setbuf(ios_t *s, char *buf, size_t size, int own)
     }
     s->size = nvalid;
 
-    if (s->buf!=NULL && s->ownbuf && s->buf!=&s->local[0])
-        LLT_FREE(s->buf);
+    if (s->buf!=NULL && s->ownbuf && s->buf!=&s->local[0]) {
+        if (s->julia_alloc)
+            julia_free(s->buf);
+        else
+            LLT_FREE(s->buf);
+    }
     s->buf = buf;
     s->maxsize = size;
     s->ownbuf = own;
@@ -717,6 +757,7 @@ static void _ios_init(ios_t *s)
     s->_eof = 0;
     s->rereadable = 0;
     s->readonly = 0;
+    s->julia_alloc = 0;
 }
 
 /* stream object initializers. we do no allocation. */
@@ -747,6 +788,15 @@ ios_t *ios_mem(ios_t *s, size_t initsize)
 {
     _ios_init(s);
     s->bm = bm_mem;
+    _buf_realloc(s, initsize);
+    return s;
+}
+
+ios_t *jl_ios_mem(ios_t *s, size_t initsize)
+{
+    _ios_init(s);
+    s->bm = bm_mem;
+    s->julia_alloc = 1;
     _buf_realloc(s, initsize);
     return s;
 }
@@ -785,21 +835,16 @@ ios_t *ios_stdin = NULL;
 ios_t *ios_stdout = NULL;
 ios_t *ios_stderr = NULL;
 
-// allocate with 1 extra word at the front
-// allows ios_t's to be stored as the data of an Array, since it will be
-// safe to "mark" them.
-#define alloc_julia_compat(n) (void*)(((void**)LLT_ALLOC(n+sizeof(void*)))+1)
-
 void ios_init_stdstreams()
 {
-    ios_stdin = alloc_julia_compat(sizeof(ios_t));
+    ios_stdin = julia_malloc(sizeof(ios_t));
     ios_fd(ios_stdin, STDIN_FILENO, 0);
 
-    ios_stdout = alloc_julia_compat(sizeof(ios_t));
+    ios_stdout = julia_malloc(sizeof(ios_t));
     ios_fd(ios_stdout, STDOUT_FILENO, 0);
     ios_stdout->bm = bm_line;
 
-    ios_stderr = alloc_julia_compat(sizeof(ios_t));
+    ios_stderr = julia_malloc(sizeof(ios_t));
     ios_fd(ios_stderr, STDERR_FILENO, 0);
     ios_stderr->bm = bm_none;
 }

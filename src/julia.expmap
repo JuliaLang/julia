@@ -45,7 +45,9 @@
     jl_set_current_output_stream_obj;
     jl_takebuf_array;
     jl_takebuf_string;
+    jl_readuntil;
     jl_cstr_to_string;
+    jl_array_to_string;
     jl_show_to_string;
     jl_parse_string;
     jl_is_rest_arg;
@@ -64,7 +66,7 @@
     jl_sizeof_ios_t;
     jl_stdout_stream;
     ios_fd;
-    ios_mem;
+    jl_ios_mem;
     ios_file;
     ios_putc;
     ios_pututf8;
