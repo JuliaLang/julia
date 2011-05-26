@@ -713,10 +713,11 @@ size_t ios_copyall(ios_t *to, ios_t *from)
 
 size_t ios_copyuntil(ios_t *to, ios_t *from, char delim)
 {
-    size_t total = 0, avail;
+    size_t total = 0, avail=from->size - from->bpos;
     if (!ios_eof(from)) {
         do {
-            avail = ios_readprep(from, LINE_CHUNK_SIZE);
+            if (avail == 0)
+                avail = ios_readprep(from, LINE_CHUNK_SIZE);
             size_t written;
             char *pd = (char*)memchr(from->buf+from->bpos, delim, avail);
             if (pd == NULL) {
