@@ -116,6 +116,8 @@ end
 function add_workers(PGRP::ProcessGroup, w::Array{Any,1})
     n = length(w)
     locs = map(x->Location(x.host,x.port), w)
+    # NOTE: currently only node 1 can add new nodes, since nobody else
+    # has the full list of address:port
     newlocs = append(PGRP.locs, locs)
     sockets = HashTable()
     handler = fd->message_handler(fd, sockets)
@@ -171,10 +173,14 @@ end
 function identify_socket(otherid, fd, sock)
     global PGRP
     i = otherid
-    locs = PGRP.locs
+    #locs = PGRP.locs
     @assert i > PGRP.myid
-    PGRP.workers[i] = Worker(locs[i].host, locs[i].port, fd, sock)
-    PGRP.workers[i].id = i
+    d = i-length(PGRP.workers)
+    if d > 0
+        grow(PGRP.workers, d)
+        PGRP.np += d
+    end
+    PGRP.workers[i] = Worker("", 0, fd, sock, i)
     #write(stdout_stream, "$(PGRP.myid) heard from $i\n")
     ()
 end
