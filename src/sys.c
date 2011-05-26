@@ -260,7 +260,7 @@ static void *run_io_thr(void *arg)
             pthread_mutex_unlock(&q_mut);
             size_t nw;
             _os_write_all(r->fd, r->buf, r->n, &nw);
-            LLT_FREE(r->buf);
+            LLT_FREE(((void**)r->buf)-3);
             free(r);
             pthread_mutex_lock(&q_mut);
         }
