@@ -91,6 +91,11 @@ function push{T}(a::Array{T,1}, item)
     return a
 end
 
+function grow{T}(a::Array{T,1}, n::Int)
+    ccall(:jl_array_grow_end, Void, (Any, Ulong), a, ulong(n))
+    return a
+end
+
 function pop{T}(a::Array{T,1})
     if isempty(a)
         error("pop: array is empty")
