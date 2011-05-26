@@ -232,7 +232,9 @@ ref(t::Tensor, r::Real...) = t[map(x->convert(Int32,round(x)),r)...]
 ref(A::Vector, I::Vector{Index}) = [ A[i] | i = I ]
 ref(A::Tensor{Any,1}, I::Vector{Index}) = { A[i] | i = I }
 
-ref(A::Matrix, I::Indices, J::Indices) = [ A[i,j] | i = I, j = J ]
+ref(A::Matrix, I::Index, J::Vector{Index})         = [ A[i,j] | i = I, j = J ]
+ref(A::Matrix, I::Vector{Index}, J::Index)         = [ A[i,j] | i = I, j = J ]
+ref(A::Matrix, I::Vector{Index}, J::Vector{Index}) = [ A[i,j] | i = I, j = J ]
 
 function ref(A::Tensor, I::Index...)
     dims = size(A)

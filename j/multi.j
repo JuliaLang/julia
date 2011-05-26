@@ -1,8 +1,9 @@
 ## multi.j - multiprocessing
 ##
-## higher-level interface:
-##
-## ProcessGroup(np) - create a group of np processors
+## julia starts with one process, and processors can be added using:
+##   addprocs_local(n)                     using exec
+##   addprocs_ssh({"host1","host2",...})   using remote execution
+##   addprocs_sge(n)                       using Sun Grid Engine batch queue
 ##
 ## remote_call(w, func, args...) -
 ##     tell a worker to call a function on the given arguments.
@@ -84,7 +85,8 @@ type Worker
         Worker(host, port, fd, fdio(fd))
     end
 
-    Worker(host, port, fd, sock) = new(host, port, fd, sock, memio(), 0, {})
+    Worker(host,port,fd,sock,id) = new(host, port, fd, sock, memio(), id, {})
+    Worker(host,port,fd,sock) = Worker(host,port,fd,sock,0)
 end
 
 send_msg(w::Worker, kind, args...) = send_msg(w.socket, w.sendbuf, kind, args)
@@ -103,66 +105,49 @@ type ProcessGroup
     locs::Array{Any,1}
     np::Int32
 
-    # event loop state
+    # global references
     refs
-    client
 
-    function ProcessGroup(np::Int)
-        # n local workers
-        w = { start_local_worker() | i=1:np }
-        ProcessGroup(w, np)
-    end
-
-    function ProcessGroup(machines)
-        np = length(machines)
-        if np > 0 && isa(machines[1],Worker)
-            return ProcessGroup(machines, np)
-        end
-        # workers on remote machines
-        w = start_remote_workers(machines)
-        ProcessGroup(w, np)
-    end
-
-    function ProcessGroup(myid::Int32, w::Array{Any,1}, locs::Array{Any,1},
-                          np::Int32)
-        return new(myid, w, locs, np, HashTable(), ())
-    end
-
-    function ProcessGroup(w::Array{Any,1}, np::Int)
-        # "client side", or initiator of process group
-        locs = map(x->Location(x.host,x.port), w)
-        global PGRP = ProcessGroup(0, w, locs, np)
-        PGRP.client = LocalProcess()
-        sockets = HashTable()
-        handler = fd->message_handler(fd, sockets)
-        for i=1:np
-            w[i].id = i
-            send_msg(w[i], i, locs)
-            sockets[w[i].fd] = w[i].socket
-            add_fd_handler(w[i].fd, handler)
-        end
-        PGRP
-    end
-
-    function ProcessGroup(myid, locs, sockets)
-        # joining existing process group
-        np = length(locs)
-        w = cell(np)
-        w[myid] = LocalProcess()
-        PGRP = ProcessGroup(myid, w, locs, np)
-        handler = fd->message_handler(fd, sockets)
-        for i=(myid+1):np
-            w[i] = Worker(locs[i].host, locs[i].port)
-            w[i].id = i
-            sockets[w[i].fd] = w[i].socket
-            add_fd_handler(w[i].fd, handler)
-            send_msg(w[i], :identify_socket, myid)
-        end
-        PGRP
+    function ProcessGroup(myid::Int32, w::Array{Any,1}, locs::Array{Any,1})
+        return new(myid, w, locs, length(w), HashTable())
     end
 end
 
-myid() = (global PGRP; isbound(:PGRP) ? (PGRP::ProcessGroup).myid : -1)
+function add_workers(PGRP::ProcessGroup, w::Array{Any,1})
+    n = length(w)
+    locs = map(x->Location(x.host,x.port), w)
+    newlocs = append(PGRP.locs, locs)
+    sockets = HashTable()
+    handler = fd->message_handler(fd, sockets)
+    for i=1:n
+        push(PGRP.workers, w[i])
+        w[i].id = PGRP.np+i
+        send_msg(w[i], w[i].id, newlocs)
+        sockets[w[i].fd] = w[i].socket
+        add_fd_handler(w[i].fd, handler)
+    end
+    PGRP.locs = newlocs
+    PGRP.np += n
+    PGRP
+end
+
+function join_pgroup(myid, locs, sockets)
+    # joining existing process group
+    np = length(locs)
+    w = cell(np)
+    w[myid] = LocalProcess()
+    handler = fd->message_handler(fd, sockets)
+    for i = 2:(myid-1)
+        w[i] = Worker(locs[i].host, locs[i].port)
+        w[i].id = i
+        sockets[w[i].fd] = w[i].socket
+        add_fd_handler(w[i].fd, handler)
+        send_msg(w[i], :identify_socket, myid)
+    end
+    ProcessGroup(myid, w, locs)
+end
+
+myid() = (global PGRP; (PGRP::ProcessGroup).myid)
 
 function worker_id_from_socket(s)
     global PGRP
@@ -174,16 +159,12 @@ function worker_id_from_socket(s)
             end
         end
     end
-    if isa(PGRP.client,Worker) && (is(s,PGRP.client.socket) ||
-                                   is(s,PGRP.client.sendbuf))
-        return 0
-    end
     return -1
 end
 
 function worker_from_id(id)
     global PGRP
-    id==0 ? PGRP.client : PGRP.workers[id]
+    PGRP.workers[id]
 end
 
 # establish a Worker connection for processes that connected to us
@@ -191,7 +172,7 @@ function identify_socket(otherid, fd, sock)
     global PGRP
     i = otherid
     locs = PGRP.locs
-    @assert i < PGRP.myid
+    @assert i > PGRP.myid
     PGRP.workers[i] = Worker(locs[i].host, locs[i].port, fd, sock)
     PGRP.workers[i].id = i
     #write(stdout_stream, "$(PGRP.myid) heard from $i\n")
@@ -429,12 +410,8 @@ remote_do(id::Int, f, args...) = remote_do(worker_from_id(id), f, args...)
 
 function sync_msg(verb::Symbol, r::RemoteRef)
     global PGRP
-    # NOTE: if other workers request stuff from the client
-    # (id 0), they won't get it until the user yield()s somehow.
-    # this should be fixed.
     oid = rr2id(r)
-    if r.where==myid() || (r.where > 0 && isa(PGRP.workers[r.where],
-                                              LocalProcess))
+    if r.where==myid() || isa(PGRP.workers[r.where], LocalProcess)
         wi = lookup_ref(oid)
         if wi.done
             return is(verb,:fetch) ? work_result(wi) : r
@@ -442,8 +419,6 @@ function sync_msg(verb::Symbol, r::RemoteRef)
             # add to WorkItem's notify list
             wi.notify = ((), verb, oid, wi.notify)
         end
-    elseif r.where == 0
-        send_msg(PGRP.client, verb, oid)
     else
         send_msg(PGRP.workers[r.where], verb, oid)
     end
@@ -607,6 +582,7 @@ function perform_work(job::WorkItem)
         #show(e)
         print("exception on ", myid(), ": ")
         show(e)
+        println()
         result = FinalValue(e)
         job.task = ()  # task is toast. would be better to reuse it somehow.
     end
@@ -670,8 +646,8 @@ function accept_handler(accept_fd, sockets)
             # first connection; get process group info from client
             _myid = force(deserialize(sock))
             locs = force(deserialize(sock))
-            PGRP = ProcessGroup(_myid, locs, sockets)
-            PGRP.client = Worker("", 0, connectfd, sock)
+            PGRP = join_pgroup(_myid, locs, sockets)
+            PGRP.workers[1] = Worker("", 0, connectfd, sock, 1)
         end
         add_fd_handler(connectfd, fd->message_handler(fd, sockets))
     end
@@ -777,6 +753,7 @@ function start_worker(wrfd)
     global Workqueue = Queue()
     global Waiting = HashTable(64)
     global Scheduler = current_task()
+    global fd_handlers = HashTable()
 
     worker_sockets = HashTable()
     add_fd_handler(sockfd, fd->accept_handler(fd, worker_sockets))
@@ -801,19 +778,41 @@ function worker_tunnel(host, port)
     localp
 end
 
-worker_ssh_command(host) =
-    `ssh -n $host "bash -l -c \"cd $JULIA_HOME && ./julia -e start_worker\(\)\""`
-
-function start_remote_workers(machines)
-    cmds = map(worker_ssh_command, machines)
-    outs = map(cmd_stdout_stream, cmds)
+function start_remote_workers(machines, cmds)
+    n = length(cmds)
+    outs = cell(n)
+    for i=1:n
+        let fd = read_from(cmds[i]).fd
+            let stream = fdio(fd)
+                outs[i] = stream
+                # redirect console output from workers to the client's stdout
+                add_fd_handler(fd, fd->write(stdout_stream, readline(stream)))
+            end
+        end
+    end
     for c = cmds
         spawn(c)
     end
-    { Worker(machines[i], read(outs[i],Int16)) | i=1:length(machines) }
+    w = cell(n)
+    for i=1:n
+        w[i] = Worker(machines[i], read(outs[i],Int16))
+        readline(outs[i])  # read and ignore hostname
+    end
+    w
 end
 
-SGE(n) = ProcessGroup(start_sge_workers(n), n)
+worker_ssh_cmd(host) =
+    `ssh -n $host "bash -l -c \"cd $JULIA_HOME && ./julia -e start_worker\(\)\""`
+
+worker_local_cmd() = `$JULIA_HOME/julia -e start_worker()`
+
+addprocs_ssh(machines) =
+    add_workers(PGRP, start_remote_workers(machines,
+                                           map(worker_ssh_cmd, machines)))
+
+addprocs_local(np::Int) =
+    add_workers(PGRP, start_remote_workers({ "localhost" | i=1:np },
+                                           { worker_local_cmd() | i=1:np }))
 
 function start_sge_workers(n)
     home = JULIA_HOME
@@ -857,23 +856,8 @@ function start_sge_workers(n)
     workers
 end
 
-function start_local_worker()
-    fds = Array(Int32, 2)
-    ccall(dlsym(libc, :pipe), Int32, (Ptr{Int32},), fds)
-    rdfd = fds[1]
-    wrfd = fds[2]
-
-    if fork()==0
-        start_worker(wrfd)
-    end
-    io = fdio(rdfd)
-    port = read(io, Int16)
-    ccall(dlsym(libc,:close), Int32, (Int32,), rdfd)
-    ccall(dlsym(libc,:close), Int32, (Int32,), wrfd)
-    #print("started worker on port ", port, "\n")
-    sleep(0.1)
-    Worker("localhost", port)
-end
+addprocs_sge(n) = add_workers(start_sge_workers(n))
+SGE(n) = addprocs_sge(n)
 
 ## global objects and collective operations ##
 
@@ -1194,7 +1178,6 @@ end
 ## demos ##
 
 fv(a)=eig(a)[2][2]
-# g = ProcessGroup(3)
 # A=randn(800,800);A=A*A';
 # pmap(fv, {A,A,A})
 
@@ -1228,7 +1211,6 @@ del_fd_handler(fd) = del(fd_handlers, fd)
 function event_loop(isclient)
     fdset = FDSet()
     iserr, lasterr = false, ()
-    #repl_callback(0, 0)
     
     while true
         try
@@ -1269,13 +1251,12 @@ function event_loop(isclient)
 end
 
 roottask = current_task()
+roottask_wi = WorkItem(roottask)
 
 function repl_callback(ast, show_value)
     # use root task to execute user input
-    cmd = WorkItem(roottask)
-    cmd.argument = (ast, show_value)
-    cmd.requeue = false
-    perform_work(cmd)
+    roottask_wi.argument = (ast, show_value)
+    perform_work(roottask_wi)
 end
 
 # start as a node that accepts interactive input
@@ -1285,13 +1266,16 @@ function start_client()
         global Workqueue = Queue()
         global Waiting = HashTable(64)
         global Scheduler = Task(()->event_loop(true), 1024*1024)
+        global PGRP = ProcessGroup(1, {LocalProcess()}, {Location("",0)})
 
         while true
             add_fd_handler(STDIN.fd, fd->ccall(:jl_stdin_callback, Void, ()))
             (ast, show_value) = yield()
             del_fd_handler(STDIN.fd)
+            roottask_wi.requeue = true
             ccall(:jl_eval_user_input, Void, (Any, Int32),
                   ast, show_value)
+            roottask_wi.requeue = false
         end
     catch e
         show(e)

@@ -893,6 +893,11 @@ jl_function_t *jl_get_specialization(jl_function_t *f, jl_tuple_t *types)
     return sf;
 }
 
+#ifdef JL_TRACE
+static int trace_en = 0;
+static void enable_trace(int x) { trace_en=x; }
+#endif
+
 JL_CALLABLE(jl_apply_generic)
 {
     jl_methtable_t *mt = (jl_methtable_t*)jl_t0(env);
@@ -900,13 +905,15 @@ JL_CALLABLE(jl_apply_generic)
     mt->ncalls++;
 #endif
 #ifdef JL_TRACE
-    ios_printf(ios_stdout, "%s(", ((jl_sym_t*)jl_t1(env))->name);
-    size_t i;
-    for(i=0; i < nargs; i++) {
-        if (i > 0) ios_printf(ios_stdout, ", ");
-        ios_printf(ios_stdout, "%s", type_summary(jl_typeof(args[i])));
+    if (trace_en) {
+        ios_printf(ios_stdout, "%s(", ((jl_sym_t*)jl_t1(env))->name);
+        size_t i;
+        for(i=0; i < nargs; i++) {
+            if (i > 0) ios_printf(ios_stdout, ", ");
+            ios_printf(ios_stdout, "%s", type_summary(jl_typeof(args[i])));
+        }
+        ios_printf(ios_stdout, ")\n");
     }
-    ios_printf(ios_stdout, ")\n");
 #endif
     /*
       search order:
