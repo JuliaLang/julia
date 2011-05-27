@@ -109,6 +109,11 @@ function show(e::MethodError)
     end
 end
 
+function show(e::UnionTooComplexError)
+    print("union type pattern too complex: ")
+    show(e.types)
+end
+
 dump(t::Type) = print(t)
 dump(t::Tuple) = print(t)
 

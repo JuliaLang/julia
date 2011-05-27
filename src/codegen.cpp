@@ -38,6 +38,7 @@ static bool nested_compile=false;
 static Module *jl_Module;
 static ExecutionEngine *jl_ExecutionEngine;
 static std::map<const std::string, GlobalVariable*> stringConstants;
+static std::map<int, std::string> argNumberStrings;
 static FunctionPassManager *FPM;
 
 // types
@@ -732,7 +733,7 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
                         ety = (jl_value_t*)jl_any_type;
                     }
                     Value *ary = emit_expr(args[1], ctx, true);
-                    const Type *elty = julia_type_to_llvm(ety);
+                    const Type *elty = julia_type_to_llvm(ety, ctx);
                     bool isbool=false;
                     if (elty==T_int1) { elty = T_int8; isbool=true; }
                     Value *data =
@@ -772,7 +773,7 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
                         ety = (jl_value_t*)jl_any_type;
                     }
                     Value *ary = emit_expr(args[1], ctx, true);
-                    const Type *elty = julia_type_to_llvm(ety);
+                    const Type *elty = julia_type_to_llvm(ety, ctx);
                     if (elty==T_int1) { elty = T_int8; }
                     Value *data =
                         builder.CreateBitCast(emit_nthptr(ary, 2),
@@ -1176,7 +1177,7 @@ static AllocaInst *alloc_local(char *name, jl_codectx_t *ctx)
     jl_value_t *jt = (*ctx->declTypes)[name];
     const Type *vtype;
     if (store_unboxed_p(name, ctx))
-        vtype = julia_type_to_llvm(jt);
+        vtype = julia_type_to_llvm(jt, ctx);
     else
         vtype = jl_pvalue_llvmt;
     AllocaInst *lv = builder.CreateAlloca(vtype, 0, name);

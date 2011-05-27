@@ -41,6 +41,7 @@ jl_struct_type_t *jl_lambda_info_type;
 jl_struct_type_t *jl_errorexception_type=NULL;
 jl_struct_type_t *jl_typeerror_type;
 jl_struct_type_t *jl_loaderror_type;
+jl_struct_type_t *jl_uniontoocomplex_type;
 jl_value_t *jl_an_empty_cell=NULL;
 jl_value_t *jl_stackovf_exception;
 jl_value_t *jl_divbyzero_exception;
@@ -644,8 +645,7 @@ int jl_union_too_complex(jl_tuple_t *types)
 jl_uniontype_t *jl_new_uniontype(jl_tuple_t *types)
 {
     if (jl_union_too_complex(types)) {
-        jl_errorf("union type pattern too complex: %s",
-                  jl_show_to_string((jl_value_t*)types));
+        jl_raise(jl_new_struct(jl_uniontoocomplex_type, (jl_value_t*)types));
     }
     jl_uniontype_t *t = (jl_uniontype_t*)newobj((jl_type_t*)jl_union_kind, 1);
     // don't make unions of 1 type; Union(T)==T

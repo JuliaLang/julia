@@ -178,6 +178,10 @@ type IOError            <: Exception end
 type StackOverflowError <: Exception end
 type EOFError           <: Exception end
 
+type UnionTooComplexError <: Exception
+    types::Tuple
+end
+
 finalizer(o, f::Function) =
     ccall(:jl_gc_add_finalizer, Void, (Any,Any), o, f)
 

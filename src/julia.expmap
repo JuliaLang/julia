@@ -67,6 +67,7 @@
     jl_stdout_stream;
     ios_fd;
     jl_ios_mem;
+    julia_free;
     ios_file;
     ios_putc;
     ios_pututf8;

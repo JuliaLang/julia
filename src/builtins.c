@@ -642,7 +642,7 @@ char *jl_show_to_string(jl_value_t *v)
             dest = jl_current_output_stream();
         }
         else {
-            ios_mem(&tmp, 0);
+            jl_ios_mem(&tmp, 0);
             dest = &tmp;
             jl_current_task->state.current_output_stream = dest;
         }

@@ -201,7 +201,7 @@ static void ajax_send_julia_response(struct mg_connection *conn,
 				     const struct mg_request_info *request_info) {
   struct message *message;
   struct session *session;
-  char text[sizeof(message->text) - 1];
+  char text[sizeof(message->text) + 1];
   int is_jsonp;
 
   mg_printf(conn, "%s", ajax_reply_start);
@@ -231,15 +231,16 @@ static void ajax_send_julia_response(struct mg_connection *conn,
   repl_result_esc[k++] = 'b';
   repl_result_esc[k++] = 'r';
   repl_result_esc[k++] = '>';
-  for (int i=0; i<repl_result_size; ++i, ++k) {
+  for (int i=0; i<repl_result_size; ++i) {
     if (repl_result[i] == '\n') {
       repl_result_esc[k++] = '<';
       repl_result_esc[k++] = 'b';
       repl_result_esc[k++] = 'r';
       repl_result_esc[k++] = '>';
-      ++i;
     }
-    repl_result_esc[k] = repl_result[i];
+    else {
+      repl_result_esc[k++] = repl_result[i];
+    }
   }
   repl_result_esc[k] = '\0';
 
@@ -247,7 +248,7 @@ static void ajax_send_julia_response(struct mg_connection *conn,
   int result_size = (repl_result_size < MAX_MESSAGE_LEN) ? repl_result_size : MAX_MESSAGE_LEN;
   memcpy(text, repl_result_esc, result_size+1);
   free(repl_result_esc);
-  //free(repl_result);
+  //julia_free(repl_result);
 
   if (text[0] != '\0') {
     // We have a message to store. Write-lock the ringbuffer,

@@ -79,6 +79,7 @@ DLLEXPORT int ios_eof(ios_t *s);
 DLLEXPORT int ios_flush(ios_t *s);
 DLLEXPORT void ios_close(ios_t *s);
 DLLEXPORT char *ios_takebuf(ios_t *s, size_t *psize);  // release buffer to caller
+DLLEXPORT void julia_free(void *b);
 // set buffer space to use
 DLLEXPORT int ios_setbuf(ios_t *s, char *buf, size_t size, int own);
 DLLEXPORT int ios_bufmode(ios_t *s, bufmode_t mode);

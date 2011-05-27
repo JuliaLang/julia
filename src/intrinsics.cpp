@@ -179,14 +179,14 @@ static Value *tpropagate(Value *a, Value *b)
     return b;
 }
 
-static const Type *julia_type_to_llvm(jl_value_t *jt)
+static const Type *julia_type_to_llvm(jl_value_t *jt, jl_codectx_t *ctx)
 {
     if (jt == (jl_value_t*)jl_bool_type) return T_int1;
     if (jt == (jl_value_t*)jl_float32_type) return T_float32;
     if (jt == (jl_value_t*)jl_float64_type) return T_float64;
     //if (jt == (jl_value_t*)jl_null) return T_void;
     if (jl_is_bits_type(jt) && jl_is_cpointer_type(jt)) {
-        const Type *lt = julia_type_to_llvm(jl_tparam0(jt));
+        const Type *lt = julia_type_to_llvm(jl_tparam0(jt), ctx);
         if (lt == T_void)
             lt = T_int8;
         return PointerType::get(lt, 0);
@@ -201,8 +201,8 @@ static const Type *julia_type_to_llvm(jl_value_t *jt)
     if (jt == (jl_value_t*)jl_any_type)
         return jl_pvalue_llvmt;
     if (jt == (jl_value_t*)jl_bottom_type) return T_void;
-    jl_errorf("cannot convert type %s to a native type",
-              jl_show_to_string(jt));
+    jl_type_error_rt(ctx->funcName.c_str(), "conversion to native type",
+                     (jl_value_t*)jl_bits_kind, jt);
     return NULL;
 }
 
@@ -368,9 +368,21 @@ extern "C" void *jl_value_to_pointer(jl_value_t *jt, jl_value_t *v, int argn)
             return temp;
         }
     }
-    jl_errorf("ccall: expected Ptr{%s} as argument %d",
-              // TODO: string is leaked
-              jl_show_to_string(jt), argn);
+    std::map<int, std::string>::iterator it = argNumberStrings.find(argn);
+    if (it == argNumberStrings.end()) {
+        std::stringstream msg;
+        msg << "argument ";
+        msg << argn;
+        argNumberStrings[argn] = msg.str();
+        it = argNumberStrings.find(argn);
+    }
+    jl_value_t *targ=NULL, *pty=NULL;
+    JL_GC_PUSH(&targ, &pty);
+    targ = (jl_value_t*)jl_tuple1(jt);
+    pty = (jl_value_t*)jl_apply_type((jl_value_t*)jl_pointer_type,
+                                     (jl_tuple_t*)targ);
+    jl_type_error_rt("ccall", (*it).second.c_str(), pty, v);
+    // doesn't return
     return (jl_value_t*)jl_null;
 }
 
@@ -456,7 +468,7 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
     jl_tuple_t *tt = (jl_tuple_t*)at;
     std::vector<const Type *> fargt(0);
     std::vector<const Type *> fargt_sig(0);
-    const Type *lrt = julia_type_to_llvm(rt);
+    const Type *lrt = julia_type_to_llvm(rt, ctx);
     size_t i;
     bool haspointers = false;
     bool isVa = false;
@@ -466,7 +478,7 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
             isVa = true;
             tti = jl_tparam0(tti);
         }
-        const Type *t = julia_type_to_llvm(tti);
+        const Type *t = julia_type_to_llvm(tti, ctx);
         haspointers = haspointers || (t->isPointerTy() && t!=jl_pvalue_llvmt);
         fargt.push_back(t);
         if (!isVa)
@@ -642,7 +654,7 @@ static Value *generic_box(jl_value_t *targ, jl_value_t *x, jl_codectx_t *ctx)
     Value *vx = emit_unboxed(x, ctx);
     if (vx->getType()->getPrimitiveSizeInBits() != nb)
         jl_errorf("box: expected argument with %d bits", nb);
-    const Type *llvmt = julia_type_to_llvm(bt);
+    const Type *llvmt = julia_type_to_llvm(bt, ctx);
     if (vx->getType() != llvmt) {
         if (vx->getType()->isPointerTy() && !llvmt->isPointerTy()) {
             vx = builder.CreatePtrToInt(vx, llvmt);
