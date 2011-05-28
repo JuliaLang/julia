@@ -257,7 +257,7 @@ DLLEXPORT
 jl_lambda_info_t *jl_new_lambda_info(jl_value_t *ast, jl_tuple_t *sparams)
 {
     jl_lambda_info_t *li =
-        (jl_lambda_info_t*)newobj((jl_type_t*)jl_lambda_info_type, 12);
+        (jl_lambda_info_t*)newobj((jl_type_t*)jl_lambda_info_type, 13);
     li->ast = ast;
     li->sparams = sparams;
     li->tfunc = (jl_value_t*)jl_null;
@@ -269,6 +269,7 @@ jl_lambda_info_t *jl_new_lambda_info(jl_value_t *ast, jl_tuple_t *sparams)
     li->inInference = 0;
     li->inCompile = 0;
     li->unspecialized = NULL;
+    li->specializations = jl_null;
     li->name = jl_symbol("anonymous");
     return li;
 }

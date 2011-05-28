@@ -296,6 +296,7 @@ void jl_serialize_value_(ios_t *s, jl_value_t *v)
         jl_serialize_value(s, (jl_value_t*)li->tfunc);
         jl_serialize_value(s, (jl_value_t*)li->name);
         jl_serialize_value(s, (jl_value_t*)li->specTypes);
+        jl_serialize_value(s, (jl_value_t*)li->specializations);
         write_int8(s, li->inferred);
     }
     else if (jl_typeis(v, jl_methtable_type)) {
@@ -638,6 +639,7 @@ jl_value_t *jl_deserialize_value(ios_t *s)
         li->tfunc = jl_deserialize_value(s);
         li->name = (jl_sym_t*)jl_deserialize_value(s);
         li->specTypes = jl_deserialize_value(s);
+        li->specializations = (jl_tuple_t*)jl_deserialize_value(s);
         li->inferred = read_int8(s);
 
         li->fptr = NULL;

@@ -233,6 +233,31 @@ jl_function_t *jl_instantiate_method(jl_function_t *f, jl_tuple_t *sp)
     return nf;
 }
 
+// make a new method that calls the generated code from the given linfo
+jl_function_t *jl_reinstantiate_method(jl_function_t *f, jl_lambda_info_t *li)
+{
+    jl_function_t *nf = jl_new_closure(NULL, NULL);
+    nf->linfo = li;
+    JL_GC_PUSH(&nf);
+    jl_value_t *env;
+    if (f->fptr == &jl_trampoline) {
+        env = jl_t1(f->env);
+    }
+    else {
+        env = f->env;
+    }
+    if (li->fptr != NULL) {
+        nf->fptr = li->fptr;
+        nf->env = env;
+    }
+    else {
+        nf->fptr = &jl_trampoline;
+        nf->env = (jl_value_t*)jl_tuple2((jl_value_t*)nf, env);
+    }
+    JL_GC_POP();
+    return nf;
+}
+
 jl_methlist_t *jl_method_table_insert(jl_methtable_t *mt, jl_tuple_t *type,
                                       jl_function_t *method);
 
@@ -415,7 +440,30 @@ static jl_function_t *cache_method(jl_methtable_t *mt, jl_tuple_t *type,
         newmeth = method;
     else
     */
-    newmeth = jl_instantiate_method(method, sparams);
+    jl_tuple_t *lilist = jl_null;
+    jl_lambda_info_t *li=NULL;
+    if (method->linfo) {
+        // reuse code already generated for this combination of lambda and
+        // arguments types. this happens for inner generic functions where
+        // a new closure is generated on each call to the enclosing function.
+        lilist = method->linfo->specializations;
+        while (lilist != jl_null) {
+            li = (jl_lambda_info_t*)jl_t0(lilist);
+            if (jl_types_equal(li->specTypes, (jl_value_t*)type))
+                break;
+            lilist = (jl_tuple_t*)jl_t1(lilist);
+        }
+    }
+    if (lilist != jl_null) {
+        assert(li);
+        newmeth = jl_reinstantiate_method(method, li);
+        (void)jl_method_cache_insert(mt, type, newmeth);
+        JL_GC_POP();
+        return newmeth;
+    }
+    else {
+        newmeth = jl_instantiate_method(method, sparams);
+    }
     /*
       if "method" itself can ever be compiled, for example for use as
       an unspecialized method (see below), then newmeth->fptr might point
@@ -433,8 +481,7 @@ static jl_function_t *cache_method(jl_methtable_t *mt, jl_tuple_t *type,
     }
     */
 
-    jl_function_t *retfunc = jl_method_cache_insert(mt, type, newmeth);
-    assert(retfunc == newmeth);
+    (void)jl_method_cache_insert(mt, type, newmeth);
 
     if (newmeth->linfo != NULL && newmeth->linfo->sparams == jl_null) {
         // when there are no static parameters, one unspecialized version
@@ -448,6 +495,9 @@ static jl_function_t *cache_method(jl_methtable_t *mt, jl_tuple_t *type,
 
     if (newmeth->linfo != NULL && newmeth->linfo->ast != NULL) {
         newmeth->linfo->specTypes = (jl_value_t*)type;
+        method->linfo->specializations =
+            jl_tuple2((jl_value_t*)newmeth->linfo,
+                      (jl_value_t*)method->linfo->specializations);
         jl_specialize_ast(newmeth->linfo);
         if (jl_typeinf_func != NULL) {
             assert(newmeth->linfo->inInference == 0);
@@ -476,7 +526,7 @@ static jl_function_t *cache_method(jl_methtable_t *mt, jl_tuple_t *type,
         }
     }
     JL_GC_POP();
-    return retfunc;
+    return newmeth;
 }
 
 jl_function_t *jl_mt_assoc_by_type(jl_methtable_t *mt, jl_tuple_t *tt)

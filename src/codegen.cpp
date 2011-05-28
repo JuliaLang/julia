@@ -187,13 +187,9 @@ extern "C" void jl_generate_fptr(jl_function_t *f)
     jl_lambda_info_t *li = f->linfo;
     assert(li->functionObject);
     Function *llvmf = (Function*)li->functionObject;
-    li->fptr = (jl_fptr_t)jl_ExecutionEngine->getPointerToFunction(llvmf);
+    if (li->fptr == NULL)
+        li->fptr = (jl_fptr_t)jl_ExecutionEngine->getPointerToFunction(llvmf);
     assert(li->fptr != NULL);
-    jl_value_t *env = f->env;
-    if (f->fptr == &jl_trampoline) {
-        assert(jl_t0(env) == (jl_value_t*)f);
-        f->env = jl_t1(env);
-    }
     f->fptr = li->fptr;
     llvmf->deleteBody();
 }

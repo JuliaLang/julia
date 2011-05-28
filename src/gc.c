@@ -470,6 +470,7 @@ static void gc_markval_(jl_value_t *v)
             GC_Markval(li->specTypes);
         if (li->unspecialized != NULL)
             GC_Markval(li->unspecialized);
+        GC_Markval(li->specializations);
     }
     else if (vt == (jl_value_t*)jl_typename_type) {
         jl_typename_t *tn = (jl_typename_t*)v;

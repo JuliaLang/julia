@@ -97,6 +97,8 @@ typedef struct _jl_lambda_info_t {
     uptrint_t inCompile;
     // a slower-but-works version of this function as a fallback
     struct _jl_function_t *unspecialized;
+    // pairlist of all lambda infos with code generated from this one
+    jl_tuple_t *specializations;
 } jl_lambda_info_t;
 
 #define JL_FUNC_FIELDS                          \
@@ -676,7 +678,6 @@ jl_value_t *jl_interpret_toplevel_expr_with(jl_value_t *e,
 
 void jl_show_method_table(jl_function_t *gf);
 DLLEXPORT void jl_show_full_function(jl_value_t *v);
-jl_function_t *jl_instantiate_method(jl_function_t *f, jl_tuple_t *sp);
 jl_lambda_info_t *jl_add_static_parameters(jl_lambda_info_t *l, jl_tuple_t *sp);
 jl_function_t *jl_method_lookup_by_type(jl_methtable_t *mt, jl_tuple_t *types);
 jl_function_t *jl_method_lookup(jl_methtable_t *mt, jl_value_t **args, size_t nargs);

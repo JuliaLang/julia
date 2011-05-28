@@ -653,7 +653,7 @@ issues 1/24/11
     future reads from that region will wait for it to complete
   . isready()
 ? try to remove @ from macro syntax
-- either add "do" to loops or use
+* either add "do" to loops or use
   @parallel for i=1:n
     ...
   end
@@ -664,8 +664,25 @@ issues 1/24/11
     the parameters of the TypeConstructor
   * make cache_1arg an array
 - finish getting rid of jl_show_to_string
-- make sure inference results can be shared across instantiations of
+  . now only used by repl-cloud
+* make sure inference results can be shared across instantiations of
   inner generic functions
+  . when cache_method specializes a LambdaStaticData, put it on a list of
+    all specializations of that LSD (like the tfunc field), and look there
+    first instead of calling typeinf
+  other design:
+  . during specialize_ast, allocate a GF object for each inner GF, evaluate
+    signatures of methods and add all the methods to the GF.
+  . at runtime make an inner_gf function that calls apply_inner_gf and
+    references the statically allocated GF above
+    do add_method as normal on the inner GF to pick up the right set of
+    methods and environments at runtime
+  . in apply_inner_gf, do method lookup in the static GF object. find the
+    corresponding definition in the inner GF (error if none) and call the
+    looked-up function pointer with the environment from the inner GF method
+    table
+  . can use lambda numbering to find corresponding def
+  . actually the GF allocated on first call can be used as the static one
 - some kind of no-specialize hint for slots like x in
   assign(A::Array{Any}, x, i::Index) = arrayset(A,i,x)
   where we know the function is identical for all types of x
