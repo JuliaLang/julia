@@ -110,8 +110,13 @@ end
 
 # initializer is a function accepting (el_type, local_size, darray) where
 # the last argument is the full DArray being constructed.
+darray{T}(init, ::Type{T}, dims::Dims, distdim, procs, dist) =
+    DArray{T,length(dims),distdim}(T, distdim, dims, init, procs, dist)
+darray{T}(init, ::Type{T}, dims::Dims, distdim, procs) =
+    darray(init, T, dims, distdim, procs,
+           defaultdist(distdim, dims, length(procs)))
 darray{T}(init, ::Type{T}, dims::Dims, distdim) =
-    DArray{T,length(dims),distdim}(T,distdim,dims,init)
+    darray(init, T, dims, distdim, linspace(1,PGRP.np))
 darray{T}(init, ::Type{T}, dims::Dims) = darray(init,T,dims,maxdim(dims))
 darray(init, T::Type, dims::Size...) = darray(init, T, dims)
 darray(init, dims::Dims) = darray(init, Float64, dims)
@@ -119,9 +124,10 @@ darray(init, dims::Size...) = darray(init, dims)
 
 clone(d::DArray, T::Type, dims::Dims) =
     darray((T,lsz,da)->Array(T,lsz), T, dims,
-           d.distdim>length(dims) ? maxdim(dims) : d.distdim)
+           d.distdim>length(dims) ? maxdim(dims) : d.distdim, d.pmap)
 
-copy{T}(d::DArray{T}) = darray((T,lsz,da)->localize(d), T, size(d), d.distdim)
+copy{T}(d::DArray{T}) =
+    darray((T,lsz,da)->localize(d), T, size(d), d.distdim, d.pmap)
 
 dzeros(args...) = darray((T,d,da)->zeros(T,d), args...)
 dones(args...)  = darray((T,d,da)->ones(T,d), args...)
@@ -157,9 +163,11 @@ end
 ## Transpose and redist ##
 
 transpose{T}(a::DArray{T,2}) = darray((T,d,da)->transpose(localize(a)),
-                                      T, (size(a,2),size(a,1)), (3-a.distdim))
+                                      T, (size(a,2),size(a,1)), (3-a.distdim),
+                                      a.pmap)
 ctranspose{T}(a::DArray{T,2}) = darray((T,d,da)->ctranspose(localize(a)),
-                                       T, (size(a,2),size(a,1)), (3-a.distdim))
+                                       T, (size(a,2),size(a,1)), (3-a.distdim),
+                                       a.pmap)
 
 ## Indexing ##
 
@@ -278,7 +286,8 @@ end
 
 function changedist{T}(A::DArray{T}, to_dist)
     if A.distdim == to_dist; return A; end
-    return darray((T,sz,da)->node_changedist(A, da, sz), T, size(A), to_dist)
+    return darray((T,sz,da)->node_changedist(A, da, sz), T, size(A), to_dist,
+                  A.pmap)
 end
 
 function node_multiply{T}(A::Tensor{T}, B, sz)
@@ -294,6 +303,12 @@ function node_multiply{T}(A::Tensor{T}, B, sz)
     locl
 end
 
-(*){T}(A::DArray{T,2,1}, B::DArray{T,2,2}) = darray((T,sz,da)->node_multiply(A,B,sz), T, (size(A,1),size(B,2)), 1)
+function (*){T}(A::DArray{T,2,1}, B::DArray{T,2,2})
+    if A.pmap != B.pmap
+        error("unsupported case of distributed *")
+    end
+    darray((T,sz,da)->node_multiply(A,B,sz), T, (size(A,1),size(B,2)), 1,
+           A.pmap)
+end
 
 (*){T}(A::DArray{T,2}, B::DArray{T,2}) = changedist(A, 1) * changedist(B, 2)
