@@ -17,4 +17,7 @@ libBLAS = dlopen("libLAPACK")
 libLAPACK = dlopen("libLAPACK")
 libarpack = dlopen("libarpack")
 
-load("custom.j")
+try
+    load(strcat(getcwd(),"/custom.j"))
+catch
+end
