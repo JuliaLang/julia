@@ -306,3 +306,44 @@ g = GlobalObject(g->(...))
 # refer to a single local object stored on one processor.
 # All other objects passed to remote_call() are copied.
 # A GlobalObject is basically a clique of RemoteRefs, if that helps.
+
+
+# =============================================================================
+# Tasks (AKA coroutines, or lightweight threads)
+# =============================================================================
+
+## using a Task as a generator
+
+function generator()
+    produce("start")
+    for i=1:10
+        produce(2i)
+    end
+    produce("stop")
+end
+
+for x = Task(generator)
+    # this will loop over each value produced by the generator.
+    # execution of the generator is suspended between its calls to produce()
+    println(x)
+end
+
+## low-level Task interface
+
+t = Task(f)   # create a task to run function f
+
+# switch to task t, passing it the given arguments. If the task has not
+# started yet, the arguments are passed to function f. Otherwise,
+# the argsin are returned from Task t's last call to yieldto().
+argsout,... = yieldto(t, argsin...)
+
+# get the currently running Task
+t = current_task()
+
+# the current_task when t was created
+t.parent
+# when f returns value x, t performs yieldto(t.parent, x)
+
+# see if a task has finished. once a task finishes, yielding to it continues
+# to return the result of function f.
+task_done(t)

@@ -298,7 +298,7 @@ function add_client(id, client)
     ()
 end
 
-function send_add_client(i, rr::RemoteRef)
+function send_add_client(rr::RemoteRef, i)
     if rr.where == myid()
         add_client(rr2id(rr), i)
     elseif i != rr.where
@@ -312,7 +312,7 @@ end
 function serialize(s, rr::RemoteRef)
     i = worker_id_from_socket(s)
     if i != -1
-        send_add_client(i, rr)
+        send_add_client(rr, i)
     end
     invoke(serialize, (Any, Any), s, rr)
 end
@@ -902,10 +902,10 @@ type GlobalObject
             end
         end
         finalizer(go, del_go_client)
-        # NOTE: this is put(go.refs[mi], WeakRef(go))
         go.local_identity = initializer(go)
         # make our reference to it weak so we can detect when there are
         # no local users of the object.
+        # NOTE: this is put(go.refs[mi], WeakRef(go))
         wi.result = WeakRef(go)
         wi.done = true
         notify_done(wi)
@@ -997,6 +997,9 @@ function serialize(s, g::GlobalObject)
     mi = myid()
     myref = member(g, mi)
     if is(myref, false)
+        # if I don't own a piece of this GO, I can't tell whether an
+        # add_client of the destination node is necessary. therefore I
+        # have to do one to be conservative.
         addnew = true
     else
         wi = PGRP.refs[rr2id(myref)]
@@ -1007,7 +1010,7 @@ function serialize(s, g::GlobalObject)
         # node doing the serializing is responsible for notifying others of
         # new references.
         for rr = g.refs
-            send_add_client(i, rr)
+            send_add_client(rr, i)
         end
     end
     serialize(s, ri)
