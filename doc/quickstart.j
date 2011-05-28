@@ -211,3 +211,98 @@ has(s, n)
 add(s, k)
 
 s = intset(1,3,5,7)   # more efficient set of integers
+
+
+# =============================================================================
+# parallel computing
+# =============================================================================
+
+# julia uses a multi-process remote procedure call (RPC) model, with
+# support for shared objects and an elastic process pool.
+
+# julia starts with 1 process. to add processors:
+
+addprocs_local(n)                     # using exec
+addprocs_ssh({"host1","host2",...})   # using remote execution
+addprocs_sge(n)                       # using Sun Grid Engine batch queue
+
+## high-level interface
+
+# parallel loops: "@parallel F for i=...", where F is a reduction applied to
+# the results of all loop iterations. F can be omitted.
+
+function buffon(niter)
+    nc =
+      @parallel (+) for i=1:niter
+          rand() <= sin(rand()*pi()/2) ? 1 : 0
+      end
+    2/(nc/niter)
+end
+
+# parallel map
+r = pmap(eig, {A, B, C, D})
+# returns remote references to the results
+
+# distributed arrays (type DArray)
+A = drandn(2000,2000)  # create distributed normal random matrix
+
+A = distribute(rand(2000,2000))  # distribute a local array
+
+localize(A)   # return local piece of a distributed array
+
+# general distributed array constructor
+darray((T, local_size, da)->(...), ET, (rows, cols, ...), dd)
+# the first argument is a function computing one piece of the array.
+# its arguments are:
+#   T          - array element type
+#   local_size - the size of the piece to compute
+#   da         - the DArray object being constructed
+# second argument is the element type
+# third argument is the dimensions of the array
+# fourth argument is the dimension of distribution
+# the 2nd and 4th arguments are optional
+
+# simple example:
+transpose{T}(a::DArray{T,2}) = darray((T,d,da)->transpose(localize(a)),
+                                      T,
+                                      (size(a,2),size(a,1)),
+                                      (3-a.distdim))
+
+## low-level interface
+
+# call func(args...) on processor P, returning a remote reference
+r = remote_call(P, func, args...)
+
+# wait for a remote ref to finish being computed
+wait(r)
+
+# get the computed value (automatically waits first)
+v = fetch(r)
+
+# faster version of fetch(remote_call(...))
+v = remote_call_fetch(P, func, args...)
+
+myid()  # get my process ID
+
+# uninitialized reference to an object that will be stored locally
+r = RemoteRef()
+# or on processor P
+r = RemoteRef(P)
+
+# store a value to an uninitialized remote reference
+put(r, value)
+
+# create a partitioned global object
+# This is one object shared by a set of processes, each of which stores a
+# local piece. This is the fundamental abstraction DArray is built on.
+g = GlobalObject(g->(...))
+# The argument is a function that will run on each processor, and returns
+# the local part for its processor. Its argument g is the GlobalObject
+# being constructed.
+# The GlobalObject itself acts like a pointer in a shared address space;
+# it can be passed to any processor and still reference the same logical
+# object.
+# RemoteRefs also reference the same object from anywhere, but they
+# refer to a single local object stored on one processor.
+# All other objects passed to remote_call() are copied.
+# A GlobalObject is basically a clique of RemoteRefs, if that helps.
