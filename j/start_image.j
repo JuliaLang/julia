@@ -10,11 +10,16 @@ stdin_stream = fdio(ccall(:jl_stdin, Int32, ()))
 stderr_stream = fdio(ccall(:jl_stderr, Int32, ()))
 
 # restore shared library handles
+
 libpcre = dlopen("libpcre")
 
-setenv("GOTO_NUM_THREADS", "1")
 libBLAS = dlopen("libLAPACK")
 libLAPACK = dlopen("libLAPACK")
+
+#setenv("GOTO_NUM_THREADS", "1")
+#libBLAS = dlopen("libgoto2")
+#libLAPACK = dlopen("libgoto2")
+
 libarpack = dlopen("libarpack")
 
 try
