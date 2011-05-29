@@ -84,8 +84,8 @@ fdlibm_install: $(FDLIBM_OBJ) $(JULIALIB)
 
 
 GOTOBLAS_OBJ = $(EXTROOTLIB)/libgoto2.$(SHLIB_EXT)
-GotoBLAS$(GOTOBLAS_VER).tgz:
-	$(DOWNLOAD) http://www.tacc.utexas.edu/index.php?eID=tx_nawsecuredl&u=0&file=fileadmin/images/GotoBLAS2-1.13_bsd.tar.gz&t=1306744626&hash=f8e4791923edcd431b5b55c63db90975
+GotoBLAS$(GOTOBLAS_VER).tar.gz:
+	curl http://www.tacc.utexas.edu/index.php\?eID=tx_nawsecuredl\&u=0\&file=fileadmin/images/GotoBLAS2-1.13_bsd.tar.gz\&t=1306744626\&hash=f8e4791923edcd431b5b55c63db90975 -o GotoBLAS$(GOTOBLAS_VER).tar.gz
 GotoBLAS$(GOTOBLAS_VER): GotoBLAS$(GOTOBLAS_VER).tar.gz
 	tar zxf GotoBLAS$(GOTOBLAS_VER).tar.gz
 $(GOTOBLAS_OBJ): GotoBLAS$(GOTOBLAS_VER)
