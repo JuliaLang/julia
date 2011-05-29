@@ -1,5 +1,7 @@
-setenv("GOTO_NUM_THREADS", "1")
 libBLAS = dlopen("libLAPACK")
+
+#setenv("GOTO_NUM_THREADS", "1")
+#libBLAS = dlopen("libgoto2")
 
 typealias DenseVector{T} Array{T,1}
 typealias DenseMatrix{T} Array{T,2}

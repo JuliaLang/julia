@@ -1,5 +1,7 @@
 libLAPACK = dlopen("libLAPACK")
 
+#libLAPACK = dlopen("libgoto2")
+
 # SUBROUTINE DPOTRF( UPLO, N, A, LDA, INFO )
 # *     .. Scalar Arguments ..
 #       CHARACTER          UPLO

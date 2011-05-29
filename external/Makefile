@@ -28,6 +28,8 @@ $(JULIALIB):
 libc_install: $(JULIALIB)
 	ln -sf $(LIBC) $(JULIALIB)/libc.so
 
+
+
 LLVM_OBJ = $(EXTROOTLIB)/libLLVM-$(LLVM_VER).$(SHLIB_EXT)
 llvm-$(LLVM_VER).tgz:
 	$(DOWNLOAD) http://llvm.org/releases/$(LLVM_VER)/llvm-$(LLVM_VER).tgz
@@ -36,6 +38,8 @@ llvm-$(LLVM_VER): llvm-$(LLVM_VER).tgz
 $(LLVM_OBJ): llvm-$(LLVM_VER)
 	cd llvm-$(LLVM_VER) && ./configure --prefix=$(EXTROOT) --disable-threads --enable-optimized --disable-profiling --disable-assertions --enable-shared --enable-targets=x86,x86_64 --disable-bindings --disable-docs && make install
 llvm: $(LLVM_OBJ)
+
+
 
 READLINE_OBJ = $(EXTROOTLIB)/libreadline.$(SHLIB_EXT)
 readline-$(READLINE_VER).tar.gz:
@@ -47,6 +51,8 @@ $(READLINE_OBJ): readline-$(READLINE_VER)
 readline_install: $(READLINE_OBJ) $(JULIALIB)
 	ln -sf $(READLINE_OBJ) $(JULIALIB)/libreadline.$(SHLIB_EXT)
 	ln -sf $(EXTROOTLIB)/libhistory.$(SHLIB_EXT) $(JULIALIB)/libhistory.$(SHLIB_EXT)
+
+
 
 PCRE_OBJ = $(EXTROOTLIB)/libpcre.$(SHLIB_EXT)
 pcre-$(PCRE_VER).tar.bz2:
@@ -63,6 +69,8 @@ fdlibmf: fdlibmf/libmf.a
 fdlibmf/libmf.a: fdlibmf/*.c
 	cd fdlibmf && make CC=$(CC) CFLAGS="-D_IEEE_LIBM -Dx86 -fPIC -O1 $(CONFIG)"
 
+
+
 FDLIBM_OBJ = $(EXTROOTLIB)/libfdm.$(SHLIB_EXT)
 fdlibm.tar.gz:
 	$(DOWNLOAD) -u anonymous:julia@juliamath.com ftp://netlib.org/fdlibm.tar.gz
@@ -72,6 +80,22 @@ $(FDLIBM_OBJ): fdlibm fdlibmf
 	cd fdlibm && make CC=$(CC) CFLAGS="-D_IEEE_LIBM -Dx86 -fPIC -O1 $(CONFIG)" && $(CC) -shared *.o ../fdlibmf/*.o -o $@
 fdlibm_install: $(FDLIBM_OBJ) $(JULIALIB)
 	ln -sf $< $(JULIALIB)/libfdm.$(SHLIB_EXT)
+
+
+
+GOTOBLAS_OBJ = $(EXTROOTLIB)/libgoto2.$(SHLIB_EXT)
+GotoBLAS$(GOTOBLAS_VER).tar.gz:
+	curl http://www.tacc.utexas.edu/index.php\?eID=tx_nawsecuredl\&u=0\&file=fileadmin/images/GotoBLAS2-1.13_bsd.tar.gz\&t=1306744626\&hash=f8e4791923edcd431b5b55c63db90975 -o GotoBLAS$(GOTOBLAS_VER).tar.gz
+GotoBLAS$(GOTOBLAS_VER): GotoBLAS$(GOTOBLAS_VER).tar.gz
+	tar zxf GotoBLAS$(GOTOBLAS_VER).tar.gz
+$(GOTOBLAS_OBJ): GotoBLAS$(GOTOBLAS_VER)
+	cp -f Makefile.GotoBLAS2 GotoBLAS2 && \
+	cd GotoBLAS2 && \
+	make USE_THREAD=0 NO_CBLAS=1 CC=$(CC) FC=$(FC) DOWNLOAD="$(DOWNLOAD)"
+GotoBLAS_install: $(GOTOBLAS_OBJ) $(JULIALIB)
+	cp -f GotoBLAS2/exports/libgoto2*.$(SHLIB_EXT) $(GOTOBLAS_OBJ) && \
+	ln -sf $< $(JULIALIB)/libgoto2.$(SHLIB_EXT)
+
 
 LAPACK_OBJ = $(EXTROOTLIB)/libLAPACK.$(SHLIB_EXT)
 lapack-$(LAPACK_VER).tgz:
@@ -86,6 +110,8 @@ $(LAPACK_OBJ): lapack-$(LAPACK_VER)
 	$(FC) -shared SRC/*.o BLAS/SRC/*.o INSTALL/dlamch.o INSTALL/dsecnd_INT_ETIME.o INSTALL/ilaver.o INSTALL/slamch.o -o $(LAPACK_OBJ) -L$(EXTROOTLIB)
 lapack_install: $(LAPACK_OBJ) $(JULIALIB)
 	ln -sf $(LAPACK_OBJ) $(JULIALIB)/libLAPACK.$(SHLIB_EXT)
+
+
 
 ARPACK_OBJ = $(EXTROOTLIB)/libarpack.$(SHLIB_EXT)
 arpack$(ARPACK_VER).tar.gz:
