@@ -109,12 +109,7 @@ void julia_init(char *imageFile)
 
     jl_init_serializer();
 
-    if (imageFile) {
-        // TODO: currently we cannot handle errors in here since some
-        // stuff in main() has not been set up yet (root task, etc.)
-        jl_restore_system_image(imageFile);
-    }
-    else {
+    if (!imageFile) {
         jl_init_primitives();
         jl_load_boot_j();
         jl_get_builtin_hooks();
@@ -122,10 +117,6 @@ void julia_init(char *imageFile)
         jl_init_builtins();
         jl_init_box_caches();
     }
-
-#ifdef JL_GC_MARKSWEEP
-    jl_gc_enable();
-#endif
 
     signal(SIGFPE, fpe_handler);
 
@@ -146,6 +137,22 @@ void julia_init(char *imageFile)
         ios_printf(ios_stderr, "sigaction: %s\n", strerror(errno));
         exit(1);
     }
+
+    if (imageFile) {
+        JL_TRY {
+            jl_restore_system_image(imageFile);
+        }
+        JL_CATCH {
+            ios_printf(ios_stderr, "error during init:\n");
+            jl_show(jl_exception_in_transit);
+            ios_printf(ios_stdout, "\n");
+            exit(1);
+        }
+    }
+
+#ifdef JL_GC_MARKSWEEP
+    jl_gc_enable();
+#endif
 }
 
 DLLEXPORT
