@@ -13,9 +13,9 @@ Brief Introduction
 
 Julia is a very high level dynamic language with simple, optional typing, multiple dispatch, and good performance, achieved by using just-in-time (JIT) compilation, implemented using LLVM. The language is multi-paradigm, combining features of functional, object-oriented, and imperative traditions.
 
-Although the beginning programmer need not use multiple dispatch, it is one of the core unifying features of Julia: functions are defined on different combinations of argument types by dispatching function application to the most specific method matching the types of the arguments to the call. This model fits mathematical programming well, and operators are just functions with special notation — to extend addition to new user-defined data types, you just define a few new methods for the `+` function. For mathematics, it is unnatural for the first argument to "own" an operation, so multiple dispatch is a better fit than traditional object-oriented dispatch. Multiple dispatch is not only much more convenient for expressing complex behaviors over a various combinations of argument types, but by using type inference, the compiler can often eliminate most or all of the dispatch overhead, thereby generating very efficient code.
+Although the beginning programmer need not use multiple dispatch, it is one of the core unifying features of Julia: functions are defined on different combinations of argument types by dispatching function application to the most specific method matching the types of the arguments. This model fits mathematical programming well, and operators are just functions with special notation — to extend addition to new user-defined data types, you just define a few new methods for the `+` function. For mathematics, it is unnatural for the first argument to "own" an operation, so multiple dispatch is a better fit than traditional object-oriented dispatch. Multiple dispatch is not only much more convenient for expressing complex behaviors over a various combinations of argument types, but by using type inference, the compiler can often eliminate most or all of the dispatch overhead, thereby generating very efficient code.
 
-Some advantages of julia over comparable systems include:
+Some advantages of Julia over comparable systems include:
 
 - Free and open source
 - Consistent and powerful generic function model
@@ -50,8 +50,8 @@ Required build tools:
 - gcc
 - g++
 - gfortran
-- curl (to download third party tool source)
 - GNU make
+- curl (to download third party sources)
 
 Supported platforms:
 
