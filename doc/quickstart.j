@@ -11,7 +11,7 @@ load("file.j")
 # defining and changing scalar and array variables
 x = 3
 x = [1 2 3]     # set x to a 1x3 row vector
-x = [1, 2, 3]   # set x to a 1d vector (implicitly treated as a column)
+x = [1,2,3]     # set x to a 1d vector (implicitly treated as a column)
 A = [1 2 3 4; 5 6 7 8; 9 10 11 12];
     # set A to a 3x4 matrix, semicolon hides output at the prompt.
     # inside a source file no output is the default.
@@ -19,6 +19,7 @@ A = [1 2 3 4; 5 6 7 8; 9 10 11 12];
 A = [1  2  3  4
      5  6  7  8
      9 10 11 12];
+
 x[2] = 7    # change x to [1 7 3]
 A[2,1] = 0  # chage A[2,1] to 0
 x[2:end]    # all of x except the first element
