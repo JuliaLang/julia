@@ -1,8 +1,11 @@
 /root
-/llvm-*
-/readline-*
-/pcre-*
+/ARPACK
+/arpack*.tar.gz
 /fdlibm
 /fdlibm.tar.gz
 /lapack-*
+/llvm-*
 /mongoose*
+/patch.tar.gz
+/pcre-*
+/readline-*
