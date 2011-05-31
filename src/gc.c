@@ -47,6 +47,7 @@ typedef struct _pool_t {
 
 typedef struct _bigval_t {
     struct _bigval_t *next;
+    void *_pad;
     size_t sz;
     union {
         uptrint_t flags;
@@ -210,7 +211,7 @@ static int szclass(size_t sz)
 static void *alloc_big(size_t sz, int isobj)
 {
     sz = (sz+3) & -4;
-    bigval_t *v = (bigval_t*)malloc(sz + 3*sizeof(void*));
+    bigval_t *v = (bigval_t*)malloc(sz + 4*sizeof(void*));
     v->sz = sz;
     v->next = big_objects;
     v->flags = 0;
@@ -221,7 +222,7 @@ static void *alloc_big(size_t sz, int isobj)
 
 void jl_gc_acquire_buffer(void *b)
 {
-    bigval_t *v = (bigval_t*)(((void**)b)-3);
+    bigval_t *v = (bigval_t*)(((void**)b)-4);
     v->sz = 0;  // ???
     v->next = big_objects;
     v->flags = 0;
@@ -249,7 +250,7 @@ static void sweep_big()
             *pv = nxt;
 #ifdef MEMDEBUG
             size_t thesz = v->sz;
-            memset(v, 0xbb, v->sz+3*sizeof(void*));
+            memset(v, 0xbb, v->sz+4*sizeof(void*));
 #endif
             free(v);
         }

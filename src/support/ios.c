@@ -30,24 +30,24 @@
 // allocate a buffer that can be used as a bigval_t in julia's GC
 void *julia_malloc(size_t n)
 {
-    void *b = LLT_ALLOC(n+sizeof(void*)*3);
+    void *b = LLT_ALLOC(n+sizeof(void*)*4);
     if (b == NULL)
         return b;
-    return (void*)(((void**)b)+3);
+    return (void*)(((void**)b)+4);
 }
 
 void julia_free(void *b)
 {
-    LLT_FREE((void*)(((void**)b)-3));
+    LLT_FREE((void*)(((void**)b)-4));
 }
 
 void *julia_realloc(void *b, size_t n)
 {
-    void *p = (b==NULL ? NULL : (void*)(((void**)b)-3));
-    p = LLT_REALLOC(p, n + sizeof(void*)*3);
+    void *p = (b==NULL ? NULL : (void*)(((void**)b)-4));
+    p = LLT_REALLOC(p, n + sizeof(void*)*4);
     if (p == NULL)
         return p;
-    return (void*)(((void**)p)+3);
+    return (void*)(((void**)p)+4);
 }
 
 #define MOST_OF(x) ((x) - ((x)>>4))
