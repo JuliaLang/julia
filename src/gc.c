@@ -22,8 +22,11 @@
 #define GC_PAGE_SZ (4096*sizeof(void*))//bytes
 
 typedef struct _gcpage_t {
-    struct _gcpage_t *next;
-    char data[GC_PAGE_SZ - sizeof(void*)];
+    union {
+        struct _gcpage_t *next;
+        char _pad[8];
+    };
+    char data[GC_PAGE_SZ - 8];
 } gcpage_t;
 
 typedef struct _gcval_t {
@@ -47,8 +50,12 @@ typedef struct _pool_t {
 
 typedef struct _bigval_t {
     struct _bigval_t *next;
-    void *_pad;
-    size_t sz;
+#ifdef MEMDEBUG
+    union {
+        size_t sz;
+        char _pad[8];
+    };
+#endif
     union {
         uptrint_t flags;
         struct {
@@ -60,6 +67,16 @@ typedef struct _bigval_t {
     };
     char _data[1];
 } bigval_t;
+
+#ifdef MEMDEBUG
+# ifdef __lp64__
+#  define BVOFFS 3
+# else
+#  define BVOFFS 4
+# endif
+#else
+#define BVOFFS 2
+#endif
 
 #define gc_val(o)     ((gcval_t*)(((void**)(o))-1))
 #define gc_marked(o)  (gc_val(o)->marked)
@@ -211,8 +228,10 @@ static int szclass(size_t sz)
 static void *alloc_big(size_t sz, int isobj)
 {
     sz = (sz+3) & -4;
-    bigval_t *v = (bigval_t*)malloc(sz + 4*sizeof(void*));
+    bigval_t *v = (bigval_t*)malloc(sz + BVOFFS*sizeof(void*));
+#ifdef MEMDEBUG
     v->sz = sz;
+#endif
     v->next = big_objects;
     v->flags = 0;
     v->isobj = isobj;
@@ -222,8 +241,10 @@ static void *alloc_big(size_t sz, int isobj)
 
 void jl_gc_acquire_buffer(void *b)
 {
-    bigval_t *v = (bigval_t*)(((void**)b)-4);
+    bigval_t *v = (bigval_t*)(((void**)b)-BVOFFS);
+#ifdef MEMDEBUG
     v->sz = 0;  // ???
+#endif
     v->next = big_objects;
     v->flags = 0;
     v->isobj = 0;
@@ -250,7 +271,7 @@ static void sweep_big()
             *pv = nxt;
 #ifdef MEMDEBUG
             size_t thesz = v->sz;
-            memset(v, 0xbb, v->sz+4*sizeof(void*));
+            memset(v, 0xbb, v->sz+BVOFFS*sizeof(void*));
 #endif
             free(v);
         }
@@ -436,8 +457,12 @@ static void gc_markval_(jl_value_t *v)
         jl_array_t *a = (jl_array_t*)v;
         if (a->dims) GC_Markval(a->dims);
         int ndims = jl_array_ndims(a);
-        if (a->data && a->data != (&a->_space[0] +
-                                   (ndims>3 ? (ndims-3) : 0)*sizeof(size_t))) {
+        int ndimwords = (ndims > 3 ? (ndims-3) : 0);
+#ifndef __lp64__
+        // on 32-bit, ndimwords must be even to preserve 8-byte alignment
+        ndimwords = (ndimwords+1)&-2;
+#endif
+        if (a->data && a->data != (&a->_space[0] + ndimwords*sizeof(size_t))) {
             if (ndims == 1)
                 gc_setmark((char*)a->data - a->offset);
             else

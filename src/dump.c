@@ -888,9 +888,6 @@ void jl_restore_system_image(char *fname)
                                           jl_symbol("typeinf_ext")));
     jl_show_gf = (jl_function_t*)jl_get_global(jl_system_module,jl_symbol("show"));
     jl_convert_gf = (jl_function_t*)jl_get_global(jl_system_module,jl_symbol("convert"));
-    jl_set_global(jl_system_module, jl_symbol("libc"),
-                  jl_box_pointer(jl_pointer_void_type,
-                                 jl_load_dynamic_library("libc")));
     jl_boot_file_loaded = 1;
 
 #ifdef JL_GC_MARKSWEEP

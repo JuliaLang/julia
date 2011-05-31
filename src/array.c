@@ -64,6 +64,10 @@ static jl_array_t *_new_array(jl_type_t *atype, jl_tuple_t *dimst,
     }
 
     int ndimwords = (ndims > 3 ? (ndims-3) : 0);
+#ifndef __lp64__
+    // on 32-bit, ndimwords must be even to preserve 8-byte alignment
+    ndimwords = (ndimwords+1)&-2;
+#endif
     if (tot <= ARRAY_INLINE_NBYTES) {
         a = allocobj(sizeof(jl_array_t) + tot + (ndimwords-1)*sizeof(size_t));
         a->type = atype;

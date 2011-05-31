@@ -27,27 +27,37 @@
 #include "ios.h"
 #include "timefuncs.h"
 
+#ifdef MEMDEBUG
+# ifdef __lp64__
+#  define BVOFFS 3
+# else
+#  define BVOFFS 4
+# endif
+#else
+#define BVOFFS 2
+#endif
+
 // allocate a buffer that can be used as a bigval_t in julia's GC
 void *julia_malloc(size_t n)
 {
-    void *b = LLT_ALLOC(n+sizeof(void*)*4);
+    void *b = LLT_ALLOC(n+sizeof(void*)*BVOFFS);
     if (b == NULL)
         return b;
-    return (void*)(((void**)b)+4);
+    return (void*)(((void**)b)+BVOFFS);
 }
 
 void julia_free(void *b)
 {
-    LLT_FREE((void*)(((void**)b)-4));
+    LLT_FREE((void*)(((void**)b)-BVOFFS));
 }
 
 void *julia_realloc(void *b, size_t n)
 {
-    void *p = (b==NULL ? NULL : (void*)(((void**)b)-4));
-    p = LLT_REALLOC(p, n + sizeof(void*)*4);
+    void *p = (b==NULL ? NULL : (void*)(((void**)b)-BVOFFS));
+    p = LLT_REALLOC(p, n + sizeof(void*)*BVOFFS);
     if (p == NULL)
         return p;
-    return (void*)(((void**)p)+4);
+    return (void*)(((void**)p)+BVOFFS);
 }
 
 #define MOST_OF(x) ((x) - ((x)>>4))

@@ -118,7 +118,15 @@ void julia_init(char *imageFile)
         jl_init_box_caches();
     }
 
-    signal(SIGFPE, fpe_handler);
+    struct sigaction actf;
+    memset(&actf, 0, sizeof(struct sigaction));
+    sigemptyset(&actf.sa_mask);
+    actf.sa_sigaction = fpe_handler;
+    actf.sa_flags = 0;
+    if (sigaction(SIGFPE, &actf, NULL) < 0) {
+        ios_printf(ios_stderr, "sigaction: %s\n", strerror(errno));
+        exit(1);
+    }
 
     stack_t ss;
     ss.ss_flags = 0;
