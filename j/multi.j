@@ -744,12 +744,8 @@ function start_worker(wrfd)
         error("could not bind socket")
     end
     io = fdio(wrfd)
-    write(io, port[1])  # print port
-    hn = Array(Uint8, 128)
-    ccall(dlsym(libc,:gethostname), Int32, (Ptr{Uint8}, Ulong),
-          hn, ulong(128))
-    hns = string(convert(Ptr{Uint8},hn))
-    write(io, hns)  # print hostname
+    write(io, port[1])        # print port
+    write(io, gethostname())  # print hostname
     write(io, '\n')
     flush(io)
     #close(io)

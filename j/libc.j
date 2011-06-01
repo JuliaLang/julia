@@ -10,6 +10,15 @@ unixtime() = ccall(dlsym(libc, :time), Uint32, (Ptr{Uint32},), C_NULL)
 system(cmd::String) =
     ccall(dlsym(libc, :system), Int32, (Ptr{Uint8},), cstring(cmd))
 
+## network functions ##
+
+function gethostname()
+    hn = Array(Uint8, 128)
+    ccall(dlsym(libc,:gethostname), Int32, (Ptr{Uint8}, Ulong),
+          hn, ulong(length(hn)))
+    string(convert(Ptr{Uint8},hn))
+end
+
 ## file and directory ##
 
 function getcwd()
