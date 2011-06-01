@@ -861,6 +861,8 @@ end
 addprocs_sge(n) = add_workers(start_sge_workers(n))
 SGE(n) = addprocs_sge(n)
 
+load("vcloud.j")
+
 ## global objects and collective operations ##
 
 type GlobalObject
