@@ -11,20 +11,23 @@
 Brief Introduction
 ------------------
 
-Julia is a very high level dynamic language with simple, optional typing, multiple dispatch, and good performance, achieved by using just-in-time (JIT) compilation, implemented using LLVM. The language is multi-paradigm, combining features of functional, object-oriented, and imperative traditions.
+Julia is a very high level dynamic language with optional typing, multiple dispatch, and good performance, achieved by using just-in-time (JIT) compilation, implemented using LLVM. The language is multi-paradigm, combining features of functional, object-oriented, and imperative traditions.
 
-Although the beginning programmer need not use multiple dispatch, it is one of the core unifying features of Julia: functions are defined on different combinations of argument types by dispatching function application to the most specific method matching the types of the arguments. This model fits mathematical programming well, and operators are just functions with special notation — to extend addition to new user-defined data types, you just define a few new methods for the `+` function. For mathematics, it is unnatural for the first argument to "own" an operation, so multiple dispatch is a better fit than traditional object-oriented dispatch. Multiple dispatch is not only much more convenient for expressing complex behaviors over a various combinations of argument types, but by using type inference, the compiler can often eliminate most or all of the dispatch overhead, thereby generating very efficient code.
+Although the beginning programmer need not use multiple dispatch, it is one of the core unifying features of Julia: functions are defined on different combinations of argument types, and applied by dispatching to the most specific matching definition. This model is a good fit for mathematical programming, where it is unnatural for the first argument to "own" an operation as in traditional object-oriented dispatch. Operators are just functions with special notation — to extend addition to new user-defined data types, you define new methods for the `+` function.
+
+Using type inference, Julia's compiler can often eliminate most or all of the dispatch overhead, thereby generating efficient code.
 
 Some advantages of Julia over comparable systems include:
 
 - Free and open source
 - Consistent and powerful generic function model
 - High performance just-in-time compilation and execution
-- User-defined types are first-class: as fast and efficient as built-ins
+- User-defined types are first-class: as fast as built-ins
 - Simple syntax for defining new types
 - High-level constructs for parallelism
 - Multi-dimensional array comprehensions
 - Lightweight "green" threading (coroutines)
+- Call C functions directly (no wrappers or special APIs needed)
 - A powerful but unobstrusive type system via optional type annotation
 - Elegant and extensible automatic conversions for numeric and other types
 - Lisp-like macros and other powerful metaprogramming facilities

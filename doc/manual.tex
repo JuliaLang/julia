@@ -1329,7 +1329,7 @@ Since functions definitions can be entered into the repl, it is easy to compare 
 \end{verbatim}
 Of course, in a purely linear function body like \verb|g|, the usage of \verb|return| is pointless since the expression \verb|x + y| is never evaluated and we could simply make \verb|x * y| the last expression in the function and omit the \verb|return|.
 In conjunction with other control flow, however, \verb|return| is of real use.
-Here, for example, is a function that computes the hypotenuse length of a right triangle with sides of length $x$ and $y$, carefully avoiding numerical errors or instabilities:
+Here, for example, is a function that computes the hypotenuse length of a right triangle with sides of length $x$ and $y$, avoiding overflow:
 \begin{verbatim}
   function hypot(x,y)
       x = abs(x)
@@ -2211,7 +2211,7 @@ Thus, one can write many useful Julia programs without ever explicitly using typ
 Doing so will typically increase both the performance and robustness of these systems, and counterintuitively, often significantly simplify them.
 
 Describing Julia's type system in the lingo of types, it is dynamic, nominative, parametric and dependent.
-Generic types can be parameterized by values, including but not limited to other types, and the relationships between types in the hierarchy is explicitly declared, rather than implied by compatible structure.
+Generic types can be parameterized by other types and integers, and the relationships between types in the hierarchy is explicitly declared, rather than implied by compatible structure.
 Parametric typing allows concisely and elegantly defining and talking about a type like \verb|List|, without caring or specifying what type of objects the list holds\,---\,for many list algorithms, the type of values is unimportant.
 In situations where the type of objects contained in a list is significant, one can simply write \verb|List{Int32}|, for example, to specify that a list contains only 32-bit integers.
 Concrete types may not subtype each other, so all actual types of run-time values are never interchangeable without conversion.
@@ -2241,16 +2241,17 @@ Every type is a subtype of the abstract type called \verb|Any|.%
 Julia also has a ``bottom'' type, called \texttt{None}, another abstract type, of which no object is an instance, and of which all other types are supertypes;
 thus it is at the nadir of the type graph.}
 
-\item Julia types\,---\,both concrete and abstract\,---\,can be paramaterized by other types or by arbitrary values.
+\item Julia types\,---\,both concrete and abstract\,---\,can be paramaterized by other types or integers.
 This allows algorithms to be written generically and reused without repetition.
 Type parameters may be completely omitted when they do not need to be referenced explicitly.
 
-\item Julia supports multiple inheritance:
-a type may declare that it is a subtype of several abstract types.
-% Thus, the type hierarchy is a directed, acyclic graph rather than a tree.
-The absence of implementation inheritance eliminates data representation problems classically encountered in the presence of multiple inheritance.%
-\footnote{The other problems classically caused by multiple inheritance are ambiguities and instabilities in method dispatch introduced when different methods of the same function are dispatched on non-disjoint types, sharing common descendant subtypes.
-These problems are prevented by a straightforward rule described in \Section{dispatch-and-inheritance}.}
+% TODO: no multiple inheritance yet
+%\item Julia supports multiple inheritance:
+%a type may declare that it is a subtype of several abstract types.
+%% Thus, the type hierarchy is a directed, acyclic graph rather than a tree.
+%The absence of implementation inheritance eliminates data representation problems classically encountered in the presence of multiple inheritance.%
+%\footnote{The other problems classically caused by multiple inheritance are ambiguities and instabilities in method dispatch introduced when different methods of the same function are dispatched on non-disjoint types, sharing common descendant subtypes.
+%These problems are prevented by a straightforward rule described in \Section{dispatch-and-inheritance}.}
 
 \end{itemize}
 The Julia type system is designed to be powerful and expressive, yet clear, intuitive and unobtrusive.
@@ -2261,7 +2262,7 @@ However, some kinds of programming becomes easier, faster and more robust with j
 
 A bits type is a concrete type whose data consists of plain old bits.
 Classic examples of bits types are integers and floating point values.
-Unlike most languages, Julia lets you declare bits types, rather than just providing a fixed set of built-in bits types.
+Unlike most languages, Julia lets you declare bits types, rather than providing only a fixed set of built-in bits types.
 In fact, the standard bits types are all defined in the language itself:
 \begin{verbatim}
   bitstype 8 Bool
@@ -2290,8 +2291,7 @@ The \verb|<:| operator means ``is a subtype of,'' and, used in declarations like
 If supertypes are omitted, then the type defaults to having \verb|Any| as its immediate supertype.
 The declaration of \verb|Bool| above therefore means that a boolean value takes eight bits to store, and has \verb|Any| as its only supertype.
 
-Not all sizes of bits types are supported in \verb|bitstype| declarations:
-currently only 8, 16, 32, and 64 bits are supported.
+Currently, only sizes of 8, 16, 32, and 64 bits are supported.
 Therefore, boolean values, although they really need just a single bit, cannot be declared to be any smaller then eight bits.
 
 The types \verb|Bool|, \verb|Int8| and \verb|Uint8| all have identical representations:
@@ -2300,7 +2300,7 @@ Since Julia's type system is nominative, they are not interchangeable despite ha
 Another fundamental difference between them is that they have different supertypes:
 \verb|Bool|'s direct supertype is \verb|Any|, \verb|Int8|'s is \verb|Int|, and \verb|Uint8|'s is \verb|Uint|.
 Concrete types cannot be subtyped in Julia, so \verb|Any|, \verb|Int|, and \verb|Uint| must be abstract types, to be introduced in the next section (\Section{abstract-types}).
-All other differences between \verb|Bool|, \verb|Int8|, and \verb|Uint8| are all matters of behavior:
+All other differences between \verb|Bool|, \verb|Int8|, and \verb|Uint8| are matters of behavior---
 the way functions are defined to act when given objects of these types as arguments.
 The necessity of a nominative type system becomes apparent from this:
 otherwise, it would be impossible to make \verb|Bool| behave any differently than \verb|Int8| or \verb|Uint8|.
@@ -2342,12 +2342,12 @@ there are other subtypes of both \verb|Number| and \verb|Real|, which will be in
 \subsection{Record Types}\sec{record-types}
 
 Record types are called records, structures (``structs'' in C), or objects in various languages.
-They are types whose values are a collection of named fields which can be used as a single composite values.
+They are types whose values are a collection of named fields which can be used as a single composite value.
 In mainstream object oriented languages, such as C++ and Java, record types also have named functions associated with them, and the combination is called an ``object.''
 In purer object-oriented languages, such as Smalltalk or Ruby, all values are objects and need not be records, but functions are still bundled with objects and called methods.
 In Julia, functions are not bundled with the objects they operate on;
 they are dispatched on all of their arguments, so associating a method with any particular argument is inappropriate.
-See \Section{methods} for details of Julia's polymorphic dispatch mechanism.
+See \Section{methods} for details of Julia's dispatch mechanism.
 
 Since record types are the most common form of concrete type, they are simply introduced with the \verb|type| keyword followed by a block listing field names.
 The fields have optional type annotations indicated with the \verb|::| operator followed by a type value.
