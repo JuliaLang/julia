@@ -43,6 +43,7 @@ end
 VCNodesInUse = HashTable()
 
 function vcloud_waitboot(name)
+    print("powering on node $name"); flush(stdout_stream)
     while true
         state = ""
         success = false
@@ -59,7 +60,21 @@ function vcloud_waitboot(name)
         print("."); flush(stdout_stream)
         sleep(1)
     end
-    println("powered on node $name")
+    println()
+end
+
+function wait_ping(host)
+    print("checking connectivity to $host"); flush(stdout_stream)
+    while true
+        cmd = `ssh $host true`
+        read_from(cmd); read_from(stderr(cmd))
+        if run(cmd)
+            break
+        end
+        print("."); flush(stdout_stream)
+        sleep(0.5)
+    end
+    println()
 end
 
 function vcloud_newnodes(n)
@@ -89,7 +104,9 @@ function vcloud_newnodes(n)
     for nn = names
         vcloud_waitboot(nn)
     end
-    map(vcloud_nodeip, append(names1,names))
+    ips = map(vcloud_nodeip, append(names1,names))
+    foreach(wait_ping, ips)
+    ips
 end
 
 function addprocs_vcloud(n)

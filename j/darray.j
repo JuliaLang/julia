@@ -304,7 +304,7 @@ function node_multiply{T}(A::Tensor{T}, B, sz)
 end
 
 function (*){T}(A::DArray{T,2,1}, B::DArray{T,2,2})
-    if A.pmap != B.pmap
+    if !isequal(A.pmap, B.pmap)
         error("unsupported case of distributed *")
     end
     darray((T,sz,da)->node_multiply(A,B,sz), T, (size(A,1),size(B,2)), 1,
