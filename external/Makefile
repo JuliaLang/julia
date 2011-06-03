@@ -15,11 +15,11 @@ endif
 default: defaultlibs_$(OS)
 
 defaultlibs_Linux: \
-	llvm pcre_install fdlibm_install lapack_install libc_install \
+	llvm pcre_install fdlibm_install openblas_install lapack_install libc_install \
 	arpack_install mongoose_install
 
 defaultlibs_Darwin: \
-	llvm readline_install pcre_install fdlibm_install lapack_install \
+	llvm readline_install pcre_install fdlibm_install openblas_install lapack_install \
 	arpack_install mongoose_install
 
 $(JULIALIB):
@@ -84,7 +84,7 @@ fdlibm_install: $(FDLIBM_OBJ) $(JULIALIB)
 
 OPENBLAS_OBJ = $(EXTROOTLIB)/libopenblas.$(SHLIB_EXT)
 openblas$(OPENBLAS_VER).tar.gz:
-	$(DOWNLOAD) https://github.com/xianyi/OpenBLAS/tarball/develop && \
+	$(DOWNLOAD) -Lk https://github.com/xianyi/OpenBLAS/tarball/develop && \
 	mv develop openblas.tar.gz
 openblas$(OPENBLAS_VER): openblas$(OPENBLAS_VER).tar.gz
 	mkdir -p openblas && tar --strip-components 1 -C openblas -xf openblas$(OPENBLAS_VER).tar.gz
