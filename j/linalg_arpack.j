@@ -7,7 +7,7 @@ macro arpack_eigs(saupd, seupd, T)
             n = size(A,1)
             ldv = n
             nev = k
-            ncv = min(max(nev+1, 20), n)
+            ncv = min(max(nev*2, 20), n)
             bmat = "I"
             which = "LM"
             zero = convert($T, 0.0)
@@ -101,7 +101,7 @@ macro arpack_svds(saupd, seupd, T)
 
             ldv = n
             nev = k
-            ncv = min(max(nev+1, 20), n)
+            ncv = min(max(nev*2, 20), n)
             bmat = "I"
             which = "LM"
             zero = convert($T, 0.0)
