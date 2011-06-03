@@ -84,21 +84,21 @@ typedef struct _jl_lambda_info_t {
     jl_tuple_t *sparams;
     jl_value_t *tfunc;
     jl_sym_t *name;  // for error reporting
+    jl_tuple_t *roots;  // pointers in generated code
+    jl_value_t *specTypes;  // argument types this is specialized for
+    // a slower-but-works version of this function as a fallback
+    struct _jl_function_t *unspecialized;
+    // pairlist of all lambda infos with code generated from this one
+    jl_tuple_t *specializations;
 
     // hidden fields:
     jl_fptr_t fptr;
-    jl_tuple_t *roots;  // pointers in generated code
     void *functionObject;
-    jl_value_t *specTypes;  // argument types this is specialized for
     uptrint_t inferred;
     // flag telling if inference is running on this function
     // used to avoid infinite recursion
     uptrint_t inInference;
     uptrint_t inCompile;
-    // a slower-but-works version of this function as a fallback
-    struct _jl_function_t *unspecialized;
-    // pairlist of all lambda infos with code generated from this one
-    jl_tuple_t *specializations;
 } jl_lambda_info_t;
 
 #define JL_FUNC_FIELDS                          \
@@ -567,8 +567,9 @@ jl_value_t *jl_box_pointer(jl_bits_type_t *ty, void *p);
 void *jl_unbox_pointer(jl_value_t *v);
 
 // arrays
-jl_array_t *jl_new_array(jl_type_t *atype, jl_tuple_t *dims);
+DLLEXPORT jl_array_t *jl_new_array(jl_type_t *atype, jl_tuple_t *dims);
 DLLEXPORT jl_array_t *jl_alloc_array_1d(jl_type_t *atype, size_t nr);
+DLLEXPORT jl_array_t *jl_alloc_array_2d(jl_type_t *atype, size_t nr, size_t nc);
 DLLEXPORT jl_array_t *jl_pchar_to_array(char *str, size_t len);
 DLLEXPORT jl_array_t *jl_cstr_to_array(char *str);
 DLLEXPORT jl_value_t *jl_pchar_to_string(char *str, size_t len);

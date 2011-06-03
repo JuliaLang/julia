@@ -230,13 +230,25 @@ macro L_str(s); s; end
 
 method_missing(f, args...) = throw(MethodError(f, args))
 
-Array{T}  (::Type{T}, d::(Size,))               = Array{T,1}(d)
-Array{T}  (::Type{T}, d::(Size,Size))           = Array{T,2}(d)
-Array{T}  (::Type{T}, d::(Size,Size,Size))      = Array{T,3}(d)
-Array{T}  (::Type{T}, d::(Size,Size,Size,Size)) = Array{T,4}(d)
-Array{T,N}(::Type{T}, d::NTuple{N,Size})        = Array{T,N}(d)
-Array{T}(::Type{T}, m::Size)                         = Array{T,1}((m,))
-Array{T}(::Type{T}, m::Size,n::Size)                 = Array{T,2}((m,n))
-Array{T}(::Type{T}, m::Size,n::Size,o::Size)         = Array{T,3}((m,n,o))
-Array{T}(::Type{T}, m::Size,n::Size,o::Size,p::Size) = Array{T,4}((m,n,o,p))
-Array{T}(::Type{T}, d::Size...)                      = Array(T, d)
+Array{T}  (::Type{T}, d::(Size,)) =
+    ccall(:jl_new_array, Any, (Any,Any), Array{T,1}, d)::Array{T,1}
+Array{T}  (::Type{T}, d::(Size,Size)) =
+    ccall(:jl_new_array, Any, (Any,Any), Array{T,2}, d)::Array{T,2}
+Array{T}  (::Type{T}, d::(Size,Size,Size)) =
+    ccall(:jl_new_array, Any, (Any,Any), Array{T,3}, d)::Array{T,3}
+Array{T}  (::Type{T}, d::(Size,Size,Size,Size)) =
+    ccall(:jl_new_array, Any, (Any,Any), Array{T,4}, d)::Array{T,4}
+Array{T,N}(::Type{T}, d::NTuple{N,Size}) =
+    ccall(:jl_new_array, Any, (Any,Any), Array{T,N}, d)::Array{T,N}
+
+Array{T}(::Type{T}, m::Size) =
+    ccall(:jl_alloc_array_1d, Any, (Any,Ulong), Array{T,1},
+          ulong(m))::Array{T,1}
+Array{T}(::Type{T}, m::Size,n::Size) =
+    ccall(:jl_alloc_array_2d, Any, (Any,Ulong,Ulong), Array{T,2},
+          ulong(m), ulong(n))::Array{T,2}
+Array{T}(::Type{T}, m::Size,n::Size,o::Size)         = Array(T, (m,n,o))
+Array{T}(::Type{T}, m::Size,n::Size,o::Size,p::Size) = Array(T, (m,n,o,p))
+
+Array{N}(T, d::NTuple{N,Size})                       = Array{T,N}(d)
+Array(T, d::Size...)                                 = Array(T, d)
