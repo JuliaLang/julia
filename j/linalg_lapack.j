@@ -1,4 +1,4 @@
-libLAPACK = dlopen("libLAPACK")
+libLAPACK = libBLAS
 
 # SUBROUTINE DPOTRF( UPLO, N, A, LDA, INFO )
 # *     .. Scalar Arguments ..

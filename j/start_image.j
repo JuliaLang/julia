@@ -14,7 +14,7 @@ stderr_stream = fdio(ccall(:jl_stderr, Int32, ()))
 libpcre = dlopen("libpcre")
 
 libBLAS = dlopen("libLAPACK")
-libLAPACK = dlopen("libLAPACK")
+libLAPACK = libBLAS
 
 libarpack = dlopen("libarpack")
 

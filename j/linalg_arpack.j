@@ -95,7 +95,10 @@ macro arpack_svds(saupd, seupd, T)
     quote
 
         function svds(A::Matrix{$T}, k::Number)
-            n = size(A,1)
+
+            (m, n) = size(A)
+            if m < n; error("Only the m>n case is implemented"); end
+
             ldv = n
             nev = k
             ncv = min(max(nev+1, 20), n)
@@ -146,7 +149,7 @@ macro arpack_svds(saupd, seupd, T)
                 if (info[1] < 0); print(info[1]); error("Error with saupd"); end
                 
                 if (ido[1] == -1 || ido[1] == 1)
-                    workd[ipntr[2]:ipntr[2]+n-1] = At*(A*workd[ipntr[1]:ipntr[1]+n-1])
+                    workd[ipntr[2]:(ipntr[2]+n-1)] = At*(A*workd[ipntr[1]:(ipntr[1]+n-1)])
                 else
                     break
                 end
