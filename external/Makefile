@@ -82,19 +82,18 @@ fdlibm_install: $(FDLIBM_OBJ) $(JULIALIB)
 	ln -sf $< $(JULIALIB)/libfdm.$(SHLIB_EXT)
 
 
-
-GOTOBLAS_OBJ = $(EXTROOTLIB)/libgoto2.$(SHLIB_EXT)
-GotoBLAS$(GOTOBLAS_VER).tar.gz:
-	curl http://www.tacc.utexas.edu/index.php\?eID=tx_nawsecuredl\&u=0\&file=fileadmin/images/GotoBLAS2-1.13_bsd.tar.gz\&t=1306744626\&hash=f8e4791923edcd431b5b55c63db90975 -o GotoBLAS$(GOTOBLAS_VER).tar.gz
-GotoBLAS$(GOTOBLAS_VER): GotoBLAS$(GOTOBLAS_VER).tar.gz
-	tar zxf GotoBLAS$(GOTOBLAS_VER).tar.gz
-$(GOTOBLAS_OBJ): GotoBLAS$(GOTOBLAS_VER)
-	cp -f Makefile.GotoBLAS2 GotoBLAS2 && \
-	cd GotoBLAS2 && \
-	make USE_THREAD=0 NO_CBLAS=1 CC=$(CC) FC=$(FC) DOWNLOAD="$(DOWNLOAD)"
-GotoBLAS_install: $(GOTOBLAS_OBJ) $(JULIALIB)
-	cp -f GotoBLAS2/exports/libgoto2*.$(SHLIB_EXT) $(GOTOBLAS_OBJ) && \
-	ln -sf $< $(JULIALIB)/libgoto2.$(SHLIB_EXT)
+OPENBLAS_OBJ = $(EXTROOTLIB)/libopenblas.$(SHLIB_EXT)
+openblas$(OPENBLAS_VER).tar.gz:
+	$(DOWNLOAD) https://github.com/xianyi/OpenBLAS/tarball/develop && \
+	mv develop openblas.tar.gz
+openblas$(OPENBLAS_VER): openblas$(OPENBLAS_VER).tar.gz
+	mkdir -p openblas && tar --strip-components 1 -C openblas -xf openblas$(OPENBLAS_VER).tar.gz
+$(OPENBLAS_OBJ): openblas$(OPENBLAS_VER)
+	cd openblas && \
+	make USE_THREAD=0 NO_CBLAS=1 NO_LAPACK=1 CC=$(CC) FC=$(FC)
+openblas_install: $(OPENBLAS_OBJ) $(JULIALIB)
+	cp -f openblas/libopenblas.$(SHLIB_EXT) $(OPENBLAS_OBJ) && \
+	ln -sf $< $(JULIALIB)/libopenblas.$(SHLIB_EXT)
 
 
 LAPACK_OBJ = $(EXTROOTLIB)/libLAPACK.$(SHLIB_EXT)
@@ -105,9 +104,8 @@ lapack-$(LAPACK_VER): lapack-$(LAPACK_VER).tgz
 $(LAPACK_OBJ): lapack-$(LAPACK_VER)
 	cd lapack-$(LAPACK_VER) && \
 	cp INSTALL/make.inc.gfortran ./make.inc && \
-	make blaslib lapacklib NOOPT="-O0 -fPIC" OPTS="-O2 -fPIC" FORTRAN=$(FC) && \
-	rm -f BLAS/SRC/xerbla_array.o && rm -f BLAS/SRC/xerbla.o && \
-	$(FC) -shared SRC/*.o BLAS/SRC/*.o INSTALL/dlamch.o INSTALL/dsecnd_INT_ETIME.o INSTALL/ilaver.o INSTALL/slamch.o -o $(LAPACK_OBJ) -L$(EXTROOTLIB)
+	make lapacklib NOOPT="-O0 -fPIC" OPTS="-O2 -fPIC" FORTRAN=$(FC) && \
+	$(FC) -shared SRC/*.o $(EXTROOTLIB)/libopenblas.$(SHLIB_EXT) INSTALL/dlamch.o INSTALL/dsecnd_INT_ETIME.o INSTALL/ilaver.o INSTALL/slamch.o -o $(LAPACK_OBJ) -L$(EXTROOTLIB)
 lapack_install: $(LAPACK_OBJ) $(JULIALIB)
 	ln -sf $(LAPACK_OBJ) $(JULIALIB)/libLAPACK.$(SHLIB_EXT)
 

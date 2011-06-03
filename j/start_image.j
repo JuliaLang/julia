@@ -16,10 +16,6 @@ libpcre = dlopen("libpcre")
 libBLAS = dlopen("libLAPACK")
 libLAPACK = dlopen("libLAPACK")
 
-#setenv("GOTO_NUM_THREADS", "1")
-#libBLAS = dlopen("libgoto2")
-#libLAPACK = dlopen("libgoto2")
-
 libarpack = dlopen("libarpack")
 
 try
