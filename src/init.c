@@ -63,7 +63,7 @@ void segv_handler(int sig, siginfo_t *info, void *context)
     sigprocmask(SIG_UNBLOCK, &sset, NULL);
 
 #ifdef COPY_STACKS
-    if ((char*)info->si_addr > (char*)jl_stack_lo-8192 &&
+    if ((char*)info->si_addr > (char*)jl_stack_lo-3000000 &&
         (char*)info->si_addr < (char*)jl_stack_hi) {
 #else
     if ((char*)info->si_addr > (char*)jl_current_task->stack-8192 &&
@@ -118,10 +118,22 @@ void julia_init(char *imageFile)
         jl_init_box_caches();
     }
 
+    if (imageFile) {
+        JL_TRY {
+            jl_restore_system_image(imageFile);
+        }
+        JL_CATCH {
+            ios_printf(ios_stderr, "error during init:\n");
+            jl_show(jl_exception_in_transit);
+            ios_printf(ios_stdout, "\n");
+            exit(1);
+        }
+    }
+
     struct sigaction actf;
     memset(&actf, 0, sizeof(struct sigaction));
     sigemptyset(&actf.sa_mask);
-    actf.sa_sigaction = fpe_handler;
+    actf.sa_handler = fpe_handler;
     actf.sa_flags = 0;
     if (sigaction(SIGFPE, &actf, NULL) < 0) {
         ios_printf(ios_stderr, "sigaction: %s\n", strerror(errno));
@@ -144,18 +156,6 @@ void julia_init(char *imageFile)
     if (sigaction(SIGSEGV, &act, NULL) < 0) {
         ios_printf(ios_stderr, "sigaction: %s\n", strerror(errno));
         exit(1);
-    }
-
-    if (imageFile) {
-        JL_TRY {
-            jl_restore_system_image(imageFile);
-        }
-        JL_CATCH {
-            ios_printf(ios_stderr, "error during init:\n");
-            jl_show(jl_exception_in_transit);
-            ios_printf(ios_stdout, "\n");
-            exit(1);
-        }
     }
 
 #ifdef JL_GC_MARKSWEEP

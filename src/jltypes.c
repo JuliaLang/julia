@@ -2066,10 +2066,18 @@ void jl_init_types()
     jl_lambda_info_type =
         jl_new_struct_type(jl_symbol("LambdaStaticData"),
                            jl_any_type, jl_null,
-                           jl_tuple(4, jl_symbol("ast"), jl_symbol("sparams"),
-                                    jl_symbol("tfunc"), jl_symbol("name")),
-                           jl_tuple(4, jl_expr_type, jl_tuple_type,
-                                    jl_any_type, jl_sym_type));
+                           jl_tuple(8, jl_symbol("ast"), jl_symbol("sparams"),
+                                    jl_symbol("tfunc"), jl_symbol("name"),
+                                    /*
+                                    jl_symbol("roots"), jl_symbol("specTypes"),
+                                    jl_symbol("unspecialized"),
+                                    jl_symbol("specializations")*/
+                                    jl_symbol(""), jl_symbol(""),
+                                    jl_symbol(""), jl_symbol("")),
+                           jl_tuple(8, jl_expr_type, jl_tuple_type,
+                                    jl_any_type, jl_sym_type,
+                                    jl_any_type, jl_tuple_type,
+                                    jl_function_type, jl_tuple_type));
     jl_lambda_info_type->fptr = jl_f_no_function;
 
     tv = jl_typevars(1, "T");

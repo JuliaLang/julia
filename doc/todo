@@ -553,6 +553,21 @@ julia> tic(); for i=1:100000; a=Array(Int32,2,3); end; toc()
 elapsed time: 0.0483038425445557 sec
 elapsed time: 0.0244669914245605 sec
 elapsed time: 0.0549869537353516 sec
+6/2/11: ~0.008 sec
+6/3/11:  0.0068681240081787 sec
+the next level of sophistication would be something like this:
+function array_ctor_factory(T, N)
+    eval(
+    quote
+        let Array
+            function Array(d::NTuple{$N,Size})
+                ccall(:jl_new_array,Any,(Any,Any),Array{$T,$N},d)::Array{$T,$N}
+            end
+        end
+    end)
+end
+which could let us avoid the type checks in jl_new_array_internal.
+BUT we get the same benefit just by using Array() instead of Array{}().
 
 -------------------------------------------------------------------------------
 
@@ -588,9 +603,9 @@ issues 12/21/10
      num::T
      den::T
  
-     Rational(n::Int, d::Int) = (l=lcd(n,d);
+     Rational(n::Int, d::Int) = (g=gcd(n,d);
                                  # can use T here
-                                 this.num=div(n,l); this.den=div(d,l))
+                                 this.num=div(n,g); this.den=div(d,g))
  end
  Rational{T}(n::T, d::T) = Rational{T}(n,d)
  Rational(n::Int, d::Int) = Rational(promote(n,d)...)

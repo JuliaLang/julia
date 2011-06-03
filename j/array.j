@@ -13,6 +13,10 @@ jl_comprehension_zeros{T}(oneresult::T, dims...) = Array(T, dims...)
 jl_comprehension_zeros(oneresult::(), dims...) = Array(None, dims...)
 
 clone(a::Array, T::Type, dims::Dims) = Array(T, dims)
+clone{T}(a::Array{T,1}) = Array(T, size(a,1))
+clone{T}(a::Array{T,2}) = Array(T, size(a,1), size(a,2))
+clone{T}(a::Array{T,1}, S::Type) = Array(S, size(a,1))
+clone{T}(a::Array{T,2}, S::Type) = Array(S, size(a,1), size(a,2))
 
 macro matrix_builder(t, f)
     quote

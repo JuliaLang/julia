@@ -464,7 +464,7 @@ static void gc_markval_(jl_value_t *v)
 #endif
         if (a->data && a->data != (&a->_space[0] + ndimwords*sizeof(size_t))) {
             if (ndims == 1)
-                gc_setmark((char*)a->data - a->offset);
+                gc_setmark((char*)a->data - a->offset*a->elsize);
             else
                 gc_setmark(a->data);
         }
@@ -485,19 +485,6 @@ static void gc_markval_(jl_value_t *v)
                 GC_Markval(elt);
         }
     }
-    else if (vt == (jl_value_t*)jl_lambda_info_type) {
-        jl_lambda_info_t *li = (jl_lambda_info_t*)v;
-        if (li->ast)
-            GC_Markval(li->ast);
-        GC_Markval(li->sparams);
-        GC_Markval(li->tfunc);
-        GC_Markval(li->roots);
-        if (li->specTypes)
-            GC_Markval(li->specTypes);
-        if (li->unspecialized != NULL)
-            GC_Markval(li->unspecialized);
-        GC_Markval(li->specializations);
-    }
     else if (vt == (jl_value_t*)jl_typename_type) {
         jl_typename_t *tn = (jl_typename_t*)v;
         if (tn->primary != NULL)
@@ -517,27 +504,6 @@ static void gc_markval_(jl_value_t *v)
             GC_Markval(st->ctor_factory);
         if (st->instance != NULL)
             GC_Markval(st->instance);
-    }
-    else if (vt == (jl_value_t*)jl_bits_kind) {
-        jl_bits_type_t *bt = (jl_bits_type_t*)v;
-        assert(bt->env == NULL);
-        assert(bt->linfo == NULL);
-        //if (bt->env  !=NULL) GC_Markval(bt->env);
-        //if (bt->linfo!=NULL) GC_Markval(bt->linfo);
-        GC_Markval(bt->name);
-        GC_Markval(bt->super);
-        GC_Markval(bt->parameters);
-        GC_Markval(bt->bnbits);
-    }
-    else if (vt == (jl_value_t*)jl_tag_kind) {
-        jl_tag_type_t *tt = (jl_tag_type_t*)v;
-        assert(tt->env == NULL);
-        assert(tt->linfo == NULL);
-        //if (tt->env  !=NULL) GC_Markval(tt->env);
-        //if (tt->linfo!=NULL) GC_Markval(tt->linfo);
-        GC_Markval(tt->name);
-        GC_Markval(tt->super);
-        GC_Markval(tt->parameters);
     }
     else if (vtt == (jl_value_t*)jl_func_kind) {
         jl_function_t *f = (jl_function_t*)v;
@@ -586,8 +552,13 @@ static void gc_markval_(jl_value_t *v)
     else {
         assert(vtt == (jl_value_t*)jl_struct_kind);
         size_t nf = ((jl_struct_type_t*)vt)->names->length;
-        size_t i;
-        for(i=0; i < nf; i++) {
+        size_t i=0;
+        if (vt == (jl_value_t*)jl_bits_kind ||
+            vt == (jl_value_t*)jl_tag_kind) {
+            i = 3;
+            nf += 3;
+        }
+        for(; i < nf; i++) {
             jl_value_t *fld = ((jl_value_t**)v)[i+1];
             if (fld)
                 GC_Markval(fld);

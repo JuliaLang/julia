@@ -97,7 +97,7 @@ static jl_array_t *_new_array(jl_type_t *atype, jl_tuple_t *dimst,
     size_t *adims = &a->nrows;
     if (ndims == 1) {
         a->nrows = nel;
-        a->maxsize = tot;
+        a->maxsize = nel;
         a->offset = 0;
     }
     else {
@@ -123,6 +123,12 @@ jl_array_t *jl_alloc_array_1d(jl_type_t *atype, size_t nr)
     return _new_array(atype, NULL, 1, &nr);
 }
 
+jl_array_t *jl_alloc_array_2d(jl_type_t *atype, size_t nr, size_t nc)
+{
+    size_t d[2] = {nr, nc};
+    return _new_array(atype, NULL, 2, &d[0]);
+}
+
 JL_CALLABLE(jl_new_array_internal)
 {
     jl_struct_type_t *atype = (jl_struct_type_t*)env;
@@ -135,10 +141,13 @@ JL_CALLABLE(jl_new_array_internal)
         jl_error("Array: wrong number of dimensions");
     }
     size_t i;
-    for(i=0; i < d->length; i++) {
-        JL_TYPECHK(Array, int32, jl_tupleref(d,i));
+    size_t *adims = alloca(nd*sizeof(size_t));
+    for(i=0; i < nd; i++) {
+        jl_value_t *di = jl_tupleref(d,i);
+        JL_TYPECHK(Array, int32, di);
+        adims[i] = jl_unbox_int32(di);
     }
-    return (jl_value_t*)jl_new_array((jl_type_t*)atype, d);
+    return (jl_value_t*)_new_array((jl_type_t*)atype, d, nd, adims);
 }
 
 jl_array_t *jl_pchar_to_array(char *str, size_t len)
@@ -320,9 +329,9 @@ JL_CALLABLE(jl_f_arrayset)
     return args[0];
 }
 
-static void *array_new_buffer(jl_array_t *a, size_t newsize)
+static void *array_new_buffer(jl_array_t *a, size_t newlen)
 {
-    size_t nbytes = newsize * a->elsize;
+    size_t nbytes = newlen * a->elsize;
     int isbytes = 0;
     if (a->elsize == 1) {
         isbytes = 1;
@@ -339,15 +348,20 @@ void jl_array_grow_end(jl_array_t *a, size_t inc)
     // optimized for the case of only growing and shrinking at the end
     if (inc == 0)
         return;
-    size_t es = a->elsize;
-    if (es*(a->length + inc) > a->maxsize - a->offset) {
-        size_t newsize = a->maxsize==0 ? inc*es : a->maxsize*2;
-        while (es*(a->length+inc) > newsize-a->offset)
-            newsize *= 2;
-        char *newdata = array_new_buffer(a, newsize);
-        newdata += a->offset;
-        memcpy(newdata, (char*)a->data, a->length*es);
-        a->maxsize = newsize;
+    size_t alen = a->length;
+    if ((alen + inc) > a->maxsize - a->offset) {
+        size_t newlen = a->maxsize==0 ? inc : a->maxsize*2;
+        while ((alen + inc) > newlen - a->offset)
+            newlen *= 2;
+        char *newdata = array_new_buffer(a, newlen);
+        size_t es = a->elsize;
+        newdata += (a->offset*es);
+        size_t anb = alen*es;
+        memcpy(newdata, (char*)a->data, anb);
+        if (es == 1) {
+            memset(newdata + anb, 0, (newlen-a->offset-alen)*es);
+        }
+        a->maxsize = newlen;
         a->data = newdata;
     }
     a->length += inc; a->nrows += inc;
@@ -372,26 +386,27 @@ void jl_array_grow_beg(jl_array_t *a, size_t inc)
         return;
     size_t es = a->elsize;
     size_t nb = inc*es;
-    if (a->offset >= nb) {
+    if (a->offset >= inc) {
         a->data = (char*)a->data - nb;
-        a->offset -= nb;
+        a->offset -= inc;
     }
     else {
-        size_t anb = a->length*es;
+        size_t alen = a->length;
+        size_t anb = alen*es;
         char *newdata;
-        if (inc > (a->maxsize-anb)/2 - (a->maxsize-anb)/20) {
-            size_t newsize = a->maxsize==0 ? 2*nb : a->maxsize*2;
-            while (anb+2*nb > newsize-a->offset)
-                newsize *= 2;
-            newdata = array_new_buffer(a, newsize);
-            size_t center = (newsize - (anb + nb))/2;
-            newdata += center;
-            a->maxsize = newsize;
+        if (inc > (a->maxsize-alen)/2 - (a->maxsize-alen)/20) {
+            size_t newlen = a->maxsize==0 ? 2*inc : a->maxsize*2;
+            while (alen+2*inc > newlen-a->offset)
+                newlen *= 2;
+            newdata = array_new_buffer(a, newlen);
+            size_t center = (newlen - (alen + inc))/2;
+            newdata += (center*es);
+            a->maxsize = newlen;
             a->offset = center;
         }
         else {
-            size_t center = (a->maxsize - (anb + nb))/2;
-            newdata = (char*)a->data - a->offset + center;
+            size_t center = (a->maxsize - (alen + inc))/2;
+            newdata = (char*)a->data - es*a->offset + es*center;
             a->offset = center;
         }
         memmove(&newdata[nb], a->data, anb);
@@ -407,9 +422,10 @@ void jl_array_del_beg(jl_array_t *a, size_t dec)
         return;
     if (dec > a->length)
         jl_error("array_del_beg: index out of range");
-    size_t nb = dec*a->elsize;
+    size_t es = a->elsize;
+    size_t nb = dec*es;
     memset(a->data, 0, nb);
-    a->offset += nb;
+    a->offset += dec;
     a->data = (char*)a->data + nb;
     a->length -= dec; a->nrows -= dec;
     a->dims = NULL;
@@ -417,9 +433,9 @@ void jl_array_del_beg(jl_array_t *a, size_t dec)
     // make sure offset doesn't grow forever due to deleting at beginning
     // and growing at end
     if (a->offset >= 13*a->maxsize/20) {
-        size_t anb = a->length*a->elsize;
-        size_t newoffs = 17*(a->maxsize - anb)/100;
-        size_t delta = (a->offset - newoffs);
+        size_t anb = a->length*es;
+        size_t newoffs = 17*(a->maxsize - a->length)/100;
+        size_t delta = (a->offset - newoffs)*es;
         a->data = (char*)a->data - delta;
         memmove(a->data, (char*)a->data + delta, anb);
         a->offset = newoffs;

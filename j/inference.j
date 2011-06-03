@@ -483,8 +483,8 @@ function abstract_eval_call(e, vtypes, sv::StaticVarInfo)
             # use inferred function type
             return ft_tfunc(ft, argtypes)
         elseif isType(ft) && isbuiltin(ft.parameters[1]) &&
+               isa(ft.parameters[1],StructKind)
             # struct constructor
-            isa(ft.parameters[1],StructKind)
             return ft.parameters[1]
         end
         return Any
