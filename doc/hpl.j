@@ -3,10 +3,10 @@
 
 function hpl (A::Matrix, b::Vector)
 
-    blocksize = 64
+    blocksize = 5
 
-    n = length(A)
-    A = [A, b]
+    n = size(A,1)
+    A = [A b]
     
     B_rows = linspace(0, n, blocksize)
     B_rows[end] = n 
