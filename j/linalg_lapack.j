@@ -36,9 +36,11 @@ end
 #       INTEGER            IPIV( * )
 #       DOUBLE PRECISION   A( LDA, * )
 
+lu(A::DenseMatrix) = lu(A, false)
+
 macro lapack_lu(fname, eltype)
     quote
-        function lu(A::DenseMatrix{$eltype})
+        function lu(A::DenseMatrix{$eltype}, economy::Bool)
             info = [0]
             m, n = size(A)
             LU = copy(A)
@@ -54,9 +56,16 @@ macro lapack_lu(fname, eltype)
             P = linspace(1,m)
             for i=1:m; t = P[i]; P[i] = P[ipiv[i]]; P[ipiv[i]] = t ; end
             
-            if info[1] == 0; return (tril(LU, -1) + eye(m,n), triu(LU), P); end
+            if info[1] == 0
+                if economy
+                    return (LU, P)
+                else
+                    return (tril(LU, -1) + eye(m,n), triu(LU), P)
+                end
+            end
             error("Error in LU")
         end
+
     end
 end
 

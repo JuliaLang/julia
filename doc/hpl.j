@@ -1,28 +1,27 @@
 ## Based on "Multi-Threading and One-Sided Communication in Parallel LU Factorization"
-## Parry Husbands, Katherine Yelick, 
 ## http://citeseerx.ist.psu.edu/viewdoc/summary?doi=10.1.1.138.4361&rank=7
 
-function hpl (A::Matrix, b::Vector, blocksize::Number)
+function hpl (A::Matrix, b::Vector)
+
+    blocksize = 64
 
     n = length(A)
-    A = [A b]
+    A = [A, b]
     
-    B_rows = 0:blocksize:n 
+    B_rows = linspace(0, n, blocksize)
     B_rows[end] = n 
-    B_cols = [B_rows n+1]
+    B_cols = [B_rows, [n+1]]
     nB = length(B_rows)
-    depend = cell(nB, nB)
+    depend = zeros(Bool, nB, nB) # In parallel, depend needs to be able to hold futures
     
     ## Add a ghost row of dependencies to boostrap the computation
-    for j=1:nB
-        depend[1,j] = true 
-    end
+    for j=1:nB; depend[1,j] = true; end
     
     for i=1:(nB-1)
         ## Threads for panel factorizations
         I = (B_rows[i]+1):B_rows[i+1]
         #[depend[i+1,i], panel_p] = spawn(panel_factor, I, depend[i,i])
-        [depend[i+1,i], panel_p] = panel_factor(A, I, depend[i,i])
+        (depend[i+1,i], panel_p) = panel_factor(A, I, depend[i,i])
         
         ## Threads for trailing updates
         for j=(i+1):nB
@@ -54,7 +53,7 @@ function panel_factor(A, I, col_dep)
     
     ## Factorize a panel
     K = I[1]:n
-    [A[K,I], panel_p] = lu(A[K,I],'vector','economy') 
+    (A[K,I], panel_p) = lu(A[K,I], true) # Economy mode
     
     ## Panel permutation 
     panel_p = K[panel_p]
