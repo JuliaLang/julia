@@ -295,6 +295,8 @@ void jl_get_builtin_hooks()
         jl_apply((jl_function_t*)global("StackOverflowError"), NULL, 0);
     jl_divbyzero_exception =
         jl_apply((jl_function_t*)global("DivideByZeroError"), NULL, 0);
+    jl_uninitializedreference_exception =
+        jl_apply((jl_function_t*)global("UninitializedReferenceError"),NULL,0);
 
     jl_append_any_func = (jl_function_t*)global("append_any");
     jl_method_missing_func = (jl_function_t*)global("method_missing");

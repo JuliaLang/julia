@@ -94,9 +94,10 @@ function show(e::LoadError)
 end
 
 show(e::SystemError) = print("$(e.prefix): $(strerror(e.errnum))")
-show(e::DivideByZeroError) = print("error: integer divide by zero")
-show(e::StackOverflowError) = print("error: stack overflow")
-show(e::EOFError) = print("read: end of file")
+show(::DivideByZeroError) = print("error: integer divide by zero")
+show(::StackOverflowError) = print("error: stack overflow")
+show(::UninitializedReferenceError) = print("access to uninitialized reference")
+show(::EOFError) = print("read: end of file")
 show(e::ErrorException) = print(e.msg)
 show(e::KeyError) = print("key not found: $(e.key)")
 

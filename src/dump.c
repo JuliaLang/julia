@@ -795,6 +795,7 @@ void jl_save_system_image(char *fname, char *startscriptname)
     jl_serialize_value(&f, jl_uniontoocomplex_type);
     jl_serialize_value(&f, jl_stackovf_exception);
     jl_serialize_value(&f, jl_divbyzero_exception);
+    jl_serialize_value(&f, jl_uninitializedreference_exception);
     jl_serialize_value(&f, jl_append_any_func);
     jl_serialize_value(&f, jl_method_missing_func);
     jl_serialize_value(&f, jl_get_global(jl_system_module,
@@ -863,6 +864,7 @@ void jl_restore_system_image(char *fname)
     jl_uniontoocomplex_type = (jl_struct_type_t*)jl_deserialize_value(&f);
     jl_stackovf_exception = jl_deserialize_value(&f);
     jl_divbyzero_exception = jl_deserialize_value(&f);
+    jl_uninitializedreference_exception = jl_deserialize_value(&f);
     jl_append_any_func = (jl_function_t*)jl_deserialize_value(&f);
     jl_method_missing_func = (jl_function_t*)jl_deserialize_value(&f);
     jl_idtable_type = (jl_struct_type_t*)jl_deserialize_value(&f);

@@ -13,6 +13,7 @@ size(t::Tensor, d) = size(t)[d]
 ndims{T,n}(::Tensor{T,n}) = n
 numel(t::Tensor) = prod(size(t))
 length(v::Vector) = numel(v)
+length(t::Tensor) = error("length not defined for ", typeof(t))
 nnz(a::Tensor) = (n = 0; for i=1:numel(a); n += a[i] != 0 ? 1 : 0; end; n)
 nnz(a::Tensor{Bool}) = (n = 0; for i=1:numel(a); n += a[i] == true ? 1 : 0; end; n)
 

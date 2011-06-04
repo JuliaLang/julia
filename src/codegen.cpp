@@ -85,6 +85,7 @@ static GlobalVariable *jlexc_var;
 
 // important functions
 static Function *jlerror_func;
+static Function *jluniniterror_func;
 static Function *jltypeerror_func;
 static Function *jlgetbindingp_func;
 static Function *jltuple_func;
@@ -288,6 +289,19 @@ static void error_unless(Value *cond, const std::string &msg, jl_codectx_t *ctx)
     builder.CreateCondBr(cond, passBB, failBB);
     builder.SetInsertPoint(failBB);
     emit_error(msg, ctx);
+    builder.CreateBr(passBB);
+    ctx->f->getBasicBlockList().push_back(passBB);
+    builder.SetInsertPoint(passBB);
+}
+
+static void null_pointer_check(Value *v, jl_codectx_t *ctx)
+{
+    Value *cond = builder.CreateICmpNE(v, V_null);
+    BasicBlock *failBB = BasicBlock::Create(getGlobalContext(),"fail",ctx->f);
+    BasicBlock *passBB = BasicBlock::Create(getGlobalContext(),"pass");
+    builder.CreateCondBr(cond, passBB, failBB);
+    builder.SetInsertPoint(failBB);
+    builder.CreateCall(jluniniterror_func);
     builder.CreateBr(passBB);
     ctx->f->getBasicBlockList().push_back(passBB);
     builder.SetInsertPoint(passBB);
@@ -744,10 +758,7 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
                     Value *elt=builder.CreateLoad(builder.CreateGEP(data, im1),
                                                   false);
                     if (ety == (jl_value_t*)jl_any_type) {
-                        // NULL pointer check
-                        error_unless(builder.CreateICmpNE(elt, V_null),
-                                     "arrayref: uninitialized reference error",
-                                     ctx);
+                        null_pointer_check(elt, ctx);
                     }
                     JL_GC_POP();
                     if (isbool)
@@ -1611,6 +1622,14 @@ static void init_julia_llvm_env(Module *m)
                          Function::ExternalLinkage,
                          "jl_error", jl_Module);
     jl_ExecutionEngine->addGlobalMapping(jlerror_func, (void*)&jl_error);
+
+    std::vector<const Type*> empty_args(0);
+    jluniniterror_func =
+        Function::Create(FunctionType::get(T_void, empty_args, false),
+                         Function::ExternalLinkage,
+                         "jl_uninitialized_ref_error", jl_Module);
+    jl_ExecutionEngine->addGlobalMapping(jluniniterror_func,
+                                         (void*)&jl_uninitialized_ref_error);
 
     setjmp_func =
         Function::Create(FunctionType::get(T_int32, args1, false),

@@ -68,6 +68,11 @@ void jl_type_error(const char *fname, jl_value_t *expected, jl_value_t *got)
     jl_type_error_rt(fname, "", expected, got);
 }
 
+void jl_uninitialized_ref_error()
+{
+    jl_raise(jl_uninitializedreference_exception);
+}
+
 JL_CALLABLE(jl_f_throw)
 {
     JL_NARGS(throw, 1, 1);
