@@ -53,14 +53,16 @@ macro lapack_lu(fname, eltype)
                   m, n, LU, m, ipiv, info)
             
             if info[1] > 0; error("Matrix is singular"); end
-            P = linspace(1,m)
-            for i=1:m; t = P[i]; P[i] = P[ipiv[i]]; P[ipiv[i]] = t ; end
+            P = linspace(1, m)
+            for i=1:min(m,n); t = P[i]; P[i] = P[ipiv[i]]; P[ipiv[i]] = t ; end
             
             if info[1] == 0
                 if economy
                     return (LU, P)
                 else
-                    return (tril(LU, -1) + eye(m,n), triu(LU), P)
+                    L = tril(LU, -1) + eye(m,n)
+                    U = m <= n ? triu(LU) : triu(LU)[1:n, :]
+                    return (L, U, P)
                 end
             end
             error("Error in LU")
