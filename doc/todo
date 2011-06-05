@@ -615,6 +615,8 @@ default ctors would be
   inside type block: Rational(n, d) = (this.num=n;this.den=d)
   outside:           Rational{T}(n::T, d::T) = Rational{T}(n,d)
 
+- rename clone to new
+
 * type=>abstract, struct=>type
 * do something about "global X+=1"
 ? make sure chained comparisons evaluate left to right

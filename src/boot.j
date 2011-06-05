@@ -177,7 +177,7 @@ type MemoryError        <: Exception end
 type IOError            <: Exception end
 type StackOverflowError <: Exception end
 type EOFError           <: Exception end
-type UninitializedReferenceError <: Exception end
+type UndefRefError      <: Exception end
 
 type UnionTooComplexError <: Exception
     types::Tuple

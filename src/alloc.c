@@ -45,7 +45,7 @@ jl_struct_type_t *jl_uniontoocomplex_type;
 jl_value_t *jl_an_empty_cell=NULL;
 jl_value_t *jl_stackovf_exception;
 jl_value_t *jl_divbyzero_exception;
-jl_value_t *jl_uninitializedreference_exception;
+jl_value_t *jl_undefref_exception;
 
 jl_bits_type_t *jl_pointer_type;
 jl_bits_type_t *jl_pointer_void_type;

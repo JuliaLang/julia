@@ -479,7 +479,13 @@
 		   `(call (top getfield) ,a (quote ,b)))
 
    (pattern-lambda (= (|.| a b) rhs)
-		   `(call (top setfield) ,a (quote ,b) ,rhs))
+		   (let ((aa (if (atom? a) a (gensym))))
+		     `(block
+		       ,@(if (eq? aa a) '() `((= ,aa ,a)))
+		       (call (top setfield) ,aa (quote ,b)
+			     (call (top convert)
+				   (call (top fieldtype) ,aa (quote ,b))
+				   ,rhs)))))
 
    (pattern-lambda (abstract sig)
 		   (receive (name params super) (analyze-type-sig sig)
@@ -633,17 +639,15 @@
       (if c
 	  (let ((cnt (gensym))
 		(lim (gensym))
-		(aa  (if (atom? a) a (gensym)))
-		(bb  (if (atom? b) b (gensym)))
-		(cc  (if (atom? c) c (gensym))))
+		(aa  (if (number? a) a (gensym)))
+		(bb  (if (number? b) b (gensym))))
 	    `(scope-block
 	     (block
 	      ,@(if (eq? aa a) '() `((= ,aa ,a)))
 	      ,@(if (eq? bb b) '() `((= ,bb ,b)))
-	      ,@(if (eq? cc c) '() `((= ,cc ,c)))
 	      (= ,cnt 0)
 	      (= ,lim
-		 (call int32 (call + 1 (call / (call - ,cc ,aa) ,bb))))
+		 (call int32 (call + 1 (call / (call - ,c ,aa) ,bb))))
 	      (break-block loop-exit
 			   (_while (call < ,cnt ,lim)
 				   (block

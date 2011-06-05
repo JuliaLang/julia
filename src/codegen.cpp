@@ -806,16 +806,40 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
             }
         }
         else if (f->fptr == &jl_f_get_field && nargs==2) {
-            jl_value_t *sty = expr_type(args[1]); rt1 = sty;
+            jl_struct_type_t *sty = (jl_struct_type_t*)expr_type(args[1]);
+            rt1 = (jl_value_t*)sty;
             if (jl_is_struct_type(sty) && jl_is_expr(args[2]) &&
                 ((jl_expr_t*)args[2])->head == quote_sym &&
                 jl_is_symbol(jl_exprarg(args[2],0))) {
-                size_t offs = jl_field_offset((jl_struct_type_t*)sty,
+                size_t offs = jl_field_offset(sty,
                                               (jl_sym_t*)jl_exprarg(args[2],0));
                 if (offs != (size_t)-1) {
                     Value *strct = emit_expr(args[1], ctx, true);
                     JL_GC_POP();
                     return emit_nthptr(strct, offs+1);
+                }
+            }
+        }
+        else if (f->fptr == &jl_f_set_field && nargs==3) {
+            jl_struct_type_t *sty = (jl_struct_type_t*)expr_type(args[1]);
+            rt1 = (jl_value_t*)sty;
+            if (jl_is_struct_type(sty) && jl_is_expr(args[2]) &&
+                ((jl_expr_t*)args[2])->head == quote_sym &&
+                jl_is_symbol(jl_exprarg(args[2],0))) {
+                size_t offs = jl_field_offset(sty,
+                                              (jl_sym_t*)jl_exprarg(args[2],0));
+                if (offs != (size_t)-1) {
+                    jl_value_t *ft = jl_tupleref(sty->types, offs);
+                    jl_value_t *rhst = expr_type(args[3]);
+                    rt2 = rhst;
+                    if (jl_subtype(rhst, ft, 0)) {
+                        Value *strct = emit_expr(args[1], ctx, true);
+                        Value *rhs = boxed(emit_expr(args[3], ctx, true));
+                        Value *addr = emit_nthptr_addr(strct, offs+1);
+                        builder.CreateStore(rhs, addr);
+                        JL_GC_POP();
+                        return strct;
+                    }
                 }
             }
         }
@@ -1627,9 +1651,9 @@ static void init_julia_llvm_env(Module *m)
     jluniniterror_func =
         Function::Create(FunctionType::get(T_void, empty_args, false),
                          Function::ExternalLinkage,
-                         "jl_uninitialized_ref_error", jl_Module);
+                         "jl_undef_ref_error", jl_Module);
     jl_ExecutionEngine->addGlobalMapping(jluniniterror_func,
-                                         (void*)&jl_uninitialized_ref_error);
+                                         (void*)&jl_undef_ref_error);
 
     setjmp_func =
         Function::Create(FunctionType::get(T_int32, args1, false),

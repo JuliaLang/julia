@@ -96,7 +96,7 @@ end
 show(e::SystemError) = print("$(e.prefix): $(strerror(e.errnum))")
 show(::DivideByZeroError) = print("error: integer divide by zero")
 show(::StackOverflowError) = print("error: stack overflow")
-show(::UninitializedReferenceError) = print("access to uninitialized reference")
+show(::UndefRefError) = print("access to undefined reference")
 show(::EOFError) = print("read: end of file")
 show(e::ErrorException) = print(e.msg)
 show(e::KeyError) = print("key not found: $(e.key)")
