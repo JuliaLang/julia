@@ -54,7 +54,14 @@ Required build tools:
 - g++
 - gfortran
 - GNU make
-- curl (to download third party sources)
+- curl (to download external libraries)
+  * fdlibm
+  * OpenBLAS
+  * LAPACK
+  * ARPACK
+  * pcre
+  * readline
+  * mongoose
 
 Supported platforms:
 
