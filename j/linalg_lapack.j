@@ -185,7 +185,7 @@ macro lapack_eig(fname, eltype)
                    Ptr{$eltype}, Ptr{$eltype}, Ptr{Int32}, Ptr{Int32}),
                   jobz, uplo, n, EV, n, W, work, lwork, info)
             
-            if info[1] == 0; return (EV, W); end
+            if info[1] == 0; return (diagm(W), EV); end
             error("Error in EIG");
         end
     end

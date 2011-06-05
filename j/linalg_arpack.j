@@ -81,7 +81,7 @@ macro arpack_eigs(saupd, seupd, T)
 
             if (ierr[1] != 0); error("Error with seupd"); end
 
-            return (d, v[1:n, 1:nev])
+            return (diagm(d), v[1:n, 1:nev])
         end
         
     end # quote
@@ -180,7 +180,7 @@ macro arpack_svds(saupd, seupd, T)
             v = v[1:n, 1:nev]
             u = A*v*diagm(1./s)
 
-            return (u, s, v)
+            return (u, diagm(s), v.')
         end
         
     end # quote
