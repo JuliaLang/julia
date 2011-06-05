@@ -202,19 +202,28 @@ t_func[:convert] =
                    end;
                    isType(t) ? static_convert(t.parameters[1],x) :
                    Any))
-
-t_func[typeof] =
-    (1, 1, t->(isType(t)      ? Type{typeof(t.parameters[1])} :
-               isa(t,TagKind) ? Type{t} :
-               typeof(t)))
-# involving constants: typeassert, tupleref, getfield, apply_type
+typeof_tfunc = function (t)
+    if isType(t)
+        Type{typeof(t.parameters[1])}
+    elseif isa(t,TagKind)
+        Type{t}
+    elseif isa(t,UnionKind)
+        Union(map(typeof_tfunc, t.types)...)
+    elseif isa(t,Tuple)
+        map(typeof_tfunc, t)
+    else
+        typeof(t)
+    end
+end
+t_func[typeof] = (1, 1, typeof_tfunc)
+# involving constants: typeassert, tupleref, getfield, fieldtype, apply_type
 # therefore they get their arguments unevaluated
 t_func[typeassert] =
     (2, 2, (A, v, t)->(isType(t) ? tintersect(v,t.parameters[1]) :
                        isconstant(A[2]) ? tintersect(v,eval(A[2])) :
                        Any))
 
-function tupleref_tfunc(A, t, i)
+tupleref_tfunc = function (A, t, i)
     if is(t,())
         return None
     end
@@ -253,7 +262,7 @@ function tupleref_tfunc(A, t, i)
 end
 t_func[tupleref] = (2, 2, tupleref_tfunc)
 
-function getfield_tfunc(A, s, name)
+getfield_tfunc = function (A, s, name)
     if !isa(s,StructKind)
         return Any
     end
@@ -270,9 +279,21 @@ function getfield_tfunc(A, s, name)
     end
 end
 t_func[getfield] = (2, 2, getfield_tfunc)
+t_func[setfield] = (3, 3, (o, f, v)->o)
+fieldtype_tfunc = function (A, s, name)
+    if !isa(s,StructKind)
+        return Type
+    end
+    t = getfield_tfunc(A, s, name)
+    if is(t,None)
+        return t
+    end
+    Type{t}
+end
+t_func[fieldtype] = (2, 2, fieldtype_tfunc)
 
 # TODO: handle e.g. apply_type(T, R::Union(Type{Int32},Type{Float64}))
-function apply_type_tfunc(A, args...)
+apply_type_tfunc = function (A, args...)
     if !isType(args[1])
         return Any
     end
@@ -295,7 +316,7 @@ function apply_type_tfunc(A, args...)
 end
 t_func[apply_type] = (1, Inf, apply_type_tfunc)
 
-# other: apply, setfield
+# other: apply
 
 function builtin_tfunction(f, args::Tuple, argtypes::Tuple)
     tf = get(t_func::IdTable, f, false)
@@ -311,7 +332,8 @@ function builtin_tfunction(f, args::Tuple, argtypes::Tuple)
         # wrong # of args
         return None
     end
-    if is(f,typeassert) || is(f,tupleref) || is(f,getfield) || is(f,apply_type)
+    if is(f,typeassert) || is(f,tupleref) || is(f,getfield) ||
+       is(f,apply_type) || is(f,fieldtype)
         # TODO: case of apply(), where we do not have the args
         return tf[3](args, argtypes...)
     end
@@ -535,6 +557,10 @@ function abstract_eval_constant(x)
     return typeof(x)
 end
 
+# Undef is the static type of a value location (e.g. variable) that is
+# undefined. The corresponding run-time type is None, since accessing an
+# undefined location is an error. A non-lvalue expression cannot have
+# type Undef, only None.
 typealias Top Union(Any,Undef)
 
 function abstract_eval_global(s::Symbol)
@@ -1153,8 +1179,9 @@ function inlining_pass(e::Expr, vars)
         end
     elseif is(e.head,:call)
         farg = e.args[1]
+        # special inlining for some builtin functions that return types
         if isa(farg,Expr) && is(farg.head,:top) &&
-            is(eval(farg),apply_type) &&
+            (is(eval(farg),apply_type) || is(eval(farg),fieldtype)) &&
             isType(e.type) && isleaftype(e.type.parameters[1])
             return e.type.parameters[1]
         end

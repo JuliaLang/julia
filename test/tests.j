@@ -738,7 +738,7 @@ r = chol(asym)
 @assert sum(l[p,:]*u - a) < 1e-8
 (q,r,p) = qr(a)
 @assert sum(q*r[:,p] - a) < 1e-8
-(v,d) = eig(asym)
+(d,v) = eig(asym)
 @assert sum(asym*v[:,1]-d[1]*v[:,1]) < 1e-8
 (u,s,vt) = svd(a)
 @assert sum(u*s*vt - a) < 1e-8

@@ -68,9 +68,9 @@ void jl_type_error(const char *fname, jl_value_t *expected, jl_value_t *got)
     jl_type_error_rt(fname, "", expected, got);
 }
 
-void jl_uninitialized_ref_error()
+void jl_undef_ref_error()
 {
-    jl_raise(jl_uninitializedreference_exception);
+    jl_raise(jl_undefref_exception);
 }
 
 JL_CALLABLE(jl_f_throw)
@@ -499,10 +499,10 @@ JL_CALLABLE(jl_f_get_field)
     JL_NARGS(getfield, 2, 2);
     JL_TYPECHK(getfield, symbol, args[1]);
     jl_value_t *v = args[0];
-    if (!jl_is_struct_type(jl_typeof(v)))
+    jl_value_t *vt = (jl_value_t*)jl_typeof(v);
+    if (!jl_is_struct_type(vt))
         jl_type_error("getfield", (jl_value_t*)jl_struct_kind, v);
-    size_t i = field_offset((jl_struct_type_t*)jl_typeof(v),
-                            (jl_sym_t*)args[1], 1);
+    size_t i = field_offset((jl_struct_type_t*)vt, (jl_sym_t*)args[1], 1);
     return ((jl_value_t**)v)[1+i];
 }
 
@@ -511,13 +511,30 @@ JL_CALLABLE(jl_f_set_field)
     JL_NARGS(setfield, 3, 3);
     JL_TYPECHK(setfield, symbol, args[1]);
     jl_value_t *v = args[0];
-    if (!jl_is_struct_type(jl_typeof(v)))
+    jl_value_t *vt = (jl_value_t*)jl_typeof(v);
+    if (!jl_is_struct_type(vt))
         jl_type_error("setfield", (jl_value_t*)jl_struct_kind, v);
-    jl_struct_type_t *st = (jl_struct_type_t*)jl_typeof(v);
+    jl_struct_type_t *st = (jl_struct_type_t*)vt;
     size_t i = field_offset(st, (jl_sym_t*)args[1], 1);
-    ((jl_value_t**)v)[1+i] = jl_convert((jl_type_t*)jl_tupleref(st->types,i),
-                                        args[2]);
+    jl_value_t *ft = jl_tupleref(st->types,i);
+    if (!jl_subtype(args[2], ft, 1)) {
+        jl_type_error("setfield", ft, args[2]);
+    }
+    ((jl_value_t**)v)[1+i] = args[2];
     return v;
+}
+
+JL_CALLABLE(jl_f_field_type)
+{
+    JL_NARGS(fieldtype, 2, 2);
+    JL_TYPECHK(fieldtype, symbol, args[1]);
+    jl_value_t *v = args[0];
+    jl_value_t *vt = (jl_value_t*)jl_typeof(v);
+    if (!jl_is_struct_type(vt))
+        jl_type_error("fieldtype", (jl_value_t*)jl_struct_kind, v);
+    jl_struct_type_t *st = (jl_struct_type_t*)vt;
+    size_t i = field_offset(st, (jl_sym_t*)args[1], 1);
+    return jl_tupleref(st->types, i);
 }
 
 // --- conversions ---
@@ -1339,10 +1356,11 @@ void jl_init_primitives()
     add_builtin_func("isbound", jl_f_isbound);
     
     // functions for internal use
-    add_builtin_func("tupleref", jl_f_tupleref);
-    add_builtin_func("tuplelen", jl_f_tuplelen);
-    add_builtin_func("getfield", jl_f_get_field);
-    add_builtin_func("setfield", jl_f_set_field);
+    add_builtin_func("tupleref",  jl_f_tupleref);
+    add_builtin_func("tuplelen",  jl_f_tuplelen);
+    add_builtin_func("getfield",  jl_f_get_field);
+    add_builtin_func("setfield",  jl_f_set_field);
+    add_builtin_func("fieldtype", jl_f_field_type);
 
     add_builtin_func("arraylen", jl_f_arraylen);
     add_builtin_func("arrayref", jl_f_arrayref);
