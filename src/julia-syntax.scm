@@ -655,11 +655,11 @@
 				    (break-block loop-cont
 						 ,body)
 				    (= ,cnt (call + 1 ,cnt))))))))
-	  (let ((lim (gensym)))
+	  (let ((lim (if (number? b) b (gensym))))
 	    `(scope-block
 	     (block
 	      (= ,var ,a)
-	      (= ,lim ,b)
+	      ,@(if (eq? lim b) '() `((= ,lim ,b)))
 	      (break-block loop-exit
 			   (_while (call <= ,var ,lim)
 				   (block
