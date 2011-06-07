@@ -43,7 +43,10 @@ macro lapack_lu(fname, eltype)
         function lu(A::DenseMatrix{$eltype}, economy::Bool)
             info = [0]
             m, n = size(A)
-            LU = copy(A)
+            LU = A
+            if !economy
+                LU = copy(A)
+            end
             ipiv = Array(Int32, min(m,n))
             
             ccall(dlsym(libLAPACK, $fname),
