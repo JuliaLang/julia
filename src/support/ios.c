@@ -27,6 +27,8 @@
 #include "ios.h"
 #include "timefuncs.h"
 
+//#define MEMDEBUG
+
 #ifdef MEMDEBUG
 # ifdef __lp64__
 #  define BVOFFS 3

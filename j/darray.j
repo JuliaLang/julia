@@ -127,7 +127,7 @@ clone(d::DArray, T::Type, dims::Dims) =
            d.distdim>length(dims) ? maxdim(dims) : d.distdim, d.pmap)
 
 copy{T}(d::DArray{T}) =
-    darray((T,lsz,da)->localize(d), T, size(d), d.distdim, d.pmap)
+    darray((T,lsz,da)->copy(localize(d)), T, size(d), d.distdim, d.pmap)
 
 dzeros(args...) = darray((T,d,da)->zeros(T,d), args...)
 dones(args...)  = darray((T,d,da)->ones(T,d), args...)
@@ -222,7 +222,7 @@ function ref{T}(d::DArray{T}, i::Index)
             sub = ntuple(length(sub),
                          ind->(ind==d.distdim ? sub[ind]-offs : sub[ind]))
         end
-        return localize(d)[sub...]
+        return localize(d)[sub...]::T
     end
     return remote_call_fetch(d.pmap[p], ref, d, i)::T
 end
