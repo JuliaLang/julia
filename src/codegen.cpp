@@ -8,6 +8,7 @@
 #include "llvm/Analysis/Verifier.h"
 #include "llvm/Target/TargetData.h"
 #include "llvm/Target/TargetSelect.h"
+#include "llvm/Target/TargetOptions.h"
 #include "llvm/Transforms/Scalar.h"
 #include "llvm/Support/IRBuilder.h"
 #include "llvm/Support/StandardPasses.h"
@@ -1567,7 +1568,10 @@ extern "C" JL_CALLABLE(jl_f_tuple);
 
 extern "C" jl_value_t *jl_new_box(jl_value_t *v)
 {
-    return jl_new_struct((jl_struct_type_t*)jl_box_any_type, v);
+    jl_value_t *box = (jl_value_t*)alloc_2w();
+    box->type = jl_box_any_type;
+    ((jl_value_t**)box)[1] = v;
+    return box;
 }
 
 static void init_julia_llvm_env(Module *m)
@@ -1773,6 +1777,9 @@ static void init_julia_llvm_env(Module *m)
 
 extern "C" void jl_init_codegen()
 {
+#ifdef DEBUG
+    llvm::JITEmitDebugInfo = true;
+#endif
     InitializeNativeTarget();
     jl_Module = new Module("julia", jl_LLVMContext);
     jl_ExecutionEngine =

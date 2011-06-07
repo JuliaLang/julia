@@ -86,7 +86,7 @@ typedef struct _bigval_t {
 
 static bigval_t *big_objects = NULL;
 
-#define N_POOLS 19
+#define N_POOLS 48
 static pool_t pools[N_POOLS];
 
 static size_t allocd_bytes = 0;
@@ -193,36 +193,17 @@ htable_t *jl_gc_get_finalizer_table()
     return &finalizer_table;
 }
 
-// size classes:
-// <=8, 12, 16, 20, 24, 28, 32, 48, 64, 96, 128, 192, 256, 384, 512, 768, 1024, 1536, 2048
-//   0   1   2   3   4   5   6   7   8   9   10   11   12   13   14   15,   16,   17,   18
-
 static int szclass(size_t sz)
 {
-    if (sz <= 8) return 0;
-    if (sz <= 32) return ((sz+3)>>2) - 2;
-    if (sz <= 128) {
-        if (sz <= 64) {
-            if (sz <= 48) return 7;
-            return 8;
-        }
-        if (sz <= 96) return 9;
-        return 10;
+    if     (sz <=    8) return 0;
+    if     (sz <=  100) return ((sz+3)/4)-2;
+    if     (sz <=  512) {
+        if (sz <=  256) return ((sz+15)-112)/16 + 24;
+        else            return ((sz+31)-288)/32 + 34;
     }
-    if (sz <= 512) {
-        if (sz <= 256) {
-            if (sz <= 192) return 11;
-            return 12;
-        }
-        if (sz <= 384) return 13;
-        return 14;
-    }
-    if (sz <= 1024) {
-        if (sz <= 768) return 15;
-        return 16;
-    }
-    if (sz <= 1536) return 17;
-    return 18;
+    if     (sz <= 1024) return ((sz+127)-640)/128 + 42;
+    if     (sz <= 1536) return 46;
+    return 47;
 }
 
 static void *alloc_big(size_t sz, int isobj)
@@ -753,8 +734,16 @@ void *alloc_4w()
 
 void jl_gc_init()
 {
-    int szc[N_POOLS] = { 8, 12, 16, 20, 24, 28, 32, 48, 64, 96, 128, 192, 256,
-                         384, 512, 768, 1024, 1536, 2048 };
+    int szc[N_POOLS] = { 8, 12, 16, 20, 24, 28, 32, 36, 40, 44, 48, 52, 56,
+                         60, 64, 68, 72, 76, 80, 84, 88, 92, 96, 100,  //#=24
+
+                         112, 128, 144, 160, 176, 192, 208, 224, 240, 256,
+
+                         288, 320, 352, 384, 416, 448, 480, 512,
+
+                         640, 768, 896, 1024, 
+
+                         1536, 2048 };
     int i;
     for(i=0; i < N_POOLS; i++) {
         pools[i].osize = szc[i];
