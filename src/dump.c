@@ -632,7 +632,7 @@ jl_value_t *jl_deserialize_value(ios_t *s)
     }
     else if (vtag == (jl_value_t*)jl_lambda_info_type) {
         jl_lambda_info_t *li =
-            (jl_lambda_info_t*)newobj((jl_type_t*)jl_lambda_info_type, 12);
+            (jl_lambda_info_t*)newobj((jl_type_t*)jl_lambda_info_type, 13);
         ptrhash_put(&backref_table, (void*)(ptrint_t)pos, li);
         li->ast = jl_deserialize_value(s);
         li->sparams = (jl_tuple_t*)jl_deserialize_value(s);

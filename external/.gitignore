@@ -6,6 +6,7 @@
 /lapack-*
 /llvm-*
 /mongoose*
+/openblas*
 /patch.tar.gz
 /pcre-*
 /readline-*

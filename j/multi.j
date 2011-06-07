@@ -752,7 +752,7 @@ function start_worker(wrfd)
     # close stdin; workers will not use it
     ccall(dlsym(libc, :close), Int32, (Int32,), 0)
 
-    global Workqueue = Queue()
+    global Workqueue = {}
     global Waiting = HashTable(64)
     global Scheduler = current_task()
     global fd_handlers = HashTable()
@@ -858,7 +858,7 @@ function start_sge_workers(n)
     workers
 end
 
-addprocs_sge(n) = add_workers(start_sge_workers(n))
+addprocs_sge(n) = add_workers(PGRP, start_sge_workers(n))
 SGE(n) = addprocs_sge(n)
 
 load("vcloud.j")
@@ -1080,6 +1080,10 @@ macro spawn(thk)
     :(spawn(()->($thk)))
 end
 
+macro spawnlocal(thk)
+    :(spawnat(LocalProcess(), ()->($thk)))
+end
+
 at_each(f, args...) = at_each(PGRP, f, args...)
 
 function at_each(grp::ProcessGroup, f, args...)
@@ -1270,7 +1274,7 @@ end
 function start_client()
     ccall(:jl_start_io_thread, Void, ())
     try
-        global Workqueue = Queue()
+        global Workqueue = {}
         global Waiting = HashTable(64)
         global Scheduler = Task(()->event_loop(true), 1024*1024)
         global PGRP = ProcessGroup(1, {LocalProcess()}, {Location("",0)})

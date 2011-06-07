@@ -1568,7 +1568,10 @@ extern "C" JL_CALLABLE(jl_f_tuple);
 
 extern "C" jl_value_t *jl_new_box(jl_value_t *v)
 {
-    return jl_new_struct((jl_struct_type_t*)jl_box_any_type, v);
+    jl_value_t *box = (jl_value_t*)alloc_2w();
+    box->type = jl_box_any_type;
+    ((jl_value_t**)box)[1] = v;
+    return box;
 }
 
 static void init_julia_llvm_env(Module *m)
