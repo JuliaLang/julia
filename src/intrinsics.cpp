@@ -386,8 +386,10 @@ extern "C" void *jl_value_to_pointer(jl_value_t *jt, jl_value_t *v, int argn)
     return (jl_value_t*)jl_null;
 }
 
+static Value *emit_arrayptr(Value *t);
+
 static Value *julia_to_native(const Type *ty, jl_value_t *jt, Value *jv,
-                              int argn, jl_codectx_t *ctx)
+                              jl_value_t *argex, int argn, jl_codectx_t *ctx)
 {
     const Type *vt = jv->getType();
     if (ty == jl_pvalue_llvmt) {
@@ -423,6 +425,12 @@ static Value *julia_to_native(const Type *ty, jl_value_t *jt, Value *jv,
         */
     }
     else if (jl_is_cpointer_type(jt)) {
+        jl_value_t *aty = expr_type(argex);
+        if (jl_is_array_type(aty) &&
+            (jl_tparam0(aty) == jt || jt==(jl_value_t*)jl_bottom_type)) {
+            // array to pointer
+            return builder.CreateBitCast(emit_arrayptr(jv), ty);
+        }
         Value *p = builder.CreateCall3(value_to_pointer_func,
                                        literal_pointer_val(jl_tparam0(jt)), jv,
                                        ConstantInt::get(T_int32, argn));
@@ -487,6 +495,15 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
     if ((!isVa && tt->length  != nargs-3) ||
         ( isVa && tt->length-1 > nargs-3))
         jl_error("ccall: wrong number of arguments to C function");
+
+    // some special functions
+    if (fptr == &jl_array_ptr) {
+        Value *ary = emit_expr(args[4], ctx, true);
+        JL_GC_POP();
+        return mark_julia_type(builder.CreateBitCast(emit_arrayptr(ary),T_pint8),
+                               rt);
+    }
+
     // make LLVM function object for the target
     Function *llvmf =
         Function::Create(FunctionType::get(lrt, fargt_sig, isVa),
@@ -528,7 +545,7 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
             ctx->argDepth++;
         }
 #endif
-        argvals.push_back(julia_to_native(largty, jargty, arg, i-3, ctx));
+        argvals.push_back(julia_to_native(largty,jargty,arg,args[i],i-3,ctx));
     }
     // the actual call
     Value *result = builder.CreateCall(llvmf, argvals.begin(), argvals.end());

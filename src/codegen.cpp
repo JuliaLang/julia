@@ -611,6 +611,11 @@ static Value *emit_arraylen(Value *t)
 #endif
 }
 
+static Value *emit_arrayptr(Value *t)
+{
+    return emit_nthptr(t, 2);
+}
+
 static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
                               jl_codectx_t *ctx,
                               Value **theFptr, Value **theEnv)
@@ -748,7 +753,7 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
                     bool isbool=false;
                     if (elty==T_int1) { elty = T_int8; isbool=true; }
                     Value *data =
-                        builder.CreateBitCast(emit_nthptr(ary, 2),
+                        builder.CreateBitCast(emit_arrayptr(ary),
                                               PointerType::get(elty, 0));
                     Value *alen = emit_arraylen(ary);
                     Value *idx = emit_unbox(T_int32, T_pint32,
@@ -784,7 +789,7 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
                     const Type *elty = julia_type_to_llvm(ety, ctx);
                     if (elty==T_int1) { elty = T_int8; }
                     Value *data =
-                        builder.CreateBitCast(emit_nthptr(ary, 2),
+                        builder.CreateBitCast(emit_arrayptr(ary),
                                               PointerType::get(elty, 0));
                     Value *alen = emit_arraylen(ary);
                     Value *idx = emit_unbox(T_int32, T_pint32,

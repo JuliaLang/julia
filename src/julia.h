@@ -488,6 +488,7 @@ int jl_tuple_subtype(jl_value_t **child, size_t cl,
 int jl_subtype(jl_value_t *a, jl_value_t *b, int ta);
 int jl_type_morespecific(jl_value_t *a, jl_value_t *b, int ta);
 DLLEXPORT jl_value_t *jl_type_match(jl_value_t *a, jl_value_t *b);
+jl_value_t *jl_type_match_invariant(jl_value_t *a, jl_value_t *b);
 jl_value_t *jl_type_match_morespecific(jl_value_t *a, jl_value_t *b);
 DLLEXPORT int jl_types_equal(jl_value_t *a, jl_value_t *b);
 int jl_types_equal_generic(jl_value_t *a, jl_value_t *b);
@@ -580,6 +581,7 @@ DLLEXPORT jl_array_t *jl_alloc_cell_1d(size_t n);
 jl_tuple_t *jl_construct_array_size(jl_array_t *a, size_t nd);
 DLLEXPORT jl_value_t *jl_arrayref(jl_array_t *a, size_t i);  // 0-indexed
 DLLEXPORT void jl_arrayset(jl_array_t *a, size_t i, jl_value_t *v);  // 0-indexed
+DLLEXPORT void *jl_array_ptr(jl_array_t *a);
 DLLEXPORT void jl_array_grow_end(jl_array_t *a, size_t inc);
 DLLEXPORT void jl_array_del_end(jl_array_t *a, size_t dec);
 DLLEXPORT void jl_array_grow_beg(jl_array_t *a, size_t inc);
