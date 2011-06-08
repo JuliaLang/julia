@@ -993,7 +993,6 @@ void jl_init_serializer()
                       jl_f_arraysize, 
                       jl_f_instantiate_type, 
                       jl_f_convert, 
-                      jl_f_convert_to_ptr, 
                       jl_f_convert_tuple,
                       jl_f_print_array_uint8, 
                       jl_f_show_bool, 

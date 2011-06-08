@@ -14,9 +14,24 @@ else
     typealias Ulong Uint32
 end
 
+# pointer to int
 convert(::Type{PtrInt}, x::Ptr) = box(PtrInt,unbox(PtrInt,x))
-convert{T}(::Type{Ptr{T}}, x::PtrInt) = box(Ptr{T},unbox(PtrInt,x))
 convert{T<:Int}(::Type{T}, x::Ptr) = convert(T,uint(x))
+
+# int to pointer
+convert{T}(::Type{Ptr{T}}, x::PtrInt) = box(Ptr{T},unbox(PtrInt,x))
+
+# pointer to pointer
+convert{T}(::Type{Ptr{T}}, p::Ptr{T}) = p
+convert{T}(::Type{Ptr{T}}, p::Ptr) = box(Ptr{T},unbox(PtrInt,p))
+
+# object to pointer
+convert(::Type{Ptr{Uint8}}, x::Symbol) =
+    ccall(:jl_symbol_name, Ptr{Uint8}, (Any,), x)
+convert(::Type{Ptr{Void}}, a::Array) =
+    ccall(:jl_array_ptr, Ptr{Void}, (Any,), a)
+convert{T}(::Type{Ptr{T}}, a::Array{T}) =
+    convert(Ptr{T}, convert(Ptr{Void}, a))
 
 pointer{T}(::Type{T}, x::PtrInt) = convert(Ptr{T}, x)
 pointer{T}(x::Array{T}) = convert(Ptr{T},x)
@@ -26,7 +41,7 @@ ptrint(x) = convert(PtrInt, x)
 long(x) = convert(Long, x)
 ulong(x) = convert(Ulong, x)
 
-@eval sizeof{T}(::Type{Ptr{T}}) = $div(WORD_SIZE,8)
+@eval sizeof(::Type{Ptr}) = $div(WORD_SIZE,8)
 
 ## limited pointer arithmetic & comparison ##
 
