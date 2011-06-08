@@ -6,6 +6,7 @@
     memhash;
     memhash32;
     jl_hash_symbol;
+    jl_symbol_name;
     rand_double;
     rand_float;
     genrand_int32;
@@ -66,6 +67,7 @@
     jl_array_del_end;
     jl_array_grow_beg;
     jl_array_del_beg;
+    jl_array_ptr;
     jl_sizeof_ios_t;
     jl_stdout_stream;
     ios_fd;

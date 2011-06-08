@@ -596,30 +596,14 @@ JL_CALLABLE(jl_f_convert)
     return x;
 }
 
-JL_CALLABLE(jl_f_convert_to_ptr)
+DLLEXPORT void *jl_symbol_name(jl_sym_t *s)
 {
-    JL_NARGS(convert, 2, 2);
-    assert(jl_is_cpointer_type(args[0]));
-    jl_value_t *v = args[1];
-    jl_value_t *elty = jl_tparam0(args[0]);
-    void *p=NULL;
-    if (v == (jl_value_t*)jl_null) {
-        p = NULL;
-    }
-    else if (jl_is_cpointer(v)) {
-        p = jl_unbox_pointer(v);
-    }
-    else if (jl_is_array(v) && (elty == (jl_value_t*)jl_bottom_type ||
-                                jl_tparam0(jl_typeof(v)) == elty)) {
-        p = ((jl_array_t*)v)->data;
-    }
-    else if (jl_is_symbol(v) && elty == (jl_value_t*)jl_uint8_type) {
-        p = ((jl_sym_t*)v)->name;
-    }
-    else {
-        jl_no_method_error(jl_convert_gf, args, 2);
-    }
-    return jl_box_pointer((jl_bits_type_t*)args[0], p);
+    return s->name;
+}
+
+DLLEXPORT void *jl_array_ptr(jl_array_t *a)
+{
+    return a->data;
 }
 
 // --- printing ---
@@ -1443,9 +1427,6 @@ void jl_init_builtins()
     jl_add_method(jl_convert_gf,
                   jl_tuple2(jl_any_type, jl_any_type),
                   jl_new_closure(jl_f_convert, NULL));
-    jl_add_method(jl_convert_gf,
-                  jl_tuple2(jl_wrap_Type((jl_value_t*)jl_pointer_type), jl_any_type),
-                  jl_new_closure(jl_f_convert_to_ptr, NULL));
     jl_add_method(jl_convert_gf,
                   jl_tuple2(jl_tuple_type, jl_tuple_type),
                   jl_new_closure(jl_f_convert_tuple, NULL));

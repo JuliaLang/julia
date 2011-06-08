@@ -51,33 +51,33 @@ macro libfdmfunc_2arg(f)
 end
 
 @libfdmfunc_1arg_float sqrt
+@libfdmfunc_1arg_float cbrt
 @libfdmfunc_1arg_float sin
 @libfdmfunc_1arg_float cos
-@libfdmfunc_1arg_float tan 
-@libfdmfunc_1arg_float sinh 
-@libfdmfunc_1arg_float cosh 
-@libfdmfunc_1arg_float tanh 
-@libfdmfunc_1arg_float asin 
-@libfdmfunc_1arg_float acos 
-@libfdmfunc_1arg_float atan 
-@libfdmfunc_1arg_float log 
-@libfdmfunc_1arg_float log2         
-@libfdmfunc_1arg_float log10 
-@libfdmfunc_1arg_float log1p 
-@libfdmfunc_1arg_float logb 
-@libfdmfunc_1arg_float exp 
-@libfdmfunc_1arg_float exp2 
+@libfdmfunc_1arg_float tan
+@libfdmfunc_1arg_float sinh
+@libfdmfunc_1arg_float cosh
+@libfdmfunc_1arg_float tanh
+@libfdmfunc_1arg_float asin
+@libfdmfunc_1arg_float acos
+@libfdmfunc_1arg_float atan
+@libfdmfunc_1arg_float log
+@libfdmfunc_1arg_float log2
+@libfdmfunc_1arg_float log10
+@libfdmfunc_1arg_float log1p
+@libfdmfunc_1arg_float logb
+@libfdmfunc_1arg_float exp
+@libfdmfunc_1arg_float exp2
 @libfdmfunc_1arg_float expm1
-@libfdmfunc_1arg_float erf 
+@libfdmfunc_1arg_float erf
 @libfdmfunc_1arg_float erfc
-@libfdmfunc_1arg_float cbrt 
-@libfdmfunc_1arg_float ceil 
-@libfdmfunc_1arg_float floor 
-@libfdmfunc_1arg_float rint 
+@libfdmfunc_1arg_float ceil
+@libfdmfunc_1arg_float floor
+@libfdmfunc_1arg_float rint
 
-@libmfunc_1arg_float nearbyint 
+@libmfunc_1arg_float nearbyint
 @libmfunc_1arg_float trunc
-@libmfunc_1arg_float round 
+@libmfunc_1arg_float round
 
 @libmfunc_1arg_int lrint
 @libmfunc_1arg_int lround
@@ -98,6 +98,17 @@ abs(x::Float64) = ccall(dlsym(libfdm, :fabs),  Float64, (Float64,), x)
 abs(x::Float32) = ccall(dlsym(libfdm, :fabsf), Float32, (Float32,), x)
 @vectorize_1arg abs
 
+gamma(x::Float64) = ccall(dlsym(libfdm, :tgamma),  Float64, (Float64,), x)
+gamma(x::Float32) = ccall(dlsym(libfdm, :tgammaf), Float32, (Float32,), x)
+gamma(x::Real) = gamma(float(x))
+@vectorize_1arg gamma
+
+# TODO: get an lgammaf implementation
+lgamma(x::Float64) = ccall(dlsym(libfdm, :lgamma),  Float64, (Float64,), x)
+lgamma(x::Float32) = float32(lgamma(float64(x)))
+lgamma(x::Real) = lgamma(float(x))
+@vectorize_1arg lgamma
+
 max(x::Float64, y::Float64) = ccall(dlsym(libm, :fmax),  Float64, (Float64,Float64), x, y)
 max(x::Float32, y::Float32) = ccall(dlsym(libm, :fmaxf), Float32, (Float32,Float32), x, y)
 @vectorize_2arg max
@@ -115,13 +126,11 @@ function frexp(x::Float64)
     s = ccall(dlsym(libfdm,:frexp), Float64, (Float64, Ptr{Int32}), x, exp)
     (s, exp[1])
 end
-
 function frexp(x::Float32)
     exp = zeros(Int32,1)
     s = ccall(dlsym(libfdm,:frexpf), Float32, (Float32, Ptr{Int32}), x, exp)
     (s, exp[1])
 end
-
 @vectorize_1arg frexp
 
 rand()     = ccall(:rand_double,   Float64, ())

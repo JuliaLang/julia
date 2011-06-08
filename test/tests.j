@@ -62,6 +62,18 @@
 @assert !(Array{Any,1} <: Array{Int8,1})
 @assert Array{Int8,1} <: Array{Int8,1}
 
+@assert !isa(Array,Type{Any})
+@assert subtype(Type{Complex},StructKind)
+@assert isa(Complex,Type{Complex})
+@assert subtype(Type{Ptr{None}},Type{Ptr})
+let T = typevar(:T)
+    @assert !is(None, tintersect(Array{None},Tensor{T}))
+end
+@assert is(None, tintersect(Type{Any},Type{Complex}))
+@assert is(None, tintersect(Type{Any},Type{typevar(:T,Real)}))
+@assert !subtype(Type{Array{Int}},Type{Tensor{Int}})
+@assert subtype(Type{Array{Int}},Type{Array{typevar(:T,Int)}})
+
 # ntuples
 nttest1{n}(x::NTuple{n,Int32}) = n
 @assert nttest1(()) == 0
