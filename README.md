@@ -65,7 +65,7 @@ You might want to make a symbolic link for the executable, for example `ln -s JU
     attic/         old, now-unused code
     bench/         benchmarks and performance tests
     contrib/       emacs and textmate support for julia
-    doc/           TeX manual and other notes
+    doc/           miscellaneous documentation and notes
     external/      external dependencies
     j/             source code for julia's standard library
     lib/           shared libraries loaded by julia's standard libraries
