@@ -28,16 +28,13 @@ Some advantages of Julia over comparable systems include:
 
 For a more in depth discussion of the rationale and advantages of Julia over other systems, see the [Introduction](https://github.com/JuliaLang/julia/wiki/Introduction) in the wiki, or [browse](https://github.com/JuliaLang/julia/wiki/) all of the wiki documentation.
 
-Compiling
----------
-
-Required build tools:
+## Required Build Tools
 
 - gcc
 - g++
 - gfortran
 - GNU make
-- curl (to download external libraries)
+- curl to download external libraries:
   * fdlibm
   * OpenBLAS
   * LAPACK
@@ -46,21 +43,19 @@ Required build tools:
   * readline
   * mongoose
 
-Supported platforms:
+## Supported Platforms
 
 - x86 and x86/64 GNU/Linux
 - x86/64 OS X (x86 OS X should work but is untested)
 
-To compile:
+## Compilation
 
 - Run `make` in `external/` to download and build external dependencies.
 - Run `make` in the top-level directory to build julia.
 
 No installation is required — julia is currently run from the directory where it was built. You might want to make a symbolic link for the executable, for example `ln -s JULIA_PATH/julia ~/bin/julia`.
 
-
-Directories
------------
+## Directories
 
     contrib/       emacs and textmate support for julia
     doc/           TeX manual and other notes
@@ -71,9 +66,7 @@ Directories
     ui/            source for various frontends
     test/          some tests
 
-
-Emacs Setup
------------
+## Emacs Setup
 
 Add the following line to `~/.emacs`
 
