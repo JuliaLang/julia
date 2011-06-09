@@ -7,26 +7,9 @@
      _/ |\__'_|_|_|\__'_|  |
     |__/                   |
 
-Julia is a very high level dynamic language with optional typing, multiple dispatch, and good performance, achieved by using type inference and just-in-time (JIT) compilation, implemented using LLVM. The language is multi-paradigm, combining features of functional, object-oriented, and imperative traditions.
-
-Some advantages of Julia over comparable systems include:
-
-- Free and open source
-- Consistent and powerful generic function model
-- High performance just-in-time compilation and execution
-- User-defined types are first-class: as fast as built-ins
-- Simple syntax for defining new types
-- High-level constructs for parallelism
-- Multi-dimensional array comprehensions
-- Lightweight "green" threading (coroutines)
-- Call C functions directly (no wrappers or special APIs needed)
-- A powerful but unobstrusive type system via optional type annotation
-- Elegant and extensible automatic conversions for numeric and other types
-- Lisp-like macros and other powerful metaprogramming facilities
-- Efficient support for Unicode, including but not limited to UTF-8
-- Powerful shell-like capabilities for managing other processes
-
-For a more in depth discussion of the rationale and advantages of Julia over other systems, see the [Introduction](https://github.com/JuliaLang/julia/wiki/Introduction) in the wiki, or [browse](https://github.com/JuliaLang/julia/wiki/) all of the wiki documentation.
+Julia is a very high level dynamic language with optional typing, multiple dispatch, and good performance, achieved by using type inference and just-in-time (JIT) compilation, implemented using LLVM.
+The language is multi-paradigm, combining features of functional, object-oriented, and imperative traditions.
+For a more in depth discussion of the rationale and advantages of Julia over other systems, see the [Introduction](https://github.com/JuliaLang/julia/wiki/Introduction) in the wiki, or [browse all](https://github.com/JuliaLang/julia/wiki/) of the wiki documentation.
 
 <a name="Resources"/>
 ## Resources
