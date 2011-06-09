@@ -28,12 +28,14 @@ Some advantages of Julia over comparable systems include:
 
 For a more in depth discussion of the rationale and advantages of Julia over other systems, see the [Introduction](https://github.com/JuliaLang/julia/wiki/Introduction) in the wiki, or [browse](https://github.com/JuliaLang/julia/wiki/) all of the wiki documentation.
 
+<a name="Resources"/>
 ## Resources
 
 - **Homepage:** <http://julialang.org>
 - **Discussion:** <julia-math@googlegroups.com>
 - **Download:** <https://github.com/JuliaLang/julia>
 
+<a name="Required-Build-Tools"/>
 ## Required Build Tools
 
 - gcc
@@ -49,11 +51,13 @@ For a more in depth discussion of the rationale and advantages of Julia over oth
   * readline
   * mongoose
 
+<a name="Supported-Platforms"/>
 ## Supported Platforms
 
 - x86 and x86/64 GNU/Linux
 - x86/64 OS X (x86 OS X should work but is untested)
 
+<a name="Compilation"/>
 ## Compilation
 
 - Run `make` in `external/` to download and build external dependencies.
@@ -61,6 +65,7 @@ For a more in depth discussion of the rationale and advantages of Julia over oth
 
 No installation is required — julia is currently run from the directory where it was built. You might want to make a symbolic link for the executable, for example `ln -s JULIA_PATH/julia ~/bin/julia`.
 
+<a name="Directories"/>
 ## Directories
 
     attic/         old, now-unused code
@@ -74,6 +79,7 @@ No installation is required — julia is currently run from the directory where 
     test/          unit and function tests for julia itself
     ui/            source for various frontends
 
+<a name="Emacs-Setup"/>
 ## Emacs Setup
 
 Add the following line to `~/.emacs`
