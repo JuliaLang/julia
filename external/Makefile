@@ -90,7 +90,7 @@ openblas$(OPENBLAS_VER): openblas$(OPENBLAS_VER).tar.gz
 	mkdir -p openblas && tar --strip-components 1 -C openblas -xf openblas$(OPENBLAS_VER).tar.gz
 $(OPENBLAS_OBJ): openblas$(OPENBLAS_VER)
 	cd openblas && \
-	make USE_THREAD=0 NO_CBLAS=1 NO_LAPACK=1 CC=$(CC) FC=$(FC)
+	make USE_THREAD=0 NO_CBLAS=1 NO_LAPACK=1 DYNAMIC_ARCH=1 CC=$(CC) FC=$(FC)
 openblas_install: $(OPENBLAS_OBJ) $(JULIALIB)
 	cp -f openblas/libopenblas.$(SHLIB_EXT) $(OPENBLAS_OBJ) && \
 	ln -sf $< $(JULIALIB)/libopenblas.$(SHLIB_EXT)
