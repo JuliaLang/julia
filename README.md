@@ -26,7 +26,7 @@ Some advantages of Julia over comparable systems include:
 - Efficient support for Unicode, including but not limited to UTF-8
 - Powerful shell-like capabilities for managing other processes
 
-For a more in depth discussion of the rationale and advantages of Julia over other systems, see the [Introduction](/wiki/Introduction) in the wiki, or [browse](/wiki/) all of the wiki documentation.
+For a more in depth discussion of the rationale and advantages of Julia over other systems, see the [Introduction](https://github.com/JuliaLang/julia/wiki/Introduction) in the wiki, or [browse](https://github.com/JuliaLang/julia/wiki/) all of the wiki documentation.
 
 Compiling
 ---------
