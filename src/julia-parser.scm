@@ -200,7 +200,9 @@
 	  ((and (eqv? c #\.)
 		(let ((c (read-char port))
 		      (nextc (peek-char port)))
-		  (cond ((char-numeric? nextc)
+		  (cond ((eof-object? nextc)
+			 '|.|)
+			((char-numeric? nextc)
 			 (read-number port c))
 			((opchar? nextc)
 			 (string->symbol
