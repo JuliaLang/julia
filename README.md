@@ -63,14 +63,16 @@ No installation is required — julia is currently run from the directory where 
 
 ## Directories
 
+    attic/         old, now-unused code
+    bench/         benchmarks and performance tests
     contrib/       emacs and textmate support for julia
     doc/           TeX manual and other notes
     external/      external dependencies
     j/             source code for julia's standard library
     lib/           shared libraries loaded by julia's standard libraries
     src/           source for julia language core
+    test/          unit and function tests for julia itself
     ui/            source for various frontends
-    test/          some tests
 
 ## Emacs Setup
 
