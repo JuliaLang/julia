@@ -7,9 +7,9 @@
      _/ |\__'_|_|_|\__'_|  |
     |__/                   |
 
-Julia is a very high level dynamic language with optional typing, multiple dispatch, and good performance, achieved by using type inference and just-in-time (JIT) compilation, implemented using LLVM.
-The language is multi-paradigm, combining features of functional, object-oriented, and imperative traditions.
-For a more in depth discussion of the rationale and advantages of Julia over other systems, see the [Introduction](https://github.com/JuliaLang/julia/wiki/Introduction) in the wiki, or [browse all](https://github.com/JuliaLang/julia/wiki/) of the wiki documentation.
+Julia is a very high level dynamic language for numerical and scientific computing with optional typing, multiple dispatch, and good performance, achieved by using type inference and just-in-time (JIT) compilation, implemented using LLVM.
+The language is multi-paradigm, combining features of functional, object-oriented, and imperative styles.
+For a more in-depth discussion of the rationale and advantages of Julia over other systems, see the [Introduction](https://github.com/JuliaLang/julia/wiki/Introduction) in the wiki, or [browse all](https://github.com/JuliaLang/julia/wiki/) of the wiki documentation.
 
 <a name="Resources"/>
 ## Resources
@@ -22,16 +22,16 @@ For a more in depth discussion of the rationale and advantages of Julia over oth
 <a name="Required-Build-Tools"/>
 ## Required Build Tools & External Libraries
 
-- **[GNU make][]** — computing and building dependencies.
+- **[GNU make][]** — building dependencies.
 - **[gcc, g++, gfortran][gcc]** — compiling and linking C, C++ and Fortran code.
 - **[curl][]** — to automatically download external libraries:
-    - **[fdlibm][]** — a portable implementation of much system-dependent libm math library.
+    - **[fdlibm][]** — a portable implementation of much of the system-dependent libm math library.
     - **[OpenBLAS][]** — a fast, open, and maintained [basic linear algebar subprograms (BLAS)](http://en.wikipedia.org/wiki/Basic_Linear_Algebra_Subprograms) library, based on [Kazushige Goto](http://en.wikipedia.org/wiki/Kazushige_Goto)'s famous [GotoBLAS](http://www.tacc.utexas.edu/tacc-projects/gotoblas2/).
     - **[LAPACK][]** — library of linear algebra routines for "solving systems of simultaneous linear equations, least-squares solutions of linear systems of equations, eigenvalue problems, and singular value problems" using generic BLAS functionality.
     - **[ARPACK][]** — "a collection of Fortran77 subroutines designed to solve large scale eigenvalue problems."
-    - **[PCRE][]** — Perl-compatible Regular Expressions library
-    - **[GNU readline][]** — library allowing line editing in the terminal, with history and familiar key bindings.
-    - **[mongoose][]** — a library for writing simple web servers, used for Julia's web-based repl.
+    - **[PCRE][]** — Perl-compatible regular expressions library
+    - **[GNU readline][]** — library allowing shell-like line editing in the terminal, with history and familiar key bindings.
+    - **[mongoose][]** — library for writing simple web servers, used for Julia's web-based repl.
 
 [GNU make]:     http://www.gnu.org/software/make/
 [gcc]:          http://gcc.gnu.org/
@@ -56,7 +56,8 @@ For a more in depth discussion of the rationale and advantages of Julia over oth
 - Run `make` in `external/` to download and build external dependencies.
 - Run `make` in the top-level directory to build julia.
 
-No installation is required — julia is currently run from the directory where it was built. You might want to make a symbolic link for the executable, for example `ln -s JULIA_PATH/julia ~/bin/julia`.
+No installation is required — julia is currently run from the directory where it was built.
+You might want to make a symbolic link for the executable, for example `ln -s JULIA_PATH/julia ~/bin/julia`.
 
 <a name="Directories"/>
 ## Directories
