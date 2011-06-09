@@ -21,18 +21,27 @@ For a more in depth discussion of the rationale and advantages of Julia over oth
 <a name="Required-Build-Tools"/>
 ## Required Build Tools
 
-- gcc
-- g++
-- gfortran
-- GNU make
-- curl to download external libraries:
-  * fdlibm
-  * OpenBLAS
-  * LAPACK
-  * ARPACK
-  * pcre
-  * readline
-  * mongoose
+- **[GNU make][]** — computing and building dependencies.
+- **[gcc, g++, gfortran][gcc]** — compiling and linking C, C++ and Fortran code.
+- **[curl][]** — to download external libraries:
+    - **[fdlibm][]** — a portable implementation of much system-dependent libm math library.
+    - **[OpenBLAS][]** — a fast, open, and maintained [basic linear algebar subprograms (BLAS)](http://en.wikipedia.org/wiki/Basic_Linear_Algebra_Subprograms) library, based on [Kazushige Goto](http://en.wikipedia.org/wiki/Kazushige_Goto)'s famous [GotoBLAS](http://www.tacc.utexas.edu/tacc-projects/gotoblas2/).
+    - **[LAPACK][]** — library of linear algebra routines for "solving systems of simultaneous linear equations, least-squares solutions of linear systems of equations, eigenvalue problems, and singular value problems" using generic BLAS functionality.
+    - **[ARPACK][]** — "a collection of Fortran77 subroutines designed to solve large scale eigenvalue problems."
+    - **[PCRE][]** — Perl-compatible Regular Expressions library
+    - **[GNU readline][]** — library allowing line editing in the terminal, with history and familiar key bindings.
+    - **[mongoose][]** — a library for writing simple web servers, used for Julia's web-based repl.
+
+[GNU make]:     http://www.gnu.org/software/make/
+[gcc]:          http://gcc.gnu.org/
+[curl]:         http://curl.haxx.se/
+[fdlibm]:       http://www.netlib.org/fdlibm/readme
+[OpenBLAS]:     https://github.com/xianyi/OpenBLAS#readme
+[LAPACK]:       http://www.netlib.org/lapack/
+[ARPACK]:       http://www.caam.rice.edu/software/ARPACK/
+[PCRE]:         http://www.pcre.org/
+[GNU readline]: http://cnswww.cns.cwru.edu/php/chet/readline/rltop.html
+[mongoose]:     http://code.google.com/p/mongoose/
 
 <a name="Supported-Platforms"/>
 ## Supported Platforms
