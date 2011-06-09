@@ -19,11 +19,11 @@ For a more in depth discussion of the rationale and advantages of Julia over oth
 - **Download:** <https://github.com/JuliaLang/julia>
 
 <a name="Required-Build-Tools"/>
-## Required Build Tools
+## Required Build Tools & External Libraries
 
 - **[GNU make][]** — computing and building dependencies.
 - **[gcc, g++, gfortran][gcc]** — compiling and linking C, C++ and Fortran code.
-- **[curl][]** — to download external libraries:
+- **[curl][]** — to automatically download external libraries:
     - **[fdlibm][]** — a portable implementation of much system-dependent libm math library.
     - **[OpenBLAS][]** — a fast, open, and maintained [basic linear algebar subprograms (BLAS)](http://en.wikipedia.org/wiki/Basic_Linear_Algebra_Subprograms) library, based on [Kazushige Goto](http://en.wikipedia.org/wiki/Kazushige_Goto)'s famous [GotoBLAS](http://www.tacc.utexas.edu/tacc-projects/gotoblas2/).
     - **[LAPACK][]** — library of linear algebra routines for "solving systems of simultaneous linear equations, least-squares solutions of linear systems of equations, eigenvalue problems, and singular value problems" using generic BLAS functionality.
@@ -46,8 +46,8 @@ For a more in depth discussion of the rationale and advantages of Julia over oth
 <a name="Supported-Platforms"/>
 ## Supported Platforms
 
-- x86 and x86/64 GNU/Linux
-- x86/64 OS X (x86 OS X should work but is untested)
+- **GNU/Linux:** x86 (32-bit); x86/64 (64-bit).
+- **OS X:** x86/64 (64-bit); x86 (32-bit) is untested but should work.
 
 <a name="Compilation"/>
 ## Compilation
