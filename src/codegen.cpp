@@ -1188,7 +1188,7 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool value)
         builder.SetInsertPoint(tryblk);
     }
     if (!strcmp(ex->head->name, "$")) {
-        jl_error("syntax error: prefix $ outside backquote");
+        jl_error("syntax error: prefix $ outside of quote block");
     }
     if (value) {
         jl_errorf("unsupported expression type %s", ex->head->name);
