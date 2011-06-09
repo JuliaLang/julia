@@ -52,6 +52,7 @@ jl_bits_type_t *jl_float32_type;
 jl_bits_type_t *jl_float64_type;
 
 jl_tuple_t *jl_null;
+jl_struct_type_t *jl_nothing;
 
 jl_func_type_t *jl_any_func;
 jl_function_t *jl_bottom_func;

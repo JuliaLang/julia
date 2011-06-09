@@ -81,6 +81,9 @@
 
 #bitstype {32|64} Ptr{T}
 
+type NothingType; end
+Nothing = NothingType()
+
 bitstype 8 Bool
 
 abstract Number
