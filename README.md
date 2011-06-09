@@ -15,8 +15,9 @@ For a more in depth discussion of the rationale and advantages of Julia over oth
 ## Resources
 
 - **Homepage:** <http://julialang.org>
-- **Discussion:** <julia-math@googlegroups.com>
 - **Download:** <https://github.com/JuliaLang/julia>
+- **Documentation:** <https://github.com/JuliaLang/julia/wiki>
+- **Discussion:** <julia-math@googlegroups.com>
 
 <a name="Required-Build-Tools"/>
 ## Required Build Tools & External Libraries
