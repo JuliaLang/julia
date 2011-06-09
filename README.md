@@ -28,6 +28,12 @@ Some advantages of Julia over comparable systems include:
 
 For a more in depth discussion of the rationale and advantages of Julia over other systems, see the [Introduction](https://github.com/JuliaLang/julia/wiki/Introduction) in the wiki, or [browse](https://github.com/JuliaLang/julia/wiki/) all of the wiki documentation.
 
+## Resources
+
+- **Homepage:** <http://julialang.org>
+- **Discussion:** <julia-math@googlegroups.com>
+- **Download:** <https://github.com/JuliaLang/julia>
+
 ## Required Build Tools
 
 - gcc
