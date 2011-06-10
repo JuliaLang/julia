@@ -243,7 +243,54 @@
    (params bounds) (sparam-name-bounds params '() '())
    (struct-def-expr- name params bounds super fields)))
 
-(define *ctor-factory-name* (gensym))
+(define (default-inner-ctor name field-names field-types)
+  `(function (call ,name ,@(map (lambda (n t) `(:: ,n ,t))
+				field-names field-types))
+	     (block
+	      ,@(map (lambda (n) `(= (|.| this ,n) ,n))
+		     field-names))))
+
+(define (default-outer-ctor name field-names field-types params)
+  `(function (call (curly ,name ,@params)
+		   ,@(map (lambda (n t) `(:: ,n ,t))
+			  field-names field-types))
+	     (block
+	      (call (curly ,name ,@params) ,@field-names))))
+
+(define (rewrite-ctor ctor Tname params)
+  ;; insert definition and return of "this" variable
+  (define (ctor-body body)
+    `(block ;; hack - make the type parameters "global" so they can be
+            ;; shadowed by static parameters
+            (global (vars ,Tname ,@params))
+	    (= this (new ,(if (null? params)
+			      Tname
+			      `(curly ,Tname ,@params))))
+	    ,body
+	    (return this)))
+  ;; TODO: error if return occurs in constructor
+  (or
+   ((pattern-lambda (function (call name . sig) body)
+		    (if (eq? name Tname)
+			`(function ,(cadr ctor) ,(ctor-body body))
+			ctor))
+    ctor)
+   ((pattern-lambda (= (call name . sig) body)
+		    (if (eq? name Tname)
+			`(= ,(cadr ctor) ,(ctor-body body))
+			ctor))
+    ctor)
+   ((pattern-lambda (function (call (curly name . p) . sig) body)
+		    (if (eq? name Tname)
+			`(function ,(cadr ctor) ,(ctor-body body))
+			ctor))
+    ctor)
+   ((pattern-lambda (= (call (curly name . p) . sig) body)
+		    (if (eq? name Tname)
+			`(= ,(cadr ctor) ,(ctor-body body))
+			ctor))
+    ctor)
+   ctor))
 
 (define (struct-def-expr- name params bounds super fields)
   (receive
@@ -251,10 +298,12 @@
 					   (and (pair? x)
 						(eq? (car x) '|::|))))
 			   fields)
-   (let ((field-names (map decl-var fields))
-	 (field-types (map decl-type fields))
-	 (T (gensym)))
-     (if (and (null? defs) (null? params))
+   (let* ((field-names (map decl-var fields))
+	  (field-types (map decl-type fields))
+	  (defs2 (if (null? defs)
+		     (list (default-inner-ctor name field-names field-types))
+		     defs)))
+     (if (null? params)
 	 `(block
 	   (= ,name
 	      (call (top new_struct_type)
@@ -263,44 +312,33 @@
 		    (tuple ,@(map (lambda (x) `',x) field-names))
 		    (null)))
 	   (call (top new_struct_fields)
-		 ,name ,super (tuple ,@field-types)))
-     `(call
-       (lambda (,@params)
-	 ; the static parameters are bound to new TypeVars in here,
-	 ; so everything that sees the TypeVars is evaluated here.
-	 (block
-	  (local! ,*ctor-factory-name*)
-	  (local! ,T)
-	  ,(if (null? defs)
-	       `(null)
-	       ; create a function that defines constructors, given
-	       ; the type and a "new" function.
-	       ; a mild hack to feed inference the type of "new":
-	       ; when "new" is created internally by the runtime, it is
-	       ; tagged with a specific function type. this type is captured
-	       ; as a static parameter which is visible to inference through
-	       ; a declaration.
-	       `(scope-block
-		 (block
-		  (function (call (curly ,*ctor-factory-name* ,T)
-				  ,name (|::| new ,T))
-			    (block
-			     (|::| new ,T)
-			     ,@defs
-			     (null))))))
-	  (= ,name
-	     (call (top new_struct_type)
-		   (quote ,name)
-		   (tuple ,@params)
-		   (tuple ,@(map (lambda (x) `',x) field-names))
-		   ,(if (null? defs)
-			`(null)
-			; pass constructor factory function
-			*ctor-factory-name*)))
-	  ; now add the type fields, which might reference the type itself.
-	  (call (top new_struct_fields)
-		,name ,super (tuple ,@field-types))))
-       ,@(symbols->typevars params bounds))))))
+		 ,name ,super (tuple ,@field-types))
+	   ,@(map (lambda (c)
+		    (rewrite-ctor c name '()))
+		  defs2)
+	   (null))
+	 `(block
+	   (call
+	    (lambda (,@params)
+	      (block
+	       (= ,name
+		  (call (top new_struct_type)
+			(quote ,name)
+			(tuple ,@params)
+			(tuple ,@(map (lambda (x) `',x) field-names))
+			(lambda (,name ,@params)
+			  (scope-block
+			   (block
+			    ,@(map (lambda (c)
+				     (rewrite-ctor c name params))
+				   defs2))))))
+	       (call (top new_struct_fields)
+		     ,name ,super (tuple ,@field-types))))
+	    ,@(symbols->typevars params bounds))
+	   ,@(if (null? defs)
+		 `(,(default-outer-ctor name field-names field-types params))
+		 '())
+	   (null))))))
 
 (define (abstract-type-def-expr name params super)
   (receive

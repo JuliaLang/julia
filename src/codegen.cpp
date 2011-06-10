@@ -1654,6 +1654,7 @@ static void init_julia_llvm_env(Module *m)
         Function::Create(FunctionType::get(T_void, args1, false),
                          Function::ExternalLinkage,
                          "jl_error", jl_Module);
+    jlerror_func->setDoesNotReturn();
     jl_ExecutionEngine->addGlobalMapping(jlerror_func, (void*)&jl_error);
 
     std::vector<const Type*> empty_args(0);
@@ -1661,6 +1662,7 @@ static void init_julia_llvm_env(Module *m)
         Function::Create(FunctionType::get(T_void, empty_args, false),
                          Function::ExternalLinkage,
                          "jl_undef_ref_error", jl_Module);
+    jluniniterror_func->setDoesNotReturn();
     jl_ExecutionEngine->addGlobalMapping(jluniniterror_func,
                                          (void*)&jl_undef_ref_error);
 
@@ -1678,6 +1680,7 @@ static void init_julia_llvm_env(Module *m)
         Function::Create(FunctionType::get(T_void, te_args, false),
                          Function::ExternalLinkage,
                          "jl_type_error_rt", jl_Module);
+    jltypeerror_func->setDoesNotReturn();
     jl_ExecutionEngine->addGlobalMapping(jltypeerror_func,
                                          (void*)&jl_type_error_rt);
 

@@ -92,13 +92,15 @@ type HashTable{K,V}
     deleted::IntSet
     deleter::Function
 
-    HashTable() = HashTable(Any,Any)
-    HashTable(n::Int) = HashTable(Any,Any,n)
-    HashTable(k, v) = HashTable(k, v, 16)
-    HashTable(k, v, n) = (n = _tablesz(n);
-                          new(Array(k,n), Array(v,n), IntSet(n+1), IntSet(n+1),
-                              identity))
+    HashTable(n) = (n = _tablesz(n);
+                    this.keys = Array(K,n);
+                    this.vals = Array(V,n);
+                    this.used = IntSet(n+1);
+                    this.deleted = IntSet(n+1);
+                    this.deleter = identity)
 end
+HashTable() = HashTable(0)
+HashTable(n::Int) = HashTable{Any,Any}(n)
 
 hashindex(key, sz) = (int32(hash(key)) & (sz-1)) + 1
 
@@ -107,7 +109,7 @@ function rehash{K,V}(h::HashTable{K,V}, newsz)
     oldv = h.vals
     oldu = h.used
     oldd = h.deleted
-    newht = HashTable(K,V,newsz)
+    newht = HashTable{K,V}(newsz)
 
     for i = oldu
         if !has(oldd,i)
@@ -273,9 +275,9 @@ end
 type WeakKeyHashTable{K,V}
     ht::HashTable{K,V}
 
-    WeakKeyHashTable() = new(HashTable())
-    WeakKeyHashTable(k, v) = new(HashTable(k, v))
+    WeakKeyHashTable() = (this.ht = HashTable{K,V}(0))
 end
+WeakKeyHashTable() = WeakKeyHashTable{Any,Any}()
 
 assign(wkh::WeakKeyHashTable, v, key) = add_weak_key(wkh.ht, key, v)
 

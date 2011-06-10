@@ -145,10 +145,10 @@ end
 type CharString <: String
     chars::Array{Char,1}
 
-    CharString(a::Array{Char,1}) = new(a)
-    CharString(c::Char...) = new([ c[i] | i=1:length(c) ])
-    CharString(x...) = CharString(map(char,x)...)
+    CharString(a::Array{Char,1}) = (this.chars=a)
+    CharString(c::Char...) = (this.chars=[ c[i] | i=1:length(c) ])
 end
+CharString(x...) = CharString(map(char,x)...)
 
 next(s::CharString, i::Index) = (s.chars[i], i+1)
 length(s::CharString) = length(s.chars)
@@ -164,9 +164,12 @@ type SubString <: String
     offset::Index
     length::Index
 
-    SubString(s::String, i::Index, j::Index) = new(s, i-1, j-i+1)
-    SubString(s::SubString, i::Index, j::Index) =
-        new(s.string, i-1+s.offset, j-i+1)
+    SubString(s::String, i::Index, j::Index) = (this.string = s;
+                                                this.offset = i;
+                                                this.length = j)
+    SubString(s::SubString, i::Index, j::Index) = (this.string = s;
+                                                   this.offset = i-1+s.offset;
+                                                   this.length = j-i+1)
 end
 
 function next(s::SubString, i::Index)
@@ -230,20 +233,33 @@ type RopeString <: String
     RopeString(h::RopeString, t::RopeString) =
         depth(h.tail) + depth(t) < depth(h.head) ?
             RopeString(h.head, RopeString(h.tail, t)) :
-            new(h, t, max(h.depth, t.depth)+1, length(h)+length(t))
+            new(h,
+                t,
+                max(h.depth,
+                    t.depth)+1,
+                length(h)+length(t))
 
     RopeString(h::RopeString, t::String) =
         depth(h.tail) < depth(h.head) ?
             RopeString(h.head, RopeString(h.tail, t)) :
-            new(h, t, h.depth+1, length(h)+length(t))
+            new(h,
+                t,
+                h.depth+1,
+                length(h)+length(t))
 
     RopeString(h::String, t::RopeString) =
         depth(t.head) < depth(t.tail) ?
             RopeString(RopeString(h, t.head), t.tail) :
-            new(h, t, t.depth+1, length(h)+length(t))
+            new(h,
+                t,
+                t.depth+1,
+                length(h)+length(t))
 
     RopeString(h::String, t::String) =
-        new(h, t, 1, length(h)+length(t))
+        new(h,
+            t,
+            1,
+            length(h)+length(t))
 end
 
 depth(s::String) = 0
