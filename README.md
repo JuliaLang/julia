@@ -19,7 +19,7 @@ For a more in-depth discussion of the rationale and advantages of Julia over oth
 - **Documentation:** <https://github.com/JuliaLang/julia/wiki>
 - **Discussion:** <julia-math@googlegroups.com>
 
-<a name="Required-Build-Tools"/>
+<a name="Required-Build-Tools-External-Libraries"/>
 ## Required Build Tools & External Libraries
 
 - **[GNU make][]** — building dependencies.
