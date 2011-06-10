@@ -87,6 +87,6 @@ where `JULIA_PATH` is the location of the top-level julia directory.
 
 Copy the TextMate Julia bundle into the TextMate application support directory:
 
-    cp -r JULIA_PATH/contrib/Julia.tmbundle ~/Library/Application Support/TextMate/Bundles/
+    cp -r JULIA_PATH/contrib/Julia.tmbundle ~/Library/Application\ Support/TextMate/Bundles/
 
 where `JULIA_PATH` is the location of the top-level julia directory.
