@@ -303,7 +303,7 @@ function string(p::Ptr{Uint8})
     ccall(:jl_cstr_to_string, Any, (Ptr{Uint8},), p)::String
 end
 
-string(x) = string(ccall(:jl_show_to_string, Ptr{Uint8}, (Any,), x))
+string(x) = print_to_string(show, x)
 
 cstring(args...) = print_to_string(print, args...)
 

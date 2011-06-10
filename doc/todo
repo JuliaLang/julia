@@ -680,8 +680,7 @@ issues 1/24/11
   . type_match only uses tvars from a given constraint environment, i.e.
     the parameters of the TypeConstructor
   * make cache_1arg an array
-- finish getting rid of jl_show_to_string
-  . now only used by repl-cloud
+* finish getting rid of jl_show_to_string
 * make sure inference results can be shared across instantiations of
   inner generic functions
   . when cache_method specializes a LambdaStaticData, put it on a list of

@@ -632,36 +632,6 @@ void jl_show(jl_value_t *v)
     jl_apply(jl_show_gf, &v, 1);
 }
 
-char *jl_show_to_string(jl_value_t *v)
-{
-    ios_t tmp, *dest=NULL;
-    jl_value_t *ioo = NULL;
-    // make a proper IOStream object if available, otherwise go underneath
-    if (jl_memio_func != NULL) {
-        ioo = jl_apply(jl_memio_func, NULL, 0);
-    }
-    // use try/catch to reset the current output stream
-    // if an error occurs during printing.
-    JL_TRY {
-        if (ioo) {
-            jl_set_current_output_stream_obj(ioo);
-            dest = jl_current_output_stream();
-        }
-        else {
-            jl_ios_mem(&tmp, 0);
-            dest = &tmp;
-            jl_current_task->state.current_output_stream = dest;
-        }
-        jl_show(v);
-    }
-    JL_CATCH {
-        jl_raise(jl_exception_in_transit);
-    }
-    size_t n;
-    assert(dest != NULL);
-    return ios_takebuf(dest, &n);
-}
-
 // comma_one prints a comma for 1 element, e.g. "(x,)"
 static void show_tuple(jl_tuple_t *t, char opn, char cls, int comma_one)
 {

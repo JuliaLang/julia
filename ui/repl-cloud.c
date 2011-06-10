@@ -248,7 +248,7 @@ static void ajax_send_julia_response(struct mg_connection *conn,
   int result_size = (repl_result_size < MAX_MESSAGE_LEN) ? repl_result_size : MAX_MESSAGE_LEN;
   memcpy(text, repl_result_esc, result_size+1);
   free(repl_result_esc);
-  //julia_free(repl_result);
+  julia_free(repl_result);
 
   if (text[0] != '\0') {
     // We have a message to store. Write-lock the ringbuffer,

@@ -52,7 +52,6 @@
     jl_readuntil;
     jl_cstr_to_string;
     jl_array_to_string;
-    jl_show_to_string;
     jl_parse_string;
     jl_is_rest_arg;
     jl_prepare_ast;
@@ -97,6 +96,7 @@
     ios_eof;
     ios_readline;
     ios_purge;
+    ios_takebuf;
     connect_to_host;
     open_any_tcp_port;
     jl_sizeof_fd_set;
@@ -164,6 +164,7 @@
     get_exename;
     jl_expr_type;
     jl_continue_sym;
+    jl_memio_func;
   local:
     *;
 };

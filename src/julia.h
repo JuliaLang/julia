@@ -317,7 +317,7 @@ extern jl_func_type_t *jl_any_func;
 extern jl_function_t *jl_show_gf;
 extern jl_function_t *jl_convert_gf;
 extern jl_function_t *jl_bottom_func;
-extern jl_function_t *jl_memio_func;
+extern DLLEXPORT jl_function_t *jl_memio_func;
 extern jl_function_t *jl_append_any_func;
 extern jl_function_t *jl_method_missing_func;
 extern jl_function_t *jl_unprotect_stack_func;
@@ -647,7 +647,6 @@ jl_lambda_info_t *jl_wrap_expr(jl_value_t *expr);
 
 // some useful functions
 DLLEXPORT void jl_show(jl_value_t *v);
-DLLEXPORT char *jl_show_to_string(jl_value_t *v);
 jl_value_t *jl_convert(jl_type_t *to, jl_value_t *x);
 
 // modules
