@@ -15,12 +15,12 @@ endif
 default: defaultlibs_$(OS)
 
 defaultlibs_Linux: \
-	llvm pcre_install fdlibm_install openblas_install lapack_install libc_install \
-	arpack_install mongoose_install
+	llvm pcre_install fdlibm_install openblas_install lapack_install \
+	libc_install arpack_install mongoose_install
 
 defaultlibs_Darwin: \
-	llvm readline_install pcre_install fdlibm_install openblas_install lapack_install \
-	arpack_install mongoose_install
+	llvm readline_install pcre_install fdlibm_install openblas_install \ 
+	lapack_install arpack_install mongoose_install
 
 $(JULIALIB):
 	mkdir -p $(JULIALIB)
@@ -66,14 +66,9 @@ pcre_install: $(PCRE_OBJ) $(JULIALIB)
 	ln -sf $(EXTROOTLIB)/libpcreposix.$(SHLIB_EXT) $(JULIALIB)/libpcreposix.$(SHLIB_EXT)
 
 
-fdlibmf: fdlibmf/libmf.a
-fdlibmf/libmf.a: fdlibmf/*.c
-	cd fdlibmf && make CC=$(CC) CFLAGS="-D_IEEE_LIBM -Dx86 -fPIC -O1 $(CONFIG)"
-
-
 FDLIBM_OBJ = $(EXTROOTLIB)/libfdm.$(SHLIB_EXT)
-$(FDLIBM_OBJ): fdlibmf fdlibm/*.c
-	cd fdlibm && make CC=$(CC) CFLAGS="-D_IEEE_LIBM -Dx86 -fPIC -O1 $(CONFIG)" && $(CC) -shared *.o ../fdlibmf/*.o -o $@
+$(FDLIBM_OBJ): fdlibm/*.c
+	cd fdlibm && make CC=$(CC) CFLAGS="-D_IEEE_LIBM -Dx86 -fPIC -O1 $(CONFIG)" && $(CC) -shared *.o -o $@
 fdlibm_install: $(FDLIBM_OBJ) $(JULIALIB)
 	ln -sf $< $(JULIALIB)/libfdm.$(SHLIB_EXT)
 
