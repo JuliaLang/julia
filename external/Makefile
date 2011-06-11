@@ -75,15 +75,15 @@ fdlibm_install: $(FDLIBM_OBJ) $(JULIALIB)
 
 OPENBLAS_OBJ = $(EXTROOTLIB)/libopenblas.$(SHLIB_EXT)
 openblas$(OPENBLAS_VER).tar.gz:
-	$(DOWNLOAD) -Lk https://github.com/xianyi/OpenBLAS/tarball/develop && \
+	$(DOWNLOAD) -Lk https://github.com/xianyi/OpenBLAS/tarball/develop
 	mv develop openblas.tar.gz
 openblas$(OPENBLAS_VER): openblas$(OPENBLAS_VER).tar.gz
 	mkdir -p openblas && tar --strip-components 1 -C openblas -xf openblas$(OPENBLAS_VER).tar.gz
 $(OPENBLAS_OBJ): openblas$(OPENBLAS_VER)
-	cd openblas && \
+	cd openblas
 	make USE_THREAD=0 NO_CBLAS=1 NO_LAPACK=1 DYNAMIC_ARCH=1 CC=$(CC) FC=$(FC)
 openblas_install: $(OPENBLAS_OBJ) $(JULIALIB)
-	cp -f openblas/libopenblas.$(SHLIB_EXT) $(OPENBLAS_OBJ) && \
+	cp -f openblas/libopenblas.$(SHLIB_EXT) $(OPENBLAS_OBJ)
 	ln -sf $< $(JULIALIB)/libopenblas.$(SHLIB_EXT)
 
 
@@ -93,9 +93,9 @@ lapack-$(LAPACK_VER).tgz:
 lapack-$(LAPACK_VER): lapack-$(LAPACK_VER).tgz
 	tar zxf lapack-$(LAPACK_VER).tgz
 $(LAPACK_OBJ): lapack-$(LAPACK_VER)
-	cd lapack-$(LAPACK_VER) && \
-	cp INSTALL/make.inc.gfortran ./make.inc && \
-	make lapacklib NOOPT="-O0 -fPIC" OPTS="-O2 -fPIC" FORTRAN=$(FC) && \
+	cd lapack-$(LAPACK_VER)
+	cp INSTALL/make.inc.gfortran ./make.inc
+	make lapacklib NOOPT="-O0 -fPIC" OPTS="-O2 -fPIC" FORTRAN=$(FC)
 	$(FC) -shared SRC/*.o $(EXTROOTLIB)/libopenblas.$(SHLIB_EXT) INSTALL/dlamch.o INSTALL/dsecnd_INT_ETIME.o INSTALL/ilaver.o INSTALL/slamch.o -o $(LAPACK_OBJ) -L$(EXTROOTLIB)
 lapack_install: $(LAPACK_OBJ) $(JULIALIB)
 	ln -sf $(LAPACK_OBJ) $(JULIALIB)/libLAPACK.$(SHLIB_EXT)
@@ -111,8 +111,8 @@ ARPACK: arpack$(ARPACK_VER).tar.gz
 	tar zxf patch.tar.gz
 	sed -i.bak -e s/"EXTERNAL           ETIME"// ./ARPACK/UTIL/second.f
 $(ARPACK_OBJ): ARPACK
-	cd ARPACK && make lib MAKE=make PLAT= home=`pwd` FC=$(FC) FFLAGS="-O3 -fPIC" && \
-	ar x libarpack_.a && \
+	cd ARPACK && make lib MAKE=make PLAT= home=`pwd` FC=$(FC) FFLAGS="-O3 -fPIC"
+	ar x libarpack_.a
 	$(FC) -shared *.o -o $(EXTROOTLIB)/libarpack.$(SHLIB_EXT)
 arpack_install: $(ARPACK_OBJ) $(JULIALIB)
 	ln -sf $(ARPACK_OBJ) $(JULIALIB)/libarpack.$(SHLIB_EXT)
