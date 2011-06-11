@@ -1,0 +1,102 @@
+-----BEGIN PGP SIGNED MESSAGE-----
+
+# netlib-bl master Mon May 17 03:35:14 EDT 2004
+# http://cm.bell-labs.com/netlib/crc/netlib-bl.html
+xqdt0SfICJbYU285K5kg9g	changes
+vXBJ84aVdIHpqtTdjwinqQ	configure
+ydqnyJgYpziE8zrr/WU4/g	configure.in
+P2sEgHh/v3RHTsLuS1UeTw	e_acos.c
+SReAT7diAMhuAtChHm1nLQ	e_acosh.c
+xsqL2/A2cuTbG4ZabFtgQg	e_asin.c
+uXwtBvNUrnsWp2lWS/ZPzg	e_atan2.c
+7+Zmokqk6yU+4B/dPWLVnQ	e_atanh.c
+FFRFIVaqeYuPIbZDy+GPLQ	e_cosh.c
+lGljkqn5/mLxl0XkN4fWxQ	e_exp.c
+ladlzVeoGGhd+r/RvPJUsw	e_fmod.c
+WwWDDWUnqoeniw5c6ShWUQ	e_gamma.c
++rYzLHXdv60VBR9GpEVA7Q	e_gamma_r.c
+BUemgwLOjQ2tpsWv8fQOWA	e_hypot.c
+um0j/BMMHd0mEzOIg/iTIw	e_j0.c
+023e/9GjB47rNsYlxW9/Ug	e_j1.c
+X2UtLCi/Hg5Xx0ZAiaUHXQ	e_jn.c
+bBStzzLdDSzNsVlhy/Isdw	e_lgamma.c
+pYie2c6jvQAObJMq2IhNGQ	e_lgamma_r.c
+mj6pKYX+E8euiAP6577R4A	e_log.c
+fEuDo4brNfU8HRqvM0syqQ	e_log10.c
+ryT3m0UgTGJarnV+NzNhNQ	e_pow.c
+L/2ye70MqZA7YqsCtgMQlQ	e_rem_pio2.c
+kdemnBPRKpa3661lnjEcyw	e_remainder.c
+DW4MDjGPgkJLg4PBGX5yGg	e_scalb.c
+LiW0gFPaN5JVIuQZW4XbVQ	e_sinh.c
+JPBrE86qzL59qF5PFCDA/Q	e_sqrt.c
+uHfh5HgtlKGibLxJYYBFCg	fdlibm.h
+G21yQjn+xOAex15TPeLfBQ	index
+sDIZFCqsPOqSl9ykcjky8w	k_cos.c
+1t3fuGir+TOYRAO0N8Chng	k_rem_pio2.c
+1Fi/fEeHcsIq50vVplKVzQ	k_sin.c
+1ufaWqW1PRP1cOuPtb7O7A	k_standard.c
+0axra6/ERRuXJJcCc5js/Q	k_tan.c
+wDXTC07GG4Bd+EnUjk/MVw	makefile
+0ffZi8Ey9JbRT9vCxp4LLg	makefile.in
+Tw07rtlUiXvlgwzbRb632Q	readme
+WDSYQ245qaKiYXtEn9qSdg	s_asinh.c
+ucf0ncFkne9OW4Uv+CxRrQ	s_atan.c
+w2/WG3x7j7+b9uydji3FZg	s_cbrt.c
+YqCYHnPBw1dDvbYwjWJNbw	s_ceil.c
+JX6gTEPMyjuTQclyjiLC2w	s_copysign.c
+91ARVh9L6LTc2i9VGu9DSg	s_cos.c
+0Jwhkbo/6ewEss7CW1PI9w	s_erf.c
+cpq+MFqK2Vi883y8LA/hxA	s_expm1.c
+K6LRiJVYLNzThuQaOyibVA	s_fabs.c
+uvNnsV4Fmj90jAbySXd54w	s_finite.c
+etEc6khe9K27aeE+6ZpW0A	s_floor.c
+5KDyugUMkjOsPsq6fygPjg	s_frexp.c
+UWvuamu8A+XGSwi9twc/vQ	s_ilogb.c
+/KmGbiWbhyiZCru0HbLUpw	s_isnan.c
++OZ/WHEZ12FiA8mZ7hk4rA	s_ldexp.c
+g33PLRuQjT5HRX4ZozySGA	s_lib_version.c
+MHsSOIzpsdw4sVVtAu4GTQ	s_log1p.c
+qWJm/3AkemsNi7aF295SGA	s_logb.c
+QGkKHdTmho+2Xbd0rObCmA	s_matherr.c
+Tfmhq38TAJspcNpJT9Tcww	s_modf.c
+k+onjlepmLUH/9xA+Wdqaw	s_nextafter.c
+omWcOHAaAKLjMuuSirX8Lw	s_rint.c
+6w2X17eamkvE+pCZlPm8Xg	s_scalbn.c
+z93vZw0EQ1IQUSqJMRu/IA	s_signgam.c
+S3OtNFaARNk7TltgUoVs+Q	s_significand.c
+yYuvBWZCWR0Y/YT6pmIr0w	s_sin.c
+LhJVti8VVlaWbptWR88XGg	s_tan.c
+QfLTJ1iGqgC7RhZWHi0PTQ	s_tanh.c
+vR2IBXoLtHZh+GHCV+Iydg	w_acos.c
+ZbhbPlbMYiu8Z1NXaDiPDQ	w_acosh.c
+KsvLAMHSqu1b72p5kYkJyQ	w_asin.c
+ENaJir3y0hZ4yWWKzBs89w	w_atan2.c
++jLlTCXpNVY6yuncPyfWyw	w_atanh.c
+84kcBUnnIU16mG+cChPbRA	w_cosh.c
+bjKr6q9UZYgun3LytNO+1A	w_exp.c
+WQG0A3Gk/MlFkjx4h3yw6Q	w_fmod.c
+MNIqntvhf0fvFvKfzcPR1g	w_gamma.c
+TnrF3OPpiAEUymzT0PZiDw	w_gamma_r.c
+OLFqJDwkIZmIF7vm6BQuGQ	w_hypot.c
+cvayKIzuZlCxTj6dLXe+qQ	w_j0.c
+PB3rNmFTtPoMICeJFkAMeg	w_j1.c
+7qCc7gGMiRIp1GY0UQ3gLg	w_jn.c
+8URUp8BmBP32s79GRllwdw	w_lgamma.c
+AJyN8jlYXVe1Dwx+w6qlEQ	w_lgamma_r.c
+8fmXSpy3xt0Mgd+9BkKHRg	w_log.c
+/+qteyYx+IKTmLuv1fxqPQ	w_log10.c
++o/ImP/JfknQmSxM4TA1ag	w_pow.c
+BkF5AkqkRA4Py2Y1p0bQIA	w_remainder.c
+77arOaApwrSQngHv26UWrg	w_scalb.c
+SgGvz6WUAuHs90sDA/GDbA	w_sinh.c
+2aR8vbagrVvvMtXPktM6CQ	w_sqrt.c
+
+-----BEGIN PGP SIGNATURE-----
+Version: 2.6.2
+
+iQCVAwUBQKhrNb5pvxO9gjtZAQGFgAP9GkR1sBbpgy/sXcoyIj/LMfystMc5ljYC
+WeqSep2+0gmE3l/aLWBaEL/ngyVY8fWNV7lll/DKGA4oJBTWtozHhWGl2g8+tb+L
+afoMIwLTbSMMkB4bPGfZm1MevZmOn5g4WLOHQ3aTPlykkBw8QDgmLm+7cWZrbHao
+SJ+0t7F/FWI=
+=aGTu
+-----END PGP SIGNATURE-----

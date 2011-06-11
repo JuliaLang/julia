@@ -1,0 +1,242 @@
+F e_acos.c
+R fdlibm.h
+
+F e_acosh.c
+R fdlibm.h
+
+F e_asin.c
+R fdlibm.h
+
+F e_atan2.c
+R fdlibm.h
+
+F e_atanh.c
+R fdlibm.h
+
+F e_cosh.c
+R fdlibm.h
+
+F e_exp.c
+R fdlibm.h
+
+F e_fmod.c
+R fdlibm.h
+
+F e_gamma.c
+R fdlibm.h
+
+F e_gamma_r.c
+R fdlibm.h
+
+F e_hypot.c
+R fdlibm.h
+
+F e_j0.c
+R fdlibm.h
+
+F e_j1.c
+R fdlibm.h
+
+F e_jn.c
+R fdlibm.h
+
+F e_lgamma.c
+R fdlibm.h
+
+F e_lgamma_r.c
+R fdlibm.h
+
+F e_log.c
+R fdlibm.h
+
+F e_log10.c
+R fdlibm.h
+
+F e_pow.c
+R fdlibm.h
+
+F e_rem_pio2.c
+R fdlibm.h
+
+F e_remainder.c
+R fdlibm.h
+
+F e_scalb.c
+R fdlibm.h
+
+F e_sinh.c
+R fdlibm.h
+
+F e_sqrt.c
+R fdlibm.h
+
+F k_cos.c
+R fdlibm.h
+
+F k_rem_pio2.c
+R fdlibm.h
+
+F k_sin.c
+R fdlibm.h
+
+F k_standard.c
+R fdlibm.h
+
+F k_tan.c
+R fdlibm.h
+
+F s_asinh.c
+R fdlibm.h
+
+F s_atan.c
+R fdlibm.h
+
+F s_cbrt.c
+R fdlibm.h
+
+F s_ceil.c
+R fdlibm.h
+
+F s_copysign.c
+R fdlibm.h
+
+F s_cos.c
+R fdlibm.h
+
+F s_erf.c
+R fdlibm.h
+
+F s_expm1.c
+R fdlibm.h
+
+F s_fabs.c
+R fdlibm.h
+
+F s_finite.c
+R fdlibm.h
+
+F s_floor.c
+R fdlibm.h
+
+F s_frexp.c
+R fdlibm.h
+
+F s_ilogb.c
+R fdlibm.h
+
+F s_isnan.c
+R fdlibm.h
+
+F s_ldexp.c
+R fdlibm.h
+
+F s_lib_version.c
+R fdlibm.h
+
+F s_log1p.c
+R fdlibm.h
+
+F s_logb.c
+R fdlibm.h
+
+F s_matherr.c
+R fdlibm.h
+
+F s_modf.c
+R fdlibm.h
+
+F s_nextafter.c
+R fdlibm.h
+
+F s_rint.c
+R fdlibm.h
+
+F s_scalbn.c
+R fdlibm.h
+
+F s_signgam.c
+R fdlibm.h
+
+F s_significand.c
+R fdlibm.h
+
+F s_sin.c
+R fdlibm.h
+
+F s_tan.c
+R fdlibm.h
+
+F s_tanh.c
+R fdlibm.h
+
+F w_acos.c
+R fdlibm.h
+
+F w_acosh.c
+R fdlibm.h
+
+F w_asin.c
+R fdlibm.h
+
+F w_atan2.c
+R fdlibm.h
+
+F w_atanh.c
+R fdlibm.h
+
+F w_cosh.c
+R fdlibm.h
+
+F w_exp.c
+R fdlibm.h
+
+F w_fmod.c
+R fdlibm.h
+
+F w_gamma.c
+R fdlibm.h
+
+F w_gamma_r.c
+R fdlibm.h
+
+F w_hypot.c
+R fdlibm.h
+
+F w_j0.c
+R fdlibm.h
+
+F w_j1.c
+R fdlibm.h
+
+F w_jn.c
+R fdlibm.h
+
+F w_lgamma.c
+R fdlibm.h
+
+F w_lgamma_r.c
+R fdlibm.h
+
+F w_log.c
+R fdlibm.h
+
+F w_log10.c
+R fdlibm.h
+
+F w_pow.c
+R fdlibm.h
+
+F w_remainder.c
+R fdlibm.h
+
+F w_scalb.c
+R fdlibm.h
+
+F w_sinh.c
+R fdlibm.h
+
+F w_sqrt.c
+R fdlibm.h
+
+F fdlibm.h
+

@@ -1,0 +1,10 @@
+lib	fdlibm
+for	C math library for machines that support IEEE 754 floating-point
+by	Kwok C Ng <kwok.ng@sun.com>
+# Version:	5.3
+# Maintained-hy:	fdlibm-comments@sun.com
+# Platforms:	Require ANSI C compiler with IEEE 754 style arithmetic
+# Copying-Policy: Freely Redistributable
+# Keywords:	libm,exp,log,sin,cos,floating-point,IEEE754
+master	ornl.gov
+

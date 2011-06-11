@@ -16,10 +16,12 @@
 #include "math.h"
 #include "math_private.h"
 
+float lgammaf_r_fdlibm(float x, int *signgamp);
+
 extern int signgam;
 
 float
 gammaf(float x)
 {
-	return lgammaf_r(x,&signgam);
+	return lgammaf_r_fdlibm(x,&signgam);
 }

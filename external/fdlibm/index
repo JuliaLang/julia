@@ -1,0 +1,168 @@
+file	fdlibm/fdlibm.h
+
+file	fdlibm/index
+
+file	fdlibm/e_acos.c
+
+file	fdlibm/e_acosh.c
+
+file	fdlibm/e_asin.c
+
+file	fdlibm/e_atan2.c
+
+file	fdlibm/e_atanh.c
+
+file	fdlibm/e_cosh.c
+
+file	fdlibm/e_exp.c
+
+file	fdlibm/e_fmod.c
+
+file	fdlibm/e_gamma.c
+
+file	fdlibm/e_gamma_r.c
+
+file	fdlibm/e_hypot.c
+
+file	fdlibm/e_j0.c
+
+file	fdlibm/e_j1.c
+
+file	fdlibm/e_jn.c
+
+file	fdlibm/e_lgamma.c
+
+file	fdlibm/e_lgamma_r.c
+
+file	fdlibm/e_log.c
+
+file	fdlibm/e_log10.c
+
+file	fdlibm/e_pow.c
+
+file	fdlibm/e_rem_pio2.c
+
+file	fdlibm/e_remainder.c
+
+file	fdlibm/e_scalb.c
+
+file	fdlibm/e_sinh.c
+
+file	fdlibm/e_sqrt.c
+
+file	fdlibm/k_cos.c
+
+file	fdlibm/k_rem_pio2.c
+
+file	fdlibm/k_sin.c
+
+file	fdlibm/k_standard.c
+
+file	fdlibm/k_tan.c
+
+file	fdlibm/makefile
+
+file	fdlibm/s_asinh.c
+
+file	fdlibm/s_atan.c
+
+file	fdlibm/s_cbrt.c
+
+file	fdlibm/s_ceil.c
+
+file	fdlibm/s_copysign.c
+
+file	fdlibm/s_cos.c
+
+file	fdlibm/s_erf.c
+
+file	fdlibm/s_expm1.c
+
+file	fdlibm/s_fabs.c
+
+file	fdlibm/s_finite.c
+
+file	fdlibm/s_floor.c
+
+file	fdlibm/s_frexp.c
+
+file	fdlibm/s_ilogb.c
+
+file	fdlibm/s_isnan.c
+
+file	fdlibm/s_ldexp.c
+
+file	fdlibm/s_lib_version.c
+
+file	fdlibm/s_log1p.c
+
+file	fdlibm/s_logb.c
+
+file	fdlibm/s_matherr.c
+
+file	fdlibm/s_modf.c
+
+file	fdlibm/s_nextafter.c
+
+file	fdlibm/s_rint.c
+
+file	fdlibm/s_scalbn.c
+
+file	fdlibm/s_signgam.c
+
+file	fdlibm/s_significand.c
+
+file	fdlibm/s_sin.c
+
+file	fdlibm/s_tan.c
+
+file	fdlibm/s_tanh.c
+
+file	fdlibm/w_acos.c
+
+file	fdlibm/w_acosh.c
+
+file	fdlibm/w_asin.c
+
+file	fdlibm/w_atan2.c
+
+file	fdlibm/w_atanh.c
+
+file	fdlibm/w_cosh.c
+
+file	fdlibm/w_exp.c
+
+file	fdlibm/w_fmod.c
+
+file	fdlibm/w_gamma.c
+
+file	fdlibm/w_gamma_r.c
+
+file	fdlibm/w_hypot.c
+
+file	fdlibm/w_j0.c
+
+file	fdlibm/w_j1.c
+
+file	fdlibm/w_jn.c
+
+file	fdlibm/w_lgamma.c
+
+file	fdlibm/w_lgamma_r.c
+
+file	fdlibm/w_log.c
+
+file	fdlibm/w_log10.c
+
+file	fdlibm/w_pow.c
+
+file	fdlibm/w_remainder.c
+
+file	fdlibm/w_scalb.c
+
+file	fdlibm/w_sinh.c
+
+file	fdlibm/w_sqrt.c
+
+file	fdlibm/readme
+

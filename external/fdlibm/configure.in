@@ -1,0 +1,14 @@
+dnl Process this file with autoconf to produce a configure script
+AC_INIT(fdlibm,5.3,[FDLIBM COMMENTS <fdlibm-comments AT sun.com>])
+AC_CONFIG_SRCDIR(e_acos.c)
+
+dnl Checks for programs
+AC_PROG_CC
+
+AC_CHECK_PROGS(AR, ar)
+AC_CHECK_PROGS(CHMOD, chmod)
+AC_CHECK_PROGS(CP, cp)
+AC_CHECK_PROGS(RANLIB, [ranlib echo])
+AC_PATH_PROGS(RM, [/bin/rm rm])
+
+AC_OUTPUT(Makefile)

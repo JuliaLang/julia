@@ -74,6 +74,7 @@ end
 @libfdmfunc_1arg_float ceil
 @libfdmfunc_1arg_float floor
 @libfdmfunc_1arg_float rint
+@libfdmfunc_1arg_float lgamma
 
 @libmfunc_1arg_float nearbyint
 @libmfunc_1arg_float trunc
@@ -102,12 +103,6 @@ gamma(x::Float64) = ccall(dlsym(libfdm, :tgamma),  Float64, (Float64,), x)
 gamma(x::Float32) = ccall(dlsym(libfdm, :tgammaf), Float32, (Float32,), x)
 gamma(x::Real) = gamma(float(x))
 @vectorize_1arg gamma
-
-# TODO: get an lgammaf implementation
-lgamma(x::Float64) = ccall(dlsym(libfdm, :lgamma),  Float64, (Float64,), x)
-lgamma(x::Float32) = float32(lgamma(float64(x)))
-lgamma(x::Real) = lgamma(float(x))
-@vectorize_1arg lgamma
 
 max(x::Float64, y::Float64) = ccall(dlsym(libm, :fmax),  Float64, (Float64,Float64), x, y)
 max(x::Float32, y::Float32) = ccall(dlsym(libm, :fmaxf), Float32, (Float32,Float32), x, y)

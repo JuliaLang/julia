@@ -19,7 +19,8 @@ src = 	e_acosf.c   e_powf.c        s_cosf.c       \
 	e_jnf.c     s_atanf.c       s_truncf.c        \
 	e_log10f.c  s_cbrtf.c       s_log1pf.c    w_dremf.c         \
 	e_log2f.c   s_ceilf.c       s_logbf.c     w_gammaf.c        \
-	e_logf.c    s_copysignf.c   w_lgammaf.c   s_finitef.c
+	e_logf.c    s_copysignf.c   w_lgammaf.c   s_finitef.c       \
+	e_lgammaf_r.c
 
 obj = 	$(src:%.c=%.o)
 
