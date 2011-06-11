@@ -1089,7 +1089,7 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool value)
     else if (ex->head == assign_sym) {
         emit_assignment(args[0], args[1], ctx);
         if (value) {
-            return literal_pointer_val((jl_value_t*)jl_null);
+            return literal_pointer_val((jl_value_t*)jl_nothing);
         }
     }
     else if (ex->head == top_sym) {

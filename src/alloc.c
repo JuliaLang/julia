@@ -489,7 +489,8 @@ void jl_add_constructors(jl_struct_type_t *t)
     }
     jl_function_t *fnew=NULL;
     JL_GC_PUSH(&fnew);
-    if (t->ctor_factory == (jl_value_t*)jl_nothing) {
+    if (t->ctor_factory == (jl_value_t*)jl_nothing ||
+        t->ctor_factory == (jl_value_t*)jl_null) {
         // no user-defined constructors
         if (t->parameters->length>0 && (jl_value_t*)t==t->name->primary) {
             jl_function_t *tf = (jl_function_t*)t;
@@ -736,7 +737,7 @@ JL_CALLABLE(jl_weakref_ctor)
     }
     if (nargs == 1)
         return (jl_value_t*)jl_gc_new_weakref(args[0]);
-    return (jl_value_t*)jl_gc_new_weakref((jl_value_t*)jl_null);
+    return (jl_value_t*)jl_gc_new_weakref((jl_value_t*)jl_nothing);
 }
 
 // bits constructors ----------------------------------------------------------

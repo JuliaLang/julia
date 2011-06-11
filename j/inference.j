@@ -532,7 +532,7 @@ function abstract_eval_expr(e, vtypes, sv::StaticVarInfo)
     elseif is(e.head,:method)
         return Any-->Any
     elseif is(e.head,:null)
-        return ()
+        return NothingType
     elseif is(e.head,:quote)
         return typeof(e.args[1])
     elseif is(e.head,:static_typeof)

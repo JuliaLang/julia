@@ -83,14 +83,14 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl)
         for (i=0; i < nl; i++) {
             if (locals[i*2] == sym) {
                 locals[i*2+1] = eval(args[1], locals, nl);
-                return (jl_value_t*)jl_null;
+                return (jl_value_t*)jl_nothing;
             }
         }
         jl_value_t **bp = jl_get_bindingp(jl_system_module, (jl_sym_t*)sym);
         jl_value_t *rhs = eval(args[1], locals, nl);
         if (*bp==NULL || !jl_is_func(*bp))
             *bp = rhs;
-        return (jl_value_t*)jl_null;
+        return (jl_value_t*)jl_nothing;
     }
     else if (ex->head == top_sym) {
         jl_value_t **bp = jl_get_bindingp(jl_system_module, (jl_sym_t*)args[0]);
@@ -143,13 +143,13 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl)
         jl_function_t *f = (jl_function_t*)eval(args[1], locals, nl);
         assert(jl_is_function(f));
         jl_set_expander(jl_system_module, nm, f);
-        return (jl_value_t*)jl_null;
+        return (jl_value_t*)jl_nothing;
     }
     else if (ex->head == error_sym) {
         jl_errorf("syntax error: %s", jl_string_data(args[0]));
     }
     jl_error("not supported");
-    return (jl_value_t*)jl_null;
+    return (jl_value_t*)jl_nothing;
 }
 
 static int label_idx(jl_value_t *tgt, jl_array_t *stmts)

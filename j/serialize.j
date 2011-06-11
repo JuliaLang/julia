@@ -19,7 +19,7 @@ let i = 2
              :null, :goto, :gotoifnot, :label, :symbol, :string, :T, :S,
              :a, :b, :c, :d, :e, :f, :g, :h, :i, :j, :k, :l, :m, :n, :o,
              :p, :q, :r, :s, :t, :u, :v, :w, :x, :y, :z,
-             false, true, 0, 1, 2, 3, 4}
+             false, true, Nothing, 0, 1, 2, 3, 4}
         ser_tag[t] = i
         deser_tag[i] = t
         i += 1

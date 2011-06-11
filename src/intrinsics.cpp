@@ -241,7 +241,7 @@ static Value *boxed(Value *v)
     if (t == jl_pvalue_llvmt)
         return v;
     if (t == T_void)
-        return literal_pointer_val((jl_value_t*)jl_null);
+        return literal_pointer_val((jl_value_t*)jl_nothing);
     if (t == T_int1) return julia_bool(v);
     jl_value_t *jt = julia_type_of(v);
     jl_bits_type_t *jb = (jl_bits_type_t*)jt;
@@ -343,8 +343,6 @@ extern "C" void *jl_value_to_pointer(jl_value_t *jt, jl_value_t *v, int argn)
 {
     // this is a custom version of convert_to_ptr that is able to use
     // the temporary argument space.
-    if (v == (jl_value_t*)jl_null)
-        return NULL;
     if (jl_is_cpointer(v))
         return jl_unbox_pointer(v);
     if ((jl_value_t*)jl_typeof(v) == jt) {
@@ -561,7 +559,7 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
 
     JL_GC_POP();
     if (lrt == T_void)
-        return literal_pointer_val((jl_value_t*)jl_null);
+        return literal_pointer_val((jl_value_t*)jl_nothing);
     return mark_julia_type(result, rt);
 }
 

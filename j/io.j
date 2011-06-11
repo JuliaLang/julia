@@ -200,7 +200,7 @@ type IOTally
     IOTally() = new(zero(Size))
 end
 
-write(s::IOTally, x::Uint8) = (s.nbytes += 1; ())
+write(s::IOTally, x::Uint8) = (s.nbytes += 1; Nothing)
 flush(s::IOTally) = ()
 
 ## select interface ##

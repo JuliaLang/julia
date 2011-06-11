@@ -1044,7 +1044,7 @@ JL_CALLABLE(jl_f_new_struct_fields)
     */
     st->types = ftypes;
     jl_add_constructors(st);
-    return (jl_value_t*)jl_null;
+    return (jl_value_t*)jl_nothing;
 }
 
 JL_CALLABLE(jl_f_new_type_constructor)
@@ -1080,7 +1080,7 @@ JL_CALLABLE(jl_f_new_tag_type_super)
     jl_value_t *super = args[1];
     check_supertype(super, ((jl_sym_t*)args[0])->name);
     ((jl_tag_type_t*)args[0])->super = (jl_tag_type_t*)super;
-    return (jl_value_t*)jl_null;
+    return (jl_value_t*)jl_nothing;
 }
 
 JL_CALLABLE(jl_f_new_bits_type)
