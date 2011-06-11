@@ -638,9 +638,10 @@
 		    (expect-end s)
 		    (list 'try try-block var catch-block)))
 	 (else (error "improperly terminated try block")))))
-    ((return)          (if (closing-token? (peek-token s))
-			   (list 'return '(null))
-			   (list 'return (parse-eq s))))
+    ((return)          (let ((t (peek-token s)))
+			 (if (or (eqv? t #\newline) (closing-token? t))
+			     (list 'return '(null))
+			     (list 'return (parse-eq s)))))
     ((break continue)  (list word))
     (else (error "unhandled reserved word")))))
 
