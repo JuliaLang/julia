@@ -613,14 +613,14 @@ JL_CALLABLE(jl_f_print_array_uint8)
     ios_t *s = jl_current_output_stream();
     jl_array_t *b = (jl_array_t*)args[0];
     ios_write(s, (char*)b->data, b->length);
-    return (jl_value_t*)jl_null;
+    return (jl_value_t*)jl_nothing;
 }
 
 JL_CALLABLE(jl_f_print_symbol)
 {
     ios_t *s = jl_current_output_stream();
     ios_puts(((jl_sym_t*)args[0])->name, s);
-    return (jl_value_t*)jl_null;
+    return (jl_value_t*)jl_nothing;
 }
 
 // --- showing ---
@@ -788,7 +788,7 @@ JL_CALLABLE(jl_f_show_bool)
         ios_puts("false", s);
     else
         ios_puts("true", s);
-    return (jl_value_t*)jl_null;
+    return (jl_value_t*)jl_nothing;
 }
 
 JL_CALLABLE(jl_f_show_char)
@@ -798,26 +798,26 @@ JL_CALLABLE(jl_f_show_char)
     ios_putc('\'', s);
     ios_pututf8(s, wc);
     ios_putc('\'', s);
-    return (jl_value_t*)jl_null;
+    return (jl_value_t*)jl_nothing;
 }
 
 JL_CALLABLE(jl_f_show_float32)
 {
     show_float64((double)*(float*)jl_bits_data(args[0]), 1);
-    return (jl_value_t*)jl_null;
+    return (jl_value_t*)jl_nothing;
 }
 
 JL_CALLABLE(jl_f_show_float64)
 {
     show_float64(*(double*)jl_bits_data(args[0]), 0);
-    return (jl_value_t*)jl_null;
+    return (jl_value_t*)jl_nothing;
 }
 
 #define INT_SHOW_FUNC(sgn,nb)               \
 JL_CALLABLE(jl_f_show_##sgn##nb)            \
 {                                           \
     show_##sgn(jl_bits_data(args[0]), nb);  \
-    return (jl_value_t*)jl_null;            \
+    return (jl_value_t*)jl_nothing;         \
 }
 
 INT_SHOW_FUNC(int,8)
@@ -842,7 +842,7 @@ JL_CALLABLE(jl_f_show_pointer)
 #else
     ios_printf(s, " @0x%08x", (uptrint_t)ptr);
 #endif
-    return (jl_value_t*)jl_null;
+    return (jl_value_t*)jl_nothing;
 }
 
 JL_CALLABLE(jl_f_show_typevar)
@@ -858,7 +858,7 @@ JL_CALLABLE(jl_f_show_typevar)
         ios_puts("<:", s);
         jl_show((jl_value_t*)tv->ub);
     }
-    return (jl_value_t*)jl_null;
+    return (jl_value_t*)jl_nothing;
 }
 
 JL_CALLABLE(jl_f_show_linfo)
@@ -867,7 +867,7 @@ JL_CALLABLE(jl_f_show_linfo)
     ios_puts("AST(", s);
     jl_show(((jl_lambda_info_t*)args[0])->ast);
     ios_putc(')', s);
-    return (jl_value_t*)jl_null;
+    return (jl_value_t*)jl_nothing;
 }
 
 JL_CALLABLE(jl_f_show_any)
@@ -911,7 +911,7 @@ JL_CALLABLE(jl_f_show_any)
             ios_putc(')', s);
         }
     }
-    return (jl_value_t*)jl_null;
+    return (jl_value_t*)jl_nothing;
 }
 
 // --- RTS primitives ---
@@ -989,7 +989,7 @@ JL_CALLABLE(jl_f_new_struct_type)
     JL_TYPECHK(new_struct_type, symbol, args[0]);
     JL_TYPECHK(new_struct_type, tuple, args[1]);
     JL_TYPECHK(new_struct_type, tuple, args[2]);
-    if (args[3] != (jl_value_t*)jl_null)
+    if (args[3] != (jl_value_t*)jl_nothing)
         JL_TYPECHK(new_struct_type, function, args[3]);
     jl_sym_t *name = (jl_sym_t*)args[0];
     jl_tuple_t *params = (jl_tuple_t*)args[1];

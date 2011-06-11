@@ -1294,7 +1294,7 @@ static jl_type_t *inst_type_w_(jl_value_t *t, jl_value_t **env, size_t n,
             nst->ctor_factory = st->ctor_factory;
             nst->instance = NULL;
             nst->uid = 0;
-            nst->types = jl_null;
+            nst->types = jl_null; // duplicate assignment?
             nst->super = (jl_tag_type_t*)inst_type_w_((jl_value_t*)st->super, env,n,stack);
             jl_tuple_t *ftypes = st->types;
             if (ftypes != NULL) {
@@ -1943,6 +1943,7 @@ void jl_init_types()
 
     jl_null = (jl_tuple_t*)newobj((jl_type_t*)jl_tuple_type, 1);
     jl_null->length = 0;
+    jl_nothing = (jl_struct_type_t*)jl_null; // for bootstrapping
 
     // initialize them. lots of cycles.
     jl_struct_kind->name = jl_new_typename(jl_symbol("StructKind"));

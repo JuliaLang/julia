@@ -489,7 +489,7 @@ void jl_add_constructors(jl_struct_type_t *t)
     }
     jl_function_t *fnew=NULL;
     JL_GC_PUSH(&fnew);
-    if (t->ctor_factory == (jl_value_t*)jl_null) {
+    if (t->ctor_factory == (jl_value_t*)jl_nothing) {
         // no user-defined constructors
         if (t->parameters->length>0 && (jl_value_t*)t==t->name->primary) {
             jl_function_t *tf = (jl_function_t*)t;

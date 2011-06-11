@@ -80,7 +80,7 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl)
     else if (ex->head == assign_sym) {
         jl_value_t *sym = args[0];
         size_t i;
-        for(i=0; i < nl; i++) {
+        for (i=0; i < nl; i++) {
             if (locals[i*2] == sym) {
                 locals[i*2+1] = eval(args[1], locals, nl);
                 return (jl_value_t*)jl_null;
@@ -105,7 +105,7 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl)
         return args[0];
     }
     else if (ex->head == null_sym) {
-        return (jl_value_t*)jl_null;
+        return (jl_value_t*)jl_nothing; // jl_nothing
     }
     else if (ex->head == body_sym) {
         return eval_body(ex->args, locals, nl, 0);
