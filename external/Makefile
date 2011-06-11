@@ -111,11 +111,11 @@ ARPACK_OBJ = $(EXTROOTLIB)/libarpack.$(SHLIB_EXT)
 arpack$(ARPACK_VER).tar.gz:
 	$(DOWNLOAD) http://www.caam.rice.edu/software/ARPACK/SRC/arpack$(ARPACK_VER).tar.gz
 	$(DOWNLOAD) http://www.caam.rice.edu/software/ARPACK/SRC/patch.tar.gz
-arpack$(ARPACK_VER): arpack$(ARPACK_VER).tar.gz
+ARPACK: arpack$(ARPACK_VER).tar.gz
 	tar zxf arpack$(ARPACK_VER).tar.gz
 	tar zxf patch.tar.gz
 	sed -i.bak -e s/"EXTERNAL           ETIME"// ./ARPACK/UTIL/second.f
-$(ARPACK_OBJ): arpack$(ARPACK_VER)
+$(ARPACK_OBJ): ARPACK
 	cd ARPACK && make lib MAKE=make PLAT= home=`pwd` FC=$(FC) FFLAGS="-O3 -fPIC" && \
 	ar x libarpack_.a && \
 	$(FC) -shared *.o -o $(EXTROOTLIB)/libarpack.$(SHLIB_EXT)
