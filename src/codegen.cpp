@@ -85,6 +85,7 @@ static GlobalVariable *jlpgcstack_var;
 static GlobalVariable *jlexc_var;
 
 // important functions
+static Function *jlraise_func;
 static Function *jlerror_func;
 static Function *jluniniterror_func;
 static Function *jltypeerror_func;
@@ -702,6 +703,11 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
                 JL_GC_POP();
                 return literal_pointer_val((jl_value_t*)jl_null);
             }
+        }
+        else if (f->fptr == &jl_f_throw && nargs==1) {
+            Value *arg1 = boxed(emit_expr(args[1], ctx, true));
+            JL_GC_POP();
+            return builder.CreateCall(jlraise_func, arg1);
         }
         else if (f->fptr == &jl_f_arraylen && nargs==1) {
             jl_value_t *aty = expr_type(args[1]); rt1 = aty;
@@ -1654,13 +1660,24 @@ static void init_julia_llvm_env(Module *m)
         Function::Create(FunctionType::get(T_void, args1, false),
                          Function::ExternalLinkage,
                          "jl_error", jl_Module);
+    jlerror_func->setDoesNotReturn();
     jl_ExecutionEngine->addGlobalMapping(jlerror_func, (void*)&jl_error);
+
+    std::vector<const Type*> args1_(0);
+    args1_.push_back(jl_pvalue_llvmt);
+    jlraise_func =
+        Function::Create(FunctionType::get(T_void, args1_, false),
+                         Function::ExternalLinkage,
+                         "jl_raise", jl_Module);
+    jlraise_func->setDoesNotReturn();
+    jl_ExecutionEngine->addGlobalMapping(jlraise_func, (void*)&jl_raise);
 
     std::vector<const Type*> empty_args(0);
     jluniniterror_func =
         Function::Create(FunctionType::get(T_void, empty_args, false),
                          Function::ExternalLinkage,
                          "jl_undef_ref_error", jl_Module);
+    jluniniterror_func->setDoesNotReturn();
     jl_ExecutionEngine->addGlobalMapping(jluniniterror_func,
                                          (void*)&jl_undef_ref_error);
 
@@ -1678,6 +1695,7 @@ static void init_julia_llvm_env(Module *m)
         Function::Create(FunctionType::get(T_void, te_args, false),
                          Function::ExternalLinkage,
                          "jl_type_error_rt", jl_Module);
+    jltypeerror_func->setDoesNotReturn();
     jl_ExecutionEngine->addGlobalMapping(jltypeerror_func,
                                          (void*)&jl_type_error_rt);
 

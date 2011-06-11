@@ -10,7 +10,7 @@ numerictype_t effective_numerictype(double r)
 {
     double fp;
 
-    fp = fpart(r);
+    fp = r - ((r>0) ? ((double)(uint64_t)r) : ((double)(int64_t)r));
     if (fp != 0 || r > U64_MAX || r < S64_MIN) {
         if (r > FLT_MAX || r < -FLT_MAX || (fabs(r) < FLT_MIN)) {
             return T_DOUBLE;
@@ -39,7 +39,7 @@ numerictype_t effective_numerictype(double r)
 {
     double fp;
 
-    fp = fpart(r);
+    fp = r - ((r>0) ? ((double)(uint64_t)r) : ((double)(int64_t)r));
     if (fp != 0 || r > U64_MAX || r < S64_MIN) {
         return T_DOUBLE;
     }

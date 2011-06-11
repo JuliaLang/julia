@@ -828,7 +828,7 @@ extern DLLEXPORT jl_value_t *jl_exception_in_transit;
 
 jl_task_t *jl_new_task(jl_function_t *start, size_t ssize);
 jl_value_t *jl_switchto(jl_task_t *t, jl_value_t *arg);
-void jl_raise(jl_value_t *e);
+DLLEXPORT void jl_raise(jl_value_t *e);
 
 DLLEXPORT jl_value_t *jl_current_output_stream_obj();
 DLLEXPORT ios_t *jl_current_output_stream();

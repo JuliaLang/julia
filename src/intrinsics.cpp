@@ -240,6 +240,8 @@ static Value *boxed(Value *v)
     const Type *t = v->getType();
     if (t == jl_pvalue_llvmt)
         return v;
+    if (t == T_void)
+        return literal_pointer_val((jl_value_t*)jl_null);
     if (t == T_int1) return julia_bool(v);
     jl_value_t *jt = julia_type_of(v);
     jl_bits_type_t *jb = (jl_bits_type_t*)jt;
