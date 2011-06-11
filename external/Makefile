@@ -19,7 +19,7 @@ defaultlibs_Linux: \
 	libc_install arpack_install mongoose_install
 
 defaultlibs_Darwin: \
-	llvm readline_install pcre_install fdlibm_install openblas_install \ 
+	llvm readline_install pcre_install fdlibm_install openblas_install \
 	lapack_install arpack_install mongoose_install
 
 $(JULIALIB):
