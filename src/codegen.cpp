@@ -1142,8 +1142,8 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool value)
         return literal_pointer_val(jv);
     }
     else if (ex->head == null_sym) {
-        return literal_pointer_val((jl_value_t*)jl_nothing); // jl_nothing
-    }
+        return literal_pointer_val((jl_value_t*)jl_nothing);
+	}
     else if (ex->head == static_typeof_sym) {
         jl_value_t *extype = expr_type((jl_value_t*)ex);
         if (jl_is_tag_type(extype) &&

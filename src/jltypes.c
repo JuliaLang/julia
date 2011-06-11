@@ -1294,7 +1294,6 @@ static jl_type_t *inst_type_w_(jl_value_t *t, jl_value_t **env, size_t n,
             nst->ctor_factory = st->ctor_factory;
             nst->instance = NULL;
             nst->uid = 0;
-            nst->types = jl_null; // duplicate assignment?
             nst->super = (jl_tag_type_t*)inst_type_w_((jl_value_t*)st->super, env,n,stack);
             jl_tuple_t *ftypes = st->types;
             if (ftypes != NULL) {

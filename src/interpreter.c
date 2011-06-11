@@ -105,7 +105,7 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl)
         return args[0];
     }
     else if (ex->head == null_sym) {
-        return (jl_value_t*)jl_nothing; // jl_nothing
+        return (jl_value_t*)jl_nothing;
     }
     else if (ex->head == body_sym) {
         return eval_body(ex->args, locals, nl, 0);
