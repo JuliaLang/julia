@@ -127,6 +127,5 @@ cleanall:
 	rm -rf llvm-$(LLVM_VER){,.tgz}
 	rm -rf readline-$(READLINE_VER){,.tar.gz}
 	rm -rf pcre-$(PCRE_VER){,.tar.bz2}
-	rm -rf fdlibm{,.tar.gz}
 	rm -rf lapack-$(LAPACK_VER){,.tgz}
 	rm -rf mongoose-$(MONGOOSE_VER){,.tgz}
