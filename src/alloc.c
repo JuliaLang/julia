@@ -585,10 +585,6 @@ jl_bits_type_t *jl_new_bitstype(jl_value_t *name, jl_tag_type_t *super,
     jl_bits_type_t *t=NULL;
     jl_typename_t *tn=NULL;
     JL_GC_PUSH(&t, &tn);
-    if (jl_is_typename(name))
-        tn = (jl_typename_t*)name;
-    else
-        tn = jl_new_typename((jl_sym_t*)name);
 
     if (!jl_boot_file_loaded && jl_is_symbol(name)) {
         // hack to avoid making two versions of basic types needed
@@ -599,9 +595,14 @@ jl_bits_type_t *jl_new_bitstype(jl_value_t *name, jl_tag_type_t *super,
             t = jl_bool_type;
     }
     int makenew = (t==NULL);
-    if (makenew)
+    if (makenew) {
         t = (jl_bits_type_t*)newobj((jl_type_t*)jl_bits_kind, BITS_TYPE_NW);
-    t->name = tn;
+        if (jl_is_typename(name))
+            tn = (jl_typename_t*)name;
+        else
+            tn = jl_new_typename((jl_sym_t*)name);
+        t->name = tn;
+    }
     t->super = super;
     unbind_tvars(parameters);
     t->parameters = parameters;

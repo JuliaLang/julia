@@ -172,7 +172,6 @@ typedef struct {
     // hidden fields:
     size_t nbits;
     uptrint_t uid;   // must be at same offset as in jl_struct_type_t
-    uptrint_t unused;
 } jl_bits_type_t;
 
 typedef struct {

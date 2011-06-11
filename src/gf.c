@@ -279,7 +279,7 @@ jl_function_t *jl_method_cache_insert(jl_methtable_t *mt, jl_tuple_t *type,
         if (uid > 0) {
             if (mt->cache_1arg == NULL)
                 mt->cache_1arg = jl_alloc_cell_1d(0);
-            if (uid > jl_array_len(mt->cache_1arg)) {
+            if (uid >= jl_array_len(mt->cache_1arg)) {
                 jl_array_grow_end(mt->cache_1arg, uid+10-jl_array_len(mt->cache_1arg));
             }
             jl_cellset(mt->cache_1arg, uid, method);
