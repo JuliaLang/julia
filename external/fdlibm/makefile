@@ -60,13 +60,13 @@ src = 	k_standard.c k_rem_pio2.c \
 	k_cos.c k_sin.c k_tan.c \
 	e_acos.c e_acosh.c e_asin.c e_atan2.c \
 	e_atanh.c e_cosh.c e_exp.c e_fmod.c \
-	e_gamma.c e_gamma_r.c e_hypot.c e_j0.c \
+	e_tgamma.c e_tgamma_r.c e_hypot.c e_j0.c \
 	e_j1.c e_jn.c e_lgamma.c e_lgamma_r.c \
 	e_log.c e_log10.c e_log2.c e_pow.c e_rem_pio2.c e_remainder.c \
 	e_scalb.c e_sinh.c e_sqrt.c \
 	w_acos.c w_acosh.c w_asin.c w_atan2.c \
 	w_atanh.c w_cosh.c w_exp.c w_fmod.c \
-	w_gamma.c w_gamma_r.c w_hypot.c w_j0.c \
+	w_tgamma.c w_tgamma_r.c w_hypot.c w_j0.c \
 	w_j1.c w_jn.c w_lgamma.c w_lgamma_r.c \
 	w_log.c w_log10.c w_pow.c w_remainder.c \
 	w_scalb.c w_sinh.c w_sqrt.c \
@@ -89,7 +89,7 @@ src = 	k_standard.c k_rem_pio2.c \
 	e_j1f.c     s_asinhf.c      s_tanhf.c         \
 	e_jnf.c     s_atanf.c       s_truncf.c        \
 	e_log10f.c  s_cbrtf.c       s_log1pf.c    w_dremf.c         \
-	e_log2f.c   s_ceilf.c       s_logbf.c     w_gammaf.c        \
+	e_log2f.c   s_ceilf.c       s_logbf.c     w_tgammaf.c        \
 	e_logf.c    s_copysignf.c   w_lgammaf.c   s_finitef.c       \
 	e_lgammaf_r.c
 

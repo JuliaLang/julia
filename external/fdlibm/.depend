@@ -22,10 +22,10 @@ R fdlibm.h
 F e_fmod.c
 R fdlibm.h
 
-F e_gamma.c
+F e_tgamma.c
 R fdlibm.h
 
-F e_gamma_r.c
+F e_tgamma_r.c
 R fdlibm.h
 
 F e_hypot.c
@@ -193,10 +193,10 @@ R fdlibm.h
 F w_fmod.c
 R fdlibm.h
 
-F w_gamma.c
+F w_tgamma.c
 R fdlibm.h
 
-F w_gamma_r.c
+F w_tgamma_r.c
 R fdlibm.h
 
 F w_hypot.c

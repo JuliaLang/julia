@@ -18,9 +18,9 @@ file	fdlibm/e_exp.c
 
 file	fdlibm/e_fmod.c
 
-file	fdlibm/e_gamma.c
+file	fdlibm/e_tgamma.c
 
-file	fdlibm/e_gamma_r.c
+file	fdlibm/e_tgamma_r.c
 
 file	fdlibm/e_hypot.c
 
@@ -134,9 +134,9 @@ file	fdlibm/w_exp.c
 
 file	fdlibm/w_fmod.c
 
-file	fdlibm/w_gamma.c
+file	fdlibm/w_tgamma.c
 
-file	fdlibm/w_gamma_r.c
+file	fdlibm/w_tgamma_r.c
 
 file	fdlibm/w_hypot.c
 

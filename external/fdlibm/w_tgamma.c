@@ -1,5 +1,5 @@
 
-/* @(#)w_gamma.c 1.3 95/01/18 */
+/* @(#)w_tgamma.c 1.3 95/01/18 */
 /*
  * ====================================================
  * Copyright (C) 1993 by Sun Microsystems, Inc. All rights reserved.
@@ -12,10 +12,10 @@
  *
  */
 
-/* double gamma(double x)
+/* double tgamma(double x)
  * Return the logarithm of the Gamma function of x.
  *
- * Method: call gamma_r
+ * Method: call tgamma_r
  */
 
 #include "fdlibm.h"
@@ -23,23 +23,23 @@
 extern int signgam;
 
 #ifdef __STDC__
-	double gamma(double x)
+	double tgamma(double x)
 #else
-	double gamma(x)
+	double tgamma(x)
 	double x;
 #endif
 {
 #ifdef _IEEE_LIBM
-	return __ieee754_gamma_r(x,&signgam);
+	return __ieee754_tgamma_r(x,&signgam);
 #else
         double y;
-        y = __ieee754_gamma_r(x,&signgam);
+        y = __ieee754_tgamma_r(x,&signgam);
         if(_LIB_VERSION == _IEEE_) return y;
         if(!finite(y)&&finite(x)) {
             if(floor(x)==x&&x<=0.0)
-                return __kernel_standard(x,x,41); /* gamma pole */
+                return __kernel_standard(x,x,41); /* tgamma pole */
             else
-                return __kernel_standard(x,x,40); /* gamma overflow */
+                return __kernel_standard(x,x,40); /* tgamma overflow */
         } else
             return y;
 #endif

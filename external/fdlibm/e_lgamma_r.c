@@ -18,7 +18,7 @@
  *
  * Method:
  *   1. Argument Reduction for 0 < x <= 8
- * 	Since gamma(1+s)=s*gamma(s), for x in [0,8], we may 
+ * 	Since tgamma(1+s)=s*tgamma(s), for x in [0,8], we may 
  * 	reduce x to a number in [1.5,2.5] by
  * 		lgamma(1+s) = log(s) + lgamma(s)
  *	for example,
@@ -59,7 +59,7 @@
  *	where 
  *		|w - f(z)| < 2**-58.74
  *		
- *   4. For negative x, since (G is gamma function)
+ *   4. For negative x, since (G is tgamma function)
  *		-x*G(-x)*G(x) = pi/sin(pi*x),
  * 	we have
  * 		G(x) = pi/(sin(pi*x)*(-x)*G(-x))

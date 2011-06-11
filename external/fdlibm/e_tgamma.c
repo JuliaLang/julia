@@ -1,5 +1,5 @@
 
-/* @(#)e_gamma_r.c 1.3 95/01/18 */
+/* @(#)e_tgamma.c 1.3 95/01/18 */
 /*
  * ====================================================
  * Copyright (C) 1993 by Sun Microsystems, Inc. All rights reserved.
@@ -12,21 +12,22 @@
  *
  */
 
-/* __ieee754_gamma_r(x, signgamp)
- * Reentrant version of the logarithm of the Gamma function 
- * with user provide pointer for the sign of Gamma(x). 
+/* __ieee754_tgamma(x)
+ * Return the logarithm of the Gamma function of x.
  *
- * Method: See __ieee754_lgamma_r
+ * Method: call __ieee754_tgamma_r
  */
 
 #include "fdlibm.h"
 
+extern int signgam;
+
 #ifdef __STDC__
-	double __ieee754_gamma_r(double x, int *signgamp)
+	double __ieee754_tgamma(double x)
 #else
-	double __ieee754_gamma_r(x,signgamp)
-	double x; int *signgamp;
+	double __ieee754_tgamma(x)
+	double x;
 #endif
 {
-	return __ieee754_lgamma_r(x,signgamp);
+	return __ieee754_tgamma_r(x,&signgam);
 }
