@@ -15,12 +15,12 @@ endif
 default: defaultlibs_$(OS)
 
 defaultlibs_Linux: \
-	llvm pcre_install fdlibm_install openblas_install lapack_install libc_install \
-	arpack_install mongoose_install
+	llvm pcre_install fdlibm_install openblas_install lapack_install \
+	libc_install arpack_install mongoose_install
 
 defaultlibs_Darwin: \
-	llvm readline_install pcre_install fdlibm_install openblas_install lapack_install \
-	arpack_install mongoose_install
+	llvm readline_install pcre_install fdlibm_install openblas_install \
+	lapack_install arpack_install mongoose_install
 
 $(JULIALIB):
 	mkdir -p $(JULIALIB)
@@ -65,34 +65,25 @@ pcre_install: $(PCRE_OBJ) $(JULIALIB)
 	ln -sf $(PCRE_OBJ) $(JULIALIB)/libpcre.$(SHLIB_EXT)
 	ln -sf $(EXTROOTLIB)/libpcreposix.$(SHLIB_EXT) $(JULIALIB)/libpcreposix.$(SHLIB_EXT)
 
-fdlibmf: fdlibmf/libmf.a
-fdlibmf/libmf.a: fdlibmf/*.c
-	cd fdlibmf && make CC=$(CC) CFLAGS="-D_IEEE_LIBM -Dx86 -fPIC -O1 $(CONFIG)"
-
-
 
 FDLIBM_OBJ = $(EXTROOTLIB)/libfdm.$(SHLIB_EXT)
-fdlibm.tar.gz:
-	$(DOWNLOAD) -u anonymous:julia@juliamath.com ftp://netlib.org/fdlibm.tar.gz
-fdlibm: fdlibm.tar.gz
-	tar zxf fdlibm.tar.gz
-$(FDLIBM_OBJ): fdlibm fdlibmf
-	cd fdlibm && make CC=$(CC) CFLAGS="-D_IEEE_LIBM -Dx86 -fPIC -O1 $(CONFIG)" && $(CC) -shared *.o ../fdlibmf/*.o -o $@
+$(FDLIBM_OBJ): fdlibm/*.c
+	cd fdlibm && make CC=$(CC) CFLAGS="-D_IEEE_LIBM -Dx86 -fPIC -O2 $(CONFIG)" && $(CC) -shared *.o -o $@
 fdlibm_install: $(FDLIBM_OBJ) $(JULIALIB)
 	ln -sf $< $(JULIALIB)/libfdm.$(SHLIB_EXT)
 
 
 OPENBLAS_OBJ = $(EXTROOTLIB)/libopenblas.$(SHLIB_EXT)
 openblas$(OPENBLAS_VER).tar.gz:
-	$(DOWNLOAD) -Lk https://github.com/xianyi/OpenBLAS/tarball/develop && \
+	$(DOWNLOAD) -Lk https://github.com/xianyi/OpenBLAS/tarball/develop
 	mv develop openblas.tar.gz
 openblas$(OPENBLAS_VER): openblas$(OPENBLAS_VER).tar.gz
 	mkdir -p openblas && tar --strip-components 1 -C openblas -xf openblas$(OPENBLAS_VER).tar.gz
 $(OPENBLAS_OBJ): openblas$(OPENBLAS_VER)
-	cd openblas && \
+	cd openblas
 	make USE_THREAD=0 NO_CBLAS=1 NO_LAPACK=1 DYNAMIC_ARCH=1 CC=$(CC) FC=$(FC)
 openblas_install: $(OPENBLAS_OBJ) $(JULIALIB)
-	cp -f openblas/libopenblas.$(SHLIB_EXT) $(OPENBLAS_OBJ) && \
+	cp -f openblas/libopenblas.$(SHLIB_EXT) $(OPENBLAS_OBJ)
 	ln -sf $< $(JULIALIB)/libopenblas.$(SHLIB_EXT)
 
 
@@ -102,9 +93,9 @@ lapack-$(LAPACK_VER).tgz:
 lapack-$(LAPACK_VER): lapack-$(LAPACK_VER).tgz
 	tar zxf lapack-$(LAPACK_VER).tgz
 $(LAPACK_OBJ): lapack-$(LAPACK_VER)
-	cd lapack-$(LAPACK_VER) && \
-	cp INSTALL/make.inc.gfortran ./make.inc && \
-	make lapacklib NOOPT="-O0 -fPIC" OPTS="-O2 -fPIC" FORTRAN=$(FC) && \
+	cd lapack-$(LAPACK_VER)
+	cp INSTALL/make.inc.gfortran ./make.inc
+	make lapacklib NOOPT="-O0 -fPIC" OPTS="-O2 -fPIC" FORTRAN=$(FC)
 	$(FC) -shared SRC/*.o $(EXTROOTLIB)/libopenblas.$(SHLIB_EXT) INSTALL/dlamch.o INSTALL/dsecnd_INT_ETIME.o INSTALL/ilaver.o INSTALL/slamch.o -o $(LAPACK_OBJ) -L$(EXTROOTLIB)
 lapack_install: $(LAPACK_OBJ) $(JULIALIB)
 	ln -sf $(LAPACK_OBJ) $(JULIALIB)/libLAPACK.$(SHLIB_EXT)
@@ -115,13 +106,13 @@ ARPACK_OBJ = $(EXTROOTLIB)/libarpack.$(SHLIB_EXT)
 arpack$(ARPACK_VER).tar.gz:
 	$(DOWNLOAD) http://www.caam.rice.edu/software/ARPACK/SRC/arpack$(ARPACK_VER).tar.gz
 	$(DOWNLOAD) http://www.caam.rice.edu/software/ARPACK/SRC/patch.tar.gz
-arpack$(ARPACK_VER): arpack$(ARPACK_VER).tar.gz
+ARPACK: arpack$(ARPACK_VER).tar.gz
 	tar zxf arpack$(ARPACK_VER).tar.gz
 	tar zxf patch.tar.gz
 	sed -i.bak -e s/"EXTERNAL           ETIME"// ./ARPACK/UTIL/second.f
-$(ARPACK_OBJ): arpack$(ARPACK_VER)
-	cd ARPACK && make lib MAKE=make PLAT= home=`pwd` FC=$(FC) FFLAGS="-O3 -fPIC" && \
-	ar x libarpack_.a && \
+$(ARPACK_OBJ): ARPACK
+	cd ARPACK && make lib MAKE=make PLAT= home=`pwd` FC=$(FC) FFLAGS="-O3 -fPIC"
+	ar x libarpack_.a
 	$(FC) -shared *.o -o $(EXTROOTLIB)/libarpack.$(SHLIB_EXT)
 arpack_install: $(ARPACK_OBJ) $(JULIALIB)
 	ln -sf $(ARPACK_OBJ) $(JULIALIB)/libarpack.$(SHLIB_EXT)
@@ -136,6 +127,5 @@ cleanall:
 	rm -rf llvm-$(LLVM_VER){,.tgz}
 	rm -rf readline-$(READLINE_VER){,.tar.gz}
 	rm -rf pcre-$(PCRE_VER){,.tar.bz2}
-	rm -rf fdlibm{,.tar.gz}
 	rm -rf lapack-$(LAPACK_VER){,.tgz}
 	rm -rf mongoose-$(MONGOOSE_VER){,.tgz}

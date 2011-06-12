@@ -10,7 +10,7 @@ strlen(s::String) = at_string_end(s)[2]
 symbol(s::String) = symbol(cstring(s))
 string(s::String) = s
 
-print(c::Char) = (write(current_output_stream(), c); ())
+print(c::Char) = (write(current_output_stream(), c); Nothing)
 print(s::String) = for c = s; print(c); end
 print(x...) = (for i=x; print(i); end)
 println(args...) = print(args..., '\n')
@@ -319,7 +319,7 @@ function string(p::Ptr{Uint8})
     ccall(:jl_cstr_to_string, Any, (Ptr{Uint8},), p)::String
 end
 
-string(x) = string(ccall(:jl_show_to_string, Ptr{Uint8}, (Any,), x))
+string(x) = print_to_string(show, x)
 
 cstring(args...) = print_to_string(print, args...)
 

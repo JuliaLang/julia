@@ -31,15 +31,6 @@ DLLEXPORT char *uint2str(char *dest, size_t len, uint64_t num, uint32_t base);
 int str2int(char *str, size_t len, int64_t *res, uint32_t base);
 int isdigit_base(char c, int base);
 
-extern double trunc(double x);
-
-STATIC_INLINE double fpart(double arg)
-{
-    return arg - trunc(arg);
-}
-
-#define ipart(x) trunc(x)
-
 numerictype_t effective_numerictype(double r);
 double conv_to_double(void *data, numerictype_t tag);
 void conv_from_double(void *data, double d, numerictype_t tag);

@@ -489,7 +489,8 @@ void jl_add_constructors(jl_struct_type_t *t)
     }
     jl_function_t *fnew=NULL;
     JL_GC_PUSH(&fnew);
-    if (t->ctor_factory == (jl_value_t*)jl_null) {
+    if (t->ctor_factory == (jl_value_t*)jl_nothing ||
+        t->ctor_factory == (jl_value_t*)jl_null) {
         // no user-defined constructors
         if (t->parameters->length>0 && (jl_value_t*)t==t->name->primary) {
             jl_function_t *tf = (jl_function_t*)t;
@@ -585,10 +586,6 @@ jl_bits_type_t *jl_new_bitstype(jl_value_t *name, jl_tag_type_t *super,
     jl_bits_type_t *t=NULL;
     jl_typename_t *tn=NULL;
     JL_GC_PUSH(&t, &tn);
-    if (jl_is_typename(name))
-        tn = (jl_typename_t*)name;
-    else
-        tn = jl_new_typename((jl_sym_t*)name);
 
     if (!jl_boot_file_loaded && jl_is_symbol(name)) {
         // hack to avoid making two versions of basic types needed
@@ -599,9 +596,14 @@ jl_bits_type_t *jl_new_bitstype(jl_value_t *name, jl_tag_type_t *super,
             t = jl_bool_type;
     }
     int makenew = (t==NULL);
-    if (makenew)
+    if (makenew) {
         t = (jl_bits_type_t*)newobj((jl_type_t*)jl_bits_kind, BITS_TYPE_NW);
-    t->name = tn;
+        if (jl_is_typename(name))
+            tn = (jl_typename_t*)name;
+        else
+            tn = jl_new_typename((jl_sym_t*)name);
+        t->name = tn;
+    }
     t->super = super;
     unbind_tvars(parameters);
     t->parameters = parameters;
@@ -735,7 +737,7 @@ JL_CALLABLE(jl_weakref_ctor)
     }
     if (nargs == 1)
         return (jl_value_t*)jl_gc_new_weakref(args[0]);
-    return (jl_value_t*)jl_gc_new_weakref((jl_value_t*)jl_null);
+    return (jl_value_t*)jl_gc_new_weakref((jl_value_t*)jl_nothing);
 }
 
 // bits constructors ----------------------------------------------------------

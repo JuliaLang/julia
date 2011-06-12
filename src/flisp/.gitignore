@@ -1,3 +1,4 @@
 /*.o
-/libflisp.a
+/*.a
 /flisp
+/flisp-debug

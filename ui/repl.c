@@ -296,9 +296,6 @@ static void repl_show_value(jl_value_t *v)
         return;
     }
     jl_show(v);
-#ifdef CLOUD_REPL
-    repl_result = jl_show_to_string(v);
-#endif
     if (jl_is_struct_type(v)) {
         ios_t *s = jl_current_output_stream();
         // for convenience, show constructor methods when
@@ -322,19 +319,27 @@ DLLEXPORT void jl_eval_user_input(jl_value_t *ast, int show_value)
     JL_GC_PUSH(&ast);
     assert(ast != NULL);
     int iserr = 0;
+#ifdef CLOUD_REPL
+    jl_value_t *outs;
+    ios_t *dest;
+#endif
  again:
     ;
     JL_TRY {
+#ifdef CLOUD_REPL
+        outs = jl_apply(jl_memio_func, NULL, 0);
+        jl_set_current_output_stream_obj(outs);
+        dest = jl_current_output_stream();
+#endif
         if (have_color) {
             ios_printf(ios_stdout, jl_color_normal);
             ios_flush(ios_stdout);
         }
         if (iserr) {
             jl_show(jl_exception_in_transit);
-#ifdef CLOUD_REPL
-	    repl_result = jl_show_to_string(jl_exception_in_transit);
-#endif
+#ifndef CLOUD_REPL
             ios_printf(ios_stdout, "\n");
+#endif
             JL_EH_POP();
             break;  // leave JL_TRY
         }
@@ -346,15 +351,23 @@ DLLEXPORT void jl_eval_user_input(jl_value_t *ast, int show_value)
                 ios_flush(ios_stdout);
             }
             repl_show_value(value);
+#ifndef CLOUD_REPL
             ios_printf(ios_stdout, "\n");
+#endif
         }
     }
     JL_CATCH {
         iserr = 1;
         goto again;
     }
+#ifdef CLOUD_REPL
+    size_t n;
+    repl_result = ios_takebuf(dest, &n);
+#endif
+#ifndef CLOUD_REPL
     ios_printf(ios_stdout, "\n");
     ios_flush(ios_stdout);
+#endif
     JL_GC_POP();
     repl_callback_enable();
 }

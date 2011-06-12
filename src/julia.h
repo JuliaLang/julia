@@ -172,7 +172,6 @@ typedef struct {
     // hidden fields:
     size_t nbits;
     uptrint_t uid;   // must be at same offset as in jl_struct_type_t
-    uptrint_t unused;
 } jl_bits_type_t;
 
 typedef struct {
@@ -310,13 +309,14 @@ extern jl_struct_type_t *jl_task_type;
 extern jl_tuple_t *jl_null;
 extern jl_value_t *jl_true;
 extern jl_value_t *jl_false;
+extern jl_struct_type_t *jl_nothing;
 
 extern jl_func_type_t *jl_any_func;
 
 extern jl_function_t *jl_show_gf;
 extern jl_function_t *jl_convert_gf;
 extern jl_function_t *jl_bottom_func;
-extern jl_function_t *jl_memio_func;
+extern DLLEXPORT jl_function_t *jl_memio_func;
 extern jl_function_t *jl_append_any_func;
 extern jl_function_t *jl_method_missing_func;
 extern jl_function_t *jl_unprotect_stack_func;
@@ -646,7 +646,6 @@ jl_lambda_info_t *jl_wrap_expr(jl_value_t *expr);
 
 // some useful functions
 DLLEXPORT void jl_show(jl_value_t *v);
-DLLEXPORT char *jl_show_to_string(jl_value_t *v);
 jl_value_t *jl_convert(jl_type_t *to, jl_value_t *x);
 
 // modules
@@ -828,7 +827,7 @@ extern DLLEXPORT jl_value_t *jl_exception_in_transit;
 
 jl_task_t *jl_new_task(jl_function_t *start, size_t ssize);
 jl_value_t *jl_switchto(jl_task_t *t, jl_value_t *arg);
-void jl_raise(jl_value_t *e);
+DLLEXPORT void jl_raise(jl_value_t *e);
 
 DLLEXPORT jl_value_t *jl_current_output_stream_obj();
 DLLEXPORT ios_t *jl_current_output_stream();

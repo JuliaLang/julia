@@ -1,8 +1,6 @@
 /root
 /ARPACK
 /arpack*.tar.gz
-/fdlibm
-/fdlibm.tar.gz
 /lapack-*
 /llvm-*
 /mongoose*

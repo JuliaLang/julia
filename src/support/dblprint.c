@@ -84,13 +84,13 @@ void snprint_real(char *s, size_t cnt, double r,
     if (r == 0)
         mag = 0;
     if ((mag > max_digs_lf-1) || (mag < -max_digs_rt)) {
-        num_format[1] = 'e';
-        temp = r/pow(10, mag);      /* see if number will have a decimal */
-        fpart = temp - floor(temp); /* when written in scientific notation */
+        num_format[1] = 'e';        /* see if number will have a decimal */
+        temp = r/pow(10, mag);      /* when written in scientific notation */
+        fpart = temp - (double)(int64_t)(temp);
     }
     else {
         num_format[1] = 'f';
-        fpart = r - floor(r);
+        fpart = r - (double)(int64_t)r;
     }
     if (fpart == 0)
         dec = 0;
@@ -105,7 +105,7 @@ void snprint_real(char *s, size_t cnt, double r,
        notation, since we might have e.g. 1.2000e+100. also not when we
        need a specific output width */
     if (width == 0 && !keepz) {
-        if (sz > 2 && fpart && num_format[1]!='e') {
+        if (sz > 2 && (fpart!=0) && num_format[1]!='e') {
             while (s[sz-1] == '0') {
                 s[sz-1]='\0';
                 sz--;

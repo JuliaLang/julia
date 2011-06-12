@@ -85,6 +85,7 @@ static GlobalVariable *jlpgcstack_var;
 static GlobalVariable *jlexc_var;
 
 // important functions
+static Function *jlraise_func;
 static Function *jlerror_func;
 static Function *jluniniterror_func;
 static Function *jltypeerror_func;
@@ -703,6 +704,11 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
                 return literal_pointer_val((jl_value_t*)jl_null);
             }
         }
+        else if (f->fptr == &jl_f_throw && nargs==1) {
+            Value *arg1 = boxed(emit_expr(args[1], ctx, true));
+            JL_GC_POP();
+            return builder.CreateCall(jlraise_func, arg1);
+        }
         else if (f->fptr == &jl_f_arraylen && nargs==1) {
             jl_value_t *aty = expr_type(args[1]); rt1 = aty;
             if (jl_is_array_type(aty)) {
@@ -1083,7 +1089,7 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool value)
     else if (ex->head == assign_sym) {
         emit_assignment(args[0], args[1], ctx);
         if (value) {
-            return literal_pointer_val((jl_value_t*)jl_null);
+            return literal_pointer_val((jl_value_t*)jl_nothing);
         }
     }
     else if (ex->head == top_sym) {
@@ -1136,8 +1142,8 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool value)
         return literal_pointer_val(jv);
     }
     else if (ex->head == null_sym) {
-        return literal_pointer_val((jl_value_t*)jl_null);
-    }
+        return literal_pointer_val((jl_value_t*)jl_nothing);
+	}
     else if (ex->head == static_typeof_sym) {
         jl_value_t *extype = expr_type((jl_value_t*)ex);
         if (jl_is_tag_type(extype) &&
@@ -1188,7 +1194,7 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool value)
         builder.SetInsertPoint(tryblk);
     }
     if (!strcmp(ex->head->name, "$")) {
-        jl_error("syntax error: prefix $ outside backquote");
+        jl_error("syntax error: prefix $ outside of quote block");
     }
     if (value) {
         jl_errorf("unsupported expression type %s", ex->head->name);
@@ -1656,6 +1662,15 @@ static void init_julia_llvm_env(Module *m)
                          "jl_error", jl_Module);
     jlerror_func->setDoesNotReturn();
     jl_ExecutionEngine->addGlobalMapping(jlerror_func, (void*)&jl_error);
+
+    std::vector<const Type*> args1_(0);
+    args1_.push_back(jl_pvalue_llvmt);
+    jlraise_func =
+        Function::Create(FunctionType::get(T_void, args1_, false),
+                         Function::ExternalLinkage,
+                         "jl_raise", jl_Module);
+    jlraise_func->setDoesNotReturn();
+    jl_ExecutionEngine->addGlobalMapping(jlraise_func, (void*)&jl_raise);
 
     std::vector<const Type*> empty_args(0);
     jluniniterror_func =

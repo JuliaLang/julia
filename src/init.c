@@ -264,9 +264,11 @@ DLLEXPORT void jl_set_memio_func()
 
 JL_CALLABLE(jl_weakref_ctor);
 
+// fetch references to things defined in boot.j
 void jl_get_builtin_hooks()
 {
-    // fetch references to things defined in boot.j
+    jl_nothing = (jl_struct_type_t*)global("Nothing");
+
     jl_char_type    = (jl_bits_type_t*)global("Char");
     jl_int8_type    = (jl_bits_type_t*)global("Int8");
     jl_uint8_type   = (jl_bits_type_t*)global("Uint8");

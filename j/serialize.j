@@ -19,7 +19,7 @@ let i = 2
              :null, :goto, :gotoifnot, :label, :symbol, :string, :T, :S,
              :a, :b, :c, :d, :e, :f, :g, :h, :i, :j, :k, :l, :m, :n, :o,
              :p, :q, :r, :s, :t, :u, :v, :w, :x, :y, :z,
-             false, true, 0, 1, 2, 3, 4}
+             false, true, Nothing, 0, 1, 2, 3, 4}
         ser_tag[t] = i
         deser_tag[i] = t
         i += 1
@@ -281,6 +281,13 @@ function deserialize(s, ::Type{StructKind})
     t = apply_type(eval(name), params...)
     # allow delegation to more specialized method
     return deserialize(s, t)
+end
+
+function deserialize(s, ::Type{TypeVar})
+    name = force(deserialize(s))
+    lb = force(deserialize(s))
+    ub = force(deserialize(s))
+    typevar(name, lb, ub)
 end
 
 # default structure deserializer

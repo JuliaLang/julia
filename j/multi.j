@@ -43,7 +43,7 @@ function send_msg(s::IOStream, kind, args...)
     if is(SENDBUF,())
         SENDBUF = memio()
     end
-    send_msg(s, SENDBUF, kind, args)
+    send_msg(s, SENDBUF::IOStream, kind, args)
 end
 
 # todo:
@@ -106,7 +106,7 @@ type ProcessGroup
     np::Int32
 
     # global references
-    refs
+    refs::HashTable
 
     function ProcessGroup(myid::Int32, w::Array{Any,1}, locs::Array{Any,1})
         return new(myid, w, locs, length(w), HashTable())
@@ -182,7 +182,7 @@ function identify_socket(otherid, fd, sock)
     end
     PGRP.workers[i] = Worker("", 0, fd, sock, i)
     #write(stdout_stream, "$(PGRP.myid) heard from $i\n")
-    ()
+    Nothing
 end
 
 ## remote refs and core messages: do, call, fetch, wait, ref, put ##
@@ -232,7 +232,7 @@ let bottom_func() = assert(false)
     global lookup_ref
     function lookup_ref(id)
         global PGRP
-        wi = get(PGRP.refs, id, ())
+        wi = get((PGRP::ProcessGroup).refs, id, ())
         if is(wi, ())
             # first we've heard of this ref
             wi = WorkItem(bottom_func)
@@ -268,7 +268,7 @@ function del_client(id, client)
         del(PGRP.refs, id)
         #print("$(myid()) collected $id\n")
     end
-    ()
+    Nothing
 end
 
 function del_clients(pairs::(Any,Any)...)
@@ -295,7 +295,7 @@ function add_client(id, client)
     global PGRP
     wi = lookup_ref(id)
     add(wi.clientset, client)
-    ()
+    Nothing
 end
 
 function send_add_client(rr::RemoteRef, i)
@@ -404,20 +404,20 @@ function remote_do(w::LocalProcess, f, args...)
     # does when it gets a :do message.
     # same for other messages on LocalProcess.
     enq_work(WorkItem(()->apply(f,args)))
-    ()
+    Nothing
 end
 
 function remote_do(w::Worker, f, args...)
     send_msg(w, :do, f, args)
-    ()
+    Nothing
 end
 
 remote_do(id::Int, f, args...) = remote_do(worker_from_id(id), f, args...)
 
 function sync_msg(verb::Symbol, r::RemoteRef)
-    global PGRP
+    pg = (PGRP::ProcessGroup)
     oid = rr2id(r)
-    if r.where==myid() || isa(PGRP.workers[r.where], LocalProcess)
+    if r.where==myid() || isa(pg.workers[r.where], LocalProcess)
         wi = lookup_ref(oid)
         if wi.done
             return is(verb,:fetch) ? work_result(wi) : r
@@ -426,7 +426,7 @@ function sync_msg(verb::Symbol, r::RemoteRef)
             wi.notify = ((), verb, oid, wi.notify)
         end
     else
-        send_msg(PGRP.workers[r.where], verb, oid)
+        send_msg(pg.workers[r.where], verb, oid)
     end
     # yield to event loop, return here when answer arrives
     v = yieldto(Scheduler, WaitFor(verb, oid))
@@ -547,7 +547,7 @@ function deliver_result(sock::(), msg, oid, value_thunk)
     if is(newjobs,())
         del(Waiting, oid)
     end
-    ()
+    Nothing
 end
 
 function enq_work(wi::WorkItem)
@@ -703,7 +703,7 @@ function message_handler(fd, sockets)
                 identify_socket(otherid, fd, sock)
             else
                 # the synchronization messages
-                oid = force(deserialize(sock))
+                oid = force(deserialize(sock))::(Int32,Int32)
                 wi = lookup_ref(oid)
                 if wi.done
                     deliver_result(sock, msg, oid, work_result(wi))
@@ -990,7 +990,7 @@ function serialize(s, g::GlobalObject)
         g.local_identity = ()
         invoke(serialize, (Any, Any), s, g)
         g.local_identity = li
-        return ()
+        return
     end
     mi = myid()
     myref = member(g, mi)
@@ -1148,7 +1148,7 @@ function pfor(f, r::Range1)
             for j=lo:hi; f(j); end
         end
     end
-    ()
+    Nothing
 end
 
 macro pfor(reducer, range, body)
@@ -1253,7 +1253,7 @@ function event_loop(isclient)
             if isa(e,DisconnectException)
                 # TODO: wake up tasks waiting for failed process
                 if !isclient
-                    return()
+                    return
                 end
             end
             iserr, lasterr = true, e

@@ -52,6 +52,7 @@ jl_bits_type_t *jl_float32_type;
 jl_bits_type_t *jl_float64_type;
 
 jl_tuple_t *jl_null;
+jl_struct_type_t *jl_nothing;
 
 jl_func_type_t *jl_any_func;
 jl_function_t *jl_bottom_func;
@@ -1293,7 +1294,6 @@ static jl_type_t *inst_type_w_(jl_value_t *t, jl_value_t **env, size_t n,
             nst->ctor_factory = st->ctor_factory;
             nst->instance = NULL;
             nst->uid = 0;
-            nst->types = jl_null;
             nst->super = (jl_tag_type_t*)inst_type_w_((jl_value_t*)st->super, env,n,stack);
             jl_tuple_t *ftypes = st->types;
             if (ftypes != NULL) {
@@ -1470,6 +1470,12 @@ static int jl_subtype_le(jl_value_t *a, jl_value_t *b, int ta, int morespecific,
                               (jl_value_t*)((jl_tvar_t*)b)->ub, 0, 0, 0) &&
                 jl_subtype_le((jl_value_t*)((jl_tvar_t*)b)->lb,
                               (jl_value_t*)((jl_tvar_t*)a)->lb, 0, 0, 0);
+        }
+        if (invariant) {
+            return 0;
+            //return
+            //    jl_subtype_le((jl_value_t*)((jl_tvar_t*)a)->ub, b, 0, 0, 1) &&
+            //    jl_subtype_le((jl_value_t*)((jl_tvar_t*)a)->lb, b, 0, 0, 1);
         }
         return jl_subtype_le((jl_value_t*)((jl_tvar_t*)a)->ub, b, 0, 0, 0);
     }
@@ -1942,6 +1948,7 @@ void jl_init_types()
 
     jl_null = (jl_tuple_t*)newobj((jl_type_t*)jl_tuple_type, 1);
     jl_null->length = 0;
+    jl_nothing = (jl_struct_type_t*)jl_null; // for bootstrapping
 
     // initialize them. lots of cycles.
     jl_struct_kind->name = jl_new_typename(jl_symbol("StructKind"));

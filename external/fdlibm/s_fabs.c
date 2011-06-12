@@ -1,25 +1,29 @@
-/* w_lgammaf.c -- float version of w_lgamma.c.
- * Conversion to float by Ian Lance Taylor, Cygnus Support, ian@cygnus.com.
- */
 
+/* @(#)s_fabs.c 1.3 95/01/18 */
 /*
  * ====================================================
  * Copyright (C) 1993 by Sun Microsystems, Inc. All rights reserved.
  *
- * Developed at SunPro, a Sun Microsystems, Inc. business.
+ * Developed at SunSoft, a Sun Microsystems, Inc. business.
  * Permission to use, copy, modify, and distribute this
  * software is freely granted, provided that this notice 
  * is preserved.
  * ====================================================
  */
 
-#include "math.h"
-#include "math_private.h"
+/*
+ * fabs(x) returns the absolute value of x.
+ */
 
-extern int signgam;
+#include "fdlibm.h"
 
-float
-lgammaf(float x)
+#ifdef __STDC__
+	double fabs(double x)
+#else
+	double fabs(x)
+	double x;
+#endif
 {
-	return lgammaf_r(x,&signgam);
+	__HI(x) &= 0x7fffffff;
+        return x;
 }

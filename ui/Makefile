@@ -1,7 +1,7 @@
 JULIAHOME = $(shell pwd)/..
 include $(JULIAHOME)/Make.inc
 
-LIBS = -L$(EXTROOT)/lib -lutil -ldl -lm $(OSLIBS) -lpthread 
+LIBS = -L$(EXTROOT)/lib -lutil -ldl $(OSLIBS) -lpthread 
 
 LLTDIR = $(JULIAHOME)/src/support
 FLISPDIR = $(JULIAHOME)/src/flisp
