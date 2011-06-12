@@ -1,4 +1,4 @@
-/* w_tgammaf.c -- float version of w_tgamma.c.
+/* w_gammaf.c -- float version of w_gamma.c.
  * Conversion to float by Ian Lance Taylor, Cygnus Support, ian@cygnus.com.
  */
 
@@ -21,7 +21,7 @@ float lgammaf_r_fdlibm(float x, int *signgamp);
 extern int signgam;
 
 float
-tgammaf(float x)
+gammaf(float x)
 {
 	return lgammaf_r_fdlibm(x,&signgam);
 }

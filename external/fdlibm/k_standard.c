@@ -68,8 +68,8 @@ static double zero = 0.0;	/* used as const */
  *	37-- y1(x>X_TLOSS)
  *	38-- jn(|x|>X_TLOSS, n)
  *	39-- yn(x>X_TLOSS, n)
- *	40-- tgamma(finite) overflow
- *	41-- tgamma(-integer)
+ *	40-- gamma(finite) overflow
+ *	41-- gamma(-integer)
  *	42-- pow(NaN,0.0)
  */
 
@@ -686,9 +686,9 @@ static double zero = 0.0;	/* used as const */
                 }        
 		break;
 	    case 40:
-		/* tgamma(finite) overflow */
+		/* gamma(finite) overflow */
 		exc.type = OVERFLOW;
-		exc.name = "tgamma";
+		exc.name = "gamma";
                 if (_LIB_VERSION == _SVID_)
                   exc.retval = HUGE;
                 else
@@ -700,9 +700,9 @@ static double zero = 0.0;	/* used as const */
                 }
 		break;
 	    case 41:
-		/* tgamma(-integer) or tgamma(0) */
+		/* gamma(-integer) or gamma(0) */
 		exc.type = SING;
-		exc.name = "tgamma";
+		exc.name = "gamma";
                 if (_LIB_VERSION == _SVID_)
                   exc.retval = HUGE;
                 else
@@ -711,7 +711,7 @@ static double zero = 0.0;	/* used as const */
 		  errno = EDOM;
 		else if (!matherr(&exc)) {
 		  if (_LIB_VERSION == _SVID_) {
-			(void) WRITE2("tgamma: SING error\n", 18);
+			(void) WRITE2("gamma: SING error\n", 18);
 		      }
 		  errno = EDOM;
 		}

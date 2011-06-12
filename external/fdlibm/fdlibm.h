@@ -157,7 +157,7 @@ extern double fmod __P((double, double));
 
 extern double erf __P((double));
 extern double erfc __P((double));
-extern double tgamma __P((double));
+extern double gamma __P((double));
 extern double hypot __P((double, double));
 extern int isnan __P((double));
 extern int finite __P((double));
@@ -204,11 +204,11 @@ extern double expm1 __P((double));
 extern double log1p __P((double));
 
 /*
- * Reentrant version of tgamma & lgamma; passes signgam back by reference
+ * Reentrant version of gamma & lgamma; passes signgam back by reference
  * as the second argument; user must allocate space for signgam.
  */
 #ifdef _REENTRANT
-extern double tgamma_r __P((double, int *));
+extern double gamma_r __P((double, int *));
 extern double lgamma_r __P((double, int *));
 #endif	/* _REENTRANT */
 
@@ -225,9 +225,9 @@ extern double __ieee754_cosh __P((double));
 extern double __ieee754_fmod __P((double,double));
 extern double __ieee754_pow __P((double,double));
 extern double __ieee754_lgamma_r __P((double,int *));
-extern double __ieee754_tgamma_r __P((double,int *));
+extern double __ieee754_gamma_r __P((double,int *));
 extern double __ieee754_lgamma __P((double));
-extern double __ieee754_tgamma __P((double));
+extern double __ieee754_gamma __P((double));
 extern double __ieee754_log10 __P((double));
 extern double __ieee754_sinh __P((double));
 extern double __ieee754_hypot __P((double,double));
