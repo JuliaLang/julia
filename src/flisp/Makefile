@@ -20,7 +20,11 @@ LIBS = $(LIBFILES) -lm $(GCLIBS)
 DEBUGFLAGS = -g -ggdb3 -DDEBUG $(FLAGS)
 SHIPFLAGS = -O3 -DNDEBUG $(FLAGS)
 
-default: $(EXENAME)-release
+default: release
+
+release: $(EXENAME)
+
+debug: $(EXENAME)-debug
 
 %.o: %.c
 	$(CC) $(SHIPFLAGS) -c $< -o $@
@@ -32,7 +36,7 @@ flisp.do: flisp.c cvalues.c types.c flisp.h print.c read.c equal.c
 flmain.o: flmain.c flisp.h
 flmain.do: flmain.c flisp.h
 
-$(LLT):
+$(LLT): $(LLTDIR)/*.h $(LLTDIR)/*.c
 	cd $(LLTDIR) && make
 
 $(LIBTARGET)-debug.a: $(DOBJS)
@@ -46,16 +50,15 @@ $(LIBTARGET).a: $(OBJS)
 
 $(EXENAME)-debug: $(DOBJS) $(LIBFILES) $(LIBTARGET)-debug.a flmain.do
 	$(CC) $(DEBUGFLAGS) $(DOBJS) flmain.do -o $(EXENAME)-debug $(LIBS) $(LIBTARGET).a $(OSLIBS)
-	cp $(EXENAME)-debug $(EXENAME)
 	./$(EXENAME)-debug unittest.lsp
 
-$(EXENAME)-release: $(OBJS) $(LIBFILES) $(LIBTARGET).a flmain.o
-	$(CC) $(SHIPFLAGS) $(OBJS) flmain.o -o $(EXENAME)-release $(LIBS) $(LIBTARGET).a $(OSLIBS)
-	cp $(EXENAME)-release $(EXENAME)
-	./$(EXENAME)-release unittest.lsp
+$(EXENAME): $(OBJS) $(LIBFILES) $(LIBTARGET).a flmain.o
+	$(CC) $(SHIPFLAGS) $(OBJS) flmain.o -o $(EXENAME) $(LIBS) $(LIBTARGET).a $(OSLIBS)
+	./$(EXENAME) unittest.lsp
 
 clean:
 	rm -f *.o
 	rm -f *.do
 	rm -f *.a
 	rm -f $(EXENAME)
+	rm -f $(EXENAME)-debug
