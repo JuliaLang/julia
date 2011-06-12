@@ -2,12 +2,13 @@ JULIAHOME = $(shell pwd)/../..
 include $(JULIAHOME)/Make.inc
 
 NAME = flisp
-SRCS = $(NAME).c builtins.c string.c equalhash.c table.c iostream.c \
+EXENAME = $(NAME)
+LIBTARGET = lib$(NAME)
+
+SRCS = flisp.c builtins.c string.c equalhash.c table.c iostream.c \
 	julia_extensions.c
 OBJS = $(SRCS:%.c=%.o)
 DOBJS = $(SRCS:%.c=%.do)
-EXENAME = $(NAME)
-LIBTARGET = lib$(NAME)
 LLTDIR = ../support
 LLT = $(LLTDIR)/libllt.a
 
@@ -19,10 +20,7 @@ LIBS = $(LIBFILES) -lm $(GCLIBS)
 DEBUGFLAGS = -g -ggdb3 -DDEBUG $(FLAGS)
 SHIPFLAGS = -O3 -DNDEBUG $(FLAGS)
 
-default: release test
-
-test:
-	./flisp unittest.lsp
+default: $(EXENAME)-release
 
 %.o: %.c
 	$(CC) $(SHIPFLAGS) -c $< -o $@
@@ -46,12 +44,15 @@ $(LIBTARGET).a: $(OBJS)
 	rm -rf $@
 	ar rs $@ $(OBJS)
 
-debug: $(DOBJS) $(LIBFILES) $(LIBTARGET)-debug.a flmain.do
-	$(CC) $(DEBUGFLAGS) $(DOBJS) flmain.do -o $(EXENAME) $(LIBS) $(LIBTARGET).a $(OSLIBS)
-	make test
+$(EXENAME)-debug: $(DOBJS) $(LIBFILES) $(LIBTARGET)-debug.a flmain.do
+	$(CC) $(DEBUGFLAGS) $(DOBJS) flmain.do -o $(EXENAME)-debug $(LIBS) $(LIBTARGET).a $(OSLIBS)
+	cp $(EXENAME)-debug $(EXENAME)
+	./$(EXENAME)-debug unittest.lsp
 
-release: $(OBJS) $(LIBFILES) $(LIBTARGET).a flmain.o
-	$(CC) $(SHIPFLAGS) $(OBJS) flmain.o -o $(EXENAME) $(LIBS) $(LIBTARGET).a $(OSLIBS)
+$(EXENAME)-release: $(OBJS) $(LIBFILES) $(LIBTARGET).a flmain.o
+	$(CC) $(SHIPFLAGS) $(OBJS) flmain.o -o $(EXENAME)-release $(LIBS) $(LIBTARGET).a $(OSLIBS)
+	cp $(EXENAME)-release $(EXENAME)
+	./$(EXENAME)-release unittest.lsp
 
 clean:
 	rm -f *.o
