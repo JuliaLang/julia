@@ -283,6 +283,13 @@ function deserialize(s, ::Type{StructKind})
     return deserialize(s, t)
 end
 
+function deserialize(s, ::Type{TypeVar})
+    name = force(deserialize(s))
+    lb = force(deserialize(s))
+    ub = force(deserialize(s))
+    typevar(name, lb, ub)
+end
+
 # default structure deserializer
 function deserialize(s, t::Type)
     @assert (isa(t,StructKind))

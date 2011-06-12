@@ -64,7 +64,10 @@ isleaftype(t) = ccall(:jl_is_leaf_type, Int32, (Any,), t) != 0
 # for now assume all global functions constant
 # TODO
 isconstant(s::Symbol) = isbound(s) && (e=eval(s);
-                                       isa(e,Function) || isa(e,Type))
+                                       isa(e,Function) || isa(e,TagKind) ||
+                                       isa(e,BitsKind) || isa(e,StructKind) ||
+                                       isa(e,TypeConstructor) ||
+                                       is(e,None))
 isconstant(s::Expr) = is(s.head,:quote)
 isconstant(x) = true
 
@@ -105,7 +108,8 @@ t_func[le_float] = (2, 2, cmp_tfunc)
 t_func[gt_float] = (2, 2, cmp_tfunc)
 t_func[ge_float] = (2, 2, cmp_tfunc)
 t_func[ccall] =
-    (3, Inf, (fptr, rt, at, a...)->(isType(rt) ? rt.parameters[1] : Any))
+    (3, Inf, (fptr, rt, at, a...)->(is(rt,Type{Void}) ? NothingType :
+                                    isType(rt) ? rt.parameters[1] : Any))
 t_func[is] = (2, 2, cmp_tfunc)
 t_func[subtype] = (2, 2, cmp_tfunc)
 t_func[isa] = (2, 2, cmp_tfunc)
@@ -220,6 +224,8 @@ t_func[typeof] = (1, 1, typeof_tfunc)
 # therefore they get their arguments unevaluated
 t_func[typeassert] =
     (2, 2, (A, v, t)->(isType(t) ? tintersect(v,t.parameters[1]) :
+                       isa(t,Tuple) && allp(isType,t) ?
+                           tintersect(v,map(t->t.parameters[1],t)) :
                        isconstant(A[2]) ? tintersect(v,eval(A[2])) :
                        Any))
 
@@ -371,7 +377,7 @@ function isconstantfunc(f, vtypes, sv::StaticVarInfo)
         assert(isa(f.args[1],Symbol), "inference.j:333")
         return (true, f.args[1])
     end
-    return (isa(f,Symbol) && !has(vtypes,f), f)
+    return (isa(f,Symbol) && !has(vtypes,f) && !has(sv.cenv,f), f)
 end
 
 isvatuple(t) = (n = length(t); n > 0 && isseqtype(t[n]))
@@ -783,18 +789,19 @@ function typeinf(linfo::LambdaStaticData,atypes::Tuple,sparams::Tuple, cop, def)
 
     #print(linfo.name); show(atypes); print('\n')
 
+    local ast::Expr
     if cop
         sparams = append(sparams, linfo.sparams)
-        ast = ccall(:jl_prepare_ast, Any, (Any,Any), ast0, sparams)
+        ast = ccall(:jl_prepare_ast, Any, (Any,Any), ast0, sparams)::Expr
     else
         ast = ast0
     end
 
     assert(is(ast.head,:lambda), "inference.j:745")
     args = f_argnames(ast)
-    locals = ast.args[2].args[1].args
+    locals = (ast.args[2].args[1].args)::Array{Any,1}
     vars = append(args, locals)
-    body = ast.args[3].args
+    body = (ast.args[3].args)::Array{Any,1}
 
     n = length(body)
     s = { () | i=1:n }
@@ -821,6 +828,7 @@ function typeinf(linfo::LambdaStaticData,atypes::Tuple,sparams::Tuple, cop, def)
     # types of closed vars
     cenv = idtable()
     for vi = ast.args[2].args[3]
+        vi::Array{Any,1}
         cenv[vi[1]] = vi[2]
         s[1][vi[1]] = vi[2]
     end

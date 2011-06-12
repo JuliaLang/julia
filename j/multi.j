@@ -43,7 +43,7 @@ function send_msg(s::IOStream, kind, args...)
     if is(SENDBUF,())
         SENDBUF = memio()
     end
-    send_msg(s, SENDBUF, kind, args)
+    send_msg(s, SENDBUF::IOStream, kind, args)
 end
 
 # todo:
@@ -106,7 +106,7 @@ type ProcessGroup
     np::Int32
 
     # global references
-    refs
+    refs::HashTable
 
     function ProcessGroup(myid::Int32, w::Array{Any,1}, locs::Array{Any,1})
         return new(myid, w, locs, length(w), HashTable())
@@ -232,7 +232,7 @@ let bottom_func() = assert(false)
     global lookup_ref
     function lookup_ref(id)
         global PGRP
-        wi = get(PGRP.refs, id, ())
+        wi = get((PGRP::ProcessGroup).refs, id, ())
         if is(wi, ())
             # first we've heard of this ref
             wi = WorkItem(bottom_func)
@@ -415,9 +415,9 @@ end
 remote_do(id::Int, f, args...) = remote_do(worker_from_id(id), f, args...)
 
 function sync_msg(verb::Symbol, r::RemoteRef)
-    global PGRP
+    pg = (PGRP::ProcessGroup)
     oid = rr2id(r)
-    if r.where==myid() || isa(PGRP.workers[r.where], LocalProcess)
+    if r.where==myid() || isa(pg.workers[r.where], LocalProcess)
         wi = lookup_ref(oid)
         if wi.done
             return is(verb,:fetch) ? work_result(wi) : r
@@ -426,7 +426,7 @@ function sync_msg(verb::Symbol, r::RemoteRef)
             wi.notify = ((), verb, oid, wi.notify)
         end
     else
-        send_msg(PGRP.workers[r.where], verb, oid)
+        send_msg(pg.workers[r.where], verb, oid)
     end
     # yield to event loop, return here when answer arrives
     v = yieldto(Scheduler, WaitFor(verb, oid))
@@ -703,7 +703,7 @@ function message_handler(fd, sockets)
                 identify_socket(otherid, fd, sock)
             else
                 # the synchronization messages
-                oid = force(deserialize(sock))
+                oid = force(deserialize(sock))::(Int32,Int32)
                 wi = lookup_ref(oid)
                 if wi.done
                     deliver_result(sock, msg, oid, work_result(wi))
