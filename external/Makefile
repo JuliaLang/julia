@@ -39,7 +39,9 @@ llvm-$(LLVM_VER)/Makefile: llvm-$(LLVM_VER).tgz
 	tar zxf $<
 	touch $@
 $(LLVM_OBJ_SOURCE): llvm-$(LLVM_VER)/Makefile
-	cd llvm-$(LLVM_VER) && ./configure --prefix=$(EXTROOT) --disable-threads --enable-optimized --disable-profiling --disable-assertions --enable-shared --enable-targets=x86,x86_64 --disable-bindings --disable-docs && make
+	cd llvm-$(LLVM_VER) && \
+	./configure --prefix=$(EXTROOT) --disable-threads --enable-optimized --disable-profiling --disable-assertions --enable-shared --enable-targets=x86,x86_64 --disable-bindings --disable-docs && \
+	make
 $(LLVM_OBJ_TARGET): $(LLVM_OBJ_SOURCE)
 	mkdir -p $(EXTROOTLIB)
 	cd llvm-$(LLVM_VER) && make install
@@ -61,7 +63,8 @@ readline-$(READLINE_VER)/Makefile: readline-$(READLINE_VER).tar.gz
 	tar zxf $<
 	touch $@
 $(READLINE_OBJ_SOURCE): readline-$(READLINE_VER)/Makefile
-	cd readline-$(READLINE_VER) && ./configure --prefix=$(EXTROOT) && make
+	cd readline-$(READLINE_VER) && \
+	./configure --prefix=$(EXTROOT) && make
 $(READLINE_OBJ_TARGET): $(READLINE_OBJ_SOURCE)
 	mkdir -p $(EXTROOTLIB)
 	cd readline-$(READLINE_VER) && make install
@@ -84,7 +87,9 @@ pcre-$(PCRE_VER)/Makefile: pcre-$(PCRE_VER).tar.bz2
 	tar jxvf $<
 	touch $@
 $(PCRE_OBJ_SOURCE): pcre-$(PCRE_VER)/Makefile
-	cd pcre-$(PCRE_VER) && ./configure --prefix=$(EXTROOT) --enable-utf8 --enable-unicode-properties && make
+	cd pcre-$(PCRE_VER) && \
+	./configure --prefix=$(EXTROOT) --enable-utf8 --enable-unicode-properties && \
+	make
 $(PCRE_OBJ_TARGET): $(PCRE_OBJ_SOURCE)
 	mkdir -p $(EXTROOTLIB)
 	cd pcre-$(PCRE_VER) && make install
@@ -102,7 +107,8 @@ compile-fdlibm: $(FDLIBM_OBJ_SOURCE)
 install-fdlibm: $(FDLIBM_OBJ_TARGET)
 
 $(FDLIBM_OBJ_SOURCE): fdlibm/*.c
-	cd fdlibm && make CC=$(CC) CFLAGS="-D_IEEE_LIBM -Dx86 -fPIC -O2 $(CONFIG)" && \
+	cd fdlibm && \
+	make CC=$(CC) CFLAGS="-D_IEEE_LIBM -Dx86 -fPIC -O2 $(CONFIG)" && \
 	$(CC) -shared *.o -o libfdm.$(SHLIB_EXT)
 $(FDLIBM_OBJ_TARGET): $(FDLIBM_OBJ_SOURCE)
 	mkdir -p $(EXTROOTLIB)
@@ -127,7 +133,8 @@ openblas/Makefile: openblas.tar.gz
 	mkdir -p openblas && tar --strip-components 1 -C openblas -xf $<
 	touch $@
 $(OPENBLAS_OBJ_SOURCE): openblas/Makefile
-	cd openblas && make USE_THREAD=0 NO_CBLAS=1 NO_LAPACK=1 DYNAMIC_ARCH=1 CC=$(CC) FC=$(FC)
+	cd openblas && \
+	make USE_THREAD=0 NO_CBLAS=1 NO_LAPACK=1 DYNAMIC_ARCH=1 CC=$(CC) FC=$(FC)
 $(OPENBLAS_OBJ_TARGET): $(OPENBLAS_OBJ_SOURCE)
 	mkdir -p $(EXTROOTLIB)
 	cp $< $@
@@ -178,8 +185,10 @@ ARPACK/Makefile: arpack$(ARPACK_VER).tar.gz arpack-patch.tar.gz
 	perl -i -nle 'print unless /EXTERNAL\s+ETIME/' ARPACK/UTIL/second.f
 	touch $@
 $(ARPACK_OBJ_SOURCE): ARPACK/Makefile
-	cd ARPACK && make lib MAKE=make PLAT= home=`pwd` FC=$(FC) FFLAGS="-O3 -fPIC" && \
-	ar x libarpack_.a && $(FC) -shared *.o -o libarpack.$(SHLIB_EXT)
+	cd ARPACK && \
+	make lib MAKE=make PLAT= home=`pwd` FC=$(FC) FFLAGS="-O3 -fPIC" && \
+	ar x libarpack_.a && \
+	$(FC) -shared *.o -o libarpack.$(SHLIB_EXT)
 $(ARPACK_OBJ_TARGET): $(ARPACK_OBJ_SOURCE)
 	mkdir -p $(EXTROOTLIB)
 	cp $< $@
