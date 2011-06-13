@@ -85,8 +85,15 @@ type Worker
         Worker(host, port, fd, fdio(fd))
     end
 
-    Worker(host,port,fd,sock,id) = new(host, port, fd, sock, memio(), id, {})
     Worker(host,port,fd,sock) = Worker(host,port,fd,sock,0)
+
+    Worker(host,port,fd,sock,id) = (this.host=host;
+                                    this.port=port;
+                                    this.fd=fd;
+                                    this.socket=sock;
+                                    this.sendbuf=memio();
+                                    this.id=id;
+                                    this.del_msgs={})
 end
 
 send_msg(w::Worker, kind, args...) = send_msg(w.socket, w.sendbuf, kind, args)
@@ -109,7 +116,11 @@ type ProcessGroup
     refs::HashTable
 
     function ProcessGroup(myid::Int32, w::Array{Any,1}, locs::Array{Any,1})
-        return new(myid, w, locs, length(w), HashTable())
+        this.myid = myid
+        this.workers = w
+        this.locs = locs
+        this.np = length(w)
+        this.refs = HashTable()
     end
 end
 
@@ -195,8 +206,14 @@ type RemoteRef
     id::Int32
     # TODO: cache value if it's fetched, but don't serialize the cached value
 
-    function RemoteRef(w, wh, id)
-        r = new(w,wh,id)
+    function RemoteRef(w, wh, id, weak)
+        this.where = w
+        this.whence = wh
+        this.id = id
+        r = this
+        if weak
+            return r
+        end
         found = key(client_refs, r, false)
         if bool(found)
             return found
@@ -206,10 +223,7 @@ type RemoteRef
         r
     end
 
-    global WeakRemoteRef
-    function WeakRemoteRef(w, wh, id)
-        return new(w, wh, id)
-    end
+    RemoteRef(w, wh, id) = RemoteRef(w, wh, id, false)
 
     REQ_ID::Int32 = 0
     function RemoteRef(pid::Int)
@@ -222,6 +236,8 @@ type RemoteRef
     RemoteRef(w::Worker) = RemoteRef(w.id)
     RemoteRef() = RemoteRef(myid())
 end
+
+WeakRemoteRef(w, wh, id) = RemoteRef(w, wh, id, true)
 
 hash(r::RemoteRef) = hash(r.whence)+3*hash(r.id)
 isequal(r::RemoteRef, s::RemoteRef) = (r.whence==s.whence && r.id==s.id)
@@ -470,10 +486,18 @@ type WorkItem
     clientset::IntSet
     requeue::Bool
 
-    WorkItem(thunk::Function) = new(thunk, (), false, (), (), (), IntSet(64),
-                                    true)
-    WorkItem(task::Task) = new(()->(), task, false, (), (), (), IntSet(64),
-                               true)
+    WorkItem() = (this.thunk = ()->();
+                  this.task = ();
+                  this.done = false;
+                  this.result = ();
+                  this.notify = ();
+                  this.argument = ();
+                  this.clientset = IntSet(64);
+                  this.requeue = true)
+
+    WorkItem(thunk::Function) = (this=WorkItem(); this.thunk=thunk)
+
+    WorkItem(task::Task) = (this=WorkItem(); this.task = task)
 end
 
 function work_result(w::WorkItem)
@@ -865,49 +889,53 @@ load("vcloud.j")
 
 ## global objects and collective operations ##
 
+function init_GlobalObject(mi, procs, rids, initializer)
+    np = length(procs)
+    refs = Array(RemoteRef, np)
+    local myrid
+    
+    for i=1:np
+        refs[i] = WeakRemoteRef(procs[i], rids[i][1], rids[i][2])
+        if procs[i] == mi
+            myrid = rids[i]
+        end
+    end
+    init_GlobalObject(mi, procs, rids, initializer, refs, myrid)
+end
+
+function init_GlobalObject(mi, procs, rids, initializer, refs, myrid)
+    np = length(procs)
+    go = GlobalObject((), refs)
+    
+    wi = lookup_ref(myrid)
+    function del_go_client(go)
+        if has(wi.clientset, mi)
+            for i=1:np
+                send_del_client(go.refs[i])
+            end
+        end
+        if !isempty(wi.clientset)
+            # still has some remote clients, restore finalizer & stay alive
+            finalizer(go, del_go_client)
+        end
+    end
+    finalizer(go, del_go_client)
+    go.local_identity = initializer(go)
+    # make our reference to it weak so we can detect when there are
+    # no local users of the object.
+    # NOTE: this is put(go.refs[mi], WeakRef(go))
+    wi.result = WeakRef(go)
+    wi.done = true
+    notify_done(wi)
+end
+
 type GlobalObject
     local_identity
     refs::Array{RemoteRef,1}
 
-    global init_GlobalObject
-    function init_GlobalObject(mi, procs, rids, initializer)
-        np = length(procs)
-        refs = Array(RemoteRef, np)
-        local myrid
-
-        for i=1:np
-            refs[i] = WeakRemoteRef(procs[i], rids[i][1], rids[i][2])
-            if procs[i] == mi
-                myrid = rids[i]
-            end
-        end
-        init_GlobalObject(mi, procs, rids, initializer, refs, myrid)
-    end
-    function init_GlobalObject(mi, procs, rids, initializer, refs, myrid)
-        np = length(procs)
-        go = new((), refs)
-
-        wi = lookup_ref(myrid)
-        function del_go_client(go)
-            if has(wi.clientset, mi)
-                for i=1:np
-                    send_del_client(go.refs[i])
-                end
-            end
-            if !isempty(wi.clientset)
-                # still has some remote clients, restore finalizer & stay alive
-                finalizer(go, del_go_client)
-            end
-        end
-        finalizer(go, del_go_client)
-        go.local_identity = initializer(go)
-        # make our reference to it weak so we can detect when there are
-        # no local users of the object.
-        # NOTE: this is put(go.refs[mi], WeakRef(go))
-        wi.result = WeakRef(go)
-        wi.done = true
-        notify_done(wi)
-    end
+    # for internal use
+    GlobalObject(l::(), refs::Array{RemoteRef,1}) = (this.local_identity=();
+                                                     this.refs = refs)
 
     # initializer is a function that will be called on the new G.O., and its
     # result will be used to set go.local_identity
@@ -948,7 +976,7 @@ type GlobalObject
             end
         end
         if !participate
-            go = new((), r)
+            go = GlobalObject((), r)
             go.local_identity = initializer(go)  # ???
             go.local_identity
         else

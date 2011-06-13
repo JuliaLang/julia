@@ -51,7 +51,8 @@ type Pipe
         if in == out
             error("identical in and out file descriptors")
         end
-        new(in,out)
+        this.in = in
+        this.out = out
     end
 end
 
@@ -141,11 +142,11 @@ type Cmd
     status::ProcessStatus
 
     function Cmd(exec::Executable)
-        this = new(exec,
-                   HashTable(FileDes,PipeEnd),
-                   Set(Cmd),
-                   0,
-                   ProcessNotRun())
+        this.exec = exec
+        this.pipes = HashTable(FileDes,PipeEnd)
+        this.pipeline = Set(Cmd)
+        this.pid = 0
+        this.status = ProcessNotRun()
         add(this.pipeline, this)
         this
     end

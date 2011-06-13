@@ -1,6 +1,6 @@
 type DArray{T,N,distdim} <: Tensor{T,N}
     dims::NTuple{N,Size}
-    locl::Union((),RemoteRef,Array{T,N})
+    locl::Union(RemoteRef,Array{T,N})
     # the distributed array has N pieces
     # pmap[i]==p ⇒ processor p has piece i
     pmap::Array{Int32,1}
@@ -11,7 +11,7 @@ type DArray{T,N,distdim} <: Tensor{T,N}
     localpiece::Int32  # my piece #; pmap[localpiece]==myid()
     go::GlobalObject
 
-    function DArray(go, T, distdim, dims, initializer, pmap, dist)
+    function DArray(go, dims, initializer, pmap, dist)
         mi = myid()
         lp = 0
         for i=1:length(pmap)
@@ -22,34 +22,37 @@ type DArray{T,N,distdim} <: Tensor{T,N}
 
         mysz = lp==0 ? 0 : (dist[lp+1]-dist[lp])
         locsz = ntuple(length(dims), i->(i==distdim?mysz:dims[i]))
-        da = new(dims,
-                 (), #Array(T, locsz),
-                 pmap, dist, distdim, lp, go)
+        this.dims = dims
+        this.pmap = pmap
+        this.dist = dist
+        this.distdim = distdim
+        this.localpiece = lp
+        this.go = go
         if is(initializer,RemoteRef)
-            da.locl = RemoteRef()
+            this.locl = RemoteRef()
         else
-            da.locl = remote_call(LocalProcess(), initializer, T, locsz, da)
+            this.locl = remote_call(LocalProcess(), initializer, T, locsz, this)
         end
-        da
+        this
     end
 
     # don't use DArray() directly; use darray() below instead
-    function DArray(T, distdim, dims, initializer, procs, dist)
-        GlobalObject(g->DArray(g, T, distdim, dims, initializer, procs, dist))
+    function DArray(dims, initializer, procs, dist)
+        GlobalObject(g->DArray(g, dims, initializer, procs, dist))
         #go.local_identity
     end
 
-    DArray(T, distdim, dims, procs::Vector, dist::Vector) =
-        DArray(T, distdim, dims, RemoteRef, procs, dist)
+    DArray(dims, procs::Vector, dist::Vector) =
+        DArray(dims, RemoteRef, procs, dist)
 
-    function DArray(T, distdim, dims, initializer::Function)
+    function DArray(dims, initializer::Function)
         global PGRP
         procs = linspace(1,PGRP.np)
         dist = defaultdist(distdim, dims, length(procs))
-        DArray(T, distdim, dims, initializer, procs, dist)
+        DArray(dims, initializer, procs, dist)
     end
 
-    DArray(T, distdim, dims) = DArray(T, distdim, dims, RemoteRef)
+    DArray(dims) = DArray(dims, RemoteRef)
 end
 
 size(d::DArray) = d.dims
@@ -111,7 +114,7 @@ end
 # initializer is a function accepting (el_type, local_size, darray) where
 # the last argument is the full DArray being constructed.
 darray{T}(init, ::Type{T}, dims::Dims, distdim, procs, dist) =
-    DArray{T,length(dims),distdim}(T, distdim, dims, init, procs, dist)
+    DArray{T,length(dims),distdim}(dims, init, procs, dist)
 darray{T}(init, ::Type{T}, dims::Dims, distdim, procs) =
     darray(init, T, dims, distdim, procs,
            defaultdist(distdim, dims, length(procs)))

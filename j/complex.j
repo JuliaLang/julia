@@ -1,11 +1,9 @@
 type Complex{T<:Real} <: Number
     re::T
     im::T
-
-    Complex{T<:Real}(x::T, y::T) = new(x, y)
-    Complex(x::Real, y::Real) = Complex(promote(x,y)...)
-    Complex(x::Real) = new(x, zero(x))
 end
+Complex(x::Real, y::Real) = Complex(promote(x,y)...)
+Complex(x::Real) = new(x, zero(x))
 
 im = Complex(0,1)
 

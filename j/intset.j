@@ -4,7 +4,8 @@ type IntSet
     
     IntSet() = IntSet(1024)
     IntSet(max::Int32) = (lim = (max+31) & -32;
-                          new(zeros(Uint32,lim>>5), lim))
+                          this.bits = zeros(Uint32,lim>>5);
+                          this.limit = lim)
 end
 
 function intset(args...)

@@ -122,12 +122,15 @@ type Regex
         end
         re = pcre_compile(pat, opts & PCRE_COMPILE_MASK)
         ex = study ? pcre_study(re, 0) : C_NULL
-        new(pat, opts, re, ex)
+        this.pattern = pat
+        this.options = opts
+        this.regex = re
+        this.extra = ex
     end
-    Regex(p::String, s::Bool) = Regex(p, 0, s)
-    Regex(p::String, o::Int)  = Regex(p, o, true)
-    Regex(p::String)          = Regex(p, 0, true)
 end
+Regex(p::String, s::Bool) = Regex(p, 0, s)
+Regex(p::String, o::Int)  = Regex(p, o, true)
+Regex(p::String)          = Regex(p, 0, true)
 
 # TODO: make sure thing are escaped in a way PCRE
 # likes so that Julia all the Julia string quoting

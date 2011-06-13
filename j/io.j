@@ -6,9 +6,9 @@ type IOStream
 
     # TODO: delay adding finalizer, e.g. for memio with a small buffer, or
     # in the case where we takebuf it.
-    IOStream() = (x = new(zeros(Uint8,sizeof_ios_t));
-                  finalizer(x, close);
-                  x)
+    IOStream() = (this.ios = zeros(Uint8,sizeof_ios_t);
+                  finalizer(this, close);
+                  this)
 end
 
 close(s::IOStream) = ccall(:ios_close, Void, (Ptr{Void},), s.ios)
@@ -207,7 +207,8 @@ type FDSet
     function FDSet()
         ar = Array(Uint8, sizeof_fd_set)
         ccall(:jl_fd_zero, Void, (Ptr{Void},), ar)
-        new(ar, 0)
+        this.data = ar
+        this.nfds = 0
     end
 end
 

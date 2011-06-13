@@ -293,13 +293,6 @@ void jl_get_builtin_hooks()
     jl_loaderror_type = (jl_struct_type_t*)global("LoadError");
     jl_uniontoocomplex_type = (jl_struct_type_t*)global("UnionTooComplexError");
 
-    jl_stackovf_exception =
-        jl_apply((jl_function_t*)global("StackOverflowError"), NULL, 0);
-    jl_divbyzero_exception =
-        jl_apply((jl_function_t*)global("DivideByZeroError"), NULL, 0);
-    jl_undefref_exception =
-        jl_apply((jl_function_t*)global("UndefRefError"),NULL,0);
-
     jl_append_any_func = (jl_function_t*)global("append_any");
     jl_method_missing_func = (jl_function_t*)global("method_missing");
 
@@ -307,4 +300,11 @@ void jl_get_builtin_hooks()
         (jl_type_t*)jl_apply_type((jl_value_t*)jl_array_type,
                                   jl_tuple2(jl_uint8_type,
                                             jl_box_int32(1)));
+
+    jl_stackovf_exception =
+        jl_apply((jl_function_t*)global("StackOverflowError"), NULL, 0);
+    jl_divbyzero_exception =
+        jl_apply((jl_function_t*)global("DivideByZeroError"), NULL, 0);
+    jl_undefref_exception =
+        jl_apply((jl_function_t*)global("UndefRefError"),NULL,0);
 }

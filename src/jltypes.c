@@ -2226,7 +2226,7 @@ void jl_init_types()
     unexpanded_sym = jl_symbol("unexpanded");
     assign_sym = jl_symbol("=");
     null_sym = jl_symbol("null");
-    unbound_sym = jl_symbol("unbound");
+    isbound_sym = jl_symbol("isbound");
     symbol_sym = jl_symbol("symbol");
     body_sym = jl_symbol("body");
     locals_sym = jl_symbol("locals");

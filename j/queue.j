@@ -7,7 +7,7 @@ type Queue
     head::Union((),Pair)
     tail::Union((),Pair)
 
-    Queue() = new((),())
+    Queue() = (this.head=(); this.tail=())
 end
 
 isempty(q::Queue) = is(q.head,())

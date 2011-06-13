@@ -110,14 +110,10 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl)
     else if (ex->head == body_sym) {
         return eval_body(ex->args, locals, nl, 0);
     }
-    /*
-    else if (ex->head == unbound_sym) {
+    else if (ex->head == isbound_sym) {
         jl_value_t **bp = var_bp((jl_sym_t*)args[0], locals, nl);
-        if (*bp == NULL)
-            return jl_true;
-        return jl_false;
+        return (*bp == NULL) ? jl_false : jl_true;
     }
-    */
     else if (ex->head == exc_sym) {
         return jl_exception_in_transit;
     }
