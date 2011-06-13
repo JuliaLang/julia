@@ -25,9 +25,6 @@ default: install
 compile: $(addprefix compile-, $(LIBS))
 install: $(addprefix install-, $(LIBS))
 
-$(EXTROOTLIB):
-	mkdir -p $@
-
 ## LLVM ##
 
 LLVM_OBJ_TARGET = $(EXTROOTLIB)/libLLVM-$(LLVM_VER).$(SHLIB_EXT)
@@ -43,7 +40,8 @@ llvm-$(LLVM_VER)/Makefile: llvm-$(LLVM_VER).tgz
 	touch $@
 $(LLVM_OBJ_SOURCE): llvm-$(LLVM_VER)/Makefile
 	cd llvm-$(LLVM_VER) && ./configure --prefix=$(EXTROOT) --disable-threads --enable-optimized --disable-profiling --disable-assertions --enable-shared --enable-targets=x86,x86_64 --disable-bindings --disable-docs && make
-$(LLVM_OBJ_TARGET): $(LLVM_OBJ_SOURCE) $(EXTROOTLIB)
+$(LLVM_OBJ_TARGET): $(LLVM_OBJ_SOURCE)
+	mkdir -p $(EXTROOTLIB)
 	cd llvm-$(LLVM_VER) && make install
 
 cleanall-llvm:
@@ -64,8 +62,10 @@ readline-$(READLINE_VER)/Makefile: readline-$(READLINE_VER).tar.gz
 	touch $@
 $(READLINE_OBJ_SOURCE): readline-$(READLINE_VER)/Makefile
 	cd readline-$(READLINE_VER) && ./configure --prefix=$(EXTROOT) && make
-$(READLINE_OBJ_TARGET): $(READLINE_OBJ_SOURCE) $(EXTROOTLIB)
+$(READLINE_OBJ_TARGET): $(READLINE_OBJ_SOURCE)
+	mkdir -p $(EXTROOTLIB)
 	cd readline-$(READLINE_VER) && make install
+	touch $@
 
 cleanall-readline:
 	rm -rf readline-$(READLINE_VER).tar.gz readline-$(READLINE_VER)
@@ -85,8 +85,10 @@ pcre-$(PCRE_VER)/Makefile: pcre-$(PCRE_VER).tar.bz2
 	touch $@
 $(PCRE_OBJ_SOURCE): pcre-$(PCRE_VER)/Makefile
 	cd pcre-$(PCRE_VER) && ./configure --prefix=$(EXTROOT) --enable-utf8 --enable-unicode-properties && make
-$(PCRE_OBJ_TARGET): $(PCRE_OBJ_SOURCE) $(EXTROOTLIB)
+$(PCRE_OBJ_TARGET): $(PCRE_OBJ_SOURCE)
+	mkdir -p $(EXTROOTLIB)
 	cd pcre-$(PCRE_VER) && make install
+	touch $@
 
 cleanall-pcre:
 	rm -rf pcre-$(PCRE_VER).tar.bz2 pcre-$(PCRE_VER)
@@ -102,7 +104,8 @@ install-fdlibm: $(FDLIBM_OBJ_TARGET)
 $(FDLIBM_OBJ_SOURCE): fdlibm/*.c
 	cd fdlibm && make CC=$(CC) CFLAGS="-D_IEEE_LIBM -Dx86 -fPIC -O2 $(CONFIG)" && \
 	$(CC) -shared *.o -o libfdm.$(SHLIB_EXT)
-$(FDLIBM_OBJ_TARGET): $(FDLIBM_OBJ_SOURCE) $(EXTROOTLIB)
+$(FDLIBM_OBJ_TARGET): $(FDLIBM_OBJ_SOURCE)
+	mkdir -p $(EXTROOTLIB)
 	cp $< $@
 
 cleanall-fdlibm:
@@ -125,7 +128,8 @@ openblas/Makefile: openblas.tar.gz
 	touch $@
 $(OPENBLAS_OBJ_SOURCE): openblas/Makefile
 	cd openblas && make USE_THREAD=0 NO_CBLAS=1 NO_LAPACK=1 DYNAMIC_ARCH=1 CC=$(CC) FC=$(FC)
-$(OPENBLAS_OBJ_TARGET): $(OPENBLAS_OBJ_SOURCE) $(EXTROOTLIB)
+$(OPENBLAS_OBJ_TARGET): $(OPENBLAS_OBJ_SOURCE)
+	mkdir -p $(EXTROOTLIB)
 	cp $< $@
 
 cleanall-openblas:
@@ -149,7 +153,8 @@ $(LAPACK_OBJ_SOURCE): lapack-$(LAPACK_VER)/Makefile $(OPENBLAS_OBJ_SOURCE)
 	cp INSTALL/make.inc.gfortran ./make.inc && \
 	make lapacklib NOOPT="-O0 -fPIC" OPTS="-O2 -fPIC" FORTRAN=$(FC) && \
 	$(FC) -shared ../$(OPENBLAS_OBJ_SOURCE) SRC/*.o INSTALL/dlamch.o INSTALL/dsecnd_INT_ETIME.o INSTALL/ilaver.o INSTALL/slamch.o -L$(EXTROOTLIB) -o libLAPACK.$(SHLIB_EXT)
-$(LAPACK_OBJ_TARGET): $(LAPACK_OBJ_SOURCE) $(EXTROOTLIB)
+$(LAPACK_OBJ_TARGET): $(LAPACK_OBJ_SOURCE)
+	mkdir -p $(EXTROOTLIB)
 	cp $< $@
 
 cleanall-lapack:
@@ -175,7 +180,8 @@ ARPACK/Makefile: arpack$(ARPACK_VER).tar.gz arpack-patch.tar.gz
 $(ARPACK_OBJ_SOURCE): ARPACK/Makefile
 	cd ARPACK && make lib MAKE=make PLAT= home=`pwd` FC=$(FC) FFLAGS="-O3 -fPIC" && \
 	ar x libarpack_.a && $(FC) -shared *.o -o libarpack.$(SHLIB_EXT)
-$(ARPACK_OBJ_TARGET): $(ARPACK_OBJ_SOURCE) $(EXTROOTLIB)
+$(ARPACK_OBJ_TARGET): $(ARPACK_OBJ_SOURCE)
+	mkdir -p $(EXTROOTLIB)
 	cp $< $@
 
 cleanall-arpack:
