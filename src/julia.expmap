@@ -165,6 +165,7 @@
     jl_expr_type;
     jl_continue_sym;
     jl_memio_func;
+    jl_nothing;
   local:
     *;
 };

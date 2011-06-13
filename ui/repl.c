@@ -341,11 +341,11 @@ DLLEXPORT void jl_eval_user_input(jl_value_t *ast, int show_value)
             ios_printf(ios_stdout, "\n");
 #endif
             JL_EH_POP();
-            break;  // leave JL_TRY
+            break; // leave JL_TRY
         }
         jl_value_t *value = jl_toplevel_eval(ast);
         jl_set_global(jl_system_module, jl_symbol("ans"), value);
-        if (show_value) {
+        if (value != (jl_value_t*)jl_nothing && show_value) {
             if (have_color) {
                 ios_printf(ios_stdout, jl_answer_color);
                 ios_flush(ios_stdout);
