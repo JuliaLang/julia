@@ -12,22 +12,21 @@ ifeq ($(ARCH), x86_64)
 LIBC = /lib64/libc.so.6
 endif
 
-default: defaultlibs_$(OS)
+default: defaultlibs.$(OS)
 
-defaultlibs_Linux: \
-	llvm pcre_install fdlibm_install openblas_install lapack_install \
-	libc_install arpack_install mongoose_install
+defaultlibs.Linux: \
+	install-llvm install-pcre install-fdlibm install-openblas install-lapack \
+	install-libc install-arpack install-mongoose
 
-defaultlibs_Darwin: \
-	llvm readline_install pcre_install fdlibm_install openblas_install \
-	lapack_install arpack_install mongoose_install
+defaultlibs.Darwin: \
+	install-llvm install-readline install-pcre install-fdlibm install-openblas \
+	install-lapack install-arpack install-mongoose
 
 $(JULIALIB):
 	mkdir -p $(JULIALIB)
 
-libc_install: $(JULIALIB)
+install-libc: $(JULIALIB)
 	ln -sf $(LIBC) $(JULIALIB)/libc.so
-
 
 
 LLVM_OBJ = $(EXTROOTLIB)/libLLVM-$(LLVM_VER).$(SHLIB_EXT)
@@ -40,7 +39,6 @@ $(LLVM_OBJ): llvm-$(LLVM_VER)
 llvm: $(LLVM_OBJ)
 
 
-
 READLINE_OBJ = $(EXTROOTLIB)/libreadline.$(SHLIB_EXT)
 readline-$(READLINE_VER).tar.gz:
 	$(DOWNLOAD) ftp://ftp.gnu.org/gnu/readline/readline-$(READLINE_VER).tar.gz
@@ -48,10 +46,9 @@ readline-$(READLINE_VER): readline-$(READLINE_VER).tar.gz
 	tar zxf readline-$(READLINE_VER).tar.gz
 $(READLINE_OBJ): readline-$(READLINE_VER)
 	cd readline-$(READLINE_VER) && ./configure --prefix=$(EXTROOT) && make install
-readline_install: $(READLINE_OBJ) $(JULIALIB)
+install-readline: $(READLINE_OBJ) $(JULIALIB)
 	ln -sf $(READLINE_OBJ) $(JULIALIB)/libreadline.$(SHLIB_EXT)
 	ln -sf $(EXTROOTLIB)/libhistory.$(SHLIB_EXT) $(JULIALIB)/libhistory.$(SHLIB_EXT)
-
 
 
 PCRE_OBJ = $(EXTROOTLIB)/libpcre.$(SHLIB_EXT)
@@ -61,7 +58,7 @@ pcre-$(PCRE_VER): pcre-$(PCRE_VER).tar.bz2
 	tar jxvf pcre-$(PCRE_VER).tar.bz2
 $(PCRE_OBJ): pcre-$(PCRE_VER)
 	cd pcre-$(PCRE_VER) && ./configure --prefix=$(EXTROOT) --enable-utf8 --enable-unicode-properties && make install
-pcre_install: $(PCRE_OBJ) $(JULIALIB)
+install-pcre: $(PCRE_OBJ) $(JULIALIB)
 	ln -sf $(PCRE_OBJ) $(JULIALIB)/libpcre.$(SHLIB_EXT)
 	ln -sf $(EXTROOTLIB)/libpcreposix.$(SHLIB_EXT) $(JULIALIB)/libpcreposix.$(SHLIB_EXT)
 
@@ -69,7 +66,7 @@ pcre_install: $(PCRE_OBJ) $(JULIALIB)
 FDLIBM_OBJ = $(EXTROOTLIB)/libfdm.$(SHLIB_EXT)
 $(FDLIBM_OBJ): fdlibm/*.c
 	cd fdlibm && make CC=$(CC) CFLAGS="-D_IEEE_LIBM -Dx86 -fPIC -O2 $(CONFIG)" && $(CC) -shared *.o -o $@
-fdlibm_install: $(FDLIBM_OBJ) $(JULIALIB)
+install-fdlibm: $(FDLIBM_OBJ) $(JULIALIB)
 	ln -sf $< $(JULIALIB)/libfdm.$(SHLIB_EXT)
 
 
@@ -82,7 +79,7 @@ openblas$(OPENBLAS_VER): openblas$(OPENBLAS_VER).tar.gz
 $(OPENBLAS_OBJ): openblas$(OPENBLAS_VER)
 	cd openblas
 	make USE_THREAD=0 NO_CBLAS=1 NO_LAPACK=1 DYNAMIC_ARCH=1 CC=$(CC) FC=$(FC)
-openblas_install: $(OPENBLAS_OBJ) $(JULIALIB)
+install-openblas: $(OPENBLAS_OBJ) $(JULIALIB)
 	cp -f openblas/libopenblas.$(SHLIB_EXT) $(OPENBLAS_OBJ)
 	ln -sf $< $(JULIALIB)/libopenblas.$(SHLIB_EXT)
 
@@ -97,9 +94,8 @@ $(LAPACK_OBJ): lapack-$(LAPACK_VER)
 	cp INSTALL/make.inc.gfortran ./make.inc
 	make lapacklib NOOPT="-O0 -fPIC" OPTS="-O2 -fPIC" FORTRAN=$(FC)
 	$(FC) -shared SRC/*.o $(EXTROOTLIB)/libopenblas.$(SHLIB_EXT) INSTALL/dlamch.o INSTALL/dsecnd_INT_ETIME.o INSTALL/ilaver.o INSTALL/slamch.o -o $(LAPACK_OBJ) -L$(EXTROOTLIB)
-lapack_install: $(LAPACK_OBJ) $(JULIALIB)
+install-lapack: $(LAPACK_OBJ) $(JULIALIB)
 	ln -sf $(LAPACK_OBJ) $(JULIALIB)/libLAPACK.$(SHLIB_EXT)
-
 
 
 ARPACK_OBJ = $(EXTROOTLIB)/libarpack.$(SHLIB_EXT)
@@ -114,14 +110,16 @@ $(ARPACK_OBJ): ARPACK
 	cd ARPACK && make lib MAKE=make PLAT= home=`pwd` FC=$(FC) FFLAGS="-O3 -fPIC"
 	ar x libarpack_.a
 	$(FC) -shared *.o -o $(EXTROOTLIB)/libarpack.$(SHLIB_EXT)
-arpack_install: $(ARPACK_OBJ) $(JULIALIB)
+install-arpack: $(ARPACK_OBJ) $(JULIALIB)
 	ln -sf $(ARPACK_OBJ) $(JULIALIB)/libarpack.$(SHLIB_EXT)
+
 
 mongoose-$(MONGOOSE_VER).tgz:
 	$(DOWNLOAD) http://mongoose.googlecode.com/files/mongoose-$(MONGOOSE_VER).tgz
 mongoose-$(MONGOOSE_VER): mongoose-$(MONGOOSE_VER).tgz
 	tar zxf mongoose-$(MONGOOSE_VER).tgz
-mongoose_install: mongoose-$(MONGOOSE_VER)
+install-mongoose: mongoose-$(MONGOOSE_VER)
+
 
 cleanall:
 	rm -rf llvm-$(LLVM_VER){,.tgz}
