@@ -13,7 +13,8 @@ end
 
 close(s::IOStream) = ccall(:ios_close, Void, (Ptr{Void},), s.ios)
 
-make_stdout_stream() = new(ccall(:jl_stdout_stream, Any, ()))
+make_stdout_stream() = ccall(:jl_new_struct, Any, (Any,Any...), IOStream,
+                             ccall(:jl_stdout_stream, Any, ()))::IOStream
 
 fdio(fd::Int) = (s = IOStream();
                  ccall(:ios_fd, Void,
@@ -192,7 +193,7 @@ truncate(s::IOStream, n::Int) =
 
 type IOTally
     nbytes::Size
-    IOTally() = new(zero(Size))
+    IOTally() = (this.nbytes=0)
 end
 
 write(s::IOTally, x::Uint8) = (s.nbytes += 1; Nothing)

@@ -3,7 +3,7 @@ type Complex{T<:Real} <: Number
     im::T
 end
 Complex(x::Real, y::Real) = Complex(promote(x,y)...)
-Complex(x::Real) = new(x, zero(x))
+Complex(x::Real) = Complex(x, zero(x))
 
 im = Complex(0,1)
 

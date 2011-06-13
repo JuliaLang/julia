@@ -7,13 +7,13 @@ type Range{T<:Real} <: Tensor{T,1}
     step::T
     stop::T
 end
-Range(start, step, stop) = new(promote(start, step, stop)...)
+Range(start, step, stop) = Range(promote(start, step, stop)...)
 
 type Range1{T<:Real} <: Tensor{T,1}
     start::T
     stop::T
 end
-Range1(start, stop) = new(promote(start, stop)...)
+Range1(start, stop) = Range(promote(start, stop)...)
 
 clone(r::Range, T::Type, dims::Dims) = Range(convert(T, r.start), convert(T, r.step), convert(T, r.stop))
 clone(r::Range1, T::Type, dims::Dims) = Range1(convert(T, r.start), convert(T, r.stop))
