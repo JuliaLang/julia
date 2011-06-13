@@ -108,7 +108,7 @@ t_func[le_float] = (2, 2, cmp_tfunc)
 t_func[gt_float] = (2, 2, cmp_tfunc)
 t_func[ge_float] = (2, 2, cmp_tfunc)
 t_func[ccall] =
-    (3, Inf, (fptr, rt, at, a...)->(is(rt,Type{Void}) ? NothingType :
+    (3, Inf, (fptr, rt, at, a...)->(is(rt,Type{Void}) ? Nothing :
                                     isType(rt) ? rt.parameters[1] : Any))
 t_func[is] = (2, 2, cmp_tfunc)
 t_func[subtype] = (2, 2, cmp_tfunc)
@@ -538,7 +538,7 @@ function abstract_eval_expr(e, vtypes, sv::StaticVarInfo)
     elseif is(e.head,:method)
         return Any-->Any
     elseif is(e.head,:null)
-        return NothingType
+        return Nothing
     elseif is(e.head,:quote)
         return typeof(e.args[1])
     elseif is(e.head,:static_typeof)

@@ -4,7 +4,7 @@ print(x) = show(x)
 
 show(s::Symbol) = print(s)
 show(tn::TypeName) = show(tn.name)
-show(::NothingType) = print("Nothing")
+show(::Nothing) = print("nothing")
 
 function show_comma_array(ar, open, close)
     print(open)

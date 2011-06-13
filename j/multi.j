@@ -182,7 +182,7 @@ function identify_socket(otherid, fd, sock)
     end
     PGRP.workers[i] = Worker("", 0, fd, sock, i)
     #write(stdout_stream, "$(PGRP.myid) heard from $i\n")
-    Nothing
+    nothing
 end
 
 ## remote refs and core messages: do, call, fetch, wait, ref, put ##
@@ -268,7 +268,7 @@ function del_client(id, client)
         del(PGRP.refs, id)
         #print("$(myid()) collected $id\n")
     end
-    Nothing
+    nothing
 end
 
 function del_clients(pairs::(Any,Any)...)
@@ -295,7 +295,7 @@ function add_client(id, client)
     global PGRP
     wi = lookup_ref(id)
     add(wi.clientset, client)
-    Nothing
+    nothing
 end
 
 function send_add_client(rr::RemoteRef, i)
@@ -404,12 +404,12 @@ function remote_do(w::LocalProcess, f, args...)
     # does when it gets a :do message.
     # same for other messages on LocalProcess.
     enq_work(WorkItem(()->apply(f,args)))
-    Nothing
+    nothing
 end
 
 function remote_do(w::Worker, f, args...)
     send_msg(w, :do, f, args)
-    Nothing
+    nothing
 end
 
 remote_do(id::Int, f, args...) = remote_do(worker_from_id(id), f, args...)
@@ -547,7 +547,7 @@ function deliver_result(sock::(), msg, oid, value_thunk)
     if is(newjobs,())
         del(Waiting, oid)
     end
-    Nothing
+    nothing
 end
 
 function enq_work(wi::WorkItem)
@@ -1148,7 +1148,7 @@ function pfor(f, r::Range1)
             for j=lo:hi; f(j); end
         end
     end
-    Nothing
+    nothing
 end
 
 macro pfor(reducer, range, body)
