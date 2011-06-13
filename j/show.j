@@ -2,9 +2,9 @@
 
 print(x) = show(x)
 
-show(::NothingType) = return
-show(tn::TypeName) = show(tn.name)
 show(s::Symbol) = print(s)
+show(tn::TypeName) = show(tn.name)
+show(::Nothing) = print("nothing")
 
 function show_comma_array(ar, open, close)
     print(open)

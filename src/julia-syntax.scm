@@ -518,6 +518,9 @@
 
 (define patterns
   (pattern-set
+   (pattern-lambda (block)
+		   `(block (null)))
+
    (pattern-lambda (--> a b)
 		   `(curly (top Function) ,a ,b))
 

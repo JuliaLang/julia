@@ -10,7 +10,7 @@ strlen(s::String) = at_string_end(s)[2]
 symbol(s::String) = symbol(cstring(s))
 string(s::String) = s
 
-print(c::Char) = (write(current_output_stream(), c); Nothing)
+print(c::Char) = (write(current_output_stream(), c); nothing)
 print(s::String) = for c = s; print(c); end
 print(x...) = (for i=x; print(i); end)
 println(args...) = print(args..., '\n')

@@ -81,8 +81,8 @@
 
 #bitstype {32|64} Ptr{T}
 
-type NothingType; end
-Nothing = NothingType()
+type Nothing; end
+nothing = Nothing()
 
 bitstype 8 Bool
 

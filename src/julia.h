@@ -309,7 +309,7 @@ extern jl_struct_type_t *jl_task_type;
 extern jl_tuple_t *jl_null;
 extern jl_value_t *jl_true;
 extern jl_value_t *jl_false;
-extern jl_struct_type_t *jl_nothing;
+DLLEXPORT extern jl_struct_type_t *jl_nothing;
 
 extern jl_func_type_t *jl_any_func;
 
