@@ -76,10 +76,12 @@ clean:
 	rm -f *.o
 	rm -f *~ *#
 
-cleanother:
-	$(MAKE) -C $(LLTDIR) clean
+clean-flisp:
 	$(MAKE) -C $(FLISPDIR) clean
 
-cleanall: clean cleanother
+clean-support:
+	$(MAKE) -C $(LLTDIR) clean
 
-.PHONY: debug release clean cleanall cleanother
+cleanall: clean clean-flisp clean-support
+
+.PHONY: debug release clean cleanall clean-*

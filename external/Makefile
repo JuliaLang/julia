@@ -200,3 +200,5 @@ cleanall-mongoose:
 
 cleanall: $(addprefix cleanall-, $(LIBS))
 	rm -rf root
+
+.PHONY: default compile install cleanall compile-* install-* cleanall-*

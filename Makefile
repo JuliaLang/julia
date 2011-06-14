@@ -13,7 +13,7 @@ julia-debug julia-release:
 	$(MAKE) -C ui $@
 	ln -f $@-$(DEFAULT_REPL) julia
 
-sys.ji: ./j/sysimg.j ./j/start_image.j src/boot.j src/dump.c j/*.j
+sys.ji: j/sysimg.j j/start_image.j src/boot.j src/dump.c j/*.j
 	./julia -b sysimg.j
 
 PCRE_CONST = 0x[0-9a-fA-F]+|[-+]?\s*[0-9]+
@@ -21,16 +21,16 @@ PCRE_CONST = 0x[0-9a-fA-F]+|[-+]?\s*[0-9]+
 j/pcre_h.j:
 	cpp -dM $(EXTROOT)/include/pcre.h | perl -nle '/^\s*#define\s+(PCRE\w*)\s*\(?($(PCRE_CONST))\)?\s*$$/ and print "$$1 = $$2"' | sort > $@
 
-test: debug
+test: default
 	./julia test/tests.j
 
-test-utf8:
+test-utf8: default
 	./julia test/test_utf8.j
 
-perf: release
+test-perf: default
 	./julia test/perf.j
 
-testall: test test-utf8 perf
+test-all: test test-utf8 test-perf
 
 SLOCCOUNT = sloccount \
 	--addlang makefile \
@@ -55,6 +55,9 @@ clean:
 	$(MAKE) -C ui clean
 
 cleanall: clean
-	$(MAKE) -C src cleanother
+	$(MAKE) -C src clean-flisp clean-support
 
-.PHONY: default debug release julia-debug julia-release test test-* testall sloccount clean cleanall
+distclean: cleanall
+	$(MAKE) -C external cleanall
+
+.PHONY: default debug release julia-debug julia-release test test-* sloccount clean cleanall
