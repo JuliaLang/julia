@@ -29,7 +29,7 @@ endif
 
 ifeq ($(OS), Darwin)
 SHLIB_EXT = dylib
-OSLIBS += -Wl,-w -framework ApplicationServices -framework vecLib
+OSLIBS += -Wl,-w -framework ApplicationServices
 endif
 
 # Library versions for building external libraries
