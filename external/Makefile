@@ -69,9 +69,8 @@ cleanall-readline:
 ## PCRE ##
 
 PCRE_OBJ_TARGET = $(EXTROOTLIB)/libpcre.$(SHLIB_EXT)
-PCRE_OBJ_SOURCE = pcre-$(PCRE_VER)/.libs/libpcre.0.$(SHLIB_EXT)
 
-compile-pcre: $(PCRE_OBJ_SOURCE)
+compile-pcre: install-pcre
 install-pcre: $(PCRE_OBJ_TARGET)
 
 pcre-$(PCRE_VER).tar.bz2:
@@ -79,13 +78,11 @@ pcre-$(PCRE_VER).tar.bz2:
 pcre-$(PCRE_VER)/Makefile: pcre-$(PCRE_VER).tar.bz2
 	tar jxvf $<
 	touch $@
-$(PCRE_OBJ_SOURCE): pcre-$(PCRE_VER)/Makefile
+$(PCRE_OBJ_TARGET): pcre-$(PCRE_VER)/Makefile
+	mkdir -p $(EXTROOTLIB)
 	cd pcre-$(PCRE_VER) && \
 	./configure --prefix=$(EXTROOT) --enable-utf8 --enable-unicode-properties && \
-	make
-$(PCRE_OBJ_TARGET): $(PCRE_OBJ_SOURCE)
-	mkdir -p $(EXTROOTLIB)
-	cd pcre-$(PCRE_VER) && make install
+	make && make install
 	touch $@
 
 cleanall-pcre:
@@ -101,7 +98,7 @@ install-fdlibm: $(FDLIBM_OBJ_TARGET)
 
 $(FDLIBM_OBJ_SOURCE): fdlibm/*.c
 	cd fdlibm && \
-	make CC=$(CC) CFLAGS="-D_IEEE_LIBM -Dx86 -fPIC -O2 $(CONFIG)" && \
+	make CC=$(CC) CFLAGS="-D_IEEE_LIBM -Dx86 -fPIC -O1 $(CONFIG)" && \
 	$(CC) -shared *.o -o libfdm.$(SHLIB_EXT)
 $(FDLIBM_OBJ_TARGET): $(FDLIBM_OBJ_SOURCE)
 	mkdir -p $(EXTROOTLIB)
@@ -110,6 +107,7 @@ $(FDLIBM_OBJ_TARGET): $(FDLIBM_OBJ_SOURCE)
 cleanall-fdlibm:
 	cd fdlibm && make clean
 	rm -f $(FDLIBM_OBJ_SOURCE)
+	rm -f $(FDLIBM_OBJ_TARGET)
 
 ## OpenBLAS ##
 
