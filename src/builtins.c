@@ -755,7 +755,7 @@ static void show_float64(double d, int single)
 {
     ios_t *s = jl_current_output_stream();
     char buf[64];
-    int ndec = single ? 8 : 16;
+    int ndec = single ? 9 : 17;
     if (!DFINITE(d)) {
         char *rep;
         if (isnan(d))
@@ -1263,6 +1263,11 @@ jl_value_t *jl_closure_linfo(jl_function_t *f)
 uptrint_t jl_hash_symbol(jl_sym_t *s)
 {
     return s->hash;
+}
+
+DLLEXPORT uptrint_t jl_uid(jl_value_t *v)
+{
+    return (uptrint_t)v;
 }
 
 // --- init ---

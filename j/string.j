@@ -699,6 +699,16 @@ oct_parse(s::String) = parse_int(Int64, s,  8)
 dec_parse(s::String) = parse_int(Int64, s, 10)
 hex_parse(s::String) = parse_int(Int64, s, 16)
 
+int   (s::String) = dec_parse(s)
+int8  (s::String) = int8(int(s))
+uint8 (s::String) = uint8(int(s))
+int16 (s::String) = int16(int(s))
+uint16(s::String) = uint16(int(s))
+int32 (s::String) = int32(int(s))
+uint32(s::String) = uint32(int(s))
+int64 (s::String) = int64(int(s))
+uint64(s::String) = parse_int(Uint64, s, 10)
+
 ## integer to string functions ##
 
 function uint2str(n::Int, b::Int)
@@ -726,6 +736,33 @@ bin(n::Int, l::Int) = lpad(bin(n), l, '0')
 oct(n::Int, l::Int) = lpad(oct(n), l, '0')
 dec(n::Int, l::Int) = lpad(dec(n), l, '0')
 hex(n::Int, l::Int) = lpad(hex(n), l, '0')
+
+## string to float functions ##
+
+let tmp = Array(Ptr{Uint8},1)
+    global float64, float32
+    function float64(s::String)
+        s = cstring(s)
+        p = pointer(s.data)
+        f = ccall(:strtod, Float64, (Ptr{Uint8},Ptr{Ptr{Uint8}}), p, tmp)
+        if p==tmp[1] || errno()!=0
+            throw(ArgumentError("float64(String): invalid number format"))
+        end
+        f
+    end
+
+    function float32(s::String)
+        s = cstring(s)
+        p = pointer(s.data)
+        f = ccall(:strtof, Float32, (Ptr{Uint8},Ptr{Ptr{Uint8}}), p, tmp)
+        if p==tmp[1] || errno()!=0
+            throw(ArgumentError("float32(String): invalid number format"))
+        end
+        f
+    end
+end
+
+float(x::String) = float64(x)
 
 ## fast C-based memory functions for string implementations ##
 

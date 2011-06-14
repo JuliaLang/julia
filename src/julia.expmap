@@ -7,6 +7,7 @@
     memhash32;
     jl_hash_symbol;
     jl_symbol_name;
+    jl_uid;
     rand_double;
     rand_float;
     genrand_int32;
