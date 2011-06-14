@@ -134,7 +134,7 @@ openblas/Makefile: openblas.tar.gz
 	touch $@
 $(OPENBLAS_OBJ_SOURCE): openblas/Makefile
 	cd openblas && \
-	make USE_THREAD=0 NO_CBLAS=1 NO_LAPACK=1 DYNAMIC_ARCH=1 CC=$(CC) FC=$(FC)
+	make USE_THREAD=0 NO_CBLAS=1 NO_LAPACK=1 CC=$(CC) FC=$(FC)
 $(OPENBLAS_OBJ_TARGET): $(OPENBLAS_OBJ_SOURCE)
 	mkdir -p $(EXTROOTLIB)
 	cp $< $@
