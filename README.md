@@ -53,8 +53,7 @@ For a more in-depth discussion of the rationale and advantages of Julia over oth
 <a name="Compilation"/>
 ## Compilation
 
-- Run `make` in `external/` to download and build external dependencies (this will take a while).
-- Run `make` in the top-level directory to build julia.
+- Run `make` in the top-level directory to build julia. It will automatically download and build its external dependencies, when compiled the first time.
 
 No installation is required — julia is currently run from the directory where it was built.
 You might want to make a symbolic link for the executable, for example `ln -s JULIA_PATH/julia ~/bin/julia`.
