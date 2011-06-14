@@ -7,13 +7,6 @@ ARCH = $(shell uname -m)
 LINUX_LIBS  = llvm pcre fdlibm openblas lapack arpack mongoose
 DARWIN_LIBS = llvm pcre fdlibm openblas lapack arpack mongoose readline
 
-ifeq ($(ARCH), $(filter $(ARCH), i386 i486 i586 i686))
-LIBC = /lib/libc.so.6
-endif
-ifeq ($(ARCH), x86_64)
-LIBC = /lib64/libc.so.6
-endif
-
 ifeq ($(OS), Linux)
 LIBS = $(LINUX_LIBS)
 endif
