@@ -53,7 +53,7 @@ For a more in-depth discussion of the rationale and advantages of Julia over oth
 <a name="Compilation"/>
 ## Compilation
 
-- Run `make` in `external/` to download and build external dependencies.
+- Run `make` in `external/` to download and build external dependencies (this will take a while).
 - Run `make` in the top-level directory to build julia.
 
 No installation is required — julia is currently run from the directory where it was built.
