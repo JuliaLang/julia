@@ -34,7 +34,7 @@ print("parse_int: ")
 function parseintperf()
     local n
     for i=1:1000
-        n=bin_parse("1111000011110000111100001111")
+        n=parse_bin("1111000011110000111100001111")
     end
     n
 end
