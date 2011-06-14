@@ -4,8 +4,8 @@ include ../Make.inc
 OS = $(shell uname)
 ARCH = $(shell uname -m)
 
-LINUX_LIBS  = llvm pcre fdlibm openblas lapack arpack mongoose
-DARWIN_LIBS = llvm pcre fdlibm openblas lapack arpack mongoose readline
+LINUX_LIBS  = llvm pcre fdlibm lapack arpack mongoose
+DARWIN_LIBS = llvm pcre fdlibm lapack arpack mongoose readline
 
 ifeq ($(OS), Linux)
 LIBS = $(LINUX_LIBS)
@@ -113,11 +113,9 @@ cleanall-fdlibm:
 
 ## OpenBLAS ##
 
-OPENBLAS_OBJ_TARGET = $(EXTROOTLIB)/libopenblas.$(SHLIB_EXT)
-OPENBLAS_OBJ_SOURCE = openblas/libopenblas.$(SHLIB_EXT)
+OPENBLAS_OBJ_SOURCE = openblas/libopenblas.a
 
 compile-openblas: $(OPENBLAS_OBJ_SOURCE)
-install-openblas: $(OPENBLAS_OBJ_TARGET)
 
 openblas.tar.gz:
 	$(DOWNLOAD) -Lk https://github.com/xianyi/OpenBLAS/tarball/develop
@@ -128,9 +126,6 @@ openblas/Makefile: openblas.tar.gz
 $(OPENBLAS_OBJ_SOURCE): openblas/Makefile
 	cd openblas && \
 	make USE_THREAD=0 NO_CBLAS=1 NO_LAPACK=1 CC=$(CC) FC=$(FC)
-$(OPENBLAS_OBJ_TARGET): $(OPENBLAS_OBJ_SOURCE)
-	mkdir -p $(EXTROOTLIB)
-	cp $< $@
 
 cleanall-openblas:
 	rm -rf openblas.tar.gz openblas
@@ -152,7 +147,7 @@ $(LAPACK_OBJ_SOURCE): lapack-$(LAPACK_VER)/Makefile $(OPENBLAS_OBJ_SOURCE)
 	cd lapack-$(LAPACK_VER) && \
 	cp INSTALL/make.inc.gfortran ./make.inc && \
 	make lapacklib NOOPT="-O0 -fPIC" OPTS="-O2 -fPIC" FORTRAN=$(FC) && \
-	$(FC) -shared ../$(OPENBLAS_OBJ_SOURCE) SRC/*.o INSTALL/dlamch.o INSTALL/dsecnd_INT_ETIME.o INSTALL/ilaver.o INSTALL/slamch.o -L$(EXTROOTLIB) -o libLAPACK.$(SHLIB_EXT)
+	$(FC) -shared SRC/*.o INSTALL/dlamch.o INSTALL/dsecnd_INT_ETIME.o INSTALL/ilaver.o INSTALL/slamch.o ../$(OPENBLAS_OBJ_SOURCE) -o libLAPACK.$(SHLIB_EXT)
 $(LAPACK_OBJ_TARGET): $(LAPACK_OBJ_SOURCE)
 	mkdir -p $(EXTROOTLIB)
 	cp $< $@

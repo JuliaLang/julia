@@ -74,7 +74,6 @@ clean:
 	rm -f boot.j.inc
 	rm -f *.do
 	rm -f *.o
-	rm -f *.ji
 	rm -f *~ *#
 
 cleanother:
