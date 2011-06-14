@@ -29,16 +29,14 @@ endif
 
 ifeq ($(OS), Darwin)
 SHLIB_EXT = dylib
-OSLIBS += -Wl,-w -framework ApplicationServices -framework vecLib
+OSLIBS += -Wl,-w -framework ApplicationServices
 endif
 
 # Library versions for building external libraries
 
 LLVM_VER = 2.9
 READLINE_VER = 6.2
-FDLIBM_VER = 5.3
 PCRE_VER = 8.12
-OPENBLAS_VER =
 LAPACK_VER = 3.3.1
 ARPACK_VER = 96
 MONGOOSE_VER = 3.0

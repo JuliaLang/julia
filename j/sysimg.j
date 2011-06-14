@@ -25,8 +25,8 @@ load("table.j")
 load("inference.j")
 ccall(:jl_enable_inference,Void,())
 
-# load libc
-libc = dlopen("libc")
+# load libc - julia already links against it so process handle works
+libc = ccall(:jl_load_dynamic_library, Ptr{Void}, (Ptr{Uint8},), C_NULL)
 
 # strings & printing
 load("io.j")

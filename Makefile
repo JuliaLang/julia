@@ -8,6 +8,7 @@ debug release: %: julia-% j/pcre_h.j sys.ji
 	./julia ./test/unittests.j
 
 julia-debug julia-release:
+	$(MAKE) -C external
 	$(MAKE) -C src lib$@
 	$(MAKE) -C ui $@
 	ln -f $@-$(DEFAULT_REPL) julia
