@@ -63,7 +63,6 @@ You might want to make a symbolic link for the executable, for example `ln -s JU
 ## Directories
 
     attic/         old, now-unused code
-    bench/         benchmarks and performance tests
     contrib/       emacs and textmate support for julia
     doc/           miscellaneous documentation and notes
     external/      external dependencies
