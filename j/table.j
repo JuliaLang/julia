@@ -227,8 +227,8 @@ next(t::HashTable, i) = ((n, nxt) = next(t.used, i);
                          ((t.keys[n],t.vals[n]),
                           skip_deleted(t.used,t.deleted,nxt)))
 
-length(t::HashTable) = length(t.used)
 isempty(t::HashTable) = done(t, start(t))
+length(t::HashTable) = length(t.used)-length(t.deleted)
 
 function ref(t::Union(IdTable,HashTable), key)
     v = get(t, key, _secret_table_token_)
