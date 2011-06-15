@@ -7,7 +7,8 @@ src = 	e_exp.S         e_sqrtl.S      s_floorf.S   s_lrintl.S   s_scalbn.S      
 	e_remainderf.S  s_copysignl.S  s_logbf.S    s_rintl.S    s_truncl.S \
 	e_remainderl.S  s_copysign.S   s_logbl.S    s_rint.S     s_trunc.S \
 	e_remainder.S   s_cos.S        s_logb.S     s_scalbnf.S \
-	e_sqrtf.S       s_finite.S     s_lrintf.S   s_scalbnl.S
+	e_sqrtf.S       s_finite.S     s_lrintf.S   s_scalbnl.S \
+	s_fabs.S        s_fabsf.S
 
 
 obj = 	$(src:%.S=%.o)
