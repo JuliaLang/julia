@@ -81,6 +81,7 @@ function hash(a::Array)
     h
 end
 
+hash(x::Any) = uid(x)
 hash(s::ByteString) = ccall(:memhash32, Uint32, (Ptr{Void}, Size), s.data, length(s.data))
 
 # hash table
