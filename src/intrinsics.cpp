@@ -902,7 +902,18 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
     HANDLE(fptrunc32,1)
         return builder.CreateFPTrunc(FP(x), T_float32);
     HANDLE(fpext64,1)
-        return builder.CreateFPExt(FP(x), T_float64);
+        // when extending a float32 to a float64, we need to force
+        // rounding to single precision first. the reason is that it's
+        // fine to keep working in extended precision as long as it's
+        // understood that everything is implicitly rounded to 23 bits,
+        // but if we start looking at more bits we need to actually do the
+        // rounding first instead of carrying around incorrect low bits.
+        if (ctx->float32Temp == NULL) {
+            ctx->float32Temp = builder.CreateAlloca(T_float32);
+        }
+        builder.CreateStore(FP(x), ctx->float32Temp, true);
+        return builder.CreateFPExt(builder.CreateLoad(ctx->float32Temp, true),
+                                   T_float64);
 
     HANDLE(sqrt_float,1)
         fx = FP(x);

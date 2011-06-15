@@ -229,6 +229,7 @@ typedef struct {
     const Argument *argArray;
     const Argument *argCount;
     AllocaInst *argTemp;
+    AllocaInst *float32Temp; // for forcing rounding
     int argDepth;
     std::string funcName;
 } jl_codectx_t;
@@ -1277,6 +1278,7 @@ static void emit_function(jl_lambda_info_t *lam, Function *f)
     ctx.argArray = &argArray;
     ctx.argCount = &argCount;
     ctx.funcName = lam->name->name;
+    ctx.float32Temp = NULL;
 
     /*
     // check for stack overflow (the slower way)
