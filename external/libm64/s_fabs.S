@@ -1,11 +1,9 @@
 #include "bsd_asm.h"
 
-.align 8
-.size S1, 8
-S1:
-	.long 0xffffffff
-	.long 0x7fffffff
 ENTRY(fabs)
-	pand    S1(%rip), %xmm0
+	movabs $0x7fffffffffffffff,%rdx
+	movq %xmm0,%rax
+	and %rdx,%rax
+	movq %rax,%xmm0
 	ret
 END(fabs)
