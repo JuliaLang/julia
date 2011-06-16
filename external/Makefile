@@ -17,6 +17,9 @@ endif
 default: install
 compile: $(addprefix compile-, $(LIBS))
 install: $(addprefix install-, $(LIBS))
+cleanall: $(addprefix clean-, $(LIBS))
+distclean: $(addprefix distclean-, $(LIBS))
+	rm -rf root
 
 ## LLVM ##
 
@@ -38,8 +41,12 @@ $(LLVM_OBJ_SOURCE): llvm-$(LLVM_VER)/Makefile
 $(LLVM_OBJ_TARGET): $(LLVM_OBJ_SOURCE)
 	mkdir -p $(EXTROOTLIB)
 	cd llvm-$(LLVM_VER) && make install
+	touch $@
 
-cleanall-llvm:
+clean-llvm:
+	make -C llvm-$(LLVM_VER) clean
+	rm -f $(LLVM_OBJ_TARGET)
+distclean-llvm:
 	rm -rf llvm-$(LLVM_VER).tgz llvm-$(LLVM_VER)
 
 ## GNU readline ##
@@ -63,7 +70,10 @@ $(READLINE_OBJ_TARGET): $(READLINE_OBJ_SOURCE)
 	cd readline-$(READLINE_VER) && make install
 	touch $@
 
-cleanall-readline:
+clean-readline:
+	make -C readline-$(READLINE_VER) clean
+	rm -f $(READLINE_OBJ_TARGET)
+distclean-readline:
 	rm -rf readline-$(READLINE_VER).tar.gz readline-$(READLINE_VER)
 
 ## PCRE ##
@@ -85,7 +95,10 @@ $(PCRE_OBJ_TARGET): pcre-$(PCRE_VER)/Makefile
 	make && make install
 	touch $@
 
-cleanall-pcre:
+clean-pcre:
+	make -C pcre-$(PCRE_VER) clean
+	rm -f $(PCRE_OBJ_TARGET)
+distclean-pcre:
 	rm -rf pcre-$(PCRE_VER).tar.bz2 pcre-$(PCRE_VER)
 
 ## fdlibm ##
@@ -104,10 +117,10 @@ $(FDLIBM_OBJ_TARGET): $(FDLIBM_OBJ_SOURCE)
 	mkdir -p $(EXTROOTLIB)
 	cp $< $@
 
-cleanall-fdlibm:
+clean-fdlibm:
 	cd fdlibm && make clean
-	rm -f $(FDLIBM_OBJ_SOURCE)
-	rm -f $(FDLIBM_OBJ_TARGET)
+	rm -f $(FDLIBM_OBJ_SOURCE) $(FDLIBM_OBJ_TARGET)
+distclean-fdlibm: clean-fdlibm
 
 ## OpenBLAS ##
 
@@ -125,7 +138,9 @@ $(OPENBLAS_OBJ_SOURCE): openblas/Makefile
 	cd openblas && \
 	make USE_THREAD=0 NO_CBLAS=1 NO_LAPACK=1 CC=$(CC) FC=$(FC)
 
-cleanall-openblas:
+clean-openblas:
+	make -C openblas clean
+distclean-openblas:
 	rm -rf openblas.tar.gz openblas
 
 ## LAPACK ##
@@ -150,7 +165,10 @@ $(LAPACK_OBJ_TARGET): $(LAPACK_OBJ_SOURCE)
 	mkdir -p $(EXTROOTLIB)
 	cp $< $@
 
-cleanall-lapack:
+clean-lapack:
+	make -C lapack-$(LAPACK_VER) clean
+	rm -f $(LAPACK_OBJ_SOURCE) $(LAPACK_OBJ_TARGET)
+distclean-lapack:
 	rm -rf lapack-$(LAPACK_VER).tgz lapack-$(LAPACK_VER)
 
 ## ARPACK ##
@@ -179,7 +197,10 @@ $(ARPACK_OBJ_TARGET): $(ARPACK_OBJ_SOURCE)
 	mkdir -p $(EXTROOTLIB)
 	cp $< $@
 
-cleanall-arpack:
+clean-arpack:
+	make -C ARPACK clean
+	rm -f $(ARPACK_OBJ_SOURCE) $(ARPACK_OBJ_TARGET)
+distclean-arpack:
 	rm -rf arpack$(ARPACK_VER).tar.gz arpack-patch.tar.gz ARPACK
 
 ## mongoose ##
@@ -193,12 +214,12 @@ mongoose/Makefile: mongoose-$(MONGOOSE_VER).tgz
 	tar zxf $<
 	touch $@
 
-cleanall-mongoose:
+clean-mongoose:
+distclean-mongoose:
 	rm -rf mongoose-$(MONGOOSE_VER).tgz mongoose
 
-## cleaning, etc. ##
+## phony targets ##
 
-cleanall: $(addprefix cleanall-, $(LIBS))
-	rm -rf root
-
-.PHONY: default compile install cleanall compile-* install-* cleanall-*
+.PHONY: \
+	default compile install cleanall distclean \
+	compile-* install-* clean-* distclean-*
