@@ -95,10 +95,10 @@ static Function *jlntuple_func;
 static Function *jlapplygeneric_func;
 static Function *jlbox_func;
 static Function *jlclosure_func;
-static Function *jlconvert_func;
 static Function *jlmethod_func;
 static Function *jlenter_func;
 static Function *jlleave_func;
+static Function *jlallocobj_func;
 static Function *setjmp_func;
 
 /*
@@ -259,7 +259,7 @@ static Value *literal_pointer_val(jl_value_t *p)
     return literal_pointer_val(p, jl_pvalue_llvmt);
 }
 
-static jl_value_t *llvm_type_to_julia(const Type *t);
+static jl_value_t *llvm_type_to_julia(const Type *t, bool err=true);
 
 static Value *emit_typeof(Value *p)
 {
@@ -1740,12 +1740,6 @@ static void init_julia_llvm_env(Module *m)
     jl_ExecutionEngine->addGlobalMapping(jlclosure_func,
                                          (void*)&jl_new_closure_internal);
 
-    jlconvert_func =
-        Function::Create(FunctionType::get(jl_pvalue_llvmt, args4, false),
-                         Function::ExternalLinkage,
-                         "jl_convert", jl_Module);
-    jl_ExecutionEngine->addGlobalMapping(jlconvert_func, (void*)&jl_convert);
-
     std::vector<const Type*> args5(0);
     args5.push_back(T_size);
     jlntuple_func =
@@ -1781,6 +1775,14 @@ static void init_julia_llvm_env(Module *m)
                          Function::ExternalLinkage,
                          "jl_pop_handler", jl_Module);
     jl_ExecutionEngine->addGlobalMapping(jlleave_func, (void*)&jl_pop_handler);
+
+    std::vector<const Type*> aoargs(0);
+    aoargs.push_back(T_size);
+    jlallocobj_func =
+        Function::Create(FunctionType::get(T_pint8, aoargs, false),
+                         Function::ExternalLinkage,
+                         "allocobj", jl_Module);
+    jl_ExecutionEngine->addGlobalMapping(jlallocobj_func, (void*)&allocobj);
 
     // set up optimization passes
     FPM = new FunctionPassManager(jl_Module);

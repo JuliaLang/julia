@@ -21,8 +21,8 @@ namespace JL_I {
         and_int, or_int, xor_int, not_int, shl_int, lshr_int, ashr_int,
         bswap_int,
         // conversion
-        sext16, zext16, sext32, zext32, sext64, zext64,
-        trunc8, trunc16, trunc32,
+        sext16, zext16, sext32, zext32, sext64, zext64, zext_int,
+        trunc8, trunc16, trunc32, trunc64, trunc_int,
         fptoui8, fptosi8, fptoui16, fptosi16, fptoui32, fptosi32,
         fptoui64, fptosi64, 
         uitofp32, sitofp32, uitofp64, sitofp64,
@@ -99,21 +99,21 @@ static bool has_julia_type(Value *v)
             ((Instruction*)v)->hasMetadata());
 }
 
-static jl_value_t *julia_type_of_without_metadata(Value *v)
+static jl_value_t *julia_type_of_without_metadata(Value *v, bool err=true)
 {
     if (dynamic_cast<AllocaInst*>(v) != NULL ||
         dynamic_cast<GetElementPtrInst*>(v) != NULL) {
         // an alloca always has llvm type pointer
-        return llvm_type_to_julia(v->getType()->getContainedType(0));
+        return llvm_type_to_julia(v->getType()->getContainedType(0), err);
     }
-    return llvm_type_to_julia(v->getType());
+    return llvm_type_to_julia(v->getType(), err);
 }
 
 static jl_value_t *julia_type_of(Value *v)
 {
     if (dynamic_cast<Instruction*>(v) == NULL ||
         !((Instruction*)v)->hasMetadata()) {
-        return julia_type_of_without_metadata(v);
+        return julia_type_of_without_metadata(v, true);
     }
     MDNode *mdn = ((Instruction*)v)->getMetadata("julia_type");
     MDString *md = (MDString*)mdn->getOperand(0);
@@ -148,7 +148,7 @@ static Value *mark_julia_type(Value *v, jl_value_t *jt)
         return v;
     if (has_julia_type(v) && julia_type_of(v) == jt)
         return v;
-    if (julia_type_of_without_metadata(v) == jt)
+    if (julia_type_of_without_metadata(v,false) == jt)
         return NoOpCast(v);
     if (dynamic_cast<Instruction*>(v) == NULL)
         v = NoOpCast(v);
@@ -197,6 +197,7 @@ static const Type *julia_type_to_llvm(jl_value_t *jt, jl_codectx_t *ctx)
         if (nb == 16) return T_int16;
         if (nb == 32) return T_int32;
         if (nb == 64) return T_int64;
+        else          return Type::getIntNTy(getGlobalContext(), nb);
     }
     if (jt == (jl_value_t*)jl_any_type)
         return jl_pvalue_llvmt;
@@ -210,7 +211,7 @@ static const Type *julia_type_to_llvm(jl_value_t *jt, jl_codectx_t *ctx)
 // so this is an approximation. it's only correct if the associated LLVM
 // value is not tagged with our value name hack.
 // boxed(v) below gets the correct type.
-static jl_value_t *llvm_type_to_julia(const Type *t)
+static jl_value_t *llvm_type_to_julia(const Type *t, bool throw_error)
 {
     if (t == T_int1)  return (jl_value_t*)jl_bool_type;
     if (t == T_int8)  return (jl_value_t*)jl_int8_type;
@@ -223,13 +224,22 @@ static jl_value_t *llvm_type_to_julia(const Type *t)
     if (t == jl_pvalue_llvmt)
         return (jl_value_t*)jl_any_type;
     if (t->isPointerTy()) {
-        jl_value_t *elty = llvm_type_to_julia(t->getContainedType(0));
+        jl_value_t *elty = llvm_type_to_julia(t->getContainedType(0),
+                                              throw_error);
         return (jl_value_t*)jl_apply_type((jl_value_t*)jl_pointer_type,
                                           jl_tuple1(elty));
     }
-    jl_errorf("cannot convert type %s to a julia type",
-              t->getDescription().c_str());
+    if (throw_error) {
+        jl_errorf("cannot convert type %s to a julia type",
+                  t->getDescription().c_str());
+    }
     return NULL;
+}
+
+static Value *bitstype_pointer(Value *x)
+{
+    return builder.CreateGEP(builder.CreateBitCast(x, jl_ppvalue_llvmt),
+                             ConstantInt::get(T_int32, 1));
 }
 
 // this is used to wrap values for generic contexts, where a
@@ -273,15 +283,19 @@ static Value *boxed(Value *v)
             return builder.CreateCall2(box32_func, literal_pointer_val(jt), v);
         if (nb == 64)
             return builder.CreateCall2(box64_func, literal_pointer_val(jt), v);
+        size_t sz = sizeof(void*) + (nb+7)/8;
+        Value *newv = builder.CreateCall(jlallocobj_func,
+                                         ConstantInt::get(T_size, sz));
+        builder.CreateStore(literal_pointer_val(jt),
+                            builder.CreateBitCast(newv, jl_ppvalue_llvmt));
+        builder.CreateStore(v,
+                            builder.CreateBitCast(bitstype_pointer(newv),
+                                                  PointerType::get(t,0)));
+        // TODO: make sure this is rooted. I think it is.
+        return newv;
     }
     assert("Don't know how to box this type" && false);
     return NULL;
-}
-
-static Value *bitstype_pointer(Value *x)
-{
-    return builder.CreateGEP(builder.CreateBitCast(x, jl_ppvalue_llvmt),
-                             ConstantInt::get(T_int32, 1));
 }
 
 static Function *value_to_pointer_func;
@@ -702,6 +716,32 @@ static Value *generic_unbox(jl_value_t *targ, jl_value_t *x, jl_codectx_t *ctx)
     return emit_unbox(to, PointerType::get(to, 0), emit_unboxed(x, ctx));
 }
 
+static Value *generic_trunc(jl_value_t *targ, jl_value_t *x, jl_codectx_t *ctx)
+{
+    jl_value_t *bt =
+        jl_interpret_toplevel_expr_with(targ,
+                                        &jl_tupleref(ctx->sp,0),
+                                        ctx->sp->length/2);
+    if (!jl_is_bits_type(bt))
+        jl_error("trunc_int: expected bits type as first argument");
+    unsigned int nb = jl_bitstype_nbits(bt);
+    const Type *to = IntegerType::get(jl_LLVMContext, nb);
+    return builder.CreateTrunc(INT(emit_unboxed(x,ctx)), to);
+}
+
+static Value *generic_zext(jl_value_t *targ, jl_value_t *x, jl_codectx_t *ctx)
+{
+    jl_value_t *bt =
+        jl_interpret_toplevel_expr_with(targ,
+                                        &jl_tupleref(ctx->sp,0),
+                                        ctx->sp->length/2);
+    if (!jl_is_bits_type(bt))
+        jl_error("zext_int: expected bits type as first argument");
+    unsigned int nb = jl_bitstype_nbits(bt);
+    const Type *to = IntegerType::get(jl_LLVMContext, nb);
+    return builder.CreateZExt(INT(emit_unboxed(x,ctx)), to);
+}
+
 #define HANDLE(intr,n)                                                  \
     case intr: if (nargs!=n) jl_error(#intr": wrong number of arguments");
 
@@ -718,6 +758,16 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
         if (nargs!=2)
             jl_error("unbox: wrong number of arguments");
         return generic_unbox(args[1], args[2], ctx);
+    }
+    if (f == trunc_int) {
+        if (nargs!=2)
+            jl_error("trunc_int: wrong number of arguments");
+        return generic_trunc(args[1], args[2], ctx);
+    }
+    if (f == zext_int) {
+        if (nargs!=2)
+            jl_error("zext_int: wrong number of arguments");
+        return generic_zext(args[1], args[2], ctx);
     }
     if (nargs < 1) jl_error("invalid intrinsic call");
     Value *x = emit_unboxed(args[1], ctx);
@@ -837,20 +887,21 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
                                      FP(emit_expr(args[2],ctx,true)));
 
     HANDLE(and_int,2)
-        return builder.CreateAnd(x, emit_expr(args[2],ctx,true));
+        return builder.CreateAnd(INT(x), emit_expr(args[2],ctx,true));
     HANDLE(or_int,2)
-        return builder.CreateOr(x, emit_expr(args[2],ctx,true));
+        return builder.CreateOr(INT(x), emit_expr(args[2],ctx,true));
     HANDLE(xor_int,2)
-        return builder.CreateXor(x, emit_expr(args[2],ctx,true));
+        return builder.CreateXor(INT(x), emit_expr(args[2],ctx,true));
     HANDLE(not_int,1)
-        return builder.CreateXor(x, ConstantInt::get(t, -1));
+        return builder.CreateXor(INT(x), ConstantInt::get(t, -1));
     HANDLE(shl_int,2)
-        return builder.CreateShl(x, uint_cnvt(t,emit_expr(args[2],ctx,true)));
+        return builder.CreateShl(INT(x), uint_cnvt(t,emit_expr(args[2],ctx,true)));
     HANDLE(lshr_int,2)
-        return builder.CreateLShr(x, uint_cnvt(t,emit_expr(args[2],ctx,true)));
+        return builder.CreateLShr(INT(x), uint_cnvt(t,emit_expr(args[2],ctx,true)));
     HANDLE(ashr_int,2)
-        return builder.CreateAShr(x, uint_cnvt(t,emit_expr(args[2],ctx,true)));
+        return builder.CreateAShr(INT(x), uint_cnvt(t,emit_expr(args[2],ctx,true)));
     HANDLE(bswap_int,1)
+        x = INT(x);
         fxt = x->getType();
         return builder.CreateCall(Intrinsic::getDeclaration(jl_Module,
                                                             Intrinsic::bswap,
@@ -858,23 +909,25 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
                                   x);
 
     HANDLE(sext16,1)
-        return builder.CreateSExt(x, T_int16);
+        return builder.CreateSExt(INT(x), T_int16);
     HANDLE(zext16,1)
-        return builder.CreateZExt(x, T_int16);
+        return builder.CreateZExt(INT(x), T_int16);
     HANDLE(sext32,1)
-        return builder.CreateSExt(x, T_int32);
+        return builder.CreateSExt(INT(x), T_int32);
     HANDLE(zext32,1)
-        return builder.CreateZExt(x, T_int32);
+        return builder.CreateZExt(INT(x), T_int32);
     HANDLE(sext64,1)
-        return builder.CreateSExt(x, T_int64);
+        return builder.CreateSExt(INT(x), T_int64);
     HANDLE(zext64,1)
-        return builder.CreateZExt(x, T_int64);
+        return builder.CreateZExt(INT(x), T_int64);
     HANDLE(trunc8,1)
-        return builder.CreateTrunc(x, T_int8);
+        return builder.CreateTrunc(INT(x), T_int8);
     HANDLE(trunc16,1)
-        return builder.CreateTrunc(x, T_int16);
+        return builder.CreateTrunc(INT(x), T_int16);
     HANDLE(trunc32,1)
-        return builder.CreateTrunc(x, T_int32);
+        return builder.CreateTrunc(INT(x), T_int32);
+    HANDLE(trunc64,1)
+        return builder.CreateTrunc(INT(x), T_int64);
     HANDLE(fptoui8,1)
         return builder.CreateFPToUI(FP(x), T_int8);
     HANDLE(fptosi8,1)
@@ -1023,8 +1076,9 @@ extern "C" void jl_init_intrinsic_functions()
     ADD_I(and_int); ADD_I(or_int); ADD_I(xor_int); ADD_I(not_int);
     ADD_I(shl_int); ADD_I(lshr_int); ADD_I(ashr_int); ADD_I(bswap_int);
     ADD_I(sext16); ADD_I(zext16); ADD_I(sext32); ADD_I(zext32);
-    ADD_I(sext64); ADD_I(zext64);
-    ADD_I(trunc8); ADD_I(trunc16); ADD_I(trunc32);
+    ADD_I(sext64); ADD_I(zext64); ADD_I(zext_int);
+    ADD_I(trunc8); ADD_I(trunc16); ADD_I(trunc32); ADD_I(trunc64);
+    ADD_I(trunc_int);
     ADD_I(fptoui8); ADD_I(fptosi8);
     ADD_I(fptoui16); ADD_I(fptosi16); ADD_I(fptoui32); ADD_I(fptosi32);
     ADD_I(fptoui64); ADD_I(fptosi64);
