@@ -663,8 +663,9 @@ jl_value_t *jl_deserialize_value(ios_t *s)
     }
     else if (vtag == (jl_value_t*)jl_bits_kind) {
         jl_bits_type_t *bt = (jl_bits_type_t*)jl_deserialize_value(s);
-        char *data = alloca(bt->nbits/8);
-        ios_read(s, data, bt->nbits/8);
+        int nby = bt->nbits/8;
+        char *data = alloca(nby);
+        ios_read(s, data, nby);
         jl_value_t *v=NULL;
         if (bt == jl_int8_type)
             v = jl_box_int8(*(int8_t*)data);
@@ -690,7 +691,10 @@ jl_value_t *jl_deserialize_value(ios_t *s)
             case 16: v = jl_box16(bt, *(int16_t*)data); break;
             case 32: v = jl_box32(bt, *(int32_t*)data); break;
             case 64: v = jl_box64(bt, *(int64_t*)data); break;
-            default: assert(0);
+            default:
+                v = (jl_value_t*)allocobj(sizeof(void*)+nby);
+                v->type = (jl_type_t*)bt;
+                memcpy(jl_bits_data(v), data, nby);
             }
         }
         ptrhash_put(&backref_table, (void*)(ptrint_t)pos, v);

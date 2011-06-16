@@ -52,7 +52,7 @@ jl_bits_type_t *jl_float32_type;
 jl_bits_type_t *jl_float64_type;
 
 jl_tuple_t *jl_null;
-jl_struct_type_t *jl_nothing;
+jl_value_t *jl_nothing;
 
 jl_func_type_t *jl_any_func;
 jl_function_t *jl_bottom_func;
@@ -1948,7 +1948,7 @@ void jl_init_types()
 
     jl_null = (jl_tuple_t*)newobj((jl_type_t*)jl_tuple_type, 1);
     jl_null->length = 0;
-    jl_nothing = (jl_struct_type_t*)jl_null; // for bootstrapping
+    jl_nothing = (jl_value_t*)jl_null; // for bootstrapping
 
     // initialize them. lots of cycles.
     jl_struct_kind->name = jl_new_typename(jl_symbol("StructKind"));

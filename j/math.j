@@ -33,3 +33,5 @@ function hypot(x::Real, y::Real)
     r = x/y
     return y*sqrt(1+r*r)
 end
+
+square(x::Number) = x*x

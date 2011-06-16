@@ -58,7 +58,7 @@ timeit(matmul, o)
 
 ## mandelbrot set: complex arithmetic and comprehensions ##
 
-function mandel(z::Complex)
+function mandel(z::ComplexNum)
     n = 0
     c = z
     for n=0:79
@@ -71,7 +71,7 @@ function mandel(z::Complex)
 end
 
 print("mandelbrot: ")
-mandelperf() = [ mandel(Complex(r,i)) | r = -2.0:.1:0.5, i = -1.:.1:1. ]
+mandelperf() = [ mandel(complex(r,i)) | r = -2.0:.1:0.5, i = -1.:.1:1. ]
 @assert sum(mandelperf()) == 14791
 timeit(mandelperf)
 
