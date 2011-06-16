@@ -28,7 +28,9 @@ ifeq ($(USE_COPY_STACKS),1)
 CFLAGS += -DCOPY_STACKS
 endif
 
-default: libjulia-release
+default: release
+
+debug release: %: libjulia-%
 
 %.o: %.c julia.h
 	$(CC) $(CFLAGS) $(SHIPFLAGS) -c $< -o $@
@@ -58,19 +60,13 @@ $(LLT): $(LLTDIR)/*.h $(LLTDIR)/*.c
 $(FLISP): $(FLISPDIR)/*.h $(FLISPDIR)/*.c $(LLT)
 	cd $(FLISPDIR) && $(MAKE)
 
-../external/.build:
-	$(MAKE) -C ../external install
-	touch $@
-
-$(JULIAHOME)/libjulia-debug.$(SHLIB_EXT): $(DOBJS) $(LIBFILES) ../external/.build
+$(JULIAHOME)/libjulia-debug.$(SHLIB_EXT): $(DOBJS) $(LIBFILES)
 	$(CXX) $(DEBUGFLAGS) $(DOBJS) -shared -o $(JULIAHOME)/libjulia-debug.$(SHLIB_EXT) $(LIBS)
 libjulia-debug: $(JULIAHOME)/libjulia-debug.$(SHLIB_EXT)
 
-$(JULIAHOME)/libjulia-release.$(SHLIB_EXT): $(OBJS) $(LIBFILES) ../external/.build
+$(JULIAHOME)/libjulia-release.$(SHLIB_EXT): $(OBJS) $(LIBFILES)
 	$(CXX) $(SHIPFLAGS) $(OBJS) -shared -o $(JULIAHOME)/libjulia-release.$(SHLIB_EXT) $(LIBS)
 libjulia-release: $(JULIAHOME)/libjulia-release.$(SHLIB_EXT)
-
-debug release: %: julia-%
 
 clean:
 	rm -f $(JULIAHOME)/libjulia*.$(SHLIB_EXT)

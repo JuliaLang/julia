@@ -41,7 +41,7 @@ $(LLVM_OBJ_SOURCE): llvm-$(LLVM_VER)/Makefile
 $(LLVM_OBJ_TARGET): $(LLVM_OBJ_SOURCE)
 	mkdir -p $(EXTROOTLIB)
 	cd llvm-$(LLVM_VER) && make install
-	touch $@ .build
+	touch $@
 
 clean-llvm:
 	make -C llvm-$(LLVM_VER) clean
@@ -68,7 +68,7 @@ $(READLINE_OBJ_SOURCE): readline-$(READLINE_VER)/Makefile
 $(READLINE_OBJ_TARGET): $(READLINE_OBJ_SOURCE)
 	mkdir -p $(EXTROOTLIB)
 	cd readline-$(READLINE_VER) && make install
-	touch $@ .build
+	touch $@
 
 clean-readline:
 	make -C readline-$(READLINE_VER) clean
@@ -93,7 +93,7 @@ $(PCRE_OBJ_TARGET): pcre-$(PCRE_VER)/Makefile
 	cd pcre-$(PCRE_VER) && \
 	./configure --prefix=$(EXTROOT) --enable-utf8 --enable-unicode-properties && \
 	make && make install
-	touch $@ .build
+	touch $@
 
 clean-pcre:
 	make -C pcre-$(PCRE_VER) clean
@@ -116,7 +116,6 @@ $(FDLIBM_OBJ_SOURCE): fdlibm/*.c
 $(FDLIBM_OBJ_TARGET): $(FDLIBM_OBJ_SOURCE)
 	mkdir -p $(EXTROOTLIB)
 	cp $< $@
-	touch .build
 
 clean-fdlibm:
 	cd fdlibm && make clean
@@ -165,7 +164,6 @@ $(LAPACK_OBJ_SOURCE): lapack-$(LAPACK_VER)/Makefile $(OPENBLAS_OBJ_SOURCE)
 $(LAPACK_OBJ_TARGET): $(LAPACK_OBJ_SOURCE)
 	mkdir -p $(EXTROOTLIB)
 	cp $< $@
-	touch .build
 
 clean-lapack:
 	make -C lapack-$(LAPACK_VER) clean
@@ -198,7 +196,6 @@ $(ARPACK_OBJ_SOURCE): ARPACK/Makefile
 $(ARPACK_OBJ_TARGET): $(ARPACK_OBJ_SOURCE)
 	mkdir -p $(EXTROOTLIB)
 	cp $< $@
-	touch .build
 
 clean-arpack:
 	make -C ARPACK clean
@@ -215,7 +212,7 @@ mongoose-$(MONGOOSE_VER).tgz:
 	$(DOWNLOAD) http://mongoose.googlecode.com/files/mongoose-$(MONGOOSE_VER).tgz
 mongoose/Makefile: mongoose-$(MONGOOSE_VER).tgz
 	tar zxf $<
-	touch $@ .build
+	touch $@
 
 clean-mongoose:
 distclean-mongoose:
