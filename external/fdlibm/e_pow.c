@@ -111,10 +111,8 @@ ivln2_l  =  1.92596299112661746887e-08; /* 0x3E54AE0B, 0xF85DDF44 =1/ln2 tail*/
 	unsigned lx,ly;
 
 	i0 = ((*(int*)&one)>>29)^1; i1=1-i0;
-        GET_HIGH_WORD(hx, x);   /* high word of x */
-        GET_LOW_WORD(lx, x);    /* low  word of x */
-        GET_HIGH_WORD(hy, y);   /* high word of y */
-        GET_LOW_WORD(ly, y);    /* low  word of y */
+        EXTRACT_WORDS(hx, lx, x);
+        EXTRACT_WORDS(hy, ly, y);
 	ix = hx&0x7fffffff;  iy = hy&0x7fffffff;
 
     /* y==zero: x**0 = 1 */
@@ -263,8 +261,7 @@ ivln2_l  =  1.92596299112661746887e-08; /* 0x3E54AE0B, 0xF85DDF44 =1/ln2 tail*/
 	p_l = (y-y1)*t1+y*t2;
 	p_h = y1*t1;
 	z = p_l+p_h;
-        GET_HIGH_WORD(j, z);
-        GET_LOW_WORD(i, z);
+        EXTRACT_WORDS(j, i, z);
 	if (j>=0x40900000) {				/* z >= 1024 */
 	    if(((j-0x40900000)|i)!=0)			/* if z > 1024 */
 		return s*huge*huge;			/* overflow */

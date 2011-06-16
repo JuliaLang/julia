@@ -54,7 +54,7 @@ static double one=1.0, two=2.0, tiny = 1.0e-300;
 	int jx,ix;
 
     /* High word of |x|. */
-	jx = __HI(x);
+        GET_HIGH_WORD(jx, x);
 	ix = jx&0x7fffffff;
 
     /* x is INF or NaN */

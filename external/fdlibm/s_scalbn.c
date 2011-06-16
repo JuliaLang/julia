@@ -38,13 +38,12 @@ tiny   = 1.0e-300;
 #endif
 {
 	int  k,hx,lx;
-	hx = __HI(x);
-	lx = __LO(x);
+        EXTRACT_WORDS(hx, lx, x);
         k = (hx&0x7ff00000)>>20;		/* extract exponent */
         if (k==0) {				/* 0 or subnormal x */
             if ((lx|(hx&0x7fffffff))==0) return x; /* +-0 */
 	    x *= two54; 
-	    hx = __HI(x);
+            GET_HIGH_WORD(hx, x);
 	    k = ((hx&0x7ff00000)>>20) - 54; 
             if (n< -50000) return tiny*x; 	/*underflow*/
 	    }
@@ -52,12 +51,12 @@ tiny   = 1.0e-300;
         k = k+n; 
         if (k >  0x7fe) return huge*copysign(huge,x); /* overflow  */
         if (k > 0) 				/* normal result */
-	    {__HI(x) = (hx&0x800fffff)|(k<<20); return x;}
+	    {SET_HIGH_WORD(x, (hx&0x800fffff)|(k<<20)); return x;}
         if (k <= -54)
             if (n > 50000) 	/* in case integer overflow in n+k */
 		return huge*copysign(huge,x);	/*overflow*/
 	    else return tiny*copysign(tiny,x); 	/*underflow*/
         k += 54;				/* subnormal result */
-        __HI(x) = (hx&0x800fffff)|(k<<20);
+        SET_HIGH_WORD(x, (hx&0x800fffff)|(k<<20));
         return x*twom54;
 }

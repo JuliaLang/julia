@@ -37,8 +37,7 @@ static double huge = 1.0e300;
 {
 	int i0,i1,j0;
 	unsigned i,j;
-	i0 =  __HI(x);
-	i1 =  __LO(x);
+        EXTRACT_WORDS(i0, i1, x);
 	j0 = ((i0>>20)&0x7ff)-0x3ff;
 	if(j0<20) {
 	    if(j0<0) { 	/* raise inexact if x != 0 */
@@ -73,7 +72,6 @@ static double huge = 1.0e300;
 		i1 &= (~i);
 	    }
 	}
-	__HI(x) = i0;
-	__LO(x) = i1;
+        INSERT_WORDS(x, i0, i1);
 	return x;
 }
