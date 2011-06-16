@@ -1,3 +1,4 @@
 *.o
 /libfdm.a
 /libfdm.dylib
+/libfdm.so
