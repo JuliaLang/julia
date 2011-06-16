@@ -19,7 +19,9 @@
 
 #include <sys/types.h>
 
+#ifndef M_PI
 #define	M_PI		3.14159265358979323846	/* pi */
+#endif
 
 /* The original fdlibm code used statements like:
 	n0 = ((*(int*)&one)>>29)^1;		* index of high word *
