@@ -25,8 +25,6 @@
  * SUCH DAMAGE.
  */
 
-#include <math.h>
-
 float
 fmaxf(float x, float y)
 {
