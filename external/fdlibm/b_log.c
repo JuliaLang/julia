@@ -350,6 +350,9 @@ static double logF_tail[N+1] = {
 	-.00000000000017239444525614834
 };
 
+double ldexp(double value, int exp);
+double logb(double x);
+
 /*
  * Extra precision variant, returning struct {double a, b;};
  * log(x) = a+b to 63 bits, with a rounded to 26 bits.

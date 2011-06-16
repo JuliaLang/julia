@@ -26,8 +26,8 @@
 #endif
 {
 	int hx,lx;
-	hx = (__HI(x)&0x7fffffff);
-	lx = __LO(x);
+        EXTRACT_WORDS(hx, lx, x);
+        hx &= 0x7fffffff;
 	hx |= (unsigned)(lx|(-lx))>>31;	
 	hx = 0x7ff00000 - hx;
 	return ((unsigned)(hx))>>31;
