@@ -30,10 +30,10 @@
 	int	hx,hy,ix,iy;
 	unsigned lx,ly;
 
-	hx = __HI(x);		/* high word of x */
-	lx = __LO(x);		/* low  word of x */
-	hy = __HI(y);		/* high word of y */
-	ly = __LO(y);		/* low  word of y */
+        GET_HIGH_WORD(hx, x);   /* high word of x */
+        GET_LOW_WORD(lx, x);    /* low  word of x */
+        GET_HIGH_WORD(hy, y);   /* high word of y */
+        GET_LOW_WORD(ly, y);    /* low  word of y */
 	ix = hx&0x7fffffff;		/* |x| */
 	iy = hy&0x7fffffff;		/* |y| */
 
@@ -42,8 +42,8 @@
 	   return x+y;				
 	if(x==y) return x;		/* x=y, return x */
 	if((ix|lx)==0) {			/* x == 0 */
-	    __HI(x) = hy&0x80000000;	/* return +-minsubnormal */
-	    __LO(x) = 1;
+            SET_HIGH_WORD(x, hy&0x80000000);	/* return +-minsubnormal */
+            SET_LOW_WORD(x, 1);
 	    y = x*x;
 	    if(y==x) return y; else return x;	/* raise underflow flag */
 	} 
@@ -69,10 +69,12 @@
 	if(hy<0x00100000) {		/* underflow */
 	    y = x*x;
 	    if(y!=x) {		/* raise underflow flag */
-		__HI(y) = hx; __LO(y) = lx;
+                SET_HIGH_WORD(y, hx);
+                SET_LOW_WORD(y, lx);
 		return y;
 	    }
 	}
-	__HI(x) = hx; __LO(x) = lx;
+        SET_HIGH_WORD(x, hx);
+        SET_LOW_WORD(x, lx);
 	return x;
 }

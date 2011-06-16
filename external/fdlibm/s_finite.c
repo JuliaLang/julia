@@ -26,6 +26,6 @@
 #endif
 {
 	int hx; 
-	hx = __HI(x);
+        GET_HIGH_WORD(hx, x);
 	return  (unsigned)((hx&0x7fffffff)-0x7ff00000)>>31;
 }

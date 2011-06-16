@@ -52,7 +52,7 @@ static double one = 1.0, half=0.5, huge = 1.0e300;
 	unsigned lx;
 
     /* High word of |x|. */
-	ix = __HI(x);
+        GET_HIGH_WORD(ix, x);
 	ix &= 0x7fffffff;
 
     /* x is INF or NaN */
