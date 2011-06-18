@@ -368,8 +368,6 @@
    (pattern-lambda (function (call name . argl) body)
 		   (generic-function-def-expr name '() argl body))
 
-   (pattern-lambda (function (-- arg (-s)) body)
-		   `(-> ,arg ,body))
    (pattern-lambda (function (tuple . args) body)
 		   `(-> (tuple ,@args) ,body))
 
