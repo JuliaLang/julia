@@ -3,16 +3,7 @@ include ../Make.inc
 
 OS = $(shell uname)
 ARCH = $(shell uname -m)
-
-LINUX_LIBS  = llvm pcre fdlibm lapack arpack mongoose
-DARWIN_LIBS = llvm pcre fdlibm lapack arpack mongoose readline
-
-ifeq ($(OS), Linux)
-LIBS = $(LINUX_LIBS)
-endif
-ifeq ($(OS), Darwin)
-LIBS = $(DARWIN_LIBS)
-endif
+LIBS = llvm pcre fdlibm lapack arpack mongoose readline
 
 default: install
 compile: $(addprefix compile-, $(LIBS))
