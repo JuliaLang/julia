@@ -193,6 +193,33 @@ clean-arpack:
 distclean-arpack:
 	rm -rf arpack$(ARPACK_VER).tar.gz arpack-patch.tar.gz ARPACK
 
+## FFTW ##
+
+FFTW_OBJ_TARGET = $(EXTROOTLIB)/libfftw3.3.$(SHLIB_EXT)
+
+compile-fftw: install-fftw
+install-fftw: $(FFTW_OBJ_TARGET)
+
+fftw-$(FFTW_VER).tar.gz:
+	$(DOWNLOAD) http://www.fftw.org/$@
+fftw-$(FFTW_VER)/configure: fftw-$(FFTW_VER).tar.gz
+	tar zxf $<
+	touch $@
+fftw-$(FFTW_VER)/config.status: fftw-$(FFTW_VER)/configure
+	cd fftw-$(FFTW_VER) && \
+	./configure --prefix=$(EXTROOT) --enable-shared && \
+	make clean
+	touch $@
+$(FFTW_OBJ_TARGET): fftw-$(FFTW_VER)/config.status
+	make -C fftw-$(FFTW_VER) install
+	touch $@
+
+clean-fftw:
+	make -C fftw-$(FFTW_VER) clean
+	rm -f $(FFTW_OBJ_TARGET)
+distclean-fftw:
+	rm -rf fftw-$(FFTW_VER).tar.gz fftw-$(FFTW_VER)
+
 ## mongoose ##
 
 compile-mongoose: mongoose/Makefile
