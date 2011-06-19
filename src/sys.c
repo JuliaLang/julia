@@ -272,14 +272,6 @@ static void *run_io_thr(void *arg)
 DLLEXPORT
 void jl_enq_send_req(ios_t *dest, ios_t *buf)
 {
-    if (buf->size <= 1024) {
-        // for small writes don't bother with the thread
-        size_t nw;
-        _os_write_all(dest->fd, buf->buf, buf->size, &nw);
-        ios_trunc(buf, 0);
-        return;
-    }
-
     sendreq_t *req = (sendreq_t*)malloc(sizeof(sendreq_t));
     req->fd = dest->fd;
     size_t sz;
