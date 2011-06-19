@@ -998,7 +998,10 @@ JL_CALLABLE(jl_apply_generic)
         return jl_no_method_error((jl_function_t*)jl_t2(env), args, nargs);
     }
 
-    return jl_apply(mfunc, args, nargs);
+    JL_GC_PUSH(&mfunc);
+    jl_value_t *result = jl_apply(mfunc, args, nargs);
+    JL_GC_POP();
+    return result;
 }
 
 static void print_methlist(char *name, jl_methlist_t *ml)
