@@ -17,7 +17,7 @@ DEBUGFLAGS = -ggdb3 -DDEBUG $(FLAGS)
 SHIPFLAGS = -O3 -DNDEBUG $(FLAGS)
 
 LIBFILES = $(FLISP) $(LLT)
-LIBS = $(LIBFILES) -L$(EXTROOT)/lib -lutil -ldl -lm $(OSLIBS) \
+LIBS = $(LIBFILES) -L$(EXTROOTLIB) -lutil -ldl -lm  $(EXTROOTLIB)/libunwind-generic.a  $(EXTROOTLIB)/libunwind.a $(OSLIBS) \
 	$(shell $(LLVMROOT)/bin/llvm-config --ldflags --libs engine) -lpthread 
 
 ifeq ($(JULIAGC),MARKSWEEP)

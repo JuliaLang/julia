@@ -18,7 +18,9 @@
 #include <unistd.h>
 #include "llt.h"
 #include "julia.h"
-
+// This gives unwind only local unwinding options ==> faster code
+#define UNW_LOCAL_ONLY
+#include <libunwind.h>
 /* This probing code is derived from Douglas Jones' user thread library */
 
 /* the list of offsets in jmp_buf to be adjusted */
@@ -426,9 +428,28 @@ static void init_task(jl_task_t *t)
 }
 #endif
 
+
+void show_backtrace (void) {
+  unw_cursor_t cursor; unw_context_t uc;
+  unw_word_t ip, sp;
+
+  unw_getcontext(&uc);
+  unw_init_local(&cursor, &uc);
+  int index = unw_step(&cursor);
+  printf("index %d\n", index);
+  while (index > 0) { 
+    unw_get_reg(&cursor, UNW_REG_IP, &ip);
+    unw_get_reg(&cursor, UNW_REG_SP, &sp);
+    printf ("ip = %lx, sp = %lx\n", (long) ip, (long) sp);    
+    index = unw_step(&cursor); 
+    printf("index %d\n", index);
+  }
+}
+
 // yield to exception handler
 void jl_raise(jl_value_t *e)
 {
+    show_backtrace();
     jl_task_t *eh = jl_current_task->state.eh_task;
     eh->state.err = 1;
     jl_exception_in_transit = e;
@@ -446,6 +467,7 @@ void jl_raise(jl_value_t *e)
         ctx_switch(eh, eh->state.eh_ctx);
         // TODO: continued exception
     }
+    
 }
 
 jl_task_t *jl_new_task(jl_function_t *start, size_t ssize)
