@@ -88,6 +88,7 @@ static GlobalVariable *jlexc_var;
 static Function *jlraise_func;
 static Function *jlerror_func;
 static Function *jluniniterror_func;
+static Function *jldiverror_func;
 static Function *jltypeerror_func;
 static Function *jlgetbindingp_func;
 static Function *jltuple_func;
@@ -297,17 +298,23 @@ static void error_unless(Value *cond, const std::string &msg, jl_codectx_t *ctx)
     builder.SetInsertPoint(passBB);
 }
 
-static void null_pointer_check(Value *v, jl_codectx_t *ctx)
+static void call_error_func_unless(Value *cond, Function *errfunc,
+                                   jl_codectx_t *ctx)
 {
-    Value *cond = builder.CreateICmpNE(v, V_null);
     BasicBlock *failBB = BasicBlock::Create(getGlobalContext(),"fail",ctx->f);
     BasicBlock *passBB = BasicBlock::Create(getGlobalContext(),"pass");
     builder.CreateCondBr(cond, passBB, failBB);
     builder.SetInsertPoint(failBB);
-    builder.CreateCall(jluniniterror_func);
+    builder.CreateCall(errfunc);
     builder.CreateBr(passBB);
     ctx->f->getBasicBlockList().push_back(passBB);
     builder.SetInsertPoint(passBB);
+}
+
+static void null_pointer_check(Value *v, jl_codectx_t *ctx)
+{
+    call_error_func_unless(builder.CreateICmpNE(v, V_null),
+                           jluniniterror_func, ctx);
 }
 
 static Value *boxed(Value *v);
@@ -1688,6 +1695,14 @@ static void init_julia_llvm_env(Module *m)
     jluniniterror_func->setDoesNotReturn();
     jl_ExecutionEngine->addGlobalMapping(jluniniterror_func,
                                          (void*)&jl_undef_ref_error);
+
+    jldiverror_func =
+        Function::Create(FunctionType::get(T_void, empty_args, false),
+                         Function::ExternalLinkage,
+                         "jl_divide_by_zero_error", jl_Module);
+    jldiverror_func->setDoesNotReturn();
+    jl_ExecutionEngine->addGlobalMapping(jldiverror_func,
+                                         (void*)&jl_divide_by_zero_error);
 
     setjmp_func =
         Function::Create(FunctionType::get(T_int32, args1, false),

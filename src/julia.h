@@ -616,6 +616,7 @@ void jl_type_error_rt(const char *fname, const char *context,
                       jl_value_t *ty, jl_value_t *got);
 jl_value_t *jl_no_method_error(jl_function_t *f, jl_value_t **args, size_t na);
 void jl_undef_ref_error();
+void jl_divide_by_zero_error();
 
 // initialization functions
 DLLEXPORT void julia_init(char *imageFile);
