@@ -1587,6 +1587,12 @@ extern "C" jl_value_t *jl_new_box(jl_value_t *v)
     return box;
 }
 
+static void addPass(FunctionPassManager *PM, Pass *P)
+{
+    // Add the pass to the pass manager...
+    PM->add(P);
+}
+
 static void init_julia_llvm_env(Module *m)
 {
     T_int1  = Type::getInt1Ty(getGlobalContext());
@@ -1787,6 +1793,44 @@ static void init_julia_llvm_env(Module *m)
     // set up optimization passes
     FPM = new FunctionPassManager(jl_Module);
     FPM->add(new TargetData(*jl_ExecutionEngine->getTargetData()));
+    
+    // list of passes from vmkit
+    /*
+    addPass(FPM, createCFGSimplificationPass()); // Clean up disgusting code
+    addPass(FPM, createPromoteMemoryToRegisterPass());// Kill useless allocas
+    
+    addPass(FPM, createInstructionCombiningPass()); // Cleanup for scalarrepl.
+    addPass(FPM, createScalarReplAggregatesPass()); // Break up aggregate allocas
+    addPass(FPM, createInstructionCombiningPass()); // Cleanup for scalarrepl.
+    addPass(FPM, createJumpThreadingPass());        // Thread jumps.
+    addPass(FPM, createCFGSimplificationPass());    // Merge & remove BBs
+    addPass(FPM, createInstructionCombiningPass()); // Combine silly seq's
+    
+    addPass(FPM, createCFGSimplificationPass());    // Merge & remove BBs
+    addPass(FPM, createReassociatePass());          // Reassociate expressions
+    addPass(FPM, createLoopRotatePass());           // Rotate loops.
+    addPass(FPM, createLICMPass());                 // Hoist loop invariants
+    addPass(FPM, createLoopUnswitchPass());         // Unswitch loops.
+    addPass(FPM, createInstructionCombiningPass()); 
+    addPass(FPM, createIndVarSimplifyPass());       // Canonicalize indvars
+    addPass(FPM, createLoopDeletionPass());         // Delete dead loops
+    addPass(FPM, createLoopUnrollPass());           // Unroll small loops
+    addPass(FPM, createLoopStrengthReducePass());   // (jwb added)
+    
+    addPass(FPM, createInstructionCombiningPass()); // Clean up after the unroller
+    addPass(FPM, createGVNPass());                  // Remove redundancies
+    addPass(FPM, createMemCpyOptPass());             // Remove memcpy / form memset  
+    addPass(FPM, createSCCPPass());                 // Constant prop with SCCP
+    
+    // Run instcombine after redundancy elimination to exploit opportunities
+    // opened up by them.
+    addPass(FPM, createInstructionCombiningPass());
+    addPass(FPM, createJumpThreadingPass());         // Thread jumps
+    addPass(FPM, createDeadStoreEliminationPass());  // Delete dead stores
+    addPass(FPM, createAggressiveDCEPass());         // Delete dead instructions
+    addPass(FPM, createCFGSimplificationPass());     // Merge & remove BBs
+    */
+
     FPM->add(createCFGSimplificationPass());
     FPM->add(createPromoteMemoryToRegisterPass());
     FPM->add(createInstructionCombiningPass());
@@ -1799,6 +1843,7 @@ static void init_julia_llvm_env(Module *m)
     FPM->add(createSCCPPass());
     FPM->add(createDeadStoreEliminationPass());
     //llvm::createStandardFunctionPasses(FPM, 2);
+
     FPM->doInitialization();
 }
 
