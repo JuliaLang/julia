@@ -86,5 +86,16 @@ add(FDSet(),0)
 has(FDSet(),0)
 isequal(2,2)
 
+compile_hint(getcwd, ())
+compile_hint(fdio, (Int32,))
+compile_hint(ProcessGroup, (Int32, Array{Any,1}, Array{Any,1}))
+compile_hint(select_read, (FDSet, Int32))
+compile_hint(next, (HashTable{Any,Any}, Int32))
+compile_hint(perform_work, ())
+compile_hint(isempty, (Array{Any,1},))
+compile_hint(ref, (HashTable{Any,Any}, Int32))
+compile_hint(event_loop, (Bool,))
+compile_hint(start_client, ())
+
 ccall(:jl_save_system_image, Void, (Ptr{Uint8},Ptr{Uint8}),
       cstring("sys.ji"), cstring("j/start_image.j"))
