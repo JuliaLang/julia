@@ -277,6 +277,8 @@ macro lapack_backslash(fname_lu, fname_chol, fname_lsq, fname_tri, eltype)
             info = [0]
             m = size(A, 1)
             n = size(A, 2)
+            mrhs = size(B, 1)
+            if m != mrhs; error("Number of rows of arguments do not match"); end
             if isa(B, Vector); nrhs = 1; else nrhs = size(B, 2); end
             Acopy = copy(A)
             X = copy(B)
