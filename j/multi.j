@@ -1096,7 +1096,6 @@ end
 
 macro bcast(thk)
     quote
-        $thk
         at_each(()->eval($expr(:quote,thk)))
     end
 end
