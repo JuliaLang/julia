@@ -347,16 +347,9 @@ DLLEXPORT jl_sym_t *jl_gensym()
     char name[32];
     char *n;
     n = uint2str(name, sizeof(name)-1, gs_ctr, 10);
-    *(--n) = 'g';
+    *(--n) = '#';
     gs_ctr++;
-    jl_sym_t *sym;
-    size_t len = (&name[sizeof(name)-1])-n-1;
-    sym = (jl_sym_t*)allocobj(sizeof(jl_sym_t)-sizeof(void*) + len + 1);
-    sym->type = (jl_type_t*)jl_sym_type;
-    sym->left = sym->right = NULL;
-    sym->hash = (uptrint_t)sym;
-    strcpy(&sym->name[0], n);
-    return sym;
+    return jl_symbol(n);
 }
 
 // allocating types -----------------------------------------------------------

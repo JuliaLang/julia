@@ -17,20 +17,6 @@
 (define (lam:vinfo x) (caddr x))
 (define (lam:body x) (cadddr x))
 
-#|
-(define *gensyms* '())
-(define *current-gensyms* '())
-(define (gensy)
-  (if (null? *current-gensyms*)
-      (let ((g (gensym)))
-	(set! *gensyms* (cons g *gensyms*))
-	g)
-      (begin0 (car *current-gensyms*)
-	      (set! *current-gensyms* (cdr *current-gensyms*)))))
-(define (reset-gensyms)
-  (set! *current-gensyms* *gensyms*))
-|#
-
 ; convert x => (x), (tuple x y) => (x y)
 ; used to normalize function signatures like "x->y" and "function +(a,b)"
 (define (fsig-to-lambda-list arglist)
@@ -91,7 +77,7 @@
 	(cons e '())
 	(cons (map (lambda (x)
 		     (if (pair? x)
-			 (let ((g (gensym)))
+			 (let ((g (gensy)))
 			   (if (eq? (car x) '...)
 			       (begin (set! a (cons `(= ,g ,(cadr x)) a))
 				      `(... ,g))
@@ -110,7 +96,7 @@
   (if (length> e 3)
       (let ((arg2 (caddr e)))
 	(if (pair? arg2)
-	    (let ((g (gensym)))
+	    (let ((g (gensy)))
 	      `(&& (call ,(cadr e) ,(car e) (= ,g ,arg2))
 		   ,(expand-compare-chain (cons g (cdddr e)))))
 	    `(&& (call ,(cadr e) ,(car e) ,arg2)
@@ -178,7 +164,7 @@
 			(cons (cadr idx) tuples)
 			(cons `(... ,(replace-end (cadr idx) a n tuples))
 			      ret))
-		  (let ((g (gensym)))
+		  (let ((g (gensy)))
 		    (loop (cdr lst) (+ n 1)
 			  (cons `(= ,g ,(replace-end (cadr idx) a n tuples))
 				stmts)
@@ -253,7 +239,7 @@
 			   fields)
    (let ((field-names (map decl-var fields))
 	 (field-types (map decl-type fields))
-	 (T (gensym)))
+	 (T (gensy)))
      (if (and (null? defs) (null? params))
 	 `(block
 	   (= ,name
@@ -354,8 +340,6 @@
 				   (-/ |<:|) super)
 		       (values name params super)) ex)
       (error "invalid type signature")))
-
-(define *anonymous-generic-function-name* (gensym))
 
 ; patterns that introduce lambdas
 (define binding-form-patterns
@@ -480,7 +464,7 @@
 		   `(call (top getfield) ,a (quote ,b)))
 
    (pattern-lambda (= (|.| a b) rhs)
-		   (let ((aa (if (atom? a) a (gensym))))
+		   (let ((aa (if (atom? a) a (gensy))))
 		     `(block
 		       ,@(if (eq? aa a) '() `((= ,aa ,a)))
 		       (call (top setfield) ,aa (quote ,b)
@@ -515,14 +499,14 @@
 		   (if (and (pair? x) (pair? lhss) (eq? (car x) 'tuple)
 			    (length= lhss (length (cdr x))))
 		       ; (a, b, ...) = (x, y, ...)
-		       (let ((temps (map (lambda (x) (gensym)) (cddr x))))
+		       (let ((temps (map (lambda (x) (gensy)) (cddr x))))
 			 `(block
 			   ,@(map make-assignment temps (cddr x))
 			   (= ,(car lhss) ,(cadr x))
 			   ,@(map make-assignment (cdr lhss) temps)
 			   (null)))
 		       ; (a, b, ...) = other
-		       (let ((t (gensym)))
+		       (let ((t (gensy)))
 			 `(block
 			   (= ,t ,x)
 			   ,@(let loop ((lhs lhss)
@@ -540,7 +524,7 @@
 						      (and (pair? x)
 							   (eq? (car x) ':))))
 						idxs)))
-			  (arr   (if reuse (gensym) a))
+			  (arr   (if reuse (gensy) a))
 			  (stmts (if reuse `((= ,arr ,a)) '())))
 		     (receive
 		      (new-idxs stuff) (process-indexes arr idxs)
@@ -555,7 +539,7 @@
 						      (and (pair? x)
 							   (eq? (car x) ':))))
 						idxs)))
-			  (arr   (if reuse (gensym) a))
+			  (arr   (if reuse (gensy) a))
 			  (stmts (if reuse `((= ,arr ,a)) '())))
 		     (receive
 		      (new-idxs stuff) (process-indexes arr idxs)
@@ -638,10 +622,10 @@
       (if (not (symbol? var))
 	  (error "invalid for loop syntax: expected symbol"))
       (if c
-	  (let ((cnt (gensym))
-		(lim (gensym))
-		(aa  (if (number? a) a (gensym)))
-		(bb  (if (number? b) b (gensym))))
+	  (let ((cnt (gensy))
+		(lim (gensy))
+		(aa  (if (number? a) a (gensy)))
+		(bb  (if (number? b) b (gensy))))
 	    `(scope-block
 	     (block
 	      ,@(if (eq? aa a) '() `((= ,aa ,a)))
@@ -656,7 +640,7 @@
 				    (break-block loop-cont
 						 ,body)
 				    (= ,cnt (call + 1 ,cnt))))))))
-	  (let ((lim (if (number? b) b (gensym))))
+	  (let ((lim (if (number? b) b (gensy))))
 	    `(scope-block
 	     (block
 	      (= ,var ,a)
@@ -671,8 +655,8 @@
    ; for loop over arbitrary vectors
    (pattern-lambda
     (for (= i X) body)
-    (let ((coll  (gensym))
-	  (state (gensym)))
+    (let ((coll  (gensy))
+	  (state (gensy)))
       `(scope-block
 	(block (= ,coll ,X)
 	       (= ,state (call (top start) ,coll))
@@ -754,9 +738,9 @@
 ;; Comprehensions
 
 (define (lower-nd-comprehension expr ranges)
-  (let ((result    (gensym))
-	(ri        (gensym))
-	(oneresult (gensym)))
+  (let ((result    (gensy))
+	(ri        (gensy))
+	(oneresult (gensy)))
     ;; evaluate one expression to figure out type and size
     ;; compute just one value by inserting a break inside loops
     (define (evaluate-one ranges)
@@ -787,7 +771,7 @@
 	      `(block (call assign ,result (ref ,expr ,@(reverse iters)) ,ri)
 		      (+= ,ri 1)) )
 	  (if (eq? (car ranges) `:)
-	      (let ((i (gensym)))
+	      (let ((i (gensy)))
 		`(for (= ,i (: 1 (call size ,oneresult ,oneresult-dim)))
 		      ,(construct-loops (cdr ranges) (cons i iters) (+ oneresult-dim 1)) ))
 	      `(for ,(car ranges)
@@ -810,10 +794,10 @@
     (comprehension expr . ranges)
     (if (any (lambda (x) (eq? x ':)) ranges)
 	(lower-nd-comprehension expr ranges)
-    (let ((result    (gensym))
-	  (ri        (gensym))
-	  (oneresult (gensym))
-	  (rv        (map (lambda (x) (gensym)) ranges)))
+    (let ((result    (gensy))
+	  (ri        (gensy))
+	  (oneresult (gensy))
+	  (rv        (map (lambda (x) (gensy)) ranges)))
 
       ;; get the first value in a range
       (define (first-val range)
@@ -863,7 +847,7 @@
    ;; cell array comprehensions
    (pattern-lambda
     (cell-comprehension expr . ranges)
-    (let ( (result (gensym)) (ri (gensym)) )
+    (let ( (result (gensy)) (ri (gensy)) )
 
       ;; compute the dimensions of the result
       (define (compute-dims ranges)
@@ -922,7 +906,7 @@
 	      (if (symbol? (car tail))
 		  `(if ,(car tail) ,(car tail)
 		       ,(loop (cdr tail)))
-		  (let ((g (gensym)))
+		  (let ((g (gensy)))
 		    `(block (= ,g ,(car tail))
 			    (if ,g ,g
 				,(loop (cdr tail)))))))))))
@@ -1001,19 +985,19 @@
 				 (to-blk (to-lff (cadddr e) dest tail))
 				 (to-blk (to-lff '(null)  dest tail))))
 			  (cdr r))))
-		 (else (let ((g (gensym)))
+		 (else (let ((g (gensy)))
 			 (cons g
 			       (cons `(local! ,g) (to-lff e g #f)))))))
 
 	  ((trycatch)
 	   (cond (tail
-		  (let ((g (gensym)))
+		  (let ((g (gensy)))
 		    (to-lff `(block (local! ,g)
 				    (= ,g ,e)
 				    (return ,g))
 			    #f #f)))
 		 ((eq? dest #t)
-		  (let ((g (gensym)))
+		  (let ((g (gensy)))
 		    (cons g
 			  (cons `(local! ,g) (to-lff e g #f)))))
 		 (else
@@ -1027,7 +1011,7 @@
 	   (to-lff (expand-or e) dest tail))
 
 	  ((block)
-	   (let* ((g (gensym))
+	   (let* ((g (gensy))
 		  (stmts
 		   (let loop ((tl (cdr e)))
 		     (if (null? tl) '()
@@ -1076,7 +1060,7 @@
 
 	  ((scope-block)
 	   (if (and dest (not tail))
-	       (let* ((g (gensym))
+	       (let* ((g (gensy))
 		      (r (to-lff (cadr e) g tail)))
 		 (cons (car (to-lff g dest tail))
 		       ; tricky: need to introduce a new local outside the
@@ -1249,7 +1233,7 @@ So far only the second case can actually occur.
 	  ((eq? (car e) 'scope-block)
 	   (let ((vars (declared-local-vars e))
 		 (body (car (last-pair e))))
-	     (let* ((newnames (map (lambda (x) (gensym)) vars))
+	     (let* ((newnames (map (lambda (x) (gensy)) vars))
 		    (bod (rename-vars (remove-scope-blocks body)
 				      (map cons vars newnames))))
 	       (set! scope-block-vars (nconc newnames scope-block-vars))
@@ -1521,6 +1505,7 @@ So far only the second case can actually occur.
      (identify-locals ex)))))
 
 (define (julia-expand0 ex)
+  (reset-gensyms)
   (to-LFF
    (pattern-expand patterns
     (pattern-expand lower-comprehensions
