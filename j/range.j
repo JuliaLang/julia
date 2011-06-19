@@ -19,8 +19,8 @@ type Range1{T<:Real} <: Tensor{T,1}
     Range1(start, stop) = new(promote(start, stop)...)
 end
 
-clone(r::Range, T::Type, dims::Dims) = Range(convert(T, r.start), convert(T, r.step), convert(T, r.stop))
-clone(r::Range1, T::Type, dims::Dims) = Range1(convert(T, r.start), convert(T, r.stop))
+similar(r::Range, T::Type, dims::Dims) = Range(convert(T, r.start), convert(T, r.step), convert(T, r.stop))
+similar(r::Range1, T::Type, dims::Dims) = Range1(convert(T, r.start), convert(T, r.stop))
 
 typealias Ranges Union(Range,Range1)
 
