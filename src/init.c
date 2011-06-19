@@ -52,7 +52,7 @@ void fpe_handler(int arg)
     sigaddset(&sset, SIGFPE);
     sigprocmask(SIG_UNBLOCK, &sset, NULL);
 
-    jl_raise(jl_divbyzero_exception);
+    jl_divide_by_zero_error();
 }
 
 void segv_handler(int sig, siginfo_t *info, void *context)
