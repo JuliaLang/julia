@@ -75,6 +75,8 @@ end ## hpl()
 ### Panel factorization ###
 
 function panel_factor(A_KI, col_dep)
+
+    @assert col_dep
     
     ## Factorize a panel
     (A_KI, panel_p) = lu(A_KI, true) # Economy mode
@@ -88,6 +90,9 @@ end ## panel_factor()
 
 function trailing_update(L_II, A_IJ, A_KI, A_KJ, row_dep, col_dep)
     
+    @assert row_dep
+    @assert col_dep
+
     ## Compute blocks of U 
     A_IJ = L_II \ A_IJ
     
