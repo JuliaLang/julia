@@ -16,7 +16,7 @@ function hpl_par(A::Matrix, b::Vector)
     B_rows[end] = n 
     B_cols = [B_rows, [n+1]]
     nB = length(B_rows)
-    depend = zeros(Bool, nB, nB) # In parallel, depend needs to be able to hold futures
+    depend = cell(nB, nB)
     
     ## Small matrix case
     if nB <= 1
@@ -26,7 +26,8 @@ function hpl_par(A::Matrix, b::Vector)
 
     ## Add a ghost row of dependencies to boostrap the computation
     for j=1:nB; depend[1,j] = true; end
-    
+    for i=2:nB, j=1:nB; depend[i,j] = false; end
+
     for i=1:(nB-1)
         ## Threads for panel factorizations
         I = (B_rows[i]+1):B_rows[i+1]
@@ -46,19 +47,24 @@ function hpl_par(A::Matrix, b::Vector)
 
         ## Threads for trailing updates
         L_II = tril(A[I,I], -1) + eye(length(I))
-        K = (I[end]+1):n
+        K = (I[length(I)]+1):n
 
         for j=(i+1):nB
             J = (B_cols[j]+1):B_cols[j+1]
             
             ## Do the trailing update (Compute U, and DGEMM - all flops are here)
-            (A_IJ, A_KJ) = trailing_update(L_II, A[I,J], A[K,I], A[K,J], 
-                                           depend[i+1,i], depend[i,j])
+            depend[i+1,j] = @spawn trailing_update(L_II, A[I,J], A[K,I], A[K,J],
+                                                   depend[i+1,i], depend[i,j], J)
+        end
+
+        for j=(i+1):nB
+            (A_IJ, A_KJ, J) = fetch(depend[i+1,j])
             ## Write updates back to A
             A[I,J] = A_IJ
             A[K,J] = A_KJ
             depend[i+1,j] = true
         end
+
     end
     
     ## Completion of the last diagonal block signals termination
@@ -88,7 +94,7 @@ end ## panel_factor()
 
 ### Trailing update ###
 
-function trailing_update(L_II, A_IJ, A_KI, A_KJ, row_dep, col_dep)
+function trailing_update(L_II, A_IJ, A_KI, A_KJ, row_dep, col_dep, J)
     
     @assert row_dep
     @assert col_dep
@@ -101,6 +107,6 @@ function trailing_update(L_II, A_IJ, A_KI, A_KJ, row_dep, col_dep)
         A_KJ = A_KJ - A_KI*A_IJ
     end
     
-    return (A_IJ, A_KJ)
+    return (A_IJ, A_KJ, J)
     
 end ## trailing_update()
