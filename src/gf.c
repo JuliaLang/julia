@@ -923,6 +923,7 @@ jl_function_t *jl_method_lookup(jl_methtable_t *mt, jl_value_t **args, size_t na
 }
 
 // compile-time method lookup
+DLLEXPORT
 jl_function_t *jl_get_specialization(jl_function_t *f, jl_tuple_t *types)
 {
     assert(jl_is_gf(f));
@@ -998,7 +999,10 @@ JL_CALLABLE(jl_apply_generic)
         return jl_no_method_error((jl_function_t*)jl_t2(env), args, nargs);
     }
 
-    return jl_apply(mfunc, args, nargs);
+    JL_GC_PUSH(&mfunc);
+    jl_value_t *result = jl_apply(mfunc, args, nargs);
+    JL_GC_POP();
+    return result;
 }
 
 static void print_methlist(char *name, jl_methlist_t *ml)

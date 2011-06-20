@@ -277,6 +277,8 @@ macro lapack_backslash(fname_lu, fname_chol, fname_lsq, fname_tri, eltype)
             info = [0]
             m = size(A, 1)
             n = size(A, 2)
+            mrhs = size(B, 1)
+            if m != mrhs; error("Number of rows of arguments do not match"); end
             if isa(B, Vector); nrhs = 1; else nrhs = size(B, 2); end
             Acopy = copy(A)
             X = copy(B)
@@ -332,21 +334,29 @@ macro lapack_backslash(fname_lu, fname_chol, fname_lsq, fname_tri, eltype)
                 # Workspace query
                 lwork = -1
                 work = [0.0]
+                Y = Array($eltype, max(m,n), nrhs)
+                Y[1:size(X,1), 1:size(X,2)] = X
+
                 ccall(dlsym(libLAPACK, $fname_lsq),
                       Void,
                       (Ptr{Uint8}, Ptr{Int32}, Ptr{Int32}, Ptr{Int32}, Ptr{$eltype}, Ptr{Int32}, 
                        Ptr{$eltype}, Ptr{Int32}, Ptr{$eltype}, Ptr{Int32}, Ptr{Int32}),
-                      "N", m, n, nrhs, Acopy, m, X, max(m,n), work, lwork, info)
+                      "N", m, n, nrhs, Acopy, m, Y, max(m,n), work, lwork, info)
                 
-                if info[1] == 0; lwork = int32(work[1]); work = Array($eltype, lwork);
-                else error("Error in ", $fname_lsq); end
+                if info[1] == 0
+                    lwork = int32(work[1])
+                    work = Array($eltype, lwork)
+                else
+                    error("Error in ", $fname_lsq)
+                end
                 
                 ccall(dlsym(libLAPACK, $fname_lsq),
                       Void,
                       (Ptr{Uint8}, Ptr{Int32}, Ptr{Int32}, Ptr{Int32}, Ptr{$eltype}, Ptr{Int32}, 
                        Ptr{$eltype}, Ptr{Int32}, Ptr{$eltype}, Ptr{Int32}, Ptr{Int32}),
-                      "N", m, n, nrhs, Acopy, m, X, max(m,n), work, lwork, info)
+                      "N", m, n, nrhs, Acopy, m, Y, max(m,n), work, lwork, info)
                 
+                X = Y
             end # if m == n...
                 
             if info[1] == 0; return X; end

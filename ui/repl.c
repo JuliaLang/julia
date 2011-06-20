@@ -221,7 +221,7 @@ static int detect_color()
 #ifdef WIN32
     return 0;
 #else
-    int tput = system("tput setaf 0 >&/dev/null");
+    int tput = system("tput setaf 0 >/dev/null");
     if (tput == 0) return 1;
     if (tput == 1) return 0;
     char *term = getenv("TERM");

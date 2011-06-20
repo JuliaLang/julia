@@ -11,9 +11,6 @@ integer_valued(z::ComplexNum) = (real_valued(z) && integer_valued(real(z)))
 real(x::Real) = x
 imag(x::Real) = convert(typeof(x), 0)
 
-==(z::ComplexNum, w::ComplexNum) = (real(z) == real(w) &&
-                                    imag(z) == imag(w))
-
 function show(c::ComplexNum)
     show(real(c))
     i = imag(c)
@@ -135,6 +132,8 @@ pi{T}(::Type{Complex{T}}) = pi(T)
 
 
 ## functions of complex numbers ##
+
+==(z::ComplexNum, w::ComplexNum) = (real(z) == real(w) && imag(z) == imag(w))
 
 conj(z::ComplexNum) = complex(real(z),-imag(z))
 norm(z::ComplexNum) = square(real(z)) + square(imag(z))

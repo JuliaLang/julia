@@ -37,6 +37,7 @@
     jl_set_memio_func;
     jl_symbol_n;
     jl_matching_methods;
+    jl_get_specialization;
     jl_is_builtin;
     jl_is_genericfunc;
     jl_genericfunc_name;

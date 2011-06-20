@@ -1,7 +1,7 @@
 ## Based on "Multi-Threading and One-Sided Communication in Parallel LU Factorization"
 ## http://citeseerx.ist.psu.edu/viewdoc/summary?doi=10.1.1.138.4361&rank=7
 
-function hpl (A::Matrix, b::Vector)
+function hpl_seq(A::Matrix, b::Vector)
 
     blocksize = 5
 
@@ -14,13 +14,19 @@ function hpl (A::Matrix, b::Vector)
     nB = length(B_rows)
     depend = zeros(Bool, nB, nB) # In parallel, depend needs to be able to hold futures
     
+    ## Small matrix case
+    if nB <= 1
+        x = A[1:n, 1:n] \ A[:,n+1]
+        return x
+    end
+
     ## Add a ghost row of dependencies to boostrap the computation
     for j=1:nB; depend[1,j] = true; end
     
     for i=1:(nB-1)
         ## Threads for panel factorizations
         I = (B_rows[i]+1):B_rows[i+1]
-        #[depend[i+1,i], panel_p] = spawn(panel_factor, I, depend[i,i])
+        #(depend[i+1,i], panel_p) = spawn(panel_factor, I, depend[i,i])
         (depend[i+1,i], panel_p) = panel_factor(A, I, depend[i,i])
         
         ## Threads for trailing updates
@@ -45,9 +51,8 @@ end ## hpl()
 ### Panel factorization ###
 
 function panel_factor(A, I, col_dep)
-
     n = size (A, 1)
-    
+
     ## Enforce dependencies
     #wait(col_dep)
     

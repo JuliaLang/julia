@@ -122,7 +122,7 @@ darray(init, T::Type, dims::Size...) = darray(init, T, dims)
 darray(init, dims::Dims) = darray(init, Float64, dims)
 darray(init, dims::Size...) = darray(init, dims)
 
-clone(d::DArray, T::Type, dims::Dims) =
+similar(d::DArray, T::Type, dims::Dims) =
     darray((T,lsz,da)->Array(T,lsz), T, dims,
            d.distdim>length(dims) ? maxdim(dims) : d.distdim, d.pmap)
 

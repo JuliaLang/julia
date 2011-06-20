@@ -73,6 +73,11 @@ void jl_undef_ref_error()
     jl_raise(jl_undefref_exception);
 }
 
+void jl_divide_by_zero_error()
+{
+    jl_raise(jl_divbyzero_exception);
+}
+
 JL_CALLABLE(jl_f_throw)
 {
     JL_NARGS(throw, 1, 1);
