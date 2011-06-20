@@ -1,7 +1,7 @@
 ## Based on "Multi-Threading and One-Sided Communication in Parallel LU Factorization"
 ## http://citeseerx.ist.psu.edu/viewdoc/summary?doi=10.1.1.138.4361&rank=7
 
-function hpl (A::Matrix, b::Vector)
+function hpl_seq(A::Matrix, b::Vector)
 
     blocksize = 5
 
