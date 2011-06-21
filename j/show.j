@@ -135,6 +135,8 @@ function dump{T}(x::T)
     println(')')
 end
 
+showempty{T}(a::Array{T}) = print("Array($T,$(size(a)))")
+
 function showall{T}(a::Array{T,1})
     if is(T,Any)
         opn = '{'; cls = '}'
