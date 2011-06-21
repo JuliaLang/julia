@@ -135,13 +135,7 @@ function dump{T}(x::T)
     println(')')
 end
 
-# show arrays
-showempty{T}(a::Array{T}) = print("Array($T,$(size(a)))")
-
 function showall{T}(a::Array{T,1})
-    if isempty(a)
-        return showempty(a)
-    end
     if is(T,Any)
         opn = '{'; cls = '}'
     else
@@ -161,9 +155,6 @@ function showall{T}(a::Array{T,2})
 end
 
 function show{T}(a::Array{T,1})
-    if isempty(a)
-        return showempty(a)
-    end
     if is(T,Any)
         opn = '{'; cls = '}'
     else
