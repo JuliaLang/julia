@@ -53,14 +53,15 @@ function hpl_par(A::Matrix, b::Vector)
             J = (B_cols[j]+1):B_cols[j+1]
             
             ## Do the trailing update (Compute U, and DGEMM - all flops are here)
-            depend[i+1,j] = @spawn trailing_update(L_II, A[I,J], A[K,I], A[K,J],
-                                                   depend[i+1,i], depend[i,j])
+            depend[i+1,j] = @spawn trailing_update(L_II, A[I,J], A[K,I], A[K,J], depend[i+1,i], depend[i,j])
+            #depend[i+1,j] = trailing_update(L_II, A[I,J], A[K,I], A[K,J], depend[i+1,i], depend[i,j])
         end
 
         # Wait for all trailing updates to complete, and write back to A
         for j=(i+1):nB
             J = (B_cols[j]+1):B_cols[j+1]
             (A_IJ, A_KJ) = fetch(depend[i+1,j])
+            #(A_IJ, A_KJ) = depend[i+1,j]
             A[I,J] = A_IJ
             A[K,J] = A_KJ
             depend[i+1,j] = true
