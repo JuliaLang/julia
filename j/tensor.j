@@ -4,6 +4,10 @@
 
 typealias Vector{T} Tensor{T,1}
 typealias Matrix{T} Tensor{T,2}
+typealias DenseVector{T} Array{T,1}
+typealias DenseMatrix{T} Array{T,2}
+typealias DenseVecOrMat{T} Union(DenseVector{T}, DenseMatrix{T})
+
 typealias Indices Union(Index, Vector{Index})
 typealias Region Union(Size,Dims)
 

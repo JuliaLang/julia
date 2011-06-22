@@ -1,9 +1,5 @@
 libBLAS = dlopen("libLAPACK")
 
-typealias DenseVector{T} Array{T,1}
-typealias DenseMatrix{T} Array{T,2}
-typealias DenseVecOrMat{T} Union(DenseVector{T}, DenseMatrix{T})
-
 # SUBROUTINE DCOPY(N,DX,INCX,DY,INCY) 
 
 macro blas_copy(fname, shape, eltype)

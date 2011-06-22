@@ -3,9 +3,9 @@ libfftw = dlopen("libfftw3")
 FFTW_FORWARD = int32(-1)
 FFTW_ESTIMATE = uint32(64)
 
-function fft(X::Vector{Complex128})
+function fft(X::DenseVector{Complex128})
 
-    Y = copy(X)
+    Y = similar(X)
 
     plan = ccall(dlsym(libfftw, "fftw_plan_dft_1d"),
               Ptr{Void}, 
