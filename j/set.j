@@ -1,12 +1,11 @@
 type Set{T}
     items::Array{T,1}
 
-    Set() = (this.items=Array(T,0))
+    Set() = new(Array(Any,0))
+    Set{T}(T::Type) = new(Array(T,0))
 end
 
-Set() = Set{Any}()
-
-set{T}(x::T...) = (s = Set{T}(); add(s, x...))
+set{T}(x::T...) = (s = Set(T); add(s, x...))
 
 isempty(set::Set) = isempty(set.items)
 length(set::Set) = length(set.items)
@@ -51,7 +50,7 @@ done(set::Set, x) = done(set.items, x)
 next(set::Set, x) = next(set.items, x)
 
 function union{T}(sets::Set{T}...)
-    u = Set{T}()
+    u = Set(T)
     for set = sets
         add(u,set)
     end

@@ -233,33 +233,33 @@ type RopeString <: String
     RopeString(h::RopeString, t::RopeString) =
         depth(h.tail) + depth(t) < depth(h.head) ?
             RopeString(h.head, RopeString(h.tail, t)) :
-            (this.head = h;
-             this.tail = t;
-             this.depth =  max(h.depth,
-                               t.depth)+1;
-             this.length = length(h)+length(t))
+            new(h,
+                t,
+                max(h.depth,
+                    t.depth)+1,
+                length(h)+length(t))
 
     RopeString(h::RopeString, t::String) =
         depth(h.tail) < depth(h.head) ?
             RopeString(h.head, RopeString(h.tail, t)) :
-            (this.head = h;
-             this.tail = t;
-             this.depth =  h.depth+1;
-             this.length = length(h)+length(t))
+            new(h,
+                t,
+                h.depth+1,
+                length(h)+length(t))
 
     RopeString(h::String, t::RopeString) =
         depth(t.head) < depth(t.tail) ?
             RopeString(RopeString(h, t.head), t.tail) :
-            (this.head = h;
-             this.tail = t;
-             this.depth =  t.depth+1;
-             this.length = length(h)+length(t))
+            new(h,
+                t,
+                t.depth+1,
+                length(h)+length(t))
 
     RopeString(h::String, t::String) =
-        (this.head = h;
-         this.tail = t;
-         this.depth =  1;
-         this.length = length(h)+length(t))
+        new(h,
+            t,
+            1,
+            length(h)+length(t))
 end
 
 depth(s::String) = 0

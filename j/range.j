@@ -6,14 +6,18 @@ type Range{T<:Real} <: Tensor{T,1}
     start::T
     step::T
     stop::T
+
+    Range{T}(start::T, step::T, stop::T) = new(start, step, stop)
+    Range(start, step, stop) = new(promote(start, step, stop)...)
 end
-Range(start, step, stop) = new(promote(start, step, stop)...)
 
 type Range1{T<:Real} <: Tensor{T,1}
     start::T
     stop::T
+
+    Range1{T}(start::T, stop::T) = new(start, stop)
+    Range1(start, stop) = new(promote(start, stop)...)
 end
-Range1(start, stop) = new(promote(start, stop)...)
 
 clone(r::Range, T::Type, dims::Dims) = Range(convert(T, r.start), convert(T, r.step), convert(T, r.stop))
 clone(r::Range1, T::Type, dims::Dims) = Range1(convert(T, r.start), convert(T, r.stop))
@@ -99,24 +103,13 @@ end
 type NDRange{N}
     ranges::NTuple{N,Any}
     empty::Bool
-
-    if N==0
-        NDRange(r::())           = (this.ranges=r; this.empty=false)
-    elseif N==1
-        NDRange(r::(Any,))       = (this.ranges=r; this.empty=isempty(r[1]))
-    elseif N==2
-        NDRange(r::(Any,Any))    = (this.ranges=r;
-                                    this.empty=isempty(r[1])||isempty(r[2]))
-    elseif N==3
-        NDRange(r::(Any,Any,Any))= (this.ranges=r;
-                                    this.empty=isempty(r[1])||isempty(r[2])||isempty(r[3]))
-    else
-        NDRange(r::Tuple)        = (this.ranges=r; this.empty=anyp(isempty,r))
-    end
+    NDRange(r::())           =new(r,false)
+    NDRange(r::(Any,))       =new(r,isempty(r[1]))
+    NDRange(r::(Any,Any))    =new(r,isempty(r[1])||isempty(r[2]))
+    NDRange(r::(Any,Any,Any))=new(r,isempty(r[1])||isempty(r[2])||isempty(r[3]))
+    NDRange(r::Tuple)        =new(r,anyp(isempty,r))
+    NDRange(rs...) = NDRange(rs)
 end
-
-NDRange{N}(r::NTuple{N,Any}) = NDRange{N}(r)
-NDRange(rs...) = NDRange(rs)
 
 start(r::NDRange{0}) = false
 done(r::NDRange{0}, st) = st

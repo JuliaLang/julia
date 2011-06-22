@@ -243,7 +243,6 @@
    (params bounds) (sparam-name-bounds params '() '())
    (struct-def-expr- name params bounds super fields)))
 
-;; default constructor that accepts all fields as arguments
 (define (default-inner-ctor name field-names field-types)
   `(function (call ,name ,@(map (lambda (n t) `(:: ,n ,t))
 				field-names field-types))
@@ -251,9 +250,6 @@
 	      ,@(map (lambda (n) `(= (|.| this ,n) ,n))
 		     field-names))))
 
-;; default generic function constructor for parametric types:
-;; MyType{T}(x::T, y::T, ...) = MyType{T}(x, y, ...)
-;; so type parameters are inferred from argument types.
 (define (default-outer-ctor name field-names field-types params)
   `(function (call (curly ,name ,@params)
 		   ,@(map (lambda (n t) `(:: ,n ,t))
@@ -261,22 +257,18 @@
 	     (block
 	      (call (curly ,name ,@params) ,@field-names))))
 
-;; insert definition and return of "this" variable
 (define (rewrite-ctor ctor Tname params)
-  (define new_expr `(new ,(if (null? params)
+  ;; insert definition and return of "this" variable
+  (define (ctor-body body)
+    `(block ;; hack - make the type parameters "global" so they can be
+            ;; shadowed by static parameters
+            (global (vars ,Tname ,@params))
+	    (= this (new ,(if (null? params)
 			      Tname
 			      `(curly ,Tname ,@params))))
-  (define (ctor-body body)
-    `(block ;; replace this.x=y with (!isbound(this)?this=new(...); this.x=y)
-	    ,(pattern-replace (pattern-set
-			       (pattern-lambda (= (|.| (-/ this) f) rhs)
-					       `(block
-						 (if (isbound this)
-						     (null)
-						     (= this ,new_expr))
-						 ,__)))
-			      body)
+	    ,body
 	    (return this)))
+  ;; TODO: error if return occurs in constructor
   (or
    ((pattern-lambda (function (call name . sig) body)
 		    (if (eq? name Tname)

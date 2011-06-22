@@ -92,7 +92,6 @@ type HashTable{K,V}
     deleted::IntSet
     deleter::Function
 
-    HashTable() = HashTable(0)
     HashTable(n) = (n = _tablesz(n);
                     this.keys = Array(K,n);
                     this.vals = Array(V,n);
@@ -276,7 +275,7 @@ end
 type WeakKeyHashTable{K,V}
     ht::HashTable{K,V}
 
-    WeakKeyHashTable() = (this.ht = HashTable{K,V}())
+    WeakKeyHashTable() = (this.ht = HashTable{K,V}(0))
 end
 WeakKeyHashTable() = WeakKeyHashTable{Any,Any}()
 

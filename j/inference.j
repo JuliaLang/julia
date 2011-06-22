@@ -42,19 +42,9 @@ type CallStack
     prev::Union(EmptyCallStack,CallStack)
 
     CallStack(ast, types, prev::EmptyCallStack) =
-        (this.ast = ast;
-         this.types = types;
-         this.n = 0;
-         this.recurred = false;
-         this.result = None;
-         this.prev = prev)
+        new(ast, types, 0, false, None, prev)
     CallStack(ast, types, prev::CallStack) =
-        (this.ast = ast;
-         this.types = types;
-         this.n = prev.n+1;
-         this.recurred = false;
-         this.result = None;
-         this.prev = prev)
+        new(ast, types, prev.n+1, false, None, prev)
 end
 
 # TODO thread local
@@ -538,13 +528,13 @@ end
 
 function abstract_eval_expr(e, vtypes, sv::StaticVarInfo)
     # handle:
-    # call  lambda  quote  null  top  isbound static_typeof
+    # call  lambda  quote  null  top  unbound static_typeof
     if is(e.head,:call) || is(e.head,:call1)
         return abstract_eval_call(e, vtypes, sv)
     elseif is(e.head,:top)
         return abstract_eval_global(e.args[1])
-    elseif is(e.head,:isbound)
-        return Bool
+    #elseif is(e.head,:unbound)
+    #    return Bool
     elseif is(e.head,:method)
         return Any-->Any
     elseif is(e.head,:null)

@@ -173,21 +173,6 @@
 	    ; expr changed; iterate
 	    (pattern-expand plist enew)))))
 
-;; finds and replaces pattern matches with their expansions
-;; one pass, does not expand recursively
-(define (pattern-replace plist expr)
-  (if (or (not (pair? expr)) (eq? (car expr) 'quote))
-      expr
-      (let ((enew (apply-patterns plist expr)))
-	(if (eq? enew expr)
-            ;; expr didn't change; move to subexpressions
-	    (map (lambda (subex)
-		   (if (not (pair? subex))
-		       subex
-		       (pattern-replace plist subex)))
-		 expr)
-	    enew))))
-
 (define-macro (pattern-set . pats)
   ; (pattern-lambda (x ...) ...) => x
   (define (pl-head p) (car (cadr p)))
