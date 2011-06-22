@@ -26,8 +26,8 @@ macro lapack_chol(fname, eltype)
     end
 end
 
-@lapack_chol "dpotrf_" Float64
-@lapack_chol "spotrf_" Float32
+@lapack_chol :dpotrf_ Float64
+@lapack_chol :spotrf_ Float32
 
 # SUBROUTINE DGETRF( M, N, A, LDA, IPIV, INFO )
 # *     .. Scalar Arguments ..
@@ -74,8 +74,8 @@ macro lapack_lu(fname, eltype)
     end
 end
 
-@lapack_lu "dgetrf_" Float64
-@lapack_lu "sgetrf_" Float32
+@lapack_lu :dgetrf_ Float64
+@lapack_lu :sgetrf_ Float32
 
 # SUBROUTINE DGEQP3( M, N, A, LDA, JPVT, TAU, WORK, LWORK, INFO )
 # *     .. Scalar Arguments ..
@@ -194,8 +194,8 @@ macro lapack_eig(fname, eltype)
     end
 end
 
-@lapack_eig "dsyev_" Float64
-@lapack_eig "ssyev_" Float32
+@lapack_eig :dsyev_ Float64
+@lapack_eig :ssyev_ Float32
 
 # SUBROUTINE DGESVD( JOBU, JOBVT, M, N, A, LDA, S, U, LDU, VT, LDVT, WORK, LWORK, INFO )
 # *     .. Scalar Arguments ..
@@ -248,8 +248,8 @@ macro lapack_svd(fname, eltype)
     end
 end
 
-@lapack_svd "dgesvd_" Float64
-@lapack_svd "sgesvd_" Float32
+@lapack_svd :dgesvd_ Float64
+@lapack_svd :sgesvd_ Float32
 
 # SUBROUTINE DGESV( N, NRHS, A, LDA, IPIV, B, LDB, INFO )
 # *     .. Scalar Arguments ..
