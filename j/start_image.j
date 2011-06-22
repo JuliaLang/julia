@@ -18,6 +18,8 @@ libLAPACK = libBLAS
 
 libarpack = dlopen("libarpack")
 
+libfftw = dlopen("libfftw3")
+
 try
     load(strcat(getcwd(),"/custom.j"))
 catch
