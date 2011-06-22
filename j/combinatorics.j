@@ -96,7 +96,7 @@ end
 
 function quicksort(a::Vector, lo, hi)
     while hi > lo
-        if (hi-lo < 15)
+        if (hi-lo <= 20)
             return insertionsort(a, lo, hi)
         end
         i, j = lo, hi
@@ -141,7 +141,7 @@ function mergesort(a::Vector, p::Vector{Size}, lo, hi,
                    b::Vector, pb::Vector{Size})
 
     if lo < hi
-        if (hi-lo < 20)
+        if (hi-lo <= 20)
             return insertionsort(a, p, lo, hi)
         end
 

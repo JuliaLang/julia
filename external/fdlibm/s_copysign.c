@@ -26,6 +26,9 @@
 	double x,y;
 #endif
 {
-	__HI(x) = (__HI(x)&0x7fffffff)|(__HI(y)&0x80000000);
+    int hx, hy;
+    GET_HIGH_WORD(hx, x);
+    GET_HIGH_WORD(hy, y);
+    SET_HIGH_WORD(x, (hx&0x7fffffff)|(hy&0x80000000));
         return x;
 }

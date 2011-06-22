@@ -73,6 +73,11 @@ void jl_undef_ref_error()
     jl_raise(jl_undefref_exception);
 }
 
+void jl_divide_by_zero_error()
+{
+    jl_raise(jl_divbyzero_exception);
+}
+
 JL_CALLABLE(jl_f_throw)
 {
     JL_NARGS(throw, 1, 1);
@@ -756,7 +761,7 @@ static void show_float64(double d, int single)
 {
     ios_t *s = jl_current_output_stream();
     char buf[64];
-    int ndec = single ? 8 : 16;
+    int ndec = single ? 9 : 17;
     if (!DFINITE(d)) {
         char *rep;
         if (isnan(d))
@@ -1096,7 +1101,8 @@ JL_CALLABLE(jl_f_new_bits_type)
                   ((jl_sym_t*)args[0])->name);
     }
     int32_t nb = jl_unbox_int32(args[2]);
-    if (nb != 8 && nb != 16 && nb != 32 && nb != 64)
+    //if (nb != 8 && nb != 16 && nb != 32 && nb != 64)
+    if (nb < 1 || nb>=(1<<23) || (nb&7) != 0)
         jl_errorf("invalid number of bits in type %s",
                   ((jl_sym_t*)args[0])->name);
     return (jl_value_t*)jl_new_bitstype((jl_value_t*)args[0], jl_any_type, p,
@@ -1264,6 +1270,11 @@ jl_value_t *jl_closure_linfo(jl_function_t *f)
 uptrint_t jl_hash_symbol(jl_sym_t *s)
 {
     return s->hash;
+}
+
+DLLEXPORT uptrint_t jl_uid(jl_value_t *v)
+{
+    return (uptrint_t)v;
 }
 
 // --- init ---

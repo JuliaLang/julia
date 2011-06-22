@@ -24,6 +24,8 @@
 	double x;
 #endif
 {
-	__HI(x) &= 0x7fffffff;
-        return x;
+    u_int32_t ix;
+    GET_HIGH_WORD(ix, x);
+    SET_HIGH_WORD(x, ix&0x7fffffff);
+    return x;
 }

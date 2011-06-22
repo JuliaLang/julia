@@ -4,6 +4,10 @@
 
 typealias Vector{T} Tensor{T,1}
 typealias Matrix{T} Tensor{T,2}
+typealias DenseVector{T} Array{T,1}
+typealias DenseMatrix{T} Array{T,2}
+typealias DenseVecOrMat{T} Union(DenseVector{T}, DenseMatrix{T})
+
 typealias Indices Union(Index, Vector{Index})
 typealias Region Union(Size,Dims)
 
@@ -19,14 +23,14 @@ nnz(a::Tensor{Bool}) = (n = 0; for i=1:numel(a); n += a[i] == true ? 1 : 0; end;
 
 ## Constructors ##
 
-# default arguments to clone()
-clone{T}(a::Tensor{T})                      = clone(a, T, size(a))
-clone   (a::Tensor, T::Type)                = clone(a, T, size(a))
-clone{T}(a::Tensor{T}, dims::Dims)          = clone(a, T, dims)
-clone{T}(a::Tensor{T}, dims::Size...)       = clone(a, T, dims)
-clone   (a::Tensor, T::Type, dims::Size...) = clone(a, T, dims)
+# default arguments to similar()
+similar{T}(a::Tensor{T})                      = similar(a, T, size(a))
+similar   (a::Tensor, T::Type)                = similar(a, T, size(a))
+similar{T}(a::Tensor{T}, dims::Dims)          = similar(a, T, dims)
+similar{T}(a::Tensor{T}, dims::Size...)       = similar(a, T, dims)
+similar   (a::Tensor, T::Type, dims::Size...) = similar(a, T, dims)
 
-reshape(a::Tensor, dims::Dims) = (b = clone(a, dims);
+reshape(a::Tensor, dims::Dims) = (b = similar(a, dims);
                                   for i=1:numel(a); b[i] = a[i]; end;
                                   b)
 reshape(a::Tensor, dims::Size...) = reshape(a, dims)
@@ -45,7 +49,7 @@ function copy_to(dest::Tensor, src::Tensor)
     return dest
 end
 
-copy(a::Tensor) = copy_to(clone(a), a)
+copy(a::Tensor) = copy_to(similar(a), a)
 
 eye(n::Size) = eye(n, n)
 eye(m::Size, n::Size) = (a = zeros(m,n);
@@ -75,7 +79,7 @@ macro unary_op(f)
     quote
         
         function ($f)(A::Tensor)            
-            F = clone(A)
+            F = similar(A)
             for i=1:numel(A)
                 F[i] = ($f)(A[i])
             end
@@ -95,7 +99,7 @@ end # macro
 *{T<:Number}(x::Tensor{T}) = x
 
 function !(A::Tensor{Bool})
-    F = clone(A)
+    F = similar(A)
     for i=1:numel(A)
         F[i] = !A[i]
     end
@@ -125,21 +129,21 @@ macro binary_arithmetic_op(f)
     quote
 
         function ($f){S,T}(A::Tensor{S}, B::Tensor{T})
-           F = clone(A, promote_type(S,T))
+           F = similar(A, promote_type(S,T))
            for i=1:numel(A)
               F[i] = ($f)(A[i], B[i])
            end
            return F
         end
         function ($f){T}(A::Number, B::Tensor{T})
-           F = clone(B, promote_type(typeof(A),T))
+           F = similar(B, promote_type(typeof(A),T))
            for i=1:numel(B)
               F[i] = ($f)(A, B[i])
            end
            return F
         end
         function ($f){T}(A::Tensor{T}, B::Number)
-           F = clone(A, promote_type(T,typeof(B)))
+           F = similar(A, promote_type(T,typeof(B)))
            for i=1:numel(A)
               F[i] = ($f)(A[i], B)
            end
@@ -160,21 +164,21 @@ macro binary_comparison_op(f)
     quote
 
         function ($f)(A::Tensor, B::Tensor)
-           F = clone(A, Bool)
+           F = similar(A, Bool)
            for i=1:numel(A)
               F[i] = ($f)(A[i], B[i])
            end
            return F
         end
         function ($f)(A::Number, B::Tensor)
-           F = clone(B, Bool)
+           F = similar(B, Bool)
            for i=1:numel(B)
               F[i] = ($f)(A, B[i])
            end
            return F
         end
         function ($f)(A::Tensor, B::Number)
-           F = clone(A, Bool)
+           F = similar(A, Bool)
            for i=1:numel(A)
               F[i] = ($f)(A[i], B)
            end
@@ -196,21 +200,21 @@ macro binary_boolean_op(f)
     quote
 
         function ($f)(A::Tensor{Bool}, B::Tensor{Bool})
-           F = clone(A, Bool)
+           F = similar(A, Bool)
            for i=1:numel(A)
               F[i] = ($f)(A[i], B[i])
            end
            return F
         end
         function ($f)(A::Bool, B::Tensor{Bool})
-           F = clone(B, Bool)
+           F = similar(B, Bool)
            for i=1:numel(B)
               F[i] = ($f)(A, B[i])
            end
            return F
         end
         function ($f)(A::Tensor{Bool}, B::Bool)
-           F = clone(A, Bool)
+           F = similar(A, Bool)
            for i=1:numel(A)
               F[i] = ($f)(A[i], B)
            end
@@ -256,7 +260,7 @@ function ref(A::Tensor, I::Indices...)
     ndimsA = length(dims)
 
     strides = cumprod(dims)
-    X = clone(A, map(length, I))
+    X = similar(A, map(length, I))
 
     storeind = 1
     function store(ind)
@@ -391,7 +395,7 @@ function areduce(f::Function, A::Tensor, region::Region, RType::Type)
     dimsA = size(A)
     ndimsA = length(dimsA)
     dimsR = ntuple(ndimsA, i->(contains(region, i) ? 1 : dimsA[i]))
-    R = clone(A, RType, dimsR)
+    R = similar(A, RType, dimsR)
     
     function reduce_one(ind)
         sliceA = ntuple(ndimsA, i->(contains(region, i) ?
@@ -458,7 +462,7 @@ end
 for (f, op) = ((:cumsum, :+), (:cumprod, :(.*)) )
     @eval function ($f)(v::Vector)
         n = length(v)
-        c = clone(v, n)
+        c = similar(v, n)
         if n == 0; return c; end
 
         c[1] = v[1]
@@ -482,7 +486,7 @@ isempty(a::Tensor) = (numel(a) == 0)
 #map(f, M::Matrix) = [ f(M[i,j]) | i=1:size(M,1), j=1:size(M,2) ]
 
 function map(f, A::Tensor)
-    F = clone(A, size(A))
+    F = similar(A, size(A))
     for i=1:numel(A)
         F[i] = f(A[i])
     end
@@ -512,7 +516,7 @@ ctranspose(x::Matrix) = [ conj(x[j,i]) | i=1:size(x,2), j=1:size(x,1) ]
 
 function transpose(a::Matrix)
     m,n = size(a)
-    b = clone(a, n, m)
+    b = similar(a, n, m)
     for i=1:m, j=1:n
         b[j,i] = a[i,j]
     end
@@ -523,7 +527,7 @@ function permute(A::Tensor, perm)
     dimsA = size(A)
     ndimsA = length(dimsA)
     dimsP = ntuple(ndimsA, i->dimsA[perm[i]])
-    P = clone(A, dimsP)
+    P = similar(A, dimsP)
 
     count = 1
     function permute_one(ind)
@@ -539,7 +543,7 @@ function ipermute(A::Tensor, perm)
     dimsA = size(A)
     ndimsA = length(dimsA)
     dimsP = ntuple(ndimsA, i->dimsA[perm[i]])
-    P = clone(A, dimsP)
+    P = similar(A, dimsP)
 
     count = 1
     function permute_one(ind)
@@ -565,7 +569,7 @@ accumarray(I::Vector, J::Vector, V) = accumarray (I, J, V, max(I), max(J))
 
 
 function accumarray{T<:Number}(I::Vector, J::Vector, V::T, m::Size, n::Size)
-    A = clone(V, m, n)
+    A = similar(V, m, n)
     for k=1:length(I)
         A[I[k], J[k]] += V
     end
@@ -573,7 +577,7 @@ function accumarray{T<:Number}(I::Vector, J::Vector, V::T, m::Size, n::Size)
 end
 
 function accumarray(I::Indices, J::Indices, V::Vector, m::Size, n::Size)
-    A = clone(V, m, n)
+    A = similar(V, m, n)
     for k=1:length(I)
         A[I[k], J[k]] += V[k]
     end

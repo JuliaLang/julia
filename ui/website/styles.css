@@ -1,0 +1,124 @@
+﻿* {
+	margin: 0px;
+	padding: 0px;
+}
+
+body {
+	background-color: #fafafa;
+	font: 90% "Verdana", "Arial";
+	color: #333333;
+}
+
+div#header {
+	border-bottom: 1px solid #e2e2e2;
+	background-color: #f7f7f7;
+	background: -webkit-gradient(linear, left top, left bottom, from(#ffffff), to(#f2f1f4));
+	background: -moz-linear-gradient(top,  #ffffff,  #f2f1f4);
+}
+
+div#header-content {
+	width: 800px;
+	margin: auto;
+}
+
+div.message {
+	background-color: #eaf2f5;
+	border: 1px solid #bedce7;
+	padding-top: 10px;
+	padding-bottom: 10px;
+	padding-left: 20px;
+	padding-right: 20px;
+	width: 760px;
+	margin-left: auto;
+	margin-right: auto;
+	margin-top: 20px;
+}
+
+div.error {
+	background-color: #fae4e4;
+	border: 1px solid #e7bebe;
+	padding-top: 10px;
+	padding-bottom: 10px;
+	padding-left: 20px;
+	padding-right: 20px;
+	width: 760px;
+	margin-left: auto;
+	margin-right: auto;
+	margin-top: 20px;
+}
+
+div#main {
+	background-color: #ffffff;
+	padding-top: 10px;
+	padding-bottom: 10px;
+	padding-left: 20px;
+	padding-right: 20px;
+	width: 760px;
+	margin-left: auto;
+	margin-right: auto;
+	margin-top: 20px;
+	margin-bottom: 20px;
+	background-color: #fffde7;
+	background: -webkit-gradient(linear, left top, left bottom, from(#fffef2), to(#fffde9));
+	background: -moz-linear-gradient(top,  #fffef2,  #fffde9);
+	border: 1px solid #e7e7ce;
+}
+
+div#footer {
+	border-top: 4px solid #444;
+	background-color: #777;
+	color: #ccc;
+	width: 100%;
+}
+
+div#footer-content {
+	width: 800px;
+	margin: auto;
+}
+
+p#copyright {
+	padding-bottom: 8px;
+}
+
+a img {
+	border: none;
+}
+
+img#logo {
+	margin-top: 10px;
+}
+
+img#mit-logo {
+	float: right;
+}
+
+h1 {
+	font: 150% "Verdana", "Arial";
+}
+
+p {
+	margin-top: 8px;
+}
+
+hr {
+	margin-top: 8px;
+	border-top: 1px solid #dddddd;
+	border-bottom: 1px solid #ffffff;
+	border-left: 0px;
+	border-right: 0px;
+}
+
+textarea {
+	width: 744px;
+	background-color: #fafafa;
+	font: 120% "Consolas", "Courier New";
+	font-weight: bold;
+	color: #444444;
+	border: 1px solid #e7e7ce;
+	outline: none;
+	padding: 8px;
+	margin: 0px;
+	margin-top: 10px;
+	margin-bottom: 5px;
+	resize: none;
+}

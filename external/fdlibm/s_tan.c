@@ -54,7 +54,7 @@
 	int n, ix;
 
     /* High word of x. */
-	ix = __HI(x);
+        GET_HIGH_WORD(ix, x);
 
     /* |x| ~< pi/4 */
 	ix &= 0x7fffffff;

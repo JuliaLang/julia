@@ -93,8 +93,7 @@ static double zero   =  0.0;
 	int k,hx,i,j;
 	unsigned lx;
 
-	hx = __HI(x);		/* high word of x */
-	lx = __LO(x);		/* low  word of x */
+        EXTRACT_WORDS(hx, lx, x);
 
 	k=0;
 	if (hx < 0x00100000) {			/* x < 2**-1022  */
@@ -102,13 +101,13 @@ static double zero   =  0.0;
 		return -two54/zero;		/* log(+-0)=-inf */
 	    if (hx<0) return (x-x)/zero;	/* log(-#) = NaN */
 	    k -= 54; x *= two54; /* subnormal number, scale up x */
-	    hx = __HI(x);		/* high word of x */
+            GET_HIGH_WORD(hx, x);
 	} 
 	if (hx >= 0x7ff00000) return x+x;
 	k += (hx>>20)-1023;
 	hx &= 0x000fffff;
 	i = (hx+0x95f64)&0x100000;
-	__HI(x) = hx|(i^0x3ff00000);	/* normalize x or x/2 */
+        SET_HIGH_WORD(x, hx|(i^0x3ff00000));	/* normalize x or x/2 */
 	k += (i>>20);
 	f = x-1.0;
 	if((0x000fffff&(2+hx))<3) {	/* |f| < 2**-20 */

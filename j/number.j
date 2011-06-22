@@ -1,26 +1,26 @@
-## generic operations on scalars ##
+## generic operations on numbers ##
 
+isreal(x::Number) = false
 isreal(x::Real) = true
-isreal(x) = false
 
+isinteger(x::Number) = false
 isinteger(x::Int) = true
-isinteger(x) = false
 
-integer_valued(x::Int) = true
 real_valued(x::Real) = true
+integer_valued(x::Int) = true
 
-size(x) = ()
-ndims(x) = 0
-numel(x) = 1
-length(x) = 1
-ref(x) = x
+size(x::Number) = ()
+ndims(x::Number) = 0
+numel(x::Number) = 1
+length(x::Number) = 1
+ref(x::Number) = x
 
 signbit(x::Real) = x < 0 ? int8(-1) : int8(1)
 sign(x::Real) = x < 0 ? int8(-1) : x > 0 ? int8(1) : int8(0)
 abs(x::Real) = x < 0 ? -x : x
 
 conj(x::Number) = x
-transpose(x) = x
+transpose(x::Number) = x
 ctranspose(x::Number) = conj(transpose(x))
 inv(x::Number) = one(x)/x
 

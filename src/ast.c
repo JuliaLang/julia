@@ -193,7 +193,6 @@ static jl_value_t *scm_to_julia(value_t e)
 #ifdef JL_GC_MARKSWEEP
     if (en) jl_gc_enable();
 #endif
-    htable_reset(&gensym_table, gensym_table.size);
     return v;
 }
 

@@ -1,30 +1,17 @@
-type Complex{T<:Real} <: Number
-    re::T
-    im::T
+## generic complex number definitions ##
 
-    Complex{T<:Real}(x::T, y::T) = new(x, y)
-    Complex(x::Real, y::Real) = Complex(promote(x,y)...)
-    Complex(x::Real) = new(x, zero(x))
-end
+abstract ComplexNum <: Number
 
-im = Complex(0,1)
+iscomplex(x::ComplexNum) = true
+iscomplex(x) = false
 
-complex(x, y) = Complex(x, y)
-complex(x) = Complex(x)
+real_valued(z::ComplexNum)    = (imag(z) == 0)
+integer_valued(z::ComplexNum) = (real_valued(z) && integer_valued(real(z)))
 
-complex(re::Array, im::Array ) = reshape([ Complex(re[i],im[i]) | i=1:numel(re) ], size(re))
-complex(re::Array, im::Real  ) = reshape([ Complex(re[i],im   ) | i=1:numel(re) ], size(re))
-complex(re::Real , im::Array ) = reshape([ Complex(re   ,im[i]) | i=1:numel(im) ], size(im))
+real(x::Real) = x
+imag(x::Real) = convert(typeof(x), 0)
 
-convert{T}(::Type{Complex{T}}, x::T) = Complex(x, convert(T,0))
-convert{T}(::Type{Complex{T}}, x::Real) = Complex(convert(T,x), convert(T,0))
-convert{T}(::Type{Complex{T}}, z::Complex) = Complex(convert(T,z.re),convert(T,z.im))
-
-promote_rule{T<:Real}(::Type{Complex{T}}, ::Type{T}) = Complex{T}
-promote_rule{T,S<:Real}(::Type{Complex{T}}, ::Type{S}) = Complex{promote_type(T,S)}
-promote_rule{T,S}(::Type{Complex{T}}, ::Type{Complex{S}}) = Complex{promote_type(T,S)}
-
-function show(c::Complex)
+function show(c::ComplexNum)
     show(real(c))
     i = imag(c)
     if signbit(i) == -1
@@ -37,101 +24,196 @@ function show(c::Complex)
     print("im")
 end
 
-iscomplex(x::Complex) = true
-iscomplex(x) = false
+complex(re::Array, im::Array ) = reshape([ complex(re[i],im[i]) | i=1:numel(re) ], size(re))
+complex(re::Array, im::Real  ) = reshape([ complex(re[i],im   ) | i=1:numel(re) ], size(re))
+complex(re::Real , im::Array ) = reshape([ complex(re   ,im[i]) | i=1:numel(im) ], size(im))
 
-real_valued(z::Complex) = (z.im == 0)
-integer_valued(z::Complex) = (real_valued(z) && integer_valued(z.re))
+
+## packed complex float types ##
+
+bitstype 128 Complex128 <: ComplexNum
+
+function complex128(r::Float64, i::Float64)
+    box(Complex128,
+        or_int(shl_int(zext_int(Complex128,unbox64(i)),unbox32(64)),
+               zext_int(Complex128,unbox64(r))))
+end
+
+complex128(r::Real, i::Real) = complex128(float64(r),float64(i))
+
+real(c::Complex128) = boxf64(trunc64(unbox(Complex128,c)))
+imag(c::Complex128) = boxf64(trunc64(ashr_int(unbox(Complex128,c),
+                                              unbox32(64))))
+
+pi(z::Complex128) = pi(Float64)
+pi(::Type{Complex128}) = pi(Float64)
+
+convert(::Type{Complex128}, x::Real) = complex128(x,zero(x))
+convert(::Type{Complex128}, z::ComplexNum) = complex128(real(z),imag(z))
+
+promote_rule(::Type{Complex128}, ::Type{Float64}) = Complex128
+promote_rule{S<:Real}(::Type{Complex128}, ::Type{S}) =
+    (P = promote_type(Float64,S);
+     is(P,Float64) ? Complex128 : Complex{P})
+
+
+bitstype 64 Complex64 <: ComplexNum
+
+function complex64(r::Float32, i::Float32)
+    box(Complex64,
+        or_int(shl_int(zext_int(Complex64,unbox32(i)),unbox32(32)),
+               zext_int(Complex64,unbox32(r))))
+end
+
+complex64(r::Real, i::Real) = complex64(float32(r),float32(i))
+
+real(c::Complex64) = boxf32(trunc32(unbox(Complex64,c)))
+imag(c::Complex64) = boxf32(trunc32(ashr_int(unbox(Complex64,c),
+                                             unbox32(32))))
+
+pi(z::Complex64) = pi(Float32)
+pi(::Type{Complex64}) = pi(Float32)
+
+convert(::Type{Complex64}, x::Real) = complex64(x,zero(x))
+convert(::Type{Complex64}, z::ComplexNum) = complex64(real(z),imag(z))
+
+promote_rule(::Type{Complex64}, ::Type{Float32}) = Complex64
+promote_rule{S<:Real}(::Type{Complex64}, ::Type{S}) =
+    (P = promote_type(Float32,S);
+     is(P,Float64) ? Complex128 :
+     is(P,Float32) ? Complex64  : Complex{P})
+promote_rule(::Type{Complex128}, ::Type{Complex64}) = Complex128
+
+
+complex(x::Float64, y::Float64) = complex128(x, y)
+complex(x::Float32, y::Float32) = complex64(x, y)
+complex(x::Float, y::Float) = complex(promote(x,y)...)
+complex(x::Float, y::Real) = complex(promote(x,y)...)
+complex(x::Real, y::Float) = complex(promote(x,y)...)
+complex(x::Float) = complex(x, zero(x))
+
+im = complex128(0,1)
+
+
+## complex with arbitrary component type ##
+
+type Complex{T<:Real} <: ComplexNum
+    re::T
+    im::T
+
+    Complex{T<:Real}(x::T, y::T) = new(x, y)
+    Complex(x::Real, y::Real) = Complex(promote(x,y)...)
+    Complex(x::Real) = new(x, zero(x))
+end
+
+real(z::Complex) = z.re
+imag(z::Complex) = z.im
+
+convert{T}(::Type{Complex{T}}, x::T) = Complex(x, convert(T,0))
+convert{T}(::Type{Complex{T}}, x::Real) = Complex(convert(T,x), convert(T,0))
+convert{T}(::Type{Complex{T}}, z::ComplexNum) = Complex(convert(T,real(z)),convert(T,imag(z)))
+
+promote_rule{T<:Real}(::Type{Complex{T}}, ::Type{T}) = Complex{T}
+promote_rule{T,S<:Real}(::Type{Complex{T}}, ::Type{S}) = Complex{promote_type(T,S)}
+promote_rule{T,S}(::Type{Complex{T}}, ::Type{Complex{S}}) = Complex{promote_type(T,S)}
+promote_rule{T<:Real}(::Type{Complex{T}}, ::Type{Complex128}) =
+    (P = promote_type(Float64,T);
+     is(P,Float64) ? Complex128 : Complex{P})
+promote_rule{T<:Real}(::Type{Complex{T}}, ::Type{Complex64}) =
+    (P = promote_type(Float32,T);
+     is(P,Float64) ? Complex128 :
+     is(P,Float32) ? Complex64  : Complex{P})
+
+complex(x, y) = Complex(x, y)
+complex(x) = Complex(x)
 
 pi{T}(z::Complex{T}) = pi(T)
 pi{T}(::Type{Complex{T}}) = pi(T)
 
-real(z::Complex) = z.re
-imag(z::Complex) = z.im
-real(x::Real) = x
-imag(x::Real) = convert(typeof(x), 0)
 
-conj(z::Complex) = Complex(z.re,-z.im)
-norm(z::Complex) = z.re*z.re + z.im*z.im
-abs(z::Complex) = hypot(z.re, z.im)
-inv(z::Complex) = conj(z)/norm(z)
+## functions of complex numbers ##
 
--(z::Complex) = Complex(-z.re, -z.im)
-+(z::Complex, w::Complex) = Complex(z.re + w.re, z.im + w.im)
--(z::Complex, w::Complex) = Complex(z.re - w.re, z.im - w.im)
-*(z::Complex, w::Complex) = Complex(z.re * w.re - z.im * w.im,
-                                    z.re * w.im + z.im * w.re)
+==(z::ComplexNum, w::ComplexNum) = (real(z) == real(w) && imag(z) == imag(w))
 
-==(z::Complex, w::Complex) = (z.re == w.re && z.im == w.im)
+conj(z::ComplexNum) = complex(real(z),-imag(z))
+norm(z::ComplexNum) = square(real(z)) + square(imag(z))
+abs(z::ComplexNum)  = hypot(real(z), imag(z))
+inv(z::ComplexNum)  = conj(z)/norm(z)
 
-/(z::Number, w::Complex) = z*inv(w)
-/(z::Complex, x::Real) = Complex(z.re/x, z.im/x)
+-(z::ComplexNum) = complex(-real(z), -imag(z))
++(z::ComplexNum, w::ComplexNum) = complex(real(z) + real(w), imag(z) + imag(w))
+-(z::ComplexNum, w::ComplexNum) = complex(real(z) - real(w), imag(z) - imag(w))
+*(z::ComplexNum, w::ComplexNum) = complex(real(z) * real(w) - imag(z) * imag(w),
+                                          real(z) * imag(w) + imag(z) * real(w))
 
-function /(a::Complex, b::Complex)
-    are = a.re; aim = a.im; bre = b.re; bim = b.im
+/(z::Number, w::ComplexNum) = z*inv(w)
+/(z::ComplexNum, x::Real) = complex(real(z)/x, imag(z)/x)
+
+function /(a::ComplexNum, b::ComplexNum)
+    are = real(a); aim = imag(a); bre = real(b); bim = imag(b)
     abr = abs(bre)
     abi = abs(bim)
     if abr <= abi
         r = bre / bim
         den = bim * (1 + r*r)
-        Complex((are*r + aim)/den, (aim*r - are)/den)
+        complex((are*r + aim)/den, (aim*r - are)/den)
     else
         r = bim / bre
         den = bre * (1 + r*r)
-        Complex((are + aim*r)/den, (aim - are*r)/den)
+        complex((are + aim*r)/den, (aim - are*r)/den)
     end
 end
 
-function /(a::Real, b::Complex)
-    bre = b.re; bim = b.im
+function /(a::Real, b::ComplexNum)
+    bre = real(b); bim = imag(b)
     abr = abs(bre)
     abi = abs(bim)
     if abr <= abi
         r = bre / bim
         den = bim * (1 + r*r)
-        Complex(a*r/den, -a/den)
+        complex(a*r/den, -a/den)
     else
         r = bim / bre
         den = bre * (1 + r*r)
-        Complex(a/den, -a*r/den)
+        complex(a/den, -a*r/den)
     end
 end
 
-function sqrt(z::Complex)
-    r = sqrt(0.5(hypot(z.re,z.im)+abs(z.re)))
-    if z.re >= 0
-        return Complex(r, 0.5*z.im/r)
+function sqrt(z::ComplexNum)
+    r = sqrt(0.5(hypot(real(z),imag(z))+abs(real(z))))
+    if real(z) >= 0
+        return complex(r, 0.5*imag(z)/r)
     end
-    return Complex(0.5*abs(z.im)/r, z.im >= 0 ? r : -r)
+    return complex(0.5*abs(imag(z))/r, imag(z) >= 0 ? r : -r)
 end
 
-cis(theta::Real) = Complex(cos(theta),sin(theta))
-function cis(z::Complex)
-    v = 1/exp(z.im)
-    Complex(v*cos(z.re), v*sin(z.re))
+cis(theta::Real) = complex(cos(theta),sin(theta))
+function cis(z::ComplexNum)
+    v = 1/exp(imag(z))
+    complex(v*cos(real(z)), v*sin(real(z)))
 end
 
-arg(z::Complex) = atan2(z.im, z.re)
+arg(z::ComplexNum) = atan2(imag(z), real(z))
 
-function sin(z::Complex)
-    u = exp(z.im)
+function sin(z::ComplexNum)
+    u = exp(imag(z))
     v = 1/u
     u = 0.5(u+v)
     v = u-v
-    Complex(u*sin(z.re), v*cos(z.re))
+    complex(u*sin(real(z)), v*cos(real(z)))
 end
 
-function cos(z::Complex)
-    u = exp(z.im)
+function cos(z::ComplexNum)
+    u = exp(imag(z))
     v = 1/u
     u = 0.5(u+v)
     v = u-v
-    Complex(u*cos(z.re), -v*sin(z.re))
+    complex(u*cos(real(z)), -v*sin(real(z)))
 end
 
-function log(z::Complex)
-    ar = abs(z.re)
-    ai = abs(z.im)
+function log(z::ComplexNum)
+    ar = abs(real(z))
+    ai = abs(imag(z))
     if ar < ai
         r = ar/ai
         re = log(ai) + 0.5*log1p(r*r)
@@ -139,12 +221,12 @@ function log(z::Complex)
         r = ai/ar
         re = log(ar) + 0.5*log1p(r*r)
     end
-    Complex(re, atan2(z.im, z.re))
+    complex(re, atan2(imag(z), real(z)))
 end
 
-function exp(z::Complex)
-    er = exp(z.re)
-    Complex(er*cos(z.im), er*sin(z.im))
+function exp(z::ComplexNum)
+    er = exp(real(z))
+    complex(er*cos(imag(z)), er*sin(imag(z)))
 end
 
 ^(x::Int, p::Float) = ^(promote(x,p)...)
@@ -154,146 +236,148 @@ function ^(x::Float, p::Float)
         return pow(x, p)
     end
     if p == 0.5
-        return sqrt(Complex(x))
+        return sqrt(complex(x))
     end
-    return Complex(x)^Complex(p)
+    return complex(x)^complex(p)
 end
 
-function ^{T}(z::Complex{T}, p::Complex)
-    if p.im == 0
-        if p.re == 0
-            return convert(T,1)
-        elseif p.re == 1
+function ^(z::ComplexNum, p::ComplexNum)
+    realp = real(p)
+    if imag(p) == 0
+        if realp == 0
+            return one(z)
+        elseif realp == 1
             return z
-        elseif p.re == 2
+        elseif realp == 2
             return z*z
-        elseif p.re == 0.5
+        elseif realp == 0.5
             return sqrt(z)
         end
     end
     r = abs(z)
-    rp = r^p.re
-    if p.im == 0
-        ip = truncate(p.re)
-        if ip == p.re
+    rp = r^realp
+    realz = real(z)
+    if imag(p) == 0
+        ip = truncate(realp)
+        if ip == realp
             # integer multiples of pi/2
-            if z.im == 0 && z.re < 0
-                return Complex(isodd(ip) ? -rp : rp, convert(T,0))
-            elseif z.re == 0 && z.im < 0
+            if imag(z) == 0 && realz < 0
+                return complex(isodd(ip) ? -rp : rp, 0)
+            elseif realz == 0 && imag(z) < 0
                 if isodd(ip)
-                    return Complex(convert(T,0), isodd(div(ip-1,2)) ? rp : -rp)
+                    return complex(0, isodd(div(ip-1,2)) ? rp : -rp)
                 else
-                    return Complex(isodd(div(ip,2)) ? -rp : rp, convert(T,0))
+                    return complex(isodd(div(ip,2)) ? -rp : rp, 0)
                 end
-            elseif z.re == 0 && z.im > 0
+            elseif realz == 0 && imag(z) > 0
                 if isodd(ip)
-                    return Complex(convert(T,0), isodd(div(ip-1,2)) ? -rp : rp)
+                    return complex(0, isodd(div(ip-1,2)) ? -rp : rp)
                 else
-                    return Complex(isodd(div(ip,2)) ? -rp : rp, convert(T,0))
+                    return complex(isodd(div(ip,2)) ? -rp : rp, 0)
                 end
             end
         else
-            dr = p.re*2
+            dr = realp*2
             ip = truncate(dr)
             # 1/2 multiples of pi
-            if ip == dr && z.im == 0
-                if z.re < 0
-                    return Complex(convert(T,0), isodd(div(ip-1,2)) ? -rp : rp)
-                elseif z.re >= 0
-                    return Complex(rp, 0)
+            if ip == dr && imag(z) == 0
+                if realz < 0
+                    return complex(0, isodd(div(ip-1,2)) ? -rp : rp)
+                elseif realz >= 0
+                    return complex(rp, 0)
                 end
             end
         end
     end
-    theta = atan2(z.im, z.re)
-    ntheta = p.re*theta
-    if p.im != 0
-        rp = rp*exp(-p.im*theta)
-        ntheta = ntheta + p.im*log(r)
+    theta = atan2(imag(z), realz)
+    ntheta = realp*theta
+    if imag(p) != 0
+        rp = rp*exp(-imag(p)*theta)
+        ntheta = ntheta + imag(p)*log(r)
     end
-    Complex(rp*cos(ntheta), rp*sin(ntheta))
+    complex(rp*cos(ntheta), rp*sin(ntheta))
 end
 
-function ^(z::Real, p::Complex)
-    if p.im == 0
-        return z^p.re
-    end
-    ^(promote(z,p)...)
-end
-
-function ^(z::Complex, p::Float)
-    if z.im == 0
-        return z.re^p
+function ^(z::Real, p::ComplexNum)
+    if imag(p) == 0
+        return z^real(p)
     end
     ^(promote(z,p)...)
 end
 
-function tan(z::Complex)
-    u = exp(z.im)
+function ^(z::ComplexNum, p::Float)
+    if imag(z) == 0
+        return real(z)^p
+    end
+    ^(promote(z,p)...)
+end
+
+function tan(z::ComplexNum)
+    u = exp(imag(z))
     v = 1/u
     u = 0.5(u+v)
     v = u-v
-    sinre = sin(z.re)
-    cosre = cos(z.re)
+    sinre = sin(real(z))
+    cosre = cos(real(z))
     d = cosre*cosre + v*v
-    Complex(sinre*cosre/d, u*v/d)
+    complex(sinre*cosre/d, u*v/d)
 end
 
-function asin(z::Complex)
-    re = 1 - (z.re*z.re - z.im*z.im)
-    im = -2z.re*z.im
-    x = sqrt(Complex(re,im))
-    re = x.re - z.im
-    im = x.im + z.re
-    Complex(atan2(im, re), -log(hypot(re, im)))
+function asin(z::ComplexNum)
+    re = 1 - (real(z)*real(z) - imag(z)*imag(z))
+    im = -2real(z)*imag(z)
+    x = sqrt(complex(re,im))
+    re = real(x) - imag(z)
+    im = imag(x) + real(z)
+    complex(atan2(im, re), -log(hypot(re, im)))
 end
 
-function acos(z::Complex)
-    re = 1 - (z.re*z.re - z.im*z.im)
-    im = -2z.re*z.im
-    x = sqrt(Complex(re,im))
-    re = z.re - x.im
-    im = z.im + x.re
-    Complex(atan2(im, re), -log(hypot(re, im)))
+function acos(z::ComplexNum)
+    re = 1 - (real(z)*real(z) - imag(z)*imag(z))
+    im = -2real(z)*imag(z)
+    x = sqrt(complex(re,im))
+    re = real(z) - imag(x)
+    im = imag(z) + real(x)
+    complex(atan2(im, re), -log(hypot(re, im)))
 end
 
-function atan(z::Complex)
-    xsq = z.re*z.re
-    ysq = z.im*z.im
-    m1y = 1-z.im
-    yp1 = 1+z.im
+function atan(z::ComplexNum)
+    xsq = real(z)*real(z)
+    ysq = imag(z)*imag(z)
+    m1y = 1-imag(z)
+    yp1 = 1+imag(z)
     m1ysq = m1y*m1y
     yp1sq = yp1*yp1
-    Complex(0.5(atan2(z.re,m1y) - atan2(-z.re,yp1)),
+    complex(0.5(atan2(real(z),m1y) - atan2(-real(z),yp1)),
             0.25*log((yp1sq + xsq)/(xsq + m1ysq)))
 end
 
-function sinh(z::Complex)
-    u = exp(z.re)
+function sinh(z::ComplexNum)
+    u = exp(real(z))
     v = 1/u
     u = 0.5(u+v)
     v = u-v
-    Complex(v*cos(z.im), u*sin(z.im))
+    complex(v*cos(imag(z)), u*sin(imag(z)))
 end
 
-function cosh(z::Complex)
-    u = exp(z.re)
+function cosh(z::ComplexNum)
+    u = exp(real(z))
     v = 1/u
     u = 0.5(u+v)
     v = u-v
-    Complex(u*cos(z.im), v*sin(z.im))
+    complex(u*cos(imag(z)), v*sin(imag(z)))
 end
 
-function tanh(z::Complex)
-    cosim = cos(z.im)
-    u = exp(z.re)
+function tanh(z::ComplexNum)
+    cosim = cos(imag(z))
+    u = exp(real(z))
     v = 1/u
     u = 0.5(u+v)
     v = u-v
     d = cosim*cosim + v*v
-    Complex(u*v/d, sin(z.im)*cosim/d)
+    complex(u*v/d, sin(imag(z))*cosim/d)
 end
 
-asinh(z::Complex) = log(z + sqrt(z*z + 1))
-acosh(z::Complex) = log(z + sqrt(z*z - 1))
-atanh(z::Complex) = log(sqrt((1+z)/(1-z)))
+asinh(z::ComplexNum) = log(z + sqrt(z*z + 1))
+acosh(z::ComplexNum) = log(z + sqrt(z*z - 1))
+atanh(z::ComplexNum) = log(sqrt((1+z)/(1-z)))

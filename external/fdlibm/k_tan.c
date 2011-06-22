@@ -75,11 +75,13 @@ __kernel_tan(double x, double y, int iy) {
 	double z, r, v, w, s;
 	int ix, hx;
 
-	hx = __HI(x);		/* high word of x */
+        GET_HIGH_WORD(hx, x);
 	ix = hx & 0x7fffffff;			/* high word of |x| */
 	if (ix < 0x3e300000) {			/* x < 2**-28 */
 		if ((int) x == 0) {		/* generate inexact */
-			if (((ix | __LO(x)) | (iy + 1)) == 0)
+                        int _lx;
+                        GET_LOW_WORD(_lx, x);
+			if (((ix | _lx) | (iy + 1)) == 0)
 				return one / fabs(x);
 			else {
 				if (iy == 1)
@@ -88,10 +90,10 @@ __kernel_tan(double x, double y, int iy) {
 					double a, t;
 
 					z = w = x + y;
-					__LO(z) = 0;
+                                        SET_LOW_WORD(z, 0);
 					v = y - (z - x);
 					t = a = -one / w;
-					__LO(t) = 0;
+                                        SET_LOW_WORD(t, 0);
 					s = one + t * z;
 					return t + a * (s + t * v);
 				}
@@ -138,10 +140,10 @@ __kernel_tan(double x, double y, int iy) {
 		/* compute -1.0 / (x+r) accurately */
 		double a, t;
 		z = w;
-		__LO(z) = 0;
+                SET_LOW_WORD(z, 0);
 		v = r - (z - x);	/* z+v = r+x */
 		t = a = -1.0 / w;	/* a = -1.0/w */
-		__LO(t) = 0;
+                SET_LOW_WORD(t, 0);
 		s = 1.0 + t * z;
 		return t + a * (s + t * v);
 	}

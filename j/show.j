@@ -6,16 +6,23 @@ show(s::Symbol) = print(s)
 show(tn::TypeName) = show(tn.name)
 show(::Nothing) = print("nothing")
 
-function show_comma_array(ar, open, close)
-    print(open)
-    for i = 1:length(ar)
-        show(ar[i])
-        if i < length(ar)
-            print(',')
-        end
-    end
+function show_delim_array(itr, open, delim, close)
+	print(open)
+	state = start(itr)
+	if !done(itr,state)
+	    while true
+			x, state = next(itr,state)
+	        show(x)
+			if done(itr,state)
+				break
+	        end
+            print(delim)
+	    end
+	end
     print(close)
 end
+
+show_comma_array(itr, o, c) = show_delim_array(itr, o, ',', c)
 
 function show(e::Expr)
     hd = e.head
@@ -128,13 +135,9 @@ function dump{T}(x::T)
     println(')')
 end
 
-# show arrays
 showempty{T}(a::Array{T}) = print("Array($T,$(size(a)))")
 
 function showall{T}(a::Array{T,1})
-    if isempty(a)
-        return showempty(a)
-    end
     if is(T,Any)
         opn = '{'; cls = '}'
     else
@@ -154,9 +157,6 @@ function showall{T}(a::Array{T,2})
 end
 
 function show{T}(a::Array{T,1})
-    if isempty(a)
-        return showempty(a)
-    end
     if is(T,Any)
         opn = '{'; cls = '}'
     else

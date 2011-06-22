@@ -26,8 +26,8 @@ macro lapack_chol(fname, eltype)
     end
 end
 
-@lapack_chol "dpotrf_" Float64
-@lapack_chol "spotrf_" Float32
+@lapack_chol :dpotrf_ Float64
+@lapack_chol :spotrf_ Float32
 
 # SUBROUTINE DGETRF( M, N, A, LDA, IPIV, INFO )
 # *     .. Scalar Arguments ..
@@ -74,8 +74,8 @@ macro lapack_lu(fname, eltype)
     end
 end
 
-@lapack_lu "dgetrf_" Float64
-@lapack_lu "sgetrf_" Float32
+@lapack_lu :dgetrf_ Float64
+@lapack_lu :sgetrf_ Float32
 
 # SUBROUTINE DGEQP3( M, N, A, LDA, JPVT, TAU, WORK, LWORK, INFO )
 # *     .. Scalar Arguments ..
@@ -194,8 +194,8 @@ macro lapack_eig(fname, eltype)
     end
 end
 
-@lapack_eig "dsyev_" Float64
-@lapack_eig "ssyev_" Float32
+@lapack_eig :dsyev_ Float64
+@lapack_eig :ssyev_ Float32
 
 # SUBROUTINE DGESVD( JOBU, JOBVT, M, N, A, LDA, S, U, LDU, VT, LDVT, WORK, LWORK, INFO )
 # *     .. Scalar Arguments ..
@@ -248,8 +248,8 @@ macro lapack_svd(fname, eltype)
     end
 end
 
-@lapack_svd "dgesvd_" Float64
-@lapack_svd "sgesvd_" Float32
+@lapack_svd :dgesvd_ Float64
+@lapack_svd :sgesvd_ Float32
 
 # SUBROUTINE DGESV( N, NRHS, A, LDA, IPIV, B, LDB, INFO )
 # *     .. Scalar Arguments ..
@@ -277,6 +277,8 @@ macro lapack_backslash(fname_lu, fname_chol, fname_lsq, fname_tri, eltype)
             info = [0]
             m = size(A, 1)
             n = size(A, 2)
+            mrhs = size(B, 1)
+            if m != mrhs; error("Number of rows of arguments do not match"); end
             if isa(B, Vector); nrhs = 1; else nrhs = size(B, 2); end
             Acopy = copy(A)
             X = copy(B)
@@ -332,21 +334,29 @@ macro lapack_backslash(fname_lu, fname_chol, fname_lsq, fname_tri, eltype)
                 # Workspace query
                 lwork = -1
                 work = [0.0]
+                Y = Array($eltype, max(m,n), nrhs)
+                Y[1:size(X,1), 1:size(X,2)] = X
+
                 ccall(dlsym(libLAPACK, $fname_lsq),
                       Void,
                       (Ptr{Uint8}, Ptr{Int32}, Ptr{Int32}, Ptr{Int32}, Ptr{$eltype}, Ptr{Int32}, 
                        Ptr{$eltype}, Ptr{Int32}, Ptr{$eltype}, Ptr{Int32}, Ptr{Int32}),
-                      "N", m, n, nrhs, Acopy, m, X, max(m,n), work, lwork, info)
+                      "N", m, n, nrhs, Acopy, m, Y, max(m,n), work, lwork, info)
                 
-                if info[1] == 0; lwork = int32(work[1]); work = Array($eltype, lwork);
-                else error("Error in ", $fname_lsq); end
+                if info[1] == 0
+                    lwork = int32(work[1])
+                    work = Array($eltype, lwork)
+                else
+                    error("Error in ", $fname_lsq)
+                end
                 
                 ccall(dlsym(libLAPACK, $fname_lsq),
                       Void,
                       (Ptr{Uint8}, Ptr{Int32}, Ptr{Int32}, Ptr{Int32}, Ptr{$eltype}, Ptr{Int32}, 
                        Ptr{$eltype}, Ptr{Int32}, Ptr{$eltype}, Ptr{Int32}, Ptr{Int32}),
-                      "N", m, n, nrhs, Acopy, m, X, max(m,n), work, lwork, info)
+                      "N", m, n, nrhs, Acopy, m, Y, max(m,n), work, lwork, info)
                 
+                X = Y
             end # if m == n...
                 
             if info[1] == 0; return X; end

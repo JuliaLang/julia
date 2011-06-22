@@ -193,6 +193,9 @@ gc() = ccall(:jl_gc_collect, Void, ())
 
 cstring(str::ByteString) = str
 
+# return an integer such that uid(x)==uid(y) iff is(x,y)
+uid(x) = ccall(:jl_uid, Ulong, (Any,), x)
+
 dlsym(hnd, s::String) =
     ccall(:jl_dlsym, Ptr{Void}, (Ptr{Void}, Ptr{Uint8}), hnd, cstring(s))
 
@@ -256,3 +259,11 @@ Array{T}(::Type{T}, m::Size,n::Size,o::Size,p::Size) = Array(T, (m,n,o,p))
 
 Array{N}(T, d::NTuple{N,Size})                       = Array{T,N}(d)
 Array(T, d::Size...)                                 = Array(T, d)
+
+function compile_hint(f, args::Tuple)
+    if !isgeneric(f)
+        return
+    end
+    ccall(:jl_get_specialization, Any, (Any, Any), f, args)
+    nothing
+end

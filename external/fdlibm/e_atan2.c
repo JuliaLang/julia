@@ -64,10 +64,10 @@ pi_lo   = 1.2246467991473531772E-16; /* 0x3CA1A626, 0x33145C07 */
 	int k,m,hx,hy,ix,iy;
 	unsigned lx,ly;
 
-	hx = __HI(x); ix = hx&0x7fffffff;
-	lx = __LO(x);
-	hy = __HI(y); iy = hy&0x7fffffff;
-	ly = __LO(y);
+        EXTRACT_WORDS(hx, lx, x);
+        EXTRACT_WORDS(hy, ly, y);
+	ix = hx&0x7fffffff;
+	iy = hy&0x7fffffff;
 	if(((ix|((lx|-lx)>>31))>0x7ff00000)||
 	   ((iy|((ly|-ly)>>31))>0x7ff00000))	/* x or y is NaN */
 	   return x+y;
@@ -112,9 +112,11 @@ pi_lo   = 1.2246467991473531772E-16; /* 0x3CA1A626, 0x33145C07 */
 	if(k > 60) z=pi_o_2+0.5*pi_lo; 	/* |y/x| >  2**60 */
 	else if(hx<0&&k<-60) z=0.0; 	/* |y|/x < -2**60 */
 	else z=atan(fabs(y/x));		/* safe to do y/x */
+        int _hz;
 	switch (m) {
 	    case 0: return       z  ;	/* atan(+,+) */
-	    case 1: __HI(z) ^= 0x80000000;
+	    case 1: GET_HIGH_WORD(_hz, z);
+                    SET_HIGH_WORD(z, _hz ^ 0x80000000);
 		    return       z  ;	/* atan(-,+) */
 	    case 2: return  pi-(z-pi_lo);/* atan(+,-) */
 	    default: /* case 3 */

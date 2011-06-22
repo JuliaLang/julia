@@ -43,27 +43,29 @@ G =  3.57142857142857150787e-01; /* 5/14      = 0x3FD6DB6D, 0xB6DB6DB7 */
 	double x;
 #endif
 {
-	int	hx;
+        int	hx, lx;
 	double r,s,t=0.0,w;
 	unsigned sign;
 
-
-	hx = __HI(x);		/* high word of x */
+        EXTRACT_WORDS(hx, lx, x);
 	sign=hx&0x80000000; 		/* sign= sign(x) */
 	hx  ^=sign;
 	if(hx>=0x7ff00000) return(x+x); /* cbrt(NaN,INF) is itself */
-	if((hx|__LO(x))==0) 
+	if((hx|lx)==0) 
 	    return(x);		/* cbrt(0) is itself */
 
-	__HI(x) = hx;	/* x <- |x| */
+        SET_HIGH_WORD(x, hx); /* x <- |x| */
     /* rough cbrt to 5 bits */
 	if(hx<0x00100000) 		/* subnormal number */
-	  {__HI(t)=0x43500000; 		/* set t= 2**54 */
-	   t*=x; __HI(t)=__HI(t)/3+B2;
-	  }
-	else
-	  __HI(t)=hx/3+B1;	
-
+            {SET_HIGH_WORD(t, 0x43500000); /* set t= 2**54 */
+             t*=x;
+             int _ht;
+             GET_HIGH_WORD(_ht, t);
+             SET_HIGH_WORD(t, _ht/3+B2);
+            }
+	else {
+            SET_HIGH_WORD(t, hx/3+B1);
+        }
 
     /* new cbrt to 23 bits, may be implemented in single precision */
 	r=t*t/x;
@@ -71,7 +73,9 @@ G =  3.57142857142857150787e-01; /* 5/14      = 0x3FD6DB6D, 0xB6DB6DB7 */
 	t*=G+F/(s+E+D/s);	
 
     /* chopped to 20 bits and make it larger than cbrt(x) */ 
-	__LO(t)=0; __HI(t)+=0x00000001;
+        int _ht;
+        GET_HIGH_WORD(_ht, t);
+        INSERT_WORDS(t, _ht+0x00000001, 0);
 
 
     /* one step newton iteration to 53 bits with error less than 0.667 ulps */
@@ -82,6 +86,7 @@ G =  3.57142857142857150787e-01; /* 5/14      = 0x3FD6DB6D, 0xB6DB6DB7 */
 	t=t+t*r;
 
     /* retore the sign bit */
-	__HI(t) |= sign;
+        GET_HIGH_WORD(_ht, t);
+        SET_HIGH_WORD(t, _ht|sign);
 	return(t);
 }

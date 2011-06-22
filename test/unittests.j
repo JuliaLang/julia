@@ -100,10 +100,10 @@ b = rand()
 @assert 0.7 < real(sqrt(Complex(0,1))) < 0.707107
 
 @assert parse_int(Int32,"z",36) == 35
-@assert bin_parse("0") == 0
-@assert oct_parse("7") == 7
-@assert dec_parse("3830974272") == 3830974272
-@assert hex_parse("0BADF00D") == 195948557
+@assert parse_bin("0") == 0
+@assert parse_oct("7") == 7
+@assert parse_dec("3830974272") == 3830974272
+@assert parse_hex("0BADF00D") == 195948557
 
 function fooo()
     local x::Int8

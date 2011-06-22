@@ -64,9 +64,8 @@ static double zero  =  0.00000000000000000000e+00;
     /* J(-n,x) = (-1)^n * J(n, x), J(n, -x) = (-1)^n * J(n, x)
      * Thus, J(-n,x) = J(n,-x)
      */
-	hx = __HI(x);
+        EXTRACT_WORDS(hx, lx, x);
 	ix = 0x7fffffff&hx;
-	lx = __LO(x);
     /* if J(n,NaN) is NaN */
 	if((ix|((unsigned)(lx|-lx))>>31)>0x7ff00000) return x+x;
 	if(n<0){		
@@ -222,9 +221,8 @@ static double zero  =  0.00000000000000000000e+00;
 	int sign;
 	double a, b, temp;
 
-	hx = __HI(x);
+        EXTRACT_WORDS(hx, lx, x);
 	ix = 0x7fffffff&hx;
-	lx = __LO(x);
     /* if Y(n,NaN) is NaN */
 	if((ix|((unsigned)(lx|-lx))>>31)>0x7ff00000) return x+x;
 	if((ix|lx)==0) return -one/zero;
@@ -262,9 +260,12 @@ static double zero  =  0.00000000000000000000e+00;
 	    a = __ieee754_y0(x);
 	    b = __ieee754_y1(x);
 	/* quit if b is -inf */
-	    for(i=1;i<n&&(__HI(b) != 0xfff00000);i++){ 
+            int hb;
+            GET_HIGH_WORD(hb, b);
+	    for(i=1;i<n&&(hb != 0xfff00000);i++){ 
 		temp = b;
 		b = ((double)(i+i)/x)*b - a;
+                GET_HIGH_WORD(hb, b);
 		a = temp;
 	    }
 	}

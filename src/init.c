@@ -52,7 +52,7 @@ void fpe_handler(int arg)
     sigaddset(&sset, SIGFPE);
     sigprocmask(SIG_UNBLOCK, &sset, NULL);
 
-    jl_raise(jl_divbyzero_exception);
+    jl_divide_by_zero_error();
 }
 
 void segv_handler(int sig, siginfo_t *info, void *context)
@@ -267,7 +267,7 @@ JL_CALLABLE(jl_weakref_ctor);
 // fetch references to things defined in boot.j
 void jl_get_builtin_hooks()
 {
-    jl_nothing = (jl_struct_type_t*)global("nothing");
+    jl_nothing      = global("nothing");
 
     jl_char_type    = (jl_bits_type_t*)global("Char");
     jl_int8_type    = (jl_bits_type_t*)global("Int8");

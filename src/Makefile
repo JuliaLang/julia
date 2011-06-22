@@ -28,6 +28,10 @@ ifeq ($(USE_COPY_STACKS),1)
 CFLAGS += -DCOPY_STACKS
 endif
 
+default: release
+
+debug release: %: libjulia-%
+
 %.o: %.c julia.h
 	$(CC) $(CFLAGS) $(SHIPFLAGS) -c $< -o $@
 %.do: %.c julia.h
@@ -56,16 +60,13 @@ $(LLT): $(LLTDIR)/*.h $(LLTDIR)/*.c
 $(FLISP): $(FLISPDIR)/*.h $(FLISPDIR)/*.c $(LLT)
 	cd $(FLISPDIR) && $(MAKE)
 
-libjulia-debug: $(JULIAHOME)/libjulia-debug.$(SHLIB_EXT)
 $(JULIAHOME)/libjulia-debug.$(SHLIB_EXT): $(DOBJS) $(LIBFILES)
 	$(CXX) $(DEBUGFLAGS) $(DOBJS) -shared -o $(JULIAHOME)/libjulia-debug.$(SHLIB_EXT) $(LIBS)
+libjulia-debug: $(JULIAHOME)/libjulia-debug.$(SHLIB_EXT)
 
-libjulia-release: $(JULIAHOME)/libjulia-release.$(SHLIB_EXT)
 $(JULIAHOME)/libjulia-release.$(SHLIB_EXT): $(OBJS) $(LIBFILES)
 	$(CXX) $(SHIPFLAGS) $(OBJS) -shared -o $(JULIAHOME)/libjulia-release.$(SHLIB_EXT) $(LIBS)
-
-
-debug release: %: julia-%
+libjulia-release: $(JULIAHOME)/libjulia-release.$(SHLIB_EXT)
 
 clean:
 	rm -f $(JULIAHOME)/libjulia*.$(SHLIB_EXT)
@@ -76,10 +77,12 @@ clean:
 	rm -f *.o
 	rm -f *~ *#
 
-cleanother:
-	$(MAKE) -C $(LLTDIR) clean
+clean-flisp:
 	$(MAKE) -C $(FLISPDIR) clean
 
-cleanall: clean cleanother
+clean-support:
+	$(MAKE) -C $(LLTDIR) clean
 
-.PHONY: debug release clean cleanall cleanother
+cleanall: clean clean-flisp clean-support
+
+.PHONY: debug release clean cleanall clean-*

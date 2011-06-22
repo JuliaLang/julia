@@ -81,6 +81,7 @@ function hash(a::Array)
     h
 end
 
+hash(x::Any) = uid(x)
 hash(s::ByteString) = ccall(:memhash32, Uint32, (Ptr{Void}, Size), s.data, length(s.data))
 
 # hash table
@@ -229,6 +230,7 @@ next(t::HashTable, i) = ((n, nxt) = next(t.used, i);
                           skip_deleted(t.used,t.deleted,nxt)))
 
 isempty(t::HashTable) = done(t, start(t))
+length(t::HashTable) = length(t.used)-length(t.deleted)
 
 function ref(t::Union(IdTable,HashTable), key)
     v = get(t, key, _secret_table_token_)

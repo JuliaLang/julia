@@ -655,9 +655,8 @@ issues 1/24/11
 * saving system image
 * make optimized arrayset, arrayref work on all Arrays
 - parallel
-  . make sure process group setup works
+  * make sure process group setup works
   * function reflection and serialization
-    . lambda-numbering to make it faster
   * automatically resolve local remote references to their values
   * @spawn
   * distributed GC
@@ -666,9 +665,15 @@ issues 1/24/11
     a channel could be a GlobalObject on 2 processors, and you wait for a
     message on the channel. or a DArray might be updated multiple times, and
     you want to wait for the next write (not just the first)
-  . some kind of atomic update, e.g. a[a:b,c:d]=X where once the write begins
+  ? some kind of atomic update, e.g. a[a:b,c:d]=X where once the write begins
     future reads from that region will wait for it to complete
-  . isready()
+  ? isready()
+  . timer events, delay and aggregate messages
+  . lambda-numbering to reuse code for spawned closures
+  . pull repl global variables into spawned closures
+  . do indexing of local objects locally automatically in spawn
+- add line number and file information
+
 ? try to remove @ from macro syntax
 * either add "do" to loops or use
   @parallel for i=1:n

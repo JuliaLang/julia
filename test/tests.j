@@ -558,36 +558,36 @@ end
 @assert parse_int(Int32,"Z",36) == 35
 @assert parse_int(Int32,"z",36) == 35
 
-@assert bin_parse("0") == 0
-@assert bin_parse("1") == 1
-@assert bin_parse("10") == 2
-@assert bin_parse("11") == 3
-@assert bin_parse("1111000011110000111100001111") == 252645135
+@assert parse_bin("0") == 0
+@assert parse_bin("1") == 1
+@assert parse_bin("10") == 2
+@assert parse_bin("11") == 3
+@assert parse_bin("1111000011110000111100001111") == 252645135
 
-@assert oct_parse("0") == 0
-@assert oct_parse("1") == 1
-@assert oct_parse("7") == 7
-@assert oct_parse("10") == 8
-@assert oct_parse("11") == 9
-@assert oct_parse("72") == 58
-@assert oct_parse("3172207320") == 434704080
+@assert parse_oct("0") == 0
+@assert parse_oct("1") == 1
+@assert parse_oct("7") == 7
+@assert parse_oct("10") == 8
+@assert parse_oct("11") == 9
+@assert parse_oct("72") == 58
+@assert parse_oct("3172207320") == 434704080
 
-@assert dec_parse("0") == 0
-@assert dec_parse("1") == 1
-@assert dec_parse("9") == 9
-@assert dec_parse("10") == 10
-@assert dec_parse("3830974272") == 3830974272
+@assert parse_dec("0") == 0
+@assert parse_dec("1") == 1
+@assert parse_dec("9") == 9
+@assert parse_dec("10") == 10
+@assert parse_dec("3830974272") == 3830974272
 
-@assert hex_parse("0") == 0
-@assert hex_parse("1") == 1
-@assert hex_parse("9") == 9
-@assert hex_parse("a") == 10
-@assert hex_parse("f") == 15
-@assert hex_parse("10") == 16
-@assert hex_parse("0BADF00D") == 195948557
-@assert hex_parse("BADCAB1E") == 3135023902
-@assert hex_parse("CafeBabe") == 3405691582
-@assert hex_parse("DeadBeef") == 3735928559
+@assert parse_hex("0") == 0
+@assert parse_hex("1") == 1
+@assert parse_hex("9") == 9
+@assert parse_hex("a") == 10
+@assert parse_hex("f") == 15
+@assert parse_hex("10") == 16
+@assert parse_hex("0BADF00D") == 195948557
+@assert parse_hex("BADCAB1E") == 3135023902
+@assert parse_hex("CafeBabe") == 3405691582
+@assert parse_hex("DeadBeef") == 3735928559
 
 # bits types, printing numbers
 @assert string(uint32(-1)) == "4294967295"

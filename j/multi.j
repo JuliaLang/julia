@@ -509,47 +509,6 @@ function taskrunner()
     end
 end
 
-function deliver_result(sock::IOStream, msg, oid, value)
-    #print("$(myid()) sending result\n")
-    if is(msg,:fetch)
-        val = value
-    else
-        @assert is(msg, :wait)
-        val = oid
-    end
-    try
-        send_msg(sock, :result, msg, oid, val)
-    catch e
-        # send exception in case of serialization error; otherwise
-        # request side would hang.
-        send_msg(sock, :result, msg, oid, e)
-    end
-end
-
-function deliver_result(sock::(), msg, oid, value_thunk)
-    global Waiting
-    # restart task that's waiting on oid
-    jobs = get(Waiting, oid, ())
-    newjobs = ()  # waiting list with one removed
-    found = false
-    while !is(jobs,())
-        if jobs[1]==msg && !found
-            found = true
-            job = jobs[2]
-            job.argument = value_thunk
-            enq_work(job)
-        else
-            newjobs = (jobs[1], jobs[2], newjobs)
-        end
-        jobs = jobs[3]
-    end
-    Waiting[oid] = newjobs
-    if is(newjobs,())
-        del(Waiting, oid)
-    end
-    nothing
-end
-
 function enq_work(wi::WorkItem)
     global Workqueue
     enq(Workqueue, wi)
@@ -618,6 +577,47 @@ function perform_work(job::WorkItem)
         end
     end
 end
+end
+
+function deliver_result(sock::IOStream, msg, oid, value)
+    #print("$(myid()) sending result\n")
+    if is(msg,:fetch)
+        val = value
+    else
+        @assert is(msg, :wait)
+        val = oid
+    end
+    try
+        send_msg(sock, :result, msg, oid, val)
+    catch e
+        # send exception in case of serialization error; otherwise
+        # request side would hang.
+        send_msg(sock, :result, msg, oid, e)
+    end
+end
+
+function deliver_result(sock::(), msg, oid, value_thunk)
+    global Waiting
+    # restart task that's waiting on oid
+    jobs = get(Waiting, oid, ())
+    newjobs = ()  # waiting list with one removed
+    found = false
+    while !is(jobs,())
+        if jobs[1]==msg && !found
+            found = true
+            job = jobs[2]
+            job.argument = value_thunk
+            enq_work(job)
+        else
+            newjobs = (jobs[1], jobs[2], newjobs)
+        end
+        jobs = jobs[3]
+    end
+    Waiting[oid] = newjobs
+    if is(newjobs,())
+        del(Waiting, oid)
+    end
+    nothing
 end
 
 function notify_done(job::WorkItem)
@@ -755,7 +755,6 @@ function start_worker(wrfd)
     global Workqueue = {}
     global Waiting = HashTable(64)
     global Scheduler = current_task()
-    global fd_handlers = HashTable()
 
     worker_sockets = HashTable()
     add_fd_handler(sockfd, fd->accept_handler(fd, worker_sockets))
@@ -1096,7 +1095,6 @@ end
 
 macro bcast(thk)
     quote
-        $thk
         at_each(()->eval($expr(:quote,thk)))
     end
 end

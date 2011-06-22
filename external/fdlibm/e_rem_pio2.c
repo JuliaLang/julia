@@ -91,7 +91,7 @@ pio2_3t =  8.47842766036889956997e-32; /* 0x397B839A, 0x252049C1 */
 	double tx[3];
 	int e0,i,j,nx,n,ix,hx;
 
-	hx = __HI(x);		/* high word of x */
+        GET_HIGH_WORD(hx, x);
 	ix = hx&0x7fffffff;
 	if(ix<=0x3fe921fb)   /* |x| ~<= pi/4 , no need for reduction */
 	    {y[0] = x; y[1] = 0; return 0;}
@@ -131,14 +131,17 @@ pio2_3t =  8.47842766036889956997e-32; /* 0x397B839A, 0x252049C1 */
 	    } else {
 	        j  = ix>>20;
 	        y[0] = r-w; 
-	        i = j-(((__HI(y[0]))>>20)&0x7ff);
+                int _hy;
+                GET_HIGH_WORD(_hy, y[0]);
+	        i = j-(((_hy)>>20)&0x7ff);
 	        if(i>16) {  /* 2nd iteration needed, good to 118 */
 		    t  = r;
 		    w  = fn*pio2_2;	
 		    r  = t-w;
 		    w  = fn*pio2_2t-((t-r)-w);	
 		    y[0] = r-w;
-		    i = j-(((__HI(y[0]))>>20)&0x7ff);
+                    GET_HIGH_WORD(_hy, y[0]);
+		    i = j-(((_hy)>>20)&0x7ff);
 		    if(i>49)  {	/* 3rd iteration need, 151 bits acc */
 		    	t  = r;	/* will cover all possible cases */
 		    	w  = fn*pio2_3;	
@@ -159,9 +162,11 @@ pio2_3t =  8.47842766036889956997e-32; /* 0x397B839A, 0x252049C1 */
 	    y[0]=y[1]=x-x; return 0;
 	}
     /* set z = scalbn(|x|,ilogb(x)-23) */
-	__LO(z) = __LO(x);
+        int _lx;
+        GET_LOW_WORD(_lx, x);
+        SET_LOW_WORD(z, _lx);
 	e0 	= (ix>>20)-1046;	/* e0 = ilogb(z)-23; */
-	__HI(z) = ix - (e0<<20);
+        SET_HIGH_WORD(z, ix - (e0<<20));
 	for(i=0;i<2;i++) {
 		tx[i] = (double)((int)(z));
 		z     = (z-tx[i])*two24;

@@ -1,9 +1,5 @@
 libBLAS = dlopen("libLAPACK")
 
-typealias DenseVector{T} Array{T,1}
-typealias DenseMatrix{T} Array{T,2}
-typealias DenseVecOrMat{T} Union(DenseVector{T}, DenseMatrix{T})
-
 # SUBROUTINE DCOPY(N,DX,INCX,DY,INCY) 
 
 macro blas_copy(fname, shape, eltype)
@@ -20,10 +16,14 @@ macro blas_copy(fname, shape, eltype)
     end
 end
 
-@blas_copy "dcopy_" DenseVector Float64
-@blas_copy "scopy_" DenseVector Float32
-@blas_copy "dcopy_" DenseMatrix Float64
-@blas_copy "scopy_" DenseMatrix Float32
+@blas_copy :dcopy_ DenseVector Float64
+@blas_copy :scopy_ DenseVector Float32
+@blas_copy :dcopy_ DenseMatrix Float64
+@blas_copy :scopy_ DenseMatrix Float32
+@blas_copy :zcopy_ DenseVector Complex128
+@blas_copy :ccopy_ DenseVector Complex64
+@blas_copy :zcopy_ DenseMatrix Complex128
+@blas_copy :ccopy_ DenseMatrix Complex64
 
 # DOUBLE PRECISION FUNCTION DDOT(N,DX,INCX,DY,INCY)
 
@@ -38,8 +38,10 @@ macro blas_dot(fname, eltype)
     end
 end
 
-@blas_dot "ddot_" Float64
-@blas_dot "sdot_" Float32
+@blas_dot :ddot_ Float64
+@blas_dot :sdot_ Float32
+@blas_dot :zdot_ Complex128
+@blas_dot :cdot_ Complex64
 
 # DOUBLE PRECISION FUNCTION DNRM2(N,X,INCX)
 
@@ -54,8 +56,10 @@ macro blas_norm(fname, eltype)
     end
 end
 
-@blas_norm "dnrm2_" Float64
-@blas_norm "snrm2_" Float32
+@blas_norm :dnrm2_ Float64
+@blas_norm :snrm2_ Float32
+@blas_norm :znrm2_ Complex128
+@blas_norm :cnrm2_ Complex64
 
 # SUBROUTINE DGEMM(TRANSA,TRANSB,M,N,K,ALPHA,A,LDA,B,LDB,BETA,C,LDC)
 # *     .. Scalar Arguments ..
@@ -90,5 +94,7 @@ macro blas_matrix_multiply(fname, eltype)
    end
 end
 
-@blas_matrix_multiply "dgemm_" Float64
-@blas_matrix_multiply "sgemm_" Float32
+@blas_matrix_multiply :dgemm_ Float64
+@blas_matrix_multiply :sgemm_ Float32
+@blas_matrix_multiply :zgemm_ Complex128
+@blas_matrix_multiply :cgemm_ Complex64

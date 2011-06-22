@@ -1,58 +1,28 @@
 type Set{T}
-    items::Array{T,1}
+    hash::HashTable{T,Bool}
 
-    Set() = new(Array(Any,0))
-    Set{T}(T::Type) = new(Array(T,0))
+    Set{T}(T::Type) = new(HashTable(T,Bool))
+    Set() = Set(Any)
 end
 
 set{T}(x::T...) = (s = Set(T); add(s, x...))
+show(s::Set) = show_comma_array(s,'{','}')
 
-isempty(set::Set) = isempty(set.items)
-length(set::Set) = length(set.items)
+isempty(s::Set) = isempty(s.hash)
+length(s::Set)  = length(s.hash)
 
-has(set::Set, x) = anyp(y->isequal(x,y), set.items)
+has(s::Set, x) = has(s.hash, x)
 
-function add(set::Set, x)
-    if !has(set,x)
-        items = clone(set.items, length(set.items)+1)
-        for i = 1:length(set.items)
-            items[i] = set.items[i]
-        end
-        items[end] = x
-        set.items = items
-    end
-    set
-end
+add(s::Set, x)	     = (s.hash[x] = true; s)
+add(s::Set, xs...)   = (for x=xs; add(s, x); end; s)
+add(s::Set, s2::Set) = (for x=s2; add(s, x); end; s)
 
-add(set::Set, xs...)   = (for x = xs; add(set, x); end; set)
-add(set::Set, s2::Set) = (for x = s2; add(set, x); end; set)
+del(s::Set, x)	     = (del(s.hash, x); s)
+del(s::Set, xs...)   = (for x=xs; del(s, x); end; s)
+del(s::Set, s2::Set) = (for x=s2; del(s, x); end; s)
 
-function del(set::Set, x)
-    if has(set,x)
-        items = clone(set.items, length(set.items)-1)
-        j = 1
-        for i = 1:length(set.items)
-            if !isequal(set.items[i],x)
-                items[j] = set.items[i]
-                j += 1
-            end
-        end
-        set.items = items
-    end
-    set
-end
+start(s::Set)       = start(s.hash)
+done(s::Set, state) = done(s.hash, state)
+next(s::Set, state) = (((k,v),state) = next(s.hash, state); (k,state))
 
-del(set::Set, xs...)   = (for x = xs; del(set, x); end; set)
-del(set::Set, s2::Set) = (for x = s2; del(set, x); end; set)
-
-start(set::Set) = start(set.items)
-done(set::Set, x) = done(set.items, x)
-next(set::Set, x) = next(set.items, x)
-
-function union{T}(sets::Set{T}...)
-    u = Set(T)
-    for set = sets
-        add(u,set)
-    end
-    return u
-end
+union{T}(sets::Set{T}...) = (u = Set(T); for s=sets; add(u,s); end; u)

@@ -27,8 +27,9 @@
 #endif
 {
 	int lx,ix;
-	ix = (__HI(x))&0x7fffffff;	/* high |x| */
-	lx = __LO(x);			/* low x */
+        int hx;
+        EXTRACT_WORDS(hx, lx, x);
+	ix = hx&0x7fffffff;	/* high |x| */
 	if((ix|lx)==0) return -1.0/fabs(x);
 	if(ix>=0x7ff00000) return x*x;
 	if((ix>>=20)==0) 			/* IEEE 754 logb */

@@ -14,6 +14,8 @@ load("pointer.j")
 load("char.j")
 load("operators.j")
 load("reduce.j")
+load("complex.j")
+load("rational.j")
 
 # core data structures (used by type inference)
 load("tensor.j")
@@ -49,10 +51,9 @@ load("linalg.j")
 load("linalg_blas.j")
 load("linalg_lapack.j")
 load("linalg_arpack.j")
+load("fft.j")
 
 # additional data types
-load("complex.j")
-load("rational.j")
 #load("list.j")
 #load("queue.j")
 load("sparse.j")
@@ -85,6 +86,17 @@ add(FDSet(),0)
 2==2.0
 has(FDSet(),0)
 isequal(2,2)
+
+compile_hint(getcwd, ())
+compile_hint(fdio, (Int32,))
+compile_hint(ProcessGroup, (Int32, Array{Any,1}, Array{Any,1}))
+compile_hint(select_read, (FDSet, Int32))
+compile_hint(next, (HashTable{Any,Any}, Int32))
+compile_hint(perform_work, ())
+compile_hint(isempty, (Array{Any,1},))
+compile_hint(ref, (HashTable{Any,Any}, Int32))
+compile_hint(event_loop, (Bool,))
+compile_hint(start_client, ())
 
 ccall(:jl_save_system_image, Void, (Ptr{Uint8},Ptr{Uint8}),
       cstring("sys.ji"), cstring("j/start_image.j"))

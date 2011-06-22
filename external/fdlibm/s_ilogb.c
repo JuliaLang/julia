@@ -28,9 +28,10 @@
 {
 	int hx,lx,ix;
 
-	hx  = (__HI(x))&0x7fffffff;	/* high word of x */
+        GET_HIGH_WORD(hx, x);
+	hx &= 0x7fffffff;
 	if(hx<0x00100000) {
-	    lx = __LO(x);
+            GET_LOW_WORD(lx, x);
 	    if((hx|lx)==0) 
 		return 0x80000001;	/* ilogb(0) = 0x80000001 */
 	    else			/* subnormal x */

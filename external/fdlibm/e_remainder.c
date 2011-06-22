@@ -40,10 +40,8 @@ static double zero = 0.0;
 	unsigned sx,lx,lp;
 	double p_half;
 
-	hx = __HI(x);		/* high word of x */
-	lx = __LO(x);		/* low  word of x */
-	hp = __HI(p);		/* high word of p */
-	lp = __LO(p);		/* low  word of p */
+        EXTRACT_WORDS(hx, lx, x);
+        EXTRACT_WORDS(hp, lp, p);
 	sx = hx&0x80000000;
 	hp &= 0x7fffffff;
 	hx &= 0x7fffffff;
@@ -72,6 +70,8 @@ static double zero = 0.0;
 		if(x>=p_half) x -= p;
 	    }
 	}
-	__HI(x) ^= sx;
+        int _hx;
+        GET_HIGH_WORD(_hx, x);
+        SET_HIGH_WORD(x, _hx ^ sx);
 	return x;
 }

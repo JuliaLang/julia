@@ -17,7 +17,11 @@
 #ifndef _MATH_PRIVATE_H_
 #define _MATH_PRIVATE_H_
 
-#include <sys/types.h>
+#if defined(i386) || defined(i486) || \
+	defined(intel) || defined(x86) || defined(i86pc) || \
+	defined(__alpha) || defined(__osf__)
+#define __LITTLE_ENDIAN
+#endif
 
 /* The original fdlibm code used statements like:
 	n0 = ((*(int*)&one)>>29)^1;		* index of high word *
@@ -38,7 +42,10 @@
  * big endian.
  */
 
-#if (BYTE_ORDER == BIG_ENDIAN) || defined(arm32)
+typedef unsigned int u_int32_t;
+typedef int int32_t;
+
+#if defined(__BIG_ENDIAN) || defined(arm32)
 
 typedef union
 {
@@ -73,7 +80,7 @@ typedef union
 
 #endif
 
-#if (BYTE_ORDER == LITTLE_ENDIAN) && !defined(arm32)
+#if defined(__LITTLE_ENDIAN) && !defined(arm32)
 
 typedef union
 {

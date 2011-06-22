@@ -86,7 +86,7 @@ static double zero = 0.0;	/* used as const */
 #define HUGE_VAL inf
 	double inf = 0.0;
 
-	__HI(inf) = 0x7ff00000;	/* set inf to infinite */
+        SET_HIGH_WORD(inf, 0x7ff00000);	/* set inf to infinite */
 #endif
 
 #ifdef _USE_WRITE

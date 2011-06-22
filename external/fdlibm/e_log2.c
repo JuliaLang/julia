@@ -33,8 +33,7 @@ log2(double x)
 	int k,hx,i,j;
 	unsigned int lx;
 
-        hx = __HI(x);
-        lx = __LO(x);
+        EXTRACT_WORDS(hx, lx, x);
 
 	k=0;
 	if (hx < 0x00100000) {			/* x < 2**-1022  */
@@ -42,7 +41,7 @@ log2(double x)
 		return -two54/zero;		/* log(+-0)=-inf */
 	    if (hx<0) return (x-x)/zero;	/* log(-#) = NaN */
 	    k -= 54; x *= two54; /* subnormal number, scale up x */
-            hx = __HI(x);
+            GET_HIGH_WORD(hx, x);
 	} 
 	if (hx >= 0x7ff00000) return x+x;
 	k += (hx>>20)-1023;

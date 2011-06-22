@@ -306,7 +306,7 @@
 ; ow, my eyes!!
 (define (parse-Nary s down op head closers allow-empty)
   (if (invalid-initial-token? (require-token s))
-      (error (string "unexpected token " (peek-token s))))
+      (error (string "unexpected " (peek-token s))))
   (if (memv (require-token s) closers)
       (list head)  ; empty block
       (let loop ((ex
@@ -465,7 +465,7 @@
 (define (parse-unary s)
   (let ((t (require-token s)))
     (if (closing-token? t)
-	(error (string "unexpected token " t)))
+	(error (string "unexpected " t)))
     (cond ((memq t unary-ops)
 	   (let ((op (take-token s))
 		 (next (peek-token s)))
@@ -601,7 +601,20 @@
 				  (parse-comma-separated-assignments s))))
     ((global) (list 'global (cons 'vars
 				  (parse-comma-separated-assignments s))))
-    ((function macro)
+    ((function)
+     (let* ((paren (eqv? (require-token s) #\())
+	    (sig   (parse-call s)))
+       (begin0 (list word
+		     (if (symbol? sig)
+			 (if paren
+			     ;; in "function (x)" the (x) is a tuple
+			     `(tuple ,sig)
+			     ;; function foo  =>  syntax error
+			     (error "expected ( in function definition"))
+			 sig)
+		     (parse-block s))
+	       (expect-end s))))
+    ((macro)
      (let ((sig (parse-call s)))
        (begin0 (list word sig (parse-block s))
 	       (expect-end s))))
@@ -692,6 +705,9 @@
 		      ; newline character isn't detectable here
 		      #;((eqv? c #\newline)
 		       (error "unexpected line break in argument list"))
+		      ((memv c '(#\] #\}))
+		       (error (string "unexpected " c
+				      " in argument list")))
 		      (else
 		       (error "missing separator in argument list")))))))))
 
@@ -800,6 +816,8 @@
 	 (error "unexpected semicolon in tuple"))
 	#;((#\newline)
 	 (error "unexpected line break in tuple"))
+	((#\] #\})
+	 (error (string "unexpected " t " in tuple")))
 	(else
 	 (error "missing separator in tuple"))))))
 
@@ -963,6 +981,8 @@
 			  `(block ,ex ,blk)))
 		       #;((eqv? t #\newline)
 			(error "unexpected line break in tuple"))
+		       ((memv t '(#\] #\}))
+			(error (string "unexpected " t " in tuple")))
 		       (else
 			(error "missing separator in tuple")))))))
 

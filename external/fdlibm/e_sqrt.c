@@ -100,8 +100,7 @@ static	double	one	= 1.0, tiny=1.0e-300;
 	unsigned r,t1,s1,ix1,q1;
 	int ix0,s0,q,m,t,i;
 
-	ix0 = __HI(x);			/* high word of x */
-	ix1 = __LO(x);		/* low word of x */
+        EXTRACT_WORDS(ix0, ix1, x);
 
     /* take care of Inf and NaN */
 	if((ix0&0x7ff00000)==0x7ff00000) {			
@@ -186,8 +185,7 @@ static	double	one	= 1.0, tiny=1.0e-300;
 	ix1 =  q1>>1;
 	if ((q&1)==1) ix1 |= sign;
 	ix0 += (m <<20);
-	__HI(z) = ix0;
-	__LO(z) = ix1;
+        INSERT_WORDS(z, ix0, ix1);
 	return z;
 }
 

@@ -69,6 +69,7 @@ function choose(s::IntSet)
     n
 end
 
+length(s::IntSet) = numel(s)
 numel(s::IntSet) =
     int32(ccall(:bitvector_count, Uint64, (Ptr{Uint32}, Uint32, Uint64),
                 s.bits, uint32(0), uint64(s.limit)))

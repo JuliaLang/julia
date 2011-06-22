@@ -241,6 +241,11 @@ static jl_value_t *new_scalar(jl_bits_type_t *bt)
     return v;
 }
 
+typedef struct {
+    int64_t a;
+    int64_t b;
+} bits128_t;
+
 jl_value_t *jl_arrayref(jl_array_t *a, size_t i)
 {
     jl_type_t *el_type = (jl_type_t*)jl_tparam0(jl_typeof(a));
@@ -262,6 +267,8 @@ jl_value_t *jl_arrayref(jl_array_t *a, size_t i)
             *(int32_t*)jl_bits_data(elt) = ((int32_t*)a->data)[i]; break;
         case 8:
             *(int64_t*)jl_bits_data(elt) = ((int64_t*)a->data)[i]; break;
+        case 16:
+            *(bits128_t*)jl_bits_data(elt) = ((bits128_t*)a->data)[i]; break;
         default:
             memcpy(jl_bits_data(elt), &((char*)a->data)[i*nb], nb);
         }
@@ -306,6 +313,8 @@ void jl_arrayset(jl_array_t *a, size_t i, jl_value_t *rhs)
             ((int32_t*)a->data)[i] = *(int32_t*)jl_bits_data(rhs); break;
         case 8:
             ((int64_t*)a->data)[i] = *(int64_t*)jl_bits_data(rhs); break;
+        case 16:
+            ((bits128_t*)a->data)[i] = *(bits128_t*)jl_bits_data(rhs); break;
         default:
             memcpy(&((char*)a->data)[i*nb], jl_bits_data(rhs), nb);
         }

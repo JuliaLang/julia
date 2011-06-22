@@ -11,7 +11,7 @@ typedef enum { bm_none, bm_line, bm_block, bm_mem } bufmode_t;
 typedef enum { bst_none, bst_rd, bst_wr } bufstate_t;
 
 #define IOS_INLSIZE 54
-#define IOS_BUFSIZE 8191
+#define IOS_BUFSIZE 131072
 
 typedef struct {
     bufmode_t bm;
