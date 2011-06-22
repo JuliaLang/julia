@@ -77,7 +77,7 @@ static const char *opts =
     " -h --help                Print this message\n";
 
 void parse_opts(int *argcp, char ***argvp) {
-    static char* shortopts = "qe:E:P:H:T:bL:hJ:";
+    static char* shortopts = "+qe:E:P:H:T:bL:hJ:";
     static struct option longopts[] = {
         { "quiet",       no_argument,       0, 'q' },
         { "eval",        required_argument, 0, 'e' },
