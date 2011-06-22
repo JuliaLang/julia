@@ -6,6 +6,8 @@
 #include "llvm/Intrinsics.h"
 #include "llvm/PassManager.h"
 #include "llvm/Analysis/Verifier.h"
+#include "llvm/Analysis/DebugInfo.h"
+#include "llvm/Analysis/DIBuilder.h"
 #include "llvm/Target/TargetData.h"
 #include "llvm/Target/TargetSelect.h"
 #include "llvm/Target/TargetOptions.h"
@@ -38,6 +40,7 @@ static IRBuilder<> builder(getGlobalContext());
 static bool nested_compile=false;
 static Module *jl_Module;
 static ExecutionEngine *jl_ExecutionEngine;
+static DIBuilder *dbuilder;
 static std::map<const std::string, GlobalVariable*> stringConstants;
 static std::map<int, std::string> argNumberStrings;
 static FunctionPassManager *FPM;
@@ -1245,6 +1248,19 @@ extern "C" jl_tuple_t *jl_tuple_tvars_to_symbols(jl_tuple_t *t);
 
 static void emit_function(jl_lambda_info_t *lam, Function *f)
 {
+    /*
+    dbuilder->createCompileUnit(0, "foo.j", ".", "julia", true, "", 0);
+    llvm::DIArray EltTypeArray = dbuilder->getOrCreateArray(NULL,0);
+    DIFile fil = dbuilder->createFile("foo.j", ".");
+    DISubprogram SP =
+        dbuilder->createFunction((DIDescriptor)dbuilder->getCU(), f->getName(),
+                                 f->getName(),
+                                 fil,
+                                 0,
+                                 dbuilder->createSubroutineType(fil,EltTypeArray),
+                                 false, true,
+                                 0, true, f);
+    */
     jl_expr_t *ast = (jl_expr_t*)lam->ast;
     //jl_print((jl_value_t*)ast);
     //ios_printf(ios_stdout, "\n");
@@ -1531,6 +1547,8 @@ static void emit_function(jl_lambda_info_t *lam, Function *f)
     // compile body statements
     bool prevlabel = false;
     for(i=0; i < stmts->length; i++) {
+        //builder.SetCurrentDebugLocation(DebugLoc::get(i+1, 1, SP));
+
         jl_value_t *stmt = jl_cellref(stmts,i);
         if (is_label(stmt)) {
             if (prevlabel) continue;
@@ -1829,13 +1847,13 @@ static void init_julia_llvm_env(Module *m)
     addPass(FPM, createLoopUnswitchPass());         // Unswitch loops.
     addPass(FPM, createInstructionCombiningPass()); 
     addPass(FPM, createIndVarSimplifyPass());       // Canonicalize indvars
-    addPass(FPM, createLoopDeletionPass());         // Delete dead loops
+    //addPass(FPM, createLoopDeletionPass());         // Delete dead loops
     addPass(FPM, createLoopUnrollPass());           // Unroll small loops
-    addPass(FPM, createLoopStrengthReducePass());   // (jwb added)
+    //addPass(FPM, createLoopStrengthReducePass());   // (jwb added)
     
     addPass(FPM, createInstructionCombiningPass()); // Clean up after the unroller
     addPass(FPM, createGVNPass());                  // Remove redundancies
-    addPass(FPM, createMemCpyOptPass());             // Remove memcpy / form memset  
+    addPass(FPM, createMemCpyOptPass());            // Remove memcpy / form memset  
     addPass(FPM, createSCCPPass());                 // Constant prop with SCCP
     
     // Run instcombine after redundancy elimination to exploit opportunities
@@ -1872,6 +1890,7 @@ extern "C" void jl_init_codegen()
     jl_Module = new Module("julia", jl_LLVMContext);
     jl_ExecutionEngine =
         EngineBuilder(jl_Module).setEngineKind(EngineKind::JIT).create();
+    dbuilder = new DIBuilder(*jl_Module);
 
     init_julia_llvm_env(jl_Module);
 
