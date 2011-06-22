@@ -6,6 +6,9 @@ size(a::Array) = arraysize(a)
 size(a::Array, d) = arraysize(a, d)
 numel(a::Array) = arraylen(a)
 
+iscomplex(x::Array{Complex128}) = true
+iscomplex(x::Array{Complex64}) = true
+
 ## Constructors ##
 
 jl_comprehension_zeros{T,n}(oneresult::Tensor{T,n}, dims...) = Array(T, dims...)
