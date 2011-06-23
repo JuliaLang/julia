@@ -472,10 +472,6 @@ issues 6/21/10
 * hooking up the pieces to use inferred types in the compiler
   . we could save tuples (type_sig, AST) as s-exprs to avoid the cost
     of lowering and type inference.
-- make type parameters visible to user-defined constructors
-  . in generic case, instantiate all signatures with the typevar mapping
-    that's currently created in add_generic_ctor
-  . in non-generic case, add static parameters
 * limit specialization of vararg functions
 * method cache invalidation, also invalidate all caches once type inference
   is available (after loading start.j)
@@ -513,7 +509,7 @@ issues 6/21/10
 * << >> precedence
 * break in value position
 * tintersect((Int,Int),(T,T)) is wrong when T is T<:Int, ok when T<:Any
-- use nothing instead of () where appropriate
+* use nothing instead of () where appropriate
 
 method ordering tests:
 //:  (T,T) before (Any,Any)
@@ -615,7 +611,14 @@ default ctors would be
   inside type block: Rational(n, d) = (this.num=n;this.den=d)
   outside:           Rational{T}(n::T, d::T) = Rational{T}(n,d)
 
-- rename clone to new
+  * frontend changes
+  - convert all .j to new constructors
+  - instantiate constructor factory with type's static parameters, and
+    type's name bound to the instantiated type also as a static parameter
+  - implement (new ...) in codegen
+  - (new ...) case in inference
+  - null check in field access
+  * rename clone
 
 * type=>abstract, struct=>type
 * do something about "global X+=1"

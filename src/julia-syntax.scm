@@ -233,8 +233,7 @@
   `(function (call ,name ,@(map (lambda (n t) `(:: ,n ,t))
 				field-names field-types))
 	     (block
-	      ,@(map (lambda (n) `(= (|.| this ,n) ,n))
-		     field-names))))
+	      (call new ,@field-names))))
 
 (define (default-outer-ctor name field-names field-types params)
   `(function (call (curly ,name ,@params)
@@ -243,38 +242,38 @@
 	     (block
 	      (call (curly ,name ,@params) ,@field-names))))
 
-(define (rewrite-ctor ctor Tname params)
-  ;; insert definition and return of "this" variable
+(define (new-call Texpr args field-names)
+  (let ((g (gensy)))
+    `(block (= ,g (new ,Texpr))
+	    ,@(map (lambda (fld val) `(= (|.| ,g ,fld) ,val))
+		   field-names args)
+	    ,g)))
+
+(define (rewrite-ctor ctor Tname params field-names)
   (define (ctor-body body)
-    `(block ;; hack - make the type parameters "global" so they can be
-            ;; shadowed by static parameters
-            (global (vars ,Tname ,@params))
-	    (= this (new ,(if (null? params)
-			      Tname
-			      `(curly ,Tname ,@params))))
-	    ,body
-	    (return this)))
-  ;; TODO: error if return occurs in constructor
+    `(block ;; make type name global
+            (global ,Tname)
+	    (pattern-replace (pattern-set
+			      (pattern-lambda
+			       (call (-/ new) . args)
+			       (new-call (if (null? params)
+					     Tname
+					     `(curly ,Tname ,@params))
+					 args
+					 field-names)))
+			     body)))
   (or
    ((pattern-lambda (function (call name . sig) body)
-		    (if (eq? name Tname)
-			`(function ,(cadr ctor) ,(ctor-body body))
-			ctor))
+		    `(function ,(cadr ctor) ,(ctor-body body)))
     ctor)
    ((pattern-lambda (= (call name . sig) body)
-		    (if (eq? name Tname)
-			`(= ,(cadr ctor) ,(ctor-body body))
-			ctor))
+		    `(= ,(cadr ctor) ,(ctor-body body)))
     ctor)
    ((pattern-lambda (function (call (curly name . p) . sig) body)
-		    (if (eq? name Tname)
-			`(function ,(cadr ctor) ,(ctor-body body))
-			ctor))
+		    `(function ,(cadr ctor) ,(ctor-body body)))
     ctor)
    ((pattern-lambda (= (call (curly name . p) . sig) body)
-		    (if (eq? name Tname)
-			`(= ,(cadr ctor) ,(ctor-body body))
-			ctor))
+		    `(= ,(cadr ctor) ,(ctor-body body)))
     ctor)
    ctor))
 
@@ -300,7 +299,7 @@
 	   (call (top new_struct_fields)
 		 ,name ,super (tuple ,@field-types))
 	   ,@(map (lambda (c)
-		    (rewrite-ctor c name '()))
+		    (rewrite-ctor c name '() field-names))
 		  defs2)
 	   (null))
 	 `(block
@@ -312,12 +311,13 @@
 			(quote ,name)
 			(tuple ,@params)
 			(tuple ,@(map (lambda (x) `',x) field-names))
-			(lambda (,name ,@params)
+			(lambda (,name)
 			  (scope-block
 			   (block
 			    ,@(map (lambda (c)
-				     (rewrite-ctor c name params))
-				   defs2))))))
+				     (rewrite-ctor c name params field-names))
+				   defs2)
+			    ,name)))))
 	       (call (top new_struct_fields)
 		     ,name ,super (tuple ,@field-types))))
 	    ,@(symbols->typevars params bounds))
