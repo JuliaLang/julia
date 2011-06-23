@@ -500,6 +500,14 @@ size_t jl_field_offset(jl_struct_type_t *t, jl_sym_t *fld)
     return field_offset(t, fld, 0);
 }
 
+static jl_value_t *nth_field(jl_value_t *v, size_t i)
+{
+    jl_value_t *fld = ((jl_value_t**)v)[1+i];
+    if (fld == NULL)
+        jl_undef_ref_error();
+    return fld;
+}
+
 JL_CALLABLE(jl_f_get_field)
 {
     JL_NARGS(getfield, 2, 2);
@@ -509,7 +517,7 @@ JL_CALLABLE(jl_f_get_field)
     if (!jl_is_struct_type(vt))
         jl_type_error("getfield", (jl_value_t*)jl_struct_kind, v);
     size_t i = field_offset((jl_struct_type_t*)vt, (jl_sym_t*)args[1], 1);
-    return ((jl_value_t**)v)[1+i];
+    return nth_field(v, i);
 }
 
 JL_CALLABLE(jl_f_set_field)
@@ -910,7 +918,7 @@ JL_CALLABLE(jl_f_show_any)
             size_t i;
             size_t n = st->names->length;
             for(i=0; i < n; i++) {
-                jl_show(((jl_value_t**)v)[i+1]);
+                jl_show(nth_field(v, i));
                 if (i < n-1)
                     ios_putc(',', s);
             }

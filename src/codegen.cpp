@@ -841,8 +841,10 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
                                           (jl_sym_t*)jl_exprarg(args[2],0));
             if (offs != (size_t)-1) {
                 Value *strct = emit_expr(args[1], ctx, true);
+                Value *fld = emit_nthptr(strct, offs+1);
+                null_pointer_check(fld, ctx);
                 JL_GC_POP();
-                return emit_nthptr(strct, offs+1);
+                return fld;
             }
         }
     }
@@ -1200,6 +1202,7 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool value)
         */
     }
     else if (ex->head == new_sym) {
+        // TODO: inline
         Value *ty = emit_expr(args[0], ctx, true);
         return builder.CreateCall(jlnew_func, ty);
     }

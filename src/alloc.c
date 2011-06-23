@@ -895,6 +895,8 @@ jl_expr_t *jl_exprn(jl_sym_t *head, size_t n)
     return ex;
 }
 
+// this constructor has to be built-in for bootstrapping, because we can't
+// do anything without being able to make Exprs.
 JL_CALLABLE(jl_f_new_expr)
 {
     JL_NARGS(Expr, 3, 3);

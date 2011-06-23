@@ -613,11 +613,12 @@ default ctors would be
 
   * frontend changes
   * convert all .j to new constructors
-  - instantiate constructor factory with type's static parameters, and
-    type's name bound to the instantiated type also as a static parameter
-  - implement (new ...) in codegen
-  - (new ...) case in inference
-  - null check in field access
+  * instantiate constructor factory with type's static parameters, and
+    type's name bound to the instantiated type
+  * implement (new ...) in codegen
+    . can be optimized more
+  * (new ...) case in inference
+  * null check in field access
   * rename clone
 
 * type=>abstract, struct=>type
