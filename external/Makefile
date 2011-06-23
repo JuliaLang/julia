@@ -1,9 +1,22 @@
+## Library Versions ##
+
+LLVM_VER = 2.9
+READLINE_VER = 6.2
+PCRE_VER = 8.12
+OPENBLAS_VER = v0.1alpha2
+LAPACK_VER = 3.3.1
+ARPACK_VER = 96
+FFTW_VER = 3.2.2
+MONGOOSE_VER = 3.0
+
+## High-Level Setup ##
+
 JULIAHOME = $(shell pwd)/..
 include ../Make.inc
 
 OS = $(shell uname)
 ARCH = $(shell uname -m)
-LIBS = llvm pcre fdlibm lapack arpack fftw mongoose readline
+LIBS = llvm pcre fdlibm openblas lapack arpack fftw mongoose readline
 
 default: install
 compile: $(addprefix compile-, $(LIBS))
@@ -21,7 +34,7 @@ compile-llvm: $(LLVM_OBJ_SOURCE)
 install-llvm: $(LLVM_OBJ_TARGET)
 
 llvm-$(LLVM_VER).tgz:
-	$(DOWNLOAD) http://llvm.org/releases/$(LLVM_VER)/$@
+	curl -O http://llvm.org/releases/$(LLVM_VER)/$@
 llvm-$(LLVM_VER)/configure: llvm-$(LLVM_VER).tgz
 	tar zxf $<
 	touch $@
@@ -48,7 +61,7 @@ compile-readline: $(READLINE_OBJ_SOURCE)
 install-readline: $(READLINE_OBJ_TARGET)
 
 readline-$(READLINE_VER).tar.gz:
-	$(DOWNLOAD) ftp://ftp.gnu.org/gnu/readline/$@
+	curl -O ftp://ftp.gnu.org/gnu/readline/$@
 readline-$(READLINE_VER)/configure: readline-$(READLINE_VER).tar.gz
 	tar zxf $<
 	touch $@
@@ -75,9 +88,9 @@ compile-pcre: install-pcre
 install-pcre: $(PCRE_OBJ_TARGET)
 
 pcre-$(PCRE_VER).tar.bz2:
-	$(DOWNLOAD) ftp://ftp.csx.cam.ac.uk/pub/software/programming/pcre/$@
+	curl -O ftp://ftp.csx.cam.ac.uk/pub/software/programming/pcre/$@
 pcre-$(PCRE_VER)/configure: pcre-$(PCRE_VER).tar.bz2
-	tar jxvf $<
+	tar jxf $<
 	touch $@
 pcre-$(PCRE_VER)/config.status: pcre-$(PCRE_VER)/configure
 	cd pcre-$(PCRE_VER) && \
@@ -102,7 +115,7 @@ install-fdlibm: $(FDLIBM_OBJ_TARGET)
 
 $(FDLIBM_OBJ_SOURCE): fdlibm/*.c
 	cd fdlibm && \
-	make CC=$(CC) CFLAGS="-D_IEEE_LIBM -Dx86 -fPIC -O2 -mtune=native $(CONFIG)" && \
+	make CC=$(CC) CFLAGS="-D_IEEE_LIBM -Dx86 -fPIC -O2 $(CONFIG)" && \
 	$(CC) -shared *.o -o libfdm.$(SHLIB_EXT)
 $(FDLIBM_OBJ_TARGET): $(FDLIBM_OBJ_SOURCE)
 	mkdir -p $(EXTROOTLIB)
@@ -115,23 +128,23 @@ distclean-fdlibm: clean-fdlibm
 
 ## OpenBLAS ##
 
-OPENBLAS_OBJ_SOURCE = openblas/libopenblas.a
+OPENBLAS_OBJ_SOURCE = openblas-$(OPENBLAS_VER)/libopenblas.a
 
 compile-openblas: $(OPENBLAS_OBJ_SOURCE)
+install-openblas: compile-openblas
 
-openblas.tar.gz:
-	$(DOWNLOAD) -Lk https://github.com/xianyi/OpenBLAS/tarball/develop
-	mv develop $@
-openblas/Makefile: openblas.tar.gz
-	mkdir -p openblas && tar --strip-components 1 -C openblas -xf $<
+openblas-$(OPENBLAS_VER).tar.gz:
+	curl -Lk https://github.com/xianyi/OpenBLAS/tarball/$(OPENBLAS_VER) > $@
+openblas-$(OPENBLAS_VER)/Makefile: openblas-$(OPENBLAS_VER).tar.gz
+	mkdir -p openblas-$(OPENBLAS_VER) && tar -C openblas-$(OPENBLAS_VER) --strip-components 1 -xf $<
 	touch $@
-$(OPENBLAS_OBJ_SOURCE): openblas/Makefile
-	make -C openblas USE_THREAD=0 NO_CBLAS=1 NO_LAPACK=1 CC=$(CC) FC=$(FC)
+$(OPENBLAS_OBJ_SOURCE): openblas-$(OPENBLAS_VER)/Makefile
+	make -C openblas-$(OPENBLAS_VER) USE_THREAD=0 NO_CBLAS=1 NO_LAPACK=1 CC=$(CC) FC=$(FC)
 
 clean-openblas:
-	make -C openblas clean
+	make -C openblas-$(OPENBLAS_VER) clean
 distclean-openblas:
-	rm -rf openblas.tar.gz openblas
+	rm -rf openblas-$(OPENBLAS_VER).tar.gz openblas-$(OPENBLAS_VER)
 
 ## LAPACK ##
 
@@ -142,14 +155,16 @@ compile-lapack: $(LAPACK_OBJ_SOURCE)
 install-lapack: $(LAPACK_OBJ_TARGET)
 
 lapack-$(LAPACK_VER).tgz:
-	$(DOWNLOAD) http://www.netlib.org/lapack/$@
+	curl -O http://www.netlib.org/lapack/$@
 lapack-$(LAPACK_VER)/Makefile: lapack-$(LAPACK_VER).tgz
 	tar zxf $<
 	touch $@
-$(LAPACK_OBJ_SOURCE): lapack-$(LAPACK_VER)/Makefile $(OPENBLAS_OBJ_SOURCE)
+lapack-$(LAPACK_VER)/INSTALL/dlamch.o: lapack-$(LAPACK_VER)/Makefile
 	cd lapack-$(LAPACK_VER) && \
 	cp INSTALL/make.inc.gfortran ./make.inc && \
-	make lapacklib NOOPT="-O0 -fPIC" OPTS="-O2 -fPIC" FORTRAN=$(FC) && \
+	make lapacklib NOOPT="-O0 -fPIC" OPTS="-O2 -fPIC" FORTRAN=$(FC)
+$(LAPACK_OBJ_SOURCE): lapack-$(LAPACK_VER)/INSTALL/dlamch.o $(OPENBLAS_OBJ_SOURCE)
+	cd lapack-$(LAPACK_VER) && \
 	$(FC) -shared SRC/*.o INSTALL/dlamch.o INSTALL/dsecnd_INT_ETIME.o INSTALL/ilaver.o INSTALL/slamch.o ../$(OPENBLAS_OBJ_SOURCE) -o libLAPACK.$(SHLIB_EXT)
 $(LAPACK_OBJ_TARGET): $(LAPACK_OBJ_SOURCE)
 	mkdir -p $(EXTROOTLIB)
@@ -170,9 +185,9 @@ compile-arpack: $(ARPACK_OBJ_SOURCE)
 install-arpack: $(ARPACK_OBJ_TARGET)
 
 arpack$(ARPACK_VER).tar.gz:
-	$(DOWNLOAD) http://www.caam.rice.edu/software/ARPACK/SRC/$@
+	curl -O http://www.caam.rice.edu/software/ARPACK/SRC/$@
 arpack-patch.tar.gz:
-	$(DOWNLOAD) http://www.caam.rice.edu/software/ARPACK/SRC/patch.tar.gz
+	curl -O http://www.caam.rice.edu/software/ARPACK/SRC/patch.tar.gz
 	mv patch.tar.gz $@
 ARPACK/Makefile: arpack$(ARPACK_VER).tar.gz arpack-patch.tar.gz
 	for x in $^; do tar zxf $$x; done
@@ -201,7 +216,7 @@ compile-fftw: install-fftw
 install-fftw: $(FFTW_OBJ_TARGET)
 
 fftw-$(FFTW_VER).tar.gz:
-	$(DOWNLOAD) http://www.fftw.org/$@
+	curl -O http://www.fftw.org/$@
 fftw-$(FFTW_VER)/configure: fftw-$(FFTW_VER).tar.gz
 	tar zxf $<
 	touch $@
@@ -226,7 +241,7 @@ compile-mongoose: mongoose/Makefile
 install-mongoose: compile-mongoose
 
 mongoose-$(MONGOOSE_VER).tgz:
-	$(DOWNLOAD) http://mongoose.googlecode.com/files/mongoose-$(MONGOOSE_VER).tgz
+	curl -O http://mongoose.googlecode.com/files/mongoose-$(MONGOOSE_VER).tgz
 mongoose/Makefile: mongoose-$(MONGOOSE_VER).tgz
 	tar zxf $<
 	touch $@
