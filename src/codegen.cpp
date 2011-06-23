@@ -1138,16 +1138,35 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool value)
         ctx->argDepth--;
         return m;
     }
-    /*
-    else if (ex->head == unbound_sym) {
-        Value *bp = var_binding_pointer((jl_sym_t*)args[0], ctx);
-        // unboxed vars will never be referenced undefined
-        if (bp->getType()->getContainedType(0) != jl_pvalue_llvmt)
+    else if (ex->head == isbound_sym) {
+        jl_sym_t *sy=NULL;
+        jl_value_t *a = args[0];
+        if (jl_is_symbol(a))
+            sy = (jl_sym_t*)a;
+        else if (jl_is_expr(a) &&
+                 ((jl_expr_t*)a)->head == symbol_sym)
+            sy = (jl_sym_t*)jl_exprarg(a,0);
+        else
+            assert(false);
+        Value *bp = var_binding_pointer(sy, ctx);
+        if (bp->getType()->getContainedType(0) != jl_pvalue_llvmt) {
+            // unboxed vars will never be referenced undefined
+            return ConstantInt::get(T_int1, 1);
+        }
+        jl_value_t *st = expr_type(args[0]);
+        if (st == (jl_value_t*)jl_undef_type) {
+            // type==Undef => definitely not assigned
             return ConstantInt::get(T_int1, 0);
+        }
+        if (ctx->linfo->specTypes != NULL &&
+            !jl_subtype((jl_value_t*)jl_undef_type, st, 0)) {
+            // Undef ⊄ expr_type => definitely assigned
+            return ConstantInt::get(T_int1, 1);
+        }
         Value *v = builder.CreateLoad(bp, false);
-        Value *isnull = builder.CreateICmpEQ(v, V_null);
-        return isnull;
-    }*/
+        Value *isbnd = builder.CreateICmpNE(v, V_null);
+        return isbnd;
+    }
 
     else if (ex->head == quote_sym) {
         jl_value_t *jv = args[0];

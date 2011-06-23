@@ -248,9 +248,9 @@ static jl_value_t *scm_to_julia_(value_t e)
             /* tree node types:
                goto  gotoifnot  label  return
                lambda  call  =  quote
-               null  top  unbound  box-unbound  closure-ref
-               body  file
-               line
+               null  top  isbound  method
+               body  file new
+               line  enter  leave
             */
             size_t n = scm_list_length(e)-1;
             size_t i;

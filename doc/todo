@@ -612,7 +612,7 @@ default ctors would be
   outside:           Rational{T}(n::T, d::T) = Rational{T}(n,d)
 
   * frontend changes
-  - convert all .j to new constructors
+  * convert all .j to new constructors
   - instantiate constructor factory with type's static parameters, and
     type's name bound to the instantiated type also as a static parameter
   - implement (new ...) in codegen
