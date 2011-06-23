@@ -119,9 +119,10 @@ OPENBLAS_OBJ_SOURCE = openblas/libopenblas.a
 
 compile-openblas: $(OPENBLAS_OBJ_SOURCE)
 
-xianyi-OpenBLAS-$(OPENBLAS_VER).tar.gz:
-	$(DOWNLOAD) https://download.github.com/xianyi-OpenBLAS-$(OPENBLAS_VER).tar.gz
-openblas/Makefile: xianyi-OpenBLAS-$(OPENBLAS_VER).tar.gz
+openblas.tar.gz:
+	$(DOWNLOAD) -Lk https://github.com/xianyi/OpenBLAS/tarball/develop
+	mv develop $@
+openblas/Makefile: openblas.tar.gz
 	mkdir -p openblas && tar --strip-components 1 -C openblas -xf $<
 	touch $@
 $(OPENBLAS_OBJ_SOURCE): openblas/Makefile
@@ -130,7 +131,7 @@ $(OPENBLAS_OBJ_SOURCE): openblas/Makefile
 clean-openblas:
 	make -C openblas clean
 distclean-openblas:
-	rm -rf xianyi-OpenBLAS-$(OPENBLAS_VER).tar.gz openblas
+	rm -rf openblas.tar.gz openblas
 
 ## LAPACK ##
 
