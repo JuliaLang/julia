@@ -105,7 +105,7 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl)
         jl_value_t *thetype = eval(args[0], locals, nl);
         JL_GC_PUSH(&thetype);
         assert(jl_is_struct_type(thetype));
-        jl_value_t *v = jl_new_struct_uninit(thetype);
+        jl_value_t *v = jl_new_struct_uninit((jl_struct_type_t*)thetype);
         JL_GC_POP();
         return v;
     }
