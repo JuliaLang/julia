@@ -568,6 +568,7 @@ jl_tuple_t *jl_tuple_tvars_to_symbols(jl_tuple_t *t)
     jl_tuple_t *s = jl_alloc_tuple_uninit(t->length);
     size_t i;
     for(i=0; i < s->length; i+=2) {
+        assert(jl_is_typevar(jl_tupleref(t,i)));
         jl_tupleset(s, i,
                     (jl_value_t*)((jl_tvar_t*)jl_tupleref(t,i))->name);
         jl_tupleset(s, i+1, jl_tupleref(t,i+1));

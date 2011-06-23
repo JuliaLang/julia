@@ -100,13 +100,13 @@ type NDRange{N}
     ranges::NTuple{N,Any}
     empty::Bool
 
-    if N==0
+    if eq_int(unbox32(N),unbox32(0))
         NDRange(r::())           = new(r, false)
-    elseif N==1
+    elseif eq_int(unbox32(N),unbox32(1))
         NDRange(r::(Any,))       = new(r, isempty(r[1]))
-    elseif N==2
+    elseif eq_int(unbox32(N),unbox32(2))
         NDRange(r::(Any,Any))    = new(r, isempty(r[1])||isempty(r[2]))
-    elseif N==3
+    elseif eq_int(unbox32(N),unbox32(3))
         NDRange(r::(Any,Any,Any))= new(r,
                                        isempty(r[1])||isempty(r[2])||isempty(r[3]))
     else

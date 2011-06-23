@@ -301,7 +301,7 @@ static void repl_show_value(jl_value_t *v)
         // for convenience, show constructor methods when
         // a type is shown at the top level.
         jl_struct_type_t *tt = (jl_struct_type_t*)v;
-        if (tt->name->primary==v && jl_is_gf(v)) {
+        if (jl_is_gf(v)) {
             ios_putc('\n', s);
             jl_show_full_function(v);
         }

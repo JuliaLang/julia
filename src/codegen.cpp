@@ -88,6 +88,7 @@ static GlobalVariable *jlpgcstack_var;
 static GlobalVariable *jlexc_var;
 
 // important functions
+static Function *jlnew_func;
 static Function *jlraise_func;
 static Function *jlerror_func;
 static Function *jluniniterror_func;
@@ -1198,6 +1199,10 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool value)
         return literal_pointer_val((jl_value_t*)jl_any_type);
         */
     }
+    else if (ex->head == new_sym) {
+        Value *ty = emit_expr(args[0], ctx, true);
+        return builder.CreateCall(jlnew_func, ty);
+    }
     else if (ex->head == exc_sym) {
         return builder.CreateLoad(jlexc_var, true);
     }
@@ -1724,6 +1729,13 @@ static void init_julia_llvm_env(Module *m)
                          "jl_raise", jl_Module);
     jlraise_func->setDoesNotReturn();
     jl_ExecutionEngine->addGlobalMapping(jlraise_func, (void*)&jl_raise);
+
+    jlnew_func =
+        Function::Create(FunctionType::get(jl_pvalue_llvmt, args1_, false),
+                         Function::ExternalLinkage,
+                         "jl_new_struct_uninit", jl_Module);
+    jl_ExecutionEngine->addGlobalMapping(jlnew_func,
+                                         (void*)&jl_new_struct_uninit);
 
     std::vector<const Type*> empty_args(0);
     jluniniterror_func =

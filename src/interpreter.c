@@ -101,6 +101,14 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl)
     else if (ex->head == symbol_sym) {
         return eval(jl_exprarg(ex,0), locals, nl);
     }
+    else if (ex->head == new_sym) {
+        jl_value_t *thetype = eval(args[0], locals, nl);
+        JL_GC_PUSH(&thetype);
+        assert(jl_is_struct_type(thetype));
+        jl_value_t *v = jl_new_struct_uninit(thetype);
+        JL_GC_POP();
+        return v;
+    }
     else if (ex->head == quote_sym) {
         return args[0];
     }

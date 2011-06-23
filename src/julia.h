@@ -516,6 +516,7 @@ jl_tag_type_t *jl_wrap_Type(jl_value_t *t);  // x -> Type{x}
 
 // constructors
 DLLEXPORT jl_value_t *jl_new_struct(jl_struct_type_t *type, ...);
+DLLEXPORT jl_value_t *jl_new_struct_uninit(jl_struct_type_t *type);
 DLLEXPORT jl_value_t *jl_new_structt(jl_struct_type_t *type, jl_tuple_t *t);
 jl_function_t *jl_new_closure(jl_fptr_t proc, jl_value_t *env);
 jl_lambda_info_t *jl_new_lambda_info(jl_value_t *ast, jl_tuple_t *sparams);

@@ -253,15 +253,15 @@
   (define (ctor-body body)
     `(block ;; make type name global
             (global ,Tname)
-	    (pattern-replace (pattern-set
-			      (pattern-lambda
-			       (call (-/ new) . args)
-			       (new-call (if (null? params)
-					     Tname
-					     `(curly ,Tname ,@params))
-					 args
-					 field-names)))
-			     body)))
+	    ,(pattern-replace (pattern-set
+			       (pattern-lambda
+				(call (-/ new) . args)
+				(new-call (if (null? params)
+					      Tname
+					      `(curly ,Tname ,@params))
+					  args
+					  field-names)))
+			      body)))
   (or
    ((pattern-lambda (function (call name . sig) body)
 		    `(function ,(cadr ctor) ,(ctor-body body)))
@@ -313,7 +313,10 @@
 			(tuple ,@(map (lambda (x) `',x) field-names))
 			(lambda (,name)
 			  (scope-block
+			   ;; don't capture params; in here they are static
+			   ;; parameters
 			   (block
+			    (global ,@params)
 			    ,@(map (lambda (c)
 				     (rewrite-ctor c name params field-names))
 				   defs2)

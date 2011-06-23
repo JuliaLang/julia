@@ -297,6 +297,7 @@ fieldtype_tfunc = function (A, s, name)
     Type{t}
 end
 t_func[fieldtype] = (2, 2, fieldtype_tfunc)
+t_func[Expr] = (3, 3, (a,b,c)->Expr)
 
 # TODO: handle e.g. apply_type(T, R::Union(Type{Int32},Type{Float64}))
 apply_type_tfunc = function (A, args...)
@@ -528,19 +529,25 @@ end
 
 function abstract_eval_expr(e, vtypes, sv::StaticVarInfo)
     # handle:
-    # call  lambda  quote  null  top  unbound static_typeof
+    # call  lambda  quote  null  top  isbound static_typeof
     if is(e.head,:call) || is(e.head,:call1)
         return abstract_eval_call(e, vtypes, sv)
     elseif is(e.head,:top)
         return abstract_eval_global(e.args[1])
-    #elseif is(e.head,:unbound)
+    #elseif is(e.head,:isbound)
     #    return Bool
-    elseif is(e.head,:method)
-        return Any-->Any
     elseif is(e.head,:null)
         return Nothing
+    elseif is(e.head,:new)
+        t = abstract_eval(e.args[1], vtypes, sv)
+        if isType(t)
+            return t.parameters[1]
+        end
+        return Any
     elseif is(e.head,:quote)
         return typeof(e.args[1])
+    elseif is(e.head,:method)
+        return Any-->Any
     elseif is(e.head,:static_typeof)
         t = abstract_eval(e.args[1], vtypes, sv)
         # intersect with Any to remove Undef

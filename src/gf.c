@@ -1065,8 +1065,6 @@ void jl_add_method(jl_function_t *gf, jl_tuple_t *types, jl_function_t *meth)
     (void)jl_method_table_insert(jl_gf_mtable(gf), types, meth);
 }
 
-JL_CALLABLE(jl_generic_ctor);
-
 static jl_tuple_t *match_method(jl_value_t *type, jl_function_t *func,
                                 jl_tuple_t *sig, jl_tuple_t *tvars,
                                 jl_sym_t *name, jl_tuple_t *next)
@@ -1102,19 +1100,6 @@ static jl_tuple_t *match_method(jl_value_t *type, jl_function_t *func,
         if (func->linfo == NULL) {
             // builtin
             result = jl_tuple(5, ti, env, name, jl_null, next);
-        }
-        else if (func->fptr == jl_generic_ctor) {
-            // a generic struct constructor
-            jl_type_t *body = (jl_type_t*)jl_t1(func->env);
-            // determine what kind of object this constructor call
-            // would make
-            // TODO: when argument types aren't concrete, we need a typevar.
-            // e.g. Range(Int,Int,Int) => Range{T<:Int}
-            // Furthermore, when a function results in a typevar T<:S, that
-            // can be converted to just S.
-            temp = (jl_value_t*)
-                jl_instantiate_type_with(body, &jl_t0(env), env->length/2);
-            result = jl_tuple(5, ti, env, temp, jl_null, next);
         }
         else {
             jl_value_t *cenv;
@@ -1190,8 +1175,6 @@ static jl_tuple_t *ml_matches(jl_methlist_t *ml, jl_value_t *type,
     return t;
 }
 
-JL_CALLABLE(jl_new_struct_internal);
-
 // return linked tuples (t1, M1, (t2, M2, (... ()))) of types and methods.
 // t is the intersection of the type argument and the method signature,
 // and M is the corresponding LambdaStaticData (jl_lambda_info_t)
@@ -1200,16 +1183,6 @@ jl_value_t *jl_matching_methods(jl_function_t *gf, jl_value_t *type)
 {
     jl_tuple_t *t = jl_null;
     if (!jl_is_gf(gf)) {
-        if (gf->fptr == jl_new_struct_internal) {
-            if (jl_is_struct_type(gf)) {
-                t = jl_tuple(5, ((jl_struct_type_t*)gf)->types,
-                             jl_null, gf, jl_null, t);
-            }
-            else {
-                t = jl_tuple(5, ((jl_struct_type_t*)gf->env)->types,
-                             jl_null, gf->env, jl_null, t);
-            }
-        }
         return (jl_value_t*)t;
     }
     jl_methtable_t *mt = jl_gf_mtable(gf);

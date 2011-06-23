@@ -114,7 +114,22 @@ jl_value_t *jl_new_struct(jl_struct_type_t *type, ...)
     for(i=0; i < nf; i++) {
         ((jl_value_t**)jv)[i+1] = va_arg(args, jl_value_t*);
     }
+    if (nf == 0) type->instance = jv;
     va_end(args);
+    return jv;
+}
+
+DLLEXPORT
+jl_value_t *jl_new_struct_uninit(jl_struct_type_t *type)
+{
+    if (type->instance != NULL) return type->instance;
+    size_t nf = type->names->length;
+    size_t i;
+    jl_value_t *jv = newobj((jl_type_t*)type, nf);
+    for(i=0; i < nf; i++) {
+        ((jl_value_t**)jv)[i+1] = NULL;
+    }
+    if (nf == 0) type->instance = jv;
     return jv;
 }
 
@@ -129,6 +144,7 @@ jl_value_t *jl_new_structt(jl_struct_type_t *type, jl_tuple_t *t)
     for(i=0; i < nf; i++) {
         ((jl_value_t**)jv)[i+1] = jl_tupleref(t, i);
     }
+    if (nf == 0) type->instance = jv;
     return jv;
 }
 
@@ -413,9 +429,6 @@ jl_func_type_t *jl_new_functype(jl_type_t *a, jl_type_t *b)
     return t;
 }
 
-JL_CALLABLE(jl_new_struct_internal);
-JL_CALLABLE(jl_generic_ctor);
-
 // instantiate a type with new variables
 jl_value_t *jl_new_type_instantiation(jl_value_t *t)
 {
@@ -450,25 +463,9 @@ jl_value_t *jl_new_type_instantiation(jl_value_t *t)
     return nt;
 }
 
-static void add_generic_ctor(jl_function_t *gf, jl_struct_type_t *t)
-{
-    jl_function_t *gmeth = jl_new_closure(jl_generic_ctor,(jl_value_t*)jl_null);
-    JL_GC_PUSH(&gmeth, &t);
-    // create new typevars, so the function has its own constraint
-    // environment.
-    t = (jl_struct_type_t*)jl_new_type_instantiation((jl_value_t*)t);
-    gmeth->linfo = jl_new_lambda_info(NULL, jl_null);
-    jl_add_method(gf, t->types, gmeth);
-    gmeth->env = (jl_value_t*)jl_tuple2((jl_value_t*)gmeth, (jl_value_t*)t);
-    if (!jl_is_struct_type(gf)) {
-        gf->type =
-            (jl_type_t*)jl_new_functype((jl_type_t*)t->types, (jl_type_t*)t);
-    }
-    JL_GC_POP();
-}
-
 JL_CALLABLE(jl_new_array_internal);
 
+jl_function_t *jl_instantiate_method(jl_function_t *f, jl_tuple_t *sp);
 void jl_specialize_ast(jl_lambda_info_t *li);
 
 void jl_add_constructors(jl_struct_type_t *t)
@@ -481,67 +478,41 @@ void jl_add_constructors(jl_struct_type_t *t)
             t->fptr = jl_f_no_function;
         return;
     }
-    jl_function_t *fnew=NULL;
-    JL_GC_PUSH(&fnew);
+
+    jl_initialize_generic_function((jl_function_t*)t, t->name->name);
+
     if (t->ctor_factory == (jl_value_t*)jl_nothing ||
         t->ctor_factory == (jl_value_t*)jl_null) {
-        // no user-defined constructors
-        if (t->parameters->length>0 && (jl_value_t*)t==t->name->primary) {
-            jl_function_t *tf = (jl_function_t*)t;
-            jl_initialize_generic_function(tf, t->name->name);
-            add_generic_ctor(tf, t);
-            jl_gf_mtable(tf)->sealed = 1;
-        }
-        else {
-            t->fptr = jl_new_struct_internal;
-        }
+        assert(t->parameters->length == 0);
     }
     else {
-        // call user-defined constructor factory on (type, new)
-        // where new is a default constructor
-        if (t->parameters->length>0 && (jl_value_t*)t==t->name->primary) {
-            // original type; new is generic
-            fnew = jl_new_generic_function(t->name->name);
-            add_generic_ctor(fnew, t);
-            jl_gf_mtable(fnew)->sealed = 1;
-        }
-        else {
-            // an instantiation; new only constructs a specific type
-            fnew = jl_new_closure(jl_new_struct_internal, (jl_value_t*)t);
-            fnew->type =
-                (jl_type_t*)jl_new_functype((jl_type_t*)t->types,
-                                            (jl_type_t*)t);
-        }
-        // in this case the type itself always works as a generic function,
-        // to accomodate the user's various definitions
-        jl_initialize_generic_function((jl_function_t*)t, t->name->name);
-        assert(jl_is_function(t->ctor_factory));
-        jl_value_t *cfargs[2];
-        cfargs[0] = (jl_value_t*)t;
-        cfargs[1] = (jl_value_t*)fnew;
-        jl_apply((jl_function_t*)t->ctor_factory, cfargs, 2);
-        // TODO: if we want to, here we could feed the type's static parameters
-        // to the methods for their use.
-        jl_gf_mtable(t)->sealed = 1;
-
-        // calling ctor_factory binds the type of new() to a static parameter
-        // visible to each of the constructor methods. eagerly specialize
-        // the ASTs for all constructor methods so that type inference can
-        // see the type of new() even before any constructors have been called.
-        jl_methlist_t *ml = jl_gf_mtable(t)->defs;
-        while (ml != NULL) {
-            jl_specialize_ast(ml->func->linfo);
-            ml = ml->next;
+        assert(t->parameters->length > 0);
+        if (t != (jl_struct_type_t*)t->name->primary) {
+            // instantiating
+            assert(jl_is_function(t->ctor_factory));
+            
+            // add type's static parameters to the ctor factory
+            size_t np = t->parameters->length;
+            jl_tuple_t *sparams = jl_alloc_tuple_uninit(np*2);
+            jl_function_t *cfactory = NULL;
+            JL_GC_PUSH(&sparams, &cfactory);
+            size_t i;
+            for(i=0; i < np; i++) {
+                jl_tupleset(sparams, i*2+0,
+                            jl_tupleref(((jl_struct_type_t*)t->name->primary)->parameters, i));
+                jl_tupleset(sparams, i*2+1,
+                            jl_tupleref(t->parameters, i));
+            }
+            cfactory = jl_instantiate_method((jl_function_t*)t->ctor_factory,
+                                             sparams);
+            jl_specialize_ast(cfactory->linfo);
+            
+            // call user-defined constructor factory on (type,)
+            jl_value_t *cfargs[1] = { (jl_value_t*)t };
+            jl_apply(cfactory, cfargs, 1);
+            JL_GC_POP();
         }
     }
-    JL_GC_POP();
-}
-
-JL_CALLABLE(jl_constructor_factory_trampoline)
-{
-    jl_struct_type_t *t = (jl_struct_type_t*)env;
-    jl_add_constructors(t);
-    return jl_apply((jl_function_t*)t, args, nargs);
 }
 
 jl_struct_type_t *jl_new_struct_type(jl_sym_t *name, jl_tag_type_t *super,
@@ -559,7 +530,7 @@ jl_struct_type_t *jl_new_struct_type(jl_sym_t *name, jl_tag_type_t *super,
     t->parameters = parameters;
     t->names = fnames;
     t->types = ftypes;
-    t->fptr = jl_constructor_factory_trampoline;
+    t->fptr = jl_f_no_function;
     t->env = (jl_value_t*)t;
     t->linfo = NULL;
     t->ctor_factory = (jl_value_t*)jl_null;
@@ -664,65 +635,6 @@ jl_typector_t *jl_new_type_ctor(jl_tuple_t *params, jl_type_t *body)
 }
 
 // struct constructors --------------------------------------------------------
-
-// this one is for fully-instantiated types where we know the field types,
-// and arguments are converted to the field types.
-JL_CALLABLE(jl_new_struct_internal)
-{
-    jl_struct_type_t *t = (jl_struct_type_t*)env;
-    size_t nf = t->names->length;
-    if (nargs < nf)
-        jl_error("too few arguments to constructor");
-    else if (nargs > nf)
-        jl_error("too many arguments to constructor");
-    if (t->instance != NULL)
-        return t->instance;
-    jl_value_t *v = newobj((jl_type_t*)t, nf);
-    JL_GC_PUSH(&v);
-    size_t i;
-    for(i=0; i < nargs; i++) {
-        ((jl_value_t**)v)[i+1] = NULL;
-    }
-    for(i=0; i < nargs; i++) {
-        ((jl_value_t**)v)[i+1] = jl_convert((jl_type_t*)jl_tupleref(t->types,i),
-                                            args[i]);
-    }
-    if (nf == 0)
-        t->instance = v;
-    JL_GC_POP();
-    return v;
-}
-
-// this one infers type parameters from the arguments and instantiates
-// (with caching) the right type, then constructs an instance.
-JL_CALLABLE(jl_generic_ctor)
-{
-    jl_function_t *self  = (jl_function_t*)jl_t0(env);
-    jl_struct_type_t *ty = (jl_struct_type_t*)jl_t1(env);
-    jl_lambda_info_t *li = self->linfo;
-    // we cache the instantiated type in li->ast
-    if (li->ast == NULL) {
-        if (li->sparams->length != ty->parameters->length*2) {
-            jl_errorf("%s: type parameters cannot be inferred from arguments",
-                      ty->name->name->name);
-        }
-        li->ast =
-            (jl_value_t*)jl_instantiate_type_with((jl_type_t*)ty,
-                                                  &jl_tupleref(li->sparams,0),
-                                                  li->sparams->length/2);
-    }
-    jl_struct_type_t *tp = (jl_struct_type_t*)li->ast;
-    if (tp->instance != NULL)
-        return tp->instance;
-    jl_value_t *v = newobj((jl_type_t*)tp, tp->names->length);
-    size_t i;
-    for(i=0; i < nargs; i++) {
-        ((jl_value_t**)v)[i+1] = args[i];
-    }
-    if (nargs == 0)
-        tp->instance = v;
-    return v;
-}
 
 JL_CALLABLE(jl_weakref_ctor)
 {
@@ -981,4 +893,23 @@ jl_expr_t *jl_exprn(jl_sym_t *head, size_t n)
     ex->etype = (jl_value_t*)jl_any_type;
     JL_GC_POP();
     return ex;
+}
+
+JL_CALLABLE(jl_f_new_expr)
+{
+    JL_NARGS(Expr, 3, 3);
+    JL_TYPECHK(Expr, symbol, args[0]);
+    if (!jl_typeis(args[1], (jl_value_t*)jl_array_any_type)) {
+        jl_type_error("Expr", (jl_value_t*)jl_array_any_type, args[1]);
+    }
+#ifdef JL_GC_MARKSWEEP
+    jl_expr_t *ex = (jl_expr_t*)alloc_4w();
+#else
+    jl_expr_t *ex = (jl_expr_t*)allocobj(sizeof(jl_expr_t));
+#endif
+    ex->type = (jl_type_t*)jl_expr_type;
+    ex->head = (jl_sym_t*)args[0];
+    ex->args = (jl_array_t*)args[1];
+    ex->etype = args[2];
+    return (jl_value_t*)ex;
 }
