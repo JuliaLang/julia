@@ -120,8 +120,8 @@ OPENBLAS_OBJ_SOURCE = openblas/libopenblas.a
 compile-openblas: $(OPENBLAS_OBJ_SOURCE)
 
 openblas.tar.gz:
-	$(DOWNLOAD) -Lk https://github.com/xianyi/OpenBLAS/tarball/develop
-	mv develop $@
+	$(DOWNLOAD) -Lk http://github.com/xianyi/OpenBLAS/tarball/$(OPENBLAS_VER)
+	mv $(OPENBLAS_VER) $@
 openblas/Makefile: openblas.tar.gz
 	mkdir -p openblas && tar --strip-components 1 -C openblas -xf $<
 	touch $@
