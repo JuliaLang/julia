@@ -1,3 +1,15 @@
+## Library Versions ##
+
+LLVM_VER = 2.9
+READLINE_VER = 6.2
+PCRE_VER = 8.12
+LAPACK_VER = 3.3.1
+ARPACK_VER = 96
+FFTW_VER = 3.2.2
+MONGOOSE_VER = 3.0
+
+## High-Level Setup ##
+
 JULIAHOME = $(shell pwd)/..
 include ../Make.inc
 
