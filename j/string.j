@@ -164,8 +164,9 @@ type SubString <: String
     offset::Index
     length::Index
 
-    SubString(s::String, i::Index, j::Index) = new(s,i,j)
-    SubString(s::SubString, i::Index, j::Index) = new(s, i-1+s.offset, j-i+1)
+    SubString(s::String, i::Index, j::Index) = new(s, i-1, j-i+1)
+    SubString(s::SubString, i::Index, j::Index) =
+        new(s.string, i-1+s.offset, j-i+1)
 end
 
 function next(s::SubString, i::Index)

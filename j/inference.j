@@ -167,8 +167,10 @@ function (T, dims...)
     Array{et,nd}
 end)
 
-static_convert(to, from) = (subtype(from, to) ? from : to)
-function static_convert(to::Tuple, from::Tuple)
+function static_convert(to, from)
+    if !isa(to,Tuple) || !isa(from,Tuple)
+        return (subtype(from, to) ? from : to)
+    end
     if is(to,Tuple)
         return from
     end
@@ -319,7 +321,13 @@ apply_type_tfunc = function (A, args...)
         end
     end
     # good, all arguments understood
-    Type{apply_type(headtype, tparams...)}
+    try
+        Type{apply_type(headtype, tparams...)}
+    catch
+        # type instantiation might fail if one of the type parameters
+        # doesn't match, which could happen if a type estimate is too coarse
+        args[1]
+    end
 end
 t_func[apply_type] = (1, Inf, apply_type_tfunc)
 
@@ -511,10 +519,13 @@ function abstract_eval_call(e, vtypes, sv::StaticVarInfo)
         if isa(ft,FuncKind)
             # use inferred function type
             return ft_tfunc(ft, argtypes)
-        elseif isType(ft) && isbuiltin(ft.parameters[1]) &&
-               isa(ft.parameters[1],StructKind)
+        elseif isType(ft) && isa(ft.parameters[1],StructKind)
+            st = ft.parameters[1]
+            #if isgeneric(st)
+            #    return abstract_call_gf(st, fargs, argtypes, e)
+            #end
             # struct constructor
-            return ft.parameters[1]
+            return st
         end
         return Any
     end
@@ -915,11 +926,11 @@ function typeinf(linfo::LambdaStaticData,atypes::Tuple,sparams::Tuple, cop, def)
         end
     end
     inference_stack = inference_stack.prev
+    #print("\n",ast,"\n")
+    #print("==> ", frame.result,"\n")
     fulltree = type_annotate(ast, s, sv, frame.result, vars)
     def.tfunc = (atypes, fulltree, def.tfunc)
     fulltree.args[3] = inlining_pass(fulltree.args[3], s[1])
-    #print("\n",fulltree,"\n")
-    #print("==> ", frame.result,"\n")
     return (fulltree, frame.result)
 end
 
@@ -935,10 +946,6 @@ function record_var_type(e::Symbol, t, decls)
     end
 end
 
-expr_type(e::Expr) = e.type
-expr_type(s::Symbol) = Any
-expr_type(x) = typeof(x)
-
 function eval_annotate(e::Expr, vtypes, sv, decls)
     if is(e.head,:quote) || is(e.head,:top) || is(e.head,:goto) ||
         is(e.head,:label) || is(e.head,:static_typeof)
@@ -953,7 +960,7 @@ function eval_annotate(e::Expr, vtypes, sv, decls)
         e.args[1] = Expr(:symbol, {s}, abstract_eval(s, vtypes, sv))
         e.args[2] = eval_annotate(e.args[2], vtypes, sv, decls)
         # TODO: if this def does not reach any uses, maybe don't do this
-        record_var_type(s, expr_type(e.args[2]), decls)
+        record_var_type(s, exprtype(e.args[2]), decls)
         return e
     end
     for i=1:length(e.args)
@@ -1047,10 +1054,17 @@ function contains_is(arr, item)
     return false
 end
 
-exprtype(e::Expr) = e.type
-exprtype(s::Symbol) = Any
-exprtype(t::Type) = Type{t}
-exprtype(other) = typeof(other)
+function exprtype(x)
+    if isa(x,Expr)
+        return x.type
+    elseif isa(x,Symbol)
+        return Any
+    elseif isa(x,Type)
+        return Type{x}
+    else
+        return typeof(x)
+    end
+end
 
 # for now, only inline functions whose bodies are of the form "return <expr>"
 # where <expr> doesn't contain any argument more than once.

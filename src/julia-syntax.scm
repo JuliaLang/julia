@@ -230,13 +230,14 @@
    (struct-def-expr- name params bounds super fields)))
 
 (define (default-inner-ctor name field-names field-types)
-  `(function (call ,name ,@(map (lambda (n t) `(:: ,n ,t))
-				field-names field-types))
+  `(function (call ,name ,@field-names)
 	     (block
 	      (call new ,@field-names))))
 
-(define (default-outer-ctor name field-names field-types params)
-  `(function (call (curly ,name ,@params)
+(define (default-outer-ctor name field-names field-types params bounds)
+  `(function (call (curly ,name
+			  ,@(map (lambda (p b) `(comparison ,p <: ,b))
+				 params bounds))
 		   ,@(map (lambda (n t) `(:: ,n ,t))
 			  field-names field-types))
 	     (block
@@ -244,10 +245,12 @@
 
 (define (new-call Texpr args field-names)
   (let ((g (gensy)))
-    `(block (= ,g (new ,Texpr))
-	    ,@(map (lambda (fld val) `(= (|.| ,g ,fld) ,val))
-		   field-names args)
-	    ,g)))
+    (if (> (length args) (length field-names))
+	`(call (top error) "new: too many arguments")
+	`(block (= ,g (new ,Texpr))
+		,@(map (lambda (fld val) `(= (|.| ,g ,fld) ,val))
+		       (list-head field-names (length args)) args)
+		,g))))
 
 (define (rewrite-ctor ctor Tname params field-names)
   (define (ctor-body body)
@@ -298,9 +301,12 @@
 		    (null)))
 	   (call (top new_struct_fields)
 		 ,name ,super (tuple ,@field-types))
-	   ,@(map (lambda (c)
-		    (rewrite-ctor c name '() field-names))
-		  defs2)
+	   (scope-block
+	    (block
+	     (global ,name)
+	     ,@(map (lambda (c)
+		      (rewrite-ctor c name '() field-names))
+		    defs2)))
 	   (null))
 	 `(block
 	   (call
@@ -325,7 +331,8 @@
 		     ,name ,super (tuple ,@field-types))))
 	    ,@(symbols->typevars params bounds))
 	   ,@(if (null? defs)
-		 `(,(default-outer-ctor name field-names field-types params))
+		 `(,(default-outer-ctor name field-names field-types
+		      params bounds))
 		 '())
 	   (null))))))
 
