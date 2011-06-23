@@ -100,11 +100,9 @@ im = complex128(0,1)
 type Complex{T<:Real} <: ComplexNum
     re::T
     im::T
-
-    Complex{T<:Real}(x::T, y::T) = new(x, y)
-    Complex(x::Real, y::Real) = Complex(promote(x,y)...)
-    Complex(x::Real) = new(x, zero(x))
 end
+Complex(x::Real, y::Real) = Complex(promote(x,y)...)
+Complex(x::Real) = Complex(x, zero(x))
 
 real(z::Complex) = z.re
 imag(z::Complex) = z.im

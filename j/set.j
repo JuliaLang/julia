@@ -1,11 +1,10 @@
 type Set{T}
     hash::HashTable{T,Bool}
 
-    Set{T}(T::Type) = new(HashTable(T,Bool))
-    Set() = Set(Any)
+    Set() = new(HashTable(T,Bool))
 end
 
-set{T}(x::T...) = (s = Set(T); add(s, x...))
+set{T}(x::T...) = (s = Set{T}(); add(s, x...))
 show(s::Set) = show_comma_array(s,'{','}')
 
 isempty(s::Set) = isempty(s.hash)
@@ -25,4 +24,4 @@ start(s::Set)       = start(s.hash)
 done(s::Set, state) = done(s.hash, state)
 next(s::Set, state) = (((k,v),state) = next(s.hash, state); (k,state))
 
-union{T}(sets::Set{T}...) = (u = Set(T); for s=sets; add(u,s); end; u)
+union{T}(sets::Set{T}...) = (u = Set{T}(); for s=sets; add(u,s); end; u)

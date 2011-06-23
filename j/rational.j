@@ -2,7 +2,7 @@ type Rational{T<:Int} <: Real
     num::T
     den::T
 
-    function Rational{T<:Int}(num::T, den::T)
+    function Rational(num::T, den::T)
         if num != 0 || den != 0
             g = gcd(den, num)
             num = div(num, g)
@@ -10,10 +10,10 @@ type Rational{T<:Int} <: Real
         end
         new(num, den)
     end
-
-    Rational(n::Int, d::Int) = Rational(promote(n,d)...)
-    Rational(n::Int) = new(n, one(n))
 end
+Rational{T<:Int}(n::T, d::T) = Rational{T}(n, d)
+Rational(n::Int, d::Int) = Rational(promote(n,d)...)
+Rational(n::Int) = Rational(n, one(n))
 
 //(n::Int, d::Int) = Rational(n,d)
 //(x::Rational, y::Int) = x.num // (x.den*y)

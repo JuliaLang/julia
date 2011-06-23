@@ -145,8 +145,8 @@ end
 type CharString <: String
     chars::Array{Char,1}
 
-    CharString(a::Array{Char,1}) = (this.chars=a)
-    CharString(c::Char...) = (this.chars=[ c[i] | i=1:length(c) ])
+    CharString(a::Array{Char,1}) = new(a)
+    CharString(c::Char...) = new([ c[i] | i=1:length(c) ])
 end
 CharString(x...) = CharString(map(char,x)...)
 
@@ -164,12 +164,8 @@ type SubString <: String
     offset::Index
     length::Index
 
-    SubString(s::String, i::Index, j::Index) = (this.string = s;
-                                                this.offset = i;
-                                                this.length = j)
-    SubString(s::SubString, i::Index, j::Index) = (this.string = s;
-                                                   this.offset = i-1+s.offset;
-                                                   this.length = j-i+1)
+    SubString(s::String, i::Index, j::Index) = new(s,i,j)
+    SubString(s::SubString, i::Index, j::Index) = new(s, i-1+s.offset, j-i+1)
 end
 
 function next(s::SubString, i::Index)

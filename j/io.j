@@ -9,11 +9,12 @@ type IOStream
     IOStream() = (x = new(zeros(Uint8,sizeof_ios_t));
                   finalizer(x, close);
                   x)
+
+    global make_stdout_stream
+    make_stdout_stream() = new(ccall(:jl_stdout_stream, Any, ()))
 end
 
 close(s::IOStream) = ccall(:ios_close, Void, (Ptr{Void},), s.ios)
-
-make_stdout_stream() = new(ccall(:jl_stdout_stream, Any, ()))
 
 fdio(fd::Int) = (s = IOStream();
                  ccall(:ios_fd, Void,
