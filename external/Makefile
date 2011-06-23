@@ -21,7 +21,7 @@ compile-llvm: $(LLVM_OBJ_SOURCE)
 install-llvm: $(LLVM_OBJ_TARGET)
 
 llvm-$(LLVM_VER).tgz:
-	$(DOWNLOAD) http://llvm.org/releases/$(LLVM_VER)/$@
+	curl -O http://llvm.org/releases/$(LLVM_VER)/$@
 llvm-$(LLVM_VER)/configure: llvm-$(LLVM_VER).tgz
 	tar zxf $<
 	touch $@
@@ -48,7 +48,7 @@ compile-readline: $(READLINE_OBJ_SOURCE)
 install-readline: $(READLINE_OBJ_TARGET)
 
 readline-$(READLINE_VER).tar.gz:
-	$(DOWNLOAD) ftp://ftp.gnu.org/gnu/readline/$@
+	curl -O ftp://ftp.gnu.org/gnu/readline/$@
 readline-$(READLINE_VER)/configure: readline-$(READLINE_VER).tar.gz
 	tar zxf $<
 	touch $@
@@ -75,7 +75,7 @@ compile-pcre: install-pcre
 install-pcre: $(PCRE_OBJ_TARGET)
 
 pcre-$(PCRE_VER).tar.bz2:
-	$(DOWNLOAD) ftp://ftp.csx.cam.ac.uk/pub/software/programming/pcre/$@
+	curl -O ftp://ftp.csx.cam.ac.uk/pub/software/programming/pcre/$@
 pcre-$(PCRE_VER)/configure: pcre-$(PCRE_VER).tar.bz2
 	tar jxvf $<
 	touch $@
@@ -120,7 +120,7 @@ OPENBLAS_OBJ_SOURCE = openblas/libopenblas.a
 compile-openblas: $(OPENBLAS_OBJ_SOURCE)
 
 openblas.tar.gz:
-	$(DOWNLOAD) -Lk https://github.com/xianyi/OpenBLAS/tarball/develop
+	curl -O -Lk https://github.com/xianyi/OpenBLAS/tarball/develop
 	mv develop $@
 openblas/Makefile: openblas.tar.gz
 	mkdir -p openblas && tar --strip-components 1 -C openblas -xf $<
@@ -142,7 +142,7 @@ compile-lapack: $(LAPACK_OBJ_SOURCE)
 install-lapack: $(LAPACK_OBJ_TARGET)
 
 lapack-$(LAPACK_VER).tgz:
-	$(DOWNLOAD) http://www.netlib.org/lapack/$@
+	curl -O http://www.netlib.org/lapack/$@
 lapack-$(LAPACK_VER)/Makefile: lapack-$(LAPACK_VER).tgz
 	tar zxf $<
 	touch $@
@@ -170,9 +170,9 @@ compile-arpack: $(ARPACK_OBJ_SOURCE)
 install-arpack: $(ARPACK_OBJ_TARGET)
 
 arpack$(ARPACK_VER).tar.gz:
-	$(DOWNLOAD) http://www.caam.rice.edu/software/ARPACK/SRC/$@
+	curl -O http://www.caam.rice.edu/software/ARPACK/SRC/$@
 arpack-patch.tar.gz:
-	$(DOWNLOAD) http://www.caam.rice.edu/software/ARPACK/SRC/patch.tar.gz
+	curl -O http://www.caam.rice.edu/software/ARPACK/SRC/patch.tar.gz
 	mv patch.tar.gz $@
 ARPACK/Makefile: arpack$(ARPACK_VER).tar.gz arpack-patch.tar.gz
 	for x in $^; do tar zxf $$x; done
@@ -201,7 +201,7 @@ compile-fftw: install-fftw
 install-fftw: $(FFTW_OBJ_TARGET)
 
 fftw-$(FFTW_VER).tar.gz:
-	$(DOWNLOAD) http://www.fftw.org/$@
+	curl -O http://www.fftw.org/$@
 fftw-$(FFTW_VER)/configure: fftw-$(FFTW_VER).tar.gz
 	tar zxf $<
 	touch $@
@@ -226,7 +226,7 @@ compile-mongoose: mongoose/Makefile
 install-mongoose: compile-mongoose
 
 mongoose-$(MONGOOSE_VER).tgz:
-	$(DOWNLOAD) http://mongoose.googlecode.com/files/mongoose-$(MONGOOSE_VER).tgz
+	curl -O http://mongoose.googlecode.com/files/mongoose-$(MONGOOSE_VER).tgz
 mongoose/Makefile: mongoose-$(MONGOOSE_VER).tgz
 	tar zxf $<
 	touch $@
