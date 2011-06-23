@@ -26,8 +26,10 @@ macro lapack_chol(fname, eltype)
     end
 end
 
-@lapack_chol "dpotrf_" Float64
-@lapack_chol "spotrf_" Float32
+@lapack_chol :dpotrf_ Float64
+@lapack_chol :spotrf_ Float32
+@lapack_chol :zpotrf_ Complex128
+@lapack_chol :cpotrf_ Complex64
 
 # SUBROUTINE DGETRF( M, N, A, LDA, IPIV, INFO )
 # *     .. Scalar Arguments ..
@@ -74,8 +76,10 @@ macro lapack_lu(fname, eltype)
     end
 end
 
-@lapack_lu "dgetrf_" Float64
-@lapack_lu "sgetrf_" Float32
+@lapack_lu :dgetrf_ Float64
+@lapack_lu :sgetrf_ Float32
+@lapack_lu :zgetrf_ Complex128
+@lapack_lu :cgetrf_ Complex64
 
 # SUBROUTINE DGEQP3( M, N, A, LDA, JPVT, TAU, WORK, LWORK, INFO )
 # *     .. Scalar Arguments ..
@@ -101,7 +105,7 @@ macro lapack_qr(fname, fname2, eltype)
             tau = Array($eltype, k)
             
             # Workspace query for QR factorization
-            work = [0.0]
+            work = zeros($eltype,1)
             lwork = -1
             ccall(dlsym(libLAPACK, $fname),
                   Void,
@@ -150,6 +154,82 @@ end
 @lapack_qr "dgeqp3_" "dorgqr_" Float64
 @lapack_qr "sgeqp3_" "sorgqr_" Float32
 
+# SUBROUTINE ZGEQP3( M, N, A, LDA, JPVT, TAU, WORK, LWORK, RWORK, INFO )
+#*      .. Scalar Arguments ..
+#       INTEGER            INFO, LDA, LWORK, M, N
+#*      .. Array Arguments ..
+#       INTEGER            JPVT( * )
+#       DOUBLE PRECISION   RWORK( * )
+#       COMPLEX*16         A( LDA, * ), TAU( * ), WORK( * )
+
+# SUBROUTINE ZUNGQR( M, N, K, A, LDA, TAU, WORK, LWORK, INFO )
+#*     .. Scalar Arguments ..
+#      INTEGER            INFO, K, LDA, LWORK, M, N
+#*     ..
+#*     .. Array Arguments ..
+#      COMPLEX*16         A( LDA, * ), TAU( * ), WORK( * )
+
+macro lapack_qr_complex(fname, fname2, eltype, eltype2)
+    quote 
+        function qr(A::DenseMatrix{$eltype})
+            info = [0]
+            m, n = size(A)
+            QR = copy(A)
+            jpvt = zeros(Int32, n)
+            k = min(m,n)
+            tau = Array($eltype, k)
+            rwork = zeros($eltype2, 2n)
+
+            # Workspace query for QR factorization
+            work = zeros($eltype, 1)
+            lwork = -1
+            ccall(dlsym(libLAPACK, $fname),
+                  Void,
+                  (Ptr{Int32}, Ptr{Int32}, Ptr{$eltype}, Ptr{Int32}, 
+                   Ptr{Int32}, Ptr{$eltype}, Ptr{$eltype}, Ptr{Int32}, Ptr{$eltype2}, Ptr{Int32}),
+                  m, n, QR, m, jpvt, tau, work, lwork, rwork, info)
+            
+            if info[1] == 0; lwork = int32(real(work[1])); work = Array($eltype, lwork);
+            else error("Error in ", $fname); end
+            
+            # Compute QR factorization
+            ccall(dlsym(libLAPACK, $fname),
+                  Void,
+                  (Ptr{Int32}, Ptr{Int32}, Ptr{$eltype}, Ptr{Int32}, 
+                   Ptr{Int32}, Ptr{$eltype}, Ptr{$eltype}, Ptr{Int32}, Ptr{$eltype2}, Ptr{Int32}),
+                  m, n, QR, m, jpvt, tau, work, lwork, rwork, info)
+            
+            if info[1] > 0; error("Matrix is singular"); end
+
+            R = triu(QR)
+
+            # Workspace query to form Q
+            lwork2 = -1
+            ccall(dlsym(libLAPACK, $fname2),
+                  Void,
+                  (Ptr{Int32}, Ptr{Int32}, Ptr{Int32}, Ptr{$eltype},
+                   Ptr{Int32}, Ptr{$eltype}, Ptr{$eltype}, Ptr{Int32}, Ptr{Int32}),
+                  m, k, k, QR, m, tau, work, lwork2, info)
+            
+            if info[1] == 0; lwork = int32(real(work[1])); work = Array($eltype, lwork);
+            else error("Error in ", $fname2); end
+
+            # Compute Q
+            ccall(dlsym(libLAPACK, $fname2),
+                  Void,
+                  (Ptr{Int32}, Ptr{Int32}, Ptr{Int32}, Ptr{$eltype},
+                   Ptr{Int32}, Ptr{$eltype}, Ptr{$eltype}, Ptr{Int32}, Ptr{Int32}),
+                  m, k, k, QR, m, tau, work, lwork, info)
+            
+            if info[1] == 0; return (QR[:, 1:k], R[1:k, :], jpvt); end
+            error("Error in ", $fname);
+        end
+    end
+end
+
+@lapack_qr_complex "zgeqp3_" "zungqr_" Complex128 Float64
+@lapack_qr_complex "cgeqp3_" "cungqr_" Complex64 Float32
+
 #       SUBROUTINE DSYEV( JOBZ, UPLO, N, A, LDA, W, WORK, LWORK, INFO )
 # *     .. Scalar Arguments ..
 #       CHARACTER          JOBZ, UPLO
@@ -194,8 +274,57 @@ macro lapack_eig(fname, eltype)
     end
 end
 
-@lapack_eig "dsyev_" Float64
-@lapack_eig "ssyev_" Float32
+@lapack_eig :dsyev_ Float64
+@lapack_eig :ssyev_ Float32
+
+#      SUBROUTINE ZHEEV( JOBZ, UPLO, N, A, LDA, W, WORK, LWORK, RWORK, INFO )
+#*     .. Scalar Arguments ..
+#      CHARACTER          JOBZ, UPLO
+#      INTEGER            INFO, LDA, LWORK, N
+#*     ..
+#*     .. Array Arguments ..
+#      DOUBLE PRECISION   RWORK( * ), W( * )
+#      COMPLEX*16         A( LDA, * ), WORK( * )
+macro lapack_eig_complex(fname, eltype, eltype2)
+    quote 
+        function eig(A::DenseMatrix{$eltype})
+            if !ishermitian(A); error("Matrix must be Hermitian"); end
+            
+            jobz = "V"
+            uplo = "U"
+            n = size(A, 1)
+            EV = copy(A)
+            W = Array($eltype2, n)
+            info = [0]
+            rwork = Array($eltype2, max(3n-2, 1))
+
+            # Workspace query
+            work = zeros($eltype, 1)
+            lwork = -1
+            ccall(dlsym(libLAPACK, $fname),
+                  Void,
+                  (Ptr{Uint8}, Ptr{Uint8}, Ptr{Int32}, Ptr{$eltype}, Ptr{Int32},
+                   Ptr{$eltype2}, Ptr{$eltype}, Ptr{Int32}, Ptr{$eltype2}, Ptr{Int32}),
+                  jobz, uplo, n, EV, n, W, work, lwork, rwork, info)
+            
+            if info[1] == 0; lwork = int32(real(work[1])); work = Array($eltype, lwork);
+            else error("Error in ", $fname); end
+            
+            # Compute eigenvalues, eigenvectors
+            ccall(dlsym(libLAPACK, $fname),
+                  Void,
+                  (Ptr{Uint8}, Ptr{Uint8}, Ptr{Int32}, Ptr{$eltype}, Ptr{Int32}, 
+                   Ptr{$eltype2}, Ptr{$eltype}, Ptr{Int32}, Ptr{$eltype2}, Ptr{Int32}),
+                  jobz, uplo, n, EV, n, W, work, lwork, rwork, info)
+            
+            if info[1] == 0; return (diagm(W), EV); end
+            error("Error in EIG");
+        end
+    end
+end
+
+@lapack_eig_complex :zheev_ Complex128 Float64
+@lapack_eig_complex :cheev_ Complex64 Float32
 
 # SUBROUTINE DGESVD( JOBU, JOBVT, M, N, A, LDA, S, U, LDU, VT, LDVT, WORK, LWORK, INFO )
 # *     .. Scalar Arguments ..
@@ -219,7 +348,7 @@ macro lapack_svd(fname, eltype)
             info = [0]
             
             # Workspace query
-            work = [0.0]
+            work = zeros($eltype, 1)
             lwork = -1
             ccall(dlsym(libLAPACK, $fname),
                   Void,
@@ -248,8 +377,65 @@ macro lapack_svd(fname, eltype)
     end
 end
 
-@lapack_svd "dgesvd_" Float64
-@lapack_svd "sgesvd_" Float32
+@lapack_svd :dgesvd_ Float64
+@lapack_svd :sgesvd_ Float32
+# SUBROUTINE ZGESVD( JOBU, JOBVT, M, N, A, LDA, S, U, LDU, VT, LDVT,
+#     $                   WORK, LWORK, RWORK, INFO )
+#*     .. Scalar Arguments ..
+#      CHARACTER          JOBU, JOBVT
+#      INTEGER            INFO, LDA, LDU, LDVT, LWORK, M, N
+#*     ..
+#*     .. Array Arguments ..
+#      DOUBLE PRECISION   RWORK( * ), S( * )
+#      COMPLEX*16         A( LDA, * ), U( LDU, * ), VT( LDVT, * ),
+#     $                   WORK( * )
+
+macro lapack_svd_complex(fname, eltype, eltype2)
+    quote 
+        function svd(A::DenseMatrix{$eltype})
+            jobu = "A"
+            jobvt = "A"
+            m, n = size(A)
+            k = min(m,n)
+            X = copy(A)
+            S = Array($eltype2, k)
+            U = Array($eltype, m, m)
+            VT = Array($eltype, n, n)
+            info = [0]
+            rwork = Array($eltype2, 5*min(m,n))
+
+            # Workspace query
+            work = zeros($eltype, 1)
+            lwork = -1
+            ccall(dlsym(libLAPACK, $fname),
+                  Void,
+                  (Ptr{Uint8}, Ptr{Uint8}, Ptr{Int32}, Ptr{Int32}, Ptr{$eltype}, Ptr{Int32},
+                   Ptr{$eltype2}, Ptr{$eltype}, Ptr{Int32}, Ptr{$eltype}, Ptr{Int32},
+                   Ptr{$eltype}, Ptr{Int32}, Ptr{$eltype2}, Ptr{Int32}),
+                  jobu, jobvt, m, n, X, m, S, U, m, VT, n, work, lwork, rwork, info)
+            
+            if info[1] == 0; lwork = int32(real(work[1])); work = Array($eltype, lwork);
+            else error("Error in ", $fname); end
+            
+            # Compute SVD
+            ccall(dlsym(libLAPACK, $fname),
+                  Void,
+                  (Ptr{Uint8}, Ptr{Uint8}, Ptr{Int32}, Ptr{Int32}, Ptr{$eltype}, Ptr{Int32},
+                   Ptr{$eltype2}, Ptr{$eltype}, Ptr{Int32}, Ptr{$eltype}, Ptr{Int32},
+                   Ptr{$eltype}, Ptr{Int32}, Ptr{$eltype2}, Ptr{Int32}),
+                  jobu, jobvt, m, n, X, m, S, U, m, VT, n, work, lwork, rwork, info)
+            
+            SIGMA = zeros($eltype, m, n)
+            for i=1:k; SIGMA[i,i] = S[i]; end
+            
+            if info[1] == 0; return (U,SIGMA,VT); end
+            error("Error in SVD");
+        end
+    end
+end
+
+@lapack_svd_complex :zgesvd_ Complex128 Float64
+@lapack_svd_complex :cgesvd_ Complex64 Float32
 
 # SUBROUTINE DGESV( N, NRHS, A, LDA, IPIV, B, LDB, INFO )
 # *     .. Scalar Arguments ..
@@ -335,7 +521,7 @@ macro lapack_backslash(fname_lu, fname_chol, fname_lsq, fname_tri, eltype)
                 lwork = -1
                 work = [0.0]
                 Y = Array($eltype, max(m,n), nrhs)
-                Y[1:size(X,1), 1:size(X,2)] = X
+                Y[1:size(X,1), 1:nrhs] = X
 
                 ccall(dlsym(libLAPACK, $fname_lsq),
                       Void,
@@ -356,7 +542,13 @@ macro lapack_backslash(fname_lu, fname_chol, fname_lsq, fname_tri, eltype)
                        Ptr{$eltype}, Ptr{Int32}, Ptr{$eltype}, Ptr{Int32}, Ptr{Int32}),
                       "N", m, n, nrhs, Acopy, m, Y, max(m,n), work, lwork, info)
                 
-                X = Y
+                ##if B is a vector, format answer as vector
+                if isa(B, Vector)
+                    X = zeros($eltype, size(Y,1))
+                    for i = 1:size(Y,1); X[i] = Y[i,1]; end
+                else
+                    X = Y
+                end
             end # if m == n...
                 
             if info[1] == 0; return X; end
@@ -368,6 +560,8 @@ end # macro...
 
 @lapack_backslash "dgesv_" "dposv_" "dgels_" "dtrtrs_" Float64
 @lapack_backslash "sgesv_" "sposv_" "sgels_" "strtrs_" Float32
+@lapack_backslash "zgesv_" "zposv_" "zgels_" "ztrtrs_" Complex128
+@lapack_backslash "cgesv_" "cposv_" "cgels_" "ctrtrs_" Complex64
 
 ## BIDIAG ##
 
