@@ -3,6 +3,7 @@
 LLVM_VER = 2.9
 READLINE_VER = 6.2
 PCRE_VER = 8.12
+OPENBLAS_VER = develop
 LAPACK_VER = 3.3.1
 ARPACK_VER = 96
 FFTW_VER = 3.2.2
@@ -15,7 +16,7 @@ include ../Make.inc
 
 OS = $(shell uname)
 ARCH = $(shell uname -m)
-LIBS = llvm pcre fdlibm lapack arpack fftw mongoose readline
+LIBS = llvm pcre fdlibm openblas lapack arpack fftw mongoose readline
 
 default: install
 compile: $(addprefix compile-, $(LIBS))
@@ -89,7 +90,7 @@ install-pcre: $(PCRE_OBJ_TARGET)
 pcre-$(PCRE_VER).tar.bz2:
 	curl -O ftp://ftp.csx.cam.ac.uk/pub/software/programming/pcre/$@
 pcre-$(PCRE_VER)/configure: pcre-$(PCRE_VER).tar.bz2
-	tar jxvf $<
+	tar jxf $<
 	touch $@
 pcre-$(PCRE_VER)/config.status: pcre-$(PCRE_VER)/configure
 	cd pcre-$(PCRE_VER) && \
@@ -127,23 +128,23 @@ distclean-fdlibm: clean-fdlibm
 
 ## OpenBLAS ##
 
-OPENBLAS_OBJ_SOURCE = openblas/libopenblas.a
+OPENBLAS_OBJ_SOURCE = openblas-$(OPENBLAS_VER)/libopenblas.a
 
 compile-openblas: $(OPENBLAS_OBJ_SOURCE)
+install-openblas: compile-openblas
 
-openblas.tar.gz:
-	curl -O -Lk https://github.com/xianyi/OpenBLAS/tarball/develop
-	mv develop $@
-openblas/Makefile: openblas.tar.gz
-	mkdir -p openblas && tar --strip-components 1 -C openblas -xf $<
+openblas-$(OPENBLAS_VER).tar.gz:
+	curl -Lk https://github.com/xianyi/OpenBLAS/tarball/$(OPENBLAS_VER) > $@
+openblas-$(OPENBLAS_VER)/Makefile: openblas-$(OPENBLAS_VER).tar.gz
+	mkdir -p openblas-$(OPENBLAS_VER) && tar -C openblas-$(OPENBLAS_VER) --strip-components 1 -xf $<
 	touch $@
-$(OPENBLAS_OBJ_SOURCE): openblas/Makefile
-	make -C openblas USE_THREAD=0 NO_CBLAS=1 NO_LAPACK=1 CC=$(CC) FC=$(FC)
+$(OPENBLAS_OBJ_SOURCE): openblas-$(OPENBLAS_VER)/Makefile
+	make -C openblas-$(OPENBLAS_VER) USE_THREAD=0 NO_CBLAS=1 NO_LAPACK=1 CC=$(CC) FC=$(FC)
 
 clean-openblas:
-	make -C openblas clean
+	make -C openblas-$(OPENBLAS_VER) clean
 distclean-openblas:
-	rm -rf openblas.tar.gz openblas
+	rm -rf openblas-$(OPENBLAS_VER).tar.gz openblas-$(OPENBLAS_VER)
 
 ## LAPACK ##
 
@@ -158,10 +159,12 @@ lapack-$(LAPACK_VER).tgz:
 lapack-$(LAPACK_VER)/Makefile: lapack-$(LAPACK_VER).tgz
 	tar zxf $<
 	touch $@
-$(LAPACK_OBJ_SOURCE): lapack-$(LAPACK_VER)/Makefile $(OPENBLAS_OBJ_SOURCE)
+lapack-$(LAPACK_VER)/INSTALL/dlamch.o: lapack-$(LAPACK_VER)/Makefile
 	cd lapack-$(LAPACK_VER) && \
 	cp INSTALL/make.inc.gfortran ./make.inc && \
-	make lapacklib NOOPT="-O0 -fPIC" OPTS="-O2 -fPIC" FORTRAN=$(FC) && \
+	make lapacklib NOOPT="-O0 -fPIC" OPTS="-O2 -fPIC" FORTRAN=$(FC)
+$(LAPACK_OBJ_SOURCE): lapack-$(LAPACK_VER)/INSTALL/dlamch.o $(OPENBLAS_OBJ_SOURCE)
+	cd lapack-$(LAPACK_VER) && \
 	$(FC) -shared SRC/*.o INSTALL/dlamch.o INSTALL/dsecnd_INT_ETIME.o INSTALL/ilaver.o INSTALL/slamch.o ../$(OPENBLAS_OBJ_SOURCE) -o libLAPACK.$(SHLIB_EXT)
 $(LAPACK_OBJ_TARGET): $(LAPACK_OBJ_SOURCE)
 	mkdir -p $(EXTROOTLIB)
