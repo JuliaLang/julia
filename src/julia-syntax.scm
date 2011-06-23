@@ -1333,7 +1333,9 @@ So far only the second case can actually occur.
 			  (append vi
 				  ; new environment: add our vars
 				  (filter (lambda (v)
-					    (not (memq (vinfo:name v) allv)))
+					    (and
+					     (not (memq (vinfo:name v) allv))
+					     (not (memq (vinfo:name v) glo))))
 					  env)))))
 	   ; mark all the vars we capture as captured
 	   (for-each (lambda (v) (vinfo:set-capt! v #t))
