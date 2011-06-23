@@ -1,10 +1,11 @@
 type Set{T}
     hash::HashTable{T,Bool}
 
-    Set() = new(HashTable(T,Bool))
+    Set() = new(HashTable{T,Bool}())
 end
 
 set{T}(x::T...) = (s = Set{T}(); add(s, x...))
+set() = Set{Any}()
 show(s::Set) = show_comma_array(s,'{','}')
 
 isempty(s::Set) = isempty(s.hash)
