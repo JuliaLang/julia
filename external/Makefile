@@ -102,7 +102,7 @@ install-fdlibm: $(FDLIBM_OBJ_TARGET)
 
 $(FDLIBM_OBJ_SOURCE): fdlibm/*.c
 	cd fdlibm && \
-	make CC=$(CC) CFLAGS="-D_IEEE_LIBM -Dx86 -fPIC -O2 -mtune=native $(CONFIG)" && \
+	make CC=$(CC) CFLAGS="-D_IEEE_LIBM -Dx86 -fPIC -O2 $(CONFIG)" && \
 	$(CC) -shared *.o -o libfdm.$(SHLIB_EXT)
 $(FDLIBM_OBJ_TARGET): $(FDLIBM_OBJ_SOURCE)
 	mkdir -p $(EXTROOTLIB)
