@@ -5,7 +5,9 @@
 # The matrix A is local to the first Worker, which allocates work to other Workers
 # All updates to A are carried out by the first Worker. Thus A is not distributed
 
-function hpl_par(A::Matrix, b::Vector)
+hpl_par(A::Matrix, b::Vector) = hpl_par(A, b, true)
+
+function hpl_par(A::Matrix, b::Vector, run_parallel::Bool)
 
     blocksize = 5
 
@@ -53,15 +55,21 @@ function hpl_par(A::Matrix, b::Vector)
             J = (B_cols[j]+1):B_cols[j+1]
             
             ## Do the trailing update (Compute U, and DGEMM - all flops are here)
-            depend[i+1,j] = @spawn trailing_update(L_II, A[I,J], A[K,I], A[K,J], depend[i+1,i], depend[i,j])
-            #depend[i+1,j] = trailing_update(L_II, A[I,J], A[K,I], A[K,J], depend[i+1,i], depend[i,j])
+            if run_parallel
+                depend[i+1,j] = @spawn trailing_update(L_II, A[I,J], A[K,I], A[K,J], depend[i+1,i], depend[i,j])
+            else
+                depend[i+1,j] = trailing_update(L_II, A[I,J], A[K,I], A[K,J], depend[i+1,i], depend[i,j])
+            end
         end
 
         # Wait for all trailing updates to complete, and write back to A
         for j=(i+1):nB
             J = (B_cols[j]+1):B_cols[j+1]
-            (A_IJ, A_KJ) = fetch(depend[i+1,j])
-            #(A_IJ, A_KJ) = depend[i+1,j]
+            if run_parallel
+                (A_IJ, A_KJ) = fetch(depend[i+1,j])
+            else
+                (A_IJ, A_KJ) = depend[i+1,j]
+            end
             A[I,J] = A_IJ
             A[K,J] = A_KJ
             depend[i+1,j] = true
