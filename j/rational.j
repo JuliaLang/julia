@@ -25,13 +25,13 @@ function show(x::Rational)
     show(den(x))
 end
 
-convert{T}(::Type{Rational{T}}, x::T) = Rational(x, convert(T,1))
-convert{T}(::Type{Rational{T}}, x::Int) = Rational(convert(T,x), convert(T,1))
-convert{T}(::Type{Rational{T}}, x::Rational) = Rational(convert(T,x.num),convert(T,x.den))
+convert{T<:Int}(::Type{Rational{T}}, x::T) = Rational(x, convert(T,1))
+convert{T<:Int}(::Type{Rational{T}}, x::Int) = Rational(convert(T,x), convert(T,1))
+convert{T<:Int}(::Type{Rational{T}}, x::Rational) = Rational(convert(T,x.num),convert(T,x.den))
 convert{T<:Float}(::Type{T}, x::Rational) = convert(T,x.num)/convert(T,x.den)
 convert{T<:Int}(::Type{T}, x::Rational) = div(convert(T,x.num),convert(T,x.den))
 
-function convert{T}(::Type{Rational{T}}, x::Float, tol::Real)
+function convert{T<:Int}(::Type{Rational{T}}, x::Float, tol::Real)
     if isnan(x); return zero(T)//zero(T); end
     if isinf(x); return sign(x)//zero(T); end
     y = x
@@ -47,12 +47,12 @@ function convert{T}(::Type{Rational{T}}, x::Float, tol::Real)
     end
 end
 
-convert{T}(rt::Type{Rational{T}}, x::Float) = convert(rt,x,eps(x))
+convert{T<:Int}(rt::Type{Rational{T}}, x::Float) = convert(rt,x,eps(x))
 
 promote_rule{T<:Int}(::Type{Rational{T}}, ::Type{T}) = Rational{T}
-promote_rule{T,S<:Int}(::Type{Rational{T}}, ::Type{S}) = Rational{promote_type(T,S)}
-promote_rule{T,S}(::Type{Rational{T}}, ::Type{Rational{S}}) = Rational{promote_type(T,S)}
-promote_rule{T,S<:Float}(::Type{Rational{T}}, ::Type{S}) = promote_type(T,S)
+promote_rule{T<:Int,S<:Int}(::Type{Rational{T}}, ::Type{S}) = Rational{promote_type(T,S)}
+promote_rule{T<:Int,S<:Int}(::Type{Rational{T}}, ::Type{Rational{S}}) = Rational{promote_type(T,S)}
+promote_rule{T<:Int,S<:Float}(::Type{Rational{T}}, ::Type{S}) = promote_type(T,S)
 
 num(x::Int) = x
 den(x::Int) = one(x)

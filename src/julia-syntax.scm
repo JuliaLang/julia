@@ -244,13 +244,16 @@
 	      (call (curly ,name ,@params) ,@field-names))))
 
 (define (new-call Texpr args field-names)
-  (let ((g (gensy)))
-    (if (> (length args) (length field-names))
-	`(call (top error) "new: too many arguments")
-	`(block (= ,g (new ,Texpr))
-		,@(map (lambda (fld val) `(= (|.| ,g ,fld) ,val))
-		       (list-head field-names (length args)) args)
-		,g))))
+  (cond ((> (length args) (length field-names))
+	 `(call (top error) "new: too many arguments"))
+	((null? args)
+	 `(new ,Texpr))
+	(else
+	 (let ((g (gensy)))
+	   `(block (= ,g (new ,Texpr))
+		   ,@(map (lambda (fld val) `(= (|.| ,g ,fld) ,val))
+			  (list-head field-names (length args)) args)
+		   ,g)))))
 
 (define (rewrite-ctor ctor Tname params field-names)
   (define (ctor-body body)

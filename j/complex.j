@@ -107,13 +107,13 @@ Complex(x::Real) = Complex(x, zero(x))
 real(z::Complex) = z.re
 imag(z::Complex) = z.im
 
-convert{T}(::Type{Complex{T}}, x::T) = Complex(x, convert(T,0))
-convert{T}(::Type{Complex{T}}, x::Real) = Complex(convert(T,x), convert(T,0))
-convert{T}(::Type{Complex{T}}, z::ComplexNum) = Complex(convert(T,real(z)),convert(T,imag(z)))
+convert{T<:Real}(::Type{Complex{T}}, x::T) = Complex(x, convert(T,0))
+convert{T<:Real}(::Type{Complex{T}}, x::Real) = Complex(convert(T,x), convert(T,0))
+convert{T<:Real}(::Type{Complex{T}}, z::ComplexNum) = Complex(convert(T,real(z)),convert(T,imag(z)))
 
 promote_rule{T<:Real}(::Type{Complex{T}}, ::Type{T}) = Complex{T}
-promote_rule{T,S<:Real}(::Type{Complex{T}}, ::Type{S}) = Complex{promote_type(T,S)}
-promote_rule{T,S}(::Type{Complex{T}}, ::Type{Complex{S}}) = Complex{promote_type(T,S)}
+promote_rule{T<:Real,S<:Real}(::Type{Complex{T}}, ::Type{S}) = Complex{promote_type(T,S)}
+promote_rule{T<:Real,S<:Real}(::Type{Complex{T}}, ::Type{Complex{S}}) = Complex{promote_type(T,S)}
 promote_rule{T<:Real}(::Type{Complex{T}}, ::Type{Complex128}) =
     (P = promote_type(Float64,T);
      is(P,Float64) ? Complex128 : Complex{P})

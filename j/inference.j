@@ -382,7 +382,7 @@ end
 
 function isconstantfunc(f, vtypes, sv::StaticVarInfo)
     if isa(f,Expr) && is(f.head,:top)
-        abstract_eval(f, vtypes, sv)
+        abstract_eval(f, vtypes, sv)  # to pick up a type annotation
         assert(isa(f.args[1],Symbol), "inference.j:333")
         return (true, f.args[1])
     end
@@ -521,9 +521,9 @@ function abstract_eval_call(e, vtypes, sv::StaticVarInfo)
             return ft_tfunc(ft, argtypes)
         elseif isType(ft) && isa(ft.parameters[1],StructKind)
             st = ft.parameters[1]
-            #if isgeneric(st)
-            #    return abstract_call_gf(st, fargs, argtypes, e)
-            #end
+            if isgeneric(st) && isleaftype(st)
+                return abstract_call_gf(st, fargs, argtypes, e)
+            end
             # struct constructor
             return st
         end
@@ -1071,8 +1071,7 @@ end
 # functions with closure environments or varargs are also excluded.
 # static parameters are ok if all the static parameter values are leaf types,
 # meaning they are fully known.
-function inlineable(e::Expr, vars)
-    f = eval(e.args[1])
+function inlineable(f, e::Expr, vars)
     argexprs = a2t(e.args[2:])
     atypes = map(exprtype, argexprs)
     meth = getmethods(f, atypes)
@@ -1170,8 +1169,12 @@ function inlining_pass(e::Expr, vars)
     # don't inline first argument of ccall, as this needs to be evaluated
     # by the interpreter and inlining might put in something it can't handle,
     # like another ccall.
-    if is(e.head,:call) && isa(e.args[1],Expr) &&
-       is(e.args[1].head,:symbol) && is(e.args[1].args[1],:ccall)
+    if length(e.args)<1
+        return e
+    end
+    arg1 = e.args[1]
+    if is(e.head,:call) && isa(arg1,Expr) &&
+       is(arg1.head,:symbol) && is(arg1.args[1],:ccall)
         if length(e.args)>1
             e.args[2] = remove_call1(e.args[2])
         end
@@ -1184,12 +1187,19 @@ function inlining_pass(e::Expr, vars)
     end
     if is(e.head,:call1)
         e.head = :call
-        body = inlineable(e, vars)
+        ET = exprtype(arg1)
+        if isType(ET)
+            f = ET.parameters[1]
+        else
+            f = eval(arg1)
+        end
+
+        body = inlineable(f, e, vars)
         if !is(body,NF)
             #print("inlining ", e, " => ", body, "\n")
             return body
         end
-        if is(eval(e.args[1]),apply)
+        if is(f,apply)
             if length(e.args) == 3
                 aarg = e.args[3]
                 if isa(aarg,Expr) && is(aarg.head,:call) &&
@@ -1198,7 +1208,7 @@ function inlining_pass(e::Expr, vars)
                     # apply(f,tuple(x,y,...)) => f(x,y,...)
                     e.args = append({e.args[2]}, aarg.args[2:])
                     # now try to inline the simplified call
-                    body = inlineable(e, vars)
+                    body = inlineable(eval(e.args[1]), e, vars)
                     if !is(body,NF)
                         return body
                     end
@@ -1207,7 +1217,7 @@ function inlining_pass(e::Expr, vars)
             end
         end
     elseif is(e.head,:call)
-        farg = e.args[1]
+        farg = arg1
         # special inlining for some builtin functions that return types
         if isa(farg,Expr) && is(farg.head,:top) &&
             (is(eval(farg),apply_type) || is(eval(farg),fieldtype)) &&
