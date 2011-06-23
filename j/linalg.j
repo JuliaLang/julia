@@ -101,6 +101,17 @@ function issymmetric(A::Matrix)
     return true
 end
 
+function ishermitian(A::Matrix)
+    m, n = size(A)
+    if m != n; error("matrix must be square, got $(m)x$(n)"); end
+    for i = 1:n, j = i:n
+        if A[i,j] != conj(A[j,i])
+            return false
+        end
+    end
+    return true
+end
+
 function isuppertriangular(A::Matrix)
     m, n = size(A)
     if m != n; error("matrix must be square, got $(m)x$(n)"); end

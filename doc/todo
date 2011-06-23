@@ -676,6 +676,7 @@ issues 1/24/11
   . pull repl global variables into spawned closures
   . do indexing of local objects locally automatically in spawn
 - add line number and file information
+- keep track of renamed var names
 
 ? try to remove @ from macro syntax
 * either add "do" to loops or use

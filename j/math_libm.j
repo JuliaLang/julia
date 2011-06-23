@@ -67,7 +67,6 @@ end
 @libfdmfunc_1arg_float log1p
 @libfdmfunc_1arg_float logb
 @libfdmfunc_1arg_float exp
-@libfdmfunc_1arg_float exp2
 @libfdmfunc_1arg_float expm1
 @libfdmfunc_1arg_float erf
 @libfdmfunc_1arg_float erfc
@@ -76,6 +75,7 @@ end
 @libfdmfunc_1arg_float rint
 @libfdmfunc_1arg_float lgamma
 
+@libmfunc_1arg_float exp2
 @libmfunc_1arg_float nearbyint
 @libmfunc_1arg_float trunc
 @libmfunc_1arg_float round
