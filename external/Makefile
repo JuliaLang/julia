@@ -136,7 +136,8 @@ install-openblas: compile-openblas
 openblas-$(OPENBLAS_VER).tar.gz:
 	curl -Lk https://github.com/xianyi/OpenBLAS/tarball/$(OPENBLAS_VER) > $@
 openblas-$(OPENBLAS_VER)/Makefile: openblas-$(OPENBLAS_VER).tar.gz
-	mkdir -p openblas-$(OPENBLAS_VER) && tar -C openblas-$(OPENBLAS_VER) --strip-components 1 -xf $<
+	mkdir -p openblas-$(OPENBLAS_VER) && \
+	tar -C openblas-$(OPENBLAS_VER) --strip-components 1 -xf $<
 	touch $@
 $(OPENBLAS_OBJ_SOURCE): openblas-$(OPENBLAS_VER)/Makefile
 	make -C openblas-$(OPENBLAS_VER) USE_THREAD=0 NO_CBLAS=1 NO_LAPACK=1 CC=$(CC) FC=$(FC)
@@ -210,36 +211,55 @@ distclean-arpack:
 
 ## FFTW ##
 
-FFTW_OBJ_TARGET = $(EXTROOTLIB)/libfftw3.3.$(SHLIB_EXT)
-FFTW_FLOAT_OBJ_TARGET = $(EXTROOTLIB)/libfftw3f.3.$(SHLIB_EXT)
+FFTW_SINGLE_OBJ_TARGET = $(EXTROOTLIB)/libfftw3f.3.$(SHLIB_EXT)
+FFTW_DOUBLE_OBJ_TARGET = $(EXTROOTLIB)/libfftw3.3.$(SHLIB_EXT)
 
-compile-fftw: install-fftw
-install-fftw: $(FFTW_OBJ_TARGET) $(FFTW_FLOAT_OBJ_TARGET)
+compile-fftw: compile-fftw-single compile-fftw-double
+compile-fftw-single: install-fftw-single
+compile-fftw-double: install-fftw-double
+
+install-fftw: install-fftw-single install-fftw-double
+install-fftw-single: $(FFTW_SINGLE_OBJ_TARGET)
+install-fftw-double: $(FFTW_DOUBLE_OBJ_TARGET)
 
 fftw-$(FFTW_VER).tar.gz:
 	curl -O http://www.fftw.org/$@
-fftw-$(FFTW_VER)/configure: fftw-$(FFTW_VER).tar.gz
-	tar zxf $<
+
+fftw-single-$(FFTW_VER)/configure: fftw-$(FFTW_VER).tar.gz
+	mkdir -p fftw-single-$(FFTW_VER) && \
+	tar -C fftw-single-$(FFTW_VER) --strip-components 1 -xf $<
 	touch $@
-fftw-$(FFTW_VER)/config.status: fftw-$(FFTW_VER)/configure
-	cd fftw-$(FFTW_VER) && \
+fftw-single-$(FFTW_VER)/config.status: fftw-single-$(FFTW_VER)/configure
+	cd fftw-single-$(FFTW_VER) && \
+	./configure --prefix=$(EXTROOT) --enable-shared --disable-threads --enable-float && \
+	make clean
+	touch $@
+$(FFTW_SINGLE_OBJ_TARGET): fftw-single-$(FFTW_VER)/config.status
+	make -C fftw-single-$(FFTW_VER) install
+	touch $@
+
+fftw-double-$(FFTW_VER)/configure: fftw-$(FFTW_VER).tar.gz
+	mkdir -p fftw-double-$(FFTW_VER) && \
+	tar -C fftw-double-$(FFTW_VER) --strip-components 1 -xf $<
+	touch $@
+fftw-double-$(FFTW_VER)/config.status: fftw-double-$(FFTW_VER)/configure
+	cd fftw-double-$(FFTW_VER) && \
 	./configure --prefix=$(EXTROOT) --enable-shared --disable-threads && \
 	make clean
 	touch $@
-$(FFTW_OBJ_TARGET): fftw-$(FFTW_VER)/config.status
-	make -C fftw-$(FFTW_VER) install
-	touch $@
-$(FFTW_FLOAT_OBJ_TARGET):
-	cd fftw-$(FFTW_VER) && \
-	./configure --prefix=$(EXTROOT) --enable-shared --disable-threads --enable-float && \
-	make install
+$(FFTW_DOUBLE_OBJ_TARGET): fftw-double-$(FFTW_VER)/config.status
+	make -C fftw-double-$(FFTW_VER) install
 	touch $@
 
-clean-fftw:
-	make -C fftw-$(FFTW_VER) clean
-	rm -f $(FFTW_OBJ_TARGET)
+clean-fftw: clean-fftw-single clean-fftw-double
+clean-fftw-single:
+	make -C fftw-single-$(FFTW_VER) clean
+	rm -f $(FFTW_SINGLE_OBJ_TARGET)
+clean-fftw-double:
+	make -C fftw-double-$(FFTW_VER) clean
+	rm -f $(FFTW_DOUBLE_OBJ_TARGET)
 distclean-fftw:
-	rm -rf fftw-$(FFTW_VER).tar.gz fftw-$(FFTW_VER)
+	rm -rf fftw-$(FFTW_VER).tar.gz fftw-$(FFTW_VER)-{single,double}
 
 ## mongoose ##
 
