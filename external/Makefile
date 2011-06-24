@@ -1,4 +1,4 @@
-## Library Versions ##
+## library versions ##
 
 LLVM_VER = 2.9
 READLINE_VER = 6.2
@@ -9,14 +9,14 @@ ARPACK_VER = 96
 FFTW_VER = 3.2.2
 MONGOOSE_VER = 3.0
 
-## High-Level Setup ##
+## high-level setup ##
 
 JULIAHOME = $(shell pwd)/..
 include ../Make.inc
 
 OS = $(shell uname)
 ARCH = $(shell uname -m)
-LIBS = llvm pcre fdlibm openblas lapack arpack fftw mongoose readline
+LIBS = llvm readline pcre fdlibm openblas lapack arpack fftw mongoose
 
 default: install
 compile: $(addprefix compile-, $(LIBS))
