@@ -23,29 +23,29 @@ FFTW_ESTIMATE        = uint32(1 << 6)
 
 # Execute
 
-jl_fftw_execute(precision::Union(Float64, Complex128), plan) = 
+jl_fftw_execute(precision::Union(Float64, Complex128), plan) =
     ccall(dlsym(libfftw, :fftw_execute), Void, (Ptr{Void},), plan)
 
-jl_fftw_execute(precision::Union(Float32, Complex64), plan) = 
+jl_fftw_execute(precision::Union(Float32, Complex64), plan) =
     ccall(dlsym(libfftwf, :fftwf_execute), Void, (Ptr{Void},), plan)
 
 # Destroy plan
 
-jl_fftw_destroy_plan(precision::Union(Float64, Complex128), plan) = 
+jl_fftw_destroy_plan(precision::Union(Float64, Complex128), plan) =
     ccall(dlsym(libfftw, :fftw_destroy_plan), Void, (Ptr{Void},), plan)
 
-jl_fftw_destroy_plan(precision::Union(Float32, Complex64), plan) = 
+jl_fftw_destroy_plan(precision::Union(Float32, Complex64), plan) =
     ccall(dlsym(libfftwf, :fftwf_destroy_plan), Void, (Ptr{Void},), plan)
 
 # Create 1d plan
 
-jl_fftw_plan_dft_1d(X::DenseVector{Complex128}, Y::DenseVector{Complex128}, direction::Int32) = 
+jl_fftw_plan_dft_1d(X::DenseVector{Complex128}, Y::DenseVector{Complex128}, direction::Int32) =
     ccall(dlsym(libfftw, :fftw_plan_dft_1d),
           Ptr{Void},
           (Int32, Ptr{Complex128}, Ptr{Complex128}, Int32, Uint32, ),
           length(X), X, Y, direction, FFTW_ESTIMATE)
 
-jl_fftw_plan_dft_1d(X::DenseVector{Complex64}, Y::DenseVector{Complex64}, direction::Int32) = 
+jl_fftw_plan_dft_1d(X::DenseVector{Complex64}, Y::DenseVector{Complex64}, direction::Int32) =
     ccall(dlsym(libfftwf, :fftwf_plan_dft_1d),
           Ptr{Void},
           (Int32, Ptr{Complex64}, Ptr{Complex64}, Int32, Uint32, ),
@@ -53,13 +53,13 @@ jl_fftw_plan_dft_1d(X::DenseVector{Complex64}, Y::DenseVector{Complex64}, direct
 
 # Create 2d plan
 
-jl_fftw_plan_dft_2d(X::DenseMatrix{Complex128}, Y::DenseMatrix{Complex128}, direction::Int32) = 
+jl_fftw_plan_dft_2d(X::DenseMatrix{Complex128}, Y::DenseMatrix{Complex128}, direction::Int32) =
     ccall(dlsym(libfftw, :fftw_plan_dft_2d),
           Ptr{Void},
           (Int32, Int32, Ptr{Complex128}, Ptr{Complex128}, Int32, Uint32, ),
           size(X,2), size(X,1), X, Y, direction, FFTW_ESTIMATE)
 
-jl_fftw_plan_dft_2d(X::DenseMatrix{Complex64}, Y::DenseMatrix{Complex64}, direction::Int32) = 
+jl_fftw_plan_dft_2d(X::DenseMatrix{Complex64}, Y::DenseMatrix{Complex64}, direction::Int32) =
     ccall(dlsym(libfftwf, :fftwf_plan_dft_2d),
           Ptr{Void},
           (Int32, Int32, Ptr{Complex64}, Ptr{Complex64}, Int32, Uint32, ),
@@ -67,13 +67,13 @@ jl_fftw_plan_dft_2d(X::DenseMatrix{Complex64}, Y::DenseMatrix{Complex64}, direct
 
 # Create 3d plan
 
-jl_fftw_plan_dft_3d(X::Array{Complex128,3}, Y::Array{Complex128,3}, direction::Int32) = 
+jl_fftw_plan_dft_3d(X::Array{Complex128,3}, Y::Array{Complex128,3}, direction::Int32) =
     ccall(dlsym(libfftw, :fftw_plan_dft_3d),
           Ptr{Void},
           (Int32, Int32, Int32, Ptr{Complex128}, Ptr{Complex128}, Int32, Uint32, ),
           size(X,3), size(X,2), size(X,1), X, Y, direction, FFTW_ESTIMATE)
 
-jl_fftw_plan_dft_3d(X::Array{Complex64,3}, Y::Array{Complex64,3}, direction::Int32) = 
+jl_fftw_plan_dft_3d(X::Array{Complex64,3}, Y::Array{Complex64,3}, direction::Int32) =
     ccall(dlsym(libfftwf, :fftwf_plan_dft_3d),
           Ptr{Void},
           (Int32, Int32, Int32, Ptr{Complex64}, Ptr{Complex64}, Int32, Uint32, ),
@@ -81,13 +81,13 @@ jl_fftw_plan_dft_3d(X::Array{Complex64,3}, Y::Array{Complex64,3}, direction::Int
 
 # Create nd plan
 
-jl_fftw_plan_dft(X::Array{Complex128}, Y::Array{Complex128}, direction::Int32) = 
+jl_fftw_plan_dft(X::Array{Complex128}, Y::Array{Complex128}, direction::Int32) =
     ccall(dlsym(libfftw, :fftw_plan_dft),
           Ptr{Void},
           (Int32, Ptr{Int32}, Ptr{Complex128}, Ptr{Complex128}, Int32, Uint32, ),
           ndims(X), [size(X)...], X, Y, direction, FFTW_ESTIMATE)
 
-jl_fftw_plan_dft(X::Array{Complex64}, Y::Array{Complex64}, direction::Int32) = 
+jl_fftw_plan_dft(X::Array{Complex64}, Y::Array{Complex64}, direction::Int32) =
     ccall(dlsym(libfftwf, :fftwf_plan_dft),
           Ptr{Void},
           (Int32, Ptr{Int32}, Ptr{Complex64}, Ptr{Complex64}, Int32, Uint32, ),
@@ -97,7 +97,7 @@ jl_fftw_plan_dft(X::Array{Complex64}, Y::Array{Complex64}, direction::Int32) =
 
 macro fftw_fftn(fname, array_type, in_type, plan_name, direction)
     quote
-        
+
         function ($fname)(X::($array_type){$in_type})
             Y = similar(X, $in_type)
             plan = ($plan_name)(X, Y, $direction)
@@ -106,7 +106,7 @@ macro fftw_fftn(fname, array_type, in_type, plan_name, direction)
             jl_fftw_destroy_plan(precision, plan)
             return Y
         end
-        
+
     end
 end
 

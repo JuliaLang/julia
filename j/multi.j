@@ -1229,7 +1229,7 @@ del_fd_handler(fd) = del(fd_handlers, fd)
 function event_loop(isclient)
     fdset = FDSet()
     iserr, lasterr = false, ()
-    
+
     while true
         try
             if iserr
@@ -1241,7 +1241,7 @@ function event_loop(isclient)
                 for (fd,_) = fd_handlers
                     add(fdset, fd)
                 end
-                
+
                 nselect = select_read(fdset, isempty(Workqueue) ? 10 : 0)
                 if nselect == 0
                     if !isempty(Workqueue)

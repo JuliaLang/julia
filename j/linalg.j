@@ -17,7 +17,7 @@ tril{T}(M::Matrix{T}, k) = [ j-i <= k ? M[i,j] : zero(T) |
 
 diff(a::Vector) = [ a[i+1] - a[i] | i=1:length(a)-1 ]
 
-function diff(a::Matrix, dim) 
+function diff(a::Matrix, dim)
     if dim == 1
         [ a[i+1,j] - a[i,j] | i=1:size(a,1)-1, j=1:size(a,2) ]
     else

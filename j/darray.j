@@ -279,7 +279,7 @@ function node_changedist{T}(A::DArray{T}, da, local_size)
     from_dist = A.distdim
     dimsA = size(A)
     myidxs = newdist[da.localpiece]:newdist[da.localpiece+1]-1
-    
+
     for p = 1:length(A.dist)-1
         R = remote_call_fetch(A.pmap[p], node_ref, A, to_dist, myidxs)
         sliceR = { i == from_dist ? (A.dist[p]:A.dist[p+1]-1) : (1:local_size[i]) | i=1:ndims(A) }

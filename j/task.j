@@ -14,7 +14,7 @@ let _generator_stack = {}
         caller = pop(_generator_stack::Array{Any,1})
         yieldto(caller, v)
     end
-    
+
     function consume(G::Task, args...)
         push(_generator_stack::Array{Any,1}, current_task())
         v = yieldto(G, args...)

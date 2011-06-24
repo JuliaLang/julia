@@ -37,7 +37,7 @@ macro arpack_eigs(saupd, seupd, T)
 
             while (true)
 
-                # call dsaupd  
+                # call dsaupd
                 #  ( IDO, BMAT, N, WHICH, NEV, TOL, RESID, NCV, V, LDV, IPARAM,
                 #    IPNTR, WORKD, WORKL, LWORKL, INFO )
 
@@ -47,11 +47,11 @@ macro arpack_eigs(saupd, seupd, T)
                        Ptr{$T}, Ptr{$T}, Ptr{Int32}, Ptr{$T}, Ptr{Int32}, Ptr{Int32},
                        Ptr{Int32}, Ptr{$T}, Ptr{$T}, Ptr{Int32}, Ptr{Int32}, ),
                       ido, bmat, n, which, nev,
-                      tol, resid, ncv, v, ldv, iparam, 
+                      tol, resid, ncv, v, ldv, iparam,
                       ipntr, workd, workl, lworkl, info)
 
                 if (info[1] < 0); print(info[1]); error("Error with saupd"); end
-                
+
                 if (ido[1] == -1 || ido[1] == 1)
                     workd[ipntr[2]:ipntr[2]+n-1] = A * workd[ipntr[1]:ipntr[1]+n-1]
                 else
@@ -59,31 +59,31 @@ macro arpack_eigs(saupd, seupd, T)
                 end
 
             end
-            
+
             rvec = true
             all = "A"
             ierr = [0]
-            
-            # call dseupd ( rvec, 'A', select, d, v, ldv, sigma, 
-            #         bmat, n, which, nev, tol, resid, ncv, v, ldv, 
+
+            # call dseupd ( rvec, 'A', select, d, v, ldv, sigma,
+            #         bmat, n, which, nev, tol, resid, ncv, v, ldv,
             #         iparam, ipntr, workd, workl, lworkl, ierr )
 
             ccall(dlsym(libarpack, $seupd),
                   Void,
-                  (Ptr{Bool}, Ptr{Uint8}, Ptr{Bool}, Ptr{$T}, Ptr{$T}, Ptr{Int32}, Ptr{$T}, 
-                   Ptr{Uint8}, Ptr{Int32}, Ptr{Uint8}, Ptr{Int32}, 
-                   Ptr{$T}, Ptr{$T}, Ptr{Int32}, Ptr{$T}, Ptr{Int32}, Ptr{Int32}, 
+                  (Ptr{Bool}, Ptr{Uint8}, Ptr{Bool}, Ptr{$T}, Ptr{$T}, Ptr{Int32}, Ptr{$T},
+                   Ptr{Uint8}, Ptr{Int32}, Ptr{Uint8}, Ptr{Int32},
+                   Ptr{$T}, Ptr{$T}, Ptr{Int32}, Ptr{$T}, Ptr{Int32}, Ptr{Int32},
                    Ptr{Int32}, Ptr{$T}, Ptr{$T}, Ptr{Int32}, Ptr{Int32}, ),
                   rvec, all, select, d, v, ldv, sigma,
                   bmat, n, which, nev,
-                  tol, resid, ncv, v, ldv, iparam, 
+                  tol, resid, ncv, v, ldv, iparam,
                   ipntr, workd, workl, lworkl, ierr)
 
             if (ierr[1] != 0); error("Error with seupd"); end
 
             return (diagm(d), v[1:n, 1:nev])
         end
-        
+
     end # quote
 end # macro
 
@@ -133,7 +133,7 @@ macro arpack_svds(saupd, seupd, T)
 
             while (true)
 
-                # call dsaupd  
+                # call dsaupd
                 #  ( IDO, BMAT, N, WHICH, NEV, TOL, RESID, NCV, V, LDV, IPARAM,
                 #    IPNTR, WORKD, WORKL, LWORKL, INFO )
 
@@ -143,11 +143,11 @@ macro arpack_svds(saupd, seupd, T)
                        Ptr{$T}, Ptr{$T}, Ptr{Int32}, Ptr{$T}, Ptr{Int32}, Ptr{Int32},
                        Ptr{Int32}, Ptr{$T}, Ptr{$T}, Ptr{Int32}, Ptr{Int32}, ),
                       ido, bmat, n, which, nev,
-                      tol, resid, ncv, v, ldv, iparam, 
+                      tol, resid, ncv, v, ldv, iparam,
                       ipntr, workd, workl, lworkl, info)
 
                 if (info[1] < 0); print(info[1]); error("Error with saupd"); end
-                
+
                 if (ido[1] == -1 || ido[1] == 1)
                     workd[ipntr[2]:(ipntr[2]+n-1)] = At*(A*workd[ipntr[1]:(ipntr[1]+n-1)])
                 else
@@ -155,13 +155,13 @@ macro arpack_svds(saupd, seupd, T)
                 end
 
             end
-            
+
             rvec = true
             all = "A"
             ierr = [0]
-            
-            # call dseupd ( rvec, 'A', select, d, v, ldv, sigma, 
-            #         bmat, n, which, nev, tol, resid, ncv, v, ldv, 
+
+            # call dseupd ( rvec, 'A', select, d, v, ldv, sigma,
+            #         bmat, n, which, nev, tol, resid, ncv, v, ldv,
             #         iparam, ipntr, workd, workl, lworkl, ierr )
 
             ccall(dlsym(libarpack, $seupd),
@@ -176,13 +176,13 @@ macro arpack_svds(saupd, seupd, T)
                   ipntr, workd, workl, lworkl, ierr)
 
             if (ierr[1] != 0); error("Error with seupd"); end
-            
+
             v = v[1:n, 1:nev]
             u = A*v*diagm(1./s)
 
             return (u, diagm(s), v.')
         end
-        
+
     end # quote
 end # macro
 

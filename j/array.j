@@ -31,7 +31,7 @@ macro matrix_builder(t, f)
             end
             return A
         end
-        
+
         ($f)(dims::Size...) = ($f)(dims)
 
     end # quote
@@ -276,7 +276,7 @@ function cat(catdim::Int, A::Array...)
 
     cat_ranges = cumsum(1, cat_ranges...)
     for k=1:nargs
-        cat_one = ntuple(ndimsC, i->(i != catdim ? 
+        cat_one = ntuple(ndimsC, i->(i != catdim ?
                                      Range1(1,dimsC[i]) :
                                      Range1(cat_ranges[k],cat_ranges[k+1]-1) ))
         C[cat_one...] = A[k]

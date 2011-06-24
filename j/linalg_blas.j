@@ -1,9 +1,9 @@
 libBLAS = dlopen("libLAPACK")
 
-# SUBROUTINE DCOPY(N,DX,INCX,DY,INCY) 
+# SUBROUTINE DCOPY(N,DX,INCX,DY,INCY)
 
 macro blas_copy(fname, shape, eltype)
-    quote 
+    quote
         function copy(X::($shape){$eltype})
             sz = size(X)
             Y = Array($eltype, sz)
