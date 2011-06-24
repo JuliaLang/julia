@@ -142,7 +142,7 @@ type Cmd
 
     function Cmd(exec::Executable)
         this = new(exec,
-                   HashTable(FileDes,PipeEnd),
+                   HashTable{FileDes,PipeEnd}(),
                    Set(Cmd),
                    0,
                    ProcessNotRun())
