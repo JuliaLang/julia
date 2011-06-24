@@ -297,7 +297,7 @@ end
 load_ascii_array(f::String, nr, nc) = load_ascii_array(open(f), nr, nc)
 function load_ascii_array(f, nr, nc)
     a = Array(Float64, (nr, nc))
-    delims = set(' ','\t')
+    delims = Set(' ','\t')
     for i=1:nr
         row = split(readline(f), delims, false)
         for j=1:nc

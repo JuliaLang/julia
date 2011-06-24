@@ -3,7 +3,7 @@
 VCPATH = "/home/vcloud/vcloudpy"
 
 function vcloud_vappnames()
-    txt = split(readall(`python $VCPATH/getvdc.py -o vApp`),set(' ','\n'),false)
+    txt = split(readall(`python $VCPATH/getvdc.py -o vApp`),Set(' ','\n'),false)
     names = {}
     i=0
     for i=1:length(txt)
@@ -21,7 +21,7 @@ function vcloud_networkname()
     if NETNAME!=""
         return NETNAME
     end
-    txt = split(readall(`python $VCPATH/getvdc.py -o Networks`),set(' ','\n'),false)
+    txt = split(readall(`python $VCPATH/getvdc.py -o Networks`),Set(' ','\n'),false)
     for i=1:length(txt)
         if txt[i]=="nw_name"
             NETNAME = txt[i+1]

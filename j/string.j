@@ -675,8 +675,8 @@ function split(s::String, delims, include_empty)
 end
 
 split(s::String, delims) = split(s, delims, true)
-split(s::String, c::Char) = split(s, set(c))
-split(s::String, c::Char, incl) = split(s, set(c), incl)
+split(s::String, c::Char) = split(s, Set(c))
+split(s::String, c::Char, incl) = split(s, Set(c), incl)
 
 function print_joined(delim, strings)
     for i = 1:length(strings)
