@@ -25,12 +25,13 @@ test: default
 	./julia test/tests.j
 
 test-utf8: default
+	make -C test/unicode
 	./julia test/test_utf8.j
 
 test-perf: default
 	./julia test/perf.j
 
-test-all: test test-utf8 test-perf
+testall: test test-utf8 test-perf
 
 SLOCCOUNT = sloccount \
 	--addlang makefile \
@@ -53,6 +54,7 @@ clean:
 	rm -f *~ *#
 	$(MAKE) -C src clean
 	$(MAKE) -C ui clean
+	$(MAKE) -C test/unicode clean
 
 cleanall: clean
 	$(MAKE) -C src clean-flisp clean-support
@@ -60,4 +62,5 @@ cleanall: clean
 distclean: cleanall
 	$(MAKE) -C external cleanall
 
-.PHONY: default debug release julia-debug julia-release test test-* sloccount clean cleanall
+.PHONY: default debug release julia-debug julia-release \
+	test testall test-* sloccount clean cleanall
