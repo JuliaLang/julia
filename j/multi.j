@@ -1071,6 +1071,15 @@ let lastp = 1
                 lastp = 1
             end
         end
+        if p==myid()
+            # for local spawn, simulate semantics of copying bindings
+            if isa(env,Tuple)
+                env = map(x->(isa(x,Box)?Box(x.contents):x), env)
+                linfo = ccall(:jl_closure_linfo, Any, (Any,), thunk)
+                thunk = ccall(:jl_new_closure_internal, Any, (Any, Any),
+                              linfo, env)::Function
+            end
+        end
         spawnat(p, thunk)
     end
 end

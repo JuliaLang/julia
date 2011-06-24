@@ -300,6 +300,7 @@ fieldtype_tfunc = function (A, s, name)
 end
 t_func[fieldtype] = (2, 2, fieldtype_tfunc)
 t_func[Expr] = (3, 3, (a,b,c)->Expr)
+t_func[Box] = (1, 1, (a,)->Box)
 
 # TODO: handle e.g. apply_type(T, R::Union(Type{Int32},Type{Float64}))
 apply_type_tfunc = function (A, args...)

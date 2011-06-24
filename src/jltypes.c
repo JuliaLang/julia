@@ -1926,6 +1926,7 @@ static jl_tuple_t *jl_typevars(size_t n, ...)
 }
 
 JL_CALLABLE(jl_f_new_expr);
+JL_CALLABLE(jl_f_new_box);
 
 extern void jl_init_int32_cache();
 
@@ -2165,7 +2166,7 @@ void jl_init_types()
                            jl_any_type, jl_null,
                            jl_tuple(1, jl_symbol("contents")),
                            jl_tuple(1, jl_any_type));
-    //jl_add_constructors(jl_box_type);
+    jl_box_type->fptr = jl_f_new_box;
     jl_box_typename = jl_box_type->name;
     jl_box_any_type = (jl_type_t*)jl_box_type;
 

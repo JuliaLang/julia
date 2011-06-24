@@ -915,3 +915,12 @@ JL_CALLABLE(jl_f_new_expr)
     ex->etype = args[2];
     return (jl_value_t*)ex;
 }
+
+JL_CALLABLE(jl_f_new_box)
+{
+    JL_NARGS(Box, 1, 1);
+    jl_value_t *box = (jl_value_t*)alloc_2w();
+    box->type = jl_box_any_type;
+    ((jl_value_t**)box)[1] = args[0];
+    return box;
+}
