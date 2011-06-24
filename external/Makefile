@@ -180,22 +180,22 @@ distclean-lapack:
 ## ARPACK ##
 
 ARPACK_OBJ_TARGET = $(EXTROOTLIB)/libarpack.$(SHLIB_EXT)
-ARPACK_OBJ_SOURCE = ARPACK/libarpack.$(SHLIB_EXT)
+ARPACK_OBJ_SOURCE = arpack-$(ARPACK_VER)/libarpack.$(SHLIB_EXT)
 
 compile-arpack: $(ARPACK_OBJ_SOURCE)
 install-arpack: $(ARPACK_OBJ_TARGET)
 
-arpack$(ARPACK_VER).tar.gz:
-	curl -O http://www.caam.rice.edu/software/ARPACK/SRC/$@
+arpack-$(ARPACK_VER).tar.gz:
+	curl http://www.caam.rice.edu/software/ARPACK/SRC/arpack$(ARPACK_VER).tar.gz > $@
 arpack-patch.tar.gz:
-	curl -O http://www.caam.rice.edu/software/ARPACK/SRC/patch.tar.gz
-	mv patch.tar.gz $@
-ARPACK/Makefile: arpack$(ARPACK_VER).tar.gz arpack-patch.tar.gz
-	for x in $^; do tar zxf $$x; done
-	perl -i -nle 'print unless /EXTERNAL\s+ETIME/' ARPACK/UTIL/second.f
+	curl http://www.caam.rice.edu/software/ARPACK/SRC/patch.tar.gz > $@
+arpack-$(ARPACK_VER)/Makefile: arpack-$(ARPACK_VER).tar.gz arpack-patch.tar.gz
+	mkdir -p arpack-$(ARPACK_VER)
+	for x in $^; do tar -C arpack-$(ARPACK_VER) --strip-components 1 -zxf $$x; done
+	perl -i -nle 'print unless /EXTERNAL\s+ETIME/' arpack-$(ARPACK_VER)/UTIL/second.f
 	touch $@
-$(ARPACK_OBJ_SOURCE): ARPACK/Makefile
-	cd ARPACK && \
+$(ARPACK_OBJ_SOURCE): arpack-$(ARPACK_VER)/Makefile
+	cd arpack-$(ARPACK_VER) && \
 	make lib MAKE=make PLAT= home=`pwd` FC=$(FC) FFLAGS="-O3 -fPIC" && \
 	ar x libarpack_.a && \
 	$(FC) -shared *.o -o libarpack.$(SHLIB_EXT)
@@ -204,10 +204,10 @@ $(ARPACK_OBJ_TARGET): $(ARPACK_OBJ_SOURCE)
 	cp $< $@
 
 clean-arpack:
-	make -C ARPACK clean
+	make -C arpack-$(ARPACK_VER) clean
 	rm -f $(ARPACK_OBJ_SOURCE) $(ARPACK_OBJ_TARGET)
 distclean-arpack:
-	rm -rf arpack$(ARPACK_VER).tar.gz arpack-patch.tar.gz ARPACK
+	rm -rf arpack-$(ARPACK_VER).tar.gz arpack-patch.tar.gz arpack-$(ARPACK_VER)
 
 ## FFTW ##
 
@@ -263,13 +263,14 @@ distclean-fftw:
 
 ## mongoose ##
 
-compile-mongoose: mongoose/Makefile
+compile-mongoose: mongoose-$(MONGOOSE_VER)/Makefile
 install-mongoose: compile-mongoose
 
 mongoose-$(MONGOOSE_VER).tgz:
 	curl -O http://mongoose.googlecode.com/files/mongoose-$(MONGOOSE_VER).tgz
-mongoose/Makefile: mongoose-$(MONGOOSE_VER).tgz
-	tar zxf $<
+mongoose-$(MONGOOSE_VER)/Makefile: mongoose-$(MONGOOSE_VER).tgz
+	mkdir -p mongoose-$(MONGOOSE_VER)
+	tar -C mongoose-$(MONGOOSE_VER) --strip-components 1 -zxf $<
 	touch $@
 
 clean-mongoose:
