@@ -4,21 +4,16 @@
 }
 
 body {
-	background-color: #fafafa;
-	font: 90% "Verdana", "Arial";
-	color: #333333;
+	background-color: #ffffff;
+	font: 100% sans-serif;
+	color: #555555;
 }
 
-div#header {
-	border-bottom: 1px solid #e2e2e2;
-	background-color: #f7f7f7;
-	background: -webkit-gradient(linear, left top, left bottom, from(#ffffff), to(#f2f1f4));
-	background: -moz-linear-gradient(top,  #ffffff,  #f2f1f4);
-}
-
-div#header-content {
+header {
 	width: 800px;
 	margin: auto;
+	padding-top: 10px;
+	padding-bottom: 10px;
 }
 
 div.message {
@@ -32,6 +27,12 @@ div.message {
 	margin-left: auto;
 	margin-right: auto;
 	margin-top: 20px;
+	-moz-box-shadow:		5px 5px 10px #efefef;
+	-webkit-box-shadow:		5px 5px 10px #efefef;
+	box-shadow:				5px 5px 10px #efefef;
+	border-radius:			2px;
+	-moz-border-radius:		2px;
+	-webkit-border-radius:	2px;
 }
 
 div.error {
@@ -45,33 +46,34 @@ div.error {
 	margin-left: auto;
 	margin-right: auto;
 	margin-top: 20px;
+	-moz-box-shadow:		5px 5px 10px #efefef;
+	-webkit-box-shadow:		5px 5px 10px #efefef;
+	box-shadow:				5px 5px 10px #efefef;
+	border-radius:			2px;
+	-moz-border-radius:		2px;
+	-webkit-border-radius:	2px;
 }
 
 div#main {
-	background-color: #ffffff;
-	padding-top: 10px;
-	padding-bottom: 10px;
-	padding-left: 20px;
-	padding-right: 20px;
-	width: 760px;
+	padding-top: 20px;
+	padding-bottom: 20px;
 	margin-left: auto;
 	margin-right: auto;
-	margin-top: 20px;
-	margin-bottom: 20px;
-	background-color: #fffde7;
-	background: -webkit-gradient(linear, left top, left bottom, from(#fffef2), to(#fffde9));
-	background: -moz-linear-gradient(top,  #fffef2,  #fffde9);
-	border: 1px solid #e7e7ce;
+	width: 800px;
 }
 
 div#footer {
-	border-top: 4px solid #444;
-	background-color: #777;
-	color: #ccc;
+	position: fixed;
+	bottom: 0px;
+	border-top: 2px solid #bb7428;
+	background-color: #222222;
+	color: #888888;
+	font-size: 80%;
 	width: 100%;
+	min-height: 45px;
 }
 
-div#footer-content {
+footer {
 	width: 800px;
 	margin: auto;
 }
@@ -84,8 +86,69 @@ a img {
 	border: none;
 }
 
+nav {
+	width: 780px;
+	padding-left: 10px;
+	padding-right: 10px;
+	margin-left: auto;
+	margin-right: auto;
+	font: 90% sans-serif;
+	font-weight: bold;
+	color: #cccccc;
+	background-color: #8b8b8b;
+	background: -webkit-gradient(linear, left top, left bottom, #9d9d9d 0%, #8b8b8b 50%, #787878 51%, #646464 100%);
+	background: -webkit-linear-gradient(top, #9d9d9d 0%, #8b8b8b 50%, #787878 51%, #646464 100%);
+	background:    -moz-linear-gradient(top, #9d9d9d 0%, #8b8b8b 50%, #787878 51%, #646464 100%);
+	background:     -ms-linear-gradient(top, #9d9d9d 0%, #8b8b8b 50%, #787878 51%, #646464 100%);
+	background:      -o-linear-gradient(top, #9d9d9d 0%, #8b8b8b 50%, #787878 51%, #646464 100%);
+	background:         linear-gradient(top, #9d9d9d 0%, #8b8b8b 50%, #787878 51%, #646464 100%);
+	-moz-box-shadow:		5px 5px 10px #efefef;
+	-webkit-box-shadow:		5px 5px 10px #efefef;
+	box-shadow:				5px 5px 10px #efefef;
+	border-radius:			3px;
+	-moz-border-radius:		3px;
+	-webkit-border-radius:	3px;
+}
+
+nav a {
+	display: block;
+	float: left;
+	width: 100px;
+	text-align: center;
+	text-decoration: none;
+	padding-top: 10px;
+	padding-bottom: 10px;
+}
+
+nav a:link {
+	color: #eeeeee;
+}
+
+nav a:visited {
+	color: #eeeeee;
+}
+
+nav a:hover {
+	color: #ffffff;
+	background-color: #b4b4b4;
+	background: -webkit-gradient(linear, left top, left bottom, #d3d3d3 0%, #c5c5c5 50%, #bababa 50.01%, #b4b4b4 100%);
+	background: -webkit-linear-gradient(top, #d3d3d3 0%, #c5c5c5 50%, #bababa 50.01%, #b4b4b4 100%);
+	background:    -moz-linear-gradient(top, #d3d3d3 0%, #c5c5c5 50%, #bababa 50.01%, #b4b4b4 100%);
+	background:     -ms-linear-gradient(top, #d3d3d3 0%, #c5c5c5 50%, #bababa 50.01%, #b4b4b4 100%);
+	background:      -o-linear-gradient(top, #d3d3d3 0%, #c5c5c5 50%, #bababa 50.01%, #b4b4b4 100%);
+	background:         linear-gradient(top, #d3d3d3 0%, #c5c5c5 50%, #bababa 50.01%, #b4b4b4 100%);
+}
+
+nav a:active {
+	color: #eeeeee;
+}
+
+div#nav-end {
+	clear: left;
+}
+
 img#logo {
-	margin-top: 10px;
+	display: block;
 }
 
 img#mit-logo {
@@ -93,32 +156,32 @@ img#mit-logo {
 }
 
 h1 {
-	font: 150% "Verdana", "Arial";
+	color: #0d4d73;
+	font-size: 140%;
+	font-weight: bold;
+	text-shadow: 1px 1px 1px #cccccc;
 }
 
 p {
 	margin-top: 8px;
 }
 
-hr {
-	margin-top: 8px;
-	border-top: 1px solid #dddddd;
-	border-bottom: 1px solid #ffffff;
-	border-left: 0px;
-	border-right: 0px;
-}
-
 textarea {
-	width: 744px;
-	background-color: #fafafa;
+	width: 768px;
+	background-color: #fcfcf5;
 	font: 120% "Consolas", "Courier New";
 	font-weight: bold;
 	color: #444444;
-	border: 1px solid #e7e7ce;
+	border: 8px solid #dddddd;
 	outline: none;
 	padding: 8px;
 	margin: 0px;
-	margin-top: 10px;
-	margin-bottom: 5px;
+	margin-top: 15px;
 	resize: none;
+	-moz-box-shadow:		5px 5px 10px #efefef;
+	-webkit-box-shadow:		5px 5px 10px #efefef;
+	box-shadow:				5px 5px 10px #efefef;
+	border-radius:			3px;
+	-moz-border-radius:		3px;
+	-webkit-border-radius:	3px;
 }
