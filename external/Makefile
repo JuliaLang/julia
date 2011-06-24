@@ -211,9 +211,10 @@ distclean-arpack:
 ## FFTW ##
 
 FFTW_OBJ_TARGET = $(EXTROOTLIB)/libfftw3.3.$(SHLIB_EXT)
+FFTW_FLOAT_OBJ_TARGET = $(EXTROOTLIB)/libfftw3f.3.$(SHLIB_EXT)
 
 compile-fftw: install-fftw
-install-fftw: $(FFTW_OBJ_TARGET)
+install-fftw: $(FFTW_OBJ_TARGET) $(FFTW_FLOAT_OBJ_TARGET)
 
 fftw-$(FFTW_VER).tar.gz:
 	curl -O http://www.fftw.org/$@
@@ -222,11 +223,16 @@ fftw-$(FFTW_VER)/configure: fftw-$(FFTW_VER).tar.gz
 	touch $@
 fftw-$(FFTW_VER)/config.status: fftw-$(FFTW_VER)/configure
 	cd fftw-$(FFTW_VER) && \
-	./configure --prefix=$(EXTROOT) --enable-shared && \
+	./configure --prefix=$(EXTROOT) --enable-shared --disable-threads && \
 	make clean
 	touch $@
 $(FFTW_OBJ_TARGET): fftw-$(FFTW_VER)/config.status
 	make -C fftw-$(FFTW_VER) install
+	touch $@
+$(FFTW_FLOAT_OBJ_TARGET):
+	cd fftw-$(FFTW_VER) && \
+	./configure --prefix=$(EXTROOT) --enable-shared --disable-threads --enable-float && \
+	make install
 	touch $@
 
 clean-fftw:
