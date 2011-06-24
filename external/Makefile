@@ -229,9 +229,10 @@ fftw-$(FFTW_VER)/config.status: fftw-$(FFTW_VER)/configure
 $(FFTW_OBJ_TARGET): fftw-$(FFTW_VER)/config.status
 	make -C fftw-$(FFTW_VER) install
 	touch $@
-$(FFTW_FLOAT_OBJ_TARGET): 
+$(FFTW_FLOAT_OBJ_TARGET):
+	cd fftw-$(FFTW_VER) && \
 	./configure --prefix=$(EXTROOT) --enable-shared --disable-threads --enable-float && \
-	make -C fftw-$(FFTW_VER) install
+	make install
 	touch $@
 
 clean-fftw:
