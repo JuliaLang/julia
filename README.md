@@ -29,6 +29,7 @@ For a more in-depth discussion of the rationale and advantages of Julia over oth
     - **[OpenBLAS][]**     — a fast, open, and maintained [basic linear algebar subprograms (BLAS)](http://en.wikipedia.org/wiki/Basic_Linear_Algebra_Subprograms) library, based on [Kazushige Goto's](http://en.wikipedia.org/wiki/Kazushige_Goto) famous [GotoBLAS](http://www.tacc.utexas.edu/tacc-projects/gotoblas2/).
     - **[LAPACK][]**       — library of linear algebra routines for solving systems of simultaneous linear equations, least-squares solutions of linear systems of equations, eigenvalue problems, and singular value problems.
     - **[ARPACK][]**       — a collection of Fortran77 subroutines designed to solve large scale eigenvalue problems.
+    - **[FFTW][]**	   - FFTW is a C subroutine library for computing the discrete Fourier transform (DFT) in one or more dimensions, of arbitrary input size, and of both real and complex data.
     - **[PCRE][]**         — Perl-compatible regular expressions library.
     - **[GNU readline][]** — library allowing shell-like line editing in the terminal, with history and familiar key bindings.
     - **[mongoose][]**     — library for writing simple web servers, used for Julia's web-based repl.
