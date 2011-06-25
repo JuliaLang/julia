@@ -5,11 +5,11 @@
 # The matrix A is local to the first Worker, which allocates work to other Workers
 # All updates to A are carried out by the first Worker. Thus A is not distributed
 
-hpl_par(A::Matrix, b::Vector) = hpl_par(A, b, true)
+hpl_par(A::Matrix, b::Vector) = hpl_par(A, b, max(size(A)) / 4, true)
 
-function hpl_par(A::Matrix, b::Vector, run_parallel::Bool)
+hpl_par(A::Matrix, b::Vector, bsize::Int32) = hpl_par(A, b, bsize, true)
 
-    blocksize = 5
+function hpl_par(A::Matrix, b::Vector, bsize::Int32, run_parallel::Bool)
 
     n = size(A,1)
     A = [A b]
