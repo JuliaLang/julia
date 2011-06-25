@@ -28,7 +28,7 @@ For a more in-depth discussion of the rationale and advantages of Julia over oth
     - **[fdlibm][]**       — a portable implementation of much of the system-dependent libm math library's functionality.
     - **[OpenBLAS][]**     — a fast, open, and maintained [basic linear algebar subprograms (BLAS)](http://en.wikipedia.org/wiki/Basic_Linear_Algebra_Subprograms) library, based on [Kazushige Goto's](http://en.wikipedia.org/wiki/Kazushige_Goto) famous [GotoBLAS](http://www.tacc.utexas.edu/tacc-projects/gotoblas2/).
     - **[LAPACK][]**       — library of linear algebra routines for solving systems of simultaneous linear equations, least-squares solutions of linear systems of equations, eigenvalue problems, and singular value problems.
-    - **[ARPACK][]**       — a collection of subroutines designed to solve large-scale eigenvalue problems.
+    - **[ARPACK][]**       — a collection of subroutines designed to solve large, sparse eigenvalue problems.
     - **[FFTW][]**	   — library for computing fast Fourier transforms very quickly and efficiently.
     - **[PCRE][]**         — Perl-compatible regular expressions library.
     - **[GNU readline][]** — library allowing shell-like line editing in the terminal, with history and familiar key bindings.
