@@ -41,6 +41,7 @@ For a more in-depth discussion of the rationale and advantages of Julia over oth
 [OpenBLAS]:     https://github.com/xianyi/OpenBLAS#readme
 [LAPACK]:       http://www.netlib.org/lapack/
 [ARPACK]:       http://www.caam.rice.edu/software/ARPACK/
+[FFTW]:         http://www.fftw.org/
 [PCRE]:         http://www.pcre.org/
 [GNU readline]: http://cnswww.cns.cwru.edu/php/chet/readline/rltop.html
 [mongoose]:     http://code.google.com/p/mongoose/
