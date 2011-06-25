@@ -45,21 +45,21 @@ end
 
 # DOUBLE PRECISION FUNCTION DNRM2(N,X,INCX)
 
-macro blas_norm(fname, eltype)
+macro blas_norm(fname, eltype, ret_type)
     quote
         function norm(x::DenseVector{$eltype})
             ccall(dlsym(libBLAS, $fname),
-                  $eltype,
+                  $ret_type,
                   (Ptr{Int32}, Ptr{$eltype}, Ptr{Int32}),
                   length(x), x, 1)
         end
     end
 end
 
-@blas_norm :dnrm2_ Float64
-@blas_norm :snrm2_ Float32
-@blas_norm :znrm2_ Complex128
-@blas_norm :cnrm2_ Complex64
+@blas_norm :dnrm2_ Float64 Float64
+@blas_norm :snrm2_ Float32 Float32
+@blas_norm :dznrm2_ Complex128 Float64
+@blas_norm :scnrm2_ Complex64 Float32
 
 # SUBROUTINE DGEMM(TRANSA,TRANSB,M,N,K,ALPHA,A,LDA,B,LDB,BETA,C,LDC)
 # *     .. Scalar Arguments ..
