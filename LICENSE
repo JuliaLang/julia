@@ -50,8 +50,10 @@ External libraries, if used, include their own licenses:
 
 ARPACK
 FDLIBM
+FFTW
 LAPACK
 LLVM
+MERSENNE TWISTER
 MONGOOSE
 PCRE
 READLINE
