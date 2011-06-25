@@ -40,8 +40,8 @@ end
 
 @blas_dot :ddot_ Float64
 @blas_dot :sdot_ Float32
-@blas_dot :zdot_ Complex128
-@blas_dot :cdot_ Complex64
+@blas_dot :zdotc_ Complex128
+@blas_dot :cdotc_ Complex64
 
 # DOUBLE PRECISION FUNCTION DNRM2(N,X,INCX)
 
