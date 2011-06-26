@@ -5,7 +5,7 @@
 # The matrix A is local to the first Worker, which allocates work to other Workers
 # All updates to A are carried out by the first Worker. Thus A is not distributed
 
-hpl_par(A::Matrix, b::Vector) = hpl_par(A, b, convert(Int32, max(size(A)) / 4), true)
+hpl_par(A::Matrix, b::Vector) = hpl_par(A, b, max(1, div(max(size(A)),4)), true)
 
 hpl_par(A::Matrix, b::Vector, bsize::Int32) = hpl_par(A, b, bsize, true)
 
@@ -14,7 +14,9 @@ function hpl_par(A::Matrix, b::Vector, blocksize::Int32, run_parallel::Bool)
     n = size(A,1)
     A = [A b]
     
-    if blocksize <= 0; blocksize = 1; end
+    if blocksize < 1
+       throw(ArgumentError("hpl_par: invalid blocksize: $blocksize < 1"))
+    end
 
     B_rows = linspace(0, n, blocksize)
     B_rows[end] = n 
