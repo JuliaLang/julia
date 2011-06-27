@@ -225,38 +225,38 @@ install-fftw-double: $(FFTW_DOUBLE_OBJ_TARGET)
 fftw-$(FFTW_VER).tar.gz:
 	curl -O http://www.fftw.org/$@
 
-fftw-single-$(FFTW_VER)/configure: fftw-$(FFTW_VER).tar.gz
-	mkdir -p fftw-single-$(FFTW_VER) && \
-	tar -C fftw-single-$(FFTW_VER) --strip-components 1 -xf $<
+fftw-$(FFTW_VER)-single/configure: fftw-$(FFTW_VER).tar.gz
+	mkdir -p fftw-$(FFTW_VER)-single && \
+	tar -C fftw-$(FFTW_VER)-single --strip-components 1 -xf $<
 	touch $@
-fftw-single-$(FFTW_VER)/config.status: fftw-single-$(FFTW_VER)/configure
-	cd fftw-single-$(FFTW_VER) && \
+fftw-$(FFTW_VER)-single/config.status: fftw-$(FFTW_VER)-single/configure
+	cd fftw-$(FFTW_VER)-single && \
 	./configure --prefix=$(EXTROOT) --enable-shared --disable-threads --enable-float && \
 	make clean
 	touch $@
-$(FFTW_SINGLE_OBJ_TARGET): fftw-single-$(FFTW_VER)/config.status
-	make -C fftw-single-$(FFTW_VER) install
+$(FFTW_SINGLE_OBJ_TARGET): fftw-$(FFTW_VER)-single/config.status
+	make -C fftw-$(FFTW_VER)-single install
 	touch $@
 
-fftw-double-$(FFTW_VER)/configure: fftw-$(FFTW_VER).tar.gz
-	mkdir -p fftw-double-$(FFTW_VER) && \
-	tar -C fftw-double-$(FFTW_VER) --strip-components 1 -xf $<
+fftw-$(FFTW_VER)-double/configure: fftw-$(FFTW_VER).tar.gz
+	mkdir -p fftw-$(FFTW_VER)-double && \
+	tar -C fftw-$(FFTW_VER)-double --strip-components 1 -xf $<
 	touch $@
-fftw-double-$(FFTW_VER)/config.status: fftw-double-$(FFTW_VER)/configure
-	cd fftw-double-$(FFTW_VER) && \
+fftw-$(FFTW_VER)-double/config.status: fftw-$(FFTW_VER)-double/configure
+	cd fftw-$(FFTW_VER)-double && \
 	./configure --prefix=$(EXTROOT) --enable-shared --disable-threads && \
 	make clean
 	touch $@
-$(FFTW_DOUBLE_OBJ_TARGET): fftw-double-$(FFTW_VER)/config.status
-	make -C fftw-double-$(FFTW_VER) install
+$(FFTW_DOUBLE_OBJ_TARGET): fftw-$(FFTW_VER)-double/config.status
+	make -C fftw-$(FFTW_VER)-double install
 	touch $@
 
 clean-fftw: clean-fftw-single clean-fftw-double
 clean-fftw-single:
-	make -C fftw-single-$(FFTW_VER) clean
+	make -C fftw-$(FFTW_VER)-single clean
 	rm -f $(FFTW_SINGLE_OBJ_TARGET)
 clean-fftw-double:
-	make -C fftw-double-$(FFTW_VER) clean
+	make -C fftw-$(FFTW_VER)-double clean
 	rm -f $(FFTW_DOUBLE_OBJ_TARGET)
 distclean-fftw:
 	rm -rf fftw-$(FFTW_VER).tar.gz fftw-$(FFTW_VER)-{single,double}
