@@ -572,7 +572,7 @@ issues 12/21/10
 - inference in inner functions
 * allow anything iterable to be spliced by ...
 * more flexible string literals
-- something about uninitialized objects in constructors
+* something about uninitialized objects in constructors
   old news (for reference):
   consider generating code for constructors, e.g.
   function new{T}(re::T, im::T)

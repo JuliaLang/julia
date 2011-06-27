@@ -408,8 +408,8 @@
 
    ;; macro definition
    (pattern-lambda (macro (call name . argl) body)
-		   `(macro (quote ,name)
-		      (-> (tuple ,@argl) ,body)))
+		   `(call (top def_macro) (quote ,name)
+			  (-> (tuple ,@argl) ,body)))
 
    ;; expression form function definition
    (pattern-lambda (= (call (curly name . sparams) . argl) body)

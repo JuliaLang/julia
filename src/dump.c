@@ -1024,6 +1024,7 @@ void jl_init_serializer()
                       jl_f_new_tag_type, 
                       jl_f_new_tag_type_super, 
                       jl_f_new_bits_type, 
+                      jl_f_def_macro,
                       jl_f_typevar, 
                       jl_f_union, 
                       jl_f_methodexists, 
