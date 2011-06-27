@@ -71,7 +71,7 @@ function pcre_study(regex::Ptr{Void}, options::Int)
                        (Ptr{Void}, Int32, Ptr{Ptr{Uint8}}),
                        regex, int32(options), errstr))()
     if errstr[1] != C_NULL
-        error("pcre_study: ", string(errstr[1]))
+        error("pcre_study: $(errstr[1])")
     end
     extra
 end
@@ -102,7 +102,7 @@ function pcre_exec(regex::Ptr{Void}, extra::Ptr{Void},
                 regex, extra, string, length(string), offset-1,
                 int32(options), ovec, length(ovec))
     if n < -1
-        error("pcre_exec: error ", n)
+        error("pcre_exec: error $n")
     end
     n < 0 ? Array(Int32,0) : ovec[1:2n]
 end
@@ -133,21 +133,30 @@ end
 # likes so that Julia all the Julia string quoting
 # constructs are correctly handled.
 
-macro r_str(s); Regex(s); end
-macro ri_str(s); Regex(s, PCRE_CASELESS); end
-macro rm_str(s); Regex(s, PCRE_MULTILINE); end
-macro rs_str(s); Regex(s, PCRE_DOTALL); end
-macro rim_str(s); Regex(s, PCRE_CASELESS | PCRE_MULTILINE); end
-macro ris_str(s); Regex(s, PCRE_CASELESS | PCRE_DOTALL); end
-macro rms_str(s); Regex(s, PCRE_MULTILINE | PCRE_DOTALL); end
-macro rims_str(s); Regex(s, PCRE_CASELESS | PCRE_MULTILINE | PCRE_DOTALL); end
+macro r_str(p);     Regex(p); end
+macro ri_str(p);    Regex(p, PCRE_CASELESS);  end
+macro rm_str(p);    Regex(p, PCRE_MULTILINE); end
+macro rs_str(p);    Regex(p, PCRE_DOTALL);    end
+macro rx_str(p);    Regex(p, PCRE_EXTENDED);  end
+macro rim_str(p);   Regex(p, PCRE_CASELESS|PCRE_MULTILINE); end
+macro ris_str(p);   Regex(p, PCRE_CASELESS|PCRE_DOTALL);    end
+macro rix_str(p);   Regex(p, PCRE_CASELESS|PCRE_EXTENDED);  end
+macro rms_str(p);   Regex(p, PCRE_MULTILINE|PCRE_DOTALL);   end
+macro rmx_str(p);   Regex(p, PCRE_MULTILINE|PCRE_EXTENDED); end
+macro rsx_str(p);   Regex(p, PCRE_DOTALL|PCRE_EXTENDED);    end
+macro rims_str(p);  Regex(p, PCRE_CASELESS|PCRE_MULTILINE|PCRE_DOTALL);   end
+macro rimx_str(p);  Regex(p, PCRE_CASELESS|PCRE_MULTILINE|PCRE_EXTENDED); end
+macro risx_str(p);  Regex(p, PCRE_CASELESS|PCRE_DOTALL|PCRE_EXTENDED);    end
+macro rmsx_str(p);  Regex(p, PCRE_MULTILINE|PCRE_DOTALL|PCRE_EXTENDED);   end
+macro rimsx_str(p); Regex(p, PCRE_CASELESS|PCRE_MULTILINE|PCRE_DOTALL|PCRE_EXTENDED); end
 
 function show(re::Regex)
-    if (re.options & ~(PCRE_CASELESS | PCRE_MULTILINE | PCRE_DOTALL)) == 0
+    if (re.options & ~(PCRE_CASELESS|PCRE_MULTILINE|PCRE_DOTALL|PCRE_EXTENDED)) == 0
         print('r')
         if re.options & PCRE_CASELESS  != 0; print('i'); end
         if re.options & PCRE_MULTILINE != 0; print('m'); end
         if re.options & PCRE_DOTALL    != 0; print('s'); end
+        if re.options & PCRE_EXTENDED  != 0; print('x'); end
         print_quoted_literal(re.pattern)
     else
         print("Regex(")
