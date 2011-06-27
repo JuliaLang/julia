@@ -350,17 +350,23 @@
       (return (parse-expr s)))
   (let loop ((ex (parse-expr s))
 	     (first? #t))
-    (let ((t (peek-token s)))
+    (let* ((t   (peek-token s))
+	   (spc (ts:space? s)))
       (if (not (eq? t ':))
 	  ex
 	  (begin (take-token s)
-		 (let ((argument
-			(if (closing-token? (peek-token s))
-			    ':  ; missing last argument
-			    (parse-expr s))))
-		   (if first?
-		       (loop (list t ex argument) #f)
-		       (loop (append ex (list argument)) #t))))))))
+		 (if (and space-sensitive spc
+			  (or (peek-token s) #t) (not (ts:space? s)))
+		     ;; "a :b" in space sensitive mode
+		     (begin (ts:put-back! s ':)
+			    ex)
+		     (let ((argument
+			    (if (closing-token? (peek-token s))
+				':  ; missing last argument
+				(parse-expr s))))
+		       (if first?
+			   (loop (list t ex argument) #f)
+			   (loop (append ex (list argument)) #t)))))))))
 
 ; the principal non-terminals follow, in increasing precedence order
 
@@ -399,7 +405,7 @@
 	      (take-token s)
 	      (cond ((and space-sensitive spc (memq t unary-and-binary-ops)
 			  (or (peek-token s) #t) (not (ts:space? s)))
-		     ; here we have "x -y"
+		     ;; here we have "x -y"
 		     (ts:put-back! s t)
 		     ex)
 		    ((eq? t chain-op)
@@ -667,14 +673,16 @@
 	(else   (reverse! (cons r ranges)))))))
 
 (define (parse-space-separated-exprs s)
-  (let loop ((exprs '()))
-    (if (or (closing-token? (peek-token s))
-	    (and space-sensitive (eq? (peek-token s) '|\||)))
-	(reverse! exprs)
-	(let ((e (parse-eq s)))
-	  (case (peek-token s)
-	    ((#\newline)   (reverse! (cons e exprs)))
-	    (else          (loop (cons e exprs))))))))
+  (let ((inside-vec space-sensitive))
+    (with-space-sensitive
+     (let loop ((exprs '()))
+       (if (or (closing-token? (peek-token s))
+	       (and inside-vec (eq? (peek-token s) '|\||)))
+	   (reverse! exprs)
+	   (let ((e (parse-eq s)))
+	     (case (peek-token s)
+	       ((#\newline)   (reverse! (cons e exprs)))
+	       (else          (loop (cons e exprs))))))))))
 
 ; handle function call argument list, or any comma-delimited list.
 ; . an extra comma at the end is allowed
