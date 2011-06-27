@@ -159,10 +159,10 @@ begin
     function show(re::Regex)
         if (re.options & ~(i|m|s|x)) == 0
             print('r')
-            if re.options & i != 0; print('i'); end
-            if re.options & m != 0; print('m'); end
-            if re.options & s != 0; print('s'); end
-            if re.options & x != 0; print('x'); end
+            if (re.options & i) != 0; print('i'); end
+            if (re.options & m) != 0; print('m'); end
+            if (re.options & s) != 0; print('s'); end
+            if (re.options & x) != 0; print('x'); end
             print_quoted_literal(re.pattern)
         else
             print("Regex(")
