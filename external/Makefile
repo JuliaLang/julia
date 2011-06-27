@@ -6,7 +6,7 @@ PCRE_VER = 8.12
 OPENBLAS_VER = v0.1alpha2
 LAPACK_VER = 3.3.1
 ARPACK_VER = 96
-FFTW_VER = 3.2.2
+FFTW_VER = 3.3-beta1
 MONGOOSE_VER = 3.0
 
 ## high-level setup ##
