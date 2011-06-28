@@ -151,8 +151,8 @@ macro lapack_qr(fname, fname2, eltype)
     end
 end
 
-@lapack_qr "dgeqp3_" "dorgqr_" Float64
-@lapack_qr "sgeqp3_" "sorgqr_" Float32
+@lapack_qr :dgeqp3_ :dorgqr_ Float64
+@lapack_qr :sgeqp3_ :sorgqr_ Float32
 
 # SUBROUTINE ZGEQP3( M, N, A, LDA, JPVT, TAU, WORK, LWORK, RWORK, INFO )
 #*      .. Scalar Arguments ..
@@ -227,8 +227,8 @@ macro lapack_qr_complex(fname, fname2, eltype, eltype2)
     end
 end
 
-@lapack_qr_complex "zgeqp3_" "zungqr_" Complex128 Float64
-@lapack_qr_complex "cgeqp3_" "cungqr_" Complex64 Float32
+@lapack_qr_complex :zgeqp3_ :zungqr_ Complex128 Float64
+@lapack_qr_complex :cgeqp3_ :cungqr_ Complex64 Float32
 
 #       SUBROUTINE DSYEV( JOBZ, UPLO, N, A, LDA, W, WORK, LWORK, INFO )
 # *     .. Scalar Arguments ..
@@ -379,6 +379,7 @@ end
 
 @lapack_svd :dgesvd_ Float64
 @lapack_svd :sgesvd_ Float32
+
 # SUBROUTINE ZGESVD( JOBU, JOBVT, M, N, A, LDA, S, U, LDU, VT, LDVT,
 #     $                   WORK, LWORK, RWORK, INFO )
 #*     .. Scalar Arguments ..
@@ -558,10 +559,10 @@ macro lapack_backslash(fname_lu, fname_chol, fname_lsq, fname_tri, eltype)
     end # quote...
 end # macro...
 
-@lapack_backslash "dgesv_" "dposv_" "dgels_" "dtrtrs_" Float64
-@lapack_backslash "sgesv_" "sposv_" "sgels_" "strtrs_" Float32
-@lapack_backslash "zgesv_" "zposv_" "zgels_" "ztrtrs_" Complex128
-@lapack_backslash "cgesv_" "cposv_" "cgels_" "ctrtrs_" Complex64
+@lapack_backslash :dgesv_ :dposv_ :dgels_ :dtrtrs_ Float64
+@lapack_backslash :sgesv_ :sposv_ :sgels_ :strtrs_ Float32
+@lapack_backslash :zgesv_ :zposv_ :zgels_ :ztrtrs_ Complex128
+@lapack_backslash :cgesv_ :cposv_ :cgels_ :ctrtrs_ Complex64
 
 ## BIDIAG ##
 
