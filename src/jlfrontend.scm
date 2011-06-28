@@ -80,7 +80,11 @@
 
 (define (jl-parse-string s)
   (parser-wrap (lambda ()
-		 (expand-toplevel-expr (julia-parse s)))))
+		 (let* ((inp  (make-token-stream (open-input-string s)))
+			(expr (julia-parse inp)))
+		   (if (not (eof-object? (julia-parse inp)))
+		       (error "extra input after end of expression")
+		       (expand-toplevel-expr expr))))))
 
 (define (has-macrocalls? e)
   (or (and (pair? e) (eq? (car e) 'macrocall))

@@ -608,7 +608,7 @@ shell_escape(cmd::String, args::String...) =
 ## interface to parser ##
 
 function parse(s::String, pos, greedy)
-	# returns (expr, end_pos). expr is () in case of parse error.
+    # returns (expr, end_pos). expr is () in case of parse error.
     ex, pos = ccall(:jl_parse_string, Any,
                     (Ptr{Uint8},Int32,Int32),
                     cstring(s), int32(pos)-1, greedy ? 1:0)
