@@ -5,7 +5,7 @@ LIBS = -L$(EXTROOT)/lib -lutil -ldl -lpthread $(OSLIBS)
 
 LLTDIR = $(JULIAHOME)/src/support
 FLISPDIR = $(JULIAHOME)/src/flisp
-MONGOOSE = $(JULIAHOME)/external/mongoose
+MONGOOSE = $(JULIAHOME)/external/mongoose-3.0
 READLINE = -lncurses -lreadline
 
 FLAGS = -falign-functions -Wall -Wno-strict-aliasing \
