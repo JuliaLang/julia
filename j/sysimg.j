@@ -73,6 +73,9 @@ load("libc.j")
 load("util.j")
 load("regex.j")
 
+# front end
+load("client.j")
+
 # prime method cache with some things we know we'll need right after startup
 length(1:2:3)
 (HashTable(0)[1])=()->()
@@ -96,7 +99,10 @@ compile_hint(perform_work, ())
 compile_hint(isempty, (Array{Any,1},))
 compile_hint(ref, (HashTable{Any,Any}, Int32))
 compile_hint(event_loop, (Bool,))
-compile_hint(start_client, ())
+compile_hint(start, ())
+compile_hint(color_available, ())
+compile_hint(process_options, (Array{Any,1},))
+compile_hint(run_repl, ())
 
 ccall(:jl_save_system_image, Void, (Ptr{Uint8},Ptr{Uint8}),
       cstring("sys.ji"), cstring("j/start_image.j"))

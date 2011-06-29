@@ -477,7 +477,7 @@ void read_expr(char *prompt)
     sleep(1000);
 }
 
-void repl_callback_enable()
+DLLEXPORT void repl_callback_enable()
 {
 }
 
