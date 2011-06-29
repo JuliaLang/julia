@@ -38,7 +38,7 @@ void read_expr(char *prompt)
     jl_input_line_callback(input);
 }
 
-void repl_callback_enable()
+DLLEXPORT void repl_callback_enable()
 {
     ios_printf(ios_stdout, prompt_string);
     ios_flush(ios_stdout);

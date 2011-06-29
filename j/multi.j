@@ -737,7 +737,6 @@ end
 # argument is descriptor to write listening port # to.
 start_worker() = start_worker(1)
 function start_worker(wrfd)
-    ccall(:jl_start_io_thread, Void, ())
     port = [int16(9009)]
     sockfd = ccall(:open_any_tcp_port, Int32, (Ptr{Int16},), port)
     if sockfd == -1
@@ -752,8 +751,6 @@ function start_worker(wrfd)
     # close stdin; workers will not use it
     ccall(dlsym(libc, :close), Int32, (Int32,), 0)
 
-    global Workqueue = {}
-    global Waiting = HashTable(64)
     global Scheduler = current_task()
 
     worker_sockets = HashTable()
@@ -803,7 +800,7 @@ function start_remote_workers(machines, cmds)
 end
 
 worker_ssh_cmd(host) =
-    `ssh -n $host "bash -l -c \"cd $JULIA_HOME && ./julia -e start_worker\(\)\""`
+    `ssh -n $host "bash -l -c \"cd $JULIA_HOME && ./julia --worker\""`
 
 worker_local_cmd() = `$JULIA_HOME/julia -e start_worker()`
 
@@ -1265,37 +1262,5 @@ function event_loop(isclient)
             end
             iserr, lasterr = true, e
         end
-    end
-end
-
-roottask = current_task()
-roottask_wi = WorkItem(roottask)
-
-function repl_callback(ast, show_value)
-    # use root task to execute user input
-    roottask_wi.argument = (ast, show_value)
-    perform_work(roottask_wi)
-end
-
-# start as a node that accepts interactive input
-function start_client()
-    ccall(:jl_start_io_thread, Void, ())
-    try
-        global Workqueue = {}
-        global Waiting = HashTable(64)
-        global Scheduler = Task(()->event_loop(true), 1024*1024)
-        global PGRP = ProcessGroup(1, {LocalProcess()}, {Location("",0)})
-
-        while true
-            add_fd_handler(STDIN.fd, fd->ccall(:jl_stdin_callback, Void, ()))
-            (ast, show_value) = yield()
-            del_fd_handler(STDIN.fd)
-            roottask_wi.requeue = true
-            ccall(:jl_eval_user_input, Void, (Any, Int32),
-                  ast, show_value)
-            roottask_wi.requeue = false
-        end
-    catch e
-        show(e)
     end
 end

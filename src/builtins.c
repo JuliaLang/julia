@@ -432,7 +432,13 @@ JL_CALLABLE(jl_f_top_eval)
     }
     jl_value_t *exex = NULL;
     JL_GC_PUSH(&exex);
-    exex = jl_expand(e);
+    if (ex->head == body_sym || ex->head == lambda_sym) {
+        // already expanded
+        exex = e;
+    }
+    else {
+        exex = jl_expand(e);
+    }
     jl_value_t *result = jl_toplevel_eval(exex);
     JL_GC_POP();
     return result;
