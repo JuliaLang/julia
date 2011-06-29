@@ -672,7 +672,7 @@ issues 1/24/11
     future reads from that region will wait for it to complete
   ? isready()
   . timer events, delay and aggregate messages
-  . lambda-numbering to reuse code for spawned closures
+  * lambda-numbering to reuse code for spawned closures
   . pull repl global variables into spawned closures
   . do indexing of local objects locally automatically in spawn
 - add line number and file information

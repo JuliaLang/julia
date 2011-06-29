@@ -119,6 +119,12 @@ function serialize(s, u::UnionKind)
     serialize(s, u.types)
 end
 
+function lambda_number(l::LambdaStaticData)
+    # a hash function that always gives the same number to the same
+    # object on the same machine, and is unique over all machines.
+    hash(uint64(uid(l))+(uint64(myid())<<44))
+end
+
 function serialize(s, f::Function)
     writetag(s, FuncKind)
     env = ccall(:jl_closure_env, Any, (Any,), f)
@@ -136,6 +142,7 @@ function serialize(s, f::Function)
     else
         @assert (isa(linfo,LambdaStaticData))
         write(s, uint8(1))
+        serialize(s, lambda_number(linfo))
         serialize(s, linfo.ast)
         serialize(s, linfo.sparams)
         serialize(s, env)
@@ -219,20 +226,32 @@ deserialize_tuple(s, len) = (a = ntuple(len, i->deserialize(s));
 deserialize(s, ::Type{Symbol}) = symbol(read(s, Uint8, int32(read(s, Uint8))))
 deserialize(s, ::Type{LongSymbol}) = symbol(read(s, Uint8, read(s, Int32)))
 
+known_lambda_data = HashTable()
+
 function deserialize_function(s)
     b = read(s, Uint8)
     if b==0
         name = deserialize(s)::Symbol
         return ()->eval(name)
     end
+    lnumber = force(deserialize(s))
     ast = deserialize(s)
     sparams = deserialize(s)
     env = deserialize(s)
-    function ()
-        linfo = ccall(:jl_new_lambda_info, Any, (Any, Any),
-                      force(ast), force(sparams))
-        ccall(:jl_new_closure_internal, Any, (Any, Any),
-              linfo, force(env))::Function
+    if has(known_lambda_data, lnumber)
+        linfo = known_lambda_data[lnumber]
+        function ()
+            ccall(:jl_new_closure_internal, Any, (Any, Any),
+                  linfo, force(env))::Function
+        end
+    else
+        function ()
+            linfo = ccall(:jl_new_lambda_info, Any, (Any, Any),
+                          force(ast), force(sparams))
+            known_lambda_data[lnumber] = linfo
+            ccall(:jl_new_closure_internal, Any, (Any, Any),
+                  linfo, force(env))::Function
+        end
     end
 end
 
