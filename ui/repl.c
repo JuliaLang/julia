@@ -353,7 +353,7 @@ int true_main(int argc, char *argv[])
 #else
     jl_function_t *start_client =
         (jl_function_t*)
-        jl_get_global(jl_system_module, jl_symbol("start"));
+        jl_get_global(jl_system_module, jl_symbol("_start"));
 #endif
 
     if (start_client == NULL) {

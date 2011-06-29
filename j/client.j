@@ -116,7 +116,7 @@ jl_banner_color =
     " _/ |\\__'_|_|_|\\__'_|  |\n" *
     "|__/                   |\033[0m\n\n"
 
-function start()
+function _start()
     try
         ccall(:jl_start_io_thread, Void, ())
         global Workqueue = {}
