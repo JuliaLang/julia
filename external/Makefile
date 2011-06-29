@@ -130,17 +130,20 @@ distclean-fdlibm: clean-fdlibm
 ## dSFMT ##
 
 DSFMT_OBJ_TARGET = $(EXTROOTLIB)/libdSFMT.$(SHLIB_EXT)
-DSFMT_OBJ_SOURCE = dSFMT-src-$(DSFMT_VER)/libdSFMT.$(SHLIB_EXT)
+DSFMT_OBJ_SOURCE = dsfmt-$(DSFMT_VER)/libdSFMT.$(SHLIB_EXT)
 
 compile-dsfmt: $(DSFMT_OBJ_SOURCE)
 install-dsfmt: $(DSFMT_OBJ_TARGET)
 
-dSFMT-src-$(DSFMT_VER).tar.gz:
-	curl -o dSFMT-src-$(DSFMT_VER).tar.gz -Lk http://www.math.sci.hiroshima-u.ac.jp/~m-mat/bin/dl/dl.cgi?SFMT:dSFMT-src-$(DSFMT_VER).tar.gz
-dSFMT-src-$(DSFMT_VER)/Makefile: dSFMT-src-$(DSFMT_VER).tar.gz
-	tar zxf dSFMT-src-$(DSFMT_VER).tar.gz
-$(DSFMT_OBJ_SOURCE): dSFMT-src-$(DSFMT_VER)/Makefile
-	cd dSFMT-src-$(DSFMT_VER) && $(CC) -O3 -finline-functions -fomit-frame-pointer -DNDEBUG -fno-strict-aliasing --param max-inline-insns-single=1800  -Wmissing-prototypes -Wall  -std=c99 -DDSFMT_MEXP=19937 -fPIC -shared dSFMT.c -o libdSFMT.$(SHLIB_EXT)
+dsfmt-$(DSFMT_VER).tar.gz:
+	curl http://www.math.sci.hiroshima-u.ac.jp/~m-mat/MT/SFMT/dSFMT-src-2.1.tar.gz > $@
+dsfmt-$(DSFMT_VER)/Makefile: dsfmt-$(DSFMT_VER).tar.gz
+	mkdir -p dsfmt-$(DSFMT_VER) && \
+	tar -C dsfmt-$(DSFMT_VER) --strip-components 1 -xf $<
+	touch $@
+$(DSFMT_OBJ_SOURCE): dsfmt-$(DSFMT_VER)/Makefile
+	cd dsfmt-$(DSFMT_VER) && \
+	$(CC) -O3 -finline-functions -fomit-frame-pointer -DNDEBUG -fno-strict-aliasing --param max-inline-insns-single=1800  -Wmissing-prototypes -Wall  -std=c99 -DDSFMT_MEXP=19937 -fPIC -shared dSFMT.c -o libdSFMT.$(SHLIB_EXT)
 $(DSFMT_OBJ_TARGET): $(DSFMT_OBJ_SOURCE)
 	mkdir -p $(EXTROOTLIB)
 	cp $< $@
