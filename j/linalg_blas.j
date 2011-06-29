@@ -40,8 +40,9 @@ end
 
 @blas_dot :ddot_ Float64
 @blas_dot :sdot_ Float32
-@blas_dot :zdotc_ Complex128
-@blas_dot :cdotc_ Complex64
+# ccall does not work well when complex values are returned
+#@blas_dot :zdotc_ Complex128
+#@blas_dot :cdotc_ Complex64
 
 # DOUBLE PRECISION FUNCTION DNRM2(N,X,INCX)
 

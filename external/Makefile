@@ -3,6 +3,7 @@
 LLVM_VER = 2.9
 READLINE_VER = 6.2
 PCRE_VER = 8.12
+DSFMT_VER = 2.1
 OPENBLAS_VER = v0.1alpha2
 LAPACK_VER = 3.3.1
 ARPACK_VER = 96
@@ -16,7 +17,7 @@ include ../Make.inc
 
 OS = $(shell uname)
 ARCH = $(shell uname -m)
-LIBS = llvm readline pcre fdlibm openblas lapack arpack fftw mongoose
+LIBS = llvm readline pcre fdlibm dsfmt openblas lapack arpack fftw mongoose
 
 default: install
 compile: $(addprefix compile-, $(LIBS))
@@ -125,6 +126,30 @@ clean-fdlibm:
 	cd fdlibm && make clean
 	rm -f $(FDLIBM_OBJ_SOURCE) $(FDLIBM_OBJ_TARGET)
 distclean-fdlibm: clean-fdlibm
+
+## dSFMT ##
+
+DSFMT_OBJ_TARGET = $(EXTROOTLIB)/libdSFMT.$(SHLIB_EXT)
+DSFMT_OBJ_SOURCE = dSFMT-src-$(DSFMT_VER)/libdSFMT.$(SHLIB_EXT)
+
+compile-dsfmt: $(DSFMT_OBJ_SOURCE)
+install-dsfmt: $(DSFMT_OBJ_TARGET)
+
+dSFMT-src-$(DSFMT_VER).tar.gz:
+	curl -o dSFMT-src-$(DSFMT_VER).tar.gz -Lk http://www.math.sci.hiroshima-u.ac.jp/~m-mat/bin/dl/dl.cgi?SFMT:dSFMT-src-$(DSFMT_VER).tar.gz
+dSFMT-src-$(DSFMT_VER)/Makefile: dSFMT-src-$(DSFMT_VER).tar.gz
+	tar zxf dSFMT-src-$(DSFMT_VER).tar.gz
+$(DSFMT_OBJ_SOURCE): dSFMT-src-$(DSFMT_VER)/Makefile
+	cd dSFMT-src-$(DSFMT_VER) && $(CC) -O3 -finline-functions -fomit-frame-pointer -DNDEBUG -fno-strict-aliasing --param max-inline-insns-single=1800  -Wmissing-prototypes -Wall  -std=c99 -DDSFMT_MEXP=19937 -fPIC -shared dSFMT.c -o libdSFMT.$(SHLIB_EXT)
+$(DSFMT_OBJ_TARGET): $(DSFMT_OBJ_SOURCE)
+	mkdir -p $(EXTROOTLIB)
+	cp $< $@
+
+clean-dsfmt:
+	make -C dSFMT-src-$(DSFMT_VER) clean
+	rm -f dSFMT-src-$(DSFMT_VER)/*.$(SHLIB_EXT)
+distclean-dsfmt:
+	rm -rf dSFMT-src-$(DSFMT_VER).tar.gz dSFMT-src-$(DSFMT_VER)
 
 ## OpenBLAS ##
 

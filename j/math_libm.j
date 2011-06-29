@@ -127,10 +127,3 @@ function frexp(x::Float32)
     (s, exp[1])
 end
 @vectorize_1arg frexp
-
-rand()     = ccall(:rand_double,   Float64, ())
-randf()    = ccall(:rand_float,    Float32, ())
-randui32() = ccall(:genrand_int32, Uint32,  ())
-randn()    = ccall(:randn,         Float64, ())
-srand(s::Union(Int32,Uint32)) = ccall(:randomseed32, Void, (Uint32,), uint32(s))
-srand(s::Union(Int64,Uint64)) = ccall(:randomseed64, Void, (Uint64,), uint64(s))
