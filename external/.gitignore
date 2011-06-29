@@ -2,9 +2,9 @@
 /llvm-*
 /readline-*
 /pcre-*
+/dsfmt-*
 /openblas-*
 /lapack-*
 /arpack-*
 /fftw-*
 /mongoose-*
-/dSFMT-*

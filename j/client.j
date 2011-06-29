@@ -97,39 +97,43 @@ function color_available()
 end
 
 jl_banner_plain =
-    "               _      \n" *
-    "   _       _ _(_)_     |\n"
-    "  (_)     | (_) (_)    |  A fresh approach to technical computing.\n" *
-    "   _ _   _| |_  __ _   |  pre-release version\n" *
-    "  | | | | | | |/ _` |  |\n" *
-    "  | | |_| | | | (_| |  |\n" *
-    " _/ |\\__'_|_|_|\\__'_|  |\n" *
-    "|__/                   |\n\n"
+L"               _
+   _       _ _(_)_     |
+  (_)     | (_) (_)    |  A fresh approach to technical computing.
+   _ _   _| |_  __ _   |  pre-release version
+  | | | | | | |/ _` |  |
+  | | |_| | | | (_| |  |
+ _/ |\__'_|_|_|\__'_|  |
+|__/                   |
+
+"
 
 jl_banner_color =
-    "\033[1m               \033[32m_\033[37m      \n" *
-    "   \033[34m_\033[37m       _ \033[31m_\033[32m(_)\033[35m_\033[37m     |\n" *
-    "  \033[34m(_)\033[37m     | \033[31m(_) \033[35m(_)\033[37m    |  A fresh approach to technical computing.\n" *
-    "   _ _   _| |_  __ _   |  pre-release version\n" *
-    "  | | | | | | |/ _` |  |\n" *
-    "  | | |_| | | | (_| |  |\n" *
-    " _/ |\\__'_|_|_|\\__'_|  |\n" *
-    "|__/                   |\033[0m\n\n"
+"\033[1m               \033[32m_\033[37m
+   \033[34m_\033[37m       _ \033[31m_\033[32m(_)\033[35m_\033[37m     |
+  \033[34m(_)\033[37m     | \033[31m(_) \033[35m(_)\033[37m    |  A fresh approach to technical computing.
+   _ _   _| |_  __ _   |  pre-release version
+  | | | | | | |/ _` |  |
+  | | |_| | | | (_| |  |
+ _/ |\\__'_|_|_|\\__'_|  |
+|__/                   |\033[0m
+
+"
 
 function _start()
     try
         ccall(:jl_start_io_thread, Void, ())
         global Workqueue = {}
         global Waiting = HashTable(64)
-        
+
         if !anyp(a->(a=="--worker"), ARGS)
             # start in "head node" mode
             global Scheduler = Task(()->event_loop(true), 1024*1024)
             global PGRP = ProcessGroup(1, {LocalProcess()}, {Location("",0)})
         end
-        
+
         (quiet,repl) = process_options(ARGS)
-        
+
         if repl
             if !quiet
                 if color_available()
