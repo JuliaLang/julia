@@ -21,27 +21,6 @@ similar{T}(a::Array{T,2}) = Array(T, size(a,1), size(a,2))
 similar{T}(a::Array{T,1}, S::Type) = Array(S, size(a,1))
 similar{T}(a::Array{T,2}, S::Type) = Array(S, size(a,1), size(a,2))
 
-macro matrix_builder(t, f)
-    quote
-
-        function ($f)(dims::Dims)
-            A = Array($t, dims)
-            for i = 1:numel(A)
-                A[i] = ($f)()
-            end
-            return A
-        end
-
-        ($f)(dims::Size...) = ($f)(dims)
-
-    end # quote
-end # macro
-
-@matrix_builder Float64 rand
-@matrix_builder Float32 randf
-@matrix_builder Float64 randn
-@matrix_builder Uint32 randui32
-
 zeros{T}(::Type{T}, dims::Dims) = fill(Array(T, dims), zero(T))
 zeros(T::Type, dims::Size...) = zeros(T, dims)
 zeros(dims::Dims) = zeros(Float64, dims)
