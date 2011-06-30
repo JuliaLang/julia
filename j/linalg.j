@@ -3,8 +3,8 @@
 dot(x::Vector, y::Vector) = sum(x.*conj(y))
 
 # blas.j defines these for floats; this handles other cases
-(*)(A::Matrix, B::Vector) = [ A[i,:].*B | i=1:size(A,1) ]
-(*)(A::Matrix, B::Matrix) = [ A[i,:].*B[:,j] | i=1:size(A,1), j=1:size(B,2) ]
+(*)(A::Matrix, B::Vector) = [ sum(A[i,:].*B) | i=1:size(A,1) ]
+(*)(A::Matrix, B::Matrix) = [ sum(A[i,:].*B[:,j]) | i=1:size(A,1), j=1:size(B,2) ]
 
 triu(M) = triu(M,0)
 tril(M) = tril(M,0)
