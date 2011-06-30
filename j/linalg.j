@@ -1,12 +1,10 @@
 ## linalg.j: Basic Linear Algebra functions ##
 
-dot(x::Vector, y::Vector) = sum(x.*y)
-# Take care of dot product of vectors that are actually matrices or N-d
-dot(x::Matrix, y::Matrix) = dot(reshape(x, prod(size(x))), reshape(y, prod(size(y))) )
+dot(x::Vector, y::Vector) = sum(x.*conj(y))
 
 # blas.j defines these for floats; this handles other cases
-(*)(A::Matrix, B::Vector) = [ dot(A[i,:],B) | i=1:size(A,1) ]
-(*)(A::Matrix, B::Matrix) = [ dot(A[i,:],B[:,j]) | i=1:size(A,1), j=1:size(B,2) ]
+(*)(A::Matrix, B::Vector) = [ A[i,:].*B | i=1:size(A,1) ]
+(*)(A::Matrix, B::Matrix) = [ A[i,:].*B[:,j] | i=1:size(A,1), j=1:size(B,2) ]
 
 triu(M) = triu(M,0)
 tril(M) = tril(M,0)
