@@ -665,3 +665,35 @@ function ind2sub(dims, ind::Index)
     end
     return sub
 end
+
+## subarrays ##
+
+type SubArray{T,N,A<:Tensor,I<:(Indices...)} <: Tensor{T,N}
+    parent::A
+    indexes::I
+    dims::Dims
+    
+    SubArray(p::A, i::I) = new(p, i, map(length, i))
+end
+
+sub{T,N}(A::Tensor{T,N}, i::NTuple{N,Indices}) =
+    SubArray{T,N,typeof(A),typeof(i)}(A, i)
+
+sub(A::Tensor, i::Indices...) = sub(A, i)
+
+size(s::SubArray) = s.dims
+ndims{T,N}(s::SubArray{T,N}) = N
+
+copy(s::SubArray) = copy_to(similar(s.parent, size(s)), s)
+similar(s::SubArray, T::Type, dims::Dims) = similar(s.parent, T, dims)
+
+ref(s::SubArray) = s
+
+ref{T}(s::SubArray{T,1}, i::Index) = s.parent[s.indexes[1][i]]
+
+ref{T}(s::SubArray{T,2}, i::Index, j::Index) =
+    s.parent[s.indexes[1][i], s.indexes[2][j]]
+
+ref(s::SubArray, is::Index...) = s.parent[map(ref, s.indexes, is)...]
+
+ref(s::SubArray, i::Index) = s[ind2sub(size(s), i)...]
