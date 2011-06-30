@@ -240,6 +240,7 @@ typedef struct {
 
 extern jl_tag_type_t *jl_any_type;
 extern jl_tag_type_t *jl_type_type;
+extern jl_tvar_t     *jl_typetype_tvar;
 extern jl_tag_type_t *jl_typetype_type;
 extern jl_tag_type_t *jl_undef_type;
 extern jl_struct_type_t *jl_typename_type;

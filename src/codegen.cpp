@@ -168,7 +168,7 @@ static GlobalVariable *stringConst(const std::string &txt)
 }
 
 static void emit_function(jl_lambda_info_t *lam, Function *f);
-
+//static int n_compile=0;
 static Function *to_function(jl_lambda_info_t *li)
 {
     Function *f = Function::Create(jl_func_sig, Function::ExternalLinkage,
@@ -181,6 +181,7 @@ static Function *to_function(jl_lambda_info_t *li)
     emit_function(li, f);
     nested_compile = last_n_c;
     FPM->run(*f);
+    //n_compile++;
     // print out the function's LLVM code
     //f->dump();
     //verifyFunction(*f);
