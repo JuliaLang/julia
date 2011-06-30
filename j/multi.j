@@ -1068,25 +1068,43 @@ let lastp = 1
                 lastp = 1
             end
         end
-        if p==myid()
-            # for local spawn, simulate semantics of copying bindings
-            if isa(env,Tuple)
-                env = map(x->(isa(x,Box)?Box(x.contents):x), env)
-                linfo = ccall(:jl_closure_linfo, Any, (Any,), thunk)
-                thunk = ccall(:jl_new_closure_internal, Any, (Any, Any),
-                              linfo, env)::Function
-            end
-        end
         spawnat(p, thunk)
     end
 end
 
-macro spawn(thk)
-    :(spawn(()->($thk)))
+find_vars(e) = find_vars(e, {})
+function find_vars(e, lst)
+    if isa(e,Symbol)
+        if isbound(e) && isgeneric(eval(e))
+            # exclude global generic functions
+        else
+            push(lst, e)
+        end
+    elseif isa(e,Expr)
+        foreach(x->find_vars(x,lst), e.args)
+    end
+    lst
 end
 
-macro spawnlocal(thk)
-    :(spawnat(LocalProcess(), ()->($thk)))
+# wrap an expression in "let a=a,b=b,..." for each var it references
+function localize_vars(expr)
+    v = find_vars(expr)
+    # requires a special feature of the front end that knows how to insert
+    # the correct variables. the list of free variables cannot be computed
+    # from a macro.
+    Expr(:localize,
+         {:(()->($expr)), v...},
+         Any)
+end
+
+macro spawn(expr)
+    expr = localize_vars(:(()->($expr)))
+    :(spawn($expr))
+end
+
+macro spawnlocal(expr)
+    expr = localize_vars(:(()->($expr)))
+    :(spawnat(LocalProcess(), $expr))
 end
 
 at_each(f, args...) = at_each(PGRP, f, args...)
