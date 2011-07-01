@@ -95,14 +95,14 @@ static jl_value_t *jl_typeid_to_type(int i)
 
 static bool has_julia_type(Value *v)
 {
-    return ((dynamic_cast<Instruction*>(v) != NULL) &&
+    return ((dyn_cast<Instruction>(v) != NULL) &&
             ((Instruction*)v)->getMetadata("julia_type")!=NULL);
 }
 
 static jl_value_t *julia_type_of_without_metadata(Value *v, bool err=true)
 {
-    if (dynamic_cast<AllocaInst*>(v) != NULL ||
-        dynamic_cast<GetElementPtrInst*>(v) != NULL) {
+    if (dyn_cast<AllocaInst>(v) != NULL ||
+        dyn_cast<GetElementPtrInst>(v) != NULL) {
         // an alloca always has llvm type pointer
         return llvm_type_to_julia(v->getType()->getContainedType(0), err);
     }
@@ -112,7 +112,7 @@ static jl_value_t *julia_type_of_without_metadata(Value *v, bool err=true)
 static jl_value_t *julia_type_of(Value *v)
 {
     MDNode *mdn;
-    if (dynamic_cast<Instruction*>(v) == NULL ||
+    if (dyn_cast<Instruction>(v) == NULL ||
         (mdn = ((Instruction*)v)->getMetadata("julia_type")) == NULL) {
         return julia_type_of_without_metadata(v, true);
     }
@@ -150,9 +150,9 @@ static Value *mark_julia_type(Value *v, jl_value_t *jt)
         return v;
     if (julia_type_of_without_metadata(v,false) == jt)
         return NoOpCast(v);
-    if (dynamic_cast<Instruction*>(v) == NULL)
+    if (dyn_cast<Instruction>(v) == NULL)
         v = NoOpCast(v);
-    assert(dynamic_cast<Instruction*>(v));
+    assert(dyn_cast<Instruction>(v));
     char name[3];
     int id = jl_type_to_typeid(jt);
     // store id as base-255 to avoid NUL
