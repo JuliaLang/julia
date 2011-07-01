@@ -459,10 +459,13 @@ void backtrace () {
 	asm(" movq %%rbp, %0;"
 		: "=r" (rbp));
 	while (rbp != 0 && i<100) {
-		printf("        rbp value %lx, value of i %d\n",rbp, i);
+		//printf("        rbp value %lx, value of i %d\n",rbp, i);
 		void **fp = ((void**)rbp)[0];
 		void *ip = ((void**)rbp)[1];
-		printf ("Function Name = %s, ip = %lx \n", getFunctionInfo(ip), (long) ip);
+		const char* info = getFunctionInfo(ip);
+		if(info != NULL) {
+			printf ("Function Name = %s, ip = %lx \n", info, (long) ip);
+		}
 		rbp = fp;
 		i++;
 	}

@@ -1924,6 +1924,8 @@ extern "C" void jl_init_codegen()
     //printf ("you reached codegen");
     //puts("lala codegen");
     llvm::JITEmitDebugInfo = true;
+    llvm::NoFramePointerElim = true;
+    llvm::NoFramePointerElimNonLeaf = true;
 
     InitializeNativeTarget();
     jl_Module = new Module("julia", jl_LLVMContext);

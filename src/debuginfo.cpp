@@ -44,7 +44,7 @@ extern "C" const char* getFunctionInfo(size_t pointer);
 const char* getFunctionInfo(size_t pointer) {
 		//printf("entered getfunc ");
 		map<size_t, FuncInfo> info = jl_jit_events->getMap();
-		const char* toReturn = "not found";
+		const char* toReturn = NULL;
 		for (map<size_t, FuncInfo>::iterator it= info.begin(); it!= info.end(); it++) {
 			//printf("looking at pointer %lx ", (*it).first);
 			if ((*it).first <= pointer) {
