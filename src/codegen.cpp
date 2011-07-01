@@ -1526,10 +1526,10 @@ static void emit_function(jl_lambda_info_t *lam, Function *f)
             LoadInst *theArg = builder.CreateLoad(argPtr, false);
             if (isBoxed(argname, &ctx))
                 builder.CreateStore(builder.CreateCall(jlbox_func, theArg), lv);
-            else if (dynamic_cast<GetElementPtrInst*>(lv) != NULL)
+            else if (dyn_cast<GetElementPtrInst>(lv) != NULL)
                 builder.CreateStore(theArg, lv);
             else
-                builder.CreateStore(emit_unbox(dynamic_cast<AllocaInst*>(lv)->getAllocatedType(),
+                builder.CreateStore(emit_unbox(dyn_cast<AllocaInst>(lv)->getAllocatedType(),
                                                lv->getType(),
                                                theArg),
                                     lv);
