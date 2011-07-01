@@ -444,13 +444,17 @@ void show_backtrace (void) {
     unw_get_reg(&cursor, UNW_REG_IP, &ip);
     unw_get_reg(&cursor, UNW_REG_SP, &sp);
     //printf("pre getFunc \n");
-    printf ("Function Name = %s, ip = %lx \n", getFunctionInfo(ip), (long) ip);  
+    const char* info = getFunctionInfo(ip);
+    if(info != NULL) {
+			printf ("Function Name = %s, instruction pointer = %lx \n", info, (long) ip);
+		}  
     //printf("post getFunc \n"); 
     index = unw_step(&cursor); 
     //printf("index %d\n", index);
   }
-  printf("exiting backtrace");
+  //printf("exiting backtrace");
 }
+
 
 void backtrace () {
 	
@@ -464,7 +468,7 @@ void backtrace () {
 		void *ip = ((void**)rbp)[1];
 		const char* info = getFunctionInfo(ip);
 		if(info != NULL) {
-			printf ("Function Name = %s, ip = %lx \n", info, (long) ip);
+			printf ("Function Name = %s, instruction pointer = %lx \n", info, (long) ip);
 		}
 		rbp = fp;
 		i++;
@@ -476,7 +480,7 @@ void backtrace () {
 // yield to exception handler
 void jl_raise(jl_value_t *e)
 {
-    backtrace();
+    show_backtrace();
     jl_task_t *eh = jl_current_task->state.eh_task;
     eh->state.err = 1;
     jl_exception_in_transit = e;
