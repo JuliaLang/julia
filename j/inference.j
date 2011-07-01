@@ -210,15 +210,26 @@ t_func[:convert] =
                    Any))
 typeof_tfunc = function (t)
     if isType(t)
-        Type{typeof(t.parameters[1])}
+        t = t.parameters[1]
+        if isa(t,TypeVar)
+            Type
+        else
+            Type{typeof(t)}
+        end
     elseif isa(t,TagKind)
-        Type{t}
+        if isleaftype(t)
+            Type{t}
+        else
+            Type{typevar(:T,t)}
+        end
     elseif isa(t,UnionKind)
         Union(map(typeof_tfunc, t.types)...)
     elseif isa(t,Tuple)
         map(typeof_tfunc, t)
+    elseif isa(t,TypeVar)
+        Type{t}
     else
-        typeof(t)
+        Type
     end
 end
 t_func[typeof] = (1, 1, typeof_tfunc)
