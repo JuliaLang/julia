@@ -444,39 +444,44 @@ void show_backtrace (void) {
     unw_get_reg(&cursor, UNW_REG_IP, &ip);
     unw_get_reg(&cursor, UNW_REG_SP, &sp);
     //printf("pre getFunc \n");
-    printf ("Function Name = %s, ip = %lx \n", getFunctionInfo(ip), (long) ip);  
+    const char* funcName = getFunctionInfo(ip);
+    if(funcName != NULL) {
+			printf ("Function Name = %s, instruction pointer = %lx \n", funcName, (long) ip);
+		}  
     //printf("post getFunc \n"); 
     index = unw_step(&cursor); 
     //printf("index %d\n", index);
   }
-  printf("exiting backtrace");
+  //printf("exiting backtrace");
 }
 
+
 void backtrace () {
-	
+	const int max_i = 10000;
 	int i = 0;
 	intptr_t rbp;
 	asm(" movq %%rbp, %0;"
 		: "=r" (rbp));
-	while (rbp != 0 && i<100) {
+	while (rbp != 0 && i<max_i) {
 		//printf("        rbp value %lx, value of i %d\n",rbp, i);
 		void **fp = ((void**)rbp)[0];
 		void *ip = ((void**)rbp)[1];
 		const char* info = getFunctionInfo(ip);
 		if(info != NULL) {
-			printf ("Function Name = %s, ip = %lx \n", info, (long) ip);
+			printf ("Function Name = %s, instruction pointer = %lx \n", info, (long) ip);
 		}
 		rbp = fp;
 		i++;
 	}
-
-
+	if (i == max_i){
+		printf("to prevent infitie loops stacktrace was cutoff at %d iterations\n to change this change max i backtrace in task.c\n",max_i);
+	}
 }
 
 // yield to exception handler
 void jl_raise(jl_value_t *e)
 {
-    backtrace();
+    show_backtrace();
     jl_task_t *eh = jl_current_task->state.eh_task;
     eh->state.err = 1;
     jl_exception_in_transit = e;

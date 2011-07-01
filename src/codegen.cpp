@@ -1579,7 +1579,7 @@ static void emit_function(jl_lambda_info_t *lam, Function *f)
     bool prevlabel = false;
     for(i=0; i < stmts->length; i++) {
         //builder.SetCurrentDebugLocation(DebugLoc::get(i+1, 1, SP));
-
+        builder.SetCurrentDebugLocation(DebugLoc::get(1771, 1, SP));
         jl_value_t *stmt = jl_cellref(stmts,i);
         if (is_label(stmt)) {
             if (prevlabel) continue;
@@ -1921,8 +1921,6 @@ static void init_julia_llvm_env(Module *m)
 
 extern "C" void jl_init_codegen()
 {
-    //printf ("you reached codegen");
-    //puts("lala codegen");
     llvm::JITEmitDebugInfo = true;
     llvm::NoFramePointerElim = true;
     llvm::NoFramePointerElimNonLeaf = true;
@@ -1937,6 +1935,5 @@ extern "C" void jl_init_codegen()
 
     jl_init_intrinsic_functions();
     jl_jit_events = new JuliaJITEventListener();
-    jl_ExecutionEngine->RegisterJITEventListener(jl_jit_events);   
-    //JIT::RegisterJITEventListener(jl_jit_events);
+    jl_ExecutionEngine->RegisterJITEventListener(jl_jit_events);
 }
