@@ -1117,9 +1117,9 @@ function at_each(grp::ProcessGroup, f, args...)
     end
 end
 
-macro bcast(thk)
+macro bcast(ex)
     quote
-        at_each(()->eval($expr(:quote,thk)))
+        at_each(()->eval($expr(:quote,ex)))
     end
 end
 

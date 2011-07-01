@@ -18,7 +18,7 @@ function append(a1::Array{Any,1}, as::Array{Any,1}...)
     a
 end
 
-function cell_1d(xs...)
+function cell_1d(xs::ANY...)
     n = length(xs)
     a = Array(Any,n)
     for i=1:n
@@ -27,7 +27,7 @@ function cell_1d(xs...)
     a
 end
 
-function cell_2d(nr, nc, xs...)
+function cell_2d(nr, nc, xs::ANY...)
     a = Array(Any,nr,nc)
     for i=1:(nr*nc)
         arrayset(a,i,xs[i])

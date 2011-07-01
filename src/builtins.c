@@ -1394,6 +1394,8 @@ void jl_init_primitives()
     add_builtin("TagKind", (jl_value_t*)jl_tag_kind);
     add_builtin("UnionKind", (jl_value_t*)jl_union_kind);
 
+    add_builtin("ANY", jl_ANY_flag);
+
     add_builtin("C_NULL", jl_box_pointer(jl_pointer_void_type, NULL));
 }
 

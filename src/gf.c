@@ -76,8 +76,8 @@ static int cache_match_by_type(jl_value_t **types, size_t n, jl_tuple_t *sig,
                 }
             }
         }
-        //else if (decl == (jl_value_t*)jl_any_type) {
-        //}
+        else if (decl == (jl_value_t*)jl_any_type) {
+        }
         else {
             if (!jl_types_equal(a, decl))
                 return 0;
@@ -127,7 +127,6 @@ static inline int cache_match(jl_value_t **args, size_t n, jl_tuple_t *sig,
             }
         }
         else if (decl == (jl_value_t*)jl_any_type) {
-            assert(0);
         }
         else {
             /*
@@ -343,7 +342,7 @@ static jl_function_t *cache_method(jl_methtable_t *mt, jl_tuple_t *type,
     for (i=0; i < type->length; i++) {
         jl_value_t *elt = jl_tupleref(type,i);
         int set_to_any = 0;
-        if (0 && nth_slot_type(decl,i) == jl_ANY_flag) {
+        if (nth_slot_type(decl,i) == jl_ANY_flag) {
             // don't specialize on slots marked ANY
             jl_value_t *orig = jl_tupleref(type, i);
             jl_tupleset(type, i, (jl_value_t*)jl_any_type);
@@ -361,6 +360,8 @@ static jl_function_t *cache_method(jl_methtable_t *mt, jl_tuple_t *type,
                 curr = curr->next;
             }
             if (nintr) {
+                // TODO: even if different specializations of this slot need
+                // separate cache entries, have them share code.
                 jl_tupleset(type, i, orig);
             }
             else {
