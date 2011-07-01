@@ -11,14 +11,11 @@ struct FuncInfo{
 };
 
 
-class JuliaJITEventListner: public JITEventListener {
+class __attribute__ ((visibility("default"))) JuliaJITEventListener: public JITEventListener {
 	map<size_t, FuncInfo> info;
 
-
- 	JuliaJITEventListner() {}
-	~JuliaJITEventListner();
-	
-	void NotifyFunctionEmitted(const Function &F, 
+public:	
+	virtual void NotifyFunctionEmitted(const Function &F, 
 		void *Code, size_t Size, const EmittedFunctionDetails &Details) {
 		// Here i should write down the information into the map i want to know. Important Code name, location of code start, length (and or end),
 		FuncInfo tmp = {&F, Size};
@@ -26,7 +23,8 @@ class JuliaJITEventListner: public JITEventListener {
 		//tmp.lengthAdr = Size;
 		info[(size_t)(Code)] = tmp;
 	}
-
+	JuliaJITEventListener(){}
+	virtual ~JuliaJITEventListener() {}
 	public:
 
 		map<size_t, FuncInfo> getMap() {
@@ -38,7 +36,7 @@ class JuliaJITEventListner: public JITEventListener {
 
 };
 
-extern JuliaJITEventListner *jl_jit_events;
+extern JuliaJITEventListener *jl_jit_events;
 
 extern "C" char* getFunctionInfo(size_t pointer);
 
@@ -59,6 +57,8 @@ char* getFunctionInfo(size_t pointer) {
 			}
 	
 		}
+
+		return "Something went wrong, left for loop too early.";
 	}
 
 

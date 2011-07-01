@@ -84,7 +84,7 @@ static GlobalVariable *jlsysmod_var;
 static GlobalVariable *jlpgcstack_var;
 #endif
 static GlobalVariable *jlexc_var;
-JuliaJITEventListner *jl_jit_events;
+JuliaJITEventListener *jl_jit_events;
 
 // important functions
 static Function *jlraise_func;
@@ -1808,6 +1808,7 @@ static void init_julia_llvm_env(Module *m)
 extern "C" void jl_init_codegen()
 {
     printf ("you reached codegen");
+    puts("lala codegen");
     llvm::JITEmitDebugInfo = true;
 
     InitializeNativeTarget();
@@ -1818,7 +1819,7 @@ extern "C" void jl_init_codegen()
     init_julia_llvm_env(jl_Module);
 
     jl_init_intrinsic_functions();
-    jl_jit_events = new JuliaJITEventListner();
+    jl_jit_events = new JuliaJITEventListener();
     jl_ExecutionEngine->RegisterJITEventListener(jl_jit_events);   
     //JIT::RegisterJITEventListener(jl_jit_events);
 }

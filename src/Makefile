@@ -12,7 +12,7 @@ FLISP = $(FLISPDIR)/libflisp.a
 
 FLAGS = -falign-functions -Wall -Wno-strict-aliasing \
 	-I$(FLISPDIR) -I$(LLTDIR) $(HFILEDIRS:%=-I%) $(LIBDIRS:%=-L%) \
-	-I$(shell $(LLVMROOT)/bin/llvm-config --includedir) -fvisibility=hidden
+	-I$(shell $(LLVMROOT)/bin/llvm-config --includedir)
 DEBUGFLAGS = -ggdb3 -DDEBUG $(FLAGS)
 SHIPFLAGS = -O3 -DNDEBUG $(FLAGS)
 
@@ -51,7 +51,7 @@ julia_flisp.boot: julia-parser.scm julia-syntax.scm \
 boot.j.inc: boot.j preparse.scm julia_flisp.boot
 	$(FLISPDIR)/flisp ./preparse.scm < $< | $(FLISPDIR)/flisp ./bin2hex.scm > $@
 
-codegen.o codegen.do: intrinsics.cpp
+codegen.o codegen.do: intrinsics.cpp debuginfo.cpp
 builtins.o builtins.do: table.c
 
 $(LLT): $(LLTDIR)/*.h $(LLTDIR)/*.c
