@@ -5,17 +5,20 @@
 
 ## comparison ##
 
-==(x, y) = false
+isequal(x, y) = is(x, y)
+
+==(x, y) = isequal(x, y)
 !=(x, y) = !(x == y)
 ==(x::Number, y::Number) = (==)(promote(x,y)...)
+
+# this definition allows Number types to implement == instead of isequal,
+# which is more idiomatic.
+isequal{T<:Number}(x::T, y::T) = (x == y)
 
 < (x::Real, y::Real) = (<)(promote(x,y)...)
 > (x::Real, y::Real) = (y < x)
 <=(x::Real, y::Real) = (x < y) || (x == y)
 >=(x::Real, y::Real) = (x > y) || (x == y)
-
-isequal{T}(x::T, y::T) = (x==y)
-isequal(x, y) = isequal(promote(x,y)...)
 
 ## definitions providing basic traits of arithmetic operators ##
 

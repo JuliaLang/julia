@@ -7,8 +7,6 @@ symbol(a::Array{Uint8,1}) =
 
 gensym() = ccall(:jl_gensym, Any, ())::Symbol
 
-(==)(x::Symbol, y::Symbol) = is(x, y)
-
 ## expressions ##
 
 expr(hd::Symbol, args::ANY...) = Expr(hd, {args...}, Any)

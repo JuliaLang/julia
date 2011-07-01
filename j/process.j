@@ -33,7 +33,7 @@ global STDIN  = FileDes(ccall(:jl_stdin,  Int32, ()))
 global STDOUT = FileDes(ccall(:jl_stdout, Int32, ()))
 global STDERR = FileDes(ccall(:jl_stderr, Int32, ()))
 
-==(fd1::FileDes, fd2::FileDes) = (fd1.fd == fd2.fd)
+isequal(fd1::FileDes, fd2::FileDes) = (fd1.fd == fd2.fd)
 
 hash(fd::FileDes) = hash(fd.fd)
 
@@ -55,15 +55,15 @@ type Pipe
     end
 end
 
-==(p1::Pipe, p2::Pipe) = (p1.in == p2.in && p1.out == p2.out)
+isequal(p1::Pipe, p2::Pipe) = (p1.in == p2.in && p1.out == p2.out)
 
 abstract PipeEnd
 type PipeIn  <: PipeEnd; pipe::Pipe; end
 type PipeOut <: PipeEnd; pipe::Pipe; end
 
-==(p1::PipeEnd, p2::PipeEnd) = false
-==(p1::PipeIn , p2::PipeIn ) = (p1.pipe == p2.pipe)
-==(p1::PipeOut, p2::PipeOut) = (p1.pipe == p2.pipe)
+isequal(p1::PipeEnd, p2::PipeEnd) = false
+isequal(p1::PipeIn , p2::PipeIn ) = (p1.pipe == p2.pipe)
+isequal(p1::PipeOut, p2::PipeOut) = (p1.pipe == p2.pipe)
 
 in (p::Pipe) = PipeIn(p)
 out(p::Pipe) = PipeOut(p)
@@ -169,8 +169,6 @@ function show(cmd::Cmd)
 end
 
 exec(cmd::Cmd) = exec(cmd.exec)
-
-==(c1::Cmd, c2::Cmd) = is(c1,c2)
 
 ## Port: a file descriptor on a particular command ##
 

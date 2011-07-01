@@ -46,7 +46,7 @@ map(f, ts::Tuple...) = ntuple(length(ts[1]), n->f(map(t->t[n],ts)...))
 
 ## comparison ##
 
-function ==(t1::Tuple, t2::Tuple)
+function isequal(t1::Tuple, t2::Tuple)
     if length(t1) != length(t2)
         return false
     end

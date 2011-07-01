@@ -132,6 +132,13 @@ pi{T}(::Type{Complex{T}}) = pi(T)
 ## functions of complex numbers ##
 
 ==(z::ComplexNum, w::ComplexNum) = (real(z) == real(w) && imag(z) == imag(w))
+==(z::ComplexNum, x::Real) = (real(z)==x && imag(z)==0)
+==(x::Real, z::ComplexNum) = (real(z)==x && imag(z)==0)
+
+isequal(z::ComplexNum, w::ComplexNum) =
+    isequal(real(z),real(w)) && isequal(imag(z),imag(w))
+
+hash(z::ComplexNum) = bitmix(hash(real(z)),hash(imag(z)))
 
 conj(z::ComplexNum) = complex(real(z),-imag(z))
 norm(z::ComplexNum) = square(real(z)) + square(imag(z))
