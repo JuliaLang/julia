@@ -1921,8 +1921,8 @@ static void init_julia_llvm_env(Module *m)
 
 extern "C" void jl_init_codegen()
 {
-    printf ("you reached codegen");
-    puts("lala codegen");
+    //printf ("you reached codegen");
+    //puts("lala codegen");
     llvm::JITEmitDebugInfo = true;
 
     InitializeNativeTarget();

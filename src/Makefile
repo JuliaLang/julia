@@ -11,6 +11,7 @@ LLT = $(LLTDIR)/libllt.a
 FLISP = $(FLISPDIR)/libflisp.a
 
 FLAGS = -falign-functions -Wall -Wno-strict-aliasing \
+	-fno-omit-frame-pointer \
 	-I$(FLISPDIR) -I$(LLTDIR) $(HFILEDIRS:%=-I%) $(LIBDIRS:%=-L%) \
 	-I$(shell $(LLVMROOT)/bin/llvm-config --includedir)
 DEBUGFLAGS = -ggdb3 -DDEBUG $(FLAGS)

@@ -439,20 +439,40 @@ void show_backtrace (void) {
   unw_getcontext(&uc);
   unw_init_local(&cursor, &uc);
   int index = unw_step(&cursor);
-  printf("index %d\n", index);
+  //printf("index %d\n", index);
   while (index > 0) { 
     unw_get_reg(&cursor, UNW_REG_IP, &ip);
     unw_get_reg(&cursor, UNW_REG_SP, &sp);
-    printf ("Function Name = %s, sp = %lx\n", getFunctionInfo(ip), (long) sp);    
+    //printf("pre getFunc \n");
+    printf ("Function Name = %s, ip = %lx \n", getFunctionInfo(ip), (long) ip);  
+    //printf("post getFunc \n"); 
     index = unw_step(&cursor); 
-    printf("index %d\n", index);
+    //printf("index %d\n", index);
   }
+  printf("exiting backtrace");
+}
+
+void backtrace () {
+	
+	int i = 0;
+	intptr_t rbp;
+	asm(" movq %%rbp, %0;"
+		: "=r" (rbp));
+	while (rbp != 0 && i<100) {
+		void **fp = ((void**)rbp)[0];
+		void *ip = ((void**)rbp)[1];
+		printf ("Function Name = %s, ip = %lx \n", getFunctionInfo(ip), (long) ip);
+		rbp = fp;
+		i++;
+	}
+
+
 }
 
 // yield to exception handler
 void jl_raise(jl_value_t *e)
 {
-    show_backtrace();
+    backtrace();
     jl_task_t *eh = jl_current_task->state.eh_task;
     eh->state.err = 1;
     jl_exception_in_transit = e;
@@ -470,6 +490,7 @@ void jl_raise(jl_value_t *e)
         ctx_switch(eh, eh->state.eh_ctx);
         // TODO: continued exception
     }
+    printf("exiting jl_raise");
     
 }
 

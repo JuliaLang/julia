@@ -38,27 +38,31 @@ public:
 
 extern JuliaJITEventListener *jl_jit_events;
 
-extern "C" char* getFunctionInfo(size_t pointer);
+extern "C" const char* getFunctionInfo(size_t pointer);
 
 ///*
-char* getFunctionInfo(size_t pointer) {
+const char* getFunctionInfo(size_t pointer) {
+		//printf("entered getfunc ");
 		map<size_t, FuncInfo> info = jl_jit_events->getMap();
-
+		const char* toReturn = "not found";
 		for (map<size_t, FuncInfo>::iterator it= info.begin(); it!= info.end(); it++) {
-			if ((*it).first < pointer) {
-				if ( (size_t)(*it).first + (*it).second.lengthAdr > pointer) {
-					 char * bob;
-					 strcpy(bob,(*(*it).second.func).getName().data());
-					 return bob;
-
+			//printf("looking at pointer %lx ", (*it).first);
+			if ((*it).first <= pointer) {
+				//printf("start %lx. end %lx \n", (*it).first, (*it).first+(*it).second.lengthAdr);
+				if ( (size_t)(*it).first + (*it).second.lengthAdr >= pointer) {
+					 
+					 //toReturn = strdup((*(*it).second.func).getName().data());
+					 toReturn = (*(*it).second.func).getName().data();
+					 break;
 				}
-			}else {
-				return "No Corresponding to pointer found";
-			}
+			}/*else {
+				toReturn = "not found";
+				break;
+			}*/
 	
 		}
-
-		return "Something went wrong, left for loop too early.";
+		//printf("exiting getfuncinfo ");
+		return toReturn;
 	}
 
 
