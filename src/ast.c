@@ -351,7 +351,8 @@ static value_t julia_to_scm(jl_value_t *v)
     return opaque;
 }
 
-jl_value_t *jl_parse_input_line(const char *str)
+// this is used to parse a line of repl input
+DLLEXPORT jl_value_t *jl_parse_input_line(const char *str)
 {
     value_t e = fl_applyn(1, symbol_value(symbol("jl-parse-string")),
                           cvalue_static_cstring(str));
@@ -361,6 +362,8 @@ jl_value_t *jl_parse_input_line(const char *str)
     return scm_to_julia(e);
 }
 
+// this is for parsing one expression out of a string, keeping track of
+// the current position.
 DLLEXPORT jl_value_t *jl_parse_string(const char *str, int pos0, int greedy)
 {
     value_t s = cvalue_static_cstring(str);

@@ -1,22 +1,23 @@
-## Library Versions ##
+## library versions ##
 
 LLVM_VER = 2.9
 READLINE_VER = 6.2
 PCRE_VER = 8.12
+DSFMT_VER = 2.1
 OPENBLAS_VER = v0.1alpha2
 LAPACK_VER = 3.3.1
 ARPACK_VER = 96
-FFTW_VER = 3.2.2
+FFTW_VER = 3.3-beta1
 MONGOOSE_VER = 3.0
 
-## High-Level Setup ##
+## high-level setup ##
 
 JULIAHOME = $(shell pwd)/..
 include ../Make.inc
 
 OS = $(shell uname)
 ARCH = $(shell uname -m)
-LIBS = llvm pcre fdlibm openblas lapack arpack fftw mongoose readline
+LIBS = llvm readline pcre fdlibm dsfmt openblas lapack arpack fftw mongoose
 
 default: install
 compile: $(addprefix compile-, $(LIBS))
@@ -126,6 +127,33 @@ clean-fdlibm:
 	rm -f $(FDLIBM_OBJ_SOURCE) $(FDLIBM_OBJ_TARGET)
 distclean-fdlibm: clean-fdlibm
 
+## dSFMT ##
+
+DSFMT_OBJ_TARGET = $(EXTROOTLIB)/libdSFMT.$(SHLIB_EXT)
+DSFMT_OBJ_SOURCE = dsfmt-$(DSFMT_VER)/libdSFMT.$(SHLIB_EXT)
+
+compile-dsfmt: $(DSFMT_OBJ_SOURCE)
+install-dsfmt: $(DSFMT_OBJ_TARGET)
+
+dsfmt-$(DSFMT_VER).tar.gz:
+	curl http://www.math.sci.hiroshima-u.ac.jp/~m-mat/MT/SFMT/dSFMT-src-2.1.tar.gz > $@
+dsfmt-$(DSFMT_VER)/Makefile: dsfmt-$(DSFMT_VER).tar.gz
+	mkdir -p dsfmt-$(DSFMT_VER) && \
+	tar -C dsfmt-$(DSFMT_VER) --strip-components 1 -xf $<
+	touch $@
+$(DSFMT_OBJ_SOURCE): dsfmt-$(DSFMT_VER)/Makefile
+	cd dsfmt-$(DSFMT_VER) && \
+	$(CC) -O3 -finline-functions -fomit-frame-pointer -DNDEBUG -fno-strict-aliasing --param max-inline-insns-single=1800  -Wmissing-prototypes -Wall  -std=c99 -DDSFMT_MEXP=19937 -fPIC -shared dSFMT.c -o libdSFMT.$(SHLIB_EXT)
+$(DSFMT_OBJ_TARGET): $(DSFMT_OBJ_SOURCE)
+	mkdir -p $(EXTROOTLIB)
+	cp $< $@
+
+clean-dsfmt:
+	make -C dSFMT-src-$(DSFMT_VER) clean
+	rm -f dSFMT-src-$(DSFMT_VER)/*.$(SHLIB_EXT)
+distclean-dsfmt:
+	rm -rf dSFMT-src-$(DSFMT_VER).tar.gz dSFMT-src-$(DSFMT_VER)
+
 ## OpenBLAS ##
 
 OPENBLAS_OBJ_SOURCE = openblas-$(OPENBLAS_VER)/libopenblas.a
@@ -136,7 +164,8 @@ install-openblas: compile-openblas
 openblas-$(OPENBLAS_VER).tar.gz:
 	curl -Lk https://github.com/xianyi/OpenBLAS/tarball/$(OPENBLAS_VER) > $@
 openblas-$(OPENBLAS_VER)/Makefile: openblas-$(OPENBLAS_VER).tar.gz
-	mkdir -p openblas-$(OPENBLAS_VER) && tar -C openblas-$(OPENBLAS_VER) --strip-components 1 -xf $<
+	mkdir -p openblas-$(OPENBLAS_VER) && \
+	tar -C openblas-$(OPENBLAS_VER) --strip-components 1 -xf $<
 	touch $@
 $(OPENBLAS_OBJ_SOURCE): openblas-$(OPENBLAS_VER)/Makefile
 	make -C openblas-$(OPENBLAS_VER) USE_THREAD=0 NO_CBLAS=1 NO_LAPACK=1 CC=$(CC) FC=$(FC)
@@ -179,22 +208,22 @@ distclean-lapack:
 ## ARPACK ##
 
 ARPACK_OBJ_TARGET = $(EXTROOTLIB)/libarpack.$(SHLIB_EXT)
-ARPACK_OBJ_SOURCE = ARPACK/libarpack.$(SHLIB_EXT)
+ARPACK_OBJ_SOURCE = arpack-$(ARPACK_VER)/libarpack.$(SHLIB_EXT)
 
 compile-arpack: $(ARPACK_OBJ_SOURCE)
 install-arpack: $(ARPACK_OBJ_TARGET)
 
-arpack$(ARPACK_VER).tar.gz:
-	curl -O http://www.caam.rice.edu/software/ARPACK/SRC/$@
+arpack-$(ARPACK_VER).tar.gz:
+	curl http://www.caam.rice.edu/software/ARPACK/SRC/arpack$(ARPACK_VER).tar.gz > $@
 arpack-patch.tar.gz:
-	curl -O http://www.caam.rice.edu/software/ARPACK/SRC/patch.tar.gz
-	mv patch.tar.gz $@
-ARPACK/Makefile: arpack$(ARPACK_VER).tar.gz arpack-patch.tar.gz
-	for x in $^; do tar zxf $$x; done
-	perl -i -nle 'print unless /EXTERNAL\s+ETIME/' ARPACK/UTIL/second.f
+	curl http://www.caam.rice.edu/software/ARPACK/SRC/patch.tar.gz > $@
+arpack-$(ARPACK_VER)/Makefile: arpack-$(ARPACK_VER).tar.gz arpack-patch.tar.gz
+	mkdir -p arpack-$(ARPACK_VER)
+	for x in $^; do tar -C arpack-$(ARPACK_VER) --strip-components 1 -zxf $$x; done
+	perl -i -nle 'print unless /EXTERNAL\s+ETIME/' arpack-$(ARPACK_VER)/UTIL/second.f
 	touch $@
-$(ARPACK_OBJ_SOURCE): ARPACK/Makefile
-	cd ARPACK && \
+$(ARPACK_OBJ_SOURCE): arpack-$(ARPACK_VER)/Makefile
+	cd arpack-$(ARPACK_VER) && \
 	make lib MAKE=make PLAT= home=`pwd` FC=$(FC) FFLAGS="-O3 -fPIC" && \
 	ar x libarpack_.a && \
 	$(FC) -shared *.o -o libarpack.$(SHLIB_EXT)
@@ -203,47 +232,73 @@ $(ARPACK_OBJ_TARGET): $(ARPACK_OBJ_SOURCE)
 	cp $< $@
 
 clean-arpack:
-	make -C ARPACK clean
+	make -C arpack-$(ARPACK_VER) clean
 	rm -f $(ARPACK_OBJ_SOURCE) $(ARPACK_OBJ_TARGET)
 distclean-arpack:
-	rm -rf arpack$(ARPACK_VER).tar.gz arpack-patch.tar.gz ARPACK
+	rm -rf arpack-$(ARPACK_VER).tar.gz arpack-patch.tar.gz arpack-$(ARPACK_VER)
 
 ## FFTW ##
 
-FFTW_OBJ_TARGET = $(EXTROOTLIB)/libfftw3.3.$(SHLIB_EXT)
+FFTW_SINGLE_OBJ_TARGET = $(EXTROOTLIB)/libfftw3f.3.$(SHLIB_EXT)
+FFTW_DOUBLE_OBJ_TARGET = $(EXTROOTLIB)/libfftw3.3.$(SHLIB_EXT)
 
-compile-fftw: install-fftw
-install-fftw: $(FFTW_OBJ_TARGET)
+compile-fftw: compile-fftw-single compile-fftw-double
+compile-fftw-single: install-fftw-single
+compile-fftw-double: install-fftw-double
+
+install-fftw: install-fftw-single install-fftw-double
+install-fftw-single: $(FFTW_SINGLE_OBJ_TARGET)
+install-fftw-double: $(FFTW_DOUBLE_OBJ_TARGET)
 
 fftw-$(FFTW_VER).tar.gz:
 	curl -O http://www.fftw.org/$@
-fftw-$(FFTW_VER)/configure: fftw-$(FFTW_VER).tar.gz
-	tar zxf $<
+
+fftw-$(FFTW_VER)-single/configure: fftw-$(FFTW_VER).tar.gz
+	mkdir -p fftw-$(FFTW_VER)-single && \
+	tar -C fftw-$(FFTW_VER)-single --strip-components 1 -xf $<
 	touch $@
-fftw-$(FFTW_VER)/config.status: fftw-$(FFTW_VER)/configure
-	cd fftw-$(FFTW_VER) && \
-	./configure --prefix=$(EXTROOT) --enable-shared && \
+fftw-$(FFTW_VER)-single/config.status: fftw-$(FFTW_VER)-single/configure
+	cd fftw-$(FFTW_VER)-single && \
+	./configure --prefix=$(EXTROOT) --enable-shared --disable-threads --enable-float && \
 	make clean
 	touch $@
-$(FFTW_OBJ_TARGET): fftw-$(FFTW_VER)/config.status
-	make -C fftw-$(FFTW_VER) install
+$(FFTW_SINGLE_OBJ_TARGET): fftw-$(FFTW_VER)-single/config.status
+	make -C fftw-$(FFTW_VER)-single install
 	touch $@
 
-clean-fftw:
-	make -C fftw-$(FFTW_VER) clean
-	rm -f $(FFTW_OBJ_TARGET)
+fftw-$(FFTW_VER)-double/configure: fftw-$(FFTW_VER).tar.gz
+	mkdir -p fftw-$(FFTW_VER)-double && \
+	tar -C fftw-$(FFTW_VER)-double --strip-components 1 -xf $<
+	touch $@
+fftw-$(FFTW_VER)-double/config.status: fftw-$(FFTW_VER)-double/configure
+	cd fftw-$(FFTW_VER)-double && \
+	./configure --prefix=$(EXTROOT) --enable-shared --disable-threads && \
+	make clean
+	touch $@
+$(FFTW_DOUBLE_OBJ_TARGET): fftw-$(FFTW_VER)-double/config.status
+	make -C fftw-$(FFTW_VER)-double install
+	touch $@
+
+clean-fftw: clean-fftw-single clean-fftw-double
+clean-fftw-single:
+	make -C fftw-$(FFTW_VER)-single clean
+	rm -f $(FFTW_SINGLE_OBJ_TARGET)
+clean-fftw-double:
+	make -C fftw-$(FFTW_VER)-double clean
+	rm -f $(FFTW_DOUBLE_OBJ_TARGET)
 distclean-fftw:
-	rm -rf fftw-$(FFTW_VER).tar.gz fftw-$(FFTW_VER)
+	rm -rf fftw-$(FFTW_VER).tar.gz fftw-$(FFTW_VER)-{single,double}
 
 ## mongoose ##
 
-compile-mongoose: mongoose/Makefile
+compile-mongoose: mongoose-$(MONGOOSE_VER)/Makefile
 install-mongoose: compile-mongoose
 
 mongoose-$(MONGOOSE_VER).tgz:
 	curl -O http://mongoose.googlecode.com/files/mongoose-$(MONGOOSE_VER).tgz
-mongoose/Makefile: mongoose-$(MONGOOSE_VER).tgz
-	tar zxf $<
+mongoose-$(MONGOOSE_VER)/Makefile: mongoose-$(MONGOOSE_VER).tgz
+	mkdir -p mongoose-$(MONGOOSE_VER)
+	tar -C mongoose-$(MONGOOSE_VER) --strip-components 1 -zxf $<
 	touch $@
 
 clean-mongoose:

@@ -799,3 +799,8 @@ end
 for i=10000:20000
     @assert h[i]==i+1
 end
+
+# fft
+
+a = rand(8) + im*rand(8)
+@assert norm((1/length(a))*ifft(fft(a)) - a) < 1e-8

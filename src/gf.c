@@ -65,9 +65,9 @@ static int cache_match_by_type(jl_value_t **types, size_t n, jl_tuple_t *sig,
         else if (jl_is_tag_type(a) && jl_is_tag_type(decl) &&
                  ((jl_tag_type_t*)decl)->name == jl_type_type->name &&
                  ((jl_tag_type_t*)a   )->name == jl_type_type->name) {
-            if (jl_tparam0(decl) == (jl_value_t*)jl_type_type) {
-                // in the case of Type{Type{...}}, the types don't have
-                // to match exactly either. this is cached as Type{Type}.
+            if (jl_tparam0(decl) == (jl_value_t*)jl_typetype_tvar) {
+                // in the case of Type{T}, the types don't have
+                // to match exactly either. this is cached as Type{T}.
                 // analogous to the situation with tuples.
             }
             else {
@@ -114,9 +114,9 @@ static inline int cache_match(jl_value_t **args, size_t n, jl_tuple_t *sig,
         else if (jl_is_tag_type(decl) &&
                  ((jl_tag_type_t*)decl)->name == jl_type_type->name &&
                  jl_is_nontuple_type(a)) {   //***
-            if (jl_tparam0(decl) == (jl_value_t*)jl_type_type) {
-                // in the case of Type{Type{...}}, the types don't have
-                // to match exactly either. this is cached as Type{Type}.
+            if (jl_tparam0(decl) == (jl_value_t*)jl_typetype_tvar) {
+                // in the case of Type{T}, the types don't have
+                // to match exactly either. this is cached as Type{T}.
                 // analogous to the situation with tuples.
             }
             else {
@@ -295,7 +295,37 @@ extern jl_function_t *jl_typeinf_func;
 
 #ifdef TRACE_INFERENCE
 static char *type_summary(jl_value_t *t);
+static void print_sig(jl_tuple_t *type)
+{
+    size_t i;
+    for(i=0; i < type->length; i++) {
+        if (i > 0) ios_printf(ios_stdout, ", ");
+        ios_printf(ios_stdout, "%s", type_summary(jl_tupleref(type,i)));
+    }
+}
 #endif
+
+static jl_value_t *nth_slot_type(jl_tuple_t *sig, size_t i)
+{
+    size_t len = sig->length;
+    if (len == 0)
+        return NULL;
+    if (i < len-1)
+        return jl_tupleref(sig, i);
+    if (jl_is_seq_type(jl_tupleref(sig,len-1))) {
+        return jl_tparam0(jl_tupleref(sig,len-1));
+    }
+    if (i == len-1)
+        return jl_tupleref(sig, i);
+    return NULL;
+}
+
+static int very_general_type(jl_value_t *t)
+{
+    return (t && (t==(jl_value_t*)jl_any_type ||
+                  (jl_is_typevar(t) &&
+                   ((jl_tvar_t*)t)->ub==(jl_value_t*)jl_any_type)));
+}
 
 static jl_tuple_t *ml_matches(jl_methlist_t *ml, jl_value_t *type,
                               jl_tuple_t *t, jl_sym_t *name);
@@ -336,28 +366,12 @@ static jl_function_t *cache_method(jl_methtable_t *mt, jl_tuple_t *type,
         }
         else if (jl_is_tag_type(elt) &&
                  ((jl_tag_type_t*)elt)->name==jl_type_type->name &&
-                 mt->defs->next==NULL && i < decl->length &&
-                 jl_tupleref(decl,i)==(jl_value_t*)jl_any_type) {
-            /*
-              here's a fairly complex heuristic: if a function has 1
-              definition, and this argument slot's declared type is Any,
-              then don't specialize for every Type that might be passed.
-              Since every type x has its own type Type{x}, this would be
-              excessive specialization for an Any slot.
-            */
-            // TODO: instead of only working for 1-definition functions,
-            // in general do this if no definition overlaps with Type for
-            // this slot.
-            jl_tupleset(type, i, (jl_value_t*)jl_typetype_type);
-        }
-        else if (jl_is_tag_type(elt) &&
-                 ((jl_tag_type_t*)elt)->name==jl_type_type->name &&
                  jl_is_tag_type(jl_tparam0(elt)) &&
                  ((jl_tag_type_t*)jl_tparam0(elt))->name==jl_type_type->name) {
             /*
               actual argument was Type{...}, we computed its type as
               Type{Type{...}}. we must avoid unbounded nesting here, so
-              cache the signature as Type{Type{_}}, unless something more
+              cache the signature as Type{T}, unless something more
               specific like Type{Type{Int32}} was actually declared.
               this can be determined using a type intersection.
             */
@@ -373,6 +387,35 @@ static jl_function_t *cache_method(jl_methtable_t *mt, jl_tuple_t *type,
                 jl_tupleset(type, i, (jl_value_t*)jl_typetype_type);
             }
             assert(jl_tupleref(type,i) != (jl_value_t*)jl_bottom_type);
+        }
+        else if (jl_is_tag_type(elt) &&
+                 ((jl_tag_type_t*)elt)->name==jl_type_type->name &&
+                 very_general_type(nth_slot_type(decl,i))) {
+            /*
+              here's a fairly complex heuristic: if this argument slot's
+              declared type is Any, and no definition overlaps with Type
+              for this slot, then don't specialize for every Type that
+              might be passed.
+              Since every type x has its own type Type{x}, this would be
+              excessive specialization for an Any slot.
+            */
+            int ok=1;
+            jl_methlist_t *curr = mt->defs;
+            while (curr != NULL) {
+                jl_value_t *slottype = nth_slot_type(curr->sig, i);
+                if (slottype &&
+                    !very_general_type(slottype) &&
+                    jl_type_intersection(slottype,
+                                         (jl_value_t*)jl_type_type) !=
+                    (jl_value_t*)jl_bottom_type) {
+                    ok=0;
+                    break;
+                }
+                curr = curr->next;
+            }
+            if (ok) {
+                jl_tupleset(type, i, (jl_value_t*)jl_typetype_type);
+            }
         }
     }
     jl_value_t *temp=NULL;
@@ -510,11 +553,7 @@ static jl_function_t *cache_method(jl_methtable_t *mt, jl_tuple_t *type,
             fargs[4] = (jl_value_t*)method->linfo;
 #ifdef TRACE_INFERENCE
             ios_printf(ios_stdout,"inference on %s(", newmeth->linfo->name->name);
-            size_t i;
-            for(i=0; i < type->length; i++) {
-                if (i > 0) ios_printf(ios_stdout, ", ");
-                ios_printf(ios_stdout, "%s", type_summary(jl_tupleref(type,i)));
-            }
+            print_sig(type);
             ios_printf(ios_stdout, ")\n");
 #endif
 #ifdef ENABLE_INFERENCE

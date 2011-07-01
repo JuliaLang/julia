@@ -492,7 +492,6 @@ issues 6/21/10
 - expose word size in the language?
   . right now you can't define Ptr
   . make Size the same as size_t
-- assigned(a,i) to tell if an object array location is assigned?
 
 * try/catch
 - flatten memory layout for Array of Complex (immutability)
@@ -572,7 +571,7 @@ issues 12/21/10
 - inference in inner functions
 * allow anything iterable to be spliced by ...
 * more flexible string literals
-- something about uninitialized objects in constructors
+* something about uninitialized objects in constructors
   old news (for reference):
   consider generating code for constructors, e.g.
   function new{T}(re::T, im::T)
@@ -673,8 +672,8 @@ issues 1/24/11
     future reads from that region will wait for it to complete
   ? isready()
   . timer events, delay and aggregate messages
-  . lambda-numbering to reuse code for spawned closures
-  . pull repl global variables into spawned closures
+  * lambda-numbering to reuse code for spawned closures
+  * pull repl global variables into spawned closures
   . do indexing of local objects locally automatically in spawn
 - add line number and file information
 - keep track of renamed var names
@@ -714,6 +713,9 @@ issues 1/24/11
   where we know the function is identical for all types of x
   - maybe make x::Any different from no type decl
   - reuse specialized methods for multiple types in an Any slot
+- implement SubArray
+- isassigned predicates
+  . maybe syntax like "a?=x" or "a??"
 
 something about update operators, in-place operations in general
 

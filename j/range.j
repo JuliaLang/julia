@@ -127,7 +127,7 @@ done(r::NDRange, st) = r.empty || !bool(st)
 function next{N}(r::NDRange{N}, st)
     nxt = ntuple(N, i->next(r.ranges[i], st[i]))
     vals = map(n->n[1], nxt)
-    
+
     for itr=1:N
         ri = r.ranges[itr]
         ni = nxt[itr][2]
@@ -146,7 +146,7 @@ function next(r::NDRange{2}, st)
     (v1, n1) = next(r1, st[1])
     (v2, n2) = next(r2, st[2])
     vals = (v1, v2)
-    
+
     if !done(r1, n1)
         st[1] = n1
         return (vals, st)

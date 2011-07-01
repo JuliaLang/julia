@@ -737,7 +737,6 @@ end
 # argument is descriptor to write listening port # to.
 start_worker() = start_worker(1)
 function start_worker(wrfd)
-    ccall(:jl_start_io_thread, Void, ())
     port = [int16(9009)]
     sockfd = ccall(:open_any_tcp_port, Int32, (Ptr{Int16},), port)
     if sockfd == -1
@@ -752,8 +751,6 @@ function start_worker(wrfd)
     # close stdin; workers will not use it
     ccall(dlsym(libc, :close), Int32, (Int32,), 0)
 
-    global Workqueue = {}
-    global Waiting = HashTable(64)
     global Scheduler = current_task()
 
     worker_sockets = HashTable()
@@ -803,7 +800,7 @@ function start_remote_workers(machines, cmds)
 end
 
 worker_ssh_cmd(host) =
-    `ssh -n $host "bash -l -c \"cd $JULIA_HOME && ./julia -e start_worker\(\)\""`
+    `ssh -n $host "bash -l -c \"cd $JULIA_HOME && ./julia --worker\""`
 
 worker_local_cmd() = `$JULIA_HOME/julia -e start_worker()`
 
@@ -823,7 +820,7 @@ function start_sge_workers(n)
     `echo $home/julia -e start_worker\\(\\)` | qsub_cmd
     out = cmd_stdout_stream(qsub_cmd)
     run(qsub_cmd)
-    id = split(readline(out),set('.'))[1]
+    id = split(readline(out),Set('.'))[1]
     println("job id is $id")
     print("waiting for job to start"); flush(stdout_stream)
     workers = cell(n)
@@ -1071,25 +1068,43 @@ let lastp = 1
                 lastp = 1
             end
         end
-        if p==myid()
-            # for local spawn, simulate semantics of copying bindings
-            if isa(env,Tuple)
-                env = map(x->(isa(x,Box)?Box(x.contents):x), env)
-                linfo = ccall(:jl_closure_linfo, Any, (Any,), thunk)
-                thunk = ccall(:jl_new_closure_internal, Any, (Any, Any),
-                              linfo, env)::Function
-            end
-        end
         spawnat(p, thunk)
     end
 end
 
-macro spawn(thk)
-    :(spawn(()->($thk)))
+find_vars(e) = find_vars(e, {})
+function find_vars(e, lst)
+    if isa(e,Symbol)
+        if isbound(e) && isgeneric(eval(e))
+            # exclude global generic functions
+        else
+            push(lst, e)
+        end
+    elseif isa(e,Expr)
+        foreach(x->find_vars(x,lst), e.args)
+    end
+    lst
 end
 
-macro spawnlocal(thk)
-    :(spawnat(LocalProcess(), ()->($thk)))
+# wrap an expression in "let a=a,b=b,..." for each var it references
+function localize_vars(expr)
+    v = find_vars(expr)
+    # requires a special feature of the front end that knows how to insert
+    # the correct variables. the list of free variables cannot be computed
+    # from a macro.
+    Expr(:localize,
+         {:(()->($expr)), v...},
+         Any)
+end
+
+macro spawn(expr)
+    expr = localize_vars(:(()->($expr)))
+    :(spawn($expr))
+end
+
+macro spawnlocal(expr)
+    expr = localize_vars(:(()->($expr)))
+    :(spawnat(LocalProcess(), $expr))
 end
 
 at_each(f, args...) = at_each(PGRP, f, args...)
@@ -1229,7 +1244,7 @@ del_fd_handler(fd) = del(fd_handlers, fd)
 function event_loop(isclient)
     fdset = FDSet()
     iserr, lasterr = false, ()
-    
+
     while true
         try
             if iserr
@@ -1241,7 +1256,7 @@ function event_loop(isclient)
                 for (fd,_) = fd_handlers
                     add(fdset, fd)
                 end
-                
+
                 nselect = select_read(fdset, isempty(Workqueue) ? 10 : 0)
                 if nselect == 0
                     if !isempty(Workqueue)
@@ -1265,37 +1280,5 @@ function event_loop(isclient)
             end
             iserr, lasterr = true, e
         end
-    end
-end
-
-roottask = current_task()
-roottask_wi = WorkItem(roottask)
-
-function repl_callback(ast, show_value)
-    # use root task to execute user input
-    roottask_wi.argument = (ast, show_value)
-    perform_work(roottask_wi)
-end
-
-# start as a node that accepts interactive input
-function start_client()
-    ccall(:jl_start_io_thread, Void, ())
-    try
-        global Workqueue = {}
-        global Waiting = HashTable(64)
-        global Scheduler = Task(()->event_loop(true), 1024*1024)
-        global PGRP = ProcessGroup(1, {LocalProcess()}, {Location("",0)})
-
-        while true
-            add_fd_handler(STDIN.fd, fd->ccall(:jl_stdin_callback, Void, ()))
-            (ast, show_value) = yield()
-            del_fd_handler(STDIN.fd)
-            roottask_wi.requeue = true
-            ccall(:jl_eval_user_input, Void, (Any, Int32),
-                  ast, show_value)
-            roottask_wi.requeue = false
-        end
-    catch e
-        show(e)
     end
 end

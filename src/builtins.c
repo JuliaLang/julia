@@ -432,7 +432,13 @@ JL_CALLABLE(jl_f_top_eval)
     }
     jl_value_t *exex = NULL;
     JL_GC_PUSH(&exex);
-    exex = jl_expand(e);
+    if (ex->head == body_sym || ex->head == lambda_sym) {
+        // already expanded
+        exex = e;
+    }
+    else {
+        exex = jl_expand(e);
+    }
     jl_value_t *result = jl_toplevel_eval(exex);
     JL_GC_POP();
     return result;
@@ -1117,6 +1123,16 @@ JL_CALLABLE(jl_f_new_bits_type)
                                         nb);
 }
 
+JL_CALLABLE(jl_f_def_macro)
+{
+    jl_sym_t *nm = (jl_sym_t*)args[0];
+    assert(jl_is_symbol(nm));
+    jl_function_t *f = (jl_function_t*)args[1];
+    assert(jl_is_function(f));
+    jl_set_expander(jl_system_module, nm, f);
+    return (jl_value_t*)jl_nothing;
+}
+
 JL_CALLABLE(jl_f_typevar)
 {
     if (nargs < 1 || nargs > 3) {
@@ -1349,6 +1365,7 @@ void jl_init_primitives()
     add_builtin_func("new_tag_type", jl_f_new_tag_type);
     add_builtin_func("new_tag_type_super", jl_f_new_tag_type_super);
     add_builtin_func("new_bits_type", jl_f_new_bits_type);
+    add_builtin_func("def_macro", jl_f_def_macro);
 
     // builtin types
     add_builtin("Any", (jl_value_t*)jl_any_type);

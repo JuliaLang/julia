@@ -77,8 +77,8 @@ imag{T <: Real}(x::Tensor{T}) = zero(x)
 
 macro unary_op(f)
     quote
-        
-        function ($f)(A::Tensor)            
+
+        function ($f)(A::Tensor)
             F = similar(A)
             for i=1:numel(A)
                 F[i] = ($f)(A[i])
@@ -349,7 +349,7 @@ function assign(A::Tensor, x, I0::Indices, I::Indices...)
         end
         A[index] = x
     end
-        
+
     cartesian_map(store_one, append(tuple(I0), I))
     return A
 end
@@ -369,7 +369,7 @@ function assign(A::Tensor, X::Tensor, I0::Indices, I::Indices...)
         A[index] = X[refind]
         refind += 1
     end
-    
+
     cartesian_map(store_all, append(tuple(I0), I))
     return A
 end
@@ -396,19 +396,19 @@ function areduce(f::Function, A::Tensor, region::Region, RType::Type)
     ndimsA = length(dimsA)
     dimsR = ntuple(ndimsA, i->(contains(region, i) ? 1 : dimsA[i]))
     R = similar(A, RType, dimsR)
-    
+
     function reduce_one(ind)
         sliceA = ntuple(ndimsA, i->(contains(region, i) ?
                                     Range1(1,dimsA[i]) :
                                     ind[i]))
         R[ind...] = f(A[sliceA...])
     end
-    
+
     cartesian_map(reduce_one, ntuple(ndimsA, i->(Range1(1,dimsR[i]))) )
     return R
 end
 
-for f = (:max, :min, :sum, :prod) 
+for f = (:max, :min, :sum, :prod)
     @eval function ($f){T}(A::Tensor{T,2}, dim::Region)
        if isinteger(dim)
           if dim == 1
@@ -665,3 +665,35 @@ function ind2sub(dims, ind::Index)
     end
     return sub
 end
+
+## subarrays ##
+
+type SubArray{T,N,A<:Tensor,I<:(Indices...)} <: Tensor{T,N}
+    parent::A
+    indexes::I
+    dims::Dims
+    
+    SubArray(p::A, i::I) = new(p, i, map(length, i))
+end
+
+sub{T,N}(A::Tensor{T,N}, i::NTuple{N,Indices}) =
+    SubArray{T,N,typeof(A),typeof(i)}(A, i)
+
+sub(A::Tensor, i::Indices...) = sub(A, i)
+
+size(s::SubArray) = s.dims
+ndims{T,N}(s::SubArray{T,N}) = N
+
+copy(s::SubArray) = copy_to(similar(s.parent, size(s)), s)
+similar(s::SubArray, T::Type, dims::Dims) = similar(s.parent, T, dims)
+
+ref(s::SubArray) = s
+
+ref{T}(s::SubArray{T,1}, i::Index) = s.parent[s.indexes[1][i]]
+
+ref{T}(s::SubArray{T,2}, i::Index, j::Index) =
+    s.parent[s.indexes[1][i], s.indexes[2][j]]
+
+ref(s::SubArray, is::Index...) = s.parent[map(ref, s.indexes, is)...]
+
+ref(s::SubArray, i::Index) = s[ind2sub(size(s), i)...]

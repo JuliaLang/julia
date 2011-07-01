@@ -201,7 +201,7 @@ stdin (cmds::Cmds) = fd(cmds,STDIN)
 stdout(cmds::Cmds) = fd(cmds,STDOUT)
 stderr(cmds::Cmds) = fd(cmds,STDERR)
 
-cmds(port::Port) = set(port.cmd)
+cmds(port::Port) = Set(port.cmd)
 
 function cmds(ports::Ports)
     c = Set{Cmd}()

@@ -608,7 +608,7 @@ shell_escape(cmd::String, args::String...) =
 ## interface to parser ##
 
 function parse(s::String, pos, greedy)
-	# returns (expr, end_pos). expr is () in case of parse error.
+    # returns (expr, end_pos). expr is () in case of parse error.
     ex, pos = ccall(:jl_parse_string, Any,
                     (Ptr{Uint8},Int32,Int32),
                     cstring(s), int32(pos)-1, greedy ? 1:0)
@@ -675,8 +675,8 @@ function split(s::String, delims, include_empty)
 end
 
 split(s::String, delims) = split(s, delims, true)
-split(s::String, c::Char) = split(s, set(c))
-split(s::String, c::Char, incl) = split(s, set(c), incl)
+split(s::String, c::Char) = split(s, Set(c))
+split(s::String, c::Char, incl) = split(s, Set(c), incl)
 
 function print_joined(delim, strings)
     for i = 1:length(strings)

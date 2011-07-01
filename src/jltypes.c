@@ -2203,9 +2203,11 @@ void jl_init_types()
     jl_undef_type = jl_new_tagtype((jl_value_t*)jl_symbol("Undef"),
                                    jl_any_type, jl_null);
 
-    // Type{Type}
-    jl_typetype_type = (jl_tag_type_t*)jl_apply_type((jl_value_t*)jl_type_type,
-                                                     jl_tuple(1,jl_type_type));
+    // Type{T}
+    jl_typetype_tvar = tvar("T");
+    jl_typetype_type = (jl_tag_type_t*)
+        jl_apply_type((jl_value_t*)jl_type_type,
+                      jl_tuple(1,jl_typetype_tvar));
 
     call_sym = jl_symbol("call");
     call1_sym = jl_symbol("call1");

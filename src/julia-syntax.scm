@@ -408,8 +408,8 @@
 
    ;; macro definition
    (pattern-lambda (macro (call name . argl) body)
-		   `(macro (quote ,name)
-		      (-> (tuple ,@argl) ,body)))
+		   `(call (top def_macro) (quote ,name)
+			  (-> (tuple ,@argl) ,body)))
 
    ;; expression form function definition
    (pattern-lambda (= (call (curly name . sparams) . argl) body)
@@ -1394,6 +1394,19 @@ So far only the second case can actually occur.
 	   `(lambda ,args
 	      (vinf ,(caddr e) ,vi ,cv ())
 	      ,bod)))
+	((eq? (car e) 'localize)
+	 ;; special feature for @spawn that wraps a piece of code in a "let"
+	 ;; binding each free variable.
+	 (let ((env-vars (map vinfo:name env))
+	       (localize-vars (cddr e)))
+	   (let ((vs (filter
+		      (lambda (v) (or (memq v localize-vars)
+				      (memq v env-vars)))
+		      (free-vars (cadr e)))))
+	     (analyze-vars
+	      `(call (lambda ,vs ,(caddr (cadr e)) ,(cadddr (cadr e)))
+		     ,@vs)
+	      env))))
 	(else (cons (car e)
 		    (map (lambda (x) (analyze-vars x env))
 			 (cdr e))))))

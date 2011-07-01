@@ -1,9 +1,9 @@
 libBLAS = dlopen("libLAPACK")
 
-# SUBROUTINE DCOPY(N,DX,INCX,DY,INCY) 
+# SUBROUTINE DCOPY(N,DX,INCX,DY,INCY)
 
 macro blas_copy(fname, shape, eltype)
-    quote 
+    quote
         function copy(X::($shape){$eltype})
             sz = size(X)
             Y = Array($eltype, sz)
@@ -40,26 +40,27 @@ end
 
 @blas_dot :ddot_ Float64
 @blas_dot :sdot_ Float32
-@blas_dot :zdot_ Complex128
-@blas_dot :cdot_ Complex64
+# ccall does not work well when complex values are returned
+#@blas_dot :zdotc_ Complex128
+#@blas_dot :cdotc_ Complex64
 
 # DOUBLE PRECISION FUNCTION DNRM2(N,X,INCX)
 
-macro blas_norm(fname, eltype)
+macro blas_norm(fname, eltype, ret_type)
     quote
         function norm(x::DenseVector{$eltype})
             ccall(dlsym(libBLAS, $fname),
-                  $eltype,
+                  $ret_type,
                   (Ptr{Int32}, Ptr{$eltype}, Ptr{Int32}),
                   length(x), x, 1)
         end
     end
 end
 
-@blas_norm :dnrm2_ Float64
-@blas_norm :snrm2_ Float32
-@blas_norm :znrm2_ Complex128
-@blas_norm :cnrm2_ Complex64
+@blas_norm :dnrm2_ Float64 Float64
+@blas_norm :snrm2_ Float32 Float32
+@blas_norm :dznrm2_ Complex128 Float64
+@blas_norm :scnrm2_ Complex64 Float32
 
 # SUBROUTINE DGEMM(TRANSA,TRANSB,M,N,K,ALPHA,A,LDA,B,LDB,BETA,C,LDC)
 # *     .. Scalar Arguments ..

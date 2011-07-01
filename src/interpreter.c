@@ -140,15 +140,6 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl)
         JL_GC_POP();
         return gf;
     }
-    else if (ex->head == macro_sym) {
-        // macro definition
-        jl_sym_t *nm = (jl_sym_t*)eval(args[0], locals, nl);
-        assert(jl_is_symbol(nm));
-        jl_function_t *f = (jl_function_t*)eval(args[1], locals, nl);
-        assert(jl_is_function(f));
-        jl_set_expander(jl_system_module, nm, f);
-        return (jl_value_t*)jl_nothing;
-    }
     else if (ex->head == error_sym) {
         jl_errorf("syntax error: %s", jl_string_data(args[0]));
     }

@@ -315,7 +315,7 @@ apply_type_tfunc = function (A, args...)
         elseif isa(A[i],Int32)
             tparams = append(tparams, (A[i],))
         # TODO: evaluate Int32 static parameter!
-        #elseif 
+        #elseif
         else
             #return args[1]
             tparams = append(tparams, (headtype.parameters[i-1],))

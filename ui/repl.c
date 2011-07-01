@@ -5,51 +5,16 @@
 
 #include "repl.h"
 
-static char jl_banner_plain[] =
-    "               _      \n"
-    "   _       _ _(_)_     |\n"
-    "  (_)     | (_) (_)    |  A fresh approach to technical computing.\n"
-#ifdef DEBUG
-    "   _ _   _| |_  __ _   |  pre-release version (debug build)\n"
-#else
-    "   _ _   _| |_  __ _   |  pre-release version\n"
-#endif
-    "  | | | | | | |/ _` |  |\n"
-    "  | | |_| | | | (_| |  |\n"  // \302\2512009-2011, Jeff Bezanson, Stefan Karpinski, Viral B. Shah.\n" 
-    " _/ |\\__'_|_|_|\\__'_|  |\n" // All rights reserved.\n"
-    "|__/                   |\n\n";
-
-static char jl_banner_color[] =
-    "\033[1m               \033[32m_\033[37m      \n"
-    "   \033[34m_\033[37m       _ \033[31m_\033[32m(_)\033[35m_\033[37m     |\n"
-    "  \033[34m(_)\033[37m     | \033[31m(_) \033[35m(_)\033[37m    |  A fresh approach to technical computing.\n"
-#ifdef DEBUG
-    "   _ _   _| |_  __ _   |  pre-release version (debug build)\n"
-#else
-    "   _ _   _| |_  __ _   |  pre-release version\n"
-#endif
-    "  | | | | | | |/ _` |  |\n"
-    "  | | |_| | | | (_| |  |\n" //  \302\2512009-2011, Jeff Bezanson, Stefan Karpinski, Viral B. Shah. \n"
-    " _/ |\\__'_|_|_|\\__'_|  |\n" //  All rights reserved.\n"
-    "|__/                   |\033[0m\n\n";
-
-
 char *jl_answer_color  = "\033[1m\033[34m";
 char *prompt_string;
 
 static char jl_prompt_plain[] = "julia> ";
 static char jl_color_normal[] = "\033[0m";
-static int print_banner = 1;
-static char *post_boot = NULL;
 static int lisp_prompt = 0;
 int jl_have_event_loop = 0;
 static char *program = NULL;
 
-int num_evals = 0;
-char **eval_exprs = NULL;
-int *print_exprs = NULL;
 char *image_file = "sys.ji";
-char *load_file = NULL;
 
 jl_value_t *rl_ast = NULL;
 int tab_width = 2;
@@ -77,39 +42,25 @@ static const char *opts =
     " -h --help                Print this message\n";
 
 void parse_opts(int *argcp, char ***argvp) {
-    static char* shortopts = "+qe:E:P:H:T:bL:hJ:";
+    static char* shortopts = "+H:T:bhJ:";
     static struct option longopts[] = {
-        { "quiet",       no_argument,       0, 'q' },
-        { "eval",        required_argument, 0, 'e' },
-        { "print",       required_argument, 0, 'E' },
-        { "post-boot",   required_argument, 0, 'P' },
         { "home",        required_argument, 0, 'H' },
         { "tab",         required_argument, 0, 'T' },
         { "bare",        no_argument,       0, 'b' },
         { "lisp",        no_argument,       &lisp_prompt, 1 },
-        { "load",        required_argument, 0, 'L' },
         { "help",        no_argument,       0, 'h' },
         { "sysimage",    required_argument, 0, 'J' },
         { 0, 0, 0, 0 }
     };
     int c;
+    opterr = 0;
     while ((c = getopt_long(*argcp,*argvp,shortopts,longopts,0)) != -1) {
+        if (c == '?') {
+            optind--;
+            break;
+        }
         switch (c) {
         case 0:
-            break;
-        case 'q':
-            print_banner = 0;
-            break;
-        case 'e':
-        case 'E':
-            num_evals++;
-            eval_exprs = (char**)realloc(eval_exprs, num_evals*sizeof(char*));
-            print_exprs = (int*)realloc(print_exprs, num_evals*sizeof(int));
-            eval_exprs[num_evals-1] = optarg;
-            print_exprs[num_evals-1] = (c == 'E');
-            break;
-        case 'P':
-            post_boot = strdup(optarg);
             break;
         case 'H':
             julia_home = strdup(optarg);
@@ -121,27 +72,17 @@ void parse_opts(int *argcp, char ***argvp) {
         case 'b':
             image_file = NULL;
             break;
-        case 'L':
-            load_file = optarg;
-            break;
         case 'J':
             image_file = optarg;
             break;
         case 'h':
             printf("%s%s", usage, opts);
             exit(0);
-        case '?':
-            ios_printf(ios_stderr, "options:\n%s", opts);
-            exit(1);
         default:
             ios_printf(ios_stderr, "julia: unhandled option -- %c\n",  c);
             ios_printf(ios_stderr, "This is a bug, please report it.\n");
             exit(1);
         }
-    }
-    if (!post_boot) {
-        post_boot = getenv("JL_POST_BOOT");
-        if (post_boot) post_boot = strdup(post_boot);
     }
     if (!julia_home) {
         julia_home = getenv("JULIA_HOME");
@@ -173,31 +114,9 @@ void parse_opts(int *argcp, char ***argvp) {
         else if (!strcmp(answer_color,"white"))
             jl_answer_color  = "\033[1m\033[37m";
     }
-    /*
-    char *pwd = getenv("PWD");
-    if (julia_home && pwd) {
-        int i, prefix = 1;
-        for (i=0; pwd[i]; i++) {
-            if (pwd[i] != julia_home[i]) {
-                prefix = 0;
-                break;
-            }
-        }
-        if (prefix && (julia_home[i] == '/' || julia_home[i] == '\0')) {
-            while (julia_home[i] == '/') i++;
-            if (julia_home[i]) {
-                char *p = strdup(julia_home + i);
-                free(julia_home);
-                julia_home = p;
-            } else {
-                julia_home = NULL;
-            }
-        }
-    }
-    */
     *argvp += optind;
     *argcp -= optind;
-    if (!num_evals && *argcp > 0) {
+    if (image_file==NULL && *argcp > 0) {
         if (strcmp((*argvp)[0], "-")) {
             program = (*argvp)[0];
         }
@@ -252,22 +171,6 @@ static int exec_program()
     JL_CATCH {
         err = 1;
         goto again;
-    }
-    return 0;
-}
-
-// load a file at startup before proceeding with REPL or program
-int jl_load_startup_file(char *fname)
-{
-    JL_TRY {
-        jl_load(fname);
-    }
-    JL_CATCH {
-        ios_printf(ios_stderr, "error during startup:\n");
-        //jl_typeinf_func = NULL;
-        jl_show(jl_exception_in_transit);
-        ios_printf(ios_stdout, "\n");
-        return 1;
     }
     return 0;
 }
@@ -433,52 +336,6 @@ int true_main(int argc, char *argv[])
     jl_set_global(jl_system_module, jl_symbol("JULIA_HOME"),
                  jl_cstr_to_string(julia_home));
 
-    // post boot phase: do -P and -L actions
-    if (post_boot) {
-        jl_value_t *ast = jl_parse_input_line(post_boot);
-        jl_toplevel_eval(ast);
-    }
-
-    if (load_file) {
-        if (jl_load_startup_file(load_file))
-            return 1;
-    }
-
-    // handle -e and -E
-    if (num_evals) {
-        int i, iserr=0;
-        jl_value_t *ast=NULL, *value=NULL;
-        JL_GC_PUSH(&ast, &value);
-        for (i=0; i < num_evals; i++) {
-        try_again: ;
-            JL_TRY {
-                if (iserr) {
-                    jl_show(jl_exception_in_transit);
-                    ios_printf(ios_stdout, "\n");
-                    iserr = 0;
-                }
-                if (i < num_evals) {
-                    ast = jl_parse_input_line(eval_exprs[i]);
-                    if (ast != NULL) {
-                        value = jl_toplevel_eval(ast);
-                        if (print_exprs[i]) {
-                            jl_show(value);
-                            ios_printf(ios_stdout, "\n");
-                        }
-                    }
-                }
-            }
-            JL_CATCH {
-                iserr = 1;
-                i++;
-                goto try_again;
-            }
-        }
-        jl_shutdown_frontend();
-        JL_GC_POP();
-        return 0;
-    }
-
     // run program if specified, otherwise enter REPL
     if (program) {
         return exec_program();
@@ -487,21 +344,16 @@ int true_main(int argc, char *argv[])
     init_repl_environment();
 
     have_color = detect_color();
-    char *banner = have_color ? jl_banner_color : jl_banner_plain;
     char *prompt = have_color ? jl_prompt_color : jl_prompt_plain;
     prompt_length = strlen(jl_prompt_plain);
     prompt_string = prompt;
-
-    if (print_banner) {
-        ios_printf(ios_stdout, "%s", banner);
-    }
 
 #ifdef CLOUD_REPL
     jl_function_t *start_client = NULL;
 #else
     jl_function_t *start_client =
         (jl_function_t*)
-        jl_get_global(jl_system_module, jl_symbol("start_client"));
+        jl_get_global(jl_system_module, jl_symbol("_start"));
 #endif
 
     if (start_client == NULL) {
@@ -533,7 +385,6 @@ int true_main(int argc, char *argv[])
     }
     else {
         jl_have_event_loop = 1;
-        repl_callback_enable();
         jl_apply(start_client, NULL, 0);
     }
 
