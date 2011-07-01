@@ -428,6 +428,9 @@ static void init_task(jl_task_t *t)
 }
 #endif
 
+char* getFunctionInfo(size_t pointer);
+
+
 
 void show_backtrace (void) {
   unw_cursor_t cursor; unw_context_t uc;
@@ -440,7 +443,7 @@ void show_backtrace (void) {
   while (index > 0) { 
     unw_get_reg(&cursor, UNW_REG_IP, &ip);
     unw_get_reg(&cursor, UNW_REG_SP, &sp);
-    printf ("ip = %lx, sp = %lx\n", (long) ip, (long) sp);    
+    printf ("Function Name = %s, sp = %lx\n", getFunctionInfo(ip), (long) sp);    
     index = unw_step(&cursor); 
     printf("index %d\n", index);
   }
