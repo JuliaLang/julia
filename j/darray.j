@@ -1,6 +1,6 @@
 type DArray{T,N,distdim} <: Tensor{T,N}
     dims::NTuple{N,Size}
-    locl::Union((),RemoteRef,Array{T,N})
+    locl::Union(RemoteRef,Array{T,N})
     # the distributed array has N pieces
     # pmap[i]==p ⇒ processor p has piece i
     pmap::Array{Int32,1}
@@ -11,7 +11,7 @@ type DArray{T,N,distdim} <: Tensor{T,N}
     localpiece::Int32  # my piece #; pmap[localpiece]==myid()
     go::GlobalObject
 
-    function DArray(go, T, distdim, dims, initializer, pmap, dist)
+    function DArray(go, dims, initializer, pmap, dist)
         mi = myid()
         lp = 0
         for i=1:length(pmap)
@@ -22,9 +22,13 @@ type DArray{T,N,distdim} <: Tensor{T,N}
 
         mysz = lp==0 ? 0 : (dist[lp+1]-dist[lp])
         locsz = ntuple(length(dims), i->(i==distdim?mysz:dims[i]))
-        da = new(dims,
-                 (), #Array(T, locsz),
-                 pmap, dist, distdim, lp, go)
+        da = new()
+        da.dims = dims
+        da.pmap = pmap
+        da.dist = dist
+        da.distdim = distdim
+        da.localpiece = lp
+        da.go = go
         if is(initializer,RemoteRef)
             da.locl = RemoteRef()
         else
@@ -34,22 +38,22 @@ type DArray{T,N,distdim} <: Tensor{T,N}
     end
 
     # don't use DArray() directly; use darray() below instead
-    function DArray(T, distdim, dims, initializer, procs, dist)
-        GlobalObject(g->DArray(g, T, distdim, dims, initializer, procs, dist))
+    function DArray(dims, initializer, procs, dist)
+        GlobalObject(g->DArray{T,N,distdim}(g, dims, initializer, procs, dist))
         #go.local_identity
     end
 
-    DArray(T, distdim, dims, procs::Vector, dist::Vector) =
-        DArray(T, distdim, dims, RemoteRef, procs, dist)
+    DArray(dims, procs::Vector, dist::Vector) =
+        DArray{T,N,distdim}(dims, RemoteRef, procs, dist)
 
-    function DArray(T, distdim, dims, initializer::Function)
+    function DArray(dims, initializer::Function)
         global PGRP
         procs = linspace(1,PGRP.np)
         dist = defaultdist(distdim, dims, length(procs))
-        DArray(T, distdim, dims, initializer, procs, dist)
+        DArray{T,N,distdim}(dims, initializer, procs, dist)
     end
 
-    DArray(T, distdim, dims) = DArray(T, distdim, dims, RemoteRef)
+    DArray(dims) = DArray{T,N,distdim}(dims, RemoteRef)
 end
 
 size(d::DArray) = d.dims
@@ -111,7 +115,7 @@ end
 # initializer is a function accepting (el_type, local_size, darray) where
 # the last argument is the full DArray being constructed.
 darray{T}(init, ::Type{T}, dims::Dims, distdim, procs, dist) =
-    DArray{T,length(dims),distdim}(T, distdim, dims, init, procs, dist)
+    DArray{T,length(dims),distdim}(dims, init, procs, dist)
 darray{T}(init, ::Type{T}, dims::Dims, distdim, procs) =
     darray(init, T, dims, distdim, procs,
            defaultdist(distdim, dims, length(procs)))
@@ -122,7 +126,7 @@ darray(init, T::Type, dims::Size...) = darray(init, T, dims)
 darray(init, dims::Dims) = darray(init, Float64, dims)
 darray(init, dims::Size...) = darray(init, dims)
 
-clone(d::DArray, T::Type, dims::Dims) =
+similar(d::DArray, T::Type, dims::Dims) =
     darray((T,lsz,da)->Array(T,lsz), T, dims,
            d.distdim>length(dims) ? maxdim(dims) : d.distdim, d.pmap)
 
@@ -275,7 +279,7 @@ function node_changedist{T}(A::DArray{T}, da, local_size)
     from_dist = A.distdim
     dimsA = size(A)
     myidxs = newdist[da.localpiece]:newdist[da.localpiece+1]-1
-    
+
     for p = 1:length(A.dist)-1
         R = remote_call_fetch(A.pmap[p], node_ref, A, to_dist, myidxs)
         sliceR = { i == from_dist ? (A.dist[p]:A.dist[p+1]-1) : (1:local_size[i]) | i=1:ndims(A) }

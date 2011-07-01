@@ -1,12 +1,10 @@
 ## linalg.j: Basic Linear Algebra functions ##
 
-dot(x::Vector, y::Vector) = sum(x.*y)
-# Take care of dot product of vectors that are actually matrices or N-d
-dot(x::Matrix, y::Matrix) = dot(reshape(x, prod(size(x))), reshape(y, prod(size(y))) )
+dot(x::Vector, y::Vector) = sum(x.*conj(y))
 
 # blas.j defines these for floats; this handles other cases
-(*)(A::Matrix, B::Vector) = [ dot(A[i,:],B) | i=1:size(A,1) ]
-(*)(A::Matrix, B::Matrix) = [ dot(A[i,:],B[:,j]) | i=1:size(A,1), j=1:size(B,2) ]
+(*)(A::Matrix, B::Vector) = [ sum(A[i,:].*B) | i=1:size(A,1) ]
+(*)(A::Matrix, B::Matrix) = [ sum(A[i,:].*B[:,j]) | i=1:size(A,1), j=1:size(B,2) ]
 
 triu(M) = triu(M,0)
 tril(M) = tril(M,0)
@@ -17,7 +15,7 @@ tril{T}(M::Matrix{T}, k) = [ j-i <= k ? M[i,j] : zero(T) |
 
 diff(a::Vector) = [ a[i+1] - a[i] | i=1:length(a)-1 ]
 
-function diff(a::Matrix, dim) 
+function diff(a::Matrix, dim)
     if dim == 1
         [ a[i+1,j] - a[i,j] | i=1:size(a,1)-1, j=1:size(a,2) ]
     else
@@ -95,6 +93,17 @@ function issymmetric(A::Matrix)
     if m != n; error("matrix must be square, got $(m)x$(n)"); end
     for i = 1:(n-1), j = (i+1):n
         if A[i,j] != A[j,i]
+            return false
+        end
+    end
+    return true
+end
+
+function ishermitian(A::Matrix)
+    m, n = size(A)
+    if m != n; error("matrix must be square, got $(m)x$(n)"); end
+    for i = 1:n, j = i:n
+        if A[i,j] != conj(A[j,i])
             return false
         end
     end

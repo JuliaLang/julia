@@ -240,6 +240,7 @@ typedef struct {
 
 extern jl_tag_type_t *jl_any_type;
 extern jl_tag_type_t *jl_type_type;
+extern jl_tvar_t     *jl_typetype_tvar;
 extern jl_tag_type_t *jl_typetype_type;
 extern jl_tag_type_t *jl_undef_type;
 extern jl_struct_type_t *jl_typename_type;
@@ -338,12 +339,12 @@ extern jl_sym_t *goto_sym;    extern jl_sym_t *goto_ifnot_sym;
 extern jl_sym_t *label_sym;   extern jl_sym_t *return_sym;
 extern jl_sym_t *lambda_sym;  extern jl_sym_t *assign_sym;
 extern jl_sym_t *null_sym;    extern jl_sym_t *body_sym;
-extern jl_sym_t *unbound_sym; extern jl_sym_t *macro_sym;
+extern jl_sym_t *isbound_sym; extern jl_sym_t *macro_sym;
 extern jl_sym_t *locals_sym;  extern jl_sym_t *colons_sym;
 extern jl_sym_t *symbol_sym;  extern jl_sym_t *unexpanded_sym;
 extern jl_sym_t *Any_sym;     extern jl_sym_t *method_sym;
 extern jl_sym_t *enter_sym;   extern jl_sym_t *leave_sym;
-extern jl_sym_t *exc_sym;
+extern jl_sym_t *exc_sym;     extern jl_sym_t *new_sym;
 extern jl_sym_t *static_typeof_sym;
 
 #ifdef __LP64__
@@ -516,6 +517,7 @@ jl_tag_type_t *jl_wrap_Type(jl_value_t *t);  // x -> Type{x}
 
 // constructors
 DLLEXPORT jl_value_t *jl_new_struct(jl_struct_type_t *type, ...);
+DLLEXPORT jl_value_t *jl_new_struct_uninit(jl_struct_type_t *type);
 DLLEXPORT jl_value_t *jl_new_structt(jl_struct_type_t *type, jl_tuple_t *t);
 jl_function_t *jl_new_closure(jl_fptr_t proc, jl_value_t *env);
 jl_lambda_info_t *jl_new_lambda_info(jl_value_t *ast, jl_tuple_t *sparams);
@@ -616,6 +618,7 @@ void jl_type_error_rt(const char *fname, const char *context,
                       jl_value_t *ty, jl_value_t *got);
 jl_value_t *jl_no_method_error(jl_function_t *f, jl_value_t **args, size_t na);
 void jl_undef_ref_error();
+void jl_divide_by_zero_error();
 
 // initialization functions
 DLLEXPORT void julia_init(char *imageFile);

@@ -6,38 +6,20 @@ size(a::Array) = arraysize(a)
 size(a::Array, d) = arraysize(a, d)
 numel(a::Array) = arraylen(a)
 
+iscomplex(x::Array{Complex128}) = true
+iscomplex(x::Array{Complex64}) = true
+
 ## Constructors ##
 
 jl_comprehension_zeros{T,n}(oneresult::Tensor{T,n}, dims...) = Array(T, dims...)
 jl_comprehension_zeros{T}(oneresult::T, dims...) = Array(T, dims...)
 jl_comprehension_zeros(oneresult::(), dims...) = Array(None, dims...)
 
-clone(a::Array, T::Type, dims::Dims) = Array(T, dims)
-clone{T}(a::Array{T,1}) = Array(T, size(a,1))
-clone{T}(a::Array{T,2}) = Array(T, size(a,1), size(a,2))
-clone{T}(a::Array{T,1}, S::Type) = Array(S, size(a,1))
-clone{T}(a::Array{T,2}, S::Type) = Array(S, size(a,1), size(a,2))
-
-macro matrix_builder(t, f)
-    quote
-
-        function ($f)(dims::Dims)
-            A = Array($t, dims)
-            for i = 1:numel(A)
-                A[i] = ($f)()
-            end
-            return A
-        end
-        
-        ($f)(dims::Size...) = ($f)(dims)
-
-    end # quote
-end # macro
-
-@matrix_builder Float64 rand
-@matrix_builder Float32 randf
-@matrix_builder Float64 randn
-@matrix_builder Uint32 randui32
+similar(a::Array, T::Type, dims::Dims) = Array(T, dims)
+similar{T}(a::Array{T,1}) = Array(T, size(a,1))
+similar{T}(a::Array{T,2}) = Array(T, size(a,1), size(a,2))
+similar{T}(a::Array{T,1}, S::Type) = Array(S, size(a,1))
+similar{T}(a::Array{T,2}, S::Type) = Array(S, size(a,1), size(a,2))
 
 zeros{T}(::Type{T}, dims::Dims) = fill(Array(T, dims), zero(T))
 zeros(T::Type, dims::Size...) = zeros(T, dims)
@@ -58,7 +40,7 @@ falses(dims::Size...) = falses(dims)
 ## Conversions ##
 
 convert{T,n}(::Type{Array{T,n}}, x::Array{T,n}) = x
-convert{T,n,S}(::Type{Array{T,n}}, x::Array{S,n}) = copy_to(clone(x,T), x)
+convert{T,n,S}(::Type{Array{T,n}}, x::Array{S,n}) = copy_to(similar(x,T), x)
 
 int8   {T,n}(x::Array{T,n}) = convert(Array{Int8   ,n}, x)
 uint8  {T,n}(x::Array{T,n}) = convert(Array{Uint8  ,n}, x)
@@ -174,7 +156,7 @@ vcat{T}(X::T...) = [ X[i] | i=1:length(X) ]
 hcat{T}(V::Array{T,1}...) = [ V[j][i] | i=1:length(V[1]), j=1:length(V) ]
 
 function vcat{T}(V::Array{T,1}...)
-    a = clone(V[1], sum(map(length, V)))
+    a = similar(V[1], sum(map(length, V)))
     pos = 1
     for k=1:length(V)
         Vk = V[k]
@@ -190,7 +172,7 @@ function hcat{T}(A::Array{T,2}...)
     nargs = length(A)
     ncols = sum(a->size(a, 2), A)
     nrows = size(A[1], 1)
-    B = clone(A[1], nrows, ncols)
+    B = similar(A[1], nrows, ncols)
     pos = 1
     for k=1:nargs
         Ak = A[k]
@@ -206,7 +188,7 @@ function vcat{T}(A::Array{T,2}...)
     nargs = length(A)
     nrows = sum(a->size(a, 1), A)
     ncols = size(A[1], 2)
-    B = clone(A[1], nrows, ncols)
+    B = similar(A[1], nrows, ncols)
     pos = 1
     for j=1:ncols, k=1:nargs
         Ak = A[k]
@@ -273,7 +255,7 @@ function cat(catdim::Int, A::Array...)
 
     cat_ranges = cumsum(1, cat_ranges...)
     for k=1:nargs
-        cat_one = ntuple(ndimsC, i->(i != catdim ? 
+        cat_one = ntuple(ndimsC, i->(i != catdim ?
                                      Range1(1,dimsC[i]) :
                                      Range1(cat_ranges[k],cat_ranges[k+1]-1) ))
         C[cat_one...] = A[k]

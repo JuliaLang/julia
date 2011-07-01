@@ -37,6 +37,7 @@
     jl_set_memio_func;
     jl_symbol_n;
     jl_matching_methods;
+    jl_get_specialization;
     jl_is_builtin;
     jl_is_genericfunc;
     jl_genericfunc_name;
@@ -54,6 +55,7 @@
     jl_cstr_to_string;
     jl_array_to_string;
     jl_parse_string;
+    jl_parse_input_line;
     jl_is_rest_arg;
     jl_prepare_ast;
     jl_is_leaf_type;
@@ -130,6 +132,7 @@
     jl_input_line_callback_readline;
     jl_input_line_callback_no_readline;
     jl_stdin_callback;
+    repl_callback_enable;
     jl_eval_user_input;
     jl_toplevel_eval;
     jl_enq_send_req;

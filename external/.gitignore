@@ -1,10 +1,10 @@
 /root
-/ARPACK
-/arpack*.tar.gz
-/lapack-*
 /llvm-*
-/mongoose*
-/openblas*
-/patch.tar.gz
-/pcre-*
 /readline-*
+/pcre-*
+/dsfmt-*
+/openblas-*
+/lapack-*
+/arpack-*
+/fftw-*
+/mongoose-*

@@ -73,6 +73,11 @@ void jl_undef_ref_error()
     jl_raise(jl_undefref_exception);
 }
 
+void jl_divide_by_zero_error()
+{
+    jl_raise(jl_divbyzero_exception);
+}
+
 JL_CALLABLE(jl_f_throw)
 {
     JL_NARGS(throw, 1, 1);
@@ -275,6 +280,7 @@ jl_value_t *jl_toplevel_eval_flex(jl_value_t *ex, int fast)
             int i;
             for(i=0; i < vinfos->length; i++) {
                 if (jl_cellref(jl_cellref(vinfos,i),2)!=jl_false) {
+                    // interpreter doesn't handle closure environment
                     ewc = 1;
                     break;
                 }
@@ -420,13 +426,19 @@ JL_CALLABLE(jl_f_top_eval)
     jl_expr_t *ex = (jl_expr_t*)e;
     if (ex->head == symbol_sym || ex->head == top_sym ||
         ex->head == quote_sym || ex->head == null_sym ||
-        ex->head == unbound_sym || ex->head == error_sym) {
+        ex->head == isbound_sym || ex->head == error_sym) {
         // expression types simple enough not to need expansion
         return jl_interpret_toplevel_expr(e);
     }
     jl_value_t *exex = NULL;
     JL_GC_PUSH(&exex);
-    exex = jl_expand(e);
+    if (ex->head == body_sym || ex->head == lambda_sym) {
+        // already expanded
+        exex = e;
+    }
+    else {
+        exex = jl_expand(e);
+    }
     jl_value_t *result = jl_toplevel_eval(exex);
     JL_GC_POP();
     return result;
@@ -494,6 +506,14 @@ size_t jl_field_offset(jl_struct_type_t *t, jl_sym_t *fld)
     return field_offset(t, fld, 0);
 }
 
+static jl_value_t *nth_field(jl_value_t *v, size_t i)
+{
+    jl_value_t *fld = ((jl_value_t**)v)[1+i];
+    if (fld == NULL)
+        jl_undef_ref_error();
+    return fld;
+}
+
 JL_CALLABLE(jl_f_get_field)
 {
     JL_NARGS(getfield, 2, 2);
@@ -503,7 +523,7 @@ JL_CALLABLE(jl_f_get_field)
     if (!jl_is_struct_type(vt))
         jl_type_error("getfield", (jl_value_t*)jl_struct_kind, v);
     size_t i = field_offset((jl_struct_type_t*)vt, (jl_sym_t*)args[1], 1);
-    return ((jl_value_t**)v)[1+i];
+    return nth_field(v, i);
 }
 
 JL_CALLABLE(jl_f_set_field)
@@ -904,7 +924,7 @@ JL_CALLABLE(jl_f_show_any)
             size_t i;
             size_t n = st->names->length;
             for(i=0; i < n; i++) {
-                jl_show(((jl_value_t**)v)[i+1]);
+                jl_show(nth_field(v, i));
                 if (i < n-1)
                     ios_putc(',', s);
             }
@@ -1101,6 +1121,16 @@ JL_CALLABLE(jl_f_new_bits_type)
                   ((jl_sym_t*)args[0])->name);
     return (jl_value_t*)jl_new_bitstype((jl_value_t*)args[0], jl_any_type, p,
                                         nb);
+}
+
+JL_CALLABLE(jl_f_def_macro)
+{
+    jl_sym_t *nm = (jl_sym_t*)args[0];
+    assert(jl_is_symbol(nm));
+    jl_function_t *f = (jl_function_t*)args[1];
+    assert(jl_is_function(f));
+    jl_set_expander(jl_system_module, nm, f);
+    return (jl_value_t*)jl_nothing;
 }
 
 JL_CALLABLE(jl_f_typevar)
@@ -1335,6 +1365,7 @@ void jl_init_primitives()
     add_builtin_func("new_tag_type", jl_f_new_tag_type);
     add_builtin_func("new_tag_type_super", jl_f_new_tag_type_super);
     add_builtin_func("new_bits_type", jl_f_new_bits_type);
+    add_builtin_func("def_macro", jl_f_def_macro);
 
     // builtin types
     add_builtin("Any", (jl_value_t*)jl_any_type);

@@ -472,10 +472,6 @@ issues 6/21/10
 * hooking up the pieces to use inferred types in the compiler
   . we could save tuples (type_sig, AST) as s-exprs to avoid the cost
     of lowering and type inference.
-- make type parameters visible to user-defined constructors
-  . in generic case, instantiate all signatures with the typevar mapping
-    that's currently created in add_generic_ctor
-  . in non-generic case, add static parameters
 * limit specialization of vararg functions
 * method cache invalidation, also invalidate all caches once type inference
   is available (after loading start.j)
@@ -496,7 +492,6 @@ issues 6/21/10
 - expose word size in the language?
   . right now you can't define Ptr
   . make Size the same as size_t
-- assigned(a,i) to tell if an object array location is assigned?
 
 * try/catch
 - flatten memory layout for Array of Complex (immutability)
@@ -513,7 +508,7 @@ issues 6/21/10
 * << >> precedence
 * break in value position
 * tintersect((Int,Int),(T,T)) is wrong when T is T<:Int, ok when T<:Any
-- use nothing instead of () where appropriate
+* use nothing instead of () where appropriate
 
 method ordering tests:
 //:  (T,T) before (Any,Any)
@@ -576,7 +571,7 @@ issues 12/21/10
 - inference in inner functions
 * allow anything iterable to be spliced by ...
 * more flexible string literals
-- something about uninitialized objects in constructors
+* something about uninitialized objects in constructors
   old news (for reference):
   consider generating code for constructors, e.g.
   function new{T}(re::T, im::T)
@@ -615,7 +610,15 @@ default ctors would be
   inside type block: Rational(n, d) = (this.num=n;this.den=d)
   outside:           Rational{T}(n::T, d::T) = Rational{T}(n,d)
 
-- rename clone to new
+  * frontend changes
+  * convert all .j to new constructors
+  * instantiate constructor factory with type's static parameters, and
+    type's name bound to the instantiated type
+  * implement (new ...) in codegen
+    . can be optimized more
+  * (new ...) case in inference
+  * null check in field access
+  * rename clone
 
 * type=>abstract, struct=>type
 * do something about "global X+=1"
@@ -655,9 +658,8 @@ issues 1/24/11
 * saving system image
 * make optimized arrayset, arrayref work on all Arrays
 - parallel
-  . make sure process group setup works
+  * make sure process group setup works
   * function reflection and serialization
-    . lambda-numbering to make it faster
   * automatically resolve local remote references to their values
   * @spawn
   * distributed GC
@@ -666,9 +668,16 @@ issues 1/24/11
     a channel could be a GlobalObject on 2 processors, and you wait for a
     message on the channel. or a DArray might be updated multiple times, and
     you want to wait for the next write (not just the first)
-  . some kind of atomic update, e.g. a[a:b,c:d]=X where once the write begins
+  ? some kind of atomic update, e.g. a[a:b,c:d]=X where once the write begins
     future reads from that region will wait for it to complete
-  . isready()
+  ? isready()
+  . timer events, delay and aggregate messages
+  * lambda-numbering to reuse code for spawned closures
+  * pull repl global variables into spawned closures
+  . do indexing of local objects locally automatically in spawn
+- add line number and file information
+- keep track of renamed var names
+
 ? try to remove @ from macro syntax
 * either add "do" to loops or use
   @parallel for i=1:n
@@ -704,6 +713,9 @@ issues 1/24/11
   where we know the function is identical for all types of x
   - maybe make x::Any different from no type decl
   - reuse specialized methods for multiple types in an Any slot
+- implement SubArray
+- isassigned predicates
+  . maybe syntax like "a?=x" or "a??"
 
 something about update operators, in-place operations in general
 

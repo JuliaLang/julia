@@ -42,7 +42,7 @@ function peakflops()
     a = rand(2000,2000)
     tic(); a*a; qtoc();
     tic(); a*a; t=qtoc();
-    
+
     floprate = (2 * 2000. ^ 3 / t)
 
     println("The peak flop rate is ", floprate*1e-9, " gigaflops")

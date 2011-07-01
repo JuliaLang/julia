@@ -306,7 +306,7 @@
 ; ow, my eyes!!
 (define (parse-Nary s down op head closers allow-empty)
   (if (invalid-initial-token? (require-token s))
-      (error (string "unexpected token " (peek-token s))))
+      (error (string "unexpected " (peek-token s))))
   (if (memv (require-token s) closers)
       (list head)  ; empty block
       (let loop ((ex
@@ -350,17 +350,23 @@
       (return (parse-expr s)))
   (let loop ((ex (parse-expr s))
 	     (first? #t))
-    (let ((t (peek-token s)))
+    (let* ((t   (peek-token s))
+	   (spc (ts:space? s)))
       (if (not (eq? t ':))
 	  ex
 	  (begin (take-token s)
-		 (let ((argument
-			(if (closing-token? (peek-token s))
-			    ':  ; missing last argument
-			    (parse-expr s))))
-		   (if first?
-		       (loop (list t ex argument) #f)
-		       (loop (append ex (list argument)) #t))))))))
+		 (if (and space-sensitive spc
+			  (or (peek-token s) #t) (not (ts:space? s)))
+		     ;; "a :b" in space sensitive mode
+		     (begin (ts:put-back! s ':)
+			    ex)
+		     (let ((argument
+			    (if (closing-token? (peek-token s))
+				':  ; missing last argument
+				(parse-expr s))))
+		       (if first?
+			   (loop (list t ex argument) #f)
+			   (loop (append ex (list argument)) #t)))))))))
 
 ; the principal non-terminals follow, in increasing precedence order
 
@@ -399,7 +405,7 @@
 	      (take-token s)
 	      (cond ((and space-sensitive spc (memq t unary-and-binary-ops)
 			  (or (peek-token s) #t) (not (ts:space? s)))
-		     ; here we have "x -y"
+		     ;; here we have "x -y"
 		     (ts:put-back! s t)
 		     ex)
 		    ((eq? t chain-op)
@@ -465,7 +471,7 @@
 (define (parse-unary s)
   (let ((t (require-token s)))
     (if (closing-token? t)
-	(error (string "unexpected token " t)))
+	(error (string "unexpected " t)))
     (cond ((memq t unary-ops)
 	   (let ((op (take-token s))
 		 (next (peek-token s)))
@@ -601,7 +607,20 @@
 				  (parse-comma-separated-assignments s))))
     ((global) (list 'global (cons 'vars
 				  (parse-comma-separated-assignments s))))
-    ((function macro)
+    ((function)
+     (let* ((paren (eqv? (require-token s) #\())
+	    (sig   (parse-call s)))
+       (begin0 (list word
+		     (if (symbol? sig)
+			 (if paren
+			     ;; in "function (x)" the (x) is a tuple
+			     `(tuple ,sig)
+			     ;; function foo  =>  syntax error
+			     (error "expected ( in function definition"))
+			 sig)
+		     (parse-block s))
+	       (expect-end s))))
+    ((macro)
      (let ((sig (parse-call s)))
        (begin0 (list word sig (parse-block s))
 	       (expect-end s))))
@@ -654,14 +673,16 @@
 	(else   (reverse! (cons r ranges)))))))
 
 (define (parse-space-separated-exprs s)
-  (let loop ((exprs '()))
-    (if (or (closing-token? (peek-token s))
-	    (and space-sensitive (eq? (peek-token s) '|\||)))
-	(reverse! exprs)
-	(let ((e (parse-eq s)))
-	  (case (peek-token s)
-	    ((#\newline)   (reverse! (cons e exprs)))
-	    (else          (loop (cons e exprs))))))))
+  (let ((inside-vec space-sensitive))
+    (with-space-sensitive
+     (let loop ((exprs '()))
+       (if (or (closing-token? (peek-token s))
+	       (and inside-vec (eq? (peek-token s) '|\||)))
+	   (reverse! exprs)
+	   (let ((e (parse-eq s)))
+	     (case (peek-token s)
+	       ((#\newline)   (reverse! (cons e exprs)))
+	       (else          (loop (cons e exprs))))))))))
 
 ; handle function call argument list, or any comma-delimited list.
 ; . an extra comma at the end is allowed
@@ -692,6 +713,9 @@
 		      ; newline character isn't detectable here
 		      #;((eqv? c #\newline)
 		       (error "unexpected line break in argument list"))
+		      ((memv c '(#\] #\}))
+		       (error (string "unexpected " c
+				      " in argument list")))
 		      (else
 		       (error "missing separator in argument list")))))))))
 
@@ -800,6 +824,8 @@
 	 (error "unexpected semicolon in tuple"))
 	#;((#\newline)
 	 (error "unexpected line break in tuple"))
+	((#\] #\})
+	 (error (string "unexpected " t " in tuple")))
 	(else
 	 (error "missing separator in tuple"))))))
 
@@ -963,6 +989,8 @@
 			  `(block ,ex ,blk)))
 		       #;((eqv? t #\newline)
 			(error "unexpected line break in tuple"))
+		       ((memv t '(#\] #\}))
+			(error (string "unexpected " t " in tuple")))
 		       (else
 			(error "missing separator in tuple")))))))
 

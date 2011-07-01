@@ -101,6 +101,14 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl)
     else if (ex->head == symbol_sym) {
         return eval(jl_exprarg(ex,0), locals, nl);
     }
+    else if (ex->head == new_sym) {
+        jl_value_t *thetype = eval(args[0], locals, nl);
+        JL_GC_PUSH(&thetype);
+        assert(jl_is_struct_type(thetype));
+        jl_value_t *v = jl_new_struct_uninit((jl_struct_type_t*)thetype);
+        JL_GC_POP();
+        return v;
+    }
     else if (ex->head == quote_sym) {
         return args[0];
     }
@@ -110,14 +118,10 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl)
     else if (ex->head == body_sym) {
         return eval_body(ex->args, locals, nl, 0);
     }
-    /*
-    else if (ex->head == unbound_sym) {
+    else if (ex->head == isbound_sym) {
         jl_value_t **bp = var_bp((jl_sym_t*)args[0], locals, nl);
-        if (*bp == NULL)
-            return jl_true;
-        return jl_false;
+        return (*bp == NULL) ? jl_false : jl_true;
     }
-    */
     else if (ex->head == exc_sym) {
         return jl_exception_in_transit;
     }
@@ -135,15 +139,6 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl)
                                        (jl_function_t*)meth);
         JL_GC_POP();
         return gf;
-    }
-    else if (ex->head == macro_sym) {
-        // macro definition
-        jl_sym_t *nm = (jl_sym_t*)eval(args[0], locals, nl);
-        assert(jl_is_symbol(nm));
-        jl_function_t *f = (jl_function_t*)eval(args[1], locals, nl);
-        assert(jl_is_function(f));
-        jl_set_expander(jl_system_module, nm, f);
-        return (jl_value_t*)jl_nothing;
     }
     else if (ex->head == error_sym) {
         jl_errorf("syntax error: %s", jl_string_data(args[0]));
@@ -228,21 +223,32 @@ static jl_value_t *eval_body(jl_array_t *stmts, jl_value_t **locals, size_t nl,
     return NULL;
 }
 
-jl_value_t *jl_interpret_toplevel_thunk(jl_lambda_info_t *lam)
+jl_value_t *jl_interpret_toplevel_thunk_with(jl_lambda_info_t *lam,
+                                             jl_value_t **loc, size_t nl)
 {
     jl_expr_t *ast = (jl_expr_t*)lam->ast;
     jl_array_t *stmts = jl_lam_body(ast)->args;
     jl_array_t *l = jl_lam_locals(ast);
     jl_value_t **names = &((jl_value_t**)l->data)[0];
-    jl_value_t **locals = (jl_value_t**)alloca(l->length*2*sizeof(void*));
+    nl += l->length;
+    jl_value_t **locals = (jl_value_t**)alloca(nl*2*sizeof(void*));
     jl_value_t *r = (jl_value_t*)jl_null;
     size_t i=0;
     for(i=0; i < l->length; i++) {
         locals[i*2]   = names[i];
         locals[i*2+1] = NULL;
     }
-    JL_GC_PUSHARGS(locals, l->length*2);
-    r = eval_body(stmts, locals, l->length, 0);
+    for(; i < nl; i++) {
+        locals[i*2]   = loc[(i-l->length)*2];
+        locals[i*2+1] = loc[(i-l->length)*2+1];
+    }
+    JL_GC_PUSHARGS(locals, nl*2);
+    r = eval_body(stmts, locals, nl, 0);
     JL_GC_POP();
     return r;
+}
+
+jl_value_t *jl_interpret_toplevel_thunk(jl_lambda_info_t *lam)
+{
+    return jl_interpret_toplevel_thunk_with(lam, NULL, 0);
 }

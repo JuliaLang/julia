@@ -96,7 +96,7 @@ static jl_value_t *jl_typeid_to_type(int i)
 static bool has_julia_type(Value *v)
 {
     return ((dynamic_cast<Instruction*>(v) != NULL) &&
-            ((Instruction*)v)->hasMetadata());
+            ((Instruction*)v)->getMetadata("julia_type")!=NULL);
 }
 
 static jl_value_t *julia_type_of_without_metadata(Value *v, bool err=true)
@@ -111,11 +111,11 @@ static jl_value_t *julia_type_of_without_metadata(Value *v, bool err=true)
 
 static jl_value_t *julia_type_of(Value *v)
 {
+    MDNode *mdn;
     if (dynamic_cast<Instruction*>(v) == NULL ||
-        !((Instruction*)v)->hasMetadata()) {
+        (mdn = ((Instruction*)v)->getMetadata("julia_type")) == NULL) {
         return julia_type_of_without_metadata(v, true);
     }
-    MDNode *mdn = ((Instruction*)v)->getMetadata("julia_type");
     MDString *md = (MDString*)mdn->getOperand(0);
     const char *vts = md->getString().data();
     int id = (vts[0]-1) + (vts[1]-1)*255;
@@ -775,6 +775,7 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
     const Type *fxt;
     const Type *fxts[2];
     Value *fx, *fy;
+    Value *den;
     switch (f) {
     HANDLE(boxui8,1)
         if (t != T_int8) x = builder.CreateBitCast(x, T_int8);
@@ -825,9 +826,17 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
     HANDLE(mul_int,2)
         return builder.CreateMul(x, emit_expr(args[2],ctx,true));
     HANDLE(sdiv_int,2)
-        return builder.CreateSDiv(x, emit_expr(args[2],ctx,true));
+        den = emit_expr(args[2],ctx,true);
+        call_error_func_unless(builder.CreateICmpNE(den,
+                                                    ConstantInt::get(t,0)),
+                               jldiverror_func, ctx);
+        return builder.CreateSDiv(x, den);
     HANDLE(udiv_int,2)
-        return builder.CreateUDiv(x, emit_expr(args[2],ctx,true));
+        den = emit_expr(args[2],ctx,true);
+        call_error_func_unless(builder.CreateICmpNE(den,
+                                                    ConstantInt::get(t,0)),
+                               jldiverror_func, ctx);
+        return builder.CreateUDiv(x, den);
     HANDLE(srem_int,2)
         return builder.CreateSRem(x, emit_expr(args[2],ctx,true));
     HANDLE(urem_int,2)

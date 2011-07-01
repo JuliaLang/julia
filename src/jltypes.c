@@ -1132,7 +1132,6 @@ void jl_mark_type_cache(void *tc)
 #endif
 
 JL_CALLABLE(jl_f_tuple);
-JL_CALLABLE(jl_constructor_factory_trampoline);
 
 static jl_type_t *inst_type_w_(jl_value_t *t, jl_value_t **env, size_t n,
                                typekey_stack_t *stack)
@@ -1288,7 +1287,7 @@ static jl_type_t *inst_type_w_(jl_value_t *t, jl_value_t **env, size_t n,
             nst->parameters = iparams_tuple;
             nst->names = st->names;
             nst->types = jl_null; // to be filled in below
-            nst->fptr = jl_constructor_factory_trampoline;
+            nst->fptr = jl_f_no_function;
             nst->env = (jl_value_t*)nst;
             nst->linfo = NULL;
             nst->ctor_factory = st->ctor_factory;
@@ -1926,6 +1925,9 @@ static jl_tuple_t *jl_typevars(size_t n, ...)
     return t;
 }
 
+JL_CALLABLE(jl_f_new_expr);
+JL_CALLABLE(jl_f_new_box);
+
 extern void jl_init_int32_cache();
 
 void jl_init_types()
@@ -2140,7 +2142,7 @@ void jl_init_types()
                                     jl_symbol("type")),
                            jl_tuple(3, jl_sym_type, jl_array_any_type,
                                     jl_any_type));
-    jl_add_constructors(jl_expr_type);
+    jl_expr_type->fptr = jl_f_new_expr;
 
     jl_lambda_info_type =
         jl_new_struct_type(jl_symbol("LambdaStaticData"),
@@ -2159,16 +2161,14 @@ void jl_init_types()
                                     jl_function_type, jl_tuple_type));
     jl_lambda_info_type->fptr = jl_f_no_function;
 
-    tv = jl_typevars(1, "T");
     jl_box_type =
         jl_new_struct_type(jl_symbol("Box"),
-                           jl_any_type, tv,
-                           jl_tuple(1, jl_symbol("contents")), tv);
-    jl_add_constructors(jl_box_type);
+                           jl_any_type, jl_null,
+                           jl_tuple(1, jl_symbol("contents")),
+                           jl_tuple(1, jl_any_type));
+    jl_box_type->fptr = jl_f_new_box;
     jl_box_typename = jl_box_type->name;
-    jl_box_any_type =
-        (jl_type_t*)jl_apply_type((jl_value_t*)jl_box_type,
-                                  jl_tuple(1, jl_any_type));
+    jl_box_any_type = (jl_type_t*)jl_box_type;
 
     jl_typector_type =
         jl_new_struct_type(jl_symbol("TypeConstructor"),
@@ -2203,9 +2203,11 @@ void jl_init_types()
     jl_undef_type = jl_new_tagtype((jl_value_t*)jl_symbol("Undef"),
                                    jl_any_type, jl_null);
 
-    // Type{Type}
-    jl_typetype_type = (jl_tag_type_t*)jl_apply_type((jl_value_t*)jl_type_type,
-                                                     jl_tuple(1,jl_type_type));
+    // Type{T}
+    jl_typetype_tvar = tvar("T");
+    jl_typetype_type = (jl_tag_type_t*)
+        jl_apply_type((jl_value_t*)jl_type_type,
+                      jl_tuple(1,jl_typetype_tvar));
 
     call_sym = jl_symbol("call");
     call1_sym = jl_symbol("call1");
@@ -2226,7 +2228,7 @@ void jl_init_types()
     unexpanded_sym = jl_symbol("unexpanded");
     assign_sym = jl_symbol("=");
     null_sym = jl_symbol("null");
-    unbound_sym = jl_symbol("unbound");
+    isbound_sym = jl_symbol("isbound");
     symbol_sym = jl_symbol("symbol");
     body_sym = jl_symbol("body");
     locals_sym = jl_symbol("locals");
@@ -2237,4 +2239,5 @@ void jl_init_types()
     leave_sym = jl_symbol("leave");
     Any_sym = jl_symbol("Any");
     static_typeof_sym = jl_symbol("static_typeof");
+    new_sym = jl_symbol("new");
 }

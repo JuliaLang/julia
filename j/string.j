@@ -147,8 +147,8 @@ type CharString <: String
 
     CharString(a::Array{Char,1}) = new(a)
     CharString(c::Char...) = new([ c[i] | i=1:length(c) ])
-    CharString(x...) = CharString(map(char,x)...)
 end
+CharString(x...) = CharString(map(char,x)...)
 
 next(s::CharString, i::Index) = (s.chars[i], i+1)
 length(s::CharString) = length(s.chars)
@@ -230,20 +230,33 @@ type RopeString <: String
     RopeString(h::RopeString, t::RopeString) =
         depth(h.tail) + depth(t) < depth(h.head) ?
             RopeString(h.head, RopeString(h.tail, t)) :
-            new(h, t, max(h.depth, t.depth)+1, length(h)+length(t))
+            new(h,
+                t,
+                max(h.depth,
+                    t.depth)+1,
+                length(h)+length(t))
 
     RopeString(h::RopeString, t::String) =
         depth(h.tail) < depth(h.head) ?
             RopeString(h.head, RopeString(h.tail, t)) :
-            new(h, t, h.depth+1, length(h)+length(t))
+            new(h,
+                t,
+                h.depth+1,
+                length(h)+length(t))
 
     RopeString(h::String, t::RopeString) =
         depth(t.head) < depth(t.tail) ?
             RopeString(RopeString(h, t.head), t.tail) :
-            new(h, t, t.depth+1, length(h)+length(t))
+            new(h,
+                t,
+                t.depth+1,
+                length(h)+length(t))
 
     RopeString(h::String, t::String) =
-        new(h, t, 1, length(h)+length(t))
+        new(h,
+            t,
+            1,
+            length(h)+length(t))
 end
 
 depth(s::String) = 0
@@ -594,21 +607,22 @@ shell_escape(cmd::String, args::String...) =
 
 ## interface to parser ##
 
-parse(s::String)          = parse(s, 1, true)
-parse(s::String, pos)     = parse(s, pos, true)
-parseatom(s::String)      = parse(s, 1, false)
-parseatom(s::String, pos) = parse(s, pos, false)
-# returns (expr, end_pos). expr is () in case of parse error.
 function parse(s::String, pos, greedy)
+    # returns (expr, end_pos). expr is () in case of parse error.
     ex, pos = ccall(:jl_parse_string, Any,
                     (Ptr{Uint8},Int32,Int32),
-                    cstring(s), int32(pos)-1, greedy?1:0)
+                    cstring(s), int32(pos)-1, greedy ? 1:0)
     if isa(ex,Expr) && is(ex.head,:error)
         throw(ParseError(ex.args[1]))
     end
     if ex == (); throw(ParseError("end of input")); end
-    ex, pos+1
+    ex, pos+1 # C is zero-based, Julia is 1-based
 end
+
+parse(s::String)          = parse(s, 1, true)
+parse(s::String, pos)     = parse(s, pos, true)
+parseatom(s::String)      = parse(s, 1, false)
+parseatom(s::String, pos) = parse(s, pos, false)
 
 ## miscellaneous string functions ##
 
@@ -661,8 +675,8 @@ function split(s::String, delims, include_empty)
 end
 
 split(s::String, delims) = split(s, delims, true)
-split(s::String, c::Char) = split(s, set(c))
-split(s::String, c::Char, incl) = split(s, set(c), incl)
+split(s::String, c::Char) = split(s, Set(c))
+split(s::String, c::Char, incl) = split(s, Set(c), incl)
 
 function print_joined(delim, strings)
     for i = 1:length(strings)

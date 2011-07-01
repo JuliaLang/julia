@@ -193,7 +193,6 @@ static jl_value_t *scm_to_julia(value_t e)
 #ifdef JL_GC_MARKSWEEP
     if (en) jl_gc_enable();
 #endif
-    htable_reset(&gensym_table, gensym_table.size);
     return v;
 }
 
@@ -249,9 +248,9 @@ static jl_value_t *scm_to_julia_(value_t e)
             /* tree node types:
                goto  gotoifnot  label  return
                lambda  call  =  quote
-               null  top  unbound  box-unbound  closure-ref
-               body  file
-               line
+               null  top  isbound  method
+               body  file new
+               line  enter  leave
             */
             size_t n = scm_list_length(e)-1;
             size_t i;
@@ -352,7 +351,8 @@ static value_t julia_to_scm(jl_value_t *v)
     return opaque;
 }
 
-jl_value_t *jl_parse_input_line(const char *str)
+// this is used to parse a line of repl input
+DLLEXPORT jl_value_t *jl_parse_input_line(const char *str)
 {
     value_t e = fl_applyn(1, symbol_value(symbol("jl-parse-string")),
                           cvalue_static_cstring(str));
@@ -362,6 +362,8 @@ jl_value_t *jl_parse_input_line(const char *str)
     return scm_to_julia(e);
 }
 
+// this is for parsing one expression out of a string, keeping track of
+// the current position.
 DLLEXPORT jl_value_t *jl_parse_string(const char *str, int pos0, int greedy)
 {
     value_t s = cvalue_static_cstring(str);
@@ -569,6 +571,7 @@ jl_tuple_t *jl_tuple_tvars_to_symbols(jl_tuple_t *t)
     jl_tuple_t *s = jl_alloc_tuple_uninit(t->length);
     size_t i;
     for(i=0; i < s->length; i+=2) {
+        assert(jl_is_typevar(jl_tupleref(t,i)));
         jl_tupleset(s, i,
                     (jl_value_t*)((jl_tvar_t*)jl_tupleref(t,i))->name);
         jl_tupleset(s, i+1, jl_tupleref(t,i+1));

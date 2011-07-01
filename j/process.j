@@ -142,8 +142,8 @@ type Cmd
 
     function Cmd(exec::Executable)
         this = new(exec,
-                   HashTable(FileDes,PipeEnd),
-                   Set(Cmd),
+                   HashTable{FileDes,PipeEnd}(),
+                   Set{Cmd}(),
                    0,
                    ProcessNotRun())
         add(this.pipeline, this)
@@ -182,7 +182,7 @@ end
 fd(cmd::Cmd, f::FileDes) = Port(cmd,f)
 
 function fd(cmds::Set{Cmd}, f::FileDes)
-    set = Set(Port)
+    set = Set{Port}()
     for cmd = cmds
         if !has(cmd.pipes, f)
             add(set, fd(cmd,f))
@@ -201,10 +201,10 @@ stdin (cmds::Cmds) = fd(cmds,STDIN)
 stdout(cmds::Cmds) = fd(cmds,STDOUT)
 stderr(cmds::Cmds) = fd(cmds,STDERR)
 
-cmds(port::Port) = set(port.cmd)
+cmds(port::Port) = Set(port.cmd)
 
 function cmds(ports::Ports)
-    c = Set(Cmd)
+    c = Set{Cmd}()
     for port = ports
         add(c, port.cmd)
     end
@@ -214,7 +214,7 @@ end
 ## building connected and disconnected pipelines ##
 
 function (&)(cmds::Cmds...)
-    set = Set(Cmd)
+    set = Set{Cmd}()
     for cmd = cmds
         add(set, cmd)
     end
@@ -222,7 +222,7 @@ function (&)(cmds::Cmds...)
 end
 
 function (&)(ports::Ports...)
-    set = Set(Port)
+    set = Set{Port}()
     for port = ports
         add(set, port)
     end
@@ -250,7 +250,7 @@ end
 
 function join(cmds::Cmds)
     if length(cmds) > 1
-        pipeline = Set(Cmd)
+        pipeline = Set{Cmd}()
         for cmd = cmds
             add(pipeline, cmd.pipeline)
         end
@@ -301,7 +301,7 @@ running(cmd::Cmd) = (cmd.pid > 0)
 # spawn(cmd) starts all processes connected to cmd
 
 function spawn(cmd::Cmd)
-    fds = Set(FileDes)
+    fds = Set{FileDes}()
     for c = cmd.pipeline
         if running(c)
             error("already running: ", c)

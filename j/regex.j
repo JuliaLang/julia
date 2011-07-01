@@ -14,31 +14,31 @@ PCRE_COMPILE_OPTIONS = [
     PCRE_EXTENDED
     PCRE_FIRSTLINE
     PCRE_MULTILINE
-    PCRE_NEWLINE_CR
-    PCRE_NEWLINE_LF
-    PCRE_NEWLINE_CRLF
-    PCRE_NEWLINE_ANYCRLF
     PCRE_NEWLINE_ANY
+    PCRE_NEWLINE_ANYCRLF
+    PCRE_NEWLINE_CR
+    PCRE_NEWLINE_CRLF
+    PCRE_NEWLINE_LF
     PCRE_NO_AUTO_CAPTURE
-#    PCRE_NO_START_OPTIMIZE
-    PCRE_UNGREEDY
+    PCRE_NO_START_OPTIMIZE
     PCRE_NO_UTF8_CHECK
+    PCRE_UNGREEDY
 ]
 
 PCRE_EXECUTE_OPTIONS = [
-    PCRE_NEWLINE_CR
-    PCRE_NEWLINE_LF
-    PCRE_NEWLINE_CRLF
-    PCRE_NEWLINE_ANYCRLF
     PCRE_NEWLINE_ANY
+    PCRE_NEWLINE_ANYCRLF
+    PCRE_NEWLINE_CR
+    PCRE_NEWLINE_CRLF
+    PCRE_NEWLINE_LF
     PCRE_NOTBOL
-    PCRE_NOTEOL
     PCRE_NOTEMPTY
-#    PCRE_NOTEMPTY_ATSTART
-#    PCRE_NO_START_OPTIMIZE
+    PCRE_NOTEMPTY_ATSTART
+    PCRE_NOTEOL
+    PCRE_NO_START_OPTIMIZE
     PCRE_NO_UTF8_CHECK
-#    PCRE_PARTIAL_HARD
-#    PCRE_PARTIAL_SOFT
+    PCRE_PARTIAL_HARD
+    PCRE_PARTIAL_SOFT
 ]
 
 PCRE_OPTIONS = [PCRE_COMPILE_OPTIONS,PCRE_EXECUTE_OPTIONS]
@@ -71,7 +71,7 @@ function pcre_study(regex::Ptr{Void}, options::Int)
                        (Ptr{Void}, Int32, Ptr{Ptr{Uint8}}),
                        regex, int32(options), errstr))()
     if errstr[1] != C_NULL
-        error("pcre_study: ", string(errstr[1]))
+        error("pcre_study: $(errstr[1])")
     end
     extra
 end
@@ -102,7 +102,7 @@ function pcre_exec(regex::Ptr{Void}, extra::Ptr{Void},
                 regex, extra, string, length(string), offset-1,
                 int32(options), ovec, length(ovec))
     if n < -1
-        error("pcre_exec: error ", n)
+        error("pcre_exec: error $n")
     end
     n < 0 ? Array(Int32,0) : ovec[1:2n]
 end
@@ -124,37 +124,53 @@ type Regex
         ex = study ? pcre_study(re, 0) : C_NULL
         new(pat, opts, re, ex)
     end
-    Regex(p::String, s::Bool) = Regex(p, 0, s)
-    Regex(p::String, o::Int)  = Regex(p, o, true)
-    Regex(p::String)          = Regex(p, 0, true)
 end
+Regex(p::String, s::Bool) = Regex(p, 0, s)
+Regex(p::String, o::Int)  = Regex(p, o, true)
+Regex(p::String)          = Regex(p, 0, true)
 
 # TODO: make sure thing are escaped in a way PCRE
 # likes so that Julia all the Julia string quoting
 # constructs are correctly handled.
 
-macro r_str(s); Regex(s); end
-macro ri_str(s); Regex(s, PCRE_CASELESS); end
-macro rm_str(s); Regex(s, PCRE_MULTILINE); end
-macro rs_str(s); Regex(s, PCRE_DOTALL); end
-macro rim_str(s); Regex(s, PCRE_CASELESS | PCRE_MULTILINE); end
-macro ris_str(s); Regex(s, PCRE_CASELESS | PCRE_DOTALL); end
-macro rms_str(s); Regex(s, PCRE_MULTILINE | PCRE_DOTALL); end
-macro rims_str(s); Regex(s, PCRE_CASELESS | PCRE_MULTILINE | PCRE_DOTALL); end
+begin
+    local i = PCRE_CASELESS
+    local m = PCRE_MULTILINE
+    local s = PCRE_DOTALL
+    local x = PCRE_EXTENDED
 
-function show(re::Regex)
-    if (re.options & ~(PCRE_CASELESS | PCRE_MULTILINE | PCRE_DOTALL)) == 0
-        print('r')
-        if re.options & PCRE_CASELESS  != 0; print('i'); end
-        if re.options & PCRE_MULTILINE != 0; print('m'); end
-        if re.options & PCRE_DOTALL    != 0; print('s'); end
-        print_quoted_literal(re.pattern)
-    else
-        print("Regex(")
-        show(re.pattern)
-        print(',')
-        show(re.options)
-        print(')')
+    macro r_str(p);     Regex(p);          end
+    macro ri_str(p);    Regex(p, i);       end
+    macro rm_str(p);    Regex(p, m);       end
+    macro rs_str(p);    Regex(p, s);       end
+    macro rx_str(p);    Regex(p, x);       end
+    macro rim_str(p);   Regex(p, i|m);     end
+    macro ris_str(p);   Regex(p, i|s);     end
+    macro rix_str(p);   Regex(p, i|x);     end
+    macro rms_str(p);   Regex(p, m|s);     end
+    macro rmx_str(p);   Regex(p, m|x);     end
+    macro rsx_str(p);   Regex(p, s|x);     end
+    macro rims_str(p);  Regex(p, i|m|s);   end
+    macro rimx_str(p);  Regex(p, i|m|x);   end
+    macro risx_str(p);  Regex(p, i|s|x);   end
+    macro rmsx_str(p);  Regex(p, m|s|x);   end
+    macro rimsx_str(p); Regex(p, i|m|s|x); end
+
+    function show(re::Regex)
+        if (re.options & ~(i|m|s|x)) == 0
+            print('r')
+            if (re.options & i) != 0; print('i'); end
+            if (re.options & m) != 0; print('m'); end
+            if (re.options & s) != 0; print('s'); end
+            if (re.options & x) != 0; print('x'); end
+            print_quoted_literal(re.pattern)
+        else
+            print("Regex(")
+            show(re.pattern)
+            print(',')
+            show(re.options)
+            print(')')
+        end
     end
 end
 

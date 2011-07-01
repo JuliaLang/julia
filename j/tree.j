@@ -13,7 +13,7 @@ end
 type BTree{K,V}
     root:: Tree{K,V}
 
-    BTree(k,v) = new(EmptyTree{k,v}())
+    BTree() = new(EmptyTree{K,V}())
 end
 
 has(t::EmptyTree, key) = false

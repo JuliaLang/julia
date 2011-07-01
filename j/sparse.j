@@ -38,10 +38,10 @@ full{T}(S::SparseMatrixCSC{T}) = convert(Array{T}, S)
 sparse(I,J,V) = sparse(I, J, V, max(I), max(J))
 sparse(I,J,V::Number,m,n) = sparse(I,J,fill(Array(typeof(V),length(I)),V),max(I),max(J))
 
-function sparse(A::Array) 
+function sparse(A::Array)
     m, n = size(A)
     I, J = find(A)
-    sparse(I, J, reshape(A, m*n), m, n) 
+    sparse(I, J, reshape(A, m*n), m, n)
 end
 
 function sparse{T}(I::Vector{Size},
@@ -76,7 +76,7 @@ function sparse{T}(I::Vector{Size},
 
     numnz = length(I)
 
-    w = zeros(Size, n+1)    
+    w = zeros(Size, n+1)
     w[1] = 1
     for k=1:numnz; w[J[k] + 1] += 1; end
     colptr = cumsum(w)
@@ -135,33 +135,33 @@ macro binary_op_A_sparse_B_sparse_res_sparse(op)
         function ($op){T1,T2}(A::SparseMatrixCSC{T1}, B::SparseMatrixCSC{T2})
             assert(size(A) == size(B))
             (m, n) = size(A)
-            
+
             typeS = promote_type(T1, T2)
             # TODO: Need better method to allocate result
-            nnzS = nnz(A) + nnz(B) 
+            nnzS = nnz(A) + nnz(B)
             colptrS = Array(Size, A.n+1)
             rowvalS = Array(Size, nnzS)
             nzvalS = Array(typeS, nnzS)
 
             zero = convert(typeS, 0)
-            
+
             colptrA = A.colptr
             rowvalA = A.rowval
             nzvalA = A.nzval
-            
+
             colptrB = B.colptr
             rowvalB = B.rowval
             nzvalB = B.nzval
-            
+
             ptrS = 1
             colptrS[1] = 1
-            
+
             for col = 1:n
                 ptrA = colptrA[col]
                 stopA = colptrA[col+1]
                 ptrB = colptrB[col]
                 stopB = colptrB[col+1]
-                
+
                 while ptrA < stopA && ptrB < stopB
                     rowA = rowvalA[ptrA]
                     rowB = rowvalB[ptrB]
@@ -192,7 +192,7 @@ macro binary_op_A_sparse_B_sparse_res_sparse(op)
                         ptrB += 1
                     end
                 end
-                
+
                 while ptrA < stopA
                     res = ($op)(nzvalA[ptrA], zero)
                     if res != zero
@@ -203,21 +203,21 @@ macro binary_op_A_sparse_B_sparse_res_sparse(op)
                     end
                     ptrA += 1
                 end
-                
+
                 while ptrB < stopB
                     res = ($op)(zero, nzvalB[ptrB])
                     if res != zero
-                        rowB = rowvalB[ptrB]                        
+                        rowB = rowvalB[ptrB]
                         rowvalS[ptrS] = rowB
                         nzvalS[ptrS] = res
                         ptrS += 1
                     end
                     ptrB += 1
                 end
-                
+
                 colptrS[col+1] = ptrS
             end
-    
+
             return SparseMatrixCSC(m, n, colptrS, rowvalS, nzvalS)
         end
 

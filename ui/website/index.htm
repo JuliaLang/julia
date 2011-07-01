@@ -1,0 +1,40 @@
+﻿<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<title>Julia - A fresh approach to technical computing.</title>
+		<link href="styles.css" rel="stylesheet" type="text/css" />
+		<script type="text/javascript" src="jquery.js"></script>
+		<link href="favicon.ico" rel="shortcut icon" />
+	</head>
+	<body>
+		<script>
+			// give the document some extra room so the user can scroll and
+			// see the entire page without the footer occluding the bottom
+			window.onload = function() {
+				$('body').css('margin-bottom', $('#footer').outerHeight(false));
+			};
+		</script>
+		<header>
+			<h1><a href="/"><img id="logo" src="images/logo.png" alt="Julia Programming Language" /></a></h1>
+		</header>
+		<nav>
+			<a href="/">Home</a>
+			<a href="https://github.com/JuliaLang/julia">GitHub</a>
+			<a href="about.htm">About</a>
+			<a href="about.htm">Contact</a>
+			<div id="nav-end"> </div>
+		</nav>
+		<div id="main">
+			<h1>A fresh approach to technical computing.</h1>
+			<p>Julia is a dynamic language with optional typing, multiple dispatch, and good performance, achieved using type inference and just-in-time (JIT) compilation, implemented using LLVM. It is multi-paradigm, combining features of imperative, functional, and object-oriented programming.  Try it out!</p>
+			<textarea name="terminal" rows="12" cols="70" autofocus="autofocus"></textarea>
+		</div>
+		<div id="footer">
+			<footer>
+				<a href="http://web.mit.edu/"><img id="mit-logo" src="images/mit_logo.png" alt="MIT Logo" /></a>
+				<p id="copyright">Copyright &copy; 2011 Alan Edelman, Jeff Bezanson, et al.</p>
+			</footer>
+		</div>
+	</body>
+</html>

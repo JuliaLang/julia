@@ -167,8 +167,10 @@ function (T, dims...)
     Array{et,nd}
 end)
 
-static_convert(to, from) = (subtype(from, to) ? from : to)
-function static_convert(to::Tuple, from::Tuple)
+function static_convert(to, from)
+    if !isa(to,Tuple) || !isa(from,Tuple)
+        return (subtype(from, to) ? from : to)
+    end
     if is(to,Tuple)
         return from
     end
@@ -297,6 +299,8 @@ fieldtype_tfunc = function (A, s, name)
     Type{t}
 end
 t_func[fieldtype] = (2, 2, fieldtype_tfunc)
+t_func[Expr] = (3, 3, (a,b,c)->Expr)
+t_func[Box] = (1, 1, (a,)->Box)
 
 # TODO: handle e.g. apply_type(T, R::Union(Type{Int32},Type{Float64}))
 apply_type_tfunc = function (A, args...)
@@ -311,14 +315,20 @@ apply_type_tfunc = function (A, args...)
         elseif isa(A[i],Int32)
             tparams = append(tparams, (A[i],))
         # TODO: evaluate Int32 static parameter!
-        #elseif 
+        #elseif
         else
             #return args[1]
             tparams = append(tparams, (headtype.parameters[i-1],))
         end
     end
     # good, all arguments understood
-    Type{apply_type(headtype, tparams...)}
+    try
+        Type{apply_type(headtype, tparams...)}
+    catch
+        # type instantiation might fail if one of the type parameters
+        # doesn't match, which could happen if a type estimate is too coarse
+        args[1]
+    end
 end
 t_func[apply_type] = (1, Inf, apply_type_tfunc)
 
@@ -373,7 +383,7 @@ end
 
 function isconstantfunc(f, vtypes, sv::StaticVarInfo)
     if isa(f,Expr) && is(f.head,:top)
-        abstract_eval(f, vtypes, sv)
+        abstract_eval(f, vtypes, sv)  # to pick up a type annotation
         assert(isa(f.args[1],Symbol), "inference.j:333")
         return (true, f.args[1])
     end
@@ -510,10 +520,13 @@ function abstract_eval_call(e, vtypes, sv::StaticVarInfo)
         if isa(ft,FuncKind)
             # use inferred function type
             return ft_tfunc(ft, argtypes)
-        elseif isType(ft) && isbuiltin(ft.parameters[1]) &&
-               isa(ft.parameters[1],StructKind)
+        elseif isType(ft) && isa(ft.parameters[1],StructKind)
+            st = ft.parameters[1]
+            if isgeneric(st) && isleaftype(st)
+                return abstract_call_gf(st, fargs, argtypes, e)
+            end
             # struct constructor
-            return ft.parameters[1]
+            return st
         end
         return Any
     end
@@ -528,19 +541,25 @@ end
 
 function abstract_eval_expr(e, vtypes, sv::StaticVarInfo)
     # handle:
-    # call  lambda  quote  null  top  unbound static_typeof
+    # call  lambda  quote  null  top  isbound static_typeof
     if is(e.head,:call) || is(e.head,:call1)
         return abstract_eval_call(e, vtypes, sv)
     elseif is(e.head,:top)
         return abstract_eval_global(e.args[1])
-    #elseif is(e.head,:unbound)
+    #elseif is(e.head,:isbound)
     #    return Bool
-    elseif is(e.head,:method)
-        return Any-->Any
     elseif is(e.head,:null)
         return Nothing
+    elseif is(e.head,:new)
+        t = abstract_eval(e.args[1], vtypes, sv)
+        if isType(t)
+            return t.parameters[1]
+        end
+        return Any
     elseif is(e.head,:quote)
         return typeof(e.args[1])
+    elseif is(e.head,:method)
+        return Any-->Any
     elseif is(e.head,:static_typeof)
         t = abstract_eval(e.args[1], vtypes, sv)
         # intersect with Any to remove Undef
@@ -908,11 +927,11 @@ function typeinf(linfo::LambdaStaticData,atypes::Tuple,sparams::Tuple, cop, def)
         end
     end
     inference_stack = inference_stack.prev
+    #print("\n",ast,"\n")
+    #print("==> ", frame.result,"\n")
     fulltree = type_annotate(ast, s, sv, frame.result, vars)
     def.tfunc = (atypes, fulltree, def.tfunc)
     fulltree.args[3] = inlining_pass(fulltree.args[3], s[1])
-    #print("\n",fulltree,"\n")
-    #print("==> ", frame.result,"\n")
     return (fulltree, frame.result)
 end
 
@@ -928,10 +947,6 @@ function record_var_type(e::Symbol, t, decls)
     end
 end
 
-expr_type(e::Expr) = e.type
-expr_type(s::Symbol) = Any
-expr_type(x) = typeof(x)
-
 function eval_annotate(e::Expr, vtypes, sv, decls)
     if is(e.head,:quote) || is(e.head,:top) || is(e.head,:goto) ||
         is(e.head,:label) || is(e.head,:static_typeof)
@@ -946,7 +961,7 @@ function eval_annotate(e::Expr, vtypes, sv, decls)
         e.args[1] = Expr(:symbol, {s}, abstract_eval(s, vtypes, sv))
         e.args[2] = eval_annotate(e.args[2], vtypes, sv, decls)
         # TODO: if this def does not reach any uses, maybe don't do this
-        record_var_type(s, expr_type(e.args[2]), decls)
+        record_var_type(s, exprtype(e.args[2]), decls)
         return e
     end
     for i=1:length(e.args)
@@ -1040,18 +1055,24 @@ function contains_is(arr, item)
     return false
 end
 
-exprtype(e::Expr) = e.type
-exprtype(s::Symbol) = Any
-exprtype(t::Type) = Type{t}
-exprtype(other) = typeof(other)
+function exprtype(x)
+    if isa(x,Expr)
+        return x.type
+    elseif isa(x,Symbol)
+        return Any
+    elseif isa(x,Type)
+        return Type{x}
+    else
+        return typeof(x)
+    end
+end
 
 # for now, only inline functions whose bodies are of the form "return <expr>"
 # where <expr> doesn't contain any argument more than once.
 # functions with closure environments or varargs are also excluded.
 # static parameters are ok if all the static parameter values are leaf types,
 # meaning they are fully known.
-function inlineable(e::Expr, vars)
-    f = eval(e.args[1])
+function inlineable(f, e::Expr, vars)
     argexprs = a2t(e.args[2:])
     atypes = map(exprtype, argexprs)
     meth = getmethods(f, atypes)
@@ -1149,8 +1170,12 @@ function inlining_pass(e::Expr, vars)
     # don't inline first argument of ccall, as this needs to be evaluated
     # by the interpreter and inlining might put in something it can't handle,
     # like another ccall.
-    if is(e.head,:call) && isa(e.args[1],Expr) &&
-       is(e.args[1].head,:symbol) && is(e.args[1].args[1],:ccall)
+    if length(e.args)<1
+        return e
+    end
+    arg1 = e.args[1]
+    if is(e.head,:call) && isa(arg1,Expr) &&
+       is(arg1.head,:symbol) && is(arg1.args[1],:ccall)
         if length(e.args)>1
             e.args[2] = remove_call1(e.args[2])
         end
@@ -1163,12 +1188,19 @@ function inlining_pass(e::Expr, vars)
     end
     if is(e.head,:call1)
         e.head = :call
-        body = inlineable(e, vars)
+        ET = exprtype(arg1)
+        if isType(ET)
+            f = ET.parameters[1]
+        else
+            f = eval(arg1)
+        end
+
+        body = inlineable(f, e, vars)
         if !is(body,NF)
             #print("inlining ", e, " => ", body, "\n")
             return body
         end
-        if is(eval(e.args[1]),apply)
+        if is(f,apply)
             if length(e.args) == 3
                 aarg = e.args[3]
                 if isa(aarg,Expr) && is(aarg.head,:call) &&
@@ -1177,7 +1209,7 @@ function inlining_pass(e::Expr, vars)
                     # apply(f,tuple(x,y,...)) => f(x,y,...)
                     e.args = append({e.args[2]}, aarg.args[2:])
                     # now try to inline the simplified call
-                    body = inlineable(e, vars)
+                    body = inlineable(eval(e.args[1]), e, vars)
                     if !is(body,NF)
                         return body
                     end
@@ -1186,7 +1218,7 @@ function inlining_pass(e::Expr, vars)
             end
         end
     elseif is(e.head,:call)
-        farg = e.args[1]
+        farg = arg1
         # special inlining for some builtin functions that return types
         if isa(farg,Expr) && is(farg.head,:top) &&
             (is(eval(farg),apply_type) || is(eval(farg),fieldtype)) &&

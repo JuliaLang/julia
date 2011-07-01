@@ -28,7 +28,8 @@ For a more in-depth discussion of the rationale and advantages of Julia over oth
     - **[fdlibm][]**       — a portable implementation of much of the system-dependent libm math library's functionality.
     - **[OpenBLAS][]**     — a fast, open, and maintained [basic linear algebar subprograms (BLAS)](http://en.wikipedia.org/wiki/Basic_Linear_Algebra_Subprograms) library, based on [Kazushige Goto's](http://en.wikipedia.org/wiki/Kazushige_Goto) famous [GotoBLAS](http://www.tacc.utexas.edu/tacc-projects/gotoblas2/).
     - **[LAPACK][]**       — library of linear algebra routines for solving systems of simultaneous linear equations, least-squares solutions of linear systems of equations, eigenvalue problems, and singular value problems.
-    - **[ARPACK][]**       — a collection of Fortran77 subroutines designed to solve large scale eigenvalue problems.
+    - **[ARPACK][]**       — a collection of subroutines designed to solve large, sparse eigenvalue problems.
+    - **[FFTW][]**	   — library for computing fast Fourier transforms very quickly and efficiently.
     - **[PCRE][]**         — Perl-compatible regular expressions library.
     - **[GNU readline][]** — library allowing shell-like line editing in the terminal, with history and familiar key bindings.
     - **[mongoose][]**     — library for writing simple web servers, used for Julia's web-based repl.
@@ -40,6 +41,7 @@ For a more in-depth discussion of the rationale and advantages of Julia over oth
 [OpenBLAS]:     https://github.com/xianyi/OpenBLAS#readme
 [LAPACK]:       http://www.netlib.org/lapack/
 [ARPACK]:       http://www.caam.rice.edu/software/ARPACK/
+[FFTW]:         http://www.fftw.org/
 [PCRE]:         http://www.pcre.org/
 [GNU readline]: http://cnswww.cns.cwru.edu/php/chet/readline/rltop.html
 [mongoose]:     http://code.google.com/p/mongoose/

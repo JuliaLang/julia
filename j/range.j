@@ -6,21 +6,17 @@ type Range{T<:Real} <: Tensor{T,1}
     start::T
     step::T
     stop::T
-
-    Range{T}(start::T, step::T, stop::T) = new(start, step, stop)
-    Range(start, step, stop) = new(promote(start, step, stop)...)
 end
+Range(start, step, stop) = Range(promote(start, step, stop)...)
 
 type Range1{T<:Real} <: Tensor{T,1}
     start::T
     stop::T
-
-    Range1{T}(start::T, stop::T) = new(start, stop)
-    Range1(start, stop) = new(promote(start, stop)...)
 end
+Range1(start, stop) = Range1(promote(start, stop)...)
 
-clone(r::Range, T::Type, dims::Dims) = Range(convert(T, r.start), convert(T, r.step), convert(T, r.stop))
-clone(r::Range1, T::Type, dims::Dims) = Range1(convert(T, r.start), convert(T, r.stop))
+similar(r::Range, T::Type, dims::Dims) = Range(convert(T, r.start), convert(T, r.step), convert(T, r.stop))
+similar(r::Range1, T::Type, dims::Dims) = Range1(convert(T, r.start), convert(T, r.stop))
 
 typealias Ranges Union(Range,Range1)
 
@@ -103,13 +99,23 @@ end
 type NDRange{N}
     ranges::NTuple{N,Any}
     empty::Bool
-    NDRange(r::())           =new(r,false)
-    NDRange(r::(Any,))       =new(r,isempty(r[1]))
-    NDRange(r::(Any,Any))    =new(r,isempty(r[1])||isempty(r[2]))
-    NDRange(r::(Any,Any,Any))=new(r,isempty(r[1])||isempty(r[2])||isempty(r[3]))
-    NDRange(r::Tuple)        =new(r,anyp(isempty,r))
-    NDRange(rs...) = NDRange(rs)
+
+    if eq_int(unbox32(N),unbox32(0))
+        NDRange(r::())           = new(r, false)
+    elseif eq_int(unbox32(N),unbox32(1))
+        NDRange(r::(Any,))       = new(r, isempty(r[1]))
+    elseif eq_int(unbox32(N),unbox32(2))
+        NDRange(r::(Any,Any))    = new(r, isempty(r[1])||isempty(r[2]))
+    elseif eq_int(unbox32(N),unbox32(3))
+        NDRange(r::(Any,Any,Any))= new(r,
+                                       isempty(r[1])||isempty(r[2])||isempty(r[3]))
+    else
+        NDRange(r::Tuple)        = new(r, anyp(isempty,r))
+    end
 end
+
+NDRange{N}(r::NTuple{N,Any}) = NDRange{N}(r)
+NDRange(rs...) = NDRange(rs)
 
 start(r::NDRange{0}) = false
 done(r::NDRange{0}, st) = st
@@ -121,7 +127,7 @@ done(r::NDRange, st) = r.empty || !bool(st)
 function next{N}(r::NDRange{N}, st)
     nxt = ntuple(N, i->next(r.ranges[i], st[i]))
     vals = map(n->n[1], nxt)
-    
+
     for itr=1:N
         ri = r.ranges[itr]
         ni = nxt[itr][2]
@@ -140,7 +146,7 @@ function next(r::NDRange{2}, st)
     (v1, n1) = next(r1, st[1])
     (v2, n2) = next(r2, st[2])
     vals = (v1, v2)
-    
+
     if !done(r1, n1)
         st[1] = n1
         return (vals, st)

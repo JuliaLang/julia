@@ -11,9 +11,6 @@ integer_valued(z::ComplexNum) = (real_valued(z) && integer_valued(real(z)))
 real(x::Real) = x
 imag(x::Real) = convert(typeof(x), 0)
 
-==(z::ComplexNum, w::ComplexNum) = (real(z) == real(w) &&
-                                    imag(z) == imag(w))
-
 function show(c::ComplexNum)
     show(real(c))
     i = imag(c)
@@ -103,22 +100,20 @@ im = complex128(0,1)
 type Complex{T<:Real} <: ComplexNum
     re::T
     im::T
-
-    Complex{T<:Real}(x::T, y::T) = new(x, y)
-    Complex(x::Real, y::Real) = Complex(promote(x,y)...)
-    Complex(x::Real) = new(x, zero(x))
 end
+Complex(x::Real, y::Real) = Complex(promote(x,y)...)
+Complex(x::Real) = Complex(x, zero(x))
 
 real(z::Complex) = z.re
 imag(z::Complex) = z.im
 
-convert{T}(::Type{Complex{T}}, x::T) = Complex(x, convert(T,0))
-convert{T}(::Type{Complex{T}}, x::Real) = Complex(convert(T,x), convert(T,0))
-convert{T}(::Type{Complex{T}}, z::ComplexNum) = Complex(convert(T,real(z)),convert(T,imag(z)))
+convert{T<:Real}(::Type{Complex{T}}, x::T) = Complex(x, convert(T,0))
+convert{T<:Real}(::Type{Complex{T}}, x::Real) = Complex(convert(T,x), convert(T,0))
+convert{T<:Real}(::Type{Complex{T}}, z::ComplexNum) = Complex(convert(T,real(z)),convert(T,imag(z)))
 
 promote_rule{T<:Real}(::Type{Complex{T}}, ::Type{T}) = Complex{T}
-promote_rule{T,S<:Real}(::Type{Complex{T}}, ::Type{S}) = Complex{promote_type(T,S)}
-promote_rule{T,S}(::Type{Complex{T}}, ::Type{Complex{S}}) = Complex{promote_type(T,S)}
+promote_rule{T<:Real,S<:Real}(::Type{Complex{T}}, ::Type{S}) = Complex{promote_type(T,S)}
+promote_rule{T<:Real,S<:Real}(::Type{Complex{T}}, ::Type{Complex{S}}) = Complex{promote_type(T,S)}
 promote_rule{T<:Real}(::Type{Complex{T}}, ::Type{Complex128}) =
     (P = promote_type(Float64,T);
      is(P,Float64) ? Complex128 : Complex{P})
@@ -135,6 +130,8 @@ pi{T}(::Type{Complex{T}}) = pi(T)
 
 
 ## functions of complex numbers ##
+
+==(z::ComplexNum, w::ComplexNum) = (real(z) == real(w) && imag(z) == imag(w))
 
 conj(z::ComplexNum) = complex(real(z),-imag(z))
 norm(z::ComplexNum) = square(real(z)) + square(imag(z))

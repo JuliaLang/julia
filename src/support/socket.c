@@ -22,9 +22,9 @@ int mysocket(int domain, int type, int protocol)
     int s = socket(domain, type, protocol);
     if (s < 0)
         return s;
-    val = 4096;
+    val = 131072;
     setsockopt(s, SOL_SOCKET, SO_RCVBUF, (char*)&val, sizeof(int));
-    val = 4096;
+    val = 131072;
     setsockopt(s, SOL_SOCKET, SO_SNDBUF, (char*)&val, sizeof(int));
     return s;
 }
@@ -46,7 +46,7 @@ int open_tcp_port(short portno)
     if (sockfd < 0)
         return -1;
     val = 1;
-    //setsockopt(sockfd, SOL_TCP, TCP_NODELAY, &val, sizeof(val));
+    //setsockopt(sockfd, IPPROTO_TCP, TCP_NODELAY, &val, sizeof(val));
     bzero(&serv_addr, sizeof(serv_addr));
     serv_addr.sin_family = AF_INET;
     serv_addr.sin_addr.s_addr = htonl(INADDR_ANY);
@@ -71,7 +71,7 @@ int open_any_tcp_port(short *portno)
     if (sockfd < 0)
         return -1;
     val = 1;
-    //setsockopt(sockfd, SOL_TCP, TCP_NODELAY, &val, sizeof(val));
+    //setsockopt(sockfd, IPPROTO_TCP, TCP_NODELAY, &val, sizeof(val));
     bzero(&serv_addr, sizeof(serv_addr));
     serv_addr.sin_family = AF_INET;
     serv_addr.sin_addr.s_addr = htonl(INADDR_ANY);

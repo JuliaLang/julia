@@ -1,7 +1,7 @@
 type IntSet
     bits::Array{Uint32,1}
     limit::Int32  # todo: should be Int64
-    
+
     IntSet() = IntSet(1024)
     IntSet(max::Int32) = (lim = (max+31) & -32;
                           new(zeros(Uint32,lim>>5), lim))
@@ -51,7 +51,7 @@ end
 
 start(s::IntSet) = 0
 done(s::IntSet, i) = (next(s,i)[1] >= s.limit)
-function next(s::IntSet, i) 
+function next(s::IntSet, i)
     n = ccall(:bitvector_next, Int32, (Ptr{Uint32}, Uint64, Uint64),
               s.bits, uint64(i), uint64(s.limit))
     (n, n+1)

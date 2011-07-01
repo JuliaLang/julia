@@ -4,21 +4,17 @@ sizeof_fd_set = ccall(:jl_sizeof_fd_set, Int32, ())
 type IOStream
     ios::Array{Uint8,1}
 
-    global make_stdout_stream, close
-
-    function close(s::IOStream)
-        ccall(:ios_close, Void, (Ptr{Void},), s.ios)
-    end
-
     # TODO: delay adding finalizer, e.g. for memio with a small buffer, or
     # in the case where we takebuf it.
     IOStream() = (x = new(zeros(Uint8,sizeof_ios_t));
                   finalizer(x, close);
                   x)
 
-    make_stdout_stream() =
-        new(ccall(:jl_stdout_stream, Any, ()))
+    global make_stdout_stream
+    make_stdout_stream() = new(ccall(:jl_stdout_stream, Any, ()))
 end
+
+close(s::IOStream) = ccall(:ios_close, Void, (Ptr{Void},), s.ios)
 
 fdio(fd::Int) = (s = IOStream();
                  ccall(:ios_fd, Void,
@@ -301,7 +297,7 @@ end
 load_ascii_array(f::String, nr, nc) = load_ascii_array(open(f), nr, nc)
 function load_ascii_array(f, nr, nc)
     a = Array(Float64, (nr, nc))
-    delims = set(' ','\t')
+    delims = Set(' ','\t')
     for i=1:nr
         row = split(readline(f), delims, false)
         for j=1:nc

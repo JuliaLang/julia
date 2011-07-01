@@ -122,26 +122,26 @@ function show(e::UnionTooComplexError)
     show(e.types)
 end
 
-dump(t::Type) = print(t)
-dump(t::Tuple) = print(t)
-
-function dump{T}(x::T)
-    print(T,'(')
-    for field = T.names
-        print(field, '=')
-        show(getfield(x, field))
-        print(',')
+function dump(x)
+    T = typeof(x)
+    if isa(x,Array)
+        showempty(x)
+    elseif isa(T,StructKind)
+        print(T,'(')
+        for field = T.names
+            print(field, '=')
+            dump(getfield(x, field))
+            print(',')
+        end
+        println(')')
+    else
+        show(x)
     end
-    println(')')
 end
 
-# show arrays
 showempty{T}(a::Array{T}) = print("Array($T,$(size(a)))")
 
 function showall{T}(a::Array{T,1})
-    if isempty(a)
-        return showempty(a)
-    end
     if is(T,Any)
         opn = '{'; cls = '}'
     else
@@ -161,9 +161,6 @@ function showall{T}(a::Array{T,2})
 end
 
 function show{T}(a::Array{T,1})
-    if isempty(a)
-        return showempty(a)
-    end
     if is(T,Any)
         opn = '{'; cls = '}'
     else

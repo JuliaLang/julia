@@ -1,0 +1,187 @@
+﻿* {
+	margin: 0px;
+	padding: 0px;
+}
+
+body {
+	background-color: #ffffff;
+	font: 100% sans-serif;
+	color: #555555;
+}
+
+header {
+	width: 800px;
+	margin: auto;
+	padding-top: 10px;
+	padding-bottom: 10px;
+}
+
+div.message {
+	background-color: #eaf2f5;
+	border: 1px solid #bedce7;
+	padding-top: 10px;
+	padding-bottom: 10px;
+	padding-left: 20px;
+	padding-right: 20px;
+	width: 760px;
+	margin-left: auto;
+	margin-right: auto;
+	margin-top: 20px;
+	-moz-box-shadow:		5px 5px 10px #efefef;
+	-webkit-box-shadow:		5px 5px 10px #efefef;
+	box-shadow:				5px 5px 10px #efefef;
+	border-radius:			2px;
+	-moz-border-radius:		2px;
+	-webkit-border-radius:	2px;
+}
+
+div.error {
+	background-color: #fae4e4;
+	border: 1px solid #e7bebe;
+	padding-top: 10px;
+	padding-bottom: 10px;
+	padding-left: 20px;
+	padding-right: 20px;
+	width: 760px;
+	margin-left: auto;
+	margin-right: auto;
+	margin-top: 20px;
+	-moz-box-shadow:		5px 5px 10px #efefef;
+	-webkit-box-shadow:		5px 5px 10px #efefef;
+	box-shadow:				5px 5px 10px #efefef;
+	border-radius:			2px;
+	-moz-border-radius:		2px;
+	-webkit-border-radius:	2px;
+}
+
+div#main {
+	padding-top: 20px;
+	padding-bottom: 20px;
+	margin-left: auto;
+	margin-right: auto;
+	width: 800px;
+}
+
+div#footer {
+	position: fixed;
+	bottom: 0px;
+	border-top: 2px solid #bb7428;
+	background-color: #222222;
+	color: #888888;
+	font-size: 80%;
+	width: 100%;
+	min-height: 45px;
+}
+
+footer {
+	width: 800px;
+	margin: auto;
+}
+
+p#copyright {
+	padding-bottom: 8px;
+}
+
+a img {
+	border: none;
+}
+
+nav {
+	width: 780px;
+	padding-left: 10px;
+	padding-right: 10px;
+	margin-left: auto;
+	margin-right: auto;
+	font: 90% sans-serif;
+	font-weight: bold;
+	color: #cccccc;
+	background-color: #8b8b8b;
+	background: -webkit-gradient(linear, left top, left bottom, #9d9d9d 0%, #8b8b8b 50%, #787878 51%, #646464 100%);
+	background: -webkit-linear-gradient(top, #9d9d9d 0%, #8b8b8b 50%, #787878 51%, #646464 100%);
+	background:    -moz-linear-gradient(top, #9d9d9d 0%, #8b8b8b 50%, #787878 51%, #646464 100%);
+	background:     -ms-linear-gradient(top, #9d9d9d 0%, #8b8b8b 50%, #787878 51%, #646464 100%);
+	background:      -o-linear-gradient(top, #9d9d9d 0%, #8b8b8b 50%, #787878 51%, #646464 100%);
+	background:         linear-gradient(top, #9d9d9d 0%, #8b8b8b 50%, #787878 51%, #646464 100%);
+	-moz-box-shadow:		5px 5px 10px #efefef;
+	-webkit-box-shadow:		5px 5px 10px #efefef;
+	box-shadow:				5px 5px 10px #efefef;
+	border-radius:			3px;
+	-moz-border-radius:		3px;
+	-webkit-border-radius:	3px;
+}
+
+nav a {
+	display: block;
+	float: left;
+	width: 100px;
+	text-align: center;
+	text-decoration: none;
+	padding-top: 10px;
+	padding-bottom: 10px;
+}
+
+nav a:link {
+	color: #eeeeee;
+}
+
+nav a:visited {
+	color: #eeeeee;
+}
+
+nav a:hover {
+	color: #ffffff;
+	background-color: #b4b4b4;
+	background: -webkit-gradient(linear, left top, left bottom, #d3d3d3 0%, #c5c5c5 50%, #bababa 50.01%, #b4b4b4 100%);
+	background: -webkit-linear-gradient(top, #d3d3d3 0%, #c5c5c5 50%, #bababa 50.01%, #b4b4b4 100%);
+	background:    -moz-linear-gradient(top, #d3d3d3 0%, #c5c5c5 50%, #bababa 50.01%, #b4b4b4 100%);
+	background:     -ms-linear-gradient(top, #d3d3d3 0%, #c5c5c5 50%, #bababa 50.01%, #b4b4b4 100%);
+	background:      -o-linear-gradient(top, #d3d3d3 0%, #c5c5c5 50%, #bababa 50.01%, #b4b4b4 100%);
+	background:         linear-gradient(top, #d3d3d3 0%, #c5c5c5 50%, #bababa 50.01%, #b4b4b4 100%);
+}
+
+nav a:active {
+	color: #eeeeee;
+}
+
+div#nav-end {
+	clear: left;
+}
+
+img#logo {
+	display: block;
+}
+
+img#mit-logo {
+	float: right;
+}
+
+h1 {
+	color: #0d4d73;
+	font-size: 140%;
+	font-weight: bold;
+	text-shadow: 1px 1px 1px #cccccc;
+}
+
+p {
+	margin-top: 8px;
+}
+
+textarea {
+	width: 768px;
+	background-color: #fcfcf5;
+	font: 120% "Consolas", "Courier New";
+	font-weight: bold;
+	color: #444444;
+	border: 8px solid #dddddd;
+	outline: none;
+	padding: 8px;
+	margin: 0px;
+	margin-top: 15px;
+	resize: none;
+	-moz-box-shadow:		5px 5px 10px #efefef;
+	-webkit-box-shadow:		5px 5px 10px #efefef;
+	box-shadow:				5px 5px 10px #efefef;
+	border-radius:			3px;
+	-moz-border-radius:		3px;
+	-webkit-border-radius:	3px;
+}

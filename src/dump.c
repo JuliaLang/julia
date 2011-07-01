@@ -972,9 +972,8 @@ void jl_init_serializer()
     }
     VALUE_TAGS = (ptrint_t)ptrhash_get(&ser_tag, jl_null);
 
-    void *fptrs[] = { jl_new_struct_internal, 
-                      jl_generic_ctor, 
-                      jl_constructor_factory_trampoline, 
+    void *fptrs[] = { jl_f_new_expr,
+                      jl_f_new_box,
                       jl_weakref_ctor, 
                       jl_new_array_internal, 
                       jl_f_throw, 
@@ -1025,6 +1024,7 @@ void jl_init_serializer()
                       jl_f_new_tag_type, 
                       jl_f_new_tag_type_super, 
                       jl_f_new_bits_type, 
+                      jl_f_def_macro,
                       jl_f_typevar, 
                       jl_f_union, 
                       jl_f_methodexists, 
