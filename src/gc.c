@@ -407,6 +407,8 @@ static void gc_mark_methlist(jl_methlist_t *ml)
         GC_Markval(ml->tvars);
         if (ml->func != NULL)
             GC_Markval(ml->func);
+        if (ml->invokes)
+            GC_Markval(ml->invokes);
         ml = ml->next;
     }
 }
