@@ -28,7 +28,7 @@ namespace JL_I {
         uitofp32, sitofp32, uitofp64, sitofp64,
         fptrunc32, fpext64,
         // functions
-        sqrt_float, powi_float, sin_float, cos_float, pow_float,
+        sqrt_float, powi_float, pow_float,
         // c interface
         ccall,
     };
@@ -984,20 +984,6 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
                                                             Intrinsic::sqrt,
                                                             &fxt, 1),
                                   fx);
-    HANDLE(sin_float,1)
-        fx = FP(x);
-        fxt = fx->getType();
-        return builder.CreateCall(Intrinsic::getDeclaration(jl_Module,
-                                                            Intrinsic::sin,
-                                                            &fxt, 1),
-                                  fx);
-    HANDLE(cos_float,1)
-        fx = FP(x);
-        fxt = fx->getType();
-        return builder.CreateCall(Intrinsic::getDeclaration(jl_Module,
-                                                            Intrinsic::cos,
-                                                            &fxt, 1),
-                                  fx);
     HANDLE(pow_float,2)
         fx = FP(x);
         fy = FP(emit_expr(args[2],ctx,true));
@@ -1094,7 +1080,6 @@ extern "C" void jl_init_intrinsic_functions()
     ADD_I(uitofp32); ADD_I(sitofp32); ADD_I(uitofp64); ADD_I(sitofp64);
     ADD_I(fptrunc32); ADD_I(fpext64);
     ADD_I(sqrt_float); ADD_I(powi_float); ADD_I(pow_float);
-    ADD_I(sin_float); ADD_I(cos_float);
     ADD_I(ccall);
     
     BOX_F(int8);  BOX_F(uint8);
