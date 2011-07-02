@@ -137,7 +137,7 @@ static void sweep_weak_refs()
         if (gc_marked_obj(wr)) {
             // weakref itself is alive
             if (!gc_marked_obj(wr->value))
-                wr->value = (jl_value_t*)jl_null;
+                wr->value = (jl_value_t*)jl_nothing;
             n++;
         }
         else {
