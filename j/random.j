@@ -1,4 +1,17 @@
-#libdsfmt = dlopen("libdSFMT")
+libdsfmt = dlopen("libdSFMT")
+
+DSFMT_MEXP = int32(19937)
+DSFMT_STATE = Array(Int32, 100000)
+DSFMT_POOL_SIZE = 10000
+
+dsfmt_init() = ccall(dlsym(libdsfmt, :dsfmt_chk_init_gen_rand),
+                     Void, (Ptr{Void}, Uint32, Int32),
+                     DSFMT_STATE, uint32(0), DSFMT_MEXP)
+
+dsfmt_fill_array_open_open(A::Array{Float64}, size::Size) =
+    ccall(dlsym(libdsfmt, :dsfmt_fill_array_open_open),
+          Void, (Ptr{Void}, Ptr{Float64}, Int32),
+          DSFMT_STATE, A, size)
 
 randui64() = boxui64(or_int(zext64(unbox32(randui32())),
                             shl_int(zext64(unbox32(randui32())),unbox32(32))))
