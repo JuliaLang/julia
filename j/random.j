@@ -1,17 +1,34 @@
 libdsfmt = dlopen("libdSFMT")
 
 DSFMT_MEXP = int32(19937)
-DSFMT_STATE = Array(Int32, 100000)
-DSFMT_POOL_SIZE = 10000
+DSFMT_STATE = Array(Int32, 1000)
+
+DSFMT_POOL_SIZE = 4096
+DSFMT_POOL = Array(Float64, DSFMT_POOL_SIZE)
+DSFMT_POOL_PTR = DSFMT_POOL_SIZE
 
 dsfmt_init() = ccall(dlsym(libdsfmt, :dsfmt_chk_init_gen_rand),
                      Void, (Ptr{Void}, Uint32, Int32),
                      DSFMT_STATE, uint32(0), DSFMT_MEXP)
 
-dsfmt_fill_array_open_open(A::Array{Float64}, size::Size) =
+dsfmt_fill_array_open_open(A::Array{Float64}, n::Size) =
     ccall(dlsym(libdsfmt, :dsfmt_fill_array_open_open),
           Void, (Ptr{Void}, Ptr{Float64}, Int32),
-          DSFMT_STATE, A, size)
+          DSFMT_STATE, A, n)
+
+function dsfmt_rand()
+    global DSFMT_POOL_PTR
+    global DSFMT_POOL_SIZE
+
+    if DSFMT_POOL_PTR < DSFMT_POOL_SIZE
+        DSFMT_POOL_PTR += 1
+        return DSFMT_POOL[DSFMT_POOL_PTR]
+    else
+        dsfmt_fill_array_open_open(DSFMT_POOL, DSFMT_POOL_SIZE)
+        DSFMT_POOL_PTR = 1
+        return DSFMT_POOL[1]
+    end
+end
 
 randui64() = boxui64(or_int(zext64(unbox32(randui32())),
                             shl_int(zext64(unbox32(randui32())),unbox32(32))))
