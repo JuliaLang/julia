@@ -132,10 +132,6 @@
 				  -1))
 			 0)))
 (define (mod x y) (- x (* (div x y) y)))
-(define (random n)
-  (if (integer? n)
-      (mod (rand) n)
-      (* (rand.double) n)))
 (define (abs x)   (if (< x 0) (- x) x))
 (define (max x0 . xs)
   (if (null? xs) x0

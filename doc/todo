@@ -711,7 +711,7 @@ issues 1/24/11
 - some kind of no-specialize hint for slots like x in
   assign(A::Array{Any}, x, i::Index) = arrayset(A,i,x)
   where we know the function is identical for all types of x
-  - maybe make x::Any different from no type decl
+  * add x::ANY
   - reuse specialized methods for multiple types in an Any slot
 - implement SubArray
 - isassigned predicates

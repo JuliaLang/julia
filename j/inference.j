@@ -167,7 +167,7 @@ function (T, dims...)
     Array{et,nd}
 end)
 
-function static_convert(to, from)
+function static_convert(to::ANY, from::ANY)
     if !isa(to,Tuple) || !isa(from,Tuple)
         return (subtype(from, to) ? from : to)
     end
@@ -575,14 +575,18 @@ function abstract_eval_expr(e, vtypes, sv::StaticVarInfo)
         t = abstract_eval(e.args[1], vtypes, sv)
         # intersect with Any to remove Undef
         t = tintersect(t, Any)
-        return Type{t}
+        if isleaftype(t) || isa(t,TypeVar)
+            return Type{t}
+        else
+            return Type{typevar(:T,t)}
+        end
     end
     Any
 end
 
 ast_rettype(ast) = ast.args[3].type
 
-function abstract_eval_constant(x)
+function abstract_eval_constant(x::ANY)
     if isa(x,TagKind) || isa(x,BitsKind) || isa(x,StructKind) ||
         isa(x,FuncKind) || isa(x,UnionKind)
         return Type{x}
@@ -670,7 +674,7 @@ function interpret(e::Expr, vtypes, sv::StaticVarInfo)
     return vtypes
 end
 
-tchanged(n, o) = is(o,NF) || (!is(n,NF) && !subtype(n,o))
+tchanged(n::ANY, o::ANY) = is(o,NF) || (!is(n,NF) && !subtype(n,o))
 
 function stchanged(new::Union(StateUpdate,VarTable), old, vars)
     if is(old,())
@@ -687,7 +691,7 @@ end
 
 badunion(t) = ccall(:jl_union_too_complex, Int32, (Any,), t) != 0
 
-function tmerge(typea, typeb)
+function tmerge(typea::ANY, typeb::ANY)
     if is(typea,NF)
         return typeb
     end
@@ -1066,7 +1070,7 @@ function contains_is(arr, item)
     return false
 end
 
-function exprtype(x)
+function exprtype(x::ANY)
     if isa(x,Expr)
         return x.type
     elseif isa(x,Symbol)

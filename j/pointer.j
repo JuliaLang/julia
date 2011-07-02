@@ -45,7 +45,7 @@ ulong(x) = convert(Ulong, x)
 
 ## limited pointer arithmetic & comparison ##
 
-==(x::Ptr, y::Ptr) = uint(x) == uint(y)
+isequal(x::Ptr, y::Ptr) = uint(x) == uint(y)
  -(x::Ptr, y::Ptr) = uint(x) - uint(y)
 
 +{T}(x::Ptr{T}, y::Int) = pointer(T, uint(x) + uint(y))

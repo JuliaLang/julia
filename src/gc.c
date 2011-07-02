@@ -137,7 +137,7 @@ static void sweep_weak_refs()
         if (gc_marked_obj(wr)) {
             // weakref itself is alive
             if (!gc_marked_obj(wr->value))
-                wr->value = (jl_value_t*)jl_null;
+                wr->value = (jl_value_t*)jl_nothing;
             n++;
         }
         else {
@@ -407,6 +407,8 @@ static void gc_mark_methlist(jl_methlist_t *ml)
         GC_Markval(ml->tvars);
         if (ml->func != NULL)
             GC_Markval(ml->func);
+        if (ml->invokes)
+            GC_Markval(ml->invokes);
         ml = ml->next;
     }
 }

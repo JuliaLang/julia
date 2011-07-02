@@ -1188,7 +1188,7 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool value)
             ((jl_tag_type_t*)extype)->name == jl_type_type->name) {
             extype = jl_tparam0(extype);
             if (jl_is_typevar(extype))
-                extype = (jl_value_t*)jl_any_type;
+                extype = ((jl_tvar_t*)extype)->ub;
         }
         else {
             extype = (jl_value_t*)jl_any_type;

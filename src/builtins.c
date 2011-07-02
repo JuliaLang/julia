@@ -1234,7 +1234,7 @@ JL_CALLABLE(jl_f_methodexists)
     check_type_tuple((jl_tuple_t*)args[1], jl_gf_name(args[0]),
                      "method_exists");
     return jl_method_lookup_by_type(jl_gf_mtable(args[0]),
-                                    (jl_tuple_t*)args[1]) ?
+                                    (jl_tuple_t*)args[1], 0) ?
         jl_true : jl_false;
 }
 
@@ -1244,7 +1244,7 @@ JL_CALLABLE(jl_f_applicable)
     JL_TYPECHK(applicable, function, args[0]);
     if (!jl_is_gf(args[0]))
         jl_error("applicable: not a generic function");
-    return jl_method_lookup(jl_gf_mtable(args[0]), &args[1], nargs-1) ?
+    return jl_method_lookup(jl_gf_mtable(args[0]), &args[1], nargs-1, 0) ?
         jl_true : jl_false;
 }
 
@@ -1259,11 +1259,8 @@ JL_CALLABLE(jl_f_invoke)
     if (!jl_tuple_subtype(&args[2], nargs-2, &jl_tupleref(args[1],0),
                           ((jl_tuple_t*)args[1])->length, 1, 0))
         jl_error("invoke: argument type error");
-    jl_function_t *mlfunc =
-        jl_method_lookup_by_type(jl_gf_mtable(args[0]), (jl_tuple_t*)args[1]);
-    if (mlfunc == NULL)
-        return jl_no_method_error((jl_function_t*)args[0], &args[2], nargs-2);
-    return jl_apply(mlfunc, &args[2], nargs-2);
+    return jl_gf_invoke((jl_function_t*)args[0],
+                        (jl_tuple_t*)args[1], &args[2], nargs-2);
 }
 
 DLLEXPORT
@@ -1396,6 +1393,8 @@ void jl_init_primitives()
     add_builtin("FuncKind", (jl_value_t*)jl_func_kind);
     add_builtin("TagKind", (jl_value_t*)jl_tag_kind);
     add_builtin("UnionKind", (jl_value_t*)jl_union_kind);
+
+    add_builtin("ANY", jl_ANY_flag);
 
     add_builtin("C_NULL", jl_box_pointer(jl_pointer_void_type, NULL));
 }

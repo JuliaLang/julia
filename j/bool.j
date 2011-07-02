@@ -11,7 +11,7 @@ sizeof(::Type{Bool}) = 1
 ## boolean operations ##
 
 !(x::Bool) = eq_int(unbox8(x),trunc8(unbox32(0)))
-==(x::Bool, y::Bool) = eq_int(unbox8(x),unbox8(y))
+isequal(x::Bool, y::Bool) = eq_int(unbox8(x),unbox8(y))
 
 (~)(x::Bool) = !x
 (&)(x::Bool, y::Bool) = (x&&y)

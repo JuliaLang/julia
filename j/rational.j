@@ -75,10 +75,12 @@ isinf(x::Rational) = x.den == 0 && x.num != 0
 isfinite(x::Rational) = x.den != 0
 
 isequal(x::Rational, y::Rational) = x.num == y.num && x.den == y.den
-isequal(x::Rational, y::Int) = x.den == 1 && x.num == y
-isequal(x::Number, y::Rational) = isequal(y, x)
+
+hash(x::Rational) = bitmix(hash(x.num),hash(x.den))
 
 ==(x::Rational, y::Rational) = !isnan(x) && x.num == y.num && x.den == y.den
+==(x::Rational, y::Int)      = x.den == 1 && x.num == y
+==(y::Int, x::Rational)      = x.den == 1 && x.num == y
 !=(x::Rational, y::Rational) =  isnan(x) || x.num != y.num || x.den != y.den
 <=(x::Rational, y::Rational) = float(x) <= float(y)
 < (x::Rational, y::Rational) = float(x) < float(y)

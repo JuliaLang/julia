@@ -76,6 +76,8 @@ static int cache_match_by_type(jl_value_t **types, size_t n, jl_tuple_t *sig,
                 }
             }
         }
+        else if (decl == (jl_value_t*)jl_any_type) {
+        }
         else {
             if (!jl_types_equal(a, decl))
                 return 0;
@@ -123,6 +125,8 @@ static inline int cache_match(jl_value_t **args, size_t n, jl_tuple_t *sig,
                 if (a!=jl_tparam0(decl) && !jl_types_equal(a,jl_tparam0(decl)))
                     return 0;
             }
+        }
+        else if (decl == (jl_value_t*)jl_any_type) {
         }
         else {
             /*
@@ -337,7 +341,36 @@ static jl_function_t *cache_method(jl_methtable_t *mt, jl_tuple_t *type,
     size_t i;
     for (i=0; i < type->length; i++) {
         jl_value_t *elt = jl_tupleref(type,i);
-        if (jl_is_tuple(elt)) {
+        int set_to_any = 0;
+        if (nth_slot_type(decl,i) == jl_ANY_flag) {
+            // don't specialize on slots marked ANY
+            jl_value_t *orig = jl_tupleref(type, i);
+            jl_tupleset(type, i, (jl_value_t*)jl_any_type);
+            int nintr=0;
+            jl_methlist_t *curr = mt->defs;
+            // if this method is the only match even with the current slot
+            // set to Any, then it is safe to cache it that way.
+            while (curr != NULL && curr->func!=method) {
+                if (jl_type_intersection((jl_value_t*)curr->sig,
+                                         (jl_value_t*)type) !=
+                    (jl_value_t*)jl_bottom_type) {
+                    nintr++;
+                    break;
+                }
+                curr = curr->next;
+            }
+            if (nintr) {
+                // TODO: even if different specializations of this slot need
+                // separate cache entries, have them share code.
+                jl_tupleset(type, i, orig);
+            }
+            else {
+                set_to_any = 1;
+            }
+        }
+        if (set_to_any) {
+        }
+        else if (jl_is_tuple(elt)) {
             /*
               don't cache tuple type exactly; just remember that it was
               a tuple, unless the declaration asks for something more
@@ -568,7 +601,7 @@ static jl_function_t *cache_method(jl_methtable_t *mt, jl_tuple_t *type,
     return newmeth;
 }
 
-jl_function_t *jl_mt_assoc_by_type(jl_methtable_t *mt, jl_tuple_t *tt)
+static jl_function_t *jl_mt_assoc_by_type(jl_methtable_t *mt, jl_tuple_t *tt, int cache)
 {
     jl_methlist_t *m = mt->defs;
     size_t nargs = tt->length;
@@ -590,6 +623,9 @@ jl_function_t *jl_mt_assoc_by_type(jl_methtable_t *mt, jl_tuple_t *tt)
 
     if (env == (jl_value_t*)jl_false) {
         if (m != NULL) {
+            if (!cache) {
+                return m->func;
+            }
             return cache_method(mt, tt, m->func, (jl_tuple_t*)m->sig, jl_null);
         }
         return NULL;
@@ -615,7 +651,11 @@ jl_function_t *jl_mt_assoc_by_type(jl_methtable_t *mt, jl_tuple_t *tt)
         newsig = (jl_tuple_t*)m->sig;
     }
     assert(jl_is_tuple(newsig));
-    jl_function_t *nf = cache_method(mt, tt, m->func, newsig, tpenv);
+    jl_function_t *nf;
+    if (!cache)
+        nf = m->func;
+    else
+        nf = cache_method(mt, tt, m->func, newsig, tpenv);
     JL_GC_POP();
     return nf;
 }
@@ -804,6 +844,7 @@ jl_methlist_t *jl_method_list_insert(jl_methlist_t **pml, jl_tuple_t *type,
             l->has_tvars = (l->tvars != jl_null);
             l->va = (type->length > 0 &&
                      jl_is_seq_type(jl_tupleref(type,type->length-1)));
+            l->invokes = NULL;
             l->func = method;
             return l;
         }
@@ -831,6 +872,7 @@ jl_methlist_t *jl_method_list_insert(jl_methlist_t **pml, jl_tuple_t *type,
     newrec->va = (type->length > 0 &&
                   jl_is_seq_type(jl_tupleref(type,type->length-1)));
     newrec->func = method;
+    newrec->invokes = NULL;
     newrec->next = l;
     *pl = newrec;
     JL_GC_POP();
@@ -940,22 +982,23 @@ static jl_tuple_t *arg_type_tuple(jl_value_t **args, size_t nargs)
     return tt;
 }
 
-jl_function_t *jl_method_lookup_by_type(jl_methtable_t *mt, jl_tuple_t *types)
+jl_function_t *jl_method_lookup_by_type(jl_methtable_t *mt, jl_tuple_t *types,
+                                        int cache)
 {
     jl_function_t *sf = jl_method_table_assoc_exact_by_type(mt, types);
     if (sf == NULL) {
-        sf = jl_mt_assoc_by_type(mt, types);
+        sf = jl_mt_assoc_by_type(mt, types, cache);
     }
     return sf;
 }
 
-jl_function_t *jl_method_lookup(jl_methtable_t *mt, jl_value_t **args, size_t nargs)
+jl_function_t *jl_method_lookup(jl_methtable_t *mt, jl_value_t **args, size_t nargs, int cache)
 {
     jl_function_t *sf = jl_method_table_assoc_exact(mt, args, nargs);
     if (sf == NULL) {
         jl_tuple_t *tt = arg_type_tuple(args, nargs);
         JL_GC_PUSH(&tt);
-        sf = jl_mt_assoc_by_type(mt, tt);
+        sf = jl_mt_assoc_by_type(mt, tt, cache);
         JL_GC_POP();
     }
     return sf;
@@ -966,8 +1009,10 @@ DLLEXPORT
 jl_function_t *jl_get_specialization(jl_function_t *f, jl_tuple_t *types)
 {
     assert(jl_is_gf(f));
+    if (!jl_is_leaf_type((jl_value_t*)types))
+        return NULL;
     jl_methtable_t *mt = (jl_methtable_t*)jl_t0(f->env);
-    jl_function_t *sf = jl_method_lookup_by_type(mt, types);
+    jl_function_t *sf = jl_method_lookup_by_type(mt, types, 1);
     if (sf == NULL) {
         return NULL;
     }
@@ -1030,12 +1075,109 @@ JL_CALLABLE(jl_apply_generic)
     else {
         jl_tuple_t *tt = arg_type_tuple(args, nargs);
         JL_GC_PUSH(&tt);
-        mfunc = jl_mt_assoc_by_type(mt, tt);
+        mfunc = jl_mt_assoc_by_type(mt, tt, 1);
         JL_GC_POP();
     }
 
     if (mfunc == NULL) {
         return jl_no_method_error((jl_function_t*)jl_t2(env), args, nargs);
+    }
+
+    JL_GC_PUSH(&mfunc);
+    jl_value_t *result = jl_apply(mfunc, args, nargs);
+    JL_GC_POP();
+    return result;
+}
+
+// invoke()
+// this does method dispatch with a set of types to match other than the
+// types of the actual arguments. this means it sometimes does NOT call the
+// most specific method for the argument types, so we need different logic.
+// first we use the given types to look up a definition, then we perform
+// caching and specialization within just that definition.
+// every definition has its own private method table for this purpose.
+//
+// NOTE: assumes argument type is a subtype of the lookup type.
+jl_value_t *jl_gf_invoke(jl_function_t *gf, jl_tuple_t *types,
+                         jl_value_t **args, size_t nargs)
+{
+    assert(jl_is_gf(gf));
+    jl_methtable_t *mt = jl_gf_mtable(gf);
+
+    jl_methlist_t *m = mt->defs;
+    size_t typelen = types->length;
+    size_t i;
+    jl_value_t *env = (jl_value_t*)jl_false;
+
+    while (m != NULL) {
+        if (m->has_tvars) {
+            env = jl_type_match((jl_value_t*)types, (jl_value_t*)m->sig);
+            if (env != (jl_value_t*)jl_false) break;
+        }
+        else if (jl_tuple_subtype(&jl_tupleref(types,0), typelen,
+                                  &jl_tupleref(m->sig,0),
+                                  ((jl_tuple_t*)m->sig)->length, 0, 0)) {
+            break;
+        }
+        m = m->next;
+    }
+
+    if (m == NULL) {
+        return jl_no_method_error(gf, args, nargs);
+    }
+
+    // now we have found the matching definition.
+    // next look for or create a specialization of this definition.
+
+    jl_function_t *mfunc;
+    if (m->invokes == NULL)
+        mfunc = NULL;
+    else
+        mfunc = jl_method_table_assoc_exact(m->invokes, args, nargs);
+    if (mfunc != NULL) {
+        if (mfunc->linfo != NULL && 
+            (mfunc->linfo->inInference || mfunc->linfo->inCompile)) {
+            // if inference is running on this function, return a copy
+            // of the function to be compiled without inference and run.
+            jl_lambda_info_t *li = mfunc->linfo;
+            if (li->unspecialized == NULL) {
+                li->unspecialized = jl_instantiate_method(mfunc, jl_null);
+            }
+            mfunc = li->unspecialized;
+        }
+    }
+    else {
+        jl_tuple_t *tpenv=jl_null;
+        jl_tuple_t *newsig=NULL;
+        jl_tuple_t *tt=NULL;
+        JL_GC_PUSH(&env, &tpenv, &newsig, &tt);
+
+        if (m->invokes == NULL) {
+            m->invokes = new_method_table();
+            // this private method table has just this one definition
+            jl_method_list_insert(&m->invokes->defs, m->sig, m->func, 0);
+        }
+
+        tt = arg_type_tuple(args, nargs);
+
+        newsig = (jl_tuple_t*)m->sig;
+
+        if (env != (jl_value_t*)jl_false) {
+            tpenv = jl_flatten_pairs((jl_tuple_t*)env);
+            // don't bother computing this if no arguments are tuples
+            for(i=0; i < tt->length; i++) {
+                if (jl_is_tuple(jl_tupleref(tt,i)))
+                    break;
+            }
+            if (i < tt->length) {
+                newsig =
+                    (jl_tuple_t*)jl_instantiate_type_with((jl_type_t*)m->sig,
+                                                          &jl_tupleref(tpenv,0),
+                                                          tpenv->length/2);
+            }
+        }
+        mfunc = cache_method(m->invokes, tt, m->func, newsig, tpenv);
+        JL_GC_POP();
     }
 
     JL_GC_PUSH(&mfunc);

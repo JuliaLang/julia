@@ -224,7 +224,7 @@ b = rand()
 
 for a = -5:5, b = -5:5
     @assert isequal(a/b, a/b)
-    @assert isequal(a//b, a/b)
+    @assert (a//b == a/b) || (isnan(a//b) && isnan(a/b))
     @assert isequal(a//b, a//b)
     for c = -5:5, d = -5:5
         @assert isequal(a//b, c//d) == isequal(a/b, c/d)

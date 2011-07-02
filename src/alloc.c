@@ -20,6 +20,7 @@ jl_value_t *jl_false;
 jl_tag_type_t *jl_undef_type;
 jl_tvar_t     *jl_typetype_tvar;
 jl_tag_type_t *jl_typetype_type;
+jl_value_t    *jl_ANY_flag;
 jl_typector_t *jl_function_type;
 jl_struct_type_t *jl_box_type;
 jl_type_t *jl_box_any_type;
