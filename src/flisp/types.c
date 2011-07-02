@@ -50,10 +50,6 @@ fltype_t *get_type(value_t t)
             ft->init = &cvalue_array_init;
             eltype->artype = ft;
         }
-        else if (car_(t) == enumsym) {
-            ft->numtype = T_INT32;
-            ft->init = &cvalue_enum_init;
-        }
     }
     *bp = ft;
     return ft;

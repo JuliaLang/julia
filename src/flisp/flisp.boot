@@ -81,7 +81,7 @@
 	  __start #fn("8000r1e0302|NF6D0|Nk12^k22e3|\x84315E0|k12]k22e4e5312e6302c7`41;" [__init_globals
   *argv* *interactive* __script princ *banner* repl #fn(exit)] __start)
 	  abs #fn("7000r1|`X650|y;|;" [] abs) any
-	  #fn("8000r2}F16D02|}M3117:02e0|}N42;" [any] any) arg-counts #table(#.not 1  #.atom? 1  #.number? 1  #.cons 2  #.set-cdr! 2  #.equal? 2  #.fixnum? 1  #.bound? 1  #.eq? 2  #.symbol? 1  #.builtin? 1  #.< 2  #.aset! 3  #.div0 2  #.cdr 1  #.null? 1  #.eqv? 2  #.compare 2  #.aref 2  #.car 1  #.set-car! 2  #.pair? 1  #.= 2  #.vector? 1  #.boolean? 1)
+	  #fn("8000r2}F16D02|}M3117:02e0|}N42;" [any] any) arg-counts #table(#.equal? 2  #.atom? 1  #.set-cdr! 2  #.symbol? 1  #.car 1  #.eq? 2  #.aref 2  #.boolean? 1  #.not 1  #.null? 1  #.eqv? 2  #.number? 1  #.pair? 1  #.builtin? 1  #.aset! 3  #.div0 2  #.= 2  #.bound? 1  #.compare 2  #.vector? 1  #.cdr 1  #.set-car! 2  #.< 2  #.fixnum? 1  #.cons 2)
 	  argc-error #fn("<000r2e0c1|c2}}aW670c3540c445;" [error "compile error: "
 							   " expects " " argument."
 							   " arguments."] argc-error)
@@ -105,7 +105,7 @@
   #fn("<000r2]|F16902|Mc0<@6E02e1|M31}Km12|Nm05\x0f/2c2|F6>0e3}|\x84L1325J0|\x85:0e4}315>0e3}e5|31L13241;" [unquote
   bq-bracket #fn("8000r1|N\x8550|M;e0|b23216H02e0|Mb23216;02c1e2|31<6>0c3e4|31|\x84L3;c5|K;" [length=
   #.list caar #.cons cadar nconc]) nreconc reverse! bq-process])])] bq-process)
-	  builtin->instruction #fn("9000r1c0~|^43;" [#fn(get)] [#table(#.number? number?  #.cons cons  #.fixnum? fixnum?  #.equal? equal?  #.eq? eq?  #.symbol? symbol?  #.div0 div0  #.builtin? builtin?  #.aset! aset!  #.- -  #.boolean? boolean?  #.not not  #.apply apply  #.atom? atom?  #.set-cdr! set-cdr!  #./ /  #.function? function?  #.vector vector  #.list list  #.bound? bound?  #.< <  #.* *  #.cdr cdr  #.null? null?  #.+ +  #.eqv? eqv?  #.compare compare  #.aref aref  #.set-car! set-car!  #.car car  #.pair? pair?  #.= =  #.vector? vector?)
+	  builtin->instruction #fn("9000r1c0~|^43;" [#fn(get)] [#table(#.equal? equal?  #.* *  #.car car  #.apply apply  #.aref aref  #.- -  #.boolean? boolean?  #.builtin? builtin?  #.null? null?  #.eqv? eqv?  #.function? function?  #.bound? bound?  #.cdr cdr  #.list list  #.set-car! set-car!  #.cons cons  #.atom? atom?  #.set-cdr! set-cdr!  #.symbol? symbol?  #.eq? eq?  #.vector vector  #.not not  #.pair? pair?  #.number? number?  #.div0 div0  #.aset! aset!  #.+ +  #.= =  #.compare compare  #.vector? vector?  #./ /  #.< <  #.fixnum? fixnum?)
 								()])
 	  caaaar #fn("6000r1|MMMM;" [] caaaar) caaadr
 	  #fn("6000r1|\x84MM;" [] caaadr) caaar #fn("6000r1|MMM;" [] caaar)
@@ -156,7 +156,7 @@
   largc lvargc vargc argc compile-in lastcdr caddr ret values #fn(function)
   encode-byte-code bcode:code const-to-idx-vec]) filter keyword-arg?])
   #fn(length)]) #fn(length)]) make-code-emitter lastcdr lambda-vars filter #.pair?
-  lambda])] #0=[#:g691 ()])
+  lambda])] #0=[#:g689 ()])
 	  compile-for #fn(":000r5e0g4316X0e1|}^g2342e1|}^g3342e1|}^g4342e2|c342;e4c541;" [1arg-lambda?
   compile-in emit for error "for: third form must be a 1-argument lambda"] compile-for)
 	  compile-if #fn("<000r4c0qe1|31e1|31g3\x84e2g331e3g331F6;0e4g331560e53045;" [#fn(";000r5g2]\x82>0e0~\x7fi02g344;g2^\x82>0e0~\x7fi02g444;e0~\x7f^g2342e1~c2|332e0~\x7fi02g3342i026<0e1~c3325:0e1~c4}332e5~|322e0~\x7fi02g4342e5~}42;" [compile-in
@@ -356,8 +356,6 @@
 	  printable? #fn("7000r1c0|3117802c1|31@;" [#fn(iostream?)
 						    #fn(eof-object?)] printable?)
 	  quote-value #fn("7000r1e0|31640|;c1|L2;" [self-evaluating? quote] quote-value)
-	  random #fn("8000r1c0|316<0e1c230|42;c330|T2;" [#fn(integer?) mod #fn(rand)
-							 #fn(rand.double)] random)
 	  read-all #fn("8000r1e0c1|42;" [read-all-of #fn(read)] read-all)
 	  read-all-of #fn("9000r2c0q]31_|}3142;" [#fn("6000r1c0qm02|;" [#fn("9000r2c0i1131680e1|41;~}|Ki10i113142;" [#fn(io.eof?)
   reverse!])])] read-all-of)

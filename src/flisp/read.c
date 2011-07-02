@@ -424,7 +424,7 @@ static value_t read_string()
     size_t i=0, j, sz = 64, ndig;
     int c;
     value_t s;
-    u_int32_t wc;
+    u_int32_t wc=0;
 
     buf = malloc(sz);
     while (1) {
