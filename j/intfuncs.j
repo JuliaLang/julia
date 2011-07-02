@@ -49,7 +49,7 @@ function ^(x, p::Int)
     elseif p == 0
         return one(x)
     elseif p < 0
-        return 1/(x^(-p))
+        return inv(x^(-p))
     elseif p == 2
         return x*x
     end
