@@ -30,3 +30,10 @@ function getcwd()
     end
     string(p)
 end
+
+function setcwd(p::String)
+    if ccall(dlsym(libc, :chdir), Int32, (Ptr{Uint8},), p) == -1
+        throw(SystemError("setcwd"))
+    end
+    getcwd()
+end
