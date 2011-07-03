@@ -1,6 +1,12 @@
 #ifndef __IEEE754_H_
 #define __IEEE754_H_
 
+#ifdef __linux
+
+#include <ieee754.h>
+
+#else
+
 union ieee754_float {
     float f;
 
@@ -63,5 +69,7 @@ union ieee854_long_double {
 };
 
 #define IEEE854_LONG_DOUBLE_BIAS 0x3fff
+
+#endif // ifdef __APPLE__ ...
 
 #endif

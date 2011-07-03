@@ -6,11 +6,7 @@
 #include <math.h>
 #include <sys/time.h>
 #include <stdint.h>
-#ifdef __APPLE__
 #include "ieee754.h"
-#else
-#include <ieee754.h>
-#endif
 
 double rand_double();
 float rand_float();
