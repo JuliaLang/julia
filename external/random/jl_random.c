@@ -66,7 +66,7 @@ void randomize()
     uint64_t a;
 
     gettimeofday(&now, NULL);
-    a = (((u_int64_t)now.tv_sec)<<32) + (u_int64_t)now.tv_usec;
+    a = (((uint64_t)now.tv_sec)<<32) + (uint64_t)now.tv_usec;
 
     randomseed64(a);
 }
