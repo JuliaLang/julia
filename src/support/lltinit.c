@@ -20,8 +20,6 @@ void llt_init()
 {
     locale_is_utf8 = u8_is_locale_utf8(setlocale(LC_ALL, ""));
 
-    randomize();
-
     ios_init_stdstreams();
 
     D_PNAN = strtod("+NaN",NULL);

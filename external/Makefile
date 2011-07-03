@@ -127,32 +127,34 @@ clean-fdlibm:
 	rm -f $(FDLIBM_OBJ_SOURCE) $(FDLIBM_OBJ_TARGET)
 distclean-fdlibm: clean-fdlibm
 
-## dSFMT ##
+## MT ##
 
-DSFMT_OBJ_TARGET = $(EXTROOTLIB)/libdSFMT.$(SHLIB_EXT)
-DSFMT_OBJ_SOURCE = dsfmt-$(DSFMT_VER)/libdSFMT.$(SHLIB_EXT)
+DSFMT_OBJ_TARGET = $(EXTROOTLIB)/libMT.$(SHLIB_EXT)
+DSFMT_OBJ_SOURCE = random/libMT.$(SHLIB_EXT)
 
 compile-dsfmt: $(DSFMT_OBJ_SOURCE)
 install-dsfmt: $(DSFMT_OBJ_TARGET)
 
-dsfmt-$(DSFMT_VER).tar.gz:
-	curl http://www.math.sci.hiroshima-u.ac.jp/~m-mat/MT/SFMT/dSFMT-src-2.1.tar.gz > $@
-dsfmt-$(DSFMT_VER)/Makefile: dsfmt-$(DSFMT_VER).tar.gz
+random/dsfmt-$(DSFMT_VER).tar.gz:
+	cd random && \
+	curl -o dsfmt-$(DSFMT_VER).tar.gz http://www.math.sci.hiroshima-u.ac.jp/~m-mat/MT/SFMT/dSFMT-src-$(DSFMT_VER).tar.gz -O http://www.math.sci.hiroshima-u.ac.jp/~m-mat/MT/mt19937-64.tgz 
+random/dsfmt-$(DSFMT_VER)/Makefile: random/dsfmt-$(DSFMT_VER).tar.gz
+	cd random && \
 	mkdir -p dsfmt-$(DSFMT_VER) && \
-	tar -C dsfmt-$(DSFMT_VER) --strip-components 1 -xf $<
+	tar -C dsfmt-$(DSFMT_VER) --strip-components 1 -xf dsfmt-$(DSFMT_VER).tar.gz && \
+	tar zxf mt19937-64.tgz
 	touch $@
-$(DSFMT_OBJ_SOURCE): dsfmt-$(DSFMT_VER)/Makefile
-	cd dsfmt-$(DSFMT_VER) && \
-	$(CC) -O3 -finline-functions -fomit-frame-pointer -DNDEBUG -fno-strict-aliasing --param max-inline-insns-single=1800  -Wmissing-prototypes -Wall  -std=c99 -DDSFMT_MEXP=19937 -fPIC -shared dSFMT.c -o libdSFMT.$(SHLIB_EXT)
+$(DSFMT_OBJ_SOURCE): random/dsfmt-$(DSFMT_VER)/Makefile
+	cd random && \
+	$(CC) -O3 -finline-functions -fomit-frame-pointer -DNDEBUG -fno-strict-aliasing --param max-inline-insns-single=1800  -Wmissing-prototypes -Wall  -std=c99 -DDSFMT_MEXP=19937 -fPIC -shared jl_random.c dsfmt-2.1/dSFMT.c -I mt19937-64 mt19937-64/mt19937-64.c -o libMT.$(SHLIB_EXT)
 $(DSFMT_OBJ_TARGET): $(DSFMT_OBJ_SOURCE)
 	mkdir -p $(EXTROOTLIB)
 	cp $< $@
 
 clean-dsfmt:
-	make -C dSFMT-src-$(DSFMT_VER) clean
-	rm -f dSFMT-src-$(DSFMT_VER)/*.$(SHLIB_EXT)
-distclean-dsfmt:
-	rm -rf dSFMT-src-$(DSFMT_VER).tar.gz dSFMT-src-$(DSFMT_VER)
+	rm -f random/libMT.$(SHLIB_EXT)
+distclean-dsfmt: clean-dsfmt
+	cd random && rm -rf *.tgz *.tar.gz dsfmt-$(DSFMT_VER) mt19937-64
 
 ## OpenBLAS ##
 

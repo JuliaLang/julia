@@ -1,14 +1,7 @@
 /*
   random numbers
 */
-#include <stdlib.h>
-#include <stdio.h>
-#include <math.h>
-#include "dtypes.h"
-#include "ieee754.h"
-#include "utils.h"
-#include "random.h"
-#include "timefuncs.h"
+#include "jl_random.h"
 
 #include "mt19937ar.c"
 
@@ -69,5 +62,11 @@ void randomseed64(uint64_t s)
 
 void randomize()
 {
-    randomseed64(i64time());
+    struct timeval now;
+    uint64_t a;
+
+    gettimeofday(&now, NULL);
+    a = (((u_int64_t)now.tv_sec)<<32) + (u_int64_t)now.tv_usec;
+
+    randomseed64(a);
 }

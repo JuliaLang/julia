@@ -13,7 +13,7 @@ libc = ccall(:jl_load_dynamic_library, Ptr{Void}, (Ptr{Uint8},), C_NULL)
 libm = dlopen("libm")
 libfdm = dlopen("libfdm")
 
-libdsfmt = dlopen("libdSFMT")
+libmt = dlopen("libMT")
 
 libpcre = dlopen("libpcre")
 
