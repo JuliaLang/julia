@@ -12,7 +12,6 @@
 #include "ptrhash.h"
 #include "bitvector.h"
 #include "dirpath.h"
-#include "random.h"
 
 DLLEXPORT void llt_init();
 

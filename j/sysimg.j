@@ -46,7 +46,7 @@ load("intfuncs.j")
 load("floatfuncs.j")
 load("math.j")
 load("math_libm.j")
-load("random.j"); dsfmt_init();
+load("random.j"); mt_init();
 load("combinatorics.j")
 load("linalg.j")
 load("linalg_blas.j")

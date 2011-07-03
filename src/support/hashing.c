@@ -9,7 +9,6 @@
 #include "hashing.h"
 #include "timefuncs.h"
 #include "ios.h"
-#include "random.h"
 
 uint_t nextipow2(uint_t i)
 {
