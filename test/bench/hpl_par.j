@@ -60,7 +60,10 @@ function hpl_par(A::Matrix, b::Vector, blocksize::Int32, run_parallel::Bool)
             
             ## Do the trailing update (Compute U, and DGEMM - all flops are here)
             if run_parallel
-                depend[i+1,j] = @spawn trailing_update(L_II, A[I,J], A[K,I], A[K,J], depend[i+1,i], depend[i,j])
+                A_IJ = A[I,J]
+                A_KI = A[K,I]
+                A_KJ = A[K,J]
+                depend[i+1,j] = @spawn trailing_update(L_II, A_IJ, A_KI, A_KJ, depend[i+1,i], depend[i,j])
             else
                 depend[i+1,j] = trailing_update(L_II, A[I,J], A[K,I], A[K,J], depend[i+1,i], depend[i,j])
             end
