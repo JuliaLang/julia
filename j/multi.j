@@ -47,23 +47,26 @@ function send_msg(s::IOStream, kind, args...)
 end
 
 # todo:
-# * add readline to event loop
-# * GOs/darrays on a subset of nodes
 # - more indexing
 # - take() to empty a Ref (full/empty variables)
-# - dynamically adding nodes (then always start with 1 and just grow/shrink)
-# ? method_missing for waiting (ref/assign/localdata seems to cover a lot)
+# - have put() wait on non-empty Refs
+# - removing nodes
 # - more dynamic scheduling
-# * call&wait and call&fetch combined messages
-# * aggregate GC messages
 # - fetch/wait latency seems to be excessive
+# - timer events and message aggregation
+# - send pings at some interval to detect failed/hung machines
+# - integrate event loop with other kinds of i/o (non-messages)
+# ? method_missing for waiting (ref/assign/localdata seems to cover a lot)
+# * serializing closures
 # * recover from i/o errors
 # * handle remote execution errors
 # * all-to-all communication
 # * distributed GC
-# - send pings at some interval to detect failed/hung machines
-# - integrate event loop with other kinds of i/o (non-messages)
-# * serializing closures
+# * call&wait and call&fetch combined messages
+# * aggregate GC messages
+# * dynamically adding nodes (then always start with 1 and grow)
+# * add readline to event loop
+# * GOs/darrays on a subset of nodes
 
 ## process group creation ##
 
@@ -210,6 +213,12 @@ type RemoteRef
     function RemoteRef(pid::Int)
         rr = RemoteRef(pid, myid(), REQ_ID)
         REQ_ID += 1
+        if mod(REQ_ID,200) == 0
+            # force gc after making a lot of refs since they take up
+            # space on the machine where they're stored, yet the client
+            # is responsible for freeing them.
+            gc()
+        end
         rr
     end
 
@@ -225,6 +234,9 @@ type RemoteRef
     function WeakRemoteRef(pid::Int)
         rr = WeakRemoteRef(pid, myid(), REQ_ID)
         REQ_ID += 1
+        if mod(REQ_ID,200) == 0
+            gc()
+        end
         rr
     end
 
@@ -953,7 +965,9 @@ type GlobalObject
         midx = 0
         for i=1:np
             # create a set of refs to be initialized by GlobalObject above
-            r[i] = RemoteRef(procs[i])
+            # these can be weak since their lifetimes are managed by the
+            # GlobalObject and its finalizer
+            r[i] = WeakRemoteRef(procs[i])
             if procs[i] == mi
                 participate = true
                 midx = i
