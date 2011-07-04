@@ -35,51 +35,6 @@
 			
 			window.onresize = set_column_heights;
 		</script>
-		<script>
-			var terminal_data = "";
-
-			function poll()
-			{
-				$.ajax({
-					type: "POST",
-					url: "/repl.scgi",
-					success: callback,
-					dataType: "text",
-					cache: false
-				});
-			}
-
-			function callback(data, textStatus, jqXHR)
-			{
-				if (data != "")
-				{
-					terminal_data += data;
-					$("#terminal").html(terminal_data);
-					$("#terminal").scrollTop($("#terminal").prop("scrollHeight"));
-				}
-				setTimeout(poll, 500);
-			}
-
-			$(document).ready(function()
-			{
-				$("#terminal-form").submit(function(evt)
-				{
-					$.ajax({
-						type: "POST",
-						url: "http://localhost/repl.scgi",
-						data: {"terminal-input": $("#terminal-input").val()},
-						success: callback,
-						dataType: "text",
-						cache: false
-					});
-
-					$("#terminal-input").val("");
-					return false;
-				});
-				
-				setTimeout(poll, 500);
-			});
-		</script>
 	</head>
 	<body>
 		<div id="header-bar">
@@ -122,12 +77,12 @@
 				</ul>
 			</div>
 			<div id="right-column">
+				<div class="error">
+					Oops! We can't find the page you requested.
+				</div>
 				<h1>A fresh approach to technical computing.</h1>
 				<p>Julia is a dynamic language with optional typing, multiple dispatch, and good performance, achieved using type inference and just-in-time (JIT) compilation, implemented using LLVM. It is multi-paradigm, combining features of imperative, functional, and object-oriented programming.  Try it out!</p>
-				<form id="terminal-form">
-					<div id="terminal"></div>
-					<input class="input" id="terminal-input" type="text" autofocus="autofocus" required="required" />
-				</form>
+				<textarea class="code-editor" name="terminal" rows="12" cols="70" autofocus="autofocus"></textarea>
 			</div>
 			<div class="float-clear"> </div>
 		</div>
