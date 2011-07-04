@@ -428,9 +428,40 @@ static void init_task(jl_task_t *t)
 }
 #endif
 
-char* getFunctionInfo(size_t pointer);
+void getFunctionInfo(const char **name, int *line, size_t pointer);
 
+/*struct InfoIP {
+	char* info;
+	long ip;
 
+};
+
+stack<InfoIP> generate_backtrace() {
+	unw_cursor_t cursor; unw_context_t uc;
+  	unw_word_t ip, sp;
+  	stack<InfoIP> toReturn = stack<InfoIP>();
+
+  	unw_getcontext(&uc);
+  	unw_init_local(&cursor, &uc);
+ 	while (unw_step(&cursor)) { 
+    	unw_get_reg(&cursor, UNW_REG_IP, &ip);
+    	unw_get_reg(&cursor, UNW_REG_SP, &sp);
+    	//printf("pre getFunc \n");
+    	const char* funcName = getFunctionInfo(ip);
+    	if(funcName != NULL) {
+    		InfoIP toAdd;
+    		toAdd.info = funcName;
+    		toAdd.ip = (long) ip;
+    		toReturn.push(toAdd);
+			//printf ("Function Name = %s, instruction pointer = %lx \n", funcName, (long) ip);
+		}      	
+  	}
+  
+  	return toReturn;
+	
+
+}
+*/
 
 void show_backtrace (void) {
   unw_cursor_t cursor; unw_context_t uc;
@@ -438,24 +469,20 @@ void show_backtrace (void) {
 
   unw_getcontext(&uc);
   unw_init_local(&cursor, &uc);
-  int index = unw_step(&cursor);
-  //printf("index %d\n", index);
-  while (index > 0) { 
+  while (unw_step(&cursor)) { 
     unw_get_reg(&cursor, UNW_REG_IP, &ip);
     unw_get_reg(&cursor, UNW_REG_SP, &sp);
-    //printf("pre getFunc \n");
-    const char* funcName = getFunctionInfo(ip);
-    if(funcName != NULL) {
-			printf ("Function Name = %s, instruction pointer = %lx \n", funcName, (long) ip);
+    const char *func_name;
+    int line_num;
+    getFunctionInfo(&func_name, &line_num, ip);
+    if(func_name != NULL) {
+			printf ("Function Name: %s, line num: %d, instruction pointer: %lx \n", func_name, line_num,(long) ip);
 		}  
-    //printf("post getFunc \n"); 
-    index = unw_step(&cursor); 
-    //printf("index %d\n", index);
   }
-  //printf("exiting backtrace");
 }
 
-
+/*
+Have to fix this code to work with new, getFunctionInfo
 void backtrace () {
 	const int max_i = 10000;
 	int i = 0;
@@ -463,7 +490,6 @@ void backtrace () {
 	asm(" movq %%rbp, %0;"
 		: "=r" (rbp));
 	while (rbp != 0 && i<max_i) {
-		//printf("        rbp value %lx, value of i %d\n",rbp, i);
 		void **fp = ((void**)rbp)[0];
 		void *ip = ((void**)rbp)[1];
 		const char* info = getFunctionInfo(ip);
@@ -477,6 +503,7 @@ void backtrace () {
 		printf("to prevent infitie loops stacktrace was cutoff at %d iterations\n to change this change max i backtrace in task.c\n",max_i);
 	}
 }
+*/
 
 // yield to exception handler
 void jl_raise(jl_value_t *e)

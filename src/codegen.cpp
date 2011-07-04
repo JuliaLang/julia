@@ -1279,7 +1279,8 @@ extern "C" jl_tuple_t *jl_tuple_tvars_to_symbols(jl_tuple_t *t);
 
 static void emit_function(jl_lambda_info_t *lam, Function *f)
 {
-    /*
+    
+    //Gstuff
     dbuilder->createCompileUnit(0, "foo.j", ".", "julia", true, "", 0);
     llvm::DIArray EltTypeArray = dbuilder->getOrCreateArray(NULL,0);
     DIFile fil = dbuilder->createFile("foo.j", ".");
@@ -1291,7 +1292,8 @@ static void emit_function(jl_lambda_info_t *lam, Function *f)
                                  dbuilder->createSubroutineType(fil,EltTypeArray),
                                  false, true,
                                  0, true, f);
-    */
+    
+    
     jl_expr_t *ast = (jl_expr_t*)lam->ast;
     //jl_print((jl_value_t*)ast);
     //ios_printf(ios_stdout, "\n");
@@ -1578,8 +1580,9 @@ static void emit_function(jl_lambda_info_t *lam, Function *f)
     // compile body statements
     bool prevlabel = false;
     for(i=0; i < stmts->length; i++) {
-        //builder.SetCurrentDebugLocation(DebugLoc::get(i+1, 1, SP));
-        builder.SetCurrentDebugLocation(DebugLoc::get(1771, 1, SP));
+        //Gstuff
+        builder.SetCurrentDebugLocation(DebugLoc::get(i+1, 1, (MDNode*) SP, NULL));
+        //builder.SetCurrentDebugLocation(DebugLoc::get(1771, 1, (MDNode*) SP, NULL));
         jl_value_t *stmt = jl_cellref(stmts,i);
         if (is_label(stmt)) {
             if (prevlabel) continue;
