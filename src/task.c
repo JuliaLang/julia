@@ -18,9 +18,7 @@
 #include <unistd.h>
 #include "llt.h"
 #include "julia.h"
-// This gives unwind only local unwinding options ==> faster code
-#define UNW_LOCAL_ONLY
-#include <libunwind.h>
+
 /* This probing code is derived from Douglas Jones' user thread library */
 
 /* the list of offsets in jmp_buf to be adjusted */
@@ -428,60 +426,9 @@ static void init_task(jl_task_t *t)
 }
 #endif
 
-char* getFunctionInfo(size_t pointer);
-
-
-
-void show_backtrace (void) {
-  unw_cursor_t cursor; unw_context_t uc;
-  unw_word_t ip, sp;
-
-  unw_getcontext(&uc);
-  unw_init_local(&cursor, &uc);
-  int index = unw_step(&cursor);
-  //printf("index %d\n", index);
-  while (index > 0) { 
-    unw_get_reg(&cursor, UNW_REG_IP, &ip);
-    unw_get_reg(&cursor, UNW_REG_SP, &sp);
-    //printf("pre getFunc \n");
-    const char* funcName = getFunctionInfo(ip);
-    if(funcName != NULL) {
-			printf ("Function Name = %s, instruction pointer = %lx \n", funcName, (long) ip);
-		}  
-    //printf("post getFunc \n"); 
-    index = unw_step(&cursor); 
-    //printf("index %d\n", index);
-  }
-  //printf("exiting backtrace");
-}
-
-
-void backtrace () {
-	const int max_i = 10000;
-	int i = 0;
-	intptr_t rbp;
-	asm(" movq %%rbp, %0;"
-		: "=r" (rbp));
-	while (rbp != 0 && i<max_i) {
-		//printf("        rbp value %lx, value of i %d\n",rbp, i);
-		void **fp = ((void**)rbp)[0];
-		void *ip = ((void**)rbp)[1];
-		const char* info = getFunctionInfo(ip);
-		if(info != NULL) {
-			printf ("Function Name = %s, instruction pointer = %lx \n", info, (long) ip);
-		}
-		rbp = fp;
-		i++;
-	}
-	if (i == max_i){
-		printf("to prevent infitie loops stacktrace was cutoff at %d iterations\n to change this change max i backtrace in task.c\n",max_i);
-	}
-}
-
 // yield to exception handler
 void jl_raise(jl_value_t *e)
 {
-    show_backtrace();
     jl_task_t *eh = jl_current_task->state.eh_task;
     eh->state.err = 1;
     jl_exception_in_transit = e;
@@ -499,8 +446,6 @@ void jl_raise(jl_value_t *e)
         ctx_switch(eh, eh->state.eh_ctx);
         // TODO: continued exception
     }
-    printf("exiting jl_raise");
-    
 }
 
 jl_task_t *jl_new_task(jl_function_t *start, size_t ssize)

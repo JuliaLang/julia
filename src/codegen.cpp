@@ -20,7 +20,6 @@
 #include <sstream>
 #include <map>
 #include <vector>
-#include "debuginfo.cpp"
 #ifdef DEBUG
 #undef NDEBUG
 #endif
@@ -87,7 +86,6 @@ static GlobalVariable *jlsysmod_var;
 static GlobalVariable *jlpgcstack_var;
 #endif
 static GlobalVariable *jlexc_var;
-JuliaJITEventListener *jl_jit_events;
 
 // important functions
 static Function *jlnew_func;
@@ -200,7 +198,6 @@ extern "C" void jl_generate_fptr(jl_function_t *f)
     Function *llvmf = (Function*)li->functionObject;
     if (li->fptr == NULL)
         li->fptr = (jl_fptr_t)jl_ExecutionEngine->getPointerToFunction(llvmf);
-	// should create a map, of fucntion names, and list of pointers so i can back trace. 
     assert(li->fptr != NULL);
     f->fptr = li->fptr;
     llvmf->deleteBody();
@@ -1921,10 +1918,9 @@ static void init_julia_llvm_env(Module *m)
 
 extern "C" void jl_init_codegen()
 {
+#ifdef DEBUG
     llvm::JITEmitDebugInfo = true;
-    llvm::NoFramePointerElim = true;
-    llvm::NoFramePointerElimNonLeaf = true;
-
+#endif
     InitializeNativeTarget();
     jl_Module = new Module("julia", jl_LLVMContext);
     jl_ExecutionEngine =
@@ -1934,6 +1930,4 @@ extern "C" void jl_init_codegen()
     init_julia_llvm_env(jl_Module);
 
     jl_init_intrinsic_functions();
-    jl_jit_events = new JuliaJITEventListener();
-    jl_ExecutionEngine->RegisterJITEventListener(jl_jit_events);
 }
