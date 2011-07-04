@@ -694,24 +694,6 @@ static void cvalue_printdata(ios_t *f, void *data, size_t len, value_t type,
             else
                 outc(']', f);
         }
-        else if (car_(type) == enumsym) {
-            int n = *(int*)data;
-            value_t syms = car(cdr_(type));
-            assert(isvector(syms));
-            if (!weak) {
-                outsn("#enum(", f, 6);
-                fl_print_child(f, syms);
-                outc(' ', f);
-            }
-            if (n >= (int)vector_size(syms)) {
-                cvalue_printdata(f, data, len, int32sym, 1);
-            }
-            else {
-                fl_print_child(f, vector_elt(syms, n));
-            }
-            if (!weak)
-                outc(')', f);
-        }
     }
 }
 

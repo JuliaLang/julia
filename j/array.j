@@ -65,7 +65,7 @@ ref{T}(a::Array{T,2}, i::Index, j::Index) = arrayref(a, (j-1)*arraysize(a,1)+i)
 ## Indexing: assign ##
 
 assign(A::Array{Any}, x::Tensor, i::Index) = arrayset(A,i,x)
-assign(A::Array{Any}, x, i::Index) = arrayset(A,i,x)
+assign(A::Array{Any}, x::ANY, i::Index) = arrayset(A,i,x)
 assign{T}(A::Array{T}, x::Tensor, i::Index) = arrayset(A,i,convert(T, x))
 assign{T}(A::Array{T}, x, i::Index) = arrayset(A,i,convert(T, x))
 

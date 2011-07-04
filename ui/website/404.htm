@@ -1,0 +1,100 @@
+﻿<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<title>Julia - A fresh approach to technical computing.</title>
+		<link href="styles.css" rel="stylesheet" type="text/css" />
+		<link href="favicon.ico" rel="shortcut icon" />
+		<script type="text/javascript" src="jquery.js"></script>
+		<script>
+			// keep track of the minimum height of the content (the height of the longest column)
+			var min_content_height;
+			
+			function set_column_heights() {
+				// set the height of all the columns to the height of the longest one
+				$('div#left-column').height(min_content_height);
+				$('div#right-column').height(min_content_height);
+				$('div#main').height(min_content_height);
+				
+				// calculate how much taller the columns should be so the footer is at the bottom of the window
+				var padding = Math.max($(window).height()-($('#footer-bar').offset().top+$('#footer-bar').outerHeight(true)), 0);
+				
+				// make the columns taller so the footer is on the bottom of the page
+				$('div#left-column').height(min_content_height+padding);
+				$('div#right-column').height(min_content_height+padding);
+				$('div#main').height(min_content_height+padding);
+			}
+			
+			window.onload = function() {
+				// calculate the height of the longest column
+				min_content_height = Math.max($('div#left-column').height(), $('div#right-column').height());
+				
+				// set the height of the columns appropriately
+				set_column_heights();
+			};
+			
+			window.onresize = set_column_heights;
+		</script>
+	</head>
+	<body>
+		<div id="header-bar">
+			<header>
+				<a href="/"><img id="logo" src="images/logo_dark.png" alt="Julia Programming Language" /></a>
+				<nav>
+					<img id="slogan" src="images/slogan.png" alt="A fresh approach to technical computing." />
+					<div class="float-clear"> </div>
+					<a href="/">Home</a>
+					<a href="https://github.com/JuliaLang/julia">GitHub</a>
+					<a href="about.htm">About</a>
+					<a href="contact.htm">Contact</a>
+					<div class="float-clear"> </div>
+				</nav>
+				<div class="float-clear"> </div>
+			</header>
+		</div>
+		<div id="main">
+			<div id="left-column">
+				<h2>Julia Overview</h2>
+				<ul>
+					<li>Introduction</li>
+					<li>Getting Started</li>
+					<li>Numeric Primitives and Literals</li>
+					<li>Mathematical Operations</li>
+					<li>Complex and Rational Numbers</li>
+					<li>Strings</li>
+					<li>Functions</li>
+					<li>Control Flow</li>
+					<li>Variables and Scoping</li>
+					<li>Types</li>
+					<li>Methods</li>
+					<li>Conversion and Promotion</li>
+					<li>Arrays</li>
+					<li>Running External Programs</li>
+					<li>Parallel Computing</li>
+					<li>Metaprogramming</li>
+					<li>Calling C Code</li>
+					<li>Standard Library Reference</li>
+				</ul>
+			</div>
+			<div id="right-column">
+				<div class="error">
+					Oops! We can't find the page you requested.
+				</div>
+				<h1>A fresh approach to technical computing.</h1>
+				<p>Julia is a dynamic language with optional typing, multiple dispatch, and good performance, achieved using type inference and just-in-time (JIT) compilation, implemented using LLVM. It is multi-paradigm, combining features of imperative, functional, and object-oriented programming.  Try it out!</p>
+				<textarea class="code-editor" name="terminal" rows="12" cols="70" autofocus="autofocus"></textarea>
+			</div>
+			<div class="float-clear"> </div>
+		</div>
+		<div id="footer-bar">
+			<footer>
+				<a href="http://web.mit.edu/"><img id="mit-logo" src="images/mit_logo.png" alt="MIT Logo" /></a>
+				<div style="text-align: center">
+					<p>A <span class="strong">fresh</span> approach to <span class="strong">technical computing.</span></p>
+					<p>Copyright &copy; 2011 Alan Edelman, Jeff Bezanson, et al.</p>
+				</div>
+				<div class="float-clear"> </div>
+			</footer>
+		</div>
+	</body>
+</html>

@@ -212,6 +212,10 @@ typedef struct _jl_methlist_t {
     int va;
     jl_tuple_t *tvars;
     jl_function_t *func;
+    // cache of specializations of this method for invoke(), i.e.
+    // cases where this method was called even though it was not necessarily
+    // the most specific for the argument types.
+    struct _jl_methtable_t *invokes;
     // TODO: pointer from specialized to original method
     //jl_function_t *orig_method;
     struct _jl_methlist_t *next;
@@ -242,6 +246,7 @@ extern jl_tag_type_t *jl_any_type;
 extern jl_tag_type_t *jl_type_type;
 extern jl_tvar_t     *jl_typetype_tvar;
 extern jl_tag_type_t *jl_typetype_type;
+extern jl_value_t    *jl_ANY_flag;
 extern jl_tag_type_t *jl_undef_type;
 extern jl_struct_type_t *jl_typename_type;
 extern jl_struct_type_t *jl_typector_type;
@@ -686,8 +691,11 @@ jl_value_t *jl_interpret_toplevel_expr_with(jl_value_t *e,
 void jl_show_method_table(jl_function_t *gf);
 DLLEXPORT void jl_show_full_function(jl_value_t *v);
 jl_lambda_info_t *jl_add_static_parameters(jl_lambda_info_t *l, jl_tuple_t *sp);
-jl_function_t *jl_method_lookup_by_type(jl_methtable_t *mt, jl_tuple_t *types);
-jl_function_t *jl_method_lookup(jl_methtable_t *mt, jl_value_t **args, size_t nargs);
+jl_function_t *jl_method_lookup_by_type(jl_methtable_t *mt, jl_tuple_t *types,
+                                        int cache);
+jl_function_t *jl_method_lookup(jl_methtable_t *mt, jl_value_t **args, size_t nargs, int cache);
+jl_value_t *jl_gf_invoke(jl_function_t *gf, jl_tuple_t *types,
+                         jl_value_t **args, size_t nargs);
 
 // AST access
 jl_array_t *jl_lam_args(jl_expr_t *l);

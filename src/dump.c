@@ -172,6 +172,7 @@ void jl_serialize_methlist(ios_t *s, jl_methlist_t *ml)
         write_int8(s, ml->va);
         jl_serialize_value(s, ml->tvars);
         jl_serialize_value(s, ml->func);
+        jl_serialize_value(s, ml->invokes);
         ml = ml->next;
     }
     jl_serialize_value(s, NULL);
@@ -505,6 +506,7 @@ jl_methlist_t *jl_deserialize_methlist(ios_t *s)
         node->va = read_int8(s);
         node->tvars = (jl_tuple_t*)jl_deserialize_value(s);
         node->func = (jl_function_t*)jl_deserialize_value(s);
+        node->invokes = (jl_methtable_t*)jl_deserialize_value(s);
         node->next = NULL;
         *pnext = node;
         pnext = &node->next;
@@ -950,6 +952,7 @@ void jl_init_serializer()
                      jl_seq_type, jl_ntuple_type, jl_tensor_type,
                      jl_box_type, jl_typector_type, jl_undef_type, jl_any_func,
                      jl_task_type, jl_union_kind, jl_function_type,
+                     jl_typetype_type, jl_typetype_tvar, jl_ANY_flag,
 
                      jl_symbol_type->name, jl_pointer_type->name,
                      jl_tag_kind->name, jl_union_kind->name, jl_bits_kind->name, jl_struct_kind->name,

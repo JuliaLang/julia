@@ -11,6 +11,7 @@ julia-debug julia-release:
 	$(MAKE) -C external
 	$(MAKE) -C src lib$@
 	$(MAKE) -C ui $@
+	$(MAKE) -C ui/webserver $@
 	ln -f $@-$(DEFAULT_REPL) julia
 
 sys.ji: j/sysimg.j j/start_image.j src/boot.j src/dump.c j/*.j
@@ -54,6 +55,7 @@ clean:
 	rm -f *~ *#
 	$(MAKE) -C src clean
 	$(MAKE) -C ui clean
+	$(MAKE) -C ui/webserver clean
 	$(MAKE) -C test/unicode clean
 
 cleanall: clean

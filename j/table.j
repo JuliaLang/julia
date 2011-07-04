@@ -18,16 +18,16 @@ end
 idtable(sz::Int) = IdTable(cell(2*_tablesz(sz)))
 idtable() = idtable(0)
 
-function assign(t::IdTable, v, k)
+function assign(t::IdTable, v::ANY, k::ANY)
     t.ht = ccall(:jl_eqtable_put,
                  Any, (Any, Any, Any), t.ht, k, v)::Array{Any,1}
     t
 end
 
-get(t::IdTable, key, default) =
+get(t::IdTable, key::ANY, default::ANY) =
     ccall(:jl_eqtable_get, Any, (Any, Any, Any), t.ht, key, default)
 
-del(t::IdTable, key) =
+del(t::IdTable, key::ANY) =
     (ccall(:jl_eqtable_del, Int32, (Any, Any), t.ht, key); t)
 
 _secret_table_token_ = (:BOO,)

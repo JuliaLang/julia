@@ -26,6 +26,7 @@ For a more in-depth discussion of the rationale and advantages of Julia over oth
 - **[gcc, g++, gfortran][gcc]** — compiling and linking C, C++ and Fortran code.
 - **[curl][]** — to automatically download external libraries:
     - **[fdlibm][]**       — a portable implementation of much of the system-dependent libm math library's functionality.
+    - **[MT][]**	   — a fast Mersenne Twister pseudorandom number generator library.
     - **[OpenBLAS][]**     — a fast, open, and maintained [basic linear algebar subprograms (BLAS)](http://en.wikipedia.org/wiki/Basic_Linear_Algebra_Subprograms) library, based on [Kazushige Goto's](http://en.wikipedia.org/wiki/Kazushige_Goto) famous [GotoBLAS](http://www.tacc.utexas.edu/tacc-projects/gotoblas2/).
     - **[LAPACK][]**       — library of linear algebra routines for solving systems of simultaneous linear equations, least-squares solutions of linear systems of equations, eigenvalue problems, and singular value problems.
     - **[ARPACK][]**       — a collection of subroutines designed to solve large, sparse eigenvalue problems.
@@ -38,6 +39,7 @@ For a more in-depth discussion of the rationale and advantages of Julia over oth
 [gcc]:          http://gcc.gnu.org/
 [curl]:         http://curl.haxx.se/
 [fdlibm]:       http://www.netlib.org/fdlibm/readme
+[MT]:		http://www.math.sci.hiroshima-u.ac.jp/~m-mat/MT/emt.html
 [OpenBLAS]:     https://github.com/xianyi/OpenBLAS#readme
 [LAPACK]:       http://www.netlib.org/lapack/
 [ARPACK]:       http://www.caam.rice.edu/software/ARPACK/

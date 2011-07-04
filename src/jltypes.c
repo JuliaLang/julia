@@ -630,9 +630,9 @@ static jl_value_t *jl_type_intersect(jl_value_t *a, jl_value_t *b,
     if (a == b) return a;
     if (a == (jl_value_t*)jl_bottom_type || b == (jl_value_t*)jl_bottom_type)
         return (jl_value_t*)jl_bottom_type;
-    if (jl_is_typevar(a))
+    if (jl_is_typevar(a) && a != jl_ANY_flag)
         return intersect_typevar((jl_tvar_t*)a, b, penv, eqc, var);
-    if (jl_is_typevar(b))
+    if (jl_is_typevar(b) && b != jl_ANY_flag)
         return intersect_typevar((jl_tvar_t*)b, a, penv, eqc, var);
     if (!jl_has_typevars(a) && !jl_has_typevars(b)) {
         if (jl_subtype(a, b, 0))
@@ -647,8 +647,10 @@ static jl_value_t *jl_type_intersect(jl_value_t *a, jl_value_t *b,
         return intersect_union((jl_uniontype_t*)b, a, penv, eqc, var);
     if (a == (jl_value_t*)jl_undef_type) return (jl_value_t*)jl_bottom_type;
     if (b == (jl_value_t*)jl_undef_type) return (jl_value_t*)jl_bottom_type;
-    if (a == (jl_value_t*)jl_any_type) return b;
-    if (b == (jl_value_t*)jl_any_type) return a;
+    if (a == (jl_value_t*)jl_any_type ||
+        a == jl_ANY_flag) return b;
+    if (b == (jl_value_t*)jl_any_type ||
+        b == jl_ANY_flag) return a;
     // tuple
     if (jl_is_tuple(a)) {
         jl_value_t *temp=NULL;
@@ -2208,6 +2210,8 @@ void jl_init_types()
     jl_typetype_type = (jl_tag_type_t*)
         jl_apply_type((jl_value_t*)jl_type_type,
                       jl_tuple(1,jl_typetype_tvar));
+
+    jl_ANY_flag = (jl_value_t*)tvar("ANY");
 
     call_sym = jl_symbol("call");
     call1_sym = jl_symbol("call1");

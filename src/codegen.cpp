@@ -20,7 +20,6 @@
 #include <sstream>
 #include <map>
 #include <vector>
-#include "debuginfo.cpp"
 #ifdef DEBUG
 #undef NDEBUG
 #endif
@@ -87,7 +86,6 @@ static GlobalVariable *jlsysmod_var;
 static GlobalVariable *jlpgcstack_var;
 #endif
 static GlobalVariable *jlexc_var;
-JuliaJITEventListener *jl_jit_events;
 
 // important functions
 static Function *jlnew_func;
@@ -200,7 +198,6 @@ extern "C" void jl_generate_fptr(jl_function_t *f)
     Function *llvmf = (Function*)li->functionObject;
     if (li->fptr == NULL)
         li->fptr = (jl_fptr_t)jl_ExecutionEngine->getPointerToFunction(llvmf);
-	// should create a map, of fucntion names, and list of pointers so i can back trace. 
     assert(li->fptr != NULL);
     f->fptr = li->fptr;
     llvmf->deleteBody();
@@ -1188,7 +1185,7 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool value)
             ((jl_tag_type_t*)extype)->name == jl_type_type->name) {
             extype = jl_tparam0(extype);
             if (jl_is_typevar(extype))
-                extype = (jl_value_t*)jl_any_type;
+                extype = ((jl_tvar_t*)extype)->ub;
         }
         else {
             extype = (jl_value_t*)jl_any_type;
@@ -1580,9 +1577,13 @@ static void emit_function(jl_lambda_info_t *lam, Function *f)
     // compile body statements
     bool prevlabel = false;
     for(i=0; i < stmts->length; i++) {
+<<<<<<< HEAD
         //Gstuff
         builder.SetCurrentDebugLocation(DebugLoc::get(i+1, 1, (MDNode*) SP, NULL));
         //builder.SetCurrentDebugLocation(DebugLoc::get(1771, 1, (MDNode*) SP, NULL));
+=======
+        //builder.SetCurrentDebugLocation(DebugLoc::get(i+1, 1, SP));
+>>>>>>> a41ca9917495602d9cefbb71893262ff7ba9500c
         jl_value_t *stmt = jl_cellref(stmts,i);
         if (is_label(stmt)) {
             if (prevlabel) continue;
@@ -1924,10 +1925,9 @@ static void init_julia_llvm_env(Module *m)
 
 extern "C" void jl_init_codegen()
 {
+#ifdef DEBUG
     llvm::JITEmitDebugInfo = true;
-    llvm::NoFramePointerElim = true;
-    llvm::NoFramePointerElimNonLeaf = true;
-
+#endif
     InitializeNativeTarget();
     jl_Module = new Module("julia", jl_LLVMContext);
     jl_ExecutionEngine =
@@ -1937,6 +1937,4 @@ extern "C" void jl_init_codegen()
     init_julia_llvm_env(jl_Module);
 
     jl_init_intrinsic_functions();
-    jl_jit_events = new JuliaJITEventListener();
-    jl_ExecutionEngine->RegisterJITEventListener(jl_jit_events);
 }

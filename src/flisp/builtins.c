@@ -15,7 +15,6 @@
 #include <errno.h>
 #include "llt.h"
 #include "flisp.h"
-#include "random.h"
 
 size_t llength(value_t v)
 {
@@ -397,44 +396,6 @@ static value_t fl_os_setenv(value_t *args, uint32_t nargs)
     return FL_T;
 }
 
-static value_t fl_rand(value_t *args, u_int32_t nargs)
-{
-    (void)args; (void)nargs;
-    fixnum_t r;
-#ifdef __LP64__
-    r = ((((uint64_t)random())<<32) | random()) & 0x1fffffffffffffffLL;
-#else
-    r = random() & 0x1fffffff;
-#endif
-    return fixnum(r);
-}
-static value_t fl_rand32(value_t *args, u_int32_t nargs)
-{
-    (void)args; (void)nargs;
-    unsigned long r = random();
-#ifdef __LP64__
-    return fixnum(r);
-#else
-    return mk_uint32(r);
-#endif
-}
-static value_t fl_rand64(value_t *args, u_int32_t nargs)
-{
-    (void)args; (void)nargs;
-    uint64_t r = (((uint64_t)random())<<32) | random();
-    return mk_uint64(r);
-}
-static value_t fl_randd(value_t *args, u_int32_t nargs)
-{
-    (void)args; (void)nargs;
-    return mk_double(rand_double());
-}
-static value_t fl_randf(value_t *args, u_int32_t nargs)
-{
-    (void)args; (void)nargs;
-    return mk_float(rand_float());
-}
-
 extern void stringfuncs_init();
 extern void table_init();
 extern void iostream_init();
@@ -464,12 +425,6 @@ static builtinspec_t builtin_info[] = {
     { "time.now", fl_time_now },
     { "time.string", fl_time_string },
     { "time.fromstring", fl_time_fromstring },
-
-    { "rand", fl_rand },
-    { "rand.uint32", fl_rand32 },
-    { "rand.uint64", fl_rand64 },
-    { "rand.double", fl_randd },
-    { "rand.float", fl_randf },
 
     { "path.cwd", fl_path_cwd },
     { "path.exists?", fl_path_exists },

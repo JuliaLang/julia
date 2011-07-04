@@ -47,23 +47,26 @@ function send_msg(s::IOStream, kind, args...)
 end
 
 # todo:
-# * add readline to event loop
-# * GOs/darrays on a subset of nodes
 # - more indexing
 # - take() to empty a Ref (full/empty variables)
-# - dynamically adding nodes (then always start with 1 and just grow/shrink)
-# ? method_missing for waiting (ref/assign/localdata seems to cover a lot)
+# - have put() wait on non-empty Refs
+# - removing nodes
 # - more dynamic scheduling
-# * call&wait and call&fetch combined messages
-# * aggregate GC messages
 # - fetch/wait latency seems to be excessive
+# - timer events and message aggregation
+# - send pings at some interval to detect failed/hung machines
+# - integrate event loop with other kinds of i/o (non-messages)
+# ? method_missing for waiting (ref/assign/localdata seems to cover a lot)
+# * serializing closures
 # * recover from i/o errors
 # * handle remote execution errors
 # * all-to-all communication
 # * distributed GC
-# - send pings at some interval to detect failed/hung machines
-# - integrate event loop with other kinds of i/o (non-messages)
-# * serializing closures
+# * call&wait and call&fetch combined messages
+# * aggregate GC messages
+# * dynamically adding nodes (then always start with 1 and grow)
+# * add readline to event loop
+# * GOs/darrays on a subset of nodes
 
 ## process group creation ##
 
@@ -206,21 +209,40 @@ type RemoteRef
         r
     end
 
-    global WeakRemoteRef
-    function WeakRemoteRef(w, wh, id)
-        return new(w, wh, id)
-    end
-
     REQ_ID::Int32 = 0
     function RemoteRef(pid::Int)
         rr = RemoteRef(pid, myid(), REQ_ID)
         REQ_ID += 1
+        if mod(REQ_ID,200) == 0
+            # force gc after making a lot of refs since they take up
+            # space on the machine where they're stored, yet the client
+            # is responsible for freeing them.
+            gc()
+        end
         rr
     end
 
     RemoteRef(w::LocalProcess) = RemoteRef(myid())
     RemoteRef(w::Worker) = RemoteRef(w.id)
     RemoteRef() = RemoteRef(myid())
+
+    global WeakRemoteRef
+    function WeakRemoteRef(w, wh, id)
+        return new(w, wh, id)
+    end
+
+    function WeakRemoteRef(pid::Int)
+        rr = WeakRemoteRef(pid, myid(), REQ_ID)
+        REQ_ID += 1
+        if mod(REQ_ID,200) == 0
+            gc()
+        end
+        rr
+    end
+
+    WeakRemoteRef(w::LocalProcess) = WeakRemoteRef(myid())
+    WeakRemoteRef(w::Worker) = WeakRemoteRef(w.id)
+    WeakRemoteRef() = WeakRemoteRef(myid())
 end
 
 hash(r::RemoteRef) = hash(r.whence)+3*hash(r.id)
@@ -228,28 +250,28 @@ isequal(r::RemoteRef, s::RemoteRef) = (r.whence==s.whence && r.id==s.id)
 
 rr2id(r::RemoteRef) = (r.whence, r.id)
 
-let bottom_func() = assert(false)
-    global lookup_ref
-    function lookup_ref(id)
-        global PGRP
-        wi = get((PGRP::ProcessGroup).refs, id, ())
-        if is(wi, ())
-            # first we've heard of this ref
-            wi = WorkItem(bottom_func)
-            # this WorkItem is just for storing the result value
-            PGRP.refs[id] = wi
-            add(wi.clientset, id[1])
-        end
-        wi
+bottom_func() = assert(false)
+
+function lookup_ref(id)
+    global PGRP
+    wi = get((PGRP::ProcessGroup).refs, id, ())
+    if is(wi, ())
+        # first we've heard of this ref
+        wi = WorkItem(bottom_func)
+        # this WorkItem is just for storing the result value
+        PGRP.refs[id] = wi
+        add(wi.clientset, id[1])
     end
-    # is a ref uninitialized? (for locally-owned refs only)
-    function ref_uninitialized(id)
-        wi = lookup_ref(id)
-        !wi.done && is(wi.thunk,bottom_func)
-    end
-    ref_uninitialized(r::RemoteRef) = (assert(r.where==myid());
-                                       ref_uninitialized(rr2id(r)))
+    wi
 end
+
+# is a ref uninitialized? (for locally-owned refs only)
+function ref_uninitialized(id)
+    wi = lookup_ref(id)
+    !wi.done && is(wi.thunk,bottom_func)
+end
+ref_uninitialized(r::RemoteRef) = (assert(r.where==myid());
+                                   ref_uninitialized(rr2id(r)))
 
 function isready(rr::RemoteRef)
     rid = rr2id(rr)
@@ -283,7 +305,7 @@ function send_del_client(rr::RemoteRef)
     else
         W = worker_from_id(rr.where)
         push(W.del_msgs, (rr2id(rr), myid()))
-        if length(W.del_msgs) >= 16
+        if length(W.del_msgs) >= 10
             #print("sending delete of $(W.del_msgs)\n")
             remote_do(rr.where, del_clients, W.del_msgs...)
             del_all(W.del_msgs)
@@ -377,10 +399,12 @@ remote_call(id::Int, f, args...) = remote_call(worker_from_id(id), f, args...)
 remote_call_fetch(w::LocalProcess, f, args...) = f(args...)
 
 function remote_call_fetch(w::Worker, f, args...)
-    rr = RemoteRef(w)
+    # can be weak, because the program will have no way to refer to the Ref
+    # itself, it only gets the result.
+    rr = WeakRemoteRef(w)
     oid = rr2id(rr)
     send_msg(w, :call_fetch, oid, f, args)
-    force(yieldto(Scheduler, WaitFor(:fetch, oid)))
+    force(yieldto(Scheduler, WaitFor(:call_fetch, oid)))
 end
 
 remote_call_fetch(id::Int, f, args...) =
@@ -420,7 +444,11 @@ function sync_msg(verb::Symbol, r::RemoteRef)
     if r.where==myid() || isa(pg.workers[r.where], LocalProcess)
         wi = lookup_ref(oid)
         if wi.done
-            return is(verb,:fetch) ? work_result(wi) : r
+            if is(verb,:fetch)
+                return work_result(wi)
+            else
+                return r
+            end
         else
             # add to WorkItem's notify list
             wi.notify = ((), verb, oid, wi.notify)
@@ -561,6 +589,7 @@ function perform_work(job::WorkItem)
         job.task = ()
         # do notifications
         notify_done(job)
+        job.thunk = bottom_func  # avoid reference retention
     else
         # job interrupted
         if is(job.task,runner)
@@ -581,7 +610,7 @@ end
 
 function deliver_result(sock::IOStream, msg, oid, value)
     #print("$(myid()) sending result\n")
-    if is(msg,:fetch)
+    if is(msg,:fetch) || is(msg,:call_fetch)
         val = value
     else
         @assert is(msg, :wait)
@@ -628,6 +657,11 @@ function notify_done(job::WorkItem)
                 deliver_result(sock, msg, oid, ()->wr)
             else
                 deliver_result(sock, msg, oid, wr)
+            end
+            if is(msg,:call_fetch)
+                # can delete the ref right away since we know it is
+                # unreferenced by the client
+                del(PGRP.refs, oid)
             end
         end
     end
@@ -681,7 +715,7 @@ function message_handler(fd, sockets)
                 #print("$(myid()) got call\n")
                 wi = schedule_call(id, f, args)
                 if is(msg, :call_fetch)
-                    wi.notify = (sock, :fetch, id, wi.notify)
+                    wi.notify = (sock, :call_fetch, id, wi.notify)
                 elseif is(msg, :call_wait)
                     wi.notify = (sock, :wait, id, wi.notify)
                 end
@@ -931,7 +965,9 @@ type GlobalObject
         midx = 0
         for i=1:np
             # create a set of refs to be initialized by GlobalObject above
-            r[i] = RemoteRef(procs[i])
+            # these can be weak since their lifetimes are managed by the
+            # GlobalObject and its finalizer
+            r[i] = WeakRemoteRef(procs[i])
             if procs[i] == mi
                 participate = true
                 midx = i
@@ -1117,9 +1153,9 @@ function at_each(grp::ProcessGroup, f, args...)
     end
 end
 
-macro bcast(thk)
+macro bcast(ex)
     quote
-        at_each(()->eval($expr(:quote,thk)))
+        at_each(()->eval($expr(:quote,ex)))
     end
 end
 

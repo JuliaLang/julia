@@ -264,6 +264,7 @@ function compile_hint(f, args::Tuple)
     if !isgeneric(f)
         return
     end
+    args = map(t->isa(t,TypeConstructor) ? t.body : t, args)
     ccall(:jl_get_specialization, Any, (Any, Any), f, args)
     nothing
 end

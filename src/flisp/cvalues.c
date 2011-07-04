@@ -13,8 +13,7 @@ value_t floatsym, doublesym;
 value_t gftypesym, stringtypesym, wcstringtypesym;
 value_t emptystringsym;
 
-value_t structsym, arraysym, enumsym, cfunctionsym, voidsym, pointersym;
-value_t unionsym;
+value_t arraysym, cfunctionsym, voidsym, pointersym;
 
 static htable_t TypeTable;
 static htable_t reverse_dlsym_lookup_table;
@@ -333,50 +332,6 @@ size_t toulong(value_t n, char *fname)
     return 0;
 }
 
-static int cvalue_enum_init(fltype_t *ft, value_t arg, void *dest)
-{
-    int n=0;
-    value_t syms;
-    value_t type = ft->type;
-
-    syms = car(cdr(type));
-    if (!isvector(syms))
-        type_error("enum", "vector", syms);
-    if (issymbol(arg)) {
-        for(n=0; n < (int)vector_size(syms); n++) {
-            if (vector_elt(syms, n) == arg) {
-                *(int*)dest = n;
-                return 0;
-            }
-        }
-        lerror(ArgError, "enum: invalid enum value");
-    }
-    if (isfixnum(arg)) {
-        n = (int)numval(arg);
-    }
-    else if (iscprim(arg)) {
-        cprim_t *cp = (cprim_t*)ptr(arg);
-        n = conv_to_int32(cp_data(cp), cp_numtype(cp));
-    }
-    else {
-        type_error("enum", "number", arg);
-    }
-    if ((unsigned)n >= vector_size(syms))
-        lerror(ArgError, "enum: value out of range");
-    *(int*)dest = n;
-    return 0;
-}
-
-value_t cvalue_enum(value_t *args, u_int32_t nargs)
-{
-    argcount("enum", nargs, 2);
-    value_t type = fl_list2(enumsym, args[0]);
-    fltype_t *ft = get_type(type);
-    value_t cv = cvalue(ft, sizeof(int32_t));
-    cvalue_enum_init(ft, args[1], cp_data((cprim_t*)ptr(cv)));
-    return cv;
-}
-
 static int isarray(value_t v)
 {
     return iscvalue(v) && cv_class((cvalue_t*)ptr(v))->eltype != NULL;
@@ -485,48 +440,6 @@ size_t cvalue_arraylen(value_t v)
     return cv_len(cv)/(cv_class(cv)->elsz);
 }
 
-static size_t cvalue_struct_offs(value_t type, value_t field, int computeTotal,
-                                 int *palign)
-{
-    value_t fld = car(cdr_(type));
-    size_t fsz, ssz = 0;
-    int al;
-    *palign = 0;
-
-    while (iscons(fld)) {
-        fsz = ctype_sizeof(car(cdr(car_(fld))), &al);
-
-        ssz = LLT_ALIGN(ssz, al);
-        if (al > *palign)
-            *palign = al;
-
-        if (!computeTotal && field==car_(car_(fld))) {
-            // found target field
-            return ssz;
-        }
-
-        ssz += fsz;
-        fld = cdr_(fld);
-    }
-    return LLT_ALIGN(ssz, *palign);
-}
-
-static size_t cvalue_union_size(value_t type, int *palign)
-{
-    value_t fld = car(cdr_(type));
-    size_t fsz, usz = 0;
-    int al;
-    *palign = 0;
-
-    while (iscons(fld)) {
-        fsz = ctype_sizeof(car(cdr(car_(fld))), &al);
-        if (al > *palign) *palign = al;
-        if (fsz > usz) usz = fsz;
-        fld = cdr_(fld);
-    }
-    return LLT_ALIGN(usz, *palign);
-}
-
 // *palign is an output argument giving the alignment required by type
 size_t ctype_sizeof(value_t type, int *palign)
 {
@@ -569,16 +482,6 @@ size_t ctype_sizeof(value_t type, int *palign)
             value_t n = car_(cdr_(cdr_(type)));
             size_t sz = toulong(n, "sizeof");
             return sz * ctype_sizeof(t, palign);
-        }
-        else if (hed == structsym) {
-            return cvalue_struct_offs(type, NIL, 1, palign);
-        }
-        else if (hed == unionsym) {
-            return cvalue_union_size(type, palign);
-        }
-        else if (hed == enumsym) {
-            *palign = ALIGN4;
-            return 4;
         }
     }
     lerror(ArgError, "sizeof: invalid c type");
@@ -964,10 +867,7 @@ static void cvalues_init()
     ctor_cv_intern(double);
 
     ctor_cv_intern(array);
-    ctor_cv_intern(enum);
     cv_intern(pointer);
-    cv_intern(struct);
-    cv_intern(union);
     cv_intern(void);
     cfunctionsym = symbol("c-function");
 

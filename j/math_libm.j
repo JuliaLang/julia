@@ -85,7 +85,6 @@ end
 @libmfunc_1arg_int ilogb
 
 @libfdmfunc_2arg atan2
-@libfdmfunc_2arg pow
 @libfdmfunc_2arg fmod
 @libfdmfunc_2arg copysign
 @libfdmfunc_2arg hypot
@@ -127,3 +126,7 @@ function frexp(x::Float32)
     (s, exp[1])
 end
 @vectorize_1arg frexp
+
+^(x::Float64, y::Float64) = ccall(dlsym(libfdm, :pow),  Float64, (Float64,Float64), x, y)
+^(x::Float32, y::Float32) = ccall(dlsym(libfdm, :powf), Float32, (Float32,Float32), x, y)
+^(x::Float, y::Float) = ^(promote(x,y)...)

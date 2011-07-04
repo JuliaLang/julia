@@ -120,11 +120,11 @@ function chars(s::String)
     cx
 end
 
-(<) (a::String, b::String) = cmp(a,b) < 0
-(>) (a::String, b::String) = cmp(a,b) > 0
-(==)(a::String, b::String) = cmp(a,b) == 0
-(<=)(a::String, b::String) = cmp(a,b) <= 0
-(>=)(a::String, b::String) = cmp(a,b) >= 0
+(<) (a::String, b::String)    = cmp(a,b) < 0
+(>) (a::String, b::String)    = cmp(a,b) > 0
+isequal(a::String, b::String) = cmp(a,b) == 0
+(<=)(a::String, b::String)    = cmp(a,b) <= 0
+(>=)(a::String, b::String)    = cmp(a,b) >= 0
 
 function cmp(a::String, b::String)
     i = start(a)
@@ -423,16 +423,17 @@ unescape_string(s::String) = print_to_string(print_unescaped, s)
 ## string interpolation parsing ##
 
 function interp_parse(str::String, unescape::Function)
-    strs = ()
+    strs = {}
     i = j = start(str)
     while !done(str,j)
         c, k = next(str,j)
         if c == '$'
             if !isempty(str[i:j-1])
-                strs = append(strs,(unescape(str[i:j-1]),))
+                push(strs, unescape(str[i:j-1]))
             end
             ex, j = parseatom(str,k)
-            strs = append(strs,(ex,)); i = j
+            push(strs, ex)
+            i = j
         elseif c == '\\' && !done(str,k)
             c, j = next(str,k)
         else
@@ -440,7 +441,7 @@ function interp_parse(str::String, unescape::Function)
         end
     end
     if !isempty(str[i:])
-        strs = append(strs,(unescape(str[i:j-1]),))
+        push(strs, unescape(str[i:j-1]))
     end
     length(strs) == 1 ? strs[1] : expr(:call,:strcat,strs...)
 end
@@ -463,20 +464,20 @@ function shell_parse(str::String, interp::Bool)
     in_single_quotes = false
     in_double_quotes = false
 
-    args = ()
-    arg = ()
+    args = {}
+    arg = {}
     i = start(str)
     j = i
 
     function update_arg(s)
         if !isa(s,String) || !isempty(s)
-            arg = append(arg,(s,))
+            push(arg, s)
         end
     end
     function append_arg()
-        if arg == (); arg = ("",); end
-        args = append(args,(arg,))
-        arg = ()
+        if isempty(arg); arg = {"",}; end
+        push(args, arg)
+        arg = {}
     end
 
     while !done(str,j)
@@ -538,20 +539,20 @@ function shell_parse(str::String, interp::Bool)
     end
 
     # construct an expression
-    exprs = ()
+    exprs = {}
     for arg = args
-        exprs = append(exprs,(expr(:tuple,arg...),))
+        push(exprs, expr(:tuple, arg))
     end
-    expr(:tuple,exprs...)
+    expr(:tuple,exprs)
 end
 
 shell_parse(str::String) = shell_parse(str,true)
 
 function shell_split(str::String)
     parsed = shell_parse(str, false)
-    args = ()
+    args = {}
     for arg = parsed
-        args = append(args,(strcat(arg...),))
+        push(args, strcat(arg...))
     end
     args
 end

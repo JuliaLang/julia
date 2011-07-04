@@ -451,8 +451,7 @@ function isequal(x::Tensor, y::Tensor)
     end
 
     for i=1:numel(x)
-        xi=x[i]; yi=y[i]
-        if xi!=yi && !isequal(xi, yi)
+        if !isequal(x[i], y[i])
             return false
         end
     end

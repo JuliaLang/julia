@@ -52,6 +52,7 @@ convert(::Type{Complex128}, x::Real) = complex128(x,zero(x))
 convert(::Type{Complex128}, z::ComplexNum) = complex128(real(z),imag(z))
 
 promote_rule(::Type{Complex128}, ::Type{Float64}) = Complex128
+promote_rule(::Type{Complex128}, ::Type{Float32}) = Complex128
 promote_rule{S<:Real}(::Type{Complex128}, ::Type{S}) =
     (P = promote_type(Float64,S);
      is(P,Float64) ? Complex128 : Complex{P})
@@ -77,6 +78,7 @@ pi(::Type{Complex64}) = pi(Float32)
 convert(::Type{Complex64}, x::Real) = complex64(x,zero(x))
 convert(::Type{Complex64}, z::ComplexNum) = complex64(real(z),imag(z))
 
+promote_rule(::Type{Complex64}, ::Type{Float64}) = Complex128
 promote_rule(::Type{Complex64}, ::Type{Float32}) = Complex64
 promote_rule{S<:Real}(::Type{Complex64}, ::Type{S}) =
     (P = promote_type(Float32,S);
@@ -132,6 +134,13 @@ pi{T}(::Type{Complex{T}}) = pi(T)
 ## functions of complex numbers ##
 
 ==(z::ComplexNum, w::ComplexNum) = (real(z) == real(w) && imag(z) == imag(w))
+==(z::ComplexNum, x::Real) = (real(z)==x && imag(z)==0)
+==(x::Real, z::ComplexNum) = (real(z)==x && imag(z)==0)
+
+isequal(z::ComplexNum, w::ComplexNum) =
+    isequal(real(z),real(w)) && isequal(imag(z),imag(w))
+
+hash(z::ComplexNum) = bitmix(hash(real(z)),hash(imag(z)))
 
 conj(z::ComplexNum) = complex(real(z),-imag(z))
 norm(z::ComplexNum) = square(real(z)) + square(imag(z))
@@ -229,17 +238,13 @@ end
 
 ^(x::Int, p::Float) = ^(promote(x,p)...)
 
-function ^(x::Float, p::Float)
-    if x >= 0
-        return pow(x, p)
-    end
-    if p == 0.5
-        return sqrt(complex(x))
-    end
-    return complex(x)^complex(p)
-end
+^(z::ComplexNum, p::ComplexNum) = ^(promote(z,p)...)
 
-function ^(z::ComplexNum, p::ComplexNum)
+^(z::Real, p::ComplexNum) = ^(promote(z,p)...)
+
+^(z::ComplexNum, p::Float) = ^(promote(z,p)...)
+
+function ^{T<:ComplexNum}(z::T, p::T)
     realp = real(p)
     if imag(p) == 0
         if realp == 0
@@ -294,20 +299,6 @@ function ^(z::ComplexNum, p::ComplexNum)
         ntheta = ntheta + imag(p)*log(r)
     end
     complex(rp*cos(ntheta), rp*sin(ntheta))
-end
-
-function ^(z::Real, p::ComplexNum)
-    if imag(p) == 0
-        return z^real(p)
-    end
-    ^(promote(z,p)...)
-end
-
-function ^(z::ComplexNum, p::Float)
-    if imag(z) == 0
-        return real(z)^p
-    end
-    ^(promote(z,p)...)
 end
 
 function tan(z::ComplexNum)
