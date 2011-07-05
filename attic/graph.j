@@ -1,3 +1,82 @@
+#########
+# GRAPH #
+#########
+# Instantiate an undirected graph by calling ILGraph(edges),
+# where edges is an array of tuples each with two or three elements:
+# the first two elements are names of the endpoints;
+# the third element is an optional one for the value of that edge
+# Example:
+# julia> ILGraph({(1,2,3),(2,3,5),(3,4)})
+# Edge 1,2: 3
+# Edge 2,3: 5
+# Edge 3,4
+# 
+# ILGraph has two fields: edges and vertices, which are arrays containing
+# all ILEdge and ILVertex objects in the graph.
+# ILEdge has three fields: v1, v2, and value. By default, value is set to zero.
+# v1 and v2 store pointers to ILVertex objects
+# ILVertex has 3 fields: name, value, neighbors. By default, value is set to zero.
+# neighbors is an array of pointers to all other ILVertex objects that this one is adjacent to.
+# Currently, ILVertex's name and ILEdge/ILVertex's value fields aren't bound to
+# any type. This may be later changed to only allow Int32 and Real fields, respectively.
+#
+# FUNCTIONS (that should be supported by all implementations of Graph):
+# Here, G is a Graph argument, x,y are Vertex arguments, and e is an Edge argument.
+# It might be best to eliminate the functions that take the Edge and Vertex objects
+# as arguments, and the ones that give access to these objects, but I don't see
+# the harm in keeping them in here for now.
+#
+# add_vertex(G, name[, value]): adds a vertex to graph G with given name(/value)
+# add(G, name1, name2[, value]): adds an edge to graph G with endpoints of given
+#                                names, which need not already exist in G
+# add(G, x, y[, value]): adds an edge to graph G with given endpoints, which
+#                        must already exist in G
+# delete(G, name1, name2), delete(G, x, y): attempts to delete the edge with the
+# two given endpoints; returns true if successful, false if the edge didn't exist,
+# and an error if either of the vertices doesn't exist in the graph
+# has_vertex(G, name), has_vertex(G, x): test if the given vertex is a member of the graph
+# get_vertex(G, name): get the Vertex object with the given name
+# neighbors(G, name), neighbors(G, x): return an array of Vertex objects that are
+# adjacent to the given vertex
+# adjacent(G, x, y), adjacent(G, name1, name2): returns boolean for if the given vertices
+# are adjacent or not in the graph (returns an error if either vertex isn't in the graph)
+# get_edge(G, name1, name2), get_edge(G, x, y): get the Edge objects with the given vertices
+# get_node_value(G, name), get_node_value(G, x): return the value of given vertex
+# set_node_value(G, name, v), set_node_value(G, x, v): set the value of given vertex to v
+# get_edge_value(G, name1, name2), get_edge_value(G, x, y), get_edge_value(G, e):
+# return value of given edge
+# set_edge_value(G, name1, name2, v), set_edge_value(G, x, y, v), set_edge_value(G, e, v):
+# set value of given edge
+#
+# There is also a BGraph class for bipartite graphs. This class was written by copy/pasting
+# ILGraph and quickly changing things, so I can't actually guarantee that it works.
+# For functions where it asks for two names/vertices, it implicitly assumes that the first
+# argument belongs to side A and the second belongs to side B.
+# For functions where it asks for one name, you must supply the side it belongs on
+# with a boolean (true = A, false = B). This is done with either an extra argument immediately
+# following name, or by replacing name with nameside, a tuple (name, side).
+# Example: set_node_value(G, name, side, v) and set_node_value(G, nameside, v) are the
+# corresponding functions for set_node_value(G, name, v)
+#
+# Currently, the only other thing to do with these Graphs is to run searches on them.
+# search(G::Graph, start_test, end_test[[, move_test], bfs::Bool])
+# start_test and end_test are functions that take a vertex and return a boolean
+# representing if that vertex is a legal starting/ending spot -- they can also
+# be replaced by a vertex object/name to represent only one legal spot
+# move_test is a optional argument function taking two vertices and returning
+# a boolean representing if the move from the first to the second is legal 
+# bfs is a optional argument boolean defaulting to true; if true, the search
+# is bfs, and otherwise it's dfs
+#
+# POSSIBLE TO-DOS:
+#  * Add checks to BGraph functions (currently, it attempts to access nameside[1], nameside[2])
+#    without checking for length.
+#  * Use a better data structure than an array that regrows/shrinks with each addition/deletion.
+#  * Implement a Graph type that uses incidence or adjacency matrices.
+#  * Implement a type for directed graphs.
+#  * Implement more algorithms, including Dijkstra's, max flow, (and maximal matchings?).
+
+
 function in(A::Array, b)
     for a = A
         if isequal(a,b); return true; end
@@ -74,7 +153,7 @@ end
 
 function add_vertex(G::ILGraph, name, value)
     if has_vertex(G, name); error("add_vertex: graph already has a vertex with name=$name"); end
-    v = ILVertex(name, 0)
+    v = ILVertex(name, value)
     push(G.vertices, v)
 end
 add_vertex(G::ILGraph, name) = add_vertex(G, name, 0)
@@ -113,16 +192,16 @@ function add(G::ILGraph, x::ILVertex, y::ILVertex, value)
 end
 add(G::ILGraph, x::ILVertex, y::ILVertex) = add(G, x, y, 0)
 
-#assumes edge is array of length 2 or 3
+#assumes edge is array/tuple of length 2 or 3
 #first two arguments are names of vertices
 #optional third argument is value
 function add_edge(G::ILGraph, edge)
-    if numel(edge) ==  3
+    if length(edge) ==  3
         add(G, edge[1], edge[2], edge[3])
-    elseif numel(edge) == 2
+    elseif length(edge) == 2
         add(G, edge[1], edge[2])
     else
-        error("add_edge: $edge is not an array of 2 or 3 elements")
+        error("add_edge: $edge does not have 2 or 3 elements")
     end
 end
 
@@ -252,13 +331,15 @@ function set_node_value(G::ILGraph, x::ILVertex, value)
 end
 
 function get_edge_value(G::ILGraph, name1, name2)
-    x = get_vertex(G, name1, true)
-    y = get_vertex(G, name2, false)
+    x = get_vertex(G, name1)
+    y = get_vertex(G, name2)
     e = get_edge(G, x, y)
     return e.value
 end
 
-function get_edge_value(G::ILGraph, x::ILEdge)
+function get_edge_value(G::ILGraph, e::ILEdge)
+    x = e.v1
+    y = e.v2
     if !has_vertex(G, x); error("get_edge_value: graph does not have $x"); end
     if !has_vertex(G, y); error("get_edge_value: graph does not have $y"); end
     e = get_edge(G, x, y)
@@ -266,8 +347,8 @@ function get_edge_value(G::ILGraph, x::ILEdge)
 end
 
 function set_edge_value(G::ILGraph, name1, name2, value)
-    x = get_vertex(G, name1, true)
-    y = get_vertex(G, name2, false)
+    x = get_vertex(G, name1)
+    y = get_vertex(G, name2)
     e = get_edge(G, x, y)
     e.value = value
 end
@@ -321,7 +402,6 @@ BEdge(v1, v2) = BEdge(v1, v2, 0)
 #           && isequal(e1.v2,e2.v2)
 #end
 
-#TODO:tabthis
 type BGraph <: Graph
     vertices::Array
     edges::Array
@@ -343,11 +423,11 @@ end
 
 function add_vertex(G::BGraph, name, side::Bool, value)
     if has_vertex(G, name, side); error("add_vertex: graph already has a vertex with name=$name,side=$(sides(side))"); end
-    v = BVertex(name, 0, side)
+    v = BVertex(name, value, side)
     push(G.vertices, v)
 end
 add_vertex(G::BGraph, name, side::Bool) = add_vertex(G, name, side, 0)
-add_vertex(G::BGraph, name) = add_vertex(G::BGraph, name)
+add_vertex(G::BGraph, nameside) = add_vertex(G::BGraph, nameside[1], nameside[2])
 
 #add the edge with vertices with names x, y, which don't need to be part of the graph yet
 function add(G::BGraph, name1, name2, value)
@@ -388,9 +468,9 @@ add(G::BGraph, x::BVertex, y::BVertex) = add(G, x, y, 0)
 #first two arguments are names of vertices
 #optional third argument is value
 function add_edge(G::BGraph, edge)
-    if numel(edge) ==  3
+    if length(edge) ==  3
         add(G, edge[1], edge[2], edge[3])
-    elseif numel(edge) == 2
+    elseif length(edge) == 2
         add(G, edge[1], edge[2])
     else
         error("add_edge: $edge is not an array of 2 or 3 elements")
@@ -433,11 +513,7 @@ function has_vertex(G::BGraph, name, side::Bool)
     end
     return false
 end
-
-function has_vertex(G::BGraph, nameside)
-    has_vertex(G, nameside[1], nameside[2])
-end
-
+has_vertex(G::BGraph, nameside) = has_vertex(G, nameside[1], nameside[2])
 
 function get_vertex(G::BGraph, name, side)
     for v = G.vertices
@@ -445,10 +521,7 @@ function get_vertex(G::BGraph, name, side)
     end
     error("get_vertex: no vertex with name=$name,side=$(sides(side))")
 end
-
-function get_vertex(G::BGraph, nameside)
-    get_vertex(G, nameside[1], nameside[2])
-end
+get_vertex(G::BGraph, nameside) = get_vertex(G, nameside[1], nameside[2])
 
 function adjacent(G::BGraph, name1, name2)
     x = get_vertex(G, name1, true)
@@ -466,6 +539,7 @@ function neighbors(G::BGraph, name, side::Bool)
     x = get_vertex(G, name, side)
     x.neighbors
 end
+neighbors(G::BGraph, nameside) = neighbors(G, nameside[1], nameside[2])
 
 function neighbors(G::BGraph, x::BVertex)
     if has_vertex(G, x)
@@ -505,10 +579,7 @@ function get_edge(G::BGraph, x::BVertex, y::BVertex)
     error("get_edge: couldn't find the edge")
 end
 
-function get_node_value(G::BGraph, nameside)
-    get_node_value(G, nameside[1], nameside[2])
-end
-
+get_node_value(G::BGraph, nameside) =  get_node_value(G, nameside[1], nameside[2])
 function get_node_value(G::BGraph, name, side::Bool)
     x = get_vertex(G, name, side)
     x.value
@@ -522,10 +593,11 @@ function get_node_value(G::BGraph, x::BVertex)
     end
 end
 
-function set_node_value(G::BGraph, name, value)
-    x = get_vertex(G, name)
+function set_node_value(G::BGraph, name, side::Bool, value)
+    x = get_vertex(G, name, side)
     x.value = value
 end
+set_node_value(G::BGraph, nameside, value) = set_node_value(G, nameside[1], nameside[2], value)
 
 function set_node_value(G::BGraph, x::BVertex, value)
     if has_vertex(G, x)
@@ -603,7 +675,7 @@ function search(G::Graph, start_test, end_test, move_test, bfs::Bool)
             if in(path, v); continue; end
             if move_test(lastPlace, v)
                 path2 = copy(path)
-                newPath = push(path2, v)
+                    newPath = push(path2, v)
                 if end_test(v)
                     finalPath = newPath
                     flag = true
