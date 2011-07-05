@@ -110,8 +110,8 @@ L"               _
 
 begin
 local tx = "\033[37m" # text
-local jl = "\033[37m" # julia
-local d1 = "\033[34m" # first dot
+local jl = "\033[34m" # julia
+local d1 = "\033[36m" # first dot
 local d2 = "\033[31m" # second dot
 local d3 = "\033[32m" # third dot
 local d4 = "\033[35m" # fourth dot
