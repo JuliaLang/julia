@@ -20,6 +20,7 @@
 #include <sstream>
 #include <map>
 #include <vector>
+#include "debuginfo.cpp"
 #ifdef DEBUG
 #undef NDEBUG
 #endif
@@ -86,6 +87,7 @@ static GlobalVariable *jlsysmod_var;
 static GlobalVariable *jlpgcstack_var;
 #endif
 static GlobalVariable *jlexc_var;
+JuliaJITEventListener *jl_jit_events;
 
 // important functions
 static Function *jlnew_func;
@@ -1577,13 +1579,9 @@ static void emit_function(jl_lambda_info_t *lam, Function *f)
     // compile body statements
     bool prevlabel = false;
     for(i=0; i < stmts->length; i++) {
-<<<<<<< HEAD
         //Gstuff
         builder.SetCurrentDebugLocation(DebugLoc::get(i+1, 1, (MDNode*) SP, NULL));
         //builder.SetCurrentDebugLocation(DebugLoc::get(1771, 1, (MDNode*) SP, NULL));
-=======
-        //builder.SetCurrentDebugLocation(DebugLoc::get(i+1, 1, SP));
->>>>>>> a41ca9917495602d9cefbb71893262ff7ba9500c
         jl_value_t *stmt = jl_cellref(stmts,i);
         if (is_label(stmt)) {
             if (prevlabel) continue;
@@ -1927,6 +1925,8 @@ extern "C" void jl_init_codegen()
 {
 #ifdef DEBUG
     llvm::JITEmitDebugInfo = true;
+    llvm::NoFramePointerElim = true;
+    llvm::NoFramePointerElimNonLeaf = true;
 #endif
     InitializeNativeTarget();
     jl_Module = new Module("julia", jl_LLVMContext);
@@ -1937,4 +1937,6 @@ extern "C" void jl_init_codegen()
     init_julia_llvm_env(jl_Module);
 
     jl_init_intrinsic_functions();
+    jl_jit_events = new JuliaJITEventListener();
+    jl_ExecutionEngine->RegisterJITEventListener(jl_jit_events);
 }

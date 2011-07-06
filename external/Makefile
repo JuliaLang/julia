@@ -9,6 +9,7 @@ LAPACK_VER = 3.3.1
 ARPACK_VER = 96
 FFTW_VER = 3.3-beta1
 MONGOOSE_VER = 3.0
+UNWIND_VER = 0.99
 
 ## high-level setup ##
 
@@ -17,7 +18,7 @@ include ../Make.inc
 
 OS = $(shell uname)
 ARCH = $(shell uname -m)
-LIBS = llvm readline pcre fdlibm dsfmt openblas lapack arpack fftw mongoose
+LIBS = llvm readline pcre fdlibm dsfmt openblas lapack arpack fftw mongoose unwind
 
 default: install
 compile: $(addprefix compile-, $(LIBS))
@@ -306,6 +307,35 @@ mongoose-$(MONGOOSE_VER)/Makefile: mongoose-$(MONGOOSE_VER).tgz
 clean-mongoose:
 distclean-mongoose:
 	rm -rf mongoose-$(MONGOOSE_VER).tgz mongoose
+
+## UNWIND ##
+
+LIBUNWIND_TARGET_OBJ = $(EXTROOTLIB)/libunwind.a
+LIBUNWIND_TARGET_SOURCE = $(JULIAHOME)/external/libunwind-$(UNWIND_VER)/Makefile
+
+compile-unwind: $(LIBUNWIND_TARGET_SOURCE)
+install-unwind: $(LIBUNWIND_TARGET_OBJ)
+
+$(LIBUNWIND_TARGET_OBJ): $(LIBUNWIND_TARGET_SOURCE)
+	cd libunwind-$(UNWIND_VER) && make && make install
+
+
+libunwind-$(UNWIND_VER).tar.gz:
+	curl -O http://savannah.spinellicreations.com/libunwind/libunwind-$(UNWIND_VER).tar.gz 
+
+open-unwind: libunwind-$(UNWIND_VER).tar.gz
+	tar xvfz $<
+	touch $@
+
+$(LIBUNWIND_TARGET_SOURCE): open-unwind
+	cd libunwind-$(UNWIND_VER) && ./configure  CFLAGS="-U_FORTIFY_SOURCE -fPIC" --prefix=$(EXTROOT) 
+
+clean-unwind:
+	make -C libunwind-$(UNWIND_VER) clean
+	rm -rf $(LIBUNWIND_TARGET_OBJ) $(LIBUNWIND_TARGET_SOURCE)
+
+distclean-unwind:
+	rm -rf libunwind-$(UWIND_VER).tar.gz libunwind-$(UNWIND_VER)
 
 ## phony targets ##
 
