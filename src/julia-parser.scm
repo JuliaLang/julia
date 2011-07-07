@@ -313,7 +313,10 @@
                   ; in allow-empty mode skip leading runs of operator
 		  (if (and allow-empty (eqv? (require-token s) op))
 		      '()
-		      (list (down s))))
+		      (if (eqv? op #\newline)
+			  (let ((lineno (input-port-line (ts:port s))))
+			    (list (down s) `(line ,lineno)))
+			  (list (down s)))))
 		 (first? #t))
 	(let ((t (peek-token s)))
 	  (if (not (eqv? t op))
@@ -331,7 +334,11 @@
 			     (and allow-empty
 				  (eqv? (peek-token s) op)))
 			 (loop ex #f)
-			 (loop (cons (down s) ex) #f))))))))
+			 (if (eqv? op #\newline)
+			     (let ((lineno (input-port-line (ts:port s))))
+			       (loop (list* (down s)
+					    `(line ,lineno) ex) #f))
+			     (loop (cons (down s) ex) #f)))))))))
 
 ; colon is strange; 3 arguments with 2 colons yields one call:
 ; 1:2   => (: 1 2)

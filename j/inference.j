@@ -1082,6 +1082,17 @@ function exprtype(x::ANY)
     end
 end
 
+function without_linenums(a::Array{Any,1})
+    l = {}
+    for x = a
+        if isa(x,Expr) && is(x.head,:line)
+        else
+            push(l, x)
+        end
+    end
+    l
+end
+
 # for now, only inline functions whose bodies are of the form "return <expr>"
 # where <expr> doesn't contain any argument more than once.
 # functions with closure environments or varargs are also excluded.
@@ -1134,7 +1145,7 @@ function inlineable(f, e::Expr, vars)
     if is(ast,())
         return NF
     end
-    body = ast.args[3].args
+    body = without_linenums(ast.args[3].args)
     # see if body is only "return <expr>"
     if length(body) > 1
         return NF

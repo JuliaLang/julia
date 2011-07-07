@@ -227,7 +227,7 @@
 (define (struct-def-expr name params super fields)
   (receive
    (params bounds) (sparam-name-bounds params '() '())
-   (struct-def-expr- name params bounds super fields)))
+   (struct-def-expr- name params bounds super (flatten-blocks fields))))
 
 (define (default-inner-ctor name field-names field-types)
   `(function (call ,name ,@field-names)
@@ -282,6 +282,18 @@
 		    `(= ,(cadr ctor) ,(ctor-body body)))
     ctor)
    ctor))
+
+;; remove line numbers and nested blocks
+(define (flatten-blocks e)
+  (if (atom? e)
+      e
+      (apply append!
+	     (map (lambda (x)
+		    (cond ((atom? x) (list x))
+			  ((eq? (car x) 'line) '())
+			  ((eq? (car x) 'block) (cdr (flatten-blocks x)))
+			  (else (list x))))
+		  e))))
 
 (define (struct-def-expr- name params bounds super fields)
   (receive

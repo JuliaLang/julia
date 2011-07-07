@@ -81,6 +81,7 @@ void getFunctionInfo(const char **name, int *line, size_t pointer)
                     if (pointer < (*vit).Address) {
                         //*name = ((Function)(*it).second.func)->getName().data();
                         *line = prev.Loc.getLine();
+                        //prev.Loc.getScope(getGlobalContext())->dump();
                         printf("exiting vector loop\n");
                         break;
                     }

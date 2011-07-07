@@ -1235,6 +1235,8 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool value)
         builder.CreateCondBr(isz, tryblk, handlr);
         builder.SetInsertPoint(tryblk);
     }
+    else if (ex->head == line_sym) {
+    }
     if (!strcmp(ex->head->name, "$")) {
         jl_error("syntax error: prefix $ outside of quote block");
     }
@@ -1579,10 +1581,13 @@ static void emit_function(jl_lambda_info_t *lam, Function *f)
     // compile body statements
     bool prevlabel = false;
     for(i=0; i < stmts->length; i++) {
-        //Gstuff
-        builder.SetCurrentDebugLocation(DebugLoc::get(i+1, 1, (MDNode*) SP, NULL));
-        //builder.SetCurrentDebugLocation(DebugLoc::get(1771, 1, (MDNode*) SP, NULL));
         jl_value_t *stmt = jl_cellref(stmts,i);
+        //Gstuff
+        if (jl_is_expr(stmt) && ((jl_expr_t*)stmt)->head == line_sym) {
+            int lno = jl_unbox_int32(jl_exprarg(stmt, 0));
+            builder.SetCurrentDebugLocation(DebugLoc::get(lno, 1, (MDNode*)SP,
+                                                          NULL));
+        }
         if (is_label(stmt)) {
             if (prevlabel) continue;
             prevlabel = true;
@@ -1925,9 +1930,10 @@ extern "C" void jl_init_codegen()
 {
 #ifdef DEBUG
     llvm::JITEmitDebugInfo = true;
+#endif
     llvm::NoFramePointerElim = true;
     llvm::NoFramePointerElimNonLeaf = true;
-#endif
+
     InitializeNativeTarget();
     jl_Module = new Module("julia", jl_LLVMContext);
     jl_ExecutionEngine =
@@ -1940,3 +1946,18 @@ extern "C" void jl_init_codegen()
     jl_jit_events = new JuliaJITEventListener();
     jl_ExecutionEngine->RegisterJITEventListener(jl_jit_events);
 }
+
+/*
+maybe this reads the dwarf info for a MachineFunction:
+
+MCContext &mc = Details.MF->getContext()
+DenseMap<const MCSection*,MCLineSection*> &secs = mc.getMCLineSectionOrder();
+std::vector<const MCSection*> &sec2line = mc.getMCLineSections();
+MCLineSection *line = sec2line[secs[0]];
+const MCLineEntryCollection *lec = line->getMCLineEntries();
+MCLineEntryCollection::iterator it = lec->begin();
+
+addr = (*it).getLabel()->getVariableValue()
+line = (*it).getLine()
+
+ */
