@@ -9,8 +9,8 @@ end
 
 ### DSFMT ###
 
-dsfmt_init_gen_rand(seed::Int) = ccall(dlsym(libmt, :dsfmt_gv_init_gen_rand), 
-                                       Void, (Uint32, ), uint32(seed))
+dsfmt_init_gen_rand(seed::Union(Int32,Uint32)) = ccall(dlsym(libmt, :dsfmt_gv_init_gen_rand), 
+                                                       Void, (Uint32, ), uint32(seed))
 
 dsfmt_get_min_array_size() = ccall(dlsym(libmt, :dsfmt_get_min_array_size), Int32, ())
 
@@ -30,9 +30,37 @@ function dsfmt_fill_array_open_open(A::Array{Float64})
     return A
 end
 
-#rand() = dsfmt_genrand_open_open()
-#randui32() = dsfmt_genrand_uint32()
-#srand(s::Union(Int32,Uint32)) = dsfmt_init_gen_rand(s)
+# rand() = dsfmt_genrand_open_open()
+# randf() = convert(Float32, rand())
+# randui32() = dsfmt_genrand_uint32()
+# srand(s) = dsfmt_init_gen_rand(s)
+
+# jl_randn_next = -42.0
+# function randn()
+#     global jl_randn_next
+
+#     if (jl_randn_next != -42.0)
+#         s = jl_randn_next
+#         jl_randn_next = -42.0
+#         return s
+#     end
+
+#     s = 1.0
+#     vre = 0.0
+#     vim = 0.0
+#     while (s >= 1.0)
+#         ure = rand()
+#         uim = rand()
+#         vre = 2.0*ure - 1.0
+#         vim = 2.0*uim - 1.0
+#         s = vre*vre + vim*vim
+#     end
+
+#     s = sqrt(-2.0*log(s)/s)
+#     jl_randn_next = s * vre
+#     return s * vim
+# end
+
 
 ### MT ###
 
@@ -79,13 +107,13 @@ randint(n::Int) = randint(one(n), n)
 
 ## Arrays of random numbers
 
-#function rand(dims::Dims)
-#    A = Array(Float64, dims)
-#    dsfmt_fill_array_open_open(A)
-#    return A
-#end
+# function rand(dims::Dims)
+#     A = Array(Float64, dims)
+#     dsfmt_fill_array_open_open(A)
+#     return A
+# end
 
-#rand(dims::Size...) = rand(dims)
+# rand(dims::Size...) = rand(dims)
 
 macro rand_matrix_builder(t, f)
     quote
@@ -104,6 +132,6 @@ macro rand_matrix_builder(t, f)
 end # macro
 
 @rand_matrix_builder Float64 rand
-@rand_matrix_builder Float32 randf
 @rand_matrix_builder Float64 randn
 @rand_matrix_builder Uint32 randui32
+@rand_matrix_builder Float32 randf
