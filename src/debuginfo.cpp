@@ -65,19 +65,19 @@ void getFunctionInfo(const char **name, int *line, size_t pointer)
                 //here only for debug purposes, should not be instatiated twice. 
                 //*name = (*it).second.func.getName().data();
                 *name = (*(*it).second.func).getName().data();
-                printf("start addr %lx\n", (size_t)(*it).first);
-                printf("print vector size: %d \n", (*it).second.lines.size());
+                //printf("start addr %lx\n", (size_t)(*it).first);
+                //printf("print vector size: %d \n", (*it).second.lines.size());
                 if ((*it).second.lines.size() == 0) {
                     continue;
                 }
                 
                 std::vector<JITEvent_EmittedFunctionDetails::LineStart>::iterator vit = (*it).second.lines.begin();
                 JITEvent_EmittedFunctionDetails::LineStart prev = *vit;
-                printf("vector %lx \n",(*vit).Address);
+                //printf("vector %lx \n",(*vit).Address);
                 vit++;
                 
                 while (vit != (*it).second.lines.end()) {
-                    printf("vector %lx \n",(*vit).Address);
+                    //printf("vector %lx \n",(*vit).Address);
                     if (pointer < (*vit).Address) {
                         //*name = ((Function)(*it).second.func)->getName().data();
                         *line = prev.Loc.getLine();

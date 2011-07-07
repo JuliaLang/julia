@@ -178,6 +178,7 @@ static Function *to_function(jl_lambda_info_t *li)
     assert(jl_is_expr(li->ast));
     li->functionObject = (void*)f;
     BasicBlock *old = nested_compile ? builder.GetInsertBlock() : NULL;
+    DebugLoc olddl = builder.getCurrentDebugLocation();
     bool last_n_c = nested_compile;
     nested_compile = true;
     emit_function(li, f);
@@ -187,8 +188,10 @@ static Function *to_function(jl_lambda_info_t *li)
     // print out the function's LLVM code
     //f->dump();
     //verifyFunction(*f);
-    if (old != NULL)
+    if (old != NULL) {
         builder.SetInsertPoint(old);
+        builder.SetCurrentDebugLocation(olddl);
+    }
     return f;
 }
 
@@ -1338,6 +1341,19 @@ static void emit_function(jl_lambda_info_t *lam, Function *f)
     ctx.funcName = lam->name->name;
     ctx.float32Temp = NULL;
 
+    // set initial line number
+    jl_array_t *stmts = jl_lam_body(ast)->args;
+    jl_value_t *stmt = jl_cellref(stmts,0);
+    if (jl_is_expr(stmt) && ((jl_expr_t*)stmt)->head == line_sym) {
+        int lno = jl_unbox_int32(jl_exprarg(stmt, 0));
+        builder.SetCurrentDebugLocation(DebugLoc::get(lno, 1, (MDNode*)SP,
+                                                      NULL));
+    }
+    else {
+        // unknown location
+        builder.SetCurrentDebugLocation(DebugLoc::get(0, 0, 0, NULL));        
+    }
+    
     /*
     // check for stack overflow (the slower way)
     Value *cur_sp =
@@ -1464,7 +1480,6 @@ static void emit_function(jl_lambda_info_t *lam, Function *f)
         }
     }
 
-    jl_array_t *stmts = jl_lam_body(ast)->args;
     // allocate space for exception handler contexts
     for(i=0; i < stmts->length; i++) {
         jl_value_t *stmt = jl_cellref(stmts,i);

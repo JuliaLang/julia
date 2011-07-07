@@ -477,8 +477,13 @@ void show_backtrace (void) {
     int line_num;
     getFunctionInfo(&func_name, &line_num, ip);
     if(func_name != NULL) {
-			printf ("Function Name: %s, line num: %d, instruction pointer: %lx \n", func_name, line_num,(long) ip);
-		}  
+        if (line_num == -1) {
+            printf ("in %s, line unknown\n", func_name);
+        }
+        else {
+            printf ("in %s, line %d\n", func_name, line_num);
+        }
+    }  
   }
 }
 
