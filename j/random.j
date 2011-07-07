@@ -30,6 +30,10 @@ function dsfmt_fill_array_open_open(A::Array{Float64})
     return A
 end
 
+#rand() = dsfmt_genrand_open_open()
+#randui32() = dsfmt_genrand_uint32()
+#srand(s::Union(Int32,Uint32)) = dsfmt_init_gen_rand(s)
+
 ### MT ###
 
 rand()     = ccall(dlsym(libmt, :rand_double),   Float64, ())
@@ -74,6 +78,15 @@ end
 randint(n::Int) = randint(one(n), n)
 
 ## Arrays of random numbers
+
+#function rand(dims::Dims)
+#    A = Array(Float64, dims)
+#    dsfmt_fill_array_open_open(A)
+#    return A
+#end
+
+#rand(dims::Size...) = rand(dims)
+
 macro rand_matrix_builder(t, f)
     quote
 
