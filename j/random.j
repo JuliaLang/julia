@@ -4,12 +4,13 @@ randomize() = ccall(dlsym(libmt, :randomize), Void, ())
 
 function mt_init()
     randomize()
-    dsfmt_init()
+    dsfmt_init_gen_rand(0)
 end
 
 ### DSFMT ###
 
-dsfmt_init() = ccall(dlsym(libmt, :dsfmt_gv_init_gen_rand), Void, (Uint32, ), uint32(0))
+dsfmt_init_gen_rand(seed::Int) = ccall(dlsym(libmt, :dsfmt_gv_init_gen_rand), 
+                                       Void, (Uint32, ), uint32(seed))
 
 dsfmt_get_min_array_size() = ccall(dlsym(libmt, :dsfmt_get_min_array_size), Int32, ())
 
