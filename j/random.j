@@ -4,38 +4,74 @@ randomize() = ccall(dlsym(libmt, :randomize), Void, ())
 
 function mt_init()
     randomize()
-    dsfmt_init()
+    dsfmt_init_gen_rand(0)
 end
 
-DSFMT_MEXP = int32(19937)
-DSFMT_STATE = Array(Int32, 1000)
+### DSFMT ###
 
-DSFMT_POOL_SIZE = 4096
-DSFMT_POOL = Array(Float64, DSFMT_POOL_SIZE)
-DSFMT_POOL_PTR = DSFMT_POOL_SIZE
+dsfmt_init_gen_rand(seed::Union(Int32,Uint32)) = ccall(dlsym(libmt, :dsfmt_gv_init_gen_rand), 
+                                                       Void, (Uint32, ), uint32(seed))
 
-dsfmt_init() = ccall(dlsym(libmt, :dsfmt_chk_init_gen_rand),
-                     Void, (Ptr{Void}, Uint32, Int32),
-                     DSFMT_STATE, uint32(0), DSFMT_MEXP)
+dsfmt_get_min_array_size() = ccall(dlsym(libmt, :dsfmt_get_min_array_size), Int32, ())
 
-dsfmt_fill_array_open_open(A::Array{Float64}, n::Size) =
-    ccall(dlsym(libmt, :dsfmt_fill_array_open_open),
-          Void, (Ptr{Void}, Ptr{Float64}, Int32),
-          DSFMT_STATE, A, n)
+dsfmt_genrand_open_open() = ccall(dlsym(libmt, :dsfmt_gv_genrand_open_open), Float64, ())
 
-function dsfmt_rand()
-    global DSFMT_POOL_PTR
-    global DSFMT_POOL_SIZE
+dsfmt_genrand_uint32() = ccall(dlsym(libmt, :dsfmt_gv_genrand_uint32), Uint32, ())
 
-    if DSFMT_POOL_PTR < DSFMT_POOL_SIZE
-        DSFMT_POOL_PTR += 1
-        return DSFMT_POOL[DSFMT_POOL_PTR]
+function dsfmt_fill_array_open_open(A::Array{Float64})
+    n = numel(A)
+    if (n <= dsfmt_get_min_array_size())
+        for i=1:numel(A)
+            A[i] = dsfmt_genrand_open_open()
+        end
     else
-        dsfmt_fill_array_open_open(DSFMT_POOL, DSFMT_POOL_SIZE)
-        DSFMT_POOL_PTR = 1
-        return DSFMT_POOL[1]
+        ccall(dlsym(libmt, :dsfmt_gv_fill_array_open_open), Void, (Ptr{Void}, Int32), A, n)
     end
+    return A
 end
+
+# rand() = dsfmt_genrand_open_open()
+# randf() = convert(Float32, rand())
+# randui32() = dsfmt_genrand_uint32()
+# srand(s) = dsfmt_init_gen_rand(s)
+
+# jl_randn_next = -42.0
+# function randn()
+#     global jl_randn_next
+
+#     if (jl_randn_next != -42.0)
+#         s = jl_randn_next
+#         jl_randn_next = -42.0
+#         return s
+#     end
+
+#     s = 1.0
+#     vre = 0.0
+#     vim = 0.0
+#     while (s >= 1.0)
+#         ure = rand()
+#         uim = rand()
+#         vre = 2.0*ure - 1.0
+#         vim = 2.0*uim - 1.0
+#         s = vre*vre + vim*vim
+#     end
+
+#     s = sqrt(-2.0*log(s)/s)
+#     jl_randn_next = s * vre
+#     return s * vim
+# end
+
+
+### MT ###
+
+rand()     = ccall(dlsym(libmt, :rand_double),   Float64, ())
+randf()    = ccall(dlsym(libmt, :rand_float),    Float32, ())
+randui32() = ccall(dlsym(libmt, :genrand_int32), Uint32,  ())
+randn()    = ccall(dlsym(libmt, :randn),         Float64, ())
+srand(s::Union(Int32,Uint32)) = ccall(dlsym(libmt, :randomseed32), Void, (Uint32,), uint32(s))
+srand(s::Union(Int64,Uint64)) = ccall(dlsym(libmt, :randomseed64), Void, (Uint64,), uint64(s))
+
+## Random integers
 
 randui64() = boxui64(or_int(zext64(unbox32(randui32())),
                             shl_int(zext64(unbox32(randui32())),unbox32(32))))
@@ -69,15 +105,16 @@ end
 # random integer from 1 to n
 randint(n::Int) = randint(one(n), n)
 
-# Floating point random numbers
-rand()     = ccall(dlsym(libmt, :rand_double),   Float64, ())
-randf()    = ccall(dlsym(libmt, :rand_float),    Float32, ())
-randui32() = ccall(dlsym(libmt, :genrand_int32), Uint32,  ())
-randn()    = ccall(dlsym(libmt, :randn),         Float64, ())
-srand(s::Union(Int32,Uint32)) = ccall(dlsym(libmt, :randomseed32), Void, (Uint32,), uint32(s))
-srand(s::Union(Int64,Uint64)) = ccall(dlsym(libmt, :randomseed64), Void, (Uint64,), uint64(s))
+## Arrays of random numbers
 
-# Arrays of random numbers
+# function rand(dims::Dims)
+#     A = Array(Float64, dims)
+#     dsfmt_fill_array_open_open(A)
+#     return A
+# end
+
+# rand(dims::Size...) = rand(dims)
+
 macro rand_matrix_builder(t, f)
     quote
 
@@ -95,6 +132,6 @@ macro rand_matrix_builder(t, f)
 end # macro
 
 @rand_matrix_builder Float64 rand
-@rand_matrix_builder Float32 randf
 @rand_matrix_builder Float64 randn
 @rand_matrix_builder Uint32 randui32
+@rand_matrix_builder Float32 randf

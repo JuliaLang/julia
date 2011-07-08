@@ -143,11 +143,14 @@ random/dsfmt-$(DSFMT_VER)/Makefile: random/dsfmt-$(DSFMT_VER).tar.gz
 	cd random && \
 	mkdir -p dsfmt-$(DSFMT_VER) && \
 	tar -C dsfmt-$(DSFMT_VER) --strip-components 1 -xf dsfmt-$(DSFMT_VER).tar.gz && \
+	cp dSFMT.h dsfmt-$(DSFMT_VER) && \
 	tar zxf mt19937-64.tgz
 	touch $@
 $(DSFMT_OBJ_SOURCE): random/dsfmt-$(DSFMT_VER)/Makefile
 	cd random && \
-	$(CC) -O3 -finline-functions -fomit-frame-pointer -DNDEBUG -fno-strict-aliasing --param max-inline-insns-single=1800  -Wmissing-prototypes -Wall  -std=c99 -DDSFMT_MEXP=19937 -fPIC -shared jl_random.c dsfmt-2.1/dSFMT.c -I mt19937-64 mt19937-64/mt19937-64.c -o libMT.$(SHLIB_EXT)
+	$(CC) -O3 -finline-functions -fomit-frame-pointer -DNDEBUG -fno-strict-aliasing --param max-inline-insns-single=1800  -Wmissing-prototypes -Wall  -std=c99 -DDSFMT_MEXP=19937 -fPIC -shared -DDSFMT_DO_NOT_USE_OLD_NAMES jl_random.c -I dSFMT dsfmt-$(DSFMT_VER)/dSFMT.c -o libMT.$(SHLIB_EXT)
+#	$(CC) -Wall  -std=c99 -DDSFMT_MEXP=19937 -fPIC -shared -DDSFMT_DO_NOT_USE_OLD_NAMES jl_random.c dsfmt-2.1/dSFMT.c -I mt19937-64 mt19937-64/mt19937-64.c -o libMT.$(SHLIB_EXT)
+
 $(DSFMT_OBJ_TARGET): $(DSFMT_OBJ_SOURCE)
 	mkdir -p $(EXTROOTLIB)
 	cp $< $@
