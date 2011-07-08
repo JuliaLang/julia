@@ -769,6 +769,18 @@ float(x::String) = float64(x)
 
 ## fast C-based memory functions for string implementations ##
 
+function memcpy(a::Array{Uint8,1})
+    b = Array(Uint8, length(a))
+    ccall(dlsym(C_NULL, :memcpy), Ptr{Uint8},
+          (Ptr{Uint8}, Ptr{Uint8}, Ulong),
+          pointer(b), pointer(a), ulong(length(a)))
+    return b
+end
+
+# copying a byte string (generally not needed)
+
+strcpy{T<:ByteString}(s::T) = T(memcpy(s))
+
 # lexicographically compare byte arrays (used by Latin-1 and UTF-8)
 
 function lexcmp(a::Array{Uint8,1}, b::Array{Uint8,1})
@@ -794,14 +806,7 @@ end
 # concatenate byte arrays into a single array
 
 memcat() = Array(Int8,0)
-
-function memcat(a::Array{Uint8,1})
-    b = Array(Uint8, length(a))
-    ccall(dlsym(libc, :memcpy), Ptr{Uint8},
-          (Ptr{Uint8}, Ptr{Uint8}, Ulong),
-          pointer(b), pointer(a), ulong(length(a)))
-    return b
-end
+memcat(a::Array{Uint8,1}) = memcpy(a)
 
 function memcat(arrays::Array{Uint8,1}...)
     n = 0
@@ -840,7 +845,3 @@ function memcat(strs::ByteString...)
     end
     data
 end
-
-# copying a byte string (generally not needed)
-
-strcpy{T<:ByteString}(s::T) = T(memcat(s))
