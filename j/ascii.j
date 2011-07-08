@@ -36,7 +36,6 @@ function uc(s::ASCIIString)
     for i = 1:length(s)
         if 'a' <= s[i] <= 'z'
             t = strcpy(s)
-            t.data[i] -= 32
             while i <= length(t)
                 if 'a' <= t[i] <= 'z'
                     t.data[i] -= 32
@@ -52,7 +51,6 @@ function lc(s::ASCIIString)
     for i = 1:length(s)
         if 'A' <= s[i] <= 'Z'
             t = strcpy(s)
-            t.data[i] += 32
             while i <= length(t)
                 if 'A' <= t[i] <= 'Z'
                     t.data[i] += 32
