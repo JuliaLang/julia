@@ -793,7 +793,15 @@ end
 
 # concatenate byte arrays into a single array
 
-memcat() = Array{Uint8,1}((0,))
+memcat() = Array(Int8,0)
+
+function memcat(a::Array{Uint8,1})
+    b = Array(Uint8, length(a))
+    ccall(dlsym(libc, :memcpy), Ptr{Uint8},
+          (Ptr{Uint8}, Ptr{Uint8}, Ulong),
+          pointer(b), pointer(a), ulong(length(a)))
+    return b
+end
 
 function memcat(arrays::Array{Uint8,1}...)
     n = 0
@@ -814,6 +822,8 @@ end
 
 # concatenate the data fields of byte strings
 
+memcat(s::ByteString) = memcat(s.data)
+
 function memcat(strs::ByteString...)
     n = 0
     for s = strs
@@ -830,3 +840,7 @@ function memcat(strs::ByteString...)
     end
     data
 end
+
+# copying a byte string (generally not needed)
+
+strcpy{T<:ByteString}(s::T) = T(memcat(s))
