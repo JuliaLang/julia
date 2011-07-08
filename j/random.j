@@ -1,7 +1,5 @@
 libmt = dlopen("libMT")
 
-randomize() = ccall(dlsym(libmt, :randomize), Void, ())
-
 function mt_init()
     #randomize()
     srand(0)
@@ -69,6 +67,7 @@ end
 ### MT ###
 # This is the old code based on the original Mersenne Twister
 
+#randomize() = ccall(dlsym(libmt, :randomize), Void, ())
 #rand()     = ccall(dlsym(libmt, :rand_double),   Float64, ())
 #randf()    = ccall(dlsym(libmt, :rand_float),    Float32, ())
 #randui32() = ccall(dlsym(libmt, :genrand_int32), Uint32,  ())
