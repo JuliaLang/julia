@@ -31,7 +31,7 @@ function dsfmt_fill_array_open_open(A::Array{Float64})
 end
 
 # rand() = dsfmt_genrand_open_open()
-# randf() = convert(Float32, rand())
+# randf() = float32(rand())
 # randui32() = dsfmt_genrand_uint32()
 # srand(s) = dsfmt_init_gen_rand(s)
 

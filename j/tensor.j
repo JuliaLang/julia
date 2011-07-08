@@ -231,8 +231,7 @@ end # macro
 ## Indexing: ref ##
 
 ref(t::Tensor) = t
-
-ref(t::Tensor, r::Real...) = t[map(x->convert(Int32,round(x)),r)...]
+ref(t::Tensor, r::Real...) = ref(t,map(x->int32(round(x)),r)...)
 
 ref(A::Vector, I::Vector{Index}) = [ A[i] | i = I ]
 ref(A::Tensor{Any,1}, I::Vector{Index}) = { A[i] | i = I }
@@ -284,7 +283,7 @@ assign(t::Tensor, x, i::Index) =
 assign(t::Tensor, x::Tensor, i::Index) =
     error("assign not defined for ",typeof(t))
 
-assign(t::Tensor, x, r::Real...) = (t[map(x->convert(Int32,round(x)),r)...] = x)
+assign(t::Tensor, x, r::Real...) = (t[map(x->int32(round(x)),r)...] = x)
 
 function assign(A::Vector, x, I::Vector{Index})
     for i=I
