@@ -186,6 +186,11 @@ type UnionTooComplexError <: Exception
     types::Tuple
 end
 
+type BackTrace <: Exception
+    e
+    trace::Array{Any,1}
+end
+
 finalizer(o, f::Function) =
     ccall(:jl_gc_add_finalizer, Void, (Any,Any), o, f)
 

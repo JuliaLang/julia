@@ -22,13 +22,14 @@ public:
     virtual ~JuliaJITEventListener() {}
     
     virtual void NotifyFunctionEmitted(const Function &F, 
-                                       void *Code, size_t Size, const EmittedFunctionDetails &Details) {
+                                       void *Code, size_t Size, const EmittedFunctionDetails &Details)
+    {
         FuncInfo tmp = {&F, Size, Details.LineStarts};
         info[(size_t)(Code)] = tmp;
-        
     }
     
-    map<size_t, FuncInfo> getMap() {
+    map<size_t, FuncInfo> getMap()
+    {
         return info;
     }
 };
@@ -42,7 +43,7 @@ void getFunctionInfo(char **name, int *line, const char **filename, size_t point
     map<size_t, FuncInfo> info = jl_jit_events->getMap();
     *name = NULL;
     *line = -1;
-    *filename = "file not found";
+    *filename = "unknown";
     for (map<size_t, FuncInfo>::iterator it= info.begin(); it!= info.end(); it++) {
         if ((*it).first <= pointer) {
             if ( (size_t)(*it).first + (*it).second.lengthAdr >= pointer) {

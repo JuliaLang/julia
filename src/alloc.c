@@ -44,6 +44,7 @@ jl_struct_type_t *jl_errorexception_type=NULL;
 jl_struct_type_t *jl_typeerror_type;
 jl_struct_type_t *jl_loaderror_type;
 jl_struct_type_t *jl_uniontoocomplex_type;
+jl_struct_type_t *jl_backtrace_type;
 jl_value_t *jl_an_empty_cell=NULL;
 jl_value_t *jl_stackovf_exception;
 jl_value_t *jl_divbyzero_exception;

@@ -1604,7 +1604,6 @@ static void emit_function(jl_lambda_info_t *lam, Function *f)
     bool prevlabel = false;
     for(i=0; i < stmts->length; i++) {
         jl_value_t *stmt = jl_cellref(stmts,i);
-        //Gstuff
         if (jl_is_expr(stmt) && ((jl_expr_t*)stmt)->head == line_sym) {
             int lno = jl_unbox_int32(jl_exprarg(stmt, 0));
             builder.SetCurrentDebugLocation(DebugLoc::get(lno, 1, (MDNode*)SP,
