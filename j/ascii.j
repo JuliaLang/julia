@@ -12,7 +12,7 @@ chr2ind(s::ASCIIString, i::Int) = i
 strchr(s::ASCIIString, c::Char) = c < 0x80 ? memchr(s.data, c) : error("char not found")
 nextind(s::ASCIIString, i::Int) = i
 prevind(s::ASCIIString, i::Int) = i-1
-strcat(s::ASCIIString, t::ASCIIString, x::ASCIIString...) = ASCIIString(strdatacat(s, t, x...))
+strcat(a::ASCIIString, b::ASCIIString, c::ASCIIString...)= ASCIIString(memcat(a,b,c...))
 
 ## outputing ASCII strings ##
 

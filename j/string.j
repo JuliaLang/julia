@@ -230,33 +230,20 @@ type RopeString <: String
     RopeString(h::RopeString, t::RopeString) =
         depth(h.tail) + depth(t) < depth(h.head) ?
             RopeString(h.head, RopeString(h.tail, t)) :
-            new(h,
-                t,
-                max(h.depth,
-                    t.depth)+1,
-                length(h)+length(t))
+            new(h, t, max(h.depth,t.depth)+1, length(h)+length(t))
 
     RopeString(h::RopeString, t::String) =
         depth(h.tail) < depth(h.head) ?
             RopeString(h.head, RopeString(h.tail, t)) :
-            new(h,
-                t,
-                h.depth+1,
-                length(h)+length(t))
+            new(h, t, h.depth+1, length(h)+length(t))
 
     RopeString(h::String, t::RopeString) =
         depth(t.head) < depth(t.tail) ?
             RopeString(RopeString(h, t.head), t.tail) :
-            new(h,
-                t,
-                t.depth+1,
-                length(h)+length(t))
+            new(h, t, t.depth+1, length(h)+length(t))
 
     RopeString(h::String, t::String) =
-        new(h,
-            t,
-            1,
-            length(h)+length(t))
+        new(h, t, 1, length(h)+length(t))
 end
 
 depth(s::String) = 0
@@ -805,6 +792,8 @@ end
 
 # concatenate byte arrays into a single array
 
+memcat() = Array{Uint8,1}((0,))
+
 function memcat(arrays::Array{Uint8,1}...)
     n = 0
     for a = arrays
@@ -824,7 +813,7 @@ end
 
 # concatenate the data fields of byte strings
 
-function strdatacat(strs::ByteString...)
+function memcat(strs::ByteString...)
     n = 0
     for s = strs
         n += length(s)
