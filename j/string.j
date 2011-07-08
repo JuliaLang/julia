@@ -5,6 +5,7 @@ done(s::String,i) = (i > length(s))
 isempty(s::String) = done(s,start(s))
 ref(s::String, i::Index) = next(s,i)[1]
 ref(s::String, x::Real) = s[int32(round(x))]
+ref(s::String, r::Range1) = s[int32(round(r.start)):int32(round(r.stop))]
 length(s::String) = at_string_end(s)[1]
 strlen(s::String) = at_string_end(s)[2]
 symbol(s::String) = symbol(cstring(s))
