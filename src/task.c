@@ -431,39 +431,7 @@ static void init_task(jl_task_t *t)
 
 void getFunctionInfo(char **name, int *line, const char **filename, size_t pointer);
 
-/*struct InfoIP {
-	char* info;
-	long ip;
-
-};
-
-stack<InfoIP> generate_backtrace() {
-	unw_cursor_t cursor; unw_context_t uc;
-  	unw_word_t ip, sp;
-  	stack<InfoIP> toReturn = stack<InfoIP>();
-
-  	unw_getcontext(&uc);
-  	unw_init_local(&cursor, &uc);
- 	while (unw_step(&cursor)) { 
-    	unw_get_reg(&cursor, UNW_REG_IP, &ip);
-    	unw_get_reg(&cursor, UNW_REG_SP, &sp);
-    	//printf("pre getFunc \n");
-    	const char* funcName = getFunctionInfo(ip);
-    	if(funcName != NULL) {
-    		InfoIP toAdd;
-    		toAdd.info = funcName;
-    		toAdd.ip = (long) ip;
-    		toReturn.push(toAdd);
-			//printf ("Function Name = %s, instruction pointer = %lx \n", funcName, (long) ip);
-		}      	
-  	}
-  
-  	return toReturn;
-	
-
-}
-*/
-
+//stacktrace using libunwind
 void show_backtrace (void) {
   unw_cursor_t cursor; unw_context_t uc;
   unw_word_t ip, sp;
@@ -479,30 +447,38 @@ void show_backtrace (void) {
     getFunctionInfo(&func_name, &line_num, &file_name, ip);
     if(func_name != NULL) {
         if (line_num == -1) {
-            printf ("in %s, line unknown, filename %s\n", func_name, file_name);
+            printf ("%s in %s:line unknown \n", file_name, func_name);
         }
         else {
-            printf ("in %s, line %d, filename %s \n", func_name, line_num,file_name);
+            printf ("%s in %s:%d \n", func_name, file_name, line_num);
         }
     }  
   }
 }
 
-/*
-Have to fix this code to work with new, getFunctionInfo
+#if defined(__x86_64__)
+// Stacktrace manually
 void backtrace () {
 	const int max_i = 10000;
 	int i = 0;
 	intptr_t rbp;
 	asm(" movq %%rbp, %0;"
 		: "=r" (rbp));
+	char *func_name;
+	int line_num;
+	const char *file_name;
 	while (rbp != 0 && i<max_i) {
 		void **fp = ((void**)rbp)[0];
 		void *ip = ((void**)rbp)[1];
-		const char* info = getFunctionInfo(ip);
-		if(info != NULL) {
-			printf ("Function Name = %s, instruction pointer = %lx \n", info, (long) ip);
-		}
+		getFunctionInfo(&func_name, &line_num, &file_name, (size_t)ip);
+    	if(func_name != NULL) {
+        	if (line_num == -1) {
+            	printf ("%s in %s:line unknown \n", file_name, func_name);
+       		}
+        	else {
+            	printf ("%s in %s:%d \n", func_name, file_name, line_num);
+        	}
+    	}  
 		rbp = fp;
 		i++;
 	}
@@ -510,8 +486,7 @@ void backtrace () {
 		printf("to prevent infitie loops stacktrace was cutoff at %d iterations\n to change this change max i backtrace in task.c\n",max_i);
 	}
 }
-*/
-
+#endif
 
 // yield to exception handler
 void jl_raise(jl_value_t *e)
