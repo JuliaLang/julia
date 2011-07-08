@@ -1,6 +1,7 @@
 #include <llvm/ExecutionEngine/JITEventListener.h>
 #include "llvm/Function.h"
 #include <map>
+#include <llvm/Analysis/DebugInfo.h>
 
 using namespace std;
 using namespace llvm;
@@ -50,13 +51,14 @@ public:
 
 extern JuliaJITEventListener *jl_jit_events;
 
-extern "C" void getFunctionInfo(const char **name, int *line, size_t pointer);
+extern "C" void getFunctionInfo(char **name, int *line, const char **filename,size_t pointer);
 
-void getFunctionInfo(const char **name, int *line, size_t pointer)
+void getFunctionInfo(char **name, int *line, const char **filename, size_t pointer)
 {
     map<size_t, FuncInfo> info = jl_jit_events->getMap();
     *name = NULL;
     *line = -1;
+    *filename = "Not found";
     //printf("funcinfo???\n");
     for (map<size_t, FuncInfo>::iterator it= info.begin(); it!= info.end(); it++) {
         if ((*it).first <= pointer) {
@@ -64,10 +66,13 @@ void getFunctionInfo(const char **name, int *line, size_t pointer)
                 //toReturn = (*(*it).second.func).getName().data();
                 //here only for debug purposes, should not be instatiated twice. 
                 //*name = (*it).second.func.getName().data();
-                *name = (*(*it).second.func).getName().data();
+                *name = &(*(*it).second.func).getNameStr()[0];
+                //DIDescriptor temp = DIDescriptor((*(*it).second.func))
+                //printf("la %i \n", (*(*it).second.func).getSubclassDataFromValue());
                 //printf("start addr %lx\n", (size_t)(*it).first);
                 //printf("print vector size: %d \n", (*it).second.lines.size());
                 if ((*it).second.lines.size() == 0) {
+                	//printf("no line number info\n");
                     continue;
                 }
                 
@@ -81,8 +86,12 @@ void getFunctionInfo(const char **name, int *line, size_t pointer)
                     if (pointer < (*vit).Address) {
                         //*name = ((Function)(*it).second.func)->getName().data();
                         *line = prev.Loc.getLine();
+                        //printf("banananans\n");
+              			DIScope please = DIScope(prev.Loc.getScope((*(*it).second.func).getContext()));
+                		printf("filename is : %s\n", please.getFilename().data());
+
                         //prev.Loc.getScope(getGlobalContext())->dump();
-                        printf("exiting vector loop\n");
+                        //printf("exiting vector loop\n");
                         break;
                     }
                     prev = *vit;
@@ -90,8 +99,13 @@ void getFunctionInfo(const char **name, int *line, size_t pointer)
                 } 
                 if (*line == -1) {
                     // must be last line, since we know ip is in this function
+                    //printf("apricots\n");
+              		DIScope please = DIScope(prev.Loc.getScope((*(*it).second.func).getContext()));
+                	*filename = please.getFilename().data();
+                	//printf("directry is : %s\n", please.getDirectory().data());
                     *line = prev.Loc.getLine();
                 }
+                
                 break;
             }
         }
