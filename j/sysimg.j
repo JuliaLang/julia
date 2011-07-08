@@ -17,6 +17,9 @@ load("reduce.j")
 load("complex.j")
 load("rational.j")
 
+# load libc - julia already links against it so process handle works
+libc = ccall(:jl_load_dynamic_library, Ptr{Void}, (Ptr{Uint8},), C_NULL)
+
 # core data structures (used by type inference)
 load("tensor.j")
 load("array.j")
@@ -26,9 +29,6 @@ load("table.j")
 # compiler
 load("inference.j")
 ccall(:jl_enable_inference,Void,())
-
-# load libc - julia already links against it so process handle works
-libc = ccall(:jl_load_dynamic_library, Ptr{Void}, (Ptr{Uint8},), C_NULL)
 
 # strings & printing
 load("io.j")
