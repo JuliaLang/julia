@@ -1283,21 +1283,6 @@ extern "C" jl_tuple_t *jl_tuple_tvars_to_symbols(jl_tuple_t *t);
 
 static void emit_function(jl_lambda_info_t *lam, Function *f)
 {
-    
-    //Gstuff
-    dbuilder->createCompileUnit(0, "foo.j", ".", "julia", true, "", 0);
-    llvm::DIArray EltTypeArray = dbuilder->getOrCreateArray(NULL,0);
-    DIFile fil = dbuilder->createFile("foo.j", ".");
-    DISubprogram SP =
-        dbuilder->createFunction((DIDescriptor)dbuilder->getCU(), f->getName(),
-                                 f->getName(),
-                                 fil,
-                                 0,
-                                 dbuilder->createSubroutineType(fil,EltTypeArray),
-                                 false, true,
-                                 0, true, f);
-    
-    
     jl_expr_t *ast = (jl_expr_t*)lam->ast;
     //jl_print((jl_value_t*)ast);
     //ios_printf(ios_stdout, "\n");
@@ -1341,11 +1326,32 @@ static void emit_function(jl_lambda_info_t *lam, Function *f)
     ctx.funcName = lam->name->name;
     ctx.float32Temp = NULL;
 
-    // set initial line number
+    // look for initial (line num filename) node
     jl_array_t *stmts = jl_lam_body(ast)->args;
     jl_value_t *stmt = jl_cellref(stmts,0);
+    std::string filename = "unknown";
+    int lno = -1;
     if (jl_is_expr(stmt) && ((jl_expr_t*)stmt)->head == line_sym) {
-        int lno = jl_unbox_int32(jl_exprarg(stmt, 0));
+        lno = jl_unbox_int32(jl_exprarg(stmt, 0));
+        if (((jl_expr_t*)stmt)->args->length > 1) {
+            filename = ((jl_sym_t*)jl_exprarg(stmt, 1))->name;
+        }
+    }
+    
+    dbuilder->createCompileUnit(0, filename, ".", "julia", true, "", 0);
+    llvm::DIArray EltTypeArray = dbuilder->getOrCreateArray(NULL,0);
+    DIFile fil = dbuilder->createFile(filename, ".");
+    DISubprogram SP =
+        dbuilder->createFunction((DIDescriptor)dbuilder->getCU(), f->getName(),
+                                 f->getName(),
+                                 fil,
+                                 0,
+                                 dbuilder->createSubroutineType(fil,EltTypeArray),
+                                 false, true,
+                                 0, true, f);
+    
+    // set initial line number
+    if (lno != -1) {
         builder.SetCurrentDebugLocation(DebugLoc::get(lno, 1, (MDNode*)SP,
                                                       NULL));
     }
