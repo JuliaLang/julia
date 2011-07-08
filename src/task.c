@@ -429,7 +429,7 @@ static void init_task(jl_task_t *t)
 }
 #endif
 
-void getFunctionInfo(const char **name, int *line, size_t pointer);
+void getFunctionInfo(char **name, int *line, const char **filename, size_t pointer);
 
 /*struct InfoIP {
 	char* info;
@@ -473,15 +473,16 @@ void show_backtrace (void) {
   while (unw_step(&cursor)) { 
     unw_get_reg(&cursor, UNW_REG_IP, &ip);
     unw_get_reg(&cursor, UNW_REG_SP, &sp);
-    const char *func_name;
+    char *func_name;
     int line_num;
-    getFunctionInfo(&func_name, &line_num, ip);
+    const char *file_name;
+    getFunctionInfo(&func_name, &line_num, &file_name, ip);
     if(func_name != NULL) {
         if (line_num == -1) {
-            printf ("in %s, line unknown\n", func_name);
+            printf ("in %s, line unknown, filename %s\n", func_name, file_name);
         }
         else {
-            printf ("in %s, line %d\n", func_name, line_num);
+            printf ("in %s, line %d, filename %s \n", func_name, line_num,file_name);
         }
     }  
   }
