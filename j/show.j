@@ -48,7 +48,7 @@ function show(e::Expr)
             end
         end
     elseif is(hd,:null)
-        print("()")
+        print("nothing")
     elseif is(hd,:goto)
         print("goto $(e.args[1])")
     elseif is(hd,:gotoifnot)

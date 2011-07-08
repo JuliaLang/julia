@@ -42,7 +42,6 @@ static jl_array_t *_new_array(jl_type_t *atype, jl_tuple_t *dimst,
     void *data;
     jl_array_t *a;
 
-    if (ndims == 0) nel = 0;
     for(i=0; i < ndims; i++) {
         nel *= dims[i];
     }
