@@ -27,6 +27,7 @@
 (define space-sensitive #f)
 ; treat 'end' like a normal symbol instead of a reserved word
 (define end-symbol #f)
+(define current-filename 'none)
 
 (define-macro (with-normal-ops . body)
   `(with-bindings ((ops-by-prec normal-ops)
@@ -297,6 +298,9 @@
   (or (eof-object? tok)
       (memv tok '(#\) #\] #\} else elseif catch))))
 
+(define (loc-header s)
+  `(line ,(input-port-line (ts:port s)) ,current-filename))
+
 ; parse a@b@c@... as (@ a b c ...) for some operator @
 ; op: the operator to look for
 ; head: the expression head to yield in the result, e.g. "a;b" => (block a b)
@@ -310,12 +314,13 @@
   (if (memv (require-token s) closers)
       (list head)  ; empty block
       (let loop ((ex
-                  ; in allow-empty mode skip leading runs of operator
+                  ;; in allow-empty mode skip leading runs of operator
 		  (if (and allow-empty (eqv? (require-token s) op))
 		      '()
 		      (if (eqv? op #\newline)
-			  (let ((lineno (input-port-line (ts:port s))))
-			    (list (down s) `(line ,lineno)))
+			  (let ((loc (loc-header s)))
+			    ;; note: loc-header must happen before (down s)
+			    (list (down s) loc))
 			  (list (down s)))))
 		 (first? #t))
 	(let ((t (peek-token s)))
@@ -1093,8 +1098,17 @@
 		     (peek-token s)))))
 
 (define (julia-parse-file filename stream)
-  ; call f on a stream until the stream runs out of data
-  (define (read-all-of f s)
+  (set! current-filename (symbol filename))
+  (define (parse s lno)
+    (let ((ex (julia-parse s)))
+      (if (and (pair? ex)
+	       (eq? (car ex) '=)
+	       (pair? (cadr ex))
+	       (eq? (caadr ex) 'call))
+	  ;; insert loc-header for short-form function defs
+	  `(= ,(cadr ex) (block (line ,lno ,current-filename) ,(caddr ex)))
+	  ex)))
+  (let ((s (make-token-stream stream)))
     (with-exception-catcher
      (lambda (e)
        (if (and (pair? e) (eq? (car e) 'error))
@@ -1104,15 +1118,15 @@
 	   (raise e)))
      (lambda ()
        (skip-ws-and-comments (ts:port s))
-       (let loop ((lines '())
-		  (linen (input-port-line (ts:port s)))
-		  (curr  (f s)))
-	 (if (eof-object? curr)
-	     (reverse lines)
-	     (begin
-	       (skip-ws-and-comments (ts:port s))
-	       (let ((nl (input-port-line (ts:port s))))
-		 (loop (list* curr `(line ,linen) lines)
-		       nl
-		       (f s)))))))))
-  (read-all-of julia-parse (make-token-stream stream)))
+       (let ((linen (input-port-line (ts:port s))))
+	 (let loop ((lines '())
+		    (linen linen)
+		    (curr  (parse s linen)))
+	   (if (eof-object? curr)
+	       (reverse lines)
+	       (begin
+		 (skip-ws-and-comments (ts:port s))
+		 (let ((nl (input-port-line (ts:port s))))
+		   (loop (list* curr `(line ,linen) lines)
+			 nl
+			 (parse s nl)))))))))))
