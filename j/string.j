@@ -12,8 +12,8 @@ symbol(s::String) = symbol(cstring(s))
 string(s::String) = s
 
 print(c::Char) = (write(current_output_stream(), c); nothing)
-print(s::String) = for c = s; print(c); end
-print(x...) = (for i=x; print(i); end)
+print(s::String) = for c=s; print(c); end
+print(x...) = for i=x; print(i); end
 println(args...) = print(args..., '\n')
 
 function show(c::Char)
@@ -278,7 +278,7 @@ type TransformedString <: String
 end
 
 length(s::TransformedString) = length(s.string)
-length(s::TransformedString) = strlen(s.string)
+strlen(s::TransformedString) = strlen(s.string)
 
 function next(s::TransformedString, i::Index)
     c, j = next(s.string,i)
