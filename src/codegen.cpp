@@ -1334,6 +1334,7 @@ static void emit_function(jl_lambda_info_t *lam, Function *f)
     if (jl_is_expr(stmt) && ((jl_expr_t*)stmt)->head == line_sym) {
         lno = jl_unbox_int32(jl_exprarg(stmt, 0));
         if (((jl_expr_t*)stmt)->args->length > 1) {
+            assert(jl_is_symbol(jl_exprarg(stmt, 1)));
             filename = ((jl_sym_t*)jl_exprarg(stmt, 1))->name;
         }
     }

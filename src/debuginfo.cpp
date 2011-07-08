@@ -88,7 +88,7 @@ void getFunctionInfo(char **name, int *line, const char **filename, size_t point
                         *line = prev.Loc.getLine();
                         //printf("banananans\n");
               			DIScope please = DIScope(prev.Loc.getScope((*(*it).second.func).getContext()));
-                		printf("filename is : %s\n", please.getFilename().data());
+                                *filename = please.getFilename().data();
 
                         //prev.Loc.getScope(getGlobalContext())->dump();
                         //printf("exiting vector loop\n");
