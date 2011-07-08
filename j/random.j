@@ -3,48 +3,52 @@ libmt = dlopen("libMT")
 randomize() = ccall(dlsym(libmt, :randomize), Void, ())
 
 function mt_init()
-    randomize()
-    dsfmt_init_gen_rand(0)
+    #randomize()
+    srand(0)
 end
 
 ### DSFMT ###
 
-dsfmt_init_gen_rand(seed::Union(Int32,Uint32)) = ccall(dlsym(libmt, :dsfmt_gv_init_gen_rand), 
-                                                       Void, (Uint32, ), uint32(seed))
-
 dsfmt_get_min_array_size() = ccall(dlsym(libmt, :dsfmt_get_min_array_size), Int32, ())
 
-dsfmt_genrand_open_open() = ccall(dlsym(libmt, :dsfmt_gv_genrand_open_open), Float64, ())
+srand(seed::Union(Int32,Uint32)) = ccall(dlsym(libmt, :dsfmt_gv_init_gen_rand), 
+                                         Void, (Uint32, ), uint32(seed))
 
-dsfmt_genrand_uint32() = ccall(dlsym(libmt, :dsfmt_gv_genrand_uint32), Uint32, ())
+randf() = float32(rand())
+
+rand() = ccall(dlsym(libmt, :dsfmt_gv_genrand_open_open), Float64, ())
+
+randui32() = ccall(dlsym(libmt, :dsfmt_gv_genrand_uint32), Uint32, ())
+
+randn() = ccall(dlsym(libmt, :dsfmt_randn), Float64, ())
 
 function dsfmt_fill_array_open_open(A::Array{Float64})
     n = numel(A)
     if (n <= dsfmt_get_min_array_size())
         for i=1:numel(A)
-            A[i] = dsfmt_genrand_open_open()
+            A[i] = rand()
         end
     else
-        ccall(dlsym(libmt, :dsfmt_gv_fill_array_open_open), Void, (Ptr{Void}, Int32), A, n)
+        if isodd(n)
+            ccall(dlsym(libmt, :dsfmt_gv_fill_array_open_open), Void, (Ptr{Void}, Int32), A, n-1)
+            A[n] = rand()
+        else
+            ccall(dlsym(libmt, :dsfmt_gv_fill_array_open_open), Void, (Ptr{Void}, Int32), A, n)
+        end
     end
     return A
 end
 
-# rand() = dsfmt_genrand_open_open()
-# randf() = float32(rand())
-# randui32() = dsfmt_genrand_uint32()
-# srand(s) = dsfmt_init_gen_rand(s)
-
 # jl_randn_next = -42.0
 # function randn()
 #     global jl_randn_next
-
+#
 #     if (jl_randn_next != -42.0)
 #         s = jl_randn_next
 #         jl_randn_next = -42.0
 #         return s
 #     end
-
+#
 #     s = 1.0
 #     vre = 0.0
 #     vim = 0.0
@@ -55,7 +59,7 @@ end
 #         vim = 2.0*uim - 1.0
 #         s = vre*vre + vim*vim
 #     end
-
+#
 #     s = sqrt(-2.0*log(s)/s)
 #     jl_randn_next = s * vre
 #     return s * vim
@@ -63,13 +67,14 @@ end
 
 
 ### MT ###
+# This is the old code based on the original Mersenne Twister
 
-rand()     = ccall(dlsym(libmt, :rand_double),   Float64, ())
-randf()    = ccall(dlsym(libmt, :rand_float),    Float32, ())
-randui32() = ccall(dlsym(libmt, :genrand_int32), Uint32,  ())
-randn()    = ccall(dlsym(libmt, :randn),         Float64, ())
-srand(s::Union(Int32,Uint32)) = ccall(dlsym(libmt, :randomseed32), Void, (Uint32,), uint32(s))
-srand(s::Union(Int64,Uint64)) = ccall(dlsym(libmt, :randomseed64), Void, (Uint64,), uint64(s))
+#rand()     = ccall(dlsym(libmt, :rand_double),   Float64, ())
+#randf()    = ccall(dlsym(libmt, :rand_float),    Float32, ())
+#randui32() = ccall(dlsym(libmt, :genrand_int32), Uint32,  ())
+#randn()    = ccall(dlsym(libmt, :randn),         Float64, ())
+#srand(s::Union(Int32,Uint32)) = ccall(dlsym(libmt, :randomseed32), Void, (Uint32,), uint32(s))
+#srand(s::Union(Int64,Uint64)) = ccall(dlsym(libmt, :randomseed64), Void, (Uint64,), uint64(s))
 
 ## Random integers
 
@@ -107,13 +112,13 @@ randint(n::Int) = randint(one(n), n)
 
 ## Arrays of random numbers
 
-# function rand(dims::Dims)
-#     A = Array(Float64, dims)
-#     dsfmt_fill_array_open_open(A)
-#     return A
-# end
+function rand(dims::Dims)
+    A = Array(Float64, dims)
+    dsfmt_fill_array_open_open(A)
+    return A
+end
 
-# rand(dims::Size...) = rand(dims)
+rand(dims::Size...) = rand(dims)
 
 macro rand_matrix_builder(t, f)
     quote
@@ -131,7 +136,6 @@ macro rand_matrix_builder(t, f)
     end # quote
 end # macro
 
-@rand_matrix_builder Float64 rand
 @rand_matrix_builder Float64 randn
-@rand_matrix_builder Uint32 randui32
 @rand_matrix_builder Float32 randf
+@rand_matrix_builder Uint32 randui32

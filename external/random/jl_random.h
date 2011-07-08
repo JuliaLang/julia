@@ -15,5 +15,6 @@ void randomize();
 uint32_t genrand_int32();
 void randomseed32(uint32_t s);
 void randomseed64(uint64_t s);
+double dsfmt_randn();
 
 #endif
