@@ -292,7 +292,7 @@ static Value *boxed(Value *v)
                             builder.CreateBitCast(bitstype_pointer(newv),
                                                   PointerType::get(t,0)));
         // TODO: make sure this is rooted. I think it is.
-        return newv;
+        return builder.CreateBitCast(newv, jl_pvalue_llvmt);
     }
     assert("Don't know how to box this type" && false);
     return NULL;
@@ -441,7 +441,8 @@ static Value *julia_to_native(const Type *ty, jl_value_t *jt, Value *jv,
     else if (jl_is_cpointer_type(jt)) {
         jl_value_t *aty = expr_type(argex);
         if (jl_is_array_type(aty) &&
-            (jl_tparam0(aty) == jt || jt==(jl_value_t*)jl_bottom_type)) {
+            (jl_tparam0(aty) == jl_tparam0(jt) ||
+             jt == (jl_value_t*)jl_pointer_void_type)) {
             // array to pointer
             return builder.CreateBitCast(emit_arrayptr(jv), ty);
         }

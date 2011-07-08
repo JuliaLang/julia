@@ -277,9 +277,15 @@ function reinterpret{T,S}(::Type{T}, a::Array{S})
 end
 reinterpret(t,x) = reinterpret(t,[x])[1]
 
-# function copy_to{T}(dest::Array{T}, src::Array{T})
-#     ccall(dlsym(libc, :memcpy),
-#           Ptr{T}, (Ptr{T}, Ptr{T}, Ulong),
-#           dest, src, ulong(numel(src)*sizeof(T)))
-#     return dest
-# end
+function copy_to{T}(dest::Array{T}, src::Array{T})
+    if isa(T, BitsKind)
+        ccall(:memcpy,
+              Ptr{Void}, (Ptr{Void}, Ptr{Void}, Ulong),
+              dest, src, ulong(numel(src)*sizeof(T)))
+    else
+        for i=1:numel(src)
+            dest[i] = copy(src[i])
+        end
+    end
+    return dest
+end
