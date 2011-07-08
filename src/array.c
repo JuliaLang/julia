@@ -158,14 +158,13 @@ jl_array_t *jl_pchar_to_array(char *str, size_t len)
 
 jl_array_t *jl_cstr_to_array(char *str)
 {
-    size_t len = strlen(str);
-    return jl_pchar_to_array(str, len);
+    return jl_pchar_to_array(str, strlen(str));
 }
 
 jl_value_t *jl_array_to_string(jl_array_t *a)
 {
-    size_t len = a->length;
-    jl_struct_type_t* string_type = u8_isvalid(a->data, len) == 1 ? // ASCII
+    // TODO: check type of array?
+    jl_struct_type_t* string_type = u8_isvalid(a->data, a->length) == 1 ? // ASCII
         jl_ascii_string_type : jl_utf8_string_type;
     return jl_apply((jl_function_t*)string_type, (jl_value_t**)&a, 1);
 }
@@ -181,13 +180,19 @@ jl_value_t *jl_pchar_to_string(char *str, size_t len)
 
 jl_value_t *jl_cstr_to_string(char *str)
 {
-    size_t len = strlen(str);
-    return jl_pchar_to_string(str, len);
+    return jl_pchar_to_string(str, strlen(str));
 }
 
 jl_array_t *jl_alloc_cell_1d(size_t n)
 {
     return jl_alloc_array_1d(jl_array_any_type, n);
+}
+
+jl_array_t *jl_memcpy(jl_array_t *a)
+{
+    jl_array_t *b = jl_alloc_array_1d(jl_array_uint8_type, a->length);
+    memcpy(b->data, a->data, a->length);
+    return b;
 }
 
 // array primitives -----------------------------------------------------------
