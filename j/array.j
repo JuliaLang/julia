@@ -276,3 +276,10 @@ function reinterpret{T,S}(::Type{T}, a::Array{S})
     b
 end
 reinterpret(t,x) = reinterpret(t,[x])[1]
+
+# function copy_to{T}(dest::Array{T}, src::Array{T})
+#     ccall(dlsym(libc, :memcpy),
+#           Ptr{T}, (Ptr{T}, Ptr{T}, Ulong),
+#           dest, src, ulong(numel(src)*sizeof(T)))
+#     return dest
+# end
