@@ -19,6 +19,7 @@ load("rational.j")
 
 # load libc - julia already links against it so process handle works
 libc = ccall(:jl_load_dynamic_library, Ptr{Void}, (Ptr{Uint8},), C_NULL)
+load("libc.j")
 
 # core data structures (used by type inference)
 load("tensor.j")
@@ -70,7 +71,6 @@ load("multi.j")
 load("darray.j")
 
 # misc
-load("libc.j")
 load("util.j")
 load("regex.j")
 

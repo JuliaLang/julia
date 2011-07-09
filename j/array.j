@@ -175,14 +175,26 @@ function hcat{T}(A::Array{T,2}...)
     ncols = sum(a->size(a, 2), A)
     nrows = size(A[1], 1)
     B = similar(A[1], nrows, ncols)
-    pos = 1
-    for k=1:nargs
-        Ak = A[k]
-        for i=1:numel(Ak)
-            B[pos] = Ak[i]
-            pos += 1
-        end
-    end
+
+   if isa(T, BitsKind) && numel(B) > 50000
+       pos = ulong(0)
+       for k = 1:nargs
+           nbytes_Ak = ulong(numel(A[k])*sizeof(T))
+           ccall(:memcpy, Void, (Ptr{Void}, Ptr{Void}, Ulong), 
+                 pointer(B) + pos, A[k], nbytes_Ak)
+           pos += nbytes_Ak
+       end
+   else
+       pos = 1
+       for k=1:nargs
+           Ak = A[k]
+           for i=1:numel(Ak)
+               B[pos] = Ak[i]
+               pos += 1
+           end
+       end
+   end
+
     return B
 end
 
