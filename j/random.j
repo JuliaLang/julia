@@ -1,12 +1,11 @@
 libmt = dlopen("libMT")
 
 function mt_init()
-    srand(uint32(clock()))
-#    try
-#        srand("/dev/urandom", 4)
-#    catch
-#        srand(uint32(clock()))
-#    end
+    try
+        srand("/dev/urandom", 4)
+    catch
+        srand(uint32(clock()))
+    end
 end
 
 dsfmt_get_min_array_size() = ccall(dlsym(libmt, :dsfmt_get_min_array_size), Int32, ())
@@ -17,7 +16,7 @@ srand(seed::Uint32) = (ccall(dlsym(libmt, :dsfmt_gv_init_gen_rand), Void, (Uint3
                        dsfmt_randn_reset())
 
 srand(seed::Vector{Uint32}) = (ccall(dlsym(libmt, :dsfmt_gv_init_by_array),
-                                     Void, (Vector{Uint32}, Int32), seed, length(seed));
+                                     Void, (Ptr{Uint32}, Int32), seed, length(seed));
                                dsfmt_randn_reset())
 
 randf() = float32(rand())
