@@ -23,18 +23,18 @@ FFTW_ESTIMATE        = uint32(1 << 6)
 
 # Execute
 
-jl_fftw_execute(precision::Union(Float64, Complex128), plan) =
+jl_fftw_execute(precision::Union(Type{Float64}, Type{Complex128}), plan) =
     ccall(dlsym(libfftw, :fftw_execute), Void, (Ptr{Void},), plan)
 
-jl_fftw_execute(precision::Union(Float32, Complex64), plan) =
+jl_fftw_execute(precision::Union(Type{Float32}, Type{Complex64}), plan) =
     ccall(dlsym(libfftwf, :fftwf_execute), Void, (Ptr{Void},), plan)
 
 # Destroy plan
 
-jl_fftw_destroy_plan(precision::Union(Float64, Complex128), plan) =
+jl_fftw_destroy_plan(precision::Union(Type{Float64}, Type{Complex128}), plan) =
     ccall(dlsym(libfftw, :fftw_destroy_plan), Void, (Ptr{Void},), plan)
 
-jl_fftw_destroy_plan(precision::Union(Float32, Complex64), plan) =
+jl_fftw_destroy_plan(precision::Union(Type{Float32}, Type{Complex64}), plan) =
     ccall(dlsym(libfftwf, :fftwf_destroy_plan), Void, (Ptr{Void},), plan)
 
 # Create 1d plan
@@ -101,9 +101,8 @@ macro fftw_fftn(fname, array_type, in_type, plan_name, direction)
         function ($fname)(X::($array_type){$in_type})
             Y = similar(X, $in_type)
             plan = ($plan_name)(X, Y, $direction)
-            precision = convert($in_type, 0)
-            jl_fftw_execute(precision, plan)
-            jl_fftw_destroy_plan(precision, plan)
+            jl_fftw_execute($in_type, plan)
+            jl_fftw_destroy_plan($in_type, plan)
             return Y
         end
 
