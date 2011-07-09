@@ -37,8 +37,8 @@ isempty(r::Range) = (r.step > 0 ? r.stop < r.start : r.stop > r.start)
 isempty(r::Range1) = (r.stop < r.start)
 
 start{T<:Int}(r::Range{T}) = r.start
-done{T<:Int}(r::Range{T}, i) = (r.step < 0 ? i < r.stop : i > r.stop)
-next{T<:Int}(r::Range{T}, i) = (i, i+r.step)
+done{T<:Int}(r::Range{T}, i::T) = (r.step < 0 ? i < r.stop : i > r.stop)
+next{T<:Int}(r::Range{T}, i::T) = (i, i+r.step)
 
 start(r::Range1) = r.start
 done(r::Range1, i) = (i > r.stop)
@@ -46,10 +46,10 @@ next(r::Range1, i) = (i, i+1)
 
 # floating point ranges need to keep an integer counter
 start(r::Range) = (1, r.start)
-done{T}(r::Range{T}, st) =
-    (r.step < 0 ? st[2]::T < r.stop : st[2]::T > r.stop)
-next{T}(r::Range{T}, st) =
-    (st[2]::T, (st[1]::Int+1, r.start + st[1]::Int*r.step))
+done{T}(r::Range{T}, st::(Int32,T)) =
+    (r.step < 0 ? tupleref(st,2) < r.stop : tupleref(st,2) > r.stop)
+next{T}(r::Range{T}, st::(Int32,T)) =
+    (tupleref(st,2), (tupleref(st,1)+1, r.start + tupleref(st,1)*r.step))
 
 colon(start::Real, stop::Real, step::Real) = Range(start, step, stop)
 colon(start::Real, stop::Real) = Range1(start, stop)
