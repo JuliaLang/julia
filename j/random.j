@@ -4,7 +4,7 @@ function mt_init()
     try
         srand("/dev/urandom", 4)
     catch
-        srand(uint32(clock()))
+        srand(uint64(clock()*2.0^32))
     end
 end
 
@@ -15,9 +15,15 @@ dsfmt_randn_reset() = ccall(dlsym(libmt, :dsfmt_randn_reset), Void, ())
 srand(seed::Uint32) = (ccall(dlsym(libmt, :dsfmt_gv_init_gen_rand), Void, (Uint32, ), seed);
                        dsfmt_randn_reset())
 
-srand(seed::Vector{Uint32}) = (ccall(dlsym(libmt, :dsfmt_gv_init_by_array),
-                                     Void, (Ptr{Uint32}, Int32), seed, length(seed));
-                               dsfmt_randn_reset())
+srand(seed::Uint64) = (srand([uint32(seed),uint32(seed>>32)]);
+                       dsfmt_randn_reset())
+
+function srand(seed::DenseVector{Uint32})
+    ccall(dlsym(libmt, :dsfmt_gv_init_by_array),
+          Void, (Ptr{Uint32}, Int32),
+          seed, length(seed))
+    dsfmt_randn_reset()
+end
 
 randf() = float32(rand())
 
@@ -51,6 +57,7 @@ function srand(fname::String, n::Int32)
     a = Array(Uint32, n)
     read(fid, a)
     srand(a)
+    close(fid)
 end
 
 ## Random integers
