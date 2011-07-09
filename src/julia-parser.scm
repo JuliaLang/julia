@@ -864,7 +864,7 @@
 	  #t
 	  (begin (if (eqv? c #\\)
 		     (let ((nextch (read-char buf)))
-		       (if (or (eqv? nextch #\") (eqv? nextch #\\))
+		       (if (eqv? nextch #\")
 			   (write-char nextch b)
 			   (begin (write-char #\\ b)
 				  (write-char nextch b))))
@@ -885,7 +885,7 @@
 	  #t
 	  (begin (if (eqv? c #\\)
 		     (let ((nextch (read-char p)))
-		       (if (or (eqv? nextch #\") (eqv? nextch #\\))
+		       (if (eqv? nextch #\")
 			   (set! hasquotes #t))
 		       (begin (write-char #\\ b)
 			      (write-char (not-eof-3 nextch) b)))
