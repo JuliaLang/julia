@@ -127,7 +127,7 @@ clean-fdlibm:
 	rm -f $(FDLIBM_OBJ_SOURCE) $(FDLIBM_OBJ_TARGET)
 distclean-fdlibm: clean-fdlibm
 
-## MT ##
+## DSFMT ##
 
 DSFMT_OBJ_TARGET = $(EXTROOTLIB)/libMT.$(SHLIB_EXT)
 DSFMT_OBJ_SOURCE = random/libMT.$(SHLIB_EXT)
@@ -137,13 +137,12 @@ install-dsfmt: $(DSFMT_OBJ_TARGET)
 
 random/dsfmt-$(DSFMT_VER).tar.gz:
 	cd random && \
-	curl -o dsfmt-$(DSFMT_VER).tar.gz http://www.math.sci.hiroshima-u.ac.jp/~m-mat/MT/SFMT/dSFMT-src-$(DSFMT_VER).tar.gz -O http://www.math.sci.hiroshima-u.ac.jp/~m-mat/MT/mt19937-64.tgz 
+	curl -o dsfmt-$(DSFMT_VER).tar.gz http://www.math.sci.hiroshima-u.ac.jp/~m-mat/MT/SFMT/dSFMT-src-$(DSFMT_VER).tar.gz 
 random/jl_random.c: random/dsfmt-$(DSFMT_VER).tar.gz
 	cd random && \
 	mkdir -p dsfmt-$(DSFMT_VER) && \
 	tar -C dsfmt-$(DSFMT_VER) --strip-components 1 -xf dsfmt-$(DSFMT_VER).tar.gz && \
-	cp dSFMT.h dsfmt-$(DSFMT_VER) && \
-	tar zxf mt19937-64.tgz
+	cp dSFMT.h dsfmt-$(DSFMT_VER)
 	touch $@
 $(DSFMT_OBJ_SOURCE): random/jl_random.c
 	cd random && \
@@ -156,7 +155,7 @@ $(DSFMT_OBJ_TARGET): $(DSFMT_OBJ_SOURCE)
 clean-dsfmt:
 	rm -f random/libMT.$(SHLIB_EXT)
 distclean-dsfmt: clean-dsfmt
-	cd random && rm -rf *.tgz *.tar.gz dsfmt-$(DSFMT_VER) mt19937-64
+	cd random && rm -rf *.tar.gz dsfmt-$(DSFMT_VER)
 
 ## OpenBLAS ##
 
