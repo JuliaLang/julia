@@ -553,11 +553,7 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
         if (largty->isPointerTy() &&
             (largty == jl_pvalue_llvmt ||
              !jl_is_bits_type(expr_type(args[i])))) {
-            Value *gcroot = builder.CreateGEP(ctx->argTemp,
-                                              ConstantInt::get(T_int32,
-                                                               ctx->argDepth));
-            builder.CreateStore(boxed(arg), gcroot);
-            ctx->argDepth++;
+            make_gcroot(boxed(arg), ctx);
         }
 #endif
         argvals.push_back(julia_to_native(largty,jargty,arg,args[i],i-3,ctx));
