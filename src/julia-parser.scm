@@ -549,7 +549,7 @@
 			    (not (ts:space? s)))
 		       ;; custom prefixed string literals, x"s" => @x_str "s"
 		       (let ((str (begin (take-token s)
-					 (parse-string-literal s #t)))
+					 (parse-string-literal s)))
 			     (macname (symbol (string ex '_str))))
 			 (loop `(macrocall ,macname ,(car str))))
 		       ex))
@@ -856,26 +856,10 @@
       (error "incomplete: invalid string syntax")
       c))
 
-(define (unescape-quotes buf)
-  (let ((b (open-output-string)))
-    (io.seek buf 0)
-    (let loop ((c (read-char buf)))
-      (if (eof-object? c)
-	  #t
-	  (begin (if (eqv? c #\\)
-		     (let ((nextch (read-char buf)))
-		       (if (or (eqv? nextch #\") (eqv? nextch #\\))
-			   (write-char nextch b)
-			   (begin (write-char #\\ b)
-				  (write-char nextch b))))
-		     (write-char c b))
-		 (loop (read-char buf)))))
-    (io.tostring! b)))
-
 ; reads a raw string literal with no processing.
 ; quote can be escaped with \, but the \ is left in place.
 ; returns ("str" . b), b is a boolean telling whether interpolation is used
-(define (parse-string-literal s unescape-q)
+(define (parse-string-literal s)
   (let ((b (open-output-string))
 	(p (ts:port s))
 	(interpolate #f)
@@ -894,9 +878,7 @@
 			   (set! interpolate #t))
 		       (write-char (not-eof-3 c) b)))
 		 (loop (read-char p)))))
-    (if (and hasquotes (or unescape-q interpolate))
-	(cons (unescape-quotes b) interpolate)
-	(cons (io.tostring! b) interpolate))))
+    (cons (io.tostring! b) interpolate)))
 
 (define (not-eof-1 c)
   (if (eof-object? c)
@@ -1035,7 +1017,7 @@
 	  ;; string literal
 	  ((eqv? t #\")
 	   (take-token s)
-	   (let ((ps (parse-string-literal s #f)))
+	   (let ((ps (parse-string-literal s)))
 	     (if (cdr ps)
 		 `(macrocall str ,(car ps))
 		 (unescape-string (car ps)))))
