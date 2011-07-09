@@ -481,7 +481,7 @@ static _Unwind_Reason_Code tracer(void *ctx, void *arg)
     return _URC_NO_REASON;
 }
 
-static jl_value_t *build_backtrace()
+static jl_value_t *build_backtrace2()
 {
     jl_array_t *a;
     a = jl_alloc_cell_1d(0);

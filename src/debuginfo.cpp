@@ -43,7 +43,7 @@ void getFunctionInfo(const char **name, int *line, const char **filename, size_t
     map<size_t, FuncInfo> info = jl_jit_events->getMap();
     *name = NULL;
     *line = -1;
-    *filename = "unknown";
+    *filename = "no file";
     for (map<size_t, FuncInfo>::iterator it= info.begin(); it!= info.end(); it++) {
         if ((*it).first <= pointer) {
             if ((size_t)(*it).first + (*it).second.lengthAdr >= pointer) {

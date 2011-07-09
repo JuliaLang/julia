@@ -1379,7 +1379,7 @@ static void emit_function(jl_lambda_info_t *lam, Function *f)
     // look for initial (line num filename) node
     jl_array_t *stmts = jl_lam_body(ast)->args;
     jl_value_t *stmt = jl_cellref(stmts,0);
-    std::string filename = "unknown";
+    std::string filename = "no file";
     int lno = -1;
     if (jl_is_expr(stmt) && ((jl_expr_t*)stmt)->head == line_sym) {
         lno = jl_unbox_int32(jl_exprarg(stmt, 0));
@@ -1403,14 +1403,7 @@ static void emit_function(jl_lambda_info_t *lam, Function *f)
                                  0, true, f);
     
     // set initial line number
-    if (lno != -1) {
-        builder.SetCurrentDebugLocation(DebugLoc::get(lno, 1, (MDNode*)SP,
-                                                      NULL));
-    }
-    else {
-        // unknown location
-        builder.SetCurrentDebugLocation(DebugLoc::get(0, 0, 0, NULL));        
-    }
+    builder.SetCurrentDebugLocation(DebugLoc::get(lno, 0, (MDNode*)SP, NULL));
     
     /*
     // check for stack overflow (the slower way)

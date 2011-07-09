@@ -129,12 +129,12 @@ function show(bt::BackTrace)
     while i < length(t)
         println()
         lno = t[i+2]
-        if lno == -1
-            line = "unknown"
+        if lno < 1
+            line = ""
         else
-            line = string(lno)
+            line = ":$lno"
         end
-        print("in $(t[i]), $(t[i+1]):$line")
+        print("in $(t[i]), $(t[i+1])$line")
         i += 3
     end
 end
