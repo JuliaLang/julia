@@ -1067,7 +1067,7 @@ JL_CALLABLE(jl_apply_generic)
             // of the function to be compiled without inference and run.
             jl_lambda_info_t *li = mfunc->linfo;
             if (li->unspecialized == NULL) {
-                li->unspecialized = jl_instantiate_method(mfunc, jl_null);
+                li->unspecialized = jl_instantiate_method(mfunc, li->sparams);
             }
             mfunc = li->unspecialized;
         }
@@ -1141,7 +1141,7 @@ jl_value_t *jl_gf_invoke(jl_function_t *gf, jl_tuple_t *types,
             // of the function to be compiled without inference and run.
             jl_lambda_info_t *li = mfunc->linfo;
             if (li->unspecialized == NULL) {
-                li->unspecialized = jl_instantiate_method(mfunc, jl_null);
+                li->unspecialized = jl_instantiate_method(mfunc, li->sparams);
             }
             mfunc = li->unspecialized;
         }

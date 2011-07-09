@@ -1,9 +1,11 @@
 /*
   random numbers
 */
+
 #include "jl_random.h"
 
 #include "mt19937ar.c"
+#include "dsfmt-2.1/dSFMT.c"
 
 double rand_double()
 {
@@ -69,4 +71,25 @@ void randomize()
     a = (((uint64_t)now.tv_sec)<<32) + (uint64_t)now.tv_usec;
 
     randomseed64(a);
+}
+
+double dsfmt_randn()
+{
+    double s, vre, vim, ure, uim;
+
+    if (randn_next != -42) {
+        s = randn_next;
+        randn_next = -42;
+        return s;
+    }
+    do {
+        ure = dsfmt_gv_genrand_close1_open2();
+        uim = dsfmt_gv_genrand_close1_open2();
+        vre = 2*ure - 3;
+        vim = 2*uim - 3;
+        s = vre*vre + vim*vim;
+    } while (s >= 1);
+    s = sqrt(-2*log(s)/s);
+    randn_next = s * vre;
+    return s * vim;
 }

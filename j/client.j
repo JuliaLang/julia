@@ -108,17 +108,25 @@ L"               _
 
 "
 
+begin
+local tx = "\033[37m" # text
+local jl = "\033[37m" # julia
+local d1 = "\033[34m" # first dot
+local d2 = "\033[31m" # second dot
+local d3 = "\033[32m" # third dot
+local d4 = "\033[35m" # fourth dot
 jl_banner_color =
-"\033[1m               \033[32m_\033[37m
-   \033[34m_\033[37m       _ \033[31m_\033[32m(_)\033[35m_\033[37m     |
-  \033[34m(_)\033[37m     | \033[31m(_) \033[35m(_)\033[37m    |  A fresh approach to technical computing.
-   _ _   _| |_  __ _   |  pre-release version
-  | | | | | | |/ _` |  |
-  | | |_| | | | (_| |  |
- _/ |\\__'_|_|_|\\__'_|  |
-|__/                   |\033[0m
+"\033[1m               $(d3)_
+   $(d1)_       $(jl)_$(tx) $(d2)_$(d3)(_)$(d4)_$(tx)     |
+  $(d1)(_)$(jl)     | $(d2)(_)$(tx) $(d4)(_)$(tx)    |  A fresh approach to technical computing.
+   $(jl)_ _   _| |_  __ _$(tx)   |  pre-release version
+  $(jl)| | | | | | |/ _` |$(tx)  |
+  $(jl)| | |_| | | | (_| |$(tx)  |
+ $(jl)_/ |\\\\__'_|_|_|\\\\__'_|$(tx)  |
+$(jl)|__/$(tx)                   |
 
-"
+\033[0m"
+end
 
 function _start()
     try

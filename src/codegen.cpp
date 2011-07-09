@@ -1896,7 +1896,6 @@ static void init_julia_llvm_env(Module *m)
     FPM->add(new TargetData(*jl_ExecutionEngine->getTargetData()));
     
     // list of passes from vmkit
-    /*
     addPass(FPM, createCFGSimplificationPass()); // Clean up disgusting code
     addPass(FPM, createPromoteMemoryToRegisterPass());// Kill useless allocas
     
@@ -1930,8 +1929,8 @@ static void init_julia_llvm_env(Module *m)
     addPass(FPM, createDeadStoreEliminationPass());  // Delete dead stores
     addPass(FPM, createAggressiveDCEPass());         // Delete dead instructions
     addPass(FPM, createCFGSimplificationPass());     // Merge & remove BBs
-    */
 
+    /*
     FPM->add(createCFGSimplificationPass());
     FPM->add(createPromoteMemoryToRegisterPass());
     FPM->add(createInstructionCombiningPass());
@@ -1944,6 +1943,7 @@ static void init_julia_llvm_env(Module *m)
     FPM->add(createSCCPPass());
     FPM->add(createDeadStoreEliminationPass());
     //llvm::createStandardFunctionPasses(FPM, 2);
+    */
 
     FPM->doInitialization();
 }

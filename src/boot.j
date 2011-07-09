@@ -120,8 +120,14 @@ isequal(w, v::WeakRef) = isequal(w, v.value)
 
 abstract String
 
-type ASCIIString <: String; data::Array{Uint8,1}; end
-type UTF8String  <: String; data::Array{Uint8,1}; end
+type ASCIIString <: String
+    data::Array{Uint8,1}
+    # ASCIIString(a::Array{Uint8,1}) = new(memcpy(a))
+end
+type UTF8String <: String
+    data::Array{Uint8,1}
+    # UTF8String(a::Array{Uint8,1}) = new(memcpy(a))
+end
 
 typealias ByteString Union(ASCIIString,UTF8String)
 

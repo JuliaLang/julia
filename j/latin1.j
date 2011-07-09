@@ -14,8 +14,7 @@ strchr(s::Latin1String, c::Char) =
     c <= 0xff ? memchr(s.data, c) : error("char not found")
 nextind(s::Latin1String, i::Int) = i
 prevind(s::Latin1String, i::Int) = i-1
-strcat(s::Latin1String, t::Latin1String, x::Latin1String...) =
-    Latin1String(strdatacat(s, t, x...))
+strcat(a::Latin1String, b::Latin1String, c::Latin1String...) = Latin1String(memcat(a,b,c...))
 
 ## outputing Latin-1 strings ##
 
