@@ -327,9 +327,9 @@ function print_escaped(s::String, q::Bool, xmax::Char)
     while !done(s,i)
         c, j = next(s,i)
         c == '\0'     ? print(escape_nul(s,j)) :
-        c == '\\'     ? print("\\\\") :
+        c == '\\'     ? print(L"\\") :
         c == '\e'     ? print(L"\e") :
-   q && c == '"'      ? print("\\\"") :
+   q && c == '"'      ? print(L"\"") :
         c == '$'      ? print(L"\$") :
         iswprint(c)   ? print(c) :
         7 <= c <= 13  ? print('\\', "abtnvfr"[c-6]) :
