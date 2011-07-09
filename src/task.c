@@ -430,41 +430,67 @@ static void init_task(jl_task_t *t)
 #endif
 
 void getFunctionInfo(char **name, int *line, const char **filename, size_t pointer);
-/*
-//stacktrace using libunwind
-void show_backtrace()
+
+// stacktrace using libunwind
+static jl_value_t *build_backtrace()
 {
     unw_cursor_t cursor; unw_context_t uc;
-    unw_word_t ip, sp;
+    unw_word_t ip;
+    
+    jl_array_t *a;
+    a = jl_alloc_cell_1d(0);
+    JL_GC_PUSH(&a);
+    int j = 0;
     
     unw_getcontext(&uc);
     unw_init_local(&cursor, &uc);
     while (unw_step(&cursor)) { 
         unw_get_reg(&cursor, UNW_REG_IP, &ip);
-        unw_get_reg(&cursor, UNW_REG_SP, &sp);
-        printf("rbp= %lx  rip= %lx\n", sp, ip);
         char *func_name;
         int line_num;
         const char *file_name;
         getFunctionInfo(&func_name, &line_num, &file_name, ip);
-        if(func_name != NULL) {
-            if (line_num == -1) {
-                printf("%s in %s:line unknown\n", file_name, func_name);
-            }
-            else {
-                printf("%s in %s:%d\n", func_name, file_name, line_num);
-            }
-        }  
+        if (func_name != NULL) {
+            jl_array_grow_end(a, 3);
+            jl_arrayset(a, j, (jl_value_t*)jl_symbol(func_name)); j++;
+            jl_arrayset(a, j, (jl_value_t*)jl_symbol(file_name)); j++;
+            jl_arrayset(a, j, jl_box_int32(line_num)); j++;
+        }
     }
+    JL_GC_POP();
+    return (jl_value_t*)a;
 }
-*/
+
+#if 0
+static _Unwind_Reason_Code tracer(void *ctx, void *arg)
+{
+    void *ip = (void*)_Unwind_GetIP(ctx);
+
+    char *func_name;
+    int line_num;
+    const char *file_name;
+    getFunctionInfo(&func_name, &line_num, &file_name, (size_t)ip);
+    jl_array_t *a = (jl_array_t*)arg;
+    if (func_name != NULL) {
+        int j = a->length;
+        jl_array_grow_end(a, 3);
+        jl_arrayset(a, j, (jl_value_t*)jl_symbol(func_name)); j++;
+        jl_arrayset(a, j, (jl_value_t*)jl_symbol(file_name)); j++;
+        jl_arrayset(a, j, jl_box_int32(line_num));
+    }
+    return _URC_NO_REASON;
+}
 
 static jl_value_t *build_backtrace()
 {
-    jl_array_t *a=NULL;
+    jl_array_t *a;
+    a = jl_alloc_cell_1d(0);
+    JL_GC_PUSH(&a);
+    _Unwind_Backtrace(tracer, a);
+#if 0
     void *buf[100];
     void **tbuf = &buf[0];
-    int n = backtrace(buf, 100);
+    int n = _Unwind_Backtrace(buf, 100);
     if (n == 100) {
         int sz = 100;
         void **mbuf=NULL;
@@ -483,19 +509,21 @@ static jl_value_t *build_backtrace()
         char *func_name;
         int line_num;
         const char *file_name;
-        getFunctionInfo(&func_name, &line_num, &file_name, buf[i]);
+        getFunctionInfo(&func_name, &line_num, &file_name, (size_t)buf[i]);
         if (func_name != NULL) {
             jl_array_grow_end(a, 3);
-            jl_arrayset(a, j, jl_symbol(func_name)); j++;
-            jl_arrayset(a, j, jl_symbol(file_name)); j++;
+            jl_arrayset(a, j, (jl_value_t*)jl_symbol(func_name)); j++;
+            jl_arrayset(a, j, (jl_value_t*)jl_symbol(file_name)); j++;
             jl_arrayset(a, j, jl_box_int32(line_num)); j++;
         }
     }
     if (tbuf != &buf[0])
         free(tbuf);
+#endif
     JL_GC_POP();
     return (jl_value_t*)a;
 }
+#endif
 
 #if 0
 // Stacktrace manually
@@ -560,7 +588,7 @@ void jl_raise(jl_value_t *e)
         tracedata = build_backtrace();
         JL_GC_PUSH(&tracedata);
         bt = (jl_value_t*)alloc_3w();
-        bt->type = jl_backtrace_type;
+        bt->type = (jl_type_t*)jl_backtrace_type;
         ((jl_value_t**)bt)[1] = jl_exception_in_transit;
         ((jl_value_t**)bt)[2] = tracedata;
         jl_exception_in_transit = bt;

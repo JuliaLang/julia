@@ -1343,8 +1343,9 @@ static void emit_function(jl_lambda_info_t *lam, Function *f)
     llvm::DIArray EltTypeArray = dbuilder->getOrCreateArray(NULL,0);
     DIFile fil = dbuilder->createFile(filename, ".");
     DISubprogram SP =
-        dbuilder->createFunction((DIDescriptor)dbuilder->getCU(), f->getName(),
-                                 f->getName(),
+        dbuilder->createFunction((DIDescriptor)dbuilder->getCU(),
+                                 lam->name->name,
+                                 lam->name->name,
                                  fil,
                                  0,
                                  dbuilder->createSubroutineType(fil,EltTypeArray),

@@ -9,6 +9,7 @@ MONGOOSE = $(JULIAHOME)/external/mongoose-3.0
 READLINE = -lncurses -lreadline
 
 FLAGS = -falign-functions -Wall -Wno-strict-aliasing \
+	-fno-omit-frame-pointer \
 	-I$(JULIAHOME)/src -I$(LLTDIR) -I$(EXTROOT)/include $(CFLAGS)
 DEBUGFLAGS = -ggdb3 -DDEBUG $(FLAGS)
 SHIPFLAGS = -O3 -DNDEBUG $(FLAGS)
