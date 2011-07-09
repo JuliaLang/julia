@@ -15,8 +15,7 @@ dsfmt_randn_reset() = ccall(dlsym(libmt, :dsfmt_randn_reset), Void, ())
 srand(seed::Uint32) = (ccall(dlsym(libmt, :dsfmt_gv_init_gen_rand), Void, (Uint32, ), seed);
                        dsfmt_randn_reset())
 
-srand(seed::Uint64) = (srand([uint32(seed),uint32(seed>>32)]);
-                       dsfmt_randn_reset())
+srand(seed::Uint64) = srand([uint32(seed),uint32(seed>>32)])
 
 function srand(seed::DenseVector{Uint32})
     ccall(dlsym(libmt, :dsfmt_gv_init_by_array),
