@@ -911,7 +911,7 @@ end
 addprocs_sge(n) = add_workers(PGRP, start_sge_workers(n))
 SGE(n) = addprocs_sge(n)
 
-load("vcloud.j")
+#load("vcloud.j")
 
 ## global objects and collective operations ##
 
