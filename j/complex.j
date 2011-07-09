@@ -143,7 +143,7 @@ isequal(z::ComplexNum, w::ComplexNum) =
 hash(z::ComplexNum) = bitmix(hash(real(z)),hash(imag(z)))
 
 conj(z::ComplexNum) = complex(real(z),-imag(z))
-norm(z::ComplexNum) = square(real(z)) + square(imag(z))
+norm(z::ComplexNum) = abs(z)
 abs(z::ComplexNum)  = hypot(real(z), imag(z))
 inv(z::ComplexNum)  = conj(z)/norm(z)
 

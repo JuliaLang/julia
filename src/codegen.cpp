@@ -556,6 +556,15 @@ static size_t max_arg_depth(jl_value_t *expr)
     return 0;
 }
 
+static void make_gcroot(Value *v, jl_codectx_t *ctx)
+{
+    Value *froot = builder.CreateGEP(ctx->argTemp,
+                                     ConstantInt::get(T_int32,
+                                                      ctx->argDepth));
+    builder.CreateStore(v, froot);
+    ctx->argDepth++;
+}
+
 extern "C" jl_function_t *jl_get_specialization(jl_function_t *f, jl_tuple_t *types);
 
 static jl_value_t *expr_type(jl_value_t *e)
@@ -723,6 +732,29 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
             JL_GC_POP();
             return literal_pointer_val((jl_value_t*)jl_null);
         }
+        int last_depth = ctx->argDepth;
+        Value *tup =
+            builder.CreateBitCast
+            (builder.CreateCall(jlallocobj_func,
+                                ConstantInt::get(T_size,
+                                                 sizeof(void*)*(nargs+2))),
+             jl_pvalue_llvmt);
+        make_gcroot(tup, ctx);
+        builder.CreateStore(literal_pointer_val((jl_value_t*)jl_tuple_type),
+                            emit_nthptr_addr(tup, (size_t)0));
+        builder.CreateStore(literal_pointer_val((jl_value_t*)nargs),
+                            emit_nthptr_addr(tup, (size_t)1));
+        for(size_t i=0; i < nargs; i++) {
+            builder.CreateStore(V_null,
+                                emit_nthptr_addr(tup, i+2));
+        }
+        for(size_t i=0; i < nargs; i++) {
+            builder.CreateStore(boxed(emit_expr(args[i+1], ctx, true)),
+                                emit_nthptr_addr(tup, i+2));
+        }
+        ctx->argDepth = last_depth;
+        JL_GC_POP();
+        return tup;
     }
     else if (f->fptr == &jl_f_throw && nargs==1) {
         Value *arg1 = boxed(emit_expr(args[1], ctx, true));
@@ -926,11 +958,7 @@ static Value *emit_call(jl_value_t **args, size_t arglen, jl_codectx_t *ctx)
         Value *theFunc = emit_expr(args[0], ctx, true);
 #ifdef JL_GC_MARKSWEEP
         if (!headIsGlobal) {
-            Value *froot = builder.CreateGEP(ctx->argTemp,
-                                             ConstantInt::get(T_int32,
-                                                              ctx->argDepth));
-            builder.CreateStore(boxed(theFunc), froot);
-            ctx->argDepth++;
+            make_gcroot(boxed(theFunc), ctx);
         }
 #endif
         if (!jl_is_func_type(hdtype) &&
@@ -1135,16 +1163,11 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool value)
         Value *name = literal_pointer_val(mn);
         Value *bp = var_binding_pointer((jl_sym_t*)mn, ctx);
         Value *a1 = emit_expr(args[1], ctx, true);
-        Value *dest=builder.CreateGEP(ctx->argTemp,
-                                      ConstantInt::get(T_int32,ctx->argDepth));
-        builder.CreateStore(boxed(a1), dest);
-        ctx->argDepth++;
+        make_gcroot(boxed(a1), ctx);
         Value *a2 = emit_expr(args[2], ctx, true);
-        dest=builder.CreateGEP(ctx->argTemp,
-                               ConstantInt::get(T_int32,ctx->argDepth));
-        builder.CreateStore(boxed(a2), dest);
+        make_gcroot(boxed(a2), ctx);
         Value *m = builder.CreateCall4(jlmethod_func, name, bp, a1, a2);
-        ctx->argDepth--;
+        ctx->argDepth-=2;
         return m;
     }
     else if (ex->head == isbound_sym) {
@@ -1208,9 +1231,36 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool value)
         */
     }
     else if (ex->head == new_sym) {
-        // TODO: inline
-        Value *ty = emit_expr(args[0], ctx, true);
-        return builder.CreateCall(jlnew_func, ty);
+        jl_value_t *ty = expr_type(args[0]);
+        if (jl_is_tag_type(ty) &&
+            ((jl_tag_type_t*)ty)->name == jl_type_type->name &&
+            jl_is_struct_type(jl_tparam0(ty)) &&
+            jl_is_leaf_type(jl_tparam0(ty))) {
+            ty = jl_tparam0(ty);
+            size_t nf = ((jl_struct_type_t*)ty)->names->length;
+            if (nf > 0) {
+                Value *strct =
+                    builder.CreateBitCast
+                    (builder.CreateCall(jlallocobj_func,
+                                        ConstantInt::get(T_size,
+                                                         sizeof(void*)*(nf+1))),
+                     jl_pvalue_llvmt);
+                builder.CreateStore(literal_pointer_val((jl_value_t*)ty),
+                                    emit_nthptr_addr(strct, (size_t)0));
+                for(size_t i=0; i < nf; i++) {
+                    builder.CreateStore(V_null,
+                                        emit_nthptr_addr(strct, i+1));
+                }
+                return strct;
+            }
+            else {
+                // 0 fields, singleton
+                return literal_pointer_val
+                    (jl_new_struct_uninit((jl_struct_type_t*)ty));
+            }
+        }
+        Value *typ = emit_expr(args[0], ctx, true);
+        return builder.CreateCall(jlnew_func, typ);
     }
     else if (ex->head == exc_sym) {
         return builder.CreateLoad(jlexc_var, true);
