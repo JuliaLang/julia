@@ -1017,7 +1017,10 @@
 	   (let ((ps (parse-string-literal s)))
 	     (if (cdr ps)
 		 `(macrocall str ,(car ps))
-		 (unescape-string (car ps)))))
+		 (let ((str (unescape-string (car ps))))
+		   (if (not (string.isutf8 str))
+		       (error "invalid utf-8 sequence"))
+		   str))))
 
 	  ;; macro call
 	  ((eqv? t #\@)

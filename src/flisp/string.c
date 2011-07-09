@@ -386,6 +386,14 @@ value_t fl_stringtonumber(value_t *args, uint32_t nargs)
     return n;
 }
 
+value_t fl_string_isutf8(value_t *args, u_int32_t nargs)
+{
+    argcount("string.isutf8", nargs, 1);
+    char *s = tostring(args[0], "string.isutf8");
+    size_t len = cv_len((cvalue_t*)ptr(args[0]));
+    return u8_isvalid(s, len) ? FL_T : FL_F;
+}
+
 static builtinspec_t stringfunc_info[] = {
     { "string", fl_string },
     { "string?", fl_stringp },
@@ -400,6 +408,7 @@ static builtinspec_t stringfunc_info[] = {
     { "string.reverse", fl_string_reverse },
     { "string.encode", fl_string_encode },
     { "string.decode", fl_string_decode },
+    { "string.isutf8", fl_string_isutf8 },
 
     { "char.upcase", fl_char_upcase },
     { "char.downcase", fl_char_downcase },

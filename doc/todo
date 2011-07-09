@@ -749,6 +749,15 @@ and emit a type check if we inline
 
 -------------------------------------------------------------------------------
 
+table updates
+most general form is h[k] = f(get(h, k, default))
+
+more efficient implementation would be:
+i = findref(h,k)
+putref(h,i,f(getref(h,i,default)))
+
+-------------------------------------------------------------------------------
+
 issues 4/16/11
 
 clone(Array{Any,1}) matches both
