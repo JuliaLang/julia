@@ -417,6 +417,13 @@ end
 
 unescape_string(s::String) = print_to_string(print_unescaped, s)
 
+## checking UTF-8 validity ##
+
+is_valid_utf8(s::ByteString) = is_valid_utf8(s.data)
+is_valid_utf8(a::Array{Uint8,1}) =
+    bool(ccall(:u8_isvalid, Int32, (Ptr{Uint8}, Int32), a, length(a)))
+check_utf8(s::ByteString) = is_valid_utf8(s) ? s : error("invalid UTF-8 sequence")
+
 ## string interpolation parsing ##
 
 function interp_parse(str::String, unescape::Function)
@@ -450,14 +457,14 @@ function interp_parse(str::String, unescape::Function)
     !isa(strs[1],String) ? expr(:call,:string,strs[1]) : strs[1]
 end
 
-interp_parse(str::String) = interp_parse(str, unescape_string)
+interp_parse(str::String) = interp_parse(str, s->check_utf8(unescape_string(s)))
 
 ## core string macros ##
 
 macro   str(s); interp_parse(s); end
 macro S_str(s); interp_parse(s); end
-macro I_str(s); interp_parse(s, unbackslash); end
-macro E_str(s); unescape_string(s); end
+macro I_str(s); interp_parse(s, s->unbackslash(s)); end
+macro E_str(s); check_utf8(unescape_string(s)); end
 
 ## shell-like command parsing ##
 
