@@ -412,7 +412,7 @@ function interp_parse(str::String, unescape::Function)
             ex, j = parseatom(str,k)
             push(strs, ex)
             i = j
-        elseif c == '\\' && !done(str,k)
+        elseif c == '\\' && !done(str,k) && str[k] == '$'
             c, j = next(str,k)
         else
             j = k
