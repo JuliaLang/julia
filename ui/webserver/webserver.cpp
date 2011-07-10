@@ -15,8 +15,6 @@ using namespace scgi;
 /*
 
     TODO:
-    - session timeouts
-    - infinite loops with printing?
     - more of a terminal-like display
         - curses-like behavior
 
