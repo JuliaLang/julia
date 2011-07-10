@@ -218,6 +218,8 @@
 	  (names bounds) (sparam-name-bounds sparams '() '())
 	  `(scope-block
 	    (block
+	     ,@(map (lambda (var) `(local ,var))
+		    names)
 	     ,@(map (lambda (var val) `(= ,var ,val))
 		    names
 		    (symbols->typevars names bounds))
