@@ -341,6 +341,21 @@ print_quoted (s::String)    = print_escaped(s, true)
 escape_string(s::String) = print_to_string(length(s),   print_escaped, s)
 quote_string (s::String) = print_to_string(length(s)+2, print_quoted,  s)
 
+# bare minimum unescaping function unescapes only backslashes
+
+function print_unbackslashed(s::String)
+    i = start(s)
+    while !done(s,i)
+        c, i = next(s,i)
+        if c == '\\' && !done(s,i) && s[i] == '\\'
+            c, i = next(s,i)
+        end
+        print(c)
+    end
+end
+
+unbackslash(s::String) = print_to_string(length(s), print_unbackslashed, s)
+
 # TODO: unescaping needs to work on bytes to match the parser
 
 function print_unescaped(s::String)
@@ -413,6 +428,12 @@ function interp_parse(str::String, unescape::Function)
             push(strs, ex)
             i = j
         elseif c == '\\' && !done(str,k)
+            if str[k] == '$'
+                if !isempty(str[i:j-1])
+                    push(strs, unescape(str[i:j-1]))
+                end
+                i = k
+            end
             c, j = next(str,k)
         else
             j = k
@@ -428,10 +449,10 @@ interp_parse(str::String) = interp_parse(str, unescape_string)
 
 ## core string macros ##
 
-macro   str(raw); interp_parse(raw); end
-macro S_str(raw); interp_parse(raw); end
-macro I_str(raw); interp_parse(raw, x->x); end
-macro Q_str(raw); unescape_string(raw); end
+macro   str(s); interp_parse(s); end
+macro S_str(s); interp_parse(s); end
+macro I_str(s); interp_parse(s, unbackslash); end
+macro E_str(s); unescape_string(s); end
 
 # TODO: S"foo\xe2\x88\x80" == "foo\xe2\x88\x80"
 
