@@ -454,7 +454,6 @@ end
 
 for i = 0:0x7f, p = {"","\0","x","xxx","\x7f","\uFF","\uFFF",
                      "\uFFFF","\U10000","\U10FFF","\U10FFFF"}
-    println("i=$i p=$(shown(p))")
     c = char(i)
     cp = strcat(c,p)
     op = strcat(char(div(i,8)), oct(i%8), p)

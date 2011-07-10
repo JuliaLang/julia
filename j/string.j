@@ -342,6 +342,7 @@ function print_escaped(s::String, esc::String)
     end
 end
 
+escape_string(s::String) = print_to_string(length(s), print_escaped, s, "\"")
 print_quoted(s::String) = (print('"'); print_escaped(s, "\"\$"); print('"'))
 quote_string(s::String) = print_to_string(length(s)+2, print_quoted, s)
 
