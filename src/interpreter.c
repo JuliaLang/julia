@@ -70,7 +70,7 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl)
     }
     jl_expr_t *ex = (jl_expr_t*)e;
     jl_value_t **args = &jl_cellref(ex->args,0);
-    if (ex->head == call_sym) {
+    if (ex->head == call_sym ||  ex->head == call1_sym) {
         jl_function_t *f = (jl_function_t*)eval(args[0], locals, nl);
         if (!jl_is_func(f))
             jl_type_error("apply", (jl_value_t*)jl_function_type,

@@ -342,7 +342,8 @@
 			 (if (eqv? op #\newline)
 			     (let ((lineno (input-port-line (ts:port s))))
 			       (loop (list* (down s)
-					    `(line ,lineno) ex) #f))
+					    `(line ,lineno) ex)
+				     #f))
 			     (loop (cons (down s) ex) #f)))))))))
 
 ; colon is strange; 3 arguments with 2 colons yields one call:

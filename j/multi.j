@@ -18,6 +18,26 @@
 ## pmap(func, lst) -
 ##     call a function on each element of lst (some 1-d thing), in
 ##     parallel.
+##
+## RemoteRef() - create an uninitialized RemoteRef on the local processor
+##
+## RemoteRef(p) - ...or on a particular processor
+##
+## put(r, val) - store a value to an uninitialized RemoteRef
+##
+## @spawn expr -
+##     evaluate expr somewhere. returns a RemoteRef. all variables in expr
+##     are copied to the remote processor.
+##
+## @spawnat p expr - @spawn specifying where to run
+##
+## @spawnlocal expr -
+##     run expr as an asynchronous task on the local processor
+##
+## @parallel (r) for i=1:n ... end -
+##     parallel loop. the results from each iteration are reduced using (r).
+##
+## @bcast expr - run expr everywhere. useful for load().
 
 ## message i/o ##
 
@@ -917,6 +937,8 @@ type GlobalObject
         np = length(procs)
         go = new((), refs)
 
+        # doing this lookup_ref is what adds the creating node to the client
+        # set of all the Refs. so WeakRemoteRef is a bit of a misnomer.
         wi = lookup_ref(myrid)
         function del_go_client(go)
             if has(wi.clientset, mi)
@@ -1046,6 +1068,8 @@ function serialize(s, g::GlobalObject)
     serialize(s, ri)
 end
 
+localize(g::GlobalObject) = g.local_identity
+
 ## higher-level functions: spawn, pmap, pfor, etc. ##
 
 _SPAWNS = ()
@@ -1141,6 +1165,11 @@ end
 macro spawnlocal(expr)
     expr = localize_vars(:(()->($expr)))
     :(spawnat(LocalProcess(), $expr))
+end
+
+macro spawnat(p, expr)
+    expr = localize_vars(:(()->($expr)))
+    :(spawnat($p, $expr))
 end
 
 at_each(f, args...) = at_each(PGRP, f, args...)

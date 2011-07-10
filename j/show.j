@@ -48,7 +48,7 @@ function show(e::Expr)
             end
         end
     elseif is(hd,:null)
-        print("()")
+        print("nothing")
     elseif is(hd,:goto)
         print("goto $(e.args[1])")
     elseif is(hd,:gotoifnot)
@@ -120,6 +120,23 @@ end
 function show(e::UnionTooComplexError)
     print("union type pattern too complex: ")
     show(e.types)
+end
+
+function show(bt::BackTrace)
+    show(bt.e)
+    i = 1
+    t = bt.trace
+    while i < length(t)
+        println()
+        lno = t[i+2]
+        if lno < 1
+            line = ""
+        else
+            line = ":$lno"
+        end
+        print("in $(t[i]), $(t[i+1])$line")
+        i += 3
+    end
 end
 
 function dump(x)

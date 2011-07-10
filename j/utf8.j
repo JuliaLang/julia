@@ -51,8 +51,10 @@ length(s::UTF8String) = length(s.data)
 cmp(a::UTF8String, b::UTF8String) = lexcmp(a.data, b.data)
 strchr(s::UTF8String, c::Char) =
     c < 0x80 ? memchr(s.data, c) : invoke(strchr, (String,Char), s, c)
-strcat(s::UTF8String, t::UTF8String, x::UTF8String...) =
-    UTF8String(strdatacat(s, t, x...))
+strcat(a::ByteString, b::ByteString, c::ByteString...) = UTF8String(memcat(a,b,c...))
+    # ^^ at least one must be UTF-8 or the ASCII-only method would get called
+ref(s::UTF8String, r::Range1{Index}) =
+    UTF8String(s.data[nextind(s,r.start):nextind(s,r.stop+1)-1])
 
 function nextind(s::UTF8String, ind::Int)
     for i = ind:length(s)

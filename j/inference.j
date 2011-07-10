@@ -253,7 +253,7 @@ tupleref_tfunc = function (A, t, i)
         return Any
     end
     n = length(t)
-    last = t[n]
+    last = tupleref(t,n)
     vararg = isseqtype(last)
     if isa(A[2],Int)
         # index is a constant
@@ -267,7 +267,7 @@ tupleref_tfunc = function (A, t, i)
         elseif i == n && vararg
             return last.parameters[1]
         else
-            return t[i]
+            return tupleref(t,i)
         end
     else
         # index unknown, could be anything from the tuple
@@ -385,6 +385,19 @@ function a2t(a::Vector)
     if n==3 return (a[1],a[2],a[3]) end
     if n==0 return () end
     t = (a[1],a[2],a[3],a[4])
+    if n==4 return t end
+    for i=5:n
+        t = tuple(t..., a[i])
+    end
+    t
+end
+
+function a2t_butfirst(a::Vector)
+    n = length(a)
+    if n==2 return (a[2],) end
+    if n<=1 return () end
+    if n==3 return (a[2],a[3]) end
+    t = (a[2],a[3],a[4])
     if n==4 return t end
     for i=5:n
         t = tuple(t..., a[i])
@@ -522,7 +535,7 @@ ft_tfunc(ft, argtypes) = ccall(:jl_func_type_tfunc, Any,
                                (Any, Any), ft, argtypes)
 
 function abstract_eval_call(e, vtypes, sv::StaticVarInfo)
-    fargs = a2t(e.args[2:])
+    fargs = a2t_butfirst(e.args)
     argtypes = map(x->abstract_eval(x,vtypes,sv), fargs)
     (isfunc, func) = isconstantfunc(e.args[1], vtypes, sv)
     if !isfunc
@@ -1101,7 +1114,7 @@ end
 # static parameters are ok if all the static parameter values are leaf types,
 # meaning they are fully known.
 function inlineable(f, e::Expr, vars)
-    argexprs = a2t(e.args[2:])
+    argexprs = a2t_butfirst(e.args)
     atypes = map(exprtype, argexprs)
     meth = getmethods(f, atypes)
     if is(meth,())
@@ -1166,7 +1179,13 @@ function inlineable(f, e::Expr, vars)
     for i=1:length(args)
         a = args[i]
         if occurs_more(expr, x->is(x,a), 1) > 1
-            return NF
+            aei = argexprs[i]
+            # ok for argument to occur more than once if the actual argument
+            # is a symbol or constant
+            if !isa(aei,Symbol) && !isa(aei,Number) &&
+                !(isa(aei,Expr) && is(aei.head,:symbol))
+                return NF
+            end
         end
     end
     # avoid capture if the function has free variables with the same name

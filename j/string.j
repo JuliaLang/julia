@@ -5,14 +5,15 @@ done(s::String,i) = (i > length(s))
 isempty(s::String) = done(s,start(s))
 ref(s::String, i::Index) = next(s,i)[1]
 ref(s::String, x::Real) = s[int32(round(x))]
+ref(s::String, r::Range1) = s[int32(round(r.start)):int32(round(r.stop))]
 length(s::String) = at_string_end(s)[1]
 strlen(s::String) = at_string_end(s)[2]
 symbol(s::String) = symbol(cstring(s))
 string(s::String) = s
 
 print(c::Char) = (write(current_output_stream(), c); nothing)
-print(s::String) = for c = s; print(c); end
-print(x...) = (for i=x; print(i); end)
+print(s::String) = for c=s; print(c); end
+print(x...) = for i=x; print(i); end
 println(args...) = print(args..., '\n')
 
 function show(c::Char)
@@ -230,33 +231,20 @@ type RopeString <: String
     RopeString(h::RopeString, t::RopeString) =
         depth(h.tail) + depth(t) < depth(h.head) ?
             RopeString(h.head, RopeString(h.tail, t)) :
-            new(h,
-                t,
-                max(h.depth,
-                    t.depth)+1,
-                length(h)+length(t))
+            new(h, t, max(h.depth,t.depth)+1, length(h)+length(t))
 
     RopeString(h::RopeString, t::String) =
         depth(h.tail) < depth(h.head) ?
             RopeString(h.head, RopeString(h.tail, t)) :
-            new(h,
-                t,
-                h.depth+1,
-                length(h)+length(t))
+            new(h, t, h.depth+1, length(h)+length(t))
 
     RopeString(h::String, t::RopeString) =
         depth(t.head) < depth(t.tail) ?
             RopeString(RopeString(h, t.head), t.tail) :
-            new(h,
-                t,
-                t.depth+1,
-                length(h)+length(t))
+            new(h, t, t.depth+1, length(h)+length(t))
 
     RopeString(h::String, t::String) =
-        new(h,
-            t,
-            1,
-            length(h)+length(t))
+        new(h, t, 1, length(h)+length(t))
 end
 
 depth(s::String) = 0
@@ -290,7 +278,7 @@ type TransformedString <: String
 end
 
 length(s::TransformedString) = length(s.string)
-length(s::TransformedString) = strlen(s.string)
+strlen(s::TransformedString) = strlen(s.string)
 
 function next(s::TransformedString, i::Index)
     c, j = next(s.string,i)
@@ -781,6 +769,18 @@ float(x::String) = float64(x)
 
 ## fast C-based memory functions for string implementations ##
 
+function memcpy(a::Array{Uint8,1})
+    b = Array(Uint8, length(a))
+    ccall(dlsym(C_NULL, :memcpy), Ptr{Uint8},
+          (Ptr{Uint8}, Ptr{Uint8}, Ulong),
+          pointer(b), pointer(a), ulong(length(a)))
+    return b
+end
+
+# copying a byte string (generally not needed)
+
+strcpy{T<:ByteString}(s::T) = T(memcpy(s))
+
 # lexicographically compare byte arrays (used by Latin-1 and UTF-8)
 
 function lexcmp(a::Array{Uint8,1}, b::Array{Uint8,1})
@@ -805,6 +805,9 @@ end
 
 # concatenate byte arrays into a single array
 
+memcat() = Array(Int8,0)
+memcat(a::Array{Uint8,1}) = memcpy(a)
+
 function memcat(arrays::Array{Uint8,1}...)
     n = 0
     for a = arrays
@@ -824,7 +827,9 @@ end
 
 # concatenate the data fields of byte strings
 
-function strdatacat(strs::ByteString...)
+memcat(s::ByteString) = memcat(s.data)
+
+function memcat(strs::ByteString...)
     n = 0
     for s = strs
         n += length(s)

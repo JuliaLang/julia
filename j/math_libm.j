@@ -50,7 +50,6 @@ macro libfdmfunc_2arg(f)
     end
 end
 
-@libfdmfunc_1arg_float sqrt
 @libfdmfunc_1arg_float cbrt
 @libfdmfunc_1arg_float sin
 @libfdmfunc_1arg_float cos
@@ -75,6 +74,7 @@ end
 @libfdmfunc_1arg_float rint
 @libfdmfunc_1arg_float lgamma
 
+@libmfunc_1arg_float sqrt
 @libmfunc_1arg_float exp2
 @libmfunc_1arg_float nearbyint
 @libmfunc_1arg_float trunc

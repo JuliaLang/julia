@@ -12,7 +12,56 @@ chr2ind(s::ASCIIString, i::Int) = i
 strchr(s::ASCIIString, c::Char) = c < 0x80 ? memchr(s.data, c) : error("char not found")
 nextind(s::ASCIIString, i::Int) = i
 prevind(s::ASCIIString, i::Int) = i-1
-strcat(s::ASCIIString, t::ASCIIString, x::ASCIIString...) = ASCIIString(strdatacat(s, t, x...))
+strcat(a::ASCIIString, b::ASCIIString, c::ASCIIString...) = ASCIIString(memcat(a,b,c...))
+ref(s::ASCIIString, r::Range1{Index}) = ASCIIString(ref(s.data,r))
+
+function ucfirst(s::ASCIIString)
+    if 'a' <= s[1] <= 'z'
+        t = strcpy(s)
+        t.data[1] -= 32
+        return t
+    end
+    return s
+end
+function lcfirst(s::ASCIIString)
+    if 'A' <= s[1] <= 'Z'
+        t = strcpy(s)
+        t.data[1] += 32
+        return t
+    end
+    return s
+end
+
+function uc(s::ASCIIString)
+    for i = 1:length(s)
+        if 'a' <= s[i] <= 'z'
+            t = strcpy(s)
+            while i <= length(t)
+                if 'a' <= t[i] <= 'z'
+                    t.data[i] -= 32
+                end
+                i += 1
+            end
+            return t
+        end
+    end
+    return s
+end
+function lc(s::ASCIIString)
+    for i = 1:length(s)
+        if 'A' <= s[i] <= 'Z'
+            t = strcpy(s)
+            while i <= length(t)
+                if 'A' <= t[i] <= 'Z'
+                    t.data[i] += 32
+                end
+                i += 1
+            end
+            return t
+        end
+    end
+    return s
+end
 
 ## outputing ASCII strings ##
 
