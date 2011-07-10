@@ -15,6 +15,8 @@ using namespace scgi;
 /*
 
     TODO:
+    - fix weird "Killed" bug
+    - make it work on server
     - more of a terminal-like display
         - curses-like behavior
 
@@ -349,7 +351,7 @@ string create_session()
         close(session_data.julia_out[1]);
 
         // acutally spawn julia instance
-        system("./julia");
+        execl("./julia-release-basic", "julia-release-basic", (char*)0);
     }
     close(session_data.julia_in[0]);
     close(session_data.julia_out[1]);
@@ -386,13 +388,13 @@ string create_session()
 // destroy a session
 void destroy_session(string session_token)
 {
-    // kill the io threads
-    pthread_cancel(session_map[session_token].inbox_proc);
-    pthread_cancel(session_map[session_token].outbox_proc);
-
     // free the pipes
     close(session_map[session_token].julia_in[1]);
     close(session_map[session_token].julia_out[0]);
+
+    // kill the io threads
+    pthread_cancel(session_map[session_token].inbox_proc);
+    pthread_cancel(session_map[session_token].outbox_proc);
 
     // kill the julia process
     kill(session_map[session_token].pid, 9);
