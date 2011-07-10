@@ -110,7 +110,8 @@ jl_fftw_plan_dft(X::Array{Complex64}, Y::Array{Complex64}, direction::Int32) =
 macro fftw_fftn(fname, array_type, in_type, plan_name, direction)
     quote
 
-        function ($fname){$in_type}(X::($array_type){$in_type})
+#        function ($fname){$in_type}(X::($array_type){$in_type})
+        function ($fname)(X::($array_type){$in_type})
             Y = similar(X, $in_type)
             plan = ($plan_name)(X, Y, $direction)
             jl_fftw_execute($in_type, plan)
