@@ -356,7 +356,7 @@ end
 
 unbackslash(s::String) = print_to_string(length(s), print_unbackslashed, s)
 
-# TODO: unescaping needs to work on bytes to match the parser
+# general unescaping of traditional C and Unicode escape sequences
 
 function print_unescaped(s::String)
     i = start(s)
@@ -364,47 +364,47 @@ function print_unescaped(s::String)
         c, i = next(s,i)
         if !done(s,i) && c == '\\'
             c, i = next(s,i)
-            x = c == 'a' ?  7 :
-                c == 'b' ?  8 :
-                c == 't' ?  9 :
-                c == 'n' ? 10 :
-                c == 'v' ? 11 :
-                c == 'f' ? 12 :
-                c == 'r' ? 13 :
-                c == 'e' ? 27 :
-                c == 'x' ||
-                c == 'u' ||
-                c == 'U' ? begin
-                    m = c == 'x' ? 2 :
-                        c == 'u' ? 4 : 8
-                    n = 0
-                    k = 0
-                    while (k+=1) <= m && !done(s,i)
-                        c, j = next(s,i)
-                        n = '0' <= c <= '9' ? n<<4 + c-'0' :
-                            'a' <= c <= 'f' ? n<<4 + c-'a'+10 :
-                            'A' <= c <= 'F' ? n<<4 + c-'A'+10 : break
-                        i = j
-                    end
-                    if k == 1
-                        error("\\x used with no following hex digits")
-                    end
-                    n
-                end :
-                '0' <= c <= '7' ? begin
-                    n = c-'0'
-                    k = 1
-                    while (k+=1) <= 3 && !done(s,i)
-                        c, j = next(s,i)
-                        n = '0' <= c <= '7' ? n<<3 + c-'0' : break
-                        i = j
-                    end
-                    if n > 255
-                        error("octal escape sequence out of range")
-                    end
-                    n
-                end : int32(c)
-            print(char(x))
+            if c == 'x' || c == 'u' || c == 'U'
+                n = k = 0
+                m = c == 'x' ? 2 :
+                    c == 'u' ? 4 : 8
+                while (k+=1) <= m && !done(s,i)
+                    c, j = next(s,i)
+                    n = '0' <= c <= '9' ? n<<4 + c-'0' :
+                        'a' <= c <= 'f' ? n<<4 + c-'a'+10 :
+                        'A' <= c <= 'F' ? n<<4 + c-'A'+10 : break
+                    i = j
+                end
+                if k == 1
+                    error("\\x used with no following hex digits")
+                end
+                if m == 2 # \x escape sequence
+                    write(current_output_stream(), uint8(n))
+                else
+                    print(char(n))
+                end
+            elseif '0' <= c <= '7'
+                k = 1
+                n = c-'0'
+                while (k+=1) <= 3 && !done(s,i)
+                    c, j = next(s,i)
+                    n = '0' <= c <= '7' ? n<<3 + c-'0' : break
+                    i = j
+                end
+                if n > 255
+                    error("octal escape sequence out of range")
+                end
+                write(current_output_stream(), uint8(n))
+            else
+                print(c == 'a' ? '\a' :
+                      c == 'b' ? '\b' :
+                      c == 't' ? '\t' :
+                      c == 'n' ? '\n' :
+                      c == 'v' ? '\v' :
+                      c == 'f' ? '\f' :
+                      c == 'r' ? '\r' :
+                      c == 'e' ? '\e' : c)
+            end
         else
             print(c)
         end
@@ -453,8 +453,6 @@ macro   str(s); interp_parse(s); end
 macro S_str(s); interp_parse(s); end
 macro I_str(s); interp_parse(s, unbackslash); end
 macro E_str(s); unescape_string(s); end
-
-# TODO: S"foo\xe2\x88\x80" == "foo\xe2\x88\x80"
 
 ## shell-like command parsing ##
 

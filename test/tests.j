@@ -452,21 +452,20 @@ for i = 1:size(cx,1)
     end
 end
 
-# TODO: implement transcoding to UTF-8 and do comparisons that way too.
-
-for i = 0:255, p = {"","\0","x","xxx","\x7f","\uFF","\uFFF",
-                    "\uFFFF","\U10000","\U10FFF","\U10FFFF"}
+for i = 0:0x7f, p = {"","\0","x","xxx","\x7f","\uFF","\uFFF",
+                     "\uFFFF","\U10000","\U10FFF","\U10FFFF"}
+    println("i=$i p=$(shown(p))")
     c = char(i)
     cp = strcat(c,p)
+    op = strcat(char(div(i,8)), oct(i%8), p)
+    hp = strcat(char(div(i,16)), hex(i%16), p)
     @assert strcat(unescape_string(strcat("\\",oct(i,1),p))) == cp
     @assert strcat(unescape_string(strcat("\\",oct(i,2),p))) == cp
     @assert strcat(unescape_string(strcat("\\",oct(i,3),p))) == cp
-    @assert strcat(unescape_string(strcat("\\",oct(i,4),p))) ==
-        strcat(char(div(i,8)), oct(i%8), p)
+    @assert strcat(unescape_string(strcat("\\",oct(i,4),p))) == op
     @assert strcat(unescape_string(strcat("\\x",hex(i,1),p))) == cp
     @assert strcat(unescape_string(strcat("\\x",hex(i,2),p))) == cp
-    @assert strcat(unescape_string(strcat("\\x",hex(i,3),p))) ==
-        strcat(char(div(i,16)), hex(i%16), p)
+    @assert strcat(unescape_string(strcat("\\x",hex(i,3),p))) == hp
 end
 
 @assert "\z" == unescape_string("\z") == "z"
@@ -544,6 +543,10 @@ end
 # @assert "\xfFa" == unescape_string("\\xfFa")
 
 # TODO: more Unicode testing here.
+
+@assert S"foo\xe2\x88\x80" == "foo\xe2\x88\x80"
+
+# TODO: the above is only one of many needed tests
 
 # integer parsing
 @assert parse_int(Int32,"0",36) == 0
