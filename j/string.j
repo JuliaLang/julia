@@ -463,7 +463,7 @@ interp_parse(str::String) = interp_parse(str, s->check_utf8(unescape_string(s)))
 
 macro   str(s); interp_parse(s); end
 macro S_str(s); interp_parse(s); end
-macro I_str(s); interp_parse(s, s->unbackslash(s)); end
+macro I_str(s); interp_parse(s, unbackslash); end
 macro E_str(s); check_utf8(unescape_string(s)); end
 
 ## shell-like command parsing ##
