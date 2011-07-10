@@ -7,8 +7,8 @@ LIBS = -lpthread
 LIBJULIA_RELEASE = $(JULIAHOME)/libjulia-release.$(SHLIB_EXT)
 LIBJULIA_DEBUG = $(JULIAHOME)/libjulia-debug.$(SHLIB_EXT)
 
-WEBSERVER_SRCS = webserver.cpp server.cpp network.cpp tinythread.cpp
-WEBSERVER_OBJS = webserver.o server.o network.o tinythread.o
+WEBSERVER_SRCS = webserver.cpp server.cpp network.cpp
+WEBSERVER_OBJS = webserver.o server.o network.o
 
 %.o: %.c
 	$(CC) $(CFLAGS) $(SHIPFLAGS) -c $< -o $@

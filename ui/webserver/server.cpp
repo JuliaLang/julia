@@ -71,10 +71,10 @@ namespace scgi
 	}
 
 	// split strings by a character
-	vector <string> split(string str, char separator)
+	vector<string> split(string str, char separator)
 	{
 		// split a string
-		vector <string> result;
+		vector<string> result;
 		string current_str;
 		for (size_t i = 0; i < str.size(); i++)
 		{
@@ -129,6 +129,42 @@ namespace scgi
 		string name;
 		string value;
 	};
+}
+
+int scgi::request::get_cookie_num()
+{
+	// return the number of cookies
+	return (int)cookie_list.size();
+}
+
+string scgi::request::get_cookie_name(int id)
+{
+	// get the name of a particular cookie
+	return cookie_list[id].name;
+}
+
+string scgi::request::get_cookie_value(string name)
+{
+	// search for the cookie by name
+	for (size_t i = 0; i < cookie_list.size(); i++)
+	{
+		// compare the lowercase names
+		if (to_lower(name) == to_lower(cookie_list[i].name))
+			return cookie_list[i].value;
+	}
+	return "";
+}
+
+bool scgi::request::get_cookie_exists(string name)
+{
+	// search for the cookie by name
+	for (size_t i = 0; i < cookie_list.size(); i++)
+	{
+		// compare the lowercase names
+		if (to_lower(name) == to_lower(cookie_list[i].name))
+			return true;
+	}
+	return false;
 }
 
 using namespace scgi;
@@ -274,6 +310,30 @@ namespace scgi
 			header_list.push_back(header_obj);
 		}
 
+		// get the cookies
+		for (size_t i = 0; i < header_list.size(); i++)
+		{
+			if (to_upper(header_list[i].name) == "HTTP_COOKIE")
+			{
+				vector<string> crumb_list = split(header_list[i].value, ';');
+				for (size_t i = 0; i < crumb_list.size(); i++)
+				{
+					// get the crumb
+					vector<string> crumb = split(crumb_list[i], '=');
+					if (crumb.size() == 2)
+					{
+						// create the cookie
+						cookie cookie_obj;
+						cookie_obj.name = strip(crumb[0]);
+						cookie_obj.value = strip(crumb[1]);
+
+						// add the cookie the list
+						request_obj.cookie_list.push_back(cookie_obj);
+					}
+				}
+			}
+		}
+
 		// make sure there is at least one character to read
 		while (request_pos >= (int)request_str.size())
 			request_str += client_sock->read();
@@ -297,9 +357,6 @@ namespace scgi
 			body += c;
 		}
 
-		// clear the field list
-		request_obj.field_list.clear();
-
 		// get the type of request
 		bool get = true;
 
@@ -307,7 +364,7 @@ namespace scgi
 		string request_method;
 		for (size_t i = 0; i < header_list.size(); i++)
 		{
-			if (header_list[i].name == "REQUEST_METHOD")
+			if (to_upper(header_list[i].name) == "REQUEST_METHOD")
 			{
 				request_method_exists = true;
 				request_method = header_list[i].value;
@@ -317,7 +374,7 @@ namespace scgi
 
 		if (request_method_exists)
 		{
-			if (to_lower(request_method) == "post")
+			if (to_upper(request_method) == "POST")
 				get = false;
 		}
 		if (get)
@@ -327,7 +384,7 @@ namespace scgi
 			string query_string;
 			for (size_t i = 0; i < header_list.size(); i++)
 			{
-				if (header_list[i].name == "QUERY_STRING")
+				if (to_upper(header_list[i].name) == "QUERY_STRING")
 				{
 					query_string_exists = true;
 					query_string = header_list[i].value;
@@ -338,12 +395,12 @@ namespace scgi
 			if (query_string_exists)
 			{
 				// get the key=value strings
-				vector <string> pairs = split(query_string, '&');
+				vector<string> pairs = split(query_string, '&');
 
 				// construct the values
 				for (size_t i = 0; i < pairs.size(); i++)
 				{
-					vector <string> pair = split(pairs[i], '=');
+					vector<string> pair = split(pairs[i], '=');
 					if (pair.size() == 2)
 					{
 						field field_obj;
@@ -361,7 +418,7 @@ namespace scgi
 			string content_type;
 			for (size_t i = 0; i < header_list.size(); i++)
 			{
-				if (header_list[i].name == "CONTENT_TYPE")
+				if (to_upper(header_list[i].name) == "CONTENT_TYPE")
 				{
 					content_type_exists = true;
 					content_type = header_list[i].value;
@@ -372,7 +429,7 @@ namespace scgi
 			if (content_type_exists)
 			{
 				// get the subparts of the CONTENT_TYPE header
-				vector <string> content_type_fields = split(content_type, ';');
+				vector<string> content_type_fields = split(content_type, ';');
 				for (size_t i = 0; i < content_type_fields.size(); i++)
 					content_type_fields[i] = strip(content_type_fields[i]);
 
@@ -380,12 +437,12 @@ namespace scgi
 				if (to_lower(content_type_fields[0]) == "application/x-www-form-urlencoded")
 				{
 					// get the key=value strings
-					vector <string> pairs = split(body, '&');
+					vector<string> pairs = split(body, '&');
 
 					// construct the values
 					for (size_t i = 0; i < pairs.size(); i++)
 					{
-						vector <string> pair = split(pairs[i], '=');
+						vector<string> pair = split(pairs[i], '=');
 						if (pair.size() == 2)
 						{
 							field field_obj;
@@ -400,7 +457,7 @@ namespace scgi
 				if (to_lower(content_type_fields[0]) == "multipart/form-data")
 				{
 					// get the boundary fields
-					vector <string> boundary_fields = split(content_type_fields[1], '=');
+					vector<string> boundary_fields = split(content_type_fields[1], '=');
 					for (size_t i = 0; i < boundary_fields.size(); i++)
 						boundary_fields[i] = strip(boundary_fields[i]);
 					if (boundary_fields.size() == 2)
@@ -476,7 +533,7 @@ namespace scgi
 										line = line.substr(disposition_header.size(), line.size()-disposition_header.size());
 
 										// get the disposition fields
-										vector <string> disposition_fields = split(line, ';');
+										vector<string> disposition_fields = split(line, ';');
 										for (size_t i = 0; i < disposition_fields.size(); i++)
 											disposition_fields[i] = strip(disposition_fields[i]);
 
@@ -484,11 +541,11 @@ namespace scgi
 										for (size_t i = 0; i < disposition_fields.size(); i++)
 										{
 											// get the key=value pair
-											vector <string> pair = split(disposition_fields[i], '=');
+											vector<string> pair = split(disposition_fields[i], '=');
 											if (pair.size() == 2)
 											{
 												// name
-												if (strip(pair[0]) == "name")
+												if (to_upper(strip(pair[0])) == "NAME")
 												{
 													// get the name
 													field_obj.name = strip(pair[1]);
@@ -505,7 +562,7 @@ namespace scgi
 												}
 											
 												// filename
-												if (strip(pair[0]) == "filename")
+												if (to_upper(strip(pair[0])) == "FILENAME")
 												{
 													// get the filename
 													field_obj.filename = strip(pair[1]);
