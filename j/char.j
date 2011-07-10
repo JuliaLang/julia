@@ -19,7 +19,7 @@ function safe_char(x)
     if '\ud800' <= c <= '\udfff' || '\U10ffff' < c
         error("invalid Unicode code point: U+", hex(c))
     end
-    c
+    return c
 end
 
 int(x::Char) = int32(x)
@@ -60,6 +60,22 @@ $(x::Char, y::Char) = int32(x) $ int32(y)
 ## traits ##
 
 sizeof(::Type{Char}) = 4
+
+## printing & showing characters ##
+
+print(c::Char) = (write(current_output_stream(), c); nothing)
+
+function show(c::Char)
+    print('\'')
+    if c == '\''
+        print(L"\'")
+    elseif c == '$'
+        print(c)
+    else
+        print_escaped(string(c), false, '\xff')
+    end
+    print('\'')
+end
 
 ## libc character class testing functions ##
 

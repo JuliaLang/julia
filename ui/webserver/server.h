@@ -24,10 +24,22 @@ namespace scgi
 		std::string filename;
 	};
 
+	// represents a cookie
+	class cookie
+	{
+	public:
+		std::string name;
+		std::string value;
+	};
+
 	// represents an HTTP request
 	class request
 	{
 	public:
+		/////////////////////////////////////////////
+		// form fields
+		/////////////////////////////////////////////
+
 		// get the number of fields
 		int get_field_num();
 
@@ -45,6 +57,28 @@ namespace scgi
 
 		// the form fields
 		std::vector<field> field_list;
+
+		/////////////////////////////////////////////
+		// cookies
+		/////////////////////////////////////////////
+
+		// get the number of cookies
+		int get_cookie_num();
+
+		// get a cookie name
+		std::string get_cookie_name(int id);
+
+		// get a cookie value (not case sensitive)
+		std::string get_cookie_value(std::string name);
+
+		// get a cookie filename (for file uploads; not case sensitive)
+		std::string get_cookie_filename(std::string name);
+
+		// get whether a cookie exists (not case sensitive)
+		bool get_cookie_exists(std::string name);
+
+		// the form cookies
+		std::vector<cookie> cookie_list;
 	};
 
 	// the callback function for requests:  string response = callback(request req);
