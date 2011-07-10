@@ -417,12 +417,19 @@ end
 
 unescape_string(s::String) = print_to_string(print_unescaped, s)
 
-## checking UTF-8 validity ##
+## checking UTF-8 & ACSII validity ##
 
-is_valid_utf8(s::ByteString) = is_valid_utf8(s.data)
-is_valid_utf8(a::Array{Uint8,1}) =
-    bool(ccall(:u8_isvalid, Int32, (Ptr{Uint8}, Int32), a, length(a)))
-check_utf8(s::ByteString) = is_valid_utf8(s) ? s : error("invalid UTF-8 sequence")
+byte_string_classify(s::ByteString) =
+    ccall(:u8_isvalid, Int32, (Ptr{Uint8}, Int32), s.data, length(s))
+    # 0: neither valid ASCII nor UTF-8
+    # 1: valid ASCII
+    # 2: valid UTF-8
+
+is_valid_ascii(s::ByteString) = byte_string_classify(s) == 1
+is_valid_utf8 (s::ByteString) = byte_string_classify(s) != 0
+
+check_ascii(s::ByteString) = is_valid_ascii(s) ? s : error("invalid ASCII sequence")
+check_utf8 (s::ByteString) = is_valid_utf8(s)  ? s : error("invalid UTF-8 sequence")
 
 ## string interpolation parsing ##
 
