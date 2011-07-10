@@ -77,8 +77,8 @@ void segv_handler(int sig, siginfo_t *info, void *context)
     }
 }
 
-volatile sig_atomic_t signal_pending = 0;
-volatile sig_atomic_t defer_signal = 0;
+volatile sig_atomic_t jl_signal_pending = 0;
+volatile sig_atomic_t jl_defer_signal = 0;
 
 void sigint_handler(int sig, siginfo_t *info, void *context)
 {
@@ -87,11 +87,11 @@ void sigint_handler(int sig, siginfo_t *info, void *context)
     sigaddset(&sset, SIGINT);
     sigprocmask(SIG_UNBLOCK, &sset, NULL);
 
-    if (defer_signal) {
-        signal_pending = sig;
+    if (jl_defer_signal) {
+        jl_signal_pending = sig;
     }
     else {
-        signal_pending = 0;
+        jl_signal_pending = 0;
         jl_raise(jl_interrupt_exception);
     }
 }

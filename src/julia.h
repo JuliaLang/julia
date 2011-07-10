@@ -801,15 +801,15 @@ void *alloc_4w();
 
 #include <signal.h>
 
-extern volatile sig_atomic_t signal_pending;
-extern volatile sig_atomic_t defer_signal;
+DLLEXPORT extern volatile sig_atomic_t jl_signal_pending;
+DLLEXPORT extern volatile sig_atomic_t jl_defer_signal;
 
-#define JL_SIGATOMIC_BEGIN() (defer_signal++)
-#define JL_SIGATOMIC_END()                              \
-    do {                                                \
-        defer_signal--;                                 \
-        if (defer_signal == 0 && signal_pending != 0)   \
-            raise(signal_pending);                      \
+#define JL_SIGATOMIC_BEGIN() (jl_defer_signal++)
+#define JL_SIGATOMIC_END()                                      \
+    do {                                                        \
+        jl_defer_signal--;                                      \
+        if (jl_defer_signal == 0 && jl_signal_pending != 0)     \
+            raise(jl_signal_pending);                           \
     } while(0)
 
 // tasks and exceptions
