@@ -102,6 +102,18 @@ end
 
 strchr(s::String, c::Char) = strchr(s, c, start(s))
 
+function has(s::String, c::Char)
+    i = start(s)
+    while !done(s,i)
+        d, j = next(s,i)
+        if c == d
+            return true
+        end
+        i = j
+    end
+    return false
+end
+
 function chars(s::String)
     cx = Array(Char,strlen(s))
     i = 0
@@ -300,6 +312,8 @@ cstring(args...) = print_to_string(print, args...)
 
 ## printing literal quoted string data ##
 
+# TODO: this is really the inverse of print_unbackslashed
+
 function print_quoted_literal(s::String)
     print('"')
     for c = s; c == '"' ? print("\\\"") : print(c); end
@@ -311,35 +325,29 @@ end
 escape_nul(s::String, i::Index) =
     !done(s,i) && '0' <= next(s,i)[1] <= '7' ? L"\x00" : L"\0"
 
-function print_escaped(s::String, q::Bool, xmax::Char)
-    if q; print('"'); end
+is_hex_digit(c::Char) = '0'<=c<='9' || 'a'<=c<='f' || 'A'<=c<='F'
+need_full_hex(s::String, i::Index) = !done(s,i) && is_hex_digit(next(s,i)[1])
+
+function print_escaped(s::String, esc::String)
     i = start(s)
     while !done(s,i)
         c, j = next(s,i)
         c == '\0'     ? print(escape_nul(s,j)) :
-        c == '\\'     ? print(L"\\") :
         c == '\e'     ? print(L"\e") :
-   q && c == '"'      ? print(L"\"") :
-        c == '$'      ? print(L"\$") :
+        c == '\\'     ? print("\\\\") :
+        has(esc,c)    ? print('\\', c) :
         iswprint(c)   ? print(c) :
         7 <= c <= 13  ? print('\\', "abtnvfr"[c-6]) :
-        c <= xmax     ? print(L"\x", hex(c,2)) :
-        c <= '\uffff' ? print(L"\u", hex(c,4)) :
-                        print(L"\U", hex(c,8))
+        c <= '\x7f'   ? print(L"\x", hex(c, need_full_hex(s,j) ? 2 : 1)) :
+        c <= '\uffff' ? print(L"\u", hex(c, need_full_hex(s,j) ? 4 : 2)) :
+                        print(L"\U", hex(c, need_full_hex(s,j) ? 8 : 4))
         i = j
     end
-    if q; print('"'); end
 end
 
-# TODO: make sure ASCII, Latin-1 and UTF-8 strings all get
-# printed so that when input back they are equivalent.
-
-print_escaped(s::String, q) = print_escaped(s, q, '\x7f')
-print_escaped(s::String)    = print_escaped(s, false)
-print_quoted (s::String)    = print_escaped(s, true)
-
-escape_string(s::String) = print_to_string(length(s),   print_escaped, s)
-quote_string (s::String) = print_to_string(length(s)+2, print_quoted,  s)
+escape_string(s::String) = print_to_string(length(s), print_escaped, s, "\"")
+print_quoted(s::String) = (print('"'); print_escaped(s, "\"\$"); print('"'))
+quote_string(s::String) = print_to_string(length(s)+2, print_quoted, s)
 
 # bare minimum unescaping function unescapes only backslashes
 
@@ -356,7 +364,7 @@ end
 
 unbackslash(s::String) = print_to_string(length(s), print_unbackslashed, s)
 
-# TODO: unescaping needs to work on bytes to match the parser
+# general unescaping of traditional C and Unicode escape sequences
 
 function print_unescaped(s::String)
     i = start(s)
@@ -364,47 +372,47 @@ function print_unescaped(s::String)
         c, i = next(s,i)
         if !done(s,i) && c == '\\'
             c, i = next(s,i)
-            x = c == 'a' ?  7 :
-                c == 'b' ?  8 :
-                c == 't' ?  9 :
-                c == 'n' ? 10 :
-                c == 'v' ? 11 :
-                c == 'f' ? 12 :
-                c == 'r' ? 13 :
-                c == 'e' ? 27 :
-                c == 'x' ||
-                c == 'u' ||
-                c == 'U' ? begin
-                    m = c == 'x' ? 2 :
-                        c == 'u' ? 4 : 8
-                    n = 0
-                    k = 0
-                    while (k+=1) <= m && !done(s,i)
-                        c, j = next(s,i)
-                        n = '0' <= c <= '9' ? n<<4 + c-'0' :
-                            'a' <= c <= 'f' ? n<<4 + c-'a'+10 :
-                            'A' <= c <= 'F' ? n<<4 + c-'A'+10 : break
-                        i = j
-                    end
-                    if k == 1
-                        error("\\x used with no following hex digits")
-                    end
-                    n
-                end :
-                '0' <= c <= '7' ? begin
-                    n = c-'0'
-                    k = 1
-                    while (k+=1) <= 3 && !done(s,i)
-                        c, j = next(s,i)
-                        n = '0' <= c <= '7' ? n<<3 + c-'0' : break
-                        i = j
-                    end
-                    if n > 255
-                        error("octal escape sequence out of range")
-                    end
-                    n
-                end : int32(c)
-            print(char(x))
+            if c == 'x' || c == 'u' || c == 'U'
+                n = k = 0
+                m = c == 'x' ? 2 :
+                    c == 'u' ? 4 : 8
+                while (k+=1) <= m && !done(s,i)
+                    c, j = next(s,i)
+                    n = '0' <= c <= '9' ? n<<4 + c-'0' :
+                        'a' <= c <= 'f' ? n<<4 + c-'a'+10 :
+                        'A' <= c <= 'F' ? n<<4 + c-'A'+10 : break
+                    i = j
+                end
+                if k == 1
+                    error("\\x used with no following hex digits")
+                end
+                if m == 2 # \x escape sequence
+                    write(uint8(n))
+                else
+                    print(char(n))
+                end
+            elseif '0' <= c <= '7'
+                k = 1
+                n = c-'0'
+                while (k+=1) <= 3 && !done(s,i)
+                    c, j = next(s,i)
+                    n = '0' <= c <= '7' ? n<<3 + c-'0' : break
+                    i = j
+                end
+                if n > 255
+                    error("octal escape sequence out of range")
+                end
+                write(uint8(n))
+            else
+                print(c == 'a' ? '\a' :
+                      c == 'b' ? '\b' :
+                      c == 't' ? '\t' :
+                      c == 'n' ? '\n' :
+                      c == 'v' ? '\v' :
+                      c == 'f' ? '\f' :
+                      c == 'r' ? '\r' :
+                      c == 'e' ? '\e' : c)
+            end
         else
             print(c)
         end
@@ -413,9 +421,23 @@ end
 
 unescape_string(s::String) = print_to_string(print_unescaped, s)
 
+## checking UTF-8 & ACSII validity ##
+
+byte_string_classify(s::ByteString) =
+    ccall(:u8_isvalid, Int32, (Ptr{Uint8}, Int32), s.data, length(s))
+    # 0: neither valid ASCII nor UTF-8
+    # 1: valid ASCII
+    # 2: valid UTF-8
+
+is_valid_ascii(s::ByteString) = byte_string_classify(s) == 1
+is_valid_utf8 (s::ByteString) = byte_string_classify(s) != 0
+
+check_ascii(s::ByteString) = is_valid_ascii(s) ? s : error("invalid ASCII sequence")
+check_utf8 (s::ByteString) = is_valid_utf8(s)  ? s : error("invalid UTF-8 sequence")
+
 ## string interpolation parsing ##
 
-function interp_parse(str::String, unescape::Function)
+function interp_parse(str::String, unescape::Function, printer::Function)
     strs = {}
     i = j = start(str)
     while !done(str,j)
@@ -442,19 +464,26 @@ function interp_parse(str::String, unescape::Function)
     if !isempty(str[i:])
         push(strs, unescape(str[i:j-1]))
     end
-    length(strs) == 1 ? strs[1] : expr(:call,:strcat,strs...)
+    length(strs) == 1 && isa(strs[1],ByteString) ? strs[1] :
+        expr(:call, :print_to_string, printer, strs...)
 end
 
-interp_parse(str::String) = interp_parse(str, unescape_string)
+interp_parse(str::String, u::Function) = interp_parse(str, u, print)
+interp_parse(str::String) = interp_parse(str, s->check_utf8(unescape_string(s)))
+
+function interp_parse_bytes(s)
+    writer(x...) = for w=x; write(w); end
+    interp_parse(s, unescape_string, writer)
+end
 
 ## core string macros ##
 
 macro   str(s); interp_parse(s); end
 macro S_str(s); interp_parse(s); end
 macro I_str(s); interp_parse(s, unbackslash); end
-macro E_str(s); unescape_string(s); end
-
-# TODO: S"foo\xe2\x88\x80" == "foo\xe2\x88\x80"
+macro E_str(s); check_utf8(unescape_string(s)); end
+macro B_str(s); interp_parse_bytes(s); end
+macro b_str(s); ex = interp_parse_bytes(s); :(($ex).data); end
 
 ## shell-like command parsing ##
 

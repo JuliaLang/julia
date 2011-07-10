@@ -80,6 +80,7 @@ print_to_string(f::Function, args...) = print_to_string(0, f, args...)
 
 nthbyte(x::Int, n::Int) = (n > sizeof(x) ? uint8(0) : uint8((x>>>((n-1)<<3))))
 
+write(x) = write(current_output_stream(), x)
 write(s, x::Uint8) = error(typeof(s)," does not support byte I/O")
 
 function write(s, x::Int)

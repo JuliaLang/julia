@@ -63,19 +63,8 @@ sizeof(::Type{Char}) = 4
 
 ## printing & showing characters ##
 
-print(c::Char) = (write(current_output_stream(), c); nothing)
-
-function show(c::Char)
-    print('\'')
-    if c == '\''
-        print(L"\'")
-    elseif c == '$'
-        print(c)
-    else
-        print_escaped(string(c), false, '\xff')
-    end
-    print('\'')
-end
+print(c::Char) = (write(c); nothing)
+show(c::Char) = (print('\''); print_escaped(string(c), "'"); print('\''))
 
 ## libc character class testing functions ##
 

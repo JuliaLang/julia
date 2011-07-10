@@ -390,8 +390,8 @@ v = pop(l)
 # string escaping & unescaping
 cx = {
     0x00000000      '\0'        "\\0"
-    0x00000001      '\x01'      "\\x01"
-    0x00000006      '\x06'      "\\x06"
+    0x00000001      '\x1'       "\\x1"
+    0x00000006      '\x6'       "\\x6"
     0x00000007      '\a'        "\\a"
     0x00000008      '\b'        "\\b"
     0x00000009      '\t'        "\\t"
@@ -399,7 +399,7 @@ cx = {
     0x0000000b      '\v'        "\\v"
     0x0000000c      '\f'        "\\f"
     0x0000000d      '\r'        "\\r"
-    0x0000000e      '\x0e'      "\\x0e"
+    0x0000000e      '\xe'       "\\xe"
     0x0000001a      '\x1a'      "\\x1a"
     0x0000001b      '\e'        "\\e"
     0x0000001c      '\x1c'      "\\x1c"
@@ -419,25 +419,25 @@ cx = {
     0x0000007b      '{'         "{"
     0x0000007e      '~'         "~"
     0x0000007f      '\x7f'      "\\x7f"
-    0x000000bf      '\u00bf'    "\\u00bf"
-    0x000000ff      '\u00ff'    "\\u00ff"
-    0x00000100      '\u0100'    "\\u0100"
-    0x000001ff      '\u01ff'    "\\u01ff"
-    0x00000fff      '\u0fff'    "\\u0fff"
+    0x000000bf      '\ubf'      "\\ubf"
+    0x000000ff      '\uff'      "\\uff"
+    0x00000100      '\u100'     "\\u100"
+    0x000001ff      '\u1ff'     "\\u1ff"
+    0x00000fff      '\ufff'     "\\ufff"
     0x00001000      '\u1000'    "\\u1000"
     0x00001fff      '\u1fff'    "\\u1fff"
     0x0000ffff      '\uffff'    "\\uffff"
-    0x00010000      '\U10000'   "\\U00010000"
-    0x0001ffff      '\U1ffff'   "\\U0001ffff"
-    0x0002ffff      '\U2ffff'   "\\U0002ffff"
-    0x00030000      '\U30000'   "\\U00030000"
-    0x000dffff      '\Udffff'   "\\U000dffff"
-    0x000e0000      '\Ue0000'   "\\U000e0000"
-    0x000effff      '\Ueffff'   "\\U000effff"
-    0x000f0000      '\Uf0000'   "\\U000f0000"
-    0x000fffff      '\Ufffff'   "\\U000fffff"
-    0x00100000      '\U100000'  "\\U00100000"
-    0x0010ffff      '\U10ffff'  "\\U0010ffff"
+    0x00010000      '\U10000'   "\\U10000"
+    0x0001ffff      '\U1ffff'   "\\U1ffff"
+    0x0002ffff      '\U2ffff'   "\\U2ffff"
+    0x00030000      '\U30000'   "\\U30000"
+    0x000dffff      '\Udffff'   "\\Udffff"
+    0x000e0000      '\Ue0000'   "\\Ue0000"
+    0x000effff      '\Ueffff'   "\\Ueffff"
+    0x000f0000      '\Uf0000'   "\\Uf0000"
+    0x000fffff      '\Ufffff'   "\\Ufffff"
+    0x00100000      '\U100000'  "\\U100000"
+    0x0010ffff      '\U10ffff'  "\\U10ffff"
 }
 
 for i = 1:size(cx,1)
@@ -452,21 +452,19 @@ for i = 1:size(cx,1)
     end
 end
 
-# TODO: implement transcoding to UTF-8 and do comparisons that way too.
-
-for i = 0:255, p = {"","\0","x","xxx","\x7f","\uFF","\uFFF",
-                    "\uFFFF","\U10000","\U10FFF","\U10FFFF"}
+for i = 0:0x7f, p = {"","\0","x","xxx","\x7f","\uFF","\uFFF",
+                     "\uFFFF","\U10000","\U10FFF","\U10FFFF"}
     c = char(i)
     cp = strcat(c,p)
+    op = strcat(char(div(i,8)), oct(i%8), p)
+    hp = strcat(char(div(i,16)), hex(i%16), p)
     @assert strcat(unescape_string(strcat("\\",oct(i,1),p))) == cp
     @assert strcat(unescape_string(strcat("\\",oct(i,2),p))) == cp
     @assert strcat(unescape_string(strcat("\\",oct(i,3),p))) == cp
-    @assert strcat(unescape_string(strcat("\\",oct(i,4),p))) ==
-        strcat(char(div(i,8)), oct(i%8), p)
+    @assert strcat(unescape_string(strcat("\\",oct(i,4),p))) == op
     @assert strcat(unescape_string(strcat("\\x",hex(i,1),p))) == cp
     @assert strcat(unescape_string(strcat("\\x",hex(i,2),p))) == cp
-    @assert strcat(unescape_string(strcat("\\x",hex(i,3),p))) ==
-        strcat(char(div(i,16)), hex(i%16), p)
+    @assert strcat(unescape_string(strcat("\\x",hex(i,3),p))) == hp
 end
 
 @assert "\z" == unescape_string("\z") == "z"
@@ -544,6 +542,10 @@ end
 # @assert "\xfFa" == unescape_string("\\xfFa")
 
 # TODO: more Unicode testing here.
+
+@assert S"foo\xe2\x88\x80" == "foo\xe2\x88\x80"
+
+# TODO: the above is only one of many needed tests
 
 # integer parsing
 @assert parse_int(Int32,"0",36) == 0

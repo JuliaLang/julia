@@ -81,6 +81,7 @@
     ios_getc;
     ios_getutf8;
     jl_getutf8;
+    u8_isvalid;
     ios_close;
     ios_flush;
     ios_read;

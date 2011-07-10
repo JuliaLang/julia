@@ -71,7 +71,6 @@ write(io, s::ASCIIString) = write(io, s.data)
 ## transcoding to ASCII ##
 
 ascii(s::ASCIIString) = s
-function ascii(s::String)
-    f = c -> (c < 0x80) ? uint8(c) : error("invalid ASCII code point: U+$(hex(c))")
-    ASCIIString(map(f, chars(s)))
-end
+ascii(a::Array{Uint8,1}) = check_ascii(ASCIIString(a))
+ascii(s::UTF8String) = ascii(s.data)
+ascii(s::String) = ascii(cstring(s))

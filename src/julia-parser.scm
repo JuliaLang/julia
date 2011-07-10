@@ -916,7 +916,7 @@
 			      (loop (read-char (ts:port s))))))
 		 (let ((str (unescape-string (io.tostring! b))))
 		   (if (= (length str) 1)
-		       ;; one byte, e.g. '\xff'. maybe not valid utf-8, but we
+		       ;; one byte, e.g. '\xff'. maybe not valid UTF-8, but we
 		       ;; want to use the raw value as a codepoint in this case.
 		       (wchar (aref str 0))
 		       (if (or (not (= (string-length str) 1))
@@ -1020,7 +1020,7 @@
 		 `(macrocall str ,(car ps))
 		 (let ((str (unescape-string (car ps))))
 		   (if (not (string.isutf8 str))
-		       (error "invalid utf-8 sequence"))
+		       (error "invalid UTF-8 sequence"))
 		   str))))
 
 	  ;; macro call
