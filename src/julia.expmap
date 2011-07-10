@@ -171,6 +171,7 @@
     jl_memio_func;
     jl_nothing;
     jl_register_toplevel_eh;
+    u8_isvalid;
   local:
     *;
 };
