@@ -576,6 +576,9 @@ static jl_function_t *cache_method(jl_methtable_t *mt, jl_tuple_t *type,
                       (jl_value_t*)method->linfo->specializations);
         jl_specialize_ast(newmeth->linfo);
         if (jl_typeinf_func != NULL) {
+            // TODO: this should be done right before code gen, so if it is
+            // interrupted we can try again the next time the function is
+            // called
             assert(newmeth->linfo->inInference == 0);
             newmeth->linfo->inInference = 1;
             jl_value_t *fargs[5];

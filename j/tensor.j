@@ -158,6 +158,41 @@ end # macro
 @binary_arithmetic_op (.*)
 @binary_arithmetic_op (.^)
 
+## promotion to complex ##
+
+function complex{S<:Real,T<:Real}(A::Tensor{S}, B::Tensor{T})
+    F = similar(A, typeof(complex(zero(S),zero(T))))
+    for i=1:numel(A)
+        F[i] = complex(A[i], B[i])
+    end
+    return F
+end
+
+function complex{T<:Real}(A::Real, B::Tensor{T})
+    F = similar(B, typeof(complex(A,zero(T))))
+    for i=1:numel(B)
+        F[i] = complex(A, B[i])
+    end
+    return F
+end
+
+function complex{T<:Real}(A::Tensor{T}, B::Real)
+    F = similar(A, typeof(complex(zero(T),B)))
+    for i=1:numel(A)
+        F[i] = complex(A[i], B)
+    end
+    return F
+end
+
+function complex{T<:Real}(A::Tensor{T})
+    z = zero(T)
+    F = similar(A, typeof(complex(z,z)))
+    for i=1:numel(A)
+        F[i] = complex(A[i], z)
+    end
+    return F
+end
+
 ## Binary comparison operators ##
 
 macro binary_comparison_op(f)

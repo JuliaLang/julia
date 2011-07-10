@@ -24,12 +24,6 @@ function show(c::ComplexNum)
     print("im")
 end
 
-complex(re::Array, im::Array ) = reshape([ complex(re[i],im[i]) | i=1:numel(re) ], size(re))
-complex(re::Array, im::Real  ) = reshape([ complex(re[i],im   ) | i=1:numel(re) ], size(re))
-complex(re::Real , im::Array ) = reshape([ complex(re   ,im[i]) | i=1:numel(im) ], size(im))
-
-complex{T}(re::Array{T}) = complex(re, zeros(T, size(re)))
-
 ## packed complex float types ##
 
 bitstype 128 Complex128 <: ComplexNum
