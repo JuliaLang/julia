@@ -11,20 +11,10 @@ strlen(s::String) = at_string_end(s)[2]
 symbol(s::String) = symbol(cstring(s))
 string(s::String) = s
 
-print(c::Char) = (write(current_output_stream(), c); nothing)
 print(s::String) = for c=s; print(c); end
 print(x...) = for i=x; print(i); end
 println(args...) = print(args..., '\n')
 
-function show(c::Char)
-    print('\'')
-    if c == '\''
-        print("\\'")
-    else
-        print_escaped(string(c), false, '\xff')
-    end
-    print('\'')
-end
 show(s::String) = print_quoted(s)
 
 (*)(s::String...) = strcat(s...)
@@ -344,9 +334,9 @@ end
 # TODO: make sure ASCII, Latin-1 and UTF-8 strings all get
 # printed so that when input back they are equivalent.
 
-print_escaped(s::String, q)       = print_escaped(s, q, '\x7f')
-print_escaped(s::String)          = print_escaped(s, false)
-print_quoted (s::String)          = print_escaped(s, true)
+print_escaped(s::String, q) = print_escaped(s, q, '\x7f')
+print_escaped(s::String)    = print_escaped(s, false)
+print_quoted (s::String)    = print_escaped(s, true)
 
 escape_string(s::String) = print_to_string(length(s),   print_escaped, s)
 quote_string (s::String) = print_to_string(length(s)+2, print_quoted,  s)
@@ -422,7 +412,7 @@ function interp_parse(str::String, unescape::Function)
             ex, j = parseatom(str,k)
             push(strs, ex)
             i = j
-        elseif c == '\\' && !done(str,k)
+        elseif c == '\\' && !done(str,k) && str[k] == '$'
             c, j = next(str,k)
         else
             j = k
