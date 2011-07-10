@@ -10,6 +10,7 @@
 			// keep track of the minimum height of the content (the height of the longest column)
 			var min_content_height;
 			
+			// this function makes all of the columns the same height
 			function set_column_heights() {
 				// set the height of all the columns to the height of the longest one
 				$('div#left-column').height(min_content_height);
@@ -25,6 +26,7 @@
 				$('div#main').height(min_content_height+padding);
 			}
 			
+			// called on page load
 			window.onload = function() {
 				// calculate the height of the longest column
 				min_content_height = Math.max($('div#left-column').height(), $('div#right-column').height());
@@ -33,13 +35,14 @@
 				set_column_heights();
 			};
 			
+			// set the window resize callback
 			window.onresize = set_column_heights;
 		</script>
 		<script>
-			var terminal_data = "";
-
+			// check the server for data
 			function poll()
 			{
+				// submit AJAX request via POST
 				$.ajax({
 					type: "POST",
 					url: "/repl.scgi",
@@ -48,22 +51,28 @@
 					cache: false
 				});
 			}
-
+			
+			// called when the server has responded
 			function callback(data, textStatus, jqXHR)
 			{
+				// add new server data to the terminal
 				if (data != "")
 				{
-					terminal_data += data;
-					$("#terminal").html(terminal_data);
-					$("#terminal").scrollTop($("#terminal").prop("scrollHeight"));
+					$("#terminal").html($("#terminal").html()+data);
+					$("#terminal").animate({scrollTop: $("#terminal").prop("scrollHeight")}, 500);
 				}
+
+				// poll the server again
 				setTimeout(poll, 500);
 			}
 
+			// called on page load
 			$(document).ready(function()
 			{
+				// hook the submit event of the form
 				$("#terminal-form").submit(function(evt)
 				{
+					// send the input to the server via AJAX
 					$.ajax({
 						type: "POST",
 						url: "http://localhost/repl.scgi",
@@ -73,10 +82,14 @@
 						cache: false
 					});
 
+					// clear the input box
 					$("#terminal-input").val("");
+
+					// don't let the form redirect to any other pages
 					return false;
 				});
 				
+				// start polling the server
 				setTimeout(poll, 500);
 			});
 		</script>
