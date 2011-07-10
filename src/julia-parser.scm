@@ -915,13 +915,14 @@
 				   (not-eof-1 (read-char (ts:port s))) b))
 			      (loop (read-char (ts:port s))))))
 		 (let ((str (unescape-string (io.tostring! b))))
-		   (if (not (= (string-length str) 1))
-		       (error "invalid character literal"))
 		   (if (= (length str) 1)
 		       ;; one byte, e.g. '\xff'. maybe not valid utf-8, but we
 		       ;; want to use the raw value as a codepoint in this case.
 		       (wchar (aref str 0))
-		       (string.char str 0))))))))
+		       (if (or (not (= (string-length str) 1))
+			       (not (string.isutf8 str)))
+			   (error "invalid character literal")
+			   (string.char str 0)))))))))
 
 	  ;; symbol/expression quote
 	  ((eq? t ':)
