@@ -51,6 +51,18 @@ jl_fftw_plan_dft_1d(X::DenseVector{Complex64}, Y::DenseVector{Complex64}, direct
           (Int32, Ptr{Complex64}, Ptr{Complex64}, Int32, Uint32, ),
           length(X), X, Y, direction, FFTW_ESTIMATE)
 
+# jl_fftw_plan_dft_r2c_1d(X::DenseVector{Float64}, Y::DenseVector{Complex128}) =
+#     ccall(dlsym(libfftw, :fftw_plan_dft_r2c_1d),
+#           Ptr{Void},
+#           (Int32, Ptr{Float64}, Ptr{Complex128}, Uint32, ),
+#           length(X), X, Y, FFTW_ESTIMATE)
+
+# jl_fftw_plan_dft_r2c_1d(X::DenseVector{Float32}, Y::DenseVector{Complex64}) =
+#     ccall(dlsym(libfftw, :fftwf_plan_dft_r2c_1d),
+#           Ptr{Void},
+#           (Int32, Ptr{Float32}, Ptr{Complex64}, Uint32, ),
+#           length(X), X, Y, FFTW_ESTIMATE)
+
 # Create 2d plan
 
 jl_fftw_plan_dft_2d(X::DenseMatrix{Complex128}, Y::DenseMatrix{Complex128}, direction::Int32) =
@@ -98,6 +110,7 @@ jl_fftw_plan_dft(X::Array{Complex64}, Y::Array{Complex64}, direction::Int32) =
 macro fftw_fftn(fname, array_type, in_type, plan_name, direction)
     quote
 
+#        function ($fname){$in_type}(X::($array_type){$in_type})
         function ($fname)(X::($array_type){$in_type})
             Y = similar(X, $in_type)
             plan = ($plan_name)(X, Y, $direction)
@@ -133,6 +146,33 @@ end
 @fftw_fftn fftn  Array               Complex64  jl_fftw_plan_dft     FFTW_FORWARD
 @fftw_fftn ifftn Array               Complex64  jl_fftw_plan_dft     FFTW_BACKWARD
 
-# Compute fft and ifft of slices of arrays
+# macro fftw_fftn_real(fname, array_type, in_type, out_type, plan_name)
+#     quote
 
-# TODO
+#         function ($fname){$in_type}(X::($array_type){$in_type})
+#             Y = similar(X, $out_type)
+#             plan = ($plan_name)(X, Y)
+#             jl_fftw_execute($in_type, plan)
+#             jl_fftw_destroy_plan($in_type, plan)
+
+#             n = length(Y)
+#             nconj = int32(length(x)/2 - 1)
+#             for i=n:-1:(nconj-n)
+#                 Y[i] = Y[n-i+2]
+#             end
+
+#             return Y
+#         end
+
+#     end
+# end
+
+# @fftw_fftn_real fft DenseVector Float64 Complex128 jl_fftw_plan_dft_r2c_1d
+# @fftw_fftn_real fft DenseVector Float32 Complex64  jl_fftw_plan_dft_r2c_1d
+
+# TODO: Implement efficient operations such as the vector case later
+#fft2(X::DenseMatrix) = fft2(complex(X))
+#fft3(X::Array) = fft3(complex(X))
+#fftn(X::Array) = fftn(complex(X))
+
+# TODO: Compute fft and ifft of slices of arrays
