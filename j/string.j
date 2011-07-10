@@ -102,6 +102,18 @@ end
 
 strchr(s::String, c::Char) = strchr(s, c, start(s))
 
+function has(s::String, c::Char)
+    i = start(s)
+    while !done(s,i)
+        d, j = next(s,i)
+        if c == d
+            return true
+        end
+        i = j
+    end
+    return false
+end
+
 function chars(s::String)
     cx = Array(Char,strlen(s))
     i = 0
@@ -300,6 +312,8 @@ cstring(args...) = print_to_string(print, args...)
 
 ## printing literal quoted string data ##
 
+# TODO: this is really the inverse of print_unbackslashed
+
 function print_quoted_literal(s::String)
     print('"')
     for c = s; c == '"' ? print("\\\"") : print(c); end
@@ -311,35 +325,25 @@ end
 escape_nul(s::String, i::Index) =
     !done(s,i) && '0' <= next(s,i)[1] <= '7' ? L"\x00" : L"\0"
 
-function print_escaped(s::String, q::Bool, xmax::Char)
-    if q; print('"'); end
+function print_escaped(s::String, esc::String)
     i = start(s)
     while !done(s,i)
         c, j = next(s,i)
         c == '\0'     ? print(escape_nul(s,j)) :
-        c == '\\'     ? print(L"\\") :
         c == '\e'     ? print(L"\e") :
-   q && c == '"'      ? print(L"\"") :
-        c == '$'      ? print(L"\$") :
+        c == '\\'     ? print("\\\\") :
+        has(esc,c)    ? print('\\', c) :
         iswprint(c)   ? print(c) :
         7 <= c <= 13  ? print('\\', "abtnvfr"[c-6]) :
-        c <= xmax     ? print(L"\x", hex(c,2)) :
+        c <= '\x7f'   ? print(L"\x", hex(c,2)) :
         c <= '\uffff' ? print(L"\u", hex(c,4)) :
                         print(L"\U", hex(c,8))
         i = j
     end
-    if q; print('"'); end
 end
 
-# TODO: make sure ASCII, Latin-1 and UTF-8 strings all get
-# printed so that when input back they are equivalent.
-
-print_escaped(s::String, q) = print_escaped(s, q, '\x7f')
-print_escaped(s::String)    = print_escaped(s, false)
-print_quoted (s::String)    = print_escaped(s, true)
-
-escape_string(s::String) = print_to_string(length(s),   print_escaped, s)
-quote_string (s::String) = print_to_string(length(s)+2, print_quoted,  s)
+print_quoted(s::String) = (print('"'); print_escaped(s, "\"\$"); print('"'))
+quote_string(s::String) = print_to_string(length(s)+2, print_quoted, s)
 
 # bare minimum unescaping function unescapes only backslashes
 
@@ -379,7 +383,7 @@ function print_unescaped(s::String)
                     error("\\x used with no following hex digits")
                 end
                 if m == 2 # \x escape sequence
-                    write(current_output_stream(), uint8(n))
+                    write(uint8(n))
                 else
                     print(char(n))
                 end
@@ -394,7 +398,7 @@ function print_unescaped(s::String)
                 if n > 255
                     error("octal escape sequence out of range")
                 end
-                write(current_output_stream(), uint8(n))
+                write(uint8(n))
             else
                 print(c == 'a' ? '\a' :
                       c == 'b' ? '\b' :
@@ -442,7 +446,8 @@ function interp_parse(str::String, unescape::Function)
     if !isempty(str[i:])
         push(strs, unescape(str[i:j-1]))
     end
-    length(strs) == 1 ? strs[1] : expr(:call,:strcat,strs...)
+    length(strs) > 1     ? expr(:call,:strcat,strs...) :
+    !isa(strs[1],String) ? expr(:call,:string,strs[1]) : strs[1]
 end
 
 interp_parse(str::String) = interp_parse(str, unescape_string)

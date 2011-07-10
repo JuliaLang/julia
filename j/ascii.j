@@ -72,6 +72,7 @@ write(io, s::ASCIIString) = write(io, s.data)
 
 ascii(s::ASCIIString) = s
 function ascii(s::String)
-    f = c -> (c < 0x80) ? uint8(c) : error("invalid ASCII code point: U+$(hex(c))")
+    f = c -> (c < 0x80) ? uint8(c) :
+        error("invalid ASCII code point: U+$(hex(c))")
     ASCIIString(map(f, chars(s)))
 end
