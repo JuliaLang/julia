@@ -64,7 +64,7 @@ sizeof(::Type{Char}) = 4
 ## printing & showing characters ##
 
 print(c::Char) = (write(c); nothing)
-show(c::Char) = (print('\''); print_escaped(c, "'"); print('\''))
+show(c::Char) = (print('\''); print_escaped(string(c), "'"); print('\''))
 
 ## libc character class testing functions ##
 
