@@ -77,6 +77,25 @@ void segv_handler(int sig, siginfo_t *info, void *context)
     }
 }
 
+volatile sig_atomic_t signal_pending = 0;
+volatile sig_atomic_t defer_signal = 0;
+
+void sigint_handler(int sig, siginfo_t *info, void *context)
+{
+    sigset_t sset;
+    sigemptyset(&sset);
+    sigaddset(&sset, SIGINT);
+    sigprocmask(SIG_UNBLOCK, &sset, NULL);
+
+    if (defer_signal) {
+        signal_pending = sig;
+    }
+    else {
+        signal_pending = 0;
+        jl_raise(jl_interrupt_exception);
+    }
+}
+
 static void jl_get_builtin_hooks();
 
 void *jl_dl_handle;
@@ -154,6 +173,15 @@ void julia_init(char *imageFile)
     act.sa_sigaction = segv_handler;
     act.sa_flags = SA_ONSTACK | SA_SIGINFO;
     if (sigaction(SIGSEGV, &act, NULL) < 0) {
+        ios_printf(ios_stderr, "sigaction: %s\n", strerror(errno));
+        exit(1);
+    }
+
+    memset(&act, 0, sizeof(struct sigaction));
+    sigemptyset(&act.sa_mask);
+    act.sa_sigaction = sigint_handler;
+    act.sa_flags = SA_SIGINFO;
+    if (sigaction(SIGINT, &act, NULL) < 0) {
         ios_printf(ios_stderr, "sigaction: %s\n", strerror(errno));
         exit(1);
     }
@@ -299,6 +327,8 @@ void jl_get_builtin_hooks()
         jl_apply((jl_function_t*)global("DivideByZeroError"), NULL, 0);
     jl_undefref_exception =
         jl_apply((jl_function_t*)global("UndefRefError"),NULL,0);
+    jl_interrupt_exception =
+        jl_apply((jl_function_t*)global("InterruptException"),NULL,0);
 
     jl_append_any_func = (jl_function_t*)global("append_any");
     jl_method_missing_func = (jl_function_t*)global("method_missing");

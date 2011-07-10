@@ -283,6 +283,7 @@ extern jl_struct_type_t *jl_uniontoocomplex_type;
 extern jl_value_t *jl_stackovf_exception;
 extern jl_value_t *jl_divbyzero_exception;
 extern jl_value_t *jl_undefref_exception;
+extern jl_value_t *jl_interrupt_exception;
 extern jl_value_t *jl_an_empty_cell;
 
 extern jl_struct_type_t *jl_box_type;
@@ -796,7 +797,22 @@ void *alloc_4w();
 #define jl_gc_n_preserved_values() (0)
 #endif
 
-// tasks
+// asynch signal handling
+
+#include <signal.h>
+
+extern volatile sig_atomic_t signal_pending;
+extern volatile sig_atomic_t defer_signal;
+
+#define JL_SIGATOMIC_BEGIN() (defer_signal++)
+#define JL_SIGATOMIC_END()                              \
+    do {                                                \
+        defer_signal--;                                 \
+        if (defer_signal == 0 && signal_pending != 0)   \
+            raise(signal_pending);                      \
+    } while(0)
+
+// tasks and exceptions
 
 // context that needs to be restored around a try block
 typedef struct _jl_savestate_t {
@@ -850,6 +866,7 @@ DLLEXPORT jl_array_t *jl_readuntil(ios_t *s, uint8_t delim);
 
 static inline void jl_eh_restore_state(jl_savestate_t *ss)
 {
+    JL_SIGATOMIC_BEGIN();
     jl_current_task->state.eh_task = ss->eh_task;
     jl_current_task->state.eh_ctx = ss->eh_ctx;
     jl_current_task->state.ostream_obj = ss->ostream_obj;
@@ -858,6 +875,7 @@ static inline void jl_eh_restore_state(jl_savestate_t *ss)
 #ifdef JL_GC_MARKSWEEP
     jl_current_task->state.gcstack = ss->gcstack;
 #endif
+    JL_SIGATOMIC_END();
 }
 
 DLLEXPORT void jl_enter_handler(jl_savestate_t *ss, jmp_buf *handlr);

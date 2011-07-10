@@ -187,6 +187,7 @@ type IOError            <: Exception end
 type StackOverflowError <: Exception end
 type EOFError           <: Exception end
 type UndefRefError      <: Exception end
+type InterruptException <: Exception end
 
 type UnionTooComplexError <: Exception
     types::Tuple

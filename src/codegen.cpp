@@ -171,6 +171,7 @@ static void emit_function(jl_lambda_info_t *lam, Function *f);
 //static int n_compile=0;
 static Function *to_function(jl_lambda_info_t *li)
 {
+    JL_SIGATOMIC_BEGIN();
     Function *f = Function::Create(jl_func_sig, Function::ExternalLinkage,
                                    li->name->name, jl_Module);
     assert(jl_is_expr(li->ast));
@@ -187,6 +188,7 @@ static Function *to_function(jl_lambda_info_t *li)
     //verifyFunction(*f);
     if (old != NULL)
         builder.SetInsertPoint(old);
+    JL_SIGATOMIC_END();
     return f;
 }
 
@@ -196,8 +198,11 @@ extern "C" void jl_generate_fptr(jl_function_t *f)
     jl_lambda_info_t *li = f->linfo;
     assert(li->functionObject);
     Function *llvmf = (Function*)li->functionObject;
-    if (li->fptr == NULL)
+    if (li->fptr == NULL) {
+        JL_SIGATOMIC_BEGIN();
         li->fptr = (jl_fptr_t)jl_ExecutionEngine->getPointerToFunction(llvmf);
+        JL_SIGATOMIC_END();
+    }
     assert(li->fptr != NULL);
     f->fptr = li->fptr;
     llvmf->deleteBody();

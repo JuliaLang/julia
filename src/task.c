@@ -235,6 +235,19 @@ static void ctx_switch(jl_task_t *t, jmp_buf *where)
 {
     if (t == jl_current_task)
         return;
+    /*
+      making task switching interrupt-safe is going to be challenging.
+      we need JL_SIGATOMIC_BEGIN in jl_enter_handler, and then
+      JL_SIGATOMIC_END after every JL_TRY setjmp that returns zero.
+      also protect jl_eh_restore_state.
+      then we need JL_SIGATOMIC_BEGIN at the top of this function (ctx_switch).
+      the JL_SIGATOMIC_END at the end of this function handles the case
+      of task switching with yieldto().
+      then we need to handle the case of task switching via raise().
+      to do that, the top of every catch block must do JL_SIGATOMIC_END
+      *IF AND ONLY IF* throwing the exception involved a task switch.
+    */
+    //JL_SIGATOMIC_BEGIN();
     if (!setjmp(jl_current_task->ctx)) {
 #ifdef COPY_STACKS
         jl_task_t *lastt = jl_current_task;
@@ -254,6 +267,7 @@ static void ctx_switch(jl_task_t *t, jmp_buf *where)
         longjmp(*where, 1);
 #endif
     }
+    //JL_SIGATOMIC_END();
 }
 
 static jl_value_t *switchto(jl_task_t *t)

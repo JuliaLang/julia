@@ -839,6 +839,7 @@ jl_methlist_t *jl_method_list_insert(jl_methlist_t **pml, jl_tuple_t *type,
     while (l != NULL) {
         if (sigs_eq((jl_value_t*)type, (jl_value_t*)l->sig)) {
             // method overwritten
+            JL_SIGATOMIC_BEGIN();
             l->sig = type;
             l->tvars = find_tvars((jl_value_t*)type, jl_null);
             l->has_tvars = (l->tvars != jl_null);
@@ -846,6 +847,7 @@ jl_methlist_t *jl_method_list_insert(jl_methlist_t **pml, jl_tuple_t *type,
                      jl_is_seq_type(jl_tupleref(type,type->length-1)));
             l->invokes = NULL;
             l->func = method;
+            JL_SIGATOMIC_END();
             return l;
         }
         l = l->next;
@@ -874,8 +876,8 @@ jl_methlist_t *jl_method_list_insert(jl_methlist_t **pml, jl_tuple_t *type,
     newrec->func = method;
     newrec->invokes = NULL;
     newrec->next = l;
+    JL_SIGATOMIC_BEGIN();
     *pl = newrec;
-    JL_GC_POP();
     // if this contains Union types, methods after it might actually be
     // more specific than it. we need to re-sort them.
     if (has_unions(type)) {
@@ -903,12 +905,15 @@ jl_methlist_t *jl_method_list_insert(jl_methlist_t **pml, jl_tuple_t *type,
             pitem = pnext;
         }
     }
+    JL_SIGATOMIC_END();
+    JL_GC_POP();
     return newrec;
 }
 
 jl_methlist_t *jl_method_table_insert(jl_methtable_t *mt, jl_tuple_t *type,
                                       jl_function_t *method)
 {
+    JL_SIGATOMIC_BEGIN();
     jl_methlist_t *ml = jl_method_list_insert(&mt->defs, type, method, 1);
     // invalidate cached methods that overlap this definition
     jl_methlist_t *l = mt->cache;
@@ -934,6 +939,7 @@ jl_methlist_t *jl_method_table_insert(jl_methtable_t *mt, jl_tuple_t *type,
     if (na > mt->max_args) {
         mt->max_args = na;
     }
+    JL_SIGATOMIC_END();
     return ml;
 }
 

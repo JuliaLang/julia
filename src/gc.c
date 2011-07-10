@@ -647,10 +647,12 @@ void jl_gc_collect()
 {
     allocd_bytes = 0;
     if (is_gc_enabled) {
+        JL_SIGATOMIC_BEGIN();
         gc_mark();
         sweep_weak_refs();
         gc_sweep();
         run_finalizers();
+        JL_SIGATOMIC_END();
     }
 }
 
