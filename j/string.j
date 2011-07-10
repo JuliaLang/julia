@@ -325,6 +325,9 @@ end
 escape_nul(s::String, i::Index) =
     !done(s,i) && '0' <= next(s,i)[1] <= '7' ? L"\x00" : L"\0"
 
+is_hex_digit(c::Char) = '0'<=c<='9' || 'a'<=c<='f' || 'A'<=c<='F'
+need_full_hex(s::String, i::Index) = !done(s,i) && is_hex_digit(next(s,i)[1])
+
 function print_escaped(s::String, esc::String)
     i = start(s)
     while !done(s,i)
@@ -335,9 +338,9 @@ function print_escaped(s::String, esc::String)
         has(esc,c)    ? print('\\', c) :
         iswprint(c)   ? print(c) :
         7 <= c <= 13  ? print('\\', "abtnvfr"[c-6]) :
-        c <= '\x7f'   ? print(L"\x", hex(c,2)) :
-        c <= '\uffff' ? print(L"\u", hex(c,4)) :
-                        print(L"\U", hex(c,8))
+        c <= '\x7f'   ? print(L"\x", hex(c, need_full_hex(s,j) ? 2 : 1)) :
+        c <= '\uffff' ? print(L"\u", hex(c, need_full_hex(s,j) ? 4 : 2)) :
+                        print(L"\U", hex(c, need_full_hex(s,j) ? 8 : 4))
         i = j
     end
 end
