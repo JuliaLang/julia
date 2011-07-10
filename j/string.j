@@ -434,7 +434,7 @@ check_utf8 (s::ByteString) = is_valid_utf8(s)  ? s : error("invalid UTF-8 sequen
 
 ## string interpolation parsing ##
 
-function interp_parse(str::String, unescape::Function)
+function interp_parse(str::String, unescape::Function, printer::Function)
     strs = {}
     i = j = start(str)
     while !done(str,j)
@@ -461,11 +461,17 @@ function interp_parse(str::String, unescape::Function)
     if !isempty(str[i:])
         push(strs, unescape(str[i:j-1]))
     end
-    length(strs) > 1     ? expr(:call,:strcat,strs...) :
-    !isa(strs[1],String) ? expr(:call,:string,strs[1]) : strs[1]
+    length(strs) == 1 && isa(strs[1],ByteString) ? strs[1] :
+        expr(:call, :print_to_string, printer, strs...)
 end
 
+interp_parse(str::String, u::Function) = interp_parse(str, u, print)
 interp_parse(str::String) = interp_parse(str, s->check_utf8(unescape_string(s)))
+
+function interp_parse_bytes(s)
+    writer(x...) = for w=x; write(w); end
+    interp_parse(s, unescape_string, writer)
+end
 
 ## core string macros ##
 
@@ -473,6 +479,8 @@ macro   str(s); interp_parse(s); end
 macro S_str(s); interp_parse(s); end
 macro I_str(s); interp_parse(s, unbackslash); end
 macro E_str(s); check_utf8(unescape_string(s)); end
+macro B_str(s); interp_parse_bytes(s); end
+macro b_str(s); ex = interp_parse_bytes(s); :(($ex).data); end
 
 ## shell-like command parsing ##
 
