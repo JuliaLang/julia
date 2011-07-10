@@ -156,8 +156,8 @@ macro fftw_fftn_real(fname, array_type, in_type, out_type, plan_name)
 
             n = length(Y)
             nconj = int32(length(X)/2 - 1)
-            for i=n:-1:(nconj-n)
-                Y[i] = Y[n-i+2]
+            for i=n:-1:(n-nconj)
+                Y[i] = conj(Y[n-i+2])
             end
 
             return Y
@@ -170,8 +170,8 @@ end
 @fftw_fftn_real fft DenseVector Float32 Complex64  jl_fftw_plan_dft_r2c_1d
 
 # TODO: Implement efficient operations such as the vector case later
-fft2(X::DenseMatrix) = fft2(complex(X))
-fft3(X::Array) = fft3(complex(X))
-fftn(X::Array) = fftn(complex(X))
+fft2(X::Union(DenseMatrix{Float64}, DenseMatrix{Float32})) = fft2(complex(X))
+fft3(X::Union(Array{Float64,3},     Array{Float32,3}))     = fft3(complex(X))
+fftn(X::Union(Array{Float64},       Array{Float32}))       = fftn(complex(X))
 
 # TODO: Compute fft and ifft of slices of arrays
