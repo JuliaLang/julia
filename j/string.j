@@ -338,7 +338,7 @@ function print_escaped(s::String, esc::String)
         has(esc,c)    ? print('\\', c) :
         iswprint(c)   ? print(c) :
         7 <= c <= 13  ? print('\\', "abtnvfr"[c-6]) :
-        c <= '\x7f'   ? print(L"\x", hex(c, need_full_hex(s,j) ? 2 : 1)) :
+        c <= '\x7f'   ? print(L"\x", hex(c, 2)) :
         c <= '\uffff' ? print(L"\u", hex(c, need_full_hex(s,j) ? 4 : 2)) :
                         print(L"\U", hex(c, need_full_hex(s,j) ? 8 : 4))
         i = j

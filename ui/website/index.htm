@@ -39,6 +39,9 @@
 			window.onresize = set_column_heights;
 		</script>
 		<script>
+			// keep track of terminal history
+			var terminal_data = "";
+
 			// check the server for data
 			function poll()
 			{
@@ -58,7 +61,8 @@
 				// add new server data to the terminal
 				if (data != "")
 				{
-					$("#terminal").html($("#terminal").html()+data);
+					terminal_data += data;
+					$("#terminal").html(terminal_data);
 					$("#terminal").animate({scrollTop: $("#terminal").prop("scrollHeight")}, 500);
 				}
 
@@ -138,7 +142,7 @@
 				<h1>A fresh approach to technical computing.</h1>
 				<p>Julia is a dynamic language with optional typing, multiple dispatch, and good performance, achieved using type inference and just-in-time (JIT) compilation, implemented using LLVM. It is multi-paradigm, combining features of imperative, functional, and object-oriented programming.  Try it out!</p>
 				<form id="terminal-form">
-					<div id="terminal"></div>
+					<div id="terminal">Spawning Julia instance...</div>
 					<input class="input" id="terminal-input" type="text" autofocus="autofocus" required="required" />
 				</form>
 			</div>
