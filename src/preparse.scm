@@ -3,6 +3,6 @@
 (with-bindings
  ((*print-pretty* #f))
  (print
-  (jl-parse-named-stream "stdin" *input-stream*)))
+  (jl-parse-source (cadr *argv*))))
 
 (newline)

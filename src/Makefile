@@ -11,13 +11,14 @@ LLT = $(LLTDIR)/libllt.a
 FLISP = $(FLISPDIR)/libflisp.a
 
 FLAGS = -falign-functions -Wall -Wno-strict-aliasing \
+	-fno-omit-frame-pointer \
 	-I$(FLISPDIR) -I$(LLTDIR) $(HFILEDIRS:%=-I%) $(LIBDIRS:%=-L%) \
 	-I$(shell $(LLVMROOT)/bin/llvm-config --includedir) -fvisibility=hidden
 DEBUGFLAGS = -ggdb3 -DDEBUG $(FLAGS)
 SHIPFLAGS = -O3 -DNDEBUG $(FLAGS)
 
 LIBFILES = $(FLISP) $(LLT)
-LIBS = $(LIBFILES) -L$(EXTROOT)/lib -lutil -ldl -lm $(OSLIBS) \
+LIBS = $(LIBFILES) -L$(EXTROOT)/lib -lutil -ldl -lm $(EXTROOT)/lib/libunwind-generic.a $(EXTROOT)/lib/libunwind.a $(OSLIBS) \
 	$(shell $(LLVMROOT)/bin/llvm-config --ldflags --libs engine) -lpthread 
 
 ifeq ($(JULIAGC),MARKSWEEP)
@@ -49,9 +50,9 @@ julia_flisp.boot: julia-parser.scm julia-syntax.scm \
 	$(FLISPDIR)/flisp ./mk_julia_flisp_boot.scm
 
 boot.j.inc: boot.j preparse.scm julia_flisp.boot
-	$(FLISPDIR)/flisp ./preparse.scm < $< | $(FLISPDIR)/flisp ./bin2hex.scm > $@
+	$(FLISPDIR)/flisp ./preparse.scm $< | $(FLISPDIR)/flisp ./bin2hex.scm > $@
 
-codegen.o codegen.do: intrinsics.cpp
+codegen.o codegen.do: intrinsics.cpp debuginfo.cpp
 builtins.o builtins.do: table.c
 
 $(LLT): $(LLTDIR)/*.h $(LLTDIR)/*.c

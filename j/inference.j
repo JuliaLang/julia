@@ -976,12 +976,13 @@ function record_var_type(e::Symbol, t, decls)
 end
 
 function eval_annotate(e::Expr, vtypes, sv, decls)
-    if is(e.head,:quote) || is(e.head,:top) || is(e.head,:goto) ||
-        is(e.head,:label) || is(e.head,:static_typeof)
+    head = e.head
+    if is(head,:quote) || is(head,:top) || is(head,:goto) ||
+        is(head,:label) || is(head,:static_typeof) || is(head,:line)
         return e
-    elseif is(e.head,:gotoifnot) || is(e.head,:return)
+    elseif is(head,:gotoifnot) || is(head,:return)
         e.type = Any
-    elseif is(e.head,:(=))
+    elseif is(head,:(=))
         e.type = Any
         s = e.args[1]
         # assignment LHS not subject to all-same-type variable checking,
@@ -1026,11 +1027,12 @@ function type_annotate(ast::Expr, states::Array, sv, rettype, vnames)
 end
 
 function sym_replace(e::Expr, from, to)
-    if is(e.head,:quote) || is(e.head,:top) || is(e.head,:goto) ||
-        is(e.head,:label)
+    head = e.head
+    if is(head,:quote) || is(head,:top) || is(head,:goto) ||
+        is(head,:label) || is(head,:line)
         return e
     end
-    if is(e.head,:symbol)
+    if is(head,:symbol)
         s = e.args[1]
         for i=1:length(from)
             if is(from[i],s)
@@ -1095,6 +1097,17 @@ function exprtype(x::ANY)
     end
 end
 
+function without_linenums(a::Array{Any,1})
+    l = {}
+    for x = a
+        if isa(x,Expr) && is(x.head,:line)
+        else
+            push(l, x)
+        end
+    end
+    l
+end
+
 # for now, only inline functions whose bodies are of the form "return <expr>"
 # where <expr> doesn't contain any argument more than once.
 # functions with closure environments or varargs are also excluded.
@@ -1147,7 +1160,7 @@ function inlineable(f, e::Expr, vars)
     if is(ast,())
         return NF
     end
-    body = ast.args[3].args
+    body = without_linenums(ast.args[3].args)
     # see if body is only "return <expr>"
     if length(body) > 1
         return NF

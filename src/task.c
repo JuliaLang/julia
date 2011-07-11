@@ -18,6 +18,9 @@
 #include <unistd.h>
 #include "llt.h"
 #include "julia.h"
+// This gives unwind only local unwinding options ==> faster code
+#define UNW_LOCAL_ONLY
+#include <libunwind.h>
 
 /* This probing code is derived from Douglas Jones' user thread library */
 
@@ -440,12 +443,171 @@ static void init_task(jl_task_t *t)
 }
 #endif
 
+void getFunctionInfo(char **name, int *line, const char **filename, size_t pointer);
+
+// stacktrace using libunwind
+static jl_value_t *build_backtrace()
+{
+    unw_cursor_t cursor; unw_context_t uc;
+    unw_word_t ip;
+    
+    jl_array_t *a;
+    a = jl_alloc_cell_1d(0);
+    JL_GC_PUSH(&a);
+    int j = 0;
+    
+    unw_getcontext(&uc);
+    unw_init_local(&cursor, &uc);
+    while (unw_step(&cursor)) { 
+        unw_get_reg(&cursor, UNW_REG_IP, &ip);
+        char *func_name;
+        int line_num;
+        const char *file_name;
+        getFunctionInfo(&func_name, &line_num, &file_name, ip);
+        if (func_name != NULL) {
+            jl_array_grow_end(a, 3);
+            jl_arrayset(a, j, (jl_value_t*)jl_symbol(func_name)); j++;
+            jl_arrayset(a, j, (jl_value_t*)jl_symbol(file_name)); j++;
+            jl_arrayset(a, j, jl_box_int32(line_num)); j++;
+        }
+    }
+    JL_GC_POP();
+    return (jl_value_t*)a;
+}
+
+#if 0
+static _Unwind_Reason_Code tracer(void *ctx, void *arg)
+{
+    void *ip = (void*)_Unwind_GetIP(ctx);
+
+    char *func_name;
+    int line_num;
+    const char *file_name;
+    getFunctionInfo(&func_name, &line_num, &file_name, (size_t)ip);
+    jl_array_t *a = (jl_array_t*)arg;
+    if (func_name != NULL) {
+        int j = a->length;
+        jl_array_grow_end(a, 3);
+        jl_arrayset(a, j, (jl_value_t*)jl_symbol(func_name)); j++;
+        jl_arrayset(a, j, (jl_value_t*)jl_symbol(file_name)); j++;
+        jl_arrayset(a, j, jl_box_int32(line_num));
+    }
+    return _URC_NO_REASON;
+}
+
+static jl_value_t *build_backtrace2()
+{
+    jl_array_t *a;
+    a = jl_alloc_cell_1d(0);
+    JL_GC_PUSH(&a);
+    _Unwind_Backtrace(tracer, a);
+#if 0
+    void *buf[100];
+    void **tbuf = &buf[0];
+    int n = _Unwind_Backtrace(buf, 100);
+    if (n == 100) {
+        int sz = 100;
+        void **mbuf=NULL;
+        while (n == sz) {
+            sz *= 2;
+            mbuf = (void**)realloc(mbuf, sz*sizeof(void*));
+            n = backtrace(mbuf, sz);
+        }
+        tbuf = mbuf;
+    }
+    JL_GC_PUSH(&a);
+    a = jl_alloc_cell_1d(0);
+    int j = 0;
+    for(int i=0; i < n; i++) {
+        //printf("rip= %lx\n", buf[i]);
+        char *func_name;
+        int line_num;
+        const char *file_name;
+        getFunctionInfo(&func_name, &line_num, &file_name, (size_t)buf[i]);
+        if (func_name != NULL) {
+            jl_array_grow_end(a, 3);
+            jl_arrayset(a, j, (jl_value_t*)jl_symbol(func_name)); j++;
+            jl_arrayset(a, j, (jl_value_t*)jl_symbol(file_name)); j++;
+            jl_arrayset(a, j, jl_box_int32(line_num)); j++;
+        }
+    }
+    if (tbuf != &buf[0])
+        free(tbuf);
+#endif
+    JL_GC_POP();
+    return (jl_value_t*)a;
+}
+#endif
+
+#if 0
+// Stacktrace manually
+void my_backtrace()
+{
+    const int max_i = 100;
+    int i = 0;
+    uintptr_t rbp;
+    unw_cursor_t cursor; unw_context_t uc;
+    unw_word_t ip;
+    
+    unw_getcontext(&uc);
+    unw_init_local(&cursor, &uc);
+    unw_step(&cursor);
+    unw_get_reg(&cursor, UNW_REG_IP, &ip);
+    unw_get_reg(&cursor, UNW_X86_64_RBP, &rbp);
+    printf("rbp= %lx  rip= %lx\n", rbp, ip);
+    //unw_get_reg(&cursor, UNW_REG_SP, &rbp);
+    /*
+    asm(" movq %%rbp, %0;"
+        : "=r" (rbp));
+    */
+    char *func_name;
+    int line_num;
+    const char *file_name;
+    while (rbp != 0 && i<max_i && rbp < (uintptr_t)jl_stack_hi) {
+        void *fp = ((void**)rbp)[0];
+        void *ip = ((void**)rbp)[1];
+        printf("rbp= %lx  rip= %lx\n", fp, ip);
+        getFunctionInfo(&func_name, &line_num, &file_name, (size_t)ip);
+    	if(func_name != NULL) {
+            if (line_num == -1) {
+            	printf("%s in %s:line unknown\n", file_name, func_name);
+            }
+            else {
+            	printf("%s in %s:%d\n", func_name, file_name, line_num);
+            }
+    	}  
+        rbp = fp;
+        i++;
+    }
+    if (i == max_i){
+        printf("to prevent infitie loops stacktrace was cutoff at %d iterations\n to change this change max i backtrace in task.c\n",max_i);
+    }
+}
+#endif
+
+static jmp_buf *toplevel_eh_ctx = NULL;
+DLLEXPORT void jl_register_toplevel_eh()
+{
+    toplevel_eh_ctx = jl_current_task->state.eh_task->state.eh_ctx;
+}
+
 // yield to exception handler
 void jl_raise(jl_value_t *e)
 {
     jl_task_t *eh = jl_current_task->state.eh_task;
     eh->state.err = 1;
     jl_exception_in_transit = e;
+    if (eh->state.eh_ctx == toplevel_eh_ctx) {
+        jl_value_t *tracedata, *bt;
+        tracedata = build_backtrace();
+        JL_GC_PUSH(&tracedata);
+        bt = (jl_value_t*)alloc_3w();
+        bt->type = (jl_type_t*)jl_backtrace_type;
+        ((jl_value_t**)bt)[1] = jl_exception_in_transit;
+        ((jl_value_t**)bt)[2] = tracedata;
+        jl_exception_in_transit = bt;
+        JL_GC_POP();
+    }
     if (jl_current_task == eh) {
         longjmp(*eh->state.eh_ctx, 1);
     }
