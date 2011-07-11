@@ -52,6 +52,9 @@ promote_rule{S<:Real}(::Type{Complex128}, ::Type{S}) =
     (P = promote_type(Float64,S);
      is(P,Float64) ? Complex128 : Complex{P})
 
+read(s, ::Type{Complex128}) = (r=read(s,Float64);i=read(s,Float64);
+                               complex128(r, i))
+write(s, z::Complex128) = (write(s,real(z));write(s,imag(z)))
 
 bitstype 64 Complex64 <: ComplexNum
 
@@ -81,6 +84,9 @@ promote_rule{S<:Real}(::Type{Complex64}, ::Type{S}) =
      is(P,Float32) ? Complex64  : Complex{P})
 promote_rule(::Type{Complex128}, ::Type{Complex64}) = Complex128
 
+read(s, ::Type{Complex64}) = (r=read(s,Float32);i=read(s,Float32);
+                              complex64(r, i))
+write(s, z::Complex64) = (write(s,real(z));write(s,imag(z)))
 
 complex(x::Float64, y::Float64) = complex128(x, y)
 complex(x::Float32, y::Float32) = complex64(x, y)

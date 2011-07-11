@@ -140,6 +140,8 @@ drand(args...)   = darray((T,d,da)->rand(d), args...)
 drandf(args...)  = darray((T,d,da)->randf(d), args...)
 drandn(args...)  = darray((T,d,da)->randn(d), args...)
 
+zero{T}(d::DArray{T}) = dzeros(T, size(d), d.distdim, d.pmap)
+
 distribute(a::Array) = distribute(a, maxdim(size(a)))
 
 function distribute{T}(a::Array{T}, distdim)
@@ -165,6 +167,18 @@ function get_my_piece(T, lsz, da, distdim, owner, orig_array)
     remote_call_fetch(owner, ref, orig_array, idxs...)
 end
 
+convert{T,N}(::Type{Array}, d::DArray{T,N}) = convert(Array{T,N}, d)
+
+function convert{S,T,N}(::Type{Array{S,N}}, d::DArray{T,N})
+    a = Array(S, size(d))
+    idxs = { 1:size(a,i) | i=1:N }
+    for p = 1:length(d.dist)-1
+        idxs[d.distdim] = d.dist[p]:(d.dist[p+1]-1)
+        a[idxs...] = remote_call_fetch(d.pmap[p], localize, d)
+    end
+    a
+end
+
 ## Transpose and redist ##
 
 transpose{T}(a::DArray{T,2}) = darray((T,d,da)->transpose(localize(a)),
@@ -173,6 +187,38 @@ transpose{T}(a::DArray{T,2}) = darray((T,d,da)->transpose(localize(a)),
 ctranspose{T}(a::DArray{T,2}) = darray((T,d,da)->ctranspose(localize(a)),
                                        T, (size(a,2),size(a,1)), (3-a.distdim),
                                        a.pmap)
+
+function node_ref(A::DArray, to_dist, range)
+    Al = localize(A)
+    locdims = size(Al)
+    slice = { i == to_dist ? range : (1:locdims[i]) | i=1:ndims(A) }
+    Al[slice...]
+end
+
+function node_changedist{T}(A::DArray{T}, da, local_size)
+    locl = Array(T, local_size)
+    if isempty(locl)
+        return locl
+    end
+    to_dist = da.distdim
+    newdist = da.dist
+    from_dist = A.distdim
+    dimsA = size(A)
+    myidxs = newdist[da.localpiece]:newdist[da.localpiece+1]-1
+
+    for p = 1:length(A.dist)-1
+        R = remote_call_fetch(A.pmap[p], node_ref, A, to_dist, myidxs)
+        sliceR = { i == from_dist ? (A.dist[p]:A.dist[p+1]-1) : (1:local_size[i]) | i=1:ndims(A) }
+        locl[sliceR...] = R
+    end
+    locl
+end
+
+function changedist{T}(A::DArray{T}, to_dist)
+    if A.distdim == to_dist; return A; end
+    return darray((T,sz,da)->node_changedist(A, da, sz), T, size(A), to_dist,
+                  A.pmap)
+end
 
 ## Indexing ##
 
@@ -251,49 +297,7 @@ function assign(d::DArray, v, i::Index)
     d
 end
 
-convert{T,N}(::Type{Array}, d::DArray{T,N}) = convert(Array{T,N}, d)
-
-function convert{S,T,N}(::Type{Array{S,N}}, d::DArray{T,N})
-    a = Array(S, size(d))
-    idxs = { 1:size(a,i) | i=1:N }
-    for p = 1:length(d.dist)-1
-        idxs[d.distdim] = d.dist[p]:(d.dist[p+1]-1)
-        a[idxs...] = remote_call_fetch(d.pmap[p], localize, d)
-    end
-    a
-end
-
-function node_ref(A::DArray, to_dist, range)
-    Al = localize(A)
-    locdims = size(Al)
-    slice = { i == to_dist ? range : (1:locdims[i]) | i=1:ndims(A) }
-    Al[slice...]
-end
-
-function node_changedist{T}(A::DArray{T}, da, local_size)
-    locl = Array(T, local_size)
-    if isempty(locl)
-        return locl
-    end
-    to_dist = da.distdim
-    newdist = da.dist
-    from_dist = A.distdim
-    dimsA = size(A)
-    myidxs = newdist[da.localpiece]:newdist[da.localpiece+1]-1
-
-    for p = 1:length(A.dist)-1
-        R = remote_call_fetch(A.pmap[p], node_ref, A, to_dist, myidxs)
-        sliceR = { i == from_dist ? (A.dist[p]:A.dist[p+1]-1) : (1:local_size[i]) | i=1:ndims(A) }
-        locl[sliceR...] = R
-    end
-    locl
-end
-
-function changedist{T}(A::DArray{T}, to_dist)
-    if A.distdim == to_dist; return A; end
-    return darray((T,sz,da)->node_changedist(A, da, sz), T, size(A), to_dist,
-                  A.pmap)
-end
+## matrix multiply ##
 
 function node_multiply{T}(A::Tensor{T}, B, sz)
     locl = Array(T, sz)
@@ -317,3 +321,51 @@ function (*){T}(A::DArray{T,2,1}, B::DArray{T,2,2})
 end
 
 (*){T}(A::DArray{T,2}, B::DArray{T,2}) = changedist(A, 1) * changedist(B, 2)
+
+## elementwise operators ##
+
+macro binary_darray_op(f)
+    quote
+        function ($f){T}(A::Number, B::DArray{T})
+            S = promote_type(typeof(A),T)
+            darray((T,lsz,da)->($f)(A, localize(B)),
+                   S, size(B), B.distdim, B.pmap)
+        end
+        function ($f){T}(A::DArray{T}, B::Number)
+            S = promote_type(T,typeof(B))
+            darray((T,lsz,da)->($f)(localize(A), B),
+                   S, size(A), A.distdim, A.pmap)
+        end
+    end # quote
+end # macro
+
+@binary_darray_op (+)
+@binary_darray_op (-)
+@binary_darray_op (.*)
+@binary_darray_op (.^)
+
+macro unary_darray_op(f)
+    quote
+        function ($f){T}(A::DArray{T})
+            darray((T,lsz,da)->($f)(localize(A)),
+                   T, size(A), A.distdim, A.pmap)
+        end
+    end # quote
+end # macro
+
+@unary_darray_op (-)
+@unary_darray_op (~)
+@unary_darray_op (conj)
+
+macro unary_darray_c2r_op(f)
+    quote
+        function ($f){T}(A::DArray{T})
+            S = typeof(($f)(zero(T)))
+            darray((T,lsz,da)->($f)(localize(A)),
+                   S, size(A), A.distdim, A.pmap)
+        end
+    end # quote
+end # macro
+
+@unary_darray_c2r_op (real)
+@unary_darray_c2r_op (imag)
