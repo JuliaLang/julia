@@ -349,20 +349,24 @@ escape_string(s::String) = print_to_string(length(s), print_escaped, s, "\"")
 print_quoted(s::String) = (print('"'); print_escaped(s, "\"\$"); print('"'))
 quote_string(s::String) = print_to_string(length(s)+2, print_quoted, s)
 
-# bare minimum unescaping function unescapes only backslashes
+# bare minimum unescaping function unescapes only given characters
 
-function print_unbackslashed(s::String)
+function print_unescaped_chars(s::String, esc::String)
+    if !has(esc,'\\')
+        esc = strcat("\\", esc)
+    end
     i = start(s)
     while !done(s,i)
         c, i = next(s,i)
-        if c == '\\' && !done(s,i) && s[i] == '\\'
+        if c == '\\' && !done(s,i) && has(esc,s[i])
             c, i = next(s,i)
         end
         print(c)
     end
 end
 
-unbackslash(s::String) = print_to_string(length(s), print_unbackslashed, s)
+unescape_chars(s::String, esc::String) =
+    print_to_string(length(s), print_unescaped_chars, s, esc)
 
 # general unescaping of traditional C and Unicode escape sequences
 
@@ -480,7 +484,7 @@ end
 
 macro   str(s); interp_parse(s); end
 macro S_str(s); interp_parse(s); end
-macro I_str(s); interp_parse(s, unbackslash); end
+macro I_str(s); interp_parse(s, s->unescape_chars(s,"\"")); end
 macro E_str(s); check_utf8(unescape_string(s)); end
 macro B_str(s); interp_parse_bytes(s); end
 macro b_str(s); ex = interp_parse_bytes(s); :(($ex).data); end
