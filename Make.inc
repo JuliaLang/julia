@@ -22,7 +22,7 @@ USE_COPY_STACKS = 1
 
 ifeq ($(OS), Linux)
 SHLIB_EXT = so
-OSLIBS += -Wl,--export-dynamic -Wl,--version-script=$(JULIAHOME)/src/julia.expmap
+OSLIBS += -Wl,--export-dynamic -Wl,--version-script=$(JULIAHOME)/src/julia.expmap $(EXTROOT)/lib/libunwind-generic.a $(EXTROOT)/lib/libunwind.a
 endif
 
 ifeq ($(OS), Darwin)
