@@ -442,6 +442,46 @@ function areduce(f::Function, A::Tensor, region::Region, RType::Type)
     return R
 end
 
+function max{T}(A::Tensor{T})
+    if subtype(T,Int)
+        v = typemin(T)
+    else
+        v = convert(T,-Inf)
+    end
+    for i=1:numel(A)
+        v = max(v,A[i])
+    end
+    v
+end
+
+function min{T}(A::Tensor{T})
+    if subtype(T,Int)
+        v = typemax(T)
+    else
+        v = convert(T,Inf)
+    end
+    for i=1:numel(A)
+        v = min(v,A[i])
+    end
+    v
+end
+
+function sum{T}(A::Tensor{T})
+    v = zero(T)
+    for i=1:numel(A)
+        v = sum(v,A[i])
+    end
+    v
+end
+
+function prod{T}(A::Tensor{T})
+    v = one(T)
+    for i=1:numel(A)
+        v = prod(v,A[i])
+    end
+    v
+end
+
 for f = (:max, :min, :sum, :prod)
     @eval function ($f){T}(A::Tensor{T,2}, dim::Region)
        if isinteger(dim)
