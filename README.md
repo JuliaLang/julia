@@ -75,6 +75,9 @@ No installation is required — julia is currently run from the directory where 
 You might want to make a symbolic link for the executable, for example `ln -s JULIA_PATH/julia ~/bin/julia`.
 Please note that the build process will not work if any of the build directory's parent directories have spaces in their names (this is due to a limitation in GNU make).
 
+Congratulations, if you've gotten this far, you are ready to try out julia.
+You can read about [getting started](/JuliaLang/julia/wiki/Getting-Started) in the Julia Manual.
+
 <a name="Directories"/>
 ## Directories
 
