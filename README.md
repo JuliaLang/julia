@@ -25,6 +25,7 @@ For a more in-depth discussion of the rationale and advantages of Julia over oth
 - **[GNU make][]** — building dependencies.
 - **[gcc, g++, gfortran][gcc]** — compiling and linking C, C++ and Fortran code.
 - **[curl][]** — to automatically download external libraries:
+    - **[LLVM][]**         — compiler infrastructure
     - **[fdlibm][]**       — a portable implementation of much of the system-dependent libm math library's functionality.
     - **[MT][]**	   — a fast Mersenne Twister pseudorandom number generator library.
     - **[OpenBLAS][]**     — a fast, open, and maintained [basic linear algebar subprograms (BLAS)](http://en.wikipedia.org/wiki/Basic_Linear_Algebra_Subprograms) library, based on [Kazushige Goto's](http://en.wikipedia.org/wiki/Kazushige_Goto) famous [GotoBLAS](http://www.tacc.utexas.edu/tacc-projects/gotoblas2/).
@@ -33,7 +34,6 @@ For a more in-depth discussion of the rationale and advantages of Julia over oth
     - **[FFTW][]**	   — library for computing fast Fourier transforms very quickly and efficiently.
     - **[PCRE][]**         — Perl-compatible regular expressions library.
     - **[GNU readline][]** — library allowing shell-like line editing in the terminal, with history and familiar key bindings.
-    - **[LLVM][]**         - compiler infrastructure
 
 [GNU make]:     http://www.gnu.org/software/make/
 [gcc]:          http://gcc.gnu.org/
@@ -54,15 +54,22 @@ For a more in-depth discussion of the rationale and advantages of Julia over oth
 - **GNU/Linux:** x86/64 (64-bit); x86 (32-bit).
 - **Darwin/OS X:** x86/64 (64-bit); x86 (32-bit) is untested but should work.
 
-<a name="Compilation"/>
-## Compilation
+<a name="Download-Compilation"/>
+## Download & Compilation
 
-- Run `make` in the top-level directory to build julia.
-  It will automatically download and build its external dependencies, when compiled the first time (this takes a while).
+To download and compile julia, do the following:
+
+- Acquire the source code either by:
+  - cloning the git repository: `git clone https://StefanKarpinski@github.com/JuliaLang/julia.git`
+  - downloading & untarring a tarball: `mkdir julia && curl -Lk https://github.com/JuliaLang/julia/tarball/master | tar -zxf- -C julia --strip-components 1` (TODO: check that this actually works once the repository is public).
+- Run `make` in the `julia` directory to build the `julia` executable.
+
+When compiled the first time, it will automatically download and build its external dependencies.
+This takes a while, but only has to be done once.
 
 No installation is required — julia is currently run from the directory where it was built.
 You might want to make a symbolic link for the executable, for example `ln -s JULIA_PATH/julia ~/bin/julia`.
-Please note that the build process will not work if any of the build directory's parent directories have spaces in their names.
+Please note that the build process will not work if any of the build directory's parent directories have spaces in their names (this is due to a limitation in GNU make).
 
 <a name="Directories"/>
 ## Directories
