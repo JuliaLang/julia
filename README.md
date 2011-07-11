@@ -52,7 +52,7 @@ For a more in-depth discussion of the rationale and advantages of Julia over oth
 ## Supported Platforms
 
 - **GNU/Linux:** x86 (32-bit); x86/64 (64-bit).
-- **OS X:** x86/64 (64-bit); x86 (32-bit) is untested but should work.
+- **Darwin/OS X:** x86/64 (64-bit); x86 (32-bit) is untested but should work.
 
 <a name="Compilation"/>
 ## Compilation
