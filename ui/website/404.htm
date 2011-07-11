@@ -10,6 +10,7 @@
 			// keep track of the minimum height of the content (the height of the longest column)
 			var min_content_height;
 			
+			// this function makes all of the columns the same height
 			function set_column_heights() {
 				// set the height of all the columns to the height of the longest one
 				$('div#left-column').height(min_content_height);
@@ -25,6 +26,7 @@
 				$('div#main').height(min_content_height+padding);
 			}
 			
+			// called on page load
 			window.onload = function() {
 				// calculate the height of the longest column
 				min_content_height = Math.max($('div#left-column').height(), $('div#right-column').height());
@@ -33,6 +35,7 @@
 				set_column_heights();
 			};
 			
+			// set the window resize callback
 			window.onresize = set_column_heights;
 		</script>
 	</head>
@@ -77,12 +80,10 @@
 				</ul>
 			</div>
 			<div id="right-column">
-				<div class="error">
-					Oops! We can't find the page you requested.
-				</div>
-				<h1>A fresh approach to technical computing.</h1>
-				<p>Julia is a dynamic language with optional typing, multiple dispatch, and good performance, achieved using type inference and just-in-time (JIT) compilation, implemented using LLVM. It is multi-paradigm, combining features of imperative, functional, and object-oriented programming.  Try it out!</p>
-				<textarea class="code-editor" name="terminal" rows="12" cols="70" autofocus="autofocus"></textarea>
+				<h1>Oops!</h1>
+				<p>
+					The requested page could not be found.
+				</p>
 			</div>
 			<div class="float-clear"> </div>
 		</div>
