@@ -133,11 +133,12 @@ similar(d::DArray, T::Type, dims::Dims) =
 copy{T}(d::DArray{T}) =
     darray((T,lsz,da)->copy(localize(d)), T, size(d), d.distdim, d.pmap)
 
-dzeros(args...) = darray((T,d,da)->zeros(T,d), args...)
-dones(args...)  = darray((T,d,da)->ones(T,d), args...)
-drand(args...)  = darray((T,d,da)->rand(d), args...)
-drandf(args...) = darray((T,d,da)->randf(d), args...)
-drandn(args...) = darray((T,d,da)->randn(d), args...)
+dzeros(args...)  = darray((T,d,da)->zeros(T,d), args...)
+dones(args...)   = darray((T,d,da)->ones(T,d), args...)
+dfill(v,args...) = darray((T,d,da)->fill(Array(T,d), v), typeof(v), args...)
+drand(args...)   = darray((T,d,da)->rand(d), args...)
+drandf(args...)  = darray((T,d,da)->randf(d), args...)
+drandn(args...)  = darray((T,d,da)->randn(d), args...)
 
 distribute(a::Array) = distribute(a, maxdim(size(a)))
 
