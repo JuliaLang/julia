@@ -33,7 +33,7 @@ For a more in-depth discussion of the rationale and advantages of Julia over oth
     - **[FFTW][]**	   — library for computing fast Fourier transforms very quickly and efficiently.
     - **[PCRE][]**         — Perl-compatible regular expressions library.
     - **[GNU readline][]** — library allowing shell-like line editing in the terminal, with history and familiar key bindings.
-    - **[mongoose][]**     — library for writing simple web servers, used for Julia's web-based repl.
+    - **[LLVM][]**         - compiler infrastructure
 
 [GNU make]:     http://www.gnu.org/software/make/
 [gcc]:          http://gcc.gnu.org/
@@ -46,7 +46,7 @@ For a more in-depth discussion of the rationale and advantages of Julia over oth
 [FFTW]:         http://www.fftw.org/
 [PCRE]:         http://www.pcre.org/
 [GNU readline]: http://cnswww.cns.cwru.edu/php/chet/readline/rltop.html
-[mongoose]:     http://code.google.com/p/mongoose/
+[LLVM]:         http://www.llvm.org/
 
 <a name="Supported-Platforms"/>
 ## Supported Platforms
@@ -62,6 +62,7 @@ For a more in-depth discussion of the rationale and advantages of Julia over oth
 
 No installation is required — julia is currently run from the directory where it was built.
 You might want to make a symbolic link for the executable, for example `ln -s JULIA_PATH/julia ~/bin/julia`.
+Please note that the build process will not work if any of the build directory's parent directories have spaces in their names.
 
 <a name="Directories"/>
 ## Directories
