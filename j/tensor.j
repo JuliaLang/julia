@@ -92,8 +92,24 @@ end # macro
 @unary_op (-)
 @unary_op (~)
 @unary_op (conj)
-@unary_op (real)
-@unary_op (imag)
+
+macro unary_c2r_op(f)
+    quote
+
+        function ($f){T}(A::Tensor{T})
+            S = typeof(($f)(zero(T)))
+            F = similar(A, S)
+            for i=1:numel(A)
+                F[i] = ($f)(A[i])
+            end
+            return F
+        end
+
+    end # quote
+end # macro
+
+@unary_c2r_op (real)
+@unary_c2r_op (imag)
 
 +{T<:Number}(x::Tensor{T}) = x
 *{T<:Number}(x::Tensor{T}) = x

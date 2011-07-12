@@ -18,7 +18,10 @@ include ../Make.inc
 
 OS = $(shell uname)
 ARCH = $(shell uname -m)
-LIBS = llvm readline pcre fdlibm dsfmt openblas lapack arpack fftw mongoose unwind
+LIBS = llvm readline pcre fdlibm dsfmt openblas lapack arpack fftw mongoose
+ifeq ($(OS), Linux)
+LIBS += unwind
+endif
 
 default: install
 compile: $(addprefix compile-, $(LIBS))

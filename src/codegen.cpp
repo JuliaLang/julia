@@ -531,16 +531,29 @@ static Value *emit_lambda_closure(jl_value_t *expr, jl_codectx_t *ctx)
                                literal_pointer_val(expr), tuple);
 }
 
+static bool expr_is_symbol(jl_value_t *e)
+{
+    return (jl_is_symbol(e) || (jl_is_expr(e) &&
+                                (((jl_expr_t*)e)->head==symbol_sym ||
+                                 ((jl_expr_t*)e)->head==top_sym)));
+}
+
 static size_t max_arg_depth(jl_value_t *expr)
 {
     if (jl_is_expr(expr)) {
-        size_t max = 0;
+        int max = 0, m;
         jl_expr_t *e = (jl_expr_t*)expr;
-        size_t i, m;
+        size_t i;
         if (e->head == call_sym || e->head == call1_sym) {
-            for(i=0; i < e->args->length; i++) {
+            int alen = e->args->length;
+            for(i=0; i < (size_t)alen; i++) {
                 m = max_arg_depth(jl_exprarg(e,i));
-                if (m+i+1 > max) max = m+i+1;
+                if (m+(int)i > max) max = m+(int)i;
+            }
+            if (!expr_is_symbol(jl_exprarg(e,0)) &&
+                jl_is_expr(jl_exprarg(e,0))) {
+                if (alen > max)
+                    max = alen;
             }
         }
         else if (e->head == method_sym) {
@@ -556,7 +569,8 @@ static size_t max_arg_depth(jl_value_t *expr)
                 if (m > max) max = m;
             }
         }
-        return max;
+        assert(max >= 0);
+        return (size_t)max;
     }
     return 0;
 }
@@ -962,7 +976,7 @@ static Value *emit_call(jl_value_t **args, size_t arglen, jl_codectx_t *ctx)
     if (theFptr == NULL) {
         Value *theFunc = emit_expr(args[0], ctx, true);
 #ifdef JL_GC_MARKSWEEP
-        if (!headIsGlobal) {
+        if (!headIsGlobal && jl_is_expr(a0)) {
             make_gcroot(boxed(theFunc), ctx);
         }
 #endif

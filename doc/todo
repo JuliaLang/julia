@@ -723,6 +723,12 @@ issues 1/24/11
 - socket data corruption bug (?)
 - array primitive benchmarks
 - parallelism documentation
+- darray functions
+  . elementwise
+  . ref
+  . assign
+  . reduce
+  . cat
 
 something about update operators, in-place operations in general
 
