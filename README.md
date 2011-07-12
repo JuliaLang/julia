@@ -16,7 +16,7 @@ For a more in-depth discussion of the rationale and advantages of Julia over oth
 
 - **Homepage:** <http://julialang.org>
 - **Source code:** <https://github.com/JuliaLang/julia>
-- **Git clone URL:** <https://StefanKarpinski@github.com/JuliaLang/julia.git> (see [below](#Download-Compilation))
+- **Git clone URL:** <git://github.com/JuliaLang/julia.git> (see [below](#Download-Compilation))
 - **Documentation:** <https://github.com/JuliaLang/julia/wiki>
 - **Discussion:** <julia-math@googlegroups.com>
 
@@ -58,11 +58,11 @@ For a more in-depth discussion of the rationale and advantages of Julia over oth
 <a name="Download-Compilation"/>
 ## Download & Compilation
 
-First, acquire the source code either by cloning the git repository (requires [git](http://git-scm.com/) to be installed):
+First, acquire the source code either by cloning the git repository (requires **[git](http://git-scm.com/)** to be installed):
 
-    git clone https://StefanKarpinski@github.com/JuliaLang/julia.git
+    git clone git://github.com/JuliaLang/julia.git
 
-or by using `curl` and `tar` to fetch and unpack the source:
+or by using curl and tar to fetch and unpack the source:
 
     mkdir julia && curl -Lk https://github.com/JuliaLang/julia/tarball/master | tar -zxf- -C julia --strip-components 1
 
