@@ -95,8 +95,6 @@ complex(x::Float, y::Real) = complex(promote(x,y)...)
 complex(x::Real, y::Float) = complex(promote(x,y)...)
 complex(x::Float) = complex(x, zero(x))
 
-im = complex128(0,1)
-
 
 ## complex with arbitrary component type ##
 
@@ -130,6 +128,24 @@ complex(x) = Complex(x)
 
 pi{T}(z::Complex{T}) = pi(T)
 pi{T}(::Type{Complex{T}}) = pi(T)
+
+
+## singleton type for complex im constant ##
+
+type ComplexIm <: ComplexNum; end
+im = ComplexIm()
+
+convert(::Type{Complex64},  ::ComplexIm) = complex64(0,1)
+convert(::Type{Complex128}, ::ComplexIm) = complex128(0,1)
+convert{T<:Real}(::Type{Complex{T}}, ::ComplexIm) = complex(zero(T),one(T))
+
+real(::ComplexIm) = 0
+imag(::ComplexIm) = 1
+
+promote_rule{T<:ComplexNum}(::Type{ComplexIm}, ::Type{T}) = T
+promote_rule{T<:Real}(::Type{ComplexIm}, ::Type{T}) = Complex{T}
+promote_rule(::Type{ComplexIm}, ::Type{Float64}) = Complex128
+promote_rule(::Type{ComplexIm}, ::Type{Float32}) = Complex64
 
 
 ## functions of complex numbers ##
