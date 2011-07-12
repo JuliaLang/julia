@@ -77,7 +77,7 @@ You might want to make a symbolic link for the executable, for example `ln -s JU
 Please note that the build process will not work if any of the build directory's parent directories have spaces in their names (this is due to a limitation in GNU make).
 
 Congratulations, if you've gotten this far, you are ready to try out julia.
-You can read about [getting started](/JuliaLang/julia/wiki/Getting-Started) in the Julia Manual.
+You can read about [getting started](https://github.com/JuliaLang/julia/wiki/Getting-Started) in the Julia Manual.
 
 <a name="Directories"/>
 ## Directories
@@ -111,3 +111,9 @@ Copy (or symlink) the TextMate Julia bundle into the TextMate application suppor
 where `JULIA_PATH` is the location of the top-level julia directory.
 Now select from the menu in TextMate `Bundles > Bundle Editor > Reload Bundles`.
 Julia should appear as a file type and be automatically detected for files with the `.j` extension.
+
+<a name="License"/>
+## License
+
+Julia is licensed under the three clause "Modified BSD License", with exceptions for certain components which link against GPL-licensed libraries (e.g. GNU readline).
+See [LICENSE](https://github.com/JuliaLang/julia/blob/master/LICENSE) for the full terms of the license.
