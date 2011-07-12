@@ -95,6 +95,9 @@ complex(x::Float, y::Real) = complex(promote(x,y)...)
 complex(x::Real, y::Float) = complex(promote(x,y)...)
 complex(x::Float) = complex(x, zero(x))
 
+im128 = complex128(0,1)
+im64 = complex64(0,1)
+
 
 ## complex with arbitrary component type ##
 
@@ -135,9 +138,9 @@ pi{T}(::Type{Complex{T}}) = pi(T)
 type ImaginaryUnit <: ComplexNum; end
 im = ImaginaryUnit()
 
-convert(::Type{Complex64},  ::ImaginaryUnit) = complex64(0,1)
-convert(::Type{Complex128}, ::ImaginaryUnit) = complex128(0,1)
 convert{T<:Real}(::Type{Complex{T}}, ::ImaginaryUnit) = complex(zero(T),one(T))
+convert(::Type{Complex128}, ::ImaginaryUnit) = im128
+convert(::Type{Complex64},  ::ImaginaryUnit) = im64
 
 real(::ImaginaryUnit) = 0
 imag(::ImaginaryUnit) = 1
