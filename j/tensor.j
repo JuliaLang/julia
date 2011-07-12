@@ -600,8 +600,14 @@ reverse(v::Vector) = [ v[length(v)-i+1] | i=1:length(v) ]
 transpose(x::Vector)  = [ x[j]         | i=1, j=1:size(x,1) ]
 ctranspose(x::Vector) = [ conj(x[j])   | i=1, j=1:size(x,1) ]
 
-#transpose(x::Matrix)  = [ x[j,i]       | i=1:size(x,2), j=1:size(x,1) ]
-ctranspose(x::Matrix) = [ conj(x[j,i]) | i=1:size(x,2), j=1:size(x,1) ]
+function ctranspose(a::Matrix)
+    m,n = size(a)
+    b = similar(a, n, m)
+    for i=1:m, j=1:n
+        b[j,i] = conj(a[i,j])
+    end
+    return b
+end
 
 function transpose(a::Matrix)
     m,n = size(a)
