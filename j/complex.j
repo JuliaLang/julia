@@ -144,9 +144,9 @@ isequal(z::ComplexNum, w::ComplexNum) =
 hash(z::ComplexNum) = bitmix(hash(real(z)),hash(imag(z)))
 
 conj(z::ComplexNum) = complex(real(z),-imag(z))
-norm(z::ComplexNum) = abs(z)
 abs(z::ComplexNum)  = hypot(real(z), imag(z))
-inv(z::ComplexNum)  = conj(z)/norm(z)
+abs2(z::ComplexNum) = real(z)*real(z) + imag(z)*imag(z)
+inv(z::ComplexNum)  = conj(z)/abs2(z)
 
 -(z::ComplexNum) = complex(-real(z), -imag(z))
 +(z::ComplexNum, w::ComplexNum) = complex(real(z) + real(w), imag(z) + imag(w))
