@@ -69,15 +69,15 @@ or by using curl and tar to fetch and unpack the source:
 TODO: check that this actually works once the repository is public.
 
 Next, enter the `julia/` directory and run `make` to build the `julia` executable.
-When compiled the first time, it will automatically download and build its external dependencies.
+When compiled the first time, it will automatically download and build its [external dependencies](#Required-Build-Tools-External-Libraries).
 This takes a while, but only has to be done once.
 
 No installation is required — julia is currently run from the directory where it was built.
-You might want to make a symbolic link for the executable, for example `ln -s JULIA_PATH/julia ~/bin/julia`.
+You might, however, want to make a symbolic link for the executable, for example `ln -s JULIA_PATH/julia ~/bin/julia`.
 Please note that the build process will not work if any of the build directory's parent directories have spaces in their names (this is due to a limitation in GNU make).
 
-Congratulations, if you've gotten this far, you are ready to try out julia.
-You can read about [getting started](https://github.com/JuliaLang/julia/wiki/Getting-Started) in the Julia Manual.
+Congratulations, if you've gotten this far, you are ready to try out Julia.
+You can read about [getting started](https://github.com/JuliaLang/julia/wiki/Getting-Started) in the manual.
 
 <a name="Directories"/>
 ## Directories
@@ -115,5 +115,5 @@ Julia should appear as a file type and be automatically detected for files with 
 <a name="License"/>
 ## License
 
-Julia is licensed under the three clause "Modified BSD License", with exceptions for certain components which link against GPL-licensed libraries (e.g. GNU readline).
+Julia is licensed under the three clause "Modified BSD License", with the exception of certain components that link against GPL-licensed libraries (e.g. GNU readline).
 See [LICENSE](https://github.com/JuliaLang/julia/blob/master/LICENSE) for the full terms of the license.
