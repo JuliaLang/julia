@@ -15,7 +15,8 @@ For a more in-depth discussion of the rationale and advantages of Julia over oth
 ## Resources
 
 - **Homepage:** <http://julialang.org>
-- **Download:** <https://github.com/JuliaLang/julia>
+- **Source code:** <https://github.com/JuliaLang/julia>
+- **Git clone URL:** <git://github.com/JuliaLang/julia.git> (see [below](#Download-Compilation))
 - **Documentation:** <https://github.com/JuliaLang/julia/wiki>
 - **Discussion:** <julia-math@googlegroups.com>
 
@@ -57,26 +58,26 @@ For a more in-depth discussion of the rationale and advantages of Julia over oth
 <a name="Download-Compilation"/>
 ## Download & Compilation
 
-First, acquire the source code either by cloning the git repository (requires [git](http://git-scm.com/) to be installed):
+First, acquire the source code either by cloning the git repository (requires **[git](http://git-scm.com/)** to be installed):
 
-    git clone https://StefanKarpinski@github.com/JuliaLang/julia.git
+    git clone git://github.com/JuliaLang/julia.git
 
-or by using `curl` and `tar` to fetch and unpack the source:
+or by using curl and tar to fetch and unpack the source:
 
     mkdir julia && curl -Lk https://github.com/JuliaLang/julia/tarball/master | tar -zxf- -C julia --strip-components 1
 
 TODO: check that this actually works once the repository is public.
 
 Next, enter the `julia/` directory and run `make` to build the `julia` executable.
-When compiled the first time, it will automatically download and build its external dependencies.
+When compiled the first time, it will automatically download and build its [external dependencies](#Required-Build-Tools-External-Libraries).
 This takes a while, but only has to be done once.
 
-No installation is required — julia is currently run from the directory where it was built.
-You might want to make a symbolic link for the executable, for example `ln -s JULIA_PATH/julia ~/bin/julia`.
+No installation is required — `julia` is currently run from the directory where it was built.
+You might, however, want to make a symbolic link for the executable, for example `ln -s JULIA_PATH/julia ~/bin/julia`.
 Please note that the build process will not work if any of the build directory's parent directories have spaces in their names (this is due to a limitation in GNU make).
 
-Congratulations, if you've gotten this far, you are ready to try out julia.
-You can read about [getting started](/JuliaLang/julia/wiki/Getting-Started) in the Julia Manual.
+Congratulations, if you've gotten this far, you are ready to try out Julia.
+You can read about [getting started](https://github.com/JuliaLang/julia/wiki/Getting-Started) in the manual.
 
 <a name="Directories"/>
 ## Directories
@@ -110,3 +111,9 @@ Copy (or symlink) the TextMate Julia bundle into the TextMate application suppor
 where `JULIA_PATH` is the location of the top-level julia directory.
 Now select from the menu in TextMate `Bundles > Bundle Editor > Reload Bundles`.
 Julia should appear as a file type and be automatically detected for files with the `.j` extension.
+
+<a name="License"/>
+## License
+
+Julia is licensed under the [three clause "Modified BSD License"](http://en.wikipedia.org/wiki/BSD_licenses#3-clause_license_.28.22New_BSD_License.22_or_.22Modified_BSD_License.22.29), with the exception of certain components that link against GPL-licensed libraries (e.g. GNU readline).
+See [LICENSE](https://github.com/JuliaLang/julia/blob/master/LICENSE) for the full terms of the license.
