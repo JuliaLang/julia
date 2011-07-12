@@ -347,6 +347,7 @@ end
 
 escape_string(s::String) = print_to_string(length(s), print_escaped, s, "\"")
 print_quoted(s::String) = (print('"'); print_escaped(s, "\"\$"); print('"'))
+#"  # work around syntax highlighting problem
 quote_string(s::String) = print_to_string(length(s)+2, print_quoted, s)
 
 # bare minimum unescaping function unescapes only given characters
@@ -839,7 +840,7 @@ end
 
 # concatenate byte arrays into a single array
 
-memcat() = Array(Int8,0)
+memcat() = Array(Uint8,0)
 memcat(a::Array{Uint8,1}) = copy(a)
 
 function memcat(arrays::Array{Uint8,1}...)

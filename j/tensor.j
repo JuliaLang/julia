@@ -533,7 +533,7 @@ end
 
 all(A::Tensor{Bool}, region::Region) = areduce(all, A, region)
 any(A::Tensor{Bool}, region::Region) = areduce(any, A, region)
-count(A::Tensor{Bool}, region::Region) = areduce(count, A, region, Int)
+count(A::Tensor{Bool}, region::Region) = areduce(count, A, region, Int32)
 
 function isequal(x::Tensor, y::Tensor)
     if size(x) != size(y)

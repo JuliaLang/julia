@@ -1179,12 +1179,21 @@ function inlineable(f, e::Expr, vars)
     expr = body[1].args[1]
     for i=1:length(args)
         a = args[i]
-        if occurs_more(expr, x->is(x,a), 1) > 1
+        occ = occurs_more(expr, x->is(x,a), 1)
+        if occ > 1
             aei = argexprs[i]
             # ok for argument to occur more than once if the actual argument
             # is a symbol or constant
             if !isa(aei,Symbol) && !isa(aei,Number) &&
                 !(isa(aei,Expr) && is(aei.head,:symbol))
+                return NF
+            end
+        elseif occ == 0
+            aei = argexprs[i]
+            if is(exprtype(aei),None)
+                # if an argument does not occur in the function and its
+                # actual argument is an error, make sure the error is not
+                # skipped.
                 return NF
             end
         end
@@ -1316,6 +1325,8 @@ function tuple_elim_pass(ast::Expr)
                         vals = { unique_name(ast) | j=1:(nv-1) }
                         push(vals, tup[nv+1])
                         del(body, i)
+                        # convert tuple allocation to a series of assignments
+                        # to local variables
                         for j=1:(nv-1)
                             tupelt = tup[j+1]
                             tmp = Expr(:(=), {vals[j],tupelt}, Any)
@@ -1327,8 +1338,7 @@ function tuple_elim_pass(ast::Expr)
                         for j=1:nv
                             r = vals[j]
                             if isa(r,Symbol)
-                                r = Expr(:symbol,{vals[j]},
-                                         exprtype(tup[j+1]))
+                                r = Expr(:symbol, {vals[j]}, exprtype(tup[j+1]))
                             end
                             body[i+j-1].args[2] = r
                         end

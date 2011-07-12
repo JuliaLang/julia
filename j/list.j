@@ -62,10 +62,12 @@ function append2(a, b)
     end
 end
 
+append(lst::List) = lst
+
 function append{T}(lst::List{T}, lsts...)
     n = length(lsts)
-    l = nil(T)
-    for i = n:-1:1
+    l = lsts[n]
+    for i = (n-1):-1:1
         l = append2(lsts[i], l)
     end
     return append2(lst, l)
