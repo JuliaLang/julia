@@ -115,5 +115,5 @@ Julia should appear as a file type and be automatically detected for files with 
 <a name="License"/>
 ## License
 
-Julia is licensed under the three clause "Modified BSD License", with the exception of certain components that link against GPL-licensed libraries (e.g. GNU readline).
+Julia is licensed under the [three clause "Modified BSD License"](http://en.wikipedia.org/wiki/BSD_licenses#3-clause_license_.28.22New_BSD_License.22_or_.22Modified_BSD_License.22.29), with the exception of certain components that link against GPL-licensed libraries (e.g. GNU readline).
 See [LICENSE](https://github.com/JuliaLang/julia/blob/master/LICENSE) for the full terms of the license.
