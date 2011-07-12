@@ -443,7 +443,7 @@ cx = {
 for i = 1:size(cx,1)
     @assert cx[i,1] == cx[i,2]
     @assert string(cx[i,2]) == unescape_string(cx[i,3])
-    if cx[i,1] < 0x80
+    if iswascii(cx[i,2]) || !iswprint(cx[i,2])
         @assert cx[i,3] == escape_string(string(cx[i,2]))
     end
     for j = 1:size(cx,1)
