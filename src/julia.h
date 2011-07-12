@@ -339,6 +339,7 @@ extern jl_sym_t *dollar_sym;
 extern jl_sym_t *quote_sym;
 extern jl_sym_t *top_sym;
 extern jl_sym_t *line_sym;
+extern jl_sym_t *multivalue_sym;
 extern DLLEXPORT jl_sym_t *jl_continue_sym;
 extern jl_sym_t *error_sym;
 extern jl_sym_t *vinf_sym;

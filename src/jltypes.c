@@ -2244,4 +2244,5 @@ void jl_init_types()
     Any_sym = jl_symbol("Any");
     static_typeof_sym = jl_symbol("static_typeof");
     new_sym = jl_symbol("new");
+    multivalue_sym = jl_symbol("multiple_value");
 }

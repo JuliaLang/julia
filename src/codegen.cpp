@@ -953,16 +953,18 @@ static Value *emit_call(jl_value_t **args, size_t arglen, jl_codectx_t *ctx)
         //if (!b->constp) b = NULL;
     }
     if (jl_is_expr(a0) && ((jl_expr_t*)a0)->head == top_sym) {
+        headIsGlobal = true;
         // (top x) is also global
         b = jl_get_binding(ctx->module,
                            (jl_sym_t*)jl_exprarg(((jl_expr_t*)a0),0));
-        if (!b->constp || b->value==NULL) b = NULL;
+        if (b->value==NULL ||
+            (!b->constp && !(jl_is_func(b->value) && jl_is_gf(b->value))))
+            b = NULL;
     }
     jl_value_t *f = NULL;
     if (b != NULL) {
         // head is a constant global
         f = b->value;
-        headIsGlobal = true;
     }
     else if (jl_is_func(a0)) {
         f = a0;

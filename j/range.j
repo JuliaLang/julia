@@ -45,11 +45,11 @@ done(r::Range1, i) = (i > r.stop)
 next(r::Range1, i) = (i, i+1)
 
 # floating point ranges need to keep an integer counter
-start(r::Range) = (1, r.start)
-done{T}(r::Range{T}, st::(Int32,T)) =
-    (r.step < 0 ? tupleref(st,2) < r.stop : tupleref(st,2) > r.stop)
-next{T}(r::Range{T}, st::(Int32,T)) =
-    (tupleref(st,2), (tupleref(st,1)+1, r.start + tupleref(st,1)*r.step))
+start(r::Range) = 0
+done{T}(r::Range{T}, st) =
+    (r.step < 0 ? r.start+st*r.step < r.stop :
+                  r.start+st*r.step > r.stop)
+next{T}(r::Range{T}, st) = (r.start+st*r.step, st+1)
 
 colon(start::Real, stop::Real, step::Real) = Range(start, step, stop)
 colon(start::Real, stop::Real) = Range1(start, stop)

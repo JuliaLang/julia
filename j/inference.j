@@ -960,6 +960,7 @@ function typeinf(linfo::LambdaStaticData,atypes::Tuple,sparams::Tuple, cop, def)
     fulltree = type_annotate(ast, s, sv, frame.result, vars)
     def.tfunc = (atypes, fulltree, def.tfunc)
     fulltree.args[3] = inlining_pass(fulltree.args[3], s[1])
+    tuple_elim_pass(fulltree)
     return (fulltree, frame.result)
 end
 
@@ -1274,6 +1275,74 @@ function inlining_pass(e::Expr, vars)
         end
     end
     e
+end
+
+function add_variable(ast, name, typ)
+    vinf = {name,typ,false,true}
+    locllist = (ast.args[2].args[1]::Expr).args
+    vinflist = ast.args[2].args[2]::Array{Any,1}
+    push(locllist, name)
+    push(vinflist, vinf)
+end
+
+function unique_name(ast)
+    locllist = (ast.args[2].args[1]::Expr).args
+    g = gensym()
+    while contains_is(locllist, g)
+        g = gensym()
+    end
+    g
+end
+
+# eliminate allocation of tuples used to return multiple values
+function tuple_elim_pass(ast::Expr)
+    body = (ast.args[3].args)::Array{Any,1}
+    n = length(body)
+    i = 1
+    while i <= n
+        e = body[i]
+        if isa(e,Expr) && is(e.head,:multiple_value)
+            i += 1
+            ret = body[i]
+            # look for t = top(tuple)(...)
+            if isa(ret,Expr) && is(ret.head,:(=))
+                rhs = ret.args[2]
+                if isa(rhs,Expr) && is(rhs.head,:call) &&
+                   isa(rhs.args[1],Expr) && is(rhs.args[1].head,:top) &&
+                   is(rhs.args[1].args[1],:tuple)
+                    tup = rhs.args
+                    nv = length(tup)-1
+                    if nv > 0
+                        vals = { unique_name(ast) | j=1:(nv-1) }
+                        push(vals, tup[nv+1])
+                        del(body, i)
+                        for j=1:(nv-1)
+                            tupelt = tup[j+1]
+                            tmp = Expr(:(=), {vals[j],tupelt}, Any)
+                            add_variable(ast, vals[j], exprtype(tupelt))
+                            insert(body, i+j-1, tmp)
+                        end
+                        i = i+nv-1
+                        i0 = i
+                        for j=1:nv
+                            r = vals[j]
+                            if isa(r,Symbol)
+                                r = Expr(:symbol,{vals[j]},
+                                         exprtype(tup[j+1]))
+                            end
+                            body[i+j-1].args[2] = r
+                        end
+                        i = i+nv-1
+                        last = body[i]
+                        del(body, i)
+                        insert(body, i0, last)
+                    end
+                end
+            end
+        end
+        i += 1
+    end
+    ast
 end
 
 function finfer(f, types)

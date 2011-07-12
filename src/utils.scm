@@ -30,6 +30,11 @@
 	   (any (lambda (x) (contains p x))
 		expr))))
 
+(define (butlast l)
+  (if (pair? (cdr l))
+      (cons (car l) (butlast (cdr l)))
+      '()))
+
 (define *gensyms* '())
 (define *current-gensyms* '())
 (define (gensy)

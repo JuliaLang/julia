@@ -566,13 +566,14 @@
 		       ; (a, b, ...) = (x, y, ...)
 		       (let ((temps (map (lambda (x) (gensy)) (cddr x))))
 			 `(block
-			   ,@(map make-assignment temps (cddr x))
-			   (= ,(car lhss) ,(cadr x))
-			   ,@(map make-assignment (cdr lhss) temps)
+			   ,@(map make-assignment temps (butlast (cdr x)))
+			   (= ,(car (last-pair lhss)) ,(car (last-pair x)))
+			   ,@(map make-assignment (butlast lhss) temps)
 			   (null)))
 		       ; (a, b, ...) = other
 		       (let ((t (gensy)))
 			 `(block
+			   (multiple_value)
 			   (= ,t ,x)
 			   ,@(let loop ((lhs lhss)
 					(i   1))
@@ -912,7 +913,9 @@
    ;; cell array comprehensions
    (pattern-lambda
     (cell-comprehension expr . ranges)
-    (let ( (result (gensy)) (ri (gensy)) )
+    (let ( (result (gensy))
+	   (ri (gensy))
+	   (rs (map (lambda (x) (gensy)) ranges)) )
 
       ;; compute the dimensions of the result
       (define (compute-dims ranges)
@@ -922,19 +925,20 @@
 		  (compute-dims (cdr ranges)))))
 
       ;; construct loops to cycle over all dimensions of an n-d comprehension
-      (define (construct-loops ranges)
+      (define (construct-loops ranges rs)
         (if (null? ranges)
 	    `(block (call assign ,result ,expr ,ri)
 		    (+= ,ri 1))
-	    `(for ,(car ranges)
-		  ,(construct-loops (cdr ranges)))))
+	    `(for (= ,(cadr (car ranges)) ,(car rs))
+		  ,(construct-loops (cdr ranges) (cdr rs)))))
 
       ;; Evaluate the comprehension
       `(scope-block
 	(block 
-	 (= ,result (call (top Array) (top Any) ,@(compute-dims ranges)))
+	 ,@(map make-assignment rs (map caddr ranges))
+	 (= ,result (call (top Array) (top Any) ,@(compute-dims rs)))
 	 (= ,ri 1)
-	 ,(construct-loops (reverse ranges))
+	 ,(construct-loops (reverse ranges) (reverse rs))
 	 ,result))))
 
 )) ;; lower-comprehensions
