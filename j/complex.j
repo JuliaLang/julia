@@ -135,7 +135,7 @@ pi{T}(::Type{Complex{T}}) = pi(T)
 type ImaginaryUnit <: ComplexNum; end
 im = ImaginaryUnit()
 
-convert{T<:Real}(::Type{Complex{T}}, ::ImaginaryUnit) = complex(zero(T),one(T))
+convert{T<:Real}(::Type{Complex{T}}, ::ImaginaryUnit) = Complex(zero(T),one(T))
 convert(::Type{Complex128}, ::ImaginaryUnit) = complex128(0,1)
 convert(::Type{Complex64},  ::ImaginaryUnit) = complex64(0,1)
 
