@@ -279,6 +279,47 @@ end # macro
 @binary_boolean_op (|)
 @binary_boolean_op ($)
 
+## code generator for specializing on the number of dimensions ##
+
+function make_loop_nest(vars, ranges, body)
+    expr = body
+    for i=1:length(vars)
+        v = vars[i]
+        r = ranges[i]
+        expr = quote
+            for ($v) = ($r)
+                $expr
+            end
+        end
+    end
+    expr
+end
+
+function gen_cartesian_map(cache, genbody, dims, exargnames, exargs...)
+    N = length(dims)
+    if !has(cache,N)
+        dimargnames = { gensym() | i=1:N }
+        ivars = { gensym() | i=1:N }
+        body = genbody(ivars)
+        fexpr =
+        quote
+            let _dummy_=nothing
+                local _F_
+                function _F_($(dimargnames...), $(exargnames...))
+                    $make_loop_nest(ivars, dimargnames, body)
+                end
+                _F_
+            end
+        end
+        f = eval(fexpr)
+        cache[N] = f
+    else
+        f = cache[N]
+    end
+    return f(dims..., exargs...)
+end
+
+
 ## Indexing: ref ##
 
 ref(t::Tensor) = t
@@ -426,10 +467,6 @@ end
 
 ## Reductions ##
 
-function areduce{T}(f::Function, A::Tensor{T}, region::Region)
-    areduce(f, A, region, T)
-end
-
 function contains(itr, x)
     for y=itr
         if y==x
@@ -441,20 +478,48 @@ end
 
 contains(s::Number, n::Int) = (s == n)
 
+areduce{T}(f::Function, A::Tensor{T}, region::Region) = areduce(f,A,region,T)
+
+# generate the body of the N-d loop to compute a reduction
+function gen_areduce_core(ivars, f)
+    n = length(ivars)
+    # limits and vars for reduction loop
+    lo    = { gensym() | i=1:n }
+    hi    = { gensym() | i=1:n }
+    rvars = { gensym() | i=1:n }
+    setlims = { quote
+        # each dim of reduction is either 1:sizeA or ivar:ivar
+        if contains(region,$i)
+            $lo[i] = 1
+            $hi[i] = size(A,$i)
+        else
+            $lo[i] = $hi[i] = $ivars[i]
+        end
+               end | i=1:n }
+    rranges = { :( ($lo[i]):($hi[i]) ) | i=1:n }  # lo:hi for all dims
+    quote
+        _tot = ($f)()
+        $(setlims...)
+        $make_loop_nest(rvars, rranges,
+                        :(_tot = ($f)(_tot, A[$(rvars...)])))
+        R[$(ivars...)] = _tot
+    end
+end
+
 function areduce(f::Function, A::Tensor, region::Region, RType::Type)
     dimsA = size(A)
     ndimsA = length(dimsA)
     dimsR = ntuple(ndimsA, i->(contains(region, i) ? 1 : dimsA[i]))
     R = similar(A, RType, dimsR)
-
-    function reduce_one(ind)
-        sliceA = ntuple(ndimsA, i->(contains(region, i) ?
-                                    Range1(1,dimsA[i]) :
-                                    ind[i]))
-        R[ind...] = f(A[sliceA...])
+    
+    global areduce_cache
+    if !isbound(:areduce_cache)
+        areduce_cache = HashTable()
     end
-
-    cartesian_map(reduce_one, ntuple(ndimsA, i->(Range1(1,dimsR[i]))) )
+    gen_cartesian_map(areduce_cache, iv->gen_areduce_core(iv,:f),
+                      ntuple(ndimsA, i->(Range1(1,dimsR[i]))),
+                      {:f, :A, :region, :R},
+                      f, A, region, R)
     return R
 end
 
