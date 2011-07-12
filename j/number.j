@@ -18,6 +18,7 @@ ref(x::Number) = x
 signbit(x::Real) = x < 0 ? int8(-1) : int8(1)
 sign(x::Real) = x < 0 ? int8(-1) : x > 0 ? int8(1) : int8(0)
 abs(x::Real) = x < 0 ? -x : x
+abs2(x::Real) = x*x
 
 conj(x::Number) = x
 transpose(x::Number) = x
