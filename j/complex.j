@@ -130,22 +130,22 @@ pi{T}(z::Complex{T}) = pi(T)
 pi{T}(::Type{Complex{T}}) = pi(T)
 
 
-## singleton type for complex im constant ##
+## singleton type for imaginary unit constant ##
 
-type ComplexIm <: ComplexNum; end
-im = ComplexIm()
+type ImaginaryUnit <: ComplexNum; end
+im = ImaginaryUnit()
 
-convert(::Type{Complex64},  ::ComplexIm) = complex64(0,1)
-convert(::Type{Complex128}, ::ComplexIm) = complex128(0,1)
-convert{T<:Real}(::Type{Complex{T}}, ::ComplexIm) = complex(zero(T),one(T))
+convert{T<:Real}(::Type{Complex{T}}, ::ImaginaryUnit) = Complex(zero(T),one(T))
+convert(::Type{Complex128}, ::ImaginaryUnit) = complex128(0,1)
+convert(::Type{Complex64},  ::ImaginaryUnit) = complex64(0,1)
 
-real(::ComplexIm) = 0
-imag(::ComplexIm) = 1
+real(::ImaginaryUnit) = 0
+imag(::ImaginaryUnit) = 1
 
-promote_rule{T<:ComplexNum}(::Type{ComplexIm}, ::Type{T}) = T
-promote_rule{T<:Real}(::Type{ComplexIm}, ::Type{T}) = Complex{T}
-promote_rule(::Type{ComplexIm}, ::Type{Float64}) = Complex128
-promote_rule(::Type{ComplexIm}, ::Type{Float32}) = Complex64
+promote_rule{T<:ComplexNum}(::Type{ImaginaryUnit}, ::Type{T}) = T
+promote_rule{T<:Real}(::Type{ImaginaryUnit}, ::Type{T}) = Complex{T}
+promote_rule(::Type{ImaginaryUnit}, ::Type{Float64}) = Complex128
+promote_rule(::Type{ImaginaryUnit}, ::Type{Float32}) = Complex64
 
 
 ## functions of complex numbers ##
@@ -204,11 +204,14 @@ function /(a::Real, b::ComplexNum)
 end
 
 function sqrt(z::ComplexNum)
-    r = sqrt(0.5(hypot(real(z),imag(z))+abs(real(z))))
-    if real(z) >= 0
-        return complex(r, 0.5*imag(z)/r)
+    rz = float(real(z))
+    iz = float(imag(z))
+    T = promote_type(typeof(rz),typeof(z))
+    r = sqrt(0.5*(hypot(rz,iz)+abs(rz)))
+    if rz >= 0
+        return convert(T,complex(r, 0.5*iz/r))
     end
-    return complex(0.5*abs(imag(z))/r, imag(z) >= 0 ? r : -r)
+    return convert(T,complex(0.5*abs(iz)/r, iz >= 0 ? r : -r))
 end
 
 cis(theta::Real) = complex(cos(theta),sin(theta))
@@ -222,17 +225,19 @@ arg(z::ComplexNum) = atan2(imag(z), real(z))
 function sin(z::ComplexNum)
     u = exp(imag(z))
     v = 1/u
+    rz = real(z)
     u = 0.5(u+v)
     v = u-v
-    complex(u*sin(real(z)), v*cos(real(z)))
+    complex(u*sin(rz), v*cos(rz))
 end
 
 function cos(z::ComplexNum)
     u = exp(imag(z))
     v = 1/u
+    rz = real(z)
     u = 0.5(u+v)
     v = u-v
-    complex(u*cos(real(z)), -v*sin(real(z)))
+    complex(u*cos(rz), -v*sin(rz))
 end
 
 function log(z::ComplexNum)
@@ -277,23 +282,24 @@ function ^{T<:ComplexNum}(z::T, p::T)
     r = abs(z)
     rp = r^realp
     realz = real(z)
+    zer = zero(r)
     if imag(p) == 0
         ip = truncate(realp)
         if ip == realp
             # integer multiples of pi/2
             if imag(z) == 0 && realz < 0
-                return complex(isodd(ip) ? -rp : rp, 0)
+                return complex(isodd(ip) ? -rp : rp, zer)
             elseif realz == 0 && imag(z) < 0
                 if isodd(ip)
-                    return complex(0, isodd(div(ip-1,2)) ? rp : -rp)
+                    return complex(zer, isodd(div(ip-1,2)) ? rp : -rp)
                 else
-                    return complex(isodd(div(ip,2)) ? -rp : rp, 0)
+                    return complex(isodd(div(ip,2)) ? -rp : rp, zer)
                 end
             elseif realz == 0 && imag(z) > 0
                 if isodd(ip)
-                    return complex(0, isodd(div(ip-1,2)) ? -rp : rp)
+                    return complex(zer, isodd(div(ip-1,2)) ? -rp : rp)
                 else
-                    return complex(isodd(div(ip,2)) ? -rp : rp, 0)
+                    return complex(isodd(div(ip,2)) ? -rp : rp, zer)
                 end
             end
         else
@@ -302,9 +308,9 @@ function ^{T<:ComplexNum}(z::T, p::T)
             # 1/2 multiples of pi
             if ip == dr && imag(z) == 0
                 if realz < 0
-                    return complex(0, isodd(div(ip-1,2)) ? -rp : rp)
+                    return complex(zer, isodd(div(ip-1,2)) ? -rp : rp)
                 elseif realz >= 0
-                    return complex(rp, 0)
+                    return complex(rp, zer)
                 end
             end
         end

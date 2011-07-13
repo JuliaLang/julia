@@ -363,9 +363,12 @@ DLLEXPORT jl_sym_t *jl_symbol_n(const char *str, int32_t len)
     return jl_symbol(name);
 }
 
+static uint32_t gs_ctr = 0;  // TODO: per-thread
+uint32_t jl_get_gs_ctr() { return gs_ctr; }
+void jl_set_gs_ctr(uint32_t ctr) { gs_ctr = ctr; }
+
 DLLEXPORT jl_sym_t *jl_gensym()
 {
-    static uint32_t gs_ctr = 0;  // TODO: per-thread
     char name[32];
     char *n;
     n = uint2str(name, sizeof(name)-1, gs_ctr, 10);
