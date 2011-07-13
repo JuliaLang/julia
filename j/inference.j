@@ -1303,49 +1303,61 @@ function unique_name(ast)
     g
 end
 
+function is_top_call(e::Expr, fname)
+    return is(e.head,:call) && isa(e.args[1],Expr) &&
+        is(e.args[1].head,:top) && is(e.args[1].args[1],fname)
+end
+
 # eliminate allocation of tuples used to return multiple values
 function tuple_elim_pass(ast::Expr)
     body = (ast.args[3].args)::Array{Any,1}
-    n = length(body)
     i = 1
-    while i <= n
+    while i < length(body)
         e = body[i]
         if isa(e,Expr) && is(e.head,:multiple_value)
-            i += 1
-            ret = body[i]
+            i_start = i
+            ret = body[i+1]
             # look for t = top(tuple)(...)
             if isa(ret,Expr) && is(ret.head,:(=))
                 rhs = ret.args[2]
-                if isa(rhs,Expr) && is(rhs.head,:call) &&
-                   isa(rhs.args[1],Expr) && is(rhs.args[1].head,:top) &&
-                   is(rhs.args[1].args[1],:tuple)
+                if isa(rhs,Expr) && is_top_call(rhs,:tuple)
                     tup = rhs.args
+                    tupname = ret.args[1]
                     nv = length(tup)-1
                     if nv > 0
-                        vals = { unique_name(ast) | j=1:(nv-1) }
-                        push(vals, tup[nv+1])
-                        del(body, i)
+                        del(body, i)  # remove (multiple_value)
+                        del(body, i)  # remove tuple allocation
+                        vals = { unique_name(ast) | j=1:nv }
                         # convert tuple allocation to a series of assignments
                         # to local variables
-                        for j=1:(nv-1)
+                        for j=1:nv
                             tupelt = tup[j+1]
                             tmp = Expr(:(=), {vals[j],tupelt}, Any)
                             add_variable(ast, vals[j], exprtype(tupelt))
                             insert(body, i+j-1, tmp)
                         end
-                        i = i+nv-1
+                        i = i+nv
                         i0 = i
-                        for j=1:nv
-                            r = vals[j]
-                            if isa(r,Symbol)
-                                r = Expr(:symbol, {vals[j]}, exprtype(tup[j+1]))
+                        j = 1; k = 1
+                        while k <= nv
+                            stmt = body[i+j-1]
+                            if isa(stmt,Expr) && is(stmt.head,:(=))
+                                rhs = stmt.args[2]
+                                if isa(rhs,Expr) &&
+                                   is_top_call(rhs,:tupleref) &&
+                                   isequal(rhs.args[2],tupname)
+                                    r = vals[k]
+                                    if isa(r,Symbol)
+                                        r = Expr(:symbol, {r},
+                                                 exprtype(tup[k+1]))
+                                    end
+                                    stmt.args[2] = r
+                                    k += 1
+                                end
                             end
-                            body[i+j-1].args[2] = r
+                            j += 1
                         end
-                        i = i+nv-1
-                        last = body[i]
-                        del(body, i)
-                        insert(body, i0, last)
+                        i = i_start
                     end
                 end
             end
