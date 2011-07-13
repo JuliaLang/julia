@@ -332,6 +332,18 @@ ref(A::Matrix, I::Index, J::Vector{Index})         = [ A[i,j] | i = I, j = J ]
 ref(A::Matrix, I::Vector{Index}, J::Index)         = [ A[i,j] | i = I, j = J ]
 ref(A::Matrix, I::Vector{Index}, J::Vector{Index}) = [ A[i,j] | i = I, j = J ]
 
+function ref(A::Tensor, i0::Index, i1::Index)
+    A[i0 + size(A,1)*(i1-1)]
+end
+
+function ref(A::Tensor, i0::Index, i1::Index, i2::Index)
+    A[i0 + size(A,1)*((i1-1) + size(A,2)*(i2-1))]
+end
+
+function ref(A::Tensor, i0::Index, i1::Index, i2::Index, i3::Index)
+    A[i0 + size(A,1)*((i1-1) + size(A,2)*((i2-1) + size(A,3)*(i3-1)))]
+end
+
 function ref(A::Tensor, I::Index...)
     dims = size(A)
     ndims = length(I)
@@ -346,25 +358,22 @@ function ref(A::Tensor, I::Index...)
     return A[index]
 end
 
+let ref_cache = nothing
+global ref
 function ref(A::Tensor, I::Indices...)
-    dims = size(A)
-    ndimsA = length(dims)
-
-    strides = cumprod(dims)
     X = similar(A, map(length, I))
-
     storeind = 1
-    function store(ind)
-        index = ind[1]
-        for d=2:ndimsA
-            index += (ind[d]-1) * strides[d-1]
-        end
-        X[storeind] = A[index]
-        storeind += 1
-    end
 
-    cartesian_map(store, I)
+    if is(ref_cache,nothing)
+        ref_cache = HashTable()
+    end
+    gen_cartesian_map(ref_cache, ivars->:(X[storeind] = A[$(ivars...)];
+                                          storeind += 1),
+                      I,
+                      {:A, :X, :storeind},
+                      A, X, storeind)
     return X
+end
 end
 
 ## Indexing: assign ##
@@ -414,6 +423,20 @@ assign(A::Tensor, x, I0::Index, I::Index...) = assign_scalarND(A,x,I0,I...)
 assign(A::Tensor, x::Tensor, I0::Index, I::Index...) =
     assign_scalarND(A,x,I0,I...)
 
+assign(A::Tensor, x::Tensor, i0::Index, i1::Index) =
+    A[i0 + size(A,1)*(i1-1)] = x
+assign(A::Tensor, x, i0::Index, i1::Index) = A[i0 + size(A,1)*(i1-1)] = x
+
+assign(A::Tensor, x, i0::Index, i1::Index, i2::Index) =
+    A[i0 + size(A,1)*((i1-1) + size(A,2)*(i2-1))] = x
+assign(A::Tensor, x::Tensor, i0::Index, i1::Index, i2::Index) =
+    A[i0 + size(A,1)*((i1-1) + size(A,2)*(i2-1))] = x
+
+assign(A::Tensor, x, i0::Index, i1::Index, i2::Index, i3::Index) =
+    A[i0 + size(A,1)*((i1-1) + size(A,2)*((i2-1) + size(A,3)*(i3-1)))] = x
+assign(A::Tensor, x::Tensor, i0::Index, i1::Index, i2::Index, i3::Index) =
+    A[i0 + size(A,1)*((i1-1) + size(A,2)*((i2-1) + size(A,3)*(i3-1)))] = x
+
 function assign_scalarND(A, x, I0, I...)
     dims = size(A)
     index = I0
@@ -426,43 +449,35 @@ function assign_scalarND(A, x, I0, I...)
     return A
 end
 
-
+let assign_cache = nothing
+global assign
 function assign(A::Tensor, x, I0::Indices, I::Indices...)
-    dims = size(A)
-    ndimsA = length(dims)
-
-    strides = cumprod(dims)
-
-    function store_one(ind)
-        index = ind[1]
-        for d=2:ndimsA
-            index += (ind[d]-1) * strides[d-1]
-        end
-        A[index] = x
+    if is(assign_cache,nothing)
+        assign_cache = HashTable()
     end
-
-    cartesian_map(store_one, append(tuple(I0), I))
+    gen_cartesian_map(assign_cache, ivars->:(A[$(ivars...)] = x),
+                      append(tuple(I0), I),
+                      {:A, :x},
+                      A, x)
     return A
 end
+end
 
+let assign_cache = nothing
+global assign
 function assign(A::Tensor, X::Tensor, I0::Indices, I::Indices...)
-    dims = size(A)
-    ndimsA = length(dims)
-
-    strides = cumprod(dims)
-
     refind = 1
-    function store_all(ind)
-        index = ind[1]
-        for d=2:ndimsA
-            index += (ind[d]-1) * strides[d-1]
-        end
-        A[index] = X[refind]
-        refind += 1
-    end
 
-    cartesian_map(store_all, append(tuple(I0), I))
+    if is(assign_cache,nothing)
+        assign_cache = HashTable()
+    end
+    gen_cartesian_map(assign_cache, ivars->:(A[$(ivars...)] = X[refind];
+                                             refind += 1),
+                      append(tuple(I0), I),
+                      {:A, :X, :refind},
+                      A, X, refind)
     return A
+end
 end
 
 ## Reductions ##
@@ -480,6 +495,7 @@ contains(s::Number, n::Int) = (s == n)
 
 areduce{T}(f::Function, A::Tensor{T}, region::Region) = areduce(f,A,region,T)
 
+let areduce_cache = nothing
 # generate the body of the N-d loop to compute a reduction
 function gen_areduce_core(ivars, f)
     n = length(ivars)
@@ -506,14 +522,14 @@ function gen_areduce_core(ivars, f)
     end
 end
 
+global areduce
 function areduce(f::Function, A::Tensor, region::Region, RType::Type)
     dimsA = size(A)
     ndimsA = length(dimsA)
     dimsR = ntuple(ndimsA, i->(contains(region, i) ? 1 : dimsA[i]))
     R = similar(A, RType, dimsR)
     
-    global areduce_cache
-    if !isbound(:areduce_cache)
+    if is(areduce_cache,nothing)
         areduce_cache = HashTable()
     end
     gen_cartesian_map(areduce_cache, iv->gen_areduce_core(iv,:f),
@@ -521,6 +537,7 @@ function areduce(f::Function, A::Tensor, region::Region, RType::Type)
                       {:f, :A, :region, :R},
                       f, A, region, R)
     return R
+end
 end
 
 function max{T}(A::Tensor{T})
