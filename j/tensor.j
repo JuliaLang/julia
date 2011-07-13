@@ -362,7 +362,6 @@ let ref_cache = nothing
 global ref
 function ref(A::Tensor, I::Indices...)
     X = similar(A, map(length, I))
-    storeind = 1
 
     if is(ref_cache,nothing)
         ref_cache = HashTable()
@@ -371,7 +370,7 @@ function ref(A::Tensor, I::Indices...)
                                           storeind += 1),
                       I,
                       {:A, :X, :storeind},
-                      A, X, storeind)
+                      A, X, 1)
     return X
 end
 end
@@ -466,8 +465,6 @@ end
 let assign_cache = nothing
 global assign
 function assign(A::Tensor, X::Tensor, I0::Indices, I::Indices...)
-    refind = 1
-
     if is(assign_cache,nothing)
         assign_cache = HashTable()
     end
@@ -475,7 +472,7 @@ function assign(A::Tensor, X::Tensor, I0::Indices, I::Indices...)
                                              refind += 1),
                       append(tuple(I0), I),
                       {:A, :X, :refind},
-                      A, X, refind)
+                      A, X, 1)
     return A
 end
 end

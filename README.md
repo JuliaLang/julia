@@ -7,9 +7,10 @@
      _/ |\__'_|_|_|\__'_|  |
     |__/                   |
 
-Julia is a very high-level, high-performance dynamic language for numerical and scientific computing.
-It provides support for state-of-the-art numerical accuracy and performance, while being designed to support parallelism and distributed computation from the ground up.
-Some of its notable features include optional typing, multiple dispatch, and excellent performance through type inference and just-in-time (JIT) compilation.
+Julia is a high-level, high-performance dynamic language for numerical and scientific computing.
+It provides a sophisticated compiler, parallel execution, and numerical accuracy.
+Key features include multiple dispatch, optional typing, and excellent
+performance through type inference and just-in-time (JIT) compilation.
 The language is multi-paradigm, combining features of functional, object-oriented, and imperative styles.
 For a more in-depth discussion of the rationale and advantages of Julia over other systems, see the [Introduction](https://github.com/JuliaLang/julia/wiki/Introduction) in the wiki, or [browse all](https://github.com/JuliaLang/julia/wiki/) of the wiki documentation.
 
@@ -31,7 +32,7 @@ For a more in-depth discussion of the rationale and advantages of Julia over oth
     - **[LLVM][]**         — compiler infrastructure
     - **[fdlibm][]**       — a portable implementation of much of the system-dependent libm math library's functionality.
     - **[MT][]**	   — a fast Mersenne Twister pseudorandom number generator library.
-    - **[OpenBLAS][]**     — a fast, open, and maintained [basic linear algebar subprograms (BLAS)](http://en.wikipedia.org/wiki/Basic_Linear_Algebra_Subprograms) library, based on [Kazushige Goto's](http://en.wikipedia.org/wiki/Kazushige_Goto) famous [GotoBLAS](http://www.tacc.utexas.edu/tacc-projects/gotoblas2/).
+    - **[OpenBLAS][]**     — a fast, open, and maintained [basic linear algebra subprograms (BLAS)](http://en.wikipedia.org/wiki/Basic_Linear_Algebra_Subprograms) library, based on [Kazushige Goto's](http://en.wikipedia.org/wiki/Kazushige_Goto) famous [GotoBLAS](http://www.tacc.utexas.edu/tacc-projects/gotoblas2/).
     - **[LAPACK][]**       — library of linear algebra routines for solving systems of simultaneous linear equations, least-squares solutions of linear systems of equations, eigenvalue problems, and singular value problems.
     - **[ARPACK][]**       — a collection of subroutines designed to solve large, sparse eigenvalue problems.
     - **[FFTW][]**	   — library for computing fast Fourier transforms very quickly and efficiently.
@@ -74,7 +75,7 @@ Next, enter the `julia/` directory and run `make` to build the `julia` executabl
 When compiled the first time, it will automatically download and build its [external dependencies](#Required-Build-Tools-External-Libraries).
 This takes a while, but only has to be done once.
 
-No installation is required: `julia` is currently run from the directory where it was built.
+No installation is required; `julia` is currently run from the directory where it was built.
 You might, however, want to make a symbolic link for the executable, for example `ln -s JULIA_PATH/julia ~/bin/julia`.
 Please note that the build process will not work if any of the build directory's parent directories have spaces in their names (this is due to a limitation in GNU make).
 
@@ -92,7 +93,7 @@ You can read about [getting started](https://github.com/JuliaLang/julia/wiki/Get
     lib/           shared libraries loaded by julia's standard libraries
     src/           source for julia language core
     test/          unit and function tests for julia itself
-    ui/            source for various frontends
+    ui/            source for various front ends
 
 <a name="Emacs-Setup"/>
 ## Emacs Setup
