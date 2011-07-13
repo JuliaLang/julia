@@ -50,10 +50,10 @@ function hpl_par(A::Matrix, b::Vector, blocksize::Int32, run_parallel::Bool)
         ## Apply permutation from pivoting
         J = (B_cols[i+1]+1):B_cols[nB+1]
         A[K, J] = A[panel_p, J]
-
         ## Threads for trailing updates
         L_II = tril(A[I,I], -1) + eye(length(I))
         K = (I[length(I)]+1):n
+        A_KI = A[K,I]
 
         for j=(i+1):nB
             J = (B_cols[j]+1):B_cols[j+1]
@@ -61,7 +61,7 @@ function hpl_par(A::Matrix, b::Vector, blocksize::Int32, run_parallel::Bool)
             ## Do the trailing update (Compute U, and DGEMM - all flops are here)
             if run_parallel
                 A_IJ = A[I,J]
-                A_KI = A[K,I]
+                #A_KI = A[K,I]
                 A_KJ = A[K,J]
                 depend[i+1,j] = @spawn trailing_update(L_II, A_IJ, A_KI, A_KJ, depend[i+1,i], depend[i,j])
             else
@@ -127,3 +127,131 @@ function trailing_update(L_II, A_IJ, A_KI, A_KJ, row_dep, col_dep)
     return (A_IJ, A_KJ)
     
 end ## trailing_update()
+
+
+### using DArrays ###
+
+function hpl_par2(A::Matrix, b::Vector)
+    n = size(A,1)
+    A = [A b]
+
+    C = distribute(A, 2)
+    nB = length(C.pmap)
+
+    ## case if only one processor
+    if nB <= 1
+        x = A[1:n, 1:n] \ A[:,n+1]
+        return x
+    end
+
+    #pmap[i] is where block i's stuff is
+    #block i is dist[i] to dist[i+1]-1
+    for i = 1:nB
+        ##panel factorization
+        panel_p = remote_call_fetch(C.pmap[i], panel_factor2, C, i, n)
+
+        ## Apply permutation from pivoting
+        ## Todo: enforce dependencies
+        for j = (i+1):nB
+            remote_do(C.pmap[j], permute, C, i, j, panel_p, n, false)
+        end
+        ## Special case for last column
+        if i == nB
+            remote_do(C.pmap[nB], permute, C, i, nB+1, panel_p, n, true)
+        end
+
+        ##Trailing updates
+        (i == nB) ? (I = (C.dist[i]):n) :
+                    (I = (C.dist[i]):(C.dist[i+1]-1))
+        C_II = convert(Array, C[I,I])
+        L_II = tril(C_II, -1) + eye(length(I))
+        K = (I[length(I)]+1):n
+        C_KI = convert(Array, C[K,I])
+
+        ##todo: enforce dependencies
+        for j=(i+1):nB
+            remote_do(C.pmap[j], trailing_update2, C, L_II, C_KI, i, j, n, false)
+        end
+
+        ## Special case for last column
+        if i == nB
+            remote_do(C.pmap[nB], trailing_update2, C, L_II, C_KI, i, nB+1, n, true)
+        end
+    end
+    
+    A = convert(Array, C)
+    x = triu(A[1:n,1:n]) \ A[:,n+1]
+end ## hpl_par2()
+
+function panel_factor2(C, i, n)
+    (C.dist[i+1] == n+2) ? (I = (C.dist[i]):n) :
+                           (I = (C.dist[i]):(C.dist[i+1]-1))
+    K = I[1]:n
+    C_KI = convert(Array, C[K,I])
+    #(C_KI, panel_p) = lu(C_KI, true) #economy mode
+    panel_p = lu(C_KI, true)[2]
+    C[K,I] = C_KI
+
+    return panel_p
+end ##panel_factor2()
+
+function permute(C, i, j, panel_p, n, flag)
+    if flag
+        K = (C.dist[i]):n
+        J = (n+1):(n+1)
+        C_KJ = convert(Array, C[K,J])
+
+        C_KJ = C_KJ[panel_p,:]
+        C[K,J] = C_KJ
+    else
+        K = (C.dist[i]):n
+        J = (C.dist[j]):(C.dist[j+1]-1)
+        C_KJ = convert(Array, C[K,J])
+
+        C_KJ = C_KJ[panel_p,:]
+        C[K,J] = C_KJ
+    end
+end ##permute()
+
+function trailing_update2(C, L_II, C_KI, i, j, n, flag)
+    if flag
+        #(C.dist[i+1] == n+2) ? (I = (C.dist[i]):n) :
+        #                       (I = (C.dist[i]):(C.dist[i+1]-1))
+        I = C.dist[i]:n
+        J = (n+1):(n+1)
+        K = (I[length(I)]+1):n
+        C_IJ = convert(Array,C[I,J])
+        C_KJ = convert(Array,C[K,J])
+
+        ## Compute blocks of U
+        C_IJ = L_II \ C_IJ
+        C[I,J] = C_IJ
+    else
+        #(C.dist[i+1] == n+2) ? (I = (C.dist[i]):n) :
+        #                       (I = (C.dist[i]):(C.dist[i+1]-1))
+        
+        I = (C.dist[i]):(C.dist[i+1]-1)
+        J = (C.dist[j]):(C.dist[j+1]-1)
+        K = (I[length(I)]+1):n
+        C_IJ = convert(Array,C[I,J])
+        C_KJ = convert(Array,C[K,J])
+
+        ## Compute blocks of U
+        C_IJ = L_II \ C_IJ
+        C[I,J] = C_IJ
+        ## Trailing submatrix update - All flops are here
+        #if !isempty(C_KJ)
+            C_KJ = C_KJ - C_KI*C_IJ
+            C[K,J] = C_KJ
+        #end   
+    end 
+end ## trailing_update2()
+
+## Test
+function test(n)
+    A = rand(n,n); b = rand(n);
+    @time (x = copy(A) \ copy(b))
+    @time (y = hpl_par(copy(A),copy(b), max(1,div(n,2))))
+    @time (z = hpl_par2(copy(A),copy(b)))
+    println(isequal(y,z))
+end
