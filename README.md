@@ -7,8 +7,8 @@
      _/ |\__'_|_|_|\__'_|  |
     |__/                   |
 
-Julia is a very high level dynamic language for numerical and scientific computing with optional typing, multiple dispatch, and good performance, achieved by using type inference and just-in-time (JIT) compilation, implemented using LLVM.
-The language is multi-paradigm, combining features of functional, object-oriented, and imperative styles.
+Julia is a very high level dynamic language for numerical and scientific computing. It strives to provide a high performance compiler, massive parallelism, and numerical perfection. Some features include optional typing, multiple dispatch, and good performance through type inference and just-in-time (JIT) compilation. The language is multi-paradigm, combining features of functional, object-oriented, and imperative styles.
+
 For a more in-depth discussion of the rationale and advantages of Julia over other systems, see the [Introduction](https://github.com/JuliaLang/julia/wiki/Introduction) in the wiki, or [browse all](https://github.com/JuliaLang/julia/wiki/) of the wiki documentation.
 
 <a name="Resources"/>

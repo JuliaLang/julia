@@ -1,3 +1,5 @@
+println("*** Julia ***")
+
 # simple performance tests
 
 nl() = print("\n")

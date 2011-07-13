@@ -27,6 +27,8 @@ end
 
 nl()
 
+fprintf ('*** Matlab ***\n')
+
 %% recursive fib %%
 
 function f = fib(n)
