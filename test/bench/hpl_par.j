@@ -247,11 +247,11 @@ function trailing_update2(C, L_II, C_KI, i, j, n, flag)
     end 
 end ## trailing_update2()
 
-## Test
-function test(n)
+## Test n*n matrix on np processors
+function test(n, np)
     A = rand(n,n); b = rand(n);
     @time (x = copy(A) \ copy(b))
-    @time (y = hpl_par(copy(A),copy(b), max(1,div(n,2))))
+    @time (y = hpl_par(copy(A),copy(b), max(1,div(n,np))))
     @time (z = hpl_par2(copy(A),copy(b)))
     println(isequal(y,z))
 end
