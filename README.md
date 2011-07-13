@@ -8,7 +8,7 @@
     |__/                   |
 
 Julia is a very high-level, high-performance dynamic language for numerical and scientific computing.
-It provides support for state-of-the-art numerical accuracy and performance, while being designed to support parallelism and distributed computation from the beginning.
+It provides support for state-of-the-art numerical accuracy and performance, while being designed to support parallelism and distributed computation from ground up.
 Some of its notable features include optional typing, multiple dispatch, and excellent performance through type inference and just-in-time (JIT) compilation.
 The language is multi-paradigm, combining features of functional, object-oriented, and imperative styles.
 For a more in-depth discussion of the rationale and advantages of Julia over other systems, see the [Introduction](https://github.com/JuliaLang/julia/wiki/Introduction) in the wiki, or [browse all](https://github.com/JuliaLang/julia/wiki/) of the wiki documentation.
