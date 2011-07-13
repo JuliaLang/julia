@@ -424,7 +424,7 @@ function print_unescaped(s::String)
     end
 end
 
-unescape_string(s::String) = print_to_string(print_unescaped, s)
+unescape_string(s::String) = print_to_string(length(s), print_unescaped, s)
 
 ## checking UTF-8 & ACSII validity ##
 
