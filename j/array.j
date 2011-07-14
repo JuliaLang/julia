@@ -176,12 +176,11 @@ function hcat{T}(A::Array{T,2}...)
     nrows = size(A[1], 1)
     B = similar(A[1], nrows, ncols)
 
-   if isa(T, BitsKind) && numel(B) > 50000
+   if isa(T, BitsKind)
        pos = ulong(0)
        for k = 1:nargs
            nbytes_Ak = ulong(numel(A[k])*sizeof(T))
-           ccall(:memcpy, Void, (Ptr{Void}, Ptr{Void}, Ulong), 
-                 pointer(B) + pos, A[k], nbytes_Ak)
+           copy_to(pointer(B) + pos, pointer(A[k]), nbytes_Ak)
            pos += nbytes_Ak
        end
    else
@@ -282,18 +281,14 @@ hcat(A::Array...) = cat(2, A...)
 
 function reinterpret{T,S}(::Type{T}, a::Array{S})
     b = Array(T, div(numel(a)*sizeof(S),sizeof(T)))
-    ccall(dlsym(libc, :memcpy),
-          Ptr{T}, (Ptr{T}, Ptr{S}, Ulong),
-          b, a, ulong(length(b)*sizeof(T)))
-    b
+    copy_to(b, a, ulong(length(b)*sizeof(T)))
+    return b
 end
 reinterpret(t,x) = reinterpret(t,[x])[1]
 
 function copy_to{T}(dest::Array{T}, src::Array{T})
     if isa(T, BitsKind)
-        ccall(:memcpy,
-              Ptr{Void}, (Ptr{Void}, Ptr{Void}, Ulong),
-              dest, src, ulong(numel(src)*sizeof(T)))
+        copy_to(pointer(dest), pointer(src), ulong(numel(src)*sizeof(T)))
     else
         for i=1:numel(src)
             dest[i] = copy(src[i])
@@ -301,3 +296,6 @@ function copy_to{T}(dest::Array{T}, src::Array{T})
     end
     return dest
 end
+
+copy_to(dest::Ptr, src::Ptr, nbytes::Ulong) = 
+    ccall(:memcpy, Ptr{Void}, (Ptr{Void}, Ptr{Void}, Ulong), dest, src, nbytes)
