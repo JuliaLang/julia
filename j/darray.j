@@ -250,7 +250,7 @@ function assign(r::RemoteRef, args...)
     end
 end
 
-assign{T}(d::DArray{T,1}, v::Tensor{T,1}, i::Index) =
+assign{T}(d::DArray{T,1}, v::Tensor, i::Index) =
     invoke(assign, (DArray{T,1}, Any, Index), d, v, i)
 
 function assign{T}(d::DArray{T,1}, v, i::Index)

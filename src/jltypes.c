@@ -556,7 +556,7 @@ static jl_value_t *intersect_typevar(jl_tvar_t *a, jl_value_t *b,
                                      variance_t var)
 {
     if (jl_subtype(b, (jl_value_t*)a, 0)) {
-        //if (!a->bound) return b;
+        if (!a->bound) return b;
     }
     else if (var==invariant && !jl_is_typevar(b)) {
         // for typevar a and non-typevar type b, b must be within a's bounds
