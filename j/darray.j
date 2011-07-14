@@ -32,7 +32,8 @@ type DArray{T,N,distdim} <: Tensor{T,N}
         if is(initializer,RemoteRef)
             da.locl = RemoteRef()
         else
-            da.locl = remote_call(LocalProcess(), initializer, T, locsz, da)
+            da.locl = initializer(T, locsz, da)
+            #remote_call(LocalProcess(), initializer, T, locsz, da)
         end
         da
     end
