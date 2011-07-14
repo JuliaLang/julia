@@ -176,7 +176,7 @@ function hcat{T}(A::Array{T,2}...)
     nrows = size(A[1], 1)
     B = similar(A[1], nrows, ncols)
 
-   if isa(T, BitsKind)
+   if isa(T, BitsKind) && numel(B) > 100
        pos = ulong(0)
        for k = 1:nargs
            nbytes_Ak = ulong(numel(A[k])*sizeof(T))
