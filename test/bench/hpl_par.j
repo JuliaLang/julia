@@ -35,6 +35,7 @@ function hpl_par(A::Matrix, b::Vector, blocksize::Int32, run_parallel::Bool)
     for i=2:nB, j=1:nB; depend[i,j] = false; end
 
     for i=1:(nB-1)
+        #println("A=$A") #####
         ## Threads for panel factorizations
         I = (B_rows[i]+1):B_rows[i+1]
         K = I[1]:n
@@ -144,20 +145,22 @@ function hpl_par2(A::Matrix, b::Vector)
         return x
     end
 
+    depend = Array(RemoteRef, nB, nB)
+
     #pmap[i] is where block i's stuff is
     #block i is dist[i] to dist[i+1]-1
     for i = 1:nB
+        #println("C=$(convert(Array, C))") #####
         ##panel factorization
         panel_p = remote_call_fetch(C.pmap[i], panel_factor2, C, i, n)
 
         ## Apply permutation from pivoting
-        ## Todo: enforce dependencies
         for j = (i+1):nB
-            remote_do(C.pmap[j], permute, C, i, j, panel_p, n, false)
+           depend[i,j] = remote_call(C.pmap[j], permute, C, i, j, panel_p, n, false)
         end
         ## Special case for last column
         if i == nB
-            remote_do(C.pmap[nB], permute, C, i, nB+1, panel_p, n, true)
+           depend[nB,nB] = remote_call(C.pmap[nB], permute, C, i, nB+1, panel_p, n, true)
         end
 
         ##Trailing updates
@@ -168,14 +171,20 @@ function hpl_par2(A::Matrix, b::Vector)
         K = (I[length(I)]+1):n
         C_KI = convert(Array, C[K,I])
 
-        ##todo: enforce dependencies
         for j=(i+1):nB
-            remote_do(C.pmap[j], trailing_update2, C, L_II, C_KI, i, j, n, false)
+            dep = depend[i,j]
+            depend[j,i] = remote_call(C.pmap[j], trailing_update2, C, L_II, C_KI, i, j, n, false, dep)
         end
 
         ## Special case for last column
         if i == nB
-            remote_do(C.pmap[nB], trailing_update2, C, L_II, C_KI, i, nB+1, n, true)
+            dep = depend[nB,nB]
+            remote_call_fetch(C.pmap[nB], trailing_update2, C, L_II, C_KI, i, nB+1, n, true, dep)
+        else
+            #enforce dependencies for nonspecial case
+            for j=(i+1):nB
+                wait(depend[j,i])
+            end
         end
     end
     
@@ -213,7 +222,8 @@ function permute(C, i, j, panel_p, n, flag)
     end
 end ##permute()
 
-function trailing_update2(C, L_II, C_KI, i, j, n, flag)
+function trailing_update2(C, L_II, C_KI, i, j, n, flag, dep)
+    if isa(dep, RemoteRef); wait(dep); end
     if flag
         #(C.dist[i+1] == n+2) ? (I = (C.dist[i]):n) :
         #                       (I = (C.dist[i]):(C.dist[i+1]-1))
@@ -240,18 +250,21 @@ function trailing_update2(C, L_II, C_KI, i, j, n, flag)
         C_IJ = L_II \ C_IJ
         C[I,J] = C_IJ
         ## Trailing submatrix update - All flops are here
-        #if !isempty(C_KJ)
+        if !isempty(C_KJ)
             C_KJ = C_KJ - C_KI*C_IJ
             C[K,J] = C_KJ
-        #end   
+        end   
     end 
 end ## trailing_update2()
 
 ## Test n*n matrix on np processors
+## Prints 5 numbers that should be close to zero
 function test(n, np)
     A = rand(n,n); b = rand(n);
     @time (x = copy(A) \ copy(b))
     @time (y = hpl_par(copy(A),copy(b), max(1,div(n,np))))
     @time (z = hpl_par2(copy(A),copy(b)))
-    println(isequal(y,z))
+    for i=1:(min(5,n))
+        print(z[i]-y[i]); print(" ")
+    end
 end
