@@ -1395,7 +1395,7 @@ void jl_init_primitives()
     add_builtin("BitsKind", (jl_value_t*)jl_bits_kind);
     add_builtin("StructKind", (jl_value_t*)jl_struct_kind);
     add_builtin("FuncKind", (jl_value_t*)jl_func_kind);
-    add_builtin("TagKind", (jl_value_t*)jl_tag_kind);
+    add_builtin("AbstractKind", (jl_value_t*)jl_tag_kind);
     add_builtin("UnionKind", (jl_value_t*)jl_union_kind);
 
     add_builtin("ANY", jl_ANY_flag);

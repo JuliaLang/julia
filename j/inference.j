@@ -64,7 +64,7 @@ isleaftype(t) = ccall(:jl_is_leaf_type, Int32, (Any,), t) != 0
 # for now assume all global functions constant
 # TODO
 isconstant(s::Symbol) = isbound(s) && (e=eval(s);
-                                       isa(e,Function) || isa(e,TagKind) ||
+                                       isa(e,Function) || isa(e,AbstractKind) ||
                                        isa(e,BitsKind) || isa(e,StructKind) ||
                                        isa(e,TypeConstructor) ||
                                        is(e,None))
@@ -73,9 +73,9 @@ isconstant(x) = true
 
 cmp_tfunc = (x,y)->Bool
 
-isType(t) = isa(t,TagKind) && is(t.name,Type.name)
+isType(t) = isa(t,AbstractKind) && is(t.name,Type.name)
 
-isseqtype(t) = isa(t,TagKind) && is(t.name.name,:...)
+isseqtype(t) = isa(t,AbstractKind) && is(t.name.name,:...)
 
 t_func = idtable()
 t_func[tuple] = (0, Inf, (args...)->limit_tuple_depth(args))
@@ -216,7 +216,7 @@ typeof_tfunc = function (t)
         else
             Type{typeof(t)}
         end
-    elseif isa(t,TagKind)
+    elseif isa(t,AbstractKind)
         if isleaftype(t)
             Type{t}
         else
@@ -246,7 +246,7 @@ tupleref_tfunc = function (A, t, i)
     if is(t,())
         return None
     end
-    if isa(t,TagKind) && is(t.name,NTuple.name)
+    if isa(t,AbstractKind) && is(t.name,NTuple.name)
         return t.parameters[2]
     end
     if !isa(t,Tuple)
@@ -600,7 +600,7 @@ end
 ast_rettype(ast) = ast.args[3].type
 
 function abstract_eval_constant(x::ANY)
-    if isa(x,TagKind) || isa(x,BitsKind) || isa(x,StructKind) ||
+    if isa(x,AbstractKind) || isa(x,BitsKind) || isa(x,StructKind) ||
         isa(x,FuncKind) || isa(x,UnionKind)
         return Type{x}
     end
