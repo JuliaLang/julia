@@ -191,7 +191,9 @@
 (define (gf-def-expr- name argl argtypes body)
   (if (not (symbol? name))
       (error (string "invalid method name " name)))
-  `(= ,name (method ,name ,argtypes ,(function-expr argl body))))
+  `(block
+    (= ,name (method ,name ,argtypes ,(function-expr argl body)))
+    (null)))
 
 (define (sparam-name-bounds sparams names bounds)
   (cond ((null? sparams)
@@ -517,6 +519,30 @@
 
 (define (make-assignment l r) `(= ,l ,r))
 
+;; convert (lhss...) = x to assignments, eliminating the tuple
+;; assumes x is of the form (tuple ...)
+(define (tuple-to-assignments lhss x)
+  (let ((temps (map (lambda (x) (gensy)) (cdr x))))
+    `(block
+      ,@(map make-assignment temps (cdr x))
+      ,@(map make-assignment lhss temps)
+      (unnecessary-tuple (tuple ,@temps)))))
+
+;; convert (lhss...) = x to tuple indexing, handling the general case
+(define (lower-tuple-assignment lhss x)
+  (let ((t (gensy)))
+    `(block
+      (multiple_value)
+      (= ,t ,x)
+      ,@(let loop ((lhs lhss)
+		   (i   1))
+	  (if (null? lhs) '((null))
+	      (cons `(= ,(car lhs)
+			(call (top tupleref) ,t ,i))
+		    (loop (cdr lhs)
+			  (+ i 1)))))
+      ,t)))
+
 (define patterns
   (pattern-set
    (pattern-lambda (block)
@@ -559,29 +585,14 @@
 
    (pattern-lambda (comparison . chain) (expand-compare-chain chain))
 
-   ; multiple value assignment
+   ;; multiple value assignment
    (pattern-lambda (= (tuple . lhss) x)
 		   (if (and (pair? x) (pair? lhss) (eq? (car x) 'tuple)
 			    (length= lhss (length (cdr x))))
-		       ; (a, b, ...) = (x, y, ...)
-		       (let ((temps (map (lambda (x) (gensy)) (cddr x))))
-			 `(block
-			   ,@(map make-assignment temps (butlast (cdr x)))
-			   (= ,(car (last-pair lhss)) ,(car (last-pair x)))
-			   ,@(map make-assignment (butlast lhss) temps)
-			   (null)))
-		       ; (a, b, ...) = other
-		       (let ((t (gensy)))
-			 `(block
-			   (multiple_value)
-			   (= ,t ,x)
-			   ,@(let loop ((lhs lhss)
-					(i   1))
-			       (if (null? lhs) '((null))
-				   (cons `(= ,(car lhs)
-					     (call (top tupleref) ,t ,i))
-					 (loop (cdr lhs)
-					       (+ i 1)))))))))
+		       ;; (a, b, ...) = (x, y, ...)
+		       (tuple-to-assignments lhss x)
+		       ;; (a, b, ...) = other
+		       (lower-tuple-assignment lhss x)))
 
    (pattern-lambda (= (ref a . idxs) rhs)
 		   (let* ((reuse (and (pair? a)
@@ -1165,6 +1176,12 @@
 	       ;; value or statement position.
 	       (to-lff `(typeassert ,@(cdr e)) dest tail)
 	       (to-lff `(decl ,@(cdr e)) dest tail)))
+
+	  ((unnecessary-tuple)
+	   (if dest
+	       (to-lff (cadr e) dest tail)
+	       ;; remove if not in value position
+	       (to-lff '(null) dest tail)))
 
 	  (else
 	   (let ((r (map (lambda (arg) (to-lff arg #t #f))
