@@ -299,3 +299,11 @@ end
 
 copy_to(dest::Ptr, src::Ptr, nbytes::Ulong) = 
     ccall(:memcpy, Ptr{Void}, (Ptr{Void}, Ptr{Void}, Ulong), dest, src, nbytes)
+
+jcopy(src::Array) = jcopy_to(similar(src), src)
+
+function jcopy_to{T}(dest::Array{T}, src::Array{T})
+    for i=1:numel(src)
+        dest[i] = src[i]
+    end    
+end
