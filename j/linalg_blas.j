@@ -4,14 +4,14 @@ libBLAS = dlopen("libLAPACK")
 
 macro blas_copy(fname, shape, eltype)
     quote
-        function copy(X::($shape){$eltype})
-            sz = size(X)
-            Y = Array($eltype, sz)
+        bcopy(src::($shape){$eltype}) = copy_to(similar(src), src)
+
+        function bcopy_to(dest::($shape){$eltype}, src::($shape){$eltype})
             ccall(dlsym(libBLAS, $fname),
                   Void,
                   (Ptr{Int32}, Ptr{$eltype}, Ptr{Int32}, Ptr{$eltype}, Ptr{Int32}),
-                  prod(sz), X, 1, Y, 1)
-            return Y
+                  numel(src), src, 1, dest, 1)
+            return dest
         end
     end
 end

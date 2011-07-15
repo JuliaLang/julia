@@ -1972,7 +1972,7 @@ void jl_init_types()
     jl_struct_kind->instance = NULL;
     jl_struct_kind->uid = jl_assign_type_uid();
 
-    jl_tag_kind->name = jl_new_typename(jl_symbol("TagKind"));
+    jl_tag_kind->name = jl_new_typename(jl_symbol("AbstractKind"));
     jl_tag_kind->name->primary = (jl_value_t*)jl_tag_kind;
     jl_tag_kind->super = jl_type_type;
     jl_tag_kind->parameters = jl_null;

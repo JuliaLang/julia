@@ -50,14 +50,14 @@ TODO:
 
 (define (put-type name t) (table-set! julia-globals name t))
 
-(define TagKind (vector 'StructKind
+(define AbstractKind (vector 'StructKind
 			'TagType 'Type-type julia-null
 			(julia-tuple 'name 'super 'parameters)
 			#f;(julia-tuple Symbol-type Type-type Tuple-type)
 			#f #f))
 
 (define (make-tag-type name super parameters)
-  (vector TagKind name super parameters))
+  (vector AbstractKind name super parameters))
 
 (define (tag-type-name t)   (vector-ref t 1))
 (define (tag-type-super t)  (vector-ref t 2))
@@ -68,8 +68,8 @@ TODO:
 (define Tuple-type (make-tag-type 'Tuple Any-type julia-null))
 (define Symbol-type (make-tag-type 'Symbol Any-type julia-null))
 
-(vector-set! TagKind 2 Type-type)
-(vector-set! TagKind 5 (julia-tuple Symbol-type Type-type Tuple-type))
+(vector-set! AbstractKind 2 Type-type)
+(vector-set! AbstractKind 5 (julia-tuple Symbol-type Type-type Tuple-type))
 
 (define FunctionKind (vector 'StructKind
 			     'Function Type-type julia-null
@@ -99,7 +99,7 @@ TODO:
   (vector any-func proc env))
 
 (define StructKind (vector 'StructKind
-			   'StructType TagKind julia-null
+			   'StructType AbstractKind julia-null
 			   (julia-tuple 'name 'super 'parameters
 					'names 'types 'new 'convert)
 			   (julia-tuple Symbol-type Type-type Tuple-type
@@ -126,7 +126,7 @@ TODO:
 							 (car args)) #f))
     T))
 
-(vector-set! TagKind 0 StructKind)
+(vector-set! AbstractKind 0 StructKind)
 (vector-set! FunctionKind 0 StructKind)
 (vector-set! StructKind 0 StructKind)
 
@@ -134,7 +134,7 @@ TODO:
 
 (define (tag-type? t)
   (and (vector? t)
-       (or (eq? (vector-ref t 0) TagKind)
+       (or (eq? (vector-ref t 0) AbstractKind)
 	   (eq? (vector-ref t 0) StructKind))))
 
 (define UnionKind (vector StructKind
@@ -265,7 +265,7 @@ TODO:
 			     (or (eq? tag UnionKind)
 				 (eq? tag StructKind)
 				 (eq? tag FunctionKind)
-				 (eq? tag TagKind))))))
+				 (eq? tag AbstractKind))))))
 
 ; --- define primitive types ---
 

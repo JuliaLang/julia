@@ -11,7 +11,7 @@ let i = 2
     global ser_tag, deser_tag
     for t = {Symbol, Int8, Uint8, Int16, Uint16, Int32, Uint32,
              Int64, Uint64, Float32, Float64, Char, Ptr,
-             TagKind, UnionKind, BitsKind, StructKind, FuncKind,
+             AbstractKind, UnionKind, BitsKind, StructKind, FuncKind,
              Tuple, Array, Expr, LongSymbol, LongTuple, LongExpr,
 
              (), Bool, Any, :Any, :Array, :TypeVar, :FuncKind, :Box,
@@ -104,11 +104,11 @@ function serialize(s, e::Expr)
     end
 end
 
-function serialize(s, t::TagKind)
+function serialize(s, t::AbstractKind)
     if has(ser_tag,t)
         write_as_tag(s, t)
     else
-        writetag(s, TagKind)
+        writetag(s, AbstractKind)
         serialize(s, t.name.name)
         serialize(s, t.parameters)
     end
@@ -288,7 +288,7 @@ function deserialize_expr(s, len)
     end
 end
 
-function deserialize(s, ::Type{TagKind})
+function deserialize(s, ::Type{AbstractKind})
     name = deserialize(s)::Symbol
     params = force(deserialize(s))
     apply_type(eval(name), params...)
