@@ -17,6 +17,10 @@ load("reduce.j")
 load("complex.j")
 load("rational.j")
 
+# operator aliases
+% = mod
+pow = ^
+
 # load libc - julia already links against it so process handle works
 libc = ccall(:jl_load_dynamic_library, Ptr{Void}, (Ptr{Uint8},), C_NULL)
 load("libc.j")

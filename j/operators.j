@@ -68,7 +68,6 @@ mod{T}(x::T, y::T) = convert(T, x-y*fld(x,y))
 rem(x,y) = rem(promote(x,y)...)
 mod(x,y) = mod(promote(x,y)...)
 
-%(x,y) = mod(x,y)
 mod1(x,y) = (m=mod(x-sign(y),y); m+sign(y))
 
 oftype{T}(x::T,c) = convert(T,c)
