@@ -14,6 +14,7 @@ ndims(x::Number) = 0
 numel(x::Number) = 1
 length(x::Number) = 1
 ref(x::Number) = x
+ref(x::Number, y::Index) = x
 
 signbit(x::Real) = x < 0 ? int8(-1) : int8(1)
 sign(x::Real) = x < 0 ? int8(-1) : x > 0 ? int8(1) : int8(0)
