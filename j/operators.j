@@ -3,7 +3,7 @@
 <:(T,S) = subtype(T,S)
 >:(T,S) = subtype(S,T)
 
-super{T}(::Type{T}) = T.super
+super(T::Union(StructKind,BitsKind,AbstractKind)) = T.super
 
 ## comparison ##
 
