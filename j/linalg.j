@@ -29,10 +29,12 @@ diag(A::Matrix) = [ A[i,i] | i=1:min(size(A)) ]
 
 function diagm{T}(v::Union(Vector{T},Matrix{T}))
     if isa(v, Matrix)
-        assert(size(v,1) == 1 || size(v,2) == 1)
+        if (size(v,1) != 1 && size(v,2) != 1)
+            error("Input should be nx1 or 1xn")
+        end
     end
 
-    n = max(size(v))
+    n = numel(v)
     a = zeros(T, n, n)
     for i=1:n
         a[i,i] = v[i]

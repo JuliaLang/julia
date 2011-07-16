@@ -155,7 +155,7 @@ hcat() = Array(None,0)
 hcat{T}(X::T...) = [ X[j] | i=1, j=1:length(X) ]
 vcat{T}(X::T...) = [ X[i] | i=1:length(X) ]
 
-hcat{T}(V::Array{T,1}...) = [ V[j][i] | i=1:length(V[1]), j=1:length(V) ]
+hcat{T}(V::(Union(T,Array{T,1}))...) = [ V[j][i] | i=1:length(V[1]), j=1:length(V) ]
 
 function vcat{T}(V::Array{T,1}...)
     a = similar(V[1], sum(map(length, V)))
