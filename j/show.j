@@ -91,9 +91,14 @@ end
 
 function show(e::TypeError)
     ctx = isempty(e.context) ? "" : "in $(e.context), "
-    print("type error: $(e.func): ",
-          "$(ctx)expected $(e.expected), ",
-          "got $(typeof(e.got))")
+    if e.expected == Bool
+        print("type error: non-boolean ($(typeof(e.got))) ",
+              "used in boolean context")
+    else
+        print("type error: $(e.func): ",
+              "$(ctx)expected $(e.expected), ",
+              "got $(typeof(e.got))")
+    end
 end
 
 function show(e::LoadError)
