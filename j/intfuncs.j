@@ -36,10 +36,10 @@ function gcdx(a, b)
     end
 end
 
-# multiplicative inverse of x mod m, false if none
+# multiplicative inverse of x mod m, error if none
 function invmod(n, m)
     g, x, y = gcdx(n, m)
-    g != 1 ? false : (x < 0 ? m + x : x)
+    g != 1 ? error("no inverse exists") : (x < 0 ? m + x : x)
 end
 
 # ^ for any x supporting *
