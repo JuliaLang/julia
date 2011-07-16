@@ -782,6 +782,10 @@ static jl_value_t *jl_type_intersect(jl_value_t *a, jl_value_t *b,
     }
     env = jl_type_match((jl_value_t*)super->parameters,
                         (jl_value_t*)sup_params);
+    if (env == jl_false) {
+        env = jl_type_match((jl_value_t*)sup_params,
+                            (jl_value_t*)super->parameters);
+    }
     for(i=0; i < tc_params->length; i++) {
         jl_tvar_t *tv = (jl_tvar_t*)jl_tupleref(tc_params,i);
         tv->bound = 0;
