@@ -134,12 +134,8 @@ end
 /(A::Number, B::Tensor) = A ./ B
 /(A::Tensor, B::Number) = A ./ B
 
-.\(x::Tensor, y::Tensor) = reshape( [ x[i] .\ y[i] | i=1:numel(x) ], size(x) )
-.\(x::Number, y::Tensor) = reshape( [ x    .\ y[i] | i=1:numel(y) ], size(y) )
-.\(x::Tensor, y::Number) = reshape( [ x[i] .\ y    | i=1:numel(x) ], size(x) )
-
-\(A::Number, B::Tensor) = A .\ B
-\(A::Tensor, B::Number) = A .\ B
+\(A::Number, B::Tensor) = B ./ A
+\(A::Tensor, B::Number) = B ./ A
 
 macro binary_arithmetic_op(f)
     quote
@@ -173,6 +169,8 @@ end # macro
 @binary_arithmetic_op (-)
 @binary_arithmetic_op (.*)
 @binary_arithmetic_op (.^)
+@binary_arithmetic_op div
+@binary_arithmetic_op mod
 
 ## promotion to complex ##
 
@@ -812,17 +810,22 @@ end
 sub2ind(dims, I::Vector...) =
     [ sub2ind(dims, map(X->X[i], I)...) | i=1:length(I[1]) ]
 
+ind2sub(dims::(), ind::Index) = throw(BoundsError())
+ind2sub(dims::(Index,), ind::Index) = (ind,)
+ind2sub(dims::(Index,Index), ind::Index) =
+    (rem(ind-1,dims[1])+1, div(ind-1,dims[1])+1)
+
 function ind2sub(dims, ind::Index)
     ndims = length(dims)
-    x = tuple(1, cumprod(dims)...)
+    x = cumprod(dims)
 
     sub = ()
-    for i=ndims:-1:1
+    for i=(ndims-1):-1:1
         rest = rem(ind-1, x[i]) + 1
         sub = tuple(div(ind - rest, x[i]) + 1, sub...)
         ind = rest
     end
-    return sub
+    return tuple(ind, sub...)
 end
 
 ## subarrays ##

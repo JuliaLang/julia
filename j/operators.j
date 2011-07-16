@@ -51,13 +51,13 @@ for op = (:+, :*, :&, :|, :$)
     end
 end
 
-\(x::Number, y::Number) = y/x
+\(x,y) = y/x
 
 # .<op> defaults to <op>
-./(x::Number,y::Number) = x/y
-.\(x::Number,y::Number) = y./x
-.*(x::Number,y::Number) = x*y
-.^(x::Number,y::Number) = x^y
+./(x,y) = x/y
+.\(x,y) = y./x
+.*(x,y) = x*y
+.^(x,y) = x^y
 
 div(x::Real, y::Real) = y != 0 ? truncate(x/y)        : throw(DivideByZeroError())
 fld(x::Real, y::Real) = y != 0 ? truncate(floor(x/y)) : throw(DivideByZeroError())
@@ -68,6 +68,7 @@ mod{T}(x::T, y::T) = convert(T, x-y*fld(x,y))
 rem(x,y) = rem(promote(x,y)...)
 mod(x,y) = mod(promote(x,y)...)
 
+% = mod
 mod1(x,y) = (m=mod(x-sign(y),y); m+sign(y))
 
 oftype{T}(x::T,c) = convert(T,c)
