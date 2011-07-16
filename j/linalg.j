@@ -26,10 +26,20 @@ end
 diff(a::Matrix) = diff(a, 1)
 
 diag(A::Matrix) = [ A[i,i] | i=1:min(size(A)) ]
-diagm{T}(v::Vector{T}) = (n=length(v);
-                          a=zeros(T,n,n);
-                          for i=1:n; a[i,i] = v[i]; end;
-                          a)
+
+function diagm{T}(v::Union(Vector{T},Matrix{T}))
+    if isa(v, Matrix)
+        assert(size(v,1) == 1 || size(v,2) == 1)
+    end
+
+    n = max(size(v))
+    a = zeros(T, n, n)
+    for i=1:n
+        a[i,i] = v[i]
+    end
+
+    return a
+end
 
 function norm(x::Vector, p::Number)
     if p == Inf
