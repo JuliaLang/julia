@@ -1,19 +1,21 @@
 ## types ##
 
-<:(T, S) = subtype(T,S)
->:(T, S) = subtype(S,T)
+<:(T,S) = subtype(T,S)
+>:(T,S) = subtype(S,T)
+
+super{T}(::Type{T}) = T.super
 
 ## comparison ##
 
 isequal(x, y) = is(x, y)
 
-==(x, y) = isequal(x, y)
-!=(x, y) = !(x == y)
+==(x,y) = isequal(x,y)
+!=(x,y) = !(x==y)
 ==(x::Number, y::Number) = (==)(promote(x,y)...)
 
 # this definition allows Number types to implement == instead of isequal,
 # which is more idiomatic.
-isequal{T<:Number}(x::T, y::T) = (x == y)
+isequal{T<:Number}(x::T, y::T) = (x==y)
 
 < (x::Real, y::Real) = (<)(promote(x,y)...)
 > (x::Real, y::Real) = (y < x)
