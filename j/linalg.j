@@ -83,14 +83,7 @@ function trace{T}(A::Matrix{T})
     return t
 end
 
-function mean(V::Vector)
-    n = numel(V)
-    m = 0.0
-    for i=1:n
-        m += V[i]
-    end
-    return m / n
-end
+mean(V::Vector) = sum(V) / length(V)
 
 function std(V::Vector)
     n = numel(V)
