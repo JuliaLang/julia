@@ -1677,8 +1677,10 @@ static jl_value_t *type_match_(jl_value_t *child, jl_value_t *parent,
     if (child == parent) return (jl_value_t*)*env;
 
     if (jl_is_typevar(child)) {
-        if (jl_subtype_le(child, parent, 0, morespecific, 0))
-            return (jl_value_t*)*env;
+        if (!invariant) {
+            if (jl_subtype_le(child, parent, 0, morespecific, 0))
+                return (jl_value_t*)*env;
+        }
         return jl_false;
     }
     if (jl_is_long(child)) {
