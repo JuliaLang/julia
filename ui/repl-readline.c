@@ -277,21 +277,31 @@ void read_expr(char *prompt)
 void init_repl_environment()
 {
     init_history();
-    rl_bind_key(' ', space_callback);
-    rl_bind_key('\t', tab_callback);
-    rl_bind_key('\r', return_callback);
-    rl_bind_key('\n', return_callback);
-    rl_bind_key('\v', line_kill_callback);
-    rl_bind_key('\b', backspace_callback);
-    rl_bind_key('\001', line_start_callback);
-    rl_bind_key('\005', line_end_callback);
-    rl_bind_key('\002', left_callback);
-    rl_bind_key('\006', right_callback);
-    rl_bind_keyseq("\e[A", up_callback);
-    rl_bind_keyseq("\e[B", down_callback);
-    rl_bind_keyseq("\e[D", left_callback);
-    rl_bind_keyseq("\e[C", right_callback);
-    rl_bind_keyseq("\\C-d", delete_callback);
+
+    int nkm;
+    Keymap keymaps[]={ emacs_standard_keymap, 
+                       vi_insertion_keymap };
+    #define NUMKEYMAPS (sizeof(keymaps)/sizeof(keymaps[0]))
+
+    for (nkm=0; nkm<NUMKEYMAPS; nkm++)
+     { 
+       rl_bind_key_in_map(' ',    space_callback,      keymaps[nkm]);
+       rl_bind_key_in_map('\t',   tab_callback,        keymaps[nkm]);
+       rl_bind_key_in_map('\r',   return_callback,     keymaps[nkm]);
+       rl_bind_key_in_map('\n',   return_callback,     keymaps[nkm]);
+       rl_bind_key_in_map('\v',   line_kill_callback,  keymaps[nkm]);
+       rl_bind_key_in_map('\b',   backspace_callback,  keymaps[nkm]);
+       rl_bind_key_in_map('\001', line_start_callback, keymaps[nkm]);
+       rl_bind_key_in_map('\005', line_end_callback,   keymaps[nkm]);
+       rl_bind_key_in_map('\002', left_callback,       keymaps[nkm]);
+       rl_bind_key_in_map('\006', right_callback,      keymaps[nkm]);
+
+       rl_bind_keyseq_in_map("\e[A",  up_callback,     keymaps[nkm]);
+       rl_bind_keyseq_in_map("\e[B",  down_callback,   keymaps[nkm]);
+       rl_bind_keyseq_in_map("\e[D",  left_callback,   keymaps[nkm]);
+       rl_bind_keyseq_in_map("\e[C",  right_callback,  keymaps[nkm]);
+       rl_bind_keyseq_in_map("\\C-d", delete_callback, keymaps[nkm]);
+     };
 }
 
 void exit_repl_environment()
