@@ -1,7 +1,5 @@
 ## floating-point functions ##
 
-rem(x::Float, y::Float) = fmod(x, y)
-
 isnan(x::Float) = (x != x)
 isnan(x::Real) = isnan(float(x))
 isnan(x::Int) = false
