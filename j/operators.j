@@ -14,8 +14,6 @@ isequal(x,y) = is(x,y)
 # this definition allows Number types to implement
 # == instead of isequal, which is more idiomatic:
 isequal{T<:Number}(x::T, y::T) = (x==y)
-# TODO: doesn't this create infinite recursion for
-# Numbers wehre == isn't defined?
 
 > {T<:Real}(x::T, y::T) = (y < x)
 <={T<:Real}(x::T, y::T) = (x < y) || (x == y)
