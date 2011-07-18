@@ -216,7 +216,7 @@ div(x::Uint32, y::Uint32) = boxui32(udiv_int(unbox32(x), unbox32(y)))
 div(x::Uint64, y::Uint64) = boxui64(udiv_int(unbox64(x), unbox64(y)))
 
 fld{T<:Uint}(x::T, y::T) = div(x,y)
-# TODO: fast fld for signed ints.
+fld{T<:Int }(x::T, y::T) = y-mod(x,y)
 
 rem(x::Int8 , y::Int8 ) = boxsi8 (srem_int(unbox8 (x), unbox8 (y)))
 rem(x::Int16, y::Int16) = boxsi16(srem_int(unbox16(x), unbox16(y)))

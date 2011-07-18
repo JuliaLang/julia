@@ -48,6 +48,7 @@ for op = (:+, :*, :&, :|, :$)
     end
 
 end
+
 # fallback division:
 /{T<:Real}(x::T, y::T) = float64(x)/float64(y)
 
@@ -60,10 +61,10 @@ end
 .^(x,y) = x^y
 
 # fallback div, fld, rem & mod implementations
-div{T<:Real}(x::T, y::T) = y!=0 ? truncate(x/y)        : throw(DivideByZeroError())
-fld{T<:Real}(x::T, y::T) = y!=0 ? truncate(floor(x/y)) : throw(DivideByZeroError())
-rem{T<:Real}(x::T, y::T) = convert(T, x-y*div(x,y))
-mod{T<:Real}(x::T, y::T) = convert(T, x-y*fld(x,y))
+div{T<:Real}(x::T, y::T) = convert(T,trunc(x/y))
+fld{T<:Real}(x::T, y::T) = convert(T,floor(x/y))
+rem{T<:Real}(x::T, y::T) = convert(T,x-y*div(x,y))
+mod{T<:Real}(x::T, y::T) = convert(T,x-y*fld(x,y))
 
 # operator alias
 % = mod
