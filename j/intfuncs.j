@@ -9,6 +9,9 @@ abs(x::Int64) = (y=x>>63; (x+y)$y)
 isodd(n::Int) = bool(rem(n,2))
 iseven(n::Int) = !isodd(n)
 
+sign{T<:Int}(x::T) = convert(T,convert(Int8,(x > 0))-convert(Int8,(x < 0)))
+sign{T<:Uint}(x::T) = convert(T,(x > 0))
+
 signbit(x::Uint ) = one(x)
 signbit(x::Int8 ) = one(x)-((x>>>7) <<1)
 signbit(x::Int16) = one(x)-((x>>>15)<<1)

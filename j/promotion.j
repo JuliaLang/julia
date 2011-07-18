@@ -30,6 +30,7 @@ function promote{T,S}(x::T, y::S, zs...)
     end
     convert((R...), tuple(x,y,zs...))
 end
+# TODO: promote{T}(x::T, ys::T...) here to catch all circularities?
 
 ## promotions in arithmetic, etc. ##
 
