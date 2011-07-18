@@ -50,3 +50,15 @@ function peakflops()
     return floprate
 
 end
+
+macro benchmark(n,ex,T)
+    s = gensym()
+    quote
+        local $s
+        @time for i=1:int32($n)
+            x = convert($T,i)
+            $s = $ex
+        end
+        $s
+    end
+end
