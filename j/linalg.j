@@ -75,17 +75,32 @@ rank(A::Matrix) = rank(A, 0)
 
 # trace(A::Matrix) = sum(diag(A))
 
-function trace(A::Matrix)
-    t = 0
+function trace{T}(A::Matrix{T})
+    t = zero(T)
     for i=1:min(size(A))
         t += A[i,i]
     end
     return t
 end
 
-mean(V::Vector) = sum(V) / length(V)
-std(V::Vector) = (m = mean(V);
-                  sqrt( sum([ (V[i] - m)^2 | i=1:length(V) ]) / (length(V)-1) ))
+function mean(V::Vector)
+    n = numel(V)
+    m = 0.0
+    for i=1:n
+        m += V[i]
+    end
+    return m / n
+end
+
+function std(V::Vector)
+    n = numel(V)
+    m = mean(V)
+    s = 0.0
+    for i=1:n
+        s += (V[i] - m)^2
+    end
+    return sqrt(s/(n-1))
+end
 
 kron(a::Vector, b::Vector) = [ a[i]*b[j] | i=1:length(a), j=1:length(b) ]
 kron(a::Matrix, b::Matrix) = reshape([ a[i,j]*b[k,l] | k=1:size(b,1),
