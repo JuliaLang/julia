@@ -345,8 +345,8 @@ for nr = {
         m = mod(a,n)
         t = promote_type(typeof(a),typeof(n))
 
-        @assert typeof(d) <: Int
-        @assert typeof(f) <: Int
+        # @assert typeof(d) <: t
+        # @assert typeof(f) <: t
         @assert typeof(r) <: t
         @assert typeof(m) <: t
 
@@ -364,8 +364,8 @@ for nr = {
             sr = rem(sa,sn)
             sm = mod(sa,sn)
 
-            @assert typeof(sd) <: Int
-            @assert typeof(sf) <: Int
+            # @assert typeof(sd) <: t
+            # @assert typeof(sf) <: t
             @assert typeof(sr) <: t
             @assert typeof(sm) <: t
 
