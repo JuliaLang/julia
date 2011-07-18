@@ -37,7 +37,7 @@ end
 *(x::Number, y::Number) = *(promote(x,y)...)
 -(x::Number, y::Number) = -(promote(x,y)...)
 /(x::Number, y::Number) = /(promote(x,y)...)
-^(x::Number, y::Number) = ^(promote(x,y)...)
+^(x::Any, y::Number) = ^(promote(x,y)...)
 
 &(x::Int...) = &(promote(x...)...)
 |(x::Int...) = |(promote(x...)...)
@@ -64,7 +64,7 @@ no_op_err(name, T) = error(name," not defined for ",T)
 *{T<:Number}(x::T, y::T) = no_op_err("*", T)
 -{T<:Number}(x::T, y::T) = no_op_err("-", T)
 /{T<:Number}(x::T, y::T) = no_op_err("/", T)
-^{T<:Number}(x::T, y::T) = no_op_err("^", T)
+^{T<:Any}(x::T, y::T) = no_op_err("^", T)
 
 &{T<:Int}(x::T, y::T) = no_op_err("&", T)
 |{T<:Int}(x::T, y::T) = no_op_err("|", T)

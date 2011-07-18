@@ -50,10 +50,6 @@ function invmod(n, m)
     g != 1 ? error("no inverse exists") : (x < 0 ? m + x : x)
 end
 
-# avoid ambiguity
-^(x::Number, y::Int) = invoke(^, (Any,Int), x, y)
-^{T<:Int}(x::T, y::T) = invoke(^, (Any,Int), x, y)
-
 # ^ for any x supporting *
 function ^(x, p::Int)
     if p == 1
