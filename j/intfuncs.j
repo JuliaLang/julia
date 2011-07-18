@@ -3,7 +3,15 @@
 isodd(n::Int) = bool(rem(n,2))
 iseven(n::Int) = !isodd(n)
 
+signbit(x::Uint ) = one(x)
+signbit(x::Int8 ) = one(x)-((x>>>07)<<1)
+signbit(x::Int16) = one(x)-((x>>>15)<<1)
+signbit(x::Int32) = one(x)-((x>>>31)<<1)
+signbit(x::Int64) = one(x)-((x>>>63)<<1)
+
 copysign(x::Int, y::Real) = y < 0 ? -abs(x) : abs(x) # TODO: make more efficient
+
+## number-theoretic functions ##
 
 function gcd(a::Int, b::Int)
     neg = a < 0
@@ -41,6 +49,10 @@ function invmod(n, m)
     g, x, y = gcdx(n, m)
     g != 1 ? error("no inverse exists") : (x < 0 ? m + x : x)
 end
+
+# avoid ambiguity
+^(x::Number, y::Int) = invoke(^, (Any,Int), x, y)
+^{T<:Int}(x::T, y::T) = invoke(^, (Any,Int), x, y)
 
 # ^ for any x supporting *
 function ^(x, p::Int)

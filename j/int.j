@@ -215,10 +215,8 @@ div(x::Uint16, y::Uint16) = boxui16(udiv_int(unbox16(x), unbox16(y)))
 div(x::Uint32, y::Uint32) = boxui32(udiv_int(unbox32(x), unbox32(y)))
 div(x::Uint64, y::Uint64) = boxui64(udiv_int(unbox64(x), unbox64(y)))
 
-fld(x::Uint8 , y::Uint8 ) = div(x,y)
-fld(x::Uint16, y::Uint16) = div(x,y)
-fld(x::Uint32, y::Uint32) = div(x,y)
-fld(x::Uint64, y::Uint64) = div(x,y)
+fld{T<:Uint}(x::T, y::T) = div(x,y)
+# TODO: fast fld for signed ints.
 
 rem(x::Int8 , y::Int8 ) = boxsi8 (srem_int(unbox8 (x), unbox8 (y)))
 rem(x::Int16, y::Int16) = boxsi16(srem_int(unbox16(x), unbox16(y)))
@@ -231,12 +229,8 @@ rem(x::Uint32, y::Uint32) = boxui32(urem_int(unbox32(x), unbox32(y)))
 rem(x::Uint64, y::Uint64) = boxui64(urem_int(unbox64(x), unbox64(y)))
 
 # faster than generic for signed ints
-mod{T<:Int}(x::T, y::T) = rem(y+rem(x,y),y)
-
-mod(x::Uint8 , y::Uint8 ) = rem(x,y)
-mod(x::Uint16, y::Uint16) = rem(x,y)
-mod(x::Uint32, y::Uint32) = rem(x,y)
-mod(x::Uint64, y::Uint64) = rem(x,y)
+mod{T<:Uint}(x::T, y::T) = rem(x,y)
+mod{T<:Int }(x::T, y::T) = rem(y+rem(x,y),y)
 
 ## integer bitwise operations ##
 
@@ -380,8 +374,6 @@ bswap(x::Uint64) = boxui64(bswap_int(unbox64(x)))
 >=(x::Uint16, y::Uint16) = uge_int(unbox16(x),unbox16(y))
 >=(x::Uint32, y::Uint32) = uge_int(unbox32(x),unbox32(y))
 >=(x::Uint64, y::Uint64) = uge_int(unbox64(x),unbox64(y))
-
-cmp(x::Int, y::Int) = x < y ? -1 : x > y ? +1 : 0
 
 ## traits ##
 
