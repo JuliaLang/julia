@@ -22,7 +22,7 @@ copysign(x::Int, y::Real) = y < 0 ? -abs(x) : abs(x) # TODO: make more efficient
 
 ## number-theoretic functions ##
 
-function gcd(a::Int, b::Int)
+function gcd{T<:Int}(a::T, b::T)
     neg = a < 0
     while b != 0
         t = b
@@ -32,12 +32,12 @@ function gcd(a::Int, b::Int)
     g = abs(a)
     neg ? -g : g
 end
-
-lcm(a::Int, b::Int) = div(a*b, gcd(b,a))
+lcm{T<:Int}(a::T, b::T) = div(a*b, gcd(b,a))
 
 gcd(a::Int) = a
 lcm(a::Int) = a
-
+gcd(a::Int, b::Int) = gcd(promote(a,b)...)
+lcm(a::Int, b::Int) = lcm(promote(a,b)...)
 gcd(a::Int, b::Int...) = gcd(a, gcd(b...))
 lcm(a::Int, b::Int...) = lcm(a, lcm(b...))
 
