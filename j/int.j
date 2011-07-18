@@ -290,6 +290,8 @@ $(x::Uint64, y::Uint64) = boxui64(xor_int(unbox64(x), unbox64(y)))
 <<(x::Uint32, y::Int32) = boxui32(shl_int(unbox32(x), unbox32(y)))
 <<(x::Uint64, y::Int32) = boxui64(shl_int(unbox64(x), unbox32(y)))
 
+<<(x::Int, y::Int) = x<<int32(y)
+
 >>(x::Int8 , y::Int32) = boxsi8 (ashr_int(unbox8 (x), unbox32(y)))
 >>(x::Int16, y::Int32) = boxsi16(ashr_int(unbox16(x), unbox32(y)))
 >>(x::Int32, y::Int32) = boxsi32(ashr_int(unbox32(x), unbox32(y)))
@@ -300,6 +302,8 @@ $(x::Uint64, y::Uint64) = boxui64(xor_int(unbox64(x), unbox64(y)))
 >>(x::Uint32, y::Int32) = boxui32(lshr_int(unbox32(x), unbox32(y)))
 >>(x::Uint64, y::Int32) = boxui64(lshr_int(unbox64(x), unbox32(y)))
 
+>>(x::Int, y::Int) = x>>int32(y)
+
 >>>(x::Int8 , y::Int32) = boxsi8 (lshr_int(unbox8 (x), unbox32(y)))
 >>>(x::Int16, y::Int32) = boxsi16(lshr_int(unbox16(x), unbox32(y)))
 >>>(x::Int32, y::Int32) = boxsi32(lshr_int(unbox32(x), unbox32(y)))
@@ -309,6 +313,8 @@ $(x::Uint64, y::Uint64) = boxui64(xor_int(unbox64(x), unbox64(y)))
 >>>(x::Uint16, y::Int32) = boxui16(lshr_int(unbox16(x), unbox32(y)))
 >>>(x::Uint32, y::Int32) = boxui32(lshr_int(unbox32(x), unbox32(y)))
 >>>(x::Uint64, y::Int32) = boxui64(lshr_int(unbox64(x), unbox32(y)))
+
+>>>(x::Int, y::Int) = x>>>int32(y)
 
 bswap(x::Int8)   = x
 bswap(x::Uint8)  = x

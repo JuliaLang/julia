@@ -106,8 +106,19 @@ bitstype 64 Uint64 <: Uint
 bitstype 32 Float32 <: Float
 bitstype 64 Float64 <: Float
 
-typealias Size Int32
-typealias Index Int32
+typealias Index Size
+if is(Size,Int64)
+    typealias Long Int64
+    typealias Ulong Uint64
+else
+    typealias Long Int32
+    typealias Ulong Uint32
+end
+
+long(x) = convert(Long, x)
+long(x::Long) = x
+ulong(x) = convert(Ulong, x)
+ulong(x::Ulong) = x
 
 type WeakRef
     value
@@ -261,11 +272,11 @@ Array{T,N}(::Type{T}, d::NTuple{N,Size}) =
     ccall(:jl_new_array, Any, (Any,Any), Array{T,N}, d)::Array{T,N}
 
 Array{T}(::Type{T}, m::Size) =
-    ccall(:jl_alloc_array_1d, Any, (Any,Ulong), Array{T,1},
-          ulong(m))::Array{T,1}
+    ccall(:jl_alloc_array_1d, Any, (Any,Size), Array{T,1},
+          long(m))::Array{T,1}
 Array{T}(::Type{T}, m::Size,n::Size) =
-    ccall(:jl_alloc_array_2d, Any, (Any,Ulong,Ulong), Array{T,2},
-          ulong(m), ulong(n))::Array{T,2}
+    ccall(:jl_alloc_array_2d, Any, (Any,Size,Size), Array{T,2},
+          long(m), long(n))::Array{T,2}
 Array{T}(::Type{T}, m::Size,n::Size,o::Size)         = Array(T, (m,n,o))
 Array{T}(::Type{T}, m::Size,n::Size,o::Size,p::Size) = Array(T, (m,n,o,p))
 

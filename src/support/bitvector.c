@@ -128,14 +128,14 @@ uint32_t bitvector_next(uint32_t *b, uint64_t n0, uint64_t n)
     return i + (n-nb);
 }
 
-u_int64_t bitvector_count(u_int32_t *b, u_int32_t offs, u_int64_t nbits)
+u_int64_t bitvector_count(u_int32_t *b, u_int64_t offs, u_int64_t nbits)
 {
     size_t i, nw;
     u_int32_t ntail;
     u_int64_t ans;
 
     if (nbits == 0) return 0;
-    nw = ((u_int64_t)offs+nbits+31)>>5;
+    nw = (offs+nbits+31)>>5;
 
     if (nw == 1) {
         if (nbits == 32)
@@ -149,13 +149,13 @@ u_int64_t bitvector_count(u_int32_t *b, u_int32_t offs, u_int64_t nbits)
         ans += count_bits(b[i]);
     }
 
-    ntail = (offs+(u_int32_t)nbits)&31;
+    ntail = (offs+nbits)&31;
     ans += count_bits(b[i]&(ntail>0?lomask(ntail):ONES32));  // last end cap
 
     return ans;
 }
 
-u_int32_t bitvector_any1(u_int32_t *b, u_int32_t offs, u_int32_t nbits)
+u_int32_t bitvector_any1(u_int32_t *b, u_int64_t offs, u_int64_t nbits)
 {
     index_t i;
     u_int32_t nw, tail;

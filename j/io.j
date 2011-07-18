@@ -1,5 +1,5 @@
-sizeof_ios_t = ccall(:jl_sizeof_ios_t, Int32, ())
-sizeof_fd_set = ccall(:jl_sizeof_fd_set, Int32, ())
+sizeof_ios_t = long(ccall(:jl_sizeof_ios_t, Int32, ()))
+sizeof_fd_set = long(ccall(:jl_sizeof_fd_set, Int32, ()))
 
 type IOStream
     ios::Array{Uint8,1}
@@ -18,7 +18,7 @@ close(s::IOStream) = ccall(:ios_close, Void, (Ptr{Void},), s.ios)
 
 fdio(fd::Int) = (s = IOStream();
                  ccall(:ios_fd, Void,
-                       (Ptr{Uint8}, Long, Int32), s.ios, long(fd), 0);
+                       (Ptr{Uint8}, Long, Int32), s.ios, long(fd), int32(0));
                  s)
 
 open(fname::String, rd::Bool, wr::Bool, cr::Bool, tr::Bool) =
@@ -63,13 +63,13 @@ takebuf_array(s::IOStream) =
 takebuf_string(s::IOStream) =
     ccall(:jl_takebuf_string, Any, (Ptr{Void},), s.ios)::String
 
-function print_to_array(size::Int32, f::Function, args...)
+function print_to_array(size::Int, f::Function, args...)
     s = memio(size)
     with_output_stream(s, f, args...)
     takebuf_array(s)
 end
 
-function print_to_string(size::Int32, f::Function, args...)
+function print_to_string(size::Int, f::Function, args...)
     s = memio(size)
     with_output_stream(s, f, args...)
     takebuf_string(s)
@@ -253,7 +253,7 @@ function del_all(s::FDSet)
     s
 end
 
-let tv = Array(Uint8, ccall(:jl_sizeof_timeval, Int32, ()))
+let tv = Array(Uint8, long(ccall(:jl_sizeof_timeval, Int32, ())))
     global select_read
     function select_read(readfds::FDSet, timeout::Real)
         if timeout == Inf
@@ -297,7 +297,7 @@ end
 
 load_ascii_array(f::String, nr, nc) = load_ascii_array(open(f), nr, nc)
 function load_ascii_array(f, nr, nc)
-    a = Array(Float64, (nr, nc))
+    a = Array(Float64, (long(nr), long(nc)))
     delims = Set(' ','\t')
     for i=1:nr
         row = split(readline(f), delims, false)

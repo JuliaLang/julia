@@ -58,17 +58,25 @@ float64{T,n}(x::Array{T,n}) = convert(Array{Float64,n}, x)
 ## Indexing: ref ##
 
 ref(a::Array, i::Index) = arrayref(a,i)
+ref(a::Array, i::Int) = arrayref(a,long(i))
 ref{T}(a::Array{T,0}) = arrayref(a,1)
 ref{T}(a::Array{T,1}, i::Index) = arrayref(a,i)
+ref{T}(a::Array{T,1}, i::Int) = arrayref(a,long(i))
 ref(a::Array{Any,1}, i::Index) = arrayref(a,i)
+ref(a::Array{Any,1}, i::Int) = arrayref(a,long(i))
 ref{T}(a::Array{T,2}, i::Index, j::Index) = arrayref(a, (j-1)*arraysize(a,1)+i)
+ref{T}(a::Array{T,2}, i::Int, j::Int) = arrayref(a,long((j-1)*arraysize(a,1)+i))
 
 ## Indexing: assign ##
 
 assign(A::Array{Any}, x::Tensor, i::Index) = arrayset(A,i,x)
+assign(A::Array{Any}, x::Tensor, i::Int) = arrayset(A,long(i),x)
 assign(A::Array{Any}, x::ANY, i::Index) = arrayset(A,i,x)
+assign(A::Array{Any}, x::ANY, i::Int) = arrayset(A,long(i),x)
 assign{T}(A::Array{T}, x::Tensor, i::Index) = arrayset(A,i,convert(T, x))
+assign{T}(A::Array{T}, x::Tensor, i::Int) = arrayset(A,long(i),convert(T, x))
 assign{T}(A::Array{T}, x, i::Index) = arrayset(A,i,convert(T, x))
+assign{T}(A::Array{T}, x, i::Int) = arrayset(A,long(i),convert(T, x))
 assign{T}(A::Array{T,0}, x) = arrayset(A,1,convert(T, x))
 
 ## Dequeue functionality ##

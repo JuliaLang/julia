@@ -122,8 +122,8 @@ t_func[Union] = (0, Inf,
 t_func[method_exists] = (2, 2, cmp_tfunc)
 t_func[applicable] = (1, Inf, (f, args...)->Bool)
 #t_func[new_generic_function] = (1, 1, s->(Any-->Any))
-t_func[tuplelen] = (1, 1, x->Int32)
-t_func[arraylen] = (1, 1, x->Int32)
+t_func[tuplelen] = (1, 1, x->Size)
+t_func[arraylen] = (1, 1, x->Size)
 t_func[arrayref] = (2, 2, (a,i)->(isa(a,StructKind) && subtype(a,Array) ?
                                   a.parameters[1] : Any))
 t_func[arrayset] = (3, 3, (a,i,v)->a)
@@ -131,12 +131,12 @@ t_func[arraysize] = (1, 2,
 function (a, d...)
     if is(d,())
         if isa(a,StructKind) && subtype(a,Array)
-            return NTuple{a.parameters[2],Int32}
+            return NTuple{a.parameters[2],Size}
         else
-            return NTuple{Array.parameters[2],Int32}
+            return NTuple{Array.parameters[2],Size}
         end
     end
-    return Int32
+    return Size
 end)
 t_func[Array] =
     (1, Inf,
@@ -323,9 +323,9 @@ apply_type_tfunc = function (A, args...)
     for i=2:length(A)
         if isType(args[i])
             tparams = append(tparams, (args[i].parameters[1],))
-        elseif isa(A[i],Int32)
+        elseif isa(A[i],Size)
             tparams = append(tparams, (A[i],))
-        # TODO: evaluate Int32 static parameter!
+        # TODO: evaluate Int static parameter!
         #elseif
         else
             #return args[1]
@@ -907,7 +907,7 @@ function typeinf(linfo::LambdaStaticData,atypes::Tuple,sparams::Tuple, cop, def)
             end
             if !is(cur_hand,())
                 # propagate type info to exception handler
-                l = cur_hand[1]::Int32
+                l = cur_hand[1]::Size
                 if stchanged(changes, s[l], vars)
                     add(W, l)
                     s[l] = stupdate(s[l], changes, vars)
@@ -936,11 +936,11 @@ function typeinf(linfo::LambdaStaticData,atypes::Tuple,sparams::Tuple, cop, def)
                         end
                     end
                 elseif is(hd,:enter)
-                    l = findlabel(body,stmt.args[1]::Int32)
+                    l = findlabel(body,stmt.args[1]::Size)
                     cur_hand = (l,cur_hand)
                     handler_at[l] = cur_hand
                 elseif is(hd,:leave)
-                    for i=1:((stmt.args[1])::Int32)
+                    for i=1:((stmt.args[1])::Size)
                         cur_hand = cur_hand[2]
                     end
                 end
@@ -1147,7 +1147,7 @@ function inlineable(f, e::Expr, vars)
     sp = meth[2]::Tuple
     spvals = sp[2:2:]
     for i=1:length(spvals)
-        if !isleaftype(spvals[i]) && !isa(spvals[i],Int32)
+        if !isleaftype(spvals[i]) && !isa(spvals[i],Int)
             return NF
         end
     end

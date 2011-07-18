@@ -30,8 +30,8 @@ numel(r::Ranges) = length(r)
 size(r::Ranges) = tuple(length(r))
 length{T<:Int}(r::Range{T}) = max(0, div(r.stop-r.start+r.step, r.step))
 length{T<:Int}(r::Range1{T}) = max(0, r.stop-r.start+1)
-length(r::Range) = max(0, int32((r.stop-r.start)/r.step+1))
-length(r::Range1) = max(0, int32(r.stop-r.start+1))
+length(r::Range) = max(0, long((r.stop-r.start)/r.step+1))
+length(r::Range1) = max(0, long(r.stop-r.start+1))
 
 isempty(r::Range) = (r.step > 0 ? r.stop < r.start : r.stop > r.start)
 isempty(r::Range1) = (r.stop < r.start)
@@ -42,7 +42,7 @@ next{T<:Int}(r::Range{T}, i::T) = (i, i+r.step)
 
 start(r::Range1) = r.start
 done(r::Range1, i) = (i > r.stop)
-next(r::Range1, i) = (i, i+1)
+next{T}(r::Range1{T}, i) = (i, i+one(T))
 
 # floating point ranges need to keep an integer counter
 start(r::Range) = 0
@@ -54,7 +54,7 @@ next{T}(r::Range{T}, st) = (r.start+st*r.step, st+1)
 colon(start::Real, stop::Real, step::Real) = Range(start, step, stop)
 colon(start::Real, stop::Real) = Range1(start, stop)
 
-function ref(r::Ranges, i::Index)
+function ref(r::Ranges, i::Int)
     if i < 1; error(BoundsError); end
     x = r.start + (i-1)*step(r)
     if step(r) > 0 ? x > r.stop : x < r.stop
@@ -100,13 +100,13 @@ type NDRange{N}
     ranges::NTuple{N,Any}
     empty::Bool
 
-    if eq_int(unbox32(N),unbox32(0))
+    if eq_int(unbox(Size,N),unbox(Size,0))
         NDRange(r::())           = new(r, false)
-    elseif eq_int(unbox32(N),unbox32(1))
+    elseif eq_int(unbox(Size,N),unbox(Size,1))
         NDRange(r::(Any,))       = new(r, isempty(r[1]))
-    elseif eq_int(unbox32(N),unbox32(2))
+    elseif eq_int(unbox(Size,N),unbox(Size,2))
         NDRange(r::(Any,Any))    = new(r, isempty(r[1])||isempty(r[2]))
-    elseif eq_int(unbox32(N),unbox32(3))
+    elseif eq_int(unbox(Size,N),unbox(Size,3))
         NDRange(r::(Any,Any,Any))= new(r,
                                        isempty(r[1])||isempty(r[2])||isempty(r[3]))
     else

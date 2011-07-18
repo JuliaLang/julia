@@ -823,7 +823,7 @@ function start_worker(wrfd)
     flush(io)
     #close(io)
     # close stdin; workers will not use it
-    ccall(dlsym(libc, :close), Int32, (Int32,), 0)
+    ccall(dlsym(libc, :close), Int32, (Int32,), int32(0))
 
     global Scheduler = current_task()
 
@@ -837,7 +837,7 @@ function start_worker(wrfd)
     end
 
     ccall(dlsym(libc, :close), Int32, (Int32,), sockfd)
-    ccall(dlsym(libc, :exit) , Void , (Int32,), 0)
+    ccall(dlsym(libc, :exit) , Void , (Int32,), int32(0))
 end
 
 # establish an SSH tunnel to a remote worker
@@ -1324,8 +1324,8 @@ yield() = yieldto(Scheduler)
 
 fd_handlers = HashTable()
 
-add_fd_handler(fd, H) = (fd_handlers[fd]=H)
-del_fd_handler(fd) = del(fd_handlers, fd)
+add_fd_handler(fd::Int32, H) = (fd_handlers[fd]=H)
+del_fd_handler(fd::Int32) = del(fd_handlers, fd)
 
 function event_loop(isclient)
     fdset = FDSet()
@@ -1349,7 +1349,7 @@ function event_loop(isclient)
                         perform_work()
                     end
                 else
-                    for fd=int32(0):(fdset.nfds-1)
+                    for fd=int32(0):int32(fdset.nfds-1)
                         if has(fdset,fd)
                             h = fd_handlers[fd]
                             h(fd)
