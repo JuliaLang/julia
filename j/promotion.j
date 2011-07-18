@@ -57,7 +57,7 @@ mod(x::Real, y::Real) = mod(promote(x,y)...)
 mod1(x::Real, y::Real) = mod1(promote(x,y)...)
 cmp(x::Real, y::Real) = cmp(promote(x,y)...)
 
-## catch-alls for operations without fallbacks ##
+## catch-alls to prevent infinite recursion when definitions are missing ##
 
 no_op_err(name, T) = error(name," not defined for ",T)
 +{T<:Number}(x::T, y::T) = no_op_err("+", T)

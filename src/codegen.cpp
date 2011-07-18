@@ -551,7 +551,8 @@ static size_t max_arg_depth(jl_value_t *expr)
                 if (m+(int)i > max) max = m+(int)i;
             }
             if (!expr_is_symbol(jl_exprarg(e,0)) &&
-                jl_is_expr(jl_exprarg(e,0))) {
+                (jl_is_expr(jl_exprarg(e,0)) ||
+                 jl_is_lambda_info(jl_exprarg(e,0)))) {
                 if (alen > max)
                     max = alen;
             }
@@ -978,7 +979,7 @@ static Value *emit_call(jl_value_t **args, size_t arglen, jl_codectx_t *ctx)
     if (theFptr == NULL) {
         Value *theFunc = emit_expr(args[0], ctx, true);
 #ifdef JL_GC_MARKSWEEP
-        if (!headIsGlobal && jl_is_expr(a0)) {
+        if (!headIsGlobal && (jl_is_expr(a0) || jl_is_lambda_info(a0))) {
             make_gcroot(boxed(theFunc), ctx);
         }
 #endif
