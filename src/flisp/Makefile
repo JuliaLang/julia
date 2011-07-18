@@ -17,8 +17,8 @@ FLAGS = -falign-functions -Wall -Wno-strict-aliasing -I$(LLTDIR) $(CFLAGS) \
 LIBFILES = $(LLT)
 LIBS = $(LIBFILES) -lm $(GCLIBS)
 
-DEBUGFLAGS = -g -ggdb3 -DDEBUG $(FLAGS)
-SHIPFLAGS = -O3 -DNDEBUG $(FLAGS)
+DEBUGFLAGS += $(FLAGS)
+SHIPFLAGS += $(FLAGS)
 
 default: release
 
