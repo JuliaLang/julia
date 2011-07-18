@@ -17,7 +17,7 @@ isequal{T<:Number}(x::T, y::T) = (x==y)
 
 > {T<:Real}(x::T, y::T) = (y < x)
 <={T<:Real}(x::T, y::T) = (x < y) || (x == y)
->={T<:Real}(x::T, y::T) = (x > y) || (x == y)
+>={T<:Real}(x::T, y::T) = (y <= x)
 
 ## definitions providing basic traits of arithmetic operators ##
 
