@@ -1,10 +1,16 @@
 ## integer functions ##
 
+abs(x::Uint ) = x
+abs(x::Int8 ) = (y=x>>7;  (x+y)$y)
+abs(x::Int16) = (y=x>>15; (x+y)$y)
+abs(x::Int32) = (y=x>>31; (x+y)$y)
+abs(x::Int64) = (y=x>>63; (x+y)$y)
+
 isodd(n::Int) = bool(rem(n,2))
 iseven(n::Int) = !isodd(n)
 
 signbit(x::Uint ) = one(x)
-signbit(x::Int8 ) = one(x)-((x>>>07)<<1)
+signbit(x::Int8 ) = one(x)-((x>>>7) <<1)
 signbit(x::Int16) = one(x)-((x>>>15)<<1)
 signbit(x::Int32) = one(x)-((x>>>31)<<1)
 signbit(x::Int64) = one(x)-((x>>>63)<<1)
