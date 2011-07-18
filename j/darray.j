@@ -5,7 +5,7 @@ type DArray{T,N,distdim} <: Tensor{T,N}
     # pmap[i]==p ⇒ processor p has piece i
     pmap::Array{Int32,1}
     # piece i consists of indexes dist[i] through dist[i+1]-1
-    dist::Array{Int32,1}
+    dist::Array{Size,1}
     # dimension of distribution
     distdim::Int32
     localpiece::Int32  # my piece #; pmap[localpiece]==myid()
@@ -116,7 +116,7 @@ end
 # initializer is a function accepting (el_type, local_size, darray) where
 # the last argument is the full DArray being constructed.
 darray{T}(init, ::Type{T}, dims::Dims, distdim, procs, dist) =
-    DArray{T,length(dims),distdim}(dims, init, procs, dist)
+    DArray{T,length(dims),long(distdim)}(dims, init, procs, dist)
 darray{T}(init, ::Type{T}, dims::Dims, distdim, procs) =
     darray(init, T, dims, distdim, procs,
            defaultdist(distdim, dims, length(procs)))

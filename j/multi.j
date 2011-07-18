@@ -745,8 +745,7 @@ function message_handler(fd, sockets)
         first = false
         try
             msg = force(deserialize(sock))
-            #print("$(myid()) got ", tuple(msg, args[1],
-            #                              map(typeof,args[2:])), "\n")
+            #print("$(myid()) got $msg\n")
             # handle message
             if is(msg, :call) || is(msg, :call_fetch) || is(msg, :call_wait)
                 id = force(deserialize(sock))

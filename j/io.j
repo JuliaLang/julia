@@ -115,6 +115,8 @@ read(s, ::Type{Float64}) = boxf64(unbox64(read(s,Int64)))
 
 read{T}(s, t::Type{T}, d1::Size, dims::Size...) =
     read(s, t, tuple(d1,dims...))
+read{T}(s, t::Type{T}, d1::Int, dims::Int...) =
+    read(s, t, map(long,tuple(d1,dims...)))
 
 read{T}(s, ::Type{T}, dims::Dims) = read(s, Array(T, dims))
 
