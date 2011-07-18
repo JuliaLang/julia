@@ -1,6 +1,6 @@
 #include "repl.h"
 
-char jl_prompt_color[] = "\033[1m\033[32mjulia> \033[37m";
+char jl_prompt_color[] = "\033[1m\033[32mjulia> \033[0m\033[1m";
 
 void init_repl_environment()
 {
