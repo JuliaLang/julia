@@ -1,7 +1,6 @@
 JULIAHOME = $(shell pwd)/../..
 include $(JULIAHOME)/Make.inc
 
-CPP = g++
 LIBS = -lpthread
 
 LIBJULIA_RELEASE = $(JULIAHOME)/libjulia-release.$(SHLIB_EXT)
@@ -18,8 +17,8 @@ WEBSERVER_OBJS = webserver.o server.o network.o
 julia-debug julia-release: webserver
 
 webserver: $(WEBSERVER_SRCS)
-	$(CPP) $(CXXFLAGS) $(SHIPFLAGS) -I$(JULIAHOME)/src -I$(JULIAHOME)/src/support -c $(WEBSERVER_SRCS)
-	$(CPP) -o $@ $(SHIPFLAGS) $(WEBSERVER_OBJS) $(LIBJULIA_RELEASE) $(LIBS)
+	$(CXX) $(CXXFLAGS) $(SHIPFLAGS) -I$(JULIAHOME)/src -I$(JULIAHOME)/src/support -c $(WEBSERVER_SRCS)
+	$(CXX) -o $@ $(SHIPFLAGS) $(WEBSERVER_OBJS) $(LIBJULIA_RELEASE) $(LIBS)
 	cp webserver $(JULIAHOME)/webserver
 
 clean:

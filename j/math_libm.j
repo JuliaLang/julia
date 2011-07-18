@@ -46,7 +46,7 @@ macro libfdmfunc_2arg(f)
         ($f)(x::Float64, y::Float64) = ccall(dlsym(libfdm,$string(f)), Float64, (Float64, Float64,), x, y)
         ($f)(x::Float32, y::Float32) = ccall(dlsym(libfdm,$strcat(string(f),"f")), Float32, (Float32, Float32), x, y)
         ($f)(x::Real, y::Real) = ($f)(float(x),float(y))
-	@vectorize_2arg $f
+        @vectorize_2arg $f
     end
 end
 
@@ -85,7 +85,6 @@ end
 @libmfunc_1arg_int ilogb
 
 @libfdmfunc_2arg atan2
-@libfdmfunc_2arg fmod
 @libfdmfunc_2arg copysign
 @libfdmfunc_2arg hypot
 
@@ -129,4 +128,3 @@ end
 
 ^(x::Float64, y::Float64) = ccall(dlsym(libfdm, :pow),  Float64, (Float64,Float64), x, y)
 ^(x::Float32, y::Float32) = ccall(dlsym(libfdm, :powf), Float32, (Float32,Float32), x, y)
-^(x::Float, y::Float) = ^(promote(x,y)...)

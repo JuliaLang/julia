@@ -258,14 +258,6 @@ function exp(z::ComplexNum)
     complex(er*cos(imag(z)), er*sin(imag(z)))
 end
 
-^(x::Int, p::Float) = ^(promote(x,p)...)
-
-^(z::ComplexNum, p::ComplexNum) = ^(promote(z,p)...)
-
-^(z::Real, p::ComplexNum) = ^(promote(z,p)...)
-
-^(z::ComplexNum, p::Float) = ^(promote(z,p)...)
-
 function ^{T<:ComplexNum}(z::T, p::T)
     realp = real(p)
     if imag(p) == 0

@@ -77,10 +77,15 @@ promote_rule(::Type{Float64}, ::Type{Char}) = Float64
 *(x::Float64, y::Float64) = boxf64(mul_float(unbox64(x), unbox64(y)))
 /(x::Float32, y::Float32) = boxf32(div_float(unbox32(x), unbox32(y)))
 /(x::Float64, y::Float64) = boxf64(div_float(unbox64(x), unbox64(y)))
+
+# TODO: fast floating point div.
+# div(x::Float32, y::Float32) = boxf32(div_float(unbox32(x), unbox32(y)))
+# div(x::Float64, y::Float64) = boxf64(div_float(unbox64(x), unbox64(y)))
 rem(x::Float32, y::Float32) = boxf32(rem_float(unbox32(x), unbox32(y)))
 rem(x::Float64, y::Float64) = boxf64(rem_float(unbox64(x), unbox64(y)))
 
-# faster than generic for floats
+# TODO: fast floating point fld.
+# fld{T<:Float}(x::T, y::T) = x-mod(x,y)
 mod{T<:Float}(x::T, y::T) = rem(y+rem(x,y),y)
 
 ## floating point comparisons ##
@@ -98,15 +103,11 @@ mod{T<:Float}(x::T, y::T) = rem(y+rem(x,y),y)
 >=(x::Float32, y::Float32) = ge_float(unbox32(x),unbox32(y))
 >=(x::Float64, y::Float64) = ge_float(unbox64(x),unbox64(y))
 
-!=(x::Float, y::Float) = (!=)(promote(x,y)...)
-<=(x::Float, y::Float) = (<=)(promote(x,y)...)
->=(x::Float, y::Float) = (>=)(promote(x,y)...)
-
 isequal(x::Float, y::Float) = (x == y) || (isnan(x) && isnan(y))
 
-cmp(x::Float, y::Float) =
-    !isnan(x) && !isnan(y) ? (x < y ? -1 : x > y ? +1 : 0) :
-        error("applying cmp to NaN us undefined")
+cmp{T<:Float}(x::T, y::T) =
+    !isnan(x) && !isnan(y) ? sign(y-x) :
+        error("applying cmp to NaN is undefined")
 
 ## traits ##
 
