@@ -727,7 +727,12 @@
 				   (block
 				    (break-block loop-cont
 						 ,body)
-				    (= ,var (call + 1 ,var)))))))))))
+				    (= ,var (call +
+						  (call (top convert)
+							(call (top typeof)
+							      ,var)
+							1)
+						  ,var)))))))))))
 
    ; for loop over arbitrary vectors
    (pattern-lambda
