@@ -3,6 +3,12 @@
 isodd(n::Int) = bool(rem(n,2))
 iseven(n::Int) = !isodd(n)
 
+signbit(x::Uint ) = one(x)
+signbit(x::Int8 ) = one(x)-((x>>>07)<<1)
+signbit(x::Int16) = one(x)-((x>>>15)<<1)
+signbit(x::Int32) = one(x)-((x>>>31)<<1)
+signbit(x::Int64) = one(x)-((x>>>63)<<1)
+
 copysign(x::Int, y::Real) = y < 0 ? -abs(x) : abs(x) # TODO: make more efficient
 
 function gcd(a::Int, b::Int)
