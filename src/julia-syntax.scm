@@ -575,13 +575,13 @@
    (pattern-lambda (typealias (-- name (-s)) type-ex)
 		   `(= ,name ,type-ex))
    (pattern-lambda (typealias (curly (-- name (-s)) . params) type-ex)
-		   `(call (lambda ,params
-			    (= ,name (call (top new_type_constructor)
-					   (tuple ,@params) ,type-ex)))
-			  ,@(receive
-			     (params bounds)
-			     (sparam-name-bounds params '() '())
-			     (symbols->typevars params bounds))))
+		   (receive
+		    (params bounds)
+		    (sparam-name-bounds params '() '())
+		    `(call (lambda ,params
+			     (= ,name (call (top new_type_constructor)
+					    (tuple ,@params) ,type-ex)))
+			   ,@(symbols->typevars params bounds))))
 
    (pattern-lambda (comparison . chain) (expand-compare-chain chain))
 
@@ -607,7 +607,7 @@
 		      (new-idxs stuff) (process-indexes arr idxs)
 		      `(block
 			,@(append stmts stuff)
-			(call assign ,arr ,rhs ,@new-idxs)))))
+			(call (top assign) ,arr ,rhs ,@new-idxs)))))
 
    (pattern-lambda (ref a . idxs)
 		   (let* ((reuse (and (pair? a)
@@ -622,7 +622,7 @@
 		      (new-idxs stuff) (process-indexes arr idxs)
 		      `(block
 			,@(append stmts stuff)
-			(call ref ,arr ,@new-idxs)))))
+			(call (top ref) ,arr ,@new-idxs)))))
 
    (pattern-lambda (curly type . elts)
 		   `(call (top apply_type) ,type ,@elts))
@@ -727,7 +727,12 @@
 				   (block
 				    (break-block loop-cont
 						 ,body)
-				    (= ,var (call + 1 ,var)))))))))))
+				    (= ,var (call +
+						  (call (top convert)
+							(call (top typeof)
+							      ,var)
+							1)
+						  ,var)))))))))))
 
    ; for loop over arbitrary vectors
    (pattern-lambda
@@ -783,10 +788,10 @@
 
    ;; hcat, vcat
    (pattern-lambda (hcat . a)
-		   `(call hcat ,@a))
+		   `(call (top hcat) ,@a))
 
    (pattern-lambda (vcat . a)
-		   `(call vcat ,@a))
+		   `(call (top vcat) ,@a))
 
    )) ; patterns
 
@@ -843,9 +848,9 @@
     (define (construct-loops ranges iters oneresult-dim)
       (if (null? ranges)
 	  (if (null? iters)
-	      `(block (call assign ,result ,expr ,ri)
+	      `(block (call (top assign) ,result ,expr ,ri)
 		      (+= ,ri 1))
-	      `(block (call assign ,result (ref ,expr ,@(reverse iters)) ,ri)
+	      `(block (call (top assign) ,result (ref ,expr ,@(reverse iters)) ,ri)
 		      (+= ,ri 1)) )
 	  (if (eq? (car ranges) `:)
 	      (let ((i (gensy)))
@@ -900,7 +905,7 @@
       ;; construct loops to cycle over all dimensions of an n-d comprehension
       (define (construct-loops ranges)
         (if (null? ranges)
-	    `(block (call assign ,result ,expr ,ri)
+	    `(block (call (top assign) ,result ,expr ,ri)
 		    (+= ,ri 1))
 	    `(for ,(car ranges)
 		  ,(construct-loops (cdr ranges)))))
@@ -932,13 +937,13 @@
       (define (compute-dims ranges)
 	(if (null? ranges)
 	    (list)
-	    (cons `(call length ,(car ranges))
+	    (cons `(call (top length) ,(car ranges))
 		  (compute-dims (cdr ranges)))))
 
       ;; construct loops to cycle over all dimensions of an n-d comprehension
       (define (construct-loops ranges rs)
         (if (null? ranges)
-	    `(block (call assign ,result ,expr ,ri)
+	    `(block (call (top assign) ,result ,expr ,ri)
 		    (+= ,ri 1))
 	    `(for (= ,(cadr (car ranges)) ,(car rs))
 		  ,(construct-loops (cdr ranges) (cdr rs)))))

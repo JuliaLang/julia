@@ -131,7 +131,7 @@ type ProcessGroup
     # global references
     refs::HashTable
 
-    function ProcessGroup(myid::Int32, w::Array{Any,1}, locs::Array{Any,1})
+    function ProcessGroup(myid::Int, w::Array{Any,1}, locs::Array{Any,1})
         return new(myid, w, locs, length(w), HashTable())
     end
 end
@@ -1349,7 +1349,7 @@ function event_loop(isclient)
                         perform_work()
                     end
                 else
-                    for fd=0:(fdset.nfds-1)
+                    for fd=int32(0):(fdset.nfds-1)
                         if has(fdset,fd)
                             h = fd_handlers[fd]
                             h(fd)

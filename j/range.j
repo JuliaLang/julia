@@ -42,7 +42,7 @@ next{T<:Int}(r::Range{T}, i::T) = (i, i+r.step)
 
 start(r::Range1) = r.start
 done(r::Range1, i) = (i > r.stop)
-next(r::Range1, i) = (i, i+1)
+next{T}(r::Range1{T}, i) = (i, i+one(T))
 
 # floating point ranges need to keep an integer counter
 start(r::Range) = 0
