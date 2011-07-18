@@ -18,7 +18,14 @@ signbit(x::Int16) = one(x)-((x>>>15)<<1)
 signbit(x::Int32) = one(x)-((x>>>31)<<1)
 signbit(x::Int64) = one(x)-((x>>>63)<<1)
 
-copysign(x::Int, y::Real) = y < 0 ? -abs(x) : abs(x) # TODO: make more efficient
+copysign(x::Int, y::Real) = y < 0 ? -abs(x) : abs(x)
+copysign(x::Int, y::Int) = copysign(promote(x,y)...)
+copysign(x::Int8 , y::Int8 ) = (t=(x$y)>>7;  (x+t)$t)
+copysign(x::Int16, y::Int16) = (t=(x$y)>>15; (x+t)$t)
+copysign(x::Int32, y::Int32) = (t=(x$y)>>31; (x+t)$t)
+copysign(x::Int64, y::Int64) = (t=(x$y)>>63; (x+t)$t)
+copysign(x::Int, y::Float32) = copysign(x,boxsi32(unbox32(y)))
+copysign(x::Int, y::Float64) = copysign(x,boxsi64(unbox64(y)))
 
 ## number-theoretic functions ##
 
