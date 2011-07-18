@@ -129,4 +129,3 @@ end
 
 ^(x::Float64, y::Float64) = ccall(dlsym(libfdm, :pow),  Float64, (Float64,Float64), x, y)
 ^(x::Float32, y::Float32) = ccall(dlsym(libfdm, :powf), Float32, (Float32,Float32), x, y)
-^(x::Float, y::Float) = ^(promote(x,y)...)

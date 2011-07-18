@@ -14,10 +14,9 @@ ndims(x::Number) = 0
 numel(x::Number) = 1
 length(x::Number) = 1
 ref(x::Number) = x
-ref(x::Number, y::Index) = x
 
-signbit(x::Real) = x < 0 ? int8(-1) : int8(1)
-sign(x::Real) = x < 0 ? int8(-1) : x > 0 ? int8(1) : int8(0)
+signbit(x::Real) = x < 0 ? -one(x) : one(x)
+sign(x::Real) = x < 0 ? -one(x) : x > 0 ? one(x) : zero(x)
 abs(x::Real) = x < 0 ? -x : x
 abs2(x::Real) = x*x
 
@@ -36,10 +35,10 @@ min(x::Real, y::Real) = x < y ? x : y
 sum(x::Number, y::Number) = x + y
 prod(x::Number, y::Number) = x * y
 
+# TODO: should we really treat numbers as iterable?
 start(a::Real) = a
 next(a::Real, i) = (a, a+1)
 done(a::Real, i) = (i > a)
-
 isempty(a::Number) = false
 
-reinterpret{T<:Real,S<:Real}(::Type{T}, x::S) = box(T, unbox(S,x))
+reinterpret{T<:Real,S<:Real}(::Type{T}, x::S) = box(T,unbox(S,x))
