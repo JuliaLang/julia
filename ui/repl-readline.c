@@ -22,8 +22,8 @@
 #include <readline/readline.h>
 #include <readline/history.h>
 
-char jl_prompt_color[] = "\001\033[1m\033[32m\002julia> \001\033[37m\002";
-static char jl_input_color[]  = "\033[1m\033[37m";
+char jl_prompt_color[] = "\001\033[1m\033[32m\002julia> \001\033[0m\033[1m\002";
+static char jl_input_color[]  = "\033[0m\033[1m";
 
 static char *history_file = NULL;
 

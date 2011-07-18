@@ -430,7 +430,7 @@ static const char *options[] = {
 // Julia REPL stuff
 ///////////////////
 
-char jl_prompt_color[] = "\033[1m\033[32mjulia> \033[37m";
+char jl_prompt_color[] = "\033[1m\033[32mjulia> \033[0m\033[1m";
 
 static struct mg_context *ctx;
 
