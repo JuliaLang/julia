@@ -67,7 +67,7 @@ function invmod(n, m)
 end
 
 # ^ for any x supporting *
-function ^(x, p::Int)
+function power_by_squaring(x, p::Int)
     if p == 1
         return x
     elseif p == 0
@@ -99,6 +99,9 @@ function ^(x, p::Int)
     end
     return x
 end
+
+^(x, p::Int) = power_by_squaring(x,p)
+^{T<:Int}(x::T, p::T) = power_by_squaring(x,p)
 
 # x^p mod m
 function powermod(x::Int, p::Int, m::Int)
