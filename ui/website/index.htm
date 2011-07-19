@@ -107,7 +107,7 @@
 					// send the input to the server via AJAX
 					$.ajax({
 						type: "POST",
-						url: "http://localhost/repl.scgi",
+						url: "/repl.scgi",
 						data: {"terminal-input": $("#terminal-input").val()},
 						success: callback,
 						dataType: "text",
