@@ -17,7 +17,7 @@ SHIPFLAGS += $(FLAGS)
 LIBJULIA_RELEASE = $(JULIAHOME)/libjulia-release.$(SHLIB_EXT)
 LIBJULIA_DEBUG = $(JULIAHOME)/libjulia-debug.$(SHLIB_EXT)
 
-julia-debug julia-release: %: %-basic %-readline %-cloud
+julia-debug julia-release: %: %-basic %-readline %-web %-cloud
 
 debug release:
 	$(MAKE) julia-$@
@@ -31,6 +31,8 @@ julia-release-basic: $(JULIAHOME)/julia-release-basic
 julia-debug-basic: $(JULIAHOME)/julia-debug-basic
 julia-release-readline: $(JULIAHOME)/julia-release-readline
 julia-debug-readline: $(JULIAHOME)/julia-debug-readline
+julia-release-web: $(JULIAHOME)/julia-release-web
+julia-debug-web: $(JULIAHOME)/julia-debug-web
 julia-release-cloud: $(JULIAHOME)/julia-release-cloud
 julia-debug-cloud: $(JULIAHOME)/julia-debug-cloud
 
@@ -44,6 +46,11 @@ $(JULIAHOME)/julia-release-readline: repl.o repl-readline.o
 $(JULIAHOME)/julia-debug-readline: repl.do repl-readline.do
 	$(CC) $(DEBUGFLAGS) $^ -o $@ $(LIBJULIA_DEBUG) $(READLINE) $(LIBS)
 
+$(JULIAHOME)/julia-release-web: repl.o repl-web.o
+	$(CC) $(SHIPFLAGS) $^ -o $@ $(LIBJULIA_RELEASE) $(READLINE) $(LIBS)
+$(JULIAHOME)/julia-debug-web: repl.do repl-web.do
+	$(CC) $(DEBUGFLAGS) $^ -o $@ $(LIBJULIA_DEBUG) $(READLINE) $(LIBS)
+
 $(JULIAHOME)/julia-release-cloud: repl.c repl-cloud.c
 	$(CC) $(SHIPFLAGS) -I$(MONGOOSE) -DCLOUD_REPL repl.c repl-cloud.c $(MONGOOSE)/mongoose.c -o $@ $(LIBJULIA_RELEASE) -lssl -lcrypto $(LIBS)
 $(JULIAHOME)/julia-debug-cloud: repl.c repl-cloud.c
@@ -53,4 +60,5 @@ clean:
 	rm -f *.o *.do
 	rm -f $(JULIAHOME)/julia-*-basic
 	rm -f $(JULIAHOME)/julia-*-readline
+	rm -f $(JULIAHOME)/julia-*-web
 	rm -f $(JULIAHOME)/julia-*-cloud

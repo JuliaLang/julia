@@ -1354,6 +1354,12 @@ static int jl_tuple_subtype_(jl_value_t **child, size_t cl,
         if (!jl_subtype_le(ce, pe, ta, morespecific, invariant))
             return 0;
 
+        if (morespecific) {
+            // stop as soon as one element is strictly more specific
+            if (!jl_types_equal(ce,pe))
+                return 1;
+        }
+
         if (cseq && pseq) return 1;
         if (!cseq) ci++;
         if (!pseq) pi++;
