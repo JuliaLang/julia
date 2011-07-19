@@ -113,6 +113,7 @@ show(::UndefRefError) = print("access to undefined reference")
 show(::EOFError) = print("read: end of file")
 show(e::ErrorException) = print(e.msg)
 show(e::KeyError) = print("key not found: $(e.key)")
+show(e::InterruptException) = nothing
 
 function show(e::MethodError)
     name = ccall(:jl_genericfunc_name, Any, (Any,), e.f)
