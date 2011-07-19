@@ -78,15 +78,12 @@ promote_rule(::Type{Float64}, ::Type{Char}) = Float64
 /(x::Float32, y::Float32) = boxf32(div_float(unbox32(x), unbox32(y)))
 /(x::Float64, y::Float64) = boxf64(div_float(unbox64(x), unbox64(y)))
 
-# TODO: fast floating point div.
-# div(x::Float32, y::Float32) = boxf32(div_float(unbox32(x), unbox32(y)))
-# div(x::Float64, y::Float64) = boxf64(div_float(unbox64(x), unbox64(y)))
+# TODO: faster floating point div?
+# TODO: faster floating point fld?
+# TODO: faster floating point mod?
+
 rem(x::Float32, y::Float32) = boxf32(rem_float(unbox32(x), unbox32(y)))
 rem(x::Float64, y::Float64) = boxf64(rem_float(unbox64(x), unbox64(y)))
-
-# TODO: fast floating point fld.
-# fld{T<:Float}(x::T, y::T) = x-mod(x,y)
-mod{T<:Float}(x::T, y::T) = rem(y+rem(x,y),y)
 
 ## floating point comparisons ##
 
