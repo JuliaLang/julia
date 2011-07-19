@@ -44,6 +44,7 @@ jl_struct_type_t *jl_errorexception_type=NULL;
 jl_struct_type_t *jl_typeerror_type;
 jl_struct_type_t *jl_loaderror_type;
 jl_struct_type_t *jl_uniontoocomplex_type;
+jl_struct_type_t *jl_backtrace_type;
 jl_value_t *jl_an_empty_cell=NULL;
 jl_value_t *jl_stackovf_exception;
 jl_value_t *jl_divbyzero_exception;
@@ -71,6 +72,7 @@ jl_sym_t *enter_sym;   jl_sym_t *leave_sym;
 jl_sym_t *exc_sym;     jl_sym_t *error_sym;
 jl_sym_t *static_typeof_sym;
 jl_sym_t *new_sym;
+jl_sym_t *multivalue_sym;
 
 /*
 static int sizebins[] = {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
@@ -361,9 +363,12 @@ DLLEXPORT jl_sym_t *jl_symbol_n(const char *str, int32_t len)
     return jl_symbol(name);
 }
 
+static uint32_t gs_ctr = 0;  // TODO: per-thread
+uint32_t jl_get_gs_ctr() { return gs_ctr; }
+void jl_set_gs_ctr(uint32_t ctr) { gs_ctr = ctr; }
+
 DLLEXPORT jl_sym_t *jl_gensym()
 {
-    static uint32_t gs_ctr = 0;  // TODO: per-thread
     char name[32];
     char *n;
     n = uint2str(name, sizeof(name)-1, gs_ctr, 10);

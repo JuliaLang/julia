@@ -343,12 +343,19 @@ for nr = {
         f = fld(a,n)
         r = rem(a,n)
         m = mod(a,n)
-        t = promote_type(typeof(a),typeof(n))
 
-        @assert typeof(d) <: Int
-        @assert typeof(f) <: Int
-        @assert typeof(r) <: t
-        @assert typeof(m) <: t
+        t1 = isa(a,Rational) && isa(n,Rational) ?
+                               promote_type(typeof(num(a)),typeof(num(n))) :
+             isa(a,Rational) ? promote_type(typeof(num(a)),typeof(n)) :
+             isa(n,Rational) ? promote_type(typeof(a),typeof(num(n))) :
+                               promote_type(typeof(a),typeof(n))
+
+        t2 = promote_type(typeof(a),typeof(n))
+
+        @assert typeof(d) <: t1
+        @assert typeof(f) <: t1
+        @assert typeof(r) <: t2
+        @assert typeof(m) <: t2
 
         @assert d == f
         @assert r == m
@@ -364,10 +371,10 @@ for nr = {
             sr = rem(sa,sn)
             sm = mod(sa,sn)
 
-            @assert typeof(sd) <: Int
-            @assert typeof(sf) <: Int
-            @assert typeof(sr) <: t
-            @assert typeof(sm) <: t
+            @assert typeof(sd) <: t1
+            @assert typeof(sf) <: t1
+            @assert typeof(sr) <: t2
+            @assert typeof(sm) <: t2
 
             @assert sa < 0 ? -n < sr <= 0 : 0 <= sr < +n
             @assert sn < 0 ? -n < sm <= 0 : 0 <= sm < +n
@@ -390,8 +397,8 @@ v = pop(l)
 # string escaping & unescaping
 cx = {
     0x00000000      '\0'        "\\0"
-    0x00000001      '\x1'       "\\x1"
-    0x00000006      '\x6'       "\\x6"
+    0x00000001      '\x01'      "\\x01"
+    0x00000006      '\x06'      "\\x06"
     0x00000007      '\a'        "\\a"
     0x00000008      '\b'        "\\b"
     0x00000009      '\t'        "\\t"
@@ -399,7 +406,7 @@ cx = {
     0x0000000b      '\v'        "\\v"
     0x0000000c      '\f'        "\\f"
     0x0000000d      '\r'        "\\r"
-    0x0000000e      '\xe'       "\\xe"
+    0x0000000e      '\x0e'      "\\x0e"
     0x0000001a      '\x1a'      "\\x1a"
     0x0000001b      '\e'        "\\e"
     0x0000001c      '\x1c'      "\\x1c"
@@ -443,7 +450,7 @@ cx = {
 for i = 1:size(cx,1)
     @assert cx[i,1] == cx[i,2]
     @assert string(cx[i,2]) == unescape_string(cx[i,3])
-    if cx[i,1] < 0x80
+    if iswascii(cx[i,2]) || !iswprint(cx[i,2])
         @assert cx[i,3] == escape_string(string(cx[i,2]))
     end
     for j = 1:size(cx,1)

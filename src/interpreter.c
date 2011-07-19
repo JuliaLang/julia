@@ -143,6 +143,12 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl)
     else if (ex->head == error_sym) {
         jl_errorf("syntax error: %s", jl_string_data(args[0]));
     }
+    else if (ex->head == line_sym) {
+        return (jl_value_t*)jl_nothing;
+    }
+    else if (ex->head == multivalue_sym) {
+        return (jl_value_t*)jl_nothing;
+    }
     jl_error("not supported");
     return (jl_value_t*)jl_nothing;
 }

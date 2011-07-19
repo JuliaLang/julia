@@ -20,6 +20,7 @@
 #include <sstream>
 #include <map>
 #include <vector>
+#include "debuginfo.cpp"
 #ifdef DEBUG
 #undef NDEBUG
 #endif
@@ -86,6 +87,7 @@ static GlobalVariable *jlsysmod_var;
 static GlobalVariable *jlpgcstack_var;
 #endif
 static GlobalVariable *jlexc_var;
+JuliaJITEventListener *jl_jit_events;
 
 // important functions
 static Function *jlnew_func;
@@ -177,6 +179,7 @@ static Function *to_function(jl_lambda_info_t *li)
     assert(jl_is_expr(li->ast));
     li->functionObject = (void*)f;
     BasicBlock *old = nested_compile ? builder.GetInsertBlock() : NULL;
+    DebugLoc olddl = builder.getCurrentDebugLocation();
     bool last_n_c = nested_compile;
     nested_compile = true;
     emit_function(li, f);
@@ -186,8 +189,10 @@ static Function *to_function(jl_lambda_info_t *li)
     // print out the function's LLVM code
     //f->dump();
     //verifyFunction(*f);
-    if (old != NULL)
+    if (old != NULL) {
         builder.SetInsertPoint(old);
+        builder.SetCurrentDebugLocation(olddl);
+    }
     JL_SIGATOMIC_END();
     return f;
 }
@@ -526,16 +531,30 @@ static Value *emit_lambda_closure(jl_value_t *expr, jl_codectx_t *ctx)
                                literal_pointer_val(expr), tuple);
 }
 
+static bool expr_is_symbol(jl_value_t *e)
+{
+    return (jl_is_symbol(e) || (jl_is_expr(e) &&
+                                (((jl_expr_t*)e)->head==symbol_sym ||
+                                 ((jl_expr_t*)e)->head==top_sym)));
+}
+
 static size_t max_arg_depth(jl_value_t *expr)
 {
     if (jl_is_expr(expr)) {
-        size_t max = 0;
+        int max = 0, m;
         jl_expr_t *e = (jl_expr_t*)expr;
-        size_t i, m;
+        size_t i;
         if (e->head == call_sym || e->head == call1_sym) {
-            for(i=0; i < e->args->length; i++) {
+            int alen = e->args->length;
+            for(i=0; i < (size_t)alen; i++) {
                 m = max_arg_depth(jl_exprarg(e,i));
-                if (m+i+1 > max) max = m+i+1;
+                if (m+(int)i > max) max = m+(int)i;
+            }
+            if (!expr_is_symbol(jl_exprarg(e,0)) &&
+                (jl_is_expr(jl_exprarg(e,0)) ||
+                 jl_is_lambda_info(jl_exprarg(e,0)))) {
+                if (alen > max)
+                    max = alen;
             }
         }
         else if (e->head == method_sym) {
@@ -551,7 +570,8 @@ static size_t max_arg_depth(jl_value_t *expr)
                 if (m > max) max = m;
             }
         }
-        return max;
+        assert(max >= 0);
+        return (size_t)max;
     }
     return 0;
 }
@@ -934,16 +954,18 @@ static Value *emit_call(jl_value_t **args, size_t arglen, jl_codectx_t *ctx)
         //if (!b->constp) b = NULL;
     }
     if (jl_is_expr(a0) && ((jl_expr_t*)a0)->head == top_sym) {
+        headIsGlobal = true;
         // (top x) is also global
         b = jl_get_binding(ctx->module,
                            (jl_sym_t*)jl_exprarg(((jl_expr_t*)a0),0));
-        if (!b->constp || b->value==NULL) b = NULL;
+        if (b->value==NULL ||
+            (!b->constp && !(jl_is_func(b->value) && jl_is_gf(b->value))))
+            b = NULL;
     }
     jl_value_t *f = NULL;
     if (b != NULL) {
         // head is a constant global
         f = b->value;
-        headIsGlobal = true;
     }
     else if (jl_is_func(a0)) {
         f = a0;
@@ -957,7 +979,7 @@ static Value *emit_call(jl_value_t **args, size_t arglen, jl_codectx_t *ctx)
     if (theFptr == NULL) {
         Value *theFunc = emit_expr(args[0], ctx, true);
 #ifdef JL_GC_MARKSWEEP
-        if (!headIsGlobal) {
+        if (!headIsGlobal && (jl_is_expr(a0) || jl_is_lambda_info(a0))) {
             make_gcroot(boxed(theFunc), ctx);
         }
 #endif
@@ -1288,6 +1310,8 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool value)
         builder.CreateCondBr(isz, tryblk, handlr);
         builder.SetInsertPoint(tryblk);
     }
+    else if (ex->head == line_sym) {
+    }
     if (!strcmp(ex->head->name, "$")) {
         jl_error("syntax error: prefix $ outside of quote block");
     }
@@ -1331,19 +1355,6 @@ extern "C" jl_tuple_t *jl_tuple_tvars_to_symbols(jl_tuple_t *t);
 
 static void emit_function(jl_lambda_info_t *lam, Function *f)
 {
-    /*
-    dbuilder->createCompileUnit(0, "foo.j", ".", "julia", true, "", 0);
-    llvm::DIArray EltTypeArray = dbuilder->getOrCreateArray(NULL,0);
-    DIFile fil = dbuilder->createFile("foo.j", ".");
-    DISubprogram SP =
-        dbuilder->createFunction((DIDescriptor)dbuilder->getCU(), f->getName(),
-                                 f->getName(),
-                                 fil,
-                                 0,
-                                 dbuilder->createSubroutineType(fil,EltTypeArray),
-                                 false, true,
-                                 0, true, f);
-    */
     jl_expr_t *ast = (jl_expr_t*)lam->ast;
     //jl_print((jl_value_t*)ast);
     //ios_printf(ios_stdout, "\n");
@@ -1387,6 +1398,35 @@ static void emit_function(jl_lambda_info_t *lam, Function *f)
     ctx.funcName = lam->name->name;
     ctx.float32Temp = NULL;
 
+    // look for initial (line num filename) node
+    jl_array_t *stmts = jl_lam_body(ast)->args;
+    jl_value_t *stmt = jl_cellref(stmts,0);
+    std::string filename = "no file";
+    int lno = -1;
+    if (jl_is_expr(stmt) && ((jl_expr_t*)stmt)->head == line_sym) {
+        lno = jl_unbox_int32(jl_exprarg(stmt, 0));
+        if (((jl_expr_t*)stmt)->args->length > 1) {
+            assert(jl_is_symbol(jl_exprarg(stmt, 1)));
+            filename = ((jl_sym_t*)jl_exprarg(stmt, 1))->name;
+        }
+    }
+    
+    dbuilder->createCompileUnit(0, filename, ".", "julia", true, "", 0);
+    llvm::DIArray EltTypeArray = dbuilder->getOrCreateArray(NULL,0);
+    DIFile fil = dbuilder->createFile(filename, ".");
+    DISubprogram SP =
+        dbuilder->createFunction((DIDescriptor)dbuilder->getCU(),
+                                 lam->name->name,
+                                 lam->name->name,
+                                 fil,
+                                 0,
+                                 dbuilder->createSubroutineType(fil,EltTypeArray),
+                                 false, true,
+                                 0, true, f);
+    
+    // set initial line number
+    builder.SetCurrentDebugLocation(DebugLoc::get(lno, 0, (MDNode*)SP, NULL));
+    
     /*
     // check for stack overflow (the slower way)
     Value *cur_sp =
@@ -1513,7 +1553,6 @@ static void emit_function(jl_lambda_info_t *lam, Function *f)
         }
     }
 
-    jl_array_t *stmts = jl_lam_body(ast)->args;
     // allocate space for exception handler contexts
     for(i=0; i < stmts->length; i++) {
         jl_value_t *stmt = jl_cellref(stmts,i);
@@ -1630,8 +1669,12 @@ static void emit_function(jl_lambda_info_t *lam, Function *f)
     // compile body statements
     bool prevlabel = false;
     for(i=0; i < stmts->length; i++) {
-        //builder.SetCurrentDebugLocation(DebugLoc::get(i+1, 1, SP));
         jl_value_t *stmt = jl_cellref(stmts,i);
+        if (jl_is_expr(stmt) && ((jl_expr_t*)stmt)->head == line_sym) {
+            int lno = jl_unbox_int32(jl_exprarg(stmt, 0));
+            builder.SetCurrentDebugLocation(DebugLoc::get(lno, 1, (MDNode*)SP,
+                                                          NULL));
+        }
         if (is_label(stmt)) {
             if (prevlabel) continue;
             prevlabel = true;
@@ -1975,6 +2018,9 @@ extern "C" void jl_init_codegen()
 #ifdef DEBUG
     llvm::JITEmitDebugInfo = true;
 #endif
+    llvm::NoFramePointerElim = true;
+    llvm::NoFramePointerElimNonLeaf = true;
+
     InitializeNativeTarget();
     jl_Module = new Module("julia", jl_LLVMContext);
     jl_ExecutionEngine =
@@ -1984,4 +2030,21 @@ extern "C" void jl_init_codegen()
     init_julia_llvm_env(jl_Module);
 
     jl_init_intrinsic_functions();
+    jl_jit_events = new JuliaJITEventListener();
+    jl_ExecutionEngine->RegisterJITEventListener(jl_jit_events);
 }
+
+/*
+maybe this reads the dwarf info for a MachineFunction:
+
+MCContext &mc = Details.MF->getContext()
+DenseMap<const MCSection*,MCLineSection*> &secs = mc.getMCLineSectionOrder();
+std::vector<const MCSection*> &sec2line = mc.getMCLineSections();
+MCLineSection *line = sec2line[secs[0]];
+const MCLineEntryCollection *lec = line->getMCLineEntries();
+MCLineEntryCollection::iterator it = lec->begin();
+
+addr = (*it).getLabel()->getVariableValue()
+line = (*it).getLine()
+
+ */

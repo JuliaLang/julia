@@ -11,8 +11,8 @@ TARGET = libllt.a
 FLAGS = -Wall -Wno-strict-aliasing $(CFLAGS) $(HFILEDIRS:%=-I%) -fvisibility=hidden
 LIBS =
 
-DEBUGFLAGS = -g -DDEBUG $(FLAGS)
-SHIPFLAGS = -O3 -DNDEBUG $(FLAGS)
+DEBUGFLAGS += $(FLAGS)
+SHIPFLAGS += $(FLAGS)
 
 default: release
 

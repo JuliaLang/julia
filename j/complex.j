@@ -52,6 +52,9 @@ promote_rule{S<:Real}(::Type{Complex128}, ::Type{S}) =
     (P = promote_type(Float64,S);
      is(P,Float64) ? Complex128 : Complex{P})
 
+read(s, ::Type{Complex128}) = (r=read(s,Float64);i=read(s,Float64);
+                               complex128(r, i))
+write(s, z::Complex128) = (write(s,real(z));write(s,imag(z)))
 
 bitstype 64 Complex64 <: ComplexNum
 
@@ -81,6 +84,9 @@ promote_rule{S<:Real}(::Type{Complex64}, ::Type{S}) =
      is(P,Float32) ? Complex64  : Complex{P})
 promote_rule(::Type{Complex128}, ::Type{Complex64}) = Complex128
 
+read(s, ::Type{Complex64}) = (r=read(s,Float32);i=read(s,Float32);
+                              complex64(r, i))
+write(s, z::Complex64) = (write(s,real(z));write(s,imag(z)))
 
 complex(x::Float64, y::Float64) = complex128(x, y)
 complex(x::Float32, y::Float32) = complex64(x, y)
@@ -88,8 +94,6 @@ complex(x::Float, y::Float) = complex(promote(x,y)...)
 complex(x::Float, y::Real) = complex(promote(x,y)...)
 complex(x::Real, y::Float) = complex(promote(x,y)...)
 complex(x::Float) = complex(x, zero(x))
-
-im = complex128(0,1)
 
 
 ## complex with arbitrary component type ##
@@ -126,6 +130,24 @@ pi{T}(z::Complex{T}) = pi(T)
 pi{T}(::Type{Complex{T}}) = pi(T)
 
 
+## singleton type for imaginary unit constant ##
+
+type ImaginaryUnit <: ComplexNum; end
+im = ImaginaryUnit()
+
+convert{T<:Real}(::Type{Complex{T}}, ::ImaginaryUnit) = Complex(zero(T),one(T))
+convert(::Type{Complex128}, ::ImaginaryUnit) = complex128(0,1)
+convert(::Type{Complex64},  ::ImaginaryUnit) = complex64(0,1)
+
+real(::ImaginaryUnit) = 0
+imag(::ImaginaryUnit) = 1
+
+promote_rule{T<:ComplexNum}(::Type{ImaginaryUnit}, ::Type{T}) = T
+promote_rule{T<:Real}(::Type{ImaginaryUnit}, ::Type{T}) = Complex{T}
+promote_rule(::Type{ImaginaryUnit}, ::Type{Float64}) = Complex128
+promote_rule(::Type{ImaginaryUnit}, ::Type{Float32}) = Complex64
+
+
 ## functions of complex numbers ##
 
 ==(z::ComplexNum, w::ComplexNum) = (real(z) == real(w) && imag(z) == imag(w))
@@ -138,9 +160,9 @@ isequal(z::ComplexNum, w::ComplexNum) =
 hash(z::ComplexNum) = bitmix(hash(real(z)),hash(imag(z)))
 
 conj(z::ComplexNum) = complex(real(z),-imag(z))
-norm(z::ComplexNum) = abs(z)
 abs(z::ComplexNum)  = hypot(real(z), imag(z))
-inv(z::ComplexNum)  = conj(z)/norm(z)
+abs2(z::ComplexNum) = real(z)*real(z) + imag(z)*imag(z)
+inv(z::ComplexNum)  = conj(z)/abs2(z)
 
 -(z::ComplexNum) = complex(-real(z), -imag(z))
 +(z::ComplexNum, w::ComplexNum) = complex(real(z) + real(w), imag(z) + imag(w))
@@ -182,11 +204,14 @@ function /(a::Real, b::ComplexNum)
 end
 
 function sqrt(z::ComplexNum)
-    r = sqrt(0.5(hypot(real(z),imag(z))+abs(real(z))))
-    if real(z) >= 0
-        return complex(r, 0.5*imag(z)/r)
+    rz = float(real(z))
+    iz = float(imag(z))
+    T = promote_type(typeof(rz),typeof(z))
+    r = sqrt(0.5*(hypot(rz,iz)+abs(rz)))
+    if rz >= 0
+        return convert(T,complex(r, 0.5*iz/r))
     end
-    return complex(0.5*abs(imag(z))/r, imag(z) >= 0 ? r : -r)
+    return convert(T,complex(0.5*abs(iz)/r, iz >= 0 ? r : -r))
 end
 
 cis(theta::Real) = complex(cos(theta),sin(theta))
@@ -200,17 +225,19 @@ arg(z::ComplexNum) = atan2(imag(z), real(z))
 function sin(z::ComplexNum)
     u = exp(imag(z))
     v = 1/u
+    rz = real(z)
     u = 0.5(u+v)
     v = u-v
-    complex(u*sin(real(z)), v*cos(real(z)))
+    complex(u*sin(rz), v*cos(rz))
 end
 
 function cos(z::ComplexNum)
     u = exp(imag(z))
     v = 1/u
+    rz = real(z)
     u = 0.5(u+v)
     v = u-v
-    complex(u*cos(real(z)), -v*sin(real(z)))
+    complex(u*cos(rz), -v*sin(rz))
 end
 
 function log(z::ComplexNum)
@@ -231,14 +258,6 @@ function exp(z::ComplexNum)
     complex(er*cos(imag(z)), er*sin(imag(z)))
 end
 
-^(x::Int, p::Float) = ^(promote(x,p)...)
-
-^(z::ComplexNum, p::ComplexNum) = ^(promote(z,p)...)
-
-^(z::Real, p::ComplexNum) = ^(promote(z,p)...)
-
-^(z::ComplexNum, p::Float) = ^(promote(z,p)...)
-
 function ^{T<:ComplexNum}(z::T, p::T)
     realp = real(p)
     if imag(p) == 0
@@ -255,23 +274,24 @@ function ^{T<:ComplexNum}(z::T, p::T)
     r = abs(z)
     rp = r^realp
     realz = real(z)
+    zer = zero(r)
     if imag(p) == 0
         ip = truncate(realp)
         if ip == realp
             # integer multiples of pi/2
             if imag(z) == 0 && realz < 0
-                return complex(isodd(ip) ? -rp : rp, 0)
+                return complex(isodd(ip) ? -rp : rp, zer)
             elseif realz == 0 && imag(z) < 0
                 if isodd(ip)
-                    return complex(0, isodd(div(ip-1,2)) ? rp : -rp)
+                    return complex(zer, isodd(div(ip-1,2)) ? rp : -rp)
                 else
-                    return complex(isodd(div(ip,2)) ? -rp : rp, 0)
+                    return complex(isodd(div(ip,2)) ? -rp : rp, zer)
                 end
             elseif realz == 0 && imag(z) > 0
                 if isodd(ip)
-                    return complex(0, isodd(div(ip-1,2)) ? -rp : rp)
+                    return complex(zer, isodd(div(ip-1,2)) ? -rp : rp)
                 else
-                    return complex(isodd(div(ip,2)) ? -rp : rp, 0)
+                    return complex(isodd(div(ip,2)) ? -rp : rp, zer)
                 end
             end
         else
@@ -280,9 +300,9 @@ function ^{T<:ComplexNum}(z::T, p::T)
             # 1/2 multiples of pi
             if ip == dr && imag(z) == 0
                 if realz < 0
-                    return complex(0, isodd(div(ip-1,2)) ? -rp : rp)
+                    return complex(zer, isodd(div(ip-1,2)) ? -rp : rp)
                 elseif realz >= 0
-                    return complex(rp, 0)
+                    return complex(rp, zer)
                 end
             end
         end

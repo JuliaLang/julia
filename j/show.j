@@ -91,9 +91,14 @@ end
 
 function show(e::TypeError)
     ctx = isempty(e.context) ? "" : "in $(e.context), "
-    print("type error: $(e.func): ",
-          "$(ctx)expected $(e.expected), ",
-          "got $(typeof(e.got))")
+    if e.expected == Bool
+        print("type error: non-boolean ($(typeof(e.got))) ",
+              "used in boolean context")
+    else
+        print("type error: $(e.func): ",
+              "$(ctx)expected $(e.expected), ",
+              "got $(typeof(e.got))")
+    end
 end
 
 function show(e::LoadError)
@@ -108,6 +113,7 @@ show(::UndefRefError) = print("access to undefined reference")
 show(::EOFError) = print("read: end of file")
 show(e::ErrorException) = print(e.msg)
 show(e::KeyError) = print("key not found: $(e.key)")
+show(e::InterruptException) = nothing
 
 function show(e::MethodError)
     name = ccall(:jl_genericfunc_name, Any, (Any,), e.f)
@@ -121,6 +127,23 @@ end
 function show(e::UnionTooComplexError)
     print("union type pattern too complex: ")
     show(e.types)
+end
+
+function show(bt::BackTrace)
+    show(bt.e)
+    i = 1
+    t = bt.trace
+    while i < length(t)
+        println()
+        lno = t[i+2]
+        if lno < 1
+            line = ""
+        else
+            line = ":$lno"
+        end
+        print("in $(t[i]), $(t[i+1])$line")
+        i += 3
+    end
 end
 
 function dump(x)

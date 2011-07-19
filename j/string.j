@@ -293,11 +293,11 @@ end
 uc(c::Char) = ccall(dlsym(libc, :towupper), Char, (Char,), c)
 lc(c::Char) = ccall(dlsym(libc, :towlower), Char, (Char,), c)
 
-uc(str::String) = TransformedString((c,i)->uc(c), str)
-lc(str::String) = TransformedString((c,i)->lc(c), str)
+uc(s::String) = TransformedString((c,i)->uc(c), s)
+lc(s::String) = TransformedString((c,i)->lc(c), s)
 
-ucfirst(str::String) = TransformedString((c,i)->i==1 ? uc(c) : c, str)
-lcfirst(str::String) = TransformedString((c,i)->i==1 ? lc(c) : c, str)
+ucfirst(s::String) = TransformedString((c,i)->i==1 ? uc(c) : c, s)
+lcfirst(s::String) = TransformedString((c,i)->i==1 ? lc(c) : c, s)
 
 ## conversion of general objects to strings ##
 
@@ -338,7 +338,7 @@ function print_escaped(s::String, esc::String)
         has(esc,c)    ? print('\\', c) :
         iswprint(c)   ? print(c) :
         7 <= c <= 13  ? print('\\', "abtnvfr"[c-6]) :
-        c <= '\x7f'   ? print(L"\x", hex(c, need_full_hex(s,j) ? 2 : 1)) :
+        c <= '\x7f'   ? print(L"\x", hex(c, 2)) :
         c <= '\uffff' ? print(L"\u", hex(c, need_full_hex(s,j) ? 4 : 2)) :
                         print(L"\U", hex(c, need_full_hex(s,j) ? 8 : 4))
         i = j
@@ -347,22 +347,27 @@ end
 
 escape_string(s::String) = print_to_string(length(s), print_escaped, s, "\"")
 print_quoted(s::String) = (print('"'); print_escaped(s, "\"\$"); print('"'))
+#"  # work around syntax highlighting problem
 quote_string(s::String) = print_to_string(length(s)+2, print_quoted, s)
 
-# bare minimum unescaping function unescapes only backslashes
+# bare minimum unescaping function unescapes only given characters
 
-function print_unbackslashed(s::String)
+function print_unescaped_chars(s::String, esc::String)
+    if !has(esc,'\\')
+        esc = strcat("\\", esc)
+    end
     i = start(s)
     while !done(s,i)
         c, i = next(s,i)
-        if c == '\\' && !done(s,i) && s[i] == '\\'
+        if c == '\\' && !done(s,i) && has(esc,s[i])
             c, i = next(s,i)
         end
         print(c)
     end
 end
 
-unbackslash(s::String) = print_to_string(length(s), print_unbackslashed, s)
+unescape_chars(s::String, esc::String) =
+    print_to_string(length(s), print_unescaped_chars, s, esc)
 
 # general unescaping of traditional C and Unicode escape sequences
 
@@ -419,7 +424,7 @@ function print_unescaped(s::String)
     end
 end
 
-unescape_string(s::String) = print_to_string(print_unescaped, s)
+unescape_string(s::String) = print_to_string(length(s), print_unescaped, s)
 
 ## checking UTF-8 & ACSII validity ##
 
@@ -437,41 +442,41 @@ check_utf8 (s::ByteString) = is_valid_utf8(s)  ? s : error("invalid UTF-8 sequen
 
 ## string interpolation parsing ##
 
-function interp_parse(str::String, unescape::Function, printer::Function)
-    strs = {}
-    i = j = start(str)
-    while !done(str,j)
-        c, k = next(str,j)
+function interp_parse(s::String, unescape::Function, printer::Function)
+    sx = {}
+    i = j = start(s)
+    while !done(s,j)
+        c, k = next(s,j)
         if c == '$'
-            if !isempty(str[i:j-1])
-                push(strs, unescape(str[i:j-1]))
+            if !isempty(s[i:j-1])
+                push(sx, unescape(s[i:j-1]))
             end
-            ex, j = parseatom(str,k)
-            push(strs, ex)
+            ex, j = parseatom(s,k)
+            push(sx, ex)
             i = j
-        elseif c == '\\' && !done(str,k)
-            if str[k] == '$'
-                if !isempty(str[i:j-1])
-                    push(strs, unescape(str[i:j-1]))
+        elseif c == '\\' && !done(s,k)
+            if s[k] == '$'
+                if !isempty(s[i:j-1])
+                    push(sx, unescape(s[i:j-1]))
                 end
                 i = k
             end
-            c, j = next(str,k)
+            c, j = next(s,k)
         else
             j = k
         end
     end
-    if !isempty(str[i:])
-        push(strs, unescape(str[i:j-1]))
+    if !isempty(s[i:])
+        push(sx, unescape(s[i:j-1]))
     end
-    length(strs) == 1 && isa(strs[1],ByteString) ? strs[1] :
-        expr(:call, :print_to_string, printer, strs...)
+    length(sx) == 1 && isa(sx[1],ByteString) ? sx[1] :
+        expr(:call, :print_to_string, printer, sx...)
 end
 
-interp_parse(str::String, u::Function) = interp_parse(str, u, print)
-interp_parse(str::String) = interp_parse(str, s->check_utf8(unescape_string(s)))
+interp_parse(s::String, u::Function) = interp_parse(s, u, print)
+interp_parse(s::String) = interp_parse(s, x->check_utf8(unescape_string(x)))
 
-function interp_parse_bytes(s)
+function interp_parse_bytes(s::String)
     writer(x...) = for w=x; write(w); end
     interp_parse(s, unescape_string, writer)
 end
@@ -480,26 +485,26 @@ end
 
 macro   str(s); interp_parse(s); end
 macro S_str(s); interp_parse(s); end
-macro I_str(s); interp_parse(s, unbackslash); end
+macro I_str(s); interp_parse(s, s->unescape_chars(s,"\"")); end
 macro E_str(s); check_utf8(unescape_string(s)); end
 macro B_str(s); interp_parse_bytes(s); end
 macro b_str(s); ex = interp_parse_bytes(s); :(($ex).data); end
 
 ## shell-like command parsing ##
 
-function shell_parse(str::String, interp::Bool)
+function shell_parse(s::String, interp::Bool)
 
     in_single_quotes = false
     in_double_quotes = false
 
     args = {}
     arg = {}
-    i = start(str)
+    i = start(s)
     j = i
 
-    function update_arg(s)
-        if !isa(s,String) || !isempty(s)
-            push(arg, s)
+    function update_arg(x)
+        if !isa(x,String) || !isempty(x)
+            push(arg, x)
         end
     end
     function append_arg()
@@ -508,14 +513,14 @@ function shell_parse(str::String, interp::Bool)
         arg = {}
     end
 
-    while !done(str,j)
-        c, k = next(str,j)
+    while !done(s,j)
+        c, k = next(s,j)
         if !in_single_quotes && !in_double_quotes && iswspace(c)
-            update_arg(str[i:j-1])
+            update_arg(s[i:j-1])
             append_arg()
             j = k
-            while !done(str,j)
-                c, k = next(str,j)
+            while !done(s,j)
+                c, k = next(s,j)
                 if !iswspace(c)
                     i = j
                     break
@@ -523,33 +528,33 @@ function shell_parse(str::String, interp::Bool)
                 j = k
             end
         elseif interp && !in_single_quotes && c == '$'
-            update_arg(str[i:j-1]); i = k
+            update_arg(s[i:j-1]); i = k
             j = k
-            ex, j = parseatom(str,j)
+            ex, j = parseatom(s,j)
             update_arg(ex); i = j
         else
             if !in_double_quotes && c == '\''
                 in_single_quotes = !in_single_quotes
-                update_arg(str[i:j-1]); i = k
+                update_arg(s[i:j-1]); i = k
             elseif !in_single_quotes && c == '"'
                 in_double_quotes = !in_double_quotes
-                update_arg(str[i:j-1]); i = k
+                update_arg(s[i:j-1]); i = k
             elseif c == '\\'
                 if in_double_quotes
                     # TODO: handle \$ in double quotes
-                    if done(str,k)
+                    if done(s,k)
                         error("unterminated double quote")
                     end
-                    if str[k] == '"'
-                        update_arg(str[i:j-1]); i = k
-                        c, k = next(str,k)
+                    if s[k] == '"'
+                        update_arg(s[i:j-1]); i = k
+                        c, k = next(s,k)
                     end
                 elseif !in_single_quotes
-                    if done(str,k)
+                    if done(s,k)
                         error("dangling backslash")
                     end
-                    update_arg(str[i:j-1]); i = k
-                    c, k = next(str,k)
+                    update_arg(s[i:j-1]); i = k
+                    c, k = next(s,k)
                 end
             end
             j = k
@@ -559,7 +564,7 @@ function shell_parse(str::String, interp::Bool)
     if in_single_quotes; error("unterminated single quote"); end
     if in_double_quotes; error("unterminated double quote"); end
 
-    update_arg(str[i:])
+    update_arg(s[i:])
     append_arg()
 
     if !interp
@@ -574,10 +579,10 @@ function shell_parse(str::String, interp::Bool)
     expr(:tuple,exprs)
 end
 
-shell_parse(str::String) = shell_parse(str,true)
+shell_parse(s::String) = shell_parse(s,true)
 
-function shell_split(str::String)
-    parsed = shell_parse(str, false)
+function shell_split(s::String)
+    parsed = shell_parse(s, false)
     args = {}
     for arg = parsed
         push(args, strcat(arg...))
@@ -835,7 +840,7 @@ end
 
 # concatenate byte arrays into a single array
 
-memcat() = Array(Int8,0)
+memcat() = Array(Uint8,0)
 memcat(a::Array{Uint8,1}) = copy(a)
 
 function memcat(arrays::Array{Uint8,1}...)

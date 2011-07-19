@@ -769,6 +769,8 @@ void jl_deserialize_finalizers(ios_t *s)
 
 int  jl_get_t_uid_ctr();
 void jl_set_t_uid_ctr(int i);
+uint32_t jl_get_gs_ctr();
+void jl_set_gs_ctr(uint32_t ctr);
 
 DLLEXPORT
 void jl_save_system_image(char *fname, char *startscriptname)
@@ -800,6 +802,7 @@ void jl_save_system_image(char *fname, char *startscriptname)
     jl_serialize_value(&f, jl_typeerror_type);
     jl_serialize_value(&f, jl_loaderror_type);
     jl_serialize_value(&f, jl_uniontoocomplex_type);
+    jl_serialize_value(&f, jl_backtrace_type);
     jl_serialize_value(&f, jl_stackovf_exception);
     jl_serialize_value(&f, jl_divbyzero_exception);
     jl_serialize_value(&f, jl_undefref_exception);
@@ -813,6 +816,7 @@ void jl_save_system_image(char *fname, char *startscriptname)
     jl_serialize_module(&f, jl_system_module);
     //jl_serialize_finalizers(&f);
     write_int32(&f, jl_get_t_uid_ctr());
+    write_int32(&f, jl_get_gs_ctr());
     htable_reset(&backref_table, 100000);
 
     ios_t ss;
@@ -871,6 +875,7 @@ void jl_restore_system_image(char *fname)
     jl_typeerror_type = (jl_struct_type_t*)jl_deserialize_value(&f);
     jl_loaderror_type = (jl_struct_type_t*)jl_deserialize_value(&f);
     jl_uniontoocomplex_type = (jl_struct_type_t*)jl_deserialize_value(&f);
+    jl_backtrace_type = (jl_struct_type_t*)jl_deserialize_value(&f);
     jl_stackovf_exception = jl_deserialize_value(&f);
     jl_divbyzero_exception = jl_deserialize_value(&f);
     jl_undefref_exception = jl_deserialize_value(&f);
@@ -887,6 +892,7 @@ void jl_restore_system_image(char *fname)
     jl_deserialize_module(&f, jl_system_module);
     //jl_deserialize_finalizers(&f);
     jl_set_t_uid_ctr(read_int32(&f));
+    jl_set_gs_ctr(read_int32(&f));
     htable_reset(&backref_table, 100000);
 
     ios_t ss;

@@ -228,6 +228,7 @@ DLLEXPORT void jl_eval_user_input(jl_value_t *ast, int show_value)
  again:
     ;
     JL_TRY {
+        jl_register_toplevel_eh();
 #ifdef CLOUD_REPL
         outs = jl_apply(jl_memio_func, NULL, 0);
         jl_set_current_output_stream_obj(outs);

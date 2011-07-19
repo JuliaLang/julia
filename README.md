@@ -7,7 +7,9 @@
      _/ |\__'_|_|_|\__'_|  |
     |__/                   |
 
-Julia is a very high level dynamic language for numerical and scientific computing with optional typing, multiple dispatch, and good performance, achieved by using type inference and just-in-time (JIT) compilation, implemented using LLVM.
+Julia is a high-level, high-performance dynamic language for numerical and scientific computing.
+It provides a sophisticated compiler, parallel execution, and numerical accuracy.
+Key features include multiple dispatch, optional typing, and excellent performance through type inference and just-in-time (JIT) compilation.
 The language is multi-paradigm, combining features of functional, object-oriented, and imperative styles.
 For a more in-depth discussion of the rationale and advantages of Julia over other systems, see the [Introduction](https://github.com/JuliaLang/julia/wiki/Introduction) in the wiki, or [browse all](https://github.com/JuliaLang/julia/wiki/) of the wiki documentation.
 
@@ -15,7 +17,8 @@ For a more in-depth discussion of the rationale and advantages of Julia over oth
 ## Resources
 
 - **Homepage:** <http://julialang.org>
-- **Download:** <https://github.com/JuliaLang/julia>
+- **Source code:** <https://github.com/JuliaLang/julia>
+- **Git clone URL:** <git://github.com/JuliaLang/julia.git> (see [below](#Download-Compilation))
 - **Documentation:** <https://github.com/JuliaLang/julia/wiki>
 - **Discussion:** <julia-math@googlegroups.com>
 
@@ -25,15 +28,15 @@ For a more in-depth discussion of the rationale and advantages of Julia over oth
 - **[GNU make][]** — building dependencies.
 - **[gcc, g++, gfortran][gcc]** — compiling and linking C, C++ and Fortran code.
 - **[curl][]** — to automatically download external libraries:
+    - **[LLVM][]**         — compiler infrastructure
     - **[fdlibm][]**       — a portable implementation of much of the system-dependent libm math library's functionality.
     - **[MT][]**	   — a fast Mersenne Twister pseudorandom number generator library.
-    - **[OpenBLAS][]**     — a fast, open, and maintained [basic linear algebar subprograms (BLAS)](http://en.wikipedia.org/wiki/Basic_Linear_Algebra_Subprograms) library, based on [Kazushige Goto's](http://en.wikipedia.org/wiki/Kazushige_Goto) famous [GotoBLAS](http://www.tacc.utexas.edu/tacc-projects/gotoblas2/).
+    - **[OpenBLAS][]**     — a fast, open, and maintained [basic linear algebra subprograms (BLAS)](http://en.wikipedia.org/wiki/Basic_Linear_Algebra_Subprograms) library, based on [Kazushige Goto's](http://en.wikipedia.org/wiki/Kazushige_Goto) famous [GotoBLAS](http://www.tacc.utexas.edu/tacc-projects/gotoblas2/).
     - **[LAPACK][]**       — library of linear algebra routines for solving systems of simultaneous linear equations, least-squares solutions of linear systems of equations, eigenvalue problems, and singular value problems.
     - **[ARPACK][]**       — a collection of subroutines designed to solve large, sparse eigenvalue problems.
     - **[FFTW][]**	   — library for computing fast Fourier transforms very quickly and efficiently.
     - **[PCRE][]**         — Perl-compatible regular expressions library.
     - **[GNU readline][]** — library allowing shell-like line editing in the terminal, with history and familiar key bindings.
-    - **[mongoose][]**     — library for writing simple web servers, used for Julia's web-based repl.
 
 [GNU make]:     http://www.gnu.org/software/make/
 [gcc]:          http://gcc.gnu.org/
@@ -46,22 +49,37 @@ For a more in-depth discussion of the rationale and advantages of Julia over oth
 [FFTW]:         http://www.fftw.org/
 [PCRE]:         http://www.pcre.org/
 [GNU readline]: http://cnswww.cns.cwru.edu/php/chet/readline/rltop.html
-[mongoose]:     http://code.google.com/p/mongoose/
+[LLVM]:         http://www.llvm.org/
 
 <a name="Supported-Platforms"/>
 ## Supported Platforms
 
-- **GNU/Linux:** x86 (32-bit); x86/64 (64-bit).
-- **OS X:** x86/64 (64-bit); x86 (32-bit) is untested but should work.
+- **GNU/Linux:** x86/64 (64-bit); x86 (32-bit).
+- **Darwin/OS X:** x86/64 (64-bit); x86 (32-bit) is untested but should work.
 
-<a name="Compilation"/>
-## Compilation
+<a name="Download-Compilation"/>
+## Download & Compilation
 
-- Run `make` in the top-level directory to build julia.
-  It will automatically download and build its external dependencies, when compiled the first time (this takes a while).
+First, acquire the source code either by cloning the git repository (requires **[git](http://git-scm.com/)** to be installed):
 
-No installation is required — julia is currently run from the directory where it was built.
-You might want to make a symbolic link for the executable, for example `ln -s JULIA_PATH/julia ~/bin/julia`.
+    git clone git://github.com/JuliaLang/julia.git
+
+or, if you don't have git installed, by using curl and tar to fetch and unpack the source:
+
+    mkdir julia && curl -Lk https://github.com/JuliaLang/julia/tarball/master | tar -zxf- -C julia --strip-components 1
+
+TODO: check that this actually works once the repository is public.
+
+Next, enter the `julia/` directory and run `make` to build the `julia` executable.
+When compiled the first time, it will automatically download and build its [external dependencies](#Required-Build-Tools-External-Libraries).
+This takes a while, but only has to be done once.
+
+No installation is required; `julia` is currently run from the directory where it was built.
+You might, however, want to make a symbolic link for the executable, for example `ln -s JULIA_PATH/julia ~/bin/julia`.
+Please note that the build process will not work if any of the build directory's parent directories have spaces in their names (this is due to a limitation in GNU make).
+
+Congratulations, if you've gotten this far, you are ready to try out Julia.
+You can read about [getting started](https://github.com/JuliaLang/julia/wiki/Getting-Started) in the manual.
 
 <a name="Directories"/>
 ## Directories
@@ -74,7 +92,7 @@ You might want to make a symbolic link for the executable, for example `ln -s JU
     lib/           shared libraries loaded by julia's standard libraries
     src/           source for julia language core
     test/          unit and function tests for julia itself
-    ui/            source for various frontends
+    ui/            source for various front ends
 
 <a name="Emacs-Setup"/>
 ## Emacs Setup
@@ -95,3 +113,9 @@ Copy (or symlink) the TextMate Julia bundle into the TextMate application suppor
 where `JULIA_PATH` is the location of the top-level julia directory.
 Now select from the menu in TextMate `Bundles > Bundle Editor > Reload Bundles`.
 Julia should appear as a file type and be automatically detected for files with the `.j` extension.
+
+<a name="License"/>
+## License
+
+Julia is licensed under the [three clause "Modified BSD License"](http://en.wikipedia.org/wiki/BSD_license#3-clause_license_.28.22New_BSD_License.22_or_.22Modified_BSD_License.22.29), with the exception of certain components that link against GPL-licensed libraries (e.g. GNU readline).
+See [LICENSE](https://github.com/JuliaLang/julia/blob/master/LICENSE) for the full terms of the license.

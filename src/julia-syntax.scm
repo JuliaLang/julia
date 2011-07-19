@@ -191,7 +191,9 @@
 (define (gf-def-expr- name argl argtypes body)
   (if (not (symbol? name))
       (error (string "invalid method name " name)))
-  `(= ,name (method ,name ,argtypes ,(function-expr argl body))))
+  `(block
+    (= ,name (method ,name ,argtypes ,(function-expr argl body)))
+    (null)))
 
 (define (sparam-name-bounds sparams names bounds)
   (cond ((null? sparams)
@@ -229,7 +231,7 @@
 (define (struct-def-expr name params super fields)
   (receive
    (params bounds) (sparam-name-bounds params '() '())
-   (struct-def-expr- name params bounds super fields)))
+   (struct-def-expr- name params bounds super (flatten-blocks fields))))
 
 (define (default-inner-ctor name field-names field-types)
   `(function (call ,name ,@field-names)
@@ -284,6 +286,18 @@
 		    `(= ,(cadr ctor) ,(ctor-body body)))
     ctor)
    ctor))
+
+;; remove line numbers and nested blocks
+(define (flatten-blocks e)
+  (if (atom? e)
+      e
+      (apply append!
+	     (map (lambda (x)
+		    (cond ((atom? x) (list x))
+			  ((eq? (car x) 'line) '())
+			  ((eq? (car x) 'block) (cdr (flatten-blocks x)))
+			  (else (list x))))
+		  e))))
 
 (define (struct-def-expr- name params bounds super fields)
   (receive
@@ -505,6 +519,30 @@
 
 (define (make-assignment l r) `(= ,l ,r))
 
+;; convert (lhss...) = x to assignments, eliminating the tuple
+;; assumes x is of the form (tuple ...)
+(define (tuple-to-assignments lhss x)
+  (let ((temps (map (lambda (x) (gensy)) (cdr x))))
+    `(block
+      ,@(map make-assignment temps (cdr x))
+      ,@(map make-assignment lhss temps)
+      (unnecessary-tuple (tuple ,@temps)))))
+
+;; convert (lhss...) = x to tuple indexing, handling the general case
+(define (lower-tuple-assignment lhss x)
+  (let ((t (gensy)))
+    `(block
+      (multiple_value)
+      (= ,t ,x)
+      ,@(let loop ((lhs lhss)
+		   (i   1))
+	  (if (null? lhs) '((null))
+	      (cons `(= ,(car lhs)
+			(call (top tupleref) ,t ,i))
+		    (loop (cdr lhs)
+			  (+ i 1)))))
+      ,t)))
+
 (define patterns
   (pattern-set
    (pattern-lambda (block)
@@ -537,38 +575,24 @@
    (pattern-lambda (typealias (-- name (-s)) type-ex)
 		   `(= ,name ,type-ex))
    (pattern-lambda (typealias (curly (-- name (-s)) . params) type-ex)
-		   `(call (lambda ,params
-			    (= ,name (call (top new_type_constructor)
-					   (tuple ,@params) ,type-ex)))
-			  ,@(receive
-			     (params bounds)
-			     (sparam-name-bounds params '() '())
-			     (symbols->typevars params bounds))))
+		   (receive
+		    (params bounds)
+		    (sparam-name-bounds params '() '())
+		    `(call (lambda ,params
+			     (= ,name (call (top new_type_constructor)
+					    (tuple ,@params) ,type-ex)))
+			   ,@(symbols->typevars params bounds))))
 
    (pattern-lambda (comparison . chain) (expand-compare-chain chain))
 
-   ; multiple value assignment
+   ;; multiple value assignment
    (pattern-lambda (= (tuple . lhss) x)
 		   (if (and (pair? x) (pair? lhss) (eq? (car x) 'tuple)
 			    (length= lhss (length (cdr x))))
-		       ; (a, b, ...) = (x, y, ...)
-		       (let ((temps (map (lambda (x) (gensy)) (cddr x))))
-			 `(block
-			   ,@(map make-assignment temps (cddr x))
-			   (= ,(car lhss) ,(cadr x))
-			   ,@(map make-assignment (cdr lhss) temps)
-			   (null)))
-		       ; (a, b, ...) = other
-		       (let ((t (gensy)))
-			 `(block
-			   (= ,t ,x)
-			   ,@(let loop ((lhs lhss)
-					(i   1))
-			       (if (null? lhs) '((null))
-				   (cons `(= ,(car lhs)
-					     (call (top tupleref) ,t ,i))
-					 (loop (cdr lhs)
-					       (+ i 1)))))))))
+		       ;; (a, b, ...) = (x, y, ...)
+		       (tuple-to-assignments lhss x)
+		       ;; (a, b, ...) = other
+		       (lower-tuple-assignment lhss x)))
 
    (pattern-lambda (= (ref a . idxs) rhs)
 		   (let* ((reuse (and (pair? a)
@@ -583,7 +607,7 @@
 		      (new-idxs stuff) (process-indexes arr idxs)
 		      `(block
 			,@(append stmts stuff)
-			(call assign ,arr ,rhs ,@new-idxs)))))
+			(call (top assign) ,arr ,rhs ,@new-idxs)))))
 
    (pattern-lambda (ref a . idxs)
 		   (let* ((reuse (and (pair? a)
@@ -598,7 +622,7 @@
 		      (new-idxs stuff) (process-indexes arr idxs)
 		      `(block
 			,@(append stmts stuff)
-			(call ref ,arr ,@new-idxs)))))
+			(call (top ref) ,arr ,@new-idxs)))))
 
    (pattern-lambda (curly type . elts)
 		   `(call (top apply_type) ,type ,@elts))
@@ -703,7 +727,12 @@
 				   (block
 				    (break-block loop-cont
 						 ,body)
-				    (= ,var (call + 1 ,var)))))))))))
+				    (= ,var (call +
+						  (call (top convert)
+							(call (top typeof)
+							      ,var)
+							1)
+						  ,var)))))))))))
 
    ; for loop over arbitrary vectors
    (pattern-lambda
@@ -759,10 +788,10 @@
 
    ;; hcat, vcat
    (pattern-lambda (hcat . a)
-		   `(call hcat ,@a))
+		   `(call (top hcat) ,@a))
 
    (pattern-lambda (vcat . a)
-		   `(call vcat ,@a))
+		   `(call (top vcat) ,@a))
 
    )) ; patterns
 
@@ -819,9 +848,9 @@
     (define (construct-loops ranges iters oneresult-dim)
       (if (null? ranges)
 	  (if (null? iters)
-	      `(block (call assign ,result ,expr ,ri)
+	      `(block (call (top assign) ,result ,expr ,ri)
 		      (+= ,ri 1))
-	      `(block (call assign ,result (ref ,expr ,@(reverse iters)) ,ri)
+	      `(block (call (top assign) ,result (ref ,expr ,@(reverse iters)) ,ri)
 		      (+= ,ri 1)) )
 	  (if (eq? (car ranges) `:)
 	      (let ((i (gensy)))
@@ -876,7 +905,7 @@
       ;; construct loops to cycle over all dimensions of an n-d comprehension
       (define (construct-loops ranges)
         (if (null? ranges)
-	    `(block (call assign ,result ,expr ,ri)
+	    `(block (call (top assign) ,result ,expr ,ri)
 		    (+= ,ri 1))
 	    `(for ,(car ranges)
 		  ,(construct-loops (cdr ranges)))))
@@ -900,29 +929,32 @@
    ;; cell array comprehensions
    (pattern-lambda
     (cell-comprehension expr . ranges)
-    (let ( (result (gensy)) (ri (gensy)) )
+    (let ( (result (gensy))
+	   (ri (gensy))
+	   (rs (map (lambda (x) (gensy)) ranges)) )
 
       ;; compute the dimensions of the result
       (define (compute-dims ranges)
 	(if (null? ranges)
 	    (list)
-	    (cons `(call length ,(car ranges))
+	    (cons `(call (top length) ,(car ranges))
 		  (compute-dims (cdr ranges)))))
 
       ;; construct loops to cycle over all dimensions of an n-d comprehension
-      (define (construct-loops ranges)
+      (define (construct-loops ranges rs)
         (if (null? ranges)
-	    `(block (call assign ,result ,expr ,ri)
+	    `(block (call (top assign) ,result ,expr ,ri)
 		    (+= ,ri 1))
-	    `(for ,(car ranges)
-		  ,(construct-loops (cdr ranges)))))
+	    `(for (= ,(cadr (car ranges)) ,(car rs))
+		  ,(construct-loops (cdr ranges) (cdr rs)))))
 
       ;; Evaluate the comprehension
       `(scope-block
 	(block 
-	 (= ,result (call (top Array) (top Any) ,@(compute-dims ranges)))
+	 ,@(map make-assignment rs (map caddr ranges))
+	 (= ,result (call (top Array) (top Any) ,@(compute-dims rs)))
 	 (= ,ri 1)
-	 ,(construct-loops (reverse ranges))
+	 ,(construct-loops (reverse ranges) (reverse rs))
 	 ,result))))
 
 )) ;; lower-comprehensions
@@ -1149,6 +1181,12 @@
 	       ;; value or statement position.
 	       (to-lff `(typeassert ,@(cdr e)) dest tail)
 	       (to-lff `(decl ,@(cdr e)) dest tail)))
+
+	  ((unnecessary-tuple)
+	   (if dest
+	       (to-lff (cadr e) dest tail)
+	       ;; remove if not in value position
+	       (to-lff '(null) dest tail)))
 
 	  (else
 	   (let ((r (map (lambda (arg) (to-lff arg #t #f))
@@ -1522,7 +1560,7 @@ So far only the second case can actually occur.
 	((eq? (car e) 'bquote)
 	 (expand-backquote (expand-backquote (cadr e))))
 	((not (any (lambda (x)
-		     (match '($ (tuple (... x))) x))
+		     (match '(call (-/ $) (... x)) x))
 		   e))
 	 `(call (top expr) ,@(map expand-backquote e)))
 	(else
@@ -1532,9 +1570,9 @@ So far only the second case can actually occur.
 		 `(call (top expr) ,(expand-backquote (car e))
 			(call (top append) ,@forms)))
 	       ; look for splice inside backquote, e.g. (a,$(x...),b)
-	       (if (match '($ (tuple (... x))) (car p))
+	       (if (match '(call (-/ $) (... x)) (car p))
 		   (loop (cdr p)
-			 (cons (cadr (cadr (cadr (car p)))) q))
+			 (cons (cadr (caddr (car p))) q))
 		   (loop (cdr p)
 			 (cons `(call (top cell_1d)
 				      ,(expand-backquote (car p)))

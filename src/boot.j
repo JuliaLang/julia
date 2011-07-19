@@ -14,13 +14,13 @@
 #    name::Symbol
 #end
 
-#type TagKind <: Type
+#type AbstractKind <: Type
 #    name::TypeName
 #    super::Type
 #    parameters::Tuple
 #end
 
-#type StructKind <: TagKind
+#type StructKind <: AbstractKind
 #    #name::TypeName
 #    #super::Type
 #    #parameters::Tuple
@@ -28,7 +28,7 @@
 #    types::Tuple
 #end
 
-#type BitsKind <: TagKind
+#type BitsKind <: AbstractKind
 #    #name::TypeName
 #    #super::Type
 #    #parameters::Tuple
@@ -191,6 +191,11 @@ type InterruptException <: Exception end
 
 type UnionTooComplexError <: Exception
     types::Tuple
+end
+
+type BackTrace <: Exception
+    e
+    trace::Array{Any,1}
 end
 
 finalizer(o, f::Function) =

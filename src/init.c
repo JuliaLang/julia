@@ -320,6 +320,7 @@ void jl_get_builtin_hooks()
     jl_typeerror_type = (jl_struct_type_t*)global("TypeError");
     jl_loaderror_type = (jl_struct_type_t*)global("LoadError");
     jl_uniontoocomplex_type = (jl_struct_type_t*)global("UnionTooComplexError");
+    jl_backtrace_type = (jl_struct_type_t*)global("BackTrace");
 
     jl_stackovf_exception =
         jl_apply((jl_function_t*)global("StackOverflowError"), NULL, 0);

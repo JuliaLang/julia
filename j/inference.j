@@ -64,7 +64,7 @@ isleaftype(t) = ccall(:jl_is_leaf_type, Int32, (Any,), t) != 0
 # for now assume all global functions constant
 # TODO
 isconstant(s::Symbol) = isbound(s) && (e=eval(s);
-                                       isa(e,Function) || isa(e,TagKind) ||
+                                       isa(e,Function) || isa(e,AbstractKind) ||
                                        isa(e,BitsKind) || isa(e,StructKind) ||
                                        isa(e,TypeConstructor) ||
                                        is(e,None))
@@ -73,9 +73,9 @@ isconstant(x) = true
 
 cmp_tfunc = (x,y)->Bool
 
-isType(t) = isa(t,TagKind) && is(t.name,Type.name)
+isType(t) = isa(t,AbstractKind) && is(t.name,Type.name)
 
-isseqtype(t) = isa(t,TagKind) && is(t.name.name,:...)
+isseqtype(t) = isa(t,AbstractKind) && is(t.name.name,:...)
 
 t_func = idtable()
 t_func[tuple] = (0, Inf, (args...)->limit_tuple_depth(args))
@@ -216,7 +216,7 @@ typeof_tfunc = function (t)
         else
             Type{typeof(t)}
         end
-    elseif isa(t,TagKind)
+    elseif isa(t,AbstractKind)
         if isleaftype(t)
             Type{t}
         else
@@ -246,7 +246,7 @@ tupleref_tfunc = function (A, t, i)
     if is(t,())
         return None
     end
-    if isa(t,TagKind) && is(t.name,NTuple.name)
+    if isa(t,AbstractKind) && is(t.name,NTuple.name)
         return t.parameters[2]
     end
     if !isa(t,Tuple)
@@ -600,7 +600,7 @@ end
 ast_rettype(ast) = ast.args[3].type
 
 function abstract_eval_constant(x::ANY)
-    if isa(x,TagKind) || isa(x,BitsKind) || isa(x,StructKind) ||
+    if isa(x,AbstractKind) || isa(x,BitsKind) || isa(x,StructKind) ||
         isa(x,FuncKind) || isa(x,UnionKind)
         return Type{x}
     end
@@ -960,6 +960,7 @@ function typeinf(linfo::LambdaStaticData,atypes::Tuple,sparams::Tuple, cop, def)
     fulltree = type_annotate(ast, s, sv, frame.result, vars)
     def.tfunc = (atypes, fulltree, def.tfunc)
     fulltree.args[3] = inlining_pass(fulltree.args[3], s[1])
+    tuple_elim_pass(fulltree)
     return (fulltree, frame.result)
 end
 
@@ -976,12 +977,13 @@ function record_var_type(e::Symbol, t, decls)
 end
 
 function eval_annotate(e::Expr, vtypes, sv, decls)
-    if is(e.head,:quote) || is(e.head,:top) || is(e.head,:goto) ||
-        is(e.head,:label) || is(e.head,:static_typeof)
+    head = e.head
+    if is(head,:quote) || is(head,:top) || is(head,:goto) ||
+        is(head,:label) || is(head,:static_typeof) || is(head,:line)
         return e
-    elseif is(e.head,:gotoifnot) || is(e.head,:return)
+    elseif is(head,:gotoifnot) || is(head,:return)
         e.type = Any
-    elseif is(e.head,:(=))
+    elseif is(head,:(=))
         e.type = Any
         s = e.args[1]
         # assignment LHS not subject to all-same-type variable checking,
@@ -1026,11 +1028,12 @@ function type_annotate(ast::Expr, states::Array, sv, rettype, vnames)
 end
 
 function sym_replace(e::Expr, from, to)
-    if is(e.head,:quote) || is(e.head,:top) || is(e.head,:goto) ||
-        is(e.head,:label)
+    head = e.head
+    if is(head,:quote) || is(head,:top) || is(head,:goto) ||
+        is(head,:label) || is(head,:line)
         return e
     end
-    if is(e.head,:symbol)
+    if is(head,:symbol)
         s = e.args[1]
         for i=1:length(from)
             if is(from[i],s)
@@ -1095,6 +1098,17 @@ function exprtype(x::ANY)
     end
 end
 
+function without_linenums(a::Array{Any,1})
+    l = {}
+    for x = a
+        if isa(x,Expr) && is(x.head,:line)
+        else
+            push(l, x)
+        end
+    end
+    l
+end
+
 # for now, only inline functions whose bodies are of the form "return <expr>"
 # where <expr> doesn't contain any argument more than once.
 # functions with closure environments or varargs are also excluded.
@@ -1147,7 +1161,7 @@ function inlineable(f, e::Expr, vars)
     if is(ast,())
         return NF
     end
-    body = ast.args[3].args
+    body = without_linenums(ast.args[3].args)
     # see if body is only "return <expr>"
     if length(body) > 1
         return NF
@@ -1165,12 +1179,21 @@ function inlineable(f, e::Expr, vars)
     expr = body[1].args[1]
     for i=1:length(args)
         a = args[i]
-        if occurs_more(expr, x->is(x,a), 1) > 1
+        occ = occurs_more(expr, x->is(x,a), 1)
+        if occ > 1
             aei = argexprs[i]
             # ok for argument to occur more than once if the actual argument
             # is a symbol or constant
             if !isa(aei,Symbol) && !isa(aei,Number) &&
                 !(isa(aei,Expr) && is(aei.head,:symbol))
+                return NF
+            end
+        elseif occ == 0
+            aei = argexprs[i]
+            if is(exprtype(aei),None)
+                # if an argument does not occur in the function and its
+                # actual argument is an error, make sure the error is not
+                # skipped.
                 return NF
             end
         end
@@ -1261,6 +1284,87 @@ function inlining_pass(e::Expr, vars)
         end
     end
     e
+end
+
+function add_variable(ast, name, typ)
+    vinf = {name,typ,false,true}
+    locllist = (ast.args[2].args[1]::Expr).args
+    vinflist = ast.args[2].args[2]::Array{Any,1}
+    push(locllist, name)
+    push(vinflist, vinf)
+end
+
+function unique_name(ast)
+    locllist = (ast.args[2].args[1]::Expr).args
+    g = gensym()
+    while contains_is(locllist, g)
+        g = gensym()
+    end
+    g
+end
+
+function is_top_call(e::Expr, fname)
+    return is(e.head,:call) && isa(e.args[1],Expr) &&
+        is(e.args[1].head,:top) && is(e.args[1].args[1],fname)
+end
+
+# eliminate allocation of tuples used to return multiple values
+function tuple_elim_pass(ast::Expr)
+    body = (ast.args[3].args)::Array{Any,1}
+    i = 1
+    while i < length(body)
+        e = body[i]
+        if isa(e,Expr) && is(e.head,:multiple_value)
+            i_start = i
+            ret = body[i+1]
+            # look for t = top(tuple)(...)
+            if isa(ret,Expr) && is(ret.head,:(=))
+                rhs = ret.args[2]
+                if isa(rhs,Expr) && is_top_call(rhs,:tuple)
+                    tup = rhs.args
+                    tupname = ret.args[1]
+                    nv = length(tup)-1
+                    if nv > 0
+                        del(body, i)  # remove (multiple_value)
+                        del(body, i)  # remove tuple allocation
+                        vals = { unique_name(ast) | j=1:nv }
+                        # convert tuple allocation to a series of assignments
+                        # to local variables
+                        for j=1:nv
+                            tupelt = tup[j+1]
+                            tmp = Expr(:(=), {vals[j],tupelt}, Any)
+                            add_variable(ast, vals[j], exprtype(tupelt))
+                            insert(body, i+j-1, tmp)
+                        end
+                        i = i+nv
+                        i0 = i
+                        j = 1; k = 1
+                        while k <= nv
+                            stmt = body[i+j-1]
+                            if isa(stmt,Expr) && is(stmt.head,:(=))
+                                rhs = stmt.args[2]
+                                if isa(rhs,Expr) &&
+                                   is_top_call(rhs,:tupleref) &&
+                                   isequal(rhs.args[2],tupname)
+                                    r = vals[k]
+                                    if isa(r,Symbol)
+                                        r = Expr(:symbol, {r},
+                                                 exprtype(tup[k+1]))
+                                    end
+                                    stmt.args[2] = r
+                                    k += 1
+                                end
+                            end
+                            j += 1
+                        end
+                        i = i_start
+                    end
+                end
+            end
+        end
+        i += 1
+    end
+    ast
 end
 
 function finfer(f, types)

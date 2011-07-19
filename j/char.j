@@ -54,7 +54,7 @@ $(x::Char, y::Char) = int32(x) $ int32(y)
 <<(x::Char, y::Int32) = int32(x) << y
 >>(x::Char, y::Int32) = int32(x) >>> y
 >>>(x::Char, y::Int32) = int32(x) >>> y
-==(x::Char, y::Char) = uint32(x) == uint32(y)
+==(x::Char, y::Char) = int32(x) == int32(y)
 <(x::Char, y::Char) = uint32(x) < uint32(y)
 
 ## traits ##
@@ -68,10 +68,16 @@ show(c::Char) = (print('\''); print_escaped(string(c), "'"); print('\''))
 
 ## libc character class testing functions ##
 
-for f = (:iswalnum, :iswalpha, :iswascii, :iswblank, :iswcntrl, :iswdigit,
+iswascii(c::Char) = c < 0x80
+
+for f = (:iswalnum, :iswalpha, :iswblank, :iswcntrl, :iswdigit,
          :iswgraph, :iswhexnumber, :iswideogram, :iswlower, :iswnumber,
          :iswphonogram, :iswprint, :iswpunct, :iswrune, :iswspace,
          :iswspecial, :iswupper, :iswxdigit)
     @eval ($f)(c::Char) = bool(ccall(dlsym(libc,$expr(:quote,f)),
                                      Int32, (Char,), c))
 end
+
+# note the following functions are BSD only:
+# iswascii, iswhexnumber, iswideogram, iswnumber, iswphonogram,
+# iswrune, iswspecial

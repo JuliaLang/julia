@@ -556,7 +556,7 @@ static jl_value_t *intersect_typevar(jl_tvar_t *a, jl_value_t *b,
                                      variance_t var)
 {
     if (jl_subtype(b, (jl_value_t*)a, 0)) {
-        //if (!a->bound) return b;
+        if (!a->bound) return b;
     }
     else if (var==invariant && !jl_is_typevar(b)) {
         // for typevar a and non-typevar type b, b must be within a's bounds
@@ -782,6 +782,10 @@ static jl_value_t *jl_type_intersect(jl_value_t *a, jl_value_t *b,
     }
     env = jl_type_match((jl_value_t*)super->parameters,
                         (jl_value_t*)sup_params);
+    if (env == jl_false) {
+        env = jl_type_match((jl_value_t*)sup_params,
+                            (jl_value_t*)super->parameters);
+    }
     for(i=0; i < tc_params->length; i++) {
         jl_tvar_t *tv = (jl_tvar_t*)jl_tupleref(tc_params,i);
         tv->bound = 0;
@@ -1972,7 +1976,7 @@ void jl_init_types()
     jl_struct_kind->instance = NULL;
     jl_struct_kind->uid = jl_assign_type_uid();
 
-    jl_tag_kind->name = jl_new_typename(jl_symbol("TagKind"));
+    jl_tag_kind->name = jl_new_typename(jl_symbol("AbstractKind"));
     jl_tag_kind->name->primary = (jl_value_t*)jl_tag_kind;
     jl_tag_kind->super = jl_type_type;
     jl_tag_kind->parameters = jl_null;
@@ -2244,4 +2248,5 @@ void jl_init_types()
     Any_sym = jl_symbol("Any");
     static_typeof_sym = jl_symbol("static_typeof");
     new_sym = jl_symbol("new");
+    multivalue_sym = jl_symbol("multiple_value");
 }

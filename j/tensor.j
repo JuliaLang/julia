@@ -92,8 +92,24 @@ end # macro
 @unary_op (-)
 @unary_op (~)
 @unary_op (conj)
-@unary_op (real)
-@unary_op (imag)
+
+macro unary_c2r_op(f)
+    quote
+
+        function ($f){T}(A::Tensor{T})
+            S = typeof(($f)(zero(T)))
+            F = similar(A, S)
+            for i=1:numel(A)
+                F[i] = ($f)(A[i])
+            end
+            return F
+        end
+
+    end # quote
+end # macro
+
+@unary_c2r_op (real)
+@unary_c2r_op (imag)
 
 +{T<:Number}(x::Tensor{T}) = x
 *{T<:Number}(x::Tensor{T}) = x
@@ -118,12 +134,8 @@ end
 /(A::Number, B::Tensor) = A ./ B
 /(A::Tensor, B::Number) = A ./ B
 
-.\(x::Tensor, y::Tensor) = reshape( [ x[i] .\ y[i] | i=1:numel(x) ], size(x) )
-.\(x::Number, y::Tensor) = reshape( [ x    .\ y[i] | i=1:numel(y) ], size(y) )
-.\(x::Tensor, y::Number) = reshape( [ x[i] .\ y    | i=1:numel(x) ], size(x) )
-
-\(A::Number, B::Tensor) = A .\ B
-\(A::Tensor, B::Number) = A .\ B
+\(A::Number, B::Tensor) = B ./ A
+\(A::Tensor, B::Number) = B ./ A
 
 macro binary_arithmetic_op(f)
     quote
@@ -157,6 +169,8 @@ end # macro
 @binary_arithmetic_op (-)
 @binary_arithmetic_op (.*)
 @binary_arithmetic_op (.^)
+@binary_arithmetic_op div
+@binary_arithmetic_op mod
 
 ## promotion to complex ##
 
@@ -263,6 +277,47 @@ end # macro
 @binary_boolean_op (|)
 @binary_boolean_op ($)
 
+## code generator for specializing on the number of dimensions ##
+
+function make_loop_nest(vars, ranges, body)
+    expr = body
+    for i=1:length(vars)
+        v = vars[i]
+        r = ranges[i]
+        expr = quote
+            for ($v) = ($r)
+                $expr
+            end
+        end
+    end
+    expr
+end
+
+function gen_cartesian_map(cache, genbody, dims, exargnames, exargs...)
+    N = length(dims)
+    if !has(cache,N)
+        dimargnames = { gensym() | i=1:N }
+        ivars = { gensym() | i=1:N }
+        body = genbody(ivars)
+        fexpr =
+        quote
+            let _dummy_=nothing
+                local _F_
+                function _F_($(dimargnames...), $(exargnames...))
+                    $make_loop_nest(ivars, dimargnames, body)
+                end
+                _F_
+            end
+        end
+        f = eval(fexpr)
+        cache[N] = f
+    else
+        f = cache[N]
+    end
+    return f(dims..., exargs...)
+end
+
+
 ## Indexing: ref ##
 
 ref(t::Tensor) = t
@@ -274,6 +329,18 @@ ref(A::Tensor{Any,1}, I::Vector{Index}) = { A[i] | i = I }
 ref(A::Matrix, I::Index, J::Vector{Index})         = [ A[i,j] | i = I, j = J ]
 ref(A::Matrix, I::Vector{Index}, J::Index)         = [ A[i,j] | i = I, j = J ]
 ref(A::Matrix, I::Vector{Index}, J::Vector{Index}) = [ A[i,j] | i = I, j = J ]
+
+function ref(A::Tensor, i0::Index, i1::Index)
+    A[i0 + size(A,1)*(i1-1)]
+end
+
+function ref(A::Tensor, i0::Index, i1::Index, i2::Index)
+    A[i0 + size(A,1)*((i1-1) + size(A,2)*(i2-1))]
+end
+
+function ref(A::Tensor, i0::Index, i1::Index, i2::Index, i3::Index)
+    A[i0 + size(A,1)*((i1-1) + size(A,2)*((i2-1) + size(A,3)*(i3-1)))]
+end
 
 function ref(A::Tensor, I::Index...)
     dims = size(A)
@@ -289,25 +356,21 @@ function ref(A::Tensor, I::Index...)
     return A[index]
 end
 
+let ref_cache = nothing
+global ref
 function ref(A::Tensor, I::Indices...)
-    dims = size(A)
-    ndimsA = length(dims)
-
-    strides = cumprod(dims)
     X = similar(A, map(length, I))
 
-    storeind = 1
-    function store(ind)
-        index = ind[1]
-        for d=2:ndimsA
-            index += (ind[d]-1) * strides[d-1]
-        end
-        X[storeind] = A[index]
-        storeind += 1
+    if is(ref_cache,nothing)
+        ref_cache = HashTable()
     end
-
-    cartesian_map(store, I)
+    gen_cartesian_map(ref_cache, ivars->:(X[storeind] = A[$(ivars...)];
+                                          storeind += 1),
+                      I,
+                      {:A, :X, :storeind},
+                      A, X, 1)
     return X
+end
 end
 
 ## Indexing: assign ##
@@ -357,6 +420,20 @@ assign(A::Tensor, x, I0::Index, I::Index...) = assign_scalarND(A,x,I0,I...)
 assign(A::Tensor, x::Tensor, I0::Index, I::Index...) =
     assign_scalarND(A,x,I0,I...)
 
+assign(A::Tensor, x::Tensor, i0::Index, i1::Index) =
+    A[i0 + size(A,1)*(i1-1)] = x
+assign(A::Tensor, x, i0::Index, i1::Index) = A[i0 + size(A,1)*(i1-1)] = x
+
+assign(A::Tensor, x, i0::Index, i1::Index, i2::Index) =
+    A[i0 + size(A,1)*((i1-1) + size(A,2)*(i2-1))] = x
+assign(A::Tensor, x::Tensor, i0::Index, i1::Index, i2::Index) =
+    A[i0 + size(A,1)*((i1-1) + size(A,2)*(i2-1))] = x
+
+assign(A::Tensor, x, i0::Index, i1::Index, i2::Index, i3::Index) =
+    A[i0 + size(A,1)*((i1-1) + size(A,2)*((i2-1) + size(A,3)*(i3-1)))] = x
+assign(A::Tensor, x::Tensor, i0::Index, i1::Index, i2::Index, i3::Index) =
+    A[i0 + size(A,1)*((i1-1) + size(A,2)*((i2-1) + size(A,3)*(i3-1)))] = x
+
 function assign_scalarND(A, x, I0, I...)
     dims = size(A)
     index = I0
@@ -369,50 +446,36 @@ function assign_scalarND(A, x, I0, I...)
     return A
 end
 
-
+let assign_cache = nothing
+global assign
 function assign(A::Tensor, x, I0::Indices, I::Indices...)
-    dims = size(A)
-    ndimsA = length(dims)
-
-    strides = cumprod(dims)
-
-    function store_one(ind)
-        index = ind[1]
-        for d=2:ndimsA
-            index += (ind[d]-1) * strides[d-1]
-        end
-        A[index] = x
+    if is(assign_cache,nothing)
+        assign_cache = HashTable()
     end
-
-    cartesian_map(store_one, append(tuple(I0), I))
+    gen_cartesian_map(assign_cache, ivars->:(A[$(ivars...)] = x),
+                      append(tuple(I0), I),
+                      {:A, :x},
+                      A, x)
     return A
 end
+end
 
+let assign_cache = nothing
+global assign
 function assign(A::Tensor, X::Tensor, I0::Indices, I::Indices...)
-    dims = size(A)
-    ndimsA = length(dims)
-
-    strides = cumprod(dims)
-
-    refind = 1
-    function store_all(ind)
-        index = ind[1]
-        for d=2:ndimsA
-            index += (ind[d]-1) * strides[d-1]
-        end
-        A[index] = X[refind]
-        refind += 1
+    if is(assign_cache,nothing)
+        assign_cache = HashTable()
     end
-
-    cartesian_map(store_all, append(tuple(I0), I))
+    gen_cartesian_map(assign_cache, ivars->:(A[$(ivars...)] = X[refind];
+                                             refind += 1),
+                      append(tuple(I0), I),
+                      {:A, :X, :refind},
+                      A, X, 1)
     return A
+end
 end
 
 ## Reductions ##
-
-function areduce{T}(f::Function, A::Tensor{T}, region::Region)
-    areduce(f, A, region, T)
-end
 
 function contains(itr, x)
     for y=itr
@@ -425,21 +488,91 @@ end
 
 contains(s::Number, n::Int) = (s == n)
 
+areduce{T}(f::Function, A::Tensor{T}, region::Region) = areduce(f,A,region,T)
+
+let areduce_cache = nothing
+# generate the body of the N-d loop to compute a reduction
+function gen_areduce_core(ivars, f)
+    n = length(ivars)
+    # limits and vars for reduction loop
+    lo    = { gensym() | i=1:n }
+    hi    = { gensym() | i=1:n }
+    rvars = { gensym() | i=1:n }
+    setlims = { quote
+        # each dim of reduction is either 1:sizeA or ivar:ivar
+        if contains(region,$i)
+            $lo[i] = 1
+            $hi[i] = size(A,$i)
+        else
+            $lo[i] = $hi[i] = $ivars[i]
+        end
+               end | i=1:n }
+    rranges = { :( ($lo[i]):($hi[i]) ) | i=1:n }  # lo:hi for all dims
+    quote
+        _tot = ($f)()
+        $(setlims...)
+        $make_loop_nest(rvars, rranges,
+                        :(_tot = ($f)(_tot, A[$(rvars...)])))
+        R[$(ivars...)] = _tot
+    end
+end
+
+global areduce
 function areduce(f::Function, A::Tensor, region::Region, RType::Type)
     dimsA = size(A)
     ndimsA = length(dimsA)
     dimsR = ntuple(ndimsA, i->(contains(region, i) ? 1 : dimsA[i]))
     R = similar(A, RType, dimsR)
-
-    function reduce_one(ind)
-        sliceA = ntuple(ndimsA, i->(contains(region, i) ?
-                                    Range1(1,dimsA[i]) :
-                                    ind[i]))
-        R[ind...] = f(A[sliceA...])
+    
+    if is(areduce_cache,nothing)
+        areduce_cache = HashTable()
     end
-
-    cartesian_map(reduce_one, ntuple(ndimsA, i->(Range1(1,dimsR[i]))) )
+    gen_cartesian_map(areduce_cache, iv->gen_areduce_core(iv,:f),
+                      ntuple(ndimsA, i->(Range1(1,dimsR[i]))),
+                      {:f, :A, :region, :R},
+                      f, A, region, R)
     return R
+end
+end
+
+function max{T}(A::Tensor{T})
+    if subtype(T,Int)
+        v = typemin(T)
+    else
+        v = convert(T,-Inf)
+    end
+    for i=1:numel(A)
+        v = max(v,A[i])
+    end
+    v
+end
+
+function min{T}(A::Tensor{T})
+    if subtype(T,Int)
+        v = typemax(T)
+    else
+        v = convert(T,Inf)
+    end
+    for i=1:numel(A)
+        v = min(v,A[i])
+    end
+    v
+end
+
+function sum{T}(A::Tensor{T})
+    v = zero(T)
+    for i=1:numel(A)
+        v = sum(v,A[i])
+    end
+    v
+end
+
+function prod{T}(A::Tensor{T})
+    v = one(T)
+    for i=1:numel(A)
+        v = prod(v,A[i])
+    end
+    v
 end
 
 for f = (:max, :min, :sum, :prod)
@@ -477,7 +610,7 @@ end
 
 all(A::Tensor{Bool}, region::Region) = areduce(all, A, region)
 any(A::Tensor{Bool}, region::Region) = areduce(any, A, region)
-count(A::Tensor{Bool}, region::Region) = areduce(count, A, region, Int)
+count(A::Tensor{Bool}, region::Region) = areduce(count, A, region, Int32)
 
 function isequal(x::Tensor, y::Tensor)
     if size(x) != size(y)
@@ -544,17 +677,8 @@ reverse(v::Vector) = [ v[length(v)-i+1] | i=1:length(v) ]
 transpose(x::Vector)  = [ x[j]         | i=1, j=1:size(x,1) ]
 ctranspose(x::Vector) = [ conj(x[j])   | i=1, j=1:size(x,1) ]
 
-#transpose(x::Matrix)  = [ x[j,i]       | i=1:size(x,2), j=1:size(x,1) ]
+transpose(x::Matrix)  = [ x[j,i]       | i=1:size(x,2), j=1:size(x,1) ]
 ctranspose(x::Matrix) = [ conj(x[j,i]) | i=1:size(x,2), j=1:size(x,1) ]
-
-function transpose(a::Matrix)
-    m,n = size(a)
-    b = similar(a, n, m)
-    for i=1:m, j=1:n
-        b[j,i] = a[i,j]
-    end
-    return b
-end
 
 function permute(A::Tensor, perm)
     dimsA = size(A)
@@ -686,17 +810,22 @@ end
 sub2ind(dims, I::Vector...) =
     [ sub2ind(dims, map(X->X[i], I)...) | i=1:length(I[1]) ]
 
+ind2sub(dims::(), ind::Index) = throw(BoundsError())
+ind2sub(dims::(Index,), ind::Index) = (ind,)
+ind2sub(dims::(Index,Index), ind::Index) =
+    (rem(ind-1,dims[1])+1, div(ind-1,dims[1])+1)
+
 function ind2sub(dims, ind::Index)
     ndims = length(dims)
-    x = tuple(1, cumprod(dims)...)
+    x = cumprod(dims)
 
     sub = ()
-    for i=ndims:-1:1
+    for i=(ndims-1):-1:1
         rest = rem(ind-1, x[i]) + 1
         sub = tuple(div(ind - rest, x[i]) + 1, sub...)
         ind = rest
     end
-    return sub
+    return tuple(ind, sub...)
 end
 
 ## subarrays ##

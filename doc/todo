@@ -718,11 +718,18 @@ issues 1/24/11
   . maybe syntax like "a?=x" or "a??"
 - inlined tuple assignment optimization
   * allow inlining where formal arg appears >once if actual arg is symbol
-  . in frontend add (multiple-value) hint before assigning the temp var
+  * in frontend add (multiple-value) hint before assigning the temp var
     for a returned tuple
 - socket data corruption bug (?)
 - array primitive benchmarks
 - parallelism documentation
+- darray functions
+  . elementwise
+  . ref
+  . assign
+  . reduce
+  . cat
+ref assign reduce permute find
 
 something about update operators, in-place operations in general
 

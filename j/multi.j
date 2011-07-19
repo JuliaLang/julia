@@ -131,7 +131,7 @@ type ProcessGroup
     # global references
     refs::HashTable
 
-    function ProcessGroup(myid::Int32, w::Array{Any,1}, locs::Array{Any,1})
+    function ProcessGroup(myid::Int, w::Array{Any,1}, locs::Array{Any,1})
         return new(myid, w, locs, length(w), HashTable())
     end
 end
@@ -363,7 +363,9 @@ function deserialize(s, t::Type{RemoteRef})
     rr = force(invoke(deserialize, (Any, Type), s, t))
     rid = rr2id(rr)
     where = rr.where
-    rr = ()
+    if where == myid()
+        add_client(rid, myid())
+    end
     function ()
         if where == myid()
             wi = lookup_ref(rid)
@@ -378,8 +380,21 @@ function deserialize(s, t::Type{RemoteRef})
                 v = v.value
             end
             if isa(v,GlobalObject)
-                add_client(rid, myid())
+                if !anyp(r->(r.whence==rid[1] && r.id==rid[2]), v.refs)
+                    # ref not part of the GlobalObject, so it needs to
+                    # manage its own lifetime
+                    RemoteRef(where, rid[1], rid[2])
+                else
+                    # here the GlobalObject's finalizer will handle removing
+                    # the client ref we added with add_client above.
+                end
                 v = v.local_identity
+            else
+                # make a RemoteRef so a finalizer is set up to remove us
+                # as a client. the RR has been converted to its value, so
+                # we don't need it any more unless there is another reference
+                # to this RR somewhere on our system.
+                RemoteRef(where, rid[1], rid[2])
             end
             return v
         else
@@ -424,7 +439,7 @@ function remote_call_fetch(w::Worker, f, args...)
     rr = WeakRemoteRef(w)
     oid = rr2id(rr)
     send_msg(w, :call_fetch, oid, f, args)
-    force(yieldto(Scheduler, WaitFor(:call_fetch, oid)))
+    force(yieldto(Scheduler, WaitFor(:call_fetch, rr)))
 end
 
 remote_call_fetch(id::Int, f, args...) =
@@ -437,7 +452,7 @@ function remote_call_wait(w::Worker, f, args...)
     rr = RemoteRef(w)
     oid = rr2id(rr)
     send_msg(w, :call_wait, oid, f, args)
-    yieldto(Scheduler, WaitFor(:wait, oid))
+    yieldto(Scheduler, WaitFor(:wait, rr))
 end
 
 remote_call_wait(id::Int, f, args...) =
@@ -477,7 +492,7 @@ function sync_msg(verb::Symbol, r::RemoteRef)
         send_msg(pg.workers[r.where], verb, oid)
     end
     # yield to event loop, return here when answer arrives
-    v = yieldto(Scheduler, WaitFor(verb, oid))
+    v = yieldto(Scheduler, WaitFor(verb, r))
     return is(verb,:fetch) ? force(v) : r
 end
 
@@ -541,7 +556,7 @@ end
 
 type WaitFor
     msg::Symbol
-    oid
+    rr
 end
 
 # to be used as a re-usable Task for executing thunks
@@ -619,7 +634,15 @@ function perform_work(job::WorkItem)
         if isa(result,WaitFor)
             # add to waiting set to wait on a sync event
             wf::WaitFor = result
-            Waiting[wf.oid] = (wf.msg, job, get(Waiting, wf.oid, ()))
+            rr = wf.rr
+            oid = rr2id(rr)
+            waitinfo = (wf.msg, job, rr)
+            waiters = get(Waiting, oid, false)
+            if isequal(waiters,false)
+                Waiting[oid] = {waitinfo}
+            else
+                push(waiters, waitinfo)
+            end
         elseif !task_done(job.task) && job.requeue
             # otherwise return to queue
             enq_work(job)
@@ -645,25 +668,22 @@ function deliver_result(sock::IOStream, msg, oid, value)
     end
 end
 
+_empty_cell_ = {}
 function deliver_result(sock::(), msg, oid, value_thunk)
     global Waiting
     # restart task that's waiting on oid
-    jobs = get(Waiting, oid, ())
-    newjobs = ()  # waiting list with one removed
-    found = false
-    while !is(jobs,())
-        if jobs[1]==msg && !found
-            found = true
-            job = jobs[2]
+    jobs = get(Waiting, oid, _empty_cell_)
+    for i = 1:length(jobs)
+        j = jobs[i]
+        if j[1]==msg
+            job = j[2]
             job.argument = value_thunk
             enq_work(job)
-        else
-            newjobs = (jobs[1], jobs[2], newjobs)
+            del(jobs, i)
+            break
         end
-        jobs = jobs[3]
     end
-    Waiting[oid] = newjobs
-    if is(newjobs,())
+    if isempty(jobs) && !is(jobs,_empty_cell_)
         del(Waiting, oid)
     end
     nothing
@@ -942,6 +962,7 @@ type GlobalObject
         wi = lookup_ref(myrid)
         function del_go_client(go)
             if has(wi.clientset, mi)
+                #println("$(myid()) trying to delete $(go.refs)")
                 for i=1:np
                     send_del_client(go.refs[i])
                 end
@@ -1328,7 +1349,7 @@ function event_loop(isclient)
                         perform_work()
                     end
                 else
-                    for fd=0:(fdset.nfds-1)
+                    for fd=int32(0):(fdset.nfds-1)
                         if has(fdset,fd)
                             h = fd_handlers[fd]
                             h(fd)
