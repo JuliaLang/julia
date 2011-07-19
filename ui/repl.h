@@ -27,11 +27,11 @@ extern int prompt_length;
 extern int have_color;
 extern int tab_width;
 extern jl_value_t *rl_ast;
-extern char *jl_answer_color;
 extern char *prompt_string;
 extern DLLEXPORT char *julia_home;
 extern int jl_have_event_loop;
 
+extern char *jl_answer_color();
 extern void init_repl_environment();
 extern void exit_repl_environment();
 extern void read_expr(char *prompt);

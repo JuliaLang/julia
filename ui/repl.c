@@ -5,17 +5,13 @@
 
 #include "repl.h"
 
-char *jl_answer_color  = "\033[1m\033[34m";
 char *prompt_string;
-
 static char jl_prompt_plain[] = "julia> ";
 static char jl_color_normal[] = "\033[0m";
 static int lisp_prompt = 0;
 int jl_have_event_loop = 0;
 static char *program = NULL;
-
 char *image_file = "sys.ji";
-
 jl_value_t *rl_ast = NULL;
 int tab_width = 2;
 int prompt_length = 0;
@@ -90,25 +86,6 @@ void parse_opts(int *argcp, char ***argvp) {
             free(julia_path);
         }
     }
-    char *answer_color = getenv("JL_ANSWER_COLOR");
-    if (answer_color) {
-        if (!strcmp(answer_color,"black"))
-            jl_answer_color  = "\033[1m\033[30m";
-        else if (!strcmp(answer_color,"red"))
-            jl_answer_color  = "\033[1m\033[31m";
-        else if (!strcmp(answer_color,"green"))
-            jl_answer_color  = "\033[1m\033[32m";
-        else if (!strcmp(answer_color,"yellow"))
-            jl_answer_color  = "\033[1m\033[33m";
-        else if (!strcmp(answer_color,"blue"))
-            jl_answer_color  = "\033[1m\033[34m";
-        else if (!strcmp(answer_color,"magenta"))
-            jl_answer_color  = "\033[1m\033[35m";
-        else if (!strcmp(answer_color,"cyan"))
-            jl_answer_color  = "\033[1m\033[36m";
-        else if (!strcmp(answer_color,"white"))
-            jl_answer_color  = "\033[1m\033[37m";
-    }
     *argvp += optind;
     *argcp -= optind;
     if (image_file==NULL && *argcp > 0) {
@@ -117,6 +94,22 @@ void parse_opts(int *argcp, char ***argvp) {
         }
         ++*argvp; --*argcp;
     }
+}
+
+char *jl_answer_color() {
+    char *answer_color = getenv("JL_ANSWER_COLOR");
+    if (answer_color) {
+        switch (answer_color[0]) {
+        case 'b': if (!strcmp(answer_color,"black"))   return "\033[1m\033[30m"; break;
+        case 'r': if (!strcmp(answer_color,"red"))     return "\033[1m\033[31m"; break;
+        case 'g': if (!strcmp(answer_color,"green"))   return "\033[1m\033[32m"; break;
+        case 'y': if (!strcmp(answer_color,"yellow"))  return "\033[1m\033[33m"; break;
+        case 'm': if (!strcmp(answer_color,"magenta")) return "\033[1m\033[35m"; break;
+        case 'c': if (!strcmp(answer_color,"cyan"))    return "\033[1m\033[36m"; break;
+        case 'w': if (!strcmp(answer_color,"white"))   return "\033[1m\033[37m"; break;
+        }
+    }
+    return "\033[1m\033[34m";
 }
 
 int ends_with_semicolon(const char *input)
@@ -235,7 +228,7 @@ DLLEXPORT void jl_eval_user_input(jl_value_t *ast, int show_value)
         jl_set_global(jl_system_module, jl_symbol("ans"), value);
         if (value != (jl_value_t*)jl_nothing && show_value) {
             if (have_color) {
-                ios_printf(ios_stdout, jl_answer_color);
+                ios_printf(ios_stdout, jl_answer_color());
                 ios_flush(ios_stdout);
             }
             repl_show_value(value);

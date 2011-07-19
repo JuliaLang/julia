@@ -123,7 +123,7 @@ static int newline_callback(int count, int key) {
 
 static int return_callback(int count, int key) {
     if (have_color) {
-        ios_printf(ios_stdout, jl_answer_color);
+        ios_printf(ios_stdout, jl_answer_color());
         ios_flush(ios_stdout);
     }
     add_history_temporary(rl_line_buffer);
