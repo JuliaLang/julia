@@ -9,6 +9,7 @@
 /julia-release-*
 
 /libjulia*
+/webserver
 
 /sys.ji
 /boot.j.inc

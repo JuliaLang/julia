@@ -18,6 +18,14 @@ Rational(n::Int) = Rational(n, one(n))
 //(n::Int, d::Int) = Rational(n,d)
 //(x::Rational, y::Int) = x.num // (x.den*y)
 //(x::Int, y::Rational) = (x*y.den) // y.num
+//(x::Complex, y::Real) = complex(real(x)//y, imag(x)//y)
+//(x::Real, y::Complex) = x*y'//real(y*y')
+
+function //(x::Complex, y::Complex)
+    xy = x*y'
+    yy = real(y*y')
+    complex(real(xy)//yy, imag(xy)//yy)
+end
 
 function show(x::Rational)
     show(num(x))
