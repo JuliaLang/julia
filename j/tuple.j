@@ -51,7 +51,7 @@ function isequal(t1::Tuple, t2::Tuple)
         return false
     end
     for i = 1:length(t1)
-        if t1[i] != t2[i]
+        if !isequal(t1[i], t2[i])
             return false
         end
     end
