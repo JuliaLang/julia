@@ -37,7 +37,7 @@ end
 @assert subtype(Type{Array{Int}},Type{Array{typevar(:T,Int)}})
 
 # ntuples
-nttest1{n}(x::NTuple{n,Int32}) = n
+nttest1{n}(x::NTuple{n,Size}) = n
 @assert nttest1(()) == 0
 @assert nttest1((1,2)) == 2
 @assert NTuple <: Tuple

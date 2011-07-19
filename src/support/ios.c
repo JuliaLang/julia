@@ -30,7 +30,7 @@
 //#define MEMDEBUG
 
 #ifdef MEMDEBUG
-# ifdef __lp64__
+# ifdef __LP64__
 #  define BVOFFS 3
 # else
 #  define BVOFFS 4

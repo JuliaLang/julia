@@ -679,6 +679,10 @@
    (pattern-lambda (|::| (-- expr (-^ (-s))) T)
 		   `(call (top typeassert) ,expr ,T))
 
+   ;; incorrect multiple return syntax [a, b, ...] = foo
+   (pattern-lambda (= (vcat . args) rhs)
+		   (error "use \"(a, b) = ...\" to assign multiple values"))
+
    ; adding break/continue support to while loop
    (pattern-lambda (while cnd body)
 		   `(scope-block
@@ -709,7 +713,7 @@
 	      ,@(if (eq? bb b) '() `((= ,bb ,b)))
 	      (= ,cnt 0)
 	      (= ,lim
-		 (call int32 (call + 1 (call / (call - ,c ,aa) ,bb))))
+		 (call (top long) (call + 1 (call / (call - ,c ,aa) ,bb))))
 	      (break-block loop-exit
 			   (_while (call < ,cnt ,lim)
 				   (block

@@ -69,7 +69,7 @@ typedef struct _bigval_t {
 } bigval_t;
 
 #ifdef MEMDEBUG
-# ifdef __lp64__
+# ifdef __LP64__
 #  define BVOFFS 3
 # else
 #  define BVOFFS 4
@@ -265,16 +265,17 @@ static void add_page(pool_t *p)
     gcpage_t *pg = malloc(sizeof(gcpage_t));
     gcval_t *v = (gcval_t*)&pg->data[0];
     char *lim = (char*)pg + GC_PAGE_SZ - p->osize;
-    gcval_t *oldfl = p->freelist;
-    gcval_t **pfl = &p->freelist;
+    gcval_t *fl;
+    gcval_t **pfl = &fl;
     while ((char*)v <= lim) {
         *pfl = v;
         pfl = &v->next;
         v = (gcval_t*)((char*)v + p->osize);
     }
-    *pfl = oldfl;
+    *pfl = p->freelist;
     pg->next = p->pages;
     p->pages = pg;
+    p->freelist = fl;
 }
 
 static void *pool_alloc(pool_t *p)
@@ -297,9 +298,10 @@ static void sweep_pool(pool_t *p)
     gcpage_t *pg = p->pages;
     gcpage_t **ppg = &p->pages;
     gcval_t **pfl = &p->freelist;
+    size_t osize = p->osize;
 
     while (pg != NULL) {
-        char *lim = (char*)pg + GC_PAGE_SZ - p->osize;
+        char *lim = (char*)pg + GC_PAGE_SZ - osize;
         v = (gcval_t*)&pg->data[0];
         //empty = 1;
         freedall = 1;
@@ -313,7 +315,7 @@ static void sweep_pool(pool_t *p)
                 v->marked = 0;
                 freedall = 0;
             }
-            v = (gcval_t*)((char*)v + p->osize);
+            v = (gcval_t*)((char*)v + osize);
         }
         gcpage_t *nextpg = pg->next;
         // lazy version: (empty) if the whole page was already unused, free it
@@ -441,7 +443,7 @@ static void gc_markval_(jl_value_t *v)
         if (a->dims) GC_Markval(a->dims);
         int ndims = jl_array_ndims(a);
         int ndimwords = (ndims > 3 ? (ndims-3) : 0);
-#ifndef __lp64__
+#ifndef __LP64__
         // on 32-bit, ndimwords must be even to preserve 8-byte alignment
         ndimwords = (ndimwords+1)&-2;
 #endif

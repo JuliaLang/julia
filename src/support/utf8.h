@@ -119,7 +119,7 @@ size_t u8_vprintf(const char *fmt, va_list ap);
 size_t u8_printf(const char *fmt, ...);
 
 /* determine whether a sequence of bytes is valid UTF-8. length is in bytes */
-DLLEXPORT int u8_isvalid(const char *str, int length);
+DLLEXPORT int u8_isvalid(const char *str, size_t length);
 
 /* reverse a UTF-8 string. len is length in bytes. dest and src must both
    be allocated to at least len+1 bytes. returns 1 for error, 0 otherwise */

@@ -55,11 +55,7 @@ bitmix(a::Union(Int64,Uint64), b::Union(Int64, Uint64)) =
 hash_f64(x::Float64) =
     ccall(:int64hash, Uint64, (Uint64,), boxui64(unbox64(x)))
 
-if WORD_SIZE == 64
-    hash(s::Symbol) = ccall(:jl_hash_symbol, Uint64, (Any,), s)
-else
-    hash(s::Symbol) = ccall(:jl_hash_symbol, Uint32, (Any,), s)
-end
+hash(s::Symbol) = ccall(:jl_hash_symbol, Ulong, (Any,), s)
 
 hash(x::Float64) = (isnan(x) ? hash_f64(NaN) : hash_f64(x))
 hash(x::Float) = hash(float64(x))
@@ -101,7 +97,7 @@ end
 HashTable() = HashTable(0)
 HashTable(n::Int) = HashTable{Any,Any}(n)
 
-hashindex(key, sz) = (int32(hash(key)) & (sz-1)) + 1
+hashindex(key, sz) = (long(hash(key)) & (sz-1)) + 1
 
 function rehash{K,V}(h::HashTable{K,V}, newsz)
     oldk = h.keys

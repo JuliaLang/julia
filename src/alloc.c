@@ -480,7 +480,7 @@ void jl_add_constructors(jl_struct_type_t *t)
 {
     if (t->name == jl_array_typename) {
         if (!jl_has_typevars(jl_tparam0(t)) &&
-            jl_is_int32(jl_tupleref(t->parameters,1)))
+            jl_is_long(jl_tupleref(t->parameters,1)))
             t->fptr = jl_new_array_internal;
         else
             t->fptr = jl_f_no_function;
@@ -565,6 +565,8 @@ jl_bits_type_t *jl_new_bitstype(jl_value_t *name, jl_tag_type_t *super,
         // during bootstrapping
         if (!strcmp(((jl_sym_t*)name)->name, "Int32"))
             t = jl_int32_type;
+        else if (!strcmp(((jl_sym_t*)name)->name, "Int64"))
+            t = jl_int64_type;
         else if (!strcmp(((jl_sym_t*)name)->name, "Bool"))
             t = jl_bool_type;
     }
@@ -765,11 +767,12 @@ jl_value_t *jl_box_uint8(uint8_t x)
     return boxed_uint8_cache[x];
 }
 
-void jl_init_int32_cache()
+void jl_init_int32_int64_cache()
 {
     int64_t i;
     for(i=0; i < NBOX_C; i++) {
         boxed_int32_cache[i]  = jl_new_box_int32(i-NBOX_C/2);
+        boxed_int64_cache[i]  = jl_new_box_int64(i-NBOX_C/2);
     }
 }
 
@@ -782,7 +785,6 @@ void jl_init_box_caches()
     }
     for(i=0; i < NBOX_C; i++) {
         boxed_int16_cache[i]  = jl_new_box_int16(i-NBOX_C/2);
-        boxed_int64_cache[i]  = jl_new_box_int64(i-NBOX_C/2);
         boxed_uint16_cache[i] = jl_new_box_uint16(i);
         boxed_uint32_cache[i] = jl_new_box_uint32(i);
         boxed_uint64_cache[i] = jl_new_box_uint64(i);

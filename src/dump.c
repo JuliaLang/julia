@@ -145,6 +145,8 @@ void jl_serialize_tag_type(ios_t *s, jl_value_t *v)
             write_uint8(s, 2);
         else if (v == (jl_value_t*)jl_bool_type)
             write_uint8(s, 3);
+        else if (v == (jl_value_t*)jl_int64_type)
+            write_uint8(s, 4);
         else
             write_uint8(s, ((jl_tag_type_t*)v)->name->primary==v ? 1 : 0);
         jl_serialize_value(s, ((jl_tag_type_t*)v)->name);
@@ -434,6 +436,8 @@ jl_value_t *jl_deserialize_tag_type(ios_t *s, jl_struct_type_t *kind, int pos)
             bt = jl_int32_type;
         else if (form == 3)
             bt = jl_bool_type;
+        else if (form == 4)
+            bt = jl_int64_type;
         else
             bt = (jl_bits_type_t*)newobj((jl_type_t*)jl_bits_kind,
                                          BITS_TYPE_NW);
@@ -573,7 +577,7 @@ jl_value_t *jl_deserialize_value(ios_t *s)
         jl_value_t *atype =
             jl_apply_type((jl_value_t*)jl_array_type,
                           jl_tuple2(elty,
-                                    jl_box_int32(((jl_tuple_t*)dims)->length)));
+                                    jl_box_long(((jl_tuple_t*)dims)->length)));
         jl_array_t *a = jl_new_array((jl_type_t*)atype, dims);
         ptrhash_put(&backref_table, (void*)(ptrint_t)pos, (jl_value_t*)a);
         if (jl_is_bits_type(elty)) {
@@ -789,7 +793,6 @@ void jl_save_system_image(char *fname, char *startscriptname)
     jl_serialize_value(&f, jl_int16_type);
     jl_serialize_value(&f, jl_uint16_type);
     jl_serialize_value(&f, jl_uint32_type);
-    jl_serialize_value(&f, jl_int64_type);
     jl_serialize_value(&f, jl_uint64_type);
     jl_serialize_value(&f, jl_float32_type);
     jl_serialize_value(&f, jl_float64_type);
@@ -858,7 +861,6 @@ void jl_restore_system_image(char *fname)
     jl_int16_type   = (jl_bits_type_t*)jl_deserialize_value(&f);
     jl_uint16_type  = (jl_bits_type_t*)jl_deserialize_value(&f);
     jl_uint32_type  = (jl_bits_type_t*)jl_deserialize_value(&f);
-    jl_int64_type   = (jl_bits_type_t*)jl_deserialize_value(&f);
     jl_uint64_type  = (jl_bits_type_t*)jl_deserialize_value(&f);
     jl_float32_type = (jl_bits_type_t*)jl_deserialize_value(&f);
     jl_float64_type = (jl_bits_type_t*)jl_deserialize_value(&f);
@@ -887,7 +889,7 @@ void jl_restore_system_image(char *fname)
     jl_array_uint8_type =
         (jl_type_t*)jl_apply_type((jl_value_t*)jl_array_type,
                                   jl_tuple2(jl_uint8_type,
-                                            jl_box_int32(1)));
+                                            jl_box_long(1)));
 
     jl_deserialize_module(&f, jl_system_module);
     //jl_deserialize_finalizers(&f);
@@ -955,6 +957,8 @@ void jl_init_serializer()
                      jl_false, jl_true,
                      jl_box_int32(0), jl_box_int32(1), jl_box_int32(2),
                      jl_box_int32(3), jl_box_int32(4),
+                     jl_box_int64(0), jl_box_int64(1), jl_box_int64(2),
+                     jl_box_int64(3), jl_box_int64(4),
 
                      jl_type_type, jl_bottom_type, jl_pointer_type,
                      jl_seq_type, jl_ntuple_type, jl_tensor_type,

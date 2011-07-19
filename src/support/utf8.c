@@ -626,7 +626,7 @@ size_t u8_printf(const char *fmt, ...)
 
    length is in bytes, since without knowing whether the string is valid
    it's hard to know how many characters there are! */
-int u8_isvalid(const char *str, int length)
+int u8_isvalid(const char *str, size_t length)
 {
     const unsigned char *p, *pend = (unsigned char*)str + length;
     unsigned char c;

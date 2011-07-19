@@ -7,9 +7,9 @@
 
 hpl_par(A::Matrix, b::Vector) = hpl_par(A, b, max(1, div(max(size(A)),4)), true)
 
-hpl_par(A::Matrix, b::Vector, bsize::Int32) = hpl_par(A, b, bsize, true)
+hpl_par(A::Matrix, b::Vector, bsize::Int) = hpl_par(A, b, bsize, true)
 
-function hpl_par(A::Matrix, b::Vector, blocksize::Int32, run_parallel::Bool)
+function hpl_par(A::Matrix, b::Vector, blocksize::Int, run_parallel::Bool)
 
     n = size(A,1)
     A = [A b]
@@ -281,10 +281,26 @@ end ## trailing_update2()
 ## Prints 5 numbers that should be close to zero
 function test(n, np)
     A = rand(n,n); b = rand(n);
-    @time (x = copy(A) \ copy(b))
-    @time (y = hpl_par(copy(A),copy(b), max(1,div(n,np))))
-    @time (z = hpl_par2(copy(A),copy(b)))
+    A1 = copy(A); A2 = copy(A); A3 = copy(A)
+    b1 = copy(b); b2 = copy(b); b3 = copy(b)
+    tic(); x = A1 \ b1; X = toc();
+    tic(); y = hpl_par(A2,b2, max(1,div(n,np))); Y = toc();
+    tic(); z = hpl_par2(A3,b3); Z = toc();
     for i=1:(min(5,n))
-        print(z[i]-y[i]); print(" ")
+        print(z[i]-y[i], " ")
     end
+    println()
+    return (X,Y,Z)
+end
+
+## test k times and collect average
+function test(n,np,k)
+    sum1 = 0; sum2 = 0; sum3 = 0;
+    for i = 1:k
+        (X,Y,Z) = test(n,np)
+        sum1 += X
+        sum2 += Y
+        sum3 += Z
+    end
+    return (sum1/k, sum2/k, sum3/k)
 end

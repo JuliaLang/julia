@@ -32,7 +32,6 @@
     jl_alloc_array_2d;
     jl_closure_env;
     jl_closure_linfo;
-    jl_word_size;
     jl_enable_inference;
     jl_set_memio_func;
     jl_symbol_n;

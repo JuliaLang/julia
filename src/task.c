@@ -468,7 +468,7 @@ static jl_value_t *build_backtrace()
             jl_array_grow_end(a, 3);
             jl_arrayset(a, j, (jl_value_t*)jl_symbol(func_name)); j++;
             jl_arrayset(a, j, (jl_value_t*)jl_symbol(file_name)); j++;
-            jl_arrayset(a, j, jl_box_int32(line_num)); j++;
+            jl_arrayset(a, j, jl_box_long(line_num)); j++;
         }
     }
     JL_GC_POP();
@@ -490,7 +490,7 @@ static _Unwind_Reason_Code tracer(void *ctx, void *arg)
         jl_array_grow_end(a, 3);
         jl_arrayset(a, j, (jl_value_t*)jl_symbol(func_name)); j++;
         jl_arrayset(a, j, (jl_value_t*)jl_symbol(file_name)); j++;
-        jl_arrayset(a, j, jl_box_int32(line_num));
+        jl_arrayset(a, j, jl_box_long(line_num));
     }
     return _URC_NO_REASON;
 }
@@ -528,7 +528,7 @@ static jl_value_t *build_backtrace2()
             jl_array_grow_end(a, 3);
             jl_arrayset(a, j, (jl_value_t*)jl_symbol(func_name)); j++;
             jl_arrayset(a, j, (jl_value_t*)jl_symbol(file_name)); j++;
-            jl_arrayset(a, j, jl_box_int32(line_num)); j++;
+            jl_arrayset(a, j, jl_box_long(line_num)); j++;
         }
     }
     if (tbuf != &buf[0])
@@ -695,8 +695,8 @@ JL_CALLABLE(jl_f_task)
     */
     size_t ssize = JL_DEFAULT_STACK;
     if (nargs == 2) {
-        JL_TYPECHK(Task, int32, args[1]);
-        ssize = jl_unbox_int32(args[1]);
+        JL_TYPECHK(Task, long, args[1]);
+        ssize = jl_unbox_long(args[1]);
         if (ssize < JL_MIN_STACK)
             jl_error("Task: stack size too small");
     }

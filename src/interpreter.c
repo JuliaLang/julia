@@ -207,7 +207,7 @@ static jl_value_t *eval_body(jl_array_t *stmts, jl_value_t **locals, size_t nl,
             }
             else if (head == leave_sym) {
                 if (hand_n_leave == 0) {
-                    hand_n_leave = jl_unbox_int32(jl_exprarg(stmt,0));
+                    hand_n_leave = jl_unbox_long(jl_exprarg(stmt,0));
                 }
                 jl_pop_handler(1);
                 hand_n_leave--;

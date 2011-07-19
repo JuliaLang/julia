@@ -20,7 +20,7 @@ srand(seed::Uint64) = srand([uint32(seed),uint32(seed>>32)])
 function srand(seed::DenseVector{Uint32})
     ccall(dlsym(libmt, :dsfmt_gv_init_by_array),
           Void, (Ptr{Uint32}, Int32),
-          seed, length(seed))
+          seed, int32(length(seed)))
     dsfmt_randn_reset()
 end
 
@@ -40,10 +40,10 @@ function dsfmt_fill_array_open_open(A::Array{Float64})
         end
     else
         if isodd(n)
-            ccall(dlsym(libmt, :dsfmt_gv_fill_array_open_open), Void, (Ptr{Void}, Int32), A, n-1)
+            ccall(dlsym(libmt, :dsfmt_gv_fill_array_open_open), Void, (Ptr{Void}, Int32), A, int32(n-1))
             A[n] = rand()
         else
-            ccall(dlsym(libmt, :dsfmt_gv_fill_array_open_open), Void, (Ptr{Void}, Int32), A, n)
+            ccall(dlsym(libmt, :dsfmt_gv_fill_array_open_open), Void, (Ptr{Void}, Int32), A, int32(n))
         end
     end
     return A
@@ -51,9 +51,9 @@ end
 
 ## Seed from a file
 
-function srand(fname::String, n::Int32)
+function srand(fname::String, n::Int)
     fid = open(fname)
-    a = Array(Uint32, n)
+    a = Array(Uint32, long(n))
     read(fid, a)
     srand(a)
     close(fid)
