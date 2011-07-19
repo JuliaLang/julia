@@ -16,7 +16,7 @@ end
 function setenv(var::String, val::String)
     ret = ccall(dlsym(libc, :setenv), Int32,
                 (Ptr{Uint8}, Ptr{Uint8}, Int32),
-                cstring(var), cstring(val), 1)
+                cstring(var), cstring(val), int32(1))
     system_error(:setenv, ret != 0)
 end
 
@@ -42,7 +42,7 @@ end
 has(::EnvHash, k::String) = hasenv(k)
 del(::EnvHash, k::String) = unsetenv(k)
 
-assign(::EnvHash, v::String, k::String) = setenv(k,v)
+assign(::EnvHash, v::String, k::String) = (setenv(k,v); v)
 
 # TODO: make this implement Hash interface
 # it should thereby inherit the ability to
