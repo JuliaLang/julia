@@ -5,21 +5,10 @@
 /README.html
 
 /julia
-/julia-debug-basic
-/julia-debug-cloud
-/julia-debug-cloud.dSYM
-/julia-debug-readline
-/julia-release-basic
-/julia-release-cloud
-/julia-release-readline
+/julia-debug-*
+/julia-release-*
 
-/libjulia.so
-/libjulia.dylib
-/libjulia-debug.so
-/libjulia-debug.dylib
-/libjulia-release.so
-/libjulia-release.dylib
+/libjulia*
 
 /sys.ji
 /boot.j.inc
-/webserver

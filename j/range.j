@@ -8,12 +8,16 @@ type Range{T<:Real} <: Tensor{T,1}
     stop::T
 end
 Range(start, step, stop) = Range(promote(start, step, stop)...)
+Range{T}(start::T, step::T, stop::T) =
+    throw(MethodError(Range, (start,step,stop)))
 
 type Range1{T<:Real} <: Tensor{T,1}
     start::T
     stop::T
 end
 Range1(start, stop) = Range1(promote(start, stop)...)
+Range1{T}(start::T, stop::T) =
+    throw(MethodError(Range1, (start,stop)))
 
 similar(r::Range, T::Type, dims::Dims) = Range(convert(T, r.start), convert(T, r.step), convert(T, r.stop))
 similar(r::Range1, T::Type, dims::Dims) = Range1(convert(T, r.start), convert(T, r.stop))

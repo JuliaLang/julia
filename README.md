@@ -64,7 +64,7 @@ First, acquire the source code either by cloning the git repository (requires **
 
     git clone git://github.com/JuliaLang/julia.git
 
-or by using curl and tar to fetch and unpack the source:
+or, if you don't have git installed, by using curl and tar to fetch and unpack the source:
 
     mkdir julia && curl -Lk https://github.com/JuliaLang/julia/tarball/master | tar -zxf- -C julia --strip-components 1
 

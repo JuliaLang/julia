@@ -35,7 +35,10 @@ qtoc() = _toc(false)
 toc()  = _toc(true)
 
 macro qtime(ex); :(tic(); $ex; qtoc()); end
-macro time(ex); :(tic(); $ex; toc(); nothing); end
+macro time(ex)
+    x = gensym()
+    :(tic(); $x = $ex; toc(); $x)
+end
 
 function peakflops()
 
@@ -49,4 +52,16 @@ function peakflops()
 
     return floprate
 
+end
+
+macro benchmark(n,ex,T)
+    s = gensym()
+    quote
+        local $s
+        @time for i=1:int32($n)
+            x = convert($T,i)
+            $s = $ex
+        end
+        $s
+    end
 end

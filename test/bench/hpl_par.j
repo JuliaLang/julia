@@ -166,10 +166,16 @@ function hpl_par2(A::Matrix, b::Vector)
         ##Trailing updates
         (i == nB) ? (I = (C.dist[i]):n) :
                     (I = (C.dist[i]):(C.dist[i+1]-1))
-        C_II = convert(Array, C[I,I])
+        #C_II = convert(Array, C[I,I])
+        C_II = C[I,I]
         L_II = tril(C_II, -1) + eye(length(I))
         K = (I[length(I)]+1):n
-        C_KI = convert(Array, C[K,I])
+        if length(K) > 0
+            #C_KI = convert(Array, C[K,I])
+            C_KI = C[K,I]
+        else
+            C_KI = zeros(0)
+        end
 
         for j=(i+1):nB
             dep = depend[i,j]
@@ -196,7 +202,8 @@ function panel_factor2(C, i, n)
     (C.dist[i+1] == n+2) ? (I = (C.dist[i]):n) :
                            (I = (C.dist[i]):(C.dist[i+1]-1))
     K = I[1]:n
-    C_KI = convert(Array, C[K,I])
+    #C_KI = convert(Array, C[K,I])
+    C_KI = C[K,I]
     #(C_KI, panel_p) = lu(C_KI, true) #economy mode
     panel_p = lu(C_KI, true)[2]
     C[K,I] = C_KI
@@ -208,14 +215,16 @@ function permute(C, i, j, panel_p, n, flag)
     if flag
         K = (C.dist[i]):n
         J = (n+1):(n+1)
-        C_KJ = convert(Array, C[K,J])
+        #C_KJ = convert(Array, C[K,J])
+        C_KJ = C[K,J]
 
         C_KJ = C_KJ[panel_p,:]
         C[K,J] = C_KJ
     else
         K = (C.dist[i]):n
         J = (C.dist[j]):(C.dist[j+1]-1)
-        C_KJ = convert(Array, C[K,J])
+        #C_KJ = convert(Array, C[K,J])
+        C_KJ = C[K,J]
 
         C_KJ = C_KJ[panel_p,:]
         C[K,J] = C_KJ
@@ -230,9 +239,14 @@ function trailing_update2(C, L_II, C_KI, i, j, n, flag, dep)
         I = C.dist[i]:n
         J = (n+1):(n+1)
         K = (I[length(I)]+1):n
-        C_IJ = convert(Array,C[I,J])
-        C_KJ = convert(Array,C[K,J])
-
+        #C_IJ = convert(Array,C[I,J])
+        C_IJ = C[I,J]
+        if length(K) > 0
+            #C_KJ = convert(Array,C[K,J])
+            C_KJ = C[K,J]
+        else
+            C_KJ = zeros(0)
+        end
         ## Compute blocks of U
         C_IJ = L_II \ C_IJ
         C[I,J] = C_IJ
@@ -243,9 +257,15 @@ function trailing_update2(C, L_II, C_KI, i, j, n, flag, dep)
         I = (C.dist[i]):(C.dist[i+1]-1)
         J = (C.dist[j]):(C.dist[j+1]-1)
         K = (I[length(I)]+1):n
-        C_IJ = convert(Array,C[I,J])
-        C_KJ = convert(Array,C[K,J])
-
+        C_IJ = C[I,J]
+        #C_IJ = convert(Array,C[I,J])
+        if length(K) > 0
+            #C_KJ = convert(Array,C[K,J])
+            C_KJ = C[K,J]
+        else
+            C_KJ = zeros(0)
+        end
+  
         ## Compute blocks of U
         C_IJ = L_II \ C_IJ
         C[I,J] = C_IJ

@@ -17,13 +17,13 @@ next(t::Tuple, i) = (t[i], i+1)
 
 ## mapping ##
 
-ntuple(n, f) = n<=0 ? () :
-               n==1 ? (f(1),) :
-               n==2 ? (f(1),f(2),) :
-               n==3 ? (f(1),f(2),f(3),) :
-               n==4 ? (f(1),f(2),f(3),f(4),) :
-               n==5 ? (f(1),f(2),f(3),f(4),f(5),) :
-               tuple(ntuple(n-2,f)..., f(n-1), f(n))
+ntuple(n::Int, f) = n<=0 ? () :
+                    n==1 ? (f(1),) :
+                    n==2 ? (f(1),f(2),) :
+                    n==3 ? (f(1),f(2),f(3),) :
+                    n==4 ? (f(1),f(2),f(3),f(4),) :
+                    n==5 ? (f(1),f(2),f(3),f(4),f(5),) :
+                    tuple(ntuple(n-2,f)..., f(n-1), f(n))
 
 # 0 argument function
 map(f) = f()
@@ -52,7 +52,7 @@ function isequal(t1::Tuple, t2::Tuple)
         return false
     end
     for i = 1:length(t1)
-        if t1[i] != t2[i]
+        if !isequal(t1[i], t2[i])
             return false
         end
     end

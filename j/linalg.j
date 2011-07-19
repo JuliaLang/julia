@@ -25,7 +25,7 @@ end
 
 diff(a::Matrix) = diff(a, 1)
 
-diag(A::Matrix) = [ A[i,i] | i=1:min(size(A)) ]
+diag(A::Matrix) = [ A[i,i] | i=1:min(size(A,1),size(A,2)) ]
 
 function diagm{T}(v::Union(Vector{T},Matrix{T}))
     if isa(v, Matrix)

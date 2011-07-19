@@ -8,7 +8,6 @@ OPENBLAS_VER = v0.1alpha2
 LAPACK_VER = 3.3.1
 ARPACK_VER = 96
 FFTW_VER = 3.3-beta1
-MONGOOSE_VER = 3.0
 UNWIND_VER = 0.99
 
 ## high-level setup ##
@@ -18,7 +17,7 @@ include ../Make.inc
 
 OS = $(shell uname)
 ARCH = $(shell uname -m)
-LIBS = llvm readline pcre fdlibm dsfmt openblas lapack arpack fftw mongoose
+LIBS = llvm readline pcre fdlibm dsfmt openblas lapack arpack fftw
 ifeq ($(OS), Linux)
 LIBS += unwind
 endif
@@ -295,22 +294,6 @@ clean-fftw-double:
 	rm -f $(FFTW_DOUBLE_OBJ_TARGET)
 distclean-fftw:
 	rm -rf fftw-$(FFTW_VER).tar.gz fftw-$(FFTW_VER)-{single,double}
-
-## mongoose ##
-
-compile-mongoose: mongoose-$(MONGOOSE_VER)/Makefile
-install-mongoose: compile-mongoose
-
-mongoose-$(MONGOOSE_VER).tgz:
-	curl -O http://mongoose.googlecode.com/files/mongoose-$(MONGOOSE_VER).tgz
-mongoose-$(MONGOOSE_VER)/Makefile: mongoose-$(MONGOOSE_VER).tgz
-	mkdir -p mongoose-$(MONGOOSE_VER)
-	tar -C mongoose-$(MONGOOSE_VER) --strip-components 1 -zxf $<
-	touch $@
-
-clean-mongoose:
-distclean-mongoose:
-	rm -rf mongoose-$(MONGOOSE_VER).tgz mongoose
 
 ## UNWIND ##
 
