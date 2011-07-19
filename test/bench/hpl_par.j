@@ -281,10 +281,12 @@ end ## trailing_update2()
 ## Prints 5 numbers that should be close to zero
 function test(n, np)
     A = rand(n,n); b = rand(n);
-    @time (x = copy(A) \ copy(b))
-    @time (y = hpl_par(copy(A),copy(b), max(1,div(n,np))))
-    @time (z = hpl_par2(copy(A),copy(b)))
+    A1 = copy(A); A2 = copy(A); A3 = copy(A)
+    b1 = copy(b); b2 = copy(b); b3 = copy(b)
+    @time (x = A1 \ b1)
+    @time (y = hpl_par(A2,b2, max(1,div(n,np))))
+    @time (z = hpl_par2(A3,b3))
     for i=1:(min(5,n))
-        print(z[i]-y[i]); print(" ")
+        print(z[i]-y[i], " ")
     end
 end

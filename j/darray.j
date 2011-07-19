@@ -114,7 +114,6 @@ function locate(d::DArray, I::Range1)
             j += 1
         else
             push(pmap,j)
-            #append(pmap,d.pmap[j])
             i = min(imax+1,d.dist[j+1])
             push(dist,i)
             j += 1
@@ -319,8 +318,10 @@ function ref{T}(d::DArray{T}, I::(Range1{Index}...,))
     end
     for p = 1:length(pmap)
         offs = I[d.distdim][1] - 1
-        J = ntuple(length(size(d)),i->(i==d.distdim?(dist[p]:(dist[p+1]-1))-offs : (I[i]-(I[i][1]-1))))
-        K = ntuple(length(size(d)),i->(i==d.distdim?(dist[p]:(dist[p+1]-1)) : I[i]))
+        J = ntuple(length(size(d)),i->(i==d.distdim ? (dist[p]:(dist[p+1]-1))-offs :
+                                                      (1:length(I[i]))))
+        K = ntuple(length(size(d)),i->(i==d.distdim ? (dist[p]:(dist[p+1]-1)) :
+                                                      I[i]))
         A[J...] = remote_call_fetch(pmap[p], ref, d, K...)
     end
     return A
