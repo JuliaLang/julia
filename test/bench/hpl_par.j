@@ -283,10 +283,24 @@ function test(n, np)
     A = rand(n,n); b = rand(n);
     A1 = copy(A); A2 = copy(A); A3 = copy(A)
     b1 = copy(b); b2 = copy(b); b3 = copy(b)
-    @time (x = A1 \ b1)
-    @time (y = hpl_par(A2,b2, max(1,div(n,np))))
-    @time (z = hpl_par2(A3,b3))
+    tic(); x = A1 \ b1; X = toc();
+    tic(); y = hpl_par(A2,b2, max(1,div(n,np))); Y = toc();
+    tic(); z = hpl_par2(A3,b3); Z = toc();
     for i=1:(min(5,n))
         print(z[i]-y[i], " ")
     end
+    println()
+    return (X,Y,Z)
+end
+
+## test k times and collect average
+function test(n,np,k)
+    sum1 = 0; sum2 = 0; sum3 = 0;
+    for i = 1:k
+        (X,Y,Z) = test(n,np)
+        sum1 += X
+        sum2 += Y
+        sum3 += Z
+    end
+    return (sum1/k, sum2/k, sum3/k)
 end
