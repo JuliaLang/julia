@@ -44,9 +44,4 @@ extern void repl_callback_disable();
 extern void repl_stdin_callback();
 extern void repl_print_prompt();
 
-
-#ifdef CLOUD_REPL
-extern char *repl_result;
-#endif
-
 #endif // JL_REPL_H

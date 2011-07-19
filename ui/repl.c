@@ -21,10 +21,6 @@ int tab_width = 2;
 int prompt_length = 0;
 int have_color = 1;
 
-#ifdef CLOUD_REPL
-char *repl_result;
-#endif
-
 static const char *usage = "julia [options] [program] [args...]\n";
 static const char *opts =
     " -q --quiet               Quiet startup without banner\n"
@@ -221,28 +217,18 @@ DLLEXPORT void jl_eval_user_input(jl_value_t *ast, int show_value)
     JL_GC_PUSH(&ast);
     assert(ast != NULL);
     int iserr = 0;
-#ifdef CLOUD_REPL
-    jl_value_t *outs;
-    ios_t *dest;
-#endif
+
  again:
     ;
     JL_TRY {
         jl_register_toplevel_eh();
-#ifdef CLOUD_REPL
-        outs = jl_apply(jl_memio_func, NULL, 0);
-        jl_set_current_output_stream_obj(outs);
-        dest = jl_current_output_stream();
-#endif
         if (have_color) {
             ios_printf(ios_stdout, jl_color_normal);
             ios_flush(ios_stdout);
         }
         if (iserr) {
             jl_show(jl_exception_in_transit);
-#ifndef CLOUD_REPL
             ios_printf(ios_stdout, "\n");
-#endif
             JL_EH_POP();
             break; // leave JL_TRY
         }
@@ -254,23 +240,15 @@ DLLEXPORT void jl_eval_user_input(jl_value_t *ast, int show_value)
                 ios_flush(ios_stdout);
             }
             repl_show_value(value);
-#ifndef CLOUD_REPL
             ios_printf(ios_stdout, "\n");
-#endif
         }
     }
     JL_CATCH {
         iserr = 1;
         goto again;
     }
-#ifdef CLOUD_REPL
-    size_t n;
-    repl_result = ios_takebuf(dest, &n);
-#endif
-#ifndef CLOUD_REPL
     ios_printf(ios_stdout, "\n");
     ios_flush(ios_stdout);
-#endif
     JL_GC_POP();
     repl_callback_enable();
 }
@@ -349,13 +327,9 @@ int true_main(int argc, char *argv[])
     prompt_length = strlen(jl_prompt_plain);
     prompt_string = prompt;
 
-#ifdef CLOUD_REPL
-    jl_function_t *start_client = NULL;
-#else
     jl_function_t *start_client =
         (jl_function_t*)
         jl_get_global(jl_system_module, jl_symbol("_start"));
-#endif
 
     if (start_client == NULL) {
         repl_print_prompt();
