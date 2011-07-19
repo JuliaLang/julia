@@ -40,7 +40,28 @@
 		</script>
 		<script>
 			// keep track of terminal history
-			var terminal_data = "";
+			var terminal_data = "Spawning Julia instance...<br /><br />";
+
+			// keep track of the last time a request was sent
+			var last_request_time = new Date();
+
+			// called once a secnd
+			function watchdog()
+			{
+				// check the watchdog
+				if ((new Date())-last_request_time > 1000)
+				{
+					// show a "connection lost" message
+					terminal_data += "<br /><br />The connection to the server was lost.";
+					$("#terminal").html(terminal_data);
+					$("#terminal").animate({scrollTop: $("#terminal").prop("scrollHeight")}, 500);
+				}
+				else
+				{
+					// run the watchdog again
+					setTimeout(watchdog, 1000);
+				}
+			}
 
 			// check the server for data
 			function poll()
@@ -53,6 +74,9 @@
 					dataType: "text",
 					cache: false
 				});
+
+				// set the time of the last request
+				last_request_time = new Date();
 			}
 			
 			// called when the server has responded
@@ -73,6 +97,10 @@
 			// called on page load
 			$(document).ready(function()
 			{
+				// initial terminal content
+				$("#terminal").html(terminal_data);
+				$("#terminal").animate({scrollTop: $("#terminal").prop("scrollHeight")}, 500);
+				
 				// hook the submit event of the form
 				$("#terminal-form").submit(function(evt)
 				{
@@ -86,6 +114,9 @@
 						cache: false
 					});
 
+					// set the time of the last request
+					last_request_time = new Date();
+
 					// clear the input box
 					$("#terminal-input").val("");
 
@@ -95,6 +126,9 @@
 				
 				// start polling the server
 				setTimeout(poll, 500);
+
+				// start the watchdog
+				setTimeout(watchdog, 1000);
 			});
 		</script>
 	</head>
@@ -142,7 +176,7 @@
 				<h1>A fresh approach to technical computing.</h1>
 				<p>Julia is a dynamic language with optional typing, multiple dispatch, and good performance, achieved using type inference and just-in-time (JIT) compilation, implemented using LLVM. It is multi-paradigm, combining features of imperative, functional, and object-oriented programming.  Try it out!</p>
 				<form id="terminal-form">
-					<div id="terminal">Spawning Julia instance...</div>
+					<div id="terminal"></div>
 					<input class="input" id="terminal-input" type="text" autofocus="autofocus" required="required" />
 				</form>
 			</div>
