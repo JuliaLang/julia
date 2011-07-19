@@ -43,25 +43,25 @@ jl_fftw_plan_dft_1d(X::DenseVector{Complex128}, Y::DenseVector{Complex128}, dire
     ccall(dlsym(libfftw, :fftw_plan_dft_1d),
           Ptr{Void},
           (Int32, Ptr{Complex128}, Ptr{Complex128}, Int32, Uint32, ),
-          length(X), X, Y, direction, FFTW_ESTIMATE)
+          int32(length(X)), X, Y, direction, FFTW_ESTIMATE)
 
 jl_fftw_plan_dft_1d(X::DenseVector{Complex64}, Y::DenseVector{Complex64}, direction::Int32) =
     ccall(dlsym(libfftwf, :fftwf_plan_dft_1d),
           Ptr{Void},
           (Int32, Ptr{Complex64}, Ptr{Complex64}, Int32, Uint32, ),
-          length(X), X, Y, direction, FFTW_ESTIMATE)
+          int32(length(X)), X, Y, direction, FFTW_ESTIMATE)
 
 jl_fftw_plan_dft_r2c_1d(X::DenseVector{Float64}, Y::DenseVector{Complex128}) =
     ccall(dlsym(libfftw, :fftw_plan_dft_r2c_1d),
           Ptr{Void},
           (Int32, Ptr{Float64}, Ptr{Complex128}, Uint32, ),
-          length(X), X, Y, FFTW_ESTIMATE)
+          int32(length(X)), X, Y, FFTW_ESTIMATE)
 
 jl_fftw_plan_dft_r2c_1d(X::DenseVector{Float32}, Y::DenseVector{Complex64}) =
     ccall(dlsym(libfftw, :fftwf_plan_dft_r2c_1d),
           Ptr{Void},
           (Int32, Ptr{Float32}, Ptr{Complex64}, Uint32, ),
-          length(X), X, Y, FFTW_ESTIMATE)
+          int32(length(X)), X, Y, FFTW_ESTIMATE)
 
 # Create 2d plan
 
@@ -69,13 +69,13 @@ jl_fftw_plan_dft_2d(X::DenseMatrix{Complex128}, Y::DenseMatrix{Complex128}, dire
     ccall(dlsym(libfftw, :fftw_plan_dft_2d),
           Ptr{Void},
           (Int32, Int32, Ptr{Complex128}, Ptr{Complex128}, Int32, Uint32, ),
-          size(X,2), size(X,1), X, Y, direction, FFTW_ESTIMATE)
+          int32(size(X,2)), int32(size(X,1)), X, Y, direction, FFTW_ESTIMATE)
 
 jl_fftw_plan_dft_2d(X::DenseMatrix{Complex64}, Y::DenseMatrix{Complex64}, direction::Int32) =
     ccall(dlsym(libfftwf, :fftwf_plan_dft_2d),
           Ptr{Void},
           (Int32, Int32, Ptr{Complex64}, Ptr{Complex64}, Int32, Uint32, ),
-          size(X,2), size(X,1), X, Y, direction, FFTW_ESTIMATE)
+          int32(size(X,2)), int32(size(X,1)), X, Y, direction, FFTW_ESTIMATE)
 
 # Create 3d plan
 
@@ -83,13 +83,13 @@ jl_fftw_plan_dft_3d(X::Array{Complex128,3}, Y::Array{Complex128,3}, direction::I
     ccall(dlsym(libfftw, :fftw_plan_dft_3d),
           Ptr{Void},
           (Int32, Int32, Int32, Ptr{Complex128}, Ptr{Complex128}, Int32, Uint32, ),
-          size(X,3), size(X,2), size(X,1), X, Y, direction, FFTW_ESTIMATE)
+          int32(size(X,3)), int32(size(X,2)), int32(size(X,1)), X, Y, direction, FFTW_ESTIMATE)
 
 jl_fftw_plan_dft_3d(X::Array{Complex64,3}, Y::Array{Complex64,3}, direction::Int32) =
     ccall(dlsym(libfftwf, :fftwf_plan_dft_3d),
           Ptr{Void},
           (Int32, Int32, Int32, Ptr{Complex64}, Ptr{Complex64}, Int32, Uint32, ),
-          size(X,3), size(X,2), size(X,1), X, Y, direction, FFTW_ESTIMATE)
+          int32(size(X,3)), int32(size(X,2)), int32(size(X,1)), X, Y, direction, FFTW_ESTIMATE)
 
 # Create nd plan
 
@@ -97,13 +97,13 @@ jl_fftw_plan_dft(X::Array{Complex128}, Y::Array{Complex128}, direction::Int32) =
     ccall(dlsym(libfftw, :fftw_plan_dft),
           Ptr{Void},
           (Int32, Ptr{Int32}, Ptr{Complex128}, Ptr{Complex128}, Int32, Uint32, ),
-          ndims(X), [size(X)...], X, Y, direction, FFTW_ESTIMATE)
+          int32(ndims(X)), int32([size(X)...]), X, Y, direction, FFTW_ESTIMATE)
 
 jl_fftw_plan_dft(X::Array{Complex64}, Y::Array{Complex64}, direction::Int32) =
     ccall(dlsym(libfftwf, :fftwf_plan_dft),
           Ptr{Void},
           (Int32, Ptr{Int32}, Ptr{Complex64}, Ptr{Complex64}, Int32, Uint32, ),
-          ndims(X), [size(X)...], X, Y, direction, FFTW_ESTIMATE)
+          int32(ndims(X)), int32([size(X)...]), X, Y, direction, FFTW_ESTIMATE)
 
 # Complex inputs
 
@@ -155,7 +155,7 @@ macro fftw_fftn_real(fname, array_type, in_type, out_type, plan_name)
             jl_fftw_destroy_plan($in_type, plan)
 
             n = length(Y)
-            nconj = int32(length(X)/2 - 1)
+            nconj = long(length(X)/2 - 1)
             for i=n:-1:(n-nconj)
                 Y[i] = conj(Y[n-i+2])
             end

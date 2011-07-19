@@ -541,7 +541,7 @@ static jl_value_t *meet_tvar(jl_tvar_t *tv, jl_value_t *ty)
     //if (jl_types_equal((jl_value_t*)tv->lb, ty))
     //    return ty;
     if (jl_subtype((jl_value_t*)tv->lb, ty, 0)) {
-        if (jl_is_leaf_type(ty) || jl_is_int32(ty))
+        if (jl_is_leaf_type(ty) || jl_is_long(ty))
             return ty;
         assert(ty != (jl_value_t*)jl_bottom_type);
         return (jl_value_t*)jl_new_typevar(jl_symbol("_"), tv->lb, ty);
@@ -666,7 +666,7 @@ static jl_value_t *jl_type_intersect(jl_value_t *a, jl_value_t *b,
                                                      (jl_tuple_t*)temp));
             }
             else if (jl_is_typevar(lenvar)) {
-                temp = jl_box_int32(alen);
+                temp = jl_box_long(alen);
                 if (intersect_typevar((jl_tvar_t*)lenvar,temp,penv,eqc,var) ==
                     (jl_value_t*)jl_bottom_type) {
                     JL_GC_POP();
@@ -704,7 +704,7 @@ static jl_value_t *jl_type_intersect(jl_value_t *a, jl_value_t *b,
     }
     if (jl_is_func_type(b))
         return (jl_value_t*)jl_bottom_type;
-    if (jl_is_int32(a) || jl_is_int32(b))
+    if (jl_is_long(a) || jl_is_long(b))
         return (jl_value_t*)jl_bottom_type;
     // tag
     assert(jl_is_some_tag_type(a));
@@ -890,9 +890,9 @@ static int type_eqv_(jl_value_t *a, jl_value_t *b, jl_value_pair_t *stack)
     if (jl_is_typector(a)) a = (jl_value_t*)((jl_typector_t*)a)->body;
     if (jl_is_typector(b)) b = (jl_value_t*)((jl_typector_t*)b)->body;
     if (jl_is_typevar(a)) return 0;
-    if (jl_is_int32(a)) {
-        if (jl_is_int32(b))
-            return (jl_unbox_int32(a) == jl_unbox_int32(b));
+    if (jl_is_long(a)) {
+        if (jl_is_long(b))
+            return (jl_unbox_long(a) == jl_unbox_long(b));
         return 0;
     }
     if (jl_is_tuple(a)) {
@@ -999,15 +999,15 @@ static jl_value_t *apply_type_(jl_value_t *tc, jl_value_t **params, size_t n)
     }
     for(i=0; i < n; i++) {
         jl_value_t *pi = params[i];
-        if (!jl_is_typector(pi) && !jl_is_type(pi) && !jl_is_int32(pi) &&
+        if (!jl_is_typector(pi) && !jl_is_type(pi) && !jl_is_long(pi) &&
             !jl_is_typevar(pi)) {
             jl_type_error_rt("apply_type", tname,
                              (jl_value_t*)jl_type_type, pi);
         }
     }
     if (tc == (jl_value_t*)jl_ntuple_type && (n==1||n==2) &&
-        jl_is_int32(params[0])) {
-        size_t nt = jl_unbox_int32(params[0]);
+        jl_is_long(params[0])) {
+        size_t nt = jl_unbox_long(params[0]);
         return (jl_value_t*)jl_tuple_fill(nt, (n==2) ? params[1] :
                                           (jl_value_t*)jl_any_type);
     }
@@ -1510,12 +1510,12 @@ static int jl_subtype_le(jl_value_t *a, jl_value_t *b, int ta, int morespecific,
     }
     if (jl_is_tuple(a)) return 0;
 
-    if (jl_is_int32(a)) {
-        if (jl_is_int32(b))
-            return (jl_unbox_int32(a)==jl_unbox_int32(b));
+    if (jl_is_long(a)) {
+        if (jl_is_long(b))
+            return (jl_unbox_long(a)==jl_unbox_long(b));
         return 0;
     }
-    if (jl_is_int32(b)) return 0;
+    if (jl_is_long(b)) return 0;
 
     if (jl_is_func_type(a)) {
         if (jl_is_func_type(b)) {
@@ -1683,19 +1683,21 @@ static jl_value_t *type_match_(jl_value_t *child, jl_value_t *parent,
     if (child == parent) return (jl_value_t*)*env;
 
     if (jl_is_typevar(child)) {
-        if (jl_subtype_le(child, parent, 0, morespecific, 0))
-            return (jl_value_t*)*env;
-        return jl_false;
-    }
-    if (jl_is_int32(child)) {
-        if (jl_is_int32(parent)) {
-            if (jl_unbox_int32((jl_value_t*)child) ==
-                jl_unbox_int32((jl_value_t*)parent))
+        if (!invariant) {
+            if (jl_subtype_le(child, parent, 0, morespecific, 0))
                 return (jl_value_t*)*env;
         }
         return jl_false;
     }
-    if (jl_is_int32(parent))
+    if (jl_is_long(child)) {
+        if (jl_is_long(parent)) {
+            if (jl_unbox_long((jl_value_t*)child) ==
+                jl_unbox_long((jl_value_t*)parent))
+                return (jl_value_t*)*env;
+        }
+        return jl_false;
+    }
+    if (jl_is_long(parent))
         return jl_false;
     if (!invariant && parent == (jl_value_t*)jl_any_type)
         return (jl_value_t*)*env;
@@ -1775,7 +1777,7 @@ static jl_value_t *type_match_(jl_value_t *child, jl_value_t *parent,
             if (alen>0 && jl_is_seq_type(jl_tupleref(child,alen-1)))
                 return jl_false;
             jl_value_t *nt_len = jl_tupleref(tp,0);
-            jl_value_t *childlen = jl_box_int32(((jl_tuple_t*)child)->length);
+            jl_value_t *childlen = jl_box_long(((jl_tuple_t*)child)->length);
             if (jl_is_typevar(nt_len)) {
                 tmp = type_match_(childlen, nt_len, env, morespecific,
                                   invariant);
@@ -1940,7 +1942,7 @@ static jl_tuple_t *jl_typevars(size_t n, ...)
 JL_CALLABLE(jl_f_new_expr);
 JL_CALLABLE(jl_f_new_box);
 
-extern void jl_init_int32_cache();
+extern void jl_init_int32_int64_cache();
 
 void jl_init_types()
 {
@@ -2116,8 +2118,12 @@ void jl_init_types()
     jl_int32_type = NULL;
     jl_int32_type = jl_new_bitstype((jl_value_t*)jl_symbol("Int32"),
                                     jl_any_type, jl_null, 32);
-    jl_init_int32_cache();
+    jl_int64_type = NULL;
+    jl_int64_type = jl_new_bitstype((jl_value_t*)jl_symbol("Int64"),
+                                    jl_any_type, jl_null, 64);
+    jl_init_int32_int64_cache();
     jl_int32_type->bnbits = jl_box_int32(32);
+    jl_int64_type->bnbits = jl_box_int32(64);
     jl_tupleset(jl_bits_kind->types, 3, (jl_value_t*)jl_int32_type);
 
     jl_bool_type = NULL;
@@ -2145,7 +2151,7 @@ void jl_init_types()
     jl_array_any_type =
         (jl_type_t*)jl_apply_type((jl_value_t*)jl_array_type,
                                   jl_tuple(2, jl_any_type,
-                                           jl_box_int32(1)));
+                                           jl_box_long(1)));
 
     jl_expr_type =
         jl_new_struct_type(jl_symbol("Expr"),

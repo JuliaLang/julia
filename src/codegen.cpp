@@ -66,6 +66,7 @@ static const Type *T_int64;
 static const Type *T_pint64;
 static const Type *T_uint64;
 static const Type *T_size;
+static const Type *T_psize;
 static const Type *T_float32;
 static const Type *T_pfloat32;
 static const Type *T_float64;
@@ -188,7 +189,7 @@ static Function *to_function(jl_lambda_info_t *li)
     //n_compile++;
     // print out the function's LLVM code
     //f->dump();
-    //verifyFunction(*f);
+    verifyFunction(*f);
     if (old != NULL) {
         builder.SetInsertPoint(old);
         builder.SetCurrentDebugLocation(olddl);
@@ -369,7 +370,7 @@ static void emit_typecheck(Value *x, jl_value_t *type, const std::string &msg,
 static Value *emit_bounds_check(Value *i, Value *len, const std::string &msg,
                                 jl_codectx_t *ctx)
 {
-    Value *im1 = builder.CreateSub(i, ConstantInt::get(T_int32, 1));
+    Value *im1 = builder.CreateSub(i, ConstantInt::get(T_size, 1));
     Value *ok = builder.CreateICmpULT(im1, len);
     error_unless(ok, msg, ctx);
     return im1;
@@ -623,8 +624,7 @@ static Value *emit_tuplelen(Value *t)
 {
     Value *lenbits = emit_nthptr(t, 1);
 #ifdef __LP64__
-    return builder.CreateTrunc(builder.CreatePtrToInt(lenbits, T_int64),
-                               T_int32);
+    return builder.CreatePtrToInt(lenbits, T_int64);
 #else
     return builder.CreatePtrToInt(lenbits, T_int32);
 #endif
@@ -634,10 +634,9 @@ static Value *emit_arraysize(Value *t, Value *dim)
 {
     Value *dbits =
         emit_nthptr(t, builder.CreateAdd(dim,
-                                         ConstantInt::get(T_int32, 4)));
+                                         ConstantInt::get(dim->getType(), 4)));
 #ifdef __LP64__
-    return builder.CreateTrunc(builder.CreatePtrToInt(dbits, T_int64),
-                               T_int32);
+    return builder.CreatePtrToInt(dbits, T_int64);
 #else
     return builder.CreatePtrToInt(dbits, T_int32);
 #endif
@@ -652,8 +651,7 @@ static Value *emit_arraylen(Value *t)
 {
     Value *lenbits = emit_nthptr(t, 3);
 #ifdef __LP64__
-    return builder.CreateTrunc(builder.CreatePtrToInt(lenbits, T_int64),
-                               T_int32);
+    return builder.CreatePtrToInt(lenbits, T_int64);
 #else
     return builder.CreatePtrToInt(lenbits, T_int32);
 #endif
@@ -723,10 +721,10 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
     else if (f->fptr == &jl_f_tupleref && nargs==2) {
         jl_value_t *tty = expr_type(args[1]); rt1 = tty;
         jl_value_t *ity = expr_type(args[2]); rt2 = ity;
-        if (jl_is_tuple(tty) && ity==(jl_value_t*)jl_int32_type) {
+        if (jl_is_tuple(tty) && ity==(jl_value_t*)jl_long_type) {
             Value *arg1 = emit_expr(args[1], ctx, true);
-            if (jl_is_int32(args[2])) {
-                uint32_t idx = (uint32_t)jl_unbox_int32(args[2]);
+            if (jl_is_long(args[2])) {
+                uint32_t idx = (uint32_t)jl_unbox_long(args[2]);
                 if (idx > 0 &&
                     (idx < ((jl_tuple_t*)tty)->length ||
                      (idx == ((jl_tuple_t*)tty)->length &&
@@ -738,13 +736,13 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
                 }
             }
             Value *tlen = emit_tuplelen(arg1);
-            Value *idx = emit_unbox(T_int32, T_pint32,
+            Value *idx = emit_unbox(T_size, T_psize,
                                     emit_unboxed(args[2], ctx));
             emit_bounds_check(idx, tlen,
                               "tupleref: index out of range", ctx);
             JL_GC_POP();
             return emit_nthptr(arg1,
-                               builder.CreateAdd(idx, ConstantInt::get(T_int32,1)));
+                               builder.CreateAdd(idx, ConstantInt::get(T_size,1)));
         }
     }
     else if (f->fptr == &jl_f_tuple) {
@@ -792,22 +790,22 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
     else if (f->fptr == &jl_f_arraysize && nargs==2) {
         jl_value_t *aty = expr_type(args[1]); rt1 = aty;
         jl_value_t *ity = expr_type(args[2]); rt2 = ity;
-        if (jl_is_array_type(aty) && ity == (jl_value_t*)jl_int32_type) {
+        if (jl_is_array_type(aty) && ity == (jl_value_t*)jl_long_type) {
             jl_value_t *ndp = jl_tparam1(aty);
-            if (jl_is_int32(ndp)) {
+            if (jl_is_long(ndp)) {
                 Value *ary = emit_expr(args[1], ctx, true);
-                size_t ndims = jl_unbox_int32(ndp);
-                if (jl_is_int32(args[2])) {
-                    uint32_t idx = (uint32_t)jl_unbox_int32(args[2]);
+                size_t ndims = jl_unbox_long(ndp);
+                if (jl_is_long(args[2])) {
+                    uint32_t idx = (uint32_t)jl_unbox_long(args[2]);
                     if (idx > 0 && idx <= ndims) {
                         JL_GC_POP();
                         return emit_arraysize(ary, idx);
                     }
                 }
                 else {
-                    Value *idx = emit_unbox(T_int32, T_pint32,
+                    Value *idx = emit_unbox(T_size, T_psize,
                                             emit_unboxed(args[2], ctx));
-                    emit_bounds_check(idx, ConstantInt::get(T_int32,ndims),
+                    emit_bounds_check(idx, ConstantInt::get(T_size,ndims),
                                       "arraysize: dimension out of range",
                                       ctx);
                     JL_GC_POP();
@@ -819,7 +817,7 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
     else if (f->fptr == &jl_f_arrayref && nargs==2) {
         jl_value_t *aty = expr_type(args[1]); rt1 = aty;
         jl_value_t *ity = expr_type(args[2]); rt2 = ity;
-        if (jl_is_array_type(aty) && ity == (jl_value_t*)jl_int32_type) {
+        if (jl_is_array_type(aty) && ity == (jl_value_t*)jl_long_type) {
             jl_value_t *ety = jl_tparam0(aty);
             //if (jl_is_bits_type(ety)) {
             if (!jl_is_typevar(ety)) {
@@ -834,7 +832,7 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
                     builder.CreateBitCast(emit_arrayptr(ary),
                                           PointerType::get(elty, 0));
                 Value *alen = emit_arraylen(ary);
-                Value *idx = emit_unbox(T_int32, T_pint32,
+                Value *idx = emit_unbox(T_size, T_psize,
                                         emit_unboxed(args[2], ctx));
                 Value *im1 =
                     emit_bounds_check(idx, alen,
@@ -856,7 +854,7 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
         jl_value_t *ity = expr_type(args[2]); rt2 = ity;
         jl_value_t *vty = expr_type(args[3]); rt3 = vty;
         if (jl_is_array_type(aty) &&
-            ity == (jl_value_t*)jl_int32_type) {
+            ity == (jl_value_t*)jl_long_type) {
             jl_value_t *ety = jl_tparam0(aty);
             //if (jl_is_bits_type(ety) && jl_subtype(vty, ety, 0)) {
             if (!jl_is_typevar(ety) && jl_subtype(vty, ety, 0)) {
@@ -870,7 +868,7 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
                     builder.CreateBitCast(emit_arrayptr(ary),
                                           PointerType::get(elty, 0));
                 Value *alen = emit_arraylen(ary);
-                Value *idx = emit_unbox(T_int32, T_pint32,
+                Value *idx = emit_unbox(T_size, T_psize,
                                         emit_unboxed(args[2], ctx));
                 Value *rhs;
                 if (jl_is_bits_type(ety)) {
@@ -1102,7 +1100,7 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool value)
     if (ex->head == goto_sym) {
         assert(!value);
         if (builder.GetInsertBlock()->getTerminator() == NULL) {
-            int labelname = jl_unbox_int32(args[0]);
+            int labelname = jl_unbox_long(args[0]);
             BasicBlock *bb = (*ctx->labels)[labelname];
             assert(bb);
             builder.CreateBr(bb);
@@ -1111,7 +1109,7 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool value)
     else if (ex->head == goto_ifnot_sym) {
         assert(!value);
         jl_value_t *cond = args[0];
-        int labelname = jl_unbox_int32(args[1]);
+        int labelname = jl_unbox_long(args[1]);
         Value *condV = emit_expr(cond, ctx, true);
 #ifdef CONDITION_REQUIRES_BOOL
         if (expr_type(cond) != (jl_value_t*)jl_bool_type &&
@@ -1139,7 +1137,7 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool value)
     }
     else if (ex->head == label_sym) {
         assert(!value);
-        int labelname = jl_unbox_int32(args[0]);
+        int labelname = jl_unbox_long(args[0]);
         BasicBlock *bb = (*ctx->labels)[labelname];
         assert(bb);
         if (builder.GetInsertBlock()->getTerminator() == NULL) {
@@ -1288,13 +1286,13 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool value)
         return builder.CreateLoad(jlexc_var, true);
     }
     else if (ex->head == leave_sym) {
-        assert(jl_is_int32(args[0]));
+        assert(jl_is_long(args[0]));
         builder.CreateCall(jlleave_func,
-                           ConstantInt::get(T_int32, jl_unbox_int32(args[0])));
+                           ConstantInt::get(T_int32, jl_unbox_long(args[0])));
     }
     else if (ex->head == enter_sym) {
-        assert(jl_is_int32(args[0]));
-        int labl = jl_unbox_int32(args[0]);
+        assert(jl_is_long(args[0]));
+        int labl = jl_unbox_long(args[0]);
         Value *jbuf = builder.CreateGEP((*ctx->jmpbufs)[labl],
                                         ConstantInt::get(T_int32,0));
         builder.CreateCall2(jlenter_func,
@@ -1404,7 +1402,7 @@ static void emit_function(jl_lambda_info_t *lam, Function *f)
     std::string filename = "no file";
     int lno = -1;
     if (jl_is_expr(stmt) && ((jl_expr_t*)stmt)->head == line_sym) {
-        lno = jl_unbox_int32(jl_exprarg(stmt, 0));
+        lno = jl_unbox_long(jl_exprarg(stmt, 0));
         if (((jl_expr_t*)stmt)->args->length > 1) {
             assert(jl_is_symbol(jl_exprarg(stmt, 1)));
             filename = ((jl_sym_t*)jl_exprarg(stmt, 1))->name;
@@ -1557,7 +1555,7 @@ static void emit_function(jl_lambda_info_t *lam, Function *f)
     for(i=0; i < stmts->length; i++) {
         jl_value_t *stmt = jl_cellref(stmts,i);
         if (jl_is_expr(stmt) && ((jl_expr_t*)stmt)->head == enter_sym) {
-            int labl = jl_unbox_int32(jl_exprarg(stmt,0));
+            int labl = jl_unbox_long(jl_exprarg(stmt,0));
             Value *svst =
                 builder.CreateAlloca(T_int8,
                                      ConstantInt::get(T_int32,
@@ -1652,7 +1650,7 @@ static void emit_function(jl_lambda_info_t *lam, Function *f)
     for(i=0; i < stmts->length; i++) {
         jl_value_t *ex = jl_cellref(stmts,i);
         if (is_label(ex)) {
-            int lname = jl_unbox_int32(jl_exprarg(ex,0));
+            int lname = jl_unbox_long(jl_exprarg(ex,0));
             if (prev != NULL) {
                 // fuse consecutive labels
                 labels[lname] = prev;
@@ -1671,7 +1669,7 @@ static void emit_function(jl_lambda_info_t *lam, Function *f)
     for(i=0; i < stmts->length; i++) {
         jl_value_t *stmt = jl_cellref(stmts,i);
         if (jl_is_expr(stmt) && ((jl_expr_t*)stmt)->head == line_sym) {
-            int lno = jl_unbox_int32(jl_exprarg(stmt, 0));
+            int lno = jl_unbox_long(jl_exprarg(stmt, 0));
             builder.SetCurrentDebugLocation(DebugLoc::get(lno, 1, (MDNode*)SP,
                                                           NULL));
         }
@@ -1762,6 +1760,7 @@ static void init_julia_llvm_env(Module *m)
 #else
     T_size = T_uint32;
 #endif
+    T_psize = PointerType::get(T_size, 0);
     T_float32 = Type::getFloatTy(getGlobalContext());
     T_pfloat32 = PointerType::get(T_float32, 0);
     T_float64 = Type::getDoubleTy(getGlobalContext());
@@ -1886,13 +1885,6 @@ static void init_julia_llvm_env(Module *m)
     jltuple_func = jlfunc_to_llvm("jl_f_tuple", (void*)*jl_f_tuple);
     jlapplygeneric_func =
         jlfunc_to_llvm("jl_apply_generic", (void*)*jl_apply_generic);
-
-    std::vector<const Type*> aargs(0);
-#ifdef __LP64__
-    aargs.push_back(T_uint64);
-#else
-    aargs.push_back(T_uint32);
-#endif
 
     std::vector<const Type*> args3(0);
     args3.push_back(jl_pvalue_llvmt);

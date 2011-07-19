@@ -22,17 +22,6 @@
 #include "llt.h"
 #include "julia.h"
 
-// --- system word size ---
-
-int jl_word_size()
-{
-#ifdef __LP64__
-    return 64;
-#else
-    return 32;
-#endif
-}
-
 // --- io and select ---
 
 void jl__not__used__()

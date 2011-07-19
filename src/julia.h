@@ -578,6 +578,18 @@ double jl_unbox_float64(jl_value_t *v);
 jl_value_t *jl_box_pointer(jl_bits_type_t *ty, void *p);
 void *jl_unbox_pointer(jl_value_t *v);
 
+#ifdef __LP64__
+#define jl_box_long(x)   jl_box_int64(x)
+#define jl_unbox_long(x) jl_unbox_int64(x)
+#define jl_is_long(x)    jl_is_int64(x)
+#define jl_long_type     jl_int64_type
+#else
+#define jl_box_long(x)   jl_box_int32(x)
+#define jl_unbox_long(x) jl_unbox_int32(x)
+#define jl_is_long(x)    jl_is_int32(x)
+#define jl_long_type     jl_int32_type
+#endif
+
 // arrays
 DLLEXPORT jl_array_t *jl_new_array(jl_type_t *atype, jl_tuple_t *dims);
 DLLEXPORT jl_array_t *jl_alloc_array_1d(jl_type_t *atype, size_t nr);
@@ -598,7 +610,6 @@ DLLEXPORT void jl_array_grow_beg(jl_array_t *a, size_t inc);
 DLLEXPORT void jl_array_del_beg(jl_array_t *a, size_t dec);
 
 // system information
-DLLEXPORT int jl_word_size();
 DLLEXPORT int jl_errno();
 DLLEXPORT jl_value_t *jl_strerror(int errnum);
 

@@ -1,10 +1,10 @@
 type IntSet
     bits::Array{Uint32,1}
-    limit::Int32  # todo: should be Int64
+    limit::Size
 
     IntSet() = IntSet(1024)
-    IntSet(max::Int32) = (lim = (max+31) & -32;
-                          new(zeros(Uint32,lim>>5), lim))
+    IntSet(max::Int) = (lim = (max+31) & -32;
+                        new(zeros(Uint32,lim>>>5), lim))
 end
 
 function intset(args...)
@@ -17,9 +17,9 @@ end
 
 function add(s::IntSet, n::Int)
     if n >= s.limit
-        lim = int32(n + div(n,2))
+        lim = long(n + div(n,2))
         olsz = length(s.bits)
-        newbits = Array(Uint32,(lim+31)>>5)
+        newbits = Array(Uint32,(lim+31)>>>5)
         newbits[1:olsz] = s.bits
         for i=(olsz+1):length(newbits); newbits[i] = 0; end
         s.bits = newbits
@@ -49,17 +49,17 @@ function has(s::IntSet, n::Int)
     end
 end
 
-start(s::IntSet) = 0
+start(s::IntSet) = int64(0)
 done(s::IntSet, i) = (next(s,i)[1] >= s.limit)
 function next(s::IntSet, i)
-    n = ccall(:bitvector_next, Int32, (Ptr{Uint32}, Uint64, Uint64),
+    n = ccall(:bitvector_next, Int64, (Ptr{Uint32}, Uint64, Uint64),
               s.bits, uint64(i), uint64(s.limit))
     (n, n+1)
 end
 
 isempty(s::IntSet) =
-    ccall(:bitvector_any1, Uint32, (Ptr{Uint32}, Uint32, Uint32),
-          s.bits, uint32(0), uint32(s.limit))==0
+    ccall(:bitvector_any1, Uint32, (Ptr{Uint32}, Uint64, Uint64),
+          s.bits, uint64(0), uint64(s.limit))==0
 
 function choose(s::IntSet)
     n = next(s,0)[1]
@@ -71,8 +71,8 @@ end
 
 length(s::IntSet) = numel(s)
 numel(s::IntSet) =
-    int32(ccall(:bitvector_count, Uint64, (Ptr{Uint32}, Uint32, Uint64),
-                s.bits, uint32(0), uint64(s.limit)))
+    int32(ccall(:bitvector_count, Uint64, (Ptr{Uint32}, Uint64, Uint64),
+                s.bits, uint64(0), uint64(s.limit)))
 
 function show(s::IntSet)
     print("intset(")

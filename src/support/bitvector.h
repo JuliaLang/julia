@@ -39,7 +39,7 @@ size_t bitvector_nwords(u_int64_t nbits);
 DLLEXPORT void bitvector_set(u_int32_t *b, u_int64_t n, u_int32_t c);
 DLLEXPORT u_int32_t bitvector_get(u_int32_t *b, u_int64_t n);
 
-DLLEXPORT uint32_t bitvector_next(uint32_t *b, uint64_t n0, uint64_t n);
+DLLEXPORT uint64_t bitvector_next(uint32_t *b, uint64_t n0, uint64_t n);
 
 void bitvector_shr(u_int32_t *b, size_t n, u_int32_t s);
 void bitvector_shr_to(u_int32_t *dest, u_int32_t *b, size_t n, u_int32_t s);
@@ -65,9 +65,9 @@ void bitvector_xor_to(u_int32_t *dest, u_int32_t doffs,
                       u_int32_t *a, u_int32_t aoffs,
                       u_int32_t *b, u_int32_t boffs, u_int32_t nbits);
 DLLEXPORT
-u_int64_t bitvector_count(u_int32_t *b, u_int32_t offs, u_int64_t nbits);
+u_int64_t bitvector_count(u_int32_t *b, u_int64_t offs, u_int64_t nbits);
 u_int32_t bitvector_any0(u_int32_t *b, u_int32_t offs, u_int32_t nbits);
 DLLEXPORT
-u_int32_t bitvector_any1(u_int32_t *b, u_int32_t offs, u_int32_t nbits);
+u_int32_t bitvector_any1(u_int32_t *b, u_int64_t offs, u_int64_t nbits);
 
 #endif
