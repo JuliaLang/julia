@@ -496,6 +496,24 @@ string make_session_token()
     return "SESSION_"+to_string(rand());
 }
 
+string respond_ok(string session_token, string body)
+{
+    string header = "HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=UTF-8\r\n";
+    if (session_token == "")
+        header += "Set-Cookie: SESSION_TOKEN="+session_token+"\r\n";
+    header += "\r\n";
+    return header+body;
+}
+
+string respond_error(string session_token, string body)
+{
+    string header = "HTTP/1.1 500 Internal Server Error\r\nContent-Type: text/html; charset=UTF-8\r\n";
+    if (session_token == "")
+        header += "Set-Cookie: SESSION_TOKEN="+session_token+"\r\n";
+    header += "\r\n";
+    return header+body;
+}
+
 // create a session and return a session token
 string create_session()
 {
@@ -515,6 +533,14 @@ string create_session()
     pipe(session_data.julia_out);
     
     pid_t pid = fork();
+    if (pid == -1)
+    {
+        close(session_data.julia_in[0]);
+        close(session_data.julia_in[1]);
+        close(session_data.julia_out[0]);
+        close(session_data.julia_out[1]);
+        return "";
+    }
     if (pid == 0)
     {
         // this is the child process - redirect standard streams
@@ -574,15 +600,9 @@ string get_response(request* req)
             session_token = "";
     }
 
-    // the HTTP header
-    string header = "HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=UTF-8\r\n";
+    // if we couldn't fork, inform the user
     if (session_token == "")
-    {
-        // make a session cookie
-        session_token = create_session();
-        header += "Set-Cookie: SESSION_TOKEN="+session_token+"\r\n";
-    }
-    header += "\r\n";
+        return respond_error("", "Maximum server capacity reached.  Please try again later.");
 
     // process input if there is any
     if (req->get_field_exists("terminal-input"))
@@ -606,7 +626,7 @@ string get_response(request* req)
     pthread_mutex_unlock(&session_mutex);
 
     // return the header and response
-    return header+response;
+    return respond_ok(session_token, response);
 }
 
 // program entrypoint
