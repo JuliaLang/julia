@@ -103,6 +103,12 @@ size_t jl_ios_size(ios_t *s)
 }
 
 DLLEXPORT
+long jl_ios_fd(ios_t *s)
+{
+    return s->fd;
+}
+
+DLLEXPORT
 int32_t jl_nb_available(ios_t *s)
 {
     return (int32_t)(s->size - s->bpos);

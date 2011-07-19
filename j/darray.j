@@ -40,8 +40,8 @@ type DArray{T,N,distdim} <: Tensor{T,N}
 
     # don't use DArray() directly; use darray() below instead
     function DArray(dims, initializer, procs, dist)
-        GlobalObject(g->DArray{T,N,distdim}(g, dims, initializer, procs, dist))
-        #go.local_identity
+        go=GlobalObject(g->DArray{T,N,distdim}(g,dims,initializer,procs,dist))
+        go.local_identity
     end
 
     DArray(dims, procs::Vector, dist::Vector) =
