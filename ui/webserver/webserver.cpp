@@ -499,8 +499,7 @@ string make_session_token()
 string respond_ok(string session_token, string body)
 {
     string header = "HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=UTF-8\r\n";
-    if (session_token == "")
-        header += "Set-Cookie: SESSION_TOKEN="+session_token+"\r\n";
+    header += "Set-Cookie: SESSION_TOKEN="+session_token+"\r\n";
     header += "\r\n";
     return header+body;
 }
@@ -508,8 +507,7 @@ string respond_ok(string session_token, string body)
 string respond_error(string session_token, string body)
 {
     string header = "HTTP/1.1 500 Internal Server Error\r\nContent-Type: text/html; charset=UTF-8\r\n";
-    if (session_token == "")
-        header += "Set-Cookie: SESSION_TOKEN="+session_token+"\r\n";
+    header += "Set-Cookie: SESSION_TOKEN="+session_token+"\r\n";
     header += "\r\n";
     return header+body;
 }
@@ -600,9 +598,13 @@ string get_response(request* req)
             session_token = "";
     }
 
-    // if we couldn't fork, inform the user
+    // create a new session if necessary
     if (session_token == "")
-        return respond_error("", "Maximum server capacity reached.  Please try again later.");
+    {
+        session_token = create_session();
+        if (session_token == "")
+            return respond_error("", "Maximum server capacity reached.  Please try again later.");
+    }
 
     // process input if there is any
     if (req->get_field_exists("terminal-input"))
