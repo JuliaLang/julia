@@ -1,26 +1,12 @@
 libfdm = dlopen("libfdm")
 libm = dlopen("libm")
 
-macro vectorize_1arg(f)
-    quote
-        ($f)(x::Vector) = [ ($f)(x[i]) | i=1:length(x) ]
-        ($f)(x::Matrix) = [ ($f)(x[i,j]) | i=1:size(x,1), j=1:size(x,2) ]
-    end
-end
-
-macro vectorize_2arg(f)
-    quote
-        ($f)(x::Vector, y::Vector) = [ ($f)(x[i], y[i]) | i=1:length(x) ]
-        ($f)(x::Matrix, y::Matrix) = [ ($f)(x[i,j], y[i,j]) | i=1:size(x,1), j=1:size(x,2) ]
-    end
-end
-
 macro libmfunc_1arg_float(f)
     quote
         ($f)(x::Float64) = ccall(dlsym(libm,$string(f)), Float64, (Float64,), x)
         ($f)(x::Float32) = ccall(dlsym(libm,$strcat(string(f),"f")), Float32, (Float32,), x)
         ($f)(x::Real) = ($f)(float(x))
-        @vectorize_1arg $f
+        @vectorize_1arg Real $f
     end
 end
 
@@ -29,7 +15,7 @@ macro libfdmfunc_1arg_float(f)
         ($f)(x::Float64) = ccall(dlsym(libfdm,$string(f)), Float64, (Float64,), x)
         ($f)(x::Float32) = ccall(dlsym(libfdm,$strcat(string(f),"f")), Float32, (Float32,), x)
         ($f)(x::Real) = ($f)(float(x))
-        @vectorize_1arg $f
+        @vectorize_1arg Real $f
     end
 end
 
@@ -37,7 +23,7 @@ macro libmfunc_1arg_int(f)
     quote
         ($f)(x::Float64) = ccall(dlsym(libm,$string(f)), Int32, (Float64,), x)
         ($f)(x::Float32) = ccall(dlsym(libm,$strcat(string(f),"f")), Int32, (Float32,), x)
-        @vectorize_1arg $f
+        @vectorize_1arg Real $f
     end
 end
 
@@ -46,7 +32,7 @@ macro libfdmfunc_2arg(f)
         ($f)(x::Float64, y::Float64) = ccall(dlsym(libfdm,$string(f)), Float64, (Float64, Float64,), x, y)
         ($f)(x::Float32, y::Float32) = ccall(dlsym(libfdm,$strcat(string(f),"f")), Float32, (Float32, Float32), x, y)
         ($f)(x::Real, y::Real) = ($f)(float(x),float(y))
-        @vectorize_2arg $f
+        @vectorize_2arg Real $f
     end
 end
 
@@ -90,29 +76,29 @@ end
 
 ipart(x) = trunc(x)
 fpart(x) = x - trunc(x)
-@vectorize_1arg ipart
-@vectorize_1arg fpart
+@vectorize_1arg Real ipart
+@vectorize_1arg Real fpart
 
 abs(x::Float64) = ccall(dlsym(libfdm, :fabs),  Float64, (Float64,), x)
 abs(x::Float32) = ccall(dlsym(libfdm, :fabsf), Float32, (Float32,), x)
-@vectorize_1arg abs
+@vectorize_1arg Real abs
 
 gamma(x::Float64) = ccall(dlsym(libfdm, :tgamma),  Float64, (Float64,), x)
 gamma(x::Float32) = float32(gamma(float64(x)))
 gamma(x::Real) = gamma(float(x))
-@vectorize_1arg gamma
+@vectorize_1arg Real gamma
 
 max(x::Float64, y::Float64) = ccall(dlsym(libm, :fmax),  Float64, (Float64,Float64), x, y)
 max(x::Float32, y::Float32) = ccall(dlsym(libm, :fmaxf), Float32, (Float32,Float32), x, y)
-@vectorize_2arg max
+@vectorize_2arg Real max
 
 min(x::Float64, y::Float64) = ccall(dlsym(libm, :fmin),  Float64, (Float64,Float64), x, y)
 min(x::Float32, y::Float32) = ccall(dlsym(libm, :fminf), Float32, (Float32,Float32), x, y)
-@vectorize_2arg min
+@vectorize_2arg Real min
 
 ldexp(x::Float64,e::Int32) = ccall(dlsym(libfdm, :ldexp),  Float64, (Float64,Int32), x, e)
 ldexp(x::Float32,e::Int32) = ccall(dlsym(libfdm, :ldexpf), Float32, (Float32,Int32), x, e)
-@vectorize_2arg ldexp
+@vectorize_2arg Real ldexp
 
 function frexp(x::Float64)
     exp = zeros(Int32,1)
@@ -124,7 +110,7 @@ function frexp(x::Float32)
     s = ccall(dlsym(libfdm,:frexpf), Float32, (Float32, Ptr{Int32}), x, exp)
     (s, exp[1])
 end
-@vectorize_1arg frexp
+@vectorize_1arg Real frexp
 
 ^(x::Float64, y::Float64) = ccall(dlsym(libfdm, :pow),  Float64, (Float64,Float64), x, y)
 ^(x::Float32, y::Float32) = ccall(dlsym(libfdm, :powf), Float32, (Float32,Float32), x, y)
