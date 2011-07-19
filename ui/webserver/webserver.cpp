@@ -12,16 +12,6 @@
 using namespace std;
 using namespace scgi;
 
-/*
-
-    TODO:
-    - session management
-    - make it work on server
-    - more of a terminal-like display
-        - curses-like behavior
-
-*/
-
 /////////////////////////////////////////////////////////////////////////////
 // helpers
 /////////////////////////////////////////////////////////////////////////////
