@@ -58,7 +58,7 @@ macro benchmark(n,ex,T)
     s = gensym()
     quote
         local $s
-        @time for i=1:int32($n)
+        @time for i=1:long($n)
             x = convert($T,i)
             $s = $ex
         end

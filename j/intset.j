@@ -49,10 +49,10 @@ function has(s::IntSet, n::Int)
     end
 end
 
-start(s::IntSet) = 0
+start(s::IntSet) = int64(0)
 done(s::IntSet, i) = (next(s,i)[1] >= s.limit)
 function next(s::IntSet, i)
-    n = ccall(:bitvector_next, Int32, (Ptr{Uint32}, Uint64, Uint64),
+    n = ccall(:bitvector_next, Int64, (Ptr{Uint32}, Uint64, Uint64),
               s.bits, uint64(i), uint64(s.limit))
     (n, n+1)
 end

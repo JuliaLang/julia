@@ -93,7 +93,7 @@ static int ntz(uint32_t x)
 // given a bitvector of n bits, starting at bit n0 find the next
 // set bit, including n0.
 // returns n if no set bits.
-uint32_t bitvector_next(uint32_t *b, uint64_t n0, uint64_t n)
+uint64_t bitvector_next(uint32_t *b, uint64_t n0, uint64_t n)
 {
     if (n0 >= n) return n;
 
