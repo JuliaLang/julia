@@ -14,6 +14,8 @@ type IOStream
     make_stdout_stream() = new(ccall(:jl_stdout_stream, Any, ()))
 end
 
+fd(s::IOStream) = ccall(:jl_ios_fd, Long, (Ptr{Void},), s.ios)
+
 close(s::IOStream) = ccall(:ios_close, Void, (Ptr{Void},), s.ios)
 
 fdio(fd::Int) = (s = IOStream();
@@ -193,6 +195,10 @@ flush(s::IOStream) = ccall(:ios_flush, Void, (Ptr{Void},), s.ios)
 truncate(s::IOStream, n::Int) =
     ccall(:ios_trunc, Ulong, (Ptr{Void}, Ulong),
           s.ios, ulong(n))
+
+seek(s::IOStream, n::Int) =
+    ccall(:ios_seek, Long, (Ptr{Void}, Long),
+          s.ios, long(n))
 
 type IOTally
     nbytes::Size

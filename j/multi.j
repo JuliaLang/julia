@@ -184,6 +184,10 @@ function worker_id_from_socket(s)
             end
         end
     end
+    if isa(s,IOStream) && fd(s)==-1
+        # serializing to a local buffer
+        return myid()
+    end
     return -1
 end
 
@@ -416,9 +420,37 @@ function schedule_call(rid, thunk)
     wi
 end
 
+localize_ref(b::Box) = Box(localize_ref(b.contents))
+
+function localize_ref(r::RemoteRef)
+    if r.where == myid()
+        fetch(r)
+    else
+        r
+    end
+end
+
+localize_ref(x) = x
+
+# call f on args in a way that simulates what would happen if
+# the function were sent elsewhere
+function local_remote_call(f, args)
+    linfo = ccall(:jl_closure_linfo, Any, (Any,), f)
+    if isa(linfo,LambdaStaticData)
+        env = ccall(:jl_closure_env, Any, (Any,), f)
+        buf = memio()
+        serialize(buf, env)
+        seek(buf, 0)
+        env = force(deserialize(buf))
+        f = ccall(:jl_new_closure_internal, Any, (Any, Any),
+                  linfo, env)::Function
+    end
+    f(map(localize_ref,args)...)
+end
+
 function remote_call(w::LocalProcess, f, args...)
     rr = RemoteRef(w)
-    schedule_call(rr2id(rr), ()->f(args...))
+    schedule_call(rr2id(rr), ()->local_remote_call(f,args))
     rr
 end
 
@@ -431,7 +463,7 @@ end
 remote_call(id::Int, f, args...) = remote_call(worker_from_id(id), f, args...)
 
 # faster version of fetch(remote_call(...))
-remote_call_fetch(w::LocalProcess, f, args...) = f(args...)
+remote_call_fetch(w::LocalProcess, f, args...) = local_remote_call(f, args)
 
 function remote_call_fetch(w::Worker, f, args...)
     # can be weak, because the program will have no way to refer to the Ref
@@ -462,7 +494,7 @@ function remote_do(w::LocalProcess, f, args...)
     # the LocalProcess version just performs in local memory what a worker
     # does when it gets a :do message.
     # same for other messages on LocalProcess.
-    enq_work(WorkItem(()->apply(f,args)))
+    enq_work(WorkItem(()->local_remote_call(f, args)))
     nothing
 end
 
@@ -652,7 +684,7 @@ end
 end
 
 function deliver_result(sock::IOStream, msg, oid, value)
-    #print("$(myid()) sending result\n")
+    #print("$(myid()) sending result $oid\n")
     if is(msg,:fetch) || is(msg,:call_fetch)
         val = value
     else
@@ -751,7 +783,7 @@ function message_handler(fd, sockets)
                 id = force(deserialize(sock))
                 f = deserialize(sock)
                 args = deserialize(sock)
-                #print("$(myid()) got call\n")
+                #print("$(myid()) got call $id\n")
                 wi = schedule_call(id, f, args)
                 if is(msg, :call_fetch)
                     wi.notify = (sock, :call_fetch, id, wi.notify)
@@ -979,6 +1011,7 @@ type GlobalObject
         wi.result = WeakRef(go)
         wi.done = true
         notify_done(wi)
+        go
     end
 
     # initializer is a function that will be called on the new G.O., and its
@@ -1024,10 +1057,9 @@ type GlobalObject
         if !participate
             go = new((), r)
             go.local_identity = initializer(go)  # ???
-            go.local_identity
+            go
         else
             init_GlobalObject(mi, procs, rids, initializer, r, rr2id(r[midx]))
-            fetch(r[midx])
         end
     end
 
@@ -1038,7 +1070,8 @@ type GlobalObject
     GlobalObject() = GlobalObject(identity)
 end
 
-show(g::GlobalObject) = print("GlobalObject()")
+show(g::GlobalObject) = (r = g.refs[myid()];
+                         print("GlobalObject($(r.whence),$(r.id))"))
 
 function member(g::GlobalObject, p::Int)
     for i=1:length(g.refs)
@@ -1089,6 +1122,10 @@ function serialize(s, g::GlobalObject)
 end
 
 localize(g::GlobalObject) = g.local_identity
+
+localize_ref(g::GlobalObject) = g.local_identity
+
+broadcast(x) = GlobalObject(g->x)
 
 ## higher-level functions: spawn, pmap, pfor, etc. ##
 

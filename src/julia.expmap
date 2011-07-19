@@ -92,6 +92,7 @@
     ios_copyuntil;
     ios_trunc;
     ios_pos;
+    ios_seek;
     ios_stdout;
     ios_stdin;
     ios_stderr;
@@ -111,6 +112,7 @@
     jl_fd_zero;
     jl_read_avail;
     jl_ios_size;
+    jl_ios_fd;
     jl_nb_available;
     jl_gc_add_finalizer;
     jl_gc_collect;
