@@ -101,6 +101,27 @@ function locate(d::DArray, i::Index)
     p
 end
 
+#find which pieces hold which subranges in distributed dimension
+#returns (pmap,dist) where pmap[i] contains dist[i]:dist[i+1]-1
+function locate(d::DArray, I::Range1)
+    i = I[1]
+    imax = I[length(I)]
+    pmap = {}
+    dist = {i}
+    j = 1
+    while i <= imax
+        if i >= d.dist[j+1]
+            j += 1
+        else
+            pmap = append(pmap,j)
+            #append(pmap,d.pmap[j])
+            i = min(imax+1,d.dist[j+1])            
+            dist = append(dist,i)
+            j += 1
+        end
+    end
+    return (pmap, dist)
+end
 ## Constructors ##
 
 function maxdim(dims)
@@ -279,6 +300,30 @@ function ref{T}(d::DArray{T}, i::Index)
     return remote_call_fetch(d.pmap[p], ref, d, i)::T
 end
 
+ref(d::DArray) = d
+ref(d::DArray, I::Range1{Int32}) = ref(d, (I,))
+ref{distdim}(d::DArray{Any,1,distdim},I::Range1{Int32}) = ref(d, (I,))
+ref{T,distdim}(d::DArray{T,1,distdim},I::Range1{Int32}) = ref(d, (I,))
+
+function ref{T}(d::DArray{T}, I::Range1{Int32}...)
+    (pmap, dist) = locate(d, I[d.distdim])
+    A = Array(T, map(range -> length(range), I))
+    if length(pmap) == 1 && pmap[1] == d.localpiece
+        offs = d.dist[pmap[1]]-1
+        J = ntuple(length(size(d)), i -> (i == d.distdim ? I[i]-offs :
+                                                           I[i]))
+        A = localize(d)[J...]
+        return A::Array{T}
+    end
+    for p = 1:length(pmap)
+        offs = I[d.distdim][1] - 1
+        J = ntuple(length(size(d)),i->(i==d.distdim?(dist[p]:(dist[p+1]-1))-offs : (I[i]-(I[i][1]-1))))
+        K = ntuple(length(size(d)),i->(i==d.distdim?(dist[p]:(dist[p+1]-1)) : I[i]))
+        A[J...] = remote_call_fetch(pmap[p], ref, d, K...)
+    end
+    return A::Array{T}
+end
+
 assign(d::DArray, v::Tensor, i::Index) =
     invoke(assign, (DArray, Any, Index), d, v, i)
 
@@ -297,6 +342,7 @@ function assign(d::DArray, v, i::Index)
     end
     d
 end
+
 
 ## matrix multiply ##
 
