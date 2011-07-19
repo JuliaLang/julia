@@ -212,8 +212,8 @@ void* inbox_thread(void* arg)
         FD_ZERO(&set);
         FD_SET(pipe, &set);
         timeval select_timeout;
-        select_timeout.tv_sec = 1;
-        select_timeout.tv_usec = 0;
+        select_timeout.tv_sec = 0;
+        select_timeout.tv_usec = 100000;
         size_t bytes_written = 0;
         if (select(FD_SETSIZE, 0, &set, 0, &select_timeout))
             bytes_written = write(pipe, inbox.c_str(), inbox.size());
@@ -287,8 +287,8 @@ void* outbox_thread(void* arg)
         FD_ZERO(&set);
         FD_SET(pipe, &set);
         timeval select_timeout;
-        select_timeout.tv_sec = 1;
-        select_timeout.tv_usec = 0;
+        select_timeout.tv_sec = 0;
+        select_timeout.tv_usec = 100000;
         size_t bytes_read = 0;
         if (select(FD_SETSIZE, &set, 0, 0, &select_timeout))
             bytes_read = read(pipe, buffer, buffer_size);
@@ -455,6 +455,10 @@ void* watchdog_thread(void* arg)
         // kill the zombies
         for (vector<string>::iterator iter = zombie_list.begin(); iter != zombie_list.end(); iter++)
         {
+            // wait for the threads to terminate
+            pthread_join(session_map[*iter].inbox_proc, 0);
+            pthread_join(session_map[*iter].outbox_proc, 0);
+
             // close the pipes
             close(session_map[*iter].julia_in[1]);
             close(session_map[*iter].julia_out[0]);
