@@ -49,7 +49,7 @@
 			function watchdog()
 			{
 				// check the watchdog
-				if ((new Date())-last_request_time > 1000)
+				if ((new Date())-last_request_time > 5000)
 				{
 					// show a "connection lost" message
 					terminal_data += "<br /><br />The connection to the server was lost.";
