@@ -32,8 +32,7 @@ static const char *opts =
     " -P --post-boot=<expr>    Evaluate <expr> right after boot\n"
     " -L --load=file           Load <file> right after boot\n"
     " -b --bare                Bare: don't load default startup files\n"
-    " -J --sysimage=file       Start up with the given system image file\n"
-    "    --lisp                Start with Lisp prompt not Julia\n\n"
+    " -J --sysimage=file       Start up with the given system image file\n\n"
 
     " -h --help                Print this message\n";
 
