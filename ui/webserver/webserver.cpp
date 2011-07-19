@@ -455,6 +455,10 @@ void* watchdog_thread(void* arg)
         // kill the zombies
         for (vector<string>::iterator iter = zombie_list.begin(); iter != zombie_list.end(); iter++)
         {
+            // wait for the threads to terminate
+            pthread_join(session_map[*iter].inbox_proc, 0);
+            pthread_join(session_map[*iter].outbox_proc, 0);
+
             // close the pipes
             close(session_map[*iter].julia_in[1]);
             close(session_map[*iter].julia_out[0]);
