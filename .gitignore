@@ -6,12 +6,13 @@
 
 /julia
 /julia-debug-basic
-/julia-debug-cloud
-/julia-debug-cloud.dSYM
 /julia-debug-readline
+/julia-debug-web
+/julia-debug-webserver
 /julia-release-basic
-/julia-release-cloud
 /julia-release-readline
+/julia-release-web
+/julia-release-webserver
 
 /libjulia.so
 /libjulia.dylib
