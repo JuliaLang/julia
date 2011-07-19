@@ -12,16 +12,6 @@
 using namespace std;
 using namespace scgi;
 
-/*
-
-    TODO:
-    - fix weird "Killed" bug
-    - make it work on server
-    - more of a terminal-like display
-        - curses-like behavior
-
-*/
-
 /////////////////////////////////////////////////////////////////////////////
 // helpers
 /////////////////////////////////////////////////////////////////////////////
@@ -110,7 +100,7 @@ vector<string> split(string str, char separator)
 // replace all occurrences of from with to in str
 string str_replace(string str, string from, string to)
 {
-    // replace all occurrences of from with to in str
+    // start from the beginning
     size_t pos = str.find(from, 0);
     while (pos != string::npos)
     {
@@ -121,12 +111,11 @@ string str_replace(string str, string from, string to)
 }
 
 /////////////////////////////////////////////////////////////////////////////
-// session management
+// sessions
 /////////////////////////////////////////////////////////////////////////////
 
-const int SESSION_TIMEOUT = 10; // in seconds
-const int IO_INTERVAL = 100000; // in nanoseconds
-const int WATCHDOG_INTERVAL = 100000000; // in nanoseconds
+// if a session hasn't been queried in this time, it dies
+const int SESSION_TIMEOUT = 4; // in seconds
 
 // a session
 struct session
@@ -150,6 +139,13 @@ struct session
     // io threads
     pthread_t inbox_proc;
     pthread_t outbox_proc;
+
+    // when both threads have terminated, we can kill the session
+    bool inbox_thread_alive;
+    bool outbox_thread_alive;
+
+    // whether this session should terminate
+    bool terminating;
 };
 
 // a list of sessions
@@ -158,11 +154,12 @@ map<string, session> session_map;
 // a mutex for accessing session_map
 pthread_mutex_t session_mutex;
 
-// generate a session token
-string make_session_token()
-{
-    return "SESSION_"+to_string(rand());
-}
+/////////////////////////////////////////////////////////////////////////////
+// THREAD:  inbox_thread
+/////////////////////////////////////////////////////////////////////////////
+
+// add to the inbox regularly according to this interval
+const int INBOX_INTERVAL = 100000; // in nanoseconds
 
 // this thread sends input from the client to julia
 void* inbox_thread(void* arg)
@@ -174,34 +171,82 @@ void* inbox_thread(void* arg)
     // loop for the duration of the session
     while (true)
     {
-        // lock the session mutex
+        // lock the mutex
         pthread_mutex_lock(&session_mutex);
 
-        // send some data to julia
-        int pipe = session_map[session_token].julia_in[1];
-        string inbox = session_map[session_token].inbox;
-        pthread_mutex_unlock(&session_mutex);
-        size_t bytes_written = write(pipe, inbox.c_str(), inbox.size());
-        pthread_mutex_lock(&session_mutex);
-        
-        // and remove it from the inbox
-        if (bytes_written > 0)
-            session_map[session_token].inbox = session_map[session_token].inbox.substr(bytes_written, session_map[session_token].inbox.size()-bytes_written);
-
-        // unlock the session mutex
-        pthread_mutex_unlock(&session_mutex);
-
-        // if no data was available, sleep before trying again
-        if (bytes_written <= 0)
+        // terminate if necessary
+        if (session_map[session_token].terminating)
         {
+            // unlock the mutex
+            pthread_mutex_unlock(&session_mutex);
+
+            // terminate
+            break;
+        }
+
+        // get the inbox data
+        string inbox = session_map[session_token].inbox;
+        if (inbox == "")
+        {
+            // unlock the mutex
+            pthread_mutex_unlock(&session_mutex);
+
+            // no data from client; pause before checking again
             timespec timeout;
             timeout.tv_sec = 0;
-            timeout.tv_nsec = IO_INTERVAL;
+            timeout.tv_nsec = INBOX_INTERVAL;
             nanosleep(&timeout, 0);
+
+            // try again
+            continue;
         }
+
+        // prepare for writing to julia
+        int pipe = session_map[session_token].julia_in[1];
+
+        // unlock the mutex
+        pthread_mutex_unlock(&session_mutex);
+
+        // write if there is data
+        fd_set set;
+        FD_ZERO(&set);
+        FD_SET(pipe, &set);
+        timeval select_timeout;
+        select_timeout.tv_sec = 1;
+        select_timeout.tv_usec = 0;
+        size_t bytes_written = 0;
+        if (select(FD_SETSIZE, 0, &set, 0, &select_timeout))
+            bytes_written = write(pipe, inbox.c_str(), inbox.size());
+
+        // lock the mutex
+        pthread_mutex_lock(&session_mutex);
+
+        // and remove it from the inbox
+        session_map[session_token].inbox = session_map[session_token].inbox.substr(bytes_written, session_map[session_token].inbox.size()-bytes_written);
+
+        // unlock the mutex
+        pthread_mutex_unlock(&session_mutex);
     }
+
+    // lock the mutex
+    pthread_mutex_lock(&session_mutex);
+
+    // tell the watchdog that this thread is done
+    session_map[session_token].inbox_thread_alive = false;
+
+    // unlock the mutex
+    pthread_mutex_unlock(&session_mutex);
+
+    // terminate
     return 0;
 }
+
+/////////////////////////////////////////////////////////////////////////////
+// THREAD:  outbox_thread
+/////////////////////////////////////////////////////////////////////////////
+
+// add to the outbox regularly according to this interval
+const int OUTBOX_INTERVAL = 100000; // in nanoseconds
 
 // this thread waits for output from julia and stores it in a buffer (for later polling by the client)
 void* outbox_thread(void* arg)
@@ -213,58 +258,75 @@ void* outbox_thread(void* arg)
     // keep track of the output from julia
     string outbox;
 
-    // keep track of whether we should wait or not
-    bool should_wait = true;
-
     // loop for the duration of the session
     while (true)
     {
-        // wait to save cpu cycles if nothing is going on
-        if (should_wait)
-        {
-            timespec timeout;
-            timeout.tv_sec = 0;
-            timeout.tv_nsec = IO_INTERVAL;
-            nanosleep(&timeout, 0);
-        }
-        should_wait = true;
-
-        // lock the session mutex
+        // lock the mutex
         pthread_mutex_lock(&session_mutex);
 
-        // read some output from julia
-        string new_data;
+        // terminate if necessary
+        if (session_map[session_token].terminating)
+        {
+            // unlock the mutex
+            pthread_mutex_unlock(&session_mutex);
+
+            // terminate
+            break;
+        }
+
+        // prepare for reading from julia
         const int buffer_size = 1; // not including null terminator
         char* buffer = new char[buffer_size+1];
         int pipe = session_map[session_token].julia_out[0];
+
+        // unlock the mutex
         pthread_mutex_unlock(&session_mutex);
-        size_t bytes_read = read(pipe, buffer, buffer_size);
+
+        // read if there is data
+        fd_set set;
+        FD_ZERO(&set);
+        FD_SET(pipe, &set);
+        timeval select_timeout;
+        select_timeout.tv_sec = 1;
+        select_timeout.tv_usec = 0;
+        size_t bytes_read = 0;
+        if (select(FD_SETSIZE, &set, 0, 0, &select_timeout))
+            bytes_read = read(pipe, buffer, buffer_size);
+
+        // lock the mutex
         pthread_mutex_lock(&session_mutex);
-        if (bytes_read > 0)
-        {
-            buffer[bytes_read] = 0;
-            new_data = buffer;
-        }
+
+        // get the read data
+        buffer[bytes_read] = 0;
+        string new_data = buffer;
         delete [] buffer;
         outbox += new_data;
-
 
         // try to read a character
         if (outbox != "")
         {
-            // we just got data; try to get more without waiting
-            should_wait = false;
-
             // get the first character
             char c = outbox[0];
 
             // is it a control sequence?
             if (c == 0x1B)
             {
-                // if we don't have enouch characters, try again later
+                // if we don't have enough characters, try again later
                 if (outbox.size() < 2)
                 {
+                    // unlock the mutex
                     pthread_mutex_unlock(&session_mutex);
+
+                    // if we didn't get any new data from julia, wait before trying again
+                    if (new_data == "")
+                    {
+                        timespec timeout;
+                        timeout.tv_sec = 0;
+                        timeout.tv_nsec = OUTBOX_INTERVAL;
+                        nanosleep(&timeout, 0);
+                    }
+
+                    // try again
                     continue;
                 }
 
@@ -285,17 +347,30 @@ void* outbox_thread(void* arg)
                     // if we don't have enouch characters, try again later
                     if (pos == -1)
                     {
+                        // unlock the mutex
                         pthread_mutex_unlock(&session_mutex);
+
+                        // if we didn't get any new data from julia, wait before trying again
+                        if (new_data == "")
+                        {
+                            timespec timeout;
+                            timeout.tv_sec = 0;
+                            timeout.tv_nsec = OUTBOX_INTERVAL;
+                            nanosleep(&timeout, 0);
+                        }
+
+                        // try again
                         continue;
                     }
                     else
                     {
                         // eat the control sequence and output nothing
                         outbox = outbox.substr(pos+1, outbox.size()-(pos+1));
+                        
+                        // unlock the mutex
                         pthread_mutex_unlock(&session_mutex);
 
-                        // get the next character immediately
-                        should_wait = false;
+                        // keep going
                         continue;
                     }
                 }
@@ -303,10 +378,11 @@ void* outbox_thread(void* arg)
                 {
                     // eat the two-character control sequence and output nothing
                     outbox = outbox.substr(2, outbox.size()-2);
+                    
+                    // unlock the mutex
                     pthread_mutex_unlock(&session_mutex);
 
-                    // get the next character immediately
-                    should_wait = false;
+                    // keep going
                     continue;
                 }
             }
@@ -314,15 +390,106 @@ void* outbox_thread(void* arg)
             // just output the raw character
             session_map[session_token].outbox += c;
             outbox = outbox.substr(1, outbox.size()-1);
-
-            // get the next character immediately
-            should_wait = false;
         }
 
-        // unlock the session mutex
+        // unlock the mutex
         pthread_mutex_unlock(&session_mutex);
+
+        // nothing from julia; wait before trying again
+        timespec timeout;
+        timeout.tv_sec = 0;
+        timeout.tv_nsec = OUTBOX_INTERVAL;
+        nanosleep(&timeout, 0);
     }
+
+    // lock the mutex
+    pthread_mutex_lock(&session_mutex);
+
+    // tell the watchdog that this thread is done
+    session_map[session_token].outbox_thread_alive = false;
+
+    // unlock the mutex
+    pthread_mutex_unlock(&session_mutex);
+
+    // terminate
     return 0;
+}
+
+/////////////////////////////////////////////////////////////////////////////
+// THREAD:  watchdog_thread
+/////////////////////////////////////////////////////////////////////////////
+
+// the watchdog runs regularly according to this interval
+const int WATCHDOG_INTERVAL = 100000000; // in nanoseconds
+
+// this thread kills old sessions after they have timed out
+void* watchdog_thread(void* arg)
+{
+    // run forever
+    while (true)
+    {
+        // lock the mutex
+        pthread_mutex_lock(&session_mutex);
+
+        // get the current time
+        time_t t = time(0);
+
+        // start terminating old sessions
+        for (map<string, session>::iterator iter = session_map.begin(); iter != session_map.end(); iter++)
+        {
+            if (!(iter->second).terminating)
+            {
+                if (t-(iter->second).update_time >= SESSION_TIMEOUT)
+                    (iter->second).terminating = true;
+            }
+        }
+
+        // get a list of zombie sessions
+        vector<string> zombie_list;
+        for (map<string, session>::iterator iter = session_map.begin(); iter != session_map.end(); iter++)
+        {
+            if (!(iter->second).inbox_thread_alive && !(iter->second).outbox_thread_alive)
+                zombie_list.push_back(iter->first);
+        }
+
+        // kill the zombies
+        for (vector<string>::iterator iter = zombie_list.begin(); iter != zombie_list.end(); iter++)
+        {
+            // close the pipes
+            close(session_map[*iter].julia_in[1]);
+            close(session_map[*iter].julia_out[0]);
+
+            // kill the julia process
+            kill(session_map[*iter].pid, 9);
+            waitpid(session_map[*iter].pid, 0, 0);
+
+            // remove the session from the map
+            session_map.erase(*iter);
+        }
+
+        // unlock the mutex
+        pthread_mutex_unlock(&session_mutex);
+
+        // don't waste cpu time
+        timespec timeout;
+        timeout.tv_sec = 0;
+        timeout.tv_nsec = WATCHDOG_INTERVAL;
+        nanosleep(&timeout, 0);
+    }
+
+    // never reached
+    return 0;
+}
+
+/////////////////////////////////////////////////////////////////////////////
+// THREAD:  main_thread
+/////////////////////////////////////////////////////////////////////////////
+
+// generate a session token
+string make_session_token()
+{
+    // add a random integer to a prefix
+    return "SESSION_"+to_string(rand());
 }
 
 // create a session and return a session token
@@ -334,9 +501,15 @@ string create_session()
     // generate a session token
     string session_token = make_session_token();
 
+    // keep the session alive for now
+    session_data.inbox_thread_alive = true;
+    session_data.outbox_thread_alive = true;
+    session_data.terminating = false;
+
     // start the julia instance
     pipe(session_data.julia_in);
     pipe(session_data.julia_out);
+    
     pid_t pid = fork();
     if (pid == 0)
     {
@@ -351,14 +524,14 @@ string create_session()
         close(session_data.julia_out[1]);
 
         // acutally spawn julia instance
-        execl("./julia-release-basic", "julia-release-basic", (char*)0);
+        execl("./julia-release-web", "julia-release-web", (char*)0);
     }
     close(session_data.julia_in[0]);
     close(session_data.julia_out[1]);
 
     // set the pid of the julia instance
     session_data.pid = pid;
-
+    
     // start the inbox thread
     char* session_token_inbox = new char[256];
     strcpy(session_token_inbox, session_token.c_str());
@@ -374,88 +547,15 @@ string create_session()
 
     // store the session
     session_map[session_token] = session_data;
-
-    // print the number of open sessions
-    if (session_map.size() == 1)
-        cout<<session_map.size()<<" open session.\n";
-    else
-        cout<<session_map.size()<<" open sessions.\n";
-
+    
     // return the session token
     return session_token;
 }
 
-// destroy a session
-void destroy_session(string session_token)
-{
-    // free the pipes
-    close(session_map[session_token].julia_in[1]);
-    close(session_map[session_token].julia_out[0]);
-
-    // kill the io threads
-    pthread_cancel(session_map[session_token].inbox_proc);
-    pthread_cancel(session_map[session_token].outbox_proc);
-
-    // kill the julia process
-    kill(session_map[session_token].pid, 9);
-    waitpid(session_map[session_token].pid, 0, 0);
-
-    // remove the session from the map
-    session_map.erase(session_token);
-
-    // print the number of open sessions
-    if (session_map.size() == 1)
-        cout<<session_map.size()<<" open session.\n";
-    else
-        cout<<session_map.size()<<" open sessions.\n";
-}
-
-// this thread kills old sessions after they have timed out
-void* watchdog_thread(void* arg)
-{
-    // run forever
-    while (true)
-    {
-        // lock the session mutex
-        pthread_mutex_lock(&session_mutex);
-
-        // get the current time
-        time_t t = time(0);
-
-        // keep a list of sessions to be deleted
-        vector<string> old_sessions;
-
-        // iterate through the open sessions
-        for (map<string, session>::iterator iter = session_map.begin(); iter != session_map.end(); iter++)
-        {
-            if (t-(iter->second).update_time >= SESSION_TIMEOUT)
-                old_sessions.push_back(iter->first);
-        }
-
-        // delete old sessions
-        for (vector<string>::iterator iter = old_sessions.begin(); iter != old_sessions.end(); iter++)
-            destroy_session(*iter);
-
-        // unlock the session mutex
-        pthread_mutex_unlock(&session_mutex);
-
-        // don't waste cpu time
-        timespec timeout;
-        timeout.tv_sec = 0;
-        timeout.tv_nsec = WATCHDOG_INTERVAL;
-        nanosleep(&timeout, 0);
-    }
-    return 0;
-}
-
-/////////////////////////////////////////////////////////////////////////////
-// main stuff
-/////////////////////////////////////////////////////////////////////////////
-
 // this function is called when an HTTP request is made - the response is the return value
 string get_response(request* req)
 {
-    // lock the session mutex
+    // lock the mutex
     pthread_mutex_lock(&session_mutex);
 
     // check for the session cookie
@@ -463,14 +563,18 @@ string get_response(request* req)
     if (req->get_cookie_exists("SESSION_TOKEN"))
         session_token = req->get_cookie_value("SESSION_TOKEN");
 
-    // make sure the session exists
-    if (session_map.find(session_token) == session_map.end())
-        session_token = "";
+    // check if the session is real
+    if (session_token != "")
+    {
+        if (session_map.find(session_token) == session_map.end())
+            session_token = "";
+    }
 
     // the HTTP header
     string header = "HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=UTF-8\r\n";
     if (session_token == "")
     {
+        // make a session cookie
         session_token = create_session();
         header += "Set-Cookie: SESSION_TOKEN="+session_token+"\r\n";
     }
@@ -494,7 +598,7 @@ string get_response(request* req)
     // pet the watchdog
     session_map[session_token].update_time = time(0);
 
-    // unlock the session mutex
+    // unlock the mutex
     pthread_mutex_unlock(&session_mutex);
 
     // return the header and response
@@ -507,7 +611,7 @@ int main()
     // seed the random number generator for generating session tokens
     srand(time(0));
 
-    // initialize the session mutex
+    // initialize the mutex
     pthread_mutex_init(&session_mutex, 0);
 
     // start the watchdog thread
