@@ -1292,7 +1292,7 @@ jl_value_t *jl_closure_linfo(jl_function_t *f)
 
 // --- hashing ---
 
-uptrint_t jl_hash_symbol(jl_sym_t *s)
+DLLEXPORT uptrint_t jl_hash_symbol(jl_sym_t *s)
 {
     return s->hash;
 }

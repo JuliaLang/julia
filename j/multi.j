@@ -42,7 +42,6 @@
 ## message i/o ##
 
 function send_msg(s::IOStream, buf::IOStream, kind, args)
-    truncate(buf, 0)
     serialize(buf, kind)
     for arg=args
         serialize(buf, arg)
@@ -54,16 +53,29 @@ function send_msg(s::IOStream, buf::IOStream, kind, args)
 end
 
 SENDBUF = ()
-function send_msg(s::IOStream, kind, args...)
-    id = worker_id_from_socket(s)
-    if id > -1
-        return send_msg(worker_from_id(id), kind, args...)
-    end
+function send_msg_unknown(s::IOStream, kind, args)
+    # for sending to a socket not associated with a worker
     global SENDBUF
     if is(SENDBUF,())
         SENDBUF = memio()
     end
     send_msg(s, SENDBUF::IOStream, kind, args)
+end
+
+function send_msg(s::IOStream, kind, args...)
+    id = worker_id_from_socket(s)
+    if id > -1
+        return send_msg(worker_from_id(id), kind, args...)
+    end
+    send_msg_unknown(s, kind, args)
+end
+
+function send_msg_now(s::IOStream, kind, args...)
+    id = worker_id_from_socket(s)
+    if id > -1
+        return send_msg_now(worker_from_id(id), kind, args...)
+    end
+    send_msg_unknown(s, kind, args)
 end
 
 # todo:
@@ -98,7 +110,9 @@ type Worker
     sendbuf::IOStream
     id::Int32
     del_msgs::Array{Any,1}
-
+    lastmsg::Float64
+    dirty::Bool
+    
     function Worker(host, port)
         fd = ccall(:connect_to_host, Int32,
                    (Ptr{Uint8}, Int16), host, port)
@@ -108,11 +122,64 @@ type Worker
         Worker(host, port, fd, fdio(fd))
     end
 
-    Worker(host,port,fd,sock,id) = new(host, port, fd, sock, memio(), id, {})
+    Worker(host,port,fd,sock,id) =
+        new(host, port, fd, sock, memio(), id, {}, 0.0, false)
     Worker(host,port,fd,sock) = Worker(host,port,fd,sock,0)
 end
 
-send_msg(w::Worker, kind, args...) = send_msg(w.socket, w.sendbuf, kind, args)
+function flush_worker(w::Worker)
+    if !isempty(w.del_msgs)
+        #print("sending delete of $(w.del_msgs)\n")
+        remote_do(w, del_clients, w.del_msgs...)
+        del_all(w.del_msgs)
+    end
+    ccall(:jl_enq_send_req, Void, (Ptr{Void}, Ptr{Void}),
+          w.socket.ios, w.sendbuf.ios)
+    w.dirty = false
+end
+
+function send_msg_now(w::Worker, kind, args...)
+    send_msg(w.socket, w.sendbuf, kind, args)
+    w.dirty = false
+end
+
+function send_msg(w::Worker, kind, args...)
+    buf = w.sendbuf
+    serialize(buf, kind)
+    for arg=args
+        serialize(buf, arg)
+    end
+    if !w.dirty
+        w.lastmsg = clock()
+    end
+    w.dirty = true
+end
+
+function flush_workers()
+    global PGRP
+    now = clock()
+    for w = PGRP.workers
+        if isa(w,Worker)
+            k = w::Worker
+            if k.dirty && now-k.lastmsg >= 0.0002
+                flush_worker(k)
+            end
+        end
+    end
+end
+
+# determine the maximum time we can sleep in select
+function max_sleep_time()
+    global PGRP
+    mt = 10.0
+    now = clock()
+    for w = PGRP.workers
+        if isa(w,Worker) && (w::Worker).dirty
+            mt = min(mt,(w::Worker).lastmsg+0.0002-now)
+        end
+    end
+    max(mt,0.0)
+end
 
 type LocalProcess
 end
@@ -147,7 +214,7 @@ function add_workers(PGRP::ProcessGroup, w::Array{Any,1})
     for i=1:n
         push(PGRP.workers, w[i])
         w[i].id = PGRP.np+i
-        send_msg(w[i], w[i].id, newlocs)
+        send_msg_now(w[i], w[i].id, newlocs)
         sockets[w[i].fd] = w[i].socket
         add_fd_handler(w[i].fd, handler)
     end
@@ -167,7 +234,10 @@ function join_pgroup(myid, locs, sockets)
         w[i].id = i
         sockets[w[i].fd] = w[i].socket
         add_fd_handler(w[i].fd, handler)
-        send_msg(w[i], :identify_socket, myid)
+        send_msg_now(w[i], :identify_socket, myid)
+    end
+    for i = (myid+1):np
+        w[i] = nothing
     end
     ProcessGroup(myid, w, locs)
 end
@@ -205,6 +275,7 @@ function identify_socket(otherid, fd, sock)
     d = i-length(PGRP.workers)
     if d > 0
         grow(PGRP.workers, d)
+        PGRP.workers[(end-d+1):end] = nothing
         PGRP.np += d
     end
     PGRP.workers[i] = Worker("", 0, fd, sock, i)
@@ -327,13 +398,12 @@ function send_del_client(rr::RemoteRef)
     if rr.where == myid()
         del_client(rr2id(rr), myid())
     else
-        W = worker_from_id(rr.where)
-        push(W.del_msgs, (rr2id(rr), myid()))
-        if length(W.del_msgs) >= 10
-            #print("sending delete of $(W.del_msgs)\n")
-            remote_do(rr.where, del_clients, W.del_msgs...)
-            del_all(W.del_msgs)
+        w = worker_from_id(rr.where)
+        push(w.del_msgs, (rr2id(rr), myid()))
+        if !w.dirty
+            w.lastmsg = clock()
         end
+        w.dirty = true
     end
 end
 
@@ -435,17 +505,21 @@ localize_ref(x) = x
 # call f on args in a way that simulates what would happen if
 # the function were sent elsewhere
 function local_remote_call(f, args)
-    linfo = ccall(:jl_closure_linfo, Any, (Any,), f)
-    if isa(linfo,LambdaStaticData)
-        env = ccall(:jl_closure_env, Any, (Any,), f)
-        buf = memio()
-        serialize(buf, env)
-        seek(buf, 0)
-        env = force(deserialize(buf))
-        f = ccall(:jl_new_closure_internal, Any, (Any, Any),
-                  linfo, env)::Function
-    end
-    f(map(localize_ref,args)...)
+    return f(args...)
+
+    # TODO: this seems to be capable of causing deadlocks by waiting on
+    # Refs buried inside the closure that we don't want to wait on yet.
+    # linfo = ccall(:jl_closure_linfo, Any, (Any,), f)
+    # if isa(linfo,LambdaStaticData)
+    #     env = ccall(:jl_closure_env, Any, (Any,), f)
+    #     buf = memio()
+    #     serialize(buf, env)
+    #     seek(buf, 0)
+    #     env = force(deserialize(buf))
+    #     f = ccall(:jl_new_closure_internal, Any, (Any, Any),
+    #               linfo, env)::Function
+    # end
+    # f(map(localize_ref,args)...)
 end
 
 function remote_call(w::LocalProcess, f, args...)
@@ -456,6 +530,7 @@ end
 
 function remote_call(w::Worker, f, args...)
     rr = RemoteRef(w)
+    #println("$(myid()) asking for $rr")
     send_msg(w, :call, rr2id(rr), f, args)
     rr
 end
@@ -667,6 +742,7 @@ function perform_work(job::WorkItem)
             # add to waiting set to wait on a sync event
             wf::WaitFor = result
             rr = wf.rr
+            #println("$(myid()) waiting for $rr")
             oid = rr2id(rr)
             waitinfo = (wf.msg, job, rr)
             waiters = get(Waiting, oid, false)
@@ -692,11 +768,11 @@ function deliver_result(sock::IOStream, msg, oid, value)
         val = oid
     end
     try
-        send_msg(sock, :result, msg, oid, val)
+        send_msg_now(sock, :result, msg, oid, val)
     catch e
         # send exception in case of serialization error; otherwise
         # request side would hang.
-        send_msg(sock, :result, msg, oid, e)
+        send_msg_now(sock, :result, msg, oid, e)
     end
 end
 
@@ -1094,7 +1170,7 @@ function serialize(s, g::GlobalObject)
     ri = member(g, i)
     if is(ri, false)
         li = g.local_identity
-        g.local_identity = ()
+        g.local_identity = nothing
         invoke(serialize, (Any, Any), s, g)
         g.local_identity = li
         return
@@ -1369,8 +1445,9 @@ function event_loop(isclient)
 
     while true
         try
+            ccall(:jl_register_toplevel_eh, Void, ())
             if iserr
-                show(lasterr)
+                show(lasterr); exit(1)
                 iserr, lasterr = false, ()
             end
             while true
@@ -1379,7 +1456,9 @@ function event_loop(isclient)
                     add(fdset, fd)
                 end
 
-                nselect = select_read(fdset, isempty(Workqueue) ? 10 : 0)
+                nselect = select_read(fdset,
+                                      isempty(Workqueue) ? max_sleep_time() :
+                                                           0.0)
                 if nselect == 0
                     if !isempty(Workqueue)
                         perform_work()
@@ -1392,6 +1471,7 @@ function event_loop(isclient)
                         end
                     end
                 end
+                flush_workers()
             end
         catch e
             if isa(e,DisconnectException)
