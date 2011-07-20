@@ -158,11 +158,14 @@ end
 
 function flush_workers()
     global PGRP
-    now = clock()
+    now = 0.0
     for w = PGRP.workers
-        if isa(w,Worker)
+        if isa(w,Worker) && (w::Worker).dirty
             k = w::Worker
-            if k.dirty && now-k.lastmsg >= 0.0002
+            if now==0.0
+                now = clock()
+            end
+            if now-k.lastmsg >= 0.0002
                 flush_worker(k)
             end
         end
@@ -173,9 +176,12 @@ end
 function max_sleep_time()
     global PGRP
     mt = 10.0
-    now = clock()
+    now = 0.0
     for w = PGRP.workers
         if isa(w,Worker) && (w::Worker).dirty
+            if now==0.0
+                now = clock()
+            end
             mt = min(mt,(w::Worker).lastmsg+0.0002-now)
         end
     end
