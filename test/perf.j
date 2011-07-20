@@ -2,61 +2,46 @@ println("*** Julia ***")
 
 # simple performance tests
 
-nl() = print("\n")
-
-function timeit(func, args...)
-    nexpt = 5
-    times = zeros(nexpt)
-
-    for i=1:nexpt
-        tic(); func(args...); times[i] = qtoc();
+macro timeit(ex,name)
+    quote
+        t = Inf
+        for i=1:5
+            t = min(t, @elapsed $ex)
+        end
+        println(rpad(strcat($name,":"), 20), t)
     end
-
-    times = sort(times)
-    print (times[1])
-    nl()
-    nl()
 end
-
-nl()
 
 ## recursive fib ##
 
 fib(n) = n < 2 ? n : fib(n-1) + fib(n-2)
 
-print("recursive fib(20): ")
-f = fib(20)
-@assert f == 6765
-timeit(fib, 20)
+@assert fib(20) == 6765
+@timeit fib(20) "recursive fib"
 
 ## parse int ##
-
-print("parse_int: ")
 
 function parseintperf()
     local n
     for i=1:1000
         n=parse_bin("1111000011110000111100001111")
     end
-    n
+    return n
 end
 
 @assert parseintperf() == 252645135
-timeit(parseintperf)
+@timeit parseintperf() "parse_int"
 
 ## array constructors ##
 
-print("ones: ")
-o = ones(200,200)
-@assert o == 1
-timeit(ones, 200, 200)
+@assert ones(200,200) == 1
+@timeit ones(200,200) "ones"
 
 ## matmul and transpose ##
 
-print("A * transpose(A): ")
-matmul(o) = o * o.'
-@assert all(matmul(o)==200)
-timeit(matmul, o)
+A = ones(200,200)
+@assert A*A' == 200
+@timeit A*A' "A*A'"
 
 ## mandelbrot set: complex arithmetic and comprehensions ##
 
@@ -72,20 +57,18 @@ function mandel(z::ComplexNum)
     n
 end
 
-print("mandelbrot: ")
-mandelperf() = [ mandel(complex(r,i)) | r = -2.0:.1:0.5, i = -1.:.1:1. ]
+mandelperf() = [ mandel(complex(r,i)) | r=-2.0:.1:0.5, i=-1.:.1:1. ]
 @assert sum(mandelperf()) == 14791
-timeit(mandelperf)
+@timeit sum(mandelperf()) "mandelbrot"
 
 ## numeric vector sort ##
 
-print("sort: ")
 function sortperf(n)
   v = rand(n)
   v = sort(v)
 end
 @assert issorted(sortperf(5000))
-timeit(sortperf, 5000)
+@timeit sortperf(5000) "sort"
 
 ## slow pi series ##
 
@@ -100,10 +83,8 @@ function pisum()
     sum
 end
 
-print("pi sum: ")
-s = pisum()
-@assert abs(s-1.644834071848065) < 1e-12
-timeit(pisum)
+@assert abs(pisum()-1.644834071848065) < 1e-12
+@timeit pisum() "pi sum"
 
 ## Random matrix statistics ##
 
@@ -124,7 +105,6 @@ function randmatstat(t)
     return (std(v)/mean(v), std(w)/mean(w))
 end
 
-print("random matrix statistics: ")
 (s1, s2) = randmatstat(1000)
 @assert s1 > 0.5 && s1 < 1.0
-timeit(randmatstat, 1000)
+@timeit randmatstat(1000) "random matrix"
