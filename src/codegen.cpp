@@ -189,7 +189,7 @@ static Function *to_function(jl_lambda_info_t *li)
     //n_compile++;
     // print out the function's LLVM code
     //f->dump();
-    verifyFunction(*f);
+    //verifyFunction(*f);
     if (old != NULL) {
         builder.SetInsertPoint(old);
         builder.SetCurrentDebugLocation(olddl);
