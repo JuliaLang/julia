@@ -282,6 +282,11 @@ function (*){T1,T2}(X::Vector{T1}, A::SparseMatrixCSC{T2})
     return Y
 end
 
+# sparse * sparse
+function (*){T1,T2}(X::SparseMatrixCSC{T1},Y::SparseMatrixCSC{T2}) 
+    error("Not yet implemented")
+end
+
 function (*){T1,T2}(A::SparseMatrixCSC{T1}, X::Matrix{T2})
     mX, nX = size(X)
     Y = zeros(promote_type(T1,T2), A.m, nX)
@@ -307,9 +312,3 @@ function (*){T1,T2}(X::Matrix{T1}, A::SparseMatrixCSC{T2})
     end
     return Y
 end
-
-# sparse * sparse
-function (*){T1,T2}(X::SparseMatrixCSC{T1},Y::SparseMatrixCSC{T2}) 
-    error("Not yet implemented")
-end
-
