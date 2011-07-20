@@ -307,3 +307,9 @@ function (*){T1,T2}(X::Matrix{T1}, A::SparseMatrixCSC{T2})
     end
     return Y
 end
+
+# sparse * sparse
+function (*){T1,T2}(X::SparseMatrixCSC{T1},Y::SparseMatrixCSC{T2}) 
+    error("Not yet implemented")
+end
+
