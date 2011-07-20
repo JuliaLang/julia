@@ -40,5 +40,7 @@ map(f, a::Array{Any,1}) = { f(a[i]) | i=1:length(a) }
 map(f, a::Array{Any,1}, b::Array{Any,1}) =
     { f(a[i],b[i]) | i=1:min(length(a),length(b)) }
 
-cell(dims::Tuple)   = Array(Any, dims)
-cell(dims::Size...) = cell(dims)
+cell(dims::(Int...))   = Array(Any, map(long, dims))
+cell(dims::Int...)     = Array(Any, map(long, dims))
+cell(d1::Int)          = Array(Any, long(d1))
+cell(d1::Int, d2::Int) = Array(Any, long(d1), long(d2))

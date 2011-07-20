@@ -84,8 +84,9 @@ end
 # - have put() wait on non-empty Refs
 # - removing nodes
 # - more dynamic scheduling
-# - fetch/wait latency seems to be excessive
-# - timer events and message aggregation
+# * fetch/wait latency seems to be excessive
+# * message aggregation
+# - timer events
 # - send pings at some interval to detect failed/hung machines
 # - integrate event loop with other kinds of i/o (non-messages)
 # ? method_missing for waiting (ref/assign/localdata seems to cover a lot)
@@ -1198,10 +1199,14 @@ function serialize(s, g::GlobalObject)
 end
 
 localize(g::GlobalObject) = g.local_identity
-
+fetch(g::GlobalObject) = g.local_identity
 localize_ref(g::GlobalObject) = g.local_identity
 
 broadcast(x) = GlobalObject(g->x)
+
+function ref(g::GlobalObject, args...)
+    g.local_identity[args...]
+end
 
 ## higher-level functions: spawn, pmap, pfor, etc. ##
 
@@ -1445,9 +1450,8 @@ function event_loop(isclient)
 
     while true
         try
-            ccall(:jl_register_toplevel_eh, Void, ())
             if iserr
-                show(lasterr); exit(1)
+                show(lasterr)
                 iserr, lasterr = false, ()
             end
             while true

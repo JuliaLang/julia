@@ -720,7 +720,7 @@ issues 1/24/11
   * allow inlining where formal arg appears >once if actual arg is symbol
   * in frontend add (multiple-value) hint before assigning the temp var
     for a returned tuple
-- socket data corruption bug (?)
+* socket data corruption bug
 - array primitive benchmarks
 - parallelism documentation
 - darray functions
