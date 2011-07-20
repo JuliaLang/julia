@@ -18,7 +18,7 @@ function hpl_par(A::Matrix, b::Vector, blocksize::Int, run_parallel::Bool)
        throw(ArgumentError("hpl_par: invalid blocksize: $blocksize < 1"))
     end
 
-    B_rows = linspace(0, n, blocksize)
+    B_rows = linspace(0, n, div(n,blocksize)+1)
     B_rows[end] = n 
     B_cols = [B_rows, [n+1]]
     nB = length(B_rows)
