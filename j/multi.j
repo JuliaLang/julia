@@ -1299,7 +1299,7 @@ macro pfor(reducer, range, body)
     var = range.args[1]
     r = range.args[2]
     quote
-        preduce($reducer, ($var)->($body), $r)
+        preduce($reducer, $localize_vars(:(($var)->($body))), $r)
     end
 end
 
@@ -1321,11 +1321,11 @@ macro parallel(args...)
     body = loop.args[2]
     if na==1
         quote
-            pfor(($var)->($body), $r)
+            pfor($localize_vars(:(($var)->($body))), $r)
         end
     else
         quote
-            preduce($reducer, ($var)->($body), $r)
+            preduce($reducer, $localize_vars(:(($var)->($body))), $r)
         end
     end
 end
