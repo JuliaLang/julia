@@ -276,7 +276,7 @@ function ^{T<:ComplexNum}(z::T, p::T)
     realz = real(z)
     zer = zero(r)
     if imag(p) == 0
-        ip = truncate(realp)
+        ip = int(realp)
         if ip == realp
             # integer multiples of pi/2
             if imag(z) == 0 && realz < 0
@@ -296,7 +296,7 @@ function ^{T<:ComplexNum}(z::T, p::T)
             end
         else
             dr = realp*2
-            ip = truncate(dr)
+            ip = int(dr)
             # 1/2 multiples of pi
             if ip == dr && imag(z) == 0
                 if realz < 0

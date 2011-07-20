@@ -27,9 +27,6 @@ convert(::Type{Float64}, x::Float32) = boxf64(fpext64(unbox32(x)))
 float32(x) = convert(Float32, x)
 float64(x) = convert(Float64, x)
 
-truncate(x::Float32) = convert(Int32, x)
-truncate(x::Float64) = convert(Int64, x)
-
 int(x::Float32) = int32(x)
 int(x::Float64) = int64(x)
 

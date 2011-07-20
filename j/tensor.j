@@ -61,13 +61,17 @@ one{T}(x::Tensor{T,2}) = (m=size(x,1); n=size(x,2);
                           a)
 zero{T}(x::Tensor{T,2}) = zeros(T,size(x))
 
-linspace(start::Real, stop::Real, stride::Real) =
-    ((start, stop, stride) = promote(start, stop, stride);
-     [ i | i=start:stride:stop ])
+function linspace(start::Real, stop::Real, n::Int)
+    (start, stop) = promote(start, stop)
+    a = Array(typeof(start), long(n))
+    step = (stop-start)/(n-1)
+    for i=1:n
+        a[i] = start+(i-1)*step
+    end
+    a
+end
 
-linspace(start::Real, stop::Real) =
-    ((start, stop) = promote(start, stop);
-     [ i | i=start:stop ])
+linspace(start::Real, stop::Real) = [ i | i=start:stop ]
 
 ## Unary operators ##
 

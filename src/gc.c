@@ -272,6 +272,8 @@ static void add_page(pool_t *p)
         pfl = &v->next;
         v = (gcval_t*)((char*)v + p->osize);
     }
+    // these statements are ordered so that interrupting after any of them
+    // leaves the system in a valid state
     *pfl = p->freelist;
     pg->next = p->pages;
     p->pages = pg;

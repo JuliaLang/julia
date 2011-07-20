@@ -30,6 +30,8 @@ static const char *opts =
     " -b --bare                Bare: don't load default startup files\n"
     " -J --sysimage=file       Start up with the given system image file\n\n"
 
+    " -p n                     Run n local processes\n\n"
+
     " -h --help                Print this message\n";
 
 void parse_opts(int *argcp, char ***argvp) {

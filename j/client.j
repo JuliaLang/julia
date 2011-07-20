@@ -51,6 +51,7 @@ function process_options(args::Array{Any,1})
             start_worker()
             # doesn't return
         elseif args[i]=="-e"
+            # TODO: support long options
             repl = false
             i+=1
             eval(parse_input_line(args[i]))
