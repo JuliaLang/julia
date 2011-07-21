@@ -238,7 +238,7 @@ $(ARPACK_OBJ_TARGET): $(ARPACK_OBJ_SOURCE)
 	cp $< $@
 
 clean-arpack:
-	make -C arpack-$(ARPACK_VER) clean
+	make -C arpack-$(ARPACK_VER) home=`pwd`/arpack-$(ARPACK_VER) clean MAKE=make
 	rm -f $(ARPACK_OBJ_SOURCE) $(ARPACK_OBJ_TARGET)
 distclean-arpack:
 	rm -rf arpack-$(ARPACK_VER).tar.gz arpack-patch.tar.gz arpack-$(ARPACK_VER)
