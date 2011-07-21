@@ -71,7 +71,7 @@ readline-$(READLINE_VER)/configure: readline-$(READLINE_VER).tar.gz
 	touch $@
 $(READLINE_OBJ_SOURCE): readline-$(READLINE_VER)/configure
 	cd readline-$(READLINE_VER) && \
-	./configure --prefix=$(EXTROOT) && \
+	./configure --prefix=$(EXTROOT) --disable-shared --enable-static --with-curses && \
 	make
 	touch $@
 $(READLINE_OBJ_TARGET): $(READLINE_OBJ_SOURCE)
