@@ -504,6 +504,8 @@ void* watchdog_thread(void* arg)
 // THREAD:  main_thread
 /////////////////////////////////////////////////////////////////////////////
 
+const size_t MAX_CONCURRENT_SESSIONS = 4;
+
 // generate a session token
 string make_session_token()
 {
@@ -566,8 +568,20 @@ string create_session()
         close(session_data.julia_out[0]);
         close(session_data.julia_out[1]);
 
+        // set a high nice value
+        nice(20);
+
+        // limit memory usage
+        rlimit limits;
+        limits.rlim_max = 200000000;
+        limits.rlim_cur = limits.rlim_max;
+        setrlimit(RLIMIT_AS, &limits);
+
         // acutally spawn julia instance
         execl("./julia-release-web", "julia-release-web", (char*)0);
+
+        // if exec failed, terminate with an error
+        exit(1);
     }
     close(session_data.julia_in[0]);
     close(session_data.julia_out[1]);
@@ -630,7 +644,8 @@ string get_response(request* req)
     // create a new session if necessary
     if (session_token == "")
     {
-        session_token = create_session();
+        if (session_map.size() < MAX_CONCURRENT_SESSIONS)
+            session_token = create_session();
         if (session_token == "")
             return respond_error("", "Maximum server capacity reached.  Please try again later.");
     }
