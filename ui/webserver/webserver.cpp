@@ -115,7 +115,7 @@ string str_replace(string str, string from, string to)
 /////////////////////////////////////////////////////////////////////////////
 
 // if a session hasn't been queried in this time, it dies
-const int SESSION_TIMEOUT = 4; // in seconds
+const int SESSION_TIMEOUT = 5; // in seconds
 
 // a session
 struct session
@@ -214,9 +214,25 @@ void* inbox_thread(void* arg)
         timeval select_timeout;
         select_timeout.tv_sec = 0;
         select_timeout.tv_usec = 100000;
-        size_t bytes_written = 0;
+        ssize_t bytes_written = 0;
         if (select(FD_SETSIZE, 0, &set, 0, &select_timeout))
             bytes_written = write(pipe, inbox.c_str(), inbox.size());
+
+        // terminate the session if the pipe is broken
+        if (bytes_written < 0)
+        {
+            // lock the mutex
+            pthread_mutex_lock(&session_mutex);
+
+            // start terminating
+            session_map[session_token].terminating = true;
+
+            // unlock the mutex
+            pthread_mutex_unlock(&session_mutex);
+
+            // carry on
+            continue;
+        }
 
         // lock the mutex
         pthread_mutex_lock(&session_mutex);
@@ -289,12 +305,31 @@ void* outbox_thread(void* arg)
         timeval select_timeout;
         select_timeout.tv_sec = 0;
         select_timeout.tv_usec = 100000;
-        size_t bytes_read = 0;
+        ssize_t bytes_read = 0;
         if (select(FD_SETSIZE, &set, 0, 0, &select_timeout))
             bytes_read = read(pipe, buffer, buffer_size);
 
         // lock the mutex
         pthread_mutex_lock(&session_mutex);
+
+        // terminate the session if the pipe is broken
+        if (bytes_read < 0)
+        {
+            // lock the mutex
+            pthread_mutex_lock(&session_mutex);
+
+            // start terminating
+            session_map[session_token].terminating = true;
+
+            // unlock the mutex
+            pthread_mutex_unlock(&session_mutex);
+
+            // free memory
+            delete [] buffer;
+
+            // carry on
+            continue;
+        }
 
         // get the read data
         buffer[bytes_read] = 0;
@@ -469,6 +504,12 @@ void* watchdog_thread(void* arg)
 
             // remove the session from the map
             session_map.erase(*iter);
+
+            // print the number of open sessions
+            if (session_map.size() == 1)
+                cout<<session_map.size()<<" open session.\n";
+            else
+                cout<<session_map.size()<<" open sessions.\n";
         }
 
         // unlock the mutex
@@ -575,6 +616,12 @@ string create_session()
 
     // store the session
     session_map[session_token] = session_data;
+
+    // print the number of open sessions
+    if (session_map.size() == 1)
+        cout<<session_map.size()<<" open session.\n";
+    else
+        cout<<session_map.size()<<" open sessions.\n";
     
     // return the session token
     return session_token;
@@ -595,7 +642,7 @@ string get_response(request* req)
     if (session_token != "")
     {
         if (session_map.find(session_token) == session_map.end())
-            session_token = "";
+            return respond_error("", "Invalid session token.");
     }
 
     // create a new session if necessary
@@ -637,6 +684,13 @@ int main()
     // seed the random number generator for generating session tokens
     srand(time(0));
 
+    // ignore the SIGPIPE signal (when julia crashes or exits, we don't want to die too)
+    struct sigaction act;
+    act.sa_flags = 0;
+    act.sa_handler = SIG_IGN;
+    sigemptyset(&act.sa_mask);
+    sigaction(SIGPIPE, &act, NULL);
+
     // initialize the mutex
     pthread_mutex_init(&session_mutex, 0);
 
@@ -644,8 +698,10 @@ int main()
     pthread_t watchdog;
     pthread_create(&watchdog, 0, watchdog_thread, 0);
 
+    // print the number of open sessions
+    cout<<"0 open sessions.\n";
+
     // start the server
-    cout<<"server started.\n";
     run_server(1441, &get_response);
 
     // never reached
