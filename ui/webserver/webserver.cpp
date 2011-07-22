@@ -15,6 +15,7 @@ using namespace scgi;
 // TODO:
 // - History support in the client
 // - Message-based protocol
+// - check ALL memory allocations and error values
 
 /////////////////////////////////////////////////////////////////////////////
 // helpers
@@ -549,8 +550,14 @@ string create_session()
     session_data.terminating = false;
 
     // start the julia instance
-    pipe(session_data.julia_in);
-    pipe(session_data.julia_out);
+    if (pipe(session_data.julia_in))
+        return "";
+    if (pipe(session_data.julia_out))
+    {
+        close(session_data.julia_in[0]);
+        close(session_data.julia_in[1]);
+        return "";
+    }
     
     pid_t pid = fork();
     if (pid == -1)
@@ -574,7 +581,8 @@ string create_session()
         close(session_data.julia_out[1]);
 
         // set a high nice value
-        nice(20);
+        if (nice(20) == -1)
+            exit(1);
 
         // limit memory usage
         rlimit limits;
