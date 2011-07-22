@@ -463,8 +463,10 @@ void* watchdog_thread(void* arg)
         for (vector<string>::iterator iter = zombie_list.begin(); iter != zombie_list.end(); iter++)
         {
             // wait for the threads to terminate
-            pthread_join(session_map[*iter].inbox_proc, 0);
-            pthread_join(session_map[*iter].outbox_proc, 0);
+            if (session_map[*iter].inbox_proc)
+                pthread_join(session_map[*iter].inbox_proc, 0);
+            if (session_map[*iter].outbox_proc)
+                pthread_join(session_map[*iter].outbox_proc, 0);
 
             // close the pipes
             close(session_map[*iter].julia_in[1]);
@@ -576,12 +578,20 @@ string create_session()
     // start the inbox thread
     char* session_token_inbox = new char[256];
     strcpy(session_token_inbox, session_token.c_str());
-    pthread_create(&session_data.inbox_proc, 0, inbox_thread, (void*)session_token_inbox);
+    if (pthread_create(&session_data.inbox_proc, 0, inbox_thread, (void*)session_token_inbox))
+    {
+        delete [] session_token_inbox;
+        session_data.inbox_proc = 0;
+    }
 
     // start the outbox thread
     char* session_token_outbox = new char[256];
     strcpy(session_token_outbox, session_token.c_str());
-    pthread_create(&session_data.outbox_proc, 0, outbox_thread, (void*)session_token_outbox);
+    if (pthread_create(&session_data.outbox_proc, 0, outbox_thread, (void*)session_token_outbox))
+    {
+        delete [] session_token_outbox;
+        session_data.outbox_proc = 0;
+    }
 
     // set the start time
     session_data.update_time = time(0);
