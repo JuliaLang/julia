@@ -16,7 +16,7 @@ length(x::Number) = 1
 ref(x::Number) = x
 
 signbit(x::Real) = x < 0 ? -one(x) : one(x)
-sign(x::Real) = x < 0 ? -one(x) : x > 0 ? one(x) : zero(x)
+sign(x::Real) = x < 0 ? -one(x) : x > 0 ? one(x) : x
 abs(x::Real) = x < 0 ? -x : x
 abs2(x::Real) = x*x
 

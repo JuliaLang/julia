@@ -138,8 +138,8 @@ b = rand()
 @assert sign(-1.0/0.0) == -1
 @assert sign(Inf) == 1
 @assert sign(-Inf) == -1
-@assert sign(NaN) == 0
-@assert sign(-NaN) == 0
+@assert isequal(sign(NaN), NaN)
+@assert isequal(sign(-NaN), NaN)
 @assert sign(2//3) == 1
 @assert sign(-2//3) == -1
 @assert sign(0//1) == 0
