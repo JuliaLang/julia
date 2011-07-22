@@ -99,10 +99,6 @@ rem(x::Float64, y::Float64) = boxf64(rem_float(unbox64(x), unbox64(y)))
 
 isequal(x::Float, y::Float) = (x == y) || (isnan(x) && isnan(y))
 
-cmp{T<:Float}(x::T, y::T) =
-    !isnan(x) && !isnan(y) ? sign(y-x) :
-        error("applying cmp to NaN is undefined")
-
 ## traits ##
 
 eps(::Type{Float32}) = float32(1.1920928e-7)
