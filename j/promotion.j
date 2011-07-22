@@ -1,7 +1,10 @@
 ## promotion mechanism ##
 
 promote_type{T}(::Type{T}) = T
+promote_type(::Type{None}, ::Type{None}) = None
 promote_type{T}(::Type{T}, ::Type{T}) = T
+promote_type{T}(::Type{T}, ::Type{None}) = T
+promote_type{T}(::Type{None}, ::Type{T}) = T
 promote_type(S::Type, T::Type...) = promote_type(S, promote_type(T...))
 
 function promote_type{T,S}(::Type{T}, ::Type{S})
