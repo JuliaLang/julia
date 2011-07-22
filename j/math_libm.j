@@ -19,11 +19,16 @@ macro libfdmfunc_1arg_float(T,f)
     end
 end
 
-macro libmfunc_1arg_int(T,f)
+macro libmfunc_1arg_int(T,f,name...)
+    if length(name)>0
+        fname = name[1]
+    else
+        fname = f
+    end
     quote
-        ($f)(x::Float64) = ccall(dlsym(libm,$string(f)), Int32, (Float64,), x)
-        ($f)(x::Float32) = ccall(dlsym(libm,$strcat(string(f),"f")), Int32, (Float32,), x)
-        @vectorize_1arg $T $f
+        ($fname)(x::Float64) = ccall(dlsym(libm,$string(f)), Int32, (Float64,), x)
+        ($fname)(x::Float32) = ccall(dlsym(libm,$strcat(string(f),"f")), Int32, (Float32,), x)
+        @vectorize_1arg $T $fname
     end
 end
 
@@ -57,17 +62,17 @@ end
 @libfdmfunc_1arg_float Number erfc
 @libfdmfunc_1arg_float Real   ceil
 @libfdmfunc_1arg_float Real   floor
-@libfdmfunc_1arg_float Real   rint
+#@libfdmfunc_1arg_float Real   rint
 @libfdmfunc_1arg_float Number lgamma
 
 @libmfunc_1arg_float Number sqrt
 @libmfunc_1arg_float Number exp2
-@libmfunc_1arg_float Real   nearbyint
+#@libmfunc_1arg_float Real   nearbyint
 @libmfunc_1arg_float Real   trunc
 @libmfunc_1arg_float Real   round
 
-@libmfunc_1arg_int Real lrint
-@libmfunc_1arg_int Real lround
+#@libmfunc_1arg_int Real lrint
+@libmfunc_1arg_int Real lround iround
 @libmfunc_1arg_int Real ilogb
 
 @libfdmfunc_2arg Number atan2

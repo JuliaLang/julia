@@ -1455,6 +1455,9 @@ static int jl_subtype_le(jl_value_t *a, jl_value_t *b, int ta, int morespecific,
                                    invariant))
                     return 0;
             }
+            if (invariant && a == (jl_value_t*)jl_bottom_type &&
+                !jl_is_typevar(b))
+                return 0;
         }
         return 1;
     }
@@ -1736,6 +1739,9 @@ static jl_value_t *type_match_(jl_value_t *child, jl_value_t *parent,
                 if (tmp == jl_false) return jl_false;
                 *env = (jl_tuple_t*)tmp;
             }
+            if (invariant && child == (jl_value_t*)jl_bottom_type &&
+                !jl_is_typevar(parent))
+                return jl_false;
         }
         return (jl_value_t*)*env;
     }

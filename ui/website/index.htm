@@ -9,27 +9,34 @@
 		<script>
 			// keep track of the minimum height of the content (the height of the longest column)
 			var min_content_height;
+
+			// set the outer height of an element or group of elements
+			function set_outer_height(selector, height)
+			{
+				$(selector).height(0);
+				$(selector).height(height-$(selector).outerHeight(true));
+			}
 			
 			// this function makes all of the columns the same height
 			function set_column_heights() {
 				// set the height of all the columns to the height of the longest one
-				$('div#left-column').height(min_content_height);
-				$('div#right-column').height(min_content_height);
-				$('div#main').height(min_content_height);
+				set_outer_height("div#left-column", min_content_height);
+				set_outer_height("div#right-column", min_content_height);
+				set_outer_height("div#main", min_content_height);
 				
 				// calculate how much taller the columns should be so the footer is at the bottom of the window
-				var padding = Math.max($(window).height()-($('#footer-bar').offset().top+$('#footer-bar').outerHeight(true)), 0);
+				var padding = Math.max($(window).height()-($("#footer-bar").offset().top+$("#footer-bar").outerHeight(true)), 0);
 				
 				// make the columns taller so the footer is on the bottom of the page
-				$('div#left-column').height(min_content_height+padding);
-				$('div#right-column').height(min_content_height+padding);
-				$('div#main').height(min_content_height+padding);
+				set_outer_height("div#left-column", min_content_height+padding);
+				set_outer_height("div#right-column", min_content_height+padding);
+				set_outer_height("div#main", min_content_height+padding);
 			}
 			
 			// called on page load
 			window.onload = function() {
 				// calculate the height of the longest column
-				min_content_height = Math.max($('div#left-column').height(), $('div#right-column').height());
+				min_content_height = Math.max($("div#left-column").outerHeight(true), $("div#right-column").outerHeight(true));
 				
 				// set the height of the columns appropriately
 				set_column_heights();
@@ -40,7 +47,7 @@
 		</script>
 		<script>
 			// keep track of terminal history
-			var terminal_data = "Spawning Julia instance...<br /><br />";
+			var terminal_data = "";
 
 			// keep track of the last time a request was sent
 			var last_request_time = new Date();
@@ -53,8 +60,11 @@
 				{
 					// show a "connection lost" message
 					terminal_data += "<br /><br />The connection to the server was lost.";
+				if (terminal_data.substring(terminal_data.length-18) == "<br />julia>&nbsp;")
+					$("#terminal").html(terminal_data.substring(0, terminal_data.length-18));
+				else
 					$("#terminal").html(terminal_data);
-					$("#terminal").animate({scrollTop: $("#terminal").prop("scrollHeight")}, 500);
+					$("#terminal").prop("scrollTop", $("#terminal").prop("scrollHeight"));
 				}
 				else
 				{
@@ -86,8 +96,11 @@
 				if (data != "")
 				{
 					terminal_data += data;
-					$("#terminal").html(terminal_data);
-					$("#terminal").animate({scrollTop: $("#terminal").prop("scrollHeight")}, 500);
+					if (terminal_data.substring(terminal_data.length-18) == "<br />julia>&nbsp;")
+						$("#terminal").html(terminal_data.substring(0, terminal_data.length-18));
+					else
+						$("#terminal").html(terminal_data);
+					$("#terminal").prop("scrollTop", $("#terminal").prop("scrollHeight"));
 				}
 
 				// poll the server again
@@ -97,9 +110,11 @@
 			// called on page load
 			$(document).ready(function()
 			{
+				// hook mouse events
+				$("#terminal-form").click(function(evt) { $("#terminal-input").focus(); } );
+
 				// initial terminal content
-				$("#terminal").html(terminal_data);
-				$("#terminal").animate({scrollTop: $("#terminal").prop("scrollHeight")}, 500);
+				$("#terminal").html("Spawning Julia instance...<br /><br />");
 				
 				// hook the submit event of the form
 				$("#terminal-form").submit(function(evt)
@@ -136,48 +151,25 @@
 		<div id="header-bar">
 			<header>
 				<a href="/"><img id="logo" src="images/logo_dark.png" alt="Julia Programming Language" /></a>
-				<nav>
-					<img id="slogan" src="images/slogan.png" alt="A fresh approach to technical computing." />
-					<div class="float-clear"> </div>
-					<a href="/">Home</a>
-					<a href="https://github.com/JuliaLang/julia">GitHub</a>
-					<a href="about.htm">About</a>
-					<a href="contact.htm">Contact</a>
-					<div class="float-clear"> </div>
-				</nav>
+				<img id="slogan" src="images/slogan.png" alt="A fresh approach to technical computing." />
 				<div class="float-clear"> </div>
 			</header>
 		</div>
 		<div id="main">
 			<div id="left-column">
-				<h2>Julia Overview</h2>
-				<ul>
-					<li>Introduction</li>
-					<li>Getting Started</li>
-					<li>Numeric Primitives and Literals</li>
-					<li>Mathematical Operations</li>
-					<li>Complex and Rational Numbers</li>
-					<li>Strings</li>
-					<li>Functions</li>
-					<li>Control Flow</li>
-					<li>Variables and Scoping</li>
-					<li>Types</li>
-					<li>Methods</li>
-					<li>Conversion and Promotion</li>
-					<li>Arrays</li>
-					<li>Running External Programs</li>
-					<li>Parallel Computing</li>
-					<li>Metaprogramming</li>
-					<li>Calling C Code</li>
-					<li>Standard Library Reference</li>
-				</ul>
+				<a href="/">Home</a>
+				<a href="/repl.htm">Interactive Prompt</a>
+				<a href="/plots.htm">Plots</a>
+				<a href="/docs.htm">Documentation</a>
+				<a href="/about.htm">About</a>
 			</div>
 			<div id="right-column">
-				<h1>A fresh approach to technical computing.</h1>
-				<p>Julia is a dynamic language with optional typing, multiple dispatch, and good performance, achieved using type inference and just-in-time (JIT) compilation, implemented using LLVM. It is multi-paradigm, combining features of imperative, functional, and object-oriented programming.  Try it out!</p>
 				<form id="terminal-form">
 					<div id="terminal"></div>
-					<input class="input" id="terminal-input" type="text" autofocus="autofocus" required="required" />
+					<div>
+						<div id="prompt">julia> </div>
+						<input class="input" id="terminal-input" type="text" autofocus="autofocus" required="required" />
+					</div>
 				</form>
 			</div>
 			<div class="float-clear"> </div>

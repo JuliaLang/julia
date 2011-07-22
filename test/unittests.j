@@ -23,6 +23,7 @@
 @assert !(Array{Int8,1} <: Array{Any,1})
 @assert !(Array{Any,1} <: Array{Int8,1})
 @assert Array{Int8,1} <: Array{Int8,1}
+@assert !subtype(Type{None}, Type{Int32})
 
 @assert !isa(Array,Type{Any})
 @assert subtype(Type{Complex},StructKind)
