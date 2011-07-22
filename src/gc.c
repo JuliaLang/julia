@@ -214,6 +214,8 @@ static void *alloc_big(size_t sz, int isobj)
 {
     sz = (sz+3) & -4;
     bigval_t *v = (bigval_t*)malloc(sz + BVOFFS*sizeof(void*));
+    if (v == NULL)
+        jl_raise(jl_memory_exception);
 #ifdef MEMDEBUG
     v->sz = sz;
 #endif
@@ -267,6 +269,8 @@ static void sweep_big()
 static void add_page(pool_t *p)
 {
     gcpage_t *pg = malloc(sizeof(gcpage_t));
+    if (pg == NULL)
+        jl_raise(jl_memory_exception);
     gcval_t *v = (gcval_t*)&pg->data[0];
     char *lim = (char*)pg + GC_PAGE_SZ - p->osize;
     gcval_t *fl;

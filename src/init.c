@@ -329,6 +329,8 @@ void jl_get_builtin_hooks()
         jl_apply((jl_function_t*)global("UndefRefError"),NULL,0);
     jl_interrupt_exception =
         jl_apply((jl_function_t*)global("InterruptException"),NULL,0);
+    jl_memory_exception =
+        jl_apply((jl_function_t*)global("MemoryError"),NULL,0);
 
     jl_append_any_func = (jl_function_t*)global("append_any");
     jl_method_missing_func = (jl_function_t*)global("method_missing");
