@@ -115,7 +115,7 @@ string str_replace(string str, string from, string to)
 /////////////////////////////////////////////////////////////////////////////
 
 // if a session hasn't been queried in this time, it dies
-const int SESSION_TIMEOUT = 5; // in seconds
+const int SESSION_TIMEOUT = 10; // in seconds
 
 // a session
 struct session
@@ -218,27 +218,14 @@ void* inbox_thread(void* arg)
         if (select(FD_SETSIZE, 0, &set, 0, &select_timeout))
             bytes_written = write(pipe, inbox.c_str(), inbox.size());
 
-        // terminate the session if the pipe is broken
-        if (bytes_written < 0)
-        {
-            // lock the mutex
-            pthread_mutex_lock(&session_mutex);
-
-            // start terminating
-            session_map[session_token].terminating = true;
-
-            // unlock the mutex
-            pthread_mutex_unlock(&session_mutex);
-
-            // carry on
-            continue;
-        }
-
         // lock the mutex
         pthread_mutex_lock(&session_mutex);
 
-        // and remove it from the inbox
-        session_map[session_token].inbox = session_map[session_token].inbox.substr(bytes_written, session_map[session_token].inbox.size()-bytes_written);
+        // remove the written data from the inbox
+        if (bytes_written < 0)
+            session_map[session_token].inbox = "";
+        else
+            session_map[session_token].inbox = session_map[session_token].inbox.substr(bytes_written, session_map[session_token].inbox.size()-bytes_written);
 
         // unlock the mutex
         pthread_mutex_unlock(&session_mutex);
@@ -312,28 +299,13 @@ void* outbox_thread(void* arg)
         // lock the mutex
         pthread_mutex_lock(&session_mutex);
 
-        // terminate the session if the pipe is broken
-        if (bytes_read < 0)
-        {
-            // lock the mutex
-            pthread_mutex_lock(&session_mutex);
-
-            // start terminating
-            session_map[session_token].terminating = true;
-
-            // unlock the mutex
-            pthread_mutex_unlock(&session_mutex);
-
-            // free memory
-            delete [] buffer;
-
-            // carry on
-            continue;
-        }
-
         // get the read data
-        buffer[bytes_read] = 0;
-        string new_data = buffer;
+        string new_data;
+        if (bytes_read > 0)
+        {
+            buffer[bytes_read] = 0;
+            new_data = buffer;
+        }
         delete [] buffer;
         outbox += new_data;
 
@@ -642,7 +614,7 @@ string get_response(request* req)
     if (session_token != "")
     {
         if (session_map.find(session_token) == session_map.end())
-            return respond_error("", "Invalid session token.");
+            session_token = "";
     }
 
     // create a new session if necessary
