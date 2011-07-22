@@ -289,7 +289,7 @@ hcat(A::Array...) = cat(2, A...)
 
 function reinterpret{T,S}(::Type{T}, a::Array{S})
     b = Array(T, div(numel(a)*sizeof(S),sizeof(T)))
-    copy_to(b, a, ulong(length(b)*sizeof(T)))
+    copy_to(pointer(b), pointer(a), ulong(length(b)*sizeof(T)))
     return b
 end
 reinterpret(t,x) = reinterpret(t,[x])[1]

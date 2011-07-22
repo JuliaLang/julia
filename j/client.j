@@ -139,6 +139,8 @@ function _start()
             # start in "head node" mode
             global Scheduler = Task(()->event_loop(true), 1024*1024)
             global PGRP = ProcessGroup(1, {LocalProcess()}, {Location("",0)})
+        else
+            global PGRP = ProcessGroup(0, {}, {})
         end
 
         (quiet,repl) = process_options(ARGS)

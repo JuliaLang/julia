@@ -411,10 +411,19 @@ static jl_value_t *intersect_tag(jl_tag_type_t *a, jl_tag_type_t *b,
         for(i=0; i < p->length; i++) {
             jl_value_t *ap = jl_tupleref(a->parameters,i);
             jl_value_t *bp = jl_tupleref(b->parameters,i);
-            if (jl_is_typevar(ap) || jl_is_typevar(bp)) {
+            if (jl_is_typevar(ap)) {
                 ti = jl_type_intersect(ap,bp,penv,eqc,invariant);
-                if (ap == (jl_value_t*)jl_bottom_type ||
-                    bp == (jl_value_t*)jl_bottom_type) {
+                if (bp == (jl_value_t*)jl_bottom_type &&
+                    !((jl_tvar_t*)ap)->bound) {
+                    // "None" as a type parameter
+                    jl_tupleset(p, i, ti);
+                    continue;
+                }
+            }
+            else if (jl_is_typevar(bp)) {
+                ti = jl_type_intersect(ap,bp,penv,eqc,invariant);
+                if (ap == (jl_value_t*)jl_bottom_type &&
+                    !((jl_tvar_t*)bp)->bound) {
                     // "None" as a type parameter
                     jl_tupleset(p, i, ti);
                     continue;
@@ -628,12 +637,12 @@ static jl_value_t *jl_type_intersect(jl_value_t *a, jl_value_t *b,
     if (jl_is_typector(b))
         b = (jl_value_t*)((jl_typector_t*)b)->body;
     if (a == b) return a;
-    if (a == (jl_value_t*)jl_bottom_type || b == (jl_value_t*)jl_bottom_type)
-        return (jl_value_t*)jl_bottom_type;
     if (jl_is_typevar(a) && a != jl_ANY_flag)
         return intersect_typevar((jl_tvar_t*)a, b, penv, eqc, var);
     if (jl_is_typevar(b) && b != jl_ANY_flag)
         return intersect_typevar((jl_tvar_t*)b, a, penv, eqc, var);
+    if (a == (jl_value_t*)jl_bottom_type || b == (jl_value_t*)jl_bottom_type)
+        return (jl_value_t*)jl_bottom_type;
     if (!jl_has_typevars(a) && !jl_has_typevars(b)) {
         if (jl_subtype(a, b, 0))
             return a;
@@ -1455,6 +1464,9 @@ static int jl_subtype_le(jl_value_t *a, jl_value_t *b, int ta, int morespecific,
                                    invariant))
                     return 0;
             }
+            if (invariant && a == (jl_value_t*)jl_bottom_type &&
+                !jl_is_typevar(b))
+                return 0;
         }
         return 1;
     }
@@ -1736,6 +1748,9 @@ static jl_value_t *type_match_(jl_value_t *child, jl_value_t *parent,
                 if (tmp == jl_false) return jl_false;
                 *env = (jl_tuple_t*)tmp;
             }
+            if (invariant && child == (jl_value_t*)jl_bottom_type &&
+                !jl_is_typevar(parent))
+                return jl_false;
         }
         return (jl_value_t*)*env;
     }

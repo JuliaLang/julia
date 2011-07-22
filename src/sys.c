@@ -227,61 +227,127 @@ int jl_stderr() { return STDERR_FILENO; }
 static pthread_t io_thread;
 static pthread_mutex_t q_mut;
 static pthread_mutex_t wake_mut;
+static pthread_mutex_t buf_mut;
 static pthread_cond_t wake_cond;
 
 typedef struct _sendreq_t {
     int fd;
-    void *buf;
-    size_t n;
+    ios_t *buf;
+    int now;
     struct _sendreq_t *next;
 } sendreq_t;
 
 static sendreq_t *ioq = NULL;
+static sendreq_t *ioq_freelist = NULL;
 
 int _os_write_all(long fd, void *buf, size_t n, size_t *nwritten);
 
 static void *run_io_thr(void *arg)
 {
     while (1) {
-        pthread_mutex_lock(&wake_mut);
-        pthread_cond_wait(&wake_cond, &wake_mut);
-        pthread_mutex_unlock(&wake_mut);
+        if (ioq == NULL) {
+            pthread_mutex_lock(&wake_mut);
+            pthread_cond_wait(&wake_cond, &wake_mut);
+            pthread_mutex_unlock(&wake_mut);
+        }
+        assert(ioq != NULL);
 
         pthread_mutex_lock(&q_mut);
-        while (ioq != NULL) {
-            sendreq_t *r = ioq;
-            ioq = ioq->next;
-            pthread_mutex_unlock(&q_mut);
-            size_t nw;
-            _os_write_all(r->fd, r->buf, r->n, &nw);
-            julia_free(r->buf);
-            free(r);
-            pthread_mutex_lock(&q_mut);
+        sendreq_t *r = ioq;
+        ioq = ioq->next;
+        pthread_mutex_unlock(&q_mut);
+
+        if (!r->now) {
+            int64_t now = (int64_t)(clock_now()*1e6);
+            int64_t waittime = r->buf->userdata+200-now;
+            if (waittime > 0) {
+                struct timespec wt;
+                wt.tv_sec = 0;
+                wt.tv_nsec = waittime * 1000;
+                nanosleep(&wt, NULL);
+            }
         }
+
+        pthread_mutex_lock(&buf_mut);
+        size_t sz;
+        size_t n = r->buf->size;
+        char *buf = ios_takebuf(r->buf, &sz);
+        pthread_mutex_unlock(&buf_mut);
+
+        size_t nw;
+        _os_write_all(r->fd, buf, n, &nw);
+        julia_free(buf);
+        //free(r);
+
+        pthread_mutex_lock(&q_mut);
+        r->next = ioq_freelist;
+        ioq_freelist = r;
         pthread_mutex_unlock(&q_mut);
     }
     return NULL;
 }
 
 DLLEXPORT
-void jl_enq_send_req(ios_t *dest, ios_t *buf)
+void jl_buf_mutex_lock()
 {
-    sendreq_t *req = (sendreq_t*)malloc(sizeof(sendreq_t));
-    req->fd = dest->fd;
-    size_t sz;
-    req->n = buf->size;
-    req->buf = ios_takebuf(buf, &sz);
-    req->next = NULL;
+    pthread_mutex_lock(&buf_mut);
+}
+
+DLLEXPORT
+void jl_buf_mutex_unlock()
+{
+    pthread_mutex_unlock(&buf_mut);
+}
+
+DLLEXPORT
+void jl_enq_send_req(ios_t *dest, ios_t *buf, int now)
+{
     pthread_mutex_lock(&q_mut);
+    sendreq_t *req = ioq;
+    sendreq_t **pr = &ioq;
+    while (req != NULL) {
+        if (req->fd == dest->fd) {
+            if (now && !req->now) {
+                // increase priority
+                *pr = req->next;
+                req->next = ioq;
+                ioq = req;
+                req->now = 1;
+            }
+            pthread_mutex_unlock(&q_mut);
+            return;
+        }
+        pr = &req->next;
+        req = req->next;
+    }
+
+    if (ioq_freelist != NULL) {
+        req = ioq_freelist;
+        ioq_freelist = ioq_freelist->next;
+    }
+    else {
+        req = (sendreq_t*)malloc(sizeof(sendreq_t));
+    }
+    req->fd = dest->fd;
+    req->buf = buf;
+    req->now = now;
+    req->next = NULL;
+    buf->userdata = (int64_t)(clock_now()*1e6);
     if (ioq == NULL) {
         ioq = req;
     }
     else {
-        sendreq_t *r = ioq;
-        while (r->next != NULL) {
-            r = r->next;
+        if (now) {
+            req->next = ioq;
+            ioq = req;
         }
-        r->next = req;
+        else {
+            sendreq_t *r = ioq;
+            while (r->next != NULL) {
+                r = r->next;
+            }
+            r->next = req;
+        }
     }
     pthread_mutex_unlock(&q_mut);
     pthread_cond_signal(&wake_cond);
@@ -292,6 +358,7 @@ void jl_start_io_thread()
 {
     pthread_mutex_init(&q_mut, NULL);
     pthread_mutex_init(&wake_mut, NULL);
+    pthread_mutex_init(&buf_mut, NULL);
     pthread_cond_init(&wake_cond, NULL);
     pthread_create(&io_thread, NULL, run_io_thr, NULL);
 }

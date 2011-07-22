@@ -24,16 +24,20 @@ convert(::Type{Float64}, x::Char)    = boxf64(uitofp64(unbox32(x)))
 convert(::Type{Float64}, x::Uint64)  = boxf64(uitofp64(unbox64(x)))
 convert(::Type{Float64}, x::Float32) = boxf64(fpext64(unbox32(x)))
 
+convert(::Type{Float}, x::Bool)    = convert(Float32, x)
+convert(::Type{Float}, x::Int8)    = convert(Float32, x)
+convert(::Type{Float}, x::Int16)   = convert(Float32, x)
+convert(::Type{Float}, x::Int32)   = convert(Float64, x)
+convert(::Type{Float}, x::Int64)   = convert(Float64, x) # LOSSY
+convert(::Type{Float}, x::Uint8)   = convert(Float32, x)
+convert(::Type{Float}, x::Uint16)  = convert(Float32, x)
+convert(::Type{Float}, x::Uint32)  = convert(Float64, x)
+convert(::Type{Float}, x::Char)    = convert(Float32, x)
+convert(::Type{Float}, x::Uint64)  = convert(Float64, x) # LOSSY
+
 float32(x) = convert(Float32, x)
 float64(x) = convert(Float64, x)
-
-int(x::Float32) = int32(x)
-int(x::Float64) = int64(x)
-
-uint(x::Float32) = uint32(x)
-uint(x::Float64) = uint64(x)
-
-float(x::Float) = x
+float(x)   = convert(Float,   x)
 
 ## floating point promotions ##
 
@@ -98,10 +102,6 @@ rem(x::Float64, y::Float64) = boxf64(rem_float(unbox64(x), unbox64(y)))
 >=(x::Float64, y::Float64) = ge_float(unbox64(x),unbox64(y))
 
 isequal(x::Float, y::Float) = (x == y) || (isnan(x) && isnan(y))
-
-cmp{T<:Float}(x::T, y::T) =
-    !isnan(x) && !isnan(y) ? sign(y-x) :
-        error("applying cmp to NaN is undefined")
 
 ## traits ##
 

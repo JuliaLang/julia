@@ -38,14 +38,14 @@ toq() = toc(false)
 # returns elapsed time
 macro elapsed(ex)
     x = gensym()
-    :(tic(); $x = $ex; toq())
+    :(local $x; tic(); $x = $ex; toq())
 end
 
 # prints elapsed time
 # returns expression value
 macro time(ex)
     x = gensym()
-    :(tic(); $x = $ex; toc(); $x)
+    :(local $x; tic(); $x = $ex; toc(); $x)
 end
 
 function peakflops()

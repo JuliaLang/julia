@@ -23,6 +23,7 @@
 @assert !(Array{Int8,1} <: Array{Any,1})
 @assert !(Array{Any,1} <: Array{Int8,1})
 @assert Array{Int8,1} <: Array{Int8,1}
+@assert !subtype(Type{None}, Type{Int32})
 
 @assert !isa(Array,Type{Any})
 @assert subtype(Type{Complex},StructKind)
@@ -76,7 +77,7 @@ b = rand()
 
 @assert sign(-1) == -1
 @assert sign(0) == 0
-@assert sign(-NaN) == 0
+@assert isequal(sign(-NaN), NaN)
 @assert signbit(-NaN) == -1
 
 @assert isnan(NaN)   == true

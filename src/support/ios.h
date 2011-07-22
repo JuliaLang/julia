@@ -62,6 +62,8 @@ typedef struct {
     // use julia-compatible buffer allocator
     unsigned char julia_alloc:1;
 
+    int64_t userdata;
+
     // todo: mutex
     char local[IOS_INLSIZE];
 } ios_t;

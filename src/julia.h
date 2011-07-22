@@ -284,6 +284,7 @@ extern jl_struct_type_t *jl_loaderror_type;
 extern jl_struct_type_t *jl_uniontoocomplex_type;
 extern jl_struct_type_t *jl_backtrace_type;
 extern jl_value_t *jl_stackovf_exception;
+extern jl_value_t *jl_memory_exception;
 extern jl_value_t *jl_divbyzero_exception;
 extern jl_value_t *jl_undefref_exception;
 extern jl_value_t *jl_interrupt_exception;
