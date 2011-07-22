@@ -949,7 +949,7 @@ end
 worker_ssh_cmd(host) =
     `ssh -n $host "bash -l -c \"cd $JULIA_HOME && ./julia --worker\""`
 
-worker_local_cmd() = `$JULIA_HOME/julia -e start_worker()`
+worker_local_cmd() = `$JULIA_HOME/julia --worker`
 
 addprocs_ssh(machines) =
     add_workers(PGRP, start_remote_workers(machines,
@@ -964,7 +964,7 @@ function start_sge_workers(n)
     sgedir = "$home/SGE"
     run(`mkdir -p $sgedir`)
     qsub_cmd = `qsub -N JULIA -terse -e $sgedir -o $sgedir -t 1:$n`
-    `echo $home/julia -e start_worker\\(\\)` | qsub_cmd
+    `echo $home/julia --worker` | qsub_cmd
     out = cmd_stdout_stream(qsub_cmd)
     run(qsub_cmd)
     id = split(readline(out),Set('.'))[1]
