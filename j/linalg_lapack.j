@@ -9,7 +9,7 @@ libLAPACK = libBLAS
 
 macro lapack_chol(fname, eltype)
     quote
-        function chol(A::DenseMatrix{$eltype})
+        function chol(A::Matrix{$eltype})
             info = [int32(0)]
             n = int32(size(A, 1))
             R = triu(A)
@@ -38,11 +38,11 @@ end
 #       INTEGER            IPIV( * )
 #       DOUBLE PRECISION   A( LDA, * )
 
-lu(A::DenseMatrix) = lu(A, false)
+lu(A::Matrix) = lu(A, false)
 
 macro lapack_lu(fname, eltype)
     quote
-        function lu(A::DenseMatrix{$eltype}, economy::Bool)
+        function lu(A::Matrix{$eltype}, economy::Bool)
             info = [int32(0)]
             m, n = size(A)
             LU = A
@@ -96,7 +96,7 @@ end
 
 macro lapack_qr(fname, fname2, eltype)
     quote
-        function qr(A::DenseMatrix{$eltype})
+        function qr(A::Matrix{$eltype})
             info = [int32(0)]
             m, n = size(A)
             QR = copy(A)
@@ -171,7 +171,7 @@ end
 
 macro lapack_qr_complex(fname, fname2, eltype, eltype2)
     quote
-        function qr(A::DenseMatrix{$eltype})
+        function qr(A::Matrix{$eltype})
             info = [int32(0)]
             m, n = size(A)
             QR = copy(A)
@@ -240,7 +240,7 @@ end
 
 macro lapack_eig(fname, eltype)
     quote
-        function eig(A::DenseMatrix{$eltype})
+        function eig(A::Matrix{$eltype})
             if !issymmetric(A); error("Matrix must be symmetric"); end
 
             jobz = "V"
@@ -288,7 +288,7 @@ end
 #      COMPLEX*16         A( LDA, * ), WORK( * )
 macro lapack_eig_complex(fname, eltype, eltype2)
     quote
-        function eig(A::DenseMatrix{$eltype})
+        function eig(A::Matrix{$eltype})
             if !ishermitian(A); error("Matrix must be Hermitian"); end
 
             jobz = "V"
@@ -337,7 +337,7 @@ end
 
 macro lapack_svd(fname, eltype)
     quote
-        function svd(A::DenseMatrix{$eltype})
+        function svd(A::Matrix{$eltype})
             jobu = "A"
             jobvt = "A"
             m, n = size(A)
@@ -395,7 +395,7 @@ end
 
 macro lapack_svd_complex(fname, eltype, eltype2)
     quote
-        function svd(A::DenseMatrix{$eltype})
+        function svd(A::Matrix{$eltype})
             jobu = "A"
             jobvt = "A"
             m, n = size(A)
@@ -463,7 +463,7 @@ end
 
 macro lapack_backslash(fname_lu, fname_chol, fname_lsq, fname_tri, eltype)
     quote
-        function \(A::DenseMatrix{$eltype}, B::DenseVecOrMat{$eltype})
+        function \(A::Matrix{$eltype}, B::VecOrMat{$eltype})
             info = [int32(0)]
             m = int32(size(A, 1))
             n = int32(size(A, 2))

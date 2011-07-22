@@ -4,9 +4,9 @@
 
 typealias AbstractVector{T} Tensor{T,1}
 typealias AbstractMatrix{T} Tensor{T,2}
-typealias DenseVector{T} Array{T,1}
-typealias DenseMatrix{T} Array{T,2}
-typealias DenseVecOrMat{T} Union(DenseVector{T}, DenseMatrix{T})
+typealias Vector{T} Array{T,1}
+typealias Matrix{T} Array{T,2}
+typealias VecOrMat{T} Union(Vector{T}, Matrix{T})
 
 typealias Indices{T<:Int} Union(Int, AbstractVector{T})
 typealias Region Union(Size,Dims)
