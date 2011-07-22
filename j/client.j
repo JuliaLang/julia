@@ -51,6 +51,7 @@ function process_options(args::Array{Any,1})
             start_worker()
             # doesn't return
         elseif args[i]=="-e"
+            # TODO: support long options
             repl = false
             i+=1
             eval(parse_input_line(args[i]))
@@ -109,8 +110,8 @@ L"               _
 "
 
 begin
-local tx = "\033[37m" # text
-local jl = "\033[37m" # julia
+local tx = "\033[0m\033[1m" # text
+local jl = "\033[0m\033[1m" # julia
 local d1 = "\033[34m" # first dot
 local d2 = "\033[31m" # second dot
 local d3 = "\033[32m" # third dot

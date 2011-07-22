@@ -66,13 +66,13 @@ void getFunctionInfo(const char **name, int *line, const char **filename, size_t
                 vit++;
                 
                 while (vit != (*it).second.lines.end()) {
-                    if (pointer < (*vit).Address) {
+                    if (pointer <= (*vit).Address) {
                         *line = prev.Loc.getLine();
                         break;
                     }
                     prev = *vit;
                     vit++;
-                } 
+                }
                 if (*line == -1) {
                     *line = prev.Loc.getLine();
                 }

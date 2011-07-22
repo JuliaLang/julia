@@ -10,7 +10,7 @@ macro blas_copy(fname, shape, eltype)
             ccall(dlsym(libBLAS, $fname),
                   Void,
                   (Ptr{Int32}, Ptr{$eltype}, Ptr{Int32}, Ptr{$eltype}, Ptr{Int32}),
-                  numel(src), src, 1, dest, 1)
+                  int32(numel(src)), src, int32(1), dest, int32(1))
             return dest
         end
     end
@@ -33,7 +33,7 @@ macro blas_dot(fname, eltype)
             ccall(dlsym(libBLAS, $fname),
                   $eltype,
                   (Ptr{Int32}, Ptr{$eltype}, Ptr{Int32}, Ptr{$eltype}, Ptr{Int32}),
-                  length(x), x, 1, y, 1)
+                  int32(length(x)), x, int32(1), y, int32(1))
         end
     end
 end
@@ -52,7 +52,7 @@ macro blas_norm(fname, eltype, ret_type)
             ccall(dlsym(libBLAS, $fname),
                   $ret_type,
                   (Ptr{Int32}, Ptr{$eltype}, Ptr{Int32}),
-                  length(x), x, 1)
+                  int32(length(x)), x, int32(1))
         end
     end
 end
@@ -88,7 +88,11 @@ macro blas_matrix_multiply(fname, eltype)
                   Ptr{$eltype}, Ptr{$eltype}, Ptr{Int32},
                   Ptr{$eltype}, Ptr{Int32},
                   Ptr{$eltype}, Ptr{$eltype}, Ptr{Int32}),
-                 "N", "N", m, n, k, convert($eltype, 1.0), A, m, B, k, convert($eltype, 0.0), C, m)
+                 "N", "N",
+                 int32(m), int32(n), int32(k),
+                 convert($eltype, 1.0),
+                 A, int32(m), B, int32(k),
+                 convert($eltype, 0.0), C, int32(m))
 
            return C
        end

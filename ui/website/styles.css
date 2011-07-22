@@ -80,10 +80,10 @@ div#footer-bar {
 	width: 100%;
 	min-width: 960px;
 	bottom: 0px;
-	border-top: 2px solid #e0e0e0;
+	border-top: 2px solid #cecece;
 	border-bottom: 1px solid #eeeeee;
-	font-size: 80%;
 	background-color: #eeeeee;
+	font-size: 80%;
 	-moz-box-shadow:		0px 0px 20px #dddddd;
 	-webkit-box-shadow:		0px 0px 20px #dddddd;
 	box-shadow:				0px 0px 20px #dddddd;
@@ -197,7 +197,7 @@ p {
 div#terminal {
 	width: 636px;
 	height: 250px;
-	border: 2px solid #e5e5e5;
+	border: 2px solid #cecece;
 	outline: none;
 	padding: 10px 20px 10px 20px;
 	margin-top: 10px;
@@ -219,7 +219,7 @@ div#terminal {
 
 input#terminal-input {
 	width: 636px;
-	border: 2px solid #e5e5e5;
+	border: 2px solid #cecece;
 	outline: none;
 	padding: 10px 20px 10px 20px;
 	margin-top: 10px;

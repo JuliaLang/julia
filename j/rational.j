@@ -18,6 +18,14 @@ Rational(n::Int) = Rational(n, one(n))
 //(n::Int, d::Int) = Rational(n,d)
 //(x::Rational, y::Int) = x.num // (x.den*y)
 //(x::Int, y::Rational) = (x*y.den) // y.num
+//(x::Complex, y::Real) = complex(real(x)//y, imag(x)//y)
+//(x::Real, y::Complex) = x*y'//real(y*y')
+
+function //(x::Complex, y::Complex)
+    xy = x*y'
+    yy = real(y*y')
+    complex(real(xy)//yy, imag(xy)//yy)
+end
 
 function show(x::Rational)
     show(num(x))
@@ -81,11 +89,9 @@ hash(x::Rational) = bitmix(hash(x.num),hash(x.den))
 ==(x::Rational, y::Rational) = !isnan(x) && x.num == y.num && x.den == y.den
 ==(x::Rational, y::Int)      = x.den == 1 && x.num == y
 ==(y::Int, x::Rational)      = x.den == 1 && x.num == y
-!=(x::Rational, y::Rational) =  isnan(x) || x.num != y.num || x.den != y.den
-<=(x::Rational, y::Rational) = float(x) <= float(y)
-< (x::Rational, y::Rational) = float(x) < float(y)
->=(x::Rational, y::Rational) = y <= x
-> (x::Rational, y::Rational) = y < x
+
+<=(x::Rational, y::Rational) = float(x) <= float(y) # TODO: better comparison
+< (x::Rational, y::Rational) = float(x) < float(y)  # TODO: better comparison
 
 div(x::Rational, y::Rational) = div(x.num*y.den, x.den*y.num)
 div(x::Real    , y::Rational) = div(x*y.den, y.num)
@@ -100,9 +106,9 @@ rational(x::Rational, tol::Real) = x
 rational(x::Int, tol::Real) = x // one(x)
 rational(x::Float32, tol::Real) = convert(Rational{Int32}, x, tol)
 rational(x::Float64, tol::Real) = convert(Rational{Int64}, x, tol)
-rational(z::Complex) = Complex(rational(real(z)), rational(imag(z)))
-rational(z::Complex, tol::Real) =
-    (tol /= sqrt(2); Complex(rational(real(z), tol), rational(imag(z), tol)))
+rational(z::ComplexNum) = complex(rational(real(z)), rational(imag(z)))
+rational(z::ComplexNum, tol::Real) =
+    (tol /= sqrt(2); complex(rational(real(z), tol), rational(imag(z), tol)))
 
 int(x::Rational) = div(x.num, x.den)
 float(x::Rational) = x.num/x.den

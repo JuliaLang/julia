@@ -1,24 +1,23 @@
 ## types ##
 
-<:(T, S) = subtype(T,S)
->:(T, S) = subtype(S,T)
+<:(T,S) = subtype(T,S)
+>:(T,S) = subtype(S,T)
+
+super(T::Union(StructKind,BitsKind,AbstractKind)) = T.super
 
 ## comparison ##
 
-isequal(x, y) = is(x, y)
+isequal(x,y) = is(x,y)
+==(x,y) = isequal(x,y)
+!=(x,y) = !(x==y)
 
-==(x, y) = isequal(x, y)
-!=(x, y) = !(x == y)
-==(x::Number, y::Number) = (==)(promote(x,y)...)
+# this definition allows Number types to implement
+# == instead of isequal, which is more idiomatic:
+isequal{T<:Number}(x::T, y::T) = (x==y)
 
-# this definition allows Number types to implement == instead of isequal,
-# which is more idiomatic.
-isequal{T<:Number}(x::T, y::T) = (x == y)
-
-< (x::Real, y::Real) = (<)(promote(x,y)...)
-> (x::Real, y::Real) = (y < x)
-<=(x::Real, y::Real) = (x < y) || (x == y)
->=(x::Real, y::Real) = (x > y) || (x == y)
+> {T<:Real}(x::T, y::T) = (y < x)
+<={T<:Real}(x::T, y::T) = (x < y) || (x == y)
+>={T<:Real}(x::T, y::T) = (y <= x)
 
 ## definitions providing basic traits of arithmetic operators ##
 
@@ -47,112 +46,90 @@ for op = (:+, :*, :&, :|, :$)
             accum
         end
     end
+
 end
 
-\(x::Number, y::Number) = y/x
+# fallback division:
+/{T<:Real}(x::T, y::T) = float64(x)/float64(y)
+
+\(x,y) = y/x
 
 # .<op> defaults to <op>
-./(x::Number,y::Number) = x/y
-.\(x::Number,y::Number) = y./x
-.*(x::Number,y::Number) = x*y
-.^(x::Number,y::Number) = x^y
+./(x,y) = x/y
+.\(x,y) = y./x
+.*(x,y) = x*y
+.^(x,y) = x^y
 
-div(x::Real, y::Real) = y != 0 ? truncate(x/y)        : throw(DivideByZeroError())
-fld(x::Real, y::Real) = y != 0 ? truncate(floor(x/y)) : throw(DivideByZeroError())
+# core << >> and >>> takes Int32 as second arg
+<<(x,y::Int)  = x << int32(y)
+>>(x,y::Int)  = x >> int32(y)
+>>>(x,y::Int) = x >>> int32(y)
 
-rem{T}(x::T, y::T) = convert(T, x-y*div(x,y))
-mod{T}(x::T, y::T) = convert(T, x-y*fld(x,y))
+# fallback div, fld, rem & mod implementations
+div{T<:Real}(x::T, y::T) = convert(T,trunc(x/y))
+fld{T<:Real}(x::T, y::T) = convert(T,floor(x/y))
+rem{T<:Real}(x::T, y::T) = convert(T,x-y*div(x,y))
+mod{T<:Real}(x::T, y::T) = convert(T,x-y*fld(x,y))
 
-rem(x,y) = rem(promote(x,y)...)
-mod(x,y) = mod(promote(x,y)...)
+# operator alias
+% = mod
 
-%(x,y) = mod(x,y)
-mod1(x,y) = (m=mod(x-sign(y),y); m+sign(y))
+# mod returns in [0,y) whereas mod1 returns in (0,y]
+mod1{T<:Real}(x::T, y::T) = y-mod(y-x,y)
 
+# cmp returns -1, 0, +1 indicating ordering
+cmp{T<:Real}(x::T, y::T) = sign(y-x)
+
+oftype{T}(::Type{T},c) = convert(T,c)
 oftype{T}(x::T,c) = convert(T,c)
-oftype{T}(x::Type{T},c) = convert(T,c)
-
-sizeof{T}(x::T) = sizeof(T)
-sizeof(t::Type) = error(strcat("size of type ",t," unknown"))
 
 zero(x) = oftype(x,0)
 one(x)  = oftype(x,1)
 
-## promotion mechanism ##
-
-promote_type{T}(::Type{T}) = T
-promote_type{T}(::Type{T}, ::Type{T}) = T
-promote_type(S::Type, T::Type...) = promote_type(S, promote_type(T...))
-
-function promote_type{T,S}(::Type{T}, ::Type{S})
-    # print("promote_type: ",T,", ",S,"\n")
-    if applicable(promote_rule, T, S)
-        return promote_rule(T,S)
-    elseif applicable(promote_rule, S, T)
-        return promote_rule(S,T)
-    else
-        error("no promotion exists for ",T," and ",S)
-    end
-end
-
-promote() = ()
-promote(x) = (x,)
-function promote{T,S}(x::T, y::S)
-    # print("promote: ",T,", ",S,"\n")
-    #R = promote_type(T,S)
-    # print("= ", R,"\n")
-    (convert(promote_type(T,S),x), convert(promote_type(T,S),y))
-end
-function promote{T,S,U}(x::T, y::S, z::U)
-    R = promote_type(promote_type(T,S), U)
-    convert((R...), (x, y, z))
-end
-function promote{T,S}(x::T, y::S, zs...)
-    R = promote_type(T,S)
-    for z = zs
-        R = promote_type(R,typeof(z))
-    end
-    convert((R...), tuple(x,y,zs...))
-end
-
-## promotion in arithmetic ##
-
-+(x::Number, y::Number) = +(promote(x,y)...)
-*(x::Number, y::Number) = *(promote(x,y)...)
--(x::Number, y::Number) = -(promote(x,y)...)
-/(x::Number, y::Number) = /(promote(x,y)...)
-
-# these are defined for the fundamental < and == so that if a method is
-# not found for e.g. <=, it is translated to < and == first, then promotion
-# is handled after.
-
-## integer-specific promotions ##
-
-div(x::Int, y::Int) = div(promote(x,y)...)
-rem(x::Int, y::Int) = rem(promote(x,y)...)
-
-&(x::Int...) = &(promote(x...)...)
-|(x::Int...) = |(promote(x...)...)
-$(x::Int...) = $(promote(x...)...)
-
-## promotion catch-alls for undefined operations ##
-
-no_op_err(name, T) = error(name," not defined for ",T)
-+{T<:Number}(x::T, y::T) = no_op_err("+", T)
-*{T<:Number}(x::T, y::T) = no_op_err("*", T)
--{T<:Number}(x::T, y::T) = no_op_err("-", T)
-/{T<:Number}(x::T, y::T) = no_op_err("/", T)
-<{T<:Real}  (x::T, y::T) = no_op_err("<", T)
-=={T<:Number}(x::T, y::T) = no_op_err("==", T)
-
-div{T<:Int}(x::T, y::T) = no_op_err("div", T)
-rem{T<:Int}(x::T, y::T) = no_op_err("rem", T)
-
-&{T<:Int}(x::T, y::T) = no_op_err("&", T)
-|{T<:Int}(x::T, y::T) = no_op_err("|", T)
-${T<:Int}(x::T, y::T) = no_op_err("\$", T)
-
-## miscellaneous ##
+sizeof(T::Type) = error(strcat("size of type ",t," unknown"))
+sizeof{T}(x::T) = sizeof(T)
 
 copy(x::ANY) = x
 foreach(f::Function, itr) = for x = itr; f(x); end
+
+# vectorization
+
+macro vectorize_1arg(S,f)
+    quote
+        function ($f){T<:$S}(x::Tensor{T,1})
+            [ ($f)(x[i]) | i=1:length(x) ]
+        end
+        function ($f){T<:$S}(x::Tensor{T,2})
+            [ ($f)(x[i,j]) | i=1:size(x,1), j=1:size(x,2) ]
+        end
+    end
+end
+
+macro vectorize_2arg(S,f)
+    quote
+        function ($f){T<:$S}(x::T, y::Tensor{T,1})
+            [ ($f)(x,y[i]) | i=1:length(y) ]
+        end
+        function ($f){T<:$S}(x::Tensor{T,1}, y::T)
+            [ ($f)(x[i],y) | i=1:length(x) ]
+        end
+        function ($f){T<:$S}(x::T, y::Tensor{T,2})
+            [ ($f)(x,y[i,j]) | i=1:size(y,1), j=1:size(y,2) ]
+        end
+        function ($f){T<:$S}(x::Tensor{T,2}, y::T)
+            [ ($f)(x[i,j],y) | i=1:size(x,1), j=1:size(x,2) ]
+        end
+        function ($f){T<:$S}(x::Tensor{T,1}, y::Tensor{T,1})
+            if size(x) != size(y)
+                error("vector length mismatch")
+            end
+            [ ($f)(x[i],y[i]) | i=1:length(x) ]
+        end
+        function ($f){T<:$S}(x::Tensor{T,2}, y::Tensor{T,2})
+            if size(x) != size(y)
+                error("matrix dimension mismatch")
+            end
+            [ ($f)(x[i,j],y[i,j]) | i=1:size(x,1), j=1:size(x,2) ]
+        end
+    end
+end

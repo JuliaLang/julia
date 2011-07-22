@@ -255,7 +255,7 @@ DLLEXPORT void jl_enable_inference()
             (jl_function_t*)*(jl_get_bindingp(jl_system_module,
                                               jl_symbol("typeinf_ext")));
         // warm up type inference to put the latency up front
-        jl_value_t *one = jl_box_int32(1);
+        jl_value_t *one = jl_box_long(1);
         jl_apply((jl_function_t*)*(jl_get_bindingp(jl_system_module,
                                                    jl_symbol("+"))),
                  &one, 1);
@@ -303,7 +303,6 @@ void jl_get_builtin_hooks()
     jl_int16_type   = (jl_bits_type_t*)global("Int16");
     jl_uint16_type  = (jl_bits_type_t*)global("Uint16");
     jl_uint32_type  = (jl_bits_type_t*)global("Uint32");
-    jl_int64_type   = (jl_bits_type_t*)global("Int64");
     jl_uint64_type  = (jl_bits_type_t*)global("Uint64");
 
     jl_float32_type = (jl_bits_type_t*)global("Float32");
@@ -337,5 +336,5 @@ void jl_get_builtin_hooks()
     jl_array_uint8_type =
         (jl_type_t*)jl_apply_type((jl_value_t*)jl_array_type,
                                   jl_tuple2(jl_uint8_type,
-                                            jl_box_int32(1)));
+                                            jl_box_long(1)));
 }

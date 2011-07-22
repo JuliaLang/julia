@@ -108,7 +108,7 @@ function wait(pid::Int32)
     status = Array(Int32,1)
     ret = ccall(dlsym(libc, :waitpid), Int32,
               (Int32, Ptr{Int32}, Int32),
-              pid, status, 0)
+              pid, status, int32(0))
     system_error(:wait, ret == -1)
     status[1]
 end

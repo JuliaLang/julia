@@ -191,7 +191,9 @@
 (define (gf-def-expr- name argl argtypes body)
   (if (not (symbol? name))
       (error (string "invalid method name " name)))
-  `(= ,name (method ,name ,argtypes ,(function-expr argl body))))
+  `(block
+    (= ,name (method ,name ,argtypes ,(function-expr argl body)))
+    (null)))
 
 (define (sparam-name-bounds sparams names bounds)
   (cond ((null? sparams)
@@ -517,6 +519,30 @@
 
 (define (make-assignment l r) `(= ,l ,r))
 
+;; convert (lhss...) = x to assignments, eliminating the tuple
+;; assumes x is of the form (tuple ...)
+(define (tuple-to-assignments lhss x)
+  (let ((temps (map (lambda (x) (gensy)) (cdr x))))
+    `(block
+      ,@(map make-assignment temps (cdr x))
+      ,@(map make-assignment lhss temps)
+      (unnecessary-tuple (tuple ,@temps)))))
+
+;; convert (lhss...) = x to tuple indexing, handling the general case
+(define (lower-tuple-assignment lhss x)
+  (let ((t (gensy)))
+    `(block
+      (multiple_value)
+      (= ,t ,x)
+      ,@(let loop ((lhs lhss)
+		   (i   1))
+	  (if (null? lhs) '((null))
+	      (cons `(= ,(car lhs)
+			(call (top tupleref) ,t ,i))
+		    (loop (cdr lhs)
+			  (+ i 1)))))
+      ,t)))
+
 (define patterns
   (pattern-set
    (pattern-lambda (block)
@@ -549,39 +575,24 @@
    (pattern-lambda (typealias (-- name (-s)) type-ex)
 		   `(= ,name ,type-ex))
    (pattern-lambda (typealias (curly (-- name (-s)) . params) type-ex)
-		   `(call (lambda ,params
-			    (= ,name (call (top new_type_constructor)
-					   (tuple ,@params) ,type-ex)))
-			  ,@(receive
-			     (params bounds)
-			     (sparam-name-bounds params '() '())
-			     (symbols->typevars params bounds))))
+		   (receive
+		    (params bounds)
+		    (sparam-name-bounds params '() '())
+		    `(call (lambda ,params
+			     (= ,name (call (top new_type_constructor)
+					    (tuple ,@params) ,type-ex)))
+			   ,@(symbols->typevars params bounds))))
 
    (pattern-lambda (comparison . chain) (expand-compare-chain chain))
 
-   ; multiple value assignment
+   ;; multiple value assignment
    (pattern-lambda (= (tuple . lhss) x)
 		   (if (and (pair? x) (pair? lhss) (eq? (car x) 'tuple)
 			    (length= lhss (length (cdr x))))
-		       ; (a, b, ...) = (x, y, ...)
-		       (let ((temps (map (lambda (x) (gensy)) (cddr x))))
-			 `(block
-			   ,@(map make-assignment temps (butlast (cdr x)))
-			   (= ,(car (last-pair lhss)) ,(car (last-pair x)))
-			   ,@(map make-assignment (butlast lhss) temps)
-			   (null)))
-		       ; (a, b, ...) = other
-		       (let ((t (gensy)))
-			 `(block
-			   (multiple_value)
-			   (= ,t ,x)
-			   ,@(let loop ((lhs lhss)
-					(i   1))
-			       (if (null? lhs) '((null))
-				   (cons `(= ,(car lhs)
-					     (call (top tupleref) ,t ,i))
-					 (loop (cdr lhs)
-					       (+ i 1)))))))))
+		       ;; (a, b, ...) = (x, y, ...)
+		       (tuple-to-assignments lhss x)
+		       ;; (a, b, ...) = other
+		       (lower-tuple-assignment lhss x)))
 
    (pattern-lambda (= (ref a . idxs) rhs)
 		   (let* ((reuse (and (pair? a)
@@ -596,7 +607,7 @@
 		      (new-idxs stuff) (process-indexes arr idxs)
 		      `(block
 			,@(append stmts stuff)
-			(call assign ,arr ,rhs ,@new-idxs)))))
+			(call (top assign) ,arr ,rhs ,@new-idxs)))))
 
    (pattern-lambda (ref a . idxs)
 		   (let* ((reuse (and (pair? a)
@@ -611,7 +622,7 @@
 		      (new-idxs stuff) (process-indexes arr idxs)
 		      `(block
 			,@(append stmts stuff)
-			(call ref ,arr ,@new-idxs)))))
+			(call (top ref) ,arr ,@new-idxs)))))
 
    (pattern-lambda (curly type . elts)
 		   `(call (top apply_type) ,type ,@elts))
@@ -668,6 +679,10 @@
    (pattern-lambda (|::| (-- expr (-^ (-s))) T)
 		   `(call (top typeassert) ,expr ,T))
 
+   ;; incorrect multiple return syntax [a, b, ...] = foo
+   (pattern-lambda (= (vcat . args) rhs)
+		   (error "use \"(a, b) = ...\" to assign multiple values"))
+
    ; adding break/continue support to while loop
    (pattern-lambda (while cnd body)
 		   `(scope-block
@@ -698,7 +713,7 @@
 	      ,@(if (eq? bb b) '() `((= ,bb ,b)))
 	      (= ,cnt 0)
 	      (= ,lim
-		 (call int32 (call + 1 (call / (call - ,c ,aa) ,bb))))
+		 (call (top long) (call + 1 (call / (call - ,c ,aa) ,bb))))
 	      (break-block loop-exit
 			   (_while (call < ,cnt ,lim)
 				   (block
@@ -716,7 +731,12 @@
 				   (block
 				    (break-block loop-cont
 						 ,body)
-				    (= ,var (call + 1 ,var)))))))))))
+				    (= ,var (call +
+						  (call (top convert)
+							(call (top typeof)
+							      ,var)
+							1)
+						  ,var)))))))))))
 
    ; for loop over arbitrary vectors
    (pattern-lambda
@@ -772,10 +792,10 @@
 
    ;; hcat, vcat
    (pattern-lambda (hcat . a)
-		   `(call hcat ,@a))
+		   `(call (top hcat) ,@a))
 
    (pattern-lambda (vcat . a)
-		   `(call vcat ,@a))
+		   `(call (top vcat) ,@a))
 
    )) ; patterns
 
@@ -832,9 +852,9 @@
     (define (construct-loops ranges iters oneresult-dim)
       (if (null? ranges)
 	  (if (null? iters)
-	      `(block (call assign ,result ,expr ,ri)
+	      `(block (call (top assign) ,result ,expr ,ri)
 		      (+= ,ri 1))
-	      `(block (call assign ,result (ref ,expr ,@(reverse iters)) ,ri)
+	      `(block (call (top assign) ,result (ref ,expr ,@(reverse iters)) ,ri)
 		      (+= ,ri 1)) )
 	  (if (eq? (car ranges) `:)
 	      (let ((i (gensy)))
@@ -889,7 +909,7 @@
       ;; construct loops to cycle over all dimensions of an n-d comprehension
       (define (construct-loops ranges)
         (if (null? ranges)
-	    `(block (call assign ,result ,expr ,ri)
+	    `(block (call (top assign) ,result ,expr ,ri)
 		    (+= ,ri 1))
 	    `(for ,(car ranges)
 		  ,(construct-loops (cdr ranges)))))
@@ -921,13 +941,13 @@
       (define (compute-dims ranges)
 	(if (null? ranges)
 	    (list)
-	    (cons `(call length ,(car ranges))
+	    (cons `(call (top length) ,(car ranges))
 		  (compute-dims (cdr ranges)))))
 
       ;; construct loops to cycle over all dimensions of an n-d comprehension
       (define (construct-loops ranges rs)
         (if (null? ranges)
-	    `(block (call assign ,result ,expr ,ri)
+	    `(block (call (top assign) ,result ,expr ,ri)
 		    (+= ,ri 1))
 	    `(for (= ,(cadr (car ranges)) ,(car rs))
 		  ,(construct-loops (cdr ranges) (cdr rs)))))
@@ -1165,6 +1185,12 @@
 	       ;; value or statement position.
 	       (to-lff `(typeassert ,@(cdr e)) dest tail)
 	       (to-lff `(decl ,@(cdr e)) dest tail)))
+
+	  ((unnecessary-tuple)
+	   (if dest
+	       (to-lff (cadr e) dest tail)
+	       ;; remove if not in value position
+	       (to-lff '(null) dest tail)))
 
 	  (else
 	   (let ((r (map (lambda (arg) (to-lff arg #t #f))

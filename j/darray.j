@@ -1,11 +1,11 @@
 type DArray{T,N,distdim} <: Tensor{T,N}
     dims::NTuple{N,Size}
-    locl::Union(RemoteRef,Array{T,N})
+    locl::Array{T,N}
     # the distributed array has N pieces
     # pmap[i]==p ⇒ processor p has piece i
     pmap::Array{Int32,1}
     # piece i consists of indexes dist[i] through dist[i+1]-1
-    dist::Array{Int32,1}
+    dist::Array{Size,1}
     # dimension of distribution
     distdim::Int32
     localpiece::Int32  # my piece #; pmap[localpiece]==myid()
@@ -29,23 +29,16 @@ type DArray{T,N,distdim} <: Tensor{T,N}
         da.distdim = distdim
         da.localpiece = lp
         da.go = go
-        if is(initializer,RemoteRef)
-            da.locl = RemoteRef()
-        else
-            da.locl = initializer(T, locsz, da)
-            #remote_call(LocalProcess(), initializer, T, locsz, da)
-        end
+        da.locl = initializer(T, locsz, da)
+        #remote_call(LocalProcess(), initializer, T, locsz, da)
         da
     end
 
     # don't use DArray() directly; use darray() below instead
     function DArray(dims, initializer, procs, dist)
-        GlobalObject(g->DArray{T,N,distdim}(g, dims, initializer, procs, dist))
-        #go.local_identity
+        go = GlobalObject(g->DArray{T,N,distdim}(g,dims,initializer,procs,dist))
+        go.local_identity
     end
-
-    DArray(dims, procs::Vector, dist::Vector) =
-        DArray{T,N,distdim}(dims, RemoteRef, procs, dist)
 
     function DArray(dims, initializer::Function)
         global PGRP
@@ -53,8 +46,6 @@ type DArray{T,N,distdim} <: Tensor{T,N}
         dist = defaultdist(distdim, dims, length(procs))
         DArray{T,N,distdim}(dims, initializer, procs, dist)
     end
-
-    DArray(dims) = DArray{T,N,distdim}(dims, RemoteRef)
 end
 
 size(d::DArray) = d.dims
@@ -85,12 +76,7 @@ end
 
 # when we actually need the data, wait for it
 localize(r::RemoteRef) = localize(fetch(r))
-function localize{T,N}(d::DArray{T,N})
-    if isa(d.locl, RemoteRef)
-        d.locl = fetch(d.locl)
-    end
-    d.locl::Array{T,N}
-end
+localize{T,N}(d::DArray{T,N}) = d.locl
 
 # find which piece holds index i in the distributed dimension
 function locate(d::DArray, i::Index)
@@ -99,6 +85,27 @@ function locate(d::DArray, i::Index)
         p += 1
     end
     p
+end
+
+#find which pieces hold which subranges in distributed dimension
+#returns (pmap,dist) where pmap[i] contains dist[i]:dist[i+1]-1
+function locate(d::DArray, I::Range1)
+    i = I[1]
+    imax = I[length(I)]
+    pmap = Array(Index,0)
+    dist = [i]
+    j = 1
+    while i <= imax
+        if i >= d.dist[j+1]
+            j += 1
+        else
+            push(pmap,j)
+            i = min(imax+1,d.dist[j+1])
+            push(dist,i)
+            j += 1
+        end
+    end
+    return (pmap, dist)
 end
 
 ## Constructors ##
@@ -116,7 +123,7 @@ end
 # initializer is a function accepting (el_type, local_size, darray) where
 # the last argument is the full DArray being constructed.
 darray{T}(init, ::Type{T}, dims::Dims, distdim, procs, dist) =
-    DArray{T,length(dims),distdim}(dims, init, procs, dist)
+    DArray{T,length(dims),long(distdim)}(dims, init, procs, dist)
 darray{T}(init, ::Type{T}, dims::Dims, distdim, procs) =
     darray(init, T, dims, distdim, procs,
            defaultdist(distdim, dims, length(procs)))
@@ -233,15 +240,6 @@ function ref(r::RemoteRef, args...)
     end
 end
 
-function ref{T}(d::DArray{T,1}, i::Index)
-    p = locate(d, i)
-    if p==d.localpiece
-        offs = d.dist[p]-1
-        return localize(d)[i-offs]
-    end
-    return remote_call_fetch(d.pmap[p], ref, d, i)::T
-end
-
 function assign(r::RemoteRef, args...)
     global PGRP
     if r.where==myid()
@@ -249,6 +247,15 @@ function assign(r::RemoteRef, args...)
     else
         remote_do(r.where, assign, r, args...)
     end
+end
+
+function ref{T}(d::DArray{T,1}, i::Index)
+    p = locate(d, i)
+    if p==d.localpiece
+        offs = d.dist[p]-1
+        return localize(d)[i-offs]
+    end
+    return remote_call_fetch(d.pmap[p], ref, d, i)::T
 end
 
 assign{T}(d::DArray{T,1}, v::Tensor, i::Index) =
@@ -279,6 +286,33 @@ function ref{T}(d::DArray{T}, i::Index)
     return remote_call_fetch(d.pmap[p], ref, d, i)::T
 end
 
+ref(d::DArray) = d
+ref(d::DArray, I::Range1{Index}) = ref(d, (I,))
+ref{distdim}(d::DArray{Any,1,distdim},I::Range1{Index}) = ref(d, (I,))
+ref{T,distdim}(d::DArray{T,1,distdim},I::Range1{Index}) = ref(d, (I,))
+ref{T}(d::DArray{T}, I::Range1{Index}...) = ref(d, I)
+
+function ref{T}(d::DArray{T}, I::(Range1{Index}...,))
+    (pmap, dist) = locate(d, I[d.distdim])
+    A = Array(T, map(range -> length(range), I))
+    if length(pmap) == 1 && pmap[1] == d.localpiece
+        offs = d.dist[pmap[1]]-1
+        J = ntuple(length(size(d)), i -> (i == d.distdim ? I[i]-offs :
+                                                           I[i]))
+        A = localize(d)[J...]
+        return A
+    end
+    for p = 1:length(pmap)
+        offs = I[d.distdim][1] - 1
+        J = ntuple(length(size(d)),i->(i==d.distdim ? (dist[p]:(dist[p+1]-1))-offs :
+                                                      (1:length(I[i]))))
+        K = ntuple(length(size(d)),i->(i==d.distdim ? (dist[p]:(dist[p+1]-1)) :
+                                                      I[i]))
+        A[J...] = remote_call_fetch(pmap[p], ref, d, K...)
+    end
+    return A
+end
+
 assign(d::DArray, v::Tensor, i::Index) =
     invoke(assign, (DArray, Any, Index), d, v, i)
 
@@ -297,6 +331,7 @@ function assign(d::DArray, v, i::Index)
     end
     d
 end
+
 
 ## matrix multiply ##
 

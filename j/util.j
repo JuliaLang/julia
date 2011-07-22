@@ -16,7 +16,7 @@ function tic()
     return t0
 end
 
-function _toc(noisy)
+function toc(noisy::Bool)
     t1 = clock()
     global _TIMERS
     if is(_TIMERS,())
@@ -31,22 +31,40 @@ function _toc(noisy)
     t
 end
 
-qtoc() = _toc(false)
-toc()  = _toc(true)
+toc() = toc(true)
+toq() = toc(false)
 
-macro qtime(ex); :(tic(); $ex; qtoc()); end
-macro time(ex); :(tic(); $ex; toc()); end
+# prints nothing
+# returns elapsed time
+macro elapsed(ex)
+    x = gensym()
+    :(tic(); $x = $ex; toq())
+end
+
+# prints elapsed time
+# returns expression value
+macro time(ex)
+    x = gensym()
+    :(tic(); $x = $ex; toc(); $x)
+end
 
 function peakflops()
-
     a = rand(2000,2000)
-    tic(); a*a; qtoc();
-    tic(); a*a; t=qtoc();
-
-    floprate = (2 * 2000. ^ 3 / t)
-
+    t = @elapsed a*a
+    t = @elapsed a*a
+    floprate = (2*2000.0^3/t)
     println("The peak flop rate is ", floprate*1e-9, " gigaflops")
+    floprate
+end
 
-    return floprate
-
+macro benchmark(n,ex,T)
+    s = gensym()
+    quote
+        local $s
+        @time for i=1:long($n)
+            x = convert($T,i)
+            $s = $ex
+        end
+        $s
+    end
 end

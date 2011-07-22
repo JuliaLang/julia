@@ -8,7 +8,7 @@ typealias DenseVector{T} Array{T,1}
 typealias DenseMatrix{T} Array{T,2}
 typealias DenseVecOrMat{T} Union(DenseVector{T}, DenseMatrix{T})
 
-typealias Indices Union(Index, Vector{Index})
+typealias Indices{T<:Int} Union(Int, Vector{T})
 typealias Region Union(Size,Dims)
 
 ## Basic functions ##
@@ -61,13 +61,17 @@ one{T}(x::Tensor{T,2}) = (m=size(x,1); n=size(x,2);
                           a)
 zero{T}(x::Tensor{T,2}) = zeros(T,size(x))
 
-linspace(start::Real, stop::Real, stride::Real) =
-    ((start, stop, stride) = promote(start, stop, stride);
-     [ i | i=start:stride:stop ])
+function linspace(start::Real, stop::Real, n::Int)
+    (start, stop) = promote(start, stop)
+    a = Array(typeof(start), long(n))
+    step = (stop-start)/(n-1)
+    for i=1:n
+        a[i] = start+(i-1)*step
+    end
+    a
+end
 
-linspace(start::Real, stop::Real) =
-    ((start, stop) = promote(start, stop);
-     [ i | i=start:stop ])
+linspace(start::Real, stop::Real) = [ i | i=start:stop ]
 
 ## Unary operators ##
 
@@ -134,12 +138,8 @@ end
 /(A::Number, B::Tensor) = A ./ B
 /(A::Tensor, B::Number) = A ./ B
 
-.\(x::Tensor, y::Tensor) = reshape( [ x[i] .\ y[i] | i=1:numel(x) ], size(x) )
-.\(x::Number, y::Tensor) = reshape( [ x    .\ y[i] | i=1:numel(y) ], size(y) )
-.\(x::Tensor, y::Number) = reshape( [ x[i] .\ y    | i=1:numel(x) ], size(x) )
-
-\(A::Number, B::Tensor) = A .\ B
-\(A::Tensor, B::Number) = A .\ B
+\(A::Number, B::Tensor) = B ./ A
+\(A::Tensor, B::Number) = B ./ A
 
 macro binary_arithmetic_op(f)
     quote
@@ -173,6 +173,8 @@ end # macro
 @binary_arithmetic_op (-)
 @binary_arithmetic_op (.*)
 @binary_arithmetic_op (.^)
+@binary_arithmetic_op div
+@binary_arithmetic_op mod
 
 ## promotion to complex ##
 
@@ -323,28 +325,28 @@ end
 ## Indexing: ref ##
 
 ref(t::Tensor) = t
-ref(t::Tensor, r::Real...) = ref(t,map(x->int32(round(x)),r)...)
+ref(t::Tensor, r::Real...) = ref(t,map(x->long(round(x)),r)...)
 
-ref(A::Vector, I::Vector{Index}) = [ A[i] | i = I ]
-ref(A::Tensor{Any,1}, I::Vector{Index}) = { A[i] | i = I }
+ref{T<:Int}(A::Vector, I::Vector{T}) = [ A[i] | i = I ]
+ref{T<:Int}(A::Tensor{Any,1}, I::Vector{T}) = { A[i] | i = I }
 
-ref(A::Matrix, I::Index, J::Vector{Index})         = [ A[i,j] | i = I, j = J ]
-ref(A::Matrix, I::Vector{Index}, J::Index)         = [ A[i,j] | i = I, j = J ]
-ref(A::Matrix, I::Vector{Index}, J::Vector{Index}) = [ A[i,j] | i = I, j = J ]
+ref{T<:Int}(A::Matrix, I::Int, J::Vector{T})       = [ A[i,j] | i = I, j = J ]
+ref{T<:Int}(A::Matrix, I::Vector{T}, J::Int)       = [ A[i,j] | i = I, j = J ]
+ref{T<:Int}(A::Matrix, I::Vector{T}, J::Vector{T}) = [ A[i,j] | i = I, j = J ]
 
-function ref(A::Tensor, i0::Index, i1::Index)
+function ref(A::Tensor, i0::Int, i1::Int)
     A[i0 + size(A,1)*(i1-1)]
 end
 
-function ref(A::Tensor, i0::Index, i1::Index, i2::Index)
+function ref(A::Tensor, i0::Int, i1::Int, i2::Int)
     A[i0 + size(A,1)*((i1-1) + size(A,2)*(i2-1))]
 end
 
-function ref(A::Tensor, i0::Index, i1::Index, i2::Index, i3::Index)
+function ref(A::Tensor, i0::Int, i1::Int, i2::Int, i3::Int)
     A[i0 + size(A,1)*((i1-1) + size(A,2)*((i2-1) + size(A,3)*(i3-1)))]
 end
 
-function ref(A::Tensor, I::Index...)
+function ref(A::Tensor, I::Int...)
     dims = size(A)
     ndims = length(I)
 
@@ -377,29 +379,29 @@ end
 ## Indexing: assign ##
 
 # 1-d indexing is assumed defined on subtypes
-assign(t::Tensor, x, i::Index) =
+assign(t::Tensor, x, i::Int) =
     error("assign not defined for ",typeof(t))
-assign(t::Tensor, x::Tensor, i::Index) =
+assign(t::Tensor, x::Tensor, i::Int) =
     error("assign not defined for ",typeof(t))
 
-assign(t::Tensor, x, r::Real...) = (t[map(x->int32(round(x)),r)...] = x)
+assign(t::Tensor, x, r::Real...) = (t[map(x->long(round(x)),r)...] = x)
 
-function assign(A::Vector, x, I::Vector{Index})
+function assign{T<:Int}(A::Vector, x, I::Vector{T})
     for i=I
         A[i] = x
     end
     return A
 end
 
-function assign(A::Vector, X::Tensor, I::Vector{Index})
+function assign{T<:Int}(A::Vector, X::Tensor, I::Vector{T})
     for i=1:length(I)
         A[I[i]] = X[i]
     end
     return A
 end
 
-assign(A::Matrix, x, i::Index, j::Index) = (A[(j-1)*size(A,1) + i] = x)
-assign(A::Matrix, x::Tensor, i::Index, j::Index) = (A[(j-1)*size(A,1) + i] = x)
+assign(A::Matrix, x, i::Int, j::Int) = (A[(j-1)*size(A,1) + i] = x)
+assign(A::Matrix, x::Tensor, i::Int, j::Int) = (A[(j-1)*size(A,1) + i] = x)
 
 function assign(A::Matrix, x, I::Indices, J::Indices)
     for j=J, i=I
@@ -417,22 +419,21 @@ function assign(A::Matrix, X::Tensor, I::Indices, J::Indices)
     return A
 end
 
-assign(A::Tensor, x, I0::Index, I::Index...) = assign_scalarND(A,x,I0,I...)
-assign(A::Tensor, x::Tensor, I0::Index, I::Index...) =
+assign(A::Tensor, x, I0::Int, I::Int...) = assign_scalarND(A,x,I0,I...)
+assign(A::Tensor, x::Tensor, I0::Int, I::Int...) =
     assign_scalarND(A,x,I0,I...)
 
-assign(A::Tensor, x::Tensor, i0::Index, i1::Index) =
-    A[i0 + size(A,1)*(i1-1)] = x
-assign(A::Tensor, x, i0::Index, i1::Index) = A[i0 + size(A,1)*(i1-1)] = x
+assign(A::Tensor, x::Tensor, i0::Int, i1::Int) = A[i0 + size(A,1)*(i1-1)] = x
+assign(A::Tensor, x, i0::Int, i1::Int) = A[i0 + size(A,1)*(i1-1)] = x
 
-assign(A::Tensor, x, i0::Index, i1::Index, i2::Index) =
+assign(A::Tensor, x, i0::Int, i1::Int, i2::Int) =
     A[i0 + size(A,1)*((i1-1) + size(A,2)*(i2-1))] = x
-assign(A::Tensor, x::Tensor, i0::Index, i1::Index, i2::Index) =
+assign(A::Tensor, x::Tensor, i0::Int, i1::Int, i2::Int) =
     A[i0 + size(A,1)*((i1-1) + size(A,2)*(i2-1))] = x
 
-assign(A::Tensor, x, i0::Index, i1::Index, i2::Index, i3::Index) =
+assign(A::Tensor, x, i0::Int, i1::Int, i2::Int, i3::Int) =
     A[i0 + size(A,1)*((i1-1) + size(A,2)*((i2-1) + size(A,3)*(i3-1)))] = x
-assign(A::Tensor, x::Tensor, i0::Index, i1::Index, i2::Index, i3::Index) =
+assign(A::Tensor, x::Tensor, i0::Int, i1::Int, i2::Int, i3::Int) =
     A[i0 + size(A,1)*((i1-1) + size(A,2)*((i2-1) + size(A,3)*(i3-1)))] = x
 
 function assign_scalarND(A, x, I0, I...)
@@ -611,7 +612,7 @@ end
 
 all(A::Tensor{Bool}, region::Region) = areduce(all, A, region)
 any(A::Tensor{Bool}, region::Region) = areduce(any, A, region)
-count(A::Tensor{Bool}, region::Region) = areduce(count, A, region, Int32)
+count(A::Tensor{Bool}, region::Region) = areduce(count, A, region, Size)
 
 function isequal(x::Tensor, y::Tensor)
     if size(x) != size(y)
@@ -849,11 +850,11 @@ function find{T}(A::Tensor{T})
 end
 end
 
-sub2ind(dims, i::Index) = i
-sub2ind(dims, i::Index, j::Index) = (j-1)*dims[1] + i
+sub2ind(dims, i::Int) = i
+sub2ind(dims, i::Int, j::Int) = (j-1)*dims[1] + i
 sub2ind(dims) = 1
 
-function sub2ind(dims, I::Index...)
+function sub2ind(dims, I::Int...)
     ndims = length(dims)
     index = I[1]
     stride = 1
@@ -867,17 +868,22 @@ end
 sub2ind(dims, I::Vector...) =
     [ sub2ind(dims, map(X->X[i], I)...) | i=1:length(I[1]) ]
 
-function ind2sub(dims, ind::Index)
+ind2sub(dims::(), ind::Int) = throw(BoundsError())
+ind2sub(dims::(Int,), ind::Int) = (ind,)
+ind2sub(dims::(Int,Int), ind::Int) =
+    (rem(ind-1,dims[1])+1, div(ind-1,dims[1])+1)
+
+function ind2sub(dims, ind::Int)
     ndims = length(dims)
-    x = tuple(1, cumprod(dims)...)
+    x = cumprod(dims)
 
     sub = ()
-    for i=ndims:-1:1
+    for i=(ndims-1):-1:1
         rest = rem(ind-1, x[i]) + 1
         sub = tuple(div(ind - rest, x[i]) + 1, sub...)
         ind = rest
     end
-    return sub
+    return tuple(ind, sub...)
 end
 
 ## subarrays ##
@@ -903,11 +909,11 @@ similar(s::SubArray, T::Type, dims::Dims) = similar(s.parent, T, dims)
 
 ref(s::SubArray) = s
 
-ref{T}(s::SubArray{T,1}, i::Index) = s.parent[s.indexes[1][i]]
+ref{T}(s::SubArray{T,1}, i::Int) = s.parent[s.indexes[1][i]]
 
-ref{T}(s::SubArray{T,2}, i::Index, j::Index) =
+ref{T}(s::SubArray{T,2}, i::Int, j::Int) =
     s.parent[s.indexes[1][i], s.indexes[2][j]]
 
-ref(s::SubArray, is::Index...) = s.parent[map(ref, s.indexes, is)...]
+ref(s::SubArray, is::Int...) = s.parent[map(ref, s.indexes, is)...]
 
-ref(s::SubArray, i::Index) = s[ind2sub(size(s), i)...]
+ref(s::SubArray, i::Int) = s[ind2sub(size(s), i)...]

@@ -25,11 +25,23 @@ end
 
 diff(a::Matrix) = diff(a, 1)
 
-diag(A::Matrix) = [ A[i,i] | i=1:min(size(A)) ]
-diagm{T}(v::Vector{T}) = (n=length(v);
-                          a=zeros(T,n,n);
-                          for i=1:n; a[i,i] = v[i]; end;
-                          a)
+diag(A::Matrix) = [ A[i,i] | i=1:min(size(A,1),size(A,2)) ]
+
+function diagm{T}(v::Union(Vector{T},Matrix{T}))
+    if isa(v, Matrix)
+        if (size(v,1) != 1 && size(v,2) != 1)
+            error("Input should be nx1 or 1xn")
+        end
+    end
+
+    n = numel(v)
+    a = zeros(T, n, n)
+    for i=1:n
+        a[i,i] = v[i]
+    end
+
+    return a
+end
 
 function norm(x::Vector, p::Number)
     if p == Inf
@@ -63,8 +75,8 @@ rank(A::Matrix) = rank(A, 0)
 
 # trace(A::Matrix) = sum(diag(A))
 
-function trace(A::Matrix)
-    t = 0
+function trace{T}(A::Matrix{T})
+    t = zero(T)
     for i=1:min(size(A))
         t += A[i,i]
     end
@@ -72,8 +84,16 @@ function trace(A::Matrix)
 end
 
 mean(V::Vector) = sum(V) / length(V)
-std(V::Vector) = (m = mean(V);
-                  sqrt( sum([ (V[i] - m)^2 | i=1:length(V) ]) / (length(V)-1) ))
+
+function std(V::Vector)
+    n = numel(V)
+    m = mean(V)
+    s = 0.0
+    for i=1:n
+        s += (V[i] - m)^2
+    end
+    return sqrt(s/(n-1))
+end
 
 kron(a::Vector, b::Vector) = [ a[i]*b[j] | i=1:length(a), j=1:length(b) ]
 kron(a::Matrix, b::Matrix) = reshape([ a[i,j]*b[k,l] | k=1:size(b,1),

@@ -772,7 +772,7 @@ static void check_ambiguous(jl_methlist_t *ml, jl_tuple_t *type,
             jl_show(t2);
             ios_printf(s, ". Make sure %s", n);
             jl_show(isect);
-            ios_printf(s, " is also defined.\n");
+            ios_printf(s, " is defined first.\n");
         }
         JL_CATCH {
             jl_raise(jl_exception_in_transit);

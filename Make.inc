@@ -4,15 +4,27 @@ EXTROOTLIB = $(EXTROOT)/lib
 LLVMROOT = $(EXTROOT)
 OS = $(shell uname)
 
+USEGCC = 1
+USECLANG = 0
+
+ifeq ($(USEGCC),1)
 CC = gcc
 CXX = g++
 FC = gfortran
-#CC = $(EXTROOT)/bin/clang
-#CXX = $(EXTROOT)/bin/clang++
-CFLAGS = -std=gnu99 -fPIC -D_FORTIFY_SOURCE=0
-CXXFLAGS = -fPIC -D_FORTIFY_SOURCE=0 -fno-rtti
-DEBUGFLAGS = -ggdb3 -DDEBUG $(FLAGS)
-SHIPFLAGS = -O3 -DNDEBUG $(FLAGS)
+CFLAGS = -pipe -std=gnu99 -fPIC -D_FORTIFY_SOURCE=0
+CXXFLAGS = -pipe -fPIC -D_FORTIFY_SOURCE=0 -fno-rtti
+DEBUGFLAGS = -ggdb3 -DDEBUG
+SHIPFLAGS = -O3 -DNDEBUG
+endif
+
+ifeq ($(USECLANG),1)
+CC = clang
+CXX = clang++
+CFLAGS = -fPIC -fexceptions -pipe
+CXXFLAGS = -fPIC -fno-rtti -fexceptions -pipe
+DEBUGFLAGS = -g -DDEBUG
+SHIPFLAGS = -O4 -DNDEBUG
+endif
 
 DEFAULT_REPL = readline
 JULIAGC = MARKSWEEP

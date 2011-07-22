@@ -4,8 +4,8 @@ start(s::String) = 1
 done(s::String,i) = (i > length(s))
 isempty(s::String) = done(s,start(s))
 ref(s::String, i::Index) = next(s,i)[1]
-ref(s::String, x::Real) = s[int32(round(x))]
-ref(s::String, r::Range1) = s[int32(round(r.start)):int32(round(r.stop))]
+ref(s::String, x::Real) = s[long(round(x))]
+ref(s::String, r::Range1) = s[long(round(r.start)):long(round(r.stop))]
 length(s::String) = at_string_end(s)[1]
 strlen(s::String) = at_string_end(s)[2]
 symbol(s::String) = symbol(cstring(s))
@@ -429,7 +429,7 @@ unescape_string(s::String) = print_to_string(length(s), print_unescaped, s)
 ## checking UTF-8 & ACSII validity ##
 
 byte_string_classify(s::ByteString) =
-    ccall(:u8_isvalid, Int32, (Ptr{Uint8}, Int32), s.data, length(s))
+    ccall(:u8_isvalid, Int32, (Ptr{Uint8}, Size), s.data, length(s))
     # 0: neither valid ASCII nor UTF-8
     # 1: valid ASCII
     # 2: valid UTF-8
@@ -645,7 +645,7 @@ function parse(s::String, pos, greedy)
     # returns (expr, end_pos). expr is () in case of parse error.
     ex, pos = ccall(:jl_parse_string, Any,
                     (Ptr{Uint8},Int32,Int32),
-                    cstring(s), int32(pos)-1, greedy ? 1:0)
+                    cstring(s), int32(pos-1), int32(greedy ? 1:0))
     if isa(ex,Expr) && is(ex.head,:error)
         throw(ParseError(ex.args[1]))
     end
@@ -730,8 +730,8 @@ function parse_int{T<:Int}(::Type{T}, s::String, base::Int)
     base = convert(T,base)
     for c = s
         d = '0' <= c <= '9' ? c-'0' :
-            'A' <= c <= 'Z' ? c-'A'+10 :
-            'a' <= c <= 'z' ? c-'a'+10 :
+            'A' <= c <= 'Z' ? c-'A'+int32(10) :
+            'a' <= c <= 'z' ? c-'a'+int32(10) :
             error(c, " is not an alphanumeric digit")
         d = convert(T,d)
         if base <= d
@@ -763,7 +763,7 @@ function uint2str(n::Int, b::Int)
     if n < zero(n); error("uint2str: negative argument ", n); end
     if b < 2; error("uint2str: invalid base ", b); end
     ndig = n==convert(typeof(n),0) ? 1 : int32(floor(log(n)/log(b)+1))
-    sz = ndig+1
+    sz = convert(Size, ndig+1)
     data = Array(Uint8, sz)
     ccall(:uint2str, Ptr{Uint8},
           (Ptr{Uint8}, Ulong, Uint64, Uint32),

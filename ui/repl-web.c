@@ -22,8 +22,9 @@
 #include <readline/readline.h>
 #include <readline/history.h>
 
-char jl_prompt_color[] = "\001\033[1m\033[32m\002julia> \001\033[0m\033[1m\002";
-static char jl_input_color[]  = "\033[0m\033[1m";
+char jl_prompt_color[] = "\001\033[1m\033[32m\002julia> \001\033[37m\002";
+static char jl_input_color[]  = "\033[1m\033[37m";
+
 static char *history_file = NULL;
 
 // yes, readline uses inconsistent indexing internally.
@@ -112,16 +113,7 @@ static int line_end(int point) {
     return nl - rl_line_buffer;
 }
 
-static int strip_initial_spaces = 0;
-static int spaces_suppressed = 0;
-
-static void reset_indent() {
-    strip_initial_spaces = 0;
-    spaces_suppressed = 0;
-}
-
 static int newline_callback(int count, int key) {
-    spaces_suppressed = 0;
     rl_insert_text("\n");
     int i;
     for (i = 0; i < prompt_length; i++)
@@ -145,34 +137,23 @@ static int return_callback(int count, int key) {
     if (!rl_done) {
         newline_callback(count, key);
     } else {
-        reset_indent();
         rl_point = rl_end;
         rl_redisplay();
     }
     return 0;
 }
 
-static int suppress_space() {
-    int i;
-    for (i = line_start(rl_point); i < rl_point; i++)
-        if (rl_line_buffer[i] != ' ') return 0;
-    if (spaces_suppressed < strip_initial_spaces) return 1;
-    return 0;
-}
-
 static int space_callback(int count, int key) {
-    if (!rl_point) strip_initial_spaces++;
-    else if (suppress_space()) spaces_suppressed++;
-    else rl_insert_text(" ");
+    if (rl_point > 0)
+        rl_insert_text(" ");
     return 0;
 }
 
 static int tab_callback(int count, int key) {
-    if (!rl_point) strip_initial_spaces += tab_width;
-    else if (suppress_space()) spaces_suppressed += tab_width;
-    else {
+    if (rl_point > 0) {
         int i;
-        for (i=0; i < tab_width; i++) rl_insert_text(" ");
+        for (i=0; i < tab_width; i++)
+            rl_insert_text(" ");
     }
     return 0;
 }
@@ -181,7 +162,6 @@ static int line_start_callback(int count, int key) {
     int start = line_start(rl_point);
     int flush_left = rl_point == 0 || rl_point == start + prompt_length;
     rl_point = flush_left ? 0 : (!start ? start : start + prompt_length);
-    reset_indent();
     return 0;
 }
 
@@ -189,7 +169,6 @@ static int line_end_callback(int count, int key) {
     int end = line_end(rl_point);
     int flush_right = rl_point == end;
     rl_point = flush_right ? rl_end : end;
-    reset_indent();
     return 0;
 }
 
@@ -199,7 +178,6 @@ static int line_kill_callback(int count, int key) {
     int kill = flush_right ? end + prompt_length + 1 : end;
     if (kill > rl_end) kill = rl_end;
     rl_kill_text(rl_point, kill);
-    reset_indent();
     return 0;
 }
 
@@ -211,7 +189,6 @@ static int backspace_callback(int count, int key) {
             rl_point-1 : i-1;
         rl_delete_text(rl_point, j);
     }
-    reset_indent();
     return 0;
 }
 
@@ -220,7 +197,6 @@ static int delete_callback(int count, int key) {
     j += (rl_line_buffer[j] == '\n') ? prompt_length+1 : 1;
     if (rl_end < j) j = rl_end;
     rl_delete_text(rl_point, j);
-    reset_indent();
     return 0;
 }
 
@@ -230,14 +206,12 @@ static int left_callback(int count, int key) {
         rl_point = (i == 0 || rl_point-i > prompt_length) ?
             rl_point-1 : i-1;
     }
-    reset_indent();
     return 0;
 }
 
 static int right_callback(int count, int key) {
     rl_point += (rl_line_buffer[rl_point] == '\n') ? prompt_length+1 : 1;
     if (rl_end < rl_point) rl_point = rl_end;
-    reset_indent();
     return 0;
 }
 
@@ -254,7 +228,6 @@ static int up_callback(int count, int key) {
         rl_point = line_end(0);
         return 0;
     }
-    reset_indent();
     return 0;
 }
 
@@ -273,7 +246,6 @@ static int down_callback(int count, int key) {
         }
         return rl_get_next_history(count, key);
     }
-    reset_indent();
     return 0;
 }
 
@@ -305,25 +277,21 @@ void read_expr(char *prompt)
 void init_repl_environment()
 {
     init_history();
-    Keymap keymaps[] = {emacs_standard_keymap, vi_insertion_keymap};
-    int i;
-    for (i = 0; i < sizeof(keymaps)/sizeof(keymaps[0]); i++) {
-        rl_bind_key_in_map(' ',        space_callback,      keymaps[i]);
-        rl_bind_key_in_map('\t',       tab_callback,        keymaps[i]);
-        rl_bind_key_in_map('\r',       return_callback,     keymaps[i]);
-        rl_bind_key_in_map('\n',       return_callback,     keymaps[i]);
-        rl_bind_key_in_map('\v',       line_kill_callback,  keymaps[i]);
-        rl_bind_key_in_map('\b',       backspace_callback,  keymaps[i]);
-        rl_bind_key_in_map('\001',     line_start_callback, keymaps[i]);
-        rl_bind_key_in_map('\005',     line_end_callback,   keymaps[i]);
-        rl_bind_key_in_map('\002',     left_callback,       keymaps[i]);
-        rl_bind_key_in_map('\006',     right_callback,      keymaps[i]);
-        rl_bind_keyseq_in_map("\e[A",  up_callback,         keymaps[i]);
-        rl_bind_keyseq_in_map("\e[B",  down_callback,       keymaps[i]);
-        rl_bind_keyseq_in_map("\e[D",  left_callback,       keymaps[i]);
-        rl_bind_keyseq_in_map("\e[C",  right_callback,      keymaps[i]);
-        rl_bind_keyseq_in_map("\\C-d", delete_callback,     keymaps[i]);
-    };
+    rl_bind_key(' ', space_callback);
+    rl_bind_key('\t', tab_callback);
+    rl_bind_key('\r', return_callback);
+    rl_bind_key('\n', return_callback);
+    rl_bind_key('\v', line_kill_callback);
+    rl_bind_key('\b', backspace_callback);
+    rl_bind_key('\001', line_start_callback);
+    rl_bind_key('\005', line_end_callback);
+    rl_bind_key('\002', left_callback);
+    rl_bind_key('\006', right_callback);
+    rl_bind_keyseq("\e[A", up_callback);
+    rl_bind_keyseq("\e[B", down_callback);
+    rl_bind_keyseq("\e[D", left_callback);
+    rl_bind_keyseq("\e[C", right_callback);
+    rl_bind_keyseq("\\C-d", delete_callback);
 }
 
 void exit_repl_environment()
@@ -349,5 +317,4 @@ void repl_stdin_callback()
 
 void repl_print_prompt()
 {
-    // handled by readline
 }

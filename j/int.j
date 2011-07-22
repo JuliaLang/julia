@@ -105,8 +105,10 @@ uint32(x) = convert(Uint32, x)
 int64 (x) = convert(Int64,  x)
 uint64(x) = convert(Uint64, x)
 
-truncate(x::Int) = x
 round(x::Int) = x
+trunc(x::Int) = x
+floor(x::Int) = x
+ceil(x::Int)  = x
 
 int(x::Int) = x
 int(x::Uint8 ) = int16(x)
@@ -215,10 +217,8 @@ div(x::Uint16, y::Uint16) = boxui16(udiv_int(unbox16(x), unbox16(y)))
 div(x::Uint32, y::Uint32) = boxui32(udiv_int(unbox32(x), unbox32(y)))
 div(x::Uint64, y::Uint64) = boxui64(udiv_int(unbox64(x), unbox64(y)))
 
-fld(x::Uint8 , y::Uint8 ) = div(x,y)
-fld(x::Uint16, y::Uint16) = div(x,y)
-fld(x::Uint32, y::Uint32) = div(x,y)
-fld(x::Uint64, y::Uint64) = div(x,y)
+fld{T<:Uint}(x::T, y::T) = div(x,y)
+# TODO: faster signed int fld?
 
 rem(x::Int8 , y::Int8 ) = boxsi8 (srem_int(unbox8 (x), unbox8 (y)))
 rem(x::Int16, y::Int16) = boxsi16(srem_int(unbox16(x), unbox16(y)))
@@ -230,13 +230,8 @@ rem(x::Uint16, y::Uint16) = boxui16(urem_int(unbox16(x), unbox16(y)))
 rem(x::Uint32, y::Uint32) = boxui32(urem_int(unbox32(x), unbox32(y)))
 rem(x::Uint64, y::Uint64) = boxui64(urem_int(unbox64(x), unbox64(y)))
 
-# faster than generic for signed ints
-mod{T<:Int}(x::T, y::T) = rem(y+rem(x,y),y)
-
-mod(x::Uint8 , y::Uint8 ) = rem(x,y)
-mod(x::Uint16, y::Uint16) = rem(x,y)
-mod(x::Uint32, y::Uint32) = rem(x,y)
-mod(x::Uint64, y::Uint64) = rem(x,y)
+mod{T<:Uint}(x::T, y::T) = rem(x,y)
+mod{T<:Int }(x::T, y::T) = rem(y+rem(x,y),y)
 
 ## integer bitwise operations ##
 
@@ -331,15 +326,15 @@ bswap(x::Uint64) = boxui64(bswap_int(unbox64(x)))
 ==(x::Uint32, y::Uint32) = eq_int(unbox32(x),unbox32(y))
 ==(x::Uint64, y::Uint64) = eq_int(unbox64(x),unbox64(y))
 
-#!=(x::Int8 , y::Int8 ) = ne_int(unbox8 (x),unbox8 (y))
-#!=(x::Int16, y::Int16) = ne_int(unbox16(x),unbox16(y))
-#!=(x::Int32, y::Int32) = ne_int(unbox32(x),unbox32(y))
-#!=(x::Int64, y::Int64) = ne_int(unbox64(x),unbox64(y))
+!=(x::Int8 , y::Int8 ) = ne_int(unbox8 (x),unbox8 (y))
+!=(x::Int16, y::Int16) = ne_int(unbox16(x),unbox16(y))
+!=(x::Int32, y::Int32) = ne_int(unbox32(x),unbox32(y))
+!=(x::Int64, y::Int64) = ne_int(unbox64(x),unbox64(y))
 
-#!=(x::Uint8 , y::Uint8 ) = ne_int(unbox8 (x),unbox8 (y))
-#!=(x::Uint16, y::Uint16) = ne_int(unbox16(x),unbox16(y))
-#!=(x::Uint32, y::Uint32) = ne_int(unbox32(x),unbox32(y))
-#!=(x::Uint64, y::Uint64) = ne_int(unbox64(x),unbox64(y))
+!=(x::Uint8 , y::Uint8 ) = ne_int(unbox8 (x),unbox8 (y))
+!=(x::Uint16, y::Uint16) = ne_int(unbox16(x),unbox16(y))
+!=(x::Uint32, y::Uint32) = ne_int(unbox32(x),unbox32(y))
+!=(x::Uint64, y::Uint64) = ne_int(unbox64(x),unbox64(y))
 
 <(x::Int8 , y::Int8 ) = slt_int(unbox8 (x),unbox8 (y))
 <(x::Int16, y::Int16) = slt_int(unbox16(x),unbox16(y))
@@ -360,28 +355,6 @@ bswap(x::Uint64) = boxui64(bswap_int(unbox64(x)))
 <=(x::Uint16, y::Uint16) = ule_int(unbox16(x),unbox16(y))
 <=(x::Uint32, y::Uint32) = ule_int(unbox32(x),unbox32(y))
 <=(x::Uint64, y::Uint64) = ule_int(unbox64(x),unbox64(y))
-
-#>(x::Int8 , y::Int8 ) = sgt_int(unbox8 (x),unbox8 (y))
-#>(x::Int16, y::Int16) = sgt_int(unbox16(x),unbox16(y))
-#>(x::Int32, y::Int32) = sgt_int(unbox32(x),unbox32(y))
-#>(x::Int64, y::Int64) = sgt_int(unbox64(x),unbox64(y))
-
-#>(x::Uint8 , y::Uint8 ) = ugt_int(unbox8 (x),unbox8 (y))
-#>(x::Uint16, y::Uint16) = ugt_int(unbox16(x),unbox16(y))
-#>(x::Uint32, y::Uint32) = ugt_int(unbox32(x),unbox32(y))
-#>(x::Uint64, y::Uint64) = ugt_int(unbox64(x),unbox64(y))
-
->=(x::Int8 , y::Int8 ) = sge_int(unbox8 (x),unbox8 (y))
->=(x::Int16, y::Int16) = sge_int(unbox16(x),unbox16(y))
->=(x::Int32, y::Int32) = sge_int(unbox32(x),unbox32(y))
->=(x::Int64, y::Int64) = sge_int(unbox64(x),unbox64(y))
-
->=(x::Uint8 , y::Uint8 ) = uge_int(unbox8 (x),unbox8 (y))
->=(x::Uint16, y::Uint16) = uge_int(unbox16(x),unbox16(y))
->=(x::Uint32, y::Uint32) = uge_int(unbox32(x),unbox32(y))
->=(x::Uint64, y::Uint64) = uge_int(unbox64(x),unbox64(y))
-
-cmp(x::Int, y::Int) = x < y ? -1 : x > y ? +1 : 0
 
 ## traits ##
 

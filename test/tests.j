@@ -75,7 +75,7 @@ end
 @assert subtype(Type{Array{Int}},Type{Array{typevar(:T,Int)}})
 
 # ntuples
-nttest1{n}(x::NTuple{n,Int32}) = n
+nttest1{n}(x::NTuple{n,Size}) = n
 @assert nttest1(()) == 0
 @assert nttest1((1,2)) == 2
 @assert NTuple <: Tuple
@@ -343,12 +343,19 @@ for nr = {
         f = fld(a,n)
         r = rem(a,n)
         m = mod(a,n)
-        t = promote_type(typeof(a),typeof(n))
 
-        @assert typeof(d) <: Int
-        @assert typeof(f) <: Int
-        @assert typeof(r) <: t
-        @assert typeof(m) <: t
+        t1 = isa(a,Rational) && isa(n,Rational) ?
+                               promote_type(typeof(num(a)),typeof(num(n))) :
+             isa(a,Rational) ? promote_type(typeof(num(a)),typeof(n)) :
+             isa(n,Rational) ? promote_type(typeof(a),typeof(num(n))) :
+                               promote_type(typeof(a),typeof(n))
+
+        t2 = promote_type(typeof(a),typeof(n))
+
+        @assert typeof(d) <: t1
+        @assert typeof(f) <: t1
+        @assert typeof(r) <: t2
+        @assert typeof(m) <: t2
 
         @assert d == f
         @assert r == m
@@ -364,10 +371,10 @@ for nr = {
             sr = rem(sa,sn)
             sm = mod(sa,sn)
 
-            @assert typeof(sd) <: Int
-            @assert typeof(sf) <: Int
-            @assert typeof(sr) <: t
-            @assert typeof(sm) <: t
+            @assert typeof(sd) <: t1
+            @assert typeof(sf) <: t1
+            @assert typeof(sr) <: t2
+            @assert typeof(sm) <: t2
 
             @assert sa < 0 ? -n < sr <= 0 : 0 <= sr < +n
             @assert sn < 0 ? -n < sm <= 0 : 0 <= sm < +n
@@ -596,9 +603,9 @@ end
 if WORD_SIZE == 64
     @assert isa((()->box(Ptr{Int8},unbox64(int64(0))))(), Ptr{Int8})
 else
-    @assert isa((()->box(Ptr{Int8},unbox32(0)))(), Ptr{Int8})
+    @assert isa((()->box(Ptr{Int8},unbox32(int32(0))))(), Ptr{Int8})
 end
-@assert isa((()->box(Char,unbox32(65)))(), Char)
+@assert isa((()->box(Char,unbox32(int32(65))))(), Char)
 
 # conversions
 function fooo()

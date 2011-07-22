@@ -22,17 +22,6 @@
 #include "llt.h"
 #include "julia.h"
 
-// --- system word size ---
-
-int jl_word_size()
-{
-#ifdef __LP64__
-    return 64;
-#else
-    return 32;
-#endif
-}
-
 // --- io and select ---
 
 void jl__not__used__()
@@ -100,6 +89,12 @@ DLLEXPORT
 size_t jl_ios_size(ios_t *s)
 {
     return s->size;
+}
+
+DLLEXPORT
+long jl_ios_fd(ios_t *s)
+{
+    return s->fd;
 }
 
 DLLEXPORT

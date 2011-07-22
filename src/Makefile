@@ -14,8 +14,8 @@ FLAGS = -falign-functions -Wall -Wno-strict-aliasing \
 	-fno-omit-frame-pointer \
 	-I$(FLISPDIR) -I$(LLTDIR) $(HFILEDIRS:%=-I%) $(LIBDIRS:%=-L%) \
 	-I$(shell $(LLVMROOT)/bin/llvm-config --includedir) -fvisibility=hidden
-DEBUGFLAGS = -ggdb3 -DDEBUG $(FLAGS)
-SHIPFLAGS = -O3 -DNDEBUG $(FLAGS)
+DEBUGFLAGS += $(FLAGS)
+SHIPFLAGS += $(FLAGS) 
 
 LIBFILES = $(FLISP) $(LLT)
 LIBS = $(LIBFILES) -L$(EXTROOT)/lib -lutil -ldl -lm $(OSLIBS) \

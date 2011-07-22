@@ -333,7 +333,7 @@ void jl_load_file_expr(char *fname, jl_value_t *ast)
             // process toplevel form
             form = jl_cellref(b, i);
             if (jl_is_expr(form) && ((jl_expr_t*)form)->head == line_sym) {
-                lineno = jl_unbox_int32(jl_exprarg(form, 0));
+                lineno = jl_unbox_long(jl_exprarg(form, 0));
             }
             else {
                 if (jl_is_expr(form) &&
@@ -352,7 +352,7 @@ void jl_load_file_expr(char *fname, jl_value_t *ast)
         jl_value_t *fn=NULL, *ln=NULL;
         JL_GC_PUSH(&fn, &ln);
         fn = jl_pchar_to_string(fname, strlen(fname));
-        ln = jl_box_int32(lineno);
+        ln = jl_box_long(lineno);
         jl_raise(jl_new_struct(jl_loaderror_type, fn, ln,
                                jl_exception_in_transit));
     }
@@ -472,9 +472,9 @@ JL_CALLABLE(jl_f_tupleref)
 {
     JL_NARGS(tupleref, 2, 2);
     JL_TYPECHK(tupleref, tuple, args[0]);
-    JL_TYPECHK(tupleref, int32, args[1]);
+    JL_TYPECHK(tupleref, long, args[1]);
     jl_tuple_t *t = (jl_tuple_t*)args[0];
-    size_t i = jl_unbox_int32(args[1])-1;
+    size_t i = jl_unbox_long(args[1])-1;
     if (i >= t->length)
         jl_error("tupleref: index out of range");
     return jl_tupleref(t, i);
@@ -484,7 +484,7 @@ JL_CALLABLE(jl_f_tuplelen)
 {
     JL_NARGS(tuplelen, 1, 1);
     JL_TYPECHK(tuplelen, tuple, args[0]);
-    return jl_box_int32(((jl_tuple_t*)args[0])->length);
+    return jl_box_long(((jl_tuple_t*)args[0])->length);
 }
 
 // structs --------------------------------------------------------------------
@@ -1112,13 +1112,13 @@ JL_CALLABLE(jl_f_new_bits_type)
     JL_NARGS(new_bits_type, 3, 3);
     JL_TYPECHK(new_bits_type, symbol, args[0]);
     JL_TYPECHK(new_bits_type, tuple, args[1]);
-    JL_TYPECHK(new_bits_type, int32, args[2]);
+    JL_TYPECHK(new_bits_type, long, args[2]);
     jl_tuple_t *p = (jl_tuple_t*)args[1];
     if (!all_typevars(p)) {
         jl_errorf("invalid type parameter list for %s",
                   ((jl_sym_t*)args[0])->name);
     }
-    int32_t nb = jl_unbox_int32(args[2]);
+    int32_t nb = jl_unbox_long(args[2]);
     //if (nb != 8 && nb != 16 && nb != 32 && nb != 64)
     if (nb < 1 || nb>=(1<<23) || (nb&7) != 0)
         jl_errorf("invalid number of bits in type %s",
@@ -1292,7 +1292,7 @@ jl_value_t *jl_closure_linfo(jl_function_t *f)
 
 // --- hashing ---
 
-uptrint_t jl_hash_symbol(jl_sym_t *s)
+DLLEXPORT uptrint_t jl_hash_symbol(jl_sym_t *s)
 {
     return s->hash;
 }
@@ -1397,6 +1397,12 @@ void jl_init_primitives()
     add_builtin("FuncKind", (jl_value_t*)jl_func_kind);
     add_builtin("AbstractKind", (jl_value_t*)jl_tag_kind);
     add_builtin("UnionKind", (jl_value_t*)jl_union_kind);
+
+#ifdef __LP64__
+    add_builtin("Size", (jl_value_t*)jl_int64_type);
+#else
+    add_builtin("Size", (jl_value_t*)jl_int32_type);
+#endif
 
     add_builtin("ANY", jl_ANY_flag);
 

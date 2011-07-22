@@ -20,8 +20,8 @@ let i = 2
              :a, :b, :c, :d, :e, :f, :g, :h, :i, :j, :k, :l, :m, :n, :o,
              :p, :q, :r, :s, :t, :u, :v, :w, :x, :y, :z,
              false, true, nothing, 0, 1, 2, 3, 4}
-        ser_tag[t] = i
-        deser_tag[i] = t
+        ser_tag[t] = int32(i)
+        deser_tag[int32(i)] = t
         i += 1
     end
 end

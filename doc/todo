@@ -675,7 +675,7 @@ issues 1/24/11
   * lambda-numbering to reuse code for spawned closures
   * pull repl global variables into spawned closures
   . do indexing of local objects locally automatically in spawn
-- add line number and file information
+* add line number and file information
 - keep track of renamed var names
 
 ? try to remove @ from macro syntax
@@ -720,7 +720,7 @@ issues 1/24/11
   * allow inlining where formal arg appears >once if actual arg is symbol
   * in frontend add (multiple-value) hint before assigning the temp var
     for a returned tuple
-- socket data corruption bug (?)
+* socket data corruption bug
 - array primitive benchmarks
 - parallelism documentation
 - darray functions

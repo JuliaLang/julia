@@ -87,11 +87,12 @@ src = 	k_standard.c k_rem_pio2.c \
 	e_hypotf.c  k_sinf.c        s_frexpf.c    s_sinf.c          \
 	e_j0f.c     k_tanf.c        s_ilogbf.c    s_tanf.c          \
 	e_j1f.c     s_asinhf.c      s_tanhf.c         \
-	e_jnf.c     s_atanf.c       s_truncf.c        \
+	e_jnf.c     s_atanf.c       s_truncf.c    s_trunc.c    \
 	e_log10f.c  s_cbrtf.c       s_log1pf.c    w_dremf.c         \
 	e_log2f.c   s_ceilf.c       s_logbf.c     w_gammaf.c        \
 	e_logf.c    s_copysignf.c   w_lgammaf.c   s_finitef.c       \
-	e_lgammaf_r.c 	b_exp.c	    b_log.c	b_tgamma.c
+	e_lgammaf_r.c 	b_exp.c	    b_log.c	b_tgamma.c \
+	s_signbit.c
 
 obj = 	$(src:%.c=%.o)
 

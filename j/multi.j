@@ -42,7 +42,6 @@
 ## message i/o ##
 
 function send_msg(s::IOStream, buf::IOStream, kind, args)
-    truncate(buf, 0)
     serialize(buf, kind)
     for arg=args
         serialize(buf, arg)
@@ -54,16 +53,29 @@ function send_msg(s::IOStream, buf::IOStream, kind, args)
 end
 
 SENDBUF = ()
-function send_msg(s::IOStream, kind, args...)
-    id = worker_id_from_socket(s)
-    if id > -1
-        return send_msg(worker_from_id(id), kind, args...)
-    end
+function send_msg_unknown(s::IOStream, kind, args)
+    # for sending to a socket not associated with a worker
     global SENDBUF
     if is(SENDBUF,())
         SENDBUF = memio()
     end
     send_msg(s, SENDBUF::IOStream, kind, args)
+end
+
+function send_msg(s::IOStream, kind, args...)
+    id = worker_id_from_socket(s)
+    if id > -1
+        return send_msg(worker_from_id(id), kind, args...)
+    end
+    send_msg_unknown(s, kind, args)
+end
+
+function send_msg_now(s::IOStream, kind, args...)
+    id = worker_id_from_socket(s)
+    if id > -1
+        return send_msg_now(worker_from_id(id), kind, args...)
+    end
+    send_msg_unknown(s, kind, args)
 end
 
 # todo:
@@ -72,8 +84,9 @@ end
 # - have put() wait on non-empty Refs
 # - removing nodes
 # - more dynamic scheduling
-# - fetch/wait latency seems to be excessive
-# - timer events and message aggregation
+# * fetch/wait latency seems to be excessive
+# * message aggregation
+# - timer events
 # - send pings at some interval to detect failed/hung machines
 # - integrate event loop with other kinds of i/o (non-messages)
 # ? method_missing for waiting (ref/assign/localdata seems to cover a lot)
@@ -98,7 +111,9 @@ type Worker
     sendbuf::IOStream
     id::Int32
     del_msgs::Array{Any,1}
-
+    lastmsg::Float64
+    dirty::Bool
+    
     function Worker(host, port)
         fd = ccall(:connect_to_host, Int32,
                    (Ptr{Uint8}, Int16), host, port)
@@ -108,11 +123,70 @@ type Worker
         Worker(host, port, fd, fdio(fd))
     end
 
-    Worker(host,port,fd,sock,id) = new(host, port, fd, sock, memio(), id, {})
+    Worker(host,port,fd,sock,id) =
+        new(host, port, fd, sock, memio(), id, {}, 0.0, false)
     Worker(host,port,fd,sock) = Worker(host,port,fd,sock,0)
 end
 
-send_msg(w::Worker, kind, args...) = send_msg(w.socket, w.sendbuf, kind, args)
+function flush_worker(w::Worker)
+    if !isempty(w.del_msgs)
+        #print("sending delete of $(w.del_msgs)\n")
+        remote_do(w, del_clients, w.del_msgs...)
+        del_all(w.del_msgs)
+    end
+    ccall(:jl_enq_send_req, Void, (Ptr{Void}, Ptr{Void}),
+          w.socket.ios, w.sendbuf.ios)
+    w.dirty = false
+end
+
+function send_msg_now(w::Worker, kind, args...)
+    send_msg(w.socket, w.sendbuf, kind, args)
+    w.dirty = false
+end
+
+function send_msg(w::Worker, kind, args...)
+    buf = w.sendbuf
+    serialize(buf, kind)
+    for arg=args
+        serialize(buf, arg)
+    end
+    if !w.dirty
+        w.lastmsg = clock()
+    end
+    w.dirty = true
+end
+
+function flush_workers()
+    global PGRP
+    now = 0.0
+    for w = PGRP.workers
+        if isa(w,Worker) && (w::Worker).dirty
+            k = w::Worker
+            if now==0.0
+                now = clock()
+            end
+            if now-k.lastmsg >= 0.0002
+                flush_worker(k)
+            end
+        end
+    end
+end
+
+# determine the maximum time we can sleep in select
+function max_sleep_time()
+    global PGRP
+    mt = 10.0
+    now = 0.0
+    for w = PGRP.workers
+        if isa(w,Worker) && (w::Worker).dirty
+            if now==0.0
+                now = clock()
+            end
+            mt = min(mt,(w::Worker).lastmsg+0.0002-now)
+        end
+    end
+    max(mt,0.0)
+end
 
 type LocalProcess
 end
@@ -131,7 +205,7 @@ type ProcessGroup
     # global references
     refs::HashTable
 
-    function ProcessGroup(myid::Int32, w::Array{Any,1}, locs::Array{Any,1})
+    function ProcessGroup(myid::Int, w::Array{Any,1}, locs::Array{Any,1})
         return new(myid, w, locs, length(w), HashTable())
     end
 end
@@ -147,7 +221,7 @@ function add_workers(PGRP::ProcessGroup, w::Array{Any,1})
     for i=1:n
         push(PGRP.workers, w[i])
         w[i].id = PGRP.np+i
-        send_msg(w[i], w[i].id, newlocs)
+        send_msg_now(w[i], w[i].id, newlocs)
         sockets[w[i].fd] = w[i].socket
         add_fd_handler(w[i].fd, handler)
     end
@@ -167,7 +241,10 @@ function join_pgroup(myid, locs, sockets)
         w[i].id = i
         sockets[w[i].fd] = w[i].socket
         add_fd_handler(w[i].fd, handler)
-        send_msg(w[i], :identify_socket, myid)
+        send_msg_now(w[i], :identify_socket, myid)
+    end
+    for i = (myid+1):np
+        w[i] = nothing
     end
     ProcessGroup(myid, w, locs)
 end
@@ -183,6 +260,10 @@ function worker_id_from_socket(s)
                 return i
             end
         end
+    end
+    if isa(s,IOStream) && fd(s)==-1
+        # serializing to a local buffer
+        return myid()
     end
     return -1
 end
@@ -201,6 +282,7 @@ function identify_socket(otherid, fd, sock)
     d = i-length(PGRP.workers)
     if d > 0
         grow(PGRP.workers, d)
+        PGRP.workers[(end-d+1):end] = nothing
         PGRP.np += d
     end
     PGRP.workers[i] = Worker("", 0, fd, sock, i)
@@ -323,13 +405,12 @@ function send_del_client(rr::RemoteRef)
     if rr.where == myid()
         del_client(rr2id(rr), myid())
     else
-        W = worker_from_id(rr.where)
-        push(W.del_msgs, (rr2id(rr), myid()))
-        if length(W.del_msgs) >= 10
-            #print("sending delete of $(W.del_msgs)\n")
-            remote_do(rr.where, del_clients, W.del_msgs...)
-            del_all(W.del_msgs)
+        w = worker_from_id(rr.where)
+        push(w.del_msgs, (rr2id(rr), myid()))
+        if !w.dirty
+            w.lastmsg = clock()
         end
+        w.dirty = true
     end
 end
 
@@ -416,14 +497,47 @@ function schedule_call(rid, thunk)
     wi
 end
 
+localize_ref(b::Box) = Box(localize_ref(b.contents))
+
+function localize_ref(r::RemoteRef)
+    if r.where == myid()
+        fetch(r)
+    else
+        r
+    end
+end
+
+localize_ref(x) = x
+
+# call f on args in a way that simulates what would happen if
+# the function were sent elsewhere
+function local_remote_call(f, args)
+    return f(args...)
+
+    # TODO: this seems to be capable of causing deadlocks by waiting on
+    # Refs buried inside the closure that we don't want to wait on yet.
+    # linfo = ccall(:jl_closure_linfo, Any, (Any,), f)
+    # if isa(linfo,LambdaStaticData)
+    #     env = ccall(:jl_closure_env, Any, (Any,), f)
+    #     buf = memio()
+    #     serialize(buf, env)
+    #     seek(buf, 0)
+    #     env = force(deserialize(buf))
+    #     f = ccall(:jl_new_closure_internal, Any, (Any, Any),
+    #               linfo, env)::Function
+    # end
+    # f(map(localize_ref,args)...)
+end
+
 function remote_call(w::LocalProcess, f, args...)
     rr = RemoteRef(w)
-    schedule_call(rr2id(rr), ()->f(args...))
+    schedule_call(rr2id(rr), ()->local_remote_call(f,args))
     rr
 end
 
 function remote_call(w::Worker, f, args...)
     rr = RemoteRef(w)
+    #println("$(myid()) asking for $rr")
     send_msg(w, :call, rr2id(rr), f, args)
     rr
 end
@@ -431,7 +545,7 @@ end
 remote_call(id::Int, f, args...) = remote_call(worker_from_id(id), f, args...)
 
 # faster version of fetch(remote_call(...))
-remote_call_fetch(w::LocalProcess, f, args...) = f(args...)
+remote_call_fetch(w::LocalProcess, f, args...) = local_remote_call(f, args)
 
 function remote_call_fetch(w::Worker, f, args...)
     # can be weak, because the program will have no way to refer to the Ref
@@ -462,7 +576,7 @@ function remote_do(w::LocalProcess, f, args...)
     # the LocalProcess version just performs in local memory what a worker
     # does when it gets a :do message.
     # same for other messages on LocalProcess.
-    enq_work(WorkItem(()->apply(f,args)))
+    enq_work(WorkItem(()->local_remote_call(f, args)))
     nothing
 end
 
@@ -635,6 +749,7 @@ function perform_work(job::WorkItem)
             # add to waiting set to wait on a sync event
             wf::WaitFor = result
             rr = wf.rr
+            #println("$(myid()) waiting for $rr")
             oid = rr2id(rr)
             waitinfo = (wf.msg, job, rr)
             waiters = get(Waiting, oid, false)
@@ -652,7 +767,7 @@ end
 end
 
 function deliver_result(sock::IOStream, msg, oid, value)
-    #print("$(myid()) sending result\n")
+    #print("$(myid()) sending result $oid\n")
     if is(msg,:fetch) || is(msg,:call_fetch)
         val = value
     else
@@ -660,11 +775,11 @@ function deliver_result(sock::IOStream, msg, oid, value)
         val = oid
     end
     try
-        send_msg(sock, :result, msg, oid, val)
+        send_msg_now(sock, :result, msg, oid, val)
     catch e
         # send exception in case of serialization error; otherwise
         # request side would hang.
-        send_msg(sock, :result, msg, oid, e)
+        send_msg_now(sock, :result, msg, oid, e)
     end
 end
 
@@ -745,14 +860,13 @@ function message_handler(fd, sockets)
         first = false
         try
             msg = force(deserialize(sock))
-            #print("$(myid()) got ", tuple(msg, args[1],
-            #                              map(typeof,args[2:])), "\n")
+            #print("$(myid()) got $msg\n")
             # handle message
             if is(msg, :call) || is(msg, :call_fetch) || is(msg, :call_wait)
                 id = force(deserialize(sock))
                 f = deserialize(sock)
                 args = deserialize(sock)
-                #print("$(myid()) got call\n")
+                #print("$(myid()) got call $id\n")
                 wi = schedule_call(id, f, args)
                 if is(msg, :call_fetch)
                     wi.notify = (sock, :call_fetch, id, wi.notify)
@@ -823,7 +937,7 @@ function start_worker(wrfd)
     flush(io)
     #close(io)
     # close stdin; workers will not use it
-    ccall(dlsym(libc, :close), Int32, (Int32,), 0)
+    ccall(dlsym(libc, :close), Int32, (Int32,), int32(0))
 
     global Scheduler = current_task()
 
@@ -837,7 +951,7 @@ function start_worker(wrfd)
     end
 
     ccall(dlsym(libc, :close), Int32, (Int32,), sockfd)
-    ccall(dlsym(libc, :exit) , Void , (Int32,), 0)
+    ccall(dlsym(libc, :exit) , Void , (Int32,), int32(0))
 end
 
 # establish an SSH tunnel to a remote worker
@@ -980,6 +1094,7 @@ type GlobalObject
         wi.result = WeakRef(go)
         wi.done = true
         notify_done(wi)
+        go
     end
 
     # initializer is a function that will be called on the new G.O., and its
@@ -1025,10 +1140,9 @@ type GlobalObject
         if !participate
             go = new((), r)
             go.local_identity = initializer(go)  # ???
-            go.local_identity
+            go
         else
             init_GlobalObject(mi, procs, rids, initializer, r, rr2id(r[midx]))
-            fetch(r[midx])
         end
     end
 
@@ -1039,7 +1153,8 @@ type GlobalObject
     GlobalObject() = GlobalObject(identity)
 end
 
-show(g::GlobalObject) = print("GlobalObject()")
+show(g::GlobalObject) = (r = g.refs[myid()];
+                         print("GlobalObject($(r.whence),$(r.id))"))
 
 function member(g::GlobalObject, p::Int)
     for i=1:length(g.refs)
@@ -1062,7 +1177,7 @@ function serialize(s, g::GlobalObject)
     ri = member(g, i)
     if is(ri, false)
         li = g.local_identity
-        g.local_identity = ()
+        g.local_identity = nothing
         invoke(serialize, (Any, Any), s, g)
         g.local_identity = li
         return
@@ -1090,6 +1205,14 @@ function serialize(s, g::GlobalObject)
 end
 
 localize(g::GlobalObject) = g.local_identity
+fetch(g::GlobalObject) = g.local_identity
+localize_ref(g::GlobalObject) = g.local_identity
+
+broadcast(x) = GlobalObject(g->x)
+
+function ref(g::GlobalObject, args...)
+    g.local_identity[args...]
+end
 
 ## higher-level functions: spawn, pmap, pfor, etc. ##
 
@@ -1263,7 +1386,7 @@ macro pfor(reducer, range, body)
     var = range.args[1]
     r = range.args[2]
     quote
-        preduce($reducer, ($var)->($body), $r)
+        preduce($reducer, $localize_vars(:(($var)->($body))), $r)
     end
 end
 
@@ -1285,11 +1408,11 @@ macro parallel(args...)
     body = loop.args[2]
     if na==1
         quote
-            pfor(($var)->($body), $r)
+            pfor($localize_vars(:(($var)->($body))), $r)
         end
     else
         quote
-            preduce($reducer, ($var)->($body), $r)
+            preduce($reducer, $localize_vars(:(($var)->($body))), $r)
         end
     end
 end
@@ -1324,8 +1447,8 @@ yield() = yieldto(Scheduler)
 
 fd_handlers = HashTable()
 
-add_fd_handler(fd, H) = (fd_handlers[fd]=H)
-del_fd_handler(fd) = del(fd_handlers, fd)
+add_fd_handler(fd::Int32, H) = (fd_handlers[fd]=H)
+del_fd_handler(fd::Int32) = del(fd_handlers, fd)
 
 function event_loop(isclient)
     fdset = FDSet()
@@ -1343,19 +1466,22 @@ function event_loop(isclient)
                     add(fdset, fd)
                 end
 
-                nselect = select_read(fdset, isempty(Workqueue) ? 10 : 0)
+                nselect = select_read(fdset,
+                                      isempty(Workqueue) ? max_sleep_time() :
+                                                           0.0)
                 if nselect == 0
                     if !isempty(Workqueue)
                         perform_work()
                     end
                 else
-                    for fd=0:(fdset.nfds-1)
+                    for fd=int32(0):int32(fdset.nfds-1)
                         if has(fdset,fd)
                             h = fd_handlers[fd]
                             h(fd)
                         end
                     end
                 end
+                flush_workers()
             end
         catch e
             if isa(e,DisconnectException)
