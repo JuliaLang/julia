@@ -378,7 +378,7 @@ function abstract_eval(e::Expr, vtypes, sv::StaticVarInfo)
     return t
 end
 
-function a2t(a::Vector)
+function a2t(a::AbstractVector)
     n = length(a)
     if n==2 return (a[1],a[2]) end
     if n==1 return (a[1],) end
@@ -392,7 +392,7 @@ function a2t(a::Vector)
     t
 end
 
-function a2t_butfirst(a::Vector)
+function a2t_butfirst(a::AbstractVector)
     n = length(a)
     if n==2 return (a[2],) end
     if n<=1 return () end

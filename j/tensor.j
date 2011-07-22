@@ -2,13 +2,13 @@
 
 ## Type aliases for convenience ##
 
-typealias Vector{T} Tensor{T,1}
-typealias Matrix{T} Tensor{T,2}
+typealias AbstractVector{T} Tensor{T,1}
+typealias AbstractMatrix{T} Tensor{T,2}
 typealias DenseVector{T} Array{T,1}
 typealias DenseMatrix{T} Array{T,2}
 typealias DenseVecOrMat{T} Union(DenseVector{T}, DenseMatrix{T})
 
-typealias Indices{T<:Int} Union(Int, Vector{T})
+typealias Indices{T<:Int} Union(Int, AbstractVector{T})
 typealias Region Union(Size,Dims)
 
 ## Basic functions ##
@@ -16,7 +16,7 @@ typealias Region Union(Size,Dims)
 size(t::Tensor, d) = size(t)[d]
 ndims{T,n}(::Tensor{T,n}) = n
 numel(t::Tensor) = prod(size(t))
-length(v::Vector) = numel(v)
+length(v::AbstractVector) = numel(v)
 length(t::Tensor) = error("length not defined for ", typeof(t))
 nnz(a::Tensor) = (n = 0; for i=1:numel(a); n += a[i] != 0 ? 1 : 0; end; n)
 nnz(a::Tensor{Bool}) = (n = 0; for i=1:numel(a); n += a[i] == true ? 1 : 0; end; n)
@@ -327,12 +327,12 @@ end
 ref(t::Tensor) = t
 ref(t::Tensor, r::Real...) = ref(t,map(x->long(round(x)),r)...)
 
-ref{T<:Int}(A::Vector, I::Vector{T}) = [ A[i] | i = I ]
-ref{T<:Int}(A::Tensor{Any,1}, I::Vector{T}) = { A[i] | i = I }
+ref{T<:Int}(A::AbstractVector, I::AbstractVector{T}) = [ A[i] | i = I ]
+ref{T<:Int}(A::Tensor{Any,1}, I::AbstractVector{T}) = { A[i] | i = I }
 
-ref{T<:Int}(A::Matrix, I::Int, J::Vector{T})       = [ A[i,j] | i = I, j = J ]
-ref{T<:Int}(A::Matrix, I::Vector{T}, J::Int)       = [ A[i,j] | i = I, j = J ]
-ref{T<:Int}(A::Matrix, I::Vector{T}, J::Vector{T}) = [ A[i,j] | i = I, j = J ]
+ref{T<:Int}(A::AbstractMatrix, I::Int, J::AbstractVector{T})       = [ A[i,j] | i = I, j = J ]
+ref{T<:Int}(A::AbstractMatrix, I::AbstractVector{T}, J::Int)       = [ A[i,j] | i = I, j = J ]
+ref{T<:Int}(A::AbstractMatrix, I::AbstractVector{T}, J::AbstractVector{T}) = [ A[i,j] | i = I, j = J ]
 
 function ref(A::Tensor, i0::Int, i1::Int)
     A[i0 + size(A,1)*(i1-1)]
@@ -386,31 +386,31 @@ assign(t::Tensor, x::Tensor, i::Int) =
 
 assign(t::Tensor, x, r::Real...) = (t[map(x->long(round(x)),r)...] = x)
 
-function assign{T<:Int}(A::Vector, x, I::Vector{T})
+function assign{T<:Int}(A::AbstractVector, x, I::AbstractVector{T})
     for i=I
         A[i] = x
     end
     return A
 end
 
-function assign{T<:Int}(A::Vector, X::Tensor, I::Vector{T})
+function assign{T<:Int}(A::AbstractVector, X::Tensor, I::AbstractVector{T})
     for i=1:length(I)
         A[I[i]] = X[i]
     end
     return A
 end
 
-assign(A::Matrix, x, i::Int, j::Int) = (A[(j-1)*size(A,1) + i] = x)
-assign(A::Matrix, x::Tensor, i::Int, j::Int) = (A[(j-1)*size(A,1) + i] = x)
+assign(A::AbstractMatrix, x, i::Int, j::Int) = (A[(j-1)*size(A,1) + i] = x)
+assign(A::AbstractMatrix, x::Tensor, i::Int, j::Int) = (A[(j-1)*size(A,1) + i] = x)
 
-function assign(A::Matrix, x, I::Indices, J::Indices)
+function assign(A::AbstractMatrix, x, I::Indices, J::Indices)
     for j=J, i=I
         A[i,j] = x
     end
     return A
 end
 
-function assign(A::Matrix, X::Tensor, I::Indices, J::Indices)
+function assign(A::AbstractMatrix, X::Tensor, I::Indices, J::Indices)
     count = 1
     for j=J, i=I
         A[i,j] = X[count]
@@ -628,7 +628,7 @@ function isequal(x::Tensor, y::Tensor)
 end
 
 for (f, op) = ((:cumsum, :+), (:cumprod, :(.*)) )
-    @eval function ($f)(v::Vector)
+    @eval function ($f)(v::AbstractVector)
         n = length(v)
         c = similar(v, n)
         if n == 0; return c; end
@@ -650,8 +650,8 @@ isempty(a::Tensor) = (numel(a) == 0)
 
 ## map over arrays ##
 
-#map(f, v::Vector) = [ f(v[i]) | i=1:length(v) ]
-#map(f, M::Matrix) = [ f(M[i,j]) | i=1:size(M,1), j=1:size(M,2) ]
+#map(f, v::AbstractVector) = [ f(v[i]) | i=1:length(v) ]
+#map(f, M::AbstractMatrix) = [ f(M[i,j]) | i=1:size(M,1), j=1:size(M,2) ]
 
 function map(f, A::Tensor)
     F = similar(A, size(A))
@@ -674,13 +674,13 @@ end
 
 ## Transpose, Permute ##
 
-reverse(v::Vector) = [ v[length(v)-i+1] | i=1:length(v) ]
+reverse(v::AbstractVector) = [ v[length(v)-i+1] | i=1:length(v) ]
 
-transpose(x::Vector)  = [ x[j]         | i=1, j=1:size(x,1) ]
-ctranspose(x::Vector) = [ conj(x[j])   | i=1, j=1:size(x,1) ]
+transpose(x::AbstractVector)  = [ x[j]         | i=1, j=1:size(x,1) ]
+ctranspose(x::AbstractVector) = [ conj(x[j])   | i=1, j=1:size(x,1) ]
 
-transpose(x::Matrix)  = [ x[j,i]       | i=1:size(x,2), j=1:size(x,1) ]
-ctranspose(x::Matrix) = [ conj(x[j,i]) | i=1:size(x,2), j=1:size(x,1) ]
+transpose(x::AbstractMatrix)  = [ x[j,i]       | i=1:size(x,2), j=1:size(x,1) ]
+ctranspose(x::AbstractMatrix) = [ conj(x[j,i]) | i=1:size(x,2), j=1:size(x,1) ]
 
 let permute_cache = nothing
 
@@ -742,7 +742,7 @@ end
 
 ## Other array functions ##
 
-repmat(a::Matrix, m::Size, n::Size) = reshape([ a[i,j] | i=1:size(a,1),
+repmat(a::AbstractMatrix, m::Size, n::Size) = reshape([ a[i,j] | i=1:size(a,1),
                                                          k=1:m,
                                                          j=1:size(a,2),
                                                          l=1:n],
@@ -750,10 +750,10 @@ repmat(a::Matrix, m::Size, n::Size) = reshape([ a[i,j] | i=1:size(a,1),
                                               size(a,2)*n)
 
 
-accumarray(I::Vector, J::Vector, V) = accumarray (I, J, V, max(I), max(J))
+accumarray(I::AbstractVector, J::AbstractVector, V) = accumarray (I, J, V, max(I), max(J))
 
 
-function accumarray{T<:Number}(I::Vector, J::Vector, V::T, m::Size, n::Size)
+function accumarray{T<:Number}(I::AbstractVector, J::AbstractVector, V::T, m::Size, n::Size)
     A = similar(V, m, n)
     for k=1:length(I)
         A[I[k], J[k]] += V
@@ -761,7 +761,7 @@ function accumarray{T<:Number}(I::Vector, J::Vector, V::T, m::Size, n::Size)
     return A
 end
 
-function accumarray(I::Indices, J::Indices, V::Vector, m::Size, n::Size)
+function accumarray(I::Indices, J::Indices, V::AbstractVector, m::Size, n::Size)
     A = similar(V, m, n)
     for k=1:length(I)
         A[I[k], J[k]] += V[k]
@@ -769,7 +769,7 @@ function accumarray(I::Indices, J::Indices, V::Vector, m::Size, n::Size)
     return A
 end
 
-function find{T}(A::Vector{T})
+function find{T}(A::AbstractVector{T})
     nnzA = nnz(A)
     I = zeros(Size, nnzA)
     z = zero(T)
@@ -783,7 +783,7 @@ function find{T}(A::Vector{T})
     return I
 end
 
-function find{T}(A::Matrix{T})
+function find{T}(A::AbstractMatrix{T})
     nnzA = nnz(A)
     I = zeros(Size, nnzA)
     J = zeros(Size, nnzA)
@@ -849,7 +849,7 @@ function sub2ind(dims, I::Int...)
     return index
 end
 
-sub2ind(dims, I::Vector...) =
+sub2ind(dims, I::AbstractVector...) =
     [ sub2ind(dims, map(X->X[i], I)...) | i=1:length(I[1]) ]
 
 ind2sub(dims::(), ind::Int) = throw(BoundsError())

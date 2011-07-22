@@ -725,8 +725,8 @@ static int is_va_tuple(jl_tuple_t *t)
   !subtype(A,B) && !subtype(B,A) && no corresponding tuple
   elements are disjoint.
   
-  for example, (Tensor, Matrix) and (Matrix, Tensor) are ambiguous.
-  however, (Tensor, Matrix, Foo) and (Matrix, Tensor, Bar) are fine
+  for example, (Tensor, AbstractMatrix) and (AbstractMatrix, Tensor) are ambiguous.
+  however, (Tensor, AbstractMatrix, Foo) and (AbstractMatrix, Tensor, Bar) are fine
   since Foo and Bar are disjoint, so there would be no confusion over
   which one to call.
   
