@@ -283,32 +283,50 @@ end # macro
 
 ## code generator for specializing on the number of dimensions ##
 
-function make_loop_nest(vars, ranges, body)
+#otherbodies are the bodies that reside between loops, if its a 2 dimension array. 
+function make_loop_nest(vars, ranges, body, otherbodies)
+    length = 
     expr = body
     for i=1:length(vars)
         v = vars[i]
         r = ranges[i]
+        if (length(size(otherbodies))==2)
+        	l = otherbodies[i]
+        	j = i*size(otherbodies)[1]
+        else
+        	l = nothing
+        	j = i
+        end
         expr = quote
+        	$l
             for ($v) = ($r)
                 $expr
             end
+            $otherbodies[j]
         end
     end
     expr
 end
 
-function gen_cartesian_map(cache, genbody, dims, exargnames, exargs...)
+function gen_cartesian_map(cache, genbodies, dims, exargnames, exargs...)
     N = length(dims)
     if !has(cache,N)
         dimargnames = { gensym() | i=1:N }
         ivars = { gensym() | i=1:N }
-        body = genbody(ivars)
+        if isa(genbodies,Array)
+			otherbodies = { i(ivars) | i = genbodies[2:] }
+			genbodies = genbodies[1]
+		else
+			otherbodies = {nothing | i = 1:N}
+		end
+		println(otherbodies)
+		body = genbodies(ivars)
         fexpr =
         quote
             let _dummy_=nothing
                 local _F_
                 function _F_($(dimargnames...), $(exargnames...))
-                    $make_loop_nest(ivars, dimargnames, body)
+                    $make_loop_nest(ivars, dimargnames, body, otherbodies)
                 end
                 _F_
             end
@@ -320,7 +338,6 @@ function gen_cartesian_map(cache, genbody, dims, exargnames, exargs...)
     end
     return f(dims..., exargs...)
 end
-
 
 ## Indexing: ref ##
 
