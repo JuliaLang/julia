@@ -504,6 +504,7 @@ void* watchdog_thread(void* arg)
 // THREAD:  main_thread
 /////////////////////////////////////////////////////////////////////////////
 
+// the maximum number of concurrent sessions
 const size_t MAX_CONCURRENT_SESSIONS = 4;
 
 // generate a session token
