@@ -114,6 +114,13 @@ function send_msg(w::Worker, kind, args...)
     send_msg_(w, kind, args, false)
 end
 
+function flush_gc_msgs(w::Worker)
+    msgs = w.del_msgs
+    w.del_msgs = {}
+    #print("sending delete of $msgs\n")
+    remote_do(w, del_clients, msgs...)
+end
+
 function send_msg_(w::Worker, kind, args, now::Bool)
     buf = w.sendbuf
     ccall(:jl_buf_mutex_lock, Void, ())
@@ -124,13 +131,21 @@ function send_msg_(w::Worker, kind, args, now::Bool)
     ccall(:jl_buf_mutex_unlock, Void, ())
 
     if !now && !isempty(w.del_msgs)
-        msgs = w.del_msgs
-        w.del_msgs = {}
-        #print("sending delete of $msgs\n")
-        remote_do(w, del_clients, msgs...)
+        flush_gc_msgs(w)
     else
         ccall(:jl_enq_send_req, Void, (Ptr{Void}, Ptr{Void}, Int32),
               w.socket.ios, w.sendbuf.ios, now ? int32(1) : int32(0))
+    end
+end
+
+function flush_gc_msgs()
+    for w = (PGRP::ProcessGroup).workers
+        if isa(w,Worker)
+            k = w::Worker
+            if !isempty(k.del_msgs)
+                flush_gc_msgs(k)
+            end
+        end
     end
 end
 
@@ -1410,7 +1425,11 @@ function event_loop(isclient)
                     add(fdset, fd)
                 end
 
-                nselect = select_read(fdset, isempty(Workqueue) ? 10.0 : 0.0)
+                bored = isempty(Workqueue)
+                if bored
+                    flush_gc_msgs()
+                end
+                nselect = select_read(fdset, bored ? 10.0 : 0.0)
                 if nselect == 0
                     if !isempty(Workqueue)
                         perform_work()
