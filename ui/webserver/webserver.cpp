@@ -115,7 +115,7 @@ string str_replace(string str, string from, string to)
 /////////////////////////////////////////////////////////////////////////////
 
 // if a session hasn't been queried in this time, it dies
-const int SESSION_TIMEOUT = 4; // in seconds
+const int SESSION_TIMEOUT = 10; // in seconds
 
 // a session
 struct session
@@ -214,15 +214,18 @@ void* inbox_thread(void* arg)
         timeval select_timeout;
         select_timeout.tv_sec = 0;
         select_timeout.tv_usec = 100000;
-        size_t bytes_written = 0;
+        ssize_t bytes_written = 0;
         if (select(FD_SETSIZE, 0, &set, 0, &select_timeout))
             bytes_written = write(pipe, inbox.c_str(), inbox.size());
 
         // lock the mutex
         pthread_mutex_lock(&session_mutex);
 
-        // and remove it from the inbox
-        session_map[session_token].inbox = session_map[session_token].inbox.substr(bytes_written, session_map[session_token].inbox.size()-bytes_written);
+        // remove the written data from the inbox
+        if (bytes_written < 0)
+            session_map[session_token].inbox = "";
+        else
+            session_map[session_token].inbox = session_map[session_token].inbox.substr(bytes_written, session_map[session_token].inbox.size()-bytes_written);
 
         // unlock the mutex
         pthread_mutex_unlock(&session_mutex);
@@ -289,7 +292,7 @@ void* outbox_thread(void* arg)
         timeval select_timeout;
         select_timeout.tv_sec = 0;
         select_timeout.tv_usec = 100000;
-        size_t bytes_read = 0;
+        ssize_t bytes_read = 0;
         if (select(FD_SETSIZE, &set, 0, 0, &select_timeout))
             bytes_read = read(pipe, buffer, buffer_size);
 
@@ -297,8 +300,12 @@ void* outbox_thread(void* arg)
         pthread_mutex_lock(&session_mutex);
 
         // get the read data
-        buffer[bytes_read] = 0;
-        string new_data = buffer;
+        string new_data;
+        if (bytes_read > 0)
+        {
+            buffer[bytes_read] = 0;
+            new_data = buffer;
+        }
         delete [] buffer;
         outbox += new_data;
 
@@ -456,8 +463,10 @@ void* watchdog_thread(void* arg)
         for (vector<string>::iterator iter = zombie_list.begin(); iter != zombie_list.end(); iter++)
         {
             // wait for the threads to terminate
-            pthread_join(session_map[*iter].inbox_proc, 0);
-            pthread_join(session_map[*iter].outbox_proc, 0);
+            if (session_map[*iter].inbox_proc)
+                pthread_join(session_map[*iter].inbox_proc, 0);
+            if (session_map[*iter].outbox_proc)
+                pthread_join(session_map[*iter].outbox_proc, 0);
 
             // close the pipes
             close(session_map[*iter].julia_in[1]);
@@ -469,6 +478,12 @@ void* watchdog_thread(void* arg)
 
             // remove the session from the map
             session_map.erase(*iter);
+
+            // print the number of open sessions
+            if (session_map.size() == 1)
+                cout<<session_map.size()<<" open session.\n";
+            else
+                cout<<session_map.size()<<" open sessions.\n";
         }
 
         // unlock the mutex
@@ -488,6 +503,9 @@ void* watchdog_thread(void* arg)
 /////////////////////////////////////////////////////////////////////////////
 // THREAD:  main_thread
 /////////////////////////////////////////////////////////////////////////////
+
+// the maximum number of concurrent sessions
+const size_t MAX_CONCURRENT_SESSIONS = 4;
 
 // generate a session token
 string make_session_token()
@@ -551,8 +569,20 @@ string create_session()
         close(session_data.julia_out[0]);
         close(session_data.julia_out[1]);
 
+        // set a high nice value
+        nice(20);
+
+        // limit memory usage
+        rlimit limits;
+        limits.rlim_max = 200000000;
+        limits.rlim_cur = limits.rlim_max;
+        setrlimit(RLIMIT_AS, &limits);
+
         // acutally spawn julia instance
         execl("./julia-release-web", "julia-release-web", (char*)0);
+
+        // if exec failed, terminate with an error
+        exit(1);
     }
     close(session_data.julia_in[0]);
     close(session_data.julia_out[1]);
@@ -563,18 +593,32 @@ string create_session()
     // start the inbox thread
     char* session_token_inbox = new char[256];
     strcpy(session_token_inbox, session_token.c_str());
-    pthread_create(&session_data.inbox_proc, 0, inbox_thread, (void*)session_token_inbox);
+    if (pthread_create(&session_data.inbox_proc, 0, inbox_thread, (void*)session_token_inbox))
+    {
+        delete [] session_token_inbox;
+        session_data.inbox_proc = 0;
+    }
 
     // start the outbox thread
     char* session_token_outbox = new char[256];
     strcpy(session_token_outbox, session_token.c_str());
-    pthread_create(&session_data.outbox_proc, 0, outbox_thread, (void*)session_token_outbox);
+    if (pthread_create(&session_data.outbox_proc, 0, outbox_thread, (void*)session_token_outbox))
+    {
+        delete [] session_token_outbox;
+        session_data.outbox_proc = 0;
+    }
 
     // set the start time
     session_data.update_time = time(0);
 
     // store the session
     session_map[session_token] = session_data;
+
+    // print the number of open sessions
+    if (session_map.size() == 1)
+        cout<<session_map.size()<<" open session.\n";
+    else
+        cout<<session_map.size()<<" open sessions.\n";
     
     // return the session token
     return session_token;
@@ -601,7 +645,8 @@ string get_response(request* req)
     // create a new session if necessary
     if (session_token == "")
     {
-        session_token = create_session();
+        if (session_map.size() < MAX_CONCURRENT_SESSIONS)
+            session_token = create_session();
         if (session_token == "")
             return respond_error("", "Maximum server capacity reached.  Please try again later.");
     }
@@ -637,6 +682,13 @@ int main()
     // seed the random number generator for generating session tokens
     srand(time(0));
 
+    // ignore the SIGPIPE signal (when julia crashes or exits, we don't want to die too)
+    struct sigaction act;
+    act.sa_flags = 0;
+    act.sa_handler = SIG_IGN;
+    sigemptyset(&act.sa_mask);
+    sigaction(SIGPIPE, &act, NULL);
+
     // initialize the mutex
     pthread_mutex_init(&session_mutex, 0);
 
@@ -644,8 +696,10 @@ int main()
     pthread_t watchdog;
     pthread_create(&watchdog, 0, watchdog_thread, 0);
 
+    // print the number of open sessions
+    cout<<"0 open sessions.\n";
+
     // start the server
-    cout<<"server started.\n";
     run_server(1441, &get_response);
 
     // never reached

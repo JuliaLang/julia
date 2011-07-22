@@ -18,8 +18,8 @@ SHIPFLAGS = -O3 -DNDEBUG
 endif
 
 ifeq ($(USECLANG),1)
-CC = $(EXTROOT)/bin/clang
-CXX = $(EXTROOT)/bin/clang++
+CC = clang
+CXX = clang++
 CFLAGS = -fPIC -fexceptions -pipe
 CXXFLAGS = -fPIC -fno-rtti -fexceptions -pipe
 DEBUGFLAGS = -g -DDEBUG

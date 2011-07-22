@@ -91,7 +91,8 @@ src = 	k_standard.c k_rem_pio2.c \
 	e_log10f.c  s_cbrtf.c       s_log1pf.c    w_dremf.c         \
 	e_log2f.c   s_ceilf.c       s_logbf.c     w_gammaf.c        \
 	e_logf.c    s_copysignf.c   w_lgammaf.c   s_finitef.c       \
-	e_lgammaf_r.c 	b_exp.c	    b_log.c	b_tgamma.c
+	e_lgammaf_r.c 	b_exp.c	    b_log.c	b_tgamma.c \
+	s_signbit.c
 
 obj = 	$(src:%.c=%.o)
 

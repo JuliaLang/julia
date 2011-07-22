@@ -368,8 +368,7 @@ function ref(A::Tensor, I::Indices...)
     if is(ref_cache,nothing)
         ref_cache = HashTable()
     end
-    gen_cartesian_map(ref_cache, ivars->:(X[storeind] = A[$(ivars...)];
-                                          storeind += 1),
+    gen_cartesian_map(ref_cache, ivars->:(X[storeind] = A[$(ivars...)];storeind += 1),
                       I,
                       {:A, :X, :storeind},
                       A, X, 1)
@@ -683,36 +682,62 @@ ctranspose(x::Vector) = [ conj(x[j])   | i=1, j=1:size(x,1) ]
 transpose(x::Matrix)  = [ x[j,i]       | i=1:size(x,2), j=1:size(x,1) ]
 ctranspose(x::Matrix) = [ conj(x[j,i]) | i=1:size(x,2), j=1:size(x,1) ]
 
+let permute_cache = nothing
+
+global permute
 function permute(A::Tensor, perm)
-    dimsA = size(A)
+	dimsA = size(A)
     ndimsA = length(dimsA)
     dimsP = ntuple(ndimsA, i->dimsA[perm[i]])
     P = similar(A, dimsP)
+    ranges = ntuple(ndimsA, i->(Range1(1,dimsP[i])))
 
-    count = 1
-    function permute_one(ind)
-        P[count] = A[ntuple(ndimsA, i->ind[perm[i]])...]
-        count += 1
+
+    strides = Array(Int32,0)
+    for dim = 1:length(perm)
+    	stride = 1
+    	for dim_size = 1:(dim-1)
+    		stride = stride*dimsA[dim_size]
+    	end
+    	push(strides, stride)
     end
 
-    cartesian_map(permute_one, ntuple(ndimsA, i->(Range1(1,dimsP[i]))) )
-    return P
+    #must create offset, because indexing starts at 1
+    offset = 0
+		for i = strides
+			offset+=i
+		end
+	offset = 1-offset
+
+    function permute_one(ivars)
+    s = { (x = ivars[i]; quote total+= $x*(strides[perm[$i]]) end) | i = 1:ndimsA}
+		quote
+			total=offset
+			$(s...)
+			#println(total)
+			P[count] = A[total]
+			count+=1
+
+		end
+	end
+
+	if is(permute_cache,nothing)
+		permute_cache = HashTable()
+	end
+
+	gen_cartesian_map(permute_cache, permute_one, ranges, {:A, :P, :perm, :count, :strides, :offset}, A, P, perm,1, strides, offset)
+	return P
+
+end
 end
 
-function ipermute(A::Tensor, perm)
-    dimsA = size(A)
-    ndimsA = length(dimsA)
-    dimsP = ntuple(ndimsA, i->dimsA[perm[i]])
-    P = similar(A, dimsP)
+function ipermute(A::Tensor,perm)
+	iperm = zeros(Int32,length(perm))
+	for i = 1:length(perm)
+		iperm[perm[i]]= i
+	end
+	return permute(A,iperm)
 
-    count = 1
-    function permute_one(ind)
-        P[ntuple(ndimsA, i->ind[perm[i]])...] = A[count]
-        count += 1
-    end
-
-    cartesian_map(permute_one, ntuple(ndimsA, i->(Range1(1,dimsP[i]))) )
-    return P
 end
 
 ## Other array functions ##
@@ -774,25 +799,39 @@ function find{T}(A::Matrix{T})
     return (I, J)
 end
 
+
+let find_cache = nothing
+
+
+
+function find_one(ivars)
+	
+	s = { quote I[$i][count] = $ivars[i] end | i = 1:length(ivars)}
+	quote
+		Aind = A[$(ivars...)]
+		if Aind != z
+			$(s...)
+			count +=1
+		end
+	end
+
+end
+
+global find
 function find{T}(A::Tensor{T})
-    ndimsA = ndims(A)
+	ndimsA = ndims(A)
     nnzA = nnz(A)
     I = ntuple(ndimsA, x->zeros(Size, nnzA))
-    z = zero(T)
+    ranges = ntuple(ndims(A), d->(1:size(A,d)))
 
-    count = 1
-    function find_one(ind)
-        Aind = A[ind...]
-        if Aind != z
-            for i=1:ndimsA
-                I[i][count] = ind[i]
-            end
-            count += 1
-        end
+    if is(find_cache,nothing)
+        find_cache = HashTable()
     end
 
-    cartesian_map(find_one, ntuple(ndims(A), d->(1:size(A,d))) )
+    gen_cartesian_map(find_cache, find_one, ranges, {:A, :I, :count, :z}, A,I,1, zero(T))
     return I
+
+end
 end
 
 sub2ind(dims, i::Int) = i

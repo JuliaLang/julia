@@ -71,7 +71,7 @@ readline-$(READLINE_VER)/configure: readline-$(READLINE_VER).tar.gz
 	touch $@
 $(READLINE_OBJ_SOURCE): readline-$(READLINE_VER)/configure
 	cd readline-$(READLINE_VER) && \
-	./configure --prefix=$(EXTROOT) && \
+	./configure --prefix=$(EXTROOT) --disable-shared --enable-static --with-curses && \
 	make
 	touch $@
 $(READLINE_OBJ_TARGET): $(READLINE_OBJ_SOURCE)
@@ -238,7 +238,7 @@ $(ARPACK_OBJ_TARGET): $(ARPACK_OBJ_SOURCE)
 	cp $< $@
 
 clean-arpack:
-	make -C arpack-$(ARPACK_VER) clean
+	make -C arpack-$(ARPACK_VER) home=`pwd`/arpack-$(ARPACK_VER) clean MAKE=make
 	rm -f $(ARPACK_OBJ_SOURCE) $(ARPACK_OBJ_TARGET)
 distclean-arpack:
 	rm -rf arpack-$(ARPACK_VER).tar.gz arpack-patch.tar.gz arpack-$(ARPACK_VER)

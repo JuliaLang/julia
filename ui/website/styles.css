@@ -1,178 +1,118 @@
-﻿* {
+﻿*
+{
 	margin: 0px;
 	padding: 0px;
 }
 
-body {
+body
+{
 	font: 100% sans-serif;
 	color: #555555;
 }
 
-div#header-bar {
+div#header-bar
+{
 	position: relative; /* make this appear above everything */
 	width: 100%;
 	min-width: 960px;
-	-moz-box-shadow:		0px 0px 40px #bbbbbb;
-	-webkit-box-shadow:		0px 0px 40px #bbbbbb;
-	box-shadow:				0px 0px 40px #bbbbbb;
 	background-color: #1c1c1c;
 }
 
-header {
+header
+{
 	width: 960px;
-	padding-top: 10px;
-	padding-bottom: 10px;
 	margin-left: auto;
 	margin-right: auto;
 	background: #1c1c1c url('images/juliaset.png') no-repeat left top;
 }
 
-div#main {
+div#main
+{
 	width: 960px;
 	margin-left: auto;
 	margin-right: auto;
 }
 
-div.message {
-	position: relative; /* make this appear above everything */
-	width: 636px;
-	padding: 10px 20px 10px 20px;
-	margin: 20px auto 10px auto;
-	background-color: #e7eff2;
-	background: -webkit-gradient(linear, left top, left bottom, #eef6f9 0%, #e7eff2 100%);
-	background: -webkit-linear-gradient(top, #eef6f9 0%, #e7eff2 100%);
-	background:    -moz-linear-gradient(top, #eef6f9 0%, #e7eff2 100%);
-	background:     -ms-linear-gradient(top, #eef6f9 0%, #e7eff2 100%);
-	background:      -o-linear-gradient(top, #eef6f9 0%, #e7eff2 100%);
-	background:         linear-gradient(top, #eef6f9 0%, #e7eff2 100%);
-	border: 2px solid #bedce7;
-	-moz-box-shadow:		3px 3px 10px #e8e8e8;
-	-webkit-box-shadow:		3px 3px 10px #e8e8e8;
-	box-shadow:				3px 3px 10px #e8e8e8;
-	-moz-border-radius:		2px;
-	-webkit-border-radius:	2px;
-	border-radius:			2px;
-}
-
-div.error {
-	position: relative; /* make this appear above everything */
-	width: 636px;
-	padding: 10px 20px 10px 20px;
-	margin: 20px auto 10px auto;
-	background-color: #f4dfdf;
-	background: -webkit-gradient(linear, left top, left bottom, #fce6e6 0%, #f4dfdf 100%);
-	background: -webkit-linear-gradient(top, #fce6e6 0%, #f4dfdf 100%);
-	background:    -moz-linear-gradient(top, #fce6e6 0%, #f4dfdf 100%);
-	background:     -ms-linear-gradient(top, #fce6e6 0%, #f4dfdf 100%);
-	background:      -o-linear-gradient(top, #fce6e6 0%, #f4dfdf 100%);
-	background:         linear-gradient(top, #fce6e6 0%, #f4dfdf 100%);
-	border: 2px solid #e7bebe;
-	-moz-box-shadow:		3px 3px 10px #e8e8e8;
-	-webkit-box-shadow:		3px 3px 10px #e8e8e8;
-	box-shadow:				3px 3px 10px #e8e8e8;
-	border-radius:			2px;
-	-moz-border-radius:		2px;
-	-webkit-border-radius:	2px;
-}
-
-div#footer-bar {
+div#footer-bar
+{
 	position: relative; /* make this appear above everything */
 	width: 100%;
 	min-width: 960px;
 	bottom: 0px;
-	border-top: 2px solid #cecece;
-	border-bottom: 1px solid #eeeeee;
-	background-color: #eeeeee;
+	border-top: 1px solid #d2d2d2;
+	border-bottom: 1px solid #f1f1f1;
+	background-color: #f1f1f1;
 	font-size: 80%;
-	-moz-box-shadow:		0px 0px 20px #dddddd;
-	-webkit-box-shadow:		0px 0px 20px #dddddd;
-	box-shadow:				0px 0px 20px #dddddd;
 }
 
-footer {
+footer
+{
 	width: 960px;
 	margin-left: auto;
 	margin-right: auto;
 }
 
-div#left-column {
-	width: 210px;
-	padding-left: 20px;
-	padding-right: 20px;
+div#left-column
+{
+	width: 189px;
 	float: left;
 	font-size: 90%;
-	background-color: #f4f4f4;
-	background: -webkit-gradient(linear, left top, left bottom, #f4f4f4 0%, #ffffff 100%);
-	background: -webkit-linear-gradient(top, #f4f4f4 0%, #ffffff 100%);
-	background:    -moz-linear-gradient(top, #f4f4f4 0%, #ffffff 100%);
-	background:     -ms-linear-gradient(top, #f4f4f4 0%, #ffffff 100%);
-	background:      -o-linear-gradient(top, #f4f4f4 0%, #ffffff 100%);
-	background:         linear-gradient(top, #f4f4f4 0%, #ffffff 100%);
-	-moz-box-shadow:		0px 0px 30px #d0d0d0;
-	-webkit-box-shadow:		0px 0px 30px #d0d0d0;
-	box-shadow:				0px 0px 30px #d0d0d0;
+	padding-top: 20px;
+	padding-bottom: 20px;
+	padding-right: 20px;
+	border-right: 1px solid #d9d9d9;
 }
 
-div#right-column {
-	width: 680px;
-	padding-left: 30px;
-	float: right;
-}
-
-nav {
-	float: right;
-	margin-top: 20px;
-	font: 90% sans-serif;
-	font-weight: bold;
-}
-
-nav a {
-	width: 100px;
+div#left-column a
+{
 	display: block;
-	float: left;
-	font-size: 110%;
-	text-align: center;
+	padding: 5px;
+	padding-left: 20px;
 	text-decoration: none;
-	text-shadow: 1px 1px 3px #555555;
+	color: #444444;
+	font-size: 100%;
 }
 
-nav a:link {
-	color: #d2d2d2;
+div#left-column a:hover
+{
+	background-color: #f1f1f1;
 }
 
-nav a:visited {
-	color: #d2d2d2;
+div#right-column
+{
+	width: 730px;
+	padding-top: 20px;
+	padding-bottom: 20px;
+	padding-left: 20px;
+	float: right;
 }
 
-nav a:hover {
-	color: #ffffff;
-}
-
-nav a:active {
-	color: #d2d2d2;
-}
-
-img#logo {
+img#logo
+{
 	display: block;
 	float: left;
 }
 
-img#slogan {
+img#slogan
+{
 	display: block;
-	margin-left: auto;
-	margin-right: auto;
+	float: right;
+	margin-top: 35px;
 }
 
-img#mit-logo {
+img#mit-logo
+{
 	float: right;
 }
 
-ul {
+ul
+{
 	list-style-type: none;
 	line-height: 1.3;
 }
 
-h1 {
+h1
+{
 	color: #0d4d73;
 	font-size: 170%;
 	font-weight: bold;
@@ -181,7 +121,8 @@ h1 {
 	margin-bottom: 10px;
 }
 
-h2 {
+h2
+{
 	font-size: 130%;
 	font-weight: bold;
 	text-shadow: 1px 1px 3px #e6e6e6;
@@ -189,64 +130,65 @@ h2 {
 	margin-bottom: 10px;
 }
 
-p {
+p
+{
 	margin-top: 10px;
 	margin-bottom: 10px;
 }
 
-div#terminal {
-	width: 636px;
-	height: 250px;
-	border: 2px solid #cecece;
+form#terminal-form
+{
+	border: 1px solid #d9d9d9;
+	padding: 20px;
+	background-color: #fafafa;
+}
+
+div#terminal
+{
+	height: 370px;
+	border: none;
 	outline: none;
-	padding: 10px 20px 10px 20px;
-	margin-top: 10px;
-	margin-bottom: 10px;
 	display: block;
-	background-color: #fcfcf5;
-	font: 120% "Consolas", "Courier New";
-	font-weight: bold;
+	font: 85% "Consolas", "Courier New";
 	color: #444444;
 	resize: none;
-	-moz-box-shadow:		5px 5px 10px #efefef;
-	-webkit-box-shadow:		5px 5px 10px #efefef;
-	box-shadow:				5px 5px 10px #efefef;
-	-moz-border-radius:		2px;
-	-webkit-border-radius:	2px;
-	border-radius:			2px;
-	overflow: auto;
+	overflow-y: auto;
+	overflow-x: hidden;
 }
 
-input#terminal-input {
-	width: 636px;
-	border: 2px solid #cecece;
-	outline: none;
-	padding: 10px 20px 10px 20px;
+div#prompt
+{
+	position: absolute;
+	font: 85% "Consolas", "Courier New";
+	color: #444444;
+}
+
+input#terminal-input
+{
+	width: 633px;
+	padding-left: 55px;
+	background-color: transparent;
 	margin-top: 10px;
-	margin-bottom: 10px;
+	border: none;
+	outline: none;
 	display: block;
-	background-color: #fcfcf5;
-	font: 120% "Consolas", "Courier New";
-	font-weight: bold;
+	font: 85% "Consolas", "Courier New";
 	color: #444444;
 	resize: none;
-	-moz-box-shadow:		5px 5px 10px #efefef;
-	-webkit-box-shadow:		5px 5px 10px #efefef;
-	box-shadow:				5px 5px 10px #efefef;
-	-moz-border-radius:		2px;
-	-webkit-border-radius:	2px;
-	border-radius:			2px;
 }
 
-div.float-clear {
+div.float-clear
+{
 	clear: left;
 }
 
-span.strong {
+span.strong
+{
 	font-weight: bold;
 }
 
 /* for Internet Explorer */
-a img {
+a img
+{
 	border: none;
 }
