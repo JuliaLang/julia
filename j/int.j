@@ -96,6 +96,18 @@ convert(::Type{Uint64}, x::Int64  ) = boxui64(unbox64(x))
 convert(::Type{Uint64}, x::Float32) = boxui64(fptoui64(unbox32(x)))
 convert(::Type{Uint64}, x::Float64) = boxui64(fptoui64(unbox64(x)))
 
+convert(::Type{Int}, x::Bool   ) = convert(Int8,  x)
+convert(::Type{Int}, x::Float32) = convert(Int32, x)
+convert(::Type{Int}, x::Float64) = convert(Int64, x)
+
+convert(::Type{Uint}, x::Bool   ) = convert(Uint8,  x)
+convert(::Type{Uint}, x::Int8   ) = convert(Uint16, x)
+convert(::Type{Uint}, x::Int16  ) = convert(Uint32, x)
+convert(::Type{Uint}, x::Int32  ) = convert(Uint64, x)
+convert(::Type{Uint}, x::Int64  ) = convert(Uint64, x) # LOSSY
+convert(::Type{Uint}, x::Float32) = convert(Uint32, x)
+convert(::Type{Uint}, x::Float64) = convert(Uint64, x)
+
 int8  (x) = convert(Int8,   x)
 uint8 (x) = convert(Uint8,  x)
 int16 (x) = convert(Int16,  x)
@@ -105,27 +117,19 @@ uint32(x) = convert(Uint32, x)
 int64 (x) = convert(Int64,  x)
 uint64(x) = convert(Uint64, x)
 
+int (x) = convert(Int,  x)
+uint(x) = convert(Uint, x)
+
+signed(x::Int) = x
+signed(x::Uint8 ) = convert(Int8 , x)
+signed(x::Uint16) = convert(Int16, x)
+signed(x::Uint32) = convert(Int32, x)
+signed(x::Uint64) = convert(Int64, x)
+
 round(x::Int) = x
 trunc(x::Int) = x
 floor(x::Int) = x
 ceil(x::Int)  = x
-
-int(x::Int) = x
-int(x::Uint8 ) = int16(x)
-int(x::Uint16) = int32(x)
-int(x::Uint32) = int64(x)
-int(x::Uint64) = int64(x) # LOSSY
-
-uint(x::Int) = x
-uint(x::Int8 ) = uint8(x)
-uint(x::Int16) = uint16(x)
-uint(x::Int32) = uint32(x)
-uint(x::Int64) = uint64(x)
-
-float(x::Union(Int8 ,Uint8) ) = float32(x)
-float(x::Union(Int16,Uint16)) = float32(x)
-float(x::Union(Int32,Uint32)) = float64(x)
-float(x::Union(Int64,Uint64)) = float64(x) # TODO: should be Float80
 
 ## integer promotions ##
 
