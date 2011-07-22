@@ -13,7 +13,6 @@
 #include <sys/types.h>
 #include <sys/time.h>
 #include <errno.h>
-#include "llt.h"
 #include "flisp.h"
 
 value_t fl_stringp(value_t *args, u_int32_t nargs)

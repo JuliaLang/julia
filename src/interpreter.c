@@ -8,7 +8,6 @@
 #include <limits.h>
 #include <errno.h>
 #include <math.h>
-#include "llt.h"
 #include "julia.h"
 #include "builtin_proto.h"
 

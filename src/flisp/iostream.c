@@ -5,7 +5,6 @@
 #include <assert.h>
 #include <sys/types.h>
 #include <setjmp.h>
-#include "llt.h"
 #include "flisp.h"
 
 static value_t iostreamsym, rdsym, wrsym, apsym, crsym, truncsym;

@@ -28,7 +28,6 @@
 using namespace llvm;
 
 extern "C" {
-#include "llt.h"
 #include "julia.h"
 #include "builtin_proto.h"
 }

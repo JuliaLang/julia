@@ -11,8 +11,8 @@ ifeq ($(USEGCC),1)
 CC = gcc
 CXX = g++
 FC = gfortran
-CFLAGS = -pipe -std=gnu99 -fPIC -D_FORTIFY_SOURCE=0
-CXXFLAGS = -pipe -fPIC -D_FORTIFY_SOURCE=0 -fno-rtti
+CFLAGS = -pipe -std=gnu99 -fPIC
+CXXFLAGS = -pipe -fPIC -fno-rtti
 DEBUGFLAGS = -ggdb3 -DDEBUG
 SHIPFLAGS = -O3 -DNDEBUG
 endif

@@ -1,6 +1,8 @@
 #ifndef _JULIA_H_
 #define _JULIA_H_
 
+#include "libsupport.h"
+
 #define JL_GC_MARKSWEEP
 
 #include "htable.h"

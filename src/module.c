@@ -10,7 +10,6 @@
 #include <limits.h>
 #include <errno.h>
 #include <math.h>
-#include "llt.h"
 #include "julia.h"
 
 jl_module_t *jl_system_module;

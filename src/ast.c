@@ -12,7 +12,6 @@
 #include <errno.h>
 #include <math.h>
 #include <setjmp.h>
-#include "llt.h"
 #include "julia.h"
 
 #include "flisp.h"

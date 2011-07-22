@@ -10,7 +10,7 @@ SRCS = flisp.c builtins.c string.c equalhash.c table.c iostream.c \
 OBJS = $(SRCS:%.c=%.o)
 DOBJS = $(SRCS:%.c=%.do)
 LLTDIR = ../support
-LLT = $(LLTDIR)/libllt.a
+LLT = $(LLTDIR)/libsupport.a
 
 FLAGS = -falign-functions -Wall -Wno-strict-aliasing -I$(LLTDIR) $(CFLAGS) \
 	-DUSE_COMPUTED_GOTO $(HFILEDIRS:%=-I%) $(LIBDIRS:%=-L%) -fvisibility=hidden

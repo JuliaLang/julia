@@ -5,21 +5,20 @@ SRCS = jltypes gf ast builtins module codegen interpreter alloc dlload \
 	sys init task array dump
 OBJS = $(SRCS:%=%.o)
 DOBJS = $(SRCS:%=%.do)
-LLTDIR = ./support
+SUPPORTDIR = ./support
 FLISPDIR = ./flisp
-LLT = $(LLTDIR)/libllt.a
+SUPPORT = $(SUPPORTDIR)/libsupport.a
 FLISP = $(FLISPDIR)/libflisp.a
 
-FLAGS = -falign-functions -Wall -Wno-strict-aliasing \
-	-fno-omit-frame-pointer \
-	-I$(FLISPDIR) -I$(LLTDIR) $(HFILEDIRS:%=-I%) $(LIBDIRS:%=-L%) \
-	-I$(shell $(LLVMROOT)/bin/llvm-config --includedir) -fvisibility=hidden
+FLAGS = -falign-functions -Wall -Wno-strict-aliasing -fno-omit-frame-pointer \
+	-I$(FLISPDIR) -I$(SUPPORTDIR) -fvisibility=hidden -fno-common \
+	-I$(shell $(LLVMROOT)/bin/llvm-config --includedir)
 DEBUGFLAGS += $(FLAGS)
-SHIPFLAGS += $(FLAGS) 
+SHIPFLAGS += $(FLAGS)
 
-LIBFILES = $(FLISP) $(LLT)
+LIBFILES = $(FLISP) $(SUPPORT)
 LIBS = $(LIBFILES) -L$(EXTROOT)/lib -lutil -ldl -lm $(OSLIBS) \
-	$(shell $(LLVMROOT)/bin/llvm-config --ldflags --libs engine) -lpthread 
+	$(shell $(LLVMROOT)/bin/llvm-config --ldflags --libfiles) -lpthread
 
 ifeq ($(JULIAGC),MARKSWEEP)
 SRCS += gc
@@ -55,10 +54,10 @@ boot.j.inc: boot.j preparse.scm julia_flisp.boot
 codegen.o codegen.do: intrinsics.cpp debuginfo.cpp
 builtins.o builtins.do: table.c
 
-$(LLT): $(LLTDIR)/*.h $(LLTDIR)/*.c
-	cd $(LLTDIR) && $(MAKE)
+$(SUPPORT): $(SUPPORTDIR)/*.h $(SUPPORTDIR)/*.c
+	cd $(SUPPORTDIR) && $(MAKE)
 
-$(FLISP): $(FLISPDIR)/*.h $(FLISPDIR)/*.c $(LLT)
+$(FLISP): $(FLISPDIR)/*.h $(FLISPDIR)/*.c $(SUPPORT)
 	cd $(FLISPDIR) && $(MAKE)
 
 $(JULIAHOME)/libjulia-debug.$(SHLIB_EXT): $(DOBJS) $(LIBFILES)
@@ -82,7 +81,7 @@ clean-flisp:
 	$(MAKE) -C $(FLISPDIR) clean
 
 clean-support:
-	$(MAKE) -C $(LLTDIR) clean
+	$(MAKE) -C $(SUPPORTDIR) clean
 
 cleanall: clean clean-flisp clean-support
 

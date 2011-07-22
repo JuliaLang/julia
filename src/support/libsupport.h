@@ -1,5 +1,5 @@
-#ifndef __LLT_H_
-#define __LLT_H_
+#ifndef __LIBSUPPORT_H_
+#define __LIBSUPPORT_H_
 
 #include <stdarg.h>
 #include "dtypes.h"
@@ -13,6 +13,6 @@
 #include "bitvector.h"
 #include "dirpath.h"
 
-DLLEXPORT void llt_init();
+DLLEXPORT void libsupport_init();
 
 #endif

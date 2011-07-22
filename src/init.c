@@ -21,7 +21,6 @@
 #include <signal.h>
 #include <libgen.h>
 #include <getopt.h>
-#include "llt.h"
 #include "julia.h"
 
 int jl_boot_file_loaded = 0;

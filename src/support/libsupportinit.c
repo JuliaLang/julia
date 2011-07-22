@@ -3,7 +3,7 @@
 #include <stdarg.h>
 #include <math.h>
 #include <locale.h>
-#include "llt.h"
+#include "libsupport.h"
 
 double D_PNAN;
 double D_NNAN;
@@ -16,7 +16,7 @@ float  F_NINF;
 
 int locale_is_utf8;
 
-void llt_init()
+void libsupport_init()
 {
     locale_is_utf8 = u8_is_locale_utf8(setlocale(LC_ALL, ""));
 

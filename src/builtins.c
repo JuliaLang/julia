@@ -14,7 +14,6 @@
 #include <ctype.h>
 #include <fcntl.h>
 #include <unistd.h>
-#include "llt.h"
 #include "julia.h"
 #include "builtin_proto.h"
 

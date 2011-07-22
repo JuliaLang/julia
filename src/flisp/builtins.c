@@ -13,7 +13,6 @@
 #include <sys/time.h>
 #include <sys/stat.h>
 #include <errno.h>
-#include "llt.h"
 #include "flisp.h"
 
 size_t llength(value_t v)

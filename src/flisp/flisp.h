@@ -1,6 +1,8 @@
 #ifndef _FLISP_H_
 #define _FLISP_H_
 
+#include "libsupport.h"
+
 typedef uptrint_t value_t;
 typedef int_t fixnum_t;
 #ifdef __LP64__

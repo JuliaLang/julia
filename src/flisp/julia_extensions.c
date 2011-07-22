@@ -10,7 +10,6 @@
 #include <math.h>
 #include <setjmp.h>
 #include <unistd.h>
-#include "llt.h"
 #include "flisp.h"
 
 static int is_uws(uint32_t wc)

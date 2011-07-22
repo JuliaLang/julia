@@ -12,7 +12,6 @@
 #include <limits.h>
 #include <errno.h>
 #include <math.h>
-#include "llt.h"
 #include "julia.h"
 
 // with MEMDEBUG, every object is allocated explicitly with malloc, and

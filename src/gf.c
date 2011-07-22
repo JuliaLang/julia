@@ -15,7 +15,6 @@
 #include <limits.h>
 #include <errno.h>
 #include <math.h>
-#include "llt.h"
 #include "julia.h"
 
 static jl_methtable_t *new_method_table()

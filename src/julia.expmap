@@ -166,7 +166,7 @@
     jl_box_int32;
     jl_lisp_prompt;
     jl_shutdown_frontend;
-    llt_init;
+    libsupport_init;
     get_exename;
     jl_expr_type;
     jl_continue_sym;

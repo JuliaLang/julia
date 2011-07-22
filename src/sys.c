@@ -19,7 +19,6 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <pthread.h>
-#include "llt.h"
 #include "julia.h"
 
 // --- io and select ---

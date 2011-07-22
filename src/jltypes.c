@@ -13,7 +13,7 @@
 #include <limits.h>
 #include <errno.h>
 #include <math.h>
-#include "llt.h"
+#include "libsupport.h"
 #include "julia.h"
 #include "newobj_internal.h"
 

@@ -19,7 +19,6 @@
 #include <getopt.h>
 #include <ctype.h>
 
-#include "llt.h"
 #include "julia.h"
 
 extern char jl_prompt_color[];

@@ -42,7 +42,7 @@
 #include <limits.h>
 #include <errno.h>
 #include <math.h>
-#include "llt.h"
+#include "libsupport.h"
 #include "flisp.h"
 #include "opcodes.h"
 
@@ -2232,7 +2232,7 @@ static void lisp_init(size_t initial_heapsize)
 {
     int i;
 
-    llt_init();
+    libsupport_init();
 
     heapsize = initial_heapsize;
 

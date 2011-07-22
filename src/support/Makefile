@@ -3,10 +3,10 @@ include $(JULIAHOME)/Make.inc
 
 SRCS = hashing.c timefuncs.c dblprint.c ptrhash.c operators.c socket.c \
 	utf8.c ios.c cplxprint.c dirpath.c htable.c bitvector.c \
-	int2str.c dump.c bswap.c lltinit.c arraylist.c
+	int2str.c dump.c bswap.c libsupportinit.c arraylist.c
 OBJS = $(SRCS:%.c=%.o)
 DOBJS = $(SRCS:%.c=%.do)
-TARGET = libllt.a
+TARGET = libsupport.a
 
 FLAGS = -Wall -Wno-strict-aliasing $(CFLAGS) $(HFILEDIRS:%=-I%) -fvisibility=hidden
 LIBS =

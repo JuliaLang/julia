@@ -16,7 +16,6 @@
 #include <signal.h>
 #include <libgen.h>
 #include <unistd.h>
-#include "llt.h"
 #include "julia.h"
 // This gives unwind only local unwinding options ==> faster code
 #define UNW_LOCAL_ONLY

@@ -34,7 +34,6 @@ static char *extensions[] = { "", ".bundle", ".dylib" };
 
 #endif
 
-#include "llt.h"
 #include "julia.h"
 
 #define PATHBUF 512

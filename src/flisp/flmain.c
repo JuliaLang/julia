@@ -11,7 +11,6 @@
 #include <limits.h>
 #include <errno.h>
 #include <math.h>
-#include "llt.h"
 #include "flisp.h"
 #include "opcodes.h"
 

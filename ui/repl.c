@@ -363,7 +363,7 @@ int true_main(int argc, char *argv[])
 
 int main(int argc, char *argv[])
 {
-    llt_init();
+    libsupport_init();
     parse_opts(&argc, &argv);
     julia_init(lisp_prompt ? NULL : image_file);
     return julia_trampoline(argc, argv, true_main);
