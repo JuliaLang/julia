@@ -39,45 +39,6 @@
 ##
 ## @bcast expr - run expr everywhere. useful for load().
 
-## message i/o ##
-
-function send_msg(s::IOStream, buf::IOStream, kind, args)
-    serialize(buf, kind)
-    for arg=args
-        serialize(buf, arg)
-    end
-    ccall(:jl_enq_send_req, Void, (Ptr{Void}, Ptr{Void}),
-          s.ios, buf.ios)
-    #ccall(:ios_write_direct, PtrInt, (Ptr{Void}, Ptr{Void}),
-    #      s.ios, buf.ios)
-end
-
-SENDBUF = ()
-function send_msg_unknown(s::IOStream, kind, args)
-    # for sending to a socket not associated with a worker
-    global SENDBUF
-    if is(SENDBUF,())
-        SENDBUF = memio()
-    end
-    send_msg(s, SENDBUF::IOStream, kind, args)
-end
-
-function send_msg(s::IOStream, kind, args...)
-    id = worker_id_from_socket(s)
-    if id > -1
-        return send_msg(worker_from_id(id), kind, args...)
-    end
-    send_msg_unknown(s, kind, args)
-end
-
-function send_msg_now(s::IOStream, kind, args...)
-    id = worker_id_from_socket(s)
-    if id > -1
-        return send_msg_now(worker_from_id(id), kind, args...)
-    end
-    send_msg_unknown(s, kind, args)
-end
-
 # todo:
 # - more indexing
 # - take() to empty a Ref (full/empty variables)
@@ -101,7 +62,27 @@ end
 # * add readline to event loop
 # * GOs/darrays on a subset of nodes
 
-## process group creation ##
+## workers and message i/o ##
+
+function send_msg_unknown(s::IOStream, kind, args)
+    error("attempt to send to unknown socket")
+end
+
+function send_msg(s::IOStream, kind, args...)
+    id = worker_id_from_socket(s)
+    if id > -1
+        return send_msg(worker_from_id(id), kind, args...)
+    end
+    send_msg_unknown(s, kind, args)
+end
+
+function send_msg_now(s::IOStream, kind, args...)
+    id = worker_id_from_socket(s)
+    if id > -1
+        return send_msg_now(worker_from_id(id), kind, args...)
+    end
+    send_msg_unknown(s, kind, args)
+end
 
 type Worker
     host::String
@@ -111,8 +92,6 @@ type Worker
     sendbuf::IOStream
     id::Int32
     del_msgs::Array{Any,1}
-    lastmsg::Float64
-    dirty::Bool
     
     function Worker(host, port)
         fd = ccall(:connect_to_host, Int32,
@@ -123,70 +102,39 @@ type Worker
         Worker(host, port, fd, fdio(fd))
     end
 
-    Worker(host,port,fd,sock,id) =
-        new(host, port, fd, sock, memio(), id, {}, 0.0, false)
+    Worker(host,port,fd,sock,id) = new(host, port, fd, sock, memio(), id, {})
     Worker(host,port,fd,sock) = Worker(host,port,fd,sock,0)
 end
 
-function flush_worker(w::Worker)
-    if !isempty(w.del_msgs)
-        #print("sending delete of $(w.del_msgs)\n")
-        remote_do(w, del_clients, w.del_msgs...)
-        del_all(w.del_msgs)
-    end
-    ccall(:jl_enq_send_req, Void, (Ptr{Void}, Ptr{Void}),
-          w.socket.ios, w.sendbuf.ios)
-    w.dirty = false
-end
-
 function send_msg_now(w::Worker, kind, args...)
-    send_msg(w.socket, w.sendbuf, kind, args)
-    w.dirty = false
+    send_msg_(w, kind, args, true)
 end
 
 function send_msg(w::Worker, kind, args...)
+    send_msg_(w, kind, args, false)
+end
+
+function send_msg_(w::Worker, kind, args, now::Bool)
     buf = w.sendbuf
+    ccall(:jl_buf_mutex_lock, Void, ())
     serialize(buf, kind)
     for arg=args
         serialize(buf, arg)
     end
-    if !w.dirty
-        w.lastmsg = clock()
-    end
-    w.dirty = true
-end
+    ccall(:jl_buf_mutex_unlock, Void, ())
 
-function flush_workers()
-    global PGRP
-    now = 0.0
-    for w = PGRP.workers
-        if isa(w,Worker) && (w::Worker).dirty
-            k = w::Worker
-            if now==0.0
-                now = clock()
-            end
-            if now-k.lastmsg >= 0.0002
-                flush_worker(k)
-            end
-        end
+    if !now && !isempty(w.del_msgs)
+        msgs = w.del_msgs
+        w.del_msgs = {}
+        #print("sending delete of $msgs\n")
+        remote_do(w, del_clients, msgs...)
+    else
+        ccall(:jl_enq_send_req, Void, (Ptr{Void}, Ptr{Void}, Int32),
+              w.socket.ios, w.sendbuf.ios, now ? int32(1) : int32(0))
     end
 end
 
-# determine the maximum time we can sleep in select
-function max_sleep_time()
-    global PGRP
-    mt = 10.0
-    now = 0.0
-    for w = PGRP.workers
-        if isa(w,Worker) && (w::Worker).dirty
-            if now==0.0
-                now = clock()
-            end
-            mt = min(mt,(w::Worker).lastmsg+0.0002-now)
-        end
-    end
-    max(mt,0.0)
-end
+## process group creation ##
 
 type LocalProcess
 end
@@ -407,10 +355,6 @@ function send_del_client(rr::RemoteRef)
     else
         w = worker_from_id(rr.where)
         push(w.del_msgs, (rr2id(rr), myid()))
-        if !w.dirty
-            w.lastmsg = clock()
-        end
-        w.dirty = true
     end
 end
 
@@ -1466,9 +1410,7 @@ function event_loop(isclient)
                     add(fdset, fd)
                 end
 
-                nselect = select_read(fdset,
-                                      isempty(Workqueue) ? max_sleep_time() :
-                                                           0.0)
+                nselect = select_read(fdset, isempty(Workqueue) ? 10.0 : 0.0)
                 if nselect == 0
                     if !isempty(Workqueue)
                         perform_work()
@@ -1481,7 +1423,6 @@ function event_loop(isclient)
                         end
                     end
                 end
-                flush_workers()
             end
         catch e
             if isa(e,DisconnectException)

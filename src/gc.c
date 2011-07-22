@@ -167,7 +167,11 @@ static void run_finalizers()
         while (jl_is_tuple(ff)) {
             f = (jl_function_t*)jl_t0(ff);
             assert(jl_is_function(f));
-            jl_apply(f, (jl_value_t**)&o, 1);
+            JL_TRY {
+                jl_apply(f, (jl_value_t**)&o, 1);
+            }
+            JL_CATCH {
+            }
             ff = jl_t1(ff);
         }
         f = (jl_function_t*)ff;
