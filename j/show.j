@@ -150,7 +150,7 @@ function dump(x)
     T = typeof(x)
     if isa(x,Array)
         showempty(x)
-    elseif isa(T,StructKind)
+    elseif isa(T,CompositeKind)
         print(T,'(')
         for field = T.names
             print(field, '=')

@@ -45,7 +45,7 @@ A = ones(200,200)
 
 ## mandelbrot set: complex arithmetic and comprehensions ##
 
-function mandel(z::ComplexNum)
+function mandel(z::Complex)
     n = 0
     c = z
     for n=0:79

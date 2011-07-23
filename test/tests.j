@@ -37,9 +37,9 @@
 @assert bool(1.0) == true
 @assert bool(0.1) == true
 @assert bool(-1.0) == true
-@assert bool(Complex(0,0)) == false
-@assert bool(Complex(1,0)) == true
-@assert bool(Complex(0,1)) == true
+@assert bool(ComplexStruct(0,0)) == false
+@assert bool(ComplexStruct(1,0)) == true
+@assert bool(ComplexStruct(0,1)) == true
 @assert bool(0//1) == false
 @assert bool(1//1) == true
 @assert bool(1//2) == true
@@ -63,13 +63,13 @@
 @assert Array{Int8,1} <: Array{Int8,1}
 
 @assert !isa(Array,Type{Any})
-@assert subtype(Type{Complex},StructKind)
-@assert isa(Complex,Type{Complex})
+@assert subtype(Type{ComplexStruct},CompositeKind)
+@assert isa(ComplexStruct,Type{ComplexStruct})
 @assert subtype(Type{Ptr{None}},Type{Ptr})
 let T = typevar(:T)
     @assert !is(None, tintersect(Array{None},Tensor{T}))
 end
-@assert is(None, tintersect(Type{Any},Type{Complex}))
+@assert is(None, tintersect(Type{Any},Type{ComplexStruct}))
 @assert is(None, tintersect(Type{Any},Type{typevar(:T,Real)}))
 @assert !subtype(Type{Array{Int}},Type{Tensor{Int}})
 @assert subtype(Type{Array{Int}},Type{Array{typevar(:T,Int)}})
@@ -240,18 +240,18 @@ end
 @assert 1+1.5 == 2.5
 @assert 1.5+1 == 2.5
 @assert 1+1.5+2 == 4.5
-@assert is(typeof(convert(Complex{Int16},1)),Complex{Int16})
-@assert Complex(1,2)+1 == Complex(2,2)
-@assert Complex(1,2)+1.5 == Complex(2.5,2.0)
-@assert 1/Complex(2,2) == Complex(.25,-.25)
-@assert Complex(1.5,1.0) + 1//2 == Complex(2.0,1.0)
-@assert real(Complex(1//2,2//3)) == 1//2
-@assert imag(Complex(1//2,2//3)) == 2//3
-@assert Complex(1,2) + 1//2 == Complex(3//2,2//1)
-@assert Complex(1,2) + 1//2 * 0.5 == Complex(1.25,2.0)
-@assert (Complex(1,2) + 1//2) * 0.5 == Complex(0.75,1.0)
-@assert (Complex(1,2)/Complex(2.5,3.0))*Complex(2.5,3.0) == Complex(1,2)
-@assert 0.7 < real(sqrt(Complex(0,1))) < 0.707107
+@assert is(typeof(convert(ComplexStruct{Int16},1)),ComplexStruct{Int16})
+@assert ComplexStruct(1,2)+1 == ComplexStruct(2,2)
+@assert ComplexStruct(1,2)+1.5 == ComplexStruct(2.5,2.0)
+@assert 1/ComplexStruct(2,2) == ComplexStruct(.25,-.25)
+@assert ComplexStruct(1.5,1.0) + 1//2 == ComplexStruct(2.0,1.0)
+@assert real(ComplexStruct(1//2,2//3)) == 1//2
+@assert imag(ComplexStruct(1//2,2//3)) == 2//3
+@assert ComplexStruct(1,2) + 1//2 == ComplexStruct(3//2,2//1)
+@assert ComplexStruct(1,2) + 1//2 * 0.5 == ComplexStruct(1.25,2.0)
+@assert (ComplexStruct(1,2) + 1//2) * 0.5 == ComplexStruct(0.75,1.0)
+@assert (ComplexStruct(1,2)/ComplexStruct(2.5,3.0))*ComplexStruct(2.5,3.0) == ComplexStruct(1,2)
+@assert 0.7 < real(sqrt(ComplexStruct(0,1))) < 0.707107
 
 # check type of constructed rationals
 int_types = {Int8, Uint8, Int16, Uint16, Int32, Uint32, Int64, Uint64}
@@ -266,7 +266,7 @@ real_types = {Int8, Uint8, Int16, Uint16, Int32, Uint32, Int64, Uint64, Float32,
               Rational{Int32}, Rational{Uint32}, Rational{Int64}, Rational{Uint64}}
 for A = real_types, B = real_types
     T = promote_type(A,B)
-    @assert typeof(Complex(convert(A,2),convert(B,3))) <: Complex{T}
+    @assert typeof(ComplexStruct(convert(A,2),convert(B,3))) <: ComplexStruct{T}
 end
 
 # div, fld, rem, mod
@@ -625,14 +625,14 @@ end
 @assert int32(foo()) == -24
 
 function bar{T}(x::T)
-    local z::Complex{T}
+    local z::ComplexStruct{T}
     z = x
     z
 end
-@assert bar(3.0) == Complex(3.0,0.0)
+@assert bar(3.0) == ComplexStruct(3.0,0.0)
 
-z = convert(Complex{Float64},2)
-@assert z == Complex(2.0,0.0)
+z = convert(ComplexStruct{Float64},2)
+@assert z == ComplexStruct(2.0,0.0)
 
 # misc
 fib(n) = n < 2 ? n : fib(n-1) + fib(n-2)
