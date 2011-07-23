@@ -11,7 +11,7 @@ iscomplex(x::Array{Complex64}) = true
 
 ## Constructors ##
 
-jl_comprehension_zeros{T,n}(oneresult::Tensor{T,n}, dims...) = Array(T, dims...)
+jl_comprehension_zeros{T,n}(oneresult::AbstractArray{T,n}, dims...) = Array(T, dims...)
 jl_comprehension_zeros{T}(oneresult::T, dims...) = Array(T, dims...)
 jl_comprehension_zeros(oneresult::(), dims...) = Array(None, dims...)
 
@@ -69,12 +69,12 @@ ref{T}(a::Array{T,2}, i::Int, j::Int) = arrayref(a,long((j-1)*arraysize(a,1)+i))
 
 ## Indexing: assign ##
 
-assign(A::Array{Any}, x::Tensor, i::Index) = arrayset(A,i,x)
-assign(A::Array{Any}, x::Tensor, i::Int) = arrayset(A,long(i),x)
+assign(A::Array{Any}, x::AbstractArray, i::Index) = arrayset(A,i,x)
+assign(A::Array{Any}, x::AbstractArray, i::Int) = arrayset(A,long(i),x)
 assign(A::Array{Any}, x::ANY, i::Index) = arrayset(A,i,x)
 assign(A::Array{Any}, x::ANY, i::Int) = arrayset(A,long(i),x)
-assign{T}(A::Array{T}, x::Tensor, i::Index) = arrayset(A,i,convert(T, x))
-assign{T}(A::Array{T}, x::Tensor, i::Int) = arrayset(A,long(i),convert(T, x))
+assign{T}(A::Array{T}, x::AbstractArray, i::Index) = arrayset(A,i,convert(T, x))
+assign{T}(A::Array{T}, x::AbstractArray, i::Int) = arrayset(A,long(i),convert(T, x))
 assign{T}(A::Array{T}, x, i::Index) = arrayset(A,i,convert(T, x))
 assign{T}(A::Array{T}, x, i::Int) = arrayset(A,long(i),convert(T, x))
 assign{T}(A::Array{T,0}, x) = arrayset(A,1,convert(T, x))

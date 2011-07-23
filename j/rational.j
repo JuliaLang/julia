@@ -18,10 +18,10 @@ Rational(n::Int) = Rational(n, one(n))
 //(n::Int, d::Int) = Rational(n,d)
 //(x::Rational, y::Int) = x.num // (x.den*y)
 //(x::Int, y::Rational) = (x*y.den) // y.num
-//(x::ComplexStruct, y::Real) = complex(real(x)//y, imag(x)//y)
-//(x::Real, y::ComplexStruct) = x*y'//real(y*y')
+//(x::ComplexPair, y::Real) = complex(real(x)//y, imag(x)//y)
+//(x::Real, y::ComplexPair) = x*y'//real(y*y')
 
-function //(x::ComplexStruct, y::ComplexStruct)
+function //(x::ComplexPair, y::ComplexPair)
     xy = x*y'
     yy = real(y*y')
     complex(real(xy)//yy, imag(xy)//yy)
@@ -76,7 +76,7 @@ copysign(x::Rational, y::Rational) = copysign(x.num,y.num) // x.den
 -(x::Rational, y::Rational) = (x.num*y.den - x.den*y.num) // (x.den*y.den)
 *(x::Rational, y::Rational) = (x.num*y.num) // (x.den*y.den)
 /(x::Rational, y::Rational) = (x.num*y.den) // (x.den*y.num)
-/(x::Rational, z::ComplexStruct) = inv(z/x)
+/(x::Rational, z::ComplexPair) = inv(z/x)
 
 isnan(x::Rational) = x.den == 0 && x.num == 0
 isinf(x::Rational) = x.den == 0 && x.num != 0

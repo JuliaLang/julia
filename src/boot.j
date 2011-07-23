@@ -56,9 +56,9 @@
 #    body
 #end
 
-#abstract Tensor{T,N}
+#abstract AbstractArray{T,N}
 
-#type Array{T,N} <: Tensor{T,N}
+#type Array{T,N} <: AbstractArray{T,N}
 #    dims::NTuple{N,Int32}
 #end
 

@@ -16,20 +16,20 @@ macro blas_copy(fname, shape, eltype)
     end
 end
 
-@blas_copy :dcopy_ DenseVector Float64
-@blas_copy :scopy_ DenseVector Float32
-@blas_copy :dcopy_ DenseMatrix Float64
-@blas_copy :scopy_ DenseMatrix Float32
-@blas_copy :zcopy_ DenseVector Complex128
-@blas_copy :ccopy_ DenseVector Complex64
-@blas_copy :zcopy_ DenseMatrix Complex128
-@blas_copy :ccopy_ DenseMatrix Complex64
+@blas_copy :dcopy_ Vector Float64
+@blas_copy :scopy_ Vector Float32
+@blas_copy :dcopy_ Matrix Float64
+@blas_copy :scopy_ Matrix Float32
+@blas_copy :zcopy_ Vector Complex128
+@blas_copy :ccopy_ Vector Complex64
+@blas_copy :zcopy_ Matrix Complex128
+@blas_copy :ccopy_ Matrix Complex64
 
 # DOUBLE PRECISION FUNCTION DDOT(N,DX,INCX,DY,INCY)
 
 macro blas_dot(fname, eltype)
     quote
-        function dot(x::DenseVector{$eltype}, y::DenseVector{$eltype})
+        function dot(x::Vector{$eltype}, y::Vector{$eltype})
             ccall(dlsym(libBLAS, $fname),
                   $eltype,
                   (Ptr{Int32}, Ptr{$eltype}, Ptr{Int32}, Ptr{$eltype}, Ptr{Int32}),
@@ -48,7 +48,7 @@ end
 
 macro blas_norm(fname, eltype, ret_type)
     quote
-        function norm(x::DenseVector{$eltype})
+        function norm(x::Vector{$eltype})
             ccall(dlsym(libBLAS, $fname),
                   $ret_type,
                   (Ptr{Int32}, Ptr{$eltype}, Ptr{Int32}),
@@ -72,7 +72,7 @@ end
 
 macro blas_matrix_multiply(fname, eltype)
    quote
-       function *(A::DenseVecOrMat{$eltype}, B::DenseVecOrMat{$eltype})
+       function *(A::VecOrMat{$eltype}, B::VecOrMat{$eltype})
            m = size(A, 1)
            if isa(B, Vector); n = 1; else n = size(B, 2); end
            if isa(A, Vector); k = 1; else k = size(A, 2); end

@@ -1,4 +1,4 @@
-type DArray{T,N,distdim} <: Tensor{T,N}
+type DArray{T,N,distdim} <: AbstractArray{T,N}
     dims::NTuple{N,Size}
     locl::Array{T,N}
     # the distributed array has N pieces
@@ -258,7 +258,7 @@ function ref{T}(d::DArray{T,1}, i::Index)
     return remote_call_fetch(d.pmap[p], ref, d, i)::T
 end
 
-assign{T}(d::DArray{T,1}, v::Tensor, i::Index) =
+assign{T}(d::DArray{T,1}, v::AbstractArray, i::Index) =
     invoke(assign, (DArray{T,1}, Any, Index), d, v, i)
 
 function assign{T}(d::DArray{T,1}, v, i::Index)
@@ -313,7 +313,7 @@ function ref{T}(d::DArray{T}, I::(Range1{Index}...,))
     return A
 end
 
-assign(d::DArray, v::Tensor, i::Index) =
+assign(d::DArray, v::AbstractArray, i::Index) =
     invoke(assign, (DArray, Any, Index), d, v, i)
 
 function assign(d::DArray, v, i::Index)
@@ -335,7 +335,7 @@ end
 
 ## matrix multiply ##
 
-function node_multiply{T}(A::Tensor{T}, B, sz)
+function node_multiply{T}(A::AbstractArray{T}, B, sz)
     locl = Array(T, sz)
     if !isempty(locl)
         cols = B.dist

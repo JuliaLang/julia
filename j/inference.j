@@ -378,7 +378,7 @@ function abstract_eval(e::Expr, vtypes, sv::StaticVarInfo)
     return t
 end
 
-function a2t(a::Vector)
+function a2t(a::AbstractVector)
     n = length(a)
     if n==2 return (a[1],a[2]) end
     if n==1 return (a[1],) end
@@ -392,7 +392,7 @@ function a2t(a::Vector)
     t
 end
 
-function a2t_butfirst(a::Vector)
+function a2t_butfirst(a::AbstractVector)
     n = length(a)
     if n==2 return (a[2],) end
     if n<=1 return () end
@@ -1391,7 +1391,7 @@ tfunc(f,t) = (getmethods(f,t)[3]).tfunc
 #     return x.re + x.im
 # end
 
-# m = getmethods(foo,(ComplexStruct{Float64},))
+# m = getmethods(foo,(ComplexPair{Float64},))
 # ast = m[3]
 
 # function bar(x)
