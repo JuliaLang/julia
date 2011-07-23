@@ -48,8 +48,8 @@
 @assert Int8 <: Int
 @assert Int32 <: Int
 @assert (Int8,Int8) <: (Int,Int)
-@assert !(Tensor{Float64,2} <: Tensor{Number,2})
-@assert !(Tensor{Float64,1} <: Tensor{Float64,2})
+@assert !(AbstractArray{Float64,2} <: AbstractArray{Number,2})
+@assert !(AbstractArray{Float64,1} <: AbstractArray{Float64,2})
 @assert (Int,Int...) <: (Int,Real...)
 @assert (Int,Float64,Int...) <: (Int,Number...)
 @assert (Int,Float64) <: (Int,Number...)
@@ -67,11 +67,11 @@
 @assert isa(ComplexStruct,Type{ComplexStruct})
 @assert subtype(Type{Ptr{None}},Type{Ptr})
 let T = typevar(:T)
-    @assert !is(None, tintersect(Array{None},Tensor{T}))
+    @assert !is(None, tintersect(Array{None},AbstractArray{T}))
 end
 @assert is(None, tintersect(Type{Any},Type{ComplexStruct}))
 @assert is(None, tintersect(Type{Any},Type{typevar(:T,Real)}))
-@assert !subtype(Type{Array{Int}},Type{Tensor{Int}})
+@assert !subtype(Type{Array{Int}},Type{AbstractArray{Int}})
 @assert subtype(Type{Array{Int}},Type{Array{typevar(:T,Int)}})
 
 # ntuples

@@ -2,7 +2,7 @@
 
 typealias Dims (Size...)
 
-type Range{T<:Real} <: Tensor{T,1}
+type Range{T<:Real} <: AbstractArray{T,1}
     start::T
     step::T
     stop::T
@@ -11,7 +11,7 @@ Range(start, step, stop) = Range(promote(start, step, stop)...)
 Range{T}(start::T, step::T, stop::T) =
     throw(MethodError(Range, (start,step,stop)))
 
-type Range1{T<:Real} <: Tensor{T,1}
+type Range1{T<:Real} <: AbstractArray{T,1}
     start::T
     stop::T
 end

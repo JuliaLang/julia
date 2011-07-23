@@ -2148,7 +2148,7 @@ void jl_init_types()
     jl_true  = jl_box8(jl_bool_type, 1);
 
     tv = jl_typevars(2, "T", "N");
-    jl_tensor_type = jl_new_tagtype((jl_value_t*)jl_symbol("Tensor"),
+    jl_tensor_type = jl_new_tagtype((jl_value_t*)jl_symbol("AbstractArray"),
                                     jl_any_type, tv);
 
     tv = jl_typevars(2, "T", "N");
