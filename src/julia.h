@@ -39,27 +39,20 @@ typedef struct {
 
 typedef struct {
     JL_STRUCT_TYPE
-    jl_tuple_t *dims;
     void *data;
     size_t length;
-    union {
-        struct {
-            uint16_t ndims;
-            uint16_t elsize;
-        };
-        void *_pad_word;
-    };
+    uint16_t ndims;
+    uint16_t elsize;
+    uint32_t offset;  // for 1-d only. does not need to get big.
     size_t nrows;
     union {
         struct {
             // 1d
             size_t maxsize;
-            size_t offset;
         };
         struct {
             // Nd
             size_t ncols;
-            size_t n3;
         };
     };
     union {

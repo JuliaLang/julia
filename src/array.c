@@ -61,7 +61,7 @@ static jl_array_t *_new_array(jl_type_t *atype, jl_tuple_t *dimst,
         tot = sizeof(void*) * nel;
     }
 
-    int ndimwords = (ndims > 3 ? (ndims-3) : 0);
+    int ndimwords = (ndims > 2 ? (ndims-2) : 0);
 #ifndef __LP64__
     // on 32-bit, ndimwords must be even to preserve 8-byte alignment
     ndimwords = (ndimwords+1)&-2;
@@ -69,7 +69,6 @@ static jl_array_t *_new_array(jl_type_t *atype, jl_tuple_t *dimst,
     if (tot <= ARRAY_INLINE_NBYTES) {
         a = allocobj(sizeof(jl_array_t) + tot + (ndimwords-1)*sizeof(size_t));
         a->type = atype;
-        a->dims = dimst;
         data = (&a->_space[0] + ndimwords*sizeof(size_t));
         if (tot > 0 && !isunboxed) {
             memset(data, 0, tot);
@@ -79,7 +78,6 @@ static jl_array_t *_new_array(jl_type_t *atype, jl_tuple_t *dimst,
         a = allocobj(sizeof(jl_array_t) + (ndimwords-1)*sizeof(size_t));
         jl_gc_preserve((jl_value_t*)a);
         a->type = atype;
-        a->dims = dimst;
         // temporarily initialize to make gc-safe
         a->data = NULL;
         a->length = 0;
@@ -205,13 +203,12 @@ JL_CALLABLE(jl_f_arraylen)
 
 jl_tuple_t *jl_construct_array_size(jl_array_t *a, size_t nd)
 {
-    if (a->dims) return a->dims;
-
     jl_tuple_t *d = jl_alloc_tuple(nd);
-    a->dims = d;
+    JL_GC_PUSH(&d);
     size_t i;
     for(i=0; i < nd; i++)
         jl_tupleset(d, i, jl_box_long((&a->nrows)[i]));
+    JL_GC_POP();
     return d;
 }
 
@@ -230,7 +227,6 @@ JL_CALLABLE(jl_f_arraysize)
     else {
         JL_NARGS(arraysize, 1, 1);
     }
-    if (a->dims) return (jl_value_t*)a->dims;
     return (jl_value_t*)jl_construct_array_size(a, nd);
 }
 
@@ -377,7 +373,6 @@ void jl_array_grow_end(jl_array_t *a, size_t inc)
         a->data = newdata;
     }
     a->length += inc; a->nrows += inc;
-    a->dims = NULL;
 }
 
 void jl_array_del_end(jl_array_t *a, size_t dec)
@@ -388,7 +383,6 @@ void jl_array_del_end(jl_array_t *a, size_t dec)
         jl_error("array_del_end: index out of range");
     memset((char*)a->data + (a->length-dec)*a->elsize, 0, dec*a->elsize);
     a->length -= dec; a->nrows -= dec;
-    a->dims = NULL;
 }
 
 void jl_array_grow_beg(jl_array_t *a, size_t inc)
@@ -425,7 +419,6 @@ void jl_array_grow_beg(jl_array_t *a, size_t inc)
         a->data = newdata;
     }
     a->length += inc; a->nrows += inc;
-    a->dims = NULL;
 }
 
 void jl_array_del_beg(jl_array_t *a, size_t dec)
@@ -437,19 +430,27 @@ void jl_array_del_beg(jl_array_t *a, size_t dec)
     size_t es = a->elsize;
     size_t nb = dec*es;
     memset(a->data, 0, nb);
-    a->offset += dec;
+    size_t offset = a->offset;
+    offset += dec;
     a->data = (char*)a->data + nb;
     a->length -= dec; a->nrows -= dec;
-    a->dims = NULL;
 
     // make sure offset doesn't grow forever due to deleting at beginning
     // and growing at end
-    if (a->offset >= 13*a->maxsize/20) {
+    size_t newoffs = offset;
+    if (offset >= 13*a->maxsize/20) {
+        newoffs = 17*(a->maxsize - a->length)/100;
+    }
+#ifdef __LP64__
+    while (newoffs > (size_t)((uint32_t)-1)) {
+        newoffs = newoffs/2;
+    }
+#endif
+    if (newoffs != offset) {
         size_t anb = a->length*es;
-        size_t newoffs = 17*(a->maxsize - a->length)/100;
-        size_t delta = (a->offset - newoffs)*es;
+        size_t delta = (offset - newoffs)*es;
         a->data = (char*)a->data - delta;
         memmove(a->data, (char*)a->data + delta, anb);
-        a->offset = newoffs;
     }
+    a->offset = newoffs;
 }

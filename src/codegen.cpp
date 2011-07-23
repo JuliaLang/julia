@@ -633,7 +633,7 @@ static Value *emit_arraysize(Value *t, Value *dim)
 {
     Value *dbits =
         emit_nthptr(t, builder.CreateAdd(dim,
-                                         ConstantInt::get(dim->getType(), 4)));
+                                         ConstantInt::get(dim->getType(), 3)));
 #ifdef __LP64__
     return builder.CreatePtrToInt(dbits, T_int64);
 #else
@@ -648,7 +648,7 @@ static Value *emit_arraysize(Value *t, int dim)
 
 static Value *emit_arraylen(Value *t)
 {
-    Value *lenbits = emit_nthptr(t, 3);
+    Value *lenbits = emit_nthptr(t, 2);
 #ifdef __LP64__
     return builder.CreatePtrToInt(lenbits, T_int64);
 #else
@@ -658,7 +658,7 @@ static Value *emit_arraylen(Value *t)
 
 static Value *emit_arrayptr(Value *t)
 {
-    return emit_nthptr(t, 2);
+    return emit_nthptr(t, 1);
 }
 
 static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
