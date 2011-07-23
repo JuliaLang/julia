@@ -11,17 +11,28 @@ integer_valued(z::Complex) = (real_valued(z) && integer_valued(real(z)))
 real(x::Real) = x
 imag(x::Real) = convert(typeof(x), 0)
 
-function show(c::Complex)
-    show(real(c))
-    i = imag(c)
-    if signbit(i) == -1
-        i = -i
-        print(" - ")
+isfinite(z::Complex) = isfinite(real(z)) && isfinite(imag(z))
+reim(z) = (real(z), imag(z))
+
+function show(z::Complex)
+    r, i = reim(z)
+    if isnan(r) || isfinite(i)
+        show(r)
+        if signbit(i) == -1
+            i = -i
+            print(" - ")
+        else
+            print(" + ")
+        end
+        show(i)
+        if !(isa(i,Int) || isa(i,Rational) ||
+             isa(i,Float) && isfinite(i))
+            print("*")
+        end
+        print("im")
     else
-        print(" + ")
+        print("complex(",r,",",i,")")
     end
-    show(i)
-    print("im")
 end
 
 ## packed complex float types ##
@@ -163,6 +174,10 @@ promote_rule{T<:Real}(::Type{ImaginaryUnit}, ::Type{T}) = ComplexStruct{T}
 promote_rule(::Type{ImaginaryUnit}, ::Type{Float64}) = Complex128
 promote_rule(::Type{ImaginaryUnit}, ::Type{Float32}) = Complex64
 
+## We might want these rules, but it's iffy:
+# *(x::Real, ::ImaginaryUnit) = complex(zero(x), x)
+# *(::ImaginaryUnit, x::Real) = complex(zero(x), x)
+
 
 ## functions of complex numbers ##
 
@@ -184,7 +199,7 @@ inv(z::Complex)  = conj(z)/abs2(z)
 +(z::Complex, w::Complex) = complex(real(z) + real(w), imag(z) + imag(w))
 -(z::Complex, w::Complex) = complex(real(z) - real(w), imag(z) - imag(w))
 *(z::Complex, w::Complex) = complex(real(z) * real(w) - imag(z) * imag(w),
-                                          real(z) * imag(w) + imag(z) * real(w))
+                                    real(z) * imag(w) + imag(z) * real(w))
 
 /(z::Number, w::Complex) = z*inv(w)
 /(z::Complex, x::Real) = complex(real(z)/x, imag(z)/x)
