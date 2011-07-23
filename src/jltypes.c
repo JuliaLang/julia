@@ -1982,7 +1982,7 @@ void jl_init_types()
     jl_nothing = (jl_value_t*)jl_null; // for bootstrapping
 
     // initialize them. lots of cycles.
-    jl_struct_kind->name = jl_new_typename(jl_symbol("StructKind"));
+    jl_struct_kind->name = jl_new_typename(jl_symbol("CompositeKind"));
     jl_struct_kind->name->primary = (jl_value_t*)jl_struct_kind;
     jl_struct_kind->super = (jl_tag_type_t*)jl_tag_kind;
     jl_struct_kind->parameters = jl_null;

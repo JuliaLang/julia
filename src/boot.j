@@ -20,7 +20,7 @@
 #    parameters::Tuple
 #end
 
-#type StructKind <: AbstractKind
+#type CompositeKind <: AbstractKind
 #    #name::TypeName
 #    #super::Type
 #    #parameters::Tuple

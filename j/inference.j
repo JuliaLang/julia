@@ -65,7 +65,7 @@ isleaftype(t) = ccall(:jl_is_leaf_type, Int32, (Any,), t) != 0
 # TODO
 isconstant(s::Symbol) = isbound(s) && (e=eval(s);
                                        isa(e,Function) || isa(e,AbstractKind) ||
-                                       isa(e,BitsKind) || isa(e,StructKind) ||
+                                       isa(e,BitsKind) || isa(e,CompositeKind) ||
                                        isa(e,TypeConstructor) ||
                                        is(e,None))
 isconstant(s::Expr) = is(s.head,:quote)
@@ -124,13 +124,13 @@ t_func[applicable] = (1, Inf, (f, args...)->Bool)
 #t_func[new_generic_function] = (1, 1, s->(Any-->Any))
 t_func[tuplelen] = (1, 1, x->Size)
 t_func[arraylen] = (1, 1, x->Size)
-t_func[arrayref] = (2, 2, (a,i)->(isa(a,StructKind) && subtype(a,Array) ?
+t_func[arrayref] = (2, 2, (a,i)->(isa(a,CompositeKind) && subtype(a,Array) ?
                                   a.parameters[1] : Any))
 t_func[arrayset] = (3, 3, (a,i,v)->a)
 t_func[arraysize] = (1, 2,
 function (a, d...)
     if is(d,())
-        if isa(a,StructKind) && subtype(a,Array)
+        if isa(a,CompositeKind) && subtype(a,Array)
             return NTuple{a.parameters[2],Size}
         else
             return NTuple{Array.parameters[2],Size}
@@ -282,7 +282,7 @@ end
 t_func[tupleref] = (2, 2, tupleref_tfunc)
 
 getfield_tfunc = function (A, s, name)
-    if !isa(s,StructKind)
+    if !isa(s,CompositeKind)
         return Any
     end
     if isa(A[2],Expr) && is(A[2].head,:quote) && isa(A[2].args[1],Symbol)
@@ -300,7 +300,7 @@ end
 t_func[getfield] = (2, 2, getfield_tfunc)
 t_func[setfield] = (3, 3, (o, f, v)->o)
 fieldtype_tfunc = function (A, s, name)
-    if !isa(s,StructKind)
+    if !isa(s,CompositeKind)
         return Type
     end
     t = getfield_tfunc(A, s, name)
@@ -349,7 +349,7 @@ function builtin_tfunction(f, args::Tuple, argtypes::Tuple)
     tf = get(t_func::IdTable, f, false)
     if is(tf,false)
         # struct constructor
-        if isa(f, StructKind)
+        if isa(f, CompositeKind)
             return f
         end
         # unknown/unhandled builtin
@@ -544,7 +544,7 @@ function abstract_eval_call(e, vtypes, sv::StaticVarInfo)
         if isa(ft,FuncKind)
             # use inferred function type
             return ft_tfunc(ft, argtypes)
-        elseif isType(ft) && isa(ft.parameters[1],StructKind)
+        elseif isType(ft) && isa(ft.parameters[1],CompositeKind)
             st = ft.parameters[1]
             if isgeneric(st) && isleaftype(st)
                 return abstract_call_gf(st, fargs, argtypes, e)
@@ -600,7 +600,7 @@ end
 ast_rettype(ast) = ast.args[3].type
 
 function abstract_eval_constant(x::ANY)
-    if isa(x,AbstractKind) || isa(x,BitsKind) || isa(x,StructKind) ||
+    if isa(x,AbstractKind) || isa(x,BitsKind) || isa(x,CompositeKind) ||
         isa(x,FuncKind) || isa(x,UnionKind)
         return Type{x}
     end

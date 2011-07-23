@@ -26,7 +26,7 @@
 @assert !subtype(Type{None}, Type{Int32})
 
 @assert !isa(Array,Type{Any})
-@assert subtype(Type{ComplexStruct},StructKind)
+@assert subtype(Type{ComplexStruct},CompositeKind)
 @assert isa(ComplexStruct,Type{ComplexStruct})
 @assert subtype(Type{Ptr{None}},Type{Ptr})
 let T = typevar(:T)

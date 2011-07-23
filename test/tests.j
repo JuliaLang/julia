@@ -63,7 +63,7 @@
 @assert Array{Int8,1} <: Array{Int8,1}
 
 @assert !isa(Array,Type{Any})
-@assert subtype(Type{ComplexStruct},StructKind)
+@assert subtype(Type{ComplexStruct},CompositeKind)
 @assert isa(ComplexStruct,Type{ComplexStruct})
 @assert subtype(Type{Ptr{None}},Type{Ptr})
 let T = typevar(:T)

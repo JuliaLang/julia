@@ -11,7 +11,7 @@ let i = 2
     global ser_tag, deser_tag
     for t = {Symbol, Int8, Uint8, Int16, Uint16, Int32, Uint32,
              Int64, Uint64, Float32, Float64, Char, Ptr,
-             AbstractKind, UnionKind, BitsKind, StructKind, FuncKind,
+             AbstractKind, UnionKind, BitsKind, CompositeKind, FuncKind,
              Tuple, Array, Expr, LongSymbol, LongTuple, LongExpr,
 
              (), Bool, Any, :Any, :Array, :TypeVar, :FuncKind, :Box,
@@ -163,8 +163,8 @@ function serialize(s, x)
             serialize(s, t.parameters)
         end
         write(s, x)
-    elseif isa(t,StructKind)
-        writetag(s, StructKind)
+    elseif isa(t,CompositeKind)
+        writetag(s, CompositeKind)
         serialize(s, t.name.name)
         serialize(s, t.parameters)
         for n = t.names
@@ -294,7 +294,7 @@ function deserialize(s, ::Type{AbstractKind})
     apply_type(eval(name), params...)
 end
 
-function deserialize(s, ::Type{StructKind})
+function deserialize(s, ::Type{CompositeKind})
     name = deserialize(s)::Symbol
     params = force(deserialize(s))
     t = apply_type(eval(name), params...)
@@ -311,7 +311,7 @@ end
 
 # default structure deserializer
 function deserialize(s, t::Type)
-    @assert (isa(t,StructKind))
+    @assert (isa(t,CompositeKind))
     nf = length(t.names)
     if nf == 0
         return ccall(:jl_new_struct, Any, (Any,Any...), t)

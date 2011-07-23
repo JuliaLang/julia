@@ -1392,7 +1392,7 @@ void jl_init_primitives()
     add_builtin("Undef", (jl_value_t*)jl_undef_type);
 
     add_builtin("BitsKind", (jl_value_t*)jl_bits_kind);
-    add_builtin("StructKind", (jl_value_t*)jl_struct_kind);
+    add_builtin("CompositeKind", (jl_value_t*)jl_struct_kind);
     add_builtin("FuncKind", (jl_value_t*)jl_func_kind);
     add_builtin("AbstractKind", (jl_value_t*)jl_tag_kind);
     add_builtin("UnionKind", (jl_value_t*)jl_union_kind);
