@@ -60,7 +60,7 @@ promote_rule(::Type{Complex128}, ::Type{Float64}) = Complex128
 promote_rule(::Type{Complex128}, ::Type{Float32}) = Complex128
 promote_rule{S<:Real}(::Type{Complex128}, ::Type{S}) =
     (P = promote_type(Float64,S);
-     is(P,Float64) ? Complex128 : ComplexStruct{P})
+     is(P,Float64) ? Complex128 : ComplexPair{P})
 
 function read(s, ::Type{Complex128})
     r = read(s,Float64)
@@ -96,7 +96,7 @@ promote_rule(::Type{Complex64}, ::Type{Float32}) = Complex64
 promote_rule{S<:Real}(::Type{Complex64}, ::Type{S}) =
     (P = promote_type(Float32,S);
      is(P,Float64) ? Complex128 :
-     is(P,Float32) ? Complex64  : ComplexStruct{P})
+     is(P,Float32) ? Complex64  : ComplexPair{P})
 promote_rule(::Type{Complex128}, ::Type{Complex64}) = Complex128
 
 function read(s, ::Type{Complex64})
@@ -119,41 +119,41 @@ complex(x::Float) = complex(x, zero(x))
 
 ## complex with arbitrary component type ##
 
-type ComplexStruct{T<:Real} <: Complex
+type ComplexPair{T<:Real} <: Complex
     re::T
     im::T
 end
-ComplexStruct(x::Real, y::Real) = ComplexStruct(promote(x,y)...)
-ComplexStruct(x::Real) = ComplexStruct(x, zero(x))
+ComplexPair(x::Real, y::Real) = ComplexPair(promote(x,y)...)
+ComplexPair(x::Real) = ComplexPair(x, zero(x))
 
-real(z::ComplexStruct) = z.re
-imag(z::ComplexStruct) = z.im
+real(z::ComplexPair) = z.re
+imag(z::ComplexPair) = z.im
 
-convert{T<:Real}(::Type{ComplexStruct{T}}, x::T) =
-    ComplexStruct(x, convert(T,0))
-convert{T<:Real}(::Type{ComplexStruct{T}}, x::Real) =
-    ComplexStruct(convert(T,x), convert(T,0))
-convert{T<:Real}(::Type{ComplexStruct{T}}, z::Complex) =
-    ComplexStruct(convert(T,real(z)),convert(T,imag(z)))
+convert{T<:Real}(::Type{ComplexPair{T}}, x::T) =
+    ComplexPair(x, convert(T,0))
+convert{T<:Real}(::Type{ComplexPair{T}}, x::Real) =
+    ComplexPair(convert(T,x), convert(T,0))
+convert{T<:Real}(::Type{ComplexPair{T}}, z::Complex) =
+    ComplexPair(convert(T,real(z)),convert(T,imag(z)))
 
-promote_rule{T<:Real}(::Type{ComplexStruct{T}}, ::Type{T}) =
-    ComplexStruct{T}
-promote_rule{T<:Real,S<:Real}(::Type{ComplexStruct{T}}, ::Type{S}) =
-    ComplexStruct{promote_type(T,S)}
-promote_rule{T<:Real,S<:Real}(::Type{ComplexStruct{T}}, ::Type{ComplexStruct{S}}) =
-    ComplexStruct{promote_type(T,S)}
-promote_rule{T<:Real}(::Type{ComplexStruct{T}}, ::Type{Complex128}) =
+promote_rule{T<:Real}(::Type{ComplexPair{T}}, ::Type{T}) =
+    ComplexPair{T}
+promote_rule{T<:Real,S<:Real}(::Type{ComplexPair{T}}, ::Type{S}) =
+    ComplexPair{promote_type(T,S)}
+promote_rule{T<:Real,S<:Real}(::Type{ComplexPair{T}}, ::Type{ComplexPair{S}}) =
+    ComplexPair{promote_type(T,S)}
+promote_rule{T<:Real}(::Type{ComplexPair{T}}, ::Type{Complex128}) =
     (P = promote_type(Float64,T);
-     is(P,Float64) ? Complex128 : ComplexStruct{P})
-promote_rule{T<:Real}(::Type{ComplexStruct{T}}, ::Type{Complex64}) =
+     is(P,Float64) ? Complex128 : ComplexPair{P})
+promote_rule{T<:Real}(::Type{ComplexPair{T}}, ::Type{Complex64}) =
     (P = promote_type(Float32,T);
-     is(P,Float64) ? Complex128 : is(P,Float32) ? Complex64  : ComplexStruct{P})
+     is(P,Float64) ? Complex128 : is(P,Float32) ? Complex64  : ComplexPair{P})
 
-complex(x, y) = ComplexStruct(x, y)
-complex(x) = ComplexStruct(x)
+complex(x, y) = ComplexPair(x, y)
+complex(x) = ComplexPair(x)
 
-pi{T}(z::ComplexStruct{T}) = pi(T)
-pi{T}(::Type{ComplexStruct{T}}) = pi(T)
+pi{T}(z::ComplexPair{T}) = pi(T)
+pi{T}(::Type{ComplexPair{T}}) = pi(T)
 
 
 ## singleton type for imaginary unit constant ##
@@ -161,8 +161,8 @@ pi{T}(::Type{ComplexStruct{T}}) = pi(T)
 type ImaginaryUnit <: Complex; end
 im = ImaginaryUnit()
 
-convert{T<:Real}(::Type{ComplexStruct{T}}, ::ImaginaryUnit) =
-    ComplexStruct(zero(T),one(T))
+convert{T<:Real}(::Type{ComplexPair{T}}, ::ImaginaryUnit) =
+    ComplexPair(zero(T),one(T))
 convert(::Type{Complex128}, ::ImaginaryUnit) = complex128(0,1)
 convert(::Type{Complex64},  ::ImaginaryUnit) = complex64(0,1)
 
@@ -170,7 +170,7 @@ real(::ImaginaryUnit) = 0
 imag(::ImaginaryUnit) = 1
 
 promote_rule{T<:Complex}(::Type{ImaginaryUnit}, ::Type{T}) = T
-promote_rule{T<:Real}(::Type{ImaginaryUnit}, ::Type{T}) = ComplexStruct{T}
+promote_rule{T<:Real}(::Type{ImaginaryUnit}, ::Type{T}) = ComplexPair{T}
 promote_rule(::Type{ImaginaryUnit}, ::Type{Float64}) = Complex128
 promote_rule(::Type{ImaginaryUnit}, ::Type{Float32}) = Complex64
 
