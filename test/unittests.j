@@ -31,6 +31,8 @@
 @assert subtype(Type{Ptr{None}},Type{Ptr})
 let T = typevar(:T)
     @assert !is(None, tintersect(Array{None},Tensor{T}))
+    @assert  is(None, tintersect((Type{Ptr{Uint8}},Ptr{None}),
+                                 (Type{Ptr{T}},Ptr{T})))
 end
 @assert is(None, tintersect(Type{Any},Type{Complex}))
 @assert is(None, tintersect(Type{Any},Type{typevar(:T,Real)}))
