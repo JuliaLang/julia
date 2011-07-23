@@ -26,13 +26,13 @@
 @assert !subtype(Type{None}, Type{Int32})
 
 @assert !isa(Array,Type{Any})
-@assert subtype(Type{Complex},StructKind)
-@assert isa(Complex,Type{Complex})
+@assert subtype(Type{ComplexStruct},StructKind)
+@assert isa(ComplexStruct,Type{ComplexStruct})
 @assert subtype(Type{Ptr{None}},Type{Ptr})
 let T = typevar(:T)
     @assert !is(None, tintersect(Array{None},Tensor{T}))
 end
-@assert is(None, tintersect(Type{Any},Type{Complex}))
+@assert is(None, tintersect(Type{Any},Type{ComplexStruct}))
 @assert is(None, tintersect(Type{Any},Type{typevar(:T,Real)}))
 @assert !subtype(Type{Array{Int}},Type{Tensor{Int}})
 @assert subtype(Type{Array{Int}},Type{Array{typevar(:T,Int)}})
@@ -96,9 +96,9 @@ b = rand()
 @assert sqrt(2) == 1.4142135623730951
 
 @assert 1+1.5 == 2.5
-@assert is(typeof(convert(Complex{Int16},1)),Complex{Int16})
-@assert Complex(1,2)+1 == Complex(2,2)
-@assert 0.7 < real(sqrt(Complex(0,1))) < 0.707107
+@assert is(typeof(convert(ComplexStruct{Int16},1)),ComplexStruct{Int16})
+@assert ComplexStruct(1,2)+1 == ComplexStruct(2,2)
+@assert 0.7 < real(sqrt(ComplexStruct(0,1))) < 0.707107
 
 @assert parse_int(Int32,"z",36) == 35
 @assert parse_bin("0") == 0

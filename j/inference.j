@@ -1391,7 +1391,7 @@ tfunc(f,t) = (getmethods(f,t)[3]).tfunc
 #     return x.re + x.im
 # end
 
-# m = getmethods(foo,(Complex{Float64},))
+# m = getmethods(foo,(ComplexStruct{Float64},))
 # ast = m[3]
 
 # function bar(x)
