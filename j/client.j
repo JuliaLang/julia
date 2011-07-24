@@ -131,6 +131,7 @@ end
 
 function _start()
     try
+        ccall(:jl_register_toplevel_eh, Void, ())
         ccall(:jl_start_io_thread, Void, ())
         global Workqueue = {}
         global Waiting = HashTable(64)
