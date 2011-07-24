@@ -20,7 +20,7 @@
 #    parameters::Tuple
 #end
 
-#type StructKind <: AbstractKind
+#type CompositeKind <: AbstractKind
 #    #name::TypeName
 #    #super::Type
 #    #parameters::Tuple
@@ -56,9 +56,9 @@
 #    body
 #end
 
-#abstract Tensor{T,N}
+#abstract AbstractArray{T,N}
 
-#type Array{T,N} <: Tensor{T,N}
+#type Array{T,N} <: AbstractArray{T,N}
 #    dims::NTuple{N,Int32}
 #end
 
@@ -66,6 +66,19 @@
 #    head::Symbol
 #    args::Array{Any,1}
 #    type::Any
+#end
+
+#type SymbolNode
+#    name::Symbol
+#    type
+#end
+
+#type LineNumberNode
+#    line::Long
+#end
+
+#type LabelNode
+#    label::Long
 #end
 
 #type LambdaStaticData

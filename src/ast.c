@@ -290,8 +290,16 @@ static jl_value_t *scm_to_julia_(value_t e)
                 }
                 return (jl_value_t*)ex;
             }
-            jl_expr_t *ex = jl_exprn(sym, n);
             e = cdr_(e);
+            if (sym == line_sym && n==1) {
+                return jl_new_struct(jl_linenumbernode_type,
+                                     scm_to_julia_(car_(e)));
+            }
+            if (sym == label_sym) {
+                return jl_new_struct(jl_labelnode_type,
+                                     scm_to_julia_(car_(e)));
+            }
+            jl_expr_t *ex = jl_exprn(sym, n);
             for(i=0; i < n; i++) {
                 assert(iscons(e));
                 jl_cellset(ex->args, i, scm_to_julia_(car_(e)));

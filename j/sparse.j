@@ -1,5 +1,5 @@
 # Compressed sparse columns data structure
-type SparseMatrixCSC{T} <: Matrix{T}
+type SparseMatrixCSC{T} <: AbstractMatrix{T}
     m::Size                # Number of rows
     n::Size                # Number of columns
     colptr::Vector{Size}   # Column i is in colptr[i]:(colptr[i+1]-1)

@@ -1300,7 +1300,7 @@ function pmap(grp::ProcessGroup, f, lsts...)
      i = 1:length(lsts[1]) }
 end
 
-function preduce(reducer, f, r::Range1)
+function preduce(reducer, f, r::Range1{Size})
     global PGRP
     np = PGRP.np
     N = length(r)
@@ -1313,16 +1313,12 @@ function preduce(reducer, f, r::Range1)
         if i==np
             hi += rest
         end
-        results[i] = @spawn begin
-            v = reducer()
-            for j=lo:hi; v = reducer(v,f(j)); end
-            v
-        end
+        results[i] = @spawn f(lo, hi)
     end
     mapreduce(reducer, fetch, results)
 end
 
-function pfor(f, r::Range1)
+function pfor(f, r::Range1{Size})
     global PGRP
     np = PGRP.np
     N = length(r)
@@ -1334,18 +1330,47 @@ function pfor(f, r::Range1)
         if i==np
             hi += rest
         end
-        @spawn begin
-            for j=lo:hi; f(j); end
-        end
+        @spawn f(lo,hi)
     end
     nothing
+end
+
+function make_preduce_body(reducer, var, body)
+    ac = gensym()
+    lo = gensym()
+    hi = gensym()
+    localize_vars(
+    quote
+        function (($lo)::Size, ($hi)::Size)
+            ($ac) = ($reducer)()
+            for ($var) = ($lo):($hi)
+                ($ac) = ($reducer)($ac, $body)
+            end
+            $ac
+        end
+    end
+                  )
+end
+
+function make_pfor_body(var, body)
+    lo = gensym()
+    hi = gensym()
+    localize_vars(
+    quote
+        function (($lo)::Size, ($hi)::Size)
+            for ($var) = ($lo):($hi)
+                $body
+            end
+        end
+    end
+                  )
 end
 
 macro pfor(reducer, range, body)
     var = range.args[1]
     r = range.args[2]
     quote
-        preduce($reducer, $localize_vars(:(($var)->($body))), $r)
+        preduce($reducer, $make_pfor_body(var, body), $r)
     end
 end
 
@@ -1367,11 +1392,11 @@ macro parallel(args...)
     body = loop.args[2]
     if na==1
         quote
-            pfor($localize_vars(:(($var)->($body))), $r)
+            pfor($make_pfor_body(var, body), $r)
         end
     else
         quote
-            preduce($reducer, $localize_vars(:(($var)->($body))), $r)
+            preduce($reducer, $make_preduce_body(reducer, var, body), $r)
         end
     end
 end

@@ -33,7 +33,6 @@ static ptrint_t VALUE_TAGS;
 #define write_int8(s, n) write_uint8(s, n)
 #define read_int8(s) read_uint8(s)
 
-/*
 static void write_int16(ios_t *s, int16_t i)
 {
     write_uint8(s, i       & 0xff);
@@ -46,7 +45,6 @@ static int16_t read_int16(ios_t *s)
     int b1 = read_uint8(s);
     return (int16_t)(b0 | (b1<<8));
 }
-*/
 
 static void write_int32(ios_t *s, int32_t i)
 {
@@ -228,18 +226,19 @@ void jl_serialize_value_(ios_t *s, jl_value_t *v)
         ios_write(s, ((jl_sym_t*)v)->name, l);
     }
     else if (jl_is_array(v)) {
+        jl_array_t *ar = (jl_array_t*)v;
         writetag(s, (jl_value_t*)jl_array_type);
         jl_value_t *elty = jl_tparam0(jl_typeof(v));
         jl_serialize_value(s, elty);
-        jl_serialize_value(s,
-                           jl_construct_array_size((jl_array_t*)v,
-                                                   jl_array_ndims(v)));
+        write_int16(s, ar->ndims);
+        for (i=0; i < ar->ndims; i++)
+            jl_serialize_value(s, jl_box_long(jl_array_dim(ar,i)));
         if (jl_is_bits_type(elty)) {
-            size_t tot = ((jl_array_t*)v)->length * jl_bitstype_nbits(elty)/8;
-            ios_write(s, ((jl_array_t*)v)->data, tot);
+            size_t tot = ar->length * ar->elsize;
+            ios_write(s, ar->data, tot);
         }
         else {
-            for(i=0; i < ((jl_array_t*)v)->length; i++) {
+            for(i=0; i < ar->length; i++) {
                 jl_serialize_value(s, jl_cellref(v, i));
             }
         }
@@ -571,16 +570,17 @@ jl_value_t *jl_deserialize_value(ios_t *s)
     }
     else if (vtag == (jl_value_t*)jl_array_type) {
         jl_value_t *elty = jl_deserialize_value(s);
-        jl_tuple_t *dims = (jl_tuple_t*)jl_deserialize_value(s);
-        assert(jl_is_tuple(dims));
+        int16_t ndims = read_int16(s);
+        size_t *dims = alloca(ndims*sizeof(size_t));
+        for(i=0; i < ndims; i++)
+            dims[i] = jl_unbox_long(jl_deserialize_value(s));
         jl_value_t *atype =
             jl_apply_type((jl_value_t*)jl_array_type,
-                          jl_tuple2(elty,
-                                    jl_box_long(((jl_tuple_t*)dims)->length)));
-        jl_array_t *a = jl_new_array((jl_type_t*)atype, dims);
+                          jl_tuple2(elty, jl_box_long(ndims)));
+        jl_array_t *a = jl_new_array_((jl_type_t*)atype, ndims, dims);
         ptrhash_put(&backref_table, (void*)(ptrint_t)pos, (jl_value_t*)a);
         if (jl_is_bits_type(elty)) {
-            size_t tot = a->length * jl_bitstype_nbits(elty)/8;
+            size_t tot = a->length * a->elsize;
             ios_read(s, a->data, tot);
         }
         else {
@@ -938,13 +938,15 @@ void jl_init_serializer()
                      (void*)LongSymbol_tag, (void*)LongTuple_tag,
                      (void*)LongExpr_tag, jl_intrinsic_type, jl_methtable_type,
                      jl_typename_type, jl_lambda_info_type, jl_tvar_type,
+                     jl_symbolnode_type, jl_labelnode_type,
+                     jl_linenumbernode_type,
 
                      jl_null, jl_any_type, jl_symbol("Any"),
                      jl_symbol("Array"), jl_symbol("TypeVar"),
                      jl_symbol("FuncKind"), jl_symbol("Box"),
                      lambda_sym, vinf_sym, locals_sym, body_sym, return_sym,
                      call_sym, colons_sym, null_sym, goto_sym, goto_ifnot_sym,
-                     label_sym, symbol_sym, jl_symbol("string"),
+                     jl_symbol("string"),
                      jl_symbol("T"), jl_symbol("S"),
                      jl_symbol("a"), jl_symbol("b"), jl_symbol("c"),
                      jl_symbol("d"), jl_symbol("e"), jl_symbol("f"),
@@ -975,7 +977,8 @@ void jl_init_serializer()
                      jl_seq_type->name, jl_ntuple_type->name, jl_tensor_type->name,
                      jl_lambda_info_type->name, jl_box_type->name,
                      jl_typector_type->name, jl_intrinsic_type->name, jl_undef_type->name,
-                     jl_task_type->name,
+                     jl_task_type->name, jl_symbolnode_type->name,
+                     jl_labelnode_type->name, jl_linenumbernode_type->name,
 
                      jl_root_task,
 

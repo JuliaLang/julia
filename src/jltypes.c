@@ -552,7 +552,6 @@ static jl_value_t *meet_tvar(jl_tvar_t *tv, jl_value_t *ty)
     if (jl_subtype((jl_value_t*)tv->lb, ty, 0)) {
         if (jl_is_leaf_type(ty) || jl_is_long(ty))
             return ty;
-        assert(ty != (jl_value_t*)jl_bottom_type);
         return (jl_value_t*)jl_new_typevar(jl_symbol("_"), tv->lb, ty);
     }
     return (jl_value_t*)jl_bottom_type;
@@ -1955,6 +1954,7 @@ static jl_tuple_t *jl_typevars(size_t n, ...)
 }
 
 JL_CALLABLE(jl_f_new_expr);
+JL_CALLABLE(jl_f_new_symbolnode);
 JL_CALLABLE(jl_f_new_box);
 
 extern void jl_init_int32_int64_cache();
@@ -1982,7 +1982,7 @@ void jl_init_types()
     jl_nothing = (jl_value_t*)jl_null; // for bootstrapping
 
     // initialize them. lots of cycles.
-    jl_struct_kind->name = jl_new_typename(jl_symbol("StructKind"));
+    jl_struct_kind->name = jl_new_typename(jl_symbol("CompositeKind"));
     jl_struct_kind->name->primary = (jl_value_t*)jl_struct_kind;
     jl_struct_kind->super = (jl_tag_type_t*)jl_tag_kind;
     jl_struct_kind->parameters = jl_null;
@@ -2148,7 +2148,7 @@ void jl_init_types()
     jl_true  = jl_box8(jl_bool_type, 1);
 
     tv = jl_typevars(2, "T", "N");
-    jl_tensor_type = jl_new_tagtype((jl_value_t*)jl_symbol("Tensor"),
+    jl_tensor_type = jl_new_tagtype((jl_value_t*)jl_symbol("AbstractArray"),
                                     jl_any_type, tv);
 
     tv = jl_typevars(2, "T", "N");
@@ -2176,6 +2176,25 @@ void jl_init_types()
                            jl_tuple(3, jl_sym_type, jl_array_any_type,
                                     jl_any_type));
     jl_expr_type->fptr = jl_f_new_expr;
+
+    jl_symbolnode_type =
+        jl_new_struct_type(jl_symbol("SymbolNode"),
+                           jl_any_type, jl_null,
+                           jl_tuple(2, jl_symbol("name"), jl_symbol("type")),
+                           jl_tuple(2, jl_sym_type, jl_any_type));
+    jl_symbolnode_type->fptr = jl_f_new_symbolnode;
+
+    jl_linenumbernode_type =
+        jl_new_struct_type(jl_symbol("LineNumberNode"),
+                           jl_any_type, jl_null,
+                           jl_tuple(1, jl_symbol("line")),
+                           jl_tuple(1, jl_long_type));
+
+    jl_labelnode_type =
+        jl_new_struct_type(jl_symbol("LabelNode"),
+                           jl_any_type, jl_null,
+                           jl_tuple(1, jl_symbol("label")),
+                           jl_tuple(1, jl_long_type));
 
     jl_lambda_info_type =
         jl_new_struct_type(jl_symbol("LambdaStaticData"),
@@ -2264,7 +2283,6 @@ void jl_init_types()
     assign_sym = jl_symbol("=");
     null_sym = jl_symbol("null");
     isbound_sym = jl_symbol("isbound");
-    symbol_sym = jl_symbol("symbol");
     body_sym = jl_symbol("body");
     locals_sym = jl_symbol("locals");
     colons_sym = jl_symbol("::");

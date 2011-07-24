@@ -2,64 +2,64 @@
 
 ## Type aliases for convenience ##
 
-typealias Vector{T} Tensor{T,1}
-typealias Matrix{T} Tensor{T,2}
-typealias DenseVector{T} Array{T,1}
-typealias DenseMatrix{T} Array{T,2}
-typealias DenseVecOrMat{T} Union(DenseVector{T}, DenseMatrix{T})
+typealias AbstractVector{T} AbstractArray{T,1}
+typealias AbstractMatrix{T} AbstractArray{T,2}
+typealias Vector{T} Array{T,1}
+typealias Matrix{T} Array{T,2}
+typealias VecOrMat{T} Union(Vector{T}, Matrix{T})
 
-typealias Indices{T<:Int} Union(Int, Vector{T})
+typealias Indices{T<:Int} Union(Int, AbstractVector{T})
 typealias Region Union(Size,Dims)
 
 ## Basic functions ##
 
-size(t::Tensor, d) = size(t)[d]
-ndims{T,n}(::Tensor{T,n}) = n
-numel(t::Tensor) = prod(size(t))
-length(v::Vector) = numel(v)
-length(t::Tensor) = error("length not defined for ", typeof(t))
-nnz(a::Tensor) = (n = 0; for i=1:numel(a); n += a[i] != 0 ? 1 : 0; end; n)
-nnz(a::Tensor{Bool}) = (n = 0; for i=1:numel(a); n += a[i] == true ? 1 : 0; end; n)
+size(t::AbstractArray, d) = size(t)[d]
+ndims{T,n}(::AbstractArray{T,n}) = n
+numel(t::AbstractArray) = prod(size(t))
+length(v::AbstractVector) = numel(v)
+length(t::AbstractArray) = error("length not defined for ", typeof(t))
+nnz(a::AbstractArray) = (n = 0; for i=1:numel(a); n += a[i] != 0 ? 1 : 0; end; n)
+nnz(a::AbstractArray{Bool}) = (n = 0; for i=1:numel(a); n += a[i] == true ? 1 : 0; end; n)
 
 ## Constructors ##
 
 # default arguments to similar()
-similar{T}(a::Tensor{T})                      = similar(a, T, size(a))
-similar   (a::Tensor, T::Type)                = similar(a, T, size(a))
-similar{T}(a::Tensor{T}, dims::Dims)          = similar(a, T, dims)
-similar{T}(a::Tensor{T}, dims::Size...)       = similar(a, T, dims)
-similar   (a::Tensor, T::Type, dims::Size...) = similar(a, T, dims)
+similar{T}(a::AbstractArray{T})                      = similar(a, T, size(a))
+similar   (a::AbstractArray, T::Type)                = similar(a, T, size(a))
+similar{T}(a::AbstractArray{T}, dims::Dims)          = similar(a, T, dims)
+similar{T}(a::AbstractArray{T}, dims::Size...)       = similar(a, T, dims)
+similar   (a::AbstractArray, T::Type, dims::Size...) = similar(a, T, dims)
 
-reshape(a::Tensor, dims::Dims) = (b = similar(a, dims);
+reshape(a::AbstractArray, dims::Dims) = (b = similar(a, dims);
                                   for i=1:numel(a); b[i] = a[i]; end;
                                   b)
-reshape(a::Tensor, dims::Size...) = reshape(a, dims)
+reshape(a::AbstractArray, dims::Size...) = reshape(a, dims)
 
-function fill(A::Tensor, x)
+function fill(A::AbstractArray, x)
     for i = 1:numel(A)
         A[i] = x
     end
     return A
 end
 
-function copy_to(dest::Tensor, src::Tensor)
+function copy_to(dest::AbstractArray, src::AbstractArray)
     for i=1:numel(src)
         dest[i] = copy(src[i])
     end
     return dest
 end
 
-copy(a::Tensor) = copy_to(similar(a), a)
+copy(a::AbstractArray) = copy_to(similar(a), a)
 
 eye(n::Size) = eye(n, n)
 eye(m::Size, n::Size) = (a = zeros(m,n);
                          for i=1:min(m,n); a[i,i]=1; end;
                          a)
-one{T}(x::Tensor{T,2}) = (m=size(x,1); n=size(x,2);
+one{T}(x::AbstractArray{T,2}) = (m=size(x,1); n=size(x,2);
                           a = zeros(T,size(x));
                           for i=1:min(m,n); a[i,i]=1; end;
                           a)
-zero{T}(x::Tensor{T,2}) = zeros(T,size(x))
+zero{T}(x::AbstractArray{T,2}) = zeros(T,size(x))
 
 function linspace(start::Real, stop::Real, n::Int)
     (start, stop) = promote(start, stop)
@@ -75,14 +75,14 @@ linspace(start::Real, stop::Real) = [ i | i=start:stop ]
 
 ## Unary operators ##
 
-conj{T <: Real}(x::Tensor{T}) = x
-real{T <: Real}(x::Tensor{T}) = x
-imag{T <: Real}(x::Tensor{T}) = zero(x)
+conj{T <: Real}(x::AbstractArray{T}) = x
+real{T <: Real}(x::AbstractArray{T}) = x
+imag{T <: Real}(x::AbstractArray{T}) = zero(x)
 
 macro unary_op(f)
     quote
 
-        function ($f)(A::Tensor)
+        function ($f)(A::AbstractArray)
             F = similar(A)
             for i=1:numel(A)
                 F[i] = ($f)(A[i])
@@ -100,7 +100,7 @@ end # macro
 macro unary_c2r_op(f)
     quote
 
-        function ($f){T}(A::Tensor{T})
+        function ($f){T}(A::AbstractArray{T})
             S = typeof(($f)(zero(T)))
             F = similar(A, S)
             for i=1:numel(A)
@@ -115,10 +115,10 @@ end # macro
 @unary_c2r_op (real)
 @unary_c2r_op (imag)
 
-+{T<:Number}(x::Tensor{T}) = x
-*{T<:Number}(x::Tensor{T}) = x
++{T<:Number}(x::AbstractArray{T}) = x
+*{T<:Number}(x::AbstractArray{T}) = x
 
-function !(A::Tensor{Bool})
+function !(A::AbstractArray{Bool})
     F = similar(A)
     for i=1:numel(A)
         F[i] = !A[i]
@@ -128,37 +128,37 @@ end
 
 ## Binary arithmetic operators ##
 
-*(A::Number, B::Tensor) = A .* B
-*(A::Tensor, B::Number) = A .* B
+*(A::Number, B::AbstractArray) = A .* B
+*(A::AbstractArray, B::Number) = A .* B
 
-./(x::Tensor, y::Tensor) = reshape( [ x[i] ./ y[i] | i=1:numel(x) ], size(x) )
-./(x::Number, y::Tensor) = reshape( [ x    ./ y[i] | i=1:numel(y) ], size(y) )
-./(x::Tensor, y::Number) = reshape( [ x[i] ./ y    | i=1:numel(x) ], size(x) )
+./(x::AbstractArray, y::AbstractArray) = reshape( [ x[i] ./ y[i] | i=1:numel(x) ], size(x) )
+./(x::Number, y::AbstractArray) = reshape( [ x    ./ y[i] | i=1:numel(y) ], size(y) )
+./(x::AbstractArray, y::Number) = reshape( [ x[i] ./ y    | i=1:numel(x) ], size(x) )
 
-/(A::Number, B::Tensor) = A ./ B
-/(A::Tensor, B::Number) = A ./ B
+/(A::Number, B::AbstractArray) = A ./ B
+/(A::AbstractArray, B::Number) = A ./ B
 
-\(A::Number, B::Tensor) = B ./ A
-\(A::Tensor, B::Number) = B ./ A
+\(A::Number, B::AbstractArray) = B ./ A
+\(A::AbstractArray, B::Number) = B ./ A
 
 macro binary_arithmetic_op(f)
     quote
 
-        function ($f){S,T}(A::Tensor{S}, B::Tensor{T})
+        function ($f){S,T}(A::AbstractArray{S}, B::AbstractArray{T})
            F = similar(A, promote_type(S,T))
            for i=1:numel(A)
               F[i] = ($f)(A[i], B[i])
            end
            return F
         end
-        function ($f){T}(A::Number, B::Tensor{T})
+        function ($f){T}(A::Number, B::AbstractArray{T})
            F = similar(B, promote_type(typeof(A),T))
            for i=1:numel(B)
               F[i] = ($f)(A, B[i])
            end
            return F
         end
-        function ($f){T}(A::Tensor{T}, B::Number)
+        function ($f){T}(A::AbstractArray{T}, B::Number)
            F = similar(A, promote_type(T,typeof(B)))
            for i=1:numel(A)
               F[i] = ($f)(A[i], B)
@@ -178,7 +178,7 @@ end # macro
 
 ## promotion to complex ##
 
-function complex{S<:Real,T<:Real}(A::Tensor{S}, B::Tensor{T})
+function complex{S<:Real,T<:Real}(A::AbstractArray{S}, B::AbstractArray{T})
     F = similar(A, typeof(complex(zero(S),zero(T))))
     for i=1:numel(A)
         F[i] = complex(A[i], B[i])
@@ -186,7 +186,7 @@ function complex{S<:Real,T<:Real}(A::Tensor{S}, B::Tensor{T})
     return F
 end
 
-function complex{T<:Real}(A::Real, B::Tensor{T})
+function complex{T<:Real}(A::Real, B::AbstractArray{T})
     F = similar(B, typeof(complex(A,zero(T))))
     for i=1:numel(B)
         F[i] = complex(A, B[i])
@@ -194,7 +194,7 @@ function complex{T<:Real}(A::Real, B::Tensor{T})
     return F
 end
 
-function complex{T<:Real}(A::Tensor{T}, B::Real)
+function complex{T<:Real}(A::AbstractArray{T}, B::Real)
     F = similar(A, typeof(complex(zero(T),B)))
     for i=1:numel(A)
         F[i] = complex(A[i], B)
@@ -202,7 +202,7 @@ function complex{T<:Real}(A::Tensor{T}, B::Real)
     return F
 end
 
-function complex{T<:Real}(A::Tensor{T})
+function complex{T<:Real}(A::AbstractArray{T})
     z = zero(T)
     F = similar(A, typeof(complex(z,z)))
     for i=1:numel(A)
@@ -216,21 +216,21 @@ end
 macro binary_comparison_op(f)
     quote
 
-        function ($f)(A::Tensor, B::Tensor)
+        function ($f)(A::AbstractArray, B::AbstractArray)
            F = similar(A, Bool)
            for i=1:numel(A)
               F[i] = ($f)(A[i], B[i])
            end
            return F
         end
-        function ($f)(A::Number, B::Tensor)
+        function ($f)(A::Number, B::AbstractArray)
            F = similar(B, Bool)
            for i=1:numel(B)
               F[i] = ($f)(A, B[i])
            end
            return F
         end
-        function ($f)(A::Tensor, B::Number)
+        function ($f)(A::AbstractArray, B::Number)
            F = similar(A, Bool)
            for i=1:numel(A)
               F[i] = ($f)(A[i], B)
@@ -252,21 +252,21 @@ end
 macro binary_boolean_op(f)
     quote
 
-        function ($f)(A::Tensor{Bool}, B::Tensor{Bool})
+        function ($f)(A::AbstractArray{Bool}, B::AbstractArray{Bool})
            F = similar(A, Bool)
            for i=1:numel(A)
               F[i] = ($f)(A[i], B[i])
            end
            return F
         end
-        function ($f)(A::Bool, B::Tensor{Bool})
+        function ($f)(A::Bool, B::AbstractArray{Bool})
            F = similar(B, Bool)
            for i=1:numel(B)
               F[i] = ($f)(A, B[i])
            end
            return F
         end
-        function ($f)(A::Tensor{Bool}, B::Bool)
+        function ($f)(A::AbstractArray{Bool}, B::Bool)
            F = similar(A, Bool)
            for i=1:numel(A)
               F[i] = ($f)(A[i], B)
@@ -341,29 +341,29 @@ end
 
 ## Indexing: ref ##
 
-ref(t::Tensor) = t
-ref(t::Tensor, r::Real...) = ref(t,map(x->long(round(x)),r)...)
+ref(t::AbstractArray) = t
+ref(t::AbstractArray, r::Real...) = ref(t,map(x->long(round(x)),r)...)
 
-ref{T<:Int}(A::Vector, I::Vector{T}) = [ A[i] | i = I ]
-ref{T<:Int}(A::Tensor{Any,1}, I::Vector{T}) = { A[i] | i = I }
+ref{T<:Int}(A::AbstractVector, I::AbstractVector{T}) = [ A[i] | i = I ]
+ref{T<:Int}(A::AbstractArray{Any,1}, I::AbstractVector{T}) = { A[i] | i = I }
 
-ref{T<:Int}(A::Matrix, I::Int, J::Vector{T})       = [ A[i,j] | i = I, j = J ]
-ref{T<:Int}(A::Matrix, I::Vector{T}, J::Int)       = [ A[i,j] | i = I, j = J ]
-ref{T<:Int}(A::Matrix, I::Vector{T}, J::Vector{T}) = [ A[i,j] | i = I, j = J ]
+ref{T<:Int}(A::AbstractMatrix, I::Int, J::AbstractVector{T})       = [ A[i,j] | i = I, j = J ]
+ref{T<:Int}(A::AbstractMatrix, I::AbstractVector{T}, J::Int)       = [ A[i,j] | i = I, j = J ]
+ref{T<:Int}(A::AbstractMatrix, I::AbstractVector{T}, J::AbstractVector{T}) = [ A[i,j] | i = I, j = J ]
 
-function ref(A::Tensor, i0::Int, i1::Int)
+function ref(A::AbstractArray, i0::Int, i1::Int)
     A[i0 + size(A,1)*(i1-1)]
 end
 
-function ref(A::Tensor, i0::Int, i1::Int, i2::Int)
+function ref(A::AbstractArray, i0::Int, i1::Int, i2::Int)
     A[i0 + size(A,1)*((i1-1) + size(A,2)*(i2-1))]
 end
 
-function ref(A::Tensor, i0::Int, i1::Int, i2::Int, i3::Int)
+function ref(A::AbstractArray, i0::Int, i1::Int, i2::Int, i3::Int)
     A[i0 + size(A,1)*((i1-1) + size(A,2)*((i2-1) + size(A,3)*(i3-1)))]
 end
 
-function ref(A::Tensor, I::Int...)
+function ref(A::AbstractArray, I::Int...)
     dims = size(A)
     ndims = length(I)
 
@@ -379,7 +379,7 @@ end
 
 let ref_cache = nothing
 global ref
-function ref(A::Tensor, I::Indices...)
+function ref(A::AbstractArray, I::Indices...)
     X = similar(A, map(length, I))
 
     if is(ref_cache,nothing)
@@ -396,38 +396,38 @@ end
 ## Indexing: assign ##
 
 # 1-d indexing is assumed defined on subtypes
-assign(t::Tensor, x, i::Int) =
+assign(t::AbstractArray, x, i::Int) =
     error("assign not defined for ",typeof(t))
-assign(t::Tensor, x::Tensor, i::Int) =
+assign(t::AbstractArray, x::AbstractArray, i::Int) =
     error("assign not defined for ",typeof(t))
 
-assign(t::Tensor, x, r::Real...) = (t[map(x->long(round(x)),r)...] = x)
+assign(t::AbstractArray, x, r::Real...) = (t[map(x->long(round(x)),r)...] = x)
 
-function assign{T<:Int}(A::Vector, x, I::Vector{T})
+function assign{T<:Int}(A::AbstractVector, x, I::AbstractVector{T})
     for i=I
         A[i] = x
     end
     return A
 end
 
-function assign{T<:Int}(A::Vector, X::Tensor, I::Vector{T})
+function assign{T<:Int}(A::AbstractVector, X::AbstractArray, I::AbstractVector{T})
     for i=1:length(I)
         A[I[i]] = X[i]
     end
     return A
 end
 
-assign(A::Matrix, x, i::Int, j::Int) = (A[(j-1)*size(A,1) + i] = x)
-assign(A::Matrix, x::Tensor, i::Int, j::Int) = (A[(j-1)*size(A,1) + i] = x)
+assign(A::AbstractMatrix, x, i::Int, j::Int) = (A[(j-1)*size(A,1) + i] = x)
+assign(A::AbstractMatrix, x::AbstractArray, i::Int, j::Int) = (A[(j-1)*size(A,1) + i] = x)
 
-function assign(A::Matrix, x, I::Indices, J::Indices)
+function assign(A::AbstractMatrix, x, I::Indices, J::Indices)
     for j=J, i=I
         A[i,j] = x
     end
     return A
 end
 
-function assign(A::Matrix, X::Tensor, I::Indices, J::Indices)
+function assign(A::AbstractMatrix, X::AbstractArray, I::Indices, J::Indices)
     count = 1
     for j=J, i=I
         A[i,j] = X[count]
@@ -436,21 +436,21 @@ function assign(A::Matrix, X::Tensor, I::Indices, J::Indices)
     return A
 end
 
-assign(A::Tensor, x, I0::Int, I::Int...) = assign_scalarND(A,x,I0,I...)
-assign(A::Tensor, x::Tensor, I0::Int, I::Int...) =
+assign(A::AbstractArray, x, I0::Int, I::Int...) = assign_scalarND(A,x,I0,I...)
+assign(A::AbstractArray, x::AbstractArray, I0::Int, I::Int...) =
     assign_scalarND(A,x,I0,I...)
 
-assign(A::Tensor, x::Tensor, i0::Int, i1::Int) = A[i0 + size(A,1)*(i1-1)] = x
-assign(A::Tensor, x, i0::Int, i1::Int) = A[i0 + size(A,1)*(i1-1)] = x
+assign(A::AbstractArray, x::AbstractArray, i0::Int, i1::Int) = A[i0 + size(A,1)*(i1-1)] = x
+assign(A::AbstractArray, x, i0::Int, i1::Int) = A[i0 + size(A,1)*(i1-1)] = x
 
-assign(A::Tensor, x, i0::Int, i1::Int, i2::Int) =
+assign(A::AbstractArray, x, i0::Int, i1::Int, i2::Int) =
     A[i0 + size(A,1)*((i1-1) + size(A,2)*(i2-1))] = x
-assign(A::Tensor, x::Tensor, i0::Int, i1::Int, i2::Int) =
+assign(A::AbstractArray, x::AbstractArray, i0::Int, i1::Int, i2::Int) =
     A[i0 + size(A,1)*((i1-1) + size(A,2)*(i2-1))] = x
 
-assign(A::Tensor, x, i0::Int, i1::Int, i2::Int, i3::Int) =
+assign(A::AbstractArray, x, i0::Int, i1::Int, i2::Int, i3::Int) =
     A[i0 + size(A,1)*((i1-1) + size(A,2)*((i2-1) + size(A,3)*(i3-1)))] = x
-assign(A::Tensor, x::Tensor, i0::Int, i1::Int, i2::Int, i3::Int) =
+assign(A::AbstractArray, x::AbstractArray, i0::Int, i1::Int, i2::Int, i3::Int) =
     A[i0 + size(A,1)*((i1-1) + size(A,2)*((i2-1) + size(A,3)*(i3-1)))] = x
 
 function assign_scalarND(A, x, I0, I...)
@@ -467,7 +467,7 @@ end
 
 let assign_cache = nothing
 global assign
-function assign(A::Tensor, x, I0::Indices, I::Indices...)
+function assign(A::AbstractArray, x, I0::Indices, I::Indices...)
     if is(assign_cache,nothing)
         assign_cache = HashTable()
     end
@@ -481,7 +481,7 @@ end
 
 let assign_cache = nothing
 global assign
-function assign(A::Tensor, X::Tensor, I0::Indices, I::Indices...)
+function assign(A::AbstractArray, X::AbstractArray, I0::Indices, I::Indices...)
     if is(assign_cache,nothing)
         assign_cache = HashTable()
     end
@@ -507,7 +507,7 @@ end
 
 contains(s::Number, n::Int) = (s == n)
 
-areduce{T}(f::Function, A::Tensor{T}, region::Region) = areduce(f,A,region,T)
+areduce{T}(f::Function, A::AbstractArray{T}, region::Region) = areduce(f,A,region,T)
 
 let areduce_cache = nothing
 # generate the body of the N-d loop to compute a reduction
@@ -537,7 +537,7 @@ function gen_areduce_core(ivars, f)
 end
 
 global areduce
-function areduce(f::Function, A::Tensor, region::Region, RType::Type)
+function areduce(f::Function, A::AbstractArray, region::Region, RType::Type)
     dimsA = size(A)
     ndimsA = length(dimsA)
     dimsR = ntuple(ndimsA, i->(contains(region, i) ? 1 : dimsA[i]))
@@ -554,7 +554,7 @@ function areduce(f::Function, A::Tensor, region::Region, RType::Type)
 end
 end
 
-function max{T}(A::Tensor{T})
+function max{T}(A::AbstractArray{T})
     if subtype(T,Int)
         v = typemin(T)
     else
@@ -566,7 +566,7 @@ function max{T}(A::Tensor{T})
     v
 end
 
-function min{T}(A::Tensor{T})
+function min{T}(A::AbstractArray{T})
     if subtype(T,Int)
         v = typemax(T)
     else
@@ -578,7 +578,7 @@ function min{T}(A::Tensor{T})
     v
 end
 
-function sum{T}(A::Tensor{T})
+function sum{T}(A::AbstractArray{T})
     v = zero(T)
     for i=1:numel(A)
         v = sum(v,A[i])
@@ -586,7 +586,7 @@ function sum{T}(A::Tensor{T})
     v
 end
 
-function prod{T}(A::Tensor{T})
+function prod{T}(A::AbstractArray{T})
     v = one(T)
     for i=1:numel(A)
         v = prod(v,A[i])
@@ -595,7 +595,7 @@ function prod{T}(A::Tensor{T})
 end
 
 for f = (:max, :min, :sum, :prod)
-    @eval function ($f){T}(A::Tensor{T,2}, dim::Region)
+    @eval function ($f){T}(A::AbstractArray{T,2}, dim::Region)
        if isinteger(dim)
           if dim == 1
             [ ($f)(A[:,i]) | i=1:size(A, 2) ]
@@ -608,13 +608,13 @@ for f = (:max, :min, :sum, :prod)
     end
 end
 
-max (A::Tensor, region::Region) = areduce(max,  A, region)
-min (A::Tensor, region::Region) = areduce(min,  A, region)
-sum (A::Tensor, region::Region) = areduce(sum,  A, region)
-prod(A::Tensor, region::Region) = areduce(prod, A, region)
+max (A::AbstractArray, region::Region) = areduce(max,  A, region)
+min (A::AbstractArray, region::Region) = areduce(min,  A, region)
+sum (A::AbstractArray, region::Region) = areduce(sum,  A, region)
+prod(A::AbstractArray, region::Region) = areduce(prod, A, region)
 
 for f = (:all, :any, :count)
-    @eval function ($f)(A::Tensor{Bool,2}, dim::Region)
+    @eval function ($f)(A::AbstractArray{Bool,2}, dim::Region)
         if isinteger(dim)
            if dim == 1
              [ ($f)(A[:,i]) | i=1:size(A, 2) ]
@@ -627,11 +627,11 @@ for f = (:all, :any, :count)
     end
 end
 
-all(A::Tensor{Bool}, region::Region) = areduce(all, A, region)
-any(A::Tensor{Bool}, region::Region) = areduce(any, A, region)
-count(A::Tensor{Bool}, region::Region) = areduce(count, A, region, Size)
+all(A::AbstractArray{Bool}, region::Region) = areduce(all, A, region)
+any(A::AbstractArray{Bool}, region::Region) = areduce(any, A, region)
+count(A::AbstractArray{Bool}, region::Region) = areduce(count, A, region, Size)
 
-function isequal(x::Tensor, y::Tensor)
+function isequal(x::AbstractArray, y::AbstractArray)
     if size(x) != size(y)
         return false
     end
@@ -645,7 +645,7 @@ function isequal(x::Tensor, y::Tensor)
 end
 
 for (f, op) = ((:cumsum, :+), (:cumprod, :(.*)) )
-    @eval function ($f)(v::Vector)
+    @eval function ($f)(v::AbstractVector)
         n = length(v)
         c = similar(v, n)
         if n == 0; return c; end
@@ -660,17 +660,17 @@ end
 
 ## iteration support for arrays as ranges ##
 
-start(a::Tensor) = 1
-next(a::Tensor,i) = (a[i],i+1)
-done(a::Tensor,i) = (i > numel(a))
-isempty(a::Tensor) = (numel(a) == 0)
+start(a::AbstractArray) = 1
+next(a::AbstractArray,i) = (a[i],i+1)
+done(a::AbstractArray,i) = (i > numel(a))
+isempty(a::AbstractArray) = (numel(a) == 0)
 
 ## map over arrays ##
 
-#map(f, v::Vector) = [ f(v[i]) | i=1:length(v) ]
-#map(f, M::Matrix) = [ f(M[i,j]) | i=1:size(M,1), j=1:size(M,2) ]
+#map(f, v::AbstractVector) = [ f(v[i]) | i=1:length(v) ]
+#map(f, M::AbstractMatrix) = [ f(M[i,j]) | i=1:size(M,1), j=1:size(M,2) ]
 
-function map(f, A::Tensor)
+function map(f, A::AbstractArray)
     F = similar(A, size(A))
     for i=1:numel(A)
         F[i] = f(A[i])
@@ -691,18 +691,18 @@ end
 
 ## Transpose, Permute ##
 
-reverse(v::Vector) = [ v[length(v)-i+1] | i=1:length(v) ]
+reverse(v::AbstractVector) = [ v[length(v)-i+1] | i=1:length(v) ]
 
-transpose(x::Vector)  = [ x[j]         | i=1, j=1:size(x,1) ]
-ctranspose(x::Vector) = [ conj(x[j])   | i=1, j=1:size(x,1) ]
+transpose(x::AbstractVector)  = [ x[j]         | i=1, j=1:size(x,1) ]
+ctranspose(x::AbstractVector) = [ conj(x[j])   | i=1, j=1:size(x,1) ]
 
-transpose(x::Matrix)  = [ x[j,i]       | i=1:size(x,2), j=1:size(x,1) ]
-ctranspose(x::Matrix) = [ conj(x[j,i]) | i=1:size(x,2), j=1:size(x,1) ]
+transpose(x::AbstractMatrix)  = [ x[j,i]       | i=1:size(x,2), j=1:size(x,1) ]
+ctranspose(x::AbstractMatrix) = [ conj(x[j,i]) | i=1:size(x,2), j=1:size(x,1) ]
 
 let permute_cache = nothing
 
 global permute
-function permute(A::Tensor, perm)
+function permute(A::AbstractArray, perm)
 	dimsA = size(A)
     ndimsA = length(dimsA)
     dimsP = ntuple(ndimsA, i->dimsA[perm[i]])
@@ -748,7 +748,7 @@ function permute(A::Tensor, perm)
 end
 end
 
-function ipermute(A::Tensor,perm)
+function ipermute(A::AbstractArray,perm)
 	iperm = zeros(Int32,length(perm))
 	for i = 1:length(perm)
 		iperm[perm[i]]= i
@@ -759,7 +759,7 @@ end
 
 ## Other array functions ##
 
-repmat(a::Matrix, m::Size, n::Size) = reshape([ a[i,j] | i=1:size(a,1),
+repmat(a::AbstractMatrix, m::Size, n::Size) = reshape([ a[i,j] | i=1:size(a,1),
                                                          k=1:m,
                                                          j=1:size(a,2),
                                                          l=1:n],
@@ -767,10 +767,10 @@ repmat(a::Matrix, m::Size, n::Size) = reshape([ a[i,j] | i=1:size(a,1),
                                               size(a,2)*n)
 
 
-accumarray(I::Vector, J::Vector, V) = accumarray (I, J, V, max(I), max(J))
+accumarray(I::AbstractVector, J::AbstractVector, V) = accumarray (I, J, V, max(I), max(J))
 
 
-function accumarray{T<:Number}(I::Vector, J::Vector, V::T, m::Size, n::Size)
+function accumarray{T<:Number}(I::AbstractVector, J::AbstractVector, V::T, m::Size, n::Size)
     A = similar(V, m, n)
     for k=1:length(I)
         A[I[k], J[k]] += V
@@ -778,7 +778,7 @@ function accumarray{T<:Number}(I::Vector, J::Vector, V::T, m::Size, n::Size)
     return A
 end
 
-function accumarray(I::Indices, J::Indices, V::Vector, m::Size, n::Size)
+function accumarray(I::Indices, J::Indices, V::AbstractVector, m::Size, n::Size)
     A = similar(V, m, n)
     for k=1:length(I)
         A[I[k], J[k]] += V[k]
@@ -786,7 +786,7 @@ function accumarray(I::Indices, J::Indices, V::Vector, m::Size, n::Size)
     return A
 end
 
-function find{T}(A::Vector{T})
+function find{T}(A::AbstractVector{T})
     nnzA = nnz(A)
     I = zeros(Size, nnzA)
     z = zero(T)
@@ -800,7 +800,7 @@ function find{T}(A::Vector{T})
     return I
 end
 
-function find{T}(A::Matrix{T})
+function find{T}(A::AbstractMatrix{T})
     nnzA = nnz(A)
     I = zeros(Size, nnzA)
     J = zeros(Size, nnzA)
@@ -835,7 +835,7 @@ function find_one(ivars)
 end
 
 global find
-function find{T}(A::Tensor{T})
+function find{T}(A::AbstractArray{T})
 	ndimsA = ndims(A)
     nnzA = nnz(A)
     I = ntuple(ndimsA, x->zeros(Size, nnzA))
@@ -866,7 +866,7 @@ function sub2ind(dims, I::Int...)
     return index
 end
 
-sub2ind(dims, I::Vector...) =
+sub2ind(dims, I::AbstractVector...) =
     [ sub2ind(dims, map(X->X[i], I)...) | i=1:length(I[1]) ]
 
 ind2sub(dims::(), ind::Int) = throw(BoundsError())
@@ -889,7 +889,7 @@ end
 
 ## subarrays ##
 
-type SubArray{T,N,A<:Tensor,I<:(Indices...)} <: Tensor{T,N}
+type SubArray{T,N,A<:AbstractArray,I<:(Indices...)} <: AbstractArray{T,N}
     parent::A
     indexes::I
     dims::Dims
@@ -897,10 +897,10 @@ type SubArray{T,N,A<:Tensor,I<:(Indices...)} <: Tensor{T,N}
     SubArray(p::A, i::I) = new(p, i, map(length, i))
 end
 
-sub{T,N}(A::Tensor{T,N}, i::NTuple{N,Indices}) =
+sub{T,N}(A::AbstractArray{T,N}, i::NTuple{N,Indices}) =
     SubArray{T,N,typeof(A),typeof(i)}(A, i)
 
-sub(A::Tensor, i::Indices...) = sub(A, i)
+sub(A::AbstractArray, i::Indices...) = sub(A, i)
 
 size(s::SubArray) = s.dims
 ndims{T,N}(s::SubArray{T,N}) = N

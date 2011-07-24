@@ -65,7 +65,7 @@ isleaftype(t) = ccall(:jl_is_leaf_type, Int32, (Any,), t) != 0
 # TODO
 isconstant(s::Symbol) = isbound(s) && (e=eval(s);
                                        isa(e,Function) || isa(e,AbstractKind) ||
-                                       isa(e,BitsKind) || isa(e,StructKind) ||
+                                       isa(e,BitsKind) || isa(e,CompositeKind) ||
                                        isa(e,TypeConstructor) ||
                                        is(e,None))
 isconstant(s::Expr) = is(s.head,:quote)
@@ -124,13 +124,13 @@ t_func[applicable] = (1, Inf, (f, args...)->Bool)
 #t_func[new_generic_function] = (1, 1, s->(Any-->Any))
 t_func[tuplelen] = (1, 1, x->Size)
 t_func[arraylen] = (1, 1, x->Size)
-t_func[arrayref] = (2, 2, (a,i)->(isa(a,StructKind) && subtype(a,Array) ?
+t_func[arrayref] = (2, 2, (a,i)->(isa(a,CompositeKind) && subtype(a,Array) ?
                                   a.parameters[1] : Any))
 t_func[arrayset] = (3, 3, (a,i,v)->a)
 t_func[arraysize] = (1, 2,
 function (a, d...)
     if is(d,())
-        if isa(a,StructKind) && subtype(a,Array)
+        if isa(a,CompositeKind) && subtype(a,Array)
             return NTuple{a.parameters[2],Size}
         else
             return NTuple{Array.parameters[2],Size}
@@ -282,7 +282,7 @@ end
 t_func[tupleref] = (2, 2, tupleref_tfunc)
 
 getfield_tfunc = function (A, s, name)
-    if !isa(s,StructKind)
+    if !isa(s,CompositeKind)
         return Any
     end
     if isa(A[2],Expr) && is(A[2].head,:quote) && isa(A[2].args[1],Symbol)
@@ -300,7 +300,7 @@ end
 t_func[getfield] = (2, 2, getfield_tfunc)
 t_func[setfield] = (3, 3, (o, f, v)->o)
 fieldtype_tfunc = function (A, s, name)
-    if !isa(s,StructKind)
+    if !isa(s,CompositeKind)
         return Type
     end
     t = getfield_tfunc(A, s, name)
@@ -349,7 +349,7 @@ function builtin_tfunction(f, args::Tuple, argtypes::Tuple)
     tf = get(t_func::IdTable, f, false)
     if is(tf,false)
         # struct constructor
-        if isa(f, StructKind)
+        if isa(f, CompositeKind)
             return f
         end
         # unknown/unhandled builtin
@@ -378,7 +378,7 @@ function abstract_eval(e::Expr, vtypes, sv::StaticVarInfo)
     return t
 end
 
-function a2t(a::Vector)
+function a2t(a::AbstractVector)
     n = length(a)
     if n==2 return (a[1],a[2]) end
     if n==1 return (a[1],) end
@@ -392,7 +392,7 @@ function a2t(a::Vector)
     t
 end
 
-function a2t_butfirst(a::Vector)
+function a2t_butfirst(a::AbstractVector)
     n = length(a)
     if n==2 return (a[2],) end
     if n<=1 return () end
@@ -544,7 +544,7 @@ function abstract_eval_call(e, vtypes, sv::StaticVarInfo)
         if isa(ft,FuncKind)
             # use inferred function type
             return ft_tfunc(ft, argtypes)
-        elseif isType(ft) && isa(ft.parameters[1],StructKind)
+        elseif isType(ft) && isa(ft.parameters[1],CompositeKind)
             st = ft.parameters[1]
             if isgeneric(st) && isleaftype(st)
                 return abstract_call_gf(st, fargs, argtypes, e)
@@ -600,7 +600,7 @@ end
 ast_rettype(ast) = ast.args[3].type
 
 function abstract_eval_constant(x::ANY)
-    if isa(x,AbstractKind) || isa(x,BitsKind) || isa(x,StructKind) ||
+    if isa(x,AbstractKind) || isa(x,BitsKind) || isa(x,CompositeKind) ||
         isa(x,FuncKind) || isa(x,UnionKind)
         return Type{x}
     end
@@ -760,7 +760,7 @@ end
 function findlabel(body, l)
     for i=1:length(body)
         b = body[i]
-        if isa(b,Expr) && is(b.head,:label) && b.args[1]==l
+        if isa(b,LabelNode) && b.label==l
             return i
         end
     end
@@ -979,7 +979,7 @@ end
 function eval_annotate(e::Expr, vtypes, sv, decls)
     head = e.head
     if is(head,:quote) || is(head,:top) || is(head,:goto) ||
-        is(head,:label) || is(head,:static_typeof) || is(head,:line)
+        is(head,:static_typeof) || is(head,:line)
         return e
     elseif is(head,:gotoifnot) || is(head,:return)
         e.type = Any
@@ -988,7 +988,7 @@ function eval_annotate(e::Expr, vtypes, sv, decls)
         s = e.args[1]
         # assignment LHS not subject to all-same-type variable checking,
         # but the type of the RHS counts as one of its types.
-        e.args[1] = Expr(:symbol, {s}, abstract_eval(s, vtypes, sv))
+        e.args[1] = SymbolNode(s, abstract_eval(s, vtypes, sv))
         e.args[2] = eval_annotate(e.args[2], vtypes, sv, decls)
         # TODO: if this def does not reach any uses, maybe don't do this
         record_var_type(s, exprtype(e.args[2]), decls)
@@ -1003,7 +1003,7 @@ end
 function eval_annotate(e::Symbol, vtypes, sv, decls)
     t = abstract_eval(e, vtypes, sv)
     record_var_type(e, t, decls)
-    Expr(:symbol, {e}, t)
+    SymbolNode(e, t)
 end
 
 eval_annotate(s, vtypes, sv, decls) = s
@@ -1030,22 +1030,23 @@ end
 function sym_replace(e::Expr, from, to)
     head = e.head
     if is(head,:quote) || is(head,:top) || is(head,:goto) ||
-        is(head,:label) || is(head,:line)
-        return e
-    end
-    if is(head,:symbol)
-        s = e.args[1]
-        for i=1:length(from)
-            if is(from[i],s)
-                return to[i]
-            end
-        end
+        is(head,:line)
         return e
     end
     for i=1:length(e.args)
         e.args[i] = sym_replace(e.args[i], from, to)
     end
     e
+end
+
+function sym_replace(e::SymbolNode, from, to)
+    s = e.name
+    for i=1:length(from)
+        if is(from[i],s)
+            return to[i]
+        end
+    end
+    return e
 end
 
 function sym_replace(s::Symbol, from, to)
@@ -1061,8 +1062,7 @@ sym_replace(x, from, to) = x
 
 # count occurrences up to n+1
 function occurs_more(e::Expr, pred, n)
-    if is(e.head,:quote) || is(e.head,:top) || is(e.head,:goto) ||
-        is(e.head,:label)
+    if is(e.head,:quote) || is(e.head,:top) || is(e.head,:goto)
         return 0
     end
     c = 0
@@ -1075,6 +1075,7 @@ function occurs_more(e::Expr, pred, n)
     c
 end
 
+occurs_more(e::SymbolNode, pred, n) = occurs_more(e.name, pred, n)
 occurs_more(e, pred, n) = pred(e) ? 1 : 0
 
 function contains_is(arr, item)
@@ -1089,6 +1090,8 @@ end
 function exprtype(x::ANY)
     if isa(x,Expr)
         return x.type
+    elseif isa(x,SymbolNode)
+        return x.type
     elseif isa(x,Symbol)
         return Any
     elseif isa(x,Type)
@@ -1101,7 +1104,7 @@ end
 function without_linenums(a::Array{Any,1})
     l = {}
     for x = a
-        if isa(x,Expr) && is(x.head,:line)
+        if (isa(x,Expr) && is(x.head,:line)) || isa(x,LineNumberNode)
         else
             push(l, x)
         end
@@ -1185,7 +1188,7 @@ function inlineable(f, e::Expr, vars)
             # ok for argument to occur more than once if the actual argument
             # is a symbol or constant
             if !isa(aei,Symbol) && !isa(aei,Number) &&
-                !(isa(aei,Expr) && is(aei.head,:symbol))
+               !isa(aei,SymbolNode)
                 return NF
             end
         elseif occ == 0
@@ -1231,8 +1234,7 @@ function inlining_pass(e::Expr, vars)
         return e
     end
     arg1 = e.args[1]
-    if is(e.head,:call) && isa(arg1,Expr) &&
-       is(arg1.head,:symbol) && is(arg1.args[1],:ccall)
+    if is(e.head,:call) && isa(arg1,SymbolNode) && is(arg1.name, :ccall)
         if length(e.args)>1
             e.args[2] = remove_call1(e.args[2])
         end
@@ -1348,8 +1350,7 @@ function tuple_elim_pass(ast::Expr)
                                    isequal(rhs.args[2],tupname)
                                     r = vals[k]
                                     if isa(r,Symbol)
-                                        r = Expr(:symbol, {r},
-                                                 exprtype(tup[k+1]))
+                                        r = SymbolNode(r, exprtype(tup[k+1]))
                                     end
                                     stmt.args[2] = r
                                     k += 1
@@ -1391,7 +1392,7 @@ tfunc(f,t) = (getmethods(f,t)[3]).tfunc
 #     return x.re + x.im
 # end
 
-# m = getmethods(foo,(Complex{Float64},))
+# m = getmethods(foo,(ComplexPair{Float64},))
 # ast = m[3]
 
 # function bar(x)

@@ -150,6 +150,7 @@ static int exec_program()
     int err = 0;
  again: ;
     JL_TRY {
+        jl_register_toplevel_eh();
         if (err) {
             jl_show(jl_exception_in_transit);
             ios_printf(ios_stdout, "\n");

@@ -10,8 +10,8 @@
 @assert Int8 <: Int
 @assert Int32 <: Int
 @assert (Int8,Int8) <: (Int,Int)
-@assert !(Tensor{Float64,2} <: Tensor{Number,2})
-@assert !(Tensor{Float64,1} <: Tensor{Float64,2})
+@assert !(AbstractArray{Float64,2} <: AbstractArray{Number,2})
+@assert !(AbstractArray{Float64,1} <: AbstractArray{Float64,2})
 @assert (Int,Int...) <: (Int,Real...)
 @assert (Int,Float64,Int...) <: (Int,Number...)
 @assert (Int,Float64) <: (Int,Number...)
@@ -26,15 +26,17 @@
 @assert !subtype(Type{None}, Type{Int32})
 
 @assert !isa(Array,Type{Any})
-@assert subtype(Type{Complex},StructKind)
-@assert isa(Complex,Type{Complex})
+@assert subtype(Type{ComplexPair},CompositeKind)
+@assert isa(ComplexPair,Type{ComplexPair})
 @assert subtype(Type{Ptr{None}},Type{Ptr})
 let T = typevar(:T)
-    @assert !is(None, tintersect(Array{None},Tensor{T}))
+    @assert !is(None, tintersect(Array{None},AbstractArray{T}))
+    @assert  is(None, tintersect((Type{Ptr{Uint8}},Ptr{None}),
+                                 (Type{Ptr{T}},Ptr{T})))
 end
-@assert is(None, tintersect(Type{Any},Type{Complex}))
+@assert is(None, tintersect(Type{Any},Type{ComplexPair}))
 @assert is(None, tintersect(Type{Any},Type{typevar(:T,Real)}))
-@assert !subtype(Type{Array{Int}},Type{Tensor{Int}})
+@assert !subtype(Type{Array{Int}},Type{AbstractArray{Int}})
 @assert subtype(Type{Array{Int}},Type{Array{typevar(:T,Int)}})
 
 # ntuples
@@ -96,9 +98,9 @@ b = rand()
 @assert sqrt(2) == 1.4142135623730951
 
 @assert 1+1.5 == 2.5
-@assert is(typeof(convert(Complex{Int16},1)),Complex{Int16})
-@assert Complex(1,2)+1 == Complex(2,2)
-@assert 0.7 < real(sqrt(Complex(0,1))) < 0.707107
+@assert is(typeof(convert(ComplexPair{Int16},1)),ComplexPair{Int16})
+@assert ComplexPair(1,2)+1 == ComplexPair(2,2)
+@assert 0.7 < real(sqrt(ComplexPair(0,1))) < 0.707107
 
 @assert parse_int(Int32,"z",36) == 35
 @assert parse_bin("0") == 0

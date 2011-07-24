@@ -17,8 +17,9 @@
 // with MEMDEBUG, every object is allocated explicitly with malloc, and
 // filled with 0xbb before being freed.
 //#define MEMDEBUG
+//#define MEMPROFILE
 
-#define GC_PAGE_SZ (4096*sizeof(void*))//bytes
+#define GC_PAGE_SZ (2048*sizeof(void*))//bytes
 
 typedef struct _gcpage_t {
     union {
@@ -49,7 +50,7 @@ typedef struct _pool_t {
 
 typedef struct _bigval_t {
     struct _bigval_t *next;
-#ifdef MEMDEBUG
+#if defined(MEMDEBUG) || defined(MEMPROFILE)
     union {
         size_t sz;
         char _pad[8];
@@ -67,7 +68,7 @@ typedef struct _bigval_t {
     char _data[1];
 } bigval_t;
 
-#ifdef MEMDEBUG
+#if defined(MEMDEBUG) || defined(MEMPROFILE)
 # ifdef __LP64__
 #  define BVOFFS 3
 # else
@@ -85,7 +86,7 @@ typedef struct _bigval_t {
 
 static bigval_t *big_objects = NULL;
 
-#define N_POOLS 48
+#define N_POOLS 42
 static pool_t pools[N_POOLS];
 
 static size_t allocd_bytes = 0;
@@ -199,14 +200,15 @@ htable_t *jl_gc_get_finalizer_table()
 static int szclass(size_t sz)
 {
     if     (sz <=    8) return 0;
-    if     (sz <=  100) return ((sz+3)/4)-2;
+    if     (sz <=   56) return ((sz+3)/4) - 2;
+    if     (sz <=   96) return ((sz+7)/8) + 5;
     if     (sz <=  512) {
-        if (sz <=  256) return ((sz+15)-112)/16 + 24;
-        else            return ((sz+31)-288)/32 + 34;
+        if (sz <=  256) return ((sz+15)-112)/16 + 18;
+        else            return ((sz+31)-288)/32 + 28;
     }
-    if     (sz <= 1024) return ((sz+127)-640)/128 + 42;
-    if     (sz <= 1536) return 46;
-    return 47;
+    if     (sz <= 1024) return ((sz+127)-640)/128 + 36;
+    if     (sz <= 1536) return 40;
+    return 41;
 }
 
 static void *alloc_big(size_t sz, int isobj)
@@ -215,7 +217,7 @@ static void *alloc_big(size_t sz, int isobj)
     bigval_t *v = (bigval_t*)malloc(sz + BVOFFS*sizeof(void*));
     if (v == NULL)
         jl_raise(jl_memory_exception);
-#ifdef MEMDEBUG
+#if defined(MEMDEBUG) || defined(MEMPROFILE)
     v->sz = sz;
 #endif
     v->next = big_objects;
@@ -228,7 +230,7 @@ static void *alloc_big(size_t sz, int isobj)
 void jl_gc_acquire_buffer(void *b)
 {
     bigval_t *v = (bigval_t*)(((void**)b)-BVOFFS);
-#ifdef MEMDEBUG
+#if defined(MEMDEBUG) || defined(MEMPROFILE)
     v->sz = 0;  // ???
 #endif
     v->next = big_objects;
@@ -256,7 +258,6 @@ static void sweep_big()
         else {
             *pv = nxt;
 #ifdef MEMDEBUG
-            size_t thesz = v->sz;
             memset(v, 0xbb, v->sz+BVOFFS*sizeof(void*));
 #endif
             free(v);
@@ -449,12 +450,11 @@ static void gc_markval_(jl_value_t *v)
     if (vtt == (jl_value_t*)jl_struct_kind && 
         ((jl_struct_type_t*)(vt))->name == jl_array_typename) {
         jl_array_t *a = (jl_array_t*)v;
-        if (a->dims) GC_Markval(a->dims);
         int ndims = jl_array_ndims(a);
-        int ndimwords = (ndims > 3 ? (ndims-3) : 0);
+        int ndimwords = (ndims > 2 ? (ndims-2) : 0);
 #ifndef __LP64__
-        // on 32-bit, ndimwords must be even to preserve 8-byte alignment
-        ndimwords = (ndimwords+1)&-2;
+        // on 32-bit, ndimwords must be odd to preserve 8-byte alignment
+        ndimwords += (~ndimwords)&1;
 #endif
         if (a->data && a->data != (&a->_space[0] + ndimwords*sizeof(size_t))) {
             if (ndims == 1)
@@ -654,12 +654,21 @@ void jl_gc_disable()
 
 int jl_gc_is_enabled() { return is_gc_enabled; }
 
+#if defined(MEMPROFILE)
+static void all_pool_stats();
+static void big_obj_stats();
+#endif
+
 void jl_gc_collect()
 {
     allocd_bytes = 0;
     if (is_gc_enabled) {
         JL_SIGATOMIC_BEGIN();
         gc_mark();
+#if defined(MEMPROFILE)
+        all_pool_stats();
+        big_obj_stats();
+#endif
         sweep_weak_refs();
         gc_sweep();
         run_finalizers();
@@ -751,7 +760,7 @@ void *alloc_4w()
 void jl_gc_init()
 {
     int szc[N_POOLS] = { 8, 12, 16, 20, 24, 28, 32, 36, 40, 44, 48, 52, 56,
-                         60, 64, 68, 72, 76, 80, 84, 88, 92, 96, 100,  //#=24
+                         64, 72, 80, 88, 96, //#=18
 
                          112, 128, 144, 160, 176, 192, 208, 224, 240, 256,
 
@@ -772,3 +781,70 @@ void jl_gc_init()
     arraylist_new(&preserved_values, 0);
     arraylist_new(&weak_refs, 0);
 }
+
+#if defined(MEMPROFILE)
+static size_t pool_stats(pool_t *p, size_t *pwaste)
+{
+    gcval_t *v;
+    gcpage_t *pg = p->pages;
+    size_t osize = p->osize;
+    size_t nused=0, nfree=0, npgs=0;
+
+    while (pg != NULL) {
+        npgs++;
+        char *lim = (char*)pg + GC_PAGE_SZ - osize;
+        v = (gcval_t*)&pg->data[0];
+        while ((char*)v <= lim) {
+            if (!v->marked) {
+                nfree++;
+            }
+            else {
+                nused++;
+            }
+            v = (gcval_t*)((char*)v + osize);
+        }
+        gcpage_t *nextpg = pg->next;
+        pg = nextpg;
+    }
+    *pwaste = npgs*GC_PAGE_SZ - (nused*p->osize);
+    ios_printf(ios_stdout,
+               "%4d : %7d/%7d objects, %5d pages, %8d bytes, %8d waste\n",
+               p->osize,
+               nused,
+               nused+nfree,
+               npgs,
+               nused*p->osize,
+               *pwaste);
+    return nused*p->osize;
+}
+
+static void all_pool_stats()
+{
+    int i;
+    size_t nb=0, w, tw=0;
+    for(i=0; i < N_POOLS; i++) {
+        nb += pool_stats(&pools[i], &w);
+        tw += w;
+    }
+    ios_printf(ios_stdout, "%d total allocated, %d total fragments\n",
+               nb, tw);
+}
+
+static void big_obj_stats()
+{
+    bigval_t *v = big_objects;
+    size_t nused=0, nbytes=0;
+    while (v != NULL) {
+        if (v->isobj && (bigval_word0(v)&1)) {
+            nused++;
+            nbytes += v->sz;
+        }
+        else if (!v->isobj && v->marked) {
+            nused++;
+            nbytes += v->sz;
+        }
+        v = v->next;
+    }
+    ios_printf(ios_stdout, "%d bytes in %d large objects\n", nbytes, nused);
+}
+#endif //MEMPROFILE

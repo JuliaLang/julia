@@ -11,12 +11,13 @@ let i = 2
     global ser_tag, deser_tag
     for t = {Symbol, Int8, Uint8, Int16, Uint16, Int32, Uint32,
              Int64, Uint64, Float32, Float64, Char, Ptr,
-             AbstractKind, UnionKind, BitsKind, StructKind, FuncKind,
+             AbstractKind, UnionKind, BitsKind, CompositeKind, FuncKind,
              Tuple, Array, Expr, LongSymbol, LongTuple, LongExpr,
+             LineNumberNode, SymbolNode, LabelNode,
 
              (), Bool, Any, :Any, :Array, :TypeVar, :FuncKind, :Box,
              :lambda, :vinf, :locals, :body, :return, :call, symbol("::"),
-             :null, :goto, :gotoifnot, :label, :symbol, :string, :T, :S,
+             :null, :goto, :gotoifnot, :string, :T, :S,
              :a, :b, :c, :d, :e, :f, :g, :h, :i, :j, :k, :l, :m, :n, :o,
              :p, :q, :r, :s, :t, :u, :v, :w, :x, :y, :z,
              false, true, nothing, 0, 1, 2, 3, 4}
@@ -163,8 +164,8 @@ function serialize(s, x)
             serialize(s, t.parameters)
         end
         write(s, x)
-    elseif isa(t,StructKind)
-        writetag(s, StructKind)
+    elseif isa(t,CompositeKind)
+        writetag(s, CompositeKind)
         serialize(s, t.name.name)
         serialize(s, t.parameters)
         for n = t.names
@@ -294,7 +295,7 @@ function deserialize(s, ::Type{AbstractKind})
     apply_type(eval(name), params...)
 end
 
-function deserialize(s, ::Type{StructKind})
+function deserialize(s, ::Type{CompositeKind})
     name = deserialize(s)::Symbol
     params = force(deserialize(s))
     t = apply_type(eval(name), params...)
@@ -311,7 +312,7 @@ end
 
 # default structure deserializer
 function deserialize(s, t::Type)
-    @assert (isa(t,StructKind))
+    @assert (isa(t,CompositeKind))
     nf = length(t.names)
     if nf == 0
         return ccall(:jl_new_struct, Any, (Any,Any...), t)

@@ -28,8 +28,9 @@
 #include "timefuncs.h"
 
 //#define MEMDEBUG
+//#define MEMPROFILE
 
-#ifdef MEMDEBUG
+#if defined(MEMDEBUG) || defined(MEMPROFILE)
 # ifdef __LP64__
 #  define BVOFFS 3
 # else

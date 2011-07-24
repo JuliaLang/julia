@@ -39,27 +39,20 @@ typedef struct {
 
 typedef struct {
     JL_STRUCT_TYPE
-    jl_tuple_t *dims;
     void *data;
     size_t length;
-    union {
-        struct {
-            uint16_t ndims;
-            uint16_t elsize;
-        };
-        void *_pad_word;
-    };
+    uint16_t ndims;
+    uint16_t elsize;
+    uint32_t offset;  // for 1-d only. does not need to get big.
     size_t nrows;
     union {
         struct {
             // 1d
             size_t maxsize;
-            size_t offset;
         };
         struct {
             // Nd
             size_t ncols;
-            size_t n3;
         };
     };
     union {
@@ -313,6 +306,9 @@ extern jl_bits_type_t *jl_pointer_void_type;
 extern jl_type_t *jl_array_uint8_type;
 extern jl_type_t *jl_array_any_type;
 extern DLLEXPORT jl_struct_type_t *jl_expr_type;
+extern jl_struct_type_t *jl_symbolnode_type;
+extern jl_struct_type_t *jl_linenumbernode_type;
+extern jl_struct_type_t *jl_labelnode_type;
 extern jl_bits_type_t *jl_intrinsic_type;
 extern jl_struct_type_t *jl_methtable_type;
 extern jl_struct_type_t *jl_task_type;
@@ -352,7 +348,7 @@ extern jl_sym_t *lambda_sym;  extern jl_sym_t *assign_sym;
 extern jl_sym_t *null_sym;    extern jl_sym_t *body_sym;
 extern jl_sym_t *isbound_sym; extern jl_sym_t *macro_sym;
 extern jl_sym_t *locals_sym;  extern jl_sym_t *colons_sym;
-extern jl_sym_t *symbol_sym;  extern jl_sym_t *unexpanded_sym;
+extern jl_sym_t *unexpanded_sym;
 extern jl_sym_t *Any_sym;     extern jl_sym_t *method_sym;
 extern jl_sym_t *enter_sym;   extern jl_sym_t *leave_sym;
 extern jl_sym_t *exc_sym;     extern jl_sym_t *new_sym;
@@ -388,6 +384,13 @@ void *allocb_permanent(size_t sz);
 
 #define jl_exprarg(e,n) jl_cellref(((jl_expr_t*)(e))->args,n)
 
+#define jl_fieldref(s,i) (((jl_value_t**)(s))[1+(i)])
+
+#define jl_symbolnode_sym(s) ((jl_sym_t*)jl_fieldref(s,0))
+#define jl_symbolnode_type(s) (jl_fieldref(s,1))
+#define jl_linenode_line(x) jl_unbox_long(jl_fieldref(x,0))
+#define jl_labelnode_label(x) jl_unbox_long(jl_fieldref(x,0))
+
 #define jl_tparam0(t) jl_tupleref(((jl_tag_type_t*)(t))->parameters, 0)
 #define jl_tparam1(t) jl_tupleref(((jl_tag_type_t*)(t))->parameters, 1)
 
@@ -416,6 +419,9 @@ void *allocb_permanent(size_t sz);
 #define jl_is_bool(v)        jl_typeis(v,jl_bool_type)
 #define jl_is_symbol(v)      jl_typeis(v,jl_sym_type)
 #define jl_is_expr(v)        jl_typeis(v,jl_expr_type)
+#define jl_is_symbolnode(v)  jl_typeis(v,jl_symbolnode_type)
+#define jl_is_labelnode(v)   jl_typeis(v,jl_labelnode_type)
+#define jl_is_linenode(v)    jl_typeis(v,jl_linenumbernode_type)
 #define jl_is_lambda_info(v) jl_typeis(v,jl_lambda_info_type)
 #define jl_is_mtable(v)      jl_typeis(v,jl_methtable_type)
 #define jl_is_task(v)        jl_typeis(v,jl_task_type)
@@ -429,8 +435,9 @@ void *allocb_permanent(size_t sz);
 #define jl_is_pointer(v)     jl_is_cpointer_type(jl_typeof(v))
 #define jl_is_gf(f)          (((jl_function_t*)(f))->fptr==jl_apply_generic)
 
-#define jl_array_len(a)   (((jl_array_t*)a)->length)
-#define jl_array_data(a)  ((void*)((jl_array_t*)a)->data)
+#define jl_array_len(a)   (((jl_array_t*)(a))->length)
+#define jl_array_data(a)  ((void*)((jl_array_t*)(a))->data)
+#define jl_array_dim(a,i) ((&((jl_array_t*)(a))->nrows)[i])
 #define jl_array_ndims(a) ((int32_t)(((jl_array_t*)a)->ndims))
 #define jl_cell_data(a)   ((jl_value_t**)((jl_array_t*)a)->data)
 #define jl_string_data(s) ((char*)((jl_array_t*)((jl_value_t**)(s))[1])->data)
@@ -595,6 +602,7 @@ void *jl_unbox_pointer(jl_value_t *v);
 
 // arrays
 DLLEXPORT jl_array_t *jl_new_array(jl_type_t *atype, jl_tuple_t *dims);
+jl_array_t *jl_new_array_(jl_type_t *atype, uint32_t ndims, size_t *dims);
 DLLEXPORT jl_array_t *jl_alloc_array_1d(jl_type_t *atype, size_t nr);
 DLLEXPORT jl_array_t *jl_alloc_array_2d(jl_type_t *atype, size_t nr, size_t nc);
 DLLEXPORT jl_array_t *jl_pchar_to_array(char *str, size_t len);
@@ -603,7 +611,6 @@ DLLEXPORT jl_value_t *jl_pchar_to_string(char *str, size_t len);
 DLLEXPORT jl_value_t *jl_cstr_to_string(char *str);
 DLLEXPORT jl_value_t *jl_array_to_string(jl_array_t *a);
 DLLEXPORT jl_array_t *jl_alloc_cell_1d(size_t n);
-jl_tuple_t *jl_construct_array_size(jl_array_t *a, size_t nd);
 DLLEXPORT jl_value_t *jl_arrayref(jl_array_t *a, size_t i);  // 0-indexed
 DLLEXPORT void jl_arrayset(jl_array_t *a, size_t i, jl_value_t *v);  // 0-indexed
 DLLEXPORT void *jl_array_ptr(jl_array_t *a);
@@ -871,6 +878,7 @@ extern DLLEXPORT jl_value_t *jl_exception_in_transit;
 jl_task_t *jl_new_task(jl_function_t *start, size_t ssize);
 jl_value_t *jl_switchto(jl_task_t *t, jl_value_t *arg);
 DLLEXPORT void jl_raise(jl_value_t *e);
+DLLEXPORT void jl_register_toplevel_eh();
 
 DLLEXPORT jl_value_t *jl_current_output_stream_obj();
 DLLEXPORT ios_t *jl_current_output_stream();

@@ -40,9 +40,9 @@ ptrint(x) = convert(PtrInt, x)
 ## limited pointer arithmetic & comparison ##
 
 isequal(x::Ptr, y::Ptr) = uint(x) == uint(y)
- -(x::Ptr, y::Ptr) = uint(x) - uint(y)
+-(x::Ptr, y::Ptr) = uint(x) - uint(y)
 
-+{T}(x::Ptr{T}, y::Int) = pointer(T, uint(x) + uint(y))
--{T}(x::Ptr{T}, y::Int) = pointer(T, uint(x) - uint(y))
++{T}(x::Ptr{T}, y::Int) = pointer(T, uint(x) + ptrint(y))
+-{T}(x::Ptr{T}, y::Int) = pointer(T, uint(x) - ptrint(y))
 
 +(x::Int, y::Ptr) = y + x
