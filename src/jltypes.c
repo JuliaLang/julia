@@ -552,7 +552,6 @@ static jl_value_t *meet_tvar(jl_tvar_t *tv, jl_value_t *ty)
     if (jl_subtype((jl_value_t*)tv->lb, ty, 0)) {
         if (jl_is_leaf_type(ty) || jl_is_long(ty))
             return ty;
-        assert(ty != (jl_value_t*)jl_bottom_type);
         return (jl_value_t*)jl_new_typevar(jl_symbol("_"), tv->lb, ty);
     }
     return (jl_value_t*)jl_bottom_type;

@@ -631,9 +631,15 @@ static Value *emit_tuplelen(Value *t)
 
 static Value *emit_arraysize(Value *t, Value *dim)
 {
+    int o;
+#ifdef __LP64__
+    o = 3;
+#else
+    o = 4;
+#endif
     Value *dbits =
         emit_nthptr(t, builder.CreateAdd(dim,
-                                         ConstantInt::get(dim->getType(), 3)));
+                                         ConstantInt::get(dim->getType(), o)));
 #ifdef __LP64__
     return builder.CreatePtrToInt(dbits, T_int64);
 #else
