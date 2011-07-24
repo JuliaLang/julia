@@ -48,6 +48,9 @@
 		<script>
 			// keep track of terminal history
 			var terminal_data = "";
+			var input_history = [];
+			var input_history_current = [""];
+			var input_history_id = 0;
 			var julia_path = "/home/stephan/julia/";
 
 			// keep track of the last time a request was sent
@@ -108,30 +111,66 @@
 			// called on page load
 			$(document).ready(function()
 			{
-				// hook mouse events
-				$("#terminal-form").click(function(evt) { $("#terminal-input").focus(); } );
-
 				// initial terminal content
 				$("#terminal").html("Spawning Julia instance...<br /><br />");
+
+				// hook mouse click events
+				$("#terminal-form").click(function(evt) { $("#terminal-input").focus(); } );
+
+				// hook up and down arrow keys for input history
+				$("#terminal-input").keydown(function(evt)
+				{
+					// determine which key was pressed
+					switch (evt.keyCode)
+					{
+						case 38:
+							// user pressed the up key
+							input_history_current[input_history_id] = $("#terminal-input").val();
+							input_history_id -= 1;
+							if (input_history_id < 0)
+								input_history_id = 0;
+							$("#terminal-input").val(input_history_current[input_history_id]);
+							return false;
+						case 40:
+							// user pressed the down key
+							input_history_current[input_history_id] = $("#terminal-input").val();
+							input_history_id += 1;
+							if (input_history_id > input_history_current.length-1)
+								input_history_id = input_history_current.length-1;
+							$("#terminal-input").val(input_history_current[input_history_id]);
+							return false;
+					}
+				});
 				
 				// hook the submit event of the form
 				$("#terminal-form").submit(function(evt)
 				{
-					// send the input to the server via AJAX
-					$.ajax({
-						type: "POST",
-						url: "/repl.scgi",
-						data: {"terminal-input": $("#terminal-input").val()},
-						success: callback,
-						dataType: "text",
-						cache: false
-					});
+					// get the input line
+					var input = $("#terminal-input").val();
+					if (input != "")
+					{
+						// send the input to the server via AJAX
+						$.ajax({
+							type: "POST",
+							url: "/repl.scgi",
+							data: {"terminal-input": input},
+							success: callback,
+							dataType: "text",
+							cache: false
+						});
 
-					// set the time of the last request
-					last_request_time = new Date();
+						// input history
+						input_history.push(input);
+						input_history_current = input_history.slice(0);
+						input_history_current.push("");
+						input_history_id = input_history_current.length-1;
 
-					// clear the input box
-					$("#terminal-input").val("");
+						// set the time of the last request
+						last_request_time = new Date();
+
+						// clear the input box
+						$("#terminal-input").val("");
+					}
 
 					// don't let the form redirect to any other pages
 					return false;
