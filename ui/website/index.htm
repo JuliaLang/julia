@@ -48,24 +48,29 @@
 		<script>
 			// keep track of terminal history
 			var terminal_data = "";
+			var julia_path = "/home/stephan/julia/";
 
 			// keep track of the last time a request was sent
 			var last_request_time = new Date();
+
+			// add to the terminal
+			function add_to_terminal(data)
+			{
+				terminal_data += data;
+				terminal_data = terminal_data.replace(new RegExp(julia_path, 'g'), "");
+				if (terminal_data.substring(terminal_data.length-18) == "<br />julia>&nbsp;")
+					$("#terminal").html(terminal_data.substring(0, terminal_data.length-18));
+				else
+					$("#terminal").html(terminal_data);
+				$("#terminal").prop("scrollTop", $("#terminal").prop("scrollHeight"));
+			}
 
 			// called once a secnd
 			function watchdog()
 			{
 				// check the watchdog
 				if ((new Date())-last_request_time > 5000)
-				{
-					// show a "connection lost" message
-					terminal_data += "<br /><br />The connection to the server was lost.";
-				if (terminal_data.substring(terminal_data.length-18) == "<br />julia>&nbsp;")
-					$("#terminal").html(terminal_data.substring(0, terminal_data.length-18));
-				else
-					$("#terminal").html(terminal_data);
-					$("#terminal").prop("scrollTop", $("#terminal").prop("scrollHeight"));
-				}
+					add_to_terminal("<br /><br />The connection to the server was lost.");
 				else
 				{
 					// run the watchdog again
@@ -94,14 +99,7 @@
 			{
 				// add new server data to the terminal
 				if (data != "")
-				{
-					terminal_data += data;
-					if (terminal_data.substring(terminal_data.length-18) == "<br />julia>&nbsp;")
-						$("#terminal").html(terminal_data.substring(0, terminal_data.length-18));
-					else
-						$("#terminal").html(terminal_data);
-					$("#terminal").prop("scrollTop", $("#terminal").prop("scrollHeight"));
-				}
+					add_to_terminal(data);
 
 				// poll the server again
 				setTimeout(poll, 500);
