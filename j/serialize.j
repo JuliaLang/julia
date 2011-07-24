@@ -13,10 +13,11 @@ let i = 2
              Int64, Uint64, Float32, Float64, Char, Ptr,
              AbstractKind, UnionKind, BitsKind, CompositeKind, FuncKind,
              Tuple, Array, Expr, LongSymbol, LongTuple, LongExpr,
+             LineNumberNode, SymbolNode, LabelNode,
 
              (), Bool, Any, :Any, :Array, :TypeVar, :FuncKind, :Box,
              :lambda, :vinf, :locals, :body, :return, :call, symbol("::"),
-             :null, :goto, :gotoifnot, :label, :symbol, :string, :T, :S,
+             :null, :goto, :gotoifnot, :string, :T, :S,
              :a, :b, :c, :d, :e, :f, :g, :h, :i, :j, :k, :l, :m, :n, :o,
              :p, :q, :r, :s, :t, :u, :v, :w, :x, :y, :z,
              false, true, nothing, 0, 1, 2, 3, 4}

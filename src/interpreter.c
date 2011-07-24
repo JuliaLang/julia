@@ -60,6 +60,9 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl)
             jl_errorf("%s not defined", ((jl_sym_t*)e)->name);
         return *bp;
     }
+    if (jl_is_symbolnode(e)) {
+        return eval((jl_value_t*)jl_symbolnode_sym(e), locals, nl);
+    }
     if (!jl_is_expr(e)) {
         if (jl_is_lambda_info(e)) {
             return jl_new_closure_internal((jl_lambda_info_t*)e,
@@ -96,9 +99,6 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl)
         if (*bp == NULL)
             jl_errorf("%s not defined", ((jl_sym_t*)args[0])->name);
         return *bp;
-    }
-    else if (ex->head == symbol_sym) {
-        return eval(jl_exprarg(ex,0), locals, nl);
     }
     else if (ex->head == new_sym) {
         jl_value_t *thetype = eval(args[0], locals, nl);
@@ -155,10 +155,10 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl)
 static int label_idx(jl_value_t *tgt, jl_array_t *stmts)
 {
     size_t j;
+    long ltgt = jl_unbox_long(tgt);
     for(j=0; j < stmts->length; j++) {
         jl_value_t *l = jl_cellref(stmts,j);
-        if (jl_is_expr(l) && ((jl_expr_t*)l)->head==label_sym &&
-            jl_exprarg(l,0)==tgt)
+        if (jl_is_labelnode(l) && jl_labelnode_label(l)==ltgt)
             break;
     }
     assert(j < stmts->length);
@@ -177,9 +177,7 @@ static jl_value_t *eval_body(jl_array_t *stmts, jl_value_t **locals, size_t nl,
         jl_value_t *stmt = jl_cellref(stmts,i);
         if (jl_is_expr(stmt)) {
             jl_sym_t *head = ((jl_expr_t*)stmt)->head;
-            if (head == label_sym) {
-            }
-            else if (head == goto_sym) {
+            if (head == goto_sym) {
                 i = label_idx(jl_exprarg(stmt,0), stmts);
                 continue;
             }

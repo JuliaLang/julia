@@ -760,7 +760,7 @@ end
 function findlabel(body, l)
     for i=1:length(body)
         b = body[i]
-        if isa(b,Expr) && is(b.head,:label) && b.args[1]==l
+        if isa(b,LabelNode) && b.label==l
             return i
         end
     end
@@ -979,7 +979,7 @@ end
 function eval_annotate(e::Expr, vtypes, sv, decls)
     head = e.head
     if is(head,:quote) || is(head,:top) || is(head,:goto) ||
-        is(head,:label) || is(head,:static_typeof) || is(head,:line)
+        is(head,:static_typeof) || is(head,:line)
         return e
     elseif is(head,:gotoifnot) || is(head,:return)
         e.type = Any
@@ -988,7 +988,7 @@ function eval_annotate(e::Expr, vtypes, sv, decls)
         s = e.args[1]
         # assignment LHS not subject to all-same-type variable checking,
         # but the type of the RHS counts as one of its types.
-        e.args[1] = Expr(:symbol, {s}, abstract_eval(s, vtypes, sv))
+        e.args[1] = SymbolNode(s, abstract_eval(s, vtypes, sv))
         e.args[2] = eval_annotate(e.args[2], vtypes, sv, decls)
         # TODO: if this def does not reach any uses, maybe don't do this
         record_var_type(s, exprtype(e.args[2]), decls)
@@ -1003,7 +1003,7 @@ end
 function eval_annotate(e::Symbol, vtypes, sv, decls)
     t = abstract_eval(e, vtypes, sv)
     record_var_type(e, t, decls)
-    Expr(:symbol, {e}, t)
+    SymbolNode(e, t)
 end
 
 eval_annotate(s, vtypes, sv, decls) = s
@@ -1030,22 +1030,23 @@ end
 function sym_replace(e::Expr, from, to)
     head = e.head
     if is(head,:quote) || is(head,:top) || is(head,:goto) ||
-        is(head,:label) || is(head,:line)
-        return e
-    end
-    if is(head,:symbol)
-        s = e.args[1]
-        for i=1:length(from)
-            if is(from[i],s)
-                return to[i]
-            end
-        end
+        is(head,:line)
         return e
     end
     for i=1:length(e.args)
         e.args[i] = sym_replace(e.args[i], from, to)
     end
     e
+end
+
+function sym_replace(e::SymbolNode, from, to)
+    s = e.name
+    for i=1:length(from)
+        if is(from[i],s)
+            return to[i]
+        end
+    end
+    return e
 end
 
 function sym_replace(s::Symbol, from, to)
@@ -1061,8 +1062,7 @@ sym_replace(x, from, to) = x
 
 # count occurrences up to n+1
 function occurs_more(e::Expr, pred, n)
-    if is(e.head,:quote) || is(e.head,:top) || is(e.head,:goto) ||
-        is(e.head,:label)
+    if is(e.head,:quote) || is(e.head,:top) || is(e.head,:goto)
         return 0
     end
     c = 0
@@ -1075,6 +1075,7 @@ function occurs_more(e::Expr, pred, n)
     c
 end
 
+occurs_more(e::SymbolNode, pred, n) = occurs_more(e.name, pred, n)
 occurs_more(e, pred, n) = pred(e) ? 1 : 0
 
 function contains_is(arr, item)
@@ -1089,6 +1090,8 @@ end
 function exprtype(x::ANY)
     if isa(x,Expr)
         return x.type
+    elseif isa(x,SymbolNode)
+        return x.type
     elseif isa(x,Symbol)
         return Any
     elseif isa(x,Type)
@@ -1101,7 +1104,7 @@ end
 function without_linenums(a::Array{Any,1})
     l = {}
     for x = a
-        if isa(x,Expr) && is(x.head,:line)
+        if (isa(x,Expr) && is(x.head,:line)) || isa(x,LineNumberNode)
         else
             push(l, x)
         end
@@ -1185,7 +1188,7 @@ function inlineable(f, e::Expr, vars)
             # ok for argument to occur more than once if the actual argument
             # is a symbol or constant
             if !isa(aei,Symbol) && !isa(aei,Number) &&
-                !(isa(aei,Expr) && is(aei.head,:symbol))
+               !isa(aei,SymbolNode)
                 return NF
             end
         elseif occ == 0
@@ -1231,8 +1234,7 @@ function inlining_pass(e::Expr, vars)
         return e
     end
     arg1 = e.args[1]
-    if is(e.head,:call) && isa(arg1,Expr) &&
-       is(arg1.head,:symbol) && is(arg1.args[1],:ccall)
+    if is(e.head,:call) && isa(arg1,SymbolNode) && is(arg1.name, :ccall)
         if length(e.args)>1
             e.args[2] = remove_call1(e.args[2])
         end
@@ -1348,8 +1350,7 @@ function tuple_elim_pass(ast::Expr)
                                    isequal(rhs.args[2],tupname)
                                     r = vals[k]
                                     if isa(r,Symbol)
-                                        r = Expr(:symbol, {r},
-                                                 exprtype(tup[k+1]))
+                                        r = SymbolNode(r, exprtype(tup[k+1]))
                                     end
                                     stmt.args[2] = r
                                     k += 1

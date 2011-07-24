@@ -331,8 +331,8 @@ void jl_load_file_expr(char *fname, jl_value_t *ast)
         for(i=0; i < b->length; i++) {
             // process toplevel form
             form = jl_cellref(b, i);
-            if (jl_is_expr(form) && ((jl_expr_t*)form)->head == line_sym) {
-                lineno = jl_unbox_long(jl_exprarg(form, 0));
+            if (jl_is_linenode(form)) {
+                lineno = jl_linenode_line(form);
             }
             else {
                 if (jl_is_expr(form) &&
@@ -427,7 +427,7 @@ JL_CALLABLE(jl_f_top_eval)
     if (!jl_is_expr(e))
         return jl_interpret_toplevel_expr(e);
     jl_expr_t *ex = (jl_expr_t*)e;
-    if (ex->head == symbol_sym || ex->head == top_sym ||
+    if (ex->head == top_sym ||
         ex->head == quote_sym || ex->head == null_sym ||
         ex->head == isbound_sym || ex->head == error_sym) {
         // expression types simple enough not to need expansion
@@ -1384,6 +1384,9 @@ void jl_init_primitives()
     add_builtin("Array", (jl_value_t*)jl_array_type);
 
     add_builtin("Expr", (jl_value_t*)jl_expr_type);
+    add_builtin("SymbolNode", (jl_value_t*)jl_symbolnode_type);
+    add_builtin("LineNumberNode", (jl_value_t*)jl_linenumbernode_type);
+    add_builtin("LabelNode", (jl_value_t*)jl_labelnode_type);
     add_builtin("Ptr", (jl_value_t*)jl_pointer_type);
     add_builtin("LambdaStaticData", (jl_value_t*)jl_lambda_info_type);
     add_builtin("Box", (jl_value_t*)jl_box_type);

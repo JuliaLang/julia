@@ -25,6 +25,18 @@ end
 
 show_comma_array(itr, o, c) = show_delim_array(itr, o, ',', c)
 
+function show_expr_type(ty)
+    if !is(ty, Any)
+        if isa(ty, FuncKind)
+            print("::F")
+        elseif is(ty, IntrinsicFunction)
+            print("::I")
+        else
+            print("::$ty")
+        end
+    end
+end
+
 function show(e::Expr)
     hd = e.head
     if is(hd,:call)
@@ -54,16 +66,12 @@ function show(e::Expr)
         print("goto $(e.args[1])")
     elseif is(hd,:gotoifnot)
         print("unless $(e.args[1]) goto $(e.args[2])")
-    elseif is(hd,:label)
-        print("$(e.args[1]): ")
     elseif is(hd,:return)
         print("return $(e.args[1])")
     elseif is(hd,:string)
         show(e.args[1])
     elseif is(hd,symbol("::"))
         print("$(e.args[1])::$(e.args[2])")
-    elseif is(hd,:symbol)
-        print(e.args[1])
     elseif is(hd,:body) || is(hd,:block)
         print("\nbegin\n")
         for a=e.args
@@ -78,15 +86,20 @@ function show(e::Expr)
         print(hd)
         show_comma_array(e.args,'(',')')
     end
-    if !is(e.type, Any)
-        if isa(e.type, FuncKind)
-            print("::F")
-        elseif is(e.type, IntrinsicFunction)
-            print("::I")
-        else
-            print("::$(e.type)")
-        end
-    end
+    show_expr_type(e.type)
+end
+
+function show(e::SymbolNode)
+    print(e.name)
+    show_expr_type(e.type)
+end
+
+function show(e::LineNumberNode)
+    print("line($(e.line))")
+end
+
+function show(e::LabelNode)
+    print("$(e.label): ")
 end
 
 function show(e::TypeError)

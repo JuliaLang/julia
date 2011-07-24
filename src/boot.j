@@ -68,6 +68,19 @@
 #    type::Any
 #end
 
+#type SymbolNode
+#    name::Symbol
+#    type
+#end
+
+#type LineNumberNode
+#    line::Long
+#end
+
+#type LabelNode
+#    label::Long
+#end
+
 #type LambdaStaticData
 #    ast::Expr
 #    sparams::Tuple

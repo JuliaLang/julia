@@ -14,6 +14,7 @@ expr(hd::Symbol, args::Array{Any,1}) = Expr(hd, args, Any)
 copy(e::Expr) = Expr(e.head, copy(e.args), e.type)
 
 isequal(x::Expr, y::Expr) = (is(x.head,y.head) && isequal(x.args,y.args))
+isequal(x::SymbolNode, y::SymbolNode) = is(x.name,y.name)
 
 ## misc syntax ##
 

@@ -438,8 +438,8 @@ static Value *globalvar_binding_pointer(jl_sym_t *s, jl_codectx_t *ctx)
 // yields a jl_value_t** giving the binding location of a variable
 static Value *var_binding_pointer(jl_sym_t *s, jl_codectx_t *ctx)
 {
-    if (jl_is_expr(s) && ((jl_expr_t*)s)->head == symbol_sym)
-        s = (jl_sym_t*)jl_exprarg(s,0);
+    if (jl_is_symbolnode(s))
+        s = jl_symbolnode_sym(s);
     assert(jl_is_symbol(s));
     std::map<std::string,int>::iterator it = ctx->closureEnv->find(s->name);
     if (it != ctx->closureEnv->end()) {
@@ -533,9 +533,8 @@ static Value *emit_lambda_closure(jl_value_t *expr, jl_codectx_t *ctx)
 
 static bool expr_is_symbol(jl_value_t *e)
 {
-    return (jl_is_symbol(e) || (jl_is_expr(e) &&
-                                (((jl_expr_t*)e)->head==symbol_sym ||
-                                 ((jl_expr_t*)e)->head==top_sym)));
+    return (jl_is_symbol(e) || jl_is_symbolnode(e) ||
+            (jl_is_expr(e) && ((jl_expr_t*)e)->head==top_sym));
 }
 
 static size_t max_arg_depth(jl_value_t *expr)
@@ -591,6 +590,8 @@ static jl_value_t *expr_type(jl_value_t *e)
 {
     if (jl_is_expr(e))
         return ((jl_expr_t*)e)->etype;
+    if (jl_is_symbolnode(e))
+        return jl_symbolnode_type(e);
     if (jl_is_symbol(e))
         return (jl_value_t*)jl_any_type;
     if (jl_is_lambda_info(e))
@@ -947,8 +948,8 @@ static Value *emit_call(jl_value_t **args, size_t arglen, jl_codectx_t *ctx)
     jl_value_t *hdtype;
     bool headIsGlobal = false;
 
-    if (jl_is_expr(a0) && ((jl_expr_t*)a0)->head==symbol_sym) {
-        a0 = jl_exprarg(a0,0);
+    if (jl_is_symbolnode(a0)) {
+        a0 = (jl_value_t*)jl_symbolnode_sym(a0);
     }
     if (jl_is_symbol(a0) && is_global((jl_sym_t*)a0, ctx) &&
         jl_boundp(ctx->module, (jl_sym_t*)a0)) {
@@ -1035,9 +1036,8 @@ static void emit_assignment(jl_value_t *l, jl_value_t *r, jl_codectx_t *ctx)
     jl_sym_t *s = NULL;
     if (jl_is_symbol(l))
         s = (jl_sym_t*)l;
-    else if (jl_is_expr(l) &&
-             ((jl_expr_t*)l)->head == symbol_sym)
-        s = (jl_sym_t*)jl_exprarg(l,0);
+    else if (jl_is_symbolnode(l))
+        s = jl_symbolnode_sym(l);
     else
         assert(false);
     Value *bp = var_binding_pointer(s, ctx);
@@ -1077,6 +1077,25 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool value)
 {
     if (jl_is_symbol(expr)) {
         return emit_var((jl_sym_t*)expr, (jl_value_t*)jl_undef_type, ctx);
+    }
+    if (jl_is_symbolnode(expr)) {
+        return emit_var(jl_symbolnode_sym(expr),
+                        jl_symbolnode_type(expr), ctx);
+    }
+    else if (jl_is_labelnode(expr)) {
+        assert(!value);
+        int labelname = jl_labelnode_label(expr);
+        BasicBlock *bb = (*ctx->labels)[labelname];
+        assert(bb);
+        if (builder.GetInsertBlock()->getTerminator() == NULL) {
+            builder.CreateBr(bb); // all BasicBlocks must exit explicitly
+        }
+        ctx->f->getBasicBlockList().push_back(bb);
+        builder.SetInsertPoint(bb);
+        return NULL;
+    }
+    else if (jl_is_linenode(expr)) {
+        return NULL;
     }
     if (!jl_is_expr(expr)) {
         // numeric literals
@@ -1140,26 +1159,11 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool value)
         builder.CreateCondBr(isfalse, ifnot, ifso);
         builder.SetInsertPoint(ifso);
     }
-    else if (ex->head == label_sym) {
-        assert(!value);
-        int labelname = jl_unbox_long(args[0]);
-        BasicBlock *bb = (*ctx->labels)[labelname];
-        assert(bb);
-        if (builder.GetInsertBlock()->getTerminator() == NULL) {
-            builder.CreateBr(bb); // all BasicBlocks must exit explicitly
-        }
-        ctx->f->getBasicBlockList().push_back(bb);
-        builder.SetInsertPoint(bb);
-    }
 
     else if (ex->head == call_sym || ex->head == call1_sym) {
         return emit_call(args, ex->args->length, ctx);
     }
 
-    else if (ex->head == symbol_sym) {
-        assert(jl_is_symbol(args[0]));
-        return emit_var((jl_sym_t*)args[0], ex->etype, ctx);
-    }
     else if (ex->head == assign_sym) {
         emit_assignment(args[0], args[1], ctx);
         if (value) {
@@ -1178,8 +1182,8 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool value)
     }
     else if (ex->head == method_sym) {
         jl_value_t *mn;
-        if (jl_is_expr(args[0]) && ((jl_expr_t*)args[0])->head==symbol_sym) {
-            mn = jl_exprarg(args[0],0);
+        if (jl_is_symbolnode(args[0])) {
+            mn = (jl_value_t*)jl_symbolnode_sym(args[0]);
         }
         else {
             mn = args[0];
@@ -1200,9 +1204,8 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool value)
         jl_value_t *a = args[0];
         if (jl_is_symbol(a))
             sy = (jl_sym_t*)a;
-        else if (jl_is_expr(a) &&
-                 ((jl_expr_t*)a)->head == symbol_sym)
-            sy = (jl_sym_t*)jl_exprarg(a,0);
+        else if (jl_is_symbolnode(a))
+            sy = jl_symbolnode_sym(a);
         else
             assert(false);
         Value *bp = var_binding_pointer(sy, ctx);
@@ -1313,8 +1316,6 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool value)
         builder.CreateCondBr(isz, tryblk, handlr);
         builder.SetInsertPoint(tryblk);
     }
-    else if (ex->head == line_sym) {
-    }
     if (!strcmp(ex->head->name, "$")) {
         jl_error("syntax error: prefix $ outside of quote block");
     }
@@ -1323,8 +1324,6 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool value)
     }
     return NULL;
 }
-
-#define is_label(ex) (jl_is_expr(ex) && ((jl_expr_t*)ex)->head == label_sym)
 
 static bool store_unboxed_p(char *name, jl_codectx_t *ctx)
 {
@@ -1406,7 +1405,10 @@ static void emit_function(jl_lambda_info_t *lam, Function *f)
     jl_value_t *stmt = jl_cellref(stmts,0);
     std::string filename = "no file";
     int lno = -1;
-    if (jl_is_expr(stmt) && ((jl_expr_t*)stmt)->head == line_sym) {
+    if (jl_is_linenode(stmt)) {
+        lno = jl_linenode_line(stmt);
+    }
+    else if (jl_is_expr(stmt) && ((jl_expr_t*)stmt)->head == line_sym) {
         lno = jl_unbox_long(jl_exprarg(stmt, 0));
         if (((jl_expr_t*)stmt)->args->length > 1) {
             assert(jl_is_symbol(jl_exprarg(stmt, 1)));
@@ -1654,8 +1656,8 @@ static void emit_function(jl_lambda_info_t *lam, Function *f)
     BasicBlock *prev=NULL;
     for(i=0; i < stmts->length; i++) {
         jl_value_t *ex = jl_cellref(stmts,i);
-        if (is_label(ex)) {
-            int lname = jl_unbox_long(jl_exprarg(ex,0));
+        if (jl_is_labelnode(ex)) {
+            int lname = jl_labelnode_label(ex);
             if (prev != NULL) {
                 // fuse consecutive labels
                 labels[lname] = prev;
@@ -1673,12 +1675,17 @@ static void emit_function(jl_lambda_info_t *lam, Function *f)
     bool prevlabel = false;
     for(i=0; i < stmts->length; i++) {
         jl_value_t *stmt = jl_cellref(stmts,i);
-        if (jl_is_expr(stmt) && ((jl_expr_t*)stmt)->head == line_sym) {
+        if (jl_is_linenode(stmt)) {
+            int lno = jl_linenode_line(stmt);
+            builder.SetCurrentDebugLocation(DebugLoc::get(lno, 1, (MDNode*)SP,
+                                                          NULL));
+        }
+        else if (jl_is_expr(stmt) && ((jl_expr_t*)stmt)->head == line_sym) {
             int lno = jl_unbox_long(jl_exprarg(stmt, 0));
             builder.SetCurrentDebugLocation(DebugLoc::get(lno, 1, (MDNode*)SP,
                                                           NULL));
         }
-        if (is_label(stmt)) {
+        if (jl_is_labelnode(stmt)) {
             if (prevlabel) continue;
             prevlabel = true;
         }

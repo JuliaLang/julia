@@ -36,6 +36,9 @@ jl_tag_type_t *jl_string_type;
 jl_struct_type_t *jl_ascii_string_type;
 jl_struct_type_t *jl_utf8_string_type;
 jl_struct_type_t *jl_expr_type;
+jl_struct_type_t *jl_symbolnode_type;
+jl_struct_type_t *jl_linenumbernode_type;
+jl_struct_type_t *jl_labelnode_type;
 jl_bits_type_t *jl_intrinsic_type;
 jl_struct_type_t *jl_methtable_type;
 jl_struct_type_t *jl_lambda_info_type;
@@ -66,7 +69,7 @@ jl_sym_t *lambda_sym;  jl_sym_t *assign_sym;
 jl_sym_t *null_sym;    jl_sym_t *body_sym;
 jl_sym_t *isbound_sym; jl_sym_t *macro_sym;
 jl_sym_t *locals_sym;  jl_sym_t *colons_sym;
-jl_sym_t *symbol_sym;  jl_sym_t *unexpanded_sym;
+jl_sym_t *unexpanded_sym;
 jl_sym_t *Any_sym;     jl_sym_t *method_sym;
 jl_sym_t *enter_sym;   jl_sym_t *leave_sym;
 jl_sym_t *exc_sym;     jl_sym_t *error_sym;
@@ -933,4 +936,19 @@ JL_CALLABLE(jl_f_new_box)
     box->type = jl_box_any_type;
     ((jl_value_t**)box)[1] = args[0];
     return box;
+}
+
+JL_CALLABLE(jl_f_new_symbolnode)
+{
+    JL_NARGS(SymbolNode, 2, 2);
+    JL_TYPECHK(SymbolNode, symbol, args[0]);
+#ifdef JL_GC_MARKSWEEP
+    jl_value_t *s = (jl_value_t*)alloc_3w();
+#else
+    jl_value_t *s = (jl_value_t*)allocobj(3*sizeof(void*));
+#endif
+    s->type = (jl_type_t*)jl_symbolnode_type;
+    jl_fieldref(s,0) = args[0];
+    jl_fieldref(s,1) = args[1];
+    return s;
 }

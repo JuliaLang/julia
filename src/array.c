@@ -104,6 +104,11 @@ static jl_array_t *_new_array(jl_type_t *atype, jl_tuple_t *dimst,
     return a;
 }
 
+jl_array_t *jl_new_array_(jl_type_t *atype, uint32_t ndims, size_t *dims)
+{
+    return _new_array(atype, NULL, ndims, dims);
+}
+
 jl_array_t *jl_new_array(jl_type_t *atype, jl_tuple_t *dims)
 {
     size_t ndims = dims->length;
@@ -201,17 +206,6 @@ JL_CALLABLE(jl_f_arraylen)
     return jl_box_long(((jl_array_t*)args[0])->length);
 }
 
-jl_tuple_t *jl_construct_array_size(jl_array_t *a, size_t nd)
-{
-    jl_tuple_t *d = jl_alloc_tuple(nd);
-    JL_GC_PUSH(&d);
-    size_t i;
-    for(i=0; i < nd; i++)
-        jl_tupleset(d, i, jl_box_long((&a->nrows)[i]));
-    JL_GC_POP();
-    return d;
-}
-
 JL_CALLABLE(jl_f_arraysize)
 {
     JL_TYPECHK(arraysize, array, args[0]);
@@ -227,7 +221,13 @@ JL_CALLABLE(jl_f_arraysize)
     else {
         JL_NARGS(arraysize, 1, 1);
     }
-    return (jl_value_t*)jl_construct_array_size(a, nd);
+    jl_tuple_t *d = jl_alloc_tuple(nd);
+    JL_GC_PUSH(&d);
+    size_t i;
+    for(i=0; i < nd; i++)
+        jl_tupleset(d, i, jl_box_long(jl_array_dim(a,i)));
+    JL_GC_POP();
+    return (jl_value_t*)d;
 }
 
 static jl_value_t *new_scalar(jl_bits_type_t *bt)

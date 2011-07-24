@@ -1954,6 +1954,7 @@ static jl_tuple_t *jl_typevars(size_t n, ...)
 }
 
 JL_CALLABLE(jl_f_new_expr);
+JL_CALLABLE(jl_f_new_symbolnode);
 JL_CALLABLE(jl_f_new_box);
 
 extern void jl_init_int32_int64_cache();
@@ -2176,6 +2177,25 @@ void jl_init_types()
                                     jl_any_type));
     jl_expr_type->fptr = jl_f_new_expr;
 
+    jl_symbolnode_type =
+        jl_new_struct_type(jl_symbol("SymbolNode"),
+                           jl_any_type, jl_null,
+                           jl_tuple(2, jl_symbol("name"), jl_symbol("type")),
+                           jl_tuple(2, jl_sym_type, jl_any_type));
+    jl_symbolnode_type->fptr = jl_f_new_symbolnode;
+
+    jl_linenumbernode_type =
+        jl_new_struct_type(jl_symbol("LineNumberNode"),
+                           jl_any_type, jl_null,
+                           jl_tuple(1, jl_symbol("line")),
+                           jl_tuple(1, jl_long_type));
+
+    jl_labelnode_type =
+        jl_new_struct_type(jl_symbol("LabelNode"),
+                           jl_any_type, jl_null,
+                           jl_tuple(1, jl_symbol("label")),
+                           jl_tuple(1, jl_long_type));
+
     jl_lambda_info_type =
         jl_new_struct_type(jl_symbol("LambdaStaticData"),
                            jl_any_type, jl_null,
@@ -2263,7 +2283,6 @@ void jl_init_types()
     assign_sym = jl_symbol("=");
     null_sym = jl_symbol("null");
     isbound_sym = jl_symbol("isbound");
-    symbol_sym = jl_symbol("symbol");
     body_sym = jl_symbol("body");
     locals_sym = jl_symbol("locals");
     colons_sym = jl_symbol("::");
