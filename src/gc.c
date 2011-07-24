@@ -453,8 +453,8 @@ static void gc_markval_(jl_value_t *v)
         int ndims = jl_array_ndims(a);
         int ndimwords = (ndims > 2 ? (ndims-2) : 0);
 #ifndef __LP64__
-        // on 32-bit, ndimwords must be even to preserve 8-byte alignment
-        ndimwords = (ndimwords+1)&-2;
+        // on 32-bit, ndimwords must be odd to preserve 8-byte alignment
+        ndimwords += (~ndimwords)&1;
 #endif
         if (a->data && a->data != (&a->_space[0] + ndimwords*sizeof(size_t))) {
             if (ndims == 1)
