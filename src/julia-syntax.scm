@@ -116,7 +116,10 @@
 (define (replace-end ex a n tuples)
   (cond ((eq? ex 'end)                (end-val a n tuples))
 	((or (atom? ex) (quoted? ex)) ex)
-	((eq? (car ex) 'ref)          ex)
+	((eq? (car ex) 'ref)
+	 ;; inside ref only replace within the first argument
+	 (list* 'ref (replace-end (cadr ex) a n tuples)
+		(cddr ex)))
 	(else
 	 (cons (car ex)
 	       (map (lambda (x) (replace-end x a n tuples))
