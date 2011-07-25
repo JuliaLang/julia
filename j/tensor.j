@@ -596,20 +596,6 @@ min (A::AbstractArray, region::Region) = areduce(min,  A, region)
 sum (A::AbstractArray, region::Region) = areduce(sum,  A, region)
 prod(A::AbstractArray, region::Region) = areduce(prod, A, region)
 
-for f = (:all, :any, :count)
-    @eval function ($f)(A::AbstractArray{Bool,2}, dim::Region)
-        if isinteger(dim)
-           if dim == 1
-             [ ($f)(A[:,i]) | i=1:size(A, 2) ]
-          elseif dim == 2
-             [ ($f)(A[i,:]) | i=1:size(A, 1) ]
-          end
-        elseif dim == (1,2)
-             ($f)(A)
-        end
-    end
-end
-
 all(A::AbstractArray{Bool}, region::Region) = areduce(all, A, region)
 any(A::AbstractArray{Bool}, region::Region) = areduce(any, A, region)
 count(A::AbstractArray{Bool}, region::Region) = areduce(count, A, region, Size)
@@ -737,12 +723,19 @@ end
 
 ## Other array functions ##
 
-repmat(a::AbstractMatrix, m::Size, n::Size) = reshape([ a[i,j] | i=1:size(a,1),
-                                                         k=1:m,
-                                                         j=1:size(a,2),
-                                                         l=1:n],
-                                              size(a,1)*m,
-                                              size(a,2)*n)
+function repmat{T}(a::Matrix{T}, m::Size, n::Size)
+    o,p = size(a)
+    b = Array(T, o*m, p*n)
+    for j=1:n
+        d = (j-1)*p+1
+        R = d:d+p-1
+        for i=1:m
+            c = (i-1)*o+1
+            b[c:c+o-1, R] = a
+        end
+    end
+    b
+end
 
 accumarray(I::AbstractVector, J::AbstractVector, V) = accumarray (I, J, V, max(I), max(J))
 
