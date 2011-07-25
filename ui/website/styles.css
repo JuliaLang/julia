@@ -161,7 +161,6 @@ div#terminal
 
 div#prompt
 {
-	display: none;
 	float: left;
 	font: 85% "Droid Sans Mono", "Consolas", "Courier", "Courier New";
 	color: #00aa00;

@@ -64,10 +64,16 @@
 			// add to the terminal
 			function add_to_terminal(data)
 			{
+				// add the data
 				terminal_data += data;
+
+				// don't show server paths
 				terminal_data = terminal_data.replace(new RegExp(julia_path, 'g'), "");
+
+				// limit size of stored data
 				if (terminal_data.length > terminal_data_size)
 				{
+					// make sure we do not cut off inside an escape sequence or HTML tag
 					var amp_pos = -1;
 					for (var i = 0; i < 5; i += 1)
 					{
@@ -109,16 +115,24 @@
 							terminal_data = terminal_data.substring(gt_pos+1);
 					}
 				}
-				if (terminal_data.substring(terminal_data.length-15) == "julia&gt;&nbsp;")
+				
+				// find the last line break
+				var last_newline = terminal_data.lastIndexOf("<br />");
+				if (last_newline == -1)
 				{
-					// eat the julia prompt
-					$("#terminal").html(terminal_data.substring(0, terminal_data.length-15).replace(/julia&gt;&nbsp;/g, "<span class=\"prompt\">julia&gt;&nbsp;</span>"));
-
-					// show out prompt
-					$("#prompt").show();
+					$("#terminal").html("");
+					$("#prompt").html(terminal_data.replace(/julia&gt;&nbsp;/g, "<span class=\"prompt\">julia&gt;&nbsp;</span>"));
 				}
 				else
-					$("#terminal").html(terminal_data.replace(/julia&gt;&nbsp;/g, "<span class=\"prompt\">julia&gt;&nbsp;</span>"));
+				{
+					var new_terminal_data = terminal_data.substring(0, last_newline).replace(/julia&gt;&nbsp;/g, "<span class=\"prompt\">julia&gt;&nbsp;</span>");
+					if (new_terminal_data.lastIndexOf("<br />") == new_terminal_data.length-6)
+						new_terminal_data += "&nbsp;";
+					$("#terminal").html(new_terminal_data);
+					$("#prompt").html(terminal_data.substring(last_newline+6).replace(/julia&gt;&nbsp;/g, "<span class=\"prompt\">julia&gt;&nbsp;</span>"));
+				}
+
+				// scroll to the new data
 				$("#terminal-form").prop("scrollTop", $("#terminal-form").prop("scrollHeight"));
 			}
 
@@ -139,7 +153,7 @@
 			function init_session()
 			{
 				// submit AJAX request via POST
-				request = {"type": "init"};
+				var request = {"type": "init"};
 				$.post("/repl.scgi", {"request": $.toJSON(request)}, callback, "json");
 
 				// set the time of the last request
@@ -150,7 +164,7 @@
 			function poll()
 			{
 				// submit AJAX request via POST
-				request = {"type": "poll"};
+				var request = {"type": "poll"};
 				$.post("/repl.scgi", {"request": $.toJSON(request)}, callback, "json");
 
 				// set the time of the last request
@@ -232,7 +246,7 @@
 					if (input != "")
 					{
 						// send the input to the server via AJAX
-						request = {"type": "input", "input": input+"\n"};
+						var request = {"type": "input", "input": input+"\n"};
 						$.post("/repl.scgi", {"request": $.toJSON(request)}, callback, "json");
 
 						// input history
@@ -248,9 +262,6 @@
 
 						// clear the input box
 						$("#terminal-input").val("");
-
-						// hide the prompt
-						$("#prompt").hide();
 					}
 
 					// don't let the form redirect to any other pages
@@ -285,8 +296,8 @@
 				<form id="terminal-form">
 					<div id="terminal"></div>
 					<div>
-						<div id="prompt">julia>&nbsp;</div>
-						<input class="input" id="terminal-input" type="text" autofocus="autofocus" />
+						<div id="prompt"></div>
+						<input class="input" id="terminal-input" type="text" autofocus="autofocus" autocomplete="off" spellcheck="false" />
 					</div>
 				</form>
 			</div>
