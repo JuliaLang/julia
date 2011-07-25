@@ -285,57 +285,70 @@ end # macro
 
 #otherbodies are the bodies that reside between loops, if its a 2 dimension array. 
 function make_loop_nest(vars, ranges, body, otherbodies)
-    length = 
     expr = body
+    #println("otherbodies: ",otherbodies)
     for i=1:length(vars)
+    	#println("trying ",i)
         v = vars[i]
         r = ranges[i]
         if (length(size(otherbodies))==2)
+        	#println("enterd the doubleness")
         	l = otherbodies[i]
-        	j = i*size(otherbodies)[1]
+        	#println("next ", size(otherbodies))
+        	j = otherbodies[i+size(otherbodies)[1]]
         else
+        	#println("entering the singleness")
         	l = nothing
-        	j = i
+        	j = otherbodies[i]
         end
+        #println(i, otherbodies[i],otherbodies[i+3])
         expr = quote
         	$l
             for ($v) = ($r)
                 $expr
             end
-            $otherbodies[j]
+            $j
         end
     end
     expr
 end
+
 
 function gen_cartesian_map(cache, genbodies, dims, exargnames, exargs...)
     N = length(dims)
     if !has(cache,N)
         dimargnames = { gensym() | i=1:N }
         ivars = { gensym() | i=1:N }
-        if isa(genbodies,Array)
-			otherbodies = { i(ivars) | i = genbodies[2:] }
-			genbodies = genbodies[1]
+        bodies = genbodies(ivars)
+        #println("size: ", size(bodies))
+        #println("bodies: ", bodies)
+        if isa(bodies,Array)
+			body = bodies[1]
+			bodies = bodies[2:end,:]
 		else
-			otherbodies = {nothing | i = 1:N}
+			body = bodies
+			bodies = {nothing | i = 1:N}
 		end
-		println(otherbodies)
-		body = genbodies(ivars)
+		#println(bodies)
         fexpr =
         quote
             let _dummy_=nothing
                 local _F_
                 function _F_($(dimargnames...), $(exargnames...))
-                    $make_loop_nest(ivars, dimargnames, body, otherbodies)
+                    $make_loop_nest(ivars, dimargnames, body, bodies)
                 end
                 _F_
             end
         end
+        #println(fexpr)
         f = eval(fexpr)
         cache[N] = f
     else
         f = cache[N]
     end
+    #println("about to try evaluating function: ", f)
+    #println("dims: ", dims, "\n exargs: ", exargs)
+    #println("exargnames: ",exargnames)
     return f(dims..., exargs...)
 end
 
@@ -699,10 +712,10 @@ ctranspose(x::AbstractVector) = [ conj(x[j])   | i=1, j=1:size(x,1) ]
 transpose(x::AbstractMatrix)  = [ x[j,i]       | i=1:size(x,2), j=1:size(x,1) ]
 ctranspose(x::AbstractMatrix) = [ conj(x[j,i]) | i=1:size(x,2), j=1:size(x,1) ]
 
-let permute_cache = nothing
+let permute2_cache = nothing
 
-global permute
-function permute(A::AbstractArray, perm)
+global permute2
+function permute2(A::AbstractArray, perm)
 	dimsA = size(A)
     ndimsA = length(dimsA)
     dimsP = ntuple(ndimsA, i->dimsA[perm[i]])
@@ -726,7 +739,7 @@ function permute(A::AbstractArray, perm)
 		end
 	offset = 1-offset
 
-    function permute_one(ivars)
+    function permute2_one(ivars)
     s = { (x = ivars[i]; quote total+= $x*(strides[perm[$i]]) end) | i = 1:ndimsA}
 		quote
 			total=offset
@@ -738,14 +751,98 @@ function permute(A::AbstractArray, perm)
 		end
 	end
 
+	if is(permute2_cache,nothing)
+		permute2_cache = HashTable()
+	end
+
+	gen_cartesian_map(permute2_cache, permute2_one, ranges, {:A, :P, :perm, :count, :strides, :offset}, A, P, perm,1, strides, offset)
+	return P
+
+end
+#end let
+end
+
+
+let permute_cache = nothing
+
+global permute
+function permute(A::AbstractArray, perm)
+	dimsA = size(A)
+    ndimsA = length(dimsA)
+    dimsP = ntuple(ndimsA, i->dimsA[perm[i]])
+    P = similar(A, dimsP)
+    ranges = ntuple(ndimsA, i->(Range1(1,dimsP[i])))
+
+    #calculates all the strides
+    strides = Array(Int32,0)
+    for dim = 1:length(perm)
+    	stride = 1
+    	for dim_size = 1:(dim-1)
+    		stride = stride*dimsA[dim_size]
+    	end
+    	push(strides, stride)
+    end
+
+    #reorganizes the ordering of the strides
+	strides = { (strides[perm[i]]) | i = 1:ndimsA}
+
+    #Creates offset, because indexing starts at 1
+    offset = 0
+		for i = strides
+			offset+=i
+		end
+	offset = 1-offset
+
+    function permute_one(ivars)
+    	#println("permute")
+    	counts = { gensym() | i=1:ndimsA}
+    	#println("counts: ", counts)
+    	toReturn = cell(ndimsA+1,2)
+    	for i = 1:numel(toReturn)
+    		toReturn[i] = nothing
+    	end
+    	#toReturn[end] runs once before any loop has started
+    	#toReturn[2*end] runs once after every loop has finished
+    	tmp = counts[end]
+    	toReturn[ndimsA+1] = quote
+    		ind = 1
+    		$tmp = strides[end]
+    	end
+    	#inner most loop
+    	toReturn[1] = quote
+    		#println("index: ", ind, " origin: ", sum($counts...)+offset)
+    		P[ind]=	A[sum($counts...)+offset]
+    		ind+=1
+    		$counts[1]+= strides[1]
+    	end
+   		for i = 1:ndimsA-1
+   			tmp = counts[i]
+   			val = i
+   			toReturn[(i+1)] = quote
+   				$tmp = strides[$val]
+   			end
+   			tmp2 = counts[i+1]
+   			val = i+1
+   			toReturn[(i+1)+(ndimsA+1)] = quote
+   				$tmp2 += strides[$val]
+   			end
+   		end
+   		#println("end permute")
+   		toReturn
+	end
+
+	
+
 	if is(permute_cache,nothing)
 		permute_cache = HashTable()
 	end
 
-	gen_cartesian_map(permute_cache, permute_one, ranges, {:A, :P, :perm, :count, :strides, :offset}, A, P, perm,1, strides, offset)
+    #println("cartesian")
+	gen_cartesian_map(permute_cache, permute_one, ranges, {:A, :P, :perm, :offset, :strides}, A, P, perm, offset, strides)
 	return P
 
 end
+#end let
 end
 
 function ipermute(A::AbstractArray,perm)
