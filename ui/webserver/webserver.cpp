@@ -13,9 +13,8 @@ using namespace std;
 using namespace scgi;
 
 // TODO:
-// - History support in the client
 // - Message-based protocol
-// - check ALL memory allocations and error values
+// - Check ALL memory allocations and error values
 
 /////////////////////////////////////////////////////////////////////////////
 // helpers
@@ -591,7 +590,7 @@ string create_session()
         setrlimit(RLIMIT_AS, &limits);
 
         // acutally spawn julia instance
-        execl("./julia-release-web", "julia-release-web", (char*)0);
+        execl("./julia-release-web", "julia-release-web", "-q", (char*)0);
 
         // if exec failed, terminate with an error
         exit(1);
@@ -674,7 +673,10 @@ string get_response(request* req)
     string response = session_map[session_token].outbox;
     session_map[session_token].outbox = "";
 
-    // escape whitespace for html
+    // escape for html
+    response = str_replace(response, "&", "&amp;");
+    response = str_replace(response, "<", "&lt;");
+    response = str_replace(response, ">", "&gt;");
     response = str_replace(response, " ", "&nbsp;");
     response = str_replace(response, "\n", "<br />");
 

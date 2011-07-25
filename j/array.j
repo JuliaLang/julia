@@ -4,6 +4,7 @@
 
 size(a::Array) = arraysize(a)
 size(a::Array, d) = arraysize(a, d)
+size(a::Matrix) = (arraysize(a,1), arraysize(a,2))
 numel(a::Array) = arraylen(a)
 
 iscomplex(x::Array{Complex128}) = true
