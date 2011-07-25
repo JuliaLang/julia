@@ -148,8 +148,6 @@ form#terminal-form
 	padding: 20px;
 	background-color: #fafafa;
 	overflow: auto;
-	font: 85% "Consolas", "Courier New";
-	color: #444444;
 }
 
 div#terminal
@@ -158,12 +156,15 @@ div#terminal
 	outline: none;
 	display: block;
 	overflow-x: hidden;
+	font: 85% "Consolas", "Courier New";
+	color: #444444;
 }
 
 div#prompt
 {
 	float: left;
-	font-weight: bold;
+	font: bold 85% "Consolas", "Courier New";
+	color: #444444;
 }
 
 input#terminal-input
