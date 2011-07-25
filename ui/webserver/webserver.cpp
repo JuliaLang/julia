@@ -13,10 +13,8 @@ using namespace std;
 using namespace scgi;
 
 // TODO:
-// - History support in the client
-// - Limit history and input history size in the lcient
 // - Message-based protocol
-// - check ALL memory allocations and error values
+// - Check ALL memory allocations and error values
 
 /////////////////////////////////////////////////////////////////////////////
 // helpers
@@ -675,7 +673,10 @@ string get_response(request* req)
     string response = session_map[session_token].outbox;
     session_map[session_token].outbox = "";
 
-    // escape whitespace for html
+    // escape for html
+    response = str_replace(response, "&", "&amp;");
+    response = str_replace(response, "<", "&lt;");
+    response = str_replace(response, ">", "&gt;");
     response = str_replace(response, " ", "&nbsp;");
     response = str_replace(response, "\n", "<br />");
 

@@ -48,9 +48,11 @@
 		<script>
 			// keep track of terminal history
 			var terminal_data = "";
+			var terminal_data_size = 50000;
 			var input_history = [];
 			var input_history_current = [""];
 			var input_history_id = 0;
+			var input_history_size = 100;
 			var julia_path = "/home/stephan/julia/";
 
 			// keep track of the last time a request was sent
@@ -61,8 +63,51 @@
 			{
 				terminal_data += data;
 				terminal_data = terminal_data.replace(new RegExp(julia_path, 'g'), "");
-				if (terminal_data.substring(terminal_data.length-18) == "<br />julia>&nbsp;")
-					$("#terminal").html(terminal_data.substring(0, terminal_data.length-18));
+				if (terminal_data.length > terminal_data_size)
+				{
+					var amp_pos = -1;
+					for (var i = 0; i < 5; i += 1)
+					{
+						if (terminal_data[terminal_data.length-terminal_data_size-1-i] == "&")
+							amp_pos = terminal_data.length-terminal_data_size-1-i;
+					}
+					var lt_pos = -1;
+					for (var i = 0; i < 5; i += 1)
+					{
+						if (terminal_data[terminal_data.length-terminal_data_size-1-i] == "<")
+							lt_pos = terminal_data.length-terminal_data_size-1-i;
+					}
+					if ((amp_pos == -1) == (lt_pos == -1))
+						terminal_data = terminal_data.substring(terminal_data.length-terminal_data_size);
+					if (amp_pos != -1 && lt_pos == -1)
+					{
+						var semi_pos = -1;
+						for (var i = 0; i < 5; i += 1)
+						{
+							if (terminal_data[terminal_data.length-terminal_data_size+i] == ";")
+								semi_pos = terminal_data.length-terminal_data_size+i;
+						}
+						if (semi_pos == -1)
+							terminal_data = terminal_data.substring(terminal_data.length-terminal_data_size);
+						else
+							terminal_data = terminal_data.substring(semi_pos+1);
+					}
+					if (amp_pos == -1 && lt_pos != -1)
+					{
+						var gt_pos = -1;
+						for (var i = 0; i < 5; i += 1)
+						{
+							if (terminal_data[terminal_data.length-terminal_data_size+i] == ">")
+								gt_pos = terminal_data.length-terminal_data_size+i;
+						}
+						if (gt_pos == -1)
+							terminal_data = terminal_data.substring(terminal_data.length-terminal_data_size);
+						else
+							terminal_data = terminal_data.substring(gt_pos+1);
+					}
+				}
+				if (terminal_data.substring(terminal_data.length-21) == "<br />julia&gt;&nbsp;")
+					$("#terminal").html(terminal_data.substring(0, terminal_data.length-21));
 				else
 					$("#terminal").html(terminal_data);
 				$("#terminal").prop("scrollTop", $("#terminal").prop("scrollHeight"));
@@ -161,6 +206,8 @@
 
 						// input history
 						input_history.push(input);
+						if (input_history.length > input_history_size)
+							input_history = input_history.slice(input_history.length-input_history_size);
 						input_history_current = input_history.slice(0);
 						input_history_current.push("");
 						input_history_id = input_history_current.length-1;
@@ -194,7 +241,7 @@
 		</div>
 		<div id="main">
 			<div id="left-column">
-				<a href="/">Home</a>
+				<a href="/" class="current-page">Home</a>
 				<a href="/repl.htm">Interactive Prompt</a>
 				<a href="/plots.htm">Plots</a>
 				<a href="/docs.htm">Documentation</a>

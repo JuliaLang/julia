@@ -73,6 +73,11 @@ div#left-column a
 	font-size: 100%;
 }
 
+div#left-column a.current-page
+{
+	font-weight: bold;
+}
+
 div#left-column a:hover
 {
 	background-color: #f1f1f1;
