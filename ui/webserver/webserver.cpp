@@ -14,6 +14,7 @@ using namespace scgi;
 
 // TODO:
 // - History support in the client
+// - Limit history and input history size in the lcient
 // - Message-based protocol
 // - check ALL memory allocations and error values
 
