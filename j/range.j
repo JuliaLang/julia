@@ -98,6 +98,21 @@ function -(r1::Ranges, r2::Ranges)
     Range(r1.start-r2.start, step(r1)-step(r2), r1.stop-r2.stop)
 end
 
+## concatenation ##
+
+function vcat{T}(rs::Union(Range{T},Range1{T})...)
+    n = sum(map(length,rs))
+    a = Array(T,n)
+    i = 1
+    for r = rs
+        for x = r
+            a[i] = x
+            i += 1
+        end
+    end
+    a
+end
+
 ## N-dimensional ranges ##
 
 type NDRange{N}
