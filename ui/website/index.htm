@@ -20,17 +20,18 @@
 			// this function makes all of the columns the same height
 			function set_column_heights() {
 				// set the height of all the columns to the height of the longest one
-				set_outer_height("div#left-column", min_content_height);
-				set_outer_height("div#right-column", min_content_height);
-				set_outer_height("div#main", min_content_height);
+				set_outer_height("#left-column", min_content_height);
+				set_outer_height("#right-column", min_content_height);
+				set_outer_height("#main", min_content_height);
 				
 				// calculate how much taller the columns should be so the footer is at the bottom of the window
 				var padding = Math.max($(window).height()-($("#footer-bar").offset().top+$("#footer-bar").outerHeight(true)), 0);
 				
 				// make the columns taller so the footer is on the bottom of the page
-				set_outer_height("div#left-column", min_content_height+padding);
-				set_outer_height("div#right-column", min_content_height+padding);
-				set_outer_height("div#main", min_content_height+padding);
+				set_outer_height("#left-column", min_content_height+padding);
+				set_outer_height("#right-column", min_content_height+padding);
+				set_outer_height("#main", min_content_height+padding);
+				set_outer_height("#terminal-form", min_content_height+padding-40);
 			}
 			
 			// called on page load
