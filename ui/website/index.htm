@@ -112,13 +112,13 @@
 				if (terminal_data.substring(terminal_data.length-15) == "julia&gt;&nbsp;")
 				{
 					// eat the julia prompt
-					$("#terminal").html(terminal_data.substring(0, terminal_data.length-15));
+					$("#terminal").html(terminal_data.substring(0, terminal_data.length-15).replace(/julia&gt;&nbsp;/g, "<span class=\"prompt\">julia&gt;&nbsp;</span>"));
 
 					// show out prompt
 					$("#prompt").show();
 				}
 				else
-					$("#terminal").html(terminal_data);
+					$("#terminal").html(terminal_data.replace(/julia&gt;&nbsp;/g, "<span class=\"prompt\">julia&gt;&nbsp;</span>"));
 				$("#terminal-form").prop("scrollTop", $("#terminal-form").prop("scrollHeight"));
 			}
 
@@ -127,7 +127,7 @@
 			{
 				// check the watchdog
 				if ((new Date())-last_request_time > 5000)
-					add_to_terminal("<br />&lt;connection lost&gt;");
+					add_to_terminal("<span class=\"error\">&lt;connection lost&gt;</span><br />");
 				else
 				{
 					// run the watchdog again
@@ -135,12 +135,23 @@
 				}
 			}
 
+			// the first request
+			function init_session()
+			{
+				// submit AJAX request via POST
+				request = {"type": "init"};
+				$.post("/repl.scgi", {"request": $.toJSON(request)}, callback, "json");
+
+				// set the time of the last request
+				last_request_time = new Date();
+			}
+
 			// check the server for data
 			function poll()
 			{
 				// submit AJAX request via POST
 				request = {"type": "poll"};
-				$.post("/repl.scgi", request, callback, "json");
+				$.post("/repl.scgi", {"request": $.toJSON(request)}, callback, "json");
 
 				// set the time of the last request
 				last_request_time = new Date();
@@ -149,9 +160,31 @@
 			// called when the server has responded
 			function callback(data, textStatus, jqXHR)
 			{
+				// error message
+				if (data.type == "error")
+					add_to_terminal("<span class=\"error\">"+data.message+"</span>");
+
+				// fatal error message
+				if (data.type == "fatal_error")
+				{
+					add_to_terminal("<span class=\"error\">"+data.message+"</span>");
+					return;
+				}
+
+				// normal message
+				if (data.type == "message")
+					add_to_terminal("<span class=\"message\">"+data.message+"</span>");
+
+				// init message
+				if (data.type == "init_message")
+					$("#terminal").html("<span class=\"message\">"+data.message+"</span>");
+
 				// add new server data to the terminal
-				if (data.content != "")
-					add_to_terminal(data.content);
+				if (data.type == "content")
+				{
+					if (data.content != "")
+						add_to_terminal(data.content);
+				}
 
 				// poll the server again
 				setTimeout(poll, 500);
@@ -225,7 +258,7 @@
 				});
 				
 				// start polling the server
-				setTimeout(poll, 500);
+				init_session();
 
 				// start the watchdog
 				setTimeout(watchdog, 1000);

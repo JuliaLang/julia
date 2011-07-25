@@ -511,17 +511,9 @@ string make_session_token()
     return "SESSION_"+to_string(rand());
 }
 
-string respond_ok(string session_token, string body)
+string respond(string session_token, string body)
 {
     string header = "HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=UTF-8\r\n";
-    header += "Set-Cookie: SESSION_TOKEN="+session_token+"\r\n";
-    header += "\r\n";
-    return header+body;
-}
-
-string respond_error(string session_token, string body)
-{
-    string header = "HTTP/1.1 500 Internal Server Error\r\nContent-Type: text/html; charset=UTF-8\r\n";
     header += "Set-Cookie: SESSION_TOKEN="+session_token+"\r\n";
     header += "\r\n";
     return header+body;
@@ -634,64 +626,147 @@ string get_response(request* req)
     // lock the mutex
     pthread_mutex_lock(&session_mutex);
 
-    // check for the session cookie
+    // the response
+    Json::Value response_root;
+    Json::StyledWriter writer;
     string session_token;
-    if (req->get_cookie_exists("SESSION_TOKEN"))
-        session_token = req->get_cookie_value("SESSION_TOKEN");
-
-    // check if the session is real
-    if (session_token != "")
-    {
-        if (session_map.find(session_token) == session_map.end())
-            session_token = "";
-    }
-
-    // create a new session if necessary
-    if (session_token == "")
-    {
-        if (session_map.size() < MAX_CONCURRENT_SESSIONS)
-            session_token = create_session();
-        if (session_token == "")
-            return respond_error("", "Maximum server capacity reached.  Please try again later.");
-    }
 
     // process input if there is any
     if (req->get_field_exists("request"))
     {
+        // parse the request
         Json::Value request_root;
         Json::Reader reader;
         if (reader.parse(req->get_field_value("request"), request_root))
         {
-            if (request_root.get("type", "poll" ).asString() == "input")
-                session_map[session_token].inbox += request_root.get("input", "" ).asString();
+            // determine the type of request
+            bool request_recognized = false;
+
+            // init message
+            if (request_root.get("type", "").asString() == "init")
+            {
+                // we recognize the request
+                request_recognized = true;
+
+                // create a new session
+                if (session_map.size() < MAX_CONCURRENT_SESSIONS)
+                    session_token = create_session();
+                if (session_token == "")
+                {
+                    // too many sessions
+                    response_root["type"] = "fatal_error";
+                    response_root["message"] = "&lt;maximum server capacity reached for now&gt;<br />";
+                }
+                else
+                {
+                    // successfully created new session
+                    response_root["type"] = "init_message";
+                    response_root["message"] = "&lt;initializing&gt;<br />";
+                }
+            }
+
+            // sending input to julia
+            if (request_root.get("type", "").asString() == "input")
+            {
+                // we recognize the request
+                request_recognized = true;
+
+                // check for the session cookie
+                if (req->get_cookie_exists("SESSION_TOKEN"))
+                    session_token = req->get_cookie_value("SESSION_TOKEN");
+
+                // check if the session is real
+                if (session_token != "")
+                {
+                    if (session_map.find(session_token) == session_map.end())
+                        session_token = "";
+                }
+                if (session_token == "")
+                {
+                    response_root["type"] = "fatal_error";
+                    response_root["message"] = "&gt;session expired&lt;<br />";
+                }
+                else
+                {
+                    // add the data to the inbox
+                    session_map[session_token].inbox += request_root.get("input", "").asString();
+
+                    // respond with a success message
+                    response_root["type"] = "success";
+
+                    // pet the watchdog
+                    session_map[session_token].update_time = time(0);
+                }
+            }
+
+            // polling for julia output
+            if (request_root.get("type", "").asString() == "poll")
+            {
+                // we recognize the request
+                request_recognized = true;
+
+                // check for the session cookie
+                if (req->get_cookie_exists("SESSION_TOKEN"))
+                    session_token = req->get_cookie_value("SESSION_TOKEN");
+
+                // check if the session is real
+                if (session_token != "")
+                {
+                    if (session_map.find(session_token) == session_map.end())
+                        session_token = "";
+                }
+                if (session_token == "")
+                {
+                    response_root["type"] = "fatal_error";
+                    response_root["message"] = "&gt;session expired&lt;<br />";
+                }
+                else
+                {
+                    // escape for html
+                    string content = session_map[session_token].outbox;
+                    content = str_replace(content, "&", "&amp;");
+                    content = str_replace(content, "<", "&lt;");
+                    content = str_replace(content, ">", "&gt;");
+                    content = str_replace(content, " ", "&nbsp;");
+                    content = str_replace(content, "\n", "<br />");
+
+                    // if julia has outputted any data since last poll
+                    response_root["type"] = "content";
+                    response_root["content"] = content;
+                    session_map[session_token].outbox = "";
+                    string response = writer.write(response_root);
+
+                    // pet the watchdog
+                    session_map[session_token].update_time = time(0);
+                }
+            }
+
+            // unrecognized request
+            if (!request_recognized)
+            {
+                response_root["type"] = "fatal_error";
+                response_root["message"] = "&gt;invalid request&lt;<br />";
+            }
         }
         else
-            return respond_error("", "Error parsing input.");
+        {
+            // error parsing json
+            response_root["type"] = "fatal_error";
+            response_root["message"] = "&gt;invalid request&lt;<br />";
+        }
     }
-
-    // escape for html
-    string content = session_map[session_token].outbox;
-    content = str_replace(content, "&", "&amp;");
-    content = str_replace(content, "<", "&lt;");
-    content = str_replace(content, ">", "&gt;");
-    content = str_replace(content, " ", "&nbsp;");
-    content = str_replace(content, "\n", "<br />");
-
-    // if julia has outputted any data since last poll
-    Json::Value response_root;
-    Json::StyledWriter writer;
-    response_root["content"] = content;
-    session_map[session_token].outbox = "";
-    string response = writer.write(response_root);
-
-    // pet the watchdog
-    session_map[session_token].update_time = time(0);
+    else
+    {
+        // no request
+        response_root["type"] = "fatal_error";
+        response_root["message"] = "&gt;invalid request&lt;<br />";
+    }
 
     // unlock the mutex
     pthread_mutex_unlock(&session_mutex);
 
     // return the header and response
-    return respond_ok(session_token, response);
+    return respond(session_token, writer.write(response_root));
 }
 
 // program entrypoint

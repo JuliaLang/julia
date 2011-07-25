@@ -164,7 +164,7 @@ div#prompt
 	display: none;
 	float: left;
 	font: 85% "Droid Sans Mono", "Consolas", "Courier", "Courier New";
-	color: #444444;
+	color: #00aa00;
 }
 
 input#terminal-input
@@ -186,6 +186,26 @@ div.float-clear
 span.strong
 {
 	font-weight: bold;
+}
+
+span.message
+{
+	color: #0000aa;
+}
+
+span.error
+{
+	color: #ff0000;
+}
+
+span.error
+{
+	color: #ff0000;
+}
+
+span.prompt
+{
+	color: #00aa00;
 }
 
 /* for Internet Explorer */
