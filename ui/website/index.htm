@@ -5,6 +5,7 @@
 		<title>Julia - A fresh approach to technical computing.</title>
 		<link href="styles.css" rel="stylesheet" type="text/css" />
 		<link href="favicon.ico" rel="shortcut icon" />
+		<link href='http://fonts.googleapis.com/css?family=Droid+Sans+Mono&v2' rel='stylesheet' type='text/css'>
 		<script type="text/javascript" src="jquery.js"></script>
 		<script>
 			// keep track of the minimum height of the content (the height of the longest column)
@@ -125,7 +126,7 @@
 			{
 				// check the watchdog
 				if ((new Date())-last_request_time > 5000)
-					add_to_terminal("<br /><br />The connection to the server was lost.");
+					add_to_terminal("<br />&lt;connection lost&gt;");
 				else
 				{
 					// run the watchdog again
@@ -141,7 +142,7 @@
 					type: "POST",
 					url: "/repl.scgi",
 					success: callback,
-					dataType: "text",
+					dataType: "json",
 					cache: false
 				});
 
@@ -153,8 +154,8 @@
 			function callback(data, textStatus, jqXHR)
 			{
 				// add new server data to the terminal
-				if (data != "")
-					add_to_terminal(data);
+				if (data.content != "")
+					add_to_terminal(data.content);
 
 				// poll the server again
 				setTimeout(poll, 500);
@@ -163,9 +164,6 @@
 			// called on page load
 			$(document).ready(function()
 			{
-				// initial terminal content
-				$("#terminal").html("Spawning Julia instance...<br /><br />");
-
 				// hook mouse click events
 				$("#terminal-form").click(function(evt) { $("#terminal-input").focus(); } );
 
@@ -210,7 +208,7 @@
 							url: "/repl.scgi",
 							data: {"terminal-input": input},
 							success: callback,
-							dataType: "text",
+							dataType: "json",
 							cache: false
 						});
 

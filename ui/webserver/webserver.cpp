@@ -8,13 +8,10 @@
 #include <signal.h>
 #include <sys/wait.h>
 #include "server.h"
+#include "json.h"
 
 using namespace std;
 using namespace scgi;
-
-// TODO:
-// - Message-based protocol
-// - Check ALL memory allocations and error values
 
 /////////////////////////////////////////////////////////////////////////////
 // helpers
@@ -163,7 +160,7 @@ pthread_mutex_t session_mutex;
 /////////////////////////////////////////////////////////////////////////////
 
 // add to the inbox regularly according to this interval
-const int INBOX_INTERVAL = 100000; // in nanoseconds
+const int INBOX_INTERVAL = 10000; // in nanoseconds
 
 // this thread sends input from the client to julia
 void* inbox_thread(void* arg)
@@ -253,7 +250,7 @@ void* inbox_thread(void* arg)
 /////////////////////////////////////////////////////////////////////////////
 
 // add to the outbox regularly according to this interval
-const int OUTBOX_INTERVAL = 100000; // in nanoseconds
+const int OUTBOX_INTERVAL = 10000; // in nanoseconds
 
 // this thread waits for output from julia and stores it in a buffer (for later polling by the client)
 void* outbox_thread(void* arg)
@@ -282,8 +279,7 @@ void* outbox_thread(void* arg)
         }
 
         // prepare for reading from julia
-        const int buffer_size = 1; // not including null terminator
-        char* buffer = new char[buffer_size+1];
+        char buffer[2];
         int pipe = session_map[session_token].julia_out[0];
 
         // unlock the mutex
@@ -298,19 +294,16 @@ void* outbox_thread(void* arg)
         select_timeout.tv_usec = 100000;
         ssize_t bytes_read = 0;
         if (select(FD_SETSIZE, &set, 0, 0, &select_timeout))
-            bytes_read = read(pipe, buffer, buffer_size);
+            bytes_read = read(pipe, buffer, 1);
+            buffer[1] = 0;
 
         // lock the mutex
         pthread_mutex_lock(&session_mutex);
 
         // get the read data
         string new_data;
-        if (bytes_read > 0)
-        {
-            buffer[bytes_read] = 0;
+        if (bytes_read == 1)
             new_data = buffer;
-        }
-        delete [] buffer;
         outbox += new_data;
 
         // try to read a character
@@ -669,16 +662,20 @@ string get_response(request* req)
         session_map[session_token].inbox += input;
     }
 
-    // if julia has outputted any data since last poll
-    string response = session_map[session_token].outbox;
-    session_map[session_token].outbox = "";
-
     // escape for html
-    response = str_replace(response, "&", "&amp;");
-    response = str_replace(response, "<", "&lt;");
-    response = str_replace(response, ">", "&gt;");
-    response = str_replace(response, " ", "&nbsp;");
-    response = str_replace(response, "\n", "<br />");
+    string content = session_map[session_token].outbox;
+    content = str_replace(content, "&", "&amp;");
+    content = str_replace(content, "<", "&lt;");
+    content = str_replace(content, ">", "&gt;");
+    content = str_replace(content, " ", "&nbsp;");
+    content = str_replace(content, "\n", "<br />");
+
+    // if julia has outputted any data since last poll
+    Json::Value root;
+    Json::StyledWriter writer;
+    root["content"] = content;
+    session_map[session_token].outbox = "";
+    string response = writer.write(root);
 
     // pet the watchdog
     session_map[session_token].update_time = time(0);
