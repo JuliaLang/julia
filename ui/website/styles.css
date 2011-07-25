@@ -143,7 +143,6 @@ p
 
 form#terminal-form
 {
-	height: 370px;
 	border: 1px solid #d9d9d9;
 	padding: 20px;
 	background-color: #fafafa;
@@ -156,14 +155,15 @@ div#terminal
 	outline: none;
 	display: block;
 	overflow-x: hidden;
-	font: 85% "Consolas", "Courier New";
+	font: 85% "Droid Sans Mono", "Consolas", "Courier", "Courier New";
 	color: #444444;
 }
 
 div#prompt
 {
+	display: none;
 	float: left;
-	font: bold 85% "Consolas", "Courier New";
+	font: 85% "Droid Sans Mono", "Consolas", "Courier", "Courier New";
 	color: #444444;
 }
 
@@ -174,7 +174,7 @@ input#terminal-input
 	border: none;
 	outline: none;
 	display: block;
-	font: 85% "Consolas", "Courier New";
+	font: 85% "Droid Sans Mono", "Consolas", "Courier", "Courier New";
 	color: #444444;
 }
 

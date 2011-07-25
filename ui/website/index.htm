@@ -5,7 +5,9 @@
 		<title>Julia - A fresh approach to technical computing.</title>
 		<link href="styles.css" rel="stylesheet" type="text/css" />
 		<link href="favicon.ico" rel="shortcut icon" />
+		<link href='http://fonts.googleapis.com/css?family=Droid+Sans+Mono&v2' rel='stylesheet' type='text/css'>
 		<script type="text/javascript" src="jquery.js"></script>
+		<script type="text/javascript" src="jquery.json.js"></script>
 		<script>
 			// keep track of the minimum height of the content (the height of the longest column)
 			var min_content_height;
@@ -20,17 +22,18 @@
 			// this function makes all of the columns the same height
 			function set_column_heights() {
 				// set the height of all the columns to the height of the longest one
-				set_outer_height("div#left-column", min_content_height);
-				set_outer_height("div#right-column", min_content_height);
-				set_outer_height("div#main", min_content_height);
+				set_outer_height("#left-column", min_content_height);
+				set_outer_height("#right-column", min_content_height);
+				set_outer_height("#main", min_content_height);
 				
 				// calculate how much taller the columns should be so the footer is at the bottom of the window
 				var padding = Math.max($(window).height()-($("#footer-bar").offset().top+$("#footer-bar").outerHeight(true)), 0);
 				
 				// make the columns taller so the footer is on the bottom of the page
-				set_outer_height("div#left-column", min_content_height+padding);
-				set_outer_height("div#right-column", min_content_height+padding);
-				set_outer_height("div#main", min_content_height+padding);
+				set_outer_height("#left-column", min_content_height+padding);
+				set_outer_height("#right-column", min_content_height+padding);
+				set_outer_height("#main", min_content_height+padding);
+				set_outer_height("#terminal-form", min_content_height+padding-40);
 			}
 			
 			// called on page load
@@ -107,7 +110,13 @@
 					}
 				}
 				if (terminal_data.substring(terminal_data.length-15) == "julia&gt;&nbsp;")
+				{
+					// eat the julia prompt
 					$("#terminal").html(terminal_data.substring(0, terminal_data.length-15));
+
+					// show out prompt
+					$("#prompt").show();
+				}
 				else
 					$("#terminal").html(terminal_data);
 				$("#terminal-form").prop("scrollTop", $("#terminal-form").prop("scrollHeight"));
@@ -118,7 +127,7 @@
 			{
 				// check the watchdog
 				if ((new Date())-last_request_time > 5000)
-					add_to_terminal("<br /><br />The connection to the server was lost.");
+					add_to_terminal("<br />&lt;connection lost&gt;");
 				else
 				{
 					// run the watchdog again
@@ -130,13 +139,8 @@
 			function poll()
 			{
 				// submit AJAX request via POST
-				$.ajax({
-					type: "POST",
-					url: "/repl.scgi",
-					success: callback,
-					dataType: "text",
-					cache: false
-				});
+				request = {"type": "poll"};
+				$.post("/repl.scgi", request, callback, "json");
 
 				// set the time of the last request
 				last_request_time = new Date();
@@ -146,8 +150,8 @@
 			function callback(data, textStatus, jqXHR)
 			{
 				// add new server data to the terminal
-				if (data != "")
-					add_to_terminal(data);
+				if (data.content != "")
+					add_to_terminal(data.content);
 
 				// poll the server again
 				setTimeout(poll, 500);
@@ -156,9 +160,6 @@
 			// called on page load
 			$(document).ready(function()
 			{
-				// initial terminal content
-				$("#terminal").html("Spawning Julia instance...<br /><br />");
-
 				// hook mouse click events
 				$("#terminal-form").click(function(evt) { $("#terminal-input").focus(); } );
 
@@ -198,14 +199,8 @@
 					if (input != "")
 					{
 						// send the input to the server via AJAX
-						$.ajax({
-							type: "POST",
-							url: "/repl.scgi",
-							data: {"terminal-input": input},
-							success: callback,
-							dataType: "text",
-							cache: false
-						});
+						request = {"type": "input", "input": input+"\n"};
+						$.post("/repl.scgi", {"request": $.toJSON(request)}, callback, "json");
 
 						// input history
 						input_history.push(input);
@@ -220,6 +215,9 @@
 
 						// clear the input box
 						$("#terminal-input").val("");
+
+						// hide the prompt
+						$("#prompt").hide();
 					}
 
 					// don't let the form redirect to any other pages

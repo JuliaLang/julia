@@ -3,7 +3,7 @@ include $(JULIAHOME)/Make.inc
 
 LIBS = -lpthread
 
-WEBSERVER_SRCS = webserver.cpp server.cpp network.cpp
+WEBSERVER_SRCS = webserver.cpp server.cpp network.cpp jsoncpp.cpp
 
 %.o: %.c
 	$(CC) $(CFLAGS) $(SHIPFLAGS) -c $< -o $@

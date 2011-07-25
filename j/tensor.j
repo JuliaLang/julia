@@ -626,20 +626,6 @@ min (A::AbstractArray, region::Region) = areduce(min,  A, region)
 sum (A::AbstractArray, region::Region) = areduce(sum,  A, region)
 prod(A::AbstractArray, region::Region) = areduce(prod, A, region)
 
-for f = (:all, :any, :count)
-    @eval function ($f)(A::AbstractArray{Bool,2}, dim::Region)
-        if isinteger(dim)
-           if dim == 1
-             [ ($f)(A[:,i]) | i=1:size(A, 2) ]
-          elseif dim == 2
-             [ ($f)(A[i,:]) | i=1:size(A, 1) ]
-          end
-        elseif dim == (1,2)
-             ($f)(A)
-        end
-    end
-end
-
 all(A::AbstractArray{Bool}, region::Region) = areduce(all, A, region)
 any(A::AbstractArray{Bool}, region::Region) = areduce(any, A, region)
 count(A::AbstractArray{Bool}, region::Region) = areduce(count, A, region, Size)
@@ -712,32 +698,31 @@ ctranspose(x::AbstractVector) = [ conj(x[j])   | i=1, j=1:size(x,1) ]
 transpose(x::AbstractMatrix)  = [ x[j,i]       | i=1:size(x,2), j=1:size(x,1) ]
 ctranspose(x::AbstractMatrix) = [ conj(x[j,i]) | i=1:size(x,2), j=1:size(x,1) ]
 
-let permute2_cache = nothing
 
-global permute2
-function permute2(A::AbstractArray, perm)
-	dimsA = size(A)
+let permute_cache = nothing
+global permute
+function permute(A::AbstractArray, perm)
+    dimsA = size(A)
     ndimsA = length(dimsA)
     dimsP = ntuple(ndimsA, i->dimsA[perm[i]])
     P = similar(A, dimsP)
     ranges = ntuple(ndimsA, i->(Range1(1,dimsP[i])))
 
-
     strides = Array(Int32,0)
     for dim = 1:length(perm)
     	stride = 1
     	for dim_size = 1:(dim-1)
-    		stride = stride*dimsA[dim_size]
+    	    stride = stride*dimsA[dim_size]
     	end
     	push(strides, stride)
     end
 
     #must create offset, because indexing starts at 1
     offset = 0
-		for i = strides
-			offset+=i
-		end
-	offset = 1-offset
+    for i = strides
+	offset+=i
+    end
+    offset = 1-offset
 
     function permute2_one(ivars)
     s = { (x = ivars[i]; quote total+= $x*(strides[perm[$i]]) end) | i = 1:ndimsA}
@@ -836,6 +821,7 @@ function permute(A::AbstractArray, perm)
 	if is(permute_cache,nothing)
 		permute_cache = HashTable()
 	end
+    end
 
     #println("cartesian")
 	gen_cartesian_map(permute_cache, permute_one, ranges, {:A, :P, :perm, :offset, :strides}, A, P, perm, offset, strides)
@@ -846,26 +832,30 @@ end
 end
 
 function ipermute(A::AbstractArray,perm)
-	iperm = zeros(Int32,length(perm))
-	for i = 1:length(perm)
-		iperm[perm[i]]= i
-	end
-	return permute(A,iperm)
-
+    iperm = zeros(Int32,length(perm))
+    for i = 1:length(perm)
+	iperm[perm[i]]= i
+    end
+    return permute(A,iperm)
 end
 
 ## Other array functions ##
 
-repmat(a::AbstractMatrix, m::Size, n::Size) = reshape([ a[i,j] | i=1:size(a,1),
-                                                         k=1:m,
-                                                         j=1:size(a,2),
-                                                         l=1:n],
-                                              size(a,1)*m,
-                                              size(a,2)*n)
-
+function repmat{T}(a::Matrix{T}, m::Size, n::Size)
+    o,p = size(a)
+    b = Array(T, o*m, p*n)
+    for j=1:n
+        d = (j-1)*p+1
+        R = d:d+p-1
+        for i=1:m
+            c = (i-1)*o+1
+            b[c:c+o-1, R] = a
+        end
+    end
+    b
+end
 
 accumarray(I::AbstractVector, J::AbstractVector, V) = accumarray (I, J, V, max(I), max(J))
-
 
 function accumarray{T<:Number}(I::AbstractVector, J::AbstractVector, V::T, m::Size, n::Size)
     A = similar(V, m, n)
@@ -913,27 +903,21 @@ function find{T}(A::AbstractMatrix{T})
     return (I, J)
 end
 
-
 let find_cache = nothing
-
-
-
 function find_one(ivars)
-	
-	s = { quote I[$i][count] = $ivars[i] end | i = 1:length(ivars)}
-	quote
-		Aind = A[$(ivars...)]
-		if Aind != z
-			$(s...)
-			count +=1
-		end
+    s = { quote I[$i][count] = $ivars[i] end | i = 1:length(ivars)}
+    quote
+	Aind = A[$(ivars...)]
+	if Aind != z
+	    $(s...)
+	    count +=1
 	end
-
+    end
 end
 
 global find
 function find{T}(A::AbstractArray{T})
-	ndimsA = ndims(A)
+    ndimsA = ndims(A)
     nnzA = nnz(A)
     I = ntuple(ndimsA, x->zeros(Size, nnzA))
     ranges = ntuple(ndims(A), d->(1:size(A,d)))
@@ -944,7 +928,6 @@ function find{T}(A::AbstractArray{T})
 
     gen_cartesian_map(find_cache, find_one, ranges, {:A, :I, :count, :z}, A,I,1, zero(T))
     return I
-
 end
 end
 

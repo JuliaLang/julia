@@ -59,11 +59,11 @@ function norm(A::Matrix, p)
     if size(A,1) == 1 || size(A,2) == 1
         return norm(reshape(A, numel(A)), p)
     elseif p == 1
-        return max(sum(abs(A)))
+        return max(sum(abs(A),1))
     elseif p == 2
         return max(diag(svd(A)[2]))
     elseif p == Inf
-        max(sum(abs(A')))
+        max(sum(abs(A),2))
     elseif p == "fro"
         return sqrt(sum(diag(A'*A)))
     end
