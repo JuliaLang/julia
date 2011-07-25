@@ -143,43 +143,38 @@ p
 
 form#terminal-form
 {
+	height: 370px;
 	border: 1px solid #d9d9d9;
 	padding: 20px;
 	background-color: #fafafa;
+	overflow: auto;
+	font: 85% "Consolas", "Courier New";
+	color: #444444;
 }
 
 div#terminal
 {
-	height: 370px;
 	border: none;
 	outline: none;
 	display: block;
-	font: 85% "Consolas", "Courier New";
-	color: #444444;
-	resize: none;
-	overflow-y: auto;
 	overflow-x: hidden;
 }
 
 div#prompt
 {
-	position: absolute;
-	font: 85% "Consolas", "Courier New";
-	color: #444444;
+	float: left;
+	font-weight: bold;
 }
 
 input#terminal-input
 {
-	width: 633px;
-	padding-left: 55px;
+	width: 500px;
 	background-color: transparent;
-	margin-top: 10px;
 	border: none;
 	outline: none;
 	display: block;
 	font: 85% "Consolas", "Courier New";
 	color: #444444;
-	resize: none;
 }
 
 div.float-clear

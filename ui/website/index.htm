@@ -106,11 +106,11 @@
 							terminal_data = terminal_data.substring(gt_pos+1);
 					}
 				}
-				if (terminal_data.substring(terminal_data.length-21) == "<br />julia&gt;&nbsp;")
-					$("#terminal").html(terminal_data.substring(0, terminal_data.length-21));
+				if (terminal_data.substring(terminal_data.length-15) == "julia&gt;&nbsp;")
+					$("#terminal").html(terminal_data.substring(0, terminal_data.length-15));
 				else
 					$("#terminal").html(terminal_data);
-				$("#terminal").prop("scrollTop", $("#terminal").prop("scrollHeight"));
+				$("#terminal-form").prop("scrollTop", $("#terminal-form").prop("scrollHeight"));
 			}
 
 			// called once a secnd
@@ -162,9 +162,12 @@
 				// hook mouse click events
 				$("#terminal-form").click(function(evt) { $("#terminal-input").focus(); } );
 
-				// hook up and down arrow keys for input history
+				// hook keyboard events for the input field
 				$("#terminal-input").keydown(function(evt)
 				{
+					// scroll to the input field
+					$("#terminal-form").prop("scrollTop", $("#terminal-form").prop("scrollHeight"));
+
 					// determine which key was pressed
 					switch (evt.keyCode)
 					{
@@ -251,7 +254,7 @@
 				<form id="terminal-form">
 					<div id="terminal"></div>
 					<div>
-						<div id="prompt">julia> </div>
+						<div id="prompt">julia>&nbsp;</div>
 						<input class="input" id="terminal-input" type="text" autofocus="autofocus" />
 					</div>
 				</form>

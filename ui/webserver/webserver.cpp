@@ -590,7 +590,7 @@ string create_session()
         setrlimit(RLIMIT_AS, &limits);
 
         // acutally spawn julia instance
-        execl("./julia-release-web", "julia-release-web", (char*)0);
+        execl("./julia-release-web", "julia-release-web", "-q", (char*)0);
 
         // if exec failed, terminate with an error
         exit(1);
