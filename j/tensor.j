@@ -683,61 +683,56 @@ transpose(x::AbstractMatrix)  = [ x[j,i]       | i=1:size(x,2), j=1:size(x,1) ]
 ctranspose(x::AbstractMatrix) = [ conj(x[j,i]) | i=1:size(x,2), j=1:size(x,1) ]
 
 let permute_cache = nothing
-
 global permute
 function permute(A::AbstractArray, perm)
-	dimsA = size(A)
+    dimsA = size(A)
     ndimsA = length(dimsA)
     dimsP = ntuple(ndimsA, i->dimsA[perm[i]])
     P = similar(A, dimsP)
     ranges = ntuple(ndimsA, i->(Range1(1,dimsP[i])))
 
-
     strides = Array(Int32,0)
     for dim = 1:length(perm)
     	stride = 1
     	for dim_size = 1:(dim-1)
-    		stride = stride*dimsA[dim_size]
+    	    stride = stride*dimsA[dim_size]
     	end
     	push(strides, stride)
     end
 
     #must create offset, because indexing starts at 1
     offset = 0
-		for i = strides
-			offset+=i
-		end
-	offset = 1-offset
+    for i = strides
+	offset+=i
+    end
+    offset = 1-offset
 
     function permute_one(ivars)
-    s = { (x = ivars[i]; quote total+= $x*(strides[perm[$i]]) end) | i = 1:ndimsA}
-		quote
-			total=offset
-			$(s...)
-			#println(total)
-			P[count] = A[total]
-			count+=1
-
-		end
+        s = { (x = ivars[i]; quote total+= $x*(strides[perm[$i]]) end) | i = 1:ndimsA}
+	quote
+	    total=offset
+	    $(s...)
+	    #println(total)
+	    P[count] = A[total]
+	    count+=1
 	end
+    end
 
-	if is(permute_cache,nothing)
-		permute_cache = HashTable()
-	end
+    if is(permute_cache,nothing)
+	permute_cache = HashTable()
+    end
 
-	gen_cartesian_map(permute_cache, permute_one, ranges, {:A, :P, :perm, :count, :strides, :offset}, A, P, perm,1, strides, offset)
-	return P
-
+    gen_cartesian_map(permute_cache, permute_one, ranges, {:A, :P, :perm, :count, :strides, :offset}, A, P, perm,1, strides, offset)
+    return P
 end
 end
 
 function ipermute(A::AbstractArray,perm)
-	iperm = zeros(Int32,length(perm))
-	for i = 1:length(perm)
-		iperm[perm[i]]= i
-	end
-	return permute(A,iperm)
-
+    iperm = zeros(Int32,length(perm))
+    for i = 1:length(perm)
+	iperm[perm[i]]= i
+    end
+    return permute(A,iperm)
 end
 
 ## Other array functions ##
@@ -749,9 +744,7 @@ repmat(a::AbstractMatrix, m::Size, n::Size) = reshape([ a[i,j] | i=1:size(a,1),
                                               size(a,1)*m,
                                               size(a,2)*n)
 
-
 accumarray(I::AbstractVector, J::AbstractVector, V) = accumarray (I, J, V, max(I), max(J))
-
 
 function accumarray{T<:Number}(I::AbstractVector, J::AbstractVector, V::T, m::Size, n::Size)
     A = similar(V, m, n)
@@ -799,27 +792,21 @@ function find{T}(A::AbstractMatrix{T})
     return (I, J)
 end
 
-
 let find_cache = nothing
-
-
-
 function find_one(ivars)
-	
-	s = { quote I[$i][count] = $ivars[i] end | i = 1:length(ivars)}
-	quote
-		Aind = A[$(ivars...)]
-		if Aind != z
-			$(s...)
-			count +=1
-		end
+    s = { quote I[$i][count] = $ivars[i] end | i = 1:length(ivars)}
+    quote
+	Aind = A[$(ivars...)]
+	if Aind != z
+	    $(s...)
+	    count +=1
 	end
-
+    end
 end
 
 global find
 function find{T}(A::AbstractArray{T})
-	ndimsA = ndims(A)
+    ndimsA = ndims(A)
     nnzA = nnz(A)
     I = ntuple(ndimsA, x->zeros(Size, nnzA))
     ranges = ntuple(ndims(A), d->(1:size(A,d)))
@@ -830,7 +817,6 @@ function find{T}(A::AbstractArray{T})
 
     gen_cartesian_map(find_cache, find_one, ranges, {:A, :I, :count, :z}, A,I,1, zero(T))
     return I
-
 end
 end
 
