@@ -107,7 +107,13 @@
 					}
 				}
 				if (terminal_data.substring(terminal_data.length-15) == "julia&gt;&nbsp;")
+				{
+					// eat the julia prompt
 					$("#terminal").html(terminal_data.substring(0, terminal_data.length-15));
+
+					// show out prompt
+					$("#prompt").show();
+				}
 				else
 					$("#terminal").html(terminal_data);
 				$("#terminal-form").prop("scrollTop", $("#terminal-form").prop("scrollHeight"));
@@ -220,6 +226,9 @@
 
 						// clear the input box
 						$("#terminal-input").val("");
+
+						// hide the prompt
+						$("#prompt").hide();
 					}
 
 					// don't let the form redirect to any other pages

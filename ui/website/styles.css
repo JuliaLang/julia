@@ -162,6 +162,7 @@ div#terminal
 
 div#prompt
 {
+	display: none;
 	float: left;
 	font: bold 85% "Consolas", "Courier New";
 	color: #444444;
