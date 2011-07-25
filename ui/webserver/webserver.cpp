@@ -656,10 +656,17 @@ string get_response(request* req)
     }
 
     // process input if there is any
-    if (req->get_field_exists("terminal-input"))
+    if (req->get_field_exists("request"))
     {
-        string input = req->get_field_value("terminal-input")+"\n";
-        session_map[session_token].inbox += input;
+        Json::Value request_root;
+        Json::Reader reader;
+        if (reader.parse(req->get_field_value("request"), request_root))
+        {
+            if (request_root.get("type", "poll" ).asString() == "input")
+                session_map[session_token].inbox += request_root.get("input", "" ).asString();
+        }
+        else
+            return respond_error("", "Error parsing input.");
     }
 
     // escape for html
@@ -671,11 +678,11 @@ string get_response(request* req)
     content = str_replace(content, "\n", "<br />");
 
     // if julia has outputted any data since last poll
-    Json::Value root;
+    Json::Value response_root;
     Json::StyledWriter writer;
-    root["content"] = content;
+    response_root["content"] = content;
     session_map[session_token].outbox = "";
-    string response = writer.write(root);
+    string response = writer.write(response_root);
 
     // pet the watchdog
     session_map[session_token].update_time = time(0);

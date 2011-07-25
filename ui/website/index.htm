@@ -7,6 +7,7 @@
 		<link href="favicon.ico" rel="shortcut icon" />
 		<link href='http://fonts.googleapis.com/css?family=Droid+Sans+Mono&v2' rel='stylesheet' type='text/css'>
 		<script type="text/javascript" src="jquery.js"></script>
+		<script type="text/javascript" src="jquery.json.js"></script>
 		<script>
 			// keep track of the minimum height of the content (the height of the longest column)
 			var min_content_height;
@@ -138,13 +139,8 @@
 			function poll()
 			{
 				// submit AJAX request via POST
-				$.ajax({
-					type: "POST",
-					url: "/repl.scgi",
-					success: callback,
-					dataType: "json",
-					cache: false
-				});
+				request = {"type": "poll"};
+				$.post("/repl.scgi", request, callback, "json");
 
 				// set the time of the last request
 				last_request_time = new Date();
@@ -203,14 +199,8 @@
 					if (input != "")
 					{
 						// send the input to the server via AJAX
-						$.ajax({
-							type: "POST",
-							url: "/repl.scgi",
-							data: {"terminal-input": input},
-							success: callback,
-							dataType: "json",
-							cache: false
-						});
+						request = {"type": "input", "input": input+"\n"};
+						$.post("/repl.scgi", {"request": $.toJSON(request)}, callback, "json");
 
 						// input history
 						input_history.push(input);
