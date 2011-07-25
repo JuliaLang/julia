@@ -699,9 +699,9 @@ transpose(x::AbstractMatrix)  = [ x[j,i]       | i=1:size(x,2), j=1:size(x,1) ]
 ctranspose(x::AbstractMatrix) = [ conj(x[j,i]) | i=1:size(x,2), j=1:size(x,1) ]
 
 
-let permute_cache = nothing
-global permute
-function permute(A::AbstractArray, perm)
+let permute2_cache = nothing
+global permute2
+function permute2(A::AbstractArray, perm)
     dimsA = size(A)
     ndimsA = length(dimsA)
     dimsP = ntuple(ndimsA, i->dimsA[perm[i]])
@@ -753,8 +753,8 @@ let permute_cache = nothing
 global permute
 function permute(A::AbstractArray, perm)
 	dimsA = size(A)
-    ndimsA = length(dimsA)
-    dimsP = ntuple(ndimsA, i->dimsA[perm[i]])
+	ndimsA = length(dimsA)
+	dimsP = ntuple(ndimsA, i->dimsA[perm[i]])
     P = similar(A, dimsP)
     ranges = ntuple(ndimsA, i->(Range1(1,dimsP[i])))
 
@@ -821,7 +821,6 @@ function permute(A::AbstractArray, perm)
 	if is(permute_cache,nothing)
 		permute_cache = HashTable()
 	end
-    end
 
     #println("cartesian")
 	gen_cartesian_map(permute_cache, permute_one, ranges, {:A, :P, :perm, :offset, :strides}, A, P, perm, offset, strides)
