@@ -284,6 +284,7 @@ end # macro
 ## code generator for specializing on the number of dimensions ##
 
 #otherbodies are the bodies that reside between loops, if its a 2 dimension array. 
+make_loop_nest(vars, ranges, body) = make_loop_nest(vars, ranges, body, nothing)
 function make_loop_nest(vars, ranges, body, otherbodies)
     expr = body
     #println("otherbodies: ",otherbodies)
@@ -291,19 +292,19 @@ function make_loop_nest(vars, ranges, body, otherbodies)
     	#println("trying ",i)
         v = vars[i]
         r = ranges[i]
-        if (length(size(otherbodies))==2)
-        	#println("enterd the doubleness")
-        	l = otherbodies[i]
-        	#println("next ", size(otherbodies))
-        	j = otherbodies[i+size(otherbodies)[1]]
+        if isa(otherbodies,Array)
+            #println("enterd the doubleness")
+            l = otherbodies[i]
+            #println("next ", size(otherbodies))
+            j = otherbodies[i+size(otherbodies)[1]]
         else
-        	#println("entering the singleness")
-        	l = nothing
-        	j = otherbodies[i]
+            #println("entering the singleness")
+            l = nothing
+            j = nothing
         end
         #println(i, otherbodies[i],otherbodies[i+3])
         expr = quote
-        	$l
+            $l
             for ($v) = ($r)
                 $expr
             end
@@ -312,7 +313,6 @@ function make_loop_nest(vars, ranges, body, otherbodies)
     end
     expr
 end
-
 
 function gen_cartesian_map(cache, genbodies, dims, exargnames, exargs...)
     N = length(dims)
@@ -323,13 +323,13 @@ function gen_cartesian_map(cache, genbodies, dims, exargnames, exargs...)
         #println("size: ", size(bodies))
         #println("bodies: ", bodies)
         if isa(bodies,Array)
-			body = bodies[1]
-			bodies = bodies[2:end,:]
-		else
-			body = bodies
-			bodies = {nothing | i = 1:N}
-		end
-		#println(bodies)
+	    body = bodies[1]
+	    bodies = bodies[2:end,:]
+        else
+	    body = bodies
+	    bodies = nothing
+        end
+        #println(bodies)
         fexpr =
         quote
             let _dummy_=nothing
@@ -398,7 +398,8 @@ function ref(A::AbstractArray, I::Indices...)
     if is(ref_cache,nothing)
         ref_cache = HashTable()
     end
-    gen_cartesian_map(ref_cache, ivars->:(X[storeind] = A[$(ivars...)];storeind += 1),
+    gen_cartesian_map(ref_cache, ivars->:(X[storeind] = A[$(ivars...)];
+                                          storeind += 1),
                       I,
                       {:A, :X, :storeind},
                       A, X, 1)
@@ -725,36 +726,33 @@ function permute2(A::AbstractArray, perm)
     offset = 1-offset
 
     function permute2_one(ivars)
-    s = { (x = ivars[i]; quote total+= $x*(strides[perm[$i]]) end) | i = 1:ndimsA}
-		quote
-			total=offset
-			$(s...)
-			#println(total)
-			P[count] = A[total]
-			count+=1
-
-		end
+        s = { (x = ivars[i]; quote total+= $x*(strides[perm[$i]]) end) | i = 1:ndimsA}
+	quote
+	    total=offset
+	    $(s...)
+	    #println(total)
+	    P[count] = A[total]
+	    count+=1
 	end
+    end
 
-	if is(permute2_cache,nothing)
-		permute2_cache = HashTable()
-	end
+    if is(permute2_cache,nothing)
+	permute2_cache = HashTable()
+    end
 
-	gen_cartesian_map(permute2_cache, permute2_one, ranges, {:A, :P, :perm, :count, :strides, :offset}, A, P, perm,1, strides, offset)
-	return P
-
+    gen_cartesian_map(permute2_cache, permute2_one, ranges, {:A, :P, :perm, :count, :strides, :offset}, A, P, perm,1, strides, offset)
+    return P
 end
 #end let
 end
 
 
 let permute_cache = nothing
-
 global permute
 function permute(A::AbstractArray, perm)
-	dimsA = size(A)
-	ndimsA = length(dimsA)
-	dimsP = ntuple(ndimsA, i->dimsA[perm[i]])
+    dimsA = size(A)
+    ndimsA = length(dimsA)
+    dimsP = ntuple(ndimsA, i->dimsA[perm[i]])
     P = similar(A, dimsP)
     ranges = ntuple(ndimsA, i->(Range1(1,dimsP[i])))
 
@@ -763,20 +761,20 @@ function permute(A::AbstractArray, perm)
     for dim = 1:length(perm)
     	stride = 1
     	for dim_size = 1:(dim-1)
-    		stride = stride*dimsA[dim_size]
+    	    stride = stride*dimsA[dim_size]
     	end
     	push(strides, stride)
     end
 
     #reorganizes the ordering of the strides
-	strides = { (strides[perm[i]]) | i = 1:ndimsA}
+    strides = { (strides[perm[i]]) | i = 1:ndimsA}
 
     #Creates offset, because indexing starts at 1
     offset = 0
-		for i = strides
-			offset+=i
-		end
-	offset = 1-offset
+    for i = strides
+	offset+=i
+    end
+    offset = 1-offset
 
     function permute_one(ivars)
     	#println("permute")
@@ -784,48 +782,45 @@ function permute(A::AbstractArray, perm)
     	#println("counts: ", counts)
     	toReturn = cell(ndimsA+1,2)
     	for i = 1:numel(toReturn)
-    		toReturn[i] = nothing
+    	    toReturn[i] = nothing
     	end
     	#toReturn[end] runs once before any loop has started
     	#toReturn[2*end] runs once after every loop has finished
     	tmp = counts[end]
-    	toReturn[ndimsA+1] = quote
-    		ind = 1
-    		$tmp = strides[end]
+        toReturn[ndimsA+1] = quote
+    	    ind = 1
+    	    $tmp = strides[end]
     	end
     	#inner most loop
     	toReturn[1] = quote
-    		#println("index: ", ind, " origin: ", sum($counts...)+offset)
-    		P[ind]=	A[sum($counts...)+offset]
-    		ind+=1
-    		$counts[1]+= strides[1]
+    	    #println("index: ", ind, " origin: ", sum($counts...)+offset)
+    	    P[ind] = A[sum($counts...)+offset]
+    	    ind+=1
+    	    $counts[1]+= strides[1]
     	end
-   		for i = 1:ndimsA-1
-   			tmp = counts[i]
-   			val = i
-   			toReturn[(i+1)] = quote
-   				$tmp = strides[$val]
-   			end
-   			tmp2 = counts[i+1]
-   			val = i+1
-   			toReturn[(i+1)+(ndimsA+1)] = quote
-   				$tmp2 += strides[$val]
-   			end
-   		end
-   		#println("end permute")
-   		toReturn
-	end
+   	for i = 1:ndimsA-1
+   	    tmp = counts[i]
+   	    val = i
+   	    toReturn[(i+1)] = quote
+   		$tmp = strides[$val]
+   	    end
+   	    tmp2 = counts[i+1]
+   	    val = i+1
+   	    toReturn[(i+1)+(ndimsA+1)] = quote
+   		$tmp2 += strides[$val]
+   	    end
+   	end
+   	#println("end permute")
+   	toReturn
+    end
 
-	
-
-	if is(permute_cache,nothing)
-		permute_cache = HashTable()
-	end
+    if is(permute_cache,nothing)
+	permute_cache = HashTable()
+    end
 
     #println("cartesian")
-	gen_cartesian_map(permute_cache, permute_one, ranges, {:A, :P, :perm, :offset, :strides}, A, P, perm, offset, strides)
-	return P
-
+    gen_cartesian_map(permute_cache, permute_one, ranges, {:A, :P, :perm, :offset, :strides}, A, P, perm, offset, strides)
+    return P
 end
 #end let
 end
@@ -833,7 +828,7 @@ end
 function ipermute(A::AbstractArray,perm)
     iperm = zeros(Int32,length(perm))
     for i = 1:length(perm)
-	iperm[perm[i]]= i
+	iperm[perm[i]] = i
     end
     return permute(A,iperm)
 end
