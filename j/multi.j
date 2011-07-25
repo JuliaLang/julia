@@ -92,6 +92,8 @@ type Worker
     sendbuf::IOStream
     id::Int32
     del_msgs::Array{Any,1}
+    add_msgs::Array{Any,1}
+    gcflag::Bool
     
     function Worker(host, port)
         fd = ccall(:connect_to_host, Int32,
@@ -102,7 +104,8 @@ type Worker
         Worker(host, port, fd, fdio(fd))
     end
 
-    Worker(host,port,fd,sock,id) = new(host, port, fd, sock, memio(), id, {})
+    Worker(host,port,fd,sock,id) = new(host, port, fd, sock, memio(), id,
+                                       {}, {}, false)
     Worker(host,port,fd,sock) = Worker(host,port,fd,sock,0)
 end
 
@@ -115,10 +118,19 @@ function send_msg(w::Worker, kind, args...)
 end
 
 function flush_gc_msgs(w::Worker)
+    w.gcflag = false
+    msgs = w.add_msgs
+    if !isempty(msgs)
+        w.add_msgs = {}
+        remote_do(w, add_clients, msgs...)
+    end
+
     msgs = w.del_msgs
-    w.del_msgs = {}
-    #print("sending delete of $msgs\n")
-    remote_do(w, del_clients, msgs...)
+    if !isempty(msgs)
+        w.del_msgs = {}
+        #print("sending delete of $msgs\n")
+        remote_do(w, del_clients, msgs...)
+    end
 end
 
 function send_msg_(w::Worker, kind, args, now::Bool)
@@ -130,7 +142,7 @@ function send_msg_(w::Worker, kind, args, now::Bool)
     end
     ccall(:jl_buf_mutex_unlock, Void, ())
 
-    if !now && !isempty(w.del_msgs)
+    if !now && w.gcflag
         flush_gc_msgs(w)
     else
         ccall(:jl_enq_send_req, Void, (Ptr{Void}, Ptr{Void}, Int32),
@@ -142,7 +154,7 @@ function flush_gc_msgs()
     for w = (PGRP::ProcessGroup).workers
         if isa(w,Worker)
             k = w::Worker
-            if !isempty(k.del_msgs)
+            if k.gcflag
                 flush_gc_msgs(k)
             end
         end
@@ -370,6 +382,7 @@ function send_del_client(rr::RemoteRef)
     else
         w = worker_from_id(rr.where)
         push(w.del_msgs, (rr2id(rr), myid()))
+        w.gcflag = true
     end
 end
 
@@ -380,6 +393,12 @@ function add_client(id, client)
     nothing
 end
 
+function add_clients(pairs::(Any,Any)...)
+    for p=pairs
+        add_client(p[1], p[2])
+    end
+end
+
 function send_add_client(rr::RemoteRef, i)
     if rr.where == myid()
         add_client(rr2id(rr), i)
@@ -387,7 +406,9 @@ function send_add_client(rr::RemoteRef, i)
         # don't need to send add_client if the message is already going
         # to the processor that owns the remote ref. it will add_client
         # itself inside deserialize().
-        remote_do(rr.where, add_client, rr2id(rr), i)
+        w = worker_from_id(rr.where)
+        push(w.add_msgs, (rr2id(rr), i))
+        w.gcflag = true
     end
 end
 
