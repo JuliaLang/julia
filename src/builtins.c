@@ -544,7 +544,7 @@ JL_CALLABLE(jl_f_set_field)
         jl_type_error("setfield", ft, args[2]);
     }
     ((jl_value_t**)v)[1+i] = args[2];
-    return v;
+    return args[2];
 }
 
 JL_CALLABLE(jl_f_field_type)
