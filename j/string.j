@@ -25,13 +25,19 @@ size(s::String, d::Index) = d == 1 ? length(s) :
     error("in size: tupleref: index ",d," out of range")
 
 function at_string_end(s::String)
-    n = 0
-    i = start(s)
-    while !done(s,i)
-        c, i = next(s,i)
-        n += 1
+    if isempty(s)
+        return 0, 0
     end
-    return i, n
+    i = start(s)
+    n = 1
+    while true
+        c, j = next(s,i)
+        if done(s,j)
+            return i, n
+        end
+        n += 1
+        i = j
+    end
 end
 
 function nextind(s::String, ind::Int)
