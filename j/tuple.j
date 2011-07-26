@@ -1,6 +1,7 @@
 ## indexing ##
 
 length(t::Tuple) = tuplelen(t)
+numel (t::Tuple) = tuplelen(t)
 size(t::Tuple, d) = d==1 ? tuplelen(t) : error("invalid tuple dimension")
 ref(t::Tuple, i::Index) = tupleref(t, i)
 ref(t::Tuple, i::Int) = tupleref(t, long(i))

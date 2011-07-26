@@ -738,6 +738,7 @@ end
 # "end"
 X = [ i+2j | i=1:5, j=1:5 ]
 @assert X[end,end] == 15
+@assert X[end]     == 15  # linear index
 @assert X[2,  end] == 12
 @assert X[end,  2] == 9
 @assert X[end-1,2] == 8
