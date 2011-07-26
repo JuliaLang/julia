@@ -89,7 +89,7 @@ end
 
 #find which pieces hold which subranges in distributed dimension
 #returns (pmap,dist) where pmap[i] contains dist[i]:dist[i+1]-1
-function locate(d::DArray, I::Range1)
+function locate(d::DArray, I::Range1{Index})
     i = I[1]
     imax = I[length(I)]
     pmap = Array(Index,0)
@@ -108,6 +108,30 @@ function locate(d::DArray, I::Range1)
     return (pmap, dist)
 end
 
+#find which pieces hold which subranges in distributed dimension
+#returns (pmap,dist,perm) where pmap[i] contains dist[i]:dist[i+1]-1
+#and perm is the permutation which sorts I
+function locate(d::DArray, I::Vector{Index})
+    if isa(I, Range{Index}); I = I[:]; end
+    (I, perm) = sortperm(I)
+
+    i = I[1]
+    imax = I[length(I)]
+    pmap = Array(Index,0)
+    dist = [i]
+    j = 1
+    while i <= imax
+        if i >= d.dist[j+1]
+            j += 1
+        else
+            push(pmap,j)
+            i = min(imax+1,d.dist[j+1])
+            push(dist,i)
+            j += 1
+        end
+    end
+    return (pmap, dist, perm)
+end
 ## Constructors ##
 
 function maxdim(dims)
@@ -287,12 +311,14 @@ function ref{T}(d::DArray{T}, i::Index)
 end
 
 ref(d::DArray) = d
-ref(d::DArray, I::Range1{Index}) = ref(d, (I,))
-ref{distdim}(d::DArray{Any,1,distdim},I::Range1{Index}) = ref(d, (I,))
-ref{T,distdim}(d::DArray{T,1,distdim},I::Range1{Index}) = ref(d, (I,))
-ref{T}(d::DArray{T}, I::Range1{Index}...) = ref(d, I)
+#ref(d::DArray, I::Range1{Index}) = ref(d, (I,))
+#ref{distdim}(d::DArray{Any,1,distdim},I::Range1{Index}) = ref(d, (I,))
+#ref{T,distdim}(d::DArray{T,1,distdim},I::Range1{Index}) = ref(d, (I,))
+#ref{T}(d::DArray{T}, I::Range1{Index}...) = ref(d, I)
+#ref{T}(d::DArray{T}, ::()) = ()
 
-function ref{T}(d::DArray{T}, I::(Range1{Index}...,))
+#function ref{T}(d::DArray{T}, I::(Range1{Index}...,))
+function ref{T}(d::DArray{T}, I::Range1{Index}...)
     (pmap, dist) = locate(d, I[d.distdim])
     A = Array(T, map(range -> length(range), I))
     if length(pmap) == 1 && pmap[1] == d.localpiece
@@ -309,6 +335,34 @@ function ref{T}(d::DArray{T}, I::(Range1{Index}...,))
         K = ntuple(length(size(d)),i->(i==d.distdim ? (dist[p]:(dist[p+1]-1)) :
                                                       I[i]))
         A[J...] = remote_call_fetch(pmap[p], ref, d, K...)
+    end
+    return A
+end
+
+function ref2{T}(d::DArray{T}, I::Vector{Index}...)
+    (pmap, dist, perm) = locate(d, I[d.distdim])
+    A = Array(T, map(range -> length(range), I))
+    if length(pmap) == 1 && pmap[1] == d.localpiece
+        offs = d.dist[pmap[1]]-1
+        J = ntuple(length(size(d)), i -> (i == d.distdim ? I[i]-offs :
+                                                           I[i]))
+        A = localize(d)[J...]
+        return A
+    end
+    n = length(perm)
+    j = 1
+    II = I[d.distdim][perm] #the sorted indexes in the distributed dimension
+    for p = 1:length(pmap)
+        if dist[p] > II[j]; continue; end
+        lower = j
+        while j <= n && II[j] < dist[p+1]
+            j += 1
+        end
+        J = ntuple(length(size(d)),i->(i==d.distdim ? perm[lower:(j-1)] :
+                                                      (1:length(I[i]))))
+        K = ntuple(length(size(d)),i->(i==d.distdim ? II[lower:(j-1)] :
+                                                      I[i]))
+        A[J...] = remote_call_fetch(pmap[p], ref2, d, K...)
     end
     return A
 end
