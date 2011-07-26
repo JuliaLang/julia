@@ -57,6 +57,7 @@
 			var input_history_id = 0;
 			var input_history_size = 100;
 			var julia_path = "/home/stephan/julia/";
+			var should_clear_input = false;
 
 			// keep track of the last time a request was sent
 			var last_request_time = new Date();
@@ -140,7 +141,7 @@
 			function watchdog()
 			{
 				// check the watchdog
-				if ((new Date())-last_request_time > 5000)
+				if ((new Date())-last_request_time > 20000)
 					add_to_terminal("<span class=\"error\">&lt;connection lost&gt;</span><br />");
 				else
 				{
@@ -197,7 +198,15 @@
 				if (data.type == "content")
 				{
 					if (data.content != "")
+					{
 						add_to_terminal(data.content);
+						if (should_clear_input)
+						{
+							$("#terminal-input").val("");
+							$('#terminal-input').removeAttr('disabled', 'disabled');
+							$('#terminal-input').focus();
+						}
+					}
 				}
 
 				// poll the server again
@@ -261,7 +270,8 @@
 						last_request_time = new Date();
 
 						// clear the input box
-						$("#terminal-input").val("");
+						should_clear_input = true;
+						$('#terminal-input').attr('disabled', 'disabled');
 					}
 
 					// don't let the form redirect to any other pages
