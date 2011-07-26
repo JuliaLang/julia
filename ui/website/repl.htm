@@ -56,11 +56,48 @@
 			var input_history_current = [""];
 			var input_history_id = 0;
 			var input_history_size = 100;
+
+			// this is removed from all terminal text
 			var julia_path = "/home/stephan/julia/";
+
+			// whether the input should be cleared when new data comes in
 			var should_clear_input = false;
 
 			// keep track of the last time a request was sent
 			var last_request_time = new Date();
+
+			// jQuery extension to insert text into an input/textarea at the cursor position
+			jQuery.fn.extend({
+				insertAtCaret: function(myValue)
+				{
+					return this.each(function(i)
+					{
+						if (document.selection)
+						{
+							this.focus();
+							sel = document.selection.createRange();
+							sel.text = myValue;
+							this.focus();
+						}
+						else if (this.selectionStart || this.selectionStart == '0')
+						{
+							var startPos = this.selectionStart;
+							var endPos = this.selectionEnd;
+							var scrollTop = this.scrollTop;
+							this.value = this.value.substring(0, startPos)+myValue+this.value.substring(endPos, this.value.length);
+							this.focus();
+							this.selectionStart = startPos+myValue.length;
+							this.selectionEnd = startPos+myValue.length;
+							this.scrollTop = scrollTop;
+						}
+						else
+						{
+							this.value += myValue;
+							this.focus();
+						}
+					})
+				}
+			});
 
 			// add to the terminal
 			function add_to_terminal(data)
@@ -137,7 +174,7 @@
 				$("#terminal-form").prop("scrollTop", $("#terminal-form").prop("scrollHeight"));
 			}
 
-			// called once a secnd
+			// called once a second
 			function watchdog()
 			{
 				// check the watchdog
@@ -228,6 +265,10 @@
 					// determine which key was pressed
 					switch (evt.keyCode)
 					{
+						case 9:
+							// user pressed the tab key
+							$("#terminal-input").insertAtCaret("  ");
+							return false;
 						case 38:
 							// user pressed the up key
 							input_history_current[input_history_id] = $("#terminal-input").val();
