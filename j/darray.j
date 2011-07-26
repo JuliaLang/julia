@@ -339,7 +339,10 @@ function ref{T}(d::DArray{T}, I::Range1{Index}...)
     return A
 end
 
-function ref2{T}(d::DArray{T}, I::Vector{Index}...)
+ref(d::DArray, I::Range1{Index}, j::Index) = d[I, j:j]
+ref(d::DArray, i::Index, J::Range1{Index}) = d[i:i, J]
+
+function ref{T}(d::DArray{T}, I::Vector{Index}...)
     (pmap, dist, perm) = locate(d, I[d.distdim])
     A = Array(T, map(range -> length(range), I))
     if length(pmap) == 1 && pmap[1] == d.localpiece
@@ -362,10 +365,13 @@ function ref2{T}(d::DArray{T}, I::Vector{Index}...)
                                                       (1:length(I[i]))))
         K = ntuple(length(size(d)),i->(i==d.distdim ? II[lower:(j-1)] :
                                                       I[i]))
-        A[J...] = remote_call_fetch(pmap[p], ref2, d, K...)
+        A[J...] = remote_call_fetch(pmap[p], ref, d, K...)
     end
     return A
 end
+
+ref(d::DArray, I::Vector{Index}, j::Index) = d[I, [j]]
+ref(d::DArray, i::Index, J::Vector{Index}) = d[[i], J]
 
 assign(d::DArray, v::AbstractArray, i::Index) =
     invoke(assign, (DArray, Any, Index), d, v, i)
