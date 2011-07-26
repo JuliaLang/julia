@@ -1350,33 +1350,27 @@ static int jl_tuple_subtype_(jl_value_t **child, size_t cl,
         int cseq = !ta && (ci<cl) && jl_is_seq_type(child[ci]);
         int pseq = (pi<pl) && jl_is_seq_type(parent[pi]);
         if (ci >= cl)
-            return mode || (pi>=pl || pseq);
+            return (pi>=pl || pseq);
         if (cseq && !pseq)
             return mode;
         if (pi >= pl)
-            return mode;
+            return 0;
         jl_value_t *ce = child[ci];
         jl_value_t *pe = parent[pi];
         if (cseq) ce = jl_tparam0(ce);
         if (pseq) pe = jl_tparam0(pe);
 
-        if (mode) {
-            if (jl_subtype_le(pe, ce, 0, morespecific, invariant) &&
-                !jl_types_equal(ce,pe))
-                return 0;
-        }
-        else {
-            if (!jl_subtype_le(ce, pe, ta, morespecific, invariant))
-                return 0;
-        }
+        if (!jl_subtype_le(ce, pe, ta, morespecific, invariant))
+            return 0;
 
-        if (morespecific && 0) {
+        if (morespecific) {
             // stop as soon as one element is strictly more specific
             if (!jl_types_equal(ce,pe)) {
                 mode = 1;
-                // here should go into a different mode where we return 1
-                // unless some element of the parent, pe, is strictly more
-                // specific than the corresponding child element, ce.
+                assert(!ta);
+                // here go into a different mode where we return 1
+                // if the only reason the child is not more specific is
+                // argument count (i.e. ...)
             }
         }
 
@@ -1384,7 +1378,7 @@ static int jl_tuple_subtype_(jl_value_t **child, size_t cl,
         if (!cseq) ci++;
         if (!pseq) pi++;
     }
-    return mode;
+    return 0;
 }
 
 int jl_tuple_subtype(jl_value_t **child, size_t cl,
