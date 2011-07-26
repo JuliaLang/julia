@@ -7,6 +7,7 @@ ref(s::String, i::Index) = next(s,i)[1]
 ref(s::String, x::Real) = s[long(round(x))]
 ref(s::String, r::Range1) = s[long(round(r.start)):long(round(r.stop))]
 length(s::String) = at_string_end(s)[1]
+numel (s::String) = length(s)
 strlen(s::String) = at_string_end(s)[2]
 symbol(s::String) = symbol(cstring(s))
 string(s::String) = s

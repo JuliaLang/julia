@@ -103,26 +103,28 @@
 		 ,(expand-compare-chain (cddr e)))))
       `(call ,(cadr e) ,(car e) ,(caddr e))))
 
-(define (end-val a n tuples)
-  (if (null? tuples)
-      `(call (top size) ,a ,n)
-      `(call (top size) ,a (call (top +) ,(- n (length tuples))
-				 ,@(map (lambda (t)
-					  `(call (top length) ,t))
-					tuples)))))
+(define (end-val a n tuples s)
+  (if s
+      `(call (top numel) ,a)
+      (if (null? tuples)
+	  `(call (top size) ,a ,n)
+	  `(call (top size) ,a (call (top +) ,(- n (length tuples))
+				     ,@(map (lambda (t)
+					      `(call (top length) ,t))
+					    tuples))))))
 
 ; replace end inside ex with (call (top size) a n)
 ; affects only the closest ref expression, so doesn't go inside nested refs
-(define (replace-end ex a n tuples)
-  (cond ((eq? ex 'end)                (end-val a n tuples))
+(define (replace-end ex a n tuples s)
+  (cond ((eq? ex 'end)                (end-val a n tuples s))
 	((or (atom? ex) (quoted? ex)) ex)
 	((eq? (car ex) 'ref)
 	 ;; inside ref only replace within the first argument
-	 (list* 'ref (replace-end (cadr ex) a n tuples)
+	 (list* 'ref (replace-end (cadr ex) a n tuples s)
 		(cddr ex)))
 	(else
 	 (cons (car ex)
-	       (map (lambda (x) (replace-end x a n tuples))
+	       (map (lambda (x) (replace-end x a n tuples s))
 		    (cdr ex))))))
 
 ; translate index x from colons to ranges
@@ -145,13 +147,17 @@
 	       (else x)))
 	(else x)))
 
-; : inside indexing means 1:end
-; a:b and a:b:c are ranges instead of calls to colon
-; expand end to size(a,n)
-; a = array being indexed, i = list of indexes
-; returns (values index-list stmts) where stmts are statements that need
-; to execute first.
 (define (process-indexes a i)
+  (process-indexes- a i (length= i 1)))
+
+;; : inside indexing means 1:end
+;; a:b and a:b:c are ranges instead of calls to colon
+;; expand end to size(a,n), or numel(a) if it is the only index
+;; a = array being indexed, i = list of indexes
+;; s = (length i) equals 1
+;; returns (values index-list stmts) where stmts are statements that need
+;; to execute first.
+(define (process-indexes- a i s)
   (let loop ((lst i)
 	     (n   1)
 	     (stmts '())
@@ -165,17 +171,17 @@
 		  (loop (cdr lst) (+ n 1)
 			stmts
 			(cons (cadr idx) tuples)
-			(cons `(... ,(replace-end (cadr idx) a n tuples))
+			(cons `(... ,(replace-end (cadr idx) a n tuples s))
 			      ret))
 		  (let ((g (gensy)))
 		    (loop (cdr lst) (+ n 1)
-			  (cons `(= ,g ,(replace-end (cadr idx) a n tuples))
+			  (cons `(= ,g ,(replace-end (cadr idx) a n tuples s))
 				stmts)
 			  (cons g tuples)
 			  (cons `(... ,g) ret))))
 	      (loop (cdr lst) (+ n 1)
 		    stmts tuples
-		    (cons (replace-end (expand-index-colon idx) a n tuples)
+		    (cons (replace-end (expand-index-colon idx) a n tuples s)
 			  ret)))))))
 
 (define (function-expr argl body)
