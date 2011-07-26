@@ -26,10 +26,10 @@ size(s::String, d::Index) = d == 1 ? length(s) :
     error("in size: tupleref: index ",d," out of range")
 
 function at_string_end(s::String)
-    if isempty(s)
+    i = start(s)
+    if done(s,i)
         return 0, 0
     end
-    i = start(s)
     n = 1
     while true
         c, j = next(s,i)

@@ -321,6 +321,9 @@ void jl_load_file_expr(char *fname, jl_value_t *ast)
     jl_array_t *b = ((jl_expr_t*)ast)->args;
     size_t i;
     volatile size_t lineno=0;
+    if (((jl_expr_t*)ast)->head == jl_continue_sym) {
+        jl_errorf("syntax error: %s", jl_string_data(jl_exprarg(ast,0)));
+    }
     JL_TRY {
         // handle syntax error
         if (((jl_expr_t*)ast)->head == error_sym) {
