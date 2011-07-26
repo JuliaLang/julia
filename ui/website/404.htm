@@ -20,17 +20,18 @@
 			// this function makes all of the columns the same height
 			function set_column_heights() {
 				// set the height of all the columns to the height of the longest one
-				set_outer_height("div#left-column", min_content_height);
-				set_outer_height("div#right-column", min_content_height);
-				set_outer_height("div#main", min_content_height);
+				set_outer_height("#left-column", min_content_height);
+				set_outer_height("#right-column", min_content_height);
+				set_outer_height("#main", min_content_height);
 				
 				// calculate how much taller the columns should be so the footer is at the bottom of the window
 				var padding = Math.max($(window).height()-($("#footer-bar").offset().top+$("#footer-bar").outerHeight(true)), 0);
 				
 				// make the columns taller so the footer is on the bottom of the page
-				set_outer_height("div#left-column", min_content_height+padding);
-				set_outer_height("div#right-column", min_content_height+padding);
-				set_outer_height("div#main", min_content_height+padding);
+				set_outer_height("#left-column", min_content_height+padding);
+				set_outer_height("#right-column", min_content_height+padding);
+				set_outer_height("#main", min_content_height+padding);
+				set_outer_height("#terminal-form", min_content_height+padding-40);
 			}
 			
 			// called on page load
@@ -50,17 +51,16 @@
 		<div id="header-bar">
 			<header>
 				<a href="/"><img id="logo" src="images/logo_dark.png" alt="Julia Programming Language" /></a>
-				<img id="slogan" src="images/slogan.png" alt="A fresh approach to technical computing." />
 				<div class="float-clear"> </div>
 			</header>
 		</div>
 		<div id="main">
 			<div id="left-column">
-				<a href="/">Home</a>
-				<a href="/repl.htm">Interactive Prompt</a>
-				<a href="/plots.htm">Plots</a>
-				<a href="/docs.htm">Documentation</a>
-				<a href="/about.htm">About</a>
+				<a href="/"><img class="bullet" src="images/bullet.png" alt="" /> Home</a>
+				<a href="/repl.htm"><img class="bullet" src="images/bullet.png" alt="" /> Interactive Prompt</a>
+				<a href="/plots.htm"><img class="bullet" src="images/bullet.png" alt="" /> Plots</a>
+				<a href="/docs.htm"><img class="bullet" src="images/bullet.png" alt="" /> Documentation</a>
+				<a href="/about.htm"><img class="bullet" src="images/bullet.png" alt="" /> About</a>
 			</div>
 			<div id="right-column">
 				<h2>Oops!  We can't seem to find that page.</h2>

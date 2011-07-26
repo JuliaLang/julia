@@ -1,0 +1,316 @@
+﻿<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<title>Julia - A fresh approach to technical computing.</title>
+		<link href="styles.css" rel="stylesheet" type="text/css" />
+		<link href="favicon.ico" rel="shortcut icon" />
+		<link href='http://fonts.googleapis.com/css?family=Droid+Sans+Mono&v2' rel='stylesheet' type='text/css'>
+		<script type="text/javascript" src="jquery.js"></script>
+		<script type="text/javascript" src="jquery.json.js"></script>
+		<script>
+			// keep track of the minimum height of the content (the height of the longest column)
+			var min_content_height;
+
+			// set the outer height of an element or group of elements
+			function set_outer_height(selector, height)
+			{
+				$(selector).height(0);
+				$(selector).height(height-$(selector).outerHeight(true));
+			}
+			
+			// this function makes all of the columns the same height
+			function set_column_heights() {
+				// set the height of all the columns to the height of the longest one
+				set_outer_height("#left-column", min_content_height);
+				set_outer_height("#right-column", min_content_height);
+				set_outer_height("#main", min_content_height);
+				
+				// calculate how much taller the columns should be so the footer is at the bottom of the window
+				var padding = Math.max($(window).height()-($("#footer-bar").offset().top+$("#footer-bar").outerHeight(true)), 0);
+				
+				// make the columns taller so the footer is on the bottom of the page
+				set_outer_height("#left-column", min_content_height+padding);
+				set_outer_height("#right-column", min_content_height+padding);
+				set_outer_height("#main", min_content_height+padding);
+				set_outer_height("#terminal-form", min_content_height+padding-40);
+			}
+			
+			// called on page load
+			window.onload = function() {
+				// calculate the height of the longest column
+				min_content_height = Math.max($("div#left-column").outerHeight(true), $("div#right-column").outerHeight(true));
+				
+				// set the height of the columns appropriately
+				set_column_heights();
+			};
+			
+			// set the window resize callback
+			window.onresize = set_column_heights;
+		</script>
+		<script>
+			// keep track of terminal history
+			var terminal_data = "";
+			var terminal_data_size = 50000;
+			var input_history = [];
+			var input_history_current = [""];
+			var input_history_id = 0;
+			var input_history_size = 100;
+			var julia_path = "/home/stephan/julia/";
+
+			// keep track of the last time a request was sent
+			var last_request_time = new Date();
+
+			// add to the terminal
+			function add_to_terminal(data)
+			{
+				// add the data
+				terminal_data += data;
+
+				// don't show server paths
+				terminal_data = terminal_data.replace(new RegExp(julia_path, 'g'), "");
+
+				// limit size of stored data
+				if (terminal_data.length > terminal_data_size)
+				{
+					// make sure we do not cut off inside an escape sequence or HTML tag
+					var amp_pos = -1;
+					for (var i = 0; i < 5; i += 1)
+					{
+						if (terminal_data[terminal_data.length-terminal_data_size-1-i] == "&")
+							amp_pos = terminal_data.length-terminal_data_size-1-i;
+					}
+					var lt_pos = -1;
+					for (var i = 0; i < 5; i += 1)
+					{
+						if (terminal_data[terminal_data.length-terminal_data_size-1-i] == "<")
+							lt_pos = terminal_data.length-terminal_data_size-1-i;
+					}
+					if ((amp_pos == -1) == (lt_pos == -1))
+						terminal_data = terminal_data.substring(terminal_data.length-terminal_data_size);
+					if (amp_pos != -1 && lt_pos == -1)
+					{
+						var semi_pos = -1;
+						for (var i = 0; i < 5; i += 1)
+						{
+							if (terminal_data[terminal_data.length-terminal_data_size+i] == ";")
+								semi_pos = terminal_data.length-terminal_data_size+i;
+						}
+						if (semi_pos == -1)
+							terminal_data = terminal_data.substring(terminal_data.length-terminal_data_size);
+						else
+							terminal_data = terminal_data.substring(semi_pos+1);
+					}
+					if (amp_pos == -1 && lt_pos != -1)
+					{
+						var gt_pos = -1;
+						for (var i = 0; i < 5; i += 1)
+						{
+							if (terminal_data[terminal_data.length-terminal_data_size+i] == ">")
+								gt_pos = terminal_data.length-terminal_data_size+i;
+						}
+						if (gt_pos == -1)
+							terminal_data = terminal_data.substring(terminal_data.length-terminal_data_size);
+						else
+							terminal_data = terminal_data.substring(gt_pos+1);
+					}
+				}
+				
+				// find the last line break
+				var last_newline = terminal_data.lastIndexOf("<br />");
+				if (last_newline == -1)
+				{
+					$("#terminal").html("");
+					$("#prompt").html(terminal_data.replace(/julia&gt;&nbsp;/g, "<span class=\"prompt\">julia&gt;&nbsp;</span>"));
+				}
+				else
+				{
+					var new_terminal_data = terminal_data.substring(0, last_newline).replace(/julia&gt;&nbsp;/g, "<span class=\"prompt\">julia&gt;&nbsp;</span>");
+					if (new_terminal_data.lastIndexOf("<br />") == new_terminal_data.length-6)
+						new_terminal_data += "&nbsp;";
+					$("#terminal").html(new_terminal_data);
+					$("#prompt").html(terminal_data.substring(last_newline+6).replace(/julia&gt;&nbsp;/g, "<span class=\"prompt\">julia&gt;&nbsp;</span>"));
+				}
+
+				// scroll to the new data
+				$("#terminal-form").prop("scrollTop", $("#terminal-form").prop("scrollHeight"));
+			}
+
+			// called once a secnd
+			function watchdog()
+			{
+				// check the watchdog
+				if ((new Date())-last_request_time > 5000)
+					add_to_terminal("<span class=\"error\">&lt;connection lost&gt;</span><br />");
+				else
+				{
+					// run the watchdog again
+					setTimeout(watchdog, 1000);
+				}
+			}
+
+			// the first request
+			function init_session()
+			{
+				// submit AJAX request via POST
+				var request = {"type": "init"};
+				$.post("/repl.scgi", {"request": $.toJSON(request)}, callback, "json");
+
+				// set the time of the last request
+				last_request_time = new Date();
+			}
+
+			// check the server for data
+			function poll()
+			{
+				// submit AJAX request via POST
+				var request = {"type": "poll"};
+				$.post("/repl.scgi", {"request": $.toJSON(request)}, callback, "json");
+
+				// set the time of the last request
+				last_request_time = new Date();
+			}
+			
+			// called when the server has responded
+			function callback(data, textStatus, jqXHR)
+			{
+				// error message
+				if (data.type == "error")
+					add_to_terminal("<span class=\"error\">"+data.message+"</span>");
+
+				// fatal error message
+				if (data.type == "fatal_error")
+				{
+					add_to_terminal("<span class=\"error\">"+data.message+"</span>");
+					return;
+				}
+
+				// normal message
+				if (data.type == "message")
+					add_to_terminal("<span class=\"message\">"+data.message+"</span>");
+
+				// init message
+				if (data.type == "init_message")
+					$("#terminal").html("<span class=\"message\">"+data.message+"</span>");
+
+				// add new server data to the terminal
+				if (data.type == "content")
+				{
+					if (data.content != "")
+						add_to_terminal(data.content);
+				}
+
+				// poll the server again
+				setTimeout(poll, 500);
+			}
+
+			// called on page load
+			$(document).ready(function()
+			{
+				// hook mouse click events
+				$("#terminal-form").click(function(evt) { $("#terminal-input").focus(); } );
+
+				// hook keyboard events for the input field
+				$("#terminal-input").keydown(function(evt)
+				{
+					// scroll to the input field
+					$("#terminal-form").prop("scrollTop", $("#terminal-form").prop("scrollHeight"));
+
+					// determine which key was pressed
+					switch (evt.keyCode)
+					{
+						case 38:
+							// user pressed the up key
+							input_history_current[input_history_id] = $("#terminal-input").val();
+							input_history_id -= 1;
+							if (input_history_id < 0)
+								input_history_id = 0;
+							$("#terminal-input").val(input_history_current[input_history_id]);
+							return false;
+						case 40:
+							// user pressed the down key
+							input_history_current[input_history_id] = $("#terminal-input").val();
+							input_history_id += 1;
+							if (input_history_id > input_history_current.length-1)
+								input_history_id = input_history_current.length-1;
+							$("#terminal-input").val(input_history_current[input_history_id]);
+							return false;
+					}
+				});
+				
+				// hook the submit event of the form
+				$("#terminal-form").submit(function(evt)
+				{
+					// get the input line
+					var input = $("#terminal-input").val();
+					if (input != "")
+					{
+						// send the input to the server via AJAX
+						var request = {"type": "input", "input": input+"\n"};
+						$.post("/repl.scgi", {"request": $.toJSON(request)}, callback, "json");
+
+						// input history
+						input_history.push(input);
+						if (input_history.length > input_history_size)
+							input_history = input_history.slice(input_history.length-input_history_size);
+						input_history_current = input_history.slice(0);
+						input_history_current.push("");
+						input_history_id = input_history_current.length-1;
+
+						// set the time of the last request
+						last_request_time = new Date();
+
+						// clear the input box
+						$("#terminal-input").val("");
+					}
+
+					// don't let the form redirect to any other pages
+					return false;
+				});
+				
+				// start polling the server
+				init_session();
+
+				// start the watchdog
+				setTimeout(watchdog, 1000);
+			});
+		</script>
+	</head>
+	<body>
+		<div id="header-bar">
+			<header>
+				<a href="/"><img id="logo" src="images/logo_dark.png" alt="Julia Programming Language" /></a>
+				<div class="float-clear"> </div>
+			</header>
+		</div>
+		<div id="main">
+			<div id="left-column">
+				<a href="/"><img class="bullet" src="images/bullet.png" alt="" /> Home</a>
+				<a href="/repl.htm" class="current-page"><img class="bullet" src="images/bullet.png" alt="" /> Interactive Prompt</a>
+				<a href="/plots.htm"><img class="bullet" src="images/bullet.png" alt="" /> Plots</a>
+				<a href="/docs.htm"><img class="bullet" src="images/bullet.png" alt="" /> Documentation</a>
+				<a href="/about.htm"><img class="bullet" src="images/bullet.png" alt="" /> About</a>
+			</div>
+			<div id="right-column">
+				<form id="terminal-form">
+					<div id="terminal"></div>
+					<div>
+						<div id="prompt"></div>
+						<input class="input" id="terminal-input" type="text" autofocus="autofocus" autocomplete="off" spellcheck="false" />
+					</div>
+				</form>
+			</div>
+			<div class="float-clear"> </div>
+		</div>
+		<div id="footer-bar">
+			<footer>
+				<a href="http://web.mit.edu/"><img id="mit-logo" src="images/mit_logo.png" alt="MIT Logo" /></a>
+				<div style="text-align: center">
+					<p>A <span class="strong">fresh</span> approach to <span class="strong">technical computing.</span></p>
+					<p>Copyright &copy; 2011 Alan Edelman, Jeff Bezanson, et al.</p>
+				</div>
+				<div class="float-clear"> </div>
+			</footer>
+		</div>
+	</body>
+</html>
