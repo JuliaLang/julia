@@ -116,7 +116,7 @@ string str_replace(string str, string from, string to)
 /////////////////////////////////////////////////////////////////////////////
 
 // if a session hasn't been queried in this time, it dies
-const int SESSION_TIMEOUT = 10; // in seconds
+const int SESSION_TIMEOUT = 20; // in seconds
 
 // a session
 struct session
