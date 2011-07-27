@@ -576,11 +576,14 @@
 
 ; parse expressions or blocks introduced by syntactic reserved words
 (define (parse-resword s word)
+  (define current-line (input-port-line (ts:port s)))
   (define (expect-end s)
     (let ((t (peek-token s)))
       (if (eq? t 'end)
 	  (take-token s)
-	  (error "incomplete: end expected"))))
+	  (error (string "incomplete: " word " at "
+			 current-filename ":" current-line
+			 " requires end")))))
   (with-normal-ops
   (case word
     ((begin)  (begin0 (parse-block s)

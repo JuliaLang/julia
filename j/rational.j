@@ -103,6 +103,7 @@ fld(x::Rational, y::Real    ) = fld(x.num, x.den*y)
 
 rational(x::Real) = rational(x, eps(x))
 rational(x::Rational, tol::Real) = x
+rational(x::Int) = x // one(x)
 rational(x::Int, tol::Real) = x // one(x)
 rational(x::Float32, tol::Real) = convert(Rational{Int32}, x, tol)
 rational(x::Float64, tol::Real) = convert(Rational{Int64}, x, tol)

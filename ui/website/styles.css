@@ -6,7 +6,7 @@
 
 body
 {
-	font: 100% sans-serif;
+	font: 100% 'Arial', sans-serif;
 	color: #555555;
 }
 
@@ -15,7 +15,7 @@ div#header-bar
 	position: relative; /* make this appear above everything */
 	width: 100%;
 	min-width: 960px;
-	background-color: #1c1c1c;
+	background: #1c1c1c url('images/juliaset.png') no-repeat center top;
 }
 
 header
@@ -23,7 +23,6 @@ header
 	width: 960px;
 	margin-left: auto;
 	margin-right: auto;
-	background: #1c1c1c url('images/juliaset.png') no-repeat left top;
 }
 
 div#main
@@ -39,10 +38,11 @@ div#footer-bar
 	width: 100%;
 	min-width: 960px;
 	bottom: 0px;
-	border-top: 1px solid #d2d2d2;
-	border-bottom: 1px solid #f1f1f1;
-	background-color: #f1f1f1;
+	border-top: 1px solid #1c1c1c;
+	border-bottom: 1px solid #1c1c1c;
 	font-size: 80%;
+	color: #bbbbbb;
+	background: #1c1c1c url('images/juliaset.png') no-repeat center top;
 }
 
 footer
@@ -98,16 +98,24 @@ img#logo
 	float: left;
 }
 
-img#slogan
+img#landing
 {
 	display: block;
-	float: right;
-	margin-top: 35px;
+	border: 1px solid #cccccc;
+	-moz-box-shadow: 0px 0px 20px #888888;
+	-webkit-box-shadow: 0px 0px 20px #888888;
+	box-shadow: 0px 0px 20px #888888;
 }
 
 img#mit-logo
 {
 	float: right;
+}
+
+img.bullet
+{
+	padding-bottom: 3px;
+	padding-right: 6px;
 }
 
 ul
@@ -155,14 +163,14 @@ div#terminal
 	outline: none;
 	display: block;
 	overflow-x: hidden;
-	font: 85% "Droid Sans Mono", "Consolas", "Courier", "Courier New";
+	font: 85% "Droid Sans Mono", "Consolas", "Courier", "Courier New", monospace;
 	color: #444444;
 }
 
 div#prompt
 {
 	float: left;
-	font: 85% "Droid Sans Mono", "Consolas", "Courier", "Courier New";
+	font: 85% "Droid Sans Mono", "Consolas", "Courier", "Courier New", monospace;
 	color: #00aa00;
 }
 
@@ -173,7 +181,7 @@ input#terminal-input
 	border: none;
 	outline: none;
 	display: block;
-	font: 85% "Droid Sans Mono", "Consolas", "Courier", "Courier New";
+	font: 85% "Droid Sans Mono", "Consolas", "Courier", "Courier New", monospace;
 	color: #444444;
 }
 

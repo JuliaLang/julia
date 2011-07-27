@@ -341,13 +341,11 @@ function gen_cartesian_map(cache, genbodies, ranges, exargnames, exargs...)
         end
         fexpr =
         quote
-            let _dummy_=nothing
-                local _F_
-                function _F_($(dimargnames...), $(exargnames...))
-                    $make_loop_nest(ivars, dimargnames, body, bodies)
-                end
-                _F_
+            local _F_
+            function _F_($(dimargnames...), $(exargnames...))
+                $make_loop_nest(ivars, dimargnames, body, bodies)
             end
+            _F_
         end
         f = eval(fexpr)
         cache[N] = f
@@ -526,12 +524,16 @@ end
 
 contains(s::Number, n::Int) = (s == n)
 
-areduce{T}(f::Function, A::AbstractArray{T}, region::Region) = areduce(f,A,region,T)
+areduce{T}(f::Function, A::AbstractArray{T}, region::Region, v0) =
+        areduce(f,A,region,v0,T)
+
+# TODO:
+# - find out why inner loop with dimsA[i] instead of size(A,i) is way too slow
 
 let areduce_cache = nothing
 # generate the body of the N-d loop to compute a reduction
-function gen_areduce_core(ivars, f)
-    n = length(ivars)
+function gen_areduce_func(n, f)
+    ivars = { gensym() | i=1:n }
     # limits and vars for reduction loop
     lo    = { gensym() | i=1:n }
     hi    = { gensym() | i=1:n }
@@ -546,39 +548,154 @@ function gen_areduce_core(ivars, f)
         end
                end | i=1:n }
     rranges = { :( ($lo[i]):($hi[i]) ) | i=1:n }  # lo:hi for all dims
+    body =
     quote
-        _tot = ($f)()
+        _tot = v0
         $(setlims...)
         $make_loop_nest(rvars, rranges,
                         :(_tot = ($f)(_tot, A[$(rvars...)])))
-        R[$(ivars...)] = _tot
+        R[_ind] = _tot
+        _ind += 1
+    end
+    quote
+        local _F_
+        function _F_(f, A, region, R, v0)
+            _ind = 1
+            $make_loop_nest(ivars, { :(1:size(R,$i)) | i=1:n }, body)
+        end
+        _F_
     end
 end
 
 global areduce
-function areduce(f::Function, A::AbstractArray, region::Region, RType::Type)
+function areduce(f::Function, A::AbstractArray, region::Region, v0, RType::Type)
     dimsA = size(A)
-    ndimsA = length(dimsA)
+    ndimsA = ndims(A)
     dimsR = ntuple(ndimsA, i->(contains(region, i) ? 1 : dimsA[i]))
     R = similar(A, RType, dimsR)
     
     if is(areduce_cache,nothing)
         areduce_cache = HashTable()
     end
-    gen_cartesian_map(areduce_cache, iv->gen_areduce_core(iv,:f),
-                      ntuple(ndimsA, i->(Range1(1,dimsR[i]))),
-                      {:f, :A, :region, :R},
-                      f, A, region, R)
+
+    key = ndimsA
+    fname = :f
+
+    if  (is(f,+)     && (fname=:+;true)) ||
+        (is(f,*)     && (fname=:*;true)) ||
+        (is(f,max)   && (fname=:max;true)) ||
+        (is(f,min)   && (fname=:min;true)) ||
+        (is(f,sum)   && (fname=:+;true)) ||
+        (is(f,prod)  && (fname=:*;true)) ||
+        (is(f,any)   && (fname=:any;true)) ||
+        (is(f,all)   && (fname=:all;true)) ||
+        (is(f,count) && (fname=:count;true))
+        key = (fname, ndimsA)
+    end
+
+    if !has(areduce_cache,key)
+        fexpr = gen_areduce_func(ndimsA, fname)
+        func = eval(fexpr)
+        areduce_cache[key] = func
+    else
+        func = areduce_cache[key]
+    end
+
+    func(f, A, region, R, v0)
+
     return R
 end
 end
 
-function max{T}(A::AbstractArray{T})
-    if subtype(T,Int)
-        v = typemin(T)
-    else
-        v = convert(T,-Inf)
+let areduce_cache = nothing
+# generate the body of the N-d loop to compute a reduction
+function gen_areduce_func(n, f)
+    ivars = { gensym() | i=1:n }
+    # limits and vars for reduction loop
+    rv = gensym()
+    idx = gensym()
+    # generate code to compute sub2ind(size(A), ivars...)
+    s2i = :($ivars[n] - 1)
+    for d = (n-1):-1:2
+        s2i = :(($ivars[d]-1) + size(A,$d)*($s2i))
     end
+    s2i = :($ivars[1] + size(A,1)*($s2i))
+    body =
+    quote
+        _tot = v0
+        $idx = $s2i
+        for $rv = 1:size(A,dim)
+            _tot = ($f)(_tot, A[$idx])
+            $idx += stride
+        end
+        R[_ind] = _tot
+        _ind += 1
+    end
+    quote
+        local _F_
+        function _F_(f, A, dim, R, stride)
+            _ind = 1
+            $make_loop_nest(ivars, { :(1:size(R,$i)) | i=1:n }, body)
+        end
+        _F_
+    end
+end
+
+global areduce
+function areduce(f::Function, A::AbstractArray, dim::Size, RType::Type)
+    dimsA = size(A)
+    ndimsA = length(dimsA)
+    dimsR = ntuple(ndimsA, i->i==dim ? 1 : dimsA[i])
+    R = similar(A, RType, dimsR)
+    stride = prod(dimsA[1:(dim-1)])
+    
+    key = ndimsA
+    fname = :f
+
+    if  (is(f,+)     && (fname=:+;true)) ||
+        (is(f,*)     && (fname=:*;true)) ||
+        (is(f,max)   && (fname=:max;true)) ||
+        (is(f,min)   && (fname=:min;true)) ||
+        (is(f,sum)   && (fname=:+;true)) ||
+        (is(f,prod)  && (fname=:*;true)) ||
+        (is(f,any)   && (fname=:any;true)) ||
+        (is(f,all)   && (fname=:all;true)) ||
+        (is(f,count) && (fname=:count;true))
+        key = (fname, ndimsA)
+    end
+
+    if !has(areduce_cache,key)
+        fexpr = gen_areduce_func(ndimsA, fname)
+        func = eval(fexpr)
+        areduce_cache[key] = func
+    else
+        func = areduce_cache[key]
+    end
+
+    func(f, A, dim, R, stride)
+
+    return R
+end
+end
+
+function initial_max_val{T}(::Type{T})
+    if subtype(T,Int)
+        typemin(T)
+    else
+        convert(T,-Inf)
+    end
+end
+
+function initial_min_val{T}(::Type{T})
+    if subtype(T,Int)
+        typemax(T)
+    else
+        convert(T,Inf)
+    end
+end
+
+function max{T}(A::AbstractArray{T})
+    v = initial_max_val(T)
     for i=1:numel(A)
         v = max(v,A[i])
     end
@@ -586,11 +703,7 @@ function max{T}(A::AbstractArray{T})
 end
 
 function min{T}(A::AbstractArray{T})
-    if subtype(T,Int)
-        v = typemax(T)
-    else
-        v = convert(T,Inf)
-    end
+    v = initial_min_val(T)
     for i=1:numel(A)
         v = min(v,A[i])
     end
@@ -613,28 +726,16 @@ function prod{T}(A::AbstractArray{T})
     v
 end
 
-for f = (:max, :min, :sum, :prod)
-    @eval function ($f){T}(A::AbstractArray{T,2}, dim::Region)
-       if isinteger(dim)
-          if dim == 1
-            [ ($f)(A[:,i]) | i=1:size(A, 2) ]
-         elseif dim == 2
-            [ ($f)(A[i,:]) | i=1:size(A, 1) ]
-         end
-       elseif dim == (1,2)
-            ($f)(A)
-       end
-    end
-end
+max{T}(A::AbstractArray{T}, region::Region) = areduce(max,  A, region,
+                                                      initial_max_val(T), T)
+min{T}(A::AbstractArray{T}, region::Region) = areduce(min,  A, region,
+                                                      initial_min_val(T), T)
+sum{T}(A::AbstractArray{T}, region::Region) = areduce(+,  A, region, zero(T))
+prod{T}(A::AbstractArray{T}, region::Region) = areduce(*, A, region, one(T))
 
-max (A::AbstractArray, region::Region) = areduce(max,  A, region)
-min (A::AbstractArray, region::Region) = areduce(min,  A, region)
-sum (A::AbstractArray, region::Region) = areduce(sum,  A, region)
-prod(A::AbstractArray, region::Region) = areduce(prod, A, region)
-
-all(A::AbstractArray{Bool}, region::Region) = areduce(all, A, region)
-any(A::AbstractArray{Bool}, region::Region) = areduce(any, A, region)
-count(A::AbstractArray{Bool}, region::Region) = areduce(count, A, region, Size)
+all(A::AbstractArray{Bool}, region::Region) = areduce(all, A, region, true)
+any(A::AbstractArray{Bool}, region::Region) = areduce(any, A, region, false)
+count(A::AbstractArray{Bool}, region::Region) = areduce(count, A, region, 0, Size)
 
 function isequal(x::AbstractArray, y::AbstractArray)
     if size(x) != size(y)
@@ -926,9 +1027,13 @@ function find{T}(A::AbstractArray{T})
 end
 end
 
+sub2ind(dims) = 1
 sub2ind(dims, i::Int) = i
 sub2ind(dims, i::Int, j::Int) = (j-1)*dims[1] + i
-sub2ind(dims) = 1
+sub2ind(dims, i0::Int, i1::Int, i2::Int) =
+    i0 + dims[1]*((i1-1) + dims[2]*(i2-1))
+sub2ind(dims, i0::Int, i1::Int, i2::Int, i3::Int) =
+    i0 + dims[1]*((i1-1) + dims[2]*((i2-1) + dims[3]*(i3-1)))
 
 function sub2ind(dims, I::Int...)
     ndims = length(dims)

@@ -96,12 +96,22 @@ function std(V::Vector)
 end
 
 kron(a::Vector, b::Vector) = [ a[i]*b[j] | i=1:length(a), j=1:length(b) ]
-kron(a::Matrix, b::Matrix) = reshape([ a[i,j]*b[k,l] | k=1:size(b,1),
-                                                       i=1:size(a,1),
-                                                       l=1:size(b,2),
-                                                       j=1:size(a,2)],
-                                     size(a,1)*size(b,1),
-                                     size(a,2)*size(b,2))
+function kron{T,S}(a::Matrix{T}, b::Matrix{S})
+    R = Array(promote_type(T,S), size(a,1)*size(b,1), size(a,2)*size(b,2))
+
+    m = 1
+    for j = 1:size(a,2)
+        for l = 1:size(b,2)
+            for i = 1:size(a,1)
+                for k = 1:size(b,1)
+                    R[m] = a[i,j]*b[k,l]
+                    m += 1
+                end
+            end
+        end
+    end
+    R
+end
 
 det(a::Matrix) = prod(diag(qr(a)[2]))
 inv(a::Matrix) = a \ eye(size(a)[1])

@@ -7,6 +7,7 @@ ref(s::String, i::Index) = next(s,i)[1]
 ref(s::String, x::Real) = s[long(round(x))]
 ref(s::String, r::Range1) = s[long(round(r.start)):long(round(r.stop))]
 length(s::String) = at_string_end(s)[1]
+numel (s::String) = length(s)
 strlen(s::String) = at_string_end(s)[2]
 symbol(s::String) = symbol(cstring(s))
 string(s::String) = s
@@ -25,13 +26,19 @@ size(s::String, d::Index) = d == 1 ? length(s) :
     error("in size: tupleref: index ",d," out of range")
 
 function at_string_end(s::String)
-    n = 0
     i = start(s)
-    while !done(s,i)
-        c, i = next(s,i)
-        n += 1
+    if done(s,i)
+        return 0, 0
     end
-    return i, n
+    n = 1
+    while true
+        c, j = next(s,i)
+        if done(s,j)
+            return i, n
+        end
+        n += 1
+        i = j
+    end
 end
 
 function nextind(s::String, ind::Int)

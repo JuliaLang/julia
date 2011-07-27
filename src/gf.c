@@ -765,11 +765,11 @@ static void check_ambiguous(jl_methlist_t *ml, jl_tuple_t *type,
             if (errstream)
                 jl_set_current_output_stream_obj(errstream);
             ios_t *s = jl_current_output_stream();
-            ios_printf(s, "Warning: new definition %s", n);
+            ios_printf(s, "Warning: New definition %s", n);
             jl_show(t1);
             ios_printf(s, " is ambiguous with %s", n);
             jl_show(t2);
-            ios_printf(s, ". Make sure %s", n);
+            ios_printf(s, ".\n         Make sure %s", n);
             jl_show(isect);
             ios_printf(s, " is defined first.\n");
         }

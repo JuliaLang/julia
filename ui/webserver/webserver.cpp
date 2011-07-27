@@ -116,7 +116,7 @@ string str_replace(string str, string from, string to)
 /////////////////////////////////////////////////////////////////////////////
 
 // if a session hasn't been queried in this time, it dies
-const int SESSION_TIMEOUT = 10; // in seconds
+const int SESSION_TIMEOUT = 20; // in seconds
 
 // a session
 struct session
@@ -684,7 +684,7 @@ string get_response(request* req)
                 if (session_token == "")
                 {
                     response_root["type"] = "fatal_error";
-                    response_root["message"] = "&gt;session expired&lt;<br />";
+                    response_root["message"] = "&lt;session expired&gt;<br />";
                 }
                 else
                 {
@@ -718,7 +718,7 @@ string get_response(request* req)
                 if (session_token == "")
                 {
                     response_root["type"] = "fatal_error";
-                    response_root["message"] = "&gt;session expired&lt;<br />";
+                    response_root["message"] = "&lt;session expired&gt;<br />";
                 }
                 else
                 {
@@ -745,21 +745,21 @@ string get_response(request* req)
             if (!request_recognized)
             {
                 response_root["type"] = "fatal_error";
-                response_root["message"] = "&gt;invalid request&lt;<br />";
+                response_root["message"] = "&lt;invalid request&gt;<br />";
             }
         }
         else
         {
             // error parsing json
             response_root["type"] = "fatal_error";
-            response_root["message"] = "&gt;invalid request&lt;<br />";
+            response_root["message"] = "&lt;invalid request&gt;<br />";
         }
     }
     else
     {
         // no request
         response_root["type"] = "fatal_error";
-        response_root["message"] = "&gt;invalid request&lt;<br />";
+        response_root["message"] = "&lt;invalid request&gt;<br />";
     }
 
     // unlock the mutex
