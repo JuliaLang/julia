@@ -320,11 +320,11 @@ function gen_cartesian_map(cache, genbodies, ranges, exargnames, exargs...)
         ## creating a 2d array, to pass as bodies
         if isa(bodies,Array)
             if (length(size(bodies))==2)
-                println("2d array noticed")
+                #println("2d array noticed")
 	            body = bodies[1]
 	            bodies = bodies[2:end,:]
             elseif (length(size(bodies))==1)
-                println("1d array noticed")
+                #println("1d array noticed")
                 body = bodies[1]
                 bodies_tmp = cell(N,2)
                 for i = 1:N
@@ -334,10 +334,10 @@ function gen_cartesian_map(cache, genbodies, ranges, exargnames, exargs...)
                 bodies = bodies_tmp
             end
         else
-            println("no array noticed")
+            #println("no array noticed")
 	        body = bodies
             bodies = cell(N,2)
-            { bodies[i] = nothing | i = 1:N}
+            { bodies[i] = nothing | i = 1:2*N}
         end
         fexpr =
         quote
@@ -854,40 +854,6 @@ end
 
 let permute_cache = nothing
 
-function permute_one(ivars)
-    len = length(ivars)
-    counts = { gensym() | i=1:len}
-    toReturn = cell(len+1,2)
-    for i = 1:numel(toReturn)
-        toReturn[i] = nothing
-    end
-    
-    tmp = counts[end]
-    toReturn[len+1] = quote
-        ind = 1
-        $tmp = strides[end]
-    end
-    
-    #inner most loop
-    toReturn[1] = quote
-        P[ind] = A[sum($counts...)+offset]
-        ind+=1
-        $counts[1]+= strides[1]
-    end
-    for i = 1:len-1
-        tmp = counts[i]
-        val = i
-        toReturn[(i+1)] = quote
-            $tmp = strides[$val]
-        end
-        tmp2 = counts[i+1]
-        val = i+1
-        toReturn[(i+1)+(len+1)] = quote
-             $tmp2 += strides[$val]
-        end
-    end
-    toReturn
-end
 
 global permute
 function permute(A::AbstractArray, perm)
@@ -896,6 +862,7 @@ function permute(A::AbstractArray, perm)
     dimsP = ntuple(ndimsA, i->dimsA[perm[i]])
     P = similar(A, dimsP)
     ranges = ntuple(ndimsA, i->(Range1(1,dimsP[i])))
+    stridenames = {gensym() | i = 1:ndimsA}
 
     #calculates all the strides
     strides = Array(Int32,0)
@@ -910,6 +877,9 @@ function permute(A::AbstractArray, perm)
     #reorganizes the ordering of the strides
     strides = { (strides[perm[i]]) | i = 1:ndimsA}
 
+    #calculates strides
+    #strides = [ prod(dimsA[1:perm[i]]) | i=1:ndimsA ]
+
     #Creates offset, because indexing starts at 1
     offset = 0
     for i = strides
@@ -917,11 +887,49 @@ function permute(A::AbstractArray, perm)
     end
     offset = 1-offset
 
+
+    function permute_one(ivars)
+        len = length(ivars)
+        counts = { gensym() | i=1:len}
+        toReturn = cell(len+1,2)
+        for i = 1:numel(toReturn)
+            toReturn[i] = nothing
+        end
+        
+        tmp = counts[end]
+        toReturn[len+1] = quote
+            ind = 1
+            $tmp = $stridenames[end]
+        end
+        
+        #inner most loop
+        toReturn[1] = quote
+            P[ind] = A[sum($counts...)+offset]
+            ind+=1
+            $counts[1]+= $stridenames[1]
+        end
+        for i = 1:len-1
+            tmp = counts[i]
+            val = i
+            toReturn[(i+1)] = quote
+                $tmp = $stridenames[val]
+            end
+            tmp2 = counts[i+1]
+            val = i+1
+            toReturn[(i+1)+(len+1)] = quote
+                 $tmp2 += $stridenames[val]
+            end
+        end
+        toReturn
+    end
+
+
     if is(permute_cache,nothing)
 	    permute_cache = HashTable()
     end
 
-    gen_cartesian_map(permute_cache, permute_one, ranges, {:A, :P, :perm, :offset, :strides}, A, P, perm, offset, strides)
+    gen_cartesian_map(permute_cache, permute_one, ranges, {:A, :P, :perm, :offset, stridenames... }, A, P, perm, offset, strides...)
+
     return P
 end
 #end let
