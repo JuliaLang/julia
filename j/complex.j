@@ -1,6 +1,6 @@
 ## generic complex number definitions ##
 
-abstract Complex <: Number
+abstract Complex{T<:Real} <: Number
 
 iscomplex(x::Complex) = true
 iscomplex(x) = false
@@ -37,7 +37,7 @@ end
 
 ## packed complex float types ##
 
-bitstype 128 Complex128 <: Complex
+bitstype 128 Complex128 <: Complex{Float64}
 
 function complex128(r::Float64, i::Float64)
     box(Complex128,
@@ -72,7 +72,7 @@ function write(s, z::Complex128)
     write(s,imag(z))
 end
 
-bitstype 64 Complex64 <: Complex
+bitstype 64 Complex64 <: Complex{Float32}
 
 function complex64(r::Float32, i::Float32)
     box(Complex64,
@@ -119,7 +119,7 @@ complex(x::Float) = complex(x, zero(x))
 
 ## complex with arbitrary component type ##
 
-type ComplexPair{T<:Real} <: Complex
+type ComplexPair{T<:Real} <: Complex{T}
     re::T
     im::T
 end
