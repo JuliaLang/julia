@@ -311,13 +311,6 @@ function ref{T}(d::DArray{T}, i::Index)
 end
 
 ref(d::DArray) = d
-#ref(d::DArray, I::Range1{Index}) = ref(d, (I,))
-#ref{distdim}(d::DArray{Any,1,distdim},I::Range1{Index}) = ref(d, (I,))
-#ref{T,distdim}(d::DArray{T,1,distdim},I::Range1{Index}) = ref(d, (I,))
-#ref{T}(d::DArray{T}, I::Range1{Index}...) = ref(d, I)
-#ref{T}(d::DArray{T}, ::()) = ()
-
-#function ref{T}(d::DArray{T}, I::(Range1{Index}...,))
 function ref{T}(d::DArray{T}, I::Range1{Index}...)
     (pmap, dist) = locate(d, I[d.distdim])
     A = Array(T, map(range -> length(range), I))
@@ -341,6 +334,14 @@ end
 
 ref(d::DArray, I::Range1{Index}, j::Index) = d[I, j:j]
 ref(d::DArray, i::Index, J::Range1{Index}) = d[i:i, J]
+
+function ref(d::DArray, I::Union(Index,Range1{Index})...)
+    J = ntuple(length(I),i->(isa(I[i],Index) ? (I[i]:I[i]) :
+                                               I[i]))
+    ref(d, J...)
+end
+
+
 
 function ref{T}(d::DArray{T}, I::Vector{Index}...)
     (pmap, dist, perm) = locate(d, I[d.distdim])
@@ -372,6 +373,12 @@ end
 
 ref(d::DArray, I::Vector{Index}, j::Index) = d[I, [j]]
 ref(d::DArray, i::Index, J::Vector{Index}) = d[[i], J]
+
+function ref(d::DArray, I::Union(Index,Vector{Index})...)
+    J = ntuple(length(I),i->(isa(I[i],Index) ? [I[i]] :
+                                               I[i]))
+    ref(d, J...)    
+end
 
 assign(d::DArray, v::AbstractArray, i::Index) =
     invoke(assign, (DArray, Any, Index), d, v, i)
