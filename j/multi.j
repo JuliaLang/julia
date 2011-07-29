@@ -961,8 +961,9 @@ function start_remote_workers(machines, cmds)
     end
     w = cell(n)
     for i=1:n
-        w[i] = Worker(machines[i], read(outs[i],Int16))
-        readline(outs[i])  # read and ignore hostname
+        port = read(outs[i],Int16)
+        hostname = readline(outs[i])[1:end-1]
+        w[i] = Worker(hostname, port)
     end
     w
 end
