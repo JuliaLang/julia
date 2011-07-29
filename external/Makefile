@@ -7,7 +7,7 @@ DSFMT_VER = 2.1
 OPENBLAS_VER = v0.1alpha2
 LAPACK_VER = 3.3.1
 ARPACK_VER = 96
-FFTW_VER = 3.3-beta1
+FFTW_VER = 3.3
 UNWIND_VER = 0.99
 
 ## high-level setup ##
