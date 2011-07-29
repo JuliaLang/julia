@@ -39,6 +39,7 @@ div#footer-bar
 {
 	position: relative; /* make this appear above everything */
 	width: 100%;
+	min-width: 960px;
 	height: 80px;
 	bottom: 0px;
 	border-top: 1px solid #3e3e3e;
