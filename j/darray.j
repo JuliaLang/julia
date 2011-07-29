@@ -332,14 +332,12 @@ function ref{T}(d::DArray{T}, I::Range1{Index}...)
     return A
 end
 
+
 ref(d::DArray, I::Range1{Index}, j::Index) = d[I, j:j]
 ref(d::DArray, i::Index, J::Range1{Index}) = d[i:i, J]
 
-function ref(d::DArray, I::Union(Index,Range1{Index})...)
-    J = ntuple(length(I),i->(isa(I[i],Index) ? (I[i]:I[i]) :
-                                               I[i]))
-    ref(d, J...)
-end
+ref(d::DArray, I::Union(Index,Range1{Index})...) =
+    d[ntuple(length(I),i->(isa(I[i],Index) ? (I[i]:I[i]) : I[i] ))...]
 
 
 
@@ -374,11 +372,9 @@ end
 ref(d::DArray, I::Vector{Index}, j::Index) = d[I, [j]]
 ref(d::DArray, i::Index, J::Vector{Index}) = d[[i], J]
 
-function ref(d::DArray, I::Union(Index,Vector{Index})...)
-    J = ntuple(length(I),i->(isa(I[i],Index) ? [I[i]] :
-                                               I[i]))
-    ref(d, J...)    
-end
+ref(d::DArray, I::Union(Index,Vector{Index})...) =
+    d[ntuple(length(I),i->(isa(I[i],Index) ? [I[i]] : I[i] ))...]
+
 
 assign(d::DArray, v::AbstractArray, i::Index) =
     invoke(assign, (DArray, Any, Index), d, v, i)
@@ -399,6 +395,75 @@ function assign(d::DArray, v, i::Index)
     d
 end
 
+#TODO: Fix this
+assign(d::DArray, v) = error("distributed arrays of dimension 0 not supported")
+
+#TODO: check for same size
+function assign(d::DArray, v, I::Range1{Index}...)
+    (pmap, dist) = locate(d, I[d.distdim])
+    if length(pmap) == 1 && pmap[1] == d.localpiece
+        offs = d.dist[pmap[1]]-1
+        J = ntuple(length(size(d)), i -> (i == d.distdim ? I[i]-offs :
+                                                           I[i]))
+        localize(d)[J...] = v
+        return d
+    end
+    refs = Array(Union(DArray,RemoteRef),length(pmap))
+    for p = 1:length(pmap)
+        offs = I[d.distdim][1] - 1
+        J = ntuple(length(size(d)),i->(i==d.distdim ? (dist[p]:(dist[p+1]-1))-offs :
+                                                      (1:length(I[i]))))
+        K = ntuple(length(size(d)),i->(i==d.distdim ? (dist[p]:(dist[p+1]-1)) :
+                                                      I[i]))
+        refs[p] = remote_call(pmap[p], assign, d, v[J...], K...)
+    end
+    for p = 1:length(pmap)
+        if isa(refs[p], RemoteRef); wait(refs[p]); end
+    end
+    return d
+end
+
+#TODO: check for same size
+function assign(d::DArray, v, I::Vector{Index}...)
+    (pmap, dist, perm) = locate(d, I[d.distdim])
+    if length(pmap) == 1 && pmap[1] == d.localpiece
+        offs = d.dist[pmap[1]]-1
+        J = ntuple(length(size(d)), i -> (i == d.distdim ? I[i]-offs :
+                                                           I[i]))
+        localize(d)[J...] = v
+        return d
+    end
+    refs = Array(Union(DArray,RemoteRef),length(pmap))
+    n = length(perm)
+    j = 1
+    II = I[d.distdim][perm] #the sorted indexes in the distributed dimension
+    for p = 1:length(pmap)
+        if dist[p] > II[j]; continue; end
+        lower = j
+        while j <= n && II[j] < dist[p+1]
+            j += 1
+        end
+        J = ntuple(length(size(d)),i->(i==d.distdim ? perm[lower:(j-1)] :
+                                                      (1:length(I[i]))))
+        K = ntuple(length(size(d)),i->(i==d.distdim ? II[lower:(j-1)] :
+                                                      I[i]))
+        refs[p] = remote_call(pmap[p], assign, d, v[J...], K...)
+    end
+    for p = 1:length(pmap)
+        if isa(refs[p], RemoteRef); wait(refs[p]); end
+    end
+    return d
+end
+
+#assign(d::DArray, v, I::Range1{Index}, j::Index) = assign(d,v,I,j:j)
+#assign(d::DArray, v, i::Index, J::Range1{Index}) = assign(d,v,i:i,J)
+#assign(d::DArray, v, I::Union(Index,Range1{Index})...) =
+#    assign(d,v,ntuple(length(I),i->(isa(I[i],Index) ? (I[i]:I[i]) : I[i] ))...)
+
+#assign(d::DArray, v, I::Vector{Index}, j::Index) = assign(d,v,I,[j])
+#assign(d::DArray, v, i::Index, J::Vector{Index}) = assign(d,v,[i],J)
+#assign(d::DArray, I::Union(Index,Vector{Index})...) =
+#    assign(d,v,ntuple(length(I),i->(isa(I[i],Index) ? [I[i]] : I[i] ))...)
 
 ## matrix multiply ##
 
