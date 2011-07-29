@@ -57,11 +57,17 @@
 			var input_history_id = 0;
 			var input_history_size = 100;
 
+			// whether we should clear the input box on next response
+			var clear_on_next_response = false;
+
+			// a queue of messages to be sent to the server
+			var outbox_queue = [];
+
+			// whether we are waiting for a message to be sent
+			var outstanding_message = false;
+
 			// this is removed from all terminal text
 			var julia_path = "/home/stephan/julia/";
-
-			// whether the input should be cleared when new data comes in
-			var should_clear_input = false;
 
 			// keep track of the last time a request was sent
 			var last_request_time = new Date();
@@ -191,8 +197,8 @@
 			function init_session()
 			{
 				// submit AJAX request via POST
-				var request = {"type": "init"};
-				$.post("/repl.scgi", {"request": $.toJSON(request)}, callback, "json");
+				outbox_queue.push({"type": "init"});
+				process_outbox();
 
 				// set the time of the last request
 				last_request_time = new Date();
@@ -202,16 +208,34 @@
 			function poll()
 			{
 				// submit AJAX request via POST
-				var request = {"type": "poll"};
-				$.post("/repl.scgi", {"request": $.toJSON(request)}, callback, "json");
+				outbox_queue.push({"type": "poll"});
+				process_outbox();
 
 				// set the time of the last request
 				last_request_time = new Date();
+			}
+
+			// send the next line in the queue - return whether there is more data to process
+			function process_outbox()
+			{
+				if (outbox_queue.length > 0 && !outstanding_message)
+					$.post("/repl.scgi", {"request": $.toJSON(outbox_queue.shift())}, callback, "json");
+				return (outbox_queue.length > 0);
 			}
 			
 			// called when the server has responded
 			function callback(data, textStatus, jqXHR)
 			{
+				// we're no longer waiting for that message to be sent
+				outstanding_message = false;
+
+				// clear input if necessary
+				if (clear_on_next_response)
+				{
+					$("#terminal-input").val("");
+					clear_on_next_response = false;
+				}
+
 				// error message
 				if (data.type == "error")
 					add_to_terminal("<span class=\"error\">"+data.message+"</span>");
@@ -235,16 +259,12 @@
 				if (data.type == "content")
 				{
 					if (data.content != "")
-					{
 						add_to_terminal(data.content);
-						if (should_clear_input)
-						{
-							$("#terminal-input").val("");
-							$('#terminal-input').removeAttr('disabled', 'disabled');
-							$('#terminal-input').focus();
-						}
-					}
 				}
+
+				// send any remaining messages if there are any
+				if (process_outbox())
+					return;
 
 				// poll the server again
 				setTimeout(poll, 500);
@@ -255,6 +275,38 @@
 			{
 				// hook mouse click events
 				$("#terminal-form").click(function(evt) { $("#terminal-input").focus(); } );
+
+				// when the user pastes multi-line strings, submit all but the last line
+				$("#terminal-input").keyup(function(evt)
+				{
+					// get the input
+					var input = $("#terminal-input").val();
+
+					// split the input into lines
+					var lines = input.split("\n");
+
+					// submit all but the last line
+					for (var i = 0; i < lines.length-1; i += 1)
+					{
+						// send the input to the server via AJAX
+						outbox_queue.push({"type": "input", "input": lines[i]+"\n"});
+
+						// input history
+						input_history.push(lines[i]);
+						if (input_history.length > input_history_size)
+							input_history = input_history.slice(input_history.length-input_history_size);
+						input_history_current = input_history.slice(0);
+						input_history_current.push("");
+						input_history_id = input_history_current.length-1;
+
+						// set the time of the last request
+						last_request_time = new Date();
+					}
+					process_outbox();
+
+					// set the input to the last line
+					$("#terminal-input").val(lines[lines.length-1]);
+				});
 
 				// hook keyboard events for the input field
 				$("#terminal-input").keydown(function(evt)
@@ -268,7 +320,9 @@
 						case 9:
 							// user pressed the tab key
 							$("#terminal-input").insertAtCaret("  ");
+							$("#terminal-form").prop("scrollTop", $("#terminal-form").prop("scrollHeight"));
 							return false;
+
 						case 38:
 							// user pressed the up key
 							input_history_current[input_history_id] = $("#terminal-input").val();
@@ -276,7 +330,9 @@
 							if (input_history_id < 0)
 								input_history_id = 0;
 							$("#terminal-input").val(input_history_current[input_history_id]);
+							$("#terminal-form").prop("scrollTop", $("#terminal-form").prop("scrollHeight"));
 							return false;
+
 						case 40:
 							// user pressed the down key
 							input_history_current[input_history_id] = $("#terminal-input").val();
@@ -284,39 +340,35 @@
 							if (input_history_id > input_history_current.length-1)
 								input_history_id = input_history_current.length-1;
 							$("#terminal-input").val(input_history_current[input_history_id]);
+							$("#terminal-form").prop("scrollTop", $("#terminal-form").prop("scrollHeight"));
+							return false;
+
+						case 13:
+							// user pressed the enter key
+							var input = $("#terminal-input").val();
+							if (input != "")
+							{
+								// send the input to the server via AJAX
+								outbox_queue.push({"type": "input", "input": input+"\n"});
+								process_outbox();
+
+								// input history
+								input_history.push(input);
+								if (input_history.length > input_history_size)
+									input_history = input_history.slice(input_history.length-input_history_size);
+								input_history_current = input_history.slice(0);
+								input_history_current.push("");
+								input_history_id = input_history_current.length-1;
+
+								// set the time of the last request
+								last_request_time = new Date();
+
+								// clear the input box
+								clear_on_next_response = true;
+							}
+							$("#terminal-form").prop("scrollTop", $("#terminal-form").prop("scrollHeight"));
 							return false;
 					}
-				});
-				
-				// hook the submit event of the form
-				$("#terminal-form").submit(function(evt)
-				{
-					// get the input line
-					var input = $("#terminal-input").val();
-					if (input != "")
-					{
-						// send the input to the server via AJAX
-						var request = {"type": "input", "input": input+"\n"};
-						$.post("/repl.scgi", {"request": $.toJSON(request)}, callback, "json");
-
-						// input history
-						input_history.push(input);
-						if (input_history.length > input_history_size)
-							input_history = input_history.slice(input_history.length-input_history_size);
-						input_history_current = input_history.slice(0);
-						input_history_current.push("");
-						input_history_id = input_history_current.length-1;
-
-						// set the time of the last request
-						last_request_time = new Date();
-
-						// clear the input box
-						should_clear_input = true;
-						$('#terminal-input').attr('disabled', 'disabled');
-					}
-
-					// don't let the form redirect to any other pages
-					return false;
 				});
 				
 				// start polling the server
@@ -347,7 +399,7 @@
 					<div id="terminal"></div>
 					<div>
 						<div id="prompt"></div>
-						<input class="input" id="terminal-input" type="text" autofocus="autofocus" autocomplete="off" spellcheck="false" />
+						<textarea id="terminal-input" autofocus="autofocus" spellcheck="false" rows="1" cols="20" /></textarea>
 					</div>
 				</form>
 			</div>

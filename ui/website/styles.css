@@ -174,7 +174,7 @@ div#prompt
 	color: #00aa00;
 }
 
-input#terminal-input
+textarea#terminal-input
 {
 	width: 500px;
 	background-color: transparent;
@@ -183,6 +183,7 @@ input#terminal-input
 	display: block;
 	font: 85% "Droid Sans Mono", "Consolas", "Courier", "Courier New", monospace;
 	color: #444444;
+	resize: none;
 }
 
 div.float-clear
