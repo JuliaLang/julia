@@ -64,7 +64,7 @@ v[2,1,1,1] = 32.0
 v[2,2,1,1] = 40.0
 
 
-@assert isequal(v,sum(z,(3,4))))
+@assert isequal(v,sum(z,(3,4)))
 
 
     
