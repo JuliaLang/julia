@@ -322,7 +322,7 @@ clean-unwind:
 	rm -rf $(LIBUNWIND_TARGET_OBJ) $(LIBUNWIND_TARGET_SOURCE)
 
 distclean-unwind:
-	rm -rf libunwind-$(UWIND_VER).tar.gz libunwind-$(UNWIND_VER)
+	rm -rf libunwind-$(UNWIND_VER).tar.gz libunwind-$(UNWIND_VER)
 
 ## phony targets ##
 
