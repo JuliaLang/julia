@@ -176,6 +176,9 @@
 					$("#prompt").html(terminal_data.substring(last_newline+6).replace(/julia&gt;&nbsp;/g, "<span class=\"prompt\">julia&gt;&nbsp;</span>"));
 				}
 
+				// resize the input box
+				$('#terminal-input').width($('#terminal').width()-$('#prompt').width());
+
 				// scroll to the new data
 				$("#terminal-form").prop("scrollTop", $("#terminal-form").prop("scrollHeight"));
 			}
