@@ -197,6 +197,7 @@ textarea#terminal-input
 	font: 85% "Droid Sans Mono", "Consolas", "Courier", "Courier New", monospace;
 	color: #444444;
 	resize: none;
+	overflow: auto;
 }
 
 div.float-clear
