@@ -99,7 +99,7 @@ type Worker
         fd = ccall(:connect_to_host, Int32,
                    (Ptr{Uint8}, Int16), host, port)
         if fd == -1
-            error("could not connect to $hostname:$port, errno=$(errno())\n")
+            error("could not connect to $host:$port, errno=$(errno())\n")
         end
         Worker(host, port, fd, fdio(fd))
     end
