@@ -284,7 +284,16 @@ end # macro
 ## code generator for specializing on the number of dimensions ##
 
 #otherbodies are the bodies that reside between loops, if its a 2 dimension array. 
-make_loop_nest(vars, ranges, body) = make_loop_nest(vars, ranges, body, nothing)
+function make_loop_nest(vars, ranges, body)
+    otherbodies = cell(length(vars),2)
+    #println(vars)
+    for i = 1:2*length(vars)
+        otherbodies[i]= nothing
+    end
+    make_loop_nest(vars, ranges, body, otherbodies)
+end
+
+
 function make_loop_nest(vars, ranges, body, otherbodies)
     expr = body
     len = size(otherbodies)[1]
@@ -303,6 +312,8 @@ function make_loop_nest(vars, ranges, body, otherbodies)
     end
     expr
 end
+
+
 
 ##genbodies is a function that creates an array (potentially 2d), where the first element is inside
 ## the inner most array, and the last element is outside most loop, and all the other arguments are 
