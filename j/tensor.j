@@ -784,6 +784,7 @@ function map(f, A::AbstractArray)
     return F
 end
 
+#obsolete code, mainly here for reference purposes, use gen_cartesian_map
 function cartesian_map(body, t::Tuple, it...)
     idx = length(t)-length(it)
     if idx == 0
@@ -805,53 +806,6 @@ ctranspose(x::AbstractVector) = [ conj(x[j])   | i=1, j=1:size(x,1) ]
 transpose(x::AbstractMatrix)  = [ x[j,i]       | i=1:size(x,2), j=1:size(x,1) ]
 ctranspose(x::AbstractMatrix) = [ conj(x[j,i]) | i=1:size(x,2), j=1:size(x,1) ]
 
-
-let permute2_cache = nothing
-global permute2
-function permute2(A::AbstractArray, perm)
-    dimsA = size(A)
-    ndimsA = length(dimsA)
-    dimsP = ntuple(ndimsA, i->dimsA[perm[i]])
-    P = similar(A, dimsP)
-    ranges = ntuple(ndimsA, i->(Range1(1,dimsP[i])))
-
-    strides = Array(Int32,0)
-    for dim = 1:length(perm)
-    	stride = 1
-    	for dim_size = 1:(dim-1)
-    	    stride = stride*dimsA[dim_size]
-    	end
-    	push(strides, stride)
-    end
-
-    #must create offset, because indexing starts at 1
-    offset = 0
-    for i = strides
-	offset+=i
-    end
-    offset = 1-offset
-
-    function permute2_one(ivars)
-        s = { (x = ivars[i]; quote total+= $x*(strides[perm[$i]]) end) | i = 1:ndimsA}
-	quote
-	    total=offset
-	    $(s...)
-	    #println(total)
-	    P[count] = A[total]
-	    count+=1
-	end
-    end
-
-    if is(permute2_cache,nothing)
-	permute2_cache = HashTable()
-    end
-
-    gen_cartesian_map(permute2_cache, permute2_one, ranges, {:A, :P, :perm, :count, :strides, :offset}, A, P, perm,1, strides, offset)
-    return P
-end
-#end let
-end
-
 let permute_cache = nothing
 
 
@@ -869,16 +823,13 @@ function permute(A::AbstractArray, perm)
     for dim = 1:length(perm)
     	stride = 1
     	for dim_size = 1:(dim-1)
-    	    stride = stride*dimsA[dim_size]
+            stride = stride*dimsA[dim_size]
     	end
     	push(strides, stride)
     end
 
     #reorganizes the ordering of the strides
     strides = { (strides[perm[i]]) | i = 1:ndimsA}
-
-    #calculates strides
-    #strides = [ prod(dimsA[1:perm[i]]) | i=1:ndimsA ]
 
     #Creates offset, because indexing starts at 1
     offset = 0
@@ -904,7 +855,7 @@ function permute(A::AbstractArray, perm)
         
         #inner most loop
         toReturn[1] = quote
-            P[ind] = A[sum($counts...)+offset]
+            P[ind] = A[+($counts...)+offset]
             ind+=1
             $counts[1]+= $stridenames[1]
         end
