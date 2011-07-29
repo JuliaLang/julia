@@ -176,8 +176,8 @@
 					$("#prompt").html(terminal_data.substring(last_newline+6).replace(/julia&gt;&nbsp;/g, "<span class=\"prompt\">julia&gt;&nbsp;</span>"));
 				}
 
-				// resize the input box
-				$('#terminal-input').width($('#terminal').width()-$('#prompt').width());
+				// resize the input box (the -1 is for Internet Explorer)
+				$('#terminal-input').width($('#terminal').width()-$('#prompt').width()-1);
 
 				// scroll to the new data
 				$("#terminal-form").prop("scrollTop", $("#terminal-form").prop("scrollHeight"));
@@ -379,6 +379,9 @@
 
 				// start the watchdog
 				setTimeout(watchdog, 1000);
+
+				// focus the input box (most browsers do this automatically because of the autofocus attribute)
+				$('#terminal-input').focus();
 			});
 		</script>
 	</head>
