@@ -15,7 +15,10 @@ div#header-bar
 	position: relative; /* make this appear above everything */
 	width: 100%;
 	min-width: 960px;
-	background: #1c1c1c url('images/juliaset.png') no-repeat center top;
+	background: #1c1c1c url('images/banner.png') repeat-x left top;
+	-moz-box-shadow: 0px 0px 20px #888888;
+	-webkit-box-shadow: 0px 0px 20px #888888;
+	box-shadow: 0px 0px 20px #888888;
 }
 
 header
@@ -36,13 +39,16 @@ div#footer-bar
 {
 	position: relative; /* make this appear above everything */
 	width: 100%;
-	min-width: 960px;
+	height: 80px;
 	bottom: 0px;
-	border-top: 1px solid #1c1c1c;
-	border-bottom: 1px solid #1c1c1c;
+	border-top: 1px solid #3e3e3e;
+	border-bottom: 1px solid #090909;
 	font-size: 80%;
 	color: #bbbbbb;
-	background: #1c1c1c url('images/juliaset.png') no-repeat center top;
+	background: #1c1c1c url('images/footer.png') repeat-x left top;
+	-moz-box-shadow: 0px 0px 20px #888888;
+	-webkit-box-shadow: 0px 0px 20px #888888;
+	box-shadow: 0px 0px 20px #888888;
 }
 
 footer
@@ -80,7 +86,7 @@ div#left-column a.current-page
 
 div#left-column a:hover
 {
-	background-color: #f1f1f1;
+	background-color: #ececec;
 }
 
 div#right-column
@@ -96,6 +102,12 @@ img#logo
 {
 	display: block;
 	float: left;
+}
+
+img#slogan
+{
+	display: block;
+	float: right;
 }
 
 img#landing
