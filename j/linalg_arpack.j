@@ -1,11 +1,11 @@
 libarpack = dlopen("libarpack")
 
-# call dsaupd
-#  ( IDO, BMAT, N, WHICH, NEV, TOL, RESID, NCV, V, LDV, IPARAM,
-#    IPNTR, WORKD, WORKL, LWORKL, INFO )
-
-macro jl_arpack_saupd_macro(saupd, T)
+macro jl_arpack_aupd_macro(T, saupd, naupd)
     quote
+
+        # call dsaupd
+        #  ( IDO, BMAT, N, WHICH, NEV, TOL, RESID, NCV, V, LDV, IPARAM,
+        #    IPNTR, WORKD, WORKL, LWORKL, INFO )
         function jl_arpack_saupd(ido, bmat, n, which, nev, 
                                  tol, resid, ncv, v::Array{$T}, ldv, 
                                  iparam, ipntr, workd, workl, lworkl, info)
@@ -17,18 +17,34 @@ macro jl_arpack_saupd_macro(saupd, T)
                   ido, bmat, n, which, nev, tol, resid, ncv, v, ldv, 
                   iparam, ipntr, workd, workl, lworkl, info)
         end
+
+        #  call dnaupd
+        #     ( IDO, BMAT, N, WHICH, NEV, TOL, RESID, NCV, V, LDV, IPARAM,
+        #       IPNTR, WORKD, WORKL, LWORKL, INFO )
+        function jl_arpack_naupd(ido, bmat, n, which, nev, 
+                                 tol, resid, ncv, v::Array{$T}, ldv, 
+                                 iparam, ipntr, workd, workl, lworkl, info)
+            ccall(dlsym(libarpack, $saupd),
+                  Void,
+                  (Ptr{Int32}, Ptr{Uint8}, Ptr{Int32}, Ptr{Uint8}, Ptr{Int32},
+                   Ptr{$T}, Ptr{$T}, Ptr{Int32}, Ptr{$T}, Ptr{Int32}, 
+                   Ptr{Int32}, Ptr{Int32}, Ptr{$T}, Ptr{$T}, Ptr{Int32}, Ptr{Int32}),
+                  ido, bmat, n, which, nev, tol, resid, ncv, v, ldv, 
+                  iparam, ipntr, workd, workl, lworkl, info)
+        end
+
     end
 end
 
-@jl_arpack_saupd_macro "ssaupd_" Float32
-@jl_arpack_saupd_macro "dsaupd_" Float64
+@jl_arpack_aupd_macro Float32 "ssaupd_" "snaupd_"
+@jl_arpack_aupd_macro Float64 "dsaupd_" "dnaupd_"
 
-# call dseupd ( rvec, 'A', select, d, v, ldv, sigma,
-#         bmat, n, which, nev, tol, resid, ncv, v, ldv,
-#         iparam, ipntr, workd, workl, lworkl, ierr )
-
-macro jl_arpack_seupd_macro(seupd, T)
+macro jl_arpack_eupd_macro(T, seupd, neupd)
     quote
+
+        #  call dseupd  
+        #     ( RVEC, HOWMNY, SELECT, D, Z, LDZ, SIGMA, BMAT, N, WHICH, NEV, TOL,
+        #       RESID, NCV, V, LDV, IPARAM, IPNTR, WORKD, WORKL, LWORKL, INFO )
         function jl_arpack_seupd(rvec, all, select, d, v, ldv, sigma, bmat, n, which, nev,
                                  tol, resid, ncv, v::Array{$T}, ldv, iparam,
                                  ipntr, workd, workl, lworkl, ierr)
@@ -42,20 +58,21 @@ macro jl_arpack_seupd_macro(seupd, T)
                   bmat, n, which, nev, tol, resid, ncv, v, ldv, 
                   iparam, ipntr, workd, workl, lworkl, ierr)
         end
+
+        #  call dneupd  
+        #     ( RVEC, HOWMNY, SELECT, DR, DI, Z, LDZ, SIGMAR, SIGMAI, WORKEV, BMAT, 
+        #       N, WHICH, NEV, TOL, RESID, NCV, V, LDV, IPARAM, IPNTR, WORKD, WORKL, 
+        #       LWORKL, INFO )
+        function jl_arpack_neupd()
+            return
+        end
+
     end
 end
 
-@jl_arpack_seupd_macro "sseupd_" Float32
-@jl_arpack_seupd_macro "dseupd_" Float64
+@jl_arpack_eupd_macro Float32 "sseupd_" "sneupd_"
+@jl_arpack_eupd_macro Float64 "dseupd_" "dneupd_"
 
-#  call dnaupd
-#     ( IDO, BMAT, N, WHICH, NEV, TOL, RESID, NCV, V, LDV, IPARAM,
-#       IPNTR, WORKD, WORKL, LWORKL, INFO )
-
-#  call dneupd  
-#     ( RVEC, HOWMNY, SELECT, DR, DI, Z, LDZ, SIGMAR, SIGMAI, WORKEV, BMAT, 
-#       N, WHICH, NEV, TOL, RESID, NCV, V, LDV, IPARAM, IPNTR, WORKD, WORKL, 
-#       LWORKL, INFO )
 
 jlArray(T, n::Int) = Array(T, int64(n))
 jlArray(T, m::Int, n::Int) = Array(T, int64(m), int64(n))
