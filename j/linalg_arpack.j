@@ -57,8 +57,8 @@ end
 #       N, WHICH, NEV, TOL, RESID, NCV, V, LDV, IPARAM, IPNTR, WORKD, WORKL, 
 #       LWORKL, INFO )
 
-jlArray(T, n) = Array(T, int64(n))
-jlArray(T, m, n) = Array(T, int64(m), int64(n))
+jlArray(T, n::Int) = Array(T, int64(n))
+jlArray(T, m::Int, n::Int) = Array(T, int64(m), int64(n))
 
 function eigs{T}(A::AbstractMatrix{T}, k::Int)
     (m, n) = size(A)
@@ -120,102 +120,72 @@ function eigs{T}(A::AbstractMatrix{T}, k::Int)
     if (ierr[1] != 0); error("Error in ARPACK eupd"); end
 
     return (diagm(d), v[1:n, 1:nev])
+
 end
 
-macro arpack_svds(saupd, seupd, T)
-    quote
+function svds{T}(A::AbstractMatrix{T}, k::Int)
+    
+    (m, n) = size(A)
+    if m < n; error("Only the m>n case is implemented"); end
+    
+    n = int32(n)
+    ldv = int32(n)
+    nev = int32(k)
+    ncv = int32(min(max(nev*2, 20), n))
+    bmat = "I"
+    which = "LM"
+    zero_T = convert(T, 0.0)
+    lworkl = int32(ncv*(ncv+8))
 
-        function svds(A::Matrix{$T}, k::Int)
+    v = jlArray(T, n, ncv)
+    workd = jlArray(T, 3*n)
+    workl = jlArray(T, lworkl)
+    d = jlArray(T, nev)
+    resid = jlArray(T, n)
+    select = jlArray(Bool, ncv)
+    iparam = jlArray(Int32, 11)
+    ipntr = jlArray(Int32, 11)
 
-            (m, n) = size(A)
-            if m < n; error("Only the m>n case is implemented"); end
+    tol = [zero_T]
+    sigma = [zero_T]
+    info = [int32(0)]
+    ido = [int32(0)]
 
-            ldv = n
-            nev = k
-            ncv = min(max(nev*2, 20), n)
-            bmat = "I"
-            which = "LM"
-            zero = convert($T, 0.0)
-            lworkl = ncv*(ncv+8)
+    iparam[1] = int32(1)    # ishifts
+    iparam[3] = int32(1000) # maxitr
+    iparam[7] = int32(1)    # mode 1
 
-            v = Array($T, n, ncv)
-            workd = Array($T, 3*n)
-            workl = Array($T, lworkl)
-            s = Array($T, nev)
-            resid = Array($T, n)
-            select = Array(Bool, ncv)
-            iparam = Array(Int32, 11)
-            ipntr = Array(Int32, 11)
+    At = A.'
 
-            tol = [zero]
-            sigma = [zero]
-            info = [0]
-            ido = [0]
+    while (true)
 
-            ishifts = 1
-            maxitr = 1000
-            mode1 = 1
+        jl_arpack_saupd(ido, bmat, n, which, nev, tol, resid, 
+                        ncv, v, ldv, 
+                        iparam, ipntr, workd, workl, lworkl, info)
 
-            iparam[1] = ishifts
-            iparam[3] = maxitr
-            iparam[7] = mode1
+        if (info[1] < 0); print(info[1]); error("Error in ARPACK aupd"); end
 
-            At = A.'
-
-            while (true)
-
-                # call dsaupd
-                #  ( IDO, BMAT, N, WHICH, NEV, TOL, RESID, NCV, V, LDV, IPARAM,
-                #    IPNTR, WORKD, WORKL, LWORKL, INFO )
-
-                ccall(dlsym(libarpack, $saupd),
-                      Void,
-                      (Ptr{Int32}, Ptr{Uint8}, Ptr{Int32}, Ptr{Uint8}, Ptr{Int32},
-                       Ptr{$T}, Ptr{$T}, Ptr{Int32}, Ptr{$T}, Ptr{Int32}, Ptr{Int32},
-                       Ptr{Int32}, Ptr{$T}, Ptr{$T}, Ptr{Int32}, Ptr{Int32}, ),
-                      ido, bmat, n, which, nev,
-                      tol, resid, ncv, v, ldv, iparam,
-                      ipntr, workd, workl, lworkl, info)
-
-                if (info[1] < 0); print(info[1]); error("Error with saupd"); end
-
-                if (ido[1] == -1 || ido[1] == 1)
-                    workd[ipntr[2]:(ipntr[2]+n-1)] = At*(A*workd[ipntr[1]:(ipntr[1]+n-1)])
-                else
-                    break
-                end
-
-            end
-
-            rvec = true
-            all = "A"
-            ierr = [0]
-
-            # call dseupd ( rvec, 'A', select, d, v, ldv, sigma,
-            #         bmat, n, which, nev, tol, resid, ncv, v, ldv,
-            #         iparam, ipntr, workd, workl, lworkl, ierr )
-
-            ccall(dlsym(libarpack, $seupd),
-                  Void,
-                  (Ptr{Bool}, Ptr{Uint8}, Ptr{Bool}, Ptr{$T}, Ptr{$T}, Ptr{Int32}, Ptr{$T},
-                   Ptr{Uint8}, Ptr{Int32}, Ptr{Uint8}, Ptr{Int32},
-                   Ptr{$T}, Ptr{$T}, Ptr{Int32}, Ptr{$T}, Ptr{Int32}, Ptr{Int32},
-                   Ptr{Int32}, Ptr{$T}, Ptr{$T}, Ptr{Int32}, Ptr{Int32}, ),
-                  rvec, all, select, s, v, ldv, sigma,
-                  bmat, n, which, nev,
-                  tol, resid, ncv, v, ldv, iparam,
-                  ipntr, workd, workl, lworkl, ierr)
-
-            if (ierr[1] != 0); error("Error with seupd"); end
-
-            v = v[1:n, 1:nev]
-            u = A*v*diagm(1./s)
-
-            return (u, diagm(s), v.')
+        if (ido[1] == -1 || ido[1] == 1)
+            workd[ipntr[2]:(ipntr[2]+n-1)] = At*(A*workd[ipntr[1]:(ipntr[1]+n-1)])
+        else
+            break
         end
+        
+    end
 
-    end # quote
-end # macro
+    rvec = true
+    all = "A"
+    ierr = [int32(0)]
 
-@arpack_svds "ssaupd_" "sseupd_" Float32
-@arpack_svds "dsaupd_" "dseupd_" Float64
+    jl_arpack_seupd(rvec, all, select, d, v, ldv, sigma, 
+                    bmat, n, which, nev, tol, resid, ncv, v, ldv, 
+                    iparam, ipntr, workd, workl, lworkl, ierr)
+
+    if (ierr[1] != 0); error("Error in ARPACK eupd"); end
+
+    v = v[1:n, 1:nev]
+    u = A*v*diagm(1./d)
+
+    return (u, diagm(d), v.')
+
+end
