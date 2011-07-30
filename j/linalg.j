@@ -96,6 +96,7 @@ function std(V::Vector)
 end
 
 kron(a::Vector, b::Vector) = [ a[i]*b[j] | i=1:length(a), j=1:length(b) ]
+
 function kron{T,S}(a::Matrix{T}, b::Matrix{S})
     R = Array(promote_type(T,S), size(a,1)*size(b,1), size(a,2)*size(b,2))
 
