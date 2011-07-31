@@ -537,6 +537,9 @@ ft_tfunc(ft, argtypes) = ccall(:jl_func_type_tfunc, Any,
 function abstract_eval_call(e, vtypes, sv::StaticVarInfo)
     fargs = a2t_butfirst(e.args)
     argtypes = map(x->abstract_eval(x,vtypes,sv), fargs)
+    if anyp(x->is(x,None), argtypes)
+        return None
+    end
     (isfunc, func) = isconstantfunc(e.args[1], vtypes, sv)
     if !isfunc
         # TODO: lambda expression (let)
@@ -642,7 +645,7 @@ function abstract_eval(s::Symbol, vtypes, sv::StaticVarInfo)
                 val = sp[i+1]
                 if isa(val,TypeVar)
                     # static param bound to typevar
-                    return val
+                    return val#Type{val}
                 end
                 return abstract_eval_constant(val)
             end
@@ -928,6 +931,10 @@ function typeinf(linfo::LambdaStaticData,atypes::Tuple,sparams::Tuple, cop, def)
                 elseif is(hd,:return)
                     pc´ = n+1
                     rt = abstract_eval(stmt.args[1], s[pc], sv)
+                    if frame.recurred
+                        add(recpts, pc)
+                        frame.recurred = false
+                    end
                     if tchanged(rt, frame.result)
                         frame.result = tmerge(frame.result, rt)
                         # revisit states that recursively depend on this

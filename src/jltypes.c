@@ -832,6 +832,31 @@ jl_value_t *jl_type_intersection(jl_value_t *a, jl_value_t *b)
     return ti;
 }
 
+/*
+  constraint satisfaction algorithm:
+  - keep lists of equality constraints and subtype constraints
+    (invariant and covariant)
+  - all constraints between two typevars are equality, i.e. it means the
+    two corresponding typevars must end up with the same value. however
+    they are kept in the subtype constraint list because they are not part
+    of the final answer yet.
+  - after computing the intersection, we try to solve the typevar constraints
+  - for each equality constraint T=S do store_result(T,S)
+  - for each other constraint T=S where S is a typevar, do
+      if S=R and T=U are in the results
+        if R==U continue
+        if R and U are both types and are different, fail
+        if R is a type, replace all U with R
+        if U is a type, replace all R with U
+        else mutate R to meet(R,U) and replace all U with R
+      if S=R is in the results, store_result(T, R), mutate R to meet(R,T)
+      if T=U is in the results, store_result(S, U), mutate U to meet(U,S)
+      else t=meet(T,S); store_result(T, t) and store_result(S, t)
+  - for each remaining constraint T=S where S is not a typevar
+      if T=R is in the results and R is a typevar, mutate R to meet(R,S)
+      if T=R is in the results, make sure R<:S
+      if T=R is not in the results, store_result(T, meet(T,S))
+*/
 jl_value_t *jl_type_intersection_matching(jl_value_t *a, jl_value_t *b,
                                           jl_tuple_t **penv)
 {
