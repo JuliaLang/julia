@@ -10,7 +10,7 @@ macro jl_lapack_potrf_macro(potrf, eltype)
         # *     .. Array Arguments ..
         #       DOUBLE PRECISION   A( LDA, * )
         function jl_lapack_potrf(uplo, n, A::Matrix{$eltype}, lda)
-            info = [int32(0)]
+            info = Array(Int32, 1)
             ccall(dlsym(libLAPACK, $potrf),
                   Void,
                   (Ptr{Uint8}, Ptr{Int32}, Ptr{$eltype}, Ptr{Int32}, Ptr{Int32}),
@@ -47,7 +47,7 @@ macro jl_lapack_getrf_macro(getrf, eltype)
         #       INTEGER            IPIV( * )
         #       DOUBLE PRECISION   A( LDA, * )
         function jl_lapack_getrf(m, n, A::Matrix{$eltype}, lda, ipiv)
-            info = [int32(0)]
+            info = Array(Int32, 1)
             ccall(dlsym(libLAPACK, $getrf),
                   Void,
                   (Ptr{Int32}, Ptr{Int32}, Ptr{$eltype},
@@ -103,7 +103,7 @@ macro jl_lapack_qr_macro(real_geqp3, complex_geqp3, orgqr, ungqr, eltype, celtyp
         #       INTEGER            JPVT( * )
         #       DOUBLE PRECISION   A( LDA, * ), TAU( * ), WORK( * )
         function jl_lapack_geqp3(m, n, A::Matrix{$eltype}, lda, jpvt, tau, work, lwork)
-            info = [int32(0)]
+            info = Array(Int32, 1)
             ccall(dlsym(libLAPACK, $real_geqp3),
                   Void,
                   (Ptr{Int32}, Ptr{Int32}, Ptr{$eltype}, Ptr{Int32},
@@ -120,7 +120,7 @@ macro jl_lapack_qr_macro(real_geqp3, complex_geqp3, orgqr, ungqr, eltype, celtyp
         #       DOUBLE PRECISION   RWORK( * )
         #       COMPLEX*16         A( LDA, * ), TAU( * ), WORK( * )
         function jl_lapack_geqp3(m, n, A::Matrix{$celtype}, lda, jpvt, tau, work, lwork, rwork)
-            info = [int32(0)]
+            info = Array(Int32, 1)
             ccall(dlsym(libLAPACK, $complex_geqp3),
                   Void,
                   (Ptr{Int32}, Ptr{Int32}, Ptr{$celtype}, Ptr{Int32},
@@ -135,7 +135,7 @@ macro jl_lapack_qr_macro(real_geqp3, complex_geqp3, orgqr, ungqr, eltype, celtyp
         # *     .. Array Arguments ..
         #       DOUBLE PRECISION   A( LDA, * ), TAU( * ), WORK( * )
         function jl_lapack_orgqr(m, n, k, A::Matrix{$eltype}, lda, tau, work, lwork)
-            info = [int32(0)]
+            info = Array(Int32, 1)
             ccall(dlsym(libLAPACK, $orgqr),
                   Void,
                   (Ptr{Int32}, Ptr{Int32}, Ptr{Int32}, Ptr{$eltype},
@@ -150,7 +150,7 @@ macro jl_lapack_qr_macro(real_geqp3, complex_geqp3, orgqr, ungqr, eltype, celtyp
         #*     .. Array Arguments ..
         #      COMPLEX*16         A( LDA, * ), TAU( * ), WORK( * )
         function jl_lapack_ungqr(m, n, k, A::Matrix{$celtype}, lda, tau, work, lwork)
-            info = [int32(0)]
+            info = Array(Int32, 1)
             ccall(dlsym(libLAPACK, $ungqr),
                   Void,
                   (Ptr{Int32}, Ptr{Int32}, Ptr{Int32}, Ptr{$celtype},
@@ -230,7 +230,7 @@ macro jl_lapack_eig_macro(syev, heev, real_geev, complex_geev, eltype, celtype)
         # *     .. Array Arguments ..
         #       DOUBLE PRECISION   A( LDA, * ), W( * ), WORK( * )
         function jl_lapack_syev(jobz, uplo, n, A::Matrix{$eltype}, lda, W, work, lwork)
-            info = [int32(0)]
+            info = Array(Int32, 1)
             ccall(dlsym(libLAPACK, $syev),
                   Void,
                   (Ptr{Uint8}, Ptr{Uint8}, Ptr{Int32}, Ptr{$eltype}, Ptr{Int32},
@@ -247,7 +247,7 @@ macro jl_lapack_eig_macro(syev, heev, real_geev, complex_geev, eltype, celtype)
         #      DOUBLE PRECISION   RWORK( * ), W( * )
         #      COMPLEX*16         A( LDA, * ), WORK( * )
         function jl_lapack_heev(jobz, uplo, n, A::Matrix{$celtype}, lda, W, work, lwork, rwork)
-            info = [int32(0)]
+            info = Array(Int32, 1)
             ccall(dlsym(libLAPACK, $heev),
                   Void,
                   (Ptr{Uint8}, Ptr{Uint8}, Ptr{Int32}, Ptr{$celtype}, Ptr{Int32},
@@ -266,7 +266,7 @@ macro jl_lapack_eig_macro(syev, heev, real_geev, complex_geev, eltype, celtype)
         #      $                   WI( * ), WORK( * ), WR( * )
         function jl_lapack_geev(jobvl, jobvr, n, A::Matrix{$eltype}, lda, WR, WI, VL, ldvl, 
                                 VR, ldvr, work, lwork)
-            info = [int32(0)]
+            info = Array(Int32, 1)
             ccall(dlsym(libLAPACK, $real_geev),
                   Void,
                   (Ptr{Uint8}, Ptr{Uint8}, Ptr{Int32}, Ptr{$eltype}, Ptr{Int32},
@@ -288,7 +288,7 @@ macro jl_lapack_eig_macro(syev, heev, real_geev, complex_geev, eltype, celtype)
         #      $                   W( * ), WORK( * )
         function jl_lapack_geev(jobvl, jobvr, n, A::Matrix{$celtype}, lda, W, VL, ldvl, 
                                 VR, ldvr, work, lwork, rwork)
-            info = [int32(0)]
+            info = Array(Int32, 1)
             ccall(dlsym(libLAPACK, $complex_geev),
                   Void,
                   (Ptr{Uint8}, Ptr{Uint8}, Ptr{Int32}, Ptr{$celtype}, Ptr{Int32},
@@ -411,7 +411,7 @@ macro jl_lapack_gesvd_macro(real_gesvd, complex_gesvd, eltype, celtype)
         #      $                   VT( LDVT, * ), WORK( * )
         function jl_lapack_gesvd(jobu, jobvt, m, n, A::Matrix{$eltype}, lda, S, U, ldu, 
                                  VT, ldvt, work, lwork)
-            info = [int32(0)]
+            info = Array(Int32, 1)
             ccall(dlsym(libLAPACK, $real_gesvd),
                   Void,
                   (Ptr{Uint8}, Ptr{Uint8}, Ptr{Int32}, Ptr{Int32}, Ptr{$eltype}, Ptr{Int32},
@@ -433,7 +433,7 @@ macro jl_lapack_gesvd_macro(real_gesvd, complex_gesvd, eltype, celtype)
         #     $                   WORK( * )
         function jl_lapack_gesvd(jobu, jobvt, m, n, A::Matrix{$celtype}, lda, S, U, ldu, 
                                  VT, ldvt, work, lwork, rwork)
-            info = [int32(0)]
+            info = Array(Int32, 1)
             ccall(dlsym(libLAPACK, $complex_gesvd),
                   Void,
                   (Ptr{Uint8}, Ptr{Uint8}, Ptr{Int32}, Ptr{Int32}, Ptr{$celtype}, Ptr{Int32},
@@ -500,7 +500,7 @@ macro jl_lapack_backslash_macro(gesv, posv, gels, trtrs, eltype)
         #       INTEGER            IPIV( * )
         #       DOUBLE PRECISION   A( LDA, * ), B( LDB, * )
         function jl_lapack_gesv(n, nrhs, A::Matrix{$eltype}, lda, ipiv, B, ldb)
-            info = [int32(0)]
+            info = Array(Int32, 1)
             ccall(dlsym(libLAPACK, $gesv),
                   Void,
                   (Ptr{Int32}, Ptr{Int32}, Ptr{$eltype}, Ptr{Int32}, Ptr{Int32},
@@ -516,7 +516,7 @@ macro jl_lapack_backslash_macro(gesv, posv, gels, trtrs, eltype)
         #     .. Array Arguments ..
         #      DOUBLE PRECISION   A( LDA, * ), B( LDB, * )
         function jl_lapack_posv(uplo, n, nrhs, A::Matrix{$eltype}, lda, B, ldb)
-            info = [int32(0)]
+            info = Array(Int32, 1)
             ccall(dlsym(libLAPACK, $posv),
                   Void,
                   (Ptr{Uint8}, Ptr{Int32}, Ptr{Int32}, Ptr{$eltype}, Ptr{Int32},
@@ -530,7 +530,7 @@ macro jl_lapack_backslash_macro(gesv, posv, gels, trtrs, eltype)
         #       CHARACTER          TRANS
         #       INTEGER            INFO, LDA, LDB, LWORK, M, N, NRHS
         function jl_lapack_gels(trans, m, n, nrhs, A::Matrix{$eltype}, lda, B, ldb, work, lwork)
-            info = [int32(0)]
+            info = Array(Int32, 1)
             ccall(dlsym(libLAPACK, $gels),
                   Void,
                   (Ptr{Uint8}, Ptr{Int32}, Ptr{Int32}, Ptr{Int32}, Ptr{$eltype}, Ptr{Int32},
@@ -547,7 +547,7 @@ macro jl_lapack_backslash_macro(gesv, posv, gels, trtrs, eltype)
         # *     .. Array Arguments ..
         #       DOUBLE PRECISION   A( LDA, * ), B( LDB, * )
         function jl_lapack_trtrs(uplo, trans, diag, n, nrhs, A::Matrix{$eltype}, lda, B, ldb)
-            info = [int32(0)]
+            info = Array(Int32, 1)
             ccall(dlsym(libLAPACK, $trtrs),
                   Void,
                   (Ptr{Uint8}, Ptr{Uint8}, Ptr{Uint8}, Ptr{Int32}, Ptr{Int32},

@@ -9,14 +9,14 @@ macro jl_arpack_aupd_macro(T, Tc, saupd, real_naupd, complex_naupd)
         function jl_arpack_saupd(ido, bmat, n, which, nev, 
                                  tol, resid, ncv, v::Array{$T}, ldv, 
                                  iparam, ipntr, workd, workl, lworkl)
-            info = [int32(0)]
+            info = zeros(Int32, 1)
             ccall(dlsym(libarpack, $saupd),
                   Void,
                   (Ptr{Int32}, Ptr{Uint8}, Ptr{Int32}, Ptr{Uint8}, Ptr{Int32},
                    Ptr{$T}, Ptr{$T}, Ptr{Int32}, Ptr{$T}, Ptr{Int32}, 
                    Ptr{Int32}, Ptr{Int32}, Ptr{$T}, Ptr{$T}, Ptr{Int32}, Ptr{Int32}),
-                  ido, bmat, n, which, nev, tol, resid, ncv, v, ldv, 
-                  iparam, ipntr, workd, workl, lworkl, info)
+                  ido, bmat, int32(n), which, int32(nev), tol, resid, int32(ncv), v, int32(ldv), 
+                  iparam, ipntr, workd, workl, int32(lworkl), info)
             return info[1]
         end
 
@@ -26,14 +26,14 @@ macro jl_arpack_aupd_macro(T, Tc, saupd, real_naupd, complex_naupd)
         function jl_arpack_naupd(ido, bmat, n, which, nev, 
                                  tol, resid, ncv, v::Array{$T}, ldv, 
                                  iparam, ipntr, workd, workl, lworkl)
-            info = [int32(0)]
+            info = zeros(Int32, 1)
             ccall(dlsym(libarpack, $real_naupd),
                   Void,
                   (Ptr{Int32}, Ptr{Uint8}, Ptr{Int32}, Ptr{Uint8}, Ptr{Int32},
                    Ptr{$T}, Ptr{$T}, Ptr{Int32}, Ptr{$T}, Ptr{Int32}, 
                    Ptr{Int32}, Ptr{Int32}, Ptr{$T}, Ptr{$T}, Ptr{Int32}, Ptr{Int32}),
-                  ido, bmat, n, which, nev, tol, resid, ncv, v, ldv, 
-                  iparam, ipntr, workd, workl, lworkl, info)
+                  ido, bmat, int32(n), which, int32(nev), tol, resid, int32(ncv), v, int32(ldv), 
+                  iparam, ipntr, workd, workl, int32(lworkl), info)
             return info[1]
         end
 
@@ -43,14 +43,14 @@ macro jl_arpack_aupd_macro(T, Tc, saupd, real_naupd, complex_naupd)
         function jl_arpack_naupd(ido, bmat, n, which, nev,
                                  tol, resid, ncv, v::Array{$Tc}, ldv,
                                  iparam, ipntr, workd, workl, lworkl, rwork)
-            info = [int32(0)]
+            info = zeros(Int32, 1)
             ccall(dlsym(libarpack, $complex_naupd),
                   Void,
                   (Ptr{Int32}, Ptr{Uint8}, Ptr{Int32}, Ptr{Uint8}, Ptr{Int32},
                    Ptr{$T}, Ptr{$Tc}, Ptr{Int32}, Ptr{$Tc}, Ptr{Int32},
                    Ptr{Int32}, Ptr{Int32}, Ptr{$Tc}, Ptr{$Tc}, Ptr{Int32}, Ptr{$T}, Ptr{Int32}),
-                  ido, bmat, n, which, nev, tol, resid, ncv, v, ldv, 
-                  iparam, ipntr, workd, workl, lworkl, rwork, info)
+                  ido, bmat, int32(n), which, int32(nev), tol, resid, int32(ncv), v, int32(ldv), 
+                  iparam, ipntr, workd, workl, int32(lworkl), rwork, info)
             return info[1]
         end
 
@@ -69,16 +69,16 @@ macro jl_arpack_eupd_macro(T, Tc, seupd, real_neupd, complex_neupd)
         function jl_arpack_seupd(rvec, all, select, d, v, ldv, sigma, bmat, n, which, nev,
                                  tol, resid, ncv, v::Array{$T}, ldv, iparam,
                                  ipntr, workd, workl, lworkl)
-            info = [int32(0)]
+            info = zeros(Int32, 1)
             ccall(dlsym(libarpack, $seupd),
                   Void,
                   (Ptr{Bool}, Ptr{Uint8}, Ptr{Bool}, Ptr{$T}, Ptr{$T}, Ptr{Int32}, Ptr{$T},
                    Ptr{Uint8}, Ptr{Int32}, Ptr{Uint8}, Ptr{Int32},
                    Ptr{$T}, Ptr{$T}, Ptr{Int32}, Ptr{$T}, Ptr{Int32}, Ptr{Int32},
                    Ptr{Int32}, Ptr{$T}, Ptr{$T}, Ptr{Int32}, Ptr{Int32}),
-                  rvec, all, select, d, v, ldv, sigma, 
-                  bmat, n, which, nev, tol, resid, ncv, v, ldv, 
-                  iparam, ipntr, workd, workl, lworkl, info)
+                  rvec, all, select, d, v, int32(ldv), sigma, 
+                  bmat, int32(n), which, int32(nev), tol, resid, int32(ncv), v, int32(ldv),
+                  iparam, ipntr, workd, workl, int32(lworkl), info)
             return info[1]
         end
 
@@ -90,16 +90,16 @@ macro jl_arpack_eupd_macro(T, Tc, seupd, real_neupd, complex_neupd)
                                  bmat, n, which, nev,
                                  tol, resid, ncv, v::Array{$T}, ldv, iparam,
                                  ipntr, workd, workl, lworkl)
-            info = [int32(0)]
+            info = zeros(Int32, 1)
             ccall(dlsym(libarpack, $real_neupd),
                   Void,
                   (Ptr{Bool}, Ptr{Uint8}, Ptr{Bool}, Ptr{$T}, Ptr{$T}, Ptr{$T}, Ptr{Int32}, 
                    Ptr{$T}, Ptr{$T}, Ptr{Uint8}, Ptr{Int32}, Ptr{Uint8}, Ptr{Int32},
                    Ptr{$T}, Ptr{$T}, Ptr{Int32}, Ptr{$T}, Ptr{Int32}, Ptr{Int32},
                    Ptr{Int32}, Ptr{$T}, Ptr{$T}, Ptr{Int32}, Ptr{Int32}),
-                  rvec, all, select, dr, di, v, ldv, sigmar, sigmai,
-                  bmat, n, which, nev, tol, resid, ncv, v, ldv, 
-                  iparam, ipntr, workd, workl, lworkl, info)
+                  rvec, all, select, dr, di, v, int32(ldv), sigmar, sigmai,
+                  bmat, int32(n), which, int32(nev), tol, resid, int32(ncv), v, int32(ldv),
+                  iparam, ipntr, workd, workl, int32(lworkl), info)
             return info[1]
         end
 
@@ -110,16 +110,16 @@ macro jl_arpack_eupd_macro(T, Tc, seupd, real_neupd, complex_neupd)
         function jl_arpack_neupd(rvec, all, select, d, v, ldv, sigma, bmat, n, which, nev,
                                  tol, resid, ncv, v::Array{$Tc}, ldv, iparam,
                                  ipntr, workd, workl, lworkl, rwork)
-            info = [int32(0)]
+            info = zeros(Int32, 1)
             ccall(dlsym(libarpack, $complex_neupd),
                   Void,
                   (Ptr{Bool}, Ptr{Uint8}, Ptr{Bool}, Ptr{$Tc}, Ptr{$Tc}, Ptr{Int32}, Ptr{$Tc},
                    Ptr{Uint8}, Ptr{Int32}, Ptr{Uint8}, Ptr{Int32},
                    Ptr{$T}, Ptr{$Tc}, Ptr{Int32}, Ptr{$Tc}, Ptr{Int32}, Ptr{Int32},
                    Ptr{Int32}, Ptr{$Tc}, Ptr{$Tc}, Ptr{Int32}, Ptr{$T}, Ptr{Int32}),
-                  rvec, all, select, d, v, ldv, sigma,
-                  bmat, n, which, nev, tol, resid, ncv, v, ldv, 
-                  iparam, ipntr, workd, workl, lworkl, rwork, info)
+                  rvec, all, select, d, v, int32(ldv), sigma,
+                  bmat, int32(n), which, int32(nev), tol, resid, int32(ncv), v, int32(ldv),
+                  iparam, ipntr, workd, workl, int32(lworkl), rwork, info)
             return info[1]
         end
 
@@ -129,36 +129,32 @@ end
 @jl_arpack_eupd_macro Float64 Complex128 "dseupd_" "dneupd_" "zneupd_"
 @jl_arpack_eupd_macro Float32 Complex64  "sseupd_" "sneupd_" "cneupd_"
 
-jlArray(T, n::Int) = Array(T, int64(n))
-jlArray(T, m::Int, n::Int) = Array(T, int64(m), int64(n))
-
 function eigs{T}(A::AbstractMatrix{T}, k::Int)
     (m, n) = size(A)
 
     if m != n; error("Input should be square"); end
     if !issymmetric(A); error("Input should be symmetric"); end
 
-    n = int32(n)
-    ldv = int32(n)
-    nev = int32(k)
-    ncv = int32(min(max(nev*2, 20), n))
+    n = n
+    ldv = n
+    nev = k
+    ncv = min(max(nev*2, 20), n)
     bmat = "I"
     which = "LM"
-    zero_T = zeros(T, 1)
-    lworkl = int32(ncv*(ncv+8))
+    lworkl = ncv*(ncv+8)
 
-    v = jlArray(T, n, ncv)
-    workd = jlArray(T, 3*n)
-    workl = jlArray(T, lworkl)
-    d = jlArray(T, nev)
-    resid = jlArray(T, n)
-    select = jlArray(Bool, ncv)
-    iparam = jlArray(Int32, 11)
-    ipntr = jlArray(Int32, 11)
+    v = Array(T, n, ncv)
+    workd = Array(T, 3*n)
+    workl = Array(T, lworkl)
+    d = Array(T, nev)
+    resid = Array(T, n)
+    select = Array(Bool, ncv)
+    iparam = Array(Int32, 11)
+    ipntr = Array(Int32, 11)
 
-    tol = [zero_T]
-    sigma = [zero_T]
-    ido = [int32(0)]
+    tol = zeros(T, 1)
+    sigma = zeros(T, 1)
+    ido = zeros(Int32, 1)
 
     iparam[1] = int32(1)    # ishifts
     iparam[3] = int32(1000) # maxitr
@@ -196,29 +192,27 @@ end
 function svds{T}(A::AbstractMatrix{T}, k::Int)
     
     (m, n) = size(A)
-    if m < n; error("Only the m>n case is implemented"); end
+    if m < n; error("Only the m >= n case is implemented"); end
     
-    n = int32(n)
-    ldv = int32(n)
-    nev = int32(k)
-    ncv = int32(min(max(nev*2, 20), n))
+    ldv = n
+    nev = k
+    ncv = min(max(nev*2, 20), n)
     bmat = "I"
     which = "LM"
-    zero_T = zeros(T, 1)
-    lworkl = int32(ncv*(ncv+8))
+    lworkl = ncv*(ncv+8)
 
-    v = jlArray(T, n, ncv)
-    workd = jlArray(T, 3*n)
-    workl = jlArray(T, lworkl)
-    d = jlArray(T, nev)
-    resid = jlArray(T, n)
-    select = jlArray(Bool, ncv)
-    iparam = jlArray(Int32, 11)
-    ipntr = jlArray(Int32, 11)
+    v = Array(T, n, ncv)
+    workd = Array(T, 3*n)
+    workl = Array(T, lworkl)
+    d = Array(T, nev)
+    resid = Array(T, n)
+    select = Array(Bool, ncv)
+    iparam = Array(Int32, 11)
+    ipntr = Array(Int32, 11)
 
-    tol = [zero_T]
-    sigma = [zero_T]
-    ido = [int32(0)]
+    tol = zeros(T, 1)
+    sigma = zeros(T, 1)
+    ido = zeros(Int32, 1)
 
     iparam[1] = int32(1)    # ishifts
     iparam[3] = int32(1000) # maxitr
