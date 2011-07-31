@@ -1,6 +1,6 @@
 libLAPACK = libBLAS
 
-macro jl_lapack_potrf_macro(fname, eltype)
+macro jl_lapack_potrf_macro(potrf, eltype)
     quote
         # SUBROUTINE DPOTRF( UPLO, N, A, LDA, INFO )
         # *     .. Scalar Arguments ..
@@ -10,7 +10,7 @@ macro jl_lapack_potrf_macro(fname, eltype)
         #       DOUBLE PRECISION   A( LDA, * )
         function jl_lapack_potrf(uplo, n, A::Matrix{$eltype}, lda)
             info = [int32(0)]
-            ccall(dlsym(libLAPACK, $fname),
+            ccall(dlsym(libLAPACK, $potrf),
                   Void,
                   (Ptr{Uint8}, Ptr{Int32}, Ptr{$eltype}, Ptr{Int32}, Ptr{Int32}),
                   uplo, int32(n), A, int32(lda), info)
@@ -35,7 +35,7 @@ function chol(A::Matrix)
     error("Error in CHOL")
 end
 
-macro jl_lapack_getrf_macro(fname, eltype)
+macro jl_lapack_getrf_macro(getrf, eltype)
     quote
         # SUBROUTINE DGETRF( M, N, A, LDA, IPIV, INFO )
         # *     .. Scalar Arguments ..
@@ -45,7 +45,7 @@ macro jl_lapack_getrf_macro(fname, eltype)
         #       DOUBLE PRECISION   A( LDA, * )
         function jl_lapack_getrf(m, n, A::Matrix{$eltype}, lda, ipiv)
             info = [int32(0)]
-            ccall(dlsym(libLAPACK, $fname),
+            ccall(dlsym(libLAPACK, $getrf),
                   Void,
                   (Ptr{Int32}, Ptr{Int32}, Ptr{$eltype},
                    Ptr{Int32}, Ptr{Int32}, Ptr{Int32}),
@@ -214,342 +214,333 @@ function qr{T}(A::Matrix{T})
     error("Error in LAPACK orgqr/ungqr");
 end
 
-
-#       SUBROUTINE DSYEV( JOBZ, UPLO, N, A, LDA, W, WORK, LWORK, INFO )
-# *     .. Scalar Arguments ..
-#       CHARACTER          JOBZ, UPLO
-#       INTEGER            INFO, LDA, LWORK, N
-# *     .. Array Arguments ..
-#       DOUBLE PRECISION   A( LDA, * ), W( * ), WORK( * )
-
-macro lapack_eig(fname, eltype)
+macro jl_lapack_eig_macro(syev, heev, eltype, celtype)
     quote
-        function eig(A::Matrix{$eltype})
-            if !issymmetric(A); error("Matrix must be symmetric"); end
-
-            jobz = "V"
-            uplo = "U"
-            n = int32(size(A, 1))
-            EV = copy(A)
-            W = Array($eltype, long(n))
+        function jl_lapack_syev(jobz, uplo, n, A::Matrix{$eltype}, lda, W, work, lwork)
+            #       SUBROUTINE DSYEV( JOBZ, UPLO, N, A, LDA, W, WORK, LWORK, INFO )
+            # *     .. Scalar Arguments ..
+            #       CHARACTER          JOBZ, UPLO
+            #       INTEGER            INFO, LDA, LWORK, N
+            # *     .. Array Arguments ..
+            #       DOUBLE PRECISION   A( LDA, * ), W( * ), WORK( * )
             info = [int32(0)]
-
-            # Workspace query
-            work = [0.0]
-            lwork = int32(-1)
-            ccall(dlsym(libLAPACK, $fname),
+            ccall(dlsym(libLAPACK, $syev),
                   Void,
                   (Ptr{Uint8}, Ptr{Uint8}, Ptr{Int32}, Ptr{$eltype}, Ptr{Int32},
                    Ptr{$eltype}, Ptr{$eltype}, Ptr{Int32}, Ptr{Int32}),
-                  jobz, uplo, n, EV, n, W, work, lwork, info)
-
-            if info[1] == 0; lwork = int32(work[1]); work = Array($eltype, long(lwork));
-            else error("Error in ", $fname); end
-
-            # Compute eigenvalues, eigenvectors
-            ccall(dlsym(libLAPACK, $fname),
-                  Void,
-                  (Ptr{Uint8}, Ptr{Uint8}, Ptr{Int32}, Ptr{$eltype}, Ptr{Int32},
-                   Ptr{$eltype}, Ptr{$eltype}, Ptr{Int32}, Ptr{Int32}),
-                  jobz, uplo, n, EV, n, W, work, lwork, info)
-
-            if info[1] == 0; return (diagm(W), EV); end
-            error("Error in EIG");
+                  jobz, uplo, int32(n), A, int32(lda), W, work, int32(lwork), info)
+            return info[1]
         end
+
+        function jl_lapack_heev(jobz, uplo, n, A::Matrix{$celtype}, lda, W, work, lwork, rwork)
+            #      SUBROUTINE ZHEEV( JOBZ, UPLO, N, A, LDA, W, WORK, LWORK, RWORK, INFO )
+            #*     .. Scalar Arguments ..
+            #      CHARACTER          JOBZ, UPLO
+            #      INTEGER            INFO, LDA, LWORK, N
+            #*     .. Array Arguments ..
+            #      DOUBLE PRECISION   RWORK( * ), W( * )
+            #      COMPLEX*16         A( LDA, * ), WORK( * )
+            info = [int32(0)]
+            ccall(dlsym(libLAPACK, $heev),
+                  Void,
+                  (Ptr{Uint8}, Ptr{Uint8}, Ptr{Int32}, Ptr{$celtype}, Ptr{Int32},
+                   Ptr{$eltype}, Ptr{$celtype}, Ptr{Int32}, Ptr{$eltype}, Ptr{Int32}),
+                  jobz, uplo, int32(n), A, int32(lda), W, work, int32(lwork), rwork, info)
+            return info[1]
+        end
+
     end
 end
 
-@lapack_eig :dsyev_ Float64
-@lapack_eig :ssyev_ Float32
+@jl_lapack_eig_macro :dsyev_ :zheev_ Float64 Complex128
+@jl_lapack_eig_macro :ssyev_ :cheev_ Float32 Complex64
 
-#      SUBROUTINE ZHEEV( JOBZ, UPLO, N, A, LDA, W, WORK, LWORK, RWORK, INFO )
-#*     .. Scalar Arguments ..
-#      CHARACTER          JOBZ, UPLO
-#      INTEGER            INFO, LDA, LWORK, N
-#*     ..
-#*     .. Array Arguments ..
-#      DOUBLE PRECISION   RWORK( * ), W( * )
-#      COMPLEX*16         A( LDA, * ), WORK( * )
-macro lapack_eig_complex(fname, eltype, eltype2)
-    quote
-        function eig(A::Matrix{$eltype})
-            if !ishermitian(A); error("Matrix must be Hermitian"); end
-
-            jobz = "V"
-            uplo = "U"
-            n = int32(size(A, 1))
-            EV = copy(A)
-            W = Array($eltype2, long(n))
-            info = [int32(0)]
-            rwork = Array($eltype2, long(max(3n-2, 1)))
-
-            # Workspace query
-            work = zeros($eltype, 1)
-            lwork = int32(-1)
-            ccall(dlsym(libLAPACK, $fname),
-                  Void,
-                  (Ptr{Uint8}, Ptr{Uint8}, Ptr{Int32}, Ptr{$eltype}, Ptr{Int32},
-                   Ptr{$eltype2}, Ptr{$eltype}, Ptr{Int32}, Ptr{$eltype2}, Ptr{Int32}),
-                  jobz, uplo, n, EV, n, W, work, lwork, rwork, info)
-
-            if info[1] == 0; lwork = int32(real(work[1])); work = Array($eltype, long(lwork));
-            else error("Error in ", $fname); end
-
-            # Compute eigenvalues, eigenvectors
-            ccall(dlsym(libLAPACK, $fname),
-                  Void,
-                  (Ptr{Uint8}, Ptr{Uint8}, Ptr{Int32}, Ptr{$eltype}, Ptr{Int32},
-                   Ptr{$eltype2}, Ptr{$eltype}, Ptr{Int32}, Ptr{$eltype2}, Ptr{Int32}),
-                  jobz, uplo, n, EV, n, W, work, lwork, rwork, info)
-
-            if info[1] == 0; return (diagm(W), EV); end
-            error("Error in EIG");
-        end
+function eig(A::Matrix)
+    if issymmetric(A)
+        return eig_sym(A)
+    else
+        return eig_nonsym(A)
     end
 end
 
-@lapack_eig_complex :zheev_ Complex128 Float64
-@lapack_eig_complex :cheev_ Complex64 Float32
+function eig_sym{T}(A::Matrix{T})
+    m, n = size(A)
+    if m != n; error("Input must be square"); end
 
-# SUBROUTINE DGESVD( JOBU, JOBVT, M, N, A, LDA, S, U, LDU, VT, LDVT, WORK, LWORK, INFO )
-# *     .. Scalar Arguments ..
-#       CHARACTER          JOBU, JOBVT
-#       INTEGER            INFO, LDA, LDU, LDVT, LWORK, M, N
-# *     .. Array Arguments ..
-#       DOUBLE PRECISION   A( LDA, * ), S( * ), U( LDU, * ),
-#      $                   VT( LDVT, * ), WORK( * )
+    jobz = "V"
+    uplo = "U"
+    EV = copy(A)
+    W = Array(T, n)
+    if iscomplex(A)
+        rwork = Array(typeof(real(A[1])), long(max(3*n-2, 1)))
+    end
 
-macro lapack_svd(fname, eltype)
+    # Workspace query
+    work = zeros(T,1)
+    lwork = int32(-1)
+    
+    if iscomplex(A)
+        info = jl_lapack_syev(jobz, uplo, n, EV, n, W, work, lwork, rwork)
+    else
+        info = jl_lapack_syev(jobz, uplo, n, EV, n, W, work, lwork)
+    end
+
+    if info == 0; lwork = real(work[1]); work = Array(T, long(lwork));
+    else error("Error in LAPACK syev/heev"); end
+
+    # Compute eigenvalues, eigenvectors
+    if iscomplex(A)
+        info = jl_lapack_syev(jobz, uplo, n, EV, n, W, work, lwork, rwork)
+    else
+        info = jl_lapack_syev(jobz, uplo, n, EV, n, W, work, lwork)
+    end
+
+    if info == 0; return (diagm(W), EV); end
+    error("Error in LAPACK syev/heev");
+end
+
+function eig_nonsym{T}(A::Matrix{T})
+    error("Not yet implemented");
+end
+
+macro jl_lapack_gesvd_macro(real_gesvd, complex_gesvd, eltype, celtype)
     quote
-        function svd(A::Matrix{$eltype})
-            jobu = "A"
-            jobvt = "A"
-            m, n = size(A)
-            m = int32(m); n = int32(n)
-            k = min(m,n)
-            X = copy(A)
-            S = Array($eltype, long(k))
-            U = Array($eltype, long(m), long(m))
-            VT = Array($eltype, long(n), long(n))
-            info = [int32(0)]
 
-            # Workspace query
-            work = zeros($eltype, 1)
-            lwork = int32(-1)
-            ccall(dlsym(libLAPACK, $fname),
+        function jl_lapack_gesvd(jobu, jobvt, m, n, A::Matrix{$eltype}, lda, S, U, ldu, 
+                                 VT, ldvt, work, lwork)
+            # SUBROUTINE DGESVD( JOBU, JOBVT, M, N, A, LDA, S, U, LDU, VT, LDVT, WORK, LWORK, INFO )
+            # *     .. Scalar Arguments ..
+            #       CHARACTER          JOBU, JOBVT
+            #       INTEGER            INFO, LDA, LDU, LDVT, LWORK, M, N
+            # *     .. Array Arguments ..
+            #       DOUBLE PRECISION   A( LDA, * ), S( * ), U( LDU, * ),
+            #      $                   VT( LDVT, * ), WORK( * )
+            info = [int32(0)]
+            ccall(dlsym(libLAPACK, $real_gesvd),
                   Void,
                   (Ptr{Uint8}, Ptr{Uint8}, Ptr{Int32}, Ptr{Int32}, Ptr{$eltype}, Ptr{Int32},
                    Ptr{$eltype}, Ptr{$eltype}, Ptr{Int32}, Ptr{$eltype}, Ptr{Int32},
                    Ptr{$eltype}, Ptr{Int32}, Ptr{Int32}),
-                  jobu, jobvt, m, n, X, m, S, U, m, VT, n, work, lwork, info)
+                  jobu, jobvt, int32(m), int32(n), A, int32(lda), S, U, int32(ldu), 
+                  VT, int32(ldvt), work, int32(lwork), info)
+            return info[1]
+        end
 
-            if info[1] == 0; lwork = int32(work[1]); work = Array($eltype, long(lwork));
-            else error("Error in ", $fname); end
-
-            # Compute SVD
-            ccall(dlsym(libLAPACK, $fname),
+        function jl_lapack_gesvd(jobu, jobvt, m, n, A::Matrix{$celtype}, lda, S, U, ldu, 
+                                 VT, ldvt, work, lwork, rwork)
+            # SUBROUTINE ZGESVD( JOBU, JOBVT, M, N, A, LDA, S, U, LDU, VT, LDVT,
+            #     $                   WORK, LWORK, RWORK, INFO )
+            #*     .. Scalar Arguments ..
+            #      CHARACTER          JOBU, JOBVT
+            #      INTEGER            INFO, LDA, LDU, LDVT, LWORK, M, N
+            #*     .. Array Arguments ..
+            #      DOUBLE PRECISION   RWORK( * ), S( * )
+            #      COMPLEX*16         A( LDA, * ), U( LDU, * ), VT( LDVT, * ),
+            #     $                   WORK( * )
+            info = [int32(0)]
+            ccall(dlsym(libLAPACK, $complex_gesvd),
                   Void,
-                  (Ptr{Uint8}, Ptr{Uint8}, Ptr{Int32}, Ptr{Int32}, Ptr{$eltype}, Ptr{Int32},
-                   Ptr{$eltype}, Ptr{$eltype}, Ptr{Int32}, Ptr{$eltype}, Ptr{Int32},
+                  (Ptr{Uint8}, Ptr{Uint8}, Ptr{Int32}, Ptr{Int32}, Ptr{$celtype}, Ptr{Int32},
+                   Ptr{$eltype}, Ptr{$celtype}, Ptr{Int32}, Ptr{$celtype}, Ptr{Int32},
+                   Ptr{$celtype}, Ptr{Int32}, Ptr{$eltype}, Ptr{Int32}),
+                  jobu, jobvt, int32(m), int32(n), A, int32(lda), S, U, int32(ldu), 
+                  VT, int32(ldvt), work, int32(lwork), rwork, info)
+            return info[1]
+        end
+
+    end
+end
+
+@jl_lapack_gesvd_macro :dgesvd_ :zgesvd_ Float64 Complex128
+@jl_lapack_gesvd_macro :sgesvd_ :cgesvd_ Float32 Complex64
+
+function svd{T}(A::Matrix{T})
+    jobu = "A"
+    jobvt = "A"
+    m, n = size(A)
+    k = min(m,n)
+    X = copy(A)
+    S = Array(typeof(real(A[1])), k)
+    U = Array(T, m, m)
+    VT = Array(T, n, n)
+    if iscomplex(A)
+        rwork = Array(typeof(real(A[1])), 5*min(m,n))
+    end
+
+    # Workspace query
+    work = zeros(T, 1)
+    lwork = -1
+    if iscomplex(A)
+        info = jl_lapack_gesvd(jobu, jobvt, m, n, X, m, S, U, m, VT, n, work, lwork, rwork)
+    else
+        info = jl_lapack_gesvd(jobu, jobvt, m, n, X, m, S, U, m, VT, n, work, lwork)
+    end
+
+    if info == 0; lwork = real(work[1]); work = Array(T, long(lwork));
+    else error("Error in LAPACK gesvd"); end
+
+    # Compute SVD
+    if iscomplex(A)
+        info = jl_lapack_gesvd(jobu, jobvt, m, n, X, m, S, U, m, VT, n, work, lwork, rwork)
+    else
+        info = jl_lapack_gesvd(jobu, jobvt, m, n, X, m, S, U, m, VT, n, work, lwork)
+    end
+
+    SIGMA = zeros(T, m, n)
+    for i=1:k; SIGMA[i,i] = S[i]; end
+
+    if info == 0; return (U, SIGMA, VT); end
+    error("Error in LAPACK gesvd");
+end
+
+macro jl_lapack_backslash_macro(gesv, posv, gels, trtrs, eltype)
+    quote
+
+        function jl_lapack_gesv(n, nrhs, A::Matrix{$eltype}, lda, ipiv, B, ldb)
+            # SUBROUTINE DGESV( N, NRHS, A, LDA, IPIV, B, LDB, INFO )
+            # *     .. Scalar Arguments ..
+            #       INTEGER            INFO, LDA, LDB, N, NRHS
+            # *     ..
+            # *     .. Array Arguments ..
+            #       INTEGER            IPIV( * )
+            #       DOUBLE PRECISION   A( LDA, * ), B( LDB, * )
+            info = [int32(0)]
+            ccall(dlsym(libLAPACK, $gesv),
+                  Void,
+                  (Ptr{Int32}, Ptr{Int32}, Ptr{$eltype}, Ptr{Int32}, Ptr{Int32},
                    Ptr{$eltype}, Ptr{Int32}, Ptr{Int32}),
-                  jobu, jobvt, m, n, X, m, S, U, m, VT, n, work, lwork, info)
-
-            SIGMA = zeros($eltype, long(m), long(n))
-            for i=1:k; SIGMA[i,i] = S[i]; end
-
-            if info[1] == 0; return (U,SIGMA,VT); end
-            error("Error in SVD");
+                  int32(n), int32(nrhs), A, int32(lda), ipiv, B, int32(ldb), info)
+            return info[1]
         end
+
+        function jl_lapack_posv(uplo, n, nrhs, A::Matrix{$eltype}, lda, B, ldb)
+            #     SUBROUTINE DPOSV( UPLO, N, NRHS, A, LDA, B, LDB, INFO )
+            #*     .. Scalar Arguments ..
+            #      CHARACTER          UPLO
+            #      INTEGER            INFO, LDA, LDB, N, NRHS
+            #     .. Array Arguments ..
+            #      DOUBLE PRECISION   A( LDA, * ), B( LDB, * )
+            info = [int32(0)]
+            ccall(dlsym(libLAPACK, $posv),
+                  Void,
+                  (Ptr{Uint8}, Ptr{Int32}, Ptr{Int32}, Ptr{$eltype}, Ptr{Int32},
+                   Ptr{$eltype}, Ptr{Int32}, Ptr{Int32}),
+                  uplo, int32(n), int32(nrhs), A, int32(lda), B, int32(ldb), info)
+            return info[1]
+        end
+
+        function jl_lapack_gels(trans, m, n, nrhs, A::Matrix{$eltype}, lda, B, ldb, work, lwork)
+            #      SUBROUTINE DGELS( TRANS, M, N, NRHS, A, LDA, B, LDB, WORK, LWORK, INFO)
+            # *     .. Scalar Arguments ..
+            #       CHARACTER          TRANS
+            #       INTEGER            INFO, LDA, LDB, LWORK, M, N, NRHS
+            info = [int32(0)]
+            ccall(dlsym(libLAPACK, $gels),
+                  Void,
+                  (Ptr{Uint8}, Ptr{Int32}, Ptr{Int32}, Ptr{Int32}, Ptr{$eltype}, Ptr{Int32},
+                   Ptr{$eltype}, Ptr{Int32}, Ptr{$eltype}, Ptr{Int32}, Ptr{Int32}),
+                  trans, int32(m), int32(n), int32(nrhs), A, int32(lda), 
+                  B, int32(ldb), work, int32(lwork), info)
+            return info[1]
+        end
+
+        function jl_lapack_trtrs(uplo, trans, diag, n, nrhs, A::Matrix{$eltype}, lda, B, ldb)
+            #      SUBROUTINE DTRTRS( UPLO, TRANS, DIAG, N, NRHS, A, LDA, B, LDB, INFO )
+            # *     .. Scalar Arguments ..
+            #       CHARACTER          DIAG, TRANS, UPLO
+            #       INTEGER            INFO, LDA, LDB, N, NRHS
+            # *     .. Array Arguments ..
+            #       DOUBLE PRECISION   A( LDA, * ), B( LDB, * )
+            info = [int32(0)]
+            ccall(dlsym(libLAPACK, $trtrs),
+                  Void,
+                  (Ptr{Uint8}, Ptr{Uint8}, Ptr{Uint8}, Ptr{Int32}, Ptr{Int32},
+                   Ptr{$eltype}, Ptr{Int32}, Ptr{$eltype}, Ptr{Int32}, Ptr{Int32}),
+                  uplo, trans, diag, int32(n), int32(nrhs), A, int32(lda), B, int32(ldb), info)
+            return info[1]
+        end
+
     end
 end
 
-@lapack_svd :dgesvd_ Float64
-@lapack_svd :sgesvd_ Float32
+@jl_lapack_backslash_macro :dgesv_ :dposv_ :dgels_ :dtrtrs_ Float64
+@jl_lapack_backslash_macro :sgesv_ :sposv_ :sgels_ :strtrs_ Float32
+@jl_lapack_backslash_macro :zgesv_ :zposv_ :zgels_ :ztrtrs_ Complex128
+@jl_lapack_backslash_macro :cgesv_ :cposv_ :cgels_ :ctrtrs_ Complex64
 
-# SUBROUTINE ZGESVD( JOBU, JOBVT, M, N, A, LDA, S, U, LDU, VT, LDVT,
-#     $                   WORK, LWORK, RWORK, INFO )
-#*     .. Scalar Arguments ..
-#      CHARACTER          JOBU, JOBVT
-#      INTEGER            INFO, LDA, LDU, LDVT, LWORK, M, N
-#*     ..
-#*     .. Array Arguments ..
-#      DOUBLE PRECISION   RWORK( * ), S( * )
-#      COMPLEX*16         A( LDA, * ), U( LDU, * ), VT( LDVT, * ),
-#     $                   WORK( * )
+function (\){T}(A::Matrix{T}, B::VecOrMat{T})
+    m, n = size(A)
+    mrhs = size(B, 1)
+    if m != mrhs; error("Number of rows of arguments do not match"); end
+    if isa(B, Vector); nrhs = 1; else nrhs = size(B, 2); end
+    Acopy = copy(A)
+    X = copy(B)
 
-macro lapack_svd_complex(fname, eltype, eltype2)
-    quote
-        function svd(A::Matrix{$eltype})
-            jobu = "A"
-            jobvt = "A"
-            m, n = size(A)
-            m = int32(m); n = int32(n)
-            k = min(m,n)
-            X = copy(A)
-            S = Array($eltype2, long(k))
-            U = Array($eltype, long(m), long(m))
-            VT = Array($eltype, long(n), long(n))
-            info = [int32(0)]
-            rwork = Array($eltype2, long(5*min(m,n)))
+    if m == n # Square
+        case = :general
+        if isuppertriangular(A); case = :upper_triangular; end
+        if islowertriangular(A); case = :lower_triangular; end
 
-            # Workspace query
-            work = zeros($eltype, 1)
-            lwork = int32(-1)
-            ccall(dlsym(libLAPACK, $fname),
-                  Void,
-                  (Ptr{Uint8}, Ptr{Uint8}, Ptr{Int32}, Ptr{Int32}, Ptr{$eltype}, Ptr{Int32},
-                   Ptr{$eltype2}, Ptr{$eltype}, Ptr{Int32}, Ptr{$eltype}, Ptr{Int32},
-                   Ptr{$eltype}, Ptr{Int32}, Ptr{$eltype2}, Ptr{Int32}),
-                  jobu, jobvt, m, n, X, m, S, U, m, VT, n, work, lwork, rwork, info)
+        if case == :general # General
+            ipiv = Array(Int32, n)
 
-            if info[1] == 0; lwork = int32(real(work[1])); work = Array($eltype, long(lwork));
-            else error("Error in ", $fname); end
+            # Check for SPD matrix
+            if issymmetric(Acopy) && all([ Acopy[i,i] > 0 | i=1:n ])
+                case = :spd
+            end
 
-            # Compute SVD
-            ccall(dlsym(libLAPACK, $fname),
-                  Void,
-                  (Ptr{Uint8}, Ptr{Uint8}, Ptr{Int32}, Ptr{Int32}, Ptr{$eltype}, Ptr{Int32},
-                   Ptr{$eltype2}, Ptr{$eltype}, Ptr{Int32}, Ptr{$eltype}, Ptr{Int32},
-                   Ptr{$eltype}, Ptr{Int32}, Ptr{$eltype2}, Ptr{Int32}),
-                  jobu, jobvt, m, n, X, m, S, U, m, VT, n, work, lwork, rwork, info)
+            if case == :spd
+                info = jl_lapack_posv("U", n, nrhs, Acopy, n, X, n)
+                if info != 0
+                    Acopy = copy(A)
+                    case = :general
+                end
+            end
 
-            SIGMA = zeros($eltype, long(m), long(n))
-            for i=1:k; SIGMA[i,i] = S[i]; end
+            if case == :general
+                info = jl_lapack_gesv(n, nrhs, Acopy, n, ipiv, X, n)
+            end
 
-            if info[1] == 0; return (U,SIGMA,VT); end
-            error("Error in SVD");
+        else # Triangular
+            uplo = "U"
+            if case == :lower_triangular; uplo = "L"; end
+
+            info = jl_lapack_trtrs(uplo, "N", "N", n, nrhs, Acopy, n, X, n)
         end
-    end
+
+    else # Rectangular
+
+        # Workspace query
+        lwork = -1
+        work = zeros(T,1)
+        Y = Array(T, max(m,n), nrhs)
+        Y[1:size(X,1), 1:nrhs] = X
+
+        info = jl_lapack_dgels("N", m, n, nrhs, Acopy, m, Y, max(m,n), work, lwork)
+
+        if info == 0
+            lwork = real(work[1])
+            work = Array(T, long(lwork))
+        else
+            error("Error in LAPACK gels")
+        end
+
+        info = jl_lapack_dgels("N", m, n, nrhs, Acopy, m, Y, max(m,n), work, lwork)
+
+        ##if B is a vector, format answer as vector
+        if isa(B, Vector)
+            X = zeros(T, size(Y,1))
+            for i = 1:size(Y,1); X[i] = Y[i,1]; end
+        else
+            X = Y
+        end
+    end # Square / Rectangular
+
+    if info == 0; return X; end
+    error("Error in LAPACK solving A*X = B")
+
 end
 
-@lapack_svd_complex :zgesvd_ Complex128 Float64
-@lapack_svd_complex :cgesvd_ Complex64 Float32
-
-# SUBROUTINE DGESV( N, NRHS, A, LDA, IPIV, B, LDB, INFO )
-# *     .. Scalar Arguments ..
-#       INTEGER            INFO, LDA, LDB, N, NRHS
-# *     ..
-# *     .. Array Arguments ..
-#       INTEGER            IPIV( * )
-#       DOUBLE PRECISION   A( LDA, * ), B( LDB, * )
-
-#      SUBROUTINE DGELS( TRANS, M, N, NRHS, A, LDA, B, LDB, WORK, LWORK, INFO)
-# *     .. Scalar Arguments ..
-#       CHARACTER          TRANS
-#       INTEGER            INFO, LDA, LDB, LWORK, M, N, NRHS
-
-#      SUBROUTINE DTRTRS( UPLO, TRANS, DIAG, N, NRHS, A, LDA, B, LDB, INFO )
-# *     .. Scalar Arguments ..
-#       CHARACTER          DIAG, TRANS, UPLO
-#       INTEGER            INFO, LDA, LDB, N, NRHS
-# *     .. Array Arguments ..
-#       DOUBLE PRECISION   A( LDA, * ), B( LDB, * )
-
-macro lapack_backslash(fname_lu, fname_chol, fname_lsq, fname_tri, eltype)
-    quote
-        function \(A::Matrix{$eltype}, B::VecOrMat{$eltype})
-            info = [int32(0)]
-            m = int32(size(A, 1))
-            n = int32(size(A, 2))
-            mrhs = int32(size(B, 1))
-            if m != mrhs; error("Number of rows of arguments do not match"); end
-            if isa(B, Vector); nrhs = int32(1); else nrhs=int32(size(B, 2)); end
-            Acopy = copy(A)
-            X = copy(B)
-
-            if m == n # Square
-                case = :general
-                if isuppertriangular(A); case = :upper_triangular; end
-                if islowertriangular(A); case = :lower_triangular; end
-
-                if case == :general # General
-                    ipiv = Array(Int32, long(n))
-
-                    # Check for SPD matrix
-                    if issymmetric(Acopy) && all([ Acopy[i,i] > 0 | i=1:n ])
-                        case = :spd
-                    end
-
-                    if case == :spd
-                        uplo = "U"
-                        ccall(dlsym(libLAPACK, $fname_chol),
-                              Void,
-                              (Ptr{Uint8}, Ptr{Int32}, Ptr{Int32}, Ptr{$eltype}, Ptr{Int32},
-                               Ptr{$eltype}, Ptr{Int32}, Ptr{Int32}),
-                              uplo, n, nrhs, Acopy, n, X, n, info)
-
-                        if info[1] != 0
-                            Acopy = copy(A)
-                            case = :general
-                        end
-                    end
-
-                    if case == :general
-                        info[1] = 0
-                        ccall(dlsym(libLAPACK, $fname_lu),
-                              Void,
-                              (Ptr{Int32}, Ptr{Int32}, Ptr{$eltype}, Ptr{Int32}, Ptr{Int32},
-                               Ptr{$eltype}, Ptr{Int32}, Ptr{Int32}),
-                              n, nrhs, Acopy, n, ipiv, X, n, info)
-                    end
-
-                else # Triangular
-                    uplo = "U"
-                    if case == :lower_triangular; uplo = "L"; end
-                    ccall(dlsym(libLAPACK, $fname_tri),
-                          Void,
-                          (Ptr{Uint8}, Ptr{Uint8}, Ptr{Uint8}, Ptr{Int32}, Ptr{Int32},
-                           Ptr{$eltype}, Ptr{Int32}, Ptr{$eltype}, Ptr{Int32}, Ptr{Int32}),
-                          uplo, "N", "N", n, nrhs, Acopy, n, X, n, info)
-                end
-
-            else # Rectangular
-
-                # Workspace query
-                lwork = -1
-                work = [0.0]
-                Y = Array($eltype, long(max(m,n)), long(nrhs))
-                Y[1:size(X,1), 1:nrhs] = X
-
-                ccall(dlsym(libLAPACK, $fname_lsq),
-                      Void,
-                      (Ptr{Uint8}, Ptr{Int32}, Ptr{Int32}, Ptr{Int32}, Ptr{$eltype}, Ptr{Int32},
-                       Ptr{$eltype}, Ptr{Int32}, Ptr{$eltype}, Ptr{Int32}, Ptr{Int32}),
-                      "N", m, n, nrhs, Acopy, m, Y, max(m,n), work, lwork, info)
-
-                if info[1] == 0
-                    lwork = int32(work[1])
-                    work = Array($eltype, long(lwork))
-                else
-                    error("Error in ", $fname_lsq)
-                end
-
-                ccall(dlsym(libLAPACK, $fname_lsq),
-                      Void,
-                      (Ptr{Uint8}, Ptr{Int32}, Ptr{Int32}, Ptr{Int32}, Ptr{$eltype}, Ptr{Int32},
-                       Ptr{$eltype}, Ptr{Int32}, Ptr{$eltype}, Ptr{Int32}, Ptr{Int32}),
-                      "N", m, n, nrhs, Acopy, m, Y, max(m,n), work, lwork, info)
-
-                ##if B is a vector, format answer as vector
-                if isa(B, Vector)
-                    X = zeros($eltype, size(Y,1))
-                    for i = 1:size(Y,1); X[i] = Y[i,1]; end
-                else
-                    X = Y
-                end
-            end # if m == n...
-
-            if info[1] == 0; return X; end
-            error("Error in solving A*X = B")
-
-        end # function...
-    end # quote...
-end # macro...
-
-@lapack_backslash :dgesv_ :dposv_ :dgels_ :dtrtrs_ Float64
-@lapack_backslash :sgesv_ :sposv_ :sgels_ :strtrs_ Float32
-@lapack_backslash :zgesv_ :zposv_ :zgels_ :ztrtrs_ Complex128
-@lapack_backslash :cgesv_ :cposv_ :cgels_ :ctrtrs_ Complex64
 
 ## BIDIAG ##
 
