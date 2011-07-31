@@ -1,235 +1,219 @@
 libLAPACK = libBLAS
 
-# SUBROUTINE DPOTRF( UPLO, N, A, LDA, INFO )
-# *     .. Scalar Arguments ..
-#       CHARACTER          UPLO
-#       INTEGER            INFO, LDA, N
-# *     .. Array Arguments ..
-#       DOUBLE PRECISION   A( LDA, * )
-
-macro lapack_chol(fname, eltype)
+macro jl_lapack_potrf_macro(fname, eltype)
     quote
-        function chol(A::Matrix{$eltype})
+        # SUBROUTINE DPOTRF( UPLO, N, A, LDA, INFO )
+        # *     .. Scalar Arguments ..
+        #       CHARACTER          UPLO
+        #       INTEGER            INFO, LDA, N
+        # *     .. Array Arguments ..
+        #       DOUBLE PRECISION   A( LDA, * )
+        function jl_lapack_potrf(uplo, n, A::Matrix{$eltype}, lda)
             info = [int32(0)]
-            n = int32(size(A, 1))
-            R = triu(A)
-
             ccall(dlsym(libLAPACK, $fname),
                   Void,
                   (Ptr{Uint8}, Ptr{Int32}, Ptr{$eltype}, Ptr{Int32}, Ptr{Int32}),
-                  "U", n, R, n, info)
-
-            if info[1] == 0; return R; end
-            if info[1] > 0; error("Matrix not Positive Definite"); end
-            error("Error in CHOL")
+                  uplo, int32(n), A, int32(lda), info)
+            return info[1]
         end
     end
 end
 
-@lapack_chol :dpotrf_ Float64
-@lapack_chol :spotrf_ Float32
-@lapack_chol :zpotrf_ Complex128
-@lapack_chol :cpotrf_ Complex64
+@jl_lapack_potrf_macro :dpotrf_ Float64
+@jl_lapack_potrf_macro :spotrf_ Float32
+@jl_lapack_potrf_macro :zpotrf_ Complex128
+@jl_lapack_potrf_macro :cpotrf_ Complex64
 
-# SUBROUTINE DGETRF( M, N, A, LDA, IPIV, INFO )
-# *     .. Scalar Arguments ..
-#       INTEGER            INFO, LDA, M, N
-# *     .. Array Arguments ..
-#       INTEGER            IPIV( * )
-#       DOUBLE PRECISION   A( LDA, * )
+function chol(A::Matrix)
+    n = int32(size(A, 1))
+    R = triu(A)
 
-lu(A::Matrix) = lu(A, false)
+    info = jl_lapack_potrf("U", n, R, n)
 
-macro lapack_lu(fname, eltype)
+    if info == 0; return R; end
+    if info  > 0; error("Matrix not Positive Definite"); end
+    error("Error in CHOL")
+end
+
+macro jl_lapack_getrf_macro(fname, eltype)
     quote
-        function lu(A::Matrix{$eltype}, economy::Bool)
+        # SUBROUTINE DGETRF( M, N, A, LDA, IPIV, INFO )
+        # *     .. Scalar Arguments ..
+        #       INTEGER            INFO, LDA, M, N
+        # *     .. Array Arguments ..
+        #       INTEGER            IPIV( * )
+        #       DOUBLE PRECISION   A( LDA, * )
+        function jl_lapack_getrf(m, n, A::Matrix{$eltype}, lda, ipiv)
             info = [int32(0)]
-            m, n = size(A)
-            LU = A
-            if !economy
-                LU = copy(A)
-            end
-            ipiv = Array(Int32, min(m,n))
-
             ccall(dlsym(libLAPACK, $fname),
                   Void,
                   (Ptr{Int32}, Ptr{Int32}, Ptr{$eltype},
                    Ptr{Int32}, Ptr{Int32}, Ptr{Int32}),
-                  int32(m), int32(n), LU, int32(m), ipiv, info)
-
-            if info[1] > 0; error("Matrix is singular"); end
-            P = linspace(1, m)
-            for i=1:min(m,n); t = P[i]; P[i] = P[ipiv[i]]; P[ipiv[i]] = t ; end
-
-            if info[1] == 0
-                if economy
-                    return (LU, P)
-                else
-                    L = tril(LU, -1) + eye(m,n)
-                    U = m <= n ? triu(LU) : triu(LU)[1:n, :]
-                    return (L, U, P)
-                end
-            end
-            error("Error in LU")
+                  int32(m), int32(n), A, int32(lda), ipiv, info)
+            return info[1]
         end
-
     end
 end
 
-@lapack_lu :dgetrf_ Float64
-@lapack_lu :sgetrf_ Float32
-@lapack_lu :zgetrf_ Complex128
-@lapack_lu :cgetrf_ Complex64
+@jl_lapack_getrf_macro :dgetrf_ Float64
+@jl_lapack_getrf_macro :sgetrf_ Float32
+@jl_lapack_getrf_macro :zgetrf_ Complex128
+@jl_lapack_getrf_macro :cgetrf_ Complex64
 
-# SUBROUTINE DGEQP3( M, N, A, LDA, JPVT, TAU, WORK, LWORK, INFO )
-# *     .. Scalar Arguments ..
-#       INTEGER            INFO, LDA, LWORK, M, N
-# *     .. Array Arguments ..
-#       INTEGER            JPVT( * )
-#       DOUBLE PRECISION   A( LDA, * ), TAU( * ), WORK( * )
+lu(A::Matrix) = lu(A, false)
 
-# SUBROUTINE DORGQR( M, N, K, A, LDA, TAU, WORK, LWORK, INFO )
-# *     .. Scalar Arguments ..
-#       INTEGER            INFO, K, LDA, LWORK, M, N
-# *     .. Array Arguments ..
-#       DOUBLE PRECISION   A( LDA, * ), TAU( * ), WORK( * )
+function lu(A::Matrix, economy::Bool)
+    m, n = size(A)
+    LU = A
+    if !economy
+        LU = copy(A)
+    end
+    ipiv = Array(Int32, min(m,n))
 
-macro lapack_qr(fname, fname2, eltype)
+    info = jl_lapack_getrf(m, n, LU, m, ipiv)
+
+    if info > 0; error("Matrix is singular"); end
+    P = linspace(1, m)
+    for i=1:min(m,n); t = P[i]; P[i] = P[ipiv[i]]; P[ipiv[i]] = t ; end
+
+    if info == 0
+        if economy
+            return (LU, P)
+        else
+            L = tril(LU, -1) + eye(m,n)
+            U = m <= n ? triu(LU) : triu(LU)[1:n, :]
+            return (L, U, P)
+        end
+    end
+    error("Error in LU")
+end
+
+
+macro jl_lapack_qr_macro(real_geqp3, complex_geqp3, orgqr, ungqr, eltype, celtype)
     quote
-        function qr(A::Matrix{$eltype})
+        # SUBROUTINE DGEQP3( M, N, A, LDA, JPVT, TAU, WORK, LWORK, INFO )
+        # *     .. Scalar Arguments ..
+        #       INTEGER            INFO, LDA, LWORK, M, N
+        # *     .. Array Arguments ..
+        #       INTEGER            JPVT( * )
+        #       DOUBLE PRECISION   A( LDA, * ), TAU( * ), WORK( * )
+        function jl_lapack_geqp3(m, n, A::Matrix{$eltype}, lda, jpvt, tau, work, lwork)
             info = [int32(0)]
-            m, n = size(A)
-            QR = copy(A)
-            jpvt = zeros(Int32, n)
-            k = min(m,n)
-            tau = Array($eltype, k)
-
-            # Workspace query for QR factorization
-            work = zeros($eltype,1)
-            lwork = int32(-1)
-            ccall(dlsym(libLAPACK, $fname),
+            ccall(dlsym(libLAPACK, $real_geqp3),
                   Void,
                   (Ptr{Int32}, Ptr{Int32}, Ptr{$eltype}, Ptr{Int32},
                    Ptr{Int32}, Ptr{$eltype}, Ptr{$eltype}, Ptr{Int32}, Ptr{Int32}),
-                  int32(m), int32(n), QR, int32(m), jpvt, tau, work, lwork, info)
+                  int32(m), int32(n), A, int32(lda), jpvt, tau, work, int32(lwork), info)
+            return info[1]
+        end
 
-            if info[1] == 0; lwork = int32(work[1]); work = Array($eltype, long(lwork));
-            else error("Error in ", $fname); end
-
-            # Compute QR factorization
-            ccall(dlsym(libLAPACK, $fname),
+        # SUBROUTINE ZGEQP3( M, N, A, LDA, JPVT, TAU, WORK, LWORK, RWORK, INFO )
+        #*      .. Scalar Arguments ..
+        #       INTEGER            INFO, LDA, LWORK, M, N
+        #*      .. Array Arguments ..
+        #       INTEGER            JPVT( * )
+        #       DOUBLE PRECISION   RWORK( * )
+        #       COMPLEX*16         A( LDA, * ), TAU( * ), WORK( * )
+        function jl_lapack_geqp3(m, n, A::Matrix{$celtype}, lda, jpvt, tau, work, lwork, rwork)
+            info = [int32(0)]
+            ccall(dlsym(libLAPACK, $complex_geqp3),
                   Void,
-                  (Ptr{Int32}, Ptr{Int32}, Ptr{$eltype}, Ptr{Int32},
-                   Ptr{Int32}, Ptr{$eltype}, Ptr{$eltype}, Ptr{Int32}, Ptr{Int32}),
-                  int32(m), int32(n), QR, int32(m), jpvt, tau, work, lwork, info)
+                  (Ptr{Int32}, Ptr{Int32}, Ptr{$celtype}, Ptr{Int32},
+                   Ptr{Int32}, Ptr{$celtype}, Ptr{$celtype}, Ptr{Int32}, Ptr{$eltype}, Ptr{Int32}),
+                  int32(m), int32(n), A, int32(lda), jpvt, tau, work, int32(lwork), rwork, info)
+            return info[1]
+        end
 
-            if info[1] > 0; error("Matrix is singular"); end
-
-            R = triu(QR)
-
-            # Workspace query to form Q
-            lwork2 = int32(-1)
-            ccall(dlsym(libLAPACK, $fname2),
+        # SUBROUTINE DORGQR( M, N, K, A, LDA, TAU, WORK, LWORK, INFO )
+        # *     .. Scalar Arguments ..
+        #       INTEGER            INFO, K, LDA, LWORK, M, N
+        # *     .. Array Arguments ..
+        #       DOUBLE PRECISION   A( LDA, * ), TAU( * ), WORK( * )
+        function jl_lapack_orgqr(m, n, k, A::Matrix{$eltype}, lda, tau, work, lwork)
+            info = [int32(0)]
+            ccall(dlsym(libLAPACK, $orgqr),
                   Void,
                   (Ptr{Int32}, Ptr{Int32}, Ptr{Int32}, Ptr{$eltype},
                    Ptr{Int32}, Ptr{$eltype}, Ptr{$eltype}, Ptr{Int32}, Ptr{Int32}),
-                  int32(m), int32(k), int32(k), QR, int32(m), tau, work, lwork2, info)
+                  int32(m), int32(n), int32(k), A, int32(lda), tau, work, int32(lwork), info)
+            return info[1]
+        end
 
-            if info[1] == 0; lwork = int32(work[1]); work = Array($eltype, long(lwork));
-            else error("Error in ", $fname2); end
-
-            # Compute Q
-            ccall(dlsym(libLAPACK, $fname2),
+        # SUBROUTINE ZUNGQR( M, N, K, A, LDA, TAU, WORK, LWORK, INFO )
+        #*     .. Scalar Arguments ..
+        #      INTEGER            INFO, K, LDA, LWORK, M, N
+        #*     .. Array Arguments ..
+        #      COMPLEX*16         A( LDA, * ), TAU( * ), WORK( * )
+        function jl_lapack_ungqr(m, n, k, A::Matrix{$celtype}, lda, tau, work, lwork)
+            info = [int32(0)]
+            ccall(dlsym(libLAPACK, $ungqr),
                   Void,
-                  (Ptr{Int32}, Ptr{Int32}, Ptr{Int32}, Ptr{$eltype},
-                   Ptr{Int32}, Ptr{$eltype}, Ptr{$eltype}, Ptr{Int32}, Ptr{Int32}),
-                  int32(m), int32(k), int32(k), QR, int32(m), tau, work, lwork, info)
-
-            if info[1] == 0; return (QR[:, 1:k], R[1:k, :], jpvt); end
-            error("Error in ", $fname);
+                  (Ptr{Int32}, Ptr{Int32}, Ptr{Int32}, Ptr{$celtype},
+                   Ptr{Int32}, Ptr{$celtype}, Ptr{$celtype}, Ptr{Int32}, Ptr{Int32}),
+                  int32(m), int32(n), int32(k), A, int32(lda), tau, work, int32(lwork), info)
+            return info[1]
         end
     end
 end
 
-@lapack_qr :dgeqp3_ :dorgqr_ Float64
-@lapack_qr :sgeqp3_ :sorgqr_ Float32
+@jl_lapack_qr_macro :dgeqp3_ :zgeqp3_ :dorgqr_ :zungqr_ Float64 Complex128
+@jl_lapack_qr_macro :sgeqp3_ :cgeqp3_ :sorgqr_ :cungqr_ Float32 Complex64
 
-# SUBROUTINE ZGEQP3( M, N, A, LDA, JPVT, TAU, WORK, LWORK, RWORK, INFO )
-#*      .. Scalar Arguments ..
-#       INTEGER            INFO, LDA, LWORK, M, N
-#*      .. Array Arguments ..
-#       INTEGER            JPVT( * )
-#       DOUBLE PRECISION   RWORK( * )
-#       COMPLEX*16         A( LDA, * ), TAU( * ), WORK( * )
-
-# SUBROUTINE ZUNGQR( M, N, K, A, LDA, TAU, WORK, LWORK, INFO )
-#*     .. Scalar Arguments ..
-#      INTEGER            INFO, K, LDA, LWORK, M, N
-#*     ..
-#*     .. Array Arguments ..
-#      COMPLEX*16         A( LDA, * ), TAU( * ), WORK( * )
-
-macro lapack_qr_complex(fname, fname2, eltype, eltype2)
-    quote
-        function qr(A::Matrix{$eltype})
-            info = [int32(0)]
-            m, n = size(A)
-            QR = copy(A)
-            jpvt = zeros(Int32, n)
-            m = int32(m); n = int32(n)
-            k = min(m,n)
-            tau = Array($eltype, long(k))
-            rwork = zeros($eltype2, long(2n))
-
-            # Workspace query for QR factorization
-            work = zeros($eltype, 1)
-            lwork = int32(-1)
-            ccall(dlsym(libLAPACK, $fname),
-                  Void,
-                  (Ptr{Int32}, Ptr{Int32}, Ptr{$eltype}, Ptr{Int32},
-                   Ptr{Int32}, Ptr{$eltype}, Ptr{$eltype}, Ptr{Int32}, Ptr{$eltype2}, Ptr{Int32}),
-                  m, n, QR, m, jpvt, tau, work, lwork, rwork, info)
-
-            if info[1] == 0; lwork = int32(real(work[1])); work = Array($eltype, lwork);
-            else error("Error in ", $fname); end
-
-            # Compute QR factorization
-            ccall(dlsym(libLAPACK, $fname),
-                  Void,
-                  (Ptr{Int32}, Ptr{Int32}, Ptr{$eltype}, Ptr{Int32},
-                   Ptr{Int32}, Ptr{$eltype}, Ptr{$eltype}, Ptr{Int32}, Ptr{$eltype2}, Ptr{Int32}),
-                  m, n, QR, m, jpvt, tau, work, lwork, rwork, info)
-
-            if info[1] > 0; error("Matrix is singular"); end
-
-            R = triu(QR)
-
-            # Workspace query to form Q
-            lwork2 = int32(-1)
-            ccall(dlsym(libLAPACK, $fname2),
-                  Void,
-                  (Ptr{Int32}, Ptr{Int32}, Ptr{Int32}, Ptr{$eltype},
-                   Ptr{Int32}, Ptr{$eltype}, Ptr{$eltype}, Ptr{Int32}, Ptr{Int32}),
-                  m, k, k, QR, m, tau, work, lwork2, info)
-
-            if info[1] == 0; lwork = int32(real(work[1])); work = Array($eltype, lwork);
-            else error("Error in ", $fname2); end
-
-            # Compute Q
-            ccall(dlsym(libLAPACK, $fname2),
-                  Void,
-                  (Ptr{Int32}, Ptr{Int32}, Ptr{Int32}, Ptr{$eltype},
-                   Ptr{Int32}, Ptr{$eltype}, Ptr{$eltype}, Ptr{Int32}, Ptr{Int32}),
-                  m, k, k, QR, m, tau, work, lwork, info)
-
-            if info[1] == 0; return (QR[:, 1:k], R[1:k, :], jpvt); end
-            error("Error in ", $fname);
-        end
+function qr{T}(A::Matrix{T})
+    m, n = size(A)
+    QR = copy(A)
+    jpvt = zeros(Int32, n)
+    k = min(m,n)
+    tau = Array(T, k)
+    if iscomplex(A)
+        rwork = zeros(typeof(real(A[1])), long(2*n))
     end
+
+    # Workspace query for QR factorization
+    work = zeros(T,1)
+    lwork = int32(-1)
+    if iscomplex(A)
+        info = jl_lapack_geqp3(m, n, QR, m, jpvt, tau, work, lwork, rwork)
+    else
+        info = jl_lapack_geqp3(m, n, QR, m, jpvt, tau, work, lwork)
+    end
+
+    if info == 0; lwork = real(work[1]); work = Array(T, long(lwork))
+    else error("Error in LAPACK geqp3"); end
+
+    # Compute QR factorization
+    if iscomplex(A)
+        info = jl_lapack_geqp3(m, n, QR, m, jpvt, tau, work, lwork, rwork)
+    else
+        info = jl_lapack_geqp3(m, n, QR, m, jpvt, tau, work, lwork)
+    end
+
+    if info > 0; error("Matrix is singular"); end
+
+    R = triu(QR)
+
+    # Workspace query to form Q
+    lwork2 = int32(-1)
+    if iscomplex(A)
+        info = jl_lapack_ungqr(m, k, k, QR, m, tau, work, lwork2)
+    else
+        info = jl_lapack_orgqr(m, k, k, QR, m, tau, work, lwork2)
+    end
+
+    if info == 0; lwork2 = real(work[1]); work = Array(T, long(lwork2))
+    else error("Error in LAPACK orgqr/ungqr"); end
+
+    # Compute Q
+    if iscomplex(A)
+        info = jl_lapack_ungqr(m, k, k, QR, m, tau, work, lwork2)
+    else
+        info = jl_lapack_orgqr(m, k, k, QR, m, tau, work, lwork2)
+    end
+
+    if info == 0; return (QR[:, 1:k], R[1:k, :], jpvt); end
+    error("Error in LAPACK orgqr/ungqr");
 end
 
-@lapack_qr_complex :zgeqp3_ :zungqr_ Complex128 Float64
-@lapack_qr_complex :cgeqp3_ :cungqr_ Complex64 Float32
 
 #       SUBROUTINE DSYEV( JOBZ, UPLO, N, A, LDA, W, WORK, LWORK, INFO )
 # *     .. Scalar Arguments ..
