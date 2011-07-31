@@ -16,8 +16,7 @@ typealias Region Union(Size,Dims)
 size(t::AbstractArray, d) = size(t)[d]
 ndims{T,n}(::AbstractArray{T,n}) = n
 numel(t::AbstractArray) = prod(size(t))
-length(v::AbstractVector) = numel(v)
-length(t::AbstractArray) = error("length not defined for ", typeof(t))
+length(a::AbstractArray) = numel(a)
 nnz(a::AbstractArray) = (n = 0; for i=1:numel(a); n += a[i] != 0 ? 1 : 0; end; n)
 nnz(a::AbstractArray{Bool}) = (n = 0; for i=1:numel(a); n += a[i] == true ? 1 : 0; end; n)
 
