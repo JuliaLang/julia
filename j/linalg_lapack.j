@@ -309,7 +309,7 @@ function eig{T}(A::Matrix{T})
     m, n = size(A)
     if m != n; error("Input must be square"); end
 
-    if issymmetric(A)
+    if ishermitian(A)
 
         jobz = "V"
         uplo = "U"
@@ -324,7 +324,7 @@ function eig{T}(A::Matrix{T})
         lwork = -1
 
         if iscomplex(A)
-            info = jl_lapack_syev(jobz, uplo, n, EV, n, W, work, lwork, rwork)
+            info = jl_lapack_heev(jobz, uplo, n, EV, n, W, work, lwork, rwork)
         else
             info = jl_lapack_syev(jobz, uplo, n, EV, n, W, work, lwork)
         end
@@ -334,7 +334,7 @@ function eig{T}(A::Matrix{T})
 
         # Compute eigenvalues, eigenvectors
         if iscomplex(A)
-            info = jl_lapack_syev(jobz, uplo, n, EV, n, W, work, lwork, rwork)
+            info = jl_lapack_heev(jobz, uplo, n, EV, n, W, work, lwork, rwork)
         else
             info = jl_lapack_syev(jobz, uplo, n, EV, n, W, work, lwork)
         end
@@ -581,7 +581,7 @@ function (\){T}(A::Matrix{T}, B::VecOrMat{T})
             ipiv = Array(Int32, n)
 
             # Check for SPD matrix
-            if issymmetric(Acopy) && all([ Acopy[i,i] > 0 | i=1:n ])
+            if ishermitian(Acopy) && all([ Acopy[i,i] > 0 | i=1:n ])
                 case = :spd
             end
 
