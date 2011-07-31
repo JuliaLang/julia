@@ -2,6 +2,7 @@ libLAPACK = libBLAS
 
 macro jl_lapack_potrf_macro(potrf, eltype)
     quote
+
         # SUBROUTINE DPOTRF( UPLO, N, A, LDA, INFO )
         # *     .. Scalar Arguments ..
         #       CHARACTER          UPLO
@@ -16,6 +17,7 @@ macro jl_lapack_potrf_macro(potrf, eltype)
                   uplo, int32(n), A, int32(lda), info)
             return info[1]
         end
+
     end
 end
 
@@ -37,6 +39,7 @@ end
 
 macro jl_lapack_getrf_macro(getrf, eltype)
     quote
+
         # SUBROUTINE DGETRF( M, N, A, LDA, IPIV, INFO )
         # *     .. Scalar Arguments ..
         #       INTEGER            INFO, LDA, M, N
@@ -52,6 +55,7 @@ macro jl_lapack_getrf_macro(getrf, eltype)
                   int32(m), int32(n), A, int32(lda), ipiv, info)
             return info[1]
         end
+
     end
 end
 
@@ -91,6 +95,7 @@ end
 
 macro jl_lapack_qr_macro(real_geqp3, complex_geqp3, orgqr, ungqr, eltype, celtype)
     quote
+
         # SUBROUTINE DGEQP3( M, N, A, LDA, JPVT, TAU, WORK, LWORK, INFO )
         # *     .. Scalar Arguments ..
         #       INTEGER            INFO, LDA, LWORK, M, N
@@ -153,6 +158,7 @@ macro jl_lapack_qr_macro(real_geqp3, complex_geqp3, orgqr, ungqr, eltype, celtyp
                   int32(m), int32(n), int32(k), A, int32(lda), tau, work, int32(lwork), info)
             return info[1]
         end
+
     end
 end
 
@@ -216,13 +222,14 @@ end
 
 macro jl_lapack_eig_macro(syev, heev, eltype, celtype)
     quote
+
+        #       SUBROUTINE DSYEV( JOBZ, UPLO, N, A, LDA, W, WORK, LWORK, INFO )
+        # *     .. Scalar Arguments ..
+        #       CHARACTER          JOBZ, UPLO
+        #       INTEGER            INFO, LDA, LWORK, N
+        # *     .. Array Arguments ..
+        #       DOUBLE PRECISION   A( LDA, * ), W( * ), WORK( * )
         function jl_lapack_syev(jobz, uplo, n, A::Matrix{$eltype}, lda, W, work, lwork)
-            #       SUBROUTINE DSYEV( JOBZ, UPLO, N, A, LDA, W, WORK, LWORK, INFO )
-            # *     .. Scalar Arguments ..
-            #       CHARACTER          JOBZ, UPLO
-            #       INTEGER            INFO, LDA, LWORK, N
-            # *     .. Array Arguments ..
-            #       DOUBLE PRECISION   A( LDA, * ), W( * ), WORK( * )
             info = [int32(0)]
             ccall(dlsym(libLAPACK, $syev),
                   Void,
@@ -232,14 +239,14 @@ macro jl_lapack_eig_macro(syev, heev, eltype, celtype)
             return info[1]
         end
 
+        #      SUBROUTINE ZHEEV( JOBZ, UPLO, N, A, LDA, W, WORK, LWORK, RWORK, INFO )
+        #*     .. Scalar Arguments ..
+        #      CHARACTER          JOBZ, UPLO
+        #      INTEGER            INFO, LDA, LWORK, N
+        #*     .. Array Arguments ..
+        #      DOUBLE PRECISION   RWORK( * ), W( * )
+        #      COMPLEX*16         A( LDA, * ), WORK( * )
         function jl_lapack_heev(jobz, uplo, n, A::Matrix{$celtype}, lda, W, work, lwork, rwork)
-            #      SUBROUTINE ZHEEV( JOBZ, UPLO, N, A, LDA, W, WORK, LWORK, RWORK, INFO )
-            #*     .. Scalar Arguments ..
-            #      CHARACTER          JOBZ, UPLO
-            #      INTEGER            INFO, LDA, LWORK, N
-            #*     .. Array Arguments ..
-            #      DOUBLE PRECISION   RWORK( * ), W( * )
-            #      COMPLEX*16         A( LDA, * ), WORK( * )
             info = [int32(0)]
             ccall(dlsym(libLAPACK, $heev),
                   Void,
@@ -306,15 +313,15 @@ end
 macro jl_lapack_gesvd_macro(real_gesvd, complex_gesvd, eltype, celtype)
     quote
 
+        # SUBROUTINE DGESVD( JOBU, JOBVT, M, N, A, LDA, S, U, LDU, VT, LDVT, WORK, LWORK, INFO )
+        # *     .. Scalar Arguments ..
+        #       CHARACTER          JOBU, JOBVT
+        #       INTEGER            INFO, LDA, LDU, LDVT, LWORK, M, N
+        # *     .. Array Arguments ..
+        #       DOUBLE PRECISION   A( LDA, * ), S( * ), U( LDU, * ),
+        #      $                   VT( LDVT, * ), WORK( * )
         function jl_lapack_gesvd(jobu, jobvt, m, n, A::Matrix{$eltype}, lda, S, U, ldu, 
                                  VT, ldvt, work, lwork)
-            # SUBROUTINE DGESVD( JOBU, JOBVT, M, N, A, LDA, S, U, LDU, VT, LDVT, WORK, LWORK, INFO )
-            # *     .. Scalar Arguments ..
-            #       CHARACTER          JOBU, JOBVT
-            #       INTEGER            INFO, LDA, LDU, LDVT, LWORK, M, N
-            # *     .. Array Arguments ..
-            #       DOUBLE PRECISION   A( LDA, * ), S( * ), U( LDU, * ),
-            #      $                   VT( LDVT, * ), WORK( * )
             info = [int32(0)]
             ccall(dlsym(libLAPACK, $real_gesvd),
                   Void,
@@ -326,17 +333,17 @@ macro jl_lapack_gesvd_macro(real_gesvd, complex_gesvd, eltype, celtype)
             return info[1]
         end
 
+        # SUBROUTINE ZGESVD( JOBU, JOBVT, M, N, A, LDA, S, U, LDU, VT, LDVT,
+        #     $                   WORK, LWORK, RWORK, INFO )
+        #*     .. Scalar Arguments ..
+        #      CHARACTER          JOBU, JOBVT
+        #      INTEGER            INFO, LDA, LDU, LDVT, LWORK, M, N
+        #*     .. Array Arguments ..
+        #      DOUBLE PRECISION   RWORK( * ), S( * )
+        #      COMPLEX*16         A( LDA, * ), U( LDU, * ), VT( LDVT, * ),
+        #     $                   WORK( * )
         function jl_lapack_gesvd(jobu, jobvt, m, n, A::Matrix{$celtype}, lda, S, U, ldu, 
                                  VT, ldvt, work, lwork, rwork)
-            # SUBROUTINE ZGESVD( JOBU, JOBVT, M, N, A, LDA, S, U, LDU, VT, LDVT,
-            #     $                   WORK, LWORK, RWORK, INFO )
-            #*     .. Scalar Arguments ..
-            #      CHARACTER          JOBU, JOBVT
-            #      INTEGER            INFO, LDA, LDU, LDVT, LWORK, M, N
-            #*     .. Array Arguments ..
-            #      DOUBLE PRECISION   RWORK( * ), S( * )
-            #      COMPLEX*16         A( LDA, * ), U( LDU, * ), VT( LDVT, * ),
-            #     $                   WORK( * )
             info = [int32(0)]
             ccall(dlsym(libLAPACK, $complex_gesvd),
                   Void,
@@ -396,14 +403,14 @@ end
 macro jl_lapack_backslash_macro(gesv, posv, gels, trtrs, eltype)
     quote
 
+        # SUBROUTINE DGESV( N, NRHS, A, LDA, IPIV, B, LDB, INFO )
+        # *     .. Scalar Arguments ..
+        #       INTEGER            INFO, LDA, LDB, N, NRHS
+        # *     ..
+        # *     .. Array Arguments ..
+        #       INTEGER            IPIV( * )
+        #       DOUBLE PRECISION   A( LDA, * ), B( LDB, * )
         function jl_lapack_gesv(n, nrhs, A::Matrix{$eltype}, lda, ipiv, B, ldb)
-            # SUBROUTINE DGESV( N, NRHS, A, LDA, IPIV, B, LDB, INFO )
-            # *     .. Scalar Arguments ..
-            #       INTEGER            INFO, LDA, LDB, N, NRHS
-            # *     ..
-            # *     .. Array Arguments ..
-            #       INTEGER            IPIV( * )
-            #       DOUBLE PRECISION   A( LDA, * ), B( LDB, * )
             info = [int32(0)]
             ccall(dlsym(libLAPACK, $gesv),
                   Void,
@@ -413,13 +420,13 @@ macro jl_lapack_backslash_macro(gesv, posv, gels, trtrs, eltype)
             return info[1]
         end
 
+        #     SUBROUTINE DPOSV( UPLO, N, NRHS, A, LDA, B, LDB, INFO )
+        #*     .. Scalar Arguments ..
+        #      CHARACTER          UPLO
+        #      INTEGER            INFO, LDA, LDB, N, NRHS
+        #     .. Array Arguments ..
+        #      DOUBLE PRECISION   A( LDA, * ), B( LDB, * )
         function jl_lapack_posv(uplo, n, nrhs, A::Matrix{$eltype}, lda, B, ldb)
-            #     SUBROUTINE DPOSV( UPLO, N, NRHS, A, LDA, B, LDB, INFO )
-            #*     .. Scalar Arguments ..
-            #      CHARACTER          UPLO
-            #      INTEGER            INFO, LDA, LDB, N, NRHS
-            #     .. Array Arguments ..
-            #      DOUBLE PRECISION   A( LDA, * ), B( LDB, * )
             info = [int32(0)]
             ccall(dlsym(libLAPACK, $posv),
                   Void,
@@ -429,11 +436,11 @@ macro jl_lapack_backslash_macro(gesv, posv, gels, trtrs, eltype)
             return info[1]
         end
 
+        #      SUBROUTINE DGELS( TRANS, M, N, NRHS, A, LDA, B, LDB, WORK, LWORK, INFO)
+        # *     .. Scalar Arguments ..
+        #       CHARACTER          TRANS
+        #       INTEGER            INFO, LDA, LDB, LWORK, M, N, NRHS
         function jl_lapack_gels(trans, m, n, nrhs, A::Matrix{$eltype}, lda, B, ldb, work, lwork)
-            #      SUBROUTINE DGELS( TRANS, M, N, NRHS, A, LDA, B, LDB, WORK, LWORK, INFO)
-            # *     .. Scalar Arguments ..
-            #       CHARACTER          TRANS
-            #       INTEGER            INFO, LDA, LDB, LWORK, M, N, NRHS
             info = [int32(0)]
             ccall(dlsym(libLAPACK, $gels),
                   Void,
@@ -444,13 +451,13 @@ macro jl_lapack_backslash_macro(gesv, posv, gels, trtrs, eltype)
             return info[1]
         end
 
+        #      SUBROUTINE DTRTRS( UPLO, TRANS, DIAG, N, NRHS, A, LDA, B, LDB, INFO )
+        # *     .. Scalar Arguments ..
+        #       CHARACTER          DIAG, TRANS, UPLO
+        #       INTEGER            INFO, LDA, LDB, N, NRHS
+        # *     .. Array Arguments ..
+        #       DOUBLE PRECISION   A( LDA, * ), B( LDB, * )
         function jl_lapack_trtrs(uplo, trans, diag, n, nrhs, A::Matrix{$eltype}, lda, B, ldb)
-            #      SUBROUTINE DTRTRS( UPLO, TRANS, DIAG, N, NRHS, A, LDA, B, LDB, INFO )
-            # *     .. Scalar Arguments ..
-            #       CHARACTER          DIAG, TRANS, UPLO
-            #       INTEGER            INFO, LDA, LDB, N, NRHS
-            # *     .. Array Arguments ..
-            #       DOUBLE PRECISION   A( LDA, * ), B( LDB, * )
             info = [int32(0)]
             ccall(dlsym(libLAPACK, $trtrs),
                   Void,
