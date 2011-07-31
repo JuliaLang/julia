@@ -220,7 +220,7 @@ function qr{T}(A::Matrix{T})
     error("Error in LAPACK orgqr/ungqr");
 end
 
-macro jl_lapack_eig_macro(syev, heev, eltype, celtype)
+macro jl_lapack_eig_macro(syev, heev, real_geev, complex_geev, eltype, celtype)
     quote
 
         #       SUBROUTINE DSYEV( JOBZ, UPLO, N, A, LDA, W, WORK, LWORK, INFO )
@@ -256,58 +256,147 @@ macro jl_lapack_eig_macro(syev, heev, eltype, celtype)
             return info[1]
         end
 
+        #      SUBROUTINE DGEEV( JOBVL, JOBVR, N, A, LDA, WR, WI, VL, LDVL, VR,
+        #      $                  LDVR, WORK, LWORK, INFO )
+        # *     .. Scalar Arguments ..
+        #       CHARACTER          JOBVL, JOBVR
+        #       INTEGER            INFO, LDA, LDVL, LDVR, LWORK, N
+        # *     .. Array Arguments ..
+        #       DOUBLE PRECISION   A( LDA, * ), VL( LDVL, * ), VR( LDVR, * ),
+        #      $                   WI( * ), WORK( * ), WR( * )
+        function jl_lapack_geev(jobvl, jobvr, n, A::Matrix{$eltype}, lda, WR, WI, VL, ldvl, 
+                                VR, ldvr, work, lwork)
+            info = [int32(0)]
+            ccall(dlsym(libLAPACK, $real_geev),
+                  Void,
+                  (Ptr{Uint8}, Ptr{Uint8}, Ptr{Int32}, Ptr{$eltype}, Ptr{Int32},
+                   Ptr{$eltype}, Ptr{$eltype}, Ptr{$eltype}, Ptr{Int32}, 
+                   Ptr{$eltype}, Ptr{Int32}, Ptr{$eltype}, Ptr{Int32}, Ptr{Int32}),
+                  jobvl, jobvr, int32(n), A, int32(lda), WR, WI, VL, int32(ldvl),
+                  VR, int32(ldvr), work, int32(lwork), info)
+            return info[1]
+        end
+
+        #      SUBROUTINE ZGEEV( JOBVL, JOBVR, N, A, LDA, W, VL, LDVL, VR, LDVR,
+        #      $                  WORK, LWORK, RWORK, INFO )
+        # *     .. Scalar Arguments ..
+        #       CHARACTER          JOBVL, JOBVR
+        #       INTEGER            INFO, LDA, LDVL, LDVR, LWORK, N
+        # *     .. Array Arguments ..
+        #       DOUBLE PRECISION   RWORK( * )
+        #       COMPLEX*16         A( LDA, * ), VL( LDVL, * ), VR( LDVR, * ),
+        #      $                   W( * ), WORK( * )
+        function jl_lapack_geev(jobvl, jobvr, n, A::Matrix{$celtype}, lda, W, VL, ldvl, 
+                                VR, ldvr, work, lwork, rwork)
+            info = [int32(0)]
+            ccall(dlsym(libLAPACK, $complex_geev),
+                  Void,
+                  (Ptr{Uint8}, Ptr{Uint8}, Ptr{Int32}, Ptr{$celtype}, Ptr{Int32},
+                   Ptr{$celtype}, Ptr{$celtype}, Ptr{Int32}, 
+                   Ptr{$celtype}, Ptr{Int32}, Ptr{$celtype}, Ptr{Int32}, Ptr{$eltype}, Ptr{Int32}),
+                  jobvl, jobvr, int32(n), A, int32(lda), W, VL, int32(ldvl), 
+                  VR, int32(ldvr), work, int32(lwork), rwork, info)
+            return info[1]
+        end
+
     end
 end
 
-@jl_lapack_eig_macro :dsyev_ :zheev_ Float64 Complex128
-@jl_lapack_eig_macro :ssyev_ :cheev_ Float32 Complex64
+@jl_lapack_eig_macro :dsyev_ :zheev_ :dgeev_ :zgeev_ Float64 Complex128
+@jl_lapack_eig_macro :ssyev_ :cheev_ :sgeev_ :cgeev_ Float32 Complex64
 
-function eig(A::Matrix)
-    if issymmetric(A)
-        return eig_sym(A)
-    else
-        return eig_nonsym(A)
-    end
-end
-
-function eig_sym{T}(A::Matrix{T})
+function eig{T}(A::Matrix{T})
     m, n = size(A)
     if m != n; error("Input must be square"); end
 
-    jobz = "V"
-    uplo = "U"
-    EV = copy(A)
-    W = Array(T, n)
-    if iscomplex(A)
-        rwork = Array(typeof(real(A[1])), long(max(3*n-2, 1)))
-    end
+    if issymmetric(A)
 
-    # Workspace query
-    work = zeros(T,1)
-    lwork = int32(-1)
-    
-    if iscomplex(A)
-        info = jl_lapack_syev(jobz, uplo, n, EV, n, W, work, lwork, rwork)
-    else
-        info = jl_lapack_syev(jobz, uplo, n, EV, n, W, work, lwork)
-    end
+        jobz = "V"
+        uplo = "U"
+        EV = copy(A)
+        W = Array(T, n)
+        if iscomplex(A)
+            rwork = Array(typeof(real(A[1])), long(max(3*n-2, 1)))
+        end
 
-    if info == 0; lwork = real(work[1]); work = Array(T, long(lwork));
-    else error("Error in LAPACK syev/heev"); end
+        # Workspace query
+        work = zeros(T,1)
+        lwork = -1
 
-    # Compute eigenvalues, eigenvectors
-    if iscomplex(A)
-        info = jl_lapack_syev(jobz, uplo, n, EV, n, W, work, lwork, rwork)
-    else
-        info = jl_lapack_syev(jobz, uplo, n, EV, n, W, work, lwork)
-    end
+        if iscomplex(A)
+            info = jl_lapack_syev(jobz, uplo, n, EV, n, W, work, lwork, rwork)
+        else
+            info = jl_lapack_syev(jobz, uplo, n, EV, n, W, work, lwork)
+        end
 
-    if info == 0; return (diagm(W), EV); end
-    error("Error in LAPACK syev/heev");
-end
+        if info == 0; lwork = real(work[1]); work = Array(T, long(lwork));
+        else error("Error in LAPACK syev/heev"); end
 
-function eig_nonsym{T}(A::Matrix{T})
-    error("Not yet implemented");
+        # Compute eigenvalues, eigenvectors
+        if iscomplex(A)
+            info = jl_lapack_syev(jobz, uplo, n, EV, n, W, work, lwork, rwork)
+        else
+            info = jl_lapack_syev(jobz, uplo, n, EV, n, W, work, lwork)
+        end
+
+        if info == 0; return (diagm(W), EV); end
+        error("Error in LAPACK syev/heev");
+
+    else # Non-symmetric case
+
+        jobvl = "N"
+        jobvr = "V"
+        Acopy = copy(A)
+        VL = Array(T, 1) # Not referenced, since we are only computing right eigenvectors
+        VR = Array(T, n, n)
+        if iscomplex(A)
+            W = Array(T, n)
+            rwork = Array(typeof(real(A[1])), 2*n)
+        else
+            WR = zeros(T, n)
+            WI = zeros(T, n)
+        end
+
+        # Workspace query
+        work = zeros(T,1)
+        lwork = -1
+
+        if iscomplex(A)
+            info = jl_lapack_geev(jobvl, jobvr, n, Acopy, n, W, VL, n, VR, n, work, lwork, rwork)
+        else
+            info = jl_lapack_geev(jobvl, jobvr, n, Acopy, n, WR, WI, VL, n, VR, n, work, lwork)
+        end
+
+        if info == 0; lwork = real(work[1]); work = Array(T, long(lwork));
+        else error("Error in LAPACK geev"); end
+
+        # Compute eigenvalues, eigenvectors
+        if iscomplex(A)
+            info = jl_lapack_geev(jobvl, jobvr, n, Acopy, n, W, VL, n, VR, n, work, lwork, rwork)
+        else
+            info = jl_lapack_geev(jobvl, jobvr, n, Acopy, n, WR, WI, VL, n, VR, n, work, lwork)
+        end
+        
+        if info != 0; error("Error in LAPACK geev"); end
+
+        if iscomplex(A)
+            return (diagm(W), VR)
+        else
+            evec = complex(zeros(T, n, n), zeros(T, n, n))
+            for j=1:n
+                if WI[j] == 0.0
+                    evec[:,j] = VR[:,j]
+                else
+                    evec[:,j]   = VR[:,j] + im*VR[:,j+1]
+                    evec[:,j+1] = VR[:,j] - im*VR[:,j+1]
+                    j += 1
+                end
+            end
+            return (diagm(complex(WR, WI)), evec)
+        end
+
+    end # symmetric / non-symmetric case
+
 end
 
 macro jl_lapack_gesvd_macro(real_gesvd, complex_gesvd, eltype, celtype)
