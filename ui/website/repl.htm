@@ -108,6 +108,13 @@
 			// add to the terminal
 			function add_to_terminal(data)
 			{
+				// clear the input if necessary
+				if (clear_on_next_response)
+				{
+					$('#terminal-input').val("");
+					clear_on_next_response = false;
+				}
+
 				// add the data
 				terminal_data += data;
 
@@ -231,13 +238,6 @@
 			{
 				// we're no longer waiting for that message to be sent
 				outstanding_message = false;
-
-				// clear input if necessary
-				if (clear_on_next_response)
-				{
-					$("#terminal-input").val("");
-					clear_on_next_response = false;
-				}
 
 				// error message
 				if (data.type == "error")
