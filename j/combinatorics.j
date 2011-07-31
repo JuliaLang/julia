@@ -83,7 +83,7 @@ function insertionsort(a::Vector, lo, hi)
         j = i
         x = a[i]
         while j > lo
-            if x > a[j-1]
+            if x >= a[j-1]
                 break
             end
             a[j] = a[j-1]
@@ -124,7 +124,7 @@ function insertionsort(a::Vector, p::Vector{Size}, lo, hi)
         x = a[i]
         xp = p[i]
         while j > lo
-            if x > a[j-1]
+            if x >= a[j-1]
                 break
             end
             a[j] = a[j-1]

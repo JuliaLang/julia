@@ -583,7 +583,7 @@ function abstract_eval_expr(e, vtypes, sv::StaticVarInfo)
     elseif is(e.head,:quote)
         return typeof(e.args[1])
     elseif is(e.head,:method)
-        return Any-->Any
+        return Function
     elseif is(e.head,:static_typeof)
         t = abstract_eval(e.args[1], vtypes, sv)
         # intersect with Any to remove Undef
@@ -605,7 +605,7 @@ function abstract_eval_constant(x::ANY)
         return Type{x}
     end
     if isa(x,LambdaStaticData)
-        return Any-->Any
+        return Function
     end
     return typeof(x)
 end
