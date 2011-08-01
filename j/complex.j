@@ -72,6 +72,8 @@ function write(s, z::Complex128)
     write(s,imag(z))
 end
 
+sizeof(::Type{Complex128}) = 16
+
 bitstype 64 Complex64 <: Complex{Float32}
 
 function complex64(r::Float32, i::Float32)
@@ -108,6 +110,8 @@ function write(s, z::Complex64)
     write(s,real(z))
     write(s,imag(z))
 end
+
+sizeof(::Type{Complex64})  =  8
 
 complex(x::Float64, y::Float64) = complex128(x, y)
 complex(x::Float32, y::Float32) = complex64(x, y)
