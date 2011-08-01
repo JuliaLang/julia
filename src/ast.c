@@ -372,7 +372,7 @@ DLLEXPORT jl_value_t *jl_parse_input_line(const char *str)
     value_t e = fl_applyn(1, symbol_value(symbol("jl-parse-string")),
                           cvalue_static_cstring(str));
     if (e == FL_T || e == FL_F || e == FL_EOF)
-        return NULL;
+        return jl_nothing;
     
     return scm_to_julia(e);
 }
