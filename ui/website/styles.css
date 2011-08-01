@@ -168,6 +168,7 @@ form#terminal-form
 	padding: 20px;
 	background-color: #fafafa;
 	overflow: auto;
+	cursor: text;
 }
 
 div#terminal
@@ -197,6 +198,7 @@ textarea#terminal-input
 	font: 85% "Droid Sans Mono", "Consolas", "Courier", "Courier New", monospace;
 	color: #444444;
 	resize: none;
+	overflow: hidden;
 }
 
 div.float-clear

@@ -655,7 +655,7 @@ string get_response(request* req)
                 {
                     // too many sessions
                     response_root["type"] = "fatal_error";
-                    response_root["message"] = "&lt;maximum server capacity reached for now&gt;<br />";
+                    response_root["message"] = "&lt;the server is currently at maximum capacity&gt;<br />";
                 }
                 else
                 {

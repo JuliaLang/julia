@@ -108,6 +108,13 @@
 			// add to the terminal
 			function add_to_terminal(data)
 			{
+				// clear the input if necessary
+				if (clear_on_next_response)
+				{
+					$('#terminal-input').val("");
+					clear_on_next_response = false;
+				}
+
 				// add the data
 				terminal_data += data;
 
@@ -176,8 +183,8 @@
 					$("#prompt").html(terminal_data.substring(last_newline+6).replace(/julia&gt;&nbsp;/g, "<span class=\"prompt\">julia&gt;&nbsp;</span>"));
 				}
 
-				// resize the input box
-				$('#terminal-input').width($('#terminal').width()-$('#prompt').width());
+				// resize the input box (the -1 is for Internet Explorer)
+				$('#terminal-input').width($('#terminal').width()-$('#prompt').width()-1);
 
 				// scroll to the new data
 				$("#terminal-form").prop("scrollTop", $("#terminal-form").prop("scrollHeight"));
@@ -231,13 +238,6 @@
 			{
 				// we're no longer waiting for that message to be sent
 				outstanding_message = false;
-
-				// clear input if necessary
-				if (clear_on_next_response)
-				{
-					$("#terminal-input").val("");
-					clear_on_next_response = false;
-				}
 
 				// error message
 				if (data.type == "error")
@@ -379,6 +379,9 @@
 
 				// start the watchdog
 				setTimeout(watchdog, 1000);
+
+				// focus the input box (most browsers do this automatically because of the autofocus attribute)
+				$('#terminal-input').focus();
 			});
 		</script>
 	</head>

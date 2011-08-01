@@ -811,6 +811,9 @@ for i=10000:20000
 end
 
 # fft
-
 a = rand(8) + im*rand(8)
 @assert norm((1/length(a))*ifft(fft(a)) - a) < 1e-8
+
+# arpack
+(d,v) = eigs(asym, 3)
+@assert sum(asym*v[:,1]-d[1]*v[:,1]) < 1e-8

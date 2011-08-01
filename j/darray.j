@@ -375,7 +375,6 @@ ref(d::DArray, i::Index, J::Vector{Index}) = d[[i], J]
 ref(d::DArray, I::Union(Index,Vector{Index})...) =
     d[ntuple(length(I),i->(isa(I[i],Index) ? [I[i]] : I[i] ))...]
 
-
 assign(d::DArray, v::AbstractArray, i::Index) =
     invoke(assign, (DArray, Any, Index), d, v, i)
 
@@ -455,15 +454,14 @@ function assign(d::DArray, v, I::Vector{Index}...)
     return d
 end
 
-#assign(d::DArray, v, I::Range1{Index}, j::Index) = assign(d,v,I,j:j)
-#assign(d::DArray, v, i::Index, J::Range1{Index}) = assign(d,v,i:i,J)
-#assign(d::DArray, v, I::Union(Index,Range1{Index})...) =
-#    assign(d,v,ntuple(length(I),i->(isa(I[i],Index) ? (I[i]:I[i]) : I[i] ))...)
+assign(d::DArray, v::AbstractArray, i::Index, is::Index...) =
+    invoke(assign, (DArray, Any, Index...), d, v, i, is...)
 
-#assign(d::DArray, v, I::Vector{Index}, j::Index) = assign(d,v,I,[j])
-#assign(d::DArray, v, i::Index, J::Vector{Index}) = assign(d,v,[i],J)
-#assign(d::DArray, I::Union(Index,Vector{Index})...) =
-#    assign(d,v,ntuple(length(I),i->(isa(I[i],Index) ? [I[i]] : I[i] ))...)
+assign(d::DArray, v, I::Union(Index,Range1{Index})...) =
+    assign(d,v,ntuple(length(I),i->(isa(I[i],Index) ? (I[i]:I[i]) : I[i] ))...)
+
+assign(d::DArray, I::Union(Index,Vector{Index})...) =
+    assign(d,v,ntuple(length(I),i->(isa(I[i],Index) ? [I[i]] : I[i] ))...)
 
 ## matrix multiply ##
 
