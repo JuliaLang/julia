@@ -928,7 +928,7 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
                     Value *addr = emit_nthptr_addr(strct, offs+1);
                     builder.CreateStore(rhs, addr);
                     JL_GC_POP();
-                    return strct;
+                    return rhs;
                 }
             }
         }

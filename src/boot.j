@@ -133,6 +133,9 @@ long(x::Long) = x
 ulong(x) = convert(Ulong, x)
 ulong(x::Ulong) = x
 
+# function version of field assignment
+setfield(s, f, v) = (s.(f) = v)
+
 type WeakRef
     value
 end

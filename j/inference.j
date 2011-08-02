@@ -298,7 +298,7 @@ getfield_tfunc = function (A, s, name)
     end
 end
 t_func[getfield] = (2, 2, getfield_tfunc)
-t_func[setfield] = (3, 3, (o, f, v)->o)
+t_func[_setfield] = (3, 3, (o, f, v)->v)
 fieldtype_tfunc = function (A, s, name)
     if !isa(s,CompositeKind)
         return Type
