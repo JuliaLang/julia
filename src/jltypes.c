@@ -16,6 +16,7 @@
 #include "libsupport.h"
 #include "julia.h"
 #include "newobj_internal.h"
+#include "jltypes_internal.h"
 
 jl_tag_type_t *jl_any_type;
 jl_tag_type_t *jl_type_type;
@@ -901,7 +902,7 @@ static char *type_summary(jl_value_t *t)
 
 static void print_env(jl_tuple_t *soln)
 {
-    jl_value_t *p = soln;
+    jl_tuple_t *p = soln;
     while (p != jl_null) {
         jl_value_t *T, *S;
         T = jl_t0(p); S = jl_t1(p);
@@ -909,7 +910,7 @@ static void print_env(jl_tuple_t *soln)
                    "%s@%x=%s ",
                    ((jl_tvar_t*)T)->name->name, T,
                    type_summary(S));
-        p = jl_nextpair(p);
+        p = (jl_tuple_t*)jl_nextpair(p);
     }
     ios_printf(ios_stdout, "\n");
 }
@@ -992,7 +993,7 @@ static int solve_tvar_constraints(jl_tuple_t *env, jl_tuple_t **soln)
             }
             else {
                 v = (jl_value_t*)jl_new_typevar(jl_symbol("_"),
-                                                jl_bottom_type, S);
+                                                (jl_value_t*)jl_bottom_type, S);
                 ((jl_tvar_t*)v)->bound = 0;
                 *soln = extend(T, v, *soln);
             }
@@ -1238,14 +1239,6 @@ jl_value_t *jl_apply_type(jl_value_t *tc, jl_tuple_t *params)
 {
     return apply_type_(tc, &jl_tupleref(params,0), params->length);
 }
-
-typedef struct _typekey_stack_t {
-    jl_typename_t *tn;
-    jl_value_t **key;
-    size_t n;  // key length
-    jl_type_t *type;
-    struct _typekey_stack_t *next;
-} typekey_stack_t;
 
 static jl_type_t *lookup_type(typekey_stack_t *table,
                               jl_typename_t *tn, jl_value_t **key, size_t n)
