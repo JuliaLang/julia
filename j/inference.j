@@ -645,7 +645,7 @@ function abstract_eval(s::Symbol, vtypes, sv::StaticVarInfo)
                 val = sp[i+1]
                 if isa(val,TypeVar)
                     # static param bound to typevar
-                    return val#Type{val}
+                    return Type{val}
                 end
                 return abstract_eval_constant(val)
             end
