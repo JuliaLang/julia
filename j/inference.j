@@ -69,6 +69,7 @@ isconstant(s::Symbol) = isbound(s) && (e=eval(s);
                                        isa(e,BitsKind) || isa(e,CompositeKind) ||
                                        isa(e,TypeConstructor) ||
                                        is(e,None))
+isconstant(s::SymbolNode) = isconstant(s.name)
 isconstant(s::Expr) = is(s.head,:quote)
 isconstant(x) = true
 
@@ -412,6 +413,9 @@ function isconstantfunc(f, vtypes, sv::StaticVarInfo)
         assert(isa(f.args[1],Symbol), "inference.j:333")
         return (true, f.args[1])
     end
+    if isa(f,SymbolNode)
+        f = f.name
+    end
     return (isa(f,Symbol) && !has(vtypes,f) && !has(sv.cenv,f), f)
 end
 
@@ -657,6 +661,9 @@ function abstract_eval(s::Symbol, vtypes, sv::StaticVarInfo)
     return t
 end
 
+abstract_eval(s::SymbolNode, vtypes, sv::StaticVarInfo) =
+    abstract_eval(s.name, vtypes, sv)
+
 abstract_eval(x, vtypes, sv::StaticVarInfo) = abstract_eval_constant(x)
 
 typealias VarTable IdTable
@@ -681,6 +688,9 @@ function interpret(e::Expr, vtypes, sv::StaticVarInfo)
     if is(e.head,:(=))
         t = abstract_eval(e.args[2], vtypes, sv)
         lhs = e.args[1]
+        if isa(lhs,SymbolNode)
+            lhs = lhs.name
+        end
         assert(isa(lhs,Symbol), "inference.j:579")
         return StateUpdate(lhs, t, vtypes)
     elseif is(e.head,:call) || is(e.head,:call1)
@@ -833,21 +843,41 @@ end
 
 typeinf(linfo,atypes,sparams,copy) = typeinf(linfo,atypes,sparams,copy,linfo)
 
+abstract RecPending{T}
+
 # def is the original unspecialized version of a method. we aggregate all
 # saved type inference data there.
 function typeinf(linfo::LambdaStaticData,atypes::Tuple,sparams::Tuple, cop, def)
+    #dbg = 
     #dotrace = true#is(linfo,sizestr)
+    local ast::Expr
+    redo = false
+    curtype = None
     # check cached t-functions
-    tf = linfo.tfunc
+    tf = def.tfunc
     while !is(tf,())
         if typeseq(tf[1],atypes)
-            return (tf[2], ast_rettype(tf[2]))
+            # if the frame above this one recurred, rerun type inf
+            # here instead of returning, and update the cache, until the new
+            # inferred type equals the cached type (fixed point)
+            rt = ast_rettype(tf[2])
+            if isa(rt,AbstractKind) && is(rt.name,RecPending.name)
+                curtype = rt.parameters[1]
+                redo = true
+                ast = tf[2]
+                break
+            else
+                return (tf[2], rt)
+            end
         end
         tf = tf[3]
     end
 
-    ast0 = linfo.ast
+    ast0 = def.ast
 
+    #if dbg
+    #    print("typeinf ", linfo.name, " ", uid(ast0), "\n")
+    #end
     #print("typeinf ", ast0, " ", sparams, " ", atypes, "\n")
 
     global inference_stack
@@ -857,20 +887,28 @@ function typeinf(linfo::LambdaStaticData,atypes::Tuple,sparams::Tuple, cop, def)
         if is(f.ast,ast0) && typeseq(f.types, atypes)
             # return best guess so far
             f.recurred = true
+            r = inference_stack
+            while !is(r, f)
+                # mark all frames that are part of the cycle
+                r.recurred = true
+                r = r.prev
+            end
             #print("*==> ", f.result,"\n")
             return ((),f.result)
         end
         f = f.prev
     end
 
+    rec = false
+
     #print(linfo.name); show(atypes); print('\n')
 
-    local ast::Expr
-    if cop
+    if redo
+    elseif cop
         sparams = append(sparams, linfo.sparams)
-        ast = ccall(:jl_prepare_ast, Any, (Any,Any), ast0, sparams)::Expr
+        ast = ccall(:jl_prepare_ast, Any, (Any,Any), linfo.ast, sparams)::Expr
     else
-        ast = ast0
+        ast = linfo.ast
     end
 
     assert(is(ast.head,:lambda), "inference.j:745")
@@ -912,6 +950,7 @@ function typeinf(linfo::LambdaStaticData,atypes::Tuple,sparams::Tuple, cop, def)
 
     # our stack frame
     frame = CallStack(ast0, atypes, inference_stack)
+    frame.result = curtype
     inference_stack = frame
 
     # exception handlers
@@ -931,7 +970,13 @@ function typeinf(linfo::LambdaStaticData,atypes::Tuple,sparams::Tuple, cop, def)
             stmt = body[pc]
             changes = interpret(stmt, s[pc], sv)
             if frame.recurred
+                if isa(frame.prev,CallStack) && frame.prev.recurred
+                    rec = true
+                end
                 add(recpts, pc)
+                #if dbg
+                #    show(pc); print(" recurred\n")
+                #end
                 frame.recurred = false
             end
             if !is(cur_hand,())
@@ -958,13 +1003,30 @@ function typeinf(linfo::LambdaStaticData,atypes::Tuple,sparams::Tuple, cop, def)
                     pc´ = n+1
                     rt = abstract_eval(stmt.args[1], s[pc], sv)
                     if frame.recurred
+                        if isa(frame.prev,CallStack) && frame.prev.recurred
+                            rec = true
+                        end
                         add(recpts, pc)
+                        #if dbg
+                        #    show(pc); print(" recurred\n")
+                        #end
                         frame.recurred = false
                     end
+                    #if dbg
+                    #    print("at "); show(pc)
+                    #    print(" result is "); show(frame.result)
+                    #    print(" and rt is "); show(rt)
+                    #    print("\n")
+                    #end
                     if tchanged(rt, frame.result)
                         frame.result = tmerge(frame.result, rt)
                         # revisit states that recursively depend on this
                         for r=recpts
+                            #if dbg
+                            #    print("will revisit ")
+                            #    show(r)
+                            #    print("\n")
+                            #end
                             add(W,r)
                         end
                     end
@@ -990,10 +1052,19 @@ function typeinf(linfo::LambdaStaticData,atypes::Tuple,sparams::Tuple, cop, def)
     inference_stack = inference_stack.prev
     #print("\n",ast,"\n")
     #print("==> ", frame.result,"\n")
-    fulltree = type_annotate(ast, s, sv, frame.result, vars)
-    def.tfunc = (atypes, fulltree, def.tfunc)
-    fulltree.args[3] = inlining_pass(fulltree.args[3], s[1])
-    tuple_elim_pass(fulltree)
+    if redo && typeseq(curtype, frame.result)
+        rec = false
+    end
+    fulltree = type_annotate(ast, s, sv,
+                             rec ? RecPending{frame.result} : frame.result,
+                             vars)
+    if !redo
+        def.tfunc = (atypes, fulltree, def.tfunc)
+    end
+    if !rec
+        fulltree.args[3] = inlining_pass(fulltree.args[3], s[1])
+        tuple_elim_pass(fulltree)
+    end
     return (fulltree, frame.result)
 end
 
@@ -1021,7 +1092,12 @@ function eval_annotate(e::Expr, vtypes, sv, decls)
         s = e.args[1]
         # assignment LHS not subject to all-same-type variable checking,
         # but the type of the RHS counts as one of its types.
-        e.args[1] = SymbolNode(s, abstract_eval(s, vtypes, sv))
+        if isa(s,SymbolNode)
+            s.type = abstract_eval(s.name, vtypes, sv)
+            s = s.name
+        else
+            e.args[1] = SymbolNode(s, abstract_eval(s, vtypes, sv))
+        end
         e.args[2] = eval_annotate(e.args[2], vtypes, sv, decls)
         # TODO: if this def does not reach any uses, maybe don't do this
         record_var_type(s, exprtype(e.args[2]), decls)
@@ -1037,6 +1113,13 @@ function eval_annotate(e::Symbol, vtypes, sv, decls)
     t = abstract_eval(e, vtypes, sv)
     record_var_type(e, t, decls)
     SymbolNode(e, t)
+end
+
+function eval_annotate(e::SymbolNode, vtypes, sv, decls)
+    t = abstract_eval(e.name, vtypes, sv)
+    record_var_type(e.name, t, decls)
+    e.type = t
+    e
 end
 
 eval_annotate(s, vtypes, sv, decls) = s

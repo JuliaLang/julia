@@ -12,6 +12,7 @@ gensym() = ccall(:jl_gensym, Any, ())::Symbol
 expr(hd::Symbol, args::ANY...) = Expr(hd, {args...}, Any)
 expr(hd::Symbol, args::Array{Any,1}) = Expr(hd, args, Any)
 copy(e::Expr) = Expr(e.head, copy(e.args), e.type)
+copy(s::SymbolNode) = SymbolNode(s.name, s.type)
 
 isequal(x::Expr, y::Expr) = (is(x.head,y.head) && isequal(x.args,y.args))
 isequal(x::SymbolNode, y::SymbolNode) = is(x.name,y.name)

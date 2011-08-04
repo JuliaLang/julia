@@ -971,7 +971,8 @@ static int solve_tvar_constraints(jl_tuple_t *env, jl_tuple_t **soln)
                     *soln = extend(T, S, *soln);
             }
             else {
-                if (jl_is_leaf_type(S) || jl_is_long(S)) {
+                if (jl_is_leaf_type(S) || jl_is_long(S) ||
+                    S == (jl_value_t*)jl_bottom_type) {
                     v = S;
                 }
                 else {
