@@ -283,3 +283,17 @@ function show(a::Array)
                          print(slice2d(a, idxs), idxs == tail ? "" : "\n\n")),
                   map(x->Range1(1,x), tail))
 end
+
+summary(x) = string(typeof(x))
+
+summary{T}(a::Array{T}) = strcat(join("x",map(string,size(a))),
+                                 " ", string(T), " array")
+
+function whos()
+    global VARIABLES
+    for v = map(symbol,sort(map(string, VARIABLES)))
+        if isbound(v)
+            println(rpad(v, 30), summary(eval(v)))
+        end
+    end
+end

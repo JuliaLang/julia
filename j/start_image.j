@@ -18,9 +18,3 @@ libLAPACK = libBLAS
 libarpack = dlopen("libarpack")
 libfftw = dlopen("libfftw3")
 libfftwf = dlopen("libfftw3f")
-
-# Load customized startup
-try
-    load(strcat(getcwd(),"/custom.j"))
-catch
-end
