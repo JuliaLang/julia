@@ -1640,7 +1640,8 @@ static int jl_subtype_le(jl_value_t *a, jl_value_t *b, int ta, int morespecific,
                     return 1;
                 }
             }
-            return 0;
+            if (!jl_is_typevar(b))
+                return 0;
         }
         else {
             for(i=0; i < ap->length; i++) {
