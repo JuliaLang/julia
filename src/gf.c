@@ -1263,27 +1263,7 @@ static jl_tuple_t *match_method(jl_value_t *type, jl_function_t *func,
     jl_value_t *ti=NULL;
     JL_GC_PUSH(&env, &ti, &temp);
 
-    ti = jl_type_intersection_matching((jl_value_t*)sig, type, &env);
-    jl_tuple_t *t = tvars;
-    jl_tuple_t *env0 = env;
-    while (t != jl_null) {
-        jl_value_t *tv = jl_t0(t);
-        int found = 0;
-        jl_tuple_t *pe = env0;
-        while (pe != jl_null) {
-            if (jl_t0(pe) == tv) {
-                found = 1;
-                break;
-            }
-            pe = (jl_tuple_t*)jl_t2(pe);
-        }
-        // bind type vars to themselves if they were not matched explicitly
-        // during type intersection.
-        if (!found)
-            env = jl_tuple3(tv, tv, env);
-        t = (jl_tuple_t*)jl_t1(t);
-    }
-    env = jl_flatten_pairs(env);
+    ti = jl_type_intersection_matching((jl_value_t*)sig, type, &env, tvars);
     jl_tuple_t *result = NULL;
     if (ti != (jl_value_t*)jl_bottom_type) {
         if (func->linfo == NULL) {

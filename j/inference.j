@@ -21,7 +21,8 @@
 # - avoid branches when condition can be statically evaluated
 
 # parameters limiting potentially-infinite types
-MAX_TYPEUNION_SIZE = 3
+MAX_TYPEUNION_LEN = 3
+MAX_TYPEUNION_DEPTH = 3
 MAX_TUPLETYPE_LEN  = 10
 MAX_TUPLE_DEPTH = 4
 
@@ -220,7 +221,7 @@ typeof_tfunc = function (t)
         if isleaftype(t)
             Type{t}
         else
-            Type{typevar(:T,t)}
+            Type{typevar(:_,t)}
         end
     elseif isa(t,UnionKind)
         Union(map(typeof_tfunc, t.types)...)
@@ -594,7 +595,7 @@ function abstract_eval_expr(e, vtypes, sv::StaticVarInfo)
         if isleaftype(t) || isa(t,TypeVar)
             return Type{t}
         else
-            return Type{typevar(:T,t)}
+            return Type{typevar(:_,t)}
         end
     end
     Any
@@ -707,6 +708,31 @@ end
 
 badunion(t) = ccall(:jl_union_too_complex, Int32, (Any,), t) != 0
 
+function type_too_complex(t, d)
+    if d > MAX_TYPEUNION_DEPTH
+        return true
+    end
+    if isa(t,UnionKind)
+        p = t.types
+    elseif isa(t,CompositeKind) || isa(t,AbstractKind) || isa(t,BitsKind)
+        p = t.parameters
+    elseif isa(t,FuncKind)
+        return type_too_complex(t.from,d+1) || type_too_complex(t.to,d+1)
+    elseif isa(t,Tuple)
+        p = t
+    elseif isa(t,TypeVar)
+        return type_too_complex(t.lb,d+1) || type_too_complex(t.ub,d+1)
+    else
+        return false
+    end
+    for x = (p::Tuple)
+        if type_too_complex(x, d+1)
+            return true
+        end
+    end
+    return false
+end
+
 function tmerge(typea::ANY, typeb::ANY)
     if is(typea,NF)
         return typeb
@@ -737,7 +763,7 @@ function tmerge(typea::ANY, typeb::ANY)
         return Any
     end
     u = Union(t...)
-    if length(u.types) > MAX_TYPEUNION_SIZE
+    if length(u.types) > MAX_TYPEUNION_LEN || type_too_complex(u, 0)
         # don't let type unions get too big
         # TODO: something smarter, like a common supertype
         return subtype(Undef,u) ? Top : Any
