@@ -550,7 +550,10 @@
 				(with-end-symbol
 				 (parse-arglist s #\] )))))
 		  ((|.|)
-		   (loop (list (take-token s) ex (parse-atom s))))
+		   (take-token s)
+		   (if (eqv? (peek-token s) #\()
+		       (loop `(|.| ,ex ,(parse-atom s)))
+		       (loop `(|.| ,ex (quote ,(parse-atom s))))))
 		  ((|.'|)   (take-token s)
 		   (loop (list 'call 'transpose ex)))
 		  ((|'|)    (take-token s)

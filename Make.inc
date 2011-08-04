@@ -4,6 +4,12 @@ EXTROOTLIB = $(EXTROOT)/lib
 LLVMROOT = $(EXTROOT)
 OS = $(shell uname)
 
+DEFAULT_REPL = readline
+JULIAGC = MARKSWEEP
+USE_COPY_STACKS = 1
+
+# Compiler specific stuff
+
 USEGCC = 1
 USECLANG = 0
 
@@ -26,10 +32,6 @@ DEBUGFLAGS = -g -DDEBUG
 SHIPFLAGS = -O4 -DNDEBUG
 endif
 
-DEFAULT_REPL = readline
-JULIAGC = MARKSWEEP
-USE_COPY_STACKS = 1
-
 # OS specific stuff
 
 ifeq ($(OS), Linux)
@@ -40,4 +42,5 @@ endif
 ifeq ($(OS), Darwin)
 SHLIB_EXT = dylib
 OSLIBS += -Wl,-w -framework ApplicationServices
+#CFLAGS += -fno-optimize-sibling-calls -fno-inline-functions
 endif

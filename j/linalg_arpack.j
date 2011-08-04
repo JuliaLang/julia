@@ -117,8 +117,10 @@ end
 @jl_arpack_eupd_macro Float64 Complex128 "dseupd_" "dneupd_" "zneupd_"
 @jl_arpack_eupd_macro Float32 Complex64  "sseupd_" "sneupd_" "cneupd_"
 
+eigs(A) = eigs(A, 6)
+eigs(A, k) = eigs(A, k, "LM")
 
-function eigs{T}(A::AbstractMatrix{T}, k::Int)
+function eigs{T}(A::AbstractMatrix{T}, k::Int, evtype::ASCIIString)
     (m, n) = size(A)
     if m != n; error("Input should be square"); end
 
@@ -128,7 +130,7 @@ function eigs{T}(A::AbstractMatrix{T}, k::Int)
     nev = k
     ncv = min(max(nev*2, 20), n)
     bmat = "I"
-    which = "LM"
+    which = evtype
     if iscomplex(A)
         lworkl = ncv * (3*ncv + 5)
     else
