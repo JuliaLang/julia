@@ -15,6 +15,8 @@
 jl_module_t *jl_system_module;
 jl_module_t *jl_user_module;
 
+static jl_binding_t *varlist_binding=NULL;
+
 jl_module_t *jl_new_module(jl_sym_t *name)
 {
     jl_module_t *m = (jl_module_t*)allocb(sizeof(jl_module_t));
@@ -37,6 +39,16 @@ jl_binding_t *jl_get_binding(jl_module_t *m, jl_sym_t *var)
         b->constp = 0;
         b->exportp = 0;
         *bp = b;
+
+        // keep track of all variables added after the VARIABLES array
+        // is defined
+        if (varlist_binding &&
+            varlist_binding->value != NULL &&
+            jl_typeis(varlist_binding->value, jl_array_any_type)) {
+            jl_array_t *a = (jl_array_t*)varlist_binding->value;
+            jl_array_grow_end(a, 1);
+            jl_cellset(a, a->length-1, (jl_value_t*)var);
+        }
     }
     return *bp;
 }
@@ -100,4 +112,5 @@ void jl_init_modules()
 {
     jl_system_module = jl_new_module(jl_symbol("System"));
     jl_user_module = jl_new_module(jl_symbol("User"));
+    varlist_binding = jl_get_binding(jl_system_module, jl_symbol("VARIABLES"));
 }

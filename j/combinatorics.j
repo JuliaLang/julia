@@ -66,13 +66,11 @@ end
 # a stable sort should be used.
 # If only numbers are being sorted, a faster quicksort can be used.
 
-sort{T <: Real}(a::Vector{T}) = quicksort(copy(a), 1, length(a))
+sort_inplace{T <: Real}(a::Vector{T}) = quicksort(a, 1, length(a))
 
-function sort{T}(a::Vector{T})
-    (x,p) = mergesort(copy(a), linspace(1,length(a)), 1, length(a),
-                      Array(T, length(a)), Array(Size, length(a)) )
-    return x
-end
+sort_inplace{T}(a::Vector{T}) = mergesort(a, 1, length(a), Array(T, length(a)))
+
+sort(a::Vector) = sort_inplace(copy(a))
 
 sortperm{T}(a::Vector{T}) =
     mergesort(copy(a), linspace(1,length(a)), 1, length(a),
@@ -184,6 +182,49 @@ function mergesort(a::Vector, p::Vector{Size}, lo, hi,
     end # if lo<hi...
 
     return (a, p)
+end
+
+function mergesort(a::Vector, lo, hi, b::Vector)
+    if lo < hi
+        if (hi-lo <= 20)
+            return insertionsort(a, lo, hi)
+        end
+
+        m = div ((lo + hi), 2)
+        mergesort(a, lo, m, b)
+        mergesort(a, m+1, hi, b)
+
+        # merge(lo,m,hi)
+        i = 1
+        j = lo
+        while (j <= m)
+            b[i] = a[j]
+            i += 1
+            j += 1
+        end
+
+        i = 1
+        k = lo
+        while ((k < j) & (j <= hi))
+            if (b[i] <= a[j])
+                a[k] = b[i]
+                i += 1
+            else
+                a[k] = a[j]
+                j += 1
+            end
+            k += 1
+        end
+
+        while (k < j)
+            a[k] = b[i]
+            k += 1
+            i += 1
+        end
+
+    end # if lo<hi...
+
+    return a
 end
 
 function issorted(v::Vector)

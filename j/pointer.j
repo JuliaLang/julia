@@ -26,6 +26,8 @@ convert(::Type{Ptr{Uint8}}, x::Symbol) =
     ccall(:jl_symbol_name, Ptr{Uint8}, (Any,), x)
 convert(::Type{Ptr{Void}}, a::Array) =
     ccall(:jl_array_ptr, Ptr{Void}, (Any,), a)
+convert(::Type{Ptr{Void}}, a::Array{None}) =
+    ccall(:jl_array_ptr, Ptr{Void}, (Any,), a)
 convert{T}(::Type{Ptr{T}}, a::Array{T}) =
     convert(Ptr{T}, convert(Ptr{Void}, a))
 

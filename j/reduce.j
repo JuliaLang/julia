@@ -58,6 +58,16 @@ function count(itr)
     return c
 end
 
+function countp(pred, itr)
+    c = 0
+    for x = itr
+        if pred(x)
+            c += 1
+        end
+    end
+    return c
+end
+
 function anyp(pred, itr)
     for x = itr
         if pred(x)

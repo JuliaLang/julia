@@ -76,12 +76,27 @@
   (equal (char-after (+ (line-beginning-position) (current-indentation)))
 	 ?#))
 
+(defun strcount (str chr)
+  (let ((i 0)
+	(c 0))
+    (while (< i (length str))
+      (if (equal (elt str i) chr)
+	  (setq c (+ c 1)))
+      (setq i (+ i 1)))
+    c))
+
+(defun in-brackets ()
+  (let ((before (buffer-substring (line-beginning-position) (point))))
+    (> (strcount before ?[)
+       (strcount before ?]))))
+
 (defun at-keyword (kw-list)
   ; not a keyword if used as a field name, X.word, or quoted, :word
   (and (or (= (point) 1)
 	   (and (not (equal (char-before (point)) ?.))
 		(not (equal (char-before (point)) ?:))))
        (not (in-comment))
+       (not (in-brackets))
        (member (current-word) kw-list)))
 
 ; get the position of the last open block
@@ -93,7 +108,7 @@
 	    (cond ((at-keyword julia-block-start-keywords)
 		   (+ count 1))
 		  ((and (equal (current-word) "end")
-			(not (in-comment)))
+			(not (in-comment)) (not (in-brackets)))
 		   (- count 1))
 		  (t count))))
     (if (> count 0)

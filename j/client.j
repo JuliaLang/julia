@@ -144,6 +144,14 @@ function _start()
             global PGRP = ProcessGroup(0, {}, {})
         end
 
+        global VARIABLES = {}
+
+        # Load customized startup
+        try
+            load(strcat(getcwd(),"/custom.j"))
+        catch
+        end
+
         (quiet,repl) = process_options(ARGS)
 
         if repl

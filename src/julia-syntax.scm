@@ -264,7 +264,7 @@
 	(else
 	 (let ((g (gensy)))
 	   `(block (= ,g (new ,Texpr))
-		   ,@(map (lambda (fld val) `(= (|.| ,g ,fld) ,val))
+		   ,@(map (lambda (fld val) `(= (|.| ,g (quote ,fld)) ,val))
 			  (list-head field-names (length args)) args)
 		   ,g)))))
 
@@ -561,15 +561,17 @@
 		   `(curly (top Function) ,a ,b))
 
    (pattern-lambda (|.| a b)
-		   `(call (top getfield) ,a (quote ,b)))
+		   `(call (top getfield) ,a ,b))
 
    (pattern-lambda (= (|.| a b) rhs)
-		   (let ((aa (if (atom? a) a (gensy))))
+		   (let ((aa (if (atom? a) a (gensy)))
+			 (bb (if (or (atom? b) (quoted? b)) b (gensy))))
 		     `(block
 		       ,@(if (eq? aa a) '() `((= ,aa ,a)))
-		       (call (top setfield) ,aa (quote ,b)
+		       ,@(if (eq? bb b) '() `((= ,bb ,b)))
+		       (call (top _setfield) ,aa ,bb
 			     (call (top convert)
-				   (call (top fieldtype) ,aa (quote ,b))
+				   (call (top fieldtype) ,aa ,bb)
 				   ,rhs)))))
 
    (pattern-lambda (abstract sig)
