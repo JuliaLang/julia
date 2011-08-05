@@ -37,7 +37,7 @@ jl_struct_type_t *jl_bits_kind;
 
 jl_type_t *jl_bottom_type;
 jl_tag_type_t *jl_seq_type;
-jl_tag_type_t *jl_tensor_type;
+jl_tag_type_t *jl_abstractarray_type;
 
 jl_bits_type_t *jl_bool_type;
 jl_bits_type_t *jl_char_type;
@@ -2334,14 +2334,14 @@ void jl_init_types()
     jl_true  = jl_box8(jl_bool_type, 1);
 
     tv = jl_typevars(2, "T", "N");
-    jl_tensor_type = jl_new_tagtype((jl_value_t*)jl_symbol("AbstractArray"),
+    jl_abstractarray_type = jl_new_tagtype((jl_value_t*)jl_symbol("AbstractArray"),
                                     jl_any_type, tv);
 
     tv = jl_typevars(2, "T", "N");
     jl_array_type = 
         jl_new_struct_type(jl_symbol("Array"),
                            (jl_tag_type_t*)
-                           jl_apply_type((jl_value_t*)jl_tensor_type, tv),
+                           jl_apply_type((jl_value_t*)jl_abstractarray_type, tv),
                            tv,
                            jl_null, jl_null);
     jl_array_typename = jl_array_type->name;

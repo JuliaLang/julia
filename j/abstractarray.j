@@ -1,4 +1,4 @@
-## tensor.j : Functions over tensors, not specialized to specific implementation
+## abstractarray.j : Generic array interfaces.
 
 ## Type aliases for convenience ##
 
