@@ -962,7 +962,7 @@ void jl_init_serializer()
                      jl_box_int64(3), jl_box_int64(4),
 
                      jl_type_type, jl_bottom_type, jl_pointer_type,
-                     jl_seq_type, jl_ntuple_type, jl_tensor_type,
+                     jl_seq_type, jl_ntuple_type, jl_abstractarray_type,
                      jl_box_type, jl_typector_type, jl_undef_type, jl_any_func,
                      jl_task_type, jl_union_kind, jl_function_type,
                      jl_typetype_type, jl_typetype_tvar, jl_ANY_flag,
@@ -972,7 +972,7 @@ void jl_init_serializer()
                      jl_func_kind->name, jl_array_type->name, jl_expr_type->name,
                      jl_typename_type->name, jl_type_type->name, jl_methtable_type->name,
                      jl_tvar_type->name,
-                     jl_seq_type->name, jl_ntuple_type->name, jl_tensor_type->name,
+                     jl_seq_type->name, jl_ntuple_type->name, jl_abstractarray_type->name,
                      jl_lambda_info_type->name, jl_box_type->name,
                      jl_typector_type->name, jl_intrinsic_type->name, jl_undef_type->name,
                      jl_task_type->name, jl_symbolnode_type->name,
