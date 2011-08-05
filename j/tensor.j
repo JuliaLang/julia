@@ -20,6 +20,18 @@ length(a::AbstractArray) = numel(a)
 nnz(a::AbstractArray) = (n = 0; for i=1:numel(a); n += a[i] != 0 ? 1 : 0; end; n)
 nnz(a::AbstractArray{Bool}) = (n = 0; for i=1:numel(a); n += a[i] == true ? 1 : 0; end; n)
 
+function stride(a::AbstractArray, i::Int)
+    s = 1
+    for n=1:(i-1)
+        s *= size(a, n)
+    end
+    s
+end
+strides{T}(a::AbstractArray{T,1}) = (1,)
+strides{T}(a::AbstractArray{T,2}) = (1, size(a,1))
+strides{T}(a::AbstractArray{T,3}) = (1, size(a,1), size(a,1)*size(a,2))
+strides   (a::AbstractArray)      = ntuple(ndims(a), i->stride(a,i))
+
 ## Constructors ##
 
 # default arguments to similar()
