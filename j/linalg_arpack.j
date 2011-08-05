@@ -65,7 +65,7 @@ macro jl_arpack_eupd_macro(T, Tc, seupd, real_neupd, complex_neupd)
                                  ipntr, workd, workl, lworkl, info)
             ccall(dlsym(libarpack, $seupd),
                   Void,
-                  (Ptr{Bool}, Ptr{Uint8}, Ptr{Bool}, Ptr{$T}, Ptr{$T}, Ptr{Int32}, Ptr{$T},
+                  (Ptr{Int32}, Ptr{Uint8}, Ptr{Int32}, Ptr{$T}, Ptr{$T}, Ptr{Int32}, Ptr{$T},
                    Ptr{Uint8}, Ptr{Int32}, Ptr{Uint8}, Ptr{Int32},
                    Ptr{$T}, Ptr{$T}, Ptr{Int32}, Ptr{$T}, Ptr{Int32}, Ptr{Int32},
                    Ptr{Int32}, Ptr{$T}, Ptr{$T}, Ptr{Int32}, Ptr{Int32}),
@@ -84,7 +84,7 @@ macro jl_arpack_eupd_macro(T, Tc, seupd, real_neupd, complex_neupd)
                                  ipntr, workd, workl, lworkl, info)
             ccall(dlsym(libarpack, $real_neupd),
                   Void,
-                  (Ptr{Bool}, Ptr{Uint8}, Ptr{Bool}, Ptr{$T}, Ptr{$T}, Ptr{$T}, Ptr{Int32}, 
+                  (Ptr{Int32}, Ptr{Uint8}, Ptr{Int32}, Ptr{$T}, Ptr{$T}, Ptr{$T}, Ptr{Int32}, 
                    Ptr{$T}, Ptr{$T}, Ptr{$T}, Ptr{Uint8}, Ptr{Int32}, Ptr{Uint8}, Ptr{Int32},
                    Ptr{$T}, Ptr{$T}, Ptr{Int32}, Ptr{$T}, Ptr{Int32}, Ptr{Int32},
                    Ptr{Int32}, Ptr{$T}, Ptr{$T}, Ptr{Int32}, Ptr{Int32}),
@@ -102,7 +102,7 @@ macro jl_arpack_eupd_macro(T, Tc, seupd, real_neupd, complex_neupd)
                                  ipntr, workd, workl, lworkl, rwork, info)
             ccall(dlsym(libarpack, $complex_neupd),
                   Void,
-                  (Ptr{Bool}, Ptr{Uint8}, Ptr{Bool}, Ptr{$Tc}, Ptr{$Tc}, Ptr{Int32}, Ptr{$Tc},
+                  (Ptr{Int32}, Ptr{Uint8}, Ptr{Int32}, Ptr{$Tc}, Ptr{$Tc}, Ptr{Int32}, Ptr{$Tc},
                    Ptr{$Tc}, Ptr{Uint8}, Ptr{Int32}, Ptr{Uint8}, Ptr{Int32},
                    Ptr{$T}, Ptr{$Tc}, Ptr{Int32}, Ptr{$Tc}, Ptr{Int32}, Ptr{Int32},
                    Ptr{Int32}, Ptr{$Tc}, Ptr{$Tc}, Ptr{Int32}, Ptr{$T}, Ptr{Int32}),
@@ -145,7 +145,7 @@ function eigs{T}(A::AbstractMatrix{T}, k::Int, evtype::ASCIIString)
     workd = Array(T, 3*n)
     workl = Array(T, lworkl)
     resid = Array(T, n)
-    select = Array(Bool, ncv)
+    select = Array(Int32, ncv)
     iparam = zeros(Int32, 11)
     ipntr = zeros(Int32, 11)
     if iscomplex(A)
@@ -192,7 +192,7 @@ function eigs{T}(A::AbstractMatrix{T}, k::Int, evtype::ASCIIString)
 
     end
 
-    rvec = true
+    rvec = int32(1)
     all = "A"
 
     if iscomplex(A)
@@ -264,7 +264,7 @@ function svds{T}(A::AbstractMatrix{T}, k::Int)
     workl = Array(T, lworkl)
     d = Array(T, nev)
     resid = Array(T, n)
-    select = Array(Bool, ncv)
+    select = Array(Int32, ncv)
     iparam = zeros(Int32, 11)
     ipntr = zeros(Int32, 11)
 
@@ -294,7 +294,7 @@ function svds{T}(A::AbstractMatrix{T}, k::Int)
         
     end
 
-    rvec = true
+    rvec = int32(1)
     all = "A"
 
     jl_arpack_seupd(rvec, all, select, d, v, ldv, sigma, 

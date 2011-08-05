@@ -62,7 +62,7 @@ load("fft.j")
 # additional data types
 #load("list.j")
 #load("queue.j")
-load("sparse.j")
+#load("sparse.j")
 #load("tree.j")
 load("set.j")
 
