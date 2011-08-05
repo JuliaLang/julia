@@ -4,9 +4,6 @@
 
 typealias AbstractVector{T} AbstractArray{T,1}
 typealias AbstractMatrix{T} AbstractArray{T,2}
-typealias Vector{T} Array{T,1}
-typealias Matrix{T} Array{T,2}
-typealias VecOrMat{T} Union(Vector{T}, Matrix{T})
 
 typealias Indices{T<:Int} Union(Int, AbstractVector{T})
 typealias Region Union(Size,Dims)
@@ -918,9 +915,9 @@ end
 
 ## Other array functions ##
 
-function repmat{T}(a::Matrix{T}, m::Size, n::Size)
+function repmat(a::AbstractMatrix, m::Size, n::Size)
     o,p = size(a)
-    b = Array(T, o*m, p*n)
+    b = similar(a, o*m, p*n)
     for j=1:n
         d = (j-1)*p+1
         R = d:d+p-1

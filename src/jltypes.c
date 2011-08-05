@@ -2327,7 +2327,7 @@ void jl_init_types()
 
     tv = jl_typevars(2, "T", "N");
     jl_abstractarray_type = jl_new_tagtype((jl_value_t*)jl_symbol("AbstractArray"),
-                                    jl_any_type, tv);
+                                           jl_any_type, tv);
 
     tv = jl_typevars(2, "T", "N");
     jl_array_type = 

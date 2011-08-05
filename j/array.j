@@ -1,4 +1,8 @@
-## array.j: Base Array functionality
+## array.j: Dense arrays
+
+typealias Vector{T} Array{T,1}
+typealias Matrix{T} Array{T,2}
+typealias VecOrMat{T} Union(Vector{T}, Matrix{T})
 
 ## Basic functions ##
 
