@@ -3,8 +3,7 @@ libBLAS = dlopen("libLAPACK")
 # SUBROUTINE DCOPY(N,DX,INCX,DY,INCY)
 macro jl_blas_copy_macro(fname, eltype)
     quote
-        function jl_blas_copy(n::Int, DX::Ptr{$eltype}, incx::Int,
-                              DY::Ptr{$eltype}, incy::Int)
+        function jl_blas_copy(n::Int, DX::Ptr{$eltype}, incx::Int, DY::Ptr{$eltype}, incy::Int)
             ccall(dlsym(libBLAS, $fname),
                   Void,
                   (Ptr{Int32}, Ptr{$eltype}, Ptr{Int32}, Ptr{$eltype}, Ptr{Int32}),
@@ -19,12 +18,23 @@ end
 @jl_blas_copy_macro :zcopy_ Complex128
 @jl_blas_copy_macro :ccopy_ Complex64
 
+bcopy_to{T<:Union(Float64,Float32,Complex128,Complex64)}(dest::Ptr{T}, src::Ptr{T}, n::Int) =
+    jl_blas_copy(n, src, 1, dest, 1)
+
+function copy_to{T<:Union(Float64,Float32,Complex128,Complex64)}(dest::Ptr{T}, src::Ptr{T}, n::Int)
+    if n < 100
+        jl_blas_copy(n, src, 1, dest, 1)
+    else
+        ccall(:memcpy, Ptr{Void}, (Ptr{Void}, Ptr{Void}, Ulong), dest, src, ulong(n*sizeof(T)))
+    end
+end
+
 function copy_to{T<:Union(Float64,Float32,Complex128,Complex64)}(dest::Array{T}, src::Array{T})
     n = numel(src)
     if n < 200
         jl_blas_copy(n, pointer(src), 1, pointer(dest), 1)
     else
-        copy_to(pointer(dest), pointer(src), ulong(numel(src)*sizeof(T)))
+        copy_to(pointer(dest), pointer(src), numel(src))
     end
     return dest
 end
