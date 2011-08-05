@@ -185,6 +185,7 @@ function eigs{T}(A::AbstractMatrix{T}, k::Int, evtype::ASCIIString)
         end
 
         if (ido[1] == -1 || ido[1] == 1)
+            # TODO: For the dense matrix case, just call BLAS directly here.
             workd[ipntr[2]:ipntr[2]+n-1] = A * workd[ipntr[1]:ipntr[1]+n-1]
         else
             break
