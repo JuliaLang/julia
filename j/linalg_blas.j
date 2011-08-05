@@ -19,6 +19,16 @@ end
 @jl_blas_copy_macro :zcopy_ Complex128
 @jl_blas_copy_macro :ccopy_ Complex64
 
+function copy_to{T<:Union(Float64,Float32,Complex128,Complex64)}(dest::Array{T}, src::Array{T})
+    n = numel(src)
+    if n < 200
+        jl_blas_copy(n, pointer(src), 1, pointer(dest), 1)
+    else
+        copy_to(pointer(dest), pointer(src), ulong(numel(src)*sizeof(T)))
+    end
+    return dest
+end
+
 # DOUBLE PRECISION FUNCTION DDOT(N,DX,INCX,DY,INCY)
 macro jl_blas_dot_macro(fname, eltype)
     quote

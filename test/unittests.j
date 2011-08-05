@@ -188,6 +188,11 @@ a = rand(n,n)
 (l,u,p) = lu(a)
 @assert sum(l[p,:]*u - a) < 1e-8
 
+# arpack
+asym = a+a'
+(d,v) = eigs(asym, 3)
+@assert sum(asym*v[:,1]-d[1]*v[:,1]) < 1e-8
+
 # hash table
 h = HashTable()
 for i=1:100
