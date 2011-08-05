@@ -35,7 +35,7 @@ end
 @jl_blas_dot_macro :ddot_ Float64
 @jl_blas_dot_macro :sdot_ Float32
 
-function dot(x::Vector{Union(Float64, Float32)}, y::Vector{Union(Float64, Float32)})
+function dot{T<:Union(Vector{Float64}, Vector{Float32})}(x::T, y::T)
     length(x) != length(y) ? error("Inputs should be of same length") : true
     jl_blas_dot(length(x), x, 1, y, 1)
 end
@@ -61,8 +61,8 @@ end
 @jl_blas_nrm2_macro :dznrm2_ Complex128 Float64
 @jl_blas_nrm2_macro :scnrm2_ Complex64 Float32
 
-norm(x::Vector{Union(Float64,Float32,Complex128,Complex64)}) =
-     jl_blas_nrm2(length(x), x, 1)
+norm{T<:Union(Float64,Float32,Complex128,Complex64)}(x::Vector{T}) =
+    jl_blas_nrm2(length(x), x, 1)
 
 # SUBROUTINE DGEMM(TRANSA,TRANSB,M,N,K,ALPHA,A,LDA,B,LDB,BETA,C,LDC)
 # *     .. Scalar Arguments ..
