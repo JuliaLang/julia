@@ -3,8 +3,8 @@ libBLAS = dlopen("libLAPACK")
 # SUBROUTINE DCOPY(N,DX,INCX,DY,INCY)
 macro jl_blas_copy_macro(fname, eltype)
     quote
-        function jl_blas_copy(n::Int, DX::Array{$eltype}, incx::Int,
-                              DY::Array{$eltype}, incy::Int)
+        function jl_blas_copy(n::Int, DX::Ptr{$eltype}, incx::Int,
+                              DY::Ptr{$eltype}, incy::Int)
             ccall(dlsym(libBLAS, $fname),
                   Void,
                   (Ptr{Int32}, Ptr{$eltype}, Ptr{Int32}, Ptr{$eltype}, Ptr{Int32}),
@@ -63,6 +63,31 @@ end
 
 norm{T<:Union(Float64,Float32,Complex128,Complex64)}(x::Vector{T}) =
     jl_blas_nrm2(length(x), x, 1)
+
+
+# SUBROUTINE DAXPY(N,DA,DX,INCX,DY,INCY)
+#*     .. Scalar Arguments ..
+#      DOUBLE PRECISION DA
+#      INTEGER INCX,INCY,N
+#*     .. Array Arguments ..
+#      DOUBLE PRECISION DX(*),DY(*)
+macro jl_blas_axpy_macro(fname, eltype)
+    quote
+        function jl_blas_axpy(n::Int, x::($eltype), 
+                              DA::Array{$eltype}, incx::Int, DY::Array{$eltype}, incy::Int)
+            ccall(dlsym(libBLAS, $fname),
+                  Void,
+                  (Ptr{Int32}, Ptr{$eltype}, Ptr{$eltype}, Ptr{Int32}, Ptr{$eltype}, Ptr{Int32}),
+                  int32(n), x, DA, int32(incx), DY, int32(incy))            
+        end
+    end
+end
+
+@jl_blas_axpy_macro :daxpy_ Float64
+@jl_blas_axpy_macro :saxpy_ Float32
+@jl_blas_axpy_macro :zaxpy_ Complex128
+@jl_blas_axpy_macro :caxpy_ Complex64
+
 
 # SUBROUTINE DGEMM(TRANSA,TRANSB,M,N,K,ALPHA,A,LDA,B,LDB,BETA,C,LDC)
 # *     .. Scalar Arguments ..
