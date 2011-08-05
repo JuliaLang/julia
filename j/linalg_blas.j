@@ -98,7 +98,8 @@ end
 @jl_blas_gemm_macro :zgemm_ Complex128
 @jl_blas_gemm_macro :cgemm_ Complex64
 
-function (*){T}(A::VecOrMat{T}, B::VecOrMat{T})
+function (*){T<:Union(Float64,Float32,Complex128,Complex64)}(A::VecOrMat{T},
+                                                             B::VecOrMat{T})
     m = size(A, 1)
     if isa(B, Vector); n = 1; else n = size(B, 2); end
     if isa(A, Vector); k = 1; else k = size(A, 2); end
