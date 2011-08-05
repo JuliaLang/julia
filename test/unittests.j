@@ -24,6 +24,8 @@
 @assert !(Array{Any,1} <: Array{Int8,1})
 @assert Array{Int8,1} <: Array{Int8,1}
 @assert !subtype(Type{None}, Type{Int32})
+@assert !subtype(Vector{Float64},Vector{Union(Float64,Float32)})
+@assert is(None, tintersect(Vector{Float64},Vector{Union(Float64,Float32)}))
 
 @assert !isa(Array,Type{Any})
 @assert subtype(Type{ComplexPair},CompositeKind)
