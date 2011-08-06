@@ -11,9 +11,9 @@ type Rational{T<:Int} <: Real
         new(num, den)
     end
 end
-Rational{T<:Int}(n::T, d::T) = Rational{T}(n, d)
+Rational{T<:Int}(n::T, d::T) = Rational{T}(n,d)
 Rational(n::Int, d::Int) = Rational(promote(n,d)...)
-Rational(n::Int) = Rational(n, one(n))
+Rational(n::Int) = Rational(n,one(n))
 
 //(n::Int, d::Int) = Rational(n,d)
 //(x::Rational, y::Int) = x.num // (x.den*y)
