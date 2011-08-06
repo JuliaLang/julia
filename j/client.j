@@ -97,9 +97,8 @@ function color_available()
     false
 end
 
-jl_version_string = strcat("Version ", version()[1], " (pre-release)")
-jl_commit_string = strcat("Commit ", version()[2])
-jl_commit_date = version()[3]
+jl_version_string = "Version $(VERSION[1])"
+jl_commit_string = "Commit $(VERSION[2][1:10]) ($(VERSION[3]))"
 
 jl_banner_plain =
 L"               _
@@ -108,7 +107,7 @@ L"               _
    _ _   _| |_  __ _   |  $jl_version_string
   | | | | | | |/ _` |  |
   | | |_| | | | (_| |  |  $jl_commit_string
- _/ |\__'_|_|_|\__'_|  |  $jl_commit_date
+ _/ |\__'_|_|_|\__'_|  |
 |__/                   |
 
 "
@@ -127,7 +126,7 @@ jl_banner_color =
    $(jl)_ _   _| |_  __ _$(tx)   |  $jl_version_string
   $(jl)| | | | | | |/ _` |$(tx)  |
   $(jl)| | |_| | | | (_| |$(tx)  |  $jl_commit_string
- $(jl)_/ |\\__'_|_|_|\\__'_|$(tx)  |  $jl_commit_date
+ $(jl)_/ |\\__'_|_|_|\\__'_|$(tx)  |
 $(jl)|__/$(tx)                   |
 
 \033[0m"
