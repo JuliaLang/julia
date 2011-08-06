@@ -77,6 +77,7 @@ load("darray.j")
 # misc
 load("util.j")
 load("regex.j")
+load("version.j")
 
 # front end
 load("client.j")

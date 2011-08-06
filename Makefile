@@ -4,35 +4,45 @@ include ./Make.inc
 
 default: release
 
-debug release: %: julia-% j/pcre_h.j sys.ji
-	./julia test/unittests.j
+debug release: %: julia-% sys.ji
+	make -C test unittests
 
 julia-debug julia-release:
 	$(MAKE) -C external
 	$(MAKE) -C src lib$@
 	$(MAKE) -C ui $@
+	$(MAKE) -C j
 	$(MAKE) -C ui/webserver $@
 	ln -f $@-$(DEFAULT_REPL) julia
 
 sys.ji: j/sysimg.j j/start_image.j src/boot.j src/dump.c j/*.j
 	./julia -b sysimg.j
 
-PCRE_CONST = 0x[0-9a-fA-F]+|[-+]?\s*[0-9]+
+clean:
+	rm -f julia
+	rm -f *~ *#
+	$(MAKE) -C j clean
+	$(MAKE) -C src clean
+	$(MAKE) -C ui clean
+	$(MAKE) -C ui/webserver clean
+	$(MAKE) -C test/unicode clean
 
-j/pcre_h.j:
-	cpp -dM $(EXTROOT)/include/pcre.h | perl -nle '/^\s*#define\s+(PCRE\w*)\s*\(?($(PCRE_CONST))\)?\s*$$/ and print "$$1 = $$2"' | sort > $@
+cleanall: clean
+	$(MAKE) -C src clean-flisp clean-support
 
-test: default
-	./julia test/tests.j
+distclean: cleanall
+	$(MAKE) -C external cleanall
 
-test-utf8: default
-	make -C test/unicode
-	./julia test/test_utf8.j
+.PHONY: default debug release julia-debug julia-release \
+	test testall test-* sloccount clean cleanall
 
 test-perf: default
-	./julia test/perf.j
+	make -C test test-perf
 
-testall: test test-utf8 test-perf
+testall: default
+	make -C test testall
+
+## SLOCCOUNT ##
 
 SLOCCOUNT = sloccount \
 	--addlang makefile \
@@ -47,22 +57,3 @@ sloccount:
 	@for x in $(J_FILES); do cp $$x $${x%.j}.hs; done
 	git ls-files | sed 's/\.j$$/.hs/' | xargs $(SLOCCOUNT) | sed 's/haskell/*julia*/g'
 	@for x in $(J_FILES); do rm -f $${x%.j}.hs; done
-
-clean:
-	rm -f julia
-	rm -f j/pcre_h.j
-	rm -f *.ji
-	rm -f *~ *#
-	$(MAKE) -C src clean
-	$(MAKE) -C ui clean
-	$(MAKE) -C ui/webserver clean
-	$(MAKE) -C test/unicode clean
-
-cleanall: clean
-	$(MAKE) -C src clean-flisp clean-support
-
-distclean: cleanall
-	$(MAKE) -C external cleanall
-
-.PHONY: default debug release julia-debug julia-release \
-	test testall test-* sloccount clean cleanall

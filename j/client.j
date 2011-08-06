@@ -97,11 +97,12 @@ function color_available()
     false
 end
 
+jl_version_string = strcat("Version ", version()[1], " (", version()[2], ")")
 jl_banner_plain =
 L"               _
    _       _ _(_)_     |
   (_)     | (_) (_)    |  A fresh approach to technical computing.
-   _ _   _| |_  __ _   |  pre-release version
+   _ _   _| |_  __ _   |  $jl_version_string
   | | | | | | |/ _` |  |
   | | |_| | | | (_| |  |
  _/ |\__'_|_|_|\__'_|  |
@@ -120,7 +121,7 @@ jl_banner_color =
 "\033[1m               $(d3)_
    $(d1)_       $(jl)_$(tx) $(d2)_$(d3)(_)$(d4)_$(tx)     |
   $(d1)(_)$(jl)     | $(d2)(_)$(tx) $(d4)(_)$(tx)    |  A fresh approach to technical computing.
-   $(jl)_ _   _| |_  __ _$(tx)   |  pre-release version
+   $(jl)_ _   _| |_  __ _$(tx)   |  $jl_version_string
   $(jl)| | | | | | |/ _` |$(tx)  |
   $(jl)| | |_| | | | (_| |$(tx)  |
  $(jl)_/ |\\__'_|_|_|\\__'_|$(tx)  |
