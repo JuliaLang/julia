@@ -18,9 +18,6 @@ load("reduce.j")
 load("complex.j")
 load("rational.j")
 
-# operator aliases
-pow = ^
-
 # load libc - julia already links against it so process handle works
 libc = ccall(:jl_load_dynamic_library, Ptr{Void}, (Ptr{Uint8},), C_NULL)
 load("libc.j")
@@ -60,10 +57,6 @@ load("linalg_arpack.j")
 load("fft.j")
 
 # additional data types
-#load("list.j")
-#load("queue.j")
-#load("sparse.j")
-#load("tree.j")
 load("set.j")
 
 # I/O and concurrency

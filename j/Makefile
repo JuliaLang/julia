@@ -16,4 +16,5 @@ version.j:
 	echo "VERSION = (\"$(JULIA_VERSION)\", \"$(COMMIT_HASH)\", \"$(COMMIT_DATE)\")" > version.j
 
 clean:
+	rm -f *# *~
 	rm -f pcre_h.j version.j
