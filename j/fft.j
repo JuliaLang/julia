@@ -1,4 +1,4 @@
-## FFT
+## FFT: Implement fft by calling fftw.
 
 libfftw = dlopen("libfftw3")
 libfftwf = dlopen("libfftw3f")
@@ -190,11 +190,9 @@ end
 ifftn{T<:Union(Float64,Float32)}(X::Array{T}) = ifftn(complex(X))
 
 # Convenience functions
-fft{T<:Union(Float64,Float32)}(X::Vector{T})  = fftn(complex(X))
 fft2{T<:Union(Float64,Float32)}(X::Matrix{T}) = fftn(complex(X))
-fft3{T<:Union(Float64,Float32)}(X::Array{T})  = fftn(complexe(X))
+fft3{T<:Union(Float64,Float32)}(X::Array{T})  = fftn(complex(X))
 
-fft{T<:Union(Complex128,Complex64)}(X::Vector{T})  = fftn(X)
 fft2{T<:Union(Complex128,Complex64)}(X::Matrix{T}) = fftn(X)
 fft3{T<:Union(Complex128,Complex64)}(X::Array{T})  = fftn(X)
 
@@ -202,4 +200,41 @@ ifft{T<:Union(Float64,Float32,Complex128,Complex64)}(X::Vector{T})  = ifftn(X)
 ifft2{T<:Union(Float64,Float32,Complex128,Complex64)}(X::Matrix{T}) = ifftn(X)
 ifft3{T<:Union(Float64,Float32,Complex128,Complex64)}(X::Array{T})  = ifftn(X)
 
-# TODO: Compute fft and ifft of slices of arrays
+# Compute fft and ifft of slices of arrays
+
+fft(X) = fft(X, (), 1)
+ifft(X) = ifft(X, (), 1)
+
+# TODO: This is inefficient. Advanced interfaces of FFTW should be used
+macro jl_fft_ifft_macro(fname)
+    quote 
+        function ($fname){T<:Union(Float64,Float32,Complex128,Complex64),n}(X::Array{T,n}, 
+                                                                            npoints, dim::Int)
+
+            if npoints != (); error("The npoints option is not yet supported"); end
+            if dim > 2; error("Only 2d arrays are supported for now"); end
+
+            if n == 1
+                if is(T, Float64) || is(T, Float32); return fftn(complex(X)); end
+                if is(T, Complex128) || is(T, Complex64); return fftn(X); end
+            end
+
+            if is(T, Float64) || is(T, Complex128); Y = similar(X, Complex128); end
+            if is(T, Float32) || is(T, Complex64);  Y = similar(X, Complex64);  end
+
+            if dim == 2; X = X.'; Y = reshape(Y, size(X)); end
+
+            for i=1:size(X,1):numel(X)
+                R = i:(i+size(X,1)-1)
+                Y[R] = $(fname)(X[R])
+            end
+
+            if dim == 2; Y = Y.'; end
+
+            return Y
+        end
+    end
+end
+
+@jl_fft_ifft_macro fft
+@jl_fft_ifft_macro ifft
