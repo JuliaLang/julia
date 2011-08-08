@@ -1047,7 +1047,7 @@ end
 
 ## subarrays ##
 
-type SubArray{T,N,A<:AbstractArray,I<:(AbstractVector...)} <: AbstractArray{T,N}
+type SubArray{T,N,A<:AbstractArray,I<:(Ranges...,)} <: AbstractArray{T,N}
     parent::A
     indexes::I
     dims::Dims
@@ -1055,17 +1055,17 @@ type SubArray{T,N,A<:AbstractArray,I<:(AbstractVector...)} <: AbstractArray{T,N}
     SubArray(p::A, i::I) = new(p, i, map(length, i))
 end
 
-sub{T,N}(A::AbstractArray{T,N}, i::NTuple{N,AbstractVector}) =
+sub{T,N}(A::AbstractArray{T,N}, i::NTuple{N,Ranges}) =
     SubArray{T,N,typeof(A),typeof(i)}(A, i)
 
 #change integer indexes into Range1 objects
 sub(A::AbstractArray, i::Indices...) =
-    sub(A, ntuple(length(i), j -> isa(i[j],AbstractVector) ? i[j] :
-                                                            (i[j]:i[j])))
+    sub(A, ntuple(length(i), j -> isa(i[j],Ranges) ? i[j] :
+                                                     (i[j]:i[j])))
 
 sub(A::SubArray, i::Indices...) =
-    sub(A.parent, ntuple(length(i), j -> isa(i[j],AbstractVector) ? A.indexes[j][i[j]] :
-                                                                    (A.indexes[j][i[j]]):(A.indexes[j][i[j]])))
+    sub(A.parent, ntuple(length(i), j -> isa(i[j],Ranges) ? A.indexes[j][i[j]] :
+                                                            (A.indexes[j][i[j]]):(A.indexes[j][i[j]])))
 
 size(s::SubArray) = s.dims
 ndims{T,N}(s::SubArray{T,N}) = N
@@ -1083,3 +1083,26 @@ ref{T}(s::SubArray{T,2}, i::Int, j::Int) =
 ref(s::SubArray, is::Int...) = s.parent[map(ref, s.indexes, is)...]
 
 ref(s::SubArray, i::Int) = s[ind2sub(size(s), i)...]
+
+strides{T,A<:AbstractArray}(s::SubArray{T,1,A,(Range1{Index},)}) = (1,)
+strides{T,A<:AbstractArray}(s::SubArray{T,1,A,(Range{Index},)}) = s.indexes[1].step > 0 ? (s.indexes[1].step,) :
+    error("strides: must have ranges with positive step")
+
+strides{T}(s::SubArray{T,2}) = (isa(s.indexes[1],Range1{Index}) ? 1 :
+                                s.indexes[1].step > 0           ? s.indexes[1].step :
+                                error("strides: must have ranges with positive step"),
+                                isa(s.indexes[2],Range1{Index}) ? size(s.parent,1) :
+                                s.indexes[2].step > 0           ? s.indexes[2].step * size(s.parent,1) :
+                                error("strides: must have ranges with positive step"))
+
+function strides{T,N}(s::SubArray{T,N})
+    a = strides(s.parent)
+    return ntuple(N, i -> stride(s,i))
+end
+
+function stride(s::SubArray, i::Int)
+    a = stride(s.parent, i)
+    return isa(s.indexes[i],Range1{Index}) ? a :
+               s.indexes[i].step > 0       ? s.indexes[i].step * a :
+               error("stride: must have ranges with positive step")
+end
