@@ -167,7 +167,7 @@ end
 
 # This definition can be generalized to fftn, once the code to 
 # compute the conjugate parts for the nd case is implemented.
-function fft_weird{T<:Union(Float64,Float32)}(X::Array{T})
+function fftn{T<:Union(Float64,Float32)}(X::Vector{T})
     T_out = Complex128
     if is(T, Float32)
         T_out = Complex64
@@ -187,6 +187,8 @@ function fft_weird{T<:Union(Float64,Float32)}(X::Array{T})
     return Y
 end
 
+# TODO: Can be computed efficiently without converting to complex
+# if the conjugate pairs are checked for.
 ifftn{T<:Union(Float64,Float32)}(X::Array{T}) = ifftn(complex(X))
 
 # Convenience functions
@@ -206,7 +208,7 @@ fft(X) = fft(X, (), 1)
 ifft(X) = ifft(X, (), 1)
 
 # TODO: This is inefficient. Advanced interfaces of FFTW should be used
-macro jl_fft_ifft_macro(fname)
+macro jl_fft_ifft_macro(fname, fname_compute)
     quote 
         function ($fname){T<:Union(Float64,Float32,Complex128,Complex64),n}(X::Array{T,n}, 
                                                                             npoints, dim::Int)
@@ -214,10 +216,7 @@ macro jl_fft_ifft_macro(fname)
             if npoints != (); error("The npoints option is not yet supported"); end
             if dim > 2; error("Only 2d arrays are supported for now"); end
 
-            if n == 1
-                if is(T, Float64) || is(T, Float32); return fftn(complex(X)); end
-                if is(T, Complex128) || is(T, Complex64); return fftn(X); end
-            end
+            if n == 1; return fftn(X); end
 
             if is(T, Float64) || is(T, Complex128); Y = similar(X, Complex128); end
             if is(T, Float32) || is(T, Complex64);  Y = similar(X, Complex64);  end
@@ -226,15 +225,16 @@ macro jl_fft_ifft_macro(fname)
 
             for i=1:size(X,1):numel(X)
                 R = i:(i+size(X,1)-1)
-                Y[R] = $(fname)(X[R])
+                Y[R] = ($fname_compute)(X[R])
             end
 
             if dim == 2; Y = Y.'; end
 
             return Y
         end
+
     end
 end
 
-@jl_fft_ifft_macro fft
-@jl_fft_ifft_macro ifft
+@jl_fft_ifft_macro fft fftn
+@jl_fft_ifft_macro ifft ifftn
