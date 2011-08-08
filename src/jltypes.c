@@ -1018,7 +1018,7 @@ jl_value_t *jl_type_intersection_matching(jl_value_t *a, jl_value_t *b,
         JL_GC_POP();
         return ti;
     }
-    if (*penv != jl_null || eqc != jl_null) {
+    if (*penv != jl_null || eqc != jl_null || tvars != jl_null) {
         if (!solve_tvar_constraints(*penv, &eqc)) {
             JL_GC_POP();
             return (jl_value_t*)jl_bottom_type;
@@ -1049,13 +1049,15 @@ jl_value_t *jl_type_intersection_matching(jl_value_t *a, jl_value_t *b,
         t = jl_flatten_pairs(eqc);
         *penv = t;
 
-        int i;
-        for(i=0; i < t->length; i+=2) {
-            jl_tupleset(t, i+1, *tvar_lookup(eqc, &jl_tupleref(t,i+1)));
+        if (env0 != jl_null) {
+            int i;
+            for(i=0; i < t->length; i+=2) {
+                jl_tupleset(t, i+1, *tvar_lookup(eqc, &jl_tupleref(t,i+1)));
+            }
+            ti = (jl_value_t*)
+                jl_instantiate_type_with((jl_type_t*)ti,
+                                         &jl_tupleref(t, 0), t->length/2);
         }
-        ti = (jl_value_t*)
-            jl_instantiate_type_with((jl_type_t*)ti,
-                                     &jl_tupleref(t, 0), t->length/2);
     }
     JL_GC_POP();
     return ti;
