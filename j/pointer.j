@@ -33,6 +33,7 @@ convert{T}(::Type{Ptr{T}}, a::Array{T}) =
 
 pointer{T}(::Type{T}, x::PtrInt) = convert(Ptr{T}, x)
 pointer{T}(x::Array{T}) = convert(Ptr{T},x)
+pointer{T}(x::Array{T}, i::Index) = convert(Ptr{T},x) + (i-1)*sizeof(T)
 
 uint(x::Ptr) = convert(PtrInt, x)
 ptrint(x) = convert(PtrInt, x)

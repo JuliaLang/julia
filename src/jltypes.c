@@ -37,7 +37,7 @@ jl_struct_type_t *jl_bits_kind;
 
 jl_type_t *jl_bottom_type;
 jl_tag_type_t *jl_seq_type;
-jl_tag_type_t *jl_tensor_type;
+jl_tag_type_t *jl_abstractarray_type;
 
 jl_bits_type_t *jl_bool_type;
 jl_bits_type_t *jl_char_type;
@@ -519,16 +519,6 @@ static jl_value_t *intersect_typevar(jl_tvar_t *a, jl_value_t *b,
             *eqc = jl_tuple3((jl_value_t*)a, b, (jl_value_t*)*eqc);
         }
         return (jl_value_t*)a;
-    }
-    p = *penv;
-    while (p != jl_null) {
-        if (jl_t0(p) == (jl_value_t*)a) {
-            assert(jl_t1(p) != (jl_value_t*)a);
-            jl_value_t *ti = jl_type_intersect(jl_t1(p), b, penv, eqc, var);
-            if (ti == (jl_value_t*)jl_bottom_type)
-                return (jl_value_t*)jl_bottom_type;
-        }
-        p = (jl_tuple_t*)jl_nextpair(p);
     }
     if ((jl_value_t*)a != b) {
         *penv = jl_tuple3((jl_value_t*)a, b, (jl_value_t*)*penv);
@@ -1644,19 +1634,21 @@ static int jl_subtype_le(jl_value_t *a, jl_value_t *b, int ta, int morespecific,
                 return 0;
         }
         else {
+            if (invariant && !jl_is_typevar(b)) {
+                return jl_subtype_le(a,b,0,0,0) && jl_subtype_le(b,a,0,0,0);
+            }
             for(i=0; i < ap->length; i++) {
                 if (!jl_subtype_le(jl_tupleref(ap,i), b, 0, morespecific,
                                    invariant))
                     return 0;
             }
-            if (invariant && a == (jl_value_t*)jl_bottom_type &&
-                !jl_is_typevar(b))
-                return 0;
         }
         return 1;
     }
 
     if (jl_is_union_type(b)) {
+        if (invariant)
+            return 0;
         jl_tuple_t *bp = ((jl_uniontype_t*)b)->types;
         for(i=0; i < bp->length; i++) {
             if (jl_subtype_le(a, jl_tupleref(bp,i), ta, morespecific, invariant))
@@ -2334,14 +2326,14 @@ void jl_init_types()
     jl_true  = jl_box8(jl_bool_type, 1);
 
     tv = jl_typevars(2, "T", "N");
-    jl_tensor_type = jl_new_tagtype((jl_value_t*)jl_symbol("AbstractArray"),
-                                    jl_any_type, tv);
+    jl_abstractarray_type = jl_new_tagtype((jl_value_t*)jl_symbol("AbstractArray"),
+                                           jl_any_type, tv);
 
     tv = jl_typevars(2, "T", "N");
     jl_array_type = 
         jl_new_struct_type(jl_symbol("Array"),
                            (jl_tag_type_t*)
-                           jl_apply_type((jl_value_t*)jl_tensor_type, tv),
+                           jl_apply_type((jl_value_t*)jl_abstractarray_type, tv),
                            tv,
                            jl_null, jl_null);
     jl_array_typename = jl_array_type->name;

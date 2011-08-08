@@ -1,4 +1,8 @@
-## array.j: Base Array functionality
+## array.j: Dense arrays
+
+typealias Vector{T} Array{T,1}
+typealias Matrix{T} Array{T,2}
+typealias VecOrMat{T} Union(Vector{T}, Matrix{T})
 
 ## Basic functions ##
 
@@ -9,6 +13,32 @@ numel(a::Array) = arraylen(a)
 
 iscomplex(x::Array{Complex128}) = true
 iscomplex(x::Array{Complex64}) = true
+
+## copy ##
+
+mcopy_to{T}(dest::Ptr{T}, src::Ptr{T}, n::Int) =
+    ccall(:memcpy, Ptr{Void}, (Ptr{Void}, Ptr{Void}, Ulong), dest, src, ulong(n*sizeof(T)))
+
+copy_to{T}(dest::Ptr{T}, src::Ptr{T}, n::Int) =
+    ccall(:memcpy, Ptr{Void}, (Ptr{Void}, Ptr{Void}, Ulong), dest, src, ulong(n*sizeof(T)))
+
+function copy_to{T}(dest::Array{T}, src::Array{T})
+    if isa(T, BitsKind)
+        copy_to(pointer(dest), pointer(src), numel(src))
+    else
+        for i=1:numel(src)
+            dest[i] = copy(src[i])
+        end
+    end
+    return dest
+end
+
+function reinterpret{T,S}(::Type{T}, a::Array{S})
+    b = Array(T, div(numel(a)*sizeof(S),sizeof(T)))
+    copy_to(pointer(b), pointer(a), ulong(length(b)*sizeof(T)))
+    return b
+end
+reinterpret(t,x) = reinterpret(t,[x])[1]
 
 ## Constructors ##
 
@@ -185,12 +215,12 @@ function hcat{T}(A::Array{T,2}...)
     nrows = size(A[1], 1)
     B = similar(A[1], nrows, ncols)
 
-   if isa(T, BitsKind) && numel(B) > 100
-       pos = ulong(0)
+   if isa(T, BitsKind)
+       pos = 1
        for k = 1:nargs
-           nbytes_Ak = ulong(numel(A[k])*sizeof(T))
-           copy_to(pointer(B) + pos, pointer(A[k]), nbytes_Ak)
-           pos += nbytes_Ak
+           nAk = numel(A[k])
+           copy_to(pointer(B, pos), pointer(A[k]), nAk)
+           pos += nAk
        end
    else
        pos = 1
@@ -287,32 +317,3 @@ end
 
 vcat(A::Array...) = cat(1, A...)
 hcat(A::Array...) = cat(2, A...)
-
-function reinterpret{T,S}(::Type{T}, a::Array{S})
-    b = Array(T, div(numel(a)*sizeof(S),sizeof(T)))
-    copy_to(pointer(b), pointer(a), ulong(length(b)*sizeof(T)))
-    return b
-end
-reinterpret(t,x) = reinterpret(t,[x])[1]
-
-function copy_to{T}(dest::Array{T}, src::Array{T})
-    if isa(T, BitsKind)
-        copy_to(pointer(dest), pointer(src), ulong(numel(src)*sizeof(T)))
-    else
-        for i=1:numel(src)
-            dest[i] = copy(src[i])
-        end
-    end
-    return dest
-end
-
-copy_to(dest::Ptr, src::Ptr, nbytes::Ulong) = 
-    ccall(:memcpy, Ptr{Void}, (Ptr{Void}, Ptr{Void}, Ulong), dest, src, nbytes)
-
-jcopy(src::Array) = jcopy_to(similar(src), src)
-
-function jcopy_to{T}(dest::Array{T}, src::Array{T})
-    for i=1:numel(src)
-        dest[i] = src[i]
-    end    
-end

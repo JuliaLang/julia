@@ -1,12 +1,9 @@
-## tensor.j : Functions over tensors, not specialized to specific implementation
+## abstractarray.j : Generic array interfaces.
 
 ## Type aliases for convenience ##
 
 typealias AbstractVector{T} AbstractArray{T,1}
 typealias AbstractMatrix{T} AbstractArray{T,2}
-typealias Vector{T} Array{T,1}
-typealias Matrix{T} Array{T,2}
-typealias VecOrMat{T} Union(Vector{T}, Matrix{T})
 
 typealias Indices{T<:Int} Union(Int, AbstractVector{T})
 typealias Region Union(Size,Dims)
@@ -19,6 +16,18 @@ numel(t::AbstractArray) = prod(size(t))
 length(a::AbstractArray) = numel(a)
 nnz(a::AbstractArray) = (n = 0; for i=1:numel(a); n += a[i] != 0 ? 1 : 0; end; n)
 nnz(a::AbstractArray{Bool}) = (n = 0; for i=1:numel(a); n += a[i] == true ? 1 : 0; end; n)
+
+function stride(a::AbstractArray, i::Int)
+    s = 1
+    for n=1:(i-1)
+        s *= size(a, n)
+    end
+    s
+end
+strides{T}(a::AbstractArray{T,1}) = (1,)
+strides{T}(a::AbstractArray{T,2}) = (1, size(a,1))
+strides{T}(a::AbstractArray{T,3}) = (1, size(a,1), size(a,1)*size(a,2))
+strides   (a::AbstractArray)      = ntuple(ndims(a), i->stride(a,i))
 
 ## Constructors ##
 
@@ -906,9 +915,9 @@ end
 
 ## Other array functions ##
 
-function repmat{T}(a::Matrix{T}, m::Size, n::Size)
+function repmat(a::AbstractMatrix, m::Size, n::Size)
     o,p = size(a)
-    b = Array(T, o*m, p*n)
+    b = similar(a, o*m, p*n)
     for j=1:n
         d = (j-1)*p+1
         R = d:d+p-1
@@ -1038,7 +1047,7 @@ end
 
 ## subarrays ##
 
-type SubArray{T,N,A<:AbstractArray,I<:(Indices...)} <: AbstractArray{T,N}
+type SubArray{T,N,A<:AbstractArray,I<:(AbstractVector...)} <: AbstractArray{T,N}
     parent::A
     indexes::I
     dims::Dims
@@ -1046,10 +1055,17 @@ type SubArray{T,N,A<:AbstractArray,I<:(Indices...)} <: AbstractArray{T,N}
     SubArray(p::A, i::I) = new(p, i, map(length, i))
 end
 
-sub{T,N}(A::AbstractArray{T,N}, i::NTuple{N,Indices}) =
+sub{T,N}(A::AbstractArray{T,N}, i::NTuple{N,AbstractVector}) =
     SubArray{T,N,typeof(A),typeof(i)}(A, i)
 
-sub(A::AbstractArray, i::Indices...) = sub(A, i)
+#change integer indexes into Range1 objects
+sub(A::AbstractArray, i::Indices...) =
+    sub(A, ntuple(length(i), j -> isa(i[j],AbstractVector) ? i[j] :
+                                                            (i[j]:i[j])))
+
+sub(A::SubArray, i::Indices...) =
+    sub(A.parent, ntuple(length(i), j -> isa(i[j],AbstractVector) ? A.indexes[j][i[j]] :
+                                                                    (A.indexes[j][i[j]]):(A.indexes[j][i[j]])))
 
 size(s::SubArray) = s.dims
 ndims{T,N}(s::SubArray{T,N}) = N

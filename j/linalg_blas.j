@@ -1,66 +1,113 @@
 libBLAS = dlopen("libLAPACK")
 
 # SUBROUTINE DCOPY(N,DX,INCX,DY,INCY)
-
-macro blas_copy(fname, shape, eltype)
+macro jl_blas_copy_macro(fname, eltype)
     quote
-        bcopy(src::($shape){$eltype}) = copy_to(similar(src), src)
-
-        function bcopy_to(dest::($shape){$eltype}, src::($shape){$eltype})
+        function jl_blas_copy(n::Int, DX::Ptr{$eltype}, incx::Int, DY::Ptr{$eltype}, incy::Int)
             ccall(dlsym(libBLAS, $fname),
                   Void,
                   (Ptr{Int32}, Ptr{$eltype}, Ptr{Int32}, Ptr{$eltype}, Ptr{Int32}),
-                  int32(numel(src)), src, int32(1), dest, int32(1))
-            return dest
+                  int32(n), DX, int32(incx), DY, int32(incy))
+            return DY
         end
     end
 end
 
-@blas_copy :dcopy_ Vector Float64
-@blas_copy :scopy_ Vector Float32
-@blas_copy :dcopy_ Matrix Float64
-@blas_copy :scopy_ Matrix Float32
-@blas_copy :zcopy_ Vector Complex128
-@blas_copy :ccopy_ Vector Complex64
-@blas_copy :zcopy_ Matrix Complex128
-@blas_copy :ccopy_ Matrix Complex64
+@jl_blas_copy_macro :dcopy_ Float64
+@jl_blas_copy_macro :scopy_ Float32
+@jl_blas_copy_macro :zcopy_ Complex128
+@jl_blas_copy_macro :ccopy_ Complex64
+
+bcopy_to{T<:Union(Float64,Float32,Complex128,Complex64)}(dest::Ptr{T}, src::Ptr{T}, n::Int) =
+    jl_blas_copy(n, src, 1, dest, 1)
+
+function copy_to{T<:Union(Float64,Float32,Complex128,Complex64)}(dest::Ptr{T}, src::Ptr{T}, n::Int)
+    if n < 100
+        jl_blas_copy(n, src, 1, dest, 1)
+    else
+        ccall(:memcpy, Ptr{Void}, (Ptr{Void}, Ptr{Void}, Ulong), dest, src, ulong(n*sizeof(T)))
+    end
+end
+
+function copy_to{T<:Union(Float64,Float32,Complex128,Complex64)}(dest::Array{T}, src::Array{T})
+    n = numel(src)
+    if n < 200
+        jl_blas_copy(n, pointer(src), 1, pointer(dest), 1)
+    else
+        copy_to(pointer(dest), pointer(src), numel(src))
+    end
+    return dest
+end
 
 # DOUBLE PRECISION FUNCTION DDOT(N,DX,INCX,DY,INCY)
-
-macro blas_dot(fname, eltype)
+macro jl_blas_dot_macro(fname, eltype)
     quote
-        function dot(x::Vector{$eltype}, y::Vector{$eltype})
+        function jl_blas_dot(n::Int, DX::Array{$eltype}, incx::Int,
+                             DY::Array{$eltype}, incy::Int)
             ccall(dlsym(libBLAS, $fname),
                   $eltype,
                   (Ptr{Int32}, Ptr{$eltype}, Ptr{Int32}, Ptr{$eltype}, Ptr{Int32}),
-                  int32(length(x)), x, int32(1), y, int32(1))
+                  int32(n), DX, int32(incx), DY, int32(incy))
         end
     end
 end
 
-@blas_dot :ddot_ Float64
-@blas_dot :sdot_ Float32
-# ccall does not work well when complex values are returned
+@jl_blas_dot_macro :ddot_ Float64
+@jl_blas_dot_macro :sdot_ Float32
+
+function dot{T<:Union(Vector{Float64}, Vector{Float32})}(x::T, y::T)
+    length(x) != length(y) ? error("Inputs should be of same length") : true
+    jl_blas_dot(length(x), x, 1, y, 1)
+end
+
+# ccall is unable to return complex values (Issue #85)
 #@blas_dot :zdotc_ Complex128
 #@blas_dot :cdotc_ Complex64
 
 # DOUBLE PRECISION FUNCTION DNRM2(N,X,INCX)
-
-macro blas_norm(fname, eltype, ret_type)
+macro jl_blas_nrm2_macro(fname, eltype, ret_type)
     quote
-        function norm(x::Vector{$eltype})
+        function jl_blas_nrm2(n::Int, X::Array{$eltype}, incx::Int)
             ccall(dlsym(libBLAS, $fname),
                   $ret_type,
                   (Ptr{Int32}, Ptr{$eltype}, Ptr{Int32}),
-                  int32(length(x)), x, int32(1))
+                  int32(n), X, int32(incx))
         end
     end
 end
 
-@blas_norm :dnrm2_ Float64 Float64
-@blas_norm :snrm2_ Float32 Float32
-@blas_norm :dznrm2_ Complex128 Float64
-@blas_norm :scnrm2_ Complex64 Float32
+@jl_blas_nrm2_macro :dnrm2_ Float64 Float64
+@jl_blas_nrm2_macro :snrm2_ Float32 Float32
+@jl_blas_nrm2_macro :dznrm2_ Complex128 Float64
+@jl_blas_nrm2_macro :scnrm2_ Complex64 Float32
+
+norm{T<:Union(Float64,Float32,Complex128,Complex64)}(x::Vector{T}) =
+    jl_blas_nrm2(length(x), x, 1)
+
+
+# SUBROUTINE DAXPY(N,DA,DX,INCX,DY,INCY)
+#*     .. Scalar Arguments ..
+#      DOUBLE PRECISION DA
+#      INTEGER INCX,INCY,N
+#*     .. Array Arguments ..
+#      DOUBLE PRECISION DX(*),DY(*)
+macro jl_blas_axpy_macro(fname, eltype)
+    quote
+        function jl_blas_axpy(n::Int, x::($eltype), 
+                              DA::Array{$eltype}, incx::Int, DY::Array{$eltype}, incy::Int)
+            ccall(dlsym(libBLAS, $fname),
+                  Void,
+                  (Ptr{Int32}, Ptr{$eltype}, Ptr{$eltype}, Ptr{Int32}, Ptr{$eltype}, Ptr{Int32}),
+                  int32(n), x, DA, int32(incx), DY, int32(incy))            
+        end
+    end
+end
+
+@jl_blas_axpy_macro :daxpy_ Float64
+@jl_blas_axpy_macro :saxpy_ Float32
+@jl_blas_axpy_macro :zaxpy_ Complex128
+@jl_blas_axpy_macro :caxpy_ Complex64
+
 
 # SUBROUTINE DGEMM(TRANSA,TRANSB,M,N,K,ALPHA,A,LDA,B,LDB,BETA,C,LDC)
 # *     .. Scalar Arguments ..
@@ -69,37 +116,48 @@ end
 #       CHARACTER TRANSA,TRANSB
 # *     .. Array Arguments ..
 #       DOUBLE PRECISION A(LDA,*),B(LDB,*),C(LDC,*)
-
-macro blas_matrix_multiply(fname, eltype)
+macro jl_blas_gemm_macro(fname, eltype)
    quote
-       function *(A::VecOrMat{$eltype}, B::VecOrMat{$eltype})
-           m = size(A, 1)
-           if isa(B, Vector); n = 1; else n = size(B, 2); end
-           if isa(A, Vector); k = 1; else k = size(A, 2); end
-           if k != size(B,1)
-               error("*: argument shapes do not match")
-           end
-           # array does not need to be initialized as long as beta==0
-           C = isa(B, Vector) ? Array($eltype, m) : Array($eltype, m, n)
 
+       function jl_blas_gemm(transA, transB, m::Int, n::Int, k::Int,
+                             alpha::($eltype), A::Array{$eltype}, lda::Int,
+                             B::Array{$eltype}, ldb::Int,
+                             beta::($eltype), C::Array{$eltype}, ldc::Int)
            ccall(dlsym(libBLAS, $fname),
                  Void,
                  (Ptr{Uint8}, Ptr{Uint8}, Ptr{Int32}, Ptr{Int32}, Ptr{Int32},
                   Ptr{$eltype}, Ptr{$eltype}, Ptr{Int32},
                   Ptr{$eltype}, Ptr{Int32},
                   Ptr{$eltype}, Ptr{$eltype}, Ptr{Int32}),
-                 "N", "N",
-                 int32(m), int32(n), int32(k),
-                 convert($eltype, 1.0),
-                 A, int32(m), B, int32(k),
-                 convert($eltype, 0.0), C, int32(m))
-
-           return C
+                 transA, transB, int32(m), int32(n), int32(k),
+                 alpha, A, int32(lda),
+                 B, int32(ldb),
+                 beta, C, int32(ldc))
        end
+
    end
 end
 
-@blas_matrix_multiply :dgemm_ Float64
-@blas_matrix_multiply :sgemm_ Float32
-@blas_matrix_multiply :zgemm_ Complex128
-@blas_matrix_multiply :cgemm_ Complex64
+@jl_blas_gemm_macro :dgemm_ Float64
+@jl_blas_gemm_macro :sgemm_ Float32
+@jl_blas_gemm_macro :zgemm_ Complex128
+@jl_blas_gemm_macro :cgemm_ Complex64
+
+function (*){T<:Union(Float64,Float32,Complex128,Complex64)}(A::VecOrMat{T},
+                                                             B::VecOrMat{T})
+    m = size(A, 1)
+    if isa(B, Vector); n = 1; else n = size(B, 2); end
+    if isa(A, Vector); k = 1; else k = size(A, 2); end
+    if k != size(B,1)
+        error("*: argument shapes do not match")
+    end
+
+    # Result array does not need to be initialized as long as beta==0
+    C = isa(B, Vector) ? Array(T, m) : Array(T, m, n)
+
+    jl_blas_gemm("N", "N", m, n, k,
+                 convert(T, 1.0), A, m,
+                 B, k,
+                 convert(T, 0.0), C, m)
+    return C
+end

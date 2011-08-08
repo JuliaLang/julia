@@ -24,6 +24,11 @@ similar(r::Range1, T::Type, dims::Dims) = Range1(convert(T, r.start), convert(T,
 
 typealias Ranges Union(Range,Range1)
 
+ref(r::Range, s::Range{Index}) = Range(r[s[1]],r.step*s.step,r[s[end]])
+ref(r::Range1, s::Range{Index}) = Range(r[s[1]],s.step,r[s[end]])
+ref(r::Range, s::Range1{Index}) = Range(r[s[1]],r.step,r[s[end]])
+ref(r::Range1, s::Range1{Index}) = Range1(r[s[1]],r[s[end]])
+
 step(r::Range)  = r.step
 step(r::Range1) = one(r.start)
 
