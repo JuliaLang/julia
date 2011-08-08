@@ -1,175 +1,74 @@
-<head>
-<meta name="robots" content="nofollow" />
-<meta name="generator" content="FreeBSD-CVSweb 3.0.6" />
-<meta http-equiv="Content-Script-Type" content="text/javascript" />
-<meta http-equiv="Content-Style-Type" content="text/css" />
-<title>Error</title>
-<meta http-equiv='content-type' content='text/html; charset=iso-8859-1' >
-<meta name='robots' content='nofollow' >
-    <link rel="stylesheet" media="screen"
-    href="http://www.FreeBSD.org/layout/css/fixed.css" type="text/css"
-    title="Normal Text" >
-    <link rel="alternate stylesheet" media="screen"
-    href="http://www.FreeBSD.org/layout/css/fixed_large.css" type="text/css"
-    title="Large Text" >
-    <link rel="shortcut icon" href="/favicon.ico" type="image/x-icon" />
-    <link rel="apple-touch-icon" href="/favicon.ico" type="image/x-icon" />
+/*
+ * Copyright (c) 1988, 1993
+ *	The Regents of the University of California.  All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ * 1. Redistributions of source code must retain the above copyright
+ *    notice, this list of conditions and the following disclaimer.
+ * 2. Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the distribution.
+ * 3. All advertising materials mentioning features or use of this software
+ *    must display the following acknowledgement:
+ *	This product includes software developed by the University of
+ *	California, Berkeley and its contributors.
+ * 4. Neither the name of the University nor the names of its contributors
+ *    may be used to endorse or promote products derived from this software
+ *    without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE REGENTS AND CONTRIBUTORS ``AS IS'' AND
+ * ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ * ARE DISCLAIMED.  IN NO EVENT SHALL THE REGENTS OR CONTRIBUTORS BE LIABLE
+ * FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+ * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS
+ * OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
+ * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
+ * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY
+ * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
+ * SUCH DAMAGE.
+ *
+ *	@(#)mathimpl.h	8.1 (Berkeley) 6/4/93
+ * $FreeBSD: src/lib/msun/bsdsrc/mathimpl.h,v 1.7 2005/11/18 05:03:12 bde Exp $
+ */
 
-<script type="text/javascript" src="http://www.FreeBSD.org/layout/js/styleswitcher.js">
-</script>
+#ifndef _MATHIMPL_H_
+#define	_MATHIMPL_H_
 
-<link rel="search" type="application/opensearchdescription+xml" href="http://www.freebsd.org/search/opensearch/cvsweb.xml" title="FreeBSD cvsweb" />
+#include <sys/cdefs.h>
+#include <math.h>
 
-</head>
-<body>
+#include "../src/math_private.h"
 
-    <div id="containerwrap">
-      <div id="container">
-        <span class="txtoffscreen"><a href="#content"
-        title="Skip site navigation" accesskey="1">Skip site
-        navigation</a> (1)</span><span class="txtoffscreen"><a
-        href="#content" title="Skip section navigation"
-        accesskey="2">Skip section navigation</a> (2)</span>
+/*
+ * TRUNC() is a macro that sets the trailing 27 bits in the mantissa of an
+ * IEEE double variable to zero.  It must be expression-like for syntactic
+ * reasons, and we implement this expression using an inline function
+ * instead of a pure macro to avoid depending on the gcc feature of
+ * statement-expressions.
+ */
+#define	TRUNC(d)	(_b_trunc(&(d)))
 
-        <div id="headercontainer">
-          <div id="header">
-            <h2 class="blockhide">Header And Logo</h2>
+static __inline void
+_b_trunc(volatile double *_dp)
+{
+	uint32_t _lw;
 
-            <div id="headerlogoleft">
-              <a href="http://www.FreeBSD.org" title="FreeBSD"><img
-              src="http://www.FreeBSD.org/layout/images/logo-red.png" width="457"
-              height="75" alt="FreeBSD" /></a>
-            </div>
+	GET_LOW_WORD(_lw, *_dp);
+	SET_LOW_WORD(*_dp, _lw & 0xf8000000);
+}
 
-            <div id="headerlogoright">
-              <h2 class="blockhide">Peripheral Links</h2>
+struct Double {
+	double	a;
+	double	b;
+};
 
-              <div id="searchnav">
-                <ul id="searchnavlist">
-                  <li>Text Size: <a href="#"
-                  onkeypress="return false;"
-                  onclick="setActiveStyleSheet('Normal Text'); return false;"
-                   title="Normal Text Size">Normal</a> / <a
-                  href="#" onkeypress="return false;"
-                  onclick="setActiveStyleSheet('Large Text'); return false;"
-                   title="Large Text Size">Large</a></li>
+/*
+ * Functions internal to the math package, yet not static.
+ */
+double	__exp__D(double, double);
+struct Double __log__D(double);
 
-                  <li><a href="http://www.FreeBSD.org/donations/"
-                  title="Donate">Donate</a></li>
-
-                  <li class="last-child"><a href="http://www.FreeBSD.org/mailto.html"
-                  title="Contact">Contact</a></li>
-                </ul>
-              </div>
-
-              <div id="search">
-                <form
-                action="http://www.FreeBSD.org/cgi/search.cgi"
-                method="get">
-                  <div>
-                    <h2 class="blockhide"><label
-                    for="words">Search</label></h2>
-                    <input type="hidden" name="max"
-                    value="25" /><input type="hidden" name="source"
-                    value="www" /><input id="words" name="words"
-                    type="text" size="20" maxlength="255"
-                    onfocus="if( this.value==this.defaultValue ) this.value='';"
-                     value="Search" />&nbsp;<input id="submit"
-                    name="submit" type="submit" value="Search" />
-                  </div>
-                </form>
-              </div>
-            </div>
-          </div>
-
-          <h2 class="blockhide">Site Navigation</h2>
-
-	  <div id="MENU">
-	    <ul class="first">
-	      <li><a href="http://www.FreeBSD.org/">Home</a></li>
-	    </ul>
-	    <ul>
-	      <li><a href="http://www.FreeBSD.org/about.html">About</a>
-		<ul>
-		  <li><a href="http://www.FreeBSD.org/projects/newbies.html">Introduction</a></li>
-		  <li><a href="http://www.FreeBSD.org/features.html">Features</a></li>
-		  <li><a href="http://www.FreeBSD.org/advocacy/">Advocacy</a></li>
-		  <li><a href="http://www.FreeBSD.org/marketing/">Marketing</a></li>
-		</ul>
-	      </li>
-	    </ul>
-	    <ul>
-	      <li><a href="http://www.FreeBSD.org/where.html">Get FreeBSD</a>
-		<ul>
-		  <li><a href="http://www.FreeBSD.org/releases/">Release Information</a></li>
-		  <li><a href="http://www.FreeBSD.org/releng/">Release Engineering</a></li>
-		</ul>
-	      </li>
-	    </ul>
-	    <ul>
-	      <li><a href="http://www.FreeBSD.org/docs.html">Documentation</a>
-		<ul>
-		  <li><a href="http://www.FreeBSD.org/doc/en_US.ISO8859-1/books/faq/">FAQ</a></li>
-		  <li><a href="http://www.FreeBSD.org/doc/en_US.ISO8859-1/books/handbook/">Handbook</a></li>
-		  <li><a href="http://www.FreeBSD.org/doc/en_US.ISO8859-1/books/porters-handbook">Porter's Handbook</a></li>
-		  <li><a href="http://www.FreeBSD.org/doc/en_US.ISO8859-1/books/developers-handbook">Developer's Handbook</a></li>
-		  <li><a href="http://www.FreeBSD.org/cgi/man.cgi">Manual Pages</a></li>
-		</ul>
-	      </li>
-	    </ul>
-	    <ul>
-	      <li><a href="http://www.FreeBSD.org/community.html">Community</a>
-		<ul>
-		  <li><a href="http://www.FreeBSD.org/community/mailinglists.html">Mailing Lists</a></li>
-		  <li><a href="http://forums.freebsd.org">Forums</a></li>
-		  <li><a href="http://www.FreeBSD.org/usergroups.html">User Groups</a></li>
-		  <li><a href="http://www.FreeBSD.org/events/events.html">Events</a></li>
-		</ul>
-	      </li>
-	    </ul>
-	    <ul>
-	      <li><a href="http://www.FreeBSD.org/projects/index.html">Developers</a>
-		<ul>
-		  <li><a href="http://www.FreeBSD.org/projects/ideas/ideas.html">Project Ideas</a></li>
-		  <li><a href="http://svn.FreeBSD.org/viewvc/base/">SVN Repository</a></li>
-		  <li><a href="http://cvsweb.FreeBSD.org">CVS Repository</a></li>
-		  <li><a href="http://p4web.FreeBSD.org">Perforce Repository</a></li>
-		</ul>
-	      </li>
-	    </ul>
-	    <ul>
-	      <li><a href="http://www.FreeBSD.org/support.html">Support</a>
-		<ul>
-		  <li><a href="http://www.FreeBSD.org/commercial/commercial.html">Vendors</a></li>
-		  <li><a href="http://security.FreeBSD.org/">Security Information</a></li>
-		  <li><a href="http://www.FreeBSD.org/cgi/query-pr-summary.cgi">Bug Reports</a></li>
-		  <li><a href="http://www.FreeBSD.org/send-pr.html">Submit Bug-report</a></li>
-		</ul>
-	      </li>
-	    </ul>
-	    <ul>
-	      <li><a href="http://www.freebsdfoundation.org/">Foundation</a>
-		<ul>
-		  <li><a href="http://www.freebsdfoundation.org/donate/">Donate</a></li>
-		</ul>
-	      </li>
-	    </ul>
-	  </div> <!-- MENU -->
-        </div>
-
-	<div id="content">
-
-<h1>Error</h1>
-<link rel="stylesheet" type="text/css" href="/layout/css/cvsweb.css" />
-<div id="error">Error: src/lib/msun/src/mathimpl.h: no such file or directory</div>
-
-	</div>
-        <div id="footer">
-          <a href="http://www.FreeBSD.org/copyright/">Legal Notices</a> | &copy; 1995-2011
-          The FreeBSD Project. All rights reserved.<br />
-	  <address><a href='http://www.FreeBSD.org/mailto.html'>www@FreeBSD.org</a><br />2010/11/13 16:37:18</address>
-        </div>
-      </div>
-    </div>
-  </body>
-</html>
+#endif /* !_MATHIMPL_H_ */

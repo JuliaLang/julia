@@ -1,175 +1,217 @@
-<head>
-<meta name="robots" content="nofollow" />
-<meta name="generator" content="FreeBSD-CVSweb 3.0.6" />
-<meta http-equiv="Content-Script-Type" content="text/javascript" />
-<meta http-equiv="Content-Style-Type" content="text/css" />
-<title>Error</title>
-<meta http-equiv='content-type' content='text/html; charset=iso-8859-1' >
-<meta name='robots' content='nofollow' >
-    <link rel="stylesheet" media="screen"
-    href="http://www.FreeBSD.org/layout/css/fixed.css" type="text/css"
-    title="Normal Text" >
-    <link rel="alternate stylesheet" media="screen"
-    href="http://www.FreeBSD.org/layout/css/fixed_large.css" type="text/css"
-    title="Large Text" >
-    <link rel="shortcut icon" href="/favicon.ico" type="image/x-icon" />
-    <link rel="apple-touch-icon" href="/favicon.ico" type="image/x-icon" />
+/*-
+ * Copyright (c) 2004-2005 David Schultz <das@FreeBSD.ORG>
+ * All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ * 1. Redistributions of source code must retain the above copyright
+ *    notice, this list of conditions and the following disclaimer.
+ * 2. Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the distribution.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE AUTHOR AND CONTRIBUTORS ``AS IS'' AND
+ * ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ * ARE DISCLAIMED.  IN NO EVENT SHALL THE AUTHOR OR CONTRIBUTORS BE LIABLE
+ * FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+ * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS
+ * OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
+ * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
+ * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY
+ * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
+ * SUCH DAMAGE.
+ *
+ * $FreeBSD: src/lib/msun/amd64/fenv.h,v 1.7 2010/02/03 20:23:47 kib Exp $
+ */
 
-<script type="text/javascript" src="http://www.FreeBSD.org/layout/js/styleswitcher.js">
-</script>
+#ifndef	_FENV_H_
+#define	_FENV_H_
 
-<link rel="search" type="application/opensearchdescription+xml" href="http://www.freebsd.org/search/opensearch/cvsweb.xml" title="FreeBSD cvsweb" />
+#include <sys/cdefs.h>
+#include <sys/_types.h>
 
-</head>
-<body>
+typedef struct {
+	struct {
+		__uint32_t	__control;
+		__uint32_t	__status;
+		__uint32_t	__tag;
+		char		__other[16];
+	} __x87;
+	__uint32_t		__mxcsr;
+} fenv_t;
 
-    <div id="containerwrap">
-      <div id="container">
-        <span class="txtoffscreen"><a href="#content"
-        title="Skip site navigation" accesskey="1">Skip site
-        navigation</a> (1)</span><span class="txtoffscreen"><a
-        href="#content" title="Skip section navigation"
-        accesskey="2">Skip section navigation</a> (2)</span>
+typedef	__uint16_t	fexcept_t;
 
-        <div id="headercontainer">
-          <div id="header">
-            <h2 class="blockhide">Header And Logo</h2>
+/* Exception flags */
+#define	FE_INVALID	0x01
+#define	FE_DENORMAL	0x02
+#define	FE_DIVBYZERO	0x04
+#define	FE_OVERFLOW	0x08
+#define	FE_UNDERFLOW	0x10
+#define	FE_INEXACT	0x20
+#define	FE_ALL_EXCEPT	(FE_DIVBYZERO | FE_DENORMAL | FE_INEXACT | \
+			 FE_INVALID | FE_OVERFLOW | FE_UNDERFLOW)
 
-            <div id="headerlogoleft">
-              <a href="http://www.FreeBSD.org" title="FreeBSD"><img
-              src="http://www.FreeBSD.org/layout/images/logo-red.png" width="457"
-              height="75" alt="FreeBSD" /></a>
-            </div>
+/* Rounding modes */
+#define	FE_TONEAREST	0x0000
+#define	FE_DOWNWARD	0x0400
+#define	FE_UPWARD	0x0800
+#define	FE_TOWARDZERO	0x0c00
+#define	_ROUND_MASK	(FE_TONEAREST | FE_DOWNWARD | \
+			 FE_UPWARD | FE_TOWARDZERO)
 
-            <div id="headerlogoright">
-              <h2 class="blockhide">Peripheral Links</h2>
+/*
+ * As compared to the x87 control word, the SSE unit's control word
+ * has the rounding control bits offset by 3 and the exception mask
+ * bits offset by 7.
+ */
+#define	_SSE_ROUND_SHIFT	3
+#define	_SSE_EMASK_SHIFT	7
 
-              <div id="searchnav">
-                <ul id="searchnavlist">
-                  <li>Text Size: <a href="#"
-                  onkeypress="return false;"
-                  onclick="setActiveStyleSheet('Normal Text'); return false;"
-                   title="Normal Text Size">Normal</a> / <a
-                  href="#" onkeypress="return false;"
-                  onclick="setActiveStyleSheet('Large Text'); return false;"
-                   title="Large Text Size">Large</a></li>
+__BEGIN_DECLS
 
-                  <li><a href="http://www.FreeBSD.org/donations/"
-                  title="Donate">Donate</a></li>
+/* Default floating-point environment */
+extern const fenv_t	__fe_dfl_env;
+#define	FE_DFL_ENV	(&__fe_dfl_env)
 
-                  <li class="last-child"><a href="http://www.FreeBSD.org/mailto.html"
-                  title="Contact">Contact</a></li>
-                </ul>
-              </div>
+#define	__fldcw(__cw)		__asm __volatile("fldcw %0" : : "m" (__cw))
+#define	__fldenv(__env)		__asm __volatile("fldenv %0" : : "m" (__env))
+#define	__fldenvx(__env)	__asm __volatile("fldenv %0" : : "m" (__env)  \
+				: "st", "st(1)", "st(2)", "st(3)", "st(4)",   \
+				"st(5)", "st(6)", "st(7)")
+#define	__fnclex()		__asm __volatile("fnclex")
+#define	__fnstenv(__env)	__asm __volatile("fnstenv %0" : "=m" (*(__env)))
+#define	__fnstcw(__cw)		__asm __volatile("fnstcw %0" : "=m" (*(__cw)))
+#define	__fnstsw(__sw)		__asm __volatile("fnstsw %0" : "=am" (*(__sw)))
+#define	__fwait()		__asm __volatile("fwait")
+#define	__ldmxcsr(__csr)	__asm __volatile("ldmxcsr %0" : : "m" (__csr))
+#define	__stmxcsr(__csr)	__asm __volatile("stmxcsr %0" : "=m" (*(__csr)))
 
-              <div id="search">
-                <form
-                action="http://www.FreeBSD.org/cgi/search.cgi"
-                method="get">
-                  <div>
-                    <h2 class="blockhide"><label
-                    for="words">Search</label></h2>
-                    <input type="hidden" name="max"
-                    value="25" /><input type="hidden" name="source"
-                    value="www" /><input id="words" name="words"
-                    type="text" size="20" maxlength="255"
-                    onfocus="if( this.value==this.defaultValue ) this.value='';"
-                     value="Search" />&nbsp;<input id="submit"
-                    name="submit" type="submit" value="Search" />
-                  </div>
-                </form>
-              </div>
-            </div>
-          </div>
+static __inline int
+feclearexcept(int __excepts)
+{
+	fenv_t __env;
 
-          <h2 class="blockhide">Site Navigation</h2>
+	if (__excepts == FE_ALL_EXCEPT) {
+		__fnclex();
+	} else {
+		__fnstenv(&__env.__x87);
+		__env.__x87.__status &= ~__excepts;
+		__fldenv(__env.__x87);
+	}
+	__stmxcsr(&__env.__mxcsr);
+	__env.__mxcsr &= ~__excepts;
+	__ldmxcsr(__env.__mxcsr);
+	return (0);
+}
 
-	  <div id="MENU">
-	    <ul class="first">
-	      <li><a href="http://www.FreeBSD.org/">Home</a></li>
-	    </ul>
-	    <ul>
-	      <li><a href="http://www.FreeBSD.org/about.html">About</a>
-		<ul>
-		  <li><a href="http://www.FreeBSD.org/projects/newbies.html">Introduction</a></li>
-		  <li><a href="http://www.FreeBSD.org/features.html">Features</a></li>
-		  <li><a href="http://www.FreeBSD.org/advocacy/">Advocacy</a></li>
-		  <li><a href="http://www.FreeBSD.org/marketing/">Marketing</a></li>
-		</ul>
-	      </li>
-	    </ul>
-	    <ul>
-	      <li><a href="http://www.FreeBSD.org/where.html">Get FreeBSD</a>
-		<ul>
-		  <li><a href="http://www.FreeBSD.org/releases/">Release Information</a></li>
-		  <li><a href="http://www.FreeBSD.org/releng/">Release Engineering</a></li>
-		</ul>
-	      </li>
-	    </ul>
-	    <ul>
-	      <li><a href="http://www.FreeBSD.org/docs.html">Documentation</a>
-		<ul>
-		  <li><a href="http://www.FreeBSD.org/doc/en_US.ISO8859-1/books/faq/">FAQ</a></li>
-		  <li><a href="http://www.FreeBSD.org/doc/en_US.ISO8859-1/books/handbook/">Handbook</a></li>
-		  <li><a href="http://www.FreeBSD.org/doc/en_US.ISO8859-1/books/porters-handbook">Porter's Handbook</a></li>
-		  <li><a href="http://www.FreeBSD.org/doc/en_US.ISO8859-1/books/developers-handbook">Developer's Handbook</a></li>
-		  <li><a href="http://www.FreeBSD.org/cgi/man.cgi">Manual Pages</a></li>
-		</ul>
-	      </li>
-	    </ul>
-	    <ul>
-	      <li><a href="http://www.FreeBSD.org/community.html">Community</a>
-		<ul>
-		  <li><a href="http://www.FreeBSD.org/community/mailinglists.html">Mailing Lists</a></li>
-		  <li><a href="http://forums.freebsd.org">Forums</a></li>
-		  <li><a href="http://www.FreeBSD.org/usergroups.html">User Groups</a></li>
-		  <li><a href="http://www.FreeBSD.org/events/events.html">Events</a></li>
-		</ul>
-	      </li>
-	    </ul>
-	    <ul>
-	      <li><a href="http://www.FreeBSD.org/projects/index.html">Developers</a>
-		<ul>
-		  <li><a href="http://www.FreeBSD.org/projects/ideas/ideas.html">Project Ideas</a></li>
-		  <li><a href="http://svn.FreeBSD.org/viewvc/base/">SVN Repository</a></li>
-		  <li><a href="http://cvsweb.FreeBSD.org">CVS Repository</a></li>
-		  <li><a href="http://p4web.FreeBSD.org">Perforce Repository</a></li>
-		</ul>
-	      </li>
-	    </ul>
-	    <ul>
-	      <li><a href="http://www.FreeBSD.org/support.html">Support</a>
-		<ul>
-		  <li><a href="http://www.FreeBSD.org/commercial/commercial.html">Vendors</a></li>
-		  <li><a href="http://security.FreeBSD.org/">Security Information</a></li>
-		  <li><a href="http://www.FreeBSD.org/cgi/query-pr-summary.cgi">Bug Reports</a></li>
-		  <li><a href="http://www.FreeBSD.org/send-pr.html">Submit Bug-report</a></li>
-		</ul>
-	      </li>
-	    </ul>
-	    <ul>
-	      <li><a href="http://www.freebsdfoundation.org/">Foundation</a>
-		<ul>
-		  <li><a href="http://www.freebsdfoundation.org/donate/">Donate</a></li>
-		</ul>
-	      </li>
-	    </ul>
-	  </div> <!-- MENU -->
-        </div>
+static __inline int
+fegetexceptflag(fexcept_t *__flagp, int __excepts)
+{
+	__uint32_t __mxcsr;
+	__uint16_t __status;
 
-	<div id="content">
+	__stmxcsr(&__mxcsr);
+	__fnstsw(&__status);
+	*__flagp = (__mxcsr | __status) & __excepts;
+	return (0);
+}
 
-<h1>Error</h1>
-<link rel="stylesheet" type="text/css" href="/layout/css/cvsweb.css" />
-<div id="error">Error: src/lib/msun/src/fenv.h: no such file or directory</div>
+int fesetexceptflag(const fexcept_t *__flagp, int __excepts);
+int feraiseexcept(int __excepts);
 
-	</div>
-        <div id="footer">
-          <a href="http://www.FreeBSD.org/copyright/">Legal Notices</a> | &copy; 1995-2011
-          The FreeBSD Project. All rights reserved.<br />
-	  <address><a href='http://www.FreeBSD.org/mailto.html'>www@FreeBSD.org</a><br />2010/11/13 16:37:18</address>
-        </div>
-      </div>
-    </div>
-  </body>
-</html>
+static __inline int
+fetestexcept(int __excepts)
+{
+	__uint32_t __mxcsr;
+	__uint16_t __status;
+
+	__stmxcsr(&__mxcsr);
+	__fnstsw(&__status);
+	return ((__status | __mxcsr) & __excepts);
+}
+
+static __inline int
+fegetround(void)
+{
+	__uint16_t __control;
+
+	/*
+	 * We assume that the x87 and the SSE unit agree on the
+	 * rounding mode.  Reading the control word on the x87 turns
+	 * out to be about 5 times faster than reading it on the SSE
+	 * unit on an Opteron 244.
+	 */
+	__fnstcw(&__control);
+	return (__control & _ROUND_MASK);
+}
+
+static __inline int
+fesetround(int __round)
+{
+	__uint32_t __mxcsr;
+	__uint16_t __control;
+
+	if (__round & ~_ROUND_MASK)
+		return (-1);
+
+	__fnstcw(&__control);
+	__control &= ~_ROUND_MASK;
+	__control |= __round;
+	__fldcw(__control);
+
+	__stmxcsr(&__mxcsr);
+	__mxcsr &= ~(_ROUND_MASK << _SSE_ROUND_SHIFT);
+	__mxcsr |= __round << _SSE_ROUND_SHIFT;
+	__ldmxcsr(__mxcsr);
+
+	return (0);
+}
+
+int fegetenv(fenv_t *__envp);
+int feholdexcept(fenv_t *__envp);
+
+static __inline int
+fesetenv(const fenv_t *__envp)
+{
+
+	/*
+	 * XXX Using fldenvx() instead of fldenv() tells the compiler that this
+	 * instruction clobbers the i387 register stack.  This happens because
+	 * we restore the tag word from the saved environment.  Normally, this
+	 * would happen anyway and we wouldn't care, because the ABI allows
+	 * function calls to clobber the i387 regs.  However, fesetenv() is
+	 * inlined, so we need to be more careful.
+	 */
+	__fldenvx(__envp->__x87);
+	__ldmxcsr(__envp->__mxcsr);
+	return (0);
+}
+
+int feupdateenv(const fenv_t *__envp);
+
+#if __BSD_VISIBLE
+
+int feenableexcept(int __mask);
+int fedisableexcept(int __mask);
+
+static __inline int
+fegetexcept(void)
+{
+	__uint16_t __control;
+
+	/*
+	 * We assume that the masks for the x87 and the SSE unit are
+	 * the same.
+	 */
+	__fnstcw(&__control);
+	return (~__control & FE_ALL_EXCEPT);
+}
+
+#endif /* __BSD_VISIBLE */
+
+__END_DECLS
+
+#endif	/* !_FENV_H_ */
