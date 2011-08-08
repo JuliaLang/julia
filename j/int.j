@@ -380,7 +380,11 @@ typemax(::Type{Int64 }) = 9223372036854775807
 typemin(::Type{Uint64}) = uint64(0)
 typemax(::Type{Uint64}) = 18446744073709551615
 
-sizeof(::Type{Union(Int8,Uint8)})   = 1
-sizeof(::Type{Union(Int16,Uint16)}) = 2
-sizeof(::Type{Union(Int32,Uint32)}) = 4
-sizeof(::Type{Union(Int64,Uint64)}) = 8
+sizeof(::Type{Int8})   = 1
+sizeof(::Type{Uint8})  = 1
+sizeof(::Type{Int16})  = 2
+sizeof(::Type{Uint16}) = 2
+sizeof(::Type{Int32})  = 4
+sizeof(::Type{Uint32}) = 4
+sizeof(::Type{Int64})  = 8
+sizeof(::Type{Uint64}) = 8
