@@ -475,6 +475,11 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
     rt  = jl_interpret_toplevel_expr_with(args[2],
                                           &jl_tupleref(ctx->sp,0),
                                           ctx->sp->length/2);
+    if (jl_is_tuple(rt)) {
+        std::string msg = "in " + ctx->funcName +
+            ": ccall: missing return type";
+        jl_error(msg.c_str());
+    }
     at  = jl_interpret_toplevel_expr_with(args[3],
                                           &jl_tupleref(ctx->sp,0),
                                           ctx->sp->length/2);
