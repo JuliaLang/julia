@@ -36,6 +36,14 @@ let T = typevar(:T)
     @assert  is(None, tintersect((Type{Ptr{Uint8}},Ptr{None}),
                                  (Type{Ptr{T}},Ptr{T})))
 end
+let N = typevar(:N)
+    @assert isequal(tintersect((NTuple{N,Int},NTuple{N,Int}),
+                               ((Int,Int), (Int...))),
+                    ((Int,Int), (Int,Int)))
+    @assert isequal(tintersect((NTuple{N,Int},NTuple{N,Int}),
+                               ((Int...), (Int,Int))),
+                    ((Int,Int), (Int,Int)))
+end
 @assert is(None, tintersect(Type{Any},Type{ComplexPair}))
 @assert is(None, tintersect(Type{Any},Type{typevar(:T,Real)}))
 @assert !subtype(Type{Array{Int}},Type{AbstractArray{Int}})
