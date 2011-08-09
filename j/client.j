@@ -102,7 +102,7 @@ jl_version_clean = VERSION_CLEAN ? "" : "*"
 jl_commit_string = "Commit $(VERSION_COMMIT[1:10]) ($VERSION_TIME)$jl_version_clean"
 
 jl_banner_plain =
-L"               _
+I"               _
    _       _ _(_)_     |
   (_)     | (_) (_)    |  A fresh approach to technical computing
    _ _   _| |_  __ _   |
