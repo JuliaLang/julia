@@ -15,7 +15,7 @@ julia-debug julia-release:
 	$(MAKE) -C ui/webserver $@
 	ln -f $@-$(DEFAULT_REPL) julia
 
-sys.ji: j/sysimg.j j/start_image.j src/boot.j src/dump.c j/*.j
+sys.ji: VERSION j/sysimg.j j/start_image.j src/boot.j src/dump.c j/*.j
 	./julia -b sysimg.j
 
 clean:
