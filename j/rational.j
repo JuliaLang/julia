@@ -87,8 +87,8 @@ isequal(x::Rational, y::Rational) = x.num == y.num && x.den == y.den
 hash(x::Rational) = bitmix(hash(x.num),hash(x.den))
 
 ==(x::Rational, y::Rational) = !isnan(x) && x.num == y.num && x.den == y.den
-==(x::Rational, y::Int)      = x.den == 1 && x.num == y
-==(y::Int, x::Rational)      = x.den == 1 && x.num == y
+==(x::Rational, y::Int) = x.den == 1 && x.num == y
+==(y::Int, x::Rational) = x.den == 1 && x.num == y
 
 <=(x::Rational, y::Rational) = float(x) <= float(y) # TODO: better comparison
 < (x::Rational, y::Rational) = float(x) < float(y)  # TODO: better comparison

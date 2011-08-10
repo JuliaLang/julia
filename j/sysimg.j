@@ -30,17 +30,16 @@ load("table.j")
 
 # compiler
 load("inference.j")
-ccall(:jl_enable_inference,Void,())
+ccall(:jl_enable_inference, Void, ())
 
 # strings & printing
 load("io.j")
 ccall(:jl_set_memio_func, Void, ())
-set_current_output_stream(make_stdout_stream())  # for error reporting
+set_current_output_stream(make_stdout_stream()) # for error reporting
 load("string.j")
 load("ascii.j")
 load("utf8.j")
 load("show.j")
-
 load("env.j")
 
 # core math functions
