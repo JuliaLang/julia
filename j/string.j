@@ -312,14 +312,14 @@ lcfirst(s::String) = TransformedString((c,i)->i==1 ? lc(c) : c, s)
 
 ## conversion of general objects to strings ##
 
-function string(p::Ptr{Uint8})
-    p == C_NULL ? error("cannot convert NULL to string") :
-    ccall(:jl_cstr_to_string, Any, (Ptr{Uint8},), p)::String
-end
-
 string(x) = print_to_string(show, x)
 
 cstring(args...) = print_to_string(print, args...)
+
+function cstring(p::Ptr{Uint8})
+    p == C_NULL ? error("cannot convert NULL to string") :
+    ccall(:jl_cstr_to_string, Any, (Ptr{Uint8},), p)::String
+end
 
 ## printing literal quoted string data ##
 

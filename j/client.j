@@ -14,13 +14,13 @@ function run_repl()
     ccall(:repl_callback_enable, Void, ())
 
     while true
+        roottask_wi.requeue = false
         add_fd_handler(STDIN.fd, fd->ccall(:jl_stdin_callback, Void, ()))
         (ast, show_value) = yield()
         del_fd_handler(STDIN.fd)
         roottask_wi.requeue = true
         ccall(:jl_eval_user_input, Void, (Any, Int32),
               ast, show_value)
-        roottask_wi.requeue = false
     end
 end
 
@@ -144,6 +144,9 @@ function _start()
             # start in "head node" mode
             global Scheduler = Task(()->event_loop(true), 1024*1024)
             global PGRP = ProcessGroup(1, {LocalProcess()}, {Location("",0)})
+            # make scheduler aware of current (root) task
+            enq_work(roottask_wi)
+            yield()
         else
             global PGRP = ProcessGroup(0, {}, {})
         end

@@ -16,7 +16,7 @@ function gethostname()
     hn = Array(Uint8, 128)
     ccall(dlsym(libc,:gethostname), Int32, (Ptr{Uint8}, Ulong),
           hn, ulong(length(hn)))
-    string(convert(Ptr{Uint8},hn))
+    cstring(convert(Ptr{Uint8},hn))
 end
 
 ## file and directory ##
@@ -28,7 +28,7 @@ function getcwd()
     if p == C_NULL
         error("path too long")
     end
-    string(p)
+    cstring(p)
 end
 
 function setcwd(p::String)

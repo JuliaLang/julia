@@ -10,7 +10,7 @@ function getenv(var::String)
     if val == C_NULL
         error("getenv: Undefined variable: ", var)
     end
-    string(val)
+    cstring(val)
 end
 
 function setenv(var::String, val::String)
