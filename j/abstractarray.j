@@ -140,14 +140,18 @@ end
 *(A::AbstractArray, B::Number) = A .* B
 
 ./(x::AbstractArray, y::AbstractArray) = reshape( [ x[i] ./ y[i] | i=1:numel(x) ], size(x) )
-./(x::Number, y::AbstractArray) = reshape( [ x    ./ y[i] | i=1:numel(y) ], size(y) )
-./(x::AbstractArray, y::Number) = reshape( [ x[i] ./ y    | i=1:numel(x) ], size(x) )
+./(x::Number,        y::AbstractArray) = reshape( [ x    ./ y[i] | i=1:numel(y) ], size(y) )
+./(x::AbstractArray, y::Number       ) = reshape( [ x[i] ./ y    | i=1:numel(x) ], size(x) )
 
 /(A::Number, B::AbstractArray) = A ./ B
 /(A::AbstractArray, B::Number) = A ./ B
 
 \(A::Number, B::AbstractArray) = B ./ A
 \(A::AbstractArray, B::Number) = B ./ A
+
+.^(x::AbstractArray, y::AbstractArray) = reshape( [ x[i] ^ y[i] | i=1:numel(x) ], size(x) )
+.^(x::Number,        y::AbstractArray) = reshape( [ x    ^ y[i] | i=1:numel(y) ], size(y) )
+.^(x::AbstractArray, y::Number       ) = reshape( [ x[i] ^ y    | i=1:numel(x) ], size(x) )
 
 macro binary_arithmetic_op(f)
     quote
@@ -180,7 +184,6 @@ end # macro
 @binary_arithmetic_op (+)
 @binary_arithmetic_op (-)
 @binary_arithmetic_op (.*)
-@binary_arithmetic_op (.^)
 @binary_arithmetic_op div
 @binary_arithmetic_op mod
 
@@ -795,12 +798,24 @@ isempty(a::AbstractArray) = (numel(a) == 0)
 #map(f, v::AbstractVector) = [ f(v[i]) | i=1:length(v) ]
 #map(f, M::AbstractMatrix) = [ f(M[i,j]) | i=1:size(M,1), j=1:size(M,2) ]
 
-function map(f, A::AbstractArray)
-    F = similar(A, size(A))
+function map_to(dest::AbstractArray, f, A::AbstractArray)
     for i=1:numel(A)
-        F[i] = f(A[i])
+        dest[i] = f(A[i])
     end
-    return F
+    return dest
+end
+
+function map(f, A::AbstractArray)
+    if isempty(A)
+        return A
+    end
+    first = f(A[1])
+    dest = Array(typeof(first), size(A))
+    dest[1] = first
+    for i=2:numel(A)
+        dest[i] = f(A[i])
+    end
+    return dest
 end
 
 #obsolete code, mainly here for reference purposes, use gen_cartesian_map

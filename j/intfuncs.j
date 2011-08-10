@@ -100,8 +100,9 @@ function power_by_squaring(x, p::Int)
     return x
 end
 
-^(x, p::Int) = power_by_squaring(x,p)
-^{T<:Int}(x::T, p::T) = power_by_squaring(x,p)
+^(x, p::Int)          = power_by_squaring(x,p)
+^(x::Int, p::Int)     = power_by_squaring(float64(x),p)
+^{T<:Int}(x::T, p::T) = power_by_squaring(float64(x),p)
 
 # x^p mod m
 function powermod(x::Int, p::Int, m::Int)
