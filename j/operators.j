@@ -92,6 +92,11 @@ sizeof{T}(x::T) = sizeof(T)
 copy(x::ANY) = x
 foreach(f::Function, itr) = for x = itr; f(x); end
 
+# function composition
+one(f::Function) = identity
+one(::Type{Function}) = identity
+*(f::Function, g::Function) = x->f(g(x))
+
 # vectorization
 
 macro vectorize_1arg(S,f)

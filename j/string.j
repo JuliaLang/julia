@@ -219,8 +219,12 @@ end
 length(s::RepString) = length(s.string)*s.repeat
 strlen(s::RepString) = strlen(s.string)*s.repeat
 
-repeat(s::String, r::Int) = r <= 0 ? "" :
-                            r == 1 ? s  : RepString(s,r)
+function repeat(s::String, r::Int)
+    r <  0 ? error("can't repeat a string ",r," times") :
+    r == 0 ? "" :
+    r == 1 ? s  :
+    RepString(s,r)
+end
 
 ## ropes for efficient concatenation, etc. ##
 

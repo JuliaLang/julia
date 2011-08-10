@@ -269,7 +269,7 @@ end
 
 append(xs...) = append_any(xs...)
 
-identity = x->x
+identity(x) = x
 
 macro thunk(ex); :(()->$ex); end
 macro L_str(s); s; end
