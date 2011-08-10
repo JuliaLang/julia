@@ -2,7 +2,7 @@ load("pcre_h.j")
 
 libpcre = dlopen("libpcre")
 
-PCRE_VERSION = string(ccall(dlsym(libpcre, :pcre_version), Ptr{Uint8}, ()))
+PCRE_VERSION = cstring(ccall(dlsym(libpcre, :pcre_version), Ptr{Uint8}, ()))
 
 ## masks for supported sets of options ##
 
