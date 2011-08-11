@@ -961,6 +961,18 @@ end
 
 ## Other array functions ##
 
+# fallback definition of hvcat in terms of hcat and vcat
+function hvcat(rows::(Size...), as...)
+    nbr = length(rows)  # number of block rows
+    rs = cell(nbr)
+    a = 1
+    for i = 1:nbr
+        rs[i] = hcat(as[a:a-1+rows[i]]...)
+        a += rows[i]
+    end
+    vcat(rs...)
+end
+
 function repmat(a::AbstractMatrix, m::Size, n::Size)
     o,p = size(a)
     b = similar(a, o*m, p*n)
