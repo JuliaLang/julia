@@ -20,6 +20,10 @@
 #include <sys/types.h>
 #include <machine/endian.h>
 
+#ifdef __APPLE__
+#define uint32_t u_int32_t 
+#endif 
+
 /*
  * The original fdlibm code used statements like:
  *	n0 = ((*(int*)&one)>>29)^1;		* index of high word *
