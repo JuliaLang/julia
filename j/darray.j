@@ -490,6 +490,27 @@ end
 
 ## elementwise operators ##
 
+function .^{T}(A::Int, B::DArray{T})
+    S = promote_type(typeof(A),T)
+    darray((T,lsz,da)->.^(A, localize(B)),
+           S, size(B), B.distdim, B.pmap)
+end
+function .^{T}(A::DArray{T}, B::Int)
+    S = promote_type(T,typeof(B))
+    darray((T,lsz,da)->.^(localize(A), B),
+           S, size(A), A.distdim, A.pmap)
+end
+
+function .^{T<:Int}(A::Int, B::DArray{T})
+    darray((T,lsz,da)->.^(A, localize(B)),
+           Float64, size(B), B.distdim, B.pmap)
+end
+function .^{T<:Int}(A::DArray{T}, B::Int)
+    S = B < 0 ? Float64 : promote_type(T,typeof(B))
+    darray((T,lsz,da)->.^(localize(A), B),
+           S, size(A), A.distdim, A.pmap)
+end
+
 macro binary_darray_op(f)
     quote
         function ($f){T}(A::Number, B::DArray{T})
