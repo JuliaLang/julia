@@ -149,9 +149,39 @@ end
 \(A::Number, B::AbstractArray) = B ./ A
 \(A::AbstractArray, B::Number) = B ./ A
 
+# ^ is difficult, since negative exponents give a different type
+
 .^(x::AbstractArray, y::AbstractArray) = reshape( [ x[i] ^ y[i] | i=1:numel(x) ], size(x) )
 .^(x::Number,        y::AbstractArray) = reshape( [ x    ^ y[i] | i=1:numel(y) ], size(y) )
 .^(x::AbstractArray, y::Number       ) = reshape( [ x[i] ^ y    | i=1:numel(x) ], size(x) )
+
+function .^{S<:Int,T<:Int}(A::AbstractArray{S}, B::AbstractArray{T})
+    F = similar(A, Float64)
+    for i=1:numel(A)
+        F[i] = A[i]^B[i]
+    end
+    return F
+end
+
+function .^{T<:Int}(A::Int, B::AbstractArray{T})
+    F = similar(B, Float64)
+    for i=1:numel(B)
+        F[i] = A^B[i]
+    end
+    return F
+end
+
+function power_array_int_body(F, A, B)
+    for i=1:numel(A)
+        F[i] = A[i]^B
+    end
+    return F
+end
+
+function .^{T<:Int}(A::AbstractArray{T}, B::Int)
+    F = similar(A, B < 0 ? Float64 : promote_type(T,typeof(B)))
+    power_array_int_body(F, A, B)
+end
 
 macro binary_arithmetic_op(f)
     quote
@@ -810,12 +840,13 @@ function map(f, A::AbstractArray)
         return A
     end
     first = f(A[1])
-    dest = Array(typeof(first), size(A))
-    dest[1] = first
-    for i=2:numel(A)
-        dest[i] = f(A[i])
-    end
-    return dest
+    dest = similar(A, typeof(first))
+    map_to(dest, f, A)
+    # dest[1] = first
+    # for i=2:numel(A)
+    #     dest[i] = f(A[i])
+    # end
+    # return dest
 end
 
 #obsolete code, mainly here for reference purposes, use gen_cartesian_map
