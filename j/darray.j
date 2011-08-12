@@ -111,7 +111,7 @@ end
 #find which pieces hold which subranges in distributed dimension
 #returns (pmap,dist,perm) where pmap[i] contains dist[i]:dist[i+1]-1
 #and perm is the permutation which sorts I
-function locate(d::DArray, I::Vector{Index})
+function locate(d::DArray, I::AbstractVector{Index})
     if isa(I, Range{Index}); I = I[:]; end
     (I, perm) = sortperm(I)
 
@@ -341,8 +341,8 @@ ref(d::DArray, I::Union(Index,Range1{Index})...) =
 
 
 
-function ref{T}(d::DArray{T}, I::Vector{Index}...)
-    (pmap, dist, perm) = locate(d, I[d.distdim])
+function ref{T}(d::DArray{T}, I::AbstractVector{Index}...)
+    (pmap, dist, perm) = locate(d,[I[d.distdim]])
     A = Array(T, map(range -> length(range), I))
     if length(pmap) == 1 && pmap[1] == d.localpiece
         offs = d.dist[pmap[1]]-1
@@ -369,10 +369,10 @@ function ref{T}(d::DArray{T}, I::Vector{Index}...)
     return A
 end
 
-ref(d::DArray, I::Vector{Index}, j::Index) = d[I, [j]]
-ref(d::DArray, i::Index, J::Vector{Index}) = d[[i], J]
+ref(d::DArray, I::AbstractVector{Index}, j::Index) = d[I, [j]]
+ref(d::DArray, i::Index, J::AbstractVector{Index}) = d[[i], J]
 
-ref(d::DArray, I::Union(Index,Vector{Index})...) =
+ref(d::DArray, I::Union(Index,AbstractVector{Index})...) =
     d[ntuple(length(I),i->(isa(I[i],Index) ? [I[i]] : I[i] ))...]
 
 assign(d::DArray, v::AbstractArray, i::Index) =
@@ -423,7 +423,7 @@ function assign(d::DArray, v, I::Range1{Index}...)
 end
 
 #TODO: check for same size
-function assign(d::DArray, v, I::Vector{Index}...)
+function assign(d::DArray, v, I::AbstractVector{Index}...)
     (pmap, dist, perm) = locate(d, I[d.distdim])
     if length(pmap) == 1 && pmap[1] == d.localpiece
         offs = d.dist[pmap[1]]-1
@@ -460,7 +460,7 @@ assign(d::DArray, v::AbstractArray, i::Index, is::Index...) =
 assign(d::DArray, v, I::Union(Index,Range1{Index})...) =
     assign(d,v,ntuple(length(I),i->(isa(I[i],Index) ? (I[i]:I[i]) : I[i] ))...)
 
-assign(d::DArray, I::Union(Index,Vector{Index})...) =
+assign(d::DArray, v, I::Union(Index,AbstractVector{Index})...) =
     assign(d,v,ntuple(length(I),i->(isa(I[i],Index) ? [I[i]] : I[i] ))...)
 
 ## matrix multiply ##
