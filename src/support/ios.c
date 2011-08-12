@@ -776,6 +776,7 @@ static void _ios_init(ios_t *s)
     s->rereadable = 0;
     s->readonly = 0;
     s->julia_alloc = 0;
+    s->mutex_initialized = 0;
 }
 
 /* stream object initializers. we do no allocation. */

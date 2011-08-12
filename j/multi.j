@@ -135,12 +135,12 @@ end
 
 function send_msg_(w::Worker, kind, args, now::Bool)
     buf = w.sendbuf
-    ccall(:jl_buf_mutex_lock, Void, ())
+    ccall(:jl_buf_mutex_lock, Void, (Ptr{Void},), buf.ios)
     serialize(buf, kind)
     for arg=args
         serialize(buf, arg)
     end
-    ccall(:jl_buf_mutex_unlock, Void, ())
+    ccall(:jl_buf_mutex_unlock, Void, (Ptr{Void},), buf.ios)
 
     if !now && w.gcflag
         flush_gc_msgs(w)
