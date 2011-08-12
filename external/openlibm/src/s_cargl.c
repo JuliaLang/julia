@@ -28,7 +28,7 @@
 
 
 #include <complex.h>
-#include <math.h>
+#include "openlibm.h"
 
 long double
 cargl(long double complex z)

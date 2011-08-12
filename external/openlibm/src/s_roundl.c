@@ -27,7 +27,7 @@
 #include <sys/cdefs.h>
 
 
-#include <math.h>
+#include "openlibm.h"
 
 long double
 roundl(long double x)

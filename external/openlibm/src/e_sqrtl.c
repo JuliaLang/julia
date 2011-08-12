@@ -31,7 +31,7 @@
 #include <float.h>
 
 #include "fpmath.h"
-#include "math.h"
+#include "openlibm.h"
 
 /* Return (x + ulp) for normal positive x. Assumes no overflow. */
 static inline long double

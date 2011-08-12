@@ -22,7 +22,7 @@
 #include <float.h>
 
 #include "fpmath.h"
-#include "math.h"
+#include "openlibm.h"
 #include "math_private.h"
 
 #if LDBL_MAX_EXP != 0x4000

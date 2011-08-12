@@ -16,7 +16,7 @@
  * Return the base 10 logarithm of x. See k_log.c for details on the algorithm.
  */
 
-#include "math.h"
+#include "openlibm.h"
 #include "math_private.h"
 #include "k_logf.h"
 

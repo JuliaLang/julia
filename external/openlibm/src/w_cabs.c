@@ -10,7 +10,7 @@
 
 #include <complex.h>
 #include <float.h>
-#include <math.h>
+#include "openlibm.h"
 
 double
 cabs(double complex z)

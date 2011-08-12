@@ -131,7 +131,7 @@
 
 #include <float.h>
 
-#include "math.h"
+#include "openlibm.h"
 #include "math_private.h"
 
 static const int init_jk[] = {3,4,4,6}; /* initial value for jk */

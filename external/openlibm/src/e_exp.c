@@ -76,7 +76,7 @@
  * to produce the hexadecimal values shown.
  */
 
-#include "math.h"
+#include "openlibm.h"
 #include "math_private.h"
 
 static const double

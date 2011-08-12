@@ -27,8 +27,20 @@
  * $FreeBSD: src/lib/libc/include/fpmath.h,v 1.4 2008/12/23 22:20:59 marcel Exp $
  */
 
-#include <sys/endian.h>
-#include "_fpmath.h"
+#ifdef __LP64__
+#include "amd64_fpmath.h"
+#else 
+#include "i386_fpmath.h"
+#endif
+
+#ifdef __linux
+#include <features.h>
+#include <endian.h>
+#endif
+
+#ifdef __APPLE__
+#include <machine/endian.h>
+#endif
 
 #ifndef _IEEE_WORD_ORDER
 #define	_IEEE_WORD_ORDER	_BYTE_ORDER

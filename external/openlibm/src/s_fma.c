@@ -29,7 +29,7 @@
 
 #include <fenv.h>
 #include <float.h>
-#include <math.h>
+#include "openlibm.h"
 
 /*
  * Fused multiply-add: Compute x * y + z with a single rounding error.

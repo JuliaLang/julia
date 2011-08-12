@@ -29,7 +29,7 @@
 #include <sys/endian.h>
 #include <ctype.h>
 #include <float.h>
-#include <math.h>
+#include "openlibm.h"
 #include <stdint.h>
 #include <strings.h>
 

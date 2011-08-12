@@ -19,7 +19,7 @@
 
 #endif
 
-#include "math.h"
+#include "openlibm.h"
 #include "math_private.h"
 
 /* |cos(x) - c(x)| < 2**-34.1 (~[-5.37e-11, 5.295e-11]). */

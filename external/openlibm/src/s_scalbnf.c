@@ -19,7 +19,7 @@ static char rcsid[] = "$FreeBSD: src/lib/msun/src/s_scalbnf.c,v 1.8 2005/03/07 0
 
 #include <sys/cdefs.h>
 
-#include "math.h"
+#include "openlibm.h"
 #include "math_private.h"
 
 static const float

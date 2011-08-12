@@ -17,7 +17,7 @@
 #include <sys/cdefs.h>
 
 
-#include "math.h"
+#include "openlibm.h"
 #include "math_private.h"
 
 /* cbrtf(x)

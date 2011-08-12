@@ -18,7 +18,7 @@
  * no branching!
  */
 
-#include "math.h"
+#include "openlibm.h"
 #include "math_private.h"
 
 	int finite(double x)

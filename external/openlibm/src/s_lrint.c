@@ -26,7 +26,7 @@
 
 #include <sys/cdefs.h>
 #include <fenv.h>
-#include <math.h>
+#include "openlibm.h"
 
 #ifndef type
 

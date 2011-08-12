@@ -49,7 +49,7 @@
  *		       = 1 - 2*(tan(y) - (tan(y)^2)/(1+tan(y)))
  */
 
-#include "math.h"
+#include "openlibm.h"
 #include "math_private.h"
 static const double xxx[] = {
 		 3.33333333333334091986e-01,	/* 3FD55555, 55555563 */

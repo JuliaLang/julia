@@ -28,7 +28,7 @@
 
 
 #include <limits.h>
-#include <math.h>
+#include "openlibm.h"
 
 double
 scalbln (double x, long n)

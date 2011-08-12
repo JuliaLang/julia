@@ -16,7 +16,7 @@
 #include <sys/cdefs.h>
 
 
-#include "math.h"
+#include "openlibm.h"
 #include "math_private.h"
 
 static const float one = 1.0, half=0.5, huge = 1.0e30;

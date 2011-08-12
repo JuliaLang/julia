@@ -18,7 +18,7 @@
 
 #endif
 
-#include "math.h"
+#include "openlibm.h"
 #include "math_private.h"
 
 /* |tan(x)/x - t(x)| < 2**-25.5 (~[-2e-08, 2e-08]). */

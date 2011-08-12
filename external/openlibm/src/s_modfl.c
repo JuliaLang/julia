@@ -37,7 +37,7 @@
  */
 
 #include <float.h>
-#include <math.h>
+#include "openlibm.h"
 #include <sys/types.h>
 
 #include "fpmath.h"

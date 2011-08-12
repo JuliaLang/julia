@@ -17,7 +17,7 @@
 static char rcsid[] = "$FreeBSD: src/lib/msun/src/e_sqrtf.c,v 1.7 2002/05/28 18:15:04 alfred Exp $";
 #endif
 
-#include "math.h"
+#include "openlibm.h"
 #include "math_private.h"
 
 static	const float	one	= 1.0, tiny=1.0e-30;

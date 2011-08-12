@@ -19,7 +19,7 @@
 
 #endif
 
-#include "math.h"
+#include "openlibm.h"
 #include "math_private.h"
 
 /* |sin(x)/x - s(x)| < 2**-37.5 (~[-4.89e-12, 4.824e-12]). */

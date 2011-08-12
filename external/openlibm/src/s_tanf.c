@@ -19,7 +19,7 @@
 
 #include <float.h>
 
-#include "math.h"
+#include "openlibm.h"
 #define	INLINE_KERNEL_TANDF
 #define INLINE_REM_PIO2F
 #include "math_private.h"

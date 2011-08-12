@@ -27,7 +27,7 @@
 #include <sys/cdefs.h>
 
 
-#include <math.h>
+#include "openlibm.h"
 
 /*
  * We simply call tgamma() rather than bloating the math library with

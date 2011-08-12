@@ -22,7 +22,7 @@
  *	Inexact flag raised if x not equal to truncf(x).
  */
 
-#include "math.h"
+#include "openlibm.h"
 #include "math_private.h"
 
 static const float huge = 1.0e30F;

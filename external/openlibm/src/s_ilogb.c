@@ -22,7 +22,7 @@
 
 #include <limits.h>
 
-#include "math.h"
+#include "openlibm.h"
 #include "math_private.h"
 
 	int ilogb(double x)

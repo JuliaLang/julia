@@ -19,7 +19,7 @@
  * for exercising the fraction-part(F) IEEE 754-1985 test vector.
  */
 
-#include "math.h"
+#include "openlibm.h"
 #include "math_private.h"
 
 double

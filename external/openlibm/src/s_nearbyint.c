@@ -28,7 +28,7 @@
 
 
 #include <fenv.h>
-#include <math.h>
+#include "openlibm.h"
 
 /*
  * We save and restore the floating-point environment to avoid raising

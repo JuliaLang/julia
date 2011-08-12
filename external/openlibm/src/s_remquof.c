@@ -13,7 +13,7 @@
 #include <sys/cdefs.h>
 
 
-#include "math.h"
+#include "openlibm.h"
 #include "math_private.h"
 
 static const float Zero[] = {0.0, -0.0,};

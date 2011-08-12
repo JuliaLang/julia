@@ -24,7 +24,7 @@ static char rcsid[] = "$FreeBSD: src/lib/msun/src/s_modf.c,v 1.8 2007/01/06 21:2
  *	No exception.
  */
 
-#include "math.h"
+#include "openlibm.h"
 #include "math_private.h"
 
 static const double one = 1.0;

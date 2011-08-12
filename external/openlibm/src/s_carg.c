@@ -28,7 +28,7 @@
 
 
 #include <complex.h>
-#include <math.h>
+#include "openlibm.h"
 
 double
 carg(double complex z)

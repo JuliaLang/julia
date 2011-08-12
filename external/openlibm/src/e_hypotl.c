@@ -18,7 +18,7 @@
 #include <float.h>
 
 #include "fpmath.h"
-#include "math.h"
+#include "openlibm.h"
 #include "math_private.h"
 
 #define	GET_LDBL_EXPSIGN(i, v) do {	\

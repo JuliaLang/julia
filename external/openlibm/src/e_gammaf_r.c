@@ -23,7 +23,7 @@
  * Method: See __ieee754_lgammaf_r
  */
 
-#include "math.h"
+#include "openlibm.h"
 #include "math_private.h"
 
 float

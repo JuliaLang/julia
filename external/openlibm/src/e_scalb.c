@@ -20,7 +20,7 @@
  * should use scalbn() instead.
  */
 
-#include "math.h"
+#include "openlibm.h"
 #include "math_private.h"
 
 #ifdef _SCALB_INT

@@ -26,7 +26,7 @@
  * $FreeBSD: src/lib/msun/src/s_copysignl.c,v 1.2 2007/01/07 07:54:21 das Exp $
  */
 
-#include <math.h>
+#include "openlibm.h"
 
 #include "fpmath.h"
 
