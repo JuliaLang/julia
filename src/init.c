@@ -295,6 +295,7 @@ JL_CALLABLE(jl_weakref_ctor);
 void jl_get_builtin_hooks()
 {
     jl_nothing      = global("nothing");
+    jl_root_task->tls = jl_nothing;
 
     jl_char_type    = (jl_bits_type_t*)global("Char");
     jl_int8_type    = (jl_bits_type_t*)global("Int8");

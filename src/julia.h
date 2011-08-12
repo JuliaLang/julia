@@ -855,6 +855,7 @@ typedef struct _jl_savestate_t {
 typedef struct _jl_task_t {
     JL_STRUCT_TYPE
     struct _jl_task_t *on_exit;
+    jl_value_t *tls;
     jmp_buf ctx;
     union {
         void *stackbase;

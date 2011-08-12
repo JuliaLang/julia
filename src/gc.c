@@ -513,6 +513,7 @@ static void gc_markval_(jl_value_t *v)
     else if (vt == (jl_value_t*)jl_task_type) {
         jl_task_t *ta = (jl_task_t*)v;
         GC_Markval(ta->on_exit);
+        GC_Markval(ta->tls);
         if (ta->start)
             GC_Markval(ta->start);
         if (ta->result)
