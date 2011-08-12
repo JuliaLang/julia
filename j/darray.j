@@ -296,8 +296,7 @@ function assign{T}(d::DArray{T,1}, v, i::Index)
     d
 end
 
-function ref{T}(d::DArray{T}, i::Index)
-    sub = ind2sub(d.dims, i)
+function ref_elt{T}(d::DArray{T}, sub::(Index...))
     p = locate(d, sub[d.distdim])
     if p==d.localpiece
         offs = d.dist[p]-1
@@ -307,8 +306,11 @@ function ref{T}(d::DArray{T}, i::Index)
         end
         return localize(d)[sub...]::T
     end
-    return remote_call_fetch(d.pmap[p], ref, d, i)::T
+    return remote_call_fetch(d.pmap[p], ref_elt, d, sub)::T
 end
+
+ref{T}(d::DArray{T}, i::Index)    = ref_elt(d, ind2sub(d.dims, i))
+ref{T}(d::DArray{T}, I::Index...) = ref_elt(d, I)
 
 ref(d::DArray) = d
 function ref{T}(d::DArray{T}, I::Range1{Index}...)
@@ -327,7 +329,7 @@ function ref{T}(d::DArray{T}, I::Range1{Index}...)
                                                       (1:length(I[i]))))
         K = ntuple(length(size(d)),i->(i==d.distdim ? (dist[p]:(dist[p+1]-1)) :
                                                       I[i]))
-        A[J...] = remote_call_fetch(pmap[p], ref, d, K...)
+        A[J...] = remote_call_fetch(d.pmap[pmap[p]], ref, d, K...)
     end
     return A
 end
@@ -364,7 +366,7 @@ function ref{T}(d::DArray{T}, I::AbstractVector{Index}...)
                                                       (1:length(I[i]))))
         K = ntuple(length(size(d)),i->(i==d.distdim ? II[lower:(j-1)] :
                                                       I[i]))
-        A[J...] = remote_call_fetch(pmap[p], ref, d, K...)
+        A[J...] = remote_call_fetch(d.pmap[pmap[p]], ref, d, K...)
     end
     return A
 end
@@ -375,11 +377,7 @@ ref(d::DArray, i::Index, J::AbstractVector{Index}) = d[[i], J]
 ref(d::DArray, I::Union(Index,AbstractVector{Index})...) =
     d[ntuple(length(I),i->(isa(I[i],Index) ? [I[i]] : I[i] ))...]
 
-assign(d::DArray, v::AbstractArray, i::Index) =
-    invoke(assign, (DArray, Any, Index), d, v, i)
-
-function assign(d::DArray, v, i::Index)
-    sub = ind2sub(d.dims, i)
+function assign_elt(d::DArray, v, sub::(Index...))
     p = locate(d, sub[d.distdim])
     if p==d.localpiece
         offs = d.dist[p]-1
@@ -389,10 +387,24 @@ function assign(d::DArray, v, i::Index)
         end
         localize(d)[sub...] = v
     else
-        remote_do(d.pmap[p], assign, d, v, i)
+        remote_do(d.pmap[p], assign_elt, d, v, sub)
     end
     d
 end
+
+assign(d::DArray, v::AbstractArray) = assign_elt(d, v, ())
+
+assign(d::DArray, v::AbstractArray, i::Index) =
+    assign_elt(d, v, ind2sub(d.dims, i))
+
+assign(d::DArray, v::AbstractArray, i0::Index, i1::Index) =
+    assign_elt(d, v, (i0,i1))
+
+assign(d::DArray, v::AbstractArray, i0::Index, I::Index...) =
+    assign_elt(d, v, tuple(i0,I...))
+
+assign(d::DArray, v, i::Index) = assign_elt(d, v, ind2sub(d.dims, i))
+assign(d::DArray, v, i0::Index, I::Index...) = assign_elt(d, v, tuple(i0,I...))
 
 #TODO: Fix this
 assign(d::DArray, v) = error("distributed arrays of dimension 0 not supported")
@@ -414,7 +426,7 @@ function assign(d::DArray, v, I::Range1{Index}...)
                                                       (1:length(I[i]))))
         K = ntuple(length(size(d)),i->(i==d.distdim ? (dist[p]:(dist[p+1]-1)) :
                                                       I[i]))
-        refs[p] = remote_call(pmap[p], assign, d, v[J...], K...)
+        refs[p] = remote_call(d.pmap[pmap[p]], assign, d, v[J...], K...)
     end
     for p = 1:length(pmap)
         if isa(refs[p], RemoteRef); wait(refs[p]); end
@@ -446,7 +458,7 @@ function assign(d::DArray, v, I::AbstractVector{Index}...)
                                                       (1:length(I[i]))))
         K = ntuple(length(size(d)),i->(i==d.distdim ? II[lower:(j-1)] :
                                                       I[i]))
-        refs[p] = remote_call(pmap[p], assign, d, v[J...], K...)
+        refs[p] = remote_call(d.pmap[pmap[p]], assign, d, v[J...], K...)
     end
     for p = 1:length(pmap)
         if isa(refs[p], RemoteRef); wait(refs[p]); end
