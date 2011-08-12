@@ -6,6 +6,7 @@
  */
 
 #include "network.h"
+#include <iostream>
 
 using namespace std;
 
@@ -183,6 +184,32 @@ namespace network_wrappers
 		#else
 			shutdown(socket_id, SHUT_RDWR);
 			close(socket_id);
+		#endif
+	}
+
+	#ifdef _WIN32
+		bool wrap_select(SOCKET socket_id)
+	#else
+		bool wrap_select(int socket_id)
+	#endif
+	{
+		// return whether a socket has data to read
+		#ifdef _WIN32
+			fd_set set;
+			FD_ZERO(&set);
+			FD_SET(socket_id, &set);
+			TIMEVAL select_timeout;
+			select_timeout.tv_sec = 0;
+			select_timeout.tv_usec = 100000;
+			return (select(0, &set, 0, 0, &select_timeout) != 0);
+		#else
+			fd_set set;
+			FD_ZERO(&set);
+			FD_SET(socket_id, &set);
+			timeval select_timeout;
+			select_timeout.tv_sec = 0;
+			select_timeout.tv_usec = 100000;
+			return (select(FD_SETSIZE, &set, 0, 0, &select_timeout) != 0);
 		#endif
 	}
 
@@ -366,6 +393,19 @@ void network::socket::close()
 			socket_id = -1;
 		}
 	#endif
+}
+
+bool network::socket::has_data()
+{
+	// return whether there is data to read
+	#ifdef _WIN32
+		if (socket_id == INVALID_SOCKET)
+			return false;
+	#else
+		if (socket_id == -1)
+			return false;
+	#endif
+	return network_wrappers::wrap_select(socket_id);
 }
 
 string network::socket::read()

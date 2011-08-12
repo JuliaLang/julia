@@ -1,55 +1,87 @@
 ###########################################
+# protocol
+###########################################
+
+###### the julia<-->server protocol #######
+
+# the message type is sent as a byte
+# the next four bytes indicates how many arguments there are
+# each argument is four bytes indicating the size of the argument, then the data for that argument
+
+###### the server<-->browser protocol #####
+
+# messages are sent as json arrays
+# [message_type:number, arg0:string, arg1:string, ...]
+
+###########################################
 # input messages
 ###########################################
 
+# null message (should be ignored)
+# arguments: {}
+MSG_INPUT_NULL = 0
+
 # new session (this message is intercepted in the SCGI server and never reaches here)
 # arguments: {}
-MSG_INPUT_START = 0
+MSG_INPUT_START = 1
 
 # poll the server (this message is intercepted in the SCGI server and never reaches here)
 # arguments: {}
-MSG_INPUT_POLL = 1
+MSG_INPUT_POLL = 2
 
 # evaluate an expression
 # arguments: {expression}
-MSG_INPUT_EVAL = 2
+MSG_INPUT_EVAL = 3
 
 ###########################################
 # output messages
 ###########################################
 
+# null message (should be ignored)
+# arguments: {}
+MSG_OUTPUT_NULL = 0
+
 # message
 # arguments: {message}
-MSG_OUTPUT_MESSAGE = 0
+MSG_OUTPUT_MESSAGE = 1
 
 # error message
 # arguments: {message}
-MSG_OUTPUT_ERROR = 1
+MSG_OUTPUT_ERROR = 2
 
 # fatal error message (terminates session)
 # arguments: {message}
-MSG_OUTPUT_FATAL_ERROR = 2
+MSG_OUTPUT_FATAL_ERROR = 3
 
 # incomplete expression
 # arguments: {}
-MSG_OUTPUT_EVAL_INCOMPLETE = 3
+MSG_OUTPUT_EVAL_INCOMPLETE = 4
 
 # expression result
 # arguments: {result}
-MSG_OUTPUT_EVAL_RESULT = 4
+MSG_OUTPUT_EVAL_RESULT = 5
+
+# other output (not sent directly from julia)
+# arguments: {message}
+MSG_OUTPUT_OTHER = 6
 
 ###########################################
 # set up the socket connection
 ###########################################
 
-# connect to localhost on 4444
-connectfd = ccall(:connect_to_host, Int32, (Ptr{Uint8}, Int16), "127.0.0.1", int16(4444))
+# get the port number
+print("enter the port number:\n")
+port_num_str = readline(stdin_stream)
+port_num = int16(port_num_str[1:length(port_num_str)-1])
+
+# connect to localhost on that port
+connectfd = ccall(:connect_to_host, Int32, (Ptr{Uint8}, Int16), "127.0.0.1", port_num)
 if connectfd == -1
     # couldn't open the socket
-    println("could not connect to socket on port 4444.")
+    println("could not connect to socket on localhost.")
     exit()
 end
-println("client connected to port 4444.")
+println("client connected.")
 
 # create an io object from the file descriptor
 io = fdio(connectfd)
@@ -126,13 +158,7 @@ add_fd_handler(connectfd, socket_callback)
 # main program loop
 ###########################################
 
-# send a start message
-write_message(Message(MSG_INPUT_START, {}))
+write_message(Message(MSG_INPUT_EVAL, ["3+5/2"]))
 
-while true
-    # send an expression to evaluate
-    write_message(Message(MSG_INPUT_EVAL, ["5"]))
-
-    # wait a second before repeating
-    sleep(1)
-end
+# do asynchronous stuff
+yield()

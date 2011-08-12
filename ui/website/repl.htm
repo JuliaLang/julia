@@ -49,25 +49,21 @@
 			window.onresize = set_column_heights;
 		</script>
 		<script>
+			/*
+				See julia-web.j for network protocol.
+			*/
+
 			// keep track of terminal history
 			var terminal_data = "";
 			var terminal_data_size = 50000;
+			var initialized = false;
 			var input_history = [];
 			var input_history_current = [""];
 			var input_history_id = 0;
 			var input_history_size = 100;
 
-			// whether we should clear the input box on next response
-			var clear_on_next_response = false;
-
 			// a queue of messages to be sent to the server
 			var outbox_queue = [];
-
-			// whether we are waiting for a message to be sent
-			var outstanding_message = false;
-
-			// this is removed from all terminal text
-			var julia_path = "/home/stephan/julia/";
 
 			// keep track of the last time a request was sent
 			var last_request_time = new Date();
@@ -108,18 +104,8 @@
 			// add to the terminal
 			function add_to_terminal(data)
 			{
-				// clear the input if necessary
-				if (clear_on_next_response)
-				{
-					$('#terminal-input').val("");
-					clear_on_next_response = false;
-				}
-
 				// add the data
 				terminal_data += data;
-
-				// don't show server paths
-				terminal_data = terminal_data.replace(new RegExp(julia_path, 'g'), "");
 
 				// limit size of stored data
 				if (terminal_data.length > terminal_data_size)
@@ -166,25 +152,9 @@
 							terminal_data = terminal_data.substring(gt_pos+1);
 					}
 				}
-				
-				// find the last line break
-				var last_newline = terminal_data.lastIndexOf("<br />");
-				if (last_newline == -1)
-				{
-					$("#terminal").html("");
-					$("#prompt").html(terminal_data.replace(/julia&gt;&nbsp;/g, "<span class=\"prompt\">julia&gt;&nbsp;</span>"));
-				}
-				else
-				{
-					var new_terminal_data = terminal_data.substring(0, last_newline).replace(/julia&gt;&nbsp;/g, "<span class=\"prompt\">julia&gt;&nbsp;</span>");
-					if (new_terminal_data.lastIndexOf("<br />") == new_terminal_data.length-6)
-						new_terminal_data += "&nbsp;";
-					$("#terminal").html(new_terminal_data);
-					$("#prompt").html(terminal_data.substring(last_newline+6).replace(/julia&gt;&nbsp;/g, "<span class=\"prompt\">julia&gt;&nbsp;</span>"));
-				}
 
-				// resize the input box (the -1 is for Internet Explorer)
-				$('#terminal-input').width($('#terminal').width()-$('#prompt').width()-1);
+				// update the html
+				$("#terminal").html(terminal_data);
 
 				// scroll to the new data
 				$("#terminal-form").prop("scrollTop", $("#terminal-form").prop("scrollHeight"));
@@ -207,7 +177,7 @@
 			function init_session()
 			{
 				// submit AJAX request via POST
-				outbox_queue.push({"type": "init"});
+				outbox_queue.push({"message_type": 1});
 				process_outbox();
 
 				// set the time of the last request
@@ -218,7 +188,7 @@
 			function poll()
 			{
 				// submit AJAX request via POST
-				outbox_queue.push({"type": "poll"});
+				outbox_queue.push({"message_type": 2});
 				process_outbox();
 
 				// set the time of the last request
@@ -228,7 +198,7 @@
 			// send the next line in the queue - return whether there is more data to process
 			function process_outbox()
 			{
-				if (outbox_queue.length > 0 && !outstanding_message)
+				if (outbox_queue.length > 0)
 					$.post("/repl.scgi", {"request": $.toJSON(outbox_queue.shift())}, callback, "json");
 				return (outbox_queue.length > 0);
 			}
@@ -236,33 +206,56 @@
 			// called when the server has responded
 			function callback(data, textStatus, jqXHR)
 			{
-				// we're no longer waiting for that message to be sent
-				outstanding_message = false;
-
-				// error message
-				if (data.type == "error")
-					add_to_terminal("<span class=\"error\">"+data.message+"</span>");
-
-				// fatal error message
-				if (data.type == "fatal_error")
+				// clear the "initializing" message if necessary
+				if (!initialized)
 				{
-					add_to_terminal("<span class=\"error\">"+data.message+"</span>");
+					initialized = true;
+					$('#terminal').html("");
+				}
+
+				// MSG_OUTPUT_NULL
+				if (data.message_type == 0)
+				{
+					// do nothing
+				}
+
+				// MSG_OUTPUT_MESSAGE
+				if (data.message_type == 1)
+				{
+					add_to_terminal("<span class=\"message\">"+data.arg0+"</span>");
+				}
+
+				// MSG_OUTPUT_ERROR
+				if (data.message_type == 2)
+				{
+					add_to_terminal("<span class=\"error\">"+data.arg0+"</span>");
+				}
+
+				// MSG_OUTPUT_FATAL_ERROR
+				if (data.message_type == 3)
+				{
+					add_to_terminal("<span class=\"error\">"+data.arg0+"</span>");
 					return;
 				}
 
-				// normal message
-				if (data.type == "message")
-					add_to_terminal("<span class=\"message\">"+data.message+"</span>");
+				// MSG_OUTPUT_EVAL_INCOMPLETE
+				if (data.message_type == 4)
+				{
+					// do nothing for now?
+				}
 
-				// init message
-				if (data.type == "init_message")
-					$("#terminal").html("<span class=\"message\">"+data.message+"</span>");
-
-				// add new server data to the terminal
-				if (data.type == "content")
+				// MSG_OUTPUT_EVAL_RESULT
+				if (data.message_type == 5)
 				{
 					if (data.content != "")
-						add_to_terminal(data.content);
+						add_to_terminal(data.arg0);
+				}
+
+				// MSG_OUTPUT_OTHER
+				if (data.message_type == 6)
+				{
+					if (data.content != "")
+						add_to_terminal(data.arg0);
 				}
 
 				// send any remaining messages if there are any
@@ -276,6 +269,9 @@
 			// called on page load
 			$(document).ready(function()
 			{
+				// resize the input box (the -1 is for Internet Explorer)
+				$('#terminal-input').width($('#terminal').width()-$('#prompt').width()-1);
+				
 				// hook mouse click events
 				$("#terminal-form").click(function(evt) { $("#terminal-input").focus(); } );
 
@@ -292,7 +288,7 @@
 					for (var i = 0; i < lines.length-1; i += 1)
 					{
 						// send the input to the server via AJAX
-						outbox_queue.push({"type": "input", "input": lines[i]+"\n"});
+						outbox_queue.push({"message_type": 3, "arg0": lines[i]+"\n"});
 
 						// input history
 						input_history.push(lines[i]);
@@ -352,7 +348,7 @@
 							if (input != "")
 							{
 								// send the input to the server via AJAX
-								outbox_queue.push({"type": "input", "input": input+"\n"});
+								outbox_queue.push({"message_type": 3, "arg0": input});
 								process_outbox();
 
 								// input history
@@ -365,11 +361,12 @@
 
 								// set the time of the last request
 								last_request_time = new Date();
-
-								// clear the input box
-								clear_on_next_response = true;
 							}
-							$("#terminal-form").prop("scrollTop", $("#terminal-form").prop("scrollHeight"));
+
+							// clear the terminal input
+							$("#terminal-input").val("");
+
+							// prevent the form from actually submitting
 							return false;
 					}
 				});
@@ -403,9 +400,9 @@
 			</div>
 			<div id="right-column">
 				<form id="terminal-form">
-					<div id="terminal"></div>
+					<div id="terminal"><span class="message">initializing</span></div>
 					<div>
-						<div id="prompt"></div>
+						<div id="prompt">julia&gt;&nbsp;</div>
 						<textarea id="terminal-input" autofocus="autofocus" spellcheck="false" rows="1" cols="20" /></textarea>
 					</div>
 				</form>

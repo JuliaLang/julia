@@ -61,6 +61,9 @@ namespace network
 		// terminate the connection (fails silently if socket already closed)
 		void close();
 
+		// return if there is data to read
+		bool has_data();
+
 		// read data (returns empty string if socket closed)
 		std::string read();
 

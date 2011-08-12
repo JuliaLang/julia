@@ -14,6 +14,12 @@ using namespace std;
 using namespace scgi;
 
 /////////////////////////////////////////////////////////////////////////////
+// TODO:
+// - read messages from julia
+// - get writing messages to julia working
+/////////////////////////////////////////////////////////////////////////////
+
+/////////////////////////////////////////////////////////////////////////////
 // helpers
 /////////////////////////////////////////////////////////////////////////////
 
@@ -112,11 +118,31 @@ string str_replace(string str, string from, string to)
 }
 
 /////////////////////////////////////////////////////////////////////////////
+// messages
+/////////////////////////////////////////////////////////////////////////////
+
+// a message
+class message
+{
+public:
+    // see julia-web.j for documentation
+    uint8_t type;
+    vector<string> args;
+};
+
+/////////////////////////////////////////////////////////////////////////////
 // sessions
 /////////////////////////////////////////////////////////////////////////////
 
 // if a session hasn't been queried in this time, it dies
 const int SESSION_TIMEOUT = 20; // in seconds
+
+enum session_status
+{
+    SESSION_WAITING_FOR_PORT_NUM,
+    SESSION_NORMAL,
+    SESSION_TERMINATING,
+};
 
 // a session
 struct session
@@ -125,10 +151,16 @@ struct session
     time_t update_time;
 
     // to be sent to julia
-    string inbox;
+    string inbox_raw;
+
+    // to be sent to julia
+    vector<message> inbox;
+
+    // to be sent to the client as MSG_OTHER_OUTPUT
+    string outbox_raw;
 
     // to be sent to the client
-    string outbox;
+    vector<message> outbox;
 
     // process id of julia instance
     int pid;
@@ -136,6 +168,9 @@ struct session
     // write to julia_in[1], read from julia_out[0]
     int julia_in[2];
     int julia_out[2];
+
+    // the socket for communicating to julia
+    network::socket* sock;
 
     // io threads
     pthread_t inbox_proc;
@@ -145,8 +180,8 @@ struct session
     bool inbox_thread_alive;
     bool outbox_thread_alive;
 
-    // whether this session should terminate
-    bool terminating;
+    // the status of the session
+    session_status status;
 };
 
 // a list of sessions
@@ -176,7 +211,7 @@ void* inbox_thread(void* arg)
         pthread_mutex_lock(&session_mutex);
 
         // terminate if necessary
-        if (session_map[session_token].terminating)
+        if (session_map[session_token].status == SESSION_TERMINATING)
         {
             // unlock the mutex
             pthread_mutex_unlock(&session_mutex);
@@ -186,8 +221,10 @@ void* inbox_thread(void* arg)
         }
 
         // get the inbox data
-        string inbox = session_map[session_token].inbox;
-        if (inbox == "")
+        string inbox = session_map[session_token].inbox_raw;
+
+        // if there is no inbox data and no messages to send, wait and try again
+        if (inbox == "" && session_map[session_token].inbox.empty())
         {
             // unlock the mutex
             pthread_mutex_unlock(&session_mutex);
@@ -222,11 +259,36 @@ void* inbox_thread(void* arg)
         // lock the mutex
         pthread_mutex_lock(&session_mutex);
 
+        // write messages to julia
+        for (size_t i = 0; i < session_map[session_token].inbox.size(); i++)
+        {
+            // get the message
+            message msg = session_map[session_token].inbox[i];
+
+            // write the number of arguments
+            string str_arg_num = " ";
+            str_arg_num[0] = msg.type;
+            session_map[session_token].sock->write(str_arg_num);
+
+            // iterate through the arguments
+            for (size_t j = 0; j < msg.args.size(); j++)
+            {
+                // write the size of the argument
+                string str_arg_size = " ";
+                str_arg_size[0] = msg.args[j].size();
+                session_map[session_token].sock->write(str_arg_size);
+
+                // write the argument
+                session_map[session_token].sock->write(msg.args[j]);
+            }
+        }
+        session_map[session_token].inbox.clear();
+
         // remove the written data from the inbox
         if (bytes_written < 0)
-            session_map[session_token].inbox = "";
+            session_map[session_token].inbox_raw = "";
         else
-            session_map[session_token].inbox = session_map[session_token].inbox.substr(bytes_written, session_map[session_token].inbox.size()-bytes_written);
+            session_map[session_token].inbox_raw = session_map[session_token].inbox_raw.substr(bytes_written, session_map[session_token].inbox_raw.size()-bytes_written);
 
         // unlock the mutex
         pthread_mutex_unlock(&session_mutex);
@@ -252,6 +314,9 @@ void* inbox_thread(void* arg)
 // add to the outbox regularly according to this interval
 const int OUTBOX_INTERVAL = 10000; // in nanoseconds
 
+// check for the port number from julia according to this interval
+const int PORT_NUM_INTERVAL = 10000; // in nanoseconds
+
 // this thread waits for output from julia and stores it in a buffer (for later polling by the client)
 void* outbox_thread(void* arg)
 {
@@ -260,7 +325,7 @@ void* outbox_thread(void* arg)
     delete [] (char*)arg;
 
     // keep track of the output from julia
-    string outbox;
+    string outbox_raw;
 
     // loop for the duration of the session
     while (true)
@@ -269,7 +334,7 @@ void* outbox_thread(void* arg)
         pthread_mutex_lock(&session_mutex);
 
         // terminate if necessary
-        if (session_map[session_token].terminating)
+        if (session_map[session_token].status == SESSION_TERMINATING)
         {
             // unlock the mutex
             pthread_mutex_unlock(&session_mutex);
@@ -295,7 +360,7 @@ void* outbox_thread(void* arg)
         ssize_t bytes_read = 0;
         if (select(FD_SETSIZE, &set, 0, 0, &select_timeout))
             bytes_read = read(pipe, buffer, 1);
-            buffer[1] = 0;
+        buffer[1] = 0;
 
         // lock the mutex
         pthread_mutex_lock(&session_mutex);
@@ -304,52 +369,22 @@ void* outbox_thread(void* arg)
         string new_data;
         if (bytes_read == 1)
             new_data = buffer;
-        outbox += new_data;
+        outbox_raw += new_data;
 
-        // try to read a character
-        if (outbox != "")
+        // send the outbox data to the client
+        if (session_map[session_token].status == SESSION_NORMAL)
         {
-            // get the first character
-            char c = outbox[0];
-
-            // is it a control sequence?
-            if (c == 0x1B)
+            // try to read a character
+            if (outbox_raw != "")
             {
-                // if we don't have enough characters, try again later
-                if (outbox.size() < 2)
+                // get the first character
+                char c = outbox_raw[0];
+
+                // is it a control sequence?
+                if (c == 0x1B)
                 {
-                    // unlock the mutex
-                    pthread_mutex_unlock(&session_mutex);
-
-                    // if we didn't get any new data from julia, wait before trying again
-                    if (new_data == "")
-                    {
-                        timespec timeout;
-                        timeout.tv_sec = 0;
-                        timeout.tv_nsec = OUTBOX_INTERVAL;
-                        nanosleep(&timeout, 0);
-                    }
-
-                    // try again
-                    continue;
-                }
-
-                // check for multi-character escape sequences
-                if (outbox[1] == '[')
-                {
-                    // find the last character in the sequence
-                    int pos = -1;
-                    for (int i = 2; i < outbox.size(); i++)
-                    {
-                        if (outbox[i] >= 64 && outbox[i] <= 126)
-                        {
-                            pos = i;
-                            break;
-                        }
-                    }
-
-                    // if we don't have enouch characters, try again later
-                    if (pos == -1)
+                    // if we don't have enough characters, try again later
+                    if (outbox_raw.size() < 2)
                     {
                         // unlock the mutex
                         pthread_mutex_unlock(&session_mutex);
@@ -366,10 +401,55 @@ void* outbox_thread(void* arg)
                         // try again
                         continue;
                     }
+
+                    // check for multi-character escape sequences
+                    if (outbox_raw[1] == '[')
+                    {
+                        // find the last character in the sequence
+                        int pos = -1;
+                        for (int i = 2; i < outbox_raw.size(); i++)
+                        {
+                            if (outbox_raw[i] >= 64 && outbox_raw[i] <= 126)
+                            {
+                                pos = i;
+                                break;
+                            }
+                        }
+
+                        // if we don't have enouch characters, try again later
+                        if (pos == -1)
+                        {
+                            // unlock the mutex
+                            pthread_mutex_unlock(&session_mutex);
+
+                            // if we didn't get any new data from julia, wait before trying again
+                            if (new_data == "")
+                            {
+                                timespec timeout;
+                                timeout.tv_sec = 0;
+                                timeout.tv_nsec = OUTBOX_INTERVAL;
+                                nanosleep(&timeout, 0);
+                            }
+
+                            // try again
+                            continue;
+                        }
+                        else
+                        {
+                            // eat the control sequence and output nothing
+                            outbox_raw = outbox_raw.substr(pos+1, outbox_raw.size()-(pos+1));
+                            
+                            // unlock the mutex
+                            pthread_mutex_unlock(&session_mutex);
+
+                            // keep going
+                            continue;
+                        }
+                    }
                     else
                     {
-                        // eat the control sequence and output nothing
-                        outbox = outbox.substr(pos+1, outbox.size()-(pos+1));
+                        // eat the two-character control sequence and output nothing
+                        outbox_raw = outbox_raw.substr(2, outbox_raw.size()-2);
                         
                         // unlock the mutex
                         pthread_mutex_unlock(&session_mutex);
@@ -378,22 +458,46 @@ void* outbox_thread(void* arg)
                         continue;
                     }
                 }
-                else
-                {
-                    // eat the two-character control sequence and output nothing
-                    outbox = outbox.substr(2, outbox.size()-2);
-                    
-                    // unlock the mutex
-                    pthread_mutex_unlock(&session_mutex);
 
-                    // keep going
-                    continue;
-                }
+                // just output the raw character
+                session_map[session_token].outbox_raw += c;
+                outbox_raw = outbox_raw.substr(1, outbox_raw.size()-1);
+            }
+        }
+
+        // get the port number
+        if (session_map[session_token].status == SESSION_WAITING_FOR_PORT_NUM)
+        {
+            // wait for a newline
+            size_t newline_pos = outbox_raw.find("\n");
+            if (newline_pos == string::npos)
+            {
+                // unlock the mutex
+                pthread_mutex_unlock(&session_mutex);
+
+                // wait before trying again
+                timespec timeout;
+                timeout.tv_sec = 0;
+                timeout.tv_nsec = PORT_NUM_INTERVAL;
+                nanosleep(&timeout, 0);
+
+                // try again
+                continue;
             }
 
-            // just output the raw character
-            session_map[session_token].outbox += c;
-            outbox = outbox.substr(1, outbox.size()-1);
+            // read the port number
+            string num_string = outbox_raw.substr(0, newline_pos);
+            outbox_raw = outbox_raw.substr(newline_pos+1, outbox_raw.size()-(newline_pos+1));
+            int port_num = from_string<int>(num_string);
+
+            // start
+            session_map[session_token].sock = new network::socket;
+            session_map[session_token].sock->connect("127.0.0.1", port_num);
+            if (!session_map[session_token].sock->is_open())
+                cout<<"error connecting to julia socket\n";
+
+            // switch to normal operation
+            session_map[session_token].status = SESSION_NORMAL;
         }
 
         // unlock the mutex
@@ -411,6 +515,9 @@ void* outbox_thread(void* arg)
 
     // tell the watchdog that this thread is done
     session_map[session_token].outbox_thread_alive = false;
+
+    // release the socket
+    delete session_map[session_token].sock;
 
     // unlock the mutex
     pthread_mutex_unlock(&session_mutex);
@@ -441,10 +548,10 @@ void* watchdog_thread(void* arg)
         // start terminating old sessions
         for (map<string, session>::iterator iter = session_map.begin(); iter != session_map.end(); iter++)
         {
-            if (!(iter->second).terminating)
+            if ((iter->second).status != SESSION_TERMINATING)
             {
                 if (t-(iter->second).update_time >= SESSION_TIMEOUT)
-                    (iter->second).terminating = true;
+                    (iter->second).status = SESSION_TERMINATING;
             }
         }
 
@@ -522,6 +629,10 @@ string respond(string session_token, string body)
 // create a session and return a session token
 string create_session()
 {
+    // check if we've reached max capacity
+    if (session_map.size() >= MAX_CONCURRENT_SESSIONS)
+        return "";
+
     // create the session
     session session_data;
 
@@ -531,7 +642,7 @@ string create_session()
     // keep the session alive for now
     session_data.inbox_thread_alive = true;
     session_data.outbox_thread_alive = true;
-    session_data.terminating = false;
+    session_data.status = SESSION_WAITING_FOR_PORT_NUM;
 
     // start the julia instance
     if (pipe(session_data.julia_in))
@@ -575,7 +686,7 @@ string create_session()
         setrlimit(RLIMIT_AS, &limits);
 
         // acutally spawn julia instance
-        execl("./julia-release-web", "julia-release-web", "-q", (char*)0);
+        execl("./julia", "julia", "./ui/webserver/julia-web.j", (char*)0);
 
         // if exec failed, terminate with an error
         exit(1);
@@ -626,10 +737,12 @@ string get_response(request* req)
     // lock the mutex
     pthread_mutex_lock(&session_mutex);
 
-    // the response
-    Json::Value response_root;
-    Json::StyledWriter writer;
+    // the session token
     string session_token;
+
+    // the response
+    message response_message;
+    response_message.type = 0;
 
     // process input if there is any
     if (req->get_field_exists("request"))
@@ -639,133 +752,127 @@ string get_response(request* req)
         Json::Reader reader;
         if (reader.parse(req->get_field_value("request"), request_root))
         {
+            // extract the message from the request
+            message request_message;
+            request_message.type = request_root.get("message_type", -1).asInt();
+            while (true)
+            {
+                string arg_name = "arg"+to_string(request_message.args.size());
+                if (!request_root.isMember(arg_name))
+                    break;
+                request_message.args.push_back(request_root.get(arg_name, "").asString());
+            }
+
+            // check for the session cookie
+            if (req->get_cookie_exists("SESSION_TOKEN"))
+                session_token = req->get_cookie_value("SESSION_TOKEN");
+
+            // check if the session is real
+            if (session_token != "")
+            {
+                if (session_map.find(session_token) == session_map.end())
+                    session_token = "";
+            }
+
+            // do some maintenance on the session if there is one
+            if (session_token != "")
+            {
+                // pet the watchdog
+                session_map[session_token].update_time = time(0);
+
+                // make sure we don't get the port number
+                if (session_map[session_token].status == SESSION_NORMAL)
+                {
+                    // catch any extra output from julia
+                    if (session_map[session_token].outbox_raw != "")
+                    {
+                        message output_message;
+                        output_message.type = 6;
+                        output_message.args.push_back(session_map[session_token].outbox_raw);
+                        session_map[session_token].outbox_raw = "";
+                        session_map[session_token].outbox.push_back(output_message);
+                    }
+                }
+            }
+
             // determine the type of request
             bool request_recognized = false;
 
-            // init message
-            if (request_root.get("type", "").asString() == "init")
+            // MSG_INPUT_START
+            if (request_message.type == 1)
             {
                 // we recognize the request
                 request_recognized = true;
 
                 // create a new session
-                if (session_map.size() < MAX_CONCURRENT_SESSIONS)
-                    session_token = create_session();
+                session_token = create_session();
                 if (session_token == "")
                 {
                     // too many sessions
-                    response_root["type"] = "fatal_error";
-                    response_root["message"] = "&lt;the server is currently at maximum capacity&gt;<br />";
-                }
-                else
-                {
-                    // successfully created new session
-                    response_root["type"] = "init_message";
-                    response_root["message"] = "&lt;initializing&gt;<br />";
+                    response_message.type = 3;
+                    response_message.args.push_back("the server is currently at maximum capacity");
                 }
             }
 
-            // sending input to julia
-            if (request_root.get("type", "").asString() == "input")
+            // MSG_INPUT_POLL
+            if (request_message.type == 2)
             {
                 // we recognize the request
                 request_recognized = true;
 
-                // check for the session cookie
-                if (req->get_cookie_exists("SESSION_TOKEN"))
-                    session_token = req->get_cookie_value("SESSION_TOKEN");
-
-                // check if the session is real
-                if (session_token != "")
-                {
-                    if (session_map.find(session_token) == session_map.end())
-                        session_token = "";
-                }
+                // make sure we have a valid session
                 if (session_token == "")
                 {
-                    response_root["type"] = "fatal_error";
-                    response_root["message"] = "&lt;session expired&gt;<br />";
+                    response_message.type = 3;
+                    response_message.args.push_back("session expired");
                 }
                 else
                 {
-                    // add the data to the inbox
-                    session_map[session_token].inbox += request_root.get("input", "").asString();
-
-                    // respond with a success message
-                    response_root["type"] = "success";
-
-                    // pet the watchdog
-                    session_map[session_token].update_time = time(0);
+                    // send the first message on the queue
+                    if (!session_map[session_token].outbox.empty())
+                    {
+                        response_message = session_map[session_token].outbox[0];
+                        session_map[session_token].outbox.erase(session_map[session_token].outbox.begin());
+                    }
                 }
             }
 
-            // polling for julia output
-            if (request_root.get("type", "").asString() == "poll")
-            {
-                // we recognize the request
-                request_recognized = true;
-
-                // check for the session cookie
-                if (req->get_cookie_exists("SESSION_TOKEN"))
-                    session_token = req->get_cookie_value("SESSION_TOKEN");
-
-                // check if the session is real
-                if (session_token != "")
-                {
-                    if (session_map.find(session_token) == session_map.end())
-                        session_token = "";
-                }
-                if (session_token == "")
-                {
-                    response_root["type"] = "fatal_error";
-                    response_root["message"] = "&lt;session expired&gt;<br />";
-                }
-                else
-                {
-                    // escape for html
-                    string content = session_map[session_token].outbox;
-                    content = str_replace(content, "&", "&amp;");
-                    content = str_replace(content, "<", "&lt;");
-                    content = str_replace(content, ">", "&gt;");
-                    content = str_replace(content, " ", "&nbsp;");
-                    content = str_replace(content, "\n", "<br />");
-
-                    // if julia has outputted any data since last poll
-                    response_root["type"] = "content";
-                    response_root["content"] = content;
-                    session_map[session_token].outbox = "";
-                    string response = writer.write(response_root);
-
-                    // pet the watchdog
-                    session_map[session_token].update_time = time(0);
-                }
-            }
-
-            // unrecognized request
+            // other messages go straight to julia
             if (!request_recognized)
             {
-                response_root["type"] = "fatal_error";
-                response_root["message"] = "&lt;invalid request&gt;<br />";
+                // make sure we have a valid session
+                if (session_token == "")
+                {
+                    response_message.type = 3;
+                    response_message.args.push_back("session expired");
+                }
+                else
+                {
+                    // forward the message to julia
+                    session_map[session_token].inbox.push_back(request_message);
+
+                    // send the first message on the queue
+                    if (!session_map[session_token].outbox.empty())
+                    {
+                        response_message = session_map[session_token].outbox[0];
+                        session_map[session_token].outbox.erase(session_map[session_token].outbox.begin());
+                    }
+                }
             }
         }
-        else
-        {
-            // error parsing json
-            response_root["type"] = "fatal_error";
-            response_root["message"] = "&lt;invalid request&gt;<br />";
-        }
-    }
-    else
-    {
-        // no request
-        response_root["type"] = "fatal_error";
-        response_root["message"] = "&lt;invalid request&gt;<br />";
     }
 
     // unlock the mutex
     pthread_mutex_unlock(&session_mutex);
 
+    // convert the message to json
+    Json::Value response_root;
+    response_root["message_type"] = response_message.type;
+    for (size_t i = 0; i < response_message.args.size(); i++)
+        response_root["arg"+to_string(i)] = response_message.args[i];
+
     // return the header and response
+    Json::StyledWriter writer;
     return respond(session_token, writer.write(response_root));
 }
 
@@ -793,7 +900,7 @@ int main()
     cout<<"0 open sessions.\n";
 
     // start the server
-    run_server(1441, &get_response);
+    run_server(1445, &get_response);
 
     // never reached
     return 0;
