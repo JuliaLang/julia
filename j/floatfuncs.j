@@ -43,3 +43,6 @@ function hex2num(s)
     end
     return boxf64(unbox64(parse_int(Int64, s, 16)))
 end
+
+@vectorize_1arg Real iround
+@vectorize_1arg Real itrunc

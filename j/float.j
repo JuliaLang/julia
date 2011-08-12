@@ -1,5 +1,11 @@
 ## floating point conversions ##
 
+iround(x::Float32) = boxsi32(fpiround32(unbox32(x)))
+iround(x::Float64) = boxsi64(fpiround64(unbox64(x)))
+
+itrunc(x::Float32) = boxsi32(fptosi32(unbox32(x)))
+itrunc(x::Float64) = boxsi64(fptosi64(unbox64(x)))
+
 convert(::Type{Float32}, x::Bool)    = boxf32(sitofp32(unbox8(x)))
 convert(::Type{Float32}, x::Int8)    = boxf32(sitofp32(unbox8(x)))
 convert(::Type{Float32}, x::Int16)   = boxf32(sitofp32(unbox16(x)))

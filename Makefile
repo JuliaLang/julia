@@ -21,6 +21,7 @@ sys.ji: VERSION j/sysimg.j j/start_image.j src/boot.j src/dump.c j/*.j
 clean:
 	rm -f julia
 	rm -f *~ *#
+	rm -f sys.ji
 	$(MAKE) -C j clean
 	$(MAKE) -C src clean
 	$(MAKE) -C ui clean
