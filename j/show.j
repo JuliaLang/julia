@@ -8,22 +8,36 @@ show(tn::TypeName) = show(tn.name)
 show(::Nothing) = print("nothing")
 
 function show_delim_array(itr, open, delim, close)
-	print(open)
-	state = start(itr)
-	if !done(itr,state)
-	    while true
-			x, state = next(itr,state)
-	        show(x)
-			if done(itr,state)
-				break
-	        end
-            print(delim)
+    print(open)
+    state = start(itr)
+    newline = true
+    if !done(itr,state)
+	while true
+	    x, state = next(itr,state)
+            multiline = isa(x,AbstractArray) && ndims(x)>1 && numel(x)>0
+            if newline
+                if multiline; println(); end
+            end
+	    show(x)
+	    if done(itr,state)
+		break
 	    end
+            print(delim)
+            if multiline
+                println(); newline=false
+            else
+                newline = true
+            end
 	end
+    end
     print(close)
 end
 
 show_comma_array(itr, o, c) = show_delim_array(itr, o, ',', c)
+
+function show(t::Tuple)
+    show_comma_array(t, '(', ')')
+end
 
 function show_expr_type(ty)
     if !is(ty, Any)
@@ -187,14 +201,20 @@ function showall{T}(a::Array{T,1})
     show_comma_array(a, opn, cls)
 end
 
-function showall{T}(a::Array{T,2})
-    if isempty(a)
-        return showempty(a)
-    end
+function showall_matrix(a::Array)
     for i = 1:size(a,1)
         show_cols(a, 1, size(a,2), i)
         print('\n')
     end
+end
+
+function showall{T}(a::Array{T,2})
+    print(summary(a))
+    if isempty(a)
+        return
+    end
+    println()
+    showall_matrix(a)
 end
 
 function show{T}(a::Array{T,1})
@@ -221,9 +241,15 @@ function show_cols(a, start, stop, i)
 end
 
 function show{T}(a::Array{T,2})
+    print(summary(a))
     if isempty(a)
-        return showempty(a)
+        return
     end
+    println()
+    show_matrix(a)
+end
+
+function show_matrix(a::Array)
     m = size(a,1)
     n = size(a,2)
     print_hdots = false
@@ -269,22 +295,70 @@ function show{T}(a::Array{T,2})
     end
 end
 
-show{T}(a::Array{T,0}) = print("Array($T,())")
+show{T}(a::Array{T,0}) = print(summary(a))
 
 function show(a::Array)
+    print(summary(a))
     if isempty(a)
-        return showempty(a)
+        return
     end
-    slice2d(a, idxs) = [ a[i, j, idxs...] | i=1:size(a,1), j=1:size(a,2) ]
+    println()
     tail = size(a)[3:]
-    cartesian_map(idxs->(print("[:, :, ");
-                         for i = 1:(length(idxs)-1); print("$(idxs[i]), "); end;
-                         println(idxs[length(idxs)], "] =");
-                         print(slice2d(a, idxs), idxs == tail ? "" : "\n\n")),
-                  map(x->Range1(1,x), tail))
+    nd = ndims(a)-2
+    function print_slice(idxs)
+        for i = 1:nd
+            ii = idxs[i]
+            if size(a,i+2) > 10
+                if ii == 4 && allp(x->x==1,idxs[1:i-1])
+                    for j=i+1:nd
+                        szj = size(a,j+2)
+                        if szj>10 && 3 < idxs[j] <= szj-3
+                            return
+                        end
+                    end
+                    #println(idxs)
+                    print("...\n\n")
+                    return
+                end
+                if 3 < ii <= size(a,i+2)-3
+                    return
+                end
+            end
+        end
+        print("[:, :, ")
+        for i = 1:(nd-1); print("$(idxs[i]), "); end
+        println(idxs[end], "] =")
+        show_matrix(a[:,:,idxs...])
+        print(idxs == tail ? "" : "\n\n")
+    end
+    cartesian_map(print_slice, map(x->Range1(1,x), tail))
+end
+
+function showall(a::Array)
+    print(summary(a))
+    if isempty(a)
+        return
+    end
+    println()
+    tail = size(a)[3:]
+    nd = ndims(a)-2
+    function print_slice(idxs)
+        print("[:, :, ")
+        for i = 1:(nd-1); print("$(idxs[i]), "); end
+        println(idxs[end], "] =")
+        showall_matrix(a[:,:,idxs...])
+        print(idxs == tail ? "" : "\n\n")
+    end
+    cartesian_map(print_slice, map(x->Range1(1,x), tail))
 end
 
 summary(x) = string(typeof(x))
+
+summary{T}(a::Array{T,0}) = strcat("0-dimensional",
+                                   " ", string(T), " array")
+
+summary{T}(a::Array{T,1}) = strcat(length(a), "-element",
+                                   " ", string(T), " array")
 
 summary{T}(a::Array{T}) = strcat(join("x",map(string,size(a))),
                                  " ", string(T), " array")
