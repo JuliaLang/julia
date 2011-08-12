@@ -119,10 +119,13 @@ function trailing_update(L_II, A_IJ, A_KI, A_KJ, row_dep, col_dep)
 
     ## Compute blocks of U 
     A_IJ = L_II \ A_IJ
-    
+
     ## Trailing submatrix update - All flops are here
     if !isempty(A_KJ)
-        A_KJ = A_KJ - A_KI*A_IJ
+        m, k = size(A_KI)
+        n = size(A_IJ,2)
+        jl_blas_gemm("N","N",m,n,k,-1.0,A_KI,m,A_IJ,k,1.0,A_KJ,m)
+        #A_KJ = A_KJ - A_KI*A_IJ
     end
     
     return (A_IJ, A_KJ)
@@ -271,7 +274,10 @@ function trailing_update2(C, L_II, C_KI, i, j, n, flag, dep)
         C[I,J] = C_IJ
         ## Trailing submatrix update - All flops are here
         if !isempty(C_KJ)
-            C_KJ = C_KJ - C_KI*C_IJ
+            cm, ck = size(C_KI)
+            cn = size(C_IJ,2)
+            jl_blas_gemm("N","N",cm,cn,ck,-1.0,C_KI,cm,C_IJ,ck,1.0,C_KJ,cm)
+            #C_KJ = C_KJ - C_KI*C_IJ
             C[K,J] = C_KJ
         end   
     end 
