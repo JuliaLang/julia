@@ -938,13 +938,13 @@ end
 
 # establish an SSH tunnel to a remote worker
 # returns P such that localhost:P connects to host:port
-function worker_tunnel(host, port)
-    localp = 9201
-    while !run(`ssh -f -o ExitOnForwardFailure=yes julia@$host -L $localp:$host:$port -N`)
-        localp += 1
-    end
-    localp
-end
+# function worker_tunnel(host, port)
+#     localp = 9201
+#     while !run(`ssh -f -o ExitOnForwardFailure=yes julia@$host -L $localp:$host:$port -N`)
+#         localp += 1
+#     end
+#     localp
+# end
 
 function start_remote_workers(machines, cmds)
     n = length(cmds)
@@ -1199,16 +1199,15 @@ end
 
 ## higher-level functions: spawn, pmap, pfor, etc. ##
 
-_SPAWNS = ()
+sync_begin() = tls(:SPAWNS, ({}, get(tls(), :SPAWNS, ())))
 
-sync_begin() = (global _SPAWNS = ({},_SPAWNS))
 function sync_end()
-    global _SPAWNS
-    if is(_SPAWNS,())
+    spawns = get(tls(), :SPAWNS, ())
+    if is(spawns,())
         error("sync_end() without sync_begin()")
     end
-    refs = _SPAWNS[1]
-    _SPAWNS = _SPAWNS[2]
+    refs = spawns[1]
+    tls(:SPAWNS, spawns[2])
     for r = refs
         wait(r)
     end
@@ -1224,14 +1223,15 @@ macro sync(block)
     end
 end
 
-function spawnat(p, thunk)
-    global _SPAWNS
-    r = remote_call(p, thunk)
-    if !is(_SPAWNS,())
-        push(_SPAWNS[1], r)
+function sync_add(r)
+    spawns = get(tls(), :SPAWNS, ())
+    if !is(spawns,())
+        push(spawns[1], r)
     end
     r
 end
+
+spawnat(p, thunk) = sync_add(remote_call(p, thunk))
 
 let lastp = 1
     global spawn

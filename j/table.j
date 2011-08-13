@@ -1,7 +1,3 @@
-type IdTable
-    ht::Array{Any,1}
-end
-
 function _tablesz(i::Int)
     if i < 16
         return 16
@@ -15,8 +11,14 @@ function _tablesz(i::Int)
     return i<<1
 end
 
-idtable(sz::Int) = IdTable(cell(2*_tablesz(sz)))
-idtable() = idtable(0)
+type IdTable
+    ht::Array{Any,1}
+    IdTable(sz::Int) = new(cell(2*_tablesz(sz)))
+    IdTable() = IdTable(0)
+end
+
+idtable(sz::Int) = IdTable(sz)
+idtable() = IdTable(0)
 
 function assign(t::IdTable, v::ANY, k::ANY)
     t.ht = ccall(:jl_eqtable_put,

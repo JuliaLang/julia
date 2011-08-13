@@ -419,17 +419,13 @@ function assign(d::DArray, v, I::Range1{Index}...)
         localize(d)[J...] = v
         return d
     end
-    refs = Array(Union(DArray,RemoteRef),length(pmap))
     for p = 1:length(pmap)
         offs = I[d.distdim][1] - 1
         J = ntuple(length(size(d)),i->(i==d.distdim ? (dist[p]:(dist[p+1]-1))-offs :
                                                       (1:length(I[i]))))
         K = ntuple(length(size(d)),i->(i==d.distdim ? (dist[p]:(dist[p+1]-1)) :
                                                       I[i]))
-        refs[p] = remote_call(d.pmap[pmap[p]], assign, d, v[J...], K...)
-    end
-    for p = 1:length(pmap)
-        if isa(refs[p], RemoteRef); wait(refs[p]); end
+        sync_add(remote_call(d.pmap[pmap[p]], assign, d, v[J...], K...))
     end
     return d
 end
@@ -444,7 +440,6 @@ function assign(d::DArray, v, I::AbstractVector{Index}...)
         localize(d)[J...] = v
         return d
     end
-    refs = Array(Union(DArray,RemoteRef),length(pmap))
     n = length(perm)
     j = 1
     II = I[d.distdim][perm] #the sorted indexes in the distributed dimension
@@ -458,10 +453,7 @@ function assign(d::DArray, v, I::AbstractVector{Index}...)
                                                       (1:length(I[i]))))
         K = ntuple(length(size(d)),i->(i==d.distdim ? II[lower:(j-1)] :
                                                       I[i]))
-        refs[p] = remote_call(d.pmap[pmap[p]], assign, d, v[J...], K...)
-    end
-    for p = 1:length(pmap)
-        if isa(refs[p], RemoteRef); wait(refs[p]); end
+        sync_add(remote_call(d.pmap[pmap[p]], assign, d, v[J...], K...))
     end
     return d
 end

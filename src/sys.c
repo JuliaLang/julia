@@ -258,7 +258,7 @@ static void *run_io_thr(void *arg)
 
         if (!r->now) {
             int64_t now = (int64_t)(clock_now()*1e6);
-            int64_t waittime = r->buf->userdata+200-now;
+            int64_t waittime = r->buf->userdata+200-now;  // microseconds
             if (waittime > 0) {
                 struct timespec wt;
                 wt.tv_sec = 0;
