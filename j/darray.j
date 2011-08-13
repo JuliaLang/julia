@@ -397,6 +397,8 @@ assign(d::DArray, v::AbstractArray) = assign_elt(d, v, ())
 assign(d::DArray, v::AbstractArray, i::Index) =
     assign_elt(d, v, ind2sub(d.dims, i))
 
+assign{T}(d::DArray{T,2}, v::AbstractArray, i0::Index, i1::Index) =
+    assign_elt(d, v, (i0,i1))
 assign(d::DArray, v::AbstractArray, i0::Index, i1::Index) =
     assign_elt(d, v, (i0,i1))
 

@@ -410,7 +410,12 @@ end
 ## Indexing: ref ##
 
 ref(t::AbstractArray) = t
-ref(t::AbstractArray, r::Real...) = ref(t,map(x->long(round(x)),r)...)
+ref(t::AbstractArray, i::Int) = error("indexing not defined for ", typeof(t))
+ref(t::AbstractArray, i::Real)          = ref(t, iround(i))
+ref(t::AbstractArray, i::Real, j::Real) = ref(t, iround(i), iround(j))
+ref(t::AbstractArray, i::Real, j::Real, k::Real) =
+    ref(t, iround(i), iround(j), iround(k))
+ref(t::AbstractArray, r::Real...)       = ref(t,map(iround,r)...)
 
 ref{T<:Int}(A::AbstractVector, I::AbstractVector{T}) = [ A[i] | i = I ]
 ref{T<:Int}(A::AbstractArray{Any,1}, I::AbstractVector{T}) = { A[i] | i = I }
@@ -470,7 +475,11 @@ assign(t::AbstractArray, x, i::Int) =
 assign(t::AbstractArray, x::AbstractArray, i::Int) =
     error("assign not defined for ",typeof(t))
 
-assign(t::AbstractArray, x, r::Real...) = (t[map(x->long(round(x)),r)...] = x)
+assign(t::AbstractArray, x, i::Real)          = (t[iround(i)] = x)
+assign(t::AbstractArray, x, i::Real, j::Real) = (t[iround(i),iround(j)] = x)
+assign(t::AbstractArray, x, i::Real, j::Real, k::Real) =
+    (t[iround(i),iround(j),iround(k)] = x)
+assign(t::AbstractArray, x, r::Real...)       = (t[map(iround,r)...] = x)
 
 function assign{T<:Int}(A::AbstractVector, x, I::AbstractVector{T})
     for i=I

@@ -1,7 +1,7 @@
 function median(S)
   n = length(S)
 
-  if n < 50000
+  if n < 1500
       C = sort(S)
       half = iround(n/2)
       if mod(n,2) == 1
@@ -18,7 +18,7 @@ function median(S)
   R = S[int64(ceil(n*rand(n75)))]
   #R = sort(R)
   sort_inplace(R)
-  d = R[max(1, floor((n75/2)-sqrt(n)))]
+  d = R[max(1.0, floor((n75/2)-sqrt(n)))]
   u = R[ceil((n75/2)+sqrt(n))]
 
   C = similar(S, 0)
