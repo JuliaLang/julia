@@ -695,6 +695,7 @@ function perform_work(job::WorkItem)
             if is(runner,())
                 # make new task to use
                 runner = Task(taskrunner, 1024*1024)
+                runner.tls = nothing
                 yieldto(runner)
             end
             job.task = runner
@@ -714,7 +715,8 @@ function perform_work(job::WorkItem)
         job.result = result.value
     end
     if job.done
-        runner = job.task  # Task now free to be shared
+        runner = job.task::Task  # Task now free to be shared
+        runner.tls = nothing
         job.task = ()
         # do notifications
         notify_done(job)

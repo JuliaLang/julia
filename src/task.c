@@ -631,7 +631,7 @@ jl_task_t *jl_new_task(jl_function_t *start, size_t ssize)
     ssize = LLT_ALIGN(ssize, pagesz);
     t->ssize = ssize;
     t->on_exit = jl_current_task;
-    t->tls = jl_nothing;
+    t->tls = jl_current_task->tls;
     t->done = 0;
     t->start = start;
     t->result = NULL;
