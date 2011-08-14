@@ -371,23 +371,23 @@ function gen_cartesian_map(cache, genbodies, ranges, exargnames, exargs...)
 
         ## creating a 2d array, to pass as bodies
         if isa(bodies,Array)
-            if (length(size(bodies))==2)
+            if (ndims(bodies)==2)
                 #println("2d array noticed")
-	            body = bodies[1]
-	            bodies = bodies[2:end,:]
-            elseif (length(size(bodies))==1)
+	        body = bodies[1]
+	        bodies = bodies[2:end,:]
+            elseif (ndims(bodies)==1)
                 #println("1d array noticed")
                 body = bodies[1]
                 bodies_tmp = cell(N,2)
                 for i = 1:N
-                    bodies_tmp[i] = bodies[i]
+                    bodies_tmp[i] = bodies[i+1]
                     bodies_tmp[i+N] = nothing
                 end
                 bodies = bodies_tmp
             end
         else
             #println("no array noticed")
-	        body = bodies
+	    body = bodies
             bodies = cell(N,2)
             { bodies[i] = nothing | i = 1:2*N}
         end
@@ -912,7 +912,6 @@ function permute(A::AbstractArray, perm)
     end
     offset = 1-offset
 
-
     function permute_one(ivars)
         len = length(ivars)
         counts = { gensym() | i=1:len}
@@ -950,7 +949,7 @@ function permute(A::AbstractArray, perm)
 
 
     if is(permute_cache,nothing)
-	    permute_cache = HashTable()
+	permute_cache = HashTable()
     end
 
     gen_cartesian_map(permute_cache, permute_one, ranges, {:A, :P, :perm, :offset, stridenames... }, A, P, perm, offset, strides...)
