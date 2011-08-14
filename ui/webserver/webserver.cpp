@@ -493,8 +493,6 @@ void* outbox_thread(void* arg)
             // start
             session_map[session_token].sock = new network::socket;
             session_map[session_token].sock->connect("127.0.0.1", port_num);
-            if (!session_map[session_token].sock->is_open())
-                cout<<"error connecting to julia socket\n";
 
             // switch to normal operation
             session_map[session_token].status = SESSION_NORMAL;

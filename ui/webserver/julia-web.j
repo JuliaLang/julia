@@ -206,4 +206,4 @@ add_fd_handler(connectfd, socket_callback)
 ###########################################
 
 # do asynchronous stuff
-yield()
+wait(RemoteRef())

@@ -161,4 +161,4 @@ add_fd_handler(connectfd, socket_callback)
 write_message(Message(MSG_INPUT_EVAL, ["3+5/2"]))
 
 # do asynchronous stuff
-yield()
+wait(RemoteRef())
