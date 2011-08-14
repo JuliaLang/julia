@@ -411,8 +411,26 @@ assign(d::DArray, v, i0::Index, I::Index...) = assign_elt(d, v, tuple(i0,I...))
 #TODO: Fix this
 assign(d::DArray, v) = error("distributed arrays of dimension 0 not supported")
 
-#TODO: check for same size
 function assign(d::DArray, v, I::Range1{Index}...)
+    (pmap, dist) = locate(d, I[d.distdim])
+    if length(pmap) == 1 && pmap[1] == d.localpiece
+        offs = d.dist[pmap[1]]-1
+        J = ntuple(length(size(d)), i -> (i == d.distdim ? I[i]-offs :
+                                                           I[i]))
+        localize(d)[J...] = v
+        return d
+    end
+    for p = 1:length(pmap)
+        offs = I[d.distdim][1] - 1
+        K = ntuple(length(size(d)),i->(i==d.distdim ? (dist[p]:(dist[p+1]-1)) :
+                                                      I[i]))
+        sync_add(remote_call(d.pmap[pmap[p]], assign, d, v, K...))
+    end
+    return d
+end
+
+#TODO: check for same size
+function assign(d::DArray, v::AbstractArray, I::Range1{Index}...)
     (pmap, dist) = locate(d, I[d.distdim])
     if length(pmap) == 1 && pmap[1] == d.localpiece
         offs = d.dist[pmap[1]]-1
@@ -432,8 +450,33 @@ function assign(d::DArray, v, I::Range1{Index}...)
     return d
 end
 
-#TODO: check for same size
 function assign(d::DArray, v, I::AbstractVector{Index}...)
+    (pmap, dist, perm) = locate(d, I[d.distdim])
+    if length(pmap) == 1 && pmap[1] == d.localpiece
+        offs = d.dist[pmap[1]]-1
+        J = ntuple(length(size(d)), i -> (i == d.distdim ? I[i]-offs :
+                                                           I[i]))
+        localize(d)[J...] = v
+        return d
+    end
+    n = length(perm)
+    j = 1
+    II = I[d.distdim][perm] #the sorted indexes in the distributed dimension
+    for p = 1:length(pmap)
+        if dist[p] > II[j]; continue; end
+        lower = j
+        while j <= n && II[j] < dist[p+1]
+            j += 1
+        end
+        K = ntuple(length(size(d)),i->(i==d.distdim ? II[lower:(j-1)] :
+                                                      I[i]))
+        sync_add(remote_call(d.pmap[pmap[p]], assign, d, v, K...))
+    end
+    return d
+end
+
+#TODO: check for same size
+function assign(d::DArray, v::AbstractArray, I::AbstractVector{Index}...)
     (pmap, dist, perm) = locate(d, I[d.distdim])
     if length(pmap) == 1 && pmap[1] == d.localpiece
         offs = d.dist[pmap[1]]-1
@@ -459,9 +502,6 @@ function assign(d::DArray, v, I::AbstractVector{Index}...)
     end
     return d
 end
-
-assign(d::DArray, v::AbstractArray, i::Index, is::Index...) =
-    invoke(assign, (DArray, Any, Index...), d, v, i, is...)
 
 assign(d::DArray, v, I::Union(Index,Range1{Index})...) =
     assign(d,v,ntuple(length(I),i->(isa(I[i],Index) ? (I[i]:I[i]) : I[i] ))...)
