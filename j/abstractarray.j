@@ -380,7 +380,7 @@ function gen_cartesian_map(cache, genbodies, ranges, exargnames, exargs...)
                 body = bodies[1]
                 bodies_tmp = cell(N,2)
                 for i = 1:N
-                    bodies_tmp[i] = bodies[i]
+                    bodies_tmp[i] = bodies[i+1]
                     bodies_tmp[i+N] = nothing
                 end
                 bodies = bodies_tmp
