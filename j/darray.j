@@ -273,6 +273,7 @@ function assign(r::RemoteRef, args...)
     end
 end
 
+# 1d scalar ref
 function ref{T}(d::DArray{T,1}, i::Index)
     p = locate(d, i)
     if p==d.localpiece
@@ -285,6 +286,7 @@ end
 assign{T}(d::DArray{T,1}, v::AbstractArray, i::Index) =
     invoke(assign, (DArray{T,1}, Any, Index), d, v, i)
 
+# 1d scalar assign
 function assign{T}(d::DArray{T,1}, v, i::Index)
     p = locate(d, i)
     if p==d.localpiece
@@ -296,6 +298,7 @@ function assign{T}(d::DArray{T,1}, v, i::Index)
     d
 end
 
+# Nd scalar ref
 function ref_elt{T}(d::DArray{T}, sub::(Index...))
     p = locate(d, sub[d.distdim])
     if p==d.localpiece
@@ -313,6 +316,8 @@ ref{T}(d::DArray{T}, i::Index)    = ref_elt(d, ind2sub(d.dims, i))
 ref{T}(d::DArray{T}, I::Index...) = ref_elt(d, I)
 
 ref(d::DArray) = d
+
+# Nd ref with Range1 indexes
 function ref{T}(d::DArray{T}, I::Range1{Index}...)
     (pmap, dist) = locate(d, I[d.distdim])
     A = Array(T, map(range -> length(range), I))
@@ -334,7 +339,7 @@ function ref{T}(d::DArray{T}, I::Range1{Index}...)
     return A
 end
 
-
+# combinations of Range1 and scalar indexes
 ref(d::DArray, I::Range1{Index}, j::Index) = d[I, j:j]
 ref(d::DArray, i::Index, J::Range1{Index}) = d[i:i, J]
 
@@ -342,7 +347,7 @@ ref(d::DArray, I::Union(Index,Range1{Index})...) =
     d[ntuple(length(I),i->(isa(I[i],Index) ? (I[i]:I[i]) : I[i] ))...]
 
 
-
+# Nd ref with vector indexes
 function ref{T}(d::DArray{T}, I::AbstractVector{Index}...)
     (pmap, dist, perm) = locate(d,[I[d.distdim]])
     A = Array(T, map(range -> length(range), I))
@@ -371,12 +376,14 @@ function ref{T}(d::DArray{T}, I::AbstractVector{Index}...)
     return A
 end
 
+# combinations of vector and scalar indexes
 ref(d::DArray, I::AbstractVector{Index}, j::Index) = d[I, [j]]
 ref(d::DArray, i::Index, J::AbstractVector{Index}) = d[[i], J]
 
 ref(d::DArray, I::Union(Index,AbstractVector{Index})...) =
     d[ntuple(length(I),i->(isa(I[i],Index) ? [I[i]] : I[i] ))...]
 
+# Nd scalar assign
 function assign_elt(d::DArray, v, sub::(Index...))
     p = locate(d, sub[d.distdim])
     if p==d.localpiece
@@ -392,6 +399,7 @@ function assign_elt(d::DArray, v, sub::(Index...))
     d
 end
 
+# disambiguating definitions
 assign(d::DArray, v::AbstractArray) = assign_elt(d, v, ())
 
 assign(d::DArray, v::AbstractArray, i::Index) =
@@ -411,6 +419,7 @@ assign(d::DArray, v, i0::Index, I::Index...) = assign_elt(d, v, tuple(i0,I...))
 #TODO: Fix this
 assign(d::DArray, v) = error("distributed arrays of dimension 0 not supported")
 
+# Nd assign, scalar fill case, with Range1 indexes
 function assign(d::DArray, v, I::Range1{Index}...)
     (pmap, dist) = locate(d, I[d.distdim])
     if length(pmap) == 1 && pmap[1] == d.localpiece
@@ -429,6 +438,7 @@ function assign(d::DArray, v, I::Range1{Index}...)
     return d
 end
 
+# Nd assign, array copy case, with Range1 indexes
 #TODO: check for same size
 function assign(d::DArray, v::AbstractArray, I::Range1{Index}...)
     (pmap, dist) = locate(d, I[d.distdim])
@@ -450,6 +460,7 @@ function assign(d::DArray, v::AbstractArray, I::Range1{Index}...)
     return d
 end
 
+# Nd assign, scalar fill case, vector indexes
 function assign(d::DArray, v, I::AbstractVector{Index}...)
     (pmap, dist, perm) = locate(d, I[d.distdim])
     if length(pmap) == 1 && pmap[1] == d.localpiece
@@ -475,6 +486,7 @@ function assign(d::DArray, v, I::AbstractVector{Index}...)
     return d
 end
 
+# Nd assign, array copy case, vector indexes
 #TODO: check for same size
 function assign(d::DArray, v::AbstractArray, I::AbstractVector{Index}...)
     (pmap, dist, perm) = locate(d, I[d.distdim])
@@ -503,9 +515,11 @@ function assign(d::DArray, v::AbstractArray, I::AbstractVector{Index}...)
     return d
 end
 
+# assign with combinations of Range1 and scalar indexes
 assign(d::DArray, v, I::Union(Index,Range1{Index})...) =
     assign(d,v,ntuple(length(I),i->(isa(I[i],Index) ? (I[i]:I[i]) : I[i] ))...)
 
+# assign with combinations of vector and scalar indexes
 assign(d::DArray, v, I::Union(Index,AbstractVector{Index})...) =
     assign(d,v,ntuple(length(I),i->(isa(I[i],Index) ? [I[i]] : I[i] ))...)
 
