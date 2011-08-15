@@ -1172,3 +1172,8 @@ function stride(s::SubArray, i::Int)
                s.indexes[i].step > 0       ? s.indexes[i].step * a :
                error("stride: must have ranges with positive step")
 end
+
+pointer{T,N}(x::SubArray{T,N}) = pointer(x.parent) + sub2ind(size(x.parent),
+    ntuple(N,i->x.indexes[i].start)...)*sizeof(T)
+iscomplex(::SubArray{Complex128}) = true
+iscomplex(::SubArray{Complex64}) = true
