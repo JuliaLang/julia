@@ -498,6 +498,11 @@ void* outbox_thread(void* arg)
 
             // switch to normal operation
             session_map[session_token].status = SESSION_NORMAL;
+
+            // send a ready message
+            message ready_message;
+            ready_message.type = 7;
+            session_map[session_token].outbox.push_back(ready_message);
         }
 
         // try to read some data from the socket
@@ -858,6 +863,21 @@ string get_response(request* req)
                         session_map[session_token].outbox_std = "";
                         session_map[session_token].outbox.push_back(output_message);
                     }
+
+                    // merge messages of the same type when desirable
+                    for (size_t i = 1; i < session_map[session_token].outbox.size(); i++)
+                    {
+                        // MSG_OUTPUT_OTHER
+                        if (session_map[session_token].outbox[i].type == 6)
+                        {
+                            if (session_map[session_token].outbox[i-1].type == 6)
+                            {
+                                session_map[session_token].outbox[i-1].args[0] += session_map[session_token].outbox[i].args[0];
+                                session_map[session_token].outbox.erase(session_map[session_token].outbox.begin()+i);
+                                i--;
+                            }
+                        }
+                    }
                 }
             }
 
@@ -880,29 +900,6 @@ string get_response(request* req)
                 }
             }
 
-            // MSG_INPUT_POLL
-            if (request_message.type == 2)
-            {
-                // we recognize the request
-                request_recognized = true;
-
-                // make sure we have a valid session
-                if (session_token == "")
-                {
-                    response_message.type = 3;
-                    response_message.args.push_back("session expired");
-                }
-                else
-                {
-                    // send the first message on the queue
-                    if (!session_map[session_token].outbox.empty())
-                    {
-                        response_message = session_map[session_token].outbox[0];
-                        session_map[session_token].outbox.erase(session_map[session_token].outbox.begin());
-                    }
-                }
-            }
-
             // other messages go straight to julia
             if (!request_recognized)
             {
@@ -915,7 +912,8 @@ string get_response(request* req)
                 else
                 {
                     // forward the message to julia
-                    session_map[session_token].inbox.push_back(request_message);
+                    if (request_message.type != 2)
+                        session_map[session_token].inbox.push_back(request_message);
 
                     // send the first message on the queue
                     if (!session_map[session_token].outbox.empty())

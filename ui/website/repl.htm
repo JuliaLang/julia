@@ -53,14 +53,18 @@
 				See julia-web.j for network protocol.
 			*/
 
-			// keep track of terminal history
+			// terminal content
 			var terminal_data = "";
 			var terminal_data_size = 50000;
-			var initialized = false;
+
+			// keep track of terminal history
 			var input_history = [];
 			var input_history_current = [""];
 			var input_history_id = 0;
 			var input_history_size = 100;
+
+			// whether the terminal should clear the input on the next non-null response
+			var clear_input_on_response = false;
 
 			// a queue of messages to be sent to the server
 			var outbox_queue = [];
@@ -104,6 +108,7 @@
 			// escape html
 			function escape_html(str)
 			{
+				// escape ampersands, angle brackets, spaces, and newlines
 				return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/ /g, "&nbsp;").replace(/\n/g, "<br />");
 			}
 
@@ -212,18 +217,17 @@
 			// called when the server has responded
 			function callback(data, textStatus, jqXHR)
 			{
-				// clear the "initializing" message if necessary
-				if (!initialized)
+				// reset the input if necessary
+				if (clear_input_on_response && (data.message_type == 1 || data.message_type == 2 || data.message_type == 3 || data.message_type == 5))
 				{
-					initialized = true;
-
-					// remove the initializing message
-					$("#terminal").html("");
-
-					// enable input
-					$("#prompt").show();
+					add_to_terminal("<span class=\"prompt\">julia&gt;&nbsp;</span>"+escape_html($("#terminal-input").val())+"<br />");
+					$("#terminal-input").val("");
 					$("#terminal-input").removeAttr("disabled");
 					$("#terminal-input").focus();
+				}
+				if (clear_input_on_response && data.message_type == 4)
+				{
+					// do nothing for now?
 				}
 
 				// MSG_OUTPUT_NULL
@@ -235,19 +239,19 @@
 				// MSG_OUTPUT_MESSAGE
 				if (data.message_type == 1)
 				{
-					add_to_terminal("<span class=\"message\">"+escape_html(data.arg0)+"</span><br />");
+					add_to_terminal("<span class=\"message\">"+escape_html(data.arg0)+"</span><br /><br />");
 				}
 
 				// MSG_OUTPUT_ERROR
 				if (data.message_type == 2)
 				{
-					add_to_terminal("<span class=\"error\">"+escape_html(data.arg0)+"</span><br />");
+					add_to_terminal("<span class=\"error\">"+escape_html(data.arg0)+"</span><br /><br />");
 				}
 
 				// MSG_OUTPUT_FATAL_ERROR
 				if (data.message_type == 3)
 				{
-					add_to_terminal("<span class=\"error\">"+escape_html(data.arg0)+"</span><br />");
+					add_to_terminal("<span class=\"error\">"+escape_html(data.arg0)+"</span><br /><br />");
 					return;
 				}
 
@@ -260,15 +264,27 @@
 				// MSG_OUTPUT_EVAL_RESULT
 				if (data.message_type == 5)
 				{
-					if (data.content != "")
-						add_to_terminal(escape_html(data.arg0)+"<br />");
+					if (data.arg0 != "" && data.arg0 != "nothing")
+						add_to_terminal(escape_html(data.arg0)+"<br /><br />");
 				}
 
 				// MSG_OUTPUT_OTHER
 				if (data.message_type == 6)
 				{
-					if (data.content != "")
+					if (data.arg0 != "")
 						add_to_terminal(escape_html(data.arg0));
+				}
+
+				// MSG_OUTPUT_READY
+				if (data.message_type == 7)
+				{
+					// remove the initializing message
+					$("#terminal").html("");
+
+					// enable input
+					$("#prompt").show();
+					$("#terminal-input").removeAttr("disabled");
+					$("#terminal-input").focus();
 				}
 
 				// send any remaining messages if there are any
@@ -376,8 +392,9 @@
 								last_request_time = new Date();
 							}
 
-							// clear the terminal input
-							$("#terminal-input").val("");
+							// disable the terminal input and clear the input field later
+							$("#terminal-input").attr("disabled", "disabled");
+							clear_input_on_response = true;
 
 							// prevent the form from actually submitting
 							return false;

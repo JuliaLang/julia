@@ -65,6 +65,10 @@ MSG_OUTPUT_EVAL_RESULT = 5
 # arguments: {message}
 MSG_OUTPUT_OTHER = 6
 
+# ready for input
+# arguments: {}
+MSG_OUTPUT_READY = 7
+
 ###########################################
 # set up the socket connection
 ###########################################
