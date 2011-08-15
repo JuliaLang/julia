@@ -5,7 +5,7 @@
 ###### the julia<-->server protocol #######
 
 # the message type is sent as a byte
-# the next four bytes indicates how many arguments there are
+# the next byte indicates how many arguments there are
 # each argument is four bytes indicating the size of the argument, then the data for that argument
 
 ###### the server<-->browser protocol #####
@@ -102,7 +102,7 @@ function read_message()
     args = {}
     num_args = read(io, Uint8)
     for i=1:num_args
-        arg_length = read(io, Uint8)
+        arg_length = read(io, Uint32)
         arg = ASCIIString(read(io, Uint8, arg_length))
         push(args, arg)
     end
@@ -119,7 +119,7 @@ function write_message(msg)
     write(io, uint8(msg.msg_type))
     write(io, uint8(length(msg.args)))
     for arg=msg.args
-        write(io, uint8(length(arg)))
+        write(io, uint32(length(arg)))
         write(io, arg)
     end
     flush(io)

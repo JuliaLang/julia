@@ -5,7 +5,7 @@
 		<title>Julia - A fresh approach to technical computing.</title>
 		<link href="styles.css" rel="stylesheet" type="text/css" />
 		<link href="favicon.ico" rel="shortcut icon" />
-		<link href='http://fonts.googleapis.com/css?family=Droid+Sans+Mono&v2' rel='stylesheet' type='text/css'>
+		<link href="http://fonts.googleapis.com/css?family=Droid+Sans+Mono&v2" rel="stylesheet" type="text/css">
 		<script type="text/javascript" src="jquery.js"></script>
 		<script type="text/javascript" src="jquery.json.js"></script>
 		<script>
@@ -81,7 +81,7 @@
 							sel.text = myValue;
 							this.focus();
 						}
-						else if (this.selectionStart || this.selectionStart == '0')
+						else if (this.selectionStart || this.selectionStart == "0")
 						{
 							var startPos = this.selectionStart;
 							var endPos = this.selectionEnd;
@@ -100,6 +100,12 @@
 					})
 				}
 			});
+
+			// escape html
+			function escape_html(str)
+			{
+				return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/ /g, "&nbsp;").replace(/\n/g, "<br />");
+			}
 
 			// add to the terminal
 			function add_to_terminal(data)
@@ -210,7 +216,14 @@
 				if (!initialized)
 				{
 					initialized = true;
-					$('#terminal').html("");
+
+					// remove the initializing message
+					$("#terminal").html("");
+
+					// enable input
+					$("#prompt").show();
+					$("#terminal-input").removeAttr("disabled");
+					$("#terminal-input").focus();
 				}
 
 				// MSG_OUTPUT_NULL
@@ -222,19 +235,19 @@
 				// MSG_OUTPUT_MESSAGE
 				if (data.message_type == 1)
 				{
-					add_to_terminal("<span class=\"message\">"+data.arg0+"</span>");
+					add_to_terminal("<span class=\"message\">"+escape_html(data.arg0)+"</span><br />");
 				}
 
 				// MSG_OUTPUT_ERROR
 				if (data.message_type == 2)
 				{
-					add_to_terminal("<span class=\"error\">"+data.arg0+"</span>");
+					add_to_terminal("<span class=\"error\">"+escape_html(data.arg0)+"</span><br />");
 				}
 
 				// MSG_OUTPUT_FATAL_ERROR
 				if (data.message_type == 3)
 				{
-					add_to_terminal("<span class=\"error\">"+data.arg0+"</span>");
+					add_to_terminal("<span class=\"error\">"+escape_html(data.arg0)+"</span><br />");
 					return;
 				}
 
@@ -248,14 +261,14 @@
 				if (data.message_type == 5)
 				{
 					if (data.content != "")
-						add_to_terminal(data.arg0);
+						add_to_terminal(escape_html(data.arg0)+"<br />");
 				}
 
 				// MSG_OUTPUT_OTHER
 				if (data.message_type == 6)
 				{
 					if (data.content != "")
-						add_to_terminal(data.arg0);
+						add_to_terminal(escape_html(data.arg0));
 				}
 
 				// send any remaining messages if there are any
@@ -270,7 +283,7 @@
 			$(document).ready(function()
 			{
 				// resize the input box (the -1 is for Internet Explorer)
-				$('#terminal-input').width($('#terminal').width()-$('#prompt').width()-1);
+				$("#terminal-input").width($("#terminal").width()-$("#prompt").width()-1);
 				
 				// hook mouse click events
 				$("#terminal-form").click(function(evt) { $("#terminal-input").focus(); } );
@@ -376,9 +389,6 @@
 
 				// start the watchdog
 				setTimeout(watchdog, 1000);
-
-				// focus the input box (most browsers do this automatically because of the autofocus attribute)
-				$('#terminal-input').focus();
 			});
 		</script>
 	</head>
@@ -400,10 +410,10 @@
 			</div>
 			<div id="right-column">
 				<form id="terminal-form">
-					<div id="terminal"><span class="message">initializing</span></div>
+					<div id="terminal"><span class="message">&lt;initializing&gt;</span></div>
 					<div>
 						<div id="prompt">julia&gt;&nbsp;</div>
-						<textarea id="terminal-input" autofocus="autofocus" spellcheck="false" rows="1" cols="20" /></textarea>
+						<textarea id="terminal-input" spellcheck="false" rows="1" cols="20" disabled="disabled" /></textarea>
 					</div>
 				</form>
 			</div>
