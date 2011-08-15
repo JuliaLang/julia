@@ -14,12 +14,6 @@ using namespace std;
 using namespace scgi;
 
 /////////////////////////////////////////////////////////////////////////////
-// TODO:
-// - read messages from julia
-// - get writing messages to julia working
-/////////////////////////////////////////////////////////////////////////////
-
-/////////////////////////////////////////////////////////////////////////////
 // helpers
 /////////////////////////////////////////////////////////////////////////////
 
@@ -151,12 +145,15 @@ struct session
     time_t update_time;
 
     // to be sent to julia
-    string inbox_raw;
+    string inbox_std;
 
     // to be sent to julia
     vector<message> inbox;
 
     // to be sent to the client as MSG_OTHER_OUTPUT
+    string outbox_std;
+
+    // to be converted into messages
     string outbox_raw;
 
     // to be sent to the client
@@ -221,10 +218,10 @@ void* inbox_thread(void* arg)
         }
 
         // get the inbox data
-        string inbox = session_map[session_token].inbox_raw;
+        string inbox = session_map[session_token].inbox_std;
 
-        // if there is no inbox data and no messages to send, wait and try again
-        if (inbox == "" && session_map[session_token].inbox.empty())
+        // if there is no inbox data and no messages to send, or if julia isn't ready, wait and try again
+        if ((inbox == "" && session_map[session_token].inbox.empty()) || session_map[session_token].status != SESSION_NORMAL)
         {
             // unlock the mutex
             pthread_mutex_unlock(&session_mutex);
@@ -265,17 +262,22 @@ void* inbox_thread(void* arg)
             // get the message
             message msg = session_map[session_token].inbox[i];
 
+            // write the message type
+            string str_msg_type = " ";
+            str_msg_type[0] = msg.type;
+            session_map[session_token].sock->write(str_msg_type);
+
             // write the number of arguments
             string str_arg_num = " ";
-            str_arg_num[0] = msg.type;
+            str_arg_num[0] = msg.args.size();
             session_map[session_token].sock->write(str_arg_num);
 
             // iterate through the arguments
             for (size_t j = 0; j < msg.args.size(); j++)
             {
                 // write the size of the argument
-                string str_arg_size = " ";
-                str_arg_size[0] = msg.args[j].size();
+                string str_arg_size = "    ";
+                *((uint32_t*)(&(str_arg_size[0]))) = (uint32_t)msg.args[j].size();
                 session_map[session_token].sock->write(str_arg_size);
 
                 // write the argument
@@ -286,9 +288,9 @@ void* inbox_thread(void* arg)
 
         // remove the written data from the inbox
         if (bytes_written < 0)
-            session_map[session_token].inbox_raw = "";
+            session_map[session_token].inbox_std = "";
         else
-            session_map[session_token].inbox_raw = session_map[session_token].inbox_raw.substr(bytes_written, session_map[session_token].inbox_raw.size()-bytes_written);
+            session_map[session_token].inbox_std = session_map[session_token].inbox_std.substr(bytes_written, session_map[session_token].inbox_std.size()-bytes_written);
 
         // unlock the mutex
         pthread_mutex_unlock(&session_mutex);
@@ -325,7 +327,7 @@ void* outbox_thread(void* arg)
     delete [] (char*)arg;
 
     // keep track of the output from julia
-    string outbox_raw;
+    string outbox_std;
 
     // loop for the duration of the session
     while (true)
@@ -369,22 +371,22 @@ void* outbox_thread(void* arg)
         string new_data;
         if (bytes_read == 1)
             new_data = buffer;
-        outbox_raw += new_data;
+        outbox_std += new_data;
 
         // send the outbox data to the client
         if (session_map[session_token].status == SESSION_NORMAL)
         {
             // try to read a character
-            if (outbox_raw != "")
+            if (outbox_std != "")
             {
                 // get the first character
-                char c = outbox_raw[0];
+                char c = outbox_std[0];
 
                 // is it a control sequence?
                 if (c == 0x1B)
                 {
                     // if we don't have enough characters, try again later
-                    if (outbox_raw.size() < 2)
+                    if (outbox_std.size() < 2)
                     {
                         // unlock the mutex
                         pthread_mutex_unlock(&session_mutex);
@@ -403,13 +405,13 @@ void* outbox_thread(void* arg)
                     }
 
                     // check for multi-character escape sequences
-                    if (outbox_raw[1] == '[')
+                    if (outbox_std[1] == '[')
                     {
                         // find the last character in the sequence
                         int pos = -1;
-                        for (int i = 2; i < outbox_raw.size(); i++)
+                        for (int i = 2; i < outbox_std.size(); i++)
                         {
-                            if (outbox_raw[i] >= 64 && outbox_raw[i] <= 126)
+                            if (outbox_std[i] >= 64 && outbox_std[i] <= 126)
                             {
                                 pos = i;
                                 break;
@@ -437,7 +439,7 @@ void* outbox_thread(void* arg)
                         else
                         {
                             // eat the control sequence and output nothing
-                            outbox_raw = outbox_raw.substr(pos+1, outbox_raw.size()-(pos+1));
+                            outbox_std = outbox_std.substr(pos+1, outbox_std.size()-(pos+1));
                             
                             // unlock the mutex
                             pthread_mutex_unlock(&session_mutex);
@@ -449,7 +451,7 @@ void* outbox_thread(void* arg)
                     else
                     {
                         // eat the two-character control sequence and output nothing
-                        outbox_raw = outbox_raw.substr(2, outbox_raw.size()-2);
+                        outbox_std = outbox_std.substr(2, outbox_std.size()-2);
                         
                         // unlock the mutex
                         pthread_mutex_unlock(&session_mutex);
@@ -460,8 +462,8 @@ void* outbox_thread(void* arg)
                 }
 
                 // just output the raw character
-                session_map[session_token].outbox_raw += c;
-                outbox_raw = outbox_raw.substr(1, outbox_raw.size()-1);
+                session_map[session_token].outbox_std += c;
+                outbox_std = outbox_std.substr(1, outbox_std.size()-1);
             }
         }
 
@@ -469,7 +471,7 @@ void* outbox_thread(void* arg)
         if (session_map[session_token].status == SESSION_WAITING_FOR_PORT_NUM)
         {
             // wait for a newline
-            size_t newline_pos = outbox_raw.find("\n");
+            size_t newline_pos = outbox_std.find("\n");
             if (newline_pos == string::npos)
             {
                 // unlock the mutex
@@ -486,8 +488,8 @@ void* outbox_thread(void* arg)
             }
 
             // read the port number
-            string num_string = outbox_raw.substr(0, newline_pos);
-            outbox_raw = outbox_raw.substr(newline_pos+1, outbox_raw.size()-(newline_pos+1));
+            string num_string = outbox_std.substr(0, newline_pos);
+            outbox_std = outbox_std.substr(newline_pos+1, outbox_std.size()-(newline_pos+1));
             int port_num = from_string<int>(num_string);
 
             // start
@@ -496,6 +498,77 @@ void* outbox_thread(void* arg)
 
             // switch to normal operation
             session_map[session_token].status = SESSION_NORMAL;
+
+            // send a ready message
+            message ready_message;
+            ready_message.type = 7;
+            session_map[session_token].outbox.push_back(ready_message);
+        }
+
+        // try to read some data from the socket
+        if (session_map[session_token].status == SESSION_NORMAL)
+        {
+            // get the socket before we unlock the mutex
+            network::socket* sock = session_map[session_token].sock;
+
+            // unlock the mutex
+            pthread_mutex_unlock(&session_mutex);
+
+            // try to read some data
+            string data;
+            if (sock->has_data())
+                data += sock->read();
+                            
+            // unlock the mutex
+            pthread_mutex_unlock(&session_mutex);
+
+            // add the data to the outbox
+            session_map[session_token].outbox_raw += data;
+        }
+
+        // try to convert the raw outbox data into messages
+        string outbox_raw = session_map[session_token].outbox_raw;
+        if (outbox_raw.size() >= 5)
+        {
+            // construct the message
+            message msg;
+
+            // get the message type
+            msg.type = *((uint8_t*)(&outbox_raw[0]));
+
+            // get the number of arguments
+            uint8_t arg_num = *((uint8_t*)(&outbox_raw[1]));
+
+            // try to read the arguments
+            int pos = 2;
+            for (uint8_t i = 0; i < arg_num; i++)
+            {
+                // make sure there is enough data left to read
+                if (outbox_raw.size() < pos+4)
+                    break;
+
+                // get the size of this argument
+                uint32_t arg_size = *((uint32_t*)(&outbox_raw[pos]));
+                pos += 4;
+
+                // make sure there is enough data left to read
+                if (outbox_raw.size() < pos+arg_size)
+                    break;
+
+                // get the argument
+                msg.args.push_back(outbox_raw.substr(pos, arg_size));
+                pos += arg_size;
+            }
+
+            // check if we have a whole message
+            if (msg.args.size() == arg_num)
+            {
+                // we have a whole message - eat it from outbox_raw
+                session_map[session_token].outbox_raw = outbox_raw.substr(pos, outbox_raw.size()-pos);
+
+                // add the message to the queue
+                session_map[session_token].outbox.push_back(msg);
+            }
         }
 
         // unlock the mutex
@@ -782,13 +855,28 @@ string get_response(request* req)
                 if (session_map[session_token].status == SESSION_NORMAL)
                 {
                     // catch any extra output from julia
-                    if (session_map[session_token].outbox_raw != "")
+                    if (session_map[session_token].outbox_std != "")
                     {
                         message output_message;
                         output_message.type = 6;
-                        output_message.args.push_back(session_map[session_token].outbox_raw);
-                        session_map[session_token].outbox_raw = "";
+                        output_message.args.push_back(session_map[session_token].outbox_std);
+                        session_map[session_token].outbox_std = "";
                         session_map[session_token].outbox.push_back(output_message);
+                    }
+
+                    // merge messages of the same type when desirable
+                    for (size_t i = 1; i < session_map[session_token].outbox.size(); i++)
+                    {
+                        // MSG_OUTPUT_OTHER
+                        if (session_map[session_token].outbox[i].type == 6)
+                        {
+                            if (session_map[session_token].outbox[i-1].type == 6)
+                            {
+                                session_map[session_token].outbox[i-1].args[0] += session_map[session_token].outbox[i].args[0];
+                                session_map[session_token].outbox.erase(session_map[session_token].outbox.begin()+i);
+                                i--;
+                            }
+                        }
                     }
                 }
             }
@@ -812,29 +900,6 @@ string get_response(request* req)
                 }
             }
 
-            // MSG_INPUT_POLL
-            if (request_message.type == 2)
-            {
-                // we recognize the request
-                request_recognized = true;
-
-                // make sure we have a valid session
-                if (session_token == "")
-                {
-                    response_message.type = 3;
-                    response_message.args.push_back("session expired");
-                }
-                else
-                {
-                    // send the first message on the queue
-                    if (!session_map[session_token].outbox.empty())
-                    {
-                        response_message = session_map[session_token].outbox[0];
-                        session_map[session_token].outbox.erase(session_map[session_token].outbox.begin());
-                    }
-                }
-            }
-
             // other messages go straight to julia
             if (!request_recognized)
             {
@@ -847,7 +912,8 @@ string get_response(request* req)
                 else
                 {
                     // forward the message to julia
-                    session_map[session_token].inbox.push_back(request_message);
+                    if (request_message.type != 2)
+                        session_map[session_token].inbox.push_back(request_message);
 
                     // send the first message on the queue
                     if (!session_map[session_token].outbox.empty())
@@ -898,7 +964,7 @@ int main()
     cout<<"0 open sessions.\n";
 
     // start the server
-    run_server(1445, &get_response);
+    run_server(1441, &get_response);
 
     // never reached
     return 0;
