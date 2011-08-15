@@ -740,7 +740,7 @@ string create_session()
         close(STDIN_FILENO);
         close(STDOUT_FILENO);
         dup2(session_data.julia_in[0], STDIN_FILENO);
-        dup2(session_data.julia_out[1], STDOUT_FILENO);
+        dup2(session_data.julia_out[1], STDERR_FILENO);
         close(session_data.julia_in[0]);
         close(session_data.julia_in[1]);
         close(session_data.julia_out[0]);

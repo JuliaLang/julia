@@ -53,15 +53,20 @@
 				See julia-web.j for network protocol.
 			*/
 
+			// how often we poll the server
+			var poll_interval = 2000;
+
 			// terminal content
 			var terminal_data = "";
-			var terminal_data_size = 50000;
 
 			// keep track of terminal history
 			var input_history = [];
 			var input_history_current = [""];
 			var input_history_id = 0;
 			var input_history_size = 100;
+
+			// keep track of incomplete expressions
+			var incomplete_expr = "";
 
 			// whether the terminal should clear the input on the next non-null response
 			var clear_input_on_response = false;
@@ -118,54 +123,11 @@
 				// add the data
 				terminal_data += data;
 
-				// limit size of stored data
-				if (terminal_data.length > terminal_data_size)
-				{
-					// make sure we do not cut off inside an escape sequence or HTML tag
-					var amp_pos = -1;
-					for (var i = 0; i < 5; i += 1)
-					{
-						if (terminal_data[terminal_data.length-terminal_data_size-1-i] == "&")
-							amp_pos = terminal_data.length-terminal_data_size-1-i;
-					}
-					var lt_pos = -1;
-					for (var i = 0; i < 5; i += 1)
-					{
-						if (terminal_data[terminal_data.length-terminal_data_size-1-i] == "<")
-							lt_pos = terminal_data.length-terminal_data_size-1-i;
-					}
-					if ((amp_pos == -1) == (lt_pos == -1))
-						terminal_data = terminal_data.substring(terminal_data.length-terminal_data_size);
-					if (amp_pos != -1 && lt_pos == -1)
-					{
-						var semi_pos = -1;
-						for (var i = 0; i < 5; i += 1)
-						{
-							if (terminal_data[terminal_data.length-terminal_data_size+i] == ";")
-								semi_pos = terminal_data.length-terminal_data_size+i;
-						}
-						if (semi_pos == -1)
-							terminal_data = terminal_data.substring(terminal_data.length-terminal_data_size);
-						else
-							terminal_data = terminal_data.substring(semi_pos+1);
-					}
-					if (amp_pos == -1 && lt_pos != -1)
-					{
-						var gt_pos = -1;
-						for (var i = 0; i < 5; i += 1)
-						{
-							if (terminal_data[terminal_data.length-terminal_data_size+i] == ">")
-								gt_pos = terminal_data.length-terminal_data_size+i;
-						}
-						if (gt_pos == -1)
-							terminal_data = terminal_data.substring(terminal_data.length-terminal_data_size);
-						else
-							terminal_data = terminal_data.substring(gt_pos+1);
-					}
-				}
-
 				// update the html
 				$("#terminal").html(terminal_data);
+
+				// resize the input box (the -1 is for Internet Explorer)
+				$("#terminal-input").width($("#terminal").width()-$("#prompt").width()-1);
 
 				// scroll to the new data
 				$("#terminal-form").prop("scrollTop", $("#terminal-form").prop("scrollHeight"));
@@ -225,10 +187,6 @@
 					$("#terminal-input").removeAttr("disabled");
 					$("#terminal-input").focus();
 				}
-				if (clear_input_on_response && data.message_type == 4)
-				{
-					// do nothing for now?
-				}
 
 				// MSG_OUTPUT_NULL
 				if (data.message_type == 0)
@@ -258,13 +216,22 @@
 				// MSG_OUTPUT_EVAL_INCOMPLETE
 				if (data.message_type == 4)
 				{
-					// do nothing for now?
+					// change this stuff
+					if (incomplete_expr == "")
+						add_to_terminal("<span class=\"prompt\">julia&gt;&nbsp;</span>");
+					add_to_terminal(escape_html($("#terminal-input").val())+"<br />");
+					incomplete_expr += $("#terminal-input").val()+"\n";
+					$("#terminal-input").val("");
+					$("#terminal-input").removeAttr("disabled");
+					$("#terminal-input").focus();
 				}
+				else
+					incomplete_expr = "";
 
 				// MSG_OUTPUT_EVAL_RESULT
 				if (data.message_type == 5)
 				{
-					if (data.arg0 != "" && data.arg0 != "nothing")
+					if (data.arg0 != "")
 						add_to_terminal(escape_html(data.arg0)+"<br /><br />");
 				}
 
@@ -292,7 +259,7 @@
 					return;
 
 				// poll the server again
-				setTimeout(poll, 500);
+				setTimeout(poll, poll_interval);
 			}
 
 			// called on page load
@@ -377,7 +344,7 @@
 							if (input != "")
 							{
 								// send the input to the server via AJAX
-								outbox_queue.push({"message_type": 3, "arg0": input});
+								outbox_queue.push({"message_type": 3, "arg0": incomplete_expr+input});
 								process_outbox();
 
 								// input history
@@ -421,9 +388,6 @@
 			<div id="left-column">
 				<a href="/"><img class="bullet" src="images/bullet.png" alt="" /> Home</a>
 				<a href="/repl.htm" class="current-page"><img class="bullet" src="images/bullet.png" alt="" /> Interactive Prompt</a>
-				<a href="/plots.htm"><img class="bullet" src="images/bullet.png" alt="" /> Plots</a>
-				<a href="/docs.htm"><img class="bullet" src="images/bullet.png" alt="" /> Documentation</a>
-				<a href="/about.htm"><img class="bullet" src="images/bullet.png" alt="" /> About</a>
 			</div>
 			<div id="right-column">
 				<form id="terminal-form">

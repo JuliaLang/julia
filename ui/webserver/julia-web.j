@@ -157,8 +157,8 @@ function send_fatal_error(msg)
 end
 
 # send an incomplete expression message
-function send_eval_incomplete(msg)
-    write_message(Message(MSG_OUTPUT_EVAL_INCOMPLETE, [msg]))
+function send_eval_incomplete()
+    write_message(Message(MSG_OUTPUT_EVAL_INCOMPLETE, []))
 end
 
 # send an expression result message
