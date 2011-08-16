@@ -3,7 +3,6 @@
 dot(x::AbstractVector, y::AbstractVector) = sum(x.*conj(y))
 
 # blas.j defines these for floats; this handles other cases
-#(*)(A::Matrix, B::Vector) = [ sum(A[i,:].*B) | i=1:size(A,1) ]
 function (*){T,S}(A::AbstractMatrix{T}, B::AbstractVector{S})
     R = promote_type(T,S)
     m = size(A,1)
@@ -18,7 +17,6 @@ function (*){T,S}(A::AbstractMatrix{T}, B::AbstractVector{S})
     C
 end
 
-#(*)(A::Matrix, B::Matrix) = [ sum(A[i,:].*B[:,j]) | i=1:size(A,1), j=1:size(B,2) ]
 function (*){T,S}(A::AbstractMatrix{T}, B::AbstractMatrix{S})
     R = promote_type(T,S)
     m = size(A,1)
@@ -36,6 +34,28 @@ function (*){T,S}(A::AbstractMatrix{T}, B::AbstractMatrix{S})
         end
     end
     C
+end
+
+# multiply 2x2 matrices
+function mul22{T,S}(A::AbstractMatrix{T}, B::AbstractMatrix{S})
+    R = promote_type(T,S)
+    C = Array(R, 2, 2)
+
+    A11 = A[1,1]
+    A12 = A[1,2]
+    A21 = A[2,1]
+    A22 = A[2,2]
+    B11 = B[1,1]
+    B12 = B[1,2]
+    B21 = B[2,1]
+    B22 = B[2,2]
+
+    C[1,1] = A11*B11 + A12*B21
+    C[1,2] = A11*B12 + A12*B22
+    C[2,1] = A21*B11 + A22*B21
+    C[2,2] = A21*B12 + A22*B22
+
+    return C
 end
 
 triu(M) = triu(M,0)
