@@ -111,7 +111,7 @@ isequal(x::Float, y::Float) = (x == y) || (isnan(x) && isnan(y))
 
 ## traits ##
 
-eps(::Type{Float32}) = float32(1.1920928e-7)
+eps(::Type{Float32}) = float32(1.192092896e-7)
 eps(::Type{Float64}) = 2.2204460492503131e-16
 eps(x::Float) = abs(x)*eps(typeof(x))
 
