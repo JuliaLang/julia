@@ -1,5 +1,8 @@
 ## floating-point functions ##
 
+abs(x::Float64) = boxf64(fpabs64(unbox64(x)))
+abs(x::Float32) = boxf32(fpabs32(unbox32(x)))
+
 isnan(x::Float) = (x != x)
 isnan(x::Real) = isnan(float(x))
 isnan(x::Int) = false
@@ -46,3 +49,4 @@ end
 
 @vectorize_1arg Real iround
 @vectorize_1arg Real itrunc
+@vectorize_1arg Number abs
