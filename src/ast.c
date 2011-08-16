@@ -358,6 +358,16 @@ static value_t julia_to_scm(jl_value_t *v)
         fl_free_gc_handles(1);
         return scmv;
     }
+    if (jl_typeis(v, jl_linenumbernode_type)) {
+        return fl_cons(julia_to_scm((jl_value_t*)line_sym),
+                       fl_cons(julia_to_scm(jl_fieldref(v,0)),
+                               FL_NIL));
+    }
+    if (jl_typeis(v, jl_labelnode_type)) {
+        return fl_cons(julia_to_scm((jl_value_t*)label_sym),
+                       fl_cons(julia_to_scm(jl_fieldref(v,0)),
+                               FL_NIL));
+    }
     if (jl_is_array(v)) {
         return array_to_list((jl_array_t*)v);
     }
