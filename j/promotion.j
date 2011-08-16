@@ -43,9 +43,9 @@ end
 /(x::Number, y::Number) = /(promote(x,y)...)
 ^(x::Any, y::Number) = ^(promote(x,y)...)
 
-&(x::Int...) = &(promote(x...)...)
-|(x::Int...) = |(promote(x...)...)
-$(x::Int...) = $(promote(x...)...)
+&(x::Int, y::Int) = &(promote(x,y)...)
+|(x::Int, y::Int) = |(promote(x,y)...)
+$(x::Int, y::Int) = $(promote(x,y)...)
 
 <(x::Real, y::Real) = (<)(promote(x,y)...)
 >(x::Real, y::Real) = (>)(promote(x,y)...)
