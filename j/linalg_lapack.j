@@ -9,12 +9,13 @@ macro jl_lapack_potrf_macro(potrf, eltype)
         #       INTEGER            INFO, LDA, N
         # *     .. Array Arguments ..
         #       DOUBLE PRECISION   A( LDA, * )
-        function jl_lapack_potrf(uplo, n, A::Matrix{$eltype}, lda)
+        function jl_lapack_potrf(uplo, n, A::AbstractMatrix{$eltype}, lda)
             info = Array(Int32, 1)
+            a = pointer(A)
             ccall(dlsym(libLAPACK, $potrf),
                   Void,
                   (Ptr{Uint8}, Ptr{Int32}, Ptr{$eltype}, Ptr{Int32}, Ptr{Int32}),
-                  uplo, int32(n), A, int32(lda), info)
+                  uplo, int32(n), a, int32(lda), info)
             return info[1]
         end
 
@@ -26,11 +27,17 @@ end
 @jl_lapack_potrf_macro :zpotrf_ Complex128
 @jl_lapack_potrf_macro :cpotrf_ Complex64
 
-function chol(A::Matrix)
+#does not check that input matrix is symmetric/hermitian
+#(uses upper triangular half)
+#Possible TODO: "economy mode"
+function chol{T<:Union(Float32,Float64,Complex64,Complex128)}(A::Union(Matrix,SubArray{T,2}))
     n = int32(size(A, 1))
-    R = triu(A)
-
-    info = jl_lapack_potrf("U", n, R, n)
+    if isa(A, Matrix)
+        R = triu(A)
+    else
+        R = triu(A[:,:])
+    end
+    info = jl_lapack_potrf("U", n, R, stride(A,2))
 
     if info == 0; return R; end
     if info  > 0; error("Matrix not Positive Definite"); end
@@ -46,13 +53,14 @@ macro jl_lapack_getrf_macro(getrf, eltype)
         # *     .. Array Arguments ..
         #       INTEGER            IPIV( * )
         #       DOUBLE PRECISION   A( LDA, * )
-        function jl_lapack_getrf(m, n, A::Matrix{$eltype}, lda, ipiv)
+        function jl_lapack_getrf(m, n, A::AbstractMatrix{$eltype}, lda, ipiv)
             info = Array(Int32, 1)
+            a = pointer(A)
             ccall(dlsym(libLAPACK, $getrf),
                   Void,
                   (Ptr{Int32}, Ptr{Int32}, Ptr{$eltype},
                    Ptr{Int32}, Ptr{Int32}, Ptr{Int32}),
-                  int32(m), int32(n), A, int32(lda), ipiv, info)
+                  int32(m), int32(n), a, int32(lda), ipiv, info)
             return info[1]
         end
 
@@ -65,16 +73,21 @@ end
 @jl_lapack_getrf_macro :cgetrf_ Complex64
 
 lu(A::Matrix) = lu(A, false)
-
-function lu(A::Matrix, economy::Bool)
+lu{T}(A::SubArray{T,2}) = lu(A,false)
+function lu{T<:Union(Float32,Float64,Complex64,Complex128)}(A::Union(Matrix,SubArray{T,2}),
+                                                            economy::Bool)
     m, n = size(A)
     LU = A
     if !economy
-        LU = copy(A)
+        if isa(A, Matrix)
+            LU = copy(A)
+        else
+            LU = A[:,:]
+        end
     end
     ipiv = Array(Int32, min(m,n))
 
-    info = jl_lapack_getrf(m, n, LU, m, ipiv)
+    info = jl_lapack_getrf(m, n, LU, stride(LU,2), ipiv)
 
     if info > 0; error("Matrix is singular"); end
     P = linspace(1, m)
@@ -104,11 +117,12 @@ macro jl_lapack_qr_macro(real_geqp3, complex_geqp3, orgqr, ungqr, eltype, celtyp
         #       DOUBLE PRECISION   A( LDA, * ), TAU( * ), WORK( * )
         function jl_lapack_geqp3(m, n, A::Matrix{$eltype}, lda, jpvt, tau, work, lwork)
             info = Array(Int32, 1)
+            a = pointer(A)
             ccall(dlsym(libLAPACK, $real_geqp3),
                   Void,
                   (Ptr{Int32}, Ptr{Int32}, Ptr{$eltype}, Ptr{Int32},
                    Ptr{Int32}, Ptr{$eltype}, Ptr{$eltype}, Ptr{Int32}, Ptr{Int32}),
-                  int32(m), int32(n), A, int32(lda), jpvt, tau, work, int32(lwork), info)
+                  int32(m), int32(n), a, int32(lda), jpvt, tau, work, int32(lwork), info)
             return info[1]
         end
 
@@ -119,13 +133,14 @@ macro jl_lapack_qr_macro(real_geqp3, complex_geqp3, orgqr, ungqr, eltype, celtyp
         #       INTEGER            JPVT( * )
         #       DOUBLE PRECISION   RWORK( * )
         #       COMPLEX*16         A( LDA, * ), TAU( * ), WORK( * )
-        function jl_lapack_geqp3(m, n, A::Matrix{$celtype}, lda, jpvt, tau, work, lwork, rwork)
+        function jl_lapack_geqp3(m, n, A::AbstractMatrix{$celtype}, lda, jpvt, tau, work, lwork, rwork)
             info = Array(Int32, 1)
+            a = pointer(A)
             ccall(dlsym(libLAPACK, $complex_geqp3),
                   Void,
                   (Ptr{Int32}, Ptr{Int32}, Ptr{$celtype}, Ptr{Int32},
                    Ptr{Int32}, Ptr{$celtype}, Ptr{$celtype}, Ptr{Int32}, Ptr{$eltype}, Ptr{Int32}),
-                  int32(m), int32(n), A, int32(lda), jpvt, tau, work, int32(lwork), rwork, info)
+                  int32(m), int32(n), a, int32(lda), jpvt, tau, work, int32(lwork), rwork, info)
             return info[1]
         end
 
@@ -134,13 +149,14 @@ macro jl_lapack_qr_macro(real_geqp3, complex_geqp3, orgqr, ungqr, eltype, celtyp
         #       INTEGER            INFO, K, LDA, LWORK, M, N
         # *     .. Array Arguments ..
         #       DOUBLE PRECISION   A( LDA, * ), TAU( * ), WORK( * )
-        function jl_lapack_orgqr(m, n, k, A::Matrix{$eltype}, lda, tau, work, lwork)
+        function jl_lapack_orgqr(m, n, k, A::AbstractMatrix{$eltype}, lda, tau, work, lwork)
             info = Array(Int32, 1)
+            a = pointer(A)
             ccall(dlsym(libLAPACK, $orgqr),
                   Void,
                   (Ptr{Int32}, Ptr{Int32}, Ptr{Int32}, Ptr{$eltype},
                    Ptr{Int32}, Ptr{$eltype}, Ptr{$eltype}, Ptr{Int32}, Ptr{Int32}),
-                  int32(m), int32(n), int32(k), A, int32(lda), tau, work, int32(lwork), info)
+                  int32(m), int32(n), int32(k), a, int32(lda), tau, work, int32(lwork), info)
             return info[1]
         end
 
@@ -149,13 +165,14 @@ macro jl_lapack_qr_macro(real_geqp3, complex_geqp3, orgqr, ungqr, eltype, celtyp
         #      INTEGER            INFO, K, LDA, LWORK, M, N
         #*     .. Array Arguments ..
         #      COMPLEX*16         A( LDA, * ), TAU( * ), WORK( * )
-        function jl_lapack_ungqr(m, n, k, A::Matrix{$celtype}, lda, tau, work, lwork)
+        function jl_lapack_ungqr(m, n, k, A::AbstractMatrix{$celtype}, lda, tau, work, lwork)
             info = Array(Int32, 1)
+            a = pointer(A)
             ccall(dlsym(libLAPACK, $ungqr),
                   Void,
                   (Ptr{Int32}, Ptr{Int32}, Ptr{Int32}, Ptr{$celtype},
                    Ptr{Int32}, Ptr{$celtype}, Ptr{$celtype}, Ptr{Int32}, Ptr{Int32}),
-                  int32(m), int32(n), int32(k), A, int32(lda), tau, work, int32(lwork), info)
+                  int32(m), int32(n), int32(k), a, int32(lda), tau, work, int32(lwork), info)
             return info[1]
         end
 
@@ -165,9 +182,14 @@ end
 @jl_lapack_qr_macro :dgeqp3_ :zgeqp3_ :dorgqr_ :zungqr_ Float64 Complex128
 @jl_lapack_qr_macro :sgeqp3_ :cgeqp3_ :sorgqr_ :cungqr_ Float32 Complex64
 
-function qr{T}(A::Matrix{T})
+#possible TODO: economy mode?
+function qr{T<:Union(Float32,Float64,Complex64,Complex128)}(A::Union(Matrix{T},SubArray{T,2}))
     m, n = size(A)
-    QR = copy(A)
+    if isa(A, Matrix)
+        QR = copy(A)
+    else
+        QR = A[:,:]
+    end
     jpvt = zeros(Int32, n)
     k = min(m,n)
     tau = Array(T, k)
@@ -179,9 +201,9 @@ function qr{T}(A::Matrix{T})
     work = zeros(T,1)
     lwork = int32(-1)
     if iscomplex(A)
-        info = jl_lapack_geqp3(m, n, QR, m, jpvt, tau, work, lwork, rwork)
+        info = jl_lapack_geqp3(m, n, QR, stride(QR,2), jpvt, tau, work, lwork, rwork)
     else
-        info = jl_lapack_geqp3(m, n, QR, m, jpvt, tau, work, lwork)
+        info = jl_lapack_geqp3(m, n, QR, stride(QR,2), jpvt, tau, work, lwork)
     end
 
     if info == 0; lwork = real(work[1]); work = Array(T, long(lwork))
@@ -189,9 +211,9 @@ function qr{T}(A::Matrix{T})
 
     # Compute QR factorization
     if iscomplex(A)
-        info = jl_lapack_geqp3(m, n, QR, m, jpvt, tau, work, lwork, rwork)
+        info = jl_lapack_geqp3(m, n, QR, stride(QR,2), jpvt, tau, work, lwork, rwork)
     else
-        info = jl_lapack_geqp3(m, n, QR, m, jpvt, tau, work, lwork)
+        info = jl_lapack_geqp3(m, n, QR, stride(QR,2), jpvt, tau, work, lwork)
     end
 
     if info > 0; error("Matrix is singular"); end
@@ -201,9 +223,9 @@ function qr{T}(A::Matrix{T})
     # Workspace query to form Q
     lwork2 = int32(-1)
     if iscomplex(A)
-        info = jl_lapack_ungqr(m, k, k, QR, m, tau, work, lwork2)
+        info = jl_lapack_ungqr(m, k, k, QR, stride(QR,2), tau, work, lwork2)
     else
-        info = jl_lapack_orgqr(m, k, k, QR, m, tau, work, lwork2)
+        info = jl_lapack_orgqr(m, k, k, QR, stride(QR,2), tau, work, lwork2)
     end
 
     if info == 0; lwork2 = real(work[1]); work = Array(T, long(lwork2))
@@ -211,9 +233,9 @@ function qr{T}(A::Matrix{T})
 
     # Compute Q
     if iscomplex(A)
-        info = jl_lapack_ungqr(m, k, k, QR, m, tau, work, lwork2)
+        info = jl_lapack_ungqr(m, k, k, QR, stride(QR,2), tau, work, lwork2)
     else
-        info = jl_lapack_orgqr(m, k, k, QR, m, tau, work, lwork2)
+        info = jl_lapack_orgqr(m, k, k, QR, stride(QR,2), tau, work, lwork2)
     end
 
     if info == 0; return (QR[:, 1:k], R[1:k, :], jpvt); end
@@ -324,9 +346,9 @@ function eig{T}(A::Matrix{T})
         lwork = -1
 
         if iscomplex(A)
-            info = jl_lapack_heev(jobz, uplo, n, EV, n, W, work, lwork, rwork)
+            info = jl_lapack_heev(jobz, uplo, n, EV, stride(A,2), W, work, lwork, rwork)
         else
-            info = jl_lapack_syev(jobz, uplo, n, EV, n, W, work, lwork)
+            info = jl_lapack_syev(jobz, uplo, n, EV, stride(A,2), W, work, lwork)
         end
 
         if info == 0; lwork = real(work[1]); work = Array(T, long(lwork));
@@ -334,9 +356,9 @@ function eig{T}(A::Matrix{T})
 
         # Compute eigenvalues, eigenvectors
         if iscomplex(A)
-            info = jl_lapack_heev(jobz, uplo, n, EV, n, W, work, lwork, rwork)
+            info = jl_lapack_heev(jobz, uplo, n, EV, stride(A,2), W, work, lwork, rwork)
         else
-            info = jl_lapack_syev(jobz, uplo, n, EV, n, W, work, lwork)
+            info = jl_lapack_syev(jobz, uplo, n, EV, stride(A,2), W, work, lwork)
         end
 
         if info == 0; return (diagm(W), EV); end
@@ -362,9 +384,9 @@ function eig{T}(A::Matrix{T})
         lwork = -1
 
         if iscomplex(A)
-            info = jl_lapack_geev(jobvl, jobvr, n, Acopy, n, W, VL, n, VR, n, work, lwork, rwork)
+            info = jl_lapack_geev(jobvl, jobvr, n, Acopy, stride(A,2), W, VL, n, VR, n, work, lwork, rwork)
         else
-            info = jl_lapack_geev(jobvl, jobvr, n, Acopy, n, WR, WI, VL, n, VR, n, work, lwork)
+            info = jl_lapack_geev(jobvl, jobvr, n, Acopy, stride(A,2), WR, WI, VL, n, VR, n, work, lwork)
         end
 
         if info == 0; lwork = real(work[1]); work = Array(T, long(lwork));
@@ -372,9 +394,9 @@ function eig{T}(A::Matrix{T})
 
         # Compute eigenvalues, eigenvectors
         if iscomplex(A)
-            info = jl_lapack_geev(jobvl, jobvr, n, Acopy, n, W, VL, n, VR, n, work, lwork, rwork)
+            info = jl_lapack_geev(jobvl, jobvr, n, Acopy, stride(A,2), W, VL, n, VR, n, work, lwork, rwork)
         else
-            info = jl_lapack_geev(jobvl, jobvr, n, Acopy, n, WR, WI, VL, n, VR, n, work, lwork)
+            info = jl_lapack_geev(jobvl, jobvr, n, Acopy, stride(A,2), WR, WI, VL, n, VR, n, work, lwork)
         end
         
         if info != 0; error("Error in LAPACK geev"); end
@@ -467,9 +489,9 @@ function svd{T}(A::Matrix{T})
     work = zeros(T, 1)
     lwork = -1
     if iscomplex(A)
-        info = jl_lapack_gesvd(jobu, jobvt, m, n, X, m, S, U, m, VT, n, work, lwork, rwork)
+        info = jl_lapack_gesvd(jobu, jobvt, m, n, X, stride(A,2), S, U, m, VT, n, work, lwork, rwork)
     else
-        info = jl_lapack_gesvd(jobu, jobvt, m, n, X, m, S, U, m, VT, n, work, lwork)
+        info = jl_lapack_gesvd(jobu, jobvt, m, n, X, stride(A,2), S, U, m, VT, n, work, lwork)
     end
 
     if info == 0; lwork = real(work[1]); work = Array(T, long(lwork));
@@ -477,9 +499,9 @@ function svd{T}(A::Matrix{T})
 
     # Compute SVD
     if iscomplex(A)
-        info = jl_lapack_gesvd(jobu, jobvt, m, n, X, m, S, U, m, VT, n, work, lwork, rwork)
+        info = jl_lapack_gesvd(jobu, jobvt, m, n, X, stride(A,2), S, U, m, VT, n, work, lwork, rwork)
     else
-        info = jl_lapack_gesvd(jobu, jobvt, m, n, X, m, S, U, m, VT, n, work, lwork)
+        info = jl_lapack_gesvd(jobu, jobvt, m, n, X, stride(A,2), S, U, m, VT, n, work, lwork)
     end
 
     SIGMA = zeros(T, m, n)

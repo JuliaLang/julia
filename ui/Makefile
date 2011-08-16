@@ -17,7 +17,7 @@ SHIPFLAGS += $(FLAGS)
 LIBJULIA_RELEASE = $(JULIAHOME)/libjulia-release.$(SHLIB_EXT)
 LIBJULIA_DEBUG = $(JULIAHOME)/libjulia-debug.$(SHLIB_EXT)
 
-julia-debug julia-release: %: %-basic %-readline %-web
+julia-debug julia-release: %: %-basic %-readline
 
 debug release:
 	$(MAKE) julia-$@
@@ -31,8 +31,6 @@ julia-release-basic: $(JULIAHOME)/julia-release-basic
 julia-debug-basic: $(JULIAHOME)/julia-debug-basic
 julia-release-readline: $(JULIAHOME)/julia-release-readline
 julia-debug-readline: $(JULIAHOME)/julia-debug-readline
-julia-release-web: $(JULIAHOME)/julia-release-web
-julia-debug-web: $(JULIAHOME)/julia-debug-web
 
 $(JULIAHOME)/julia-release-basic: repl.o repl-basic.o
 	$(CC) $(SHIPFLAGS) $^ -o $@ $(LIBJULIA_RELEASE) $(LIBS)
@@ -42,11 +40,6 @@ $(JULIAHOME)/julia-debug-basic: repl.do repl-basic.do
 $(JULIAHOME)/julia-release-readline: repl.o repl-readline.o
 	$(CC) $(SHIPFLAGS) $^ -o $@ $(LIBJULIA_RELEASE) $(READLINE) $(LIBS)
 $(JULIAHOME)/julia-debug-readline: repl.do repl-readline.do
-	$(CC) $(DEBUGFLAGS) $^ -o $@ $(LIBJULIA_DEBUG) $(READLINE) $(LIBS)
-
-$(JULIAHOME)/julia-release-web: repl.o repl-web.o
-	$(CC) $(SHIPFLAGS) $^ -o $@ $(LIBJULIA_RELEASE) $(READLINE) $(LIBS)
-$(JULIAHOME)/julia-debug-web: repl.do repl-web.do
 	$(CC) $(DEBUGFLAGS) $^ -o $@ $(LIBJULIA_DEBUG) $(READLINE) $(LIBS)
 
 clean:

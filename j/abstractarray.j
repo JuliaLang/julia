@@ -371,23 +371,23 @@ function gen_cartesian_map(cache, genbodies, ranges, exargnames, exargs...)
 
         ## creating a 2d array, to pass as bodies
         if isa(bodies,Array)
-            if (length(size(bodies))==2)
+            if (ndims(bodies)==2)
                 #println("2d array noticed")
-	            body = bodies[1]
-	            bodies = bodies[2:end,:]
-            elseif (length(size(bodies))==1)
+	        body = bodies[1]
+	        bodies = bodies[2:end,:]
+            elseif (ndims(bodies)==1)
                 #println("1d array noticed")
                 body = bodies[1]
                 bodies_tmp = cell(N,2)
                 for i = 1:N
-                    bodies_tmp[i] = bodies[i]
+                    bodies_tmp[i] = bodies[i+1]
                     bodies_tmp[i+N] = nothing
                 end
                 bodies = bodies_tmp
             end
         else
             #println("no array noticed")
-	        body = bodies
+	    body = bodies
             bodies = cell(N,2)
             { bodies[i] = nothing | i = 1:2*N}
         end
@@ -410,7 +410,12 @@ end
 ## Indexing: ref ##
 
 ref(t::AbstractArray) = t
-ref(t::AbstractArray, r::Real...) = ref(t,map(x->long(round(x)),r)...)
+ref(t::AbstractArray, i::Int) = error("indexing not defined for ", typeof(t))
+ref(t::AbstractArray, i::Real)          = ref(t, iround(i))
+ref(t::AbstractArray, i::Real, j::Real) = ref(t, iround(i), iround(j))
+ref(t::AbstractArray, i::Real, j::Real, k::Real) =
+    ref(t, iround(i), iround(j), iround(k))
+ref(t::AbstractArray, r::Real...)       = ref(t,map(iround,r)...)
 
 ref{T<:Int}(A::AbstractVector, I::AbstractVector{T}) = [ A[i] | i = I ]
 ref{T<:Int}(A::AbstractArray{Any,1}, I::AbstractVector{T}) = { A[i] | i = I }
@@ -470,7 +475,11 @@ assign(t::AbstractArray, x, i::Int) =
 assign(t::AbstractArray, x::AbstractArray, i::Int) =
     error("assign not defined for ",typeof(t))
 
-assign(t::AbstractArray, x, r::Real...) = (t[map(x->long(round(x)),r)...] = x)
+assign(t::AbstractArray, x, i::Real)          = (t[iround(i)] = x)
+assign(t::AbstractArray, x, i::Real, j::Real) = (t[iround(i),iround(j)] = x)
+assign(t::AbstractArray, x, i::Real, j::Real, k::Real) =
+    (t[iround(i),iround(j),iround(k)] = x)
+assign(t::AbstractArray, x, r::Real...)       = (t[map(iround,r)...] = x)
 
 function assign{T<:Int}(A::AbstractVector, x, I::AbstractVector{T})
     for i=I
@@ -903,7 +912,6 @@ function permute(A::AbstractArray, perm)
     end
     offset = 1-offset
 
-
     function permute_one(ivars)
         len = length(ivars)
         counts = { gensym() | i=1:len}
@@ -941,7 +949,7 @@ function permute(A::AbstractArray, perm)
 
 
     if is(permute_cache,nothing)
-	    permute_cache = HashTable()
+	permute_cache = HashTable()
     end
 
     gen_cartesian_map(permute_cache, permute_one, ranges, {:A, :P, :perm, :offset, stridenames... }, A, P, perm, offset, strides...)
@@ -960,6 +968,18 @@ function ipermute(A::AbstractArray,perm)
 end
 
 ## Other array functions ##
+
+# fallback definition of hvcat in terms of hcat and vcat
+function hvcat(rows::(Size...), as...)
+    nbr = length(rows)  # number of block rows
+    rs = cell(nbr)
+    a = 1
+    for i = 1:nbr
+        rs[i] = hcat(as[a:a-1+rows[i]]...)
+        a += rows[i]
+    end
+    vcat(rs...)
+end
 
 function repmat(a::AbstractMatrix, m::Size, n::Size)
     o,p = size(a)
@@ -1152,3 +1172,8 @@ function stride(s::SubArray, i::Int)
                s.indexes[i].step > 0       ? s.indexes[i].step * a :
                error("stride: must have ranges with positive step")
 end
+
+pointer{T,N}(x::SubArray{T,N}) = pointer(x.parent) + sub2ind(size(x.parent),
+    ntuple(N,i->x.indexes[i].start)...)*sizeof(T)
+iscomplex(::SubArray{Complex128}) = true
+iscomplex(::SubArray{Complex64}) = true

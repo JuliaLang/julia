@@ -186,6 +186,7 @@ div#prompt
 	float: left;
 	font: 85% "Droid Sans Mono", "Consolas", "Courier", "Courier New", monospace;
 	color: #00aa00;
+	display: none;
 }
 
 textarea#terminal-input
@@ -214,11 +215,6 @@ span.strong
 span.message
 {
 	color: #0000aa;
-}
-
-span.error
-{
-	color: #ff0000;
 }
 
 span.error

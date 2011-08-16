@@ -5,67 +5,85 @@
 ###### the julia<-->server protocol #######
 
 # the message type is sent as a byte
-# the next four bytes indicates how many arguments there are
+# the next byte indicates how many arguments there are
 # each argument is four bytes indicating the size of the argument, then the data for that argument
 
 ###### the server<-->browser protocol #####
 
 # messages are sent as json arrays
-# [message_type:number, arg1:string, arg2:string, ...]
+# [message_type:number, arg0:string, arg1:string, ...]
 
 ###########################################
 # input messages
 ###########################################
 
+# null message (should be ignored)
+# arguments: {}
+MSG_INPUT_NULL = 0
+
 # new session (this message is intercepted in the SCGI server and never reaches here)
 # arguments: {}
-MSG_INPUT_START = 0
+MSG_INPUT_START = 1
 
 # poll the server (this message is intercepted in the SCGI server and never reaches here)
 # arguments: {}
-MSG_INPUT_POLL = 1
+MSG_INPUT_POLL = 2
 
 # evaluate an expression
 # arguments: {expression}
-MSG_INPUT_EVAL = 2
+MSG_INPUT_EVAL = 3
 
 ###########################################
 # output messages
 ###########################################
 
+# null message (should be ignored)
+# arguments: {}
+MSG_OUTPUT_NULL = 0
+
 # message
 # arguments: {message}
-MSG_OUTPUT_MESSAGE = 0
+MSG_OUTPUT_MESSAGE = 1
 
 # error message
 # arguments: {message}
-MSG_OUTPUT_ERROR = 1
+MSG_OUTPUT_ERROR = 2
 
 # fatal error message (terminates session)
 # arguments: {message}
-MSG_OUTPUT_FATAL_ERROR = 2
+MSG_OUTPUT_FATAL_ERROR = 3
 
 # incomplete expression
 # arguments: {}
-MSG_OUTPUT_EVAL_INCOMPLETE = 3
+MSG_OUTPUT_EVAL_INCOMPLETE = 4
 
 # expression result
 # arguments: {result}
-MSG_OUTPUT_EVAL_RESULT = 4
+MSG_OUTPUT_EVAL_RESULT = 5
+
+# other output (not sent directly from julia)
+# arguments: {message}
+MSG_OUTPUT_OTHER = 6
+
+# ready for input
+# arguments: {}
+MSG_OUTPUT_READY = 7
 
 ###########################################
 # set up the socket connection
 ###########################################
 
-# open a socket on port 4444
+# open a socket on any port
 ports = [int16(4444)]
 sockfd = ccall(:open_any_tcp_port, Int32, (Ptr{Int16},), ports)
-if sockfd == -1 || ports[1] != 4444
+if sockfd == -1
     # couldn't open the socket
     println("could not open server socket on port 4444.")
     exit()
 end
-println("server listening on port 4444.")
+
+# print the socket number so the server knows what it is
+println(ports[1])
 
 # wait for the server to connect to the socket
 connectfd = ccall(dlsym(libc, :accept), Int32, (Int32, Ptr{Void}, Ptr{Void}), sockfd, C_NULL, C_NULL)
@@ -89,15 +107,10 @@ function read_message()
     args = {}
     num_args = read(io, Uint8)
     for i=1:num_args
-        arg_length = read(io, Uint8)
+        arg_length = read(io, Uint32)
         arg = ASCIIString(read(io, Uint8, arg_length))
         push(args, arg)
     end
-
-    # print the message
-    print("received message:  ")
-    print_message(Message(msg_type, args))
-
     return Message(msg_type, args)
 end
 
@@ -106,14 +119,10 @@ function write_message(msg)
     write(io, uint8(msg.msg_type))
     write(io, uint8(length(msg.args)))
     for arg=msg.args
-        write(io, uint8(length(arg)))
+        write(io, uint32(length(arg)))
         write(io, arg)
     end
     flush(io)
-
-    # print the message
-    print("sent message:  ")
-    print_message(msg)
 end
 
 # print a message (useful for debugging)
@@ -148,8 +157,8 @@ function send_fatal_error(msg)
 end
 
 # send an incomplete expression message
-function send_eval_incomplete(msg)
-    write_message(Message(MSG_OUTPUT_EVAL_INCOMPLETE, [msg]))
+function send_eval_incomplete()
+    write_message(Message(MSG_OUTPUT_EVAL_INCOMPLETE, []))
 end
 
 # send an expression result message
@@ -201,4 +210,4 @@ add_fd_handler(connectfd, socket_callback)
 ###########################################
 
 # do asynchronous stuff
-yield()
+wait(RemoteRef())

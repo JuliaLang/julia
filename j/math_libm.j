@@ -72,7 +72,7 @@ end
 @libmfunc_1arg_float Real   round
 
 #@libmfunc_1arg_int Real lrint
-@libmfunc_1arg_int Real lround iround
+#@libmfunc_1arg_int Real lround iround
 @libmfunc_1arg_int Real ilogb
 
 @libfdmfunc_2arg Number atan2

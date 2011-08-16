@@ -39,6 +39,10 @@ end
 map(f, a::Array{Any,1}) = { f(a[i]) | i=1:length(a) }
 map(f, a::Array{Any,1}, b::Array{Any,1}) =
     { f(a[i],b[i]) | i=1:min(length(a),length(b)) }
+function map(f, as::Array{Any,1}...)
+    n = min(map(length,as))
+    { f(map(a->a[i],as)...) | i=1:n }
+end
 
 cell(dims::(Int...))   = Array(Any, map(long, dims))
 cell(dims::Int...)     = Array(Any, map(long, dims))

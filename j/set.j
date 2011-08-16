@@ -22,6 +22,8 @@ del(s::Set, x)	     = (del(s.hash, x); s)
 del(s::Set, xs...)   = (for x=xs; del(s, x); end; s)
 del(s::Set, s2::Set) = (for x=s2; del(s, x); end; s) # TODO: set API is broken
 
+del_all{T}(s::Set{T}) = (s.hash = HashTable{T,Bool}(); s)
+
 start(s::Set)       = start(s.hash)
 done(s::Set, state) = done(s.hash, state)
 next(s::Set, state) = (((k,v),state) = next(s.hash, state); (k,state))

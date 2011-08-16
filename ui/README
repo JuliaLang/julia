@@ -1,0 +1,20 @@
+Here are the instructions for setting up the web repl locally.  I
+encourage everyone who wants to work on the web stuff (repl, graphics,
+whatever) to do this.
+
+1) Install lighttpd
+
+sudo apt-get install lighttpd
+
+2) Configure lighttpd
+
+The config file is /etc/lighttpd/lighttpd.conf.  Replace it with the
+one I attached to this email.  Change the document root to point to
+your_path_to_julia/ui/website.
+
+3) Start lighttpd and the julia server:
+
+a) sudo /etc/init.d/lighttpd start
+b) your_path_to_julia/julia-release-webserver
+
+4) Open your browser and go to localhost

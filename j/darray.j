@@ -111,7 +111,7 @@ end
 #find which pieces hold which subranges in distributed dimension
 #returns (pmap,dist,perm) where pmap[i] contains dist[i]:dist[i+1]-1
 #and perm is the permutation which sorts I
-function locate(d::DArray, I::Vector{Index})
+function locate(d::DArray, I::AbstractVector{Index})
     if isa(I, Range{Index}); I = I[:]; end
     (I, perm) = sortperm(I)
 
@@ -273,6 +273,7 @@ function assign(r::RemoteRef, args...)
     end
 end
 
+# 1d scalar ref
 function ref{T}(d::DArray{T,1}, i::Index)
     p = locate(d, i)
     if p==d.localpiece
@@ -285,6 +286,7 @@ end
 assign{T}(d::DArray{T,1}, v::AbstractArray, i::Index) =
     invoke(assign, (DArray{T,1}, Any, Index), d, v, i)
 
+# 1d scalar assign
 function assign{T}(d::DArray{T,1}, v, i::Index)
     p = locate(d, i)
     if p==d.localpiece
@@ -296,8 +298,8 @@ function assign{T}(d::DArray{T,1}, v, i::Index)
     d
 end
 
-function ref{T}(d::DArray{T}, i::Index)
-    sub = ind2sub(d.dims, i)
+# Nd scalar ref
+function ref_elt{T}(d::DArray{T}, sub::(Index...))
     p = locate(d, sub[d.distdim])
     if p==d.localpiece
         offs = d.dist[p]-1
@@ -307,10 +309,15 @@ function ref{T}(d::DArray{T}, i::Index)
         end
         return localize(d)[sub...]::T
     end
-    return remote_call_fetch(d.pmap[p], ref, d, i)::T
+    return remote_call_fetch(d.pmap[p], ref_elt, d, sub)::T
 end
 
+ref{T}(d::DArray{T}, i::Index)    = ref_elt(d, ind2sub(d.dims, i))
+ref{T}(d::DArray{T}, I::Index...) = ref_elt(d, I)
+
 ref(d::DArray) = d
+
+# Nd ref with Range1 indexes
 function ref{T}(d::DArray{T}, I::Range1{Index}...)
     (pmap, dist) = locate(d, I[d.distdim])
     A = Array(T, map(range -> length(range), I))
@@ -327,12 +334,12 @@ function ref{T}(d::DArray{T}, I::Range1{Index}...)
                                                       (1:length(I[i]))))
         K = ntuple(length(size(d)),i->(i==d.distdim ? (dist[p]:(dist[p+1]-1)) :
                                                       I[i]))
-        A[J...] = remote_call_fetch(pmap[p], ref, d, K...)
+        A[J...] = remote_call_fetch(d.pmap[pmap[p]], ref, d, K...)
     end
     return A
 end
 
-
+# combinations of Range1 and scalar indexes
 ref(d::DArray, I::Range1{Index}, j::Index) = d[I, j:j]
 ref(d::DArray, i::Index, J::Range1{Index}) = d[i:i, J]
 
@@ -340,9 +347,9 @@ ref(d::DArray, I::Union(Index,Range1{Index})...) =
     d[ntuple(length(I),i->(isa(I[i],Index) ? (I[i]:I[i]) : I[i] ))...]
 
 
-
-function ref{T}(d::DArray{T}, I::Vector{Index}...)
-    (pmap, dist, perm) = locate(d, I[d.distdim])
+# Nd ref with vector indexes
+function ref{T}(d::DArray{T}, I::AbstractVector{Index}...)
+    (pmap, dist, perm) = locate(d,[I[d.distdim]])
     A = Array(T, map(range -> length(range), I))
     if length(pmap) == 1 && pmap[1] == d.localpiece
         offs = d.dist[pmap[1]]-1
@@ -364,22 +371,20 @@ function ref{T}(d::DArray{T}, I::Vector{Index}...)
                                                       (1:length(I[i]))))
         K = ntuple(length(size(d)),i->(i==d.distdim ? II[lower:(j-1)] :
                                                       I[i]))
-        A[J...] = remote_call_fetch(pmap[p], ref, d, K...)
+        A[J...] = remote_call_fetch(d.pmap[pmap[p]], ref, d, K...)
     end
     return A
 end
 
-ref(d::DArray, I::Vector{Index}, j::Index) = d[I, [j]]
-ref(d::DArray, i::Index, J::Vector{Index}) = d[[i], J]
+# combinations of vector and scalar indexes
+ref(d::DArray, I::AbstractVector{Index}, j::Index) = d[I, [j]]
+ref(d::DArray, i::Index, J::AbstractVector{Index}) = d[[i], J]
 
-ref(d::DArray, I::Union(Index,Vector{Index})...) =
+ref(d::DArray, I::Union(Index,AbstractVector{Index})...) =
     d[ntuple(length(I),i->(isa(I[i],Index) ? [I[i]] : I[i] ))...]
 
-assign(d::DArray, v::AbstractArray, i::Index) =
-    invoke(assign, (DArray, Any, Index), d, v, i)
-
-function assign(d::DArray, v, i::Index)
-    sub = ind2sub(d.dims, i)
+# Nd scalar assign
+function assign_elt(d::DArray, v, sub::(Index...))
     p = locate(d, sub[d.distdim])
     if p==d.localpiece
         offs = d.dist[p]-1
@@ -389,15 +394,32 @@ function assign(d::DArray, v, i::Index)
         end
         localize(d)[sub...] = v
     else
-        remote_do(d.pmap[p], assign, d, v, i)
+        remote_do(d.pmap[p], assign_elt, d, v, sub)
     end
     d
 end
 
+# disambiguating definitions
+assign(d::DArray, v::AbstractArray) = assign_elt(d, v, ())
+
+assign(d::DArray, v::AbstractArray, i::Index) =
+    assign_elt(d, v, ind2sub(d.dims, i))
+
+assign{T}(d::DArray{T,2}, v::AbstractArray, i0::Index, i1::Index) =
+    assign_elt(d, v, (i0,i1))
+assign(d::DArray, v::AbstractArray, i0::Index, i1::Index) =
+    assign_elt(d, v, (i0,i1))
+
+assign(d::DArray, v::AbstractArray, i0::Index, I::Index...) =
+    assign_elt(d, v, tuple(i0,I...))
+
+assign(d::DArray, v, i::Index) = assign_elt(d, v, ind2sub(d.dims, i))
+assign(d::DArray, v, i0::Index, I::Index...) = assign_elt(d, v, tuple(i0,I...))
+
 #TODO: Fix this
 assign(d::DArray, v) = error("distributed arrays of dimension 0 not supported")
 
-#TODO: check for same size
+# Nd assign, scalar fill case, with Range1 indexes
 function assign(d::DArray, v, I::Range1{Index}...)
     (pmap, dist) = locate(d, I[d.distdim])
     if length(pmap) == 1 && pmap[1] == d.localpiece
@@ -407,23 +429,39 @@ function assign(d::DArray, v, I::Range1{Index}...)
         localize(d)[J...] = v
         return d
     end
-    refs = Array(Union(DArray,RemoteRef),length(pmap))
+    for p = 1:length(pmap)
+        offs = I[d.distdim][1] - 1
+        K = ntuple(length(size(d)),i->(i==d.distdim ? (dist[p]:(dist[p+1]-1)) :
+                                                      I[i]))
+        sync_add(remote_call(d.pmap[pmap[p]], assign, d, v, K...))
+    end
+    return d
+end
+
+# Nd assign, array copy case, with Range1 indexes
+#TODO: check for same size
+function assign(d::DArray, v::AbstractArray, I::Range1{Index}...)
+    (pmap, dist) = locate(d, I[d.distdim])
+    if length(pmap) == 1 && pmap[1] == d.localpiece
+        offs = d.dist[pmap[1]]-1
+        J = ntuple(length(size(d)), i -> (i == d.distdim ? I[i]-offs :
+                                                           I[i]))
+        localize(d)[J...] = v
+        return d
+    end
     for p = 1:length(pmap)
         offs = I[d.distdim][1] - 1
         J = ntuple(length(size(d)),i->(i==d.distdim ? (dist[p]:(dist[p+1]-1))-offs :
                                                       (1:length(I[i]))))
         K = ntuple(length(size(d)),i->(i==d.distdim ? (dist[p]:(dist[p+1]-1)) :
                                                       I[i]))
-        refs[p] = remote_call(pmap[p], assign, d, v[J...], K...)
-    end
-    for p = 1:length(pmap)
-        if isa(refs[p], RemoteRef); wait(refs[p]); end
+        sync_add(remote_call(d.pmap[pmap[p]], assign, d, v[J...], K...))
     end
     return d
 end
 
-#TODO: check for same size
-function assign(d::DArray, v, I::Vector{Index}...)
+# Nd assign, scalar fill case, vector indexes
+function assign(d::DArray, v, I::AbstractVector{Index}...)
     (pmap, dist, perm) = locate(d, I[d.distdim])
     if length(pmap) == 1 && pmap[1] == d.localpiece
         offs = d.dist[pmap[1]]-1
@@ -432,7 +470,33 @@ function assign(d::DArray, v, I::Vector{Index}...)
         localize(d)[J...] = v
         return d
     end
-    refs = Array(Union(DArray,RemoteRef),length(pmap))
+    n = length(perm)
+    j = 1
+    II = I[d.distdim][perm] #the sorted indexes in the distributed dimension
+    for p = 1:length(pmap)
+        if dist[p] > II[j]; continue; end
+        lower = j
+        while j <= n && II[j] < dist[p+1]
+            j += 1
+        end
+        K = ntuple(length(size(d)),i->(i==d.distdim ? II[lower:(j-1)] :
+                                                      I[i]))
+        sync_add(remote_call(d.pmap[pmap[p]], assign, d, v, K...))
+    end
+    return d
+end
+
+# Nd assign, array copy case, vector indexes
+#TODO: check for same size
+function assign(d::DArray, v::AbstractArray, I::AbstractVector{Index}...)
+    (pmap, dist, perm) = locate(d, I[d.distdim])
+    if length(pmap) == 1 && pmap[1] == d.localpiece
+        offs = d.dist[pmap[1]]-1
+        J = ntuple(length(size(d)), i -> (i == d.distdim ? I[i]-offs :
+                                                           I[i]))
+        localize(d)[J...] = v
+        return d
+    end
     n = length(perm)
     j = 1
     II = I[d.distdim][perm] #the sorted indexes in the distributed dimension
@@ -446,21 +510,17 @@ function assign(d::DArray, v, I::Vector{Index}...)
                                                       (1:length(I[i]))))
         K = ntuple(length(size(d)),i->(i==d.distdim ? II[lower:(j-1)] :
                                                       I[i]))
-        refs[p] = remote_call(pmap[p], assign, d, v[J...], K...)
-    end
-    for p = 1:length(pmap)
-        if isa(refs[p], RemoteRef); wait(refs[p]); end
+        sync_add(remote_call(d.pmap[pmap[p]], assign, d, v[J...], K...))
     end
     return d
 end
 
-assign(d::DArray, v::AbstractArray, i::Index, is::Index...) =
-    invoke(assign, (DArray, Any, Index...), d, v, i, is...)
-
+# assign with combinations of Range1 and scalar indexes
 assign(d::DArray, v, I::Union(Index,Range1{Index})...) =
     assign(d,v,ntuple(length(I),i->(isa(I[i],Index) ? (I[i]:I[i]) : I[i] ))...)
 
-assign(d::DArray, I::Union(Index,Vector{Index})...) =
+# assign with combinations of vector and scalar indexes
+assign(d::DArray, v, I::Union(Index,AbstractVector{Index})...) =
     assign(d,v,ntuple(length(I),i->(isa(I[i],Index) ? [I[i]] : I[i] ))...)
 
 ## matrix multiply ##

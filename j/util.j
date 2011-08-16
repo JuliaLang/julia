@@ -8,22 +8,20 @@ catfile(file::String) = system(strcat("cat ", file))
 
 clock() = ccall(:clock_now, Float64, ())
 
-_TIMERS = ()
-
 function tic()
     t0 = clock()
-    global _TIMERS = (t0, _TIMERS)
+    tls(:TIMERS, (t0, get(tls(), :TIMERS, ())))
     return t0
 end
 
 function toc(noisy::Bool)
     t1 = clock()
-    global _TIMERS
-    if is(_TIMERS,())
+    timers = get(tls(), :TIMERS, ())
+    if is(timers,())
         error("toc() without tic()")
     end
-    t0 = _TIMERS[1]
-    _TIMERS = _TIMERS[2]
+    t0 = timers[1]
+    tls(:TIMERS, timers[2])
     t = t1-t0
     if noisy
         print("elapsed time: ", t, " sec\n")

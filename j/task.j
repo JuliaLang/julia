@@ -8,6 +8,22 @@ function wait(t::Task)
     yieldto(t)  # return last value
 end
 
+function tls()
+    t = current_task()
+    if is(t.tls, nothing)
+        t.tls = IdTable()
+    end
+    (t.tls)::IdTable
+end
+
+function tls(key)
+    tls()[key]
+end
+
+function tls(key, val)
+    tls()[key] = val
+end
+
 let _generator_stack = {}
     global produce, consume
     function produce(v)

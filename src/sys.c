@@ -227,7 +227,6 @@ int jl_stderr() { return STDERR_FILENO; }
 static pthread_t io_thread;
 static pthread_mutex_t q_mut;
 static pthread_mutex_t wake_mut;
-static pthread_mutex_t buf_mut;
 static pthread_cond_t wake_cond;
 
 typedef struct _sendreq_t {
@@ -259,7 +258,7 @@ static void *run_io_thr(void *arg)
 
         if (!r->now) {
             int64_t now = (int64_t)(clock_now()*1e6);
-            int64_t waittime = r->buf->userdata+200-now;
+            int64_t waittime = r->buf->userdata+200-now;  // microseconds
             if (waittime > 0) {
                 struct timespec wt;
                 wt.tv_sec = 0;
@@ -268,11 +267,11 @@ static void *run_io_thr(void *arg)
             }
         }
 
-        pthread_mutex_lock(&buf_mut);
+        pthread_mutex_lock(&r->buf->mutex);
         size_t sz;
         size_t n = r->buf->size;
         char *buf = ios_takebuf(r->buf, &sz);
-        pthread_mutex_unlock(&buf_mut);
+        pthread_mutex_unlock(&r->buf->mutex);
 
         size_t nw;
         _os_write_all(r->fd, buf, n, &nw);
@@ -288,15 +287,19 @@ static void *run_io_thr(void *arg)
 }
 
 DLLEXPORT
-void jl_buf_mutex_lock()
+void jl_buf_mutex_lock(ios_t *s)
 {
-    pthread_mutex_lock(&buf_mut);
+    if (!s->mutex_initialized) {
+        pthread_mutex_init(&s->mutex, NULL);
+        s->mutex_initialized = 1;
+    }
+    pthread_mutex_lock(&s->mutex);
 }
 
 DLLEXPORT
-void jl_buf_mutex_unlock()
+void jl_buf_mutex_unlock(ios_t *s)
 {
-    pthread_mutex_unlock(&buf_mut);
+    pthread_mutex_unlock(&s->mutex);
 }
 
 DLLEXPORT
@@ -358,7 +361,6 @@ void jl_start_io_thread()
 {
     pthread_mutex_init(&q_mut, NULL);
     pthread_mutex_init(&wake_mut, NULL);
-    pthread_mutex_init(&buf_mut, NULL);
     pthread_cond_init(&wake_cond, NULL);
     pthread_create(&io_thread, NULL, run_io_thr, NULL);
 }

@@ -40,6 +40,14 @@ function reinterpret{T,S}(::Type{T}, a::Array{S})
 end
 reinterpret(t,x) = reinterpret(t,[x])[1]
 
+function reshape{T,N}(a::Array{T}, dims::NTuple{N,Size})
+    if prod(dims) != numel(a)
+        error("reshape: invalid dimensions")
+    end
+    ccall(:jl_reshape_array, Any, (Any, Any, Any),
+          Array{T,N}, a, dims)::Array{T,N}
+end
+
 ## Constructors ##
 
 jl_comprehension_zeros{T,n}(oneresult::AbstractArray{T,n}, dims...) = Array(T, dims...)
@@ -261,6 +269,8 @@ function cat(catdim::Int, X...)
         dimsC = nargs
     elseif catdim == 2
         dimsC = (1, nargs)
+    else
+        # TODO
     end
     C = Array(typeC, dimsC)
 
@@ -317,3 +327,35 @@ end
 
 vcat(A::Array...) = cat(1, A...)
 hcat(A::Array...) = cat(2, A...)
+
+# 2d concatenation
+
+function hvcat{T}(rows::(Size...), as::Array{T,2}...)
+    nbr = length(rows)  # number of block rows
+
+    nc = mapreduce(+, a->size(a,2), as[1:rows[1]])
+    nr = 0
+
+    a = 1
+    for i = 1:nbr
+        nr += size(as[a],1)
+        a += rows[i]
+    end
+
+    out = Array(T, nr, nc)
+
+    a = 1
+    r = 1
+    for i = 1:nbr
+        c = 1
+        szi = size(as[a],1)
+        for j = 1:rows[i]
+            szj = size(as[a+j-1],2)
+            out[r:r-1+szi, c:c-1+szj] = as[a+j-1]
+            c += szj
+        end
+        r += szi
+        a += rows[i]
+    end
+    out
+end

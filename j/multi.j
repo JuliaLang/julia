@@ -15,6 +15,8 @@
 ##
 ## fetch(rr) - wait for and get the value of a RemoteRef
 ##
+## remote_call_fetch(w, func, args...) - faster fetch(remote_call(...))
+##
 ## pmap(func, lst) -
 ##     call a function on each element of lst (some 1-d thing), in
 ##     parallel.
@@ -135,12 +137,12 @@ end
 
 function send_msg_(w::Worker, kind, args, now::Bool)
     buf = w.sendbuf
-    ccall(:jl_buf_mutex_lock, Void, ())
+    ccall(:jl_buf_mutex_lock, Void, (Ptr{Void},), buf.ios)
     serialize(buf, kind)
     for arg=args
         serialize(buf, arg)
     end
-    ccall(:jl_buf_mutex_unlock, Void, ())
+    ccall(:jl_buf_mutex_unlock, Void, (Ptr{Void},), buf.ios)
 
     if !now && w.gcflag
         flush_gc_msgs(w)
@@ -225,6 +227,7 @@ function join_pgroup(myid, locs, sockets)
 end
 
 myid() = (global PGRP; (PGRP::ProcessGroup).myid)
+nprocs() = (global PGRP; (PGRP::ProcessGroup).np)
 
 function worker_id_from_socket(s)
     global PGRP
@@ -525,7 +528,13 @@ end
 remote_call(id::Int, f, args...) = remote_call(worker_from_id(id), f, args...)
 
 # faster version of fetch(remote_call(...))
-remote_call_fetch(w::LocalProcess, f, args...) = local_remote_call(f, args)
+function remote_call_fetch(w::LocalProcess, f, args...)
+    rr = WeakRemoteRef(w)
+    oid = rr2id(rr)
+    wi = schedule_call(oid, ()->local_remote_call(f,args))
+    wi.notify = ((), :call_fetch, oid, wi.notify)
+    force(yieldto(Scheduler, WaitFor(:call_fetch, rr)))
+end
 
 function remote_call_fetch(w::Worker, f, args...)
     # can be weak, because the program will have no way to refer to the Ref
@@ -695,6 +704,7 @@ function perform_work(job::WorkItem)
             if is(runner,())
                 # make new task to use
                 runner = Task(taskrunner, 1024*1024)
+                runner.tls = nothing
                 yieldto(runner)
             end
             job.task = runner
@@ -714,7 +724,10 @@ function perform_work(job::WorkItem)
         job.result = result.value
     end
     if job.done
-        runner = job.task  # Task now free to be shared
+        if isa(job.task,Task)
+            runner = job.task::Task  # Task now free to be shared
+            runner.tls = nothing
+        end
         job.task = ()
         # do notifications
         notify_done(job)
@@ -936,13 +949,13 @@ end
 
 # establish an SSH tunnel to a remote worker
 # returns P such that localhost:P connects to host:port
-function worker_tunnel(host, port)
-    localp = 9201
-    while !run(`ssh -f -o ExitOnForwardFailure=yes julia@$host -L $localp:$host:$port -N`)
-        localp += 1
-    end
-    localp
-end
+# function worker_tunnel(host, port)
+#     localp = 9201
+#     while !run(`ssh -f -o ExitOnForwardFailure=yes julia@$host -L $localp:$host:$port -N`)
+#         localp += 1
+#     end
+#     localp
+# end
 
 function start_remote_workers(machines, cmds)
     n = length(cmds)
@@ -1197,16 +1210,15 @@ end
 
 ## higher-level functions: spawn, pmap, pfor, etc. ##
 
-_SPAWNS = ()
+sync_begin() = tls(:SPAWNS, ({}, get(tls(), :SPAWNS, ())))
 
-sync_begin() = (global _SPAWNS = ({},_SPAWNS))
 function sync_end()
-    global _SPAWNS
-    if is(_SPAWNS,())
+    spawns = get(tls(), :SPAWNS, ())
+    if is(spawns,())
         error("sync_end() without sync_begin()")
     end
-    refs = _SPAWNS[1]
-    _SPAWNS = _SPAWNS[2]
+    refs = spawns[1]
+    tls(:SPAWNS, spawns[2])
     for r = refs
         wait(r)
     end
@@ -1222,14 +1234,15 @@ macro sync(block)
     end
 end
 
-function spawnat(p, thunk)
-    global _SPAWNS
-    r = remote_call(p, thunk)
-    if !is(_SPAWNS,())
-        push(_SPAWNS[1], r)
+function sync_add(r)
+    spawns = get(tls(), :SPAWNS, ())
+    if !is(spawns,())
+        push(spawns[1], r)
     end
     r
 end
+
+spawnat(p, thunk) = sync_add(remote_call(p, thunk))
 
 let lastp = 1
     global spawn
@@ -1313,13 +1326,44 @@ macro bcast(ex)
     end
 end
 
-pmap(f, lsts...) = pmap(PGRP, f, lsts...)
-pmap(grp::ProcessGroup, f) = f()
+function pmap_static(f, lsts...)
+    np = nprocs()
+    n = length(lsts[1])
+    { remote_call((i-1)%np+1, f, map(L->L[i], lsts)...) | i = 1:n }
+end
 
-function pmap(grp::ProcessGroup, f, lsts...)
-    np = grp.np
-    { remote_call(grp.workers[(i-1)%np+1], f, map(L->L[i], lsts)...) |
-     i = 1:length(lsts[1]) }
+pmap(f) = f()
+
+# dynamic scheduling by creating a local task to feed work to each processor
+# as it finishes.
+# example unbalanced workload:
+# rsym(n) = (a=rand(n,n);a*a')
+# L = {rsym(200),rsym(1000),rsym(200),rsym(1000),rsym(200),rsym(1000),rsym(200),rsym(1000)};
+# pmap(eig, L);
+function pmap(f, lsts...)
+    global PGRP
+    np = PGRP.np
+    n = length(lsts[1])
+    results = cell(n)
+    i = 1
+    # function to produce the next work item from the queue.
+    # in this case it's just an index.
+    next_idx() = (idx=i; i+=1; idx)
+    @sync begin
+        for p=1:np
+            @spawnlocal begin
+                while true
+                    idx = next_idx()
+                    if idx > n
+                        break
+                    end
+                    results[idx] = remote_call_fetch(p, f,
+                                                     map(L->L[idx], lsts)...)
+                end
+            end
+        end
+    end
+    results
 end
 
 function preduce(reducer, f, r::Range1{Size})

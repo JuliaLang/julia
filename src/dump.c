@@ -864,6 +864,7 @@ void jl_restore_system_image(char *fname)
     jl_float64_type = (jl_bits_type_t*)jl_deserialize_value(&f);
     jl_init_box_caches();
     jl_nothing = jl_deserialize_value(&f);
+    jl_root_task->tls = jl_nothing;
     jl_weakref_type = (jl_struct_type_t*)jl_deserialize_value(&f);
     jl_weakref_type->fptr = jl_weakref_ctor;
     jl_weakref_type->env = NULL;

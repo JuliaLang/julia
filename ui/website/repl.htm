@@ -5,7 +5,7 @@
 		<title>Julia - A fresh approach to technical computing.</title>
 		<link href="styles.css" rel="stylesheet" type="text/css" />
 		<link href="favicon.ico" rel="shortcut icon" />
-		<link href='http://fonts.googleapis.com/css?family=Droid+Sans+Mono&v2' rel='stylesheet' type='text/css'>
+		<link href="http://fonts.googleapis.com/css?family=Droid+Sans+Mono&v2" rel="stylesheet" type="text/css">
 		<script type="text/javascript" src="jquery.js"></script>
 		<script type="text/javascript" src="jquery.json.js"></script>
 		<script>
@@ -49,25 +49,30 @@
 			window.onresize = set_column_heights;
 		</script>
 		<script>
-			// keep track of terminal history
+			/*
+				See julia-web.j for network protocol.
+			*/
+
+			// how often we poll the server
+			var poll_interval = 2000;
+
+			// terminal content
 			var terminal_data = "";
-			var terminal_data_size = 50000;
+
+			// keep track of terminal history
 			var input_history = [];
 			var input_history_current = [""];
 			var input_history_id = 0;
 			var input_history_size = 100;
 
-			// whether we should clear the input box on next response
-			var clear_on_next_response = false;
+			// keep track of incomplete expressions
+			var incomplete_expr = "";
+
+			// whether the terminal should clear the input on the next non-null response
+			var clear_input_on_response = false;
 
 			// a queue of messages to be sent to the server
 			var outbox_queue = [];
-
-			// whether we are waiting for a message to be sent
-			var outstanding_message = false;
-
-			// this is removed from all terminal text
-			var julia_path = "/home/stephan/julia/";
 
 			// keep track of the last time a request was sent
 			var last_request_time = new Date();
@@ -85,7 +90,7 @@
 							sel.text = myValue;
 							this.focus();
 						}
-						else if (this.selectionStart || this.selectionStart == '0')
+						else if (this.selectionStart || this.selectionStart == "0")
 						{
 							var startPos = this.selectionStart;
 							var endPos = this.selectionEnd;
@@ -105,86 +110,24 @@
 				}
 			});
 
+			// escape html
+			function escape_html(str)
+			{
+				// escape ampersands, angle brackets, spaces, and newlines
+				return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/ /g, "&nbsp;").replace(/\n/g, "<br />");
+			}
+
 			// add to the terminal
 			function add_to_terminal(data)
 			{
-				// clear the input if necessary
-				if (clear_on_next_response)
-				{
-					$('#terminal-input').val("");
-					clear_on_next_response = false;
-				}
-
 				// add the data
 				terminal_data += data;
 
-				// don't show server paths
-				terminal_data = terminal_data.replace(new RegExp(julia_path, 'g'), "");
-
-				// limit size of stored data
-				if (terminal_data.length > terminal_data_size)
-				{
-					// make sure we do not cut off inside an escape sequence or HTML tag
-					var amp_pos = -1;
-					for (var i = 0; i < 5; i += 1)
-					{
-						if (terminal_data[terminal_data.length-terminal_data_size-1-i] == "&")
-							amp_pos = terminal_data.length-terminal_data_size-1-i;
-					}
-					var lt_pos = -1;
-					for (var i = 0; i < 5; i += 1)
-					{
-						if (terminal_data[terminal_data.length-terminal_data_size-1-i] == "<")
-							lt_pos = terminal_data.length-terminal_data_size-1-i;
-					}
-					if ((amp_pos == -1) == (lt_pos == -1))
-						terminal_data = terminal_data.substring(terminal_data.length-terminal_data_size);
-					if (amp_pos != -1 && lt_pos == -1)
-					{
-						var semi_pos = -1;
-						for (var i = 0; i < 5; i += 1)
-						{
-							if (terminal_data[terminal_data.length-terminal_data_size+i] == ";")
-								semi_pos = terminal_data.length-terminal_data_size+i;
-						}
-						if (semi_pos == -1)
-							terminal_data = terminal_data.substring(terminal_data.length-terminal_data_size);
-						else
-							terminal_data = terminal_data.substring(semi_pos+1);
-					}
-					if (amp_pos == -1 && lt_pos != -1)
-					{
-						var gt_pos = -1;
-						for (var i = 0; i < 5; i += 1)
-						{
-							if (terminal_data[terminal_data.length-terminal_data_size+i] == ">")
-								gt_pos = terminal_data.length-terminal_data_size+i;
-						}
-						if (gt_pos == -1)
-							terminal_data = terminal_data.substring(terminal_data.length-terminal_data_size);
-						else
-							terminal_data = terminal_data.substring(gt_pos+1);
-					}
-				}
-				
-				// find the last line break
-				var last_newline = terminal_data.lastIndexOf("<br />");
-				if (last_newline == -1)
-				{
-					$("#terminal").html("");
-					$("#prompt").html(terminal_data.replace(/julia&gt;&nbsp;/g, "<span class=\"prompt\">julia&gt;&nbsp;</span>"));
-				}
-				else
-				{
-					var new_terminal_data = terminal_data.substring(0, last_newline).replace(/julia&gt;&nbsp;/g, "<span class=\"prompt\">julia&gt;&nbsp;</span>");
-					if (new_terminal_data.lastIndexOf("<br />") == new_terminal_data.length-6)
-						new_terminal_data += "&nbsp;";
-					$("#terminal").html(new_terminal_data);
-					$("#prompt").html(terminal_data.substring(last_newline+6).replace(/julia&gt;&nbsp;/g, "<span class=\"prompt\">julia&gt;&nbsp;</span>"));
-				}
+				// update the html
+				$("#terminal").html(terminal_data);
 
 				// resize the input box (the -1 is for Internet Explorer)
-				$('#terminal-input').width($('#terminal').width()-$('#prompt').width()-1);
+				$("#terminal-input").width($("#terminal").width()-$("#prompt").width()-1);
 
 				// scroll to the new data
 				$("#terminal-form").prop("scrollTop", $("#terminal-form").prop("scrollHeight"));
@@ -207,7 +150,7 @@
 			function init_session()
 			{
 				// submit AJAX request via POST
-				outbox_queue.push({"type": "init"});
+				outbox_queue.push({"message_type": 1});
 				process_outbox();
 
 				// set the time of the last request
@@ -218,7 +161,7 @@
 			function poll()
 			{
 				// submit AJAX request via POST
-				outbox_queue.push({"type": "poll"});
+				outbox_queue.push({"message_type": 2});
 				process_outbox();
 
 				// set the time of the last request
@@ -228,7 +171,7 @@
 			// send the next line in the queue - return whether there is more data to process
 			function process_outbox()
 			{
-				if (outbox_queue.length > 0 && !outstanding_message)
+				if (outbox_queue.length > 0)
 					$.post("/repl.scgi", {"request": $.toJSON(outbox_queue.shift())}, callback, "json");
 				return (outbox_queue.length > 0);
 			}
@@ -236,33 +179,79 @@
 			// called when the server has responded
 			function callback(data, textStatus, jqXHR)
 			{
-				// we're no longer waiting for that message to be sent
-				outstanding_message = false;
-
-				// error message
-				if (data.type == "error")
-					add_to_terminal("<span class=\"error\">"+data.message+"</span>");
-
-				// fatal error message
-				if (data.type == "fatal_error")
+				// reset the input if necessary
+				if (clear_input_on_response && (data.message_type == 1 || data.message_type == 2 || data.message_type == 3 || data.message_type == 5))
 				{
-					add_to_terminal("<span class=\"error\">"+data.message+"</span>");
+					add_to_terminal("<span class=\"prompt\">julia&gt;&nbsp;</span>"+escape_html($("#terminal-input").val())+"<br />");
+					$("#terminal-input").val("");
+					$("#terminal-input").removeAttr("disabled");
+					$("#terminal-input").focus();
+				}
+
+				// MSG_OUTPUT_NULL
+				if (data.message_type == 0)
+				{
+					// do nothing
+				}
+
+				// MSG_OUTPUT_MESSAGE
+				if (data.message_type == 1)
+				{
+					add_to_terminal("<span class=\"message\">"+escape_html(data.arg0)+"</span><br /><br />");
+				}
+
+				// MSG_OUTPUT_ERROR
+				if (data.message_type == 2)
+				{
+					add_to_terminal("<span class=\"error\">"+escape_html(data.arg0)+"</span><br /><br />");
+				}
+
+				// MSG_OUTPUT_FATAL_ERROR
+				if (data.message_type == 3)
+				{
+					add_to_terminal("<span class=\"error\">"+escape_html(data.arg0)+"</span><br /><br />");
 					return;
 				}
 
-				// normal message
-				if (data.type == "message")
-					add_to_terminal("<span class=\"message\">"+data.message+"</span>");
-
-				// init message
-				if (data.type == "init_message")
-					$("#terminal").html("<span class=\"message\">"+data.message+"</span>");
-
-				// add new server data to the terminal
-				if (data.type == "content")
+				// MSG_OUTPUT_EVAL_INCOMPLETE
+				if (data.message_type == 4)
 				{
-					if (data.content != "")
-						add_to_terminal(data.content);
+					// change this stuff
+					if (incomplete_expr == "")
+						add_to_terminal("<span class=\"prompt\">julia&gt;&nbsp;</span>");
+					add_to_terminal(escape_html($("#terminal-input").val())+"<br />");
+					incomplete_expr += $("#terminal-input").val()+"\n";
+					$("#terminal-input").val("");
+					$("#terminal-input").removeAttr("disabled");
+					$("#terminal-input").focus();
+				}
+				else
+					incomplete_expr = "";
+
+				// MSG_OUTPUT_EVAL_RESULT
+				if (data.message_type == 5)
+				{
+					if (data.arg0 != "")
+						add_to_terminal(escape_html(data.arg0)+"<br /><br />");
+				}
+
+				// MSG_OUTPUT_OTHER
+				if (data.message_type == 6)
+				{
+					if (data.arg0 != "")
+						add_to_terminal(escape_html(data.arg0));
+				}
+
+				// MSG_OUTPUT_READY
+				if (data.message_type == 7)
+				{
+					// remove the initializing message
+					$("#terminal").html("");
+
+					// enable input
+					$("#prompt").show();
+					$("#terminal-input").removeAttr("disabled");
+					$("#terminal-input").focus();
 				}
 
 				// send any remaining messages if there are any
@@ -270,12 +259,15 @@
 					return;
 
 				// poll the server again
-				setTimeout(poll, 500);
+				setTimeout(poll, poll_interval);
 			}
 
 			// called on page load
 			$(document).ready(function()
 			{
+				// resize the input box (the -1 is for Internet Explorer)
+				$("#terminal-input").width($("#terminal").width()-$("#prompt").width()-1);
+				
 				// hook mouse click events
 				$("#terminal-form").click(function(evt) { $("#terminal-input").focus(); } );
 
@@ -292,7 +284,7 @@
 					for (var i = 0; i < lines.length-1; i += 1)
 					{
 						// send the input to the server via AJAX
-						outbox_queue.push({"type": "input", "input": lines[i]+"\n"});
+						outbox_queue.push({"message_type": 3, "arg0": lines[i]+"\n"});
 
 						// input history
 						input_history.push(lines[i]);
@@ -352,7 +344,7 @@
 							if (input != "")
 							{
 								// send the input to the server via AJAX
-								outbox_queue.push({"type": "input", "input": input+"\n"});
+								outbox_queue.push({"message_type": 3, "arg0": incomplete_expr+input});
 								process_outbox();
 
 								// input history
@@ -365,11 +357,13 @@
 
 								// set the time of the last request
 								last_request_time = new Date();
-
-								// clear the input box
-								clear_on_next_response = true;
 							}
-							$("#terminal-form").prop("scrollTop", $("#terminal-form").prop("scrollHeight"));
+
+							// disable the terminal input and clear the input field later
+							$("#terminal-input").attr("disabled", "disabled");
+							clear_input_on_response = true;
+
+							// prevent the form from actually submitting
 							return false;
 					}
 				});
@@ -379,9 +373,6 @@
 
 				// start the watchdog
 				setTimeout(watchdog, 1000);
-
-				// focus the input box (most browsers do this automatically because of the autofocus attribute)
-				$('#terminal-input').focus();
 			});
 		</script>
 	</head>
@@ -397,16 +388,13 @@
 			<div id="left-column">
 				<a href="/"><img class="bullet" src="images/bullet.png" alt="" /> Home</a>
 				<a href="/repl.htm" class="current-page"><img class="bullet" src="images/bullet.png" alt="" /> Interactive Prompt</a>
-				<a href="/plots.htm"><img class="bullet" src="images/bullet.png" alt="" /> Plots</a>
-				<a href="/docs.htm"><img class="bullet" src="images/bullet.png" alt="" /> Documentation</a>
-				<a href="/about.htm"><img class="bullet" src="images/bullet.png" alt="" /> About</a>
 			</div>
 			<div id="right-column">
 				<form id="terminal-form">
-					<div id="terminal"></div>
+					<div id="terminal"><span class="message">&lt;initializing&gt;</span></div>
 					<div>
-						<div id="prompt"></div>
-						<textarea id="terminal-input" autofocus="autofocus" spellcheck="false" rows="1" cols="20" /></textarea>
+						<div id="prompt">julia&gt;&nbsp;</div>
+						<textarea id="terminal-input" spellcheck="false" rows="1" cols="20" disabled="disabled" /></textarea>
 					</div>
 				</form>
 			</div>

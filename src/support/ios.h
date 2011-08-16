@@ -2,6 +2,7 @@
 #define __IOS_H_
 
 #include <stdarg.h>
+#include <pthread.h>
 
 // this flag controls when data actually moves out to the underlying I/O
 // channel. memory streams are a special case of this where the data
@@ -61,8 +62,10 @@ typedef struct {
 
     // use julia-compatible buffer allocator
     unsigned char julia_alloc:1;
+    unsigned char mutex_initialized:1;
 
     int64_t userdata;
+    pthread_mutex_t mutex;
 
     // todo: mutex
     char local[IOS_INLSIZE];

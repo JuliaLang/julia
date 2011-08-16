@@ -1,7 +1,3 @@
-type IdTable
-    ht::Array{Any,1}
-end
-
 function _tablesz(i::Int)
     if i < 16
         return 16
@@ -15,8 +11,14 @@ function _tablesz(i::Int)
     return i<<1
 end
 
-idtable(sz::Int) = IdTable(cell(2*_tablesz(sz)))
-idtable() = idtable(0)
+type IdTable
+    ht::Array{Any,1}
+    IdTable(sz::Int) = new(cell(2*_tablesz(sz)))
+    IdTable() = IdTable(0)
+end
+
+idtable(sz::Int) = IdTable(sz)
+idtable() = IdTable(0)
 
 function assign(t::IdTable, v::ANY, k::ANY)
     t.ht = ccall(:jl_eqtable_put,
@@ -29,6 +31,8 @@ get(t::IdTable, key::ANY, default::ANY) =
 
 del(t::IdTable, key::ANY) =
     (ccall(:jl_eqtable_del, Int32, (Any, Any), t.ht, key); t)
+
+del_all(t::IdTable) = (t.ht = cell(length(t.ht)); t)
 
 _secret_table_token_ = (:BOO,)
 
@@ -112,6 +116,16 @@ function rehash{K,V}(h::HashTable{K,V}, newsz)
         end
     end
 
+    h.keys = newht.keys
+    h.vals = newht.vals
+    h.used = newht.used
+    h.deleted = newht.deleted
+    h
+end
+
+function del_all{K,V}(h::HashTable{K,V})
+    sz = length(h.keys)
+    newht = HashTable{K,V}(sz)
     h.keys = newht.keys
     h.vals = newht.vals
     h.used = newht.used
@@ -287,6 +301,7 @@ end
 
 get(wkh::WeakKeyHashTable, key, deflt) = get(wkh.ht, key, deflt)
 del(wkh::WeakKeyHashTable, key) = del(wkh.ht, key)
+del_all(wkh::WeakKeyHashTable)  = (del_all(wkh.ht); wkh)
 has(wkh::WeakKeyHashTable, key) = has(wkh.ht, key)
 ref(wkh::WeakKeyHashTable, key) = ref(wkh.ht, key)
 isempty(wkh::WeakKeyHashTable) = isempty(wkh.ht)
