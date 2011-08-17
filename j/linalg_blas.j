@@ -146,12 +146,18 @@ end
 
 function (*){T<:Union(Float64,Float32,Complex128,Complex64)}(A::VecOrMat{T},
                                                              B::VecOrMat{T})
-    m = size(A, 1)
-    if isa(B, Vector); n = 1; else n = size(B, 2); end
-    if isa(A, Vector); k = 1; else k = size(A, 2); end
-    if k != size(B,1)
+    (mA, nA) = size(A)
+    (mB, nB) = size(B)
+
+    # TODO: Use DGEMV for matvec.
+    if isa(B, Vector); n = 1; else n = nB; end
+    if isa(A, Vector); k = 1; else k = nA; end
+    if k != mB
         error("*: argument shapes do not match")
     end
+
+    if mA == 2 && nA == 2 && nB == 2; return mul22(A,B); end
+    if mA == 3 && nA == 3 && nB == 3; return mul33(A,B); end
 
     # Result array does not need to be initialized as long as beta==0
     C = isa(B, Vector) ? Array(T, m) : Array(T, m, n)
