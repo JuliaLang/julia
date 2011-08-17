@@ -102,40 +102,40 @@ rem(x::Float64, y::Float64) = boxf64(rem_float(unbox64(x), unbox64(y)))
 < (x::Float64, y::Float64) = lt_float(unbox64(x),unbox64(y))
 <=(x::Float32, y::Float32) = le_float(unbox32(x),unbox32(y))
 <=(x::Float64, y::Float64) = le_float(unbox64(x),unbox64(y))
-> (x::Float32, y::Float32) = gt_float(unbox32(x),unbox32(y))
-> (x::Float64, y::Float64) = gt_float(unbox64(x),unbox64(y))
->=(x::Float32, y::Float32) = ge_float(unbox32(x),unbox32(y))
->=(x::Float64, y::Float64) = ge_float(unbox64(x),unbox64(y))
 
 isequal(x::Float, y::Float) = (x == y) || (isnan(x) && isnan(y))
 
-## constants ##
+## floating point traits ##
 
-Inf = 1/0
-NaN = -(0/0)
+Inf = boxf64(unbox64(0x7ff0000000000000))
+NaN = boxf64(unbox64(0x7ff8000000000000))
+
+@eval begin
+    inf(::Type{Float32}) = $float32(Inf)
+    nan(::Type{Float32}) = $float32(NaN)
+    inf(::Type{Float64}) = $Inf
+    nan(::Type{Float64}) = $NaN
+    inf{T<:Float}(x::T) = inf(T)
+    nan{T<:Float}(x::T) = nan(T)
+
+    typemin(::Type{Float32}) = $boxf32(unbox32(uint32(0x00800000)))
+    typemax(::Type{Float32}) = $boxf32(unbox32(uint32(0x7f7fffff)))
+    typemin(::Type{Float64}) = $boxf64(unbox64(0x0010000000000000))
+    typemax(::Type{Float64}) = $boxf64(unbox64(0x7fefffffffffffff))
+
+    eps(::Type{Float32}) = $boxf32(unbox32(uint32(0x34000000)))
+    eps(::Type{Float64}) = $boxf64(unbox64(0x3cb0000000000000))
+end
+
+eps(x::Float32) = isfinite(x) ? abs(boxf32(unbox32(boxsi32(unbox32(x))+int32(1)))-x) : nan(x)
+eps(x::Float64) = isfinite(x) ? abs(boxf64(unbox64(boxsi64(unbox64(x))+int64(1)))-x) : nan(x)
+
+sizeof(::Type{Float32}) = 4
+sizeof(::Type{Float64}) = 8
+
+## mathematical constants ##
 
 pi() = 3.14159265358979323846
 pi(x) = pi()
 pi(::Union(Float64, Type{Float64})) = 3.14159265358979323846
 pi(::Union(Float32, Type{Float32})) = float32(3.14159265358979323846)
-
-## traits ##
-
-eps(::Type{Float64}) = 2.2204460492503131e-16
-@eval eps(::Type{Float32}) = $float32(1.19209289550781250e-07)
-@eval function eps(x::Float64)
-    x == 0.0 ? $boxf64(unbox64(uint64(1))) :
-    isfinite(x) ? abs(x)*$eps(Float64) : $NaN
-end
-@eval function eps(x::Float32)
-    x == $float32(0.0) ? $boxf32(unbox32(uint32(1))) :
-    isfinite(x) ? abs(x)*$eps(Float32) : $float32(NaN)
-end
-
-typemin(::Type{Float32}) = float32(1.175494351e-38)
-typemax(::Type{Float32}) = float32(3.402823466e+38)
-typemin(::Type{Float64}) = 2.2250738585072014e-308
-typemax(::Type{Float64}) = 1.7976931348623157e+308
-
-sizeof(::Type{Float32}) = 4
-sizeof(::Type{Float64}) = 8
