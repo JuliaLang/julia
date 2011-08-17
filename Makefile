@@ -37,11 +37,8 @@ distclean: cleanall
 .PHONY: default debug release julia-debug julia-release \
 	test testall test-* sloccount clean cleanall
 
-test-perf: default
-	make -C test test-perf
-
-testall: default
-	make -C test testall
+test test-utf8 test-perf testall: default
+	make -C test $@
 
 ## SLOCCOUNT ##
 
