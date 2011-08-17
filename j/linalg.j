@@ -1,10 +1,42 @@
 ## linalg.j: Basic Linear Algebra functions ##
 
-dot(x::Vector, y::Vector) = sum(x.*conj(y))
+dot(x::AbstractVector, y::AbstractVector) = sum(x.*conj(y))
 
 # blas.j defines these for floats; this handles other cases
-(*)(A::Matrix, B::Vector) = [ sum(A[i,:].*B) | i=1:size(A,1) ]
-(*)(A::Matrix, B::Matrix) = [ sum(A[i,:].*B[:,j]) | i=1:size(A,1), j=1:size(B,2) ]
+#(*)(A::Matrix, B::Vector) = [ sum(A[i,:].*B) | i=1:size(A,1) ]
+function (*){T,S}(A::AbstractMatrix{T}, B::AbstractVector{S})
+    R = promote_type(T,S)
+    m = size(A,1)
+    l = size(B,1)
+    C = zeros(R, m)
+    for k = 1:l
+        b = B[k]
+        for i = 1:m
+            C[i] += b * A[i, k]
+        end
+    end
+    C
+end
+
+#(*)(A::Matrix, B::Matrix) = [ sum(A[i,:].*B[:,j]) | i=1:size(A,1), j=1:size(B,2) ]
+function (*){T,S}(A::AbstractMatrix{T}, B::AbstractMatrix{S})
+    R = promote_type(T,S)
+    m = size(A,1)
+    n = size(B,2)
+    l = size(B,1)
+    C = zeros(R, m, n)
+    for j = 1:n
+        coffs = (j-1)*m
+        for k = 1:l
+            b = B[k, j]
+            aoffs = (k-1)*m
+            for i = 1:m
+                C[coffs+i] += b * A[aoffs+i]
+            end
+        end
+    end
+    C
+end
 
 triu(M) = triu(M,0)
 tril(M) = tril(M,0)

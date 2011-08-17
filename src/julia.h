@@ -41,7 +41,8 @@ typedef struct {
     JL_STRUCT_TYPE
     void *data;
     size_t length;
-    uint16_t ndims;
+    unsigned short ndims:15;
+    unsigned short reshaped:1;
     uint16_t elsize;
     uint32_t offset;  // for 1-d only. does not need to get big.
     size_t nrows;
@@ -603,6 +604,8 @@ void *jl_unbox_pointer(jl_value_t *v);
 // arrays
 DLLEXPORT jl_array_t *jl_new_array(jl_type_t *atype, jl_tuple_t *dims);
 jl_array_t *jl_new_array_(jl_type_t *atype, uint32_t ndims, size_t *dims);
+DLLEXPORT jl_array_t *jl_reshape_array(jl_type_t *atype, jl_array_t *data,
+                                       jl_tuple_t *dims);
 DLLEXPORT jl_array_t *jl_alloc_array_1d(jl_type_t *atype, size_t nr);
 DLLEXPORT jl_array_t *jl_alloc_array_2d(jl_type_t *atype, size_t nr, size_t nc);
 DLLEXPORT jl_array_t *jl_pchar_to_array(char *str, size_t len);

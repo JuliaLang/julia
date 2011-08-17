@@ -29,7 +29,7 @@ namespace JL_I {
         uitofp32, sitofp32, uitofp64, sitofp64,
         fptrunc32, fpext64,
         // functions
-        sqrt_float, powi_float, pow_float,
+        sqrt_float, powi_float, pow_float, fpabs32, fpabs64,
         // c interface
         ccall,
     };
@@ -1042,6 +1042,20 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
                                                              Intrinsic::powi,
                                                              fxts, 1),
                                    fx, fy);
+    HANDLE(fpabs32,1)
+    {
+        Value *bits = builder.CreateBitCast(x, T_int32);
+        Value *absbits = builder.CreateAnd(bits,
+                                           ConstantInt::get(T_int32, ~BIT31));
+        return builder.CreateBitCast(absbits, T_float32);
+    }
+    HANDLE(fpabs64,1)
+    {
+        Value *bits = builder.CreateBitCast(x, T_int64);
+        Value *absbits = builder.CreateAnd(bits,
+                                           ConstantInt::get(T_int64, ~BIT63));
+        return builder.CreateBitCast(absbits, T_float64);
+    }
     default:
         assert(false);
     }
@@ -1118,6 +1132,7 @@ extern "C" void jl_init_intrinsic_functions()
     ADD_I(uitofp32); ADD_I(sitofp32); ADD_I(uitofp64); ADD_I(sitofp64);
     ADD_I(fptrunc32); ADD_I(fpext64);
     ADD_I(sqrt_float); ADD_I(powi_float); ADD_I(pow_float);
+    ADD_I(fpabs32); ADD_I(fpabs64);
     ADD_I(ccall);
     
     BOX_F(int8);  BOX_F(uint8);

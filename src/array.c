@@ -32,7 +32,7 @@ static void *alloc_array_buffer(size_t nbytes, int isunboxed)
     return data;
 }
 
-static jl_array_t *_new_array(jl_type_t *atype, jl_tuple_t *dimst,
+static jl_array_t *_new_array(jl_type_t *atype,
                               uint32_t ndims, size_t *dims)
 {
     size_t i, tot;
@@ -89,14 +89,15 @@ static jl_array_t *_new_array(jl_type_t *atype, jl_tuple_t *dimst,
     if (isbytes) ((char*)data)[tot-1] = '\0';
     a->length = nel;
     a->ndims = ndims;
+    a->reshaped = 0;
     a->elsize = elsz;
-    size_t *adims = &a->nrows;
     if (ndims == 1) {
         a->nrows = nel;
         a->maxsize = nel;
         a->offset = 0;
     }
     else {
+        size_t *adims = &a->nrows;
         for(i=0; i < ndims; i++)
             adims[i] = dims[i];
     }
@@ -104,9 +105,45 @@ static jl_array_t *_new_array(jl_type_t *atype, jl_tuple_t *dimst,
     return a;
 }
 
+jl_array_t *jl_reshape_array(jl_type_t *atype, jl_array_t *data,
+                             jl_tuple_t *dims)
+{
+    size_t i;
+    jl_array_t *a;
+    size_t ndims = dims->length;
+
+    int ndimwords = (ndims > 2 ? (ndims-2) : 0);
+#ifndef __LP64__
+    // on 32-bit, ndimwords must be odd to preserve 8-byte alignment
+    ndimwords += (~ndimwords)&1;
+#endif
+    a = allocobj(sizeof(jl_array_t) + ndimwords*sizeof(size_t));
+    a->type = atype;
+    *((jl_array_t**)(&a->_space[0] + ndimwords*sizeof(size_t))) = data;
+    a->data = data->data;
+    a->length = data->length;
+    a->elsize = data->elsize;
+    a->ndims = ndims;
+    a->reshaped = 1;
+
+    if (ndims == 1) {
+        a->nrows = a->length;
+        a->maxsize = a->length;
+        a->offset = 0;
+    }
+    else {
+        size_t *adims = &a->nrows;
+        for(i=0; i < ndims; i++) {
+            adims[i] = jl_unbox_long(jl_tupleref(dims, i));
+        }
+    }
+    
+    return a;
+}
+
 jl_array_t *jl_new_array_(jl_type_t *atype, uint32_t ndims, size_t *dims)
 {
-    return _new_array(atype, NULL, ndims, dims);
+    return _new_array(atype, ndims, dims);
 }
 
 jl_array_t *jl_new_array(jl_type_t *atype, jl_tuple_t *dims)
@@ -116,18 +153,18 @@ jl_array_t *jl_new_array(jl_type_t *atype, jl_tuple_t *dims)
     size_t i;
     for(i=0; i < ndims; i++)
         adims[i] = jl_unbox_long(jl_tupleref(dims,i));
-    return _new_array(atype, dims, ndims, adims);
+    return _new_array(atype, ndims, adims);
 }
 
 jl_array_t *jl_alloc_array_1d(jl_type_t *atype, size_t nr)
 {
-    return _new_array(atype, NULL, 1, &nr);
+    return _new_array(atype, 1, &nr);
 }
 
 jl_array_t *jl_alloc_array_2d(jl_type_t *atype, size_t nr, size_t nc)
 {
     size_t d[2] = {nr, nc};
-    return _new_array(atype, NULL, 2, &d[0]);
+    return _new_array(atype, 2, &d[0]);
 }
 
 JL_CALLABLE(jl_new_array_internal)
@@ -148,7 +185,7 @@ JL_CALLABLE(jl_new_array_internal)
         JL_TYPECHK(Array, long, di);
         adims[i] = jl_unbox_long(di);
     }
-    return (jl_value_t*)_new_array((jl_type_t*)atype, d, nd, adims);
+    return (jl_value_t*)_new_array((jl_type_t*)atype, nd, adims);
 }
 
 jl_array_t *jl_pchar_to_array(char *str, size_t len)

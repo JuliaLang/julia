@@ -456,7 +456,11 @@ static void gc_markval_(jl_value_t *v)
         // on 32-bit, ndimwords must be odd to preserve 8-byte alignment
         ndimwords += (~ndimwords)&1;
 #endif
-        if (a->data && a->data != (&a->_space[0] + ndimwords*sizeof(size_t))) {
+        void *data_area = &a->_space[0] + ndimwords*sizeof(size_t);
+        if (a->reshaped) {
+            GC_Markval(*((jl_value_t**)data_area));
+        }
+        else if (a->data && a->data != data_area) {
             if (ndims == 1)
                 gc_setmark((char*)a->data - a->offset*a->elsize);
             else

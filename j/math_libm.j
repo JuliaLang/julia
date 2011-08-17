@@ -84,9 +84,9 @@ fpart(x) = x - trunc(x)
 @vectorize_1arg Real ipart
 @vectorize_1arg Real fpart
 
-abs(x::Float64) = ccall(dlsym(libfdm, :fabs),  Float64, (Float64,), x)
-abs(x::Float32) = ccall(dlsym(libfdm, :fabsf), Float32, (Float32,), x)
-@vectorize_1arg Number abs
+#abs(x::Float64) = ccall(dlsym(libfdm, :fabs),  Float64, (Float64,), x)
+#abs(x::Float32) = ccall(dlsym(libfdm, :fabsf), Float32, (Float32,), x)
+#@vectorize_1arg Number abs
 
 gamma(x::Float64) = ccall(dlsym(libfdm, :tgamma),  Float64, (Float64,), x)
 gamma(x::Float32) = float32(gamma(float64(x)))
