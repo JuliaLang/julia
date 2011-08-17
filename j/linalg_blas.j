@@ -144,27 +144,24 @@ end
 @jl_blas_gemm_macro :zgemm_ Complex128
 @jl_blas_gemm_macro :cgemm_ Complex64
 
-function (*){T<:Union(Float64,Float32,Complex128,Complex64)}(A::VecOrMat{T},
-                                                             B::VecOrMat{T})
+function (*){T<:Union(Float64,Float32,Complex128,Complex64)}(A::Matrix{T},
+                                                             B::Matrix{T})
     (mA, nA) = size(A)
     (mB, nB) = size(B)
 
-    # TODO: Use DGEMV for matvec.
-    if isa(B, Vector); n = 1; else n = nB; end
-    if isa(A, Vector); k = 1; else k = nA; end
-    if k != mB
-        error("*: argument shapes do not match")
-    end
+    if nA != mB; error("*: argument shapes do not match"); end
 
-    if mA == 2 && nA == 2 && nB == 2; return mul22(A,B); end
-    if mA == 3 && nA == 3 && nB == 3; return mul33(A,B); end
+    if mA == 2 && nA == 2 && nB == 2; return matmul2x2(A,B); end
+    if mA == 3 && nA == 3 && nB == 3; return matmul3x3(A,B); end
 
     # Result array does not need to be initialized as long as beta==0
-    C = isa(B, Vector) ? Array(T, m) : Array(T, m, n)
+    C = Array(T, mA, nB)
 
-    jl_blas_gemm("N", "N", m, n, k,
-                 convert(T, 1.0), A, m,
-                 B, k,
-                 convert(T, 0.0), C, m)
+    jl_blas_gemm("N", "N", mA, nB, nA,
+                 convert(T, 1.0), A, mA,
+                 B, nA,
+                 convert(T, 0.0), C, mA)
     return C
 end
+
+# TODO: Use DGEMV for matvec.

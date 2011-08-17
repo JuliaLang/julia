@@ -3,12 +3,11 @@
 dot(x::AbstractVector, y::AbstractVector) = sum(x.*conj(y))
 
 # blas.j defines these for floats; this handles other cases
+# TODO: Also need the vector*matrix case
 function (*){T,S}(A::AbstractMatrix{T}, B::AbstractVector{S})
     R = promote_type(T,S)
-    (mA, nA) = size(A)
-    (mB, nB) = size(B)
-    if mA == 2 && nA == 2 && nB == 2; return mul22(A,B); end
-    if mA == 3 && nA == 3 && nB == 3; return mul33(A,B); end
+    mA = size(A, 1)
+    mB = size(B, 1)
     C = zeros(R, mA)
     for k = 1:mB
         b = B[k]
@@ -23,10 +22,10 @@ function (*){T,S}(A::AbstractMatrix{T}, B::AbstractMatrix{S})
     R = promote_type(T,S)
     (mA, nA) = size(A)
     (mB, nB) = size(B)
-    if mA == 2 && nA == 2 && nB == 2; return mul22(A,B); end
-    if mA == 3 && nA == 3 && nB == 3; return mul33(A,B); end
+    if mA == 2 && nA == 2 && nB == 2; return matmul2x2(A,B); end
+    if mA == 3 && nA == 3 && nB == 3; return matmul3x3(A,B); end
     C = zeros(R, mA, nB)
-    for j = 1:n
+    for j = 1:nB
         coffs = (j-1)*mA
         for k = 1:mB
             b = B[k, j]
@@ -40,7 +39,7 @@ function (*){T,S}(A::AbstractMatrix{T}, B::AbstractMatrix{S})
 end
 
 # multiply 2x2 matrices
-function mul22{T,S}(A::AbstractMatrix{T}, B::AbstractMatrix{S})
+function matmul2x2{T,S}(A::AbstractMatrix{T}, B::AbstractMatrix{S})
     R = promote_type(T,S)
     C = Array(R, 2, 2)
 
@@ -55,7 +54,7 @@ function mul22{T,S}(A::AbstractMatrix{T}, B::AbstractMatrix{S})
     return C
 end
 
-function mul33{T,S}(A::AbstractMatrix{T}, B::AbstractMatrix{S})
+function matmul3x3{T,S}(A::AbstractMatrix{T}, B::AbstractMatrix{S})
     R = promote_type(T,S)
     C = Array(R, 3, 3)
 
