@@ -29,7 +29,8 @@ namespace JL_I {
         uitofp32, sitofp32, uitofp64, sitofp64,
         fptrunc32, fpext64,
         // functions
-        sqrt_float, powi_float, pow_float,
+        sqrt_float, powi_float, pow_float, abs_float32, abs_float64,
+        copysign_float32, copysign_float64,
         // c interface
         ccall,
     };
@@ -960,6 +961,7 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
         return builder.CreateFPToSI(FP(x), T_int64);
     HANDLE(fpiround32,1)
     {
+        // itrunc(x + copysign(0.5,x))
         Value *bits = builder.CreateBitCast(x, T_int32);
         Value *half = builder.CreateBitCast(ConstantFP::get(T_float32, 0.5),
                                             T_int32);
@@ -1042,6 +1044,48 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
                                                              Intrinsic::powi,
                                                              fxts, 1),
                                    fx, fy);
+    HANDLE(abs_float32,1)
+    {
+        Value *bits = builder.CreateBitCast(x, T_int32);
+        Value *absbits = builder.CreateAnd(bits,
+                                           ConstantInt::get(T_int32, ~BIT31));
+        return builder.CreateBitCast(absbits, T_float32);
+    }
+    HANDLE(abs_float64,1)
+    {
+        Value *bits = builder.CreateBitCast(x, T_int64);
+        Value *absbits = builder.CreateAnd(bits,
+                                           ConstantInt::get(T_int64, ~BIT63));
+        return builder.CreateBitCast(absbits, T_float64);
+    }
+    HANDLE(copysign_float32,2)
+    {
+        fy = emit_expr(args[2],ctx,true);
+        Value *bits = builder.CreateBitCast(x, T_int32);
+        Value *sbits = builder.CreateBitCast(fy, T_int32);
+        Value *rbits =
+            builder.CreateOr(builder.CreateAnd(bits,
+                                               ConstantInt::get(T_int32,
+                                                                ~BIT31)),
+                             builder.CreateAnd(sbits,
+                                               ConstantInt::get(T_int32,
+                                                                BIT31)));
+        return builder.CreateBitCast(rbits, T_float32);
+    }
+    HANDLE(copysign_float64,2)
+    {
+        fy = emit_expr(args[2],ctx,true);
+        Value *bits = builder.CreateBitCast(x, T_int64);
+        Value *sbits = builder.CreateBitCast(fy, T_int64);
+        Value *rbits =
+            builder.CreateOr(builder.CreateAnd(bits,
+                                               ConstantInt::get(T_int64,
+                                                                ~BIT63)),
+                             builder.CreateAnd(sbits,
+                                               ConstantInt::get(T_int64,
+                                                                BIT63)));
+        return builder.CreateBitCast(rbits, T_float64);
+    }
     default:
         assert(false);
     }
@@ -1118,6 +1162,8 @@ extern "C" void jl_init_intrinsic_functions()
     ADD_I(uitofp32); ADD_I(sitofp32); ADD_I(uitofp64); ADD_I(sitofp64);
     ADD_I(fptrunc32); ADD_I(fpext64);
     ADD_I(sqrt_float); ADD_I(powi_float); ADD_I(pow_float);
+    ADD_I(abs_float32); ADD_I(abs_float64);
+    ADD_I(copysign_float32); ADD_I(copysign_float64);
     ADD_I(ccall);
     
     BOX_F(int8);  BOX_F(uint8);

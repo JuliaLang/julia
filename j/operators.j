@@ -25,13 +25,13 @@ isequal{T<:Number}(x::T, y::T) = (x==y)
 *() = 1
 &() = error("zero-argument & is ambiguous")
 |() = error("zero-argument | is ambiguous")
-$() = error("zero-argument \$ is ambiguous")
+($)() = error("zero-argument \$ is ambiguous")
 
 +(x::Number) = x
 *(x::Number) = x
 &(x::Int) = x
 |(x::Int) = x
-$(x::Int) = x
+($)(x::Int) = x
 
 for op = (:+, :*, :&, :|, :$)
     @eval begin

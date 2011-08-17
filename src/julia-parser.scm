@@ -490,13 +490,13 @@
 		 (next (peek-token s)))
 	     (cond ((closing-token? next)
 		    op)  ; return operator by itself, as in (+)
+		   ((syntactic-unary-op? op)
+		    (list op (parse-unary s)))
 		   ((or (eqv? next #\() (eqv? next #\{))
 		    (ts:put-back! s op)
 		    (parse-factor s))
 		   (else
-		    (if (syntactic-unary-op? op)
-			(list op (parse-unary s))
-			(list 'call op (parse-unary s)))))))
+		    (list 'call op (parse-unary s))))))
 	  ((eq? t '|::|)
 	   ; allow ::T, omitting argument name
 	   (take-token s)

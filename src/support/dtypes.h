@@ -164,7 +164,7 @@ typedef u_ptrint_t uptrint_t;
 #define BIT31      0x80000000
 
 #define DBL_EPSILON      2.2204460492503131e-16
-#define FLT_EPSILON      1.1920928e-7
+#define FLT_EPSILON      1.192092896e-7
 #define DBL_MAX          1.7976931348623157e+308
 #define DBL_MIN          2.2250738585072014e-308
 #define FLT_MAX          3.402823466e+38

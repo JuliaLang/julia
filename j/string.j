@@ -770,10 +770,23 @@ uint64(s::String) = parse_int(Uint64, s, 10)
 
 ## integer to string functions ##
 
+function ndigits(n::Int, b::Int)
+    nd = 1
+    ba = convert(typeof(n), b)
+    while true
+        n = div(n, ba)
+        if n == 0
+            break
+        end
+        nd += 1
+    end
+    return nd
+end
+
 function uint2str(n::Int, b::Int)
     if n < zero(n); error("uint2str: negative argument ", n); end
     if b < 2; error("uint2str: invalid base ", b); end
-    ndig = n==convert(typeof(n),0) ? 1 : int32(floor(log(n)/log(b)+1))
+    ndig = ndigits(n, b)
     sz = convert(Size, ndig+1)
     data = Array(Uint8, sz)
     ccall(:uint2str, Ptr{Uint8},
@@ -798,7 +811,8 @@ hex(n::Int, l::Int) = lpad(hex(n), l, '0')
 
 ## string to float functions ##
 
-let tmp = Array(Ptr{Uint8},1)
+let _
+    tmp::Array{Ptr{Uint8},1} = Array(Ptr{Uint8},1)
     global float64, float32
     function float64(s::String)
         s = cstring(s)
