@@ -36,7 +36,6 @@ macro libfdmfunc_2arg(T,f)
     quote
         ($f)(x::Float64, y::Float64) = ccall(dlsym(libfdm,$string(f)), Float64, (Float64, Float64,), x, y)
         ($f)(x::Float32, y::Float32) = ccall(dlsym(libfdm,$strcat(string(f),"f")), Float32, (Float32, Float32), x, y)
-        ($f)(x::Real, y::Real) = ($f)(float(x),float(y))
         @vectorize_2arg $T $f
     end
 end
@@ -76,8 +75,11 @@ end
 @libmfunc_1arg_int Real ilogb
 
 @libfdmfunc_2arg Number atan2
-@libfdmfunc_2arg Real   copysign
+atan2(x::Real, y::Real) = atan2(float64(x), float64(y))
+#@libfdmfunc_2arg Real   copysign
 @libfdmfunc_2arg Number hypot
+hypot(x::Float32, y::Float64) = hypot(float64(x), y)
+hypot(x::Float64, y::Float32) = hypot(x, float64(y))
 
 ipart(x) = trunc(x)
 fpart(x) = x - trunc(x)
@@ -103,19 +105,22 @@ min(x::Float32, y::Float32) = ccall(dlsym(libm, :fminf), Float32, (Float32,Float
 
 ldexp(x::Float64,e::Int32) = ccall(dlsym(libfdm, :ldexp),  Float64, (Float64,Int32), x, e)
 ldexp(x::Float32,e::Int32) = ccall(dlsym(libfdm, :ldexpf), Float32, (Float32,Int32), x, e)
-@vectorize_2arg Real ldexp
+# TODO: vectorize does not do the right thing for these argument types
+#@vectorize_2arg Real ldexp
 
-function frexp(x::Float64)
-    exp = zeros(Int32,1)
-    s = ccall(dlsym(libfdm,:frexp), Float64, (Float64, Ptr{Int32}), x, exp)
-    (s, exp[1])
+let _
+    exp::Array{Int32,1} = zeros(Int32,1)
+    global frexp
+    function frexp(x::Float64)
+        s = ccall(dlsym(libfdm,:frexp), Float64, (Float64, Ptr{Int32}), x, exp)
+        (s, exp[1])
+    end
+    function frexp(x::Float32)
+        s = ccall(dlsym(libfdm,:frexpf), Float32, (Float32, Ptr{Int32}), x, exp)
+        (s, exp[1])
+    end
 end
-function frexp(x::Float32)
-    exp = zeros(Int32,1)
-    s = ccall(dlsym(libfdm,:frexpf), Float32, (Float32, Ptr{Int32}), x, exp)
-    (s, exp[1])
-end
-@vectorize_1arg Real frexp
+#@vectorize_1arg Real frexp
 
 ^(x::Float64, y::Float64) = ccall(dlsym(libfdm, :pow),  Float64, (Float64,Float64), x, y)
 ^(x::Float32, y::Float32) = ccall(dlsym(libfdm, :powf), Float32, (Float32,Float32), x, y)

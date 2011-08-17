@@ -1,7 +1,7 @@
 ## floating-point functions ##
 
-abs(x::Float64) = boxf64(fpabs64(unbox64(x)))
-abs(x::Float32) = boxf32(fpabs32(unbox32(x)))
+abs(x::Float64) = boxf64(abs_float64(unbox64(x)))
+abs(x::Float32) = boxf32(abs_float32(unbox32(x)))
 
 isnan(x::Float) = (x != x)
 isnan(x::Real) = isnan(float(x))
@@ -15,8 +15,14 @@ isfinite(x::Float) = (x-x == 0)
 isfinite(x::Real) = isfinite(float(x))
 isfinite(x::Int) = true
 
-signbit(x::Float64) = float64(signbit(boxsi64(unbox64(x))))
-signbit(x::Float32) = float32(signbit(boxsi32(unbox32(x))))
+copysign(x::Float64, y::Float64) = boxf64(copysign_float64(unbox64(x),unbox64(y)))
+copysign(x::Float32, y::Float32) = boxf32(copysign_float32(unbox32(x),unbox32(y)))
+copysign(x::Float32, y::Real) = copysign(x, float32(y))
+copysign(x::Float64, y::Real) = copysign(x, float64(y))
+@vectorize_2arg Real copysign
+
+signbit(x::Float64) = copysign(1.0, x)
+signbit(x::Float32) = copysign(float32(1.0), x)
 
 exponent(x::Float64) = ccall(:double_exponent, Int32, (Float64,), x)
 exponent(x::Float32) = ccall(:float_exponent,  Int32, (Float32,), x)
