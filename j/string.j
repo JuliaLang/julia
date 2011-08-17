@@ -798,7 +798,8 @@ hex(n::Int, l::Int) = lpad(hex(n), l, '0')
 
 ## string to float functions ##
 
-let tmp = Array(Ptr{Uint8},1)
+let _
+    tmp::Array{Ptr{Uint8},1} = Array(Ptr{Uint8},1)
     global float64, float32
     function float64(s::String)
         s = cstring(s)
