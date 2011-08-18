@@ -11,6 +11,7 @@ typealias Region Union(Size,Dims)
 ## Basic functions ##
 
 size(t::AbstractArray, d) = size(t)[d]
+eltype{T,n}(::AbstractArray{T,n}) = T
 ndims{T,n}(::AbstractArray{T,n}) = n
 numel(t::AbstractArray) = prod(size(t))
 length(a::AbstractArray) = numel(a)

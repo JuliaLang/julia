@@ -736,7 +736,7 @@
 		       (error (string "unexpected " c
 				      " in argument list")))
 		      (else
-		       (error "missing separator in argument list")))))))))
+		       (error "missing comma or ) in argument list")))))))))
 
 (define (colons-to-ranges ranges)
   (map (lambda (r) (pattern-expand
