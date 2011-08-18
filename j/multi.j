@@ -1495,6 +1495,9 @@ end
 
 yield() = yieldto(Scheduler)
 
+task_exit() = task_exit(nothing)
+task_exit(val) = yieldto(Scheduler, FinalValue(val))
+
 fd_handlers = HashTable()
 
 add_fd_handler(fd::Int32, H) = (fd_handlers[fd]=H)
