@@ -56,16 +56,15 @@
 			 (string "malformed function arguments " lst)))))))
        lst))
 
+(define (decl? e)
+  (and (pair? e) (eq? (car e) '|::|)))
+
 ; get the variable name part of a declaration, x::int => x
 (define (decl-var v)
-  (if (and (pair? v) (eq? (car v) '|::|))
-      (cadr v)
-      v))
+  (if (decl? v) (cadr v) v))
 
 (define (decl-type v)
-  (if (and (pair? v) (eq? (car v) '|::|))
-      (caddr v)
-      'Any))
+  (if (decl? v) (caddr v) 'Any))
 
 ; make an expression safe for multiple evaluation
 ; for example a[f(x)] => (temp=f(x); a[temp])
@@ -310,9 +309,7 @@
 
 (define (struct-def-expr- name params bounds super fields)
   (receive
-   (fields defs) (separate (lambda (x) (or (symbol? x)
-					   (and (pair? x)
-						(eq? (car x) '|::|))))
+   (fields defs) (separate (lambda (x) (or (symbol? x) (decl? x)))
 			   fields)
    (let* ((field-names (map decl-var fields))
 	  (field-types (map decl-type fields))
@@ -455,42 +452,48 @@
 				(cdr a)
 				(list a))))
 					; TODO: anonymous generic function
-		     (function-expr a b)))
+		     (function-expr a
+				    `(block
+				      ,@(map (lambda (d)
+					       `(= ,(cadr d)
+						   (typeassert ,@(cdr d))))
+					     (filter decl? a))
+				      ,b))))
 
    ;; let
    (pattern-lambda (let ex . binds)
 		   (let loop ((binds binds)
-			      (args  ())
-			      (inits ())
 			      (locls ())
 			      (stmts ()))
 		     (if (null? binds)
-			 `(call (-> (tuple ,@args)
+			 `(call (-> (tuple)
 				    (block (local (vars ,@locls))
 					   ,@stmts
 					   ,ex))
-				,@inits)
+				)
 			 (cond
-			  ((symbol? (car binds))
+			  ((or (symbol? (car binds)) (decl? (car binds)))
 			   ;; just symbol -> add local
-			   (loop (cdr binds) args inits
+			   (loop (cdr binds)
 				 (cons (car binds) locls)
 				 stmts))
 			  ((and (length= (car binds) 3)
 				(eq? (caar binds) '=))
 			   ;; some kind of assignment
 			   (cond
-			    ((symbol? (cadar binds))
-			     ;; a=b -> add argument
+			    ((or (symbol? (cadar binds))
+				 (decl?   (cadar binds)))
+			     ;; a=b -> add local and initializer
 			     (loop (cdr binds)
-				   (cons (cadar binds) args)
-				   (cons (caddar binds) inits)
-				   locls stmts))
+				   (cons (cadar binds) locls)
+				   (cons `(= ,(decl-var (cadar binds))
+					     ,(caddar binds))
+					 stmts)))
 			    ((and (pair? (cadar binds))
 				  (eq? (caadar binds) 'call))
 			     ;; f()=c
 			     (let ((asgn (cadr (julia-expand0 (car binds)))))
-			       (loop (cdr binds) args inits
+			       (loop (cdr binds)
 				     (cons (cadr asgn) locls)
 				     (cons asgn stmts))))
 			    (else (error "invalid let syntax"))))

@@ -108,8 +108,7 @@ ldexp(x::Float32,e::Int32) = ccall(dlsym(libfdm, :ldexpf), Float32, (Float32,Int
 # TODO: vectorize does not do the right thing for these argument types
 #@vectorize_2arg Real ldexp
 
-let _
-    exp::Array{Int32,1} = zeros(Int32,1)
+let exp::Array{Int32,1} = zeros(Int32,1)
     global frexp
     function frexp(x::Float64)
         s = ccall(dlsym(libfdm,:frexp), Float64, (Float64, Ptr{Int32}), x, exp)
