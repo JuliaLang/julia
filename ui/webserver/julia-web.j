@@ -5,7 +5,7 @@
 ###### the julia<-->server protocol #######
 
 # the message type is sent as a byte
-# the next four bytes indicates how many arguments there are
+# the next byte indicates how many arguments there are
 # each argument is four bytes indicating the size of the argument, then the data for that argument
 
 ###### the server<-->browser protocol #####
@@ -65,6 +65,10 @@ MSG_OUTPUT_EVAL_RESULT = 5
 # arguments: {message}
 MSG_OUTPUT_OTHER = 6
 
+# ready for input
+# arguments: {}
+MSG_OUTPUT_READY = 7
+
 ###########################################
 # set up the socket connection
 ###########################################
@@ -103,7 +107,7 @@ function read_message()
     args = {}
     num_args = read(io, Uint8)
     for i=1:num_args
-        arg_length = read(io, Uint8)
+        arg_length = read(io, Uint32)
         arg = ASCIIString(read(io, Uint8, arg_length))
         push(args, arg)
     end
@@ -115,7 +119,7 @@ function write_message(msg)
     write(io, uint8(msg.msg_type))
     write(io, uint8(length(msg.args)))
     for arg=msg.args
-        write(io, uint8(length(arg)))
+        write(io, uint32(length(arg)))
         write(io, arg)
     end
     flush(io)
@@ -153,8 +157,8 @@ function send_fatal_error(msg)
 end
 
 # send an incomplete expression message
-function send_eval_incomplete(msg)
-    write_message(Message(MSG_OUTPUT_EVAL_INCOMPLETE, [msg]))
+function send_eval_incomplete()
+    write_message(Message(MSG_OUTPUT_EVAL_INCOMPLETE, []))
 end
 
 # send an expression result message
@@ -206,4 +210,4 @@ add_fd_handler(connectfd, socket_callback)
 ###########################################
 
 # do asynchronous stuff
-yield()
+wait(RemoteRef())

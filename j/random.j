@@ -32,6 +32,10 @@ randui32() = ccall(dlsym(libmt, :dsfmt_gv_genrand_uint32), Uint32, ())
 
 randn() = ccall(dlsym(libmt, :dsfmt_randn), Float64, ())
 
+randbit() = randui32()&1
+
+randbool() = randbit() == 1
+
 function dsfmt_fill_array_open_open(A::Array{Float64})
     n = numel(A)
     if (n <= dsfmt_get_min_array_size())

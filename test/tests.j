@@ -607,6 +607,10 @@ else
 end
 @assert isa((()->box(Char,unbox32(int32(65))))(), Char)
 
+@assert hex(0xffffffffffff)=="ffffffffffff"
+@assert hex(0xffffffffffff+1)=="1000000000000"
+@assert hex(typemax(Uint64))=="ffffffffffffffff"
+
 # conversions
 function fooo()
     local x::Int8

@@ -322,24 +322,31 @@
      (if (null? params)
 	 `(block
 	   (= ,name
-	      (call (top new_struct_type)
-		    (quote ,name)
-		    (tuple ,@params)
-		    (tuple ,@(map (lambda (x) `',x) field-names))
-		    (null)))
-	   (call (top new_struct_fields)
-		 ,name ,super (tuple ,@field-types))
+	      (scope-block
+	       (block
+		(local ,name)
+		(= ,name
+		   (call (top new_struct_type)
+			 (quote ,name)
+			 (tuple ,@params)
+			 (tuple ,@(map (lambda (x) `',x) field-names))
+			 (null)))
+		(call (top new_struct_fields)
+		      ,name ,super (tuple ,@field-types))
+		,name)))
 	   (scope-block
 	    (block
-	     (global ,name)
 	     ,@(map (lambda (c)
 		      (rewrite-ctor c name '() field-names))
 		    defs2)))
 	   (null))
 	 `(block
+	   (= ,name
 	   (call
 	    (lambda (,@params)
+	      (scope-block
 	      (block
+	       (local ,name)
 	       (= ,name
 		  (call (top new_struct_type)
 			(quote ,name)
@@ -356,8 +363,9 @@
 				   defs2)
 			    ,name)))))
 	       (call (top new_struct_fields)
-		     ,name ,super (tuple ,@field-types))))
-	    ,@(symbols->typevars params bounds))
+		     ,name ,super (tuple ,@field-types))
+	       ,name)))
+	    ,@(symbols->typevars params bounds)))
 	   ,@(if (null? defs)
 		 `(,(default-outer-ctor name field-names field-types
 		      params bounds))
@@ -368,41 +376,39 @@
   (receive
    (params bounds)
    (sparam-name-bounds params '() '())
-   (if (null? params)
-       `(block
-	 (= ,name
-	    (call (top new_tag_type)
-		  (quote ,name) (tuple ,@params)))
-	 (call (top new_tag_type_super) ,name ,super))
-       `(block
-	 (call
-	  (lambda ,params
+   `(block
+     (= ,name
+	(call
+	 (lambda ,params
+	   (scope-block
 	    (block
+	     (local ,name)
 	     (= ,name
 		(call (top new_tag_type)
 		      (quote ,name) (tuple ,@params)))
-	     (call (top new_tag_type_super) ,name ,super)))
-	  ,@(symbols->typevars params bounds))))))
+	     (call (top new_tag_type_super) ,name ,super)
+	     ,name)))
+	 ,@(symbols->typevars params bounds)))
+     (null))))
 
 (define (bits-def-expr n name params super)
   (receive
    (params bounds)
    (sparam-name-bounds params '() '())
-   (if (null? params)
-       `(block
-	 (= ,name
-	    (call (top new_bits_type)
-		  (quote ,name) (tuple ,@params) ,n))
-	 (call (top new_tag_type_super) ,name ,super))
-       `(block
-	 (call
-	  (lambda ,params
+   `(block
+     (= ,name
+	(call
+	 (lambda ,params
+	   (scope-block
 	    (block
+	     (local ,name)
 	     (= ,name
 		(call (top new_bits_type)
 		      (quote ,name) (tuple ,@params) ,n))
-	     (call (top new_tag_type_super) ,name ,super)))
-	  ,@(symbols->typevars params bounds))))))
+	     (call (top new_tag_type_super) ,name ,super)
+	     ,name)))
+	 ,@(symbols->typevars params bounds)))
+     (null))))
 
 ; take apart a type signature, e.g. T{X} <: S{Y}
 (define (analyze-type-sig ex)
@@ -1575,7 +1581,7 @@ So far only the second case can actually occur.
 	((eq? (car e) 'bquote)
 	 (expand-backquote (expand-backquote (cadr e))))
 	((not (any (lambda (x)
-		     (match '(call (-/ $) (... x)) x))
+		     (match '($ (tuple (... x))) x))
 		   e))
 	 `(call (top expr) ,@(map expand-backquote e)))
 	(else
@@ -1585,9 +1591,9 @@ So far only the second case can actually occur.
 		 `(call (top expr) ,(expand-backquote (car e))
 			(call (top append) ,@forms)))
 	       ; look for splice inside backquote, e.g. (a,$(x...),b)
-	       (if (match '(call (-/ $) (... x)) (car p))
+	       (if (match '($ (tuple (... x))) (car p))
 		   (loop (cdr p)
-			 (cons (cadr (caddr (car p))) q))
+			 (cons (cadr (cadadr (car p))) q))
 		   (loop (cdr p)
 			 (cons `(call (top cell_1d)
 				      ,(expand-backquote (car p)))

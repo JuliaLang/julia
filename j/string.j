@@ -770,10 +770,23 @@ uint64(s::String) = parse_int(Uint64, s, 10)
 
 ## integer to string functions ##
 
+function ndigits(n::Int, b::Int)
+    nd = 1
+    ba = convert(typeof(n), b)
+    while true
+        n = div(n, ba)
+        if n == 0
+            break
+        end
+        nd += 1
+    end
+    return nd
+end
+
 function uint2str(n::Int, b::Int)
     if n < zero(n); error("uint2str: negative argument ", n); end
     if b < 2; error("uint2str: invalid base ", b); end
-    ndig = n==convert(typeof(n),0) ? 1 : int32(floor(log(n)/log(b)+1))
+    ndig = ndigits(n, b)
     sz = convert(Size, ndig+1)
     data = Array(Uint8, sz)
     ccall(:uint2str, Ptr{Uint8},
@@ -781,24 +794,26 @@ function uint2str(n::Int, b::Int)
           data, ulong(sz), uint64(n), uint32(b))
     ASCIIString(data[1:(sz-1)]) # cut out terminating NUL
 end
-
-uint2str(n::Int, b::Int, len::Int) = lpad(uint2str(n,b),len,'0')
+uint2str(n::Union(Int,Float), b::Int, len::Int) = lpad(uint2str(n,b),len,'0')
+uint2str(x::Float64, b::Int) = uint2str(boxui64(unbox64(x)), b)
+uint2str(x::Float32, b::Int) = uint2str(boxui32(unbox32(x)), b)
 
 # TODO: support signed Ints too
 
-bin(n::Int) = uint2str(n,  2)
-oct(n::Int) = uint2str(n,  8)
-dec(n::Int) = uint2str(n, 10)
-hex(n::Int) = uint2str(n, 16)
+bin(n::Union(Int,Float)) = uint2str(n,  2)
+oct(n::Union(Int,Float)) = uint2str(n,  8)
+dec(n::Union(Int,Float)) = uint2str(n, 10)
+hex(n::Union(Int,Float)) = uint2str(n, 16)
 
-bin(n::Int, l::Int) = lpad(bin(n), l, '0')
-oct(n::Int, l::Int) = lpad(oct(n), l, '0')
-dec(n::Int, l::Int) = lpad(dec(n), l, '0')
-hex(n::Int, l::Int) = lpad(hex(n), l, '0')
+bin(n::Union(Int,Float), l::Int) = lpad(bin(n), l, '0')
+oct(n::Union(Int,Float), l::Int) = lpad(oct(n), l, '0')
+dec(n::Union(Int,Float), l::Int) = lpad(dec(n), l, '0')
+hex(n::Union(Int,Float), l::Int) = lpad(hex(n), l, '0')
 
 ## string to float functions ##
 
-let tmp = Array(Ptr{Uint8},1)
+let _
+    tmp::Array{Ptr{Uint8},1} = Array(Ptr{Uint8},1)
     global float64, float32
     function float64(s::String)
         s = cstring(s)

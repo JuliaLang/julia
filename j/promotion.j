@@ -43,9 +43,9 @@ end
 /(x::Number, y::Number) = /(promote(x,y)...)
 ^(x::Any, y::Number) = ^(promote(x,y)...)
 
-&(x::Int...) = &(promote(x...)...)
-|(x::Int...) = |(promote(x...)...)
-$(x::Int...) = $(promote(x...)...)
+&(x::Int, y::Int)   = &(promote(x,y)...)
+|(x::Int, y::Int)   = |(promote(x,y)...)
+($)(x::Int, y::Int) = ($)(promote(x,y)...)
 
 <(x::Real, y::Real) = (<)(promote(x,y)...)
 >(x::Real, y::Real) = (>)(promote(x,y)...)
@@ -72,7 +72,7 @@ no_op_err(name, T) = error(name," not defined for ",T)
 
 &{T<:Int}(x::T, y::T) = no_op_err("&", T)
 |{T<:Int}(x::T, y::T) = no_op_err("|", T)
-${T<:Int}(x::T, y::T) = no_op_err("\$", T)
+($){T<:Int}(x::T, y::T) = no_op_err("\$", T)
 
 <{T<:Real}(x::T, y::T) = no_op_err("<", T)
 =={T<:Number}(x::T, y::T) = no_op_err("==", T)

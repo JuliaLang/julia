@@ -1,10 +1,89 @@
 ## linalg.j: Basic Linear Algebra functions ##
 
-dot(x::Vector, y::Vector) = sum(x.*conj(y))
+dot(x::AbstractVector, y::AbstractVector) = sum(x.*conj(y))
 
 # blas.j defines these for floats; this handles other cases
-(*)(A::Matrix, B::Vector) = [ sum(A[i,:].*B) | i=1:size(A,1) ]
-(*)(A::Matrix, B::Matrix) = [ sum(A[i,:].*B[:,j]) | i=1:size(A,1), j=1:size(B,2) ]
+# TODO: Also need the vector*matrix case
+function (*){T,S}(A::AbstractMatrix{T}, B::AbstractVector{S})
+    R = promote_type(T,S)
+    mA = size(A, 1)
+    mB = size(B, 1)
+    C = zeros(R, mA)
+    for k = 1:mB
+        b = B[k]
+        for i = 1:mA
+            C[i] += b * A[i, k]
+        end
+    end
+    C
+end
+
+function (*){T,S}(A::AbstractMatrix{T}, B::AbstractMatrix{S})
+    R = promote_type(T,S)
+    (mA, nA) = size(A)
+    (mB, nB) = size(B)
+    if mA == 2 && nA == 2 && nB == 2; return matmul2x2(A,B); end
+    if mA == 3 && nA == 3 && nB == 3; return matmul3x3(A,B); end
+    C = zeros(R, mA, nB)
+    for j = 1:nB
+        coffs = (j-1)*mA
+        for k = 1:mB
+            b = B[k, j]
+            aoffs = (k-1)*mA
+            for i = 1:mA
+                C[coffs+i] += b * A[aoffs+i]
+            end
+        end
+    end
+    C
+end
+
+# multiply 2x2 matrices
+function matmul2x2{T,S}(A::AbstractMatrix{T}, B::AbstractMatrix{S})
+    R = promote_type(T,S)
+    C = Array(R, 2, 2)
+
+    A11 = A[1,1]; A12 = A[1,2]; A21 = A[2,1]; A22 = A[2,2]
+    B11 = B[1,1]; B12 = B[1,2]; B21 = B[2,1]; B22 = B[2,2]
+
+    C[1,1] = A11*B11 + A12*B21
+    C[1,2] = A11*B12 + A12*B22
+    C[2,1] = A21*B11 + A22*B21
+    C[2,2] = A21*B12 + A22*B22
+
+    return C
+end
+
+function matmul3x3{T,S}(A::AbstractMatrix{T}, B::AbstractMatrix{S})
+    R = promote_type(T,S)
+    C = Array(R, 3, 3)
+
+    A11 = A[1,1]; A12 = A[1,2]; A13 = A[1,3];
+    A21 = A[2,1]; A22 = A[2,2]; A23 = A[2,3];
+    A31 = A[3,1]; A32 = A[3,2]; A33 = A[3,3];
+
+    B11 = B[1,1]; B12 = B[1,2]; B13 = B[1,3];
+    B21 = B[2,1]; B22 = B[2,2]; B23 = B[2,3];
+    B31 = B[3,1]; B32 = B[3,2]; B33 = B[3,3];
+
+    C[1,1] = A11*B11 + A12*B21 + A13*B31
+    C[1,2] = A11*B12 + A12*B22 + A13*B32
+    C[1,3] = A11*B13 + A12*B23 + A13*B33
+
+    C[2,1] = A21*B11 + A22*B21 + A23*B31
+    C[2,2] = A21*B12 + A22*B22 + A23*B32
+    C[2,3] = A21*B13 + A22*B23 + A23*B33
+
+    C[3,1] = A31*B11 + A32*B21 + A33*B31
+    C[3,2] = A31*B12 + A32*B22 + A33*B32
+    C[3,3] = A31*B13 + A32*B23 + A33*B33
+
+    return C
+end
+
+
+
+
 
 triu(M) = triu(M,0)
 tril(M) = tril(M,0)

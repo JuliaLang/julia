@@ -186,6 +186,7 @@ div#prompt
 	float: left;
 	font: 85% "Droid Sans Mono", "Consolas", "Courier", "Courier New", monospace;
 	color: #00aa00;
+	display: none;
 }
 
 textarea#terminal-input

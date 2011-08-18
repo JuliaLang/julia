@@ -40,6 +40,14 @@ function reinterpret{T,S}(::Type{T}, a::Array{S})
 end
 reinterpret(t,x) = reinterpret(t,[x])[1]
 
+function reshape{T,N}(a::Array{T}, dims::NTuple{N,Size})
+    if prod(dims) != numel(a)
+        error("reshape: invalid dimensions")
+    end
+    ccall(:jl_reshape_array, Any, (Any, Any, Any),
+          Array{T,N}, a, dims)::Array{T,N}
+end
+
 ## Constructors ##
 
 jl_comprehension_zeros{T,n}(oneresult::AbstractArray{T,n}, dims...) = Array(T, dims...)
