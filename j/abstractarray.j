@@ -11,6 +11,7 @@ typealias Region Union(Size,Dims)
 ## Basic functions ##
 
 size(t::AbstractArray, d) = size(t)[d]
+eltype{T,n}(::AbstractArray{T,n}) = T
 ndims{T,n}(::AbstractArray{T,n}) = n
 numel(t::AbstractArray) = prod(size(t))
 length(a::AbstractArray) = numel(a)
@@ -1113,25 +1114,58 @@ end
 
 ## subarrays ##
 
-type SubArray{T,N,A<:AbstractArray,I<:(Ranges...,)} <: AbstractArray{T,N}
+type SubArray{T,N,A<:AbstractArray,I<:(Union(Index,Range{Index},Range1{Index})...,)} <: AbstractArray{T,N}
     parent::A
     indexes::I
     dims::Dims
-    
-    SubArray(p::A, i::I) = new(p, i, map(length, i))
+    strides::Array{Index,1}
+    first_index::Index
+
+    function SubArray(p::A, i::I)
+        newdims = Array(Index, 0)
+        newstrides = Array(Index, 0)
+        newfirst = 1
+        pstrides = strides(p)
+        for j = 1:length(i)
+            if isa(i[j], Index)
+                newfirst += (i[j]-1)*pstrides[j]
+            else
+                push(newdims, length(i[j]))
+                #may want to return error if i[j].step <= 0
+                push(newstrides, isa(i[j],Range1) ? pstrides[j] : pstrides[j] * i[j].step)
+                newfirst += (i[j].start-1)*pstrides[j]
+            end 
+        end
+        new(p, i, tuple(newdims...), newstrides, newfirst)
+    end
 end
 
-sub{T,N}(A::AbstractArray{T,N}, i::NTuple{N,Ranges}) =
-    SubArray{T,N,typeof(A),typeof(i)}(A, i)
+function sub{T,N}(A::AbstractArray{T,N}, i::NTuple{N,Union(Index,Range{Index},Range1{Index})})
+    n = 0
+    for j = i; if !isa(j, Index); n += 1; end; end
+    SubArray{T,n,typeof(A),typeof(i)}(A, i)
+end
 
-#change integer indexes into Range1 objects
-sub(A::AbstractArray, i::Indices...) =
-    sub(A, ntuple(length(i), j -> isa(i[j],Ranges) ? i[j] :
-                                                     (i[j]:i[j])))
+sub{T}(A::AbstractArray{T}, i::Union(Index,Range{Index},Range1{Index})...) =
+    sub(A, i)
 
-sub(A::SubArray, i::Indices...) =
-    sub(A.parent, ntuple(length(i), j -> isa(i[j],Ranges) ? A.indexes[j][i[j]] :
-                                                            (A.indexes[j][i[j]]):(A.indexes[j][i[j]])))
+function sub(A::SubArray, i::Union(Index,Range{Index},Range1{Index})...)
+    j = 1
+    newindexes = Array(Union(Index,Range{Index},Range1{Index}),length(A.indexes))
+    for k = 1:length(A.indexes)
+        if isa(A.indexes[k], Index)
+            newindexes[k] = A.indexes[k]
+        else
+            newindexes[k] = A.indexes[k][i[j]]
+            j += 1
+        end
+    end
+    sub(A.parent, tuple(newindexes...))
+end
+
+#TODO
+#slice{T,N}(s::SubArray{T,N}) = 
+#unslice?
 
 size(s::SubArray) = s.dims
 ndims{T,N}(s::SubArray{T,N}) = N
@@ -1141,39 +1175,46 @@ similar(s::SubArray, T::Type, dims::Dims) = similar(s.parent, T, dims)
 
 ref(s::SubArray) = s
 
-ref{T}(s::SubArray{T,1}, i::Int) = s.parent[s.indexes[1][i]]
-
-ref{T}(s::SubArray{T,2}, i::Int, j::Int) =
-    s.parent[s.indexes[1][i], s.indexes[2][j]]
-
-ref(s::SubArray, is::Int...) = s.parent[map(ref, s.indexes, is)...]
+ref{T}(s::SubArray{T,1}, i::Int) = s.parent[s.first_index + (i-1)*s.strides[1]]
 
 ref(s::SubArray, i::Int) = s[ind2sub(size(s), i)...]
 
-strides{T,A<:AbstractArray}(s::SubArray{T,1,A,(Range1{Index},)}) = (1,)
-strides{T,A<:AbstractArray}(s::SubArray{T,1,A,(Range{Index},)}) = s.indexes[1].step > 0 ? (s.indexes[1].step,) :
-    error("strides: must have ranges with positive step")
-
-strides{T}(s::SubArray{T,2}) = (isa(s.indexes[1],Range1{Index}) ? 1 :
-                                s.indexes[1].step > 0           ? s.indexes[1].step :
-                                error("strides: must have ranges with positive step"),
-                                isa(s.indexes[2],Range1{Index}) ? size(s.parent,1) :
-                                s.indexes[2].step > 0           ? s.indexes[2].step * size(s.parent,1) :
-                                error("strides: must have ranges with positive step"))
-
-function strides{T,N}(s::SubArray{T,N})
-    a = strides(s.parent)
-    return ntuple(N, i -> stride(s,i))
+#TODO: Special 2D cases
+function ref(s::SubArray, is::Int...)
+    index = s.first_index
+    for i = 1:length(is)
+        index += (is[i]-1)*s.strides[i]
+    end
+    s.parent[index]
 end
 
-function stride(s::SubArray, i::Int)
-    a = stride(s.parent, i)
-    return isa(s.indexes[i],Range1{Index}) ? a :
-               s.indexes[i].step > 0       ? s.indexes[i].step * a :
-               error("stride: must have ranges with positive step")
+assign(s::SubArray, v::AbstractArray, i::Int) =
+    invoke(assign, (SubArray, Any, Int), s, v, i)
+assign(s::SubArray, v, i::Int) = assign(s, v, ind2sub(size(s), i)...)
+
+assign(s::SubArray, v::AbstractArray, i::Int, is::Int...) =
+    invoke(assign, (SubArray, Any, Int...), s, v, tuple(i,is...))
+assign(s::SubArray, v::AbstractArray, is::Int...) =
+    invoke(assign, (SubArray, Any, Int...), s, v, is)
+function assign(s::SubArray, v, is::Int...)
+    index = s.first_index
+    for i = 1:length(is)
+        index += (is[i]-1)*s.strides[i]
+    end
+    s.parent[index] = v
+    return s
 end
 
-pointer{T,N}(x::SubArray{T,N}) = pointer(x.parent) + sub2ind(size(x.parent),
-    ntuple(N,i->x.indexes[i].start)...)*sizeof(T)
+strides(s::SubArray) = tuple(s.strides...)
+
+stride(s::SubArray, i::Int) = s.strides[i]
+
+pointer{T}(x::SubArray{T}) = pointer(x.parent) + (x.first_index-1)*sizeof(T)
+
 iscomplex(::SubArray{Complex128}) = true
 iscomplex(::SubArray{Complex64}) = true
+
+triu{T}(M::SubArray{T,2}, k) = [ j-i >= k ? M[i,j] : zero(T) |
+                                i=1:size(M,1), j=1:size(M,2) ]
+tril{T}(M::SubArray{T,2}, k) = [ j-i <= k ? M[i,j] : zero(T) |
+                                i=1:size(M,1), j=1:size(M,2) ]
