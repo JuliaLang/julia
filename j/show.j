@@ -7,10 +7,11 @@ show(s::Symbol) = print(s)
 show(tn::TypeName) = show(tn.name)
 show(::Nothing) = print("nothing")
 
-function show_delim_array(itr, open, delim, close)
+function show_delim_array(itr, open, delim, close, delim_one)
     print(open)
     state = start(itr)
     newline = true
+    first = true
     if !done(itr,state)
 	while true
 	    x, state = next(itr,state)
@@ -20,8 +21,12 @@ function show_delim_array(itr, open, delim, close)
             end
 	    show(x)
 	    if done(itr,state)
+                if delim_one && first
+                    print(delim)
+                end
 		break
 	    end
+            first = false
             print(delim)
             if multiline
                 println(); newline=false
@@ -33,10 +38,10 @@ function show_delim_array(itr, open, delim, close)
     print(close)
 end
 
-show_comma_array(itr, o, c) = show_delim_array(itr, o, ',', c)
+show_comma_array(itr, o, c) = show_delim_array(itr, o, ',', c, false)
 
 function show(t::Tuple)
-    show_comma_array(t, '(', ')')
+    show_delim_array(t, '(', ',', ')', true)
 end
 
 function show_expr_type(ty)
@@ -176,7 +181,7 @@ end
 function dump(x)
     T = typeof(x)
     if isa(x,Array)
-        showempty(x)
+        print("Array($(eltype(x)),$(size(x)))")
     elseif isa(T,CompositeKind)
         print(T,'(')
         for field = T.names
@@ -190,9 +195,7 @@ function dump(x)
     end
 end
 
-showempty{T}(a::Array{T}) = print("Array($T,$(size(a)))")
-
-function showall{T}(a::Array{T,1})
+function showall{T}(a::AbstractArray{T,1})
     if is(T,Any)
         opn = '{'; cls = '}'
     else
@@ -201,14 +204,14 @@ function showall{T}(a::Array{T,1})
     show_comma_array(a, opn, cls)
 end
 
-function showall_matrix(a::Array)
+function showall_matrix(a::AbstractArray)
     for i = 1:size(a,1)
         show_cols(a, 1, size(a,2), i)
         print('\n')
     end
 end
 
-function showall{T}(a::Array{T,2})
+function showall{T}(a::AbstractArray{T,2})
     print(summary(a))
     if isempty(a)
         return
@@ -217,7 +220,7 @@ function showall{T}(a::Array{T,2})
     showall_matrix(a)
 end
 
-function show{T}(a::Array{T,1})
+function show{T}(a::AbstractArray{T,1})
     if is(T,Any)
         opn = '{'; cls = '}'
     else
@@ -240,7 +243,7 @@ function show_cols(a, start, stop, i)
     end
 end
 
-function show{T}(a::Array{T,2})
+function show{T}(a::AbstractArray{T,2})
     print(summary(a))
     if isempty(a)
         return
@@ -249,7 +252,7 @@ function show{T}(a::Array{T,2})
     show_matrix(a)
 end
 
-function show_matrix(a::Array)
+function show_matrix(a::AbstractArray)
     m = size(a,1)
     n = size(a,2)
     print_hdots = false
@@ -295,9 +298,9 @@ function show_matrix(a::Array)
     end
 end
 
-show{T}(a::Array{T,0}) = print(summary(a))
+show{T}(a::AbstractArray{T,0}) = print(summary(a))
 
-function show(a::Array)
+function show(a::AbstractArray)
     print(summary(a))
     if isempty(a)
         return
@@ -334,7 +337,7 @@ function show(a::Array)
     cartesian_map(print_slice, map(x->Range1(1,x), tail))
 end
 
-function showall(a::Array)
+function showall(a::AbstractArray)
     print(summary(a))
     if isempty(a)
         return
@@ -354,14 +357,19 @@ end
 
 summary(x) = string(typeof(x))
 
-summary{T}(a::Array{T,0}) = strcat("0-dimensional",
-                                   " ", string(T), " array")
+function dims2string(d)
+    if length(d) == 0
+        return "0-dimensional"
+    elseif length(d) == 1
+        strcat(d[1], "-element")
+    else
+        join("x", map(string,d))
+    end
+end
 
-summary{T}(a::Array{T,1}) = strcat(length(a), "-element",
-                                   " ", string(T), " array")
-
-summary{T}(a::Array{T}) = strcat(join("x",map(string,size(a))),
-                                 " ", string(T), " array")
+summary{T}(a::AbstractArray{T}) = strcat(dims2string(size(a)),
+                                         " ", string(T), " ",
+                                         string(typeof(a).name))
 
 function whos()
     global VARIABLES

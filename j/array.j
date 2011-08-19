@@ -11,9 +11,6 @@ size(a::Array, d) = arraysize(a, d)
 size(a::Matrix) = (arraysize(a,1), arraysize(a,2))
 numel(a::Array) = arraylen(a)
 
-iscomplex(x::Array{Complex128}) = true
-iscomplex(x::Array{Complex64}) = true
-
 ## copy ##
 
 mcopy_to{T}(dest::Ptr{T}, src::Ptr{T}, n::Int) =

@@ -30,6 +30,8 @@ strides{T}(a::AbstractArray{T,2}) = (1, size(a,1))
 strides{T}(a::AbstractArray{T,3}) = (1, size(a,1), size(a,1)*size(a,2))
 strides   (a::AbstractArray)      = ntuple(ndims(a), i->stride(a,i))
 
+iscomplex{T<:Complex}(x::AbstractArray{T}) = true
+
 ## Constructors ##
 
 # default arguments to similar()
@@ -1209,12 +1211,18 @@ strides(s::SubArray) = tuple(s.strides...)
 
 stride(s::SubArray, i::Int) = s.strides[i]
 
-pointer{T}(x::SubArray{T}) = pointer(x.parent) + (x.first_index-1)*sizeof(T)
+convert{T}(::Type{Ptr}, x::SubArray{T}) =
+    pointer(x.parent) + (x.first_index-1)*sizeof(T)
 
-iscomplex(::SubArray{Complex128}) = true
-iscomplex(::SubArray{Complex64}) = true
+function pointer{T}(s::SubArray{T}, i::Index)
+    is = ind2sub(size(s), i)
+    index = s.first_index
+    for n = 1:length(is)
+        index += (is[n]-1)*s.strides[n]
+    end
+    return pointer(s.parent, index)
+end
 
-triu{T}(M::SubArray{T,2}, k) = [ j-i >= k ? M[i,j] : zero(T) |
-                                i=1:size(M,1), j=1:size(M,2) ]
-tril{T}(M::SubArray{T,2}, k) = [ j-i <= k ? M[i,j] : zero(T) |
-                                i=1:size(M,1), j=1:size(M,2) ]
+summary{T,N}(s::SubArray{T,N}) =
+    strcat(dims2string(size(s)), " SubArray of ",
+           summary(s.parent))

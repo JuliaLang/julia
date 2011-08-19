@@ -87,10 +87,10 @@ end
 
 triu(M) = triu(M,0)
 tril(M) = tril(M,0)
-triu{T}(M::Matrix{T}, k) = [ j-i >= k ? M[i,j] : zero(T) |
-                            i=1:size(M,1), j=1:size(M,2) ]
-tril{T}(M::Matrix{T}, k) = [ j-i <= k ? M[i,j] : zero(T) |
-                            i=1:size(M,1), j=1:size(M,2) ]
+triu{T}(M::AbstractMatrix{T}, k) = [ j-i >= k ? M[i,j] : zero(T) |
+                                    i=1:size(M,1), j=1:size(M,2) ]
+tril{T}(M::AbstractMatrix{T}, k) = [ j-i <= k ? M[i,j] : zero(T) |
+                                    i=1:size(M,1), j=1:size(M,2) ]
 
 diff(a::Vector) = [ a[i+1] - a[i] | i=1:length(a)-1 ]
 

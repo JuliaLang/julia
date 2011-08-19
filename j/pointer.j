@@ -32,8 +32,11 @@ convert{T}(::Type{Ptr{T}}, a::Array{T}) =
     convert(Ptr{T}, convert(Ptr{Void}, a))
 
 pointer{T}(::Type{T}, x::PtrInt) = convert(Ptr{T}, x)
-pointer{T}(x::Array{T}) = convert(Ptr{T},x)
-pointer{T}(x::Array{T}, i::Index) = convert(Ptr{T},x) + (i-1)*sizeof(T)
+# note: these definitions don't mean any AbstractArray is convertible to
+# pointer. they just map the array element type to the pointer type for
+# convenience in cases that work.
+pointer{T}(x::AbstractArray{T}) = convert(Ptr{T},x)
+pointer{T}(x::AbstractArray{T}, i::Index) = convert(Ptr{T},x) + (i-1)*sizeof(T)
 
 uint(x::Ptr) = convert(PtrInt, x)
 ptrint(x) = convert(PtrInt, x)
