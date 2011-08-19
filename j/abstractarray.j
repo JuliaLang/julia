@@ -1146,7 +1146,7 @@ function sub{T,N}(A::AbstractArray{T,N}, i::NTuple{N,Union(Index,Range{Index},Ra
     SubArray{T,n,typeof(A),typeof(i)}(A, i)
 end
 
-sub{T}(A::AbstractArray{T}, i::Union(Index,Range{Index},Range1{Index})...) =
+sub(A::AbstractArray, i::Union(Index,Range{Index},Range1{Index})...) =
     sub(A, i)
 
 function sub(A::SubArray, i::Union(Index,Range{Index},Range1{Index})...)
@@ -1163,8 +1163,47 @@ function sub(A::SubArray, i::Union(Index,Range{Index},Range1{Index})...)
     sub(A.parent, tuple(newindexes...))
 end
 
-#TODO
-#slice{T,N}(s::SubArray{T,N}) = 
+#slice all dimensions of length 1
+slice{T,N}(a::AbstractArray{T,N}) = sub(a, map(i-> i == 1 ? 1 : (1:i), size(a)))
+slice{T,N}(s::SubArray{T,N}) =
+    sub(s.parent, map(i->!isa(i, Index) && length(i)==1 ?i[1] : i, s.indexes))
+
+#slice dimensions listed, error if any have length > 1
+#silently ignores dimensions that are greater than N
+function slice{T,N}(a::AbstractArray{T,N}, sdims::Int...)
+    newdims = ()
+    for i = 1:N
+        next = 1:size(a, i)
+        for j = sdims
+            if i == j
+                if size(a, i) != 1
+                    error("slice: dimension ", i, " has length greater than 1")
+                end
+                next = 1
+                break
+            end
+        end
+        newdims = tuple(newdims..., next)
+    end
+    sub(a, newdims)
+end 
+function slice{T,N}(s::SubArray{T,N}, sdims::Int...)
+    newdims = ()
+    for i = 1:length(s.indexes)
+        next = s.indexes[i]
+        for j = sdims
+            if i == j
+                if length(next) != 1
+                    error("slice: dimension ", i," has length greater than 1")
+                end
+                next = isa(next, Index) ? next : next.start
+                break
+            end
+        end
+        newdims = tuple(newdims..., next)
+    end
+    sub(s.parent, newdims)
+end
 #unslice?
 
 size(s::SubArray) = s.dims
