@@ -1214,7 +1214,8 @@ ndims{T,N}(s::SubArray{T,N}) = N
 copy(s::SubArray) = copy_to(similar(s.parent, size(s)), s)
 similar(s::SubArray, T::Type, dims::Dims) = similar(s.parent, T, dims)
 
-ref(s::SubArray) = s
+ref{T}(s::SubArray{T,0,AbstractArray{T,0}}) = s.parent[]
+ref{T}(s::SubArray{T,0}) = s.parent[s.first_index]
 
 ref{T}(s::SubArray{T,1}, i::Int) = s.parent[s.first_index + (i-1)*s.strides[1]]
 
@@ -1245,6 +1246,15 @@ function assign(s::SubArray, v, is::Int...)
     s.parent[index] = v
     return s
 end
+
+assign{T}(s::SubArray{T,0,AbstractArray{T,0}}, v::AbstractArray) =
+    (s.parent[]=v; s)
+assign{T}(s::SubArray{T,0,AbstractArray{T,0}},v) =
+    (s.parent[]=v; s)
+assign{T}(s::SubArray{T,0}, v::AbstractArray) =
+    (s.parent[s.first_index]=v; s)
+assign{T}(s::SubArray{T,0}, v) =
+    (s.parent[s.first_index]=v; s)
 
 strides(s::SubArray) = tuple(s.strides...)
 
