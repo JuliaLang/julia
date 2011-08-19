@@ -548,11 +548,15 @@ int jl_is_rest_arg(jl_value_t *ex)
     return 1;
 }
 
+void jl_specialize_ast(jl_lambda_info_t *li);
+
 static jl_value_t *copy_ast(jl_value_t *expr, jl_tuple_t *sp)
 {
     if (jl_is_lambda_info(expr)) {
-        return (jl_value_t*)jl_add_static_parameters((jl_lambda_info_t*)expr,
-                                                     sp);
+        jl_lambda_info_t *li = (jl_lambda_info_t*)expr;
+        li = jl_add_static_parameters(li, sp);
+        jl_specialize_ast(li);
+        return (jl_value_t*)li;
     }
     if (jl_typeis(expr,jl_array_any_type)) {
         jl_array_t *a = (jl_array_t*)expr;

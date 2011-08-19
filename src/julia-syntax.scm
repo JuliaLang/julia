@@ -463,18 +463,20 @@
    ;; let
    (pattern-lambda (let ex . binds)
 		   (let loop ((binds binds)
+			      (args  ())
+			      (inits ())
 			      (locls ())
 			      (stmts ()))
 		     (if (null? binds)
-			 `(call (-> (tuple)
+			 `(call (-> (tuple ,@args)
 				    (block (local (vars ,@locls))
 					   ,@stmts
 					   ,ex))
-				)
+				,@inits)
 			 (cond
 			  ((or (symbol? (car binds)) (decl? (car binds)))
 			   ;; just symbol -> add local
-			   (loop (cdr binds)
+			   (loop (cdr binds) args inits
 				 (cons (car binds) locls)
 				 stmts))
 			  ((and (length= (car binds) 3)
@@ -483,12 +485,15 @@
 			   (cond
 			    ((or (symbol? (cadar binds))
 				 (decl?   (cadar binds)))
-			     ;; a=b -> add local and initializer
+			     ;; a=b -> add argument
 			     (loop (cdr binds)
-				   (cons (cadar binds) locls)
-				   (cons `(= ,(decl-var (cadar binds))
+				   (cons (cadar binds) args)
+				   (cons (caddar binds) inits)
+				   locls stmts))
+				   #;(cons (cadar binds) locls)
+				   #;(cons `(= ,(decl-var (cadar binds))
 					     ,(caddar binds))
-					 stmts)))
+					 stmts);))
 			    ((and (pair? (cadar binds))
 				  (eq? (caadar binds) 'call))
 			     ;; f()=c
