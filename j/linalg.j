@@ -5,10 +5,9 @@ dot(x::AbstractVector, y::AbstractVector) = sum(x.*conj(y))
 # blas.j defines these for floats; this handles other cases
 # TODO: Also need the vector*matrix case
 function (*){T,S}(A::AbstractMatrix{T}, B::AbstractVector{S})
-    R = promote_type(T,S)
     mA = size(A, 1)
     mB = size(B, 1)
-    C = zeros(R, mA)
+    C = zeros(promote_type(T,S), mA)
     for k = 1:mB
         b = B[k]
         for i = 1:mA
@@ -19,12 +18,11 @@ function (*){T,S}(A::AbstractMatrix{T}, B::AbstractVector{S})
 end
 
 function (*){T,S}(A::AbstractMatrix{T}, B::AbstractMatrix{S})
-    R = promote_type(T,S)
     (mA, nA) = size(A)
     (mB, nB) = size(B)
     if mA == 2 && nA == 2 && nB == 2; return matmul2x2(A,B); end
     if mA == 3 && nA == 3 && nB == 3; return matmul3x3(A,B); end
-    C = zeros(R, mA, nB)
+    C = zeros(promote_type(T,S), mA, nB)
     for j = 1:nB
         coffs = (j-1)*mA
         for k = 1:mB
@@ -80,9 +78,6 @@ function matmul3x3{T,S}(A::AbstractMatrix{T}, B::AbstractMatrix{S})
 
     return C
 end
-
-
-
 
 
 triu(M) = triu(M,0)
@@ -183,8 +178,9 @@ function kron{T,S}(a::Matrix{T}, b::Matrix{S})
     for j = 1:size(a,2)
         for l = 1:size(b,2)
             for i = 1:size(a,1)
+                aij = a[i,j]
                 for k = 1:size(b,1)
-                    R[m] = a[i,j]*b[k,l]
+                    R[m] = aij*b[k,l]
                     m += 1
                 end
             end
