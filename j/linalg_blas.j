@@ -171,4 +171,61 @@ function (*){T<:Union(Float64,Float32,Complex128,Complex64)}(A::DenseMat{T},
     return C
 end
 
-# TODO: Use DGEMV for matvec.
+#SUBROUTINE DGEMV(TRANS,M,N,ALPHA,A,LDA,X,INCX,BETA,Y,INCY)
+#*     .. Scalar Arguments ..
+#      DOUBLE PRECISION ALPHA,BETA
+#      INTEGER INCX,INCY,LDA,M,N
+#      CHARACTER TRANS
+#*     .. Array Arguments ..
+#      DOUBLE PRECISION A(LDA,*),X(*),Y(*)
+
+macro jl_blas_gemv_macro(fname, eltype)
+   quote
+
+       function jl_blas_gemm(trans, m::Int, n::Int, 
+                             alpha::($eltype), A::DenseMat{$eltype}, lda::Int,
+                             X::DenseVec{$eltype}, incx::Int,
+                             beta::($eltype), Y::DenseVec{$eltype}, incy::Int)
+           a = pointer(A)
+           x = pointer(X)
+           y = pointer(Y)
+           ccall(dlsym(libBLAS, $fname),
+                 Void,
+                 (Ptr{Uint8}, Ptr{Int32}, Ptr{Int32},
+                  Ptr{$eltype}, Ptr{$eltype}, Ptr{Int32},
+                  Ptr{$eltype}, Ptr{Int32},
+                  Ptr{$eltype}, Ptr{$eltype}, Ptr{Int32}),
+                 trans, int32(m), int32(n),
+                 alpha, a, int32(lda),
+                 x, int32(incx),
+                 beta, y, int32(incy))
+       end
+
+   end
+end
+
+@jl_blas_gemv_macro :dgemv_ Float64
+@jl_blas_gemv_macro :sgemv_ Float32
+@jl_blas_gemv_macro :zgemv_ Complex128
+@jl_blas_gemv_macro :cgemv_ Complex64
+
+function (*){T<:Union(Float64,Float32,Complex128,Complex64)}(A::DenseMat{T},
+                                                             X::DenseVec{T})
+    (mA, nA) = size(A)
+    mX = size(X, 1)
+
+    if nA != mX; error("*: argument shapes do not match"); end
+
+    if stride(A, 1) != 1
+        return invoke(*, (AbstractArray, AbstractVector), A, X)
+    end
+
+    # Result array does not need to be initialized as long as beta==0
+    Y = Array(T, mA)
+
+    jl_blas_gemm("N", mA, nA,
+                 convert(T, 1.0), A, stride(A, 2),
+                 X, stride(X, 1),
+                 convert(T, 0.0), Y, 1)
+    return Y
+end
