@@ -66,17 +66,18 @@ end
 # a stable sort should be used.
 # If only numbers are being sorted, a faster quicksort can be used.
 
-sort_inplace{T <: Real}(a::Vector{T}) = quicksort(a, 1, length(a))
+sort_inplace{T <: Real}(a::DenseVec{T}) = quicksort(a, 1, length(a))
 
-sort_inplace{T}(a::Vector{T}) = mergesort(a, 1, length(a), Array(T, length(a)))
+sort_inplace{T}(a::DenseVec{T}) =
+    mergesort(a, 1, length(a), Array(T, length(a)))
 
-sort(a::Vector) = sort_inplace(copy(a))
+sort(a::DenseVec) = sort_inplace(copy(a))
 
-sortperm{T}(a::Vector{T}) =
+sortperm{T}(a::DenseVec{T}) =
     mergesort(copy(a), linspace(1,length(a)), 1, length(a),
               Array(T, length(a)), Array(Size, length(a)))
 
-function insertionsort(a::Vector, lo, hi)
+function insertionsort(a::DenseVec, lo, hi)
     for i=(lo+1):hi
         j = i
         x = a[i]
@@ -92,7 +93,7 @@ function insertionsort(a::Vector, lo, hi)
     a
 end
 
-function quicksort(a::Vector, lo, hi)
+function quicksort(a::DenseVec, lo, hi)
     while hi > lo
         if (hi-lo <= 20)
             return insertionsort(a, lo, hi)
@@ -116,7 +117,7 @@ function quicksort(a::Vector, lo, hi)
     return a
 end
 
-function insertionsort(a::Vector, p::Vector{Size}, lo, hi)
+function insertionsort(a::DenseVec, p::Vector{Size}, lo, hi)
     for i=(lo+1):hi
         j = i
         x = a[i]
@@ -135,8 +136,8 @@ function insertionsort(a::Vector, p::Vector{Size}, lo, hi)
     (a, p)
 end
 
-function mergesort(a::Vector, p::Vector{Size}, lo, hi,
-                   b::Vector, pb::Vector{Size})
+function mergesort(a::DenseVec, p::Vector{Size}, lo, hi,
+                   b::DenseVec, pb::Vector{Size})
 
     if lo < hi
         if (hi-lo <= 20)
@@ -184,7 +185,7 @@ function mergesort(a::Vector, p::Vector{Size}, lo, hi,
     return (a, p)
 end
 
-function mergesort(a::Vector, lo, hi, b::Vector)
+function mergesort(a::DenseVec, lo, hi, b::DenseVec)
     if lo < hi
         if (hi-lo <= 20)
             return insertionsort(a, lo, hi)
@@ -227,7 +228,7 @@ function mergesort(a::Vector, lo, hi, b::Vector)
     return a
 end
 
-function issorted(v::Vector)
+function issorted(v::AbstractVector)
     for i=1:(length(v)-1)
         if v[i] > v[i+1]; return false; end
     end
