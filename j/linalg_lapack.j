@@ -30,6 +30,9 @@ end
 #does not check that input matrix is symmetric/hermitian
 #(uses upper triangular half)
 #Possible TODO: "economy mode"
+
+chol{T<:Real}(x::Matrix{T}) = chol(float64(x))
+
 function chol{T<:Union(Float32,Float64,Complex64,Complex128)}(A::DenseMat{T})
     if stride(A,1) != 1; error("chol: matrix columns must have contiguous elements"); end
     n = int32(size(A, 1))
@@ -75,6 +78,8 @@ end
 
 lu(A::Matrix) = lu(A, false)
 lu{T}(A::SubArray{T,2}) = lu(A,false)
+lu{T<:Real}(x::Matrix{T}) = lu(float64(x), false)
+
 function lu{T<:Union(Float32,Float64,Complex64,Complex128)}(A::DenseMat{T},
                                                             economy::Bool)
     if stride(A,1) != 1; error("lu: matrix columns must have contiguous elements"); end
@@ -185,6 +190,9 @@ end
 @jl_lapack_qr_macro :sgeqp3_ :cgeqp3_ :sorgqr_ :cungqr_ Float32 Complex64
 
 #possible TODO: economy mode?
+
+qr{T<:Real}(x::Matrix{T}) = qr(float64(x))
+
 function qr{T<:Union(Float32,Float64,Complex64,Complex128)}(A::DenseMat{T})
     m, n = size(A)
     if isa(A, Matrix)
@@ -329,7 +337,9 @@ end
 @jl_lapack_eig_macro :dsyev_ :zheev_ :dgeev_ :zgeev_ Float64 Complex128
 @jl_lapack_eig_macro :ssyev_ :cheev_ :sgeev_ :cgeev_ Float32 Complex64
 
-function eig{T}(A::Matrix{T})
+eig{T<:Real}(x::Matrix{T}) = eig(float64(x))
+
+function eig{T<:Union(Float64,Float32,Complex128,Complex64)}(A::Matrix{T})
     m, n = size(A)
     if m != n; error("Input must be square"); end
 
@@ -474,7 +484,9 @@ end
 @jl_lapack_gesvd_macro :dgesvd_ :zgesvd_ Float64 Complex128
 @jl_lapack_gesvd_macro :sgesvd_ :cgesvd_ Float32 Complex64
 
-function svd{T}(A::Matrix{T})
+svd{T<:Real}(x::Matrix{T}) = svd(float64(x))
+
+function svd{T<:Union(Float64,Float32,Complex128,Complex64)}(A::Matrix{T})
     jobu = "A"
     jobvt = "A"
     m, n = size(A)
@@ -593,7 +605,9 @@ end
 @jl_lapack_backslash_macro :zgesv_ :zposv_ :zgels_ :ztrtrs_ Complex128
 @jl_lapack_backslash_macro :cgesv_ :cposv_ :cgels_ :ctrtrs_ Complex64
 
-function (\){T}(A::Matrix{T}, B::VecOrMat{T})
+(\){T1<:Real, T2<:Real}(A::Matrix{T1}, B::VecOrMat{T2}) = (\)(float64(A), float64(B))
+
+function (\){T<:Union(Float64,Float32,Complex128,Complex64)}(A::Matrix{T}, B::VecOrMat{T})
     m, n = size(A)
     mrhs = size(B, 1)
     if m != mrhs; error("Number of rows of arguments do not match"); end
@@ -665,7 +679,6 @@ function (\){T}(A::Matrix{T}, B::VecOrMat{T})
     error("Error in LAPACK solving A*X = B")
 
 end
-
 
 ## BIDIAG ##
 
