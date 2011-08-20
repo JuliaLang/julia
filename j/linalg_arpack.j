@@ -230,7 +230,7 @@ function eigs{T}(A::AbstractMatrix{T}, k::Int, evtype::ASCIIString)
     if (info[1] != 0); error("Error in ARPACK eupd"); end
 
     if iscomplex(A) || isrealsymA
-        return (diagm(d), v[1:n, 1:nev])
+        return (d, v[1:n, 1:nev])
     else
         evec = complex(zeros(T, n, nev+1), zeros(T, n, nev+1))
         for j=1:nev
@@ -242,7 +242,7 @@ function eigs{T}(A::AbstractMatrix{T}, k::Int, evtype::ASCIIString)
                 j += 1
             end
         end
-        return (diagm(complex(dr[1:nev],di[1:nev])), evec[1:n, 1:nev])
+        return (complex(dr[1:nev],di[1:nev]), evec[1:n, 1:nev])
     end
 
 end
@@ -307,6 +307,6 @@ function svds{T}(A::AbstractMatrix{T}, k::Int)
     v = v[1:n, 1:nev]
     u = A*v*diagm(1./d)
 
-    return (u, diagm(d), v.')
+    return (u, d, v.')
 
 end

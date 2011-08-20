@@ -363,7 +363,7 @@ function eig{T}(A::Matrix{T})
             info = jl_lapack_syev(jobz, uplo, n, EV, stride(A,2), W, work, lwork)
         end
 
-        if info == 0; return (diagm(W), EV); end
+        if info == 0; return (W, EV); end
         error("Error in LAPACK syev/heev");
 
     else # Non-symmetric case
@@ -404,7 +404,7 @@ function eig{T}(A::Matrix{T})
         if info != 0; error("Error in LAPACK geev"); end
 
         if iscomplex(A)
-            return (diagm(W), VR)
+            return (W, VR)
         else
             evec = complex(zeros(T, n, n), zeros(T, n, n))
             for j=1:n
@@ -416,7 +416,7 @@ function eig{T}(A::Matrix{T})
                     j += 1
                 end
             end
-            return (diagm(complex(WR, WI)), evec)
+            return (complex(WR, WI), evec)
         end
 
     end # symmetric / non-symmetric case
@@ -506,10 +506,7 @@ function svd{T}(A::Matrix{T})
         info = jl_lapack_gesvd(jobu, jobvt, m, n, X, stride(A,2), S, U, m, VT, n, work, lwork)
     end
 
-    SIGMA = zeros(T, m, n)
-    for i=1:k; SIGMA[i,i] = S[i]; end
-
-    if info == 0; return (U, SIGMA, VT); end
+    if info == 0; return (U, S, VT); end
     error("Error in LAPACK gesvd");
 end
 
