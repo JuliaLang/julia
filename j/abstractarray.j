@@ -159,6 +159,7 @@ end
 .^(x::AbstractArray, y::Number       ) = reshape( [ x[i] ^ y    | i=1:numel(x) ], size(x) )
 
 function .^{S<:Int,T<:Int}(A::AbstractArray{S}, B::AbstractArray{T})
+    if size(A) != size(B); error("Inputs should be of same shape and size"); end
     F = similar(A, Float64)
     for i=1:numel(A)
         F[i] = A[i]^B[i]
@@ -190,25 +191,26 @@ macro binary_arithmetic_op(f)
     quote
 
         function ($f){S,T}(A::AbstractArray{S}, B::AbstractArray{T})
-           F = similar(A, promote_type(S,T))
-           for i=1:numel(A)
-              F[i] = ($f)(A[i], B[i])
-           end
-           return F
+            if size(A) != size(B); error("Inputs should be of same shape and size"); end
+            F = similar(A, promote_type(S,T))
+            for i=1:numel(A)
+                F[i] = ($f)(A[i], B[i])
+            end
+            return F
         end
         function ($f){T}(A::Number, B::AbstractArray{T})
-           F = similar(B, promote_type(typeof(A),T))
-           for i=1:numel(B)
-              F[i] = ($f)(A, B[i])
-           end
-           return F
+            F = similar(B, promote_type(typeof(A),T))
+            for i=1:numel(B)
+                F[i] = ($f)(A, B[i])
+            end
+            return F
         end
         function ($f){T}(A::AbstractArray{T}, B::Number)
-           F = similar(A, promote_type(T,typeof(B)))
-           for i=1:numel(A)
-              F[i] = ($f)(A[i], B)
-           end
-           return F
+            F = similar(A, promote_type(T,typeof(B)))
+            for i=1:numel(A)
+                F[i] = ($f)(A[i], B)
+            end
+            return F
         end
 
     end # quote
@@ -261,25 +263,26 @@ macro binary_comparison_op(f)
     quote
 
         function ($f)(A::AbstractArray, B::AbstractArray)
-           F = similar(A, Bool)
-           for i=1:numel(A)
-              F[i] = ($f)(A[i], B[i])
-           end
-           return F
+            if size(A) != size(B); error("Inputs should be of same shape and size"); end
+            F = similar(A, Bool)
+            for i=1:numel(A)
+                F[i] = ($f)(A[i], B[i])
+            end
+            return F
         end
         function ($f)(A::Number, B::AbstractArray)
-           F = similar(B, Bool)
-           for i=1:numel(B)
-              F[i] = ($f)(A, B[i])
-           end
-           return F
+            F = similar(B, Bool)
+            for i=1:numel(B)
+                F[i] = ($f)(A, B[i])
+            end
+            return F
         end
         function ($f)(A::AbstractArray, B::Number)
-           F = similar(A, Bool)
-           for i=1:numel(A)
-              F[i] = ($f)(A[i], B)
-           end
-           return F
+            F = similar(A, Bool)
+            for i=1:numel(A)
+                F[i] = ($f)(A[i], B)
+            end
+            return F
         end
     end
 end
@@ -297,25 +300,26 @@ macro binary_boolean_op(f)
     quote
 
         function ($f)(A::AbstractArray{Bool}, B::AbstractArray{Bool})
-           F = similar(A, Bool)
-           for i=1:numel(A)
-              F[i] = ($f)(A[i], B[i])
-           end
-           return F
+            if size(A) != size(B); error("Inputs should be of same shape and size"); end
+            F = similar(A, Bool)
+            for i=1:numel(A)
+                F[i] = ($f)(A[i], B[i])
+            end
+            return F
         end
         function ($f)(A::Bool, B::AbstractArray{Bool})
-           F = similar(B, Bool)
-           for i=1:numel(B)
-              F[i] = ($f)(A, B[i])
-           end
-           return F
+            F = similar(B, Bool)
+            for i=1:numel(B)
+                F[i] = ($f)(A, B[i])
+            end
+            return F
         end
         function ($f)(A::AbstractArray{Bool}, B::Bool)
-           F = similar(A, Bool)
-           for i=1:numel(A)
-              F[i] = ($f)(A[i], B)
-           end
-           return F
+            F = similar(A, Bool)
+            for i=1:numel(A)
+                F[i] = ($f)(A[i], B)
+            end
+            return F
         end
 
     end # quote
@@ -357,14 +361,12 @@ function make_loop_nest(vars, ranges, body, otherbodies)
     expr
 end
 
-
-
-##genbodies is a function that creates an array (potentially 2d), where the first element is inside
-## the inner most array, and the last element is outside most loop, and all the other arguments are 
-##between each loop. 
-## if it creates a 2d array, it just means that it specifis what it wants to do before and after each
-##loop.
-##if genbodies creates an array it must of length N
+## genbodies() is a function that creates an array (potentially 2d), 
+## where the first element is inside the inner most array, and the last 
+## element is outside most loop, and all the other arguments are 
+## between each loop. If it creates a 2d array, it just means that it 
+## specifies what it wants to do before and after each loop.
+## If genbodies creates an array it must of length N.
 function gen_cartesian_map(cache, genbodies, ranges, exargnames, exargs...)
     N = length(ranges)
     if !has(cache,N)
