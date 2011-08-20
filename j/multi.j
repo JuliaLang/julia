@@ -925,7 +925,7 @@ function start_worker(wrfd)
     end
     io = fdio(wrfd)
     write(io, port[1])        # print port
-    write(io, gethostname())  # print hostname
+    write(io, getipaddr())  # print hostname
     write(io, '\n')
     flush(io)
     #close(io)
@@ -981,18 +981,36 @@ function start_remote_workers(machines, cmds)
     w
 end
 
-worker_ssh_cmd(host) =
+function worker_ssh_cmd(host)
     `ssh -n $host "bash -l -c \"cd $JULIA_HOME && ./julia --worker\""`
 
-worker_local_cmd() = `$JULIA_HOME/julia --worker`
+end #func
 
-addprocs_ssh(machines) =
-    add_workers(PGRP, start_remote_workers(machines,
-                                           map(worker_ssh_cmd, machines)))
+function worker_ssh_cmd(host, key)
+    `ssh -i $key -n $host "bash -l -c \"cd $JULIA_HOME && ./julia --worker\""`
+end #func
+
+function addprocs_ssh(machines) 
+    add_workers(PGRP, start_remote_workers(machines, map(worker_ssh_cmd, machines)))
+end #func
+                    
+function addprocs_ssh(machines, keys)
+    if !(isa(keys, Array)) && isa(machines,Array)
+        key = keys
+        keys = [ key | x = 1:numel(machines)]
+        cmdargs = { {machines[x],keys[x]} | x = 1:numel(machines)}
+    else
+        cmdargs = {{machines,keys}}
+    end #if/else
+    add_workers(PGRP, start_remote_workers(machines, map(x->worker_ssh_cmd(x[1],x[2]), cmdargs)))
+end #func
+
+worker_local_cmd() = `$JULIA_HOME/julia --worker`
 
 addprocs_local(np::Int) =
     add_workers(PGRP, start_remote_workers({ "localhost" | i=1:np },
                                            { worker_local_cmd() | i=1:np }))
+
 
 function start_sge_workers(n)
     home = JULIA_HOME
