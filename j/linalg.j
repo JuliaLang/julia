@@ -2,14 +2,14 @@
 
 dot(x::AbstractVector, y::AbstractVector) = sum(x.*conj(y))
 
-# blas.j defines these for floats; this handles other cases
+# blas.j defines matmul for floats; other integer and mixed precision
+# cases are handled here
 
 # TODO: It will be faster for large matrices to convert to float,
 # call BLAS, and convert back to required type.
 
-# TODO: Can this matrix multiplication code here also handle subarrays?
-
-function (*){T,S}(A::AbstractMatrix{T}, B::AbstractVector{S})
+function (*){T,S}(A::Union(AbstractMatrix{T}, SubArray{T,2,Array{T}}),
+                  B::Union(AbstractVector{S}, SubArray{S,1,Array{S}}))
     mA = size(A, 1)
     mB = size(B, 1)
     C = zeros(promote_type(T,S), mA)
@@ -22,7 +22,8 @@ function (*){T,S}(A::AbstractMatrix{T}, B::AbstractVector{S})
     return C
 end
 
-function (*){T,S}(A::AbstractVector{T}, B::AbstractMatrix{S})
+function (*){T,S}(A::Union(AbstractVector{S}, SubArray{S,1,Array{S}}),
+                  B::Union(AbstractMatrix{T}, SubArray{T,2,Array{T}}))
     nA = size(A, 1)
     nB = size(B, 2)
     R = promote_type(T,S)
@@ -37,7 +38,8 @@ function (*){T,S}(A::AbstractVector{T}, B::AbstractMatrix{S})
     return C
 end
 
-function (*){T,S}(A::AbstractMatrix{T}, B::AbstractMatrix{S})
+function (*){T,S}(A::Union(AbstractMatrix{T}, SubArray{T,2,Array{T}}),
+                  B::Union(AbstractMatrix{S}, SubArray{S,2,Array{S}}))
     (mA, nA) = size(A)
     (mB, nB) = size(B)
     if mA == 2 && nA == 2 && nB == 2; return matmul2x2(A,B); end
@@ -57,7 +59,8 @@ function (*){T,S}(A::AbstractMatrix{T}, B::AbstractMatrix{S})
 end
 
 # multiply 2x2 matrices
-function matmul2x2{T,S}(A::AbstractMatrix{T}, B::AbstractMatrix{S})
+function matmul2x2{T,S}(A::Union(AbstractMatrix{T}, SubArray{T,2,Array{T}}),
+                        B::Union(AbstractMatrix{S}, SubArray{S,2,Array{S}}))
     R = promote_type(T,S)
     C = Array(R, 2, 2)
 
@@ -72,7 +75,8 @@ function matmul2x2{T,S}(A::AbstractMatrix{T}, B::AbstractMatrix{S})
     return C
 end
 
-function matmul3x3{T,S}(A::AbstractMatrix{T}, B::AbstractMatrix{S})
+function matmul3x3{T,S}(A::Union(AbstractMatrix{T}, SubArray{T,2,Array{T}}),
+                        B::Union(AbstractMatrix{S}, SubArray{S,2,Array{S}}))
     R = promote_type(T,S)
     C = Array(R, 3, 3)
 

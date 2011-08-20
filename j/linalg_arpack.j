@@ -185,8 +185,7 @@ function eigs{T}(A::AbstractMatrix{T}, k::Int, evtype::ASCIIString)
         end
 
         if (ido[1] == -1 || ido[1] == 1)
-            # TODO: For the dense matrix case, just call BLAS directly here.
-            workd[ipntr[2]:ipntr[2]+n-1] = A * workd[ipntr[1]:ipntr[1]+n-1]
+            workd[ipntr[2]:ipntr[2]+n-1] = A * sub(workd, ipntr[1]:(ipntr[1]+n-1))
         else
             break
         end
@@ -288,7 +287,7 @@ function svds{T}(A::AbstractMatrix{T}, k::Int)
         if (info[1] < 0); print(info[1], ":"); error("Error in ARPACK aupd"); end
 
         if (ido[1] == -1 || ido[1] == 1)
-            workd[ipntr[2]:(ipntr[2]+n-1)] = At*(A*workd[ipntr[1]:(ipntr[1]+n-1)])
+            workd[ipntr[2]:(ipntr[2]+n-1)] = At*(A*sub(workd, ipntr[1]:(ipntr[1]+n-1)))
         else
             break
         end
