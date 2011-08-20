@@ -9,7 +9,7 @@ macro jl_lapack_potrf_macro(potrf, eltype)
         #       INTEGER            INFO, LDA, N
         # *     .. Array Arguments ..
         #       DOUBLE PRECISION   A( LDA, * )
-        function jl_lapack_potrf(uplo, n, A::AbstractMatrix{$eltype}, lda)
+        function jl_lapack_potrf(uplo, n, A::DenseMat{$eltype}, lda)
             info = Array(Int32, 1)
             a = pointer(A)
             ccall(dlsym(libLAPACK, $potrf),
@@ -30,7 +30,8 @@ end
 #does not check that input matrix is symmetric/hermitian
 #(uses upper triangular half)
 #Possible TODO: "economy mode"
-function chol{T<:Union(Float32,Float64,Complex64,Complex128)}(A::Union(Matrix,SubArray{T,2}))
+function chol{T<:Union(Float32,Float64,Complex64,Complex128)}(A::DenseMat{T})
+    if stride(A,1) != 1; error("chol: matrix columns must have contiguous elements"); end
     n = int32(size(A, 1))
     if isa(A, Matrix)
         R = triu(A)
@@ -74,8 +75,9 @@ end
 
 lu(A::Matrix) = lu(A, false)
 lu{T}(A::SubArray{T,2}) = lu(A,false)
-function lu{T<:Union(Float32,Float64,Complex64,Complex128)}(A::Union(Matrix,SubArray{T,2}),
+function lu{T<:Union(Float32,Float64,Complex64,Complex128)}(A::DenseMat{T},
                                                             economy::Bool)
+    if stride(A,1) != 1; error("lu: matrix columns must have contiguous elements"); end
     m, n = size(A)
     LU = A
     if !economy
@@ -115,7 +117,7 @@ macro jl_lapack_qr_macro(real_geqp3, complex_geqp3, orgqr, ungqr, eltype, celtyp
         # *     .. Array Arguments ..
         #       INTEGER            JPVT( * )
         #       DOUBLE PRECISION   A( LDA, * ), TAU( * ), WORK( * )
-        function jl_lapack_geqp3(m, n, A::Matrix{$eltype}, lda, jpvt, tau, work, lwork)
+        function jl_lapack_geqp3(m, n, A::DenseMat{$eltype}, lda, jpvt, tau, work, lwork)
             info = Array(Int32, 1)
             a = pointer(A)
             ccall(dlsym(libLAPACK, $real_geqp3),
@@ -133,7 +135,7 @@ macro jl_lapack_qr_macro(real_geqp3, complex_geqp3, orgqr, ungqr, eltype, celtyp
         #       INTEGER            JPVT( * )
         #       DOUBLE PRECISION   RWORK( * )
         #       COMPLEX*16         A( LDA, * ), TAU( * ), WORK( * )
-        function jl_lapack_geqp3(m, n, A::AbstractMatrix{$celtype}, lda, jpvt, tau, work, lwork, rwork)
+        function jl_lapack_geqp3(m, n, A::DenseMat{$eltype}, lda, jpvt, tau, work, lwork, rwork)
             info = Array(Int32, 1)
             a = pointer(A)
             ccall(dlsym(libLAPACK, $complex_geqp3),
@@ -149,7 +151,7 @@ macro jl_lapack_qr_macro(real_geqp3, complex_geqp3, orgqr, ungqr, eltype, celtyp
         #       INTEGER            INFO, K, LDA, LWORK, M, N
         # *     .. Array Arguments ..
         #       DOUBLE PRECISION   A( LDA, * ), TAU( * ), WORK( * )
-        function jl_lapack_orgqr(m, n, k, A::AbstractMatrix{$eltype}, lda, tau, work, lwork)
+        function jl_lapack_orgqr(m, n, k, A::DenseMat{$eltype}, lda, tau, work, lwork)
             info = Array(Int32, 1)
             a = pointer(A)
             ccall(dlsym(libLAPACK, $orgqr),
@@ -165,7 +167,7 @@ macro jl_lapack_qr_macro(real_geqp3, complex_geqp3, orgqr, ungqr, eltype, celtyp
         #      INTEGER            INFO, K, LDA, LWORK, M, N
         #*     .. Array Arguments ..
         #      COMPLEX*16         A( LDA, * ), TAU( * ), WORK( * )
-        function jl_lapack_ungqr(m, n, k, A::AbstractMatrix{$celtype}, lda, tau, work, lwork)
+        function jl_lapack_ungqr(m, n, k, A::DenseMat{$eltype}, lda, tau, work, lwork)
             info = Array(Int32, 1)
             a = pointer(A)
             ccall(dlsym(libLAPACK, $ungqr),
@@ -183,7 +185,7 @@ end
 @jl_lapack_qr_macro :sgeqp3_ :cgeqp3_ :sorgqr_ :cungqr_ Float32 Complex64
 
 #possible TODO: economy mode?
-function qr{T<:Union(Float32,Float64,Complex64,Complex128)}(A::Union(Matrix{T},SubArray{T,2}))
+function qr{T<:Union(Float32,Float64,Complex64,Complex128)}(A::DenseMat{T})
     m, n = size(A)
     if isa(A, Matrix)
         QR = copy(A)
@@ -521,13 +523,15 @@ macro jl_lapack_backslash_macro(gesv, posv, gels, trtrs, eltype)
         # *     .. Array Arguments ..
         #       INTEGER            IPIV( * )
         #       DOUBLE PRECISION   A( LDA, * ), B( LDB, * )
-        function jl_lapack_gesv(n, nrhs, A::Matrix{$eltype}, lda, ipiv, B, ldb)
+        function jl_lapack_gesv(n, nrhs, A::AbstractMatrix{$eltype}, lda, ipiv, B, ldb)
             info = Array(Int32, 1)
+            a = pointer(A)
+            b = pointer(B)
             ccall(dlsym(libLAPACK, $gesv),
                   Void,
                   (Ptr{Int32}, Ptr{Int32}, Ptr{$eltype}, Ptr{Int32}, Ptr{Int32},
                    Ptr{$eltype}, Ptr{Int32}, Ptr{Int32}),
-                  int32(n), int32(nrhs), A, int32(lda), ipiv, B, int32(ldb), info)
+                  int32(n), int32(nrhs), a, int32(lda), ipiv, b, int32(ldb), info)
             return info[1]
         end
 
@@ -537,13 +541,15 @@ macro jl_lapack_backslash_macro(gesv, posv, gels, trtrs, eltype)
         #      INTEGER            INFO, LDA, LDB, N, NRHS
         #     .. Array Arguments ..
         #      DOUBLE PRECISION   A( LDA, * ), B( LDB, * )
-        function jl_lapack_posv(uplo, n, nrhs, A::Matrix{$eltype}, lda, B, ldb)
+        function jl_lapack_posv(uplo, n, nrhs, A::AbstractMatrix{$eltype}, lda, B, ldb)
             info = Array(Int32, 1)
+            a = pointer(A)
+            b = pointer(B)
             ccall(dlsym(libLAPACK, $posv),
                   Void,
                   (Ptr{Uint8}, Ptr{Int32}, Ptr{Int32}, Ptr{$eltype}, Ptr{Int32},
                    Ptr{$eltype}, Ptr{Int32}, Ptr{Int32}),
-                  uplo, int32(n), int32(nrhs), A, int32(lda), B, int32(ldb), info)
+                  uplo, int32(n), int32(nrhs), a, int32(lda), b, int32(ldb), info)
             return info[1]
         end
 
@@ -551,14 +557,16 @@ macro jl_lapack_backslash_macro(gesv, posv, gels, trtrs, eltype)
         # *     .. Scalar Arguments ..
         #       CHARACTER          TRANS
         #       INTEGER            INFO, LDA, LDB, LWORK, M, N, NRHS
-        function jl_lapack_gels(trans, m, n, nrhs, A::Matrix{$eltype}, lda, B, ldb, work, lwork)
+        function jl_lapack_gels(trans, m, n, nrhs, A::AbstractMatrix{$eltype}, lda, B, ldb, work, lwork)
             info = Array(Int32, 1)
+            a = pointer(A)
+            b = pointer(B)
             ccall(dlsym(libLAPACK, $gels),
                   Void,
                   (Ptr{Uint8}, Ptr{Int32}, Ptr{Int32}, Ptr{Int32}, Ptr{$eltype}, Ptr{Int32},
                    Ptr{$eltype}, Ptr{Int32}, Ptr{$eltype}, Ptr{Int32}, Ptr{Int32}),
-                  trans, int32(m), int32(n), int32(nrhs), A, int32(lda), 
-                  B, int32(ldb), work, int32(lwork), info)
+                  trans, int32(m), int32(n), int32(nrhs), a, int32(lda), 
+                  b, int32(ldb), work, int32(lwork), info)
             return info[1]
         end
 
@@ -568,13 +576,15 @@ macro jl_lapack_backslash_macro(gesv, posv, gels, trtrs, eltype)
         #       INTEGER            INFO, LDA, LDB, N, NRHS
         # *     .. Array Arguments ..
         #       DOUBLE PRECISION   A( LDA, * ), B( LDB, * )
-        function jl_lapack_trtrs(uplo, trans, diag, n, nrhs, A::Matrix{$eltype}, lda, B, ldb)
+        function jl_lapack_trtrs(uplo, trans, diag, n, nrhs, A::AbstractMatrix{$eltype}, lda, B, ldb)
             info = Array(Int32, 1)
+            a = pointer(A)
+            b = pointer(B)
             ccall(dlsym(libLAPACK, $trtrs),
                   Void,
                   (Ptr{Uint8}, Ptr{Uint8}, Ptr{Uint8}, Ptr{Int32}, Ptr{Int32},
                    Ptr{$eltype}, Ptr{Int32}, Ptr{$eltype}, Ptr{Int32}, Ptr{Int32}),
-                  uplo, trans, diag, int32(n), int32(nrhs), A, int32(lda), B, int32(ldb), info)
+                  uplo, trans, diag, int32(n), int32(nrhs), a, int32(lda), b, int32(ldb), info)
             return info[1]
         end
 
