@@ -182,7 +182,7 @@ end
 macro jl_blas_gemv_macro(fname, eltype)
    quote
 
-       function jl_blas_gemm(trans, m::Int, n::Int, 
+       function jl_blas_gemv(trans, m::Int, n::Int, 
                              alpha::($eltype), A::DenseMat{$eltype}, lda::Int,
                              X::DenseVec{$eltype}, incx::Int,
                              beta::($eltype), Y::DenseVec{$eltype}, incy::Int)
@@ -223,7 +223,7 @@ function (*){T<:Union(Float64,Float32,Complex128,Complex64)}(A::DenseMat{T},
     # Result array does not need to be initialized as long as beta==0
     Y = Array(T, mA)
 
-    jl_blas_gemm("N", mA, nA,
+    jl_blas_gemv("N", mA, nA,
                  convert(T, 1.0), A, stride(A, 2),
                  X, stride(X, 1),
                  convert(T, 0.0), Y, 1)
