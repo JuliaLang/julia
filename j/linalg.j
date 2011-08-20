@@ -3,7 +3,12 @@
 dot(x::AbstractVector, y::AbstractVector) = sum(x.*conj(y))
 
 # blas.j defines these for floats; this handles other cases
-# TODO: Also need the vector*matrix case
+
+# TODO: It will be faster for large matrices to convert to float,
+# call BLAS, and convert back to required type.
+
+# TODO: Can this matrix multiplication code here also handle subarrays?
+
 function (*){T,S}(A::AbstractMatrix{T}, B::AbstractVector{S})
     mA = size(A, 1)
     mB = size(B, 1)
@@ -11,10 +16,25 @@ function (*){T,S}(A::AbstractMatrix{T}, B::AbstractVector{S})
     for k = 1:mB
         b = B[k]
         for i = 1:mA
-            C[i] += b * A[i, k]
+            C[i] += A[i, k] * b
         end
     end
-    C
+    return C
+end
+
+function (*){T,S}(A::AbstractVector{T}, B::AbstractMatrix{S})
+    nA = size(A, 1)
+    nB = size(B, 2)
+    R = promote_type(T,S)
+    C = Array(R, nB)
+    for j = 1:nB
+        s = zero(R)
+        for i = 1:nA
+            s += A[i] * B[i, j]
+        end
+        C[j] = s
+    end
+    return C
 end
 
 function (*){T,S}(A::AbstractMatrix{T}, B::AbstractMatrix{S})
@@ -33,7 +53,7 @@ function (*){T,S}(A::AbstractMatrix{T}, B::AbstractMatrix{S})
             end
         end
     end
-    C
+    return C
 end
 
 # multiply 2x2 matrices
