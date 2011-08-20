@@ -104,6 +104,7 @@
     ios_takebuf;
     connect_to_host;
     open_any_tcp_port;
+    getlocalip;
     jl_sizeof_fd_set;
     jl_sizeof_timeval;
     jl_set_timeval;
