@@ -140,8 +140,7 @@ global create_ec2_instance
 function create_ec2_instance(ec2_cert_pk_path, ec2_cert_path, ssh_key_name, inst_size, ami_id, ipaddress,
      stopping_behavior, subnet_id, group_id)
     ##ec2-command
-    output = ec2_run_instance(ec2_cert_pk_path, ec2_cert_path, ssh_key_name, inst_size, ami_id, ipaddress,
-     stopping_behavior, subnet_id, group_id)
+    output = ec2_run_instance(ec2_cert_pk_path, ec2_cert_path, ssh_key_name, inst_size, ami_id, ipaddress, stopping_behavior, subnet_id, group_id)
     
     #find the instance name
     println("the EC2 output: ",output)
@@ -149,7 +148,8 @@ function create_ec2_instance(ec2_cert_pk_path, ec2_cert_path, ssh_key_name, inst
     for i = 1:numel(output)
         if(output[i] == "INSTANCE")
             id = output[i+1]
-            push( instances, Ec2Instance(ip,id))
+            push( instances, Ec2Instance(ipaddress,id))
+            break
         end #if
     end #for
 end #func
@@ -176,14 +176,11 @@ function addprocs_ec2(n)
     for i = 1:n
         ip = generateip(ec2_info.subnet_mask,ec2_info.ip_ranges)
         create_ec2_instance(ip)
-        println("created ec2")
     end
     for i = 1:n
-        println("trying to ssh")
         ip = instances[prevsize+i].ip
         wait_ping(ip)
         addprocs_ssh(ip, ec2_info.ssh_key_path)
-        println("ssh complete")
     end #for
     #println("New Machine(s) Created: ", length(instaces)-prevsize)
     println("YAY")
