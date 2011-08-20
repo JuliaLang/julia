@@ -98,8 +98,9 @@ end #func
 
 function wait_ping(host)
     print("checking connectivity to $host"); flush(stdout_stream)
+    key = ec2_info.ssh_key_path
     while true
-        cmd = `ssh $host true`
+        cmd = `ssh -i $key $host true`
         read_from(cmd); read_from(stderr(cmd))
         if run(cmd)
             break
