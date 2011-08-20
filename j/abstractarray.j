@@ -843,16 +843,11 @@ isempty(a::AbstractArray) = (numel(a) == 0)
 #map(f, M::AbstractMatrix) = [ f(M[i,j]) | i=1:size(M,1), j=1:size(M,2) ]
 
 ## TODO: How to generalize map to n input args?
+
+## 1-d
 function map_to(dest::AbstractArray, f, A::AbstractArray)
     for i=1:numel(A)
         dest[i] = f(A[i])
-    end
-    return dest
-end
-
-function map_to(dest::AbstractArray, f, A::AbstractArray, B::AbstractArray)
-    for i=1:numel(A)
-        dest[i] = f(A[i], B[i])
     end
     return dest
 end
@@ -864,6 +859,14 @@ function map(f, A::AbstractArray)
     return map_to(dest, f, A)
 end
 
+## 2-d
+function map_to(dest::AbstractArray, f, A::AbstractArray, B::AbstractArray)
+    for i=1:numel(A)
+        dest[i] = f(A[i], B[i])
+    end
+    return dest
+end
+
 function map(f, A::AbstractArray, B::AbstractArray)
     if size(A) != size(B); error("Input size and shape should be same"); end
     if isempty(A); return A; end
@@ -872,17 +875,46 @@ function map(f, A::AbstractArray, B::AbstractArray)
     return map_to(dest, f, A, B)
 end
 
+function map_to(dest::AbstractArray, f, A::AbstractArray, B::Number)
+    for i=1:numel(A)
+        dest[i] = f(A[i], B)
+    end
+    return dest
+end
+
+function map(f, A::AbstractArray, B::Number)
+    if isempty(A); return A; end
+    first = f(A[1], B)
+    dest = similar(A, typeof(first))
+    return map_to(dest, f, A, B)
+end
+
+function map_to(dest::AbstractArray, f, A::Number, B::AbstractArray)
+    for i=1:numel(B)
+        dest[i] = f(A, B[i])
+    end
+    return dest
+end
+
+function map(f, A::Number, B::AbstractArray)
+    if isempty(A); return A; end
+    first = f(A, B[1])
+    dest = similar(B, typeof(first))
+    return map_to(dest, f, A, B)
+end
+
 ## Obsolete - Mainly here for reference purposes, use gen_cartesian_map
-# function cartesian_map(body, t::Tuple, it...)
-#     idx = length(t)-length(it)
-#     if idx == 0
-#         body(it)
-#     else
-#         for i = t[idx]
-#             cartesian_map(body, t, i, it...)
-#         end
-#     end
-# end
+## Still used in show()
+function cartesian_map(body, t::Tuple, it...)
+    idx = length(t)-length(it)
+    if idx == 0
+        body(it)
+    else
+        for i = t[idx]
+            cartesian_map(body, t, i, it...)
+        end
+    end
+end
 
 ## Transpose, Permute ##
 
