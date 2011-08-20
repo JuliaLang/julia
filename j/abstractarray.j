@@ -1134,7 +1134,8 @@ type SubArray{T,N,A<:AbstractArray,I<:(Union(Index,Range{Index},Range1{Index})..
             else
                 push(newdims, length(i[j]))
                 #may want to return error if i[j].step <= 0
-                push(newstrides, isa(i[j],Range1) ? pstrides[j] : pstrides[j] * i[j].step)
+                push(newstrides, isa(i[j],Range1) ? pstrides[j] :
+                     pstrides[j] * i[j].step)
                 newfirst += (i[j].start-1)*pstrides[j]
             end 
         end
@@ -1143,15 +1144,33 @@ type SubArray{T,N,A<:AbstractArray,I<:(Union(Index,Range{Index},Range1{Index})..
 end
 
 function sub{T,N}(A::AbstractArray{T,N}, i::NTuple{N,Union(Index,Range{Index},Range1{Index})})
+    i = map(j -> isa(j, Index) ? (j:j) : j, i)
+    SubArray{T,N,typeof(A),typeof(i)}(A, i)
+end
+sub(A::AbstractArray, i::Union(Index,Range{Index},Range1{Index})...) =
+    sub(A, i)
+function sub(A::SubArray, i::Union(Index,Range{Index},Range1{Index})...)
+    j = 1
+    newindexes = Array(Union(Index,Range{Index},Range1{Index}),length(A.indexes))
+    for k = 1:length(A.indexes)
+        if isa(A.indexes[k], Index)
+            newindexes[k] = A.indexes[k]
+        else
+            newindexes[k] = A.indexes[k][isa(i[j],Index) ? (i[j]:i[j]) : i[j]]
+            j += 1
+        end
+    end
+    sub(A.parent, tuple(newindexes...))
+end
+
+function slice{T,N}(A::AbstractArray{T,N}, i::NTuple{N,Union(Index,Range{Index},Range1{Index})})
     n = 0
     for j = i; if !isa(j, Index); n += 1; end; end
     SubArray{T,n,typeof(A),typeof(i)}(A, i)
 end
-
-sub(A::AbstractArray, i::Union(Index,Range{Index},Range1{Index})...) =
-    sub(A, i)
-
-function sub(A::SubArray, i::Union(Index,Range{Index},Range1{Index})...)
+slice(A::AbstractArray, i::Union(Index,Range{Index},Range1{Index})...) =
+    slice(A, i)
+function slice(A::SubArray, i::Union(Index,Range{Index},Range1{Index})...)
     j = 1
     newindexes = Array(Union(Index,Range{Index},Range1{Index}),length(A.indexes))
     for k = 1:length(A.indexes)
@@ -1162,51 +1181,52 @@ function sub(A::SubArray, i::Union(Index,Range{Index},Range1{Index})...)
             j += 1
         end
     end
-    sub(A.parent, tuple(newindexes...))
+    slice(A.parent, tuple(newindexes...))
 end
 
-#slice all dimensions of length 1
-slice{T,N}(a::AbstractArray{T,N}) = sub(a, map(i-> i == 1 ? 1 : (1:i), size(a)))
-slice{T,N}(s::SubArray{T,N}) =
-    sub(s.parent, map(i->!isa(i, Index) && length(i)==1 ?i[1] : i, s.indexes))
-
-#slice dimensions listed, error if any have length > 1
-#silently ignores dimensions that are greater than N
-function slice{T,N}(a::AbstractArray{T,N}, sdims::Int...)
-    newdims = ()
-    for i = 1:N
-        next = 1:size(a, i)
-        for j = sdims
-            if i == j
-                if size(a, i) != 1
-                    error("slice: dimension ", i, " has length greater than 1")
-                end
-                next = 1
-                break
-            end
-        end
-        newdims = tuple(newdims..., next)
-    end
-    sub(a, newdims)
-end 
-function slice{T,N}(s::SubArray{T,N}, sdims::Int...)
-    newdims = ()
-    for i = 1:length(s.indexes)
-        next = s.indexes[i]
-        for j = sdims
-            if i == j
-                if length(next) != 1
-                    error("slice: dimension ", i," has length greater than 1")
-                end
-                next = isa(next, Index) ? next : next.start
-                break
-            end
-        end
-        newdims = tuple(newdims..., next)
-    end
-    sub(s.parent, newdims)
-end
-#unslice?
+### rename the old slice function ###
+##slice all dimensions of length 1
+#slice{T,N}(a::AbstractArray{T,N}) = sub(a, map(i-> i == 1 ? 1 : (1:i), size(a)))
+#slice{T,N}(s::SubArray{T,N}) =
+#    sub(s.parent, map(i->!isa(i, Index) && length(i)==1 ?i[1] : i, s.indexes))
+#
+##slice dimensions listed, error if any have length > 1
+##silently ignores dimensions that are greater than N
+#function slice{T,N}(a::AbstractArray{T,N}, sdims::Int...)
+#    newdims = ()
+#    for i = 1:N
+#        next = 1:size(a, i)
+#        for j = sdims
+#            if i == j
+#                if size(a, i) != 1
+#                    error("slice: dimension ", i, " has length greater than 1")
+#                end
+#                next = 1
+#                break
+#            end
+#        end
+#        newdims = tuple(newdims..., next)
+#    end
+#    sub(a, newdims)
+#end 
+#function slice{T,N}(s::SubArray{T,N}, sdims::Int...)
+#    newdims = ()
+#    for i = 1:length(s.indexes)
+#        next = s.indexes[i]
+#        for j = sdims
+#            if i == j
+#                if length(next) != 1
+#                    error("slice: dimension ", i," has length greater than 1")
+#                end
+#                next = isa(next, Index) ? next : next.start
+#                break
+#            end
+#        end
+#        newdims = tuple(newdims..., next)
+#    end
+#    sub(s.parent, newdims)
+#end
+### end commented code ###
 
 size(s::SubArray) = s.dims
 ndims{T,N}(s::SubArray{T,N}) = N
@@ -1218,10 +1238,11 @@ ref{T}(s::SubArray{T,0,AbstractArray{T,0}}) = s.parent[]
 ref{T}(s::SubArray{T,0}) = s.parent[s.first_index]
 
 ref{T}(s::SubArray{T,1}, i::Int) = s.parent[s.first_index + (i-1)*s.strides[1]]
+ref{T}(s::SubArray{T,2}, i::Int, j::Int) =
+    s.parent[s.first_index +(i-1)*s.strides[1]+(j-1)*s.strides[2]]
 
 ref(s::SubArray, i::Int) = s[ind2sub(size(s), i)...]
 
-#TODO: Special 2D cases
 function ref(s::SubArray, is::Int...)
     index = s.first_index
     for i = 1:length(is)
@@ -1255,6 +1276,16 @@ assign{T}(s::SubArray{T,0}, v::AbstractArray) =
     (s.parent[s.first_index]=v; s)
 assign{T}(s::SubArray{T,0}, v) =
     (s.parent[s.first_index]=v; s)
+
+
+assign{T}(s::SubArray{T,1}, v::AbstractArray, i::Int) =
+    (s.parent[s.first_index + (i-1)*s.strides[1]] = v; s)
+assign{T}(s::SubArray{T,1}, v, i::Int) =
+    (s.parent[s.first_index + (i-1)*s.strides[1]] = v; s)
+assign{T}(s::SubArray{T,2}, v::AbstractArray, i::Int, j::Int) =
+    (s.parent[s.first_index +(i-1)*s.strides[1]+(j-1)*s.strides[2]] = v; s)
+assign{T}(s::SubArray{T,2}, v, i::Int, j::Int) =
+    (s.parent[s.first_index +(i-1)*s.strides[1]+(j-1)*s.strides[2]] = v; s)
 
 strides(s::SubArray) = tuple(s.strides...)
 
