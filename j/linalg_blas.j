@@ -121,9 +121,12 @@ macro jl_blas_gemm_macro(fname, eltype)
    quote
 
        function jl_blas_gemm(transA, transB, m::Int, n::Int, k::Int,
-                             alpha::($eltype), A::Array{$eltype}, lda::Int,
-                             B::Array{$eltype}, ldb::Int,
-                             beta::($eltype), C::Array{$eltype}, ldc::Int)
+                             alpha::($eltype), A::DenseMat{$eltype}, lda::Int,
+                             B::DenseMat{$eltype}, ldb::Int,
+                             beta::($eltype), C::DenseMat{$eltype}, ldc::Int)
+           a = pointer(A)
+           b = pointer(B)
+           c = pointer(C)
            ccall(dlsym(libBLAS, $fname),
                  Void,
                  (Ptr{Uint8}, Ptr{Uint8}, Ptr{Int32}, Ptr{Int32}, Ptr{Int32},
@@ -131,9 +134,9 @@ macro jl_blas_gemm_macro(fname, eltype)
                   Ptr{$eltype}, Ptr{Int32},
                   Ptr{$eltype}, Ptr{$eltype}, Ptr{Int32}),
                  transA, transB, int32(m), int32(n), int32(k),
-                 alpha, A, int32(lda),
-                 B, int32(ldb),
-                 beta, C, int32(ldc))
+                 alpha, a, int32(lda),
+                 b, int32(ldb),
+                 beta, c, int32(ldc))
        end
 
    end
@@ -144,8 +147,8 @@ end
 @jl_blas_gemm_macro :zgemm_ Complex128
 @jl_blas_gemm_macro :cgemm_ Complex64
 
-function (*){T<:Union(Float64,Float32,Complex128,Complex64)}(A::Matrix{T},
-                                                             B::Matrix{T})
+function (*){T<:Union(Float64,Float32,Complex128,Complex64)}(A::DenseMat{T},
+                                                             B::DenseMat{T})
     (mA, nA) = size(A)
     (mB, nB) = size(B)
 
@@ -154,12 +157,16 @@ function (*){T<:Union(Float64,Float32,Complex128,Complex64)}(A::Matrix{T},
     if mA == 2 && nA == 2 && nB == 2; return matmul2x2(A,B); end
     if mA == 3 && nA == 3 && nB == 3; return matmul3x3(A,B); end
 
+    if stride(A, 1) != 1 || stride(B, 1) != 1
+        return invoke(*, (AbstractArray, AbstractArray), A, B)
+    end
+
     # Result array does not need to be initialized as long as beta==0
     C = Array(T, mA, nB)
 
     jl_blas_gemm("N", "N", mA, nB, nA,
-                 convert(T, 1.0), A, mA,
-                 B, nA,
+                 convert(T, 1.0), A, stride(A, 2),
+                 B, stride(B, 2),
                  convert(T, 0.0), C, mA)
     return C
 end

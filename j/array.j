@@ -3,6 +3,7 @@
 typealias Vector{T} Array{T,1}
 typealias Matrix{T} Array{T,2}
 typealias VecOrMat{T} Union(Vector{T}, Matrix{T})
+typealias DenseMat{T} Union(Matrix{T},SubArray{T,2,Array{T}})
 
 ## Basic functions ##
 
