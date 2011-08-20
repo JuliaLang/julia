@@ -5,6 +5,7 @@ typealias Matrix{T} Array{T,2}
 typealias VecOrMat{T} Union(Vector{T}, Matrix{T})
 typealias DenseVec{T} Union(Vector{T}, SubArray{T,1,Array{T}})
 typealias DenseMat{T} Union(Matrix{T}, SubArray{T,2,Array{T}})
+typealias DenseVecOrMat{T} Union(DenseVec{T}, DenseMat{T})
 
 ## Basic functions ##
 
@@ -90,8 +91,8 @@ int64  {T,n}(x::Array{T,n}) = convert(Array{Int64  ,n}, x)
 uint64 {T,n}(x::Array{T,n}) = convert(Array{Uint64 ,n}, x)
 bool   {T,n}(x::Array{T,n}) = convert(Array{Bool   ,n}, x)
 char   {T,n}(x::Array{T,n}) = convert(Array{Char   ,n}, x)
-float32{T,n}(x::Array{T,n}) = convert(Array{Float32,n}, x)
-float64{T,n}(x::Array{T,n}) = convert(Array{Float64,n}, x)
+float32{T,n}(x::Array{T,n}) = convert(Array{typeof(float32(zero(T))),n}, x)
+float64{T,n}(x::Array{T,n}) = convert(Array{typeof(float64(zero(T))),n}, x)
 
 ## Indexing: ref ##
 
