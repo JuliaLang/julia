@@ -839,12 +839,7 @@ isempty(a::AbstractArray) = (numel(a) == 0)
 
 ## map over arrays ##
 
-#map(f, v::AbstractVector) = [ f(v[i]) | i=1:length(v) ]
-#map(f, M::AbstractMatrix) = [ f(M[i,j]) | i=1:size(M,1), j=1:size(M,2) ]
-
-## TODO: How to generalize map to n input args?
-
-## 1-d
+## 1 argument
 function map_to(dest::AbstractArray, f, A::AbstractArray)
     for i=1:numel(A)
         dest[i] = f(A[i])
@@ -859,7 +854,7 @@ function map(f, A::AbstractArray)
     return map_to(dest, f, A)
 end
 
-## 2-d
+## 2 argument
 function map_to(dest::AbstractArray, f, A::AbstractArray, B::AbstractArray)
     for i=1:numel(A)
         dest[i] = f(A[i], B[i])
@@ -901,6 +896,24 @@ function map(f, A::Number, B::AbstractArray)
     first = f(A, B[1])
     dest = similar(B, typeof(first))
     return map_to(dest, f, A, B)
+end
+
+## N argument
+function map_to(dest::AbstractArray, f, As::AbstractArray...)
+    n = numel(As[1])
+    i = 1
+    ith = a->a[i]
+    for i=1:n
+        dest[i] = f(map(ith, As)...)
+    end
+    return dest
+end
+
+function map(f, As::AbstractArray...)
+    if isempty(As[1]); return As[1]; end
+    first = f(map(a->a[1], As)...)
+    dest = similar(As[1], typeof(first))
+    return map_to(dest, f, As...)
 end
 
 ## Obsolete - Mainly here for reference purposes, use gen_cartesian_map
