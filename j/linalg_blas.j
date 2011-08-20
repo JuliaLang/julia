@@ -165,9 +165,9 @@ function (*){T<:Union(Float64,Float32,Complex128,Complex64)}(A::DenseMat{T},
     C = Array(T, mA, nB)
 
     jl_blas_gemm("N", "N", mA, nB, nA,
-                 convert(T, 1.0), A, stride(A, 2),
+                 one(T), A, stride(A, 2),
                  B, stride(B, 2),
-                 convert(T, 0.0), C, mA)
+                 zero(T), C, mA)
     return C
 end
 
@@ -224,8 +224,8 @@ function (*){T<:Union(Float64,Float32,Complex128,Complex64)}(A::DenseMat{T},
     Y = Array(T, mA)
 
     jl_blas_gemv("N", mA, nA,
-                 convert(T, 1.0), A, stride(A, 2),
+                 one(T), A, stride(A, 2),
                  X, stride(X, 1),
-                 convert(T, 0.0), Y, 1)
+                 zero(T), Y, 1)
     return Y
 end
