@@ -234,7 +234,7 @@ function (*){T<:Union(Float64,Float32,Complex128,Complex64)}(X::DenseVec{T},
                                                              A::DenseMat{T})
     nX = size(X, 1)
     (mA, nA) = size(A)
-   
+
     if mA != nX; error("*: argument shapes do not match"); end
 
     if stride(A, 1) != 1
