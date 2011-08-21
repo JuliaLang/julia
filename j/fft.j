@@ -238,3 +238,28 @@ end
 
 @jl_fft_ifft_macro fft fftn
 @jl_fft_ifft_macro ifft ifftn
+
+
+# Transpose
+
+function fftw_transpose(X::Matrix{Complex128})
+    P = similar(X)
+    (n1, n2) = size(X)
+    plan = ccall(dlsym(libfftw, :fftw_plan_guru_dft), Ptr{Void},
+                 (Int32, Ptr{Int32}, Int32, Ptr{Int32}, Ptr{Complex128}, Ptr{Complex128}, Int32, Uint32),
+                 int32(0), int32([]),int32(2),int32([n1,n2,1,n2,1,n1]), X, P, FFTW_FORWARD, FFTW_ESTIMATE)
+    jl_fftw_execute(Complex128, plan)
+    jl_fftw_destroy_plan(Complex128, plan)
+    return P
+end
+
+function fftw_transpose(X::Matrix{Complex64})
+    P = similar(X)
+    (n1, n2) = size(X)
+    plan = ccall(dlsym(libfftwf, :fftwf_plan_guru_dft), Ptr{Void},
+                 (Int32, Ptr{Int32}, Int32, Ptr{Int32}, Ptr{Complex64}, Ptr{Complex64}, Int32, Uint32),
+                 int32(0), int32([]),int32(2),int32([n1,n2,1,n2,1,n1]), X, P, FFTW_FORWARD, FFTW_ESTIMATE)
+    jl_fftw_execute(Complex64, plan)
+    jl_fftw_destroy_plan(Complex64, plan)
+    return P
+end
