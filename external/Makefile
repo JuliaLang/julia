@@ -265,7 +265,7 @@ fftw-$(FFTW_VER)-single/configure: fftw-$(FFTW_VER).tar.gz
 	touch $@
 fftw-$(FFTW_VER)-single/config.status: fftw-$(FFTW_VER)-single/configure
 	cd fftw-$(FFTW_VER)-single && \
-	./configure --prefix=$(EXTROOT) --enable-shared --disable-threads --enable-float && \
+	./configure --prefix=$(EXTROOT) --enable-shared --enable-float --disable-fortran --enable-sse2 --disable-mpi --disable-openmp --disable-threads && \
 	make clean
 	touch $@
 $(FFTW_SINGLE_OBJ_TARGET): fftw-$(FFTW_VER)-single/config.status
@@ -278,7 +278,7 @@ fftw-$(FFTW_VER)-double/configure: fftw-$(FFTW_VER).tar.gz
 	touch $@
 fftw-$(FFTW_VER)-double/config.status: fftw-$(FFTW_VER)-double/configure
 	cd fftw-$(FFTW_VER)-double && \
-	./configure --prefix=$(EXTROOT) --enable-shared --disable-threads && \
+	./configure --prefix=$(EXTROOT) --enable-shared --disable-fortran --enable-sse2 --disable-mpi --disable-openmp --disable-threads && \
 	make clean
 	touch $@
 $(FFTW_DOUBLE_OBJ_TARGET): fftw-$(FFTW_VER)-double/config.status
