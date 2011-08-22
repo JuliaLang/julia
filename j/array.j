@@ -241,7 +241,7 @@ function hcat{T}(A::Array{T,2}...)
        end
    end
 
-    return B
+   return B
 end
 
 function vcat{T}(A::Array{T,2}...)
@@ -270,7 +270,7 @@ function cat(catdim::Int, X...)
     elseif catdim == 2
         dimsC = (1, nargs)
     else
-        # TODO
+        dimsC = tuple(ntuple(catdim-1, i->1)..., nargs)
     end
     C = Array(typeC, dimsC)
 
@@ -290,7 +290,7 @@ function cat(catdim::Int, A::Array...)
     dimsA = map(size, A)
     ndimsA = map(ndims, A)
     d_max = max(ndimsA)
-    d_min = min(ndimsA)
+    #d_min = min(ndimsA)
 
     cat_ranges = ntuple(nargs, i->(catdim <= ndimsA[i] ? dimsA[i][catdim] : 1))
 
