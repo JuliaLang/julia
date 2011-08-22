@@ -236,6 +236,27 @@ function issorted(v::AbstractVector)
 end
 
 sort(A::AbstractArray) = sort(A, 1)
+sort(A::AbstractMatrix) = sort(A, 1)
+
+function sort(A::AbstractMatrix, dim::Index)
+    X = similar(A)
+    (m, n) = size(A)
+    numelA = numel(A)
+
+    if dim == 1
+        for i=1:m:numel(A)
+            this_slice = i:(i+m-1)
+            X[this_slice] = sort(sub(A, this_slice))
+        end
+    elseif dim == 2
+        for i=1:n
+            this_slice = i:n:numelA
+            X[this_slice] = sort(sub(A, this_slice))
+        end
+    end
+
+    return X
+end
 
 function sort(A::AbstractArray, dim::Index)
     X = similar(A)
