@@ -1219,7 +1219,7 @@ static void print_methlist(char *name, jl_methlist_t *ml)
                 }
             }
             else {
-                ios_printf(s, " (built in)");
+                ios_printf(s, " is a built-in");
             }
         }
         //if (ml->func && ml->func->linfo && ml->func->linfo->ast &&
