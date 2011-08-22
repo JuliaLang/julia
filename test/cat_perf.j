@@ -88,8 +88,8 @@ end
 @timeit vcat_perf2(500, 2) "large vcat 2"
 
 function catnd_perf(n, iter)
-    a = rand(2,n,n,1)
-    b = rand(2,n,n)
+    a = rand(1,n,n,1)
+    b = rand(1,n,n)
     for i = 1:iter
         c = cat(3, a, b, b, a)
     end
