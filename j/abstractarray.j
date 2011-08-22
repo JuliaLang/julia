@@ -74,18 +74,6 @@ one{T}(x::AbstractArray{T,2}) = (m=size(x,1); n=size(x,2);
                           a)
 zero{T}(x::AbstractArray{T,2}) = zeros(T,size(x))
 
-function linspace(start::Real, stop::Real, n::Int)
-    (start, stop) = promote(start, stop)
-    a = Array(typeof(start), long(n))
-    step = (stop-start)/(n-1)
-    for i=1:n
-        a[i] = start+(i-1)*step
-    end
-    a
-end
-
-linspace(start::Real, stop::Real) = [ i | i=start:stop ]
-
 ## Unary operators ##
 
 conj{T <: Real}(x::AbstractArray{T}) = x

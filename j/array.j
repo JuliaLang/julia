@@ -76,6 +76,22 @@ trues(dims::Size...) = trues(dims)
 falses(dims::Dims) = fill(Array(Bool, dims), false)
 falses(dims::Size...) = falses(dims)
 
+function linspace(start::Real, stop::Real, n::Int)
+    (start, stop) = promote(start, stop)
+    a = Array(typeof(start), long(n))
+    if n == 1
+        a[1] = start
+        return a
+    end
+    step = (stop-start)/(n-1)
+    for i=1:n
+        a[i] = start+(i-1)*step
+    end
+    a
+end
+
+linspace(start::Real, stop::Real) = [ i | i=start:stop ]
+
 ## Conversions ##
 
 convert{T,n}(::Type{Array{T,n}}, x::Array{T,n}) = x
