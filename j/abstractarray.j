@@ -8,6 +8,8 @@ typealias AbstractMatrix{T} AbstractArray{T,2}
 typealias Indices{T<:Int} Union(Int, AbstractVector{T})
 typealias Region Union(Size,Dims)
 
+typealias RangeIndex Union(Index, Range{Index}, Range1{Index})
+
 ## Basic functions ##
 
 size(t::AbstractArray, d) = size(t)[d]
@@ -1172,42 +1174,61 @@ end
 
 ## subarrays ##
 
-type SubArray{T,N,A<:AbstractArray,I<:(Union(Index,Range{Index},Range1{Index})...,)} <: AbstractArray{T,N}
+type SubArray{T,N,A<:AbstractArray,I<:(RangeIndex...,)} <: AbstractArray{T,N}
     parent::A
     indexes::I
     dims::Dims
     strides::Array{Index,1}
     first_index::Index
 
-    function SubArray(p::A, i::I)
-        newdims = Array(Index, 0)
-        newstrides = Array(Index, 0)
-        newfirst = 1
-        pstrides = strides(p)
-        for j = 1:length(i)
-            if isa(i[j], Index)
-                newfirst += (i[j]-1)*pstrides[j]
+    #linear indexing constructor
+    if N == 1 && length(I) == 1 && A <: Array
+        function SubArray(p::A, i::I)
+            t = new(p, i, (length(i[1]),))
+            if isa(i[1], Index)
+                t.strides = [1]
+                t.first_index = i[1]
             else
-                push(newdims, length(i[j]))
-                #may want to return error if i[j].step <= 0
-                push(newstrides, isa(i[j],Range1) ? pstrides[j] :
-                     pstrides[j] * i[j].step)
-                newfirst += (i[j].start-1)*pstrides[j]
-            end 
+                t.strides = [isa(i[1], Range1) ? 1 : i[1].step]
+                t.first_index = i[1].start
+            end
+            t
         end
-        new(p, i, tuple(newdims...), newstrides, newfirst)
+    else
+        function SubArray(p::A, i::I)
+            newdims = Array(Index, 0)
+            newstrides = Array(Index, 0)
+            newfirst = 1
+            pstrides = strides(p)
+            for j = 1:length(i)
+                if isa(i[j], Index)
+                    newfirst += (i[j]-1)*pstrides[j]
+                else
+                    push(newdims, length(i[j]))
+                    #may want to return error if i[j].step <= 0
+                    push(newstrides, isa(i[j],Range1) ? pstrides[j] :
+                         pstrides[j] * i[j].step)
+                    newfirst += (i[j].start-1)*pstrides[j]
+                end 
+            end
+            new(p, i, tuple(newdims...), newstrides, newfirst)
+        end
     end
 end
+#linear indexing sub (may want to rename as slice)
+function sub{T,N}(A::Array{T,N}, i::(RangeIndex,))
+    SubArray{T,1,typeof(A),typeof(i)}(A, i)
+end
 
-function sub{T,N}(A::AbstractArray{T,N}, i::NTuple{N,Union(Index,Range{Index},Range1{Index})})
+function sub{T,N}(A::AbstractArray{T,N}, i::NTuple{N,RangeIndex})
     i = map(j -> isa(j, Index) ? (j:j) : j, i)
     SubArray{T,N,typeof(A),typeof(i)}(A, i)
 end
-sub(A::AbstractArray, i::Union(Index,Range{Index},Range1{Index})...) =
+sub(A::AbstractArray, i::RangeIndex...) =
     sub(A, i)
-function sub(A::SubArray, i::Union(Index,Range{Index},Range1{Index})...)
+function sub(A::SubArray, i::RangeIndex...)
     j = 1
-    newindexes = Array(Union(Index,Range{Index},Range1{Index}),length(A.indexes))
+    newindexes = Array(RangeIndex,length(A.indexes))
     for k = 1:length(A.indexes)
         if isa(A.indexes[k], Index)
             newindexes[k] = A.indexes[k]
@@ -1219,16 +1240,16 @@ function sub(A::SubArray, i::Union(Index,Range{Index},Range1{Index})...)
     sub(A.parent, tuple(newindexes...))
 end
 
-function slice{T,N}(A::AbstractArray{T,N}, i::NTuple{N,Union(Index,Range{Index},Range1{Index})})
+function slice{T,N}(A::AbstractArray{T,N}, i::NTuple{N,RangeIndex})
     n = 0
     for j = i; if !isa(j, Index); n += 1; end; end
     SubArray{T,n,typeof(A),typeof(i)}(A, i)
 end
-slice(A::AbstractArray, i::Union(Index,Range{Index},Range1{Index})...) =
+slice(A::AbstractArray, i::RangeIndex...) =
     slice(A, i)
-function slice(A::SubArray, i::Union(Index,Range{Index},Range1{Index})...)
+function slice(A::SubArray, i::RangeIndex...)
     j = 1
-    newindexes = Array(Union(Index,Range{Index},Range1{Index}),length(A.indexes))
+    newindexes = Array(RangeIndex,length(A.indexes))
     for k = 1:length(A.indexes)
         if isa(A.indexes[k], Index)
             newindexes[k] = A.indexes[k]

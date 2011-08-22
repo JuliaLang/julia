@@ -52,7 +52,8 @@ function hpl_par(A::Matrix, b::Vector, blocksize::Int, run_parallel::Bool)
         J = (B_cols[i+1]+1):B_cols[nB+1]
         A[K, J] = A[panel_p, J]
         ## Threads for trailing updates
-        L_II = tril(A[I,I], -1) + eye(length(I))
+        #L_II = tril(A[I,I], -1) + eye(length(I))
+        L_II = tril(sub(A,I,I), -1) + eye(length(I))
         K = (I[length(I)]+1):n
         A_KI = A[K,I]
 
@@ -278,11 +279,9 @@ end ## trailing_update2()
 ## Prints 5 numbers that should be close to zero
 function test(n, np)
     A = rand(n,n); b = rand(n);
-    A1 = copy(A); A2 = copy(A); A3 = copy(A)
-    b1 = copy(b); b2 = copy(b); b3 = copy(b)
-    tic(); x = A1 \ b1; X = toc();
-    tic(); y = hpl_par(A2,b2, max(1,div(n,np))); Y = toc();
-    tic(); z = hpl_par2(A3,b3); Z = toc();
+    X = (@elapsed x = A \ b);
+    Y = (@elapsed y = hpl_par(A,b, max(1,div(n,np))));
+    Z = (@elapsed z = hpl_par2(A,b));
     for i=1:(min(5,n))
         print(z[i]-y[i], " ")
     end
