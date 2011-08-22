@@ -280,19 +280,16 @@
 					  args
 					  field-names)))
 			      body)))
-  (or
-   ((pattern-lambda (function (call name . sig) body)
-		    `(function ,(cadr ctor) ,(ctor-body body)))
-    ctor)
-   ((pattern-lambda (= (call name . sig) body)
-		    `(= ,(cadr ctor) ,(ctor-body body)))
-    ctor)
-   ((pattern-lambda (function (call (curly name . p) . sig) body)
-		    `(function ,(cadr ctor) ,(ctor-body body)))
-    ctor)
-   ((pattern-lambda (= (call (curly name . p) . sig) body)
-		    `(= ,(cadr ctor) ,(ctor-body body)))
-    ctor)
+  (pattern-replace
+   (pattern-set
+    (pattern-lambda (function (call name . sig) body)
+		    `(function ,(cadr __) ,(ctor-body body)))
+    (pattern-lambda (= (call name . sig) body)
+		    `(= ,(cadr __) ,(ctor-body body)))
+    (pattern-lambda (function (call (curly name . p) . sig) body)
+		    `(function ,(cadr __) ,(ctor-body body)))
+    (pattern-lambda (= (call (curly name . p) . sig) body)
+		    `(= ,(cadr __) ,(ctor-body body))))
    ctor))
 
 ;; remove line numbers and nested blocks
