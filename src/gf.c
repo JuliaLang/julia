@@ -1218,6 +1218,9 @@ static void print_methlist(char *name, jl_methlist_t *ml)
                     ios_printf(s, " at %s:%d", fname, lno);
                 }
             }
+            else {
+                ios_printf(s, " (built in)");
+            }
         }
         //if (ml->func && ml->func->linfo && ml->func->linfo->ast &&
         //    ml->func->linfo->inferred) {
