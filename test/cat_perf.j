@@ -96,14 +96,14 @@ function catnd_perf(n, iter)
 end
 
 function catnd_perf2(n, iter)
-    a = rand(2,n,n,1)
-    b = rand(2,n,n)
+    a = rand(1,n,n,1)
+    b = rand(1,n,n)
     for i = 1:iter
-        c = Array(Float64, 2,n,4*n,1)
-        c[:,:,1:n,1] = a
-        c[:,:,n+1:2*n,1] = b
-        c[:,:,2*n+1:3*n,1] = b
-        c[:,:,3*n+1:4*n,1] = a
+        c = Array(Float64, 1,n,4*n,1)
+        c[1,:,1:n,1] = a
+        c[1,:,n+1:2*n,1] = b
+        c[1,:,2*n+1:3*n,1] = b
+        c[1,:,3*n+1:4*n,1] = a
     end
 end
 
