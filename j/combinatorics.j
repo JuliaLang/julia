@@ -66,18 +66,18 @@ end
 # a stable sort should be used.
 # If only numbers are being sorted, a faster quicksort can be used.
 
-sort_inplace{T <: Real}(a::StridedVector{T}) = quicksort(a, 1, length(a))
+sort_inplace{T <: Real}(a::AbstractVector{T}) = quicksort(a, 1, length(a))
 
-sort_inplace{T}(a::StridedVector{T}) =
+sort_inplace{T}(a::AbstractVector{T}) =
     mergesort(a, 1, length(a), Array(T, length(a)))
 
-sort(a::StridedVector) = sort_inplace(copy(a))
+sort(a::AbstractVector) = sort_inplace(copy(a))
 
-sortperm{T}(a::StridedVector{T}) =
+sortperm{T}(a::AbstractVector{T}) =
     mergesort(copy(a), linspace(1,length(a)), 1, length(a),
               Array(T, length(a)), Array(Size, length(a)))
 
-function insertionsort(a::StridedVector, lo, hi)
+function insertionsort(a::AbstractVector, lo, hi)
     for i=(lo+1):hi
         j = i
         x = a[i]
@@ -93,7 +93,7 @@ function insertionsort(a::StridedVector, lo, hi)
     a
 end
 
-function quicksort(a::StridedVector, lo, hi)
+function quicksort(a::AbstractVector, lo, hi)
     while hi > lo
         if (hi-lo <= 20)
             return insertionsort(a, lo, hi)
@@ -117,7 +117,7 @@ function quicksort(a::StridedVector, lo, hi)
     return a
 end
 
-function insertionsort(a::StridedVector, p::Vector{Size}, lo, hi)
+function insertionsort(a::AbstractVector, p::AbstractVector{Size}, lo, hi)
     for i=(lo+1):hi
         j = i
         x = a[i]
@@ -136,8 +136,8 @@ function insertionsort(a::StridedVector, p::Vector{Size}, lo, hi)
     (a, p)
 end
 
-function mergesort(a::StridedVector, p::Vector{Size}, lo, hi,
-                   b::StridedVector, pb::Vector{Size})
+function mergesort(a::AbstractVector, p::AbstractVector{Size}, lo, hi,
+                   b::AbstractVector, pb::AbstractVector{Size})
 
     if lo < hi
         if (hi-lo <= 20)
@@ -185,7 +185,7 @@ function mergesort(a::StridedVector, p::Vector{Size}, lo, hi,
     return (a, p)
 end
 
-function mergesort(a::StridedVector, lo, hi, b::StridedVector)
+function mergesort(a::AbstractVector, lo, hi, b::AbstractVector)
     if lo < hi
         if (hi-lo <= 20)
             return insertionsort(a, lo, hi)
@@ -257,7 +257,7 @@ function sort(A::AbstractArray, dim::Index)
 end
 
 # Knuth shuffle
-function shuffle(a::Vector)
+function shuffle(a::AbstractVector)
     for i = length(a):-1:2
         j = randint(i)
         a[i], a[j] = a[j], a[i]
