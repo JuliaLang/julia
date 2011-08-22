@@ -3,9 +3,9 @@
 typealias Vector{T} Array{T,1}
 typealias Matrix{T} Array{T,2}
 typealias VecOrMat{T} Union(Vector{T}, Matrix{T})
-typealias DenseVec{T} Union(Vector{T}, SubArray{T,1,Array{T}})
-typealias DenseMat{T} Union(Matrix{T}, SubArray{T,2,Array{T}})
-typealias DenseVecOrMat{T} Union(DenseVec{T}, DenseMat{T})
+typealias StridedVector{T} Union(Vector{T}, SubArray{T,1,Array{T}})
+typealias StridedMatrix{T} Union(Matrix{T}, SubArray{T,2,Array{T}})
+typealias StridedVecOrMat{T} Union(StridedVector{T}, StridedMatrix{T})
 
 ## Basic functions ##
 

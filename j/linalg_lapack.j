@@ -9,7 +9,7 @@ macro jl_lapack_potrf_macro(potrf, eltype)
         #       INTEGER            INFO, LDA, N
         # *     .. Array Arguments ..
         #       DOUBLE PRECISION   A( LDA, * )
-        function jl_lapack_potrf(uplo, n, A::DenseMat{$eltype}, lda)
+        function jl_lapack_potrf(uplo, n, A::StridedMatrix{$eltype}, lda)
             info = Array(Int32, 1)
             a = pointer(A)
             ccall(dlsym(libLAPACK, $potrf),
@@ -31,9 +31,9 @@ end
 #(uses upper triangular half)
 #Possible TODO: "economy mode"
 
-#chol{T<:Number}(x::DenseMat{T}) = chol(float64(x))
+#chol{T<:Number}(x::StridedMatrix{T}) = chol(float64(x))
 
-function chol{T<:Union(Float32,Float64,Complex64,Complex128)}(A::DenseMat{T})
+function chol{T<:Union(Float32,Float64,Complex64,Complex128)}(A::StridedMatrix{T})
     if stride(A,1) != 1; error("chol: matrix columns must have contiguous elements"); end
     n = int32(size(A, 1))
     if isa(A, Matrix)
@@ -76,10 +76,10 @@ end
 @jl_lapack_getrf_macro :zgetrf_ Complex128
 @jl_lapack_getrf_macro :cgetrf_ Complex64
 
-lu(A::DenseMat) = lu(A, false)
-#lu{T<:Number}(x::DenseMat{T}) = lu(float64(x), false)
+lu(A::StridedMatrix) = lu(A, false)
+#lu{T<:Number}(x::StridedMatrix{T}) = lu(float64(x), false)
 
-function lu{T<:Union(Float32,Float64,Complex64,Complex128)}(A::DenseMat{T},
+function lu{T<:Union(Float32,Float64,Complex64,Complex128)}(A::StridedMatrix{T},
                                                             economy::Bool)
     if stride(A,1) != 1; error("lu: matrix columns must have contiguous elements"); end
     m, n = size(A)
@@ -121,7 +121,7 @@ macro jl_lapack_qr_macro(real_geqp3, complex_geqp3, orgqr, ungqr, eltype, celtyp
         # *     .. Array Arguments ..
         #       INTEGER            JPVT( * )
         #       DOUBLE PRECISION   A( LDA, * ), TAU( * ), WORK( * )
-        function jl_lapack_geqp3(m, n, A::DenseMat{$eltype}, lda, jpvt, tau, work, lwork)
+        function jl_lapack_geqp3(m, n, A::StridedMatrix{$eltype}, lda, jpvt, tau, work, lwork)
             info = Array(Int32, 1)
             a = pointer(A)
             ccall(dlsym(libLAPACK, $real_geqp3),
@@ -139,7 +139,7 @@ macro jl_lapack_qr_macro(real_geqp3, complex_geqp3, orgqr, ungqr, eltype, celtyp
         #       INTEGER            JPVT( * )
         #       DOUBLE PRECISION   RWORK( * )
         #       COMPLEX*16         A( LDA, * ), TAU( * ), WORK( * )
-        function jl_lapack_geqp3(m, n, A::DenseMat{$eltype}, lda, jpvt, tau, work, lwork, rwork)
+        function jl_lapack_geqp3(m, n, A::StridedMatrix{$eltype}, lda, jpvt, tau, work, lwork, rwork)
             info = Array(Int32, 1)
             a = pointer(A)
             ccall(dlsym(libLAPACK, $complex_geqp3),
@@ -155,7 +155,7 @@ macro jl_lapack_qr_macro(real_geqp3, complex_geqp3, orgqr, ungqr, eltype, celtyp
         #       INTEGER            INFO, K, LDA, LWORK, M, N
         # *     .. Array Arguments ..
         #       DOUBLE PRECISION   A( LDA, * ), TAU( * ), WORK( * )
-        function jl_lapack_orgqr(m, n, k, A::DenseMat{$eltype}, lda, tau, work, lwork)
+        function jl_lapack_orgqr(m, n, k, A::StridedMatrix{$eltype}, lda, tau, work, lwork)
             info = Array(Int32, 1)
             a = pointer(A)
             ccall(dlsym(libLAPACK, $orgqr),
@@ -171,7 +171,7 @@ macro jl_lapack_qr_macro(real_geqp3, complex_geqp3, orgqr, ungqr, eltype, celtyp
         #      INTEGER            INFO, K, LDA, LWORK, M, N
         #*     .. Array Arguments ..
         #      COMPLEX*16         A( LDA, * ), TAU( * ), WORK( * )
-        function jl_lapack_ungqr(m, n, k, A::DenseMat{$eltype}, lda, tau, work, lwork)
+        function jl_lapack_ungqr(m, n, k, A::StridedMatrix{$eltype}, lda, tau, work, lwork)
             info = Array(Int32, 1)
             a = pointer(A)
             ccall(dlsym(libLAPACK, $ungqr),
@@ -190,9 +190,9 @@ end
 
 #possible TODO: economy mode?
 
-#qr{T<:Number}(x::DenseMat{T}) = qr(float64(x))
+#qr{T<:Number}(x::StridedMatrix{T}) = qr(float64(x))
 
-function qr{T<:Union(Float32,Float64,Complex64,Complex128)}(A::DenseMat{T})
+function qr{T<:Union(Float32,Float64,Complex64,Complex128)}(A::StridedMatrix{T})
     m, n = size(A)
     if isa(A, Matrix)
         QR = copy(A)
@@ -336,7 +336,7 @@ end
 @jl_lapack_eig_macro :dsyev_ :zheev_ :dgeev_ :zgeev_ Float64 Complex128
 @jl_lapack_eig_macro :ssyev_ :cheev_ :sgeev_ :cgeev_ Float32 Complex64
 
-#eig{T<:Number}(x::DenseMat{T}) = eig(float64(x))
+#eig{T<:Number}(x::StridedMatrix{T}) = eig(float64(x))
 
 function eig{T<:Union(Float64,Float32,Complex128,Complex64)}(A::Matrix{T})
     m, n = size(A)
@@ -483,7 +483,7 @@ end
 @jl_lapack_gesvd_macro :dgesvd_ :zgesvd_ Float64 Complex128
 @jl_lapack_gesvd_macro :sgesvd_ :cgesvd_ Float32 Complex64
 
-#svd{T<:Number}(x::DenseMat{T}) = svd(float64(x))
+#svd{T<:Number}(x::StridedMatrix{T}) = svd(float64(x))
 
 function svd{T<:Union(Float64,Float32,Complex128,Complex64)}(A::Matrix{T})
     jobu = "A"
@@ -604,7 +604,7 @@ end
 @jl_lapack_backslash_macro :zgesv_ :zposv_ :zgels_ :ztrtrs_ Complex128
 @jl_lapack_backslash_macro :cgesv_ :cposv_ :cgels_ :ctrtrs_ Complex64
 
-#(\){T1<:Number, T2<:Number}(A::DenseMat{T1}, B::DenseVecOrMat{T2}) = (\)(float64(A), float64(B))
+#(\){T1<:Number, T2<:Number}(A::StridedMatrix{T1}, B::StridedVecOrMat{T2}) = (\)(float64(A), float64(B))
 
 function (\){T<:Union(Float64,Float32,Complex128,Complex64)}(A::Matrix{T}, B::VecOrMat{T})
     m, n = size(A)

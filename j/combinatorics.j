@@ -66,18 +66,18 @@ end
 # a stable sort should be used.
 # If only numbers are being sorted, a faster quicksort can be used.
 
-sort_inplace{T <: Real}(a::DenseVec{T}) = quicksort(a, 1, length(a))
+sort_inplace{T <: Real}(a::StridedVector{T}) = quicksort(a, 1, length(a))
 
-sort_inplace{T}(a::DenseVec{T}) =
+sort_inplace{T}(a::StridedVector{T}) =
     mergesort(a, 1, length(a), Array(T, length(a)))
 
-sort(a::DenseVec) = sort_inplace(copy(a))
+sort(a::StridedVector) = sort_inplace(copy(a))
 
-sortperm{T}(a::DenseVec{T}) =
+sortperm{T}(a::StridedVector{T}) =
     mergesort(copy(a), linspace(1,length(a)), 1, length(a),
               Array(T, length(a)), Array(Size, length(a)))
 
-function insertionsort(a::DenseVec, lo, hi)
+function insertionsort(a::StridedVector, lo, hi)
     for i=(lo+1):hi
         j = i
         x = a[i]
@@ -93,7 +93,7 @@ function insertionsort(a::DenseVec, lo, hi)
     a
 end
 
-function quicksort(a::DenseVec, lo, hi)
+function quicksort(a::StridedVector, lo, hi)
     while hi > lo
         if (hi-lo <= 20)
             return insertionsort(a, lo, hi)
@@ -117,7 +117,7 @@ function quicksort(a::DenseVec, lo, hi)
     return a
 end
 
-function insertionsort(a::DenseVec, p::Vector{Size}, lo, hi)
+function insertionsort(a::StridedVector, p::Vector{Size}, lo, hi)
     for i=(lo+1):hi
         j = i
         x = a[i]
@@ -136,8 +136,8 @@ function insertionsort(a::DenseVec, p::Vector{Size}, lo, hi)
     (a, p)
 end
 
-function mergesort(a::DenseVec, p::Vector{Size}, lo, hi,
-                   b::DenseVec, pb::Vector{Size})
+function mergesort(a::StridedVector, p::Vector{Size}, lo, hi,
+                   b::StridedVector, pb::Vector{Size})
 
     if lo < hi
         if (hi-lo <= 20)
@@ -185,7 +185,7 @@ function mergesort(a::DenseVec, p::Vector{Size}, lo, hi,
     return (a, p)
 end
 
-function mergesort(a::DenseVec, lo, hi, b::DenseVec)
+function mergesort(a::StridedVector, lo, hi, b::StridedVector)
     if lo < hi
         if (hi-lo <= 20)
             return insertionsort(a, lo, hi)

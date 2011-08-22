@@ -121,9 +121,9 @@ macro jl_blas_gemm_macro(fname, eltype)
    quote
 
        function jl_blas_gemm(transA, transB, m::Int, n::Int, k::Int,
-                             alpha::($eltype), A::DenseMat{$eltype}, lda::Int,
-                             B::DenseMat{$eltype}, ldb::Int,
-                             beta::($eltype), C::DenseMat{$eltype}, ldc::Int)
+                             alpha::($eltype), A::StridedMatrix{$eltype}, lda::Int,
+                             B::StridedMatrix{$eltype}, ldb::Int,
+                             beta::($eltype), C::StridedMatrix{$eltype}, ldc::Int)
            a = pointer(A)
            b = pointer(B)
            c = pointer(C)
@@ -147,8 +147,8 @@ end
 @jl_blas_gemm_macro :zgemm_ Complex128
 @jl_blas_gemm_macro :cgemm_ Complex64
 
-function (*){T<:Union(Float64,Float32,Complex128,Complex64)}(A::DenseMat{T},
-                                                             B::DenseMat{T})
+function (*){T<:Union(Float64,Float32,Complex128,Complex64)}(A::StridedMatrix{T},
+                                                             B::StridedMatrix{T})
     (mA, nA) = size(A)
     (mB, nB) = size(B)
 
@@ -183,9 +183,9 @@ macro jl_blas_gemv_macro(fname, eltype)
    quote
 
        function jl_blas_gemv(trans, m::Int, n::Int, 
-                             alpha::($eltype), A::DenseMat{$eltype}, lda::Int,
-                             X::DenseVec{$eltype}, incx::Int,
-                             beta::($eltype), Y::DenseVec{$eltype}, incy::Int)
+                             alpha::($eltype), A::StridedMatrix{$eltype}, lda::Int,
+                             X::StridedVector{$eltype}, incx::Int,
+                             beta::($eltype), Y::StridedVector{$eltype}, incy::Int)
            a = pointer(A)
            x = pointer(X)
            y = pointer(Y)
@@ -209,8 +209,8 @@ end
 @jl_blas_gemv_macro :zgemv_ Complex128
 @jl_blas_gemv_macro :cgemv_ Complex64
 
-function (*){T<:Union(Float64,Float32,Complex128,Complex64)}(A::DenseMat{T},
-                                                             X::DenseVec{T})
+function (*){T<:Union(Float64,Float32,Complex128,Complex64)}(A::StridedMatrix{T},
+                                                             X::StridedVector{T})
     (mA, nA) = size(A)
     mX = size(X, 1)
 
@@ -230,8 +230,8 @@ function (*){T<:Union(Float64,Float32,Complex128,Complex64)}(A::DenseMat{T},
     return Y
 end
 
-function (*){T<:Union(Float64,Float32,Complex128,Complex64)}(X::DenseVec{T},
-                                                             A::DenseMat{T})
+function (*){T<:Union(Float64,Float32,Complex128,Complex64)}(X::StridedVector{T},
+                                                             A::StridedMatrix{T})
     nX = size(X, 1)
     (mA, nA) = size(A)
 
