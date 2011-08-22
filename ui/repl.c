@@ -19,6 +19,7 @@ int have_color = 1;
 
 static const char *usage = "julia [options] [program] [args...]\n";
 static const char *opts =
+    " -v --version             Display version information\n"
     " -q --quiet               Quiet startup without banner\n"
     " -H --home=<dir>          Load files relative to <dir>\n"
     " -T --tab=<size>          Set REPL tab width to <size>\n\n"
