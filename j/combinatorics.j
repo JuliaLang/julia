@@ -235,6 +235,27 @@ function issorted(v::AbstractVector)
     return true
 end
 
+sort(A::AbstractArray) = sort(A, 1)
+
+function sort(A::AbstractArray, dim::Index)
+    X = similar(A)
+    n = size(A,dim)
+    s = stride(A,dim)
+    nslices = int(numel(A) / n)
+
+    if dim == 1
+        for i=1:n:numel(A)
+            this_slice = i:(i+n-1)
+            X[this_slice] = sort(sub(A, this_slice))
+        end
+    else
+        # Implement using subarrays or permute.
+        error("Not yet implemented")
+    end
+
+    return X
+end
+
 # Knuth shuffle
 function shuffle(a::Vector)
     for i = length(a):-1:2
