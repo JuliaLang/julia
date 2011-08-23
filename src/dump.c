@@ -33,7 +33,7 @@ static ptrint_t VALUE_TAGS;
 #define read_uint8(s) ((uint8_t)ios_getc(s))
 #define write_int8(s, n) write_uint8(s, n)
 #define read_int8(s) read_uint8(s)
-
+/*
 static void write_int16(ios_t *s, int16_t i)
 {
     write_uint8(s, i       & 0xff);
@@ -46,7 +46,7 @@ static int16_t read_int16(ios_t *s)
     int b1 = read_uint8(s);
     return (int16_t)(b0 | (b1<<8));
 }
-
+*/
 static void write_int32(ios_t *s, int32_t i)
 {
     write_uint8(s, i       & 0xff);
@@ -242,9 +242,8 @@ void jl_serialize_value_(ios_t *s, jl_value_t *v)
     else if (jl_is_array(v)) {
         jl_array_t *ar = (jl_array_t*)v;
         writetag(s, (jl_value_t*)jl_array_type);
-        jl_value_t *elty = jl_tparam0(jl_typeof(v));
-        jl_serialize_value(s, elty);
-        write_int16(s, ar->ndims);
+        jl_serialize_value(s, ar->type);
+        jl_value_t *elty = jl_tparam0(ar->type);
         for (i=0; i < ar->ndims; i++)
             jl_serialize_value(s, jl_box_long(jl_array_dim(ar,i)));
         if (jl_is_bits_type(elty)) {
@@ -572,15 +571,13 @@ jl_value_t *jl_deserialize_value(ios_t *s)
         return s;
     }
     else if (vtag == (jl_value_t*)jl_array_type) {
-        jl_value_t *elty = jl_deserialize_value(s);
-        int16_t ndims = read_int16(s);
+        jl_value_t *aty = jl_deserialize_value(s);
+        jl_value_t *elty = jl_tparam0(aty);
+        int16_t ndims = jl_unbox_long(jl_tparam1(aty));
         size_t *dims = alloca(ndims*sizeof(size_t));
         for(i=0; i < ndims; i++)
             dims[i] = jl_unbox_long(jl_deserialize_value(s));
-        jl_value_t *atype =
-            jl_apply_type((jl_value_t*)jl_array_type,
-                          jl_tuple2(elty, jl_box_long(ndims)));
-        jl_array_t *a = jl_new_array_((jl_type_t*)atype, ndims, dims);
+        jl_array_t *a = jl_new_array_((jl_type_t*)aty, ndims, dims);
         ptrhash_put(&backref_table, (void*)(ptrint_t)pos, (jl_value_t*)a);
         if (jl_is_bits_type(elty)) {
             size_t tot = a->length * a->elsize;
@@ -813,6 +810,11 @@ void jl_save_system_image(char *fname, char *startscriptname)
     jl_serialize_value(&f, jl_get_global(jl_system_module,
                                          jl_symbol("IdTable")));
     jl_serialize_value(&f, jl_array_type->env);
+    jl_serialize_typecache(&f, jl_array_type->name);
+    jl_serialize_typecache(&f, jl_type_type->name);
+    jl_serialize_typecache(&f, jl_pointer_type->name);
+    jl_serialize_typecache(&f, jl_seq_type->name);
+    jl_serialize_typecache(&f, jl_abstractarray_type->name);
 
     jl_serialize_module(&f, jl_system_module);
     //jl_serialize_finalizers(&f);
@@ -886,6 +888,12 @@ void jl_restore_system_image(char *fname)
     jl_method_missing_func = (jl_function_t*)jl_deserialize_value(&f);
     jl_idtable_type = (jl_struct_type_t*)jl_deserialize_value(&f);
     jl_array_type->env = jl_deserialize_value(&f);
+    jl_array_type->name->cache = jl_deserialize_typecache(&f);
+    jl_type_type->name->cache = jl_deserialize_typecache(&f);
+    jl_pointer_type->name->cache = jl_deserialize_typecache(&f);
+    jl_seq_type->name->cache = jl_deserialize_typecache(&f);
+    jl_abstractarray_type->name->cache = jl_deserialize_typecache(&f);
+    
     jl_array_uint8_type =
         (jl_type_t*)jl_apply_type((jl_value_t*)jl_array_type,
                                   jl_tuple2(jl_uint8_type,
@@ -967,6 +975,7 @@ void jl_init_serializer()
                      jl_box_type, jl_typector_type, jl_undef_type, jl_any_func,
                      jl_task_type, jl_union_kind, jl_function_type,
                      jl_typetype_type, jl_typetype_tvar, jl_ANY_flag,
+                     jl_array_any_type, jl_pointer_void_type,
 
                      jl_symbol_type->name, jl_pointer_type->name,
                      jl_tag_kind->name, jl_union_kind->name, jl_bits_kind->name, jl_struct_kind->name,

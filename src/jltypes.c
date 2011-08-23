@@ -1368,7 +1368,7 @@ int jl_assign_type_uid()
 static void cache_type_(jl_value_t **key, size_t n, jl_type_t *type)
 {
     // only cache concrete types
-    if (jl_has_typevars((jl_value_t*)type) || n==0)
+    if (jl_has_typevars_((jl_value_t*)type,1) || n==0)
         return;
     // assign uid
     if (jl_is_struct_type(type) && ((jl_struct_type_t*)type)->uid==0)
