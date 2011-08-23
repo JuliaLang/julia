@@ -567,6 +567,177 @@ function assign(A::AbstractArray, X::AbstractArray, I0::Indices, I::Indices...)
 end
 end
 
+## Concatenation ##
+
+cat(catdim::Int) = similar([], None, 0)
+
+vcat() = similar([], None, 0)
+hcat() = similar([], None, 0)
+
+## cat: special cases
+hcat{T}(X::T...) = [ X[j] | i=1, j=1:length(X) ]
+vcat{T}(X::T...) = [ X[i] | i=1:length(X) ]
+
+hcat{T}(V::AbstractVector{T}...) = [ V[j][i] | i=1:length(V[1]), j=1:length(V) ]
+
+function vcat{T}(V::AbstractVector{T}...)
+    a = similar(V[1], sum(map(length, V))::Size)
+    pos = 1
+    for k=1:length(V)
+        Vk = V[k]
+        for i=1:length(Vk)
+            a[pos] = Vk[i]
+            pos += 1
+        end
+    end
+    a
+end
+
+function hcat{T}(A::AbstractMatrix{T}...)
+    nargs = length(A)
+    ncols = sum(a->size(a, 2), A)::Size
+    nrows = size(A[1], 1)
+    B = similar(A[1], nrows, ncols)
+
+   if isa(T, BitsKind)
+       pos = 1
+       for k = 1:nargs
+           nAk = numel(A[k])
+           copy_to(pointer(B, pos), pointer(A[k]), nAk)
+           pos += nAk
+       end
+   else
+       pos = 1
+       for k=1:nargs
+           Ak = A[k]
+           for i=1:numel(Ak)
+               B[pos] = Ak[i]
+               pos += 1
+           end
+       end
+   end
+
+   return B
+end
+
+function vcat{T}(A::AbstractMatrix{T}...)
+    nargs = length(A)
+    nrows = sum(a->size(a, 1), A)::Size
+    ncols = size(A[1], 2)
+    B = similar(A[1], nrows, ncols)
+    pos = 1
+    for k=1:nargs
+        Ak = A[k]
+        p1 = pos+size(Ak,1)-1
+        B[pos:p1, :] = Ak
+        pos = p1+1
+    end
+
+    return B
+end
+
+## cat: general case
+
+function cat(catdim::Int, X...)
+    typeC = promote_type(map(typeof, X)...)
+    nargs = length(X)
+    local dimsC::(Size...)
+    if catdim == 1
+        dimsC = (nargs,)
+    elseif catdim == 2
+        dimsC = (1, nargs)
+    else
+        dimsC = tuple(ntuple(catdim-1, i->1)..., nargs)
+    end
+    C = similar(C, typeC, dimsC)
+
+    for i=1:nargs
+        C[i] = X[i]
+    end
+    return C
+end
+
+vcat(X...) = cat(1, X...)
+hcat(X...) = cat(2, X...)
+
+function cat(catdim::Int, A::AbstractArray...)
+    # ndims of all input arrays should be in [d-1, d]
+
+    nargs = length(A)
+    dimsA = map(size, A)
+    ndimsA = map(ndims, A)
+    d_max = max(ndimsA)
+    #d_min = min(ndimsA)
+
+    cat_ranges = ntuple(nargs, i->(catdim <= ndimsA[i] ? dimsA[i][catdim] : 1))
+
+    function compute_dims(d)
+        if d == catdim
+            if catdim <= d_max
+                return sum(cat_ranges)
+            else
+                return nargs
+            end
+        else
+            if d <= d_max
+                return dimsA[1][d]
+            else
+                return 1
+            end
+        end
+    end
+
+    ndimsC = max(catdim, d_max)
+    dimsC = ntuple(ndimsC, compute_dims)::(Size...)
+    typeC = promote_type(ntuple(nargs, i->typeof(A[i]).parameters[1])...)
+    C = similar(A[1], typeC, dimsC)
+
+    cat_ranges = cumsum(1, cat_ranges...)::(Size...)
+    for k=1:nargs
+        cat_one = ntuple(ndimsC, i->(i != catdim ?
+                                     Range1(1,dimsC[i]) :
+                                     Range1(cat_ranges[k],cat_ranges[k+1]-1) ))
+        C[cat_one...] = A[k]
+    end
+    return C
+end
+
+vcat(A::AbstractArray...) = cat(1, A...)
+hcat(A::AbstractArray...) = cat(2, A...)
+
+# 2d horizontal and vertical concatenation
+
+function hvcat{T}(rows::(Size...), as::AbstractMatrix{T}...)
+    nbr = length(rows)  # number of block rows
+
+    nc = mapreduce(+, a->size(a,2), as[1:rows[1]])::Size
+    nr = 0
+
+    a = 1
+    for i = 1:nbr
+        nr += size(as[a],1)
+        a += rows[i]
+    end
+
+    out = similar(as[1], T, nr, nc)
+
+    a = 1
+    r = 1
+    for i = 1:nbr
+        c = 1
+        szi = size(as[a],1)
+        for j = 1:rows[i]
+            szj = size(as[a+j-1],2)
+            out[r:r-1+szi, c:c-1+szj] = as[a+j-1]
+            c += szj
+        end
+        r += szi
+        a += rows[i]
+    end
+    out
+end
+
+
 ## Reductions ##
 
 function contains(itr, x)
