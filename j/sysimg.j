@@ -103,13 +103,7 @@ load("util.j")
 load("regex.j")
 
 # version information
-VERSION_STRING = readall(`cat $JULIA_HOME/VERSION`)[1:end-1]
-VERSION_COMMIT = readall(`git rev-parse HEAD`)[1:end-1]
-VERSION_CLEAN = run(`git diff --quiet`)
-VERSION_TIME = readall(
-    `git log -1 --pretty=format:%ct` |
-    `perl -MPOSIX=strftime -e 'print strftime "%F %T", gmtime <>'`
-)
+load("version.j")
 
 # front end
 load("client.j")

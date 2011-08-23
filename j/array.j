@@ -3,6 +3,9 @@
 typealias Vector{T} Array{T,1}
 typealias Matrix{T} Array{T,2}
 typealias VecOrMat{T} Union(Vector{T}, Matrix{T})
+typealias StridedVector{T} Union(Vector{T}, SubArray{T,1,Array{T}})
+typealias StridedMatrix{T} Union(Matrix{T}, SubArray{T,2,Array{T}})
+typealias StridedVecOrMat{T} Union(StridedVector{T}, StridedMatrix{T})
 
 ## Basic functions ##
 
@@ -73,6 +76,22 @@ trues(dims::Size...) = trues(dims)
 falses(dims::Dims) = fill(Array(Bool, dims), false)
 falses(dims::Size...) = falses(dims)
 
+function linspace(start::Real, stop::Real, n::Int)
+    (start, stop) = promote(start, stop)
+    a = Array(typeof(start), long(n))
+    if n == 1
+        a[1] = start
+        return a
+    end
+    step = (stop-start)/(n-1)
+    for i=1:n
+        a[i] = start+(i-1)*step
+    end
+    a
+end
+
+linspace(start::Real, stop::Real) = [ i | i=start:stop ]
+
 ## Conversions ##
 
 convert{T,n}(::Type{Array{T,n}}, x::Array{T,n}) = x
@@ -88,8 +107,8 @@ int64  {T,n}(x::Array{T,n}) = convert(Array{Int64  ,n}, x)
 uint64 {T,n}(x::Array{T,n}) = convert(Array{Uint64 ,n}, x)
 bool   {T,n}(x::Array{T,n}) = convert(Array{Bool   ,n}, x)
 char   {T,n}(x::Array{T,n}) = convert(Array{Char   ,n}, x)
-float32{T,n}(x::Array{T,n}) = convert(Array{Float32,n}, x)
-float64{T,n}(x::Array{T,n}) = convert(Array{Float64,n}, x)
+float32{T,n}(x::Array{T,n}) = convert(Array{typeof(float32(zero(T))),n}, x)
+float64{T,n}(x::Array{T,n}) = convert(Array{typeof(float64(zero(T))),n}, x)
 
 ## Indexing: ref ##
 
@@ -202,7 +221,7 @@ vcat{T}(X::T...) = [ X[i] | i=1:length(X) ]
 hcat{T}(V::Array{T,1}...) = [ V[j][i] | i=1:length(V[1]), j=1:length(V) ]
 
 function vcat{T}(V::Array{T,1}...)
-    a = similar(V[1], sum(map(length, V)))
+    a = similar(V[1], sum(map(length, V))::Size)
     pos = 1
     for k=1:length(V)
         Vk = V[k]
@@ -216,7 +235,7 @@ end
 
 function hcat{T}(A::Array{T,2}...)
     nargs = length(A)
-    ncols = sum(a->size(a, 2), A)
+    ncols = sum(a->size(a, 2), A)::Size
     nrows = size(A[1], 1)
     B = similar(A[1], nrows, ncols)
 
@@ -238,22 +257,22 @@ function hcat{T}(A::Array{T,2}...)
        end
    end
 
-    return B
+   return B
 end
 
 function vcat{T}(A::Array{T,2}...)
     nargs = length(A)
-    nrows = sum(a->size(a, 1), A)
+    nrows = sum(a->size(a, 1), A)::Size
     ncols = size(A[1], 2)
     B = similar(A[1], nrows, ncols)
     pos = 1
-    for j=1:ncols, k=1:nargs
+    for k=1:nargs
         Ak = A[k]
-        for i=1:size(Ak, 1)
-            B[pos] = Ak[i,j]
-            pos += 1
-        end
+        p1 = pos+size(Ak,1)-1
+        B[pos:p1, :] = Ak
+        pos = p1+1
     end
+
     return B
 end
 
@@ -262,12 +281,13 @@ end
 function cat(catdim::Int, X...)
     typeC = promote_type(map(typeof, X)...)
     nargs = length(X)
+    local dimsC::(Size...)
     if catdim == 1
-        dimsC = nargs
+        dimsC = (nargs,)
     elseif catdim == 2
         dimsC = (1, nargs)
     else
-        # TODO
+        dimsC = tuple(ntuple(catdim-1, i->1)..., nargs)
     end
     C = Array(typeC, dimsC)
 
@@ -287,7 +307,7 @@ function cat(catdim::Int, A::Array...)
     dimsA = map(size, A)
     ndimsA = map(ndims, A)
     d_max = max(ndimsA)
-    d_min = min(ndimsA)
+    #d_min = min(ndimsA)
 
     cat_ranges = ntuple(nargs, i->(catdim <= ndimsA[i] ? dimsA[i][catdim] : 1))
 
@@ -308,11 +328,11 @@ function cat(catdim::Int, A::Array...)
     end
 
     ndimsC = max(catdim, d_max)
-    dimsC = ntuple(ndimsC, compute_dims)
+    dimsC = ntuple(ndimsC, compute_dims)::(Size...)
     typeC = promote_type(ntuple(nargs, i->typeof(A[i]).parameters[1])...)
     C = Array(typeC, dimsC)
 
-    cat_ranges = cumsum(1, cat_ranges...)
+    cat_ranges = cumsum(1, cat_ranges...)::(Size...)
     for k=1:nargs
         cat_one = ntuple(ndimsC, i->(i != catdim ?
                                      Range1(1,dimsC[i]) :
@@ -330,7 +350,7 @@ hcat(A::Array...) = cat(2, A...)
 function hvcat{T}(rows::(Size...), as::Array{T,2}...)
     nbr = length(rows)  # number of block rows
 
-    nc = mapreduce(+, a->size(a,2), as[1:rows[1]])
+    nc = mapreduce(+, a->size(a,2), as[1:rows[1]])::Size
     nr = 0
 
     a = 1

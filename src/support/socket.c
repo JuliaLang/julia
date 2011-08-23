@@ -166,6 +166,38 @@ int connect_to_addr(struct sockaddr_in *host_addr)
     return sockfd;
 }
 
+DLLEXPORT
+void getlocalip(char *buf, size_t len)
+{
+    struct ifaddrs * ifAddrStruct=NULL;
+    struct ifaddrs * ifa=NULL;
+    void * tmpAddrPtr=NULL;
+    buf[0] = '\0';
+
+    getifaddrs(&ifAddrStruct);
+
+    for (ifa = ifAddrStruct; ifa != NULL; ifa = ifa->ifa_next) {
+        if (ifa ->ifa_addr->sa_family==AF_INET) { // check it is IP4
+            // is a valid IP4 Address
+            tmpAddrPtr=&((struct sockaddr_in *)ifa->ifa_addr)->sin_addr;
+            inet_ntop(AF_INET, tmpAddrPtr, buf, len);
+            if (strcmp(buf,"127.0.0.1"))
+                break;
+            //printf("%s IP Address %s\n", ifa->ifa_name, addressBuffer); 
+        }
+        /*
+        else if (ifa->ifa_addr->sa_family==AF_INET6) { // check it is IP6
+            // is a valid IP6 Address
+            tmpAddrPtr=&((struct sockaddr_in *)ifa->ifa_addr)->sin_addr;
+            char addressBuffer[INET6_ADDRSTRLEN];
+            inet_ntop(AF_INET6, tmpAddrPtr, addressBuffer, INET6_ADDRSTRLEN);
+            printf("%s IP Address %s\n", ifa->ifa_name, addressBuffer); 
+        }
+        */
+    }
+    if (ifAddrStruct!=NULL) freeifaddrs(ifAddrStruct);
+}
+
 /* repeated send until all of buffer is sent */
 int sendall(int sockfd, char *buffer, int bufLen, int flags)
 {

@@ -66,17 +66,18 @@ end
 # a stable sort should be used.
 # If only numbers are being sorted, a faster quicksort can be used.
 
-sort_inplace{T <: Real}(a::Vector{T}) = quicksort(a, 1, length(a))
+sort_inplace{T <: Real}(a::AbstractVector{T}) = quicksort(a, 1, length(a))
 
-sort_inplace{T}(a::Vector{T}) = mergesort(a, 1, length(a), Array(T, length(a)))
+sort_inplace{T}(a::AbstractVector{T}) =
+    mergesort(a, 1, length(a), Array(T, length(a)))
 
-sort(a::Vector) = sort_inplace(copy(a))
+sort(a::AbstractVector) = sort_inplace(copy(a))
 
-sortperm{T}(a::Vector{T}) =
+sortperm{T}(a::AbstractVector{T}) =
     mergesort(copy(a), linspace(1,length(a)), 1, length(a),
               Array(T, length(a)), Array(Size, length(a)))
 
-function insertionsort(a::Vector, lo, hi)
+function insertionsort(a::AbstractVector, lo, hi)
     for i=(lo+1):hi
         j = i
         x = a[i]
@@ -92,7 +93,7 @@ function insertionsort(a::Vector, lo, hi)
     a
 end
 
-function quicksort(a::Vector, lo, hi)
+function quicksort(a::AbstractVector, lo, hi)
     while hi > lo
         if (hi-lo <= 20)
             return insertionsort(a, lo, hi)
@@ -116,7 +117,7 @@ function quicksort(a::Vector, lo, hi)
     return a
 end
 
-function insertionsort(a::Vector, p::Vector{Size}, lo, hi)
+function insertionsort(a::AbstractVector, p::AbstractVector{Size}, lo, hi)
     for i=(lo+1):hi
         j = i
         x = a[i]
@@ -135,8 +136,8 @@ function insertionsort(a::Vector, p::Vector{Size}, lo, hi)
     (a, p)
 end
 
-function mergesort(a::Vector, p::Vector{Size}, lo, hi,
-                   b::Vector, pb::Vector{Size})
+function mergesort(a::AbstractVector, p::AbstractVector{Size}, lo, hi,
+                   b::AbstractVector, pb::AbstractVector{Size})
 
     if lo < hi
         if (hi-lo <= 20)
@@ -184,7 +185,7 @@ function mergesort(a::Vector, p::Vector{Size}, lo, hi,
     return (a, p)
 end
 
-function mergesort(a::Vector, lo, hi, b::Vector)
+function mergesort(a::AbstractVector, lo, hi, b::AbstractVector)
     if lo < hi
         if (hi-lo <= 20)
             return insertionsort(a, lo, hi)
@@ -227,15 +228,57 @@ function mergesort(a::Vector, lo, hi, b::Vector)
     return a
 end
 
-function issorted(v::Vector)
+function issorted(v::AbstractVector)
     for i=1:(length(v)-1)
         if v[i] > v[i+1]; return false; end
     end
     return true
 end
 
+sort(A::AbstractArray) = sort(A, 1)
+sort(A::AbstractMatrix) = sort(A, 1)
+
+function sort(A::AbstractMatrix, dim::Index)
+    X = similar(A)
+    (m, n) = size(A)
+    numelA = numel(A)
+
+    if dim == 1
+        for i=1:m:numel(A)
+            this_slice = i:(i+m-1)
+            X[this_slice] = sort(sub(A, this_slice))
+        end
+    elseif dim == 2
+        for i=1:n
+            this_slice = i:n:numelA
+            X[this_slice] = sort(sub(A, this_slice))
+        end
+    end
+
+    return X
+end
+
+function sort(A::AbstractArray, dim::Index)
+    X = similar(A)
+    n = size(A,dim)
+    s = stride(A,dim)
+    nslices = int(numel(A) / n)
+
+    if dim == 1
+        for i=1:n:numel(A)
+            this_slice = i:(i+n-1)
+            X[this_slice] = sort(sub(A, this_slice))
+        end
+    else
+        # Implement using subarrays or permute.
+        error("Not yet implemented")
+    end
+
+    return X
+end
+
 # Knuth shuffle
-function shuffle(a::Vector)
+function shuffle(a::AbstractVector)
     for i = length(a):-1:2
         j = randint(i)
         a[i], a[j] = a[j], a[i]

@@ -185,8 +185,7 @@ function eigs{T}(A::AbstractMatrix{T}, k::Int, evtype::ASCIIString)
         end
 
         if (ido[1] == -1 || ido[1] == 1)
-            # TODO: For the dense matrix case, just call BLAS directly here.
-            workd[ipntr[2]:ipntr[2]+n-1] = A * workd[ipntr[1]:ipntr[1]+n-1]
+            workd[ipntr[2]:ipntr[2]+n-1] = A * sub(workd, ipntr[1]:(ipntr[1]+n-1))
         else
             break
         end
@@ -230,7 +229,7 @@ function eigs{T}(A::AbstractMatrix{T}, k::Int, evtype::ASCIIString)
     if (info[1] != 0); error("Error in ARPACK eupd"); end
 
     if iscomplex(A) || isrealsymA
-        return (diagm(d), v[1:n, 1:nev])
+        return (d, v[1:n, 1:nev])
     else
         evec = complex(zeros(T, n, nev+1), zeros(T, n, nev+1))
         for j=1:nev
@@ -242,7 +241,7 @@ function eigs{T}(A::AbstractMatrix{T}, k::Int, evtype::ASCIIString)
                 j += 1
             end
         end
-        return (diagm(complex(dr[1:nev],di[1:nev])), evec[1:n, 1:nev])
+        return (complex(dr[1:nev],di[1:nev]), evec[1:n, 1:nev])
     end
 
 end
@@ -288,7 +287,7 @@ function svds{T}(A::AbstractMatrix{T}, k::Int)
         if (info[1] < 0); print(info[1], ":"); error("Error in ARPACK aupd"); end
 
         if (ido[1] == -1 || ido[1] == 1)
-            workd[ipntr[2]:(ipntr[2]+n-1)] = At*(A*workd[ipntr[1]:(ipntr[1]+n-1)])
+            workd[ipntr[2]:(ipntr[2]+n-1)] = At*(A*sub(workd, ipntr[1]:(ipntr[1]+n-1)))
         else
             break
         end
@@ -307,6 +306,6 @@ function svds{T}(A::AbstractMatrix{T}, k::Int)
     v = v[1:n, 1:nev]
     u = A*v*diagm(1./d)
 
-    return (u, diagm(d), v.')
+    return (u, d, v.')
 
 end

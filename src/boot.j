@@ -256,7 +256,7 @@ function append_any(xs...)
     for x = xs
         n += length(x)
     end
-    out = Array{Any,1}((n,))
+    out = Array(Any, n)
     i = 1
     for x = xs
         for y = x

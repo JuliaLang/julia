@@ -70,6 +70,10 @@ function process_options(args::Array{Any,1})
             i+=1
             np = int32(args[i])
             addprocs_local(np-1)
+        elseif args[i]=="-v" || args[i]=="--version"
+            println(VERSION_STRING)
+            println(jl_commit_string)
+            exit(0)
         elseif args[i][1]!='-'
             # program
             repl = false
@@ -84,53 +88,6 @@ function process_options(args::Array{Any,1})
         i += 1
     end
     return (quiet,repl)
-end
-
-function color_available()
-    if run(`tput setaf 0`)
-        return true
-    end
-    if has(ENV, "TERM")
-        term = ENV["TERM"]
-        return term=="xterm" || term=="xterm-color"
-    end
-    false
-end
-
-jl_version_string = "Version $VERSION_STRING"
-jl_version_clean = VERSION_CLEAN ? "" : "*"
-jl_commit_string = "Commit $(VERSION_COMMIT[1:10]) ($VERSION_TIME)$jl_version_clean"
-
-jl_banner_plain =
-I"               _
-   _       _ _(_)_     |
-  (_)     | (_) (_)    |  A fresh approach to technical computing
-   _ _   _| |_  __ _   |
-  | | | | | | |/ _` |  |  $jl_version_string
-  | | |_| | | | (_| |  |  $jl_commit_string
- _/ |\__'_|_|_|\__'_|  |
-|__/                   |
-
-"
-
-begin
-local tx = "\033[0m\033[1m" # text
-local jl = "\033[0m\033[1m" # julia
-local d1 = "\033[34m" # first dot
-local d2 = "\033[31m" # second dot
-local d3 = "\033[32m" # third dot
-local d4 = "\033[35m" # fourth dot
-jl_banner_color =
-"\033[1m               $(d3)_
-   $(d1)_       $(jl)_$(tx) $(d2)_$(d3)(_)$(d4)_$(tx)     |
-  $(d1)(_)$(jl)     | $(d2)(_)$(tx) $(d4)(_)$(tx)    |  A fresh approach to technical computing
-   $(jl)_ _   _| |_  __ _$(tx)   |
-  $(jl)| | | | | | |/ _` |$(tx)  |  $jl_version_string
-  $(jl)| | |_| | | | (_| |$(tx)  |  $jl_commit_string
- $(jl)_/ |\\__'_|_|_|\\__'_|$(tx)  |
-$(jl)|__/$(tx)                   |
-
-\033[0m"
 end
 
 function _start()
@@ -163,11 +120,7 @@ function _start()
 
         if repl
             if !quiet
-                if color_available()
-                    print(jl_banner_color)
-                else
-                    print(jl_banner_plain)
-                end
+                banner()
             end
             run_repl()
         end

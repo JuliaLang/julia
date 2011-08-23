@@ -8,6 +8,8 @@ typealias AbstractMatrix{T} AbstractArray{T,2}
 typealias Indices{T<:Int} Union(Int, AbstractVector{T})
 typealias Region Union(Size,Dims)
 
+typealias RangeIndex Union(Index, Range{Index}, Range1{Index})
+
 ## Basic functions ##
 
 size(t::AbstractArray, d) = size(t)[d]
@@ -71,18 +73,6 @@ one{T}(x::AbstractArray{T,2}) = (m=size(x,1); n=size(x,2);
                           for i=1:min(m,n); a[i,i]=1; end;
                           a)
 zero{T}(x::AbstractArray{T,2}) = zeros(T,size(x))
-
-function linspace(start::Real, stop::Real, n::Int)
-    (start, stop) = promote(start, stop)
-    a = Array(typeof(start), long(n))
-    step = (stop-start)/(n-1)
-    for i=1:n
-        a[i] = start+(i-1)*step
-    end
-    a
-end
-
-linspace(start::Real, stop::Real) = [ i | i=start:stop ]
 
 ## Unary operators ##
 
@@ -159,6 +149,7 @@ end
 .^(x::AbstractArray, y::Number       ) = reshape( [ x[i] ^ y    | i=1:numel(x) ], size(x) )
 
 function .^{S<:Int,T<:Int}(A::AbstractArray{S}, B::AbstractArray{T})
+    if size(A) != size(B); error("Inputs should be of same shape and size"); end
     F = similar(A, Float64)
     for i=1:numel(A)
         F[i] = A[i]^B[i]
@@ -190,25 +181,26 @@ macro binary_arithmetic_op(f)
     quote
 
         function ($f){S,T}(A::AbstractArray{S}, B::AbstractArray{T})
-           F = similar(A, promote_type(S,T))
-           for i=1:numel(A)
-              F[i] = ($f)(A[i], B[i])
-           end
-           return F
+            if size(A) != size(B); error("Inputs should be of same shape and size"); end
+            F = similar(A, promote_type(S,T))
+            for i=1:numel(A)
+                F[i] = ($f)(A[i], B[i])
+            end
+            return F
         end
         function ($f){T}(A::Number, B::AbstractArray{T})
-           F = similar(B, promote_type(typeof(A),T))
-           for i=1:numel(B)
-              F[i] = ($f)(A, B[i])
-           end
-           return F
+            F = similar(B, promote_type(typeof(A),T))
+            for i=1:numel(B)
+                F[i] = ($f)(A, B[i])
+            end
+            return F
         end
         function ($f){T}(A::AbstractArray{T}, B::Number)
-           F = similar(A, promote_type(T,typeof(B)))
-           for i=1:numel(A)
-              F[i] = ($f)(A[i], B)
-           end
-           return F
+            F = similar(A, promote_type(T,typeof(B)))
+            for i=1:numel(A)
+                F[i] = ($f)(A[i], B)
+            end
+            return F
         end
 
     end # quote
@@ -261,25 +253,26 @@ macro binary_comparison_op(f)
     quote
 
         function ($f)(A::AbstractArray, B::AbstractArray)
-           F = similar(A, Bool)
-           for i=1:numel(A)
-              F[i] = ($f)(A[i], B[i])
-           end
-           return F
+            if size(A) != size(B); error("Inputs should be of same shape and size"); end
+            F = similar(A, Bool)
+            for i=1:numel(A)
+                F[i] = ($f)(A[i], B[i])
+            end
+            return F
         end
         function ($f)(A::Number, B::AbstractArray)
-           F = similar(B, Bool)
-           for i=1:numel(B)
-              F[i] = ($f)(A, B[i])
-           end
-           return F
+            F = similar(B, Bool)
+            for i=1:numel(B)
+                F[i] = ($f)(A, B[i])
+            end
+            return F
         end
         function ($f)(A::AbstractArray, B::Number)
-           F = similar(A, Bool)
-           for i=1:numel(A)
-              F[i] = ($f)(A[i], B)
-           end
-           return F
+            F = similar(A, Bool)
+            for i=1:numel(A)
+                F[i] = ($f)(A[i], B)
+            end
+            return F
         end
     end
 end
@@ -297,25 +290,26 @@ macro binary_boolean_op(f)
     quote
 
         function ($f)(A::AbstractArray{Bool}, B::AbstractArray{Bool})
-           F = similar(A, Bool)
-           for i=1:numel(A)
-              F[i] = ($f)(A[i], B[i])
-           end
-           return F
+            if size(A) != size(B); error("Inputs should be of same shape and size"); end
+            F = similar(A, Bool)
+            for i=1:numel(A)
+                F[i] = ($f)(A[i], B[i])
+            end
+            return F
         end
         function ($f)(A::Bool, B::AbstractArray{Bool})
-           F = similar(B, Bool)
-           for i=1:numel(B)
-              F[i] = ($f)(A, B[i])
-           end
-           return F
+            F = similar(B, Bool)
+            for i=1:numel(B)
+                F[i] = ($f)(A, B[i])
+            end
+            return F
         end
         function ($f)(A::AbstractArray{Bool}, B::Bool)
-           F = similar(A, Bool)
-           for i=1:numel(A)
-              F[i] = ($f)(A[i], B)
-           end
-           return F
+            F = similar(A, Bool)
+            for i=1:numel(A)
+                F[i] = ($f)(A[i], B)
+            end
+            return F
         end
 
     end # quote
@@ -357,14 +351,12 @@ function make_loop_nest(vars, ranges, body, otherbodies)
     expr
 end
 
-
-
-##genbodies is a function that creates an array (potentially 2d), where the first element is inside
-## the inner most array, and the last element is outside most loop, and all the other arguments are 
-##between each loop. 
-## if it creates a 2d array, it just means that it specifis what it wants to do before and after each
-##loop.
-##if genbodies creates an array it must of length N
+## genbodies() is a function that creates an array (potentially 2d), 
+## where the first element is inside the inner most array, and the last 
+## element is outside most loop, and all the other arguments are 
+## between each loop. If it creates a 2d array, it just means that it 
+## specifies what it wants to do before and after each loop.
+## If genbodies creates an array it must of length N.
 function gen_cartesian_map(cache, genbodies, ranges, exargnames, exargs...)
     N = length(ranges)
     if !has(cache,N)
@@ -837,9 +829,7 @@ isempty(a::AbstractArray) = (numel(a) == 0)
 
 ## map over arrays ##
 
-#map(f, v::AbstractVector) = [ f(v[i]) | i=1:length(v) ]
-#map(f, M::AbstractMatrix) = [ f(M[i,j]) | i=1:size(M,1), j=1:size(M,2) ]
-
+## 1 argument
 function map_to(dest::AbstractArray, f, A::AbstractArray)
     for i=1:numel(A)
         dest[i] = f(A[i])
@@ -848,20 +838,76 @@ function map_to(dest::AbstractArray, f, A::AbstractArray)
 end
 
 function map(f, A::AbstractArray)
-    if isempty(A)
-        return A
-    end
+    if isempty(A); return A; end
     first = f(A[1])
     dest = similar(A, typeof(first))
-    map_to(dest, f, A)
-    # dest[1] = first
-    # for i=2:numel(A)
-    #     dest[i] = f(A[i])
-    # end
-    # return dest
+    return map_to(dest, f, A)
 end
 
-#obsolete code, mainly here for reference purposes, use gen_cartesian_map
+## 2 argument
+function map_to(dest::AbstractArray, f, A::AbstractArray, B::AbstractArray)
+    for i=1:numel(A)
+        dest[i] = f(A[i], B[i])
+    end
+    return dest
+end
+
+function map(f, A::AbstractArray, B::AbstractArray)
+    if size(A) != size(B); error("Input size and shape should be same"); end
+    if isempty(A); return A; end
+    first = f(A[1], B[1])
+    dest = similar(A, typeof(first))
+    return map_to(dest, f, A, B)
+end
+
+function map_to(dest::AbstractArray, f, A::AbstractArray, B::Number)
+    for i=1:numel(A)
+        dest[i] = f(A[i], B)
+    end
+    return dest
+end
+
+function map(f, A::AbstractArray, B::Number)
+    if isempty(A); return A; end
+    first = f(A[1], B)
+    dest = similar(A, typeof(first))
+    return map_to(dest, f, A, B)
+end
+
+function map_to(dest::AbstractArray, f, A::Number, B::AbstractArray)
+    for i=1:numel(B)
+        dest[i] = f(A, B[i])
+    end
+    return dest
+end
+
+function map(f, A::Number, B::AbstractArray)
+    if isempty(A); return A; end
+    first = f(A, B[1])
+    dest = similar(B, typeof(first))
+    return map_to(dest, f, A, B)
+end
+
+## N argument
+function map_to(dest::AbstractArray, f, As::AbstractArray...)
+    n = numel(As[1])
+    i = 1
+    ith = a->a[i]
+    for i=1:n
+        dest[i] = f(map(ith, As)...)
+    end
+    return dest
+end
+
+function map(f, As::AbstractArray...)
+    if isempty(As[1]); return As[1]; end
+    first = f(map(a->a[1], As)...)
+    dest = similar(As[1], typeof(first))
+    return map_to(dest, f, As...)
+end
+
+## Obsolete - Mainly here for reference purposes, use gen_cartesian_map
+## Still used in show()
 function cartesian_map(body, t::Tuple, it...)
     idx = length(t)-length(it)
     if idx == 0
@@ -1116,44 +1162,82 @@ end
 
 ## subarrays ##
 
-type SubArray{T,N,A<:AbstractArray,I<:(Union(Index,Range{Index},Range1{Index})...,)} <: AbstractArray{T,N}
+type SubArray{T,N,A<:AbstractArray,I<:(RangeIndex...,)} <: AbstractArray{T,N}
     parent::A
     indexes::I
     dims::Dims
     strides::Array{Index,1}
     first_index::Index
 
-    function SubArray(p::A, i::I)
-        newdims = Array(Index, 0)
-        newstrides = Array(Index, 0)
-        newfirst = 1
-        pstrides = strides(p)
-        for j = 1:length(i)
-            if isa(i[j], Index)
-                newfirst += (i[j]-1)*pstrides[j]
+    #linear indexing constructor
+    if N == 1 && length(I) == 1 && A <: Array
+        function SubArray(p::A, i::I)
+            t = new(p, i, (length(i[1]),))
+            if isa(i[1], Index)
+                t.strides = [1]
+                t.first_index = i[1]
             else
-                push(newdims, length(i[j]))
-                #may want to return error if i[j].step <= 0
-                push(newstrides, isa(i[j],Range1) ? pstrides[j] : pstrides[j] * i[j].step)
-                newfirst += (i[j].start-1)*pstrides[j]
-            end 
+                t.strides = [isa(i[1], Range1) ? 1 : i[1].step]
+                t.first_index = i[1].start
+            end
+            t
         end
-        new(p, i, tuple(newdims...), newstrides, newfirst)
+    else
+        function SubArray(p::A, i::I)
+            newdims = Array(Index, 0)
+            newstrides = Array(Index, 0)
+            newfirst = 1
+            pstrides = strides(p)
+            for j = 1:length(i)
+                if isa(i[j], Index)
+                    newfirst += (i[j]-1)*pstrides[j]
+                else
+                    push(newdims, length(i[j]))
+                    #may want to return error if i[j].step <= 0
+                    push(newstrides, isa(i[j],Range1) ? pstrides[j] :
+                         pstrides[j] * i[j].step)
+                    newfirst += (i[j].start-1)*pstrides[j]
+                end 
+            end
+            new(p, i, tuple(newdims...), newstrides, newfirst)
+        end
     end
 end
+#linear indexing sub (may want to rename as slice)
+function sub{T,N}(A::Array{T,N}, i::(RangeIndex,))
+    SubArray{T,1,typeof(A),typeof(i)}(A, i)
+end
 
-function sub{T,N}(A::AbstractArray{T,N}, i::NTuple{N,Union(Index,Range{Index},Range1{Index})})
+function sub{T,N}(A::AbstractArray{T,N}, i::NTuple{N,RangeIndex})
+    i = map(j -> isa(j, Index) ? (j:j) : j, i)
+    SubArray{T,N,typeof(A),typeof(i)}(A, i)
+end
+sub(A::AbstractArray, i::RangeIndex...) =
+    sub(A, i)
+function sub(A::SubArray, i::RangeIndex...)
+    j = 1
+    newindexes = Array(RangeIndex,length(A.indexes))
+    for k = 1:length(A.indexes)
+        if isa(A.indexes[k], Index)
+            newindexes[k] = A.indexes[k]
+        else
+            newindexes[k] = A.indexes[k][isa(i[j],Index) ? (i[j]:i[j]) : i[j]]
+            j += 1
+        end
+    end
+    sub(A.parent, tuple(newindexes...))
+end
+
+function slice{T,N}(A::AbstractArray{T,N}, i::NTuple{N,RangeIndex})
     n = 0
     for j = i; if !isa(j, Index); n += 1; end; end
     SubArray{T,n,typeof(A),typeof(i)}(A, i)
 end
-
-sub(A::AbstractArray, i::Union(Index,Range{Index},Range1{Index})...) =
-    sub(A, i)
-
-function sub(A::SubArray, i::Union(Index,Range{Index},Range1{Index})...)
+slice(A::AbstractArray, i::RangeIndex...) =
+    slice(A, i)
+function slice(A::SubArray, i::RangeIndex...)
     j = 1
-    newindexes = Array(Union(Index,Range{Index},Range1{Index}),length(A.indexes))
+    newindexes = Array(RangeIndex,length(A.indexes))
     for k = 1:length(A.indexes)
         if isa(A.indexes[k], Index)
             newindexes[k] = A.indexes[k]
@@ -1162,51 +1246,52 @@ function sub(A::SubArray, i::Union(Index,Range{Index},Range1{Index})...)
             j += 1
         end
     end
-    sub(A.parent, tuple(newindexes...))
+    slice(A.parent, tuple(newindexes...))
 end
 
-#slice all dimensions of length 1
-slice{T,N}(a::AbstractArray{T,N}) = sub(a, map(i-> i == 1 ? 1 : (1:i), size(a)))
-slice{T,N}(s::SubArray{T,N}) =
-    sub(s.parent, map(i->!isa(i, Index) && length(i)==1 ?i[1] : i, s.indexes))
-
-#slice dimensions listed, error if any have length > 1
-#silently ignores dimensions that are greater than N
-function slice{T,N}(a::AbstractArray{T,N}, sdims::Int...)
-    newdims = ()
-    for i = 1:N
-        next = 1:size(a, i)
-        for j = sdims
-            if i == j
-                if size(a, i) != 1
-                    error("slice: dimension ", i, " has length greater than 1")
-                end
-                next = 1
-                break
-            end
-        end
-        newdims = tuple(newdims..., next)
-    end
-    sub(a, newdims)
-end 
-function slice{T,N}(s::SubArray{T,N}, sdims::Int...)
-    newdims = ()
-    for i = 1:length(s.indexes)
-        next = s.indexes[i]
-        for j = sdims
-            if i == j
-                if length(next) != 1
-                    error("slice: dimension ", i," has length greater than 1")
-                end
-                next = isa(next, Index) ? next : next.start
-                break
-            end
-        end
-        newdims = tuple(newdims..., next)
-    end
-    sub(s.parent, newdims)
-end
-#unslice?
+### rename the old slice function ###
+##slice all dimensions of length 1
+#slice{T,N}(a::AbstractArray{T,N}) = sub(a, map(i-> i == 1 ? 1 : (1:i), size(a)))
+#slice{T,N}(s::SubArray{T,N}) =
+#    sub(s.parent, map(i->!isa(i, Index) && length(i)==1 ?i[1] : i, s.indexes))
+#
+##slice dimensions listed, error if any have length > 1
+##silently ignores dimensions that are greater than N
+#function slice{T,N}(a::AbstractArray{T,N}, sdims::Int...)
+#    newdims = ()
+#    for i = 1:N
+#        next = 1:size(a, i)
+#        for j = sdims
+#            if i == j
+#                if size(a, i) != 1
+#                    error("slice: dimension ", i, " has length greater than 1")
+#                end
+#                next = 1
+#                break
+#            end
+#        end
+#        newdims = tuple(newdims..., next)
+#    end
+#    sub(a, newdims)
+#end 
+#function slice{T,N}(s::SubArray{T,N}, sdims::Int...)
+#    newdims = ()
+#    for i = 1:length(s.indexes)
+#        next = s.indexes[i]
+#        for j = sdims
+#            if i == j
+#                if length(next) != 1
+#                    error("slice: dimension ", i," has length greater than 1")
+#                end
+#                next = isa(next, Index) ? next : next.start
+#                break
+#            end
+#        end
+#        newdims = tuple(newdims..., next)
+#    end
+#    sub(s.parent, newdims)
+#end
+### end commented code ###
 
 size(s::SubArray) = s.dims
 ndims{T,N}(s::SubArray{T,N}) = N
@@ -1218,10 +1303,11 @@ ref{T}(s::SubArray{T,0,AbstractArray{T,0}}) = s.parent[]
 ref{T}(s::SubArray{T,0}) = s.parent[s.first_index]
 
 ref{T}(s::SubArray{T,1}, i::Int) = s.parent[s.first_index + (i-1)*s.strides[1]]
+ref{T}(s::SubArray{T,2}, i::Int, j::Int) =
+    s.parent[s.first_index +(i-1)*s.strides[1]+(j-1)*s.strides[2]]
 
 ref(s::SubArray, i::Int) = s[ind2sub(size(s), i)...]
 
-#TODO: Special 2D cases
 function ref(s::SubArray, is::Int...)
     index = s.first_index
     for i = 1:length(is)
@@ -1255,6 +1341,16 @@ assign{T}(s::SubArray{T,0}, v::AbstractArray) =
     (s.parent[s.first_index]=v; s)
 assign{T}(s::SubArray{T,0}, v) =
     (s.parent[s.first_index]=v; s)
+
+
+assign{T}(s::SubArray{T,1}, v::AbstractArray, i::Int) =
+    (s.parent[s.first_index + (i-1)*s.strides[1]] = v; s)
+assign{T}(s::SubArray{T,1}, v, i::Int) =
+    (s.parent[s.first_index + (i-1)*s.strides[1]] = v; s)
+assign{T}(s::SubArray{T,2}, v::AbstractArray, i::Int, j::Int) =
+    (s.parent[s.first_index +(i-1)*s.strides[1]+(j-1)*s.strides[2]] = v; s)
+assign{T}(s::SubArray{T,2}, v, i::Int, j::Int) =
+    (s.parent[s.first_index +(i-1)*s.strides[1]+(j-1)*s.strides[2]] = v; s)
 
 strides(s::SubArray) = tuple(s.strides...)
 

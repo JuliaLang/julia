@@ -1200,8 +1200,28 @@ static void print_methlist(char *name, jl_methlist_t *ml)
     while (ml != NULL) {
         ios_printf(s, "%s", name);
         jl_show((jl_value_t*)ml->sig);
-        if (ml->func == NULL)  // mark dummy cache entries
+        if (ml->func == NULL)  {
+            // mark dummy cache entries
             ios_printf(s, " *");
+        }
+        else {
+            jl_lambda_info_t *li = ml->func->linfo;
+            if (li != NULL && li->ast != NULL && jl_is_expr(li->ast)) {
+                jl_expr_t *body1 = (jl_expr_t*)jl_exprarg(jl_lam_body((jl_expr_t*)li->ast),0);
+                if (jl_is_expr(body1) &&
+                    ((jl_expr_t*)body1)->head == line_sym) {
+                    long lno = jl_unbox_long(jl_exprarg(body1, 0));
+                    char *fname = ((jl_sym_t*)jl_exprarg(body1, 1))->name;
+                    char *sep = strrchr(fname, '/');
+                    if (sep)
+                        fname = sep+1;
+                    ios_printf(s, " at %s:%d", fname, lno);
+                }
+            }
+            else {
+                ios_printf(s, " is a built-in");
+            }
+        }
         //if (ml->func && ml->func->linfo && ml->func->linfo->ast &&
         //    ml->func->linfo->inferred) {
         //    jl_show(ml->func->linfo->ast);

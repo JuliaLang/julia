@@ -107,34 +107,36 @@ macro vectorize_1arg(S,f)
         function ($f){T<:$S}(x::AbstractArray{T,2})
             [ ($f)(x[i,j]) | i=1:size(x,1), j=1:size(x,2) ]
         end
+        function ($f){T<:$S}(x::AbstractArray{T})
+            reshape([ ($f)(x[i]) | i=1:numel(x) ], size(x))
+        end
     end
 end
 
 macro vectorize_2arg(S,f)
     quote
-        function ($f){T<:$S}(x::T, y::AbstractArray{T,1})
-            [ ($f)(x,y[i]) | i=1:length(y) ]
+        # function ($f){T<:$S}(x::T, y::AbstractArray{T,1})
+        #     [ ($f)(x,y[i]) | i=1:length(y) ]
+        # end
+        # function ($f){T<:$S}(x::AbstractArray{T,1}, y::T)
+        #     [ ($f)(x[i],y) | i=1:length(x) ]
+        # end
+        # function ($f){T<:$S}(x::T, y::AbstractArray{T,2})
+        #     [ ($f)(x,y[i,j]) | i=1:size(y,1), j=1:size(y,2) ]
+        # end
+        # function ($f){T<:$S}(x::AbstractArray{T,2}, y::T)
+        #     [ ($f)(x[i,j],y) | i=1:size(x,1), j=1:size(x,2) ]
+        # end
+        function ($f){T1<:$S, T2<:$S}(x::T1, y::AbstractArray{T2})
+            reshape([ ($f)(x, y[i]) | i=1:numel(y) ], size(y))
         end
-        function ($f){T<:$S}(x::AbstractArray{T,1}, y::T)
-            [ ($f)(x[i],y) | i=1:length(x) ]
+        function ($f){T1<:$S, T2<:$S}(x::AbstractArray{T1}, y::T2)
+            reshape([ ($f)(x[i], y) | i=1:numel(x) ], size(x))
         end
-        function ($f){T<:$S}(x::T, y::AbstractArray{T,2})
-            [ ($f)(x,y[i,j]) | i=1:size(y,1), j=1:size(y,2) ]
-        end
-        function ($f){T<:$S}(x::AbstractArray{T,2}, y::T)
-            [ ($f)(x[i,j],y) | i=1:size(x,1), j=1:size(x,2) ]
-        end
-        function ($f){T<:$S}(x::AbstractArray{T,1}, y::AbstractArray{T,1})
-            if size(x) != size(y)
-                error("vector length mismatch")
-            end
-            [ ($f)(x[i],y[i]) | i=1:length(x) ]
-        end
-        function ($f){T<:$S}(x::AbstractArray{T,2}, y::AbstractArray{T,2})
-            if size(x) != size(y)
-                error("matrix dimension mismatch")
-            end
-            [ ($f)(x[i,j],y[i,j]) | i=1:size(x,1), j=1:size(x,2) ]
+
+        function ($f){T1<:$S, T2<:$S}(x::AbstractArray{T1}, y::AbstractArray{T2})
+            if size(x) != size(y); error("Input sizes and shapes should match"); end
+            reshape([ ($f)(x[i], y[i]) | i=1:numel(x) ], size(x))
         end
     end
 end

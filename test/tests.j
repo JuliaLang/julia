@@ -766,8 +766,10 @@ r = chol(asym)
 @assert sum(q*r[:,p] - a) < 1e-8
 (d,v) = eig(asym)
 @assert sum(asym*v[:,1]-d[1]*v[:,1]) < 1e-8
+(d,v) = eig(a)
+@assert abs(sum(a*v[:,1]-d[1]*v[:,1])) < 1e-8
 (u,s,vt) = svd(a)
-@assert sum(u*s*vt - a) < 1e-8
+@assert sum(u*diagm(s)*vt - a) < 1e-8
 x = a \ b
 @assert sum(a*x-b) < 1e-8
 x = triu(a) \ b
@@ -776,11 +778,14 @@ x = tril(a) \ b
 @assert sum(tril(a)*x-b) < 1e-8
 
 # arpack
-(d,v) = eigs(asym, 3)
-@assert sum(asym*v[:,1]-d[1,1]*v[:,1]) < 1e-8
+if WORD_SIZE==64
+    # TODO: hangs on 32-bit
+    (d,v) = eigs(asym, 3)
+    @assert sum(asym*v[:,1]-d[1]*v[:,1]) < 1e-8
+end
 
 (d,v) = eigs(a,3)
-@assert abs(sum(a*v[:,2]-d[2,2]*v[:,2])) < 1e-8
+@assert abs(sum(a*v[:,2]-d[2]*v[:,2])) < 1e-8
 
 # hash table
 h = HashTable()

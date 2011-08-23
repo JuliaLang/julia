@@ -19,6 +19,13 @@ function gethostname()
     cstring(convert(Ptr{Uint8},hn))
 end
 
+function getipaddr()
+    ip = Array(Uint8, 128)
+    ccall(:getlocalip, Void, (Ptr{Uint8}, Ulong),
+          ip, ulong(length(ip)))
+    cstring(convert(Ptr{Uint8},ip))
+end
+
 ## file and directory ##
 
 function getcwd()
