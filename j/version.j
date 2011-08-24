@@ -1,4 +1,75 @@
-VERSION_STRING = readall(`cat $JULIA_HOME/VERSION`)[1:end-1]
+## semantic version numbers (http://semver.org)
+
+type VersionNumber
+    major::Uint16
+    minor::Uint16
+    patch::Uint16
+    suffix::String
+
+    function VersionNumber(major::Int, minor::Int, patch::Int, suffix::String)
+        if major < 0; error("invalid major version: $major"); end
+        if minor < 0; error("invalid minor version: $minor"); end
+        if patch < 0; error("invalid patch version: $patch"); end
+        # TODO: use compile-time regex, pending bugfix
+        if match(Regex(L"^(?:[a-z-][0-9a-z-]*)?$"), suffix).match == nothing
+            error("invalid version suffix: $suffix")
+        end
+        new(major, minor, patch, suffix)
+    end
+end
+VersionNumber(major, minor, suffix::String) = VersionNumber(major, minor, 0,     suffix)
+VersionNumber(major, suffix::String)        = VersionNumber(major, 0,     0,     suffix)
+VersionNumber(major, minor, patch)          = VersionNumber(major, minor, patch, "")
+VersionNumber(major, minor)                 = VersionNumber(major, minor, 0,     "")
+VersionNumber(major)                        = VersionNumber(major, 0,     0,     "")
+
+show(v::VersionNumber) = print("v$(v.major).$(v.minor).$(v.patch)$(v.suffix)")
+
+convert(::Type{VersionNumber}, v::Int) = VersionNumber(v)
+convert(::Type{VersionNumber}, v::Tuple) = VersionNumber(v...)
+
+function convert(::Type{VersionNumber}, v::String)
+    # TODO: use compile-time regex, pending bugfix
+    m = match(Regex(L"^v?(\d+)(?:\.(\d+)(?:\.(\d+))?)?((?:[a-z-][0-9a-z-]*)?)$"), v)
+    if m.match == nothing; error("invalid version string: $v"); end
+    major, minor, patch, suffix = m.captures
+    major = parse_dec(major)
+    minor = minor == nothing ? 0 : parse_dec(minor)
+    patch = patch == nothing ? 0 : parse_dec(patch)
+    VersionNumber(major, minor, patch, suffix)
+end
+
+<(v1::VersionNumber, v2::VersionNumber) =
+    v1.major < v2.major || v1.major == v2.major &&
+    v1.minor < v2.minor || v1.minor == v2.minor &&
+    v1.patch < v2.patch || v1.patch == v2.patch &&
+    v1.suffix < v2.suffix
+
+==(v1::VersionNumber, v2::VersionNumber) =
+    v1.major == v2.major &&
+    v1.minor == v2.minor &&
+    v1.patch == v2.patch &&
+    v1.suffix == v2.suffix
+
+# TODO: fix the fallback >, <= and >= cases to not require these
+> (v1::VersionNumber, v2::VersionNumber) = v2 < v1
+<=(v1::VersionNumber, v2::VersionNumber) = v1 < v2 || v1 == v2
+>=(v1::VersionNumber, v2::VersionNumber) = v1 > v2 || v1 == v2
+
+<(v1::VersionNumber, v2) = v1 < convert(VersionNumber,v2)
+<(v1, v2::VersionNumber) = convert(VersionNumber,v1) < v2
+>(v1::VersionNumber, v2) = v1 > convert(VersionNumber,v2)
+>(v1, v2::VersionNumber) = convert(VersionNumber,v1) > v2
+<=(v1::VersionNumber, v2) = v1 <= convert(VersionNumber,v2)
+<=(v1, v2::VersionNumber) = convert(VersionNumber,v1) <= v2
+>=(v1::VersionNumber, v2) = v1 >= convert(VersionNumber,v2)
+>=(v1, v2::VersionNumber) = convert(VersionNumber,v1) >= v2
+==(v1::VersionNumber, v2) = v1 == convert(VersionNumber,v2)
+==(v1, v2::VersionNumber) = convert(VersionNumber,v1) == v2
+
+## julia version info
+
+VERSION = convert(VersionNumber,readall(`cat $JULIA_HOME/VERSION`)[1:end-1])
 VERSION_COMMIT = readall(`git rev-parse HEAD`)[1:end-1]
 VERSION_CLEAN = run(`git diff --quiet`)
 VERSION_TIME = readall(
@@ -6,7 +77,7 @@ VERSION_TIME = readall(
     `perl -MPOSIX=strftime -e 'print strftime "%F %T", gmtime <>'`
 )
 
-jl_version_string = "Version $VERSION_STRING"
+jl_version_string = "Version $VERSION"
 jl_version_clean = VERSION_CLEAN ? "" : "*"
 jl_commit_string = "Commit $(VERSION_COMMIT[1:10]) ($VERSION_TIME)$jl_version_clean"
 
