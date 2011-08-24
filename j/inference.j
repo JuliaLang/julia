@@ -376,7 +376,7 @@ end
 
 function abstract_eval(e::Expr, vtypes, sv::StaticVarInfo)
     t = abstract_eval_expr(e, vtypes, sv)
-    e.type = t
+    e.typ = t
     return t
 end
 
@@ -605,7 +605,7 @@ function abstract_eval_expr(e, vtypes, sv::StaticVarInfo)
     Any
 end
 
-ast_rettype(ast) = ast.args[3].type
+ast_rettype(ast) = ast.args[3].typ
 
 function abstract_eval_constant(x::ANY)
     if isa(x,AbstractKind) || isa(x,BitsKind) || isa(x,CompositeKind) ||
@@ -1086,14 +1086,14 @@ function eval_annotate(e::Expr, vtypes, sv, decls)
         is(head,:static_typeof) || is(head,:line)
         return e
     elseif is(head,:gotoifnot) || is(head,:return)
-        e.type = Any
+        e.typ = Any
     elseif is(head,:(=))
-        e.type = Any
+        e.typ = Any
         s = e.args[1]
         # assignment LHS not subject to all-same-type variable checking,
         # but the type of the RHS counts as one of its types.
         if isa(s,SymbolNode)
-            s.type = abstract_eval(s.name, vtypes, sv)
+            s.typ = abstract_eval(s.name, vtypes, sv)
             s = s.name
         else
             e.args[1] = SymbolNode(s, abstract_eval(s, vtypes, sv))
@@ -1118,7 +1118,7 @@ end
 function eval_annotate(e::SymbolNode, vtypes, sv, decls)
     t = abstract_eval(e.name, vtypes, sv)
     record_var_type(e.name, t, decls)
-    e.type = t
+    e.typ = t
     e
 end
 
@@ -1131,7 +1131,7 @@ function type_annotate(ast::Expr, states::Array, sv, rettype, vnames)
     for i=1:length(body)
         body[i] = eval_annotate(body[i], states[i], sv, decls)
     end
-    ast.args[3].type = rettype
+    ast.args[3].typ = rettype
 
     vinf = append(ast.args[2].args[2],ast.args[2].args[3])
     # add declarations for variables that are always the same type
@@ -1205,9 +1205,9 @@ end
 
 function exprtype(x::ANY)
     if isa(x,Expr)
-        return x.type
+        return x.typ
     elseif isa(x,SymbolNode)
-        return x.type
+        return x.typ
     elseif isa(x,Symbol)
         return Any
     elseif isa(x,Type)
@@ -1397,8 +1397,8 @@ function inlining_pass(e::Expr, vars)
         # special inlining for some builtin functions that return types
         if isa(farg,Expr) && is(farg.head,:top) &&
             (is(eval(farg),apply_type) || is(eval(farg),fieldtype)) &&
-            isType(e.type) && isleaftype(e.type.parameters[1])
-            return e.type.parameters[1]
+            isType(e.typ) && isleaftype(e.typ.parameters[1])
+            return e.typ.parameters[1]
         end
     end
     e

@@ -440,40 +440,6 @@ jl_func_type_t *jl_new_functype(jl_type_t *a, jl_type_t *b)
     return t;
 }
 
-// instantiate a type with new variables
-jl_value_t *jl_new_type_instantiation(jl_value_t *t)
-{
-    jl_tuple_t *tp;
-    if (jl_is_typector(t)) {
-        tp = ((jl_typector_t*)t)->parameters;
-    }
-    else if (jl_is_some_tag_type(t)) {
-        tp = ((jl_tag_type_t*)t)->parameters;
-    }
-    else {
-        tp = NULL;
-        jl_error("not supported");
-    }
-    jl_tuple_t *ntvs = jl_alloc_tuple(tp->length);
-    JL_GC_PUSH(&ntvs);
-    size_t i;
-    for(i=0; i < tp->length; i++) {
-        jl_value_t *tv = jl_tupleref(tp, i);
-        if (jl_is_typevar(tv)) {
-            jl_tupleset(ntvs, i,
-                        (jl_value_t*)jl_new_typevar(((jl_tvar_t*)tv)->name,
-                                                    ((jl_tvar_t*)tv)->lb,
-                                                    ((jl_tvar_t*)tv)->ub));
-        }
-        else {
-            jl_tupleset(ntvs, i, tv);
-        }
-    }
-    jl_value_t *nt = (jl_value_t*)jl_apply_type((jl_value_t*)t, ntvs);
-    JL_GC_POP();
-    return nt;
-}
-
 JL_CALLABLE(jl_new_array_internal);
 
 jl_function_t *jl_instantiate_method(jl_function_t *f, jl_tuple_t *sp);
@@ -936,19 +902,4 @@ JL_CALLABLE(jl_f_new_box)
     box->type = jl_box_any_type;
     ((jl_value_t**)box)[1] = args[0];
     return box;
-}
-
-JL_CALLABLE(jl_f_new_symbolnode)
-{
-    JL_NARGS(SymbolNode, 2, 2);
-    JL_TYPECHK(SymbolNode, symbol, args[0]);
-#ifdef JL_GC_MARKSWEEP
-    jl_value_t *s = (jl_value_t*)alloc_3w();
-#else
-    jl_value_t *s = (jl_value_t*)allocobj(3*sizeof(void*));
-#endif
-    s->type = (jl_type_t*)jl_symbolnode_type;
-    jl_fieldref(s,0) = args[0];
-    jl_fieldref(s,1) = args[1];
-    return s;
 }

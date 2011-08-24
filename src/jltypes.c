@@ -2235,7 +2235,6 @@ static jl_tuple_t *jl_typevars(size_t n, ...)
 }
 
 JL_CALLABLE(jl_f_new_expr);
-JL_CALLABLE(jl_f_new_symbolnode);
 JL_CALLABLE(jl_f_new_box);
 
 extern void jl_init_int32_int64_cache();
@@ -2453,17 +2452,10 @@ void jl_init_types()
         jl_new_struct_type(jl_symbol("Expr"),
                            jl_any_type, jl_null,
                            jl_tuple(3, jl_symbol("head"), jl_symbol("args"),
-                                    jl_symbol("type")),
+                                    jl_symbol("typ")),
                            jl_tuple(3, jl_sym_type, jl_array_any_type,
                                     jl_any_type));
     jl_expr_type->fptr = jl_f_new_expr;
-
-    jl_symbolnode_type =
-        jl_new_struct_type(jl_symbol("SymbolNode"),
-                           jl_any_type, jl_null,
-                           jl_tuple(2, jl_symbol("name"), jl_symbol("type")),
-                           jl_tuple(2, jl_sym_type, jl_any_type));
-    jl_symbolnode_type->fptr = jl_f_new_symbolnode;
 
     jl_linenumbernode_type =
         jl_new_struct_type(jl_symbol("LineNumberNode"),
