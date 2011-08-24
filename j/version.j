@@ -23,7 +23,7 @@ VersionNumber(major, minor, patch)          = VersionNumber(major, minor, patch,
 VersionNumber(major, minor)                 = VersionNumber(major, minor, 0,     "")
 VersionNumber(major)                        = VersionNumber(major, 0,     0,     "")
 
-show(v::VersionNumber) = print("v$(v.major).$(v.minor).$(v.patch)$(v.suffix)")
+show(v::VersionNumber) = print("$(v.major).$(v.minor).$(v.patch)$(v.suffix)")
 
 convert(::Type{VersionNumber}, v::Int) = VersionNumber(v)
 convert(::Type{VersionNumber}, v::Tuple) = VersionNumber(v...)
@@ -40,9 +40,9 @@ function convert(::Type{VersionNumber}, v::String)
 end
 
 <(v1::VersionNumber, v2::VersionNumber) =
-    (v1.major < v2.major || v1.major == v2.major) &&
-    (v1.minor < v2.minor || v1.minor == v2.minor) &&
-    (v1.patch < v2.patch || v1.patch == v2.patch) && v1.suffix < v2.suffix
+    v1.major < v2.major || v1.major == v2.major &&
+    (v1.minor < v2.minor || v1.minor == v2.minor &&
+     (v1.patch < v2.patch || v1.patch == v2.patch && v1.suffix < v2.suffix))
 
 ==(v1::VersionNumber, v2::VersionNumber) =
     v1.major == v2.major && v1.minor == v2.minor &&
