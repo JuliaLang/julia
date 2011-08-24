@@ -191,5 +191,4 @@ function match(re::Regex, str::String, opts::Int)
     RegexMatch(mat, cap, m[1]+1)
 end
 
-match(re::Regex, str::String) =
-    match(re, str, re.options & PCRE_EXECUTE_MASK)
+match(re::Regex, str::String) = match(re, str, re.options & PCRE_EXECUTE_MASK)

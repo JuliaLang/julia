@@ -40,16 +40,13 @@ function convert(::Type{VersionNumber}, v::String)
 end
 
 <(v1::VersionNumber, v2::VersionNumber) =
-    v1.major < v2.major || v1.major == v2.major &&
-    v1.minor < v2.minor || v1.minor == v2.minor &&
-    v1.patch < v2.patch || v1.patch == v2.patch &&
-    v1.suffix < v2.suffix
+    (v1.major < v2.major || v1.major == v2.major) &&
+    (v1.minor < v2.minor || v1.minor == v2.minor) &&
+    (v1.patch < v2.patch || v1.patch == v2.patch) && v1.suffix < v2.suffix
 
 ==(v1::VersionNumber, v2::VersionNumber) =
-    v1.major == v2.major &&
-    v1.minor == v2.minor &&
-    v1.patch == v2.patch &&
-    v1.suffix == v2.suffix
+    v1.major == v2.major && v1.minor == v2.minor &&
+    v1.patch == v2.patch && v1.suffix == v2.suffix
 
 # TODO: fix the fallback >, <= and >= cases to not require these
 > (v1::VersionNumber, v2::VersionNumber) = v2 < v1
