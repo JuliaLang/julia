@@ -20,12 +20,6 @@ void snprint_real(char *s, size_t cnt, double r,
                   // # of digits left of decimal before scientific notation
                   // recommend 10
                   int max_digs_lf);
-void snprint_cplx(char *s, size_t cnt, double re, double im,
-                  // args to pass on to snprint_real
-                  int width, int dec,
-                  int max_digs_rt, int max_digs_lf,
-                  // print spaces around sign in a+bi
-                  int spflag);
 
 DLLEXPORT char *uint2str(char *dest, size_t len, uint64_t num, uint32_t base);
 int str2int(char *str, size_t len, int64_t *res, uint32_t base);

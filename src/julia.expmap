@@ -112,7 +112,6 @@
     jl_fd_isset;
     jl_fd_set;
     jl_fd_zero;
-    jl_read_avail;
     jl_ios_size;
     jl_ios_fd;
     jl_nb_available;

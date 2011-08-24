@@ -61,22 +61,6 @@ DLLEXPORT void jl_fd_zero(fd_set *set)
 }
 
 DLLEXPORT
-int jl_read_avail(ios_t *s)
-{
-    int fd = s->fd;
-    fd_set fds;
-    struct timeval tout;
-    tout.tv_sec = 0;
-    tout.tv_usec = 0;
-    FD_ZERO(&fds);
-    FD_SET(fd, &fds);
-    select(fd+1, &fds, NULL, NULL, &tout);
-    if (FD_ISSET(fd, &fds))
-        return 1;
-    return 0;
-}
-
-DLLEXPORT
 uint32_t jl_getutf8(ios_t *s)
 {
     uint32_t wc=0;
