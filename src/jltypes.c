@@ -2521,10 +2521,6 @@ void jl_init_types()
 #endif
                         );
 
-    jl_pointer_void_type =
-        (jl_bits_type_t*)jl_apply_type((jl_value_t*)jl_pointer_type,
-                                       jl_tuple(1, jl_bottom_type));
-
     jl_undef_type = jl_new_tagtype((jl_value_t*)jl_symbol("Undef"),
                                    jl_any_type, jl_null);
 

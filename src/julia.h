@@ -302,7 +302,6 @@ extern jl_bits_type_t *jl_float32_type;
 extern jl_bits_type_t *jl_float64_type;
 
 extern jl_bits_type_t *jl_pointer_type;
-extern jl_bits_type_t *jl_pointer_void_type;
 
 extern jl_type_t *jl_array_uint8_type;
 extern jl_type_t *jl_array_any_type;
@@ -471,7 +470,7 @@ static inline int jl_is_box(void *v)
 static inline int jl_is_cpointer_type(void *t)
 {
     return (jl_is_bits_type(t) &&
-            ((jl_bits_type_t*)(t))->name == jl_pointer_void_type->name);
+            ((jl_bits_type_t*)(t))->name == jl_pointer_type->name);
 }
 
 static inline int jl_is_seq_type(jl_value_t *v)
@@ -586,8 +585,6 @@ int64_t jl_unbox_int64(jl_value_t *v);
 uint64_t jl_unbox_uint64(jl_value_t *v);
 float jl_unbox_float32(jl_value_t *v);
 double jl_unbox_float64(jl_value_t *v);
-jl_value_t *jl_box_pointer(jl_bits_type_t *ty, void *p);
-void *jl_unbox_pointer(jl_value_t *v);
 
 #ifdef __LP64__
 #define jl_box_long(x)   jl_box_int64(x)

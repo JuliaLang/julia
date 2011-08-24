@@ -976,7 +976,7 @@ void jl_init_serializer()
                      jl_box_type, jl_typector_type, jl_undef_type, jl_any_func,
                      jl_task_type, jl_union_kind, jl_function_type,
                      jl_typetype_type, jl_typetype_tvar, jl_ANY_flag,
-                     jl_array_any_type, jl_pointer_void_type,
+                     jl_array_any_type,
 
                      jl_symbol_type->name, jl_pointer_type->name,
                      jl_tag_kind->name, jl_union_kind->name, jl_bits_kind->name, jl_struct_kind->name,

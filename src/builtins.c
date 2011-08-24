@@ -1304,8 +1304,6 @@ void jl_init_primitives()
 #endif
 
     add_builtin("ANY", jl_ANY_flag);
-
-    add_builtin("C_NULL", jl_box_pointer(jl_pointer_void_type, NULL));
 }
 
 void jl_init_builtins()

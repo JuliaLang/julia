@@ -116,15 +116,14 @@ DLLEXPORT ios_t *jl_current_output_stream()
 void jl_set_current_output_stream_obj(jl_value_t *v)
 {
     jl_current_task->state.ostream_obj = v;
-    jl_value_t *ptr = jl_convert((jl_type_t*)jl_pointer_void_type, v);
-    jl_current_task->state.current_output_stream =
-        (ios_t*)jl_unbox_pointer(ptr);
+    ios_t *s = (ios_t*)jl_array_data(jl_fieldref(v,0));
+    jl_current_task->state.current_output_stream = s;
     // if current stream has never been set before, propagate to all
     // outer contexts.
     jl_savestate_t *ss = jl_current_task->state.prev;
     while (ss != NULL && ss->ostream_obj == (jl_value_t*)jl_null) {
         ss->ostream_obj = v;
-        ss->current_output_stream = (ios_t*)jl_unbox_pointer(ptr);
+        ss->current_output_stream = s;
         ss = ss->prev;
     }
 }

@@ -48,7 +48,6 @@ static Function *box_int64_func;
 static Function *box_uint64_func;
 static Function *box_float32_func;
 static Function *box_float64_func;
-static Function *box_pointer_func;
 static Function *box8_func;
 static Function *box16_func;
 static Function *box32_func;
@@ -269,14 +268,6 @@ static Value *boxed(Value *v)
     if (jb == jl_uint16_type) return builder.CreateCall(box_uint16_func, v);
     if (jb == jl_uint32_type) return builder.CreateCall(box_uint32_func, v);
     if (jb == jl_uint64_type) return builder.CreateCall(box_uint64_func, v);
-    if (jl_is_cpointer_type(jt)) {
-        if (!v->getType()->isPointerTy())
-            v = builder.CreateIntToPtr(v, T_pint8);
-        else
-            v = builder.CreateBitCast(v, T_pint8);
-        return builder.CreateCall2(box_pointer_func,
-                                   literal_pointer_val(jt), v);
-    }
     if (jl_is_bits_type(jt)) {
         int nb = jl_bitstype_nbits(jt);
         if (nb == 8)
@@ -362,7 +353,7 @@ extern "C" void *jl_value_to_pointer(jl_value_t *jt, jl_value_t *v, int argn)
     // this is a custom version of convert_to_ptr that is able to use
     // the temporary argument space.
     if (jl_is_cpointer(v))
-        return jl_unbox_pointer(v);
+        return (void*)jl_unbox_long(v);
     if ((jl_value_t*)jl_typeof(v) == jt) {
         assert(jl_is_bits_type(jt));
         size_t osz = jl_bitstype_nbits(jt)/8;
@@ -445,8 +436,8 @@ static Value *julia_to_native(const Type *ty, jl_value_t *jt, Value *jv,
     else if (jl_is_cpointer_type(jt)) {
         jl_value_t *aty = expr_type(argex);
         if (jl_is_array_type(aty) &&
-            (jl_tparam0(aty) == jl_tparam0(jt) ||
-             jt == (jl_value_t*)jl_pointer_void_type)) {
+            (jl_tparam0(jt) == jl_tparam0(aty) ||
+             jl_tparam0(jt) == (jl_value_t*)jl_bottom_type)) {
             // array to pointer
             return builder.CreateBitCast(emit_arrayptr(jv), ty);
         }
@@ -1180,17 +1171,6 @@ extern "C" void jl_init_intrinsic_functions()
                               "jl_box32", (void*)*jl_box32);
     box64_func = boxfunc_llvm(ft2arg(jl_pvalue_llvmt, jl_pvalue_llvmt, T_int64),
                               "jl_box64", (void*)*jl_box64);
-
-    std::vector<const Type*> boxpointerargs(0);
-    boxpointerargs.push_back(jl_pvalue_llvmt);
-    boxpointerargs.push_back(T_pint8);
-    box_pointer_func =
-        Function::Create(FunctionType::get(jl_pvalue_llvmt,
-                                           boxpointerargs, false),
-                         Function::ExternalLinkage, "jl_box_pointer",
-                         jl_Module);
-    jl_ExecutionEngine->addGlobalMapping(box_pointer_func,
-                                         (void*)&jl_box_pointer);
 
     std::vector<const Type*> toptrargs(0);
     toptrargs.push_back(jl_pvalue_llvmt);

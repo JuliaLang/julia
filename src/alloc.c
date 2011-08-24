@@ -55,7 +55,6 @@ jl_value_t *jl_interrupt_exception;
 jl_value_t *jl_memory_exception;
 
 jl_bits_type_t *jl_pointer_type;
-jl_bits_type_t *jl_pointer_void_type;
 
 jl_sym_t *call_sym;    jl_sym_t *dots_sym;
 jl_sym_t *call1_sym;
@@ -836,24 +835,6 @@ UNBOX_FUNC(uint64, uint64_t)
 UNBOX_FUNC(bool,   int8_t)
 UNBOX_FUNC(float32, float)
 UNBOX_FUNC(float64, double)
-
-jl_value_t *jl_box_pointer(jl_bits_type_t *ty, void *p)
-{
-#ifdef JL_GC_MARKSWEEP
-    jl_value_t *v = alloc_2w();
-    v->type = (jl_type_t*)ty;
-#else
-    jl_value_t *v = newobj((jl_type_t*)ty, 1);
-#endif
-    *(void**)jl_bits_data(v) = p;
-    return v;
-}
-
-void *jl_unbox_pointer(jl_value_t *v)
-{
-    assert(jl_is_cpointer(v));
-    return *(void**)jl_bits_data(v);
-}
 
 // Expr constructor for internal use ------------------------------------------
 
