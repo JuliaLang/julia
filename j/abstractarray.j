@@ -598,26 +598,15 @@ function hcat{T}(A::AbstractMatrix{T}...)
     ncols = sum(a->size(a, 2), A)::Size
     nrows = size(A[1], 1)
     B = similar(A[1], nrows, ncols)
+    pos = 1
+    for k=1:nargs
+        Ak = A[k]
+        p1 = pos+size(Ak,2)-1
+        B[:, pos:p1] = Ak
+        pos = p1+1
+    end
 
-   if isa(T, BitsKind)
-       pos = 1
-       for k = 1:nargs
-           nAk = numel(A[k])
-           copy_to(pointer(B, pos), pointer(A[k]), nAk)
-           pos += nAk
-       end
-   else
-       pos = 1
-       for k=1:nargs
-           Ak = A[k]
-           for i=1:numel(Ak)
-               B[pos] = Ak[i]
-               pos += 1
-           end
-       end
-   end
-
-   return B
+    return B
 end
 
 function vcat{T}(A::AbstractMatrix{T}...)
