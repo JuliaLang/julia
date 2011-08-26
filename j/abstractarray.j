@@ -1359,7 +1359,7 @@ type SubArray{T,N,A<:AbstractArray,I<:(RangeIndex...,)} <: AbstractArray{T,N}
             new(p, i, (length(i[1]),), [1], i[1].start)
         end
         function SubArray(p::A, i::(Range{Index},))
-            new(p, i, (length(i[1]),), i[1].step, i[1].start) 
+            new(p, i, (length(i[1]),), [i[1].step], i[1].start) 
         end
     else
         function SubArray(p::A, i::I)
@@ -1495,10 +1495,23 @@ function ref(s::SubArray, is::Int...)
     s.parent[index]
 end
 
+ref{T}(s::SubArray{T,1}, I::Range1{Index}) =
+    ref(s.parent, (s.first_index+(I.start-1)*s.strides[1]):s.strides[1]:(s.first_index+(I.stop-1)*s.strides[1]))
+ref{T}(s::SubArray{T,1}, I::Range{Index}) =
+    ref(s.parent, (s.first_index+(I.start-1)*s.strides[1]):(s.strides[1]*I.step):(s.first_index+(I.stop-1)*s.strides[1]))
+
+function ref{T}(s::SubArray{T,1}, I::AbstractVector{Int})
+    t = Array(Index, length(I))
+    for i = 1:length(I)
+        t[i] = s.first_index + (I[i]-1)*s.strides[1]
+    end
+    ref(s.parent, t)
+end
 function ref(s::SubArray, I::Indices...)
     j = 1 #the jth dimension in subarray
     n = ndims(s.parent)
-    newindexes = Array(Indices, n)
+    #newindexes = Array(Indices, n)
+    newindexes = invoke(Array, (Type{Indices}, Int64), Indices, n)
     for i = 1:n
         t = s.indexes[i]
         #TODO: don't generate the dense vector indexes if they can be ranges
@@ -1506,22 +1519,7 @@ function ref(s::SubArray, I::Indices...)
         j += 1
     end
     
-    reshape(ref(s.parent, newindexes...), s.dims)
-end
-#TODO: don't generate the dense vector indexes if they can be ranges
-#function ref{T}(s::SubArray{T,1}, I::Range{Index})
-    
-#end
-#function ref{T}(s::SubArray{T,1}, I::Range1{Index})
-
-#end
-#TODO: see if using strides and first index is faster for 1d
-function ref2{T}(s::SubArray{T,1}, I::AbstractArray{Int})
-    t = Array(Index, length(I))
-    for i = 1:length(I)
-        t[i] = s.first_index + (I[i]-1)*s.strides
-    end
-    ref(s.parent, t)
+    reshape(ref(s.parent, newindexes...), map(length, I))
 end
 
 assign(s::SubArray, v::AbstractArray, i::Int) =
@@ -1559,6 +1557,60 @@ assign{T}(s::SubArray{T,2}, v::AbstractArray, i::Int, j::Int) =
     (s.parent[s.first_index +(i-1)*s.strides[1]+(j-1)*s.strides[2]] = v; s)
 assign{T}(s::SubArray{T,2}, v, i::Int, j::Int) =
     (s.parent[s.first_index +(i-1)*s.strides[1]+(j-1)*s.strides[2]] = v; s)
+
+assign{T}(s::SubArray{T,1}, v::AbstractArray, I::Range1{Index}) = 
+    assign(s.parent, v, (s.first_index+(I.start-1)*s.strides[1]):s.strides[1]:(s.first_index+(I.stop-1)*s.strides[1]))
+assign{T}(s::SubArray{T,1}, v, I::Range1{Index}) = 
+    assign(s.parent, v, (s.first_index+(I.start-1)*s.strides[1]):s.strides[1]:(s.first_index+(I.stop-1)*s.strides[1]))
+assign{T}(s::SubArray{T,1}, v::AbstractArray, I::Range{Index}) =
+    assign(s.parent, v, (s.first_index+(I.start-1)*s.strides[1]):(s.strides[1]*I.step):(s.first_index+(I.stop-1)*s.strides[1]))
+assign{T}(s::SubArray{T,1}, v, I::Range{Index}) =
+    assign(s.parent, v, (s.first_index+(I.start-1)*s.strides[1]):(s.strides[1]*I.step):(s.first_index+(I.stop-1)*s.strides[1]))
+
+function assign{T}(s::SubArray{T,1}, v::AbstractArray, I::AbstractVector{Int})
+    t = Array(Index, length(I))
+    for i = 1:length(I)
+        t[i] = s.first_index + (I[i]-1)*s.strides[1]
+    end
+    assign(s.parent, v, t)
+end
+function assign{T}(s::SubArray{T,1}, v, I::AbstractVector{Int})
+    t = Array(Index, length(I))
+    for i = 1:length(I)
+        t[i] = s.first_index + (I[i]-1)*s.strides[1]
+    end
+    assign(s.parent, v, t)
+end
+
+function assign(s::SubArray, v::AbstractArray, I::Indices...)
+    j = 1 #the jth dimension in subarray
+    n = ndims(s.parent)
+    #newindexes = Array(Indices, n)
+    newindexes = invoke(Array, (Type{Indices}, Int64), Indices, n)
+    for i = 1:n
+        t = s.indexes[i]
+        #TODO: don't generate the dense vector indexes if they can be ranges
+        newindexes[i] = isa(t, Index) ? t : t[I[j]]
+        j += 1
+    end
+    
+    assign(s.parent, reshape(v, map(length, I)), newindexes...)
+end
+
+function assign(s::SubArray, v, I::Indices...)
+    j = 1 #the jth dimension in subarray
+    n = ndims(s.parent)
+    #newindexes = Array(Indices, n)
+    newindexes = invoke(Array, (Type{Indices}, Int64), Indices, n)
+    for i = 1:n
+        t = s.indexes[i]
+        #TODO: don't generate the dense vector indexes if they can be ranges
+        newindexes[i] = isa(t, Index) ? t : t[I[j]]
+        j += 1
+    end
+    
+    assign(s.parent, v, newindexes...)
+end
 
 strides(s::SubArray) = tuple(s.strides...)
 
