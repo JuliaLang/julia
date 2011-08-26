@@ -571,8 +571,8 @@ end
 
 cat(catdim::Int) = similar([], None, 0)
 
-vcat() = similar([], None, 0)
-hcat() = similar([], None, 0)
+vcat() = Array(None, 0)
+hcat() = Array(None, 0)
 
 ## cat: special cases
 hcat{T}(X::T...) = [ X[j] | i=1, j=1:length(X) ]
