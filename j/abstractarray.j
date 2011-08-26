@@ -749,16 +749,7 @@ end
 
 ## Reductions ##
 
-function contains(itr, x)
-    for y=itr
-        if y==x
-            return true
-        end
-    end
-    return false
-end
-
-contains(s::Number, n::Int) = (s == n)
+contains(s::Number, n::Number) = (s == n)
 
 areduce{T}(f::Function, A::AbstractArray{T}, region::Region, v0) =
         areduce(f,A,region,v0,T)
@@ -914,24 +905,8 @@ function areduce(f::Function, A::AbstractArray, dim::Size, RType::Type)
 end
 end
 
-function initial_max_val{T}(::Type{T})
-    if subtype(T,Int)
-        typemin(T)
-    else
-        convert(T,-Inf)
-    end
-end
-
-function initial_min_val{T}(::Type{T})
-    if subtype(T,Int)
-        typemax(T)
-    else
-        convert(T,Inf)
-    end
-end
-
 function max{T}(A::AbstractArray{T})
-    v = initial_max_val(T)
+    v = typemin(T)
     for i=1:numel(A)
         v = max(v,A[i])
     end
@@ -939,7 +914,7 @@ function max{T}(A::AbstractArray{T})
 end
 
 function min{T}(A::AbstractArray{T})
-    v = initial_min_val(T)
+    v = typemax(T)
     for i=1:numel(A)
         v = min(v,A[i])
     end
@@ -963,9 +938,9 @@ function prod{T}(A::AbstractArray{T})
 end
 
 max{T}(A::AbstractArray{T}, region::Region) = areduce(max,  A, region,
-                                                      initial_max_val(T), T)
+                                                      typemin(T), T)
 min{T}(A::AbstractArray{T}, region::Region) = areduce(min,  A, region,
-                                                      initial_min_val(T), T)
+                                                      typemax(T), T)
 sum{T}(A::AbstractArray{T}, region::Region) = areduce(+,  A, region, zero(T))
 prod{T}(A::AbstractArray{T}, region::Region) = areduce(*, A, region, one(T))
 
