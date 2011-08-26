@@ -491,6 +491,12 @@ void jl_add_constructors(jl_struct_type_t *t)
     }
 }
 
+JL_CALLABLE(jl_f_ctor_trampoline)
+{
+    jl_add_constructors((jl_struct_type_t*)env);
+    return jl_apply((jl_function_t*)env, args, nargs);
+}
+
 jl_struct_type_t *jl_new_struct_type(jl_sym_t *name, jl_tag_type_t *super,
                                      jl_tuple_t *parameters,
                                      jl_tuple_t *fnames, jl_tuple_t *ftypes)
@@ -506,7 +512,7 @@ jl_struct_type_t *jl_new_struct_type(jl_sym_t *name, jl_tag_type_t *super,
     t->parameters = parameters;
     t->names = fnames;
     t->types = ftypes;
-    t->fptr = jl_f_no_function;
+    t->fptr = jl_f_ctor_trampoline;
     t->env = (jl_value_t*)t;
     t->linfo = NULL;
     t->ctor_factory = (jl_value_t*)jl_null;
