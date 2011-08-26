@@ -1364,6 +1364,9 @@ static jl_tuple_t *ml_matches(jl_methlist_t *ml, jl_value_t *type,
     return t;
 }
 
+void jl_add_constructors(jl_struct_type_t *t);
+JL_CALLABLE(jl_f_ctor_trampoline);
+
 // return linked tuples (t1, M1, (t2, M2, (... ()))) of types and methods.
 // t is the intersection of the type argument and the method signature,
 // and M is the corresponding LambdaStaticData (jl_lambda_info_t)
@@ -1371,6 +1374,8 @@ DLLEXPORT
 jl_value_t *jl_matching_methods(jl_function_t *gf, jl_value_t *type)
 {
     jl_tuple_t *t = jl_null;
+    if (gf->fptr == jl_f_ctor_trampoline)
+        jl_add_constructors((jl_struct_type_t*)gf);
     if (!jl_is_gf(gf)) {
         return (jl_value_t*)t;
     }

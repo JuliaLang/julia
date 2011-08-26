@@ -1418,6 +1418,7 @@ void jl_mark_type_cache(void *tc)
 #endif
 
 JL_CALLABLE(jl_f_tuple);
+JL_CALLABLE(jl_f_ctor_trampoline);
 
 static jl_type_t *inst_type_w_(jl_value_t *t, jl_value_t **env, size_t n,
                                typekey_stack_t *stack)
@@ -1573,7 +1574,7 @@ static jl_type_t *inst_type_w_(jl_value_t *t, jl_value_t **env, size_t n,
             nst->parameters = iparams_tuple;
             nst->names = st->names;
             nst->types = jl_null; // to be filled in below
-            nst->fptr = jl_f_no_function;
+            nst->fptr = jl_f_ctor_trampoline;
             nst->env = (jl_value_t*)nst;
             nst->linfo = NULL;
             nst->ctor_factory = st->ctor_factory;
@@ -1592,9 +1593,6 @@ static jl_type_t *inst_type_w_(jl_value_t *t, jl_value_t **env, size_t n,
                 }
             }
             cache_type_(iparams, ntp, (jl_type_t*)nst);
-            if (!jl_has_typevars_((jl_value_t*)nst,1)) {
-                jl_add_constructors(nst);
-            }
             result = (jl_type_t*)nst;
         }
     done_inst_tt:
