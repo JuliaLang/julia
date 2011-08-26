@@ -1348,7 +1348,6 @@ type SubArray{T,N,A<:AbstractArray,I<:(RangeIndex...,)} <: AbstractArray{T,N}
     dims::Dims
     strides::Array{Index,1}
     first_index::Index
-    indexed_dims::Array{Index,1}
 
     #linear indexing constructor
     if N == 1 && length(I) == 1 && A <: Array
