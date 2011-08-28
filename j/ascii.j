@@ -14,7 +14,16 @@ nextind(s::ASCIIString, i::Int) = i
 prevind(s::ASCIIString, i::Int) = i-1
 strcat(a::ASCIIString, b::ASCIIString, c::ASCIIString...) = ASCIIString(memcat(a,b,c...))
 ref(s::ASCIIString, r::Range1{Index}) = ASCIIString(ref(s.data,r))
-# TODO: fast has(str,c) implementation
+
+function contains(str::ASCIIString, c::Char)
+    if c >= 0x80
+        return false
+    end
+    q = ccall(dlsym(libc, :memchr), Ptr{Uint8},
+              (Ptr{Uint8}, Int32, Ulong),
+              str.data, int32(c), ulong(length(str)))
+    return q != C_NULL
+end
 
 function ucfirst(s::ASCIIString)
     if 'a' <= s[1] <= 'z'
