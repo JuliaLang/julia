@@ -460,18 +460,20 @@
    ;; let
    (pattern-lambda (let ex . binds)
 		   (let loop ((binds binds)
+			      (args  ())
+			      (inits ())
 			      (locls ())
 			      (stmts ()))
 		     (if (null? binds)
-			 `(call (-> (tuple)
+			 `(call (-> (tuple ,@args)
 				    (block (local (vars ,@locls))
 					   ,@stmts
 					   ,ex))
-				)
+				,@inits)
 			 (cond
 			  ((or (symbol? (car binds)) (decl? (car binds)))
 			   ;; just symbol -> add local
-			   (loop (cdr binds)
+			   (loop (cdr binds) args inits
 				 (cons (car binds) locls)
 				 stmts))
 			  ((and (length= (car binds) 3)
@@ -480,17 +482,20 @@
 			   (cond
 			    ((or (symbol? (cadar binds))
 				 (decl?   (cadar binds)))
-			     ;; a=b -> add local and initializer
+			     ;; a=b -> add argument
 			     (loop (cdr binds)
-				   (cons (cadar binds) locls)
-				   (cons `(= ,(decl-var (cadar binds))
+				   (cons (cadar binds) args)
+				   (cons (caddar binds) inits)
+				   locls stmts))
+				   #;(cons (cadar binds) locls)
+				   #;(cons `(= ,(decl-var (cadar binds))
 					     ,(caddar binds))
-					 stmts)))
+					 stmts);))
 			    ((and (pair? (cadar binds))
 				  (eq? (caadar binds) 'call))
 			     ;; f()=c
 			     (let ((asgn (cadr (julia-expand0 (car binds)))))
-			       (loop (cdr binds)
+			       (loop (cdr binds) args inits
 				     (cons (cadr asgn) locls)
 				     (cons asgn stmts))))
 			    (else (error "invalid let syntax"))))
@@ -738,22 +743,24 @@
 				    (break-block loop-cont
 						 ,body)
 				    (= ,cnt (call + 1 ,cnt))))))))
-	  (let ((lim (if (number? b) b (gensy))))
+	  (let ((cnt (gensy))
+		(lim (if (number? b) b (gensy))))
 	    `(scope-block
 	     (block
-	      (= ,var ,a)
+	      (= ,cnt ,a)
 	      ,@(if (eq? lim b) '() `((= ,lim ,b)))
 	      (break-block loop-exit
-			   (_while (call <= ,var ,lim)
+			   (_while (call <= ,cnt ,lim)
 				   (block
+				    (= ,var ,cnt)
 				    (break-block loop-cont
 						 ,body)
-				    (= ,var (call +
+				    (= ,cnt (call +
 						  (call (top convert)
 							(call (top typeof)
-							      ,var)
+							      ,cnt)
 							1)
-						  ,var)))))))))))
+						  ,cnt)))))))))))
 
    ; for loop over arbitrary vectors
    (pattern-lambda
