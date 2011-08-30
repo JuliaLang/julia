@@ -1116,10 +1116,12 @@ jl_value_t *jl_method_def(jl_sym_t *name, jl_value_t **bp,
         if (!jl_is_gf(gf))
             jl_error("in method definition: not a generic function");
     }
+    JL_GC_PUSH(&gf);
     assert(jl_is_function(f));
     assert(jl_is_tuple(argtypes));
     check_type_tuple(argtypes, name, "method definition");
     jl_add_method((jl_function_t*)gf, argtypes, f);
+    JL_GC_POP();
     return gf;
 }
 
