@@ -50,11 +50,12 @@ function mandel(z::Complex)
     c = z
     for n=0:79
         if abs(z)>2
+            n -= 1
             break
         end
         z = z^2+c
     end
-    n
+    n+1
 end
 
 mandelperf() = [ mandel(complex(r,i)) | r=-2.0:.1:0.5, i=-1.:.1:1. ]

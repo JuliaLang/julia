@@ -416,7 +416,8 @@ function eig{T<:Union(Float64,Float32,Complex128,Complex64)}(A::Matrix{T})
             return (W, VR)
         else
             evec = complex(zeros(T, n, n), zeros(T, n, n))
-            for j=1:n
+            j = 1
+            while j <= n
                 if WI[j] == 0.0
                     evec[:,j] = VR[:,j]
                 else
@@ -424,6 +425,7 @@ function eig{T<:Union(Float64,Float32,Complex128,Complex64)}(A::Matrix{T})
                     evec[:,j+1] = VR[:,j] - im*VR[:,j+1]
                     j += 1
                 end
+                j += 1
             end
             return (complex(WR, WI), evec)
         end
