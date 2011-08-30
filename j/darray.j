@@ -89,29 +89,14 @@ function localize(s::SubDArray)
     l = localize(d)
     if isa(sdi,Int)
         if lo <= sdi <= hi
-            return l[ntuple(ndims(l), i->(i==d.distdim ? sdi-lo+1 :
-                                          1:size(l,i)))...]
+            return slicedim(l, d.distdim, sdi-lo+1)
         else
-            return Array(eltype(l), ntuple(ndims(l),
-                                           i->(i==d.distdim ? 0 :
-                                               size(l,i))))
+            return Array(eltype(l), ntuple(ndims(l), i->(i==d.distdim ? 0 :
+                                                         size(l,i))))
         end
     else
-        sta = start(sdi)
-        ste = step(sdi)
-        sto = sdi[end]
-        i0 = sta + ste*div((lo-sta), ste)
-        i1 = sta + ste*div((hi-sta), ste)
-        i0 = max(i0,sta)
-        i1 = min(i1,sto)
-        if i0 > sto || i1 < sta
-            return Array(eltype(l), ntuple(ndims(l),
-                                           i->(i==d.distdim ? 0 :
-                                               size(l,i))))
-        else
-            return l[ntuple(ndims(l), i->(i==d.distdim ? i0:ste:i1 :
-                                          1:size(l,i)))...]
-        end
+        r = intersect(lo:hi, sdi)
+        return l[ntuple(ndims(l), i->(i==d.distdim ? r : 1:size(l,i)))...]
     end
 end
 

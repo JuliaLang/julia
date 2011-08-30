@@ -464,6 +464,43 @@ function ref(A::AbstractArray, I::Indices...)
 end
 end
 
+# index A[:,:,...,i,:,:,...] where "i" is in dimension "d"
+# TODO: more optimized special cases
+function slicedim(A::AbstractArray, d::Int, i)
+    A[ntuple(ndims(A), n->(n==d ? i : (1:size(A,n))))...]
+end
+
+function slicedim(A::AbstractArray, d::Int, i::Int)
+    d_in = size(A)
+    leading = d_in[1:(d-1)]
+    d_out = append(leading, (1,), d_in[(d+1):end])
+
+    M = prod(leading)
+    N = numel(A)
+    stride = M * d_in[d]
+
+    B = similar(A, d_out)
+    index_offset = 1 + (i-1)*M
+
+    l = 1
+
+    if M==1
+        for j=0:stride:(N-stride)
+            B[l] = A[j + index_offset]
+            l += 1
+        end
+    else
+        for j=0:stride:(N-stride)
+            offs = j + index_offset
+            for k=0:(M-1)
+                B[l] = A[offs + k]
+                l += 1
+            end
+        end
+    end
+    return B
+end
+
 ## Indexing: assign ##
 
 # 1-d indexing is assumed defined on subtypes
@@ -1315,6 +1352,16 @@ function ind2sub(dims, ind::Int)
         ind = rest
     end
     return tuple(ind, sub...)
+end
+
+function squeeze(A::AbstractArray)
+    d = ()
+    for i = size(A)
+        if i != 1
+            d = tuple(d..., i)
+        end
+    end
+    reshape(A, d)
 end
 
 ## subarrays ##
