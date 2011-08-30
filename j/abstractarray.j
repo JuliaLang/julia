@@ -43,6 +43,8 @@ similar{T}(a::AbstractArray{T}, dims::Dims)          = similar(a, T, dims)
 similar{T}(a::AbstractArray{T}, dims::Size...)       = similar(a, T, dims)
 similar   (a::AbstractArray, T::Type, dims::Size...) = similar(a, T, dims)
 
+empty(a::AbstractArray) = similar(a, 0)
+
 reshape(a::AbstractArray, dims::Dims) = (b = similar(a, dims);
                                   for i=1:numel(a); b[i] = a[i]; end;
                                   b)
@@ -569,7 +571,7 @@ end
 
 ## Concatenation ##
 
-cat(catdim::Int) = similar([], None, 0)
+cat(catdim::Int) = Array(None, 0)
 
 vcat() = Array(None, 0)
 hcat() = Array(None, 0)

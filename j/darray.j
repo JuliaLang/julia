@@ -48,6 +48,9 @@ type DArray{T,N,distdim} <: AbstractArray{T,N}
     end
 end
 
+typealias SubDArray{T,N}   SubArray{T,N,DArray{T}}
+typealias SubOrDArray{T,N} Union(DArray{T,N}, SubDArray{T,N})
+
 size(d::DArray) = d.dims
 
 function serialize{T,N,dd}(s, d::DArray{T,N,dd})
@@ -76,7 +79,41 @@ end
 
 # when we actually need the data, wait for it
 localize(r::RemoteRef) = localize(fetch(r))
-localize{T,N}(d::DArray{T,N}) = d.locl
+localize(d::DArray) = d.locl
+
+function localize(s::SubDArray)
+    d = s.parent
+    lo = d.dist[d.localpiece]
+    hi = d.dist[d.localpiece+1]-1
+    sdi = s.indexes[d.distdim]
+    l = localize(d)
+    if isa(sdi,Int)
+        if lo <= sdi <= hi
+            return l[ntuple(ndims(l), i->(i==d.distdim ? sdi-lo+1 :
+                                          1:size(l,i)))...]
+        else
+            return Array(eltype(l), ntuple(ndims(l),
+                                           i->(i==d.distdim ? 0 :
+                                               size(l,i))))
+        end
+    else
+        sta = start(sdi)
+        ste = step(sdi)
+        sto = sdi[end]
+        i0 = sta + ste*div((lo-sta), ste)
+        i1 = sta + ste*div((hi-sta), ste)
+        i0 = max(i0,sta)
+        i1 = min(i1,sto)
+        if i0 > sto || i1 < sta
+            return Array(eltype(l), ntuple(ndims(l),
+                                           i->(i==d.distdim ? 0 :
+                                               size(l,i))))
+        else
+            return l[ntuple(ndims(l), i->(i==d.distdim ? i0:ste:i1 :
+                                          1:size(l,i)))...]
+        end
+    end
+end
 
 # find which piece holds index i in the distributed dimension
 function locate(d::DArray, i::Index)
@@ -132,6 +169,7 @@ function locate(d::DArray, I::AbstractVector{Index})
     end
     return (pmap, dist, perm)
 end
+
 ## Constructors ##
 
 function maxdim(dims)
