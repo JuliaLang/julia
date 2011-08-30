@@ -68,11 +68,6 @@
 #    type::Any
 #end
 
-#type SymbolNode
-#    name::Symbol
-#    type
-#end
-
 #type LineNumberNode
 #    line::Long
 #end
@@ -157,6 +152,11 @@ type UTF8String <: String
 end
 
 typealias ByteString Union(ASCIIString,UTF8String)
+
+type SymbolNode
+    name::Symbol
+    typ
+end
 
 abstract Exception
 
@@ -277,9 +277,11 @@ macro L_str(s); s; end
 method_missing(f, args...) = throw(MethodError(f, args))
 
 Array{T}  (::Type{T}, d::(Size,)) =
-    ccall(:jl_new_array, Any, (Any,Any), Array{T,1}, d)::Array{T,1}
+    ccall(:jl_alloc_array_1d, Any, (Any,Size), Array{T,1},
+          long(d[1]))::Array{T,1}
 Array{T}  (::Type{T}, d::(Size,Size)) =
-    ccall(:jl_new_array, Any, (Any,Any), Array{T,2}, d)::Array{T,2}
+    ccall(:jl_alloc_array_2d, Any, (Any,Size,Size), Array{T,2},
+          long(d[1]), long(d[2]))::Array{T,2}
 Array{T}  (::Type{T}, d::(Size,Size,Size)) =
     ccall(:jl_new_array, Any, (Any,Any), Array{T,3}, d)::Array{T,3}
 Array{T}  (::Type{T}, d::(Size,Size,Size,Size)) =
@@ -293,11 +295,11 @@ Array{T}(::Type{T}, m::Size) =
 Array{T}(::Type{T}, m::Size,n::Size) =
     ccall(:jl_alloc_array_2d, Any, (Any,Size,Size), Array{T,2},
           long(m), long(n))::Array{T,2}
-Array{T}(::Type{T}, m::Size,n::Size,o::Size)         = Array(T, (m,n,o))
-Array{T}(::Type{T}, m::Size,n::Size,o::Size,p::Size) = Array(T, (m,n,o,p))
+Array{T}(::Type{T}, m::Size,n::Size,o::Size)         = Array{T,3}(m,n,o)
+Array{T}(::Type{T}, m::Size,n::Size,o::Size,p::Size) = Array{T,4}(m,n,o,p)
 
 Array{N}(T, d::NTuple{N,Size})                       = Array{T,N}(d)
-Array(T, d::Size...)                                 = Array(T, d)
+Array(T, d::Size...)                                 = Array{T,length(d)}(d)
 
 function compile_hint(f, args::Tuple)
     if !isgeneric(f)

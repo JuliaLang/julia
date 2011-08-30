@@ -86,6 +86,15 @@ function allp(pred, itr)
     return true
 end
 
+function contains(itr, x)
+    for y=itr
+        if isequal(y,x)
+            return true
+        end
+    end
+    return false
+end
+
 ## Scans ##
 
 scan(op::Function, x::()) = ()

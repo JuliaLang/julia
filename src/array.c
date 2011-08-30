@@ -172,16 +172,22 @@ JL_CALLABLE(jl_new_array_internal)
     jl_struct_type_t *atype = (jl_struct_type_t*)env;
     jl_value_t *ndims = jl_tupleref(atype->parameters,1);
     size_t nd = jl_unbox_long(ndims);
-    JL_NARGS(Array, 1, 1);
-    JL_TYPECHK(Array, tuple, args[0]);
-    jl_tuple_t *d = (jl_tuple_t*)args[0];
-    if (d->length != nd) {
-        jl_error("Array: wrong number of dimensions");
+    jl_value_t **dargs;
+    if (nargs == 1 && jl_is_tuple(args[0])) {
+        jl_tuple_t *d = (jl_tuple_t*)args[0];
+        if (d->length != nd) {
+            jl_error("Array: wrong number of dimensions");
+        }
+        dargs = &jl_tupleref(d, 0);
+    }
+    else {
+        JL_NARGS(Array, nd, nd);
+        dargs = args;
     }
     size_t i;
     size_t *adims = alloca(nd*sizeof(size_t));
     for(i=0; i < nd; i++) {
-        jl_value_t *di = jl_tupleref(d,i);
+        jl_value_t *di = dargs[i];
         JL_TYPECHK(Array, long, di);
         adims[i] = jl_unbox_long(di);
     }

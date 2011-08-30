@@ -735,48 +735,6 @@ static void show_type(jl_value_t *t)
     }
 }
 
-static void show_int(void *data, int nbits)
-{
-    ios_t *s = jl_current_output_stream();
-    switch (nbits) {
-    case 8:
-        ios_printf(s, "%hhd", *(int8_t*)data);
-        break;
-    case 16:
-        ios_printf(s, "%hd", *(int16_t*)data);
-        break;
-    case 32:
-        ios_printf(s, "%d", *(int32_t*)data);
-        break;
-    case 64:
-        ios_printf(s, "%lld", *(int64_t*)data);
-        break;
-    default:
-        jl_error("print: unsupported integer size");
-    }
-}
-
-static void show_uint(void *data, int nbits)
-{
-    ios_t *s = jl_current_output_stream();
-    switch (nbits) {
-    case 8:
-        ios_printf(s, "%hhu", *(int8_t*)data);
-        break;
-    case 16:
-        ios_printf(s, "%hu", *(int16_t*)data);
-        break;
-    case 32:
-        ios_printf(s, "%u", *(int32_t*)data);
-        break;
-    case 64:
-        ios_printf(s, "%llu", *(int64_t*)data);
-        break;
-    default:
-        jl_error("print: unsupported integer size");
-    }
-}
-
 static void show_float64(double d, int single)
 {
     ios_t *s = jl_current_output_stream();
@@ -807,26 +765,6 @@ static void show_float64(double d, int single)
     }
 }
 
-JL_CALLABLE(jl_f_show_bool)
-{
-    ios_t *s = jl_current_output_stream();
-    if (jl_unbox_bool(args[0]) == 0)
-        ios_puts("false", s);
-    else
-        ios_puts("true", s);
-    return (jl_value_t*)jl_nothing;
-}
-
-JL_CALLABLE(jl_f_show_char)
-{
-    ios_t *s = jl_current_output_stream();
-    u_int32_t wc = *(uint32_t*)jl_bits_data(args[0]);
-    ios_putc('\'', s);
-    ios_pututf8(s, wc);
-    ios_putc('\'', s);
-    return (jl_value_t*)jl_nothing;
-}
-
 JL_CALLABLE(jl_f_show_float32)
 {
     show_float64((double)*(float*)jl_bits_data(args[0]), 1);
@@ -839,60 +777,17 @@ JL_CALLABLE(jl_f_show_float64)
     return (jl_value_t*)jl_nothing;
 }
 
-#define INT_SHOW_FUNC(sgn,nb)               \
-JL_CALLABLE(jl_f_show_##sgn##nb)            \
-{                                           \
-    show_##sgn(jl_bits_data(args[0]), nb);  \
-    return (jl_value_t*)jl_nothing;         \
-}
-
-INT_SHOW_FUNC(int,8)
-INT_SHOW_FUNC(uint,8)
-INT_SHOW_FUNC(int,16)
-INT_SHOW_FUNC(uint,16)
-INT_SHOW_FUNC(int,32)
-INT_SHOW_FUNC(uint,32)
-INT_SHOW_FUNC(int,64)
-INT_SHOW_FUNC(uint,64)
-
-JL_CALLABLE(jl_f_show_pointer)
+JL_CALLABLE(jl_f_show_int64)
 {
     ios_t *s = jl_current_output_stream();
-    void *ptr = *(void**)jl_bits_data(args[0]);
-    if (jl_typeis(args[0],jl_pointer_void_type))
-        ios_printf(s, "Ptr{Void}");
-    else
-        jl_show((jl_value_t*)jl_typeof(args[0]));
-#ifdef __LP64__
-    ios_printf(s, " @0x%016x", (uptrint_t)ptr);
-#else
-    ios_printf(s, " @0x%08x", (uptrint_t)ptr);
-#endif
+    ios_printf(s, "%lld", *(int64_t*)jl_bits_data(args[0]));
     return (jl_value_t*)jl_nothing;
 }
 
-JL_CALLABLE(jl_f_show_typevar)
+JL_CALLABLE(jl_f_show_uint64)
 {
     ios_t *s = jl_current_output_stream();
-    jl_tvar_t *tv = (jl_tvar_t*)args[0];
-    if (tv->lb != (jl_value_t*)jl_bottom_type) {
-        jl_show((jl_value_t*)tv->lb);
-        ios_puts("<:", s);
-    }
-    ios_puts(tv->name->name, s);
-    if (tv->ub != (jl_value_t*)jl_any_type) {
-        ios_puts("<:", s);
-        jl_show((jl_value_t*)tv->ub);
-    }
-    return (jl_value_t*)jl_nothing;
-}
-
-JL_CALLABLE(jl_f_show_linfo)
-{
-    ios_t *s = jl_current_output_stream();
-    ios_puts("AST(", s);
-    jl_show(((jl_lambda_info_t*)args[0])->ast);
-    ios_putc(')', s);
+    ios_printf(s, "%llu", *(uint64_t*)jl_bits_data(args[0]));
     return (jl_value_t*)jl_nothing;
 }
 
@@ -920,7 +815,7 @@ JL_CALLABLE(jl_f_show_any)
     else {
         jl_value_t *t = (jl_value_t*)jl_typeof(v);
         if (jl_is_bits_type(t)) {
-            show_uint(jl_bits_data(v), jl_bitstype_nbits(t));
+            jl_no_method_error(jl_show_gf, args, 1);
         }
         else {
             assert(jl_is_struct_type(t));
@@ -1387,7 +1282,6 @@ void jl_init_primitives()
     add_builtin("Array", (jl_value_t*)jl_array_type);
 
     add_builtin("Expr", (jl_value_t*)jl_expr_type);
-    add_builtin("SymbolNode", (jl_value_t*)jl_symbolnode_type);
     add_builtin("LineNumberNode", (jl_value_t*)jl_linenumbernode_type);
     add_builtin("LabelNode", (jl_value_t*)jl_labelnode_type);
     add_builtin("Ptr", (jl_value_t*)jl_pointer_type);
@@ -1410,8 +1304,6 @@ void jl_init_primitives()
 #endif
 
     add_builtin("ANY", jl_ANY_flag);
-
-    add_builtin("C_NULL", jl_box_pointer(jl_pointer_void_type, NULL));
 }
 
 void jl_init_builtins()
@@ -1426,23 +1318,11 @@ void jl_init_builtins()
 
     jl_show_gf = jl_new_generic_function(jl_symbol("show"));
 
-    //add_builtin_method1(jl_show_gf, (jl_type_t*)jl_sym_type,         jl_f_print_symbol);
     add_builtin_method1(jl_show_gf, (jl_type_t*)jl_any_type,         jl_f_show_any);
-    add_builtin_method1(jl_show_gf, (jl_type_t*)jl_tvar_type,        jl_f_show_typevar);
-    add_builtin_method1(jl_show_gf, (jl_type_t*)jl_lambda_info_type, jl_f_show_linfo);
     add_builtin_method1(jl_show_gf, (jl_type_t*)jl_float32_type,     jl_f_show_float32);
     add_builtin_method1(jl_show_gf, (jl_type_t*)jl_float64_type,     jl_f_show_float64);
-    add_builtin_method1(jl_show_gf, (jl_type_t*)jl_int8_type,        jl_f_show_int8);
-    add_builtin_method1(jl_show_gf, (jl_type_t*)jl_uint8_type,       jl_f_show_uint8);
-    add_builtin_method1(jl_show_gf, (jl_type_t*)jl_int16_type,       jl_f_show_int16);
-    add_builtin_method1(jl_show_gf, (jl_type_t*)jl_uint16_type,      jl_f_show_uint16);
-    add_builtin_method1(jl_show_gf, (jl_type_t*)jl_int32_type,       jl_f_show_int32);
-    add_builtin_method1(jl_show_gf, (jl_type_t*)jl_uint32_type,      jl_f_show_uint32);
     add_builtin_method1(jl_show_gf, (jl_type_t*)jl_int64_type,       jl_f_show_int64);
     add_builtin_method1(jl_show_gf, (jl_type_t*)jl_uint64_type,      jl_f_show_uint64);
-    add_builtin_method1(jl_show_gf, (jl_type_t*)jl_bool_type,        jl_f_show_bool);
-    add_builtin_method1(jl_show_gf, (jl_type_t*)jl_char_type,        jl_f_show_char);
-    add_builtin_method1(jl_show_gf, (jl_type_t*)jl_pointer_type,     jl_f_show_pointer);
 
     jl_convert_gf = jl_new_generic_function(jl_symbol("convert"));
     jl_add_method(jl_convert_gf,

@@ -109,18 +109,6 @@ end
 
 strchr(s::String, c::Char) = strchr(s, c, start(s))
 
-function has(s::String, c::Char)
-    i = start(s)
-    while !done(s,i)
-        d, j = next(s,i)
-        if c == d
-            return true
-        end
-        i = j
-    end
-    return false
-end
-
 function chars(s::String)
     cx = Array(Char,strlen(s))
     i = 0
@@ -343,15 +331,15 @@ function print_escaped(s::String, esc::String)
     i = start(s)
     while !done(s,i)
         c, j = next(s,i)
-        c == '\0'     ? print(escape_nul(s,j)) :
-        c == '\e'     ? print(L"\e") :
-        c == '\\'     ? print("\\\\") :
-        has(esc,c)    ? print('\\', c) :
-        iswprint(c)   ? print(c) :
-        7 <= c <= 13  ? print('\\', "abtnvfr"[c-6]) :
-        c <= '\x7f'   ? print(L"\x", hex(c, 2)) :
-        c <= '\uffff' ? print(L"\u", hex(c, need_full_hex(s,j) ? 4 : 2)) :
-                        print(L"\U", hex(c, need_full_hex(s,j) ? 8 : 4))
+        c == '\0'       ? print(escape_nul(s,j)) :
+        c == '\e'       ? print(L"\e") :
+        c == '\\'       ? print("\\\\") :
+        contains(esc,c) ? print('\\', c) :
+        iswprint(c)     ? print(c) :
+        7 <= c <= 13    ? print('\\', "abtnvfr"[c-6]) :
+        c <= '\x7f'     ? print(L"\x", hex(c, 2)) :
+        c <= '\uffff'   ? print(L"\u", hex(c, need_full_hex(s,j) ? 4 : 2)) :
+                          print(L"\U", hex(c, need_full_hex(s,j) ? 8 : 4))
         i = j
     end
 end
@@ -364,13 +352,13 @@ quote_string(s::String) = print_to_string(length(s)+2, print_quoted, s)
 # bare minimum unescaping function unescapes only given characters
 
 function print_unescaped_chars(s::String, esc::String)
-    if !has(esc,'\\')
+    if !contains(esc,'\\')
         esc = strcat("\\", esc)
     end
     i = start(s)
     while !done(s,i)
         c, i = next(s,i)
-        if c == '\\' && !done(s,i) && has(esc,s[i])
+        if c == '\\' && !done(s,i) && contains(esc,s[i])
             c, i = next(s,i)
         end
         print(c)
@@ -703,7 +691,7 @@ function split(s::String, delims, include_empty)
         tokstart = tokend = i
         while !done(s,i)
             (c,i) = next(s,i)
-            if has(delims, c)
+            if contains(delims, c)
                 break
             end
             tokend = i
@@ -812,7 +800,8 @@ hex(n::Union(Int,Float), l::Int) = lpad(hex(n), l, '0')
 
 ## string to float functions ##
 
-let tmp::Array{Ptr{Uint8},1} = Array(Ptr{Uint8},1)
+begin
+    local tmp::Array{Ptr{Uint8},1} = Array(Ptr{Uint8},1)
     global float64, float32
     function float64(s::String)
         s = cstring(s)

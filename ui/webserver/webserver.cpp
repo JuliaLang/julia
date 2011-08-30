@@ -13,8 +13,16 @@
 using namespace std;
 using namespace scgi;
 
+/*
+
+    TODO:
+        - Make "incomplete expressions" work (the problem seems to have something to do with messages with no arguments)
+        - Graphs!
+
+*/
+
 /////////////////////////////////////////////////////////////////////////////
-// helpers
+// helpers that should really be part of the C++ standard library
 /////////////////////////////////////////////////////////////////////////////
 
 // convert a value to a string
@@ -740,7 +748,7 @@ string create_session()
         close(STDIN_FILENO);
         close(STDOUT_FILENO);
         dup2(session_data.julia_in[0], STDIN_FILENO);
-        dup2(session_data.julia_out[1], STDERR_FILENO);
+        dup2(session_data.julia_out[1], STDOUT_FILENO);
         close(session_data.julia_in[0]);
         close(session_data.julia_in[1]);
         close(session_data.julia_out[0]);
@@ -941,8 +949,16 @@ string get_response(request* req)
 }
 
 // program entrypoint
-int main()
+int main(int argc, char* argv[])
 {
+    // get the command line arguments
+    int port_num = 1441;
+    for (int i = 1; i < argc-1; i++)
+    {
+        if (string(argv[i]) == "-p")
+            port_num = from_string<int>(argv[i+1]);
+    }
+
     // seed the random number generator for generating session tokens
     srand(time(0));
 
@@ -964,7 +980,7 @@ int main()
     cout<<"0 open sessions.\n";
 
     // start the server
-    run_server(1441, &get_response);
+    run_server(port_num, &get_response);
 
     // never reached
     return 0;

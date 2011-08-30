@@ -61,22 +61,6 @@ DLLEXPORT void jl_fd_zero(fd_set *set)
 }
 
 DLLEXPORT
-int jl_read_avail(ios_t *s)
-{
-    int fd = s->fd;
-    fd_set fds;
-    struct timeval tout;
-    tout.tv_sec = 0;
-    tout.tv_usec = 0;
-    FD_ZERO(&fds);
-    FD_SET(fd, &fds);
-    select(fd+1, &fds, NULL, NULL, &tout);
-    if (FD_ISSET(fd, &fds))
-        return 1;
-    return 0;
-}
-
-DLLEXPORT
 uint32_t jl_getutf8(ios_t *s)
 {
     uint32_t wc=0;
@@ -132,15 +116,14 @@ DLLEXPORT ios_t *jl_current_output_stream()
 void jl_set_current_output_stream_obj(jl_value_t *v)
 {
     jl_current_task->state.ostream_obj = v;
-    jl_value_t *ptr = jl_convert((jl_type_t*)jl_pointer_void_type, v);
-    jl_current_task->state.current_output_stream =
-        (ios_t*)jl_unbox_pointer(ptr);
+    ios_t *s = (ios_t*)jl_array_data(jl_fieldref(v,0));
+    jl_current_task->state.current_output_stream = s;
     // if current stream has never been set before, propagate to all
     // outer contexts.
     jl_savestate_t *ss = jl_current_task->state.prev;
     while (ss != NULL && ss->ostream_obj == (jl_value_t*)jl_null) {
         ss->ostream_obj = v;
-        ss->current_output_stream = (ios_t*)jl_unbox_pointer(ptr);
+        ss->current_output_stream = s;
         ss = ss->prev;
     }
 }

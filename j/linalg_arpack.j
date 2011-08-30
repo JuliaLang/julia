@@ -232,7 +232,8 @@ function eigs{T}(A::AbstractMatrix{T}, k::Int, evtype::ASCIIString)
         return (d, v[1:n, 1:nev])
     else
         evec = complex(zeros(T, n, nev+1), zeros(T, n, nev+1))
-        for j=1:nev
+        j = 1
+        while j <= nev
             if di[j] == 0.0
                 evec[:,j] = v[:,j]
             else
@@ -240,6 +241,7 @@ function eigs{T}(A::AbstractMatrix{T}, k::Int, evtype::ASCIIString)
                 evec[:,j+1] = v[:,j] - im*v[:,j+1]
                 j += 1
             end
+            j += 1
         end
         return (complex(dr[1:nev],di[1:nev]), evec[1:n, 1:nev])
     end

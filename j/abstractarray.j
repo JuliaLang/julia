@@ -567,18 +567,189 @@ function assign(A::AbstractArray, X::AbstractArray, I0::Indices, I::Indices...)
 end
 end
 
-## Reductions ##
+## Concatenation ##
 
-function contains(itr, x)
-    for y=itr
-        if y==x
-            return true
+cat(catdim::Int) = similar([], None, 0)
+
+vcat() = Array(None, 0)
+hcat() = Array(None, 0)
+
+## cat: special cases
+hcat{T}(X::T...) = [ X[j] | i=1, j=1:length(X) ]
+vcat{T}(X::T...) = [ X[i] | i=1:length(X) ]
+
+hcat{T}(V::AbstractVector{T}...) = [ V[j][i] | i=1:length(V[1]), j=1:length(V) ]
+
+function vcat{T}(V::AbstractVector{T}...)
+    a = similar(V[1], sum(map(length, V))::Size)
+    pos = 1
+    for k=1:length(V)
+        Vk = V[k]
+        for i=1:length(Vk)
+            a[pos] = Vk[i]
+            pos += 1
         end
     end
-    return false
+    a
 end
 
-contains(s::Number, n::Int) = (s == n)
+function hcat{T}(A::AbstractMatrix{T}...)
+    nargs = length(A)
+    ncols = sum(a->size(a, 2), A)::Size
+    nrows = size(A[1], 1)
+    B = similar(A[1], nrows, ncols)
+    pos = 1
+    for k=1:nargs
+        Ak = A[k]
+        p1 = pos+size(Ak,2)-1
+        B[:, pos:p1] = Ak
+        pos = p1+1
+    end
+
+    return B
+end
+
+function vcat{T}(A::AbstractMatrix{T}...)
+    nargs = length(A)
+    nrows = sum(a->size(a, 1), A)::Size
+    ncols = size(A[1], 2)
+    B = similar(A[1], nrows, ncols)
+    pos = 1
+    for k=1:nargs
+        Ak = A[k]
+        p1 = pos+size(Ak,1)-1
+        B[pos:p1, :] = Ak
+        pos = p1+1
+    end
+
+    return B
+end
+
+## cat: general case
+
+function cat(catdim::Int, X...)
+    nargs = length(X)
+    dimsA = map((a->isa(a,AbstractArray) ? size(a) : (1,)), X)
+    ndimsA = map((a->isa(a,AbstractArray) ? ndims(a) : 1), X)
+    d_max = max(ndimsA)
+
+    cat_ranges = ntuple(nargs, i->(catdim <= ndimsA[i] ? dimsA[i][catdim] : 1))
+
+    function compute_dims(d)
+        if d == catdim
+            if catdim <= d_max
+                return sum(cat_ranges)
+            else
+                return nargs
+            end
+        else
+            if d <= ndimsA[1]
+                return dimsA[1][d]
+            else
+                return 1
+            end
+        end
+    end
+
+    ndimsC = max(catdim, d_max)
+    dimsC = ntuple(ndimsC, compute_dims)::(Size...)
+    typeC = promote_type(ntuple(nargs, i->isa(X[i],AbstractArray) ? typeof(X[i]).parameters[1] : typeof(X[i]))...)
+    C = similar(isa(X[1],AbstractArray) ? X[1] : [X[1]], typeC, dimsC)
+
+    cat_ranges = cumsum(1, cat_ranges...)::(Size...)
+    for k=1:nargs
+        cat_one = ntuple(ndimsC, i->(i != catdim ?
+                                     Range1(1,dimsC[i]) :
+                                     Range1(cat_ranges[k],cat_ranges[k+1]-1) ))
+        C[cat_one...] = X[k]
+    end
+    return C
+end
+
+vcat(X...) = cat(1, X...)
+hcat(X...) = cat(2, X...)
+
+function cat(catdim::Int, A::AbstractArray...)
+    # ndims of all input arrays should be in [d-1, d]
+
+    nargs = length(A)
+    dimsA = map(size, A)
+    ndimsA = map(ndims, A)
+    d_max = max(ndimsA)
+    #d_min = min(ndimsA)
+
+    cat_ranges = ntuple(nargs, i->(catdim <= ndimsA[i] ? dimsA[i][catdim] : 1))
+
+    function compute_dims(d)
+        if d == catdim
+            if catdim <= d_max
+                return sum(cat_ranges)
+            else
+                return nargs
+            end
+        else
+            if d <= ndimsA[1]
+                return dimsA[1][d]
+            else
+                return 1
+            end
+        end
+    end
+
+    ndimsC = max(catdim, d_max)
+    dimsC = ntuple(ndimsC, compute_dims)::(Size...)
+    typeC = promote_type(ntuple(nargs, i->typeof(A[i]).parameters[1])...)
+    C = similar(A[1], typeC, dimsC)
+
+    cat_ranges = cumsum(1, cat_ranges...)::(Size...)
+    for k=1:nargs
+        cat_one = ntuple(ndimsC, i->(i != catdim ?
+                                     Range1(1,dimsC[i]) :
+                                     Range1(cat_ranges[k],cat_ranges[k+1]-1) ))
+        C[cat_one...] = A[k]
+    end
+    return C
+end
+
+vcat(A::AbstractArray...) = cat(1, A...)
+hcat(A::AbstractArray...) = cat(2, A...)
+
+# 2d horizontal and vertical concatenation
+
+function hvcat{T}(rows::(Size...), as::AbstractMatrix{T}...)
+    nbr = length(rows)  # number of block rows
+
+    nc = mapreduce(+, a->size(a,2), as[1:rows[1]])::Size
+    nr = 0
+
+    a = 1
+    for i = 1:nbr
+        nr += size(as[a],1)
+        a += rows[i]
+    end
+
+    out = similar(as[1], T, nr, nc)
+
+    a = 1
+    r = 1
+    for i = 1:nbr
+        c = 1
+        szi = size(as[a],1)
+        for j = 1:rows[i]
+            szj = size(as[a+j-1],2)
+            out[r:r-1+szi, c:c-1+szj] = as[a+j-1]
+            c += szj
+        end
+        r += szi
+        a += rows[i]
+    end
+    out
+end
+
+
+## Reductions ##
+
+contains(s::Number, n::Number) = (s == n)
 
 areduce{T}(f::Function, A::AbstractArray{T}, region::Region, v0) =
         areduce(f,A,region,v0,T)
@@ -734,24 +905,8 @@ function areduce(f::Function, A::AbstractArray, dim::Size, RType::Type)
 end
 end
 
-function initial_max_val{T}(::Type{T})
-    if subtype(T,Int)
-        typemin(T)
-    else
-        convert(T,-Inf)
-    end
-end
-
-function initial_min_val{T}(::Type{T})
-    if subtype(T,Int)
-        typemax(T)
-    else
-        convert(T,Inf)
-    end
-end
-
 function max{T}(A::AbstractArray{T})
-    v = initial_max_val(T)
+    v = typemin(T)
     for i=1:numel(A)
         v = max(v,A[i])
     end
@@ -759,7 +914,7 @@ function max{T}(A::AbstractArray{T})
 end
 
 function min{T}(A::AbstractArray{T})
-    v = initial_min_val(T)
+    v = typemax(T)
     for i=1:numel(A)
         v = min(v,A[i])
     end
@@ -783,9 +938,9 @@ function prod{T}(A::AbstractArray{T})
 end
 
 max{T}(A::AbstractArray{T}, region::Region) = areduce(max,  A, region,
-                                                      initial_max_val(T), T)
+                                                      typemin(T), T)
 min{T}(A::AbstractArray{T}, region::Region) = areduce(min,  A, region,
-                                                      initial_min_val(T), T)
+                                                      typemax(T), T)
 sum{T}(A::AbstractArray{T}, region::Region) = areduce(+,  A, region, zero(T))
 prod{T}(A::AbstractArray{T}, region::Region) = areduce(*, A, region, one(T))
 
@@ -1171,16 +1326,14 @@ type SubArray{T,N,A<:AbstractArray,I<:(RangeIndex...,)} <: AbstractArray{T,N}
 
     #linear indexing constructor
     if N == 1 && length(I) == 1 && A <: Array
-        function SubArray(p::A, i::I)
-            t = new(p, i, (length(i[1]),))
-            if isa(i[1], Index)
-                t.strides = [1]
-                t.first_index = i[1]
-            else
-                t.strides = [isa(i[1], Range1) ? 1 : i[1].step]
-                t.first_index = i[1].start
-            end
-            t
+        function SubArray(p::A, i::(Index,))
+            new(p, i, (length(i[1]),), [1], i[1])
+        end
+        function SubArray(p::A, i::(Range1{Index},))
+            new(p, i, (length(i[1]),), [1], i[1].start)
+        end
+        function SubArray(p::A, i::(Range{Index},))
+            new(p, i, (length(i[1]),), [i[1].step], i[1].start) 
         end
     else
         function SubArray(p::A, i::I)
@@ -1250,7 +1403,7 @@ function slice(A::SubArray, i::RangeIndex...)
 end
 
 ### rename the old slice function ###
-##slice all dimensions of length 1
+##squeeze all dimensions of length 1
 #slice{T,N}(a::AbstractArray{T,N}) = sub(a, map(i-> i == 1 ? 1 : (1:i), size(a)))
 #slice{T,N}(s::SubArray{T,N}) =
 #    sub(s.parent, map(i->!isa(i, Index) && length(i)==1 ?i[1] : i, s.indexes))
@@ -1316,6 +1469,33 @@ function ref(s::SubArray, is::Int...)
     s.parent[index]
 end
 
+ref{T}(s::SubArray{T,1}, I::Range1{Index}) =
+    ref(s.parent, (s.first_index+(I.start-1)*s.strides[1]):s.strides[1]:(s.first_index+(I.stop-1)*s.strides[1]))
+ref{T}(s::SubArray{T,1}, I::Range{Index}) =
+    ref(s.parent, (s.first_index+(I.start-1)*s.strides[1]):(s.strides[1]*I.step):(s.first_index+(I.stop-1)*s.strides[1]))
+
+function ref{T}(s::SubArray{T,1}, I::AbstractVector{Int})
+    t = Array(Index, length(I))
+    for i = 1:length(I)
+        t[i] = s.first_index + (I[i]-1)*s.strides[1]
+    end
+    ref(s.parent, t)
+end
+function ref(s::SubArray, I::Indices...)
+    j = 1 #the jth dimension in subarray
+    n = ndims(s.parent)
+    #newindexes = Array(Indices, n)
+    newindexes = invoke(Array, (Type{Indices}, Int64), Indices, n)
+    for i = 1:n
+        t = s.indexes[i]
+        #TODO: don't generate the dense vector indexes if they can be ranges
+        newindexes[i] = isa(t, Index) ? t : t[I[j]]
+        j += 1
+    end
+    
+    reshape(ref(s.parent, newindexes...), map(length, I))
+end
+
 assign(s::SubArray, v::AbstractArray, i::Int) =
     invoke(assign, (SubArray, Any, Int), s, v, i)
 assign(s::SubArray, v, i::Int) = assign(s, v, ind2sub(size(s), i)...)
@@ -1351,6 +1531,60 @@ assign{T}(s::SubArray{T,2}, v::AbstractArray, i::Int, j::Int) =
     (s.parent[s.first_index +(i-1)*s.strides[1]+(j-1)*s.strides[2]] = v; s)
 assign{T}(s::SubArray{T,2}, v, i::Int, j::Int) =
     (s.parent[s.first_index +(i-1)*s.strides[1]+(j-1)*s.strides[2]] = v; s)
+
+assign{T}(s::SubArray{T,1}, v::AbstractArray, I::Range1{Index}) = 
+    assign(s.parent, v, (s.first_index+(I.start-1)*s.strides[1]):s.strides[1]:(s.first_index+(I.stop-1)*s.strides[1]))
+assign{T}(s::SubArray{T,1}, v, I::Range1{Index}) = 
+    assign(s.parent, v, (s.first_index+(I.start-1)*s.strides[1]):s.strides[1]:(s.first_index+(I.stop-1)*s.strides[1]))
+assign{T}(s::SubArray{T,1}, v::AbstractArray, I::Range{Index}) =
+    assign(s.parent, v, (s.first_index+(I.start-1)*s.strides[1]):(s.strides[1]*I.step):(s.first_index+(I.stop-1)*s.strides[1]))
+assign{T}(s::SubArray{T,1}, v, I::Range{Index}) =
+    assign(s.parent, v, (s.first_index+(I.start-1)*s.strides[1]):(s.strides[1]*I.step):(s.first_index+(I.stop-1)*s.strides[1]))
+
+function assign{T}(s::SubArray{T,1}, v::AbstractArray, I::AbstractVector{Int})
+    t = Array(Index, length(I))
+    for i = 1:length(I)
+        t[i] = s.first_index + (I[i]-1)*s.strides[1]
+    end
+    assign(s.parent, v, t)
+end
+function assign{T}(s::SubArray{T,1}, v, I::AbstractVector{Int})
+    t = Array(Index, length(I))
+    for i = 1:length(I)
+        t[i] = s.first_index + (I[i]-1)*s.strides[1]
+    end
+    assign(s.parent, v, t)
+end
+
+function assign(s::SubArray, v::AbstractArray, I::Indices...)
+    j = 1 #the jth dimension in subarray
+    n = ndims(s.parent)
+    #newindexes = Array(Indices, n)
+    newindexes = invoke(Array, (Type{Indices}, Int64), Indices, n)
+    for i = 1:n
+        t = s.indexes[i]
+        #TODO: don't generate the dense vector indexes if they can be ranges
+        newindexes[i] = isa(t, Index) ? t : t[I[j]]
+        j += 1
+    end
+    
+    assign(s.parent, reshape(v, map(length, I)), newindexes...)
+end
+
+function assign(s::SubArray, v, I::Indices...)
+    j = 1 #the jth dimension in subarray
+    n = ndims(s.parent)
+    #newindexes = Array(Indices, n)
+    newindexes = invoke(Array, (Type{Indices}, Int64), Indices, n)
+    for i = 1:n
+        t = s.indexes[i]
+        #TODO: don't generate the dense vector indexes if they can be ranges
+        newindexes[i] = isa(t, Index) ? t : t[I[j]]
+        j += 1
+    end
+    
+    assign(s.parent, v, newindexes...)
+end
 
 strides(s::SubArray) = tuple(s.strides...)
 

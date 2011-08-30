@@ -99,7 +99,7 @@ function serialize(s, e::Expr)
         write(s, int32(l))
     end
     serialize(s, e.head)
-    serialize(s, e.type)
+    serialize(s, e.typ)
     for a = e.args
         serialize(s, a)
     end
@@ -284,7 +284,7 @@ function deserialize_expr(s, len)
     args = { deserialize(s) | i=1:len }
     function ()
         e = expr(hd, map(force, args))
-        e.type = ty
+        e.typ = ty
         e
     end
 end

@@ -105,8 +105,19 @@ end
 
 ## concatenation ##
 
+function vcat{T}(r::Union(Range{T},Range1{T}))
+    n = length(r)
+    a = Array(T,n)
+    i = 1
+    for x = r
+        a[i] = x
+        i += 1
+    end
+    a
+end
+
 function vcat{T}(rs::Union(Range{T},Range1{T})...)
-    n = sum(map(length,rs))
+    n = sum(map(length,rs))::Size
     a = Array(T,n)
     i = 1
     for r = rs

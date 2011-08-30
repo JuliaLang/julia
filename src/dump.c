@@ -800,6 +800,7 @@ void jl_save_system_image(char *fname, char *startscriptname)
     jl_serialize_value(&f, jl_loaderror_type);
     jl_serialize_value(&f, jl_uniontoocomplex_type);
     jl_serialize_value(&f, jl_backtrace_type);
+    jl_serialize_value(&f, jl_symbolnode_type);
     jl_serialize_value(&f, jl_stackovf_exception);
     jl_serialize_value(&f, jl_memory_exception);
     jl_serialize_value(&f, jl_divbyzero_exception);
@@ -879,6 +880,7 @@ void jl_restore_system_image(char *fname)
     jl_loaderror_type = (jl_struct_type_t*)jl_deserialize_value(&f);
     jl_uniontoocomplex_type = (jl_struct_type_t*)jl_deserialize_value(&f);
     jl_backtrace_type = (jl_struct_type_t*)jl_deserialize_value(&f);
+    jl_symbolnode_type = (jl_struct_type_t*)jl_deserialize_value(&f);
     jl_stackovf_exception = jl_deserialize_value(&f);
     jl_memory_exception = jl_deserialize_value(&f);
     jl_divbyzero_exception = jl_deserialize_value(&f);
@@ -945,8 +947,7 @@ void jl_init_serializer()
                      (void*)LongSymbol_tag, (void*)LongTuple_tag,
                      (void*)LongExpr_tag, jl_intrinsic_type, jl_methtable_type,
                      jl_typename_type, jl_lambda_info_type, jl_tvar_type,
-                     jl_symbolnode_type, jl_labelnode_type,
-                     jl_linenumbernode_type,
+                     jl_labelnode_type, jl_linenumbernode_type,
 
                      jl_null, jl_any_type, jl_symbol("Any"),
                      jl_symbol("Array"), jl_symbol("TypeVar"),
@@ -975,7 +976,7 @@ void jl_init_serializer()
                      jl_box_type, jl_typector_type, jl_undef_type, jl_any_func,
                      jl_task_type, jl_union_kind, jl_function_type,
                      jl_typetype_type, jl_typetype_tvar, jl_ANY_flag,
-                     jl_array_any_type, jl_pointer_void_type,
+                     jl_array_any_type,
 
                      jl_symbol_type->name, jl_pointer_type->name,
                      jl_tag_kind->name, jl_union_kind->name, jl_bits_kind->name, jl_struct_kind->name,
@@ -985,7 +986,7 @@ void jl_init_serializer()
                      jl_seq_type->name, jl_ntuple_type->name, jl_abstractarray_type->name,
                      jl_lambda_info_type->name, jl_box_type->name,
                      jl_typector_type->name, jl_intrinsic_type->name, jl_undef_type->name,
-                     jl_task_type->name, jl_symbolnode_type->name,
+                     jl_task_type->name,
                      jl_labelnode_type->name, jl_linenumbernode_type->name,
 
                      jl_root_task,
@@ -999,70 +1000,33 @@ void jl_init_serializer()
     }
     VALUE_TAGS = (ptrint_t)ptrhash_get(&ser_tag, jl_null);
 
-    void *fptrs[] = { jl_f_new_expr,
-                      jl_f_new_box,
-                      jl_weakref_ctor, 
-                      jl_new_array_internal, 
-                      jl_f_throw, 
-                      jl_f_is, 
-                      jl_f_no_function, 
-                      jl_f_typeof, 
-                      jl_f_subtype, 
-                      jl_f_isa, 
-                      jl_f_typeassert, 
-                      jl_f_apply, 
-                      jl_f_top_eval, 
-                      jl_f_isbound, 
-                      jl_f_tuple, 
-                      jl_f_tupleref, 
-                      jl_f_tuplelen, 
-                      jl_f_get_field, 
-                      jl_f_set_field, 
-                      jl_f_field_type, 
-                      jl_f_arraylen, 
-                      jl_f_arrayref, 
-                      jl_f_arrayset, 
-                      jl_f_arraysize, 
-                      jl_f_instantiate_type, 
-                      jl_f_convert, 
-                      jl_f_convert_tuple,
-                      jl_f_print_array_uint8, 
-                      jl_f_show_bool, 
-                      jl_f_show_char, 
-                      jl_f_show_float32, 
-                      jl_f_show_float64, 
-                      jl_f_show_int8, 
-                      jl_f_show_uint8, 
-                      jl_f_show_int16, 
-                      jl_f_show_uint16, 
-                      jl_f_show_int32, 
-                      jl_f_show_uint32, 
-                      jl_f_show_int64, 
-                      jl_f_show_uint64, 
-                      jl_f_show_pointer, 
-                      jl_f_show_typevar, 
-                      jl_f_show_linfo, 
-                      jl_f_show_any, 
-                      jl_f_print_symbol, 
-                      jl_trampoline, 
-                      jl_f_new_struct_type, 
-                      jl_f_new_struct_fields, 
-                      jl_f_new_type_constructor, 
-                      jl_f_new_tag_type, 
-                      jl_f_new_tag_type_super, 
-                      jl_f_new_bits_type, 
-                      jl_f_def_macro,
-                      jl_f_typevar, 
-                      jl_f_union, 
-                      jl_f_methodexists, 
-                      jl_f_applicable, 
-                      jl_f_invoke, 
-                      jl_apply_generic, 
-                      jl_unprotect_stack, 
-                      jl_f_task, 
-                      jl_f_yieldto, 
-                      jl_f_current_task, 
-                      jl_f_taskdone,
+    void *fptrs[] = { jl_f_new_expr, jl_f_new_box,
+                      jl_weakref_ctor, jl_new_array_internal, 
+                      jl_f_throw, jl_f_is, 
+                      jl_f_no_function, jl_f_typeof, 
+                      jl_f_subtype, jl_f_isa, 
+                      jl_f_typeassert, jl_f_apply, 
+                      jl_f_top_eval, jl_f_isbound, 
+                      jl_f_tuple, jl_f_tupleref, 
+                      jl_f_tuplelen, jl_f_get_field, 
+                      jl_f_set_field, jl_f_field_type, 
+                      jl_f_arraylen, jl_f_arrayref, 
+                      jl_f_arrayset, jl_f_arraysize, 
+                      jl_f_instantiate_type, jl_f_convert, 
+                      jl_f_convert_tuple, jl_f_print_array_uint8, 
+                      jl_f_show_float32, jl_f_show_float64, 
+                      jl_f_show_int64, jl_f_show_uint64, 
+                      jl_f_show_any, jl_f_print_symbol, 
+                      jl_trampoline, jl_f_new_struct_type, 
+                      jl_f_new_struct_fields, jl_f_new_type_constructor, 
+                      jl_f_new_tag_type, jl_f_new_tag_type_super, 
+                      jl_f_new_bits_type, jl_f_def_macro,
+                      jl_f_typevar, jl_f_union, 
+                      jl_f_methodexists, jl_f_applicable, 
+                      jl_f_invoke, jl_apply_generic, 
+                      jl_unprotect_stack, jl_f_task, 
+                      jl_f_yieldto, jl_f_current_task, 
+                      jl_f_taskdone, jl_f_ctor_trampoline,
                       NULL };
     i=2;
     while (fptrs[i-2] != NULL) {

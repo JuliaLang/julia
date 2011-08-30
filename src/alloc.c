@@ -55,7 +55,6 @@ jl_value_t *jl_interrupt_exception;
 jl_value_t *jl_memory_exception;
 
 jl_bits_type_t *jl_pointer_type;
-jl_bits_type_t *jl_pointer_void_type;
 
 jl_sym_t *call_sym;    jl_sym_t *dots_sym;
 jl_sym_t *call1_sym;
@@ -440,40 +439,6 @@ jl_func_type_t *jl_new_functype(jl_type_t *a, jl_type_t *b)
     return t;
 }
 
-// instantiate a type with new variables
-jl_value_t *jl_new_type_instantiation(jl_value_t *t)
-{
-    jl_tuple_t *tp;
-    if (jl_is_typector(t)) {
-        tp = ((jl_typector_t*)t)->parameters;
-    }
-    else if (jl_is_some_tag_type(t)) {
-        tp = ((jl_tag_type_t*)t)->parameters;
-    }
-    else {
-        tp = NULL;
-        jl_error("not supported");
-    }
-    jl_tuple_t *ntvs = jl_alloc_tuple(tp->length);
-    JL_GC_PUSH(&ntvs);
-    size_t i;
-    for(i=0; i < tp->length; i++) {
-        jl_value_t *tv = jl_tupleref(tp, i);
-        if (jl_is_typevar(tv)) {
-            jl_tupleset(ntvs, i,
-                        (jl_value_t*)jl_new_typevar(((jl_tvar_t*)tv)->name,
-                                                    ((jl_tvar_t*)tv)->lb,
-                                                    ((jl_tvar_t*)tv)->ub));
-        }
-        else {
-            jl_tupleset(ntvs, i, tv);
-        }
-    }
-    jl_value_t *nt = (jl_value_t*)jl_apply_type((jl_value_t*)t, ntvs);
-    JL_GC_POP();
-    return nt;
-}
-
 JL_CALLABLE(jl_new_array_internal);
 
 jl_function_t *jl_instantiate_method(jl_function_t *f, jl_tuple_t *sp);
@@ -526,6 +491,12 @@ void jl_add_constructors(jl_struct_type_t *t)
     }
 }
 
+JL_CALLABLE(jl_f_ctor_trampoline)
+{
+    jl_add_constructors((jl_struct_type_t*)env);
+    return jl_apply((jl_function_t*)env, args, nargs);
+}
+
 jl_struct_type_t *jl_new_struct_type(jl_sym_t *name, jl_tag_type_t *super,
                                      jl_tuple_t *parameters,
                                      jl_tuple_t *fnames, jl_tuple_t *ftypes)
@@ -541,7 +512,7 @@ jl_struct_type_t *jl_new_struct_type(jl_sym_t *name, jl_tag_type_t *super,
     t->parameters = parameters;
     t->names = fnames;
     t->types = ftypes;
-    t->fptr = jl_f_no_function;
+    t->fptr = jl_f_ctor_trampoline;
     t->env = (jl_value_t*)t;
     t->linfo = NULL;
     t->ctor_factory = (jl_value_t*)jl_null;
@@ -871,24 +842,6 @@ UNBOX_FUNC(bool,   int8_t)
 UNBOX_FUNC(float32, float)
 UNBOX_FUNC(float64, double)
 
-jl_value_t *jl_box_pointer(jl_bits_type_t *ty, void *p)
-{
-#ifdef JL_GC_MARKSWEEP
-    jl_value_t *v = alloc_2w();
-    v->type = (jl_type_t*)ty;
-#else
-    jl_value_t *v = newobj((jl_type_t*)ty, 1);
-#endif
-    *(void**)jl_bits_data(v) = p;
-    return v;
-}
-
-void *jl_unbox_pointer(jl_value_t *v)
-{
-    assert(jl_is_cpointer(v));
-    return *(void**)jl_bits_data(v);
-}
-
 // Expr constructor for internal use ------------------------------------------
 
 jl_expr_t *jl_exprn(jl_sym_t *head, size_t n)
@@ -936,19 +889,4 @@ JL_CALLABLE(jl_f_new_box)
     box->type = jl_box_any_type;
     ((jl_value_t**)box)[1] = args[0];
     return box;
-}
-
-JL_CALLABLE(jl_f_new_symbolnode)
-{
-    JL_NARGS(SymbolNode, 2, 2);
-    JL_TYPECHK(SymbolNode, symbol, args[0]);
-#ifdef JL_GC_MARKSWEEP
-    jl_value_t *s = (jl_value_t*)alloc_3w();
-#else
-    jl_value_t *s = (jl_value_t*)allocobj(3*sizeof(void*));
-#endif
-    s->type = (jl_type_t*)jl_symbolnode_type;
-    jl_fieldref(s,0) = args[0];
-    jl_fieldref(s,1) = args[1];
-    return s;
 }

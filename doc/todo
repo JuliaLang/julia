@@ -790,3 +790,10 @@ problem is matching Tensor{T} with Array{Any,1} yields the constraint T<:Any,
 which it already is. it should yield T==Any instead.
 
 this (and tintersect on NTuple) is needed to define Array() methods in boot.j
+
+-------------------------------------------------------------------------------
+
+8/23/11
+
+- check what function vcat{T}(A::Array{T,2}...) gets specialized for on
+  4 Array{Float64,2} arguments.

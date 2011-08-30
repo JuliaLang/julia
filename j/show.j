@@ -6,6 +6,40 @@ shown(x) = print_to_string(show, x)
 show(s::Symbol) = print(s)
 show(tn::TypeName) = show(tn.name)
 show(::Nothing) = print("nothing")
+show(b::Bool) = print(b ? "true" : "false")
+show(n::Int)  = show(int64(n))
+show(n::Uint) = show(uint64(n))
+
+function show{T}(p::Ptr{T})
+    if is(T,None)
+        print("Ptr{Void}")
+    else
+        print(typeof(p))
+    end
+    if WORD_SIZE==64
+        print(" @0x$(hex(uint(p),16))")
+    else
+        print(" @0x$(hex(uint(p), 8))")
+    end
+end
+
+function show(l::LambdaStaticData)
+    print("AST(")
+    show(l.ast)
+    print(")")
+end
+
+function show(tv::TypeVar)
+    if !is(tv.lb, None)
+        show(tv.lb)
+        print("<:")
+    end
+    print(tv.name)
+    if !is(tv.ub, Any)
+        print("<:")
+        show(tv.ub)
+    end
+end
 
 function show_delim_array(itr, open, delim, close, delim_one)
     print(open)
@@ -105,12 +139,12 @@ function show(e::Expr)
         print(hd)
         show_comma_array(e.args,'(',')')
     end
-    show_expr_type(e.type)
+    show_expr_type(e.typ)
 end
 
 function show(e::SymbolNode)
     print(e.name)
-    show_expr_type(e.type)
+    show_expr_type(e.typ)
 end
 
 function show(e::LineNumberNode)

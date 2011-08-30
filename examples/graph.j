@@ -77,13 +77,6 @@
 #  * Implement more algorithms, including Dijkstra's, max flow, (and maximal matchings?).
 
 
-function in(A::Array, b)
-    for a = A
-        if isequal(a,b); return true; end
-    end
-    return false
-end
-
 function index_of(A::Array, b)
     i = 1
     for a = A
@@ -239,7 +232,7 @@ function has_vertex(G::ILGraph, name)
 end
 
 function has_vertex(G::ILGraph, v::ILVertex)
-    in(G.vertices, v)
+    contains(G.vertices, v)
 end
 
 function get_vertex(G::ILGraph, name)
@@ -252,13 +245,13 @@ end
 function adjacent(G::ILGraph, name1, name2)
     x = get_vertex(G, name1)
     y = get_vertex(G, name2)
-    return in(x.neighbors, y)
+    return contains(x.neighbors, y)
 end
 
 function adjacent(G::ILGraph, x::ILVertex, y::ILVertex)
     if !has_vertex(G, x); error("adjacent: graph does not have $x"); end
     if !has_vertex(G, y); error("adjacent: graph does not have $y"); end
-    return in(x.neighbors, y)
+    return contains(x.neighbors, y)
 end
 
 function neighbors(G::ILGraph, name)
@@ -504,7 +497,7 @@ function delete(G::BGraph, x::BVertex, y::BVertex)
 end
 
 function has_vertex(G::BGraph, v::BVertex)
-    in(G.vertices, v)
+    contains(G.vertices, v)
 end
 
 function has_vertex(G::BGraph, name, side::Bool)
@@ -526,13 +519,13 @@ get_vertex(G::BGraph, nameside) = get_vertex(G, nameside[1], nameside[2])
 function adjacent(G::BGraph, name1, name2)
     x = get_vertex(G, name1, true)
     y = get_vertex(G, name2, false)
-    return in(x.neighbors, y)
+    return contains(x.neighbors, y)
 end
 
 function adjacent(G::BGraph, x::BVertex, y::BVertex)
     if !has_vertex(G, x); error("adjacent: graph does not have $x"); end
     if !has_vertex(G, y); error("adjacent: graph does not have $y"); end
-    return in(x.neighbors, y)
+    return contains(x.neighbors, y)
 end
 
 function neighbors(G::BGraph, name, side::Bool)
@@ -672,7 +665,7 @@ function search(G::Graph, start_test, end_test, move_test, bfs::Bool)
         path = pop(paths)
         lastPlace = path[numel(path)]
         for v = lastPlace.neighbors
-            if in(path, v); continue; end
+            if contains(path, v); continue; end
             if move_test(lastPlace, v)
                 path2 = copy(path)
                     newPath = push(path2, v)

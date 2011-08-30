@@ -76,11 +76,11 @@ function pcre_study(regex::Ptr{Void}, options::Int)
     extra
 end
 
-function pcre_info{T}(regex::Ptr{Void}, extra::Ptr{Void}, what::Int32, ::Type{T})
+function pcre_info{T}(regex::Ptr{Void}, extra::Ptr{Void}, what::Int, ::Type{T})
     buf = Array(Uint8,sizeof(T))
     ret = ccall(dlsym(libpcre, :pcre_fullinfo), Int32,
                 (Ptr{Void}, Ptr{Void}, Int32, Ptr{Uint8}),
-                regex, extra, what, buf)
+                regex, extra, int32(what), buf)
     if ret != 0
         error("pcre_info: ",
               ret == PCRE_ERROR_NULL      ? "NULL regex object" :
@@ -92,19 +92,18 @@ function pcre_info{T}(regex::Ptr{Void}, extra::Ptr{Void}, what::Int32, ::Type{T}
 end
 
 function pcre_exec(regex::Ptr{Void}, extra::Ptr{Void},
-                   string::ByteString,
-                   offset::Index, options::Int)
+                   str::ByteString, offset::Index, options::Int)
     ncap = pcre_info(regex, extra, PCRE_INFO_CAPTURECOUNT, Int32)
     ovec = Array(Int32, 3(ncap+1))
     n = ccall(dlsym(libpcre, :pcre_exec), Int32,
-                (Ptr{Void}, Ptr{Void}, Ptr{Uint8}, Int32, Int32,
-                Int32, Ptr{Int32}, Int32),
-                regex, extra, string, length(string), offset-1,
-                int32(options), ovec, length(ovec))
+                (Ptr{Void}, Ptr{Void}, Ptr{Uint8}, Int32,
+                 Int32, Int32, Ptr{Int32}, Int32),
+                regex, extra, str, int32(length(str)),
+                int32(offset-1), int32(options), ovec, int32(length(ovec)))
     if n < -1
         error("pcre_exec: error $n")
     end
-    n < 0 ? Array(Int32,0) : ovec[1:2n]
+    n < 0 ? Array(Int32,0) : ovec[1:2(ncap+1)]
 end
 
 ## object-oriented Regex interface ##
@@ -175,7 +174,7 @@ begin
 end
 
 type RegexMatch
-    match::Union((),String)
+    match::Union(Nothing,ByteString)
     captures::Tuple
     offset::Index
 end
@@ -185,11 +184,11 @@ show(m::RegexMatch) = show(m.match)
 function match(re::Regex, str::String, opts::Int)
     cstr = cstring(str)
     m = pcre_exec(re.regex, C_NULL, cstr, 1, int32(opts))
-    if isempty(m); return RegexMatch((),(),-1); end
+    if isempty(m); return RegexMatch(nothing,(),-1); end
     mat = cstr[m[1]+1:m[2]]
-    cap = ntuple(div(length(m),2)-1, i->cstr[m[2i+1]+1:m[2i+2]])
+    n = pcre_info(re.regex, re.extra, PCRE_INFO_CAPTURECOUNT, Int32)
+    cap = ntuple(n, i->(m[2i+1] < 0 ? nothing : cstr[m[2i+1]+1:m[2i+2]]))
     RegexMatch(mat, cap, m[1]+1)
 end
 
-match(re::Regex, str::String) =
-    match(re, str, re.options & PCRE_EXECUTE_MASK)
+match(re::Regex, str::String) = match(re, str, re.options & PCRE_EXECUTE_MASK)

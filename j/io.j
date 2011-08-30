@@ -261,7 +261,8 @@ function del_all(s::FDSet)
     s
 end
 
-let tv = Array(Uint8, long(ccall(:jl_sizeof_timeval, Int32, ())))
+begin
+    local tv = Array(Uint8, long(ccall(:jl_sizeof_timeval, Int32, ())))
     global select_read
     function select_read(readfds::FDSet, timeout::Real)
         if timeout == Inf
