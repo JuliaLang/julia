@@ -43,6 +43,8 @@ similar{T}(a::AbstractArray{T}, dims::Dims)          = similar(a, T, dims)
 similar{T}(a::AbstractArray{T}, dims::Size...)       = similar(a, T, dims)
 similar   (a::AbstractArray, T::Type, dims::Size...) = similar(a, T, dims)
 
+empty(a::AbstractArray) = similar(a, 0)
+
 reshape(a::AbstractArray, dims::Dims) = (b = similar(a, dims);
                                   for i=1:numel(a); b[i] = a[i]; end;
                                   b)
@@ -462,6 +464,43 @@ function ref(A::AbstractArray, I::Indices...)
 end
 end
 
+# index A[:,:,...,i,:,:,...] where "i" is in dimension "d"
+# TODO: more optimized special cases
+function slicedim(A::AbstractArray, d::Int, i)
+    A[ntuple(ndims(A), n->(n==d ? i : (1:size(A,n))))...]
+end
+
+function slicedim(A::AbstractArray, d::Int, i::Int)
+    d_in = size(A)
+    leading = d_in[1:(d-1)]
+    d_out = append(leading, (1,), d_in[(d+1):end])
+
+    M = prod(leading)
+    N = numel(A)
+    stride = M * d_in[d]
+
+    B = similar(A, d_out)
+    index_offset = 1 + (i-1)*M
+
+    l = 1
+
+    if M==1
+        for j=0:stride:(N-stride)
+            B[l] = A[j + index_offset]
+            l += 1
+        end
+    else
+        for j=0:stride:(N-stride)
+            offs = j + index_offset
+            for k=0:(M-1)
+                B[l] = A[offs + k]
+                l += 1
+            end
+        end
+    end
+    return B
+end
+
 ## Indexing: assign ##
 
 # 1-d indexing is assumed defined on subtypes
@@ -569,7 +608,7 @@ end
 
 ## Concatenation ##
 
-cat(catdim::Int) = similar([], None, 0)
+cat(catdim::Int) = Array(None, 0)
 
 vcat() = Array(None, 0)
 hcat() = Array(None, 0)
@@ -1313,6 +1352,16 @@ function ind2sub(dims, ind::Int)
         ind = rest
     end
     return tuple(ind, sub...)
+end
+
+function squeeze(A::AbstractArray)
+    d = ()
+    for i = size(A)
+        if i != 1
+            d = tuple(d..., i)
+        end
+    end
+    reshape(A, d)
 end
 
 ## subarrays ##

@@ -24,11 +24,6 @@ similar(r::Range1, T::Type, dims::Dims) = Range1(convert(T, r.start), convert(T,
 
 typealias Ranges Union(Range,Range1)
 
-ref(r::Range, s::Range{Index}) = Range(r[s[1]],r.step*s.step,r[s[end]])
-ref(r::Range1, s::Range{Index}) = Range(r[s[1]],s.step,r[s[end]])
-ref(r::Range, s::Range1{Index}) = Range(r[s[1]],r.step,r[s[end]])
-ref(r::Range1, s::Range1{Index}) = Range1(r[s[1]],r[s[end]])
-
 step(r::Range)  = r.step
 step(r::Range1) = one(r.start)
 
@@ -63,6 +58,11 @@ next{T}(r::Range{T}, st) = (r.start+st*r.step, st+1)
 colon(start::Real, stop::Real, step::Real) = Range(start, step, stop)
 colon(start::Real, stop::Real) = Range1(start, stop)
 
+ref(r::Range, s::Range{Index}) = Range(r[s[1]],r.step*s.step,r[s[end]])
+ref(r::Range1, s::Range{Index}) = Range(r[s[1]],s.step,r[s[end]])
+ref(r::Range, s::Range1{Index}) = Range(r[s[1]],r.step,r[s[end]])
+ref(r::Range1, s::Range1{Index}) = Range1(r[s[1]],r[s[end]])
+
 function ref(r::Ranges, i::Int)
     if i < 1; error(BoundsError); end
     x = r.start + (i-1)*step(r)
@@ -70,6 +70,23 @@ function ref(r::Ranges, i::Int)
         error(BoundsError)
     end
     return x
+end
+
+intersect(r::Range1, s::Range1) = max(r.start,s.start):min(r.stop,s.stop)
+
+intersect(r::Range, s::Range1) = intersect(s, r)
+
+function intersect(r::Range1, s::Range)
+    sta = start(s)
+    ste = step(s)
+    sto = s[end]
+    lo = r.start
+    hi = r.stop
+    i0 = max(lo, sta + ste*div((lo-sta)+ste-1, ste))
+    i1 = min(hi, sta + ste*div((hi-sta), ste))
+    i0 = max(i0, sta)
+    i1 = min(i1, sto)
+    i0:ste:i1
 end
 
 ## linear operations on 1-d ranges ##
