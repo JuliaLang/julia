@@ -499,6 +499,14 @@ static Value *emit_lambda_closure(jl_value_t *expr, jl_codectx_t *ctx)
     assert(jl_is_lambda_info(expr));
     size_t i;
     jl_array_t *capt = jl_lam_capt((jl_expr_t*)((jl_lambda_info_t*)expr)->ast);
+    if (capt->length == 0) {
+        // no captured vars; lift
+        jl_value_t *fun = jl_new_closure_internal((jl_lambda_info_t*)expr,
+                                                  (jl_value_t*)jl_null);
+        ctx->linfo->roots = jl_tuple2(fun, ctx->linfo->roots);
+        return literal_pointer_val(fun);
+    }
+
     std::vector<Value *> captured(0);
     captured.push_back(ConstantInt::get(T_size, capt->length));
     for(i=0; i < capt->length; i++) {
@@ -519,16 +527,11 @@ static Value *emit_lambda_closure(jl_value_t *expr, jl_codectx_t *ctx)
         }
         captured.push_back(val);
     }
-    Value *tuple;
-    if (capt->length == 0) {
-        tuple = literal_pointer_val((jl_value_t*)jl_null);
-    }
-    else {
-        tuple = builder.CreateCall(jlntuple_func,
+    Value *env_tuple;
+    env_tuple = builder.CreateCall(jlntuple_func,
                                    captured.begin(), captured.end());
-    }
     return builder.CreateCall2(jlclosure_func,
-                               literal_pointer_val(expr), tuple);
+                               literal_pointer_val(expr), env_tuple);
 }
 
 static bool expr_is_symbol(jl_value_t *e)

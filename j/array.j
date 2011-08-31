@@ -127,6 +127,37 @@ ref(a::Array{Any,1}, i::Int) = arrayref(a,long(i))
 ref{T}(a::Array{T,2}, i::Index, j::Index) = arrayref(a, (j-1)*arraysize(a,1)+i)
 ref{T}(a::Array{T,2}, i::Int, j::Int) = arrayref(a,long((j-1)*arraysize(a,1)+i))
 
+function slicedim(A::Array, d::Int, i::Int)
+    d_in = size(A)
+    leading = d_in[1:(d-1)]
+    d_out = append(leading, (1,), d_in[(d+1):end])
+
+    M = prod(leading)
+    N = numel(A)
+    stride = M * d_in[d]
+
+    B = similar(A, d_out)
+    index_offset = 1 + (i-1)*M
+
+    l = 1
+
+    if M==1
+        for j=0:stride:(N-stride)
+            B[l] = A[j + index_offset]
+            l += 1
+        end
+    else
+        for j=0:stride:(N-stride)
+            offs = j + index_offset
+            for k=0:(M-1)
+                B[l] = A[offs + k]
+                l += 1
+            end
+        end
+    end
+    return B
+end
+
 ## Indexing: assign ##
 
 assign(A::Array{Any}, x::AbstractArray, i::Index) = arrayset(A,i,x)
