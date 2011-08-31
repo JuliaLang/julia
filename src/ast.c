@@ -554,9 +554,13 @@ static jl_value_t *copy_ast(jl_value_t *expr, jl_tuple_t *sp)
 {
     if (jl_is_lambda_info(expr)) {
         jl_lambda_info_t *li = (jl_lambda_info_t*)expr;
+        /*
         if (sp == jl_null && li->ast &&
             jl_lam_capt((jl_expr_t*)li->ast)->length == 0)
             return expr;
+        */
+        // TODO: avoid if above condition is true and decls have already
+        // been evaluated.
         li = jl_add_static_parameters(li, sp);
         jl_specialize_ast(li);
         return (jl_value_t*)li;

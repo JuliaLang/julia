@@ -86,11 +86,11 @@ typedef struct _jl_lambda_info_t {
     struct _jl_function_t *unspecialized;
     // pairlist of all lambda infos with code generated from this one
     jl_tuple_t *specializations;
+    jl_value_t *inferred;
 
     // hidden fields:
     jl_fptr_t fptr;
     void *functionObject;
-    uptrint_t inferred;
     // flag telling if inference is running on this function
     // used to avoid infinite recursion
     uptrint_t inInference;

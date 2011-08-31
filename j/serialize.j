@@ -146,6 +146,7 @@ function serialize(s, f::Function)
         serialize(s, lambda_number(linfo))
         serialize(s, linfo.ast)
         serialize(s, linfo.sparams)
+        serialize(s, linfo.inferred)
         serialize(s, env)
     end
 end
@@ -238,6 +239,7 @@ function deserialize_function(s)
     lnumber = force(deserialize(s))
     ast = deserialize(s)
     sparams = deserialize(s)
+    infr = force(deserialize(s))
     env = deserialize(s)
     if has(known_lambda_data, lnumber)
         linfo = known_lambda_data[lnumber]
@@ -249,6 +251,7 @@ function deserialize_function(s)
         function ()
             linfo = ccall(:jl_new_lambda_info, Any, (Any, Any),
                           force(ast), force(sparams))
+            linfo.inferred = infr
             known_lambda_data[lnumber] = linfo
             ccall(:jl_new_closure_internal, Any, (Any, Any),
                   linfo, force(env))::Function

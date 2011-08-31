@@ -1352,7 +1352,7 @@ static bool store_unboxed_p(char *name, jl_codectx_t *ctx)
     jl_value_t *jt = (*ctx->declTypes)[name];
     // only store a variable unboxed if type inference has run, which
     // checks that the variable is not referenced undefined.
-    return (ctx->linfo->inferred && jl_is_bits_type(jt) &&
+    return (ctx->linfo->inferred==jl_true && jl_is_bits_type(jt) &&
             jl_is_leaf_type(jt) &&
             // don't unbox intrinsics, since inference depends on their having
             // stable addresses for table lookup.
