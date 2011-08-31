@@ -588,6 +588,7 @@ static jl_value_t *copy_ast(jl_value_t *expr, jl_tuple_t *sp)
     return expr;
 }
 
+// TODO: eval decl types for arguments of non-generic functions
 static void eval_decl_types(jl_array_t *vi, jl_tuple_t *spenv)
 {
     size_t i;

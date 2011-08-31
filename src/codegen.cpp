@@ -1481,8 +1481,8 @@ static void emit_function(jl_lambda_info_t *lam, Function *f)
         jl_array_t *vi = (jl_array_t*)jl_cellref(vinfos, i);
         assert(jl_is_array(vi));
         char *vname = ((jl_sym_t*)jl_cellref(vi,0))->name;
-        isAssigned[vname] = (jl_cellref(vi,3)!=jl_false);
-        isCaptured[vname] = (jl_cellref(vi,2)!=jl_false);
+        isAssigned[vname] = (jl_vinfo_assigned(vi)!=0);
+        isCaptured[vname] = (jl_vinfo_capt(vi)!=0);
         declTypes[vname] = jl_cellref(vi,1);
     }
     vinfos = jl_lam_capt(ast);
@@ -1491,7 +1491,7 @@ static void emit_function(jl_lambda_info_t *lam, Function *f)
         assert(jl_is_array(vi));
         char *vname = ((jl_sym_t*)jl_cellref(vi,0))->name;
         closureEnv[vname] = i;
-        isAssigned[vname] = (jl_cellref(vi,3)!=jl_false);
+        isAssigned[vname] = (jl_vinfo_assigned(vi)!=0);
         isCaptured[vname] = true;
         declTypes[vname] = jl_cellref(vi,1);
     }
