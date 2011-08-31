@@ -347,7 +347,7 @@ t_func[apply_type] = (1, Inf, apply_type_tfunc)
 
 # other: apply
 
-function builtin_tfunction(f, args::Tuple, argtypes::Tuple)
+function builtin_tfunction(f::ANY, args::ANY, argtypes::ANY)
     tf = get(t_func::IdTable, f, false)
     if is(tf,false)
         # struct constructor
@@ -357,6 +357,7 @@ function builtin_tfunction(f, args::Tuple, argtypes::Tuple)
         # unknown/unhandled builtin
         return Any
     end
+    tf = tf::(Real, Real, Function)
     if !(tf[1] <= length(argtypes) <= tf[2])
         # wrong # of args
         return None
@@ -812,13 +813,13 @@ f_argnames(ast) =
 is_rest_arg(arg) = (isa(arg,Expr) && is(arg.head,symbol("::")) &&
                     ccall(:jl_is_rest_arg,Int32,(Any,), arg) != 0)
 
-function typeinf_task(caller)
-    result = ()
-    while true
-        (caller, args) = yieldto(caller, result)
-        result = typeinf_ext_(args...)
-    end
-end
+# function typeinf_task(caller)
+#     result = ()
+#     while true
+#         (caller, args) = yieldto(caller, result)
+#         result = typeinf_ext_(args...)
+#     end
+# end
 
 #Inference_Task = Task(typeinf_task, 2097152)
 #yieldto(Inference_Task, current_task())
@@ -845,6 +846,8 @@ typeinf(linfo,atypes,sparams,copy) = typeinf(linfo,atypes,sparams,copy,linfo)
 
 abstract RecPending{T}
 
+isRecPending(t) = isa(t, AbstractKind) && is(t.name, RecPending.name)
+
 # def is the original unspecialized version of a method. we aggregate all
 # saved type inference data there.
 function typeinf(linfo::LambdaStaticData,atypes::Tuple,sparams::Tuple, cop, def)
@@ -861,7 +864,7 @@ function typeinf(linfo::LambdaStaticData,atypes::Tuple,sparams::Tuple, cop, def)
             # here instead of returning, and update the cache, until the new
             # inferred type equals the cached type (fixed point)
             rt = ast_rettype(tf[2])
-            if isa(rt,AbstractKind) && is(rt.name,RecPending.name)
+            if isRecPending(rt)
                 curtype = rt.parameters[1]
                 redo = true
                 ast = tf[2]
@@ -1049,7 +1052,6 @@ function typeinf(linfo::LambdaStaticData,atypes::Tuple,sparams::Tuple, cop, def)
             end
         end
     end
-    inference_stack = inference_stack.prev
     #print("\n",ast,"\n")
     #print("==> ", frame.result,"\n")
     if redo && typeseq(curtype, frame.result)
@@ -1064,7 +1066,9 @@ function typeinf(linfo::LambdaStaticData,atypes::Tuple,sparams::Tuple, cop, def)
     if !rec
         fulltree.args[3] = inlining_pass(fulltree.args[3], s[1])
         tuple_elim_pass(fulltree)
+        linfo.inferred = true
     end
+    inference_stack = inference_stack.prev
     return (fulltree, frame.result)
 end
 
@@ -1080,7 +1084,7 @@ function record_var_type(e::Symbol, t, decls)
     end
 end
 
-function eval_annotate(e::Expr, vtypes, sv, decls)
+function eval_annotate(e::Expr, vtypes, sv, decls, clo)
     head = e.head
     if is(head,:quote) || is(head,:top) || is(head,:goto) ||
         is(head,:static_typeof) || is(head,:line)
@@ -1098,38 +1102,44 @@ function eval_annotate(e::Expr, vtypes, sv, decls)
         else
             e.args[1] = SymbolNode(s, abstract_eval(s, vtypes, sv))
         end
-        e.args[2] = eval_annotate(e.args[2], vtypes, sv, decls)
+        e.args[2] = eval_annotate(e.args[2], vtypes, sv, decls, clo)
         # TODO: if this def does not reach any uses, maybe don't do this
         record_var_type(s, exprtype(e.args[2]), decls)
         return e
     end
     for i=1:length(e.args)
-        e.args[i] = eval_annotate(e.args[i], vtypes, sv, decls)
+        e.args[i] = eval_annotate(e.args[i], vtypes, sv, decls, clo)
     end
     e
 end
 
-function eval_annotate(e::Symbol, vtypes, sv, decls)
+function eval_annotate(e::Symbol, vtypes, sv, decls, clo)
     t = abstract_eval(e, vtypes, sv)
     record_var_type(e, t, decls)
     SymbolNode(e, t)
 end
 
-function eval_annotate(e::SymbolNode, vtypes, sv, decls)
+function eval_annotate(e::SymbolNode, vtypes, sv, decls, clo)
     t = abstract_eval(e.name, vtypes, sv)
     record_var_type(e.name, t, decls)
     e.typ = t
     e
 end
 
-eval_annotate(s, vtypes, sv, decls) = s
+eval_annotate(s, vtypes, sv, decls, clo) = s
+
+function eval_annotate(l::LambdaStaticData, vtypes, sv, decls, clo)
+    push(clo, l)
+    l
+end
 
 # annotate types of all symbols in AST
 function type_annotate(ast::Expr, states::Array, sv, rettype, vnames)
     decls = idtable()
+    closures = {}
     body = ast.args[3].args
     for i=1:length(body)
-        body[i] = eval_annotate(body[i], states[i], sv, decls)
+        body[i] = eval_annotate(body[i], states[i], sv, decls, closures)
     end
     ast.args[3].typ = rettype
 
@@ -1140,6 +1150,26 @@ function type_annotate(ast::Expr, states::Array, sv, rettype, vnames)
             vi[2] = decls[vi[1]]
         end
     end
+
+    # do inference on inner functions
+    if isRecPending(rettype)
+        return ast
+    end
+
+    for li = closures
+        if !li.inferred
+            a = li.ast
+            # pass on declarations of captured vars
+            vinf = a.args[2].args[3]
+            for vi = vinf
+                if has(decls,vi[1])
+                    vi[2] = decls[vi[1]]
+                end
+            end
+            typeinf(li, NTuple{length(a.args[1]), Any}, li.sparams, false, li)
+        end
+    end
+
     ast
 end
 
