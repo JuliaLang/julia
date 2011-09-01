@@ -944,10 +944,23 @@ function typeinf(linfo::LambdaStaticData,atypes::Tuple,sparams::Tuple, cop, def)
     end
     # types of closed vars
     cenv = idtable()
-    for vi = ast.args[2].args[3]
+    for vi = ((ast.args[2].args[3])::Array{Any,1})
         vi::Array{Any,1}
-        cenv[vi[1]] = vi[2]
-        s[1][vi[1]] = vi[2]
+        vname = vi[1]
+        vtype = vi[2]
+        cenv[vname] = vtype
+        s[1][vname] = vtype
+    end
+    for vi = ((ast.args[2].args[2])::Array{Any,1})
+        vi::Array{Any,1}
+        if (vi[3]&4)!=0
+            # variables assigned by inner functions are treated like
+            # closed variables; we only use the declared type
+            vname = vi[1]
+            vtype = vi[2]
+            cenv[vname] = vtype
+            s[1][vname] = vtype
+        end
     end
     sv = StaticVarInfo(sparams, cenv)
 
@@ -1301,7 +1314,7 @@ function inlineable(f, e::Expr, vars)
         end
     end
     for vi = meth[3].ast.args[2].args[2]
-        if vi[3]
+        if (vi[3]&1)!=0
             # captures variables (TODO)
             return NF
         end
@@ -1435,7 +1448,7 @@ function inlining_pass(e::Expr, vars)
 end
 
 function add_variable(ast, name, typ)
-    vinf = {name,typ,false,true}
+    vinf = {name,typ,2}
     locllist = (ast.args[2].args[1]::Expr).args
     vinflist = ast.args[2].args[2]::Array{Any,1}
     push(locllist, name)

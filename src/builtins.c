@@ -282,7 +282,7 @@ jl_value_t *jl_toplevel_eval_flex(jl_value_t *ex, int fast)
             jl_array_t *vinfos = jl_lam_vinfo((jl_expr_t*)thk->ast);
             int i;
             for(i=0; i < vinfos->length; i++) {
-                if (jl_cellref(jl_cellref(vinfos,i),2)!=jl_false) {
+                if (jl_vinfo_capt((jl_array_t*)jl_cellref(vinfos,i))) {
                     // interpreter doesn't handle closure environment
                     ewc = 1;
                     break;
