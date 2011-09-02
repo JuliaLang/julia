@@ -9,12 +9,23 @@
 #include <algorithm>
 #include <cmath>
 #include <complex>
+#include <sys/time.h>
 
 #ifdef __APPLE__
 #include <vecLib/cblas.h>
 #endif
 
 using namespace std;
+
+double clock_now()
+{
+    struct timeval now;
+
+    gettimeofday(&now, NULL);
+    return (double)now.tv_sec + (double)now.tv_usec/1.0e6;
+}
+
+#define CLOCK() clock_now()
 
 #define NITER 10
 
@@ -60,21 +71,21 @@ int mandelperf() {
     return mandel_sum;
 }
 int main() {
-    clock_t t1, t2;
+    double t1, t2;
     
     // fib(20)
     assert(fib(20) == 6765);
     int f=0;
-    t1 = clock();
+    t1 = CLOCK();
     for (int i=0; i<NITER; ++i) {
       f += fib(20);
     }
-    t2 = clock() - t1;
-    printf("fib(20):\t %1.8lf\n", (t2/(double)NITER) / (double) CLOCKS_PER_SEC);
+    t2 = CLOCK() - t1;
+    printf("fib(20):\t %1.8lf\n", (t2/(double)NITER));
     
     // array constructor
     double *a;
-    t1 = clock();
+    t1 = CLOCK();
     for (int i=0; i<NITER; ++i) {
         a = (double *) malloc(200*200*sizeof(double));
         for (int k=0; k<200*200; ++k) {
@@ -82,8 +93,8 @@ int main() {
         }
         free(a);
     }
-    t2 = clock() - t1;
-    printf("ones(200,200):\t %1.8lf\n", (t2/NITER) / (double) CLOCKS_PER_SEC);
+    t2 = CLOCK() - t1;
+    printf("ones(200,200):\t %1.8lf\n", (t2/NITER));
 
     // A*A'
     //SUBROUTINE DGEMM(TRANSA,TRANSB,M,N,K,ALPHA,A,LDA,B,LDB,BETA,C,LDC)
@@ -95,43 +106,45 @@ int main() {
       a[k] = 1.0;
       c[k] = 0.0;
     }
-    t1 = clock();
+    t1 = CLOCK();
     for (int i=0; i<NITER; ++i) {
       cblas_dgemm(CblasColMajor, CblasNoTrans, CblasTrans, 200, 200, 200, 1.0, b, 200, b, 200, 0.0, c, 200);
     }
-    t2 = clock() - t1;
+    t2 = CLOCK() - t1;
     free(b);
     free(c);
-    printf("A*A':   \t %1.8lf\n", (t2/NITER) / (double) CLOCKS_PER_SEC);
+    printf("A*A':   \t %1.8lf\n", (t2/NITER));
     #endif
 
     // mandel
-    assert(mandelperf() == 14720);
-    t1 = clock();
+    int mandel_sum;
+    t1 = CLOCK();
     for (int i=0; i<NITER; ++i) {
-        int mandel_sum = mandelperf();
+        mandel_sum = mandelperf();
     }
-    t2 = clock() - t1;
-    printf("mandel:   \t %1.8lf\n", (t2/NITER) / (double) CLOCKS_PER_SEC);
+    assert(mandel_sum == 14720);
+    t2 = CLOCK() - t1;
+    printf("mandel:   \t %1.8lf\n", (t2/NITER));
 
     // sort
     double *d;
     d = (double *) malloc(5000*sizeof(double));
-    t1 = clock();
+    t1 = CLOCK();
     for (int i=0; i<NITER; ++i) {
       for (int k=0; k<5000; ++k) d[k] = drand48();
       sort(d, d+5000);
     }
-    t2 = clock() - t1;
+    t2 = CLOCK() - t1;
     free(d);
-    printf("sort:   \t %1.8lf\n", (t2/NITER) / (double) CLOCKS_PER_SEC);
+    printf("sort:   \t %1.8lf\n", (t2/NITER));
 
     // pi sum
-    assert(fabs(pisum()-1.644834071848065) < 1e-12);
-    t1 = clock();
+    t1 = CLOCK();
+    double pi;
     for (int i=0; i<NITER; ++i) {
-      double pi = pisum();
+      pi = pisum();
     }
-    t2 = clock() - t1;
-    printf("pisum:   \t %1.8lf\n", (t2/NITER) / (double) CLOCKS_PER_SEC);
+    assert(fabs(pi-1.644834071848065) < 1e-12);
+    t2 = CLOCK() - t1;
+    printf("pisum:   \t %1.8lf\n", (t2/NITER));
 } 
