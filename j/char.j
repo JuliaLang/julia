@@ -56,6 +56,7 @@ mod(x::Char, y::Char) = rem(int32(x), int32(y))
 >>>(x::Char, y::Int32) = int32(x) >>> y
 ==(x::Char, y::Char) = int32(x) == int32(y)
 <(x::Char, y::Char) = uint32(x) < uint32(y)
+<=(x::Char, y::Char) = uint32(x) <= uint32(y)
 
 ## traits ##
 

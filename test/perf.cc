@@ -8,6 +8,7 @@
 #include <complex>
 #include <sys/time.h>
 #include <algorithm>
+#include <cstring>
 
 #ifdef __APPLE__
 #include <vecLib/cblas.h>
