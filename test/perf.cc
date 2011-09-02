@@ -55,7 +55,7 @@ int mandel(complex<double> z) {
             n -= 1;
             break;
         }
-        z = z*z+c;
+        z = pow(z,2)+c;
     }
     return n+1;
 }
