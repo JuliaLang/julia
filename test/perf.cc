@@ -1,4 +1,4 @@
-// Compile on Mac with: g++ -O3 perf.cc -o perf  -framework Accelerate
+// Compile on Mac with: g++ -O2 perf.cc -o perf  -framework Accelerate
 // Need to compile cblas in openblas, so that we can link to that on both, linux and mac.
 
 #include <cstdio>
@@ -6,12 +6,17 @@
 #include <iostream>
 #include <cassert>
 #include <ctime>
+#include <algorithm>
+#include <cmath>
+#include <complex>
 
 #ifdef __APPLE__
 #include <vecLib/cblas.h>
 #endif
 
-#define NITER 100
+using namespace std;
+
+#define NITER 10
 
 extern "C" void dgemm_(char, char, int, int, int, double, double *, int, double *, int, double, double *, int);
 
@@ -19,6 +24,41 @@ int fib(int n) {
     return n < 2 ? n : fib(n-1) + fib(n-2);
 }
 
+// pi sum
+double pisum() {
+  double sum = 0.0;
+  for (int j=0; j<500; ++j) {
+    sum = 0.0;
+    for (int k=1; k<=10000; ++k) {
+      sum += 1.0/(k*k);
+    }
+  }
+  return sum;
+}
+
+int mandel(complex<double> z) {
+    int n = 0;
+    complex<double> c = complex<double>(real(z), imag(z));
+    for (n=0; n<=79; ++n) {
+        if (abs(z) > 2.0) {
+            n -= 1;
+            break;
+        }
+        z = z*z+c;
+    }
+    return n+1;
+}
+
+int mandelperf() {
+    int mandel_sum = 0;
+    for (double re=-2.0; re<=0.5; re+=0.1) {
+        for (double im=-1.0; im<=1.0; im+=0.1) {
+            int m = mandel(complex<double>(re, im));
+            mandel_sum += m;
+        }
+    }
+    return mandel_sum;
+}
 int main() {
     clock_t t1, t2;
     
@@ -64,4 +104,34 @@ int main() {
     free(c);
     printf("A*A':   \t %1.8lf\n", (t2/NITER) / (double) CLOCKS_PER_SEC);
     #endif
+
+    // mandel
+    assert(mandelperf() == 14720);
+    t1 = clock();
+    for (int i=0; i<NITER; ++i) {
+        int mandel_sum = mandelperf();
+    }
+    t2 = clock() - t1;
+    printf("mandel:   \t %1.8lf\n", (t2/NITER) / (double) CLOCKS_PER_SEC);
+
+    // sort
+    double *d;
+    d = (double *) malloc(5000*sizeof(double));
+    t1 = clock();
+    for (int i=0; i<NITER; ++i) {
+      for (int k=0; k<5000; ++k) d[k] = drand48();
+      sort(d, d+5000);
+    }
+    t2 = clock() - t1;
+    free(d);
+    printf("sort:   \t %1.8lf\n", (t2/NITER) / (double) CLOCKS_PER_SEC);
+
+    // pi sum
+    assert(fabs(pisum()-1.644834071848065) < 1e-12);
+    t1 = clock();
+    for (int i=0; i<NITER; ++i) {
+      double pi = pisum();
+    }
+    t2 = clock() - t1;
+    printf("pisum:   \t %1.8lf\n", (t2/NITER) / (double) CLOCKS_PER_SEC);
 } 
