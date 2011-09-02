@@ -74,13 +74,13 @@ long parse_int(const char *s, long base) {
     
     for (int i=0; i<strlen(s); ++i) {
         char c = s[i];
-        long d = (long) '0' <= c <= '9' ? c-'0' :
-                        'A' <= c <= 'Z' ? c-'A' + (int) 10 :
-                        'a' <= c <= 'z' ? c-'a' + (int) 10 :
-                        printf("Error\n");
-        if (base <= d) {
-            printf("Error\n");
-        }
+	long d = 0;
+	if (c >= '0' && c <= '9') d = c-'0';
+	else if (c >= 'A' && c <= 'Z') d = c-'A' + (int) 10;
+	else if (c >= 'a' && c <= 'z') d = c-'a' + (int) 10;
+	else exit(-1);
+
+        if (base <= d) exit(-1);
         n = n*base + d;
     }
     return n;
