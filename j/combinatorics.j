@@ -77,7 +77,7 @@ sortperm{T}(a::AbstractVector{T}) =
     mergesort(copy(a), linspace(1,length(a)), 1, length(a),
               Array(T, length(a)), Array(Size, length(a)))
 
-function insertionsort(a::AbstractVector, lo, hi)
+function insertionsort(a::AbstractVector, lo::Int, hi::Int)
     for i=(lo+1):hi
         j = i
         x = a[i]
@@ -93,7 +93,7 @@ function insertionsort(a::AbstractVector, lo, hi)
     a
 end
 
-function quicksort(a::AbstractVector, lo, hi)
+function quicksort(a::AbstractVector, lo::Int, hi::Int)
     while hi > lo
         if (hi-lo <= 20)
             return insertionsort(a, lo, hi)
@@ -117,7 +117,7 @@ function quicksort(a::AbstractVector, lo, hi)
     return a
 end
 
-function insertionsort(a::AbstractVector, p::AbstractVector{Size}, lo, hi)
+function insertionsort(a::AbstractVector, p::AbstractVector{Size}, lo::Int, hi::Int)
     for i=(lo+1):hi
         j = i
         x = a[i]
@@ -136,7 +136,7 @@ function insertionsort(a::AbstractVector, p::AbstractVector{Size}, lo, hi)
     (a, p)
 end
 
-function mergesort(a::AbstractVector, p::AbstractVector{Size}, lo, hi,
+function mergesort(a::AbstractVector, p::AbstractVector{Size}, lo::Int, hi::Int,
                    b::AbstractVector, pb::AbstractVector{Size})
 
     if lo < hi
@@ -185,7 +185,7 @@ function mergesort(a::AbstractVector, p::AbstractVector{Size}, lo, hi,
     return (a, p)
 end
 
-function mergesort(a::AbstractVector, lo, hi, b::AbstractVector)
+function mergesort(a::AbstractVector, lo::Int, hi::Int, b::AbstractVector)
     if lo < hi
         if (hi-lo <= 20)
             return insertionsort(a, lo, hi)
