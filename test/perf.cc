@@ -28,8 +28,6 @@ double clock_now()
 
 #define CLOCK() clock_now()
 
-extern "C" void dgemm_(char, char, int, int, int, double, double *, int, double *, int, double, double *, int);
-
 int fib(int n) {
     return n < 2 ? n : fib(n-1) + fib(n-2);
 }
