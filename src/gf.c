@@ -338,6 +338,7 @@ static jl_function_t *cache_method(jl_methtable_t *mt, jl_tuple_t *type,
                                    jl_tuple_t *sparams)
 {
     size_t i;
+    int need_dummy_entries = 0;
     for (i=0; i < type->length; i++) {
         jl_value_t *elt = jl_tupleref(type,i);
         int set_to_any = 0;
@@ -375,6 +376,7 @@ static jl_function_t *cache_method(jl_methtable_t *mt, jl_tuple_t *type,
               a tuple, unless the declaration asks for something more
               specific. determined with a type intersection.
             */
+            int might_need_dummy=0;
             if (i < decl->length) {
                 jl_value_t *declt = jl_tupleref(decl,i);
                 // for T..., intersect with T
@@ -384,8 +386,9 @@ static jl_function_t *cache_method(jl_methtable_t *mt, jl_tuple_t *type,
                     jl_subtype((jl_value_t*)jl_tuple_type, declt, 0)) {
                     // don't specialize args that matched (Any...) or Any
                     jl_tupleset(type, i, (jl_value_t*)jl_tuple_type);
+                    might_need_dummy = 1;
                 }
-                else if (((jl_tuple_t*)elt)->length > 4) {
+                else if (((jl_tuple_t*)elt)->length > 3) {
                     declt = jl_type_intersection(declt,
                                                  (jl_value_t*)jl_tuple_type);
                     jl_tupleset(type, i, declt);
@@ -393,8 +396,21 @@ static jl_function_t *cache_method(jl_methtable_t *mt, jl_tuple_t *type,
             }
             else {
                 jl_tupleset(type, i, (jl_value_t*)jl_tuple_type);
+                might_need_dummy = 1;
             }
             assert(jl_tupleref(type,i) != (jl_value_t*)jl_bottom_type);
+            if (might_need_dummy) {
+                jl_methlist_t *curr = mt->defs;
+                while (curr != NULL && curr->func!=method) {
+                    jl_tuple_t *sig = curr->sig;
+                    if (sig->length > i &&
+                        jl_is_tuple(jl_tupleref(sig,i))) {
+                        need_dummy_entries = 1;
+                        break;
+                    }
+                    curr = curr->next;
+                }
+            }
         }
         else if (jl_is_tag_type(elt) &&
                  ((jl_tag_type_t*)elt)->name==jl_type_type->name &&
@@ -501,10 +517,17 @@ static jl_function_t *cache_method(jl_methtable_t *mt, jl_tuple_t *type,
         // of this signature and definitions. those dummy entries will
         // supersede this one in conflicted cases, alerting us that there
         // should actually be a cache miss.
+        need_dummy_entries = 1;
+    }
+
+    if (need_dummy_entries) {
         temp = (jl_value_t*)
             ml_matches(mt->defs, (jl_value_t*)type, jl_null, lambda_sym);
         while (temp != (jl_value_t*)jl_null) {
-            jl_method_cache_insert(mt, (jl_tuple_t*)jl_tupleref(temp, 0), NULL);
+            if (jl_tupleref(temp,2) != (jl_value_t*)method->linfo) {
+                jl_method_cache_insert(mt, (jl_tuple_t*)jl_tupleref(temp, 0),
+                                       NULL);
+            }
             temp = jl_tupleref(temp, 4);
         }
     }
