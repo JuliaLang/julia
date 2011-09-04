@@ -59,7 +59,9 @@ double *ones(int m, int n) {
 
 double *matmul_aat(int n, double *b) {
   double *c = (double *) malloc(n*n*sizeof(double));
+#ifdef __APPLE__
   cblas_dgemm(CblasColMajor, CblasNoTrans, CblasTrans, n, n, n, 1.0, b, n, b, n, 0.0, c, n);
+#endif
   return c;
 }
 
