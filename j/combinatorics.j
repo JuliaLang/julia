@@ -262,7 +262,7 @@ function sort(A::AbstractArray, dim::Index)
     X = similar(A)
     n = size(A,dim)
     s = stride(A,dim)
-    nslices = int(numel(A) / n)
+    nslices = div(numel(A), n)
 
     if dim == 1
         for i=1:n:numel(A)
@@ -270,8 +270,9 @@ function sort(A::AbstractArray, dim::Index)
             X[this_slice] = sort(sub(A, this_slice))
         end
     else
-        # Implement using subarrays or permute.
-        error("Not yet implemented")
+        p = [1:ndims(A)]
+        p[dim], p[1] = p[1], p[dim]
+        X = ipermute(sort(permute(A, p)), p)
     end
 
     return X
