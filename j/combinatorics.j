@@ -249,8 +249,8 @@ function sort(A::AbstractMatrix, dim::Index)
             X[this_slice] = sort(sub(A, this_slice))
         end
     elseif dim == 2
-        for i=1:n
-            this_slice = i:n:numelA
+        for i=1:m
+            this_slice = i:m:numelA
             X[this_slice] = sort(sub(A, this_slice))
         end
     end
