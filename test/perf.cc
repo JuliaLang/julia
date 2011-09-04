@@ -32,16 +32,35 @@ int fib(int n) {
     return n < 2 ? n : fib(n-1) + fib(n-2);
 }
 
-// pi sum
-double pisum() {
-  double sum = 0.0;
-  for (int j=0; j<500; ++j) {
-    sum = 0.0;
-    for (int k=1; k<=10000; ++k) {
-      sum += 1.0/(k*k);
+long parse_int(const char *s, long base) {
+    long n = 0;
+    
+    for (int i=0; i<strlen(s); ++i) {
+        char c = s[i];
+	long d = 0;
+	if (c >= '0' && c <= '9') d = c-'0';
+	else if (c >= 'A' && c <= 'Z') d = c-'A' + (int) 10;
+	else if (c >= 'a' && c <= 'z') d = c-'a' + (int) 10;
+	else exit(-1);
+
+        if (base <= d) exit(-1);
+        n = n*base + d;
     }
+    return n;
+}
+
+double *ones(int m, int n) {
+  double *a = (double *) malloc(m*n*sizeof(double));
+  for (int k=0; k<m*n; ++k) {
+    a[k] = 1.0;
   }
-  return sum;
+  return a;
+}
+
+double *matmul_aat(int n, double *b) {
+  double *c = (double *) malloc(n*n*sizeof(double));
+  cblas_dgemm(CblasColMajor, CblasNoTrans, CblasTrans, n, n, n, 1.0, b, n, b, n, 0.0, c, n);
+  return c;
 }
 
 int mandel(complex<double> z) {
@@ -68,21 +87,90 @@ int mandelperf() {
     return mandel_sum;
 }
 
-long parse_int(const char *s, long base) {
-    long n = 0;
-    
-    for (int i=0; i<strlen(s); ++i) {
-        char c = s[i];
-	long d = 0;
-	if (c >= '0' && c <= '9') d = c-'0';
-	else if (c >= 'A' && c <= 'Z') d = c-'A' + (int) 10;
-	else if (c >= 'a' && c <= 'z') d = c-'a' + (int) 10;
-	else exit(-1);
+double *rand(int n) {
+  double *d = (double *) malloc (n*sizeof(double));
+  for (int k=0; k<n; ++k) d[k] = drand48();
+  return d;
+}
 
-        if (base <= d) exit(-1);
-        n = n*base + d;
+double pisum() {
+  double sum = 0.0;
+  for (int j=0; j<500; ++j) {
+    sum = 0.0;
+    for (int k=1; k<=10000; ++k) {
+      sum += 1.0/(k*k);
     }
-    return n;
+  }
+  return sum;
+}
+
+#define RANDN_RESET -99999999
+static double randn_next = RANDN_RESET;
+
+void randn_reset()
+{
+  randn_next = RANDN_RESET;
+}
+
+double randn()
+{
+  double s, vre, vim, ure, uim;
+
+  if (randn_next != RANDN_RESET) {
+    s = randn_next;
+    randn_next = RANDN_RESET;
+    return s;
+  }
+  do {
+    ure = drand48();
+    uim = drand48();
+    vre = 2*ure - 3;
+    vim = 2*uim - 3;
+    s = vre*vre + vim*vim;
+  } while (s >= 1);
+  s = sqrt(-2*log(s)/s);
+  randn_next = s * vre;
+  return s * vim;
+}
+
+double *randn(int m, int n) {
+  double *d = (double *) malloc (m*n*sizeof(double));
+  for (int k=0; k<m*n; ++k) d[k] = randn();
+  return d;
+}
+
+void randmatstat(int t) {
+  double *v = (double *) malloc(t*sizeof(double));
+  double *w = (double *) malloc(t*sizeof(double));
+
+  for (int i=0; i<t; ++i) {
+    double *a = randn(5,5);
+    double *b = randn(5,5);
+    double *c = randn(5,5);
+    double *d = randn(5,5);
+    
+    double *P = (double *) malloc(5*20*sizeof(double));
+    double *Q = (double *) malloc(10*10*sizeof(double));
+    
+    /*
+      P = [a b c d];
+      Q = [a b; c d];
+      v[i] = trace((P.'*P)^4);
+      w[i] = trace((Q.'*Q)^4);
+    */
+    
+    free(P);
+    free(Q);
+
+    free(v);
+    free(w);
+
+    /*
+    return (std(v)/mean(v), std(w)/mean(w))
+    */
+
+    return;
+  }
 }
 
 int main() {
@@ -110,14 +198,10 @@ int main() {
     printf("parse_bin:\t %1.8lf\n", (t2/(double)NITER));
 
     // array constructor
-    double *a;
     t1 = CLOCK();
     for (int i=0; i<NITER; ++i) {
-        a = (double *) malloc(200*200*sizeof(double));
-        for (int k=0; k<200*200; ++k) {
-            a[k] = 1.0;
-        }
-        free(a);
+      double *a = ones(200,200);
+      free(a);
     }
     t2 = CLOCK() - t1;
     printf("ones(200,200):\t %1.8lf\n", (t2/NITER));
@@ -125,20 +209,14 @@ int main() {
     // A*A'
     //SUBROUTINE DGEMM(TRANSA,TRANSB,M,N,K,ALPHA,A,LDA,B,LDB,BETA,C,LDC)
     #ifdef __APPLE__
-    double *b, *c;
-    b = (double *) malloc(200*200*sizeof(double));
-    c = (double *) malloc(200*200*sizeof(double));
-    for (int k=0; k<200*200; ++k) {
-      a[k] = 1.0;
-      c[k] = 0.0;
-    }
+    double *b = ones(200, 200);
     t1 = CLOCK();
     for (int i=0; i<NITER; ++i) {
-      cblas_dgemm(CblasColMajor, CblasNoTrans, CblasTrans, 200, 200, 200, 1.0, b, 200, b, 200, 0.0, c, 200);
+      double *c = matmul_aat(200, b);
+      free(c);
     }
     t2 = CLOCK() - t1;
     free(b);
-    free(c);
     printf("A*A':   \t %1.8lf\n", (t2/NITER));
     #endif
 
@@ -153,15 +231,13 @@ int main() {
     printf("mandel:   \t %1.8lf\n", (t2/NITER));
 
     // sort
-    double *d;
-    d = (double *) malloc(5000*sizeof(double));
     t1 = CLOCK();
     for (int i=0; i<NITER; ++i) {
-      for (int k=0; k<5000; ++k) d[k] = drand48();
+      double *d = rand(5000);
       sort(d, d+5000);
+      free(d);
     }
     t2 = CLOCK() - t1;
-    free(d);
     printf("sort:   \t %1.8lf\n", (t2/NITER));
 
     // pi sum
@@ -173,4 +249,6 @@ int main() {
     assert(fabs(pi-1.644834071848065) < 1e-12);
     t2 = CLOCK() - t1;
     printf("pisum:   \t %1.8lf\n", (t2/NITER));
+
+    // randmatstat    
 } 
