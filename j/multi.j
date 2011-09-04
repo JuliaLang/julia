@@ -43,8 +43,8 @@
 
 # todo:
 # - more indexing
-# - take() to empty a Ref (full/empty variables)
-# - have put() wait on non-empty Refs
+# * take() to empty a Ref (full/empty variables)
+# * have put() wait on non-empty Refs
 # - removing nodes
 # - more dynamic scheduling
 # * fetch/wait latency seems to be excessive
@@ -231,8 +231,8 @@ nprocs() = (global PGRP; (PGRP::ProcessGroup).np)
 
 function worker_id_from_socket(s)
     global PGRP
-    for i=1:PGRP.np
-        w = PGRP.workers[i]
+    for i=1:nprocs()
+        w = (PGRP::ProcessGroup).workers[i]
         if isa(w,Worker)
             if is(s, w.socket) || is(s, w.sendbuf)
                 return i
@@ -248,7 +248,7 @@ end
 
 function worker_from_id(id)
     global PGRP
-    PGRP.workers[id]
+    (PGRP::ProcessGroup).workers[id]
 end
 
 # establish a Worker connection for processes that connected to us
@@ -333,13 +333,13 @@ rr2id(r::RemoteRef) = (r.whence, r.id)
 bottom_func() = assert(false)
 
 function lookup_ref(id)
-    global PGRP
-    wi = get((PGRP::ProcessGroup).refs, id, ())
+    GRP = PGRP::ProcessGroup
+    wi = get(GRP.refs, id, ())
     if is(wi, ())
         # first we've heard of this ref
         wi = WorkItem(bottom_func)
         # this WorkItem is just for storing the result value
-        PGRP.refs[id] = wi
+        GRP.refs[id] = wi
         add(wi.clientset, id[1])
     end
     wi
@@ -367,7 +367,7 @@ function del_client(id, client)
     wi = lookup_ref(id)
     del(wi.clientset, client)
     if isempty(wi.clientset)
-        del(PGRP.refs, id)
+        del((PGRP::ProcessGroup).refs, id)
         #print("$(myid()) collected $id\n")
     end
     nothing
@@ -390,7 +390,6 @@ function send_del_client(rr::RemoteRef)
 end
 
 function add_client(id, client)
-    global PGRP
     wi = lookup_ref(id)
     add(wi.clientset, client)
     nothing
@@ -474,7 +473,7 @@ schedule_call(rid, f_thk, args_thk) =
 function schedule_call(rid, thunk)
     global PGRP
     wi = WorkItem(thunk)
-    PGRP.refs[rid] = wi
+    (PGRP::ProcessGroup).refs[rid] = wi
     add(wi.clientset, rid[1])
     enq_work(wi)
     wi
@@ -607,7 +606,8 @@ fetch(x) = x
 function put_ref(rid, val)
     wi = lookup_ref(rid)
     if wi.done
-        error("invalid put()")
+        wi.notify = ((), :take, rid, wi.notify)
+        yieldto(Scheduler, WaitFor(:take, RemoteRef(myid(), rid[1], rid[2])))
     end
     wi.result = val
     wi.done = true
@@ -619,9 +619,29 @@ function put(rr::RemoteRef, val)
     if rr.where == myid()
         put_ref(rid, val)
     else
-        remote_do(rr.where, put_ref, rid, val)
+        remote_call_fetch(rr.where, put_ref, rid, val)
     end
     val
+end
+
+function take_ref(rid)
+    wi = lookup_ref(rid)
+    if !wi.done
+        wait(RemoteRef(myid(), rid[1], rid[2]))
+    end
+    val = wi.result
+    wi.done = false
+    notify_empty(wi)
+    val
+end
+
+function take(rr::RemoteRef)
+    rid = rr2id(rr)
+    if rr.where == myid()
+        take_ref(rid)
+    else
+        remote_call_fetch(rr.where, take_ref, rid)
+    end
 end
 
 ## work queue ##
@@ -631,7 +651,7 @@ type WorkItem
     task   # the Task working on this item, or ()
     done::Bool
     result
-    notify
+    notify::Tuple
     argument  # value to pass task next time it is restarted
     clientset::IntSet
     requeue::Bool
@@ -797,22 +817,32 @@ function deliver_result(sock::(), msg, oid, value_thunk)
     nothing
 end
 
-function notify_done(job::WorkItem)
+notify_done (job::WorkItem) = notify_done(job, false)
+notify_empty(job::WorkItem) = notify_done(job, true)
+
+function notify_done(job::WorkItem, take)
+    newnot = ()
     while !is(job.notify,())
         (sock, msg, oid, job.notify) = job.notify
-        let wr = work_result(job)
-            if is(sock,())
-                deliver_result(sock, msg, oid, ()->wr)
-            else
-                deliver_result(sock, msg, oid, wr)
+        if take == is(msg,:take)
+            let wr = work_result(job)
+                if is(sock,())
+                    deliver_result(sock, msg, oid, ()->wr)
+                else
+                    deliver_result(sock, msg, oid, wr)
+                end
+                if is(msg,:call_fetch)
+                    # can delete the ref right away since we know it is
+                    # unreferenced by the client
+                    del((PGRP::ProcessGroup).refs, oid)
+                end
             end
-            if is(msg,:call_fetch)
-                # can delete the ref right away since we know it is
-                # unreferenced by the client
-                del(PGRP.refs, oid)
-            end
+        else
+            newnot = (sock, msg, oid, newnot)
         end
     end
+    job.notify = newnot
+    nothing
 end
 
 ## message event handlers ##
@@ -846,7 +876,7 @@ type DisconnectException <: Exception end
 # activity on message socket
 function message_handler(fd, sockets)
     global PGRP
-    refs = PGRP.refs
+    refs = (PGRP::ProcessGroup).refs
     sock = sockets[fd]
     first = true
     while first || nb_available(sock)>0
@@ -1159,8 +1189,7 @@ type GlobalObject
     end
 
     function GlobalObject(initializer::Function)
-        global PGRP
-        GlobalObject(1:PGRP.np, initializer)
+        GlobalObject(1:nprocs(), initializer)
     end
     GlobalObject() = GlobalObject(identity)
 end
@@ -1279,8 +1308,7 @@ let lastp = 1
         end
         if p == -1
             p = lastp; lastp += 1
-            global PGRP
-            if lastp > PGRP.np
+            if lastp > nprocs()
                 lastp = 1
             end
         end
@@ -1328,13 +1356,9 @@ macro spawnat(p, expr)
     :(spawnat($p, $expr))
 end
 
-at_each(f, args...) = at_each(PGRP, f, args...)
-
-function at_each(grp::ProcessGroup, f, args...)
-    w = grp.workers
-    np = grp.np
-    for i=1:np
-        remote_do(w[i], f, args...)
+function at_each(f, args...)
+    for i=1:nprocs()
+        remote_do(i, f, args...)
     end
 end
 
@@ -1359,8 +1383,7 @@ pmap(f) = f()
 # L = {rsym(200),rsym(1000),rsym(200),rsym(1000),rsym(200),rsym(1000),rsym(200),rsym(1000)};
 # pmap(eig, L);
 function pmap(f, lsts...)
-    global PGRP
-    np = PGRP.np
+    np = nprocs()
     n = length(lsts[1])
     results = cell(n)
     i = 1
@@ -1385,8 +1408,7 @@ function pmap(f, lsts...)
 end
 
 function preduce(reducer, f, r::Range1{Size})
-    global PGRP
-    np = PGRP.np
+    np = nprocs()
     N = length(r)
     each = div(N,np)
     rest = rem(N,np)
@@ -1403,8 +1425,7 @@ function preduce(reducer, f, r::Range1{Size})
 end
 
 function pfor(f, r::Range1{Size})
-    global PGRP
-    np = PGRP.np
+    np = nprocs()
     N = length(r)
     each = div(N,np)
     rest = rem(N,np)
