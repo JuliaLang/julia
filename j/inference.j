@@ -1147,7 +1147,8 @@ function eval_annotate(l::LambdaStaticData, vtypes, sv, decls, clo)
 end
 
 # annotate types of all symbols in AST
-function type_annotate(ast::Expr, states::Array, sv, rettype, vnames)
+function type_annotate(ast::Expr, states::Array{Any,1},
+                       sv::ANY, rettype::ANY, vnames::ANY)
     decls = idtable()
     closures = {}
     body = ast.args[3].args
@@ -1504,15 +1505,26 @@ function tuple_elim_pass(ast::Expr)
                             stmt = body[i+j-1]
                             if isa(stmt,Expr) && is(stmt.head,:(=))
                                 rhs = stmt.args[2]
-                                if isa(rhs,Expr) &&
-                                   is_top_call(rhs,:tupleref) &&
-                                   isequal(rhs.args[2],tupname)
-                                    r = vals[k]
-                                    if isa(r,Symbol)
-                                        r = SymbolNode(r, exprtype(tup[k+1]))
+                                if isa(rhs,Expr)
+                                    if is_top_call(rhs,:tupleref) &&
+                                        isequal(rhs.args[2],tupname)
+                                        r = vals[k]
+                                        if isa(r,Symbol)
+                                            r = SymbolNode(r, exprtype(tup[k+1]))
+                                        end
+                                        stmt.args[2] = r
+                                        k += 1
+                                    elseif is_top_call(rhs,:convert) &&
+                                        is_top_call(rhs.args[3],:tupleref) &&
+                                        isequal(rhs.args[3].args[2],tupname)
+                                        # assignment with conversion
+                                        r = vals[k]
+                                        if isa(r,Symbol)
+                                            r = SymbolNode(r, exprtype(tup[k+1]))
+                                        end
+                                        rhs.args[3] = r
+                                        k += 1
                                     end
-                                    stmt.args[2] = r
-                                    k += 1
                                 end
                             end
                             j += 1

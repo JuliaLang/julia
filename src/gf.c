@@ -303,7 +303,15 @@ static void print_sig(jl_tuple_t *type)
     size_t i;
     for(i=0; i < type->length; i++) {
         if (i > 0) ios_printf(ios_stdout, ", ");
-        ios_printf(ios_stdout, "%s", type_summary(jl_tupleref(type,i)));
+        jl_value_t *v = jl_tupleref(type,i);
+        if (jl_is_tuple(v)) {
+            ios_putc('(', ios_stdout);
+            print_sig((jl_tuple_t*)v);
+            ios_putc(')', ios_stdout);
+        }
+        else {
+            ios_printf(ios_stdout, "%s", type_summary(v));
+        }
     }
 }
 #endif
