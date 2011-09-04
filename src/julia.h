@@ -711,6 +711,8 @@ jl_value_t *jl_interpret_toplevel_thunk(jl_lambda_info_t *lam);
 jl_value_t *jl_interpret_toplevel_expr(jl_value_t *e);
 jl_value_t *jl_interpret_toplevel_expr_with(jl_value_t *e,
                                             jl_value_t **locals, size_t nl);
+void jl_type_infer(jl_lambda_info_t *li, jl_tuple_t *argtypes,
+                   jl_lambda_info_t *def);
 
 void jl_show_method_table(jl_function_t *gf);
 DLLEXPORT void jl_show_full_function(jl_value_t *v);

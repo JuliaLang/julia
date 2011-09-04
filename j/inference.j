@@ -1180,7 +1180,9 @@ function type_annotate(ast::Expr, states::Array{Any,1},
                     vi[2] = decls[vi[1]]
                 end
             end
-            typeinf(li, NTuple{length(a.args[1]), Any}, li.sparams, false, li)
+            na = length(a.args[1])
+            typeinf(li, ntuple(na+1, i->(i>na ? Tuple[1] : Any)),
+                    li.sparams, false, li)
         end
     end
 
