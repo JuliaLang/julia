@@ -54,7 +54,6 @@ function convert{T<:Int}(::Type{Rational{T}}, x::Float, tol::Real)
         y = 1/y
     end
 end
-
 convert{T<:Int}(rt::Type{Rational{T}}, x::Float) = convert(rt,x,eps(x))
 
 promote_rule{T<:Int}(::Type{Rational{T}}, ::Type{T}) = Rational{T}
