@@ -802,5 +802,5 @@ this (and tintersect on NTuple) is needed to define Array() methods in boot.j
   even if the argument doesn't occur in the function (but might occur in
   a nested function)
 
-- call inference on general thunks so we don't need to make GFs for them
+* call inference on general thunks so we don't need to make GFs for them
   in toplevel_eval

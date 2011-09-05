@@ -696,6 +696,7 @@
     (with-space-sensitive
      (let loop ((exprs '()))
        (if (or (closing-token? (peek-token s))
+	       (newline? (peek-token s))
 	       (and inside-vec (eq? (peek-token s) '|\||)))
 	   (reverse! exprs)
 	   (let ((e (parse-eq s)))
