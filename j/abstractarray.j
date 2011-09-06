@@ -847,8 +847,7 @@ let areduce_cache = nothing
 function gen_areduce_func(n, f)
     ivars = { gensym() | i=1:n }
     # limits and vars for reduction loop
-    rv = gensym()
-    idx = gensym()
+    rv, idx = gensym(2)
     # generate code to compute sub2ind(size(A), ivars...)
     s2i = :($ivars[n] - 1)
     for d = (n-1):-1:2
