@@ -24,7 +24,7 @@ function toc(noisy::Bool)
     tls(:TIMERS, timers[2])
     t = t1-t0
     if noisy
-        print("elapsed time: ", t, " sec\n")
+        println("elapsed time: ", t, " seconds")
     end
     t
 end
@@ -32,18 +32,29 @@ end
 toc() = toc(true)
 toq() = toc(false)
 
-# prints nothing
-# returns elapsed time
-macro elapsed(ex)
-    x = gensym()
-    :(local $x; tic(); $x = $ex; toq())
-end
-
 # prints elapsed time
 # returns expression value
 macro time(ex)
-    x = gensym()
-    :(local $x; tic(); $x = $ex; toc(); $x)
+  t0, val, t1 = gensym(3)
+  quote
+    local $t0 = clock()
+    local $val = $ex
+    local $t1 = clock()
+    println("elapsed time: ", $t1-$t0, " seconds")
+    $val
+  end
+end
+
+# prints nothing
+# returns elapsed time
+macro elapsed(ex)
+  t0, val, t1 = gensym(3)
+  quote
+    local $t0 = clock()
+    local $val = $ex
+    local $t1 = clock()
+    $t1-$t0
+  end
 end
 
 function peakflops()
