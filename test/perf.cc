@@ -1,18 +1,15 @@
-// Compile on Mac with: g++ -O2 perf.cc -o perf  -framework Accelerate
-// Need to compile cblas in openblas, so that we can link to that on both, linux and mac.
+// g++ -O2 perf.cc -o perf ../external/openblas-v0.1alpha2.2/libopenblas.a
 
+#include <sys/time.h>
 #include <cstdio>
 #include <cstdlib>
 #include <cassert>
 #include <cmath>
-#include <complex>
-#include <sys/time.h>
-#include <algorithm>
 #include <cstring>
+#include <complex>
+#include <algorithm>
 
-#ifdef __APPLE__
-#include <vecLib/cblas.h>
-#endif
+#include "../external/openblas-v0.1alpha2.2/cblas.h"
 
 using namespace std;
 
@@ -59,9 +56,7 @@ double *ones(int m, int n) {
 
 double *matmul_aat(int n, double *b) {
   double *c = (double *) malloc(n*n*sizeof(double));
-#ifdef __APPLE__
   cblas_dgemm(CblasColMajor, CblasNoTrans, CblasTrans, n, n, n, 1.0, b, n, b, n, 0.0, c, n);
-#endif
   return c;
 }
 
@@ -210,7 +205,6 @@ int main() {
 
     // A*A'
     //SUBROUTINE DGEMM(TRANSA,TRANSB,M,N,K,ALPHA,A,LDA,B,LDB,BETA,C,LDC)
-    #ifdef __APPLE__
     double *b = ones(200, 200);
     t1 = CLOCK();
     for (int i=0; i<NITER; ++i) {
@@ -220,7 +214,6 @@ int main() {
     t2 = CLOCK() - t1;
     free(b);
     printf("A*A':   \t %1.8lf\n", (t2/NITER));
-    #endif
 
     // mandel
     int mandel_sum;
