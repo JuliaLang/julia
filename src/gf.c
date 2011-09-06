@@ -341,6 +341,45 @@ static int very_general_type(jl_value_t *t)
 static jl_tuple_t *ml_matches(jl_methlist_t *ml, jl_value_t *type,
                               jl_tuple_t *t, jl_sym_t *name);
 
+/*
+  run type inference on lambda "li" in-place, for given argument types.
+  "def" is the original method definition of which this is an instance;
+  can be equal to "li" if not applicable.
+*/
+int jl_in_inference = 0;
+void jl_type_infer(jl_lambda_info_t *li, jl_tuple_t *argtypes,
+                   jl_lambda_info_t *def)
+{
+    int last_ii = jl_in_inference;
+    jl_in_inference = 1;
+    jl_specialize_ast(li);
+    if (jl_typeinf_func != NULL) {
+        // TODO: this should be done right before code gen, so if it is
+        // interrupted we can try again the next time the function is
+        // called
+        assert(li->inInference == 0);
+        li->inInference = 1;
+        jl_value_t *fargs[5];
+        fargs[0] = (jl_value_t*)li;
+        fargs[1] = (jl_value_t*)argtypes;
+        fargs[2] = (jl_value_t*)li->sparams;
+        fargs[3] = jl_false;
+        fargs[4] = (jl_value_t*)def;
+#ifdef TRACE_INFERENCE
+        ios_printf(ios_stdout,"inference on %s(", li->name->name);
+        print_sig(argtypes);
+        ios_printf(ios_stdout, ")\n");
+#endif
+#ifdef ENABLE_INFERENCE
+        jl_value_t *newast = jl_apply(jl_typeinf_func, fargs, 5);
+        li->ast = jl_tupleref(newast, 0);
+        li->inferred = jl_true;
+#endif
+        li->inInference = 0;
+    }
+    jl_in_inference = last_ii;
+}
+
 static jl_function_t *cache_method(jl_methtable_t *mt, jl_tuple_t *type,
                                    jl_function_t *method, jl_tuple_t *decl,
                                    jl_tuple_t *sparams)
@@ -604,31 +643,7 @@ static jl_function_t *cache_method(jl_methtable_t *mt, jl_tuple_t *type,
         method->linfo->specializations =
             jl_tuple2((jl_value_t*)newmeth->linfo,
                       (jl_value_t*)method->linfo->specializations);
-        jl_specialize_ast(newmeth->linfo);
-        if (jl_typeinf_func != NULL) {
-            // TODO: this should be done right before code gen, so if it is
-            // interrupted we can try again the next time the function is
-            // called
-            assert(newmeth->linfo->inInference == 0);
-            newmeth->linfo->inInference = 1;
-            jl_value_t *fargs[5];
-            fargs[0] = (jl_value_t*)newmeth->linfo;
-            fargs[1] = (jl_value_t*)type;
-            fargs[2] = (jl_value_t*)newmeth->linfo->sparams;
-            fargs[3] = jl_false;
-            fargs[4] = (jl_value_t*)method->linfo;
-#ifdef TRACE_INFERENCE
-            ios_printf(ios_stdout,"inference on %s(", newmeth->linfo->name->name);
-            print_sig(type);
-            ios_printf(ios_stdout, ")\n");
-#endif
-#ifdef ENABLE_INFERENCE
-            jl_value_t *newast = jl_apply(jl_typeinf_func, fargs, 5);
-            newmeth->linfo->ast = jl_tupleref(newast, 0);
-            newmeth->linfo->inferred = jl_true;
-#endif
-            newmeth->linfo->inInference = 0;
-        }
+        jl_type_infer(newmeth->linfo, type, method->linfo);
     }
     JL_GC_POP();
     return newmeth;
