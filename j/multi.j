@@ -1412,6 +1412,9 @@ function preduce(reducer, f, r::Range1{Size})
     N = length(r)
     each = div(N,np)
     rest = rem(N,np)
+    if each < 1
+        return fetch(@spawn f(r.start, r.start+N-1))
+    end
     results = cell(np)
     for i=1:np
         lo = r.start + (i-1)*each
@@ -1429,6 +1432,10 @@ function pfor(f, r::Range1{Size})
     N = length(r)
     each = div(N,np)
     rest = rem(N,np)
+    if each < 1
+        @spawn f(r.start, r.start+N-1)
+        return
+    end
     for i=1:np
         lo = r.start + (i-1)*each
         hi = lo + each-1
@@ -1445,8 +1452,9 @@ function make_preduce_body(reducer, var, body)
     localize_vars(
     quote
         function (($lo)::Size, ($hi)::Size)
-            ($ac) = ($reducer)()
-            for ($var) = ($lo):($hi)
+            ($var) = ($lo)
+            ($ac) = $body
+            for ($var) = (($lo)+1):($hi)
                 ($ac) = ($reducer)($ac, $body)
             end
             $ac

@@ -192,9 +192,9 @@ dzeros(args...)  = darray((T,d,da)->zeros(T,d), args...)
 dones(args...)   = darray((T,d,da)->ones(T,d), args...)
 dfill(v,args...) = darray((T,d,da)->fill(Array(T,d), v), typeof(v), args...)
 dcell(args...)   = darray((T,d,da)->cell(d), Any, args...)
-drand(args...)   = darray((T,d,da)->rand(d), args...)
-drandf(args...)  = darray((T,d,da)->randf(d), args...)
-drandn(args...)  = darray((T,d,da)->randn(d), args...)
+drand(args...)   = darray((T,d,da)->rand(d), Float64, args...)
+drandf(args...)  = darray((T,d,da)->randf(d), Float32, args...)
+drandn(args...)  = darray((T,d,da)->randn(d), Float64, args...)
 
 zero{T}(d::DArray{T}) = dzeros(T, size(d), d.distdim, d.pmap)
 

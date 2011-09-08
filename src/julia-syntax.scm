@@ -1318,16 +1318,17 @@ So far only the second case can actually occur.
 		      (eq? (car x) 'local!)))
 	       (cdr e))))
 
+(define (without alst remove)
+  (cond ((null? alst)               '())
+	((null? remove)             alst)
+	((memq (caar alst) remove)  (without (cdr alst) remove))
+	(else                       (cons (car alst)
+					  (without (cdr alst) remove)))))
+
 ; e - expression
 ; renames - assoc list of (oldname . newname)
 ; this works on any tree format after identify-locals
 (define (rename-vars e renames)
-  (define (without alst remove)
-    (cond ((null? alst)               '())
-	  ((null? remove)             alst)
-	  ((memq (caar alst) remove)  (without (cdr alst) remove))
-	  (else                       (cons (car alst)
-					    (without (cdr alst) remove)))))
   (cond ((null? renames)  e)
 	((symbol? e)      (lookup e renames e))
 	((not (pair? e))  e)
