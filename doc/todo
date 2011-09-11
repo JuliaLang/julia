@@ -713,7 +713,7 @@ issues 1/24/11
   where we know the function is identical for all types of x
   * add x::ANY
   - reuse specialized methods for multiple types in an Any slot
-- implement SubArray
+* implement SubArray
 - isassigned predicates
   . maybe syntax like "a?=x" or "a??"
 - inlined tuple assignment optimization

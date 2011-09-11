@@ -1256,12 +1256,18 @@ So far only the second case can actually occur.
 	(else
 	 (apply append (map declared-global-vars e))))))
 
+(define (check-dups locals)
+  (if (and (pair? locals) (pair? (cdr locals)))
+      (or (and (memq (car locals) (cdr locals))
+	       (error (string "local " (car locals) " declared twice")))
+	  (check-dups (cdr locals)))
+      locals))
+
 (define (find-assigned-vars e env)
   (if (or (not (pair? e)) (quoted? e))
       '()
       (case (car e)
 	((lambda scope-block)  '())
-	((local local!)  (list (decl-var (cadr e))))
 	((=)
 	 (let ((v (decl-var (cadr e))))
 	   (if (memq v env)
@@ -1271,38 +1277,63 @@ So far only the second case can actually occur.
 	 (apply append! (map (lambda (x) (find-assigned-vars x env))
 			     e))))))
 
-; local variable identification
-; convert (scope-block x) to `(scope-block ,@locals ,x)
-; where locals is a list of (local x) expressions, derived from two sources:
-; 1. (local x) expressions inside this scope-block and lambda
-; 2. variables assigned inside this scope-block that don't exist in outer
-;    scopes
-(define (identify-locals e)
-  (define (add-local-decls e env)
-    (if (or (not (pair? e)) (quoted? e)) e
-	(cond ((eq? (car e) 'lambda)
-	       (let* ((env (append (lam:vars e) env))
-		      (body (add-local-decls (caddr e) env)))
-		 (list 'lambda (cadr e) body)))
+(define (find-local-decls e env)
+  (if (or (not (pair? e)) (quoted? e))
+      '()
+      (case (car e)
+	((lambda scope-block)  '())
+	((local)  (list (decl-var (cadr e))))
+	(else
+	 (apply append! (map (lambda (x) (find-local-decls x env))
+			     e))))))
 
-	      ((eq? (car e) 'scope-block)
-	       (let* ((glob (declared-global-vars (cadr e)))
-		      (vars (delete-duplicates
-			     (find-assigned-vars
-			      ; being declared global prevents a variable
-			      ; assignment from introducing a local
-			      (cadr e) (append env glob))))
-		      (body (add-local-decls (cadr e) (append vars glob env))))
-		 `(scope-block ,@(map (lambda (v) `(local ,v))
-				      vars)
-			       ,body)))
-	      (else
-	       ; form (local! x) adds a local to a normal (non-scope) block
-	       (let ((newenv (append (declared-local!-vars e) env)))
-		 (map (lambda (x)
-			(add-local-decls x newenv))
-		      e))))))
-  (add-local-decls e '()))
+(define (find-local!-decls e env)
+  (if (or (not (pair? e)) (quoted? e))
+      '()
+      (case (car e)
+	((lambda scope-block)  '())
+	((local!)  (list (decl-var (cadr e))))
+	(else
+	 (apply append! (map (lambda (x) (find-local!-decls x env))
+			     e))))))
+
+(define (find-locals e env)
+  (delete-duplicates
+   (append! (check-dups (find-local-decls e env))
+	    (find-local!-decls e env)
+	    (find-assigned-vars e env))))
+
+;; local variable identification
+;; convert (scope-block x) to `(scope-block ,@locals ,x)
+;; where locals is a list of (local x) expressions, derived from two sources:
+;; 1. (local x) expressions inside this scope-block and lambda
+;; 2. variables assigned inside this scope-block that don't exist in outer
+;;    scopes
+(define (add-local-decls e env)
+  (if (or (not (pair? e)) (quoted? e)) e
+      (cond ((eq? (car e) 'lambda)
+	     (let* ((env (append (lam:vars e) env))
+		    (body (add-local-decls (caddr e) env)))
+	       (list 'lambda (cadr e) body)))
+	    
+	    ((eq? (car e) 'scope-block)
+	     (let* ((glob (declared-global-vars (cadr e)))
+		    (vars (find-locals
+			   ;; being declared global prevents a variable
+			   ;; assignment from introducing a local
+			   (cadr e) (append env glob)))
+		    (body (add-local-decls (cadr e) (append vars glob env))))
+	       `(scope-block ,@(map (lambda (v) `(local ,v))
+				    vars)
+			     ,body)))
+	    (else
+	     ;; form (local! x) adds a local to a normal (non-scope) block
+	     (let ((newenv (append (declared-local!-vars e) env)))
+	       (map (lambda (x)
+		      (add-local-decls x newenv))
+		    e))))))
+
+(define (identify-locals e) (add-local-decls e '()))
 
 (define (declared-local-vars e)
   (map (lambda (x) (decl-var (cadr x)))
@@ -1345,8 +1376,8 @@ So far only the second case can actually occur.
 			(rename-vars x new-renames))
 		      (cdr e)))))))
 
-; remove (scope-block) and (local), convert lambdas to the form
-; (lambda (argname...) (locals var...) body)
+;; remove (scope-block) and (local), convert lambdas to the form
+;; (lambda (argname...) (locals var...) body)
 (define (flatten-scopes e)
   (define scope-block-vars '())
   (define (remove-scope-blocks e)
@@ -1372,11 +1403,14 @@ So far only the second case can actually occur.
 			       body0))
 		(l0
 		 (if (eq? (car body0) 'scope-block)
-		     (filter   ; remove locals conflicting with arg names
-		      (lambda (v) (not (memq v argnames)))
-		      (declared-local-vars body0))
+		     (declared-local-vars body0)
 		     (declared-local!-vars body0)))
 		(r-s-b (remove-scope-blocks body)))
+	   (for-each (lambda (v)
+		       (if (memq v argnames)
+			   (error (string "local " v
+					  " conflicts with argument"))))
+		     l0)
 	   `(lambda ,(cadr e)
 	      (locals ,@l0 ,@scope-block-vars)
 	      ,r-s-b)))
