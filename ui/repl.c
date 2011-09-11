@@ -48,26 +48,29 @@ void parse_opts(int *argcp, char ***argvp) {
     };
     int c;
     opterr = 0;
+    int ind = 1;
     while ((c = getopt_long(*argcp,*argvp,shortopts,longopts,0)) != -1) {
-        if (c == '?') {
-            optind--;
-            break;
-        }
         switch (c) {
         case 0:
             break;
+        case '?':
+            break;
         case 'H':
             julia_home = strdup(optarg);
+            ind+=2;
             break;
         case 'T':
             // TODO: more robust error checking.
             tab_width = atoi(optarg);
+            ind+=2;
             break;
         case 'b':
             image_file = NULL;
+            ind+=1;
             break;
         case 'J':
             image_file = optarg;
+            ind+=2;
             break;
         case 'h':
             printf("%s%s", usage, opts);
@@ -89,13 +92,12 @@ void parse_opts(int *argcp, char ***argvp) {
             free(julia_path);
         }
     }
-    *argvp += optind;
-    *argcp -= optind;
+    *argvp += ind;
+    *argcp -= ind;
     if (image_file==NULL && *argcp > 0) {
         if (strcmp((*argvp)[0], "-")) {
             program = (*argvp)[0];
         }
-        ++*argvp; --*argcp;
     }
 }
 
