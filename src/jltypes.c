@@ -1683,8 +1683,7 @@ static int jl_subtype_le(jl_value_t *a, jl_value_t *b, int ta, int morespecific,
     if (!ta&&jl_is_typector(a)) a = (jl_value_t*)((jl_typector_t*)a)->body;
     if (jl_is_typector(b)) b = (jl_value_t*)((jl_typector_t*)b)->body;
     if (ta) {
-        if (jl_is_tag_type(b) &&
-            ((jl_tag_type_t*)b)->name == jl_type_type->name) {
+        if (jl_is_type_type(b)) {
             jl_value_t *bp = jl_tparam0(b);
             if (jl_is_type(a))
                 return jl_subtype_le(a, bp, 0, morespecific, 1);

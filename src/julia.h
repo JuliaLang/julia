@@ -494,6 +494,12 @@ static inline int jl_is_nontuple_type(jl_value_t *v)
             jl_typeis(v, jl_bits_kind));
 }
 
+static inline int jl_is_type_type(jl_value_t *v)
+{
+    return (jl_is_tag_type(v) &&
+            ((jl_tag_type_t*)(v))->name == jl_type_type->name);
+}
+
 // type info accessors
 jl_value_t *jl_full_type(jl_value_t *v);
 size_t jl_field_offset(jl_struct_type_t *t, jl_sym_t *fld);

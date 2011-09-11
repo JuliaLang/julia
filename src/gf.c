@@ -112,8 +112,7 @@ static inline int cache_match(jl_value_t **args, size_t n, jl_tuple_t *sig,
             if (!jl_subtype(a, decl, 1))
                 return 0;
         }
-        else if (jl_is_tag_type(decl) &&
-                 ((jl_tag_type_t*)decl)->name == jl_type_type->name &&
+        else if (jl_is_type_type(decl) &&
                  jl_is_nontuple_type(a)) {   //***
             if (jl_tparam0(decl) == (jl_value_t*)jl_typetype_tvar) {
                 // in the case of Type{T}, the types don't have
@@ -459,10 +458,7 @@ static jl_function_t *cache_method(jl_methtable_t *mt, jl_tuple_t *type,
                 }
             }
         }
-        else if (jl_is_tag_type(elt) &&
-                 ((jl_tag_type_t*)elt)->name==jl_type_type->name &&
-                 jl_is_tag_type(jl_tparam0(elt)) &&
-                 ((jl_tag_type_t*)jl_tparam0(elt))->name==jl_type_type->name) {
+        else if (jl_is_type_type(elt) && jl_is_type_type(jl_tparam0(elt))) {
             /*
               actual argument was Type{...}, we computed its type as
               Type{Type{...}}. we must avoid unbounded nesting here, so
@@ -483,8 +479,7 @@ static jl_function_t *cache_method(jl_methtable_t *mt, jl_tuple_t *type,
             }
             assert(jl_tupleref(type,i) != (jl_value_t*)jl_bottom_type);
         }
-        else if (jl_is_tag_type(elt) &&
-                 ((jl_tag_type_t*)elt)->name==jl_type_type->name &&
+        else if (jl_is_type_type(elt) &&
                  very_general_type(nth_slot_type(decl,i))) {
             /*
               here's a fairly complex heuristic: if this argument slot's
@@ -547,8 +542,7 @@ static jl_function_t *cache_method(jl_methtable_t *mt, jl_tuple_t *type,
         type = limited;
         if (all_are_subtypes) {
             // avoid Type{Type{...}...}...
-            if (jl_is_tag_type(lasttype) &&
-                ((jl_tag_type_t*)lasttype)->name == jl_type_type->name)
+            if (jl_is_type_type(lasttype))
                 lasttype = (jl_value_t*)jl_type_type;
             temp = (jl_value_t*)jl_tuple1(lasttype);
             jl_tupleset(type, i, jl_apply_type((jl_value_t*)jl_seq_type,

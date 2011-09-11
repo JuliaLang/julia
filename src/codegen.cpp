@@ -733,10 +733,42 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
         }
     }
     else if (f->fptr == &jl_f_typeassert && nargs==2) {
-        
+        jl_value_t *arg = expr_type(args[1]); rt1 = arg;
+        jl_value_t *ty  = expr_type(args[2]); rt2 = ty;
+        if (jl_is_type_type(ty) && !jl_is_typevar(jl_tparam0(ty))) {
+            jl_value_t *tp0 = jl_tparam0(ty);
+            if (jl_subtype(arg, tp0, 0)) {
+                JL_GC_POP();
+                return emit_expr(args[1], ctx, true);
+            }
+            if (!jl_is_tuple(tp0) && jl_is_leaf_type(tp0)) {
+                Value *arg1 = emit_expr(args[1], ctx, true);
+                emit_typecheck(arg1, tp0, "typeassert", ctx);
+                JL_GC_POP();
+                return arg1;
+            }
+        }
     }
     else if (f->fptr == &jl_f_isa && nargs==2) {
-        
+        jl_value_t *arg = expr_type(args[1]); rt1 = arg;
+        jl_value_t *ty  = expr_type(args[2]); rt2 = ty;
+        if (jl_is_type_type(ty) && !jl_is_typevar(jl_tparam0(ty))) {
+            jl_value_t *tp0 = jl_tparam0(ty);
+            if (jl_subtype(arg, tp0, 0)) {
+                JL_GC_POP();
+                return ConstantInt::get(T_int1,1);
+            }
+            if (!jl_is_tuple(tp0) && jl_is_leaf_type(tp0)) {
+                if (jl_is_leaf_type(arg)) {
+                    JL_GC_POP();
+                    return ConstantInt::get(T_int1,0);
+                }
+                Value *arg1 = emit_expr(args[1], ctx, true);
+                JL_GC_POP();
+                return builder.CreateICmpEQ(emit_typeof(arg1),
+                                            literal_pointer_val(tp0));
+            }
+        }
     }
     else if (f->fptr == &jl_f_tuplelen && nargs==1) {
         jl_value_t *aty = expr_type(args[1]); rt1 = aty;
@@ -778,6 +810,22 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
             JL_GC_POP();
             return literal_pointer_val((jl_value_t*)jl_null);
         }
+        size_t i;
+        for(i=0; i < nargs; i++) {
+            if (!jl_is_bits_type(jl_typeof(args[i+1])))
+                break;
+        }
+        if (i >= nargs) {
+            // all arguments immutable; can be statically evaluated
+            rt1 = (jl_value_t*)jl_alloc_tuple_uninit(nargs);
+            for(i=0; i < nargs; i++) {
+                jl_tupleset(rt1, i, args[i+1]);
+            }
+            ctx->linfo->roots = jl_tuple2(rt1, ctx->linfo->roots);
+            JL_GC_POP();
+            return literal_pointer_val(rt1);
+        }
+
         int last_depth = ctx->argDepth;
         Value *tup =
             builder.CreateBitCast
@@ -790,11 +838,11 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
                             emit_nthptr_addr(tup, (size_t)0));
         builder.CreateStore(literal_pointer_val((jl_value_t*)nargs),
                             emit_nthptr_addr(tup, (size_t)1));
-        for(size_t i=0; i < nargs; i++) {
+        for(i=0; i < nargs; i++) {
             builder.CreateStore(V_null,
                                 emit_nthptr_addr(tup, i+2));
         }
-        for(size_t i=0; i < nargs; i++) {
+        for(i=0; i < nargs; i++) {
             builder.CreateStore(boxed(emit_expr(args[i+1], ctx, true)),
                                 emit_nthptr_addr(tup, i+2));
         }
@@ -1011,8 +1059,7 @@ static Value *emit_call(jl_value_t **args, size_t arglen, jl_codectx_t *ctx)
 #endif
         if (!jl_is_func_type(hdtype) &&
             hdtype!=(jl_value_t*)jl_struct_kind &&
-            !(jl_is_tag_type(hdtype) &&
-              ((jl_tag_type_t*)hdtype)->name==jl_type_type->name &&
+            !(jl_is_type_type(hdtype) &&
               jl_is_struct_type(jl_tparam0(hdtype)))) {
             emit_func_check(theFunc, ctx);
         }
@@ -1259,8 +1306,7 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool value)
 	}
     else if (ex->head == static_typeof_sym) {
         jl_value_t *extype = expr_type((jl_value_t*)ex);
-        if (jl_is_tag_type(extype) &&
-            ((jl_tag_type_t*)extype)->name == jl_type_type->name) {
+        if (jl_is_type_type(extype)) {
             extype = jl_tparam0(extype);
             if (jl_is_typevar(extype))
                 extype = ((jl_tvar_t*)extype)->ub;
@@ -1282,8 +1328,7 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool value)
     }
     else if (ex->head == new_sym) {
         jl_value_t *ty = expr_type(args[0]);
-        if (jl_is_tag_type(ty) &&
-            ((jl_tag_type_t*)ty)->name == jl_type_type->name &&
+        if (jl_is_type_type(ty) &&
             jl_is_struct_type(jl_tparam0(ty)) &&
             jl_is_leaf_type(jl_tparam0(ty))) {
             ty = jl_tparam0(ty);
