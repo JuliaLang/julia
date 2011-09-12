@@ -549,28 +549,60 @@ assign(d::DArray, v, I::Union(Index,AbstractVector{Index})...) =
 
 ## matrix multiply ##
 
-function node_multiply{T}(A::AbstractArray{T}, B, sz)
+function node_multiply2{T}(A::AbstractArray{T}, B, sz)
     locl = Array(T, sz)
     if !isempty(locl)
-        cols = B.dist
-        Adata = localize(A)
-        for p=1:length(A.dist)-1
-            r = remote_call_fetch(p, localize, B)
-            locl[:, cols[p]:cols[p+1]-1] = Adata * r
+        Bdata = localize(B)
+        np = length(B.pmap)
+        nr = size(locl,1)
+        if np >= nr
+            rows = [1,nr+1]
+        else
+            rows = linspace(1,nr+1,np+1)
+        end
+        for p=1:length(rows)-1
+            R = rows[p]:rows[p+1]-1
+            locl[R, :] = A[R, :] * Bdata
         end
     end
     locl
 end
 
 function (*){T}(A::DArray{T,2,1}, B::DArray{T,2,2})
-    if !isequal(A.pmap, B.pmap)
-        error("unsupported case of distributed *")
+    darray((T,sz,da)->node_multiply2(A,B,sz), T, (size(A,1),size(B,2)), 2,
+           B.pmap)
+end
+
+function (*){T}(A::DArray{T,2}, B::DArray{T,2,2})
+    darray((T,sz,da)->node_multiply2(A,B,sz), T, (size(A,1),size(B,2)), 2,
+           B.pmap)
+end
+
+function node_multiply1{T}(A::AbstractArray{T}, B, sz)
+    locl = Array(T, sz)
+    if !isempty(locl)
+        Adata = localize(A)
+        np = length(A.pmap)
+        nc = size(locl,2)
+        if np >= nc
+            cols = [1,nc+1]
+        else
+            cols = linspace(1,nc+1,np+1)
+        end
+        for p=1:length(cols)-1
+            C = cols[p]:cols[p+1]-1
+            locl[:, C] = Adata * B[:, C]
+        end
     end
-    darray((T,sz,da)->node_multiply(A,B,sz), T, (size(A,1),size(B,2)), 1,
+    locl
+end
+
+function (*){T}(A::DArray{T,2,1}, B::DArray{T,2})
+    darray((T,sz,da)->node_multiply1(A,B,sz), T, (size(A,1),size(B,2)), 1,
            A.pmap)
 end
 
-(*){T}(A::DArray{T,2}, B::DArray{T,2}) = changedist(A, 1) * changedist(B, 2)
+(*){T}(A::DArray{T,2}, B::DArray{T,2}) = A * changedist(B, 2)
 
 ## elementwise operators ##
 
