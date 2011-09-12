@@ -713,7 +713,7 @@ issues 1/24/11
   where we know the function is identical for all types of x
   * add x::ANY
   - reuse specialized methods for multiple types in an Any slot
-- implement SubArray
+* implement SubArray
 - isassigned predicates
   . maybe syntax like "a?=x" or "a??"
 - inlined tuple assignment optimization
@@ -797,3 +797,10 @@ this (and tintersect on NTuple) is needed to define Array() methods in boot.j
 
 - check what function vcat{T}(A::Array{T,2}...) gets specialized for on
   4 Array{Float64,2} arguments.
+
+- make sure an argument with declared type gets the declaration recorded
+  even if the argument doesn't occur in the function (but might occur in
+  a nested function)
+
+* call inference on general thunks so we don't need to make GFs for them
+  in toplevel_eval

@@ -33,11 +33,8 @@ function show(x::Rational)
     show(den(x))
 end
 
-convert{T<:Int}(::Type{Rational{T}}, x::T) = Rational(x, convert(T,1))
-convert{T<:Int}(::Type{Rational{T}}, x::Int) = Rational(convert(T,x), convert(T,1))
 convert{T<:Int}(::Type{Rational{T}}, x::Rational) = Rational(convert(T,x.num),convert(T,x.den))
-convert{T<:Float}(::Type{T}, x::Rational) = convert(T,x.num)/convert(T,x.den)
-convert{T<:Int}(::Type{T}, x::Rational) = div(convert(T,x.num),convert(T,x.den))
+convert{T<:Int}(::Type{Rational{T}}, x::Int) = Rational(convert(T,x), convert(T,1))
 
 function convert{T<:Int}(::Type{Rational{T}}, x::Float, tol::Real)
     if isnan(x); return zero(T)//zero(T); end
@@ -54,8 +51,10 @@ function convert{T<:Int}(::Type{Rational{T}}, x::Float, tol::Real)
         y = 1/y
     end
 end
-
 convert{T<:Int}(rt::Type{Rational{T}}, x::Float) = convert(rt,x,eps(x))
+
+convert{T<:Float}(::Type{T}, x::Rational) = convert(T,x.num)/convert(T,x.den)
+convert{T<:Int}(::Type{T}, x::Rational) = div(convert(T,x.num),convert(T,x.den))
 
 promote_rule{T<:Int}(::Type{Rational{T}}, ::Type{T}) = Rational{T}
 promote_rule{T<:Int,S<:Int}(::Type{Rational{T}}, ::Type{S}) = Rational{promote_type(T,S)}

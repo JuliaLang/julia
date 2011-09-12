@@ -713,6 +713,15 @@ glotest()
 @assert glob_x == 88
 @assert loc_x == 10
 
+# dispatch
+begin
+    local foo
+    foo(x::(Any...))=0
+    foo(x::(Int...))=1
+    @assert foo((:a,))==0
+    @assert foo(( 2,))==1
+end
+
 # ranges
 @assert size(10:1:0) == (0,)
 @assert length(1:.2:2) == 6

@@ -65,7 +65,7 @@
 #type Expr
 #    head::Symbol
 #    args::Array{Any,1}
-#    type::Any
+#    typ::Any
 #end
 
 #type LineNumberNode

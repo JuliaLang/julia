@@ -282,7 +282,7 @@ jl_value_t *jl_toplevel_eval_flex(jl_value_t *ex, int fast)
             jl_array_t *vinfos = jl_lam_vinfo((jl_expr_t*)thk->ast);
             int i;
             for(i=0; i < vinfos->length; i++) {
-                if (jl_cellref(jl_cellref(vinfos,i),2)!=jl_false) {
+                if (jl_vinfo_capt((jl_array_t*)jl_cellref(vinfos,i))) {
                     // interpreter doesn't handle closure environment
                     ewc = 1;
                     break;
@@ -296,10 +296,7 @@ jl_value_t *jl_toplevel_eval_flex(jl_value_t *ex, int fast)
     JL_GC_PUSH(&thunk, &gf, &thk);
     if (ewc) {
         thunk = jl_new_closure_internal(thk, (jl_value_t*)jl_null);
-        // use a generic function so type inference runs
-        gf = jl_new_generic_function(lambda_sym);
-        jl_add_method(gf, jl_null, (jl_function_t*)thunk);
-        result = jl_apply(gf, NULL, 0);
+        result = jl_apply((jl_function_t*)thunk, NULL, 0);
     }
     else {
         result = jl_interpret_toplevel_thunk(thk);
@@ -837,11 +834,23 @@ JL_CALLABLE(jl_f_show_any)
 
 // --- RTS primitives ---
 
+extern int jl_in_inference;
+
 JL_CALLABLE(jl_trampoline)
 {
     jl_function_t *f = (jl_function_t*)jl_t0(env);
     assert(jl_is_func(f));
     assert(f->linfo != NULL);
+    if (f->linfo->inferred == jl_false) {
+        if (!jl_in_inference) {
+            int na = jl_lam_args((jl_expr_t*)f->linfo->ast)->length;
+            jl_tuple_t *atypes = jl_tuple_fill(na+1, (jl_value_t*)jl_any_type);
+            JL_GC_PUSH(&atypes);
+            jl_tupleset(atypes, na, jl_tupleref(jl_tuple_type,0));
+            jl_type_infer(f->linfo, atypes, f->linfo);
+            JL_GC_POP();
+        }
+    }
     jl_compile(f);
     assert(f->fptr == &jl_trampoline);
     jl_generate_fptr(f);
@@ -1116,10 +1125,12 @@ jl_value_t *jl_method_def(jl_sym_t *name, jl_value_t **bp,
         if (!jl_is_gf(gf))
             jl_error("in method definition: not a generic function");
     }
+    JL_GC_PUSH(&gf);
     assert(jl_is_function(f));
     assert(jl_is_tuple(argtypes));
     check_type_tuple(argtypes, name, "method definition");
     jl_add_method((jl_function_t*)gf, argtypes, f);
+    JL_GC_POP();
     return gf;
 }
 

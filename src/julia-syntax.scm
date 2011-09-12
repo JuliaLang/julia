@@ -1124,24 +1124,26 @@
 	   (to-lff (expand-or e) dest tail))
 
 	  ((block)
-	   (let* ((g (gensy))
-		  (stmts
-		   (let loop ((tl (cdr e)))
-		     (if (null? tl) '()
-			 (if (null? (cdr tl))
-			     (cond ((or tail (eq? dest #f) (symbol? dest))
-				    (blk-tail (to-lff (car tl) dest tail)))
-				   (else
-				    (blk-tail (to-lff (car tl) g tail))))
-			     (cons (to-blk (to-lff (car tl) #f #f))
-				   (loop (cdr tl))))))))
-	     (if (and (eq? dest #t) (not tail))
-		 (cons g (reverse stmts))
-		 (if (and tail (null? stmts))
-		     (cons '(return (null))
-			   '())
-		     (cons (cons 'block stmts)
-			   '())))))
+	   (if (length= e 2)
+	       (to-lff (cadr e) dest tail)
+	       (let* ((g (gensy))
+		      (stmts
+		       (let loop ((tl (cdr e)))
+			 (if (null? tl) '()
+			     (if (null? (cdr tl))
+				 (cond ((or tail (eq? dest #f) (symbol? dest))
+					(blk-tail (to-lff (car tl) dest tail)))
+				       (else
+					(blk-tail (to-lff (car tl) g tail))))
+				 (cons (to-blk (to-lff (car tl) #f #f))
+				       (loop (cdr tl))))))))
+		 (if (and (eq? dest #t) (not tail))
+		     (cons g (reverse stmts))
+		     (if (and tail (null? stmts))
+			 (cons '(return (null))
+			       '())
+			 (cons (cons 'block stmts)
+			       '()))))))
 
 	  ((return)
 	   (if (and dest (not tail))
@@ -1254,12 +1256,18 @@ So far only the second case can actually occur.
 	(else
 	 (apply append (map declared-global-vars e))))))
 
+(define (check-dups locals)
+  (if (and (pair? locals) (pair? (cdr locals)))
+      (or (and (memq (car locals) (cdr locals))
+	       (error (string "local " (car locals) " declared twice")))
+	  (check-dups (cdr locals)))
+      locals))
+
 (define (find-assigned-vars e env)
   (if (or (not (pair? e)) (quoted? e))
       '()
       (case (car e)
 	((lambda scope-block)  '())
-	((local local!)  (list (decl-var (cadr e))))
 	((=)
 	 (let ((v (decl-var (cadr e))))
 	   (if (memq v env)
@@ -1269,38 +1277,63 @@ So far only the second case can actually occur.
 	 (apply append! (map (lambda (x) (find-assigned-vars x env))
 			     e))))))
 
-; local variable identification
-; convert (scope-block x) to `(scope-block ,@locals ,x)
-; where locals is a list of (local x) expressions, derived from two sources:
-; 1. (local x) expressions inside this scope-block and lambda
-; 2. variables assigned inside this scope-block that don't exist in outer
-;    scopes
-(define (identify-locals e)
-  (define (add-local-decls e env)
-    (if (or (not (pair? e)) (quoted? e)) e
-	(cond ((eq? (car e) 'lambda)
-	       (let* ((env (append (lam:vars e) env))
-		      (body (add-local-decls (caddr e) env)))
-		 (list 'lambda (cadr e) body)))
+(define (find-local-decls e env)
+  (if (or (not (pair? e)) (quoted? e))
+      '()
+      (case (car e)
+	((lambda scope-block)  '())
+	((local)  (list (decl-var (cadr e))))
+	(else
+	 (apply append! (map (lambda (x) (find-local-decls x env))
+			     e))))))
 
-	      ((eq? (car e) 'scope-block)
-	       (let* ((glob (declared-global-vars (cadr e)))
-		      (vars (delete-duplicates
-			     (find-assigned-vars
-			      ; being declared global prevents a variable
-			      ; assignment from introducing a local
-			      (cadr e) (append env glob))))
-		      (body (add-local-decls (cadr e) (append vars glob env))))
-		 `(scope-block ,@(map (lambda (v) `(local ,v))
-				      vars)
-			       ,body)))
-	      (else
-	       ; form (local! x) adds a local to a normal (non-scope) block
-	       (let ((newenv (append (declared-local!-vars e) env)))
-		 (map (lambda (x)
-			(add-local-decls x newenv))
-		      e))))))
-  (add-local-decls e '()))
+(define (find-local!-decls e env)
+  (if (or (not (pair? e)) (quoted? e))
+      '()
+      (case (car e)
+	((lambda scope-block)  '())
+	((local!)  (list (decl-var (cadr e))))
+	(else
+	 (apply append! (map (lambda (x) (find-local!-decls x env))
+			     e))))))
+
+(define (find-locals e env)
+  (delete-duplicates
+   (append! (check-dups (find-local-decls e env))
+	    (find-local!-decls e env)
+	    (find-assigned-vars e env))))
+
+;; local variable identification
+;; convert (scope-block x) to `(scope-block ,@locals ,x)
+;; where locals is a list of (local x) expressions, derived from two sources:
+;; 1. (local x) expressions inside this scope-block and lambda
+;; 2. variables assigned inside this scope-block that don't exist in outer
+;;    scopes
+(define (add-local-decls e env)
+  (if (or (not (pair? e)) (quoted? e)) e
+      (cond ((eq? (car e) 'lambda)
+	     (let* ((env (append (lam:vars e) env))
+		    (body (add-local-decls (caddr e) env)))
+	       (list 'lambda (cadr e) body)))
+	    
+	    ((eq? (car e) 'scope-block)
+	     (let* ((glob (declared-global-vars (cadr e)))
+		    (vars (find-locals
+			   ;; being declared global prevents a variable
+			   ;; assignment from introducing a local
+			   (cadr e) (append env glob)))
+		    (body (add-local-decls (cadr e) (append vars glob env))))
+	       `(scope-block ,@(map (lambda (v) `(local ,v))
+				    vars)
+			     ,body)))
+	    (else
+	     ;; form (local! x) adds a local to a normal (non-scope) block
+	     (let ((newenv (append (declared-local!-vars e) env)))
+	       (map (lambda (x)
+		      (add-local-decls x newenv))
+		    e))))))
+
+(define (identify-locals e) (add-local-decls e '()))
 
 (define (declared-local-vars e)
   (map (lambda (x) (decl-var (cadr x)))
@@ -1316,16 +1349,17 @@ So far only the second case can actually occur.
 		      (eq? (car x) 'local!)))
 	       (cdr e))))
 
+(define (without alst remove)
+  (cond ((null? alst)               '())
+	((null? remove)             alst)
+	((memq (caar alst) remove)  (without (cdr alst) remove))
+	(else                       (cons (car alst)
+					  (without (cdr alst) remove)))))
+
 ; e - expression
 ; renames - assoc list of (oldname . newname)
 ; this works on any tree format after identify-locals
 (define (rename-vars e renames)
-  (define (without alst remove)
-    (cond ((null? alst)               '())
-	  ((null? remove)             alst)
-	  ((memq (caar alst) remove)  (without (cdr alst) remove))
-	  (else                       (cons (car alst)
-					    (without (cdr alst) remove)))))
   (cond ((null? renames)  e)
 	((symbol? e)      (lookup e renames e))
 	((not (pair? e))  e)
@@ -1342,8 +1376,8 @@ So far only the second case can actually occur.
 			(rename-vars x new-renames))
 		      (cdr e)))))))
 
-; remove (scope-block) and (local), convert lambdas to the form
-; (lambda (argname...) (locals var...) body)
+;; remove (scope-block) and (local), convert lambdas to the form
+;; (lambda (argname...) (locals var...) body)
 (define (flatten-scopes e)
   (define scope-block-vars '())
   (define (remove-scope-blocks e)
@@ -1369,11 +1403,14 @@ So far only the second case can actually occur.
 			       body0))
 		(l0
 		 (if (eq? (car body0) 'scope-block)
-		     (filter   ; remove locals conflicting with arg names
-		      (lambda (v) (not (memq v argnames)))
-		      (declared-local-vars body0))
+		     (declared-local-vars body0)
 		     (declared-local!-vars body0)))
 		(r-s-b (remove-scope-blocks body)))
+	   (for-each (lambda (v)
+		       (if (memq v argnames)
+			   (error (string "local " v
+					  " conflicts with argument"))))
+		     l0)
 	   `(lambda ,(cadr e)
 	      (locals ,@l0 ,@scope-block-vars)
 	      ,r-s-b)))
@@ -1381,13 +1418,26 @@ So far only the second case can actually occur.
 				   (flatten-scopes x)))
 		   e))))
 
-(define (make-var-info name) (list name 'Any #f #f))
+(define (make-var-info name) (list name 'Any 0))
 (define vinfo:name car)
 (define vinfo:type cadr)
-(define vinfo:capt caddr)
+(define (vinfo:capt v) (< 0 (logand (caddr v) 1)))
 (define (vinfo:set-type! v t) (set-car! (cdr v) t))
-(define (vinfo:set-capt! v c) (set-car! (cddr v) c))
-(define (vinfo:set-asgn! v a) (set-car! (cdddr v) a))
+;; record whether var is captured
+(define (vinfo:set-capt! v c) (set-car! (cddr v)
+					(if c
+					    (logior (caddr v) 1)
+					    (logand (caddr v) -2))))
+;; whether var is assigned
+(define (vinfo:set-asgn! v a) (set-car! (cddr v)
+					(if a
+					    (logior (caddr v) 2)
+					    (logand (caddr v) -3))))
+;; whether var is assigned by an inner function
+(define (vinfo:set-iasg! v a) (set-car! (cddr v)
+					(if a
+					    (logior (caddr v) 4)
+					    (logand (caddr v) -5))))
 (define var-info-for assq)
 
 (define (lambda-all-vars e)
@@ -1405,16 +1455,19 @@ So far only the second case can actually occur.
 ; convert each lambda's (locals ...) to
 ;   (vinf (locals ...) var-info-lst captured-var-infos)
 ; where var-info-lst is a list of var-info records
-(define (analyze-vars e env)
+(define (analyze-vars e env captvars)
   (cond ((or (atom? e) (quoted? e)) e)
-	((and (eq? (car e) '=) (symbol? (cadr e)))
+	((eq? (car e) '=)
 	 (let ((vi (var-info-for (cadr e) env)))
 	   (if vi
-	       (vinfo:set-asgn! vi #t)))
-	 `(= ,(cadr e) ,(analyze-vars (caddr e) env)))
+	       (begin
+		 (vinfo:set-asgn! vi #t)
+		 (if (assq (car vi) captvars)
+		     (vinfo:set-iasg! vi #t)))))
+	 `(= ,(cadr e) ,(analyze-vars (caddr e) env captvars)))
 	((or (eq? (car e) 'local) (eq? (car e) 'local!))
 	 (if (pair? (cadr e))
-	     (analyze-vars (cadr e) env)
+	     (analyze-vars (cadr e) env captvars)
 	     '(null)))
 	((eq? (car e) 'typeassert)
 	 ;(let ((vi (var-info-for (cadr e) env)))
@@ -1455,7 +1508,8 @@ So far only the second case can actually occur.
 					    (and
 					     (not (memq (vinfo:name v) allv))
 					     (not (memq (vinfo:name v) glo))))
-					  env)))))
+					  env))
+			  cv)))
 	   ; mark all the vars we capture as captured
 	   (for-each (lambda (v) (vinfo:set-capt! v #t))
 		     cv)
@@ -1474,12 +1528,12 @@ So far only the second case can actually occur.
 	     (analyze-vars
 	      `(call (lambda ,vs ,(caddr (cadr e)) ,(cadddr (cadr e)))
 		     ,@vs)
-	      env))))
+	      env captvars))))
 	(else (cons (car e)
-		    (map (lambda (x) (analyze-vars x env))
+		    (map (lambda (x) (analyze-vars x env captvars))
 			 (cdr e))))))
 
-(define (analyze-variables e) (analyze-vars e '()))
+(define (analyze-variables e) (analyze-vars e '() '()))
 
 ; remove if, _while, block, break-block, and break
 ; replaced with goto and gotoifnot

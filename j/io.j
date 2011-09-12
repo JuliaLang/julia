@@ -311,8 +311,7 @@ function load_ascii_array(f, nr, nc)
     for i=1:nr
         row = split(readline(f), delims, false)
         for j=1:nc
-            a[i,j] = ccall(dlsym(libc,:strtod),Float64,(Ptr{Uint8},Ptr{Uint8}),
-                           cstring(row[j]), C_NULL)
+            a[i,j] = float64(row[j])
         end
     end
     a

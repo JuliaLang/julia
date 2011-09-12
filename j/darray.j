@@ -48,6 +48,9 @@ type DArray{T,N,distdim} <: AbstractArray{T,N}
     end
 end
 
+typealias SubDArray{T,N}   SubArray{T,N,DArray{T}}
+typealias SubOrDArray{T,N} Union(DArray{T,N}, SubDArray{T,N})
+
 size(d::DArray) = d.dims
 
 function serialize{T,N,dd}(s, d::DArray{T,N,dd})
@@ -68,15 +71,35 @@ end
 # compute balanced dist vector
 function defaultdist(distdim, dims, np)
     sdd = dims[distdim]
-    each = div(sdd,np)
-    sizes = fill(Array(Int32,np), each)
-    sizes[end] += rem(sdd,np)
-    [[1], cumsum(sizes)+1]
+    if sdd >= np
+        linspace(1, sdd+1, np+1)
+    else
+        [[1:(sdd+1)], zeros(Size, np-sdd)]
+    end
 end
 
 # when we actually need the data, wait for it
 localize(r::RemoteRef) = localize(fetch(r))
-localize{T,N}(d::DArray{T,N}) = d.locl
+localize(d::DArray) = d.locl
+
+function localize(s::SubDArray)
+    d = s.parent
+    lo = d.dist[d.localpiece]
+    hi = d.dist[d.localpiece+1]-1
+    sdi = s.indexes[d.distdim]
+    l = localize(d)
+    if isa(sdi,Int)
+        if lo <= sdi <= hi
+            return slicedim(l, d.distdim, sdi-lo+1)
+        else
+            return Array(eltype(l), ntuple(ndims(l), i->(i==d.distdim ? 0 :
+                                                         size(l,i))))
+        end
+    else
+        r = intersect(lo:hi, sdi)
+        return l[ntuple(ndims(l), i->(i==d.distdim ? r : 1:size(l,i)))...]
+    end
+end
 
 # find which piece holds index i in the distributed dimension
 function locate(d::DArray, i::Index)
@@ -132,6 +155,7 @@ function locate(d::DArray, I::AbstractVector{Index})
     end
     return (pmap, dist, perm)
 end
+
 ## Constructors ##
 
 function maxdim(dims)
@@ -148,11 +172,23 @@ end
 # the last argument is the full DArray being constructed.
 darray{T}(init, ::Type{T}, dims::Dims, distdim, procs, dist) =
     DArray{T,length(dims),long(distdim)}(dims, init, procs, dist)
-darray{T}(init, ::Type{T}, dims::Dims, distdim, procs) =
+
+function darray{T}(init, ::Type{T}, dims::Dims, distdim, procs)
+    sdd = dims[distdim]
+    np = length(procs)
+    if sdd < np
+        procs = procs[1:sdd]
+    end
     darray(init, T, dims, distdim, procs,
            defaultdist(distdim, dims, length(procs)))
-darray{T}(init, ::Type{T}, dims::Dims, distdim) =
-    darray(init, T, dims, distdim, linspace(1,PGRP.np))
+end
+
+function darray{T}(init, ::Type{T}, dims::Dims, distdim)
+    procs = linspace(1, min(nprocs(),dims[distdim]))
+    darray(init, T, dims, distdim, procs,
+           defaultdist(distdim, dims, length(procs)))
+end
+
 darray{T}(init, ::Type{T}, dims::Dims) = darray(init,T,dims,maxdim(dims))
 darray(init, T::Type, dims::Size...) = darray(init, T, dims)
 darray(init, dims::Dims) = darray(init, Float64, dims)
@@ -168,9 +204,10 @@ copy{T}(d::DArray{T}) =
 dzeros(args...)  = darray((T,d,da)->zeros(T,d), args...)
 dones(args...)   = darray((T,d,da)->ones(T,d), args...)
 dfill(v,args...) = darray((T,d,da)->fill(Array(T,d), v), typeof(v), args...)
-drand(args...)   = darray((T,d,da)->rand(d), args...)
-drandf(args...)  = darray((T,d,da)->randf(d), args...)
-drandn(args...)  = darray((T,d,da)->randn(d), args...)
+dcell(args...)   = darray((T,d,da)->cell(d), Any, args...)
+drand(args...)   = darray((T,d,da)->rand(d), Float64, args...)
+drandf(args...)  = darray((T,d,da)->randf(d), Float32, args...)
+drandn(args...)  = darray((T,d,da)->randn(d), Float64, args...)
 
 zero{T}(d::DArray{T}) = dzeros(T, size(d), d.distdim, d.pmap)
 
@@ -525,28 +562,60 @@ assign(d::DArray, v, I::Union(Index,AbstractVector{Index})...) =
 
 ## matrix multiply ##
 
-function node_multiply{T}(A::AbstractArray{T}, B, sz)
+function node_multiply2{T}(A::AbstractArray{T}, B, sz)
     locl = Array(T, sz)
     if !isempty(locl)
-        cols = B.dist
-        Adata = localize(A)
-        for p=1:length(A.dist)-1
-            r = remote_call_fetch(p, localize, B)
-            locl[:, cols[p]:cols[p+1]-1] = Adata * r
+        Bdata = localize(B)
+        np = length(B.pmap)
+        nr = size(locl,1)
+        if np >= nr
+            rows = [1,nr+1]
+        else
+            rows = linspace(1,nr+1,np+1)
+        end
+        for p=1:length(rows)-1
+            R = rows[p]:rows[p+1]-1
+            locl[R, :] = A[R, :] * Bdata
         end
     end
     locl
 end
 
 function (*){T}(A::DArray{T,2,1}, B::DArray{T,2,2})
-    if !isequal(A.pmap, B.pmap)
-        error("unsupported case of distributed *")
+    darray((T,sz,da)->node_multiply2(A,B,sz), T, (size(A,1),size(B,2)), 2,
+           B.pmap)
+end
+
+function (*){T}(A::DArray{T,2}, B::DArray{T,2,2})
+    darray((T,sz,da)->node_multiply2(A,B,sz), T, (size(A,1),size(B,2)), 2,
+           B.pmap)
+end
+
+function node_multiply1{T}(A::AbstractArray{T}, B, sz)
+    locl = Array(T, sz)
+    if !isempty(locl)
+        Adata = localize(A)
+        np = length(A.pmap)
+        nc = size(locl,2)
+        if np >= nc
+            cols = [1,nc+1]
+        else
+            cols = linspace(1,nc+1,np+1)
+        end
+        for p=1:length(cols)-1
+            C = cols[p]:cols[p+1]-1
+            locl[:, C] = Adata * B[:, C]
+        end
     end
-    darray((T,sz,da)->node_multiply(A,B,sz), T, (size(A,1),size(B,2)), 1,
+    locl
+end
+
+function (*){T}(A::DArray{T,2,1}, B::DArray{T,2})
+    darray((T,sz,da)->node_multiply1(A,B,sz), T, (size(A,1),size(B,2)), 1,
            A.pmap)
 end
 
-(*){T}(A::DArray{T,2}, B::DArray{T,2}) = changedist(A, 1) * changedist(B, 2)
+(*){T}(A::DArray{T,2}, B::DArray{T,2}) = A * changedist(B, 2)
 
 ## elementwise operators ##
 

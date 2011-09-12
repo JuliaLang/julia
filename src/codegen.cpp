@@ -499,6 +499,14 @@ static Value *emit_lambda_closure(jl_value_t *expr, jl_codectx_t *ctx)
     assert(jl_is_lambda_info(expr));
     size_t i;
     jl_array_t *capt = jl_lam_capt((jl_expr_t*)((jl_lambda_info_t*)expr)->ast);
+    if (capt->length == 0) {
+        // no captured vars; lift
+        jl_value_t *fun = jl_new_closure_internal((jl_lambda_info_t*)expr,
+                                                  (jl_value_t*)jl_null);
+        ctx->linfo->roots = jl_tuple2(fun, ctx->linfo->roots);
+        return literal_pointer_val(fun);
+    }
+
     std::vector<Value *> captured(0);
     captured.push_back(ConstantInt::get(T_size, capt->length));
     for(i=0; i < capt->length; i++) {
@@ -519,16 +527,11 @@ static Value *emit_lambda_closure(jl_value_t *expr, jl_codectx_t *ctx)
         }
         captured.push_back(val);
     }
-    Value *tuple;
-    if (capt->length == 0) {
-        tuple = literal_pointer_val((jl_value_t*)jl_null);
-    }
-    else {
-        tuple = builder.CreateCall(jlntuple_func,
+    Value *env_tuple;
+    env_tuple = builder.CreateCall(jlntuple_func,
                                    captured.begin(), captured.end());
-    }
     return builder.CreateCall2(jlclosure_func,
-                               literal_pointer_val(expr), tuple);
+                               literal_pointer_val(expr), env_tuple);
 }
 
 static bool expr_is_symbol(jl_value_t *e)
@@ -730,10 +733,42 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
         }
     }
     else if (f->fptr == &jl_f_typeassert && nargs==2) {
-        
+        jl_value_t *arg = expr_type(args[1]); rt1 = arg;
+        jl_value_t *ty  = expr_type(args[2]); rt2 = ty;
+        if (jl_is_type_type(ty) && !jl_is_typevar(jl_tparam0(ty))) {
+            jl_value_t *tp0 = jl_tparam0(ty);
+            if (jl_subtype(arg, tp0, 0)) {
+                JL_GC_POP();
+                return emit_expr(args[1], ctx, true);
+            }
+            if (!jl_is_tuple(tp0) && jl_is_leaf_type(tp0)) {
+                Value *arg1 = emit_expr(args[1], ctx, true);
+                emit_typecheck(arg1, tp0, "typeassert", ctx);
+                JL_GC_POP();
+                return arg1;
+            }
+        }
     }
     else if (f->fptr == &jl_f_isa && nargs==2) {
-        
+        jl_value_t *arg = expr_type(args[1]); rt1 = arg;
+        jl_value_t *ty  = expr_type(args[2]); rt2 = ty;
+        if (jl_is_type_type(ty) && !jl_is_typevar(jl_tparam0(ty))) {
+            jl_value_t *tp0 = jl_tparam0(ty);
+            if (jl_subtype(arg, tp0, 0)) {
+                JL_GC_POP();
+                return ConstantInt::get(T_int1,1);
+            }
+            if (!jl_is_tuple(tp0) && jl_is_leaf_type(tp0)) {
+                if (jl_is_leaf_type(arg)) {
+                    JL_GC_POP();
+                    return ConstantInt::get(T_int1,0);
+                }
+                Value *arg1 = emit_expr(args[1], ctx, true);
+                JL_GC_POP();
+                return builder.CreateICmpEQ(emit_typeof(arg1),
+                                            literal_pointer_val(tp0));
+            }
+        }
     }
     else if (f->fptr == &jl_f_tuplelen && nargs==1) {
         jl_value_t *aty = expr_type(args[1]); rt1 = aty;
@@ -775,6 +810,22 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
             JL_GC_POP();
             return literal_pointer_val((jl_value_t*)jl_null);
         }
+        size_t i;
+        for(i=0; i < nargs; i++) {
+            if (!jl_is_bits_type(jl_typeof(args[i+1])))
+                break;
+        }
+        if (i >= nargs) {
+            // all arguments immutable; can be statically evaluated
+            rt1 = (jl_value_t*)jl_alloc_tuple_uninit(nargs);
+            for(i=0; i < nargs; i++) {
+                jl_tupleset(rt1, i, args[i+1]);
+            }
+            ctx->linfo->roots = jl_tuple2(rt1, ctx->linfo->roots);
+            JL_GC_POP();
+            return literal_pointer_val(rt1);
+        }
+
         int last_depth = ctx->argDepth;
         Value *tup =
             builder.CreateBitCast
@@ -787,11 +838,11 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
                             emit_nthptr_addr(tup, (size_t)0));
         builder.CreateStore(literal_pointer_val((jl_value_t*)nargs),
                             emit_nthptr_addr(tup, (size_t)1));
-        for(size_t i=0; i < nargs; i++) {
+        for(i=0; i < nargs; i++) {
             builder.CreateStore(V_null,
                                 emit_nthptr_addr(tup, i+2));
         }
-        for(size_t i=0; i < nargs; i++) {
+        for(i=0; i < nargs; i++) {
             builder.CreateStore(boxed(emit_expr(args[i+1], ctx, true)),
                                 emit_nthptr_addr(tup, i+2));
         }
@@ -1008,8 +1059,7 @@ static Value *emit_call(jl_value_t **args, size_t arglen, jl_codectx_t *ctx)
 #endif
         if (!jl_is_func_type(hdtype) &&
             hdtype!=(jl_value_t*)jl_struct_kind &&
-            !(jl_is_tag_type(hdtype) &&
-              ((jl_tag_type_t*)hdtype)->name==jl_type_type->name &&
+            !(jl_is_type_type(hdtype) &&
               jl_is_struct_type(jl_tparam0(hdtype)))) {
             emit_func_check(theFunc, ctx);
         }
@@ -1256,8 +1306,7 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool value)
 	}
     else if (ex->head == static_typeof_sym) {
         jl_value_t *extype = expr_type((jl_value_t*)ex);
-        if (jl_is_tag_type(extype) &&
-            ((jl_tag_type_t*)extype)->name == jl_type_type->name) {
+        if (jl_is_type_type(extype)) {
             extype = jl_tparam0(extype);
             if (jl_is_typevar(extype))
                 extype = ((jl_tvar_t*)extype)->ub;
@@ -1279,8 +1328,7 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool value)
     }
     else if (ex->head == new_sym) {
         jl_value_t *ty = expr_type(args[0]);
-        if (jl_is_tag_type(ty) &&
-            ((jl_tag_type_t*)ty)->name == jl_type_type->name &&
+        if (jl_is_type_type(ty) &&
             jl_is_struct_type(jl_tparam0(ty)) &&
             jl_is_leaf_type(jl_tparam0(ty))) {
             ty = jl_tparam0(ty);
@@ -1349,7 +1397,7 @@ static bool store_unboxed_p(char *name, jl_codectx_t *ctx)
     jl_value_t *jt = (*ctx->declTypes)[name];
     // only store a variable unboxed if type inference has run, which
     // checks that the variable is not referenced undefined.
-    return (ctx->linfo->inferred && jl_is_bits_type(jt) &&
+    return (ctx->linfo->inferred==jl_true && jl_is_bits_type(jt) &&
             jl_is_leaf_type(jt) &&
             // don't unbox intrinsics, since inference depends on their having
             // stable addresses for table lookup.
@@ -1478,8 +1526,8 @@ static void emit_function(jl_lambda_info_t *lam, Function *f)
         jl_array_t *vi = (jl_array_t*)jl_cellref(vinfos, i);
         assert(jl_is_array(vi));
         char *vname = ((jl_sym_t*)jl_cellref(vi,0))->name;
-        isAssigned[vname] = (jl_cellref(vi,3)!=jl_false);
-        isCaptured[vname] = (jl_cellref(vi,2)!=jl_false);
+        isAssigned[vname] = (jl_vinfo_assigned(vi)!=0);
+        isCaptured[vname] = (jl_vinfo_capt(vi)!=0);
         declTypes[vname] = jl_cellref(vi,1);
     }
     vinfos = jl_lam_capt(ast);
@@ -1488,7 +1536,7 @@ static void emit_function(jl_lambda_info_t *lam, Function *f)
         assert(jl_is_array(vi));
         char *vname = ((jl_sym_t*)jl_cellref(vi,0))->name;
         closureEnv[vname] = i;
-        isAssigned[vname] = (jl_cellref(vi,3)!=jl_false);
+        isAssigned[vname] = (jl_vinfo_assigned(vi)!=0);
         isCaptured[vname] = true;
         declTypes[vname] = jl_cellref(vi,1);
     }

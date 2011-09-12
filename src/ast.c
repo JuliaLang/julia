@@ -548,11 +548,22 @@ int jl_is_rest_arg(jl_value_t *ex)
     return 1;
 }
 
+void jl_specialize_ast(jl_lambda_info_t *li);
+
 static jl_value_t *copy_ast(jl_value_t *expr, jl_tuple_t *sp)
 {
     if (jl_is_lambda_info(expr)) {
-        return (jl_value_t*)jl_add_static_parameters((jl_lambda_info_t*)expr,
-                                                     sp);
+        jl_lambda_info_t *li = (jl_lambda_info_t*)expr;
+        /*
+        if (sp == jl_null && li->ast &&
+            jl_lam_capt((jl_expr_t*)li->ast)->length == 0)
+            return expr;
+        */
+        // TODO: avoid if above condition is true and decls have already
+        // been evaluated.
+        li = jl_add_static_parameters(li, sp);
+        jl_specialize_ast(li);
+        return (jl_value_t*)li;
     }
     if (jl_typeis(expr,jl_array_any_type)) {
         jl_array_t *a = (jl_array_t*)expr;
@@ -577,6 +588,7 @@ static jl_value_t *copy_ast(jl_value_t *expr, jl_tuple_t *sp)
     return expr;
 }
 
+// TODO: eval decl types for arguments of non-generic functions
 static void eval_decl_types(jl_array_t *vi, jl_tuple_t *spenv)
 {
     size_t i;

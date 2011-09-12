@@ -8,6 +8,7 @@ function wait(t::Task)
     yieldto(t)  # return last value
 end
 
+# task-local storage
 function tls()
     t = current_task()
     if is(t.tls, nothing)

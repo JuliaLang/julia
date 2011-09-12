@@ -29,7 +29,7 @@ function next(s::UTF8String, i::Index)
     if !is_utf8_start(s.data[i])
         error("invalid UTF-8 character index")
     end
-    trailing = utf8_trailing[s.data[i]+1]
+    trailing = (utf8_trailing::Array{Long,1})[s.data[i]+1]
     if length(s.data) < i + trailing
         error("premature end of UTF-8 data")
     end

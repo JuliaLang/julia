@@ -43,6 +43,8 @@ similar{T}(a::AbstractArray{T}, dims::Dims)          = similar(a, T, dims)
 similar{T}(a::AbstractArray{T}, dims::Size...)       = similar(a, T, dims)
 similar   (a::AbstractArray, T::Type, dims::Size...) = similar(a, T, dims)
 
+empty(a::AbstractArray) = similar(a, 0)
+
 reshape(a::AbstractArray, dims::Dims) = (b = similar(a, dims);
                                   for i=1:numel(a); b[i] = a[i]; end;
                                   b)
@@ -462,6 +464,12 @@ function ref(A::AbstractArray, I::Indices...)
 end
 end
 
+# index A[:,:,...,i,:,:,...] where "i" is in dimension "d"
+# TODO: more optimized special cases
+function slicedim(A::AbstractArray, d::Int, i)
+    A[ntuple(ndims(A), n->(n==d ? i : (1:size(A,n))))...]
+end
+
 ## Indexing: assign ##
 
 # 1-d indexing is assumed defined on subtypes
@@ -569,7 +577,7 @@ end
 
 ## Concatenation ##
 
-cat(catdim::Int) = similar([], None, 0)
+cat(catdim::Int) = Array(None, 0)
 
 vcat() = Array(None, 0)
 hcat() = Array(None, 0)
@@ -629,11 +637,20 @@ end
 
 function cat(catdim::Int, X...)
     nargs = length(X)
-    dimsA = map((a->isa(a,AbstractArray) ? size(a) : (1,)), X)
-    ndimsA = map((a->isa(a,AbstractArray) ? ndims(a) : 1), X)
-    d_max = max(ndimsA)
+    dimsX = map((a->isa(a,AbstractArray) ? size(a) : (1,)), X)
+    ndimsX = map((a->isa(a,AbstractArray) ? ndims(a) : 1), X)
+    d_max = max(ndimsX)
 
-    cat_ranges = ntuple(nargs, i->(catdim <= ndimsA[i] ? dimsA[i][catdim] : 1))
+    if catdim > d_max + 1
+        for i=1:nargs
+            if dimsX[1] != dimsX[i]
+                error("All inputs must be of same dimension when
+                      concatenating along a higher dimension");
+            end
+        end
+    end
+
+    cat_ranges = ntuple(nargs, i->(catdim <= ndimsX[i] ? dimsX[i][catdim] : 1))
 
     function compute_dims(d)
         if d == catdim
@@ -643,8 +660,8 @@ function cat(catdim::Int, X...)
                 return nargs
             end
         else
-            if d <= ndimsA[1]
-                return dimsA[1][d]
+            if d <= ndimsX[1]
+                return dimsX[1][d]
             else
                 return 1
             end
@@ -676,7 +693,6 @@ function cat(catdim::Int, A::AbstractArray...)
     dimsA = map(size, A)
     ndimsA = map(ndims, A)
     d_max = max(ndimsA)
-    #d_min = min(ndimsA)
 
     cat_ranges = ntuple(nargs, i->(catdim <= ndimsA[i] ? dimsA[i][catdim] : 1))
 
@@ -839,8 +855,7 @@ let areduce_cache = nothing
 function gen_areduce_func(n, f)
     ivars = { gensym() | i=1:n }
     # limits and vars for reduction loop
-    rv = gensym()
-    idx = gensym()
+    rv, idx = gensym(2)
     # generate code to compute sub2ind(size(A), ivars...)
     s2i = :($ivars[n] - 1)
     for d = (n-1):-1:2
@@ -1166,7 +1181,7 @@ end
 function ipermute(A::AbstractArray,perm)
     iperm = zeros(Int32,length(perm))
     for i = 1:length(perm)
-	    iperm[perm[i]] = i
+	iperm[perm[i]] = i
     end
     return permute(A,iperm)
 end
@@ -1313,6 +1328,16 @@ function ind2sub(dims, ind::Int)
         ind = rest
     end
     return tuple(ind, sub...)
+end
+
+function squeeze(A::AbstractArray)
+    d = ()
+    for i = size(A)
+        if i != 1
+            d = tuple(d..., i)
+        end
+    end
+    reshape(A, d)
 end
 
 ## subarrays ##

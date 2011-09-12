@@ -1683,8 +1683,7 @@ static int jl_subtype_le(jl_value_t *a, jl_value_t *b, int ta, int morespecific,
     if (!ta&&jl_is_typector(a)) a = (jl_value_t*)((jl_typector_t*)a)->body;
     if (jl_is_typector(b)) b = (jl_value_t*)((jl_typector_t*)b)->body;
     if (ta) {
-        if (jl_is_tag_type(b) &&
-            ((jl_tag_type_t*)b)->name == jl_type_type->name) {
+        if (jl_is_type_type(b)) {
             jl_value_t *bp = jl_tparam0(b);
             if (jl_is_type(a))
                 return jl_subtype_le(a, bp, 0, morespecific, 1);
@@ -2470,18 +2469,20 @@ void jl_init_types()
     jl_lambda_info_type =
         jl_new_struct_type(jl_symbol("LambdaStaticData"),
                            jl_any_type, jl_null,
-                           jl_tuple(8, jl_symbol("ast"), jl_symbol("sparams"),
+                           jl_tuple(9, jl_symbol("ast"), jl_symbol("sparams"),
                                     jl_symbol("tfunc"), jl_symbol("name"),
                                     /*
                                     jl_symbol("roots"), jl_symbol("specTypes"),
                                     jl_symbol("unspecialized"),
                                     jl_symbol("specializations")*/
                                     jl_symbol(""), jl_symbol(""),
-                                    jl_symbol(""), jl_symbol("")),
-                           jl_tuple(8, jl_expr_type, jl_tuple_type,
+                                    jl_symbol(""), jl_symbol(""),
+                                    jl_symbol("inferred")),
+                           jl_tuple(9, jl_expr_type, jl_tuple_type,
                                     jl_any_type, jl_sym_type,
                                     jl_any_type, jl_tuple_type,
-                                    jl_function_type, jl_tuple_type));
+                                    jl_function_type, jl_tuple_type,
+                                    jl_bool_type));
     jl_lambda_info_type->fptr = jl_f_no_function;
 
     jl_box_type =

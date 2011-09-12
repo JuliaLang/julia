@@ -86,11 +86,11 @@ typedef struct _jl_lambda_info_t {
     struct _jl_function_t *unspecialized;
     // pairlist of all lambda infos with code generated from this one
     jl_tuple_t *specializations;
+    jl_value_t *inferred;
 
     // hidden fields:
     jl_fptr_t fptr;
     void *functionObject;
-    uptrint_t inferred;
     // flag telling if inference is running on this function
     // used to avoid infinite recursion
     uptrint_t inInference;
@@ -494,6 +494,12 @@ static inline int jl_is_nontuple_type(jl_value_t *v)
             jl_typeis(v, jl_bits_kind));
 }
 
+static inline int jl_is_type_type(jl_value_t *v)
+{
+    return (jl_is_tag_type(v) &&
+            ((jl_tag_type_t*)(v))->name == jl_type_type->name);
+}
+
 // type info accessors
 jl_value_t *jl_full_type(jl_value_t *v);
 size_t jl_field_offset(jl_struct_type_t *t, jl_sym_t *fld);
@@ -711,6 +717,8 @@ jl_value_t *jl_interpret_toplevel_thunk(jl_lambda_info_t *lam);
 jl_value_t *jl_interpret_toplevel_expr(jl_value_t *e);
 jl_value_t *jl_interpret_toplevel_expr_with(jl_value_t *e,
                                             jl_value_t **locals, size_t nl);
+void jl_type_infer(jl_lambda_info_t *li, jl_tuple_t *argtypes,
+                   jl_lambda_info_t *def);
 
 void jl_show_method_table(jl_function_t *gf);
 DLLEXPORT void jl_show_full_function(jl_value_t *v);
@@ -729,6 +737,21 @@ jl_array_t *jl_lam_capt(jl_expr_t *l);
 jl_expr_t *jl_lam_body(jl_expr_t *l);
 jl_sym_t *jl_decl_var(jl_value_t *ex);
 DLLEXPORT int jl_is_rest_arg(jl_value_t *ex);
+
+static inline int jl_vinfo_capt(jl_array_t *vi)
+{
+    return (jl_unbox_long(jl_cellref(vi,2))&1)!=0;
+}
+
+static inline int jl_vinfo_assigned(jl_array_t *vi)
+{
+    return (jl_unbox_long(jl_cellref(vi,2))&2)!=0;
+}
+
+static inline int jl_vinfo_assigned_inner(jl_array_t *vi)
+{
+    return (jl_unbox_long(jl_cellref(vi,2))&4)!=0;
+}
 
 // for writing julia functions in C
 #define JL_CALLABLE(name) \

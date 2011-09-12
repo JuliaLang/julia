@@ -484,7 +484,7 @@ end
 
 macro   str(s); interp_parse(s); end
 macro S_str(s); interp_parse(s); end
-macro I_str(s); interp_parse(s, s->unescape_chars(s,"\"")); end
+macro I_str(s); interp_parse(s, x->unescape_chars(x,"\"")); end
 macro E_str(s); check_utf8(unescape_string(s)); end
 macro B_str(s); interp_parse_bytes(s); end
 macro b_str(s); ex = interp_parse_bytes(s); :(($ex).data); end
@@ -581,7 +581,7 @@ end
 shell_parse(s::String) = shell_parse(s,true)
 
 function shell_split(s::String)
-    parsed = shell_parse(s, false)
+    parsed = shell_parse(s,false)
     args = {}
     for arg = parsed
         push(args, strcat(arg...))
@@ -593,25 +593,17 @@ function print_shell_word(word::String)
     if isempty(word)
         print("''")
     end
-    has_spaces = false
-    has_backsl = false
     has_single = false
-    has_double = false
-    has_dollar = false
+    has_special = false
     for c = word
-        if iswspace(c)
-            has_spaces = true
-        elseif c == '\\'
-            has_backsl = true
-        elseif c == '\''
-            has_single = true
-        elseif c == '"'
-            has_double = true
-        elseif c == '$'
-            has_dollar = true
+        if iswspace(c) || c=='\\' || c=='\'' || c=='"' || c=='$'
+            has_special = true
+            if c == '\''
+                has_single = true
+            end
         end
     end
-    if !(has_spaces || has_backsl || has_single || has_double || has_dollar)
+    if !has_special
         print(word)
     elseif !has_single
         print('\'', word, '\'')

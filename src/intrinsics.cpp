@@ -269,6 +269,9 @@ static Value *boxed(Value *v)
     if (jb == jl_uint32_type) return builder.CreateCall(box_uint32_func, v);
     if (jb == jl_uint64_type) return builder.CreateCall(box_uint64_func, v);
     if (jl_is_bits_type(jt)) {
+        if (v->getType()->isPointerTy()) {
+            v = builder.CreatePtrToInt(v, T_size);
+        }
         int nb = jl_bitstype_nbits(jt);
         if (nb == 8)
             return builder.CreateCall2(box8_func,  literal_pointer_val(jt), v);
