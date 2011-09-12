@@ -71,10 +71,11 @@ end
 # compute balanced dist vector
 function defaultdist(distdim, dims, np)
     sdd = dims[distdim]
-    each = div(sdd,np)
-    sizes = fill(Array(Int32,np), each)
-    sizes[end] += rem(sdd,np)
-    [[1], cumsum(sizes)+1]
+    if sdd >= np
+        linspace(1, sdd+1, np+1)
+    else
+        [[1:(sdd+1)], zeros(Size, np-sdd)]
+    end
 end
 
 # when we actually need the data, wait for it
@@ -171,11 +172,23 @@ end
 # the last argument is the full DArray being constructed.
 darray{T}(init, ::Type{T}, dims::Dims, distdim, procs, dist) =
     DArray{T,length(dims),long(distdim)}(dims, init, procs, dist)
-darray{T}(init, ::Type{T}, dims::Dims, distdim, procs) =
+
+function darray{T}(init, ::Type{T}, dims::Dims, distdim, procs)
+    sdd = dims[distdim]
+    np = length(procs)
+    if sdd < np
+        procs = procs[1:sdd]
+    end
     darray(init, T, dims, distdim, procs,
            defaultdist(distdim, dims, length(procs)))
-darray{T}(init, ::Type{T}, dims::Dims, distdim) =
-    darray(init, T, dims, distdim, linspace(1,PGRP.np))
+end
+
+function darray{T}(init, ::Type{T}, dims::Dims, distdim)
+    procs = linspace(1, min(nprocs(),dims[distdim]))
+    darray(init, T, dims, distdim, procs,
+           defaultdist(distdim, dims, length(procs)))
+end
+
 darray{T}(init, ::Type{T}, dims::Dims) = darray(init,T,dims,maxdim(dims))
 darray(init, T::Type, dims::Size...) = darray(init, T, dims)
 darray(init, dims::Dims) = darray(init, Float64, dims)
