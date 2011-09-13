@@ -11,7 +11,7 @@ type DArray{T,N,distdim} <: AbstractArray{T,N}
     localpiece::Int32  # my piece #; pmap[localpiece]==myid()
     go::GlobalObject
 
-    function DArray(go, dims, initializer, pmap, dist)
+    function DArray(go, initializer, dims, pmap, dist)
         mi = myid()
         lp = 0
         for i=1:length(pmap)
@@ -35,16 +35,15 @@ type DArray{T,N,distdim} <: AbstractArray{T,N}
     end
 
     # don't use DArray() directly; use darray() below instead
-    function DArray(dims, initializer, procs, dist)
-        go = GlobalObject(g->DArray{T,N,distdim}(g,dims,initializer,procs,dist))
+    function DArray(initializer, dims, procs, dist)
+        go = GlobalObject(g->DArray{T,N,distdim}(g,initializer,dims,procs,dist))
         go.local_identity
     end
 
-    function DArray(dims, initializer::Function)
-        global PGRP
-        procs = linspace(1,PGRP.np)
+    function DArray(initializer::Function, dims)
+        procs = linspace(1, min(nprocs(),dims[distdim]))
         dist = defaultdist(distdim, dims, length(procs))
-        DArray{T,N,distdim}(dims, initializer, procs, dist)
+        DArray{T,N,distdim}(initializer, dims, procs, dist)
     end
 end
 
@@ -76,6 +75,14 @@ function defaultdist(distdim, dims, np)
     else
         [[1:(sdd+1)], zeros(Size, np-sdd)]
     end
+end
+
+function myindexes(d::DArray)
+    p = d.localpiece
+    if p == 0
+        return ntuple(ndims(d), i->(i==d.distdim ? 1:0 : 1:size(d,i)))
+    end
+    ntuple(ndims(d), i->(i==d.distdim ? d.dist[p]:d.dist[p+1]-1 : 1:size(d,i)))
 end
 
 # when we actually need the data, wait for it
@@ -171,7 +178,7 @@ end
 # initializer is a function accepting (el_type, local_size, darray) where
 # the last argument is the full DArray being constructed.
 darray{T}(init, ::Type{T}, dims::Dims, distdim, procs, dist) =
-    DArray{T,length(dims),long(distdim)}(dims, init, procs, dist)
+    DArray{T,length(dims),long(distdim)}(init, dims, procs, dist)
 
 function darray{T}(init, ::Type{T}, dims::Dims, distdim, procs)
     sdd = dims[distdim]
@@ -293,7 +300,6 @@ end
 
 ref(r::RemoteRef) = invoke(ref, (RemoteRef, Any...), r)
 function ref(r::RemoteRef, args...)
-    global PGRP
     if r.where==myid()
         ref(fetch(r), args...)
     else
@@ -302,7 +308,6 @@ function ref(r::RemoteRef, args...)
 end
 
 function assign(r::RemoteRef, args...)
-    global PGRP
     if r.where==myid()
         assign(fetch(r), args...)
     else
@@ -360,17 +365,17 @@ function ref{T}(d::DArray{T}, I::Range1{Index}...)
     A = Array(T, map(range -> length(range), I))
     if length(pmap) == 1 && pmap[1] == d.localpiece
         offs = d.dist[pmap[1]]-1
-        J = ntuple(length(size(d)), i -> (i == d.distdim ? I[i]-offs :
-                                                           I[i]))
+        J = ntuple(ndims(d), i -> (i == d.distdim ? I[i]-offs :
+                                                    I[i]))
         A = localize(d)[J...]
         return A
     end
     for p = 1:length(pmap)
         offs = I[d.distdim][1] - 1
-        J = ntuple(length(size(d)),i->(i==d.distdim ? (dist[p]:(dist[p+1]-1))-offs :
-                                                      (1:length(I[i]))))
-        K = ntuple(length(size(d)),i->(i==d.distdim ? (dist[p]:(dist[p+1]-1)) :
-                                                      I[i]))
+        J = ntuple(ndims(d),i->(i==d.distdim ? (dist[p]:(dist[p+1]-1))-offs :
+                                               (1:length(I[i]))))
+        K = ntuple(ndims(d),i->(i==d.distdim ? (dist[p]:(dist[p+1]-1)) :
+                                               I[i]))
         A[J...] = remote_call_fetch(d.pmap[pmap[p]], ref, d, K...)
     end
     return A
@@ -390,8 +395,8 @@ function ref{T}(d::DArray{T}, I::AbstractVector{Index}...)
     A = Array(T, map(range -> length(range), I))
     if length(pmap) == 1 && pmap[1] == d.localpiece
         offs = d.dist[pmap[1]]-1
-        J = ntuple(length(size(d)), i -> (i == d.distdim ? I[i]-offs :
-                                                           I[i]))
+        J = ntuple(ndims(d), i -> (i == d.distdim ? I[i]-offs :
+                                                    I[i]))
         A = localize(d)[J...]
         return A
     end
@@ -404,10 +409,10 @@ function ref{T}(d::DArray{T}, I::AbstractVector{Index}...)
         while j <= n && II[j] < dist[p+1]
             j += 1
         end
-        J = ntuple(length(size(d)),i->(i==d.distdim ? perm[lower:(j-1)] :
-                                                      (1:length(I[i]))))
-        K = ntuple(length(size(d)),i->(i==d.distdim ? II[lower:(j-1)] :
-                                                      I[i]))
+        J = ntuple(ndims(d),i->(i==d.distdim ? perm[lower:(j-1)] :
+                                               (1:length(I[i]))))
+        K = ntuple(ndims(d),i->(i==d.distdim ? II[lower:(j-1)] :
+                                               I[i]))
         A[J...] = remote_call_fetch(d.pmap[pmap[p]], ref, d, K...)
     end
     return A
@@ -461,15 +466,15 @@ function assign(d::DArray, v, I::Range1{Index}...)
     (pmap, dist) = locate(d, I[d.distdim])
     if length(pmap) == 1 && pmap[1] == d.localpiece
         offs = d.dist[pmap[1]]-1
-        J = ntuple(length(size(d)), i -> (i == d.distdim ? I[i]-offs :
-                                                           I[i]))
+        J = ntuple(ndims(d), i -> (i == d.distdim ? I[i]-offs :
+                                                    I[i]))
         localize(d)[J...] = v
         return d
     end
     for p = 1:length(pmap)
         offs = I[d.distdim][1] - 1
-        K = ntuple(length(size(d)),i->(i==d.distdim ? (dist[p]:(dist[p+1]-1)) :
-                                                      I[i]))
+        K = ntuple(ndims(d),i->(i==d.distdim ? (dist[p]:(dist[p+1]-1)) :
+                                               I[i]))
         sync_add(remote_call(d.pmap[pmap[p]], assign, d, v, K...))
     end
     return d
@@ -481,17 +486,17 @@ function assign(d::DArray, v::AbstractArray, I::Range1{Index}...)
     (pmap, dist) = locate(d, I[d.distdim])
     if length(pmap) == 1 && pmap[1] == d.localpiece
         offs = d.dist[pmap[1]]-1
-        J = ntuple(length(size(d)), i -> (i == d.distdim ? I[i]-offs :
-                                                           I[i]))
+        J = ntuple(ndims(d), i -> (i == d.distdim ? I[i]-offs :
+                                                    I[i]))
         localize(d)[J...] = v
         return d
     end
     for p = 1:length(pmap)
         offs = I[d.distdim][1] - 1
-        J = ntuple(length(size(d)),i->(i==d.distdim ? (dist[p]:(dist[p+1]-1))-offs :
-                                                      (1:length(I[i]))))
-        K = ntuple(length(size(d)),i->(i==d.distdim ? (dist[p]:(dist[p+1]-1)) :
-                                                      I[i]))
+        J = ntuple(ndims(d),i->(i==d.distdim ? (dist[p]:(dist[p+1]-1))-offs :
+                                               (1:length(I[i]))))
+        K = ntuple(ndims(d),i->(i==d.distdim ? (dist[p]:(dist[p+1]-1)) :
+                                               I[i]))
         sync_add(remote_call(d.pmap[pmap[p]], assign, d, v[J...], K...))
     end
     return d
@@ -502,8 +507,8 @@ function assign(d::DArray, v, I::AbstractVector{Index}...)
     (pmap, dist, perm) = locate(d, I[d.distdim])
     if length(pmap) == 1 && pmap[1] == d.localpiece
         offs = d.dist[pmap[1]]-1
-        J = ntuple(length(size(d)), i -> (i == d.distdim ? I[i]-offs :
-                                                           I[i]))
+        J = ntuple(ndims(d), i -> (i == d.distdim ? I[i]-offs :
+                                                    I[i]))
         localize(d)[J...] = v
         return d
     end
@@ -516,8 +521,8 @@ function assign(d::DArray, v, I::AbstractVector{Index}...)
         while j <= n && II[j] < dist[p+1]
             j += 1
         end
-        K = ntuple(length(size(d)),i->(i==d.distdim ? II[lower:(j-1)] :
-                                                      I[i]))
+        K = ntuple(ndims(d),i->(i==d.distdim ? II[lower:(j-1)] :
+                                               I[i]))
         sync_add(remote_call(d.pmap[pmap[p]], assign, d, v, K...))
     end
     return d
@@ -529,8 +534,8 @@ function assign(d::DArray, v::AbstractArray, I::AbstractVector{Index}...)
     (pmap, dist, perm) = locate(d, I[d.distdim])
     if length(pmap) == 1 && pmap[1] == d.localpiece
         offs = d.dist[pmap[1]]-1
-        J = ntuple(length(size(d)), i -> (i == d.distdim ? I[i]-offs :
-                                                           I[i]))
+        J = ntuple(ndims(d), i -> (i == d.distdim ? I[i]-offs :
+                                                    I[i]))
         localize(d)[J...] = v
         return d
     end
@@ -543,10 +548,10 @@ function assign(d::DArray, v::AbstractArray, I::AbstractVector{Index}...)
         while j <= n && II[j] < dist[p+1]
             j += 1
         end
-        J = ntuple(length(size(d)),i->(i==d.distdim ? perm[lower:(j-1)] :
-                                                      (1:length(I[i]))))
-        K = ntuple(length(size(d)),i->(i==d.distdim ? II[lower:(j-1)] :
-                                                      I[i]))
+        J = ntuple(ndims(d),i->(i==d.distdim ? perm[lower:(j-1)] :
+                                               (1:length(I[i]))))
+        K = ntuple(ndims(d),i->(i==d.distdim ? II[lower:(j-1)] :
+                                               I[i]))
         sync_add(remote_call(d.pmap[pmap[p]], assign, d, v[J...], K...))
     end
     return d

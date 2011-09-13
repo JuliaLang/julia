@@ -1449,7 +1449,7 @@ end
 
 function make_preduce_body(reducer, var, body)
     ac, lo, hi = gensym(3)
-    localize_vars(
+    #localize_vars(
     quote
         function (($lo)::Size, ($hi)::Size)
             ($var) = ($lo)
@@ -1460,12 +1460,12 @@ function make_preduce_body(reducer, var, body)
             $ac
         end
     end
-                  )
+    #              )
 end
 
 function make_pfor_body(var, body)
     lo, hi = gensym(2)
-    localize_vars(
+    #localize_vars(
     quote
         function (($lo)::Size, ($hi)::Size)
             for ($var) = ($lo):($hi)
@@ -1473,7 +1473,7 @@ function make_pfor_body(var, body)
             end
         end
     end
-                  )
+    #              )
 end
 
 macro pfor(reducer, range, body)
