@@ -42,4 +42,4 @@ function setdefualtcloud(cloudservice::String)
     eval(cloud)
 end #function
 
-#setdefualtcloud("ec2")
+setdefualtcloud("ec2")
