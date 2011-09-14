@@ -33,6 +33,7 @@ function setdefualtcloud(cloudservice::String)
         newmachine_cloud = $symbol(strcat("newmachine_",cloudservice))
         killmachine_cloud = $symbol(strcat("killmachine_",cloudservice))
         killnode_cloud = $symbol(strcat("killnode_",cloudservice))
+        setheadnode_cloud = $symbol(strcat("setheadnode_",cloudservice))
 
         ### Variable(s) ###
         info_cloud = $symbol(strcat("info_",cloudservice))
