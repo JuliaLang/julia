@@ -8,7 +8,7 @@ function getenv(var::String)
     val = ccall(dlsym(libc, :getenv),
                 Ptr{Uint8}, (Ptr{Uint8},), cstring(var))
     if val == C_NULL
-        error("getenv: Undefined variable: ", var)
+        error("getenv: undefined variable: ", var)
     end
     cstring(val)
 end
