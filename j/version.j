@@ -11,7 +11,7 @@ type VersionNumber
         if minor < 0; error("invalid minor version: $minor"); end
         if patch < 0; error("invalid patch version: $patch"); end
         # TODO: use compile-time regex, pending bugfix
-        if match(Regex(L"^(?:[a-z-][0-9a-z-]*)?$"), suffix).match == nothing
+        if match(Regex(L"^(?:[a-z-][0-9a-z-]*)?$"), suffix) == nothing
             error("invalid version suffix: $suffix")
         end
         new(major, minor, patch, suffix)
@@ -29,9 +29,10 @@ convert(::Type{VersionNumber}, v::Int) = VersionNumber(v)
 convert(::Type{VersionNumber}, v::Tuple) = VersionNumber(v...)
 
 function convert(::Type{VersionNumber}, v::String)
-    # TODO: use compile-time regex, pending bugfix
-    m = match(Regex(L"^v?(\d+)(?:\.(\d+)(?:\.(\d+))?)?((?:[a-z-][0-9a-z-]*)?)$"), v)
-    if m.match == nothing; error("invalid version string: $v"); end
+    # TODO: move outside of function when #187 is fixed
+    VERSION_REGEX = Regex(L"^v?(\d+)(?:\.(\d+)(?:\.(\d+))?)?((?:[a-z-][0-9a-z-]*)?)$")
+    m = match(VERSION_REGEX, v)
+    if m == nothing; error("invalid version string: $v"); end
     major, minor, patch, suffix = m.captures
     major = parse_dec(major)
     minor = minor == nothing ? 0 : parse_dec(minor)

@@ -68,17 +68,31 @@ begin
 end
 
 type RegexMatch
-    match::Union(Nothing,ByteString)
+    match::ByteString
     captures::Tuple
     offset::Index
 end
 
-show(m::RegexMatch) = show(m.match)
+function show(m::RegexMatch)
+    print("RegexMatch(")
+    show(m.match)
+    if !isempty(m.captures)
+        print(", ")
+        for i = 1:length(m.captures)
+            print(i, "=")
+            show(m.captures[i])
+            if i < length(m.captures)
+                print(", ")
+            end
+        end
+    end
+    print(")")
+end
 
 function match(re::Regex, str::String, opts::Int)
     cstr = cstring(str)
     m = pcre_exec(re.regex, C_NULL, cstr, 1, int32(opts))
-    if isempty(m); return RegexMatch(nothing,(),-1); end
+    if isempty(m); return nothing; end
     mat = cstr[m[1]+1:m[2]]
     n = pcre_info(re.regex, re.extra, PCRE_INFO_CAPTURECOUNT, Int32)
     cap = ntuple(n, i->(m[2i+1] < 0 ? nothing : cstr[m[2i+1]+1:m[2i+2]]))
