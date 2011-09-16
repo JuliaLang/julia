@@ -17,10 +17,10 @@ For a more in-depth discussion of the rationale and advantages of Julia over oth
 ## Resources
 
 - **Homepage:** <http://julialang.org>
+- **Discussion:** <julia-math@googlegroups.com>
 - **Source code:** <https://github.com/JuliaLang/julia>
 - **Git clone URL:** <git://github.com/JuliaLang/julia.git> (see [below](#Download-Compilation))
 - **Documentation:** <https://github.com/JuliaLang/julia/wiki>
-- **Discussion:** <julia-math@googlegroups.com>
 
 <a name="Required-Build-Tools-External-Libraries"/>
 ## Required Build Tools & External Libraries
