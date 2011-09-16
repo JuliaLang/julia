@@ -8,10 +8,10 @@
     |__/                   |
 
 Julia is a high-level, high-performance dynamic language for numerical and scientific computing.
-It provides a sophisticated compiler, parallel execution, and numerical accuracy.
+It provides a sophisticated compiler, distributed parallel execution, and numerical accuracy.
 Key features include multiple dispatch, optional typing, and excellent performance through type inference and just-in-time (JIT) compilation.
 The language is multi-paradigm, combining features of functional, object-oriented, and imperative styles.
-For a more in-depth discussion of the rationale and advantages of Julia over other systems, see the [Introduction](https://github.com/JuliaLang/julia/wiki/Introduction) in the wiki, or [browse all](https://github.com/JuliaLang/julia/wiki/) of the wiki documentation.
+For a more in-depth discussion of the rationale and advantages of Julia over other systems, see the [introduction](https://github.com/JuliaLang/julia/wiki/Introduction) in the manual, or [browse all](https://github.com/JuliaLang/julia/wiki/) of the documentation.
 
 <a name="Resources"/>
 ## Resources
@@ -87,6 +87,7 @@ You can read about [getting started](https://github.com/JuliaLang/julia/wiki/Get
     attic/         old, now-unused code
     contrib/       emacs and textmate support for julia
     doc/           miscellaneous documentation and notes
+    examples/      example julia programs
     external/      external dependencies
     j/             source code for julia's standard library
     lib/           shared libraries loaded by julia's standard libraries
@@ -117,5 +118,5 @@ Julia should appear as a file type and be automatically detected for files with 
 <a name="License"/>
 ## License
 
-Julia is licensed under the [three clause "Modified BSD License"](http://en.wikipedia.org/wiki/BSD_license#3-clause_license_.28.22New_BSD_License.22_or_.22Modified_BSD_License.22.29), with the exception of certain components that link against GPL-licensed libraries (e.g. GNU readline).
+Julia is licensed under the [MIT license](http://en.wikipedia.org/wiki/MIT_License#License_terms), with the exception of certain components that link against GPL-licensed libraries (e.g. GNU readline).
 See [LICENSE](https://github.com/JuliaLang/julia/blob/master/LICENSE) for the full terms of the license.
