@@ -117,6 +117,9 @@ function locate(d::DArray, i::Index)
     p
 end
 
+# find which processor holds index i in the distributed dimension
+owner(d::DArray, i::Index) = d.pmap[locate(d, i)]
+
 #find which pieces hold which subranges in distributed dimension
 #returns (pmap,dist) where pmap[i] contains dist[i]:dist[i+1]-1
 function locate(d::DArray, I::Range1{Index})
@@ -199,7 +202,11 @@ end
 darray{T}(init, ::Type{T}, dims::Dims) = darray(init,T,dims,maxdim(dims))
 darray(init, T::Type, dims::Size...) = darray(init, T, dims)
 darray(init, dims::Dims) = darray(init, Float64, dims)
-darray(init, dims::Size...) = darray(init, dims)
+darray(init::Function, dims::Size...) = darray(init, dims)
+
+darray(T::Type, args...)     = darray((T,lsz,da)->Array(T,lsz), T, args...)
+darray(dims::Dims, args...)  = darray((T,lsz,da)->Array(T,lsz), dims, args...)
+darray(dims::Size...)        = darray((T,lsz,da)->Array(T,lsz), dims)
 
 similar(d::DArray, T::Type, dims::Dims) =
     darray((T,lsz,da)->Array(T,lsz), T, dims,
