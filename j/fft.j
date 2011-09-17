@@ -213,8 +213,8 @@ macro jl_fft_ifft_macro(fname, fname_compute)
         function ($fname){T<:Union(Float64,Float32,Complex128,Complex64),n}(X::Array{T,n}, 
                                                                             npoints, dim::Int)
 
-            if npoints != (); error("The npoints option is not yet supported"); end
-            if dim > 2; error("Only 2d arrays are supported for now"); end
+            if npoints != (); error("the npoints option is not yet supported"); end
+            if dim > 2; error("only 2d arrays are supported for now"); end
 
             if n == 1; return fftn(X); end
 

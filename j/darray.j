@@ -21,7 +21,7 @@ type DArray{T,N,distdim} <: AbstractArray{T,N}
         end
 
         mysz = lp==0 ? 0 : (dist[lp+1]-dist[lp])
-        locsz = ntuple(length(dims), i->(i==distdim?mysz:dims[i]))
+        locsz = ntuple(length(dims), i->(i==distdim ? mysz : dims[i]))
         da = new()
         da.dims = dims
         da.pmap = pmap
@@ -51,12 +51,16 @@ typealias SubDArray{T,N}   SubArray{T,N,DArray{T}}
 typealias SubOrDArray{T,N} Union(DArray{T,N}, SubDArray{T,N})
 
 size(d::DArray) = d.dims
+distdim(d::DArray) = d.distdim
+procmap(d::DArray) = d.pmap
+distdim(d::SubDArray) = d.parent.distdim
+procmap(d::SubDArray) = d.parent.pmap
 
 function serialize{T,N,dd}(s, d::DArray{T,N,dd})
     i = worker_id_from_socket(s)
     if is(member(d.go,i), false)
         sz = size(d)
-        emptylocl = Array(T, ntuple(length(sz), i->(i==d.distdim?0:sz[i])))
+        emptylocl = Array(T, ntuple(length(sz), i->(i==d.distdim ? 0 : sz[i])))
         invoke(serialize, (Any, Any),
                s,
                ccall(:jl_new_structt, Any, (Any, Any),
@@ -80,16 +84,13 @@ end
 function myindexes(d::DArray)
     p = d.localpiece
     if p == 0
-        return ntuple(ndims(d), i->(i==d.distdim ? 1:0 : 1:size(d,i)))
+        return ntuple(ndims(d), i->(i==d.distdim ? (1:0) : 1:size(d,i)))
     end
-    ntuple(ndims(d), i->(i==d.distdim ? d.dist[p]:d.dist[p+1]-1 : 1:size(d,i)))
+    ntuple(ndims(d), i->(i==d.distdim ? (d.dist[p]:d.dist[p+1]-1) :
+                                        1:size(d,i)))
 end
 
-# when we actually need the data, wait for it
-localize(r::RemoteRef) = localize(fetch(r))
-localize(d::DArray) = d.locl
-
-function localize(s::SubDArray)
+function myindexes(s::SubDArray, locl)
     d = s.parent
     lo = d.dist[d.localpiece]
     hi = d.dist[d.localpiece+1]-1
@@ -97,16 +98,29 @@ function localize(s::SubDArray)
     l = localize(d)
     if isa(sdi,Int)
         if lo <= sdi <= hi
-            return slicedim(l, d.distdim, sdi-lo+1)
+            r = sdi
+            if locl
+                r -= (lo-1)
+            end
         else
-            return Array(eltype(l), ntuple(ndims(l), i->(i==d.distdim ? 0 :
-                                                         size(l,i))))
+            return ntuple(ndims(l), i->(i==d.distdim ? (1:0) : 1:size(s,i)))
         end
     else
         r = intersect(lo:hi, sdi)
-        return l[ntuple(ndims(l), i->(i==d.distdim ? r : 1:size(l,i)))...]
+        if locl
+            r -= (lo-1)
+        end
     end
+    return ntuple(ndims(l), i->(i==d.distdim ? r : 1:size(s,i)))
 end
+
+myindexes(s::SubDArray) = myindexes(s, false)
+
+# when we actually need the data, wait for it
+localize(r::RemoteRef) = localize(fetch(r))
+localize(d::DArray) = d.locl
+
+localize(s::SubDArray) = sub(localize(s.parent), myindexes(s, true))
 
 # find which piece holds index i in the distributed dimension
 function locate(d::DArray, i::Index)
@@ -631,38 +645,46 @@ end
 
 ## elementwise operators ##
 
-function .^{T}(A::Int, B::DArray{T})
+function .^{T}(A::Int, B::SubOrDArray{T})
     S = promote_type(typeof(A),T)
     darray((T,lsz,da)->.^(A, localize(B)),
-           S, size(B), B.distdim, B.pmap)
+           S, size(B), distdim(B), procmap(B))
 end
-function .^{T}(A::DArray{T}, B::Int)
+function .^{T}(A::SubOrDArray{T}, B::Int)
     S = promote_type(T,typeof(B))
     darray((T,lsz,da)->.^(localize(A), B),
-           S, size(A), A.distdim, A.pmap)
+           S, size(A), distdim(A), procmap(A))
 end
 
-function .^{T<:Int}(A::Int, B::DArray{T})
+function .^{T<:Int}(A::Int, B::SubOrDArray{T})
     darray((T,lsz,da)->.^(A, localize(B)),
-           Float64, size(B), B.distdim, B.pmap)
+           Float64, size(B), distdim(B), procmap(B))
 end
-function .^{T<:Int}(A::DArray{T}, B::Int)
+function .^{T<:Int}(A::SubOrDArray{T}, B::Int)
     S = B < 0 ? Float64 : promote_type(T,typeof(B))
     darray((T,lsz,da)->.^(localize(A), B),
-           S, size(A), A.distdim, A.pmap)
+           S, size(A), distdim(A), procmap(A))
 end
 
 macro binary_darray_op(f)
     quote
-        function ($f){T}(A::Number, B::DArray{T})
-            S = promote_type(typeof(A),T)
+        function ($f){T}(A::Number, B::SubOrDArray{T})
+            S = typeof(($f)(one(A),one(T)))
             darray((T,lsz,da)->($f)(A, localize(B)),
-                   S, size(B), B.distdim, B.pmap)
+                   S, size(B), distdim(B), procmap(B))
         end
-        function ($f){T}(A::DArray{T}, B::Number)
-            S = promote_type(T,typeof(B))
+        function ($f){T}(A::SubOrDArray{T}, B::Number)
+            S = typeof(($f)(one(T),one(B)))
             darray((T,lsz,da)->($f)(localize(A), B),
-                   S, size(A), A.distdim, A.pmap)
+                   S, size(A), distdim(A), procmap(A))
+        end
+        function ($f){T,S}(A::SubOrDArray{T}, B::SubOrDArray{S})
+            if size(A) != size(B)
+                error("argument dimensions must match")
+            end
+            R = typeof(($f)(one(T), one(S)))
+            darray((T,lsz,da)->($f)(localize(A), B[myindexes(A)...]),
+                   R, size(A), distdim(A), procmap(A))
         end
     end # quote
 end # macro
@@ -670,13 +692,14 @@ end # macro
 @binary_darray_op (+)
 @binary_darray_op (-)
 @binary_darray_op (.*)
+@binary_darray_op (./)
 @binary_darray_op (.^)
 
 macro unary_darray_op(f)
     quote
-        function ($f){T}(A::DArray{T})
+        function ($f){T}(A::SubOrDArray{T})
             darray((T,lsz,da)->($f)(localize(A)),
-                   T, size(A), A.distdim, A.pmap)
+                   T, size(A), distdim(A), procmap(A))
         end
     end # quote
 end # macro
@@ -687,10 +710,10 @@ end # macro
 
 macro unary_darray_c2r_op(f)
     quote
-        function ($f){T}(A::DArray{T})
+        function ($f){T}(A::SubOrDArray{T})
             S = typeof(($f)(zero(T)))
             darray((T,lsz,da)->($f)(localize(A)),
-                   S, size(A), A.distdim, A.pmap)
+                   S, size(A), distdim(A), procmap(A))
         end
     end # quote
 end # macro

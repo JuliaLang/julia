@@ -122,7 +122,7 @@ eigs(A, k) = eigs(A, k, "LM")
 
 function eigs{T}(A::AbstractMatrix{T}, k::Int, evtype::ASCIIString)
     (m, n) = size(A)
-    if m != n; error("Input should be square"); end
+    if m != n; error("matrix argument must be square"); end
 
     isrealsymA = false
     if !iscomplex(A) && issymmetric(A); isrealsymA = true; end
@@ -178,10 +178,10 @@ function eigs{T}(A::AbstractMatrix{T}, k::Int, evtype::ASCIIString)
             end
         end
 
-        if (info[1] < 0); print(info[1], ":"); error("Error in ARPACK aupd"); end
+        if (info[1] < 0); print(info[1], ":"); error("error in ARPACK aupd"); end
         if (info[1] == 1)
             print(info[1], ":")
-            error("Maximum iterations reached in ARPACK aupd")
+            error("maximum iterations reached in ARPACK aupd")
         end
 
         if (ido[1] == -1 || ido[1] == 1)
@@ -226,7 +226,7 @@ function eigs{T}(A::AbstractMatrix{T}, k::Int, evtype::ASCIIString)
 
     end
 
-    if (info[1] != 0); error("Error in ARPACK eupd"); end
+    if (info[1] != 0); error("error in ARPACK eupd"); end
 
     if iscomplex(A) || isrealsymA
         return (d, v[1:n, 1:nev])
@@ -252,7 +252,7 @@ end
 function svds{T}(A::AbstractMatrix{T}, k::Int)
     
     (m, n) = size(A)
-    if m < n; error("Only the m >= n case is implemented"); end
+    if m < n; error("only the m >= n case is implemented"); end
     
     ldv = n
     nev = k
@@ -286,7 +286,7 @@ function svds{T}(A::AbstractMatrix{T}, k::Int)
                         ncv, v, ldv, 
                         iparam, ipntr, workd, workl, lworkl, info)
 
-        if (info[1] < 0); print(info[1], ":"); error("Error in ARPACK aupd"); end
+        if (info[1] < 0); print(info[1], ":"); error("error in ARPACK aupd"); end
 
         if (ido[1] == -1 || ido[1] == 1)
             workd[ipntr[2]:(ipntr[2]+n-1)] = At*(A*sub(workd, ipntr[1]:(ipntr[1]+n-1)))
@@ -303,7 +303,7 @@ function svds{T}(A::AbstractMatrix{T}, k::Int)
                     bmat, n, which, nev, tol, resid, ncv, v, ldv, 
                     iparam, ipntr, workd, workl, lworkl, info)
 
-    if (info[1] != 0); error("Error in ARPACK eupd"); end
+    if (info[1] != 0); error("error in ARPACK eupd"); end
 
     v = v[1:n, 1:nev]
     u = A*v*diagm(1./d)

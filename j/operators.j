@@ -135,7 +135,7 @@ macro vectorize_2arg(S,f)
         end
 
         function ($f){T1<:$S, T2<:$S}(x::AbstractArray{T1}, y::AbstractArray{T2})
-            if size(x) != size(y); error("Input sizes and shapes should match"); end
+            if size(x) != size(y); error("argument dimensions must match"); end
             reshape([ ($f)(x[i], y[i]) | i=1:numel(x) ], size(x))
         end
     end

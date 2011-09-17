@@ -44,8 +44,8 @@ function chol{T<:Union(Float32,Float64,Complex64,Complex128)}(A::StridedMatrix{T
     info = jl_lapack_potrf("U", n, R, stride(A,2))
 
     if info == 0; return R; end
-    if info  > 0; error("Matrix not Positive Definite"); end
-    error("Error in CHOL")
+    if info  > 0; error("matrix not positive definite"); end
+    error("error in CHOL")
 end
 
 macro jl_lapack_getrf_macro(getrf, eltype)
@@ -95,7 +95,7 @@ function lu{T<:Union(Float32,Float64,Complex64,Complex128)}(A::StridedMatrix{T},
 
     info = jl_lapack_getrf(m, n, LU, stride(LU,2), ipiv)
 
-    if info > 0; error("Matrix is singular"); end
+    if info > 0; error("matrix is singular"); end
     P = linspace(1, m)
     for i=1:min(m,n); t = P[i]; P[i] = P[ipiv[i]]; P[ipiv[i]] = t ; end
 
@@ -108,7 +108,7 @@ function lu{T<:Union(Float32,Float64,Complex64,Complex128)}(A::StridedMatrix{T},
             return (L, U, P)
         end
     end
-    error("Error in LU")
+    error("error in LU")
 end
 
 
@@ -216,7 +216,7 @@ function qr{T<:Union(Float32,Float64,Complex64,Complex128)}(A::StridedMatrix{T})
     end
 
     if info == 0; lwork = real(work[1]); work = Array(T, long(lwork))
-    else error("Error in LAPACK geqp3"); end
+    else error("error in LAPACK geqp3"); end
 
     # Compute QR factorization
     if iscomplex(A)
@@ -225,7 +225,7 @@ function qr{T<:Union(Float32,Float64,Complex64,Complex128)}(A::StridedMatrix{T})
         info = jl_lapack_geqp3(m, n, QR, stride(QR,2), jpvt, tau, work, lwork)
     end
 
-    if info > 0; error("Matrix is singular"); end
+    if info > 0; error("matrix is singular"); end
 
     R = triu(QR)
 
@@ -238,7 +238,7 @@ function qr{T<:Union(Float32,Float64,Complex64,Complex128)}(A::StridedMatrix{T})
     end
 
     if info == 0; lwork2 = real(work[1]); work = Array(T, long(lwork2))
-    else error("Error in LAPACK orgqr/ungqr"); end
+    else error("error in LAPACK orgqr/ungqr"); end
 
     # Compute Q
     if iscomplex(A)
@@ -248,7 +248,7 @@ function qr{T<:Union(Float32,Float64,Complex64,Complex128)}(A::StridedMatrix{T})
     end
 
     if info == 0; return (QR[:, 1:k], R[1:k, :], jpvt); end
-    error("Error in LAPACK orgqr/ungqr");
+    error("error in LAPACK orgqr/ungqr");
 end
 
 macro jl_lapack_eig_macro(syev, heev, real_geev, complex_geev, eltype, celtype)
@@ -340,7 +340,7 @@ end
 
 function eig{T<:Union(Float64,Float32,Complex128,Complex64)}(A::Matrix{T})
     m, n = size(A)
-    if m != n; error("Input must be square"); end
+    if m != n; error("matrix argument must be square"); end
 
     if ishermitian(A)
 
@@ -363,7 +363,7 @@ function eig{T<:Union(Float64,Float32,Complex128,Complex64)}(A::Matrix{T})
         end
 
         if info == 0; lwork = real(work[1]); work = Array(T, long(lwork));
-        else error("Error in LAPACK syev/heev"); end
+        else error("error in LAPACK syev/heev"); end
 
         # Compute eigenvalues, eigenvectors
         if iscomplex(A)
@@ -373,7 +373,7 @@ function eig{T<:Union(Float64,Float32,Complex128,Complex64)}(A::Matrix{T})
         end
 
         if info == 0; return (W, EV); end
-        error("Error in LAPACK syev/heev");
+        error("error in LAPACK syev/heev");
 
     else # Non-symmetric case
 
@@ -401,7 +401,7 @@ function eig{T<:Union(Float64,Float32,Complex128,Complex64)}(A::Matrix{T})
         end
 
         if info == 0; lwork = real(work[1]); work = Array(T, long(lwork));
-        else error("Error in LAPACK geev"); end
+        else error("error in LAPACK geev"); end
 
         # Compute eigenvalues, eigenvectors
         if iscomplex(A)
@@ -410,7 +410,7 @@ function eig{T<:Union(Float64,Float32,Complex128,Complex64)}(A::Matrix{T})
             info = jl_lapack_geev(jobvl, jobvr, n, Acopy, stride(A,2), WR, WI, VL, n, VR, n, work, lwork)
         end
         
-        if info != 0; error("Error in LAPACK geev"); end
+        if info != 0; error("error in LAPACK geev"); end
 
         if iscomplex(A)
             return (W, VR)
@@ -510,7 +510,7 @@ function svd{T<:Union(Float64,Float32,Complex128,Complex64)}(A::Matrix{T})
     end
 
     if info == 0; lwork = real(work[1]); work = Array(T, long(lwork));
-    else error("Error in LAPACK gesvd"); end
+    else error("error in LAPACK gesvd"); end
 
     # Compute SVD
     if iscomplex(A)
@@ -520,7 +520,7 @@ function svd{T<:Union(Float64,Float32,Complex128,Complex64)}(A::Matrix{T})
     end
 
     if info == 0; return (U, S, VT); end
-    error("Error in LAPACK gesvd");
+    error("error in LAPACK gesvd");
 end
 
 macro jl_lapack_backslash_macro(gesv, posv, gels, trtrs, eltype)
@@ -611,7 +611,7 @@ end
 function (\){T<:Union(Float64,Float32,Complex128,Complex64)}(A::Matrix{T}, B::VecOrMat{T})
     m, n = size(A)
     mrhs = size(B, 1)
-    if m != mrhs; error("Number of rows of arguments do not match"); end
+    if m != mrhs; error("number of rows of arguments do not match"); end
     if isa(B, Vector); nrhs = 1; else nrhs = size(B, 2); end
     Acopy = copy(A)
     X = copy(B)
@@ -662,7 +662,7 @@ function (\){T<:Union(Float64,Float32,Complex128,Complex64)}(A::Matrix{T}, B::Ve
             lwork = real(work[1])
             work = Array(T, long(lwork))
         else
-            error("Error in LAPACK gels")
+            error("error in LAPACK gels")
         end
 
         info = jl_lapack_dgels("N", m, n, nrhs, Acopy, m, Y, max(m,n), work, lwork)
@@ -677,7 +677,7 @@ function (\){T<:Union(Float64,Float32,Complex128,Complex64)}(A::Matrix{T}, B::Ve
     end # Square / Rectangular
 
     if info == 0; return X; end
-    error("Error in LAPACK solving A*X = B")
+    error("error in LAPACK solving A*X = B")
 
 end
 

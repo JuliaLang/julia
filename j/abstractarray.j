@@ -151,7 +151,7 @@ end
 .^(x::AbstractArray, y::Number       ) = reshape( [ x[i] ^ y    | i=1:numel(x) ], size(x) )
 
 function .^{S<:Int,T<:Int}(A::AbstractArray{S}, B::AbstractArray{T})
-    if size(A) != size(B); error("Inputs should be of same shape and size"); end
+    if size(A) != size(B); error("argument dimensions must match"); end
     F = similar(A, Float64)
     for i=1:numel(A)
         F[i] = A[i]^B[i]
@@ -183,7 +183,7 @@ macro binary_arithmetic_op(f)
     quote
 
         function ($f){S,T}(A::AbstractArray{S}, B::AbstractArray{T})
-            if size(A) != size(B); error("Inputs should be of same shape and size"); end
+            if size(A) != size(B); error("argument dimensions must match"); end
             F = similar(A, promote_type(S,T))
             for i=1:numel(A)
                 F[i] = ($f)(A[i], B[i])
@@ -255,7 +255,7 @@ macro binary_comparison_op(f)
     quote
 
         function ($f)(A::AbstractArray, B::AbstractArray)
-            if size(A) != size(B); error("Inputs should be of same shape and size"); end
+            if size(A) != size(B); error("argument dimensions must match"); end
             F = similar(A, Bool)
             for i=1:numel(A)
                 F[i] = ($f)(A[i], B[i])
@@ -292,7 +292,7 @@ macro binary_boolean_op(f)
     quote
 
         function ($f)(A::AbstractArray{Bool}, B::AbstractArray{Bool})
-            if size(A) != size(B); error("Inputs should be of same shape and size"); end
+            if size(A) != size(B); error("argument dimensions must match"); end
             F = similar(A, Bool)
             for i=1:numel(A)
                 F[i] = ($f)(A[i], B[i])
@@ -644,8 +644,7 @@ function cat(catdim::Int, X...)
     if catdim > d_max + 1
         for i=1:nargs
             if dimsX[1] != dimsX[i]
-                error("All inputs must be of same dimension when
-                      concatenating along a higher dimension");
+                error("all inputs must have same dimensions when concatenating along a higher dimension");
             end
         end
     end
@@ -1023,7 +1022,7 @@ function map_to(dest::AbstractArray, f, A::AbstractArray, B::AbstractArray)
 end
 
 function map(f, A::AbstractArray, B::AbstractArray)
-    if size(A) != size(B); error("Input size and shape should be same"); end
+    if size(A) != size(B); error("argument dimensions must match"); end
     if isempty(A); return A; end
     first = f(A[1], B[1])
     dest = similar(A, typeof(first))

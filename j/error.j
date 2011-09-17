@@ -18,8 +18,8 @@ system_error(s::Symbol, b::Bool) = system_error(string(s), b)
 assert_test(b::Bool) = b
 assert_test(b::AbstractArray{Bool}) = all(b)
 assert(x) = assert(x,'?')
-assert(x,labl) = assert_test(x) ? nothing : error("Assertion failed: ", labl)
+assert(x,labl) = assert_test(x) ? nothing : error("assertion failed: ", labl)
 
 macro assert(ex)
-    :(assert_test($ex) ? nothing : error("Assertion failed: ", $string(ex)))
+    :(assert_test($ex) ? nothing : error("assertion failed: ", $string(ex)))
 end
