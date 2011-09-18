@@ -738,15 +738,8 @@ static void show_float64(double d, int single)
     char buf[64];
     int ndec = single ? 9 : 17;
     if (!DFINITE(d)) {
-        char *rep;
-        if (isnan(d))
-            rep = "NaN";
-        else
-            rep = sign_bit(d) ? "-Inf" : "Inf";
-        if (single)
-            ios_printf(s, "float32(%s)", rep);
-        else
-            ios_puts(rep, s);
+        char *rep = isnan(d) ? "NaN" : sign_bit(d) ? "-Inf" : "Inf";
+        ios_puts(rep, s);
     }
     else if (d == 0) {
         if (1/d < 0)
