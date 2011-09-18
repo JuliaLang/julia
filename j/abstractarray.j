@@ -470,6 +470,26 @@ function slicedim(A::AbstractArray, d::Int, i)
     A[ntuple(ndims(A), n->(n==d ? i : (1:size(A,n))))...]
 end
 
+function flip(d::Int, A::AbstractArray)
+    sd = size(A, d)
+    if sd == 1
+        return copy(A)
+    end
+    B = similar(A)
+    nd = ndims(A)
+    alli = ntuple(nd, n->(n==d ? 0 : (1:size(B,n))))
+    local ri
+    b_ind = n->(n==d ? ri : alli[n])
+    for i = 1:sd
+        ri = sd+1-i
+        B[ntuple(nd, b_ind)...] = slicedim(A, d, i)
+    end
+    B
+end
+
+flipud(A::AbstractArray) = flip(1, A)
+fliplr(A::AbstractArray) = flip(2, A)
+
 ## Indexing: assign ##
 
 # 1-d indexing is assumed defined on subtypes

@@ -158,6 +158,53 @@ function slicedim(A::Array, d::Int, i::Int)
     return B
 end
 
+function flip{T}(d::Int, A::Array{T})
+    d_in = size(A)
+    sd = d_in[d]
+    if sd == 1
+        return copy(A)
+    end
+
+    B = similar(A)
+
+    leading = d_in[1:(d-1)]
+    M = prod(leading)
+    N = numel(A)
+    stride = M * sd
+
+    if M==1
+        for j = 0:stride:(N-stride)
+            for i = 1:sd
+                ri = sd+1-i
+                B[j + ri] = A[j + i]
+            end
+        end
+    else
+        if isa(T,BitsKind) && M>200
+            for i = 1:sd
+                ri = sd+1-i
+                for j=0:stride:(N-stride)
+                    offs = j + 1 + (i-1)*M
+                    boffs = j + 1 + (ri-1)*M
+                    copy_to(pointer(B, boffs), pointer(A, offs), M)
+                end
+            end
+        else
+            for i = 1:sd
+                ri = sd+1-i
+                for j=0:stride:(N-stride)
+                    offs = j + 1 + (i-1)*M
+                    boffs = j + 1 + (ri-1)*M
+                    for k=0:(M-1)
+                        B[boffs + k] = A[offs + k]
+                    end
+                end
+            end
+        end
+    end
+    return B
+end
+
 ## Indexing: assign ##
 
 assign(A::Array{Any}, x::AbstractArray, i::Index) = arrayset(A,i,x)
