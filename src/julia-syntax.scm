@@ -1260,8 +1260,8 @@ So far only the second case can actually occur.
   (if (and (pair? locals) (pair? (cdr locals)))
       (or (and (memq (car locals) (cdr locals))
 	       (error (string "local " (car locals) " declared twice")))
-	  (check-dups (cdr locals)))
-      locals))
+	  (check-dups (cdr locals))))
+  locals)
 
 (define (find-assigned-vars e env)
   (if (or (not (pair? e)) (quoted? e))
