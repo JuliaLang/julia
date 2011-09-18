@@ -122,6 +122,25 @@ localize(d::DArray) = d.locl
 
 localize(s::SubDArray) = sub(localize(s.parent), myindexes(s, true))
 
+# fetch the part of "src" that overlaps with the local part of "dest"
+# equivalent to src[myindexes(dest)...]
+function localize(src::DArray, dest::DArray)
+    if size(src)==size(dest) && distdim(src)==distdim(dest) &&
+       src.dist[src.localpiece]   == dest.dist[dest.localpiece] &&
+       src.dist[src.localpiece+1] == dest.dist[dest.localpiece+1]
+        return localize(src)
+    end
+    src[myindexes(dest)...]
+end
+
+function localize(src::SubDArray, dest::DArray)
+    di = myindexes(dest)
+    if isequal(myindexes(src), di)
+        return localize(src)
+    end
+    src[di...]
+end
+
 # find which piece holds index i in the distributed dimension
 function locate(d::DArray, i::Index)
     p = 1
@@ -227,7 +246,7 @@ similar(d::DArray, T::Type, dims::Dims) =
            d.distdim>length(dims) ? maxdim(dims) : d.distdim, d.pmap)
 
 copy{T}(d::DArray{T}) =
-    darray((T,lsz,da)->copy(localize(d)), T, size(d), d.distdim, d.pmap)
+    darray((T,lsz,da)->copy(localize(d)), T, size(d), d.distdim,d.pmap,d.dist)
 
 dzeros(args...)  = darray((T,d,da)->zeros(T,d), args...)
 dones(args...)   = darray((T,d,da)->ones(T,d), args...)
@@ -280,41 +299,14 @@ end
 
 transpose{T}(a::DArray{T,2}) = darray((T,d,da)->transpose(localize(a)),
                                       T, (size(a,2),size(a,1)), (3-a.distdim),
-                                      a.pmap)
+                                      a.pmap, a.dist)
 ctranspose{T}(a::DArray{T,2}) = darray((T,d,da)->ctranspose(localize(a)),
                                        T, (size(a,2),size(a,1)), (3-a.distdim),
-                                       a.pmap)
-
-function node_ref(A::DArray, to_dist, range)
-    Al = localize(A)
-    locdims = size(Al)
-    slice = { i == to_dist ? range : (1:locdims[i]) | i=1:ndims(A) }
-    Al[slice...]
-end
-
-function node_changedist{T}(A::DArray{T}, da, local_size)
-    locl = Array(T, local_size)
-    if isempty(locl)
-        return locl
-    end
-    to_dist = da.distdim
-    newdist = da.dist
-    from_dist = A.distdim
-    dimsA = size(A)
-    myidxs = newdist[da.localpiece]:newdist[da.localpiece+1]-1
-
-    for p = 1:length(A.dist)-1
-        R = remote_call_fetch(A.pmap[p], node_ref, A, to_dist, myidxs)
-        sliceR = { i == from_dist ? (A.dist[p]:A.dist[p+1]-1) : (1:local_size[i]) | i=1:ndims(A) }
-        locl[sliceR...] = R
-    end
-    locl
-end
+                                       a.pmap, a.dist)
 
 function changedist{T}(A::DArray{T}, to_dist)
     if A.distdim == to_dist; return A; end
-    return darray((T,sz,da)->node_changedist(A, da, sz), T, size(A), to_dist,
-                  A.pmap)
+    return darray((T,sz,da)->A[myindexes(da)...], T, size(A), to_dist, A.pmap)
 end
 
 ## Indexing ##
@@ -647,22 +639,22 @@ end
 
 function .^{T}(A::Int, B::SubOrDArray{T})
     S = promote_type(typeof(A),T)
-    darray((T,lsz,da)->.^(A, localize(B)),
+    darray((T,lsz,da)->.^(A, localize(B, da)),
            S, size(B), distdim(B), procmap(B))
 end
 function .^{T}(A::SubOrDArray{T}, B::Int)
     S = promote_type(T,typeof(B))
-    darray((T,lsz,da)->.^(localize(A), B),
+    darray((T,lsz,da)->.^(localize(A, da), B),
            S, size(A), distdim(A), procmap(A))
 end
 
 function .^{T<:Int}(A::Int, B::SubOrDArray{T})
-    darray((T,lsz,da)->.^(A, localize(B)),
+    darray((T,lsz,da)->.^(A, localize(B, da)),
            Float64, size(B), distdim(B), procmap(B))
 end
 function .^{T<:Int}(A::SubOrDArray{T}, B::Int)
     S = B < 0 ? Float64 : promote_type(T,typeof(B))
-    darray((T,lsz,da)->.^(localize(A), B),
+    darray((T,lsz,da)->.^(localize(A, da), B),
            S, size(A), distdim(A), procmap(A))
 end
 
@@ -670,12 +662,12 @@ macro binary_darray_op(f)
     quote
         function ($f){T}(A::Number, B::SubOrDArray{T})
             S = typeof(($f)(one(A),one(T)))
-            darray((T,lsz,da)->($f)(A, localize(B)),
+            darray((T,lsz,da)->($f)(A, localize(B, da)),
                    S, size(B), distdim(B), procmap(B))
         end
         function ($f){T}(A::SubOrDArray{T}, B::Number)
             S = typeof(($f)(one(T),one(B)))
-            darray((T,lsz,da)->($f)(localize(A), B),
+            darray((T,lsz,da)->($f)(localize(A, da), B),
                    S, size(A), distdim(A), procmap(A))
         end
         function ($f){T,S}(A::SubOrDArray{T}, B::SubOrDArray{S})
@@ -683,7 +675,7 @@ macro binary_darray_op(f)
                 error("argument dimensions must match")
             end
             R = typeof(($f)(one(T), one(S)))
-            darray((T,lsz,da)->($f)(localize(A), B[myindexes(A)...]),
+            darray((T,lsz,da)->($f)(localize(A, da), localize(B, da)),
                    R, size(A), distdim(A), procmap(A))
         end
     end # quote
@@ -698,7 +690,7 @@ end # macro
 macro unary_darray_op(f)
     quote
         function ($f){T}(A::SubOrDArray{T})
-            darray((T,lsz,da)->($f)(localize(A)),
+            darray((T,lsz,da)->($f)(localize(A, da)),
                    T, size(A), distdim(A), procmap(A))
         end
     end # quote
@@ -712,7 +704,7 @@ macro unary_darray_c2r_op(f)
     quote
         function ($f){T}(A::SubOrDArray{T})
             S = typeof(($f)(zero(T)))
-            darray((T,lsz,da)->($f)(localize(A)),
+            darray((T,lsz,da)->($f)(localize(A, da)),
                    S, size(A), distdim(A), procmap(A))
         end
     end # quote
@@ -720,3 +712,23 @@ end # macro
 
 @unary_darray_c2r_op (real)
 @unary_darray_c2r_op (imag)
+
+function map(f, A::SubOrDArray)
+    T = typeof(f(A[1]))
+    darray((T,lsz,da)->map_to(Array(T,lsz), f, localize(A, da)),
+           T, size(A), distdim(A), procmap(A))
+end
+
+# map a function that is already vectorized
+function map_vectorized(f, A::SubOrDArray)
+    T = typeof(f(A[1]))
+    darray((T,lsz,da)->f(localize(A, da)),
+           T, size(A), distdim(A), procmap(A))
+end
+
+for f = (:ceil, :floor, :trunc, :round, :iround,
+         :sqrt, :cbrt, :sin, :cos, :tan, :sinh, :cosh, :tanh,
+         :asin, :acos, :atan,
+         :log, :log2, :exp, :expm1)
+    @eval ($f)(A::SubOrDArray) = map_vectorized($f, A)
+end

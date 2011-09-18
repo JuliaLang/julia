@@ -72,6 +72,16 @@ function ref(r::Ranges, i::Int)
     return x
 end
 
+isequal(r::Range, s::Range) = (r.start==s.start && r.step==s.step &&
+                               r.stop==s.stop)
+
+isequal(r::Range1, s::Range1) = (r.start==s.start && r.stop==s.stop)
+
+isequal(r::Range, s::Range1) = (r.start==s.start && r.step==1 &&
+                                r.stop==s.stop)
+
+isequal(r::Range1, s::Range) = isequal(s, r)
+
 intersect(r::Range1, s::Range1) = max(r.start,s.start):min(r.stop,s.stop)
 
 intersect(r::Range, s::Range1) = intersect(s, r)
