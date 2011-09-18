@@ -12,8 +12,8 @@
      (+ - |\|| $)
      (<< >> >>>)
      (* / |./| % & |.*| |\\| |.\\|)
-     (^ |.^|)
      (// .//)
+     (^ |.^|)
      (|::|)
      (|.|)))
 
@@ -443,25 +443,25 @@
 
 (define (parse-term s)
   (let ((ops (prec-ops 9)))
-    (let loop ((ex       (parse-unary s))
+    (let loop ((ex       (parse-rational s))
 	       (chain-op #f))
       (let ((t (peek-token s)))
 	(cond ((and (juxtapose? ex t)
 		    (not (ts:space? s)))
 	       (if (eq? chain-op '*)
-		   (loop (append ex (list (parse-unary s)))
+		   (loop (append ex (list (parse-rational s)))
 			 chain-op)
-		   (loop (list 'call '* ex (parse-unary s))
+		   (loop (list 'call '* ex (parse-rational s))
 			 '*)))
 	      ((not (memq t ops))
 	       ex)
 	      ((eq? t chain-op)
 	       (begin (take-token s)
-		      (loop (append ex (list (parse-unary s)))
+		      (loop (append ex (list (parse-rational s)))
 			    chain-op)))
 	      (else
 	       (begin (take-token s)
-		      (loop (list 'call t ex (parse-unary s))
+		      (loop (list 'call t ex (parse-rational s))
 			    (and (eq? t '*) t)))))))))
 
 (define (parse-comparison s ops)
@@ -517,12 +517,12 @@
 	     (list 'call
 		   (take-token s) ex (parse-factor-h s parse-unary ops)))))))
 
+(define (parse-rational s) (parse-LtoR s parse-unary (prec-ops 10)))
+
 ; -2^3 is parsed as -(2^3), so call parse-decl for the first argument,
 ; and parse-unary from then on (to handle 2^-3)
 (define (parse-factor s)
-  (parse-factor-h s parse-rational (prec-ops 10)))
-
-(define (parse-rational s) (parse-LtoR s parse-decl (prec-ops 11)))
+  (parse-factor-h s parse-decl (prec-ops 11)))
 
 (define (parse-decl s) (parse-LtoR s parse-call (prec-ops 12)))
 
