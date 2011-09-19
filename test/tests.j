@@ -145,8 +145,6 @@ b = rand()
 @assert sign(0//1) == 0
 @assert sign(-0//1) == 0
 @assert sign(1//0) == 1
-@assert sign(0//0) == 0
-@assert sign(-0//0) == 0
 @assert sign(-1//0) == -1
 
 @assert signbit(1) == 1
@@ -167,8 +165,6 @@ b = rand()
 @assert signbit(0//1) == 1
 @assert signbit(-0//1) == 1
 @assert signbit(1//0) == 1
-@assert signbit(0//0) == 1
-@assert signbit(-0//0) == 1
 @assert signbit(-1//0) == -1
 
 @assert isnan(1)     == false
@@ -181,7 +177,6 @@ b = rand()
 @assert isnan(-2//3) == false
 @assert isnan(5//0)  == false
 @assert isnan(-3//0) == false
-@assert isnan(0//0)  == true
 
 @assert isinf(1)     == false
 @assert isinf(1.0)   == false
@@ -193,7 +188,6 @@ b = rand()
 @assert isinf(-2//3) == false
 @assert isinf(5//0)  == true
 @assert isinf(-3//0) == true
-@assert isinf(0//0)  == false
 
 @assert isfinite(1)     == true
 @assert isfinite(1.0)   == true
@@ -205,7 +199,6 @@ b = rand()
 @assert isfinite(-2//3) == true
 @assert isfinite(5//0)  == false
 @assert isfinite(-3//0) == false
-@assert isfinite(0//0)  == false
 
 @assert 1//1 == 1
 @assert 2//2 == 1
@@ -223,6 +216,7 @@ b = rand()
 @assert -7//0 == -1//0
 
 for a = -5:5, b = -5:5
+    if a == b == 0; continue; end
     @assert isequal(a/b, a/b)
     @assert (a//b == a/b) || (isnan(a//b) && isnan(a/b))
     @assert isequal(a//b, a//b)
