@@ -213,6 +213,9 @@ end # macro
 @binary_arithmetic_op (.*)
 @binary_arithmetic_op div
 @binary_arithmetic_op mod
+@binary_arithmetic_op (&)
+@binary_arithmetic_op (|)
+@binary_arithmetic_op ($)
 
 ## promotion to complex ##
 
@@ -253,7 +256,6 @@ end
 
 macro binary_comparison_op(f)
     quote
-
         function ($f)(A::AbstractArray, B::AbstractArray)
             if size(A) != size(B); error("argument dimensions must match"); end
             F = similar(A, Bool)
@@ -282,44 +284,14 @@ end
 @binary_comparison_op (==)
 @binary_comparison_op (!=)
 @binary_comparison_op (<)
-@binary_comparison_op (>)
 @binary_comparison_op (<=)
-@binary_comparison_op (>=)
 
-## Binary boolean operators ##
-
-macro binary_boolean_op(f)
-    quote
-
-        function ($f)(A::AbstractArray{Bool}, B::AbstractArray{Bool})
-            if size(A) != size(B); error("argument dimensions must match"); end
-            F = similar(A, Bool)
-            for i=1:numel(A)
-                F[i] = ($f)(A[i], B[i])
-            end
-            return F
-        end
-        function ($f)(A::Bool, B::AbstractArray{Bool})
-            F = similar(B, Bool)
-            for i=1:numel(B)
-                F[i] = ($f)(A, B[i])
-            end
-            return F
-        end
-        function ($f)(A::AbstractArray{Bool}, B::Bool)
-            F = similar(A, Bool)
-            for i=1:numel(A)
-                F[i] = ($f)(A[i], B)
-            end
-            return F
-        end
-
-    end # quote
-end # macro
-
-@binary_boolean_op (&)
-@binary_boolean_op (|)
-@binary_boolean_op ($)
+>(A::AbstractArray, B::AbstractArray) = B<A
+>(A::Number, B::AbstractArray) = B<A
+>(A::AbstractArray, B::Number) = B<A
+>=(A::AbstractArray, B::AbstractArray) = B<=A
+>=(A::Number, B::AbstractArray) = B<=A
+>=(A::AbstractArray, B::Number) = B<=A
 
 ## code generator for specializing on the number of dimensions ##
 

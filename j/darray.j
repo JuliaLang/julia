@@ -686,6 +686,9 @@ end # macro
 @binary_darray_op (.*)
 @binary_darray_op (./)
 @binary_darray_op (.^)
+@binary_darray_op (&)
+@binary_darray_op (|)
+@binary_darray_op ($)
 
 macro unary_darray_op(f)
     quote
@@ -732,3 +735,28 @@ for f = (:ceil, :floor, :trunc, :round, :iround,
          :log, :log2, :exp, :expm1)
     @eval ($f)(A::SubOrDArray) = map_vectorized($f, A)
 end
+
+macro binary_darray_comparison_op(f)
+    quote
+        function ($f){T}(A::Number, B::SubOrDArray{T})
+            darray((T,lsz,da)->($f)(A, localize(B, da)),
+                   Bool, size(B), distdim(B), procmap(B))
+        end
+        function ($f){T}(A::SubOrDArray{T}, B::Number)
+            darray((T,lsz,da)->($f)(localize(A, da), B),
+                   Bool, size(A), distdim(A), procmap(A))
+        end
+        function ($f){T,S}(A::SubOrDArray{T}, B::SubOrDArray{S})
+            if size(A) != size(B)
+                error("argument dimensions must match")
+            end
+            darray((T,lsz,da)->($f)(localize(A, da), localize(B, da)),
+                   Bool, size(A), distdim(A), procmap(A))
+        end
+    end # quote
+end # macro
+
+@binary_darray_comparison_op (==)
+@binary_darray_comparison_op (!=)
+@binary_darray_comparison_op (<)
+@binary_darray_comparison_op (<=)
