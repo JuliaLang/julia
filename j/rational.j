@@ -95,11 +95,11 @@ hash(x::Rational) = bitmix(hash(x.num),hash(x.den))
 ==(x::Rational, y::Int     ) = x.den == one(x.den) && x.num == y
 ==(x::Int     , y::Rational) = y == x
 
-< (x::Rational, y::Rational) = x.num*y.den < x.den*y.num
+< (x::Rational, y::Rational) = x.den == y.den ? x.num < y.num : x.num*y.den < x.den*y.num
 < (x::Rational, y::Int     ) = x.num < x.den*y
 < (x::Int     , y::Rational) = x*y.den < y.num
 
-<=(x::Rational, y::Rational) = x.num*y.den <= x.den*y.num
+<=(x::Rational, y::Rational) = x.den == y.den ? x.num <= y.num : x.num*y.den <= x.den*y.num
 <=(x::Rational, y::Int     ) = x.num <= x.den*y
 <=(x::Int     , y::Rational) = x*y.den <= y.num
 

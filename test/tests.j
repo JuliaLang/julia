@@ -217,17 +217,24 @@ b = rand()
 
 for a = -5:5, b = -5:5
     if a == b == 0; continue; end
-    @assert isequal(a/b, a/b)
-    @assert (a//b == a/b) || (isnan(a//b) && isnan(a/b))
-    @assert isequal(a//b, a//b)
-    for c = -5:5, d = -5:5
-        @assert isequal(a//b, c//d) == isequal(a/b, c/d)
-        @assert (a//b == c//d) == (a/b == c/d)
-        @assert (a//b != c//d) == (a/b != c/d)
-        @assert (a//b <= c//d) == (a/b <= c/d)
-        @assert (a//b <  c//d) == (a/b <  c/d)
-        @assert (a//b >= c//d) == (a/b >= c/d)
-        @assert (a//b >  c//d) == (a/b >  c/d)
+    @assert a//b == a/b
+    @assert a//b == a//b
+    for c = -5:5
+        @assert (a//b == c) == (a/b == c)
+        @assert (a//b != c) == (a/b != c)
+        @assert (a//b <= c) == (a/b <= c)
+        @assert (a//b <  c) == (a/b <  c)
+        @assert (a//b >= c) == (a/b >= c)
+        @assert (a//b >  c) == (a/b >  c)
+        for d = -5:5
+            if c == d == 0; continue; end
+            @assert (a//b == c//d) == (a/b == c/d)
+            @assert (a//b != c//d) == (a/b != c/d)
+            @assert (a//b <= c//d) == (a/b <= c/d)
+            @assert (a//b <  c//d) == (a/b <  c/d)
+            @assert (a//b >= c//d) == (a/b >= c/d)
+            @assert (a//b >  c//d) == (a/b >  c/d)
+        end
     end
 end
 
