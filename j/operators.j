@@ -78,7 +78,7 @@ mod{T<:Real}(x::T, y::T) = convert(T,x-y*fld(x,y))
 mod1{T<:Real}(x::T, y::T) = y-mod(y-x,y)
 
 # cmp returns -1, 0, +1 indicating ordering
-cmp{T<:Real}(x::T, y::T) = sign(y-x)
+cmp{T<:Real}(x::T, y::T) = sign(x-y)
 
 oftype{T}(::Type{T},c) = convert(T,c)
 oftype{T}(x::T,c) = convert(T,c)
