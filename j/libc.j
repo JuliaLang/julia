@@ -2,7 +2,7 @@
 
 ## time-related functions ##
 
-sleep(s::Real) = ccall(dlsym(libc, :usleep), Uint32, (Uint32,), uint32(round(s*1e6)))
+sleep(s::Real) = ccall(dlsym(libc, :usleep), Uint32, (Uint32,), uint32(iround(s*1e6)))
 unixtime() = ccall(dlsym(libc, :time), Uint32, (Ptr{Uint32},), C_NULL)
 
 ## process-related functions ##

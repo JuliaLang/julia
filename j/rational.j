@@ -47,7 +47,7 @@ function convert{T<:Int}(::Type{Rational{T}}, x::Float, tol::Real)
     a = d = one(T)
     b = c = zero(T)
     while true
-        f = convert(T,iround(y)); y -= f
+        f = convert(T,y); y -= f
         a, b, c, d = f*a+c, f*b+d, a, b
         if y == 0 || abs(a/b-x) <= tol
             return a//b
@@ -57,8 +57,7 @@ function convert{T<:Int}(::Type{Rational{T}}, x::Float, tol::Real)
 end
 convert{T<:Int}(rt::Type{Rational{T}}, x::Float) = convert(rt,x,0)
 
-convert{T<:Float}(::Type{T}, x::Rational) = convert(T,x.num)/convert(T,x.den)
-convert{T<:Int}(::Type{T}, x::Rational) = div(convert(T,x.num),convert(T,x.den))
+convert{T<:Real}(::Type{T}, x::Rational) = convert(T, x.num/x.den)
 
 promote_rule{T<:Int}(::Type{Rational{T}}, ::Type{T}) = Rational{T}
 promote_rule{T<:Int,S<:Int}(::Type{Rational{T}}, ::Type{S}) = Rational{promote_type(T,S)}
@@ -120,6 +119,3 @@ rational(x::Float64, tol::Real) = convert(Rational{Int64}, x, tol)
 rational(z::Complex) = complex(rational(real(z)), rational(imag(z)))
 rational(z::Complex, tol::Real) =
     (tol /= sqrt(2); complex(rational(real(z), tol), rational(imag(z), tol)))
-
-int(x::Rational) = div(x.num, x.den)
-float(x::Rational) = x.num/x.den

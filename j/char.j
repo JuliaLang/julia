@@ -24,7 +24,6 @@ end
 
 int(x::Char) = int32(x)
 uint(x::Char) = uint32(x)
-float(x::Char) = float32(x)
 
 ## char promotions ##
 
