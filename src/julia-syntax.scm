@@ -525,9 +525,12 @@
 	     (vars    '())
 	     (assigns '()))
     (if (null? b)
-	`(block
-	  ,@(map (lambda (x) `(,what ,x)) vars)
-	  ,@(reverse assigns))
+	(if (and (null? assigns)
+		 (length= vars 1))
+	    `(,what ,(car vars))
+	    `(block
+	      ,@(map (lambda (x) `(,what ,x)) vars)
+	      ,@(reverse assigns)))
 	(let ((x (car b)))
 	  (if (and (pair? x) (memq (car x) assignment-ops))
 	      (loop (cdr b)
