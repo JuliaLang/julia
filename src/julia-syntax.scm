@@ -738,7 +738,7 @@
 	      ,@(if (eq? bb b) '() `((= ,bb ,b)))
 	      (= ,cnt 0)
 	      (= ,lim
-		 (call (top long) (call + 1 (call / (call - ,c ,aa) ,bb))))
+		 (call (top itrunc) (call + 1 (call / (call - ,c ,aa) ,bb))))
 	      (break-block loop-exit
 			   (_while (call < ,cnt ,lim)
 				   (block

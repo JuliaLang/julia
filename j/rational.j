@@ -47,7 +47,7 @@ function convert{T<:Int}(::Type{Rational{T}}, x::Float, tol::Real)
     a = d = one(T)
     b = c = zero(T)
     while true
-        f = convert(T,round(y)); y -= f
+        f = convert(T,iround(y)); y -= f
         a, b, c, d = f*a+c, f*b+d, a, b
         if y == 0 || abs(a/b-x) <= tol
             return a//b

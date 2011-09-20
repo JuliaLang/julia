@@ -729,7 +729,7 @@ function map_vectorized(f, A::SubOrDArray)
            T, size(A), distdim(A), procmap(A))
 end
 
-for f = (:ceil, :floor, :trunc, :round, :iround,
+for f = (:ceil, :floor, :trunc, :round, :iround, :itrunc,
          :sqrt, :cbrt, :sin, :cos, :tan, :sinh, :cosh, :tanh,
          :asin, :acos, :atan,
          :log, :log2, :exp, :expm1)

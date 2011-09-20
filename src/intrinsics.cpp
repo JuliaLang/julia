@@ -956,7 +956,7 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
     HANDLE(fpiround32,1)
     {
         // itrunc(x + copysign(0.5,x))
-        Value *bits = builder.CreateBitCast(x, T_int32);
+        Value *bits = INT(x);
         Value *half = builder.CreateBitCast(ConstantFP::get(T_float32, 0.5),
                                             T_int32);
         Value *signedhalf =
@@ -965,14 +965,14 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
                                                ConstantInt::get(T_int32,
                                                                 BIT31)));
         return builder.
-            CreateFPToSI(builder.CreateFAdd(x,
+            CreateFPToSI(builder.CreateFAdd(FP(x),
                                             builder.CreateBitCast(signedhalf,
                                                                   T_float32)),
                          T_int32);
     }
     HANDLE(fpiround64,1)
     {
-        Value *bits = builder.CreateBitCast(x, T_int64);
+        Value *bits = INT(x);
         Value *half = builder.CreateBitCast(ConstantFP::get(T_float64, 0.5),
                                             T_int64);
         Value *signedhalf =
@@ -981,7 +981,7 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
                                                ConstantInt::get(T_int64,
                                                                 BIT63)));
         return builder.
-            CreateFPToSI(builder.CreateFAdd(x,
+            CreateFPToSI(builder.CreateFAdd(FP(x),
                                             builder.CreateBitCast(signedhalf,
                                                                   T_float64)),
                          T_int64);
