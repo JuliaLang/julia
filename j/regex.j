@@ -108,10 +108,13 @@ match(r::Regex, s::String)         = match(r, s, 1)
 type RegexMatchIterator
     regex::Regex
     string::ByteString
+    overlap::Bool
 end
 
 start(itr::RegexMatchIterator) = match(itr.regex, itr.string)
 done(itr::RegexMatchIterator, m) = m == nothing
-next(itr::RegexMatchIterator, m) = (m, match(itr.regex, itr.string, m.offset+length(m.match)))
+next(itr::RegexMatchIterator, m) = (m, match(itr.regex, itr.string,
+                                             m.offset + (itr.overlap ? 1 : length(m.match))))
 
-each_match(re::Regex, str::String) = RegexMatchIterator(re, str)
+each_match(r::Regex, s::String) = RegexMatchIterator(r,s,false)
+each_match_overlap(r::Regex, s::String) = RegexMatchIterator(r,s,true)
