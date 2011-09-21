@@ -104,3 +104,14 @@ function match(re::Regex, str::String, offset::Int, opts::Int)
 end
 match(r::Regex, s::String, o::Int) = match(r, s, o, r.options & PCRE_EXECUTE_MASK)
 match(r::Regex, s::String)         = match(r, s, 1)
+
+type RegexMatchIterator
+    regex::Regex
+    string::ByteString
+end
+
+start(itr::RegexMatchIterator) = match(itr.regex, itr.string)
+done(itr::RegexMatchIterator, m) = m == nothing
+next(itr::RegexMatchIterator, m) = (m, match(itr.regex, itr.string, m.offset+length(m.match)))
+
+each_match(re::Regex, str::String) = RegexMatchIterator(re, str)
