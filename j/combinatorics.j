@@ -47,18 +47,19 @@ function nCr{T <: Int}(n::T, r::T)
         r = (n - r)
     end
 
-    ans = nn = n - r + 1.0
+    x = nn = n - r + 1.0
     nn += 1.0
     rr = 2.0
     while (rr <= r)
-        ans *= (nn/rr)
+        x *= (nn/rr)
         rr += 1
         nn += 1
     end
+    # TODO: should these be truncates?
     if neg
-        return convert(T,-ans)
+        return convert(T,-x)
     end
-    return convert(T,ans)
+    return convert(T,x)
 end
 
 # sort() should be stable

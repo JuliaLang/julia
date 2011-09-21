@@ -315,7 +315,7 @@ function ^{T<:Complex}(z::T, p::T)
     realz = real(z)
     zer = zero(r)
     if imag(p) == 0
-        ip = int(realp)
+        ip = itrunc(realp)
         if ip == realp
             # integer multiples of pi/2
             if imag(z) == 0 && realz < 0
@@ -335,7 +335,7 @@ function ^{T<:Complex}(z::T, p::T)
             end
         else
             dr = realp*2
-            ip = int(dr)
+            ip = itrunc(dr)
             # 1/2 multiples of pi
             if ip == dr && imag(z) == 0
                 if realz < 0

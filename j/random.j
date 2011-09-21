@@ -68,11 +68,11 @@ end
 randui64() = boxui64(or_int(zext64(unbox32(randui32())),
                             shl_int(zext64(unbox32(randui32())),unbox32(32))))
 
-randint(::Type{Int32}) = int32(randui32())&typemax(Int32)
+randint(::Type{Int32})  = int32(randui32()) & typemax(Int32)
 randint(::Type{Uint32}) = randui32()
-randint(::Type{Int64}) = int64(randui64())&typemax(Int64)
+randint(::Type{Int64})  = int64(randui64()) & typemax(Int64)
 randint(::Type{Uint64}) = randui64()
-randint() = randint(Int32)
+randint() = randint(Int32) # TODO: should be platform-dependent
 
 # random integer from lo to hi inclusive
 function randint{T<:Int}(lo::T, hi::T)

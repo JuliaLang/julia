@@ -32,7 +32,8 @@ if false
         end
         print("\n")
     end
-end    
+end
+
 # core operations & types
 load("range.j")
 load("tuple.j")
