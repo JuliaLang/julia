@@ -127,5 +127,6 @@ function _start()
     catch e
         show(e)
         println()
+        exit(1)
     end
 end
