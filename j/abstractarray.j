@@ -286,13 +286,6 @@ end
 @binary_comparison_op (<)
 @binary_comparison_op (<=)
 
->(A::AbstractArray, B::AbstractArray) = B<A
->(A::Number, B::AbstractArray) = B<A
->(A::AbstractArray, B::Number) = B<A
->=(A::AbstractArray, B::AbstractArray) = B<=A
->=(A::Number, B::AbstractArray) = B<=A
->=(A::AbstractArray, B::Number) = B<=A
-
 ## code generator for specializing on the number of dimensions ##
 
 #otherbodies are the bodies that reside between loops, if its a 2 dimension array. 

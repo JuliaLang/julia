@@ -41,16 +41,14 @@ end
 *(x::Number, y::Number) = *(promote(x,y)...)
 -(x::Number, y::Number) = -(promote(x,y)...)
 /(x::Number, y::Number) = /(promote(x,y)...)
-^(x::Any, y::Number) = ^(promote(x,y)...)
+^(x::Any,    y::Number) = ^(promote(x,y)...)
 
 &(x::Int, y::Int)   = &(promote(x,y)...)
 |(x::Int, y::Int)   = |(promote(x,y)...)
 ($)(x::Int, y::Int) = ($)(promote(x,y)...)
 
-<(x::Real, y::Real) = (<)(promote(x,y)...)
->(x::Real, y::Real) = (>)(promote(x,y)...)
-<=(x::Real, y::Real) = (<=)(promote(x,y)...)
->=(x::Real, y::Real) = (>=)(promote(x,y)...)
+< (x::Real, y::Real)     = (< )(promote(x,y)...)
+<=(x::Real, y::Real)     = (<=)(promote(x,y)...)
 ==(x::Number, y::Number) = (==)(promote(x,y)...)
 
 div(x::Real, y::Real) = div(promote(x,y)...)

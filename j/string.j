@@ -118,11 +118,9 @@ function chars(s::String)
     cx
 end
 
-(<) (a::String, b::String)    = cmp(a,b) < 0
-(>) (a::String, b::String)    = cmp(a,b) > 0
-isequal(a::String, b::String) = cmp(a,b) == 0
+(< )(a::String, b::String)    = cmp(a,b) <  0
 (<=)(a::String, b::String)    = cmp(a,b) <= 0
-(>=)(a::String, b::String)    = cmp(a,b) >= 0
+isequal(a::String, b::String) = cmp(a,b) == 0
 
 function cmp(a::String, b::String)
     i = start(a)

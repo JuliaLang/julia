@@ -40,30 +40,19 @@ function convert(::Type{VersionNumber}, v::String)
     VersionNumber(major, minor, patch, suffix)
 end
 
-<(v1::VersionNumber, v2::VersionNumber) =
-    v1.major < v2.major || v1.major == v2.major &&
-    (v1.minor < v2.minor || v1.minor == v2.minor &&
-     (v1.patch < v2.patch || v1.patch == v2.patch && v1.suffix < v2.suffix))
+<(a::VersionNumber, b::VersionNumber) =
+    a.major < b.major || a.major == b.major &&
+    (a.minor < b.minor || a.minor == b.minor &&
+     (a.patch < b.patch || a.patch == b.patch && a.suffix < b.suffix))
 
-==(v1::VersionNumber, v2::VersionNumber) =
-    v1.major == v2.major && v1.minor == v2.minor &&
-    v1.patch == v2.patch && v1.suffix == v2.suffix
+==(a::VersionNumber, b::VersionNumber) =
+    a.major == b.major && a.minor == b.minor &&
+    a.patch == b.patch && a.suffix == b.suffix
 
-# TODO: fix the fallback >, <= and >= cases to not require these
-> (v1::VersionNumber, v2::VersionNumber) = v2 < v1
-<=(v1::VersionNumber, v2::VersionNumber) = v1 < v2 || v1 == v2
->=(v1::VersionNumber, v2::VersionNumber) = v1 > v2 || v1 == v2
-
-<(v1::VersionNumber, v2) = v1 < convert(VersionNumber,v2)
-<(v1, v2::VersionNumber) = convert(VersionNumber,v1) < v2
->(v1::VersionNumber, v2) = v1 > convert(VersionNumber,v2)
->(v1, v2::VersionNumber) = convert(VersionNumber,v1) > v2
-<=(v1::VersionNumber, v2) = v1 <= convert(VersionNumber,v2)
-<=(v1, v2::VersionNumber) = convert(VersionNumber,v1) <= v2
->=(v1::VersionNumber, v2) = v1 >= convert(VersionNumber,v2)
->=(v1, v2::VersionNumber) = convert(VersionNumber,v1) >= v2
-==(v1::VersionNumber, v2) = v1 == convert(VersionNumber,v2)
-==(v1, v2::VersionNumber) = convert(VersionNumber,v1) == v2
+<(a::VersionNumber, b) = a < convert(VersionNumber,b)
+<(a, b::VersionNumber) = convert(VersionNumber,a) < b
+==(a::VersionNumber, b) = a == convert(VersionNumber,b)
+==(a, b::VersionNumber) = convert(VersionNumber,a) == b
 
 ## julia version info
 

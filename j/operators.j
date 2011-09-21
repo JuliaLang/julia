@@ -15,9 +15,9 @@ isequal(x,y) = is(x,y)
 # == instead of isequal, which is more idiomatic:
 isequal(x::Number, y::Number) = (x==y)
 
-> {T<:Real}(x::T, y::T) = (y < x)
-<={T<:Real}(x::T, y::T) = (x < y) || (x == y)
->={T<:Real}(x::T, y::T) = (y <= x)
+> (x,y) = y < x
+<=(x,y) = x < y || x == y
+>=(x,y) = y <= x
 
 ## definitions providing basic traits of arithmetic operators ##
 
