@@ -19,8 +19,8 @@ Range1(start, stop) = Range1(promote(start, stop)...)
 Range1{T}(start::T, stop::T) =
     throw(MethodError(Range1, (start,stop)))
 
-similar(r::Range, T::Type, dims::Dims) = Range(convert(T, r.start), convert(T, r.step), convert(T, r.stop))
-similar(r::Range1, T::Type, dims::Dims) = Range1(convert(T, r.start), convert(T, r.stop))
+similar(r::Range, T::Type, dims::Dims) = Array(T, dims)
+similar(r::Range1, T::Type, dims::Dims) = Array(T, dims)
 
 typealias Ranges Union(Range,Range1)
 

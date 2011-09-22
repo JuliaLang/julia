@@ -990,17 +990,32 @@ function map_to(dest::AbstractArray, f, A::AbstractArray)
     end
     return dest
 end
+function map_to2(first, dest::AbstractArray, f, A::AbstractArray)
+    dest[1] = first
+    for i=2:numel(A)
+        dest[i] = f(A[i])
+    end
+    return dest
+end
 
 function map(f, A::AbstractArray)
     if isempty(A); return A; end
     first = f(A[1])
     dest = similar(A, typeof(first))
-    return map_to(dest, f, A)
+    return map_to2(first, dest, f, A)
 end
 
 ## 2 argument
 function map_to(dest::AbstractArray, f, A::AbstractArray, B::AbstractArray)
     for i=1:numel(A)
+        dest[i] = f(A[i], B[i])
+    end
+    return dest
+end
+function map_to2(first, dest::AbstractArray, f,
+                 A::AbstractArray, B::AbstractArray)
+    dest[1] = first
+    for i=2:numel(A)
         dest[i] = f(A[i], B[i])
     end
     return dest
@@ -1011,11 +1026,18 @@ function map(f, A::AbstractArray, B::AbstractArray)
     if isempty(A); return A; end
     first = f(A[1], B[1])
     dest = similar(A, typeof(first))
-    return map_to(dest, f, A, B)
+    return map_to2(first, dest, f, A, B)
 end
 
 function map_to(dest::AbstractArray, f, A::AbstractArray, B::Number)
     for i=1:numel(A)
+        dest[i] = f(A[i], B)
+    end
+    return dest
+end
+function map_to2(first, dest::AbstractArray, f, A::AbstractArray, B::Number)
+    dest[1] = first
+    for i=2:numel(A)
         dest[i] = f(A[i], B)
     end
     return dest
@@ -1025,11 +1047,18 @@ function map(f, A::AbstractArray, B::Number)
     if isempty(A); return A; end
     first = f(A[1], B)
     dest = similar(A, typeof(first))
-    return map_to(dest, f, A, B)
+    return map_to2(first, dest, f, A, B)
 end
 
 function map_to(dest::AbstractArray, f, A::Number, B::AbstractArray)
     for i=1:numel(B)
+        dest[i] = f(A, B[i])
+    end
+    return dest
+end
+function map_to2(first, dest::AbstractArray, f, A::Number, B::AbstractArray)
+    dest[1] = first
+    for i=2:numel(B)
         dest[i] = f(A, B[i])
     end
     return dest
@@ -1039,7 +1068,7 @@ function map(f, A::Number, B::AbstractArray)
     if isempty(A); return A; end
     first = f(A, B[1])
     dest = similar(B, typeof(first))
-    return map_to(dest, f, A, B)
+    return map_to2(first, dest, f, A, B)
 end
 
 ## N argument
@@ -1052,12 +1081,22 @@ function map_to(dest::AbstractArray, f, As::AbstractArray...)
     end
     return dest
 end
+function map_to2(first, dest::AbstractArray, f, As::AbstractArray...)
+    n = numel(As[1])
+    i = 1
+    ith = a->a[i]
+    dest[1] = first
+    for i=2:n
+        dest[i] = f(map(ith, As)...)
+    end
+    return dest
+end
 
 function map(f, As::AbstractArray...)
     if isempty(As[1]); return As[1]; end
     first = f(map(a->a[1], As)...)
     dest = similar(As[1], typeof(first))
-    return map_to(dest, f, As...)
+    return map_to2(first, dest, f, As...)
 end
 
 ## Obsolete - Mainly here for reference purposes, use gen_cartesian_map
