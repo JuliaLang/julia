@@ -188,6 +188,8 @@ static const Type *julia_type_to_llvm(jl_value_t *jt, jl_codectx_t *ctx)
     //if (jt == (jl_value_t*)jl_null) return T_void;
     if (jl_is_bits_type(jt) && jl_is_cpointer_type(jt)) {
         const Type *lt = julia_type_to_llvm(jl_tparam0(jt), ctx);
+        if (lt == NULL)
+            return NULL;
         if (lt == T_void)
             lt = T_int8;
         return PointerType::get(lt, 0);
@@ -203,8 +205,8 @@ static const Type *julia_type_to_llvm(jl_value_t *jt, jl_codectx_t *ctx)
     if (jt == (jl_value_t*)jl_any_type)
         return jl_pvalue_llvmt;
     if (jt == (jl_value_t*)jl_bottom_type) return T_void;
-    jl_type_error_rt(ctx->funcName.c_str(), "conversion to native type",
-                     (jl_value_t*)jl_bits_kind, jt);
+    emit_type_error(literal_pointer_val(jt), (jl_value_t*)jl_bits_kind,
+                    "conversion to native type", ctx);
     return NULL;
 }
 
@@ -495,6 +497,10 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
     std::vector<const Type *> fargt(0);
     std::vector<const Type *> fargt_sig(0);
     const Type *lrt = julia_type_to_llvm(rt, ctx);
+    if (lrt == NULL) {
+        JL_GC_POP();
+        return literal_pointer_val(jl_nothing);
+    }
     size_t i;
     bool haspointers = false;
     bool isVa = false;
@@ -505,6 +511,10 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
             tti = jl_tparam0(tti);
         }
         const Type *t = julia_type_to_llvm(tti, ctx);
+        if (t == NULL) {
+            JL_GC_POP();
+            return literal_pointer_val(jl_nothing);
+        }
         haspointers = haspointers || (t->isPointerTy() && t!=jl_pvalue_llvmt);
         fargt.push_back(t);
         if (!isVa)
@@ -686,6 +696,9 @@ static Value *generic_box(jl_value_t *targ, jl_value_t *x, jl_codectx_t *ctx)
     if (vx->getType()->getPrimitiveSizeInBits() != nb)
         jl_errorf("box: expected argument with %d bits", nb);
     const Type *llvmt = julia_type_to_llvm(bt, ctx);
+    if (llvmt == NULL) {
+        return literal_pointer_val(jl_nothing);
+    }
     if (vx->getType() != llvmt) {
         if (vx->getType()->isPointerTy() && !llvmt->isPointerTy()) {
             vx = builder.CreatePtrToInt(vx, llvmt);

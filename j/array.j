@@ -17,9 +17,6 @@ numel(a::Array) = arraylen(a)
 
 ## copy ##
 
-mcopy_to{T}(dest::Ptr{T}, src::Ptr{T}, n::Int) =
-    ccall(:memcpy, Ptr{Void}, (Ptr{Void}, Ptr{Void}, Ulong), dest, src, ulong(n*sizeof(T)))
-
 copy_to{T}(dest::Ptr{T}, src::Ptr{T}, n::Int) =
     ccall(:memcpy, Ptr{Void}, (Ptr{Void}, Ptr{Void}, Ulong), dest, src, ulong(n*sizeof(T)))
 

@@ -902,6 +902,7 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
                 }
                 Value *ary = emit_expr(args[1], ctx, true);
                 const Type *elty = julia_type_to_llvm(ety, ctx);
+                assert(elty != NULL);
                 bool isbool=false;
                 if (elty==T_int1) { elty = T_int8; isbool=true; }
                 Value *data =
@@ -939,6 +940,7 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
                 }
                 Value *ary = emit_expr(args[1], ctx, true);
                 const Type *elty = julia_type_to_llvm(ety, ctx);
+                assert(elty != NULL);
                 if (elty==T_int1) { elty = T_int8; }
                 Value *data =
                     builder.CreateBitCast(emit_arrayptr(ary),
@@ -1412,6 +1414,7 @@ static AllocaInst *alloc_local(char *name, jl_codectx_t *ctx)
         vtype = julia_type_to_llvm(jt, ctx);
     else
         vtype = jl_pvalue_llvmt;
+    assert(vtype != NULL);
     AllocaInst *lv = builder.CreateAlloca(vtype, 0, name);
     if (vtype != jl_pvalue_llvmt)
         mark_julia_type(lv, jt);

@@ -46,7 +46,6 @@ for op = (:+, :*, :&, :|, :$)
             accum
         end
     end
-
 end
 
 # fallback division:
