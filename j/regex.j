@@ -90,20 +90,20 @@ function show(m::RegexMatch)
     print(")")
 end
 
-matches(r::Regex, s::String, o::Int) = pcre_exec(r.regex, C_NULL, cstring(s), 1, int32(o), false)
+matches(r::Regex, s::String, o::Int) = pcre_exec(r.regex, C_NULL, cstring(s), 1, o, false)
 matches(r::Regex, s::String) = matches(r, s, r.options & PCRE_EXECUTE_MASK)
 
-function match(re::Regex, str::String, offset::Int, opts::Int)
-    cstr = cstring(str)
-    m, n = pcre_exec(re.regex, C_NULL, cstr, offset, opts, true)
+function match(re::Regex, str::ByteString, offset::Int, opts::Int)
+    m, n = pcre_exec(re.regex, C_NULL, str, offset, opts, true)
     if isempty(m); return nothing; end
-    mat = cstr[m[1]+1:m[2]]
-    cap = ntuple(n, i->(m[2i+1] < 0 ? nothing : cstr[m[2i+1]+1:m[2i+2]]))
+    mat = str[m[1]+1:m[2]]
+    cap = ntuple(n, i->(m[2i+1] < 0 ? nothing : str[m[2i+1]+1:m[2i+2]]))
     off = map(i->m[2i+1]+1, [1:n])
     RegexMatch(mat, cap, m[1]+1, off)
 end
+match(r::Regex, s::String, o::Int, p::Int) = match(r, cstring(s), o, p)
 match(r::Regex, s::String, o::Int) = match(r, s, o, r.options & PCRE_EXECUTE_MASK)
-match(r::Regex, s::String)         = match(r, s, 1)
+match(r::Regex, s::String) = match(r, s, 1)
 
 type RegexMatchIterator
     regex::Regex

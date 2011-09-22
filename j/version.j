@@ -17,11 +17,11 @@ type VersionNumber
         new(major, minor, patch, suffix)
     end
 end
-VersionNumber(major, minor, suffix::String) = VersionNumber(major, minor, 0,     suffix)
-VersionNumber(major, suffix::String)        = VersionNumber(major, 0,     0,     suffix)
-VersionNumber(major, minor, patch)          = VersionNumber(major, minor, patch, "")
-VersionNumber(major, minor)                 = VersionNumber(major, minor, 0,     "")
-VersionNumber(major)                        = VersionNumber(major, 0,     0,     "")
+VersionNumber(x::Int, y::Int, s::String) = VersionNumber(x, y, 0, s )
+VersionNumber(x::Int, s::String)         = VersionNumber(x, 0, 0, s )
+VersionNumber(x::Int, y::Int, z::Int)    = VersionNumber(x, y, z, "")
+VersionNumber(x::Int, y::Int)            = VersionNumber(x, y, 0, "")
+VersionNumber(x::Int)                    = VersionNumber(x, 0, 0, "")
 
 show(v::VersionNumber) = print("$(v.major).$(v.minor).$(v.patch)$(v.suffix)")
 
@@ -64,9 +64,11 @@ VERSION_TIME = readall(
     `perl -MPOSIX=strftime -e 'print strftime "%F %T", gmtime <>'`
 )
 
-jl_version_string = "Version $VERSION"
-jl_version_clean = VERSION_CLEAN ? "" : "*"
-jl_commit_string = "Commit $(VERSION_COMMIT[1:10]) ($VERSION_TIME)$jl_version_clean"
+begin
+
+local jl_version_string = "Version $VERSION"
+local jl_version_clean = VERSION_CLEAN ? "" : "*"
+local jl_commit_string = "Commit $(VERSION_COMMIT[1:10]) ($VERSION_TIME)$jl_version_clean"
 
 jl_banner_plain =
 I"               _
@@ -80,7 +82,6 @@ I"               _
 
 "
 
-begin
 local tx = "\033[0m\033[1m" # text
 local jl = "\033[0m\033[1m" # julia
 local d1 = "\033[34m" # first dot
@@ -98,7 +99,6 @@ jl_banner_color =
 $(jl)|__/$(tx)                   |
 
 \033[0m"
-end
 
 function color_available()
     if run(`tput setaf 0`)
@@ -118,3 +118,6 @@ function banner()
         print(jl_banner_plain)
     end
 end
+
+end # begin
+
