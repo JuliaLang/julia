@@ -11,7 +11,7 @@ type VersionNumber
         if minor < 0; error("invalid minor version: $minor"); end
         if patch < 0; error("invalid patch version: $patch"); end
         # TODO: use compile-time regex, pending bugfix
-        if match(Regex(L"^(?:[a-z-][0-9a-z-]*)?$"), suffix) == nothing
+        if !matches(Regex(L"^(?:[a-z-][0-9a-z-]*)?$"), suffix)
             error("invalid version suffix: $suffix")
         end
         new(major, minor, patch, suffix)

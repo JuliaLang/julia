@@ -71,6 +71,7 @@ type RegexMatch
     match::ByteString
     captures::Tuple
     offset::Index
+    offsets::Vector{Index}
 end
 
 function show(m::RegexMatch)
@@ -89,14 +90,31 @@ function show(m::RegexMatch)
     print(")")
 end
 
-function match(re::Regex, str::String, opts::Int)
+matches(r::Regex, s::String, o::Int) = pcre_exec(r.regex, C_NULL, cstring(s), 1, int32(o), false)
+matches(r::Regex, s::String) = matches(r, s, r.options & PCRE_EXECUTE_MASK)
+
+function match(re::Regex, str::String, offset::Int, opts::Int)
     cstr = cstring(str)
-    m = pcre_exec(re.regex, C_NULL, cstr, 1, int32(opts))
+    m, n = pcre_exec(re.regex, C_NULL, cstr, offset, opts, true)
     if isempty(m); return nothing; end
     mat = cstr[m[1]+1:m[2]]
-    n = pcre_info(re.regex, re.extra, PCRE_INFO_CAPTURECOUNT, Int32)
     cap = ntuple(n, i->(m[2i+1] < 0 ? nothing : cstr[m[2i+1]+1:m[2i+2]]))
-    RegexMatch(mat, cap, m[1]+1)
+    off = map(i->m[2i+1]+1, [1:n])
+    RegexMatch(mat, cap, m[1]+1, off)
+end
+match(r::Regex, s::String, o::Int) = match(r, s, o, r.options & PCRE_EXECUTE_MASK)
+match(r::Regex, s::String)         = match(r, s, 1)
+
+type RegexMatchIterator
+    regex::Regex
+    string::ByteString
+    overlap::Bool
 end
 
-match(re::Regex, str::String) = match(re, str, re.options & PCRE_EXECUTE_MASK)
+start(itr::RegexMatchIterator) = match(itr.regex, itr.string)
+done(itr::RegexMatchIterator, m) = m == nothing
+next(itr::RegexMatchIterator, m) = (m, match(itr.regex, itr.string,
+                                             m.offset + (itr.overlap ? 1 : length(m.match))))
+
+each_match(r::Regex, s::String) = RegexMatchIterator(r,s,false)
+each_match_overlap(r::Regex, s::String) = RegexMatchIterator(r,s,true)

@@ -92,7 +92,7 @@ function pcre_info{T}(regex::Ptr{Void}, extra::Ptr{Void}, what::Int, ::Type{T})
 end
 
 function pcre_exec(regex::Ptr{Void}, extra::Ptr{Void},
-                   str::ByteString, offset::Index, options::Int)
+                   str::ByteString, offset::Int, options::Int, cap::Bool)
     ncap = pcre_info(regex, extra, PCRE_INFO_CAPTURECOUNT, Int32)
     ovec = Array(Int32, 3(ncap+1))
     n = ccall(dlsym(libpcre, :pcre_exec), Int32,
@@ -103,5 +103,5 @@ function pcre_exec(regex::Ptr{Void}, extra::Ptr{Void},
     if n < -1
         error("pcre_exec: error $n")
     end
-    n < 0 ? Array(Int32,0) : ovec[1:2(ncap+1)]
+    cap ? ((n > -1 ? ovec[1:2(ncap+1)] : Array(Int32,0)), ncap) : n > -1
 end
