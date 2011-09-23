@@ -28,7 +28,7 @@ function hypot(x::Real, y::Real)
         return x*sqrt(1+r*r)
     end
     if y == 0
-        return zero(x)
+        return sqrt(y)  # to give same type as other cases
     end
     r = x/y
     return y*sqrt(1+r*r)

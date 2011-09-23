@@ -247,6 +247,9 @@ function sqrt(z::Complex)
     iz = float(imag(z))
     T = promote_type(typeof(rz),typeof(z))
     r = sqrt(0.5*(hypot(rz,iz)+abs(rz)))
+    if r == 0
+        return convert(T,complex(0.0, iz))
+    end
     if rz >= 0
         return convert(T,complex(r, 0.5*iz/r))
     end
