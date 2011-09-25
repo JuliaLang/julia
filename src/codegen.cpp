@@ -459,6 +459,12 @@ static Value *var_binding_pointer(jl_sym_t *s, jl_codectx_t *ctx)
     return globalvar_binding_pointer(s, ctx);
 }
 
+static int is_var_closed(jl_sym_t *s, jl_codectx_t *ctx)
+{
+    std::map<std::string,int>::iterator it = ctx->closureEnv->find(s->name);
+    return (it != ctx->closureEnv->end());
+}
+
 static int is_global(jl_sym_t *s, jl_codectx_t *ctx)
 {
     std::map<std::string,int>::iterator it = ctx->closureEnv->find(s->name);
@@ -1138,7 +1144,9 @@ static Value *emit_var(jl_sym_t *sym, jl_value_t *ty, jl_codectx_t *ctx)
     Value *bp = var_binding_pointer(sym, ctx);
     Value *arg = (*ctx->arguments)[sym->name];
     // arguments are always defined
-    if (arg != NULL || !jl_subtype((jl_value_t*)jl_undef_type, ty, 0)) {
+    if (arg != NULL ||
+        (!is_var_closed(sym, ctx) &&
+         !jl_subtype((jl_value_t*)jl_undef_type, ty, 0))) {
         return tpropagate(bp, builder.CreateLoad(bp, false));
     }
     return emit_checked_var(bp, sym->name, ctx);
@@ -1290,6 +1298,7 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool value)
             return ConstantInt::get(T_int1, 0);
         }
         if (ctx->linfo->specTypes != NULL &&
+            !is_var_closed(sy, ctx) &&
             !jl_subtype((jl_value_t*)jl_undef_type, st, 0)) {
             // Undef ⊄ expr_type => definitely assigned
             return ConstantInt::get(T_int1, 1);
