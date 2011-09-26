@@ -106,7 +106,7 @@ DLLEXPORT ios_t *ios_mem(ios_t *s, size_t initsize);
 DLLEXPORT ios_t *jl_ios_mem(ios_t *s, size_t initsize);
 ios_t *ios_str(ios_t *s, char *str);
 ios_t *ios_static_buffer(ios_t *s, char *buf, size_t sz);
-DLLEXPORT ios_t *ios_fd(ios_t *s, long fd, int isfile);
+DLLEXPORT ios_t *ios_fd(ios_t *s, long fd, int isfile, int own);
 // todo: ios_socket
 extern DLLEXPORT ios_t *ios_stdin;
 extern DLLEXPORT ios_t *ios_stdout;

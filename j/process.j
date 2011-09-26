@@ -373,7 +373,7 @@ end
 function _readall(ports::Ports, cmds::Cmds)
     r = read_from(ports)
     spawn(cmds)
-    o = readall(fdio(r.fd))
+    o = readall(fdio(r.fd, true))
     if !wait(cmds)
         error("pipeline failed: $cmds")
     end
@@ -388,7 +388,7 @@ function _each_line(ports::Ports, cmds::Cmds)
     create = @thunk begin
         r = read_from(ports)
         spawn(cmds)
-        fh = fdio(r.fd)
+        fh = fdio(r.fd, true)
         LineIterator(fh)
     end
     destroy = @thunk close(fh)

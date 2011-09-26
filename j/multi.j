@@ -103,7 +103,7 @@ type Worker
         if fd == -1
             error("could not connect to $host:$port, errno=$(errno())\n")
         end
-        Worker(host, port, fd, fdio(fd))
+        Worker(host, port, fd, fdio(fd, true))
     end
 
     Worker(host,port,fd,sock,id) = new(host, port, fd, sock, memio(), id,
@@ -858,7 +858,7 @@ function accept_handler(accept_fd, sockets)
         print("accept error: ", strerror(), "\n")
     else
         first = isempty(sockets)
-        sock = fdio(connectfd)
+        sock = fdio(connectfd, true)
         sockets[connectfd] = sock
         if first
             # first connection; get process group info from client
@@ -958,7 +958,6 @@ function start_worker(wrfd)
     write(io, getipaddr())  # print hostname
     write(io, '\n')
     flush(io)
-    #close(io)
     # close stdin; workers will not use it
     ccall(dlsym(libc, :close), Int32, (Int32,), int32(0))
 
@@ -992,7 +991,7 @@ function start_remote_workers(machines, cmds)
     outs = cell(n)
     for i=1:n
         let fd = read_from(cmds[i]).fd
-            let stream = fdio(fd)
+            let stream = fdio(fd, true)
                 outs[i] = stream
                 # redirect console output from workers to the client's stdout
                 add_fd_handler(fd, fd->write(stdout_stream, readline(stream)))

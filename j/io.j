@@ -18,10 +18,13 @@ fd(s::IOStream) = ccall(:jl_ios_fd, Long, (Ptr{Void},), s.ios)
 
 close(s::IOStream) = ccall(:ios_close, Void, (Ptr{Void},), s.ios)
 
-fdio(fd::Int) = (s = IOStream();
-                 ccall(:ios_fd, Void,
-                       (Ptr{Uint8}, Long, Int32), s.ios, long(fd), int32(0));
-                 s)
+fdio(fd::Int) = fdio(fd, false)
+# "own" means the descriptor will be closed when this IOStream is
+fdio(fd::Int, own::Bool) =
+    (s = IOStream();
+     ccall(:ios_fd, Void, (Ptr{Uint8}, Long, Int32, Int32),
+           s.ios, long(fd), int32(0), int32(own));
+     s)
 
 open(fname::String, rd::Bool, wr::Bool, cr::Bool, tr::Bool) =
     (s = IOStream();

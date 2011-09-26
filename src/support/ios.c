@@ -793,8 +793,7 @@ ios_t *ios_file(ios_t *s, char *fname, int rd, int wr, int create, int trunc)
     fd = open(fname, flags, S_IRUSR|S_IWUSR|S_IRGRP|S_IROTH/*644*/);
     if (fd == -1)
         goto open_file_err;
-    s = ios_fd(s, fd, 1);
-    s->ownfd = 1;
+    s = ios_fd(s, fd, 1, 1);
     if (!wr)
         s->readonly = 1;
     return s;
@@ -838,13 +837,13 @@ ios_t *ios_static_buffer(ios_t *s, char *buf, size_t sz)
     return s;
 }
 
-ios_t *ios_fd(ios_t *s, long fd, int isfile)
+ios_t *ios_fd(ios_t *s, long fd, int isfile, int own)
 {
     _ios_init(s);
     s->fd = fd;
     if (isfile) s->rereadable = 1;
     _buf_init(s, bm_block);
-    s->ownfd = 0;
+    s->ownfd = own;
     if (fd == STDERR_FILENO)
         s->bm = bm_none;
     return s;
@@ -857,14 +856,14 @@ ios_t *ios_stderr = NULL;
 void ios_init_stdstreams()
 {
     ios_stdin = julia_malloc(sizeof(ios_t));
-    ios_fd(ios_stdin, STDIN_FILENO, 0);
+    ios_fd(ios_stdin, STDIN_FILENO, 0, 0);
 
     ios_stdout = julia_malloc(sizeof(ios_t));
-    ios_fd(ios_stdout, STDOUT_FILENO, 0);
+    ios_fd(ios_stdout, STDOUT_FILENO, 0, 0);
     ios_stdout->bm = bm_line;
 
     ios_stderr = julia_malloc(sizeof(ios_t));
-    ios_fd(ios_stderr, STDERR_FILENO, 0);
+    ios_fd(ios_stderr, STDERR_FILENO, 0, 0);
     ios_stderr->bm = bm_none;
 }
 
