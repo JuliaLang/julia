@@ -298,7 +298,10 @@
   (or (eof-object? tok)
       (memv tok '(#\) #\] #\} else elseif catch))))
 
-(define (loc-header s)
+(define (line-number-node s)
+  `(line ,(input-port-line (ts:port s))))
+
+(define (line-number-filename-node s)
   `(line ,(input-port-line (ts:port s)) ,current-filename))
 
 ; parse a@b@c@... as (@ a b c ...) for some operator @
@@ -318,8 +321,8 @@
 		  (if (and allow-empty (eqv? (require-token s) op))
 		      '()
 		      (if (eqv? op #\newline)
-			  (let ((loc (loc-header s)))
-			    ;; note: loc-header must happen before (down s)
+			  (let ((loc (line-number-node s)))
+			    ;; note: line-number must happen before (down s)
 			    (list (down s) loc))
 			  (list (down s)))))
 		 (first? #t))
@@ -629,17 +632,22 @@
 				  (parse-comma-separated-assignments s))))
     ((function)
      (let* ((paren (eqv? (require-token s) #\())
-	    (sig   (parse-call s)))
-       (begin0 (list word
-		     (if (symbol? sig)
-			 (if paren
-			     ;; in "function (x)" the (x) is a tuple
-			     `(tuple ,sig)
-			     ;; function foo  =>  syntax error
-			     (error "expected ( in function definition"))
-			 sig)
-		     (parse-block s))
-	       (expect-end s))))
+	    (sig   (parse-call s))
+	    (def   (if (symbol? sig)
+		       (if paren
+			   ;; in "function (x)" the (x) is a tuple
+			   `(tuple ,sig)
+			   ;; function foo  =>  syntax error
+			   (error "expected ( in function definition"))
+		       sig))
+	    (loc   (line-number-filename-node s))
+	    (body  (parse-block s)))
+       (expect-end s)
+       (if (and (length> body 1)
+		(pair? (cadr body))
+		(eq? (caadr body) 'line))
+	   (set-car! (cdr body) loc))
+       (list word def body)))
     ((macro)
      (let ((sig (parse-call s)))
        (begin0 (list word sig (parse-block s))
@@ -1115,7 +1123,7 @@
 	       (eq? (car ex) '=)
 	       (pair? (cadr ex))
 	       (eq? (caadr ex) 'call))
-	  ;; insert loc-header for short-form function defs
+	  ;; insert line/file for short-form function defs
 	  `(= ,(cadr ex) (block (line ,lno ,current-filename) ,(caddr ex)))
 	  ex)))
   (let ((s (make-token-stream stream)))

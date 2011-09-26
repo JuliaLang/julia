@@ -804,3 +804,19 @@ this (and tintersect on NTuple) is needed to define Array() methods in boot.j
 
 * call inference on general thunks so we don't need to make GFs for them
   in toplevel_eval
+
+-------------------------------------------------------------------------------
+
+counts of expression types:
+
+static int n_expr=0;  // 252767
+static int n_call=0;  // 87436
+static int n_top=0;   // 31118
+static int n_oth=0;   // 20502  body,locals,enter,leave
+                      // 19559  ::
+static int n_assi=0;  // 18926
+static int n_quot=0;  // 15003
+static int n_ret=0;   // 11827
+                      // 10061  lambda
+static int n_goti=0;  // 6286
+static int n_goto=0;  // 6227
