@@ -460,11 +460,12 @@ static void gc_markval_(jl_value_t *v)
         if (a->reshaped) {
             GC_Markval(*((jl_value_t**)data_area));
         }
-        else if (a->data && a->data != data_area) {
-            if (ndims == 1)
-                gc_setmark((char*)a->data - a->offset*a->elsize);
-            else
-                gc_setmark(a->data);
+        else if (a->data) {
+            char *data = a->data;
+            if (ndims == 1) data -= a->offset*a->elsize;
+            if (data != data_area) {
+                gc_setmark(data);
+            }
         }
         jl_value_t *elty = jl_tparam0(vt);
         if (gc_typeof(elty) != (jl_value_t*)jl_bits_kind) {
