@@ -309,6 +309,9 @@ extern DLLEXPORT jl_struct_type_t *jl_expr_type;
 extern jl_struct_type_t *jl_symbolnode_type;
 extern jl_struct_type_t *jl_linenumbernode_type;
 extern jl_struct_type_t *jl_labelnode_type;
+extern jl_struct_type_t *jl_gotonode_type;
+extern jl_struct_type_t *jl_quotenode_type;
+extern jl_struct_type_t *jl_topnode_type;
 extern jl_bits_type_t *jl_intrinsic_type;
 extern jl_struct_type_t *jl_methtable_type;
 extern jl_struct_type_t *jl_task_type;
@@ -390,6 +393,7 @@ void *allocb_permanent(size_t sz);
 #define jl_symbolnode_type(s) (jl_fieldref(s,1))
 #define jl_linenode_line(x) jl_unbox_long(jl_fieldref(x,0))
 #define jl_labelnode_label(x) jl_unbox_long(jl_fieldref(x,0))
+#define jl_gotonode_label(x) jl_unbox_long(jl_fieldref(x,0))
 
 #define jl_tparam0(t) jl_tupleref(((jl_tag_type_t*)(t))->parameters, 0)
 #define jl_tparam1(t) jl_tupleref(((jl_tag_type_t*)(t))->parameters, 1)
@@ -421,6 +425,9 @@ void *allocb_permanent(size_t sz);
 #define jl_is_expr(v)        jl_typeis(v,jl_expr_type)
 #define jl_is_symbolnode(v)  jl_typeis(v,jl_symbolnode_type)
 #define jl_is_labelnode(v)   jl_typeis(v,jl_labelnode_type)
+#define jl_is_gotonode(v)    jl_typeis(v,jl_gotonode_type)
+#define jl_is_quotenode(v)   jl_typeis(v,jl_quotenode_type)
+#define jl_is_topnode(v)     jl_typeis(v,jl_topnode_type)
 #define jl_is_linenode(v)    jl_typeis(v,jl_linenumbernode_type)
 #define jl_is_lambda_info(v) jl_typeis(v,jl_lambda_info_type)
 #define jl_is_mtable(v)      jl_typeis(v,jl_methtable_type)

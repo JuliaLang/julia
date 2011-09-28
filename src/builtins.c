@@ -427,8 +427,7 @@ JL_CALLABLE(jl_f_top_eval)
     if (!jl_is_expr(e))
         return jl_interpret_toplevel_expr(e);
     jl_expr_t *ex = (jl_expr_t*)e;
-    if (ex->head == top_sym ||
-        ex->head == quote_sym || ex->head == null_sym ||
+    if (ex->head == null_sym ||
         ex->head == isbound_sym || ex->head == error_sym) {
         // expression types simple enough not to need expansion
         return jl_interpret_toplevel_expr(e);
@@ -1288,6 +1287,9 @@ void jl_init_primitives()
     add_builtin("Expr", (jl_value_t*)jl_expr_type);
     add_builtin("LineNumberNode", (jl_value_t*)jl_linenumbernode_type);
     add_builtin("LabelNode", (jl_value_t*)jl_labelnode_type);
+    add_builtin("GotoNode", (jl_value_t*)jl_gotonode_type);
+    add_builtin("QuoteNode", (jl_value_t*)jl_quotenode_type);
+    add_builtin("TopNode", (jl_value_t*)jl_topnode_type);
     add_builtin("Ptr", (jl_value_t*)jl_pointer_type);
     add_builtin("LambdaStaticData", (jl_value_t*)jl_lambda_info_type);
     add_builtin("Box", (jl_value_t*)jl_box_type);

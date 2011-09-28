@@ -76,6 +76,19 @@
 #    label::Long
 #end
 
+#type GotoNode
+#    label::Long
+#end
+
+#type QuoteNode
+#    value
+#end
+
+#type TopNode
+#    name::Symbol
+#    typ
+#end
+
 #type LambdaStaticData
 #    ast::Expr
 #    sparams::Tuple

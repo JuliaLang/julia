@@ -948,6 +948,7 @@ void jl_init_serializer()
                      (void*)LongExpr_tag, jl_intrinsic_type, jl_methtable_type,
                      jl_typename_type, jl_lambda_info_type, jl_tvar_type,
                      jl_labelnode_type, jl_linenumbernode_type,
+                     jl_gotonode_type, jl_quotenode_type, jl_topnode_type,
 
                      jl_null, jl_any_type, jl_symbol("Any"),
                      jl_symbol("Array"), jl_symbol("TypeVar"),
@@ -988,6 +989,8 @@ void jl_init_serializer()
                      jl_typector_type->name, jl_intrinsic_type->name, jl_undef_type->name,
                      jl_task_type->name,
                      jl_labelnode_type->name, jl_linenumbernode_type->name,
+                     jl_gotonode_type->name, jl_quotenode_type->name,
+                     jl_topnode_type->name,
 
                      jl_root_task,
 

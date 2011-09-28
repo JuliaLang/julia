@@ -39,6 +39,9 @@ jl_struct_type_t *jl_expr_type;
 jl_struct_type_t *jl_symbolnode_type;
 jl_struct_type_t *jl_linenumbernode_type;
 jl_struct_type_t *jl_labelnode_type;
+jl_struct_type_t *jl_gotonode_type;
+jl_struct_type_t *jl_quotenode_type;
+jl_struct_type_t *jl_topnode_type;
 jl_bits_type_t *jl_intrinsic_type;
 jl_struct_type_t *jl_methtable_type;
 jl_struct_type_t *jl_lambda_info_type;
@@ -846,7 +849,7 @@ UNBOX_FUNC(float64, double)
 
 jl_expr_t *jl_exprn(jl_sym_t *head, size_t n)
 {
-    jl_array_t *ar = jl_alloc_cell_1d(n);
+    jl_array_t *ar = n==0 ? (jl_array_t*)jl_an_empty_cell : jl_alloc_cell_1d(n);
     JL_GC_PUSH(&ar);
 #ifdef JL_GC_MARKSWEEP
     jl_expr_t *ex = (jl_expr_t*)alloc_4w();
@@ -889,4 +892,15 @@ JL_CALLABLE(jl_f_new_box)
     box->type = jl_box_any_type;
     ((jl_value_t**)box)[1] = args[0];
     return box;
+}
+
+JL_CALLABLE(jl_f_new_topnode)
+{
+    JL_NARGS(TopNode, 2, 2);
+    JL_TYPECHK(TopNode, symbol, args[0]);
+    jl_value_t *ex = alloc_3w();
+    ex->type = (jl_type_t*)jl_topnode_type;
+    jl_fieldref(ex,0) = args[0];
+    jl_fieldref(ex,1) = args[1];
+    return ex;
 }

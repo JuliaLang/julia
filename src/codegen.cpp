@@ -542,8 +542,7 @@ static Value *emit_lambda_closure(jl_value_t *expr, jl_codectx_t *ctx)
 
 static bool expr_is_symbol(jl_value_t *e)
 {
-    return (jl_is_symbol(e) || jl_is_symbolnode(e) ||
-            (jl_is_expr(e) && ((jl_expr_t*)e)->head==top_sym));
+    return (jl_is_symbol(e) || jl_is_symbolnode(e) || jl_is_topnode(e));
 }
 
 static size_t max_arg_depth(jl_value_t *expr)
@@ -601,6 +600,10 @@ static jl_value_t *expr_type(jl_value_t *e)
         return ((jl_expr_t*)e)->etype;
     if (jl_is_symbolnode(e))
         return jl_symbolnode_type(e);
+    if (jl_is_topnode(e))
+        return jl_fieldref(e,1);
+    if (jl_is_quotenode(e))
+        return (jl_value_t*)jl_typeof(jl_fieldref(e,0));
     if (jl_is_symbol(e))
         return (jl_value_t*)jl_any_type;
     if (jl_is_lambda_info(e))
@@ -974,11 +977,10 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
     else if (f->fptr == &jl_f_get_field && nargs==2) {
         jl_struct_type_t *sty = (jl_struct_type_t*)expr_type(args[1]);
         rt1 = (jl_value_t*)sty;
-        if (jl_is_struct_type(sty) && jl_is_expr(args[2]) &&
-            ((jl_expr_t*)args[2])->head == quote_sym &&
-            jl_is_symbol(jl_exprarg(args[2],0))) {
+        if (jl_is_struct_type(sty) && jl_is_quotenode(args[2]) &&
+            jl_is_symbol(jl_fieldref(args[2],0))) {
             size_t offs = jl_field_offset(sty,
-                                          (jl_sym_t*)jl_exprarg(args[2],0));
+                                          (jl_sym_t*)jl_fieldref(args[2],0));
             if (offs != (size_t)-1) {
                 Value *strct = emit_expr(args[1], ctx, true);
                 Value *fld = emit_nthptr(strct, offs+1);
@@ -991,11 +993,10 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
     else if (f->fptr == &jl_f_set_field && nargs==3) {
         jl_struct_type_t *sty = (jl_struct_type_t*)expr_type(args[1]);
         rt1 = (jl_value_t*)sty;
-        if (jl_is_struct_type(sty) && jl_is_expr(args[2]) &&
-            ((jl_expr_t*)args[2])->head == quote_sym &&
-            jl_is_symbol(jl_exprarg(args[2],0))) {
+        if (jl_is_struct_type(sty) && jl_is_quotenode(args[2]) &&
+            jl_is_symbol(jl_fieldref(args[2],0))) {
             size_t offs = jl_field_offset(sty,
-                                          (jl_sym_t*)jl_exprarg(args[2],0));
+                                          (jl_sym_t*)jl_fieldref(args[2],0));
             if (offs != (size_t)-1) {
                 jl_value_t *ft = jl_tupleref(sty->types, offs);
                 jl_value_t *rhst = expr_type(args[3]);
@@ -1035,11 +1036,11 @@ static Value *emit_call(jl_value_t **args, size_t arglen, jl_codectx_t *ctx)
         // TODO
         //if (!b->constp) b = NULL;
     }
-    if (jl_is_expr(a0) && ((jl_expr_t*)a0)->head == top_sym) {
+    if (jl_is_topnode(a0)) {
         headIsGlobal = true;
         // (top x) is also global
         b = jl_get_binding(ctx->module,
-                           (jl_sym_t*)jl_exprarg(((jl_expr_t*)a0),0));
+                           (jl_sym_t*)jl_fieldref(a0,0));
         if (b->value==NULL ||
             (!b->constp && !(jl_is_func(b->value) && jl_is_gf(b->value))))
             b = NULL;
@@ -1176,6 +1177,32 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool value)
     else if (jl_is_linenode(expr)) {
         return NULL;
     }
+    else if (jl_is_quotenode(expr)) {
+        jl_value_t *jv = jl_fieldref(expr,0);
+        return literal_pointer_val(jv);
+    }
+    else if (jl_is_gotonode(expr)) {
+        assert(!value);
+        if (builder.GetInsertBlock()->getTerminator() == NULL) {
+            int labelname = jl_gotonode_label(expr);
+            BasicBlock *bb = (*ctx->labels)[labelname];
+            assert(bb);
+            builder.CreateBr(bb);
+        }
+        return NULL;
+    }
+    else if (jl_is_topnode(expr)) {
+        jl_sym_t *var = (jl_sym_t*)jl_fieldref(expr,0);
+        jl_value_t *etype = jl_fieldref(expr,1);
+        jl_binding_t *b = jl_get_binding(ctx->module, var);
+        Value *bp = globalvar_binding_pointer(var, ctx);
+        if ((b->constp && b->value!=NULL) ||
+            (etype!=(jl_value_t*)jl_any_type &&
+             !jl_subtype((jl_value_t*)jl_undef_type, etype, 0))) {
+            return builder.CreateLoad(bp, false);
+        }
+        return emit_checked_var(bp, var->name, ctx);
+    }
     if (!jl_is_expr(expr)) {
         // numeric literals
         if (jl_is_int32(expr)) {
@@ -1200,16 +1227,7 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool value)
     // this is object-disoriented.
     // however, this is a good way to do it because it should *not* be easy
     // to add new node types.
-    if (ex->head == goto_sym) {
-        assert(!value);
-        if (builder.GetInsertBlock()->getTerminator() == NULL) {
-            int labelname = jl_unbox_long(args[0]);
-            BasicBlock *bb = (*ctx->labels)[labelname];
-            assert(bb);
-            builder.CreateBr(bb);
-        }
-    }
-    else if (ex->head == goto_ifnot_sym) {
+    if (ex->head == goto_ifnot_sym) {
         assert(!value);
         jl_value_t *cond = args[0];
         int labelname = jl_unbox_long(args[1]);
@@ -1248,16 +1266,6 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool value)
         if (value) {
             return literal_pointer_val((jl_value_t*)jl_nothing);
         }
-    }
-    else if (ex->head == top_sym) {
-        jl_binding_t *b = jl_get_binding(ctx->module, (jl_sym_t*)args[0]);
-        Value *bp = globalvar_binding_pointer((jl_sym_t*)args[0], ctx);
-        if ((b->constp && b->value!=NULL) ||
-            (ex->etype!=(jl_value_t*)jl_any_type &&
-             !jl_subtype((jl_value_t*)jl_undef_type, ex->etype, 0))) {
-            return builder.CreateLoad(bp, false);
-        }
-        return emit_checked_var(bp, ((jl_sym_t*)args[0])->name, ctx);
     }
     else if (ex->head == method_sym) {
         jl_value_t *mn;
@@ -1308,10 +1316,6 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool value)
         return isbnd;
     }
 
-    else if (ex->head == quote_sym) {
-        jl_value_t *jv = args[0];
-        return literal_pointer_val(jv);
-    }
     else if (ex->head == null_sym) {
         return literal_pointer_val((jl_value_t*)jl_nothing);
 	}

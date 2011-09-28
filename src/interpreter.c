@@ -63,6 +63,16 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl)
     if (jl_is_symbolnode(e)) {
         return eval((jl_value_t*)jl_symbolnode_sym(e), locals, nl);
     }
+    if (jl_is_quotenode(e)) {
+        return jl_fieldref(e,0);
+    }
+    if (jl_is_topnode(e)) {
+        jl_value_t **bp = jl_get_bindingp(jl_system_module,
+                                          (jl_sym_t*)jl_fieldref(e,0));
+        if (*bp == NULL)
+            jl_errorf("%s not defined", ((jl_sym_t*)jl_fieldref(e,0))->name);
+        return *bp;
+    }
     if (!jl_is_expr(e)) {
         if (jl_is_lambda_info(e)) {
             return jl_new_closure_internal((jl_lambda_info_t*)e,
@@ -94,12 +104,6 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl)
             *bp = rhs;
         return (jl_value_t*)jl_nothing;
     }
-    else if (ex->head == top_sym) {
-        jl_value_t **bp = jl_get_bindingp(jl_system_module, (jl_sym_t*)args[0]);
-        if (*bp == NULL)
-            jl_errorf("%s not defined", ((jl_sym_t*)args[0])->name);
-        return *bp;
-    }
     else if (ex->head == new_sym) {
         jl_value_t *thetype = eval(args[0], locals, nl);
         JL_GC_PUSH(&thetype);
@@ -107,9 +111,6 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl)
         jl_value_t *v = jl_new_struct_uninit((jl_struct_type_t*)thetype);
         JL_GC_POP();
         return v;
-    }
-    else if (ex->head == quote_sym) {
-        return args[0];
     }
     else if (ex->head == null_sym) {
         return (jl_value_t*)jl_nothing;
@@ -175,13 +176,13 @@ static jl_value_t *eval_body(jl_array_t *stmts, jl_value_t **locals, size_t nl,
     size_t i=start;
     while (1) {
         jl_value_t *stmt = jl_cellref(stmts,i);
+        if (jl_is_gotonode(stmt)) {
+            i = label_idx(jl_fieldref(stmt,0), stmts);
+            continue;
+        }
         if (jl_is_expr(stmt)) {
             jl_sym_t *head = ((jl_expr_t*)stmt)->head;
-            if (head == goto_sym) {
-                i = label_idx(jl_exprarg(stmt,0), stmts);
-                continue;
-            }
-            else if (head == goto_ifnot_sym) {
+            if (head == goto_ifnot_sym) {
                 jl_value_t *cond = eval(jl_exprarg(stmt,0), locals, nl);
                 if (cond == jl_false) {
                     i = label_idx(jl_exprarg(stmt,1), stmts);

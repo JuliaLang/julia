@@ -41,20 +41,21 @@
 (define (llist-vars lst)
   (map arg-name lst))
 
+(define (arg-type v)
+  (cond ((symbol? v)  'Any)
+	((not (pair? v))
+	 (error (string "malformed function arguments " lst)))
+	(else
+	 (case (car v)
+	   ((...)         `(... ,(decl-type (cadr v))))
+	   ((= keyword)   (decl-type (caddr v)))
+	   ((|::|)        (decl-type v))
+	   (else (error
+		  (string "malformed function arguments " lst)))))))
+
 ; get just argument types
 (define (llist-types lst)
-  (map (lambda (v)
-	 (cond ((symbol? v)  'Any)
-	       ((not (pair? v))
-		(error (string "malformed function arguments " lst)))
-	       (else
-		(case (car v)
-		  ((...)         `(... ,(decl-type (cadr v))))
-		  ((= keyword)   (decl-type (caddr v)))
-		  ((|::|)        (decl-type v))
-		  (else (error
-			 (string "malformed function arguments " lst)))))))
-       lst))
+  (map arg-type lst))
 
 (define (decl? e)
   (and (pair? e) (eq? (car e) '|::|)))
@@ -191,6 +192,17 @@
       `(lambda ,argl
 	 (scope-block ,body)))))
 
+;; GF method does not need to keep decl expressions on lambda args
+;; except for rest arg
+(define (method-lambda-expr argl body)
+  (let ((argl (map (lambda (x)
+		     (if (and (pair? x) (eq? (car x) '...))
+			 `(|::| ,(arg-name x) ,(arg-type x))
+			 (arg-name x)))
+		   argl)))
+    `(lambda ,argl
+       (scope-block ,body))))
+
 (define (symbols->typevars sl upperbounds)
   (if (null? upperbounds)
       (map (lambda (x)    `(call (top typevar) ',x)) sl)
@@ -200,7 +212,7 @@
   (if (not (symbol? name))
       (error (string "invalid method name " name)))
   `(block
-    (= ,name (method ,name ,argtypes ,(function-expr argl body)))
+    (= ,name (method ,name ,argtypes ,(method-lambda-expr argl body)))
     (null)))
 
 (define (sparam-name-bounds sparams names bounds)
@@ -431,11 +443,6 @@
    (pattern-lambda (function (tuple . args) body)
 		   `(-> (tuple ,@args) ,body))
 
-   ;; macro definition
-   (pattern-lambda (macro (call name . argl) body)
-		   `(call (top def_macro) (quote ,name)
-			  (-> (tuple ,@argl) ,body)))
-
    ;; expression form function definition
    (pattern-lambda (= (call (curly name . sparams) . argl) body)
 		   `(function (call (curly ,name . ,sparams) . ,argl) ,body))
@@ -500,6 +507,11 @@
 				     (cons asgn stmts))))
 			    (else (error "invalid let syntax"))))
 			  (else (error "invalid let syntax"))))))
+
+   ;; macro definition
+   (pattern-lambda (macro (call name . argl) body)
+		   `(call (top def_macro) (quote ,name)
+			  (-> (tuple ,@argl) ,body)))
 
    ;; type definition
    (pattern-lambda (type sig (block . fields))

@@ -299,6 +299,18 @@ static jl_value_t *scm_to_julia_(value_t e)
                 return jl_new_struct(jl_labelnode_type,
                                      scm_to_julia_(car_(e)));
             }
+            if (sym == goto_sym) {
+                return jl_new_struct(jl_gotonode_type,
+                                     scm_to_julia_(car_(e)));
+            }
+            if (sym == quote_sym) {
+                return jl_new_struct(jl_quotenode_type,
+                                     scm_to_julia_(car_(e)));
+            }
+            if (sym == top_sym) {
+                return jl_new_struct(jl_topnode_type,
+                                     scm_to_julia_(car_(e)), jl_any_type);
+            }
             jl_expr_t *ex = jl_exprn(sym, n);
             for(i=0; i < n; i++) {
                 assert(iscons(e));
@@ -365,6 +377,21 @@ static value_t julia_to_scm(jl_value_t *v)
     }
     if (jl_typeis(v, jl_labelnode_type)) {
         return fl_cons(julia_to_scm((jl_value_t*)label_sym),
+                       fl_cons(julia_to_scm(jl_fieldref(v,0)),
+                               FL_NIL));
+    }
+    if (jl_typeis(v, jl_gotonode_type)) {
+        return fl_cons(julia_to_scm((jl_value_t*)goto_sym),
+                       fl_cons(julia_to_scm(jl_fieldref(v,0)),
+                               FL_NIL));
+    }
+    if (jl_typeis(v, jl_quotenode_type)) {
+        return fl_cons(julia_to_scm((jl_value_t*)quote_sym),
+                       fl_cons(julia_to_scm(jl_fieldref(v,0)),
+                               FL_NIL));
+    }
+    if (jl_typeis(v, jl_topnode_type)) {
+        return fl_cons(julia_to_scm((jl_value_t*)top_sym),
                        fl_cons(julia_to_scm(jl_fieldref(v,0)),
                                FL_NIL));
     }

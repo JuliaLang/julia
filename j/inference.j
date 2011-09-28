@@ -70,7 +70,8 @@ isconstant(s::Symbol) = isbound(s) && (e=eval(s);
                                        isa(e,TypeConstructor) ||
                                        is(e,None))
 isconstant(s::SymbolNode) = isconstant(s.name)
-isconstant(s::Expr) = is(s.head,:quote)
+isconstant(s::TopNode) = isconstant(s.name)
+isconstant(x::Expr) = false
 isconstant(x) = true
 
 cmp_tfunc = (x,y)->Bool
@@ -287,8 +288,8 @@ getfield_tfunc = function (A, s, name)
     if !isa(s,CompositeKind)
         return Any
     end
-    if isa(A[2],Expr) && is(A[2].head,:quote) && isa(A[2].args[1],Symbol)
-        fld = A[2].args[1]
+    if isa(A[2],QuoteNode) && isa(A[2].value,Symbol)
+        fld = A[2].value
         for i=1:length(s.names)
             if is(s.names[i],fld)
                 return s.types[i]
@@ -375,12 +376,6 @@ type StaticVarInfo
     cenv::IdTable   # types of closed vars
 end
 
-function abstract_eval(e::Expr, vtypes, sv::StaticVarInfo)
-    t = abstract_eval_expr(e, vtypes, sv)
-    e.typ = t
-    return t
-end
-
 function a2t(a::AbstractVector)
     n = length(a)
     if n==2 return (a[1],a[2]) end
@@ -409,10 +404,9 @@ function a2t_butfirst(a::AbstractVector)
 end
 
 function isconstantfunc(f, vtypes, sv::StaticVarInfo)
-    if isa(f,Expr) && is(f.head,:top)
+    if isa(f,TopNode)
         abstract_eval(f, vtypes, sv)  # to pick up a type annotation
-        assert(isa(f.args[1],Symbol), "inference.j:333")
-        return (true, f.args[1])
+        return (true, f.name)
     end
     if isa(f,SymbolNode)
         f = f.name
@@ -574,11 +568,9 @@ end
 
 function abstract_eval_expr(e, vtypes, sv::StaticVarInfo)
     # handle:
-    # call  lambda  quote  null  top  isbound static_typeof
+    # call  lambda  null  isbound static_typeof
     if is(e.head,:call) || is(e.head,:call1)
         return abstract_eval_call(e, vtypes, sv)
-    elseif is(e.head,:top)
-        return abstract_eval_global(e.args[1])
     #elseif is(e.head,:isbound)
     #    return Bool
     elseif is(e.head,:null)
@@ -589,8 +581,6 @@ function abstract_eval_expr(e, vtypes, sv::StaticVarInfo)
             return t.parameters[1]
         end
         return Any
-    elseif is(e.head,:quote)
-        return typeof(e.args[1])
     elseif is(e.head,:method)
         return Function
     elseif is(e.head,:static_typeof)
@@ -604,6 +594,22 @@ function abstract_eval_expr(e, vtypes, sv::StaticVarInfo)
         end
     end
     Any
+end
+
+function abstract_eval(e::Expr, vtypes, sv::StaticVarInfo)
+    t = abstract_eval_expr(e, vtypes, sv)
+    e.typ = t
+    return t
+end
+
+function abstract_eval(e::QuoteNode, vtypes, sv::StaticVarInfo)
+    return typeof(e.value)
+end
+
+function abstract_eval(e::TopNode, vtypes, sv::StaticVarInfo)
+    t = abstract_eval_global(e.name)
+    e.typ = t
+    return t
 end
 
 ast_rettype(ast) = ast.args[3].typ
@@ -810,8 +816,7 @@ end
 f_argnames(ast) =
     map(x->(isa(x,Expr) ? x.args[1] : x), ast.args[1]::Array{Any,1})
 
-is_rest_arg(arg) = (isa(arg,Expr) && is(arg.head,symbol("::")) &&
-                    ccall(:jl_is_rest_arg,Int32,(Any,), arg) != 0)
+is_rest_arg(arg) = (ccall(:jl_is_rest_arg,Int32,(Any,), arg) != 0)
 
 # function typeinf_task(caller)
 #     result = ()
@@ -1004,11 +1009,11 @@ function typeinf(linfo::LambdaStaticData,atypes::Tuple,sparams::Tuple, cop, def)
                 end
             end
             pc´ = pc+1
-            if isa(stmt,Expr)
+            if isa(stmt,GotoNode)
+                pc´ = findlabel(body,stmt.label)
+            elseif isa(stmt,Expr)
                 hd = stmt.head
-                if is(hd,:goto)
-                    pc´ = findlabel(body,stmt.args[1])
-                elseif is(hd,:gotoifnot)
+                if is(hd,:gotoifnot)
                     l = findlabel(body,stmt.args[2])
                     handler_at[l] = cur_hand
                     if stchanged(changes, s[l], vars)
@@ -1099,8 +1104,7 @@ end
 
 function eval_annotate(e::Expr, vtypes, sv, decls, clo)
     head = e.head
-    if is(head,:quote) || is(head,:top) || is(head,:goto) ||
-        is(head,:static_typeof) || is(head,:line)
+    if is(head,:static_typeof) || is(head,:line)
         return e
     elseif is(head,:gotoifnot) || is(head,:return)
         e.typ = Any
@@ -1191,8 +1195,7 @@ end
 
 function sym_replace(e::Expr, from, to)
     head = e.head
-    if is(head,:quote) || is(head,:top) || is(head,:goto) ||
-        is(head,:line)
+    if is(head,:line)
         return e
     end
     for i=1:length(e.args)
@@ -1224,9 +1227,6 @@ sym_replace(x, from, to) = x
 
 # count occurrences up to n+1
 function occurs_more(e::Expr, pred, n)
-    if is(e.head,:quote) || is(e.head,:top) || is(e.head,:goto)
-        return 0
-    end
     c = 0
     for a = e.args
         c += occurs_more(a, pred, n)
@@ -1425,7 +1425,7 @@ function inlining_pass(e::Expr, vars)
             if length(e.args) == 3
                 aarg = e.args[3]
                 if isa(aarg,Expr) && is(aarg.head,:call) &&
-                    isa(aarg.args[1],Expr) && is(aarg.args[1].head,:top) &&
+                    isa(aarg.args[1],TopNode) &&
                     is(eval(aarg.args[1]),tuple)
                     # apply(f,tuple(x,y,...)) => f(x,y,...)
                     e.args = append({e.args[2]}, aarg.args[2:])
@@ -1441,7 +1441,7 @@ function inlining_pass(e::Expr, vars)
     elseif is(e.head,:call)
         farg = arg1
         # special inlining for some builtin functions that return types
-        if isa(farg,Expr) && is(farg.head,:top) &&
+        if isa(farg,TopNode) &&
             (is(eval(farg),apply_type) || is(eval(farg),fieldtype)) &&
             isType(e.typ) && isleaftype(e.typ.parameters[1])
             return e.typ.parameters[1]
@@ -1468,8 +1468,8 @@ function unique_name(ast)
 end
 
 function is_top_call(e::Expr, fname)
-    return is(e.head,:call) && isa(e.args[1],Expr) &&
-        is(e.args[1].head,:top) && is(e.args[1].args[1],fname)
+    return is(e.head,:call) && isa(e.args[1],TopNode) &&
+        is(e.args[1].name,fname)
 end
 
 # eliminate allocation of tuples used to return multiple values

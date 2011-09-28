@@ -97,26 +97,8 @@ function show(e::Expr)
         show_comma_array(e.args[2:],'(',')')
     elseif is(hd,:(=))
         print("$(e.args[1]) = $(e.args[2])")
-    elseif is(hd,:quote)
-        a1 = e.args[1]
-        if isa(e.args[1],Expr) && (is(a1.head,:body) ||
-                                   is(a1.head,:block))
-            println("\nquote")
-            for a=a1.args
-                println("  $a")
-            end
-            println("end")
-        else
-            if isa(a1,Symbol) && !is(a1,:(:))
-                print(":$a1")
-            else
-                print(":($a1)")
-            end
-        end
     elseif is(hd,:null)
         print("nothing")
-    elseif is(hd,:goto)
-        print("goto $(e.args[1])")
     elseif is(hd,:gotoifnot)
         print("unless $(e.args[1]) goto $(e.args[2])")
     elseif is(hd,:return)
@@ -147,12 +129,30 @@ function show(e::SymbolNode)
     show_expr_type(e.typ)
 end
 
-function show(e::LineNumberNode)
-    print("line($(e.line))")
-end
+show(e::LineNumberNode) = print("line($(e.line))")
 
-function show(e::LabelNode)
-    print("$(e.label): ")
+show(e::LabelNode) = print("$(e.label): ")
+
+show(e::GotoNode) = print("goto $(e.label)")
+
+show(e::TopNode) = (print("top($(e.name))");
+                    show_expr_type(e.typ))
+
+function show(e::QuoteNode)
+    a1 = e.value
+    if isa(a1,Expr) && (is(a1.head,:body) || is(a1.head,:block))
+        println("\nquote")
+        for a=a1.args
+            println("  $a")
+        end
+        println("end")
+    else
+        if isa(a1,Symbol) && !is(a1,:(:))
+            print(":$a1")
+        else
+            print(":($a1)")
+        end
+    end
 end
 
 function show(e::TypeError)
