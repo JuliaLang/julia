@@ -746,6 +746,43 @@ function hvcat{T}(rows::(Size...), as::AbstractMatrix{T}...)
     out
 end
 
+hvcat(rows::(Size...)) = []
+
+function hvcat{T<:Number}(rows::(Size...), xs::T...)
+    nr = length(rows)
+    nc = rows[1]
+    a = Array(T, nr, nc)
+    k = 1
+    for i=1:nr
+        for j=1:nc
+            a[i,j] = xs[k]
+            k += 1
+        end
+    end
+    a
+end
+
+function hvcat_fill(a, xs)
+    k = 1
+    nr, nc = size(a)
+    for i=1:nr
+        for j=1:nc
+            a[i,j] = xs[k]
+            k += 1
+        end
+    end
+    a
+end
+
+function hvcat(rows::(Size...), xs::Number...)
+    nr = length(rows)
+    nc = rows[1]
+    T = typeof(xs[1])
+    for i=2:length(xs)
+        T = promote_type(T,typeof(xs[i]))
+    end
+    hvcat_fill(Array(T, nr, nc), xs)
+end
 
 ## Reductions ##
 
