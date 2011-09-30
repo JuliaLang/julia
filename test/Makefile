@@ -1,7 +1,7 @@
 testall: test test-utf8 test-perf
 
-unittests:
-	../julia unittests.j
+quicktests:
+	../julia quicktests.j
 
 test:
 	../julia tests.j

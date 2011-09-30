@@ -5,7 +5,7 @@ include ./Make.inc
 default: release
 
 debug release: %: julia-% sys.ji
-	make -C test unittests
+	make -C test quicktests
 
 julia-debug julia-release:
 	$(MAKE) -C external

@@ -718,11 +718,17 @@ glotest()
 
 # dispatch
 begin
-    local foo
+    local foo, bar
     foo(x::(Any...))=0
     foo(x::(Int...))=1
     @assert foo((:a,))==0
     @assert foo(( 2,))==1
+    
+    bar{T}(x::(T,T,T,T))=1
+    bar(x::(Any,Any,Any,Any))=2
+    @assert bar((1,1,1,1)) == 1
+    @assert bar((1,1,1,"a")) == 2
+    @assert bar((:a,:a,:a,:a)) == 1
 end
 
 # ranges

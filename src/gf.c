@@ -379,18 +379,32 @@ void jl_type_infer(jl_lambda_info_t *li, jl_tuple_t *argtypes,
     jl_in_inference = last_ii;
 }
 
+static int tuple_all_Any(jl_tuple_t *t)
+{
+    int i;
+    for(i=0; i < t->length; i++) {
+        if (jl_tupleref(t,i) != (jl_value_t*)jl_any_type)
+            return 0;
+    }
+    return 1;
+}
+
 static jl_function_t *cache_method(jl_methtable_t *mt, jl_tuple_t *type,
                                    jl_function_t *method, jl_tuple_t *decl,
                                    jl_tuple_t *sparams)
 {
     size_t i;
     int need_dummy_entries = 0;
+    jl_value_t *temp=NULL;
+    jl_function_t *newmeth=NULL;
+    JL_GC_PUSH(&type, &temp, &newmeth);
+
     for (i=0; i < type->length; i++) {
         jl_value_t *elt = jl_tupleref(type,i);
         int set_to_any = 0;
         if (nth_slot_type(decl,i) == jl_ANY_flag) {
             // don't specialize on slots marked ANY
-            jl_value_t *orig = jl_tupleref(type, i);
+            temp = jl_tupleref(type, i);
             jl_tupleset(type, i, (jl_value_t*)jl_any_type);
             int nintr=0;
             jl_methlist_t *curr = mt->defs;
@@ -408,7 +422,7 @@ static jl_function_t *cache_method(jl_methtable_t *mt, jl_tuple_t *type,
             if (nintr) {
                 // TODO: even if different specializations of this slot need
                 // separate cache entries, have them share code.
-                jl_tupleset(type, i, orig);
+                jl_tupleset(type, i, temp);
             }
             else {
                 set_to_any = 1;
@@ -423,6 +437,7 @@ static jl_function_t *cache_method(jl_methtable_t *mt, jl_tuple_t *type,
               specific. determined with a type intersection.
             */
             int might_need_dummy=0;
+            temp = jl_tupleref(type, i);
             if (i < decl->length) {
                 jl_value_t *declt = jl_tupleref(decl,i);
                 // for T..., intersect with T
@@ -434,10 +449,14 @@ static jl_function_t *cache_method(jl_methtable_t *mt, jl_tuple_t *type,
                     jl_tupleset(type, i, (jl_value_t*)jl_tuple_type);
                     might_need_dummy = 1;
                 }
-                else if (((jl_tuple_t*)elt)->length > 3) {
+                else {
                     declt = jl_type_intersection(declt,
                                                  (jl_value_t*)jl_tuple_type);
-                    jl_tupleset(type, i, declt);
+                    if (((jl_tuple_t*)elt)->length > 3 ||
+                        tuple_all_Any((jl_tuple_t*)declt)) {
+                        jl_tupleset(type, i, declt);
+                        might_need_dummy = 1;
+                    }
                 }
             }
             else {
@@ -445,6 +464,22 @@ static jl_function_t *cache_method(jl_methtable_t *mt, jl_tuple_t *type,
                 might_need_dummy = 1;
             }
             assert(jl_tupleref(type,i) != (jl_value_t*)jl_bottom_type);
+            if (might_need_dummy) {
+                jl_methlist_t *curr = mt->defs;
+                // can't generalize type if there's an overlapping definition
+                // with typevars
+                while (curr != NULL && curr->func!=method) {
+                    if (curr->has_tvars &&
+                        jl_type_intersection((jl_value_t*)curr->sig,
+                                             (jl_value_t*)type) !=
+                        (jl_value_t*)jl_bottom_type) {
+                        jl_tupleset(type, i, temp);
+                        might_need_dummy = 0;
+                        break;
+                    }
+                    curr = curr->next;
+                }
+            }
             if (might_need_dummy) {
                 jl_methlist_t *curr = mt->defs;
                 while (curr != NULL && curr->func!=method) {
@@ -508,9 +543,7 @@ static jl_function_t *cache_method(jl_methtable_t *mt, jl_tuple_t *type,
             }
         }
     }
-    jl_value_t *temp=NULL;
-    jl_function_t *newmeth=NULL;
-    JL_GC_PUSH(&type, &temp, &newmeth);
+
     // for varargs methods, only specialize up to max_args.
     // in general, here we want to find the biggest type that's not a
     // supertype of any other method signatures. so far we are conservative
@@ -1323,7 +1356,7 @@ static jl_tuple_t *match_method(jl_value_t *type, jl_function_t *func,
     jl_value_t *ti=NULL;
     JL_GC_PUSH(&env, &ti, &temp);
 
-    ti = jl_type_intersection_matching((jl_value_t*)sig, type, &env, tvars);
+    ti = jl_type_intersection_matching(type, (jl_value_t*)sig, &env, tvars);
     jl_tuple_t *result = NULL;
     if (ti != (jl_value_t*)jl_bottom_type) {
         if (func->linfo == NULL) {
