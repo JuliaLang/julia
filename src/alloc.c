@@ -893,14 +893,3 @@ JL_CALLABLE(jl_f_new_box)
     ((jl_value_t**)box)[1] = args[0];
     return box;
 }
-
-JL_CALLABLE(jl_f_new_topnode)
-{
-    JL_NARGS(TopNode, 2, 2);
-    JL_TYPECHK(TopNode, symbol, args[0]);
-    jl_value_t *ex = alloc_3w();
-    ex->type = (jl_type_t*)jl_topnode_type;
-    jl_fieldref(ex,0) = args[0];
-    jl_fieldref(ex,1) = args[1];
-    return ex;
-}

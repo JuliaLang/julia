@@ -423,7 +423,7 @@ function ref(A::AbstractArray, I::Indices...)
     gen_cartesian_map(ref_cache, ivars->:(X[storeind] = A[$(ivars...)];
                                           storeind += 1),
                       I,
-                      {:A, :X, :storeind},
+                      (:A, :X, :storeind),
                       A, X, 1)
     return X
 end
@@ -538,8 +538,8 @@ function assign(A::AbstractArray, x, I0::Indices, I::Indices...)
         assign_cache = HashTable()
     end
     gen_cartesian_map(assign_cache, ivars->:(A[$(ivars...)] = x),
-                      append(tuple(I0), I),
-                      {:A, :x},
+                      tuple(I0, I...),
+                      (:A, :x),
                       A, x)
     return A
 end
@@ -553,8 +553,8 @@ function assign(A::AbstractArray, X::AbstractArray, I0::Indices, I::Indices...)
     end
     gen_cartesian_map(assign_cache, ivars->:(A[$(ivars...)] = X[refind];
                                              refind += 1),
-                      append(tuple(I0), I),
-                      {:A, :X, :refind},
+                      tuple(I0, I...),
+                      (:A, :X, :refind),
                       A, X, 1)
     return A
 end
@@ -574,7 +574,11 @@ vcat{T}(X::T...) = [ X[i] | i=1:length(X) ]
 hcat{T}(V::AbstractVector{T}...) = [ V[j][i] | i=1:length(V[1]), j=1:length(V) ]
 
 function vcat{T}(V::AbstractVector{T}...)
-    a = similar(V[1], sum(map(length, V))::Size)
+    n = 0
+    for Vk = V
+        n += length(Vk)
+    end
+    a = similar(V[1], n)
     pos = 1
     for k=1:length(V)
         Vk = V[k]
@@ -1231,8 +1235,10 @@ function permute(A::AbstractArray, perm)
 	permute_cache = HashTable()
     end
 
-    gen_cartesian_map(permute_cache, permute_one, ranges, {:A, :P, :perm, :offset, stridenames... }, A, P, perm, offset, strides...)
-
+    gen_cartesian_map(permute_cache, permute_one, ranges,
+                      tuple(:A, :P, :perm, :offset, stridenames...),
+                      A, P, perm, offset, strides...)
+    
     return P
 end
 #end let
@@ -1345,7 +1351,8 @@ function find{T}(A::AbstractArray{T})
         find_cache = HashTable()
     end
 
-    gen_cartesian_map(find_cache, find_one, ranges, {:A, :I, :count, :z}, A,I,1, zero(T))
+    gen_cartesian_map(find_cache, find_one, ranges,
+                      (:A, :I, :count, :z), A,I,1, zero(T))
     return I
 end
 end
@@ -1644,8 +1651,7 @@ end
 function assign(s::SubArray, v::AbstractArray, I::Indices...)
     j = 1 #the jth dimension in subarray
     n = ndims(s.parent)
-    #newindexes = Array(Indices, n)
-    newindexes = invoke(Array, (Type{Indices}, Int64), Indices, n)
+    newindexes = cell(n)
     for i = 1:n
         t = s.indexes[i]
         #TODO: don't generate the dense vector indexes if they can be ranges
@@ -1659,8 +1665,7 @@ end
 function assign(s::SubArray, v, I::Indices...)
     j = 1 #the jth dimension in subarray
     n = ndims(s.parent)
-    #newindexes = Array(Indices, n)
-    newindexes = invoke(Array, (Type{Indices}, Int64), Indices, n)
+    newindexes = cell(n)
     for i = 1:n
         t = s.indexes[i]
         #TODO: don't generate the dense vector indexes if they can be ranges

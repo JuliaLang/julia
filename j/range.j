@@ -144,7 +144,7 @@ function vcat{T}(r::Union(Range{T},Range1{T}))
 end
 
 function vcat{T}(rs::Union(Range{T},Range1{T})...)
-    n = sum(map(length,rs))::Size
+    n = sum(length,rs)::Size
     a = Array(T,n)
     i = 1
     for r = rs

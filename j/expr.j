@@ -14,7 +14,9 @@ expr(hd::Symbol, args::ANY...) = Expr(hd, {args...}, Any)
 expr(hd::Symbol, args::Array{Any,1}) = Expr(hd, args, Any)
 copy(e::Expr) = Expr(e.head, isempty(e.args) ? e.args : copy(e.args), e.typ)
 copy(s::SymbolNode) = SymbolNode(s.name, s.typ)
-copy(s::TopNode)    = TopNode(s.name, s.typ)
+# doesn't need to be copied, since the type of one of these will always
+# be the same.
+#copy(s::TopNode)    = TopNode(s.name, s.typ)
 
 isequal(x::Expr, y::Expr) = (is(x.head,y.head) && isequal(x.args,y.args))
 isequal(x::SymbolNode, y::SymbolNode) = is(x.name,y.name)
