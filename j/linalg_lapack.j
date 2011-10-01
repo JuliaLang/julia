@@ -57,7 +57,7 @@ macro jl_lapack_getrf_macro(getrf, eltype)
         # *     .. Array Arguments ..
         #       INTEGER            IPIV( * )
         #       DOUBLE PRECISION   A( LDA, * )
-        function jl_lapack_getrf(m, n, A::AbstractMatrix{$eltype}, lda, ipiv)
+        function jl_lapack_getrf(m, n, A::Matrix{$eltype}, lda, ipiv)
             info = Array(Int32, 1)
             a = pointer(A)
             ccall(dlsym(libLAPACK, $getrf),
@@ -533,7 +533,7 @@ macro jl_lapack_backslash_macro(gesv, posv, gels, trtrs, eltype)
         # *     .. Array Arguments ..
         #       INTEGER            IPIV( * )
         #       DOUBLE PRECISION   A( LDA, * ), B( LDB, * )
-        function jl_lapack_gesv(n, nrhs, A::AbstractMatrix{$eltype}, lda, ipiv, B, ldb)
+        function jl_lapack_gesv(n, nrhs, A::Matrix{$eltype}, lda, ipiv, B, ldb)
             info = Array(Int32, 1)
             a = pointer(A)
             b = pointer(B)
@@ -551,7 +551,7 @@ macro jl_lapack_backslash_macro(gesv, posv, gels, trtrs, eltype)
         #      INTEGER            INFO, LDA, LDB, N, NRHS
         #     .. Array Arguments ..
         #      DOUBLE PRECISION   A( LDA, * ), B( LDB, * )
-        function jl_lapack_posv(uplo, n, nrhs, A::AbstractMatrix{$eltype}, lda, B, ldb)
+        function jl_lapack_posv(uplo, n, nrhs, A::Matrix{$eltype}, lda, B, ldb)
             info = Array(Int32, 1)
             a = pointer(A)
             b = pointer(B)
@@ -567,7 +567,7 @@ macro jl_lapack_backslash_macro(gesv, posv, gels, trtrs, eltype)
         # *     .. Scalar Arguments ..
         #       CHARACTER          TRANS
         #       INTEGER            INFO, LDA, LDB, LWORK, M, N, NRHS
-        function jl_lapack_gels(trans, m, n, nrhs, A::AbstractMatrix{$eltype}, lda, B, ldb, work, lwork)
+        function jl_lapack_gels(trans, m, n, nrhs, A::Matrix{$eltype}, lda, B, ldb, work, lwork)
             info = Array(Int32, 1)
             a = pointer(A)
             b = pointer(B)
@@ -586,7 +586,7 @@ macro jl_lapack_backslash_macro(gesv, posv, gels, trtrs, eltype)
         #       INTEGER            INFO, LDA, LDB, N, NRHS
         # *     .. Array Arguments ..
         #       DOUBLE PRECISION   A( LDA, * ), B( LDB, * )
-        function jl_lapack_trtrs(uplo, trans, diag, n, nrhs, A::AbstractMatrix{$eltype}, lda, B, ldb)
+        function jl_lapack_trtrs(uplo, trans, diag, n, nrhs, A::Matrix{$eltype}, lda, B, ldb)
             info = Array(Int32, 1)
             a = pointer(A)
             b = pointer(B)
