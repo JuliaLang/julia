@@ -1576,8 +1576,7 @@ end
 function ref(s::SubArray, I::Indices...)
     j = 1 #the jth dimension in subarray
     n = ndims(s.parent)
-    #newindexes = Array(Indices, n)
-    newindexes = invoke(Array, (Type{Indices}, Int64), Indices, n)
+    newindexes = Array(Indices, n)
     for i = 1:n
         t = s.indexes[i]
         #TODO: don't generate the dense vector indexes if they can be ranges
