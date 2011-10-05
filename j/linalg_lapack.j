@@ -31,19 +31,23 @@ end
 #(uses upper triangular half)
 #Possible TODO: "economy mode"
 
-#chol{T<:Number}(x::StridedMatrix{T}) = chol(float64(x))
+chol{T<:Number}(x::StridedMatrix{T}) = chol(float64(x))
 
 function chol{T<:Union(Float32,Float64,Complex64,Complex128)}(A::StridedMatrix{T})
     if stride(A,1) != 1; error("chol: matrix columns must have contiguous elements"); end
     n = int32(size(A, 1))
-    if isa(A, Matrix)
-        R = triu(A)
-    else
-        R = triu(A[:,:])
-    end
-    info = jl_lapack_potrf("U", n, R, stride(A,2))
+    R = copy(A)
+    info = jl_lapack_potrf("U", n, R, stride(R,2))
 
-    if info == 0; return R; end
+    if info == 0; 
+        # Zero out the lower triangular part of the result
+        for j=1:n
+            for i=(j+1):n
+                R[i,j] = zero(T)
+            end
+        end
+        return R; 
+    end
     if info  > 0; error("matrix not positive definite"); end
     error("error in CHOL")
 end
