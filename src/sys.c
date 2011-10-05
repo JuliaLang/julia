@@ -226,6 +226,13 @@ int _os_write_all(long fd, void *buf, size_t n, size_t *nwritten);
 
 static void *run_io_thr(void *arg)
 {
+    sigset_t set;
+    sigemptyset(&set);
+    sigaddset(&set, SIGFPE);
+    sigaddset(&set, SIGINT);
+    sigaddset(&set, SIGSEGV);
+    pthread_sigmask(SIG_BLOCK, &set, NULL);
+
     while (1) {
         if (ioq == NULL) {
             pthread_mutex_lock(&wake_mut);

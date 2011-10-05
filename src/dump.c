@@ -181,6 +181,7 @@ void jl_serialize_typecache(ios_t *s, jl_typename_t *tn)
     typekey_stack_t *tc = (typekey_stack_t*)tn->cache;
     while (tc != NULL) {
         jl_serialize_value(s, tc->type);
+        jl_serialize_value(s, tc->tn);
         write_int32(s, tc->n);
         int i;
         for(i=0; i < tc->n; i++) {
@@ -503,7 +504,7 @@ typekey_stack_t *jl_deserialize_typecache(ios_t *s)
             break;
         typekey_stack_t *tc = (typekey_stack_t*)allocb(sizeof(typekey_stack_t));
         tc->type = (jl_type_t*)type;
-        tc->tn = ((jl_tag_type_t*)type)->name;
+        tc->tn = (jl_typename_t*)jl_deserialize_value(s);
         int n = read_int32(s);
         tc->n = n;
         tc->key = (jl_value_t**)allocb(n * sizeof(void*));
