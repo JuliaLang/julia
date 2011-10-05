@@ -31,7 +31,7 @@ end
 #(uses upper triangular half)
 #Possible TODO: "economy mode"
 
-chol{T<:Number}(x::StridedMatrix{T}) = chol(float64(x))
+#chol{T<:Number}(x::StridedMatrix{T}) = chol(float64(x))
 
 function chol{T<:Union(Float32,Float64,Complex64,Complex128)}(A::StridedMatrix{T})
     if stride(A,1) != 1; error("chol: matrix columns must have contiguous elements"); end
@@ -191,7 +191,7 @@ end
 
 #possible TODO: economy mode?
 
-qr{T<:Number}(x::StridedMatrix{T}) = qr(float64(x))
+#qr{T<:Number}(x::StridedMatrix{T}) = qr(float64(x))
 
 function qr{T<:Union(Float32,Float64,Complex64,Complex128)}(A::StridedMatrix{T})
     m, n = size(A)
@@ -333,7 +333,7 @@ end
 @jl_lapack_eig_macro :dsyev_ :zheev_ :dgeev_ :zgeev_ Float64 Complex128
 @jl_lapack_eig_macro :ssyev_ :cheev_ :sgeev_ :cgeev_ Float32 Complex64
 
-eig{T<:Number}(x::StridedMatrix{T}) = eig(float64(x))
+#eig{T<:Number}(x::StridedMatrix{T}) = eig(float64(x))
 
 function eig{T<:Union(Float64,Float32,Complex128,Complex64)}(A::StridedMatrix{T})
     m, n = size(A)
@@ -354,9 +354,9 @@ function eig{T<:Union(Float64,Float32,Complex128,Complex64)}(A::StridedMatrix{T}
         lwork = -1
 
         if iscomplex(A)
-            info = jl_lapack_heev(jobz, uplo, n, EV, stride(A,2), W, work, lwork, rwork)
+            info = jl_lapack_heev(jobz, uplo, n, EV, stride(EV,2), W, work, lwork, rwork)
         else
-            info = jl_lapack_syev(jobz, uplo, n, EV, stride(A,2), W, work, lwork)
+            info = jl_lapack_syev(jobz, uplo, n, EV, stride(EV,2), W, work, lwork)
         end
 
         if info == 0; lwork = real(work[1]); work = Array(T, long(lwork));
@@ -364,9 +364,9 @@ function eig{T<:Union(Float64,Float32,Complex128,Complex64)}(A::StridedMatrix{T}
 
         # Compute eigenvalues, eigenvectors
         if iscomplex(A)
-            info = jl_lapack_heev(jobz, uplo, n, EV, stride(A,2), W, work, lwork, rwork)
+            info = jl_lapack_heev(jobz, uplo, n, EV, stride(EV,2), W, work, lwork, rwork)
         else
-            info = jl_lapack_syev(jobz, uplo, n, EV, stride(A,2), W, work, lwork)
+            info = jl_lapack_syev(jobz, uplo, n, EV, stride(EV,2), W, work, lwork)
         end
 
         if info == 0; return (W, EV); end
@@ -392,9 +392,9 @@ function eig{T<:Union(Float64,Float32,Complex128,Complex64)}(A::StridedMatrix{T}
         lwork = -1
 
         if iscomplex(A)
-            info = jl_lapack_geev(jobvl, jobvr, n, Acopy, stride(A,2), W, VL, n, VR, n, work, lwork, rwork)
+            info = jl_lapack_geev(jobvl, jobvr, n, Acopy, stride(Acopy,2), W, VL, n, VR, n, work, lwork, rwork)
         else
-            info = jl_lapack_geev(jobvl, jobvr, n, Acopy, stride(A,2), WR, WI, VL, n, VR, n, work, lwork)
+            info = jl_lapack_geev(jobvl, jobvr, n, Acopy, stride(Acopy,2), WR, WI, VL, n, VR, n, work, lwork)
         end
 
         if info == 0; lwork = real(work[1]); work = Array(T, long(lwork));
@@ -402,9 +402,9 @@ function eig{T<:Union(Float64,Float32,Complex128,Complex64)}(A::StridedMatrix{T}
 
         # Compute eigenvalues, eigenvectors
         if iscomplex(A)
-            info = jl_lapack_geev(jobvl, jobvr, n, Acopy, stride(A,2), W, VL, n, VR, n, work, lwork, rwork)
+            info = jl_lapack_geev(jobvl, jobvr, n, Acopy, stride(Acopy,2), W, VL, n, VR, n, work, lwork, rwork)
         else
-            info = jl_lapack_geev(jobvl, jobvr, n, Acopy, stride(A,2), WR, WI, VL, n, VR, n, work, lwork)
+            info = jl_lapack_geev(jobvl, jobvr, n, Acopy, stride(Acopy,2), WR, WI, VL, n, VR, n, work, lwork)
         end
         
         if info != 0; error("error in LAPACK geev"); end
@@ -482,7 +482,7 @@ end
 @jl_lapack_gesvd_macro :dgesvd_ :zgesvd_ Float64 Complex128
 @jl_lapack_gesvd_macro :sgesvd_ :cgesvd_ Float32 Complex64
 
-svd{T<:Number}(x::StridedMatrix{T}) = svd(float64(x))
+#svd{T<:Number}(x::StridedMatrix{T}) = svd(float64(x))
 
 function svd{T<:Union(Float64,Float32,Complex128,Complex64)}(A::StridedMatrix{T})
     jobu = "A"
@@ -501,9 +501,9 @@ function svd{T<:Union(Float64,Float32,Complex128,Complex64)}(A::StridedMatrix{T}
     work = zeros(T, 1)
     lwork = -1
     if iscomplex(A)
-        info = jl_lapack_gesvd(jobu, jobvt, m, n, X, stride(A,2), S, U, m, VT, n, work, lwork, rwork)
+        info = jl_lapack_gesvd(jobu, jobvt, m, n, X, stride(X,2), S, U, m, VT, n, work, lwork, rwork)
     else
-        info = jl_lapack_gesvd(jobu, jobvt, m, n, X, stride(A,2), S, U, m, VT, n, work, lwork)
+        info = jl_lapack_gesvd(jobu, jobvt, m, n, X, stride(X,2), S, U, m, VT, n, work, lwork)
     end
 
     if info == 0; lwork = real(work[1]); work = Array(T, long(lwork));
@@ -511,9 +511,9 @@ function svd{T<:Union(Float64,Float32,Complex128,Complex64)}(A::StridedMatrix{T}
 
     # Compute SVD
     if iscomplex(A)
-        info = jl_lapack_gesvd(jobu, jobvt, m, n, X, stride(A,2), S, U, m, VT, n, work, lwork, rwork)
+        info = jl_lapack_gesvd(jobu, jobvt, m, n, X, stride(X,2), S, U, m, VT, n, work, lwork, rwork)
     else
-        info = jl_lapack_gesvd(jobu, jobvt, m, n, X, stride(A,2), S, U, m, VT, n, work, lwork)
+        info = jl_lapack_gesvd(jobu, jobvt, m, n, X, stride(X,2), S, U, m, VT, n, work, lwork)
     end
 
     if info == 0; return (U, S, VT); end
@@ -603,7 +603,7 @@ end
 @jl_lapack_backslash_macro :zgesv_ :zposv_ :zgels_ :ztrtrs_ Complex128
 @jl_lapack_backslash_macro :cgesv_ :cposv_ :cgels_ :ctrtrs_ Complex64
 
-(\){T1<:Number, T2<:Number}(A::StridedMatrix{T1}, B::StridedVecOrMat{T2}) = (\)(float64(A), float64(B))
+#(\){T1<:Number, T2<:Number}(A::StridedMatrix{T1}, B::StridedVecOrMat{T2}) = (\)(float64(A), float64(B))
 
 function (\){T<:Union(Float64,Float32,Complex128,Complex64)}(A::StridedMatrix{T}, B::VecOrMat{T})
     m, n = size(A)
