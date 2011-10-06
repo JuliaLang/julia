@@ -337,8 +337,8 @@ static int very_general_type(jl_value_t *t)
                    ((jl_tvar_t*)t)->ub==(jl_value_t*)jl_any_type)));
 }
 
-static jl_tuple_t *ml_matches(jl_methlist_t *ml, jl_value_t *type,
-                              jl_tuple_t *t, jl_sym_t *name);
+static jl_value_t *ml_matches(jl_methlist_t *ml, jl_value_t *type,
+                              jl_tuple_t *t, jl_sym_t *name, int lim);
 
 /*
   run type inference on lambda "li" in-place, for given argument types.
@@ -595,8 +595,7 @@ static jl_function_t *cache_method(jl_methtable_t *mt, jl_tuple_t *type,
     }
 
     if (need_dummy_entries) {
-        temp = (jl_value_t*)
-            ml_matches(mt->defs, (jl_value_t*)type, jl_null, lambda_sym);
+        temp = ml_matches(mt->defs, (jl_value_t*)type, jl_null, lambda_sym, -1);
         while (temp != (jl_value_t*)jl_null) {
             if (jl_tupleref(temp,2) != (jl_value_t*)method->linfo) {
                 jl_method_cache_insert(mt, (jl_tuple_t*)jl_tupleref(temp, 0),
@@ -1382,42 +1381,33 @@ static jl_tuple_t *match_method(jl_value_t *type, jl_function_t *func,
 }
 
 // returns linked tuples (argtypes, static_params, lambdainfo, cloenv, next)
-static jl_tuple_t *ml_matches(jl_methlist_t *ml, jl_value_t *type,
-                              jl_tuple_t *t, jl_sym_t *name)
+static jl_value_t *ml_matches(jl_methlist_t *ml, jl_value_t *type,
+                              jl_tuple_t *t, jl_sym_t *name, int lim)
 {
     JL_GC_PUSH(&t);
+    int len=0;
     while (ml != NULL) {
         // a method is shadowed if type <: S <: m->sig where S is the
         // signature of another applicable method
         /*
-          more generally?
-          given arguments T and applicable methods A, X (T⊆A ∧ T⊆X),
-          X is shadowed if there exists an applicable method B
-          (possibly A==B), such that (B ⊆ X) ∧ (A∩X ⊆ B)
-          in other words, B covers any ambiguity between A and X.
+          more generally, we can stop when the type is a subtype of the
+          union of all the signatures examined so far.
         */
-        //jl_tuple_t *tt = t;
         //int shadowed = 0;
-        /*
-        while (tt != jl_null) {
-            jl_value_t *S = jl_tupleref(tt,0);
-            if (jl_subtype(type, S, 0) &&
-                jl_subtype(S, (jl_value_t*)ml->sig, 0)) {
-                shadowed = 1;
-                break;
-            }
-            tt = (jl_tuple_t*)jl_tupleref(tt,4);
-        }
-        */
         if (1/*!shadowed*/) {
             jl_tuple_t *matc = match_method(type, ml->func, ml->sig, ml->tvars,
                                             name, t);
             if (matc != NULL) {
+                len++;
+                if (lim >= 0 && len > lim) {
+                    JL_GC_POP();
+                    return jl_false;
+                }
                 t = matc;
                 // (type ∩ ml->sig == type) ⇒ (type ⊆ ml->sig)
                 if (jl_types_equal(jl_t0(matc), type)) {
                     JL_GC_POP();
-                    return t;
+                    return (jl_value_t*)t;
                 }
                 /*
                 if (ml->has_tvars) {
@@ -1434,7 +1424,7 @@ static jl_tuple_t *ml_matches(jl_methlist_t *ml, jl_value_t *type,
         ml = ml->next;
     }
     JL_GC_POP();
-    return t;
+    return (jl_value_t*)t;
 }
 
 void jl_add_constructors(jl_struct_type_t *t);
@@ -1443,19 +1433,19 @@ JL_CALLABLE(jl_f_ctor_trampoline);
 // return linked tuples (t1, M1, (t2, M2, (... ()))) of types and methods.
 // t is the intersection of the type argument and the method signature,
 // and M is the corresponding LambdaStaticData (jl_lambda_info_t)
+// lim is the max # of methods to return. if there are more return jl_false.
+// -1 for no limit.
 DLLEXPORT
-jl_value_t *jl_matching_methods(jl_function_t *gf, jl_value_t *type)
+jl_value_t *jl_matching_methods(jl_function_t *gf, jl_value_t *type, int lim)
 {
-    jl_tuple_t *t = jl_null;
     if (gf->fptr == jl_f_ctor_trampoline)
         jl_add_constructors((jl_struct_type_t*)gf);
     if (!jl_is_gf(gf)) {
-        return (jl_value_t*)t;
+        return (jl_value_t*)jl_null;
     }
     jl_methtable_t *mt = jl_gf_mtable(gf);
     jl_sym_t *gfname = jl_gf_name(gf);
-    t = ml_matches(mt->defs, type, t, gfname);
-    return (jl_value_t*)t;
+    return ml_matches(mt->defs, type, jl_null, gfname, lim);
 }
 
 DLLEXPORT

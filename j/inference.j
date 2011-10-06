@@ -54,7 +54,9 @@ inference_stack = EmptyCallStack()
 tintersect(a,b) = ccall(:jl_type_intersection, Any, (Any,Any), a, b)
 tmatch(a,b) = ccall(:jl_type_match, Any, (Any,Any), a, b)
 
-getmethods(f,t) = ccall(:jl_matching_methods, Any, (Any,Any), f, t)::Tuple
+getmethods(f,t) = getmethods(f,t,-1)::Tuple
+getmethods(f,t,lim) = ccall(:jl_matching_methods, Any, (Any,Any,Int32),
+                            f, t, int32(lim))
 
 typeseq(a,b) = subtype(a,b)&&subtype(b,a)
 
@@ -448,9 +450,23 @@ function limit_tuple_type(t)
 end
 
 function abstract_call_gf(f, fargs, argtypes, e)
-    applicable = getmethods(f, argtypes)
+    # don't consider more than N methods. this trades off between
+    # compiler performance and generated code performance.
+    # typically, considering many methods means spending lots of time
+    # obtaining poor type information.
+    # It is important for N to be >= the number of methods in the error()
+    # function, so we can still know that error() is always None.
+    # here I picked 4.
+    applicable = getmethods(f, argtypes, 4)
     rettype = None
-    x = applicable
+    if is(applicable,false)
+        # this means too many methods matched
+        if isa(e,Expr)
+            e.head = :call
+        end
+        return Any
+    end
+    x::Tuple = applicable
     if is(x,())
         # no methods match
         if is(f,method_missing)
@@ -468,19 +484,7 @@ function abstract_call_gf(f, fargs, argtypes, e)
             e.head = :call
         end
     end
-    ctr = 0
     while !is(x,())
-        ctr += 1
-        # don't consider more than N methods. this trades off between
-        # compiler performance and generated code performance.
-        # typically, considering many methods means spending lots of time
-        # obtaining poor type information.
-        # It is important for N to be >= the number of methods in the error()
-        # function, so we can still know that error() is always None.
-        if ctr > 4
-            rettype = Any
-            break
-        end
         #print(x,"\n")
         if isa(x[3],Symbol)
             # when there is a builtin method in this GF, we get
@@ -490,7 +494,7 @@ function abstract_call_gf(f, fargs, argtypes, e)
             # constructor
             rt = x[3]
         else
-            (_tree,rt) = typeinf(x[3], x[1], x[2], true)
+            (_tree,rt) = typeinf(x[3], x[1], x[2], true, x[3])
         end
         rettype = tmerge(rettype, rt)
         if is(rettype,Any)
@@ -566,38 +570,36 @@ function abstract_eval_call(e, vtypes, sv::StaticVarInfo)
     return abstract_call(f, fargs, argtypes, vtypes, sv, e)
 end
 
-function abstract_eval_expr(e, vtypes, sv::StaticVarInfo)
+function abstract_eval(e::Expr, vtypes, sv::StaticVarInfo)
     # handle:
     # call  lambda  null  isbound static_typeof
     if is(e.head,:call) || is(e.head,:call1)
-        return abstract_eval_call(e, vtypes, sv)
+        t = abstract_eval_call(e, vtypes, sv)
     #elseif is(e.head,:isbound)
-    #    return Bool
+    #    t = Bool
     elseif is(e.head,:null)
-        return Nothing
+        t = Nothing
     elseif is(e.head,:new)
         t = abstract_eval(e.args[1], vtypes, sv)
         if isType(t)
-            return t.parameters[1]
+            t = t.parameters[1]
+        else
+            t = Any
         end
-        return Any
     elseif is(e.head,:method)
-        return Function
+        t = Function
     elseif is(e.head,:static_typeof)
         t = abstract_eval(e.args[1], vtypes, sv)
         # intersect with Any to remove Undef
         t = tintersect(t, Any)
         if isleaftype(t) || isa(t,TypeVar)
-            return Type{t}
+            t = Type{t}
         else
-            return Type{typevar(:_,t)}
+            t = Type{typevar(:_,t)}
         end
+    else
+        t = Any
     end
-    Any
-end
-
-function abstract_eval(e::Expr, vtypes, sv::StaticVarInfo)
-    t = abstract_eval_expr(e, vtypes, sv)
     e.typ = t
     return t
 end
@@ -886,6 +888,7 @@ function typeinf(linfo::LambdaStaticData,atypes::Tuple,sparams::Tuple, cop, def)
     #if dbg
     #    print("typeinf ", linfo.name, " ", uid(ast0), "\n")
     #end
+    #print("typeinf ", linfo.name, " ", atypes, "\n")
     #print("typeinf ", ast0, " ", sparams, " ", atypes, "\n")
 
     global inference_stack
@@ -1322,7 +1325,7 @@ function inlineable(f, e::Expr, vars)
             return NF
         end
     end
-    (ast, ty) = typeinf(meth[3], meth[1], meth[2], true)
+    (ast, ty) = typeinf(meth[3], meth[1], meth[2], true, meth[3])
     if is(ast,())
         return NF
     end

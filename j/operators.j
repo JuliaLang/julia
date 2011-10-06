@@ -60,9 +60,9 @@ end
 .^(x,y) = x^y
 
 # core << >> and >>> takes Int32 as second arg
-<<(x,y::Int)  = x << int32(y)
->>(x,y::Int)  = x >> int32(y)
->>>(x,y::Int) = x >>> int32(y)
+<<(x,y::Int)  = x << convert(Int32,y)
+>>(x,y::Int)  = x >> convert(Int32,y)
+>>>(x,y::Int) = x >>> convert(Int32,y)
 
 # fallback div, fld, rem & mod implementations
 div{T<:Real}(x::T, y::T) = convert(T,itrunc(x/y))
