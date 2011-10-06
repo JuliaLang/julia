@@ -270,6 +270,7 @@ static Value *boxed(Value *v)
     if (jb == jl_uint16_type) return builder.CreateCall(box_uint16_func, v);
     if (jb == jl_uint32_type) return builder.CreateCall(box_uint32_func, v);
     if (jb == jl_uint64_type) return builder.CreateCall(box_uint64_func, v);
+    // TODO: skip the call for constant arguments
     if (jl_is_bits_type(jt)) {
         if (v->getType()->isPointerTy()) {
             v = builder.CreatePtrToInt(v, T_size);
@@ -423,10 +424,11 @@ static Value *julia_to_native(const Type *ty, jl_value_t *jt, Value *jv,
         }
         if (ty->isPointerTy() && ty->getContainedType(0)==vt) {
             // we have an unboxed variable x, and need to pass &x
-            // todo: pass address of stack-allocated variable
-            jv = boxed(jv);
-            Value *p = bitstype_pointer(jv);
-            return builder.CreateBitCast(p, ty);
+            // pass the address of an alloca'd thing, not a box
+            // since that might be reused (box cache)
+            Value *slot = builder.CreateAlloca(vt);
+            builder.CreateStore(jv, slot);
+            return builder.CreateBitCast(slot, ty);
         }
         else {
             // error. box for error handling.
@@ -541,8 +543,13 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
 
     // save temp argument area stack pointer
     Value *saveloc=NULL;
+    Value *stacksave=NULL;
     if (haspointers) {
+        // TODO: inline this
         saveloc = builder.CreateCall(save_arg_area_loc_func);
+        stacksave =
+            builder.CreateCall(Intrinsic::getDeclaration(jl_Module,
+                                                         Intrinsic::stacksave));
     }
 
     // emit arguments
@@ -578,6 +585,10 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
     if (haspointers) {
         assert(saveloc != NULL);
         builder.CreateCall(restore_arg_area_loc_func, saveloc);
+        assert(stacksave != NULL);
+        builder.CreateCall(Intrinsic::getDeclaration(jl_Module,
+                                                     Intrinsic::stackrestore),
+                           stacksave);
     }
     ctx->argDepth = last_depth;
 
@@ -679,6 +690,27 @@ static Value *emit_unboxed(jl_value_t *e, jl_codectx_t *ctx)
     }
     else if (e == jl_false) {
         return ConstantInt::get(T_int1, 0);
+    }
+    else if (jl_is_bits_type(jl_typeof(e))) {
+        jl_bits_type_t *bt = (jl_bits_type_t*)jl_typeof(e);
+        int nb = jl_bitstype_nbits(bt);
+        if (nb == 8)
+            return mark_julia_type(ConstantInt::get(T_int8,
+                                                    jl_unbox_int8(e)),
+                                   (jl_value_t*)bt);
+        if (nb == 16)
+            return mark_julia_type(ConstantInt::get(T_int16,
+                                                    jl_unbox_int16(e)),
+                                   (jl_value_t*)bt);
+        if (nb == 32)
+            return mark_julia_type(ConstantInt::get(T_int32,
+                                                    jl_unbox_int32(e)),
+                                   (jl_value_t*)bt);
+        if (nb == 64)
+            return mark_julia_type(ConstantInt::get(T_int64,
+                                                    jl_unbox_int64(e)),
+                                   (jl_value_t*)bt);
+        // TODO: bigger sizes
     }
     return emit_expr(e, ctx, true);
 }
