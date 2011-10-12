@@ -136,6 +136,8 @@
 #include <time.h>
 #include <sys/time.h>
 
+#include "jl_random.h"
+
 typedef int randmtzig_idx_type;
 typedef signed char randmtzig_int8_t;
 typedef unsigned char randmtzig_uint8_t;
@@ -147,6 +149,7 @@ typedef long long randmtzig_int64_t;
 typedef unsigned long long randmtzig_uint64_t;
 
 #define PI 3.14159265358979323846
+#define M_PI 3.141592653589793238462643
 
 #define MT_N 624
 #define ZIGGURAT_TABLE_SIZE 256
@@ -332,12 +335,12 @@ static randmtzig_uint32_t randmt (randmtzig_uint32_t *state)
 /* ===== Uniform generators ===== */
 
 /* Select which 32 bit generator to use */
-#define randi32 randmt
+//#define randi32 randmt
 
 static randmtzig_uint64_t randi53 (randmtzig_uint32_t *state)
 {
-  const randmtzig_uint32_t lo = randi32(state);
-  const randmtzig_uint32_t hi = randi32(state)&0x1FFFFF;
+  const randmtzig_uint32_t lo = dsfmt_gv_genrand_uint32();
+  const randmtzig_uint32_t hi = dsfmt_gv_genrand_uint32()&0x1FFFFF;
 #if HAVE_X86_32
   randmtzig_uint64_t u;
   randmtzig_uint32_t *p = (randmtzig_uint32_t *)&u;
@@ -351,8 +354,8 @@ static randmtzig_uint64_t randi53 (randmtzig_uint32_t *state)
 
 static randmtzig_uint64_t randi54 (randmtzig_uint32_t *state)
 {
-  const randmtzig_uint32_t lo = randi32(state);
-  const randmtzig_uint32_t hi = randi32(state)&0x3FFFFF;
+  const randmtzig_uint32_t lo = dsfmt_gv_genrand_uint32();
+  const randmtzig_uint32_t hi = dsfmt_gv_genrand_uint32()&0x3FFFFF;
 #if HAVE_X86_32
   randmtzig_uint64_t u;
   randmtzig_uint32_t *p = (randmtzig_uint32_t *)&u;
@@ -366,8 +369,8 @@ static randmtzig_uint64_t randi54 (randmtzig_uint32_t *state)
 
 static randmtzig_uint64_t randi64 (randmtzig_uint32_t *state)
 {
-  const randmtzig_uint32_t lo = randi32(state);
-  const randmtzig_uint32_t hi = randi32(state);
+  const randmtzig_uint32_t lo = dsfmt_gv_genrand_uint32();
+  const randmtzig_uint32_t hi = dsfmt_gv_genrand_uint32();
 #if HAVE_X86_32
   randmtzig_uint64_t u;
   randmtzig_uint32_t *p = (randmtzig_uint32_t *)&u;
@@ -382,15 +385,15 @@ static randmtzig_uint64_t randi64 (randmtzig_uint32_t *state)
 /* generates a random number on (0,1)-real-interval */
 static double randu32 (randmtzig_uint32_t *state)
 {
-  return ((double)randi32(state) + 0.5) * (1.0/4294967296.0); 
+  return ((double)dsfmt_gv_genrand_uint32() + 0.5) * (1.0/4294967296.0); 
   /* divided by 2^32 */
 }
 
 /* generates a random number on (0,1) with 53-bit resolution */
 static double randu53 (randmtzig_uint32_t *state) 
 { 
-  const randmtzig_uint32_t a=randi32(state)>>5;
-  const randmtzig_uint32_t b=randi32(state)>>6; 
+  const randmtzig_uint32_t a=dsfmt_gv_genrand_uint32()>>5;
+  const randmtzig_uint32_t b=dsfmt_gv_genrand_uint32()>>6; 
   return(a*67108864.0+b+0.4) * (1.0/9007199254740992.0);
 } 
 
@@ -402,7 +405,7 @@ double randmtzig_randu (randmtzig_uint32_t *state)
 
 randmtzig_uint32_t randmtzig_randi32 (randmtzig_uint32_t *state)
 {
-     return randi32(state);
+     return dsfmt_gv_genrand_uint32();
 }
 
 /* ===== Ziggurat normal and exponential generators ===== */
@@ -574,9 +577,9 @@ randmtzig_randn (randmtzig_uint32_t *state, ZIGINT *ki, ZIGINT *ke, double *wi, 
       register randmtzig_uint32_t lo, hi;
       randmtzig_int64_t rabs;
       randmtzig_uint32_t *p = (randmtzig_uint32_t *)&rabs;
-      lo = randi32(state);
+      lo = dsfmt_gv_genrand_uint32();
       idx = lo&0xFF;
-      hi = randi32(state);
+      hi = dsfmt_gv_genrand_uint32();
       si = hi&UMASK;
       p[0] = lo;
       p[1] = hi&0x1FFFFF;
@@ -591,7 +594,7 @@ randmtzig_randn (randmtzig_uint32_t *state, ZIGINT *ki, ZIGINT *ke, double *wi, 
       if (rabs < (randmtzig_int64_t)ki[idx])
 #else /* ALLBITS */
       /* 32-bit mantissa */
-      const randmtzig_uint32_t r = randi32(state);
+      const randmtzig_uint32_t r = dsfmt_gv_genrand_uint32();
       const randmtzig_uint32_t rabs = r&LMASK;
       const int idx = (int)(r&0xFF);
       const double x = ((randmtzig_int32_t)r) * wi[idx];
