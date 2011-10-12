@@ -7,15 +7,15 @@ function librandom_init()
         srand(uint64(clock()*2.0^32))
     end
 
-    zig_randn_init_by_int(uint32(clock()))
+    randn_zig_init(uint32(clock()))
 end
 
 dsfmt_get_min_array_size() = ccall(dlsym(librandom, :dsfmt_get_min_array_size), Int32, ())
 
-dsfmt_randn_reset() = ccall(dlsym(librandom, :dsfmt_randn_reset), Void, ())
+dsfmt_randn_bm_reset() = ccall(dlsym(librandom, :dsfmt_randn_bm_reset), Void, ())
 
 srand(seed::Uint32) = (ccall(dlsym(librandom, :dsfmt_gv_init_gen_rand), Void, (Uint32, ), seed);
-                       dsfmt_randn_reset())
+                       dsfmt_randn_bm_reset())
 
 srand(seed::Uint64) = srand([uint32(seed),uint32(seed>>32)])
 
@@ -23,7 +23,7 @@ function srand(seed::Vector{Uint32})
     ccall(dlsym(librandom, :dsfmt_gv_init_by_array),
           Void, (Ptr{Uint32}, Int32),
           seed, int32(length(seed)))
-    dsfmt_randn_reset()
+    dsfmt_randn_bm_reset()
 end
 
 randf() = float32(rand())
@@ -32,7 +32,7 @@ rand() = ccall(dlsym(librandom, :dsfmt_gv_genrand_open_open), Float64, ())
 
 randui32() = ccall(dlsym(librandom, :dsfmt_gv_genrand_uint32), Uint32, ())
 
-randn() = ccall(dlsym(librandom, :dsfmt_randn), Float64, ())
+randn() = ccall(dlsym(librandom, :dsfmt_randn_bm), Float64, ())
 
 randbit() = randui32()&1
 
@@ -101,32 +101,17 @@ randint(n::Int) = randint(one(n), n)
 
 ## Normally distributed random numbers using Ziggurat algorithm
 
-ZT_SIZE = 256
-ZT_STATE = Array(Uint32, 628)
-ki = Array(Uint64,  ZT_SIZE)
-ke = Array(Uint64,  ZT_SIZE)
-wi = Array(Float64, ZT_SIZE)
-fi = Array(Float64, ZT_SIZE)
-we = Array(Float64, ZT_SIZE)
-fe = Array(Float64, ZT_SIZE)
+randn_zig_init(x::Uint32) = ccall(dlsym(librandom, :randn_zig_init), Void, (Uint32,), x)
 
-zig_randn_init_by_int(x::Uint32) = ccall(dlsym(librandom, :randmtzig_init_by_int), Void, (Uint32, Ptr{Uint32},), x, ZT_STATE)
+randn_zig() = ccall(dlsym(librandom, :randn_zig), Float64, ())
 
-#zig_randn_init_by_entropy() = ccall(dlsym(librandom, :randmtzig_init_by_entropy), Void, (Ptr{Uint32},), ZT_STATE)
-
-zig_randn() = ccall(dlsym(librandom, :randmtzig_randn), Float64, 
-                    (Ptr{Uint32}, Ptr{Uint64}, Ptr{Uint64}, Ptr{Float64}, Ptr{Float64}, Ptr{Float64}, Ptr{Float64}),
-                    ZT_STATE, ki, ke, wi, fi, we, fe)
-
-function zig_randn(dims::Dims)
+function randn_zig(dims::Dims)
     A = Array(Float64, dims)
-    ccall(dlsym(librandom, :randmtzig_fill_drandn), Void,
-          (Int32, Ptr{Float64}, Ptr{Uint32}, Ptr{Uint64}, Ptr{Uint64}, Ptr{Float64}, Ptr{Float64}, Ptr{Float64}, Ptr{Float64}),
-          int32(numel(A)), A, ZT_STATE, ki, ke, wi, fi, we, fe)
+    A = ccall(dlsym(librandom, :randn_zig_fill_array), Ptr{Float64}, (Ptr{Float64}, Uint32), A, uint32(numel(A)))
     return A
 end
 
-zig_randn(dims::Size...) = zig_randn(dims)
+randn_zig(dims::Size...) = randn_zig(dims)
 
 ## Arrays of random numbers
 

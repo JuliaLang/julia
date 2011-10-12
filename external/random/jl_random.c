@@ -4,23 +4,25 @@
 
 #include "jl_random.h"
 #include "dsfmt-2.1/dSFMT.c"
+#include "randmtzig.c"
 
 #define RANDN_RESET -99999999
 
-static double randn_next = RANDN_RESET;
+static double randn_bm_next = RANDN_RESET;
 
-void dsfmt_randn_reset()
+void dsfmt_randn_bm_reset()
 {
-    randn_next = RANDN_RESET;
+    randn_bm_next = RANDN_RESET;
 }
 
-double dsfmt_randn()
+// Box Muller
+double dsfmt_randn_bm()
 {
     double s, vre, vim, ure, uim;
 
-    if (randn_next != RANDN_RESET) {
-        s = randn_next;
-        randn_next = RANDN_RESET;
+    if (randn_bm_next != RANDN_RESET) {
+        s = randn_bm_next;
+        randn_bm_next = RANDN_RESET;
         return s;
     }
     do {
@@ -31,6 +33,42 @@ double dsfmt_randn()
         s = vre*vre + vim*vim;
     } while (s >= 1);
     s = sqrt(-2*log(s)/s);
-    randn_next = s * vre;
+    randn_bm_next = s * vre;
     return s * vim;
+}
+
+// Ziggurat
+
+#define ZT_SIZE 256
+#define MT_N 628
+
+uint32_t *ZT_STATE;
+uint64_t *KI;
+uint64_t *KE;
+double *WI;
+double *FI;
+double *WE;
+double *FE;
+
+void randn_zig_init(uint32_t seed) {
+    ZT_STATE = (uint32_t *) malloc (MT_N * sizeof(uint32_t));
+    KI = (uint64_t *) malloc(ZT_SIZE * sizeof(uint64_t));
+    KE = (uint64_t *) malloc(ZT_SIZE * sizeof(uint64_t));
+    WI = (double *) malloc(ZT_SIZE * sizeof(double));
+    FI = (double *) malloc(ZT_SIZE * sizeof(double));
+    WE = (double *) malloc(ZT_SIZE * sizeof(double));
+    FE = (double *) malloc(ZT_SIZE * sizeof(double));
+    
+    randmtzig_init_by_int(seed, ZT_STATE);
+
+    return;
+}
+
+double randn_zig() {
+    return randmtzig_randn(ZT_STATE, KI, KE, WI, FI, WE, FE);
+}
+
+double *randn_zig_fill_array(double *a, uint32_t n) {
+    randmtzig_fill_drandn(n, a, ZT_STATE, KI, KE, WI, FI, WE, FE);
+    return a;
 }
