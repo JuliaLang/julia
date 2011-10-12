@@ -45,13 +45,13 @@ llvm-$(LLVM_VER)/configure: llvm-$(LLVM_VER).tgz
 $(LLVM_OBJ_SOURCE): llvm-$(LLVM_VER)/configure
 	cd llvm-$(LLVM_VER) && \
 	./configure --prefix=$(EXTROOT) --disable-threads --enable-optimized --disable-profiling --disable-assertions --enable-shared --enable-targets=x86,x86_64 --disable-bindings --disable-docs && \
-	make
+	$(MAKE)
 $(LLVM_OBJ_TARGET): $(LLVM_OBJ_SOURCE)
-	make -C llvm-$(LLVM_VER) install
+	$(MAKE) -C llvm-$(LLVM_VER) install
 	touch $@
 
 clean-llvm:
-	make -C llvm-$(LLVM_VER) clean
+	$(MAKE) -C llvm-$(LLVM_VER) clean
 	rm -f $(LLVM_OBJ_TARGET)
 distclean-llvm:
 	rm -rf llvm-$(LLVM_VER).tgz llvm-$(LLVM_VER)
@@ -72,14 +72,14 @@ readline-$(READLINE_VER)/configure: readline-$(READLINE_VER).tar.gz
 $(READLINE_OBJ_SOURCE): readline-$(READLINE_VER)/configure
 	cd readline-$(READLINE_VER) && \
 	./configure --prefix=$(EXTROOT) --disable-shared --enable-static --with-curses && \
-	make
+	$(MAKE)
 	touch $@
 $(READLINE_OBJ_TARGET): $(READLINE_OBJ_SOURCE)
-	make -C readline-$(READLINE_VER) install
+	$(MAKE) -C readline-$(READLINE_VER) install
 	touch $@
 
 clean-readline:
-	make -C readline-$(READLINE_VER) clean
+	$(MAKE) -C readline-$(READLINE_VER) clean
 	rm -f $(READLINE_OBJ_TARGET)
 distclean-readline:
 	rm -rf readline-$(READLINE_VER).tar.gz readline-$(READLINE_VER)
@@ -100,11 +100,11 @@ pcre-$(PCRE_VER)/config.status: pcre-$(PCRE_VER)/configure
 	cd pcre-$(PCRE_VER) && \
 	./configure --prefix=$(EXTROOT) --enable-utf8 --enable-unicode-properties
 $(PCRE_OBJ_TARGET): pcre-$(PCRE_VER)/config.status
-	make -C pcre-$(PCRE_VER) install
+	$(MAKE) -C pcre-$(PCRE_VER) install
 	touch $@
 
 clean-pcre:
-	make -C pcre-$(PCRE_VER) clean
+	$(MAKE) -C pcre-$(PCRE_VER) clean
 	rm -f $(PCRE_OBJ_TARGET)
 distclean-pcre:
 	rm -rf pcre-$(PCRE_VER).tar.bz2 pcre-$(PCRE_VER)
@@ -119,14 +119,14 @@ install-fdlibm: $(FDLIBM_OBJ_TARGET)
 
 $(FDLIBM_OBJ_SOURCE): fdlibm/*.c
 	cd fdlibm && \
-	make CC=$(CC) CFLAGS="-D_IEEE_LIBM -Dx86 -fPIC -O2 $(CONFIG)" && \
+	$(MAKE) CC=$(CC) CFLAGS="-D_IEEE_LIBM -Dx86 -fPIC -O2 $(CONFIG)" && \
 	$(CC) -shared *.o -o libfdm.$(SHLIB_EXT)
 $(FDLIBM_OBJ_TARGET): $(FDLIBM_OBJ_SOURCE)
 	mkdir -p $(EXTROOTLIB)
 	cp $< $@
 
 clean-fdlibm:
-	cd fdlibm && make clean
+	cd fdlibm && $(MAKE) clean
 	rm -f $(FDLIBM_OBJ_SOURCE) $(FDLIBM_OBJ_TARGET)
 distclean-fdlibm: clean-fdlibm
 
@@ -174,10 +174,10 @@ openblas-$(OPENBLAS_VER)/Makefile: openblas-$(OPENBLAS_VER).tar.gz
 	tar -C openblas-$(OPENBLAS_VER) --strip-components 1 -xf $<
 	touch $@
 $(OPENBLAS_OBJ_SOURCE): openblas-$(OPENBLAS_VER)/Makefile
-	make -C openblas-$(OPENBLAS_VER) USE_THREAD=0 NO_LAPACK=1 CC=$(CC) FC=$(FC)
+	$(MAKE) -C openblas-$(OPENBLAS_VER) USE_THREAD=0 NO_LAPACK=1 CC=$(CC) FC=$(FC)
 
 clean-openblas:
-	make -C openblas-$(OPENBLAS_VER) clean
+	$(MAKE) -C openblas-$(OPENBLAS_VER) clean
 distclean-openblas:
 	rm -rf openblas-$(OPENBLAS_VER).tar.gz openblas-$(OPENBLAS_VER)
 
@@ -197,7 +197,7 @@ lapack-$(LAPACK_VER)/Makefile: lapack-$(LAPACK_VER).tgz
 lapack-$(LAPACK_VER)/INSTALL/dlamch.o: lapack-$(LAPACK_VER)/Makefile
 	cd lapack-$(LAPACK_VER) && \
 	cp INSTALL/make.inc.gfortran ./make.inc && \
-	make lapacklib NOOPT="-O0 -fPIC" OPTS="-O2 -fPIC" FORTRAN=$(FC)
+	$(MAKE) lapacklib NOOPT="-O0 -fPIC" OPTS="-O2 -fPIC" FORTRAN=$(FC)
 $(LAPACK_OBJ_SOURCE): lapack-$(LAPACK_VER)/INSTALL/dlamch.o $(OPENBLAS_OBJ_SOURCE)
 	cd lapack-$(LAPACK_VER) && \
 	$(FC) -shared SRC/*.o INSTALL/dlamch.o INSTALL/dsecnd_INT_ETIME.o INSTALL/ilaver.o INSTALL/slamch.o ../$(OPENBLAS_OBJ_SOURCE) -o libLAPACK.$(SHLIB_EXT)
@@ -206,7 +206,7 @@ $(LAPACK_OBJ_TARGET): $(LAPACK_OBJ_SOURCE)
 	cp $< $@
 
 clean-lapack:
-	make -C lapack-$(LAPACK_VER) clean
+	$(MAKE) -C lapack-$(LAPACK_VER) clean
 	rm -f $(LAPACK_OBJ_SOURCE) $(LAPACK_OBJ_TARGET)
 distclean-lapack:
 	rm -rf lapack-$(LAPACK_VER).tgz lapack-$(LAPACK_VER)
@@ -230,7 +230,7 @@ arpack-$(ARPACK_VER)/Makefile: arpack-$(ARPACK_VER).tar.gz arpack-patch.tar.gz
 	touch $@
 $(ARPACK_OBJ_SOURCE): arpack-$(ARPACK_VER)/Makefile
 	cd arpack-$(ARPACK_VER) && \
-	make lib MAKE=make PLAT= home=`pwd` FC=$(FC) FFLAGS="-O3 -fPIC" && \
+	$(MAKE) lib MAKE=make PLAT= home=`pwd` FC=$(FC) FFLAGS="-O3 -fPIC" && \
 	ar x libarpack_.a && \
 	$(FC) -shared *.o -o libarpack.$(SHLIB_EXT)
 $(ARPACK_OBJ_TARGET): $(ARPACK_OBJ_SOURCE)
@@ -238,7 +238,7 @@ $(ARPACK_OBJ_TARGET): $(ARPACK_OBJ_SOURCE)
 	cp $< $@
 
 clean-arpack:
-	make -C arpack-$(ARPACK_VER) home=`pwd`/arpack-$(ARPACK_VER) clean MAKE=make
+	$(MAKE) -C arpack-$(ARPACK_VER) home=`pwd`/arpack-$(ARPACK_VER) clean MAKE=make
 	rm -f $(ARPACK_OBJ_SOURCE) $(ARPACK_OBJ_TARGET)
 distclean-arpack:
 	rm -rf arpack-$(ARPACK_VER).tar.gz arpack-patch.tar.gz arpack-$(ARPACK_VER)
@@ -266,10 +266,10 @@ fftw-$(FFTW_VER)-single/configure: fftw-$(FFTW_VER).tar.gz
 fftw-$(FFTW_VER)-single/config.status: fftw-$(FFTW_VER)-single/configure
 	cd fftw-$(FFTW_VER)-single && \
 	./configure --prefix=$(EXTROOT) --enable-shared --enable-float --disable-fortran --enable-sse2 --disable-mpi --disable-openmp --disable-threads && \
-	make clean
+	$(MAKE) clean
 	touch $@
 $(FFTW_SINGLE_OBJ_TARGET): fftw-$(FFTW_VER)-single/config.status
-	make -C fftw-$(FFTW_VER)-single install
+	$(MAKE) -C fftw-$(FFTW_VER)-single install
 	touch $@
 
 fftw-$(FFTW_VER)-double/configure: fftw-$(FFTW_VER).tar.gz
@@ -279,18 +279,18 @@ fftw-$(FFTW_VER)-double/configure: fftw-$(FFTW_VER).tar.gz
 fftw-$(FFTW_VER)-double/config.status: fftw-$(FFTW_VER)-double/configure
 	cd fftw-$(FFTW_VER)-double && \
 	./configure --prefix=$(EXTROOT) --enable-shared --disable-fortran --enable-sse2 --disable-mpi --disable-openmp --disable-threads && \
-	make clean
+	$(MAKE) clean
 	touch $@
 $(FFTW_DOUBLE_OBJ_TARGET): fftw-$(FFTW_VER)-double/config.status
-	make -C fftw-$(FFTW_VER)-double install
+	$(MAKE) -C fftw-$(FFTW_VER)-double install
 	touch $@
 
 clean-fftw: clean-fftw-single clean-fftw-double
 clean-fftw-single:
-	make -C fftw-$(FFTW_VER)-single clean
+	$(MAKE) -C fftw-$(FFTW_VER)-single clean
 	rm -f $(FFTW_SINGLE_OBJ_TARGET)
 clean-fftw-double:
-	make -C fftw-$(FFTW_VER)-double clean
+	$(MAKE) -C fftw-$(FFTW_VER)-double clean
 	rm -f $(FFTW_DOUBLE_OBJ_TARGET)
 distclean-fftw:
 	rm -rf fftw-$(FFTW_VER).tar.gz fftw-$(FFTW_VER)-{single,double}
@@ -304,7 +304,7 @@ compile-unwind: $(LIBUNWIND_TARGET_SOURCE)
 install-unwind: $(LIBUNWIND_TARGET_OBJ)
 
 $(LIBUNWIND_TARGET_OBJ): $(LIBUNWIND_TARGET_SOURCE)
-	cd libunwind-$(UNWIND_VER) && make && make install
+	cd libunwind-$(UNWIND_VER) && $(MAKE) && $(MAKE) install
 
 
 libunwind-$(UNWIND_VER).tar.gz:
@@ -318,7 +318,7 @@ $(LIBUNWIND_TARGET_SOURCE): open-unwind
 	cd libunwind-$(UNWIND_VER) && ./configure  CFLAGS="-U_FORTIFY_SOURCE -fPIC" --prefix=$(EXTROOT) 
 
 clean-unwind:
-	make -C libunwind-$(UNWIND_VER) clean
+	$(MAKE) -C libunwind-$(UNWIND_VER) clean
 	rm -rf $(LIBUNWIND_TARGET_OBJ) $(LIBUNWIND_TARGET_SOURCE)
 
 distclean-unwind:
