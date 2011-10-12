@@ -715,14 +715,13 @@ join(delim, strings) = print_to_string(print_joined, delim, strings)
 ## string to integer functions ##
 
 function parse_int{T<:Int}(::Type{T}, s::String, base::Int)
-    n = zero(T)
+    n::T = 0
     base = convert(T,base)
     for c = s
         d = '0' <= c <= '9' ? c-'0' :
             'A' <= c <= 'Z' ? c-'A'+int32(10) :
             'a' <= c <= 'z' ? c-'a'+int32(10) :
             error(c, " is not an alphanumeric digit")
-        d = convert(T,d)
         if base <= d
             error(c, " is not a valid digit in base ", base)
         end
