@@ -39,9 +39,6 @@ double dsfmt_randn_bm()
 
 // Ziggurat
 
-#define ZT_SIZE 256
-#define MT_N 628
-
 uint32_t *ZT_STATE;
 uint64_t *KI;
 uint64_t *KE;
@@ -51,13 +48,13 @@ double *WE;
 double *FE;
 
 void randn_zig_init(uint32_t seed) {
-    ZT_STATE = (uint32_t *) malloc (MT_N * sizeof(uint32_t));
-    KI = (uint64_t *) malloc(ZT_SIZE * sizeof(uint64_t));
-    KE = (uint64_t *) malloc(ZT_SIZE * sizeof(uint64_t));
-    WI = (double *) malloc(ZT_SIZE * sizeof(double));
-    FI = (double *) malloc(ZT_SIZE * sizeof(double));
-    WE = (double *) malloc(ZT_SIZE * sizeof(double));
-    FE = (double *) malloc(ZT_SIZE * sizeof(double));
+    ZT_STATE = (uint32_t *) malloc ((MT_N+4) * sizeof(uint32_t));
+    KI = (uint64_t *) malloc(ZIGGURAT_TABLE_SIZE * sizeof(uint64_t));
+    KE = (uint64_t *) malloc(ZIGGURAT_TABLE_SIZE * sizeof(uint64_t));
+    WI = (double *) malloc(ZIGGURAT_TABLE_SIZE * sizeof(double));
+    FI = (double *) malloc(ZIGGURAT_TABLE_SIZE * sizeof(double));
+    WE = (double *) malloc(ZIGGURAT_TABLE_SIZE * sizeof(double));
+    FE = (double *) malloc(ZIGGURAT_TABLE_SIZE * sizeof(double));
     
     randmtzig_init_by_int(seed, ZT_STATE);
 
