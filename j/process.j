@@ -212,7 +212,7 @@ end
 ## building connected and disconnected pipelines ##
 
 add_cmds(set::Set{Cmd}, cmd::Cmd) = add(set, cmd)
-add_cmds(set::Set{Cmd}, cmds::Set{Cmds}) = (for cmd=cmds; add(set, cmd); end)
+add_cmds(set::Set{Cmd}, cmds::Set{Cmd}) = (for cmd=cmds; add(set, cmd); end)
 
 function (&)(cmds::Cmds...)
     set = Set{Cmd}()
@@ -223,7 +223,7 @@ function (&)(cmds::Cmds...)
 end
 
 add_ports(set::Set{Port}, port::Port) = add(set, port)
-add_ports(set::Set{Port}, ports::Set{Ports}) = (for port=ports; add(set, port); end)
+add_ports(set::Set{Port}, ports::Set{Port}) = (for port=ports; add(set, port); end)
 
 function (&)(ports::Ports...)
     set = Set{Port}()
