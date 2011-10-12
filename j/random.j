@@ -12,11 +12,6 @@ end
 
 dsfmt_get_min_array_size() = ccall(dlsym(librandom, :dsfmt_get_min_array_size), Int32, ())
 
-dsfmt_randn_bm_reset() = ccall(dlsym(librandom, :dsfmt_randn_bm_reset), Void, ())
-
-srand(seed::Uint32) = (ccall(dlsym(librandom, :dsfmt_gv_init_gen_rand), Void, (Uint32, ), seed);
-                       dsfmt_randn_bm_reset())
-
 srand(seed::Uint64) = srand([uint32(seed),uint32(seed>>32)])
 
 function srand(seed::Vector{Uint32})
@@ -31,8 +26,6 @@ randf() = float32(rand())
 rand() = ccall(dlsym(librandom, :dsfmt_gv_genrand_open_open), Float64, ())
 
 randui32() = ccall(dlsym(librandom, :dsfmt_gv_genrand_uint32), Uint32, ())
-
-randn() = ccall(dlsym(librandom, :dsfmt_randn_bm), Float64, ())
 
 randbit() = randui32()&1
 
@@ -101,17 +94,28 @@ randint(n::Int) = randint(one(n), n)
 
 ## Normally distributed random numbers using Ziggurat algorithm
 
+## Ziggurat
+
 randn_zig_init(x::Uint32) = ccall(dlsym(librandom, :randn_zig_init), Void, (Uint32,), x)
 
-randn_zig() = ccall(dlsym(librandom, :randn_zig), Float64, ())
+randn() = ccall(dlsym(librandom, :randn_zig), Float64, ())
 
-function randn_zig(dims::Dims)
+function randn(dims::Dims)
     A = Array(Float64, dims)
-    A = ccall(dlsym(librandom, :randn_zig_fill_array), Ptr{Float64}, (Ptr{Float64}, Uint32), A, uint32(numel(A)))
+    ccall(dlsym(librandom, :randn_zig_fill_array), Ptr{Float64}, (Ptr{Float64}, Uint32), A, uint32(numel(A)))
     return A
 end
 
-randn_zig(dims::Size...) = randn_zig(dims)
+randn(dims::Size...) = randn(dims)
+
+## Box-Muller
+
+randn_bm() = ccall(dlsym(librandom, :dsfmt_randn_bm), Float64, ())
+
+dsfmt_randn_bm_reset() = ccall(dlsym(librandom, :dsfmt_randn_bm_reset), Void, ())
+
+srand(seed::Uint32) = (ccall(dlsym(librandom, :dsfmt_gv_init_gen_rand), Void, (Uint32, ), seed);
+                       dsfmt_randn_bm_reset())
 
 ## Arrays of random numbers
 
@@ -139,7 +143,7 @@ macro rand_matrix_builder(t, f)
     end # quote
 end # macro
 
-@rand_matrix_builder Float64 randn
+#@rand_matrix_builder Float32 randn
 @rand_matrix_builder Float32 randf
 @rand_matrix_builder Uint32 randui32
 @rand_matrix_builder Uint64 randui64
