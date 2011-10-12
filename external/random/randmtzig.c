@@ -149,6 +149,7 @@ typedef long long randmtzig_int64_t;
 typedef unsigned long long randmtzig_uint64_t;
 
 #define PI 3.14159265358979323846
+#define M_PI 3.141592653589793238462643
 
 #define MT_N 624
 #define ZIGGURAT_TABLE_SIZE 256
