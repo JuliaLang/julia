@@ -767,33 +767,16 @@ hcat(A::AbstractArray...) = cat(2, A...)
 function hvcat{T}(rows::(Size...), as::AbstractMatrix{T}...)
     nbr = length(rows)  # number of block rows
 
-    nc = mapreduce(+, a->size(a,2), as[1:rows[1]])::Size
-    nr = 0
+    nc = 0
+    for i=1:rows[1]
+        nc += size(as[i],2)
+    end
 
-    a_index = cumsum(rows)
+    nr = 0
     a = 1
     for i = 1:nbr
         nr += size(as[a],1)
         a += rows[i]
-        #error checking
-        #num rows in each block row
-        if rows[i] > 1
-            first_row_index = (i == 1 ? 1 : a_index[i-1] + 1)
-            first_height = size(as[first_row_index],1)
-            for j = (first_row_index + 1):a_index[i]
-                if size(as[j],1) != first_height
-                    error("hvcat: mismatched height in block row ", i)
-                end
-            end
-        end
-        
-        if i != 1
-            #check num columns
-            nci = mapreduce(+, b->size(b,2), as[(a_index[i-1]+1):a_index[i]])::Size
-            if nc != nci
-                error("hvcat: block row ", i, " has mismatched number of columns")
-            end
-        end
     end
 
     out = similar(as[1], T, nr, nc)
@@ -804,9 +787,19 @@ function hvcat{T}(rows::(Size...), as::AbstractMatrix{T}...)
         c = 1
         szi = size(as[a],1)
         for j = 1:rows[i]
-            szj = size(as[a+j-1],2)
-            out[r:r-1+szi, c:c-1+szj] = as[a+j-1]
+            Aj = as[a+j-1]
+            szj = size(Aj,2)
+            if size(Aj,1) != szi
+                error("hvcat: mismatched height in block row ", i)
+            end
+            if c-1+szj > nc
+                error("hvcat: block row ", i, " has mismatched number of columns")
+            end
+            out[r:r-1+szi, c:c-1+szj] = Aj
             c += szj
+        end
+        if c != nc+1
+            error("hvcat: block row ", i, " has mismatched number of columns")
         end
         r += szi
         a += rows[i]
