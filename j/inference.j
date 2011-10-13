@@ -1124,7 +1124,10 @@ function eval_annotate(e::Expr, vtypes, sv, decls, clo)
         end
         e.args[2] = eval_annotate(e.args[2], vtypes, sv, decls, clo)
         # TODO: if this def does not reach any uses, maybe don't do this
-        record_var_type(s, exprtype(e.args[2]), decls)
+        rhstype = exprtype(e.args[2])
+        if !is(rhstype,None)
+            record_var_type(s, rhstype, decls)
+        end
         return e
     end
     for i=1:length(e.args)
