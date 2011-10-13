@@ -7,7 +7,9 @@
 /julia
 /julia-debug-*
 /julia-release-*
+/libjulia-debug.so
 /libjulia-debug.dylib
+/libjulia-release.so
 /libjulia-release.dylib
 
 /sys.ji
