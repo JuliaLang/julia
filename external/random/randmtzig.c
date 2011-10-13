@@ -42,93 +42,6 @@
    http://www.math.keio.ac.jp/matumoto/emt.html
    email: matumoto@math.keio.ac.jp
 
-
-   2007-09-22  Ivan Raikov  <iraikov@ece.gatech.edu>
-   * Created single-precision versions of the array generator
-     procedures.
-   * Removed static state and table variables and created reentrant
-     variants of each routine.
-
-   2007-09-20  Ivan Raikov  <ivan.g.raikov@gmail.com>
-   Adapted for use in Chicken Scheme.
-
-   * 2006-04-01 David Bateman
-   * * convert for use in octave, declaring static functions only used
-   *   here and adding oct_ to functions visible externally
-   * * inverse sense of ALLBITS
-   * 2004-01-19 Paul Kienzle
-   * * comment out main
-   * add init_by_entropy, get_state, set_state
-   * * converted to allow compiling by C++ compiler
-   *
-   * 2004-01-25 David Bateman
-   * * Add Marsaglia and Tsang Ziggurat code
-   *
-   * 2004-07-13 Paul Kienzle
-   * * make into an independent library with some docs.
-   * * introduce new main and test code.
-   *
-   * 2004-07-28 Paul Kienzle & David Bateman
-   * * add -DALLBITS flag for 32 vs. 53 bits of randomness in mantissa
-   * * make the naming scheme more uniform
-   * * add -DHAVE_X86 for faster support of 53 bit mantissa on x86 arch.
-   *
-   * 2005-02-23 Paul Kienzle
-   * * fix -DHAVE_X86_32 flag and add -DUSE_X86_32=0|1 for explicit control
-   */
-
-/*
-   === Build instructions ===
-
-   Compile with -DHAVE_GETTIMEOFDAY if the gettimeofday function is 
-   available.  This is not necessary if your architecture has
-   /dev/urandom defined.
-
-   Compile with -DALLBITS to disable 53-bit random numbers. This is about
-   50% slower than using 32-bit random numbers.
-
-   Uses implicit -Di386 or explicit -DHAVE_X86_32 to determine if CPU=x86.  
-   You can force X86 behaviour with -DUSE_X86_32=1, or suppress it with 
-   -DUSE_X86_32=0. You should also consider -march=i686 or similar for 
-   extra performance. Check whether -DUSE_X86_32=0 is faster on 64-bit
-   x86 architectures.
-
-   If you want to replace the Mersenne Twister with another
-   generator then redefine randi32 appropriately.
-
-   === Usage instructions ===
-   Before using any of the generators, initialize the state with one of
-   randmtzig_init_by_int, randmtzig_init_by_array or randmtzig_init_by_entropy.
-
-   All generators share the same state vector.
-
-   === Mersenne Twister ===
-   void randmtzig_init_by_int(uint32_t s)           32-bit initial state
-   void randmtzig_init_by_array(uint32_t k[],int m) m*32-bit initial state
-   void randmtzig_init_by_entropy(void)             random initial state
-   void randmtzig_get_state(uint32_t save[MT_N+1])  saves state in array
-   void randmtzig_set_state(uint32_t save[MT_N+1])  restores state from array
-   static uint32_t randmt(void)               returns 32-bit unsigned int
-
-   === inline generators ===
-   static uint32_t randi32(void)   returns 32-bit unsigned int
-   static uint64_t randi53(void)   returns 53-bit unsigned int
-   static uint64_t randi54(void)   returns 54-bit unsigned int
-   static uint64_t randi64(void)   returns 64-bit unsigned int
-   static double randu32(void)     returns 32-bit uniform in (0,1)
-   static double randu53(void)     returns 53-bit uniform in (0,1)
-
-   double randmtzig_randu(void)       returns M-bit uniform in (0,1)
-   double randmtzig_randn(void)       returns M-bit standard normal
-   double randmtzig_rande(void)       returns N-bit standard exponential
-
-   === Array generators ===
-   void randmtzig_fill_randi32(randmtzig_idx_type, uint32_t [])
-   void randmtzig_fill_randi64(randmtzig_idx_type, uint64_t [])
-   void randmtzig_fill_randu(randmtzig_idx_type, double [])
-   void randmtzig_fill_randn(randmtzig_idx_type, double [])
-   void randmtzig_fill_rande(randmtzig_idx_type, double [])
-
 */
 
 #include <math.h>
@@ -148,16 +61,6 @@ typedef unsigned int randmtzig_uint32_t;
 typedef long long randmtzig_int64_t;
 typedef unsigned long long randmtzig_uint64_t;
 
-/* FIXME may want to suppress X86 if sizeof(long)>4 */
-#if !defined(USE_X86_32)
-# if defined(i386) || defined(HAVE_X86_32)
-#  define USE_X86_32 1
-# else
-#  define USE_X86_32 0
-# endif
-#endif
-
-
 /* Declarations */
 
 void randmtzig_create_ziggurat_tables (void);
@@ -170,7 +73,7 @@ inline static randmtzig_uint64_t randi53 (void)
 {
   const randmtzig_uint32_t lo = dsfmt_gv_genrand_uint32();
   const randmtzig_uint32_t hi = dsfmt_gv_genrand_uint32()&0x1FFFFF;
-#if HAVE_X86_32
+#ifndef __LP64__
   randmtzig_uint64_t u;
   randmtzig_uint32_t *p = (randmtzig_uint32_t *)&u;
   p[0] = lo;
@@ -185,7 +88,7 @@ inline static randmtzig_uint64_t randi54 (void)
 {
   const randmtzig_uint32_t lo = dsfmt_gv_genrand_uint32();
   const randmtzig_uint32_t hi = dsfmt_gv_genrand_uint32()&0x3FFFFF;
-#if HAVE_X86_32
+#ifndef __LP64__
   randmtzig_uint64_t u;
   randmtzig_uint32_t *p = (randmtzig_uint32_t *)&u;
   p[0] = lo;
@@ -200,7 +103,7 @@ inline static randmtzig_uint64_t randi64 (void)
 {
   const randmtzig_uint32_t lo = dsfmt_gv_genrand_uint32();
   const randmtzig_uint32_t hi = dsfmt_gv_genrand_uint32();
-#if HAVE_X86_32
+#ifndef __LP64__
   randmtzig_uint64_t u;
   randmtzig_uint32_t *p = (randmtzig_uint32_t *)&u;
   p[0] = lo;
@@ -372,17 +275,13 @@ double randmtzig_randn (void)
 {
   while (1)
     {
-      /* The following code is specialized for 32-bit mantissa.
-       * Compared to the arbitrary mantissa code, there is a performance
-       * gain for 32-bits:  PPC: 2%, MIPS: 8%, x86: 40%
-       * There is a bigger performance gain compared to using a full
-       * 53-bit mantissa:  PPC: 60%, MIPS: 65%, x86: 240%
-       * Of course, different compilers and operating systems may
-       * have something to do with this.
-       */
-#if !defined(ALLBITS)
-# if HAVE_X86_32
-      /* 53-bit mantissa, 1-bit sign, x86 32-bit architecture */
+#ifdef __LP64__
+      /* arbitrary mantissa (selected by NRANDI, with 1 bit for sign) */
+      const randmtzig_uint64_t r = NRANDI;
+      const randmtzig_int64_t rabs=r>>1;
+      const int idx = (int)(rabs&0xFF);
+      const double x = ( r&1 ? -rabs : rabs) * wi[idx];
+#else
       double x;
       int si,idx;
       register randmtzig_uint32_t lo, hi;
@@ -395,22 +294,9 @@ double randmtzig_randn (void)
       p[0] = lo;
       p[1] = hi&0x1FFFFF;
       x = ( si ? -rabs : rabs ) * wi[idx];
-# else /* !HAVE_X86_32 */
-      /* arbitrary mantissa (selected by NRANDI, with 1 bit for sign) */
-      const randmtzig_uint64_t r = NRANDI;
-      const randmtzig_int64_t rabs=r>>1;
-      const int idx = (int)(rabs&0xFF);
-      const double x = ( r&1 ? -rabs : rabs) * wi[idx];
-# endif /* !HAVE_X86_32 */
+# endif
+
       if (rabs < (randmtzig_int64_t)ki[idx])
-#else /* ALLBITS */
-      /* 32-bit mantissa */
-      const randmtzig_uint32_t r = dsfmt_gv_genrand_uint32();
-      const randmtzig_uint32_t rabs = r&LMASK;
-      const int idx = (int)(r&0xFF);
-      const double x = ((randmtzig_int32_t)r) * wi[idx];
-      if (rabs < ki[idx])
-#endif /* ALLBITS */
 	return x;        /* 99.3% of the time we return here 1st try */
       else if (idx == 0)
 	{
