@@ -1,234 +1,234 @@
 ﻿*
 {
-	margin: 0px;
-	padding: 0px;
+    margin: 0px;
+    padding: 0px;
 }
 
 body
 {
-	font: 100% 'Arial', sans-serif;
-	color: #555555;
+    font: 100% 'Arial', sans-serif;
+    color: #555555;
 }
 
 div#header-bar
 {
-	position: relative; /* make this appear above everything */
-	width: 100%;
-	min-width: 960px;
-	background: #1c1c1c url('images/banner.png') repeat-x left top;
-	-moz-box-shadow: 0px 0px 20px #888888;
-	-webkit-box-shadow: 0px 0px 20px #888888;
-	box-shadow: 0px 0px 20px #888888;
+    position: relative; /* make this appear above everything */
+    width: 100%;
+    min-width: 960px;
+    background: #1c1c1c url('images/banner.png') repeat-x left top;
+    -moz-box-shadow: 0px 0px 20px #888888;
+    -webkit-box-shadow: 0px 0px 20px #888888;
+    box-shadow: 0px 0px 20px #888888;
 }
 
 header
 {
-	width: 960px;
-	margin-left: auto;
-	margin-right: auto;
+    width: 960px;
+    margin-left: auto;
+    margin-right: auto;
 }
 
 div#main
 {
-	width: 960px;
-	margin-left: auto;
-	margin-right: auto;
+    width: 960px;
+    margin-left: auto;
+    margin-right: auto;
 }
 
 div#footer-bar
 {
-	position: relative; /* make this appear above everything */
-	width: 100%;
-	min-width: 960px;
-	height: 80px;
-	bottom: 0px;
-	border-top: 1px solid #3e3e3e;
-	border-bottom: 1px solid #090909;
-	font-size: 80%;
-	color: #bbbbbb;
-	background: #1c1c1c url('images/footer.png') repeat-x left top;
-	-moz-box-shadow: 0px 0px 20px #888888;
-	-webkit-box-shadow: 0px 0px 20px #888888;
-	box-shadow: 0px 0px 20px #888888;
+    position: relative; /* make this appear above everything */
+    width: 100%;
+    min-width: 960px;
+    height: 80px;
+    bottom: 0px;
+    border-top: 1px solid #3e3e3e;
+    border-bottom: 1px solid #090909;
+    font-size: 80%;
+    color: #bbbbbb;
+    background: #1c1c1c url('images/footer.png') repeat-x left top;
+    -moz-box-shadow: 0px 0px 20px #888888;
+    -webkit-box-shadow: 0px 0px 20px #888888;
+    box-shadow: 0px 0px 20px #888888;
 }
 
 footer
 {
-	width: 960px;
-	margin-left: auto;
-	margin-right: auto;
+    width: 960px;
+    margin-left: auto;
+    margin-right: auto;
 }
 
 div#left-column
 {
-	width: 189px;
-	float: left;
-	font-size: 90%;
-	padding-top: 20px;
-	padding-bottom: 20px;
-	padding-right: 20px;
-	border-right: 1px solid #d9d9d9;
+    width: 189px;
+    float: left;
+    font-size: 90%;
+    padding-top: 20px;
+    padding-bottom: 20px;
+    padding-right: 20px;
+    border-right: 1px solid #d9d9d9;
 }
 
 div#left-column a
 {
-	display: block;
-	padding: 5px;
-	padding-left: 20px;
-	text-decoration: none;
-	color: #444444;
-	font-size: 100%;
+    display: block;
+    padding: 5px;
+    padding-left: 20px;
+    text-decoration: none;
+    color: #444444;
+    font-size: 100%;
 }
 
 div#left-column a.current-page
 {
-	font-weight: bold;
+    font-weight: bold;
 }
 
 div#left-column a:hover
 {
-	background-color: #ececec;
+    background-color: #ececec;
 }
 
 div#right-column
 {
-	width: 730px;
-	padding-top: 20px;
-	padding-bottom: 20px;
-	padding-left: 20px;
-	float: right;
+    width: 730px;
+    padding-top: 20px;
+    padding-bottom: 20px;
+    padding-left: 20px;
+    float: right;
 }
 
 img#logo
 {
-	display: block;
-	float: left;
+    display: block;
+    float: left;
 }
 
 img#slogan
 {
-	display: block;
-	float: right;
+    display: block;
+    float: right;
 }
 
 img#landing
 {
-	display: block;
-	border: 1px solid #cccccc;
-	-moz-box-shadow: 0px 0px 20px #888888;
-	-webkit-box-shadow: 0px 0px 20px #888888;
-	box-shadow: 0px 0px 20px #888888;
+    display: block;
+    border: 1px solid #cccccc;
+    -moz-box-shadow: 0px 0px 20px #888888;
+    -webkit-box-shadow: 0px 0px 20px #888888;
+    box-shadow: 0px 0px 20px #888888;
 }
 
 img#mit-logo
 {
-	float: right;
+    float: right;
 }
 
 img.bullet
 {
-	padding-bottom: 3px;
-	padding-right: 6px;
+    padding-bottom: 3px;
+    padding-right: 6px;
 }
 
 ul
 {
-	list-style-type: none;
-	line-height: 1.3;
+    list-style-type: none;
+    line-height: 1.3;
 }
 
 h1
 {
-	color: #0d4d73;
-	font-size: 170%;
-	font-weight: bold;
-	text-shadow: 1px 1px 3px #e2e2e2;
-	margin-top: 20px;
-	margin-bottom: 10px;
+    color: #0d4d73;
+    font-size: 170%;
+    font-weight: bold;
+    text-shadow: 1px 1px 3px #e2e2e2;
+    margin-top: 20px;
+    margin-bottom: 10px;
 }
 
 h2
 {
-	font-size: 130%;
-	font-weight: bold;
-	text-shadow: 1px 1px 3px #e6e6e6;
-	margin-top: 20px;
-	margin-bottom: 10px;
+    font-size: 130%;
+    font-weight: bold;
+    text-shadow: 1px 1px 3px #e6e6e6;
+    margin-top: 20px;
+    margin-bottom: 10px;
 }
 
 p
 {
-	margin-top: 10px;
-	margin-bottom: 10px;
+    margin-top: 10px;
+    margin-bottom: 10px;
 }
 
 form#terminal-form
 {
-	border: 1px solid #d9d9d9;
-	padding: 20px;
-	background-color: #fafafa;
-	overflow: auto;
-	cursor: text;
+    border: 1px solid #d9d9d9;
+    padding: 20px;
+    background-color: #fafafa;
+    overflow: auto;
+    cursor: text;
 }
 
 div#terminal
 {
-	border: none;
-	outline: none;
-	display: block;
-	overflow-x: hidden;
-	font: 85% "Droid Sans Mono", "Consolas", "Courier", "Courier New", monospace;
-	color: #444444;
+    border: none;
+    outline: none;
+    display: block;
+    overflow-x: hidden;
+    font: 85% "Droid Sans Mono", "Consolas", "Courier", "Courier New", monospace;
+    color: #444444;
 }
 
 div#prompt
 {
-	float: left;
-	font: 85% "Droid Sans Mono", "Consolas", "Courier", "Courier New", monospace;
-	color: #00aa00;
-	display: none;
+    float: left;
+    font: 85% "Droid Sans Mono", "Consolas", "Courier", "Courier New", monospace;
+    color: #00aa00;
+    display: none;
 }
 
 textarea#terminal-input
 {
-	width: 500px;
-	background-color: transparent;
-	border: none;
-	outline: none;
-	display: block;
-	font: 85% "Droid Sans Mono", "Consolas", "Courier", "Courier New", monospace;
-	color: #444444;
-	resize: none;
-	overflow: hidden;
+    width: 500px;
+    background-color: transparent;
+    border: none;
+    outline: none;
+    display: block;
+    font: 85% "Droid Sans Mono", "Consolas", "Courier", "Courier New", monospace;
+    color: #444444;
+    resize: none;
+    overflow: hidden;
 }
 
 div.float-clear
 {
-	clear: left;
+    clear: left;
 }
 
 span.strong
 {
-	font-weight: bold;
+    font-weight: bold;
 }
 
 span.message
 {
-	color: #0000aa;
+    color: #0000aa;
 }
 
 span.error
 {
-	color: #ff0000;
+    color: #ff0000;
 }
 
 span.prompt
 {
-	color: #00aa00;
+    color: #00aa00;
 }
 
 /* for Internet Explorer */
 a img
 {
-	border: none;
+    border: none;
 }
