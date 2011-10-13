@@ -149,6 +149,9 @@ function socket_callback(fd)
         catch error
             return send_error(print_to_string(show, error))
         end
+        if result == nothing
+            return send_eval_result("")
+        end
         return send_eval_result(print_to_string(show, result))
     end
 end
