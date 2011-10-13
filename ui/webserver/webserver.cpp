@@ -178,6 +178,9 @@ struct session
     bool inbox_thread_alive;
     bool outbox_thread_alive;
 
+    // whether the session should terminate
+    bool should_terminate;
+
     // the status of the session
     session_status status;
 };
@@ -620,9 +623,9 @@ void* watchdog_thread(void* arg)
         // start terminating old sessions
         for (map<string, session>::iterator iter = session_map.begin(); iter != session_map.end(); iter++)
         {
-            if ((iter->second).status != SESSION_TERMINATING)
+            if ((iter->second).status == SESSION_NORMAL)
             {
-                if (t-(iter->second).update_time >= SESSION_TIMEOUT)
+                if (t-(iter->second).update_time >= SESSION_TIMEOUT || (iter->second).should_terminate)
                     (iter->second).status = SESSION_TERMINATING;
             }
         }
@@ -714,6 +717,7 @@ string create_session()
     // keep the session alive for now
     session_data.inbox_thread_alive = true;
     session_data.outbox_thread_alive = true;
+    session_data.should_terminate = false;
     session_data.status = SESSION_WAITING_FOR_PORT_NUM;
 
     // start the julia instance
@@ -865,7 +869,7 @@ string get_response(request* req)
                         session_map[session_token].outbox.push_back(output_message);
                     }
 
-                    // merge messages of the same type when desirable
+                    // merge MSG_OUTPUT_OTHER messages
                     for (size_t i = 1; i < session_map[session_token].outbox.size(); i++)
                     {
                         // MSG_OUTPUT_OTHER
@@ -890,6 +894,10 @@ string get_response(request* req)
             {
                 // we recognize the request
                 request_recognized = true;
+
+                // kill the old session if there is one
+                if (session_token != "")
+                    session_map[session_token].should_terminate = true;
 
                 // create a new session
                 session_token = create_session();
