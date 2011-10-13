@@ -14,62 +14,6 @@
 # [message_type:number, arg0:string, arg1:string, ...]
 
 ###########################################
-# input messages
-###########################################
-
-# null message (should be ignored)
-# arguments: {}
-MSG_INPUT_NULL = 0
-
-# new session (this message is intercepted in the SCGI server and never reaches here)
-# arguments: {}
-MSG_INPUT_START = 1
-
-# poll the server (this message is intercepted in the SCGI server and never reaches here)
-# arguments: {}
-MSG_INPUT_POLL = 2
-
-# evaluate an expression
-# arguments: {expression}
-MSG_INPUT_EVAL = 3
-
-###########################################
-# output messages
-###########################################
-
-# null message (should be ignored)
-# arguments: {}
-MSG_OUTPUT_NULL = 0
-
-# message
-# arguments: {message}
-MSG_OUTPUT_MESSAGE = 1
-
-# error message
-# arguments: {message}
-MSG_OUTPUT_ERROR = 2
-
-# fatal error message (terminates session)
-# arguments: {message}
-MSG_OUTPUT_FATAL_ERROR = 3
-
-# incomplete expression
-# arguments: {}
-MSG_OUTPUT_EVAL_INCOMPLETE = 4
-
-# expression result
-# arguments: {result}
-MSG_OUTPUT_EVAL_RESULT = 5
-
-# other output (not sent directly from julia)
-# arguments: {message}
-MSG_OUTPUT_OTHER = 6
-
-# ready for input
-# arguments: {}
-MSG_OUTPUT_READY = 7
-
-###########################################
 # set up the socket connection
 ###########################################
 
@@ -116,8 +60,8 @@ end
 
 # send a message
 function write_message(msg)
-    write(io, uint8(msg.msg_type))
-    write(io, uint8(length(msg.args)))
+    write(io, uint8(msg.msg_type+1))
+    write(io, uint8(length(msg.args)+1))
     for arg=msg.args
         write(io, uint32(length(arg)))
         write(io, arg)
@@ -143,27 +87,27 @@ end
 
 # send a message
 function send_message(msg)
-    write_message(Message(MSG_OUTPUT_MESSAGE, [msg]))
+    write_message(Message(MSG_OUTPUT_MESSAGE, {msg}))
 end
 
 # send an error message
 function send_error(msg)
-    write_message(Message(MSG_OUTPUT_ERROR, [msg]))
+    write_message(Message(MSG_OUTPUT_ERROR, {msg}))
 end
 
 # send a fatal error message
 function send_fatal_error(msg)
-    write_message(Message(MSG_OUTPUT_FATAL_ERROR, [msg]))
+    write_message(Message(MSG_OUTPUT_FATAL_ERROR, {msg}))
 end
 
 # send an incomplete expression message
 function send_eval_incomplete()
-    write_message(Message(MSG_OUTPUT_EVAL_INCOMPLETE, []))
+    write_message(Message(MSG_OUTPUT_EVAL_INCOMPLETE, {}))
 end
 
 # send an expression result message
 function send_eval_result(msg)
-    write_message(Message(MSG_OUTPUT_EVAL_RESULT, [msg]))
+    write_message(Message(MSG_OUTPUT_EVAL_RESULT, {msg}))
 end
 
 ###########################################

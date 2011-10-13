@@ -9,6 +9,7 @@
 #include <sys/wait.h>
 #include "server.h"
 #include "json.h"
+#include "message_types.h"
 
 using namespace std;
 using namespace scgi;
@@ -16,7 +17,7 @@ using namespace scgi;
 /*
 
     TODO:
-        - Make "incomplete expressions" work (the problem seems to have something to do with messages with no arguments)
+        - Make "incomplete expressions" work
         - Graphs!
 
 */
@@ -196,7 +197,7 @@ map<string, session> session_map;
 pthread_mutex_t session_mutex;
 
 /////////////////////////////////////////////////////////////////////////////
-// THREAD:  inbox_thread
+// THREAD:  inbox_thread (from browser to julia)
 /////////////////////////////////////////////////////////////////////////////
 
 // add to the inbox regularly according to this interval
@@ -318,7 +319,7 @@ void* inbox_thread(void* arg)
 }
 
 /////////////////////////////////////////////////////////////////////////////
-// THREAD:  outbox_thread
+// THREAD:  outbox_thread (from julia to browser)
 /////////////////////////////////////////////////////////////////////////////
 
 // add to the outbox regularly according to this interval
@@ -509,7 +510,7 @@ void* outbox_thread(void* arg)
 
             // send a ready message
             message ready_message;
-            ready_message.type = 7;
+            ready_message.type = MSG_OUTPUT_READY;
             session_map[session_token].outbox.push_back(ready_message);
         }
 
@@ -542,7 +543,7 @@ void* outbox_thread(void* arg)
             message msg;
 
             // get the message type
-            msg.type = *((uint8_t*)(&outbox_raw[0]));
+            msg.type = (*((uint8_t*)(&outbox_raw[0])))-1;
 
             // get the number of arguments
             uint8_t arg_num = *((uint8_t*)(&outbox_raw[1]));
@@ -576,6 +577,8 @@ void* outbox_thread(void* arg)
 
                 // add the message to the queue
                 session_map[session_token].outbox.push_back(msg);
+
+                cout<<"message from julia: "<<int(msg.type)<<"\n";
             }
         }
 
@@ -821,7 +824,7 @@ string get_response(request* req)
 
     // the response
     message response_message;
-    response_message.type = 0;
+    response_message.type = MSG_OUTPUT_NULL;
 
     // process input if there is any
     if (req->get_field_exists("request"))
@@ -866,7 +869,7 @@ string get_response(request* req)
                     if (session_map[session_token].outbox_std != "")
                     {
                         message output_message;
-                        output_message.type = 6;
+                        output_message.type = MSG_OUTPUT_OTHER;
                         output_message.args.push_back(session_map[session_token].outbox_std);
                         session_map[session_token].outbox_std = "";
                         session_map[session_token].outbox.push_back(output_message);
@@ -876,9 +879,9 @@ string get_response(request* req)
                     for (size_t i = 1; i < session_map[session_token].outbox.size(); i++)
                     {
                         // MSG_OUTPUT_OTHER
-                        if (session_map[session_token].outbox[i].type == 6)
+                        if (session_map[session_token].outbox[i].type == MSG_OUTPUT_OTHER)
                         {
-                            if (session_map[session_token].outbox[i-1].type == 6)
+                            if (session_map[session_token].outbox[i-1].type == MSG_OUTPUT_OTHER)
                             {
                                 session_map[session_token].outbox[i-1].args[0] += session_map[session_token].outbox[i].args[0];
                                 session_map[session_token].outbox.erase(session_map[session_token].outbox.begin()+i);
@@ -893,7 +896,7 @@ string get_response(request* req)
             bool request_recognized = false;
 
             // MSG_INPUT_START
-            if (request_message.type == 1)
+            if (request_message.type == MSG_INPUT_START)
             {
                 // we recognize the request
                 request_recognized = true;
@@ -903,7 +906,7 @@ string get_response(request* req)
                 if (session_token == "")
                 {
                     // too many sessions
-                    response_message.type = 3;
+                    response_message.type = MSG_OUTPUT_FATAL_ERROR;
                     response_message.args.push_back("the server is currently at maximum capacity");
                 }
             }
@@ -914,13 +917,13 @@ string get_response(request* req)
                 // make sure we have a valid session
                 if (session_token == "")
                 {
-                    response_message.type = 3;
+                    response_message.type = MSG_OUTPUT_FATAL_ERROR;
                     response_message.args.push_back("session expired");
                 }
                 else
                 {
                     // forward the message to julia
-                    if (request_message.type != 2)
+                    if (request_message.type != MSG_INPUT_POLL)
                         session_map[session_token].inbox.push_back(request_message);
 
                     // send the first message on the queue
@@ -928,6 +931,7 @@ string get_response(request* req)
                     {
                         response_message = session_map[session_token].outbox[0];
                         session_map[session_token].outbox.erase(session_map[session_token].outbox.begin());
+                        cout<<"message to browser: "<<int(response_message.type)<<"\n";
                     }
                 }
             }
@@ -975,6 +979,9 @@ int main(int argc, char* argv[])
     // start the watchdog thread
     pthread_t watchdog;
     pthread_create(&watchdog, 0, watchdog_thread, 0);
+
+    // print a welcome message
+    cout<<"server started on port "<<port_num<<".\n";
 
     // print the number of open sessions
     cout<<"0 open sessions.\n";
