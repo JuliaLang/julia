@@ -14,11 +14,5 @@ void randomize();
 uint32_t genrand_int32();
 void randomseed32(uint32_t s);
 void randomseed64(uint64_t s);
-double dsfmt_randn();
-uint32_t dsfmt_gv_genrand_uint32(void);
-
-void randn_zig_init(uint32_t seed);
-double randn_zig(void);
-double *randn_zig_fill_array(double *a, uint32_t n);
 
 #endif

@@ -148,15 +148,6 @@ typedef unsigned int randmtzig_uint32_t;
 typedef long long randmtzig_int64_t;
 typedef unsigned long long randmtzig_uint64_t;
 
-#ifndef M_PI
-#define M_PI 3.141592653589793238462643
-#endif
-
-#define PI M_PI
-
-#define MT_N 624
-#define ZIGGURAT_TABLE_SIZE 256
-   
 /* FIXME may want to suppress X86 if sizeof(long)>4 */
 #if !defined(USE_X86_32)
 # if defined(i386) || defined(HAVE_X86_32)
@@ -166,181 +157,16 @@ typedef unsigned long long randmtzig_uint64_t;
 # endif
 #endif
 
-/* ===== Mersenne Twister 32-bit generator ===== */  
 
-#define MT_M 397
-#define MATRIX_A 0x9908b0dfUL   /* constant vector a */
-#define UMASK 0x80000000UL /* most significant w-r bits */
-#define LMASK 0x7fffffffUL /* least significant r bits */
-#define MIXBITS(u,v) ( ((u) & UMASK) | ((v) & LMASK) )
-#define TWIST(u,v) ((MIXBITS(u,v) >> 1) ^ ((v)&1UL ? MATRIX_A : 0UL))
+/* Declarations */
 
-//static uint32_t *next;
-
-/* static uint32_t state[MT_N]; /\* the array for the state vector  *\/ */
-/* unsigned int next; */
-/* static int left = 1; */
-/* static int initf = 0; */
-/* static int initt = 1; */
-
-
-#define STATE_NEXT  0 
-#define STATE_LEFT  1 
-#define STATE_INITF 2 
-#define STATE_INITT 3
-#define STATE_SEED  4
-
-/* initializes state[MT_N] with a seed */
-void 
-randmtzig_init_by_int (randmtzig_uint32_t s, randmtzig_uint32_t *state)
-{
-    int j;
-    state[STATE_SEED+0] = s & 0xffffffffUL;
-    for (j = 1; j < MT_N; j++) {
-        state[STATE_SEED+j] = (1812433253UL * (state[STATE_SEED+j-1] ^ (state[STATE_SEED+j-1] >> 30)) + j); 
-        /* See Knuth TAOCP Vol2. 3rd Ed. P.106 for multiplier. */
-        /* In the previous versions, MSBs of the seed affect   */
-        /* only MSBs of the array state[].                        */
-        /* 2002/01/09 modified by Makoto Matsumoto             */
-        state[STATE_SEED+j] &= 0xffffffffUL;  /* for >32 bit machines */
-    }
-    state[STATE_LEFT] = 1; 
-    state[STATE_INITF] = 1;
-    state[STATE_INITT] = 1;
-}
-
-/* initialize by an array with array-length */
-/* init_key is the array for initializing keys */
-/* key_length is its length */
-void 
-randmtzig_init_by_array (randmtzig_uint32_t init_key[], int key_length, randmtzig_uint32_t *state)
-{
-  int i, j, k;
-  randmtzig_init_by_int (19650218UL,state);
-  i = 1;
-  j = 0;
-  k = (MT_N > key_length ? MT_N : key_length);
-  for (; k; k--)
-    {
-      state[STATE_SEED+i] = (state[STATE_SEED+i] ^ ((state[STATE_SEED+i-1] ^ (state[STATE_SEED+i-1] >> 30)) * 1664525UL))
-	+ init_key[j] + j; /* non linear */
-      state[STATE_SEED+i] &= 0xffffffffUL; /* for WORDSIZE > 32 machines */
-      i++;
-      j++;
-      if (i >= MT_N)
-	{
-	  state[STATE_SEED+0] = state[STATE_SEED+MT_N-1];
-	  i = 1;
-	}
-      if (j >= key_length)
-	j = 0;
-    }
-  for (k = MT_N - 1; k; k--)
-    {
-      state[STATE_SEED+i] = 
-	   (state[STATE_SEED+i] ^ ((state[STATE_SEED+i-1] ^ (state[STATE_SEED+i-1] >> 30)) * 1566083941UL))
-	   - i; /* non linear */
-      state[STATE_SEED+i] &= 0xffffffffUL; /* for WORDSIZE > 32 machines */
-      i++;
-      if (i >= MT_N)
-	{
-	  state[STATE_SEED+0] = state[STATE_SEED+MT_N-1];
-	  i = 1;
-	}
-    }
-
-  state[STATE_SEED+0] = 0x80000000UL; /* MSB is 1; assuring non-zero initial array */
-  state[STATE_LEFT] = 1; 
-  state[STATE_INITF] = 1;
-}
-
-void 
-randmtzig_init_by_entropy (randmtzig_uint32_t *state)
-{
-    randmtzig_uint32_t entropy[MT_N];
-    int n = 0;
-
-    /* Look for entropy in /dev/urandom */
-    FILE* urandom =fopen("/dev/urandom", "rb");
-    if (urandom) 
-      {
-	while (n < MT_N) 
-	  {
-	    unsigned char word[4];
-	    if (fread(word, 4, 1, urandom) != 1) 
-	      break;
-	    entropy[n++] = word[0]+(word[1]<<8)+(word[2]<<16)+(word[3]<<24);
-	  }
-	fclose(urandom);
-      }
-
-    /* If there isn't enough entropy, gather some from various sources */
-    if (n < MT_N) 
-      entropy[n++] = time(NULL); /* Current time in seconds */
-    if (n < MT_N) 
-      entropy[n++] = clock();    /* CPU time used (usec) */
-#ifdef HAVE_GETTIMEOFDAY
-    if (n < MT_N) 
-      {
-	struct timeval tv;
-	if (gettimeofday(&tv, NULL) != -1)
-	  entropy[n++] = tv.tv_usec;   /* Fractional part of current time */
-      }
-#endif
-    /* Send all the entropy into the initial state vector */
-    randmtzig_init_by_array(entropy,n,state);
-}
-
-
-static void 
-next_state (randmtzig_uint32_t *state)
-{
-  randmtzig_uint32_t *p = state+STATE_SEED;
-  int j;
-
-  /* if init_by_int() has not been called, */
-  /* a default initial seed is used         */
-  /* if (initf==0) init_by_int(5489UL); */
-  /* Or better yet, a random seed! */
-  if (state[STATE_INITF] != 1) 
-       randmtzig_init_by_entropy(state);
-
-  state[STATE_LEFT] = MT_N;
-  state[STATE_NEXT] = 0;
-    
-  for (j = MT_N - MT_M + 1; --j; p++) 
-    *p = p[MT_M] ^ TWIST(p[0], p[1]);
-
-  for (j = MT_M; --j; p++) 
-    *p = p[MT_M-MT_N] ^ TWIST(p[0], p[1]);
-
-  *p = p[MT_M-MT_N] ^ TWIST(p[0], state[STATE_SEED+0]);
-}
-
-/* generates a random number on [0,0xffffffff]-interval */
-static randmtzig_uint32_t randmt (randmtzig_uint32_t *state)
-{
-     register randmtzig_uint32_t y;
-     
-     (state[STATE_LEFT])--;
-     if (state[STATE_LEFT] == 0)  next_state(state);
-     y = state[STATE_SEED+(state[STATE_NEXT])];
-     (state[STATE_NEXT])++;
-     
-     /* Tempering */
-     y ^= (y >> 11);
-     y ^= (y << 7) & 0x9d2c5680UL;
-     y ^= (y << 15) & 0xefc60000UL;
-
-     return (y ^ (y >> 18));
-}
+void randmtzig_create_ziggurat_tables (void);
+double randmtzig_randn (void);
+void randmtzig_fill_randn (double *p, randmtzig_idx_type n);
 
 /* ===== Uniform generators ===== */
 
-/* Select which 32 bit generator to use */
-//#define randi32 randmt
-
-static randmtzig_uint64_t randi53 (randmtzig_uint32_t *state)
+inline static randmtzig_uint64_t randi53 (void)
 {
   const randmtzig_uint32_t lo = dsfmt_gv_genrand_uint32();
   const randmtzig_uint32_t hi = dsfmt_gv_genrand_uint32()&0x1FFFFF;
@@ -355,7 +181,7 @@ static randmtzig_uint64_t randi53 (randmtzig_uint32_t *state)
 #endif
 }
 
-static randmtzig_uint64_t randi54 (randmtzig_uint32_t *state)
+inline static randmtzig_uint64_t randi54 (void)
 {
   const randmtzig_uint32_t lo = dsfmt_gv_genrand_uint32();
   const randmtzig_uint32_t hi = dsfmt_gv_genrand_uint32()&0x3FFFFF;
@@ -370,7 +196,7 @@ static randmtzig_uint64_t randi54 (randmtzig_uint32_t *state)
 #endif
 }
 
-static randmtzig_uint64_t randi64 (randmtzig_uint32_t *state)
+inline static randmtzig_uint64_t randi64 (void)
 {
   const randmtzig_uint32_t lo = dsfmt_gv_genrand_uint32();
   const randmtzig_uint32_t hi = dsfmt_gv_genrand_uint32();
@@ -386,38 +212,31 @@ static randmtzig_uint64_t randi64 (randmtzig_uint32_t *state)
 }
 
 /* generates a random number on (0,1)-real-interval */
-static double randu32 (randmtzig_uint32_t *state)
+inline static double randu32 (void)
 {
   return ((double)dsfmt_gv_genrand_uint32() + 0.5) * (1.0/4294967296.0); 
   /* divided by 2^32 */
 }
 
 /* generates a random number on (0,1) with 53-bit resolution */
-static double randu53 (randmtzig_uint32_t *state) 
+inline static double randu53 (void)
 { 
-  const randmtzig_uint32_t a=dsfmt_gv_genrand_uint32()>>5;
-  const randmtzig_uint32_t b=dsfmt_gv_genrand_uint32()>>6; 
-  return(a*67108864.0+b+0.4) * (1.0/9007199254740992.0);
+    /*
+      const randmtzig_uint32_t a=dsfmt_gv_genrand_uint32()>>5;
+      const randmtzig_uint32_t b=dsfmt_gv_genrand_uint32()>>6; 
+      return(a*67108864.0+b+0.4) * (1.0/9007199254740992.0);
+    */
+
+    return dsfmt_gv_genrand_open_open();
 } 
-
-/* Determine mantissa for uniform doubles */
-double randmtzig_randu (randmtzig_uint32_t *state)
-{
-  return randu53(state);
-}
-
-randmtzig_uint32_t randmtzig_randi32 (randmtzig_uint32_t *state)
-{
-     return dsfmt_gv_genrand_uint32();
-}
 
 /* ===== Ziggurat normal and exponential generators ===== */
 # define ZIGINT randmtzig_uint64_t
 # define EMANTISSA 9007199254740992.0  /* 53 bit mantissa */
-# define ERANDI randi53(state) /* 53 bits for mantissa */
+# define ERANDI randi53() /* 53 bits for mantissa */
 # define NMANTISSA EMANTISSA  
-# define NRANDI randi54(state) /* 53 bits for mantissa + 1 bit sign */
-# define RANDU randu53(state)
+# define NRANDI randi54() /* 53 bits for mantissa + 1 bit sign */
+# define RANDU randu53()
 
 
 #define ZIGGURAT_TABLE_SIZE 256
@@ -468,16 +287,12 @@ reason is just the use of the Mersenne Twister and not the inlining,
 so I'm not going to try and optimize further.
 */
 
+static ZIGINT ki[ZIGGURAT_TABLE_SIZE];
+static ZIGINT ke[ZIGGURAT_TABLE_SIZE];
+static double wi[ZIGGURAT_TABLE_SIZE], fi[ZIGGURAT_TABLE_SIZE];
+static double we[ZIGGURAT_TABLE_SIZE], fe[ZIGGURAT_TABLE_SIZE];
 
-/* static ZIGINT ki[ZIGGURAT_TABLE_SIZE]; */
-/* static ZIGINT ke[ZIGGURAT_TABLE_SIZE]; */
-/* static double wi[ZIGGURAT_TABLE_SIZE], fi[ZIGGURAT_TABLE_SIZE]; */
-/* static double we[ZIGGURAT_TABLE_SIZE], fe[ZIGGURAT_TABLE_SIZE]; */
-
-
-static void 
-create_ziggurat_tables (randmtzig_uint32_t *state, ZIGINT *ki, ZIGINT *ke, double *wi, double *fi,
-			double *we, double *fe)
+void randmtzig_create_ziggurat_tables (void)
 {
   int i;
   double x, x1;
@@ -536,8 +351,6 @@ create_ziggurat_tables (randmtzig_uint32_t *state, ZIGINT *ki, ZIGINT *ke, doubl
       x1 = x;
     }
   ke[1] = 0;
-
-  state[STATE_INITT] = 0;
 }
 
 /*
@@ -555,13 +368,8 @@ create_ziggurat_tables (randmtzig_uint32_t *state, ZIGINT *ki, ZIGINT *ke, doubl
  * distribution is exp(-0.5*x*x)
  */
 
-double
-randmtzig_randn (randmtzig_uint32_t *state, ZIGINT *ki, ZIGINT *ke, double *wi, double *fi,
-		 double *we, double *fe)
+double randmtzig_randn (void)
 {
-  if (state[STATE_INITT] == 1) 
-       create_ziggurat_tables(state, ki, ke, wi, fi, we, fe);
-
   while (1)
     {
       /* The following code is specialized for 32-bit mantissa.
@@ -630,706 +438,9 @@ randmtzig_randn (randmtzig_uint32_t *state, ZIGINT *ki, ZIGINT *ke, double *wi, 
     }
 }
 
-double
-randmtzig_rande (randmtzig_uint32_t *state, ZIGINT *ki, ZIGINT *ke, double *wi, double *fi,
-		 double *we, double *fe)
-{
-     if (state[STATE_INITT] == 1) 
-	  create_ziggurat_tables(state,ki,ke,wi,fi,we,fe);
-     
-     while (1)
-     {
-	  ZIGINT ri = ERANDI;
-	  const int idx = (int)(ri & 0xFF);
-	  const double x = ri * we[idx];
-	  if (ri < ke[idx])
-	       return x;		// 98.9% of the time we return here 1st try
-	  else if (idx == 0)
-	  {
-	       /* As stated in Marsaglia and Tsang
-		* 
-		* For the exponential tail, the method of Marsaglia[5] provides:
-		* x = r - ln(U);
-		*/
-	       return ZIGGURAT_EXP_R - log(RANDU);
-	  }
-	  else if ((fe[idx-1] - fe[idx]) * RANDU + fe[idx] < exp(-x))
-	       return x;
-     }
-}
-
-
-/* ---------------------------------------------------------------- */
-/* gammln - compute natural log of gamma function of xx */
-static double gammln(double xx)
-{
-    double x,tmp,ser;
-    static double cof[6]={76.18009173,-86.50532033,24.01409822,
-			  -1.231739516,0.120858003e-2,-0.536382e-5};
-    int j;
-    x=xx-1.0;
-    tmp=x+5.5;
-    tmp -= (x+0.5)*log(tmp);
-    ser=1.0;
-    for (j=0;j<=5;j++) 
-    {
-	 x += 1.0;
-	 ser += cof[j]/x;
-    }
-    return -tmp+log(2.50662827465*ser);
-}
-
-
-/* 
-   Choose a random number from a binomial distribution. 
-   Based on the bnldev function from Schaefer, Larkum, Sakmann, Roth
-   "Coincidence detection in pyramidal neurons is tuned by their
-   dendritic branching pattern" J. Neurophys. 
-
-   Miki London & Peter N. Steinmetz, Kamran Diba
-*/
-double randmtzig_randb(int nnr, double ppr, randmtzig_uint32_t *state) 
-{
-     int j;
-     static int nold=(-1);
-     double am,em,g,angle,p,bnl,sq,bt,y;
-     static double pold=(-1.0),pc,plog,pclog,en,oldg;
-    
-     /* prepare to always ignore errors within this routine */
-     p=(ppr <= 0.5 ? ppr : 1.0-ppr);
-     am=nnr*p;
-     if (nnr < 25) 
-     {
-	  bnl=0.0;
-	  for (j=1;j<=nnr;j++)
-	       if (randmtzig_randu(state) < p) bnl += 1.0;
-     }
-     else if (am < 1.0) 
-     {
-	  g=exp(-am);
-	  bt=1.0;
-	  for (j=0;j<=nnr;j++) 
-	  {
-	       bt *= randmtzig_randu (state);
-            if (bt < g) break;
-	  }
-	  bnl=(j <= nnr ? j : nnr);
-     }
-     else 
-     {
-	  if (nnr != nold) 
-	  {
-	       en=nnr;
-	       oldg=gammln(en+1.0);
-	       nold=nnr;
-	  }
-	  if (p != pold) 
-	  {
-	       pc=1.0-p;
-	       plog=log(p);
-	       pclog=log(pc);
-	       pold=p;
-	  }
-	  sq=sqrt(2.0*am*pc);
-	  do {
-	       do {
-		    angle=PI*randmtzig_randu (state);
-                    angle=PI*randmtzig_randu (state);
-		    y=tan(angle);
-		    em=sq*y+am;
-	       } while (em < 0.0 || em >= (en+1.0));
-	       em=floor(em);
-	       bt=1.2*sq*(1.0+y*y)*exp(oldg-gammln(em+1.0) - 
-				       gammln(en-em+1.0)+em*plog+(en-em)*pclog);
-	  } while (randmtzig_randu (state) > bt);
-	  bnl=em;
-     }
-
-     if (p != ppr) bnl=nnr-bnl;
-    
-    return bnl;
-}
-
-
-#define RUNI(s) randmtzig_randu(s)
-#define RNOR(s,ki,ke,wi,fi,we,fe) randmtzig_randn(s,ki,ke,wi,fi,we,fe)
-#define LGAMMA lgamma
-
-/* ---- pprsc.c from Stadloeber's winrand --- */
-
-/* flogfak(k) = ln(k!) */
-static double 
-flogfak (double k)
-{
-#define       C0      9.18938533204672742e-01
-#define       C1      8.33333333333333333e-02
-#define       C3     -2.77777777777777778e-03
-#define       C5      7.93650793650793651e-04
-#define       C7     -5.95238095238095238e-04
-
-  static double logfak[30L] = {
-    0.00000000000000000,   0.00000000000000000,   0.69314718055994531,
-    1.79175946922805500,   3.17805383034794562,   4.78749174278204599,
-    6.57925121201010100,   8.52516136106541430,  10.60460290274525023,
-    12.80182748008146961,  15.10441257307551530,  17.50230784587388584,
-    19.98721449566188615,  22.55216385312342289,  25.19122118273868150,
-    27.89927138384089157,  30.67186010608067280,  33.50507345013688888,
-    36.39544520803305358,  39.33988418719949404,  42.33561646075348503,
-    45.38013889847690803,  48.47118135183522388,  51.60667556776437357,
-    54.78472939811231919,  58.00360522298051994,  61.26170176100200198,
-    64.55753862700633106,  67.88974313718153498,  71.25703896716800901
-  };
-  
-  double  r, rr;
-  
-  if (k >= 30.0) 
-    {
-      r  = 1.0 / k;
-      rr = r * r;
-      return ((k + 0.5)*log(k) - k + C0 + r*(C1 + rr*(C3 + rr*(C5 + rr*C7))));
-    }
-  else
-    return (logfak[(int)k]);
-}
-
-
-/******************************************************************
- *                                                                *
- * Poisson Distribution - Patchwork Rejection/Inversion  *
- *                                                                *
- ******************************************************************
- *                                                                *
- * For parameter  my < 10  Tabulated Inversion is applied.        *
- * For my >= 10  Patchwork Rejection is employed:                 *
- * The area below the histogram function f(x) is rearranged in    *
- * its body by certain point reflections. Within a large center   *
- * interval variates are sampled efficiently by rejection from    *
- * uniform hats. Rectangular immediate acceptance regions speed   *
- * up the generation. The remaining tails are covered by          *
- * exponential functions.                                         *
- *                                                                *
- ******************************************************************
- *                                                                *
- * FUNCTION :   - pprsc samples a random number from the Poisson  *
- *                distribution with parameter my > 0.             *
- * REFERENCE :  - H. Zechner (1994): Efficient sampling from      *
- *                continuous and discrete unimodal distributions, *
- *                Doctoral Dissertation, 156 pp., Technical       *
- *                University Graz, Austria.                       *
- * SUBPROGRAM : - drand(seed) ... (0,1)-Uniform generator with    *
- *                unsigned long integer *seed.                    *
- *                                                                *
- * Implemented by H. Zechner, January 1994                        *
- * Revised by F. Niederl, July 1994                               *
- *                                                                *
- ******************************************************************/
-
-static double 
-f (double k, double l_nu, double c_pm)
-{
-  return exp(k * l_nu - flogfak(k) - c_pm);
-}
-
-static double 
-pprsc (double my, randmtzig_uint32_t *state)
-{
-  static double        my_last = -1.0;
-  static double        m,  k2, k4, k1, k5;
-  static double        dl, dr, r1, r2, r4, r5, ll, lr, l_my, c_pm,
-    f1, f2, f4, f5, p1, p2, p3, p4, p5, p6;
-  double               Dk, X, Y;
-  double               Ds, U, V, W;
-  
-  if (my != my_last)
-    {                               /* set-up           */
-      my_last = my;
-      /* approximate deviation of reflection points k2, k4 from my - 1/2 */
-      Ds = sqrt(my + 0.25);
-      
-      /* mode m, reflection points k2 and k4, and points k1 and k5,      */
-      /* which delimit the centre region of h(x)                         */
-      m  = floor(my);
-      k2 = ceil(my - 0.5 - Ds);
-      k4 = floor(my - 0.5 + Ds);
-      k1 = k2 + k2 - m + 1L;
-      k5 = k4 + k4 - m;
-      
-      /* range width of the critical left and right centre region        */
-      dl = (k2 - k1);
-      dr = (k5 - k4);
-      
-      /* recurrence constants r(k)=p(k)/p(k-1) at k = k1, k2, k4+1, k5+1 */
-      r1 = my / k1;
-      r2 = my / k2;
-      r4 = my / (k4 + 1.0);
-      r5 = my / (k5 + 1.0);
-
-      /* reciprocal values of the scale parameters of exp. tail envelope */
-      ll =  log(r1);                                 /* expon. tail left */
-      lr = -log(r5);                                 /* expon. tail right*/
-      
-      /* Poisson constants, necessary for computing function values f(k) */
-      l_my = log(my);
-      c_pm = m * l_my - flogfak(m);
-      
-      /* function values f(k) = p(k)/p(m) at k = k2, k4, k1, k5          */
-      f2 = f(k2, l_my, c_pm);
-      f4 = f(k4, l_my, c_pm);
-      f1 = f(k1, l_my, c_pm);
-      f5 = f(k5, l_my, c_pm);
-      
-      /* area of the two centre and the two exponential tail regions     */
-      /* area of the two immediate acceptance regions between k2, k4     */
-      p1 = f2 * (dl + 1.0);                            /* immed. left    */
-      p2 = f2 * dl         + p1;                       /* centre left    */
-      p3 = f4 * (dr + 1.0) + p2;                       /* immed. right   */
-      p4 = f4 * dr         + p3;                       /* centre right   */
-      p5 = f1 / ll         + p4;                       /* exp. tail left */
-      p6 = f5 / lr         + p5;                       /* exp. tail right*/
-    }
-  
-  for (;;)
-    {
-      /* generate uniform number U -- U(0, p6)                           */
-      /* case distinction corresponding to U                             */
-	 if ((U = RUNI(state) * p6) < p2)
-	{                                            /* centre left      */
-	  
-	  /* immediate acceptance region 
-	     R2 = [k2, m) *[0, f2),  X = k2, ... m -1 */
-	  if ((V = U - p1) < 0.0)  return(k2 + floor(U/f2));
-	  /* immediate acceptance region 
-	     R1 = [k1, k2)*[0, f1),  X = k1, ... k2-1 */
-	  if ((W = V / dl) < f1 )  return(k1 + floor(V/f1));
-	  
-	  /* computation of candidate X < k2, and its counterpart Y > k2 */
-	  /* either squeeze-acceptance of X or acceptance-rejection of Y */
-	  Dk = floor(dl * RUNI(state)) + 1.0;
-	  if (W <= f2 - Dk * (f2 - f2/r2))
-	    {                                        /* quick accept of  */
-	      return(k2 - Dk);                       /* X = k2 - Dk      */
-	    }
-	  if ((V = f2 + f2 - W) < 1.0)
-	    {                                        /* quick reject of Y*/
-	      Y = k2 + Dk;
-	      if (V <= f2 + Dk * (1.0 - f2)/(dl + 1.0))
-		{                                    /* quick accept of  */
-		  return(Y);                         /* Y = k2 + Dk      */
-		}
-	      if (V <= f(Y, l_my, c_pm))  return(Y); /* final accept of Y*/
-	    }
-	  X = k2 - Dk;
-	}
-      else if (U < p4)
-	{                                            /* centre right     */
-	  /*  immediate acceptance region 
-	      R3 = [m, k4+1)*[0, f4), X = m, ... k4    */
-	  if ((V = U - p3) < 0.0)  return(k4 - floor((U - p2)/f4));
-	  /* immediate acceptance region 
-	     R4 = [k4+1, k5+1)*[0, f5)                */
-	  if ((W = V / dr) < f5 )  return(k5 - floor(V/f5));
-	  
-	  /* computation of candidate X > k4, and its counterpart Y < k4 */
-	  /* either squeeze-acceptance of X or acceptance-rejection of Y */
-	  Dk = floor(dr * RUNI(state)) + 1.0;
-	  if (W <= f4 - Dk * (f4 - f4*r4))
-	    {                                        /* quick accept of  */
-	      return(k4 + Dk);                       /* X = k4 + Dk      */
-	    }
-	  if ((V = f4 + f4 - W) < 1.0)
-	    {                                        /* quick reject of Y*/
-	      Y = k4 - Dk;
-	      if (V <= f4 + Dk * (1.0 - f4)/ dr)
-		{                                    /* quick accept of  */
-		  return(Y);                         /* Y = k4 - Dk      */
-		}
-	      if (V <= f(Y, l_my, c_pm))  return(Y); /* final accept of Y*/
-	    }
-	  X = k4 + Dk;
-	}
-      else
-	{
-	     W = RUNI(state);
-	  if (U < p5)
-	    {                                        /* expon. tail left */
-	      Dk = floor(1.0 - log(W)/ll);
-	      if ((X = k1 - Dk) < 0L)  continue;     /* 0 <= X <= k1 - 1 */
-	      W *= (U - p4) * ll;                    /* W -- U(0, h(x))  */
-	      if (W <= f1 - Dk * (f1 - f1/r1))  
-		return(X);                           /* quick accept of X*/
-	    }
-	  else
-	    {                                        /* expon. tail right*/
-	      Dk = floor(1.0 - log(W)/lr);
-	      X  = k5 + Dk;                          /* X >= k5 + 1      */
-	      W *= (U - p5) * lr;                    /* W -- U(0, h(x))  */
-	      if (W <= f5 - Dk * (f5 - f5*r5))  
-		return(X);                           /* quick accept of X*/
-	    }
-	}
-      
-      /* acceptance-rejection test of candidate X from the original area */
-      /* test, whether  W <= f(k),    with  W = U*h(x)  and  U -- U(0, 1)*/
-      /* log f(X) = (X - m)*log(my) - log X! + log m!                    */
-      if (log(W) <= X * l_my - flogfak(X) - c_pm)  return(X);
-    }
-}
-/* ---- pprsc.c end ------ */
-
-
-/* The remainder of the file is by Paul Kienzle */
-
-/* Given uniform u, find x such that CDF(L,x)==u.  Return x. */
-static void 
-poisson_cdf_lookup(double lambda, double *p, size_t n, randmtzig_uint32_t *state)
-{
-  /* Table size is predicated on the maximum value of lambda
-   * we want to store in the table, and the maximum value of
-   * returned by the uniform random number generator on [0,1).
-   * With lambda==10 and u_max = 1 - 1/(2^32+1), we
-   * have poisson_pdf(lambda,36) < 1-u_max.  If instead our
-   * generator uses more bits of mantissa or returns a value
-   * in the range [0,1], then for lambda==10 we need a table 
-   * size of 46 instead.  For long doubles, the table size 
-   * will need to be longer still.  */
-#define TABLESIZE 46
-  double t[TABLESIZE];
-  
-  /* Precompute the table for the u up to and including 0.458.
-   * We will almost certainly need it. */
-  int intlambda = (int)floor(lambda);
-  double P;
-  int tableidx;
-  size_t i = n;
-  
-  t[0] = P = exp(-lambda);
-  for (tableidx = 1; tableidx <= intlambda; tableidx++) {
-    P = P*lambda/(double)tableidx;
-    t[tableidx] = t[tableidx-1] + P;
-  }
-
-  while (i-- > 0) {
-       double u = RUNI(state);
-    
-    /* If u > 0.458 we know we can jump to floor(lambda) before
-     * comparing (this observation is based on Stadlober's winrand
-     * code). For lambda >= 1, this will be a win.  Lambda < 1
-     * is already fast, so adding an extra comparison is not a
-     * problem. */
-    int k = (u > 0.458 ? intlambda : 0);
-
-    /* We aren't using a for loop here because when we find the
-     * right k we want to jump to the next iteration of the
-     * outer loop, and the continue statement will only work for 
-     * the inner loop. */
-  nextk:
-    if ( u <= t[k] ) {
-      p[i] = (double) k;
-      continue;
-    }
-    if (++k < tableidx) goto nextk;
-    
-    /* We only need high values of the table very rarely so we 
-     * don't automatically compute the entire table. */
-    while (tableidx < TABLESIZE) {
-      P = P*lambda/(double)tableidx;
-      t[tableidx] = t[tableidx-1] + P;
-      /* Make sure we converge to 1.0 just in case u is uniform
-       * on [0,1] rather than [0,1). */
-      if (t[tableidx] == t[tableidx-1]) t[tableidx] = 1.0;
-      tableidx++;
-      if (u <= t[tableidx-1]) break;
-    }
-    
-    /* We are assuming that the table size is big enough here.
-     * This should be true even if RUNI is returning values in
-     * the range [0,1] rather than [0,1).
-     */
-    p[i] = (double)(tableidx-1);
-  }
-}
-
-/* From Press, et al., Numerical Recipes */
-static void
-poisson_rejection (double lambda, double *p, size_t n, randmtzig_uint32_t *state)
-{
-  double sq = sqrt(2.0*lambda);
-  double alxm = log(lambda);
-  double g = lambda*alxm - LGAMMA(lambda+1.0);
-  size_t i;
-  
-  for (i = 0; i < n; i++) 
-    {
-      double y, em, t;
-      do {
-	do {
-	     y = tan(M_PI*RUNI(state));
-	  em = sq * y + lambda;
-	} while (em < 0.0);
-	em = floor(em);
-	t = 0.9*(1.0+y*y)*exp(em*alxm-flogfak(em)-g);
-      } while (RUNI(state) > t);
-      p[i] = em;
-    }
-}
-
-
-/* Generate one poisson variate */
-double randmtzig_randp (double L, randmtzig_uint32_t *state, 
-			ZIGINT *ki, ZIGINT *ke, double *wi, double *fi, double *we, double *fe)
-{
-  double ret;
-  if (L < 0.0) ret = NAN;
-  else if (L <= 12.0) {
-    /* From Press, et al. Numerical recipes */
-    double g = exp(-L);
-    int em = -1;
-    double t = 1.0;
-    do {
-      ++em;
-      t *= RUNI(state);
-    } while (t > g);
-    ret = em;
-  } else if (L <= 1e8) {
-    /* numerical recipes */
-       poisson_rejection(L, &ret, 1,state);
-  } else if (isinf(L)) {
-    /* FIXME R uses NaN, but the normal approx. suggests that as
-     * limit should be inf. Which is correct? */
-    ret = NAN;
-  } else {
-    /* normal approximation: from Phys. Rev. D (1994) v50 p1284 */
-       ret = floor(RNOR(state,ki,ke,wi,fi,we,fe)*sqrt(L) + L + 0.5);
-    if (ret < 0.0) ret = 0.0; /* will probably never happen */
-  }
-  return ret;
-}
-
-
-
-
-/* Array generators */
-void 
-randmtzig_fill_drandu (randmtzig_idx_type n, double *p, randmtzig_uint32_t *state)
+void randmtzig_fill_randn (double *p, randmtzig_idx_type n)
 {
      randmtzig_idx_type i;
      for (i = 0; i < n; i++) 
-	  p[i] = randmtzig_randu(state);
+	  p[i] = randmtzig_randn();
 }
-
-void 
-randmtzig_fill_drandn (randmtzig_idx_type n, double *p, randmtzig_uint32_t *state,
-		       ZIGINT *ki, ZIGINT *ke, double *wi, double *fi,
-		       double *we, double *fe)
-{
-     randmtzig_idx_type i;
-     for (i = 0; i < n; i++) 
-	  p[i] = randmtzig_randn(state,ki,ke,wi,fi,we,fe);
-}
-
-void 
-randmtzig_fill_drande (randmtzig_idx_type n, double *p, randmtzig_uint32_t *state,
-		       ZIGINT *ki, ZIGINT *ke, double *wi, double *fi,
-		       double *we, double *fe)
-		       
-{
-     randmtzig_idx_type i;
-     for (i = 0; i < n; i++) 
-	  p[i] = randmtzig_rande(state,ki,ke,wi,fi,we,fe);
-}
-
-void 
-randmtzig_fill_drandb (int nnr, double ppr, 
-		       randmtzig_idx_type n, double *v, randmtzig_uint32_t *state)
-{
-     randmtzig_idx_type i;
-     for (i = 0; i < n; i++) 
-	  v[i] = randmtzig_randb(nnr, ppr, state);
-}
-
-
-void 
-randmtzig_fill_srandu (randmtzig_idx_type n, float *p, randmtzig_uint32_t *state)
-{
-     randmtzig_idx_type i;
-     for (i = 0; i < n; i++)  
-	  p[i] = randmtzig_randu(state);
-}
-
-void 
-randmtzig_fill_srandn (randmtzig_idx_type n, float *p, randmtzig_uint32_t *state,
-		       ZIGINT *ki, ZIGINT *ke, double *wi, double *fi,
-		       double *we, double *fe)
-{
-     randmtzig_idx_type i;
-     for (i = 0; i < n; i++) 
-	  p[i] = randmtzig_randn(state,ki,ke,wi,fi,we,fe);
-}
-
-void 
-randmtzig_fill_srande (randmtzig_idx_type n, float *p, randmtzig_uint32_t *state,
-		       ZIGINT *ki, ZIGINT *ke, double *wi, double *fi,
-		       double *we, double *fe)
-{
-  randmtzig_idx_type i;
-  for (i = 0; i < n; i++) 
-    p[i] = randmtzig_rande(state,ki,ke,wi,fi,we,fe);
-}
-
-
-void 
-randmtzig_fill_srandb (int nnr, float ppr, 
-		       randmtzig_idx_type n, float *v, randmtzig_uint32_t *state)
-{
-     randmtzig_idx_type i;
-     for (i = 0; i < n; i++) 
-	  v[i] = randmtzig_randb(nnr, ppr, state);
-}
-
-/* The cutoff of L <= 1e8 in the following two functions before using 
- * the normal approximation is based on:
- *   > L=1e8; x=floor(linspace(0,2*L,1000));
- *   > max(abs(normal_pdf(x,L,L)-poisson_pdf(x,L)))
- *   ans =  1.1376e-28
- * For L=1e7, the max is around 1e-9, which is within the step size of RUNI.
- * For L>1e10 the pprsc function breaks down, as I saw from the histogram
- * of a large sample, so 1e8 is both small enough and large enough. */
-
-/* Generate a set of poisson numbers with the same distribution */
-void 
-randmtzig_fill_drandp (double L, randmtzig_idx_type n, double *p, randmtzig_uint32_t *state, 
-		       ZIGINT *ki, ZIGINT *ke, double *wi, double *fi, double *we, double *fe)
-{
-  randmtzig_idx_type i;
-  if (L < 0.0 || isinf(L)) 
-    {
-      for (i=0; i<n; i++) 
-	p[i] = NAN;
-    } 
-  else if (L <= 10.0) 
-    {
-	 poisson_cdf_lookup(L, p, n, state);
-    } 
-  else if (L <= 1e8) 
-    {
-      for (i=0; i<n; i++) 
-	   p[i] = pprsc(L,state);
-    } 
-  else 
-    {
-      /* normal approximation: from Phys. Rev. D (1994) v50 p1284 */
-      const double sqrtL = sqrt(L);
-      for (i = 0; i < n; i++) 
-	{
-	     p[i] = floor(RNOR(state,ki,ke,wi,fi,we,fe)*sqrtL + L + 0.5);
-	  if (p[i] < 0.0) 
-	    p[i] = 0.0; /* will probably never happen */
-	}
-    }
-}
-
-
-
-/* Given uniform u, find x such that CDF(L,x)==u.  Return x. */
-static void 
-poisson_cdf_slookup(double lambda, float *p, size_t n, randmtzig_uint32_t *state)
-{
-  /* Table size is predicated on the maximum value of lambda
-   * we want to store in the table, and the maximum value of
-   * returned by the uniform random number generator on [0,1).
-   * With lambda==10 and u_max = 1 - 1/(2^32+1), we
-   * have poisson_pdf(lambda,36) < 1-u_max.  If instead our
-   * generator uses more bits of mantissa or returns a value
-   * in the range [0,1], then for lambda==10 we need a table 
-   * size of 46 instead.  For long doubles, the table size 
-   * will need to be longer still.  */
-#define TABLESIZE 46
-  float t[TABLESIZE];
-  
-  /* Precompute the table for the u up to and including 0.458.
-   * We will almost certainly need it. */
-  int intlambda = (int)floor(lambda);
-  double P;
-  int tableidx;
-  size_t i = n;
-  
-  t[0] = P = exp(-lambda);
-  for (tableidx = 1; tableidx <= intlambda; tableidx++) {
-    P = P*lambda/(float)tableidx;
-    t[tableidx] = t[tableidx-1] + P;
-  }
-
-  while (i-- > 0) {
-       float u = RUNI(state);
-    
-    /* If u > 0.458 we know we can jump to floor(lambda) before
-     * comparing (this observation is based on Stadlober's winrand
-     * code). For lambda >= 1, this will be a win.  Lambda < 1
-     * is already fast, so adding an extra comparison is not a
-     * problem. */
-    int k = (u > 0.458 ? intlambda : 0);
-
-    /* We aren't using a for loop here because when we find the
-     * right k we want to jump to the next iteration of the
-     * outer loop, and the continue statement will only work for 
-     * the inner loop. */
-  nextk:
-    if ( u <= t[k] ) {
-      p[i] = (float) k;
-      continue;
-    }
-    if (++k < tableidx) goto nextk;
-    
-    /* We only need high values of the table very rarely so we 
-     * don't automatically compute the entire table. */
-    while (tableidx < TABLESIZE) {
-      P = P*lambda/(float)tableidx;
-      t[tableidx] = t[tableidx-1] + P;
-      /* Make sure we converge to 1.0 just in case u is uniform
-       * on [0,1] rather than [0,1). */
-      if (t[tableidx] == t[tableidx-1]) t[tableidx] = 1.0;
-      tableidx++;
-      if (u <= t[tableidx-1]) break;
-    }
-    
-    /* We are assuming that the table size is big enough here.
-     * This should be true even if RUNI is returning values in
-     * the range [0,1] rather than [0,1).
-     */
-    p[i] = (float)(tableidx-1);
-  }
-}
-
-
-void 
-randmtzig_fill_srandp (double L, randmtzig_idx_type n, float *p, randmtzig_uint32_t *state,
-                       ZIGINT *ki, ZIGINT *ke, double *wi, double *fi, double *we, double *fe)
-{
-  randmtzig_idx_type i;
-  if (L < 0.0 || isinf(L)) 
-    {
-      for (i=0; i<n; i++) 
-	p[i] = NAN;
-    } 
-  else if (L <= 10.0) 
-    {
-	 poisson_cdf_slookup(L, p, n, state);
-    } 
-  else if (L <= 1e8) 
-    {
-      for (i=0; i<n; i++) 
-	   p[i] = pprsc(L,state);
-    } 
-  else 
-    {
-      /* normal approximation: from Phys. Rev. D (1994) v50 p1284 */
-      const float sqrtL = sqrt(L);
-      for (i = 0; i < n; i++) 
-	{
-	     p[i] = floor(RNOR(state,ki,ke,wi,fi,we,fe)*sqrtL + L + 0.5);
-	  if (p[i] < 0.0) 
-	    p[i] = 0.0; /* will probably never happen */
-	}
-    }
-}
-

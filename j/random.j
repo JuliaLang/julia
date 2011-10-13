@@ -7,7 +7,7 @@ function librandom_init()
         srand(uint64(clock()*2.0^32))
     end
 
-    randn_zig_init(uint32(clock()))
+    randn_zig_init()
 end
 
 dsfmt_get_min_array_size() = ccall(dlsym(librandom, :dsfmt_get_min_array_size), Int32, ())
@@ -96,13 +96,15 @@ randint(n::Int) = randint(one(n), n)
 
 ## Ziggurat
 
-randn_zig_init(x::Uint32) = ccall(dlsym(librandom, :randn_zig_init), Void, (Uint32,), x)
+randn_zig_init() = ccall(dlsym(librandom, :randmtzig_create_ziggurat_tables), Void, ())
 
-randn() = ccall(dlsym(librandom, :randn_zig), Float64, ())
+randn() = ccall(dlsym(librandom, :randmtzig_randn), Float64, ())
 
 function randn(dims::Dims)
     A = Array(Float64, dims)
-    ccall(dlsym(librandom, :randn_zig_fill_array), Ptr{Float64}, (Ptr{Float64}, Uint32), A, uint32(numel(A)))
+    ccall(dlsym(librandom, :randmtzig_fill_randn), Void,
+          (Ptr{Float64}, Uint32), 
+          A, uint32(numel(A)))
     return A
 end
 
