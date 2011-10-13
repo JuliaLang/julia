@@ -94,7 +94,7 @@ static u_int32_t toktype = TOK_NONE;
 static value_t tokval;
 static char buf[256];
 
-static char nextchar()
+static char nextchar(void)
 {
     int ch;
     char c;
@@ -174,7 +174,7 @@ static int read_token(char c, int digits)
 
 static value_t do_read_sexpr(value_t label);
 
-static u_int32_t peek()
+static u_int32_t peek(void)
 {
     char c, *end;
     fixnum_t x;
@@ -423,7 +423,7 @@ static value_t read_vector(value_t label, u_int32_t closer)
     return POP();
 }
 
-static value_t read_string()
+static value_t read_string(void)
 {
     char *buf, *temp;
     char eseq[10];

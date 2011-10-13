@@ -1,79 +1,426 @@
 ﻿<!doctype html>
 <html lang="en">
-	<head>
-		<meta charset="utf-8" />
-		<title>Julia - A fresh approach to technical computing.</title>
-		<link href="styles.css" rel="stylesheet" type="text/css" />
-		<link href="favicon.ico" rel="shortcut icon" />
-		<script type="text/javascript" src="jquery.js"></script>
-		<script>
-			// keep track of the minimum height of the content (the height of the longest column)
-			var min_content_height;
+    <head>
+        <meta charset="utf-8" />
+        <title>Julia - A fresh approach to technical computing.</title>
+        <link href="styles.css" rel="stylesheet" type="text/css" />
+        <link href="favicon.ico" rel="shortcut icon" />
+        <link href="http://fonts.googleapis.com/css?family=Droid+Sans+Mono&v2" rel="stylesheet" type="text/css">
+        <script type="text/javascript" src="jquery.js"></script>
+        <script type="text/javascript" src="jquery.json.js"></script>
+        <script>
+            /*
+                Some stuff to make the two columns extend to the footer.
+            */
 
-			// set the outer height of an element or group of elements
-			function set_outer_height(selector, height)
-			{
-				$(selector).height(0);
-				$(selector).height(height-$(selector).outerHeight(true));
-			}
-			
-			// this function makes all of the columns the same height
-			function set_column_heights() {
-				// set the height of all the columns to the height of the longest one
-				set_outer_height("#left-column", min_content_height);
-				set_outer_height("#right-column", min_content_height);
-				set_outer_height("#main", min_content_height);
-				
-				// calculate how much taller the columns should be so the footer is at the bottom of the window
-				var padding = Math.max($(window).height()-($("#footer-bar").offset().top+$("#footer-bar").outerHeight(true)), 0);
-				
-				// make the columns taller so the footer is on the bottom of the page
-				set_outer_height("#left-column", min_content_height+padding);
-				set_outer_height("#right-column", min_content_height+padding);
-				set_outer_height("#main", min_content_height+padding);
-				set_outer_height("#terminal-form", min_content_height+padding-40);
-			}
-			
-			// called on page load
-			window.onload = function() {
-				// calculate the height of the longest column
-				min_content_height = Math.max($("div#left-column").outerHeight(true), $("div#right-column").outerHeight(true));
-				
-				// set the height of the columns appropriately
-				set_column_heights();
-			};
-			
-			// set the window resize callback
-			window.onresize = set_column_heights;
-		</script>
-	</head>
-	<body>
-		<div id="header-bar">
-			<header>
-				<a href="/"><img id="logo" src="images/logo.png" alt="Julia" /></a>
-				<img id="slogan" src="images/slogan.png" alt="A fresh approach to technical computing" />
-				<div class="float-clear"> </div>
-			</header>
-		</div>
-		<div id="main">
-			<div id="left-column">
-				<a href="/" class="current-page"><img class="bullet" src="images/bullet.png" alt="" /> Home</a>
-				<a href="/repl.htm"><img class="bullet" src="images/bullet.png" alt="" /> Interactive Prompt</a>
-			</div>
-			<div id="right-column">
-				<a href="/repl.htm"><img id="landing" src="images/landing.png" alt="Julia - A fresh approach to technical computing." /></a>
-			</div>
-			<div class="float-clear"> </div>
-		</div>
-		<div id="footer-bar">
-			<footer>
-				<a href="http://web.mit.edu/"><img id="mit-logo" src="images/mit_logo.png" alt="MIT Logo" /></a>
-				<div style="text-align: center">
-					<p style="margin-top: 15px;">A <span class="strong">fresh</span> approach to <span class="strong">technical computing.</span></p>
-					<p>Copyright &copy; 2011 Alan Edelman, Jeff Bezanson, et al.</p>
-				</div>
-				<div class="float-clear"> </div>
-			</footer>
-		</div>
-	</body>
+            // keep track of the minimum height of the content (the height of the longest column)
+            var min_content_height;
+
+            // set the outer height of an element or group of elements
+            function set_outer_height(selector, height)
+            {
+                $(selector).height(0);
+                $(selector).height(height-$(selector).outerHeight(true));
+            }
+            
+            // this function makes all of the columns the same height
+            function set_column_heights() {
+                // set the height of all the columns to the height of the longest one
+                set_outer_height("#left-column", min_content_height);
+                set_outer_height("#right-column", min_content_height);
+                set_outer_height("#main", min_content_height);
+                
+                // calculate how much taller the columns should be so the footer is at the bottom of the window
+                var padding = Math.max($(window).height()-($("#footer-bar").offset().top+$("#footer-bar").outerHeight(true)), 0);
+                
+                // make the columns taller so the footer is on the bottom of the page
+                set_outer_height("#left-column", min_content_height+padding);
+                set_outer_height("#right-column", min_content_height+padding);
+                set_outer_height("#main", min_content_height+padding);
+                set_outer_height("#terminal-form", min_content_height+padding-40);
+            }
+            
+            // called on page load
+            window.onload = function() {
+                // calculate the height of the longest column
+                min_content_height = Math.max($("div#left-column").outerHeight(true), $("div#right-column").outerHeight(true));
+                
+                // set the height of the columns appropriately
+                set_column_heights();
+            };
+            
+            // set the window resize callback
+            window.onresize = set_column_heights;
+        </script>
+        <script>
+            /*
+                Network Protol
+
+                This needs to match the message
+                types listed in message_types.h.
+            */
+
+            // input messages
+            var MSG_INPUT_NULL = 0;
+            var MSG_INPUT_START = 1;
+            var MSG_INPUT_POLL = 2;
+            var MSG_INPUT_EVAL = 3;
+
+            // output messages
+            var MSG_OUTPUT_NULL = 0;
+            var MSG_OUTPUT_MESSAGE = 1;
+            var MSG_OUTPUT_ERROR = 2;
+            var MSG_OUTPUT_FATAL_ERROR = 3;
+            var MSG_OUTPUT_EVAL_INCOMPLETE = 4;
+            var MSG_OUTPUT_EVAL_RESULT = 5;
+            var MSG_OUTPUT_OTHER = 6;
+            var MSG_OUTPUT_READY = 7;
+        </script>
+        <script>
+            /*
+                REPL implementation.
+            */
+
+            // how often we poll the server
+            var poll_interval = 500;
+
+            // terminal content
+            var terminal_data = "";
+
+            // keep track of terminal history
+            var input_history = [];
+            var input_history_current = [""];
+            var input_history_id = 0;
+            var input_history_size = 100;
+
+            // keep track of incomplete expressions
+            var incomplete_expr = "";
+
+            // whether the terminal should clear the input on the next non-null response
+            var clear_input_on_response = false;
+
+            // a queue of messages to be sent to the server
+            var outbox_queue = [];
+
+            // jQuery extension to insert text into an input/textarea at the cursor position
+            // (used to indent when the user presses the tab key)
+            jQuery.fn.extend({
+                insertAtCaret: function(myValue)
+                {
+                    return this.each(function(i)
+                    {
+                        if (document.selection)
+                        {
+                            this.focus();
+                            sel = document.selection.createRange();
+                            sel.text = myValue;
+                            this.focus();
+                        }
+                        else if (this.selectionStart || this.selectionStart == "0")
+                        {
+                            var startPos = this.selectionStart;
+                            var endPos = this.selectionEnd;
+                            var scrollTop = this.scrollTop;
+                            this.value = this.value.substring(0, startPos)+myValue+this.value.substring(endPos, this.value.length);
+                            this.focus();
+                            this.selectionStart = startPos+myValue.length;
+                            this.selectionEnd = startPos+myValue.length;
+                            this.scrollTop = scrollTop;
+                        }
+                        else
+                        {
+                            this.value += myValue;
+                            this.focus();
+                        }
+                    })
+                }
+            });
+
+            // escape html
+            function escape_html(str)
+            {
+                // escape ampersands, angle brackets, spaces, and newlines
+                return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/ /g, "&nbsp;").replace(/\n/g, "<br />");
+            }
+
+            // add to the terminal
+            function add_to_terminal(data)
+            {
+                // add the data
+                terminal_data += data;
+
+                // update the html
+                $("#terminal").html(terminal_data);
+
+                // resize the input box (the -1 is for Internet Explorer)
+                $("#terminal-input").width($("#terminal").width()-$("#prompt").width()-1);
+
+                // scroll to the new data
+                $("#terminal-form").prop("scrollTop", $("#terminal-form").prop("scrollHeight"));
+            }
+
+            // the first request
+            function init_session()
+            {
+                // submit AJAX request via POST
+                outbox_queue.push({"message_type": MSG_INPUT_START});
+                process_outbox();
+            }
+
+            // check the server for data
+            function poll()
+            {
+                // submit AJAX request via POST
+                outbox_queue.push({"message_type": MSG_INPUT_POLL});
+                process_outbox();
+            }
+
+            // send the next line in the queue - return whether there is more data to process
+            function process_outbox()
+            {
+                if (outbox_queue.length > 0)
+                    $.post("/repl.scgi", {"request": $.toJSON(outbox_queue.shift())}, callback, "json");
+                return (outbox_queue.length > 0);
+            }
+            
+            // called when the server has responded
+            function callback(data, textStatus, jqXHR)
+            {
+                // reset the input if necessary
+                if (clear_input_on_response && (
+                    data.message_type == MSG_OUTPUT_MESSAGE || 
+                    data.message_type == MSG_OUTPUT_ERROR || 
+                    data.message_type == MSG_OUTPUT_FATAL_ERROR || 
+                    data.message_type == MSG_OUTPUT_EVAL_RESULT))
+                {
+                    add_to_terminal("<span class=\"prompt\">julia&gt;&nbsp;</span>"+escape_html($("#terminal-input").val())+"<br />");
+                    $("#terminal-input").val("");
+                    $("#terminal-input").removeAttr("disabled");
+                    $("#terminal-input").focus();
+                }
+
+                // MSG_OUTPUT_NULL
+                if (data.message_type == MSG_OUTPUT_NULL)
+                {
+                    // do nothing
+                }
+
+                // MSG_OUTPUT_MESSAGE
+                if (data.message_type == MSG_OUTPUT_MESSAGE)
+                {
+                    add_to_terminal("<span class=\"message\">"+escape_html(data.arg0)+"</span><br /><br />");
+                }
+
+                // MSG_OUTPUT_ERROR
+                if (data.message_type == MSG_OUTPUT_ERROR)
+                {
+                    add_to_terminal("<span class=\"error\">"+escape_html(data.arg0)+"</span><br /><br />");
+                }
+
+                // MSG_OUTPUT_FATAL_ERROR
+                if (data.message_type == MSG_OUTPUT_FATAL_ERROR)
+                {
+                    add_to_terminal("<span class=\"error\">"+escape_html(data.arg0)+"</span><br /><br />");
+                    return;
+                }
+
+                // MSG_OUTPUT_EVAL_INCOMPLETE
+                if (data.message_type == MSG_OUTPUT_EVAL_INCOMPLETE)
+                {
+                    // change this stuff
+                    /*
+                    if (incomplete_expr == "")
+                        add_to_terminal("<span class=\"prompt\">julia&gt;&nbsp;</span>");
+                    add_to_terminal(escape_html($("#terminal-input").val())+"<br />");
+                    incomplete_expr += $("#terminal-input").val()+"\n";
+                    $("#terminal-input").val("");
+                    $("#terminal-input").removeAttr("disabled");
+                    $("#terminal-input").focus();
+                    */
+
+                    console.log("No good, Captain.");
+
+
+
+                    add_to_terminal("<span class=\"prompt\">julia&gt;&nbsp;</span>"+escape_html($("#terminal-input").val())+"<br />");
+                    $("#terminal-input").val("");
+                    $("#terminal-input").removeAttr("disabled");
+                    $("#terminal-input").focus();
+                }
+                else
+                    incomplete_expr = "";
+
+                // MSG_OUTPUT_EVAL_RESULT
+                if (data.message_type == MSG_OUTPUT_EVAL_RESULT)
+                {
+                    if (data.arg0 != "")
+                        add_to_terminal(escape_html(data.arg0)+"<br /><br />");
+                }
+
+                // MSG_OUTPUT_OTHER
+                if (data.message_type == MSG_OUTPUT_OTHER)
+                {
+                    if (data.arg0 != "")
+                        add_to_terminal(escape_html(data.arg0));
+                }
+
+                // MSG_OUTPUT_READY
+                if (data.message_type == MSG_OUTPUT_READY)
+                {
+                    // remove the initializing message
+                    $("#terminal").html("");
+
+                    // enable input
+                    $("#prompt").show();
+                    $("#terminal-input").removeAttr("disabled");
+                    $("#terminal-input").focus();
+                }
+
+                // send any remaining messages if there are any
+                if (process_outbox())
+                    return;
+
+                // poll the server again
+                setTimeout(poll, poll_interval);
+            }
+
+            // called on page load
+            $(document).ready(function()
+            {
+                // resize the input box (the -1 is for Internet Explorer)
+                $("#terminal-input").width($("#terminal").width()-$("#prompt").width()-1);
+                
+                // hook mouse click events
+                $("#terminal-form").click(function(evt) { $("#terminal-input").focus(); } );
+
+                // when the user pastes multi-line strings, submit all but the last line
+                $("#terminal-input").keyup(function(evt)
+                {
+                    // get the input
+                    var input = $("#terminal-input").val();
+
+                    // split the input into lines
+                    var lines = input.split("\n");
+
+                    // submit all but the last line
+                    for (var i = 0; i < lines.length-1; i += 1)
+                    {
+                        // send the input to the server via AJAX
+                        outbox_queue.push({"message_type": MSG_INPUT_EVAL, "arg0": lines[i]+"\n"});
+
+                        // input history
+                        input_history.push(lines[i]);
+                        if (input_history.length > input_history_size)
+                            input_history = input_history.slice(input_history.length-input_history_size);
+                        input_history_current = input_history.slice(0);
+                        input_history_current.push("");
+                        input_history_id = input_history_current.length-1;
+                    }
+                    process_outbox();
+
+                    // set the input to the last line
+                    $("#terminal-input").val(lines[lines.length-1]);
+                });
+
+                // hook keyboard events for the input field
+                $("#terminal-input").keydown(function(evt)
+                {
+                    // scroll to the input field
+                    $("#terminal-form").prop("scrollTop", $("#terminal-form").prop("scrollHeight"));
+
+                    // determine which key was pressed
+                    switch (evt.keyCode)
+                    {
+                        case 9:
+                            // user pressed the tab key
+                            $("#terminal-input").insertAtCaret("\t");
+                            $("#terminal-form").prop("scrollTop", $("#terminal-form").prop("scrollHeight"));
+                            return false;
+
+                        case 38:
+                            // user pressed the up key
+                            input_history_current[input_history_id] = $("#terminal-input").val();
+                            input_history_id -= 1;
+                            if (input_history_id < 0)
+                                input_history_id = 0;
+                            $("#terminal-input").val(input_history_current[input_history_id]);
+                            $("#terminal-form").prop("scrollTop", $("#terminal-form").prop("scrollHeight"));
+                            return false;
+
+                        case 40:
+                            // user pressed the down key
+                            input_history_current[input_history_id] = $("#terminal-input").val();
+                            input_history_id += 1;
+                            if (input_history_id > input_history_current.length-1)
+                                input_history_id = input_history_current.length-1;
+                            $("#terminal-input").val(input_history_current[input_history_id]);
+                            $("#terminal-form").prop("scrollTop", $("#terminal-form").prop("scrollHeight"));
+                            return false;
+
+                        case 13:
+                            // user pressed the enter key
+                            var input = $("#terminal-input").val();
+                            if (input != "")
+                            {
+                                // send the input to the server via AJAX
+                                outbox_queue.push({"message_type": MSG_INPUT_EVAL, "arg0": incomplete_expr+input});
+                                process_outbox();
+
+                                // input history
+                                input_history.push(input);
+                                if (input_history.length > input_history_size)
+                                    input_history = input_history.slice(input_history.length-input_history_size);
+                                input_history_current = input_history.slice(0);
+                                input_history_current.push("");
+                                input_history_id = input_history_current.length-1;
+                            }
+
+                            // disable the terminal input and clear the input field later
+                            $("#terminal-input").attr("disabled", "disabled");
+                            clear_input_on_response = true;
+
+                            // prevent the form from actually submitting
+                            return false;
+                    }
+                });
+                
+                // start polling the server
+                init_session();
+            });
+        </script>
+    </head>
+    <body>
+        <div id="header-bar">
+            <header>
+                <a href="/"><img id="logo" src="images/logo.png" alt="Julia" /></a>
+                <img id="slogan" src="images/slogan.png" alt="A fresh approach to technical computing" />
+                <div class="float-clear"> </div>
+            </header>
+        </div>
+        <div id="main">
+            <div id="left-column">
+                <a href="/" class="current-page"><img class="bullet" src="images/bullet.png" alt="" /> Interactive Prompt</a>
+            </div>
+            <div id="right-column">
+                <form id="terminal-form">
+                    <div id="terminal"><span class="message">&lt;initializing&gt;</span></div>
+                    <div>
+                        <div id="prompt">julia&gt;&nbsp;</div>
+                        <textarea id="terminal-input" spellcheck="false" rows="1" cols="20" disabled="disabled" /></textarea>
+                    </div>
+                </form>
+            </div>
+            <div class="float-clear"> </div>
+        </div>
+        <div id="footer-bar">
+            <footer>
+                <a href="http://web.mit.edu/"><img id="mit-logo" src="images/mit_logo.png" alt="MIT Logo" /></a>
+                <div style="text-align: center">
+                    <p style="margin-top: 15px;">A <span class="strong">fresh</span> approach to <span class="strong">technical computing.</span></p>
+                    <p>Copyright &copy; 2011 Alan Edelman, Jeff Bezanson, et al.</p>
+                </div>
+                <div class="float-clear"> </div>
+            </footer>
+        </div>
+    </body>
 </html>

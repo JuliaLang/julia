@@ -17,7 +17,7 @@
 #include <math.h>
 #include "julia.h"
 
-static jl_methtable_t *new_method_table()
+static jl_methtable_t *new_method_table(void)
 {
     jl_methtable_t *mt = (jl_methtable_t*)allocobj(sizeof(jl_methtable_t));
     mt->type = (jl_type_t*)jl_methtable_type;

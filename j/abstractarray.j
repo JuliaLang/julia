@@ -562,6 +562,7 @@ end
 
 ## Concatenation ##
 
+#TODO: ERROR CHECK
 cat(catdim::Int) = Array(None, 0)
 
 vcat() = Array(None, 0)
@@ -571,7 +572,13 @@ hcat() = Array(None, 0)
 hcat{T}(X::T...) = [ X[j] | i=1, j=1:length(X) ]
 vcat{T}(X::T...) = [ X[i] | i=1:length(X) ]
 
-hcat{T}(V::AbstractVector{T}...) = [ V[j][i] | i=1:length(V[1]), j=1:length(V) ]
+function hcat{T}(V::AbstractVector{T}...)
+    height = length(V[1])
+    for j = 2:length(V)
+        if length(V[j]) != height; error("hcat: mismatched dimensions"); end
+    end
+    [ V[j][i] | i=1:length(V[1]), j=1:length(V) ]
+end
 
 function vcat{T}(V::AbstractVector{T}...)
     n = 0
@@ -594,6 +601,10 @@ function hcat{T}(A::AbstractMatrix{T}...)
     nargs = length(A)
     ncols = sum(a->size(a, 2), A)::Size
     nrows = size(A[1], 1)
+    for j = 2:nargs
+        if size(A[j], 1) != nrows; error("hcat: mismatched dimensions"); end
+    end
+
     B = similar(A[1], nrows, ncols)
     pos = 1
     for k=1:nargs
@@ -610,6 +621,10 @@ function vcat{T}(A::AbstractMatrix{T}...)
     nargs = length(A)
     nrows = sum(a->size(a, 1), A)::Size
     ncols = size(A[1], 2)
+    for j = 2:nargs
+        if size(A[j], 2) != ncols; error("vcat: mismatched dimensions"); end
+    end
+
     B = similar(A[1], nrows, ncols)
     pos = 1
     for k=1:nargs
@@ -633,7 +648,18 @@ function cat(catdim::Int, X...)
     if catdim > d_max + 1
         for i=1:nargs
             if dimsX[1] != dimsX[i]
-                error("all inputs must have same dimensions when concatenating along a higher dimension");
+                error("cat: all inputs must have same dimensions when concatenating along a higher dimension");
+            end
+        end
+    elseif nargs >= 2
+        for d=1:d_max
+            if d == catdim; continue; end
+            len = d <= ndimsX[1] ? dimsX[1][d] : 1
+            for i = 2:nargs
+                if len != (d <= ndimsX[i] ? dimsX[i][d] : 1)
+                    error("cat: dimension mismatch on dimension", d)
+                    #error("lala $d")
+                end
             end
         end
     end
@@ -682,6 +708,24 @@ function cat(catdim::Int, A::AbstractArray...)
     ndimsA = map(ndims, A)
     d_max = max(ndimsA)
 
+    if catdim > d_max + 1
+        for i=1:nargs
+            if dimsA[1] != dimsA[i]
+                error("cat: all inputs must have same dimensions when concatenating along a higher dimension");
+            end
+        end
+    elseif nargs >= 2
+        for d=1:d_max
+            if d == catdim; continue; end
+            len = d <= ndimsA[1] ? dimsA[1][d] : 1
+            for i = 2:nargs
+                if len != (d <= ndimsA[i] ? dimsA[i][d] : 1)
+                    error("cat: dimension mismatch on dimension ", d)
+                end
+            end
+        end
+    end
+
     cat_ranges = ntuple(nargs, i->(catdim <= ndimsA[i] ? dimsA[i][catdim] : 1))
 
     function compute_dims(d)
@@ -723,9 +767,12 @@ hcat(A::AbstractArray...) = cat(2, A...)
 function hvcat{T}(rows::(Size...), as::AbstractMatrix{T}...)
     nbr = length(rows)  # number of block rows
 
-    nc = mapreduce(+, a->size(a,2), as[1:rows[1]])::Size
-    nr = 0
+    nc = 0
+    for i=1:rows[1]
+        nc += size(as[i],2)
+    end
 
+    nr = 0
     a = 1
     for i = 1:nbr
         nr += size(as[a],1)
@@ -740,9 +787,19 @@ function hvcat{T}(rows::(Size...), as::AbstractMatrix{T}...)
         c = 1
         szi = size(as[a],1)
         for j = 1:rows[i]
-            szj = size(as[a+j-1],2)
-            out[r:r-1+szi, c:c-1+szj] = as[a+j-1]
+            Aj = as[a+j-1]
+            szj = size(Aj,2)
+            if size(Aj,1) != szi
+                error("hvcat: mismatched height in block row ", i)
+            end
+            if c-1+szj > nc
+                error("hvcat: block row ", i, " has mismatched number of columns")
+            end
+            out[r:r-1+szi, c:c-1+szj] = Aj
             c += szj
+        end
+        if c != nc+1
+            error("hvcat: block row ", i, " has mismatched number of columns")
         end
         r += szi
         a += rows[i]
@@ -755,6 +812,13 @@ hvcat(rows::(Size...)) = []
 function hvcat{T<:Number}(rows::(Size...), xs::T...)
     nr = length(rows)
     nc = rows[1]
+    #error check
+    for i = 2:nr
+        if nc != rows[i]
+            error("hvcat: row ", i, " has mismatched number of columns")
+        end
+    end
+
     a = Array(T, nr, nc)
     k = 1
     for i=1:nr
@@ -781,6 +845,12 @@ end
 function hvcat(rows::(Size...), xs::Number...)
     nr = length(rows)
     nc = rows[1]
+    #error check
+    for i = 2:nr
+        if nc != rows[i]
+            error("hvcat: row ", i, " has mismatched number of columns")
+        end
+    end
     T = typeof(xs[1])
     for i=2:length(xs)
         T = promote_type(T,typeof(xs[i]))

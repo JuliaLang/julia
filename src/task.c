@@ -117,7 +117,7 @@ static void _infer_direction_from(int *first_addr)
     _stack_grows_up = (first_addr < &second);
 }
 
-static void _infer_stack_direction()
+static void _infer_stack_direction(void)
 {
     int first;
     _infer_direction_from(&first);
@@ -127,7 +127,7 @@ static int mangle_pointers;
 extern char *jl_stack_lo;
 extern char *jl_stack_hi;
 
-static void _probe_arch()
+static void _probe_arch(void)
 {
     struct _probe_data p;
     memset(p.probe_env, 0, sizeof(jmp_buf));
@@ -445,7 +445,7 @@ static void init_task(jl_task_t *t)
 void getFunctionInfo(char **name, int *line, const char **filename, size_t pointer);
 
 // stacktrace using libunwind
-static jl_value_t *build_backtrace()
+static jl_value_t *build_backtrace(void)
 {
     unw_cursor_t cursor; unw_context_t uc;
     unw_word_t ip;
@@ -494,7 +494,7 @@ static _Unwind_Reason_Code tracer(void *ctx, void *arg)
     return _URC_NO_REASON;
 }
 
-static jl_value_t *build_backtrace2()
+static jl_value_t *build_backtrace2(void)
 {
     jl_array_t *a;
     a = jl_alloc_cell_1d(0);
@@ -540,7 +540,7 @@ static jl_value_t *build_backtrace2()
 
 #if 0
 // Stacktrace manually
-void my_backtrace()
+void my_backtrace(void)
 {
     const int max_i = 100;
     int i = 0;
@@ -585,7 +585,7 @@ void my_backtrace()
 #endif
 
 static jmp_buf *toplevel_eh_ctx = NULL;
-DLLEXPORT void jl_register_toplevel_eh()
+DLLEXPORT void jl_register_toplevel_eh(void)
 {
     toplevel_eh_ctx = jl_current_task->state.eh_task->state.eh_ctx;
 }

@@ -1356,10 +1356,10 @@ static jl_type_t *lookup_type(typekey_stack_t *table,
 
 static int t_uid_ctr = 1;  // TODO: lock
 
-int  jl_get_t_uid_ctr() { return t_uid_ctr; }
+int  jl_get_t_uid_ctr(void) { return t_uid_ctr; }
 void jl_set_t_uid_ctr(int i) { t_uid_ctr=i; }
 
-int jl_assign_type_uid()
+int jl_assign_type_uid(void)
 {
     return t_uid_ctr++;
 }
@@ -2236,7 +2236,7 @@ JL_CALLABLE(jl_f_new_box);
 
 extern void jl_init_int32_int64_cache();
 
-void jl_init_types()
+void jl_init_types(void)
 {
     // create base objects
     jl_struct_kind = (jl_struct_type_t*)newobj(NULL, STRUCT_TYPE_NW);

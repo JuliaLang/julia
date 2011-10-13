@@ -5,7 +5,7 @@ include ./Make.inc
 default: release
 
 debug release: %: julia-% sys.ji
-	make -C test quicktests
+	$(MAKE) -C test quicktests
 
 julia-debug julia-release:
 	$(MAKE) -C external
@@ -38,7 +38,7 @@ distclean: cleanall
 	test testall test-* sloccount clean cleanall
 
 test test-utf8 test-perf testall: default
-	make -C test $@
+	$(MAKE) -C test $@
 
 ## SLOCCOUNT ##
 

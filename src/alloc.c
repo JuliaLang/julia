@@ -332,7 +332,7 @@ static void unmark_symbols_(jl_sym_t *root)
     }
 }
 
-void jl_unmark_symbols() { unmark_symbols_(symtab); }
+void jl_unmark_symbols(void) { unmark_symbols_(symtab); }
 
 static jl_sym_t **symtab_lookup(jl_sym_t **ptree, const char *str)
 {
@@ -369,10 +369,10 @@ DLLEXPORT jl_sym_t *jl_symbol_n(const char *str, int32_t len)
 }
 
 static uint32_t gs_ctr = 0;  // TODO: per-thread
-uint32_t jl_get_gs_ctr() { return gs_ctr; }
+uint32_t jl_get_gs_ctr(void) { return gs_ctr; }
 void jl_set_gs_ctr(uint32_t ctr) { gs_ctr = ctr; }
 
-DLLEXPORT jl_sym_t *jl_gensym()
+DLLEXPORT jl_sym_t *jl_gensym(void)
 {
     char name[32];
     char *n;
@@ -744,7 +744,7 @@ jl_value_t *jl_box_uint8(uint8_t x)
     return boxed_uint8_cache[x];
 }
 
-void jl_init_int32_int64_cache()
+void jl_init_int32_int64_cache(void)
 {
     int64_t i;
     for(i=0; i < NBOX_C; i++) {
@@ -753,7 +753,7 @@ void jl_init_int32_int64_cache()
     }
 }
 
-void jl_init_box_caches()
+void jl_init_box_caches(void)
 {
     int64_t i;
     for(i=0; i < 256; i++) {
@@ -769,7 +769,7 @@ void jl_init_box_caches()
 }
 
 #ifdef JL_GC_MARKSWEEP
-void jl_mark_box_caches()
+void jl_mark_box_caches(void)
 {
     int64_t i;
     for(i=0; i < 256; i++) {

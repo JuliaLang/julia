@@ -27,7 +27,7 @@ extern fltype_t *iostreamtype;
 static jl_value_t *scm_to_julia(value_t e);
 static value_t julia_to_scm(jl_value_t *v);
 
-DLLEXPORT void jl_lisp_prompt()
+DLLEXPORT void jl_lisp_prompt(void)
 {
     fl_applyn(1, symbol_value(symbol("__start")), fl_cons(FL_NIL,FL_NIL));
 }
@@ -90,7 +90,7 @@ static builtinspec_t julia_flisp_ast_ext[] = {
 
 static fltype_t *jvtype;
 
-void jl_init_frontend()
+void jl_init_frontend(void)
 {
     fl_init(2*512*1024);
     value_t img = cvalue(iostreamtype, sizeof(ios_t));
@@ -112,7 +112,7 @@ void jl_init_frontend()
     assign_global_builtins(julia_flisp_ast_ext);
 }
 
-DLLEXPORT void jl_shutdown_frontend()
+DLLEXPORT void jl_shutdown_frontend(void)
 {
     //fl_applyn(0, symbol_value(symbol("show-profiles")));
 }
@@ -121,7 +121,7 @@ static char boot_j[] = {
 #include "boot.j.inc"
 };
 
-void jl_load_boot_j()
+void jl_load_boot_j(void)
 {
     value_t bootc = cvalue(iostreamtype, sizeof(ios_t));
     ios_t *pi = value2c(ios_t*, bootc);

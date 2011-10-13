@@ -296,7 +296,7 @@ int cmp_eq(void *a, numerictype_t atag, void *b, numerictype_t btag,
 }
 
 #ifdef ENABLE_LLT_TEST
-void test_operators()
+void test_operators(void)
 {
     int8_t i8, i8b;
     uint8_t ui8, ui8b;

@@ -79,7 +79,7 @@ fltype_t *define_opaque_type(value_t sym, size_t sz, cvtable_t *vtab,
     return ft;
 }
 
-void relocate_typetable()
+void relocate_typetable(void)
 {
     htable_t *h = &TypeTable;
     size_t i;

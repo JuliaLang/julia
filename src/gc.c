@@ -99,7 +99,7 @@ static arraylist_t preserved_values;
 
 static arraylist_t weak_refs;
 
-int jl_gc_n_preserved_values()
+int jl_gc_n_preserved_values(void)
 {
     return preserved_values.len;
 }
@@ -109,7 +109,7 @@ void jl_gc_preserve(jl_value_t *v)
     arraylist_push(&preserved_values, (void*)v);
 }
 
-void jl_gc_unpreserve()
+void jl_gc_unpreserve(void)
 {
     (void)arraylist_pop(&preserved_values);
 }
@@ -123,7 +123,7 @@ jl_weakref_t *jl_gc_new_weakref(jl_value_t *value)
     return wr;
 }
 
-static void sweep_weak_refs()
+static void sweep_weak_refs(void)
 {
     size_t n=0, ndel=0, l=weak_refs.len;
     jl_weakref_t *wr;
@@ -153,7 +153,7 @@ static void schedule_finalization(void *o)
     arraylist_push(&to_finalize, o);
 }
 
-static void run_finalizers()
+static void run_finalizers(void)
 {
     void *o = NULL;
     jl_function_t *f=NULL;
@@ -192,7 +192,7 @@ void jl_gc_add_finalizer(jl_value_t *v, jl_function_t *f)
     }
 }
 
-htable_t *jl_gc_get_finalizer_table()
+htable_t *jl_gc_get_finalizer_table(void)
 {
     return &finalizer_table;
 }
@@ -241,7 +241,7 @@ void jl_gc_acquire_buffer(void *b)
 
 #define bigval_word0(v) (((uptrint_t*)(&((bigval_t*)(v))->_data[0]))[0])
 
-static void sweep_big()
+static void sweep_big(void)
 {
     bigval_t *v = big_objects;
     bigval_t **pv = &big_objects;
@@ -349,7 +349,7 @@ static void sweep_pool(pool_t *p)
 
 extern void jl_unmark_symbols();
 
-static void gc_sweep()
+static void gc_sweep(void)
 {
     sweep_big();
     int i;
@@ -592,7 +592,7 @@ void jl_mark_box_caches();
 
 extern jl_value_t * volatile jl_task_arg_in_transit;
 
-static void gc_mark()
+static void gc_mark(void)
 {
     // mark all roots
 
@@ -648,24 +648,24 @@ static void gc_mark()
 
 static int is_gc_enabled = 0;
 
-void jl_gc_enable()
+void jl_gc_enable(void)
 {
     is_gc_enabled = 1;
 }
 
-void jl_gc_disable()
+void jl_gc_disable(void)
 {
     is_gc_enabled = 0;
 }
 
-int jl_gc_is_enabled() { return is_gc_enabled; }
+int jl_gc_is_enabled(void) { return is_gc_enabled; }
 
 #if defined(MEMPROFILE)
 static void all_pool_stats();
 static void big_obj_stats();
 #endif
 
-void jl_gc_collect()
+void jl_gc_collect(void)
 {
     allocd_bytes = 0;
     if (is_gc_enabled) {
@@ -718,7 +718,7 @@ void *allocb_permanent(size_t sz)
     return ptr+sizeof(void*);
 }
 
-void *alloc_2w()
+void *alloc_2w(void)
 {
     if (allocd_bytes > collect_interval)
         jl_gc_collect();
@@ -733,7 +733,7 @@ void *alloc_2w()
 #endif
 }
 
-void *alloc_3w()
+void *alloc_3w(void)
 {
     if (allocd_bytes > collect_interval)
         jl_gc_collect();
@@ -748,7 +748,7 @@ void *alloc_3w()
 #endif
 }
 
-void *alloc_4w()
+void *alloc_4w(void)
 {
     if (allocd_bytes > collect_interval)
         jl_gc_collect();
@@ -763,7 +763,7 @@ void *alloc_4w()
 #endif
 }
 
-void jl_gc_init()
+void jl_gc_init(void)
 {
     int szc[N_POOLS] = { 8, 12, 16, 20, 24, 28, 32, 36, 40, 44, 48, 52, 56,
                          64, 72, 80, 88, 96, //#=18
@@ -824,7 +824,7 @@ static size_t pool_stats(pool_t *p, size_t *pwaste)
     return nused*p->osize;
 }
 
-static void all_pool_stats()
+static void all_pool_stats(void)
 {
     int i;
     size_t nb=0, w, tw=0;
@@ -836,7 +836,7 @@ static void all_pool_stats()
                nb, tw);
 }
 
-static void big_obj_stats()
+static void big_obj_stats(void)
 {
     bigval_t *v = big_objects;
     size_t nused=0, nbytes=0;

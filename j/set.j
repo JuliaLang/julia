@@ -16,11 +16,9 @@ has(s::Set, x) = has(s.hash, x)
 
 add(s::Set, x)	     = (s.hash[x] = true; s)
 add(s::Set, xs...)   = (for x=xs; add(s, x); end; s)
-add(s::Set, s2::Set) = (for x=s2; add(s, x); end; s) # TODO: set API is broken
 
 del(s::Set, x)	     = (del(s.hash, x); s)
 del(s::Set, xs...)   = (for x=xs; del(s, x); end; s)
-del(s::Set, s2::Set) = (for x=s2; del(s, x); end; s) # TODO: set API is broken
 
 del_all{T}(s::Set{T}) = (s.hash = HashTable{T,Bool}(); s)
 

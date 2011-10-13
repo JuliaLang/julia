@@ -446,7 +446,7 @@ static builtinspec_t iostreamfunc_info[] = {
     { NULL, NULL }
 };
 
-void iostream_init()
+void iostream_init(void)
 {
     iostreamsym = symbol("iostream");
     rdsym = symbol(":read");

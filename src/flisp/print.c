@@ -732,7 +732,7 @@ static void cvalue_print(ios_t *f, value_t v)
     }
 }
 
-static void set_print_width()
+static void set_print_width(void)
 {
     value_t pw = symbol_value(printwidthsym);
     if (!isfixnum(pw)) return;
