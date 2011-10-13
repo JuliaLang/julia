@@ -253,15 +253,16 @@
                 // MSG_OUTPUT_EVAL_RESULT
                 if (data.message_type == MSG_OUTPUT_EVAL_RESULT)
                 {
-                    if (data.arg0 != "")
+                    if ($.trim(data.arg0) == "")
+                        add_to_terminal("<br />");
+                    else
                         add_to_terminal(escape_html(data.arg0)+"<br /><br />");
                 }
 
                 // MSG_OUTPUT_OTHER
                 if (data.message_type == MSG_OUTPUT_OTHER)
                 {
-                    if (data.arg0 != "")
-                        add_to_terminal(escape_html(data.arg0));
+                    add_to_terminal(escape_html(data.arg0));
                 }
 
                 // MSG_OUTPUT_READY
@@ -360,20 +361,18 @@
                         case 13:
                             // user pressed the enter key
                             var input = $("#terminal-input").val();
-                            if (input != "")
-                            {
-                                // send the input to the server via AJAX
-                                outbox_queue.push({"message_type": MSG_INPUT_EVAL, "arg0": incomplete_expr+input});
-                                process_outbox();
+                            
+                            // send the input to the server via AJAX
+                            outbox_queue.push({"message_type": MSG_INPUT_EVAL, "arg0": incomplete_expr+input});
+                            process_outbox();
 
-                                // input history
-                                input_history.push(input);
-                                if (input_history.length > input_history_size)
-                                    input_history = input_history.slice(input_history.length-input_history_size);
-                                input_history_current = input_history.slice(0);
-                                input_history_current.push("");
-                                input_history_id = input_history_current.length-1;
-                            }
+                            // input history
+                            input_history.push(input);
+                            if (input_history.length > input_history_size)
+                                input_history = input_history.slice(input_history.length-input_history_size);
+                            input_history_current = input_history.slice(0);
+                            input_history_current.push("");
+                            input_history_id = input_history_current.length-1;
 
                             // disable the terminal input and clear the input field later
                             $("#terminal-input").attr("disabled", "disabled");

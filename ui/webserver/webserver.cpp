@@ -14,14 +14,6 @@
 using namespace std;
 using namespace scgi;
 
-/*
-
-    TODO:
-        - Make "incomplete expressions" work
-        - Graphs!
-
-*/
-
 /////////////////////////////////////////////////////////////////////////////
 // helpers that should really be part of the C++ standard library
 /////////////////////////////////////////////////////////////////////////////
@@ -537,13 +529,13 @@ void* outbox_thread(void* arg)
 
         // try to convert the raw outbox data into messages
         string outbox_raw = session_map[session_token].outbox_raw;
-        if (outbox_raw.size() >= 5)
+        if (outbox_raw.size() >= 2)
         {
             // construct the message
             message msg;
 
             // get the message type
-            msg.type = (*((uint8_t*)(&outbox_raw[0])))-1;
+            msg.type = (*((uint8_t*)(&outbox_raw[0])));
 
             // get the number of arguments
             uint8_t arg_num = *((uint8_t*)(&outbox_raw[1]));
@@ -929,7 +921,6 @@ string get_response(request* req)
                     {
                         response_message = session_map[session_token].outbox[0];
                         session_map[session_token].outbox.erase(session_map[session_token].outbox.begin());
-                        cout<<"message to browser: "<<int(response_message.type)<<"\n";
                     }
                 }
             }
