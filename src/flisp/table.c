@@ -201,7 +201,7 @@ static builtinspec_t tablefunc_info[] = {
     { NULL, NULL }
 };
 
-void table_init()
+void table_init(void)
 {
     tablesym = symbol("table");
     tabletype = define_opaque_type(tablesym, sizeof(htable_t),

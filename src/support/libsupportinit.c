@@ -16,7 +16,7 @@ float  F_NINF;
 
 int locale_is_utf8;
 
-void libsupport_init()
+void libsupport_init(void)
 {
     locale_is_utf8 = u8_is_locale_utf8(setlocale(LC_ALL, ""));
 

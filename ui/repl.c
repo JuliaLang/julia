@@ -101,7 +101,7 @@ void parse_opts(int *argcp, char ***argvp) {
     }
 }
 
-char *jl_answer_color() {
+char *jl_answer_color(void) {
     char *answer_color = getenv("JL_ANSWER_COLOR");
     if (answer_color) {
         switch (answer_color[0]) {
@@ -128,7 +128,7 @@ int ends_with_semicolon(const char *input)
     return 0;
 }
 
-static int detect_color()
+static int detect_color(void)
 {
 #ifdef WIN32
     return 0;
@@ -143,12 +143,12 @@ static int detect_color()
 }
 
 // called when we detect an event on stdin
-DLLEXPORT void jl_stdin_callback()
+DLLEXPORT void jl_stdin_callback(void)
 {
     repl_stdin_callback();
 }
 
-static int exec_program()
+static int exec_program(void)
 {
     int err = 0;
  again: ;
@@ -279,7 +279,7 @@ void handle_input(jl_value_t *ast, int end, int show_value)
 void jl_lisp_prompt();
 
 #ifdef JL_GF_PROFILE
-static void print_profile()
+static void print_profile(void)
 {
     size_t i;
     void **table = jl_system_module->bindings.table;

@@ -935,7 +935,7 @@ void jl_restore_system_image(char *fname)
 
 // --- init ---
 
-void jl_init_serializer()
+void jl_init_serializer(void)
 {
     htable_new(&ser_tag, 0);
     htable_new(&deser_tag, 0);

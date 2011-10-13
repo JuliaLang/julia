@@ -10,13 +10,13 @@
 
 static double randn_bm_next = RANDN_RESET;
 
-void dsfmt_randn_bm_reset()
+void dsfmt_randn_bm_reset(void)
 {
     randn_bm_next = RANDN_RESET;
 }
 
 // Box Muller
-double dsfmt_randn_bm()
+double dsfmt_randn_bm(void)
 {
     double s, vre, vim, ure, uim;
 
@@ -61,7 +61,7 @@ void randn_zig_init(uint32_t seed) {
     return;
 }
 
-double randn_zig() {
+double randn_zig(void) {
     return randmtzig_randn(ZT_STATE, KI, KE, WI, FI, WE, FE);
 }
 

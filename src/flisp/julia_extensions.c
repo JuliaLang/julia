@@ -83,7 +83,7 @@ static builtinspec_t julia_flisp_func_info[] = {
     { NULL, NULL }
 };
 
-void fl_init_julia_extensions()
+void fl_init_julia_extensions(void)
 {
     assign_global_builtins(julia_flisp_func_info);
 }

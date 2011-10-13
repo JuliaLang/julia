@@ -57,7 +57,7 @@ void add_finalizer(cvalue_t *cv)
 }
 
 // remove dead objects from finalization list in-place
-static void sweep_finalizers()
+static void sweep_finalizers(void)
 {
     cvalue_t **lst = Finalizers;
     size_t n=0, ndel=0, l=nfinalizers;
@@ -838,7 +838,7 @@ static builtinspec_t cvalues_builtin_info[] = {
 #define mk_primtype_(name,ctype) \
   name##type=get_type(name##sym);name##type->init = &cvalue_##ctype##_init
 
-static void cvalues_init()
+static void cvalues_init(void)
 {
     htable_new(&TypeTable, 256);
     htable_new(&reverse_dlsym_lookup_table, 256);
@@ -1164,7 +1164,7 @@ int numeric_compare(value_t a, value_t b, int eq, int eqnans, char *fname)
 }
 
 static void DivideByZeroError() __attribute__ ((__noreturn__));
-static void DivideByZeroError()
+static void DivideByZeroError(void)
 {
     lerror(DivideError, "/: division by zero");
 }

@@ -2,11 +2,11 @@
 
 char jl_prompt_color[] = "\033[1m\033[32mjulia> \033[0m\033[1m";
 
-void init_repl_environment()
+void init_repl_environment(void)
 {
 }
 
-void exit_repl_environment()
+void exit_repl_environment(void)
 {
 }
 
@@ -40,24 +40,24 @@ void read_expr(char *prompt)
     jl_input_line_callback(input);
 }
 
-DLLEXPORT void repl_callback_enable()
+DLLEXPORT void repl_callback_enable(void)
 {
     ios_printf(ios_stdout, prompt_string);
     ios_flush(ios_stdout);
 }
 
-void repl_callback_disable()
+void repl_callback_disable(void)
 {
 }
 
-void repl_stdin_callback()
+void repl_stdin_callback(void)
 {
     char *input = ios_readline(ios_stdin);
     ios_purge(ios_stdin);
     jl_input_line_callback(input);
 }
 
-void repl_print_prompt()
+void repl_print_prompt(void)
 {
     ios_printf(ios_stdout, prompt_string);
 }
