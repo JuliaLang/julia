@@ -1,7 +1,18 @@
+import sys
+import time
+import random
+
 def fib(n):
     if n<2:
         return n
     return fib(n-1)+fib(n-2)
+
+def timeparseint():
+    t1=time.time()
+    for i in xrange(1,1000):
+        int('1111000011110000111100001111',2)
+    print "parse_int: ", time.time()-t1
+
 
 def partition(list, start, end):
     pivot = list[end]                          # Partition around the last value
@@ -47,15 +58,13 @@ def quicksort(list, start, end):
 
 
 if __name__=="__main__":                       # If this script is run as a program:
-    import sys
-    import time
-    import random
-    
     t1=time.time()
     f = fib(20)
     print "fib: ", time.time()-t1
     
-    lst = [ random.random() for i in range(1,5000) ]
+    timeparseint()
+    
+    lst = [ random.random() for i in xrange(1,5000) ]
     t1=time.time()
     quicksort(lst, 0, len(lst)-1)
     print "sort: ", time.time()-t1
