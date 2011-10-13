@@ -73,7 +73,8 @@ inline static randmtzig_uint64_t randi54 (void)
 {
   const randmtzig_uint32_t lo = dsfmt_gv_genrand_uint32();
   const randmtzig_uint32_t hi = dsfmt_gv_genrand_uint32()&0x3FFFFF;
-#ifndef __LP64__
+//#ifndef __LP64__
+#if 0
   randmtzig_uint64_t u;
   randmtzig_uint32_t *p = (randmtzig_uint32_t *)&u;
   p[0] = lo;
@@ -87,12 +88,7 @@ inline static randmtzig_uint64_t randi54 (void)
 /* generates a random number on (0,1) with 53-bit resolution */
 inline static double randu53 (void)
 {
-
-    const randmtzig_uint32_t a=dsfmt_gv_genrand_uint32()>>5;
-    const randmtzig_uint32_t b=dsfmt_gv_genrand_uint32()>>6;
-    return(a*67108864.0+b+0.4) * (1.0/9007199254740992.0);
-
-    //return dsfmt_gv_genrand_open_open();
+    return dsfmt_gv_genrand_open_open();
 }
 
 /* ===== Ziggurat normal and exponential generators ===== */
@@ -236,7 +232,8 @@ double randmtzig_randn (void)
 {
   while (1)
     {
-#ifdef __LP64__
+//#ifdef __LP64__
+#if 1
       /* arbitrary mantissa (selected by NRANDI, with 1 bit for sign) */
       const randmtzig_uint64_t r = NRANDI;
       const randmtzig_int64_t rabs=r>>1;
