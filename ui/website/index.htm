@@ -301,7 +301,7 @@
                 $("#terminal-input").width($("#terminal").width()-$("#prompt").width()-1);
 
                 // apply the autoresize plugin to the textarea
-                $("#terminal-input").autoResize({ animate: false, maxHeight: 1000 });
+                $("#terminal-input").autoResize({ animate: false, maxHeight: 1000, onResize: function() { setTimeout(function() { $("#terminal-form").prop("scrollTop", $("#terminal-form").prop("scrollHeight")); }, 100); } });
                 
                 // hook mouse click events
                 $("#terminal-form").click(function(evt) { $("#terminal-input").focus(); } );
@@ -309,15 +309,12 @@
                 // hook keyboard events for the input field
                 $("#terminal-input").keydown(function(evt)
                 {
-                    // scroll to the input field
-                    $("#terminal-form").prop("scrollTop", $("#terminal-form").prop("scrollHeight"));
-
                     // determine which key was pressed
                     switch (evt.keyCode)
                     {
                         case 9:
                             // user pressed the tab key
-                            $("#terminal-input").insertAtCaret("\t");
+                            $("#terminal-input").insertAtCaret("    ");
                             $("#terminal-form").prop("scrollTop", $("#terminal-form").prop("scrollHeight"));
                             return false;
 
@@ -358,6 +355,9 @@
                     }
                 });
                 
+                // scroll to the input field
+                $("#terminal-form").prop("scrollTop", $("#terminal-form").prop("scrollHeight"));
+
                 // start polling the server
                 init_session();
             });
