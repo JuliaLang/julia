@@ -289,30 +289,49 @@ macro L_str(s); s; end
 
 method_missing(f, args...) = throw(MethodError(f, args))
 
-Array{T}  (::Type{T}, d::(Size,)) =
+Array{T}  (::Type{T}, d::(Int,)) =
     ccall(:jl_alloc_array_1d, Any, (Any,Size), Array{T,1},
           long(d[1]))::Array{T,1}
-Array{T}  (::Type{T}, d::(Size,Size)) =
+Array{T}  (::Type{T}, d::(Int,Int)) =
     ccall(:jl_alloc_array_2d, Any, (Any,Size,Size), Array{T,2},
           long(d[1]), long(d[2]))::Array{T,2}
+
 Array{T}  (::Type{T}, d::(Size,Size,Size)) =
     ccall(:jl_new_array, Any, (Any,Any), Array{T,3}, d)::Array{T,3}
+Array{T}  (::Type{T}, d::(Int,Int,Int)) =
+    ccall(:jl_new_array, Any, (Any,Any), Array{T,3},
+          (long(d[1]),long(d[2]),long(d[3])))::Array{T,3}
 Array{T}  (::Type{T}, d::(Size,Size,Size,Size)) =
     ccall(:jl_new_array, Any, (Any,Any), Array{T,4}, d)::Array{T,4}
-Array{T,N}(::Type{T}, d::NTuple{N,Size}) =
-    ccall(:jl_new_array, Any, (Any,Any), Array{T,N}, d)::Array{T,N}
+Array{T}  (::Type{T}, d::(Int,Int,Int,Int)) =
+    ccall(:jl_new_array, Any, (Any,Any), Array{T,4},
+          (long(d[1]),long(d[2]),long(d[3]),long(d[4])))::Array{T,4}
+Array{T,N}(::Type{T}, d::NTuple{N,Int}) =
+    ccall(:jl_new_array, Any, (Any,Any), Array{T,N},
+          convert((Size...), d))::Array{T,N}
 
+Array{T}(::Type{T}, m::Int) =
+    ccall(:jl_alloc_array_1d, Any, (Any,Size), Array{T,1},
+          long(m))::Array{T,1}
 Array{T}(::Type{T}, m::Size) =
     ccall(:jl_alloc_array_1d, Any, (Any,Size), Array{T,1},
           long(m))::Array{T,1}
+Array{T}(::Type{T}, m::Int,n::Int) =
+    ccall(:jl_alloc_array_2d, Any, (Any,Size,Size), Array{T,2},
+          long(m), long(n))::Array{T,2}
 Array{T}(::Type{T}, m::Size,n::Size) =
     ccall(:jl_alloc_array_2d, Any, (Any,Size,Size), Array{T,2},
           long(m), long(n))::Array{T,2}
-Array{T}(::Type{T}, m::Size,n::Size,o::Size)         = Array{T,3}(m,n,o)
-Array{T}(::Type{T}, m::Size,n::Size,o::Size,p::Size) = Array{T,4}(m,n,o,p)
 
-Array{N}(T, d::NTuple{N,Size})                       = Array{T,N}(d)
-Array(T, d::Size...)                                 = Array{T,length(d)}(d)
+Array{T}(::Type{T}, m::Size,n::Size,o::Size)         = Array{T,3}(m,n,o)
+Array{T}(::Type{T}, m::Int, n::Int, o::Int) =
+    Array{T,3}(long(m),long(n),long(o))
+Array{T}(::Type{T}, m::Size,n::Size,o::Size,p::Size) = Array{T,4}(m,n,o,p)
+Array{T}(::Type{T}, m::Int, n::Int, o::Int, p::Int) =
+    Array{T,4}(long(m),long(n),long(o),long(p))
+
+Array{N}(T, d::NTuple{N,Int}) = Array{T,N}(convert((Size...),d))
+Array(T, d::Int...) = Array{T,length(d)}(convert((Size...),d))
 
 function compile_hint(f, args::Tuple)
     if !isgeneric(f)

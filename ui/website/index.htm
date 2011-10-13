@@ -8,6 +8,7 @@
         <link href="http://fonts.googleapis.com/css?family=Droid+Sans+Mono&v2" rel="stylesheet" type="text/css">
         <script type="text/javascript" src="jquery.js"></script>
         <script type="text/javascript" src="jquery.json.js"></script>
+        <script type="text/javascript" src="jquery.autoresize.js"></script>
         <script>
             /*
                 Some stuff to make the two columns extend to the footer.
@@ -93,9 +94,6 @@
             var input_history_id = 0;
             var input_history_size = 100;
 
-            // keep track of incomplete expressions
-            var incomplete_expr = "";
-
             // whether the terminal should clear the input on the next non-null response
             var clear_input_on_response = false;
 
@@ -139,8 +137,8 @@
             // escape html
             function escape_html(str)
             {
-                // escape ampersands, angle brackets, spaces, and newlines
-                return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/ /g, "&nbsp;").replace(/\n/g, "<br />");
+                // escape ampersands, angle brackets, spaces, tabs, and newlines
+                return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/ /g, "&nbsp;").replace(/\t/g, "&nbsp;&nbsp;&nbsp;&nbsp;").replace(/\n/g, "<br />");
             }
 
             // add to the terminal
@@ -193,10 +191,31 @@
                     data.message_type == MSG_OUTPUT_FATAL_ERROR || 
                     data.message_type == MSG_OUTPUT_EVAL_RESULT))
                 {
-                    add_to_terminal("<span class=\"prompt\">julia&gt;&nbsp;</span>"+escape_html($("#terminal-input").val())+"<br />");
+                    // get the input from form
+                    var input = $("#terminal-input").val();
+
+                    // input history
+                    input_history.push(input);
+                    if (input_history.length > input_history_size)
+                        input_history = input_history.slice(input_history.length-input_history_size);
+                    input_history_current = input_history.slice(0);
+                    input_history_current.push("");
+                    input_history_id = input_history_current.length-1;
+
+                    // add the julia prompt and the input to the log
+                    add_to_terminal("<span class=\"prompt\">julia&gt;&nbsp;</span>"+escape_html(input)+"<br />");
+                    
+                    // clear the input field
                     $("#terminal-input").val("");
+
+                    // re-enable the input field
                     $("#terminal-input").removeAttr("disabled");
+
+                    // focus the input field
                     $("#terminal-input").focus();
+
+                    // clear the flag
+                    clear_input_on_response = false;
                 }
 
                 // MSG_OUTPUT_NULL
@@ -227,41 +246,32 @@
                 // MSG_OUTPUT_EVAL_INCOMPLETE
                 if (data.message_type == MSG_OUTPUT_EVAL_INCOMPLETE)
                 {
-                    // change this stuff
-                    /*
-                    if (incomplete_expr == "")
-                        add_to_terminal("<span class=\"prompt\">julia&gt;&nbsp;</span>");
-                    add_to_terminal(escape_html($("#terminal-input").val())+"<br />");
-                    incomplete_expr += $("#terminal-input").val()+"\n";
-                    $("#terminal-input").val("");
+                    // re-enable the input field
                     $("#terminal-input").removeAttr("disabled");
+
+                    // focus the input field
                     $("#terminal-input").focus();
-                    */
 
-                    console.log("No good, Captain.");
+                    // add a newline for the user
+                    $("#terminal-input").insertAtCaret("\n");
 
-
-
-                    add_to_terminal("<span class=\"prompt\">julia&gt;&nbsp;</span>"+escape_html($("#terminal-input").val())+"<br />");
-                    $("#terminal-input").val("");
-                    $("#terminal-input").removeAttr("disabled");
-                    $("#terminal-input").focus();
+                    // clear the flag
+                    clear_input_on_response = false;
                 }
-                else
-                    incomplete_expr = "";
 
                 // MSG_OUTPUT_EVAL_RESULT
                 if (data.message_type == MSG_OUTPUT_EVAL_RESULT)
                 {
-                    if (data.arg0 != "")
+                    if ($.trim(data.arg0) == "")
+                        add_to_terminal("<br />");
+                    else
                         add_to_terminal(escape_html(data.arg0)+"<br /><br />");
                 }
 
                 // MSG_OUTPUT_OTHER
                 if (data.message_type == MSG_OUTPUT_OTHER)
                 {
-                    if (data.arg0 != "")
-                        add_to_terminal(escape_html(data.arg0));
+                    add_to_terminal(escape_html(data.arg0));
                 }
 
                 // MSG_OUTPUT_READY
@@ -289,38 +299,12 @@
             {
                 // resize the input box (the -1 is for Internet Explorer)
                 $("#terminal-input").width($("#terminal").width()-$("#prompt").width()-1);
+
+                // apply the autoresize plugin to the textarea
+                $("#terminal-input").autoResize({ animate: false, maxHeight: 1000 });
                 
                 // hook mouse click events
                 $("#terminal-form").click(function(evt) { $("#terminal-input").focus(); } );
-
-                // when the user pastes multi-line strings, submit all but the last line
-                $("#terminal-input").keyup(function(evt)
-                {
-                    // get the input
-                    var input = $("#terminal-input").val();
-
-                    // split the input into lines
-                    var lines = input.split("\n");
-
-                    // submit all but the last line
-                    for (var i = 0; i < lines.length-1; i += 1)
-                    {
-                        // send the input to the server via AJAX
-                        outbox_queue.push({"message_type": MSG_INPUT_EVAL, "arg0": lines[i]+"\n"});
-
-                        // input history
-                        input_history.push(lines[i]);
-                        if (input_history.length > input_history_size)
-                            input_history = input_history.slice(input_history.length-input_history_size);
-                        input_history_current = input_history.slice(0);
-                        input_history_current.push("");
-                        input_history_id = input_history_current.length-1;
-                    }
-                    process_outbox();
-
-                    // set the input to the last line
-                    $("#terminal-input").val(lines[lines.length-1]);
-                });
 
                 // hook keyboard events for the input field
                 $("#terminal-input").keydown(function(evt)
@@ -360,20 +344,10 @@
                         case 13:
                             // user pressed the enter key
                             var input = $("#terminal-input").val();
-                            if (input != "")
-                            {
-                                // send the input to the server via AJAX
-                                outbox_queue.push({"message_type": MSG_INPUT_EVAL, "arg0": incomplete_expr+input});
-                                process_outbox();
-
-                                // input history
-                                input_history.push(input);
-                                if (input_history.length > input_history_size)
-                                    input_history = input_history.slice(input_history.length-input_history_size);
-                                input_history_current = input_history.slice(0);
-                                input_history_current.push("");
-                                input_history_id = input_history_current.length-1;
-                            }
+                            
+                            // send the input to the server via AJAX
+                            outbox_queue.push({"message_type": MSG_INPUT_EVAL, "arg0": input});
+                            process_outbox();
 
                             // disable the terminal input and clear the input field later
                             $("#terminal-input").attr("disabled", "disabled");

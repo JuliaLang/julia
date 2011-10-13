@@ -24,11 +24,6 @@ MSG_INPUT_EVAL = 3 # {}, evaluate an expression
 
 
 
-
-
-
-
-
 #ifndef notdefined
 #define MSG_OUTPUT_NULL 0
 #else

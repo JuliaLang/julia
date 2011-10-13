@@ -63,8 +63,8 @@ end
 
 # send a message
 function write_message(msg)
-    write(io, uint8(msg.msg_type+1))
-    write(io, uint8(length(msg.args)+1))
+    write(io, uint8(msg.msg_type))
+    write(io, uint8(length(msg.args)))
     for arg=msg.args
         write(io, uint32(length(arg)))
         write(io, arg)
@@ -75,13 +75,13 @@ end
 # print a message (useful for debugging)
 function print_message(msg)
     print(msg.msg_type)
-    print(":  ")
+    print(": [ ")
     for arg=msg.args
         print("\"")
         print(arg)
         print("\" ")
     end
-    println("")
+    println("]")
 end
 
 ###########################################
@@ -127,6 +127,10 @@ function socket_callback(fd)
         # try to evaluate it
         expr_c_str = cstring(msg.args[1])
         expr = ccall(:jl_parse_input_line, Any, (Ptr{Uint8},), expr_c_str)
+
+        if expr == nothing
+            return send_eval_result("")
+        end
 
         # check if there was an error
         if expr.head == :error
