@@ -77,3 +77,30 @@ macro benchmark(n,ex,T)
         $s
     end
 end
+
+# source files, editing
+
+edit(fl::String) = edit(fl, 1)
+function edit(fl::String, line::Int)
+    run(`emacs $fl --eval "(goto-line $line)"`)
+    load(fl)
+end
+
+function_loc(f::Function) = function_loc(f, (Any...))
+
+function function_loc(f::Function, types)
+    m = getmethods(f, types)
+    while !is(m,())
+        if isa(m[3],LambdaStaticData)
+            ast = m[3].ast
+            ln = ast.args[3].args[1]
+            if isa(ln,Expr) && is(ln.head,:line)
+                return (string(ln.args[2]), ln.args[1])
+            end
+        end
+    end
+    error("could not find function definition")
+end
+
+edit(f::Function) = edit(function_loc(f)...)
+edit(f::Function, t) = edit(function_loc(f,t)...)
