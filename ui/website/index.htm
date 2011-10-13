@@ -203,7 +203,7 @@
                     input_history_id = input_history_current.length-1;
 
                     // add the julia prompt and the input to the log
-                    add_to_terminal("<span class=\"prompt\">julia&gt;&nbsp;</span>"+escape_html(input)+"<br />");
+                    add_to_terminal("<span class=\"prompt\">julia&gt;&nbsp;</span>"+escape_html(input.replace(/\n/g, "\n       "))+"<br />");
                     
                     // clear the input field
                     $("#terminal-input").val("");
