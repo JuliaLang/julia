@@ -1,4 +1,4 @@
-/* 
+/*
    A C-program for MT19937, with initialization improved 2002/2/10.
    Coded by Takuji Nishimura and Makoto Matsumoto.
    This is a faster version by taking Shawn Cokus's optimization,
@@ -13,7 +13,7 @@
    Redistribution and use in source and binary forms, with or without
    modification, are permitted provided that the following conditions
    are met:
-   
+
      1. Redistributions of source code must retain the above copyright
         notice, this list of conditions and the following disclaimer.
 
@@ -21,14 +21,14 @@
         notice, this list of conditions and the following disclaimer in the
         documentation and/or other materials provided with the distribution.
 
-     3. The names of its contributors may not be used to endorse or promote 
-        products derived from this software without specific prior written 
+     3. The names of its contributors may not be used to endorse or promote
+        products derived from this software without specific prior written
         permission.
 
    THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
    "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
    LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
-   A PARTICULAR PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER 
+   A PARTICULAR PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER
    OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
    EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
    PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
@@ -86,19 +86,19 @@ inline static randmtzig_uint64_t randi54 (void)
 
 /* generates a random number on (0,1) with 53-bit resolution */
 inline static double randu53 (void)
-{ 
+{
 
     const randmtzig_uint32_t a=dsfmt_gv_genrand_uint32()>>5;
-    const randmtzig_uint32_t b=dsfmt_gv_genrand_uint32()>>6; 
+    const randmtzig_uint32_t b=dsfmt_gv_genrand_uint32()>>6;
     return(a*67108864.0+b+0.4) * (1.0/9007199254740992.0);
 
     //return dsfmt_gv_genrand_open_open();
-} 
+}
 
 /* ===== Ziggurat normal and exponential generators ===== */
 # define ZIGINT randmtzig_uint64_t
 # define EMANTISSA 9007199254740992.0  /* 53 bit mantissa */
-# define NMANTISSA EMANTISSA  
+# define NMANTISSA EMANTISSA
 # define NRANDI randi54() /* 53 bits for mantissa + 1 bit sign */
 # define RANDU randu53()
 
@@ -117,16 +117,16 @@ inline static double randu53 (void)
 This code is based on the paper Marsaglia and Tsang, "The ziggurat method
 for generating random variables", Journ. Statistical Software. Code was
 presented in this paper for a Ziggurat of 127 levels and using a 32 bit
-integer random number generator. This version of the code, uses the 
-Mersenne Twister as the integer generator and uses 256 levels in the 
+integer random number generator. This version of the code, uses the
+Mersenne Twister as the integer generator and uses 256 levels in the
 Ziggurat. This has several advantages.
 
-  1) As Marsaglia and Tsang themselves states, the more levels the few 
+  1) As Marsaglia and Tsang themselves states, the more levels the few
      times the expensive tail algorithm must be called
-  2) The cycle time of the generator is determined by the integer 
-     generator, thus the use of a Mersenne Twister for the core random 
+  2) The cycle time of the generator is determined by the integer
+     generator, thus the use of a Mersenne Twister for the core random
      generator makes this cycle extremely long.
-  3) The license on the original code was unclear, thus rewriting the code 
+  3) The license on the original code was unclear, thus rewriting the code
      from the article means we are free of copyright issues.
   4) Compile flag for full 53-bit random mantissa.
 
@@ -139,7 +139,7 @@ assumed that 0 <= x < Inf, and "unsigned long"s are used, thus resulting in
 terms like 2^32 in the code. As the normal distribution is defined between
 -Inf < x < Inf, we effectively only have 31 bit integers plus a sign. Thus
 in Marsaglia and Tsang, terms like 2^32 become 2^31. We use NMANTISSA for
-this term.  The exponential distribution is one sided so we use the 
+this term.  The exponential distribution is one sided so we use the
 full 32 bits.  We use EMANTISSA for this term.
 
 It appears that I'm slightly slower than the code in the article, this
@@ -160,16 +160,16 @@ void randmtzig_create_ziggurat_tables (void)
 {
   int i;
   double x, x1;
- 
+
   /* Ziggurat tables for the normal distribution */
   x1 = ZIGGURAT_NOR_R;
   wi[255] = x1 / NMANTISSA;
   fi[255] = exp (-0.5 * x1 * x1);
 
-  /* Index zero is special for tail strip, where Marsaglia and Tsang 
-   * defines this as 
+  /* Index zero is special for tail strip, where Marsaglia and Tsang
+   * defines this as
    * k_0 = 2^31 * r * f(r) / v, w_0 = 0.5^31 * v / f(r), f_0 = 1,
-   * where v is the area of each strip of the ziggurat. 
+   * where v is the area of each strip of the ziggurat.
    */
   ki[0] = (ZIGINT) (x1 * fi[255] / NOR_SECTION_AREA * NMANTISSA);
   wi[0] = NOR_SECTION_AREA / fi[255] / NMANTISSA;
@@ -194,10 +194,10 @@ void randmtzig_create_ziggurat_tables (void)
   we[255] = x1 / EMANTISSA;
   fe[255] = exp (-x1);
 
-  /* Index zero is special for tail strip, where Marsaglia and Tsang 
-   * defines this as 
+  /* Index zero is special for tail strip, where Marsaglia and Tsang
+   * defines this as
    * k_0 = 2^32 * r * f(r) / v, w_0 = 0.5^32 * v / f(r), f_0 = 1,
-   * where v is the area of each strip of the ziggurat. 
+   * where v is the area of each strip of the ziggurat.
    */
   ke[0] = (ZIGINT) (x1 * fe[255] / EXP_SECTION_AREA * EMANTISSA);
   we[0] = EXP_SECTION_AREA / fe[255] / EMANTISSA;
@@ -258,36 +258,36 @@ double randmtzig_randn (void)
 # endif
 
       if (rabs < (randmtzig_int64_t)ki[idx])
-	return x;        /* 99.3% of the time we return here 1st try */
+        return x;        /* 99.3% of the time we return here 1st try */
       else if (idx == 0)
-	{
-	  /* As stated in Marsaglia and Tsang
-	   * 
-	   * For the normal tail, the method of Marsaglia[5] provides:
-	   * generate x = -ln(U_1)/r, y = -ln(U_2), until y+y > x*x,
-	   * then return r+x. Except that r+x is always in the positive 
-	   * tail!!!! Any thing random might be used to determine the
-	   * sign, but as we already have r we might as well use it
-	   *
-	   * [PAK] but not the bottom 8 bits, since they are all 0 here!
-	   */
-	  double xx, yy;
-	  do
-	    {
-	      xx = - ZIGGURAT_NOR_INV_R * log (RANDU);
-	      yy = - log (RANDU);
-	    } 
-	  while ( yy+yy <= xx*xx);
-	  return (rabs&0x100 ? -ZIGGURAT_NOR_R-xx : ZIGGURAT_NOR_R+xx);
-	}
+        {
+          /* As stated in Marsaglia and Tsang
+           *
+           * For the normal tail, the method of Marsaglia[5] provides:
+           * generate x = -ln(U_1)/r, y = -ln(U_2), until y+y > x*x,
+           * then return r+x. Except that r+x is always in the positive
+           * tail!!!! Any thing random might be used to determine the
+           * sign, but as we already have r we might as well use it
+           *
+           * [PAK] but not the bottom 8 bits, since they are all 0 here!
+           */
+          double xx, yy;
+          do
+            {
+              xx = - ZIGGURAT_NOR_INV_R * log (RANDU);
+              yy = - log (RANDU);
+            }
+          while ( yy+yy <= xx*xx);
+          return (rabs&0x100 ? -ZIGGURAT_NOR_R-xx : ZIGGURAT_NOR_R+xx);
+        }
       else if ((fi[idx-1] - fi[idx]) * RANDU + fi[idx] < exp(-0.5*x*x))
-	return x;
+        return x;
     }
 }
 
 void randmtzig_fill_randn (double *p, randmtzig_idx_type n)
 {
      randmtzig_idx_type i;
-     for (i = 0; i < n; i++) 
-	  p[i] = randmtzig_randn();
+     for (i = 0; i < n; i++)
+          p[i] = randmtzig_randn();
 }
