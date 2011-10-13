@@ -577,8 +577,6 @@ void* outbox_thread(void* arg)
 
                 // add the message to the queue
                 session_map[session_token].outbox.push_back(msg);
-
-                cout<<"message from julia: "<<int(msg.type)<<"\n";
             }
         }
 
