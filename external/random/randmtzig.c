@@ -69,21 +69,6 @@ void randmtzig_fill_randn (double *p, randmtzig_idx_type n);
 
 /* ===== Uniform generators ===== */
 
-inline static randmtzig_uint64_t randi53 (void)
-{
-  const randmtzig_uint32_t lo = dsfmt_gv_genrand_uint32();
-  const randmtzig_uint32_t hi = dsfmt_gv_genrand_uint32()&0x1FFFFF;
-#ifndef __LP64__
-  randmtzig_uint64_t u;
-  randmtzig_uint32_t *p = (randmtzig_uint32_t *)&u;
-  p[0] = lo;
-  p[1] = hi;
-  return u;
-#else
-  return (((randmtzig_uint64_t)hi<<32)|lo);
-#endif
-}
-
 inline static randmtzig_uint64_t randi54 (void)
 {
   const randmtzig_uint32_t lo = dsfmt_gv_genrand_uint32();
@@ -99,44 +84,20 @@ inline static randmtzig_uint64_t randi54 (void)
 #endif
 }
 
-inline static randmtzig_uint64_t randi64 (void)
-{
-  const randmtzig_uint32_t lo = dsfmt_gv_genrand_uint32();
-  const randmtzig_uint32_t hi = dsfmt_gv_genrand_uint32();
-#ifndef __LP64__
-  randmtzig_uint64_t u;
-  randmtzig_uint32_t *p = (randmtzig_uint32_t *)&u;
-  p[0] = lo;
-  p[1] = hi;
-  return u;
-#else
-  return (((randmtzig_uint64_t)hi<<32)|lo);
-#endif
-}
-
-/* generates a random number on (0,1)-real-interval */
-inline static double randu32 (void)
-{
-  return ((double)dsfmt_gv_genrand_uint32() + 0.5) * (1.0/4294967296.0); 
-  /* divided by 2^32 */
-}
-
 /* generates a random number on (0,1) with 53-bit resolution */
 inline static double randu53 (void)
 { 
-    /*
-      const randmtzig_uint32_t a=dsfmt_gv_genrand_uint32()>>5;
-      const randmtzig_uint32_t b=dsfmt_gv_genrand_uint32()>>6; 
-      return(a*67108864.0+b+0.4) * (1.0/9007199254740992.0);
-    */
 
-    return dsfmt_gv_genrand_open_open();
+    const randmtzig_uint32_t a=dsfmt_gv_genrand_uint32()>>5;
+    const randmtzig_uint32_t b=dsfmt_gv_genrand_uint32()>>6; 
+    return(a*67108864.0+b+0.4) * (1.0/9007199254740992.0);
+
+    //return dsfmt_gv_genrand_open_open();
 } 
 
 /* ===== Ziggurat normal and exponential generators ===== */
 # define ZIGINT randmtzig_uint64_t
 # define EMANTISSA 9007199254740992.0  /* 53 bit mantissa */
-# define ERANDI randi53() /* 53 bits for mantissa */
 # define NMANTISSA EMANTISSA  
 # define NRANDI randi54() /* 53 bits for mantissa + 1 bit sign */
 # define RANDU randu53()
