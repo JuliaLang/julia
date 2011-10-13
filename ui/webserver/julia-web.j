@@ -13,6 +13,9 @@
 # messages are sent as json arrays
 # [message_type:number, arg0:string, arg1:string, ...]
 
+# import the message types
+load("./ui/webserver/message_types.h")
+
 ###########################################
 # set up the socket connection
 ###########################################

@@ -546,7 +546,7 @@ void* outbox_thread(void* arg)
             msg.type = (*((uint8_t*)(&outbox_raw[0])))-1;
 
             // get the number of arguments
-            uint8_t arg_num = *((uint8_t*)(&outbox_raw[1]));
+            uint8_t arg_num = *((uint8_t*)(&outbox_raw[1]))-1;
 
             // try to read the arguments
             int pos = 2;
@@ -929,7 +929,6 @@ string get_response(request* req)
                     {
                         response_message = session_map[session_token].outbox[0];
                         session_map[session_token].outbox.erase(session_map[session_token].outbox.begin());
-                        cout<<"message to browser: "<<int(response_message.type)<<"\n";
                     }
                 }
             }
