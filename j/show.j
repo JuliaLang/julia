@@ -1,7 +1,7 @@
 # showing fundamental objects
 
 print(x) = show(x)
-shown(x) = print_to_string(show, x)
+show_to_string(x) = print_to_string(show, x)
 
 show(s::Symbol) = print(s)
 show(tn::TypeName) = show(tn.name)
