@@ -147,9 +147,9 @@ function socket_callback(fd)
         try
             result = eval(expr)
         catch error
-            return send_error("There was an error!")
+            return send_error(print_to_string(show, error))
         end
-        return send_eval_result(string(result))
+        return send_eval_result(print_to_string(show, result))
     end
 end
 
