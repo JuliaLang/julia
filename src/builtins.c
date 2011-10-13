@@ -67,12 +67,12 @@ void jl_type_error(const char *fname, jl_value_t *expected, jl_value_t *got)
     jl_type_error_rt(fname, "", expected, got);
 }
 
-void jl_undef_ref_error()
+void jl_undef_ref_error(void)
 {
     jl_raise(jl_undefref_exception);
 }
 
-void jl_divide_by_zero_error()
+void jl_divide_by_zero_error(void)
 {
     jl_raise(jl_divbyzero_exception);
 }
@@ -1229,7 +1229,7 @@ void jl_add_builtin(const char *name, jl_value_t *v)
     return add_builtin(name, v);
 }
 
-void jl_init_primitives()
+void jl_init_primitives(void)
 {
     add_builtin_func("is", jl_f_is);
     add_builtin_func("typeof", jl_f_typeof);
@@ -1312,7 +1312,7 @@ void jl_init_primitives()
     add_builtin("ANY", jl_ANY_flag);
 }
 
-void jl_init_builtins()
+void jl_init_builtins(void)
 {
     jl_function_t *jl_print_gf = jl_new_generic_function(jl_symbol("print"));
 

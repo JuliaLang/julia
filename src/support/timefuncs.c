@@ -30,7 +30,7 @@ double tvals2float(struct tm *t, struct timeb *tstruct)
         (double)t->tm_sec + (double)tstruct->millitm/1.0e3;
 }
 */
-double floattime()
+double floattime(void)
 {
     struct timeb tstruct;
 
@@ -50,7 +50,7 @@ double diff_time(struct timeval *tv1, struct timeval *tv2)
 #endif
 
 // return as many bits of system randomness as we can get our hands on
-u_int64_t i64time()
+u_int64_t i64time(void)
 {
     u_int64_t a;
 #ifdef WIN32
@@ -66,7 +66,7 @@ u_int64_t i64time()
     return a;
 }
 
-double clock_now()
+double clock_now(void)
 {
 #ifdef WIN32
     return floattime();

@@ -853,7 +853,7 @@ ios_t *ios_stdin = NULL;
 ios_t *ios_stdout = NULL;
 ios_t *ios_stderr = NULL;
 
-void ios_init_stdstreams()
+void ios_init_stdstreams(void)
 {
     ios_stdin = julia_malloc(sizeof(ios_t));
     ios_fd(ios_stdin, STDIN_FILENO, 0, 0);

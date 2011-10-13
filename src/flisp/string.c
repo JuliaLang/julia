@@ -418,7 +418,7 @@ static builtinspec_t stringfunc_info[] = {
     { NULL, NULL }
 };
 
-void stringfuncs_init()
+void stringfuncs_init(void)
 {
     assign_global_builtins(stringfunc_info);
 }

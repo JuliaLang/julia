@@ -29,7 +29,7 @@ char *jl_stack_lo;
 char *jl_stack_hi;
 size_t jl_page_size;
 
-static void jl_find_stack_bottom()
+static void jl_find_stack_bottom(void)
 {
     size_t stack_size;
 #if defined(__linux) || defined(__APPLE__)
@@ -208,7 +208,7 @@ jl_function_t *jl_memio_func=NULL;
 jl_function_t *jl_append_any_func=NULL;
 jl_function_t *jl_method_missing_func=NULL;
 
-static void clear_tfunc_caches()
+static void clear_tfunc_caches(void)
 {
     htable_t *t = &jl_system_module->bindings;
     size_t i;
@@ -230,7 +230,7 @@ static void clear_tfunc_caches()
     }
 }
 /*
-static void clear_method_caches()
+static void clear_method_caches(void)
 {
     htable_t *t = &jl_system_module->bindings;
     size_t i;
@@ -246,7 +246,7 @@ static void clear_method_caches()
     }
 }
 */
-DLLEXPORT void jl_enable_inference()
+DLLEXPORT void jl_enable_inference(void)
 {
     if (jl_boundp(jl_system_module, jl_symbol("typeinf_ext"))) {
         //clear_method_caches();
@@ -284,7 +284,7 @@ DLLEXPORT void jl_enable_inference()
     }
 }
 
-DLLEXPORT void jl_set_memio_func()
+DLLEXPORT void jl_set_memio_func(void)
 {
     jl_memio_func = (jl_function_t*)global("memio");
 }
@@ -292,7 +292,7 @@ DLLEXPORT void jl_set_memio_func()
 JL_CALLABLE(jl_weakref_ctor);
 
 // fetch references to things defined in boot.j
-void jl_get_builtin_hooks()
+void jl_get_builtin_hooks(void)
 {
     jl_nothing      = global("nothing");
     jl_root_task->tls = jl_nothing;

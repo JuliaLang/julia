@@ -23,16 +23,16 @@
 
 // --- io and select ---
 
-void jl__not__used__()
+void jl__not__used__(void)
 {
     // force inclusion of lib/socket.o in executable
     short p=0;
     open_any_tcp_port(&p);
 }
 
-DLLEXPORT int jl_sizeof_fd_set() { return sizeof(fd_set); }
+DLLEXPORT int jl_sizeof_fd_set(void) { return sizeof(fd_set); }
 
-DLLEXPORT int jl_sizeof_timeval() { return sizeof(struct timeval); }
+DLLEXPORT int jl_sizeof_timeval(void) { return sizeof(struct timeval); }
 
 DLLEXPORT void jl_set_timeval(struct timeval *tv, double tout)
 {
@@ -88,13 +88,13 @@ int32_t jl_nb_available(ios_t *s)
 
 // --- io constructors ---
 
-DLLEXPORT int jl_sizeof_ios_t() { return sizeof(ios_t); }
+DLLEXPORT int jl_sizeof_ios_t(void) { return sizeof(ios_t); }
 
 // hack to expose ios_stdout to julia. we could create a new iostream pointing
 // to stdout, but then there would be two buffers for one descriptor, and
 // ios_stdout is used before julia IOStream is available, creating a potential
 // mess.
-DLLEXPORT jl_value_t *jl_stdout_stream()
+DLLEXPORT jl_value_t *jl_stdout_stream(void)
 {
     jl_array_t *a = jl_alloc_array_1d(jl_array_uint8_type, sizeof(ios_t));
     a->data = (void*)ios_stdout;
@@ -103,12 +103,12 @@ DLLEXPORT jl_value_t *jl_stdout_stream()
 
 // --- current output stream ---
 
-jl_value_t *jl_current_output_stream_obj()
+jl_value_t *jl_current_output_stream_obj(void)
 {
     return jl_current_task->state.ostream_obj;
 }
 
-DLLEXPORT ios_t *jl_current_output_stream()
+DLLEXPORT ios_t *jl_current_output_stream(void)
 {
     return jl_current_task->state.current_output_stream;
 }
@@ -181,7 +181,7 @@ jl_array_t *jl_readuntil(ios_t *s, uint8_t delim)
 
 // -- syscall utilities --
 
-int jl_errno() { return errno; }
+int jl_errno(void) { return errno; }
 
 jl_value_t *jl_strerror(int errnum)
 {
@@ -201,9 +201,9 @@ int jl_process_stop_signal(int status) { return WSTOPSIG(status); }
 
 // -- access to std filehandles --
 
-int jl_stdin()  { return STDIN_FILENO; }
-int jl_stdout() { return STDOUT_FILENO; }
-int jl_stderr() { return STDERR_FILENO; }
+int jl_stdin(void)  { return STDIN_FILENO; }
+int jl_stdout(void) { return STDOUT_FILENO; }
+int jl_stderr(void) { return STDERR_FILENO; }
 
 // I/O thread
 
@@ -347,7 +347,7 @@ void jl_enq_send_req(ios_t *dest, ios_t *buf, int now)
 }
 
 DLLEXPORT
-void jl_start_io_thread()
+void jl_start_io_thread(void)
 {
     pthread_mutex_init(&q_mut, NULL);
     pthread_mutex_init(&wake_mut, NULL);

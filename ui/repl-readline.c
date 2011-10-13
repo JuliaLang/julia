@@ -29,7 +29,7 @@ static char *history_file = NULL;
 // yes, readline uses inconsistent indexing internally.
 #define history_rem(n) remove_history(n-history_base)
 
-static void init_history() {
+static void init_history(void) {
     using_history();
     char *home = getenv("HOME");
     if (!home) return;
@@ -115,7 +115,7 @@ static int line_end(int point) {
 static int strip_initial_spaces = 0;
 static int spaces_suppressed = 0;
 
-static void reset_indent() {
+static void reset_indent(void) {
     strip_initial_spaces = 0;
     spaces_suppressed = 0;
 }
@@ -152,7 +152,7 @@ static int return_callback(int count, int key) {
     return 0;
 }
 
-static int suppress_space() {
+static int suppress_space(void) {
     int i;
     for (i = line_start(rl_point); i < rl_point; i++)
         if (rl_line_buffer[i] != ' ') return 0;
@@ -302,7 +302,7 @@ void read_expr(char *prompt)
     jl_input_line_callback(input);
 }
 
-void init_repl_environment()
+void init_repl_environment(void)
 {
     init_history();
     Keymap keymaps[] = {emacs_standard_keymap, vi_insertion_keymap};
@@ -326,28 +326,28 @@ void init_repl_environment()
     };
 }
 
-void exit_repl_environment()
+void exit_repl_environment(void)
 {
     rl_callback_handler_remove();
 }
 
-DLLEXPORT void repl_callback_enable()
+DLLEXPORT void repl_callback_enable(void)
 {
     if (jl_have_event_loop)
         rl_callback_handler_install(prompt_string, jl_input_line_callback);
 }
 
-void repl_callback_disable()
+void repl_callback_disable(void)
 {
     rl_callback_handler_remove();
 }
 
-void repl_stdin_callback()
+void repl_stdin_callback(void)
 {
     rl_callback_read_char();
 }
 
-void repl_print_prompt()
+void repl_print_prompt(void)
 {
     // handled by readline
 }

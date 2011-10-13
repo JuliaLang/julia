@@ -603,7 +603,7 @@ void gc(int mustgrow)
         gc(0);
 }
 
-static void grow_stack()
+static void grow_stack(void)
 {
     size_t newsz = N_STACK + (N_STACK>>1);
     value_t *ns = realloc(Stack, newsz*sizeof(value_t));
@@ -795,7 +795,7 @@ static value_t copy_list(value_t L)
     return c;
 }
 
-static value_t do_trycatch()
+static value_t do_trycatch(void)
 {
     uint32_t saveSP = SP;
     value_t v;

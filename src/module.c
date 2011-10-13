@@ -108,7 +108,7 @@ void jl_set_expander(jl_module_t *m, jl_sym_t *macroname, jl_function_t *f)
     *bp = f;
 }
 
-void jl_init_modules()
+void jl_init_modules(void)
 {
     jl_system_module = jl_new_module(jl_symbol("System"));
     jl_user_module = jl_new_module(jl_symbol("User"));

@@ -239,7 +239,7 @@ static value_t cyc_compare(value_t a, value_t b, htable_t *table, int eq)
 }
 
 static htable_t equal_eq_hashtable;
-void comparehash_init()
+void comparehash_init(void)
 {
     htable_new(&equal_eq_hashtable, 512);
 }

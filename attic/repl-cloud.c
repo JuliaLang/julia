@@ -434,7 +434,7 @@ char jl_prompt_color[] = "\033[1m\033[32mjulia> \033[0m\033[1m";
 
 static struct mg_context *ctx;
 
-void init_repl_environment() {
+void init_repl_environment(void) {
   // Initialize random number generator. It will be used later on for
   // the session identifier creation.
   srand((unsigned) time(0));
@@ -449,7 +449,7 @@ void init_repl_environment() {
   return;
 }
 
-void exit_repl_environment()
+void exit_repl_environment(void)
 {
   mg_stop(ctx);
 }
@@ -477,18 +477,18 @@ void read_expr(char *prompt)
     sleep(1000);
 }
 
-DLLEXPORT void repl_callback_enable()
+DLLEXPORT void repl_callback_enable(void)
 {
 }
 
-void repl_callback_disable()
+void repl_callback_disable(void)
 {
 }
 
-void repl_stdin_callback()
+void repl_stdin_callback(void)
 {
 }
 
-void repl_print_prompt()
+void repl_print_prompt(void)
 {
 }
