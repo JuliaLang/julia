@@ -57,6 +57,9 @@ def quicksort(list, start, end):
     else:
         return
 
+
+## randmatstat ##
+
 def randmatstat(t):
     n = 5
     v = zeros(t)
@@ -71,6 +74,7 @@ def randmatstat(t):
         v[i] = trace(pow(transpose(P)*P, 4))
         w[i] = trace(pow(transpose(Q)*Q, 4))
     return (std(v)/mean(v), std(w)/mean(w))
+
 
 ## mandelbrot ##
 
@@ -101,19 +105,25 @@ def mandelperf():
 if __name__=="__main__":
     t = time.time()
     f = fib(20)
-    print "fib: ", time.time()-t
+    print "fib:", time.time()-t
 
     t = time.time()
     for i in xrange(1,1000):
         int("1111000011110000111100001111",2)
-    print "parse_int: ", time.time()-t
+    print "parse_int:", time.time()-t
 
     lst = [ random.random() for i in xrange(1,5000) ]
     t = time.time()
     quicksort(lst, 0, len(lst)-1)
-    print "sort: ", time.time()-t
+    print "sort:", time.time()-t
 
     assert sum(mandelperf()) == 14304
     t = time.time()
     mandelperf()
-    print "mandelbrot: ", time.time()-t
+    print "mandelbrot:", time.time()-t
+
+    (s1, s2) = randmatstat(1000)
+    assert s1 > 0.5 and s1 < 1.0
+    t = time.time()
+    randmatstat(1000)
+    print "random matrix:", time.time()-t
