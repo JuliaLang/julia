@@ -119,6 +119,25 @@ dsfmt_randn_bm_reset() = ccall(dlsym(librandom, :dsfmt_randn_bm_reset), Void, ()
 srand(seed::Uint32) = (ccall(dlsym(librandom, :dsfmt_gv_init_gen_rand), Void, (Uint32, ), seed);
                        dsfmt_randn_bm_reset())
 
+## randg, chi2rnd
+
+function randg(alpha)
+    d = alpha - 1.0/3.0
+
+    while(true)
+        x = randn()
+        U = rand()
+        v = (1+x/sqrt(9d))^3
+        dv = d*v
+        t = x^2 / 2.0 + d - d*v  + d * log(v)
+
+        if log(U) < t; break; end
+    end
+    return dv
+end
+
+chi2rnd(v) = 2*randg(v/2)
+
 ## Arrays of random numbers
 
 function rand(dims::Dims)
