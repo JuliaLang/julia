@@ -76,6 +76,7 @@ load("string.j")
 load("ascii.j")
 load("utf8.j")
 load("show.j")
+load("regex.j")
 load("env.j")
 
 # core math functions
@@ -104,7 +105,6 @@ load("darray.j")
 
 # misc
 load("util.j")
-load("regex.j")
 
 # version information
 load("version.j")

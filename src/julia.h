@@ -636,6 +636,9 @@ DLLEXPORT void jl_array_del_beg(jl_array_t *a, size_t dec);
 DLLEXPORT int jl_errno();
 DLLEXPORT jl_value_t *jl_strerror(int errnum);
 
+// environment entries
+DLLEXPORT jl_value_t *jl_environ(int i);
+
 // child process status
 DLLEXPORT int jl_process_exited(int status);
 DLLEXPORT int jl_process_signaled(int status);
