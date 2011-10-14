@@ -45,10 +45,11 @@ has(::EnvHash, k::String) = hasenv(k)
 del(::EnvHash, k::String) = unsetenv(k)
 assign(::EnvHash, v::String, k::String) = (setenv(k,v); v)
 
-start(::EnvHash) = 0
+start(::EnvHash) = int32(0)
 done(::EnvHash, i) = (ccall(:jl_environ, Any, (Int32,), int32(i)) == nothing)
 function next(::EnvHash, i)
-    env = ccall(:jl_environ, Any, (Int32,), int32(i))
+    i = int32(i)
+    env = ccall(:jl_environ, Any, (Int32,), i)
     if env == nothing
         error("environ: index out of range")
     end
@@ -57,7 +58,7 @@ function next(::EnvHash, i)
     if m == nothing
         error("malformed environment entry: $env")
     end
-    (m.captures, i+1)
+    (m.captures, i+one(i))
 end
 
 function show(::EnvHash)
