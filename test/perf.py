@@ -1,3 +1,4 @@
+from numpy import *
 import sys
 import time
 import random
