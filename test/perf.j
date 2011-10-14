@@ -60,7 +60,7 @@ end
 
 mandelperf() = [ mandel(complex(r,i)) | r=-2.0:.1:0.5, i=-1.:.1:1. ]
 @assert sum(mandelperf()) == 14791
-@timeit sum(mandelperf()) "mandelbrot"
+@timeit mandelperf() "mandelbrot"
 
 ## numeric vector sort ##
 
