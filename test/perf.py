@@ -56,6 +56,20 @@ def quicksort(list, start, end):
     else:
         return
 
+def randmatstat(t):
+    n = 5
+    v = zeros(t)
+    w = zeros(t)
+    for i in xrange(1,t):
+        a = numpy.random.randn(n, n)
+        b = numpy.random.randn(n, n)
+        c = numpy.random.randn(n, n)
+        d = numpy.random.randn(n, n)
+        P = matrix(hstack((a, b, c, d)))
+        Q = matrix(vstack((hstack((a, b)), hstack((c, d)))))
+        v[i] = trace(pow(transpose(P)*P, 4))
+        w[i] = trace(pow(transpose(Q)*Q, 4))
+    return (std(v)/mean(v), std(w)/mean(w))
 
 if __name__=="__main__":                       # If this script is run as a program:
     t1=time.time()
