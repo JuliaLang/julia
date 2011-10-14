@@ -99,31 +99,44 @@ def mandelperf():
             count += 1
     return M
 
+def pisum():
+    sum = 0.0
+    for j in xrange(1, 500):
+        sum = 0.0
+        for k in xrange(1, 10000):
+            sum += 1.0/(k*k)
+    return sum
 
 ## run tests ##
 
 if __name__=="__main__":
     t = time.time()
     f = fib(20)
-    print "fib:", time.time()-t
+    print "fib:           ", time.time()-t
 
     t = time.time()
     for i in xrange(1,1000):
         int("1111000011110000111100001111",2)
-    print "parse_int:", time.time()-t
-
-    lst = [ random.random() for i in xrange(1,5000) ]
-    t = time.time()
-    quicksort(lst, 0, len(lst)-1)
-    print "sort:", time.time()-t
+    print "parse_int:     ", time.time()-t
 
     assert sum(mandelperf()) == 14304
     t = time.time()
     mandelperf()
-    print "mandelbrot:", time.time()-t
+    print "mandelbrot:    ", time.time()-t
+
+    lst = [ random.random() for i in xrange(1,5000) ]
+    t = time.time()
+    quicksort(lst, 0, len(lst)-1)
+    print "sort:          ", time.time()-t
+
+    pi = pisum()
+    assert abs(pisum()-1.644834071848065) < 1e-6
+    t = time.time()
+    pisum()
+    print "pisum:         ", time.time()-t
 
     (s1, s2) = randmatstat(1000)
     assert s1 > 0.5 and s1 < 1.0
     t = time.time()
     randmatstat(1000)
-    print "random matrix:", time.time()-t
+    print "random matrix: ", time.time()-t
