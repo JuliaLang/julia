@@ -103,10 +103,12 @@ def mandelperf():
 ## run tests ##
 
 if __name__=="__main__":
+    assert fib(20) == 6765
     t = time.time()
-    f = fib(20)
+    fib(20)
     print "fib:", time.time()-t
 
+    assert int("1111000011110000111100001111",2) == 252645135
     t = time.time()
     for i in xrange(1,1000):
         int("1111000011110000111100001111",2)
