@@ -121,19 +121,43 @@ srand(seed::Uint32) = (ccall(dlsym(librandom, :dsfmt_gv_init_gen_rand), Void, (U
 
 ## randg, chi2rnd
 
-function randg(alpha)
-    d = alpha - 1.0/3.0
+# A simple method for generating gamma variables - Marsaglia and Tsang
+# http://www.cparity.com/projects/AcmClassification/samples/358414.pdf
+# Page 369
+
+# function randg(a)
+#     d = a - 1.0/3.0
+#     c = 1.0 / sqrt(9*d)
+#    
+#     while(true)
+#         x = randn()
+#         U = rand()
+#         v = (1 + c*x)
+#         v = v*v*v
+#         dv = d*v
+#         t = x^2 / 2.0 + d - dv  + d * log(v)
+#
+#         if log(U) < t; return dv; end
+#     end
+# end
+
+function randg(a)
+    d = a - 1.0/3.0
+    c = 1.0 / sqrt(9*d)
 
     while(true)
         x = randn()
+        v = 1.0 + c*x
+        while (v <= 0.0)
+            x = randn()
+            v = 1.0 + c*x
+        end
+        v = v*v*v
         U = rand()
-        v = (1+x/sqrt(9d))^3
-        dv = d*v
-        t = x^2 / 2.0 + d - d*v  + d * log(v)
-
-        if log(U) < t; break; end
+        x2 = x*x
+        if U < 1.0 - 0.331*x2*x2; return d*v; end
+        if log(U) < 0.5*x2 + d*(1.0 - v + log(v)); return d*v; end
     end
-    return dv
 end
 
 chi2rnd(v) = 2*randg(v/2)
