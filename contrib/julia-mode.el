@@ -121,7 +121,7 @@
     (and pos
 	 (progn
 	   (goto-char pos)
-	   (+ 4 (current-indentation))))))
+	   (+ julia-basic-offset (current-indentation))))))
 
 ; return indent implied by a special form opening on the previous line, if any
 (defun form-indent ()
@@ -129,13 +129,13 @@
   (end-of-line)
   (backward-sexp)
   (if (at-keyword julia-block-other-keywords)
-      (+ 4 (current-indentation))
+      (+ julia-basic-offset (current-indentation))
     (if (char-equal (char-after (point)) ?\()
         (progn
           (backward-word 1)
           (let ((cur (current-indentation)))
             (if (at-keyword julia-block-start-keywords)
-                (+ 4 cur)
+                (+ julia-basic-offset cur)
               nil)))
       nil)))
 
@@ -180,7 +180,7 @@
                            (forward-to-indentation 0)
                            (at-keyword julia-block-end-keywords))))
              (error2nil (+ (last-open-block (point-min))
-                           (if endtok -4 0)))))
+                           (if endtok (- julia-basic-offset) 0)))))
 	 ;; previous line ends in =
 	 (save-excursion
 	   (if (and (not (equal (point-min) (line-beginning-position)))
@@ -188,7 +188,7 @@
 		      (forward-line -1)
 		      (end-of-line) (backward-char 1)
 		      (equal (char-after (point)) ?=)))
-	       (+ 4 (current-indentation))
+	       (+ julia-basic-offset (current-indentation))
 	     nil))
 	 ;; take same indentation as previous line
 	 (save-excursion (forward-line -1)
@@ -213,6 +213,7 @@
         (list "\\(\"\\(.\\|\\s-\\)*?[^\\\\]\"\\|\"\"\\)" 0
               julia-mode-string-syntax-table)))
   (set (make-local-variable 'indent-line-function) 'julia-indent-line)
+  (set (make-local-variable 'julia-basic-offset) 4)
   (setq indent-tabs-mode nil)
   (setq major-mode 'julia-mode)
   (setq mode-name "julia")
