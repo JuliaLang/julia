@@ -6,9 +6,11 @@ type IOStream
 
     # TODO: delay adding finalizer, e.g. for memio with a small buffer, or
     # in the case where we takebuf it.
-    IOStream() = (x = new(zeros(Uint8,sizeof_ios_t));
-                  finalizer(x, close);
-                  x)
+    function IOStream()
+        x = new(zeros(Uint8,sizeof_ios_t))
+        finalizer(x, close)
+        return x
+    end
 
     global make_stdout_stream
     make_stdout_stream() = new(ccall(:jl_stdout_stream, Any, ()))
@@ -18,25 +20,26 @@ fd(s::IOStream) = ccall(:jl_ios_fd, Long, (Ptr{Void},), s.ios)
 
 close(s::IOStream) = ccall(:ios_close, Void, (Ptr{Void},), s.ios)
 
+# "own" means the descriptor will be closed with the IOStream
+function fdio(fd::Int, own::Bool)
+    s = IOStream()
+    ccall(:ios_fd, Void, (Ptr{Uint8}, Long, Int32, Int32),
+          s.ios, long(fd), int32(0), int32(own));
+    return s
+end
 fdio(fd::Int) = fdio(fd, false)
-# "own" means the descriptor will be closed when this IOStream is
-fdio(fd::Int, own::Bool) =
-    (s = IOStream();
-     ccall(:ios_fd, Void, (Ptr{Uint8}, Long, Int32, Int32),
-           s.ios, long(fd), int32(0), int32(own));
-     s)
 
-open(fname::String, rd::Bool, wr::Bool, cr::Bool, tr::Bool) =
-    (s = IOStream();
-     if ccall(:ios_file, Ptr{Void},
-              (Ptr{Uint8}, Ptr{Uint8}, Int32, Int32, Int32, Int32),
-              s.ios, cstring(fname),
-              int32(rd), int32(wr), int32(cr), int32(tr))==C_NULL
-         error("could not open file ", fname)
-     end;
-     s)
-
-open(fname::String) = open(fname, true, true, false, false)
+function open(fname::String, rd::Bool, wr::Bool, cr::Bool, tr::Bool)
+    s = IOStream()
+    if ccall(:ios_file, Ptr{Void},
+             (Ptr{Uint8}, Ptr{Uint8}, Int32, Int32, Int32, Int32),
+             s.ios, cstring(fname),
+             int32(rd), int32(wr), int32(cr), int32(tr)) == C_NULL
+        error("could not open file ", fname)
+    end
+    return s
+end
+open(fname::String) = open(fname, true, false, false, false)
 
 memio() = memio(0)
 function memio(x::Int)
@@ -111,7 +114,7 @@ function read{T <: Int}(s, ::Type{T})
     for n = 1:sizeof(x)
         x |= (convert(T,read(s,Uint8))<<((n-1)<<3))
     end
-    x
+    return x
 end
 
 read(s, ::Type{Bool})    = (read(s,Uint8)!=0)
@@ -129,7 +132,7 @@ function read{T}(s, a::Array{T})
     for i = 1:numel(a)
         a[i] = read(s, T)
     end
-    a
+    return a
 end
 
 ## low-level calls ##
@@ -196,12 +199,10 @@ readline(s::IOStream) = readuntil(s, uint8('\n'))
 flush(s::IOStream) = ccall(:ios_flush, Void, (Ptr{Void},), s.ios)
 
 truncate(s::IOStream, n::Int) =
-    ccall(:ios_trunc, Ulong, (Ptr{Void}, Ulong),
-          s.ios, ulong(n))
+    ccall(:ios_trunc, Ulong, (Ptr{Void}, Ulong), s.ios, ulong(n))
 
 seek(s::IOStream, n::Int) =
-    ccall(:ios_seek, Long, (Ptr{Void}, Long),
-          s.ios, long(n))
+    ccall(:ios_seek, Long, (Ptr{Void}, Long), s.ios, long(n))
 
 type IOTally
     nbytes::Size
@@ -261,7 +262,7 @@ end
 function del_all(s::FDSet)
     ccall(:jl_fd_zero, Void, (Ptr{Void},), s.data)
     s.nfds = 0
-    s
+    return s
 end
 
 begin
@@ -275,9 +276,9 @@ begin
                   tv, float64(timeout))
             tout = convert(Ptr{Void}, tv)
         end
-        return ccall(dlsym(libc, :select), Int32,
-                     (Int32, Ptr{Void}, Ptr{Void}, Ptr{Void}, Ptr{Void}),
-                     readfds.nfds, readfds.data, C_NULL, C_NULL, tout)
+        ccall(dlsym(libc, :select), Int32,
+              (Int32, Ptr{Void}, Ptr{Void}, Ptr{Void}, Ptr{Void}),
+              readfds.nfds, readfds.data, C_NULL, C_NULL, tout)
     end
 end
 
@@ -302,7 +303,7 @@ function readlines(s)
     for l = each_line(s)
         push(a, l)
     end
-    a
+    return a
 end
 
 ## file formats ##
@@ -317,5 +318,5 @@ function load_ascii_array(f, nr, nc)
             a[i,j] = float64(row[j])
         end
     end
-    a
+    return a
 end

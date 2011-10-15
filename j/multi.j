@@ -1061,7 +1061,7 @@ function start_sge_workers(n)
         sleep(0.5)
         while !fexists
             try
-                fl = open(fname,true,false,false,false)
+                fl = open(fname)
                 try
                     port = read(fl,Int16)
                 catch e

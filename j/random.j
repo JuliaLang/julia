@@ -7,9 +7,9 @@ function librandom_init()
         srand("/dev/urandom", 4)
     catch
         println("Entropy pool not available to seed RNG, using ad-hoc entropy sources.")
-        seed = bswap(uint64(clock()*2.0^32))
-        seed $= parse_int(Uint64, readall(`ifconfig`|`sha1sum`)[1:40], 16)
-        seed $= uint64(getpid())
+        seed = bswap(uint64(clock()*2.0^32)) $
+               parse_int(Uint64, readall(`ifconfig`|`sha1sum`)[1:40], 16) $
+               uint64(getpid())
         srand(seed)
     end
     randn_zig_init()
