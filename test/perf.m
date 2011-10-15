@@ -111,27 +111,31 @@ end
 function a = qsort_kernel(a, lo, hi)
     i = lo;
     j = hi;
-    pivot = a((lo+hi)/2);
-    % Partition
-    while i <= j
-        while a(i) < pivot, i = i + 1; end
-        while a(j) > pivot, j = j - 1; end
-        if i <= j
-	    t = a(i);
-	    a(i) = a(j);
-	    a(j) = t;
-            i = i + 1;
-            j = j - 1;
-        end
+    while i < hi
+        pivot = a(round((lo+hi)/2));
+    	% Partition
+    	while i <= j
+              while a(i) < pivot, i = i + 1; end
+              while a(j) > pivot, j = j - 1; end
+              if i <= j
+	      	 t = a(i);
+	    	 a(i) = a(j);
+	    	 a(j) = t;
+            	 i = i + 1;
+            	 j = j - 1;
+       	      end
+    	end
+        % Recursion for quicksort
+        if lo < j; a=qsort_kernel(a, lo, j); end
+        lo = i;
+	j = hi;
     end
-    % Recursion for quicksort
-    if lo < j; qsort_kernel(a, lo, j); end
-    if i < hi; qsort_kernel(a, i, hi); end
 end
 
 fprintf('quicksort: ')
 function v = sortperf(n)
   v = rand(n,1);
+  %v = qsort_kernel(v,1,n);
   v = sort(v);
 end
 assert(issorted(sortperf(5000)))
