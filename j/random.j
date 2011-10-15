@@ -6,6 +6,7 @@ function librandom_init()
     try
         srand("/dev/urandom", 4)
     catch
+        println("Entropy pool not available to seed RNG. Using time, which may end up using the same seed across multiple processors.")
         srand(uint64(clock()*2.0^32))
     end
 
