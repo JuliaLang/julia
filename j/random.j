@@ -1,5 +1,7 @@
 librandom = dlopen("librandom")
 
+## Initialization
+
 function librandom_init()
     try
         srand("/dev/urandom", 4)
@@ -12,24 +14,78 @@ end
 
 dsfmt_get_min_array_size() = ccall(dlsym(librandom, :dsfmt_get_min_array_size), Int32, ())
 
-srand(seed::Uint64) = srand([uint32(seed),uint32(seed>>32)])
+macro rand_matrix_builder(t, f)
+    quote
+
+        function ($f)(dims::Dims)
+            A = Array($t, dims)
+            for i = 1:numel(A); A[i] = ($f)(); end
+            return A
+        end
+
+    end # quote
+end # macro
+
+macro rand_matrix_builder_1arg(t, f)
+    quote
+
+        function ($f)(arg, dims::Dims)
+            A = Array($t, dims)
+            for i = 1:numel(A); A[i] = ($f)(arg); end
+            return A
+        end
+
+        ($f)(arg, dims::Size...) = ($f)(arg, dims)
+
+    end # quote
+end # macro
+
+macro rand_matrix_builder_2arg(t, f)
+    quote
+
+        function ($f)(arg1, arg2, dims::Dims)
+            A = Array($t, dims)
+            for i = 1:numel(A); A[i] = ($f)(arg1, arg2); end
+            return A
+        end
+
+        ($f)(arg1, arg2, dims::Size...) = ($f)(arg1, arg2, dims)
+
+    end # quote
+end # macro
+
+## srand()
+
+srand(seed::Uint32) = ccall(dlsym(librandom, :dsfmt_gv_init_gen_rand), Void, (Uint32, ), seed)
 
 function srand(seed::Vector{Uint32})
     ccall(dlsym(librandom, :dsfmt_gv_init_by_array),
           Void, (Ptr{Uint32}, Int32),
           seed, int32(length(seed)))
-    dsfmt_randn_bm_reset()
 end
 
-randf() = float32(rand())
+srand(seed::Uint64) = srand([uint32(seed),uint32(seed>>32)])
+
+# Seed from a file
+function srand(fname::String, n::Int)
+    fid = open(fname)
+    a = Array(Uint32, long(n))
+    read(fid, a)
+    srand(a)
+    close(fid)
+end
+
+## rand()
 
 rand() = ccall(dlsym(librandom, :dsfmt_gv_genrand_open_open), Float64, ())
 
-randui32() = ccall(dlsym(librandom, :dsfmt_gv_genrand_uint32), Uint32, ())
+function rand(dims::Dims)
+    A = Array(Float64, dims)
+    dsfmt_fill_array_open_open(A)
+    return A
+end
 
-randbit() = randui32()&1
-
-randbool() = randbit() == 1
+rand(dims::Size...) = rand(dims)
 
 function dsfmt_fill_array_open_open(A::Array{Float64})
     n = numel(A)
@@ -48,31 +104,32 @@ function dsfmt_fill_array_open_open(A::Array{Float64})
     return A
 end
 
-## Seed from a file
-
-function srand(fname::String, n::Int)
-    fid = open(fname)
-    a = Array(Uint32, long(n))
-    read(fid, a)
-    srand(a)
-    close(fid)
-end
-
 ## Random integers
 
-randui64() = boxui64(or_int(zext64(unbox32(randui32())),
-                            shl_int(zext64(unbox32(randui32())),unbox32(32))))
+dsfmt_randui32() = ccall(dlsym(librandom, :dsfmt_gv_genrand_uint32), Uint32, ())
 
-randint(::Type{Int32})  = int32(randui32()) & typemax(Int32)
-randint(::Type{Uint32}) = randui32()
-randint(::Type{Int64})  = int64(randui64()) & typemax(Int64)
-randint(::Type{Uint64}) = randui64()
-randint() = randint(Int32) # TODO: should be platform-dependent
+dsfmt_randui64() = boxui64(or_int(zext64(unbox32(dsfmt_randui32())),
+                            shl_int(zext64(unbox32(dsfmt_randui32())),unbox32(32))))
+
+randi() = randi(Uint32)  # TODO: should be platform-dependent
+@rand_matrix_builder Uint32 randi
+
+randi(::Type{Int32})  = int32(dsfmt_randui32()) & typemax(Int32)
+@rand_matrix_builder_1arg Int32 randi
+
+randi(::Type{Uint32}) = dsfmt_randui32()
+@rand_matrix_builder_1arg Uint32 randi
+
+randi(::Type{Int64})  = int64(dsfmt_randui64()) & typemax(Int64)
+@rand_matrix_builder_1arg Int64 randi
+
+randi(::Type{Uint64}) = dsfmt_randui64()
+@rand_matrix_builder_1arg Uint64 randi
 
 # random integer from lo to hi inclusive
-function randint{T<:Int}(lo::T, hi::T)
+function randi_interval{T<:Int}(lo::T, hi::T)
     m = typemax(T)
-    s = randint(T)
+    s = randi(T)
     if (hi-lo == m)
         return s + lo
     end
@@ -84,17 +141,26 @@ function randint{T<:Int}(lo::T, hi::T)
     # note: m>=0 && r>=0
     lim = m - rem(rem(m,r)+1, r)
     while s > lim
-        s = randint(T)
+        s = randi(T)
     end
     return rem(s,r) + lo
 end
 
+@rand_matrix_builder_2arg Int randi_interval
+
 # random integer from 1 to n
-randint(n::Int) = randint(one(n), n)
+randi_max(n::Int) = randi_interval(one(n), n)
+@rand_matrix_builder_1arg Int randi_max
 
-## Normally distributed random numbers using Ziggurat algorithm
+## Random Bools
 
-## Ziggurat
+randbit() = randui32() & uint32(1)
+@rand_matrix_builder Uint32 randbit
+
+randbool() = randbit() == 1
+@rand_matrix_builder Bool randbool
+
+## randn() - Normally distributed random numbers using Ziggurat algorithm
 
 randn_zig_init() = ccall(dlsym(librandom, :randmtzig_create_ziggurat_tables), Void, ())
 
@@ -110,38 +176,13 @@ end
 
 randn(dims::Size...) = randn(dims)
 
-## Box-Muller
-
-randn_bm() = ccall(dlsym(librandom, :dsfmt_randn_bm), Float64, ())
-
-dsfmt_randn_bm_reset() = ccall(dlsym(librandom, :dsfmt_randn_bm_reset), Void, ())
-
-srand(seed::Uint32) = (ccall(dlsym(librandom, :dsfmt_gv_init_gen_rand), Void, (Uint32, ), seed);
-                       dsfmt_randn_bm_reset())
-
-## randg, chi2rnd
+## randg()
 
 # A simple method for generating gamma variables - Marsaglia and Tsang
 # http://www.cparity.com/projects/AcmClassification/samples/358414.pdf
 # Page 369
 
-# function randg(a)
-#     d = a - 1.0/3.0
-#     c = 1.0 / sqrt(9*d)
-#    
-#     while(true)
-#         x = randn()
-#         U = rand()
-#         v = (1 + c*x)
-#         v = v*v*v
-#         dv = d*v
-#         t = x^2 / 2.0 + d - dv  + d * log(v)
-#
-#         if log(U) < t; return dv; end
-#     end
-# end
-
-function randg(a)
+function randg(a::Number)
     d = a - 1.0/3.0
     c = 1.0 / sqrt(9*d)
 
@@ -160,35 +201,9 @@ function randg(a)
     end
 end
 
+@rand_matrix_builder_1arg Float64 randg
+
+# chi2rnd()
+
 chi2rnd(v) = 2*randg(v/2)
-
-## Arrays of random numbers
-
-function rand(dims::Dims)
-    A = Array(Float64, dims)
-    dsfmt_fill_array_open_open(A)
-    return A
-end
-
-rand(dims::Size...) = rand(dims)
-
-macro rand_matrix_builder(t, f)
-    quote
-
-        function ($f)(dims::Dims)
-            A = Array($t, dims)
-            for i = 1:numel(A)
-                A[i] = ($f)()
-            end
-            return A
-        end
-
-        ($f)(dims::Size...) = ($f)(dims)
-
-    end # quote
-end # macro
-
-#@rand_matrix_builder Float32 randn
-@rand_matrix_builder Float32 randf
-@rand_matrix_builder Uint32 randui32
-@rand_matrix_builder Uint64 randui64
+@rand_matrix_builder_1arg Float64 chi2rnd
