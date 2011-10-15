@@ -15,6 +15,48 @@ end
 
 dsfmt_get_min_array_size() = ccall(dlsym(librandom, :dsfmt_get_min_array_size), Int32, ())
 
+# Macros to generate random arrays
+
+macro rand_matrix_builder(t, f)
+    quote
+
+        function ($f)(dims::Dims)
+            A = Array($t, dims)
+            for i = 1:numel(A); A[i] = ($f)(); end
+            return A
+        end
+
+    end # quote
+end # macro
+
+macro rand_matrix_builder_1arg(t, f)
+    quote
+
+        function ($f)(arg, dims::Dims)
+            A = Array($t, dims)
+            for i = 1:numel(A); A[i] = ($f)(arg); end
+            return A
+        end
+
+        ($f)(arg, dims::Size...) = ($f)(arg, dims)
+
+    end # quote
+end # macro
+
+macro rand_matrix_builder_2arg(t, f)
+    quote
+
+        function ($f)(arg1, arg2, dims::Dims)
+            A = Array($t, dims)
+            for i = 1:numel(A); A[i] = ($f)(arg1, arg2); end
+            return A
+        end
+
+        ($f)(arg1, arg2, dims::Size...) = ($f)(arg1, arg2, dims)
+
+    end # quote
+end # macro
+
 ## srand()
 
 srand(seed::Uint32) = ccall(dlsym(librandom, :dsfmt_gv_init_gen_rand), Void, (Uint32, ), seed)
@@ -168,45 +210,3 @@ end
 
 chi2rnd(v) = 2*randg(v/2)
 @rand_matrix_builder_1arg Float64 chi2rnd
-
-# Macros to generate random arrays
-
-macro rand_matrix_builder(t, f)
-    quote
-
-        function ($f)(dims::Dims)
-            A = Array($t, dims)
-            for i = 1:numel(A); A[i] = ($f)(); end
-            return A
-        end
-
-    end # quote
-end # macro
-
-macro rand_matrix_builder_1arg(t, f)
-    quote
-
-        function ($f)(arg, dims::Dims)
-            A = Array($t, dims)
-            for i = 1:numel(A); A[i] = ($f)(arg); end
-            return A
-        end
-
-        ($f)(arg, dims::Size...) = ($f)(arg, dims)
-
-    end # quote
-end # macro
-
-macro rand_matrix_builder_2arg(t, f)
-    quote
-
-        function ($f)(arg1, arg2, dims::Dims)
-            A = Array($t, dims)
-            for i = 1:numel(A); A[i] = ($f)(arg1, arg2); end
-            return A
-        end
-
-        ($f)(arg1, arg2, dims::Size...) = ($f)(arg1, arg2, dims)
-
-    end # quote
-end # macro
