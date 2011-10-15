@@ -114,8 +114,13 @@ dsfmt_randui32() = ccall(dlsym(librandom, :dsfmt_gv_genrand_uint32), Uint32, ())
 dsfmt_randui64() = boxui64(or_int(zext64(unbox32(dsfmt_randui32())),
                             shl_int(zext64(unbox32(dsfmt_randui32())),unbox32(32))))
 
-randi() = randi(Uint32)  # TODO: should be platform-dependent
-@rand_matrix_builder Uint32 randi
+if WORD_SIZE == 64
+    randi() = randi(Uint64)
+    @rand_matrix_builder Uint64 randi
+else
+    randi() = randi(Uint32)
+    @rand_matrix_builder Uint32 randi
+end
 
 randi(::Type{Int32})  = int32(dsfmt_randui32()) & typemax(Int32)
 @rand_matrix_builder_1arg Int32 randi
@@ -157,7 +162,7 @@ randi_max(n::Int) = randi_interval(one(n), n)
 
 ## Random Bools
 
-randbit() = randui32() & uint32(1)
+randbit() = dsfmt_randui32() & uint32(1)
 @rand_matrix_builder Uint32 randbit
 
 randbool() = randbit() == 1
@@ -185,7 +190,7 @@ randn(dims::Size...) = randn(dims)
 # http://www.cparity.com/projects/AcmClassification/samples/358414.pdf
 # Page 369
 
-function randg(a::Number)
+function randg(a::Real)
     d = a - 1.0/3.0
     c = 1.0 / sqrt(9*d)
 
