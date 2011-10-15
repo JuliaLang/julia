@@ -118,7 +118,9 @@
     jl_gc_add_finalizer;
     jl_gc_collect;
     jl_gc_lookfor;
+    jl_errno;
     jl_strerror;
+    jl_environ;
     jl_stdin;
     jl_stdout;
     jl_stderr;
@@ -128,7 +130,6 @@
     jl_process_exit_status;
     jl_process_term_signal;
     jl_process_stop_signal;
-    jl_errno;
     jl_load;
     jl_dlsym;
     jl_load_dynamic_library;

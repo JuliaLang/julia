@@ -13,12 +13,14 @@ function getenv(var::String)
     cstring(val)
 end
 
-function setenv(var::String, val::String)
+function setenv(var::String, val::String, overwrite::Bool)
     ret = ccall(dlsym(libc, :setenv), Int32,
                 (Ptr{Uint8}, Ptr{Uint8}, Int32),
-                cstring(var), cstring(val), int32(1))
+                cstring(var), cstring(val), int32(overwrite))
     system_error(:setenv, ret != 0)
 end
+
+setenv(var::String, val::String) = setenv(var, val, true)
 
 function unsetenv(var::String)
     ret = ccall(dlsym(libc, :unsetenv), Int32, (Ptr{Uint8},), var)
@@ -41,14 +43,31 @@ end
 
 has(::EnvHash, k::String) = hasenv(k)
 del(::EnvHash, k::String) = unsetenv(k)
-
 assign(::EnvHash, v::String, k::String) = (setenv(k,v); v)
 
-# TODO: make this implement Hash interface
-# it should thereby inherit the ability to
-# iterate its key-value pairs and display
-# iteself to the world.
+start(::EnvHash) = int32(0)
+done(::EnvHash, i) = (ccall(:jl_environ, Any, (Int32,), int32(i)) == nothing)
+function next(::EnvHash, i)
+    i = int32(i)
+    env = ccall(:jl_environ, Any, (Int32,), i)
+    if env == nothing
+        error("environ: index out of range")
+    end
+    env::ByteString
+    m = match(Regex(L"^(.*?)=(.*)$"), env)
+    if m == nothing
+        error("malformed environment entry: $env")
+    end
+    (m.captures, i+one(i))
+end
 
-## misc environment functionality ##
+function show(::EnvHash)
+    for (k,v) = ENV
+        println("$k=$v")
+    end
+end
 
-tty_columns() = parse_int(Int32, ENV["COLUMNS"], 10)
+## misc environment-related functionality ##
+
+tty_cols() = parse_int(Int32, ENV["COLUMNS"], 10)
+tty_rows() = parse_int(Int32, ENV["LINES"], 10)

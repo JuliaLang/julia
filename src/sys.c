@@ -189,6 +189,23 @@ jl_value_t *jl_strerror(int errnum)
     return jl_pchar_to_string((char*)str, strlen(str));
 }
 
+// -- iterating the environment --
+
+#ifdef __APPLE__
+#include <crt_externs.h>
+#else
+extern char **environ;
+#endif
+
+jl_value_t *jl_environ(int i)
+{
+#ifdef __APPLE__
+    char **environ = *_NSGetEnviron();
+#endif
+    char *env = environ[i];
+    return env ? jl_pchar_to_string(env, strlen(env)) : jl_nothing;
+}
+
 // -- child process status --
 
 int jl_process_exited(int status)      { return WIFEXITED(status); }
