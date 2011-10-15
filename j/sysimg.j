@@ -84,7 +84,6 @@ load("intfuncs.j")
 load("floatfuncs.j")
 load("math.j")
 load("math_libm.j")
-load("random.j")
 load("combinatorics.j")
 load("linalg.j")
 load("linalg_blas.j")
@@ -102,6 +101,9 @@ load("process.j")
 load("serialize.j")
 load("multi.j")
 load("darray.j")
+
+# random number generation
+load("random.j")
 
 # misc
 load("util.j")

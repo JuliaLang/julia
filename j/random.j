@@ -1,61 +1,55 @@
 librandom = dlopen("librandom")
 
-## Initialization
+## initialization
 
 function librandom_init()
     try
         srand("/dev/urandom", 4)
     catch
-        println("Entropy pool not available to seed RNG. Using time, which may end up using the same seed across multiple processors.")
-        srand(uint64(clock()*2.0^32))
+        println("Entropy pool not available to seed RNG, using ad-hoc entropy sources.")
+        seed = bswap(uint64(clock()*2.0^32))
+        seed $= parse_int(Uint64, readall(`ifconfig`|`sha1sum`)[1:40], 16)
+        seed $= uint64(getpid())
+        srand(seed)
     end
-
     randn_zig_init()
 end
 
 dsfmt_get_min_array_size() = ccall(dlsym(librandom, :dsfmt_get_min_array_size), Int32, ())
 
-# Macros to generate random arrays
+# macros to generate random arrays
 
 macro rand_matrix_builder(t, f)
     quote
-
         function ($f)(dims::Dims)
             A = Array($t, dims)
             for i = 1:numel(A); A[i] = ($f)(); end
             return A
         end
-
-    end # quote
-end # macro
+    end
+end
 
 macro rand_matrix_builder_1arg(t, f)
     quote
-
         function ($f)(arg, dims::Dims)
             A = Array($t, dims)
             for i = 1:numel(A); A[i] = ($f)(arg); end
             return A
         end
-
         ($f)(arg, dims::Size...) = ($f)(arg, dims)
-
-    end # quote
-end # macro
+    end
+end
 
 macro rand_matrix_builder_2arg(t, f)
     quote
-
         function ($f)(arg1, arg2, dims::Dims)
             A = Array($t, dims)
             for i = 1:numel(A); A[i] = ($f)(arg1, arg2); end
             return A
         end
-
         ($f)(arg1, arg2, dims::Size...) = ($f)(arg1, arg2, dims)
-
-    end # quote
-end # macro
+    end
+end
 
 ## srand()
 
@@ -69,14 +63,15 @@ end
 
 srand(seed::Uint64) = srand([uint32(seed),uint32(seed>>32)])
 
-# Seed from a file
-function srand(fname::String, n::Int)
-    fid = open(fname)
+function srand(filename::String, n::Int)
+    fd = open(filename)
     a = Array(Uint32, long(n))
-    read(fid, a)
+    read(fd, a)
     srand(a)
-    close(fid)
+    close(fd)
 end
+
+srand(filename::String) = srand(filename, 4)
 
 ## rand()
 
@@ -107,12 +102,12 @@ function dsfmt_fill_array_open_open(A::Array{Float64})
     return A
 end
 
-## Random integers
+## random integers
 
 dsfmt_randui32() = ccall(dlsym(librandom, :dsfmt_gv_genrand_uint32), Uint32, ())
 
 dsfmt_randui64() = boxui64(or_int(zext64(unbox32(dsfmt_randui32())),
-                            shl_int(zext64(unbox32(dsfmt_randui32())),unbox32(32))))
+                           shl_int(zext64(unbox32(dsfmt_randui32())),unbox32(32))))
 
 if WORD_SIZE == 64
     randi() = randi(Uint64)
@@ -160,7 +155,7 @@ end
 randi_max(n::Int) = randi_interval(one(n), n)
 @rand_matrix_builder_1arg Int randi_max
 
-## Random Bools
+## random Bools
 
 randbit() = dsfmt_randui32() & uint32(1)
 @rand_matrix_builder Uint32 randbit
@@ -193,7 +188,6 @@ randn(dims::Size...) = randn(dims)
 function randg(a::Real)
     d = a - 1.0/3.0
     c = 1.0 / sqrt(9*d)
-
     while(true)
         x = randn()
         v = 1.0 + c*x
@@ -211,7 +205,7 @@ end
 
 @rand_matrix_builder_1arg Float64 randg
 
-# chi2rnd()
+# randchi2()
 
-chi2rnd(v) = 2*randg(v/2)
-@rand_matrix_builder_1arg Float64 chi2rnd
+randchi2(v) = 2*randg(v/2)
+@rand_matrix_builder_1arg Float64 randchi2
