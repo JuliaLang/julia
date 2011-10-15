@@ -10,16 +10,16 @@
 
 static double randn_bm_next = RANDN_RESET;
 
-void dsfmt_randn_bm_reset(void);
-double dsfmt_randn_bm(void);
+void randn_bm_reset(void);
+double randn_bm(void);
 
-void dsfmt_randn_bm_reset(void)
+void randn_bm_reset(void)
 {
     randn_bm_next = RANDN_RESET;
 }
 
 // Box Muller
-double dsfmt_randn_bm(void)
+double randn_bm(void)
 {
     double s, vre, vim, ure, uim;
 
