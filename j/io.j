@@ -29,7 +29,7 @@ function fdio(fd::Int, own::Bool)
 end
 fdio(fd::Int) = fdio(fd, false)
 
-function open(fname::String, rd::Bool, wr::Bool, cr::Bool, tr::Bool)
+function open(fname::String, rd::Bool, wr::Bool, cr::Bool, tr::Bool, ff::Bool)
     s = IOStream()
     if ccall(:ios_file, Ptr{Void},
              (Ptr{Uint8}, Ptr{Uint8}, Int32, Int32, Int32, Int32),
@@ -37,16 +37,29 @@ function open(fname::String, rd::Bool, wr::Bool, cr::Bool, tr::Bool)
              int32(rd), int32(wr), int32(cr), int32(tr)) == C_NULL
         error("could not open file ", fname)
     end
+    if ff && ccall(:ios_seek_end, PtrInt, (Ptr{Void},), s.ios) != 0
+        error("error seeking to end of file ", fname)
+    end
     return s
 end
-open(fname::String) = open(fname, true, false, false, false)
+open(fname::String) = open(fname, true, false, false, false, false)
 
-memio() = memio(0)
+function open(fname::String, mode::String)
+    mode == "r"  ? open(fname, true,  false, false, false, false) :
+    mode == "r+" ? open(fname, true,  true , false, false, false) :
+    mode == "w"  ? open(fname, false, true , true , true , false) :
+    mode == "w+" ? open(fname, true,  true , true , true , false) :
+    mode == "a"  ? open(fname, false, true , true , false, true ) :
+    mode == "a+" ? open(fname, true,  true , true , false, true ) :
+    error("invalid open mode: ", mode)
+end
+
 function memio(x::Int)
     s = IOStream()
     ccall(:jl_ios_mem, Ptr{Void}, (Ptr{Uint8}, Ulong), s.ios, ulong(x))
     s
 end
+memio() = memio(0)
 
 convert(T::Type{Ptr}, s::IOStream) = convert(T, s.ios)
 
@@ -235,7 +248,7 @@ function add(s::FDSet, i::Int)
     if i >= s.nfds
         s.nfds = i+1
     end
-    s
+    return s
 end
 
 function has(s::FDSet, i::Int)
@@ -256,7 +269,7 @@ function del(s::FDSet, i::Int)
             end
         end
     end
-    s
+    return s
 end
 
 function del_all(s::FDSet)
