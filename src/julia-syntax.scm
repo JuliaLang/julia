@@ -954,19 +954,19 @@
 		  ,(construct-loops (cdr ranges)))))
 
       ;; Evaluate the comprehension
-      (let ((ranges2
+      (let ((loopranges
 	     (map (lambda (r v) `(= ,(cadr r) ,v)) ranges rv)))
 	`(scope-block
 	  (block
 	   (local ,oneresult)
 	   ,@(map (lambda (v r) `(= ,v ,(caddr r))) rv ranges)
 	   ;; the evaluate-one code is used by type inference but does not run
-	   (if false ,(evaluate-one ranges2))
+	   (if (call (top !) true) ,(evaluate-one loopranges))
 	   (= ,result (call (top Array)
 			    (static_typeof ,oneresult)
-			    ,@(compute-dims ranges2)))
+			    ,@(compute-dims loopranges)))
 	   (= ,ri 1)
-	   ,(construct-loops (reverse ranges2))
+	   ,(construct-loops (reverse loopranges))
 	   ,result))))))
 
    ;; cell array comprehensions

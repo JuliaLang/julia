@@ -351,7 +351,9 @@ function gen_cartesian_map(cache, genbodies, ranges, exargnames, exargs...)
             #println("no array noticed")
 	    body = bodies
             bodies = cell(N,2)
-            { bodies[i] = nothing | i = 1:2*N}
+            for i=1:2*N
+                bodies[i] = nothing
+            end
         end
         fexpr =
         quote

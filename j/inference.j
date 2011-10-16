@@ -897,7 +897,7 @@ function typeinf(linfo::LambdaStaticData,atypes::Tuple,sparams::Tuple, cop, def)
     while !isa(f,EmptyCallStack)
         if is(f.ast,ast0) && typeseq(f.types, atypes)
             # return best guess so far
-            f.recurred = true
+            (f::CallStack).recurred = true
             r = inference_stack
             while !is(r, f)
                 # mark all frames that are part of the cycle
@@ -1017,11 +1017,19 @@ function typeinf(linfo::LambdaStaticData,atypes::Tuple,sparams::Tuple, cop, def)
             elseif isa(stmt,Expr)
                 hd = stmt.head
                 if is(hd,:gotoifnot)
+                    condexpr = stmt.args[1]
                     l = findlabel(body,stmt.args[2])
-                    handler_at[l] = cur_hand
-                    if stchanged(changes, s[l], vars)
-                        add(W, l)
-                        s[l] = stupdate(s[l], changes, vars)
+                    # constant conditions
+                    if is(condexpr,true)
+                    elseif is(condexpr,false)
+                        pc´ = l
+                    else
+                        # general case
+                        handler_at[l] = cur_hand
+                        if stchanged(changes, s[l], vars)
+                            add(W, l)
+                            s[l] = stupdate(s[l], changes, vars)
+                        end
                     end
                 elseif is(hd,:return)
                     pc´ = n+1
@@ -1089,7 +1097,7 @@ function typeinf(linfo::LambdaStaticData,atypes::Tuple,sparams::Tuple, cop, def)
         tuple_elim_pass(fulltree)
         linfo.inferred = true
     end
-    inference_stack = inference_stack.prev
+    inference_stack = (inference_stack::CallStack).prev
     return (fulltree, frame.result)
 end
 
