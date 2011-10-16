@@ -431,6 +431,20 @@ function eig{T<:Union(Float64,Float32,Complex128,Complex64)}(A::StridedMatrix{T}
 
 end
 
+function trideig(d::Vector{Float64}, e::Vector{Float64})
+    dcopy = copy(d)
+    ecopy = copy(e)
+    ccall(dlsym(libLAPACK, :dsteqr_),
+          Void,
+          (Ptr{Uint8},Ptr{Int32},Ptr{Float64},
+           Ptr{Float64},Ptr{Float64},Ptr{Int32},
+           Ptr{Float64},Ptr{Int32}),
+          "N", int32(numel(d)), dcopy, ecopy,
+          [0.0], int32(numel(d)), [0.0], [int32(0)])
+    return dcopy
+end
+
+
 macro jl_lapack_gesvd_macro(real_gesvd, complex_gesvd, eltype, celtype)
     quote
 
