@@ -232,9 +232,10 @@ function darray{T}(init, ::Type{T}, dims::Dims, distdim)
            defaultdist(distdim, dims, length(procs)))
 end
 
-darray{T}(init, ::Type{T}, dims::Dims) = darray(init,T,dims,maxdim(dims))
-darray(init, T::Type, dims::Size...) = darray(init, T, dims)
-darray(init, dims::Dims) = darray(init, Float64, dims)
+darray{T}(init::Function, ::Type{T}, dims::Dims) =
+    darray(init,T,dims,maxdim(dims))
+darray(init::Function, T::Type, dims::Size...) = darray(init, T, dims)
+darray(init::Function, dims::Dims) = darray(init, Float64, dims)
 darray(init::Function, dims::Size...) = darray(init, dims)
 
 darray(T::Type, args...)     = darray((T,lsz,da)->Array(T,lsz), T, args...)
