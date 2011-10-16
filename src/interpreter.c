@@ -98,10 +98,10 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl)
                 return (jl_value_t*)jl_nothing;
             }
         }
-        jl_value_t **bp = jl_get_bindingp(jl_system_module, (jl_sym_t*)sym);
+        jl_binding_t *bp = jl_get_binding(jl_system_module, (jl_sym_t*)sym);
         jl_value_t *rhs = eval(args[1], locals, nl);
-        if (*bp==NULL || !jl_is_func(*bp))
-            *bp = rhs;
+        jl_check_assignment(bp);
+        bp->value = rhs;
         return (jl_value_t*)jl_nothing;
     }
     else if (ex->head == new_sym) {
@@ -130,15 +130,39 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl)
     }
     else if (ex->head == method_sym) {
         jl_sym_t *fname = (jl_sym_t*)args[0];
-        jl_value_t **bp = var_bp(fname, locals, nl);
+        jl_value_t **bp=NULL;
+        jl_binding_t *b=NULL;
+        size_t i;
+        for (i=0; i < nl; i++) {
+            if (locals[i*2] == (jl_value_t*)fname) {
+                bp = &locals[i*2+1];
+                break;
+            }
+        }
+        if (bp == NULL) {
+            b = jl_get_binding(jl_system_module, fname);
+            bp = &b->value;
+        }
         jl_value_t *atypes=NULL, *meth=NULL;
         JL_GC_PUSH(&atypes, &meth);
         atypes = eval(args[1], locals, nl);
         meth = eval(args[2], locals, nl);
-        jl_value_t *gf = jl_method_def(fname, bp, (jl_tuple_t*)atypes,
+        jl_value_t *gf = jl_method_def(fname, bp, b, (jl_tuple_t*)atypes,
                                        (jl_function_t*)meth);
         JL_GC_POP();
         return gf;
+    }
+    else if (ex->head == const_sym) {
+        jl_value_t *sym = args[0];
+        size_t i;
+        for (i=0; i < nl; i++) {
+            if (locals[i*2] == sym) {
+                return (jl_value_t*)jl_nothing;
+            }
+        }
+        jl_binding_t *bp = jl_get_binding(jl_system_module, (jl_sym_t*)sym);
+        jl_declare_constant(bp);
+        return (jl_value_t*)jl_nothing;
     }
     else if (ex->head == error_sym) {
         jl_errorf("syntax error: %s", jl_string_data(args[0]));

@@ -84,6 +84,28 @@ void jl_set_const(jl_module_t *m, jl_sym_t *var, jl_value_t *val)
     }
 }
 
+DLLEXPORT
+int jl_is_const(jl_sym_t *var)
+{
+    jl_binding_t *bp = jl_get_binding(jl_system_module, var);
+    return bp->constp;
+}
+
+void jl_check_assignment(jl_binding_t *b)
+{
+    if (b->constp && b->value != NULL)
+        jl_errorf("cannot redefine constant %s", b->name->name);
+}
+
+void jl_declare_constant(jl_binding_t *b)
+{
+    if (b->value != NULL) {
+        jl_errorf("cannot declare %s constant; it already has a value",
+                  b->name->name);
+    }
+    b->constp = 1;
+}
+
 jl_module_t *jl_add_module(jl_module_t *m, jl_module_t *child);
 jl_module_t *jl_get_module(jl_module_t *m, jl_sym_t *name);
 jl_module_t *jl_import_module(jl_module_t *to, jl_module_t *from);

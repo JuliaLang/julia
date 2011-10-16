@@ -64,13 +64,8 @@ isbuiltin(f) = ccall(:jl_is_builtin, Int32, (Any,), f) != 0
 isgeneric(f) = ccall(:jl_is_genericfunc, Int32, (Any,), f) != 0
 isleaftype(t) = ccall(:jl_is_leaf_type, Int32, (Any,), t) != 0
 
-# for now assume all global functions constant
-# TODO
-isconstant(s::Symbol) = isbound(s) && (e=eval(s);
-                                       isa(e,Function) || isa(e,AbstractKind) ||
-                                       isa(e,BitsKind) || isa(e,CompositeKind) ||
-                                       isa(e,TypeConstructor) ||
-                                       is(e,None))
+isconstant(s::Symbol) =
+    isbound(s) && (ccall(:jl_is_const, Int32, (Any,), s) != 0)
 isconstant(s::SymbolNode) = isconstant(s.name)
 isconstant(s::TopNode) = isconstant(s.name)
 isconstant(x::Expr) = false
@@ -586,8 +581,6 @@ function abstract_eval(e::Expr, vtypes, sv::StaticVarInfo)
         else
             t = Any
         end
-    elseif is(e.head,:method)
-        t = Function
     elseif is(e.head,:static_typeof)
         t = abstract_eval(e.args[1], vtypes, sv)
         # intersect with Any to remove Undef
@@ -631,7 +624,7 @@ end
 # undefined. The corresponding run-time type is None, since accessing an
 # undefined location is an error. A non-lvalue expression cannot have
 # type Undef, only None.
-typealias Top Union(Any,Undef)
+# typealias Top Union(Any,Undef)
 
 function abstract_eval_global(s::Symbol)
     if !isbound(s)
@@ -706,6 +699,8 @@ function interpret(e::Expr, vtypes, sv::StaticVarInfo)
         abstract_eval(e, vtypes, sv)
     elseif is(e.head,:gotoifnot)
         abstract_eval(e.args[1], vtypes, sv)
+    elseif is(e.head,:method)
+        return StateUpdate(e.args[1], Function, vtypes)
     end
     return vtypes
 end
@@ -1113,7 +1108,8 @@ end
 
 function eval_annotate(e::Expr, vtypes, sv, decls, clo)
     head = e.head
-    if is(head,:static_typeof) || is(head,:line)
+    if is(head,:static_typeof) || is(head,:line) || is(head,:const) ||
+       is(head,:method)
         return e
     elseif is(head,:gotoifnot) || is(head,:return)
         e.typ = Any

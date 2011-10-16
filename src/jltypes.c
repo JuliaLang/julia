@@ -36,6 +36,7 @@ jl_struct_type_t *jl_struct_kind;
 jl_struct_type_t *jl_bits_kind;
 
 jl_type_t *jl_bottom_type;
+jl_value_t *jl_top_type;
 jl_tag_type_t *jl_seq_type;
 jl_tag_type_t *jl_abstractarray_type;
 
@@ -1315,7 +1316,6 @@ static jl_value_t *apply_type_(jl_value_t *tc, jl_value_t **params, size_t n)
                 // TODO: Undef should not be special here; fix.
                 // maybe introduce Top == Union(Any,Undef), and make this
                 // the default upper bound.
-                params[i] != (jl_value_t*)jl_undef_type &&
                 !jl_subtype(params[i], (jl_value_t*)tv, 0)) {
                 jl_type_error_rt(tname, tv->name->name,
                                  tv->ub, params[i]);
@@ -1760,7 +1760,8 @@ static int jl_subtype_le(jl_value_t *a, jl_value_t *b, int ta, int morespecific,
     if (ta) a = (jl_value_t*)jl_typeof(a);
 
     if (a == b) return 1;
-    if (a==(jl_value_t*)jl_undef_type || b==(jl_value_t*)jl_undef_type)
+    if ((a==(jl_value_t*)jl_undef_type && !jl_is_typevar(b)) ||
+        b==(jl_value_t*)jl_undef_type)
         return 0;
     if (!invariant && (jl_tag_type_t*)b == jl_any_type) return 1;
     if (jl_is_typevar(a)) {
@@ -2388,7 +2389,15 @@ void jl_init_types(void)
                                                jl_type_type));
     jl_tvar_type->fptr = jl_f_no_function;
 
-    jl_tvar_t *tttvar = tvar("T");
+    jl_undef_type = jl_new_tagtype((jl_value_t*)jl_symbol("Undef"),
+                                   jl_any_type, jl_null);
+
+    jl_top_type = jl_new_struct(jl_union_kind,
+                                jl_tuple2(jl_any_type, jl_undef_type));
+
+    jl_tvar_t *tttvar = jl_new_typevar(jl_symbol("T"),
+                                       (jl_value_t*)jl_bottom_type,
+                                       jl_top_type);
     jl_type_type->parameters = jl_tuple(1, tttvar);
 
     jl_tuple_t *tv;
@@ -2538,9 +2547,6 @@ void jl_init_types(void)
 #endif
                         );
 
-    jl_undef_type = jl_new_tagtype((jl_value_t*)jl_symbol("Undef"),
-                                   jl_any_type, jl_null);
-
     // Type{T}
     jl_typetype_tvar = tvar("T");
     jl_typetype_type = (jl_tag_type_t*)
@@ -2580,4 +2586,5 @@ void jl_init_types(void)
     static_typeof_sym = jl_symbol("static_typeof");
     new_sym = jl_symbol("new");
     multivalue_sym = jl_symbol("multiple_value");
+    const_sym = jl_symbol("const");
 }

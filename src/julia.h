@@ -262,6 +262,7 @@ extern DLLEXPORT jl_struct_type_t *jl_struct_kind;
 extern jl_struct_type_t *jl_bits_kind;
 
 extern jl_type_t *jl_bottom_type;
+extern jl_value_t *jl_top_type;
 extern jl_struct_type_t *jl_lambda_info_type;
 extern jl_tag_type_t *jl_seq_type;
 extern jl_typector_t *jl_function_type;
@@ -356,6 +357,7 @@ extern jl_sym_t *Any_sym;     extern jl_sym_t *method_sym;
 extern jl_sym_t *enter_sym;   extern jl_sym_t *leave_sym;
 extern jl_sym_t *exc_sym;     extern jl_sym_t *new_sym;
 extern jl_sym_t *static_typeof_sym;
+extern jl_sym_t *const_sym;
 
 #ifdef __LP64__
 #define NWORDS(sz) (((sz)+7)>>3)
@@ -568,7 +570,7 @@ jl_expr_t *jl_exprn(jl_sym_t *head, size_t n);
 jl_function_t *jl_new_generic_function(jl_sym_t *name);
 void jl_initialize_generic_function(jl_function_t *f, jl_sym_t *name);
 void jl_add_method(jl_function_t *gf, jl_tuple_t *types, jl_function_t *meth);
-jl_value_t *jl_method_def(jl_sym_t *name, jl_value_t **bp,
+jl_value_t *jl_method_def(jl_sym_t *name, jl_value_t **bp, jl_binding_t *bnd,
                           jl_tuple_t *argtypes, jl_function_t *f);
 jl_value_t *jl_box_bool(int8_t x);
 jl_value_t *jl_box_int8(int8_t x);
@@ -706,6 +708,8 @@ int jl_boundp(jl_module_t *m, jl_sym_t *var);
 DLLEXPORT jl_value_t *jl_get_global(jl_module_t *m, jl_sym_t *var);
 DLLEXPORT void jl_set_global(jl_module_t *m, jl_sym_t *var, jl_value_t *val);
 DLLEXPORT void jl_set_const(jl_module_t *m, jl_sym_t *var, jl_value_t *val);
+void jl_check_assignment(jl_binding_t *b);
+void jl_declare_constant(jl_binding_t *b);
 jl_module_t *jl_add_module(jl_module_t *m, jl_module_t *child);
 jl_module_t *jl_get_module(jl_module_t *m, jl_sym_t *name);
 jl_module_t *jl_import_module(jl_module_t *to, jl_module_t *from);

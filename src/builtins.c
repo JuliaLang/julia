@@ -712,6 +712,9 @@ static void show_type(jl_value_t *t)
         if (t == (jl_value_t*)jl_bottom_type) {
             ios_write(s, "None", 4);
         }
+        else if (t == jl_top_type) {
+            ios_write(s, "Top", 3);
+        }
         else {
             ios_write(s, "Union", 5);
             show_tuple(((jl_uniontype_t*)t)->types, '(', ')', 0);
@@ -1105,12 +1108,16 @@ static void check_type_tuple(jl_tuple_t *t, jl_sym_t *name, const char *ctx)
     }
 }
 
-jl_value_t *jl_method_def(jl_sym_t *name, jl_value_t **bp,
+jl_value_t *jl_method_def(jl_sym_t *name, jl_value_t **bp, jl_binding_t *bnd,
                           jl_tuple_t *argtypes, jl_function_t *f)
 {
     jl_value_t *gf;
+    if (bnd && !bnd->constp) {
+        jl_declare_constant(bnd);
+    }
     if (*bp == NULL) {
         gf = (jl_value_t*)jl_new_generic_function(name);
+        *bp = gf;
     }
     else {
         gf = *bp;
@@ -1272,6 +1279,7 @@ void jl_init_primitives(void)
     add_builtin("Any", (jl_value_t*)jl_any_type);
     add_builtin("None", (jl_value_t*)jl_bottom_type);
     add_builtin("Void", (jl_value_t*)jl_bottom_type);
+    add_builtin("Top",  (jl_value_t*)jl_top_type);
     add_builtin("TypeVar", (jl_value_t*)jl_tvar_type);
     add_builtin("TypeName", (jl_value_t*)jl_typename_type);
     add_builtin("TypeConstructor", (jl_value_t*)jl_typector_type);

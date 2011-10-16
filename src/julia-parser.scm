@@ -690,6 +690,12 @@
 			     (list 'return '(null))
 			     (list 'return (parse-eq s)))))
     ((break continue)  (list word))
+    ((const)
+     (let ((assgn (parse-eq s)))
+       (if (or (not (pair? assgn))
+	       (not (eq? (car assgn) '=)))
+	   (error "expected assignment after const")
+	   `(const ,assgn))))
     (else (error "unhandled reserved word")))))
 
 ; parse comma-separated assignments, like "i=1:n,j=1:m,..."

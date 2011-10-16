@@ -212,7 +212,7 @@
   (if (not (symbol? name))
       (error (string "invalid method name " name)))
   `(block
-    (= ,name (method ,name ,argtypes ,(method-lambda-expr argl body)))
+    (method ,name ,argtypes ,(method-lambda-expr argl body))
     (null)))
 
 (define (sparam-name-bounds sparams names bounds)
@@ -327,6 +327,7 @@
 		     defs)))
      (if (null? params)
 	 `(block
+	   (const ,name)
 	   (= ,name
 	      (scope-block
 	       (block
@@ -347,6 +348,7 @@
 		    defs2)))
 	   (null))
 	 `(block
+	   (const ,name)
 	   (= ,name
 	   (call
 	    (lambda (,@params)
@@ -383,6 +385,7 @@
    (params bounds)
    (sparam-name-bounds params '() '())
    `(block
+     (const ,name)
      (= ,name
 	(call
 	 (lambda ,params
@@ -402,6 +405,7 @@
    (params bounds)
    (sparam-name-bounds params '() '())
    `(block
+     (const ,name)
      (= ,name
 	(call
 	 (lambda ,params
@@ -610,14 +614,15 @@
 
    ; typealias is an assignment; should be const when that exists
    (pattern-lambda (typealias (-- name (-s)) type-ex)
-		   `(= ,name ,type-ex))
+		   `(const (= ,name ,type-ex)))
    (pattern-lambda (typealias (curly (-- name (-s)) . params) type-ex)
 		   (receive
 		    (params bounds)
 		    (sparam-name-bounds params '() '())
 		    `(call (lambda ,params
-			     (= ,name (call (top new_type_constructor)
-					    (tuple ,@params) ,type-ex)))
+			     (const
+			      (= ,name (call (top new_type_constructor)
+					     (tuple ,@params) ,type-ex))))
 			   ,@(symbols->typevars params bounds))))
 
    (pattern-lambda (comparison . chain) (expand-compare-chain chain))
@@ -715,6 +720,11 @@
    ; <expr>::T => typeassert(expr, T)
    (pattern-lambda (|::| (-- expr (-^ (-s))) T)
 		   `(call (top typeassert) ,expr ,T))
+
+   ;; constant definition
+   (pattern-lambda (const (= lhs rhs))
+		   `(block (const ,(decl-var lhs))
+			   (= ,lhs ,rhs)))
 
    ;; incorrect multiple return syntax [a, b, ...] = foo
    (pattern-lambda (= (vcat . args) rhs)
@@ -1437,6 +1447,7 @@ So far only the second case can actually occur.
 (define vinfo:name car)
 (define vinfo:type cadr)
 (define (vinfo:capt v) (< 0 (logand (caddr v) 1)))
+(define (vinfo:const v) (< 0 (logand (caddr v) 8)))
 (define (vinfo:set-type! v t) (set-car! (cdr v) t))
 ;; record whether var is captured
 (define (vinfo:set-capt! v c) (set-car! (cddr v)
@@ -1453,6 +1464,12 @@ So far only the second case can actually occur.
 					(if a
 					    (logior (caddr v) 4)
 					    (logand (caddr v) -5))))
+;; whether var is const
+(define (vinfo:set-const! v a) (set-car! (cddr v)
+					 (if a
+					     (logior (caddr v) 8)
+					     (logand (caddr v) -9))))
+
 (define var-info-for assq)
 
 (define (lambda-all-vars e)

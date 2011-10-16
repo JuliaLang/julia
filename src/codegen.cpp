@@ -97,6 +97,8 @@ static Function *jluniniterror_func;
 static Function *jldiverror_func;
 static Function *jltypeerror_func;
 static Function *jlgetbindingp_func;
+static Function *jlcheckassign_func;
+static Function *jldeclareconst_func;
 static Function *jltuple_func;
 static Function *jlntuple_func;
 static Function *jlapplygeneric_func;
@@ -276,6 +278,11 @@ static Value *literal_pointer_val(jl_value_t *p)
     return literal_pointer_val(p, jl_pvalue_llvmt);
 }
 
+static Value *literal_pointer_val(void *p)
+{
+    return literal_pointer_val(p, T_pint8);
+}
+
 static jl_value_t *llvm_type_to_julia(const Type *t, bool err=true);
 
 static Value *emit_typeof(Value *p)
@@ -425,9 +432,17 @@ static Value *emit_nthptr(Value *v, Value *idx)
     return builder.CreateLoad(vptr, false);
 }
 
-static Value *globalvar_binding_pointer(jl_sym_t *s, jl_codectx_t *ctx)
+static Value *globalvar_binding_pointer(jl_sym_t *s, jl_binding_t **pbnd,
+                                        jl_codectx_t *ctx)
 {
-    jl_value_t **bp = jl_get_bindingp(ctx->module, s);
+    jl_value_t **bp;
+    if (pbnd) {
+        *pbnd = jl_get_binding(ctx->module, s);
+        bp = &(*pbnd)->value;
+    }
+    else {
+        bp = jl_get_bindingp(ctx->module, s);
+    }
     return literal_pointer_val(bp, jl_ppvalue_llvmt);
     /*
     return builder.CreateCall2(jlgetbindingp_func,
@@ -437,7 +452,8 @@ static Value *globalvar_binding_pointer(jl_sym_t *s, jl_codectx_t *ctx)
 }
 
 // yields a jl_value_t** giving the binding location of a variable
-static Value *var_binding_pointer(jl_sym_t *s, jl_codectx_t *ctx)
+static Value *var_binding_pointer(jl_sym_t *s, jl_binding_t **pbnd,
+                                  jl_codectx_t *ctx)
 {
     if (jl_is_symbolnode(s))
         s = jl_symbolnode_sym(s);
@@ -457,7 +473,7 @@ static Value *var_binding_pointer(jl_sym_t *s, jl_codectx_t *ctx)
         }
         return l;
     }
-    return globalvar_binding_pointer(s, ctx);
+    return globalvar_binding_pointer(s, pbnd, ctx);
 }
 
 static int is_var_closed(jl_sym_t *s, jl_codectx_t *ctx)
@@ -1034,16 +1050,14 @@ static Value *emit_call(jl_value_t **args, size_t arglen, jl_codectx_t *ctx)
     if (jl_is_symbol(a0) && is_global((jl_sym_t*)a0, ctx) &&
         jl_boundp(ctx->module, (jl_sym_t*)a0)) {
         b = jl_get_binding(ctx->module, (jl_sym_t*)a0);
-        // TODO
-        //if (!b->constp) b = NULL;
+        if (!b->constp)
+            b = NULL;
     }
     if (jl_is_topnode(a0)) {
         headIsGlobal = true;
         // (top x) is also global
-        b = jl_get_binding(ctx->module,
-                           (jl_sym_t*)jl_fieldref(a0,0));
-        if (b->value==NULL ||
-            (!b->constp && !(jl_is_func(b->value) && jl_is_gf(b->value))))
+        b = jl_get_binding(ctx->module, (jl_sym_t*)jl_fieldref(a0,0));
+        if (b->value==NULL || !b->constp)
             b = NULL;
     }
     jl_value_t *f = NULL;
@@ -1119,7 +1133,11 @@ static void emit_assignment(jl_value_t *l, jl_value_t *r, jl_codectx_t *ctx)
         s = jl_symbolnode_sym(l);
     else
         assert(false);
-    Value *bp = var_binding_pointer(s, ctx);
+    jl_binding_t *bnd=NULL;
+    Value *bp = var_binding_pointer(s, &bnd, ctx);
+    if (bnd) {
+        builder.CreateCall(jlcheckassign_func, literal_pointer_val((void*)bnd));
+    }
     const Type *vt = bp->getType();
     if (vt->isPointerTy() && vt->getContainedType(0)!=jl_pvalue_llvmt)
         builder.CreateStore(emit_unbox(vt->getContainedType(0), vt,
@@ -1143,7 +1161,7 @@ static Value *emit_var(jl_sym_t *sym, jl_value_t *ty, jl_codectx_t *ctx)
             }
         }
     }
-    Value *bp = var_binding_pointer(sym, ctx);
+    Value *bp = var_binding_pointer(sym, NULL, ctx);
     Value *arg = (*ctx->arguments)[sym->name];
     // arguments are always defined
     if (arg != NULL ||
@@ -1195,8 +1213,8 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool value)
     else if (jl_is_topnode(expr)) {
         jl_sym_t *var = (jl_sym_t*)jl_fieldref(expr,0);
         jl_value_t *etype = jl_fieldref(expr,1);
-        jl_binding_t *b = jl_get_binding(ctx->module, var);
-        Value *bp = globalvar_binding_pointer(var, ctx);
+        jl_binding_t *b;
+        Value *bp = globalvar_binding_pointer(var, &b, ctx);
         if ((b->constp && b->value!=NULL) ||
             (etype!=(jl_value_t*)jl_any_type &&
              !jl_subtype((jl_value_t*)jl_undef_type, etype, 0))) {
@@ -1278,12 +1296,14 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool value)
         }
         assert(jl_is_symbol(mn));
         Value *name = literal_pointer_val(mn);
-        Value *bp = var_binding_pointer((jl_sym_t*)mn, ctx);
+        jl_binding_t *bnd = NULL;
+        Value *bp = var_binding_pointer((jl_sym_t*)mn, &bnd, ctx);
         Value *a1 = emit_expr(args[1], ctx, true);
         make_gcroot(boxed(a1), ctx);
         Value *a2 = emit_expr(args[2], ctx, true);
         make_gcroot(boxed(a2), ctx);
-        Value *m = builder.CreateCall4(jlmethod_func, name, bp, a1, a2);
+        Value *m = builder.CreateCall5(jlmethod_func, name, bp,
+                                       literal_pointer_val((void*)bnd), a1, a2);
         ctx->argDepth-=2;
         return m;
     }
@@ -1296,7 +1316,7 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool value)
             sy = jl_symbolnode_sym(a);
         else
             assert(false);
-        Value *bp = var_binding_pointer(sy, ctx);
+        Value *bp = var_binding_pointer(sy, NULL, ctx);
         if (bp->getType()->getContainedType(0) != jl_pvalue_llvmt) {
             // unboxed vars will never be referenced undefined
             return ConstantInt::get(T_int1, 1);
@@ -1315,6 +1335,15 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool value)
         Value *v = builder.CreateLoad(bp, false);
         Value *isbnd = builder.CreateICmpNE(v, V_null);
         return isbnd;
+    }
+    else if (ex->head == const_sym) {
+        jl_sym_t *sym = (jl_sym_t*)args[0];
+        jl_binding_t *bnd = NULL;
+        (void)var_binding_pointer(sym, &bnd, ctx);
+        if (bnd) {
+            builder.CreateCall(jldeclareconst_func,
+                               literal_pointer_val((void*)bnd));
+        }
     }
 
     else if (ex->head == null_sym) {
@@ -1979,6 +2008,22 @@ static void init_julia_llvm_env(Module *m)
     jl_ExecutionEngine->addGlobalMapping(jlgetbindingp_func,
                                          (void*)&jl_get_bindingp);
 
+    std::vector<const Type *> args_1ptr(0);
+    args_1ptr.push_back(T_pint8);
+    jlcheckassign_func =
+        Function::Create(FunctionType::get(T_void, args_1ptr, false),
+                         Function::ExternalLinkage,
+                         "jl_check_assignment", jl_Module);
+    jl_ExecutionEngine->addGlobalMapping(jlcheckassign_func,
+                                         (void*)&jl_check_assignment);
+
+    jldeclareconst_func =
+        Function::Create(FunctionType::get(T_void, args_1ptr, false),
+                         Function::ExternalLinkage,
+                         "jl_declare_constant", jl_Module);
+    jl_ExecutionEngine->addGlobalMapping(jldeclareconst_func,
+                                         (void*)&jl_declare_constant);
+
     jltuple_func = jlfunc_to_llvm("jl_f_tuple", (void*)*jl_f_tuple);
     jlapplygeneric_func =
         jlfunc_to_llvm("jl_apply_generic", (void*)*jl_apply_generic);
@@ -2012,6 +2057,7 @@ static void init_julia_llvm_env(Module *m)
     std::vector<const Type*> mdargs(0);
     mdargs.push_back(jl_pvalue_llvmt);
     mdargs.push_back(jl_ppvalue_llvmt);
+    mdargs.push_back(T_pint8);
     mdargs.push_back(jl_pvalue_llvmt);
     mdargs.push_back(jl_pvalue_llvmt);
     jlmethod_func =
