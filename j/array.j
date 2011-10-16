@@ -216,7 +216,10 @@ assign{T}(A::Array{T,0}, x) = arrayset(A,1,convert(T, x))
 
 ## Dequeue functionality ##
 
-function push{T}(a::Array{T,1}, item)
+function push{T}(a::Array{T,1}, item::ANY)
+    if is(T,None)
+        error("[] cannot grow. Instead, initialize the array with \"empty(element_type)\".")
+    end
     ccall(:jl_array_grow_end, Void, (Any, Ulong), a, ulong(1))
     a[end] = item
     return a
@@ -237,6 +240,9 @@ function pop{T}(a::Array{T,1})
 end
 
 function enq{T}(a::Array{T,1}, item)
+    if is(T,None)
+        error("[] cannot grow. Instead, initialize the array with \"empty(element_type)\".")
+    end
     ccall(:jl_array_grow_beg, Void, (Any, Ulong), a, ulong(1))
     a[1] = item
     return a
