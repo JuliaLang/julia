@@ -82,7 +82,16 @@ end
 
 edit(fl::String) = edit(fl, 1)
 function edit(fl::String, line::Int)
-    run(`emacs $fl --eval "(goto-line $line)"`)
+    issrc = fl[end-1:end] == ".j"
+    if issrc
+        jmode = "$JULIA_HOME/contrib/julia-mode.el"
+        run(`emacs $fl --eval "(progn
+                                 (require 'julia-mode \"$jmode\")
+                                 (julia-mode)
+                                 (goto-line $line))"`)
+    else
+        run(`emacs $fl --eval "(goto-line $line)"`)
+    end
     load(fl)
 end
 
