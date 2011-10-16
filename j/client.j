@@ -115,6 +115,10 @@ function _start()
             load(strcat(getcwd(),"/custom.j"))
         catch
         end
+        try
+            load(strcat(getcwd(),"/startup.j"))
+        catch
+        end
 
         (quiet,repl) = process_options(ARGS)
 
