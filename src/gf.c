@@ -351,26 +351,24 @@ void jl_type_infer(jl_lambda_info_t *li, jl_tuple_t *argtypes,
 {
     int last_ii = jl_in_inference;
     jl_in_inference = 1;
-    jl_specialize_ast(li);
     if (jl_typeinf_func != NULL) {
         // TODO: this should be done right before code gen, so if it is
         // interrupted we can try again the next time the function is
         // called
         assert(li->inInference == 0);
         li->inInference = 1;
-        jl_value_t *fargs[5];
+        jl_value_t *fargs[4];
         fargs[0] = (jl_value_t*)li;
         fargs[1] = (jl_value_t*)argtypes;
-        fargs[2] = (jl_value_t*)li->sparams;
-        fargs[3] = jl_false;
-        fargs[4] = (jl_value_t*)def;
+        fargs[2] = (jl_value_t*)jl_null;
+        fargs[3] = (jl_value_t*)def;
 #ifdef TRACE_INFERENCE
         ios_printf(ios_stdout,"inference on %s(", li->name->name);
         print_sig(argtypes);
         ios_printf(ios_stdout, ")\n");
 #endif
 #ifdef ENABLE_INFERENCE
-        jl_value_t *newast = jl_apply(jl_typeinf_func, fargs, 5);
+        jl_value_t *newast = jl_apply(jl_typeinf_func, fargs, 4);
         li->ast = jl_tupleref(newast, 0);
         li->inferred = jl_true;
 #endif
@@ -625,7 +623,7 @@ static jl_function_t *cache_method(jl_methtable_t *mt, jl_tuple_t *type,
             lilist = (jl_tuple_t*)jl_t1(lilist);
         }
     }
-    if (lilist != jl_null) {
+    if (lilist != jl_null && !li->inInference) {
         assert(li);
         newmeth = jl_reinstantiate_method(method, li);
         (void)jl_method_cache_insert(mt, type, newmeth);
@@ -1158,6 +1156,7 @@ JL_CALLABLE(jl_apply_generic)
         mfunc = jl_mt_assoc_by_type(mt, tt, 1);
         JL_GC_POP();
     }
+    assert(!mfunc->linfo || !mfunc->linfo->inInference);
 
     if (mfunc == NULL) {
         return jl_no_method_error((jl_function_t*)jl_t2(env), args, nargs);

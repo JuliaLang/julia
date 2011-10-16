@@ -78,9 +78,9 @@ isconstant(x) = true
 
 cmp_tfunc = (x,y)->Bool
 
-isType(t) = isa(t,AbstractKind) && is(t.name,Type.name)
+isType(t::ANY) = isa(t,AbstractKind) && is((t::AbstractKind).name,Type.name)
 
-isseqtype(t) = isa(t,AbstractKind) && is(t.name.name,:...)
+isseqtype(t::ANY) = isa(t,AbstractKind) && is((t::AbstractKind).name.name,:...)
 
 t_func = idtable()
 t_func[tuple] = (0, Inf, (args...)->limit_tuple_depth(args))
@@ -494,7 +494,7 @@ function abstract_call_gf(f, fargs, argtypes, e)
             # constructor
             rt = x[3]
         else
-            (_tree,rt) = typeinf(x[3], x[1], x[2], true, x[3])
+            (_tree,rt) = typeinf(x[3], x[1], x[2], x[3])
         end
         rettype = tmerge(rettype, rt)
         if is(rettype,Any)
@@ -840,16 +840,16 @@ is_rest_arg(arg) = (ccall(:jl_is_rest_arg,Int32,(Any,), arg) != 0)
     #return yieldto(Inference_Task, C, args)
 #end
 
-function typeinf_ext(linfo, atypes, sparams, cop, def)
+function typeinf_ext(linfo, atypes, sparams, def)
     global inference_stack
     last = inference_stack
     inference_stack = EmptyCallStack()
-    result = typeinf(linfo, atypes, sparams, cop, def)
+    result = typeinf(linfo, atypes, sparams, def)
     inference_stack = last
     return result
 end
 
-typeinf(linfo,atypes,sparams,copy) = typeinf(linfo,atypes,sparams,copy,linfo)
+typeinf(linfo,atypes,sparams) = typeinf(linfo,atypes,sparams,linfo)
 
 abstract RecPending{T}
 
@@ -857,7 +857,7 @@ isRecPending(t) = isa(t, AbstractKind) && is(t.name, RecPending.name)
 
 # def is the original unspecialized version of a method. we aggregate all
 # saved type inference data there.
-function typeinf(linfo::LambdaStaticData,atypes::Tuple,sparams::Tuple, cop, def)
+function typeinf(linfo::LambdaStaticData,atypes::Tuple,sparams::Tuple, def)
     #dbg = 
     #dotrace = true#is(linfo,sizestr)
     local ast::Expr
@@ -912,14 +912,12 @@ function typeinf(linfo::LambdaStaticData,atypes::Tuple,sparams::Tuple, cop, def)
 
     rec = false
 
-    #print(linfo.name); show(atypes); print('\n')
+    #print("typeinf ", linfo.name, " ", atypes, "\n")
 
     if redo
-    elseif cop
+    else
         sparams = append(sparams, linfo.sparams)
         ast = ccall(:jl_prepare_ast, Any, (Any,Any), linfo.ast, sparams)::Expr
-    else
-        ast = linfo.ast
     end
 
     assert(is(ast.head,:lambda), "inference.j:745")
@@ -1147,7 +1145,7 @@ end
 function eval_annotate(e::Symbol, vtypes, sv, decls, clo)
     t = abstract_eval(e, vtypes, sv)
     record_var_type(e, t, decls)
-    SymbolNode(e, t)
+    return is(t,Any) ? e : SymbolNode(e, t)
 end
 
 function eval_annotate(e::SymbolNode, vtypes, sv, decls, clo)
@@ -1200,7 +1198,7 @@ function type_annotate(ast::Expr, states::Array{Any,1},
             end
             na = length(a.args[1])
             typeinf(li, ntuple(na+1, i->(i>na ? Tuple[1] : Any)),
-                    li.sparams, false, li)
+                    li.sparams, li)
         end
     end
 
@@ -1336,7 +1334,7 @@ function inlineable(f, e::Expr, vars)
             return NF
         end
     end
-    (ast, ty) = typeinf(meth[3], meth[1], meth[2], true, meth[3])
+    (ast, ty) = typeinf(meth[3], meth[1], meth[2], meth[3])
     if is(ast,())
         return NF
     end
@@ -1410,7 +1408,8 @@ function inlining_pass(e::Expr, vars)
         return e
     end
     arg1 = e.args[1]
-    if is(e.head,:call) && isa(arg1,SymbolNode) && is(arg1.name, :ccall)
+    if is(e.head,:call) && (is(arg1, :ccall) ||
+                            (isa(arg1,SymbolNode) && is(arg1.name, :ccall)))
         if length(e.args)>1
             e.args[2] = remove_call1(e.args[2])
         end
@@ -1490,7 +1489,7 @@ end
 function tuple_elim_pass(ast::Expr)
     body = (ast.args[3].args)::Array{Any,1}
     i = 1
-    while i < length(body)
+    while i < length(body)-1
         e = body[i]
         if isa(e,Expr) && is(e.head,:multiple_value)
             i_start = i
@@ -1557,7 +1556,7 @@ end
 
 function finfer(f, types)
     x = getmethods(f,types)
-    typeinf(x[3], x[1], x[2], true)[1]
+    typeinf(x[3], x[1], x[2])[1]
 end
 
 tfunc(f,t) = (getmethods(f,t)[3]).tfunc

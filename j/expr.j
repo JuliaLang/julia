@@ -20,6 +20,8 @@ copy(s::SymbolNode) = SymbolNode(s.name, s.typ)
 
 isequal(x::Expr, y::Expr) = (is(x.head,y.head) && isequal(x.args,y.args))
 isequal(x::SymbolNode, y::SymbolNode) = is(x.name,y.name)
+isequal(x::SymbolNode, y::Symbol)     = is(x.name,y)
+isequal(x::Symbol    , y::SymbolNode) = is(x,y.name)
 
 ## misc syntax ##
 

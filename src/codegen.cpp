@@ -177,6 +177,7 @@ static Function *to_function(jl_lambda_info_t *li)
     Function *f = Function::Create(jl_func_sig, Function::ExternalLinkage,
                                    li->name->name, jl_Module);
     assert(jl_is_expr(li->ast));
+    assert(!li->inInference);
     li->functionObject = (void*)f;
     BasicBlock *old = nested_compile ? builder.GetInsertBlock() : NULL;
     DebugLoc olddl = builder.getCurrentDebugLocation();
