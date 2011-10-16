@@ -205,7 +205,7 @@ end
 
 @rand_matrix_builder_1arg Float64 randg
 
-# randchi2()
+# chi2rnd
 
-randchi2(v) = 2*randg(v/2)
-@rand_matrix_builder_1arg Float64 randchi2
+chi2rnd(v) = 2*randg(v/2)
+@rand_matrix_builder_1arg Float64 chi2rnd
