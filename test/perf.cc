@@ -136,6 +136,8 @@ double pisum() {
 }
 
 int main() {
+    printf("**** C ****\n");
+
     // Initialize RNG
     dsfmt_gv_init_gen_rand(0);
 
