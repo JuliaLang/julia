@@ -31,7 +31,7 @@ end
 
 type EnvHash; end
 
-ENV = EnvHash()
+const ENV = EnvHash()
 
 function ref(::EnvHash, k::String)
     try

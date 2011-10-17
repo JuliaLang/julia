@@ -190,8 +190,6 @@ static int label_idx(jl_value_t *tgt, jl_array_t *stmts)
     return j;
 }
 
-static int hand_n_leave = 0;
-
 static jl_value_t *eval_body(jl_array_t *stmts, jl_value_t **locals, size_t nl,
                              int start)
 {
@@ -219,8 +217,7 @@ static jl_value_t *eval_body(jl_array_t *stmts, jl_value_t **locals, size_t nl,
             else if (head == enter_sym) {
                 jl_enter_handler(&__ss, &__handlr);
                 if (!setjmp(__handlr)) {
-                    i = (size_t)eval_body(stmts, locals, nl, i+1);
-                    continue;
+                    return eval_body(stmts, locals, nl, i+1);
                 }
                 else {
                     i = label_idx(jl_exprarg(stmt,0), stmts);
@@ -228,15 +225,8 @@ static jl_value_t *eval_body(jl_array_t *stmts, jl_value_t **locals, size_t nl,
                 }
             }
             else if (head == leave_sym) {
-                if (hand_n_leave == 0) {
-                    hand_n_leave = jl_unbox_long(jl_exprarg(stmt,0));
-                }
-                jl_pop_handler(1);
-                hand_n_leave--;
-                if (hand_n_leave==0)
-                    return (jl_value_t*)(i+1);
-                else
-                    return (jl_value_t*)(i);
+                int hand_n_leave = jl_unbox_long(jl_exprarg(stmt,0));
+                jl_pop_handler(hand_n_leave);
             }
             else {
                 eval(stmt, locals, nl);

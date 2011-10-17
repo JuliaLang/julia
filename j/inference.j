@@ -21,10 +21,10 @@
 # - avoid branches when condition can be statically evaluated
 
 # parameters limiting potentially-infinite types
-MAX_TYPEUNION_LEN = 3
-MAX_TYPEUNION_DEPTH = 3
-MAX_TUPLETYPE_LEN  = 10
-MAX_TUPLE_DEPTH = 4
+const MAX_TYPEUNION_LEN = 3
+const MAX_TYPEUNION_DEPTH = 3
+const MAX_TUPLETYPE_LEN  = 10
+const MAX_TUPLE_DEPTH = 4
 
 type NotFound
 end
@@ -77,7 +77,7 @@ isType(t::ANY) = isa(t,AbstractKind) && is((t::AbstractKind).name,Type.name)
 
 isseqtype(t::ANY) = isa(t,AbstractKind) && is((t::AbstractKind).name.name,:...)
 
-t_func = idtable()
+const t_func = idtable()
 t_func[tuple] = (0, Inf, (args...)->limit_tuple_depth(args))
 t_func[throw] = (1, 1, x->None)
 t_func[boxsi8] = (1, 1, x->Int8)
