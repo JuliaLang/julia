@@ -107,8 +107,8 @@ isequal(x::Float, y::Float) = (x == y) || (isnan(x) && isnan(y))
 
 ## floating point traits ##
 
-Inf = boxf64(unbox64(0x7ff0000000000000))
-NaN = boxf64(unbox64(0x7ff8000000000000))
+const Inf = boxf64(unbox64(0x7ff0000000000000))
+const NaN = boxf64(unbox64(0x7ff8000000000000))
 
 @eval begin
     inf(::Type{Float32}) = $float32(Inf)

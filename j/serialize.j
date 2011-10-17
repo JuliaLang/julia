@@ -5,8 +5,8 @@ abstract LongSymbol
 abstract LongTuple
 abstract LongExpr
 
-ser_tag = idtable()
-deser_tag = idtable()
+const ser_tag = idtable()
+const deser_tag = idtable()
 let i = 2
     global ser_tag, deser_tag
     for t = {Symbol, Int8, Uint8, Int16, Uint16, Int32, Uint32,
@@ -28,7 +28,7 @@ let i = 2
 end
 
 # tags >= this just represent themselves, their whole representation is 1 byte
-VALUE_TAGS = ser_tag[()]
+const VALUE_TAGS = ser_tag[()]
 
 writetag(s, x) = write(s, uint8(ser_tag[x]))
 

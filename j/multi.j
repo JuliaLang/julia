@@ -270,7 +270,7 @@ end
 
 ## remote refs and core messages: do, call, fetch, wait, ref, put ##
 
-client_refs = WeakKeyHashTable()
+const client_refs = WeakKeyHashTable()
 
 type RemoteRef
     where::Int32
@@ -1022,7 +1022,7 @@ end #func
 function addprocs_ssh(machines) 
     add_workers(PGRP, start_remote_workers(machines, map(worker_ssh_cmd, machines)))
 end #func
-                    
+
 function addprocs_ssh(machines, keys)
     if !(isa(keys, Array)) && isa(machines,Array)
         key = keys
@@ -1541,7 +1541,7 @@ yield() = yieldto(Scheduler)
 task_exit() = task_exit(nothing)
 task_exit(val) = yieldto(Scheduler, FinalValue(val))
 
-fd_handlers = HashTable()
+const fd_handlers = HashTable()
 
 add_fd_handler(fd::Int32, H) = (fd_handlers[fd]=H)
 del_fd_handler(fd::Int32) = del(fd_handlers, fd)

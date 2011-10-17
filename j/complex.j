@@ -167,7 +167,7 @@ pi{T}(::Type{ComplexPair{T}}) = pi(T)
 ## singleton type for imaginary unit constant ##
 
 type ImaginaryUnit <: Complex; end
-im = ImaginaryUnit()
+const im = ImaginaryUnit()
 
 convert{T<:Real}(::Type{ComplexPair{T}}, ::ImaginaryUnit) =
     ComplexPair(zero(T),one(T))

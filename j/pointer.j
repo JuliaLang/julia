@@ -1,6 +1,6 @@
 ## system word size ##
 
-WORD_SIZE = long(Size.nbits)
+const WORD_SIZE = long(Size.nbits)
 
 ## converting pointers to an appropriate uint ##
 
@@ -10,7 +10,7 @@ else
     typealias PtrInt Uint32
 end
 
-C_NULL = box(Ptr{Void}, unbox(Long,0))
+const C_NULL = box(Ptr{Void}, unbox(Long,0))
 
 # pointer to int
 convert(::Type{PtrInt}, x::Ptr) = box(PtrInt,unbox(PtrInt,x))

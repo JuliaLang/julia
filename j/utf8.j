@@ -3,7 +3,7 @@
 
 ## basic UTF-8 decoding & iteration ##
 
-utf8_offset = [
+const utf8_offset = [
     int64(0),
     int64(12416),
     int64(925824),
@@ -12,7 +12,7 @@ utf8_offset = [
     int64(2181570688),
 ]
 
-utf8_trailing = [
+const utf8_trailing = [
     0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0, 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
     0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0, 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
     0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0, 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
@@ -29,7 +29,7 @@ function next(s::UTF8String, i::Index)
     if !is_utf8_start(s.data[i])
         error("invalid UTF-8 character index")
     end
-    trailing = (utf8_trailing::Array{Long,1})[s.data[i]+1]
+    trailing = utf8_trailing[s.data[i]+1]
     if length(s.data) < i + trailing
         error("premature end of UTF-8 data")
     end
