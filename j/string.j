@@ -763,6 +763,7 @@ end
 function uint2str(n::Int, b::Int)
     if n < zero(n); error("uint2str: negative argument ", n); end
     if b < 2; error("uint2str: invalid base ", b); end
+    b = convert(typeof(n), b)
     ndig = ndigits(n, b)
     sz = convert(Size, ndig)
     data = Array(Uint8, sz)
