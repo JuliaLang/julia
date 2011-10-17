@@ -1102,7 +1102,9 @@
 
 	(case (car e)
 	  ((=)
-	   (if (not (symbol? (cadr e)))
+	   (if (or (not (symbol? (cadr e)))
+		   (eq? (cadr e) 'true)
+		   (eq? (cadr e) 'false))
 	       (error (string "invalid assignment lvalue " (cadr e)))
 	       (let ((r (to-lff (caddr e) (cadr e) #f)))
 		 (cond ((symbol? dest)
