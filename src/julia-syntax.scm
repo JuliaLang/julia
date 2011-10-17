@@ -44,14 +44,14 @@
 (define (arg-type v)
   (cond ((symbol? v)  'Any)
 	((not (pair? v))
-	 (error (string "malformed function arguments " lst)))
+	 (error (string "malformed function arguments " v)))
 	(else
 	 (case (car v)
 	   ((...)         `(... ,(decl-type (cadr v))))
 	   ((= keyword)   (decl-type (caddr v)))
 	   ((|::|)        (decl-type v))
 	   (else (error
-		  (string "malformed function arguments " lst)))))))
+		  (string "malformed function arguments " v)))))))
 
 ; get just argument types
 (define (llist-types lst)
