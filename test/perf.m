@@ -27,7 +27,7 @@ end
 
 nl()
 
-fprintf ('*** Matlab ***\n')
+fprintf ('*** Matlab/Octave ***\n')
 
 %% recursive fib %%
 

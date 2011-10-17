@@ -110,6 +110,8 @@ def pisum():
 ## run tests ##
 
 if __name__=="__main__":
+    print "**** Python ****\n"
+
     assert fib(20) == 6765
     t = time.time()
     f = fib(20)
