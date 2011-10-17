@@ -118,5 +118,12 @@ Julia should appear as a file type and be automatically detected for files with 
 <a name="License"/>
 ## License
 
-Julia is licensed under the [MIT license](http://en.wikipedia.org/wiki/MIT_License#License_terms), with the exception of certain components that link against GPL-licensed libraries (e.g. GNU readline).
+The core of the Julia implementation is licensed under the [MIT license][MIT]:
+the shared library files `libjulia-release` and `libjulia-debug` can be used under the terms of the MIT license.
+The `julia` executable, however, is [GPL-licensed][GPL] as it links the libjulia core together with libraries and code available under a variety of open source licenses, including [GPL][], [LGPL][], [BSD][] and [MIT][].
 See [LICENSE](https://github.com/JuliaLang/julia/blob/master/LICENSE) for the full terms of the license.
+
+[MIT]:  http://en.wikipedia.org/wiki/MIT_License
+[GPL]:  http://en.wikipedia.org/wiki/GNU_General_Public_License
+[LGPL]: http://en.wikipedia.org/wiki/GNU_Lesser_General_Public_License
+[BSD]:  http://en.wikipedia.org/wiki/BSD_licenses
