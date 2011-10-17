@@ -764,12 +764,21 @@ function uint2str(n::Int, b::Int)
     if n < zero(n); error("uint2str: negative argument ", n); end
     if b < 2; error("uint2str: invalid base ", b); end
     ndig = ndigits(n, b)
-    sz = convert(Size, ndig+1)
+    sz = convert(Size, ndig)
     data = Array(Uint8, sz)
-    ccall(:uint2str, Ptr{Uint8},
-          (Ptr{Uint8}, Ulong, Uint64, Uint32),
-          data, ulong(sz), uint64(n), uint32(b))
-    ASCIIString(data[1:(sz-1)]) # cut out terminating NUL
+    for i=sz:-1:1
+        ch = n % b
+        if ch < 10
+            data[i] = ch+'0'
+        else
+            data[i] = ch-10+'a';
+        end
+        n = div(n,b)
+        if n==0
+            break
+        end
+    end
+    ASCIIString(data)
 end
 uint2str(n::Union(Int,Float), b::Int, len::Int) = lpad(uint2str(n,b),len,'0')
 uint2str(x::Float64, b::Int) = uint2str(boxui64(unbox64(x)), b)
