@@ -126,4 +126,4 @@ end
 ^(x::Float32, y::Float32) = ccall(dlsym(libfdm, :powf), Float32, (Float32,Float32), x, y)
 
 # alias
-pow = ^
+const pow = ^

@@ -403,12 +403,13 @@ end
 function isconstantfunc(f, vtypes, sv::StaticVarInfo)
     if isa(f,TopNode)
         abstract_eval(f, vtypes, sv)  # to pick up a type annotation
-        return (true, f.name)
+        return (isconstant(f.name), f.name)
     end
     if isa(f,SymbolNode)
         f = f.name
     end
-    return (isa(f,Symbol) && !has(vtypes,f) && !has(sv.cenv,f), f)
+    return (isa(f,Symbol) && !has(vtypes,f) && !has(sv.cenv,f) &&
+            isconstant(f), f)
 end
 
 isvatuple(t) = (n = length(t); n > 0 && isseqtype(t[n]))

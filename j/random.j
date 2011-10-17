@@ -210,4 +210,4 @@ end
 randchi2(v) = 2*randg(v/2)
 @rand_matrix_builder_1arg Float64 randchi2
 
-chi2rnd = randchi2 # alias chi2rnd
+const chi2rnd = randchi2 # alias chi2rnd

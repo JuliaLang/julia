@@ -71,7 +71,7 @@ rem{T<:Real}(x::T, y::T) = convert(T,x-y*div(x,y))
 mod{T<:Real}(x::T, y::T) = convert(T,x-y*fld(x,y))
 
 # operator alias
-% = mod
+const % = mod
 
 # mod returns in [0,y) whereas mod1 returns in (0,y]
 mod1{T<:Real}(x::T, y::T) = y-mod(y-x,y)
