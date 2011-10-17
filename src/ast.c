@@ -356,10 +356,10 @@ static value_t julia_to_scm(jl_value_t *v)
         return symbol(((jl_sym_t*)v)->name);
     }
     if (v == jl_true) {
-        return symbol("true");
+        return FL_T;
     }
     if (v == jl_false) {
-        return symbol("false");
+        return FL_F;
     }
     if (jl_is_expr(v)) {
         jl_expr_t *ex = (jl_expr_t*)v;
