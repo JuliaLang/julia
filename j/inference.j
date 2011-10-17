@@ -1142,7 +1142,7 @@ end
 function eval_annotate(e::Symbol, vtypes, sv, decls, clo)
     t = abstract_eval(e, vtypes, sv)
     record_var_type(e, t, decls)
-    return is(t,Any) ? e : SymbolNode(e, t)
+    return (is(t,Any) || is(t,IntrinsicFunction)) ? e : SymbolNode(e, t)
 end
 
 function eval_annotate(e::SymbolNode, vtypes, sv, decls, clo)
