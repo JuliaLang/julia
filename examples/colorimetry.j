@@ -1,4 +1,4 @@
-struct ColorSpace
+type ColorSpace
     CIEprimaries::Matrix
     whitepoint::Vector
     rgbxyz::Matrix
@@ -70,7 +70,7 @@ rgb2gray(p::Pixel) =
     (y = 0.3*redval(p) + 0.59*greenval(p) + 0.11*blueval(p);
      rgb(y,y,y))
 
-cie_color_match =
+const cie_color_match =
     [0.001368 3.8999999999999999e-005 0.006450001;
      0.00150205 4.2826400000000000e-005 0.007083216;
      0.001642328 4.6914600000000000e-005 0.007745488;
