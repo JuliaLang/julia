@@ -29,13 +29,16 @@
 	  arglist)))
 
 (define (arg-name v)
-  (if (symbol? v)
-      v
-      (case (car v)
-	((...)         (decl-var (cadr v)))
-	((= keyword)   (decl-var (caddr v)))
-	((|::|)        (decl-var v))
-	(else (error (string "malformed function argument " v))))))
+  (cond ((and (symbol? v) (not (eq? v 'true)) (not (eq? v 'false)))
+	 v)
+	((not (pair? v))
+	 (error (string "malformed function arguments " v)))
+	(else
+	 (case (car v)
+	   ((...)         (decl-var (cadr v)))
+	   ((= keyword)   (decl-var (caddr v)))
+	   ((|::|)        (decl-var v))
+	   (else (error (string "malformed function argument " v)))))))
 
 ; convert a lambda list into a list of just symbols
 (define (llist-vars lst)
