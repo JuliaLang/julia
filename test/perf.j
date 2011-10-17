@@ -1,14 +1,10 @@
-println("*** Julia ***")
-
-# simple performance tests
-
 macro timeit(ex,name)
     quote
         t = Inf
         for i=1:5
             t = min(t, @elapsed $ex)
         end
-        println(rpad(strcat($name,":"), 20), t)
+        println("julia, ", rpad(strcat($name,","), 15), t*1000)
     end
 end
 
@@ -17,7 +13,7 @@ end
 fib(n) = n < 2 ? n : fib(n-1) + fib(n-2)
 
 @assert fib(20) == 6765
-@timeit fib(20) "recursive fib"
+@timeit fib(20) "fib"
 
 ## parse int ##
 
@@ -41,7 +37,7 @@ end
 
 A = ones(200,200)
 @assert A*A' == 200
-@timeit A*A' "A*A'"
+@timeit A*A' "AtA"
 
 ## mandelbrot set: complex arithmetic and comprehensions ##
 
@@ -60,7 +56,7 @@ end
 
 mandelperf() = [ mandel(complex(r,i)) | r=-2.0:.1:0.5, i=-1.:.1:1. ]
 @assert sum(mandelperf()) == 14791
-@timeit mandelperf() "mandelbrot"
+@timeit mandelperf() "mandel"
 
 ## numeric vector sort ##
 
@@ -69,7 +65,7 @@ function sortperf(n)
   v = sort(v)
 end
 @assert issorted(sortperf(5000))
-@timeit sortperf(5000) "sort"
+@timeit sortperf(5000) "quicksort"
 
 ## slow pi series ##
 
@@ -85,7 +81,7 @@ function pisum()
 end
 
 @assert abs(pisum()-1.644834071848065) < 1e-12
-@timeit pisum() "pi sum"
+@timeit pisum() "pi_sum"
 
 ## Random matrix statistics ##
 
@@ -108,4 +104,4 @@ end
 
 (s1, s2) = randmatstat(1000)
 @assert s1 > 0.5 && s1 < 1.0
-@timeit randmatstat(1000) "random matrix"
+@timeit randmatstat(1000) "rand_mat_stat"

@@ -107,40 +107,41 @@ def pisum():
             sum += 1.0/(k*k)
     return sum
 
+def print_perf(name, time):
+    print "python, ", name, ", ", time*1000
+
 ## run tests ##
 
 if __name__=="__main__":
-    print "**** Python ****\n"
-
     assert fib(20) == 6765
     t = time.time()
     f = fib(20)
-    print "fib:           ", time.time()-t
+    print_perf("fib", time.time()-t)
 
     assert int("1111000011110000111100001111",2) == 252645135
     t = time.time()
     for i in xrange(1,1000):
         int("1111000011110000111100001111",2)
-    print "parse_int:     ", time.time()-t
+    print_perf ("parse_int", time.time()-t)
 
     assert sum(mandelperf()) == 14304
     t = time.time()
     mandelperf()
-    print "mandelbrot:    ", time.time()-t
+    print_perf ("mandel", time.time()-t)
 
     lst = [ random.random() for i in xrange(1,5000) ]
     t = time.time()
     quicksort(lst, 0, len(lst)-1)
-    print "sort:          ", time.time()-t
+    print_perf ("quicksort", time.time()-t)
 
     pi = pisum()
     assert abs(pisum()-1.644834071848065) < 1e-6
     t = time.time()
     pisum()
-    print "pisum:         ", time.time()-t
+    print_perf ("pi_sum", time.time()-t)
 
     (s1, s2) = randmatstat(1000)
     assert s1 > 0.5 and s1 < 1.0
     t = time.time()
     randmatstat(1000)
-    print "random matrix: ", time.time()-t
+    print_perf ("rand_mat_stat", time.time()-t)
