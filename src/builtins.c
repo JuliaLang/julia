@@ -250,6 +250,12 @@ static int eval_with_compiler_p(jl_expr_t *expr, int compileloops)
                      ((jl_expr_t*)stmt)->head == goto_ifnot_sym)) {
                     return 1;
                 }
+                // to compile code that uses exceptions
+                /*
+                if (((jl_expr_t*)stmt)->head == enter_sym) {
+                    return 1;
+                }
+                */
             }
         }
     }
