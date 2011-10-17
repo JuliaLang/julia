@@ -11,6 +11,9 @@
 
 #include "../external/openblas-v0.1alpha2.2/cblas.h"
 
+#define DSFMT_MEXP 19937
+#include "../external/random/dsfmt-2.1/dSFMT.c"
+
 using namespace std;
 
 #define NITER 10
@@ -84,10 +87,41 @@ int mandelperf() {
     return mandel_sum;
 }
 
-double *rand(int n) {
+double *myrand(int n) {
   double *d = (double *) malloc (n*sizeof(double));
-  for (int k=0; k<n; ++k) d[k] = drand48();
+  for (int k=0; k<n; ++k) d[k] = dsfmt_gv_genrand_open_open();
   return d;
+}
+
+void quicksort(double *a, int lo, int hi) {
+  int i = lo;
+  int j = hi;
+  while (i < hi) {
+    double pivot = a[(lo+hi)/2];
+    // Partition
+    while (i <= j) {
+      while (a[i] < pivot) {
+	i = i + 1;
+      }
+      while (a[j] > pivot) {
+	j = j - 1;
+      }
+      if (i <= j) {
+	double t = a[i];
+	a[i] = a[j];
+	a[j] = t;
+	i = i + 1;
+	j = j - 1;
+      }
+    }
+
+    // Recursion for quicksort
+    if (lo < j) {
+      quicksort(a, lo, j);
+    }
+    lo = i;
+    j = hi;
+  }
 }
 
 double pisum() {
@@ -102,6 +136,9 @@ double pisum() {
 }
 
 int main() {
+    // Initialize RNG
+    dsfmt_gv_init_gen_rand(0);
+
     double t1, t2;
     
     // fib(20)
@@ -159,8 +196,8 @@ int main() {
     // sort
     t1 = CLOCK();
     for (int i=0; i<NITER; ++i) {
-      double *d = rand(5000);
-      sort(d, d+5000);
+      double *d = myrand(5000);
+      quicksort(d, 0, 5000-1);
       free(d);
     }
     t2 = CLOCK() - t1;
@@ -176,5 +213,5 @@ int main() {
     t2 = CLOCK() - t1;
     printf("pisum:   \t %1.8lf\n", (t2/NITER));
 
-    // randmatstat    
+    return 0;
 } 

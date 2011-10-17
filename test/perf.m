@@ -135,8 +135,8 @@ end
 fprintf('quicksort: ')
 function v = sortperf(n)
   v = rand(n,1);
-  %v = qsort_kernel(v,1,n);
-  v = sort(v);
+  v = qsort_kernel(v,1,n);
+  %v = sort(v);
 end
 assert(issorted(sortperf(5000)))
 timeit (@sortperf, 5000)
