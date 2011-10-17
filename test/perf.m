@@ -1,9 +1,4 @@
 function perf()
-% simple performance tests
-
-function nl()
-   fprintf('\n')
-end
 
 function assert(expr)
    if ~expr
@@ -11,7 +6,12 @@ function assert(expr)
    end
 end
 
-function timeit(func, varargin)
+function timeit(name, func, varargin)
+    lang = 'matlab';
+    if exist('OCTAVE_VERSION') ~= 0
+       lang = 'octave';
+    end
+
     nexpt = 5;
     times = zeros(nexpt, 1);
 
@@ -20,14 +20,9 @@ function timeit(func, varargin)
     end
 
     times = sort(times);
-    fprintf ('%.8f', times(1));
-    nl()
-    nl()
+    fprintf ('%s, %15s, %.8f\n', lang, name, times(1)*1000);
 end
 
-nl()
-
-fprintf ('*** Matlab/Octave ***\n')
 
 %% recursive fib %%
 
@@ -40,14 +35,12 @@ function f = fib(n)
   end
 end
 
-fprintf('recursive fib(20): ')
 f = fib(20);
 assert(f == 6765)
-timeit(@fib, 20)
+timeit('fib', @fib, 20)
 
 %% parse int %%
 
-fprintf('parse_int: ')
 bin2dec('10');
 function n = parseintperf(ignore)
     for i=1:1000
@@ -55,23 +48,21 @@ function n = parseintperf(ignore)
     end
 end
 assert(parseintperf(true) == 252645135)
-timeit(@parseintperf, true)
+timeit('parse_int', @parseintperf, true)
 
 %% array constructors %%
 
-fprintf('ones: ')
 o = ones(200,200);
 assert(all(o) == 1)
-timeit(@ones, 200, 200)
+timeit('ones', @ones, 200, 200)
 
 %% matmul and transpose %%
 
-fprintf('A * transpose(A): ');
 function oo = matmul(o)
   oo = o * o.';
 end
 assert(all(matmul(o) == 200))
-timeit(@matmul, o)
+timeit('AtA', @matmul, o)
 
 %% mandelbrot set: complex arithmetic and comprehensions %%
 
@@ -86,7 +77,6 @@ function n = mandel(z)
     end
 end
 
-fprintf('mandelbrot: ');
 mandel(complex(-.53,.68));
 
 function M = mandelperf(ignore)
@@ -100,7 +90,7 @@ function M = mandelperf(ignore)
   end
 end
 assert(sum(sum(mandelperf(true))) == 14628)
-timeit (@mandelperf, true)
+timeit ('mandel', @mandelperf, true)
 
 %% numeric vector quicksort %%
 
@@ -132,14 +122,13 @@ function a = qsort_kernel(a, lo, hi)
     end
 end
 
-fprintf('quicksort: ')
 function v = sortperf(n)
   v = rand(n,1);
   v = qsort_kernel(v,1,n);
   %v = sort(v);
 end
 assert(issorted(sortperf(5000)))
-timeit (@sortperf, 5000)
+timeit ('quicksort', @sortperf, 5000)
 
 %% slow pi series %%
 
@@ -153,10 +142,9 @@ function sum = pisum(ignore)
     end
 end
 
-fprintf('pi sum: ')
 s = pisum(true);
 assert(abs(s-1.644834071848065) < 1e-12);
-timeit(@pisum, true)
+timeit('pi_sum',@pisum, true)
 
 function [s1, s2] = randmatstat(t)
     n=5;
@@ -176,10 +164,9 @@ function [s1, s2] = randmatstat(t)
     s2 = std(w)/mean(w);
 end
 
-fprintf('random matrix statistics: ');
 [s1, s2] = randmatstat(1000);
-assert(round(10*s1) > 6 && round(10*s1) < 8);
-timeit (@randmatstat, 1000)
+assert(round(10*s1) > 5 && round(10*s1) < 10);
+timeit ('rand_mat_stat', @randmatstat, 1000)
 
 function t = mytranspose(x)
     [m, n] = size(x);
