@@ -403,7 +403,7 @@ function show_matrix(a::AbstractArray)
     end
 end
 
-show{T}(a::AbstractArray{T,0}) = print(summary(a))
+show{T}(a::AbstractArray{T,0}) = (println(summary(a)); show(a[]))
 
 function show(a::AbstractArray)
     print(summary(a))

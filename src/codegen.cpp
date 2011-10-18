@@ -1452,12 +1452,11 @@ static bool store_unboxed_p(char *name, jl_codectx_t *ctx)
 static AllocaInst *alloc_local(char *name, jl_codectx_t *ctx)
 {
     jl_value_t *jt = (*ctx->declTypes)[name];
-    const Type *vtype;
+    const Type *vtype=NULL;
     if (store_unboxed_p(name, ctx))
         vtype = julia_type_to_llvm(jt, ctx);
-    else
+    if (vtype == NULL)
         vtype = jl_pvalue_llvmt;
-    assert(vtype != NULL);
     AllocaInst *lv = builder.CreateAlloca(vtype, 0, name);
     if (vtype != jl_pvalue_llvmt)
         mark_julia_type(lv, jt);

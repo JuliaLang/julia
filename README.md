@@ -68,8 +68,6 @@ or, if you don't have git installed, by using curl and tar to fetch and unpack t
 
     mkdir julia && curl -Lk https://github.com/JuliaLang/julia/tarball/master | tar -zxf- -C julia --strip-components 1
 
-TODO: check that this actually works once the repository is public.
-
 Next, enter the `julia/` directory and run `make` to build the `julia` executable.
 When compiled the first time, it will automatically download and build its [external dependencies](#Required-Build-Tools-External-Libraries).
 This takes a while, but only has to be done once.
