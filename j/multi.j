@@ -1318,8 +1318,8 @@ end
 find_vars(e) = find_vars(e, {})
 function find_vars(e, lst)
     if isa(e,Symbol)
-        if isbound(e) && isgeneric(eval(e))
-            # exclude global generic functions
+        if isconstant(e)
+            # exclude global constants
         else
             push(lst, e)
         end
@@ -1448,7 +1448,7 @@ end
 
 function make_preduce_body(reducer, var, body)
     ac, lo, hi = gensym(3)
-    #localize_vars(
+    localize_vars(
     quote
         function (($lo)::Size, ($hi)::Size)
             ($var) = ($lo)
@@ -1459,12 +1459,12 @@ function make_preduce_body(reducer, var, body)
             $ac
         end
     end
-    #              )
+                  )
 end
 
 function make_pfor_body(var, body)
     lo, hi = gensym(2)
-    #localize_vars(
+    localize_vars(
     quote
         function (($lo)::Size, ($hi)::Size)
             for ($var) = ($lo):($hi)
@@ -1472,7 +1472,7 @@ function make_pfor_body(var, body)
             end
         end
     end
-    #              )
+                  )
 end
 
 macro pfor(reducer, range, body)

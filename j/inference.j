@@ -840,12 +840,13 @@ function typeinf_ext(linfo, atypes, sparams, def)
     global inference_stack
     last = inference_stack
     inference_stack = EmptyCallStack()
-    result = typeinf(linfo, atypes, sparams, def)
+    result = typeinf(linfo, atypes, sparams, def, true)
     inference_stack = last
     return result
 end
 
-typeinf(linfo,atypes,sparams) = typeinf(linfo,atypes,sparams,linfo)
+typeinf(linfo,atypes,sparams) = typeinf(linfo,atypes,sparams,linfo,true)
+typeinf(linfo,atypes,sparams,linfo) = typeinf(linfo,atypes,sparams,linfo,true)
 
 abstract RecPending{T}
 
@@ -853,7 +854,7 @@ isRecPending(t) = isa(t, AbstractKind) && is(t.name, RecPending.name)
 
 # def is the original unspecialized version of a method. we aggregate all
 # saved type inference data there.
-function typeinf(linfo::LambdaStaticData,atypes::Tuple,sparams::Tuple, def)
+function typeinf(linfo::LambdaStaticData,atypes::Tuple,sparams::Tuple, def, cop)
     #dbg = 
     #dotrace = true#is(linfo,sizestr)
     local ast::Expr
@@ -911,9 +912,11 @@ function typeinf(linfo::LambdaStaticData,atypes::Tuple,sparams::Tuple, def)
     #print("typeinf ", linfo.name, " ", atypes, "\n")
 
     if redo
-    else
+    elseif cop
         sparams = append(sparams, linfo.sparams)
         ast = ccall(:jl_prepare_ast, Any, (Any,Any), linfo.ast, sparams)::Expr
+    else
+        ast = linfo.ast
     end
 
     assert(is(ast.head,:lambda), "inference.j:745")
@@ -1142,7 +1145,7 @@ end
 function eval_annotate(e::Symbol, vtypes, sv, decls, clo)
     t = abstract_eval(e, vtypes, sv)
     record_var_type(e, t, decls)
-    return is(t,Any) ? e : SymbolNode(e, t)
+    return (is(t,Any) || is(t,IntrinsicFunction)) ? e : SymbolNode(e, t)
 end
 
 function eval_annotate(e::SymbolNode, vtypes, sv, decls, clo)
@@ -1195,7 +1198,7 @@ function type_annotate(ast::Expr, states::Array{Any,1},
             end
             na = length(a.args[1])
             typeinf(li, ntuple(na+1, i->(i>na ? Tuple[1] : Any)),
-                    li.sparams, li)
+                    li.sparams, li, false)
         end
     end
 
