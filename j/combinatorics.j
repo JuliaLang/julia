@@ -282,7 +282,7 @@ end
 # Knuth shuffle
 function shuffle(a::AbstractVector)
     for i = length(a):-1:2
-        j = randi_max(i)
+        j = randi(i)
         a[i], a[j] = a[j], a[i]
     end
     return a
@@ -292,7 +292,7 @@ function randperm(n::Int)
     a = Array(typeof(n), n)
     a[1] = 1
     for i = 2:n
-        j = randi_max(i)
+        j = randi(i)
         a[i] = a[j]
         a[j] = i
     end
@@ -303,7 +303,7 @@ function randcycle(n::Int)
     a = Array(typeof(n), n)
     a[1] = 1
     for i = 2:n
-        j = randi_max(i-1)
+        j = randi(i-1)
         a[i] = a[j]
         a[j] = i
     end
