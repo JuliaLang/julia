@@ -106,11 +106,8 @@ else
 end
 
 randi(::Type{Int32})  = int32(dsfmt_randui32()) & typemax(Int32)
-
 randi(::Type{Uint32}) = dsfmt_randui32()
-
 randi(::Type{Int64})  = int64(dsfmt_randui64()) & typemax(Int64)
-
 randi(::Type{Uint64}) = dsfmt_randui64()
 
 # random integer from lo to hi inclusive
@@ -143,6 +140,7 @@ randi_interval(lo, hi, dims::Size...) = randi_interval(lo, hi, dims)
 randi(max::Int)                    = randi_interval(one(max), max)
 randi(max::Int, dims::Dims)        = randi_interval(one(max), max, dims)
 randi(max::Int, dims::Size...)     = randi_interval(one(max), max, dims)
+randi(r::(Int,Int))                = randi_interval(r[1], r[2])
 randi(r::(Int,Int), dims::Dims)    = randi_interval(r[1], r[2], dims)
 randi(r::(Int,Int), dims::Size...) = randi_interval(r[1], r[2], dims)
 
