@@ -313,9 +313,12 @@ function alignment(v::AbstractVector)
     (l, r)
 end
 
-function alignment(X::AbstractMatrix, cols_if_complete::Int, cols_otherwise::Int, sep::Int)
+function alignment(
+    X::AbstractMatrix, cols::AbstractVector,
+    cols_if_complete::Int, cols_otherwise::Int, sep::Int
+)
     a = {}
-    for j = 1:size(X,2)
+    for j = cols
         push(a, alignment(X[:,j][:]))
         if sum(map(sum,a)) + sep*length(a) >= cols_if_complete
             pop(a)
@@ -330,32 +333,58 @@ function alignment(X::AbstractMatrix, cols_if_complete::Int, cols_otherwise::Int
     return a
 end
 
-function show_matrix_ul(
+function print_matrix_block(
+    X::AbstractMatrix, cols::AbstractVector,
+    A::Vector, sep::String, i::Int
+)
+    for k = 1:length(A)
+        j = cols[k]
+        x = X[i,j]
+        a = alignment(x)
+        l = repeat(" ", A[k][1]-a[1])
+        r = repeat(" ", A[k][2]-a[2])
+        print(l, show_to_string(x), r)
+        if k < length(A); print(sep); end
+    end
+end
+
+function show_matrix_ng(
     X::AbstractMatrix, rows::Int, cols::Int,
     pre::String, sep::String, post::String,
-    lp::String, rp::String, hetc::String, vetc::String
+    hetc::String, vetc::String
 )
-    cic = cols - strlen(pre)
-    cow = cic - strlen(hetc)
-    m = size(X,1) <= rows ? size(X,1) : rows-1
-    a = alignment(X[1:m,:], cic, cow, strlen(sep))
-    for i = 1:m
-        print(pre)
-        for j = 1:length(a)
-            x = X[i,j]
-            b = alignment(x)
-            l = lp^(a[j][1]-b[1])
-            r = rp^(a[j][2]-b[2])
-            print(l, show_to_string(x), r)
-            if j < length(a); print(sep); end
+    cols -= strlen(pre) + strlen(post)
+    ss = strlen(sep)
+    m, n = size(X)
+    if m <= rows
+        A = alignment(X,1:size(X,2),cols,cols,ss)
+        if n <= length(A)
+            for i = 1:m
+                print(i == 1 ? pre : repeat(" ", strlen(pre)))
+                print_matrix_block(X,1:n,A,sep,i)
+                println(i == m ? post : repeat(" ", strlen(post)))
+            end
+        else
+            c = div(cols-strlen(hetc)+1,2)+1
+            R = reverse(alignment(X,n:-1:1,c,c,ss))
+            c = cols - sum(map(sum,R)) - (length(R)-1)*ss - strlen(hetc)
+            L = alignment(X,1:n,c,c,ss)
+            for i = 1:m
+                print(i == 1 ? pre : repeat(" ", strlen(pre)))
+                print_matrix_block(X,1:length(L),L,sep,i)
+                print(i % 5 == 1 ? hetc : repeat(" ", strlen(hetc)))
+                print_matrix_block(X,n-length(R)+1:n,R,sep,i)
+                println(i == m ? post : repeat(" ", strlen(post)))
+            end
         end
-        if i == 1 && size(X,2) > length(a); print(hetc); end
-        println(post)
+    else
+        top = 1:div(rows,2)
+        bottom = m-div(rows-1,2)+1:m
+        a = alignment([X[top,:];X[bottom,:]], cols, cols-4, 1)
     end
-    if m < size(X,1); println(pre, vetc); end
 end
-show_matrix_ul(X::AbstractMatrix) =
-    show_matrix_ul(X, tty_rows()-2, tty_cols(), " ", " ", "", " ", " ", " ...", "...")
+show_matrix_ng(X::AbstractMatrix) =
+    show_matrix_ng(X, tty_rows()-2, tty_cols(), " ", " ", "", "  ...  ", "...")
 
 function show_matrix(a::AbstractArray)
     m = size(a,1)
