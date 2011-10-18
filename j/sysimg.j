@@ -75,8 +75,8 @@ set_current_output_stream(make_stdout_stream()) # for error reporting
 load("string.j")
 load("ascii.j")
 load("utf8.j")
-load("show.j")
 load("regex.j")
+load("show.j")
 load("env.j")
 
 # core math functions

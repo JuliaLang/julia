@@ -286,6 +286,71 @@ function show{T}(a::AbstractArray{T,2})
     show_matrix(a)
 end
 
+alignment(x::Any) = (0, strlen(show_to_string(x)))
+alignment(x::Number) = (strlen(show_to_string(x)), 0)
+function alignment(x::Real)
+    m = match(Regex(L"^(.*?)((?:[\.eE].*)?)$"), show_to_string(x))
+    m == nothing ? (strlen(show_to_string(x)), 0) :
+                   (strlen(m.captures[1]), strlen(m.captures[2]))
+end
+function alignment(x::Complex)
+    m = match(Regex(L"^(.*?)(\+.*)$"), show_to_string(x))
+    m == nothing ? (strlen(show_to_string(x)), 0) :
+                   (strlen(m.captures[1]), strlen(m.captures[2]))
+end
+function alignment(x::Rational)
+    m = match(Regex(L"^(.*?/)(/.*)$"), show_to_string(x))
+    m == nothing ? (strlen(show_to_string(x)), 0) :
+                   (strlen(m.captures[1]), strlen(m.captures[2]))
+end
+function alignment(v::AbstractVector)
+    l = r = 0
+    for x = v
+        a = alignment(x)
+        l = max(l, a[1])
+        r = max(r, a[2])
+    end
+    (l, r)
+end
+
+function alignment(X::AbstractMatrix, cols_if_complete::Int, cols_otherwise::Int, sep::Int)
+    a = {}
+    for j = 1:size(X,2)
+        push(a, alignment(X[:,j][:]))
+        if sum(map(sum,a)) + sep*length(a) >= cols_if_complete
+            pop(a)
+            break
+        end
+    end
+    if length(a) < size(X,2)
+        while sum(map(sum,a)) + sep*length(a) >= cols_otherwise
+            pop(a)
+        end
+    end
+    return a
+end
+
+function show_matrix_ul(X::AbstractMatrix, rows::Int, cols::Int, sep::String)
+    m = size(X,1) < rows ? size(X,1) : rows-1
+    a = alignment(X[1:m,:], cols, cols-4, strlen(sep))
+    for i = 1:m
+        for j = 1:length(a)
+            x = X[i,j]
+            b = alignment(x)
+            l = " "^(a[j][1]-b[1])
+            r = " "^(a[j][2]-b[2])
+            print(l, show_to_string(x), r)
+            if j < length(a)
+                print(sep)
+            end
+        end
+        print(i > 1 || size(X,2) <= length(a) ? "\n" : " ...\n")
+    end
+    if size(X,1) >= rows
+        print("...\n")
+    end
+end
+
 function show_matrix(a::AbstractArray)
     m = size(a,1)
     n = size(a,2)
