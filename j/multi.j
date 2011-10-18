@@ -1318,7 +1318,7 @@ end
 find_vars(e) = find_vars(e, {})
 function find_vars(e, lst)
     if isa(e,Symbol)
-        if isconstant(e)
+        if !isbound(e) || isconstant(e)
             # exclude global constants
         else
             push(lst, e)
