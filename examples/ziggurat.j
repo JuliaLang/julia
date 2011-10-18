@@ -108,7 +108,7 @@ const wtab = [
 ]
 
 function randn_zig(sigma::Number)
-    sign = int64(0)
+    sign = 0
     x = 0.0
 
     while (true)
@@ -120,13 +120,14 @@ function randn_zig(sigma::Number)
         x = j*wtab[i]
         if j < ktab[i]; break; end
         
+        y = 0.0
         if i < 128
             y0 = ytab[i]
             y1 = ytab[i+1]
             y = y1 + (y0-y1)*rand()
         else
-            x = PARAM_R - log(1.0-rand() / PARAM_R)
-            y = exp(-PARAM_R * (x-0.5*PARAM_R)) * rand()
+            x = PARAM_R - log(1.0-rand()) / PARAM_R
+            y = exp(-PARAM_R * (x - 0.5*PARAM_R)) * rand()
         end
 
         if y < exp(-0.5*x*x); break; end
