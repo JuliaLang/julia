@@ -89,10 +89,10 @@ function edit(fl::String, line::Int)
                                  (require 'julia-mode \"$jmode\")
                                  (julia-mode)
                                  (goto-line $line))"`)
+        load(fl)
     else
         run(`emacs $fl --eval "(goto-line $line)"`)
     end
-    load(fl)
 end
 
 function_loc(f::Function) = function_loc(f, (Any...))
@@ -107,6 +107,7 @@ function function_loc(f::Function, types)
                 return (string(ln.args[2]), ln.args[1])
             end
         end
+        m = m[5]
     end
     error("could not find function definition")
 end
