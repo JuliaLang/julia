@@ -330,26 +330,32 @@ function alignment(X::AbstractMatrix, cols_if_complete::Int, cols_otherwise::Int
     return a
 end
 
-function show_matrix_ul(X::AbstractMatrix, rows::Int, cols::Int, sep::String)
-    m = size(X,1) < rows ? size(X,1) : rows-1
-    a = alignment(X[1:m,:], cols, cols-4, strlen(sep))
+function show_matrix_ul(
+    X::AbstractMatrix, rows::Int, cols::Int,
+    pre::String, sep::String, post::String,
+    lp::String, rp::String, hetc::String, vetc::String
+)
+    cic = cols - strlen(pre)
+    cow = cic - strlen(hetc)
+    m = size(X,1) <= rows ? size(X,1) : rows-1
+    a = alignment(X[1:m,:], cic, cow, strlen(sep))
     for i = 1:m
+        print(pre)
         for j = 1:length(a)
             x = X[i,j]
             b = alignment(x)
-            l = " "^(a[j][1]-b[1])
-            r = " "^(a[j][2]-b[2])
+            l = lp^(a[j][1]-b[1])
+            r = rp^(a[j][2]-b[2])
             print(l, show_to_string(x), r)
-            if j < length(a)
-                print(sep)
-            end
+            if j < length(a); print(sep); end
         end
-        print(i > 1 || size(X,2) <= length(a) ? "\n" : " ...\n")
+        if i == 1 && size(X,2) > length(a); print(hetc); end
+        println(post)
     end
-    if size(X,1) >= rows
-        print("...\n")
-    end
+    if m < size(X,1); println(pre, vetc); end
 end
+show_matrix_ul(X::AbstractMatrix) =
+    show_matrix_ul(X, tty_rows()-2, tty_cols(), " ", " ", "", " ", " ", " ...", "...")
 
 function show_matrix(a::AbstractArray)
     m = size(a,1)
