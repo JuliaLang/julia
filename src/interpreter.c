@@ -98,10 +98,10 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl)
                 return (jl_value_t*)jl_nothing;
             }
         }
-        jl_binding_t *bp = jl_get_binding(jl_system_module, (jl_sym_t*)sym);
+        jl_binding_t *b = jl_get_binding(jl_system_module, (jl_sym_t*)sym);
         jl_value_t *rhs = eval(args[1], locals, nl);
-        jl_check_assignment(bp);
-        bp->value = rhs;
+        jl_check_assignment(b);
+        b->value = rhs;
         return (jl_value_t*)jl_nothing;
     }
     else if (ex->head == new_sym) {
@@ -160,8 +160,8 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl)
                 return (jl_value_t*)jl_nothing;
             }
         }
-        jl_binding_t *bp = jl_get_binding(jl_system_module, (jl_sym_t*)sym);
-        jl_declare_constant(bp);
+        jl_binding_t *b = jl_get_binding(jl_system_module, (jl_sym_t*)sym);
+        jl_declare_constant(b);
         return (jl_value_t*)jl_nothing;
     }
     else if (ex->head == error_sym) {

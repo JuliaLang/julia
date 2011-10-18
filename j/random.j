@@ -26,6 +26,7 @@ macro rand_matrix_builder(t, f)
             for i = 1:numel(A); A[i] = ($f)(); end
             return A
         end
+        ($f)(dims::Size...) = ($f)(dims)
     end
 end
 
@@ -37,17 +38,6 @@ macro rand_matrix_builder_1arg(t, f)
             return A
         end
         ($f)(arg, dims::Size...) = ($f)(arg, dims)
-    end
-end
-
-macro rand_matrix_builder_2arg(t, f)
-    quote
-        function ($f)(arg1, arg2, dims::Dims)
-            A = Array($t, dims)
-            for i = 1:numel(A); A[i] = ($f)(arg1, arg2); end
-            return A
-        end
-        ($f)(arg1, arg2, dims::Size...) = ($f)(arg1, arg2, dims)
     end
 end
 
@@ -111,23 +101,14 @@ dsfmt_randui64() = boxui64(or_int(zext64(unbox32(dsfmt_randui32())),
 
 if WORD_SIZE == 64
     randi() = randi(Uint64)
-    @rand_matrix_builder Uint64 randi
 else
     randi() = randi(Uint32)
-    @rand_matrix_builder Uint32 randi
 end
 
 randi(::Type{Int32})  = int32(dsfmt_randui32()) & typemax(Int32)
-@rand_matrix_builder_1arg Int32 randi
-
 randi(::Type{Uint32}) = dsfmt_randui32()
-@rand_matrix_builder_1arg Uint32 randi
-
 randi(::Type{Int64})  = int64(dsfmt_randui64()) & typemax(Int64)
-@rand_matrix_builder_1arg Int64 randi
-
 randi(::Type{Uint64}) = dsfmt_randui64()
-@rand_matrix_builder_1arg Uint64 randi
 
 # random integer from lo to hi inclusive
 function randi_interval{T<:Int}(lo::T, hi::T)
@@ -149,11 +130,19 @@ function randi_interval{T<:Int}(lo::T, hi::T)
     return rem(s,r) + lo
 end
 
-@rand_matrix_builder_2arg Int randi_interval
+function randi_interval{T<:Int}(lo::T, hi::T, dims::Dims)
+    A = Array(T, dims)
+    for i = 1:numel(A); A[i] = randi_interval(lo, hi); end
+    return A
+end
+randi_interval(lo, hi, dims::Size...) = randi_interval(lo, hi, dims)
 
-# random integer from 1 to n
-randi_max(n::Int) = randi_interval(one(n), n)
-@rand_matrix_builder_1arg Int randi_max
+randi(max::Int)                    = randi_interval(one(max), max)
+randi(max::Int, dims::Dims)        = randi_interval(one(max), max, dims)
+randi(max::Int, dims::Size...)     = randi_interval(one(max), max, dims)
+randi(r::(Int,Int))                = randi_interval(r[1], r[2])
+randi(r::(Int,Int), dims::Dims)    = randi_interval(r[1], r[2], dims)
+randi(r::(Int,Int), dims::Size...) = randi_interval(r[1], r[2], dims)
 
 ## random Bools
 
@@ -164,6 +153,9 @@ randbool() = randbit() == 1
 @rand_matrix_builder Bool randbool
 
 ## randn() - Normally distributed random numbers using Ziggurat algorithm
+
+# The Ziggurat Method for generating random variables - Marsaglia and Tsang
+# Paper and reference code: http://www.jstatsoft.org/v05/i08/ 
 
 randn_zig_init() = ccall(dlsym(librandom, :randmtzig_create_ziggurat_tables), Void, ())
 

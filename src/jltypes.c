@@ -2398,6 +2398,7 @@ void jl_init_types(void)
     jl_tvar_t *tttvar = jl_new_typevar(jl_symbol("T"),
                                        (jl_value_t*)jl_bottom_type,
                                        jl_top_type);
+    tttvar->bound = 0;
     jl_type_type->parameters = jl_tuple(1, tttvar);
 
     jl_tuple_t *tv;
