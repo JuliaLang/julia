@@ -10,7 +10,7 @@ FLISPDIR = ./flisp
 SUPPORT = $(SUPPORTDIR)/libsupport.a
 FLISP = $(FLISPDIR)/libflisp.a
 
-FLAGS = -falign-functions -Wall -Wno-strict-aliasing \
+FLAGS = -falign-functions -Wall -Wno-strict-aliasing -fno-omit-frame-pointer \
 	-I$(FLISPDIR) -I$(SUPPORTDIR) -fvisibility=hidden -fno-common \
 	-I$(shell $(LLVMROOT)/bin/llvm-config --includedir)
 DEBUGFLAGS += $(FLAGS)
