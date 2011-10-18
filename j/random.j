@@ -156,6 +156,9 @@ randbool() = randbit() == 1
 
 ## randn() - Normally distributed random numbers using Ziggurat algorithm
 
+# The Ziggurat Method for generating random variables - Marsaglia and Tsang
+# Paper and reference code: http://www.jstatsoft.org/v05/i08/ 
+
 randn_zig_init() = ccall(dlsym(librandom, :randmtzig_create_ziggurat_tables), Void, ())
 
 randn() = ccall(dlsym(librandom, :randmtzig_randn), Float64, ())
