@@ -352,25 +352,24 @@ end
 
 function print_matrix_vdots(vdots::String, A::Vector, sep::String, M::Int, m::Int)
     for k = 1:length(A)
+        w = A[k][1] + A[k][2]
         if k % M == m
-            l = repeat(" ", A[k][1]-strlen(vdots))
-            r = repeat(" ", A[k][2])
+            l = repeat(" ", max(0, A[k][1]-strlen(vdots)))
+            r = repeat(" ", max(0, w-strlen(vdots)-strlen(l)))
             print(l, vdots, r)
         else
-            print(repeat(" ", A[k][1] + A[k][2]))
+            print(repeat(" ", w))
         end
         if k < length(A); print(sep); end
     end
 end
 
-function show_matrix_ng(
+function print_matrix(
     X::AbstractMatrix, rows::Int, cols::Int,
     pre::String, sep::String, post::String,
     hdots::String, vdots::String,
     hmod::Int, vmod::Int
 )
-    println(summary(X))
-    rows -= 1
     cols -= strlen(pre) + strlen(post)
     presp = repeat(" ", strlen(pre))
     postsp = ""
@@ -383,7 +382,8 @@ function show_matrix_ng(
             for i = 1:m
                 print(i == 1 ? pre : presp)
                 print_matrix_row(X,A,i,1:n,sep)
-                println(i == m ? post : postsp)
+                print(i == m ? post : postsp)
+                if i != m; println(); end
             end
         else # rows fit, cols don't
             c = div(cols-strlen(hdots)+1,2)+1
@@ -395,7 +395,8 @@ function show_matrix_ng(
                 print_matrix_row(X,L,i,1:length(L),sep)
                 print(i % hmod == 1 ? hdots : repeat(" ", strlen(hdots)))
                 print_matrix_row(X,R,i,n-length(R)+1:n,sep)
-                println(i == m ? post : postsp)
+                print(i == m ? post : postsp)
+                if i != m; println(); end
             end
         end
     else # rows don't fit
@@ -406,7 +407,8 @@ function show_matrix_ng(
             for i = I
                 print(i == 1 ? pre : presp)
                 print_matrix_row(X,A,i,1:n,sep)
-                println(i == m ? post : postsp)
+                print(i == m ? post : postsp)
+                if i != I[end]; println(); end
                 if i == t
                     print(i == 1 ? pre : presp)
                     print_matrix_vdots(vdots,A,sep,vmod,1)
@@ -424,7 +426,8 @@ function show_matrix_ng(
                 print_matrix_row(X,L,i,1:length(L),sep)
                 print(i % hmod == 1 ? hdots : repeat(" ", strlen(hdots)))
                 print_matrix_row(X,R,i,n-length(R)+1:n,sep)
-                println(i == m ? post : postsp)
+                print(i == m ? post : postsp)
+                if i != I[end]; println(); end
                 if i == t
                     print(i == 1 ? pre : presp)
                     print_matrix_vdots(vdots,L,sep,vmod,1)
@@ -436,110 +439,25 @@ function show_matrix_ng(
         end
     end
 end
-show_matrix_ng(X::AbstractMatrix) =
-    show_matrix_ng(X,tty_rows()-2,tty_cols()," "," ","","  :  ",":",5,5)
+print_matrix(X::AbstractMatrix, rows::Int, cols::Int) =
+    print_matrix(X, rows, cols, " ", " ", "", "  :  ", ":", 5, 5)
 
-function show_matrix(a::AbstractArray)
-    m = size(a,1)
-    n = size(a,2)
-    print_hdots = false
-    print_vdots = false
-    if 10 < m; print_vdots = true; end
-    if 10 < n; print_hdots = true; end
-    if !print_vdots && !print_hdots
-        for i = 1:m
-            show_cols(a, 1, n, i)
-            if i < m; println(); end
-        end
-    elseif print_vdots && !print_hdots
-        for i = 1:3
-            show_cols(a, 1, n, i)
-            println()
-        end
-        println(':')
-        for i = m-2:m
-            show_cols(a, 1, n, i)
-            if i < m; println(); end
-        end
-    elseif !print_vdots && print_hdots
-        for i = 1:m
-            show_cols(a, 1, 3, i)
-            if i == 1 || i == m; print(": "); else; print("  "); end
-            show_cols(a, n-2, n, i)
-            if i < m; println(); end
-        end
-    else
-        for i = 1:3
-            show_cols(a, 1, 3, i)
-            if i == 1; print(": "); else; print("  "); end
-            show_cols(a, n-2, n, i)
-            println()
-        end
-        print(":\n")
-        for i = m-2:m
-            show_cols(a, 1, 3, i)
-            if i == m; print(": "); else; print("  "); end
-            show_cols(a, n-2, n, i)
-            if i < m; println(); end
-        end
-    end
+show{T}(x::AbstractArray{T,0}) = (println(summary(x),":"); show(x[]))
+
+function show(v::AbstractVector)
+    println(summary(v),":")
+    print_matrix(v', tty_rows()-3, tty_cols())
 end
 
-show{T}(a::AbstractArray{T,0}) = (println(summary(a)); show(a[]))
-
-function show(a::AbstractArray)
-    print(summary(a))
-    if isempty(a)
-        return
-    end
-    println()
-    tail = size(a)[3:]
-    nd = ndims(a)-2
-    function print_slice(idxs)
-        for i = 1:nd
-            ii = idxs[i]
-            if size(a,i+2) > 10
-                if ii == 4 && allp(x->x==1,idxs[1:i-1])
-                    for j=i+1:nd
-                        szj = size(a,j+2)
-                        if szj>10 && 3 < idxs[j] <= szj-3
-                            return
-                        end
-                    end
-                    #println(idxs)
-                    print("...\n\n")
-                    return
-                end
-                if 3 < ii <= size(a,i+2)-3
-                    return
-                end
-            end
-        end
-        print("[:, :, ")
-        for i = 1:(nd-1); print("$(idxs[i]), "); end
-        println(idxs[end], "] =")
-        show_matrix(a[:,:,idxs...])
-        print(idxs == tail ? "" : "\n\n")
-    end
-    cartesian_map(print_slice, map(x->Range1(1,x), tail))
+function show(X::AbstractMatrix)
+    println(summary(X),":")
+    print_matrix(X, tty_rows()-3, tty_cols())
 end
 
-function showall(a::AbstractArray)
-    print(summary(a))
-    if isempty(a)
-        return
-    end
-    println()
-    tail = size(a)[3:]
-    nd = ndims(a)-2
-    function print_slice(idxs)
-        print("[:, :, ")
-        for i = 1:(nd-1); print("$(idxs[i]), "); end
-        println(idxs[end], "] =")
-        showall_matrix(a[:,:,idxs...])
-        print(idxs == tail ? "" : "\n\n")
-    end
-    cartesian_map(print_slice, map(x->Range1(1,x), tail))
+function show(X::AbstractArray)
+    println(summary(X),":")
+    # TODO: implement >= 3-tensor printing
+    print("Printing N-dimensional tensors for N >= 3 not yet implemented.")
 end
 
 summary(x) = string(typeof(x))
