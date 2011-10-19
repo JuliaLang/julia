@@ -314,12 +314,14 @@ function alignment(v::AbstractVector)
 end
 
 function alignment(
-    X::AbstractMatrix, cols::AbstractVector,
+    X::AbstractMatrix,
+    rows::AbstractVector, cols::AbstractVector,
     cols_if_complete::Int, cols_otherwise::Int, sep::Int
 )
     a = {}
     for j = cols
-        push(a, alignment(X[:,j][:]))
+        push(a, alignment(X[rows,j][:]))
+        # TODO: remove [:] once X[rows,j] returns a vector
         if sum(map(sum,a)) + sep*length(a) >= cols_if_complete
             pop(a)
             break
@@ -333,9 +335,9 @@ function alignment(
     return a
 end
 
-function print_matrix_block(
-    X::AbstractMatrix, cols::AbstractVector,
-    A::Vector, sep::String, i::Int
+function print_matrix_row(
+    X::AbstractMatrix, A::Vector,
+    i::Int, cols::AbstractVector, sep::String
 )
     for k = 1:length(A)
         j = cols[k]
@@ -348,43 +350,74 @@ function print_matrix_block(
     end
 end
 
+function print_matrix_vdots(vdots::String, A::Vector, sep::String, every::Int)
+    for k = 1:length(A)
+        if k % every == 1
+            l = repeat(" ", A[k][1]-strlen(vdots))
+            r = repeat(" ", A[k][2])
+            print(l, vdots, r)
+        else
+            print(repeat(" ", A[k][1] + A[k][2]))
+        end
+        if k < length(A); print(sep); end
+    end
+end
+
 function show_matrix_ng(
     X::AbstractMatrix, rows::Int, cols::Int,
     pre::String, sep::String, post::String,
-    hetc::String, vetc::String
+    hdots::String, vdots::String
 )
+    println(summary(X))
+    rows -= 1
     cols -= strlen(pre) + strlen(post)
+    presp = repeat(" ", strlen(pre))
+    postsp = ""
     ss = strlen(sep)
     m, n = size(X)
-    if m <= rows
-        A = alignment(X,1:size(X,2),cols,cols,ss)
-        if n <= length(A)
+    if m <= rows # rows fit
+        A = alignment(X,1:m,1:n,cols,cols,ss)
+        if n <= length(A) # rows and cols fit
             for i = 1:m
-                print(i == 1 ? pre : repeat(" ", strlen(pre)))
-                print_matrix_block(X,1:n,A,sep,i)
-                println(i == m ? post : repeat(" ", strlen(post)))
+                print(i == 1 ? pre : presp)
+                print_matrix_row(X,A,i,1:n,sep)
+                println(i == m ? post : postsp)
             end
-        else
-            c = div(cols-strlen(hetc)+1,2)+1
-            R = reverse(alignment(X,n:-1:1,c,c,ss))
-            c = cols - sum(map(sum,R)) - (length(R)-1)*ss - strlen(hetc)
-            L = alignment(X,1:n,c,c,ss)
+        else # rows fit, cols don't
+            c = div(cols-strlen(hdots)+1,2)+1
+            R = reverse(alignment(X,1:m,n:-1:1,c,c,ss))
+            c = cols - sum(map(sum,R)) - (length(R)-1)*ss - strlen(hdots)
+            L = alignment(X,1:m,1:n,c,c,ss)
             for i = 1:m
-                print(i == 1 ? pre : repeat(" ", strlen(pre)))
-                print_matrix_block(X,1:length(L),L,sep,i)
-                print(i % 5 == 1 ? hetc : repeat(" ", strlen(hetc)))
-                print_matrix_block(X,n-length(R)+1:n,R,sep,i)
-                println(i == m ? post : repeat(" ", strlen(post)))
+                print(i == 1 ? pre : presp)
+                print_matrix_row(X,L,i,1:length(L),sep)
+                print(i % 5 == 1 ? hdots : repeat(" ", strlen(hdots)))
+                print_matrix_row(X,R,i,n-length(R)+1:n,sep)
+                println(i == m ? post : postsp)
             end
         end
-    else
-        top = 1:div(rows,2)
-        bottom = m-div(rows-1,2)+1:m
-        a = alignment([X[top,:];X[bottom,:]], cols, cols-4, 1)
+    else # rows don't fit
+        T = 1:div(rows,2)
+        B = m-div(rows-1,2)+1:m
+        A = alignment(X,[T,B],1:n,cols,cols,ss)
+        if n <= length(A) # rows don't fit, cols do
+            for i = [T,B]
+                print(i == 1 ? pre : presp)
+                print_matrix_row(X,A,i,1:n,sep)
+                println(i == m ? post : postsp)
+                if i == T[end]
+                    print(i == 1 ? pre : presp)
+                    print_matrix_vdots(vdots,A,sep,5)
+                    println(i == m ? post : postsp)
+                end
+            end
+        else # neither rows nor cols fit
+            
+        end
     end
 end
 show_matrix_ng(X::AbstractMatrix) =
-    show_matrix_ng(X, tty_rows()-2, tty_cols(), " ", " ", "", "  ...  ", "...")
+    show_matrix_ng(X, tty_rows()-2, tty_cols()-1, " ", " ", "", "  ...  ", ":")
 
 function show_matrix(a::AbstractArray)
     m = size(a,1)
