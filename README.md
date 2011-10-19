@@ -10,7 +10,9 @@
 
 Julia is a fresh approach to technical computing. These are some of the reasons why someone may consider using julia:
 
-1. High-performance JIT compiler with syntax that is familiar to users of other technical computing environments.
+### High-performance JIT compiler 
+
+Julia is an interactive environment with a high performance JIT compiler, with syntax that is familiar to users of other technical computing environments. The following [performance benchmarks](https://github.com/JuliaLang/julia/blob/master/test/perf.j) are from a Macbook with 2.1GHz Intel Core 2 Duo.
 
 <pre>
 +---------------+--------+--------+--------+---------------+---------+
@@ -25,11 +27,10 @@ Julia is a fresh approach to technical computing. These are some of the reasons 
 | rand_mat_stat |  38.9  |  139   | 517    |  363          |  No Way |
 +---------------+--------+--------+--------+---------------+---------+
 </pre>
-Performance numbers on a Macbook with 2.1GHz Intel Core 2 Duo.
 
-2. Designed for parallelism.
+### Designed for parallelism
 
-Julia does not impose any particular style of parallelism on the user. Instead, it is flexible enough to support a number of styles of [parallelism][https://github.com/JuliaLang/julia/wiki/Parallel-Computing], and makes it easy for the user to add more. The following simple example demonstrates how to count the number of heads in a large number of coin tosses in parallel.
+Julia does not impose any particular style of parallelism on the user. Instead, it is flexible enough to support a number of styles of [parallelism](https://github.com/JuliaLang/julia/wiki/Parallel-Computing), and makes it easy for the user to add more. The following simple example demonstrates how to count the number of heads in a large number of coin tosses in parallel.
 
 ````
 nheads = @parallel (+) for i=1:100000000
@@ -37,9 +38,9 @@ nheads = @parallel (+) for i=1:100000000
 end
 ````
 
-3. Free and open source. 
+### Free and open source
 
-The core of the Julia implementation is licensed under the [MIT license][MIT]. Various libraries used by the Julia environment include their own licenses such as the GPL, LGPL, BSD, etc. Users may even plug their own code, and even other proprietary libraries, should they choose to. Julia makes it easy to call functions from [external C and Fortran shared libraries][https://github.com/JuliaLang/julia/wiki/Calling-C-and-Fortran-Code]. It does not even require the use of a C/Fortran compiler.
+The core of the Julia implementation is licensed under the [MIT license][MIT]. Various libraries used by the Julia environment include their own licenses such as the [GPL], [LGPL], [BSD], etc. Users may even plug their own code, and even other proprietary libraries, should they choose to. Julia makes it easy to call functions from [external C and Fortran shared libraries](https://github.com/JuliaLang/julia/wiki/Calling-C-and-Fortran-Code). It does not even require the use of a C/Fortran compiler.
 
 <a name="The-Julia-Language"/>
 ## The Julia language
