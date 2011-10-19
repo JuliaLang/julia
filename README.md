@@ -12,6 +12,7 @@ Julia is a fresh approach to technical computing. These are some of the reasons 
 
 1. High-performance JIT compiler with syntax that is familiar to users of other technical computing environments.
 
+<pre>
 +---------------+--------+--------+--------+---------------+---------+
 |    Time       | Julia  | Matlab | Octave | Python 2.7.1  | g++ -O3 |  
 |    (ms)       |        | R2011a |  3.4   | Numpy  1.5.1  |  4.6.1  |   
@@ -23,6 +24,7 @@ Julia is a fresh approach to technical computing. These are some of the reasons 
 | pi_sum        |  49.5  |  69    | 20578  |  1289         |  49.3   |
 | rand_mat_stat |  38.9  |  139   | 517    |  363          |  No Way |
 +---------------+--------+--------+--------+---------------+---------+
+</pre>
 Performance numbers on a Macbook with 2.1GHz Intel Core 2 Duo.
 
 2. Designed for parallelism.
