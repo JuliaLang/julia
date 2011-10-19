@@ -1118,7 +1118,7 @@ jl_value_t *jl_method_def(jl_sym_t *name, jl_value_t **bp, jl_binding_t *bnd,
                           jl_tuple_t *argtypes, jl_function_t *f)
 {
     jl_value_t *gf;
-    if (bnd && !bnd->constp) {
+    if (bnd) {
         jl_declare_constant(bnd);
     }
     if (*bp == NULL) {

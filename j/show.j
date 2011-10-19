@@ -446,7 +446,7 @@ show{T}(x::AbstractArray{T,0}) = (println(summary(x),":"); show(x[]))
 
 function show(v::AbstractVector)
     println(summary(v),":")
-    print_matrix(v', tty_rows()-3, tty_cols())
+    print_matrix(v.', tty_rows()-3, tty_cols())
 end
 
 function show(X::AbstractMatrix)

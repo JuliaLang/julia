@@ -60,7 +60,7 @@ similar{T}(a::Array{T,2}) = Array(T, size(a,1), size(a,2))
 similar{T}(a::Array{T,1}, S::Type) = Array(S, size(a,1))
 similar{T}(a::Array{T,2}, S::Type) = Array(S, size(a,1), size(a,2))
 
-empty(T::Type) = Array(T, 0)
+empty(T) = Array(T, 0)
 
 zeros{T}(::Type{T}, dims::Dims) = fill(Array(T, dims), zero(T))
 zeros(T::Type, dims::Size...) = zeros(T, dims)
