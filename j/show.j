@@ -350,9 +350,9 @@ function print_matrix_row(
     end
 end
 
-function print_matrix_vdots(vdots::String, A::Vector, sep::String, every::Int)
+function print_matrix_vdots(vdots::String, A::Vector, sep::String, M::Int, m::Int)
     for k = 1:length(A)
-        if k % every == 1
+        if k % M == m
             l = repeat(" ", A[k][1]-strlen(vdots))
             r = repeat(" ", A[k][2])
             print(l, vdots, r)
@@ -366,13 +366,15 @@ end
 function show_matrix_ng(
     X::AbstractMatrix, rows::Int, cols::Int,
     pre::String, sep::String, post::String,
-    hdots::String, vdots::String
+    hdots::String, vdots::String,
+    hmod::Int, vmod::Int
 )
     println(summary(X))
     rows -= 1
     cols -= strlen(pre) + strlen(post)
     presp = repeat(" ", strlen(pre))
     postsp = ""
+    hdotssp = repeat(" ", strlen(hdots))
     ss = strlen(sep)
     m, n = size(X)
     if m <= rows # rows fit
@@ -391,33 +393,51 @@ function show_matrix_ng(
             for i = 1:m
                 print(i == 1 ? pre : presp)
                 print_matrix_row(X,L,i,1:length(L),sep)
-                print(i % 5 == 1 ? hdots : repeat(" ", strlen(hdots)))
+                print(i % hmod == 1 ? hdots : repeat(" ", strlen(hdots)))
                 print_matrix_row(X,R,i,n-length(R)+1:n,sep)
                 println(i == m ? post : postsp)
             end
         end
     else # rows don't fit
-        T = 1:div(rows,2)
-        B = m-div(rows-1,2)+1:m
-        A = alignment(X,[T,B],1:n,cols,cols,ss)
+        t = div(rows,2)
+        I = [1:t; m-div(rows-1,2)+1:m]
+        A = alignment(X,I,1:n,cols,cols,ss)
         if n <= length(A) # rows don't fit, cols do
-            for i = [T,B]
+            for i = I
                 print(i == 1 ? pre : presp)
                 print_matrix_row(X,A,i,1:n,sep)
                 println(i == m ? post : postsp)
-                if i == T[end]
+                if i == t
                     print(i == 1 ? pre : presp)
-                    print_matrix_vdots(vdots,A,sep,5)
+                    print_matrix_vdots(vdots,A,sep,vmod,1)
                     println(i == m ? post : postsp)
                 end
             end
         else # neither rows nor cols fit
-            
+            c = div(cols-strlen(hdots)+1,2)+1
+            R = reverse(alignment(X,I,n:-1:1,c,c,ss))
+            c = cols - sum(map(sum,R)) - (length(R)-1)*ss - strlen(hdots)
+            L = alignment(X,I,1:n,c,c,ss)
+            r = (length(R)-n+1) % vmod
+            for i = I
+                print(i == 1 ? pre : presp)
+                print_matrix_row(X,L,i,1:length(L),sep)
+                print(i % hmod == 1 ? hdots : repeat(" ", strlen(hdots)))
+                print_matrix_row(X,R,i,n-length(R)+1:n,sep)
+                println(i == m ? post : postsp)
+                if i == t
+                    print(i == 1 ? pre : presp)
+                    print_matrix_vdots(vdots,L,sep,vmod,1)
+                    print(hdotssp)
+                    print_matrix_vdots(vdots,R,sep,vmod,r)
+                    println(i == m ? post : postsp)
+                end
+            end
         end
     end
 end
 show_matrix_ng(X::AbstractMatrix) =
-    show_matrix_ng(X, tty_rows()-2, tty_cols()-1, " ", " ", "", "  ...  ", ":")
+    show_matrix_ng(X,tty_rows()-2,tty_cols()," "," ","","  :  ",":",5,5)
 
 function show_matrix(a::AbstractArray)
     m = size(a,1)
