@@ -8,46 +8,62 @@
     |__/                   |
 
 
-These are some of the reasons why someone may consider using julia:
-
-### High-performance JIT compiler 
-
-Julia is an interactive environment with a high performance JIT compiler, with syntax that is familiar to users of other technical computing environments. The following [performance benchmarks](https://github.com/JuliaLang/julia/blob/master/test/perf.j) are from a Macbook with 2.1GHz Intel Core 2 Duo.
-
-<pre>
-+---------------+--------+--------+--------+---------------+---------+
-|    Time       | Julia  | Matlab | Octave | Python 2.7.1  | g++ -O3 |  
-|    (ms)       |        | R2011a |  3.4   | Numpy  1.5.1  |  4.6.1  |   
-+---------------+--------+--------+--------+---------------+---------+
-| fib           |  0.5   |  309   | 570    |  7.49         |  0.179  |
-| parse_int     |  0.21  |  124   | 557    |  0.63         |  0.151  |
-| mandel        |  1.82  |  40    | 260    |  9.64         |  0.53   |
-| quicksort     |  0.64  |  71    | 1611   |  30.6         |  0.6    |
-| pi_sum        |  49.5  |  69    | 20578  |  1289         |  49.3   |
-| rand_mat_stat |  38.9  |  139   | 517    |  363          |  No Way |
-+---------------+--------+--------+--------+---------------+---------+
-</pre>
-
-### Designed for parallelism
-
-Julia does not impose any particular style of parallelism on the user. Instead, it is flexible enough to support a number of styles of [parallelism](https://github.com/JuliaLang/julia/wiki/Parallel-Computing), and makes it easy for the user to add more. The following simple example demonstrates how to count the number of heads in a large number of coin tosses in parallel.
-
-````
-nheads = @parallel (+) for i=1:100000000
-    randbit()
-end
-````
-
-### Free and open source
-
-The core of the Julia implementation is licensed under the [MIT license][MIT]. Various libraries used by the Julia environment include their own licenses such as the [GPL], [LGPL], [BSD], etc. Users may even plug their own code, and even other proprietary libraries, should they choose to. Julia makes it easy to call functions from [external C and Fortran shared libraries](https://github.com/JuliaLang/julia/wiki/Calling-C-and-Fortran-Code), without even requiring the use of a C/Fortran compiler.
-
 <a name="The-Julia-Language"/>
 ## The Julia language
 
-Julia is a high-level, high-performance dynamic language for numerical and scientific computing. It provides a sophisticated compiler, distributed parallel execution, and numerical accuracy. Key features include multiple dispatch, optional typing, and excellent performance through type inference and just-in-time (JIT) compilation. The language is multi-paradigm, combining features of functional, object-oriented, and imperative styles.
+Julia is a high-level, high-performance dynamic language for numerical and scientific computing.
+It provides a sophisticated compiler, distributed parallel execution, and numerical accuracy.
+Key features include multiple dispatch, optional typing, and excellent performance through type inference and just-in-time (JIT) compilation.
+For a more in-depth discussion of the rationale and advantages of Julia over other systems, see the following highlights, read the [introduction](https://github.com/JuliaLang/julia/wiki/Introduction) in the manual, or [browse all](https://github.com/JuliaLang/julia/wiki/) of the documentation.
 
-For a more in-depth discussion of the rationale and advantages of Julia over other systems, see the [introduction](https://github.com/JuliaLang/julia/wiki/Introduction) in the manual, or [browse all](https://github.com/JuliaLang/julia/wiki/) of the documentation.
+### High-Performance JIT Compiler 
+
+Julia is an interactive environment with a high performance JIT compiler, with syntax that is familiar to users of other technical computing environments.
+The following [performance benchmarks](https://github.com/JuliaLang/julia/blob/master/test/perf.j) are from a Macbook with 2.1GHz Intel Core 2 Duo:
+
+    +---------------+--------+--------+--------+--------------+---------+
+    |    Time       | Julia  | Matlab | Octave | Python 2.7.1 | g++ -O3 |  
+    |    (ms)       |        | R2011a |  3.4   | Numpy  1.5.1 |  4.6.1  |   
+    +---------------+--------+--------+--------+--------------+---------+
+    | fib           |    .5  |  309.  |   570. |      7.49    |    .179 |
+    | parse_int     |    .21 |  124.  |   557. |       .63    |    .151 |
+    | mandel        |   1.82 |   40.  |   260. |      9.64    |    .53  |
+    | quicksort     |    .64 |   71.  |  1611. |     30.6     |    .6   |
+    | pi_sum        |  49.5  |   69.  | 20578. |   1289.      |  49.3   |
+    | rand_mat_stat |  38.9  |  139.  |   517. |    363.      |         |
+    +---------------+--------+--------+--------+--------------+---------+
+
+Relative performance between languages on Linux is similar.
+These benchmarks, while not comprehensive, were also not chosen to make Julia look good, but rather to test JIT compiler performance in a range of common problem areas, such as recursion optimization, string parsing, sorting, iterative numerical loops, and random number generation.
+
+*Note:* The C++ benchmark for random matrix statistics is missing because implementing such a complex benchmark in a low-level language, while technically possible, is unrealistic, and it is unclear how a fair comparison implementation should work.
+
+### Designed for Parallelism
+
+Julia does not impose any particular style of parallelism on the user.
+Instead, it is flexible enough to support a number of styles of [parallelism](https://github.com/JuliaLang/julia/wiki/Parallel-Computing), and makes it easy for the user to add more.
+The following simple example demonstrates how to count the number of heads in a large number of coin tosses in parallel.
+
+    nheads = @parallel (+) for i=1:100000000
+      randbit()
+    end
+
+This computation is automatically distributed across all available nodes participarting in the computation session, and the result, reduced by summation (`+`), is returned at the calling node.
+It is also possible to add and remove nodes participating in a computation session while a session is ongoing, allowing elasticity and fault recovery.
+
+### Free, Open Source & Library-Friendly
+
+The core of the Julia implementation is licensed under the [MIT license][MIT].
+Various libraries used by the Julia environment include their own licenses such as the [GPL], [LGPL], [BSD], etc., including the `julia` runtime, which is GPL-licensed (this is similar to Python's licensing arrangement).
+Users can easily combine their own code or even proprietary third-party libraries with the `libjulia` core, should they choose to.
+Furthermore, Julia makes it easy to call functions from [external C and Fortran shared libraries](https://github.com/JuliaLang/julia/wiki/Calling-C-and-Fortran-Code), without requiring the use of a C or Fortran compiler, or even writing any wrapper code.
+You can try calling arbitrary external library functions directly from Julia's interactive prompt, playing with the interface and getting immediate feedback until you get it right.
+See [LICENSE](https://github.com/JuliaLang/julia/blob/master/LICENSE) for the full terms Julia's licensing.
+
+[MIT]:  http://en.wikipedia.org/wiki/MIT_License
+[GPL]:  http://en.wikipedia.org/wiki/GNU_General_Public_License
+[LGPL]: http://en.wikipedia.org/wiki/GNU_Lesser_General_Public_License
+[BSD]:  http://en.wikipedia.org/wiki/BSD_licenses
 
 <a name="Resources"/>
 ## Resources
@@ -148,16 +164,3 @@ Copy (or symlink) the TextMate Julia bundle into the TextMate application suppor
 where `JULIA_PATH` is the location of the top-level julia directory.
 Now select from the menu in TextMate `Bundles > Bundle Editor > Reload Bundles`.
 Julia should appear as a file type and be automatically detected for files with the `.j` extension.
-
-<a name="License"/>
-## License
-
-The core of the Julia implementation is licensed under the [MIT license][MIT]:
-the shared library files `libjulia-release` and `libjulia-debug` can be used under the terms of the MIT license.
-The `julia` executable, however, is [GPL-licensed][GPL] as it links the libjulia core together with libraries and code available under a variety of open source licenses, including [GPL][], [LGPL][], [BSD][] and [MIT][].
-See [LICENSE](https://github.com/JuliaLang/julia/blob/master/LICENSE) for the full terms of the license.
-
-[MIT]:  http://en.wikipedia.org/wiki/MIT_License
-[GPL]:  http://en.wikipedia.org/wiki/GNU_General_Public_License
-[LGPL]: http://en.wikipedia.org/wiki/GNU_Lesser_General_Public_License
-[BSD]:  http://en.wikipedia.org/wiki/BSD_licenses
