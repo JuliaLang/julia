@@ -744,7 +744,8 @@ static void show_float64(double d, int single)
 {
     ios_t *s = jl_current_output_stream();
     char buf[64];
-    int ndec = single ? 9 : 17;
+    //int ndec = single ? 9 : 17;
+    int ndec = 5;
     if (!DFINITE(d)) {
         char *rep = isnan(d) ? "NaN" : sign_bit(d) ? "-Inf" : "Inf";
         ios_puts(rep, s);
