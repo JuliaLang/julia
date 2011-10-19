@@ -12,7 +12,7 @@
 ## The Julia Language
 
 Julia is a high-level, high-performance dynamic language for numerical and scientific computing.
-It provides a sophisticated compiler, distributed parallel execution, and numerical accuracy.
+It provides a sophisticated compiler, distributed parallel execution, numerical accuracy, and easy interfaces to mature best-of-breed C and Fortran libraries for technical computing tasks such as matrix math, random number generation, fast Fourier transforms, and string processing.
 Key features include multiple dispatch, optional typing, and excellent performance through type inference and just-in-time (JIT) compilation.
 For a more in-depth discussion of the rationale and advantages of Julia over other systems, see the following highlights, read the [introduction](https://github.com/JuliaLang/julia/wiki/Introduction) in the manual, or [browse all](https://github.com/JuliaLang/julia/wiki/) of the documentation.
 
@@ -21,17 +21,17 @@ For a more in-depth discussion of the rationale and advantages of Julia over oth
 Julia is an interactive environment with a high performance JIT compiler, with syntax that is familiar to users of other technical computing environments.
 The following [performance benchmarks](https://github.com/JuliaLang/julia/blob/master/test/perf.j) are from a Macbook with 2.1GHz Intel Core 2 Duo:
 
-    +---------------+--------+--------+--------+--------------+---------+
-    |    Time       | Julia  | Matlab | Octave | Python 2.7.1 | g++ -O3 |  
-    |    (ms)       |        | R2011a |  3.4   | Numpy  1.5.1 |  4.6.1  |   
-    +---------------+--------+--------+--------+--------------+---------+
-    | fib           |    .5  |  309.  |   570. |      7.49    |    .179 |
-    | parse_int     |    .21 |  124.  |   557. |       .63    |    .151 |
-    | mandel        |   1.82 |   40.  |   260. |      9.64    |    .53  |
-    | quicksort     |    .64 |   71.  |  1611. |     30.6     |    .6   |
-    | pi_sum        |  49.5  |   69.  | 20578. |   1289.      |  49.3   |
-    | rand_mat_stat |  38.9  |  139.  |   517. |    363.      |         |
-    +---------------+--------+--------+--------+--------------+---------+
+    +---------------+-------+--------+--------+--------------+---------+
+    |    Time       | Julia | Matlab | Octave | Python 2.7.1 | g++ -O3 |  
+    |    (ms)       |       | R2011a |  3.4   | Numpy  1.5.1 |  4.6.1  |   
+    +---------------+-------+--------+--------+--------------+---------+
+    | fib           |   .5  |  309.  |   570. |      7.49    |    .179 |
+    | parse_int     |   .21 |  124.  |   557. |       .63    |    .151 |
+    | mandel        |  1.82 |   40.  |   260. |      9.64    |    .53  |
+    | quicksort     |   .64 |   71.  |  1611. |     30.6     |    .6   |
+    | pi_sum        | 49.5  |   69.  | 20578. |   1289.      |  49.3   |
+    | rand_mat_stat | 38.9  |  139.  |   517. |    363.      |         |
+    +---------------+-------+--------+--------+--------------+---------+
 
 Relative performance between languages on Linux is similar.
 These benchmarks, while not comprehensive, were also not chosen to make Julia look good, but rather to test JIT compiler performance in a range of common problem areas, such as recursion optimization, string parsing, sorting, iterative numerical loops, and random number generation.
