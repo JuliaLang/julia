@@ -9,7 +9,7 @@
 
 
 <a name="The-Julia-Language"/>
-## The Julia language
+## The Julia Language
 
 Julia is a high-level, high-performance dynamic language for numerical and scientific computing.
 It provides a sophisticated compiler, distributed parallel execution, and numerical accuracy.
