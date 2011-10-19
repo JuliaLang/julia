@@ -8,7 +8,7 @@
     |__/                   |
 
 
-Julia is a fresh approach to technical computing. These are some of the reasons why someone may consider using julia:
+These are some of the reasons why someone may consider using julia:
 
 ### High-performance JIT compiler 
 
@@ -34,13 +34,13 @@ Julia does not impose any particular style of parallelism on the user. Instead, 
 
 ````
 nheads = @parallel (+) for i=1:100000000
-  randbit()
+    randbit()
 end
 ````
 
 ### Free and open source
 
-The core of the Julia implementation is licensed under the [MIT license][MIT]. Various libraries used by the Julia environment include their own licenses such as the [GPL], [LGPL], [BSD], etc. Users may even plug their own code, and even other proprietary libraries, should they choose to. Julia makes it easy to call functions from [external C and Fortran shared libraries](https://github.com/JuliaLang/julia/wiki/Calling-C-and-Fortran-Code). It does not even require the use of a C/Fortran compiler.
+The core of the Julia implementation is licensed under the [MIT license][MIT]. Various libraries used by the Julia environment include their own licenses such as the [GPL], [LGPL], [BSD], etc. Users may even plug their own code, and even other proprietary libraries, should they choose to. Julia makes it easy to call functions from [external C and Fortran shared libraries](https://github.com/JuliaLang/julia/wiki/Calling-C-and-Fortran-Code), without even requiring the use of a C/Fortran compiler.
 
 <a name="The-Julia-Language"/>
 ## The Julia language
