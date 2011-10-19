@@ -55,8 +55,8 @@ It is also possible to add and remove nodes participating in a computation sessi
 ### Free, Open Source & Library-Friendly
 
 The core of the Julia implementation is licensed under the [MIT license][MIT].
-Various libraries used by the Julia environment include their own licenses such as the [GPL], [LGPL], [BSD], etc., including the `julia` runtime, which is GPL-licensed (this is similar to Python's licensing arrangement).
-Users can easily combine their own code or even proprietary third-party libraries with the `libjulia` core, should they choose to.
+Various libraries used by the Julia environment include their own licenses such as the [GPL], [LGPL], [BSD], etc.
+Users can easily combine their own code or even proprietary third-party libraries, should they choose to.
 Furthermore, Julia makes it easy to call functions from [external C and Fortran shared libraries](https://github.com/JuliaLang/julia/wiki/Calling-C-and-Fortran-Code), without requiring the use of a C or Fortran compiler, or even writing any wrapper code.
 You can try calling arbitrary external library functions directly from Julia's interactive prompt, playing with the interface and getting immediate feedback until you get it right.
 See [LICENSE](https://github.com/JuliaLang/julia/blob/master/LICENSE) for the full terms Julia's licensing.
