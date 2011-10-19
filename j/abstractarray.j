@@ -1214,16 +1214,16 @@ end
 
 ## Obsolete - Mainly here for reference purposes, use gen_cartesian_map
 ## Still used in show()
-function cartesian_map(body, t::Tuple, it...)
-    idx = length(t)-length(it)
-    if idx == 0
-        body(it)
-    else
-        for i = t[idx]
-            cartesian_map(body, t, i, it...)
-        end
-    end
-end
+# function cartesian_map(body, t::Tuple, it...)
+#     idx = length(t)-length(it)
+#     if idx == 0
+#         body(it)
+#     else
+#         for i = t[idx]
+#             cartesian_map(body, t, i, it...)
+#         end
+#     end
+# end
 
 ## Transpose, Permute ##
 
