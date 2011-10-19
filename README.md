@@ -7,10 +7,46 @@
      _/ |\__'_|_|_|\__'_|  |
     |__/                   |
 
-Julia is a high-level, high-performance dynamic language for numerical and scientific computing.
-It provides a sophisticated compiler, distributed parallel execution, and numerical accuracy.
-Key features include multiple dispatch, optional typing, and excellent performance through type inference and just-in-time (JIT) compilation.
-The language is multi-paradigm, combining features of functional, object-oriented, and imperative styles.
+
+These are some of the reasons why someone may consider using julia:
+
+### High-performance JIT compiler 
+
+Julia is an interactive environment with a high performance JIT compiler, with syntax that is familiar to users of other technical computing environments. The following [performance benchmarks](https://github.com/JuliaLang/julia/blob/master/test/perf.j) are from a Macbook with 2.1GHz Intel Core 2 Duo.
+
+<pre>
++---------------+--------+--------+--------+---------------+---------+
+|    Time       | Julia  | Matlab | Octave | Python 2.7.1  | g++ -O3 |  
+|    (ms)       |        | R2011a |  3.4   | Numpy  1.5.1  |  4.6.1  |   
++---------------+--------+--------+--------+---------------+---------+
+| fib           |  0.5   |  309   | 570    |  7.49         |  0.179  |
+| parse_int     |  0.21  |  124   | 557    |  0.63         |  0.151  |
+| mandel        |  1.82  |  40    | 260    |  9.64         |  0.53   |
+| quicksort     |  0.64  |  71    | 1611   |  30.6         |  0.6    |
+| pi_sum        |  49.5  |  69    | 20578  |  1289         |  49.3   |
+| rand_mat_stat |  38.9  |  139   | 517    |  363          |  No Way |
++---------------+--------+--------+--------+---------------+---------+
+</pre>
+
+### Designed for parallelism
+
+Julia does not impose any particular style of parallelism on the user. Instead, it is flexible enough to support a number of styles of [parallelism](https://github.com/JuliaLang/julia/wiki/Parallel-Computing), and makes it easy for the user to add more. The following simple example demonstrates how to count the number of heads in a large number of coin tosses in parallel.
+
+````
+nheads = @parallel (+) for i=1:100000000
+    randbit()
+end
+````
+
+### Free and open source
+
+The core of the Julia implementation is licensed under the [MIT license][MIT]. Various libraries used by the Julia environment include their own licenses such as the [GPL], [LGPL], [BSD], etc. Users may even plug their own code, and even other proprietary libraries, should they choose to. Julia makes it easy to call functions from [external C and Fortran shared libraries](https://github.com/JuliaLang/julia/wiki/Calling-C-and-Fortran-Code), without even requiring the use of a C/Fortran compiler.
+
+<a name="The-Julia-Language"/>
+## The Julia language
+
+Julia is a high-level, high-performance dynamic language for numerical and scientific computing. It provides a sophisticated compiler, distributed parallel execution, and numerical accuracy. Key features include multiple dispatch, optional typing, and excellent performance through type inference and just-in-time (JIT) compilation. The language is multi-paradigm, combining features of functional, object-oriented, and imperative styles.
+
 For a more in-depth discussion of the rationale and advantages of Julia over other systems, see the [introduction](https://github.com/JuliaLang/julia/wiki/Introduction) in the manual, or [browse all](https://github.com/JuliaLang/julia/wiki/) of the documentation.
 
 <a name="Resources"/>
@@ -26,17 +62,17 @@ For a more in-depth discussion of the rationale and advantages of Julia over oth
 ## Required Build Tools & External Libraries
 
 - **[GNU make][]** — building dependencies.
-- **[gcc, g++, gfortran][gcc]** — compiling and linking C, C++ and Fortran code.
+- **[gcc, g++, gfortran][gcc]** — compiling and linking C, C++ and Fortran code.
 - **[curl][]** — to automatically download external libraries:
     - **[LLVM][]**         — compiler infrastructure.
-    - **[fdlibm][]**       — a portable implementation of much of the system-dependent libm math library's functionality.
+    - **[fdlibm][]**       — a portable implementation of much of the system-dependent libm math library's functionality.
     - **[MT][]**           — a fast Mersenne Twister pseudorandom number generator library.
-    - **[OpenBLAS][]**     — a fast, open, and maintained [basic linear algebra subprograms (BLAS)](http://en.wikipedia.org/wiki/Basic_Linear_Algebra_Subprograms) library, based on [Kazushige Goto's](http://en.wikipedia.org/wiki/Kazushige_Goto) famous [GotoBLAS](http://www.tacc.utexas.edu/tacc-projects/gotoblas2/).
-    - **[LAPACK][]**       — library of linear algebra routines for solving systems of simultaneous linear equations, least-squares solutions of linear systems of equations, eigenvalue problems, and singular value problems.
-    - **[ARPACK][]**       — a collection of subroutines designed to solve large, sparse eigenvalue problems.
+    - **[OpenBLAS][]**     — a fast, open, and maintained [basic linear algebra subprograms (BLAS)](http://en.wikipedia.org/wiki/Basic_Linear_Algebra_Subprograms) library, based on [Kazushige Goto's](http://en.wikipedia.org/wiki/Kazushige_Goto) famous [GotoBLAS](http://www.tacc.utexas.edu/tacc-projects/gotoblas2/).
+    - **[LAPACK][]**       — library of linear algebra routines for solving systems of simultaneous linear equations, least-squares solutions of linear systems of equations, eigenvalue problems, and singular value problems.
+    - **[ARPACK][]**       — a collection of subroutines designed to solve large, sparse eigenvalue problems.
     - **[FFTW][]**         — library for computing fast Fourier transforms very quickly and efficiently.
-    - **[PCRE][]**         — Perl-compatible regular expressions library.
-    - **[GNU readline][]** — library allowing shell-like line editing in the terminal, with history and familiar key bindings.
+    - **[PCRE][]**         — Perl-compatible regular expressions library.
+    - **[GNU readline][]** — library allowing shell-like line editing in the terminal, with history and familiar key bindings.
 
 [GNU make]:     http://www.gnu.org/software/make/
 [gcc]:          http://gcc.gnu.org/
