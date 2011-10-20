@@ -449,20 +449,21 @@ print_matrix(X::AbstractMatrix, rows::Int, cols::Int) =
 
 show{T}(x::AbstractArray{T,0}) = (println(summary(x),":"); show(x[]))
 
+print_matrix(X::AbstractMatrix) = print_matrix(X, tty_rows()-3, tty_cols())
+
 function show(v::AbstractVector)
     println(summary(v),":")
-    print_matrix(v.', tty_rows()-3, tty_cols())
+    print_matrix(v.')
 end
 
 function show(X::AbstractMatrix)
     println(summary(X),":")
-    print_matrix(X, tty_rows()-3, tty_cols())
+    print_matrix(X)
 end
 
 function show(X::AbstractArray)
     println(summary(X),":")
-    # TODO: implement >= 3-tensor printing
-    print("Printing N-dimensional tensors for N >= 3 not yet implemented.")
+    show_nd(X)
 end
 
 summary(x) = string(typeof(x))
@@ -480,6 +481,52 @@ end
 summary{T}(a::AbstractArray{T}) = strcat(dims2string(size(a)),
                                          " ", string(T), " ",
                                          string(typeof(a).name))
+
+function cartesian_map(body, t::Tuple, it...)
+    idx = length(t)-length(it)
+    if idx == 0
+        body(it)
+    else
+        for i = t[idx]
+            cartesian_map(body, t, i, it...)
+        end
+    end
+end
+
+function show_nd(a::AbstractArray)
+    if isempty(a)
+        return
+    end
+    tail = size(a)[3:]
+    nd = ndims(a)-2
+    function print_slice(idxs)
+        for i = 1:nd
+            ii = idxs[i]
+            if size(a,i+2) > 10
+                if ii == 4 && allp(x->x==1,idxs[1:i-1])
+                    for j=i+1:nd
+                        szj = size(a,j+2)
+                        if szj>10 && 3 < idxs[j] <= szj-3
+                            return
+                        end
+                    end
+                    #println(idxs)
+                    print("...\n\n")
+                    return
+                end
+                if 3 < ii <= size(a,i+2)-3
+                    return
+                end
+            end
+        end
+        print("[:, :, ")
+        for i = 1:(nd-1); print("$(idxs[i]), "); end
+        println(idxs[end], "] =")
+        print_matrix(squeeze(a[:,:,idxs...]))
+        print(idxs == tail ? "" : "\n\n")
+    end
+    cartesian_map(print_slice, map(x->Range1(1,x), tail))
+end
 
 function whos()
     global VARIABLES
