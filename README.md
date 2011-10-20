@@ -12,9 +12,10 @@
 ## The Julia Language
 
 Julia is a high-level, high-performance dynamic language for numerical and scientific computing.
-It provides a sophisticated compiler, distributed parallel execution, numerical accuracy, and easy interfaces to mature best-of-breed C and Fortran libraries for technical computing tasks such as matrix math, random number generation, fast Fourier transforms, and string processing.
-Key features include multiple dispatch, optional typing, and excellent performance through type inference and just-in-time (JIT) compilation.
-For a more in-depth discussion of the rationale and advantages of Julia over other systems, see the following highlights, read the [introduction](https://github.com/JuliaLang/julia/wiki/Introduction) in the manual, or [browse all](https://github.com/JuliaLang/julia/wiki/) of the documentation.
+It provides a sophisticated compiler, distributed parallel execution, and numerical accuracy.
+It also has easy interfaces to mature, best-of-breed C and Fortran libraries for technical computing tasks such as matrix math, random number generation, fast Fourier transforms, and string processing.
+Key language features include multiple dispatch, optional typing, and excellent performance through type inference and just-in-time (JIT) compilation.
+For a more in-depth discussion of the rationale and advantages of Julia over other systems, see the following highlights or read the [introduction](https://github.com/JuliaLang/julia/wiki/Introduction) in the [manual](https://github.com/JuliaLang/julia/wiki/).
 
 ### High-Performance JIT Compiler 
 
@@ -54,8 +55,8 @@ It is also possible to add and remove nodes participating in a computation sessi
 ### Free, Open Source & Library-Friendly
 
 The core of the Julia implementation is licensed under the [MIT license][MIT].
-Various libraries used by the Julia environment include their own licenses such as the [GPL], [LGPL], [BSD], etc., including the `julia` runtime, which is GPL-licensed (this is similar to Python's licensing arrangement).
-Users can easily combine their own code or even proprietary third-party libraries with the `libjulia` core, should they choose to.
+Various libraries used by the Julia environment include their own licenses such as the [GPL], [LGPL], [BSD], etc.
+Users can easily combine their own code or even proprietary third-party libraries, should they choose to.
 Furthermore, Julia makes it easy to call functions from [external C and Fortran shared libraries](https://github.com/JuliaLang/julia/wiki/Calling-C-and-Fortran-Code), without requiring the use of a C or Fortran compiler, or even writing any wrapper code.
 You can try calling arbitrary external library functions directly from Julia's interactive prompt, playing with the interface and getting immediate feedback until you get it right.
 See [LICENSE](https://github.com/JuliaLang/julia/blob/master/LICENSE) for the full terms Julia's licensing.

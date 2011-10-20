@@ -740,11 +740,11 @@ static void show_type(jl_value_t *t)
     }
 }
 
-static void show_float64(double d, int single)
+DLLEXPORT
+void jl_show_float(double d, int ndec)
 {
     ios_t *s = jl_current_output_stream();
     char buf[64];
-    int ndec = single ? 9 : 17;
     if (!DFINITE(d)) {
         char *rep = isnan(d) ? "NaN" : sign_bit(d) ? "-Inf" : "Inf";
         ios_puts(rep, s);
@@ -758,21 +758,9 @@ static void show_float64(double d, int single)
     else {
         snprint_real(buf, sizeof(buf), d, 0, ndec, 3, 10);
         int hasdec = (strpbrk(buf, ".eE") != NULL);
-	    ios_puts(buf, s);
+        ios_puts(buf, s);
         if (!hasdec) ios_puts(".0", s);
     }
-}
-
-JL_CALLABLE(jl_f_show_float32)
-{
-    show_float64((double)*(float*)jl_bits_data(args[0]), 1);
-    return (jl_value_t*)jl_nothing;
-}
-
-JL_CALLABLE(jl_f_show_float64)
-{
-    show_float64(*(double*)jl_bits_data(args[0]), 0);
-    return (jl_value_t*)jl_nothing;
 }
 
 JL_CALLABLE(jl_f_show_int64)
@@ -1118,7 +1106,7 @@ jl_value_t *jl_method_def(jl_sym_t *name, jl_value_t **bp, jl_binding_t *bnd,
                           jl_tuple_t *argtypes, jl_function_t *f)
 {
     jl_value_t *gf;
-    if (bnd && !bnd->constp) {
+    if (bnd) {
         jl_declare_constant(bnd);
     }
     if (*bp == NULL) {
@@ -1339,8 +1327,6 @@ void jl_init_builtins(void)
     jl_show_gf = jl_new_generic_function(jl_symbol("show"));
 
     add_builtin_method1(jl_show_gf, (jl_type_t*)jl_any_type,         jl_f_show_any);
-    add_builtin_method1(jl_show_gf, (jl_type_t*)jl_float32_type,     jl_f_show_float32);
-    add_builtin_method1(jl_show_gf, (jl_type_t*)jl_float64_type,     jl_f_show_float64);
     add_builtin_method1(jl_show_gf, (jl_type_t*)jl_int64_type,       jl_f_show_int64);
     add_builtin_method1(jl_show_gf, (jl_type_t*)jl_uint64_type,      jl_f_show_uint64);
 

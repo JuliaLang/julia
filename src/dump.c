@@ -1019,7 +1019,6 @@ void jl_init_serializer(void)
                       jl_f_arrayset, jl_f_arraysize, 
                       jl_f_instantiate_type, jl_f_convert, 
                       jl_f_convert_tuple, jl_f_print_array_uint8, 
-                      jl_f_show_float32, jl_f_show_float64, 
                       jl_f_show_int64, jl_f_show_uint64, 
                       jl_f_show_any, jl_f_print_symbol, 
                       jl_trampoline, jl_f_new_struct_type, 

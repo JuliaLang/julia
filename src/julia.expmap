@@ -151,6 +151,7 @@
     jl_enter_handler;
     jl_exception_in_transit;
     jl_show;
+    jl_show_float;
     jl_pgcstack;
     jl_symbol;
     jl_system_module;

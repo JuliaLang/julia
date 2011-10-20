@@ -99,7 +99,7 @@ void jl_check_assignment(jl_binding_t *b)
 
 void jl_declare_constant(jl_binding_t *b)
 {
-    if (b->value != NULL) {
+    if (b->value != NULL && !b->constp) {
         jl_errorf("cannot declare %s constant; it already has a value",
                   b->name->name);
     }
