@@ -22,17 +22,71 @@ For a more in-depth discussion of the rationale and advantages of Julia over oth
 Julia is an interactive environment with a high performance JIT compiler, with syntax that is familiar to users of other technical computing environments.
 The following [benchmarks](https://github.com/JuliaLang/julia/blob/master/test/perf.j) are from a Macbook with 2.1GHz Intel Core 2 Duo:
 
-    +---------------+-------+--------+--------+--------------+---------+
-    |    Time       | Julia | Matlab | Octave | Python 2.7.1 | g++ -O3 |  
-    |    (ms)       |       | R2011a |  3.4   | Numpy  1.5.1 |  4.6.1  |   
-    +---------------+-------+--------+--------+--------------+---------+
-    | fib           |   .5  |  309.  |   570. |      7.49    |    .179 |
-    | parse_int     |   .21 |  124.  |   557. |       .63    |    .151 |
-    | mandel        |  1.82 |   40.  |   260. |      9.64    |    .53  |
-    | quicksort     |   .64 |   71.  |  1611. |     30.6     |    .6   |
-    | pi_sum        | 49.5  |   69.  | 20578. |   1289.      |  49.3   |
-    | rand_mat_stat | 38.9  |  139.  |   517. |    363.      |         |
-    +---------------+-------+--------+--------+--------------+---------+
+<table>
+  <tr>
+    <th rowspan="2">time (ms)</th>
+    <th>Julia</th>
+    <th>Matlab</th>
+    <th>Octave</th>
+    <th>Python/NumPy</th>
+    <th>C++ (GCC)</th>
+  </tr>
+  <tr>
+    <th>46c2c6de</th>
+    <th>R2011a</th>
+    <th>3.4</th>
+    <th>2.7.1/1.5.1</th>
+    <th>4.6.1 (-O3)</th>
+  </tr>
+  <tr>
+    <th>fib</th>
+    <td>     .5  </td>
+    <td>  309.   </td>
+    <td>  570.   </td>
+    <td>    7.49 </td>
+    <td>     .179</td>
+  </tr>
+  <tr>
+    <th>parse_int</th>
+    <td>     .21 </td>
+    <td>  124.   </td>
+    <td>  557.   </td>
+    <td>     .63 </td>
+    <td>     .151</td>
+  </tr>
+  <tr>
+    <th>mandel</th>
+    <td>    1.82 </td>
+    <td>   40.0  </td>
+    <td>  260.   </td>
+    <td>    9.64 </td>
+    <td>     .53 </td>
+  </tr>
+  <tr>
+    <th>quicksort</th>
+    <td>     .64 </td>
+    <td>   71.   </td>
+    <td> 1611.   </td>
+    <td>   30.6  </td>
+    <td>     .6  </td>
+  </tr>
+  <tr>
+    <th>pi_sum</th>
+    <td>   49.5  </td>
+    <td>   69.   </td>
+    <td>20578.   </td>
+    <td> 1289.   </td>
+    <td>   49.3  </td>
+  </tr>
+  <tr>
+    <th>rand_mat_stat</th>
+    <td>   38.9  </td>
+    <td>  139.   </td>
+    <td>  517.   </td>
+    <td>  363.   </td>
+    <td>         </td>
+  </tr>
+</table>
 
 Relative performance between languages on Linux is similar.
 These benchmarks, while not comprehensive, do test compiler performance on a range of common code patterns, such as function calls, string parsing, sorting, numerical loops, random number generation, and array operations.
