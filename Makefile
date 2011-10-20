@@ -30,6 +30,7 @@ clean:
 
 cleanall: clean
 	$(MAKE) -C src clean-flisp clean-support
+	rm -fr package-mac *.pkg
 
 distclean: cleanall
 	$(MAKE) -C external cleanall
@@ -39,6 +40,16 @@ distclean: cleanall
 
 test test-utf8 test-perf testall: default
 	$(MAKE) -C test $@
+
+package-mac:
+	rm -fr package-mac/usr && \
+	mkdir -p package-mac/julia-mac && \
+	cp julia* package-mac/julia-mac && \
+	cp libjulia* package-mac/julia-mac && \
+	cp -r lib package-mac/julia-mac && \
+	cp -r j package-mac/julia-mac && \
+	cp -r contrib package-mac/julia-mac && \
+	cp -r sys.ji package-mac/julia-mac
 
 ## SLOCCOUNT ##
 
