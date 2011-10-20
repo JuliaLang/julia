@@ -20,7 +20,7 @@ For a more in-depth discussion of the rationale and advantages of Julia over oth
 ### High-Performance JIT Compiler 
 
 Julia is an interactive environment with a high performance JIT compiler, with syntax that is familiar to users of other technical computing environments.
-The following [performance benchmarks](https://github.com/JuliaLang/julia/blob/master/test/perf.j) are from a Macbook with 2.1GHz Intel Core 2 Duo:
+The following [benchmarks](https://github.com/JuliaLang/julia/blob/master/test/perf.j) are from a Macbook with 2.1GHz Intel Core 2 Duo:
 
     +---------------+-------+--------+--------+--------------+---------+
     |    Time       | Julia | Matlab | Octave | Python 2.7.1 | g++ -O3 |  
@@ -35,9 +35,9 @@ The following [performance benchmarks](https://github.com/JuliaLang/julia/blob/m
     +---------------+-------+--------+--------+--------------+---------+
 
 Relative performance between languages on Linux is similar.
-These benchmarks, while not comprehensive, were also not chosen to make Julia look good, but rather to test JIT compiler performance in a range of common problem areas, such as recursion optimization, string parsing, sorting, iterative numerical loops, and random number generation.
+These benchmarks, while not comprehensive, do test compiler performance on a range of common code patterns, such as function calls, string parsing, sorting, numerical loops, random number generation, and array operations.
 
-*Note:* The C++ benchmark for random matrix statistics is missing because implementing such a complex benchmark in a low-level language, while technically possible, is unrealistic, and it is unclear how a fair comparison implementation should work.
+*Note:* A C++ implementation of random matrix statistics is missing because this test involves many whole-matrix operations, and it is not clear what an idiomatic implementation would look like.
 
 ### Designed for Parallelism
 
@@ -50,15 +50,15 @@ The following simple example demonstrates how to count the number of heads in a 
     end
 
 This computation is automatically distributed across all available nodes participarting in the computation session, and the result, reduced by summation (`+`), is returned at the calling node.
-It is also possible to add and remove nodes participating in a computation session while a session is ongoing, allowing elasticity and fault recovery.
+It is also possible to add and remove compute nodes while a session is running, allowing elasticity and fault recovery.
 
 ### Free, Open Source & Library-Friendly
 
 The core of the Julia implementation is licensed under the [MIT license][MIT].
-Various libraries used by the Julia environment include their own licenses such as the [GPL], [LGPL], [BSD], etc.
+Various libraries used by the Julia environment include their own licenses such as the [GPL], [LGPL], and [BSD] (therefore the environment, which consists of the language, user interfaces, and libraries, is under the GPL).
 Users can easily combine their own code or even proprietary third-party libraries, should they choose to.
-Furthermore, Julia makes it easy to call functions from [external C and Fortran shared libraries](https://github.com/JuliaLang/julia/wiki/Calling-C-and-Fortran-Code), without requiring the use of a C or Fortran compiler, or even writing any wrapper code.
-You can try calling arbitrary external library functions directly from Julia's interactive prompt, playing with the interface and getting immediate feedback until you get it right.
+Furthermore, Julia makes it easy to call functions from [external C and Fortran shared libraries](https://github.com/JuliaLang/julia/wiki/Calling-C-and-Fortran-Code), without writing any wrapper code, or even recompiling code.
+You can try calling external library functions directly from Julia's interactive prompt, playing with the interface and getting immediate feedback until you get it right.
 See [LICENSE](https://github.com/JuliaLang/julia/blob/master/LICENSE) for the full terms Julia's licensing.
 
 [MIT]:  http://en.wikipedia.org/wiki/MIT_License
