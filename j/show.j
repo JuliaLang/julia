@@ -11,9 +11,9 @@ show(n::Int)  = show(int64(n))
 show(n::Uint) = show(uint64(n))
 
 show(f::Float64) = ccall(:jl_show_float, Void, (Float64, Int32),
-                         f, int32(17))
+                         f, int32(8))
 show(f::Float32) = ccall(:jl_show_float, Void, (Float64, Int32),
-                         float64(f), int32(9))
+                         float64(f), int32(8))
 
 function show{T}(p::Ptr{T})
     if is(T,None)
