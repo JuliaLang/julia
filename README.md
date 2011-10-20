@@ -22,9 +22,10 @@ For a more in-depth discussion of the rationale and advantages of Julia over oth
 Julia is an interactive environment with a high performance JIT compiler, with syntax that is familiar to users of other technical computing environments.
 The following [benchmarks](https://github.com/JuliaLang/julia/blob/master/test/perf.j) are from a Macbook with 2.1GHz Intel Core 2 Duo:
 
-<table>
+<table cellspacing="0" border="0">
+<thead>
   <tr>
-    <th rowspan="2">time (ms)</th>
+    <td/>
     <th>Julia</th>
     <th>Matlab</th>
     <th>Octave</th>
@@ -32,60 +33,64 @@ The following [benchmarks](https://github.com/JuliaLang/julia/blob/master/test/p
     <th>C++ (GCC)</th>
   </tr>
   <tr>
+    <td/>
     <th>46c2c6de</th>
     <th>R2011a</th>
     <th>3.4</th>
     <th>2.7.1/1.5.1</th>
     <th>4.6.1 (-O3)</th>
   </tr>
+</thead>
+<tbody>
   <tr>
     <th>fib</th>
-    <td>     .5  </td>
-    <td>  309.   </td>
-    <td>  570.   </td>
-    <td>    7.49 </td>
-    <td>     .179</td>
+    <td align="right" width="80px">      .500 </td>
+    <td align="right" width="80px">   309.000 </td>
+    <td align="right" width="80px">   570.000 </td>
+    <td align="right" width="80px">     7.490 </td>
+    <td align="right" width="80px">      .179 </td>
   </tr>
   <tr>
     <th>parse_int</th>
-    <td>     .21 </td>
-    <td>  124.   </td>
-    <td>  557.   </td>
-    <td>     .63 </td>
-    <td>     .151</td>
+    <td align="right" width="80px">      .210 </td>
+    <td align="right" width="80px">   124.000 </td>
+    <td align="right" width="80px">   557.000 </td>
+    <td align="right" width="80px">      .630 </td>
+    <td align="right" width="80px">      .151 </td>
   </tr>
   <tr>
     <th>mandel</th>
-    <td>    1.82 </td>
-    <td>   40.0  </td>
-    <td>  260.   </td>
-    <td>    9.64 </td>
-    <td>     .53 </td>
+    <td align="right" width="80px">     1.820 </td>
+    <td align="right" width="80px">    40.000 </td>
+    <td align="right" width="80px">   260.000 </td>
+    <td align="right" width="80px">     9.640 </td>
+    <td align="right" width="80px">      .530 </td>
   </tr>
   <tr>
     <th>quicksort</th>
-    <td>     .64 </td>
-    <td>   71.   </td>
-    <td> 1611.   </td>
-    <td>   30.6  </td>
-    <td>     .6  </td>
+    <td align="right" width="80px">      .640 </td>
+    <td align="right" width="80px">    71.000 </td>
+    <td align="right" width="80px">  1611.000 </td>
+    <td align="right" width="80px">    30.600 </td>
+    <td align="right" width="80px">      .600 </td>
   </tr>
   <tr>
     <th>pi_sum</th>
-    <td>   49.5  </td>
-    <td>   69.   </td>
-    <td>20578.   </td>
-    <td> 1289.   </td>
-    <td>   49.3  </td>
+    <td align="right" width="80px">    49.500 </td>
+    <td align="right" width="80px">    69.000 </td>
+    <td align="right" width="80px"> 20578.000 </td>
+    <td align="right" width="80px">  1289.000 </td>
+    <td align="right" width="80px">    49.300 </td>
   </tr>
   <tr>
     <th>rand_mat_stat</th>
-    <td>   38.9  </td>
-    <td>  139.   </td>
-    <td>  517.   </td>
-    <td>  363.   </td>
-    <td>         </td>
+    <td align="right" width="80px">    38.900 </td>
+    <td align="right" width="80px">   139.000 </td>
+    <td align="right" width="80px">   517.000 </td>
+    <td align="right" width="80px">   363.000 </td>
+    <td align="right" width="80px">           </td>
   </tr>
+</tbody>
 </table>
 
 Relative performance between languages on Linux is similar.
