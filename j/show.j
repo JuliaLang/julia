@@ -294,7 +294,7 @@ function alignment(x::Real)
                    (strlen(m.captures[1]), strlen(m.captures[2]))
 end
 function alignment(x::Complex)
-    m = match(Regex(L"^(.*?)(\+.*)$"), show_to_string(x))
+    m = match(Regex(L"^(.*?)( [\+-] .*)$"), show_to_string(x))
     m == nothing ? (strlen(show_to_string(x)), 0) :
                    (strlen(m.captures[1]), strlen(m.captures[2]))
 end
@@ -440,18 +440,18 @@ function print_matrix(
     end
 end
 print_matrix(X::AbstractMatrix, rows::Int, cols::Int) =
-    print_matrix(X, rows, cols, " ", " ", "", "  :  ", ":", 5, 5)
+    print_matrix(X, rows, cols, " ", "  ", "", "  :  ", ":", 5, 5)
 
 show{T}(x::AbstractArray{T,0}) = (println(summary(x),":"); show(x[]))
 
 function show(v::AbstractVector)
     println(summary(v),":")
-    print_matrix(v', tty_rows()-3, tty_cols())
+    print_matrix(v', tty_rows()-4, tty_cols())
 end
 
 function show(X::AbstractMatrix)
     println(summary(X),":")
-    print_matrix(X, tty_rows()-3, tty_cols())
+    print_matrix(X, tty_rows()-4, tty_cols())
 end
 
 function show(X::AbstractArray)
