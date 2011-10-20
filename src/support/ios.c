@@ -679,11 +679,6 @@ void ios_set_readonly(ios_t *s)
     s->readonly = 1;
 }
 
-void ios_bswap(ios_t *s, int bswap)
-{
-    s->byteswap = !!bswap;
-}
-
 static size_t ios_copy_(ios_t *to, ios_t *from, size_t nbytes, bool_t all)
 {
     size_t total = 0, avail;
@@ -769,7 +764,6 @@ static void _ios_init(ios_t *s)
     s->tally = 0;
     s->lineno = 1;
     s->fd = -1;
-    s->byteswap = 0;
     s->ownbuf = 1;
     s->ownfd = 0;
     s->_eof = 0;

@@ -23,13 +23,6 @@
 #include "timefuncs.h"
 
 #ifdef WIN32
-/*
-double tvals2float(struct tm *t, struct timeb *tstruct)
-{
-    return (double)t->tm_hour * 3600 + (double)t->tm_min * 60 +
-        (double)t->tm_sec + (double)tstruct->millitm/1.0e3;
-}
-*/
 double floattime(void)
 {
     struct timeb tstruct;

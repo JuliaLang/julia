@@ -33,20 +33,6 @@ static ptrint_t VALUE_TAGS;
 #define read_uint8(s) ((uint8_t)ios_getc(s))
 #define write_int8(s, n) write_uint8(s, n)
 #define read_int8(s) read_uint8(s)
-/*
-static void write_int16(ios_t *s, int16_t i)
-{
-    write_uint8(s, i       & 0xff);
-    write_uint8(s, (i>> 8) & 0xff);
-}
-
-static int16_t read_int16(ios_t *s)
-{
-    int b0 = read_uint8(s);
-    int b1 = read_uint8(s);
-    return (int16_t)(b0 | (b1<<8));
-}
-*/
 static void write_int32(ios_t *s, int32_t i)
 {
     write_uint8(s, i       & 0xff);
@@ -63,34 +49,6 @@ static int32_t read_int32(ios_t *s)
     int b3 = read_uint8(s);
     return b0 | (b1<<8) | (b2<<16) | (b3<<24);
 }
-
-/*
-static void write_int64(ios_t *s, int64_t i)
-{
-    write_uint8(s, i       & 0xff);
-    write_uint8(s, (i>> 8) & 0xff);
-    write_uint8(s, (i>>16) & 0xff);
-    write_uint8(s, (i>>24) & 0xff);
-    write_uint8(s, (i>>32) & 0xff);
-    write_uint8(s, (i>>40) & 0xff);
-    write_uint8(s, (i>>48) & 0xff);
-    write_uint8(s, (i>>56) & 0xff);
-}
-
-static int64_t read_int64(ios_t *s)
-{
-    int64_t b0 = read_uint8(s);
-    int64_t b1 = read_uint8(s);
-    int64_t b2 = read_uint8(s);
-    int64_t b3 = read_uint8(s);
-    int64_t b4 = read_uint8(s);
-    int64_t b5 = read_uint8(s);
-    int64_t b6 = read_uint8(s);
-    int64_t b7 = read_uint8(s);
-    return b0 | (b1<<8) | (b2<<16) | (b3<<24) | (b4<<32) | (b5<<40) |
-        (b6<<48) | (b7<<56);
-}
-*/
 
 static void writetag(ios_t *s, void *v)
 {

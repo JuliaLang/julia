@@ -312,23 +312,6 @@ value_t fl_iowrite(value_t *args, u_int32_t nargs)
     return size_wrap(ios_write(s, data, nb));
 }
 
-value_t fl_dump(value_t *args, u_int32_t nargs)
-{
-    if (nargs < 1 || nargs > 3)
-        argcount("dump", nargs, 1);
-    ios_t *s = toiostream(symbol_value(outstrsym), "dump");
-    char *data;
-    size_t sz, offs=0;
-    to_sized_ptr(args[0], "dump", &data, &sz);
-    size_t nb = sz;
-    if (nargs > 1) {
-        get_start_count_args(args, nargs, sz, &offs, &nb, "dump");
-        data += offs;
-    }
-    hexdump(s, data, nb, offs);
-    return FL_T;
-}
-
 static char get_delim_arg(value_t arg, char *fname)
 {
     size_t uldelim = toulong(arg, fname);
@@ -420,7 +403,6 @@ static builtinspec_t iostreamfunc_info[] = {
     { "iostream?", fl_iostreamp },
     { "eof-object", fl_eof_object },
     { "eof-object?", fl_eof_objectp },
-    { "dump", fl_dump },
     { "file", fl_file },
     { "buffer", fl_buffer },
     { "read", fl_read },

@@ -647,7 +647,6 @@ static Value *uint_cnvt(const Type *to, Value *x)
 
 static Value *emit_unbox(const Type *to, const Type *pto, Value *x)
 {
-    //if (x->getType()->isIntegerTy() || x->getType()->isFloatingPointTy()) {
     if (x->getType() != jl_pvalue_llvmt) {
         // bools are stored internally as int8 (for now), so we need to make
         // unbox8(x::Bool) work.
@@ -657,7 +656,6 @@ static Value *emit_unbox(const Type *to, const Type *pto, Value *x)
             return builder.CreatePtrToInt(x, to);
         return x;
     }
-    //assert(x->getType() == jl_pvalue_llvmt);
     Value *p = bitstype_pointer(x);
     if (to == T_int1) {
         // bools stored as int8, so an extra Trunc is needed to get an int1

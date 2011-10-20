@@ -1,12 +1,6 @@
 #ifndef __UTILS_H_
 #define __UTILS_H_
 
-/* these functions byteswap any-size units --------------------- */
-void bswap(byte_t *s, size_t n);
-void bswap_to(byte_t *dest, byte_t *src, size_t n);
-void bswap_buffer(byte_t *data, size_t sz, size_t npts);
-/* ------------------------------------------------------------- */
-
 DLLEXPORT int double_exponent(double d);
 DLLEXPORT double double_mantissa(double d);
 DLLEXPORT int float_exponent(float f);
@@ -25,9 +19,7 @@ DLLEXPORT char *uint2str(char *dest, size_t len, uint64_t num, uint32_t base);
 int str2int(char *str, size_t len, int64_t *res, uint32_t base);
 int isdigit_base(char c, int base);
 
-numerictype_t effective_numerictype(double r);
 double conv_to_double(void *data, numerictype_t tag);
-void conv_from_double(void *data, double d, numerictype_t tag);
 int64_t conv_to_int64(void *data, numerictype_t tag);
 uint64_t conv_to_uint64(void *data, numerictype_t tag);
 int32_t conv_to_int32(void *data, numerictype_t tag);

@@ -4,55 +4,6 @@
 #include "utils.h"
 #include "ieee754.h"
 
-// given a number, determine an appropriate type for storing it
-#if 0
-numerictype_t effective_numerictype(double r)
-{
-    double fp;
-
-    fp = r - ((r>0) ? ((double)(uint64_t)r) : ((double)(int64_t)r));
-    if (fp != 0 || r > U64_MAX || r < S64_MIN) {
-        if (r > FLT_MAX || r < -FLT_MAX || (fabs(r) < FLT_MIN)) {
-            return T_DOUBLE;
-        }
-        else {
-            return T_FLOAT;
-        }
-    }
-    else if (r >= SCHAR_MIN && r <= SCHAR_MAX) {
-        return T_INT8;
-    }
-    else if (r >= SHRT_MIN && r <= SHRT_MAX) {
-        return T_INT16;
-    }
-    else if (r >= INT_MIN && r <= INT_MAX) {
-        return T_INT32;
-    }
-    else if (r <= S64_MAX) {
-        return T_INT64;
-    }
-    return T_UINT64;
-}
-#else
-// simpler version implementing a smaller preferred type repertoire
-numerictype_t effective_numerictype(double r)
-{
-    double fp;
-
-    fp = r - ((r>0) ? ((double)(uint64_t)r) : ((double)(int64_t)r));
-    if (fp != 0 || r > U64_MAX || r < S64_MIN) {
-        return T_DOUBLE;
-    }
-    else if (r >= INT_MIN && r <= INT_MAX) {
-        return T_INT32;
-    }
-    else if (r <= S64_MAX) {
-        return T_INT64;
-    }
-    return T_UINT64;
-}
-#endif
-
 double conv_to_double(void *data, numerictype_t tag)
 {
     double d=0;
@@ -73,26 +24,6 @@ double conv_to_double(void *data, numerictype_t tag)
     case T_DOUBLE: return *(double*)data;
     }
     return d;
-}
-
-void conv_from_double(void *dest, double d, numerictype_t tag)
-{
-    switch (tag) {
-    case T_INT8:   *(int8_t*)dest = d; break;
-    case T_UINT8:  *(uint8_t*)dest = d; break;
-    case T_INT16:  *(int16_t*)dest = d; break;
-    case T_UINT16: *(uint16_t*)dest = d; break;
-    case T_INT32:  *(int32_t*)dest = d; break;
-    case T_UINT32: *(uint32_t*)dest = d; break;
-    case T_INT64:
-        *(int64_t*)dest = d;
-        if (d > 0 && *(int64_t*)dest < 0)  // 0x8000000000000000 is a bitch
-            *(int64_t*)dest = S64_MAX;
-        break;
-    case T_UINT64: *(uint64_t*)dest = (int64_t)d; break;
-    case T_FLOAT:  *(float*)dest = d; break;
-    case T_DOUBLE: *(double*)dest = d; break;
-    }
 }
 
 #define CONV_TO_INTTYPE(type)                               \

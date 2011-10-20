@@ -112,37 +112,9 @@ static Function *setjmp_func;
 
 /*
   stuff to fix up:
-  * gensyms from the front end might conflict with real variables, fix it
-  * exceptions
-
-  - source location tracking, var name metadata
-  * rootlist to track pointers emitted into code
-  - function/var name mangling
+  - function/var name (un)mangling
   - experiment with llvm optimization passes, option to disable them
-
-  optimizations round 1:
-  * constants, especially global. resolve functions statically.
-  * keep a table mapping fptr to Function* for compiling known calls
-  - manually inline simple builtins (tuple,box,boxset,etc.)
-  - dispatch optimizations
-  * inline space for buffers
-  * preallocate boxes for small integers
-  * speed up type caching
-  * do something about all the string copying from scheme
-  * speed up scheme pattern matcher
-
-  optimizations round 2:
-  * type inference
-  * mark non-null references and avoid null check
-  * static method lookup
-  - avoid tuple allocation in (a,b)=(b,a)
   - varargs and ... optimizations
-
-  optimizations round 3:
-  * inlining
-  * unboxing
-  - lambda lifting
-  - mark pure (builtin) functions, CSE
 
   future:
   - try using fastcc to get tail calls
@@ -921,7 +893,6 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
         jl_value_t *ity = expr_type(args[2]); rt2 = ity;
         if (jl_is_array_type(aty) && ity == (jl_value_t*)jl_long_type) {
             jl_value_t *ety = jl_tparam0(aty);
-            //if (jl_is_bits_type(ety)) {
             if (!jl_is_typevar(ety)) {
                 if (!jl_is_bits_type(ety)) {
                     ety = (jl_value_t*)jl_any_type;
@@ -959,7 +930,6 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
         if (jl_is_array_type(aty) &&
             ity == (jl_value_t*)jl_long_type) {
             jl_value_t *ety = jl_tparam0(aty);
-            //if (jl_is_bits_type(ety) && jl_subtype(vty, ety, 0)) {
             if (!jl_is_typevar(ety) && jl_subtype(vty, ety, 0)) {
                 if (!jl_is_bits_type(ety)) {
                     ety = (jl_value_t*)jl_any_type;
@@ -1360,16 +1330,6 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool value)
             extype = (jl_value_t*)jl_any_type;
         }
         return literal_pointer_val(extype);
-        /*
-        jl_sym_t *s = (jl_sym_t*)args[0];
-        if (jl_is_symbol(s)) {
-            jl_value_t *ty = (*ctx->declTypes)[s->name];
-            if (ty != NULL) {
-                return literal_pointer_val(ty);
-            }
-        }
-        return literal_pointer_val((jl_value_t*)jl_any_type);
-        */
     }
     else if (ex->head == new_sym) {
         jl_value_t *ty = expr_type(args[0]);
@@ -1851,8 +1811,6 @@ static Function *jlfunc_to_llvm(const std::string &cname, void *addr)
     return f;
 }
 
-extern "C" JL_CALLABLE(jl_f_tuple);
-
 extern "C" jl_value_t *jl_new_box(jl_value_t *v)
 {
     jl_value_t *box = (jl_value_t*)alloc_2w();
@@ -2129,21 +2087,6 @@ static void init_julia_llvm_env(Module *m)
     addPass(FPM, createAggressiveDCEPass());         // Delete dead instructions
     addPass(FPM, createCFGSimplificationPass());     // Merge & remove BBs
 
-    /*
-    FPM->add(createCFGSimplificationPass());
-    FPM->add(createPromoteMemoryToRegisterPass());
-    FPM->add(createInstructionCombiningPass());
-    FPM->add(createJumpThreadingPass());
-    FPM->add(createCFGSimplificationPass());
-    //FPM->add(createDeadCodeEliminationPass());
-    FPM->add(createReassociatePass());
-    //FPM->add(createInstructionCombiningPass());
-    //FPM->add(createGVNPass());
-    FPM->add(createSCCPPass());
-    FPM->add(createDeadStoreEliminationPass());
-    //llvm::createStandardFunctionPasses(FPM, 2);
-    */
-
     FPM->doInitialization();
 }
 
@@ -2180,5 +2123,4 @@ MCLineEntryCollection::iterator it = lec->begin();
 
 addr = (*it).getLabel()->getVariableValue()
 line = (*it).getLine()
-
- */
+*/

@@ -1014,7 +1014,6 @@ JL_CALLABLE(jl_f_new_bits_type)
                   ((jl_sym_t*)args[0])->name);
     }
     int32_t nb = jl_unbox_long(args[2]);
-    //if (nb != 8 && nb != 16 && nb != 32 && nb != 64)
     if (nb < 1 || nb>=(1<<23) || (nb&7) != 0)
         jl_errorf("invalid number of bits in type %s",
                   ((jl_sym_t*)args[0])->name);

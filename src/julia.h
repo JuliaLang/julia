@@ -855,6 +855,10 @@ void *alloc_4w();
 #define jl_gc_preserve(v) ((void)(v))
 #define jl_gc_unpreserve()
 #define jl_gc_n_preserved_values() (0)
+
+static inline void *alloc_2w() { return allocobj(2*sizeof(void*)); }
+static inline void *alloc_3w() { return allocobj(3*sizeof(void*)); }
+static inline void *alloc_4w() { return allocobj(4*sizeof(void*)); }
 #endif
 
 // asynch signal handling

@@ -41,7 +41,6 @@ typedef struct {
     // to be a pointer
     long fd;
 
-    unsigned char byteswap:1;
     unsigned char readonly:1;
     unsigned char ownbuf:1;
     unsigned char ownfd:1;
@@ -89,7 +88,6 @@ DLLEXPORT void julia_free(void *b);
 DLLEXPORT int ios_setbuf(ios_t *s, char *buf, size_t size, int own);
 DLLEXPORT int ios_bufmode(ios_t *s, bufmode_t mode);
 DLLEXPORT void ios_set_readonly(ios_t *s);
-DLLEXPORT void ios_bswap(ios_t *s, int bswap);
 DLLEXPORT size_t ios_copy(ios_t *to, ios_t *from, size_t nbytes);
 DLLEXPORT size_t ios_copyall(ios_t *to, ios_t *from);
 DLLEXPORT size_t ios_copyuntil(ios_t *to, ios_t *from, char delim);

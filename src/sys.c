@@ -222,7 +222,7 @@ int jl_stdin(void)  { return STDIN_FILENO; }
 int jl_stdout(void) { return STDOUT_FILENO; }
 int jl_stderr(void) { return STDERR_FILENO; }
 
-// I/O thread
+// -- I/O thread --
 
 static pthread_t io_thread;
 static pthread_mutex_t q_mut;
@@ -283,7 +283,6 @@ static void *run_io_thr(void *arg)
         size_t nw;
         _os_write_all(r->fd, buf, n, &nw);
         julia_free(buf);
-        //free(r);
 
         pthread_mutex_lock(&q_mut);
         r->next = ioq_freelist;
