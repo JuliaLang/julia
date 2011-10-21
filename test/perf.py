@@ -108,40 +108,64 @@ def pisum():
     return sum
 
 def print_perf(name, time):
-    print "python, ", name, ", ", time*1000
+    print "python," + name + "," + str(time*1000)
 
 ## run tests ##
 
 if __name__=="__main__":
     assert fib(20) == 6765
-    t = time.time()
-    f = fib(20)
-    print_perf("fib", time.time()-t)
+    tmin = float('inf')
+    for i in xrange(5):
+        t = time.time()
+        f = fib(20)
+        t = time.time()-t
+        if t < tmin: tmin = t
+    print_perf("fib", tmin)
 
     assert int("1111000011110000111100001111",2) == 252645135
-    t = time.time()
-    for i in xrange(1,1000):
-        int("1111000011110000111100001111",2)
-    print_perf ("parse_int", time.time()-t)
+    tmin = float('inf')
+    for i in xrange(5):
+        t = time.time()
+        for i in xrange(1,1000):
+            int("1111000011110000111100001111",2)
+        t = time.time()-t
+        if t < tmin: tmin = t
+    print_perf ("parse_int", tmin)
 
     assert sum(mandelperf()) == 14304
-    t = time.time()
-    mandelperf()
-    print_perf ("mandel", time.time()-t)
+    tmin = float('inf')
+    for i in xrange(5):
+        t = time.time()
+        mandelperf()
+        t = time.time()-t
+        if t < tmin: tmin = t
+    print_perf ("mandel", tmin)
 
-    lst = [ random.random() for i in xrange(1,5000) ]
-    t = time.time()
-    quicksort(lst, 0, len(lst)-1)
-    print_perf ("quicksort", time.time()-t)
+    tmin = float('inf')
+    for i in xrange(5):
+        lst = [ random.random() for i in xrange(1,5000) ]
+        t = time.time()
+        quicksort(lst, 0, len(lst)-1)
+        t = time.time()-t
+        if t < tmin: tmin = t
+    print_perf ("quicksort", tmin)
 
     pi = pisum()
     assert abs(pisum()-1.644834071848065) < 1e-6
-    t = time.time()
-    pisum()
-    print_perf ("pi_sum", time.time()-t)
+    tmin = float('inf')
+    for i in xrange(5):
+        t = time.time()
+        pisum()
+        t = time.time()-t
+        if t < tmin: tmin = t
+    print_perf ("pi_sum", tmin)
 
     (s1, s2) = randmatstat(1000)
     assert s1 > 0.5 and s1 < 1.0
-    t = time.time()
-    randmatstat(1000)
-    print_perf ("rand_mat_stat", time.time()-t)
+    tmin = float('inf')
+    for i in xrange(5):
+        t = time.time()
+        randmatstat(1000)
+        t = time.time()-t
+        if t < tmin: tmin = t
+    print_perf ("rand_mat_stat", tmin)
