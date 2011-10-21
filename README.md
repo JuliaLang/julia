@@ -118,8 +118,8 @@ See [LICENSE](https://github.com/JuliaLang/julia/blob/master/LICENSE) for the fu
 - **GNU/Linux:** x86/64 (64-bit); x86 (32-bit).
 - **Darwin/OS X:** x86/64 (64-bit); x86 (32-bit) is untested but should work.
 
-<a name="Download-Compilation"/>
-## Download & Compilation
+<a name="Source-Download-Compilation"/>
+## Source Download & Compilation
 
 First, acquire the source code either by cloning the git repository (requires **[git](http://git-scm.com/)** to be installed):
 
