@@ -295,15 +295,15 @@ static void print_sig(jl_tuple_t *type)
 {
     size_t i;
     for(i=0; i < type->length; i++) {
-        if (i > 0) ios_printf(ios_stdout, ", ");
+        if (i > 0) ios_printf(ios_stderr, ", ");
         jl_value_t *v = jl_tupleref(type,i);
         if (jl_is_tuple(v)) {
-            ios_putc('(', ios_stdout);
+            ios_putc('(', ios_stderr);
             print_sig((jl_tuple_t*)v);
-            ios_putc(')', ios_stdout);
+            ios_putc(')', ios_stderr);
         }
         else {
-            ios_printf(ios_stdout, "%s", type_summary(v));
+            ios_printf(ios_stderr, "%s", type_summary(v));
         }
     }
 }
@@ -357,9 +357,9 @@ void jl_type_infer(jl_lambda_info_t *li, jl_tuple_t *argtypes,
         fargs[2] = (jl_value_t*)jl_null;
         fargs[3] = (jl_value_t*)def;
 #ifdef TRACE_INFERENCE
-        ios_printf(ios_stdout,"inference on %s(", li->name->name);
+        ios_printf(ios_stderr,"inference on %s(", li->name->name);
         print_sig(argtypes);
-        ios_printf(ios_stdout, ")\n");
+        ios_printf(ios_stderr, ")\n");
 #endif
 #ifdef ENABLE_INFERENCE
         jl_value_t *newast = jl_apply(jl_typeinf_func, fargs, 4);
@@ -1027,9 +1027,9 @@ static char *type_summary(jl_value_t *t)
     if (jl_is_func_type(t)) return "Function";
     if (jl_is_some_tag_type(t))
         return ((jl_tag_type_t*)t)->name->name->name;
-    ios_printf(ios_stdout, "unexpected argument type: ");
+    ios_printf(ios_stderr, "unexpected argument type: ");
     jl_show(t);
-    ios_printf(ios_stdout, "\n");
+    ios_printf(ios_stderr, "\n");
     assert(0);
     return NULL;
 }

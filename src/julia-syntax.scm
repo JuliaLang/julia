@@ -705,6 +705,35 @@
 
    (pattern-lambda (... a) `(curly ... ,a))
 
+   ;; cell array syntax
+   (pattern-lambda (cell1d . args)
+		   (if (any (lambda (e) (and (pair? e) (eq? (car e) '...)))
+			    args)
+		       `(call (top cell_1d) ,@args)
+		       (let ((name (gensy)))
+			 `(block (= ,name (call (top Array) (top Any)
+						,(length args)))
+				 ,@(map (lambda (i elt)
+					  `(call (top arrayset) ,name ,(+ 1 i)
+						 ,elt))
+					(iota (length args))
+					args)
+				 ,name))))
+
+   (pattern-lambda (cell2d nr nc . args)
+		   (if (any (lambda (e) (and (pair? e) (eq? (car e) '...)))
+			    args)
+		       `(call (top cell_2d) ,nr ,nc ,@args)
+		       (let ((name (gensy)))
+			 `(block (= ,name (call (top Array) (top Any)
+						,nr ,nc))
+				 ,@(map (lambda (i elt)
+					  `(call (top arrayset) ,name ,(+ 1 i)
+						 ,elt))
+					(iota (* nr nc))
+					args)
+				 ,name))))
+
    ; local x,y,z => local x;local y;local z
    (pattern-lambda (local (vars . binds))
 		   (expand-decls 'local binds))
@@ -1693,8 +1722,7 @@ So far only the second case can actually occur.
 		   (loop (cdr p)
 			 (cons (cadr (cadadr (car p))) q))
 		   (loop (cdr p)
-			 (cons `(call (top cell_1d)
-				      ,(expand-backquote (car p)))
+			 (cons `(cell1d ,(expand-backquote (car p)))
 			       q))))))))
 
 ;; rename quote to bquote, so that quoted expressions are always identified

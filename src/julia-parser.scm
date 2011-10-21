@@ -1031,12 +1031,12 @@
 	  ((eqv? t #\{ )
 	   (take-token s)
 	   (if (eqv? (require-token s) #\})
-	       (begin (take-token s) '(call (top cell_1d)))
+	       (begin (take-token s) '(cell1d))
 	       (let ((vex (parse-cat s #\})))
 		 (cond ((eq? (car vex) 'comprehension)
 			(cons 'cell-comprehension (cdr vex)))
 		       ((eq? (car vex) 'hcat)
-			`(call (top cell_2d) 1 ,(length (cdr vex)) ,@(cdr vex)))
+			`(cell2d 1 ,(length (cdr vex)) ,@(cdr vex)))
 		       (else  ; (vcat ...)
 			(if (and (pair? (cadr vex)) (eq? (caadr vex) 'hcat))
 			    (let ((nr (length (cdr vex)))
@@ -1049,16 +1049,16 @@
 					       (length= (cdr x) nc)))
 					(cddr vex)))
 				  (error "inconsistent shape in cell expression"))
-			      `(call (top cell_2d) ,nr ,nc
-				     ,@(apply append
-					      ;; transpose to storage order
-					      (apply map list
-						     (map cdr (cdr vex))))))
+			      `(cell2d ,nr ,nc
+				       ,@(apply append
+						;; transpose to storage order
+						(apply map list
+						       (map cdr (cdr vex))))))
 			    (if (any (lambda (x) (and (pair? x)
 						      (eq? (car x) 'hcat)))
 				     (cddr vex))
 				(error "inconsistent shape in cell expression")
-				`(call (top cell_1d) ,@(cdr vex)))))))))
+				`(cell1d ,@(cdr vex)))))))))
 
 	  ;; cat expression
 	  ((eqv? t #\[ )
