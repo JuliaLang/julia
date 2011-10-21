@@ -209,7 +209,7 @@ function kron{T,S}(a::Matrix{T}, b::Matrix{S})
 end
 
 det(a::Matrix) = prod(diag(qr(a)[2]))
-inv(a::Matrix) = a \ eye(size(a)[1])
+inv(a::Matrix) = a \ eye(size(a,1))
 cond(a::Matrix, p) = norm(a, p) * norm(inv(a), p)
 cond(a::Matrix) = cond(a, 2)
 
@@ -255,4 +255,10 @@ function islowertriangular(A::Matrix)
         end
     end
     return true
+end
+
+function linreg(x, y)
+    M = [ones(length(x)) x]
+    Mt = M'
+    ((Mt*M)\Mt)*y
 end

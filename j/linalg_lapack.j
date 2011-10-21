@@ -667,7 +667,7 @@ function (\){T<:Union(Float64,Float32,Complex128,Complex64)}(A::StridedMatrix{T}
         Y = Array(T, max(m,n), nrhs)
         Y[1:size(X,1), 1:nrhs] = X
 
-        info = jl_lapack_dgels("N", m, n, nrhs, Acopy, m, Y, max(m,n), work, lwork)
+        info = jl_lapack_gels("N", m, n, nrhs, Acopy, m, Y, max(m,n), work, lwork)
 
         if info == 0
             lwork = real(work[1])
@@ -676,7 +676,7 @@ function (\){T<:Union(Float64,Float32,Complex128,Complex64)}(A::StridedMatrix{T}
             error("error in LAPACK gels")
         end
 
-        info = jl_lapack_dgels("N", m, n, nrhs, Acopy, m, Y, max(m,n), work, lwork)
+        info = jl_lapack_gels("N", m, n, nrhs, Acopy, m, Y, max(m,n), work, lwork)
 
         ##if B is a vector, format answer as vector
         if isa(B, Vector)
