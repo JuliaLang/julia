@@ -16,7 +16,7 @@
 
 using namespace std;
 
-#define NITER 10
+#define NITER 5
 
 double clock_now()
 {
@@ -25,8 +25,6 @@ double clock_now()
     gettimeofday(&now, NULL);
     return (double)now.tv_sec + (double)now.tv_usec/1.0e6;
 }
-
-#define CLOCK() clock_now()
 
 int fib(int n) {
     return n < 2 ? n : fib(n-1) + fib(n-2);
@@ -143,79 +141,93 @@ int main() {
     // Initialize RNG
     dsfmt_gv_init_gen_rand(0);
 
-    double t1, t2;
+    double t, tmin;
     
     // fib(20)
     assert(fib(20) == 6765);
     int f=0;
-    t1 = CLOCK();
+    tmin = INFINITY;
     for (int i=0; i<NITER; ++i) {
+        t = clock_now();
         f += fib(20);
+        t = clock_now()-t;
+        if (t < tmin) tmin = t;
     }
-    t2 = CLOCK() - t1;
-    print_perf("fib", (t2/(double)NITER));
+    print_perf("fib", tmin);
     
     // parse_bin
     assert(parse_int("1111000011110000111100001111", 2) == 252645135);
-    t1 = CLOCK();
+    tmin = INFINITY;
     for (int i=0; i<NITER; ++i) {
+        t = clock_now();
         for (int k=0; k<1000; ++k) {
             parse_int("1111000011110000111100001111", 2);
         }
+        t = clock_now()-t;
+        if (t < tmin) tmin = t;
     }
-    t2 = CLOCK() - t1;
-    print_perf("parse_int", (t2/(double)NITER));
+    print_perf("parse_int", tmin);
 
     // array constructor
-    t1 = CLOCK();
+    tmin = INFINITY;
     for (int i=0; i<NITER; ++i) {
+        t = clock_now();
         double *a = ones(200,200);
         free(a);
+        t = clock_now()-t;
+        if (t < tmin) tmin = t;
     }
-    t2 = CLOCK() - t1;
-    print_perf("ones", (t2/NITER));
+    print_perf("ones", tmin);
 
     // A*A'
     //SUBROUTINE DGEMM(TRANSA,TRANSB,M,N,K,ALPHA,A,LDA,B,LDB,BETA,C,LDC)
     double *b = ones(200, 200);
-    t1 = CLOCK();
+    tmin = INFINITY;
     for (int i=0; i<NITER; ++i) {
+        t = clock_now();
         double *c = matmul_aat(200, b);
         free(c);
+        t = clock_now()-t;
+        if (t < tmin) tmin = t;
     }
-    t2 = CLOCK() - t1;
     free(b);
-    print_perf("AtA", (t2/NITER));
+    print_perf("AtA", tmin);
 
     // mandel
     int mandel_sum;
-    t1 = CLOCK();
+    tmin = INFINITY;
     for (int i=0; i<NITER; ++i) {
+        t = clock_now();
         mandel_sum = mandelperf();
+        t = clock_now()-t;
+        if (t < tmin) tmin = t;
     }
     assert(mandel_sum == 14720);
-    t2 = CLOCK() - t1;
-    print_perf("mandel", (t2/NITER));
+    print_perf("mandel", tmin);
 
     // sort
-    t1 = CLOCK();
+    tmin = INFINITY;
     for (int i=0; i<NITER; ++i) {
+        t = clock_now();
         double *d = myrand(5000);
         quicksort(d, 0, 5000-1);
         free(d);
+        t = clock_now()-t;
+        if (t < tmin) tmin = t;
     }
-    t2 = CLOCK() - t1;
-    print_perf("quicksort", (t2/NITER));
+    print_perf("quicksort", tmin);
 
     // pi sum
-    t1 = CLOCK();
     double pi;
+    tmin = INFINITY;
     for (int i=0; i<NITER; ++i) {
+        t = clock_now();
         pi = pisum();
+        t = clock_now()-t;
+        if (t < tmin) tmin = t;
     }
     assert(fabs(pi-1.644834071848065) < 1e-12);
-    t2 = CLOCK() - t1;
-    print_perf("pi_sum", (t2/NITER));
+    print_perf("pi_sum", tmin);
 
     return 0;
 } 
