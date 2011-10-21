@@ -17,81 +17,26 @@ It also has easy interfaces to mature, best-of-breed C and Fortran libraries for
 Key language features include multiple dispatch, optional typing, and excellent performance through type inference and just-in-time (JIT) compilation.
 For a more in-depth discussion of the rationale and advantages of Julia over other systems, see the following highlights or read the [introduction](https://github.com/JuliaLang/julia/wiki/Introduction) in the [manual](https://github.com/JuliaLang/julia/wiki/).
 
-### High-Performance JIT Compiler 
+### High-Performance JIT Compiler
 
 Julia is an interactive environment with a high performance JIT compiler, with syntax that is familiar to users of other technical computing environments.
 The following [benchmarks](https://github.com/JuliaLang/julia/blob/master/test/perf.j) are from a Macbook with 2.1GHz Intel Core 2 Duo:
 
-<table cellspacing="0" border="0">
-<thead>
-  <tr>
-    <td/>
-    <th>Julia</th>
-    <th>Matlab</th>
-    <th>Octave</th>
-    <th>Python/NumPy</th>
-    <th>C++ (GCC)</th>
-  </tr>
-  <tr>
-    <td/>
-    <th>46c2c6de</th>
-    <th>R2011a</th>
-    <th>3.4</th>
-    <th>2.7.1/1.5.1</th>
-    <th>4.6.1 (-O3)</th>
-  </tr>
-</thead>
-<tbody>
-  <tr>
-    <th>fib</th>
-    <td align="right" width="80px">      .500 </td>
-    <td align="right" width="80px">   309.000 </td>
-    <td align="right" width="80px">   570.000 </td>
-    <td align="right" width="80px">     7.490 </td>
-    <td align="right" width="80px">      .179 </td>
-  </tr>
-  <tr>
-    <th>parse_int</th>
-    <td align="right" width="80px">      .210 </td>
-    <td align="right" width="80px">   124.000 </td>
-    <td align="right" width="80px">   557.000 </td>
-    <td align="right" width="80px">      .630 </td>
-    <td align="right" width="80px">      .151 </td>
-  </tr>
-  <tr>
-    <th>mandel</th>
-    <td align="right" width="80px">     1.820 </td>
-    <td align="right" width="80px">    40.000 </td>
-    <td align="right" width="80px">   260.000 </td>
-    <td align="right" width="80px">     9.640 </td>
-    <td align="right" width="80px">      .530 </td>
-  </tr>
-  <tr>
-    <th>quicksort</th>
-    <td align="right" width="80px">      .640 </td>
-    <td align="right" width="80px">    71.000 </td>
-    <td align="right" width="80px">  1611.000 </td>
-    <td align="right" width="80px">    30.600 </td>
-    <td align="right" width="80px">      .600 </td>
-  </tr>
-  <tr>
-    <th>pi_sum</th>
-    <td align="right" width="80px">    49.500 </td>
-    <td align="right" width="80px">    69.000 </td>
-    <td align="right" width="80px"> 20578.000 </td>
-    <td align="right" width="80px">  1289.000 </td>
-    <td align="right" width="80px">    49.300 </td>
-  </tr>
-  <tr>
-    <th>rand_mat_stat</th>
-    <td align="right" width="80px">    38.900 </td>
-    <td align="right" width="80px">   139.000 </td>
-    <td align="right" width="80px">   517.000 </td>
-    <td align="right" width="80px">   363.000 </td>
-    <td align="right" width="80px">           </td>
-  </tr>
-</tbody>
-</table>
+    ____________________________________________________________________________________
+
+                          Julia        Matlab       Octave   Python/NumPy    C++ (GCC)
+                        46c2c6de       R2011a        3.4      2.7.1/1.5.1    4.6.1 -O3
+    ____________________________________________________________________________________
+
+      fib                  .500        309.        570.           7.49          .179
+      parse_int            .210        124.        557.            .630         .151
+      mandel              1.82          40.0       260.           9.64          .530
+      quicksort            .640         71.0      1611.          30.6           .600
+      pi_sum             49.5           69.0     20578.        1289.          49.3
+      rand_mat_stat      38.9          139.        517.         363.
+    ____________________________________________________________________________________
+
+          Figure: benchmark time (ms) across various programming system versions.
 
 Relative performance between languages on Linux is similar.
 These benchmarks, while not comprehensive, do test compiler performance on a range of common code patterns, such as function calls, string parsing, sorting, numerical loops, random number generation, and array operations.
