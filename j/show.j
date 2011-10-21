@@ -451,8 +451,6 @@ print_matrix(X::AbstractMatrix) = print_matrix(X, tty_rows()-4, tty_cols())
 
 show{T}(x::AbstractArray{T,0}) = (println(summary(x),":"); show(x[]))
 
-print_matrix(X::AbstractMatrix) = print_matrix(X, tty_rows()-3, tty_cols())
-
 function show(v::AbstractVector)
     println(summary(v),":")
     print_matrix(v.') #'
