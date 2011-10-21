@@ -446,24 +446,67 @@ off_t ios_seek(ios_t *s, off_t pos)
         if ((size_t)pos > s->size)
             return -1;
         s->bpos = pos;
-        return s->bpos;
     }
-    // TODO
+    else {
+        ios_flush(s);
+        off_t fdpos = lseek(s->fd, pos, SEEK_SET);
+        if (fdpos == (off_t)-1)
+            return fdpos;
+        s->bpos = s->size = 0;
+    }
     return 0;
 }
 
 off_t ios_seek_end(ios_t *s)
 {
     s->_eof = 1;
-    // TODO
+    if (s->bm == bm_mem) {
+        s->bpos = s->size;
+    }
+    else {
+        ios_flush(s);
+        off_t fdpos = lseek(s->fd, 0, SEEK_END);
+        if (fdpos == (off_t)-1)
+            return fdpos;
+        s->bpos = s->size = 0;
+    }
     return 0;
 }
 
 off_t ios_skip(ios_t *s, off_t offs)
 {
-    if (offs < 0)
+    if (offs != 0) {
+        if (offs > 0) {
+            if (offs <= (off_t)(s->size-s->bpos)) {
+                s->bpos += offs;
+                return 0;
+            }
+            else if (s->bm == bm_mem) {
+                // TODO: maybe grow buffer
+                return -1;
+            }
+        }
+        else if (offs < 0) {
+            if (-offs <= (off_t)s->bpos) {
+                s->bpos += offs;
+                s->_eof = 0;
+                return 0;
+            }
+            else if (s->bm == bm_mem) {
+                return -1;
+            }
+        }
+        ios_flush(s);
+        if (s->state == bst_wr)
+            offs += s->bpos;
+        else if (s->state == bst_rd)
+            offs -= (s->size - s->bpos);
+        off_t fdpos = lseek(s->fd, offs, SEEK_CUR);
+        if (fdpos == (off_t)-1)
+            return fdpos;
+        s->bpos = s->size = 0;
         s->_eof = 0;
-    // TODO
+    }
     return 0;
 }
 
@@ -520,24 +563,6 @@ int ios_eof(ios_t *s)
     */
 }
 
-static void _discard_partial_buffer(ios_t *s)
-{
-    // this function preserves the invariant that data to write
-    // begins at the beginning of the buffer, and s->size refers
-    // to how much valid file data is stored in the buffer.
-
-    // this needs to be called when normal operation is interrupted in
-    // the middle of the buffer. "normal operation" is reading or
-    // writing to the end of the buffer. this happens e.g. when flushing.
-    size_t delta = 0;
-    if (s->ndirty && s->size > s->ndirty) {
-        delta = s->size - s->ndirty;
-        memmove(s->buf, s->buf + s->ndirty, delta);
-    }
-    s->size -= s->ndirty;
-    s->bpos -= s->ndirty;
-}
-
 int ios_flush(ios_t *s)
 {
     if (s->ndirty == 0 || s->bm == bm_mem || s->buf == NULL)
@@ -562,12 +587,17 @@ int ios_flush(ios_t *s)
         if (s->bpos != nw &&
             lseek(s->fd, (off_t)s->bpos - (off_t)nw, SEEK_CUR) == (off_t)-1) {
         }
+        // now preserve the invariant that data to write
+        // begins at the beginning of the buffer, and s->size refers
+        // to how much valid file data is stored in the buffer.
+        if (s->size > s->ndirty) {
+            size_t delta = s->size - s->ndirty;
+            memmove(s->buf, s->buf + s->ndirty, delta);
+        }
+        s->size -= s->ndirty;
+        s->bpos = 0;
     }
 
-    if (s->ndirty <= s->bpos) {
-        // in this case assume we're done with the first part of the buffer
-        _discard_partial_buffer(s);
-    }
     s->ndirty = 0;
 
     if (err)

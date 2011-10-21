@@ -95,6 +95,7 @@
     ios_trunc;
     ios_pos;
     ios_seek;
+    ios_skip;
     ios_seek_end;
     ios_stdout;
     ios_stdin;

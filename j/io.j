@@ -215,7 +215,14 @@ truncate(s::IOStream, n::Int) =
     ccall(:ios_trunc, Ulong, (Ptr{Void}, Ulong), s.ios, ulong(n))
 
 seek(s::IOStream, n::Int) =
-    ccall(:ios_seek, Long, (Ptr{Void}, Long), s.ios, long(n))
+    (ccall(:ios_seek, Long, (Ptr{Void}, Long), s.ios, long(n))==0 ||
+     error("seek failed"))
+
+skip(s::IOStream, delta::Int) =
+    (ccall(:ios_skip, Long, (Ptr{Void}, Long), s.ios, long(delta))==0 ||
+     error("skip failed"))
+
+position(s::IOStream) = ccall(:ios_pos, Long, (Ptr{Void},), s.ios)
 
 type IOTally
     nbytes::Size
