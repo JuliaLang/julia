@@ -50,7 +50,7 @@ you can expect well-written Julia code to come within 4x of well-written C/C++, 
 ### Designed for Parallelism
 
 Julia does not impose any particular style of parallelism on the user.
-Instead, it is flexible enough to support a number of styles of [parallelism](https://github.com/JuliaLang/julia/wiki/Parallel-Computing), and makes it easy for the user to add more.
+Instead, it provides a number of [key building blocks for distributed computation](https://github.com/JuliaLang/julia/wiki/Parallel-Computing), making it flexible enough to support a number of styles of parallelism, and allowing users to add more.
 The following simple example demonstrates how to count the number of heads in a large number of coin tosses in parallel.
 
     nheads = @parallel (+) for i=1:100000000
@@ -64,8 +64,8 @@ It is also possible to add and remove compute nodes while a session is running, 
 
 The core of the Julia implementation is licensed under the [MIT license][MIT].
 Various libraries used by the Julia environment include their own licenses such as the [GPL], [LGPL], and [BSD] (therefore the environment, which consists of the language, user interfaces, and libraries, is under the GPL).
-Users can easily combine their own code or even proprietary third-party libraries, should they choose to.
-Furthermore, Julia makes it easy to call functions from [external C and Fortran shared libraries](https://github.com/JuliaLang/julia/wiki/Calling-C-and-Fortran-Code), without writing any wrapper code, or even recompiling code.
+Users can legally combine Julia with their own C/Fortran code or proprietary third-party libraries, should they choose to.
+Furthermore, Julia makes it [easy to call functions](https://github.com/JuliaLang/julia/wiki/Calling-C-and-Fortran-Code) from external C and Fortran shared libraries, without writing any wrapper code or even recompiling existing code.
 You can try calling external library functions directly from Julia's interactive prompt, playing with the interface and getting immediate feedback until you get it right.
 See [LICENSE](https://github.com/JuliaLang/julia/blob/master/LICENSE) for the full terms Julia's licensing.
 
