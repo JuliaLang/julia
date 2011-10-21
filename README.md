@@ -24,7 +24,7 @@ The following [benchmarks](https://github.com/JuliaLang/julia/blob/master/test/p
 
     ____________________________________________________________________________________
 
-                          Julia        Matlab       Octave   Python/NumPy    C++ (GCC)
+                          Julia        Matlab      Octave    Python/NumPy    C++ (GCC)
                         46c2c6de       R2011a        3.4      2.7.1/1.5.1    4.6.1 -O3
     ____________________________________________________________________________________
 
