@@ -20,9 +20,8 @@ function timeit(name, func, varargin)
     end
 
     times = sort(times);
-    fprintf ('%s, %15s, %.8f\n', lang, name, times(1)*1000);
+    fprintf ('%s,%s,%.8f\n', lang, name, times(1)*1000);
 end
-
 
 %% recursive fib %%
 

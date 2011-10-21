@@ -37,11 +37,11 @@ long parse_int(const char *s, long base) {
     
     for (unsigned int i=0; i<strlen(s); ++i) {
         char c = s[i];
-	long d = 0;
-	if (c >= '0' && c <= '9') d = c-'0';
-	else if (c >= 'A' && c <= 'Z') d = c-'A' + (int) 10;
-	else if (c >= 'a' && c <= 'z') d = c-'a' + (int) 10;
-	else exit(-1);
+        long d = 0;
+        if (c >= '0' && c <= '9') d = c-'0';
+        else if (c >= 'A' && c <= 'Z') d = c-'A' + (int) 10;
+        else if (c >= 'a' && c <= 'z') d = c-'a' + (int) 10;
+        else exit(-1);
 
         if (base <= d) exit(-1);
         n = n*base + d;
@@ -50,17 +50,17 @@ long parse_int(const char *s, long base) {
 }
 
 double *ones(int m, int n) {
-  double *a = (double *) malloc(m*n*sizeof(double));
-  for (int k=0; k<m*n; ++k) {
-    a[k] = 1.0;
-  }
-  return a;
+    double *a = (double *) malloc(m*n*sizeof(double));
+    for (int k=0; k<m*n; ++k) {
+        a[k] = 1.0;
+    }
+    return a;
 }
 
 double *matmul_aat(int n, double *b) {
-  double *c = (double *) malloc(n*n*sizeof(double));
-  cblas_dgemm(CblasColMajor, CblasNoTrans, CblasTrans, n, n, n, 1.0, b, n, b, n, 0.0, c, n);
-  return c;
+    double *c = (double *) malloc(n*n*sizeof(double));
+    cblas_dgemm(CblasColMajor, CblasNoTrans, CblasTrans, n, n, n, 1.0, b, n, b, n, 0.0, c, n);
+    return c;
 }
 
 int mandel(complex<double> z) {
@@ -88,57 +88,56 @@ int mandelperf() {
 }
 
 double *myrand(int n) {
-  double *d = (double *) malloc (n*sizeof(double));
-  for (int k=0; k<n; ++k) d[k] = dsfmt_gv_genrand_open_open();
-  return d;
+    double *d = (double *) malloc (n*sizeof(double));
+    for (int k=0; k<n; ++k) d[k] = dsfmt_gv_genrand_open_open();
+    return d;
 }
 
 void quicksort(double *a, int lo, int hi) {
-  int i = lo;
-  int j = hi;
-  while (i < hi) {
-    double pivot = a[(lo+hi)/2];
-    // Partition
-    while (i <= j) {
-      while (a[i] < pivot) {
-	i = i + 1;
-      }
-      while (a[j] > pivot) {
-	j = j - 1;
-      }
-      if (i <= j) {
-	double t = a[i];
-	a[i] = a[j];
-	a[j] = t;
-	i = i + 1;
-	j = j - 1;
-      }
-    }
+    int i = lo;
+    int j = hi;
+    while (i < hi) {
+        double pivot = a[(lo+hi)/2];
+        // Partition
+        while (i <= j) {
+            while (a[i] < pivot) {
+                i = i + 1;
+            }
+            while (a[j] > pivot) {
+                j = j - 1;
+            }
+            if (i <= j) {
+                double t = a[i];
+                a[i] = a[j];
+                a[j] = t;
+                i = i + 1;
+                j = j - 1;
+            }
+        }
 
-    // Recursion for quicksort
-    if (lo < j) {
-      quicksort(a, lo, j);
+        // Recursion for quicksort
+        if (lo < j) {
+            quicksort(a, lo, j);
+        }
+        lo = i;
+        j = hi;
     }
-    lo = i;
-    j = hi;
-  }
 }
 
 double pisum() {
-  double sum = 0.0;
-  for (int j=0; j<500; ++j) {
-    sum = 0.0;
-    for (int k=1; k<=10000; ++k) {
-      sum += 1.0/(k*k);
+    double sum = 0.0;
+    for (int j=0; j<500; ++j) {
+        sum = 0.0;
+        for (int k=1; k<=10000; ++k) {
+            sum += 1.0/(k*k);
+        }
     }
-  }
-  return sum;
+    return sum;
 }
 
 void print_perf(const char *name, double t) {
-  printf("c, %15s, %.6f\n", name, t*1000);
+    printf("c,%s,%.6f\n", name, t*1000);
 }
-
 
 int main() {
     // Initialize RNG
@@ -151,7 +150,7 @@ int main() {
     int f=0;
     t1 = CLOCK();
     for (int i=0; i<NITER; ++i) {
-      f += fib(20);
+        f += fib(20);
     }
     t2 = CLOCK() - t1;
     print_perf("fib", (t2/(double)NITER));
@@ -161,7 +160,7 @@ int main() {
     t1 = CLOCK();
     for (int i=0; i<NITER; ++i) {
         for (int k=0; k<1000; ++k) {
-	  parse_int("1111000011110000111100001111", 2);
+            parse_int("1111000011110000111100001111", 2);
         }
     }
     t2 = CLOCK() - t1;
@@ -170,8 +169,8 @@ int main() {
     // array constructor
     t1 = CLOCK();
     for (int i=0; i<NITER; ++i) {
-      double *a = ones(200,200);
-      free(a);
+        double *a = ones(200,200);
+        free(a);
     }
     t2 = CLOCK() - t1;
     print_perf("ones", (t2/NITER));
@@ -181,8 +180,8 @@ int main() {
     double *b = ones(200, 200);
     t1 = CLOCK();
     for (int i=0; i<NITER; ++i) {
-      double *c = matmul_aat(200, b);
-      free(c);
+        double *c = matmul_aat(200, b);
+        free(c);
     }
     t2 = CLOCK() - t1;
     free(b);
@@ -201,9 +200,9 @@ int main() {
     // sort
     t1 = CLOCK();
     for (int i=0; i<NITER; ++i) {
-      double *d = myrand(5000);
-      quicksort(d, 0, 5000-1);
-      free(d);
+        double *d = myrand(5000);
+        quicksort(d, 0, 5000-1);
+        free(d);
     }
     t2 = CLOCK() - t1;
     print_perf("quicksort", (t2/NITER));
@@ -212,7 +211,7 @@ int main() {
     t1 = CLOCK();
     double pi;
     for (int i=0; i<NITER; ++i) {
-      pi = pisum();
+        pi = pisum();
     }
     assert(fabs(pi-1.644834071848065) < 1e-12);
     t2 = CLOCK() - t1;
