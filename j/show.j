@@ -243,52 +243,35 @@ function showall{T}(a::AbstractArray{T,1})
     show_comma_array(a, opn, cls)
 end
 
-function showall_matrix(a::AbstractArray)
-    for i = 1:size(a,1)
-        show_cols(a, 1, size(a,2), i)
-        print('\n')
-    end
-end
-
 function showall{T}(a::AbstractArray{T,2})
     print(summary(a))
     if isempty(a)
         return
     end
     println()
-    showall_matrix(a)
+    for i = 1:size(a,1)
+        for j = 1:size(a,2)
+            show(a[i,j])
+            print(' ')
+        end
+        print('\n')
+    end
 end
 
-function show{T}(a::AbstractArray{T,1})
-    if is(T,Any)
+function show(a::AbstractVector)
+    if is(eltype(a),Any)
         opn = '{'; cls = '}'
     else
         opn = '['; cls = ']';
     end
     n = size(a,1)
-    if n <= 10
+    if n <= 20
         show_comma_array(a, opn, cls)
     else
-        show_comma_array(a[1:5], opn, "")
+        show_comma_array(a[1:10], opn, "")
         print(",...,")
-        show_comma_array(a[(n-4):n], "", cls)
+        show_comma_array(a[(n-9):n], "", cls)
     end
-end
-
-function show_cols(a, start, stop, i)
-    for j = start:stop
-        show(a[i,j])
-        print(' ')
-    end
-end
-
-function show{T}(a::AbstractArray{T,2})
-    print(summary(a))
-    if isempty(a)
-        return
-    end
-    println()
-    show_matrix(a)
 end
 
 alignment(x::Any) = (0, strlen(show_to_string(x)))
@@ -450,11 +433,6 @@ print_matrix(X::AbstractMatrix, rows::Int, cols::Int) =
 print_matrix(X::AbstractMatrix) = print_matrix(X, tty_rows()-4, tty_cols())
 
 show{T}(x::AbstractArray{T,0}) = (println(summary(x),":"); show(x[]))
-
-function show(v::AbstractVector)
-    println(summary(v),":")
-    print_matrix(v.') #'
-end
 
 function show(X::AbstractMatrix)
     println(summary(X),":")
