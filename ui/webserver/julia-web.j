@@ -125,8 +125,7 @@ function socket_callback(fd)
     # MSG_INPUT_EVAL
     if msg.msg_type == MSG_INPUT_EVAL
         # try to evaluate it
-        expr_c_str = cstring(msg.args[1])
-        expr = ccall(:jl_parse_input_line, Any, (Ptr{Uint8},), expr_c_str)
+        expr = parse_input_line(msg.args[1])
 
         if expr == nothing
             return send_eval_result("")

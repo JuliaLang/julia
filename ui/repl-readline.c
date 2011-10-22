@@ -23,7 +23,6 @@
 #include <readline/history.h>
 
 char jl_prompt_color[] = "\001\033[1m\033[32m\002julia> \001\033[0m\033[1m\002";
-static char jl_input_color[]  = "\033[0m\033[1m";
 static char *history_file = NULL;
 
 // yes, readline uses inconsistent indexing internally.
@@ -130,18 +129,10 @@ static int newline_callback(int count, int key) {
 }
 
 static int return_callback(int count, int key) {
-    if (have_color) {
-        ios_printf(ios_stdout, jl_answer_color());
-        ios_flush(ios_stdout);
-    }
     add_history_temporary(rl_line_buffer);
     rl_ast = jl_parse_input_line(rl_line_buffer);
     rl_done = !rl_ast || !jl_is_expr(rl_ast) ||
         (((jl_expr_t*)rl_ast)->head != jl_continue_sym);
-    if (!rl_done && have_color) {
-        ios_printf(ios_stdout, jl_input_color);
-        ios_flush(ios_stdout);
-    }
     if (!rl_done) {
         newline_callback(count, key);
     } else {

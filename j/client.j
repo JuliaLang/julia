@@ -4,7 +4,7 @@
 roottask = current_task()
 roottask_wi = WorkItem(roottask)
 
-function repl_callback(ast, show_value)
+function repl_callback(ast::ANY, show_value)
     # use root task to execute user input
     roottask_wi.argument = (ast, show_value)
     perform_work(roottask_wi)
@@ -19,8 +19,7 @@ function run_repl()
         (ast, show_value) = yield()
         del_fd_handler(STDIN.fd)
         roottask_wi.requeue = true
-        ccall(:jl_eval_user_input, Void, (Any, Int32),
-              ast, show_value)
+        ccall(:jl_eval_user_input, Void, (Any, Int32), ast, show_value)
     end
 end
 
@@ -71,7 +70,7 @@ function process_options(args::Array{Any,1})
             np = int32(args[i])
             addprocs_local(np-1)
         elseif args[i]=="-v" || args[i]=="--version"
-            println(VERSION_STRING)
+            println("julia version $VERSION")
             println(jl_commit_string)
             exit(0)
         elseif args[i][1]!='-'

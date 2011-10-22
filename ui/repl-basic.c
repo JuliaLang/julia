@@ -60,4 +60,5 @@ void repl_stdin_callback(void)
 void repl_print_prompt(void)
 {
     ios_printf(ios_stdout, prompt_string);
+    ios_flush(ios_stdout);
 }

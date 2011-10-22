@@ -66,9 +66,9 @@ VERSION_TIME = readall(
 
 begin
 
-local jl_version_string = "Version $VERSION"
+jl_version_string = "Version $VERSION"
 local jl_version_clean = VERSION_CLEAN ? "" : "*"
-local jl_commit_string = "Commit $(VERSION_COMMIT[1:10]) ($VERSION_TIME)$jl_version_clean"
+jl_commit_string = "Commit $(VERSION_COMMIT[1:10]) ($VERSION_TIME)$jl_version_clean"
 
 jl_banner_plain =
 I"               _

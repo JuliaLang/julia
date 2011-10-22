@@ -222,7 +222,6 @@ DLLEXPORT void jl_eval_user_input(jl_value_t *ast, int show_value)
         jl_register_toplevel_eh();
         if (have_color) {
             ios_printf(ios_stdout, jl_color_normal);
-            ios_flush(ios_stdout);
         }
         if (iserr) {
             jl_show(jl_exception_in_transit);
@@ -235,7 +234,6 @@ DLLEXPORT void jl_eval_user_input(jl_value_t *ast, int show_value)
         if (value != (jl_value_t*)jl_nothing && show_value) {
             if (have_color) {
                 ios_printf(ios_stdout, jl_answer_color());
-                ios_flush(ios_stdout);
             }
             repl_show_value(value);
             ios_printf(ios_stdout, "\n");
@@ -246,7 +244,6 @@ DLLEXPORT void jl_eval_user_input(jl_value_t *ast, int show_value)
         goto again;
     }
     ios_printf(ios_stdout, "\n");
-    ios_flush(ios_stdout);
     JL_GC_POP();
     repl_callback_enable();
 }
@@ -261,7 +258,6 @@ void handle_input(jl_value_t *ast, int end, int show_value)
     if (ast == NULL) {
         ios_printf(ios_stdout, "\n");
         repl_print_prompt();
-        ios_flush(ios_stdout);
         return;
     }
     if (!jl_have_event_loop) {
@@ -331,7 +327,6 @@ int true_main(int argc, char *argv[])
 
     if (start_client == NULL) {
         repl_print_prompt();
-        ios_flush(ios_stdout);
         // client event loop not available; use fallback blocking version
         int iserr = 0;
     again:
@@ -340,11 +335,9 @@ int true_main(int argc, char *argv[])
             if (iserr) {
                 if (have_color) {
                     ios_printf(ios_stdout, jl_color_normal);
-                    ios_flush(ios_stdout);
                 }
                 jl_show(jl_exception_in_transit);
                 ios_printf(ios_stdout, "\n\n");
-                ios_flush(ios_stdout);
                 iserr = 0;
             }
             while (1) {
