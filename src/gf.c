@@ -1150,11 +1150,11 @@ JL_CALLABLE(jl_apply_generic)
         mfunc = jl_mt_assoc_by_type(mt, tt, 1);
         JL_GC_POP();
     }
-    assert(!mfunc->linfo || !mfunc->linfo->inInference);
 
     if (mfunc == NULL) {
         return jl_no_method_error((jl_function_t*)jl_t2(env), args, nargs);
     }
+    assert(!mfunc->linfo || !mfunc->linfo->inInference);
 
     JL_GC_PUSH(&mfunc);
     jl_value_t *result = jl_apply(mfunc, args, nargs);

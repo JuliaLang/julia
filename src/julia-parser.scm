@@ -304,6 +304,15 @@
 (define (line-number-filename-node s)
   `(line ,(input-port-line (ts:port s)) ,current-filename))
 
+;; insert line/file for short-form function defs, otherwise leave alone
+(define (short-form-function-loc ex lno)
+  (if (and (pair? ex)
+	   (eq? (car ex) '=)
+	   (pair? (cadr ex))
+	   (eq? (caadr ex) 'call))
+      `(= ,(cadr ex) (block (line ,lno ,current-filename) ,(caddr ex)))
+      ex))
+
 ; parse a@b@c@... as (@ a b c ...) for some operator @
 ; op: the operator to look for
 ; head: the expression head to yield in the result, e.g. "a;b" => (block a b)
@@ -343,10 +352,8 @@
 				  (eqv? (peek-token s) op)))
 			 (loop ex #f)
 			 (if (eqv? op #\newline)
-			     (let ((lineno (input-port-line (ts:port s))))
-			       (loop (list* (down s)
-					    `(line ,lineno) ex)
-				     #f))
+			     (let ((loc (line-number-node s)))
+			       (loop (list* (down s) loc ex) #f))
 			     (loop (cons (down s) ex) #f)))))))))
 
 ; colon is strange; 3 arguments with 2 colons yields one call:
@@ -393,7 +400,10 @@
 					  #t))
 (define (parse-stmts s) (parse-Nary s parse-eq    #\; 'block '(#\newline) #t))
 
-(define (parse-eq s)    (parse-RtoL s parse-comma (prec-ops 0)))
+(define (parse-eq s)
+  (let ((lno (input-port-line (ts:port s))))
+    (short-form-function-loc
+     (parse-RtoL s parse-comma (prec-ops 0)) lno)))
 ; parse-eq* is used where commas are special, for example in an argument list
 (define (parse-eq* s)   (parse-RtoL s parse-cond  (prec-ops 0)))
 ; parse-comma is needed for commas outside parens, for example a = b,c
@@ -1123,15 +1133,6 @@
 
 (define (julia-parse-file filename stream)
   (set! current-filename (symbol filename))
-  (define (parse s lno)
-    (let ((ex (julia-parse s)))
-      (if (and (pair? ex)
-	       (eq? (car ex) '=)
-	       (pair? (cadr ex))
-	       (eq? (caadr ex) 'call))
-	  ;; insert line/file for short-form function defs
-	  `(= ,(cadr ex) (block (line ,lno ,current-filename) ,(caddr ex)))
-	  ex)))
   (let ((s (make-token-stream stream)))
     (with-exception-catcher
      (lambda (e)
@@ -1145,7 +1146,7 @@
        (let ((linen (input-port-line (ts:port s))))
 	 (let loop ((lines '())
 		    (linen linen)
-		    (curr  (parse s linen)))
+		    (curr  (julia-parse s)))
 	   (if (eof-object? curr)
 	       (reverse lines)
 	       (begin
@@ -1153,4 +1154,4 @@
 		 (let ((nl (input-port-line (ts:port s))))
 		   (loop (list* curr `(line ,linen) lines)
 			 nl
-			 (parse s nl)))))))))))
+			 (julia-parse s)))))))))))
