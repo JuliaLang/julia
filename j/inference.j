@@ -1135,7 +1135,8 @@ function eval_annotate(e::Expr, vtypes, sv, decls, clo)
         end
         return e
     end
-    for i=1:length(e.args)
+    i0 = is(head,:method) ? 2 : 1
+    for i=i0:length(e.args)
         e.args[i] = eval_annotate(e.args[i], vtypes, sv, decls, clo)
     end
     e
