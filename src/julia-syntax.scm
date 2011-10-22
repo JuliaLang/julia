@@ -1327,7 +1327,7 @@ So far only the second case can actually occur.
       '()
       (case (car e)
 	((lambda scope-block)  '())
-	((=)
+	((= method)
 	 (let ((v (decl-var (cadr e))))
 	   (if (memq v env)
 	       '()

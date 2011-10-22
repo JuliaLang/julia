@@ -1112,8 +1112,7 @@ end
 
 function eval_annotate(e::Expr, vtypes, sv, decls, clo)
     head = e.head
-    if is(head,:static_typeof) || is(head,:line) || is(head,:const) ||
-       is(head,:method)
+    if is(head,:static_typeof) || is(head,:line) || is(head,:const)
         return e
     elseif is(head,:gotoifnot) || is(head,:return)
         e.typ = Any
