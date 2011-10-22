@@ -1595,6 +1595,16 @@ So far only the second case can actually occur.
 	      `(call (lambda ,vs ,(caddr (cadr e)) ,(cadddr (cadr e)))
 		     ,@vs)
 	      env captvars))))
+	((eq? (car e) 'method)
+	 (let ((vi (var-info-for (cadr e) env)))
+	   (if vi
+	       (begin
+		 (vinfo:set-asgn! vi #t)
+		 (if (assq (car vi) captvars)
+		     (vinfo:set-iasg! vi #t)))))
+	 `(method ,(cadr e)
+		  ,(analyze-vars (caddr  e) env captvars)
+		  ,(analyze-vars (cadddr e) env captvars)))
 	(else (cons (car e)
 		    (map (lambda (x) (analyze-vars x env captvars))
 			 (cdr e))))))
