@@ -222,6 +222,7 @@ typedef struct {
     AllocaInst *argTemp;
     AllocaInst *float32Temp; // for forcing rounding
     int argDepth;
+    int argSpace;
     std::string funcName;
 } jl_codectx_t;
 
@@ -534,46 +535,49 @@ static bool expr_is_symbol(jl_value_t *e)
     return (jl_is_symbol(e) || jl_is_symbolnode(e) || jl_is_topnode(e));
 }
 
-static size_t max_arg_depth(jl_value_t *expr)
+static void max_arg_depth(jl_value_t *expr, int32_t *max, int32_t *sp)
 {
     if (jl_is_expr(expr)) {
-        int max = 0, m;
         jl_expr_t *e = (jl_expr_t*)expr;
         size_t i;
         if (e->head == call_sym || e->head == call1_sym) {
             int alen = e->args->length;
-            for(i=0; i < (size_t)alen; i++) {
-                m = max_arg_depth(jl_exprarg(e,i));
-                if (m+(int)i > max) max = m+(int)i;
-            }
+            int lastsp = *sp;
             if (!expr_is_symbol(jl_exprarg(e,0)) &&
                 (jl_is_expr(jl_exprarg(e,0)) ||
                  jl_is_lambda_info(jl_exprarg(e,0)))) {
-                if (alen > max)
-                    max = alen;
+                max_arg_depth(jl_exprarg(e,0), max, sp);
+                (*sp)++;
+                if (*sp > *max) *max = *sp;
             }
+
+            for(i=1; i < (size_t)alen; i++) {
+                max_arg_depth(jl_exprarg(e,i), max, sp);
+                (*sp)++;
+                if (*sp > *max) *max = *sp;
+            }
+            (*sp) = lastsp;
         }
         else if (e->head == method_sym) {
-            m = max_arg_depth(jl_exprarg(e,1));
-            if (m > max) max = m;
-            m = max_arg_depth(jl_exprarg(e,2));
-            if (m+1 > max) max = m+1;
-            if (2 > max) max = 2;
+            max_arg_depth(jl_exprarg(e,1), max, sp);
+            (*sp)++;
+            if (*sp > *max) *max = *sp;
+            max_arg_depth(jl_exprarg(e,2), max, sp);
+            (*sp)++;
+            if (*sp > *max) *max = *sp;
+            (*sp)-=2;
         }
         else {
             for(i=0; i < e->args->length; i++) {
-                m = max_arg_depth(jl_exprarg(e,i));
-                if (m > max) max = m;
+                max_arg_depth(jl_exprarg(e,i), max, sp);
             }
         }
-        assert(max >= 0);
-        return (size_t)max;
     }
-    return 0;
 }
 
 static void make_gcroot(Value *v, jl_codectx_t *ctx)
 {
+    assert(ctx->argDepth < ctx->argSpace);
     Value *froot = builder.CreateGEP(ctx->argTemp,
                                      ConstantInt::get(T_int32,
                                                       ctx->argDepth));
@@ -825,22 +829,29 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
         }
 
         int last_depth = ctx->argDepth;
+        // we only get a GC root per-argument, so we can't allocate the
+        // tuple before evaluating one argument. so eval the first argument
+        // first, then do hand-over-hand to track the tuple.
+        Value *arg1 = boxed(emit_expr(args[1], ctx, true));
+        make_gcroot(arg1, ctx);
         Value *tup =
             builder.CreateBitCast
             (builder.CreateCall(jlallocobj_func,
                                 ConstantInt::get(T_size,
                                                  sizeof(void*)*(nargs+2))),
              jl_pvalue_llvmt);
+        builder.CreateStore(arg1, emit_nthptr_addr(tup, 2));
+        ctx->argDepth--;
         make_gcroot(tup, ctx);
         builder.CreateStore(literal_pointer_val((jl_value_t*)jl_tuple_type),
                             emit_nthptr_addr(tup, (size_t)0));
         builder.CreateStore(literal_pointer_val((jl_value_t*)nargs),
                             emit_nthptr_addr(tup, (size_t)1));
-        for(i=0; i < nargs; i++) {
+        for(i=1; i < nargs; i++) {
             builder.CreateStore(V_null,
                                 emit_nthptr_addr(tup, i+2));
         }
-        for(i=0; i < nargs; i++) {
+        for(i=1; i < nargs; i++) {
             builder.CreateStore(boxed(emit_expr(args[i+1], ctx, true)),
                                 emit_nthptr_addr(tup, i+2));
         }
@@ -1074,19 +1085,21 @@ static Value *emit_call(jl_value_t **args, size_t arglen, jl_codectx_t *ctx)
     // emit arguments
     size_t i;
     int argStart = ctx->argDepth;
-    assert(nargs+ctx->argDepth <= ((ConstantInt*)ctx->argTemp->getArraySize())->getZExtValue());
     for(i=0; i < nargs; i++) {
         Value *anArg = emit_expr(args[i+1], ctx, true);
         // put into argument space
-        Value *dest=builder.CreateGEP(ctx->argTemp,
-                                      ConstantInt::get(T_int32,ctx->argDepth));
-        builder.CreateStore(boxed(anArg), dest);
-        ctx->argDepth++;
+        make_gcroot(boxed(anArg), ctx);
     }
 
     // call
-    Value *myargs = builder.CreateGEP(ctx->argTemp,
-                                      ConstantInt::get(T_int32, argStart));
+    Value *myargs;
+    if (ctx->argTemp != NULL) {
+        myargs = builder.CreateGEP(ctx->argTemp,
+                                   ConstantInt::get(T_int32, argStart));
+    }
+    else {
+        myargs = Constant::getNullValue(jl_ppvalue_llvmt);
+    }
     Value *result = builder.CreateCall3(theFptr, theEnv, myargs,
                                         ConstantInt::get(T_int32,nargs));
 
@@ -1265,6 +1278,7 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool value)
             mn = args[0];
         }
         assert(jl_is_symbol(mn));
+        int last_depth = ctx->argDepth;
         Value *name = literal_pointer_val(mn);
         jl_binding_t *bnd = NULL;
         Value *bp = var_binding_pointer((jl_sym_t*)mn, &bnd, ctx);
@@ -1274,7 +1288,7 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool value)
         make_gcroot(boxed(a2), ctx);
         Value *m = builder.CreateCall5(jlmethod_func, name, bp,
                                        literal_pointer_val((void*)bnd), a1, a2);
-        ctx->argDepth-=2;
+        ctx->argDepth = last_depth;
         return m;
     }
     else if (ex->head == isbound_sym) {
@@ -1569,33 +1583,42 @@ static void emit_function(jl_lambda_info_t *lam, Function *f)
         }
     }
 
-    int32_t argdepth = (int32_t)max_arg_depth((jl_value_t*)ast);
+    int32_t argdepth=0, vsp=0;
+    max_arg_depth((jl_value_t*)ast, &argdepth, &vsp);
     n_roots += argdepth;
-    ctx.argTemp = builder.CreateAlloca(jl_pvalue_llvmt,
-                                       ConstantInt::get(T_int32, n_roots));
     ctx.argDepth = 0;
-
+    ctx.argSpace = argdepth;
 #ifdef JL_GC_MARKSWEEP
-    // create gc frame
-    AllocaInst *gcframe = builder.CreateAlloca(T_gcframe, 0);
-    builder.CreateStore(builder.CreateBitCast(ctx.argTemp,
-                                              PointerType::get(jl_ppvalue_llvmt,0)),
-                        builder.CreateConstGEP2_32(gcframe, 0, 0));
-    builder.CreateStore(ConstantInt::get(T_size, n_roots),
-                        builder.CreateConstGEP2_32(gcframe, 0, 1));
-    builder.CreateStore(ConstantInt::get(T_int32, 0),
-                        builder.CreateConstGEP2_32(gcframe, 0, 2));
-    builder.CreateStore(builder.CreateLoad
-                        (builder.CreateLoad(jlpgcstack_var, false), false),
-                        builder.CreateConstGEP2_32(gcframe, 0, 3));
-    builder.CreateStore(gcframe,
-                        builder.CreateLoad(jlpgcstack_var, false));
-    // initialize stack roots to null
-    for(i=0; i < (size_t)n_roots; i++) {
-        Value *argTempi = builder.CreateConstGEP1_32(ctx.argTemp,i);
-        builder.CreateStore(V_null, argTempi);
-    }
+    AllocaInst *gcframe = NULL;
 #endif
+    if (n_roots > 0) {
+        ctx.argTemp = builder.CreateAlloca(jl_pvalue_llvmt,
+                                           ConstantInt::get(T_int32, n_roots));
+#ifdef JL_GC_MARKSWEEP
+        // create gc frame
+        gcframe = builder.CreateAlloca(T_gcframe, 0);
+        builder.CreateStore(builder.CreateBitCast(ctx.argTemp,
+                                                  PointerType::get(jl_ppvalue_llvmt,0)),
+                            builder.CreateConstGEP2_32(gcframe, 0, 0));
+        builder.CreateStore(ConstantInt::get(T_size, n_roots),
+                            builder.CreateConstGEP2_32(gcframe, 0, 1));
+        builder.CreateStore(ConstantInt::get(T_int32, 0),
+                            builder.CreateConstGEP2_32(gcframe, 0, 2));
+        builder.CreateStore(builder.CreateLoad
+                            (builder.CreateLoad(jlpgcstack_var, false), false),
+                            builder.CreateConstGEP2_32(gcframe, 0, 3));
+        builder.CreateStore(gcframe,
+                            builder.CreateLoad(jlpgcstack_var, false));
+        // initialize stack roots to null
+        for(i=0; i < (size_t)n_roots; i++) {
+            Value *argTempi = builder.CreateConstGEP1_32(ctx.argTemp,i);
+            builder.CreateStore(V_null, argTempi);
+        }
+#endif
+    }
+    else {
+        ctx.argTemp = NULL;
+    }
 
     // get pointers for locals stored in the gc frame array (argTemp)
     int varnum = argdepth;
@@ -1770,8 +1793,10 @@ static void emit_function(jl_lambda_info_t *lam, Function *f)
             Value *retval = boxed(emit_expr(jl_exprarg(ex,0), &ctx, true));
 #ifdef JL_GC_MARKSWEEP
             // JL_GC_POP();
-            builder.CreateStore(builder.CreateLoad(builder.CreateConstGEP2_32(gcframe, 0, 3), false),
-                                builder.CreateLoad(jlpgcstack_var, false));
+            if (n_roots > 0) {
+                builder.CreateStore(builder.CreateLoad(builder.CreateConstGEP2_32(gcframe, 0, 3), false),
+                                    builder.CreateLoad(jlpgcstack_var, false));
+            }
 #endif
             builder.CreateRet(retval);
             if (i != stmts->length-1) {
