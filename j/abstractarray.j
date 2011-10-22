@@ -76,6 +76,23 @@ one{T}(x::AbstractArray{T,2}) = (m=size(x,1); n=size(x,2);
                           a)
 zero{T}(x::AbstractArray{T,2}) = zeros(T,size(x))
 
+## Conversions ##
+
+int8   (x::AbstractArray) = copy_to(similar(x,Int8)  , x)
+uint8  (x::AbstractArray) = copy_to(similar(x,Uint8) , x)
+int16  (x::AbstractArray) = copy_to(similar(x,Int16) , x)
+uint16 (x::AbstractArray) = copy_to(similar(x,Uint16), x)
+int32  (x::AbstractArray) = copy_to(similar(x,Int32) , x)
+uint32 (x::AbstractArray) = copy_to(similar(x,Uint32), x)
+int64  (x::AbstractArray) = copy_to(similar(x,Int64) , x)
+uint64 (x::AbstractArray) = copy_to(similar(x,Uint64), x)
+bool   (x::AbstractArray) = copy_to(similar(x,Bool)  , x)
+char   (x::AbstractArray) = copy_to(similar(x,Char)  , x)
+float32{T}(x::AbstractArray{T}) =
+    copy_to(similar(x,typeof(float32(zero(T)))), x)
+float64{T}(x::AbstractArray{T}) =
+    copy_to(similar(x,typeof(float64(zero(T)))), x)
+
 ## Unary operators ##
 
 conj{T <: Real}(x::AbstractArray{T}) = x

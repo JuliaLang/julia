@@ -673,6 +673,10 @@ function clotest()
     dec()
     @assert c == 1
     @assert (()->c)() == 1
+
+    fibb(n) = n < 2 ? n : fibb(n-1)+fibb(n-2)
+    assert(fibb(10)==55)
+
     return (n->(c+=n), ()->c)
 end
 let T = clotest()

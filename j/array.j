@@ -99,19 +99,6 @@ linspace(start::Real, stop::Real) = [ i | i=start:stop ]
 convert{T,n}(::Type{Array{T,n}}, x::Array{T,n}) = x
 convert{T,n,S}(::Type{Array{T,n}}, x::Array{S,n}) = copy_to(similar(x,T), x)
 
-int8   {T,n}(x::Array{T,n}) = convert(Array{Int8   ,n}, x)
-uint8  {T,n}(x::Array{T,n}) = convert(Array{Uint8  ,n}, x)
-int16  {T,n}(x::Array{T,n}) = convert(Array{Int16  ,n}, x)
-uint16 {T,n}(x::Array{T,n}) = convert(Array{Uint16 ,n}, x)
-int32  {T,n}(x::Array{T,n}) = convert(Array{Int32  ,n}, x)
-uint32 {T,n}(x::Array{T,n}) = convert(Array{Uint32 ,n}, x)
-int64  {T,n}(x::Array{T,n}) = convert(Array{Int64  ,n}, x)
-uint64 {T,n}(x::Array{T,n}) = convert(Array{Uint64 ,n}, x)
-bool   {T,n}(x::Array{T,n}) = convert(Array{Bool   ,n}, x)
-char   {T,n}(x::Array{T,n}) = convert(Array{Char   ,n}, x)
-float32{T,n}(x::Array{T,n}) = convert(Array{typeof(float32(zero(T))),n}, x)
-float64{T,n}(x::Array{T,n}) = convert(Array{typeof(float64(zero(T))),n}, x)
-
 ## Indexing: ref ##
 
 ref(a::Array, i::Index) = arrayref(a,i)

@@ -81,14 +81,15 @@ function defaultdist(distdim, dims, np)
     end
 end
 
-function myindexes(d::DArray)
-    p = d.localpiece
+function pieceindexes(d::DArray, p)
     if p == 0
         return ntuple(ndims(d), i->(i==d.distdim ? (1:0) : 1:size(d,i)))
     end
     ntuple(ndims(d), i->(i==d.distdim ? (d.dist[p]:d.dist[p+1]-1) :
                                         1:size(d,i)))
 end
+
+myindexes(d::DArray) = pieceindexes(d, d.localpiece)
 
 function myindexes(s::SubDArray, locl)
     d = s.parent
@@ -248,6 +249,26 @@ similar(d::DArray, T::Type, dims::Dims) =
 
 copy{T}(d::DArray{T}) =
     darray((T,lsz,da)->copy(localize(d)), T, size(d), d.distdim,d.pmap,d.dist)
+
+function copy_to(d::DArray, src::DArray)
+    @sync begin
+        for p = d.pmap
+            @spawnat p copy_to(localize(d), src[myindexes(d)...])
+        end
+    end
+    return d
+end
+
+function copy_to(d::DArray, src::AbstractArray)
+    @sync begin
+        for i = 1:length(d.pmap)
+            p = d.pmap[i]
+            block = src[pieceindexes(d, i)...]
+            @spawnat p copy_to(localize(d), block)
+        end
+    end
+    return d
+end
 
 dzeros(args...)  = darray((T,d,da)->zeros(T,d), args...)
 dones(args...)   = darray((T,d,da)->ones(T,d), args...)

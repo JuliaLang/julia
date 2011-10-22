@@ -18,8 +18,8 @@ end
 @jl_blas_copy_macro :zcopy_ Complex128
 @jl_blas_copy_macro :ccopy_ Complex64
 
-bcopy_to{T<:Union(Float64,Float32,Complex128,Complex64)}(dest::Ptr{T}, src::Ptr{T}, n::Int) =
-    jl_blas_copy(n, src, 1, dest, 1)
+#bcopy_to{T<:Union(Float64,Float32,Complex128,Complex64)}(dest::Ptr{T}, src::Ptr{T}, n::Int) =
+#    jl_blas_copy(n, src, 1, dest, 1)
 
 function copy_to{T<:Union(Float64,Float32,Complex128,Complex64)}(dest::Ptr{T}, src::Ptr{T}, n::Int)
     if n < 200
