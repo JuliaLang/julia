@@ -9,11 +9,11 @@
 
 
 <a name="The-Julia-Language"/>
-## The Julia Language
+## Julia
 
 Julia is a high-level, high-performance dynamic language for numerical and scientific computing.
-It provides a sophisticated compiler, distributed parallel execution, and numerical accuracy.
-It also has easy interfaces to mature, best-of-breed C and Fortran libraries for technical computing tasks such as matrix math, random number generation, fast Fourier transforms, and string processing.
+It strives to provide a state-of-the-art compiler, built-in distributed parallel execution, numerical accurarcy, and a robust library of functions for technical computing.
+The library, largely written in julia itself, also integrates mature, best-of-breed C and Fortran libraries for linear algebra, random number generation, FFTs, and string processing. More libraries continue to be added over time.
 Key language features include multiple dispatch, optional typing, and excellent performance through type inference and just-in-time (JIT) compilation.
 For a more in-depth discussion of the rationale and advantages of Julia over other systems, see the following highlights or read the [introduction](https://github.com/JuliaLang/julia/wiki/Introduction) in the [manual](https://github.com/JuliaLang/julia/wiki/).
 
