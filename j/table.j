@@ -97,9 +97,23 @@ type HashTable{K,V}
     HashTable(n) = (n = _tablesz(n);
                     new(Array(K,n), Array(V,n), IntSet(n+1), IntSet(n+1),
                         identity))
+    function HashTable(ks::Tuple, vs::Tuple)
+        n = length(ks)
+        h = HashTable{K,V}(n)
+        for i=1:n
+            h[ks[i]] = vs[i]
+        end
+        return h
+    end
 end
 HashTable() = HashTable(0)
 HashTable(n::Int) = HashTable{Any,Any}(n)
+
+# syntax entry point
+hashtable{K,V}(ks::(K...), vs::(V...)) = HashTable{K,V}    (ks, vs)
+hashtable{K}  (ks::(K...), vs::Tuple ) = HashTable{K,Any}  (ks, vs)
+hashtable{V}  (ks::Tuple , vs::(V...)) = HashTable{Any,V}  (ks, vs)
+hashtable     (ks::Tuple , vs::Tuple)  = HashTable{Any,Any}(ks, vs)
 
 hashindex(key, sz) = (long(hash(key)) & (sz-1)) + 1
 
