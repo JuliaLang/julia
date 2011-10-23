@@ -277,17 +277,17 @@ end
 alignment(x::Any) = (0, strlen(show_to_string(x)))
 alignment(x::Number) = (strlen(show_to_string(x)), 0)
 function alignment(x::Real)
-    m = match(Regex(L"^(.*?)((?:[\.eE].*)?)$"), show_to_string(x))
+    m = match(r"^(.*?)((?:[\.eE].*)?)$", show_to_string(x))
     m == nothing ? (strlen(show_to_string(x)), 0) :
                    (strlen(m.captures[1]), strlen(m.captures[2]))
 end
 function alignment(x::Complex)
-    m = match(Regex(L"^(.*?)( [\+-] .*)$"), show_to_string(x))
+    m = match(r"^(.*?)( [\+-] .*)$", show_to_string(x))
     m == nothing ? (strlen(show_to_string(x)), 0) :
                    (strlen(m.captures[1]), strlen(m.captures[2]))
 end
 function alignment(x::Rational)
-    m = match(Regex(L"^(.*?/)(/.*)$"), show_to_string(x))
+    m = match(r"^(.*?/)(/.*)$", show_to_string(x))
     m == nothing ? (strlen(show_to_string(x)), 0) :
                    (strlen(m.captures[1]), strlen(m.captures[2]))
 end

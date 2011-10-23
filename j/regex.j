@@ -5,7 +5,7 @@ load("pcre.j")
 type Regex
     pattern::ByteString
     options::Int32
-    regex::Ptr{Void}
+    regex::Array{Uint8}
     extra::Ptr{Void}
 
     function Regex(pat::String, opts::Int, study::Bool)
@@ -14,13 +14,13 @@ type Regex
             error("invalid regex option(s)")
         end
         re = pcre_compile(pat, opts & PCRE_COMPILE_MASK)
-        ex = study ? pcre_study(re, 0) : C_NULL
+        ex = study ? pcre_study(re) : C_NULL
         new(pat, opts, re, ex)
     end
 end
 Regex(p::String, s::Bool) = Regex(p, 0, s)
-Regex(p::String, o::Int)  = Regex(p, o, true)
-Regex(p::String)          = Regex(p, 0, true)
+Regex(p::String, o::Int)  = Regex(p, o, false)
+Regex(p::String)          = Regex(p, 0, false)
 
 # TODO: make sure thing are escaped in a way PCRE
 # likes so that Julia all the Julia string quoting
@@ -90,11 +90,11 @@ function show(m::RegexMatch)
     print(")")
 end
 
-matches(r::Regex, s::String, o::Int) = pcre_exec(r.regex, C_NULL, cstring(s), 1, o, false)
+matches(r::Regex, s::String, o::Int) = pcre_exec(r.regex, r.extra, cstring(s), 1, o, false)
 matches(r::Regex, s::String) = matches(r, s, r.options & PCRE_EXECUTE_MASK)
 
 function match(re::Regex, str::ByteString, offset::Int, opts::Int)
-    m, n = pcre_exec(re.regex, C_NULL, str, offset, opts, true)
+    m, n = pcre_exec(re.regex, re.extra, str, offset, opts, true)
     if isempty(m); return nothing; end
     mat = str[m[1]+1:m[2]]
     cap = ntuple(n, i->(m[2i+1] < 0 ? nothing : str[m[2i+1]+1:m[2i+2]]))
@@ -113,8 +113,8 @@ end
 
 start(itr::RegexMatchIterator) = match(itr.regex, itr.string)
 done(itr::RegexMatchIterator, m) = m == nothing
-next(itr::RegexMatchIterator, m) = (m, match(itr.regex, itr.string,
-                                             m.offset + (itr.overlap ? 1 : length(m.match))))
+next(itr::RegexMatchIterator, m) =
+    (m, match(itr.regex, itr.string, m.offset + (itr.overlap ? 1 : length(m.match))))
 
 each_match(r::Regex, s::String) = RegexMatchIterator(r,s,false)
 each_match_overlap(r::Regex, s::String) = RegexMatchIterator(r,s,true)

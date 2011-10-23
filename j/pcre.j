@@ -49,34 +49,10 @@ PCRE_COMPILE_MASK = (|)(PCRE_COMPILE_OPTIONS...)
 PCRE_EXECUTE_MASK = (|)(PCRE_EXECUTE_OPTIONS...)
 PCRE_OPTIONS_MASK = PCRE_COMPILE_MASK | PCRE_EXECUTE_MASK
 
-function pcre_compile(pattern::String, options::Int)
-    errstr = Array(Ptr{Uint8},1)
-    erroff = Array(Int32,1)
-    regex = (()->ccall(dlsym(libpcre, :pcre_compile), Ptr{Void},
-                       (Ptr{Uint8}, Int32, Ptr{Ptr{Uint8}}, Ptr{Int32}, Ptr{Uint8}),
-                       cstring(pattern), int32(options), errstr, erroff, C_NULL))()
-    if regex == C_NULL
-        error("pcre_compile: $(errstr[1])",
-              " at position $(erroff[1]+1)",
-              " in $(quote_string(pattern))")
-    end
-    regex
-end
-
-# NOTE: options should always be zero in current PCRE
-
-function pcre_study(regex::Ptr{Void}, options::Int)
-    errstr = Array(Ptr{Uint8},1)
-    extra = (()->ccall(dlsym(libpcre, :pcre_study), Ptr{Void},
-                       (Ptr{Void}, Int32, Ptr{Ptr{Uint8}}),
-                       regex, int32(options), errstr))()
-    if errstr[1] != C_NULL
-        error("pcre_study: $(errstr[1])")
-    end
-    extra
-end
-
-function pcre_info{T}(regex::Ptr{Void}, extra::Ptr{Void}, what::Int, ::Type{T})
+function pcre_info{T}(
+    regex::Union(Ptr{Void},Vector{Uint8}),
+    extra::Ptr{Void}, what::Int, ::Type{T}
+)
     buf = Array(Uint8,sizeof(T))
     ret = ccall(dlsym(libpcre, :pcre_fullinfo), Int32,
                 (Ptr{Void}, Ptr{Void}, Int32, Ptr{Uint8}),
@@ -91,7 +67,37 @@ function pcre_info{T}(regex::Ptr{Void}, extra::Ptr{Void}, what::Int, ::Type{T})
     reinterpret(T,buf)[1]
 end
 
-function pcre_exec(regex::Ptr{Void}, extra::Ptr{Void},
+function pcre_compile(pattern::String, options::Int)
+    errstr = Array(Ptr{Uint8},1)
+    erroff = Array(Int32,1)
+    re_ptr = (()->ccall(dlsym(libpcre, :pcre_compile), Ptr{Void},
+                       (Ptr{Uint8}, Int32, Ptr{Ptr{Uint8}}, Ptr{Int32}, Ptr{Uint8}),
+                       cstring(pattern), int32(options), errstr, erroff, C_NULL))()
+    if re_ptr == C_NULL
+        error("pcre_compile: $(errstr[1])",
+              " at position $(erroff[1]+1)",
+              " in $(quote_string(pattern))")
+    end
+    size = pcre_info(re_ptr, C_NULL, PCRE_INFO_SIZE, Int32)
+    regex = Array(Uint8,size)
+    ccall(:memcpy, Ptr{Void}, (Ptr{Void}, Ptr{Void}, Ulong), regex, re_ptr, ulong(size))
+    regex
+end
+
+function pcre_study(regex::Array{Uint8}, options::Int)
+    # NOTE: options should always be zero in current PCRE
+    errstr = Array(Ptr{Uint8},1)
+    extra = (()->ccall(dlsym(libpcre, :pcre_study), Ptr{Void},
+                       (Ptr{Void}, Int32, Ptr{Ptr{Uint8}}),
+                       regex, int32(options), errstr))()
+    if errstr[1] != C_NULL
+        error("pcre_study: $(errstr[1])")
+    end
+    extra
+end
+pcre_study(re::Array{Uint8}) = pcre_study(re, int32(0))
+
+function pcre_exec(regex::Array{Uint8}, extra::Ptr{Void},
                    str::ByteString, offset::Int, options::Int, cap::Bool)
     ncap = pcre_info(regex, extra, PCRE_INFO_CAPTURECOUNT, Int32)
     ovec = Array(Int32, 3(ncap+1))

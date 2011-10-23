@@ -54,7 +54,7 @@ function next(::EnvHash, i)
         error("environ: index out of range")
     end
     env::ByteString
-    m = match(Regex(L"^(.*?)=(.*)$"), env)
+    m = match(r"^(.*?)=(.*)$", env)
     if m == nothing
         error("malformed environment entry: $env")
     end
