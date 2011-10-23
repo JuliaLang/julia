@@ -38,8 +38,7 @@ The following [benchmarks](https://github.com/JuliaLang/julia/blob/master/test/p
 
           Figure: benchmark time (ms) across various programming system versions.
 
-Julia beats other high-level systems on all benchmarks — by orders of magnitude on most tests.
-Moreover, it comes within a factor of two of heavily optimized, well-written C++ on all but two tests, and is never more than four times as slow.
+Julia beats other high-level systems on all micro-benchmarks above. It also comes within a factor of two of heavily optimized, well-written C++ on all but two tests, and is never more than four times as slow.
 Relative performance between languages on other systems, including Linux, is similar.
 These benchmarks, while not comprehensive, do test compiler performance on a range of common code patterns, such as function calls, string parsing, sorting, numerical loops, random number generation, and array operations.
 Typical performance relative to C++ exhibits similar characteristics:
