@@ -10,7 +10,7 @@ type VersionNumber
         if major < 0; error("invalid major version: $major"); end
         if minor < 0; error("invalid minor version: $minor"); end
         if patch < 0; error("invalid patch version: $patch"); end
-        if !matches(r"^(?:[a-z-][0-9a-z-]*)?$", suffix)
+        if !matches(ri"^(?:[a-z-][0-9a-z-]*)?$", suffix)
             error("invalid version suffix: $suffix")
         end
         new(major, minor, patch, suffix)
@@ -22,7 +22,8 @@ VersionNumber(x::Int, y::Int, z::Int)    = VersionNumber(x, y, z, "")
 VersionNumber(x::Int, y::Int)            = VersionNumber(x, y, 0, "")
 VersionNumber(x::Int)                    = VersionNumber(x, 0, 0, "")
 
-show(v::VersionNumber) = print("$(v.major).$(v.minor).$(v.patch)$(v.suffix)")
+print(v::VersionNumber) = print("$(v.major).$(v.minor).$(v.patch)$(v.suffix)")
+show(v::VersionNumber) = print("v\"", v, "\"")
 
 convert(::Type{VersionNumber}, v::Int) = VersionNumber(v)
 convert(::Type{VersionNumber}, v::Tuple) = VersionNumber(v...)
@@ -39,10 +40,13 @@ function convert(::Type{VersionNumber}, v::String)
     VersionNumber(major, minor, patch, suffix)
 end
 
+macro v_str(v); convert(VersionNumber, v); end
+
 <(a::VersionNumber, b::VersionNumber) =
     a.major < b.major || a.major == b.major &&
     (a.minor < b.minor || a.minor == b.minor &&
-     (a.patch < b.patch || a.patch == b.patch && a.suffix < b.suffix))
+     (a.patch < b.patch || a.patch == b.patch &&
+      (!isempty(a.suffix) && (isempty(b.suffix) || a.suffix < b.suffix))))
 
 ==(a::VersionNumber, b::VersionNumber) =
     a.major == b.major && a.minor == b.minor &&
