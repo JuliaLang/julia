@@ -831,16 +831,13 @@ hvcat(rows::(Size...)) = []
 function hvcat{T<:Number}(rows::(Size...), xs::T...)
     nr = length(rows)
     nc = rows[1]
-    #error check
-    for i = 2:nr
-        if nc != rows[i]
-            error("hvcat: row ", i, " has mismatched number of columns")
-        end
-    end
 
     a = Array(T, nr, nc)
     k = 1
     for i=1:nr
+        if nc != rows[i]
+            error("hvcat: row ", i, " has mismatched number of columns")
+        end
         for j=1:nc
             a[i,j] = xs[k]
             k += 1
@@ -1394,7 +1391,7 @@ function find{T}(A::AbstractMatrix{T})
     J = zeros(Size, nnzA)
     z = zero(T)
     count = 1
-    for i=1:size(A,1), j=1:size(A,2)
+    for j=1:size(A,2), i=1:size(A,1)
         if A[i,j] != z
             I[count] = i
             J[count] = j

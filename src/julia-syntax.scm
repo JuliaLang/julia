@@ -707,10 +707,7 @@
 
    ;; cell array syntax
    (pattern-lambda (cell1d . args)
-		   (cond ((any (lambda (e) (and (pair? e) (eq? (car e) '...)))
-			       args)
-			  `(call (top cell_1d) ,@args))
-			 ((any (lambda (e) (and (length= e 3)
+		   (cond ((any (lambda (e) (and (length= e 3)
 						(eq? (car e) '=>)))
 			       args)
 			  (if (not (every (lambda (e) (and (length= e 3)
@@ -720,6 +717,9 @@
 			      `(call (top hashtable)
 				     (tuple ,@(map cadr  args))
 				     (tuple ,@(map caddr args)))))
+			 ((any (lambda (e) (and (pair? e) (eq? (car e) '...)))
+			       args)
+			  `(call (top cell_1d) ,@args))
 			 (else
 			  (let ((name (gensy)))
 			    `(block (= ,name (call (top Array) (top Any)
