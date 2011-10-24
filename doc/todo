@@ -820,3 +820,25 @@ static int n_assi=0;  // 18926
 static int n_ret=0;   // 11827
 static int n_goti=0;  // 6286
 static int n_goto=0;  // 6227
+
+-------------------------------------------------------------------------------
+
+idea for symbolic optimizations:
+basically compile-time method definitions. this is a generalization of
+inlining, where instead of inserting the matched function's body you insert
+the result of calling an arbitrary function. normal inlining is then
+equivalent to having a default version of this function that looks up and
+returns the appropriate function body.
+
+example:
+
+staged function vcat{T<:Number}(xs::T...)
+    n = length(xs)
+    ar = gensym()
+    inits = { :(($ar)[i] = $(xs[i])) | i=1:n }
+    quote
+        ($ar) = Array($T, $n)
+        $(inits...)
+	$ar
+    end
+end

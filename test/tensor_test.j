@@ -1,8 +1,8 @@
 #Array test
 
-## find ##
+## findn ##
 
-b = find(ones(2,2,2,2))
+b = findn(ones(2,2,2,2))
 @assert (length(b[1]) == 16)
 @assert (length(b[2]) == 16)
 @assert (length(b[3]) == 16)
@@ -14,7 +14,7 @@ z = zeros(2,2,2)
 for i = 1:3
     z[a[1][i],a[2][i],a[3][i]] = 10
 end
-@assert isequal(a,find(z))
+@assert isequal(a,findn(z))
 
 
 ## permute ##

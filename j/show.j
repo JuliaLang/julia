@@ -500,7 +500,8 @@ function show_nd(a::AbstractArray)
         print("[:, :, ")
         for i = 1:(nd-1); print("$(idxs[i]), "); end
         println(idxs[end], "] =")
-        print_matrix(squeeze(a[:,:,idxs...]))
+        slice = a[:,:,idxs...]
+        print_matrix(reshape(slice, size(slice,1), size(slice,2)))
         print(idxs == tail ? "" : "\n\n")
     end
     cartesian_map(print_slice, map(x->Range1(1,x), tail))
