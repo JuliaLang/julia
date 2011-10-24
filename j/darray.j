@@ -750,10 +750,13 @@ function map_vectorized(f, A::SubOrDArray)
            T, size(A), distdim(A), procmap(A))
 end
 
-for f = (:ceil, :floor, :trunc, :round, :iround, :itrunc,
-         :sqrt, :cbrt, :sin, :cos, :tan, :sinh, :cosh, :tanh,
-         :asin, :acos, :atan,
-         :log, :log2, :exp, :expm1)
+for f = (:ceil,   :floor,  :trunc,  :round,
+         :iceil,  :ifloor, :itrunc, :iround,
+         :sqrt,   :cbrt,   :log,    :log2,   :exp,   :expm1,
+         :sin,    :cos,    :tan,    :cot,    :sec,   :csc,
+         :sinh,   :cosh,   :tanh,   :coth,   :sech,  :csch,
+         :asin,   :acos,   :atan,   :acot,   :asec,  :acsc,
+         :acoth,  :asech,  :acsch,  :sinc,   :cosc,  :atan2)
     @eval ($f)(A::SubOrDArray) = map_vectorized($f, A)
 end
 

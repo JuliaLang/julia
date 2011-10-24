@@ -103,24 +103,9 @@ $(jl)|__/$(tx)                   |
 
 \033[0m"
 
-function color_available()
-    if run(`tput setaf 0`)
-        return true
-    end
-    if has(ENV, "TERM")
-        term = ENV["TERM"]
-        return term=="xterm" || term=="xterm-color"
-    end
-    false
-end
+color_available() =
+    run(`tput setaf 0`) || has(ENV, "TERM") && matches(r"^xterm", ENV["TERM"])
 
-function banner()
-    if color_available()
-        print(jl_banner_color)
-    else
-        print(jl_banner_plain)
-    end
-end
+banner() = print(color_available() ? jl_banner_color : jl_banner_plain)
 
 end # begin
-

@@ -126,11 +126,15 @@ signed(x::Uint16) = convert(Int16, x)
 signed(x::Uint32) = convert(Int32, x)
 signed(x::Uint64) = convert(Int64, x)
 
-round(x::Int)  = x
+round(x::Int) = x
+trunc(x::Int) = x
+floor(x::Int) = x
+ceil(x::Int)  = x
+
 iround(x::Int) = x
-trunc(x::Int)  = x
-floor(x::Int)  = x
-ceil(x::Int)   = x
+itrunc(x::Int) = x
+ifloor(x::Int) = x
+iceil(x::Int)  = x
 
 ## integer promotions ##
 

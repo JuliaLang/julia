@@ -55,4 +55,6 @@ end
 
 @vectorize_1arg Real iround
 @vectorize_1arg Real itrunc
+@vectorize_1arg Real ifloor
+@vectorize_1arg Real iceil
 @vectorize_1arg Number abs

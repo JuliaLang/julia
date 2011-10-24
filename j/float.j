@@ -1,10 +1,4 @@
-## floating point conversions ##
-
-iround(x::Float32) = boxsi32(fpiround32(unbox32(x)))
-iround(x::Float64) = boxsi64(fpiround64(unbox64(x)))
-
-itrunc(x::Float32) = boxsi32(fptosi32(unbox32(x)))
-itrunc(x::Float64) = boxsi64(fptosi64(unbox64(x)))
+## conversions to floating-point ##
 
 convert(::Type{Float32}, x::Bool)    = boxf32(sitofp32(unbox8(x)))
 convert(::Type{Float32}, x::Int8)    = boxf32(sitofp32(unbox8(x)))
@@ -44,6 +38,20 @@ convert(::Type{Float}, x::Uint64)  = convert(Float64, x) # LOSSY
 float32(x) = convert(Float32, x)
 float64(x) = convert(Float64, x)
 float(x)   = convert(Float,   x)
+
+## conversions from floating-point ##
+
+iround(x::Float32) = boxsi32(fpiround32(unbox32(x)))
+iround(x::Float64) = boxsi64(fpiround64(unbox64(x)))
+itrunc(x::Float32) = boxsi32(fptosi32(unbox32(x)))
+itrunc(x::Float64) = boxsi64(fptosi64(unbox64(x)))
+
+iceil(x::Float)  = int(ceil(x))  # TODO: fast primitive for iceil
+ifloor(x::Float) = int(floor(x)) # TOOD: fast primitive for ifloor
+
+convert(::Type{Int},   x::Float) = iround(x)
+convert(::Type{Int32}, x::Float) = float32(iround(x))
+convert(::Type{Int64}, x::Float) = float64(iround(x))
 
 ## floating point promotions ##
 
