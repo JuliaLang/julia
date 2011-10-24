@@ -1385,7 +1385,7 @@ function accumarray(I::Indices, J::Indices, V::AbstractVector, m::Size, n::Size)
     return A
 end
 
-function find{T}(A::AbstractVector{T})
+function find{T}(A::AbstractArray{T})
     nnzA = nnz(A)
     I = zeros(Size, nnzA)
     z = zero(T)
@@ -1399,7 +1399,9 @@ function find{T}(A::AbstractVector{T})
     return I
 end
 
-function find{T}(A::AbstractMatrix{T})
+findn(A::AbstractVector) = find(A)
+
+function findn{T}(A::AbstractMatrix{T})
     nnzA = nnz(A)
     I = zeros(Size, nnzA)
     J = zeros(Size, nnzA)
@@ -1415,8 +1417,8 @@ function find{T}(A::AbstractMatrix{T})
     return (I, J)
 end
 
-let find_cache = nothing
-function find_one(ivars)
+let findn_cache = nothing
+function findn_one(ivars)
     s = { quote I[$i][count] = $ivars[i] end | i = 1:length(ivars)}
     quote
 	Aind = A[$(ivars...)]
@@ -1427,18 +1429,18 @@ function find_one(ivars)
     end
 end
 
-global find
-function find{T}(A::AbstractArray{T})
+global findn
+function findn{T}(A::AbstractArray{T})
     ndimsA = ndims(A)
     nnzA = nnz(A)
     I = ntuple(ndimsA, x->zeros(Size, nnzA))
     ranges = ntuple(ndims(A), d->(1:size(A,d)))
 
-    if is(find_cache,nothing)
-        find_cache = HashTable()
+    if is(findn_cache,nothing)
+        findn_cache = HashTable()
     end
 
-    gen_cartesian_map(find_cache, find_one, ranges,
+    gen_cartesian_map(findn_cache, findn_one, ranges,
                       (:A, :I, :count, :z), A,I,1, zero(T))
     return I
 end
