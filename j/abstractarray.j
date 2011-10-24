@@ -706,12 +706,13 @@ function cat(catdim::Int, X...)
     typeC = promote_type(ntuple(nargs, i->isa(X[i],AbstractArray) ? typeof(X[i]).parameters[1] : typeof(X[i]))...)
     C = similar(isa(X[1],AbstractArray) ? X[1] : [X[1]], typeC, dimsC)
 
-    cat_ranges = cumsum(1, cat_ranges...)::(Size...)
+    range = 1
     for k=1:nargs
+        nextrange = range+cat_ranges[k]
         cat_one = ntuple(ndimsC, i->(i != catdim ?
-                                     Range1(1,dimsC[i]) :
-                                     Range1(cat_ranges[k],cat_ranges[k+1]-1) ))
+                                     (1:dimsC[i]) : (range:nextrange-1) ))
         C[cat_one...] = X[k]
+        range = nextrange
     end
     return C
 end
@@ -768,12 +769,13 @@ function cat(catdim::Int, A::AbstractArray...)
     typeC = promote_type(ntuple(nargs, i->typeof(A[i]).parameters[1])...)
     C = similar(A[1], typeC, dimsC)
 
-    cat_ranges = cumsum(1, cat_ranges...)::(Size...)
+    range = 1
     for k=1:nargs
+        nextrange = range+cat_ranges[k]
         cat_one = ntuple(ndimsC, i->(i != catdim ?
-                                     Range1(1,dimsC[i]) :
-                                     Range1(cat_ranges[k],cat_ranges[k+1]-1) ))
+                                     (1:dimsC[i]) : (range:nextrange-1) ))
         C[cat_one...] = A[k]
+        range = nextrange
     end
     return C
 end
@@ -1050,7 +1052,7 @@ end
 function sum{T}(A::AbstractArray{T})
     v = zero(T)
     for i=1:numel(A)
-        v = sum(v,A[i])
+        v += A[i]
     end
     v
 end
@@ -1058,15 +1060,15 @@ end
 function prod{T}(A::AbstractArray{T})
     v = one(T)
     for i=1:numel(A)
-        v = prod(v,A[i])
+        v *= A[i]
     end
     v
 end
 
-max{T}(A::AbstractArray{T}, region::Region) = areduce(max,  A, region,
-                                                      typemin(T), T)
-min{T}(A::AbstractArray{T}, region::Region) = areduce(min,  A, region,
-                                                      typemax(T), T)
+max{T}(A::AbstractArray{T}, b::(), region::Region) = areduce(max,  A, region,
+                                                             typemin(T), T)
+min{T}(A::AbstractArray{T}, b::(), region::Region) = areduce(min,  A, region,
+                                                             typemax(T), T)
 sum{T}(A::AbstractArray{T}, region::Region) = areduce(+,  A, region, zero(T))
 prod{T}(A::AbstractArray{T}, region::Region) = areduce(*, A, region, one(T))
 
@@ -1087,7 +1089,7 @@ function isequal(x::AbstractArray, y::AbstractArray)
     return true
 end
 
-for (f, op) = ((:cumsum, :+), (:cumprod, :(.*)) )
+for (f, op) = ((:cumsum, :+), (:cumprod, :*) )
     @eval function ($f)(v::AbstractVector)
         n = length(v)
         c = similar(v, n)
@@ -1459,13 +1461,17 @@ ind2sub(dims::(Int,Int), ind::Int) =
 
 function ind2sub(dims, ind::Int)
     ndims = length(dims)
-    x = cumprod(dims)
+    stride = dims[1]
+    for i=2:ndims-1
+        stride *= dims[i]
+    end
 
     sub = ()
     for i=(ndims-1):-1:1
-        rest = rem(ind-1, x[i]) + 1
-        sub = tuple(div(ind - rest, x[i]) + 1, sub...)
+        rest = rem(ind-1, stride) + 1
+        sub = tuple(div(ind - rest, stride) + 1, sub...)
         ind = rest
+        stride = div(stride, dims[i])
     end
     return tuple(ind, sub...)
 end

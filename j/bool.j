@@ -18,10 +18,17 @@ isequal(x::Bool, y::Bool) = eq_int(unbox8(x),unbox8(y))
 (|)(x::Bool, y::Bool) = (x||y)
 ($)(x::Bool, y::Bool) = (x!=y)
 
+any() = false
+all() = true
+count() = 0
+
 any(x::Bool)  = x
 all(x::Bool)  = x
 count(x::Bool) = (x ? 1 : 0)
 
-any(x::Bool, y::Bool) = x || y ? true : false
-all(x::Bool, y::Bool) = x && y ? true : false
+any(x::Bool, y::Bool) = x || y
+all(x::Bool, y::Bool) = x && y
 count(x::Bool, y::Bool) = count(x) + count(y)
+
+count(x::Int, y::Bool) = x + count(y)
+count(x::Bool, y::Int) = count(x) + y

@@ -26,6 +26,8 @@ isequal(x::Number, y::Number) = (x==y)
 &() = error("zero-argument & is ambiguous")
 |() = error("zero-argument | is ambiguous")
 ($)() = error("zero-argument \$ is ambiguous")
+max() = -Inf
+min() = +Inf
 
 +(x::Number) = x
 *(x::Number) = x
@@ -33,7 +35,7 @@ isequal(x::Number, y::Number) = (x==y)
 |(x::Int) = x
 ($)(x::Int) = x
 
-for op = (:+, :*, :&, :|, :$)
+for op = (:+, :*, :&, :|, :$, :min, :max)
     @eval begin
         ($op)(a,b,c) = ($op)(($op)(a,b),c)
         ($op)(a,b,c,d) = ($op)(($op)(($op)(a,b),c),d)
