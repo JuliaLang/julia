@@ -1034,32 +1034,44 @@ end
 end
 
 function max{T}(A::AbstractArray{T})
-    v = typemin(T)
-    for i=1:numel(A)
+    if isempty(A)
+        return typemin(T)
+    end
+    v = A[1]
+    for i=2:numel(A)
         v = max(v,A[i])
     end
     v
 end
 
 function min{T}(A::AbstractArray{T})
-    v = typemax(T)
-    for i=1:numel(A)
+    if isempty(A)
+        return typemax(T)
+    end
+    v = A[1]
+    for i=2:numel(A)
         v = min(v,A[i])
     end
     v
 end
 
 function sum{T}(A::AbstractArray{T})
-    v = zero(T)
-    for i=1:numel(A)
+    if isempty(A)
+        return zero(T)
+    end
+    v = A[1]
+    for i=2:numel(A)
         v += A[i]
     end
     v
 end
 
 function prod{T}(A::AbstractArray{T})
-    v = one(T)
-    for i=1:numel(A)
+    if isempty(A)
+        return one(T)
+    end
+    v = A[1]
+    for i=2:numel(A)
         v *= A[i]
     end
     v
