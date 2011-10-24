@@ -28,7 +28,7 @@ show(v::VersionNumber) = print("v\"", v, "\"")
 convert(::Type{VersionNumber}, v::Int) = VersionNumber(v)
 convert(::Type{VersionNumber}, v::Tuple) = VersionNumber(v...)
 
-const VERSION_REGEX = r"^v?(\d+)(?:\.(\d+)(?:\.(\d+))?)?((?:[a-z-][0-9a-z-]*)?)$"
+const VERSION_REGEX = ri"^v?(\d+)(?:\.(\d+)(?:\.(\d+))?)?((?:[a-z-][0-9a-z-]*)?)$"
 
 function convert(::Type{VersionNumber}, v::String)
     m = match(VERSION_REGEX, v)
