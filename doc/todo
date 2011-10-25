@@ -842,3 +842,27 @@ staged function vcat{T<:Number}(xs::T...)
 	$ar
     end
 end
+
+-------------------------------------------------------------------------------
+
+optimization: hoisting method lookups. if a function argument f is always
+called on the same type we can hoist the lookup:
+
+function foo(f)
+  while something
+    f(x)
+  end
+end
+
+=>
+
+function foo(f)
+  m = getmethod(f,(typeof(x),))
+  while something
+    m(x)
+  end
+end
+
+-------------------------------------------------------------------------------
+
+- make getmethods return an array instead of linked tuples

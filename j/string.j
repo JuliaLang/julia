@@ -762,7 +762,7 @@ end
 
 function uint2str(n::Int, b::Int)
     if n < zero(n); error("uint2str: negative argument ", n); end
-    if b < 2; error("uint2str: invalid base ", b); end
+    if b < 2 || b > 40; error("uint2str: invalid base ", b); end
     b = convert(typeof(n), b)
     ndig = ndigits(n, b)
     sz = convert(Size, ndig)

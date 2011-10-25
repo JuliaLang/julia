@@ -756,7 +756,7 @@ for f = (:ceil,   :floor,  :trunc,  :round,
          :sin,    :cos,    :tan,    :cot,    :sec,   :csc,
          :sinh,   :cosh,   :tanh,   :coth,   :sech,  :csch,
          :asin,   :acos,   :atan,   :acot,   :asec,  :acsc,
-         :acoth,  :asech,  :acsch,  :sinc,   :cosc,  :atan2)
+         :acoth,  :asech,  :acsch,  :sinc,   :cosc)
     @eval ($f)(A::SubOrDArray) = map_vectorized($f, A)
 end
 

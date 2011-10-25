@@ -1,6 +1,19 @@
 ## reductions ##
 
 function reduce(op, itr)
+    if is(op,max)
+        return max(itr)
+    elseif is(op,min)
+        return min(itr)
+    elseif is(op,+)
+        return sum(itr)
+    elseif is(op,*)
+        return prod(itr)
+    elseif is(op,any)
+        return any(itr)
+    elseif is(op,all)
+        return all(itr)
+    end
     s = start(itr)
     if done(itr, s)
         return op()  # empty collection
@@ -13,10 +26,82 @@ function reduce(op, itr)
     return v
 end
 
+function max(itr)
+    s = start(itr)
+    if done(itr, s)
+        return typemin(eltype(itr))
+    end
+    (v, s) = next(itr, s)
+    while !done(itr, s)
+        (x, s) = next(itr, s)
+        v = max(v,x)
+    end
+    return v
+end
+
+function min(itr)
+    s = start(itr)
+    if done(itr, s)
+        return typemax(eltype(itr))
+    end
+    (v, s) = next(itr, s)
+    while !done(itr, s)
+        (x, s) = next(itr, s)
+        v = min(v,x)
+    end
+    return v
+end
+
+function sum(itr)
+    s = start(itr)
+    if done(itr, s)
+        return +()
+    end
+    (v, s) = next(itr, s)
+    while !done(itr, s)
+        (x, s) = next(itr, s)
+        v = v+x
+    end
+    return v
+end
+
+function prod(itr)
+    s = start(itr)
+    if done(itr, s)
+        return *()
+    end
+    (v, s) = next(itr, s)
+    while !done(itr, s)
+        (x, s) = next(itr, s)
+        v = v*x
+    end
+    return v
+end
+
 function reduce(op::Function, v0, itr)
     v = v0
-    for x = itr
-        v = op(v,x)
+    if is(op,max)
+        for x = itr
+            v = max(v,x)
+        end
+    elseif is(op,min)
+        for x = itr
+            v = min(v,x)
+        end
+    elseif is(op,+)
+        for x = itr
+            v = v+x
+        end
+    elseif is(op,*)
+        for x = itr
+            v = v*x
+        end
+    else
+        u = v0
+        for x = itr
+            u = op(u,x)
+        end
+        return u
     end
     return v
 end
@@ -36,17 +121,13 @@ function mapreduce(op, f, itr)
 end
 
 function mapreduce(op::Function, f::Function, v0, itr)
-    v = f(v0)
+    v = v0
     for x = itr
         v = op(v,f(x))
     end
     return v
 end
 
-max(itr)  = reduce(max, itr)
-min(itr)  = reduce(min, itr)
-sum(itr)  = reduce(+,   itr)
-prod(itr) = reduce(*,   itr)
 function any(itr)
     for x = itr
         if x
@@ -66,12 +147,13 @@ function all(itr)
 end
 all(args::Bool...) = all(args)
 
-max(f::Function, itr)  = mapreduce(max, f, itr)
-min(f::Function, itr)  = mapreduce(min, f, itr)
-sum(f::Function, itr)  = mapreduce(+,   f, itr)
-prod(f::Function, itr) = mapreduce(*,   f, itr)
-any(f::Function, itr)  = anyp(f, itr)
-all(f::Function, itr)  = allp(f, itr)
+max(f::Function, itr)   = mapreduce(max, f, itr)
+min(f::Function, itr)   = mapreduce(min, f, itr)
+sum(f::Function, itr)   = mapreduce(+,   f, itr)
+prod(f::Function, itr)  = mapreduce(*,   f, itr)
+any(f::Function, itr)   = anyp(f, itr)
+all(f::Function, itr)   = allp(f, itr)
+count(f::Function, itr) = countp(f, itr)
 
 function count(itr)
     c = 0

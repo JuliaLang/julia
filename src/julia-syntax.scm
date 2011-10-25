@@ -350,6 +350,7 @@
 		      (rewrite-ctor c name '() field-names))
 		    defs2)))
 	   (null))
+	 ;; parametric case
 	 `(block
 	   (const ,name)
 	   (= ,name

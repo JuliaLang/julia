@@ -1033,28 +1033,6 @@ function areduce(f::Function, A::AbstractArray, dim::Size, RType::Type)
 end
 end
 
-function max{T}(A::AbstractArray{T})
-    if isempty(A)
-        return typemin(T)
-    end
-    v = A[1]
-    for i=2:numel(A)
-        v = max(v,A[i])
-    end
-    v
-end
-
-function min{T}(A::AbstractArray{T})
-    if isempty(A)
-        return typemax(T)
-    end
-    v = A[1]
-    for i=2:numel(A)
-        v = min(v,A[i])
-    end
-    v
-end
-
 function sum{T}(A::AbstractArray{T})
     if isempty(A)
         return zero(T)
