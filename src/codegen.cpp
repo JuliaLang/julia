@@ -2086,9 +2086,9 @@ static void init_julia_llvm_env(Module *m)
     addPass(FPM, createInstructionCombiningPass()); // Cleanup for scalarrepl.
     addPass(FPM, createJumpThreadingPass());        // Thread jumps.
     addPass(FPM, createCFGSimplificationPass());    // Merge & remove BBs
-    addPass(FPM, createInstructionCombiningPass()); // Combine silly seq's
+    //addPass(FPM, createInstructionCombiningPass()); // Combine silly seq's
     
-    addPass(FPM, createCFGSimplificationPass());    // Merge & remove BBs
+    //addPass(FPM, createCFGSimplificationPass());    // Merge & remove BBs
     addPass(FPM, createReassociatePass());          // Reassociate expressions
     addPass(FPM, createLoopRotatePass());           // Rotate loops.
     addPass(FPM, createLICMPass());                 // Hoist loop invariants
@@ -2101,7 +2101,7 @@ static void init_julia_llvm_env(Module *m)
     
     addPass(FPM, createInstructionCombiningPass()); // Clean up after the unroller
     addPass(FPM, createGVNPass());                  // Remove redundancies
-    addPass(FPM, createMemCpyOptPass());            // Remove memcpy / form memset  
+    //addPass(FPM, createMemCpyOptPass());            // Remove memcpy / form memset  
     addPass(FPM, createSCCPPass());                 // Constant prop with SCCP
     
     // Run instcombine after redundancy elimination to exploit opportunities
