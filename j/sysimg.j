@@ -90,6 +90,7 @@ load("linalg_blas.j")
 load("linalg_lapack.j")
 load("linalg_arpack.j")
 load("fft.j")
+load("signal.j")
 
 # additional data types
 load("set.j")
