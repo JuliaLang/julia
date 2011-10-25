@@ -50,8 +50,8 @@ iceil(x::Float)  = int(ceil(x))  # TODO: fast primitive for iceil
 ifloor(x::Float) = int(floor(x)) # TOOD: fast primitive for ifloor
 
 convert(::Type{Int},   x::Float) = iround(x)
-convert(::Type{Int32}, x::Float) = float32(iround(x))
-convert(::Type{Int64}, x::Float) = float64(iround(x))
+convert(::Type{Int32}, x::Float) = int32(iround(x))
+convert(::Type{Int64}, x::Float) = int64(iround(x))
 
 ## floating point promotions ##
 
