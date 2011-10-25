@@ -633,6 +633,7 @@ DLLEXPORT void jl_array_grow_end(jl_array_t *a, size_t inc);
 DLLEXPORT void jl_array_del_end(jl_array_t *a, size_t dec);
 DLLEXPORT void jl_array_grow_beg(jl_array_t *a, size_t inc);
 DLLEXPORT void jl_array_del_beg(jl_array_t *a, size_t dec);
+void jl_cell_1d_push(jl_array_t *a, jl_value_t *item);
 
 // system information
 DLLEXPORT int jl_errno();

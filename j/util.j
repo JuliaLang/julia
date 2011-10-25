@@ -98,8 +98,7 @@ end
 function_loc(f::Function) = function_loc(f, (Any...))
 
 function function_loc(f::Function, types)
-    m = getmethods(f, types)
-    while !is(m,())
+    for m = getmethods(f, types)
         if isa(m[3],LambdaStaticData)
             ast = m[3].ast
             ln = ast.args[3].args[1]
@@ -107,7 +106,6 @@ function function_loc(f::Function, types)
                 return (string(ln.args[2]), ln.args[1])
             end
         end
-        m = m[5]
     end
     error("could not find function definition")
 end

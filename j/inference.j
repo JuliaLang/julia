@@ -54,7 +54,7 @@ inference_stack = EmptyCallStack()
 tintersect(a,b) = ccall(:jl_type_intersection, Any, (Any,Any), a, b)
 tmatch(a,b) = ccall(:jl_type_match, Any, (Any,Any), a, b)
 
-getmethods(f,t) = getmethods(f,t,-1)::Tuple
+getmethods(f,t) = getmethods(f,t,-1)::Array{Any,1}
 getmethods(f,t,lim) = ccall(:jl_matching_methods, Any, (Any,Any,Int32),
                             f, t, int32(lim))
 
@@ -462,8 +462,8 @@ function abstract_call_gf(f, fargs, argtypes, e)
         end
         return Any
     end
-    x::Tuple = applicable
-    if is(x,())
+    x::Array{Any,1} = applicable
+    if isempty(x)
         # no methods match
         if is(f,method_missing)
             # match failure due to None (error) argument, propagate
@@ -473,30 +473,29 @@ function abstract_call_gf(f, fargs, argtypes, e)
                                 tuple(Function, argtypes...), ())
     end
     if isa(e,Expr)
-        if is(x[5],())
+        if length(x)==1
             # method match is unique; mark it
             e.head = :call1
         else
             e.head = :call
         end
     end
-    while !is(x,())
-        #print(x,"\n")
-        if isa(x[3],Symbol)
+    for (m::Tuple) = x
+        #print(m,"\n")
+        if isa(m[3],Symbol)
             # when there is a builtin method in this GF, we get
             # a symbol with the name instead of a LambdaStaticData
-            rt = builtin_tfunction(x[3], fargs, x[1])
-        elseif isa(x[3],Type)
+            rt = builtin_tfunction(m[3], fargs, m[1])
+        elseif isa(m[3],Type)
             # constructor
-            rt = x[3]
+            rt = m[3]
         else
-            (_tree,rt) = typeinf(x[3], x[1], x[2], x[3])
+            (_tree,rt) = typeinf(m[3], m[1], m[2], m[3])
         end
         rettype = tmerge(rettype, rt)
         if is(rettype,Any)
             break
         end
-        x = x[5]
     end
     # if rettype is None we've found a method not found error
     #print("=> ", rettype, "\n")
@@ -1295,16 +1294,10 @@ function inlineable(f, e::Expr, vars)
     argexprs = a2t_butfirst(e.args)
     atypes = map(exprtype, argexprs)
     meth = getmethods(f, atypes)
-    if is(meth,())
+    if length(meth) != 1
         return NF
     end
-    #if !(!is(meth,()) && is(meth[5],()))
-    #    print(e,"\n")
-    #end
-    #assert(is(meth[5],()))
-    if !is(meth[5],())
-        return NF
-    end
+    meth = meth[1]::Tuple
     # when 1 method matches the inferred types, there is still a chance
     # of a no-method error at run time, unless the inferred types are a
     # subset of the method signature.
@@ -1555,11 +1548,11 @@ function tuple_elim_pass(ast::Expr)
 end
 
 function finfer(f, types)
-    x = getmethods(f,types)
+    x = getmethods(f,types)[1]
     typeinf(x[3], x[1], x[2])[1]
 end
 
-tfunc(f,t) = (getmethods(f,t)[3]).tfunc
+tfunc(f,t) = (getmethods(f,t)[1][3]).tfunc
 
 # stuff for testing
 
@@ -1570,57 +1563,3 @@ tfunc(f,t) = (getmethods(f,t)[3]).tfunc
 # b=typevar(:b)
 # c=typevar(:c)
 # d=typevar(:d)
-
-# m = getmethods(fact,(Int32,))
-# ast = m[3]
-
-# function foo(x)
-#     return x.re + x.im
-# end
-
-# m = getmethods(foo,(ComplexPair{Float64},))
-# ast = m[3]
-
-# function bar(x)
-#     if (x > 0)
-#         return bar(x-1)
-#     end
-#     return 0
-# end
-
-# function qux(x)
-#     if mystery()
-#         a = 10
-#     else
-#         a = 2+b
-#     end
-#     b = 1
-#     z = a + b
-#     Range(1, 2, 10)
-# end
-
-# m = getmethods(qux,(Int32,))
-# ast = m[3]
-
-# fib(n) = n < 2 ? n : fib(n-1) + fib(n-2)
-
-# function both()
-#     a = 2
-#     while mystery()
-#         b = a+a
-#         g(a)
-#         a = 2.0
-#         c = a+a
-#         f(a)
-#         f(c)
-#     end
-#     c
-# end
-
-# function und()
-#     local a
-#     if mystery()
-#         a = other_mystery()
-#     end
-#     c = a
-# end

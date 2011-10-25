@@ -332,7 +332,7 @@ static int very_general_type(jl_value_t *t)
 }
 
 static jl_value_t *ml_matches(jl_methlist_t *ml, jl_value_t *type,
-                              jl_tuple_t *t, jl_sym_t *name, int lim);
+                              jl_sym_t *name, int lim);
 
 /*
   run type inference on lambda "li" in-place, for given argument types.
@@ -587,13 +587,13 @@ static jl_function_t *cache_method(jl_methtable_t *mt, jl_tuple_t *type,
     }
 
     if (need_dummy_entries) {
-        temp = ml_matches(mt->defs, (jl_value_t*)type, jl_null, lambda_sym, -1);
-        while (temp != (jl_value_t*)jl_null) {
-            if (jl_tupleref(temp,2) != (jl_value_t*)method->linfo) {
-                jl_method_cache_insert(mt, (jl_tuple_t*)jl_tupleref(temp, 0),
+        temp = ml_matches(mt->defs, (jl_value_t*)type, lambda_sym, -1);
+        for(i=0; i < jl_array_len(temp); i++) {
+            jl_value_t *m = jl_cellref(temp, i);
+            if (jl_tupleref(m,2) != (jl_value_t*)method->linfo) {
+                jl_method_cache_insert(mt, (jl_tuple_t*)jl_tupleref(m, 0),
                                        NULL);
             }
-            temp = jl_tupleref(temp, 4);
         }
     }
 
@@ -1341,7 +1341,7 @@ void jl_add_method(jl_function_t *gf, jl_tuple_t *types, jl_function_t *meth)
 
 static jl_tuple_t *match_method(jl_value_t *type, jl_function_t *func,
                                 jl_tuple_t *sig, jl_tuple_t *tvars,
-                                jl_sym_t *name, jl_tuple_t *next)
+                                jl_sym_t *name)
 {
     jl_tuple_t *env = jl_null;
     jl_value_t *temp=NULL;
@@ -1353,7 +1353,7 @@ static jl_tuple_t *match_method(jl_value_t *type, jl_function_t *func,
     if (ti != (jl_value_t*)jl_bottom_type) {
         if (func->linfo == NULL) {
             // builtin
-            result = jl_tuple(5, ti, env, name, jl_null, next);
+            result = jl_tuple(4, ti, env, name, jl_null);
         }
         else {
             jl_value_t *cenv;
@@ -1366,7 +1366,7 @@ static jl_tuple_t *match_method(jl_value_t *type, jl_function_t *func,
             else {
                 cenv = (jl_value_t*)jl_null;
             }
-            result = jl_tuple(5, ti, env, func->linfo, cenv, next);
+            result = jl_tuple(4, ti, env, func->linfo, cenv);
         }
     }
     JL_GC_POP();
@@ -1375,8 +1375,9 @@ static jl_tuple_t *match_method(jl_value_t *type, jl_function_t *func,
 
 // returns linked tuples (argtypes, static_params, lambdainfo, cloenv, next)
 static jl_value_t *ml_matches(jl_methlist_t *ml, jl_value_t *type,
-                              jl_tuple_t *t, jl_sym_t *name, int lim)
+                              jl_sym_t *name, int lim)
 {
+    jl_array_t *t = (jl_array_t*)jl_an_empty_cell;
     JL_GC_PUSH(&t);
     int len=0;
     while (ml != NULL) {
@@ -1389,14 +1390,20 @@ static jl_value_t *ml_matches(jl_methlist_t *ml, jl_value_t *type,
         //int shadowed = 0;
         if (1/*!shadowed*/) {
             jl_tuple_t *matc = match_method(type, ml->func, ml->sig, ml->tvars,
-                                            name, t);
+                                            name);
             if (matc != NULL) {
                 len++;
                 if (lim >= 0 && len > lim) {
                     JL_GC_POP();
                     return jl_false;
                 }
-                t = matc;
+                if (len == 1) {
+                    t = jl_alloc_cell_1d(1);
+                    jl_cellref(t,0) = (jl_value_t*)matc;
+                }
+                else {
+                    jl_cell_1d_push(t, (jl_value_t*)matc);
+                }
                 // (type ∩ ml->sig == type) ⇒ (type ⊆ ml->sig)
                 if (jl_types_equal(jl_t0(matc), type)) {
                     JL_GC_POP();
@@ -1434,11 +1441,11 @@ jl_value_t *jl_matching_methods(jl_function_t *gf, jl_value_t *type, int lim)
     if (gf->fptr == jl_f_ctor_trampoline)
         jl_add_constructors((jl_struct_type_t*)gf);
     if (!jl_is_gf(gf)) {
-        return (jl_value_t*)jl_null;
+        return (jl_value_t*)jl_an_empty_cell;
     }
     jl_methtable_t *mt = jl_gf_mtable(gf);
     jl_sym_t *gfname = jl_gf_name(gf);
-    return ml_matches(mt->defs, type, jl_null, gfname, lim);
+    return ml_matches(mt->defs, type, gfname, lim);
 }
 
 DLLEXPORT
