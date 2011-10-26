@@ -474,6 +474,18 @@ end
 flipud(A::AbstractArray) = flip(1, A)
 fliplr(A::AbstractArray) = flip(2, A)
 
+circshift(a, shiftamt::Int) = circshift(a, [shiftamt])
+function circshift(a, shiftamts)
+    n = ndims(a)
+    I = cell(n)
+    for i=1:n
+        s = size(a,i)
+        d = i<=length(shiftamts) ? shiftamts[i] : 0
+        I[i] = d==0 ? (1:s) : mod([-d:s-1-d], s)+1
+    end
+    a[I...]::typeof(a)
+end
+
 ## Indexing: assign ##
 
 # 1-d indexing is assumed defined on subtypes
