@@ -1378,7 +1378,8 @@ static jl_value_t *ml_matches(jl_methlist_t *ml, jl_value_t *type,
                               jl_sym_t *name, int lim)
 {
     jl_array_t *t = (jl_array_t*)jl_an_empty_cell;
-    JL_GC_PUSH(&t);
+    jl_tuple_t *matc=NULL;
+    JL_GC_PUSH(&t, &matc);
     int len=0;
     while (ml != NULL) {
         // a method is shadowed if type <: S <: m->sig where S is the
@@ -1389,8 +1390,7 @@ static jl_value_t *ml_matches(jl_methlist_t *ml, jl_value_t *type,
         */
         //int shadowed = 0;
         if (1/*!shadowed*/) {
-            jl_tuple_t *matc = match_method(type, ml->func, ml->sig, ml->tvars,
-                                            name);
+            matc = match_method(type, ml->func, ml->sig, ml->tvars, name);
             if (matc != NULL) {
                 len++;
                 if (lim >= 0 && len > lim) {
