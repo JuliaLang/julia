@@ -866,3 +866,5 @@ end
 -------------------------------------------------------------------------------
 
 * make getmethods return an array instead of linked tuples
+- make default constructors use field types as argument types
+- move more of the repl to julia

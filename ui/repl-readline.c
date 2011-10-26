@@ -293,14 +293,120 @@ void read_expr(char *prompt)
     jl_input_line_callback(input);
 }
 
-void init_repl_environment(void)
+static int common_prefix(const char *s1, const char *s2)
 {
-    init_history();
+    int i = 0;
+    while (s1[i] && s2[i] && s1[i] == s2[i])
+        i++;
+    return i;
+}
+
+static void symtab_search(jl_sym_t *tree, int *pcount, ios_t *result,
+                          const char *prefix, int plen)
+{
+    do {
+        if (common_prefix(prefix, tree->name) == plen &&
+            jl_boundp(jl_system_module, tree)) {
+            ios_printf(result, "%s", tree->name);
+            ios_printf(result, "\n");
+            (*pcount)++;
+        }
+        if (tree->left)
+            symtab_search(tree->left, pcount, result, prefix, plen);
+        tree = tree->right;
+    } while (tree != NULL);
+}
+
+static int symtab_get_matches(jl_sym_t *tree, const char *str, char **answer)
+{
+    int x, plen, count=0;
+    ios_t ans;
+
+    plen = strlen(str);
+
+    while (tree != NULL) {
+        x = common_prefix(str, tree->name);
+        if (x == plen) {
+            ios_mem(&ans, 0);
+            symtab_search(tree, &count, &ans, str, plen);
+            size_t nb;
+            *answer = ios_takebuf(&ans, &nb);
+            return count;
+        }
+        else {
+            x = strcmp(str, tree->name);
+            if (x < 0)
+                tree = tree->left;
+            else
+                tree = tree->right;
+        }
+    }
+    return 0;
+}
+
+static int jl_word_char(uint32_t wc)
+{
+    return ((wc >= 'A' && wc <= 'Z') || (wc >= 'a' && wc <= 'z') ||
+            (wc >= '0' && wc <= '9') || (wc >= 0xA1) ||
+            wc == '_');
+}
+
+int tab_complete(const char *line, char **answer, int *plen)
+{
+    int len = *plen;
+
+    while (len>=0) {
+        if (!jl_word_char(line[len])) {
+            break;
+        }
+        len--;
+    }
+    len++;
+    *plen = len;
+
+    return symtab_get_matches(jl_get_root_symbol(), &line[len], answer);
+}
+
+static char *do_completions(const char *ch, int c)
+{
+    static char *completions = NULL;
+    char *ptr;
+    int len, cnt;
+
+    if (c == 0) {
+        // first time
+        if (completions)
+            free(completions);
+        completions = NULL;
+        len = strlen(ch);
+        if (len > 0)
+            len--;
+        cnt = tab_complete(ch, &completions, &len);
+        if (cnt == 0)
+            return NULL;
+        ptr = strtok(completions, "\n");
+    }
+    else {
+        ptr = strtok(NULL, "\n");
+    }
+
+    return ptr ? strdup(ptr) : NULL;
+}
+
+static char **julia_completion(const char *text, int start, int end)
+{
+    return rl_completion_matches(text, do_completions);
+}
+
+static void init_rl(void)
+{
+    rl_readline_name = "julia";
+    rl_attempted_completion_function = julia_completion;
     Keymap keymaps[] = {emacs_standard_keymap, vi_insertion_keymap};
     int i;
     for (i = 0; i < sizeof(keymaps)/sizeof(keymaps[0]); i++) {
         rl_bind_key_in_map(' ',        space_callback,      keymaps[i]);
-        rl_bind_key_in_map('\t',       tab_callback,        keymaps[i]);
+        //rl_bind_key_in_map('\t',       tab_callback,        keymaps[i]);
         rl_bind_key_in_map('\r',       return_callback,     keymaps[i]);
         rl_bind_key_in_map('\n',       return_callback,     keymaps[i]);
         rl_bind_key_in_map('\v',       line_kill_callback,  keymaps[i]);
@@ -315,6 +421,12 @@ void init_repl_environment(void)
         rl_bind_keyseq_in_map("\e[C",  right_callback,      keymaps[i]);
         rl_bind_keyseq_in_map("\\C-d", delete_callback,     keymaps[i]);
     };
+}
+
+void init_repl_environment(void)
+{
+    init_history();
+    rl_startup_hook = init_rl;
 }
 
 void exit_repl_environment(void)
