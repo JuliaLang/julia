@@ -119,6 +119,13 @@ static void reset_indent(void) {
     spaces_suppressed = 0;
 }
 
+// TODO: is it appropriate to call this on the int values readline uses?
+static int jl_word_char(uint32_t wc)
+{
+    return ('A' <= wc && wc <= 'Z') || ('a' <= wc && wc <= 'z') ||
+           ('0' <= wc && wc <= '9') || (0xA1 <= wc) || (wc == '_');
+}
+
 static int newline_callback(int count, int key) {
     spaces_suppressed = 0;
     rl_insert_text("\n");
@@ -159,11 +166,26 @@ static int space_callback(int count, int key) {
 }
 
 static int tab_callback(int count, int key) {
-    if (!rl_point) strip_initial_spaces += tab_width;
-    else if (suppress_space()) spaces_suppressed += tab_width;
-    else {
-        int i;
-        for (i=0; i < tab_width; i++) rl_insert_text(" ");
+    if (!rl_point) {
+        strip_initial_spaces += tab_width;
+        return 0;
+    }
+    int i;
+    for (i = line_start(rl_point); i < rl_point; i++)
+        if (rl_line_buffer[i] != ' ')
+            goto complete;
+
+//indent:
+    if (suppress_space()) spaces_suppressed += tab_width;
+    else for (i = 0; i < tab_width; i++) rl_insert_text(" ");
+    return 0;
+
+complete:
+    i = rl_point;
+    rl_complete_internal('!');
+    if (i < rl_point && rl_line_buffer[rl_point-1] == ' ') {
+        rl_delete_text(rl_point-1, rl_point);
+        rl_point = rl_point-1;
     }
     return 0;
 }
@@ -195,6 +217,7 @@ static int line_kill_callback(int count, int key) {
 }
 
 static int backspace_callback(int count, int key) {
+    // TODO: backspace tabwidth through indents?
     if (rl_point > 0) {
         int j = rl_point;
         int i = line_start(rl_point);
@@ -344,13 +367,6 @@ static int symtab_get_matches(jl_sym_t *tree, const char *str, char **answer)
     return 0;
 }
 
-static int jl_word_char(uint32_t wc)
-{
-    return ((wc >= 'A' && wc <= 'Z') || (wc >= 'a' && wc <= 'z') ||
-            (wc >= '0' && wc <= '9') || (wc >= 0xA1) ||
-            wc == '_');
-}
-
 int tab_complete(const char *line, char **answer, int *plen)
 {
     int len = *plen;
@@ -406,7 +422,7 @@ static void init_rl(void)
     int i;
     for (i = 0; i < sizeof(keymaps)/sizeof(keymaps[0]); i++) {
         rl_bind_key_in_map(' ',        space_callback,      keymaps[i]);
-        //rl_bind_key_in_map('\t',       tab_callback,        keymaps[i]);
+        rl_bind_key_in_map('\t',       tab_callback,        keymaps[i]);
         rl_bind_key_in_map('\r',       return_callback,     keymaps[i]);
         rl_bind_key_in_map('\n',       return_callback,     keymaps[i]);
         rl_bind_key_in_map('\v',       line_kill_callback,  keymaps[i]);
@@ -426,7 +442,7 @@ static void init_rl(void)
 void init_repl_environment(void)
 {
     init_history();
-    rl_startup_hook = init_rl;
+    rl_startup_hook = (Function*)init_rl;
 }
 
 void exit_repl_environment(void)
