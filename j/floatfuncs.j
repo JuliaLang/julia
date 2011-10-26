@@ -43,8 +43,8 @@ sqrt(x::Real) = sqrt(float(x))
 sin(x::Real) = sin(float(x))
 cos(x::Real) = cos(float(x))
 
-num2hex(x::Float32) = uint2str(boxui32(unbox32(x)),16, 8)
-num2hex(x::Float64) = uint2str(boxui64(unbox64(x)),16,16)
+num2hex(x::Float32) = int2str(boxui32(unbox32(x)),16, 8)
+num2hex(x::Float64) = int2str(boxui64(unbox64(x)),16,16)
 
 function hex2num(s)
     if length(s) <= 8

@@ -760,14 +760,15 @@ function ndigits(n::Int, b::Int)
     return nd
 end
 
-function uint2str(n::Int, b::Int)
-    if n < zero(n); error("uint2str: negative argument ", n); end
-    if b < 2 || b > 40; error("uint2str: invalid base ", b); end
+function int2str(n::Int, b::Int)
+    if b < 2 || b > 40; error("int2str: invalid base ", b); end
+    neg = n<zero(n) ? 1 : 0
+    n = abs(n)
     b = convert(typeof(n), b)
     ndig = ndigits(n, b)
     sz = convert(Size, ndig)
-    data = Array(Uint8, sz)
-    for i=sz:-1:1
+    data = Array(Uint8, sz + neg)
+    for i=(sz+neg):-1:(1+neg)
         ch = n % b
         if ch < 10
             data[i] = ch+'0'
@@ -779,23 +780,24 @@ function uint2str(n::Int, b::Int)
             break
         end
     end
+    if neg>0
+        data[1] = '-'
+    end
     ASCIIString(data)
 end
-uint2str(n::Union(Int,Float), b::Int, len::Int) = lpad(uint2str(n,b),len,'0')
-uint2str(x::Float64, b::Int) = uint2str(boxui64(unbox64(x)), b)
-uint2str(x::Float32, b::Int) = uint2str(boxui32(unbox32(x)), b)
+int2str(n::Int, b::Int, len::Int) = lpad(int2str(n,b),len,'0')
 
 # TODO: support signed Ints too
 
-bin(n::Union(Int,Float)) = uint2str(n,  2)
-oct(n::Union(Int,Float)) = uint2str(n,  8)
-dec(n::Union(Int,Float)) = uint2str(n, 10)
-hex(n::Union(Int,Float)) = uint2str(n, 16)
+bin(n::Int) = int2str(n,  2)
+oct(n::Int) = int2str(n,  8)
+dec(n::Int) = int2str(n, 10)
+hex(n::Int) = int2str(n, 16)
 
-bin(n::Union(Int,Float), l::Int) = lpad(bin(n), l, '0')
-oct(n::Union(Int,Float), l::Int) = lpad(oct(n), l, '0')
-dec(n::Union(Int,Float), l::Int) = lpad(dec(n), l, '0')
-hex(n::Union(Int,Float), l::Int) = lpad(hex(n), l, '0')
+bin(n::Int, l::Int) = lpad(bin(n), l, '0')
+oct(n::Int, l::Int) = lpad(oct(n), l, '0')
+dec(n::Int, l::Int) = lpad(dec(n), l, '0')
+hex(n::Int, l::Int) = lpad(hex(n), l, '0')
 
 ## string to float functions ##
 
