@@ -101,8 +101,8 @@ static void add_history_permanent(char *input) {
 static int line_start(int point) {
     if (!point) return 0;
     int i = point-1;
-    for (; i && rl_line_buffer[i] != '\n'; i--) ;
-    return i ? i+1 : 0;
+    for (; i; i--) if (rl_line_buffer[i] == '\n') return i+1;
+    return rl_line_buffer[i] == '\n' ? 1 : 0;
 }
 
 static int line_end(int point) {
@@ -127,6 +127,7 @@ static int jl_word_char(uint32_t wc)
 }
 
 static int newline_callback(int count, int key) {
+    if (!rl_point) return 0;
     spaces_suppressed = 0;
     rl_insert_text("\n");
     int i;
@@ -435,7 +436,7 @@ static void init_rl(void)
         rl_bind_key_in_map(' ',        space_callback,      keymaps[i]);
         rl_bind_key_in_map('\t',       tab_callback,        keymaps[i]);
         rl_bind_key_in_map('\r',       return_callback,     keymaps[i]);
-        rl_bind_key_in_map('\n',       return_callback,     keymaps[i]);
+        rl_bind_key_in_map('\n',       newline_callback,    keymaps[i]);
         rl_bind_key_in_map('\v',       line_kill_callback,  keymaps[i]);
         rl_bind_key_in_map('\b',       backspace_callback,  keymaps[i]);
         rl_bind_key_in_map('\001',     line_start_callback, keymaps[i]);
