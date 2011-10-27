@@ -169,3 +169,11 @@ Copy (or symlink) the TextMate Julia bundle into the TextMate application suppor
 where `JULIA_PATH` is the location of the top-level julia directory.
 Now select from the menu in TextMate `Bundles > Bundle Editor > Reload Bundles`.
 Julia should appear as a file type and be automatically detected for files with the `.j` extension.
+
+<a name="Terminal-Setup"/>
+## Terminal Setup
+
+For best interaction with readline-based command-line interactive sessions, make sure that backspace sends the `^H` sequence and that `shift-Enter` sends a `\n` newline character (hex `0x0a`).
+The `shift-Enter` combination inserts a newline in the interactive session without evaluating the current expression, even if the expression is complete.
+These bindings allow readline to trap and correctly handle these key sequences;
+most other programs will behave normally with these bindings.
