@@ -25,9 +25,6 @@ transpose(x::Number) = x
 ctranspose(x::Number) = conj(transpose(x))
 inv(x::Number) = one(x)/x
 
-max(x::Real, y::Real) = x > y ? x : y
-min(x::Real, y::Real) = x < y ? x : y
-
 # TODO: should we really treat numbers as iterable?
 start(a::Real) = a
 next(a::Real, i) = (a, a+1)

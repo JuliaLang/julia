@@ -19,6 +19,9 @@ isequal(x::Number, y::Number) = (x==y)
 <=(x,y) = x < y || x == y
 >=(x,y) = y <= x
 
+max(x, y) = x > y ? x : y
+min(x, y) = x < y ? x : y
+
 ## definitions providing basic traits of arithmetic operators ##
 
 +() = 0
@@ -26,8 +29,6 @@ isequal(x::Number, y::Number) = (x==y)
 &() = error("zero-argument & is ambiguous")
 |() = error("zero-argument | is ambiguous")
 ($)() = error("zero-argument \$ is ambiguous")
-max() = -Inf
-min() = +Inf
 
 +(x::Number) = x
 *(x::Number) = x

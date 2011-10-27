@@ -32,7 +32,10 @@ strides{T}(a::AbstractArray{T,2}) = (1, size(a,1))
 strides{T}(a::AbstractArray{T,3}) = (1, size(a,1), size(a,1)*size(a,2))
 strides   (a::AbstractArray)      = ntuple(ndims(a), i->stride(a,i))
 
-iscomplex{T<:Complex}(x::AbstractArray{T}) = true
+isreal{T<:Real}(::AbstractArray{T}) = true
+isreal(::AbstractArray) = false
+iscomplex{T<:Complex}(::AbstractArray{T}) = true
+iscomplex(::AbstractArray) = false
 
 ## Constructors ##
 

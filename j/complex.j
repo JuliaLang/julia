@@ -3,7 +3,7 @@
 abstract Complex{T<:Real} <: Number
 
 iscomplex(x::Complex) = true
-iscomplex(x) = false
+iscomplex(x::Number) = false
 
 real_valued(z::Complex)    = (imag(z) == 0)
 integer_valued(z::Complex) = (real_valued(z) && integer_valued(real(z)))
