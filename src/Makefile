@@ -58,17 +58,17 @@ $(FLISP): $(FLISPDIR)/*.h $(FLISPDIR)/*.c $(SUPPORT)
 
 $(JULIAHOME)/libjulia-debug.$(SHLIB_EXT): $(DOBJS) $(FLISP) $(SUPPORT)
 	$(CXX) $(DEBUGFLAGS) $(DOBJS) -shared -o $(JULIAHOME)/libjulia-debug.$(SHLIB_EXT) $(LIBS)
-$(JULIAHOME)/libjulia-debug.a: $(DOBJS) $(FLISP) $(SUPPORT)
+$(JULIAHOME)/src/libjulia-debug.a: $(DOBJS) $(FLISP) $(SUPPORT)
 	ar -rcs libjulia-debug.a $(DOBJS) 
 #libjulia-debug: $(JULIAHOME)/libjulia-debug.$(SHLIB_EXT)
-libjulia-debug: $(JULIAHOME)/libjulia-debug.a
+libjulia-debug: $(JULIAHOME)/src/libjulia-debug.a
 
 $(JULIAHOME)/libjulia-release.$(SHLIB_EXT): $(OBJS) $(FLISP) $(SUPPORT)
 	$(CXX) $(SHIPFLAGS) $(OBJS) -shared -o $(JULIAHOME)/libjulia-release.$(SHLIB_EXT) $(LIBS)
-$(JULIAHOME)/libjulia-release.a: $(OBJS)
+$(JULIAHOME)/src/libjulia-release.a: $(OBJS)
 	ar -rcs libjulia-release.a $(OBJS) 
 #libjulia-release: $(JULIAHOME)/libjulia-release.$(SHLIB_EXT)
-libjulia-release: $(JULIAHOME)/libjulia-release.a
+libjulia-release: $(JULIAHOME)/src/libjulia-release.a
 
 clean:
 	rm -f $(JULIAHOME)/libjulia*.$(SHLIB_EXT)
