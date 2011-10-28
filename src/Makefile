@@ -16,10 +16,6 @@ FLAGS = -falign-functions -Wall -Wno-strict-aliasing -fno-omit-frame-pointer \
 DEBUGFLAGS += $(FLAGS)
 SHIPFLAGS += $(FLAGS)
 
-LIBFILES = $(FLISP) $(SUPPORT)
-LIBS = $(LIBFILES) -L$(EXTROOT)/lib -lutil -ldl -lm $(OSLIBS) \
-	$(shell $(LLVMROOT)/bin/llvm-config --ldflags --libfiles) -lpthread
-
 ifeq ($(JULIAGC),MARKSWEEP)
 SRCS += gc
 endif
@@ -60,13 +56,19 @@ $(SUPPORT): $(SUPPORTDIR)/*.h $(SUPPORTDIR)/*.c
 $(FLISP): $(FLISPDIR)/*.h $(FLISPDIR)/*.c $(SUPPORT)
 	cd $(FLISPDIR) && $(MAKE)
 
-$(JULIAHOME)/libjulia-debug.$(SHLIB_EXT): $(DOBJS) $(LIBFILES)
+$(JULIAHOME)/libjulia-debug.$(SHLIB_EXT): $(DOBJS) $(FLISP) $(SUPPORT)
 	$(CXX) $(DEBUGFLAGS) $(DOBJS) -shared -o $(JULIAHOME)/libjulia-debug.$(SHLIB_EXT) $(LIBS)
-libjulia-debug: $(JULIAHOME)/libjulia-debug.$(SHLIB_EXT)
+$(JULIAHOME)/libjulia-debug.a: $(DOBJS) $(FLISP) $(SUPPORT)
+	ar -rcs libjulia-debug.a $(DOBJS) 
+#libjulia-debug: $(JULIAHOME)/libjulia-debug.$(SHLIB_EXT)
+libjulia-debug: $(JULIAHOME)/libjulia-debug.a
 
-$(JULIAHOME)/libjulia-release.$(SHLIB_EXT): $(OBJS) $(LIBFILES)
+$(JULIAHOME)/libjulia-release.$(SHLIB_EXT): $(OBJS) $(FLISP) $(SUPPORT)
 	$(CXX) $(SHIPFLAGS) $(OBJS) -shared -o $(JULIAHOME)/libjulia-release.$(SHLIB_EXT) $(LIBS)
-libjulia-release: $(JULIAHOME)/libjulia-release.$(SHLIB_EXT)
+$(JULIAHOME)/libjulia-release.a: $(OBJS)
+	ar -rcs libjulia-release.a $(OBJS) 
+#libjulia-release: $(JULIAHOME)/libjulia-release.$(SHLIB_EXT)
+libjulia-release: $(JULIAHOME)/libjulia-release.a
 
 clean:
 	rm -f $(JULIAHOME)/libjulia*.$(SHLIB_EXT)

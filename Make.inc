@@ -44,3 +44,7 @@ SHLIB_EXT = dylib
 OSLIBS += -Wl,-w -framework ApplicationServices
 #CFLAGS += -fno-optimize-sibling-calls -fno-inline-functions
 endif
+
+# Libraries to link
+LIBS = $(shell $(LLVMROOT)/bin/llvm-config --libfiles) $(JULIAHOME)/src/support/libsupport.a $(JULIAHOME)/src/flisp/libflisp.a -L$(EXTROOT)/lib -lutil -ldl -lm $(OSLIBS) -lpthread $(shell $(LLVMROOT)/bin/llvm-config --ldflags)
+
