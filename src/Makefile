@@ -71,6 +71,7 @@ $(JULIAHOME)/src/libjulia-release.a: $(OBJS)
 libjulia-release: $(JULIAHOME)/src/libjulia-release.a
 
 clean:
+	rm -f libjulia*.$(SHLIB_EXT)
 	rm -f $(JULIAHOME)/libjulia*.$(SHLIB_EXT)
 	rm -f julia_flisp.boot
 	rm -f julia_flisp.boot.inc
