@@ -101,8 +101,8 @@ static void add_history_permanent(char *input) {
 static int line_start(int point) {
     if (!point) return 0;
     int i = point-1;
-    for (; i && rl_line_buffer[i] != '\n'; i--) ;
-    return i ? i+1 : 0;
+    for (; i; i--) if (rl_line_buffer[i] == '\n') return i+1;
+    return rl_line_buffer[i] == '\n' ? 1 : 0;
 }
 
 static int line_end(int point) {
@@ -127,6 +127,7 @@ static int jl_word_char(uint32_t wc)
 }
 
 static int newline_callback(int count, int key) {
+    if (!rl_point) return 0;
     spaces_suppressed = 0;
     rl_insert_text("\n");
     int i;
@@ -171,91 +172,104 @@ static int tab_callback(int count, int key) {
         return 0;
     }
     int i;
-    for (i = line_start(rl_point); i < rl_point; i++)
-        if (rl_line_buffer[i] != ' ')
-            goto complete;
-
-//indent:
-    if (suppress_space()) spaces_suppressed += tab_width;
-    else for (i = 0; i < tab_width; i++) rl_insert_text(" ");
-    return 0;
-
-complete:
-    i = rl_point;
-    rl_complete_internal('!');
-    if (i < rl_point && rl_line_buffer[rl_point-1] == ' ') {
-        rl_delete_text(rl_point-1, rl_point);
-        rl_point = rl_point-1;
+    for (i = line_start(rl_point); i < rl_point; i++) {
+        if (rl_line_buffer[i] != ' ') {
+            // do tab completion
+            i = rl_point;
+            rl_complete_internal('!');
+            if (i < rl_point && rl_line_buffer[rl_point-1] == ' ') {
+                rl_delete_text(rl_point-1, rl_point);
+                rl_point = rl_point-1;
+            }
+            return 0;
+        }
+    }
+    // indent to next tab stop
+    if (suppress_space()) {
+        spaces_suppressed += tab_width;
+    } else {
+        i = line_start(rl_point) + prompt_length;
+        do { rl_insert_text(" "); } while ((rl_point - i) % tab_width);
     }
     return 0;
 }
 
 static int line_start_callback(int count, int key) {
+    reset_indent();
     int start = line_start(rl_point);
     int flush_left = rl_point == 0 || rl_point == start + prompt_length;
     rl_point = flush_left ? 0 : (!start ? start : start + prompt_length);
-    reset_indent();
     return 0;
 }
 
 static int line_end_callback(int count, int key) {
+    reset_indent();
     int end = line_end(rl_point);
     int flush_right = rl_point == end;
     rl_point = flush_right ? rl_end : end;
-    reset_indent();
     return 0;
 }
 
 static int line_kill_callback(int count, int key) {
+    reset_indent();
     int end = line_end(rl_point);
     int flush_right = rl_point == end;
     int kill = flush_right ? end + prompt_length + 1 : end;
     if (kill > rl_end) kill = rl_end;
     rl_kill_text(rl_point, kill);
-    reset_indent();
     return 0;
 }
 
 static int backspace_callback(int count, int key) {
-    // TODO: backspace tabwidth through indents?
-    if (rl_point > 0) {
-        int j = rl_point;
-        int i = line_start(rl_point);
-        rl_point = (i == 0 || rl_point-i > prompt_length) ?
-            rl_point-1 : i-1;
-        rl_delete_text(rl_point, j);
-    }
     reset_indent();
+    if (!rl_point) return 0;
+
+    int i = line_start(rl_point), j = rl_point, k;
+    if (!i || rl_point <= i + prompt_length) goto backspace;
+    for (k = i; k < rl_point; k++)
+        if (rl_line_buffer[k] != ' ') goto backspace;
+
+//unindent:
+    k = i + prompt_length;
+    do { rl_point--; } while ((rl_point - k) % tab_width);
+    goto finish;
+
+backspace:
+    rl_point = (i == 0 || rl_point-i > prompt_length) ? rl_point-1 : i-1;
+
+finish:
+    rl_delete_text(rl_point, j);
     return 0;
 }
 
 static int delete_callback(int count, int key) {
+    reset_indent();
     int j = rl_point;
     j += (rl_line_buffer[j] == '\n') ? prompt_length+1 : 1;
     if (rl_end < j) j = rl_end;
     rl_delete_text(rl_point, j);
-    reset_indent();
     return 0;
 }
 
 static int left_callback(int count, int key) {
+    reset_indent();
     if (rl_point > 0) {
         int i = line_start(rl_point);
         rl_point = (i == 0 || rl_point-i > prompt_length) ?
             rl_point-1 : i-1;
     }
-    reset_indent();
     return 0;
 }
 
 static int right_callback(int count, int key) {
+    reset_indent();
     rl_point += (rl_line_buffer[rl_point] == '\n') ? prompt_length+1 : 1;
     if (rl_end < rl_point) rl_point = rl_end;
-    reset_indent();
     return 0;
 }
 
 static int up_callback(int count, int key) {
+    reset_indent();
     int i = line_start(rl_point);
     if (i > 0) {
         int j = line_start(i-1);
@@ -266,13 +280,12 @@ static int up_callback(int count, int key) {
         last_hist_offset = -1;
         rl_get_previous_history(count, key);
         rl_point = line_end(0);
-        return 0;
     }
-    reset_indent();
     return 0;
 }
 
 static int down_callback(int count, int key) {
+    reset_indent();
     int j = line_end(rl_point);
     if (j < rl_end) {
         int i = line_start(rl_point);
@@ -280,6 +293,7 @@ static int down_callback(int count, int key) {
         rl_point += j - i + 1;
         int k = line_end(j+1);
         if (rl_point > k) rl_point = k;
+        return 0;
     } else {
         if (last_hist_offset >= 0) {
             history_set_pos(last_hist_offset);
@@ -287,8 +301,6 @@ static int down_callback(int count, int key) {
         }
         return rl_get_next_history(count, key);
     }
-    reset_indent();
-    return 0;
 }
 
 DLLEXPORT void jl_input_line_callback(char *input)
@@ -424,7 +436,7 @@ static void init_rl(void)
         rl_bind_key_in_map(' ',        space_callback,      keymaps[i]);
         rl_bind_key_in_map('\t',       tab_callback,        keymaps[i]);
         rl_bind_key_in_map('\r',       return_callback,     keymaps[i]);
-        rl_bind_key_in_map('\n',       return_callback,     keymaps[i]);
+        rl_bind_key_in_map('\n',       newline_callback,    keymaps[i]);
         rl_bind_key_in_map('\v',       line_kill_callback,  keymaps[i]);
         rl_bind_key_in_map('\b',       backspace_callback,  keymaps[i]);
         rl_bind_key_in_map('\001',     line_start_callback, keymaps[i]);
