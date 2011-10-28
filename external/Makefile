@@ -4,7 +4,7 @@ LLVM_VER = 2.9
 READLINE_VER = 6.2
 PCRE_VER = 8.12
 DSFMT_VER = 2.1
-OPENBLAS_VER = v0.1alpha2.2
+OPENBLAS_VER = v0.1alpha2.4
 LAPACK_VER = 3.3.1
 ARPACK_VER = 96
 FFTW_VER = 3.3
@@ -174,7 +174,7 @@ openblas-$(OPENBLAS_VER)/Makefile: openblas-$(OPENBLAS_VER).tar.gz
 	tar -C openblas-$(OPENBLAS_VER) --strip-components 1 -xf $<
 	touch $@
 $(OPENBLAS_OBJ_SOURCE): openblas-$(OPENBLAS_VER)/Makefile
-	$(MAKE) -C openblas-$(OPENBLAS_VER) USE_THREAD=0 NO_LAPACK=1 CC=$(CC) FC=$(FC)
+	$(MAKE) -C openblas-$(OPENBLAS_VER) DYNAMIC_ARCH=1 USE_THREAD=0 NO_LAPACK=1 CC=$(CC) FC=$(FC)
 
 clean-openblas:
 	$(MAKE) -C openblas-$(OPENBLAS_VER) clean
