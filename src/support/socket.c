@@ -39,13 +39,14 @@ void bzero(void *s, size_t n)
 /* returns a socket on which to accept() connections */
 int open_tcp_port(short portno)
 {
-    int sockfd, val;
+    int sockfd;
+    //int val;
     struct sockaddr_in serv_addr;
 
     sockfd = mysocket(PF_INET, SOCK_STREAM, IPPROTO_TCP);
     if (sockfd < 0)
         return -1;
-    val = 1;
+    //val = 1;
     //setsockopt(sockfd, IPPROTO_TCP, TCP_NODELAY, &val, sizeof(val));
     bzero(&serv_addr, sizeof(serv_addr));
     serv_addr.sin_family = AF_INET;
@@ -64,13 +65,14 @@ int open_tcp_port(short portno)
 int open_any_tcp_port(short *portno)
 
 {
-    int sockfd, val;
+    int sockfd;
+    int val;
     struct sockaddr_in serv_addr;
 
     sockfd = mysocket(PF_INET, SOCK_STREAM, IPPROTO_TCP);
     if (sockfd < 0)
         return -1;
-    val = 1;
+    //val = 1;
     //setsockopt(sockfd, IPPROTO_TCP, TCP_NODELAY, &val, sizeof(val));
     bzero(&serv_addr, sizeof(serv_addr));
     serv_addr.sin_family = AF_INET;

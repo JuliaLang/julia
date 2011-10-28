@@ -393,7 +393,7 @@ size_t u8_read_escape_sequence(const char *str, size_t ssz, u_int32_t *dest)
 size_t u8_unescape(char *buf, size_t sz, const char *src)
 {
     size_t c=0, amt;
-    u_int32_t ch;
+    u_int32_t ch = 0;
     char temp[4];
 
     while (*src && c < sz) {

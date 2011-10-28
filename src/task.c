@@ -142,11 +142,12 @@ static void _probe_arch(void)
     /* do a probe without filler */
     boundlow(&p);
 
-    char **s = (char**)p.ref_probe;
 #if defined(__linux) && defined(__i386__)
+    char **s = (char**)p.ref_probe;
     mangle_pointers = !(s[4] > jl_stack_lo &&
                         s[4] < jl_stack_hi);
 #elif defined(__linux) && defined(__x86_64__)
+    char **s = (char**)p.ref_probe;
     mangle_pointers = !(s[6] > jl_stack_lo &&
                         s[6] < jl_stack_hi);
 #else
