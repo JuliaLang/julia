@@ -1,5 +1,6 @@
 /*.o
 /*.do
+*.a
 
 /boot.j.inc
 /julia_flisp.boot
