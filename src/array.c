@@ -401,7 +401,7 @@ void jl_array_grow_end(jl_array_t *a, size_t inc)
         return;
     size_t alen = a->length;
     if ((alen + inc) > a->maxsize - a->offset) {
-        size_t newlen = a->maxsize==0 ? inc : a->maxsize*2;
+        size_t newlen = a->maxsize==0 ? (inc<4?4:inc) : a->maxsize*2;
         while ((alen + inc) > newlen - a->offset)
             newlen *= 2;
         char *newdata = array_new_buffer(a, newlen);

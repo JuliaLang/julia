@@ -327,7 +327,6 @@ extern jl_func_type_t *jl_any_func;
 extern jl_function_t *jl_show_gf;
 extern jl_function_t *jl_convert_gf;
 extern jl_function_t *jl_bottom_func;
-extern DLLEXPORT jl_function_t *jl_memio_func;
 extern jl_function_t *jl_append_any_func;
 extern jl_function_t *jl_method_missing_func;
 extern jl_function_t *jl_unprotect_stack_func;

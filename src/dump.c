@@ -736,6 +736,7 @@ void jl_save_system_image(char *fname, char *startscriptname)
     jl_gc_collect();
     int en = jl_gc_is_enabled();
     jl_gc_disable();
+    htable_reset(&backref_table, 50000);
     ios_t f;
     ios_file(&f, fname, 1, 1, 1, 1);
 
@@ -780,7 +781,7 @@ void jl_save_system_image(char *fname, char *startscriptname)
     //jl_serialize_finalizers(&f);
     write_int32(&f, jl_get_t_uid_ctr());
     write_int32(&f, jl_get_gs_ctr());
-    htable_reset(&backref_table, 100000);
+    htable_reset(&backref_table, 0);
 
     ios_t ss;
     ios_file(&ss, startscriptname, 1, 0, 0, 0);
@@ -864,7 +865,7 @@ void jl_restore_system_image(char *fname)
     //jl_deserialize_finalizers(&f);
     jl_set_t_uid_ctr(read_int32(&f));
     jl_set_gs_ctr(read_int32(&f));
-    htable_reset(&backref_table, 100000);
+    htable_reset(&backref_table, 0);
 
     ios_t ss;
     ios_mem(&ss, 0);
@@ -899,7 +900,7 @@ void jl_init_serializer(void)
     htable_new(&deser_tag, 0);
     htable_new(&fptr_to_id, 0);
     htable_new(&id_to_fptr, 0);
-    htable_new(&backref_table, 100000);
+    htable_new(&backref_table, 50000);
 
     void *tags[] = { jl_symbol_type, jl_tag_kind, jl_bits_kind, jl_struct_kind,
                      jl_func_kind, jl_tuple_type, jl_array_type, jl_expr_type,

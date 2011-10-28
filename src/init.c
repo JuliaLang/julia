@@ -204,7 +204,6 @@ int julia_trampoline(int argc, char *argv[], int (*pmain)(int ac,char *av[]))
 }
 
 jl_function_t *jl_typeinf_func=NULL;
-jl_function_t *jl_memio_func=NULL;
 jl_function_t *jl_append_any_func=NULL;
 jl_function_t *jl_method_missing_func=NULL;
 
@@ -282,11 +281,6 @@ DLLEXPORT void jl_enable_inference(void)
         */
         clear_tfunc_caches();
     }
-}
-
-DLLEXPORT void jl_set_memio_func(void)
-{
-    jl_memio_func = (jl_function_t*)global("memio");
 }
 
 JL_CALLABLE(jl_weakref_ctor);

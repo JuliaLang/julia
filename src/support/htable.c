@@ -45,8 +45,6 @@ void htable_reset(htable_t *h, size_t sz)
     if (h->size > sz*4 && h->size > HT_N_INLINE) {
         size_t newsz = sz*4;
         void **newtab = (void**)LLT_REALLOC(h->table, newsz*sizeof(void*));
-        if (newtab == NULL)
-            return;
         h->size = newsz;
         h->table = newtab;
     }

@@ -346,12 +346,12 @@ function lookup_ref(id)
 end
 
 # is a ref uninitialized? (for locally-owned refs only)
-function ref_uninitialized(id)
-    wi = lookup_ref(id)
-    !wi.done && is(wi.thunk,bottom_func)
-end
-ref_uninitialized(r::RemoteRef) = (assert(r.where==myid());
-                                   ref_uninitialized(rr2id(r)))
+#function ref_uninitialized(id)
+#    wi = lookup_ref(id)
+#    !wi.done && is(wi.thunk,bottom_func)
+#end
+#ref_uninitialized(r::RemoteRef) = (assert(r.where==myid());
+#                                   ref_uninitialized(rr2id(r)))
 
 function isready(rr::RemoteRef)
     rid = rr2id(rr)
