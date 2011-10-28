@@ -77,6 +77,7 @@ clean:
 	rm -f boot.j.inc
 	rm -f *.do
 	rm -f *.o
+	rm -f *.a
 	rm -f *~ *#
 
 clean-flisp:
