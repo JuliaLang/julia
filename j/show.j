@@ -258,22 +258,6 @@ function showall{T}(a::AbstractArray{T,2})
     end
 end
 
-function show(a::AbstractVector)
-    if is(eltype(a),Any)
-        opn = '{'; cls = '}'
-    else
-        opn = '['; cls = ']';
-    end
-    n = size(a,1)
-    if n <= 20
-        show_comma_array(a, opn, cls)
-    else
-        show_comma_array(a[1:10], opn, "")
-        print(",...,")
-        show_comma_array(a[(n-9):n], "", cls)
-    end
-end
-
 alignment(x::Any) = (0, strlen(show_to_string(x)))
 alignment(x::Number) = (strlen(show_to_string(x)), 0)
 function alignment(x::Real)
@@ -432,33 +416,14 @@ print_matrix(X::AbstractMatrix, rows::Int, cols::Int) =
 
 print_matrix(X::AbstractMatrix) = print_matrix(X, tty_rows()-4, tty_cols())
 
-show{T}(x::AbstractArray{T,0}) = (println(summary(x),":"); show(x[]))
-
-function show(X::AbstractMatrix)
-    println(summary(X),":")
-    print_matrix(X)
-end
-
-function show(X::AbstractArray)
-    println(summary(X),":")
-    show_nd(X)
-end
-
 summary(x) = string(typeof(x))
 
-function dims2string(d)
-    if length(d) == 0
-        return "0-dimensional"
-    elseif length(d) == 1
-        strcat(d[1], "-element")
-    else
-        join("x", map(string,d))
-    end
-end
+dims2string(d) = length(d) == 0 ? "0-dimensional" :
+                 length(d) == 1 ? "$(d[1])-element" :
+                 join("x", map(string,d))
 
-summary{T}(a::AbstractArray{T}) = strcat(dims2string(size(a)),
-                                         " ", string(T), " ",
-                                         string(typeof(a).name))
+summary{T}(a::AbstractArray{T}) =
+    strcat(dims2string(size(a)), " ", string(T), " ", string(typeof(a).name))
 
 function cartesian_map(body, t::Tuple, it...)
     idx = length(t)-length(it)
@@ -514,4 +479,28 @@ function whos()
             println(rpad(v, 30), summary(eval(v)))
         end
     end
+end
+
+show{T}(x::AbstractArray{T,0}) = (println(summary(x),":"); show(x[]))
+
+function show(X::AbstractMatrix)
+    println(summary(X),":")
+    print_matrix(X)
+end
+
+function show(X::AbstractArray)
+    println(summary(X),":")
+    show_nd(X)
+end
+
+function show(v::AbstractVector)
+    if is(eltype(v),Any)
+        opn = "{"
+        cls = "}"
+    else
+        opn = "["
+        cls = "]"
+    end
+    X = reshape(v,(1,length(v)))
+    print_matrix(X, 1, tty_cols(), opn, ", ", cls, "  ...  ", ":", 5, 5)
 end
