@@ -19,6 +19,20 @@ FFTW_PRESERVE_INPUT  = uint32(1 << 4)   # cancels FFTW_DESTROY_INPUT
 FFTW_PATIENT         = uint32(1 << 5)   # IMPATIENT is default
 FFTW_ESTIMATE        = uint32(1 << 6)
 
+## R2R transform kinds
+
+FFTW_R2HC    = int32(0)
+FFTW_HC2R    = int32(1)
+FFTW_DHT     = int32(2)
+FFTW_REDFT00 = int32(3)
+FFTW_REDFT01 = int32(4)
+FFTW_REDFT10 = int32(5)
+FFTW_REDFT11 = int32(6)
+FFTW_RODFT00 = int32(7)
+FFTW_RODFT01 = int32(8)
+FFTW_RODFT10 = int32(9)
+FFTW_RODFT11 = int32(10)
+
 ## Julia wrappers around FFTW functions
 
 # Execute
@@ -261,5 +275,27 @@ function fftw_transpose(X::Matrix{Complex64})
                  int32(0), C_NULL, int32(2),int32([n1,n2,1,n2,1,n1]), X, P, FFTW_FORWARD, FFTW_PATIENT)
     jl_fftw_execute(Complex64, plan)
     jl_fftw_destroy_plan(Complex64, plan)
+    return P
+end
+
+function fftw_transpose(X::Matrix{Float64})
+    P = similar(X)
+    (n1, n2) = size(X)
+    plan = ccall(dlsym(libfftw, :fftw_plan_guru_r2r), Ptr{Void},
+                 (Int32, Ptr{Int32}, Int32, Ptr{Int32}, Ptr{Float64}, Ptr{Float64}, Ptr{Int32}, Uint32),
+                 int32(0), C_NULL, int32(2),int32([n1,n2,1,n2,1,n1]), X, P, [FFTW_HC2R], FFTW_PATIENT | FFTW_PRESERVE_INPUT)
+    jl_fftw_execute(Float64, plan)
+    jl_fftw_destroy_plan(Float64, plan)
+    return P
+end
+
+function fftw_transpose(X::Matrix{Float32})
+    P = similar(X)
+    (n1, n2) = size(X)
+    plan = ccall(dlsym(libfftwf, :fftwf_plan_guru_r2r), Ptr{Void},
+                 (Int32, Ptr{Int32}, Int32, Ptr{Int32}, Ptr{Float32}, Ptr{Float32}, Ptr{Int32}, Uint32),
+                 int32(0), C_NULL, int32(2),int32([n1,n2,1,n2,1,n1]), X, P, [FFTW_HC2R], FFTW_PATIENT | FFTW_PRESERVE_INPUT)
+    jl_fftw_execute(Float32, plan)
+    jl_fftw_destroy_plan(Float32, plan)
     return P
 end
