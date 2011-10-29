@@ -8,8 +8,8 @@ READLINE = -lncurses $(EXTROOT)/lib/libreadline.a
 FLAGS = -falign-functions -Wall -Wno-strict-aliasing \
 	-fno-omit-frame-pointer \
 	-I$(JULIAHOME)/src -I$(LLTDIR) -I$(EXTROOT)/include $(CFLAGS)
-DEBUGFLAGS += $(FLAGS)
-SHIPFLAGS += $(FLAGS)
+DEBUGFLAGS += $(FLAGS) -static-libgcc -static-libstdc++
+SHIPFLAGS += $(FLAGS) -static-libgcc -static-libstdc++
 
 LIBJULIA_RELEASE = $(JULIAHOME)/src/libjulia-release.a
 LIBJULIA_DEBUG = $(JULIAHOME)/src/libjulia-debug.a
