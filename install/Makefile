@@ -4,8 +4,7 @@ LIBS = ../lib/libarpack.$(SHLIB_EXT) ../lib/libfdm.$(SHLIB_EXT) ../lib/libfftw3.
 
 all: package-$(OS)
 
-package-$(OS):
-	rm -fr package *.tar.gz && \
+package-$(OS): clean
 	mkdir -p package/julia-$(OS) && \
 	mkdir -p package/julia-$(OS)/lib && \
 	cp ../julia-release-readline ../julia-release-basic package/julia-$(OS) && \

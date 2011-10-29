@@ -27,6 +27,7 @@ clean:
 	$(MAKE) -C ui clean
 	$(MAKE) -C ui/webserver clean
 	$(MAKE) -C test/unicode clean
+	$(MAKE) -C install clean
 
 cleanall: clean
 	$(MAKE) -C src clean-flisp clean-support
