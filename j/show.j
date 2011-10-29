@@ -68,7 +68,7 @@ function show_delim_array(itr, open, delim, close, delim_one)
             first = false
             print(delim)
             if multiline
-                println(); newline=false
+                println(); println(); newline=false
             else
                 newline = true
             end

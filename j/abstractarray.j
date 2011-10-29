@@ -91,10 +91,8 @@ int64  (x::AbstractArray) = copy_to(similar(x,Int64) , x)
 uint64 (x::AbstractArray) = copy_to(similar(x,Uint64), x)
 bool   (x::AbstractArray) = copy_to(similar(x,Bool)  , x)
 char   (x::AbstractArray) = copy_to(similar(x,Char)  , x)
-float32{T}(x::AbstractArray{T}) =
-    copy_to(similar(x,typeof(float32(zero(T)))), x)
-float64{T}(x::AbstractArray{T}) =
-    copy_to(similar(x,typeof(float64(zero(T)))), x)
+float32{T}(x::AbstractArray{T}) = copy_to(similar(x,Float32), x)
+float64{T}(x::AbstractArray{T}) = copy_to(similar(x,Float64), x)
 
 ## Unary operators ##
 

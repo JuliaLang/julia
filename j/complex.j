@@ -74,8 +74,6 @@ end
 
 sizeof(::Type{Complex128}) = 16
 
-#float64(z::Complex) = convert(Complex128, z)
-
 bitstype 64 Complex64 <: Complex{Float32}
 
 function complex64(r::Float32, i::Float32)
@@ -114,8 +112,6 @@ function write(s, z::Complex64)
 end
 
 sizeof(::Type{Complex64})  =  8
-
-#float32(z::Complex) = convert(Complex64, z)
 
 complex(x::Float64, y::Float64) = complex128(x, y)
 complex(x::Float32, y::Float32) = complex64(x, y)
