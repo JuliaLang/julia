@@ -1,2 +1,2 @@
-*.tar.gz
-package
+/julia
+/julia-*.tar.gz
