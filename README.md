@@ -13,15 +13,16 @@
 <a name="The-Julia-Language"/>
 ## The Julia Language
 
-Julia is a high-level, high-performance dynamic language for technical computing. 
-It strives to provide a sophisticated compiler, distributed parallel execution, numerical accuracy, and a robust function library.
-The library, mostly written in Julia itself, also integrates mature, best-of-breed C and Fortran libraries for linear algebra, random number generation, FFTs, and string processing. More libraries continue to be added over time.
+Julia is a high-level, high-performance dynamic language for technical computing, with syntax that is familiar to users of other technical computing environments.
+It provides a sophisticated compiler, distributed parallel execution, numerical accuracy, and an extensive mathematical function library.
+The library, mostly written in Julia itself, also integrates mature, best-of-breed C and Fortran libraries for linear algebra, random number generation, FFTs, and string processing.
+More libraries continue to be added over time.
 Julia programs are organized around defining functions, and overloading them for different combinations of argument types (which can also be user-defined).
 For a more in-depth discussion of the rationale and advantages of Julia over other systems, see the following highlights or read the [introduction](https://github.com/JuliaLang/julia/wiki/Introduction) in the [manual](https://github.com/JuliaLang/julia/wiki/).
 
 ### High-Performance JIT Compiler
 
-Julia is an interactive environment with a high performance JIT compiler, with syntax that is familiar to users of other technical computing environments.
+Julia's LLVM-based JIT compiler combined with the language's design allow it to approach and often match the performance of C/C++.
 The following [benchmarks](https://github.com/JuliaLang/julia/blob/master/test/perf.j) are from a Macbook with 2.1GHz Intel Core 2 Duo:
 
     ____________________________________________________________________________________
@@ -40,8 +41,9 @@ The following [benchmarks](https://github.com/JuliaLang/julia/blob/master/test/p
 
           Figure: benchmark time (ms) across various programming system versions.
 
-Julia beats other high-level systems on all micro-benchmarks above. It also comes within a factor of two of optimized C++ on all but two tests, and is never more than four times as slow.
-Relative performance between languages on other systems, including Linux, is similar.
+Julia beats other high-level systems on all micro-benchmarks above.
+It also comes within a factor of two of optimized C++ on all but two tests, and is never more than four times as slow.
+Relative performance between languages on [other systems](#Supported-Platforms) is similar.
 These benchmarks, while not comprehensive, do test compiler performance on a range of common code patterns, such as function calls, string parsing, sorting, numerical loops, random number generation, and array operations.
 
 *Note:* A C++ implementation of random matrix statistics is missing because this test involves many whole-matrix operations, and it is not clear what an idiomatic implementation would look like.
