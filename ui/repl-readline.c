@@ -453,6 +453,7 @@ static void init_rl(void)
 
 void init_repl_environment(void)
 {
+    rl_catch_signals = 0;
     init_history();
     rl_startup_hook = (Function*)init_rl;
 }
