@@ -118,6 +118,35 @@ See [LICENSE](https://github.com/JuliaLang/julia/blob/master/LICENSE) for the fu
 - **GNU/Linux:** x86/64 (64-bit); x86 (32-bit).
 - **Darwin/OS X:** x86/64 (64-bit); x86 (32-bit) is untested but should work.
 
+<a name="Binary-Installation"/>
+## Binary Installation
+
+Julia's binary install ships as a tarball:
+
+- Linux x86/64: <https://github.com/downloads/JuliaLang/julia/julia-08b1e294ed-Linux-x86_64.tar.gz>
+- Darwin x86/64: <https://github.com/downloads/JuliaLang/julia/julia-08b1e294ed-Darwin-x86_64.tar.gz>
+
+Download the appropriate tarball and untar it somewhere:
+
+    curl -OLk https://github.com/downloads/JuliaLang/julia/julia-08b1e294ed-Darwin-x86_64.tar.gz
+    tar zxvf julia-08b1e294ed-Darwin-x86_64.tar.gz
+
+Next you have to make sure that the `julia/lib` directory is in your `LD_LIBRARY_PATH` environment variable:
+
+    cd julia
+    export LD_LIBRARY_PATH=$(pwd)/lib
+
+You may also want to have the julia directory in your executable path:
+
+    export PATH="$(pwd):$PATH"
+
+Now you should be able to run julia like this:
+
+    julia
+
+If everything works correctly, you will see a Julia banner and an interactive prompt into which you can enter expressions for evaluation.
+You can read about [getting started](https://github.com/JuliaLang/julia/wiki/Getting-Started) in the manual.
+
 <a name="Source-Download-Compilation"/>
 ## Source Download & Compilation
 
