@@ -95,7 +95,7 @@ void sigint_handler(int sig, siginfo_t *info, void *context)
     }
 }
 
-static void jl_get_builtin_hooks();
+void jl_get_builtin_hooks(void);
 
 void *jl_dl_handle;
 
@@ -131,6 +131,10 @@ void julia_init(char *imageFile)
         jl_init_primitives();
         jl_load_boot_j();
         jl_get_builtin_hooks();
+        jl_array_uint8_type =
+            (jl_type_t*)jl_apply_type((jl_value_t*)jl_array_type,
+                                      jl_tuple2(jl_uint8_type,
+                                                jl_box_long(1)));
         jl_boot_file_loaded = 1;
         jl_init_builtins();
         jl_init_box_caches();
@@ -329,9 +333,4 @@ void jl_get_builtin_hooks(void)
 
     jl_append_any_func = (jl_function_t*)global("append_any");
     jl_method_missing_func = (jl_function_t*)global("method_missing");
-
-    jl_array_uint8_type =
-        (jl_type_t*)jl_apply_type((jl_value_t*)jl_array_type,
-                                  jl_tuple2(jl_uint8_type,
-                                            jl_box_long(1)));
 }

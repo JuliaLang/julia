@@ -631,22 +631,10 @@ jl_value_t *jl_deserialize_value(ios_t *s)
         char *data = alloca(nby);
         ios_read(s, data, nby);
         jl_value_t *v=NULL;
-        if (bt == jl_int8_type)
-            v = jl_box_int8(*(int8_t*)data);
-        else if (bt == jl_uint8_type)
-            v = jl_box_uint8(*(uint8_t*)data);
-        else if (bt == jl_int16_type)
-            v = jl_box_int16(*(int16_t*)data);
-        else if (bt == jl_uint16_type)
-            v = jl_box_uint16(*(uint16_t*)data);
-        else if (bt == jl_int32_type)
+        if (bt == jl_int32_type)
             v = jl_box_int32(*(int32_t*)data);
-        else if (bt == jl_uint32_type)
-            v = jl_box_uint32(*(uint32_t*)data);
         else if (bt == jl_int64_type)
             v = jl_box_int64(*(int64_t*)data);
-        else if (bt == jl_uint64_type)
-            v = jl_box_uint64(*(uint64_t*)data);
         else if (bt == jl_bool_type)
             v = jl_box_bool(*(int8_t*)data);
         else {
@@ -740,34 +728,6 @@ void jl_save_system_image(char *fname, char *startscriptname)
     ios_t f;
     ios_file(&f, fname, 1, 1, 1, 1);
 
-    // values needed by C RTS code
-    jl_serialize_value(&f, jl_char_type);
-    jl_serialize_value(&f, jl_int8_type);
-    jl_serialize_value(&f, jl_uint8_type);
-    jl_serialize_value(&f, jl_int16_type);
-    jl_serialize_value(&f, jl_uint16_type);
-    jl_serialize_value(&f, jl_uint32_type);
-    jl_serialize_value(&f, jl_uint64_type);
-    jl_serialize_value(&f, jl_float32_type);
-    jl_serialize_value(&f, jl_float64_type);
-    jl_serialize_value(&f, jl_nothing);
-    jl_serialize_value(&f, jl_weakref_type);
-    jl_serialize_value(&f, jl_string_type);
-    jl_serialize_value(&f, jl_ascii_string_type);
-    jl_serialize_value(&f, jl_utf8_string_type);
-    jl_serialize_value(&f, jl_errorexception_type);
-    jl_serialize_value(&f, jl_typeerror_type);
-    jl_serialize_value(&f, jl_loaderror_type);
-    jl_serialize_value(&f, jl_uniontoocomplex_type);
-    jl_serialize_value(&f, jl_backtrace_type);
-    jl_serialize_value(&f, jl_symbolnode_type);
-    jl_serialize_value(&f, jl_stackovf_exception);
-    jl_serialize_value(&f, jl_memory_exception);
-    jl_serialize_value(&f, jl_divbyzero_exception);
-    jl_serialize_value(&f, jl_undefref_exception);
-    jl_serialize_value(&f, jl_interrupt_exception);
-    jl_serialize_value(&f, jl_append_any_func);
-    jl_serialize_value(&f, jl_method_missing_func);
     jl_serialize_value(&f, jl_get_global(jl_system_module,
                                          jl_symbol("IdTable")));
     jl_serialize_value(&f, jl_array_type->env);
@@ -795,6 +755,7 @@ void jl_save_system_image(char *fname, char *startscriptname)
 
 extern jl_function_t *jl_typeinf_func;
 extern int jl_boot_file_loaded;
+extern void jl_get_builtin_hooks(void);
 
 DLLEXPORT
 void jl_restore_system_image(char *fname)
@@ -815,39 +776,6 @@ void jl_restore_system_image(char *fname)
     jl_gc_disable();
 #endif
 
-    // values needed by C RTS code
-    jl_char_type    = (jl_bits_type_t*)jl_deserialize_value(&f);
-    jl_int8_type    = (jl_bits_type_t*)jl_deserialize_value(&f);
-    jl_uint8_type   = (jl_bits_type_t*)jl_deserialize_value(&f);
-    jl_int16_type   = (jl_bits_type_t*)jl_deserialize_value(&f);
-    jl_uint16_type  = (jl_bits_type_t*)jl_deserialize_value(&f);
-    jl_uint32_type  = (jl_bits_type_t*)jl_deserialize_value(&f);
-    jl_uint64_type  = (jl_bits_type_t*)jl_deserialize_value(&f);
-    jl_float32_type = (jl_bits_type_t*)jl_deserialize_value(&f);
-    jl_float64_type = (jl_bits_type_t*)jl_deserialize_value(&f);
-    jl_init_box_caches();
-    jl_nothing = jl_deserialize_value(&f);
-    jl_root_task->tls = jl_nothing;
-    jl_weakref_type = (jl_struct_type_t*)jl_deserialize_value(&f);
-    jl_weakref_type->fptr = jl_weakref_ctor;
-    jl_weakref_type->env = NULL;
-    jl_weakref_type->linfo = NULL;
-    jl_string_type = (jl_tag_type_t*)jl_deserialize_value(&f);
-    jl_ascii_string_type = (jl_struct_type_t*)jl_deserialize_value(&f);
-    jl_utf8_string_type = (jl_struct_type_t*)jl_deserialize_value(&f);
-    jl_errorexception_type = (jl_struct_type_t*)jl_deserialize_value(&f);
-    jl_typeerror_type = (jl_struct_type_t*)jl_deserialize_value(&f);
-    jl_loaderror_type = (jl_struct_type_t*)jl_deserialize_value(&f);
-    jl_uniontoocomplex_type = (jl_struct_type_t*)jl_deserialize_value(&f);
-    jl_backtrace_type = (jl_struct_type_t*)jl_deserialize_value(&f);
-    jl_symbolnode_type = (jl_struct_type_t*)jl_deserialize_value(&f);
-    jl_stackovf_exception = jl_deserialize_value(&f);
-    jl_memory_exception = jl_deserialize_value(&f);
-    jl_divbyzero_exception = jl_deserialize_value(&f);
-    jl_undefref_exception = jl_deserialize_value(&f);
-    jl_interrupt_exception = jl_deserialize_value(&f);
-    jl_append_any_func = (jl_function_t*)jl_deserialize_value(&f);
-    jl_method_missing_func = (jl_function_t*)jl_deserialize_value(&f);
     jl_idtable_type = (jl_struct_type_t*)jl_deserialize_value(&f);
     jl_array_type->env = jl_deserialize_value(&f);
     jl_array_type->name->cache = jl_deserialize_typecache(&f);
@@ -856,12 +784,21 @@ void jl_restore_system_image(char *fname)
     jl_seq_type->name->cache = jl_deserialize_typecache(&f);
     jl_abstractarray_type->name->cache = jl_deserialize_typecache(&f);
     
+    jl_deserialize_module(&f, jl_system_module);
+
+    jl_get_builtin_hooks();
     jl_array_uint8_type =
         (jl_type_t*)jl_apply_type((jl_value_t*)jl_array_type,
                                   jl_tuple2(jl_uint8_type,
                                             jl_box_long(1)));
+    jl_boot_file_loaded = 1;
+    jl_typeinf_func =
+        (jl_function_t*)*(jl_get_bindingp(jl_system_module,
+                                          jl_symbol("typeinf_ext")));
+    jl_show_gf = (jl_function_t*)jl_get_global(jl_system_module,jl_symbol("show"));
+    jl_convert_gf = (jl_function_t*)jl_get_global(jl_system_module,jl_symbol("convert"));
+    jl_init_box_caches();
 
-    jl_deserialize_module(&f, jl_system_module);
     //jl_deserialize_finalizers(&f);
     jl_set_t_uid_ctr(read_int32(&f));
     jl_set_gs_ctr(read_int32(&f));
@@ -872,13 +809,6 @@ void jl_restore_system_image(char *fname)
     ios_copyuntil(&ss, &f, '\0');
     ios_close(&f);
     if (fpath != fname) free(fpath);
-
-    jl_typeinf_func =
-        (jl_function_t*)*(jl_get_bindingp(jl_system_module,
-                                          jl_symbol("typeinf_ext")));
-    jl_show_gf = (jl_function_t*)jl_get_global(jl_system_module,jl_symbol("show"));
-    jl_convert_gf = (jl_function_t*)jl_get_global(jl_system_module,jl_symbol("convert"));
-    jl_boot_file_loaded = 1;
 
 #ifdef JL_GC_MARKSWEEP
     if (en) jl_gc_enable();

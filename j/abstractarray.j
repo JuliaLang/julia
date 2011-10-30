@@ -1242,8 +1242,6 @@ transpose(x::AbstractMatrix)  = [ x[j,i]       | i=1:size(x,2), j=1:size(x,1) ]
 ctranspose(x::AbstractMatrix) = [ conj(x[j,i]) | i=1:size(x,2), j=1:size(x,1) ]
 
 let permute_cache = nothing
-
-
 global permute
 function permute(A::AbstractArray, perm)
     dimsA = size(A)
@@ -1319,8 +1317,7 @@ function permute(A::AbstractArray, perm)
     
     return P
 end
-#end let
-end
+end # let
 
 function ipermute(A::AbstractArray,perm)
     iperm = zeros(Int32,length(perm))

@@ -1,9 +1,9 @@
 # set up non-serializable state
 
-stdout_stream = make_stdout_stream()
+const stdout_stream = make_stdout_stream()
 set_current_output_stream(stdout_stream)
-stdin_stream = fdio(ccall(:jl_stdin, Int32, ()))
-stderr_stream = fdio(ccall(:jl_stderr, Int32, ()))
+const stdin_stream = fdio(ccall(:jl_stdin, Int32, ()))
+const stderr_stream = fdio(ccall(:jl_stderr, Int32, ()))
 
 # restore shared library handles
 
