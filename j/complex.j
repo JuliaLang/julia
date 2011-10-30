@@ -205,6 +205,13 @@ inv(z::Complex)  = conj(z)/abs2(z)
 *(z::Complex, w::Complex) = complex(real(z) * real(w) - imag(z) * imag(w),
                                     real(z) * imag(w) + imag(z) * real(w))
 
+# multiplying by im is common
+*(z::ImaginaryUnit, w::ImaginaryUnit) = complex(-imag(z), real(z))
+*(z::ImaginaryUnit, x::Real)    = complex(zero(x), x)
+*(x::Real, z::ImaginaryUnit)    = complex(zero(x), x)
+*(z::ImaginaryUnit, w::Complex) = complex(-imag(w), real(w))
+*(w::Complex, z::ImaginaryUnit) = complex(-imag(w), real(w))
+
 /(z::Number, w::Complex) = z*inv(w)
 /(z::Complex, x::Real) = complex(real(z)/x, imag(z)/x)
 
