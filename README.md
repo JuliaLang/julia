@@ -1,3 +1,5 @@
+<a name="banner"/>
+
                    _
        _       _ _(_)_     |
       (_)     | (_) (_)    |   A fresh approach to technical computing
@@ -9,7 +11,7 @@
 
 
 <a name="The-Julia-Language"/>
-## Julia
+## The Julia Language
 
 Julia is a high-level, high-performance dynamic language for technical computing. 
 It strives to provide a sophisticated compiler, distributed parallel execution, numerical accuracy, and a robust function library.
