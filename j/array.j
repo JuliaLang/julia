@@ -99,6 +99,24 @@ linspace(start::Real, stop::Real) = [ i | i=start:stop ]
 convert{T,n}(::Type{Array{T,n}}, x::Array{T,n}) = x
 convert{T,n,S}(::Type{Array{T,n}}, x::Array{S,n}) = copy_to(similar(x,T), x)
 
+## Transpose ##
+
+function transpose{T<:Union(Float64,Float32,Complex128,Complex64)}(A::Matrix{T})
+    if numel(A) > 50000
+        return fftw_transpose(A)
+    else
+        return [ A[j,i] | i=1:size(A,2), j=1:size(A,1) ]
+    end
+end
+
+function ctranspose{T<:Union(Float64,Float32)}(A::Matrix{T})
+    if numel(A) > 50000
+        return fftw_transpose(A)
+    else
+        return [ A[j,i] | i=1:size(A,2), j=1:size(A,1) ]
+    end
+end
+
 ## Indexing: ref ##
 
 ref(a::Array, i::Index) = arrayref(a,i)

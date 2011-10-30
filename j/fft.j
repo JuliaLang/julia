@@ -255,47 +255,46 @@ end
 
 
 # Transpose
+# NOTE: Using FFTW_MEASURE and FFTW_PATIENT zeros out the input the 
+# first time it is used for a particular size. Use FFTW_ESTIMATE
 
-function fftw_transpose(X::Matrix{Complex128})
-    P = similar(X)
-    (n1, n2) = size(X)
-    plan = ccall(dlsym(libfftw, :fftw_plan_guru_dft), Ptr{Void},
-                 (Int32, Ptr{Int32}, Int32, Ptr{Int32}, Ptr{Complex128}, Ptr{Complex128}, Int32, Uint32),
-                 int32(0), C_NULL, int32(2),int32([n1,n2,1,n2,1,n1]), X, P, FFTW_FORWARD, FFTW_PATIENT)
-    jl_fftw_execute(Complex128, plan)
-    jl_fftw_destroy_plan(Complex128, plan)
-    return P
+macro jl_transpose_real_macro(libname, fname, eltype)
+    quote
+
+        function fftw_transpose(X::Matrix{$eltype})
+            P = similar(X)
+            (n1, n2) = size(X)
+            plan = ccall(dlsym($libname, $fname), Ptr{Void},
+                         (Int32, Ptr{Int32}, Int32, Ptr{Int32}, Ptr{$eltype}, Ptr{$eltype}, Ptr{Int32}, Uint32),
+                         int32(0), C_NULL, int32(2),int32([n1,n2,1,n2,1,n1]), X, P, [FFTW_HC2R], FFTW_ESTIMATE | FFTW_PRESERVE_INPUT)
+            jl_fftw_execute($eltype, plan)
+            jl_fftw_destroy_plan($eltype, plan)
+            return P
+        end
+
+    end
 end
 
-function fftw_transpose(X::Matrix{Complex64})
-    P = similar(X)
-    (n1, n2) = size(X)
-    plan = ccall(dlsym(libfftwf, :fftwf_plan_guru_dft), Ptr{Void},
-                 (Int32, Ptr{Int32}, Int32, Ptr{Int32}, Ptr{Complex64}, Ptr{Complex64}, Int32, Uint32),
-                 int32(0), C_NULL, int32(2),int32([n1,n2,1,n2,1,n1]), X, P, FFTW_FORWARD, FFTW_PATIENT)
-    jl_fftw_execute(Complex64, plan)
-    jl_fftw_destroy_plan(Complex64, plan)
-    return P
+@jl_transpose_real_macro libfftw  :fftw_plan_guru_r2r  Float64
+@jl_transpose_real_macro libfftwf :fftwf_plan_guru_r2r Float32
+
+macro jl_transpose_complex_macro(libname, fname, celtype)
+    quote
+
+        function fftw_transpose(X::Matrix{$celtype})
+            P = similar(X)
+            (n1, n2) = size(X)
+            plan = ccall(dlsym($libname, $fname), Ptr{Void},
+                         (Int32, Ptr{Int32}, Int32, Ptr{Int32}, Ptr{$celtype}, Ptr{$celtype}, Int32, Uint32),
+                         int32(0), C_NULL, int32(2),int32([n1,n2,1,n2,1,n1]), X, P, FFTW_FORWARD, FFTW_ESTIMATE | FFTW_PRESERVE_INPUT)
+            jl_fftw_execute($celtype, plan)
+            jl_fftw_destroy_plan($celtype, plan)
+            return P
+        end
+
+    end
 end
 
-function fftw_transpose(X::Matrix{Float64})
-    P = similar(X)
-    (n1, n2) = size(X)
-    plan = ccall(dlsym(libfftw, :fftw_plan_guru_r2r), Ptr{Void},
-                 (Int32, Ptr{Int32}, Int32, Ptr{Int32}, Ptr{Float64}, Ptr{Float64}, Ptr{Int32}, Uint32),
-                 int32(0), C_NULL, int32(2),int32([n1,n2,1,n2,1,n1]), X, P, [FFTW_HC2R], FFTW_PATIENT | FFTW_PRESERVE_INPUT)
-    jl_fftw_execute(Float64, plan)
-    jl_fftw_destroy_plan(Float64, plan)
-    return P
-end
+@jl_transpose_complex_macro libfftw  :fftw_plan_guru_dft  Complex128
+@jl_transpose_complex_macro libfftwf :fftwf_plan_guru_dft Complex64
 
-function fftw_transpose(X::Matrix{Float32})
-    P = similar(X)
-    (n1, n2) = size(X)
-    plan = ccall(dlsym(libfftwf, :fftwf_plan_guru_r2r), Ptr{Void},
-                 (Int32, Ptr{Int32}, Int32, Ptr{Int32}, Ptr{Float32}, Ptr{Float32}, Ptr{Int32}, Uint32),
-                 int32(0), C_NULL, int32(2),int32([n1,n2,1,n2,1,n1]), X, P, [FFTW_HC2R], FFTW_PATIENT | FFTW_PRESERVE_INPUT)
-    jl_fftw_execute(Float32, plan)
-    jl_fftw_destroy_plan(Float32, plan)
-    return P
-end
