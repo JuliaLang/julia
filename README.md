@@ -121,10 +121,10 @@ See [LICENSE](https://github.com/JuliaLang/julia/blob/master/LICENSE) for the fu
 <a name="Binary-Installation"/>
 ## Binary Installation
 
-Julia's binary install ships as a tarball:
+Julia's binary installs ship as platform-specific tarballs:
 
-- Linux x86/64: <https://github.com/downloads/JuliaLang/julia/julia-08b1e294ed-Linux-x86_64.tar.gz>
-- Darwin x86/64: <https://github.com/downloads/JuliaLang/julia/julia-08b1e294ed-Darwin-x86_64.tar.gz>
+- **GNU/Linux x86/64:** <https://github.com/downloads/JuliaLang/julia/julia-08b1e294ed-Linux-x86_64.tar.gz>
+- **Darwin/OS X x86/64:** <https://github.com/downloads/JuliaLang/julia/julia-08b1e294ed-Darwin-x86_64.tar.gz>
 
 Download the appropriate tarball and untar it somewhere:
 
