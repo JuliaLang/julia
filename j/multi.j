@@ -737,6 +737,7 @@ function perform_work(job::WorkItem)
         println()
         result = FinalValue(e)
         job.task = ()  # task is toast. would be better to reuse it somehow.
+        runner = ()
     end
     if isa(result,FinalValue)
         # job done
