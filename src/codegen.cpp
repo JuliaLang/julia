@@ -83,6 +83,7 @@ static GlobalVariable *jltrue_var;
 static GlobalVariable *jlfalse_var;
 static GlobalVariable *jlnull_var;
 static GlobalVariable *jlsysmod_var;
+static GlobalVariable *jlfloat32temp_var;
 #ifdef JL_GC_MARKSWEEP
 static GlobalVariable *jlpgcstack_var;
 #endif
@@ -220,7 +221,6 @@ typedef struct {
     const Argument *argArray;
     const Argument *argCount;
     AllocaInst *argTemp;
-    AllocaInst *float32Temp; // for forcing rounding
     int argDepth;
     int argSpace;
     std::string funcName;
@@ -1485,7 +1485,6 @@ static void emit_function(jl_lambda_info_t *lam, Function *f)
     ctx.argArray = &argArray;
     ctx.argCount = &argCount;
     ctx.funcName = lam->name->name;
-    ctx.float32Temp = NULL;
 
     // look for initial (line num filename) node
     jl_array_t *stmts = jl_lam_body(ast)->args;
@@ -1919,6 +1918,10 @@ static void init_julia_llvm_env(Module *m)
     jlsysmod_var = global_to_llvm("jl_system_module", (void*)&jl_system_module);
     jlexc_var = global_to_llvm("jl_exception_in_transit",
                                (void*)&jl_exception_in_transit);
+    jlfloat32temp_var =
+        new GlobalVariable(*jl_Module, T_float32,
+                           false, GlobalVariable::PrivateLinkage,
+                           ConstantFP::get(T_float32,0.0), "jl_float32_temp");
 
     std::vector<const Type*> args1(0);
     args1.push_back(T_pint8);

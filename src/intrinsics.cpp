@@ -1046,11 +1046,8 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
         // understood that everything is implicitly rounded to 23 bits,
         // but if we start looking at more bits we need to actually do the
         // rounding first instead of carrying around incorrect low bits.
-        if (ctx->float32Temp == NULL) {
-            ctx->float32Temp = builder.CreateAlloca(T_float32);
-        }
-        builder.CreateStore(FP(x), ctx->float32Temp, true);
-        return builder.CreateFPExt(builder.CreateLoad(ctx->float32Temp, true),
+        builder.CreateStore(FP(x), jlfloat32temp_var, true);
+        return builder.CreateFPExt(builder.CreateLoad(jlfloat32temp_var, true),
                                    T_float64);
 
     HANDLE(sqrt_float,1)
