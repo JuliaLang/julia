@@ -148,6 +148,7 @@ You can read about [getting started](https://github.com/JuliaLang/julia/wiki/Get
     doc/           miscellaneous documentation and notes
     examples/      example julia programs
     external/      external dependencies
+    install/       used for creating binary installs
     j/             source code for julia's standard library
     lib/           shared libraries loaded by julia's standard libraries
     src/           source for julia language core

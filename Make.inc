@@ -5,7 +5,9 @@ JULIALIB = $(JULIAHOME)/lib
 EXTROOT = $(JULIAHOME)/external/root
 EXTROOTLIB = $(EXTROOT)/lib
 LLVMROOT = $(EXTROOT)
+
 OS = $(shell uname)
+ARCH = $(shell uname -m)
 
 DEFAULT_REPL = readline
 JULIAGC = MARKSWEEP
