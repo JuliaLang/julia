@@ -330,6 +330,24 @@ function changedist{T}(A::DArray{T}, to_dist)
     return darray((T,sz,da)->A[myindexes(da)...], T, size(A), to_dist, A.pmap)
 end
 
+function _jl_da_reshape(T, sz, da, A)
+    mi = myindexes(da)
+    i0s = map(r->r.start, mi)
+    i1s = map(r->r.stop, mi)
+    i0 = sub2ind(size(da), i0s...)
+    i1 = sub2ind(size(da), i1s...)
+    I = map(Range1, ind2sub(size(A), i0), ind2sub(size(A), i1))
+    reshape(A[I...], sz)
+end
+
+reshape(A::DArray, dims::Dims) =
+    darray((T,sz,da)->_jl_da_reshape(T,sz,da,A),
+           eltype(A), dims, maxdim(dims), A.pmap)
+
+transpose{T} (v::DArray{T,1}) = reshape(v, 1, size(v,1))
+ctranspose{T}(v::DArray{T,1}) = conj(reshape(v, 1, size(v,1)))
+ctranspose{T<:Real}(v::DArray{T,1}) = reshape(v, 1, size(v,1))
+
 ## Indexing ##
 
 ref(r::RemoteRef) = invoke(ref, (RemoteRef, Any...), r)
