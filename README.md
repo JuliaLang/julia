@@ -131,9 +131,9 @@ Download the appropriate tarball and untar it somewhere:
     curl -OLk https://github.com/downloads/JuliaLang/julia/julia-08b1e294ed-Darwin-x86_64.tar.gz
     tar zxvf julia-08b1e294ed-Darwin-x86_64.tar.gz
 
-You may also want to have the julia directory in your executable path:
+You can either run the `julia` executable using its full path in the directory created above, or add that directory to your executable path so that you can run the julia program from anywhere:
 
-    export PATH="$(pwd):$PATH"
+    export PATH="$(pwd)/julia:$PATH"
 
 Now you should be able to run julia like this:
 
@@ -157,11 +157,17 @@ Next, enter the `julia/` directory and run `make` to build the `julia` executabl
 When compiled the first time, it will automatically download and build its [external dependencies](#Required-Build-Tools-External-Libraries).
 This takes a while, but only has to be done once.
 
-No installation is required; `julia` is currently run from the directory where it was built.
-You might, however, want to make a symbolic link for the executable, for example `ln -s JULIA_PATH/julia ~/bin/julia`.
-Please note that the build process will not work if any of the build directory's parent directories have spaces in their names (this is due to a limitation in GNU make).
+*Note:* the build process will not work if any of the build directory's parent directories have spaces in their names (this is due to a limitation in GNU make).
 
-Congratulations, if you've gotten this far, you are ready to try out Julia.
+You can either run the `julia` executable using its full path in the directory created above, or add that directory to your executable path so that you can run the julia program from anywhere:
+
+    export PATH="$(pwd)/julia:$PATH"
+
+Now you should be able to run julia like this:
+
+    julia
+
+If everything works correctly, you will see a Julia banner and an interactive prompt into which you can enter expressions for evaluation.
 You can read about [getting started](https://github.com/JuliaLang/julia/wiki/Getting-Started) in the manual.
 
 <a name="Directories"/>
