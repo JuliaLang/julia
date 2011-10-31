@@ -126,7 +126,8 @@ Julia's binary installs ship as platform-specific tarballs:
 - **GNU/Linux x86/64:** <https://github.com/downloads/JuliaLang/julia/julia-08b1e294ed-Linux-x86_64.tar.gz>
 - **Darwin/OS X x86/64:** <https://github.com/downloads/JuliaLang/julia/julia-08b1e294ed-Darwin-x86_64.tar.gz>
 
-Download the appropriate tarball and untar it somewhere:
+Download the appropriate tarball and untar it somewhere;
+for example, if you are on an OS X (Darwin) x86/64 system, do the following:
 
     curl -OLk https://github.com/downloads/JuliaLang/julia/julia-08b1e294ed-Darwin-x86_64.tar.gz
     tar zxvf julia-08b1e294ed-Darwin-x86_64.tar.gz
@@ -156,10 +157,9 @@ or, if you don't have git installed, by using curl and tar to fetch and unpack t
 Next, enter the `julia/` directory and run `make` to build the `julia` executable.
 When compiled the first time, it will automatically download and build its [external dependencies](#Required-Build-Tools-External-Libraries).
 This takes a while, but only has to be done once.
-
 *Note:* the build process will not work if any of the build directory's parent directories have spaces in their names (this is due to a limitation in GNU make).
 
-You can either run the `julia` executable using its full path in the directory created above, or add that directory to your executable path so that you can run the julia program from anywhere:
+Once it is built, you can either run the `julia` executable using its full path in the directory created above, or add that directory to your executable path so that you can run the julia program from anywhere:
 
     export PATH="$(pwd)/julia:$PATH"
 
