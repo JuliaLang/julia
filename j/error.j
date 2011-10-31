@@ -7,7 +7,6 @@ error(s...) = error(print_to_string(print, s...))
 
 ## system error handling ##
 
-load("errno_h.j")
 errno() = ccall(:jl_errno, Int32, ())
 strerror(e::Int) = ccall(:jl_strerror, Any, (Int32,), int32(e))::ByteString
 strerror() = strerror(errno())
