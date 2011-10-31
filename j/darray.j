@@ -752,6 +752,7 @@ end
 
 for f = (:ceil,   :floor,  :trunc,  :round,
          :iceil,  :ifloor, :itrunc, :iround,
+         :abs,    :arg,    :log10,
          :sqrt,   :cbrt,   :log,    :log2,   :exp,   :expm1,
          :sin,    :cos,    :tan,    :cot,    :sec,   :csc,
          :sinh,   :cosh,   :tanh,   :coth,   :sech,  :csch,

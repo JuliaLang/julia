@@ -265,7 +265,10 @@ function cis(z::Complex)
     complex(v*cos(real(z)), v*sin(real(z)))
 end
 
+arg(z::Real) = atan2(zero(z), z)
 arg(z::Complex) = atan2(imag(z), real(z))
+@vectorize_1arg Number arg
+const angle = arg
 
 function sin(z::Complex)
     u = exp(imag(z))

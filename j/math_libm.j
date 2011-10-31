@@ -63,6 +63,10 @@ end
 @libfdmfunc_1arg_float Real   floor
 #@libfdmfunc_1arg_float Real   rint
 @libfdmfunc_1arg_float Number lgamma
+@libfdmfunc_1arg_float Real   j0
+@libfdmfunc_1arg_float Real   j1
+@libfdmfunc_1arg_float Real   y0
+@libfdmfunc_1arg_float Real   y1
 
 @libmfunc_1arg_float Number sqrt
 @libmfunc_1arg_float Number exp2
@@ -94,6 +98,9 @@ gamma(x::Float64) = ccall(dlsym(libfdm, :tgamma),  Float64, (Float64,), x)
 gamma(x::Float32) = float32(gamma(float64(x)))
 gamma(x::Real) = gamma(float(x))
 @vectorize_1arg Number gamma
+
+lfact(x::Real) = (x<=1 ? zero(x) : lgamma(x+one(x)))
+@vectorize_1arg Number lfact
 
 max(x::Float64, y::Float64) = ccall(dlsym(libm, :fmax),  Float64, (Float64,Float64), x, y)
 max(x::Float32, y::Float32) = ccall(dlsym(libm, :fmaxf), Float32, (Float32,Float32), x, y)
