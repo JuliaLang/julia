@@ -2225,8 +2225,8 @@ static builtinspec_t core_builtin_info[] = {
 
 // initialization -------------------------------------------------------------
 
-extern void builtins_init();
-extern void comparehash_init();
+extern void builtins_init(void);
+extern void comparehash_init(void);
 
 static void lisp_init(size_t initial_heapsize)
 {
@@ -2329,7 +2329,7 @@ value_t fl_toplevel_eval(value_t expr)
     return fl_applyn(1, symbol_value(evalsym), expr);
 }
 
-extern void fl_init_julia_extensions();
+extern void fl_init_julia_extensions(void);
 
 void fl_init(size_t initial_heapsize)
 {

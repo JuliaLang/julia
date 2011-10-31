@@ -395,9 +395,9 @@ static value_t fl_os_setenv(value_t *args, uint32_t nargs)
     return FL_T;
 }
 
-extern void stringfuncs_init();
-extern void table_init();
-extern void iostream_init();
+extern void stringfuncs_init(void);
+extern void table_init(void);
+extern void iostream_init(void);
 
 static builtinspec_t builtin_info[] = {
     { "environment", fl_global_env },
