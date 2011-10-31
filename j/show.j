@@ -10,23 +10,11 @@ show(b::Bool) = print(b ? "true" : "false")
 show(n::Int)  = show(int64(n))
 show(n::Uint) = show(uint64(n))
 
-show(f::Float64) = ccall(:jl_show_float, Void, (Float64, Int32),
-                         f, int32(8))
-show(f::Float32) = ccall(:jl_show_float, Void, (Float64, Int32),
-                         float64(f), int32(8))
+show(f::Float64) = ccall(:jl_show_float, Void, (Float64, Int32), f, int32(8))
+show(f::Float32) = ccall(:jl_show_float, Void, (Float64, Int32), float64(f), int32(8))
 
-function show{T}(p::Ptr{T})
-    if is(T,None)
-        print("Ptr{Void}")
-    else
-        print(typeof(p))
-    end
-    if WORD_SIZE==64
-        print(" @0x$(hex(uint(p),16))")
-    else
-        print(" @0x$(hex(uint(p), 8))")
-    end
-end
+show{T}(p::Ptr{T}) =
+    print(is(T,None) ? "Ptr{Void}" : typeof(p), " @0x$(hex(uint(p),WORD_SIZE>>2))")
 
 function show(l::LambdaStaticData)
     print("AST(")
@@ -78,10 +66,7 @@ function show_delim_array(itr, open, delim, close, delim_one)
 end
 
 show_comma_array(itr, o, c) = show_delim_array(itr, o, ',', c, false)
-
-function show(t::Tuple)
-    show_delim_array(t, '(', ',', ')', true)
-end
+show(t::Tuple) = show_delim_array(t, '(', ',', ')', true)
 
 function show_expr_type(ty)
     if !is(ty, Any)
@@ -129,19 +114,11 @@ function show(e::Expr)
     show_expr_type(e.typ)
 end
 
-function show(e::SymbolNode)
-    print(e.name)
-    show_expr_type(e.typ)
-end
-
+show(e::SymbolNode) = (print(e.name); show_expr_type(e.typ))
 show(e::LineNumberNode) = print("line($(e.line))")
-
 show(e::LabelNode) = print("$(e.label): ")
-
 show(e::GotoNode) = print("goto $(e.label)")
-
-show(e::TopNode) = (print("top($(e.name))");
-                    show_expr_type(e.typ))
+show(e::TopNode) = (print("top($(e.name))"); show_expr_type(e.typ))
 
 function show(e::QuoteNode)
     a1 = e.value
@@ -172,11 +149,7 @@ function show(e::TypeError)
     end
 end
 
-function show(e::LoadError)
-    show(e.error)
-    print(" $(e.file):$(e.line)")
-end
-
+show(e::LoadError) = (show(e.error); print(" $(e.file):$(e.line)"))
 show(e::SystemError) = print("$(e.prefix): $(strerror(e.errnum))")
 show(::DivideByZeroError) = print("error: integer divide by zero")
 show(::StackOverflowError) = print("error: stack overflow")
@@ -482,16 +455,8 @@ function whos()
 end
 
 show{T}(x::AbstractArray{T,0}) = (println(summary(x),":"); show(x[]))
-
-function show(X::AbstractMatrix)
-    println(summary(X),":")
-    print_matrix(X)
-end
-
-function show(X::AbstractArray)
-    println(summary(X),":")
-    show_nd(X)
-end
+show(X::AbstractMatrix) = (println(summary(X),":"); print_matrix(X))
+show(X::AbstractArray) = (println(summary(X),":"); show_nd(X))
 
 function show(v::AbstractVector)
     if is(eltype(v),Any)
