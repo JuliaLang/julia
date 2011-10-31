@@ -131,11 +131,6 @@ Download the appropriate tarball and untar it somewhere:
     curl -OLk https://github.com/downloads/JuliaLang/julia/julia-08b1e294ed-Darwin-x86_64.tar.gz
     tar zxvf julia-08b1e294ed-Darwin-x86_64.tar.gz
 
-Next you have to make sure that the `julia/lib` directory is in your `LD_LIBRARY_PATH` environment variable:
-
-    cd julia
-    export LD_LIBRARY_PATH=$(pwd)/lib
-
 You may also want to have the julia directory in your executable path:
 
     export PATH="$(pwd):$PATH"
