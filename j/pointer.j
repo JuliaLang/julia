@@ -17,7 +17,7 @@ convert(::Type{PtrInt}, x::Ptr) = box(PtrInt,unbox(PtrInt,x))
 convert{T<:Int}(::Type{T}, x::Ptr) = convert(T,uint(x))
 
 # int to pointer
-convert{T}(::Type{Ptr{T}}, x::PtrInt) = box(Ptr{T},unbox(PtrInt,x))
+convert{T}(::Type{Ptr{T}}, x::Int) = box(Ptr{T},unbox(PtrInt,ptrint(x)))
 
 # pointer to pointer
 convert{T}(::Type{Ptr{T}}, p::Ptr{T}) = p
