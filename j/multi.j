@@ -422,6 +422,34 @@ function serialize(s, rr::RemoteRef)
     invoke(serialize, (Any, Any), s, rr)
 end
 
+type GORef
+    whence
+    id
+end
+
+# special type for serializing references to GlobalObjects.
+# Needed because we want to always wait for the G.O. to be computed and
+# return it. in contrast, deserialize() for RemoteRef needs to avoid waiting
+# on uninitialized RemoteRefs since that might cause a deadlock, while G.O.s
+# are a special case where we know waiting on the RR is OK.
+function deserialize(s, t::Type{GORef})
+    gr = force(invoke(deserialize, (Any, Type), s, t))
+    rid = (gr.whence, gr.id)
+    add_client(rid, myid())
+    function ()
+        wi = lookup_ref(rid)
+        if !wi.done
+            wait(WeakRemoteRef(myid(), rid[1], rid[2]))
+        end
+        v = wi.result
+        if isa(v,WeakRef)
+            v = v.value
+        end
+        assert(isa(v,GlobalObject))
+        return v.local_identity
+    end
+end
+
 function deserialize(s, t::Type{RemoteRef})
     rr = force(invoke(deserialize, (Any, Type), s, t))
     rid = rr2id(rr)
@@ -1208,6 +1236,7 @@ function member(g::GlobalObject, p::Int)
     return false
 end
 
+const _jl_temp_goref = GORef(0,0)
 function serialize(s, g::GlobalObject)
     global PGRP
     # a GO is sent to a machine by sending just the RemoteRef for its
@@ -1243,7 +1272,9 @@ function serialize(s, g::GlobalObject)
             send_add_client(rr, i)
         end
     end
-    serialize(s, ri)
+    _jl_temp_goref.whence = ri.whence
+    _jl_temp_goref.id = ri.id
+    serialize(s, _jl_temp_goref)
 end
 
 localize(g::GlobalObject) = g.local_identity
