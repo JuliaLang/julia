@@ -2235,7 +2235,7 @@ static jl_tuple_t *jl_typevars(size_t n, ...)
 JL_CALLABLE(jl_f_new_expr);
 JL_CALLABLE(jl_f_new_box);
 
-extern void jl_init_int32_int64_cache();
+extern void jl_init_int32_int64_cache(void);
 
 void jl_init_types(void)
 {

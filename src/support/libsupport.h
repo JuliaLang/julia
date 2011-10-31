@@ -13,6 +13,6 @@
 #include "bitvector.h"
 #include "dirpath.h"
 
-DLLEXPORT void libsupport_init();
+DLLEXPORT void libsupport_init(void);
 
 #endif

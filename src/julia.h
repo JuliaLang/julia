@@ -564,8 +564,8 @@ jl_tuple_t *jl_tuple_fill(size_t n, jl_value_t *v);
 jl_tuple_t *jl_flatten_pairs(jl_tuple_t *t);
 DLLEXPORT jl_sym_t *jl_symbol(const char *str);
 DLLEXPORT jl_sym_t *jl_symbol_n(const char *str, int32_t len);
-DLLEXPORT jl_sym_t *jl_gensym();
-jl_sym_t *jl_get_root_symbol();
+DLLEXPORT jl_sym_t *jl_gensym(void);
+jl_sym_t *jl_get_root_symbol(void);
 jl_expr_t *jl_exprn(jl_sym_t *head, size_t n);
 jl_function_t *jl_new_generic_function(jl_sym_t *name);
 void jl_initialize_generic_function(jl_function_t *f, jl_sym_t *name);
@@ -636,7 +636,7 @@ DLLEXPORT void jl_array_del_beg(jl_array_t *a, size_t dec);
 void jl_cell_1d_push(jl_array_t *a, jl_value_t *item);
 
 // system information
-DLLEXPORT int jl_errno();
+DLLEXPORT int jl_errno(void);
 DLLEXPORT jl_value_t *jl_strerror(int errnum);
 
 // environment entries
@@ -652,9 +652,9 @@ DLLEXPORT int jl_process_term_signal(int status);
 DLLEXPORT int jl_process_stop_signal(int status);
 
 // access to std filehandles
-DLLEXPORT int jl_stdin();
-DLLEXPORT int jl_stdout();
-DLLEXPORT int jl_stderr();
+DLLEXPORT int jl_stdin(void);
+DLLEXPORT int jl_stdout(void);
+DLLEXPORT int jl_stderr(void);
 
 // exceptions
 void jl_error(const char *str);
@@ -665,25 +665,25 @@ void jl_type_error(const char *fname, jl_value_t *expected, jl_value_t *got);
 void jl_type_error_rt(const char *fname, const char *context,
                       jl_value_t *ty, jl_value_t *got);
 jl_value_t *jl_no_method_error(jl_function_t *f, jl_value_t **args, size_t na);
-void jl_undef_ref_error();
-void jl_divide_by_zero_error();
+void jl_undef_ref_error(void);
+void jl_divide_by_zero_error(void);
 
 // initialization functions
 DLLEXPORT void julia_init(char *imageFile);
 DLLEXPORT
 int julia_trampoline(int argc, char *argv[], int (*pmain)(int ac,char *av[]));
-void jl_init_types();
-void jl_init_box_caches();
-void jl_init_frontend();
-void jl_shutdown_frontend();
-void jl_init_primitives();
-void jl_init_builtins();
-void jl_init_modules();
-void jl_init_codegen();
-void jl_init_intrinsic_functions();
+void jl_init_types(void);
+void jl_init_box_caches(void);
+void jl_init_frontend(void);
+void jl_shutdown_frontend(void);
+void jl_init_primitives(void);
+void jl_init_builtins(void);
+void jl_init_modules(void);
+void jl_init_codegen(void);
+void jl_init_intrinsic_functions(void);
 void jl_init_tasks(void *stack, size_t ssize);
-void jl_init_serializer();
-void jl_load_boot_j();
+void jl_init_serializer(void);
+void jl_load_boot_j(void);
 
 void jl_save_system_image(char *fname, char *startscriptname);
 void jl_restore_system_image(char *fname);
@@ -830,22 +830,22 @@ extern DLLEXPORT jl_gcframe_t ** volatile jl_pgcstack;
 #define JL_GC_POP() \
     (*jl_pgcstack = __gc_stkf_.prev)
 
-void jl_gc_init();
+void jl_gc_init(void);
 void jl_gc_markval(jl_value_t *v);
-void jl_gc_enable();
-void jl_gc_disable();
-int jl_gc_is_enabled();
-DLLEXPORT void jl_gc_collect();
+void jl_gc_enable(void);
+void jl_gc_disable(void);
+int jl_gc_is_enabled(void);
+DLLEXPORT void jl_gc_collect(void);
 void jl_gc_preserve(jl_value_t *v);
-void jl_gc_unpreserve();
-int jl_gc_n_preserved_values();
+void jl_gc_unpreserve(void);
+int jl_gc_n_preserved_values(void);
 DLLEXPORT void jl_gc_add_finalizer(jl_value_t *v, jl_function_t *f);
 jl_weakref_t *jl_gc_new_weakref(jl_value_t *value);
 #define jl_gc_setmark(v) (((uptrint_t*)(v))[-1]|=1)
 void jl_gc_acquire_buffer(void *b);
-void *alloc_2w();
-void *alloc_3w();
-void *alloc_4w();
+void *alloc_2w(void);
+void *alloc_3w(void);
+void *alloc_4w(void);
 
 #else
 
@@ -921,10 +921,10 @@ extern DLLEXPORT jl_value_t *jl_exception_in_transit;
 jl_task_t *jl_new_task(jl_function_t *start, size_t ssize);
 jl_value_t *jl_switchto(jl_task_t *t, jl_value_t *arg);
 DLLEXPORT void jl_raise(jl_value_t *e);
-DLLEXPORT void jl_register_toplevel_eh();
+DLLEXPORT void jl_register_toplevel_eh(void);
 
-DLLEXPORT jl_value_t *jl_current_output_stream_obj();
-DLLEXPORT ios_t *jl_current_output_stream();
+DLLEXPORT jl_value_t *jl_current_output_stream_obj(void);
+DLLEXPORT ios_t *jl_current_output_stream(void);
 DLLEXPORT void jl_set_current_output_stream_obj(jl_value_t *v);
 
 DLLEXPORT jl_array_t *jl_takebuf_array(ios_t *s);

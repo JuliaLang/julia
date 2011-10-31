@@ -77,6 +77,7 @@ load("utf8.j")
 load("regex.j")
 load("show.j")
 load("env.j")
+load("errno_h.j")
 
 # core math functions
 load("intfuncs.j")

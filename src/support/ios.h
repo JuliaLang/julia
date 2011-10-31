@@ -109,7 +109,7 @@ DLLEXPORT ios_t *ios_fd(ios_t *s, long fd, int isfile, int own);
 extern DLLEXPORT ios_t *ios_stdin;
 extern DLLEXPORT ios_t *ios_stdout;
 extern DLLEXPORT ios_t *ios_stderr;
-void ios_init_stdstreams();
+void ios_init_stdstreams(void);
 
 /* high-level functions - output */
 int ios_putnum(ios_t *s, char *data, uint32_t type);

@@ -347,7 +347,7 @@ static void sweep_pool(pool_t *p)
     *pfl = NULL;
 }
 
-extern void jl_unmark_symbols();
+extern void jl_unmark_symbols(void);
 
 static void gc_sweep(void)
 {
@@ -588,7 +588,7 @@ static void gc_mark_module(jl_module_t *m)
     }
 }
 
-void jl_mark_box_caches();
+void jl_mark_box_caches(void);
 
 extern jl_value_t * volatile jl_task_arg_in_transit;
 
@@ -661,8 +661,8 @@ void jl_gc_disable(void)
 int jl_gc_is_enabled(void) { return is_gc_enabled; }
 
 #if defined(MEMPROFILE)
-static void all_pool_stats();
-static void big_obj_stats();
+static void all_pool_stats(void);
+static void big_obj_stats(void);
 #endif
 
 void jl_gc_collect(void)
