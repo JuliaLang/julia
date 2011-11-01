@@ -5,33 +5,33 @@ libfftwf = dlopen("libfftw3f")
 
 ## Direction of FFT
 
-FFTW_FORWARD = int32(-1)
-FFTW_BACKWARD = int32(1)
+const FFTW_FORWARD = int32(-1)
+const FFTW_BACKWARD = int32(1)
 
 ## FFTW Flags from fftw3.h
 
-FFTW_MEASURE         = uint32(0)
-FFTW_DESTROY_INPUT   = uint32(1 << 0)
-FFTW_UNALIGNED       = uint32(1 << 1)
-FFTW_CONSERVE_MEMORY = uint32(1 << 2)
-FFTW_EXHAUSTIVE      = uint32(1 << 3)   # NO_EXHAUSTIVE is default
-FFTW_PRESERVE_INPUT  = uint32(1 << 4)   # cancels FFTW_DESTROY_INPUT
-FFTW_PATIENT         = uint32(1 << 5)   # IMPATIENT is default
-FFTW_ESTIMATE        = uint32(1 << 6)
+const FFTW_MEASURE         = uint32(0)
+const FFTW_DESTROY_INPUT   = uint32(1 << 0)
+const FFTW_UNALIGNED       = uint32(1 << 1)
+const FFTW_CONSERVE_MEMORY = uint32(1 << 2)
+const FFTW_EXHAUSTIVE      = uint32(1 << 3)   # NO_EXHAUSTIVE is default
+const FFTW_PRESERVE_INPUT  = uint32(1 << 4)   # cancels FFTW_DESTROY_INPUT
+const FFTW_PATIENT         = uint32(1 << 5)   # IMPATIENT is default
+const FFTW_ESTIMATE        = uint32(1 << 6)
 
 ## R2R transform kinds
 
-FFTW_R2HC    = int32(0)
-FFTW_HC2R    = int32(1)
-FFTW_DHT     = int32(2)
-FFTW_REDFT00 = int32(3)
-FFTW_REDFT01 = int32(4)
-FFTW_REDFT10 = int32(5)
-FFTW_REDFT11 = int32(6)
-FFTW_RODFT00 = int32(7)
-FFTW_RODFT01 = int32(8)
-FFTW_RODFT10 = int32(9)
-FFTW_RODFT11 = int32(10)
+const FFTW_R2HC    = int32(0)
+const FFTW_HC2R    = int32(1)
+const FFTW_DHT     = int32(2)
+const FFTW_REDFT00 = int32(3)
+const FFTW_REDFT01 = int32(4)
+const FFTW_REDFT10 = int32(5)
+const FFTW_REDFT11 = int32(6)
+const FFTW_RODFT00 = int32(7)
+const FFTW_RODFT01 = int32(8)
+const FFTW_RODFT10 = int32(9)
+const FFTW_RODFT11 = int32(10)
 
 ## Julia wrappers around FFTW functions
 
