@@ -56,7 +56,7 @@ function binomial{T<:Int}(n::T, k::T)
     return sgn*convert(T,x)
 end
 
-## in-place sorting methods ##
+## sorting ##
 
 function issorted(v::AbstractVector)
     for i=1:(length(v)-1)
@@ -222,37 +222,39 @@ function _jl_mergesort(a::AbstractVector, lo::Int, hi::Int, b::AbstractVector)
 end
 
 sort!{T <: Real}(a::AbstractVector{T}) = _jl_quicksort(a, 1, length(a))
-
-sort!{T}(a::AbstractVector{T}) =
-    _jl_mergesort(a, 1, length(a), Array(T, length(a)))
+sort!{T}(a::AbstractVector{T}) = _jl_mergesort(a, 1, length(a), Array(T, length(a)))
 
 sortperm{T}(a::AbstractVector{T}) =
     _jl_mergesort(copy(a), linspace(1,length(a)), 1, length(a),
-              Array(T, length(a)), Array(Size, length(a)))
+                  Array(T, length(a)), Array(Size, length(a)))
 
-function sort!(a::AbstractMatrix, dim::Index)
-    m, n = size(a)
-    if dim == 1
-        for i=1:m:numel(a)
-            sort!(sub(a, i:(i+m-1)))
+macro in_place_matrix_op(in_place, out_of_place)
+    quote
+        function ($in_place)(a::AbstractMatrix, dim::Index)
+            m = size(a,1)
+            if dim == 1
+                for i=1:m:numel(a)
+                    ($in_place)(sub(a, i:(i+m-1)))
+                end
+            elseif dim == 2
+                for i=1:m
+                    ($in_place)(sub(a, i:m:numel(a)))
+                end
+            end
+            return a
         end
-    elseif dim == 2
-        for i=1:m
-            sort!(sub(a, i:m:numel(a)))
-        end
+        # TODO: in-place generalized AbstractArray implementation
+        ($in_place)(a::AbstractMatrix) = ($in_place)(a,1)
+
+        ($out_of_place)(a::AbstractVector) = ($in_place)(copy(a))
+        ($out_of_place)(a::AbstractArray, dim::Index) = ($in_place)(copy(a), dim)
+        ($out_of_place)(a::AbstractMatrix) = ($out_of_place)(a,1)
     end
-    return a
 end
 
-sort!(a::AbstractArray) = sort!(a, 1)
+@in_place_matrix_op sort! sort
 
-## non-in-place sort methods ##
-
-sort(a::AbstractVector) = sort!(copy(a))
-sort(a::AbstractArray, dim::Index) = sort!(copy(a), dim)
-sort(a::AbstractArray) = sort(a, 1)
-
-# TODO: make this in-place, then call in-place version on a copy
+# TODO: implement generalized in-place, ditch this
 function sort(a::AbstractArray, dim::Index)
     X = similar(a)
     n = size(a,dim)
@@ -271,7 +273,8 @@ function sort(a::AbstractArray, dim::Index)
     return X
 end
 
-# Knuth shuffle
+## other ordering related functions ##
+
 function shuffle!(a::AbstractVector)
     for i = length(a):-1:2
         j = randi(i)
@@ -279,7 +282,8 @@ function shuffle!(a::AbstractVector)
     end
     return a
 end
-shuffle(a::AbstractVector) = shuffle!(copy(a))
+
+@in_place_matrix_op shuffle! shuffle
 
 function randperm(n::Int)
     a = Array(typeof(n), n)
