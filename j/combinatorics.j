@@ -42,7 +42,7 @@ function binomial{T<:Int}(n::T, k::T)
     if k == 1
         return sgn*n
     end
-    if k > div(n,2)
+    if k > (n>>1)
         k = (n - k)
     end
     x = nn = n - k + 1.0
@@ -83,16 +83,16 @@ function _jl_insertionsort(a::AbstractVector, lo::Int, hi::Int)
         end
         a[j] = x
     end
-    a
+    return a
 end
 
 function _jl_quicksort(a::AbstractVector, lo::Int, hi::Int)
     while hi > lo
-        if (hi-lo <= 20)
+        if hi-lo <= 20
             return _jl_insertionsort(a, lo, hi)
         end
         i, j = lo, hi
-        pivot = a[div((lo+hi),2)]
+        pivot = a[div(lo+hi,2)]
         # Partition
         while i <= j
             while a[i] < pivot; i += 1; end
@@ -104,14 +104,16 @@ function _jl_quicksort(a::AbstractVector, lo::Int, hi::Int)
             end
         end
         # Recursion for quicksort
-        if lo < j; _jl_quicksort(a, lo, j); end
+        if lo < j
+            _jl_quicksort(a, lo, j)
+        end
         lo = i
     end
     return a
 end
 
 function _jl_insertionsort(a::AbstractVector, p::AbstractVector{Size}, lo::Int, hi::Int)
-    for i=(lo+1):hi
+    for i = (lo+1):hi
         j = i
         x = a[i]
         xp = p[i]
@@ -126,25 +128,24 @@ function _jl_insertionsort(a::AbstractVector, p::AbstractVector{Size}, lo::Int, 
         a[j] = x
         p[j] = xp
     end
-    (a, p)
+    return a, p
 end
 
 function _jl_mergesort(a::AbstractVector, p::AbstractVector{Size}, lo::Int, hi::Int,
-                    b::AbstractVector, pb::AbstractVector{Size})
-
+                       b::AbstractVector, pb::AbstractVector{Size})
     if lo < hi
-        if (hi-lo <= 20)
+        if hi-lo <= 20
             return _jl_insertionsort(a, p, lo, hi)
         end
 
-        m = div ((lo + hi), 2)
+        m = div(lo+hi, 2)
         _jl_mergesort(a, p, lo, m, b, pb)
         _jl_mergesort(a, p, m+1, hi, b, pb)
 
         # merge(lo,m,hi)
         i = 1
         j = lo
-        while (j <= m)
+        while j <= m
             b[i] = a[j]
             pb[i] = p[j]
             i += 1
@@ -153,8 +154,8 @@ function _jl_mergesort(a::AbstractVector, p::AbstractVector{Size}, lo::Int, hi::
 
         i = 1
         k = lo
-        while ((k < j) & (j <= hi))
-            if (b[i] <= a[j])
+        while (k < j) & (j <= hi)
+            if b[i] <= a[j]
                 a[k] = b[i]
                 p[k] = pb[i]
                 i += 1
@@ -165,33 +166,30 @@ function _jl_mergesort(a::AbstractVector, p::AbstractVector{Size}, lo::Int, hi::
             end
             k += 1
         end
-
-        while (k < j)
+        while k < j
             a[k] = b[i]
             p[k] = pb[i]
             k += 1
             i += 1
         end
-
-    end # if lo<hi...
-
-    return (a, p)
+    end
+    return a, p
 end
 
 function _jl_mergesort(a::AbstractVector, lo::Int, hi::Int, b::AbstractVector)
     if lo < hi
-        if (hi-lo <= 20)
+        if hi-lo <= 20
             return _jl_insertionsort(a, lo, hi)
         end
 
-        m = div ((lo + hi), 2)
+        m = div(lo+hi, 2)
         _jl_mergesort(a, lo, m, b)
         _jl_mergesort(a, m+1, hi, b)
 
         # merge(lo,m,hi)
         i = 1
         j = lo
-        while (j <= m)
+        while j <= m
             b[i] = a[j]
             i += 1
             j += 1
@@ -199,8 +197,8 @@ function _jl_mergesort(a::AbstractVector, lo::Int, hi::Int, b::AbstractVector)
 
         i = 1
         k = lo
-        while ((k < j) & (j <= hi))
-            if (b[i] <= a[j])
+        while (k < j) & (j <= hi)
+            if b[i] <= a[j]
                 a[k] = b[i]
                 i += 1
             else
@@ -210,7 +208,7 @@ function _jl_mergesort(a::AbstractVector, lo::Int, hi::Int, b::AbstractVector)
             k += 1
         end
 
-        while (k < j)
+        while k < j
             a[k] = b[i]
             k += 1
             i += 1
@@ -228,7 +226,8 @@ sortperm{T}(a::AbstractVector{T}) =
     _jl_mergesort(copy(a), linspace(1,length(a)), 1, length(a),
                   Array(T, length(a)), Array(Size, length(a)))
 
-macro in_place_matrix_op(in_place, out_of_place)
+macro in_place_matrix_op(out_of_place)
+    in_place = symbol("$(out_of_place)!")
     quote
         function ($in_place)(a::AbstractMatrix, dim::Index)
             m = size(a,1)
@@ -252,7 +251,7 @@ macro in_place_matrix_op(in_place, out_of_place)
     end
 end
 
-@in_place_matrix_op sort! sort
+@in_place_matrix_op sort
 
 # TODO: implement generalized in-place, ditch this
 function sort(a::AbstractArray, dim::Index)
@@ -283,7 +282,7 @@ function shuffle!(a::AbstractVector)
     return a
 end
 
-@in_place_matrix_op shuffle! shuffle
+@in_place_matrix_op shuffle
 
 function randperm(n::Int)
     a = Array(typeof(n), n)
