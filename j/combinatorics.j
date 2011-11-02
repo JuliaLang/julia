@@ -9,7 +9,7 @@ function factorial(n::Int)
     p
 end
 
-function nPr{T <: Int}(n::T, r::T)
+function factorial{T <: Int}(n::T, r::T)
     if r < 0 || n < 0 || r > n
         return zero(T)
     end
@@ -23,7 +23,7 @@ function nPr{T <: Int}(n::T, r::T)
     return ans
 end
 
-function nCr{T <: Int}(n::T, r::T)
+function binomial{T <: Int}(n::T, r::T)
     if r < 0
         return zero(T)
     end
@@ -62,23 +62,21 @@ function nCr{T <: Int}(n::T, r::T)
     return convert(T,x)
 end
 
-# sort() should be stable
+## in-place sorting methods ##
+
+function issorted(v::AbstractVector)
+    for i=1:(length(v)-1)
+        if v[i] > v[i+1]; return false; end
+    end
+    return true
+end
+
+# sorting should be stable
 # Thus, if a permutation is required, or records are being sorted
 # a stable sort should be used.
 # If only numbers are being sorted, a faster quicksort can be used.
 
-sort_inplace{T <: Real}(a::AbstractVector{T}) = quicksort(a, 1, length(a))
-
-sort_inplace{T}(a::AbstractVector{T}) =
-    mergesort(a, 1, length(a), Array(T, length(a)))
-
-sort(a::AbstractVector) = sort_inplace(copy(a))
-
-sortperm{T}(a::AbstractVector{T}) =
-    mergesort(copy(a), linspace(1,length(a)), 1, length(a),
-              Array(T, length(a)), Array(Size, length(a)))
-
-function insertionsort(a::AbstractVector, lo::Int, hi::Int)
+function _jl_insertionsort(a::AbstractVector, lo::Int, hi::Int)
     for i=(lo+1):hi
         j = i
         x = a[i]
@@ -94,10 +92,10 @@ function insertionsort(a::AbstractVector, lo::Int, hi::Int)
     a
 end
 
-function quicksort(a::AbstractVector, lo::Int, hi::Int)
+function _jl_quicksort(a::AbstractVector, lo::Int, hi::Int)
     while hi > lo
         if (hi-lo <= 20)
-            return insertionsort(a, lo, hi)
+            return _jl_insertionsort(a, lo, hi)
         end
         i, j = lo, hi
         pivot = a[div((lo+hi),2)]
@@ -112,13 +110,13 @@ function quicksort(a::AbstractVector, lo::Int, hi::Int)
             end
         end
         # Recursion for quicksort
-        if lo < j; quicksort(a, lo, j); end
+        if lo < j; _jl_quicksort(a, lo, j); end
         lo = i
     end
     return a
 end
 
-function insertionsort(a::AbstractVector, p::AbstractVector{Size}, lo::Int, hi::Int)
+function _jl_insertionsort(a::AbstractVector, p::AbstractVector{Size}, lo::Int, hi::Int)
     for i=(lo+1):hi
         j = i
         x = a[i]
@@ -137,17 +135,17 @@ function insertionsort(a::AbstractVector, p::AbstractVector{Size}, lo::Int, hi::
     (a, p)
 end
 
-function mergesort(a::AbstractVector, p::AbstractVector{Size}, lo::Int, hi::Int,
-                   b::AbstractVector, pb::AbstractVector{Size})
+function _jl_mergesort(a::AbstractVector, p::AbstractVector{Size}, lo::Int, hi::Int,
+                    b::AbstractVector, pb::AbstractVector{Size})
 
     if lo < hi
         if (hi-lo <= 20)
-            return insertionsort(a, p, lo, hi)
+            return _jl_insertionsort(a, p, lo, hi)
         end
 
         m = div ((lo + hi), 2)
-        mergesort(a, p, lo, m, b, pb)
-        mergesort(a, p, m+1, hi, b, pb)
+        _jl_mergesort(a, p, lo, m, b, pb)
+        _jl_mergesort(a, p, m+1, hi, b, pb)
 
         # merge(lo,m,hi)
         i = 1
@@ -186,15 +184,15 @@ function mergesort(a::AbstractVector, p::AbstractVector{Size}, lo::Int, hi::Int,
     return (a, p)
 end
 
-function mergesort(a::AbstractVector, lo::Int, hi::Int, b::AbstractVector)
+function _jl_mergesort(a::AbstractVector, lo::Int, hi::Int, b::AbstractVector)
     if lo < hi
         if (hi-lo <= 20)
-            return insertionsort(a, lo, hi)
+            return _jl_insertionsort(a, lo, hi)
         end
 
         m = div ((lo + hi), 2)
-        mergesort(a, lo, m, b)
-        mergesort(a, m+1, hi, b)
+        _jl_mergesort(a, lo, m, b)
+        _jl_mergesort(a, m+1, hi, b)
 
         # merge(lo,m,hi)
         i = 1
@@ -229,64 +227,65 @@ function mergesort(a::AbstractVector, lo::Int, hi::Int, b::AbstractVector)
     return a
 end
 
-function issorted(v::AbstractVector)
-    for i=1:(length(v)-1)
-        if v[i] > v[i+1]; return false; end
-    end
-    return true
-end
+sort!{T <: Real}(a::AbstractVector{T}) = _jl_quicksort(a, 1, length(a))
 
-sort(A::AbstractArray) = sort(A, 1)
-sort(A::AbstractMatrix) = sort(A, 1)
+sort!{T}(a::AbstractVector{T}) =
+    _jl_mergesort(a, 1, length(a), Array(T, length(a)))
 
-function sort(A::AbstractMatrix, dim::Index)
-    X = similar(A)
-    (m, n) = size(A)
-    numelA = numel(A)
+sortperm{T}(a::AbstractVector{T}) =
+    _jl_mergesort(copy(a), linspace(1,length(a)), 1, length(a),
+              Array(T, length(a)), Array(Size, length(a)))
 
+function sort!(a::AbstractMatrix, dim::Index)
+    m, n = size(a)
     if dim == 1
-        for i=1:m:numel(A)
-            this_slice = i:(i+m-1)
-            X[this_slice] = sort(sub(A, this_slice))
+        for i=1:m:numel(a)
+            sort!(sub(a, i:(i+m-1)))
         end
     elseif dim == 2
         for i=1:m
-            this_slice = i:m:numelA
-            X[this_slice] = sort(sub(A, this_slice))
+            sort!(sub(a, i:m:numel(a)))
         end
     end
-
-    return X
+    return a
 end
 
-function sort(A::AbstractArray, dim::Index)
-    X = similar(A)
-    n = size(A,dim)
-    s = stride(A,dim)
-    nslices = div(numel(A), n)
+sort!(a::AbstractArray) = sort!(a, 1)
+
+## non-in-place sort methods ##
+
+sort(a::AbstractVector) = sort!(copy(a))
+sort(a::AbstractArray, dim::Index) = sort!(copy(a), dim)
+sort(a::AbstractArray) = sort(a, 1)
+
+# TODO: make this in-place, then call in-place version on a copy
+function sort(a::AbstractArray, dim::Index)
+    X = similar(a)
+    n = size(a,dim)
 
     if dim == 1
-        for i=1:n:numel(A)
+        for i=1:n:numel(a)
             this_slice = i:(i+n-1)
-            X[this_slice] = sort(sub(A, this_slice))
+            X[this_slice] = sort(sub(a, this_slice))
         end
     else
-        p = [1:ndims(A)]
+        p = [1:ndims(a)]
         p[dim], p[1] = p[1], p[dim]
-        X = ipermute(sort(permute(A, p)), p)
+        X = ipermute(sort(permute(a, p)), p)
     end
 
     return X
 end
 
 # Knuth shuffle
-function shuffle(a::AbstractVector)
+function shuffle!(a::AbstractVector)
     for i = length(a):-1:2
         j = randi(i)
         a[i], a[j] = a[j], a[i]
     end
     return a
 end
+shuffle(a::AbstractVector) = shuffle!(copy(a))
 
 function randperm(n::Int)
     a = Array(typeof(n), n)
@@ -310,12 +309,13 @@ function randcycle(n::Int)
     return a
 end
 
-function nthperm(A, k::Int)
+function nthperm!(a::AbstractVector, k::Int)
     fac = one(k)
-    for i=2:length(A)
+    for i=2:length(a)
         fac *= (i-1)
         j = i - rem(div(k,fac),i)
-        A[i], A[j] = A[j], A[i]
+        a[i], a[j] = a[j], a[i]
     end
-    A
+    a
 end
+nthperm(a::AbstractVector, k::Int) = nthperm!(copy(a))
