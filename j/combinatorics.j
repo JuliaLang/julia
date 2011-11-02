@@ -2,64 +2,58 @@ function factorial(n::Int)
     if n < 0
         return zero(n)
     end
-    p = one(n)
-    for i=2:n
-        p*=i
+    f = one(n)
+    for i = 2:n
+        f *= i
     end
-    p
+    return f
 end
 
-function factorial{T <: Int}(n::T, r::T)
-    if r < 0 || n < 0 || r > n
+# computes n!/k!
+function factorial{T<:Int}(n::T, k::T)
+    if k < 0 || n < 0 || k > n
         return zero(T)
     end
-
-    ans = one(T)
-    while (r > 0)
-        ans *= n
+    f = one(T)
+    while n > k
+        f *= n
         n -= 1
-        r -= 1
     end
-    return ans
+    return f
 end
 
-function binomial{T <: Int}(n::T, r::T)
-    if r < 0
+function binomial{T<:Int}(n::T, k::T)
+    if k < 0
         return zero(T)
     end
-
-    neg = false
+    sgn = one(T)
     if n < 0
-        n = (-n)+r-1
-        if isodd(r)
-            neg = true
+        n = -n + k -1
+        if isodd(k)
+            sgn = -sgn
         end
     end
-
-    if r > n
+    if k > n # TODO: is this definitely right?
         return zero(T)
     end
-    if r == 0 || r == n
-        return one(T)
+    if k == 0 || k == n
+        return sgn
     end
-
-    if r > div(n,2)
-        r = (n - r)
+    if k == 1
+        return sgn*n
     end
-
-    x = nn = n - r + 1.0
+    if k > div(n,2)
+        k = (n - k)
+    end
+    x = nn = n - k + 1.0
     nn += 1.0
     rr = 2.0
-    while (rr <= r)
+    while rr <= k
         x *= (nn/rr)
         rr += 1
         nn += 1
     end
-    # TODO: should these be truncates?
-    if neg
-        return convert(T,-x)
-    end
-    return convert(T,x)
+    return sgn*convert(T,x)
 end
 
 ## in-place sorting methods ##
