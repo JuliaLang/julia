@@ -107,7 +107,7 @@ function _start()
             global const PGRP = ProcessGroup(0, {}, {})
         end
 
-        global const VARIABLES = empty(Symbol)
+        global const VARIABLES = {}
 
         # Load customized startup
         try
