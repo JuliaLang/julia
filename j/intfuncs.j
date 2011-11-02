@@ -131,3 +131,14 @@ function powermod(x::Int, p::Int, m::Int)
     end
     return r
 end
+
+# smallest power of 2 >= i
+function nextpow2(i::Int)
+    if i&(i-1) == 0
+        return i
+    end
+    while (i&(i-1) != 0)
+        i = i&(i-1)
+    end
+    return i<<1
+end

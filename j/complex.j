@@ -204,6 +204,8 @@ inv(z::Complex)  = conj(z)/abs2(z)
 -(z::Complex, w::Complex) = complex(real(z) - real(w), imag(z) - imag(w))
 *(z::Complex, w::Complex) = complex(real(z) * real(w) - imag(z) * imag(w),
                                     real(z) * imag(w) + imag(z) * real(w))
+*(x::Real, z::Complex) = complex(x * real(z), x * imag(z))
+*(z::Complex, x::Real) = complex(x * real(z), x * imag(z))
 
 # multiplying by im is common
 *(z::ImaginaryUnit, w::ImaginaryUnit) = complex(-imag(z), real(z))
@@ -265,10 +267,9 @@ function cis(z::Complex)
     complex(v*cos(real(z)), v*sin(real(z)))
 end
 
-arg(z::Real) = atan2(zero(z), z)
-arg(z::Complex) = atan2(imag(z), real(z))
-@vectorize_1arg Number arg
-const angle = arg
+angle(z::Real) = atan2(zero(z), z)
+angle(z::Complex) = atan2(imag(z), real(z))
+@vectorize_1arg Number angle
 
 function sin(z::Complex)
     u = exp(imag(z))
