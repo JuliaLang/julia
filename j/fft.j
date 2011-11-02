@@ -5,33 +5,33 @@ libfftwf = dlopen("libfftw3f")
 
 ## Direction of FFT
 
-FFTW_FORWARD = int32(-1)
-FFTW_BACKWARD = int32(1)
+const FFTW_FORWARD = int32(-1)
+const FFTW_BACKWARD = int32(1)
 
 ## FFTW Flags from fftw3.h
 
-FFTW_MEASURE         = uint32(0)
-FFTW_DESTROY_INPUT   = uint32(1 << 0)
-FFTW_UNALIGNED       = uint32(1 << 1)
-FFTW_CONSERVE_MEMORY = uint32(1 << 2)
-FFTW_EXHAUSTIVE      = uint32(1 << 3)   # NO_EXHAUSTIVE is default
-FFTW_PRESERVE_INPUT  = uint32(1 << 4)   # cancels FFTW_DESTROY_INPUT
-FFTW_PATIENT         = uint32(1 << 5)   # IMPATIENT is default
-FFTW_ESTIMATE        = uint32(1 << 6)
+const FFTW_MEASURE         = uint32(0)
+const FFTW_DESTROY_INPUT   = uint32(1 << 0)
+const FFTW_UNALIGNED       = uint32(1 << 1)
+const FFTW_CONSERVE_MEMORY = uint32(1 << 2)
+const FFTW_EXHAUSTIVE      = uint32(1 << 3)   # NO_EXHAUSTIVE is default
+const FFTW_PRESERVE_INPUT  = uint32(1 << 4)   # cancels FFTW_DESTROY_INPUT
+const FFTW_PATIENT         = uint32(1 << 5)   # IMPATIENT is default
+const FFTW_ESTIMATE        = uint32(1 << 6)
 
 ## R2R transform kinds
 
-FFTW_R2HC    = int32(0)
-FFTW_HC2R    = int32(1)
-FFTW_DHT     = int32(2)
-FFTW_REDFT00 = int32(3)
-FFTW_REDFT01 = int32(4)
-FFTW_REDFT10 = int32(5)
-FFTW_REDFT11 = int32(6)
-FFTW_RODFT00 = int32(7)
-FFTW_RODFT01 = int32(8)
-FFTW_RODFT10 = int32(9)
-FFTW_RODFT11 = int32(10)
+const FFTW_R2HC    = int32(0)
+const FFTW_HC2R    = int32(1)
+const FFTW_DHT     = int32(2)
+const FFTW_REDFT00 = int32(3)
+const FFTW_REDFT01 = int32(4)
+const FFTW_REDFT10 = int32(5)
+const FFTW_REDFT11 = int32(6)
+const FFTW_RODFT00 = int32(7)
+const FFTW_RODFT01 = int32(8)
+const FFTW_RODFT10 = int32(9)
+const FFTW_RODFT11 = int32(10)
 
 ## Julia wrappers around FFTW functions
 
@@ -55,23 +55,18 @@ jl_fftw_destroy_plan(precision::Union(Type{Float32}, Type{Complex64}), plan) =
 
 macro jl_fftw_plan_dft_1d_macro(libname, fname_complex, fname_real, T_in, T_out)
     quote
-
         function jl_fftw_plan_dft(X::Vector{$T_out}, Y::Vector{$T_out}, direction::Int)
-            plan = ccall(dlsym($libname, $fname_complex),
-                         Ptr{Void},
-                         (Int32, Ptr{$T_out}, Ptr{$T_out}, Int32, Uint32, ),
-                         int32(length(X)), X, Y, int32(direction), FFTW_ESTIMATE)
-            return plan
+            ccall(dlsym($libname, $fname_complex),
+                  Ptr{Void},
+                  (Int32, Ptr{$T_out}, Ptr{$T_out}, Int32, Uint32, ),
+                  int32(length(X)), X, Y, int32(direction), FFTW_ESTIMATE)
         end
-
         function jl_fftw_plan_dft(X::Vector{$T_in}, Y::Vector{$T_out})
-            plan = ccall(dlsym($libname, $fname_real),
-                         Ptr{Void},
-                         (Int32, Ptr{$T_in}, Ptr{$T_out}, Uint32, ),
-                         int32(length(X)), X, Y, FFTW_ESTIMATE)
-            return plan
+            ccall(dlsym($libname, $fname_real),
+                  Ptr{Void},
+                  (Int32, Ptr{$T_in}, Ptr{$T_out}, Uint32, ),
+                  int32(length(X)), X, Y, FFTW_ESTIMATE)
         end
-
     end
 end
 
@@ -82,23 +77,18 @@ end
 
 macro jl_fftw_plan_dft_2d_macro(libname, fname_complex, fname_real, T_in, T_out)
     quote
-
         function jl_fftw_plan_dft(X::Matrix{$T_out}, Y::Matrix{$T_out}, direction::Int)
-            plan = ccall(dlsym($libname, $fname_complex),
-                         Ptr{Void},
-                         (Int32, Int32, Ptr{$T_out}, Ptr{$T_out}, Int32, Uint32, ),
-                         int32(size(X,2)), int32(size(X,1)), X, Y, int32(direction), FFTW_ESTIMATE)
-            return plan
+            ccall(dlsym($libname, $fname_complex),
+                  Ptr{Void},
+                  (Int32, Int32, Ptr{$T_out}, Ptr{$T_out}, Int32, Uint32, ),
+                  int32(size(X,2)), int32(size(X,1)), X, Y, int32(direction), FFTW_ESTIMATE)
         end
-
         function jl_fftw_plan_dft(X::Matrix{$T_in}, Y::Matrix{$T_out})
-            plan = ccall(dlsym($libname, $fname_real),
-                         Ptr{Void},
-                         (Int32, Int32, Ptr{$T_in}, Ptr{$T_out}, Uint32, ),
-                         int32(size(X,2)), int32(size(X,1)), X, Y, FFTW_ESTIMATE)
-            return plan
+            ccall(dlsym($libname, $fname_real),
+                  Ptr{Void},
+                  (Int32, Int32, Ptr{$T_in}, Ptr{$T_out}, Uint32, ),
+                  int32(size(X,2)), int32(size(X,1)), X, Y, FFTW_ESTIMATE)
         end
-
     end
 end
 
@@ -109,23 +99,18 @@ end
 
 macro jl_fftw_plan_dft_3d_macro(libname, fname_complex, fname_real, T_in, T_out)
     quote
-
         function jl_fftw_plan_dft(X::Array{$T_out,3}, Y::Array{$T_out,3}, direction::Int)
-            plan = ccall(dlsym($libname, $fname_complex),
-                         Ptr{Void},
-                         (Int32, Int32, Int32, Ptr{$T_out}, Ptr{$T_out}, Int32, Uint32, ),
-                         int32(size(X,3)), int32(size(X,2)), int32(size(X,1)), X, Y, int32(direction), FFTW_ESTIMATE)
-            return plan
+            ccall(dlsym($libname, $fname_complex),
+                  Ptr{Void},
+                  (Int32, Int32, Int32, Ptr{$T_out}, Ptr{$T_out}, Int32, Uint32, ),
+                  int32(size(X,3)), int32(size(X,2)), int32(size(X,1)), X, Y, int32(direction), FFTW_ESTIMATE)
         end
-
         function jl_fftw_plan_dft(X::Array{$T_in,3}, Y::Array{$T_out,3})
-            plan = ccall(dlsym($libname, $fname_real),
-                         Ptr{Void},
-                         (Int32, Int32, Int32, Ptr{$T_in}, Ptr{$T_out}, Uint32, ),
-                         int32(size(X,3)), int32(size(X,2)), int32(size(X,1)), X, Y, FFTW_ESTIMATE)
-            return plan
+            ccall(dlsym($libname, $fname_real),
+                  Ptr{Void},
+                  (Int32, Int32, Int32, Ptr{$T_in}, Ptr{$T_out}, Uint32, ),
+                  int32(size(X,3)), int32(size(X,2)), int32(size(X,1)), X, Y, FFTW_ESTIMATE)
         end
-
     end
 end
 
@@ -136,23 +121,18 @@ end
 
 macro jl_fftw_plan_dft_nd_macro(libname, fname_complex, fname_real, T_in, T_out)
     quote
-
         function jl_fftw_plan_dft(X::Array{$T_out}, Y::Array{$T_out}, direction::Int)
-            plan = ccall(dlsym($libname, $fname_complex),
-                         Ptr{Void},
-                         (Int32, Ptr{Int32}, Ptr{$T_out}, Ptr{$T_out}, Int32, Uint32, ),
-                         int32(ndims(X)), int32([size(X)...]), X, Y, int32(direction), FFTW_ESTIMATE)
-            return plan
+            ccall(dlsym($libname, $fname_complex),
+                  Ptr{Void},
+                  (Int32, Ptr{Int32}, Ptr{$T_out}, Ptr{$T_out}, Int32, Uint32, ),
+                  int32(ndims(X)), int32([size(X)...]), X, Y, int32(direction), FFTW_ESTIMATE)
         end
-
         function jl_fftw_plan_dft(X::Array{$T_in}, Y::Array{$T_out})
-            plan = ccall(dlsym($libname, $fname_real),
-                         Ptr{Void},
-                         (Int32, Ptr{Int32}, Ptr{$T_in}, Ptr{$T_out}, Uint32, ),
-                         int32(ndims(X)), int32([size(X)...]), X, Y, FFTW_ESTIMATE)
-            return plan
+            ccall(dlsym($libname, $fname_real),
+                  Ptr{Void},
+                  (Int32, Ptr{Int32}, Ptr{$T_in}, Ptr{$T_out}, Uint32, ),
+                  int32(ndims(X)), int32([size(X)...]), X, Y, FFTW_ESTIMATE)
         end
-
     end
 end
 
@@ -182,10 +162,7 @@ end
 # This definition can be generalized to fftn, once the code to 
 # compute the conjugate parts for the nd case is implemented.
 function fftn{T<:Union(Float64,Float32)}(X::Vector{T})
-    T_out = Complex128
-    if is(T, Float32)
-        T_out = Complex64
-    end
+    T_out = is(T, Float32) ? Complex64 : Complex128
 
     Y = similar(X, T_out)
     plan = jl_fftw_plan_dft(X, Y)
@@ -224,16 +201,15 @@ ifft(X) = ifft(X, (), 1)
 # TODO: This is inefficient. Advanced interfaces of FFTW should be used
 macro jl_fft_ifft_macro(fname, fname_compute)
     quote 
-        function ($fname){T<:Union(Float64,Float32,Complex128,Complex64),n}(X::Array{T,n}, 
-                                                                            npoints, dim::Int)
-
+        function ($fname){T<:Union(Float64,Float32,Complex128,Complex64),n}(
+            X::Array{T,n}, npoints, dim::Int
+        )
             if npoints != (); error("the npoints option is not yet supported"); end
             if dim > 2; error("only 2d arrays are supported for now"); end
 
             if n == 1; return fftn(X); end
 
-            if is(T, Float64) || is(T, Complex128); Y = similar(X, Complex128); end
-            if is(T, Float32) || is(T, Complex64);  Y = similar(X, Complex64);  end
+            Y = similar(X, (is(T,Float32)||is(T,Complex64)) ? Complex64 : Complex128)
 
             if dim == 2; X = X.'; Y = reshape(Y, size(X)); end
 
@@ -246,13 +222,11 @@ macro jl_fft_ifft_macro(fname, fname_compute)
 
             return Y
         end
-
     end
 end
 
 @jl_fft_ifft_macro fft fftn
 @jl_fft_ifft_macro ifft ifftn
-
 
 # Transpose
 # NOTE: Using FFTW_MEASURE and FFTW_PATIENT zeros out the input the 
@@ -260,7 +234,6 @@ end
 
 macro jl_transpose_real_macro(libname, fname, eltype)
     quote
-
         function fftw_transpose(X::Matrix{$eltype})
             P = similar(X)
             (n1, n2) = size(X)
@@ -271,7 +244,6 @@ macro jl_transpose_real_macro(libname, fname, eltype)
             jl_fftw_destroy_plan($eltype, plan)
             return P
         end
-
     end
 end
 
@@ -280,7 +252,6 @@ end
 
 macro jl_transpose_complex_macro(libname, fname, celtype)
     quote
-
         function fftw_transpose(X::Matrix{$celtype})
             P = similar(X)
             (n1, n2) = size(X)
@@ -291,10 +262,8 @@ macro jl_transpose_complex_macro(libname, fname, celtype)
             jl_fftw_destroy_plan($celtype, plan)
             return P
         end
-
     end
 end
 
 @jl_transpose_complex_macro libfftw  :fftw_plan_guru_dft  Complex128
 @jl_transpose_complex_macro libfftwf :fftwf_plan_guru_dft Complex64
-
