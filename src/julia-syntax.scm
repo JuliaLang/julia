@@ -561,6 +561,21 @@
 	      (loop (cdr b) (cons x vars) assigns))))))
 
 (define (make-assignment l r) `(= ,l ,r))
+(define (assignment? e) (and (pair? e) (eq? (car e) '=)))
+
+(define (const-check-symbol s)
+  (if (not (symbol? s))
+      (error "expected identifier after const")
+      s))
+
+(define (qualified-const-expr binds __)
+  (let ((vs (map (lambda (b)
+		   (if (assignment? b)
+		       (const-check-symbol (decl-var (cadr b)))
+		       (error "expected assignment after const")))
+		 binds)))
+    `(block ,@(map (lambda (v) `(const ,v)) vs)
+	    ,(cadr __))))
 
 ;; convert (lhss...) = x to assignments, eliminating the tuple
 ;; assumes x is of the form (tuple ...)
@@ -768,8 +783,12 @@
 
    ;; constant definition
    (pattern-lambda (const (= lhs rhs))
-		   `(block (const ,(decl-var lhs))
+		   `(block (const ,(const-check-symbol (decl-var lhs)))
 			   (= ,lhs ,rhs)))
+   (pattern-lambda (const (global (vars . binds)))
+		   (qualified-const-expr binds __))
+   (pattern-lambda (const (local (vars . binds)))
+		   (qualified-const-expr binds __))
 
    ;; incorrect multiple return syntax [a, b, ...] = foo
    (pattern-lambda (= (vcat . args) rhs)

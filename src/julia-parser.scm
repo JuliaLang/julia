@@ -636,10 +636,14 @@
 	    (ex    (parse-block s)))
        (expect-end s)
        `(let ,ex ,@binds)))
-    ((local)  (list 'local  (cons 'vars
-				  (parse-comma-separated-assignments s))))
-    ((global) (list 'global (cons 'vars
-				  (parse-comma-separated-assignments s))))
+    ((global local)
+     (let* ((const (and (eq? (peek-token s) 'const)
+			(take-token s)))
+	    (expr  (list word (cons 'vars
+				    (parse-comma-separated-assignments s)))))
+       (if const
+	   `(const ,expr)
+	   expr)))
     ((function)
      (let* ((paren (eqv? (require-token s) #\())
 	    (sig   (parse-call s))
@@ -702,8 +706,10 @@
     ((break continue)  (list word))
     ((const)
      (let ((assgn (parse-eq s)))
-       (if (or (not (pair? assgn))
-	       (not (eq? (car assgn) '=)))
+       (if (not (and (pair? assgn)
+		     (or (eq? (car assgn) '=)
+			 (eq? (car assgn) 'global)
+			 (eq? (car assgn) 'local))))
 	   (error "expected assignment after const")
 	   `(const ,assgn))))
     (else (error "unhandled reserved word")))))
