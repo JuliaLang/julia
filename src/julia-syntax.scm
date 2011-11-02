@@ -187,11 +187,12 @@
 		    (cons (replace-end (expand-index-colon idx) a n tuples s)
 			  ret)))))))
 
+(define (make-decl n t) `(|::| ,n ,t))
+
 (define (function-expr argl body)
   (let ((t (llist-types argl))
 	(n (llist-vars argl)))
-    (let ((argl (map (lambda (n t) `(|::| ,n ,t))
-		     n t)))
+    (let ((argl (map make-decl n t)))
       `(lambda ,argl
 	 (scope-block ,body)))))
 
@@ -200,7 +201,7 @@
 (define (method-lambda-expr argl body)
   (let ((argl (map (lambda (x)
 		     (if (and (pair? x) (eq? (car x) '...))
-			 `(|::| ,(arg-name x) ,(arg-type x))
+			 (make-decl (arg-name x) (arg-type x))
 			 (arg-name x)))
 		   argl)))
     `(lambda ,argl
@@ -257,7 +258,8 @@
    (struct-def-expr- name params bounds super (flatten-blocks fields))))
 
 (define (default-inner-ctor name field-names field-types)
-  `(function (call ,name ,@field-names)
+  `(function (call ,name
+		   ,@(map make-decl field-names field-types))
 	     (block
 	      (call new ,@field-names))))
 
@@ -265,8 +267,7 @@
   `(function (call (curly ,name
 			  ,@(map (lambda (p b) `(comparison ,p <: ,b))
 				 params bounds))
-		   ,@(map (lambda (n t) `(:: ,n ,t))
-			  field-names field-types))
+		   ,@(map make-decl field-names field-types))
 	     (block
 	      (call (curly ,name ,@params) ,@field-names))))
 

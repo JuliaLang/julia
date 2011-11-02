@@ -171,6 +171,7 @@ end
 type Location
     host::String
     port::Int16
+    Location(h,p::Int) = new(h,int16(p))
 end
 
 type ProcessGroup
