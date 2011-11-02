@@ -93,21 +93,21 @@ function _start()
     try
         ccall(:jl_register_toplevel_eh, Void, ())
         ccall(:jl_start_io_thread, Void, ())
-        global Workqueue = {}
-        global Waiting = HashTable(64)
+        global const Workqueue = empty(WorkItem)
+        global const Waiting = HashTable(64)
 
         if !anyp(a->(a=="--worker"), ARGS)
             # start in "head node" mode
-            global Scheduler = Task(()->event_loop(true), 1024*1024)
-            global PGRP = ProcessGroup(1, {LocalProcess()}, {Location("",0)})
+            global const Scheduler = Task(()->event_loop(true), 1024*1024)
+            global const PGRP = ProcessGroup(1, {LocalProcess()}, {Location("",0)})
             # make scheduler aware of current (root) task
             enq_work(roottask_wi)
             yield()
         else
-            global PGRP = ProcessGroup(0, {}, {})
+            global const PGRP = ProcessGroup(0, {}, {})
         end
 
-        global VARIABLES = {}
+        global const VARIABLES = empty(Symbol)
 
         # Load customized startup
         try
