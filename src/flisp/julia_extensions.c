@@ -42,7 +42,7 @@ static int jl_id_char(uint32_t wc)
 {
     return ((wc >= 'A' && wc <= 'Z') || (wc >= 'a' && wc <= 'z') ||
             (wc >= '0' && wc <= '9') || (wc >= 0xA1) ||
-            wc == '_');
+            wc == '!' || wc == '_');
 }
 
 value_t fl_accum_julia_symbol(value_t *args, u_int32_t nargs)
@@ -56,6 +56,15 @@ value_t fl_accum_julia_symbol(value_t *args, u_int32_t nargs)
     ios_mem(&str, 0);
     while (jl_id_char(wc)) {
         ios_getutf8(s, &wc);
+        if (wc == '!') {
+            uint32_t nwc;
+            ios_peekutf8(s, &nwc);
+            // make sure != is always an operator
+            if (nwc == '=') {
+                ios_ungetc('!', s);
+                break;
+            }
+        }
         ios_pututf8(&str, wc);
         if (ios_peekutf8(s, &wc) == IOS_EOF)
             break;
