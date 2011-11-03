@@ -125,6 +125,7 @@ Julia's binary installs ship as platform-specific tarballs:
 
 - **GNU/Linux x86/64:** <https://github.com/downloads/JuliaLang/julia/julia-08b1e294ed-Linux-x86_64.tar.gz>
 - **Darwin/OS X x86/64:** <https://github.com/downloads/JuliaLang/julia/julia-08b1e294ed-Darwin-x86_64.tar.gz>
+- **GNU/Linux x86:** <https://github.com/downloads/JuliaLang/julia/julia-618b93c22c-Linux-i686.tar.gz>
 
 Download the appropriate tarball and untar it somewhere;
 for example, if you are on an OS X (Darwin) x86/64 system, do the following:
