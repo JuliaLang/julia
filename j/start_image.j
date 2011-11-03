@@ -15,5 +15,5 @@ libpcre = dlopen("libpcre")
 libBLAS = dlopen("libLAPACK")
 libLAPACK = libBLAS
 libarpack = dlopen("libarpack")
-libfftw = dlopen("libfftw3")
-libfftwf = dlopen("libfftw3f")
+_jl_libfftw = dlopen("libfftw3")
+_jl_libfftwf = dlopen("libfftw3f")
