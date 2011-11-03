@@ -154,7 +154,7 @@ function _jl_mergesort(a::AbstractVector, p::AbstractVector{Size}, lo::Int, hi::
 
         i = 1
         k = lo
-        while (k < j) && (j <= hi)
+        while k < j <= hi
             if b[i] <= a[j]
                 a[k] = b[i]
                 p[k] = pb[i]
@@ -197,7 +197,7 @@ function _jl_mergesort(a::AbstractVector, lo::Int, hi::Int, b::AbstractVector)
 
         i = 1
         k = lo
-        while (k < j) && (j <= hi)
+        while k < j <= hi
             if b[i] <= a[j]
                 a[k] = b[i]
                 i += 1
@@ -232,11 +232,11 @@ macro in_place_matrix_op(out_of_place)
         function ($in_place)(a::AbstractMatrix, dim::Index)
             m = size(a,1)
             if dim == 1
-                for i=1:m:numel(a)
+                for i = 1:m:numel(a)
                     ($in_place)(sub(a, i:(i+m-1)))
                 end
             elseif dim == 2
-                for i=1:m
+                for i = 1:m
                     ($in_place)(sub(a, i:m:numel(a)))
                 end
             end
@@ -259,7 +259,7 @@ function sort(a::AbstractArray, dim::Index)
     n = size(a,dim)
 
     if dim == 1
-        for i=1:n:numel(a)
+        for i = 1:n:numel(a)
             this_slice = i:(i+n-1)
             X[this_slice] = sort(sub(a, this_slice))
         end
@@ -308,7 +308,7 @@ end
 
 function nthperm!(a::AbstractVector, k::Int)
     fac = one(k)
-    for i=2:length(a)
+    for i = 2:length(a)
         fac *= (i-1)
         j = i - rem(div(k,fac),i)
         a[i], a[j] = a[j], a[i]
