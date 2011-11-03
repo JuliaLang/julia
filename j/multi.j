@@ -208,7 +208,7 @@ function add_workers(PGRP::ProcessGroup, w::Array{Any,1})
     PGRP
 end
 
-function join_pgroup(myid, locs, sockets)
+function _jl_join_pgroup(myid, locs, sockets)
     # joining existing process group
     np = length(locs)
     w = cell(np)
@@ -253,7 +253,7 @@ function worker_from_id(id)
 end
 
 # establish a Worker connection for processes that connected to us
-function identify_socket(otherid, fd, sock)
+function _jl_identify_socket(otherid, fd, sock)
     global PGRP
     i = otherid
     #locs = PGRP.locs
@@ -271,7 +271,7 @@ end
 
 ## remote refs and core messages: do, call, fetch, wait, ref, put ##
 
-const client_refs = WeakKeyHashTable()
+const _jl_client_refs = WeakKeyHashTable()
 
 type RemoteRef
     where::Int32
@@ -281,11 +281,11 @@ type RemoteRef
 
     function RemoteRef(w, wh, id)
         r = new(w,wh,id)
-        found = key(client_refs, r, false)
+        found = key(_jl_client_refs, r, false)
         if bool(found)
             return found
         end
-        client_refs[r] = true
+        _jl_client_refs[r] = true
         finalizer(r, send_del_client)
         r
     end
@@ -491,7 +491,7 @@ function deserialize(s, t::Type{RemoteRef})
             end
             return v
         else
-            # make sure this rr gets added to the client_refs table
+            # make sure this rr gets added to the _jl_client_refs table
             RemoteRef(where, rid[1], rid[2])
         end
     end
@@ -827,11 +827,11 @@ function deliver_result(sock::IOStream, msg, oid, value)
     end
 end
 
-_empty_cell_ = {}
+const _jl_empty_cell_ = {}
 function deliver_result(sock::(), msg, oid, value_thunk)
     global Waiting
     # restart task that's waiting on oid
-    jobs = get(Waiting, oid, _empty_cell_)
+    jobs = get(Waiting, oid, _jl_empty_cell_)
     for i = 1:length(jobs)
         j = jobs[i]
         if j[1]==msg
@@ -842,7 +842,7 @@ function deliver_result(sock::(), msg, oid, value_thunk)
             break
         end
     end
-    if isempty(jobs) && !is(jobs,_empty_cell_)
+    if isempty(jobs) && !is(jobs,_jl_empty_cell_)
         del(Waiting, oid)
     end
     nothing
@@ -851,6 +851,7 @@ end
 notify_done (job::WorkItem) = notify_done(job, false)
 notify_empty(job::WorkItem) = notify_done(job, true)
 
+# notify waiters that a certain job has finished or Ref has been emptied
 function notify_done(job::WorkItem, take)
     newnot = ()
     while !is(job.notify,())
@@ -895,7 +896,7 @@ function accept_handler(accept_fd, sockets)
             # first connection; get process group info from client
             _myid = force(deserialize(sock))
             locs = force(deserialize(sock))
-            PGRP = join_pgroup(_myid, locs, sockets)
+            PGRP = _jl_join_pgroup(_myid, locs, sockets)
             PGRP.workers[1] = Worker("", 0, connectfd, sock, 1)
         end
         add_fd_handler(connectfd, fd->message_handler(fd, sockets))
@@ -942,7 +943,7 @@ function message_handler(fd, sockets)
                 deliver_result((), mkind, oid, val)
             elseif is(msg, :identify_socket)
                 otherid = force(deserialize(sock))
-                identify_socket(otherid, fd, sock)
+                _jl_identify_socket(otherid, fd, sock)
             else
                 # the synchronization messages
                 oid = force(deserialize(sock))::(Int32,Int32)
@@ -1575,10 +1576,10 @@ yield() = yieldto(Scheduler)
 task_exit() = task_exit(nothing)
 task_exit(val) = yieldto(Scheduler, FinalValue(val))
 
-const fd_handlers = HashTable()
+const _jl_fd_handlers = HashTable()
 
-add_fd_handler(fd::Int32, H) = (fd_handlers[fd]=H)
-del_fd_handler(fd::Int32) = del(fd_handlers, fd)
+add_fd_handler(fd::Int32, H) = (_jl_fd_handlers[fd]=H)
+del_fd_handler(fd::Int32) = del(_jl_fd_handlers, fd)
 
 function event_loop(isclient)
     fdset = FDSet()
@@ -1592,7 +1593,7 @@ function event_loop(isclient)
             end
             while true
                 del_all(fdset)
-                for (fd,_) = fd_handlers
+                for (fd,_) = _jl_fd_handlers
                     add(fdset, fd)
                 end
 
@@ -1608,7 +1609,7 @@ function event_loop(isclient)
                 else
                     for fd=int32(0):int32(fdset.nfds-1)
                         if has(fdset,fd)
-                            h = fd_handlers[fd]
+                            h = _jl_fd_handlers[fd]
                             h(fd)
                         end
                     end

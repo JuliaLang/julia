@@ -286,12 +286,12 @@ function distribute{T}(a::Array{T}, distdim)
     # create a remotely-visible reference to the array
     rr = RemoteRef()
     put(rr, a)
-    darray((T,lsz,da)->get_my_piece(T,lsz,da,distdim,owner,rr),
+    darray((T,lsz,da)->_jl_distribute_one(T,lsz,da,distdim,owner,rr),
            T, size(a), distdim)
 end
 
 # fetch one processor's piece of an array being distributed
-function get_my_piece(T, lsz, da, distdim, owner, orig_array)
+function _jl_distribute_one(T, lsz, da, distdim, owner, orig_array)
     if prod(lsz)==0
         return Array(T, lsz)
     end
@@ -619,7 +619,7 @@ assign(d::DArray, v, I::Union(Index,AbstractVector{Index})...) =
 
 ## matrix multiply ##
 
-function node_multiply2{T}(A::AbstractArray{T}, B, sz)
+function _jl_node_multiply2{T}(A::AbstractArray{T}, B, sz)
     locl = Array(T, sz)
     if !isempty(locl)
         Bdata = localize(B)
@@ -639,16 +639,16 @@ function node_multiply2{T}(A::AbstractArray{T}, B, sz)
 end
 
 function (*){T}(A::DArray{T,2,1}, B::DArray{T,2,2})
-    darray((T,sz,da)->node_multiply2(A,B,sz), T, (size(A,1),size(B,2)), 2,
+    darray((T,sz,da)->_jl_node_multiply2(A,B,sz), T, (size(A,1),size(B,2)), 2,
            B.pmap)
 end
 
 function (*){T}(A::DArray{T,2}, B::DArray{T,2,2})
-    darray((T,sz,da)->node_multiply2(A,B,sz), T, (size(A,1),size(B,2)), 2,
+    darray((T,sz,da)->_jl_node_multiply2(A,B,sz), T, (size(A,1),size(B,2)), 2,
            B.pmap)
 end
 
-function node_multiply1{T}(A::AbstractArray{T}, B, sz)
+function _jl_node_multiply1{T}(A::AbstractArray{T}, B, sz)
     locl = Array(T, sz)
     if !isempty(locl)
         Adata = localize(A)
@@ -668,7 +668,7 @@ function node_multiply1{T}(A::AbstractArray{T}, B, sz)
 end
 
 function (*){T}(A::DArray{T,2,1}, B::DArray{T,2})
-    darray((T,sz,da)->node_multiply1(A,B,sz), T, (size(A,1),size(B,2)), 1,
+    darray((T,sz,da)->_jl_node_multiply1(A,B,sz), T, (size(A,1),size(B,2)), 1,
            A.pmap)
 end
 

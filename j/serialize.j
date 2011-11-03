@@ -5,10 +5,10 @@ abstract LongSymbol
 abstract LongTuple
 abstract LongExpr
 
-const ser_tag = idtable()
-const deser_tag = idtable()
+const _jl_ser_tag = idtable()
+const _jl_deser_tag = idtable()
 let i = 2
-    global ser_tag, deser_tag
+    global _jl_ser_tag, _jl_deser_tag
     for t = {Symbol, Int8, Uint8, Int16, Uint16, Int32, Uint32,
              Int64, Uint64, Float32, Float64, Char, Ptr,
              AbstractKind, UnionKind, BitsKind, CompositeKind, FuncKind,
@@ -21,19 +21,19 @@ let i = 2
              :a, :b, :c, :d, :e, :f, :g, :h, :i, :j, :k, :l, :m, :n, :o,
              :p, :q, :r, :s, :t, :u, :v, :w, :x, :y, :z,
              false, true, nothing, 0, 1, 2, 3, 4}
-        ser_tag[t] = int32(i)
-        deser_tag[int32(i)] = t
+        _jl_ser_tag[t] = int32(i)
+        _jl_deser_tag[int32(i)] = t
         i += 1
     end
 end
 
 # tags >= this just represent themselves, their whole representation is 1 byte
-const VALUE_TAGS = ser_tag[()]
+const VALUE_TAGS = _jl_ser_tag[()]
 
-writetag(s, x) = write(s, uint8(ser_tag[x]))
+writetag(s, x) = write(s, uint8(_jl_ser_tag[x]))
 
 function write_as_tag(s, x)
-    t = ser_tag[x]
+    t = _jl_ser_tag[x]
     if t < VALUE_TAGS
         write(s, uint8(0))
     end
@@ -59,7 +59,7 @@ function serialize(s, t::Tuple)
 end
 
 function serialize(s, x::Symbol)
-    if has(ser_tag, x)
+    if has(_jl_ser_tag, x)
         return write_as_tag(s, x)
     end
     name = string(x)
@@ -106,7 +106,7 @@ function serialize(s, e::Expr)
 end
 
 function serialize(s, t::AbstractKind)
-    if has(ser_tag,t)
+    if has(_jl_ser_tag,t)
         write_as_tag(s, t)
     else
         writetag(s, AbstractKind)
@@ -120,7 +120,7 @@ function serialize(s, u::UnionKind)
     serialize(s, u.types)
 end
 
-function lambda_number(l::LambdaStaticData)
+function _jl_lambda_number(l::LambdaStaticData)
     # a hash function that always gives the same number to the same
     # object on the same machine, and is unique over all machines.
     hash(uint64(uid(l))+(uint64(myid())<<44))
@@ -143,7 +143,7 @@ function serialize(s, f::Function)
     else
         @assert (isa(linfo,LambdaStaticData))
         write(s, uint8(1))
-        serialize(s, lambda_number(linfo))
+        serialize(s, _jl_lambda_number(linfo))
         serialize(s, linfo.ast)
         serialize(s, linfo.sparams)
         serialize(s, linfo.inferred)
@@ -152,12 +152,12 @@ function serialize(s, f::Function)
 end
 
 function serialize(s, x)
-    if has(ser_tag,x)
+    if has(_jl_ser_tag,x)
         return write_as_tag(s, x)
     end
     t = typeof(x)
     if isa(t,BitsKind)
-        if has(ser_tag,t)
+        if has(_jl_ser_tag,t)
             writetag(s, t)
         else
             writetag(s, BitsKind)
@@ -191,9 +191,9 @@ force(x::Function) = x()
 function deserialize(s)
     b = int32(read(s, Uint8))
     if b == 0
-        return deser_tag[int32(read(s, Uint8))]
+        return _jl_deser_tag[int32(read(s, Uint8))]
     end
-    tag = deser_tag[b]
+    tag = _jl_deser_tag[b]
     if b >= VALUE_TAGS
         return tag
     elseif is(tag,Tuple)
@@ -228,7 +228,7 @@ deserialize_tuple(s, len) = (a = ntuple(len, i->deserialize(s));
 deserialize(s, ::Type{Symbol}) = symbol(read(s, Uint8, int32(read(s, Uint8))))
 deserialize(s, ::Type{LongSymbol}) = symbol(read(s, Uint8, read(s, Int32)))
 
-known_lambda_data = HashTable()
+const _jl_known_lambda_data = HashTable()
 
 function deserialize_function(s)
     b = read(s, Uint8)
@@ -241,8 +241,8 @@ function deserialize_function(s)
     sparams = deserialize(s)
     infr = force(deserialize(s))
     env = deserialize(s)
-    if has(known_lambda_data, lnumber)
-        linfo = known_lambda_data[lnumber]
+    if has(_jl_known_lambda_data, lnumber)
+        linfo = _jl_known_lambda_data[lnumber]
         function ()
             ccall(:jl_new_closure_internal, Any, (Any, Any),
                   linfo, force(env))::Function
@@ -252,7 +252,7 @@ function deserialize_function(s)
             linfo = ccall(:jl_new_lambda_info, Any, (Any, Any),
                           force(ast), force(sparams))
             linfo.inferred = infr
-            known_lambda_data[lnumber] = linfo
+            _jl_known_lambda_data[lnumber] = linfo
             ccall(:jl_new_closure_internal, Any, (Any, Any),
                   linfo, force(env))::Function
         end

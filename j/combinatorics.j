@@ -154,7 +154,7 @@ function _jl_mergesort(a::AbstractVector, p::AbstractVector{Size}, lo::Int, hi::
 
         i = 1
         k = lo
-        while (k < j) & (j <= hi)
+        while (k < j) && (j <= hi)
             if b[i] <= a[j]
                 a[k] = b[i]
                 p[k] = pb[i]
@@ -197,7 +197,7 @@ function _jl_mergesort(a::AbstractVector, lo::Int, hi::Int, b::AbstractVector)
 
         i = 1
         k = lo
-        while (k < j) & (j <= hi)
+        while (k < j) && (j <= hi)
             if b[i] <= a[j]
                 a[k] = b[i]
                 i += 1
