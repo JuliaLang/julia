@@ -161,14 +161,27 @@ function slicedim(A::Array, d::Int, i::Int)
 end
 
 function flip{T}(d::Int, A::Array{T})
-    d_in = size(A)
-    sd = d_in[d]
+    nd = ndims(A)
+    sd = d > nd ? 1 : size(A, d)
     if sd == 1
         return copy(A)
     end
 
     B = similar(A)
 
+    nnd = 0
+    for i = 1:nd
+        nnd += count(size(A,i)==1 || i==d)
+    end
+    if nnd==nd
+        # flip along the only non-singleton dimension
+        for i = 1:sd
+            B[i] = A[sd+1-i]
+        end
+        return B
+    end
+
+    d_in = size(A)
     leading = d_in[1:(d-1)]
     M = prod(leading)
     N = numel(A)

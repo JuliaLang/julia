@@ -458,12 +458,23 @@ function slicedim(A::AbstractArray, d::Int, i)
 end
 
 function flip(d::Int, A::AbstractArray)
-    sd = size(A, d)
+    nd = ndims(A)
+    sd = d > nd ? 1 : size(A, d)
     if sd == 1
         return copy(A)
     end
     B = similar(A)
-    nd = ndims(A)
+    nnd = 0
+    for i = 1:nd
+        nnd += count(size(A,i)==1 || i==d)
+    end
+    if nnd==nd
+        # flip along the only non-singleton dimension
+        for i = 1:sd
+            B[i] = A[sd+1-i]
+        end
+        return B
+    end
     alli = ntuple(nd, n->(n==d ? 0 : (1:size(B,n))))
     local ri
     b_ind = n->(n==d ? ri : alli[n])
@@ -471,7 +482,7 @@ function flip(d::Int, A::AbstractArray)
         ri = sd+1-i
         B[ntuple(nd, b_ind)...] = slicedim(A, d, i)
     end
-    B
+    return B
 end
 
 flipud(A::AbstractArray) = flip(1, A)
@@ -1235,7 +1246,7 @@ end
 
 ## Transpose, Permute ##
 
-reverse(v::AbstractVector) = [ v[length(v)-i+1] | i=1:length(v) ]
+reverse(v::AbstractVector) = (n=length(v); [ v[n-i+1] | i=1:n ])
 
 transpose(x::AbstractVector)  = [ x[j]         | i=1, j=1:size(x,1) ]
 ctranspose(x::AbstractVector) = [ conj(x[j])   | i=1, j=1:size(x,1) ]
