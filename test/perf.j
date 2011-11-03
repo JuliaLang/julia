@@ -62,7 +62,7 @@ mandelperf() = [ mandel(complex(r,i)) | r=-2.0:.1:0.5, i=-1.:.1:1. ]
 
 function sortperf(n)
   v = rand(n)
-  v = sort(v)
+  sort!(v)
 end
 @assert issorted(sortperf(5000))
 @timeit sortperf(5000) "quicksort"

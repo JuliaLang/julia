@@ -2,83 +2,75 @@ function factorial(n::Int)
     if n < 0
         return zero(n)
     end
-    p = one(n)
-    for i=2:n
-        p*=i
+    f = one(n)
+    for i = 2:n
+        f *= i
     end
-    p
+    return f
 end
 
-function nPr{T <: Int}(n::T, r::T)
-    if r < 0 || n < 0 || r > n
+# computes n!/k!
+function factorial{T<:Int}(n::T, k::T)
+    if k < 0 || n < 0 || k > n
         return zero(T)
     end
-
-    ans = one(T)
-    while (r > 0)
-        ans *= n
+    f = one(T)
+    while n > k
+        f *= n
         n -= 1
-        r -= 1
     end
-    return ans
+    return f
 end
 
-function nCr{T <: Int}(n::T, r::T)
-    if r < 0
+function binomial{T<:Int}(n::T, k::T)
+    if k < 0
         return zero(T)
     end
-
-    neg = false
+    sgn = one(T)
     if n < 0
-        n = (-n)+r-1
-        if isodd(r)
-            neg = true
+        n = -n + k -1
+        if isodd(k)
+            sgn = -sgn
         end
     end
-
-    if r > n
+    if k > n # TODO: is this definitely right?
         return zero(T)
     end
-    if r == 0 || r == n
-        return one(T)
+    if k == 0 || k == n
+        return sgn
     end
-
-    if r > div(n,2)
-        r = (n - r)
+    if k == 1
+        return sgn*n
     end
-
-    x = nn = n - r + 1.0
+    if k > (n>>1)
+        k = (n - k)
+    end
+    x = nn = n - k + 1.0
     nn += 1.0
     rr = 2.0
-    while (rr <= r)
+    while rr <= k
         x *= (nn/rr)
         rr += 1
         nn += 1
     end
-    # TODO: should these be truncates?
-    if neg
-        return convert(T,-x)
-    end
-    return convert(T,x)
+    return sgn*convert(T,x)
 end
 
-# sort() should be stable
+## sorting ##
+
+function issorted(v::AbstractVector)
+    for i=1:(length(v)-1)
+        if v[i] > v[i+1]; return false; end
+    end
+    return true
+end
+
+# sorting should be stable
 # Thus, if a permutation is required, or records are being sorted
 # a stable sort should be used.
 # If only numbers are being sorted, a faster quicksort can be used.
 
-sort_inplace{T <: Real}(a::AbstractVector{T}) = quicksort(a, 1, length(a))
-
-sort_inplace{T}(a::AbstractVector{T}) =
-    mergesort(a, 1, length(a), Array(T, length(a)))
-
-sort(a::AbstractVector) = sort_inplace(copy(a))
-
-sortperm{T}(a::AbstractVector{T}) =
-    mergesort(copy(a), linspace(1,length(a)), 1, length(a),
-              Array(T, length(a)), Array(Size, length(a)))
-
-function insertionsort(a::AbstractVector, lo::Int, hi::Int)
+function _jl_insertionsort(a::AbstractVector, lo::Int, hi::Int)
     for i=(lo+1):hi
         j = i
         x = a[i]
@@ -91,16 +83,16 @@ function insertionsort(a::AbstractVector, lo::Int, hi::Int)
         end
         a[j] = x
     end
-    a
+    return a
 end
 
-function quicksort(a::AbstractVector, lo::Int, hi::Int)
+function _jl_quicksort(a::AbstractVector, lo::Int, hi::Int)
     while hi > lo
-        if (hi-lo <= 20)
-            return insertionsort(a, lo, hi)
+        if hi-lo <= 20
+            return _jl_insertionsort(a, lo, hi)
         end
         i, j = lo, hi
-        pivot = a[div((lo+hi),2)]
+        pivot = a[div(lo+hi,2)]
         # Partition
         while i <= j
             while a[i] < pivot; i += 1; end
@@ -112,14 +104,16 @@ function quicksort(a::AbstractVector, lo::Int, hi::Int)
             end
         end
         # Recursion for quicksort
-        if lo < j; quicksort(a, lo, j); end
+        if lo < j
+            _jl_quicksort(a, lo, j)
+        end
         lo = i
     end
     return a
 end
 
-function insertionsort(a::AbstractVector, p::AbstractVector{Size}, lo::Int, hi::Int)
-    for i=(lo+1):hi
+function _jl_insertionsort(a::AbstractVector, p::AbstractVector{Size}, lo::Int, hi::Int)
+    for i = (lo+1):hi
         j = i
         x = a[i]
         xp = p[i]
@@ -134,25 +128,24 @@ function insertionsort(a::AbstractVector, p::AbstractVector{Size}, lo::Int, hi::
         a[j] = x
         p[j] = xp
     end
-    (a, p)
+    return a, p
 end
 
-function mergesort(a::AbstractVector, p::AbstractVector{Size}, lo::Int, hi::Int,
-                   b::AbstractVector, pb::AbstractVector{Size})
-
+function _jl_mergesort(a::AbstractVector, p::AbstractVector{Size}, lo::Int, hi::Int,
+                       b::AbstractVector, pb::AbstractVector{Size})
     if lo < hi
-        if (hi-lo <= 20)
-            return insertionsort(a, p, lo, hi)
+        if hi-lo <= 20
+            return _jl_insertionsort(a, p, lo, hi)
         end
 
-        m = div ((lo + hi), 2)
-        mergesort(a, p, lo, m, b, pb)
-        mergesort(a, p, m+1, hi, b, pb)
+        m = div(lo+hi, 2)
+        _jl_mergesort(a, p, lo, m, b, pb)
+        _jl_mergesort(a, p, m+1, hi, b, pb)
 
         # merge(lo,m,hi)
         i = 1
         j = lo
-        while (j <= m)
+        while j <= m
             b[i] = a[j]
             pb[i] = p[j]
             i += 1
@@ -161,8 +154,8 @@ function mergesort(a::AbstractVector, p::AbstractVector{Size}, lo::Int, hi::Int,
 
         i = 1
         k = lo
-        while ((k < j) & (j <= hi))
-            if (b[i] <= a[j])
+        while (k < j) & (j <= hi)
+            if b[i] <= a[j]
                 a[k] = b[i]
                 p[k] = pb[i]
                 i += 1
@@ -173,33 +166,30 @@ function mergesort(a::AbstractVector, p::AbstractVector{Size}, lo::Int, hi::Int,
             end
             k += 1
         end
-
-        while (k < j)
+        while k < j
             a[k] = b[i]
             p[k] = pb[i]
             k += 1
             i += 1
         end
-
-    end # if lo<hi...
-
-    return (a, p)
+    end
+    return a, p
 end
 
-function mergesort(a::AbstractVector, lo::Int, hi::Int, b::AbstractVector)
+function _jl_mergesort(a::AbstractVector, lo::Int, hi::Int, b::AbstractVector)
     if lo < hi
-        if (hi-lo <= 20)
-            return insertionsort(a, lo, hi)
+        if hi-lo <= 20
+            return _jl_insertionsort(a, lo, hi)
         end
 
-        m = div ((lo + hi), 2)
-        mergesort(a, lo, m, b)
-        mergesort(a, m+1, hi, b)
+        m = div(lo+hi, 2)
+        _jl_mergesort(a, lo, m, b)
+        _jl_mergesort(a, m+1, hi, b)
 
         # merge(lo,m,hi)
         i = 1
         j = lo
-        while (j <= m)
+        while j <= m
             b[i] = a[j]
             i += 1
             j += 1
@@ -207,8 +197,8 @@ function mergesort(a::AbstractVector, lo::Int, hi::Int, b::AbstractVector)
 
         i = 1
         k = lo
-        while ((k < j) & (j <= hi))
-            if (b[i] <= a[j])
+        while (k < j) & (j <= hi)
+            if b[i] <= a[j]
                 a[k] = b[i]
                 i += 1
             else
@@ -218,7 +208,7 @@ function mergesort(a::AbstractVector, lo::Int, hi::Int, b::AbstractVector)
             k += 1
         end
 
-        while (k < j)
+        while k < j
             a[k] = b[i]
             k += 1
             i += 1
@@ -229,64 +219,70 @@ function mergesort(a::AbstractVector, lo::Int, hi::Int, b::AbstractVector)
     return a
 end
 
-function issorted(v::AbstractVector)
-    for i=1:(length(v)-1)
-        if v[i] > v[i+1]; return false; end
+sort!{T <: Real}(a::AbstractVector{T}) = _jl_quicksort(a, 1, length(a))
+sort!{T}(a::AbstractVector{T}) = _jl_mergesort(a, 1, length(a), Array(T, length(a)))
+
+sortperm{T}(a::AbstractVector{T}) =
+    _jl_mergesort(copy(a), linspace(1,length(a)), 1, length(a),
+                  Array(T, length(a)), Array(Size, length(a)))
+
+macro in_place_matrix_op(out_of_place)
+    in_place = symbol("$(out_of_place)!")
+    quote
+        function ($in_place)(a::AbstractMatrix, dim::Index)
+            m = size(a,1)
+            if dim == 1
+                for i=1:m:numel(a)
+                    ($in_place)(sub(a, i:(i+m-1)))
+                end
+            elseif dim == 2
+                for i=1:m
+                    ($in_place)(sub(a, i:m:numel(a)))
+                end
+            end
+            return a
+        end
+        # TODO: in-place generalized AbstractArray implementation
+        ($in_place)(a::AbstractMatrix) = ($in_place)(a,1)
+
+        ($out_of_place)(a::AbstractVector) = ($in_place)(copy(a))
+        ($out_of_place)(a::AbstractArray, dim::Index) = ($in_place)(copy(a), dim)
+        ($out_of_place)(a::AbstractMatrix) = ($out_of_place)(a,1)
     end
-    return true
 end
 
-sort(A::AbstractArray) = sort(A, 1)
-sort(A::AbstractMatrix) = sort(A, 1)
+@in_place_matrix_op sort
 
-function sort(A::AbstractMatrix, dim::Index)
-    X = similar(A)
-    (m, n) = size(A)
-    numelA = numel(A)
-
-    if dim == 1
-        for i=1:m:numel(A)
-            this_slice = i:(i+m-1)
-            X[this_slice] = sort(sub(A, this_slice))
-        end
-    elseif dim == 2
-        for i=1:m
-            this_slice = i:m:numelA
-            X[this_slice] = sort(sub(A, this_slice))
-        end
-    end
-
-    return X
-end
-
-function sort(A::AbstractArray, dim::Index)
-    X = similar(A)
-    n = size(A,dim)
-    s = stride(A,dim)
-    nslices = div(numel(A), n)
+# TODO: implement generalized in-place, ditch this
+function sort(a::AbstractArray, dim::Index)
+    X = similar(a)
+    n = size(a,dim)
 
     if dim == 1
-        for i=1:n:numel(A)
+        for i=1:n:numel(a)
             this_slice = i:(i+n-1)
-            X[this_slice] = sort(sub(A, this_slice))
+            X[this_slice] = sort(sub(a, this_slice))
         end
     else
-        p = [1:ndims(A)]
+        p = [1:ndims(a)]
         p[dim], p[1] = p[1], p[dim]
-        X = ipermute(sort(permute(A, p)), p)
+        X = ipermute(sort(permute(a, p)), p)
     end
 
     return X
 end
 
-# Knuth shuffle
-function shuffle(a::AbstractVector)
+## other ordering related functions ##
+
+function shuffle!(a::AbstractVector)
     for i = length(a):-1:2
         j = randi(i)
         a[i], a[j] = a[j], a[i]
     end
     return a
 end
+
+@in_place_matrix_op shuffle
 
 function randperm(n::Int)
     a = Array(typeof(n), n)
@@ -310,12 +306,13 @@ function randcycle(n::Int)
     return a
 end
 
-function nthperm(A, k::Int)
+function nthperm!(a::AbstractVector, k::Int)
     fac = one(k)
-    for i=2:length(A)
+    for i=2:length(a)
         fac *= (i-1)
         j = i - rem(div(k,fac),i)
-        A[i], A[j] = A[j], A[i]
+        a[i], a[j] = a[j], a[i]
     end
-    A
+    a
 end
+nthperm(a::AbstractVector, k::Int) = nthperm!(copy(a))

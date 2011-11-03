@@ -52,9 +52,9 @@ typealias SubOrDArray{T,N} Union(DArray{T,N}, SubDArray{T,N})
 
 size(d::DArray) = d.dims
 distdim(d::DArray) = d.distdim
-procmap(d::DArray) = d.pmap
+procs(d::DArray) = d.pmap
 distdim(d::SubDArray) = d.parent.distdim
-procmap(d::SubDArray) = d.parent.pmap
+procs(d::SubDArray) = d.parent.pmap
 
 function serialize{T,N,dd}(s, d::DArray{T,N,dd})
     i = worker_id_from_socket(s)
@@ -679,22 +679,22 @@ end
 function .^{T}(A::Int, B::SubOrDArray{T})
     S = promote_type(typeof(A),T)
     darray((T,lsz,da)->.^(A, localize(B, da)),
-           S, size(B), distdim(B), procmap(B))
+           S, size(B), distdim(B), procs(B))
 end
 function .^{T}(A::SubOrDArray{T}, B::Int)
     S = promote_type(T,typeof(B))
     darray((T,lsz,da)->.^(localize(A, da), B),
-           S, size(A), distdim(A), procmap(A))
+           S, size(A), distdim(A), procs(A))
 end
 
 function .^{T<:Int}(A::Int, B::SubOrDArray{T})
     darray((T,lsz,da)->.^(A, localize(B, da)),
-           Float64, size(B), distdim(B), procmap(B))
+           Float64, size(B), distdim(B), procs(B))
 end
 function .^{T<:Int}(A::SubOrDArray{T}, B::Int)
     S = B < 0 ? Float64 : promote_type(T,typeof(B))
     darray((T,lsz,da)->.^(localize(A, da), B),
-           S, size(A), distdim(A), procmap(A))
+           S, size(A), distdim(A), procs(A))
 end
 
 macro binary_darray_op(f)
@@ -702,12 +702,12 @@ macro binary_darray_op(f)
         function ($f){T}(A::Number, B::SubOrDArray{T})
             S = typeof(($f)(one(A),one(T)))
             darray((T,lsz,da)->($f)(A, localize(B, da)),
-                   S, size(B), distdim(B), procmap(B))
+                   S, size(B), distdim(B), procs(B))
         end
         function ($f){T}(A::SubOrDArray{T}, B::Number)
             S = typeof(($f)(one(T),one(B)))
             darray((T,lsz,da)->($f)(localize(A, da), B),
-                   S, size(A), distdim(A), procmap(A))
+                   S, size(A), distdim(A), procs(A))
         end
         function ($f){T,S}(A::SubOrDArray{T}, B::SubOrDArray{S})
             if size(A) != size(B)
@@ -715,7 +715,7 @@ macro binary_darray_op(f)
             end
             R = typeof(($f)(one(T), one(S)))
             darray((T,lsz,da)->($f)(localize(A, da), localize(B, da)),
-                   R, size(A), distdim(A), procmap(A))
+                   R, size(A), distdim(A), procs(A))
         end
     end # quote
 end # macro
@@ -733,7 +733,7 @@ macro unary_darray_op(f)
     quote
         function ($f){T}(A::SubOrDArray{T})
             darray((T,lsz,da)->($f)(localize(A, da)),
-                   T, size(A), distdim(A), procmap(A))
+                   T, size(A), distdim(A), procs(A))
         end
     end # quote
 end # macro
@@ -747,7 +747,7 @@ macro unary_darray_c2r_op(f)
         function ($f){T}(A::SubOrDArray{T})
             S = typeof(($f)(zero(T)))
             darray((T,lsz,da)->($f)(localize(A, da)),
-                   S, size(A), distdim(A), procmap(A))
+                   S, size(A), distdim(A), procs(A))
         end
     end # quote
 end # macro
@@ -758,19 +758,19 @@ end # macro
 function map(f, A::SubOrDArray)
     T = typeof(f(A[1]))
     darray((T,lsz,da)->map_to(Array(T,lsz), f, localize(A, da)),
-           T, size(A), distdim(A), procmap(A))
+           T, size(A), distdim(A), procs(A))
 end
 
 # map a function that is already vectorized
 function map_vectorized(f, A::SubOrDArray)
     T = typeof(f(A[1]))
     darray((T,lsz,da)->f(localize(A, da)),
-           T, size(A), distdim(A), procmap(A))
+           T, size(A), distdim(A), procs(A))
 end
 
 for f = (:ceil,   :floor,  :trunc,  :round,
          :iceil,  :ifloor, :itrunc, :iround,
-         :abs,    :arg,    :log10,
+         :abs,    :angle,  :log10,
          :sqrt,   :cbrt,   :log,    :log2,   :exp,   :expm1,
          :sin,    :cos,    :tan,    :cot,    :sec,   :csc,
          :sinh,   :cosh,   :tanh,   :coth,   :sech,  :csch,
@@ -783,18 +783,18 @@ macro binary_darray_comparison_op(f)
     quote
         function ($f){T}(A::Number, B::SubOrDArray{T})
             darray((T,lsz,da)->($f)(A, localize(B, da)),
-                   Bool, size(B), distdim(B), procmap(B))
+                   Bool, size(B), distdim(B), procs(B))
         end
         function ($f){T}(A::SubOrDArray{T}, B::Number)
             darray((T,lsz,da)->($f)(localize(A, da), B),
-                   Bool, size(A), distdim(A), procmap(A))
+                   Bool, size(A), distdim(A), procs(A))
         end
         function ($f){T,S}(A::SubOrDArray{T}, B::SubOrDArray{S})
             if size(A) != size(B)
                 error("argument dimensions must match")
             end
             darray((T,lsz,da)->($f)(localize(A, da), localize(B, da)),
-                   Bool, size(A), distdim(A), procmap(A))
+                   Bool, size(A), distdim(A), procs(A))
         end
     end # quote
 end # macro

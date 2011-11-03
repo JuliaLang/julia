@@ -187,11 +187,12 @@
 		    (cons (replace-end (expand-index-colon idx) a n tuples s)
 			  ret)))))))
 
+(define (make-decl n t) `(|::| ,n ,t))
+
 (define (function-expr argl body)
   (let ((t (llist-types argl))
 	(n (llist-vars argl)))
-    (let ((argl (map (lambda (n t) `(|::| ,n ,t))
-		     n t)))
+    (let ((argl (map make-decl n t)))
       `(lambda ,argl
 	 (scope-block ,body)))))
 
@@ -200,7 +201,7 @@
 (define (method-lambda-expr argl body)
   (let ((argl (map (lambda (x)
 		     (if (and (pair? x) (eq? (car x) '...))
-			 `(|::| ,(arg-name x) ,(arg-type x))
+			 (make-decl (arg-name x) (arg-type x))
 			 (arg-name x)))
 		   argl)))
     `(lambda ,argl
@@ -257,7 +258,8 @@
    (struct-def-expr- name params bounds super (flatten-blocks fields))))
 
 (define (default-inner-ctor name field-names field-types)
-  `(function (call ,name ,@field-names)
+  `(function (call ,name
+		   ,@(map make-decl field-names field-types))
 	     (block
 	      (call new ,@field-names))))
 
@@ -265,8 +267,7 @@
   `(function (call (curly ,name
 			  ,@(map (lambda (p b) `(comparison ,p <: ,b))
 				 params bounds))
-		   ,@(map (lambda (n t) `(:: ,n ,t))
-			  field-names field-types))
+		   ,@(map make-decl field-names field-types))
 	     (block
 	      (call (curly ,name ,@params) ,@field-names))))
 
@@ -561,6 +562,21 @@
 	      (loop (cdr b) (cons x vars) assigns))))))
 
 (define (make-assignment l r) `(= ,l ,r))
+(define (assignment? e) (and (pair? e) (eq? (car e) '=)))
+
+(define (const-check-symbol s)
+  (if (not (symbol? s))
+      (error "expected identifier after const")
+      s))
+
+(define (qualified-const-expr binds __)
+  (let ((vs (map (lambda (b)
+		   (if (assignment? b)
+		       (const-check-symbol (decl-var (cadr b)))
+		       (error "expected assignment after const")))
+		 binds)))
+    `(block ,@(map (lambda (v) `(const ,v)) vs)
+	    ,(cadr __))))
 
 ;; convert (lhss...) = x to assignments, eliminating the tuple
 ;; assumes x is of the form (tuple ...)
@@ -768,8 +784,12 @@
 
    ;; constant definition
    (pattern-lambda (const (= lhs rhs))
-		   `(block (const ,(decl-var lhs))
+		   `(block (const ,(const-check-symbol (decl-var lhs)))
 			   (= ,lhs ,rhs)))
+   (pattern-lambda (const (global (vars . binds)))
+		   (qualified-const-expr binds __))
+   (pattern-lambda (const (local (vars . binds)))
+		   (qualified-const-expr binds __))
 
    ;; incorrect multiple return syntax [a, b, ...] = foo
    (pattern-lambda (= (vcat . args) rhs)

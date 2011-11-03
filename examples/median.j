@@ -16,8 +16,7 @@ function median(S)
   
   n75 = int64(ceil(n^.75))
   R = S[int64(ceil(n*rand(n75)))]
-  #R = sort(R)
-  sort_inplace(R)
+  sort!(R)
   d = R[max(1.0, floor((n75/2)-sqrt(n)))]
   u = R[ceil((n75/2)+sqrt(n))]
 
@@ -42,8 +41,7 @@ function median(S)
     if length(C) > 4*n75
       m = median(S)
     else
-      #C = sort(C)
-      sort_inplace(C)
+      sort!(C)
       if mod(n,2) == 1
         m = C[floor(n/2)-Ld+1]
       else

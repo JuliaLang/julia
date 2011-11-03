@@ -225,6 +225,8 @@ function push{T}(a::Array{T,1}, item::ANY)
     if is(T,None)
         error("[] cannot grow. Instead, initialize the array with \"empty(element_type)\".")
     end
+    # convert first so we don't grow the array if the assignment won't work
+    item = convert(T, item)
     ccall(:jl_array_grow_end, Void, (Any, Ulong), a, ulong(1))
     a[end] = item
     return a
@@ -248,6 +250,7 @@ function enq{T}(a::Array{T,1}, item)
     if is(T,None)
         error("[] cannot grow. Instead, initialize the array with \"empty(element_type)\".")
     end
+    item = convert(T, item)
     ccall(:jl_array_grow_beg, Void, (Any, Ulong), a, ulong(1))
     a[1] = item
     return a
@@ -257,6 +260,7 @@ function insert{T}(a::Array{T,1}, i::Int, item)
     if i < 1
         throw(BoundsError())
     end
+    item = convert(T, item)
     l = length(a)
     if i > l
         ccall(:jl_array_grow_end, Void, (Any, Ulong), a, ulong(i-l))

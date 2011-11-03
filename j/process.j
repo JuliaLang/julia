@@ -29,9 +29,9 @@ process_success(s::ProcessExited) = (s.status == 0)
 
 type FileDes; fd::Int32; end
 
-global STDIN  = FileDes(ccall(:jl_stdin,  Int32, ()))
-global STDOUT = FileDes(ccall(:jl_stdout, Int32, ()))
-global STDERR = FileDes(ccall(:jl_stderr, Int32, ()))
+global const STDIN = FileDes(ccall(:jl_stdin,  Int32, ()))
+global const STDOUT = FileDes(ccall(:jl_stdout, Int32, ()))
+global const STDERR = FileDes(ccall(:jl_stderr, Int32, ()))
 
 isequal(fd1::FileDes, fd2::FileDes) = (fd1.fd == fd2.fd)
 
