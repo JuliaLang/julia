@@ -1,6 +1,6 @@
-libLAPACK = libBLAS
+_jl_libLAPACK = _jl_libBLAS
 
-macro jl_lapack_potrf_macro(potrf, eltype)
+macro _jl_lapack_potrf_macro(potrf, eltype)
     quote
 
         # SUBROUTINE DPOTRF( UPLO, N, A, LDA, INFO )
@@ -9,10 +9,10 @@ macro jl_lapack_potrf_macro(potrf, eltype)
         #       INTEGER            INFO, LDA, N
         # *     .. Array Arguments ..
         #       DOUBLE PRECISION   A( LDA, * )
-        function jl_lapack_potrf(uplo, n, A::StridedMatrix{$eltype}, lda)
+        function _jl_lapack_potrf(uplo, n, A::StridedMatrix{$eltype}, lda)
             info = Array(Int32, 1)
             a = pointer(A)
-            ccall(dlsym(libLAPACK, $potrf),
+            ccall(dlsym(_jl_libLAPACK, $potrf),
                   Void,
                   (Ptr{Uint8}, Ptr{Int32}, Ptr{$eltype}, Ptr{Int32}, Ptr{Int32}),
                   uplo, int32(n), a, int32(lda), info)
@@ -22,10 +22,10 @@ macro jl_lapack_potrf_macro(potrf, eltype)
     end
 end
 
-@jl_lapack_potrf_macro :dpotrf_ Float64
-@jl_lapack_potrf_macro :spotrf_ Float32
-@jl_lapack_potrf_macro :zpotrf_ Complex128
-@jl_lapack_potrf_macro :cpotrf_ Complex64
+@_jl_lapack_potrf_macro :dpotrf_ Float64
+@_jl_lapack_potrf_macro :spotrf_ Float32
+@_jl_lapack_potrf_macro :zpotrf_ Complex128
+@_jl_lapack_potrf_macro :cpotrf_ Complex64
 
 #does not check that input matrix is symmetric/hermitian
 #(uses upper triangular half)
@@ -37,7 +37,7 @@ function chol{T<:Union(Float32,Float64,Complex64,Complex128)}(A::StridedMatrix{T
     if stride(A,1) != 1; error("chol: matrix columns must have contiguous elements"); end
     n = int32(size(A, 1))
     R = copy(A)
-    info = jl_lapack_potrf("U", n, R, stride(R,2))
+    info = _jl_lapack_potrf("U", n, R, stride(R,2))
 
     if info == 0; 
         # Zero out the lower triangular part of the result
@@ -52,7 +52,7 @@ function chol{T<:Union(Float32,Float64,Complex64,Complex128)}(A::StridedMatrix{T
     error("error in CHOL")
 end
 
-macro jl_lapack_getrf_macro(getrf, eltype)
+macro _jl_lapack_getrf_macro(getrf, eltype)
     quote
 
         # SUBROUTINE DGETRF( M, N, A, LDA, IPIV, INFO )
@@ -61,10 +61,10 @@ macro jl_lapack_getrf_macro(getrf, eltype)
         # *     .. Array Arguments ..
         #       INTEGER            IPIV( * )
         #       DOUBLE PRECISION   A( LDA, * )
-        function jl_lapack_getrf(m, n, A::StridedMatrix{$eltype}, lda, ipiv)
+        function _jl_lapack_getrf(m, n, A::StridedMatrix{$eltype}, lda, ipiv)
             info = Array(Int32, 1)
             a = pointer(A)
-            ccall(dlsym(libLAPACK, $getrf),
+            ccall(dlsym(_jl_libLAPACK, $getrf),
                   Void,
                   (Ptr{Int32}, Ptr{Int32}, Ptr{$eltype},
                    Ptr{Int32}, Ptr{Int32}, Ptr{Int32}),
@@ -75,10 +75,10 @@ macro jl_lapack_getrf_macro(getrf, eltype)
     end
 end
 
-@jl_lapack_getrf_macro :dgetrf_ Float64
-@jl_lapack_getrf_macro :sgetrf_ Float32
-@jl_lapack_getrf_macro :zgetrf_ Complex128
-@jl_lapack_getrf_macro :cgetrf_ Complex64
+@_jl_lapack_getrf_macro :dgetrf_ Float64
+@_jl_lapack_getrf_macro :sgetrf_ Float32
+@_jl_lapack_getrf_macro :zgetrf_ Complex128
+@_jl_lapack_getrf_macro :cgetrf_ Complex64
 
 lu(A::StridedMatrix) = lu(A, false)
 
@@ -94,7 +94,7 @@ function lu{T<:Union(Float32,Float64,Complex64,Complex128)}(A::StridedMatrix{T},
     end
     ipiv = Array(Int32, min(m,n))
 
-    info = jl_lapack_getrf(m, n, LU, stride(LU,2), ipiv)
+    info = _jl_lapack_getrf(m, n, LU, stride(LU,2), ipiv)
 
     if info > 0; error("matrix is singular"); end
     P = linspace(1, m)
@@ -113,7 +113,7 @@ function lu{T<:Union(Float32,Float64,Complex64,Complex128)}(A::StridedMatrix{T},
 end
 
 
-macro jl_lapack_qr_macro(real_geqp3, complex_geqp3, orgqr, ungqr, eltype, celtype)
+macro _jl_lapack_qr_macro(real_geqp3, complex_geqp3, orgqr, ungqr, eltype, celtype)
     quote
 
         # SUBROUTINE DGEQP3( M, N, A, LDA, JPVT, TAU, WORK, LWORK, INFO )
@@ -122,10 +122,10 @@ macro jl_lapack_qr_macro(real_geqp3, complex_geqp3, orgqr, ungqr, eltype, celtyp
         # *     .. Array Arguments ..
         #       INTEGER            JPVT( * )
         #       DOUBLE PRECISION   A( LDA, * ), TAU( * ), WORK( * )
-        function jl_lapack_geqp3(m, n, A::StridedMatrix{$eltype}, lda, jpvt, tau, work, lwork)
+        function _jl_lapack_geqp3(m, n, A::StridedMatrix{$eltype}, lda, jpvt, tau, work, lwork)
             info = Array(Int32, 1)
             a = pointer(A)
-            ccall(dlsym(libLAPACK, $real_geqp3),
+            ccall(dlsym(_jl_libLAPACK, $real_geqp3),
                   Void,
                   (Ptr{Int32}, Ptr{Int32}, Ptr{$eltype}, Ptr{Int32},
                    Ptr{Int32}, Ptr{$eltype}, Ptr{$eltype}, Ptr{Int32}, Ptr{Int32}),
@@ -140,10 +140,10 @@ macro jl_lapack_qr_macro(real_geqp3, complex_geqp3, orgqr, ungqr, eltype, celtyp
         #       INTEGER            JPVT( * )
         #       DOUBLE PRECISION   RWORK( * )
         #       COMPLEX*16         A( LDA, * ), TAU( * ), WORK( * )
-        function jl_lapack_geqp3(m, n, A::StridedMatrix{$eltype}, lda, jpvt, tau, work, lwork, rwork)
+        function _jl_lapack_geqp3(m, n, A::StridedMatrix{$eltype}, lda, jpvt, tau, work, lwork, rwork)
             info = Array(Int32, 1)
             a = pointer(A)
-            ccall(dlsym(libLAPACK, $complex_geqp3),
+            ccall(dlsym(_jl_libLAPACK, $complex_geqp3),
                   Void,
                   (Ptr{Int32}, Ptr{Int32}, Ptr{$celtype}, Ptr{Int32},
                    Ptr{Int32}, Ptr{$celtype}, Ptr{$celtype}, Ptr{Int32}, Ptr{$eltype}, Ptr{Int32}),
@@ -156,10 +156,10 @@ macro jl_lapack_qr_macro(real_geqp3, complex_geqp3, orgqr, ungqr, eltype, celtyp
         #       INTEGER            INFO, K, LDA, LWORK, M, N
         # *     .. Array Arguments ..
         #       DOUBLE PRECISION   A( LDA, * ), TAU( * ), WORK( * )
-        function jl_lapack_orgqr(m, n, k, A::StridedMatrix{$eltype}, lda, tau, work, lwork)
+        function _jl_lapack_orgqr(m, n, k, A::StridedMatrix{$eltype}, lda, tau, work, lwork)
             info = Array(Int32, 1)
             a = pointer(A)
-            ccall(dlsym(libLAPACK, $orgqr),
+            ccall(dlsym(_jl_libLAPACK, $orgqr),
                   Void,
                   (Ptr{Int32}, Ptr{Int32}, Ptr{Int32}, Ptr{$eltype},
                    Ptr{Int32}, Ptr{$eltype}, Ptr{$eltype}, Ptr{Int32}, Ptr{Int32}),
@@ -172,10 +172,10 @@ macro jl_lapack_qr_macro(real_geqp3, complex_geqp3, orgqr, ungqr, eltype, celtyp
         #      INTEGER            INFO, K, LDA, LWORK, M, N
         #*     .. Array Arguments ..
         #      COMPLEX*16         A( LDA, * ), TAU( * ), WORK( * )
-        function jl_lapack_ungqr(m, n, k, A::StridedMatrix{$eltype}, lda, tau, work, lwork)
+        function _jl_lapack_ungqr(m, n, k, A::StridedMatrix{$eltype}, lda, tau, work, lwork)
             info = Array(Int32, 1)
             a = pointer(A)
-            ccall(dlsym(libLAPACK, $ungqr),
+            ccall(dlsym(_jl_libLAPACK, $ungqr),
                   Void,
                   (Ptr{Int32}, Ptr{Int32}, Ptr{Int32}, Ptr{$celtype},
                    Ptr{Int32}, Ptr{$celtype}, Ptr{$celtype}, Ptr{Int32}, Ptr{Int32}),
@@ -186,8 +186,8 @@ macro jl_lapack_qr_macro(real_geqp3, complex_geqp3, orgqr, ungqr, eltype, celtyp
     end
 end
 
-@jl_lapack_qr_macro :dgeqp3_ :zgeqp3_ :dorgqr_ :zungqr_ Float64 Complex128
-@jl_lapack_qr_macro :sgeqp3_ :cgeqp3_ :sorgqr_ :cungqr_ Float32 Complex64
+@_jl_lapack_qr_macro :dgeqp3_ :zgeqp3_ :dorgqr_ :zungqr_ Float64 Complex128
+@_jl_lapack_qr_macro :sgeqp3_ :cgeqp3_ :sorgqr_ :cungqr_ Float32 Complex64
 
 #possible TODO: economy mode?
 
@@ -207,9 +207,9 @@ function qr{T<:Union(Float32,Float64,Complex64,Complex128)}(A::StridedMatrix{T})
     work = zeros(T,1)
     lwork = int32(-1)
     if iscomplex(A)
-        info = jl_lapack_geqp3(m, n, QR, stride(QR,2), jpvt, tau, work, lwork, rwork)
+        info = _jl_lapack_geqp3(m, n, QR, stride(QR,2), jpvt, tau, work, lwork, rwork)
     else
-        info = jl_lapack_geqp3(m, n, QR, stride(QR,2), jpvt, tau, work, lwork)
+        info = _jl_lapack_geqp3(m, n, QR, stride(QR,2), jpvt, tau, work, lwork)
     end
 
     if info == 0; lwork = real(work[1]); work = Array(T, long(lwork))
@@ -217,9 +217,9 @@ function qr{T<:Union(Float32,Float64,Complex64,Complex128)}(A::StridedMatrix{T})
 
     # Compute QR factorization
     if iscomplex(A)
-        info = jl_lapack_geqp3(m, n, QR, stride(QR,2), jpvt, tau, work, lwork, rwork)
+        info = _jl_lapack_geqp3(m, n, QR, stride(QR,2), jpvt, tau, work, lwork, rwork)
     else
-        info = jl_lapack_geqp3(m, n, QR, stride(QR,2), jpvt, tau, work, lwork)
+        info = _jl_lapack_geqp3(m, n, QR, stride(QR,2), jpvt, tau, work, lwork)
     end
 
     if info > 0; error("matrix is singular"); end
@@ -229,9 +229,9 @@ function qr{T<:Union(Float32,Float64,Complex64,Complex128)}(A::StridedMatrix{T})
     # Workspace query to form Q
     lwork2 = int32(-1)
     if iscomplex(A)
-        info = jl_lapack_ungqr(m, k, k, QR, stride(QR,2), tau, work, lwork2)
+        info = _jl_lapack_ungqr(m, k, k, QR, stride(QR,2), tau, work, lwork2)
     else
-        info = jl_lapack_orgqr(m, k, k, QR, stride(QR,2), tau, work, lwork2)
+        info = _jl_lapack_orgqr(m, k, k, QR, stride(QR,2), tau, work, lwork2)
     end
 
     if info == 0; lwork2 = real(work[1]); work = Array(T, long(lwork2))
@@ -239,16 +239,16 @@ function qr{T<:Union(Float32,Float64,Complex64,Complex128)}(A::StridedMatrix{T})
 
     # Compute Q
     if iscomplex(A)
-        info = jl_lapack_ungqr(m, k, k, QR, stride(QR,2), tau, work, lwork2)
+        info = _jl_lapack_ungqr(m, k, k, QR, stride(QR,2), tau, work, lwork2)
     else
-        info = jl_lapack_orgqr(m, k, k, QR, stride(QR,2), tau, work, lwork2)
+        info = _jl_lapack_orgqr(m, k, k, QR, stride(QR,2), tau, work, lwork2)
     end
 
     if info == 0; return (QR[:, 1:k], R[1:k, :], jpvt); end
     error("error in LAPACK orgqr/ungqr");
 end
 
-macro jl_lapack_eig_macro(syev, heev, real_geev, complex_geev, eltype, celtype)
+macro _jl_lapack_eig_macro(syev, heev, real_geev, complex_geev, eltype, celtype)
     quote
 
         #       SUBROUTINE DSYEV( JOBZ, UPLO, N, A, LDA, W, WORK, LWORK, INFO )
@@ -257,9 +257,9 @@ macro jl_lapack_eig_macro(syev, heev, real_geev, complex_geev, eltype, celtype)
         #       INTEGER            INFO, LDA, LWORK, N
         # *     .. Array Arguments ..
         #       DOUBLE PRECISION   A( LDA, * ), W( * ), WORK( * )
-        function jl_lapack_syev(jobz, uplo, n, A::StridedMatrix{$eltype}, lda, W, work, lwork)
+        function _jl_lapack_syev(jobz, uplo, n, A::StridedMatrix{$eltype}, lda, W, work, lwork)
             info = Array(Int32, 1)
-            ccall(dlsym(libLAPACK, $syev),
+            ccall(dlsym(_jl_libLAPACK, $syev),
                   Void,
                   (Ptr{Uint8}, Ptr{Uint8}, Ptr{Int32}, Ptr{$eltype}, Ptr{Int32},
                    Ptr{$eltype}, Ptr{$eltype}, Ptr{Int32}, Ptr{Int32}),
@@ -274,9 +274,9 @@ macro jl_lapack_eig_macro(syev, heev, real_geev, complex_geev, eltype, celtype)
         #*     .. Array Arguments ..
         #      DOUBLE PRECISION   RWORK( * ), W( * )
         #      COMPLEX*16         A( LDA, * ), WORK( * )
-        function jl_lapack_heev(jobz, uplo, n, A::StridedMatrix{$celtype}, lda, W, work, lwork, rwork)
+        function _jl_lapack_heev(jobz, uplo, n, A::StridedMatrix{$celtype}, lda, W, work, lwork, rwork)
             info = Array(Int32, 1)
-            ccall(dlsym(libLAPACK, $heev),
+            ccall(dlsym(_jl_libLAPACK, $heev),
                   Void,
                   (Ptr{Uint8}, Ptr{Uint8}, Ptr{Int32}, Ptr{$celtype}, Ptr{Int32},
                    Ptr{$eltype}, Ptr{$celtype}, Ptr{Int32}, Ptr{$eltype}, Ptr{Int32}),
@@ -292,10 +292,10 @@ macro jl_lapack_eig_macro(syev, heev, real_geev, complex_geev, eltype, celtype)
         # *     .. Array Arguments ..
         #       DOUBLE PRECISION   A( LDA, * ), VL( LDVL, * ), VR( LDVR, * ),
         #      $                   WI( * ), WORK( * ), WR( * )
-        function jl_lapack_geev(jobvl, jobvr, n, A::StridedMatrix{$eltype}, lda, WR, WI, VL, ldvl, 
+        function _jl_lapack_geev(jobvl, jobvr, n, A::StridedMatrix{$eltype}, lda, WR, WI, VL, ldvl, 
                                 VR, ldvr, work, lwork)
             info = Array(Int32, 1)
-            ccall(dlsym(libLAPACK, $real_geev),
+            ccall(dlsym(_jl_libLAPACK, $real_geev),
                   Void,
                   (Ptr{Uint8}, Ptr{Uint8}, Ptr{Int32}, Ptr{$eltype}, Ptr{Int32},
                    Ptr{$eltype}, Ptr{$eltype}, Ptr{$eltype}, Ptr{Int32}, 
@@ -314,10 +314,10 @@ macro jl_lapack_eig_macro(syev, heev, real_geev, complex_geev, eltype, celtype)
         #       DOUBLE PRECISION   RWORK( * )
         #       COMPLEX*16         A( LDA, * ), VL( LDVL, * ), VR( LDVR, * ),
         #      $                   W( * ), WORK( * )
-        function jl_lapack_geev(jobvl, jobvr, n, A::StridedMatrix{$celtype}, lda, W, VL, ldvl, 
+        function _jl_lapack_geev(jobvl, jobvr, n, A::StridedMatrix{$celtype}, lda, W, VL, ldvl, 
                                 VR, ldvr, work, lwork, rwork)
             info = Array(Int32, 1)
-            ccall(dlsym(libLAPACK, $complex_geev),
+            ccall(dlsym(_jl_libLAPACK, $complex_geev),
                   Void,
                   (Ptr{Uint8}, Ptr{Uint8}, Ptr{Int32}, Ptr{$celtype}, Ptr{Int32},
                    Ptr{$celtype}, Ptr{$celtype}, Ptr{Int32}, 
@@ -330,8 +330,8 @@ macro jl_lapack_eig_macro(syev, heev, real_geev, complex_geev, eltype, celtype)
     end
 end
 
-@jl_lapack_eig_macro :dsyev_ :zheev_ :dgeev_ :zgeev_ Float64 Complex128
-@jl_lapack_eig_macro :ssyev_ :cheev_ :sgeev_ :cgeev_ Float32 Complex64
+@_jl_lapack_eig_macro :dsyev_ :zheev_ :dgeev_ :zgeev_ Float64 Complex128
+@_jl_lapack_eig_macro :ssyev_ :cheev_ :sgeev_ :cgeev_ Float32 Complex64
 
 #eig{T<:Number}(x::StridedMatrix{T}) = eig(float64(x))
 
@@ -354,9 +354,9 @@ function eig{T<:Union(Float64,Float32,Complex128,Complex64)}(A::StridedMatrix{T}
         lwork = -1
 
         if iscomplex(A)
-            info = jl_lapack_heev(jobz, uplo, n, EV, stride(EV,2), W, work, lwork, rwork)
+            info = _jl_lapack_heev(jobz, uplo, n, EV, stride(EV,2), W, work, lwork, rwork)
         else
-            info = jl_lapack_syev(jobz, uplo, n, EV, stride(EV,2), W, work, lwork)
+            info = _jl_lapack_syev(jobz, uplo, n, EV, stride(EV,2), W, work, lwork)
         end
 
         if info == 0; lwork = real(work[1]); work = Array(T, long(lwork));
@@ -364,9 +364,9 @@ function eig{T<:Union(Float64,Float32,Complex128,Complex64)}(A::StridedMatrix{T}
 
         # Compute eigenvalues, eigenvectors
         if iscomplex(A)
-            info = jl_lapack_heev(jobz, uplo, n, EV, stride(EV,2), W, work, lwork, rwork)
+            info = _jl_lapack_heev(jobz, uplo, n, EV, stride(EV,2), W, work, lwork, rwork)
         else
-            info = jl_lapack_syev(jobz, uplo, n, EV, stride(EV,2), W, work, lwork)
+            info = _jl_lapack_syev(jobz, uplo, n, EV, stride(EV,2), W, work, lwork)
         end
 
         if info == 0; return (W, EV); end
@@ -392,9 +392,9 @@ function eig{T<:Union(Float64,Float32,Complex128,Complex64)}(A::StridedMatrix{T}
         lwork = -1
 
         if iscomplex(A)
-            info = jl_lapack_geev(jobvl, jobvr, n, Acopy, stride(Acopy,2), W, VL, n, VR, n, work, lwork, rwork)
+            info = _jl_lapack_geev(jobvl, jobvr, n, Acopy, stride(Acopy,2), W, VL, n, VR, n, work, lwork, rwork)
         else
-            info = jl_lapack_geev(jobvl, jobvr, n, Acopy, stride(Acopy,2), WR, WI, VL, n, VR, n, work, lwork)
+            info = _jl_lapack_geev(jobvl, jobvr, n, Acopy, stride(Acopy,2), WR, WI, VL, n, VR, n, work, lwork)
         end
 
         if info == 0; lwork = real(work[1]); work = Array(T, long(lwork));
@@ -402,9 +402,9 @@ function eig{T<:Union(Float64,Float32,Complex128,Complex64)}(A::StridedMatrix{T}
 
         # Compute eigenvalues, eigenvectors
         if iscomplex(A)
-            info = jl_lapack_geev(jobvl, jobvr, n, Acopy, stride(Acopy,2), W, VL, n, VR, n, work, lwork, rwork)
+            info = _jl_lapack_geev(jobvl, jobvr, n, Acopy, stride(Acopy,2), W, VL, n, VR, n, work, lwork, rwork)
         else
-            info = jl_lapack_geev(jobvl, jobvr, n, Acopy, stride(Acopy,2), WR, WI, VL, n, VR, n, work, lwork)
+            info = _jl_lapack_geev(jobvl, jobvr, n, Acopy, stride(Acopy,2), WR, WI, VL, n, VR, n, work, lwork)
         end
         
         if info != 0; error("error in LAPACK geev"); end
@@ -434,7 +434,7 @@ end
 function trideig(d::Vector{Float64}, e::Vector{Float64})
     dcopy = copy(d)
     ecopy = copy(e)
-    ccall(dlsym(libLAPACK, :dsteqr_),
+    ccall(dlsym(_jl_libLAPACK, :dsteqr_),
           Void,
           (Ptr{Uint8},Ptr{Int32},Ptr{Float64},
            Ptr{Float64},Ptr{Float64},Ptr{Int32},
@@ -445,7 +445,7 @@ function trideig(d::Vector{Float64}, e::Vector{Float64})
 end
 
 
-macro jl_lapack_gesvd_macro(real_gesvd, complex_gesvd, eltype, celtype)
+macro _jl_lapack_gesvd_macro(real_gesvd, complex_gesvd, eltype, celtype)
     quote
 
         # SUBROUTINE DGESVD( JOBU, JOBVT, M, N, A, LDA, S, U, LDU, VT, LDVT, WORK, LWORK, INFO )
@@ -455,10 +455,10 @@ macro jl_lapack_gesvd_macro(real_gesvd, complex_gesvd, eltype, celtype)
         # *     .. Array Arguments ..
         #       DOUBLE PRECISION   A( LDA, * ), S( * ), U( LDU, * ),
         #      $                   VT( LDVT, * ), WORK( * )
-        function jl_lapack_gesvd(jobu, jobvt, m, n, A::StridedMatrix{$eltype}, lda, S, U, ldu, 
+        function _jl_lapack_gesvd(jobu, jobvt, m, n, A::StridedMatrix{$eltype}, lda, S, U, ldu, 
                                  VT, ldvt, work, lwork)
             info = Array(Int32, 1)
-            ccall(dlsym(libLAPACK, $real_gesvd),
+            ccall(dlsym(_jl_libLAPACK, $real_gesvd),
                   Void,
                   (Ptr{Uint8}, Ptr{Uint8}, Ptr{Int32}, Ptr{Int32}, Ptr{$eltype}, Ptr{Int32},
                    Ptr{$eltype}, Ptr{$eltype}, Ptr{Int32}, Ptr{$eltype}, Ptr{Int32},
@@ -477,10 +477,10 @@ macro jl_lapack_gesvd_macro(real_gesvd, complex_gesvd, eltype, celtype)
         #      DOUBLE PRECISION   RWORK( * ), S( * )
         #      COMPLEX*16         A( LDA, * ), U( LDU, * ), VT( LDVT, * ),
         #     $                   WORK( * )
-        function jl_lapack_gesvd(jobu, jobvt, m, n, A::StridedMatrix{$celtype}, lda, S, U, ldu, 
+        function _jl_lapack_gesvd(jobu, jobvt, m, n, A::StridedMatrix{$celtype}, lda, S, U, ldu, 
                                  VT, ldvt, work, lwork, rwork)
             info = Array(Int32, 1)
-            ccall(dlsym(libLAPACK, $complex_gesvd),
+            ccall(dlsym(_jl_libLAPACK, $complex_gesvd),
                   Void,
                   (Ptr{Uint8}, Ptr{Uint8}, Ptr{Int32}, Ptr{Int32}, Ptr{$celtype}, Ptr{Int32},
                    Ptr{$eltype}, Ptr{$celtype}, Ptr{Int32}, Ptr{$celtype}, Ptr{Int32},
@@ -493,8 +493,8 @@ macro jl_lapack_gesvd_macro(real_gesvd, complex_gesvd, eltype, celtype)
     end
 end
 
-@jl_lapack_gesvd_macro :dgesvd_ :zgesvd_ Float64 Complex128
-@jl_lapack_gesvd_macro :sgesvd_ :cgesvd_ Float32 Complex64
+@_jl_lapack_gesvd_macro :dgesvd_ :zgesvd_ Float64 Complex128
+@_jl_lapack_gesvd_macro :sgesvd_ :cgesvd_ Float32 Complex64
 
 #svd{T<:Number}(x::StridedMatrix{T}) = svd(float64(x))
 
@@ -515,9 +515,9 @@ function svd{T<:Union(Float64,Float32,Complex128,Complex64)}(A::StridedMatrix{T}
     work = zeros(T, 1)
     lwork = -1
     if iscomplex(A)
-        info = jl_lapack_gesvd(jobu, jobvt, m, n, X, stride(X,2), S, U, m, VT, n, work, lwork, rwork)
+        info = _jl_lapack_gesvd(jobu, jobvt, m, n, X, stride(X,2), S, U, m, VT, n, work, lwork, rwork)
     else
-        info = jl_lapack_gesvd(jobu, jobvt, m, n, X, stride(X,2), S, U, m, VT, n, work, lwork)
+        info = _jl_lapack_gesvd(jobu, jobvt, m, n, X, stride(X,2), S, U, m, VT, n, work, lwork)
     end
 
     if info == 0; lwork = real(work[1]); work = Array(T, long(lwork));
@@ -525,16 +525,16 @@ function svd{T<:Union(Float64,Float32,Complex128,Complex64)}(A::StridedMatrix{T}
 
     # Compute SVD
     if iscomplex(A)
-        info = jl_lapack_gesvd(jobu, jobvt, m, n, X, stride(X,2), S, U, m, VT, n, work, lwork, rwork)
+        info = _jl_lapack_gesvd(jobu, jobvt, m, n, X, stride(X,2), S, U, m, VT, n, work, lwork, rwork)
     else
-        info = jl_lapack_gesvd(jobu, jobvt, m, n, X, stride(X,2), S, U, m, VT, n, work, lwork)
+        info = _jl_lapack_gesvd(jobu, jobvt, m, n, X, stride(X,2), S, U, m, VT, n, work, lwork)
     end
 
     if info == 0; return (U, S, VT); end
     error("error in LAPACK gesvd");
 end
 
-macro jl_lapack_backslash_macro(gesv, posv, gels, trtrs, eltype)
+macro _jl_lapack_backslash_macro(gesv, posv, gels, trtrs, eltype)
     quote
 
         # SUBROUTINE DGESV( N, NRHS, A, LDA, IPIV, B, LDB, INFO )
@@ -544,11 +544,11 @@ macro jl_lapack_backslash_macro(gesv, posv, gels, trtrs, eltype)
         # *     .. Array Arguments ..
         #       INTEGER            IPIV( * )
         #       DOUBLE PRECISION   A( LDA, * ), B( LDB, * )
-        function jl_lapack_gesv(n, nrhs, A::StridedMatrix{$eltype}, lda, ipiv, B, ldb)
+        function _jl_lapack_gesv(n, nrhs, A::StridedMatrix{$eltype}, lda, ipiv, B, ldb)
             info = Array(Int32, 1)
             a = pointer(A)
             b = pointer(B)
-            ccall(dlsym(libLAPACK, $gesv),
+            ccall(dlsym(_jl_libLAPACK, $gesv),
                   Void,
                   (Ptr{Int32}, Ptr{Int32}, Ptr{$eltype}, Ptr{Int32}, Ptr{Int32},
                    Ptr{$eltype}, Ptr{Int32}, Ptr{Int32}),
@@ -562,11 +562,11 @@ macro jl_lapack_backslash_macro(gesv, posv, gels, trtrs, eltype)
         #      INTEGER            INFO, LDA, LDB, N, NRHS
         #     .. Array Arguments ..
         #      DOUBLE PRECISION   A( LDA, * ), B( LDB, * )
-        function jl_lapack_posv(uplo, n, nrhs, A::StridedMatrix{$eltype}, lda, B, ldb)
+        function _jl_lapack_posv(uplo, n, nrhs, A::StridedMatrix{$eltype}, lda, B, ldb)
             info = Array(Int32, 1)
             a = pointer(A)
             b = pointer(B)
-            ccall(dlsym(libLAPACK, $posv),
+            ccall(dlsym(_jl_libLAPACK, $posv),
                   Void,
                   (Ptr{Uint8}, Ptr{Int32}, Ptr{Int32}, Ptr{$eltype}, Ptr{Int32},
                    Ptr{$eltype}, Ptr{Int32}, Ptr{Int32}),
@@ -578,11 +578,11 @@ macro jl_lapack_backslash_macro(gesv, posv, gels, trtrs, eltype)
         # *     .. Scalar Arguments ..
         #       CHARACTER          TRANS
         #       INTEGER            INFO, LDA, LDB, LWORK, M, N, NRHS
-        function jl_lapack_gels(trans, m, n, nrhs, A::StridedMatrix{$eltype}, lda, B, ldb, work, lwork)
+        function _jl_lapack_gels(trans, m, n, nrhs, A::StridedMatrix{$eltype}, lda, B, ldb, work, lwork)
             info = Array(Int32, 1)
             a = pointer(A)
             b = pointer(B)
-            ccall(dlsym(libLAPACK, $gels),
+            ccall(dlsym(_jl_libLAPACK, $gels),
                   Void,
                   (Ptr{Uint8}, Ptr{Int32}, Ptr{Int32}, Ptr{Int32}, Ptr{$eltype}, Ptr{Int32},
                    Ptr{$eltype}, Ptr{Int32}, Ptr{$eltype}, Ptr{Int32}, Ptr{Int32}),
@@ -597,11 +597,11 @@ macro jl_lapack_backslash_macro(gesv, posv, gels, trtrs, eltype)
         #       INTEGER            INFO, LDA, LDB, N, NRHS
         # *     .. Array Arguments ..
         #       DOUBLE PRECISION   A( LDA, * ), B( LDB, * )
-        function jl_lapack_trtrs(uplo, trans, diag, n, nrhs, A::StridedMatrix{$eltype}, lda, B, ldb)
+        function _jl_lapack_trtrs(uplo, trans, diag, n, nrhs, A::StridedMatrix{$eltype}, lda, B, ldb)
             info = Array(Int32, 1)
             a = pointer(A)
             b = pointer(B)
-            ccall(dlsym(libLAPACK, $trtrs),
+            ccall(dlsym(_jl_libLAPACK, $trtrs),
                   Void,
                   (Ptr{Uint8}, Ptr{Uint8}, Ptr{Uint8}, Ptr{Int32}, Ptr{Int32},
                    Ptr{$eltype}, Ptr{Int32}, Ptr{$eltype}, Ptr{Int32}, Ptr{Int32}),
@@ -612,10 +612,10 @@ macro jl_lapack_backslash_macro(gesv, posv, gels, trtrs, eltype)
     end
 end
 
-@jl_lapack_backslash_macro :dgesv_ :dposv_ :dgels_ :dtrtrs_ Float64
-@jl_lapack_backslash_macro :sgesv_ :sposv_ :sgels_ :strtrs_ Float32
-@jl_lapack_backslash_macro :zgesv_ :zposv_ :zgels_ :ztrtrs_ Complex128
-@jl_lapack_backslash_macro :cgesv_ :cposv_ :cgels_ :ctrtrs_ Complex64
+@_jl_lapack_backslash_macro :dgesv_ :dposv_ :dgels_ :dtrtrs_ Float64
+@_jl_lapack_backslash_macro :sgesv_ :sposv_ :sgels_ :strtrs_ Float32
+@_jl_lapack_backslash_macro :zgesv_ :zposv_ :zgels_ :ztrtrs_ Complex128
+@_jl_lapack_backslash_macro :cgesv_ :cposv_ :cgels_ :ctrtrs_ Complex64
 
 #(\){T1<:Number, T2<:Number}(A::StridedMatrix{T1}, B::StridedVecOrMat{T2}) = (\)(float64(A), float64(B))
 
@@ -641,7 +641,7 @@ function (\){T<:Union(Float64,Float32,Complex128,Complex64)}(A::StridedMatrix{T}
             end
 
             if case == :spd
-                info = jl_lapack_posv("U", n, nrhs, Acopy, n, X, n)
+                info = _jl_lapack_posv("U", n, nrhs, Acopy, n, X, n)
                 if info != 0
                     Acopy = copy(A)
                     case = :general
@@ -649,14 +649,14 @@ function (\){T<:Union(Float64,Float32,Complex128,Complex64)}(A::StridedMatrix{T}
             end
 
             if case == :general
-                info = jl_lapack_gesv(n, nrhs, Acopy, n, ipiv, X, n)
+                info = _jl_lapack_gesv(n, nrhs, Acopy, n, ipiv, X, n)
             end
 
         else # Triangular
             uplo = "U"
             if case == :lower_triangular; uplo = "L"; end
 
-            info = jl_lapack_trtrs(uplo, "N", "N", n, nrhs, Acopy, n, X, n)
+            info = _jl_lapack_trtrs(uplo, "N", "N", n, nrhs, Acopy, n, X, n)
         end
 
     else # Rectangular
@@ -667,7 +667,7 @@ function (\){T<:Union(Float64,Float32,Complex128,Complex64)}(A::StridedMatrix{T}
         Y = Array(T, max(m,n), nrhs)
         Y[1:size(X,1), 1:nrhs] = X
 
-        info = jl_lapack_gels("N", m, n, nrhs, Acopy, m, Y, max(m,n), work, lwork)
+        info = _jl_lapack_gels("N", m, n, nrhs, Acopy, m, Y, max(m,n), work, lwork)
 
         if info == 0
             lwork = real(work[1])
@@ -676,7 +676,7 @@ function (\){T<:Union(Float64,Float32,Complex128,Complex64)}(A::StridedMatrix{T}
             error("error in LAPACK gels")
         end
 
-        info = jl_lapack_gels("N", m, n, nrhs, Acopy, m, Y, max(m,n), work, lwork)
+        info = _jl_lapack_gels("N", m, n, nrhs, Acopy, m, Y, max(m,n), work, lwork)
 
         ##if B is a vector, format answer as vector
         if isa(B, Vector)
@@ -714,7 +714,7 @@ function bidiag(A::Matrix{Float64}, nb, nargout)
         X = zeros(m-k+1, nb)
         Y = zeros(n-k+1, nb)
 
-        ccall(dlsym(libLAPACK, :dlabrd_), Void,
+        ccall(dlsym(_jl_libLAPACK, :dlabrd_), Void,
               (Ptr{Int32}, Ptr{Int32}, Ptr{Int32}, Ptr{Float64}, Ptr{Int32},
                Ptr{Float64}, Ptr{Float64}, Ptr{Float64}, Ptr{Float64},
                Ptr{Float64},
@@ -744,7 +744,7 @@ function bidiag(A::Matrix{Float64}, nb, nargout)
     tauqblk = zeros(s-k+1)
     taupblk = zeros(s-k+1)
 
-    ccall(dlsym(libLAPACK,:dgebd2_), Void,
+    ccall(dlsym(_jl_libLAPACK,:dgebd2_), Void,
           (Ptr{Int32}, Ptr{Int32}, Ptr{Float64}, Ptr{Int32},
            Ptr{Float64}, Ptr{Float64}, Ptr{Float64}, Ptr{Float64},
            Ptr{Float64}, Ptr{Int32}),
@@ -771,13 +771,13 @@ function bidiag(A::Matrix{Float64}, nb, nargout)
 
     if m >= n
         Q = copy(A0)
-        ccall(dlsym(libLAPACK,:dorgbr_), Void,
+        ccall(dlsym(_jl_libLAPACK,:dorgbr_), Void,
               (Ptr{Uint8}, Ptr{Int32}, Ptr{Int32}, Ptr{Int32},
                Ptr{Float64}, Ptr{Int32}, Ptr{Float64}, Ptr{Float64},
                Ptr{Int32}, Ptr{Int32}),
               "Q", m, n, n, Q, m, tauq, zeros(s), s, 0)
         PT = A0
-        ccall(dlsym(libLAPACK,:dorgbr_), Void,
+        ccall(dlsym(_jl_libLAPACK,:dorgbr_), Void,
               (Ptr{Uint8}, Ptr{Int32}, Ptr{Int32}, Ptr{Int32},
                Ptr{Float64}, Ptr{Int32}, Ptr{Float64}, Ptr{Float64},
                Ptr{Int32}, Ptr{Int32}),
@@ -785,14 +785,14 @@ function bidiag(A::Matrix{Float64}, nb, nargout)
         PT = PT[1:n,:]
     else
         Q = copy(A0)
-        ccall(dlsym(libLAPACK,:dorgbr_), Void,
+        ccall(dlsym(_jl_libLAPACK,:dorgbr_), Void,
               (Ptr{Uint8}, Ptr{Int32}, Ptr{Int32}, Ptr{Int32},
                Ptr{Float64}, Ptr{Int32}, Ptr{Float64}, Ptr{Float64},
                Ptr{Int32}, Ptr{Int32}),
               "Q", m, m, n, Q, m, tauq, zeros(s), s, 0)
         Q = Q[:,1:m]
         PT = A0
-        ccall(dlsym(libLAPACK,:dorgbr_), Void,
+        ccall(dlsym(_jl_libLAPACK,:dorgbr_), Void,
               (Ptr{Uint8}, Ptr{Int32}, Ptr{Int32}, Ptr{Int32},
                Ptr{Float64}, Ptr{Int32}, Ptr{Float64}, Ptr{Float64},
                Ptr{Int32}, Ptr{Int32}),
@@ -811,7 +811,7 @@ function blksvd(A::Matrix{Float64}, nargout)
     (Q, D, E, PT) = bidiag(A, nb, 4)
 
     if m >= n
-        ccall(dlsym(libLAPACK,:dbdsqr_), Void,
+        ccall(dlsym(_jl_libLAPACK, :dbdsqr_), Void,
               (Ptr{Uint8}, Ptr{Int32}, Ptr{Int32}, Ptr{Int32}, Ptr{Int32},
                Ptr{Float64}, Ptr{Float64}, Ptr{Float64}, Ptr{Int32},
                Ptr{Float64}, Ptr{Int32}, Ptr{Float64}, Ptr{Int32},
@@ -819,7 +819,7 @@ function blksvd(A::Matrix{Float64}, nargout)
               "U",
               n, n, m, 0, D, E, PT, n, Q, m, zeros(1,1), 1, zeros(4*n,1), 0)
     else
-        ccall(dlsym(libLAPACK,:dbdsqr_), Void,
+        ccall(dlsym(_jl_libLAPACK, :dbdsqr_), Void,
               (Ptr{Uint8}, Ptr{Int32}, Ptr{Int32}, Ptr{Int32}, Ptr{Int32},
                Ptr{Float64}, Ptr{Float64}, Ptr{Float64}, Ptr{Int32},
                Ptr{Float64}, Ptr{Int32}, Ptr{Float64}, Ptr{Int32},
