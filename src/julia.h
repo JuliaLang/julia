@@ -898,6 +898,7 @@ typedef struct _jl_task_t {
     JL_STRUCT_TYPE
     struct _jl_task_t *on_exit;
     jl_value_t *tls;
+    jl_value_t *done;
     jmp_buf ctx;
     union {
         void *stackbase;
@@ -908,7 +909,6 @@ typedef struct _jl_task_t {
     void *stkbuf;
     size_t ssize;
     jl_function_t *start;
-    int done;
     jl_value_t *result;
     // exception state and per-task dynamic parameters
     jl_savestate_t state;

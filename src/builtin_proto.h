@@ -65,8 +65,6 @@ JL_CALLABLE(jl_apply_generic);
 JL_CALLABLE(jl_unprotect_stack);
 JL_CALLABLE(jl_f_task);
 JL_CALLABLE(jl_f_yieldto);
-JL_CALLABLE(jl_f_current_task);
-JL_CALLABLE(jl_f_taskdone);
 JL_CALLABLE(jl_f_ctor_trampoline);
 
 jl_value_t *jl_new_closure_internal(jl_lambda_info_t *li, jl_value_t *env);

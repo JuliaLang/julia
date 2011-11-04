@@ -199,7 +199,9 @@ htable_t *jl_gc_get_finalizer_table(void)
 
 static int szclass(size_t sz)
 {
+#ifndef __LP64__
     if     (sz <=    8) return 0;
+#endif
     if     (sz <=   56) return ((sz+3)/4) - 2;
     if     (sz <=   96) return ((sz+7)/8) + 5;
     if     (sz <=  512) {

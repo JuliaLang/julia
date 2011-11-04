@@ -314,7 +314,7 @@ DLLEXPORT void jl_input_line_callback(char *input)
     if (rl_ast != NULL) {
         doprint = !ends_with_semicolon(input);
         add_history_permanent(input);
-        ios_printf(ios_stdout, "\n");
+        ios_putc('\n', ios_stdout);
         free(input);
     }
 
@@ -342,8 +342,8 @@ static void symtab_search(jl_sym_t *tree, int *pcount, ios_t *result,
     do {
         if (common_prefix(prefix, tree->name) == plen &&
             jl_boundp(jl_system_module, tree)) {
-            ios_printf(result, "%s", tree->name);
-            ios_printf(result, "\n");
+            ios_puts(tree->name, result);
+            ios_putc('\n', result);
             (*pcount)++;
         }
         if (tree->left)
@@ -395,6 +395,8 @@ int tab_complete(const char *line, char **answer, int *plen)
     return symtab_get_matches(jl_get_root_symbol(), &line[len], answer);
 }
 
+static char *strtok_saveptr;
+
 static char *do_completions(const char *ch, int c)
 {
     static char *completions = NULL;
@@ -412,10 +414,10 @@ static char *do_completions(const char *ch, int c)
         cnt = tab_complete(ch, &completions, &len);
         if (cnt == 0)
             return NULL;
-        ptr = strtok(completions, "\n");
+        ptr = strtok_r(completions, "\n", &strtok_saveptr);
     }
     else {
-        ptr = strtok(NULL, "\n");
+        ptr = strtok_r(NULL, "\n", &strtok_saveptr);
     }
 
     return ptr ? strdup(ptr) : NULL;

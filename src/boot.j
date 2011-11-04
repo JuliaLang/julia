@@ -243,6 +243,9 @@ finalizer(o, f::Function) =
 
 gc() = ccall(:jl_gc_collect, Void, ())
 
+current_task() = ccall(:jl_get_current_task, Any, ())::Task
+task_done(t::Task) = t.done
+
 cstring(str::ByteString) = str
 
 # return an integer such that uid(x)==uid(y) iff is(x,y)

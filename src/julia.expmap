@@ -152,6 +152,7 @@
     jl_save_system_image;
     jl_restore_system_image;
     jl_current_task;
+    jl_get_current_task;
     jl_enter_handler;
     jl_exception_in_transit;
     jl_show;

@@ -918,8 +918,7 @@ void jl_init_serializer(void)
                       jl_f_methodexists, jl_f_applicable, 
                       jl_f_invoke, jl_apply_generic, 
                       jl_unprotect_stack, jl_f_task, 
-                      jl_f_yieldto, jl_f_current_task, 
-                      jl_f_taskdone, jl_f_ctor_trampoline,
+                      jl_f_yieldto, jl_f_ctor_trampoline,
                       NULL };
     i=2;
     while (fptrs[i-2] != NULL) {

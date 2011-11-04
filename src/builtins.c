@@ -706,7 +706,7 @@ static void show_type(jl_value_t *t)
     ios_t *s = jl_current_output_stream();
     if (jl_is_func_type(t)) {
         if (t == (jl_value_t*)jl_any_func) {
-            ios_printf(s, "Function");
+            ios_puts("Function", s);
         }
         else {
             jl_show((jl_value_t*)((jl_func_type_t*)t)->from);
@@ -796,7 +796,7 @@ JL_CALLABLE(jl_f_show_any)
         ios_printf(s, "#<intrinsic-function %d>", *(uint32_t*)jl_bits_data(v));
     }
     else if (v == (jl_value_t*)jl_function_type) {
-        ios_printf(s, "Function");
+        ios_puts("Function", s);
     }
     else {
         jl_value_t *t = (jl_value_t*)jl_typeof(v);

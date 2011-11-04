@@ -275,7 +275,7 @@ static void ctx_switch(jl_task_t *t, jmp_buf *where)
 
 static jl_value_t *switchto(jl_task_t *t)
 {
-    if (t->done) {
+    if (t->done==jl_true) {
         jl_task_arg_in_transit = (jl_value_t*)jl_null;
         return t->result;
     }
@@ -379,8 +379,8 @@ jl_value_t *jl_switchto(jl_task_t *t, jl_value_t *arg)
 
 static void finish_task(jl_task_t *t, jl_value_t *resultval)
 {
-    assert(!t->done);
-    t->done = 1;
+    assert(t->done==jl_false);
+    t->done = jl_true;
     t->result = resultval;
 }
 
@@ -418,7 +418,7 @@ static void start_task(jl_task_t *t)
     finish_task(t, res);
     jl_task_t *cont = t->on_exit;
     // if parent task has exited, try its parent, and so on
-    while (cont->done)
+    while (cont->done==jl_true)
         cont = cont->on_exit;
     jl_switchto(cont, t->result);
     assert(0);
@@ -612,7 +612,7 @@ void jl_raise(jl_value_t *e)
         longjmp(*eh->state.eh_ctx, 1);
     }
     else {
-        if (eh->done || eh->state.eh_ctx==NULL) {
+        if (eh->done==jl_true || eh->state.eh_ctx==NULL) {
             // our handler is not available, use root task
             ios_printf(ios_stderr, "warning: exception handler exited\n");
             eh = jl_root_task;
@@ -633,7 +633,7 @@ jl_task_t *jl_new_task(jl_function_t *start, size_t ssize)
     t->ssize = ssize;
     t->on_exit = jl_current_task;
     t->tls = jl_current_task->tls;
-    t->done = 0;
+    t->done = jl_false;
     t->start = start;
     t->result = NULL;
     t->state.err = 0;
@@ -721,17 +721,9 @@ JL_CALLABLE(jl_f_yieldto)
     return switchto((jl_task_t*)args[0]);
 }
 
-JL_CALLABLE(jl_f_current_task)
+DLLEXPORT jl_value_t *jl_get_current_task(void)
 {
-    JL_NARGS(current_task, 0, 0);
     return (jl_value_t*)jl_current_task;
-}
-
-JL_CALLABLE(jl_f_taskdone)
-{
-    JL_NARGS(task_done, 1, 1);
-    JL_TYPECHK(task_done, task, args[0]);
-    return ((jl_task_t*)args[0])->done ? jl_true : jl_false;
 }
 
 jl_function_t *jl_unprotect_stack_func;
@@ -741,9 +733,11 @@ void jl_init_tasks(void *stack, size_t ssize)
     _probe_arch();
     jl_task_type = jl_new_struct_type(jl_symbol("Task"), jl_any_type,
                                       jl_null,
-                                      jl_tuple(2, jl_symbol("parent"),
-                                               jl_symbol("tls")),
-                                      jl_tuple(2, jl_any_type, jl_any_type));
+                                      jl_tuple(3, jl_symbol("parent"),
+                                               jl_symbol("tls"),
+                                               jl_symbol("done")),
+                                      jl_tuple(3, jl_any_type, jl_any_type,
+                                               jl_bool_type));
     jl_tupleset(jl_task_type->types, 0, (jl_value_t*)jl_task_type);
     jl_task_type->fptr = jl_f_task;
 
@@ -760,7 +754,7 @@ void jl_init_tasks(void *stack, size_t ssize)
     jl_current_task->stkbuf = NULL;
     jl_current_task->on_exit = jl_current_task;
     jl_current_task->tls = NULL;
-    jl_current_task->done = 0;
+    jl_current_task->done = jl_false;
     jl_current_task->start = jl_bottom_func;
     jl_current_task->result = NULL;
     jl_current_task->state.err = 0;
@@ -782,6 +776,4 @@ void jl_init_tasks(void *stack, size_t ssize)
 
     jl_add_builtin("Task", (jl_value_t*)jl_task_type);
     jl_add_builtin_func("yieldto", jl_f_yieldto);
-    jl_add_builtin_func("current_task", jl_f_current_task);
-    jl_add_builtin_func("task_done", jl_f_taskdone);
 }
