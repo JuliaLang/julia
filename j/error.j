@@ -2,16 +2,14 @@
 
 error(e::Exception) = throw(e)
 error{E<:Exception}(::Type{E}) = throw(E())
-error(s::ByteString) = throw(ErrorException(s))
-error(s...) = error(print_to_string(print, s...))
+error(s...) = throw(ErrorException(cstring(s...)))
 
 ## system error handling ##
 
 errno() = ccall(:jl_errno, Int32, ())
 strerror(e::Int) = ccall(:jl_strerror, Any, (Int32,), int32(e))::ByteString
 strerror() = strerror(errno())
-system_error(p::String, b::Bool) = b ? error(SystemError(p)) : nothing
-system_error(s::Symbol, b::Bool) = system_error(string(s), b)
+system_error(p, b::Bool) = b ? error(SystemError(string(p))) : nothing
 
 ## assertion functions and macros ##
 
