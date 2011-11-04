@@ -6,7 +6,6 @@ next(s::ASCIIString, i::Index) = (char(s.data[i]), i+1)
 ## overload methods for efficiency ##
 
 length(s::ASCIIString) = length(s.data)
-cmp(a::ASCIIString, b::ASCIIString) = lexcmp(a.data, b.data)
 ind2chr(s::ASCIIString, i::Int) = i
 chr2ind(s::ASCIIString, i::Int) = i
 strchr(s::ASCIIString, c::Char) = c < 0x80 ? memchr(s.data, c) : error("char not found")

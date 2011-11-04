@@ -118,10 +118,6 @@ function chars(s::String)
     cx
 end
 
-(< )(a::String, b::String)    = cmp(a,b) <  0
-(<=)(a::String, b::String)    = cmp(a,b) <= 0
-isequal(a::String, b::String) = cmp(a,b) == 0
-
 function cmp(a::String, b::String)
     i = start(a)
     j = start(b)
@@ -135,6 +131,15 @@ function cmp(a::String, b::String)
     done(a,i) && !done(b,j) ? -1 :
     !done(a,i) && done(b,j) ? +1 : 0
 end
+
+(< )(a::String, b::String)    = cmp(a,b) <  0
+(<=)(a::String, b::String)    = cmp(a,b) <= 0
+isequal(a::String, b::String) = cmp(a,b) == 0
+
+# faster comparisons for byte strings
+
+cmp(a::ByteString, b::ByteString)     = lexcmp(a.data, b.data)
+isequal(a::ByteString, b::ByteString) = length(a) == length(b) && cmp(a,b) == 0
 
 ## plain old character arrays ##
 

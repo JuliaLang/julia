@@ -48,7 +48,6 @@ end
 ## overload methods for efficiency ##
 
 length(s::UTF8String) = length(s.data)
-cmp(a::UTF8String, b::UTF8String) = lexcmp(a.data, b.data)
 strchr(s::UTF8String, c::Char) =
     c < 0x80 ? memchr(s.data, c) : invoke(strchr, (String,Char), s, c)
 strcat(a::ByteString, b::ByteString, c::ByteString...) = UTF8String(memcat(a,b,c...))
@@ -81,8 +80,7 @@ write(io, s::UTF8String) = write(io, s.data)
 
 ## transcoding to UTF-8 ##
 
-# NOTE: returns an ASCIIString or UTF8String object.
-
+# NOTE: returns ASCIIString OR UTF8String object:
 utf8(s::ByteString) = s
 utf8(a::Array{Uint8,1}) = check_utf8(UTF8String(a))
 utf8(s::String) = cstring(s)
