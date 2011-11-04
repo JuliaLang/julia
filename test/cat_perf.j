@@ -20,7 +20,7 @@ function cat2d_perf2(n, iter)
     a = rand(n,n)
     b = rand(n,n)
     for i=1:iter
-        c = Array(Float64, 2*n, 2*n)
+        c = Array(Float64, 2n, 2n)
         c[1:n,1:n] = a
         c[1:n,n+1:end] = b
         c[n+1:end,1:n] = b
@@ -47,11 +47,11 @@ function hcat_perf2(n, iter)
     a = rand(n,n)
     b = rand(n,n)
     for i=1:iter
-        c = Array(Float64, n, 4*n)
+        c = Array(Float64, n, 4n)
         c[:, 1:n] = a
-        c[:, n+1:2*n] = b
-        c[:, 2*n+1:3*n] = b
-        c[:, 3*n+1:end] = a
+        c[:, n+1:2n] = b
+        c[:, 2n+1:3n] = b
+        c[:, 3n+1:end] = a
     end
 end
 
@@ -73,11 +73,11 @@ function vcat_perf2(n, iter)
     a = rand(n,n)
     b = rand(n,n)
     for i=1:iter
-        c = Array(Float64, 4*n, n)
+        c = Array(Float64, 4n, n)
         c[1:n, :] = a
-        c[n+1:2*n, :] = b
-        c[2*n+1:3*n, :] = b
-        c[3*n+1:4*n, :] = a
+        c[n+1:2n, :] = b
+        c[2n+1:3n, :] = b
+        c[3n+1:4n, :] = a
     end
 end
 
@@ -99,11 +99,11 @@ function catnd_perf2(n, iter)
     a = rand(1,n,n,1)
     b = rand(1,n,n)
     for i = 1:iter
-        c = Array(Float64, 1,n,4*n,1)
+        c = Array(Float64, 1, n, 4n, 1)
         c[1,:,1:n,1] = a
-        c[1,:,n+1:2*n,1] = b
-        c[1,:,2*n+1:3*n,1] = b
-        c[1,:,3*n+1:4*n,1] = a
+        c[1,:,n+1:2n,1] = b
+        c[1,:,2n+1:3n,1] = b
+        c[1,:,3n+1:4n,1] = a
     end
 end
 
