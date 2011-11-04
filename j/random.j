@@ -1,8 +1,8 @@
-librandom = dlopen("librandom")
+_jl_librandom = dlopen("librandom")
 
 ## initialization
 
-function librandom_init()
+function _jl_librandom_init()
     try
         srand("/dev/urandom", 4)
     catch
@@ -12,14 +12,14 @@ function librandom_init()
                uint64(getpid())
         srand(seed)
     end
-    randn_zig_init()
+    _jl_randn_zig_init()
 end
 
-dsfmt_get_min_array_size() = ccall(dlsym(librandom, :dsfmt_get_min_array_size), Int32, ())
+_jl_dsfmt_get_min_array_size() = ccall(dlsym(_jl_librandom, :dsfmt_get_min_array_size), Int32, ())
 
 # macros to generate random arrays
 
-macro rand_matrix_builder(t, f)
+macro _jl_rand_matrix_builder(t, f)
     quote
         function ($f)(dims::Dims)
             A = Array($t, dims)
@@ -30,7 +30,7 @@ macro rand_matrix_builder(t, f)
     end
 end
 
-macro rand_matrix_builder_1arg(t, f)
+macro _jl_rand_matrix_builder_1arg(t, f)
     quote
         function ($f)(arg, dims::Dims)
             A = Array($t, dims)
@@ -43,10 +43,10 @@ end
 
 ## srand()
 
-srand(seed::Uint32) = ccall(dlsym(librandom, :dsfmt_gv_init_gen_rand), Void, (Uint32, ), seed)
+srand(seed::Uint32) = ccall(dlsym(_jl_librandom, :dsfmt_gv_init_gen_rand), Void, (Uint32, ), seed)
 
 function srand(seed::Vector{Uint32})
-    ccall(dlsym(librandom, :dsfmt_gv_init_by_array),
+    ccall(dlsym(_jl_librandom, :dsfmt_gv_init_by_array),
           Void, (Ptr{Uint32}, Int32),
           seed, int32(length(seed)))
 end
@@ -65,28 +65,28 @@ srand(filename::String) = srand(filename, 4)
 
 ## rand()
 
-rand() = ccall(dlsym(librandom, :dsfmt_gv_genrand_open_open), Float64, ())
+rand() = ccall(dlsym(_jl_librandom, :dsfmt_gv_genrand_open_open), Float64, ())
 
 function rand(dims::Dims)
     A = Array(Float64, dims)
-    dsfmt_fill_array_open_open(A)
+    _jl_dsfmt_fill_array_open_open(A)
     return A
 end
 
 rand(dims::Size...) = rand(dims)
 
-function dsfmt_fill_array_open_open(A::Array{Float64})
+function _jl_dsfmt_fill_array_open_open(A::Array{Float64})
     n = numel(A)
-    if (n <= dsfmt_get_min_array_size())
+    if (n <= _jl_dsfmt_get_min_array_size())
         for i=1:numel(A)
             A[i] = rand()
         end
     else
         if isodd(n)
-            ccall(dlsym(librandom, :dsfmt_gv_fill_array_open_open), Void, (Ptr{Void}, Int32), A, int32(n-1))
+            ccall(dlsym(_jl_librandom, :dsfmt_gv_fill_array_open_open), Void, (Ptr{Void}, Int32), A, int32(n-1))
             A[n] = rand()
         else
-            ccall(dlsym(librandom, :dsfmt_gv_fill_array_open_open), Void, (Ptr{Void}, Int32), A, int32(n))
+            ccall(dlsym(_jl_librandom, :dsfmt_gv_fill_array_open_open), Void, (Ptr{Void}, Int32), A, int32(n))
         end
     end
     return A
@@ -94,10 +94,10 @@ end
 
 ## random integers
 
-dsfmt_randui32() = ccall(dlsym(librandom, :dsfmt_gv_genrand_uint32), Uint32, ())
+_jl_dsfmt_randui32() = ccall(dlsym(_jl_librandom, :dsfmt_gv_genrand_uint32), Uint32, ())
 
-dsfmt_randui64() = boxui64(or_int(zext64(unbox32(dsfmt_randui32())),
-                           shl_int(zext64(unbox32(dsfmt_randui32())),unbox32(32))))
+_jl_dsfmt_randui64() = boxui64(or_int(zext64(unbox32(_jl_dsfmt_randui32())),
+                           shl_int(zext64(unbox32(_jl_dsfmt_randui32())),unbox32(32))))
 
 if WORD_SIZE == 64
     randi() = randi(Uint64)
@@ -105,10 +105,10 @@ else
     randi() = randi(Uint32)
 end
 
-randi(::Type{Int32})  = int32(dsfmt_randui32()) & typemax(Int32)
-randi(::Type{Uint32}) = dsfmt_randui32()
-randi(::Type{Int64})  = int64(dsfmt_randui64()) & typemax(Int64)
-randi(::Type{Uint64}) = dsfmt_randui64()
+randi(::Type{Int32})  = int32(_jl_dsfmt_randui32()) & typemax(Int32)
+randi(::Type{Uint32}) = _jl_dsfmt_randui32()
+randi(::Type{Int64})  = int64(_jl_dsfmt_randui64()) & typemax(Int64)
+randi(::Type{Uint64}) = _jl_dsfmt_randui64()
 
 # random integer from lo to hi inclusive
 function randi_interval{T<:Int}(lo::T, hi::T)
@@ -146,24 +146,24 @@ randi(r::(Int,Int), dims::Size...) = randi_interval(r[1], r[2], dims)
 
 ## random Bools
 
-randbit() = dsfmt_randui32() & uint32(1)
-@rand_matrix_builder Uint32 randbit
+randbit() = _jl_dsfmt_randui32() & uint32(1)
+@_jl_rand_matrix_builder Uint32 randbit
 
 randbool() = randbit() == 1
-@rand_matrix_builder Bool randbool
+@_jl_rand_matrix_builder Bool randbool
 
 ## randn() - Normally distributed random numbers using Ziggurat algorithm
 
 # The Ziggurat Method for generating random variables - Marsaglia and Tsang
 # Paper and reference code: http://www.jstatsoft.org/v05/i08/ 
 
-randn_zig_init() = ccall(dlsym(librandom, :randmtzig_create_ziggurat_tables), Void, ())
+_jl_randn_zig_init() = ccall(dlsym(_jl_librandom, :randmtzig_create_ziggurat_tables), Void, ())
 
-randn() = ccall(dlsym(librandom, :randmtzig_randn), Float64, ())
+randn() = ccall(dlsym(_jl_librandom, :randmtzig_randn), Float64, ())
 
 function randn(dims::Dims)
     A = Array(Float64, dims)
-    ccall(dlsym(librandom, :randmtzig_fill_randn), Void,
+    ccall(dlsym(_jl_librandom, :randmtzig_fill_randn), Void,
           (Ptr{Float64}, Uint32), 
           A, uint32(numel(A)))
     return A
@@ -195,11 +195,11 @@ function randg(a::Real)
     end
 end
 
-@rand_matrix_builder_1arg Float64 randg
+@_jl_rand_matrix_builder_1arg Float64 randg
 
 # randchi2()
 
 randchi2(v) = 2*randg(v/2)
-@rand_matrix_builder_1arg Float64 randchi2
+@_jl_rand_matrix_builder_1arg Float64 randchi2
 
 const chi2rnd = randchi2 # alias chi2rnd
