@@ -1621,8 +1621,27 @@ function event_loop(isclient)
                 if !isclient
                     return
                 end
+            elseif isclient && isa(e,InterruptException) &&
+                !has(_jl_fd_handlers, STDIN.fd)
+                # root task is waiting for something on client. allow C-C
+                # to interrupt.
+                interrupt_waiting_task(_jl_roottask_wi, e)
             end
             iserr, lasterr = true, e
+        end
+    end
+end
+
+# force a task to stop waiting, providing with_value as the value of
+# whatever it's waiting for.
+function interrupt_waiting_task(wi::WorkItem, with_value)
+    global Waiting
+    for (oid, jobs) = Waiting
+        for j = jobs
+            if is(j[2], wi)
+                deliver_result((), j[1], oid, ()->with_value)
+                return
+            end
         end
     end
 end
