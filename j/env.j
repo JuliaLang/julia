@@ -34,11 +34,19 @@ type EnvHash; end
 const ENV = EnvHash()
 
 function ref(::EnvHash, k::String)
-    try
-        getenv(k)
-    catch
+    val = ccall(dlsym(libc, :getenv), Ptr{Uint8}, (Ptr{Uint8},), cstring(k))
+    if val == C_NULL
         throw(KeyError(k))
     end
+    cstring(val)
+end
+
+function get(::EnvHash, k::String, deflt)
+    val = ccall(dlsym(libc, :getenv), Ptr{Uint8}, (Ptr{Uint8},), cstring(k))
+    if val == C_NULL
+        return deflt
+    end
+    cstring(val)
 end
 
 has(::EnvHash, k::String) = hasenv(k)
@@ -69,5 +77,5 @@ end
 
 ## misc environment-related functionality ##
 
-tty_cols() = parse_int(Int32, ENV["COLUMNS"], 10)
-tty_rows() = parse_int(Int32, ENV["LINES"], 10)
+tty_cols() = parse_int(Int32, get(ENV,"COLUMNS","80"), 10)
+tty_rows() = parse_int(Int32, get(ENV,"LINES","25"), 10)
