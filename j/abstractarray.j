@@ -279,21 +279,21 @@ macro binary_comparison_op(f)
         function ($f)(A::AbstractArray, B::AbstractArray)
             if size(A) != size(B); error("argument dimensions must match"); end
             F = similar(A, Bool)
-            for i=1:numel(A)
+            for i = 1:numel(A)
                 F[i] = ($f)(A[i], B[i])
             end
             return F
         end
         function ($f)(A::Number, B::AbstractArray)
             F = similar(B, Bool)
-            for i=1:numel(B)
+            for i = 1:numel(B)
                 F[i] = ($f)(A, B[i])
             end
             return F
         end
         function ($f)(A::AbstractArray, B::Number)
             F = similar(A, Bool)
-            for i=1:numel(A)
+            for i = 1:numel(A)
                 F[i] = ($f)(A[i], B)
             end
             return F
@@ -313,11 +313,10 @@ function make_loop_nest(vars, ranges, body)
     otherbodies = cell(length(vars),2)
     #println(vars)
     for i = 1:2*length(vars)
-        otherbodies[i]= nothing
+        otherbodies[i] = nothing
     end
     make_loop_nest(vars, ranges, body, otherbodies)
 end
-
 
 function make_loop_nest(vars, ranges, body, otherbodies)
     expr = body
@@ -1081,24 +1080,21 @@ function prod{T}(A::AbstractArray{T})
     v
 end
 
-max{T}(A::AbstractArray{T}, b::(), region::Region) = areduce(max,  A, region,
-                                                             typemin(T), T)
-min{T}(A::AbstractArray{T}, b::(), region::Region) = areduce(min,  A, region,
-                                                             typemax(T), T)
-sum{T}(A::AbstractArray{T}, region::Region) = areduce(+,  A, region, zero(T))
-prod{T}(A::AbstractArray{T}, region::Region) = areduce(*, A, region, one(T))
+max{T}(A::AbstractArray{T}, b::(), region::Region) = areduce(max,A,region,typemin(T),T)
+min{T}(A::AbstractArray{T}, b::(), region::Region) = areduce(min,A,region,typemax(T),T)
+sum{T}(A::AbstractArray{T}, region::Region)  = areduce(+,A,region,zero(T))
+prod{T}(A::AbstractArray{T}, region::Region) = areduce(*,A,region,one(T))
 
-all(A::AbstractArray{Bool}, region::Region) = areduce(all, A, region, true)
-any(A::AbstractArray{Bool}, region::Region) = areduce(any, A, region, false)
-count(A::AbstractArray{Bool}, region::Region) = areduce(count, A, region, 0, Size)
+all(A::AbstractArray{Bool}, region::Region) = areduce(all,A,region,true)
+any(A::AbstractArray{Bool}, region::Region) = areduce(any,A,region,false)
+count(A::AbstractArray{Bool}, region::Region) = areduce(count,A,region,0,Size)
 
-function isequal(x::AbstractArray, y::AbstractArray)
-    if size(x) != size(y)
+function isequal(A::AbstractArray, B::AbstractArray)
+    if size(A) != size(B)
         return false
     end
-
-    for i=1:numel(x)
-        if !isequal(x[i], y[i])
+    for i = 1:numel(A)
+        if !isequal(A[i], B[i])
             return false
         end
     end

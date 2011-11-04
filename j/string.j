@@ -300,7 +300,8 @@ lcfirst(s::String) = TransformedString((c,i)->i==1 ? lc(c) : c, s)
 
 string(x) = print_to_string(show, x)
 
-cstring(args...) = print_to_string(print, args...)
+cstring(x::ByteString) = x
+cstring(x...) = print_to_string(print, x...)
 
 function cstring(p::Ptr{Uint8})
     p == C_NULL ? error("cannot convert NULL to string") :
