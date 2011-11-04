@@ -39,6 +39,8 @@ endif
 
 # OS specific stuff
 
+USE_SYSTEM_READLINE=0
+
 ifeq ($(OS), Linux)
 SHLIB_EXT = so
 OSLIBS += -Wl,--export-dynamic -Wl,--version-script=$(JULIAHOME)/src/julia.expmap $(EXTROOT)/lib/libunwind-generic.a $(EXTROOT)/lib/libunwind.a

@@ -3,7 +3,11 @@ include $(JULIAHOME)/Make.inc
 
 LLTDIR = $(JULIAHOME)/src/support
 FLISPDIR = $(JULIAHOME)/src/flisp
+ifeq ($(USE_SYSTEM_READLINE), 1)
+READLINE = -lncurses -lreadline
+else
 READLINE = -lncurses $(EXTROOT)/lib/libreadline.a
+endif
 
 FLAGS = -falign-functions -Wall -Wno-strict-aliasing \
 	-fno-omit-frame-pointer \

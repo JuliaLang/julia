@@ -17,9 +17,12 @@ include ../Make.inc
 
 OS = $(shell uname)
 ARCH = $(shell uname -m)
-LIBS = llvm readline pcre fdlibm dsfmt openblas lapack arpack fftw
+LIBS = llvm pcre fdlibm dsfmt openblas lapack arpack fftw
 ifeq ($(OS), Linux)
 LIBS += unwind
+endif
+ifeq ($(USE_SYSTEM_READLINE), 0)
+LIBS += readline
 endif
 
 default: install
