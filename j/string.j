@@ -304,8 +304,6 @@ lcfirst(s::String) = TransformedString((c,i)->i==1 ? lc(c) : c, s)
 ## conversion of general objects to strings ##
 
 string(x) = print_to_string(show, x)
-
-cstring(x::ByteString) = x
 cstring(x...) = print_to_string(print, x...)
 
 function cstring(p::Ptr{Uint8})
