@@ -502,5 +502,5 @@ void jl_cell_1d_push(jl_array_t *a, jl_value_t *item)
 {
     assert(jl_typeis(a, jl_array_any_type));
     jl_array_grow_end(a, 1);
-    jl_cellref(a, a->length-1) = item;
+    jl_cellset(a, a->length-1, item);
 }

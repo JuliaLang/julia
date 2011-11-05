@@ -535,6 +535,7 @@ jl_typename_t *jl_new_typename(jl_sym_t *name);
 jl_tvar_t *jl_new_typevar(jl_sym_t *name,jl_value_t *lb,jl_value_t *ub);
 jl_typector_t *jl_new_type_ctor(jl_tuple_t *params, jl_type_t *body);
 jl_value_t *jl_apply_type(jl_value_t *tc, jl_tuple_t *params);
+jl_value_t *jl_apply_type_(jl_value_t *tc, jl_value_t **params, size_t n);
 jl_type_t *jl_instantiate_type_with(jl_type_t *t, jl_value_t **env, size_t n);
 jl_uniontype_t *jl_new_uniontype(jl_tuple_t *types);
 jl_func_type_t *jl_new_functype(jl_type_t *a, jl_type_t *b);

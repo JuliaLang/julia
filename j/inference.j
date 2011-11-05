@@ -78,7 +78,7 @@ isType(t::ANY) = isa(t,AbstractKind) && is((t::AbstractKind).name,Type.name)
 isseqtype(t::ANY) = isa(t,AbstractKind) && is((t::AbstractKind).name.name,:...)
 
 const t_func = idtable()
-t_func[tuple] = (0, Inf, (args...)->limit_tuple_depth(args))
+#t_func[tuple] = (0, Inf, (args...)->limit_tuple_depth(args))
 t_func[throw] = (1, 1, x->None)
 t_func[boxsi8] = (1, 1, x->Int8)
 t_func[boxui8] = (1, 1, x->Uint8)
@@ -127,17 +127,15 @@ t_func[arraylen] = (1, 1, x->Size)
 t_func[arrayref] = (2, 2, (a,i)->(isa(a,CompositeKind) && subtype(a,Array) ?
                                   a.parameters[1] : Any))
 t_func[arrayset] = (3, 3, (a,i,v)->a)
-t_func[arraysize] = (1, 2,
-function (a, d...)
-    if is(d,())
-        if isa(a,CompositeKind) && subtype(a,Array)
-            return NTuple{a.parameters[2],Size}
-        else
-            return NTuple{Array.parameters[2],Size}
-        end
+_jl_arraysize_tfunc(a, d) = Size
+function _jl_arraysize_tfunc(a)
+    if isa(a,CompositeKind) && subtype(a,Array)
+        return NTuple{a.parameters[2],Size}
+    else
+        return NTuple{Array.parameters[2],Size}
     end
-    return Size
-end)
+end
+t_func[arraysize] = (1, 2, _jl_arraysize_tfunc)
 t_func[Array] =
     (1, Inf,
 function (T, dims...)
@@ -346,6 +344,9 @@ t_func[apply_type] = (1, Inf, apply_type_tfunc)
 # other: apply
 
 function builtin_tfunction(f::ANY, args::ANY, argtypes::ANY)
+    if is(f,tuple)
+        return limit_tuple_depth(argtypes)
+    end
     tf = get(t_func::IdTable, f, false)
     if is(tf,false)
         # struct constructor
@@ -379,12 +380,7 @@ function a2t(a::AbstractVector)
     if n==1 return (a[1],) end
     if n==3 return (a[1],a[2],a[3]) end
     if n==0 return () end
-    t = (a[1],a[2],a[3],a[4])
-    if n==4 return t end
-    for i=5:n
-        t = tuple(t..., a[i])
-    end
-    t
+    return tuple(a...)
 end
 
 function a2t_butfirst(a::AbstractVector)
@@ -403,13 +399,13 @@ end
 function isconstantfunc(f, vtypes, sv::StaticVarInfo)
     if isa(f,TopNode)
         abstract_eval(f, vtypes, sv)  # to pick up a type annotation
-        return (isconstant(f.name), f.name)
+        return isconstant(f.name) && f.name
     end
     if isa(f,SymbolNode)
         f = f.name
     end
-    return (isa(f,Symbol) && !has(vtypes,f) && !has(sv.cenv,f) &&
-            isconstant(f), f)
+    return isa(f,Symbol) && !has(vtypes,f) && !has(sv.cenv,f) &&
+           isconstant(f) && f
 end
 
 isvatuple(t) = (n = length(t); n > 0 && isseqtype(t[n]))
@@ -505,8 +501,8 @@ end
 function abstract_call(f, fargs, argtypes, vtypes, sv::StaticVarInfo, e)
     if isbuiltin(f)
         if is(f,apply) && length(fargs)>0
-            (isfunc, af) = isconstantfunc(fargs[1], vtypes, sv)
-            if isfunc && isbound(af)
+            af = isconstantfunc(fargs[1], vtypes, sv)
+            if !is(af,false) && isbound(af)
                 aargtypes = argtypes[2:]
                 if allp(x->isa(x,Tuple), aargtypes) &&
                    !anyp(isvatuple, aargtypes[1:(length(aargtypes)-1)])
@@ -539,8 +535,8 @@ function abstract_eval_call(e, vtypes, sv::StaticVarInfo)
     if anyp(x->is(x,None), argtypes)
         return None
     end
-    (isfunc, func) = isconstantfunc(e.args[1], vtypes, sv)
-    if !isfunc
+    func = isconstantfunc(e.args[1], vtypes, sv)
+    if is(func,false)
         # TODO: lambda expression (let)
         ft = abstract_eval(e.args[1], vtypes, sv)
         if isa(ft,FuncKind)
@@ -1165,14 +1161,14 @@ end
 function type_annotate(ast::Expr, states::Array{Any,1},
                        sv::ANY, rettype::ANY, vnames::ANY)
     decls = idtable()
-    closures = {}
-    body = ast.args[3].args
+    closures = empty(LambdaStaticData)
+    body = ast.args[3].args::Array{Any,1}
     for i=1:length(body)
         body[i] = eval_annotate(body[i], states[i], sv, decls, closures)
     end
     ast.args[3].typ = rettype
 
-    vinf = append(ast.args[2].args[2],ast.args[2].args[3])
+    vinf = append(ast.args[2].args[2],ast.args[2].args[3])::Array{Any,1}
     # add declarations for variables that are always the same type
     for vi = vinf
         if has(decls,vi[1])
@@ -1189,7 +1185,7 @@ function type_annotate(ast::Expr, states::Array{Any,1},
         if !li.inferred
             a = li.ast
             # pass on declarations of captured vars
-            vinf = a.args[2].args[3]
+            vinf = a.args[2].args[3]::Array{Any,1}
             for vi = vinf
                 if has(decls,vi[1])
                     vi[2] = decls[vi[1]]

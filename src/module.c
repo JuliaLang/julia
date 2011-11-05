@@ -46,8 +46,7 @@ jl_binding_t *jl_get_binding(jl_module_t *m, jl_sym_t *var)
             varlist_binding->value != NULL &&
             jl_typeis(varlist_binding->value, jl_array_any_type)) {
             jl_array_t *a = (jl_array_t*)varlist_binding->value;
-            jl_array_grow_end(a, 1);
-            jl_cellset(a, a->length-1, (jl_value_t*)var);
+            jl_cell_1d_push(a, (jl_value_t*)var);
         }
     }
     return *bp;

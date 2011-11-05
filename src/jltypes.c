@@ -1267,7 +1267,7 @@ int jl_types_equal_generic(jl_value_t *a, jl_value_t *b)
     return type_le_generic(a, b) && type_le_generic(b, a);
 }
 
-static jl_value_t *apply_type_(jl_value_t *tc, jl_value_t **params, size_t n)
+jl_value_t *jl_apply_type_(jl_value_t *tc, jl_value_t **params, size_t n)
 {
     if (n == 0) {
         if (jl_is_typector(tc))
@@ -1332,7 +1332,7 @@ static jl_value_t *apply_type_(jl_value_t *tc, jl_value_t **params, size_t n)
 
 jl_value_t *jl_apply_type(jl_value_t *tc, jl_tuple_t *params)
 {
-    return apply_type_(tc, &jl_tupleref(params,0), params->length);
+    return jl_apply_type_(tc, &jl_tupleref(params,0), params->length);
 }
 
 static jl_type_t *lookup_type(typekey_stack_t *table,
@@ -1497,7 +1497,7 @@ static jl_type_t *inst_type_w_(jl_value_t *t, jl_value_t **env, size_t n,
         jl_value_t *tc = tn->primary;
         if (tc == (jl_value_t*)jl_ntuple_type && tc != t) {
             //(tc != NULL && tc != t)
-            result = (jl_type_t*)apply_type_(tc, iparams, ntp);
+            result = (jl_type_t*)jl_apply_type_(tc, iparams, ntp);
             goto done_inst_tt;
         }
 

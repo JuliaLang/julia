@@ -608,6 +608,39 @@ static jl_value_t *expr_type(jl_value_t *e)
 
 #include "intrinsics.cpp"
 
+static bool is_constant(jl_value_t *ex, jl_codectx_t *ctx)
+{
+    if (jl_is_symbolnode(ex))
+        ex = (jl_value_t*)jl_symbolnode_sym(ex);
+    if (jl_is_symbol(ex)) {
+        jl_sym_t *sym = (jl_sym_t*)ex;
+        if (is_global(sym, ctx)) {
+            size_t i;
+            for(i=0; i < ctx->sp->length; i+=2) {
+                if (sym == (jl_sym_t*)jl_tupleref(ctx->sp, i)) {
+                    // static parameter
+                    return true;
+                }
+            }
+            if (jl_boundp(ctx->module, sym)) {
+                jl_binding_t *b = jl_get_binding(ctx->module, sym);
+                if (b->constp)
+                    return true;
+            }
+        }
+        return false;
+    }
+    if (jl_is_topnode(ex)) {
+        jl_binding_t *b = jl_get_binding(ctx->module,
+                                         (jl_sym_t*)jl_fieldref(ex,0));
+        if (b->constp && b->value)
+            return true;
+    }
+    if (jl_is_bits_type(jl_typeof(ex)))
+        return true;
+    return false;
+}
+
 static jl_tuple_t *call_arg_types(jl_value_t **args, size_t n)
 {
     jl_tuple_t *t = jl_alloc_tuple(n);
@@ -675,7 +708,8 @@ static Value *emit_arrayptr(Value *t)
 
 static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
                               jl_codectx_t *ctx,
-                              Value **theFptr, Value **theEnv)
+                              Value **theFptr, Value **theEnv,
+                              jl_value_t *expr)
 {
     if (jl_typeis(ff, jl_intrinsic_type)) {
         return emit_intrinsic((intrinsic)*(uint32_t*)jl_bits_data(ff),
@@ -1010,12 +1044,30 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
             }
         }
     }
+    else if (f->fptr == &jl_f_instantiate_type && nargs > 0) {
+        size_t i;
+        for(i=1; i <= nargs; i++) {
+            if (!is_constant(args[i], ctx))
+                break;
+        }
+        if (i > nargs) {
+            jl_value_t *ty =
+                jl_interpret_toplevel_expr_with(expr,
+                                                &jl_tupleref(ctx->sp,0),
+                                                ctx->sp->length/2);
+            if (jl_is_leaf_type(ty)) {
+                JL_GC_POP();
+                return literal_pointer_val(ty);
+            }
+        }
+    }
     // TODO: other known builtins
     JL_GC_POP();
     return NULL;
 }
 
-static Value *emit_call(jl_value_t **args, size_t arglen, jl_codectx_t *ctx)
+static Value *emit_call(jl_value_t **args, size_t arglen, jl_codectx_t *ctx,
+                        jl_value_t *expr)
 {
     size_t nargs = arglen-1;
     Value *theFptr=NULL, *theEnv=NULL;
@@ -1050,7 +1102,8 @@ static Value *emit_call(jl_value_t **args, size_t arglen, jl_codectx_t *ctx)
         f = a0;
     }
     if (f != NULL) {
-        Value *result = emit_known_call(f, args, nargs, ctx, &theFptr, &theEnv);
+        Value *result = emit_known_call(f, args, nargs, ctx, &theFptr, &theEnv,
+                                        expr);
         if (result != NULL) return result;
     }
     int last_depth = ctx->argDepth;
@@ -1260,7 +1313,7 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool value)
     }
 
     else if (ex->head == call_sym || ex->head == call1_sym) {
-        return emit_call(args, ex->args->length, ctx);
+        return emit_call(args, ex->args->length, ctx, (jl_value_t*)ex);
     }
 
     else if (ex->head == assign_sym) {

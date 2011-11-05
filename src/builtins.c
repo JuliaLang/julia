@@ -874,11 +874,7 @@ JL_CALLABLE(jl_f_instantiate_type)
     JL_NARGSV(instantiate_type, 1);
     if (!jl_is_some_tag_type(args[0]))
         JL_TYPECHK(instantiate_type, typector, args[0]);
-    jl_tuple_t *tparams = (jl_tuple_t*)jl_f_tuple(NULL, &args[1], nargs-1);
-    JL_GC_PUSH(&tparams);
-    jl_value_t *v = jl_apply_type(args[0], tparams);
-    JL_GC_POP();
-    return v;
+    return jl_apply_type_(args[0], &args[1], nargs-1);
 }
 
 static int all_typevars(jl_tuple_t *p)
