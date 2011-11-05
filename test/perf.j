@@ -4,7 +4,7 @@ macro timeit(ex,name)
         for i=1:5
             t = min(t, @elapsed $ex)
         end
-        println("julia,", $name, ",", t*1000)
+        println("julia, ", $name, ", ", t*1000)
     end
 end
 
