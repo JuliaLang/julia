@@ -587,8 +587,10 @@ static jl_value_t *copy_ast(jl_value_t *expr, jl_tuple_t *sp)
         */
         // TODO: avoid if above condition is true and decls have already
         // been evaluated.
+        JL_GC_PUSH(&li);
         li = jl_add_static_parameters(li, sp);
         jl_specialize_ast(li);
+        JL_GC_POP();
         return (jl_value_t*)li;
     }
     if (jl_typeis(expr,jl_array_any_type)) {
