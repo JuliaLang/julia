@@ -35,9 +35,8 @@ static void *alloc_array_buffer(size_t nbytes, int isunboxed)
 static jl_array_t *_new_array(jl_type_t *atype,
                               uint32_t ndims, size_t *dims)
 {
-    size_t i, tot;
-    size_t nel=1;
-    int isbytes=0, isunboxed=0, elsz;
+    size_t i, tot, nel=1;
+    int isunboxed=0, elsz;
     void *data;
     jl_array_t *a;
 
@@ -50,9 +49,8 @@ static jl_array_t *_new_array(jl_type_t *atype,
     if (isunboxed) {
         elsz = jl_bitstype_nbits(el_type)/8;
         tot = elsz * nel;
-        if (elsz==1 && ndims==1) {
+        if (elsz == 1) {
             // hidden 0 terminator for all byte arrays
-            isbytes = 1;
             tot++;
         }
     }
@@ -86,7 +84,7 @@ static jl_array_t *_new_array(jl_type_t *atype,
     }
 
     a->data = data;
-    if (isbytes) ((char*)data)[tot-1] = '\0';
+    if (elsz == 1) ((char*)data)[tot-1] = '\0';
     a->length = nel;
     a->ndims = ndims;
     a->reshaped = 0;
@@ -383,14 +381,12 @@ JL_CALLABLE(jl_f_arrayset)
 static void *array_new_buffer(jl_array_t *a, size_t newlen)
 {
     size_t nbytes = newlen * a->elsize;
-    int isbytes = 0;
     if (a->elsize == 1) {
-        isbytes = 1;
         nbytes++;
     }
     int isunboxed = jl_is_bits_type(jl_tparam0(jl_typeof(a)));
     char *newdata = alloc_array_buffer(nbytes, isunboxed);
-    if (isbytes) newdata[nbytes-1] = '\0';
+    if (a->elsize == 1) newdata[nbytes-1] = '\0';
     return newdata;
 }
 

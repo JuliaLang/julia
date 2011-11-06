@@ -28,9 +28,6 @@
 # Adapted from Cleve Moler's textbook
 # http://www.mathworks.com/moler/ncm/ode23tx.m
 
-realmin() = eps(0.0)
-eps() = eps(1.0)
-
 function ode23(F::Function, tspan::Vector, y_0)
 
     rtol = 1.e-3

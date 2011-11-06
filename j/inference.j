@@ -1329,7 +1329,7 @@ function inlineable(f, e::Expr, vars)
     end
     body = without_linenums(ast.args[3].args)
     # see if body is only "return <expr>"
-    if length(body) > 1
+    if length(body) != 1
         return NF
     end
     assert(isa(body[1],Expr), "inference.j:1050")
