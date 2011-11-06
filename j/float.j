@@ -145,6 +145,7 @@ const NaN = boxf64(unbox64(0x7ff8000000000000))
     realmin() = realmin(Float64)
     realmax() = realmax(Float64)
 
+    nextfloat(x::Float32, i::Int) = boxf32(unbox32(boxsi32(unbox32(x))+int32(i)))
     nextfloat(x::Float64, i::Int) = boxf64(unbox64(boxsi64(unbox64(x))+int64(i)))
     nextfloat(x::Float) = nextfloat(x,+1)
     prevfloat(x::Float) = nextfloat(x,-1)
