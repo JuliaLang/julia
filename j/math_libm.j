@@ -63,10 +63,6 @@ end
 @libfdmfunc_1arg_float Real   floor
 #@libfdmfunc_1arg_float Real   rint
 @libfdmfunc_1arg_float Number lgamma
-@libfdmfunc_1arg_float Real   j0
-@libfdmfunc_1arg_float Real   j1
-@libfdmfunc_1arg_float Real   y0
-@libfdmfunc_1arg_float Real   y1
 
 @libmfunc_1arg_float Number sqrt
 @libmfunc_1arg_float Number exp2
@@ -134,3 +130,17 @@ end
 
 # alias
 const pow = ^
+
+besselj0(x::Float64) = ccall(dlsym(libfdm, :j0),  Float64, (Float64,), x)
+besselj0(x::Float32) = ccall(dlsym(libfdm, :j0f), Float32, (Float32,), x)
+@vectorize_1arg Real besselj0
+besselj1(x::Float64) = ccall(dlsym(libfdm, :j1),  Float64, (Float64,), x)
+besselj1(x::Float32) = ccall(dlsym(libfdm, :j1f), Float32, (Float32,), x)
+@vectorize_1arg Real besselj1
+
+bessely0(x::Float64) = ccall(dlsym(libfdm, :y0),  Float64, (Float64,), x)
+bessely0(x::Float32) = ccall(dlsym(libfdm, :y0f), Float32, (Float32,), x)
+@vectorize_1arg Real bessely0
+bessely1(x::Float64) = ccall(dlsym(libfdm, :y1),  Float64, (Float64,), x)
+bessely1(x::Float32) = ccall(dlsym(libfdm, :y1f), Float32, (Float32,), x)
+@vectorize_1arg Real bessely1
