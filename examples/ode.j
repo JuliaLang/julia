@@ -29,6 +29,7 @@
 # http://www.mathworks.com/moler/ncm/ode23tx.m
 
 realmin() = eps(0.0)
+eps() = eps(1.0)
 
 function ode23(F::Function, tspan::Vector, y_0)
 
@@ -58,7 +59,7 @@ function ode23(F::Function, tspan::Vector, y_0)
 
     while t != tfinal
         
-        hmin = 16*eps*abs(t)
+        hmin = 16*eps()*abs(t)
         if abs(h) > hmax; h = tdir*hmax; end
         if abs(h) < hmin; h = tdir*hmin; end
         
