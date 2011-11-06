@@ -238,10 +238,10 @@ function ode45(F, tspan, x0)
       k_ = zeros(length(x),7)
 
       # Compute the first stage prior to the main loop.  This is part of the Dormand-Prince pair caveat
-      # Normally, during the main loop the last stage for x(k) is the first stage for computing x(k+1].
+      # Normally, during the main loop the last stage for x[k] is the first stage for computing x[k+1].
       # So, the very first integration step requires 7 function evaluations, then each subsequent step
       # 6 function evaluations because the first stage is simply assigned from the last step's last stage.
-      # note: you can see this by the last element in c_ is 1.0, thus t+c_[7)*h = t+h, ergo, the next step.
+      # note: you can see this by the last element in c_ is 1.0, thus t+c_[7]*h = t+h, ergo, the next step.
       
       k_[:,1] = F(t,x) # first stage
                 
@@ -249,8 +249,8 @@ function ode45(F, tspan, x0)
       while (t < tfinal) & (h >= hmin)
         if t + h > tfinal; h = tfinal - t; end
         
-        # Compute the slopes by computing the k(:,j+1]'th column based on the previous k(:,1:j) columns
-        # notes: k_ needs to end up as an Nxs, a_ is 7x6, which is s by (s-1],
+        # Compute the slopes by computing the k[:,j+1]'th column based on the previous k[:,1:j] columns
+        # notes: k_ needs to end up as an Nxs, a_ is 7x6, which is s by (s-1),
         #        s is the number of intermediate RK stages on [t (t+h)] (Dormand-Prince has s=7 stages)
 
         for j = 1:6
@@ -282,7 +282,7 @@ function ode45(F, tspan, x0)
         if (delta==0.0); delta = 1e-16; end
         h = min(hmax, 0.8*h*(tau/delta)^pow)
                     
-        # Assign the last stage for x(k) as the first stage for computing x(k+1].
+        # Assign the last stage for x(k) as the first stage for computing x[k+1].
         # This is part of the Dormand-Prince pair caveat.
 	# k_[:,7] has already been computed, so use it instead of recomputing it
 	# again as k_[:,1] during the next step.
@@ -300,8 +300,8 @@ function ode45(F, tspan, x0)
       while (t < tfinal) & (h >= hmin)
         if t + h > tfinal; h = tfinal - t; end
           
-        # Compute the slopes by computing the k(:,j+1]'th column based on the previous k(:,1:j) columns
-        # notes: k_ needs to end up as an Nx6, a_ is 6x5, which is s by (s-1],  (RK-Fehlberg has s=6 stages)
+        # Compute the slopes by computing the k[:,j+1]'th column based on the previous k[:,1:j] columns
+        # notes: k_ needs to end up as an Nx6, a_ is 6x5, which is s by (s-1),  (RK-Fehlberg has s=6 stages)
         #        s is the number of intermediate RK stages on [t (t+h)]
 
         k_[:,1]=F(t,x) # first stage
@@ -314,7 +314,7 @@ function ode45(F, tspan, x0)
         x4=x + h* (k_[:,1:5]*b4_) # k_[:,1:5] is an Nx5 and b4_ is a 5x1
           
 	# compute the 5th order estimate
-        x5=x + h*(k_*b5_) # k_ is the same as k_[:,1:6) and is an Nx6 and b5_ is a 6x1
+        x5=x + h*(k_*b5_) # k_ is the same as k_[:,1:6] and is an Nx6 and b5_ is a 6x1
         
         # estimate the local truncation error
         gamma1 = x5 - x4

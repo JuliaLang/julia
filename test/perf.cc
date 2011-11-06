@@ -1,4 +1,4 @@
-// g++ -O2 perf.cc -o perf ../external/openblas-v0.1alpha2.2/libopenblas.a
+// g++ -O2 perf.cc -o perf ../external/openblas-v0.1alpha2.4/libopenblas.a
 
 #include <sys/time.h>
 #include <cstdio>
@@ -9,7 +9,7 @@
 #include <complex>
 #include <algorithm>
 
-#include "../external/openblas-v0.1alpha2.2/cblas.h"
+#include "../external/openblas-v0.1alpha2.4/cblas.h"
 
 #define DSFMT_MEXP 19937
 #include "../external/random/dsfmt-2.1/dSFMT.c"
