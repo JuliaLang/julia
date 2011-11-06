@@ -6,11 +6,14 @@ type IOStream
 
     # TODO: delay adding finalizer, e.g. for memio with a small buffer, or
     # in the case where we takebuf it.
-    function IOStream()
+    function IOStream(finalize::Bool)
         x = new(zeros(Uint8,sizeof_ios_t))
-        finalizer(x, close)
+        if finalize
+            finalizer(x, close)
+        end
         return x
     end
+    IOStream() = IOStream(true)
 
     global make_stdout_stream
     make_stdout_stream() = new(ccall(:jl_stdout_stream, Any, ()))
@@ -54,12 +57,13 @@ function open(fname::String, mode::String)
     error("invalid open mode: ", mode)
 end
 
-function memio(x::Int)
-    s = IOStream()
+function memio(x::Int, finalize::Bool)
+    s = IOStream(finalize)
     ccall(:jl_ios_mem, Ptr{Void}, (Ptr{Uint8}, Ulong), s.ios, ulong(x))
     s
 end
-memio() = memio(0)
+memio(x::Int) = memio(x, true)
+memio() = memio(0, true)
 
 convert(T::Type{Ptr}, s::IOStream) = convert(T, s.ios)
 
@@ -78,21 +82,33 @@ function with_output_stream(s::IOStream, f::Function, args...)
     end
 end
 
+# custom version for print_to_*
+function _jl_with_output_stream(s::IOStream, f::Function, args...)
+    try
+        set_current_output_stream(s)
+        f(args...)
+    catch e
+        # only add finalizer if takebuf doesn't happen
+        finalizer(s, close)
+        throw(e)
+    end
+end
+
 takebuf_array(s::IOStream) =
     ccall(:jl_takebuf_array, Any, (Ptr{Void},), s.ios)::Array{Uint8,1}
 
 takebuf_string(s::IOStream) =
-    ccall(:jl_takebuf_string, Any, (Ptr{Void},), s.ios)::String
+    ccall(:jl_takebuf_string, Any, (Ptr{Void},), s.ios)::ByteString
 
 function print_to_array(size::Int, f::Function, args...)
-    s = memio(size)
-    with_output_stream(s, f, args...)
+    s = memio(size, false)
+    _jl_with_output_stream(s, f, args...)
     takebuf_array(s)
 end
 
 function print_to_string(size::Int, f::Function, args...)
-    s = memio(size)
-    with_output_stream(s, f, args...)
+    s = memio(size, false)
+    _jl_with_output_stream(s, f, args...)
     takebuf_string(s)
 end
 

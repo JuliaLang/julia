@@ -526,6 +526,7 @@ static Value *emit_lambda_closure(jl_value_t *expr, jl_codectx_t *ctx)
     Value *env_tuple;
     env_tuple = builder.CreateCall(jlntuple_func,
                                    captured.begin(), captured.end());
+    //ctx->linfo->roots = jl_tuple2(expr, ctx->linfo->roots);
     return builder.CreateCall2(jlclosure_func,
                                literal_pointer_val(expr), env_tuple);
 }
@@ -1234,6 +1235,8 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool value)
     }
     else if (jl_is_quotenode(expr)) {
         jl_value_t *jv = jl_fieldref(expr,0);
+        //if (!jl_is_symbol(jv))
+        //    ctx->linfo->roots = jl_tuple2(jv, ctx->linfo->roots);
         return literal_pointer_val(jv);
     }
     else if (jl_is_gotonode(expr)) {
@@ -1275,6 +1278,7 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool value)
             return emit_lambda_closure(expr, ctx);
         }
         // TODO: for now just return the direct pointer
+        //ctx->linfo->roots = jl_tuple2(expr, ctx->linfo->roots);
         return literal_pointer_val(expr);
     }
     jl_expr_t *ex = (jl_expr_t*)expr;

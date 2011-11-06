@@ -18,6 +18,7 @@
 // filled with 0xbb before being freed.
 //#define MEMDEBUG
 //#define MEMPROFILE
+//#define GCTIME
 
 #define GC_PAGE_SZ (2048*sizeof(void*))//bytes
 
@@ -449,7 +450,15 @@ static void gc_markval_(jl_value_t *v)
     if (vtt==(jl_value_t*)jl_bits_kind) return;
 
     // some values have special representations
-    if (vtt == (jl_value_t*)jl_struct_kind && 
+    if (vt == (jl_value_t*)jl_tuple_type) {
+        size_t i;
+        for(i=0; i < ((jl_tuple_t*)v)->length; i++) {
+            jl_value_t *elt = ((jl_tuple_t*)v)->data[i];
+            if (elt != NULL)
+                GC_Markval(elt);
+        }
+    }
+    else if (vtt == (jl_value_t*)jl_struct_kind && 
         ((jl_struct_type_t*)(vt))->name == jl_array_typename) {
         jl_array_t *a = (jl_array_t*)v;
         int ndims = jl_array_ndims(a);
@@ -476,14 +485,6 @@ static void gc_markval_(jl_value_t *v)
                 jl_value_t *elt = ((jl_value_t**)a->data)[i];
                 if (elt != NULL) GC_Markval(elt);
             }
-        }
-    }
-    else if (vt == (jl_value_t*)jl_tuple_type) {
-        size_t i;
-        for(i=0; i < ((jl_tuple_t*)v)->length; i++) {
-            jl_value_t *elt = ((jl_tuple_t*)v)->data[i];
-            if (elt != NULL)
-                GC_Markval(elt);
         }
     }
     else if (vt == (jl_value_t*)jl_typename_type) {
@@ -593,6 +594,9 @@ static void gc_mark_module(jl_module_t *m)
 void jl_mark_box_caches(void);
 
 extern jl_value_t * volatile jl_task_arg_in_transit;
+#ifdef GCTIME
+double clock_now(void);
+#endif
 
 static void gc_mark(void)
 {
@@ -649,17 +653,8 @@ static void gc_mark(void)
 }
 
 static int is_gc_enabled = 0;
-
-void jl_gc_enable(void)
-{
-    is_gc_enabled = 1;
-}
-
-void jl_gc_disable(void)
-{
-    is_gc_enabled = 0;
-}
-
+void jl_gc_enable(void)    { is_gc_enabled = 1; }
+void jl_gc_disable(void)   { is_gc_enabled = 0; }
 int jl_gc_is_enabled(void) { return is_gc_enabled; }
 
 #if defined(MEMPROFILE)
@@ -672,13 +667,25 @@ void jl_gc_collect(void)
     allocd_bytes = 0;
     if (is_gc_enabled) {
         JL_SIGATOMIC_BEGIN();
+#ifdef GCTIME
+        double t0 = clock_now();
+#endif
         gc_mark();
+#ifdef GCTIME
+        ios_printf(ios_stderr, "mark time %.3f ms\n", (clock_now()-t0)*1000);
+#endif
 #if defined(MEMPROFILE)
         all_pool_stats();
         big_obj_stats();
 #endif
+#ifdef GCTIME
+        t0 = clock_now();
+#endif
         sweep_weak_refs();
         gc_sweep();
+#ifdef GCTIME
+        ios_printf(ios_stderr, "sweep time %.3f ms\n", (clock_now()-t0)*1000);
+#endif
         run_finalizers();
         JL_SIGATOMIC_END();
     }
