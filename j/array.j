@@ -245,6 +245,16 @@ function push{T}(a::Array{T,1}, item::ANY)
     return a
 end
 
+function append!{T}(a::Array{T,1}, items::Array{T,1})
+    if is(T,None)
+        error("[] cannot grow. Instead, initialize the array with \"empty(element_type)\".")
+    end
+    n = length(items)
+    ccall(:jl_array_grow_end, Void, (Any, Ulong), a, ulong(n))
+    a[end-n+1:end] = items
+    return a
+end
+
 function grow{T}(a::Array{T,1}, n::Int)
     ccall(:jl_array_grow_end, Void, (Any, Ulong), a, ulong(n))
     return a
