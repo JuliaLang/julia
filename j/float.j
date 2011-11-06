@@ -134,12 +134,21 @@ const NaN = boxf64(unbox64(0x7ff8000000000000))
     typemin(::Type{Float64}) = $(-Inf)
     typemax(::Type{Float64}) = $(Inf)
 
+    realmin(::Type{Float64}) = 2.2250738585072014e-308
+    realmin(::Type{Float32}) = $(float32(1.175494351e-38))
+    realmax(::Type{Float64}) = 1.7976931348623157e+308
+    realmax(::Type{Float32}) = $(float32(3.402823466e+38))
+    realmin() = realmin(Float64)
+    realmax() = realmax(Float64)
+
     eps(::Type{Float32}) = $boxf32(unbox32(uint32(0x34000000)))
     eps(::Type{Float64}) = $boxf64(unbox64(0x3cb0000000000000))
 end
 
 eps(x::Float32) = isfinite(x) ? abs(boxf32(unbox32(boxsi32(unbox32(x))+int32(1)))-x) : nan(x)
 eps(x::Float64) = isfinite(x) ? abs(boxf64(unbox64(boxsi64(unbox64(x))+int64(1)))-x) : nan(x)
+
+eps() = eps(1.0)
 
 sizeof(::Type{Float32}) = 4
 sizeof(::Type{Float64}) = 8
