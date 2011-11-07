@@ -168,57 +168,32 @@ end # ode23
 # created : 06 October 1999
 # modified: 17 January 2001
 
-function ode45(F, tspan, x0)
+# Dormand Prince
+function ode45_dp(F, tspan, x0)
     tol = 1.0e-3
-
+    
     # see p.91 in the Ascher & Petzold reference for more infomation.
     pow = 1/6; 
-
-    dormand_prince = true
-    fehlberg = false
 
     a_ = zeros(7,7)
     b4_ = zeros(7)
     b5_ = zeros(7)
     c_ = zeros(7)
 
-    if dormand_prince
-      a_[1,1]=0;
-      a_[2,1]=1/5;
-      a_[3,1]=3/40; a_[3,2]=9/40;
-      a_[4,1]=44/45; a_[4,2]=-56/15; a_[4,3]=32/9;
-      a_[5,1]=19372/6561; a_[5,2]=-25360/2187; a_[5,3]=64448/6561; a_[5,4]=-212/729;
-      a_[6,1]=9017/3168; a_[6,2]=-355/33; a_[6,3]=46732/5247; a_[6,4]=49/176; a_[6,5]=-5103/18656;
-      a_[7,1]=35/384; a_[7,2]=0; a_[7,3]=500/1113; a_[7,4]=125/192; a_[7,5]=-2187/6784; a_[7,6]=11/84;
-      # 4th order b-coefficients
-      b4_[1]=5179/57600; b4_[2]=0; b4_[3]=7571/16695; b4_[4]=393/640; b4_[5]=-92097/339200; b4_[6]=187/2100; b4_[7]=1/40;
-      # 5th order b-coefficients
-      b5_[1]=35/384; b5_[2]=0; b5_[3]=500/1113; b5_[4]=125/192; b5_[5]=-2187/6784; b5_[6]=11/84; b5_[7]=0;
-      for i=1:7
+    a_[1,1]=0;
+    a_[2,1]=1/5;
+    a_[3,1]=3/40;       a_[3,2]=9/40;
+    a_[4,1]=44/45;      a_[4,2]=-56/15;      a_[4,3]=32/9;
+    a_[5,1]=19372/6561; a_[5,2]=-25360/2187; a_[5,3]=64448/6561; a_[5,4]=-212/729;
+    a_[6,1]=9017/3168;  a_[6,2]=-355/33;     a_[6,3]=46732/5247; a_[6,4]=49/176;   a_[6,5]=-5103/18656;
+    a_[7,1]=35/384;     a_[7,2]=0;           a_[7,3]=500/1113;   a_[7,4]=125/192;  a_[7,5]=-2187/6784;  a_[7,6]=11/84;
+    # 4th order b-coefficients
+    b4_[1]=5179/57600; b4_[2]=0; b4_[3]=7571/16695; b4_[4]=393/640; b4_[5]=-92097/339200; b4_[6]=187/2100; b4_[7]=1/40;
+    # 5th order b-coefficients
+    b5_[1]=35/384; b5_[2]=0; b5_[3]=500/1113; b5_[4]=125/192; b5_[5]=-2187/6784; b5_[6]=11/84; b5_[7]=0;
+    for i=1:7
         c_[i]=sum(a_[i,:])
-      end
     end
-    
-    if fehlberg 
-      a_[1,1]=0;
-      a_[2,1]=1/4;
-      a_[3,1]=3/32; a_[3,2]=9/32;
-      a_[4,1]=1932/2197; a_[4,2]=-7200/2197; a_[4,3]=7296/2197;
-      a_[5,1]=439/216; a_[5,2]=-8; a_[5,3]=3680/513; a_[5,4]=-845/4104;
-      a_[6,1]=-8/27; a_[6,2]=2; a_[6,3]=-3544/2565; a_[6,4]=1859/4104; a_[6,5]=-11/40;
-      # 4th order b-coefficients (guaranteed to be a column vector)
-      b4_[1]=25/216; b4_[2]=0; b4_[3]=1408/2565; b4_[4]=2197/4104; b4_[5]=-1/5;
-      # 5th order b-coefficients (also guaranteed to be a column vector)
-      b5_[1]=16/135; b5_[2]=0; b5_[3]=6656/12825; b5_[4]=28561/56430; b5_[5]=-9/50; b5_[6]=2/55;
-      for i=1:6
-        c_[i]=sum(a_[i,:])
-      end
- 
-      a_ = a_[1:6, 1:6]
-      b4_ = b4_[1:5]
-      b5_ = b5_[1:6]
-      c_ = c_[1:6]
-   end 
 
     # Initialization
     t0 = tspan[1]
@@ -231,22 +206,20 @@ function ode45(F, tspan, x0)
     tout = t              # first output time
     xout = x.'            # first output solution
         
-    if dormand_prince
-  
-      # k_ needs to be initialized as an Nx7 matrix where N=number of rows in x
-      # (just for speed so octave doesn't need to allocate more memory at each stage value)
-      k_ = zeros(length(x),7)
-
-      # Compute the first stage prior to the main loop.  This is part of the Dormand-Prince pair caveat
-      # Normally, during the main loop the last stage for x[k] is the first stage for computing x[k+1].
-      # So, the very first integration step requires 7 function evaluations, then each subsequent step
-      # 6 function evaluations because the first stage is simply assigned from the last step's last stage.
-      # note: you can see this by the last element in c_ is 1.0, thus t+c_[7]*h = t+h, ergo, the next step.
-      
-      k_[:,1] = F(t,x) # first stage
-                
-      # The main loop using Dormand-Prince 4(5) pair
-      while (t < tfinal) & (h >= hmin)
+    # k_ needs to be initialized as an Nx7 matrix where N=number of rows in x
+    # (just for speed so octave doesn't need to allocate more memory at each stage value)
+    k_ = zeros(length(x),7)
+    
+    # Compute the first stage prior to the main loop.  This is part of the Dormand-Prince pair caveat
+    # Normally, during the main loop the last stage for x[k] is the first stage for computing x[k+1].
+    # So, the very first integration step requires 7 function evaluations, then each subsequent step
+    # 6 function evaluations because the first stage is simply assigned from the last step's last stage.
+    # note: you can see this by the last element in c_ is 1.0, thus t+c_[7]*h = t+h, ergo, the next step.
+    
+    k_[:,1] = F(t,x) # first stage
+    
+    # The main loop using Dormand-Prince 4(5) pair
+    while (t < tfinal) & (h >= hmin)
         if t + h > tfinal; h = tfinal - t; end
         
         # Compute the slopes by computing the k[:,j+1]'th column based on the previous k[:,1:j] columns
@@ -254,7 +227,7 @@ function ode45(F, tspan, x0)
         #        s is the number of intermediate RK stages on [t (t+h)] (Dormand-Prince has s=7 stages)
 
         for j = 1:6
-          k_[:,j+1] = F(t+c_[j+1]*h, x + reshape(h*k_[:,1:j]*a_[j+1,1:j]', length(x)))
+            k_[:,j+1] = F(t+c_[j+1]*h, x + reshape(h*k_[:,1:j]*a_[j+1,1:j]', length(x)))
         end
                 
 	# compute the 4th order estimate
@@ -271,11 +244,11 @@ function ode45(F, tspan, x0)
         tau = tol*max(norm(x,Inf), 1.0) # allowable error
                     
 	# Update the solution only if the error is acceptable
-        if (delta<=tau)
-          t = t + h
-          x = x5    # <-- using the higher order estimate is called 'local extrapolation'
-          tout = [tout; t]
-          xout = [xout; x.']
+        if (delta <= tau)
+            t = t + h
+            x = x5    # <-- using the higher order estimate is called 'local extrapolation'
+            tout = [tout; t]
+            xout = [xout; x.']
         end
 
 	# Update the step size
@@ -288,55 +261,96 @@ function ode45(F, tspan, x0)
 	# again as k_[:,1] during the next step.
         k_[:,1]=k_[:,7]
 
-      end # while (t < tfinal) & (h >= hmin)
-    end # if dormand_prince ...
+    end # while (t < tfinal) & (h >= hmin)
 
-    if fehlberg
+    if (t < tfinal)
+      println("Step size grew too small. t=", t, ", h=", h, ", x=", x)
+    end
 
-      # k_ needs to be initialized as an Nx6 matrix where N=number of rows in x
-      # (just for speed so octave doesn't need to allocate more memory at each stage value)
-      k_ = zeros(length(x),6)
-                                    
-      while (t < tfinal) & (h >= hmin)
+    return (tout, xout)
+    
+end # ode45_dp
+
+# Fehlberg
+function ode45_fb(F, tspan, x0)
+    tol = 1.0e-3
+
+    # see p.91 in the Ascher & Petzold reference for more infomation.
+    pow = 1/6; 
+
+    a_ = zeros(6,6)
+    b4_ = zeros(5)
+    b5_ = zeros(6)
+    c_ = zeros(6)
+
+    a_[1,1]=0;
+    a_[2,1]=1/4;
+    a_[3,1]=3/32;      a_[3,2]=9/32;
+    a_[4,1]=1932/2197; a_[4,2]=-7200/2197; a_[4,3]=7296/2197;
+    a_[5,1]=439/216;   a_[5,2]=-8;         a_[5,3]=3680/513;   a_[5,4]=-845/4104;
+    a_[6,1]=-8/27;     a_[6,2]=2;          a_[6,3]=-3544/2565; a_[6,4]=1859/4104; a_[6,5]=-11/40;
+    # 4th order b-coefficients (guaranteed to be a column vector)
+    b4_[1]=25/216; b4_[2]=0; b4_[3]=1408/2565; b4_[4]=2197/4104; b4_[5]=-1/5;
+    # 5th order b-coefficients (also guaranteed to be a column vector)
+    b5_[1]=16/135; b5_[2]=0; b5_[3]=6656/12825; b5_[4]=28561/56430; b5_[5]=-9/50; b5_[6]=2/55;
+    for i=1:6
+        c_[i]=sum(a_[i,:])
+    end
+
+    # Initialization
+    t0 = tspan[1]
+    tfinal = tspan[2]
+    t = t0
+    hmax = (tfinal - t)/2.5
+    hmin = (tfinal - t)/1e9
+    h = (tfinal - t)/100  # initial guess at a step size
+    x = x0[:]             # this always creates a column vector, x
+    tout = t              # first output time
+    xout = x.'            # first output solution
+        
+    # k_ needs to be initialized as an Nx6 matrix where N=number of rows in x
+    # (just for speed so octave doesn't need to allocate more memory at each stage value)
+    k_ = zeros(length(x),6)
+    
+    while (t < tfinal) & (h >= hmin)
         if t + h > tfinal; h = tfinal - t; end
-          
+        
         # Compute the slopes by computing the k[:,j+1]'th column based on the previous k[:,1:j] columns
         # notes: k_ needs to end up as an Nx6, a_ is 6x5, which is s by (s-1),  (RK-Fehlberg has s=6 stages)
         #        s is the number of intermediate RK stages on [t (t+h)]
-
+        
         k_[:,1]=F(t,x) # first stage
-          
+        
         for j = 1:5
-          k_[:,j+1] = F(t+c_[j+1]*h, x + reshape(h*k_[:,1:j]*a_[j+1,1:j]', length(x)))
+            k_[:,j+1] = F(t+c_[j+1]*h, x + reshape(h*k_[:,1:j]*a_[j+1,1:j]', length(x)))
         end
         
         # compute the 4th order estimate
         x4=x + h* (k_[:,1:5]*b4_) # k_[:,1:5] is an Nx5 and b4_ is a 5x1
-          
+        
 	# compute the 5th order estimate
         x5=x + h*(k_*b5_) # k_ is the same as k_[:,1:6] and is an Nx6 and b5_ is a 6x1
         
         # estimate the local truncation error
         gamma1 = x5 - x4
-          
+        
         # Estimate the error and the acceptable error
         delta = norm(gamma1, Inf)       # actual error
         tau = tol*max(norm(x, Inf),1.0) # allowable error
-          
+        
 	# update the solution only if the error is acceptable
-        if (delta<=tau)
-          t = t + h
-          x = x5    # <-- using the higher order estimate is called 'local extrapolation'
-          tout = [tout; t]
-          xout = [xout; x.']
+        if (delta <= tau)
+            t = t + h
+            x = x5    # <-- using the higher order estimate is called 'local extrapolation'
+            tout = [tout; t]
+            xout = [xout; x.']
         end 
-                                                
+
         # Update the step size
         if (delta==0.0); delta = 1e-16; end
         h = min(hmax, 0.8*h*(tau/delta)^pow)
           
-      end # while (t < tfinal) & (h >= hmin)
-    end # if fehlberg
+    end # while (t < tfinal) & (h >= hmin)
         
     if (t < tfinal)
       println("Step size grew too small. t=", t, ", h=", h, ", x=", x)
@@ -344,4 +358,7 @@ function ode45(F, tspan, x0)
 
     return (tout, xout)
     
-end # ode45
+end # ode45_fb
+
+# Use Dormand Prince version of ode45 by default
+ode45 = ode45_dp
