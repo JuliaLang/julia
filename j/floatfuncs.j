@@ -29,6 +29,7 @@ exponent(x::Float32) = ccall(:float_exponent,  Int32, (Float32,), x)
 mantissa(x::Float64) = ccall(:double_mantissa, Float64, (Float64,), x)
 mantissa(x::Float32) = ccall(:float_mantissa,  Float32, (Float32,), x)
 
+maxintfloat() = maxintfloat(Float64)
 maxintfloat(::Type{Float64}) = 9007199254740992.
 maxintfloat(::Type{Float32}) = float32(16777216.)
 integer_valued(x::Float) = trunc(x) == x && abs(x) <= maxintfloat(x)

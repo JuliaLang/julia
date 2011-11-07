@@ -38,7 +38,6 @@ end
 
 convert{T<:Int}(::Type{Rational{T}}, x::Rational) = Rational(convert(T,x.num),convert(T,x.den))
 convert{T<:Int}(::Type{Rational{T}}, x::Int) = Rational(convert(T,x), convert(T,1))
-
 function convert{T<:Int}(::Type{Rational{T}}, x::Float, tol::Real)
     if isnan(x);       return zero(T)//zero(T); end
     if x < typemin(T); return -one(T)//zero(T); end
@@ -56,7 +55,6 @@ function convert{T<:Int}(::Type{Rational{T}}, x::Float, tol::Real)
     end
 end
 convert{T<:Int}(rt::Type{Rational{T}}, x::Float) = convert(rt,x,0)
-
 convert{T<:Real}(::Type{T}, x::Rational) = convert(T, x.num/x.den)
 
 promote_rule{T<:Int}(::Type{Rational{T}}, ::Type{T}) = Rational{T}
@@ -81,7 +79,10 @@ isfinite(x::Rational) = x.den != 0
 typemin{T<:Int}(::Type{Rational{T}}) = -one(T)//zero(T)
 typemax{T<:Int}(::Type{Rational{T}}) = one(T)//zero(T)
 
-hash(x::Rational) = bitmix(hash(x.num),hash(x.den))
+integer_valued{T}(x::Rational{T}) = x.den == one(T)
+
+hash(x::Rational) = integer_valued(x) || abs(x.num) <= maxintfloat()*x.den ?
+                    hash(float(x)) : bitmix(hash(x.den),hash(x.num))
 
 -(x::Rational) = (-x.num) // x.den
 +(x::Rational, y::Rational) = (x.num*y.den + x.den*y.num) // (x.den*y.den)

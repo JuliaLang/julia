@@ -53,17 +53,18 @@ bitmix(a::Union(Int64,Uint64), b::Union(Int64, Uint64)) =
           xor_int(unbox64(a), or_int(lshr_int(unbox64(b),unbox32(32)),
                                      shl_int(unbox64(b),unbox32(32)))))
 
-#hash(x::Union(Int32,Uint32,Char)) = ccall(:int32hash, Uint32, (Uint32,), uint32(x))
-#hash(x::Union(Int64,Uint64)) = ccall(:int64hash, Uint64, (Uint64,), uint64(x))
-
-hash_f64(x::Float64) =
+_jl_hash64(x::Union(Int64,Uint64,Float64)) =
     ccall(:int64hash, Uint64, (Uint64,), boxui64(unbox64(x)))
 
-hash(s::Symbol) = ccall(:jl_hash_symbol, Ulong, (Any,), s)
+hash(x::Float64) = isnan(x) ? _jl_hash64(NaN) : _jl_hash64(x)
+hash(x::Float32) = hash(float64(x))
 
-hash(x::Float64) = (isnan(x) ? hash_f64(NaN) : hash_f64(x))
-hash(x::Float) = hash(float64(x))
-hash(x::Number) = hash_f64(float64(x))
+function hash(x::Int)
+    const m = int(maxintfloat())
+    !isfinite(x) || -m <= x <= m ? hash(float64(x)) : _jl_hash64(x)
+end
+
+hash(s::Symbol) = ccall(:jl_hash_symbol, Ulong, (Any,), s)
 
 function hash(t::Tuple)
     h = int64(0)
