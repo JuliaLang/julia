@@ -187,7 +187,7 @@ promote_rule(::Type{ImaginaryUnit}, ::Type{Float32}) = Complex64
 
 ==(z::Complex, w::Complex) = (real(z) == real(w) && imag(z) == imag(w))
 ==(z::Complex, x::Real) = (real(z) == x && imag(z) == 0)
-==(x::Real, z::Complex) = (z == 0)
+==(x::Real, z::Complex) = (z == x)
 
 isequal(z::Complex, w::Complex) = isequal(real(z),real(w)) && isequal(imag(z),imag(w))
 isequal(z::Complex, x::Real) = isequal(real(z),x) && isequal(imag(z),0)
