@@ -4,12 +4,12 @@ _jl_librandom = dlopen("librandom")
 
 function _jl_librandom_init()
     try
-        srand("/dev/urandom", 4)
+        srand("/dev/urandom")
     catch
         println("Entropy pool not available to seed RNG, using ad-hoc entropy sources.")
-        seed = bswap(uint64(clock()*2.0^32)) $
-               parse_int(Uint64, readall(`ifconfig`|`sha1sum`)[1:40], 16) $
-               uint64(getpid())
+        seed = reinterpret(Uint64, clock())
+        seed = bitmix(seed, parse_int(Uint64, readall(`ifconfig`|`sha1sum`)[1:40], 16))
+        seed = bitmix(seed, uint64(getpid()))
         srand(seed)
     end
     _jl_randn_zig_init()
@@ -43,15 +43,21 @@ end
 
 ## srand()
 
-srand(seed::Uint32) = ccall(dlsym(_jl_librandom, :dsfmt_gv_init_gen_rand), Void, (Uint32, ), seed)
+function srand(seed::Uint32)
+    global RANDOM_SEED = seed
+    ccall(dlsym(_jl_librandom, :dsfmt_gv_init_gen_rand),
+          Void, (Uint32,), uint32(seed))
+end
 
 function srand(seed::Vector{Uint32})
+    global RANDOM_SEED = seed
     ccall(dlsym(_jl_librandom, :dsfmt_gv_init_by_array),
-          Void, (Ptr{Uint32}, Int32),
-          seed, int32(length(seed)))
+          Void, (Ptr{Uint32}, Int32), seed, int32(length(seed)))
 end
 
 srand(seed::Uint64) = srand([uint32(seed),uint32(seed>>32)])
+srand(seed::Int32) = srand(uint32(seed))
+srand(seed::Int64) = srand(uint64(seed))
 
 function srand(filename::String, n::Int)
     fd = open(filename)
