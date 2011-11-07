@@ -29,8 +29,9 @@ exponent(x::Float32) = ccall(:float_exponent,  Int32, (Float32,), x)
 mantissa(x::Float64) = ccall(:double_mantissa, Float64, (Float64,), x)
 mantissa(x::Float32) = ccall(:float_mantissa,  Float32, (Float32,), x)
 
-integer_valued(x::Float64) = (trunc(x)==x && abs(x)<=9007199254740992.)
-integer_valued(x::Float32) = (trunc(x)==x && abs(x)<=float32(16777216.))
+maxintfloat(::Type{Float64}) = 9007199254740992.
+maxintfloat(::Type{Float32}) = float32(16777216.)
+integer_valued(x::Float) = trunc(x) == x && abs(x) <= maxintfloat(x)
 
 cmp(x::Float, y::Float) = sign(x-y)
 
