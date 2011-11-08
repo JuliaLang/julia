@@ -214,7 +214,7 @@ typeof_tfunc = function (t)
         else
             Type{typeof(t)}
         end
-    elseif isa(t,AbstractKind)
+    elseif isa(t,AbstractKind) || isa(t,CompositeKind) || isa(t,BitsKind)
         if isleaftype(t)
             Type{t}
         else

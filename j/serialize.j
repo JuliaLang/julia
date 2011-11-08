@@ -105,7 +105,7 @@ function serialize(s, e::Expr)
     end
 end
 
-function serialize(s, t::AbstractKind)
+function serialize(s, t::Union(AbstractKind,BitsKind,CompositeKind))
     if has(_jl_ser_tag,t)
         write_as_tag(s, t)
     else
