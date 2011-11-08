@@ -137,9 +137,9 @@ JL_CALLABLE(jl_f_typeof)
 JL_CALLABLE(jl_f_subtype)
 {
     JL_NARGS(subtype, 2, 2);
-    if (!jl_is_typector(args[0]) && !jl_is_typevar(args[0]))
+    if (!jl_is_typevar(args[0]))
         JL_TYPECHK(subtype, type, args[0]);
-    if (!jl_is_typector(args[1]) && !jl_is_typevar(args[1]))
+    if (!jl_is_typevar(args[1]))
         JL_TYPECHK(subtype, type, args[1]);
     return (jl_subtype(args[0],args[1],0) ? jl_true : jl_false);
 }
@@ -147,16 +147,14 @@ JL_CALLABLE(jl_f_subtype)
 JL_CALLABLE(jl_f_isa)
 {
     JL_NARGS(isa, 2, 2);
-    if (!jl_is_typector(args[1]))
-        JL_TYPECHK(isa, type, args[1]);
+    JL_TYPECHK(isa, type, args[1]);
     return (jl_subtype(args[0],args[1],1) ? jl_true : jl_false);
 }
 
 JL_CALLABLE(jl_f_typeassert)
 {
     JL_NARGS(typeassert, 2, 2);
-    if (!jl_is_typector(args[1]))
-        JL_TYPECHK(typeassert, type, args[1]);
+    JL_TYPECHK(typeassert, type, args[1]);
     if (!jl_subtype(args[0],args[1],1))
         jl_type_error("typeassert", args[1], args[0]);
     return args[0];
@@ -614,8 +612,7 @@ jl_value_t *jl_convert(jl_type_t *to, jl_value_t *x)
 JL_CALLABLE(jl_f_convert)
 {
     JL_NARGS(convert, 2, 2);
-    if (!jl_is_typector(args[0]))
-        JL_TYPECHK(convert, type, args[0]);
+    JL_TYPECHK(convert, type, args[0]);
     jl_type_t *to = (jl_type_t*)args[0];
     jl_value_t *x = args[1];
     if (!jl_subtype(x, (jl_value_t*)to, 1)) {
@@ -1036,21 +1033,11 @@ JL_CALLABLE(jl_f_typevar)
     jl_value_t *lb = (jl_value_t*)jl_bottom_type;
     jl_value_t *ub = (jl_value_t*)jl_any_type;
     if (nargs > 1) {
-        if (jl_is_typector(args[1])) {
-            lb = (jl_value_t*)((jl_typector_t*)args[1])->body;
-        }
-        else {
-            JL_TYPECHK(typevar, type, args[1]);
-            lb = args[1];
-        }
+        JL_TYPECHK(typevar, type, args[1]);
+        lb = args[1];
         if (nargs > 2) {
-            if (jl_is_typector(args[2])) {
-                ub = (jl_value_t*)((jl_typector_t*)args[2])->body;
-            }
-            else {
-                JL_TYPECHK(typevar, type, args[2]);
-                ub = args[2];
-            }
+            JL_TYPECHK(typevar, type, args[2]);
+            ub = args[2];
         }
         else {
             // typevar(name, UB)
@@ -1068,10 +1055,7 @@ JL_CALLABLE(jl_f_union)
     size_t i;
     jl_tuple_t *argt = jl_alloc_tuple_uninit(nargs);
     for(i=0; i < nargs; i++) {
-        if (jl_is_typector(args[i])) {
-            jl_tupleset(argt, i, (jl_value_t*)((jl_typector_t*)args[i])->body);
-        }
-        else if (!jl_is_type(args[i]) && !jl_is_typevar(args[i])) {
+        if (!jl_is_type(args[i]) && !jl_is_typevar(args[i])) {
             jl_error("invalid union type");
         }
         else {
@@ -1091,7 +1075,7 @@ static void check_type_tuple(jl_tuple_t *t, jl_sym_t *name, const char *ctx)
     size_t i;
     for(i=0; i < t->length; i++) {
         jl_value_t *elt = jl_tupleref(t,i);
-        if (!jl_is_type(elt) && !jl_is_typector(elt) && !jl_is_typevar(elt)) {
+        if (!jl_is_type(elt) && !jl_is_typevar(elt)) {
             jl_type_error_rt(name->name, ctx, (jl_value_t*)jl_type_type, elt);
         }
     }

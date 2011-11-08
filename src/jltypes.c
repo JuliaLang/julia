@@ -1288,8 +1288,7 @@ jl_value_t *jl_apply_type_(jl_value_t *tc, jl_value_t **params, size_t n)
     }
     for(i=0; i < n; i++) {
         jl_value_t *pi = params[i];
-        if (!jl_is_typector(pi) && !jl_is_type(pi) && !jl_is_long(pi) &&
-            !jl_is_typevar(pi)) {
+        if (!jl_is_type(pi) && !jl_is_long(pi) && !jl_is_typevar(pi)) {
             jl_type_error_rt("apply_type", tname,
                              (jl_value_t*)jl_type_type, pi);
         }
@@ -1685,10 +1684,9 @@ static int jl_subtype_le(jl_value_t *a, jl_value_t *b, int ta, int morespecific,
     if (ta) {
         if (jl_is_type_type(b)) {
             jl_value_t *bp = jl_tparam0(b);
-            if (jl_is_type(a))
-                return jl_subtype_le(a, bp, 0, morespecific, 1);
-            if (jl_is_typector(a))
-                return jl_subtype_le((jl_value_t*)((jl_typector_t*)a)->body, bp, 0, morespecific, 1);
+            return jl_subtype_le((jl_value_t*)jl_typeof(a),
+                                 (jl_value_t*)jl_type_type, 0, morespecific, 0) &&
+                jl_subtype_le(a, bp, 0, morespecific, 1);
         }
     }
     else if (a == b) {
@@ -2262,7 +2260,7 @@ void jl_init_types(void)
     // initialize them. lots of cycles.
     jl_struct_kind->name = jl_new_typename(jl_symbol("CompositeKind"));
     jl_struct_kind->name->primary = (jl_value_t*)jl_struct_kind;
-    jl_struct_kind->super = (jl_tag_type_t*)jl_tag_kind;
+    jl_struct_kind->super = (jl_tag_type_t*)jl_type_type;
     jl_struct_kind->parameters = jl_null;
     jl_struct_kind->names = jl_tuple(5, jl_symbol("name"), jl_symbol("super"),
                                      jl_symbol("parameters"),
@@ -2370,7 +2368,7 @@ void jl_init_types(void)
     jl_bottom_func = jl_new_closure(jl_f_no_function, NULL);
 
     jl_bits_kind =
-        jl_new_struct_type(jl_symbol("BitsKind"), (jl_tag_type_t*)jl_tag_kind,
+        jl_new_struct_type(jl_symbol("BitsKind"), jl_type_type,
                            jl_null,
                            jl_tuple(4, jl_symbol("name"), jl_symbol("super"),
                                     jl_symbol("parameters"),
@@ -2524,7 +2522,7 @@ void jl_init_types(void)
 
     jl_typector_type =
         jl_new_struct_type(jl_symbol("TypeConstructor"),
-                           jl_any_type, jl_null,
+                           jl_type_type, jl_null,
                            jl_tuple(2, jl_symbol("parameters"),
                                     jl_symbol("body")),
                            jl_tuple(2, jl_tuple_type, jl_any_type));

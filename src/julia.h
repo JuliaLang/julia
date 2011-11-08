@@ -499,7 +499,8 @@ static inline int jl_is_nontuple_type(jl_value_t *v)
             jl_typeis(v, jl_struct_kind) ||
             jl_typeis(v, jl_func_kind) ||
             jl_typeis(v, jl_tag_kind) ||
-            jl_typeis(v, jl_bits_kind));
+            jl_typeis(v, jl_bits_kind) ||
+            jl_typeis(v, jl_typector_type));
 }
 
 static inline int jl_is_type_type(jl_value_t *v)
