@@ -56,13 +56,9 @@ bitmix(a::Union(Int64,Uint64), b::Union(Int64, Uint64)) =
 _jl_hash64(x::Union(Int64,Uint64,Float64)) =
     ccall(:int64hash, Uint64, (Uint64,), boxui64(unbox64(x)))
 
-hash(x::Float64) = isnan(x) ? _jl_hash64(NaN) : _jl_hash64(x)
-hash(x::Float32) = hash(float64(x))
-
-function hash(x::Int)
-    const m = int(maxintfloat())
-    !isfinite(x) || -m <= x <= m ? hash(float64(x)) : _jl_hash64(x)
-end
+hash(x::Int) = _jl_hash64(uint64(x))
+@eval hash(x::Float) = integer_valued(x) ? _jl_hash64(uint64(x)) :
+                       isnan(x) ? $_jl_hash64(NaN) : _jl_hash64(float64(x))
 
 hash(s::Symbol) = ccall(:jl_hash_symbol, Ulong, (Any,), s)
 

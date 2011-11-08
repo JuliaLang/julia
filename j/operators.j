@@ -13,7 +13,8 @@ isequal(x,y) = is(x,y)
 
 # this definition allows Number types to implement
 # == instead of isequal, which is more idiomatic:
-isequal(x::Number, y::Number) = (x==y)
+isequal{T<:Number}(x::T, y::T) = x==y
+isequal(x::Number, y::Number)  = hash(x)==hash(y) && x==y
 
 > (x,y) = y < x
 <=(x,y) = x < y || x == y

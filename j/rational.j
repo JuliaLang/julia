@@ -79,10 +79,12 @@ isfinite(x::Rational) = x.den != 0
 typemin{T<:Int}(::Type{Rational{T}}) = -one(T)//zero(T)
 typemax{T<:Int}(::Type{Rational{T}}) = one(T)//zero(T)
 
-integer_valued{T}(x::Rational{T}) = x.den == one(T)
+integer_valued(x::Rational) = x.den == one(x.den)
+float64_valued(x::Rational) = abs(x.num) <= x.den*maxintfloat(Float64)
 
-hash(x::Rational) = integer_valued(x) || abs(x.num) <= maxintfloat()*x.den ?
-                    hash(float(x)) : bitmix(hash(x.den),hash(x.num))
+hash(x::Rational) = integer_valued(x) ? hash(x.num) :
+                    float64_valued(x) ? hash(float64(x)) :
+                    bitmix(hash(x.num),hash(x.den))
 
 -(x::Rational) = (-x.num) // x.den
 +(x::Rational, y::Rational) = (x.num*y.den + x.den*y.num) // (x.den*y.den)

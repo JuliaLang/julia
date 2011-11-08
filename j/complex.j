@@ -5,7 +5,7 @@ abstract Complex{T<:Real} <: Number
 iscomplex(x::Complex) = true
 iscomplex(x::Number) = false
 
-real_valued(z::Complex) = (imag(z) == 0)
+real_valued{T<:Real}(z::Complex{T}) = imag(z) == zero(T)
 integer_valued(z::Complex) = real_valued(z) && integer_valued(real(z))
 
 real(x::Real) = x
@@ -183,17 +183,17 @@ promote_rule(::Type{ImaginaryUnit}, ::Type{Float32}) = Complex64
 # *(::ImaginaryUnit, x::Real) = complex(zero(x), x)
 
 
-## functions of complex numbers ##
+## generic functions of complex numbers ##
 
-==(z::Complex, w::Complex) = (real(z) == real(w) && imag(z) == imag(w))
-==(z::Complex, x::Real) = (real(z) == x && imag(z) == 0)
-==(x::Real, z::Complex) = (z == x)
+==(z::Complex, w::Complex) = real(z) == real(w) && imag(z) == imag(w)
+==(z::Complex, x::Real) = real_valued(z) && real(z) == x
+==(x::Real, z::Complex) = real_valued(z) && real(z) == x
 
 isequal(z::Complex, w::Complex) = isequal(real(z),real(w)) && isequal(imag(z),imag(w))
-isequal(z::Complex, x::Real) = isequal(real(z),x) && isequal(imag(z),0)
-isequal(x::Real, z::Complex) = isequal(z,x)
+isequal(z::Complex, x::Real) = real_valued(z) && isequal(real(z),x)
+isequal(x::Real, z::Complex) = real_valued(z) && isequal(real(z),x)
 
-hash(z::Complex) = real_valued(z) ? hash(real(z)) : bitmix(hash(real(z)),hash(imag(z)))
+hash(z::Complex) = (r = hash(real(z)); real_valued(z) ? r : bitmix(r,hash(imag(z))))
 
 conj(z::Complex) = complex(real(z),-imag(z))
 abs(z::Complex)  = hypot(real(z), imag(z))
