@@ -3,9 +3,9 @@ JULIAHOME = $(shell pwd)
 include ./Make.inc
 
 default: release
+	$(MAKE) -C test quick
 
 debug release: %: julia-% sys.ji
-	$(MAKE) -C test quick
 
 julia-debug julia-release:
 	$(MAKE) -C external
@@ -38,13 +38,13 @@ distclean: cleanall
 .PHONY: default debug release julia-debug julia-release \
 	test testall test-* sloccount clean cleanall
 
-test: julia-release
+test: release
 	$(MAKE) -C test quick core
 
-testall: julia-release
+testall: release
 	$(MAKE) -C test all
 
-test-%: julia-release
+test-%: release
 	$(MAKE) -C test $*
 
 ## SLOCCOUNT ##
