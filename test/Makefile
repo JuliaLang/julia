@@ -1,14 +1,10 @@
-testall: test test-utf8 test-perf
+all: quick core hashing unicode perf
 
-quicktests:
-	../julia quicktests.j
+quick core hashing perf:
+	../julia $@.j
 
-test:
-	../julia tests.j
+unicode:
+	$(MAKE) -C unicode
+	../julia unicode.j
 
-test-utf8:
-	make -C unicode
-	../julia test_utf8.j
-
-test-perf:
-	../julia perf.j
+.PHONY: all quick core hashing unicode perf
