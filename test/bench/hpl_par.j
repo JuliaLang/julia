@@ -125,7 +125,7 @@ function trailing_update(L_II, A_IJ, A_KI, A_KJ, row_dep, col_dep)
     if !isempty(A_KJ)
         m, k = size(A_KI)
         n = size(A_IJ,2)
-        jl_blas_gemm("N","N",m,n,k,-1.0,A_KI,m,A_IJ,k,1.0,A_KJ,m)
+        _jl_blas_gemm("N","N",m,n,k,-1.0,A_KI,m,A_IJ,k,1.0,A_KJ,m)
         #A_KJ = A_KJ - A_KI*A_IJ
     end
     
@@ -268,7 +268,7 @@ function trailing_update2(C, L_II, C_KI, i, j, n, flag, dep)
         if !isempty(C_KJ)
             cm, ck = size(C_KI)
             cn = size(C_IJ,2)
-            jl_blas_gemm("N","N",cm,cn,ck,-1.0,C_KI,cm,C_IJ,ck,1.0,C_KJ,cm)
+            _jl_blas_gemm("N","N",cm,cn,ck,-1.0,C_KI,cm,C_IJ,ck,1.0,C_KJ,cm)
             #C_KJ = C_KJ - C_KI*C_IJ
             C[K,J] = C_KJ
         end   
