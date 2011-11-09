@@ -728,7 +728,7 @@ function cat(catdim::Int, X...)
 
     ndimsC = max(catdim, d_max)
     dimsC = ntuple(ndimsC, compute_dims)::(Size...)
-    typeC = promote_type(ntuple(nargs, i->isa(X[i],AbstractArray) ? typeof(X[i]).parameters[1] : typeof(X[i]))...)
+    typeC = promote_type(map(x->isa(x,AbstractArray) ? eltype(x) : typeof(x), X)...)
     C = similar(isa(X[1],AbstractArray) ? X[1] : [X[1]], typeC, dimsC)
 
     range = 1
@@ -791,7 +791,7 @@ function cat(catdim::Int, A::AbstractArray...)
 
     ndimsC = max(catdim, d_max)
     dimsC = ntuple(ndimsC, compute_dims)::(Size...)
-    typeC = promote_type(ntuple(nargs, i->typeof(A[i]).parameters[1])...)
+    typeC = promote_type(map(eltype, A)...)
     C = similar(A[1], typeC, dimsC)
 
     range = 1

@@ -1,6 +1,6 @@
 # figure 5.2 from principles of parallel programming, ported to julia.
 # sum a vector using a tree on top of local reductions.
-function sum{T}(v::DArray{T,1})
+function sum(v::DArray)
     P = procs(v)
     nodeval = { RemoteRef(p) | p=P }
     answer = RemoteRef()
@@ -25,6 +25,11 @@ function sum{T}(v::DArray{T,1})
         end
     end
     fetch(answer)
+end
+
+function sum_l(v::DArray)
+    mapreduce(+, fetch,
+              { @spawnat p sum(localize(v)) | p = procs(v) })
 end
 
 # possibly-useful abstraction:

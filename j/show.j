@@ -13,6 +13,9 @@ show(n::Uint) = show(uint64(n))
 show(f::Float64) = ccall(:jl_show_float, Void, (Float64, Int32), f, int32(8))
 show(f::Float32) = ccall(:jl_show_float, Void, (Float64, Int32), float64(f), int32(8))
 
+showall(f::Float64) = ccall(:jl_show_float, Void, (Float64, Int32), f, int32(17))
+showall(f::Float32) = ccall(:jl_show_float, Void, (Float64, Int32), float64(f), int32(9))
+
 show{T}(p::Ptr{T}) =
     print(is(T,None) ? "Ptr{Void}" : typeof(p), " @0x$(hex(uint(p),WORD_SIZE>>2))")
 

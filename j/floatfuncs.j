@@ -34,8 +34,7 @@ maxintfloat(::Type{Float32}) = float32(16777216.)
 maxintfloat{T<:Float}(x::T)  = maxintfloat(T)
 maxintfloat() = maxintfloat(Float64)
 
-# TODO: faster bit-twiddling integer-valued test?
-integer_valued(x::Float) = trunc(x) == x && abs(x) <= maxintfloat(x)
+integer_valued(x::Float) = trunc(x) == x
 
 cmp(x::Float, y::Float) = sign(x-y)
 
