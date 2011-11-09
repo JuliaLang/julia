@@ -57,8 +57,10 @@ _jl_hash64(x::Union(Int64,Uint64,Float64)) =
     ccall(:int64hash, Uint64, (Uint64,), boxui64(unbox64(x)))
 
 hash(x::Int) = _jl_hash64(uint64(x))
-@eval hash(x::Float) = integer_valued(x) ? _jl_hash64(uint64(x)) :
-                       isnan(x) ? $_jl_hash64(NaN) : _jl_hash64(float64(x))
+@eval function hash(x::Float)
+    abs(x) <= $typemax(Uint64) && trunc(x) == x ? hash(uint64(x)) :
+    isnan(x) ? $_jl_hash64(NaN) : _jl_hash64(float64(x))
+end
 
 hash(s::Symbol) = ccall(:jl_hash_symbol, Ulong, (Any,), s)
 
