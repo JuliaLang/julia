@@ -763,20 +763,6 @@ static int args_morespecific(jl_value_t *a, jl_value_t *b)
     return msp;
 }
 
-static jl_tuple_t *without_typectors(jl_tuple_t *t)
-{
-    jl_tuple_t *tc = jl_alloc_tuple_uninit(t->length);
-    size_t i;
-    for(i=0; i < t->length; i++) {
-        jl_value_t *v = jl_tupleref(t,i);
-        if (jl_is_typector(v))
-            jl_tupleset(tc,i,(jl_value_t*)((jl_typector_t*)v)->body);
-        else
-            jl_tupleset(tc,i,v);
-    }
-    return tc;
-}
-
 static int is_va_tuple(jl_tuple_t *t)
 {
     return (t->length>0 && jl_is_seq_type(jl_tupleref(t,t->length-1)));
@@ -812,8 +798,7 @@ static void check_ambiguous(jl_methlist_t *ml, jl_tuple_t *type,
                                                  (jl_value_t*)sig);
         if (isect == (jl_value_t*)jl_bottom_type)
             return;
-        jl_value_t *t1=NULL, *t2=NULL;
-        JL_GC_PUSH(&isect, &t1, &t2);
+        JL_GC_PUSH(&isect);
         jl_methlist_t *l = ml;
         while (l != NULL) {
             if (sigs_eq(isect, (jl_value_t*)l->sig))
@@ -821,8 +806,6 @@ static void check_ambiguous(jl_methlist_t *ml, jl_tuple_t *type,
             l = l->next;
         }
         char *n = fname->name;
-        t1 = (jl_value_t*)without_typectors(type);
-        t2 = (jl_value_t*)without_typectors(sig);
         jl_value_t *errstream = jl_get_global(jl_system_module,
                                               jl_symbol("stderr_stream"));
         JL_TRY {
@@ -830,9 +813,9 @@ static void check_ambiguous(jl_methlist_t *ml, jl_tuple_t *type,
                 jl_set_current_output_stream_obj(errstream);
             ios_t *s = jl_current_output_stream();
             ios_printf(s, "Warning: New definition %s", n);
-            jl_show(t1);
+            jl_show((jl_value_t*)type);
             ios_printf(s, " is ambiguous with %s", n);
-            jl_show(t2);
+            jl_show((jl_value_t*)sig);
             ios_printf(s, ".\n         Make sure %s", n);
             jl_show(isect);
             ios_printf(s, " is defined first.\n");

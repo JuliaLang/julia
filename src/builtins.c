@@ -711,6 +711,9 @@ static void show_type(jl_value_t *t)
             jl_show((jl_value_t*)((jl_func_type_t*)t)->to);
         }
     }
+    else if (t == (jl_value_t*)jl_function_type) {
+        ios_puts("Function", s);
+    }
     else if (jl_is_union_type(t)) {
         if (t == (jl_value_t*)jl_bottom_type) {
             ios_write(s, "None", 4);
@@ -726,6 +729,9 @@ static void show_type(jl_value_t *t)
     else if (jl_is_seq_type(t)) {
         jl_show(jl_tparam0(t));
         ios_write(s, "...", 3);
+    }
+    else if (jl_is_typector(t)) {
+        jl_show((jl_value_t*)((jl_typector_t*)t)->body);
     }
     else {
         assert(jl_is_some_tag_type(t));
@@ -791,9 +797,6 @@ JL_CALLABLE(jl_f_show_any)
     }
     else if (jl_typeis(v,jl_intrinsic_type)) {
         ios_printf(s, "#<intrinsic-function %d>", *(uint32_t*)jl_bits_data(v));
-    }
-    else if (v == (jl_value_t*)jl_function_type) {
-        ios_puts("Function", s);
     }
     else {
         jl_value_t *t = (jl_value_t*)jl_typeof(v);
