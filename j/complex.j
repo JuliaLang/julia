@@ -9,7 +9,7 @@ real_valued{T<:Real}(z::Complex{T}) = imag(z) == zero(T)
 integer_valued(z::Complex) = real_valued(z) && integer_valued(real(z))
 
 real(x::Real) = x
-imag(x::Real) = convert(typeof(x), 0)
+imag(x::Real) = zero(x)
 
 isfinite(z::Complex) = isfinite(real(z)) && isfinite(imag(z))
 reim(z) = (real(z), imag(z))
@@ -33,6 +33,14 @@ function show(z::Complex)
     else
         print("complex(",r,",",i,")")
     end
+end
+
+function showcompact(z::Complex)
+    print('(')
+    showcompact(real(z))
+    print(',')
+    showcompact(imag(z))
+    print(')')
 end
 
 ## packed complex float types ##
@@ -111,7 +119,7 @@ function write(s, z::Complex64)
     write(s,imag(z))
 end
 
-sizeof(::Type{Complex64})  =  8
+sizeof(::Type{Complex64}) = 8
 
 complex(x::Float64, y::Float64) = complex128(x, y)
 complex(x::Float32, y::Float32) = complex64(x, y)
@@ -177,10 +185,6 @@ promote_rule{T<:Complex}(::Type{ImaginaryUnit}, ::Type{T}) = T
 promote_rule{T<:Real}(::Type{ImaginaryUnit}, ::Type{T}) = ComplexPair{T}
 promote_rule(::Type{ImaginaryUnit}, ::Type{Float64}) = Complex128
 promote_rule(::Type{ImaginaryUnit}, ::Type{Float32}) = Complex64
-
-## We might want these rules, but it's iffy:
-# *(x::Real, ::ImaginaryUnit) = complex(zero(x), x)
-# *(::ImaginaryUnit, x::Real) = complex(zero(x), x)
 
 
 ## generic functions of complex numbers ##

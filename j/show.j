@@ -1,7 +1,7 @@
-# showing fundamental objects
-
 print(x) = show(x)
+showcompact(x) = show(x)
 show_to_string(x) = print_to_string(show, x)
+showcompact_to_string(x) = print_to_string(showcompact, x)
 
 show(s::Symbol) = print(s)
 show(tn::TypeName) = show(tn.name)
@@ -10,14 +10,14 @@ show(b::Bool) = print(b ? "true" : "false")
 show(n::Int)  = show(int64(n))
 show(n::Uint) = show(uint64(n))
 
-show(f::Float64) = ccall(:jl_show_float, Void, (Float64, Int32), f, int32(8))
-show(f::Float32) = ccall(:jl_show_float, Void, (Float64, Int32), float64(f), int32(8))
+show(f::Float64) = ccall(:jl_show_float, Void, (Float64, Int32), f, int32(17))
+show(f::Float32) = ccall(:jl_show_float, Void, (Float64, Int32), float64(f), int32(9))
 
-showall(f::Float64) = ccall(:jl_show_float, Void, (Float64, Int32), f, int32(17))
-showall(f::Float32) = ccall(:jl_show_float, Void, (Float64, Int32), float64(f), int32(9))
+showcompact(f::Float64) = ccall(:jl_show_float, Void, (Float64, Int32), f, int32(8))
+showcompact(f::Float32) = ccall(:jl_show_float, Void, (Float64, Int32), float64(f), int32(8))
 
 show{T}(p::Ptr{T}) =
-    print(is(T,None) ? "Ptr{Void}" : typeof(p), " @0x$(hex(uint(p),WORD_SIZE>>2))")
+    print(is(T,None) ? "Ptr{Void}" : typeof(p), " @0x$(hex(uint(p), WORD_SIZE>>2))")
 
 function show(l::LambdaStaticData)
     print("AST(")
@@ -234,21 +234,21 @@ function showall{T}(a::AbstractArray{T,2})
     end
 end
 
-alignment(x::Any) = (0, strlen(show_to_string(x)))
-alignment(x::Number) = (strlen(show_to_string(x)), 0)
+alignment(x::Any) = (0, strlen(showcompact_to_string(x)))
+alignment(x::Number) = (strlen(showcompact_to_string(x)), 0)
 function alignment(x::Real)
-    m = match(r"^(.*?)((?:[\.eE].*)?)$", show_to_string(x))
-    m == nothing ? (strlen(show_to_string(x)), 0) :
+    m = match(r"^(.*?)((?:[\.eE].*)?)$", showcompact_to_string(x))
+    m == nothing ? (strlen(showcompact_to_string(x)), 0) :
                    (strlen(m.captures[1]), strlen(m.captures[2]))
 end
 function alignment(x::Complex)
-    m = match(r"^(.*?)( [\+-] .*)$", show_to_string(x))
-    m == nothing ? (strlen(show_to_string(x)), 0) :
+    m = match(r"^(.*,)(.*)$", showcompact_to_string(x))
+    m == nothing ? (strlen(showcompact_to_string(x)), 0) :
                    (strlen(m.captures[1]), strlen(m.captures[2]))
 end
 function alignment(x::Rational)
-    m = match(r"^(.*?/)(/.*)$", show_to_string(x))
-    m == nothing ? (strlen(show_to_string(x)), 0) :
+    m = match(r"^(.*?/)(/.*)$", showcompact_to_string(x))
+    m == nothing ? (strlen(showcompact_to_string(x)), 0) :
                    (strlen(m.captures[1]), strlen(m.captures[2]))
 end
 function alignment(v::AbstractVector)
@@ -293,7 +293,7 @@ function print_matrix_row(
         a = alignment(x)
         l = repeat(" ", A[k][1]-a[1])
         r = repeat(" ", A[k][2]-a[2])
-        print(l, show_to_string(x), r)
+        print(l, showcompact_to_string(x), r)
         if k < length(A); print(sep); end
     end
 end
