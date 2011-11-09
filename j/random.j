@@ -103,7 +103,7 @@ end
 _jl_dsfmt_randui32() = ccall(dlsym(_jl_librandom, :dsfmt_gv_genrand_uint32), Uint32, ())
 
 _jl_dsfmt_randui64() = boxui64(or_int(zext64(unbox32(_jl_dsfmt_randui32())),
-                           shl_int(zext64(unbox32(_jl_dsfmt_randui32())),unbox32(32))))
+                           shl_int(zext64(unbox32(_jl_dsfmt_randui32())), 32)))
 
 if WORD_SIZE == 64
     randi() = randi(Uint64)

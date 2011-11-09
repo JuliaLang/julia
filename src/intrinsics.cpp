@@ -947,11 +947,11 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
     HANDLE(not_int,1)
         return builder.CreateXor(INT(x), ConstantInt::get(t, -1));
     HANDLE(shl_int,2)
-        return builder.CreateShl(INT(x), uint_cnvt(t,emit_expr(args[2],ctx,true)));
+        return builder.CreateShl(INT(x), uint_cnvt(t,emit_unboxed(args[2],ctx)));
     HANDLE(lshr_int,2)
-        return builder.CreateLShr(INT(x), uint_cnvt(t,emit_expr(args[2],ctx,true)));
+        return builder.CreateLShr(INT(x), uint_cnvt(t,emit_unboxed(args[2],ctx)));
     HANDLE(ashr_int,2)
-        return builder.CreateAShr(INT(x), uint_cnvt(t,emit_expr(args[2],ctx,true)));
+        return builder.CreateAShr(INT(x), uint_cnvt(t,emit_unboxed(args[2],ctx)));
     HANDLE(bswap_int,1)
         x = INT(x);
         fxt = x->getType();
