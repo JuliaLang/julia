@@ -12,7 +12,7 @@ function sum(v::DArray)
             tally = sum(localize(v))
             while stride < np
                 if i%(2*stride) == 0
-                    tally = tally + fetch(nodeval[i+stride])
+                    tally = tally + take(nodeval[i+stride])
                     stride = 2*stride
                 else
                     put(nodeval[i], tally)
@@ -27,9 +27,9 @@ function sum(v::DArray)
     fetch(answer)
 end
 
-function sum_l(v::DArray)
-    mapreduce(+, fetch,
-              { @spawnat p sum(localize(v)) | p = procs(v) })
+function reduce(f, v::DArray)
+    mapreduce(f, fetch,
+              { @spawnat p reduce(f,localize(v)) | p = procs(v) })
 end
 
 # possibly-useful abstraction:
