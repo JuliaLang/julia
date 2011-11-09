@@ -903,21 +903,21 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
     HANDLE(ne_int,2)
         return builder.CreateICmpNE(INT(x), INT(emit_expr(args[2],ctx,true)));
     HANDLE(slt_int,2)
-        return builder.CreateICmpSLT(x, emit_expr(args[2],ctx,true));
+        return builder.CreateICmpSLT(INT(x), INT(emit_expr(args[2],ctx,true)));
     HANDLE(ult_int,2)
-        return builder.CreateICmpULT(x, emit_expr(args[2],ctx,true));
+        return builder.CreateICmpULT(INT(x), INT(emit_expr(args[2],ctx,true)));
     HANDLE(sle_int,2)
-        return builder.CreateICmpSLE(x, emit_expr(args[2],ctx,true));
+        return builder.CreateICmpSLE(INT(x), INT(emit_expr(args[2],ctx,true)));
     HANDLE(ule_int,2)
-        return builder.CreateICmpULE(x, emit_expr(args[2],ctx,true));
+        return builder.CreateICmpULE(INT(x), INT(emit_expr(args[2],ctx,true)));
     HANDLE(sgt_int,2)
-        return builder.CreateICmpSGT(x, emit_expr(args[2],ctx,true));
+        return builder.CreateICmpSGT(INT(x), INT(emit_expr(args[2],ctx,true)));
     HANDLE(ugt_int,2)
-        return builder.CreateICmpUGT(x, emit_expr(args[2],ctx,true));
+        return builder.CreateICmpUGT(INT(x), INT(emit_expr(args[2],ctx,true)));
     HANDLE(sge_int,2)
-        return builder.CreateICmpSGE(x, emit_expr(args[2],ctx,true));
+        return builder.CreateICmpSGE(INT(x), INT(emit_expr(args[2],ctx,true)));
     HANDLE(uge_int,2)
-        return builder.CreateICmpUGE(x, emit_expr(args[2],ctx,true));
+        return builder.CreateICmpUGE(INT(x), INT(emit_expr(args[2],ctx,true)));
 
     HANDLE(eq_float,2)
         return builder.CreateFCmpOEQ(FP(x),
