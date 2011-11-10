@@ -213,21 +213,27 @@ typedef struct {
     const Argument *argCount;
     AllocaInst *argTemp;
     int argDepth;
+    //int maxDepth;
     int argSpace;
     std::string funcName;
 } jl_codectx_t;
 
 static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool value);
 static int is_global(jl_sym_t *s, jl_codectx_t *ctx);
+static void make_gcroot(Value *v, jl_codectx_t *ctx);
 
 // --- utilities ---
 
 #include "cgutils.cpp"
 #include "debuginfo.cpp"
 
+// --- code gen for intrinsic functions ---
+
+#include "intrinsics.cpp"
+
 // --- constant determination ---
 
-static bool is_constant(jl_value_t *ex, jl_codectx_t *ctx)
+static bool is_constant(jl_value_t *ex, jl_codectx_t *ctx, bool sparams=true)
 {
     if (jl_is_symbolnode(ex))
         ex = (jl_value_t*)jl_symbolnode_sym(ex);
@@ -235,10 +241,12 @@ static bool is_constant(jl_value_t *ex, jl_codectx_t *ctx)
         jl_sym_t *sym = (jl_sym_t*)ex;
         if (is_global(sym, ctx)) {
             size_t i;
-            for(i=0; i < ctx->sp->length; i+=2) {
-                if (sym == (jl_sym_t*)jl_tupleref(ctx->sp, i)) {
-                    // static parameter
-                    return true;
+            if (sparams) {
+                for(i=0; i < ctx->sp->length; i+=2) {
+                    if (sym == (jl_sym_t*)jl_tupleref(ctx->sp, i)) {
+                        // static parameter
+                        return true;
+                    }
                 }
             }
             if (jl_boundp(ctx->module, sym)) {
@@ -267,7 +275,8 @@ static bool expr_is_symbol(jl_value_t *e)
     return (jl_is_symbol(e) || jl_is_symbolnode(e) || jl_is_topnode(e));
 }
 
-static void max_arg_depth(jl_value_t *expr, int32_t *max, int32_t *sp)
+static void max_arg_depth(jl_value_t *expr, int32_t *max, int32_t *sp,
+                          jl_codectx_t *ctx)
 {
     if (jl_is_expr(expr)) {
         jl_expr_t *e = (jl_expr_t*)expr;
@@ -275,33 +284,48 @@ static void max_arg_depth(jl_value_t *expr, int32_t *max, int32_t *sp)
         if (e->head == call_sym || e->head == call1_sym) {
             int alen = e->args->length;
             int lastsp = *sp;
-            if (!expr_is_symbol(jl_exprarg(e,0)) &&
-                (jl_is_expr(jl_exprarg(e,0)) ||
-                 jl_is_lambda_info(jl_exprarg(e,0)))) {
-                max_arg_depth(jl_exprarg(e,0), max, sp);
+            jl_value_t *f = jl_exprarg(e,0);
+            if (expr_is_symbol(f)) {
+                if (is_constant(f, ctx, false)) {
+                    jl_value_t *fv = jl_interpret_toplevel_expr(f);
+                    if (jl_typeis(fv, jl_intrinsic_type)) {
+                        JL_I::intrinsic fi = (JL_I::intrinsic)jl_unbox_int32(fv);
+                        if (fi != JL_I::ccall) {
+                            // here we need space for each argument, but
+                            // not for each of their results
+                            for(i=1; i < (size_t)alen; i++) {
+                                max_arg_depth(jl_exprarg(e,i), max, sp, ctx);
+                            }
+                            return;
+                        }
+                    }
+                }
+            }
+            else if (jl_is_expr(f) || jl_is_lambda_info(f)) {
+                max_arg_depth(f, max, sp, ctx);
                 (*sp)++;
                 if (*sp > *max) *max = *sp;
             }
 
             for(i=1; i < (size_t)alen; i++) {
-                max_arg_depth(jl_exprarg(e,i), max, sp);
+                max_arg_depth(jl_exprarg(e,i), max, sp, ctx);
                 (*sp)++;
                 if (*sp > *max) *max = *sp;
             }
             (*sp) = lastsp;
         }
         else if (e->head == method_sym) {
-            max_arg_depth(jl_exprarg(e,1), max, sp);
+            max_arg_depth(jl_exprarg(e,1), max, sp, ctx);
             (*sp)++;
             if (*sp > *max) *max = *sp;
-            max_arg_depth(jl_exprarg(e,2), max, sp);
+            max_arg_depth(jl_exprarg(e,2), max, sp, ctx);
             (*sp)++;
             if (*sp > *max) *max = *sp;
             (*sp)-=2;
         }
         else {
             for(i=0; i < e->args->length; i++) {
-                max_arg_depth(jl_exprarg(e,i), max, sp);
+                max_arg_depth(jl_exprarg(e,i), max, sp, ctx);
             }
         }
     }
@@ -315,11 +339,9 @@ static void make_gcroot(Value *v, jl_codectx_t *ctx)
                                                       ctx->argDepth));
     builder.CreateStore(v, froot);
     ctx->argDepth++;
+    //if (ctx->argDepth > ctx->maxDepth)
+    //    ctx->maxDepth = ctx->argDepth;
 }
-
-// --- code gen for intrinsic functions ---
-
-#include "intrinsics.cpp"
 
 // --- lambda ---
 
@@ -1266,6 +1288,10 @@ extern char *jl_stack_lo;
 
 extern "C" jl_tuple_t *jl_tuple_tvars_to_symbols(jl_tuple_t *t);
 
+//static int total_roots=0;
+//static int used_roots=0;
+//static int n_elim=0;
+
 static void emit_function(jl_lambda_info_t *lam, Function *f)
 {
     jl_expr_t *ast = (jl_expr_t*)lam->ast;
@@ -1407,9 +1433,11 @@ static void emit_function(jl_lambda_info_t *lam, Function *f)
     }
 
     int32_t argdepth=0, vsp=0;
-    max_arg_depth((jl_value_t*)ast, &argdepth, &vsp);
+    max_arg_depth((jl_value_t*)ast, &argdepth, &vsp, &ctx);
     n_roots += argdepth;
+    //total_roots += n_roots;
     ctx.argDepth = 0;
+    //ctx.maxDepth = 0;
     ctx.argSpace = argdepth;
 #ifdef JL_GC_MARKSWEEP
     AllocaInst *gcframe = NULL;
@@ -1441,6 +1469,7 @@ static void emit_function(jl_lambda_info_t *lam, Function *f)
     }
     else {
         ctx.argTemp = NULL;
+        //n_elim++;
     }
 
     // get pointers for locals stored in the gc frame array (argTemp)
@@ -1636,6 +1665,7 @@ static void emit_function(jl_lambda_info_t *lam, Function *f)
     if (builder.GetInsertBlock()->getTerminator() == NULL) {
         builder.CreateRet(V_null);
     }
+    //used_roots += ctx.maxDepth;
     //JL_GC_POP();
     jl_gc_unpreserve();
 }
