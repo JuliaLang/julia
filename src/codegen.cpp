@@ -1,6 +1,7 @@
 #include "llvm/DerivedTypes.h"
 #include "llvm/ExecutionEngine/ExecutionEngine.h"
 #include "llvm/ExecutionEngine/JIT.h"
+#include "llvm/ExecutionEngine/JITEventListener.h"
 #include "llvm/LLVMContext.h"
 #include "llvm/Module.h"
 #include "llvm/Intrinsics.h"
@@ -20,7 +21,6 @@
 #include <sstream>
 #include <map>
 #include <vector>
-#include "debuginfo.cpp"
 #ifdef DEBUG
 #undef NDEBUG
 #endif
@@ -41,7 +41,6 @@ static bool nested_compile=false;
 static Module *jl_Module;
 static ExecutionEngine *jl_ExecutionEngine;
 static DIBuilder *dbuilder;
-static std::map<const std::string, GlobalVariable*> stringConstants;
 static std::map<int, std::string> argNumberStrings;
 static FunctionPassManager *FPM;
 
@@ -88,7 +87,6 @@ static GlobalVariable *jlfloat32temp_var;
 static GlobalVariable *jlpgcstack_var;
 #endif
 static GlobalVariable *jlexc_var;
-JuliaJITEventListener *jl_jit_events;
 
 // important functions
 static Function *jlnew_func;
@@ -110,6 +108,20 @@ static Function *jlenter_func;
 static Function *jlleave_func;
 static Function *jlallocobj_func;
 static Function *setjmp_func;
+static Function *box_int8_func;
+static Function *box_uint8_func;
+static Function *box_int16_func;
+static Function *box_uint16_func;
+static Function *box_int32_func;
+static Function *box_uint32_func;
+static Function *box_int64_func;
+static Function *box_uint64_func;
+static Function *box_float32_func;
+static Function *box_float64_func;
+static Function *box8_func;
+static Function *box16_func;
+static Function *box32_func;
+static Function *box64_func;
 
 /*
   stuff to fix up:
@@ -121,28 +133,7 @@ static Function *setjmp_func;
   - try using fastcc to get tail calls
 */
 
-static GlobalVariable *stringConst(const std::string &txt)
-{
-    GlobalVariable *gv = stringConstants[txt];
-    static int strno = 0;
-    if (gv == NULL) {
-        std::stringstream ssno;
-        std::string vname;
-        ssno << strno;
-        vname += "_j_str";
-        vname += ssno.str();
-        gv = new GlobalVariable(*jl_Module,
-                                ArrayType::get(T_int8, txt.length()+1),
-                                true,
-                                GlobalVariable::ExternalLinkage,
-                                ConstantArray::get(getGlobalContext(),
-                                                   txt.c_str()),
-                                vname);
-        stringConstants[txt] = gv;
-        strno++;
-    }
-    return gv;
-}
+// --- entry point ---
 
 static void emit_function(jl_lambda_info_t *lam, Function *f);
 //static int n_compile=0;
@@ -226,310 +217,50 @@ typedef struct {
     std::string funcName;
 } jl_codectx_t;
 
-static bool isBoxed(char *varname, jl_codectx_t *ctx)
-{
-    return (*ctx->isAssigned)[varname] && (*ctx->isCaptured)[varname];
-}
-
-static Value *mark_julia_type(Value *v, jl_value_t *jt);
-static jl_value_t *julia_type_of(Value *v);
-static Value *tpropagate(Value *a, Value *b);
-
-static Value *literal_pointer_val(void *p, const Type *t)
-{
-#ifdef __LP64__
-    return ConstantExpr::getIntToPtr(ConstantInt::get(T_int64, (uint64_t)p),
-                                     t);
-#else
-    return ConstantExpr::getIntToPtr(ConstantInt::get(T_int32, (uint32_t)p),
-                                     t);
-#endif
-}
-
-static Value *literal_pointer_val(jl_value_t *p)
-{
-    return literal_pointer_val(p, jl_pvalue_llvmt);
-}
-
-static Value *literal_pointer_val(void *p)
-{
-    return literal_pointer_val(p, T_pint8);
-}
-
-static jl_value_t *llvm_type_to_julia(const Type *t, bool err=true);
-
-static Value *emit_typeof(Value *p)
-{
-    // given p, a jl_value_t*, compute its type tag
-    if (p->getType() == jl_pvalue_llvmt) {
-        Value *tt = builder.CreateBitCast(p, jl_ppvalue_llvmt);
-        tt = builder.
-            CreateLoad(builder.CreateGEP(tt,ConstantInt::get(T_int32,0)),
-                       false);
-        return tt;
-    }
-    return literal_pointer_val(llvm_type_to_julia(p->getType()));
-}
-
-static void emit_error(const std::string &txt, jl_codectx_t *ctx)
-{
-    std::string txt2 = "in " + ctx->funcName + ": " + txt;
-    std::vector<Value *> zeros(0);
-    zeros.push_back(ConstantInt::get(T_int32, 0));
-    zeros.push_back(ConstantInt::get(T_int32, 0));
-    builder.CreateCall(jlerror_func,
-                       builder.CreateGEP(stringConst(txt2),
-                                         zeros.begin(), zeros.end()));
-}
-
-static void error_unless(Value *cond, const std::string &msg, jl_codectx_t *ctx)
-{
-    BasicBlock *failBB = BasicBlock::Create(getGlobalContext(),"fail",ctx->f);
-    BasicBlock *passBB = BasicBlock::Create(getGlobalContext(),"pass");
-    builder.CreateCondBr(cond, passBB, failBB);
-    builder.SetInsertPoint(failBB);
-    emit_error(msg, ctx);
-    builder.CreateBr(passBB);
-    ctx->f->getBasicBlockList().push_back(passBB);
-    builder.SetInsertPoint(passBB);
-}
-
-static void call_error_func_unless(Value *cond, Function *errfunc,
-                                   jl_codectx_t *ctx)
-{
-    BasicBlock *failBB = BasicBlock::Create(getGlobalContext(),"fail",ctx->f);
-    BasicBlock *passBB = BasicBlock::Create(getGlobalContext(),"pass");
-    builder.CreateCondBr(cond, passBB, failBB);
-    builder.SetInsertPoint(failBB);
-    builder.CreateCall(errfunc);
-    builder.CreateBr(passBB);
-    ctx->f->getBasicBlockList().push_back(passBB);
-    builder.SetInsertPoint(passBB);
-}
-
-static void null_pointer_check(Value *v, jl_codectx_t *ctx)
-{
-    call_error_func_unless(builder.CreateICmpNE(v, V_null),
-                           jluniniterror_func, ctx);
-}
-
-static Value *boxed(Value *v);
-
-static void emit_type_error(Value *x, jl_value_t *type, const std::string &msg,
-                            jl_codectx_t *ctx)
-{
-    std::vector<Value *> zeros(0);
-    zeros.push_back(ConstantInt::get(T_int32, 0));
-    zeros.push_back(ConstantInt::get(T_int32, 0));
-    Value *fname_val = builder.CreateGEP(stringConst(ctx->funcName),
-                                         zeros.begin(), zeros.end());
-    Value *msg_val = builder.CreateGEP(stringConst(msg),
-                                       zeros.begin(), zeros.end());
-    builder.CreateCall4(jltypeerror_func,
-                        fname_val, msg_val,
-                        literal_pointer_val(type), boxed(x));
-}
-
-static void emit_typecheck(Value *x, jl_value_t *type, const std::string &msg,
-                           jl_codectx_t *ctx)
-{
-    Value *istype =
-        builder.CreateICmpEQ(emit_typeof(x), literal_pointer_val(type));
-    BasicBlock *failBB = BasicBlock::Create(getGlobalContext(),"fail",ctx->f);
-    BasicBlock *passBB = BasicBlock::Create(getGlobalContext(),"pass");
-    builder.CreateCondBr(istype, passBB, failBB);
-    builder.SetInsertPoint(failBB);
-
-    emit_type_error(x, type, msg, ctx);
-
-    builder.CreateBr(passBB);
-    ctx->f->getBasicBlockList().push_back(passBB);
-    builder.SetInsertPoint(passBB);
-}
-
-static Value *emit_bounds_check(Value *i, Value *len, const std::string &msg,
-                                jl_codectx_t *ctx)
-{
-    Value *im1 = builder.CreateSub(i, ConstantInt::get(T_size, 1));
-    Value *ok = builder.CreateICmpULT(im1, len);
-    error_unless(ok, msg, ctx);
-    return im1;
-}
-
-static void emit_func_check(Value *x, jl_codectx_t *ctx)
-{
-    Value *istype1 =
-        builder.CreateICmpEQ(emit_typeof(emit_typeof(x)),
-                             literal_pointer_val((jl_value_t*)jl_func_kind));
-    BasicBlock *elseBB1 = BasicBlock::Create(getGlobalContext(),"a", ctx->f);
-    BasicBlock *mergeBB1 = BasicBlock::Create(getGlobalContext(),"b");
-    builder.CreateCondBr(istype1, mergeBB1, elseBB1);
-
-    builder.SetInsertPoint(elseBB1);
-    Value *istype2 =
-        builder.CreateICmpEQ(emit_typeof(x),
-                             literal_pointer_val((jl_value_t*)jl_struct_kind));
-    BasicBlock *elseBB2 = BasicBlock::Create(getGlobalContext(),"a", ctx->f);
-    builder.CreateCondBr(istype2, mergeBB1, elseBB2);
-
-    builder.SetInsertPoint(elseBB2);
-    emit_type_error(x, (jl_value_t*)jl_function_type, "apply", ctx);
-
-    builder.CreateBr(mergeBB1);
-    ctx->f->getBasicBlockList().push_back(mergeBB1);
-    builder.SetInsertPoint(mergeBB1);
-}
-
-static Value *emit_nthptr_addr(Value *v, size_t n)
-{
-    return builder.CreateGEP(builder.CreateBitCast(v, jl_ppvalue_llvmt),
-                             ConstantInt::get(T_int32, n));
-}
-
-static Value *emit_nthptr_addr(Value *v, Value *idx)
-{
-    return builder.CreateGEP(builder.CreateBitCast(v, jl_ppvalue_llvmt), idx);
-}
-
-static Value *emit_nthptr(Value *v, size_t n)
-{
-    // p = (jl_value_t**)v; p[n]
-    Value *vptr = emit_nthptr_addr(v, n);
-    return builder.CreateLoad(vptr, false);
-}
-
-static Value *emit_nthptr(Value *v, Value *idx)
-{
-    // p = (jl_value_t**)v; p[n]
-    Value *vptr = emit_nthptr_addr(v, idx);
-    return builder.CreateLoad(vptr, false);
-}
-
-static Value *globalvar_binding_pointer(jl_sym_t *s, jl_binding_t **pbnd,
-                                        jl_codectx_t *ctx)
-{
-    jl_value_t **bp;
-    if (pbnd) {
-        *pbnd = jl_get_binding(ctx->module, s);
-        bp = &(*pbnd)->value;
-    }
-    else {
-        bp = jl_get_bindingp(ctx->module, s);
-    }
-    return literal_pointer_val(bp, jl_ppvalue_llvmt);
-    /*
-    return builder.CreateCall2(jlgetbindingp_func,
-                               literal_pointer_val(ctx->module, T_pint8),
-                               literal_pointer_val(s, T_pint8));
-    */
-}
-
-// yields a jl_value_t** giving the binding location of a variable
-static Value *var_binding_pointer(jl_sym_t *s, jl_binding_t **pbnd,
-                                  jl_codectx_t *ctx)
-{
-    if (jl_is_symbolnode(s))
-        s = jl_symbolnode_sym(s);
-    assert(jl_is_symbol(s));
-    std::map<std::string,int>::iterator it = ctx->closureEnv->find(s->name);
-    if (it != ctx->closureEnv->end()) {
-        int idx = (*it).second;
-        if (isBoxed(s->name, ctx)) {
-            return emit_nthptr_addr(emit_nthptr((Value*)ctx->envArg, idx+2), 1);
-        }
-        return emit_nthptr_addr((Value*)ctx->envArg, idx+2);
-    }
-    Value *l = (*ctx->vars)[s->name];
-    if (l != NULL) {
-        if (isBoxed(s->name, ctx)) {
-            return emit_nthptr_addr(builder.CreateLoad(l,false), 1);
-        }
-        return l;
-    }
-    return globalvar_binding_pointer(s, pbnd, ctx);
-}
-
-static int is_var_closed(jl_sym_t *s, jl_codectx_t *ctx)
-{
-    std::map<std::string,int>::iterator it = ctx->closureEnv->find(s->name);
-    return (it != ctx->closureEnv->end());
-}
-
-static int is_global(jl_sym_t *s, jl_codectx_t *ctx)
-{
-    std::map<std::string,int>::iterator it = ctx->closureEnv->find(s->name);
-    if (it != ctx->closureEnv->end())
-        return false;
-    return ((*ctx->vars)[s->name] == NULL);
-}
-
-static Value *emit_checked_var(Value *bp, const char *name, jl_codectx_t *ctx)
-{
-    Value *v = tpropagate(bp, builder.CreateLoad(bp, false));
-    Value *ok = builder.CreateICmpNE(v, V_null);
-    BasicBlock *err = BasicBlock::Create(getGlobalContext(), "err", ctx->f);
-    BasicBlock *ifok = BasicBlock::Create(getGlobalContext(), "ok");
-    builder.CreateCondBr(ok, ifok, err);
-    builder.SetInsertPoint(err);
-    std::string msg;
-    msg += std::string(name);
-    msg += " not defined";
-    emit_error(msg, ctx);
-    builder.CreateBr(ifok);
-    ctx->f->getBasicBlockList().push_back(ifok);
-    builder.SetInsertPoint(ifok);
-    return v;
-}
-
-static Value *julia_bool(Value *cond)
-{
-    return builder.CreateSelect(cond,
-                                literal_pointer_val(jl_true),
-                                literal_pointer_val(jl_false));
-}
-
 static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool value);
+static int is_global(jl_sym_t *s, jl_codectx_t *ctx);
 
-static Value *emit_lambda_closure(jl_value_t *expr, jl_codectx_t *ctx)
+// --- utilities ---
+
+#include "cgutils.cpp"
+#include "debuginfo.cpp"
+
+// --- constant determination ---
+
+static bool is_constant(jl_value_t *ex, jl_codectx_t *ctx)
 {
-    assert(jl_is_lambda_info(expr));
-    size_t i;
-    jl_array_t *capt = jl_lam_capt((jl_expr_t*)((jl_lambda_info_t*)expr)->ast);
-    if (capt->length == 0) {
-        // no captured vars; lift
-        jl_value_t *fun = jl_new_closure_internal((jl_lambda_info_t*)expr,
-                                                  (jl_value_t*)jl_null);
-        ctx->linfo->roots = jl_tuple2(fun, ctx->linfo->roots);
-        return literal_pointer_val(fun);
-    }
-
-    std::vector<Value *> captured(0);
-    captured.push_back(ConstantInt::get(T_size, capt->length));
-    for(i=0; i < capt->length; i++) {
-        Value *val;
-        jl_array_t *vi = (jl_array_t*)jl_cellref(capt, i);
-        assert(jl_is_array(vi));
-        jl_sym_t *s = (jl_sym_t*)jl_cellref(vi,0);
-        assert(jl_is_symbol(s));
-        std::map<std::string,int>::iterator it = ctx->closureEnv->find(s->name);
-        if (it != ctx->closureEnv->end()) {
-            int idx = (*it).second;
-            val = emit_nthptr((Value*)ctx->envArg, idx+2);
+    if (jl_is_symbolnode(ex))
+        ex = (jl_value_t*)jl_symbolnode_sym(ex);
+    if (jl_is_symbol(ex)) {
+        jl_sym_t *sym = (jl_sym_t*)ex;
+        if (is_global(sym, ctx)) {
+            size_t i;
+            for(i=0; i < ctx->sp->length; i+=2) {
+                if (sym == (jl_sym_t*)jl_tupleref(ctx->sp, i)) {
+                    // static parameter
+                    return true;
+                }
+            }
+            if (jl_boundp(ctx->module, sym)) {
+                jl_binding_t *b = jl_get_binding(ctx->module, sym);
+                if (b->constp)
+                    return true;
+            }
         }
-        else {
-            Value *l = (*ctx->vars)[s->name];
-            assert(l != NULL);
-            val = builder.CreateLoad(l, false);
-        }
-        captured.push_back(val);
+        return false;
     }
-    Value *env_tuple;
-    env_tuple = builder.CreateCall(jlntuple_func,
-                                   captured.begin(), captured.end());
-    //ctx->linfo->roots = jl_tuple2(expr, ctx->linfo->roots);
-    return builder.CreateCall2(jlclosure_func,
-                               literal_pointer_val(expr), env_tuple);
+    if (jl_is_topnode(ex)) {
+        jl_binding_t *b = jl_get_binding(ctx->module,
+                                         (jl_sym_t*)jl_fieldref(ex,0));
+        if (b->constp && b->value)
+            return true;
+    }
+    if (jl_is_bits_type(jl_typeof(ex)))
+        return true;
+    return false;
 }
+
+// --- gc root counting ---
 
 static bool expr_is_symbol(jl_value_t *e)
 {
@@ -586,61 +317,54 @@ static void make_gcroot(Value *v, jl_codectx_t *ctx)
     ctx->argDepth++;
 }
 
-extern "C" jl_function_t *jl_get_specialization(jl_function_t *f, jl_tuple_t *types);
-
-static jl_value_t *expr_type(jl_value_t *e)
-{
-    if (jl_is_expr(e))
-        return ((jl_expr_t*)e)->etype;
-    if (jl_is_symbolnode(e))
-        return jl_symbolnode_type(e);
-    if (jl_is_topnode(e))
-        return jl_fieldref(e,1);
-    if (jl_is_quotenode(e))
-        return (jl_value_t*)jl_typeof(jl_fieldref(e,0));
-    if (jl_is_symbol(e))
-        return (jl_value_t*)jl_any_type;
-    if (jl_is_lambda_info(e))
-        return (jl_value_t*)jl_any_func;
-    if (jl_is_some_tag_type(e))
-        return (jl_value_t*)jl_wrap_Type(e);
-    return (jl_value_t*)jl_typeof(e);
-}
+// --- code gen for intrinsic functions ---
 
 #include "intrinsics.cpp"
 
-static bool is_constant(jl_value_t *ex, jl_codectx_t *ctx)
+// --- lambda ---
+
+static Value *emit_lambda_closure(jl_value_t *expr, jl_codectx_t *ctx)
 {
-    if (jl_is_symbolnode(ex))
-        ex = (jl_value_t*)jl_symbolnode_sym(ex);
-    if (jl_is_symbol(ex)) {
-        jl_sym_t *sym = (jl_sym_t*)ex;
-        if (is_global(sym, ctx)) {
-            size_t i;
-            for(i=0; i < ctx->sp->length; i+=2) {
-                if (sym == (jl_sym_t*)jl_tupleref(ctx->sp, i)) {
-                    // static parameter
-                    return true;
-                }
-            }
-            if (jl_boundp(ctx->module, sym)) {
-                jl_binding_t *b = jl_get_binding(ctx->module, sym);
-                if (b->constp)
-                    return true;
-            }
+    assert(jl_is_lambda_info(expr));
+    size_t i;
+    jl_array_t *capt = jl_lam_capt((jl_expr_t*)((jl_lambda_info_t*)expr)->ast);
+    if (capt->length == 0) {
+        // no captured vars; lift
+        jl_value_t *fun = jl_new_closure_internal((jl_lambda_info_t*)expr,
+                                                  (jl_value_t*)jl_null);
+        ctx->linfo->roots = jl_tuple2(fun, ctx->linfo->roots);
+        return literal_pointer_val(fun);
+    }
+
+    std::vector<Value *> captured(0);
+    captured.push_back(ConstantInt::get(T_size, capt->length));
+    for(i=0; i < capt->length; i++) {
+        Value *val;
+        jl_array_t *vi = (jl_array_t*)jl_cellref(capt, i);
+        assert(jl_is_array(vi));
+        jl_sym_t *s = (jl_sym_t*)jl_cellref(vi,0);
+        assert(jl_is_symbol(s));
+        std::map<std::string,int>::iterator it = ctx->closureEnv->find(s->name);
+        if (it != ctx->closureEnv->end()) {
+            int idx = (*it).second;
+            val = emit_nthptr((Value*)ctx->envArg, idx+2);
         }
-        return false;
+        else {
+            Value *l = (*ctx->vars)[s->name];
+            assert(l != NULL);
+            val = builder.CreateLoad(l, false);
+        }
+        captured.push_back(val);
     }
-    if (jl_is_topnode(ex)) {
-        jl_binding_t *b = jl_get_binding(ctx->module,
-                                         (jl_sym_t*)jl_fieldref(ex,0));
-        if (b->constp && b->value)
-            return true;
-    }
-    if (jl_is_bits_type(jl_typeof(ex)))
-        return true;
-    return false;
+    Value *env_tuple;
+    env_tuple = builder.CreateCall(jlntuple_func,
+                                   captured.begin(), captured.end());
+    //ctx->linfo->roots = jl_tuple2(expr, ctx->linfo->roots);
+    return builder.CreateCall2(jlclosure_func,
+                               literal_pointer_val(expr), env_tuple);
 }
+
+// --- generating function calls ---
 
 static jl_tuple_t *call_arg_types(jl_value_t **args, size_t n)
 {
@@ -659,53 +383,7 @@ static jl_tuple_t *call_arg_types(jl_value_t **args, size_t n)
     return t;
 }
 
-static Value *emit_tuplelen(Value *t)
-{
-    Value *lenbits = emit_nthptr(t, 1);
-#ifdef __LP64__
-    return builder.CreatePtrToInt(lenbits, T_int64);
-#else
-    return builder.CreatePtrToInt(lenbits, T_int32);
-#endif
-}
-
-static Value *emit_arraysize(Value *t, Value *dim)
-{
-    int o;
-#ifdef __LP64__
-    o = 3;
-#else
-    o = 4;
-#endif
-    Value *dbits =
-        emit_nthptr(t, builder.CreateAdd(dim,
-                                         ConstantInt::get(dim->getType(), o)));
-#ifdef __LP64__
-    return builder.CreatePtrToInt(dbits, T_int64);
-#else
-    return builder.CreatePtrToInt(dbits, T_int32);
-#endif
-}
-
-static Value *emit_arraysize(Value *t, int dim)
-{
-    return emit_arraysize(t, ConstantInt::get(T_int32, dim));
-}
-
-static Value *emit_arraylen(Value *t)
-{
-    Value *lenbits = emit_nthptr(t, 2);
-#ifdef __LP64__
-    return builder.CreatePtrToInt(lenbits, T_int64);
-#else
-    return builder.CreatePtrToInt(lenbits, T_int32);
-#endif
-}
-
-static Value *emit_arrayptr(Value *t)
-{
-    return emit_nthptr(t, 1);
-}
+extern "C" jl_function_t *jl_get_specialization(jl_function_t *f, jl_tuple_t *types);
 
 static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
                               jl_codectx_t *ctx,
@@ -1161,27 +839,87 @@ static Value *emit_call(jl_value_t **args, size_t arglen, jl_codectx_t *ctx,
     return result;
 }
 
-static void emit_assignment(jl_value_t *l, jl_value_t *r, jl_codectx_t *ctx)
+// --- accessing and assigning variables ---
+
+static bool isBoxed(char *varname, jl_codectx_t *ctx)
 {
-    jl_sym_t *s = NULL;
-    if (jl_is_symbol(l))
-        s = (jl_sym_t*)l;
-    else if (jl_is_symbolnode(l))
-        s = jl_symbolnode_sym(l);
-    else
-        assert(false);
-    jl_binding_t *bnd=NULL;
-    Value *bp = var_binding_pointer(s, &bnd, ctx);
-    if (bnd) {
-        builder.CreateCall(jlcheckassign_func, literal_pointer_val((void*)bnd));
+    return (*ctx->isAssigned)[varname] && (*ctx->isCaptured)[varname];
+}
+
+static Value *globalvar_binding_pointer(jl_sym_t *s, jl_binding_t **pbnd,
+                                        jl_codectx_t *ctx)
+{
+    jl_value_t **bp;
+    if (pbnd) {
+        *pbnd = jl_get_binding(ctx->module, s);
+        bp = &(*pbnd)->value;
     }
-    const Type *vt = bp->getType();
-    if (vt->isPointerTy() && vt->getContainedType(0)!=jl_pvalue_llvmt)
-        builder.CreateStore(emit_unbox(vt->getContainedType(0), vt,
-                                       emit_unboxed(r, ctx)),
-                            bp);
-    else
-        builder.CreateStore(boxed(emit_expr(r, ctx, true)), bp);
+    else {
+        bp = jl_get_bindingp(ctx->module, s);
+    }
+    return literal_pointer_val(bp, jl_ppvalue_llvmt);
+    /*
+    return builder.CreateCall2(jlgetbindingp_func,
+                               literal_pointer_val(ctx->module, T_pint8),
+                               literal_pointer_val(s, T_pint8));
+    */
+}
+
+// yields a jl_value_t** giving the binding location of a variable
+static Value *var_binding_pointer(jl_sym_t *s, jl_binding_t **pbnd,
+                                  jl_codectx_t *ctx)
+{
+    if (jl_is_symbolnode(s))
+        s = jl_symbolnode_sym(s);
+    assert(jl_is_symbol(s));
+    std::map<std::string,int>::iterator it = ctx->closureEnv->find(s->name);
+    if (it != ctx->closureEnv->end()) {
+        int idx = (*it).second;
+        if (isBoxed(s->name, ctx)) {
+            return emit_nthptr_addr(emit_nthptr((Value*)ctx->envArg, idx+2), 1);
+        }
+        return emit_nthptr_addr((Value*)ctx->envArg, idx+2);
+    }
+    Value *l = (*ctx->vars)[s->name];
+    if (l != NULL) {
+        if (isBoxed(s->name, ctx)) {
+            return emit_nthptr_addr(builder.CreateLoad(l,false), 1);
+        }
+        return l;
+    }
+    return globalvar_binding_pointer(s, pbnd, ctx);
+}
+
+static int is_var_closed(jl_sym_t *s, jl_codectx_t *ctx)
+{
+    std::map<std::string,int>::iterator it = ctx->closureEnv->find(s->name);
+    return (it != ctx->closureEnv->end());
+}
+
+static int is_global(jl_sym_t *s, jl_codectx_t *ctx)
+{
+    std::map<std::string,int>::iterator it = ctx->closureEnv->find(s->name);
+    if (it != ctx->closureEnv->end())
+        return false;
+    return ((*ctx->vars)[s->name] == NULL);
+}
+
+static Value *emit_checked_var(Value *bp, const char *name, jl_codectx_t *ctx)
+{
+    Value *v = tpropagate(bp, builder.CreateLoad(bp, false));
+    Value *ok = builder.CreateICmpNE(v, V_null);
+    BasicBlock *err = BasicBlock::Create(getGlobalContext(), "err", ctx->f);
+    BasicBlock *ifok = BasicBlock::Create(getGlobalContext(), "ok");
+    builder.CreateCondBr(ok, ifok, err);
+    builder.SetInsertPoint(err);
+    std::string msg;
+    msg += std::string(name);
+    msg += " not defined";
+    emit_error(msg, ctx);
+    builder.CreateBr(ifok);
+    ctx->f->getBasicBlockList().push_back(ifok);
+    builder.SetInsertPoint(ifok);
+    return v;
 }
 
 static Value *emit_var(jl_sym_t *sym, jl_value_t *ty, jl_codectx_t *ctx)
@@ -1208,6 +946,31 @@ static Value *emit_var(jl_sym_t *sym, jl_value_t *ty, jl_codectx_t *ctx)
     }
     return emit_checked_var(bp, sym->name, ctx);
 }
+
+static void emit_assignment(jl_value_t *l, jl_value_t *r, jl_codectx_t *ctx)
+{
+    jl_sym_t *s = NULL;
+    if (jl_is_symbol(l))
+        s = (jl_sym_t*)l;
+    else if (jl_is_symbolnode(l))
+        s = jl_symbolnode_sym(l);
+    else
+        assert(false);
+    jl_binding_t *bnd=NULL;
+    Value *bp = var_binding_pointer(s, &bnd, ctx);
+    if (bnd) {
+        builder.CreateCall(jlcheckassign_func, literal_pointer_val((void*)bnd));
+    }
+    const Type *vt = bp->getType();
+    if (vt->isPointerTy() && vt->getContainedType(0)!=jl_pvalue_llvmt)
+        builder.CreateStore(emit_unbox(vt->getContainedType(0), vt,
+                                       emit_unboxed(r, ctx)),
+                            bp);
+    else
+        builder.CreateStore(boxed(emit_expr(r, ctx, true)), bp);
+}
+
+// --- convert expression to code ---
 
 static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool value)
 {
@@ -1468,6 +1231,8 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool value)
     return NULL;
 }
 
+// --- allocating local variables ---
+
 static bool store_unboxed_p(char *name, jl_codectx_t *ctx)
 {
     jl_value_t *jt = (*ctx->declTypes)[name];
@@ -1494,6 +1259,8 @@ static AllocaInst *alloc_local(char *name, jl_codectx_t *ctx)
     (*ctx->vars)[name] = lv;
     return lv;
 }
+
+// --- generate function bodies ---
 
 extern char *jl_stack_lo;
 
@@ -1872,6 +1639,8 @@ static void emit_function(jl_lambda_info_t *lam, Function *f)
     //JL_GC_POP();
     jl_gc_unpreserve();
 }
+
+// --- initialization ---
 
 static GlobalVariable *global_to_llvm(const std::string &cname, void *addr)
 {
