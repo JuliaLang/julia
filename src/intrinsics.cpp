@@ -26,7 +26,7 @@ namespace JL_I {
         trunc8, trunc16, trunc32, trunc64, trunc_int,
         fptoui8, fptosi8, fptoui16, fptosi16, fptoui32, fptosi32,
         fptoui64, fptosi64, 
-        fpiround32, fpiround64,
+        fpsiround32, fpsiround64, fpuiround32, fpuiround64,
         uitofp32, sitofp32, uitofp64, sitofp64,
         fptrunc32, fpext64,
         // functions
@@ -1015,7 +1015,8 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
         return builder.CreateFPToUI(FP(x), T_int64);
     HANDLE(fptosi64,1)
         return builder.CreateFPToSI(FP(x), T_int64);
-    HANDLE(fpiround32,1)
+    HANDLE(fpsiround32,1)
+    HANDLE(fpuiround32,1)
     {
         // itrunc(x + copysign(0.5,x))
         Value *bits = INT(x);
@@ -1026,13 +1027,18 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
                              builder.CreateAnd(bits,
                                                ConstantInt::get(T_int32,
                                                                 BIT31)));
-        return builder.
-            CreateFPToSI(builder.CreateFAdd(FP(x),
-                                            builder.CreateBitCast(signedhalf,
-                                                                  T_float32)),
-                         T_int32);
+        Value *sum = builder.CreateFAdd(FP(x),
+                                        builder.CreateBitCast(signedhalf,
+                                                              T_float32));
+        if (f == fpuiround32) {
+            return builder.CreateFPToUI(sum, T_int32);
+        }
+        else {
+            return builder.CreateFPToSI(sum, T_int32);
+        }
     }
-    HANDLE(fpiround64,1)
+    HANDLE(fpsiround64,1)
+    HANDLE(fpuiround64,1)
     {
         Value *bits = INT(x);
         Value *half = builder.CreateBitCast(ConstantFP::get(T_float64, 0.5),
@@ -1042,11 +1048,15 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
                              builder.CreateAnd(bits,
                                                ConstantInt::get(T_int64,
                                                                 BIT63)));
-        return builder.
-            CreateFPToSI(builder.CreateFAdd(FP(x),
-                                            builder.CreateBitCast(signedhalf,
-                                                                  T_float64)),
-                         T_int64);
+        Value *sum = builder.CreateFAdd(FP(x),
+                                        builder.CreateBitCast(signedhalf,
+                                                              T_float64));
+        if (f == fpuiround64) {
+            return builder.CreateFPToUI(sum, T_int64);
+        }
+        else {
+            return builder.CreateFPToSI(sum, T_int64);
+        }
     }
     HANDLE(uitofp32,1)
         return builder.CreateUIToFP(x, T_float32);
@@ -1212,7 +1222,8 @@ extern "C" void jl_init_intrinsic_functions()
     ADD_I(fptoui8); ADD_I(fptosi8);
     ADD_I(fptoui16); ADD_I(fptosi16); ADD_I(fptoui32); ADD_I(fptosi32);
     ADD_I(fptoui64); ADD_I(fptosi64);
-    ADD_I(fpiround32); ADD_I(fpiround64);
+    ADD_I(fpsiround32); ADD_I(fpsiround64);
+    ADD_I(fpuiround32); ADD_I(fpuiround64);
     ADD_I(uitofp32); ADD_I(sitofp32); ADD_I(uitofp64); ADD_I(sitofp64);
     ADD_I(fptrunc32); ADD_I(fpext64);
     ADD_I(sqrt_float); ADD_I(powi_float); ADD_I(pow_float);

@@ -41,8 +41,8 @@ float(x)   = convert(Float,   x)
 
 ## conversions from floating-point ##
 
-iround(x::Float32) = boxsi32(fpiround32(unbox32(x)))
-iround(x::Float64) = boxsi64(fpiround64(unbox64(x)))
+iround(x::Float32) = boxsi32(fpsiround32(unbox32(x)))
+iround(x::Float64) = boxsi64(fpsiround64(unbox64(x)))
 itrunc(x::Float32) = boxsi32(fptosi32(unbox32(x)))
 itrunc(x::Float64) = boxsi64(fptosi64(unbox64(x)))
 
