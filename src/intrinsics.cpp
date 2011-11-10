@@ -17,7 +17,8 @@ namespace JL_I {
         eq_float, ne_float,
         lt_float, le_float,
         gt_float, ge_float,
-        iseq_float64, islt_float64,
+        fpsortlt32, fpsortlt64,
+        fpsortle32, fpsortle64,
         // bitwise operators
         and_int, or_int, xor_int, not_int, shl_int, lshr_int, ashr_int,
         bswap_int,
@@ -933,14 +934,23 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
     HANDLE(ge_float,2)
         return builder.CreateFCmpOGE(FP(x), FP(emit_expr(args[2],ctx,true)));
 
-    HANDLE(iseq_float64,2)
+    HANDLE(fpsortlt32,2)
     {
         fy = emit_expr(args[2],ctx,true);
-        Value *xi = builder.CreateBitCast(x, T_int64);
-        Value *yi = builder.CreateBitCast(fy, T_int64);
-        return builder.CreateICmpEQ(xi, yi);
+        Value *xi = builder.CreateBitCast(x, T_int32);
+        Value *yi = builder.CreateBitCast(fy, T_int32);
+        return builder.CreateOr(
+            builder.CreateAnd(
+                builder.CreateICmpSGE(xi, ConstantInt::get(T_int32, 0)),
+                builder.CreateICmpSLT(xi, yi)
+            ),
+            builder.CreateAnd(
+                builder.CreateICmpSLT(xi, ConstantInt::get(T_int32, 0)),
+                builder.CreateICmpUGT(xi, yi)
+            )
+        );
     }
-    HANDLE(islt_float64,2)
+    HANDLE(fpsortlt64,2)
     {
         fy = emit_expr(args[2],ctx,true);
         Value *xi = builder.CreateBitCast(x, T_int64);
@@ -953,6 +963,38 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
             builder.CreateAnd(
                 builder.CreateICmpSLT(xi, ConstantInt::get(T_int64, 0)),
                 builder.CreateICmpUGT(xi, yi)
+            )
+        );
+    }
+    HANDLE(fpsortle32,2)
+    {
+        fy = emit_expr(args[2],ctx,true);
+        Value *xi = builder.CreateBitCast(x, T_int32);
+        Value *yi = builder.CreateBitCast(fy, T_int32);
+        return builder.CreateOr(
+            builder.CreateAnd(
+                builder.CreateICmpSGE(xi, ConstantInt::get(T_int32, 0)),
+                builder.CreateICmpSLE(xi, yi)
+            ),
+            builder.CreateAnd(
+                builder.CreateICmpSLT(xi, ConstantInt::get(T_int32, 0)),
+                builder.CreateICmpUGE(xi, yi)
+            )
+        );
+    }
+    HANDLE(fpsortle64,2)
+    {
+        fy = emit_expr(args[2],ctx,true);
+        Value *xi = builder.CreateBitCast(x, T_int64);
+        Value *yi = builder.CreateBitCast(fy, T_int64);
+        return builder.CreateOr(
+            builder.CreateAnd(
+                builder.CreateICmpSGE(xi, ConstantInt::get(T_int64, 0)),
+                builder.CreateICmpSLE(xi, yi)
+            ),
+            builder.CreateAnd(
+                builder.CreateICmpSLT(xi, ConstantInt::get(T_int64, 0)),
+                builder.CreateICmpUGE(xi, yi)
             )
         );
     }
@@ -1212,7 +1254,8 @@ extern "C" void jl_init_intrinsic_functions()
     ADD_I(eq_float); ADD_I(ne_float);
     ADD_I(lt_float); ADD_I(le_float);
     ADD_I(gt_float); ADD_I(ge_float);
-    ADD_I(iseq_float64); ADD_I(islt_float64);
+    ADD_I(fpsortlt32); ADD_I(fpsortlt64);
+    ADD_I(fpsortle32); ADD_I(fpsortle64);
     ADD_I(and_int); ADD_I(or_int); ADD_I(xor_int); ADD_I(not_int);
     ADD_I(shl_int); ADD_I(lshr_int); ADD_I(ashr_int); ADD_I(bswap_int);
     ADD_I(sext16); ADD_I(zext16); ADD_I(sext32); ADD_I(zext32);
