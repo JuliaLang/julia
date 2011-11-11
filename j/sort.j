@@ -1,15 +1,33 @@
+## standard sort comparisons ##
+
+sortlt(x,y) = x < y
+sortle(x,y) = x <= y
+
+sortlt(x::Float32, y::Float32) = fpsortlt32(unbox32(x),unbox32(y))
+sortlt(x::Float64, y::Float64) = fpsortlt64(unbox64(x),unbox64(y))
+sortle(x::Float32, y::Float32) = fpsortle32(unbox32(x),unbox32(y))
+sortle(x::Float64, y::Float64) = fpsortle64(unbox64(x),unbox64(y))
+
+_jl_fp_pos_lt(x::Float32, y::Float32) = slt_int(unbox32(x),unbox32(y))
+_jl_fp_pos_lt(x::Float64, y::Float64) = slt_int(unbox64(x),unbox64(y))
+_jl_fp_pos_le(x::Float32, y::Float32) = sle_int(unbox32(x),unbox32(y))
+_jl_fp_pos_le(x::Float64, y::Float64) = sle_int(unbox64(x),unbox64(y))
+
+_jl_fp_neg_lt(x::Float32, y::Float32) = sgt_int(unbox32(x),unbox32(y))
+_jl_fp_neg_lt(x::Float64, y::Float64) = sgt_int(unbox64(x),unbox64(y))
+_jl_fp_neg_le(x::Float32, y::Float32) = sge_int(unbox32(x),unbox32(y))
+_jl_fp_neg_le(x::Float64, y::Float64) = sge_int(unbox64(x),unbox64(y))
+
 ## internal sorting functionality ##
 
-macro _jl_sort_functions(lt, le); quote
-
-function issorted(v::AbstractVector)
-    for i = 1:length(v)-1
-        if ($lt)(v[i+1], v[i])
-            return false
-        end
-    end
-    return true
-end
+macro _jl_sort_functions(suffix, lt, le, args_spec...)
+insertionsort = symbol("_jl_insertionsort$suffix")
+quicksort = symbol("_jl_quicksort$suffix")
+mergesort = symbol("_jl_mergesort$suffix")
+lt = @eval (a,b)->$lt
+le = @eval (a,b)->$le
+args = map(x->x.args[1], args_spec)
+quote
 
 # sorting should be stable
 # Thus, if a permutation is required, or records are being sorted
@@ -17,12 +35,14 @@ end
 # If only numbers are being sorted, a faster quicksort can be used.
 
 # fast sort for small arrays
-function _jl_insertionsort(a::AbstractVector, lo::Int, hi::Int)
+$expr(:call, insertionsort, args_spec...,
+             :(a::AbstractVector), :(lo::Int), :(hi::Int)) =
+begin
     for i = lo+1:hi
         j = i
         x = a[i]
         while j > lo
-            if ($le)(a[j-1], x)
+            if $le(:(a[j-1]), :x)
                 break
             end
             a[j] = a[j-1]
@@ -34,13 +54,15 @@ function _jl_insertionsort(a::AbstractVector, lo::Int, hi::Int)
 end
 
 # permutes an auxilliary array mirroring the sort
-function _jl_insertionsort(a::AbstractVector, p::AbstractVector{Size}, lo::Int, hi::Int)
+$expr(:call, insertionsort, args_spec...,
+             :(a::AbstractVector), :(p::AbstractVector{Size}), :(lo::Int), :(hi::Int)) =
+begin
     for i = lo+1:hi
         j = i
         x = a[i]
         xp = p[i]
         while j > lo
-            if ($le)(a[j-1], x)
+            if $le(:(a[j-1]), :x)
                 break
             end
             a[j] = a[j-1]
@@ -54,17 +76,19 @@ function _jl_insertionsort(a::AbstractVector, p::AbstractVector{Size}, lo::Int, 
 end
 
 # very fast but unstable
-function _jl_quicksort(a::AbstractVector, lo::Int, hi::Int)
+$expr(:call, quicksort, args_spec...,
+             :(a::AbstractVector), :(lo::Int), :(hi::Int)) =
+begin
     while hi > lo
         if hi-lo <= 20
-            return _jl_insertionsort(a, lo, hi)
+            return $expr(:call, insertionsort, args..., :a, :lo, :hi)
         end
         i, j = lo, hi
         pivot = a[div(lo+hi,2)]
         # Partition
         while i <= j
-            while ($lt)(a[i], pivot); i += 1; end
-            while ($lt)(pivot, a[j]); j -= 1; end
+            while $lt(:(a[i]), :pivot); i += 1; end
+            while $lt(:pivot, :(a[j])); j -= 1; end
             if i <= j
                 a[i], a[j] = a[j], a[i]
                 i += 1
@@ -73,7 +97,7 @@ function _jl_quicksort(a::AbstractVector, lo::Int, hi::Int)
         end
         # Recursion for quicksort
         if lo < j
-            _jl_quicksort(a, lo, j)
+            $expr(:call, quicksort, args..., :a, :lo, :j)
         end
         lo = i
     end
@@ -81,15 +105,17 @@ function _jl_quicksort(a::AbstractVector, lo::Int, hi::Int)
 end
 
 # less fast but stable
-function _jl_mergesort(a::AbstractVector, lo::Int, hi::Int, b::AbstractVector)
+$expr(:call, mergesort, args_spec...,
+             :(a::AbstractVector), :(lo::Int), :(hi::Int), :(b::AbstractVector)) =
+begin
     if lo < hi
         if hi-lo <= 20
-            return _jl_insertionsort(a, lo, hi)
+            return $expr(:call, insertionsort, args..., :a, :lo, :hi)
         end
 
         m = div(lo+hi, 2)
-        _jl_mergesort(a, lo, m, b)
-        _jl_mergesort(a, m+1, hi, b)
+        $expr(:call, mergesort, args..., :a, :lo, :m, :b)
+        $expr(:call, mergesort, args..., :a, :(m+1), :hi, :b)
 
         # merge(lo,m,hi)
         i = 1
@@ -103,7 +129,7 @@ function _jl_mergesort(a::AbstractVector, lo::Int, hi::Int, b::AbstractVector)
         i = 1
         k = lo
         while k < j <= hi
-            if ($le)(b[i], a[j])
+            if $le(:(b[i]), :(a[j]))
                 a[k] = b[i]
                 i += 1
             else
@@ -125,16 +151,18 @@ function _jl_mergesort(a::AbstractVector, lo::Int, hi::Int, b::AbstractVector)
 end
 
 # permutes auxilliary arrays mirroring the sort
-function _jl_mergesort(a::AbstractVector, p::AbstractVector{Size}, lo::Int, hi::Int,
-                       b::AbstractVector, pb::AbstractVector{Size})
+$expr(:call, mergesort, args_spec...,
+             :(a::AbstractVector), :(p::AbstractVector{Size}), :(lo::Int), :(hi::Int),
+             :(b::AbstractVector), :(pb::AbstractVector{Size})) =
+begin
     if lo < hi
         if hi-lo <= 20
-            return _jl_insertionsort(a, p, lo, hi)
+            return ($insertionsort)(args..., a, p, lo, hi)
         end
 
         m = div(lo+hi, 2)
-        _jl_mergesort(a, p, lo, m, b, pb)
-        _jl_mergesort(a, p, m+1, hi, b, pb)
+        $expr(:call, mergesort, args..., :a, :p, :lo, :m, :b, :pb)
+        $expr(:call, mergesort, args..., :a, :p, :(m+1), :hi, :b, :pb)
 
         # merge(lo,m,hi)
         i = 1
@@ -149,7 +177,7 @@ function _jl_mergesort(a::AbstractVector, p::AbstractVector{Size}, lo::Int, hi::
         i = 1
         k = lo
         while k < j <= hi
-            if ($le)(b[i], a[j])
+            if $le(:(b[i]), :(a[j]))
                 a[k] = b[i]
                 p[k] = pb[i]
                 i += 1
@@ -172,16 +200,12 @@ end
 
 end; end # quote / macro
 
-@_jl_sort_functions (<) (<=)
+@_jl_sort_functions "" :(sortlt($a,$b)) :(sortle($a,$b))
 
 ## external sorting functions ##
 
 sort!{T <: Real}(a::AbstractVector{T}) = _jl_quicksort(a, 1, length(a))
 sort!{T}(a::AbstractVector{T}) = _jl_mergesort(a, 1, length(a), Array(T, length(a)))
-
-sortperm{T}(a::AbstractVector{T}) =
-    _jl_mergesort(copy(a), linspace(1,length(a)), 1, length(a),
-                  Array(T, length(a)), Array(Size, length(a)))
 
 macro in_place_matrix_op(out_of_place)
     in_place = symbol("$(out_of_place)!")
@@ -227,4 +251,17 @@ function sort(a::AbstractArray, dim::Index)
     end
 
     return X
+end
+
+sortperm{T}(a::AbstractVector{T}) =
+    _jl_mergesort(copy(a), linspace(1,length(a)), 1, length(a),
+                  Array(T, length(a)), Array(Size, length(a)))
+
+function issorted(v::AbstractVector)
+  for i = 1:length(v)-1
+      if sortlt(v[i+1], v[i])
+          return false
+      end
+  end
+  return true
 end
