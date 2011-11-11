@@ -40,7 +40,7 @@ sparse(I,J,V::Number,m,n) = sparse(I,J,fill(Array(typeof(V),length(I)),V),max(I)
 
 function sparse(A::Array)
     m, n = size(A)
-    I, J = find(A)
+    I, J = findn(A)
     sparse(I, J, reshape(A, m*n), m, n)
 end
 
