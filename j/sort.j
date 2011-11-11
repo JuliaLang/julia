@@ -16,6 +16,7 @@ end
 # a stable sort should be used.
 # If only numbers are being sorted, a faster quicksort can be used.
 
+# fast sort for small arrays
 function _jl_insertionsort(a::AbstractVector, lo::Int, hi::Int)
     for i = lo+1:hi
         j = i
@@ -32,6 +33,27 @@ function _jl_insertionsort(a::AbstractVector, lo::Int, hi::Int)
     return a
 end
 
+# permutes an auxilliary array mirroring the sort
+function _jl_insertionsort(a::AbstractVector, p::AbstractVector{Size}, lo::Int, hi::Int)
+    for i = lo+1:hi
+        j = i
+        x = a[i]
+        xp = p[i]
+        while j > lo
+            if ($le)(a[j-1], x)
+                break
+            end
+            a[j] = a[j-1]
+            p[j] = p[j-1]
+            j -= 1
+        end
+        a[j] = x
+        p[j] = xp
+    end
+    return a, p
+end
+
+# very fast but unstable
 function _jl_quicksort(a::AbstractVector, lo::Int, hi::Int)
     while hi > lo
         if hi-lo <= 20
@@ -58,25 +80,51 @@ function _jl_quicksort(a::AbstractVector, lo::Int, hi::Int)
     return a
 end
 
-function _jl_insertionsort(a::AbstractVector, p::AbstractVector{Size}, lo::Int, hi::Int)
-    for i = lo+1:hi
-        j = i
-        x = a[i]
-        xp = p[i]
-        while j > lo
-            if ($le)(a[j-1], x)
-                break
-            end
-            a[j] = a[j-1]
-            p[j] = p[j-1]
-            j -= 1
+# less fast but stable
+function _jl_mergesort(a::AbstractVector, lo::Int, hi::Int, b::AbstractVector)
+    if lo < hi
+        if hi-lo <= 20
+            return _jl_insertionsort(a, lo, hi)
         end
-        a[j] = x
-        p[j] = xp
-    end
-    return a, p
+
+        m = div(lo+hi, 2)
+        _jl_mergesort(a, lo, m, b)
+        _jl_mergesort(a, m+1, hi, b)
+
+        # merge(lo,m,hi)
+        i = 1
+        j = lo
+        while j <= m
+            b[i] = a[j]
+            i += 1
+            j += 1
+        end
+
+        i = 1
+        k = lo
+        while k < j <= hi
+            if ($le)(b[i], a[j])
+                a[k] = b[i]
+                i += 1
+            else
+                a[k] = a[j]
+                j += 1
+            end
+            k += 1
+        end
+
+        while k < j
+            a[k] = b[i]
+            k += 1
+            i += 1
+        end
+
+    end # if lo<hi...
+
+    return a
 end
 
+# permutes auxilliary arrays mirroring the sort
 function _jl_mergesort(a::AbstractVector, p::AbstractVector{Size}, lo::Int, hi::Int,
                        b::AbstractVector, pb::AbstractVector{Size})
     if lo < hi
@@ -120,49 +168,6 @@ function _jl_mergesort(a::AbstractVector, p::AbstractVector{Size}, lo::Int, hi::
         end
     end
     return a, p
-end
-
-function _jl_mergesort(a::AbstractVector, lo::Int, hi::Int, b::AbstractVector)
-    if lo < hi
-        if hi-lo <= 20
-            return _jl_insertionsort(a, lo, hi)
-        end
-
-        m = div(lo+hi, 2)
-        _jl_mergesort(a, lo, m, b)
-        _jl_mergesort(a, m+1, hi, b)
-
-        # merge(lo,m,hi)
-        i = 1
-        j = lo
-        while j <= m
-            b[i] = a[j]
-            i += 1
-            j += 1
-        end
-
-        i = 1
-        k = lo
-        while k < j <= hi
-            if ($le)(b[i], a[j])
-                a[k] = b[i]
-                i += 1
-            else
-                a[k] = a[j]
-                j += 1
-            end
-            k += 1
-        end
-
-        while k < j
-            a[k] = b[i]
-            k += 1
-            i += 1
-        end
-
-    end # if lo<hi...
-
-    return a
 end
 
 end; end # quote / macro
