@@ -1,6 +1,12 @@
+## internal sorting functionality ##
+
+macro _jl_sort_functions(lt, le); quote
+
 function issorted(v::AbstractVector)
-    for i=1:(length(v)-1)
-        if v[i] > v[i+1]; return false; end
+    for i = 1:length(v)-1
+        if ($lt)(v[i+1], v[i])
+            return false
+        end
     end
     return true
 end
@@ -11,11 +17,11 @@ end
 # If only numbers are being sorted, a faster quicksort can be used.
 
 function _jl_insertionsort(a::AbstractVector, lo::Int, hi::Int)
-    for i=(lo+1):hi
+    for i = lo+1:hi
         j = i
         x = a[i]
         while j > lo
-            if x >= a[j-1]
+            if ($le)(a[j-1], x)
                 break
             end
             a[j] = a[j-1]
@@ -35,8 +41,8 @@ function _jl_quicksort(a::AbstractVector, lo::Int, hi::Int)
         pivot = a[div(lo+hi,2)]
         # Partition
         while i <= j
-            while a[i] < pivot; i += 1; end
-            while a[j] > pivot; j -= 1; end
+            while ($lt)(a[i], pivot); i += 1; end
+            while ($lt)(pivot, a[j]); j -= 1; end
             if i <= j
                 a[i], a[j] = a[j], a[i]
                 i += 1
@@ -53,12 +59,12 @@ function _jl_quicksort(a::AbstractVector, lo::Int, hi::Int)
 end
 
 function _jl_insertionsort(a::AbstractVector, p::AbstractVector{Size}, lo::Int, hi::Int)
-    for i = (lo+1):hi
+    for i = lo+1:hi
         j = i
         x = a[i]
         xp = p[i]
         while j > lo
-            if x >= a[j-1]
+            if ($le)(a[j-1], x)
                 break
             end
             a[j] = a[j-1]
@@ -95,7 +101,7 @@ function _jl_mergesort(a::AbstractVector, p::AbstractVector{Size}, lo::Int, hi::
         i = 1
         k = lo
         while k < j <= hi
-            if b[i] <= a[j]
+            if ($le)(b[i], a[j])
                 a[k] = b[i]
                 p[k] = pb[i]
                 i += 1
@@ -138,7 +144,7 @@ function _jl_mergesort(a::AbstractVector, lo::Int, hi::Int, b::AbstractVector)
         i = 1
         k = lo
         while k < j <= hi
-            if b[i] <= a[j]
+            if ($le)(b[i], a[j])
                 a[k] = b[i]
                 i += 1
             else
@@ -158,6 +164,12 @@ function _jl_mergesort(a::AbstractVector, lo::Int, hi::Int, b::AbstractVector)
 
     return a
 end
+
+end; end # quote / macro
+
+@_jl_sort_functions (<) (<=)
+
+## external sorting functions ##
 
 sort!{T <: Real}(a::AbstractVector{T}) = _jl_quicksort(a, 1, length(a))
 sort!{T}(a::AbstractVector{T}) = _jl_mergesort(a, 1, length(a), Array(T, length(a)))
