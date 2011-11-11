@@ -20,7 +20,7 @@ sign(x::Real) = x < 0 ? -one(x) : x > 0 ? one(x) : x
 abs(x::Real) = x < 0 ? -x : x
 abs2(x::Real) = x*x
 
-conj(x::Number) = x
+conj(x::Real) = x
 transpose(x::Number) = x
 ctranspose(x::Number) = conj(transpose(x))
 inv(x::Number) = one(x)/x

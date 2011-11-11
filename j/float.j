@@ -116,12 +116,14 @@ isequal{T<:Float}(x::T, y::T) = (x == y) || (isnan(x) && isnan(y))
 
 ## floating point traits ##
 
+const Inf32 = boxf32(unbox32(0x7f800000))
+const NaN32 = boxf32(unbox32(0x7fc00000))
 const Inf = boxf64(unbox64(0x7ff0000000000000))
 const NaN = boxf64(unbox64(0x7ff8000000000000))
 
 @eval begin
-    inf(::Type{Float32}) = $float32(Inf)
-    nan(::Type{Float32}) = $float32(NaN)
+    inf(::Type{Float32}) = $Inf32
+    nan(::Type{Float32}) = $NaN32
     inf(::Type{Float64}) = $Inf
     nan(::Type{Float64}) = $NaN
     inf{T<:Float}(x::T) = inf(T)
@@ -130,8 +132,8 @@ const NaN = boxf64(unbox64(0x7ff8000000000000))
     isdenormal(x::Float32) = (abs(x) < $boxf32(unbox32(uint32(0x00800000))))
     isdenormal(x::Float64) = (abs(x) < $boxf64(unbox64(0x0010000000000000)))
 
-    typemin(::Type{Float32}) = $(-float32(Inf))
-    typemax(::Type{Float32}) = $(float32(Inf))
+    typemin(::Type{Float32}) = $(-Inf32)
+    typemax(::Type{Float32}) = $(Inf32)
     typemin(::Type{Float64}) = $(-Inf)
     typemax(::Type{Float64}) = $(Inf)
     typemin{T<:Real}(x::T) = typemin(T)
