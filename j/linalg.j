@@ -1,6 +1,15 @@
 ## linalg.j: Basic Linear Algebra functions ##
 
-dot(x::AbstractVector, y::AbstractVector) = sum(x.*conj(y))
+function dot(x::AbstractVector, y::AbstractVector)
+    s = zero(eltype(x))
+    for i=1:length(x)
+        s += conj(x[i])*y[i]
+    end
+    s
+end
+
+cross(a::AbstractVector, b::AbstractVector) =
+    [a[2]*b[3]-a[3]*b[2], a[3]*b[1]-a[1]*b[3], a[1]*b[2]-a[2]*b[1]]
 
 # blas.j defines matmul for floats; other integer and mixed precision
 # cases are handled here
@@ -146,7 +155,7 @@ function norm(x::Vector, p::Number)
     end
 end
 
-norm(x::Vector) = sqrt(sum(x.*x))
+norm(x::Vector) = sqrt(real(dot(x,x)))
 
 function norm(A::Matrix, p)
     if size(A,1) == 1 || size(A,2) == 1
@@ -261,4 +270,12 @@ function linreg(x, y)
     M = [ones(length(x)) x]
     Mt = M'
     ((Mt*M)\Mt)*y
+end
+
+# weighted least squares
+function linreg(x, y, w)
+    w = sqrt(w)
+    M = [w w.*x]
+    Mt = M'
+    ((Mt*M)\Mt)*(w.*y)
 end
