@@ -222,8 +222,8 @@ function sort!{T<:Float}(a::AbstractVector{T})
     i = 1
     j = length(a)
     while true
-        while i <= j && sortlt(a[i],zero(T)); i += 1; end
-        while i <= j && sortle(zero(T),a[j]); j -= 1; end
+        while i <= j && _jl_fp_pos_lt(a[i],zero(T)); i += 1; end
+        while i <= j && _jl_fp_pos_le(zero(T),a[j]); j -= 1; end
         if i <= j
             a[i], a[j] = a[j], a[i]
             i += 1
