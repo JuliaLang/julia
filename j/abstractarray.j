@@ -1243,6 +1243,15 @@ end
 ## Transpose, Permute ##
 
 reverse(v::AbstractVector) = (n=length(v); [ v[n-i+1] | i=1:n ])
+function reverse!(v::AbstractVector)
+    n = length(v)
+    r = n
+    for i=1:div(n,2)
+        v[i], v[r] = v[r], v[i]
+        r -= 1
+    end
+    v
+end
 
 transpose(x::AbstractVector)  = [ x[j]         | i=1, j=1:size(x,1) ]
 ctranspose(x::AbstractVector) = [ conj(x[j])   | i=1, j=1:size(x,1) ]
