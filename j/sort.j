@@ -20,13 +20,12 @@ _jl_fp_neg_le(x::Float64, y::Float64) = sge_int(unbox64(x),unbox64(y))
 
 ## internal sorting functionality ##
 
-macro _jl_sort_functions(suffix, lt, le, args_spec...)
+macro _jl_sort_functions(suffix, lt, le, args...)
 insertionsort = symbol("_jl_insertionsort$suffix")
 quicksort = symbol("_jl_quicksort$suffix")
 mergesort = symbol("_jl_mergesort$suffix")
 lt = @eval (a,b)->$lt
 le = @eval (a,b)->$le
-args = map(x->x.args[1], args_spec)
 quote
 
 # sorting should be stable
@@ -35,9 +34,7 @@ quote
 # If only numbers are being sorted, a faster quicksort can be used.
 
 # fast sort for small arrays
-$expr(:call, insertionsort, args_spec...,
-             :(a::AbstractVector), :(lo::Int), :(hi::Int)) =
-begin
+function ($insertionsort)($(args...), a::AbstractVector, lo::Int, hi::Int)
     for i = lo+1:hi
         j = i
         x = a[i]
@@ -54,9 +51,7 @@ begin
 end
 
 # permutes an auxilliary array mirroring the sort
-$expr(:call, insertionsort, args_spec...,
-             :(a::AbstractVector), :(p::AbstractVector{Size}), :(lo::Int), :(hi::Int)) =
-begin
+function ($insertionsort)($(args...), a::AbstractVector, p::AbstractVector{Size}, lo::Int, hi::Int)
     for i = lo+1:hi
         j = i
         x = a[i]
@@ -76,9 +71,7 @@ begin
 end
 
 # very fast but unstable
-$expr(:call, quicksort, args_spec...,
-             :(a::AbstractVector), :(lo::Int), :(hi::Int)) =
-begin
+function ($quicksort)($(args...), a::AbstractVector, lo::Int, hi::Int)
     while hi > lo
         if hi-lo <= 20
             return $expr(:call, insertionsort, args..., :a, :lo, :hi)
@@ -105,17 +98,15 @@ begin
 end
 
 # less fast but stable
-$expr(:call, mergesort, args_spec...,
-             :(a::AbstractVector), :(lo::Int), :(hi::Int), :(b::AbstractVector)) =
-begin
+function ($mergesort)($(args...), a::AbstractVector, lo::Int, hi::Int, b::AbstractVector)
     if lo < hi
         if hi-lo <= 20
-            return $expr(:call, insertionsort, args..., :a, :lo, :hi)
+            return ($insertionsort)($(args...), a, lo, hi)
         end
 
         m = div(lo+hi, 2)
-        $expr(:call, mergesort, args..., :a, :lo, :m, :b)
-        $expr(:call, mergesort, args..., :a, :(m+1), :hi, :b)
+        ($mergesort)($(args...), a, lo, m, b)
+        ($mergesort)($(args...), a, m+1, hi, b)
 
         # merge(lo,m,hi)
         i = 1
@@ -151,18 +142,17 @@ begin
 end
 
 # permutes auxilliary arrays mirroring the sort
-$expr(:call, mergesort, args_spec...,
-             :(a::AbstractVector), :(p::AbstractVector{Size}), :(lo::Int), :(hi::Int),
-             :(b::AbstractVector), :(pb::AbstractVector{Size})) =
-begin
+function ($mergesort)($(args...),
+                      a::AbstractVector, p::AbstractVector{Size}, lo::Int, hi::Int,
+                      b::AbstractVector, pb::AbstractVector{Size})
     if lo < hi
         if hi-lo <= 20
-            return ($insertionsort)(args..., a, p, lo, hi)
+            return ($insertionsort)($(args...), a, p, lo, hi)
         end
 
         m = div(lo+hi, 2)
-        $expr(:call, mergesort, args..., :a, :p, :lo, :m, :b, :pb)
-        $expr(:call, mergesort, args..., :a, :p, :(m+1), :hi, :b, :pb)
+        ($mergesort)($(args...), a, p, lo, m, b, pb)
+        ($mergesort)($(args...), a, p, m+1, hi, b, pb)
 
         # merge(lo,m,hi)
         i = 1
