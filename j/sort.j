@@ -213,6 +213,32 @@ sortr!{T}(a::AbstractVector{T}) = _jl_mergesort_r(a, 1, length(a), Array(T,lengt
 sort!{T}(lt::Function, a::AbstractVector{T}) =
     _jl_mergesort_lt(lt, a, 1, length(a), Array(T,length(a)))
 
+## special sorting for floating-point arrays ##
+
+@_jl_sort_functions "_fp_pos" :(_jl_fp_pos_lt($a,$b)) :(_jl_fp_pos_le($a,$b))
+@_jl_sort_functions "_fp_neg" :(_jl_fp_neg_lt($a,$b)) :(_jl_fp_neg_le($a,$b))
+
+function sort!{T<:Float}(a::AbstractVector{T})
+    i = 1
+    j = length(a)
+    while true
+        while i <= j && sortlt(a[i],zero(T)); i += 1; end
+        while i <= j && sortle(zero(T),a[j]); j -= 1; end
+        if i <= j
+            a[i], a[j] = a[j], a[i]
+            i += 1
+            j -= 1
+        else
+            break
+        end
+    end
+    _jl_quicksort_fp_neg(a, 1, j)
+    _jl_quicksort_fp_pos(a, i, length(a))
+    return a
+end
+
+## other sorting functions defined in terms of sort! ##
+
 macro in_place_matrix_op(out_of_place)
     in_place = symbol("$(out_of_place)!")
     quote
