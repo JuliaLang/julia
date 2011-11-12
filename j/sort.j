@@ -201,11 +201,17 @@ end
 end; end # quote / macro
 
 @_jl_sort_functions "" :(sortlt($a,$b)) :(sortle($a,$b))
+@_jl_sort_functions "_r" :(sortlt($b,$a)) :(sortle($b,$a))
+@_jl_sort_functions "_lt" :(lt($a,$b)) :(!lt($b,$a)) lt::Function
 
 ## external sorting functions ##
 
-sort!{T <: Real}(a::AbstractVector{T}) = _jl_quicksort(a, 1, length(a))
-sort!{T}(a::AbstractVector{T}) = _jl_mergesort(a, 1, length(a), Array(T, length(a)))
+sort!{T<:Real}(a::AbstractVector{T}) = _jl_quicksort(a, 1, length(a))
+sortr!{T<:Real}(a::AbstractVector{T}) = _jl_quicksort_r(a, 1, length(a))
+sort!{T}(a::AbstractVector{T}) = _jl_mergesort(a, 1, length(a), Array(T,length(a)))
+sortr!{T}(a::AbstractVector{T}) = _jl_mergesort_r(a, 1, length(a), Array(T,length(a)))
+sort!{T}(lt::Function, a::AbstractVector{T}) =
+    _jl_mergesort_lt(lt, a, 1, length(a), Array(T,length(a)))
 
 macro in_place_matrix_op(out_of_place)
     in_place = symbol("$(out_of_place)!")
