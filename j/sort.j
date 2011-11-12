@@ -239,38 +239,39 @@ end
 
 ## other sorting functions defined in terms of sort! ##
 
-macro in_place_matrix_op(out_of_place)
+macro in_place_matrix_op(out_of_place, args...)
     in_place = symbol("$(out_of_place)!")
     quote
-        function ($in_place)(a::AbstractMatrix, dim::Index)
+        function ($in_place)(($args...), a::AbstractMatrix, dim::Index)
             m = size(a,1)
             if dim == 1
                 for i = 1:m:numel(a)
-                    ($in_place)(sub(a, i:(i+m-1)))
+                    ($in_place)($(args...), sub(a, i:(i+m-1)))
                 end
             elseif dim == 2
                 for i = 1:m
-                    ($in_place)(sub(a, i:m:numel(a)))
+                    ($in_place)($(args...), sub(a, i:m:numel(a)))
                 end
             end
             return a
         end
         # TODO: in-place generalized AbstractArray implementation
-        ($in_place)(a::AbstractMatrix) = ($in_place)(a,1)
+        ($in_place)(($args...), a::AbstractArray) = ($in_place)($(args...), a,1)
 
-        ($out_of_place)(a::AbstractVector) = ($in_place)(copy(a))
-        ($out_of_place)(a::AbstractArray, dim::Index) = ($in_place)(copy(a), dim)
-        ($out_of_place)(a::AbstractMatrix) = ($out_of_place)(a,1)
+        ($out_of_place)(($args...), a::AbstractVector) = ($in_place)($(args...), copy(a))
+        ($out_of_place)(($args...), a::AbstractArray, d::Index) = ($in_place)($(args...), copy(a), d)
+        ($out_of_place)(($args...), a::AbstractArray) = ($out_of_place)($(args...), a,1)
     end
 end
 
 @in_place_matrix_op sort
+@in_place_matrix_op sort lt::Function
+@in_place_matrix_op sortr
 
 # TODO: implement generalized in-place, ditch this
 function sort(a::AbstractArray, dim::Index)
     X = similar(a)
     n = size(a,dim)
-
     if dim == 1
         for i = 1:n:numel(a)
             this_slice = i:(i+n-1)
@@ -281,7 +282,6 @@ function sort(a::AbstractArray, dim::Index)
         p[dim], p[1] = p[1], p[dim]
         X = ipermute(sort(permute(a, p)), p)
     end
-
     return X
 end
 
