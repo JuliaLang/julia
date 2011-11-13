@@ -160,7 +160,7 @@ function slicedim(A::Array, d::Int, i::Int)
     return B
 end
 
-function flip{T}(d::Int, A::Array{T})
+function flipdim{T}(A::Array{T}, d::Int)
     nd = ndims(A)
     sd = d > nd ? 1 : size(A, d)
     if sd == 1

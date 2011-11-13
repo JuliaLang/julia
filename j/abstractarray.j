@@ -456,7 +456,7 @@ function slicedim(A::AbstractArray, d::Int, i)
     A[ntuple(ndims(A), n->(n==d ? i : (1:size(A,n))))...]
 end
 
-function flip(d::Int, A::AbstractArray)
+function flipdim(A::AbstractArray, d::Int)
     nd = ndims(A)
     sd = d > nd ? 1 : size(A, d)
     if sd == 1
@@ -484,8 +484,8 @@ function flip(d::Int, A::AbstractArray)
     return B
 end
 
-flipud(A::AbstractArray) = flip(1, A)
-fliplr(A::AbstractArray) = flip(2, A)
+flipud(A::AbstractArray) = flipdim(A, 1)
+fliplr(A::AbstractArray) = flipdim(A, 2)
 
 circshift(a, shiftamt::Int) = circshift(a, [shiftamt])
 function circshift(a, shiftamts)
