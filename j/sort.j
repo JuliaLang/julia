@@ -190,9 +190,9 @@ end
 
 end; end # quote / macro
 
-@_jl_sort_functions "" :(sortlt($a,$b)) :(sortle($a,$b))
-@_jl_sort_functions "_r" :(sortlt($b,$a)) :(sortle($b,$a))
-@_jl_sort_functions "_lt" :(lt($a,$b)) :(!lt($b,$a)) lt::Function
+@_jl_sort_functions ""    :(sortlt($a,$b)) :(sortle($a,$b))
+@_jl_sort_functions "_r"  :(sortlt($b,$a)) :(sortle($b,$a))
+@_jl_sort_functions "_lt" :(lt($a,$b))     :(!lt($b,$a))    lt::Function
 
 ## external sorting functions ##
 
@@ -226,6 +226,32 @@ function sort!{T<:Float}(a::AbstractVector{T})
     _jl_quicksort_fp_pos(a, i, length(a))
     return a
 end
+
+function each_col!(f::Function, a::AbstractMatrix)
+    m = size(a,1)
+    for i = 1:m:numel(a)
+        f(sub(a, i:(i+m-1)))
+    end
+    return a
+end
+
+function each_row!(f::Function, a::AbstractMatrix)
+    m = size(a,1)
+    for i = 1:m
+        f(sub(a, i:m:numel(a)))
+    end
+    return a
+end
+
+function each_vec!(f::Function, a::AbstractMatrix, dim::Int)
+    if dim == 1; return each_col(f,a); end
+    if dim == 2; return each_row(f,a); end
+    error("invalid matrix dimensions: $dim")
+end
+
+each_col(f::Function, a::AbstractMatrix) = each_col!(f,copy(a))
+each_row(f::Function, a::AbstractMatrix) = each_row!(f,copy(a))
+each_vec(f::Function, a::AbstractMatrix, d::Int) = each_vec!(f,copy(a),d)
 
 ## other sorting functions defined in terms of sort! ##
 
