@@ -13,14 +13,21 @@ let i = 2
              Int64, Uint64, Float32, Float64, Char, Ptr,
              AbstractKind, UnionKind, BitsKind, CompositeKind, FuncKind,
              Tuple, Array, Expr, LongSymbol, LongTuple, LongExpr,
-             LineNumberNode, SymbolNode, LabelNode,
 
              (), Bool, Any, :Any, :Array, :TypeVar, :FuncKind, :Box,
              :lambda, :vinf, :locals, :body, :return, :call, symbol("::"),
-             :null, :goto, :gotoifnot, :string, :T, :S,
+             :(=), :null, :gotoifnot, :A, :B, :C, :M, :N, :T, :S, :X, :Y,
              :a, :b, :c, :d, :e, :f, :g, :h, :i, :j, :k, :l, :m, :n, :o,
              :p, :q, :r, :s, :t, :u, :v, :w, :x, :y, :z,
-             false, true, nothing, 0, 1, 2, 3, 4}
+             :add_int, :sub_int, :mul_int, :add_float, :sub_float,
+             :mul_float, :unbox, :unbox32, :unbox64, :box, :boxf32, :boxf64,
+             :boxsi32, :boxsi64, :eq_int, :slt_int, :sle_int, :ne_int,
+             :arrayset, :arrayref,
+             false, true, nothing, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11,
+             12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27,
+             28, 29, 30, 31, 32,
+             LineNumberNode, SymbolNode, LabelNode, GotoNode,
+             QuoteNode, TopNode, TypeVar, Box}
         _jl_ser_tag[t] = int32(i)
         _jl_deser_tag[int32(i)] = t
         i += 1
@@ -167,8 +174,12 @@ function serialize(s, x)
         write(s, x)
     elseif isa(t,CompositeKind)
         writetag(s, CompositeKind)
-        serialize(s, t.name.name)
-        serialize(s, t.parameters)
+        if has(_jl_ser_tag,t)
+            write_as_tag(s, t)
+        else
+            serialize(s, t.name.name)
+            serialize(s, t.parameters)
+        end
         for n = t.names
             serialize(s, getfield(x, n))
         end
@@ -299,9 +310,12 @@ function deserialize(s, ::Type{AbstractKind})
 end
 
 function deserialize(s, ::Type{CompositeKind})
-    name = deserialize(s)::Symbol
-    params = force(deserialize(s))
-    t = apply_type(eval(name), params...)
+    t = deserialize(s)
+    if !isa(t,CompositeKind)
+        name::Symbol = t
+        params = force(deserialize(s))
+        t = apply_type(eval(name), params...)
+    end
     # allow delegation to more specialized method
     return deserialize(s, t)
 end
