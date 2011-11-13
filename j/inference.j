@@ -679,9 +679,9 @@ function ref(x::StateUpdate, s::Symbol)
     return get(x.state,s,NF)
 end
 
-interpret(e, vtypes, sv::StaticVarInfo) = vtypes
+_jl_abstract_interpret(e, vtypes, sv::StaticVarInfo) = vtypes
 
-function interpret(e::Expr, vtypes, sv::StaticVarInfo)
+function _jl_abstract_interpret(e::Expr, vtypes, sv::StaticVarInfo)
     # handle assignment
     if is(e.head,:(=))
         t = abstract_eval(e.args[2], vtypes, sv)
@@ -984,7 +984,7 @@ function typeinf(linfo::LambdaStaticData,atypes::Tuple,sparams::Tuple, def, cop)
                 cur_hand = handler_at[pc]
             end
             stmt = body[pc]
-            changes = interpret(stmt, s[pc], sv)
+            changes = _jl_abstract_interpret(stmt, s[pc], sv)
             if frame.recurred
                 if isa(frame.prev,CallStack) && frame.prev.recurred
                     rec = true

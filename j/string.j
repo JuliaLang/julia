@@ -443,7 +443,7 @@ check_utf8 (s::ByteString) = is_valid_utf8(s)  ? s : error("invalid UTF-8 sequen
 
 ## string interpolation parsing ##
 
-function interp_parse(s::String, unescape::Function, printer::Function)
+function _jl_interp_parse(s::String, unescape::Function, printer::Function)
     sx = {}
     i = j = start(s)
     while !done(s,j)
@@ -474,26 +474,26 @@ function interp_parse(s::String, unescape::Function, printer::Function)
         expr(:call, :print_to_string, printer, sx...)
 end
 
-interp_parse(s::String, u::Function) = interp_parse(s, u, print)
-interp_parse(s::String) = interp_parse(s, x->check_utf8(unescape_string(x)))
+_jl_interp_parse(s::String, u::Function) = _jl_interp_parse(s, u, print)
+_jl_interp_parse(s::String) = _jl_interp_parse(s, x->check_utf8(unescape_string(x)))
 
-function interp_parse_bytes(s::String)
+function _jl_interp_parse_bytes(s::String)
     writer(x...) = for w=x; write(w); end
-    interp_parse(s, unescape_string, writer)
+    _jl_interp_parse(s, unescape_string, writer)
 end
 
 ## core string macros ##
 
-macro   str(s); interp_parse(s); end
-macro S_str(s); interp_parse(s); end
-macro I_str(s); interp_parse(s, x->unescape_chars(x,"\"")); end
+macro   str(s); _jl_interp_parse(s); end
+macro S_str(s); _jl_interp_parse(s); end
+macro I_str(s); _jl_interp_parse(s, x->unescape_chars(x,"\"")); end
 macro E_str(s); check_utf8(unescape_string(s)); end
-macro B_str(s); interp_parse_bytes(s); end
-macro b_str(s); ex = interp_parse_bytes(s); :(($ex).data); end
+macro B_str(s); _jl_interp_parse_bytes(s); end
+macro b_str(s); ex = _jl_interp_parse_bytes(s); :(($ex).data); end
 
 ## shell-like command parsing ##
 
-function shell_parse(s::String, interp::Bool)
+function _jl_shell_parse(s::String, interp::Bool)
 
     in_single_quotes = false
     in_double_quotes = false
@@ -580,16 +580,7 @@ function shell_parse(s::String, interp::Bool)
     expr(:tuple,exprs)
 end
 
-shell_parse(s::String) = shell_parse(s,true)
-
-function shell_split(s::String)
-    parsed = shell_parse(s,false)
-    args = {}
-    for arg = parsed
-        push(args, strcat(arg...))
-    end
-    args
-end
+_jl_shell_parse(s::String) = _jl_shell_parse(s,true)
 
 function print_shell_word(word::String)
     if isempty(word)

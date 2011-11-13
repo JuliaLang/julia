@@ -715,7 +715,7 @@ end
 # to be used as a re-usable Task for executing thunks
 # if a work item finishes, you get a FinalValue. if you get something else,
 # the thunk was interrupted and is not done yet.
-function taskrunner()
+function _jl_taskrunner()
     parent = current_task().parent
     result = ()
     while true
@@ -753,7 +753,7 @@ function perform_work(job::WorkItem)
         else
             if is(runner,())
                 # make new task to use
-                runner = Task(taskrunner, 1024*1024)
+                runner = Task(_jl_taskrunner, 1024*1024)
                 runner.tls = nothing
                 yieldto(runner)
             end

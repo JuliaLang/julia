@@ -28,13 +28,13 @@ let i = 2
 end
 
 # tags >= this just represent themselves, their whole representation is 1 byte
-const VALUE_TAGS = _jl_ser_tag[()]
+const _jl_VALUE_TAGS = _jl_ser_tag[()]
 
 writetag(s, x) = write(s, uint8(_jl_ser_tag[x]))
 
 function write_as_tag(s, x)
     t = _jl_ser_tag[x]
-    if t < VALUE_TAGS
+    if t < _jl_VALUE_TAGS
         write(s, uint8(0))
     end
     write(s, uint8(t))
@@ -194,7 +194,7 @@ function deserialize(s)
         return _jl_deser_tag[int32(read(s, Uint8))]
     end
     tag = _jl_deser_tag[b]
-    if b >= VALUE_TAGS
+    if b >= _jl_VALUE_TAGS
         return tag
     elseif is(tag,Tuple)
         len = int32(read(s, Uint8))
