@@ -582,6 +582,15 @@ end
 
 _jl_shell_parse(s::String) = _jl_shell_parse(s,true)
 
+function shell_split(s::String)
+    parsed = _jl_shell_parse(s,false)
+    args = empty(String)
+    for arg = parsed
+       push(args, strcat(arg...))
+    end
+    args
+end
+
 function print_shell_word(word::String)
     if isempty(word)
         print("''")
