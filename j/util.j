@@ -116,8 +116,6 @@ edit(f::Function, t) = edit(function_loc(f,t)...)
 function parse_help(file)
     f = open(file)
     helpdb = HashTable()
-    category = HashTable()
-    helpdb["Other"] = category
     for l = each_line(f)
         if isempty(l)
             continue
@@ -139,7 +137,12 @@ function parse_help(file)
             m = match(r"((\w|\d)+)\(", sig)
             if m != nothing && length(m.captures)>0
                 funcname = m.captures[1]
-                category[funcname] = (sig, desc)
+                entry = (sig, desc)
+                if has(category,funcname)
+                    push(category[funcname], entry)
+                else
+                    category[funcname] = {entry}
+                end
             end
         end
     end
@@ -189,10 +192,13 @@ function help_for(fname::String)
     _jl_init_help()
     n = 0
     for (cat, tabl) = _jl_helpdb
-        for (func, desc) = tabl
+        for (func, entries) = tabl
             if func == fname
-                println(desc[1], "\n ", desc[2])
+                for desc = entries
+                    println(desc[1], "\n ", desc[2])
+                end
                 n+=1
+                break
             end
         end
     end
