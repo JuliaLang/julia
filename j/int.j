@@ -323,6 +323,33 @@ bswap(x::Uint32) = boxui32(bswap_int(unbox32(x)))
 bswap(x::Int64)  = boxsi64(bswap_int(unbox64(x)))
 bswap(x::Uint64) = boxui64(bswap_int(unbox64(x)))
 
+count_ones(x::Int8)   = boxsi8 (ctpop_int(unbox8 (x)))
+count_ones(x::Uint8)  = boxui8 (ctpop_int(unbox8 (x)))
+count_ones(x::Int16)  = boxsi16(ctpop_int(unbox16(x)))
+count_ones(x::Uint16) = boxui16(ctpop_int(unbox16(x)))
+count_ones(x::Int32)  = boxsi32(ctpop_int(unbox32(x)))
+count_ones(x::Uint32) = boxui32(ctpop_int(unbox32(x)))
+count_ones(x::Int64)  = boxsi64(ctpop_int(unbox64(x)))
+count_ones(x::Uint64) = boxui64(ctpop_int(unbox64(x)))
+
+leading_zeros(x::Int8)   = boxsi8 (ctlz_int(unbox8 (x)))
+leading_zeros(x::Uint8)  = boxui8 (ctlz_int(unbox8 (x)))
+leading_zeros(x::Int16)  = boxsi16(ctlz_int(unbox16(x)))
+leading_zeros(x::Uint16) = boxui16(ctlz_int(unbox16(x)))
+leading_zeros(x::Int32)  = boxsi32(ctlz_int(unbox32(x)))
+leading_zeros(x::Uint32) = boxui32(ctlz_int(unbox32(x)))
+leading_zeros(x::Int64)  = boxsi64(ctlz_int(unbox64(x)))
+leading_zeros(x::Uint64) = boxui64(ctlz_int(unbox64(x)))
+
+trailing_zeros(x::Int8)   = boxsi8 (cttz_int(unbox8 (x)))
+trailing_zeros(x::Uint8)  = boxui8 (cttz_int(unbox8 (x)))
+trailing_zeros(x::Int16)  = boxsi16(cttz_int(unbox16(x)))
+trailing_zeros(x::Uint16) = boxui16(cttz_int(unbox16(x)))
+trailing_zeros(x::Int32)  = boxsi32(cttz_int(unbox32(x)))
+trailing_zeros(x::Uint32) = boxui32(cttz_int(unbox32(x)))
+trailing_zeros(x::Int64)  = boxsi64(cttz_int(unbox64(x)))
+trailing_zeros(x::Uint64) = boxui64(cttz_int(unbox64(x)))
+
 ## integer comparisons ##
 
 ==(x::Int8 , y::Int8 ) = eq_int(unbox8 (x),unbox8 (y))
