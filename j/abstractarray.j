@@ -1370,7 +1370,7 @@ function repmat(a::AbstractMatrix, m::Size, n::Size)
             b[c:c+o-1, R] = a
         end
     end
-    b
+    return b
 end
 
 accumarray(I::AbstractVector, J::AbstractVector, V) = accumarray (I, J, V, max(I), max(J))
@@ -1450,6 +1450,21 @@ function findn{T}(A::AbstractArray{T})
                       (:A, :I, :count, :z), A,I,1, zero(T))
     return I
 end
+end
+
+function nonzeros{T}(A::AbstractArray{T})
+    nnzA = nnz(A)
+    V = zeros(Size, nnzA)
+    z = zero(T)
+    count = 1
+    for i=1:length(A)
+        Ai = A[i]
+        if Ai != z
+            V[count] = Ai
+            count += 1
+        end
+    end
+    return V
 end
 
 sub2ind(dims) = 1
