@@ -41,7 +41,8 @@ sparse(I,J,V::Number,m,n) = sparse(I,J,fill(Array(typeof(V),length(I)),V),max(I)
 function sparse(A::Array)
     m, n = size(A)
     I, J = findn(A)
-    sparse(I, J, reshape(A, m*n), m, n)
+    V = nonzeros(A)
+    sparse(I, J, V, m, n)
 end
 
 function sparse{T}(I::Vector{Size},
@@ -113,15 +114,15 @@ end
 
 function sprand_rng(m, n, density, rng)
     numnz = long(m*n*density)
-    I = [ randint(1, m) | i=1:numnz ]
-    J = [ randint(1, n) | i=1:numnz ]
-    V = rng(numnz)
+    I = [ randi_interval(1, m) | i=1:numnz ]
+    J = [ randi_interval(1, n) | i=1:numnz ]
+    V = rng((numnz,))
     S = sparse(I, J, V, m, n)
 end
 
 sprand(m,n,density) = sprand_rng (m,n,density,rand)
 sprandn(m,n,density) = sprand_rng (m,n,density,randn)
-sprandi(m,n,density) = sprand_rng (m,n,density,randint)
+#sprandi(m,n,density) = sprand_rng (m,n,density,randi)
 
 speye(n::Size) = ( L = linspace(1,n); sparse(L, L, ones(Float64, n), n, n) )
 speye(m::Size, n::Size) = ( x = min(m,n); L = linspace(1,x); sparse(L, L, ones(Float64, x), m, n) )
