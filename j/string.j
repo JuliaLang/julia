@@ -198,6 +198,9 @@ type RepString <: String
     repeat::Int
 end
 
+length(s::RepString) = length(s.string)*s.repeat
+strlen(s::RepString) = strlen(s.string)*s.repeat
+
 function next(s::RepString, i::Index)
     if i < 1 || i > length(s)
         error("string index out of bounds")
@@ -207,15 +210,28 @@ function next(s::RepString, i::Index)
     c, k-j+i
 end
 
-length(s::RepString) = length(s.string)*s.repeat
-strlen(s::RepString) = strlen(s.string)*s.repeat
-
 function repeat(s::String, r::Int)
     r <  0 ? error("can't repeat a string ",r," times") :
     r == 0 ? "" :
     r == 1 ? s  :
     RepString(s,r)
 end
+
+## reversed strings without data movement ##
+
+type RevString <: String
+    string::String
+end
+
+length(s::RevString) = length(s.string)
+strlen(s::RevString) = strlen(s.string)
+
+function next(s::RevString, i::Index)
+    j = length(s)-i+1
+    (s.string[j], length(s)-prevind(s.string,j)+1)
+end
+
+reverse(s::String) = RevString(s)
 
 ## ropes for efficient concatenation, etc. ##
 
