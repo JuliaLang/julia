@@ -21,7 +21,7 @@ namespace JL_I {
         fpsortle32, fpsortle64,
         // bitwise operators
         and_int, or_int, xor_int, not_int, shl_int, lshr_int, ashr_int,
-        bswap_int,
+        bswap_int, ctpop_int, ctlz_int, cttz_int,
         // conversion
         sext16, zext16, sext32, zext32, sext64, zext64, zext_int,
         trunc8, trunc16, trunc32, trunc64, trunc_int,
@@ -470,10 +470,31 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
     HANDLE(bswap_int,1)
         x = INT(x);
         fxt = x->getType();
-        return builder.CreateCall(Intrinsic::getDeclaration(jl_Module,
-                                                            Intrinsic::bswap,
-                                                            &fxt, 1),
-                                  x);
+        return builder.CreateCall(
+            Intrinsic::getDeclaration(jl_Module, Intrinsic::bswap, &fxt, 1),
+            x
+        );
+    HANDLE(ctpop_int,1)
+        x = INT(x);
+        fxt = x->getType();
+        return builder.CreateCall(
+            Intrinsic::getDeclaration(jl_Module, Intrinsic::ctpop, &fxt, 1),
+            x
+        );
+    HANDLE(ctlz_int,1)
+        x = INT(x);
+        fxt = x->getType();
+        return builder.CreateCall(
+            Intrinsic::getDeclaration(jl_Module, Intrinsic::ctlz, &fxt, 1),
+            x
+        );
+    HANDLE(cttz_int,1)
+        x = INT(x);
+        fxt = x->getType();
+        return builder.CreateCall(
+            Intrinsic::getDeclaration(jl_Module, Intrinsic::cttz, &fxt, 1),
+            x
+        );
 
     HANDLE(sext16,1)
         return builder.CreateSExt(INT(x), T_int16);
@@ -712,6 +733,7 @@ extern "C" void jl_init_intrinsic_functions()
     ADD_I(fpsortle32); ADD_I(fpsortle64);
     ADD_I(and_int); ADD_I(or_int); ADD_I(xor_int); ADD_I(not_int);
     ADD_I(shl_int); ADD_I(lshr_int); ADD_I(ashr_int); ADD_I(bswap_int);
+    ADD_I(ctpop_int); ADD_I(ctlz_int); ADD_I(cttz_int);
     ADD_I(sext16); ADD_I(zext16); ADD_I(sext32); ADD_I(zext32);
     ADD_I(sext64); ADD_I(zext64); ADD_I(zext_int);
     ADD_I(trunc8); ADD_I(trunc16); ADD_I(trunc32); ADD_I(trunc64);
