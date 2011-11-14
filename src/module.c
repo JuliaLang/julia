@@ -90,10 +90,17 @@ int jl_is_const(jl_sym_t *var)
     return bp->constp;
 }
 
-void jl_check_assignment(jl_binding_t *b)
+void jl_checked_assignment(jl_binding_t *b, jl_value_t *rhs)
 {
-    if (b->constp && b->value != NULL)
-        jl_errorf("cannot redefine constant %s", b->name->name);
+    if (b->constp && b->value != NULL) {
+        //jl_errorf("cannot redefine constant %s", b->name->name);
+        ios_printf(ios_stderr,
+                   "Warning: redefinition of constant %s ignored\n",
+                   b->name->name);
+    }
+    else {
+        b->value = rhs;
+    }
 }
 
 void jl_declare_constant(jl_binding_t *b)

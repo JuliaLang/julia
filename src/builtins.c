@@ -932,8 +932,10 @@ JL_CALLABLE(jl_f_new_struct_fields)
     if (!jl_is_struct_type(t))
         jl_error("you can't do that.");
     jl_struct_type_t *st = (jl_struct_type_t*)t;
-    if (st->types != NULL)
-        jl_error("you can't do that.");
+    if (st->types != NULL) {
+        // type already exists. redefinition ignored.
+        return (jl_value_t*)jl_nothing;
+    }
     check_type_tuple(ftypes, st->name->name, "type definition");
     jl_tuple_t *fnames = st->names;
 
@@ -992,9 +994,10 @@ JL_CALLABLE(jl_f_new_tag_type_super)
 {
     JL_NARGS(new_tag_type_super, 2, 2);
     JL_TYPECHK(new_tag_type_super, tag_type, args[1]);
+    jl_tag_type_t *tt = (jl_tag_type_t*)args[0];
     jl_value_t *super = args[1];
-    check_supertype(super, ((jl_sym_t*)args[0])->name);
-    ((jl_tag_type_t*)args[0])->super = (jl_tag_type_t*)super;
+    check_supertype(super, tt->name->name->name);
+    tt->super = (jl_tag_type_t*)super;
     return (jl_value_t*)jl_nothing;
 }
 
