@@ -298,6 +298,16 @@ static void max_arg_depth(jl_value_t *expr, int32_t *max, int32_t *sp,
                             }
                             return;
                         }
+                        else {
+                            // first 3 arguments are static
+                            for(i=4; i < (size_t)alen; i++) {
+                                max_arg_depth(jl_exprarg(e,i), max, sp, ctx);
+                                (*sp)++;
+                                if (*sp > *max) *max = *sp;
+                            }
+                            (*sp) = lastsp;
+                            return;
+                        }
                     }
                 }
             }
@@ -451,6 +461,17 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
         }
     }
     else if (f->fptr == &jl_f_is && nargs==2) {
+        jl_value_t *rt1 = expr_type(args[1]);
+        jl_value_t *rt2  = expr_type(args[2]);
+        if (jl_is_type_type(rt1) && jl_is_type_type(rt2) &&
+            !jl_is_typevar(jl_tparam0(rt1)) &&
+            !jl_is_typevar(jl_tparam0(rt2)) &&
+            is_constant(args[1], ctx) && is_constant(args[2], ctx)) {
+            JL_GC_POP();
+            if (jl_tparam0(rt1) == jl_tparam0(rt2))
+                return ConstantInt::get(T_int1, 1);
+            return ConstantInt::get(T_int1, 0);
+        }
         JL_GC_POP();
         Value *arg1 = boxed(emit_expr(args[1], ctx, true));
         Value *arg2 = boxed(emit_expr(args[2], ctx, true));

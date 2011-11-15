@@ -234,12 +234,18 @@ assign{T}(A::Array{T,0}, x) = arrayset(A,1,convert(T, x))
 
 ## Dequeue functionality ##
 
-function push{T}(a::Array{T,1}, item::ANY)
+function push{T}(a::Array{T,1}, item)
     if is(T,None)
         error("[] cannot grow. Instead, initialize the array with \"empty(element_type)\".")
     end
     # convert first so we don't grow the array if the assignment won't work
     item = convert(T, item)
+    ccall(:jl_array_grow_end, Void, (Any, Ulong), a, ulong(1))
+    a[end] = item
+    return a
+end
+
+function push(a::Array{Any,1}, item::ANY)
     ccall(:jl_array_grow_end, Void, (Any, Ulong), a, ulong(1))
     a[end] = item
     return a
