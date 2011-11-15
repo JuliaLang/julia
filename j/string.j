@@ -232,6 +232,7 @@ function next(s::RevString, i::Index)
 end
 
 reverse(s::String) = RevString(s)
+reverse(s::RevString) = s.string
 
 ## ropes for efficient concatenation, etc. ##
 
