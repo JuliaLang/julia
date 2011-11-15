@@ -113,10 +113,9 @@ end
 edit(f::Function) = edit(function_loc(f)...)
 edit(f::Function, t) = edit(function_loc(f,t)...)
 
-function parse_help(file)
-    f = open(file)
+function parse_help(stream)
     helpdb = HashTable()
-    for l = each_line(f)
+    for l = each_line(stream)
         if isempty(l)
             continue
         end
@@ -151,10 +150,15 @@ end
 
 _jl_helpdb = nothing
 
+const _jl_help_url = "https://raw.github.com/wiki/JuliaLang/julia/Standard-Library-Reference.md"
+
 function _jl_init_help()
     global _jl_helpdb
     if _jl_helpdb == nothing
-        _jl_helpdb = parse_help("$JULIA_HOME/../julia.wiki/Standard Library Reference.md")
+        cmd = `curl $_jl_help_url`
+        stream = fdio(read_from(cmd).fd, true)
+        spawn(cmd)
+        _jl_helpdb = parse_help(stream)
     end
 end
 
