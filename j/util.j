@@ -155,6 +155,7 @@ const _jl_help_url = "https://raw.github.com/wiki/JuliaLang/julia/Standard-Libra
 function _jl_init_help()
     global _jl_helpdb
     if _jl_helpdb == nothing
+        println("Downloading help data...")
         cmd = `curl $_jl_help_url`
         stream = fdio(read_from(cmd).fd, true)
         spawn(cmd)
@@ -169,8 +170,8 @@ function help()
 
     https://github.com/JuliaLang/julia/wiki/
 
-  To get help on a function, try help(function). To see available functions,
-  try help(category), for one of the following categories:
+ To get help on a function, try help(function). To see available functions,
+ try help(category), for one of the following categories:
 
 ")
     for (cat, _) = _jl_helpdb
