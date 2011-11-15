@@ -981,15 +981,19 @@ static void emit_assignment(jl_value_t *l, jl_value_t *r, jl_codectx_t *ctx)
     jl_binding_t *bnd=NULL;
     Value *bp = var_binding_pointer(s, &bnd, ctx);
     if (bnd) {
-        builder.CreateCall(jlcheckassign_func, literal_pointer_val((void*)bnd));
+        builder.CreateCall2(jlcheckassign_func,
+                            literal_pointer_val((void*)bnd),
+                            boxed(emit_expr(r, ctx, true)));
     }
-    const Type *vt = bp->getType();
-    if (vt->isPointerTy() && vt->getContainedType(0)!=jl_pvalue_llvmt)
-        builder.CreateStore(emit_unbox(vt->getContainedType(0), vt,
-                                       emit_unboxed(r, ctx)),
-                            bp);
-    else
-        builder.CreateStore(boxed(emit_expr(r, ctx, true)), bp);
+    else {
+        const Type *vt = bp->getType();
+        if (vt->isPointerTy() && vt->getContainedType(0)!=jl_pvalue_llvmt)
+            builder.CreateStore(emit_unbox(vt->getContainedType(0), vt,
+                                           emit_unboxed(r, ctx)),
+                                bp);
+        else
+            builder.CreateStore(boxed(emit_expr(r, ctx, true)), bp);
+    }
 }
 
 // --- convert expression to code ---
@@ -1849,15 +1853,18 @@ static void init_julia_llvm_env(Module *m)
     jl_ExecutionEngine->addGlobalMapping(jlgetbindingp_func,
                                          (void*)&jl_get_bindingp);
 
+    std::vector<const Type *> args_2ptrs(0);
+    args_2ptrs.push_back(T_pint8);
+    args_2ptrs.push_back(jl_pvalue_llvmt);
+    jlcheckassign_func =
+        Function::Create(FunctionType::get(T_void, args_2ptrs, false),
+                         Function::ExternalLinkage,
+                         "jl_checked_assignment", jl_Module);
+    jl_ExecutionEngine->addGlobalMapping(jlcheckassign_func,
+                                         (void*)&jl_checked_assignment);
+
     std::vector<const Type *> args_1ptr(0);
     args_1ptr.push_back(T_pint8);
-    jlcheckassign_func =
-        Function::Create(FunctionType::get(T_void, args_1ptr, false),
-                         Function::ExternalLinkage,
-                         "jl_check_assignment", jl_Module);
-    jl_ExecutionEngine->addGlobalMapping(jlcheckassign_func,
-                                         (void*)&jl_check_assignment);
-
     jldeclareconst_func =
         Function::Create(FunctionType::get(T_void, args_1ptr, false),
                          Function::ExternalLinkage,

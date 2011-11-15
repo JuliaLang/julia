@@ -1393,7 +1393,7 @@ end
 
 function find{T}(A::AbstractArray{T})
     nnzA = nnz(A)
-    I = zeros(Size, nnzA)
+    I = Array(Size, nnzA)
     z = zero(T)
     count = 1
     for i=1:length(A)
@@ -1409,8 +1409,8 @@ findn(A::AbstractVector) = find(A)
 
 function findn{T}(A::AbstractMatrix{T})
     nnzA = nnz(A)
-    I = zeros(Size, nnzA)
-    J = zeros(Size, nnzA)
+    I = Array(Size, nnzA)
+    J = Array(Size, nnzA)
     z = zero(T)
     count = 1
     for j=1:size(A,2), i=1:size(A,1)
@@ -1439,7 +1439,7 @@ global findn
 function findn{T}(A::AbstractArray{T})
     ndimsA = ndims(A)
     nnzA = nnz(A)
-    I = ntuple(ndimsA, x->zeros(Size, nnzA))
+    I = ntuple(ndimsA, x->Array(Size, nnzA))
     ranges = ntuple(ndims(A), d->(1:size(A,d)))
 
     if is(findn_cache,nothing)
@@ -1454,7 +1454,7 @@ end
 
 function nonzeros{T}(A::AbstractArray{T})
     nnzA = nnz(A)
-    V = zeros(Size, nnzA)
+    V = Array(T, nnzA)
     z = zero(T)
     count = 1
     for i=1:length(A)

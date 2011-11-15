@@ -711,7 +711,7 @@ DLLEXPORT int jl_boundp(jl_module_t *m, jl_sym_t *var);
 DLLEXPORT jl_value_t *jl_get_global(jl_module_t *m, jl_sym_t *var);
 DLLEXPORT void jl_set_global(jl_module_t *m, jl_sym_t *var, jl_value_t *val);
 DLLEXPORT void jl_set_const(jl_module_t *m, jl_sym_t *var, jl_value_t *val);
-void jl_check_assignment(jl_binding_t *b);
+void jl_checked_assignment(jl_binding_t *b, jl_value_t *rhs);
 void jl_declare_constant(jl_binding_t *b);
 jl_module_t *jl_add_module(jl_module_t *m, jl_module_t *child);
 jl_module_t *jl_get_module(jl_module_t *m, jl_sym_t *name);
