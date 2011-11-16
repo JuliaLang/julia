@@ -276,6 +276,7 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
     const Type *fxts[2];
     Value *fx, *fy;
     Value *den;
+    ConstantInt *ci=NULL;
     switch (f) {
     HANDLE(boxui8,1)
         if (t != T_int8) x = builder.CreateBitCast(x, T_int8);
@@ -390,16 +391,30 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
         return builder.CreateFCmpOGE(FP(x), FP(emit_expr(args[2],ctx,true)));
 
     HANDLE(eq_f64_i64,2)
-        fy = emit_expr(args[2],ctx,true);
+        fy = INT(emit_expr(args[2],ctx,true));
+        x = FP(x);
+        ci = dyn_cast<ConstantInt>(fy);
+        if (ci != NULL) {
+            int64_t yval = ci->getSExtValue();
+            if (yval <= DBL_MAXINT && yval >= -DBL_MAXINT)
+                return builder.CreateFCmpOEQ(x, builder.CreateSIToFP(fy, T_float64));
+        }
         return builder.CreateAnd(
-            builder.CreateFCmpOEQ(FP(x), builder.CreateSIToFP(INT(fy), T_float64)),
-            builder.CreateICmpEQ(builder.CreateFPToSI(FP(x), T_int64), INT(fy))
+            builder.CreateFCmpOEQ(x, builder.CreateSIToFP(fy, T_float64)),
+            builder.CreateICmpEQ(builder.CreateFPToSI(x, T_int64), fy)
         );
     HANDLE(eq_f64_u64,2)
-        fy = emit_expr(args[2],ctx,true);
+        fy = INT(emit_expr(args[2],ctx,true));
+        x = FP(x);
+        ci = dyn_cast<ConstantInt>(fy);
+        if (ci != NULL) {
+            uint64_t yval = ci->getZExtValue();
+            if (yval <= DBL_MAXINT)
+                return builder.CreateFCmpOEQ(x, builder.CreateUIToFP(fy, T_float64));
+        }
         return builder.CreateAnd(
-            builder.CreateFCmpOEQ(FP(x), builder.CreateUIToFP(INT(fy), T_float64)),
-            builder.CreateICmpEQ(builder.CreateFPToUI(FP(x), T_int64), INT(fy))
+            builder.CreateFCmpOEQ(x, builder.CreateUIToFP(fy, T_float64)),
+            builder.CreateICmpEQ(builder.CreateFPToUI(x, T_int64), fy)
         );
 
     HANDLE(fpsortlt32,2)
