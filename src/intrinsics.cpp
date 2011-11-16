@@ -17,6 +17,7 @@ namespace JL_I {
         eq_float, ne_float,
         lt_float, le_float,
         gt_float, ge_float,
+        eq_f64_i64, eq_f64_u64,
         fpsortlt32, fpsortlt64,
         fpsortle32, fpsortle64,
         // bitwise operators
@@ -388,6 +389,19 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
     HANDLE(ge_float,2)
         return builder.CreateFCmpOGE(FP(x), FP(emit_expr(args[2],ctx,true)));
 
+    HANDLE(eq_f64_i64,2)
+        fy = emit_expr(args[2],ctx,true);
+        return builder.CreateAnd(
+            builder.CreateFCmpOEQ(FP(x), builder.CreateSIToFP(INT(fy), T_float64)),
+            builder.CreateICmpEQ(builder.CreateFPToSI(FP(x), T_int64), INT(fy))
+        );
+    HANDLE(eq_f64_u64,2)
+        fy = emit_expr(args[2],ctx,true);
+        return builder.CreateAnd(
+            builder.CreateFCmpOEQ(FP(x), builder.CreateUIToFP(INT(fy), T_float64)),
+            builder.CreateICmpEQ(builder.CreateFPToUI(FP(x), T_int64), INT(fy))
+        );
+
     HANDLE(fpsortlt32,2)
     {
         fy = emit_expr(args[2],ctx,true);
@@ -729,6 +743,7 @@ extern "C" void jl_init_intrinsic_functions()
     ADD_I(eq_float); ADD_I(ne_float);
     ADD_I(lt_float); ADD_I(le_float);
     ADD_I(gt_float); ADD_I(ge_float);
+    ADD_I(eq_f64_i64); ADD_I(eq_f64_u64);
     ADD_I(fpsortlt32); ADD_I(fpsortlt64);
     ADD_I(fpsortle32); ADD_I(fpsortle64);
     ADD_I(and_int); ADD_I(or_int); ADD_I(xor_int); ADD_I(not_int);

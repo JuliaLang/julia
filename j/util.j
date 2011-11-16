@@ -156,7 +156,7 @@ function _jl_init_help()
     global _jl_helpdb
     if _jl_helpdb == nothing
         println("Downloading help data...")
-        cmd = `curl $_jl_help_url`
+        cmd = `curl -s $_jl_help_url`
         stream = fdio(read_from(cmd).fd, true)
         spawn(cmd)
         _jl_helpdb = parse_help(stream)
