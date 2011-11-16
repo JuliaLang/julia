@@ -722,6 +722,7 @@ split(s::String, delims) = split(s, delims, true)
 split(s::String, c::Char) = split(s, (c,))
 split(s::String, c::Char, incl) = split(s, (c,), incl)
 
+# TODO: make these work on generic iterable strings objects.
 function print_joined(delim, strings)
     for i = 1:length(strings)
         print(strings[i])
@@ -731,7 +732,17 @@ function print_joined(delim, strings)
     end
 end
 
+function print_joined(delim, last, strings)
+    for i = 1:length(strings)
+        print(strings[i])
+        if (i < length(strings))
+            print(i < length(strings)-1 ? delim : last)
+        end
+    end
+end
+
 join(delim, strings) = print_to_string(print_joined, delim, strings)
+join(delim, last, strings) = print_to_string(print_joined, delim, last, strings)
 
 ## string to integer functions ##
 
