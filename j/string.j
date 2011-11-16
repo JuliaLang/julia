@@ -722,22 +722,28 @@ split(s::String, delims) = split(s, delims, true)
 split(s::String, c::Char) = split(s, (c,))
 split(s::String, c::Char, incl) = split(s, (c,), incl)
 
-# TODO: make these work on generic iterable strings objects.
 function print_joined(strings, delim)
-    for i = 1:length(strings)
-        print(strings[i])
-        if (i < length(strings))
+    i = start(strings)
+    while !done(strings,i)
+        str, i = next(strings,i)
+        print(str)
+        if !done(strings,i)
             print(delim)
         end
     end
 end
 
 function print_joined(strings, delim, last)
-    for i = 1:length(strings)
-        print(strings[i])
-        if (i < length(strings))
-            print(i < length(strings)-1 ? delim : last)
-        end
+    i = start(strings)
+    if done(strings,i)
+        return
+    end
+    str, i = next(strings,i)
+    print(str)
+    while !done(strings,i)
+        str, i = next(strings,i)
+        print(done(strings,i) ? last : delim)
+        print(str)
     end
 end
 
