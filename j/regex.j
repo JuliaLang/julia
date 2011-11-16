@@ -118,3 +118,27 @@ next(itr::RegexMatchIterator, m) =
 
 each_match(r::Regex, s::String) = RegexMatchIterator(r,s,false)
 each_match_overlap(r::Regex, s::String) = RegexMatchIterator(r,s,true)
+
+function split(s::String, regex::Regex, include_empty::Bool)
+    s = cstring(s)
+    i = j = start(s)
+    strs = empty(typeof(s))
+    while !done(s,i)
+        m = match(regex,s,j)
+        if m == nothing
+            break
+        end
+        tok = s[i:m.offset-1]
+        if include_empty || !isempty(tok)
+            push(strs, tok)
+        end
+        i = m.offset+length(m.match)
+        j = m.offset+max(1,length(m.match))
+    end
+    if include_empty || i < length(s)
+        push(strs, s[i:end])
+    end
+    strs
+end
+
+split(s::String, x::String, incl::Bool) = split(s, Regex(strcat("\\Q",x)), incl)

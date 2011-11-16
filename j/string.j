@@ -694,9 +694,13 @@ rpad(s, n::Int, p) = rpad(string(s), n, string(p))
 lpad(s, n::Int) = lpad(string(s), n, " ")
 rpad(s, n::Int) = rpad(string(s), n, " ")
 
-function split(s::String, delims, include_empty)
+# TODO: for some reason this horks the boot image creation:
+# typealias Chars Union(Set{Char},AbstractArray{Char},(Char...))
+
+# TODO: want to have delims::Chars here:
+function split(s::String, delims, include_empty::Bool)
     i = 1
-    strs = {}
+    strs = empty(String)
     len = length(s)
     while true
         tokstart = tokend = i
@@ -708,7 +712,7 @@ function split(s::String, delims, include_empty)
             tokend = i
         end
         tok = s[tokstart:(tokend-1)]
-        if !isempty(tok) || include_empty
+        if include_empty || !isempty(tok)
             push(strs, tok)
         end
         if !((i <= len) || (i==len+1 && tokend!=i))
@@ -718,9 +722,8 @@ function split(s::String, delims, include_empty)
     strs
 end
 
-split(s::String, delims) = split(s, delims, true)
-split(s::String, c::Char) = split(s, (c,))
-split(s::String, c::Char, incl) = split(s, (c,), incl)
+split(s::String, x) = split(s, x, true)
+split(s::String, x::Char, incl::Bool) = split(s, (x,), incl)
 
 function print_joined(strings, delim)
     i = start(strings)
