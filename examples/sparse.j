@@ -38,10 +38,27 @@ full{T}(S::SparseMatrixCSC{T}) = convert(Array{T}, S)
 sparse(I,J,V) = sparse(I, J, V, max(I), max(J))
 sparse(I,J,V::Number,m,n) = sparse(I,J,fill(Array(typeof(V),length(I)),V),max(I),max(J))
 
-function sparse(A::Array)
+function findn_nzs{T}(A::AbstractMatrix{T})
+    nnzA = nnz(A)
+    I = zeros(Size, nnzA)
+    J = zeros(Size, nnzA)
+    NZs = zeros(T, nnzA)
+    z = zero(T)
+    count = 1
+    for j=1:size(A,2), i=1:size(A,1)
+        if A[i,j] != z
+            I[count] = i
+            J[count] = j
+            NZs[count] = A[i,j]
+            count += 1
+        end
+    end
+    return (I, J, NZs)
+end
+
+function sparse(A::Matrix)
     m, n = size(A)
-    I, J = findn(A)
-    V = nonzeros(A)
+    I, J, V = findn_nzs(A)
     sparse(I, J, V, m, n)
 end
 
@@ -50,7 +67,6 @@ function sparse{T}(I::Vector{Size},
                    V::Vector{T},
                    m::Size,
                    n::Size)
-
     (I,p) = sortperm(I)
     J = J[p]
     V = V[p]
@@ -59,6 +75,16 @@ function sparse{T}(I::Vector{Size},
     I = I[p]
     V = V[p]
 
+    make_sparse(I,J,V,m,n)
+end
+
+#assumes that I,J are sorted in dictionary order (with J taking precedence)
+#use sparse() with the same arguments if this is not the case
+function make_sparse{T}(I::Vector{Size},
+                        J::Vector{Size},
+                        V::Vector{T},
+                        m::Size,
+                        n::Size)
     lastdup = 1
     for k=2:length(I)
         if I[k] == I[lastdup] && J[k] == J[lastdup]
@@ -124,8 +150,8 @@ sprand(m,n,density) = sprand_rng (m,n,density,rand)
 sprandn(m,n,density) = sprand_rng (m,n,density,randn)
 #sprandi(m,n,density) = sprand_rng (m,n,density,randi)
 
-speye(n::Size) = ( L = linspace(1,n); sparse(L, L, ones(Float64, n), n, n) )
-speye(m::Size, n::Size) = ( x = min(m,n); L = linspace(1,x); sparse(L, L, ones(Float64, x), m, n) )
+speye(n::Size) = ( L = linspace(1,n); make_sparse(L, L, ones(Float64, n), n, n) )
+speye(m::Size, n::Size) = ( x = min(m,n); L = linspace(1,x); make_sparse(L, L, ones(Float64, x), m, n) )
 
 transpose(S::SparseMatrixCSC) = ( (I,J,V) = find(S); sparse(J, I, V, S.n, S.m) )
 ctranspose(S::SparseMatrixCSC) = ( (I,J,V) = find(S); sparse(J, I, conj(V), S.n, S.m) )
@@ -285,11 +311,24 @@ end
 
 # sparse * sparse
 function (*){T1,T2}(X::SparseMatrixCSC{T1},Y::SparseMatrixCSC{T2}) 
-    error("Not yet implemented")
+    mX, nX = size(X)
+    mY, nY = size(Y)
+    if nX != mY; error("error in *: mismatched dimensions"); end
+    A = zeros(promote_type(T1,T2), mX, nY)
+    for y_col = 1:nY
+        for y_elt = Y.colptr[y_col] : (Y.colptr[y_col+1]-1)
+            x_col = Y.rowval[y_elt]
+            for x_elt = X.colptr[x_col] : (X.colptr[x_col+1]-1)
+                A[X.rowval[x_elt],y_col] += X.nzval[x_elt] * Y.nzval[y_elt]
+            end
+        end
+    end
+    return A
 end
 
 function (*){T1,T2}(A::SparseMatrixCSC{T1}, X::Matrix{T2})
     mX, nX = size(X)
+    if A.n != mX; error("error in *: mismatched dimensions"); end
     Y = zeros(promote_type(T1,T2), A.m, nX)
     for multivec_col = 1:nX
         for col = 1 : A.n
@@ -303,7 +342,8 @@ end
 
 function (*){T1,T2}(X::Matrix{T1}, A::SparseMatrixCSC{T2})
     mX, nX = size(X)
-    Y = Array(promote_type(T1,T2), mX, A.n)
+    if nX != A.m; error("error in *: mismatched dimensions"); end
+    Y = zeros(promote_type(T1,T2), mX, A.n)
     for multivec_row = 1:mX
         for col = 1 : A.n
             for k = A.colptr[col] : (A.colptr[col+1]-1)
