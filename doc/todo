@@ -183,6 +183,18 @@ dot product
 min,max
 transpose
 1d comprehension
+
+functions needed to port computer vision project:
+
+bsxfun
+logical indexing
+conv2
+imread
+rgb2gray
+fspecial gaussian
+meshgrid
+histc
+
 -------------------------------------------------------------------------------
 
 invariance vs. covariance
@@ -869,5 +881,5 @@ end
 * make default constructors use field types as argument types
 - move more of the repl to julia
 
-- make control-C on client while evaluating input wake up the root task
+* make control-C on client while evaluating input wake up the root task
   with an InterruptException if it is waiting for something.

@@ -7,12 +7,14 @@ Set() = Set{Any}()
 Set(x...) = (s = Set{Any}(); add(s, x...))
 Set{T}(x::T...) = (s = Set{T}(); add(s, x...))
 
-show{T<:Set}(s::T) = (show(T); show_comma_array(s,'(',')'))
+show(s::Set) = (show(typeof(s)); show_comma_array(s,'(',')'))
 
 isempty(s::Set) = isempty(s.hash)
 length(s::Set)  = length(s.hash)
 
 has(s::Set, x) = has(s.hash, x)
+
+get(s::Set, x, deflt) = get(s.hash, x, false)
 
 add(s::Set, x)	     = (s.hash[x] = true; s)
 add(s::Set, xs...)   = (for x=xs; add(s, x); end; s)
