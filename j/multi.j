@@ -1081,7 +1081,7 @@ function start_sge_workers(n)
     `echo $home/julia --worker` | qsub_cmd
     out = cmd_stdout_stream(qsub_cmd)
     run(qsub_cmd)
-    id = split(readline(out),Set('.'))[1]
+    id = split(readline(out),'.')[1]
     println("job id is $id")
     print("waiting for job to start"); flush(stdout_stream)
     workers = cell(n)
