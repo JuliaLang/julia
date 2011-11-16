@@ -257,7 +257,7 @@ function connect(ports::Ports, pend::PipeEnd)
     return pend
 end
 
-function join(cmds::Cmds)
+function merge(cmds::Cmds)
     if length(cmds) > 1
         pipeline = Set{Cmd}()
         for cmd = cmds
@@ -272,12 +272,12 @@ function join(cmds::Cmds)
 end
 
 function read_from(ports::Ports)
-    join(cmds(ports))
+    merge(cmds(ports))
     other(connect(ports, in(make_pipe())))
 end
 
 function write_to(ports::Ports)
-    join(cmds(ports))
+    merge(cmds(ports))
     other(connect(ports, out(make_pipe())))
 end
 
@@ -294,7 +294,7 @@ function (|)(src::Port, dst::Port)
         connect(src, in(p))
         connect(dst, out(p))
     end
-    join(src.cmd & dst.cmd)
+    merge(src.cmd & dst.cmd)
 end
 
 (|)(src::Port, dsts::Ports) = for dst = dsts; src | dst; end

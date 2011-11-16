@@ -396,7 +396,7 @@ summary(x) = string(typeof(x))
 
 dims2string(d) = length(d) == 0 ? "0-dimensional" :
                  length(d) == 1 ? "$(d[1])-element" :
-                 join("x", map(string,d))
+                 join(map(string,d), 'x')
 
 summary{T}(a::AbstractArray{T}) =
     strcat(dims2string(size(a)), " ", string(T), " ", string(typeof(a).name))
