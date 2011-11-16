@@ -63,6 +63,7 @@ load("abstractarray.j")
 load("array.j")
 load("intset.j")
 load("table.j")
+load("set.j")
 
 # compiler
 load("inference.j")
@@ -92,9 +93,6 @@ load("linalg_lapack.j")
 load("linalg_arpack.j")
 load("fft.j")
 load("signal.j")
-
-# additional data types
-load("set.j")
 
 # I/O and concurrency
 load("iterator.j")
