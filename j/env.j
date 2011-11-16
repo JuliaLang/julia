@@ -29,7 +29,7 @@ end
 
 ## ENV: hash interface ##
 
-type EnvHash; end
+type EnvHash <: Associative; end
 
 const ENV = EnvHash()
 

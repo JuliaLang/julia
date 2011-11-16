@@ -11,7 +11,35 @@ function _tablesz(i::Int)
     return i<<1
 end
 
-type IdTable
+_secret_table_token_ = (:BOO,)
+
+function ref(t::Associative, key)
+    v = get(t, key, _secret_table_token_)
+    if is(v,_secret_table_token_)
+        throw(KeyError(key))
+    end
+    return v
+end
+
+has(t::Associative, key) = !is(get(t, key, _secret_table_token_),
+                               _secret_table_token_)
+
+function show(t::Associative)
+    if isempty(t)
+        print(typeof(t).name.name,"()")
+    else
+        print("{")
+        for (k, v) = t
+            show(k)
+            print("=>")
+            show(v)
+            print(",")
+        end
+        print("}")
+    end
+end
+
+type IdTable <: Associative
     ht::Array{Any,1}
     IdTable(sz::Int) = new(cell(2*_tablesz(sz)))
     IdTable() = IdTable(0)
@@ -33,8 +61,6 @@ del(t::IdTable, key::ANY) =
     (ccall(:jl_eqtable_del, Int32, (Any, Any), t.ht, key); t)
 
 del_all(t::IdTable) = (t.ht = cell(length(t.ht)); t)
-
-_secret_table_token_ = (:BOO,)
 
 start(t::IdTable) = 0
 done(t::IdTable, i) = is(next(t,i),())
@@ -86,7 +112,7 @@ hash(s::ByteString) = ccall(:memhash32, Uint32, (Ptr{Void}, Size), s.data, lengt
 
 # hash table
 
-type HashTable{K,V}
+type HashTable{K,V} <: Associative
     keys::Array{K,1}
     vals::Array{V,1}
     used::IntSet
@@ -254,18 +280,6 @@ next(t::HashTable, i) = ((n, nxt) = next(t.used, i);
 isempty(t::HashTable) = done(t, start(t))
 length(t::HashTable) = length(t.used)-length(t.deleted)
 
-function ref(t::Union(IdTable,HashTable), key)
-    v = get(t, key, _secret_table_token_)
-    if is(v,_secret_table_token_)
-        throw(KeyError(key))
-    end
-    return v
-end
-
-has(t::Union(IdTable,HashTable), key) =
-    !is(get(t, key, _secret_table_token_),
-        _secret_table_token_)
-
 function add_weak_key(t::HashTable, k, v)
     if is(t.deleter, identity)
         t.deleter = x->del(t, x)
@@ -281,22 +295,7 @@ function add_weak_value(t::HashTable, k, v)
     t
 end
 
-function show(t::Union(IdTable,HashTable))
-    if isempty(t)
-        print(typeof(t).name.name,"()")
-    else
-        print("{")
-        for (k, v) = t
-            show(k)
-            print("=>")
-            show(v)
-            print(",")
-        end
-        print("}")
-    end
-end
-
-type WeakKeyHashTable{K,V}
+type WeakKeyHashTable{K,V} <: Associative
     ht::HashTable{K,V}
 
     WeakKeyHashTable() = new(HashTable{K,V}())

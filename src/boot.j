@@ -166,6 +166,8 @@ end
 
 typealias ByteString Union(ASCIIString,UTF8String)
 
+abstract Associative
+
 type SymbolNode
     name::Symbol
     typ
