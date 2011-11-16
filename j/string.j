@@ -694,11 +694,9 @@ rpad(s, n::Int, p) = rpad(string(s), n, string(p))
 lpad(s, n::Int) = lpad(string(s), n, " ")
 rpad(s, n::Int) = rpad(string(s), n, " ")
 
-# TODO: for some reason this horks the boot image creation:
-# typealias Chars Union(Set{Char},AbstractArray{Char},(Char...))
+typealias Chars Union(Set{Char},AbstractArray{Char},(Char...))
 
-# TODO: want to have delims::Chars here:
-function split(s::String, delims, include_empty::Bool)
+function split(s::String, delims::Chars, include_empty::Bool)
     i = 1
     strs = empty(String)
     len = length(s)
