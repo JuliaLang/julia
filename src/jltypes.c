@@ -92,6 +92,8 @@ DLLEXPORT int jl_is_leaf_type(jl_value_t *v)
         }
         return 1;
     }
+    if (jl_is_type_type(v) && !jl_has_typevars_(jl_tparam0(v),1))
+        return 1;
     if (!jl_is_struct_type(v) && !jl_is_func_type(v) && !jl_is_bits_type(v))
         return 0;
     return !jl_has_typevars_(v,1);
@@ -573,6 +575,8 @@ static jl_value_t *intersect_typevar(jl_tvar_t *a, jl_value_t *b,
     return (jl_value_t*)a;
 }
 
+static int match_intersection_mode = 0;
+
 static jl_value_t *jl_type_intersect(jl_value_t *a, jl_value_t *b,
                                      jl_tuple_t **penv, jl_tuple_t **eqc,
                                      variance_t var)
@@ -728,15 +732,12 @@ static jl_value_t *jl_type_intersect(jl_value_t *a, jl_value_t *b,
     }
 
     size_t n = sub->parameters->length;
-    if (n == 0) {
-        JL_GC_POP();
-        return (jl_value_t*)sub;
-    }
 
     assert(sub->name->primary != NULL);
     jl_value_t *tc = sub->name->primary;
+    jl_tuple_t *tc_params = ((jl_tag_type_t*)tc)->parameters;
     // compute what constraints the supertype imposes on the subtype
-    jl_tuple_t *sup_params =
+    jl_tuple_t *subs_sup_params =
         ((jl_tag_type_t*)((jl_tag_type_t*)tc)->super)->parameters;
     // match the intersected supertype against the pattern this subtype
     // uses to instantiate its supertype. this tells us what subtype parameter
@@ -744,34 +745,47 @@ static jl_value_t *jl_type_intersect(jl_value_t *a, jl_value_t *b,
     // intersected supertype cannot come from this subtype (in which case
     // our final answer is None).
     size_t i;
-    // hack: we need type_match to find assignments for these
-    // typevars even though they normally aren't constrained. temporarily
-    // switch them.
-    jl_tuple_t *tc_params = ((jl_tag_type_t*)tc)->parameters;
-    for(i=0; i < tc_params->length; i++) {
-        jl_tvar_t *tv = (jl_tvar_t*)jl_tupleref(tc_params,i);
-        assert(jl_is_typevar(tv));
-        assert(!tv->bound);
-        tv->bound = 1;
-    }
+    // hack: we need type_match to find assignments for all typevars
+    int prev_mim = match_intersection_mode;
+    match_intersection_mode = 1;
     env = jl_type_match((jl_value_t*)super->parameters,
-                        (jl_value_t*)sup_params);
+                        (jl_value_t*)subs_sup_params);
+    int sub_needs_parameters = 0;
     if (env == jl_false) {
-        env = jl_type_match((jl_value_t*)sup_params,
+        env = jl_type_match((jl_value_t*)subs_sup_params,
                             (jl_value_t*)super->parameters);
     }
-    for(i=0; i < tc_params->length; i++) {
-        jl_tvar_t *tv = (jl_tvar_t*)jl_tupleref(tc_params,i);
-        tv->bound = 0;
+    else {
+        // this means it needs to be possible to instantiate the subtype
+        // such that the supertype gets the matching parameters we just
+        // determined.
+        sub_needs_parameters = 1;
     }
+    match_intersection_mode = prev_mim;
     if (env == jl_false) {
         JL_GC_POP();
         return (jl_value_t*)jl_bottom_type;
     }
+    if (sub_needs_parameters) {
+        jl_value_t *e = env;
+        while (e != (jl_value_t*)jl_null) {
+            jl_value_t *tp = jl_t0(e);
+            // make sure each needed parameter is actually set by the subtype
+            for(i=0; i < n; i++) {
+                if (tp == jl_tupleref(tc_params, i))
+                    break;
+            }
+            if (i >= n) {
+                JL_GC_POP();
+                return (jl_value_t*)jl_bottom_type;
+            }
+            e = jl_nextpair(e);
+        }
+    }
 
     p = jl_alloc_tuple(n);
     for(i=0; i < n; i++) {
-        jl_value_t *tp = jl_tupleref(((jl_tag_type_t*)tc)->parameters, i);
+        jl_value_t *tp = jl_tupleref(tc_params, i);
         jl_value_t *elt = jl_tupleref(sub->parameters, i);
         jl_value_t *e = env;
         while (e != (jl_value_t*)jl_null) {
@@ -1938,7 +1952,9 @@ static jl_value_t *type_match_(jl_value_t *child, jl_value_t *parent,
         // make sure type is within this typevar's bounds
         if (!jl_subtype_le(child, parent, 0, 0, 0))
             return jl_false;
-        if (!((jl_tvar_t*)parent)->bound) return (jl_value_t*)*env;
+        if (!match_intersection_mode) {
+            if (!((jl_tvar_t*)parent)->bound) return (jl_value_t*)*env;
+        }
         jl_tuple_t *p = *env;
         while (p != jl_null) {
             if (jl_t0(p) == (jl_value_t*)parent) {

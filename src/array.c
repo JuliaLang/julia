@@ -393,8 +393,6 @@ static void *array_new_buffer(jl_array_t *a, size_t newlen)
 void jl_array_grow_end(jl_array_t *a, size_t inc)
 {
     // optimized for the case of only growing and shrinking at the end
-    if (inc == 0)
-        return;
     size_t alen = a->length;
     if ((alen + inc) > a->maxsize - a->offset) {
         size_t newlen = a->maxsize==0 ? (inc<4?4:inc) : a->maxsize*2;
@@ -416,8 +414,6 @@ void jl_array_grow_end(jl_array_t *a, size_t inc)
 
 void jl_array_del_end(jl_array_t *a, size_t dec)
 {
-    if (dec == 0)
-        return;
     if (dec > a->length)
         jl_error("array_del_end: index out of range");
     memset((char*)a->data + (a->length-dec)*a->elsize, 0, dec*a->elsize);

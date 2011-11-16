@@ -35,6 +35,7 @@ let T = typevar(:T)
     @assert !is(None, tintersect(Array{None},AbstractArray{T}))
     @assert  is(None, tintersect((Type{Ptr{Uint8}},Ptr{None}),
                                  (Type{Ptr{T}},Ptr{T})))
+    @assert !subtype(Type{T},TypeVar)
 end
 let N = typevar(:N)
     @assert isequal(tintersect((NTuple{N,Int},NTuple{N,Int}),
@@ -48,6 +49,9 @@ end
 @assert is(None, tintersect(Type{Any},Type{typevar(:T,Real)}))
 @assert !subtype(Type{Array{Int}},Type{AbstractArray{Int}})
 @assert subtype(Type{Array{Int}},Type{Array{typevar(:T,Int)}})
+@assert is(None, tintersect(Type{Function},BitsKind))
+@assert is(Type{Int32}, tintersect(Type{Int32},BitsKind))
+@assert !subtype(Type,TypeVar)
 
 # ntuples
 nttest1{n}(x::NTuple{n,Size}) = n

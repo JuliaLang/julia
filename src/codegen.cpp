@@ -482,6 +482,8 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
         if (!jl_is_typevar(aty) && aty != (jl_value_t*)jl_any_type &&
             jl_type_intersection(aty,(jl_value_t*)jl_tuple_type)==(jl_value_t*)jl_bottom_type) {
             if (jl_is_leaf_type(aty)) {
+                if (jl_is_type_type(aty))
+                    aty = (jl_value_t*)jl_typeof(jl_tparam0(aty));
                 JL_GC_POP();
                 return literal_pointer_val(aty);
             }
@@ -516,7 +518,8 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
                 JL_GC_POP();
                 return ConstantInt::get(T_int1,1);
             }
-            if (!jl_is_tuple(tp0) && jl_is_leaf_type(tp0)) {
+            if (!jl_is_tuple(tp0) && jl_is_leaf_type(tp0) &&
+                !jl_is_type_type(tp0)) {
                 if (jl_is_leaf_type(arg)) {
                     JL_GC_POP();
                     return ConstantInt::get(T_int1,0);
