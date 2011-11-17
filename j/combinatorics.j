@@ -90,7 +90,7 @@ function randcycle(n::Int)
     return a
 end
 
-function nthperm!(k::Int, a::AbstractVector)
+function nthperm!(a::AbstractVector, k::Int)
     n = length(a)
     k -= 1   # make k 1-indexed
     f = factorial(oftype(k, n-1))
@@ -108,5 +108,4 @@ function nthperm!(k::Int, a::AbstractVector)
     end
     a
 end
-
-@in_place_matrix_op nthperm k::Int
+nthperm(a::AbstractVector, k::Int) = nthperm!(copy(a),k)
