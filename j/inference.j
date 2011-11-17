@@ -29,7 +29,7 @@ const MAX_TUPLE_DEPTH = 4
 type NotFound
 end
 
-NF = NotFound()
+const NF = NotFound()
 
 type EmptyCallStack
 end

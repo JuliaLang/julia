@@ -4,50 +4,44 @@ load("pcre_h.j")
 
 libpcre = dlopen("libpcre")
 
-PCRE_VERSION = cstring(ccall(dlsym(libpcre, :pcre_version), Ptr{Uint8}, ()))
+const PCRE_VERSION = cstring(ccall(dlsym(libpcre, :pcre_version), Ptr{Uint8}, ()))
 
 # supported options for different use cases
 
-PCRE_COMPILE_OPTIONS = [
-    PCRE_ANCHORED
-    PCRE_CASELESS
-    PCRE_DOLLAR_ENDONLY
-    PCRE_DOTALL
-    PCRE_EXTENDED
-    PCRE_FIRSTLINE
-    PCRE_MULTILINE
-    PCRE_NEWLINE_ANY
-    PCRE_NEWLINE_ANYCRLF
-    PCRE_NEWLINE_CR
-    PCRE_NEWLINE_CRLF
-    PCRE_NEWLINE_LF
-    PCRE_NO_AUTO_CAPTURE
-    PCRE_NO_START_OPTIMIZE
-    PCRE_NO_UTF8_CHECK
-    PCRE_UNGREEDY
-]
+const PCRE_COMPILE_MASK      =
+      PCRE_ANCHORED          |
+      PCRE_CASELESS          |
+      PCRE_DOLLAR_ENDONLY    |
+      PCRE_DOTALL            |
+      PCRE_EXTENDED          |
+      PCRE_FIRSTLINE         |
+      PCRE_MULTILINE         |
+      PCRE_NEWLINE_ANY       |
+      PCRE_NEWLINE_ANYCRLF   |
+      PCRE_NEWLINE_CR        |
+      PCRE_NEWLINE_CRLF      |
+      PCRE_NEWLINE_LF        |
+      PCRE_NO_AUTO_CAPTURE   |
+      PCRE_NO_START_OPTIMIZE |
+      PCRE_NO_UTF8_CHECK     |
+      PCRE_UNGREEDY
 
-PCRE_EXECUTE_OPTIONS = [
-    PCRE_NEWLINE_ANY
-    PCRE_NEWLINE_ANYCRLF
-    PCRE_NEWLINE_CR
-    PCRE_NEWLINE_CRLF
-    PCRE_NEWLINE_LF
-    PCRE_NOTBOL
-    PCRE_NOTEMPTY
-    PCRE_NOTEMPTY_ATSTART
-    PCRE_NOTEOL
-    PCRE_NO_START_OPTIMIZE
-    PCRE_NO_UTF8_CHECK
-    PCRE_PARTIAL_HARD
-    PCRE_PARTIAL_SOFT
-]
+const PCRE_EXECUTE_MASK      =
+      PCRE_NEWLINE_ANY       |
+      PCRE_NEWLINE_ANYCRLF   |
+      PCRE_NEWLINE_CR        |
+      PCRE_NEWLINE_CRLF      |
+      PCRE_NEWLINE_LF        |
+      PCRE_NOTBOL            |
+      PCRE_NOTEMPTY          |
+      PCRE_NOTEMPTY_ATSTART  |
+      PCRE_NOTEOL            |
+      PCRE_NO_START_OPTIMIZE |
+      PCRE_NO_UTF8_CHECK     |
+      PCRE_PARTIAL_HARD      |
+      PCRE_PARTIAL_SOFT
 
-PCRE_OPTIONS = [PCRE_COMPILE_OPTIONS,PCRE_EXECUTE_OPTIONS]
-
-PCRE_COMPILE_MASK = (|)(PCRE_COMPILE_OPTIONS...)
-PCRE_EXECUTE_MASK = (|)(PCRE_EXECUTE_OPTIONS...)
-PCRE_OPTIONS_MASK = PCRE_COMPILE_MASK | PCRE_EXECUTE_MASK
+const PCRE_OPTIONS_MASK = PCRE_COMPILE_MASK | PCRE_EXECUTE_MASK
 
 function pcre_info{T}(
     regex::Union(Ptr{Void},Vector{Uint8}),
