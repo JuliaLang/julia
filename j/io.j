@@ -334,17 +334,12 @@ end
 
 each_line(stream::IOStream) = LineIterator(stream)
 
-function readlines(s, f::Function)
+function readlines(s, fx::Function...)
     a = {}
     for l = each_line(s)
-        push(a, f(l))
-    end
-    return a
-end
-
-function readlines(s)
-    a = {}
-    for l = each_line(s)
+        for f = fx
+          l = f(l)
+        end
         push(a, l)
     end
     return a
