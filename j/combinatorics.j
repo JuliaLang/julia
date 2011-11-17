@@ -91,11 +91,20 @@ function randcycle(n::Int)
 end
 
 function nthperm!(k::Int, a::AbstractVector)
-    fac = one(k)
-    for i = 2:length(a)
-        fac *= (i-1)
-        j = i - rem(div(k,fac),i)
-        a[i], a[j] = a[j], a[i]
+    n = length(a)
+    k -= 1   # make k 1-indexed
+    f = factorial(oftype(k, n-1))
+    for i=1:n-1
+        j = div(k, f) + 1
+        k = k % f
+        f = div(f, n-i)
+
+        j = j+i-1
+        elt = a[j]
+        for d = j:-1:i+1
+            a[d] = a[d-1]
+        end
+        a[i] = elt
     end
     a
 end

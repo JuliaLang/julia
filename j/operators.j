@@ -17,7 +17,7 @@ isequal{T<:Number}(x::T, y::T) = x==y
 isequal(x::Number, y::Number)  = hash(x)==hash(y) && x==y
 
 > (x,y) = y < x
-<=(x,y) = x < y || x == y
+<=(x,y) = !(y < x)
 >=(x,y) = y <= x
 
 max(x, y) = x > y ? x : y
@@ -90,6 +90,7 @@ zero(x) = oftype(x,0)
 one(x)  = oftype(x,1)
 
 sizeof(T::Type) = error(strcat("size of type ",T," unknown"))
+sizeof(T::BitsKind) = div(T.nbits,8)
 sizeof{T}(x::T) = sizeof(T)
 
 copy(x::ANY) = x
