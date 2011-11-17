@@ -702,7 +702,7 @@ function lpad(s::String, n::Int, p::String)
     l = strlen(p)
     q = div(m,l)
     r = m - q*l
-    p^q * (r > 0 ? p[1:chr2ind(p,r)] : "") * s
+    p^q*p[1:chr2ind(p,r)]*s
 end
 
 function rpad(s::String, n::Int, p::String)
