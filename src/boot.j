@@ -154,8 +154,9 @@ isequal(w::WeakRef, v) = isequal(w.value, v)
 isequal(w, v::WeakRef) = isequal(w, v.value)
 
 abstract String
+abstract DirectIndexString <: String
 
-type ASCIIString <: String
+type ASCIIString <: DirectIndexString
     data::Array{Uint8,1}
     # ASCIIString(a::Array{Uint8,1}) = new(memcpy(a))
 end

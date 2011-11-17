@@ -1,29 +1,16 @@
 ## from src/boot.j
-# type ASCIIString <: String; data::Array{Uint8,1}; end
+# type ASCIIString <: DirectIndexString; data::Array{Uint8,1}; end
 
-next(s::ASCIIString, i::Index) = (char(s.data[i]), i+1)
+## required core functionality ##
+
+length(s::ASCIIString) = length(s.data)
+ref(s::ASCIIString, i::Index) = char(s.data[i])
 
 ## overload methods for efficiency ##
 
-length(s::ASCIIString) = length(s.data)
-ind2chr(s::ASCIIString, i::Int) = i
-chr2ind(s::ASCIIString, i::Int) = i
-strchr(s::ASCIIString, c::Char) = c < 0x80 ? memchr(s.data, c) : error("char not found")
-nextind(s::ASCIIString, i::Int) = i
-prevind(s::ASCIIString, i::Int) = i-1
-strcat(a::ASCIIString, b::ASCIIString, c::ASCIIString...) = ASCIIString(memcat(a,b,c...))
-ref(s::ASCIIString, i::Index) = char(s.data[i])
 ref(s::ASCIIString, r::Range1{Index}) = ASCIIString(ref(s.data,r))
-
-function contains(str::ASCIIString, c::Char)
-    if c >= 0x80
-        return false
-    end
-    q = ccall(dlsym(libc, :memchr), Ptr{Uint8},
-              (Ptr{Uint8}, Int32, Ulong),
-              str.data, int32(c), ulong(length(str)))
-    return q != C_NULL
-end
+strchr(s::ASCIIString, c::Char) = c < 0x80 ? memchr(s.data, c) : 0
+strcat(a::ASCIIString, b::ASCIIString, c::ASCIIString...) = ASCIIString(memcat(a,b,c...))
 
 function ucfirst(s::ASCIIString)
     if 'a' <= s[1] <= 'z'

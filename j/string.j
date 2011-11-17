@@ -1,14 +1,19 @@
-## generic string functions ##
+## core string functions ##
+
+length{T<:String}(s::T) = error("you must implement length(",T,")")
+next{T<:String}(s::T, i::Int) = error("you must implement next(",T,",Int)")
+next(s::DirectIndexString, i::Int) = (s[i],i+1)
+
+## generic supplied functions ##
 
 start(s::String) = 1
 done(s::String,i) = (i > length(s))
+numel(s::String) = length(s)
 isempty(s::String) = done(s,start(s))
 ref(s::String, i::Index) = next(s,i)[1]
 ref(s::String, x::Real) = s[iround(x)]
 ref(s::String, r::Range1) = s[iround(r.start):iround(r.stop)]
-length(s::String) = at_string_end(s)[1]
-numel (s::String) = length(s)
-strlen(s::String) = at_string_end(s)[2]
+
 symbol(s::String) = symbol(cstring(s))
 string(s::String) = s
 
@@ -25,73 +30,84 @@ size(s::String) = (length(s),)
 size(s::String, d::Index) = d == 1 ? length(s) :
     error("in size: tupleref: index ",d," out of range")
 
-function at_string_end(s::String)
+strlen(s::DirectIndexString) = length(s)
+function strlen(s::String)
     i = start(s)
     if done(s,i)
-        return 0, 0
+        return 0
     end
     n = 1
     while true
         c, j = next(s,i)
         if done(s,j)
-            return i, n
+            return n
         end
         n += 1
         i = j
     end
 end
 
-function nextind(s::String, ind::Int)
-    for i = ind:length(s)
-        try
-            c = s[i]
-            return i
-        catch
-        end
-    end
-    length(s) + 1
-end
-
-function prevind(s::String, ind::Int)
-    for i = ind-1:-1:1
-        try
-            c = s[i]
-            return i
-        catch
-        end
-    end
-    0
-end
-
-function ind2chr(s::String, ind::Int)
-    if ind < 1
-        error("in next: arrayref: index out of range")
-    end
-    i = 1
-    j = start(s)
-    while true
-        c, k = next(s,j)
-        if ind <= j
-            return i
-        end
-        i += 1
-        j = k
+isvalid(s::DirectIndexString, i::Int) = true
+function isvalid(s::String, i::Int)
+    try
+        next(s,i)
+        true
+    catch
+        false
     end
 end
 
-function chr2ind(s::String, chr::Int)
-    if chr < 1
-        error("in next: arrayref: index out of range")
-    end
-    i = 1
-    j = start(s)
-    while true
-        c, k = next(s,j)
-        if chr == i
+thisind(s::DirectIndexString, i::Int) = i
+nextind(s::DirectIndexString, i::Int) = i+1
+
+function thisind(s::String, i::Int)
+    for j = i:-1:1
+        if isvalid(s,j)
             return j
         end
-        i += 1
-        j = k
+    end
+    return 0 # out of range
+end
+
+function nextind(s::String, i::Int)
+    for j = i+1:length(s)
+        if isvalid(s,j)
+            return j
+        end
+    end
+    length(s)+1 # out of range
+end
+
+ind2chr(s::DirectIndexString, i::Int) = i
+chr2ind(s::DirectIndexString, i::Int) = i
+
+function ind2chr(s::String, i::Int)
+    s[i] # throws error if invalid
+    j = 1
+    k = start(s)
+    while true
+        c, l = next(s,k)
+        if i <= k
+            return j
+        end
+        j += 1
+        k = l
+    end
+end
+
+function chr2ind(s::String, i::Int)
+    if i < 1
+        return i
+    end
+    j = 1
+    k = start(s)
+    while true
+        c, l = next(s,k)
+        if i == j
+            return k
+        end
+        j += 1
+        k = l
     end
 end
 
@@ -104,10 +120,10 @@ function strchr(s::String, c::Char, i::Int)
         end
         i = j
     end
-    error("char not found")
+    return 0
 end
-
 strchr(s::String, c::Char) = strchr(s, c, start(s))
+contains(s::String, c::Char) = (strchr(s,c)!=0)
 
 function chars(s::String)
     cx = Array(Char,strlen(s))
@@ -115,7 +131,7 @@ function chars(s::String)
     for c = s
         cx[i += 1] = c
     end
-    cx
+    return cx
 end
 
 function cmp(a::String, b::String)
@@ -139,7 +155,16 @@ isequal(a::String, b::String) = cmp(a,b) == 0
 # faster comparisons for byte strings
 
 cmp(a::ByteString, b::ByteString)     = lexcmp(a.data, b.data)
-isequal(a::ByteString, b::ByteString) = length(a) == length(b) && cmp(a,b) == 0
+isequal(a::ByteString, b::ByteString) = length(a)==length(b) && cmp(a,b)==0
+
+## generic string uses only length and next ##
+
+type GenericString <: String
+    string::String
+end
+
+length(s::GenericString) = length(s.string)
+next(s::GenericString, i::Int) = next(s.string, i)
 
 ## plain old character arrays ##
 
@@ -226,9 +251,10 @@ end
 length(s::RevString) = length(s.string)
 strlen(s::RevString) = strlen(s.string)
 
+start(s::RevString) = (n=length(s); n-thisind(s.string,n)+1)
 function next(s::RevString, i::Index)
-    j = length(s)-i+1
-    (s.string[j], length(s)-prevind(s.string,j)+1)
+    n = length(s); j = n-i+1
+    (s.string[j], n-thisind(s.string,j-1)+1)
 end
 
 reverse(s::String) = RevString(s)
@@ -685,7 +711,7 @@ function rpad(s::String, n::Int, p::String)
     l = strlen(p)
     q = div(m,l)
     r = m - q*l
-    s * p^q * (r > 0 ? p[1:chr2ind(p,r)] : "")
+    s*p^q*p[1:chr2ind(p,r)]
 end
 
 lpad(s, n::Int, p) = lpad(string(s), n, string(p))
@@ -749,8 +775,8 @@ end
 join(strings, delim) = print_to_string(print_joined, strings, delim)
 join(strings, delim, last) = print_to_string(print_joined, strings, delim, last)
 
-chop(s::String) = s[1:prevind(s,end)-1]
-chomp(s::String) = (i=prevind(s,length(s)); s[i]=='\n' ? s[1:i-1] : s)
+chop(s::String) = s[1:thisind(s,length(s))-1]
+chomp(s::String) = (i=thisind(s,length(s)); s[i]=='\n' ? s[1:i-1] : s)
 chomp(s::ByteString) = s.data[end]==0x0a ? s[1:end-1] : s
 
 ## string to integer functions ##
@@ -888,10 +914,7 @@ function memchr(a::Array{Uint8,1}, b::Int)
     q = ccall(dlsym(libc, :memchr), Ptr{Uint8},
               (Ptr{Uint8}, Int32, Ulong),
               p, int32(b), ulong(length(a)))
-    if q == C_NULL
-        error("char not found")
-    end
-    q - p + 1
+    q == C_NULL ? 0 : q - p + 1
 end
 
 # concatenate byte arrays into a single array
