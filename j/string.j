@@ -749,6 +749,10 @@ end
 join(strings, delim) = print_to_string(print_joined, strings, delim)
 join(strings, delim, last) = print_to_string(print_joined, strings, delim, last)
 
+chop(s::String) = s[1:prevind(s,end)-1]
+chomp(s::String) = (i=prevind(s,length(s)); s[i]=='\n' ? s[1:i-1] : s)
+chomp(s::ByteString) = s.data[end]==0x0a ? s[1:end-1] : s
+
 ## string to integer functions ##
 
 function parse_int{T<:Int}(::Type{T}, s::String, base::Int)
