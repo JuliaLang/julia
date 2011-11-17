@@ -1,5 +1,5 @@
-sizeof_ios_t = long(ccall(:jl_sizeof_ios_t, Int32, ()))
-sizeof_fd_set = long(ccall(:jl_sizeof_fd_set, Int32, ()))
+const sizeof_ios_t = long(ccall(:jl_sizeof_ios_t, Int32, ()))
+const sizeof_fd_set = long(ccall(:jl_sizeof_fd_set, Int32, ()))
 
 type IOStream
     ios::Array{Uint8,1}

@@ -103,7 +103,7 @@
 #bitstype {32|64} Ptr{T}
 
 type Nothing; end
-nothing = Nothing()
+const nothing = Nothing()
 
 bitstype 8 Bool
 
@@ -329,7 +329,7 @@ Array{T}(::Type{T}, m::Size,n::Size) =
     ccall(:jl_alloc_array_2d, Any, (Any,Size,Size), Array{T,2},
           long(m), long(n))::Array{T,2}
 
-Array{T}(::Type{T}, m::Size,n::Size,o::Size)         = Array{T,3}(m,n,o)
+Array{T}(::Type{T}, m::Size,n::Size,o::Size) = Array{T,3}(m,n,o)
 Array{T}(::Type{T}, m::Int, n::Int, o::Int) =
     Array{T,3}(long(m),long(n),long(o))
 Array{T}(::Type{T}, m::Size,n::Size,o::Size,p::Size) = Array{T,4}(m,n,o,p)
