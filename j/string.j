@@ -694,9 +694,7 @@ rpad(s, n::Int, p) = rpad(string(s), n, string(p))
 lpad(s, n::Int) = lpad(string(s), n, " ")
 rpad(s, n::Int) = rpad(string(s), n, " ")
 
-typealias Chars Union(Set{Char},AbstractArray{Char},(Char...))
-
-function split(s::String, delims::Chars, include_empty::Bool)
+function split(s::String, delims, include_empty::Bool)
     i = 1
     strs = empty(String)
     len = length(s)
