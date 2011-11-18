@@ -176,6 +176,8 @@ You can read about [getting started](https://github.com/JuliaLang/julia/wiki/Get
 
 On some Linux distributions (for instance Ubuntu 11.10) you may need to change how the readline library is linked. If you get a build error involving readline, try changing the value of `USE_SYSTEM_READLINE` in `Make.inc` to `1`.
 
+On Ubuntu, you may also need to install the package `libncurses5-dev`.
+
 <a name="Directories"/>
 ## Directories
 
