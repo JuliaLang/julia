@@ -8,8 +8,8 @@ const stderr_stream = fdio(ccall(:jl_stderr, Int32, ()))
 # restore shared library handles
 
 libc = ccall(:jl_load_dynamic_library, Ptr{Void}, (Ptr{Uint8},), C_NULL)
-libm = dlopen("libm")
-libfdm = dlopen("libfdm")
+_jl_libm = dlopen("libm")
+_jl_libfdm = dlopen("libfdm")
 _jl_librandom = dlopen("librandom"); _jl_librandom_init();
 libpcre = dlopen("libpcre")
 _jl_libBLAS = dlopen("libLAPACK")
