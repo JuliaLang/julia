@@ -246,6 +246,7 @@ macro binary_op_A_sparse_B_sparse_res_sparse(op)
                 colptrS[col+1] = ptrS
             end
 
+            # Free up unused memory before returning?
             return SparseMatrixCSC(m, n, colptrS, rowvalS, nzvalS)
         end
 
@@ -290,7 +291,7 @@ end
 
 # In matrix-vector multiplication, the right orientation of the vector is assumed.
 function (*){T1,T2}(A::SparseMatrixCSC{T1}, X::Vector{T2})
-    Y = zeros(promote_type(T1,T2), A.m)
+    Y = Array(promote_type(T1,T2), A.m)
     for col = 1 : A.n
         for k = A.colptr[col] : (A.colptr[col+1]-1)
             Y[A.rowval[k]] += A.nzval[k] * X[col]
@@ -301,7 +302,7 @@ end
 
 # In vector-matrix multiplication, the right orientation of the vector is assumed.
 function (*){T1,T2}(X::Vector{T1}, A::SparseMatrixCSC{T2})
-    Y = zeros(promote_type(T1,T2), A.n)
+    Y = Array(promote_type(T1,T2), A.n)
     for col = 1 : A.n
         for k = A.colptr[col] : (A.colptr[col+1]-1)
             Y[col] += X[A.rowval[k]] * A.nzval[k]
@@ -310,27 +311,10 @@ function (*){T1,T2}(X::Vector{T1}, A::SparseMatrixCSC{T2})
     return Y
 end
 
-# sparse * sparse
-function (*){T1,T2}(X::SparseMatrixCSC{T1},Y::SparseMatrixCSC{T2}) 
-    mX, nX = size(X)
-    mY, nY = size(Y)
-    if nX != mY; error("error in *: mismatched dimensions"); end
-    A = zeros(promote_type(T1,T2), mX, nY)
-    for y_col = 1:nY
-        for y_elt = Y.colptr[y_col] : (Y.colptr[y_col+1]-1)
-            x_col = Y.rowval[y_elt]
-            for x_elt = X.colptr[x_col] : (X.colptr[x_col+1]-1)
-                A[X.rowval[x_elt],y_col] += X.nzval[x_elt] * Y.nzval[y_elt]
-            end
-        end
-    end
-    return A
-end
-
 function (*){T1,T2}(A::SparseMatrixCSC{T1}, X::Matrix{T2})
     mX, nX = size(X)
     if A.n != mX; error("error in *: mismatched dimensions"); end
-    Y = zeros(promote_type(T1,T2), A.m, nX)
+    Y = Array(promote_type(T1,T2), A.m, nX)
     for multivec_col = 1:nX
         for col = 1 : A.n
             for k = A.colptr[col] : (A.colptr[col+1]-1)
@@ -344,7 +328,7 @@ end
 function (*){T1,T2}(X::Matrix{T1}, A::SparseMatrixCSC{T2})
     mX, nX = size(X)
     if nX != A.m; error("error in *: mismatched dimensions"); end
-    Y = zeros(promote_type(T1,T2), mX, A.n)
+    Y = Array(promote_type(T1,T2), mX, A.n)
     for multivec_row = 1:mX
         for col = 1 : A.n
             for k = A.colptr[col] : (A.colptr[col+1]-1)
@@ -353,4 +337,24 @@ function (*){T1,T2}(X::Matrix{T1}, A::SparseMatrixCSC{T2})
         end
     end
     return Y
+end
+
+# sparse * sparse
+# NOTE: This implementation has the wrong runtime complexity. Need something like:
+# http://www.cise.ufl.edu/research/sparse/ssmult/SSMULT/ssmult.c
+function (*){T1,T2}(X::SparseMatrixCSC{T1},Y::SparseMatrixCSC{T2}) 
+    mX, nX = size(X)
+    mY, nY = size(Y)
+    if nX != mY; error("error in *: mismatched dimensions"); end
+    T = promote_type(T1,T2)
+    A = Array(T, mX, nY)
+    for y_col = 1:nY
+        for y_elt = Y.colptr[y_col] : (Y.colptr[y_col+1]-1)
+            x_col = Y.rowval[y_elt]
+            for x_elt = X.colptr[x_col] : (X.colptr[x_col+1]-1)
+                A[X.rowval[x_elt],y_col] += X.nzval[x_elt] * Y.nzval[y_elt]
+            end
+        end
+    end
+    return A
 end
