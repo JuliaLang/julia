@@ -581,6 +581,7 @@ jl_value_t *jl_box_int16(int16_t x);
 jl_value_t *jl_box_uint16(uint16_t x);
 DLLEXPORT jl_value_t *jl_box_int32(int32_t x);
 jl_value_t *jl_box_uint32(uint32_t x);
+jl_value_t *jl_box_char(uint32_t x);
 jl_value_t *jl_new_box_int8(int8_t x);
 jl_value_t *jl_new_box_int32(int32_t x);
 jl_value_t *jl_box_int64(int64_t x);

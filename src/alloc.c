@@ -648,15 +648,15 @@ BOX_FUNC(int16,   int16_t,  jl_new_box, 2)
 BOX_FUNC(uint16,  uint16_t, jl_new_box, 2)
 BOX_FUNC(int32,   int32_t,  jl_new_box, 2)
 BOX_FUNC(uint32,  uint32_t, jl_new_box, 2)
+BOX_FUNC(char,    uint32_t, jl_new_box, 2)
+BOX_FUNC(float32, float,    jl_box, 2)
 #ifdef __LP64__
 BOX_FUNC(int64,   int64_t,  jl_new_box, 2)
 BOX_FUNC(uint64,  uint64_t, jl_new_box, 2)
-BOX_FUNC(float32, float,    jl_box, 2)
 BOX_FUNC(float64, double,   jl_box, 2)
 #else
 BOX_FUNC(int64,   int64_t,  jl_new_box, 3)
 BOX_FUNC(uint64,  uint64_t, jl_new_box, 3)
-BOX_FUNC(float32, float,    jl_box, 2)
 BOX_FUNC(float64, double,   jl_box, 3)
 #endif
 
@@ -688,6 +688,7 @@ SIBOX_FUNC(int16,  int16_t, 2)
 SIBOX_FUNC(int32,  int32_t, 2)
 UIBOX_FUNC(uint16, uint16_t, 2)
 UIBOX_FUNC(uint32, uint32_t, 2)
+UIBOX_FUNC(char,   uint32_t, 2)
 #ifdef __LP64__
 SIBOX_FUNC(int64,  int64_t, 2)
 UIBOX_FUNC(uint64, uint64_t, 2)
@@ -727,6 +728,7 @@ void jl_init_box_caches(void)
         boxed_int16_cache[i]  = jl_new_box_int16(i-NBOX_C/2);
         boxed_uint16_cache[i] = jl_new_box_uint16(i);
         boxed_uint32_cache[i] = jl_new_box_uint32(i);
+        boxed_char_cache[i]   = jl_new_box_char(i);
         boxed_uint64_cache[i] = jl_new_box_uint64(i);
     }
 }
@@ -745,6 +747,7 @@ void jl_mark_box_caches(void)
         jl_gc_markval(boxed_int64_cache[i]);
         jl_gc_markval(boxed_uint16_cache[i]);
         jl_gc_markval(boxed_uint32_cache[i]);
+        jl_gc_markval(boxed_char_cache[i]);
         jl_gc_markval(boxed_uint64_cache[i]);
     }
 }

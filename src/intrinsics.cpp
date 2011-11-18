@@ -785,6 +785,7 @@ extern "C" void jl_init_intrinsic_functions()
     BOX_F(int32); BOX_F(uint32);
     BOX_F(int64); BOX_F(uint64);
     BOX_F(float32); BOX_F(float64);
+    BOX_F(char);
 
     box8_func  = boxfunc_llvm(ft2arg(jl_pvalue_llvmt, jl_pvalue_llvmt, T_int8),
                               "jl_box8", (void*)*jl_box8);

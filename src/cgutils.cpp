@@ -493,6 +493,7 @@ static Value *boxed(Value *v)
     if (jb == jl_uint16_type) return builder.CreateCall(box_uint16_func, v);
     if (jb == jl_uint32_type) return builder.CreateCall(box_uint32_func, v);
     if (jb == jl_uint64_type) return builder.CreateCall(box_uint64_func, v);
+    if (jb == jl_char_type)   return builder.CreateCall(box_char_func, v);
     // TODO: skip the call for constant arguments
     if (jl_is_bits_type(jt)) {
         if (v->getType()->isPointerTy()) {
