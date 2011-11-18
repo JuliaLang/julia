@@ -171,6 +171,11 @@ Now you should be able to run julia like this:
 If everything works correctly, you will see a Julia banner and an interactive prompt into which you can enter expressions for evaluation.
 You can read about [getting started](https://github.com/JuliaLang/julia/wiki/Getting-Started) in the manual.
 
+<a name="Platform-Specific-Notes"/>
+## Platform-Specific Notes
+
+On some Linux distributions (for instance Ubuntu 11.10) you may need to change how the readline library is linked. If you get a build error involving readline, try changing the value of `USE_SYSTEM_READLINE` in `Make.inc` to `1`.
+
 <a name="Directories"/>
 ## Directories
 
