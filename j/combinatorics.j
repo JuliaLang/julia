@@ -22,6 +22,8 @@ function factorial{T<:Int}(n::T, k::T)
     return f
 end
 
+nPr(n, r) = factorial(n, n-r)
+
 function binomial{T<:Int}(n::T, k::T)
     if k < 0
         return zero(T)

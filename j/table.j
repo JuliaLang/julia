@@ -11,18 +11,18 @@ function _tablesz(i::Int)
     return i<<1
 end
 
-_secret_table_token_ = (:BOO,)
+_jl_secret_table_token = (:BOO,)
 
 function ref(t::Associative, key)
-    v = get(t, key, _secret_table_token_)
-    if is(v,_secret_table_token_)
+    v = get(t, key, _jl_secret_table_token)
+    if is(v,_jl_secret_table_token)
         throw(KeyError(key))
     end
     return v
 end
 
-has(t::Associative, key) = !is(get(t, key, _secret_table_token_),
-                               _secret_table_token_)
+has(t::Associative, key) = !is(get(t, key, _jl_secret_table_token),
+                               _jl_secret_table_token)
 
 function show(t::Associative)
     if isempty(t)
@@ -305,8 +305,8 @@ WeakKeyHashTable() = WeakKeyHashTable{Any,Any}()
 assign(wkh::WeakKeyHashTable, v, key) = add_weak_key(wkh.ht, key, v)
 
 function key(wkh::WeakKeyHashTable, kk, deflt)
-    k = key(wkh.ht, kk, _secret_table_token_)
-    if is(k, _secret_table_token_)
+    k = key(wkh.ht, kk, _jl_secret_table_token)
+    if is(k, _jl_secret_table_token)
         return deflt
     end
     return k.value

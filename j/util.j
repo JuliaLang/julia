@@ -135,13 +135,17 @@ function parse_help(stream)
             end
             m = match(r"((\w|\d)+)\(", sig)
             if m != nothing && length(m.captures)>0
+                # found something of the form "f("
                 funcname = m.captures[1]
-                entry = (sig, desc)
-                if has(category,funcname)
-                    push(category[funcname], entry)
-                else
-                    category[funcname] = {entry}
-                end
+            else
+                # otherwise use whatever's between the ``
+                funcname = sig
+            end
+            entry = (sig, desc)
+            if has(category,funcname)
+                push(category[funcname], entry)
+            else
+                category[funcname] = {entry}
             end
         end
     end
@@ -185,10 +189,10 @@ end
 function help(cat::String)
     _jl_init_help()
     if !has(_jl_helpdb, cat)
-        println("Unknown category.")
-        return
+        # if it's not a category, try another named thing
+        return help_for(cat)
     end
-    println("Help is available for the following functions:")
+    println("Help is available for the following items:")
     for (func, _) = _jl_helpdb[cat]
         print(func, " ")
     end
