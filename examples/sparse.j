@@ -1,4 +1,5 @@
 # Compressed sparse columns data structure
+# Assumes that no zeros are stored in the data structure
 type SparseMatrixCSC{T} <: AbstractMatrix{T}
     m::Size                # Number of rows
     n::Size                # Number of columns
@@ -8,7 +9,7 @@ type SparseMatrixCSC{T} <: AbstractMatrix{T}
 end
 
 size(S::SparseMatrixCSC) = (S.m, S.n)
-nnz(S::SparseMatrixCSC) = nnz(S.nzval)
+nnz(S::SparseMatrixCSC) = S.colptr[end]-1
 
 function show(S::SparseMatrixCSC)
     println(S.m, "-by-", S.n, " sparse matrix with ", nnz(S), " nonzeros:")
