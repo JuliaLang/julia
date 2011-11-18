@@ -174,9 +174,11 @@ function help()
  try help(category), for one of the following categories:
 
 ")
-    for (cat, _) = _jl_helpdb
-        print("  ")
-        show(cat); println()
+    for (cat, tabl) = _jl_helpdb
+        if !isempty(tabl)
+            print("  ")
+            show(cat); println()
+        end
     end
 end
 
@@ -199,8 +201,13 @@ function help_for(fname::String)
     for (cat, tabl) = _jl_helpdb
         for (func, entries) = tabl
             if func == fname
+                first = true
                 for desc = entries
-                    println(desc[1], "\n ", desc[2])
+                    if !first
+                        println()
+                    end
+                    print(desc[1], "\n ", desc[2])
+                    first = false
                 end
                 n+=1
                 break
