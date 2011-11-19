@@ -47,7 +47,7 @@ julia_flisp.boot: julia-parser.scm julia-syntax.scm \
 boot.j.inc: boot.j preparse.scm julia_flisp.boot
 	$(FLISPDIR)/flisp ./preparse.scm $< | $(FLISPDIR)/flisp ./bin2hex.scm > $@
 
-codegen.o codegen.do: intrinsics.cpp debuginfo.cpp
+codegen.o codegen.do: intrinsics.cpp debuginfo.cpp cgutils.cpp ccall.cpp
 builtins.o builtins.do: table.c
 
 $(SUPPORT): $(SUPPORTDIR)/*.h $(SUPPORTDIR)/*.c

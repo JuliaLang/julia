@@ -58,7 +58,7 @@ procs(d::SubDArray) = d.parent.pmap
 
 function serialize{T,N,dd}(s, d::DArray{T,N,dd})
     i = worker_id_from_socket(s)
-    if is(member(d.go,i), false)
+    if is(is_go_member(d.go,i), false)
         sz = size(d)
         emptylocl = Array(T, ntuple(length(sz), i->(i==d.distdim ? 0 : sz[i])))
         invoke(serialize, (Any, Any),

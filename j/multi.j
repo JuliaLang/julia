@@ -1228,7 +1228,7 @@ end
 show(g::GlobalObject) = (r = g.refs[myid()];
                          print("GlobalObject($(r.whence),$(r.id))"))
 
-function member(g::GlobalObject, p::Int)
+function is_go_member(g::GlobalObject, p::Int)
     for i=1:length(g.refs)
         r = g.refs[i]
         if r.where == p
@@ -1247,7 +1247,7 @@ function serialize(s, g::GlobalObject)
     if i == -1
         error("global object cannot be sent outside its process group")
     end
-    ri = member(g, i)
+    ri = is_go_member(g, i)
     if is(ri, false)
         li = g.local_identity
         g.local_identity = nothing
@@ -1256,7 +1256,7 @@ function serialize(s, g::GlobalObject)
         return
     end
     mi = myid()
-    myref = member(g, mi)
+    myref = is_go_member(g, mi)
     if is(myref, false)
         # if I don't own a piece of this GO, I can't tell whether an
         # add_client of the destination node is necessary. therefore I

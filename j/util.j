@@ -133,7 +133,7 @@ function parse_help(stream)
             else
                 desc = ""
             end
-            m = match(r"(\w+)\(", sig)
+            m = match(r"(\w+!?)\(", sig)
             if m != nothing
                 # found something of the form "f("
                 funcname = m.captures[1]
@@ -234,16 +234,15 @@ function apropos(txt::String)
     r = Regex("\\Q$txt", PCRE_CASELESS)
     first = true
     for (cat, tabl) = _jl_helpdb
-        if match(r, cat) != nothing
+        if matches(r, cat)
             println("Category: \"$cat\"")
             first = false
         end
     end
     for (cat, tabl) = _jl_helpdb
         for (func, entries) = tabl
-            if match(r, func)!=nothing ||
-               anyp(e->(match(r,e[1])!=nothing || match(r,e[2])!=nothing),
-                    entries)
+            if matches(r, func) || anyp(e->(matches(r,e[1]) || matches(r,e[2])),
+                                        entries)
                 if !first
                     println()
                 end
