@@ -133,8 +133,8 @@ function parse_help(stream)
             else
                 desc = ""
             end
-            m = match(r"((\w|\d)+)\(", sig)
-            if m != nothing && length(m.captures)>0
+            m = match(r"(\w+)\(", sig)
+            if m != nothing
                 # found something of the form "f("
                 funcname = m.captures[1]
             else
@@ -174,8 +174,9 @@ function help()
 
     https://github.com/JuliaLang/julia/wiki/
 
- To get help on a function, try help(function). To see available functions,
- try help(category), for one of the following categories:
+ To get help on a function, try help(function). To search all help text,
+ try apropos(\"string\"). To see available functions, try help(category),
+ for one of the following categories:
 
 ")
     for (cat, tabl) = _jl_helpdb
@@ -199,22 +200,56 @@ function help(cat::String)
     println()
 end
 
+function _jl_print_help_entries(entries)
+    first = true
+    for desc = entries
+        if !first
+            println()
+        end
+        print(desc[1], "\n ", desc[2])
+        first = false
+    end
+end
+
 function help_for(fname::String)
     _jl_init_help()
     n = 0
     for (cat, tabl) = _jl_helpdb
         for (func, entries) = tabl
             if func == fname
-                first = true
-                for desc = entries
-                    if !first
-                        println()
-                    end
-                    print(desc[1], "\n ", desc[2])
-                    first = false
-                end
+                _jl_print_help_entries(entries)
                 n+=1
                 break
+            end
+        end
+    end
+    if n == 0
+        println("No help information found.")
+    end
+end
+
+function apropos(txt::String)
+    _jl_init_help()
+    n = 0
+    r = Regex("\\Q$txt", PCRE_CASELESS)
+    first = true
+    for (cat, tabl) = _jl_helpdb
+        if match(r, cat) != nothing
+            println("Category: \"$cat\"")
+            first = false
+        end
+    end
+    for (cat, tabl) = _jl_helpdb
+        for (func, entries) = tabl
+            if match(r, func)!=nothing ||
+               anyp(e->(match(r,e[1])!=nothing || match(r,e[2])!=nothing),
+                    entries)
+                if !first
+                    println()
+                end
+                _jl_print_help_entries(entries)
+                first = false
+                n+=1
             end
         end
     end
