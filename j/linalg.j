@@ -51,16 +51,29 @@ function (*){T,S}(A::AbstractMatrix{T}, B::AbstractMatrix{S})
     if mA == 2 && nA == 2 && nB == 2; return matmul2x2(A,B); end
     if mA == 3 && nA == 3 && nB == 3; return matmul3x3(A,B); end
     C = zeros(promote_type(T,S), mA, nB)
-    for j = 1:nB
-        coffs = (j-1)*mA
-        for k = 1:mB
-            b = B[k, j]
-            aoffs = (k-1)*mA
-            for i = 1:mA
-                C[coffs+i] += b * A[aoffs+i]
+    z = zero(eltype(C))
+
+    for jb = 1:50:nB
+        jlim = min(jb+50-1,nB)
+        for ib = 1:50:mA
+            ilim = min(ib+50-1,mA)
+            for kb = 1:50:mB
+                klim = min(kb+50-1,mB)
+                for j=jb:jlim
+                    boffs = (j-1)*mB
+                    coffs = (j-1)*mA
+                    for i=ib:ilim
+                        s = z
+                        for k=kb:klim
+                            s += A[i,k] * B[boffs+k]
+                        end
+                        C[coffs+i] += s
+                    end
+                end
             end
         end
     end
+
     return C
 end
 
