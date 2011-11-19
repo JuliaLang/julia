@@ -25,7 +25,7 @@ FC = gfortran
 CFLAGS = -pipe -std=gnu99 -fPIC
 CXXFLAGS = -pipe -fPIC -fno-rtti
 DEBUGFLAGS = -ggdb3 -DDEBUG
-SHIPFLAGS = -O3 -DNDEBUG
+SHIPFLAGS = -O3 -DNDEBUG -falign-functions
 endif
 
 ifeq ($(USECLANG),1)
@@ -34,7 +34,7 @@ CXX = clang++
 CFLAGS = -fPIC -fexceptions -pipe
 CXXFLAGS = -fPIC -fno-rtti -fexceptions -pipe
 DEBUGFLAGS = -g -DDEBUG
-SHIPFLAGS = -O4 -DNDEBUG
+SHIPFLAGS = -O3 -DNDEBUG
 endif
 
 # OS specific stuff

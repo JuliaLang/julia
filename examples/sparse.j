@@ -347,7 +347,7 @@ function (*){T1,T2}(X::SparseMatrixCSC{T1},Y::SparseMatrixCSC{T2})
     mY, nY = size(Y)
     if nX != mY; error("error in *: mismatched dimensions"); end
     T = promote_type(T1,T2)
-    A = Array(T, mX, nY)
+    A = zeros(T, mX, nY)
     for y_col = 1:nY
         for y_elt = Y.colptr[y_col] : (Y.colptr[y_col+1]-1)
             x_col = Y.rowval[y_elt]
