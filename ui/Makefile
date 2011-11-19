@@ -9,11 +9,15 @@ else
 READLINE = -lncurses $(EXTROOT)/lib/libreadline.a
 endif
 
-FLAGS = -falign-functions -Wall -Wno-strict-aliasing \
-	-fno-omit-frame-pointer \
+FLAGS = -Wall -Wno-strict-aliasing -fno-omit-frame-pointer \
 	-I$(JULIAHOME)/src -I$(LLTDIR) -I$(EXTROOT)/include $(CFLAGS)
-DEBUGFLAGS += $(FLAGS) -static-libgcc -static-libstdc++
-SHIPFLAGS += $(FLAGS) -static-libgcc -static-libstdc++
+DEBUGFLAGS = $(FLAGS)
+SHIPFLAGS = $(FLAGS)
+
+ifeq ($(USEGCC),1)
+DEBUGFLAGS += -static-libgcc -static-libstdc++
+SHIPFLAGS += -static-libgcc -static-libstdc++
+endif
 
 LIBJULIA_RELEASE = $(JULIAHOME)/src/libjulia-release.a
 LIBJULIA_DEBUG = $(JULIAHOME)/src/libjulia-debug.a
