@@ -82,17 +82,35 @@ end
 
 edit(fl::String) = edit(fl, 1)
 function edit(fl::String, line::Int)
+    editor = get(ENV, "JULIA_EDITOR", "emacs")
     issrc = fl[end-1:end] == ".j"
     if issrc
-        jmode = "$JULIA_HOME/contrib/julia-mode.el"
-        run(`emacs $fl --eval "(progn
-                                 (require 'julia-mode \"$jmode\")
-                                 (julia-mode)
-                                 (goto-line $line))"`)
+        if editor == "emacs"
+            jmode = "$JULIA_HOME/contrib/julia-mode.el"
+            run(`emacs $fl --eval "(progn
+                                     (require 'julia-mode \"$jmode\")
+                                     (julia-mode)
+                                     (goto-line $line))"`)
+        elseif editor == "vim"
+            run(`vim $fl +$line`)
+        elseif editor == "textmate"
+            run(`mate -w $fl -l $line`)
+        else
+            error("unknown editor: $editor")
+        end
         load(fl)
     else
-        run(`emacs $fl --eval "(goto-line $line)"`)
+        if editor == "emacs"
+            run(`emacs $fl --eval "(goto-line $line)"`)
+        elseif editor == "vim"
+            run(`vim $fl +$line`)
+        elseif editor == "textmate"
+            run(`mate $fl -l $line`)
+        else
+            error("unknown editor: $editor")
+        end
     end
+    nothing
 end
 
 function_loc(f::Function) = function_loc(f, (Any...))
