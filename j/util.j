@@ -82,11 +82,7 @@ end
 
 edit(fl::String) = edit(fl, 1)
 function edit(fl::String, line::Int)
-    editor = get(ENV, "JULIA_EDITOR", nothing)
-    if editor == nothing
-        error("Set the JULIA_EDITOR environment variable to ",
-              "\"emacs\", \"vim\" or \"textmate\".")
-    end
+    editor = get(ENV, "JULIA_EDITOR", "emacs")
     issrc = fl[end-1:end] == ".j"
     if issrc
         if editor == "emacs"
