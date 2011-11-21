@@ -383,14 +383,40 @@ end
 #TODO: ref of ranges, vectors (the fallback is slow)
 
 #assign
+assign{T,N}(A::SparseMatrixCSC{T},v::AbstractArray{T,N},i::Int) =
+    invoke(assign, (SparseMatrixCSC{T}, Any, Int), A, v, i)
 assign{T,N}(A::SparseMatrixCSC, v::AbstractArray{T,N}, i0::Int, i1::Int) = 
-    invoke(assign, (SparseMatrixCSC, Any, Int, Int), A, v, i0, i1)
-assign(A::SparseMatrixCSC, v, i::Int) = assign(A, v, ind2sub(size(A),i))
-assign(A::SparseMatrixCSC, v, I::(Int,Int)) = assign(A, v, I[1], I[2])
+    invoke(assign, (SparseMatrixCSC{T}, Any, Int, Int), A, v, i0, i1)
+assign{T}(A::SparseMatrixCSC{T}, v, i::Int) = assign(A, v, ind2sub(size(A),i))
+assign{T}(A::SparseMatrixCSC{T}, v, I::(Int,Int)) = assign(A, v, I[1], I[2])
 
 function assign{T}(A::SparseMatrixCSC{T}, v, i0::Int, i1::Int)
     if i0 < 1 || i0 > A.m || i1 < 1 || i1 > A.n; error("assign: index out of bounds"); end
-    if v == zero(T); return A; end
+    if v == zero(T) #either do nothing or delete entry if it exists
+        first = A.colptr[i1]
+        last = A.colptr[i1+1]-1
+        loc = -1
+        while first <= last
+            mid = (first + last) >> 1
+            t = A.rowval[mid]
+            if t == i0
+                loc = mid
+                break
+            elseif t > i0
+                last = mid - 1
+            else
+                first = mid + 1
+            end
+        end
+        if loc != -1
+            del(A.rowval, loc)
+            del(A.nzval, loc)
+            for j = (i1+1):(A.n+1)
+                A.colptr[j] = A.colptr[j] - 1
+            end
+        end
+        return A
+    end
     first = A.colptr[i1]
     last = A.colptr[i1+1]-1
     #find i such that A.rowval[i] = i0, or A.rowval[i-1] < i0 < A.rowval[i]
