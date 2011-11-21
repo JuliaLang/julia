@@ -358,3 +358,137 @@ function (*){T1,T2}(X::SparseMatrixCSC{T1},Y::SparseMatrixCSC{T2})
     end
     return A
 end
+
+## ref ##
+ref(A::SparseMatrixCSC, i::Int) = ref(A, ind2sub(size(A),i))
+ref(A::SparseMatrixCSC, I::(Int,Int)) = ref(A, I[1], I[2])
+
+function ref{T}(A::SparseMatrixCSC{T}, i0::Int, i1::Int)
+    if i0 < 1 || i0 > A.m || i1 < 1 || i1 > A.n; error("ref: index out of bounds"); end
+    first = A.colptr[i1]
+    last = A.colptr[i1+1]-1
+    while first <= last
+        mid = (first + last) >> 1
+        t = A.rowval[mid]
+        if t == i0
+            return A.nzval[mid]
+        elseif t > i0
+            last = mid - 1
+        else
+            first = mid + 1
+        end
+    end
+    return zero(T)
+end
+#TODO: ref of ranges, vectors (the fallback is slow)
+
+#assign
+assign{T,N}(A::SparseMatrixCSC{T},v::AbstractArray{T,N},i::Int) =
+    invoke(assign, (SparseMatrixCSC{T}, Any, Int), A, v, i)
+assign{T,N}(A::SparseMatrixCSC, v::AbstractArray{T,N}, i0::Int, i1::Int) = 
+    invoke(assign, (SparseMatrixCSC{T}, Any, Int, Int), A, v, i0, i1)
+assign{T}(A::SparseMatrixCSC{T}, v, i::Int) = assign(A, v, ind2sub(size(A),i))
+assign{T}(A::SparseMatrixCSC{T}, v, I::(Int,Int)) = assign(A, v, I[1], I[2])
+
+function assign{T}(A::SparseMatrixCSC{T}, v, i0::Int, i1::Int)
+    if i0 < 1 || i0 > A.m || i1 < 1 || i1 > A.n; error("assign: index out of bounds"); end
+    if v == zero(T) #either do nothing or delete entry if it exists
+        first = A.colptr[i1]
+        last = A.colptr[i1+1]-1
+        loc = -1
+        while first <= last
+            mid = (first + last) >> 1
+            t = A.rowval[mid]
+            if t == i0
+                loc = mid
+                break
+            elseif t > i0
+                last = mid - 1
+            else
+                first = mid + 1
+            end
+        end
+        if loc != -1
+            del(A.rowval, loc)
+            del(A.nzval, loc)
+            for j = (i1+1):(A.n+1)
+                A.colptr[j] = A.colptr[j] - 1
+            end
+        end
+        return A
+    end
+    first = A.colptr[i1]
+    last = A.colptr[i1+1]-1
+    #find i such that A.rowval[i] = i0, or A.rowval[i-1] < i0 < A.rowval[i]
+    while last - first >= 3
+        mid = (first + last) >> 1
+        t = A.rowval[mid]
+        if t == i0
+            A.nzval[mid] = v
+            return A
+        elseif t > i0
+            last = mid - 1
+        else
+            first = mid + 1
+        end
+    end
+    if last - first == 2
+        mid = first + 1
+        if A.rowval[mid] == i0
+            A.nzval[mid] = v
+            return A
+        elseif A.rowval[mid] > i0
+            if A.rowval[first] == i0
+                A.nzval[first] = v
+                return A
+            elseif A.rowval[first] < i0
+                i = first+1
+            else #A.rowval[first] > i0
+                i = first
+            end
+        else #A.rowval[mid] < i0
+            if A.rowval[last] == i0
+                A.nzval[last] = v
+                return A
+            elseif A.rowval[last] > i0
+                i = last
+            else #A.rowval[last] < i0
+                i = last+1
+            end
+        end
+    elseif last - first == 1
+        if A.rowval[first] == i0
+            A.nzval[first] = v
+            return A
+        elseif A.rowval[first] > i0
+            i = first
+        else #A.rowval[first] < i0
+            if A.rowval[last] == i0
+                A.nzval[last] = v
+                return A
+            elseif A.rowval[last] < i0
+                i = last+1
+            else #A.rowval[last] > i0
+                i = last
+            end
+        end
+    elseif last == first
+        if A.rowval[first] == i0
+            A.nzval[first] = v
+            return A
+        elseif A.rowval[first] < i0
+            i = first+1
+        else #A.rowval[first] > i0
+            i = first
+        end
+    else #last < first to begin with
+        i = first
+    end
+    insert(A.rowval, i, i0)
+    insert(A.nzval, i, v)
+    for j = (i1+1):(A.n+1)
+        A.colptr[j] = A.colptr[j] + 1
+    end
+    return A
+end
+#TODO: assign of ranges, vectors
