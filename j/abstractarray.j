@@ -499,6 +499,9 @@ function circshift(a, shiftamts)
     a[I...]::typeof(a)
 end
 
+rot90(a::AbstractMatrix)  = flipud(a.')
+rotn90(a::AbstractMatrix) = flipud(a).'
+
 ## Indexing: assign ##
 
 # 1-d indexing is assumed defined on subtypes
