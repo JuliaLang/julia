@@ -502,6 +502,17 @@ end
 rotl90(a::AbstractMatrix) = flipud(a.')
 rotr90(a::AbstractMatrix) = flipud(a).'
 
+function rotl90(a::AbstractMatrix, k::Int)
+    k = k % 4
+    k == 1 ? rotl90(a) :
+    k == 2 ? rotl90(rotl90(a)) :
+    k == 3 ? rotr90(a) :
+    copy(a) # k == 0
+end
+rotr90(a::AbstractMatrix, k::Int) = rotl90(a,-k)
+
+const rot90 = rotl90
+
 ## Indexing: assign ##
 
 # 1-d indexing is assumed defined on subtypes
