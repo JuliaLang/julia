@@ -82,7 +82,11 @@ end
 
 edit(fl::String) = edit(fl, 1)
 function edit(fl::String, line::Int)
-    editor = get(ENV, "JULIA_EDITOR", "emacs")
+    editor = get(ENV, "JULIA_EDITOR", nothing)
+    if editor == nothing
+        error("Set the JULIA_EDITOR environment variable to ",
+              "\"emacs\", \"vim\" or \"textmate\".")
+    end
     issrc = fl[end-1:end] == ".j"
     if issrc
         if editor == "emacs"
@@ -96,7 +100,7 @@ function edit(fl::String, line::Int)
         elseif editor == "textmate"
             run(`mate -w $fl -l $line`)
         else
-            error("unknown editor: $editor")
+            error("Invalid JULIA_EDITOR value: $(show_to_string(editor))")
         end
         load(fl)
     else
@@ -107,7 +111,7 @@ function edit(fl::String, line::Int)
         elseif editor == "textmate"
             run(`mate $fl -l $line`)
         else
-            error("unknown editor: $editor")
+            error("Invalid JULIA_EDITOR value: $(show_to_string(editor))")
         end
     end
     nothing
