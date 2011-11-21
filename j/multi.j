@@ -460,8 +460,7 @@ function deserialize(s, t::Type{RemoteRef})
     end
     function ()
         if (where == myid() &&
-            (wi = lookup_ref(rid);true) &&
-            !is(wi.thunk,bottom_func))
+           (wi = lookup_ref(rid);true) && !is(wi.thunk,bottom_func))
             if !wi.done
                 #println("$(myid()) waiting for $where,$(rid[1]),$(rid[2])")
                 wait(WeakRemoteRef(where, rid[1], rid[2]))
@@ -509,17 +508,17 @@ function schedule_call(rid, thunk)
     wi
 end
 
-localize_ref(b::Box) = Box(localize_ref(b.contents))
+#localize_ref(b::Box) = Box(localize_ref(b.contents))
 
-function localize_ref(r::RemoteRef)
-    if r.where == myid()
-        fetch(r)
-    else
-        r
-    end
-end
+#function localize_ref(r::RemoteRef)
+#    if r.where == myid()
+#        fetch(r)
+#    else
+#        r
+#    end
+#end
 
-localize_ref(x) = x
+#localize_ref(x) = x
 
 # call f on args in a way that simulates what would happen if
 # the function were sent elsewhere
@@ -1044,7 +1043,6 @@ end
 
 function worker_ssh_cmd(host)
     `ssh -n $host "bash -l -c \"cd $JULIA_HOME && ./julia --worker\""`
-
 end #func
 
 function worker_ssh_cmd(host, key)
@@ -1281,7 +1279,7 @@ end
 
 localize(g::GlobalObject) = g.local_identity
 fetch(g::GlobalObject) = g.local_identity
-localize_ref(g::GlobalObject) = g.local_identity
+#localize_ref(g::GlobalObject) = g.local_identity
 
 broadcast(x) = GlobalObject(g->x)
 
@@ -1547,7 +1545,7 @@ end
 
 ## demos ##
 
-fv(a)=eig(a)[2][2]
+# fv(a)=eig(a)[2][2]
 # A=randn(800,800);A=A*A';
 # pmap(fv, {A,A,A})
 

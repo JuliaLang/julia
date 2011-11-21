@@ -56,7 +56,6 @@ load("rational.j")
 
 # load libc - julia already links against it so process handle works
 libc = ccall(:jl_load_dynamic_library, Ptr{Void}, (Ptr{Uint8},), C_NULL)
-load("libc.j")
 
 # core data structures (used by type inference)
 load("abstractarray.j")
@@ -69,7 +68,7 @@ load("set.j")
 load("inference.j")
 ccall(:jl_enable_inference, Void, ())
 
-# strings & printing
+# I/O, strings & printing
 load("io.j")
 set_current_output_stream(make_stdout_stream()) # for error reporting
 load("string.j")
@@ -77,8 +76,19 @@ load("ascii.j")
 load("utf8.j")
 load("regex.j")
 load("show.j")
+
+# system & environment
+load("libc.j")
 load("env.j")
 load("errno_h.j")
+
+# concurrency
+load("iterator.j")
+load("task.j")
+load("process.j")
+load("serialize.j")
+load("multi.j")
+load("darray.j")
 
 # core math functions
 load("intfuncs.j")
@@ -87,25 +97,21 @@ load("math.j")
 load("math_libm.j")
 load("sort.j")
 load("combinatorics.j")
+
+# linear algebra
 load("linalg.j")
 load("linalg_blas.j")
 load("linalg_lapack.j")
 load("linalg_arpack.j")
+
+# signal processing
 load("fft.j")
 load("signal.j")
-
-# I/O and concurrency
-load("iterator.j")
-load("task.j")
-load("process.j")
-load("serialize.j")
-load("multi.j")
-load("darray.j")
 
 # random number generation
 load("random.j")
 
-# misc
+# utilities - timing, help, edit
 load("util.j")
 
 # version information
