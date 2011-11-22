@@ -499,18 +499,38 @@ function circshift(a, shiftamts)
     a[I...]::typeof(a)
 end
 
-rotl90(a::AbstractMatrix) = flipud(a.')
-rotr90(a::AbstractMatrix) = flipud(a).'
-
-function rotl90(a::AbstractMatrix, k::Int)
-    k = k % 4
-    k == 1 ? rotl90(a) :
-    k == 2 ? rotl90(rotl90(a)) :
-    k == 3 ? rotr90(a) :
-    copy(a) # k == 0
+function rotl90(A::AbstractMatrix)
+    m,n = size(A)
+    B = similar(A,(n,m))
+    for i=1:m, j=1:n
+        B[n-j+1,i] = A[i,j]
+    end
+    return B
 end
-rotr90(a::AbstractMatrix, k::Int) = rotl90(a,-k)
-
+function rotr90(A::AbstractMatrix)
+    m,n = size(A)
+    B = similar(A,(n,m))
+    for i=1:m, j=1:n
+        B[j,m-i+1] = A[i,j]
+    end
+    return B
+end
+function rot180(A::AbstractMatrix)
+    m,n = size(A)
+    B = similar(A)
+    for i=1:m, j=1:n
+        B[m-i+1,n-j+1] = A[i,j]
+    end
+    return B
+end
+function rotl90(A::AbstractMatrix, k::Int)
+    k = k % 4
+    k == 1 ? rotl90(A) :
+    k == 2 ? rot180(A) :
+    k == 3 ? rotr90(A) : copy(A)
+end
+rotr90(A::AbstractMatrix, k::Int) = rotl90(A,-k)
+rot180(A::AbstractMatrix, k::Int) = k % 2 == 1 ? rot180(A) : copy(A)
 const rot90 = rotl90
 
 ## Indexing: assign ##
