@@ -23,6 +23,18 @@ isequal(x::SymbolNode, y::SymbolNode) = is(x.name,y.name)
 isequal(x::SymbolNode, y::Symbol)     = is(x.name,y)
 isequal(x::Symbol    , y::SymbolNode) = is(x,y.name)
 
+function show(tv::TypeVar)
+    if !is(tv.lb, None)
+        show(tv.lb)
+        print("<:".data)
+    end
+    print(tv.name)
+    if !is(tv.ub, Any)
+        print("<:".data)
+        show(tv.ub)
+    end
+end
+
 ## misc syntax ##
 
 macro eval(x)

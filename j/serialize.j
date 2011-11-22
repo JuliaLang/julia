@@ -83,7 +83,7 @@ end
 
 function serialize(s, a::Array)
     writetag(s, Array)
-    elty = typeof(a).parameters[1]
+    elty = eltype(a)
     serialize(s, elty)
     serialize(s, size(a))
     if isa(elty,BitsKind)
@@ -94,6 +94,18 @@ function serialize(s, a::Array)
             serialize(s, a[i])
         end
     end
+end
+
+function serialize{T,N}(s, a::SubArray{T,N,Array})
+    if !isa(T,BitsKind) || stride(a,1)!=1
+        return serialize(s, copy(a))
+    end
+    writetag(s, Array)
+    serialize(s, T)
+    serialize(s, size(a))
+    colsz = size(a,1)*sizeof(T)
+    cartesian_map((idxs...)->write(s, pointer(a, idxs), colsz),
+                  tuple(1:1, map(n->(1:n), size(a)[2:])...))
 end
 
 function serialize(s, e::Expr)
@@ -190,7 +202,7 @@ end
 
 ## deserializing values ##
 
-force(x) = x
+force(x::ANY) = x
 force(x::Function) = x()
 
 # deserialize(s) returns either a simple value or a thunk. calling the

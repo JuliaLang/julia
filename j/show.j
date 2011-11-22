@@ -25,18 +25,6 @@ function show(l::LambdaStaticData)
     print(")")
 end
 
-function show(tv::TypeVar)
-    if !is(tv.lb, None)
-        show(tv.lb)
-        print("<:")
-    end
-    print(tv.name)
-    if !is(tv.ub, Any)
-        print("<:")
-        show(tv.ub)
-    end
-end
-
 function show_delim_array(itr, open, delim, close, delim_one)
     print(open)
     state = start(itr)
@@ -401,24 +389,13 @@ dims2string(d) = length(d) == 0 ? "0-dimensional" :
 summary{T}(a::AbstractArray{T}) =
     strcat(dims2string(size(a)), " ", string(T), " ", string(typeof(a).name))
 
-function cartesian_map(body, t::Tuple, it...)
-    idx = length(t)-length(it)
-    if idx == 0
-        body(it)
-    else
-        for i = t[idx]
-            cartesian_map(body, t, i, it...)
-        end
-    end
-end
-
 function show_nd(a::AbstractArray)
     if isempty(a)
         return
     end
     tail = size(a)[3:]
     nd = ndims(a)-2
-    function print_slice(idxs)
+    function print_slice(idxs...)
         for i = 1:nd
             ii = idxs[i]
             if size(a,i+2) > 10

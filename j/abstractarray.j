@@ -1676,6 +1676,9 @@ assign(s::SubArray, v::AbstractArray, i::Int) =
     invoke(assign, (SubArray, Any, Int), s, v, i)
 assign(s::SubArray, v, i::Int) = assign(s, v, ind2sub(size(s), i)...)
 
+assign{T}(s::SubArray{T,2}, v::AbstractArray, ind::Int) =
+    invoke(assign, (SubArray{T,2}, Any, Int), a, v, ind)
+
 function assign{T}(s::SubArray{T,2}, v, ind::Int)
     ld = size(s,1)
     i = rem(ind-1,ld)+1
@@ -1775,8 +1778,9 @@ stride(s::SubArray, i::Int) = s.strides[i]
 convert{T}(::Type{Ptr}, x::SubArray{T}) =
     pointer(x.parent) + (x.first_index-1)*sizeof(T)
 
-function pointer{T}(s::SubArray{T}, i::Index)
-    is = ind2sub(size(s), i)
+pointer(s::SubArray, i::Index) = pointer(s, ind2sub(size(s), i))
+
+function pointer{T}(s::SubArray{T}, is::(Index...))
     index = s.first_index
     for n = 1:length(is)
         index += (is[n]-1)*s.strides[n]
@@ -1787,3 +1791,55 @@ end
 summary{T,N}(s::SubArray{T,N}) =
     strcat(dims2string(size(s)), " SubArray of ",
            summary(s.parent))
+
+## iteration utilities ##
+
+# slow, but useful
+function cartesian_map(body, t::Tuple, it...)
+    idx = length(t)-length(it)
+    if idx == 1
+        for i = t[1]
+            body(i, it...)
+        end
+    elseif idx == 2
+        for j = t[2]
+            for i = t[1]
+                body(i, j, it...)
+            end
+        end
+    elseif idx > 1
+        for j = t[idx]
+            for i = t[idx-1]
+                cartesian_map(body, t, i, j, it...)
+            end
+        end
+    else
+        throw(ArgumentError("cartesian_map"))
+    end
+end
+
+cartesian_map(body, t::()) = (body(); nothing)
+
+function cartesian_map(body, t::(Any,))
+    for i = t[1]
+        body(i)
+    end
+end
+
+function cartesian_map(body, t::(Any,Any))
+    for j = t[2]
+        for i = t[1]
+            body(i,j)
+        end
+    end
+end
+
+function cartesian_map(body, t::(Any,Any,Any))
+    for k = t[3]
+        for j = t[2]
+            for i = t[1]
+                body(i,j,k)
+            end
+        end
+    end
+end

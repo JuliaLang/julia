@@ -883,3 +883,24 @@ end
 
 * make control-C on client while evaluating input wake up the root task
   with an InterruptException if it is waiting for something.
+
+* implement efficient serialization of SubArray
+* use sub() when the result of indexing is being serialized to avoid
+  the extra copy
+
+d = drandn(2000,2000);
+a = randn(1000,1000);
+
+@time begin
+  b = @spawnlocal d[1:1000,1001:2000]
+  c = a*a
+  fetch(b) + c
+end
+elapsed time: 0.21709394454956055 seconds
+
+julia> @benchmark 10 begin
+         b = @spawnlocal d[1:2000,1001:2000]
+         c = a*a
+         fetch(b)[1:1000,:] + c
+       end Any;
+elapsed time: 2.18363595008850098 seconds

@@ -182,6 +182,12 @@ function write{T}(s::IOStream, a::Array{T})
     end
 end
 
+function write(s::IOStream, p::Ptr, nb::Int)
+    ccall(:ios_write, Ulong,
+          (Ptr{Void}, Ptr{Void}, Ulong),
+          s.ios, p, ulong(nb))
+end
+
 # num bytes available without blocking
 nb_available(s::IOStream) = ccall(:jl_nb_available, Int32, (Ptr{Void},), s.ios)
 
