@@ -1022,76 +1022,6 @@ function areduce(f::Function, A::AbstractArray, region::Region, v0, RType::Type)
 end
 end
 
-let areduce_cache = nothing
-# generate the body of the N-d loop to compute a reduction
-function gen_areduce_func(n, f)
-    ivars = { gensym() | i=1:n }
-    # limits and vars for reduction loop
-    rv, idx = gensym(2)
-    # generate code to compute sub2ind(size(A), ivars...)
-    s2i = :($ivars[n] - 1)
-    for d = (n-1):-1:2
-        s2i = :(($ivars[d]-1) + size(A,$d)*($s2i))
-    end
-    s2i = :($ivars[1] + size(A,1)*($s2i))
-    body =
-    quote
-        _tot = v0
-        $idx = $s2i
-        for $rv = 1:size(A,dim)
-            _tot = ($f)(_tot, A[$idx])
-            $idx += stride
-        end
-        R[_ind] = _tot
-        _ind += 1
-    end
-    quote
-        local _F_
-        function _F_(f, A, dim, R, stride)
-            _ind = 1
-            $make_loop_nest(ivars, { :(1:size(R,$i)) | i=1:n }, body)
-        end
-        _F_
-    end
-end
-
-global areduce
-function areduce(f::Function, A::AbstractArray, dim::Size, RType::Type)
-    dimsA = size(A)
-    ndimsA = length(dimsA)
-    dimsR = ntuple(ndimsA, i->i==dim ? 1 : dimsA[i])
-    R = similar(A, RType, dimsR)
-    stride = prod(dimsA[1:(dim-1)])
-    
-    key = ndimsA
-    fname = :f
-
-    if  (is(f,+)     && (fname=:+;true)) ||
-        (is(f,*)     && (fname=:*;true)) ||
-        (is(f,max)   && (fname=:max;true)) ||
-        (is(f,min)   && (fname=:min;true)) ||
-        (is(f,sum)   && (fname=:+;true)) ||
-        (is(f,prod)  && (fname=:*;true)) ||
-        (is(f,any)   && (fname=:any;true)) ||
-        (is(f,all)   && (fname=:all;true)) ||
-        (is(f,count) && (fname=:count;true))
-        key = (fname, ndimsA)
-    end
-
-    if !has(areduce_cache,key)
-        fexpr = gen_areduce_func(ndimsA, fname)
-        func = eval(fexpr)
-        areduce_cache[key] = func
-    else
-        func = areduce_cache[key]
-    end
-
-    func(f, A, dim, R, stride)
-
-    return R
-end
-end
-
 function sum{T}(A::AbstractArray{T})
     if isempty(A)
         return zero(T)
@@ -1697,9 +1627,16 @@ ref{T}(s::SubArray{T,0}) = s.parent[s.first_index]
 
 ref{T}(s::SubArray{T,1}, i::Int) = s.parent[s.first_index + (i-1)*s.strides[1]]
 ref{T}(s::SubArray{T,2}, i::Int, j::Int) =
-    s.parent[s.first_index +(i-1)*s.strides[1]+(j-1)*s.strides[2]]
+    s.parent[s.first_index + (i-1)*s.strides[1] + (j-1)*s.strides[2]]
 
 ref(s::SubArray, i::Int) = s[ind2sub(size(s), i)...]
+
+function ref{T}(s::SubArray{T,2}, ind::Int)
+    ld = size(s,1)
+    i = rem(ind-1,ld)+1
+    j = div(ind-1,ld)+1
+    s.parent[s.first_index + (i-1)*s.strides[1] + (j-1)*s.strides[2]]
+end
 
 function ref(s::SubArray, is::Int...)
     index = s.first_index
@@ -1738,6 +1675,14 @@ end
 assign(s::SubArray, v::AbstractArray, i::Int) =
     invoke(assign, (SubArray, Any, Int), s, v, i)
 assign(s::SubArray, v, i::Int) = assign(s, v, ind2sub(size(s), i)...)
+
+function assign{T}(s::SubArray{T,2}, v, ind::Int)
+    ld = size(s,1)
+    i = rem(ind-1,ld)+1
+    j = div(ind-1,ld)+1
+    s.parent[s.first_index + (i-1)*s.strides[1] + (j-1)*s.strides[2]] = v
+    return s
+end
 
 assign(s::SubArray, v::AbstractArray, i::Int, is::Int...) =
     invoke(assign, (SubArray, Any, Int...), s, v, tuple(i,is...))
