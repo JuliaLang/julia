@@ -8,6 +8,9 @@ type SparseMatrixCSC{T} <: AbstractMatrix{T}
     nzval::Vector{T}       # Nonzero values
 end
 
+issparse(A::AbstractArray) = false
+issparse(S::SparseMatrixCSC) = true
+
 size(S::SparseMatrixCSC) = (S.m, S.n)
 nnz(S::SparseMatrixCSC) = S.colptr[end]-1
 
@@ -76,12 +79,12 @@ function sparse{T}(I::Vector{Size},
     I = I[p]
     V = V[p]
 
-    make_sparse(I,J,V,m,n)
+    _jl_make_sparse(I,J,V,m,n)
 end
 
 #assumes that I,J are sorted in dictionary order (with J taking precedence)
 #use sparse() with the same arguments if this is not the case
-function make_sparse{T}(I::Vector{Size},
+function _jl_make_sparse{T}(I::Vector{Size},
                         J::Vector{Size},
                         V::Vector{T},
                         m::Size,
@@ -151,13 +154,18 @@ sprand(m,n,density) = sprand_rng (m,n,density,rand)
 sprandn(m,n,density) = sprand_rng (m,n,density,randn)
 #sprandi(m,n,density) = sprand_rng (m,n,density,randi)
 
-speye(n::Size) = ( L = linspace(1,n); make_sparse(L, L, ones(Float64, n), n, n) )
-speye(m::Size, n::Size) = ( x = min(m,n); L = linspace(1,x); make_sparse(L, L, ones(Float64, x), m, n) )
+speye(n::Size) = ( L = linspace(1,n); _jl_make_sparse(L, L, ones(Float64, n), n, n) )
+speye(m::Size, n::Size) = ( x = min(m,n); L = linspace(1,x); _jl_make_sparse(L, L, ones(Float64, x), m, n) )
+
+function issymmetric(A::SparseMatrixCSC)
+    # Slow implementation
+    nnz(A - A.') == 0 ? true : false
+end
 
 transpose(S::SparseMatrixCSC) = ( (I,J,V) = find(S); sparse(J, I, V, S.n, S.m) )
 ctranspose(S::SparseMatrixCSC) = ( (I,J,V) = find(S); sparse(J, I, conj(V), S.n, S.m) )
 
-macro binary_op_A_sparse_B_sparse_res_sparse(op)
+macro _jl_binary_op_A_sparse_B_sparse_res_sparse(op)
     quote
 
         function ($op){T1,T2}(A::SparseMatrixCSC{T1}, B::SparseMatrixCSC{T2})
@@ -255,17 +263,17 @@ end # macro
 
 (+)(A::SparseMatrixCSC, B::Union(Array,Number)) = (+)(full(A), B)
 (+)(A::Union(Array,Number), B::SparseMatrixCSC) = (+)(A, full(B))
-@binary_op_A_sparse_B_sparse_res_sparse (+)
+@_jl_binary_op_A_sparse_B_sparse_res_sparse (+)
 
 (-)(A::SparseMatrixCSC, B::Union(Array,Number)) = (-)(full(A), B)
 (-)(A::Union(Array,Number), B::SparseMatrixCSC) = (-)(A, full(B))
-@binary_op_A_sparse_B_sparse_res_sparse (-)
+@_jl_binary_op_A_sparse_B_sparse_res_sparse (-)
 
 (.*)(A::SparseMatrixCSC, B::Number) = SparseMatrixCSC(A.m, A.n, A.colptr, A.rowval, A.nzval .* B)
 (.*)(A::Number, B::SparseMatrixCSC) = SparseMatrixCSC(B.m, B.n, B.colptr, B.rowval, A .* B.nzval)
 (.*)(A::SparseMatrixCSC, B::Array) = (.*)(A, sparse(B))
 (.*)(A::Array, B::SparseMatrixCSC) = (.*)(sparse(A), B)
-@binary_op_A_sparse_B_sparse_res_sparse (.*)
+@_jl_binary_op_A_sparse_B_sparse_res_sparse (.*)
 
 (./)(A::SparseMatrixCSC, B::Number) = SparseMatrixCSC(A.m, A.n, A.colptr, A.rowval, A.nzval ./ B)
 (./)(A::Number, B::SparseMatrixCSC) = (./)(A, full(B))
@@ -283,11 +291,7 @@ end # macro
 (.^)(A::Number, B::SparseMatrixCSC) = (.^)(A, full(B))
 (.^)(A::SparseMatrixCSC, B::Array) = (.^)(full(A), B)
 (.^)(A::Array, B::SparseMatrixCSC) = (.^)(A, full(B))
-@binary_op_A_sparse_B_sparse_res_sparse (.^)
-
-function issymmetric(A::SparseMatrixCSC)
-    nnz(A - A.') == 0 ? true : false
-end
+@_jl_binary_op_A_sparse_B_sparse_res_sparse (.^)
 
 # In matrix-vector multiplication, the right orientation of the vector is assumed.
 function (*){T1,T2}(A::SparseMatrixCSC{T1}, X::Vector{T2})
@@ -491,4 +495,6 @@ function assign{T}(A::SparseMatrixCSC{T}, v, i0::Int, i1::Int)
     end
     return A
 end
+
 #TODO: assign of ranges, vectors
+#TODO: sub
