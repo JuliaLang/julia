@@ -1795,21 +1795,21 @@ summary{T,N}(s::SubArray{T,N}) =
 ## iteration utilities ##
 
 # slow, but useful
-function cartesian_map(body, t::Tuple, it...)
+function cartesian_map(body, t::(Size...), it...)
     idx = length(t)-length(it)
     if idx == 1
-        for i = t[1]
+        for i = 1:t[1]
             body(i, it...)
         end
     elseif idx == 2
-        for j = t[2]
-            for i = t[1]
+        for j = 1:t[2]
+            for i = 1:t[1]
                 body(i, j, it...)
             end
         end
     elseif idx > 1
-        for j = t[idx]
-            for i = t[idx-1]
+        for j = 1:t[idx]
+            for i = 1:t[idx-1]
                 cartesian_map(body, t, i, j, it...)
             end
         end
@@ -1820,24 +1820,24 @@ end
 
 cartesian_map(body, t::()) = (body(); nothing)
 
-function cartesian_map(body, t::(Any,))
-    for i = t[1]
+function cartesian_map(body, t::(Size,))
+    for i = 1:t[1]
         body(i)
     end
 end
 
-function cartesian_map(body, t::(Any,Any))
-    for j = t[2]
-        for i = t[1]
+function cartesian_map(body, t::(Size,Size))
+    for j = 1:t[2]
+        for i = 1:t[1]
             body(i,j)
         end
     end
 end
 
-function cartesian_map(body, t::(Any,Any,Any))
-    for k = t[3]
-        for j = t[2]
-            for i = t[1]
+function cartesian_map(body, t::(Size,Size,Size))
+    for k = 1:t[3]
+        for j = 1:t[2]
+            for i = 1:t[1]
                 body(i,j,k)
             end
         end

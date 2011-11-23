@@ -422,7 +422,7 @@ function show_nd(a::AbstractArray)
         print_matrix(reshape(slice, size(slice,1), size(slice,2)))
         print(idxs == tail ? "" : "\n\n")
     end
-    cartesian_map(print_slice, map(x->Range1(1,x), tail))
+    cartesian_map(print_slice, tail)
 end
 
 function whos()
