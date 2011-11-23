@@ -176,7 +176,7 @@ function norm(A::Matrix, p)
     elseif p == 1
         return max(sum(abs(A),1))
     elseif p == 2
-        return max(diag(svd(A)[2]))
+        return max(svd(A)[2])
     elseif p == Inf
         max(sum(abs(A),2))
     elseif p == "fro"
@@ -185,7 +185,7 @@ function norm(A::Matrix, p)
 end
 
 norm(A::Matrix) = norm(A, 2)
-rank(A::Matrix, tol::Real) = count(diag(svd(A)[2]) > tol)
+rank(A::Matrix, tol::Real) = count(svd(A)[2] > tol)
 rank(A::Matrix) = rank(A, 0)
 
 # trace(A::Matrix) = sum(diag(A))
@@ -231,7 +231,7 @@ function kron{T,S}(a::Matrix{T}, b::Matrix{S})
 end
 
 det(a::Matrix) = prod(diag(qr(a)[2]))
-inv(a::Matrix) = a \ eye(size(a,1))
+inv(a::Matrix) = a \ one(a)
 cond(a::Matrix, p) = norm(a, p) * norm(inv(a), p)
 cond(a::Matrix) = cond(a, 2)
 
@@ -291,4 +291,51 @@ function linreg(x, y, w)
     M = [w w.*x]
     Mt = M'
     ((Mt*M)\Mt)*(w.*y)
+end
+
+# multiply by diagonal matrix as vector
+function diagmm(A::Matrix, b::Vector)
+    T = promote_type(eltype(A),eltype(b))
+    m, n = size(A)
+    C = Array(T, m, n)
+    for j=1:n
+        bj = b[j]
+        for i=1:m
+            C[i,j] = A[i,j]*bj
+        end
+    end
+    C
+end
+
+function diagmm(b::Vector, A::Matrix)
+    T = promote_type(eltype(A),eltype(b))
+    m, n = size(A)
+    C = Array(T, m, n)
+    for j=1:n
+        for i=1:m
+            C[i,j] = A[i,j]*b[i]
+        end
+    end
+    C
+end
+
+^(A::AbstractMatrix, p::Int) = power_by_squaring(A, p)
+
+function ^(A::AbstractMatrix, p::Number)
+    if integer_valued(p)
+        return A^int(real(p))
+    end
+    if size(A,1) != size(A,2)
+        error("matrix must be square")
+    end
+    (v, X) = eig(A)
+    if isreal(v) && any(v<0)
+        v = complex(v)
+    end
+    if ishermitian(A)
+        Xinv = X'
+    else
+        Xinv = inv(X)
+    end
+    diagmm(X, v.^p)*Xinv
 end

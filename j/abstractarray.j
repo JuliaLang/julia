@@ -187,7 +187,7 @@ function .^{T<:Int}(A::Int, B::AbstractArray{T})
     return F
 end
 
-function power_array_int_body(F, A, B)
+function _jl_power_array_int_body(F, A, B)
     for i=1:numel(A)
         F[i] = A[i]^B
     end
@@ -196,7 +196,7 @@ end
 
 function .^{T<:Int}(A::AbstractArray{T}, B::Int)
     F = similar(A, B < 0 ? Float64 : promote_type(T,typeof(B)))
-    power_array_int_body(F, A, B)
+    _jl_power_array_int_body(F, A, B)
 end
 
 macro binary_arithmetic_op(f)
@@ -907,7 +907,7 @@ function hvcat{T<:Number}(rows::(Size...), xs::T...)
     a
 end
 
-function hvcat_fill(a, xs)
+function _jl_hvcat_fill(a, xs)
     k = 1
     nr, nc = size(a)
     for i=1:nr
@@ -932,7 +932,7 @@ function hvcat(rows::(Size...), xs::Number...)
     for i=2:length(xs)
         T = promote_type(T,typeof(xs[i]))
     end
-    hvcat_fill(Array(T, nr, nc), xs)
+    _jl_hvcat_fill(Array(T, nr, nc), xs)
 end
 
 ## Reductions ##

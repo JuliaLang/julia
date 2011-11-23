@@ -170,7 +170,7 @@ pi{T}(::Type{ComplexPair{T}}) = pi(T)
 
 ## singleton type for imaginary unit constant ##
 
-type ImaginaryUnit <: Complex; end
+type ImaginaryUnit <: Complex{Int32}; end
 const im = ImaginaryUnit()
 
 convert{T<:Real}(::Type{ComplexPair{T}}, ::ImaginaryUnit) =
@@ -178,8 +178,8 @@ convert{T<:Real}(::Type{ComplexPair{T}}, ::ImaginaryUnit) =
 convert(::Type{Complex128}, ::ImaginaryUnit) = complex128(0,1)
 convert(::Type{Complex64},  ::ImaginaryUnit) = complex64(0,1)
 
-real(::ImaginaryUnit) = 0
-imag(::ImaginaryUnit) = 1
+real(::ImaginaryUnit) = int32(0)
+imag(::ImaginaryUnit) = int32(1)
 
 promote_rule{T<:Complex}(::Type{ImaginaryUnit}, ::Type{T}) = T
 promote_rule{T<:Real}(::Type{ImaginaryUnit}, ::Type{T}) = ComplexPair{T}

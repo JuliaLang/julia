@@ -344,7 +344,7 @@ function eig{T<:Union(Float64,Float32,Complex128,Complex64)}(A::StridedMatrix{T}
         jobz = "V"
         uplo = "U"
         EV = copy(A)
-        W = Array(T, n)
+        W = Array(typeof(real(A[1])), n)
         if iscomplex(A)
             rwork = Array(typeof(real(A[1])), long(max(3*n-2, 1)))
         end
