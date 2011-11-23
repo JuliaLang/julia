@@ -520,10 +520,13 @@ end
 
 #localize_ref(x) = x
 
-# call f on args in a way that simulates what would happen if
+# make a thunk to call f on args in a way that simulates what would happen if
 # the function were sent elsewhere
-function local_remote_call(f, args)
-    return f(args...)
+function local_remote_call_thunk(f, args)
+    if isempty(args)
+        return f
+    end
+    return ()->f(args...)
 
     # TODO: this seems to be capable of causing deadlocks by waiting on
     # Refs buried inside the closure that we don't want to wait on yet.
@@ -542,7 +545,7 @@ end
 
 function remote_call(w::LocalProcess, f, args...)
     rr = RemoteRef(w)
-    schedule_call(rr2id(rr), ()->local_remote_call(f,args))
+    schedule_call(rr2id(rr), local_remote_call_thunk(f,args))
     rr
 end
 
@@ -559,7 +562,7 @@ remote_call(id::Int, f, args...) = remote_call(worker_from_id(id), f, args...)
 function remote_call_fetch(w::LocalProcess, f, args...)
     rr = WeakRemoteRef(w)
     oid = rr2id(rr)
-    wi = schedule_call(oid, ()->local_remote_call(f,args))
+    wi = schedule_call(oid, local_remote_call_thunk(f,args))
     wi.notify = ((), :call_fetch, oid, wi.notify)
     force(yieldto(Scheduler, WaitFor(:call_fetch, rr)))
 end
@@ -593,7 +596,7 @@ function remote_do(w::LocalProcess, f, args...)
     # the LocalProcess version just performs in local memory what a worker
     # does when it gets a :do message.
     # same for other messages on LocalProcess.
-    enq_work(WorkItem(()->local_remote_call(f, args)))
+    enq_work(WorkItem(local_remote_call_thunk(f, args)))
     nothing
 end
 
@@ -629,7 +632,7 @@ end
 
 wait(r::RemoteRef) = sync_msg(:wait, r)
 fetch(r::RemoteRef) = sync_msg(:fetch, r)
-fetch(x) = x
+fetch(x::ANY) = x
 
 # writing to an uninitialized ref
 function put_ref(rid, val)
@@ -1378,9 +1381,22 @@ macro spawn(expr)
     :(spawn($expr))
 end
 
+function spawnlocal(thunk)
+    global Workqueue
+    global PGRP
+    rr = RemoteRef(myid())
+    rid = rr2id(rr)
+    wi = WorkItem(thunk)
+    (PGRP::ProcessGroup).refs[rid] = wi
+    add(wi.clientset, rid[1])
+    push(Workqueue, wi)   # add to the *front* of the queue, work first
+    yield()
+    rr
+end
+
 macro spawnlocal(expr)
     expr = localize_vars(:(()->($expr)))
-    :(spawnat(LocalProcess(), $expr))
+    :(spawnlocal($expr))
 end
 
 macro spawnat(p, expr)

@@ -904,3 +904,10 @@ julia> @benchmark 10 begin
          fetch(b)[1:1000,:] + c
        end Any;
 elapsed time: 2.18363595008850098 seconds
+
+julia> @benchmark 2 begin
+                b = @spawnlocal d[1:2000,1001:2000]
+                c = a.*a.*a.*a
+                fetch(b)[1:1000,:] + c
+              end Any;
+elapsed time: 0.15899491310119629 seconds

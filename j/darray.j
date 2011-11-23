@@ -118,7 +118,6 @@ end
 myindexes(s::SubDArray) = myindexes(s, false)
 
 # when we actually need the data, wait for it
-localize(r::RemoteRef) = localize(fetch(r))
 localize(d::DArray) = d.locl
 
 localize(s::SubDArray) = sub(localize(s.parent), myindexes(s, true))
@@ -411,24 +410,40 @@ ref{T}(d::DArray{T}, I::Index...) = ref_elt(d, I)
 
 ref(d::DArray) = d
 
+function _jl_da_sub(d::DArray, I::Range1{Index}...)
+    offs = d.dist[d.localpiece]-1
+    J = ntuple(ndims(d), i -> (i == d.distdim ? I[i]-offs :
+                                                I[i]))
+    return sub(localize(d), J...)
+end
+
 # Nd ref with Range1 indexes
 function ref{T}(d::DArray{T}, I::Range1{Index}...)
     (pmap, dist) = locate(d, I[d.distdim])
-    A = Array(T, map(range -> length(range), I))
-    if length(pmap) == 1 && pmap[1] == d.localpiece
+    np = length(pmap)
+    if np == 1 && pmap[1] == d.localpiece
         offs = d.dist[pmap[1]]-1
         J = ntuple(ndims(d), i -> (i == d.distdim ? I[i]-offs :
                                                     I[i]))
-        A = localize(d)[J...]
-        return A
+        return localize(d)[J...]
     end
-    for p = 1:length(pmap)
+    A = Array(T, map(length, I))
+    deps = cell(np)
+    for p = 1:np
+        K = ntuple(ndims(d),i->(i==d.distdim ? (dist[p]:(dist[p+1]-1)) :
+                                               I[i]))
+        if np == 1
+            # use remote_call_fetch if we only need to communicate with 1 proc
+            deps[p] = remote_call_fetch(d.pmap[pmap[p]], _jl_da_sub, d, K...)
+        else
+            deps[p] = remote_call(d.pmap[pmap[p]], _jl_da_sub, d, K...)
+        end
+    end
+    for p = 1:np
         offs = I[d.distdim][1] - 1
         J = ntuple(ndims(d),i->(i==d.distdim ? (dist[p]:(dist[p+1]-1))-offs :
                                                (1:length(I[i]))))
-        K = ntuple(ndims(d),i->(i==d.distdim ? (dist[p]:(dist[p+1]-1)) :
-                                               I[i]))
-        A[J...] = remote_call_fetch(d.pmap[pmap[p]], ref, d, K...)
+        A[J...] = fetch(deps[p])
     end
     return A
 end
@@ -444,18 +459,34 @@ ref(d::DArray, I::Union(Index,Range1{Index})...) =
 # Nd ref with vector indexes
 function ref{T}(d::DArray{T}, I::AbstractVector{Index}...)
     (pmap, dist, perm) = locate(d,[I[d.distdim]])
-    A = Array(T, map(range -> length(range), I))
-    if length(pmap) == 1 && pmap[1] == d.localpiece
+    np = length(pmap)
+    if np == 1 && pmap[1] == d.localpiece
         offs = d.dist[pmap[1]]-1
         J = ntuple(ndims(d), i -> (i == d.distdim ? I[i]-offs :
                                                     I[i]))
-        A = localize(d)[J...]
-        return A
+        return localize(d)[J...]
     end
+    A = Array(T, map(length, I))
     n = length(perm)
-    j = 1
     II = I[d.distdim][perm] #the sorted indexes in the distributed dimension
-    for p = 1:length(pmap)
+    deps = cell(np)
+    j = 1
+    for p = 1:np
+        if dist[p] > II[j]; continue; end
+        lower = j
+        while j <= n && II[j] < dist[p+1]
+            j += 1
+        end
+        K = ntuple(ndims(d),i->(i==d.distdim ? II[lower:(j-1)] :
+                                               I[i]))
+        if np == 1
+            deps[p] = remote_call_fetch(d.pmap[pmap[p]], ref, d, K...)
+        else
+            deps[p] = remote_call(d.pmap[pmap[p]], ref, d, K...)
+        end
+    end
+    j = 1
+    for p = 1:np
         if dist[p] > II[j]; continue; end
         lower = j
         while j <= n && II[j] < dist[p+1]
@@ -463,9 +494,7 @@ function ref{T}(d::DArray{T}, I::AbstractVector{Index}...)
         end
         J = ntuple(ndims(d),i->(i==d.distdim ? perm[lower:(j-1)] :
                                                (1:length(I[i]))))
-        K = ntuple(ndims(d),i->(i==d.distdim ? II[lower:(j-1)] :
-                                               I[i]))
-        A[J...] = remote_call_fetch(d.pmap[pmap[p]], ref, d, K...)
+        A[J...] = fetch(deps[p])
     end
     return A
 end

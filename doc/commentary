@@ -113,16 +113,6 @@ develop on the desktop, run the unmodified code on the cloud
 
 -------------------------------------------------------------------------------
 
-goals for end of 1/2011:
-- get basic parallel stuff working right out of the box
-- demo system available on darwin or something similar
-- athena locker available, start julia + do ppeval instantly at MIT.
-- start learning vCloud details, do a bootcamp session @VMW
-- 2 page outline of intro-to-julia paper
-- start wiki documentation. hopefully useful to first users at MIT.
-
--------------------------------------------------------------------------------
-
 Julia: A Next-Generation Technical Computing Language
 
 explaining our motivation and approach to developing a new high-level
@@ -227,3 +217,20 @@ We first create an empty array and assign into it whenever we feel like.
 Waiting for a piece of the array will wait for somebody to assign to it.
 This greatly frees how we can write code without giving up any of the
 parallelism allowed by the functional model.
+
+-------------------------------------------------------------------------------
+
+Is performance important? "In the small", perhaps not -- many users are
+able to get enough performance from existing languages, and even if they're
+not, a 2x or even 10x speedup might be just a convenience. But "in the large"
+it might have a big effect.
+Extreme analogy: Steve Wozniak at HP: having a computer on every engineer's
+desk seems to be a small added convenience over taking 10 seconds to walk
+down the hall to a shared computer. But it turns out that personal computers
+leverage much more.
+
+So maybe we should look for the small conveniences that make all the difference.
+
+One reason performance is important now: the developer now pays for the cycles
+to run the application, not the end user.
+
