@@ -5,8 +5,8 @@ type Set{T}
     Set(x...) = add(new(HashTable{T,Bool}(length(x))), x...)
 end
 Set() = Set{Any}()
-Set(x...) = add(Set{Any}(), x...)
-Set{T}(x::T...) = add(Set{T}(), x...)
+Set(x...) = Set{Any}(x...)
+Set{T}(x::T...) = Set{T}(x...)
 
 show(s::Set) = (show(typeof(s)); show_comma_array(s,'(',')'))
 
