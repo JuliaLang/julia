@@ -6,14 +6,7 @@ type IntSet
     IntSet(max::Int) = (lim = (max+31) & -32;
                         new(zeros(Uint32,lim>>>5), lim))
 end
-
-function intset(args...)
-    s = IntSet()
-    for i = args
-        add(s, i)
-    end
-    s
-end
+intset(args...) = add(IntSet(), args...)
 
 function add(s::IntSet, n::Int)
     if n >= s.limit
@@ -26,19 +19,26 @@ function add(s::IntSet, n::Int)
         s.limit = lim
     end
     s.bits[n>>5 + 1] |= (1<<(n&31))
-    s
+    return s
+end
+
+function add(s::IntSet, nx::Int...)
+    for n = nx
+        add(s, n)
+    end
+    return s
 end
 
 function del(s::IntSet, n::Int)
     if n < s.limit
         s.bits[n>>5 + 1] &= ~(1<<(n&31))
     end
-    s
+    return s
 end
 
 function del_all(s::IntSet)
     s.bits[:] = 0
-    s
+    return s
 end
 
 function has(s::IntSet, n::Int)
@@ -66,7 +66,7 @@ function choose(s::IntSet)
     if n >= s.limit
         error("choose: set is empty")
     end
-    n
+    return n
 end
 
 length(s::IntSet) = numel(s)

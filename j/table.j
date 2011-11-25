@@ -51,7 +51,7 @@ idtable() = IdTable(0)
 function assign(t::IdTable, v::ANY, k::ANY)
     t.ht = ccall(:jl_eqtable_put,
                  Any, (Any, Any, Any), t.ht, k, v)::Array{Any,1}
-    t
+    return t
 end
 
 get(t::IdTable, key::ANY, default::ANY) =
@@ -96,7 +96,7 @@ function hash(t::Tuple)
     for i=1:length(t)
         h = bitmix(h,hash(t[i]))
     end
-    h
+    return h
 end
 
 function hash(a::Array)
@@ -104,7 +104,7 @@ function hash(a::Array)
     for i=1:length(a)
         h = bitmix(h,hash(a[i]))
     end
-    h
+    return h
 end
 
 hash(x::Any) = uid(x)
@@ -160,7 +160,7 @@ function rehash{K,V}(h::HashTable{K,V}, newsz)
     h.vals = newht.vals
     h.used = newht.used
     h.deleted = newht.deleted
-    h
+    return h
 end
 
 function del_all{K,V}(h::HashTable{K,V})
@@ -170,7 +170,7 @@ function del_all{K,V}(h::HashTable{K,V})
     h.vals = newht.vals
     h.used = newht.used
     h.deleted = newht.deleted
-    h
+    return h
 end
 
 function assign{K,V}(h::HashTable{K,V}, v, key)
@@ -262,7 +262,7 @@ function del(h::HashTable, key)
     if index > 0
         add(h.deleted, index)
     end
-    h
+    return h
 end
 
 function skip_deleted(used, deleted, i)
@@ -291,13 +291,13 @@ function add_weak_key(t::HashTable, k, v)
     end
     t[WeakRef(k)] = v
     finalizer(k, t.deleter)
-    t
+    return t
 end
 
 function add_weak_value(t::HashTable, k, v)
     t[k] = WeakRef(v)
     finalizer(v, x->del(t, k))
-    t
+    return t
 end
 
 type WeakKeyHashTable{K,V} <: Associative
