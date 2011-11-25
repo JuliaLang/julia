@@ -174,6 +174,9 @@ function del_all{K,V}(h::HashTable{K,V})
 end
 
 function assign{K,V}(h::HashTable{K,V}, v, key)
+    key = convert(K,key)
+    v = convert(V,v)
+
     sz = length(h.keys)
 
     if numel(h.deleted) >= ((3*sz)>>2)
@@ -217,7 +220,9 @@ function assign{K,V}(h::HashTable{K,V}, v, key)
 end
 
 # get the index where a key is stored, or -1 if not present
-function ht_keyindex(h::HashTable, key)
+function ht_keyindex{K,V}(h::HashTable{K,V}, key)
+    key = convert(K,key)
+
     sz = length(h.keys)
     iter = 0
     maxprobe = sz>>3
