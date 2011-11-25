@@ -6,7 +6,7 @@ type IntSet
     IntSet(max::Int) = (lim = (max+31) & -32;
                         new(zeros(Uint32,lim>>>5), lim))
 end
-intset(args...) = add(IntSet(), args...)
+intset(args...) = add_each(IntSet(), args)
 
 function add(s::IntSet, n::Int)
     if n >= s.limit
@@ -22,8 +22,8 @@ function add(s::IntSet, n::Int)
     return s
 end
 
-function add(s::IntSet, nx::Int...)
-    for n = nx
+function add_each(s::IntSet, ns)
+    for n = ns
         add(s, n)
     end
     return s
@@ -32,6 +32,13 @@ end
 function del(s::IntSet, n::Int)
     if n < s.limit
         s.bits[n>>5 + 1] &= ~(1<<(n&31))
+    end
+    return s
+end
+
+function del_each(s::IntSet, ns)
+    for n = ns
+        del(s, n)
     end
     return s
 end

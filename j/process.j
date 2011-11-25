@@ -217,7 +217,7 @@ end
 ## building connected and disconnected pipelines ##
 
 add_cmds(set::Set{Cmd}, cmd::Cmd) = add(set, cmd)
-add_cmds(set::Set{Cmd}, cmds::Set{Cmd}) = add(set, cmds...)
+add_cmds(set::Set{Cmd}, cmds::Set{Cmd}) = add_each(set, cmds)
 
 function (&)(cmds::Cmds...)
     set = Set{Cmd}()
@@ -228,7 +228,7 @@ function (&)(cmds::Cmds...)
 end
 
 add_ports(set::Set{Port}, port::Port) = add(set, port)
-add_ports(set::Set{Port}, ports::Set{Port}) = add(set, ports...)
+add_ports(set::Set{Port}, ports::Set{Port}) = add_each(set, ports)
 
 function (&)(ports::Ports...)
     set = Set{Port}()
@@ -261,7 +261,7 @@ function merge(cmds::Cmds)
     if length(cmds) > 1
         pipeline = Set{Cmd}()
         for cmd = cmds
-            add(pipeline, cmd.pipeline...)
+            add_each(pipeline, cmd.pipeline)
         end
         for cmd = pipeline
             cmd.pipeline = pipeline
