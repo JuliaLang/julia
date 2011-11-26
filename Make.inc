@@ -19,8 +19,8 @@ USEGCC = 1
 USECLANG = 0
 
 ifeq ($(USEGCC),1)
-CC = gcc
-CXX = g++
+CC = gcc-4.2
+CXX = g++-4.2
 FC = gfortran
 CFLAGS = -pipe -std=gnu99 -fPIC
 CXXFLAGS = -pipe -fPIC -fno-rtti
@@ -40,6 +40,11 @@ endif
 # OS specific stuff
 
 USE_SYSTEM_READLINE=0
+
+# If OpenBLAS doesn't build, find your architechure at the following URL and enter it below
+# https://github.com/xianyi/OpenBLAS/blob/master/GotoBLAS_01Readme.txt
+TARGET_OPENBLAS_ARCH=
+
 
 ifeq ($(OS), Linux)
 SHLIB_EXT = so
