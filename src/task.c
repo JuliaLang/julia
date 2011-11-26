@@ -17,9 +17,13 @@
 #include <libgen.h>
 #include <unistd.h>
 #include "julia.h"
+#if defined(__APPLE__)
+#include <execinfo.h>
+#else
 // This gives unwind only local unwinding options ==> faster code
 #define UNW_LOCAL_ONLY
 #include <libunwind.h>
+#endif
 
 /* This probing code is derived from Douglas Jones' user thread library */
 
@@ -445,6 +449,36 @@ static void init_task(jl_task_t *t)
 
 void getFunctionInfo(char **name, int *line, const char **filename, size_t pointer);
 
+#if defined(__APPLE__)
+// stacktrace using execinfo
+static jl_value_t *build_backtrace(void)
+{
+	void *array[1024];
+	size_t ip;
+	size_t* p;
+    jl_array_t *a;
+    a = jl_alloc_cell_1d(0);
+    JL_GC_PUSH(&a);
+    int j = 0;
+	
+	backtrace(array, 1023);
+	p = array;
+	while ((ip = *(p++)) != 0) {
+        char *func_name;
+        int line_num;
+        const char *file_name;
+        getFunctionInfo(&func_name, &line_num, &file_name, ip);
+        if (func_name != NULL) {
+            jl_array_grow_end(a, 3);
+            jl_arrayset(a, j, (jl_value_t*)jl_symbol(func_name)); j++;
+            jl_arrayset(a, j, (jl_value_t*)jl_symbol(file_name)); j++;
+            jl_arrayset(a, j, jl_box_long(line_num)); j++;
+        }
+    }
+    JL_GC_POP();
+    return (jl_value_t*)a;
+}
+#else
 // stacktrace using libunwind
 static jl_value_t *build_backtrace(void)
 {
@@ -474,6 +508,7 @@ static jl_value_t *build_backtrace(void)
     JL_GC_POP();
     return (jl_value_t*)a;
 }
+#endif
 
 #if 0
 static _Unwind_Reason_Code tracer(void *ctx, void *arg)
