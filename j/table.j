@@ -45,9 +45,6 @@ type IdTable <: Associative
     IdTable() = IdTable(0)
 end
 
-idtable(sz::Int) = IdTable(sz)
-idtable() = IdTable(0)
-
 function assign(t::IdTable, v::ANY, k::ANY)
     t.ht = ccall(:jl_eqtable_put,
                  Any, (Any, Any, Any), t.ht, k, v)::Array{Any,1}

@@ -77,7 +77,7 @@ isType(t::ANY) = isa(t,AbstractKind) && is((t::AbstractKind).name,Type.name)
 
 isseqtype(t::ANY) = isa(t,AbstractKind) && is((t::AbstractKind).name.name,:...)
 
-const t_func = idtable()
+const t_func = IdTable()
 #t_func[tuple] = (0, Inf, (args...)->limit_tuple_depth(args))
 t_func[throw] = (1, 1, x->None)
 t_func[boxsi8] = (1, 1, x->Int8)
@@ -783,7 +783,7 @@ end
 
 function stupdate(state, changes::Union(StateUpdate,VarTable), vars)
     if is(state,())
-        state = idtable()
+        state = IdTable()
     end
     for i = 1:length(vars)
         v = vars[i]
@@ -927,7 +927,7 @@ function typeinf(linfo::LambdaStaticData,atypes::Tuple,sparams::Tuple, def, cop)
     # initial set of pc
     add(W,1)
     # initial types
-    s[1] = idtable()
+    s[1] = IdTable()
     for v=vars
         s[1][v] = Undef
     end
@@ -943,7 +943,7 @@ function typeinf(linfo::LambdaStaticData,atypes::Tuple,sparams::Tuple, def, cop)
         s[1][args[i]] = atypes[i]
     end
     # types of closed vars
-    cenv = idtable()
+    cenv = IdTable()
     for vi = ((ast.args[2].args[3])::Array{Any,1})
         vi::Array{Any,1}
         vname = vi[1]
@@ -1160,7 +1160,7 @@ end
 # annotate types of all symbols in AST
 function type_annotate(ast::Expr, states::Array{Any,1},
                        sv::ANY, rettype::ANY, vnames::ANY)
-    decls = idtable()
+    decls = IdTable()
     closures = empty(LambdaStaticData)
     body = ast.args[3].args::Array{Any,1}
     for i=1:length(body)

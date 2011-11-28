@@ -434,7 +434,7 @@ end
 # on uninitialized RemoteRefs since that might cause a deadlock, while G.O.s
 # are a special case where we know waiting on the RR is OK.
 function deserialize(s, t::Type{GORef})
-    gr = force(invoke(deserialize, (Any, Type), s, t))
+    gr = force(invoke(deserialize, (Any, CompositeKind), s, t))
     rid = (gr.whence, gr.id)
     add_client(rid, myid())
     function ()
@@ -452,7 +452,7 @@ function deserialize(s, t::Type{GORef})
 end
 
 function deserialize(s, t::Type{RemoteRef})
-    rr = force(invoke(deserialize, (Any, Type), s, t))
+    rr = force(invoke(deserialize, (Any, CompositeKind), s, t))
     rid = rr2id(rr)
     where = rr.where
     if where == myid()

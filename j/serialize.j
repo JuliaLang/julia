@@ -5,16 +5,19 @@ abstract LongSymbol
 abstract LongTuple
 abstract LongExpr
 
-const _jl_ser_tag = idtable()
-const _jl_deser_tag = idtable()
+const _jl_ser_tag = IdTable()
+const _jl_deser_tag = IdTable()
 let i = 2
     global _jl_ser_tag, _jl_deser_tag
     for t = {Symbol, Int8, Uint8, Int16, Uint16, Int32, Uint32,
              Int64, Uint64, Float32, Float64, Char, Ptr,
              AbstractKind, UnionKind, BitsKind, CompositeKind, FuncKind,
              Tuple, Array, Expr, LongSymbol, LongTuple, LongExpr,
-
-             (), Bool, Any, :Any, :Array, :TypeVar, :FuncKind, :Box,
+             LineNumberNode, SymbolNode, LabelNode, GotoNode,
+             QuoteNode, TopNode, TypeVar, Box,
+             
+             (), Bool, Any, :Any, None, Top, Undef, Type,
+             :Array, :TypeVar, :FuncKind, :Box,
              :lambda, :vinf, :locals, :body, :return, :call, symbol("::"),
              :(=), :null, :gotoifnot, :A, :B, :C, :M, :N, :T, :S, :X, :Y,
              :a, :b, :c, :d, :e, :f, :g, :h, :i, :j, :k, :l, :m, :n, :o,
@@ -25,9 +28,7 @@ let i = 2
              :arrayset, :arrayref,
              false, true, nothing, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11,
              12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27,
-             28, 29, 30, 31, 32,
-             LineNumberNode, SymbolNode, LabelNode, GotoNode,
-             QuoteNode, TopNode, TypeVar, Box}
+             28, 29, 30, 31, 32}
         _jl_ser_tag[t] = int32(i)
         _jl_deser_tag[int32(i)] = t
         i += 1
@@ -124,21 +125,6 @@ function serialize(s, e::Expr)
     end
 end
 
-function serialize(s, t::Union(AbstractKind,BitsKind,CompositeKind))
-    if has(_jl_ser_tag,t)
-        write_as_tag(s, t)
-    else
-        writetag(s, AbstractKind)
-        serialize(s, t.name.name)
-        serialize(s, t.parameters)
-    end
-end
-
-function serialize(s, u::UnionKind)
-    writetag(s, UnionKind)
-    serialize(s, u.types)
-end
-
 function _jl_lambda_number(l::LambdaStaticData)
     # a hash function that always gives the same number to the same
     # object on the same machine, and is unique over all machines.
@@ -170,28 +156,44 @@ function serialize(s, f::Function)
     end
 end
 
+function serialize_type_data(s, t)
+    tname = t.name.name
+    serialize(s, tname)
+    if isbound(tname) && is(t,eval(tname))
+        serialize(s, ())
+    else
+        serialize(s, t.parameters)
+    end
+end
+
+function serialize(s, t::Union(AbstractKind,BitsKind,CompositeKind))
+    if has(_jl_ser_tag,t)
+        write_as_tag(s, t)
+    else
+        writetag(s, AbstractKind)
+        serialize_type_data(s, t)
+    end
+end
+
+function serialize_type(s, t::Union(CompositeKind,BitsKind))
+    if has(_jl_ser_tag,t) && !is(t,FuncKind)
+        writetag(s, t)
+    else
+        writetag(s, typeof(t))
+        serialize_type_data(s, t)
+    end
+end
+
 function serialize(s, x)
     if has(_jl_ser_tag,x)
         return write_as_tag(s, x)
     end
     t = typeof(x)
     if isa(t,BitsKind)
-        if has(_jl_ser_tag,t)
-            writetag(s, t)
-        else
-            writetag(s, BitsKind)
-            serialize(s, t.name.name)
-            serialize(s, t.parameters)
-        end
+        serialize_type(s, t)
         write(s, x)
     elseif isa(t,CompositeKind)
-        writetag(s, CompositeKind)
-        if has(_jl_ser_tag,t)
-            write_as_tag(s, t)
-        else
-            serialize(s, t.name.name)
-            serialize(s, t.parameters)
-        end
+        serialize_type(s, t)
         for n = t.names
             serialize(s, getfield(x, n))
         end
@@ -229,20 +231,6 @@ function deserialize(s)
         return deserialize_function(s)
     end
     return deserialize(s, tag)
-end
-
-deserialize(s, t::BitsKind) = read(s, t)
-
-function deserialize(s, ::Type{BitsKind})
-    name = deserialize(s)::Symbol
-    params = force(deserialize(s))
-    t = apply_type(eval(name), params...)
-    return read(s, t)
-end
-
-function deserialize(s, ::Type{UnionKind})
-    args = deserialize(s)
-    ()->Union(force(args)...)
 end
 
 deserialize_tuple(s, len) = (a = ntuple(len, i->deserialize(s));
@@ -315,23 +303,6 @@ function deserialize_expr(s, len)
     end
 end
 
-function deserialize(s, ::Type{AbstractKind})
-    name = deserialize(s)::Symbol
-    params = force(deserialize(s))
-    apply_type(eval(name), params...)
-end
-
-function deserialize(s, ::Type{CompositeKind})
-    t = deserialize(s)
-    if !isa(t,CompositeKind)
-        name::Symbol = t
-        params = force(deserialize(s))
-        t = apply_type(eval(name), params...)
-    end
-    # allow delegation to more specialized method
-    return deserialize(s, t)
-end
-
 function deserialize(s, ::Type{TypeVar})
     name = force(deserialize(s))
     lb = force(deserialize(s))
@@ -339,9 +310,32 @@ function deserialize(s, ::Type{TypeVar})
     typevar(name, lb, ub)
 end
 
+function deserialize(s, ::Type{UnionKind})
+    types = deserialize(s)
+    ()->Union(force(types)...)
+end
+
+function deserialize(s, ::Type{AbstractKind})
+    name = deserialize(s)::Symbol
+    params = force(deserialize(s))
+    ty = eval(name)
+    if is(params,())
+        return ty
+    end
+    apply_type(ty, params...)
+end
+
+function deserialize(s, ::Union(Type{CompositeKind}, Type{BitsKind}))
+    t = deserialize(s, AbstractKind)
+    # allow delegation to more specialized method
+    return deserialize(s, t)
+end
+
+# default bits deserializer
+deserialize(s, t::BitsKind) = read(s, t)
+
 # default structure deserializer
-function deserialize(s, t::Type)
-    @assert (isa(t,CompositeKind))
+function deserialize(s, t::CompositeKind)
     nf = length(t.names)
     if nf == 0
         return ccall(:jl_new_struct, Any, (Any,Any...), t)

@@ -356,9 +356,8 @@ end
 load_ascii_array(f::String, nr, nc) = load_ascii_array(open(f), nr, nc)
 function load_ascii_array(f, nr, nc)
     a = Array(Float64, (long(nr), long(nc)))
-    delims = Set(' ','\t')
     for i=1:nr
-        row = split(readline(f), delims, false)
+        row = split(readline(f), (' ','\t'), false)
         for j=1:nc
             a[i,j] = float64(row[j])
         end
