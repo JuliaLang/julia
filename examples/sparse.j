@@ -295,7 +295,7 @@ end # macro
 
 # In matrix-vector multiplication, the right orientation of the vector is assumed.
 function (*){T1,T2}(A::SparseMatrixCSC{T1}, X::Vector{T2})
-    Y = Array(promote_type(T1,T2), A.m)
+    Y = zeros(promote_type(T1,T2), A.m)
     for col = 1 : A.n
         for k = A.colptr[col] : (A.colptr[col+1]-1)
             Y[A.rowval[k]] += A.nzval[k] * X[col]
@@ -306,7 +306,7 @@ end
 
 # In vector-matrix multiplication, the right orientation of the vector is assumed.
 function (*){T1,T2}(X::Vector{T1}, A::SparseMatrixCSC{T2})
-    Y = Array(promote_type(T1,T2), A.n)
+    Y = zeros(promote_type(T1,T2), A.n)
     for col = 1 : A.n
         for k = A.colptr[col] : (A.colptr[col+1]-1)
             Y[col] += X[A.rowval[k]] * A.nzval[k]
@@ -318,7 +318,7 @@ end
 function (*){T1,T2}(A::SparseMatrixCSC{T1}, X::Matrix{T2})
     mX, nX = size(X)
     if A.n != mX; error("error in *: mismatched dimensions"); end
-    Y = Array(promote_type(T1,T2), A.m, nX)
+    Y = zeros(promote_type(T1,T2), A.m, nX)
     for multivec_col = 1:nX
         for col = 1 : A.n
             for k = A.colptr[col] : (A.colptr[col+1]-1)
@@ -332,7 +332,7 @@ end
 function (*){T1,T2}(X::Matrix{T1}, A::SparseMatrixCSC{T2})
     mX, nX = size(X)
     if nX != A.m; error("error in *: mismatched dimensions"); end
-    Y = Array(promote_type(T1,T2), mX, A.n)
+    Y = zeros(promote_type(T1,T2), mX, A.n)
     for multivec_row = 1:mX
         for col = 1 : A.n
             for k = A.colptr[col] : (A.colptr[col+1]-1)
@@ -344,23 +344,21 @@ function (*){T1,T2}(X::Matrix{T1}, A::SparseMatrixCSC{T2})
 end
 
 # sparse * sparse
-# NOTE: This implementation has the wrong runtime complexity. Need something like:
-# http://www.cise.ufl.edu/research/sparse/ssmult/SSMULT/ssmult.c
 function (*){T1,T2}(X::SparseMatrixCSC{T1},Y::SparseMatrixCSC{T2}) 
     mX, nX = size(X)
     mY, nY = size(Y)
     if nX != mY; error("error in *: mismatched dimensions"); end
     T = promote_type(T1,T2)
-    A = zeros(T, mX, nY)
+    spa_cols = Array(SparseAccumulator{T},nY)
+    for i = 1:nY; spa_cols[i] = SPA(T,mX); end
     for y_col = 1:nY
         for y_elt = Y.colptr[y_col] : (Y.colptr[y_col+1]-1)
             x_col = Y.rowval[y_elt]
-            for x_elt = X.colptr[x_col] : (X.colptr[x_col+1]-1)
-                A[X.rowval[x_elt],y_col] += X.nzval[x_elt] * Y.nzval[y_elt]
-            end
+            spaxpy(spa_cols[y_col], Y.nzval[y_elt], X, x_col)
         end
     end
-    return A
+    return spahcat(spa_cols...)
+    
 end
 
 ## ref ##
@@ -498,3 +496,91 @@ end
 
 #TODO: assign of ranges, vectors
 #TODO: sub
+
+type SparseAccumulator{T} <: AbstractVector{T}
+    len::Size
+    vals::Vector{T}
+    flags::Vector{Bool}
+    indexes::Vector{Index}
+end
+
+SPA(s::Size) = SPA(Float64, s)
+function SPA{T}(::Type{T}, s::Size)
+    SparseAccumulator(s,Array(T,s),falses(s),Array(Index,0))
+end
+
+function show{T}(S::SparseAccumulator{T})
+    invoke(show, (Any,), S)
+end
+
+size{T}(S::SparseAccumulator{T}) = S.len
+
+ref{T}(S::SparseAccumulator{T}, i::Index) = S.flags[i] ? S.vals[i] : zero(T)
+
+assign{T,N}(S::SparseAccumulator{T}, v::AbstractArray{T,N}, i::Index) = 
+    invoke(assign, (SparseAccumulator{T}, Any, Index), S, v, i)
+function assign{T}(S::SparseAccumulator{T}, v, i::Index)
+    if v == zero(T)
+        if S.flags[i]
+            S.vals[i] = v
+        end
+    else
+        if S.flags[i]
+            S.vals[i] = v
+        else
+            S.flags[i] = true
+            S.vals[i] = v
+            push(S.indexes, i)
+        end
+    end
+    S
+end
+
+#increments S[i] by v
+function spaincr{T}(S::SparseAccumulator{T}, v, i::Index)
+    if v != zero(T)
+        if S.flags[i]
+            S.vals[i] += v
+        else
+            S.flags[i] = true
+            S.vals[i] = v
+            push(S.indexes, i)
+        end
+    end
+    S
+end
+
+#sets S = S + a*x, where x is col j of A
+function spaxpy{T}(S::SparseAccumulator{T}, a, A::SparseMatrixCSC{T}, j::Index)
+    if size(S) != A.m; error("error in spaxpy: dimension mismatch"); end
+    for i = A.colptr[j]:(A.colptr[j+1]-1)
+        spaincr(S, a*A.nzval[i], A.rowval[i])
+    end
+    S
+end
+
+#returns a sparse matrix which represents the hcat of inputs
+function spahcat{T}(S::SparseAccumulator{T}...)
+    m = size(S[1])
+    n = length(S)
+    for i = 2:n
+        if size(S[i]) != m; error("error in spahcat: mismatched lengths"); end
+    end
+    colptr = Array(Size, n+1)
+    rowval = Array(Size, 0)
+    nzval = Array(T, 0)
+    colptr[1] = 1
+    for i = 1:n
+        colptr[i+1] = colptr[i]
+        s = S[i]
+        sort!(s.indexes)
+        for j = s.indexes
+            if s.flags[j]
+                push(rowval,j)
+                push(nzval,s.vals[j])
+                colptr[i+1] += 1
+            end
+        end
+    end
+    return SparseMatrixCSC(m,n,colptr,rowval,nzval)
+end
