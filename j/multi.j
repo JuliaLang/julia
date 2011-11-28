@@ -459,12 +459,16 @@ function deserialize(s, t::Type{RemoteRef})
         add_client(rid, myid())
     end
     function ()
-        if (where == myid() &&
-           (wi = lookup_ref(rid);true) && !is(wi.thunk,bottom_func))
+        if where == myid()
+            wi = lookup_ref(rid)
             if !wi.done
-                #println("$(myid()) waiting for $where,$(rid[1]),$(rid[2])")
-                wait(WeakRemoteRef(where, rid[1], rid[2]))
-                #println("...ok")
+                if !is(wi.thunk,bottom_func)
+                    #println("$(myid()) waiting for $where,$(rid[1]),$(rid[2])")
+                    wait(WeakRemoteRef(where, rid[1], rid[2]))
+                    #println("...ok")
+                else
+                    return RemoteRef(where, rid[1], rid[2])
+                end
             end
             v = wi.result
             # NOTE: this duplicates work_result()
