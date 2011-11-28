@@ -700,7 +700,7 @@ UIBOX_FUNC(uint64, uint64_t, 3)
 static jl_value_t *boxed_int8_cache[256];
 jl_value_t *jl_box_int8(int8_t x)
 {
-    return boxed_int8_cache[((int32_t)x)+128];
+    return boxed_int8_cache[(uint8_t)x];
 }
 static jl_value_t *boxed_uint8_cache[256];
 jl_value_t *jl_box_uint8(uint8_t x)
@@ -721,7 +721,7 @@ void jl_init_box_caches(void)
 {
     int64_t i;
     for(i=0; i < 256; i++) {
-        boxed_int8_cache[i]  = jl_new_box_int8((int8_t)(i-128));
+        boxed_int8_cache[i]  = jl_new_box_int8(i);
         boxed_uint8_cache[i] = jl_new_box_uint8(i);
     }
     for(i=0; i < NBOX_C; i++) {
