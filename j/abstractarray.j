@@ -154,23 +154,23 @@ end
 *(A::Number, B::AbstractArray) = A .* B
 *(A::AbstractArray, B::Number) = A .* B
 
-./(x::AbstractArray, y::AbstractArray) = reshape( [ x[i] ./ y[i] | i=1:numel(x) ], size(x) )
-./(x::Number,        y::AbstractArray) = reshape( [ x    ./ y[i] | i=1:numel(y) ], size(y) )
-./(x::AbstractArray, y::Number       ) = reshape( [ x[i] ./ y    | i=1:numel(x) ], size(x) )
-
 /(A::Number, B::AbstractArray) = A ./ B
 /(A::AbstractArray, B::Number) = A ./ B
 
 \(A::Number, B::AbstractArray) = B ./ A
 \(A::AbstractArray, B::Number) = B ./ A
 
+./(x::Array, y::Array ) = reshape( [ x[i] ./ y[i] | i=1:numel(x) ], size(x) )
+./(x::Number,y::Array ) = reshape( [ x    ./ y[i] | i=1:numel(y) ], size(y) )
+./(x::Array, y::Number) = reshape( [ x[i] ./ y    | i=1:numel(x) ], size(x) )
+
 # ^ is difficult, since negative exponents give a different type
 
-.^(x::AbstractArray, y::AbstractArray) = reshape( [ x[i] ^ y[i] | i=1:numel(x) ], size(x) )
-.^(x::Number,        y::AbstractArray) = reshape( [ x    ^ y[i] | i=1:numel(y) ], size(y) )
-.^(x::AbstractArray, y::Number       ) = reshape( [ x[i] ^ y    | i=1:numel(x) ], size(x) )
+.^(x::Array, y::Array ) = reshape( [ x[i] ^ y[i] | i=1:numel(x) ], size(x) )
+.^(x::Number,y::Array ) = reshape( [ x    ^ y[i] | i=1:numel(y) ], size(y) )
+.^(x::Array, y::Number) = reshape( [ x[i] ^ y    | i=1:numel(x) ], size(x) )
 
-function .^{S<:Int,T<:Int}(A::AbstractArray{S}, B::AbstractArray{T})
+function .^{S<:Int,T<:Int}(A::Array{S}, B::Array{T})
     if size(A) != size(B); error("argument dimensions must match"); end
     F = similar(A, Float64)
     for i=1:numel(A)
@@ -179,7 +179,7 @@ function .^{S<:Int,T<:Int}(A::AbstractArray{S}, B::AbstractArray{T})
     return F
 end
 
-function .^{T<:Int}(A::Int, B::AbstractArray{T})
+function .^{T<:Int}(A::Int, B::Array{T})
     F = similar(B, Float64)
     for i=1:numel(B)
         F[i] = A^B[i]
@@ -194,7 +194,7 @@ function _jl_power_array_int_body(F, A, B)
     return F
 end
 
-function .^{T<:Int}(A::AbstractArray{T}, B::Int)
+function .^{T<:Int}(A::Array{T}, B::Int)
     F = similar(A, B < 0 ? Float64 : promote_type(T,typeof(B)))
     _jl_power_array_int_body(F, A, B)
 end
@@ -202,7 +202,7 @@ end
 macro binary_arithmetic_op(f)
     quote
 
-        function ($f){S,T}(A::AbstractArray{S}, B::AbstractArray{T})
+        function ($f){S,T}(A::Array{S}, B::Array{T})
             if size(A) != size(B); error("argument dimensions must match"); end
             F = similar(A, promote_type(S,T))
             for i=1:numel(A)
@@ -210,14 +210,14 @@ macro binary_arithmetic_op(f)
             end
             return F
         end
-        function ($f){T}(A::Number, B::AbstractArray{T})
+        function ($f){T}(A::Number, B::Array{T})
             F = similar(B, promote_type(typeof(A),T))
             for i=1:numel(B)
                 F[i] = ($f)(A, B[i])
             end
             return F
         end
-        function ($f){T}(A::AbstractArray{T}, B::Number)
+        function ($f){T}(A::Array{T}, B::Number)
             F = similar(A, promote_type(T,typeof(B)))
             for i=1:numel(A)
                 F[i] = ($f)(A[i], B)
@@ -239,7 +239,7 @@ end # macro
 
 ## promotion to complex ##
 
-function complex{S<:Real,T<:Real}(A::AbstractArray{S}, B::AbstractArray{T})
+function complex{S<:Real,T<:Real}(A::Array{S}, B::Array{T})
     F = similar(A, typeof(complex(zero(S),zero(T))))
     for i=1:numel(A)
         F[i] = complex(A[i], B[i])
@@ -247,7 +247,7 @@ function complex{S<:Real,T<:Real}(A::AbstractArray{S}, B::AbstractArray{T})
     return F
 end
 
-function complex{T<:Real}(A::Real, B::AbstractArray{T})
+function complex{T<:Real}(A::Real, B::Array{T})
     F = similar(B, typeof(complex(A,zero(T))))
     for i=1:numel(B)
         F[i] = complex(A, B[i])
@@ -255,7 +255,7 @@ function complex{T<:Real}(A::Real, B::AbstractArray{T})
     return F
 end
 
-function complex{T<:Real}(A::AbstractArray{T}, B::Real)
+function complex{T<:Real}(A::Array{T}, B::Real)
     F = similar(A, typeof(complex(zero(T),B)))
     for i=1:numel(A)
         F[i] = complex(A[i], B)
@@ -263,7 +263,7 @@ function complex{T<:Real}(A::AbstractArray{T}, B::Real)
     return F
 end
 
-function complex{T<:Real}(A::AbstractArray{T})
+function complex{T<:Real}(A::Array{T})
     z = zero(T)
     F = similar(A, typeof(complex(z,z)))
     for i=1:numel(A)
@@ -276,7 +276,7 @@ end
 
 macro binary_comparison_op(f)
     quote
-        function ($f)(A::AbstractArray, B::AbstractArray)
+        function ($f)(A::Array, B::Array)
             if size(A) != size(B); error("argument dimensions must match"); end
             F = similar(A, Bool)
             for i = 1:numel(A)
@@ -284,14 +284,14 @@ macro binary_comparison_op(f)
             end
             return F
         end
-        function ($f)(A::Number, B::AbstractArray)
+        function ($f)(A::Number, B::Array)
             F = similar(B, Bool)
             for i = 1:numel(B)
                 F[i] = ($f)(A, B[i])
             end
             return F
         end
-        function ($f)(A::AbstractArray, B::Number)
+        function ($f)(A::Array, B::Number)
             F = similar(A, Bool)
             for i = 1:numel(A)
                 F[i] = ($f)(A[i], B)
