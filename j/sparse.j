@@ -51,19 +51,29 @@ function sparse(I::AbstractVector, J::AbstractVector,
                 V::Union(Number,AbstractVector), 
                 m::Int, n::Int)
 
+    create_J_copy = true
+
     if ~issorted(I)
         (I,p) = sortperm(I)
         J = J[p]
         if isa(V, AbstractVector); V = V[p]; end
+        create_J_copy = false
+    else
+        I = copy(I)
     end
 
     if ~issorted(J)
         (J,p) = sortperm(J)
         I = I[p]
-        if isa(V, AbstractVector); V = reverse(V); end
+        if isa(V, AbstractVector); V = V[p]; end
+    else
+        if create_J_copy
+            J = copy(J)
+            if isa(V, AbstractVector); V = copy(V); end
+        end
     end
 
-    _jl_make_sparse(I,J,V,m,n)
+    return _jl_make_sparse(I, J, V, m, n)
 
 end
 
@@ -110,9 +120,7 @@ function _jl_make_sparse(I::AbstractVector, J::AbstractVector,
 
     colptr = cumsum(cols)
 
-    # NOTE: SparseMatrixCSC can be extended to allow some extra storage
-    # If so, this trimming can be avoided
-    if ndups > 0
+    if ndups > 0.2*length(I)
         numnz = length(I)-ndups
         I = I[1:numnz]
         V = V[1:numnz]
