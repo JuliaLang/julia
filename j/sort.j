@@ -313,3 +313,6 @@ function issorted(v::AbstractVector)
   end
   return true
 end
+
+issorted(v::Range1) = true
+issorted(v::Range) = v.step < 0 ? false : true

@@ -51,23 +51,13 @@ function sparse(I::AbstractVector, J::AbstractVector,
                 V::Union(Number,AbstractVector), 
                 m::Int, n::Int)
 
-    if isa(I, Range1)
-        # do nothing
-    elseif isa(I, Range)
-        if step(I) < 0
-            I = reverse(I)
-            J = reverse(J)
-            if isa(V, AbstractVector); V = reverse(V); end
-        end
-    else
+    if ~issorted(I)
         (I,p) = sortperm(I)
         J = J[p]
         if isa(V, AbstractVector); V = V[p]; end
     end
 
-    if isa(J, Range1)
-        # do nothing
-    else
+    if ~issorted(J)
         (J,p) = sortperm(J)
         I = I[p]
         if isa(V, AbstractVector); V = reverse(V); end
@@ -77,43 +67,53 @@ function sparse(I::AbstractVector, J::AbstractVector,
 
 end
 
-# sparse() assumes that I,J are sorted in dictionary order (with J taking precedence)
+# _jl_make_sparse() assumes that I,J are sorted in dictionary order 
+# (with J taking precedence)
 # use sparse() with the same arguments if this is not the case
 function _jl_make_sparse(I::AbstractVector, J::AbstractVector, 
                          V::Union(Number, AbstractVector),
                          m::Int, n::Int)
 
-    if isa(V, Number)
+    if isa(I, Range1) || isa(I, Range); I = [I]; end
+    if isa(J, Range1) || isa(J, Range); J = [J]; end
+
+    if isa(V, Range1) || isa(V, Range)
+        V = [V]
+    elseif isa(V, Number)
         V = fill(V, length(I))
     end
 
+    cols = zeros(Size, n+1)
+    cols[1] = 1
+    cols[J[1] + 1] = 1
+
     lastdup = 1
+    ndups = 0
+
     for k=2:length(I)
         if I[k] == I[lastdup] && J[k] == J[lastdup]
-            I[k] = -1
-            J[k] = -1
             V[lastdup] += V[k]
+            ndups += 1
         else
-            lastdup = k
+            cols[J[k] + 1] += 1
+            lastdup = k-ndups
+            if ndups != 0
+                I[k-ndups] = I[k]
+                J[k-ndups] = J[k]
+                V[k-ndups] = V[k]
+            end
         end
     end
 
-    select = find(I > 0)
-    if length(select) < length(I)
-        I = I[select]
-        J = J[select]
-        V = V[select]
+    colptr = cumsum(cols)
+
+    # NOTE: SparseMatrixCSC can be extended to allow some extra storage
+    # If so, this trimming can be avoided
+    if ndups > 0
+        numnz = length(I)-ndups
+        I = I[1:numnz]
+        V = V[1:numnz]
     end
-
-    numnz = length(I)
-
-    w = zeros(Size, n+1)
-    w[1] = 1
-    for k=1:numnz; w[J[k] + 1] += 1; end
-    colptr = cumsum(w)
-
-    if isa(I, Range1) || isa(I, Range); I = [I]; end
-    if isa(V, Range1) || isa(V, Range); V = [V]; end
 
     return SparseMatrixCSC(m, n, colptr, I, V)
 end
