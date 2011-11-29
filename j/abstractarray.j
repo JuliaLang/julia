@@ -81,6 +81,10 @@ one{T}(x::AbstractArray{T,2}) = (m=size(x,1); n=size(x,2);
                           a)
 zero{T}(x::AbstractArray{T,2}) = zeros(T,size(x))
 
+linspace(start::Real, stop::Real) = [ i | i=start:stop ]
+linspace(R::Range1) = linspace(start(R), stop(R), step(R))
+linspace(R::Range) = linspace(start(R), stop(R), step(R))
+
 ## Conversions ##
 
 int8   (x::AbstractArray) = copy_to(similar(x,Int8)  , x)
