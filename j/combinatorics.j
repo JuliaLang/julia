@@ -58,6 +58,8 @@ function binomial{T<:Int}(n::T, k::T)
     return sgn*convert(T,x)
 end
 
+pascal(n) = [binomial(i+j-2,i-1) | i=1:n,j=1:n]
+
 ## other ordering related functions ##
 
 function shuffle!(a::AbstractVector)

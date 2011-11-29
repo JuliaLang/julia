@@ -832,3 +832,9 @@ end # macro
 @binary_darray_comparison_op (!=)
 @binary_darray_comparison_op (<)
 @binary_darray_comparison_op (<=)
+
+sum(d::DArray) = error("not yet implemented")
+prod(d::DArray) = error("not yet implemented")
+areduce(f::Function, d::DArray, r::Region, v0, T::Type) = error("not yet implemented")
+cumsum(d::DArray) = error("not yet implemented")
+cumprod(d::DArray) = error("not yet implemented")

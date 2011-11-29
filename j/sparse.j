@@ -53,7 +53,7 @@ function sparse(I::AbstractVector, J::AbstractVector,
 
     create_J_copy = true
 
-    if ~issorted(I)
+    if !issorted(I)
         (I,p) = sortperm(I)
         J = J[p]
         if isa(V, AbstractVector); V = V[p]; end
@@ -62,7 +62,7 @@ function sparse(I::AbstractVector, J::AbstractVector,
         I = copy(I)
     end
 
-    if ~issorted(J)
+    if !issorted(J)
         (J,p) = sortperm(J)
         I = I[p]
         if isa(V, AbstractVector); V = V[p]; end
