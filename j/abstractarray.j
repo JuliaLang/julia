@@ -1044,6 +1044,28 @@ function prod{T}(A::AbstractArray{T})
     v
 end
 
+function min{T<:Int}(A::AbstractArray{T})
+    v = typemax(T)
+    for i=1:numel(A)
+        x = A[i]
+        if x < v
+            v = x
+        end
+    end
+    v
+end
+
+function max{T<:Int}(A::AbstractArray{T})
+    v = typemin(T)
+    for i=1:numel(A)
+        x = A[i]
+        if x > v
+            v = x
+        end
+    end
+    v
+end
+
 max{T}(A::AbstractArray{T}, b::(), region::Region) = areduce(max,A,region,typemin(T),T)
 min{T}(A::AbstractArray{T}, b::(), region::Region) = areduce(min,A,region,typemax(T),T)
 sum{T}(A::AbstractArray{T}, region::Region)  = areduce(+,A,region,zero(T))
