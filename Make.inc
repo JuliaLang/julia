@@ -41,6 +41,11 @@ endif
 
 USE_SYSTEM_READLINE=0
 
+# If OpenBLAS doesn't build, find your architechure at the following URL and enter it below
+# https://github.com/xianyi/OpenBLAS/blob/master/GotoBLAS_01Readme.txt
+TARGET_OPENBLAS_ARCH=
+
+
 ifeq ($(OS), Linux)
 SHLIB_EXT = so
 OSLIBS += -Wl,--export-dynamic -Wl,--version-script=$(JULIAHOME)/src/julia.expmap $(EXTROOT)/lib/libunwind-generic.a $(EXTROOT)/lib/libunwind.a
