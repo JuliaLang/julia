@@ -25,7 +25,7 @@ FC = gfortran
 CFLAGS = -pipe -std=gnu99 -fPIC
 CXXFLAGS = -pipe -fPIC -fno-rtti
 DEBUGFLAGS = -ggdb3 -DDEBUG
-SHIPFLAGS = -O3 -DNDEBUG -falign-functions
+SHIPFLAGS = -O3 -DNDEBUG -falign-functions -momit-leaf-frame-pointer
 endif
 
 ifeq ($(USECLANG),1)
