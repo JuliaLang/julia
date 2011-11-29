@@ -41,12 +41,10 @@ isempty(r::Range) = (r.step > 0 ? r.stop < r.start : r.stop > r.start)
 isempty(r::Range1) = (r.stop < r.start)
 
 start{T<:Int}(r::Range{T}) = r.start
-stop{T<:Int}(r::Range{T}) = r.stop
 done{T<:Int}(r::Range{T}, i::T) = (r.step < 0 ? i < r.stop : i > r.stop)
 next{T<:Int}(r::Range{T}, i::T) = (i, i+r.step)
 
 start(r::Range1) = r.start
-stop(r::Range1) = r.stop
 done(r::Range1, i) = (i > r.stop)
 next{T}(r::Range1{T}, i) = (i, i+one(T))
 
@@ -65,7 +63,7 @@ ref(r::Range1, s::Range{Index}) = Range(r[s[1]],s.step,r[s[end]])
 ref(r::Range, s::Range1{Index}) = Range(r[s[1]],r.step,r[s[end]])
 ref(r::Range1, s::Range1{Index}) = Range1(r[s[1]],r[s[end]])
 
-function ref(r::Ranges, i::Int)
+function ref(r::Range, i::Int)
     if i < 1; error(BoundsError); end
     x = r.start + (i-1)*step(r)
     if step(r) > 0 ? x > r.stop : x < r.stop
@@ -74,13 +72,25 @@ function ref(r::Ranges, i::Int)
     return x
 end
 
+function ref(r::Range1, i::Int)
+    if i < 1; error(BoundsError); end
+    x = r.start + (i-1)
+    if x > r.stop
+        error(BoundsError)
+    end
+    return x
+end
+
+last(r::Range1) = r.stop
+last(r::Range) = r.start + (length(r)-1)*r.step
+
 isequal(r::Range, s::Range) = (r.start==s.start && r.step==s.step &&
-                               r.stop==s.stop)
+                               last(r)==last(s))
 
 isequal(r::Range1, s::Range1) = (r.start==s.start && r.stop==s.stop)
 
 isequal(r::Range, s::Range1) = (r.start==s.start && r.step==1 &&
-                                r.stop==s.stop)
+                                last(r)==last(s))
 
 isequal(r::Range1, s::Range) = isequal(s, r)
 
@@ -161,7 +171,7 @@ end
 ## sorting ##
 
 issorted(v::Range1) = true
-issorted(v::Range) = v.step < 0 ? false : true
+issorted(v::Range) = v.step >= 0
 
 sort(v::Range1) = v
 sort!(v::Range1) = v
@@ -171,4 +181,3 @@ function sum(v::Range1)
     n2 = v.stop
     return div((n2*(n2+1) - n1*(n1+1)), 2)
 end
-
