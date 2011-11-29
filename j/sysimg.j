@@ -108,7 +108,7 @@ load("linalg_arpack.j")
 load("sparse.j")
 
 # signal processing
-load("fft.j")
+load("signal_fftw.j")
 load("signal.j")
 
 # random number generation
