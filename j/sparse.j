@@ -130,11 +130,13 @@ function find{T}(S::SparseMatrixCSC{T})
     count = 1
     for col = 1 : S.n
         for k = S.colptr[col] : (S.colptr[col+1]-1)
-            if S.nzval[k] != 0
+            if S.nzval[k] != 0 
                 I[count] = S.rowval[k]
                 J[count] = col
                 V[count] = S.nzval[k]
                 count += 1
+            else
+                println("Warning: sparse matrix has implicit stored zeros.")
             end
         end
     end
