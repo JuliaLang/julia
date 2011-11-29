@@ -39,56 +39,54 @@ end
 
 full{T}(S::SparseMatrixCSC{T}) = convert(Array{T}, S)
 
-sparse(I,J,V) = sparse(I, J, V, max(I), max(J))
-sparse(I,J,V::Number,m,n) = sparse(I,J,fill(Array(typeof(V),length(I)),V),max(I),max(J))
-
-function findn_nzs{T}(A::AbstractMatrix{T})
-    nnzA = nnz(A)
-    I = zeros(Size, nnzA)
-    J = zeros(Size, nnzA)
-    NZs = zeros(T, nnzA)
-    z = zero(T)
-    count = 1
-    for j=1:size(A,2), i=1:size(A,1)
-        if A[i,j] != z
-            I[count] = i
-            J[count] = j
-            NZs[count] = A[i,j]
-            count += 1
-        end
-    end
-    return (I, J, NZs)
-end
-
 function sparse(A::Matrix)
     m, n = size(A)
     I, J, V = findn_nzs(A)
     sparse(I, J, V, m, n)
 end
 
-function sparse{T}(I::Vector{Size},
-                   J::Vector{Size},
-                   V::Vector{T},
-                   m::Size,
-                   n::Size)
-    (I,p) = sortperm(I)
-    J = J[p]
-    V = V[p]
+sparse(I,J,V) = sparse(I, J, V, max(I), max(J))
 
-    (J,p) = sortperm(J)
-    I = I[p]
-    V = V[p]
+function sparse(I::AbstractVector, J::AbstractVector, 
+                V::Union(Number,AbstractVector), 
+                m::Int, n::Int)
+
+    if isa(I, Range1)
+        # do nothing
+    elseif isa(I, Range)
+        if step(I) < 0
+            I = reverse(I)
+            J = reverse(J)
+            if isa(V, AbstractVector); V = reverse(V); end
+        end
+    else
+        (I,p) = sortperm(I)
+        J = J[p]
+        if isa(V, AbstractVector); V = V[p]; end
+    end
+
+    if isa(J, Range1)
+        # do nothing
+    else
+        (J,p) = sortperm(J)
+        I = I[p]
+        if isa(V, AbstractVector); V = reverse(V); end
+    end
 
     _jl_make_sparse(I,J,V,m,n)
+
 end
 
-#assumes that I,J are sorted in dictionary order (with J taking precedence)
-#use sparse() with the same arguments if this is not the case
-function _jl_make_sparse{T}(I::Vector{Size},
-                        J::Vector{Size},
-                        V::Vector{T},
-                        m::Size,
-                        n::Size)
+# sparse() assumes that I,J are sorted in dictionary order (with J taking precedence)
+# use sparse() with the same arguments if this is not the case
+function _jl_make_sparse(I::AbstractVector, J::AbstractVector, 
+                         V::Union(Number, AbstractVector),
+                         m::Int, n::Int)
+
+    if isa(V, Number)
+        V = fill(Array(typeof(V), length(I)), V)
+    end
+
     lastdup = 1
     for k=2:length(I)
         if I[k] == I[lastdup] && J[k] == J[lastdup]
@@ -101,9 +99,11 @@ function _jl_make_sparse{T}(I::Vector{Size},
     end
 
     select = find(I > 0)
-    I = I[select]
-    J = J[select]
-    V = V[select]
+    if length(select) < length(I)
+        I = I[select]
+        J = J[select]
+        V = V[select]
+    end
 
     numnz = length(I)
 
@@ -111,6 +111,9 @@ function _jl_make_sparse{T}(I::Vector{Size},
     w[1] = 1
     for k=1:numnz; w[J[k] + 1] += 1; end
     colptr = cumsum(w)
+
+    if isa(I, Range1) || isa(I, Range); I = linspace(I); end
+    if isa(V, Range1) || isa(V, Range); V = linspace(V); end
 
     return SparseMatrixCSC(m, n, colptr, I, V)
 end

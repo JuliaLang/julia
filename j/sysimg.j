@@ -104,6 +104,9 @@ load("linalg_blas.j")
 load("linalg_lapack.j")
 load("linalg_arpack.j")
 
+# sparse matrices
+load("sparse.j")
+
 # signal processing
 load("fft.j")
 load("signal.j")

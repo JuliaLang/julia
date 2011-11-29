@@ -41,10 +41,12 @@ isempty(r::Range) = (r.step > 0 ? r.stop < r.start : r.stop > r.start)
 isempty(r::Range1) = (r.stop < r.start)
 
 start{T<:Int}(r::Range{T}) = r.start
+stop{T<:Int}(r::Range{T}) = r.stop
 done{T<:Int}(r::Range{T}, i::T) = (r.step < 0 ? i < r.stop : i > r.stop)
 next{T<:Int}(r::Range{T}, i::T) = (i, i+r.step)
 
 start(r::Range1) = r.start
+stop(r::Range1) = r.stop
 done(r::Range1, i) = (i > r.stop)
 next{T}(r::Range1{T}, i) = (i, i+one(T))
 

@@ -81,6 +81,10 @@ one{T}(x::AbstractArray{T,2}) = (m=size(x,1); n=size(x,2);
                           a)
 zero{T}(x::AbstractArray{T,2}) = zeros(T,size(x))
 
+linspace(start::Real, stop::Real) = [ i | i=start:stop ]
+linspace(R::Range1) = linspace(start(R), stop(R), step(R))
+linspace(R::Range) = linspace(start(R), stop(R), step(R))
+
 ## Conversions ##
 
 int8   (x::AbstractArray) = copy_to(similar(x,Int8)  , x)
@@ -1414,6 +1418,24 @@ function findn{T}(A::AbstractArray{T})
                       (:A, :I, :count, :z), A,I,1, zero(T))
     return I
 end
+end
+
+function findn_nzs{T}(A::AbstractMatrix{T})
+    nnzA = nnz(A)
+    I = zeros(Size, nnzA)
+    J = zeros(Size, nnzA)
+    NZs = zeros(T, nnzA)
+    z = zero(T)
+    count = 1
+    for j=1:size(A,2), i=1:size(A,1)
+        if A[i,j] != z
+            I[count] = i
+            J[count] = j
+            NZs[count] = A[i,j]
+            count += 1
+        end
+    end
+    return (I, J, NZs)
 end
 
 function nonzeros{T}(A::AbstractArray{T})
