@@ -55,7 +55,7 @@ reshape(a::AbstractArray, dims::Dims) = (b = similar(a, dims);
                                   b)
 reshape(a::AbstractArray, dims::Size...) = reshape(a, dims)
 
-function fill(A::AbstractArray, x)
+function fill!(A::AbstractArray, x)
     for i = 1:numel(A)
         A[i] = x
     end
