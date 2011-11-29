@@ -89,18 +89,21 @@ function _jl_make_sparse(I::AbstractVector, J::AbstractVector,
 
     lastdup = 1
     ndups = 0
+    I_lastdup = I[1]
+    J_lastdup = J[1]
 
     for k=2:length(I)
-        if I[k] == I[lastdup] && J[k] == J[lastdup]
+        if I[k] == I_lastdup && J[k] == J_lastdup
             V[lastdup] += V[k]
             ndups += 1
         else
             cols[J[k] + 1] += 1
             lastdup = k-ndups
             if ndups != 0
-                I[k-ndups] = I[k]
-                J[k-ndups] = J[k]
-                V[k-ndups] = V[k]
+                I_lastdup = I[k]
+                J_lastdup = J[k]
+                I[lastdup] = I_lastdup
+                V[lastdup] = V[k]
             end
         end
     end
