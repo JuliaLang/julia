@@ -136,7 +136,7 @@ function find{T}(S::SparseMatrixCSC{T})
                 V[count] = S.nzval[k]
                 count += 1
             else
-                println("Warning: sparse matrix has implicit stored zeros.")
+                println("Warning: sparse matrix has explicit stored zeros.")
             end
         end
     end
