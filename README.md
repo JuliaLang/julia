@@ -216,7 +216,11 @@ Julia should appear as a file type and be automatically detected for files with 
 <a name="Terminal-Setup"/>
 ## Terminal Setup
 
-For best interaction with readline-based command-line interactive sessions, make sure that backspace sends the `^H` sequence and that `shift-Enter` sends a `\n` newline character (hex `0x0a`).
-The `shift-Enter` combination inserts a newline in the interactive session without evaluating the current expression, even if the expression is complete.
-These bindings allow readline to trap and correctly handle these key sequences;
-most other programs will behave normally with these bindings.
+Adjusting your terminal bindings is strictly optional:
+everything will work fine without these key bindings.
+For the best interactive session experience, however, make sure that your terminal emulator (`Terminal`, `iTerm`, `xterm`, etc.) sends the `^H` sequence for `Backspace` (delete key) and that the `Shift-Enter` key combination sends a `\n` newline character to distinguish it from just pressing `Enter`, which sends a `\r` carriage return character.
+These bindings allow custom readline handlers to trap and correctly deal with these key sequences;
+other programs will continue behave normally with these bindings.
+The first binding makes backspacing through text in the interactive session behave more intuitively.
+The second binding allows the `Shift-Enter` combination to insert a newline without evaluating the current expression, even when the current expression is complete.
+(Pressing an unmodified `Enter` inserts a newline if the current expression is incomplete, evaluates the exprerssion if it is complete, or shows an error if the syntax is irrecoverably invalid.)
