@@ -92,6 +92,8 @@ function linspace(start::Real, stop::Real, n::Int)
     a
 end
 
+linspace(start::Real, stop::Real) = [ i | i=start:stop ]
+
 ## Conversions ##
 
 convert{T,n}(::Type{Array{T,n}}, x::Array{T,n}) = x

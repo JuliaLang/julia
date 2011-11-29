@@ -112,8 +112,8 @@ function _jl_make_sparse(I::AbstractVector, J::AbstractVector,
     for k=1:numnz; w[J[k] + 1] += 1; end
     colptr = cumsum(w)
 
-    if isa(I, Range1) || isa(I, Range); I = linspace(I); end
-    if isa(V, Range1) || isa(V, Range); V = linspace(V); end
+    if isa(I, Range1) || isa(I, Range); I = [I]; end
+    if isa(V, Range1) || isa(V, Range); V = [V]; end
 
     return SparseMatrixCSC(m, n, colptr, I, V)
 end
