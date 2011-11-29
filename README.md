@@ -78,7 +78,7 @@ See [LICENSE](https://github.com/JuliaLang/julia/blob/master/LICENSE) for the fu
 ## Resources
 
 - **Homepage:** <http://julialang.org>
-- **Discussion:** <julia-math@googlegroups.com>
+- **Discussion:** <julia-dev@googlegroups.com>
 - **Source code:** <https://github.com/JuliaLang/julia>
 - **Git clone URL:** <git://github.com/JuliaLang/julia.git> (see [below](#Download-Compilation))
 - **Documentation:** <https://github.com/JuliaLang/julia/wiki>
