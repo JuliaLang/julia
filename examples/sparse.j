@@ -39,38 +39,20 @@ end
 
 full{T}(S::SparseMatrixCSC{T}) = convert(Array{T}, S)
 
-sparse(I,J,V) = sparse(I, J, V, max(I), max(J))
-sparse(I,J,V::Number,m,n) = sparse(I,J,fill(Array(typeof(V),length(I)),V),max(I),max(J))
-
-function findn_nzs{T}(A::AbstractMatrix{T})
-    nnzA = nnz(A)
-    I = zeros(Size, nnzA)
-    J = zeros(Size, nnzA)
-    NZs = zeros(T, nnzA)
-    z = zero(T)
-    count = 1
-    for j=1:size(A,2), i=1:size(A,1)
-        if A[i,j] != z
-            I[count] = i
-            J[count] = j
-            NZs[count] = A[i,j]
-            count += 1
-        end
-    end
-    return (I, J, NZs)
-end
-
 function sparse(A::Matrix)
     m, n = size(A)
     I, J, V = findn_nzs(A)
     sparse(I, J, V, m, n)
 end
 
-function sparse{T}(I::Vector{Size},
-                   J::Vector{Size},
+sparse(I,J,V) = sparse(I, J, V, max(I), max(J))
+sparse(I,J,V::Number,m,n) = sparse(I,J,fill(Array(typeof(V),length(I)),V),max(I),max(J))
+
+function sparse{T}(I::Vector{Int},
+                   J::Vector{Int},
                    V::Vector{T},
-                   m::Size,
-                   n::Size)
+                   m::Int,
+                   n::Int)
     (I,p) = sortperm(I)
     J = J[p]
     V = V[p]
@@ -84,11 +66,11 @@ end
 
 #assumes that I,J are sorted in dictionary order (with J taking precedence)
 #use sparse() with the same arguments if this is not the case
-function _jl_make_sparse{T}(I::Vector{Size},
-                        J::Vector{Size},
+function _jl_make_sparse{T}(I::Vector{Int},
+                        J::Vector{Int},
                         V::Vector{T},
-                        m::Size,
-                        n::Size)
+                        m::Int,
+                        n::Int)
     lastdup = 1
     for k=2:length(I)
         if I[k] == I[lastdup] && J[k] == J[lastdup]

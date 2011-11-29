@@ -1416,6 +1416,24 @@ function findn{T}(A::AbstractArray{T})
 end
 end
 
+function findn_nzs{T}(A::AbstractMatrix{T})
+    nnzA = nnz(A)
+    I = zeros(Size, nnzA)
+    J = zeros(Size, nnzA)
+    NZs = zeros(T, nnzA)
+    z = zero(T)
+    count = 1
+    for j=1:size(A,2), i=1:size(A,1)
+        if A[i,j] != z
+            I[count] = i
+            J[count] = j
+            NZs[count] = A[i,j]
+            count += 1
+        end
+    end
+    return (I, J, NZs)
+end
+
 function nonzeros{T}(A::AbstractArray{T})
     nnzA = nnz(A)
     V = Array(T, nnzA)
