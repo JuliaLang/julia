@@ -15,7 +15,7 @@ end
 function indexedcolor(data, pal, w, l)
     n = numel(pal)-1
     if n == 0
-        return fill(similar(data, eltype(pal)), pal[1])
+        return fill(pal[1], size(data))
     end
     w_min = l - w/2
     scale = w==0 ? 1 : w/n

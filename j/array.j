@@ -62,21 +62,24 @@ similar{T}(a::Array{T,2}, S::Type) = Array(S, size(a,1), size(a,2))
 
 empty(T) = Array(T, 0)
 
-zeros{T}(::Type{T}, dims::Dims) = fill(Array(T, dims), zero(T))
+zeros{T}(::Type{T}, dims::Dims) = fill!(Array(T, dims), zero(T))
 zeros(T::Type, dims::Size...) = zeros(T, dims)
 zeros(dims::Dims) = zeros(Float64, dims)
 zeros(dims::Size...) = zeros(dims)
 
-ones{T}(::Type{T}, dims::Dims) = fill(Array(T, dims), one(T))
+ones{T}(::Type{T}, dims::Dims) = fill!(Array(T, dims), one(T))
 ones(T::Type, dims::Size...) = ones(T, dims)
 ones(dims::Dims) = ones(Float64, dims)
 ones(dims::Size...) = ones(dims)
 
-trues(dims::Dims) = fill(Array(Bool, dims), true)
+trues(dims::Dims) = fill!(Array(Bool, dims), true)
 trues(dims::Size...) = trues(dims)
 
-falses(dims::Dims) = fill(Array(Bool, dims), false)
+falses(dims::Dims) = fill!(Array(Bool, dims), false)
 falses(dims::Size...) = falses(dims)
+
+fill(v, dims::Dims) = fill!(Array(typeof(v), dims), v)
+fill(v, dims::Size...) = fill(v, dims)
 
 function linspace(start::Real, stop::Real, n::Int)
     (start, stop) = promote(start, stop)

@@ -79,7 +79,7 @@
     (if (not (pair? e))
 	(cons e '())
 	(cons (map (lambda (x)
-		     (if (pair? x)
+		     (if (and (pair? x) (not (quoted? x)))
 			 (let ((g (gensy)))
 			   (if (eq? (car x) '...)
 			       (begin (set! a (cons `(= ,g ,(cadr x)) a))

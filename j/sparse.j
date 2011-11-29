@@ -84,7 +84,7 @@ function _jl_make_sparse(I::AbstractVector, J::AbstractVector,
                          m::Int, n::Int)
 
     if isa(V, Number)
-        V = fill(Array(typeof(V), length(I)), V)
+        V = fill(V, length(I))
     end
 
     lastdup = 1
