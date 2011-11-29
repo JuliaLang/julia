@@ -157,3 +157,18 @@ function vcat{T}(rs::Union(Range{T},Range1{T})...)
     end
     a
 end
+
+## sorting ##
+
+issorted(v::Range1) = true
+issorted(v::Range) = v.step < 0 ? false : true
+
+sort(v::Range1) = v
+sort!(v::Range1) = v
+
+function sum(v::Range1)
+    n1 = v.start-1
+    n2 = v.stop
+    return div((n2*(n2+1) - n1*(n1+1)), 2)
+end
+
