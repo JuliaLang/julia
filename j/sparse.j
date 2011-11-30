@@ -8,7 +8,7 @@ type SparseMatrixCSC{T} <: AbstractMatrix{T}
     nzval::Vector{T}       # Nonzero values
 end
 
-issparse(A::Array) = false
+issparse(A::AbstractArray) = false
 issparse(S::SparseMatrixCSC) = true
 
 size(S::SparseMatrixCSC) = (S.m, S.n)
