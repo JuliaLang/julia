@@ -398,7 +398,33 @@ function ref{T}(A::SparseMatrixCSC{T}, i0::Int, i1::Int)
     end
     return zero(T)
 end
-#TODO: ref of ranges, vectors (the fallback is slow)
+
+ref{T<:Int}(A::SparseMatrixCSC, I::AbstractVector{T}, J::AbstractVector{T}) = ref(A,I,J)
+
+function ref(A::SparseMatrixCSC, I::AbstractVector, J::AbstractVector)
+
+    (nr, nc) = size(A)
+    nI = length(I)
+    nJ = length(J)
+
+    is_I_colon = (isa(I, Range1) || isa(I, Range)) && I.start == 1 && I.stop == nr && step(I) == 1
+    is_J_colon = (isa(J, Range1) || isa(J, Range)) && J.start == 1 && J.stop == nc && step(J) == 1
+
+    if is_I_colon && is_J_colon
+        return A
+    elseif is_J_colon 
+        IM = sparse (1:nI, I, 1, nI, nr)
+        B = IM * A
+    elseif is_I_colon
+        JM = sparse (J, 1:nJ, 1, nc, nJ)
+        B = A *JM
+    else
+        IM = sparse (1:nI, I, 1, nI, nr)
+        JM = sparse (J, 1:nJ, 1, nc, nJ)
+        B = IM * A * JM
+    end
+
+end
 
 #assign
 assign{T,N}(A::SparseMatrixCSC{T},v::AbstractArray{T,N},i::Int) =
