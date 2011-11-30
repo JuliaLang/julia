@@ -1691,7 +1691,7 @@ ref{T}(s::SubArray{T,1}, I::Range1{Index}) =
 ref{T}(s::SubArray{T,1}, I::Range{Index}) =
     ref(s.parent, (s.first_index+(I.start-1)*s.strides[1]):(s.strides[1]*I.step):(s.first_index+(I.stop-1)*s.strides[1]))
 
-function ref{T}(s::SubArray{T,1}, I::AbstractVector{Int})
+function ref{T,S<:Int}(s::SubArray{T,1}, I::AbstractVector{S})
     t = Array(Index, length(I))
     for i = 1:length(I)
         t[i] = s.first_index + (I[i]-1)*s.strides[1]
@@ -1768,14 +1768,14 @@ assign{T}(s::SubArray{T,1}, v::AbstractArray, I::Range{Index}) =
 assign{T}(s::SubArray{T,1}, v, I::Range{Index}) =
     assign(s.parent, v, (s.first_index+(I.start-1)*s.strides[1]):(s.strides[1]*I.step):(s.first_index+(I.stop-1)*s.strides[1]))
 
-function assign{T}(s::SubArray{T,1}, v::AbstractArray, I::AbstractVector{Int})
+function assign{T,S<:Int}(s::SubArray{T,1}, v::AbstractArray, I::AbstractVector{S})
     t = Array(Index, length(I))
     for i = 1:length(I)
         t[i] = s.first_index + (I[i]-1)*s.strides[1]
     end
     assign(s.parent, v, t)
 end
-function assign{T}(s::SubArray{T,1}, v, I::AbstractVector{Int})
+function assign{T,S<:Int}(s::SubArray{T,1}, v, I::AbstractVector{S})
     t = Array(Index, length(I))
     for i = 1:length(I)
         t[i] = s.first_index + (I[i]-1)*s.strides[1]
