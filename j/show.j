@@ -10,8 +10,15 @@ show(b::Bool) = print(b ? "true" : "false")
 show(n::Int)  = show(int64(n))
 show(n::Uint) = show(uint64(n))
 
-show(f::Float64) = ccall(:jl_show_float, Void, (Float64, Int32), f, int32(17))
-show(f::Float32) = ccall(:jl_show_float, Void, (Float64, Int32), float64(f), int32(9))
+show_float64(f::Float64, ndig) =
+    ccall(:jl_show_float, Void, (Float64, Int32), f, int32(ndig))
+
+show(f::Float64) = show_float64(f, 17)
+show(f::Float32) = show_float64(float64(f), 9)
+
+num2str(f::Float, ndig) = print_to_string(show_float64, float64(f), ndig)
+num2str(f::Float) = show_to_string(f)
+num2str(n::Int) = dec(n)
 
 showcompact(f::Float64) = ccall(:jl_show_float, Void, (Float64, Int32), f, int32(8))
 showcompact(f::Float32) = ccall(:jl_show_float, Void, (Float64, Int32), float64(f), int32(8))
