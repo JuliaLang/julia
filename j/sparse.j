@@ -399,9 +399,10 @@ function ref{T}(A::SparseMatrixCSC{T}, i0::Int, i1::Int)
     return zero(T)
 end
 
-ref{T<:Int}(A::SparseMatrixCSC, I::AbstractVector{T}, J::AbstractVector{T}) = ref(A,I,J)
+ref{T<:Int}(A::SparseMatrixCSC, I::AbstractVector{T}, J::AbstractVector{T}) = sparse_ref(A,I,J)
+ref(A::SparseMatrixCSC, I::AbstractVector, J::AbstractVector) = sparse_ref(A,I,J)
 
-function ref(A::SparseMatrixCSC, I::AbstractVector, J::AbstractVector)
+function sparse_ref(A::SparseMatrixCSC, I::AbstractVector, J::AbstractVector)
 
     (nr, nc) = size(A)
     nI = length(I)
