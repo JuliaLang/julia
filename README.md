@@ -5,7 +5,7 @@
       (_)     | (_) (_)    |   A fresh approach to technical computing
        _ _   _| |_  __ _   |
       | | | | | | |/ _` |  |           http://julialang.org
-      | | |_| | | | (_| |  |       julia-math@googlegroups.com
+      | | |_| | | | (_| |  |       julia-dev@googlegroups.com
      _/ |\__'_|_|_|\__'_|  |
     |__/                   |
 
@@ -216,11 +216,13 @@ Julia should appear as a file type and be automatically detected for files with 
 <a name="Terminal-Setup"/>
 ## Terminal Setup
 
-Adjusting your terminal bindings is strictly optional:
-everything will work fine without these key bindings.
+Adjusting your terminal bindings is optional; everything will work fine without these key bindings.
 For the best interactive session experience, however, make sure that your terminal emulator (`Terminal`, `iTerm`, `xterm`, etc.) sends the `^H` sequence for `Backspace` (delete key) and that the `Shift-Enter` key combination sends a `\n` newline character to distinguish it from just pressing `Enter`, which sends a `\r` carriage return character.
-These bindings allow custom readline handlers to trap and correctly deal with these key sequences;
-other programs will continue behave normally with these bindings.
+These bindings allow custom readline handlers to trap and correctly deal with these key sequences; other programs will continue behave normally with these bindings.
 The first binding makes backspacing through text in the interactive session behave more intuitively.
-The second binding allows the `Shift-Enter` combination to insert a newline without evaluating the current expression, even when the current expression is complete.
-(Pressing an unmodified `Enter` inserts a newline if the current expression is incomplete, evaluates the exprerssion if it is complete, or shows an error if the syntax is irrecoverably invalid.)
+The second binding allows `Shift-Enter` to insert a newline without evaluating the current expression, even when the current expression is complete.
+(Pressing an unmodified `Enter` inserts a newline if the current expression is incomplete, evaluates the expression if it is complete, or shows an error if the syntax is irrecoverably invalid.)
+
+On Linux systems, the `Shift-Enter` binding can be set by placing the following line in the file `.xmodmaprc` in your home directory:
+
+    keysym Return = Return Linefeed
