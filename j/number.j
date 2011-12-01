@@ -22,7 +22,7 @@ abs2(x::Real) = x*x
 
 conj(x::Real) = x
 transpose(x::Number) = x
-ctranspose(x::Number) = conj(transpose(x))
+ctranspose(x::Number) = conj(x)
 inv(x::Number) = one(x)/x
 
 # TODO: should we really treat numbers as iterable?

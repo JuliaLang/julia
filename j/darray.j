@@ -344,8 +344,8 @@ reshape(A::DArray, dims::Dims) =
            eltype(A), dims, maxdim(dims), A.pmap)
 
 transpose{T} (v::DArray{T,1}) = reshape(v, 1, size(v,1))
-ctranspose{T}(v::DArray{T,1}) = conj(reshape(v, 1, size(v,1)))
-ctranspose{T<:Real}(v::DArray{T,1}) = reshape(v, 1, size(v,1))
+ctranspose{T<:Number}(v::DArray{T,1}) = conj(reshape(v, 1, size(v,1)))
+ctranspose{T<:Real}(v::DArray{T,1}) = transpose(v)
 
 ## Indexing ##
 

@@ -170,16 +170,24 @@ sprand(m,n,density) = sprand_rng (m,n,density,rand)
 sprandn(m,n,density) = sprand_rng (m,n,density,randn)
 #sprandi(m,n,density) = sprand_rng (m,n,density,randi)
 
-speye(n::Size) = ( L = linspace(1,n); _jl_make_sparse(L, L, ones(Float64, n), n, n) )
-speye(m::Size, n::Size) = ( x = min(m,n); L = linspace(1,x); _jl_make_sparse(L, L, ones(Float64, x), m, n) )
+function speye(n::Size)
+    L = linspace(1,n)
+    _jl_make_sparse(L, L, ones(Float64, n), n, n)
+end
+function speye(m::Size, n::Size)
+    x = min(m,n)
+    L = linspace(1,x)
+    _jl_make_sparse(L, L, ones(Float64, x), m, n)
+end
 
 function issymmetric(A::SparseMatrixCSC)
     # Slow implementation
     nnz(A - A.') == 0 ? true : false
 end
 
-transpose(S::SparseMatrixCSC) = ( (I,J,V) = find(S); sparse(J, I, V, S.n, S.m) )
-ctranspose(S::SparseMatrixCSC) = ( (I,J,V) = find(S); sparse(J, I, conj(V), S.n, S.m) )
+transpose(S::SparseMatrixCSC) = ((I,J,V) = find(S); sparse(J, I, V, S.n, S.m))
+ctranspose{T<:Number}(S::SparseMatrixCSC{T}) =
+    ((I,J,V) = find(S); sparse(J, I, conj(V), S.n, S.m))
 
 macro _jl_binary_op_A_sparse_B_sparse_res_sparse(op)
     quote
