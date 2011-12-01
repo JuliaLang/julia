@@ -2573,4 +2573,5 @@ void jl_init_types(void)
     new_sym = jl_symbol("new");
     multivalue_sym = jl_symbol("multiple_value");
     const_sym = jl_symbol("const");
+    thunk_sym = jl_symbol("thunk");
 }

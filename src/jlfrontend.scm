@@ -66,7 +66,7 @@
 	    ;; if no locals, return just body of function
 	    (let ((body (cadddr th)))
 	      body)
-	    th))))
+	    `(thunk ,th)))))
 
 (define (jl-just-parse-string s pos0 greedy)
   (set! current-filename 'string)

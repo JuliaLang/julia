@@ -76,9 +76,8 @@ jl_sym_t *Any_sym;     jl_sym_t *method_sym;
 jl_sym_t *enter_sym;   jl_sym_t *leave_sym;
 jl_sym_t *exc_sym;     jl_sym_t *error_sym;
 jl_sym_t *static_typeof_sym;
-jl_sym_t *new_sym;
-jl_sym_t *multivalue_sym;
-jl_sym_t *const_sym;
+jl_sym_t *new_sym;     jl_sym_t *multivalue_sym;
+jl_sym_t *const_sym;   jl_sym_t *thunk_sym;
 
 /*
 static int sizebins[] = {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
