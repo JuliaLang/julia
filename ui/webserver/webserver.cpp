@@ -289,6 +289,7 @@ void* outbox_thread(void* arg)
         // read while there is data
         while (true)
         {
+            // select to determine if there is a byte to read
             char buffer[2];
             fd_set set;
             FD_ZERO(&set);
@@ -298,6 +299,7 @@ void* outbox_thread(void* arg)
             select_timeout.tv_usec = 100000;
             if (select(FD_SETSIZE, &set, 0, 0, &select_timeout))
             {
+                // try to read the byte
                 if (read(pipe, buffer, 1) > 0)
                     new_raw_data = true;
                 else
@@ -306,8 +308,9 @@ void* outbox_thread(void* arg)
             else
                 break;
             buffer[1] = 0;
-            if (new_raw_data)
-                outbox_std += buffer[0];
+
+            // add the byte to the outbox
+            outbox_std += buffer[0];
         }
 
         // lock the mutex
