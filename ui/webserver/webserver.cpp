@@ -530,6 +530,9 @@ void* outbox_thread(void* arg)
 // the watchdog runs regularly according to this interval
 const int WATCHDOG_INTERVAL = 100000000; // in nanoseconds
 
+// this is defined below but we need it here too
+string create_session(bool idle);
+
 // this thread kills old sessions after they have timed out
 void* watchdog_thread(void* arg)
 {
@@ -586,6 +589,22 @@ void* watchdog_thread(void* arg)
             else
                 cout<<session_map.size()<<" open sessions.\n";
         }
+
+        // check if there are any idle sessions
+        bool found_idle_session = false;
+        for (map<string, session>::iterator iter = session_map.begin(); iter != session_map.end(); iter++)
+        {
+            // check if the session is idle
+            if ((iter->second).is_idle)
+            {
+                found_idle_session = true;
+                break;
+            }
+        }
+
+        // if there aren't any idle sessions, try creating one
+        if (!found_idle_session)
+            create_session(true);
 
         // unlock the mutex
         pthread_mutex_unlock(&session_mutex);
@@ -834,9 +853,6 @@ string get_response(request* req)
                         (iter->second).update_time = time(0);
                         (iter->second).is_idle = false;
                         found_idle_session = true;
-
-                        // start a new idle session
-                        create_session(true);
                         break;
                     }
                 }
@@ -928,9 +944,6 @@ int main(int argc, char* argv[])
 
     // print the number of open sessions
     cout<<"0 open sessions.\n";
-
-    // start an idle session
-    create_session(true);
 
     // start the server
     run_server(port_num, &get_response);
