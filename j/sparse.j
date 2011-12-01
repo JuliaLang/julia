@@ -538,9 +538,9 @@ function (*){T1,T2}(X::SparseMatrixCSC{T1},Y::SparseMatrixCSC{T2})
     for y_col = 1:nY
         for y_elt = Y.colptr[y_col] : (Y.colptr[y_col+1]-1)
             x_col = Y.rowval[y_elt]
-            spa_axpy(spa, Y.nzval[y_elt], X, x_col)
+            _jl_spa_axpy(spa, Y.nzval[y_elt], X, x_col)
         end
-        (rowval, nzval) = spa_store_reset(spa, y_col, colptr, rowval, nzval)
+        (rowval, nzval) = _jl_spa_store_reset(spa, y_col, colptr, rowval, nzval)
     end
         
     return SparseMatrixCSC(mX, nY, colptr, rowval, nzval)     
@@ -570,7 +570,7 @@ length(S::SparseAccumulator) = length(S.vals)
 numel(S::SparseAccumulator) = S.nvals
 
 # reset spa
-function spa_reset{T}(S::SparseAccumulator{T})
+function _jl_spa_reset{T}(S::SparseAccumulator{T})
     z = zero(T)
     for i=1:numel(S)
         S.vals[i] = z
@@ -580,7 +580,7 @@ function spa_reset{T}(S::SparseAccumulator{T})
 end
 
 # store spa and reset
-function spa_store_reset{T}(S::SparseAccumulator{T}, col, colptr, rowval, nzval)
+function _jl_spa_store_reset{T}(S::SparseAccumulator{T}, col, colptr, rowval, nzval)
     z = zero(T)
     start = colptr[col]
 
@@ -628,7 +628,7 @@ function assign{T}(S::SparseAccumulator{T}, v, i::Index)
 end
 
 #increments S[i] by v
-function spa_incr{T}(S::SparseAccumulator{T}, v, i::Index)
+function _jl_spa_incr{T}(S::SparseAccumulator{T}, v, i::Index)
     if v != zero(T)
         if S.flags[i]
             S.vals[i] += v
@@ -643,10 +643,10 @@ function spa_incr{T}(S::SparseAccumulator{T}, v, i::Index)
 end
 
 #sets S = S + a*x, where x is col j of A
-function spa_axpy(S::SparseAccumulator, a, A::SparseMatrixCSC, j::Index)
-    if size(S) != A.m; error("error in spa_axpy: dimension mismatch"); end
+function _jl_spa_axpy(S::SparseAccumulator, a, A::SparseMatrixCSC, j::Index)
+    if size(S) != A.m; error("error in _jl_spa_axpy: dimension mismatch"); end
     for i = A.colptr[j]:(A.colptr[j+1]-1)
-        spa_incr(S, a*A.nzval[i], A.rowval[i])
+        _jl_spa_incr(S, a*A.nzval[i], A.rowval[i])
     end
     return S
 end
