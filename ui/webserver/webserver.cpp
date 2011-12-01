@@ -145,6 +145,9 @@ struct session
     // time since watchdog was last "pet"
     time_t update_time;
 
+    // whether this is an "idle" session
+    bool is_idle;
+
     // to be sent to julia
     string inbox_std;
 
@@ -542,7 +545,7 @@ void* watchdog_thread(void* arg)
         // start terminating old sessions
         for (map<string, session>::iterator iter = session_map.begin(); iter != session_map.end(); iter++)
         {
-            if ((iter->second).status == SESSION_NORMAL)
+            if ((iter->second).status == SESSION_NORMAL && !(iter->second).is_idle)
             {
                 if (t-(iter->second).update_time >= SESSION_TIMEOUT || (iter->second).should_terminate)
                     (iter->second).status = SESSION_TERMINATING;
@@ -621,7 +624,9 @@ string respond(string session_token, string body)
 }
 
 // create a session and return a session token
-string create_session()
+// a new session can be "idle", which means it isn't yet matched with a browser session
+// idle sessions don't expire
+string create_session(bool idle)
 {
     // check if we've reached max capacity
     if (session_map.size() >= MAX_CONCURRENT_SESSIONS)
@@ -632,6 +637,9 @@ string create_session()
 
     // generate a session token
     string session_token = make_session_token();
+
+    // set the idleness of the session
+    session_data.is_idle = idle;
 
     // keep the session alive for now
     session_data.inbox_thread_alive = true;
@@ -670,7 +678,7 @@ string create_session()
         close(session_data.julia_out[0]);
         close(session_data.julia_out[1]);
 
-        // set a high nice value
+        // set a high nice value (so that one instance can't dominate the rest)
         if (nice(20) == -1)
             exit(1);
 
@@ -814,13 +822,35 @@ string get_response(request* req)
                 if (session_token != "")
                     session_map[session_token].should_terminate = true;
 
-                // create a new session
-                session_token = create_session();
-                if (session_token == "")
+                // look for an idle session to harvest
+                bool found_idle_session = false;
+                for (map<string, session>::iterator iter = session_map.begin(); iter != session_map.end(); iter++)
                 {
-                    // too many sessions
-                    response_message.type = MSG_OUTPUT_FATAL_ERROR;
-                    response_message.args.push_back("the server is currently at maximum capacity");
+                    // check if the session is idle
+                    if ((iter->second).is_idle)
+                    {
+                        // the session is no longer idle
+                        session_token = iter->first;
+                        (iter->second).update_time = time(0);
+                        (iter->second).is_idle = false;
+                        found_idle_session = true;
+
+                        // start a new idle session
+                        create_session(true);
+                        break;
+                    }
+                }
+
+                // no extra idle sessions -- try to create a new session
+                if (!found_idle_session)
+                {
+                    session_token = create_session(false);
+                    if (session_token == "")
+                    {
+                        // too many sessions
+                        response_message.type = MSG_OUTPUT_FATAL_ERROR;
+                        response_message.args.push_back("the server is currently at maximum capacity");
+                    }
                 }
             }
 
@@ -836,6 +866,7 @@ string get_response(request* req)
                 else
                 {
                     // forward the message to julia
+
                     if (request_message.type != MSG_INPUT_POLL)
                         session_map[session_token].inbox.push_back(request_message);
 
@@ -897,6 +928,9 @@ int main(int argc, char* argv[])
 
     // print the number of open sessions
     cout<<"0 open sessions.\n";
+
+    // start an idle session
+    create_session(true);
 
     // start the server
     run_server(port_num, &get_response);
