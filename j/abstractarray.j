@@ -83,24 +83,33 @@ zero{T}(x::AbstractArray{T,2}) = zeros(T,size(x))
 
 ## Conversions ##
 
-int8   (x::AbstractArray) = copy_to(similar(x,Int8)  , x)
-uint8  (x::AbstractArray) = copy_to(similar(x,Uint8) , x)
-int16  (x::AbstractArray) = copy_to(similar(x,Int16) , x)
-uint16 (x::AbstractArray) = copy_to(similar(x,Uint16), x)
-int32  (x::AbstractArray) = copy_to(similar(x,Int32) , x)
-uint32 (x::AbstractArray) = copy_to(similar(x,Uint32), x)
-int64  (x::AbstractArray) = copy_to(similar(x,Int64) , x)
-uint64 (x::AbstractArray) = copy_to(similar(x,Uint64), x)
-bool   (x::AbstractArray) = copy_to(similar(x,Bool)  , x)
-char   (x::AbstractArray) = copy_to(similar(x,Char)  , x)
-float32{T}(x::AbstractArray{T}) = copy_to(similar(x,Float32), x)
-float64{T}(x::AbstractArray{T}) = copy_to(similar(x,Float64), x)
+int8   (x::AbstractArray) = copy_to(similar(x,Int8)   , x)
+uint8  (x::AbstractArray) = copy_to(similar(x,Uint8)  , x)
+int16  (x::AbstractArray) = copy_to(similar(x,Int16)  , x)
+uint16 (x::AbstractArray) = copy_to(similar(x,Uint16) , x)
+int32  (x::AbstractArray) = copy_to(similar(x,Int32)  , x)
+uint32 (x::AbstractArray) = copy_to(similar(x,Uint32) , x)
+int64  (x::AbstractArray) = copy_to(similar(x,Int64)  , x)
+uint64 (x::AbstractArray) = copy_to(similar(x,Uint64) , x)
+bool   (x::AbstractArray) = copy_to(similar(x,Bool)   , x)
+char   (x::AbstractArray) = copy_to(similar(x,Char)   , x)
+float32(x::AbstractArray) = copy_to(similar(x,Float32), x)
+float64(x::AbstractArray) = copy_to(similar(x,Float64), x)
 
 ## Unary operators ##
 
-conj{T <: Real}(x::AbstractArray{T}) = x
-real{T <: Real}(x::AbstractArray{T}) = x
-imag{T <: Real}(x::AbstractArray{T}) = zero(x)
+conj{T<:Real}(x::AbstractArray{T}) = x
+conj!{T<:Real}(x::AbstractArray{T}) = x
+
+function conj!{T<:Number}(A::AbstractArray{T})
+    for i=1:numel(A)
+        A[i] = conj(A[i])
+    end
+    return A
+end
+
+real{T<:Real}(x::AbstractArray{T}) = x
+imag{T<:Real}(x::AbstractArray{T}) = zero(x)
 
 macro unary_op(f)
     quote
@@ -1239,11 +1248,14 @@ function reverse!(v::AbstractVector)
     v
 end
 
-transpose(x::AbstractVector)  = [ x[j]         | i=1, j=1:size(x,1) ]
-ctranspose(x::AbstractVector) = [ conj(x[j])   | i=1, j=1:size(x,1) ]
+ctranspose(x::AbstractVector) = transpose(x)
+ctranspose(x::AbstractMatrix) = transpose(x)
 
-transpose(x::AbstractMatrix)  = [ x[j,i]       | i=1:size(x,2), j=1:size(x,1) ]
-ctranspose(x::AbstractMatrix) = [ conj(x[j,i]) | i=1:size(x,2), j=1:size(x,1) ]
+transpose(x::AbstractVector) = [ x[j] | i=1, j=1:size(x,1) ]
+transpose(x::AbstractMatrix) = [ x[j,i] | i=1:size(x,2), j=1:size(x,1) ]
+
+ctranspose{T<:Number}(x::AbstractVector{T}) = [ conj(x[j]) | i=1, j=1:size(x,1) ]
+ctranspose{T<:Number}(x::AbstractMatrix{T}) = [ conj(x[j,i]) | i=1:size(x,2), j=1:size(x,1) ]
 
 let permute_cache = nothing
 global permute
