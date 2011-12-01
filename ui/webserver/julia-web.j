@@ -124,33 +124,44 @@ function __socket_callback(fd)
 
     # MSG_INPUT_EVAL
     if __msg.msg_type == __MSG_INPUT_EVAL
-        # try to evaluate it
+        # try to parse it
         __expr = parse_input_line(__msg.args[1])
 
+        # if there was nothing to parse, send nothing back
         if __expr == nothing
             return __send_eval_result("")
         end
+        
+        if typeof(__expr) == Expr
+            # check if there was a parsing error
+            if __expr.head == :error
+                return __send_error(__expr.args[1])
+            end
 
-        # check if there was an error
-        if __expr.head == :error
-            return __send_error(__expr.args[1])
+            # check if the expression was incomplete
+            if __expr.head == :continue
+                return __send_eval_incomplete()
+            end
         end
 
-        # check if the expression was incomplete
-        if __expr.head == :continue
-            return __send_eval_incomplete()
-        end
-
-        # evaluate the expression
+        # evaluate the expression and print any exceptions that occurred
         local __result
         try
-            __result = eval(__expr)
+            if typeof(__expr) == LambdaStaticData
+                __result = eval(__expr)()
+            else
+                __result = eval(__expr)
+            end
         catch __error
             return __send_error(print_to_string(show, __error))
         end
+
+        # if nothing was returned, send nothing back
         if __result == nothing
             return __send_eval_result("")
-            end
+        end
+
+        # otherwise, send back the result
         return __send_eval_result(print_to_string(show, __result))
     end
 end
