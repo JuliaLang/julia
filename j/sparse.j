@@ -555,15 +555,10 @@ type SparseAccumulator{T} <: AbstractVector{T}
     nvals::Size
 end
 
+show{T}(S::SparseAccumulator{T}) = invoke(show, (Any,), S)
+
+SparseAccumulator{T}(::Type{T}, s::Size) = SparseAccumulator(zeros(T,s), falses(s), Array(Index,s), 0)
 SparseAccumulator(s::Size) = SparseAccumulator(Float64, s)
-
-function SparseAccumulator{T}(::Type{T}, s::Size)
-    SparseAccumulator(Array(T,s), falses(s), Array(Index,s), 0)
-end
-
-function show{T}(S::SparseAccumulator{T})
-    invoke(show, (Any,), S)
-end
 
 size(S::SparseAccumulator) = length(S.vals)
 length(S::SparseAccumulator) = length(S.vals)
