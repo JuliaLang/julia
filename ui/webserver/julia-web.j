@@ -117,8 +117,14 @@ end
 # input event handler
 ###########################################
 
+# store the result of the previous input
+ans = nothing
+
 # callback for that event handler
 function __socket_callback(fd)
+    # keep track of the previous result
+    global ans
+
     # read the message
     __msg = __read_message()
 
@@ -158,10 +164,12 @@ function __socket_callback(fd)
 
         # if nothing was returned, send nothing back
         if __result == nothing
+            ans = nothing
             return __send_eval_result("")
         end
 
         # otherwise, send back the result
+        ans = __result
         return __send_eval_result(print_to_string(show, __result))
     end
 end
