@@ -138,26 +138,20 @@ function __socket_callback(fd)
             return __send_eval_result("")
         end
         
-        if typeof(__expr) == Expr
-            # check if there was a parsing error
-            if __expr.head == :error
-                return __send_error(__expr.args[1])
-            end
+        # check if there was a parsing error
+        if __expr.head == :error
+            return __send_error(__expr.args[1])
+        end
 
-            # check if the expression was incomplete
-            if __expr.head == :continue
-                return __send_eval_incomplete()
-            end
+        # check if the expression was incomplete
+        if __expr.head == :continue
+            return __send_eval_incomplete()
         end
 
         # evaluate the expression and print any exceptions that occurred
         local __result
         try
-            if typeof(__expr) == LambdaStaticData
-                __result = eval(__expr)()
-            else
-                __result = eval(__expr)
-            end
+            __result = eval(__expr)
         catch __error
             return __send_error(print_to_string(show, __error))
         end
