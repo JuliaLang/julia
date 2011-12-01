@@ -150,8 +150,8 @@
                 // update the html
                 $("#terminal").html(terminal_data);
 
-                // resize the input box (the -10 is for Internet Explorer)
-                $("#terminal-input").width($("#terminal").width()-$("#prompt").width()-10);
+                // resize the input box (the -1 is for Internet Explorer)
+                $("#terminal-input").width($("#terminal").width()-$("#prompt").width()-1);
 
                 // scroll to the new data
                 $("#terminal-form").prop("scrollTop", $("#terminal-form").prop("scrollHeight"));
@@ -284,6 +284,9 @@
                     $("#prompt").show();
                     $("#terminal-input").removeAttr("disabled");
                     $("#terminal-input").focus();
+
+                    // resize the input box (the -1 is for Internet Explorer)
+                    $("#terminal-input").width($("#terminal").width()-$("#prompt").width()-1);
                 }
 
                 // send any remaining messages if there are any
@@ -297,9 +300,6 @@
             // called on page load
             $(document).ready(function()
             {
-                // resize the input box (the -10 is for Internet Explorer)
-                $("#terminal-input").width($("#terminal").width()-$("#prompt").width()-10);
-
                 // apply the autoresize plugin to the textarea
                 $("#terminal-input").autoResize({ animate: false, maxHeight: 1000, onResize: function() { setTimeout(function() { $("#terminal-form").prop("scrollTop", $("#terminal-form").prop("scrollHeight")); }, 100); } });
                 
