@@ -15,7 +15,7 @@ using namespace std;
 using namespace scgi;
 
 /////////////////////////////////////////////////////////////////////////////
-// helpers that should really be part of the C++ standard library
+// string helper functions
 /////////////////////////////////////////////////////////////////////////////
 
 // convert a value to a string
@@ -34,82 +34,6 @@ template <class T> T from_string(const std::string& t)
     T ret;
     stringstream(t)>>ret;
     return ret;
-}
-
-// strip a string of leading and trailing whitespace
-string strip(string str)
-{
-    // remove leading whitespace
-    while (!str.empty())
-    {
-        if (str[0] == ' ' || str[0] == '\t' || str[0] == '\n' || str[0] == '\r')
-            str = str.substr(1, str.size()-1);
-        else
-            break;
-    }
-
-    // remove trailing whitespace
-    while (!str.empty())
-    {
-        if (str[str.size()-1] == ' ' || str[str.size()-1] == '\t' || str[str.size()-1] == '\n' || str[str.size()-1] == '\r')
-            str = str.substr(0, str.size()-1);
-        else
-            break;
-    }
-
-    // return the result
-    return str;
-}
-
-// convert a string to lowercase
-string to_lower(string str)
-{
-    // convert a string to lowercase
-    for (size_t j = 0; j < str.size(); j++)
-        str[j] = tolower(str[j]);
-    return str;
-}
-
-// convert a string to uppercase
-string to_upper(string str)
-{
-    // convert a string to uppercase
-    for (size_t j = 0; j < str.size(); j++)
-        str[j] = toupper(str[j]);
-    return str;
-}
-
-// split strings by a character
-vector<string> split(string str, char separator)
-{
-    // split a string
-    vector<string> result;
-    string current_str;
-    for (size_t i = 0; i < str.size(); i++)
-    {
-        if (str[i] == separator)
-        {
-            result.push_back(current_str);
-            current_str = "";
-        }
-        else
-            current_str += str.substr(i, 1);
-    }
-    result.push_back(current_str);
-    return result;
-}
-
-// replace all occurrences of from with to in str
-string str_replace(string str, string from, string to)
-{
-    // start from the beginning
-    size_t pos = str.find(from, 0);
-    while (pos != string::npos)
-    {
-        str.replace(pos, from.size(), to);
-        pos = str.find(from, pos+to.size());
-    }
-    return str;
 }
 
 /////////////////////////////////////////////////////////////////////////////
@@ -362,19 +286,29 @@ void* outbox_thread(void* arg)
         // unlock the mutex
         pthread_mutex_unlock(&session_mutex);
 
-        // read if there is data
-        char buffer[2];
-        fd_set set;
-        FD_ZERO(&set);
-        FD_SET(pipe, &set);
-        timeval select_timeout;
-        select_timeout.tv_sec = 0;
-        select_timeout.tv_usec = 100000;
-        if (select(FD_SETSIZE, &set, 0, 0, &select_timeout))
-            new_raw_data = (read(pipe, buffer, 1) == 1);
-        buffer[1] = 0;
-        if (new_raw_data)
-            outbox_std += buffer[0];
+        // read while there is data
+        while (true)
+        {
+            char buffer[2];
+            fd_set set;
+            FD_ZERO(&set);
+            FD_SET(pipe, &set);
+            timeval select_timeout;
+            select_timeout.tv_sec = 0;
+            select_timeout.tv_usec = 100000;
+            if (select(FD_SETSIZE, &set, 0, 0, &select_timeout))
+            {
+                if (read(pipe, buffer, 1) > 0)
+                    new_raw_data = true;
+                else
+                    break;
+            }
+            else
+                break;
+            buffer[1] = 0;
+            if (new_raw_data)
+                outbox_std += buffer[0];
+        }
 
         // lock the mutex
         pthread_mutex_lock(&session_mutex);
