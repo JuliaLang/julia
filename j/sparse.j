@@ -194,7 +194,7 @@ sprandn(m,n,density) = sprand_rng (m,n,density,randn)
 #sprandi(m,n,density) = sprand_rng (m,n,density,randi)
 
 function speye(T::Type, n::Size)
-    L = linspace(_jl_best_inttype(n), 1, n)
+    L = linspace(1, n)
     _jl_make_sparse(L, L, ones(T, n), n, n)
 end
 
@@ -202,7 +202,7 @@ speye(n::Size) = speye(Float64, n)
 
 function speye(T::Type, m::Size, n::Size)
     x = min(m,n)
-    L = linspace(_jl_best_inttype(m), 1, x)
+    L = linspace(1, x)
     _jl_make_sparse(L, L, ones(T, x), m, n)
 end
 
@@ -628,7 +628,7 @@ function (*){T1,T2}(X::Matrix{T1}, A::SparseMatrixCSC{T2})
     return Y
 end
 
-# sparse * sparse
+# sparse matmul (sparse * sparse)
 function (*){T1,T2}(X::SparseMatrixCSC{T1}, Y::SparseMatrixCSC{T2}) 
     mX, nX = size(X)
     mY, nY = size(Y)
@@ -642,15 +642,19 @@ function (*){T1,T2}(X::SparseMatrixCSC{T1}, Y::SparseMatrixCSC{T2})
     rowval = Array(inttype, nnz_res)  # Need better estimation of result space
     nzval = Array(T, nnz_res)         # Need better estimation of result space
 
+    colptrY = Y.colptr
+    rowvalY = Y.rowval
+    nzvalY = Y.nzval
+
     spa = SparseAccumulator(T, inttype, mX);
     for y_col = 1:nY
-        for y_elt = Y.colptr[y_col] : (Y.colptr[y_col+1]-1)
-            x_col = Y.rowval[y_elt]
-            _jl_spa_axpy(spa, Y.nzval[y_elt], X, x_col)
+        for y_elt = colptrY[y_col] : (colptrY[y_col+1]-1)
+            x_col = rowvalY[y_elt]
+            _jl_spa_axpy(spa, nzvalY[y_elt], X, x_col)
         end
         (rowval, nzval) = _jl_spa_store_reset(spa, y_col, colptr, rowval, nzval)
     end
-        
+
     return SparseMatrixCSC(mX, nY, colptr, rowval, nzval)     
 end
         
@@ -671,42 +675,92 @@ end
 
 SparseAccumulator(s::Size) = SparseAccumulator(Float64, s)
 
-size(S::SparseAccumulator) = length(S.vals)
 length(S::SparseAccumulator) = length(S.vals)
 numel(S::SparseAccumulator) = S.nvals
 
-# reset spa
-function _jl_spa_reset{T}(S::SparseAccumulator{T})
-    z = zero(T)
-    for i=1:numel(S)
-        S.vals[i] = z
-        S.flags[i] = false
-    end
-    S.nvals = 0
-end
-
 # store spa and reset
 function _jl_spa_store_reset{T}(S::SparseAccumulator{T}, col, colptr, rowval, nzval)
+    vals = S.vals
+    flags = S.flags
+    indexes = S.indexes
+    nvals = S.nvals
     z = zero(T)
+
     start = colptr[col]
 
-    if numel(S) > length(nzval) - start 
+    if nvals > length(nzval) - start 
         rowval = grow(rowval, 2*length(rowval))
         nzval = grow(nzval, 2*length(nzval))
     end
 
-    for i=1:numel(S)
-        pos = S.indexes[i]
+    for i=1:nvals
+        pos = indexes[i]
         rowval[start + i - 1] = pos
-        nzval[start + i - 1] = S.vals[pos]
-        S.vals[pos] = z
-        S.flags[i] = false
+        nzval[start + i - 1] = vals[pos]
+        vals[pos] = z
+        flags[i] = false
     end
 
-    colptr[col+1] = start + numel(S)
+    colptr[col+1] = start + nvals
     S.nvals = 0
     return (rowval, nzval)
 end
+
+#sets S = S + a*x, where x is col j of A
+function _jl_spa_axpy{T}(S::SparseAccumulator{T}, a, A::SparseMatrixCSC, j::Int)
+    colptrA = A.colptr
+    rowvalA = A.rowval
+    nzvalA = A.nzval
+    
+    vals = S.vals
+    flags = S.flags
+    indexes = S.indexes
+    nvals = S.nvals
+    z = zero(T)
+
+    for i = colptrA[j]:(colptrA[j+1]-1)
+        v = a * nzvalA[i]
+        r = rowvalA[i]
+
+        if flags[r] == true
+            vals[r] += v
+        else
+            if v == z; continue; end
+            flags[r] = true
+            vals[r] = v
+            nvals += 1
+            indexes[nvals] = i
+        end
+    end
+    
+    S.nvals = nvals
+    return S
+end
+
+# # reset spa
+# function _jl_spa_reset{T}(S::SparseAccumulator{T})
+#     z = zero(T)
+#     for i=1:numel(S)
+#         S.vals[i] = z
+#         S.flags[i] = false
+#     end
+#     S.nvals = 0
+# end
+
+# #increments S[i] by v
+# function _jl_spa_incr{T}(S::SparseAccumulator{T}, v, i::Int)
+#     if v != zero(T)
+#         if S.flags[i]
+#             S.vals[i] += v
+#         else
+#             S.flags[i] = true
+#             S.vals[i] = v
+#             S.nvals += 1
+#             S.indexes[S.nvals] = i            
+#         end
+#     end
+#     return S
+# end
 
 # ref{T}(S::SparseAccumulator{T}, i::Index) = S.flags[i] ? S.vals[i] : zero(T)
 
@@ -732,26 +786,3 @@ end
 #     end
 #     return S
 # end
-
-#increments S[i] by v
-function _jl_spa_incr{T}(S::SparseAccumulator{T}, v, i::Int)
-    if v != zero(T)
-        if S.flags[i]
-            S.vals[i] += v
-        else
-            S.flags[i] = true
-            S.vals[i] = v
-            S.nvals += 1
-            S.indexes[S.nvals] = i            
-        end
-    end
-    return S
-end
-
-#sets S = S + a*x, where x is col j of A
-function _jl_spa_axpy(S::SparseAccumulator, a, A::SparseMatrixCSC, j::Int)
-    for i = A.colptr[j]:(A.colptr[j+1]-1)
-        _jl_spa_incr(S, a*A.nzval[i], A.rowval[i])
-    end
-    return S
-end
