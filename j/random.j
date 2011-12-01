@@ -175,7 +175,21 @@ function randn(dims::Dims)
     return A
 end
 
+## exprnd() - Exponentially distributed random numbers using Ziggurat algorithm
+
 randn(dims::Size...) = randn(dims)
+
+exprnd() = ccall(dlsym(_jl_librandom, :randmtzig_exprnd), Float64, ())
+
+function exprnd(dims::Dims)
+    A = Array(Float64, dims)
+    ccall(dlsym(_jl_librandom, :randmtzig_fill_exprnd), Void,
+          (Ptr{Float64}, Uint32), 
+          A, uint32(numel(A)))
+    return A
+end
+
+exprnd(dims::Size...) = exprnd(dims)
 
 ## randg()
 
