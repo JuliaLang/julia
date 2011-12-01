@@ -339,3 +339,27 @@ function ^(A::AbstractMatrix, p::Number)
     end
     diagmm(X, v.^p)*Xinv
 end
+
+function rref{T}(A::Matrix{T})
+    (L,U) = lu(A)
+    U = U::Matrix{T}
+    e = eps(norm(U,Inf))
+    nr, nc = size(U)
+    for i = 1:nr
+        d = U[i,i]
+        if abs(d) > e
+            for k = i:nc
+                U[i,k] /= d
+            end
+        end
+    end
+    for i = 1:(nr-1)
+        for j = (i+1):min(nr,nc)
+            c = U[i,j]
+            for k = j:nc
+                U[i,k] -= c*U[j,k]
+            end
+        end
+    end
+    U
+end

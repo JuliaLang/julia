@@ -490,14 +490,16 @@ static jl_value_t *build_backtrace(void)
     unw_cursor_t cursor; unw_context_t uc;
     unw_word_t ip;
     jl_array_t *a;
+    size_t n=0;
     a = jl_alloc_cell_1d(0);
     JL_GC_PUSH(&a);
     
     unw_getcontext(&uc);
     unw_init_local(&cursor, &uc);
-    while (unw_step(&cursor)) { 
+    while (unw_step(&cursor) && n < 10000) { 
         unw_get_reg(&cursor, UNW_REG_IP, &ip);
         push_frame_info_from_ip(a, ip);
+        n++;
     }
     JL_GC_POP();
     return (jl_value_t*)a;
@@ -520,10 +522,8 @@ void jl_raise(jl_value_t *e)
         jl_value_t *tracedata, *bt;
         tracedata = build_backtrace();
         JL_GC_PUSH(&tracedata);
-        bt = (jl_value_t*)alloc_3w();
-        bt->type = (jl_type_t*)jl_backtrace_type;
-        ((jl_value_t**)bt)[1] = jl_exception_in_transit;
-        ((jl_value_t**)bt)[2] = tracedata;
+        bt = jl_new_struct(jl_backtrace_type,
+                           jl_exception_in_transit, tracedata);
         jl_exception_in_transit = bt;
         JL_GC_POP();
     }
