@@ -215,6 +215,39 @@ transpose(S::SparseMatrixCSC) = ((I,J,V) = find(S); sparse(J, I, V, S.n, S.m))
 ctranspose{T<:Number}(S::SparseMatrixCSC{T}) =
     ((I,J,V) = find(S); sparse(J, I, conj(V), S.n, S.m))
 
+#Based on: http://www.cise.ufl.edu/research/sparse/CSparse/CSparse/Source/cs_transpose.c
+function transpose_expt{T}(S::SparseMatrixCSC{T})
+    (nT, mT) = size(S)
+    nnzS = nnz(S)
+    colptr_S = S.colptr
+    rowval_S = S.rowval
+    nzval_S = S.nzval
+
+    inttype = _jl_best_inttype(mT)
+    rowval_T = Array(inttype, nnzS)
+    nzval_T = Array(T, nnzS)
+
+    w = zeros(Size, nT+1)
+    w[1] = 1
+    for i=1:nnzS
+        w[rowval_S[i]+1] += 1
+    end
+    colptr_T = cumsum(w)
+    w = copy(colptr_T)
+
+    for j = 1:mT
+        for p = colptr_S[j]:(colptr_S[j+1]-1)
+            ind = rowval_S[p]
+            q = w[ind]
+            w[ind] += 1
+            rowval_T[q] = j
+            nzval_T[q] = nzval_S[p]
+        end
+    end
+    
+    return SparseMatrixCSC(mT, nT, colptr_T, rowval_T, nzval_T)
+end
+
 macro _jl_binary_op_A_sparse_B_sparse_res_sparse(op)
     quote
 
