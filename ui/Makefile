@@ -4,9 +4,9 @@ include $(JULIAHOME)/Make.inc
 LLTDIR = $(JULIAHOME)/src/support
 FLISPDIR = $(JULIAHOME)/src/flisp
 ifeq ($(USE_SYSTEM_READLINE), 1)
-READLINE = -lncurses -lreadline
+READLINE = -lncurses -lcurses -lreadline
 else
-READLINE = -lncurses $(EXTROOT)/lib/libreadline.a
+READLINE = -lncurses -lcurses $(EXTROOT)/lib/libreadline.a
 endif
 
 FLAGS = -Wall -Wno-strict-aliasing -fno-omit-frame-pointer \
