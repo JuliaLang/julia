@@ -61,13 +61,13 @@
                 types listed in message_types.h.
             */
 
-            // input messages
+            // input messages (to julia)
             var MSG_INPUT_NULL = 0;
             var MSG_INPUT_START = 1;
             var MSG_INPUT_POLL = 2;
             var MSG_INPUT_EVAL = 3;
 
-            // output messages
+            // output messages (to the browser)
             var MSG_OUTPUT_NULL = 0;
             var MSG_OUTPUT_MESSAGE = 1;
             var MSG_OUTPUT_ERROR = 2;
@@ -82,7 +82,7 @@
                 REPL implementation.
             */
 
-            // how often we poll the server
+            // how often we poll the server in ms
             var poll_interval = 500;
 
             // terminal content

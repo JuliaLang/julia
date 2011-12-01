@@ -21,59 +21,59 @@ load("./ui/webserver/message_types.h")
 ###########################################
 
 # open a socket on any port
-ports = [int16(4444)]
-sockfd = ccall(:open_any_tcp_port, Int32, (Ptr{Int16},), ports)
-if sockfd == -1
+__ports = [int16(4444)]
+__sockfd = ccall(:open_any_tcp_port, Int32, (Ptr{Int16},), __ports)
+if __sockfd == -1
     # couldn't open the socket
     println("could not open server socket on port 4444.")
     exit()
 end
 
 # print the socket number so the server knows what it is
-println(ports[1])
+println(__ports[1])
 
 # wait for the server to connect to the socket
-connectfd = ccall(dlsym(libc, :accept), Int32, (Int32, Ptr{Void}, Ptr{Void}), sockfd, C_NULL, C_NULL)
+__connectfd = ccall(dlsym(libc, :accept), Int32, (Int32, Ptr{Void}, Ptr{Void}), __sockfd, C_NULL, C_NULL)
 
 # create an io object from the file descriptor
-io = fdio(connectfd)
+__io = fdio(__connectfd)
 
 ###########################################
 # protocol implementation
 ###########################################
 
 # a message
-type Message
+type __Message
     msg_type::Uint8
-    args::Array{Any,1}
+    args::Array{Any, 1}
 end
 
 # read a message
-function read_message()
-    msg_type = read(io, Uint8)
+function __read_message()
+    msg_type = read(__io, Uint8)
     args = {}
-    num_args = read(io, Uint8)
+    num_args = read(__io, Uint8)
     for i=1:num_args
-        arg_length = read(io, Uint32)
-        arg = ASCIIString(read(io, Uint8, arg_length))
+        arg_length = read(__io, Uint32)
+        arg = ASCIIString(read(__io, Uint8, arg_length))
         push(args, arg)
     end
-    return Message(msg_type, args)
+    return __Message(msg_type, args)
 end
 
 # send a message
-function write_message(msg)
-    write(io, uint8(msg.msg_type))
-    write(io, uint8(length(msg.args)))
+function __write_message(msg)
+    write(__io, uint8(msg.msg_type))
+    write(__io, uint8(length(msg.args)))
     for arg=msg.args
-        write(io, uint32(length(arg)))
-        write(io, arg)
+        write(__io, uint32(length(arg)))
+        write(__io, arg)
     end
-    flush(io)
+    flush(__io)
 end
 
 # print a message (useful for debugging)
-function print_message(msg)
+function __print_message(msg)
     print(msg.msg_type)
     print(": [ ")
     for arg=msg.args
@@ -89,28 +89,28 @@ end
 ###########################################
 
 # send a message
-function send_message(msg)
-    write_message(Message(MSG_OUTPUT_MESSAGE, {msg}))
+function __send_message(msg)
+    __write_message(__Message(__MSG_OUTPUT_MESSAGE, {msg}))
 end
 
 # send an error message
-function send_error(msg)
-    write_message(Message(MSG_OUTPUT_ERROR, {msg}))
+function __send_error(msg)
+    __write_message(__Message(__MSG_OUTPUT_ERROR, {msg}))
 end
 
 # send a fatal error message
-function send_fatal_error(msg)
-    write_message(Message(MSG_OUTPUT_FATAL_ERROR, {msg}))
+function __send_fatal_error(msg)
+    __write_message(__Message(__MSG_OUTPUT_FATAL_ERROR, {msg}))
 end
 
 # send an incomplete expression message
-function send_eval_incomplete()
-    write_message(Message(MSG_OUTPUT_EVAL_INCOMPLETE, {}))
+function __send_eval_incomplete()
+    __write_message(__Message(__MSG_OUTPUT_EVAL_INCOMPLETE, {}))
 end
 
 # send an expression result message
-function send_eval_result(msg)
-    write_message(Message(MSG_OUTPUT_EVAL_RESULT, {msg}))
+function __send_eval_result(msg)
+    __write_message(__Message(__MSG_OUTPUT_EVAL_RESULT, {msg}))
 end
 
 ###########################################
@@ -118,45 +118,45 @@ end
 ###########################################
 
 # callback for that event handler
-function socket_callback(fd)
+function __socket_callback(fd)
     # read the message
-    msg = read_message()
+    __msg = __read_message()
 
     # MSG_INPUT_EVAL
-    if msg.msg_type == MSG_INPUT_EVAL
+    if __msg.msg_type == __MSG_INPUT_EVAL
         # try to evaluate it
-        expr = parse_input_line(msg.args[1])
+        __expr = parse_input_line(__msg.args[1])
 
-        if expr == nothing
-            return send_eval_result("")
+        if __expr == nothing
+            return __send_eval_result("")
         end
 
         # check if there was an error
-        if expr.head == :error
-            return send_error(expr.args[1])
+        if __expr.head == :error
+            return __send_error(__expr.args[1])
         end
 
         # check if the expression was incomplete
-        if expr.head == :continue
-            return send_eval_incomplete()
+        if __expr.head == :continue
+            return __send_eval_incomplete()
         end
 
         # evaluate the expression
-        local result
+        local __result
         try
-            result = eval(expr)
-        catch error
-            return send_error(print_to_string(show, error))
+            __result = eval(__expr)
+        catch __error
+            return __send_error(print_to_string(show, __error))
         end
-        if result == nothing
-            return send_eval_result("")
-        end
-        return send_eval_result(print_to_string(show, result))
+        if __result == nothing
+            return __send_eval_result("")
+            end
+        return __send_eval_result(print_to_string(show, __result))
     end
 end
 
 # event handler for socket input
-add_fd_handler(connectfd, socket_callback)
+add_fd_handler(__connectfd, __socket_callback)
 
 ###########################################
 # asynchronous stuff
