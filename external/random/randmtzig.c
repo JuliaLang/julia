@@ -66,8 +66,26 @@ typedef unsigned long long randmtzig_uint64_t;
 void randmtzig_create_ziggurat_tables (void);
 double randmtzig_randn (void);
 void randmtzig_fill_randn (double *p, randmtzig_idx_type n);
+double randmtzig_exprnd (void);
+void randmtzig_fill_exprnd (double *p, randmtzig_idx_type n);
 
 /* ===== Uniform generators ===== */
+
+inline static randmtzig_uint64_t randi53 (void)
+{
+    const randmtzig_uint32_t lo = dsfmt_gv_genrand_uint32();
+    const randmtzig_uint32_t hi = dsfmt_gv_genrand_uint32()&0x1FFFFF;
+//#ifndef __LP64__
+#if 0
+    randmtzig_uint64_t u;
+    randmtzig_uint32_t *p = (randmtzig_uint32_t *)&u;
+    p[0] = lo;
+    p[1] = hi;
+    return u;
+#else
+    return (((randmtzig_uint64_t)hi<<32)|lo);
+#endif
+}
 
 inline static randmtzig_uint64_t randi54 (void)
 {
@@ -94,6 +112,7 @@ inline static double randu53 (void)
 /* ===== Ziggurat normal and exponential generators ===== */
 # define ZIGINT randmtzig_uint64_t
 # define EMANTISSA 9007199254740992.0  /* 53 bit mantissa */
+# define ERANDI randi53() /* 53 bits for mantissa */
 # define NMANTISSA EMANTISSA
 # define NRANDI randi54() /* 53 bits for mantissa + 1 bit sign */
 # define RANDU randu53()
@@ -282,9 +301,40 @@ double randmtzig_randn (void)
     }
 }
 
+double randmtzig_exprnd (void)
+{
+     while (1)
+     {
+	  ZIGINT ri = ERANDI;
+	  const int idx = (int)(ri & 0xFF);
+	  const double x = ri * we[idx];
+	  if (ri < ke[idx])
+	       return x;		// 98.9% of the time we return here 1st try
+	  else if (idx == 0)
+	  {
+	       /* As stated in Marsaglia and Tsang
+		* 
+		* For the exponential tail, the method of Marsaglia[5] provides:
+		* x = r - ln(U);
+		*/
+	       return ZIGGURAT_EXP_R - log(RANDU);
+	  }
+	  else if ((fe[idx-1] - fe[idx]) * RANDU + fe[idx] < exp(-x))
+	       return x;
+     }
+}
+
 void randmtzig_fill_randn (double *p, randmtzig_idx_type n)
 {
      randmtzig_idx_type i;
      for (i = 0; i < n; i++)
           p[i] = randmtzig_randn();
 }
+
+void randmtzig_fill_exprnd (double *p, randmtzig_idx_type n)
+{
+     randmtzig_idx_type i;
+     for (i = 0; i < n; i++)
+          p[i] = randmtzig_exprnd();
+}
+
