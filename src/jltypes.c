@@ -431,29 +431,9 @@ static jl_value_t *intersect_tag(jl_tag_type_t *a, jl_tag_type_t *b,
                     continue;
                 }
             }
-            else if (jl_has_typevars_(ap,1)) {
-                // if the types have parameters, see if there exists a
-                // parameter assignment that makes them the same type
-                jl_value_t *tm = jl_type_match_invariant(bp, ap);
-                if (tm != jl_false && tm != (jl_value_t*)jl_null) {
-                    ti = jl_type_intersect(ap,bp,penv,eqc,invariant);
-                }
-                else if (jl_has_typevars_(bp,1)) {
-                    tm = jl_type_match_invariant(ap, bp);
-                    if (tm != jl_false && tm != (jl_value_t*)jl_null) {
-                        ti = jl_type_intersect(ap,bp,penv,eqc,invariant);
-                    }
-                    else {
-                        ti = (jl_value_t*)jl_bottom_type;
-                    }
-                }
-                else {
-                    ti = (jl_value_t*)jl_bottom_type;
-                }
-            }
-            else if (jl_has_typevars_(bp,1)) {
-                jl_value_t *tm = jl_type_match_invariant(ap, bp);
-                if (tm != jl_false && tm != (jl_value_t*)jl_null) {
+            else if (jl_has_typevars_(ap,1) || jl_has_typevars_(bp,1)) {
+                if (jl_subtype_invariant(ap,bp,0) ||
+                    jl_subtype_invariant(bp,ap,0)) {
                     ti = jl_type_intersect(ap,bp,penv,eqc,invariant);
                 }
                 else {
@@ -487,8 +467,8 @@ static jl_value_t *intersect_tag(jl_tag_type_t *a, jl_tag_type_t *b,
     return NULL;
 }
 
-// use, essentially, union-find on type variables to group them
-// into equivalence classes.
+static int match_intersection_mode = 0;
+
 static jl_value_t *intersect_typevar(jl_tvar_t *a, jl_value_t *b,
                                      jl_tuple_t **penv, jl_tuple_t **eqc,
                                      variance_t var)
@@ -574,8 +554,6 @@ static jl_value_t *intersect_typevar(jl_tvar_t *a, jl_value_t *b,
     }
     return (jl_value_t*)a;
 }
-
-static int match_intersection_mode = 0;
 
 static jl_value_t *jl_type_intersect(jl_value_t *a, jl_value_t *b,
                                      jl_tuple_t **penv, jl_tuple_t **eqc,
@@ -771,11 +749,12 @@ static jl_value_t *jl_type_intersect(jl_value_t *a, jl_value_t *b,
         while (e != (jl_value_t*)jl_null) {
             jl_value_t *tp = jl_t0(e);
             // make sure each needed parameter is actually set by the subtype
-            for(i=0; i < n; i++) {
-                if (tp == jl_tupleref(tc_params, i))
+            size_t j;
+            for(j=0; j < n; j++) {
+                if (tp == jl_tupleref(tc_params, j))
                     break;
             }
-            if (i >= n) {
+            if (j >= n) {
                 JL_GC_POP();
                 return (jl_value_t*)jl_bottom_type;
             }
@@ -2169,15 +2148,6 @@ jl_value_t *jl_type_match(jl_value_t *a, jl_value_t *b)
     jl_tuple_t *env = jl_null;
     JL_GC_PUSH(&env);
     jl_value_t *m = type_match_(a, b, &env, 0, 0);
-    JL_GC_POP();
-    return m;
-}
-
-jl_value_t *jl_type_match_invariant(jl_value_t *a, jl_value_t *b)
-{
-    jl_tuple_t *env = jl_null;
-    JL_GC_PUSH(&env);
-    jl_value_t *m = type_match_(a, b, &env, 0, 1);
     JL_GC_POP();
     return m;
 }

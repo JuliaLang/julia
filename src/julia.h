@@ -521,8 +521,8 @@ int jl_tuple_subtype(jl_value_t **child, size_t cl,
                      jl_value_t **parent, size_t pl, int ta, int morespecific);
 int jl_subtype(jl_value_t *a, jl_value_t *b, int ta);
 int jl_type_morespecific(jl_value_t *a, jl_value_t *b, int ta);
+int jl_subtype_invariant(jl_value_t *a, jl_value_t *b, int ta);
 DLLEXPORT jl_value_t *jl_type_match(jl_value_t *a, jl_value_t *b);
-jl_value_t *jl_type_match_invariant(jl_value_t *a, jl_value_t *b);
 jl_value_t *jl_type_match_morespecific(jl_value_t *a, jl_value_t *b);
 DLLEXPORT int jl_types_equal(jl_value_t *a, jl_value_t *b);
 int jl_types_equal_generic(jl_value_t *a, jl_value_t *b);
