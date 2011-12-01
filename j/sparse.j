@@ -689,8 +689,8 @@ function _jl_spa_store_reset{T}(S::SparseAccumulator{T}, col, colptr, rowval, nz
     start = colptr[col]
 
     if nvals > length(nzval) - start 
-        rowval = grow(rowval, 2*length(rowval))
-        nzval = grow(nzval, 2*length(nzval))
+        rowval = grow(rowval, length(rowval))
+        nzval = grow(nzval, length(nzval))
     end
 
     for i=1:nvals
@@ -734,7 +734,6 @@ function _jl_spa_axpy{T}(S::SparseAccumulator{T}, a, A::SparseMatrixCSC, j::Int)
     end
     
     S.nvals = nvals
-    return S
 end
 
 # # reset spa
