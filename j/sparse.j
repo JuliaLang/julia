@@ -586,7 +586,7 @@ function _jl_spa_store_reset{T}(S::SparseAccumulator{T}, col, colptr, rowval, nz
 
     for i=1:numel(S)
         pos = S.indexes[i]
-        rowval[start + i - 1] = i
+        rowval[start + i - 1] = pos
         nzval[start + i - 1] = S.vals[pos]
         S.vals[pos] = z
         S.flags[i] = false
