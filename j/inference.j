@@ -607,7 +607,7 @@ ast_rettype(ast) = ast.args[3].typ
 
 function abstract_eval_constant(x::ANY)
     if isa(x,AbstractKind) || isa(x,BitsKind) || isa(x,CompositeKind) ||
-        isa(x,FuncKind) || isa(x,UnionKind)
+        isa(x,FuncKind) || isa(x,UnionKind) || isa(x,TypeConstructor)
         return Type{x}
     end
     if isa(x,LambdaStaticData)
