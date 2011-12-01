@@ -81,9 +81,9 @@ falses(dims::Size...) = falses(dims)
 fill(v, dims::Dims) = fill!(Array(typeof(v), dims), v)
 fill(v, dims::Size...) = fill(v, dims)
 
-function linspace(start::Real, stop::Real, n::Int)
+function linspace(T::Type, start::Real, stop::Real, n::Int)
     (start, stop) = promote(start, stop)
-    a = Array(typeof(start), long(n))
+    a = Array(T, long(n))
     if n == 1
         a[1] = start
         return a
@@ -94,6 +94,10 @@ function linspace(start::Real, stop::Real, n::Int)
     end
     a
 end
+
+linspace(start::Real, stop::Real, n::Int) = linspace(typeof(start), start, stop, n)
+
+linspace(T::Type, start::Real, stop::Real) = [ convert(T,i) | i=start:stop ]
 
 linspace(start::Real, stop::Real) = [ i | i=start:stop ]
 

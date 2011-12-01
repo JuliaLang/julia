@@ -1,11 +1,32 @@
 # Compressed sparse columns data structure
 # Assumes that no zeros are stored in the data structure
-type SparseMatrixCSC{T} <: AbstractMatrix{T}
-    m::Size                # Number of rows
-    n::Size                # Number of columns
-    colptr::Vector{Size}   # Column i is in colptr[i]:(colptr[i+1]-1)
-    rowval::Vector{Size}   # Row values of nonzeros
-    nzval::Vector{T}       # Nonzero values
+type SparseMatrixCSC{T,T_int} <: AbstractMatrix{T}
+    m::Size                 # Number of rows
+    n::Size                 # Number of columns
+    colptr::Vector{Size}    # Column i is in colptr[i]:(colptr[i+1]-1)
+    rowval::Vector{T_int}   # Row values of nonzeros
+    nzval::Vector{T}        # Nonzero values
+end
+
+function _jl_best_inttype(x::Int)
+    if x < typemax(Int8)
+        return Int8
+    elseif x < typemax(Int16)
+        return Int16
+    elseif x < typemax(Int32)
+        return Int32
+    else
+        return Int64
+    end    
+end
+
+function SparseMatrixCSC(T::Type, m::Int, n::Int, numnz::Int)
+    inttype = _jl_best_inttype(m)
+    colptr = Array(Size, n+1)
+    rowval = Array(inttype, numnz)
+    nzval = Array(T, numnz)
+
+    return SparseMatrixCSC(m, n, colptr, rowval, nzval)
 end
 
 issparse(A::AbstractArray) = false
@@ -47,30 +68,30 @@ end
 
 sparse(I,J,V) = sparse(I, J, V, max(I), max(J))
 
-function sparse(I::AbstractVector, J::AbstractVector, 
-                V::Union(Number,AbstractVector), 
-                m::Int, n::Int)
+function sparse{T1,T2}(I::AbstractVector{T1}, J::AbstractVector{T2}, 
+                       V::Union(Number,AbstractVector), 
+                       m::Int, n::Int)
 
-    create_J_copy = true
+    create_I_copy = true
+
+    inttype = _jl_best_inttype(m)
+    if T1 != inttype
+        I = copy_to(similar(I, inttype), I)
+        create_I_copy = false
+    end
 
     if !issorted(I)
         (I,p) = sortperm(I)
         J = J[p]
         if isa(V, AbstractVector); V = V[p]; end
-        create_J_copy = false
     else
-        I = copy(I)
+        if create_I_copy; I = copy(I); end
     end
 
     if !issorted(J)
         (J,p) = sortperm(J)
         I = I[p]
         if isa(V, AbstractVector); V = V[p]; end
-    else
-        if create_J_copy
-            J = copy(J)
-            if isa(V, AbstractVector); V = copy(V); end
-        end
     end
 
     return _jl_make_sparse(I, J, V, m, n)
@@ -80,7 +101,7 @@ end
 # _jl_make_sparse() assumes that I,J are sorted in dictionary order 
 # (with J taking precedence)
 # use sparse() with the same arguments if this is not the case
-function _jl_make_sparse(I::AbstractVector, J::AbstractVector, 
+function _jl_make_sparse(I::AbstractVector, J::AbstractVector,
                          V::Union(Number, AbstractVector),
                          m::Int, n::Int)
 
@@ -94,7 +115,7 @@ function _jl_make_sparse(I::AbstractVector, J::AbstractVector,
     end
 
     cols = zeros(Size, n+1)
-    cols[1] = 1
+    cols[1] = 1  # For cumsum purposes
     cols[J[1] + 1] = 1
 
     lastdup = 1
@@ -170,15 +191,20 @@ sprand(m,n,density) = sprand_rng (m,n,density,rand)
 sprandn(m,n,density) = sprand_rng (m,n,density,randn)
 #sprandi(m,n,density) = sprand_rng (m,n,density,randi)
 
-function speye(n::Size)
-    L = linspace(1,n)
-    _jl_make_sparse(L, L, ones(Float64, n), n, n)
+function speye(T::Type, n::Size)
+    L = linspace(_jl_best_inttype(n), 1, n)
+    _jl_make_sparse(L, L, ones(T, n), n, n)
 end
-function speye(m::Size, n::Size)
+
+speye(n::Size) = speye(Float64, n)
+
+function speye(T::Type, m::Size, n::Size)
     x = min(m,n)
-    L = linspace(1,x)
-    _jl_make_sparse(L, L, ones(Float64, x), m, n)
+    L = linspace(_jl_best_inttype(m), 1, x)
+    _jl_make_sparse(L, L, ones(T, x), m, n)
 end
+
+speye(m::Size, n::Size) = speye(Float64, m, n)
 
 function issymmetric(A::SparseMatrixCSC)
     # Slow implementation
@@ -193,14 +219,18 @@ macro _jl_binary_op_A_sparse_B_sparse_res_sparse(op)
     quote
 
         function ($op){T1,T2}(A::SparseMatrixCSC{T1}, B::SparseMatrixCSC{T2})
-            assert(size(A) == size(B))
+            if size(A,1) != size(B,1) || size(A,2) != size(B,2)
+                error("Incompatible sizes")
+            end
+
             (m, n) = size(A)
 
             typeS = promote_type(T1, T2)
             # TODO: Need better method to allocate result
             nnzS = nnz(A) + nnz(B)
             colptrS = Array(Size, A.n+1)
-            rowvalS = Array(Size, nnzS)
+            inttype = _jl_best_inttype(m)
+            rowvalS = Array(m, nnzS)
             nzvalS = Array(typeS, nnzS)
 
             zero = convert(typeS, 0)
@@ -531,7 +561,7 @@ function (*){T1,T2}(X::Matrix{T1}, A::SparseMatrixCSC{T2})
 end
 
 # sparse * sparse
-function (*){T1,T2}(X::SparseMatrixCSC{T1},Y::SparseMatrixCSC{T2}) 
+function (*){T1,T2}(X::SparseMatrixCSC{T1}, Y::SparseMatrixCSC{T2}) 
     mX, nX = size(X)
     mY, nY = size(Y)
     if nX != mY; error("error in *: mismatched dimensions"); end
@@ -539,10 +569,12 @@ function (*){T1,T2}(X::SparseMatrixCSC{T1},Y::SparseMatrixCSC{T2})
 
     colptr = Array(Size, nY+1)
     colptr[1] = 1
-    rowval = Array(Size, nnz(X) + nnz(Y))  # Need better estimation of space for result
-    nzval = Array(T, nnz(X) + nnz(Y))      # Need better estimation of space for result
+    inttype = _jl_best_inttype(mX)
+    nnz_res = nnz(X) + nnz(Y)
+    rowval = Array(inttype, nnz_res)  # Need better estimation of result space
+    nzval = Array(T, nnz_res)         # Need better estimation of result space
 
-    spa = SparseAccumulator(T, mX);
+    spa = SparseAccumulator(T, inttype, mX);
     for y_col = 1:nY
         for y_elt = Y.colptr[y_col] : (Y.colptr[y_col+1]-1)
             x_col = Y.rowval[y_elt]
@@ -553,19 +585,22 @@ function (*){T1,T2}(X::SparseMatrixCSC{T1},Y::SparseMatrixCSC{T2})
         
     return SparseMatrixCSC(mX, nY, colptr, rowval, nzval)     
 end
-
+        
 ## SparseAccumulator and related functions
 
-type SparseAccumulator{T} <: AbstractVector{T}
+type SparseAccumulator{T,T_int} <: AbstractVector{T}
     vals::Vector{T}
     flags::Vector{Bool}
-    indexes::Vector{Index}
+    indexes::Vector{T_int}
     nvals::Size
 end
 
 show{T}(S::SparseAccumulator{T}) = invoke(show, (Any,), S)
 
-SparseAccumulator{T}(::Type{T}, s::Size) = SparseAccumulator(zeros(T,s), falses(s), Array(Index,s), 0)
+function SparseAccumulator{T,T_int}(::Type{T}, ::Type{T_int}, s::Size) 
+    return SparseAccumulator(zeros(T,s), falses(s), Array(T_int,s), 0)
+end
+
 SparseAccumulator(s::Size) = SparseAccumulator(Float64, s)
 
 size(S::SparseAccumulator) = length(S.vals)
@@ -605,33 +640,33 @@ function _jl_spa_store_reset{T}(S::SparseAccumulator{T}, col, colptr, rowval, nz
     return (rowval, nzval)
 end
 
-ref{T}(S::SparseAccumulator{T}, i::Index) = S.flags[i] ? S.vals[i] : zero(T)
+# ref{T}(S::SparseAccumulator{T}, i::Index) = S.flags[i] ? S.vals[i] : zero(T)
 
-assign{T,N}(S::SparseAccumulator{T}, v::AbstractArray{T,N}, i::Index) = 
-    invoke(assign, (SparseAccumulator{T}, Any, Index), S, v, i)
+# assign{T,N}(S::SparseAccumulator{T}, v::AbstractArray{T,N}, i::Index) = 
+#     invoke(assign, (SparseAccumulator{T}, Any, Int), S, v, i)
 
-function assign{T}(S::SparseAccumulator{T}, v, i::Index)
-    if v == zero(T)
-        if S.flags[i]
-            S.vals[i] = v
-            S.flags[i] = false
-            S.nvals -= 1
-        end
-    else
-        if S.flags[i]
-            S.vals[i] = v
-        else
-            S.flags[i] = true
-            S.vals[i] = v
-            S.nvals += 1
-            S.indexes[S.nvals] = i
-        end
-    end
-    return S
-end
+# function assign{T}(S::SparseAccumulator{T}, v, i::Int)
+#     if v == zero(T)
+#         if S.flags[i]
+#             S.vals[i] = v
+#             S.flags[i] = false
+#             S.nvals -= 1
+#         end
+#     else
+#         if S.flags[i]
+#             S.vals[i] = v
+#         else
+#             S.flags[i] = true
+#             S.vals[i] = v
+#             S.nvals += 1
+#             S.indexes[S.nvals] = i
+#         end
+#     end
+#     return S
+# end
 
 #increments S[i] by v
-function _jl_spa_incr{T}(S::SparseAccumulator{T}, v, i::Index)
+function _jl_spa_incr{T}(S::SparseAccumulator{T}, v, i::Int)
     if v != zero(T)
         if S.flags[i]
             S.vals[i] += v
@@ -646,8 +681,7 @@ function _jl_spa_incr{T}(S::SparseAccumulator{T}, v, i::Index)
 end
 
 #sets S = S + a*x, where x is col j of A
-function _jl_spa_axpy(S::SparseAccumulator, a, A::SparseMatrixCSC, j::Index)
-    if size(S) != A.m; error("error in _jl_spa_axpy: dimension mismatch"); end
+function _jl_spa_axpy(S::SparseAccumulator, a, A::SparseMatrixCSC, j::Int)
     for i = A.colptr[j]:(A.colptr[j+1]-1)
         _jl_spa_incr(S, a*A.nzval[i], A.rowval[i])
     end
