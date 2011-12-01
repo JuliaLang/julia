@@ -349,126 +349,39 @@ void* outbox_thread(void* arg)
             break;
         }
 
+        // flags to indicate whether raw and formatted data was available
+        bool new_raw_data = false;
+        bool new_formatted_data = false;
+
         // prepare for reading from julia
-        char buffer[2];
         int pipe = session_map[session_token].julia_out[0];
 
         // unlock the mutex
         pthread_mutex_unlock(&session_mutex);
 
         // read if there is data
+        char buffer[2];
         fd_set set;
         FD_ZERO(&set);
         FD_SET(pipe, &set);
         timeval select_timeout;
         select_timeout.tv_sec = 0;
         select_timeout.tv_usec = 100000;
-        ssize_t bytes_read = 0;
         if (select(FD_SETSIZE, &set, 0, 0, &select_timeout))
-            bytes_read = read(pipe, buffer, 1);
+            new_raw_data = (read(pipe, buffer, 1) == 1);
         buffer[1] = 0;
+        if (new_raw_data)
+            outbox_std += buffer[0];
 
         // lock the mutex
         pthread_mutex_lock(&session_mutex);
 
-        // get the read data
-        string new_data;
-        if (bytes_read == 1)
-            new_data = buffer;
-        outbox_std += new_data;
-
         // send the outbox data to the client
         if (session_map[session_token].status == SESSION_NORMAL)
         {
-            // try to read a character
-            if (outbox_std != "")
-            {
-                // get the first character
-                char c = outbox_std[0];
-
-                // is it a control sequence?
-                if (c == 0x1B)
-                {
-                    // if we don't have enough characters, try again later
-                    if (outbox_std.size() < 2)
-                    {
-                        // unlock the mutex
-                        pthread_mutex_unlock(&session_mutex);
-
-                        // if we didn't get any new data from julia, wait before trying again
-                        if (new_data == "")
-                        {
-                            timespec timeout;
-                            timeout.tv_sec = 0;
-                            timeout.tv_nsec = OUTBOX_INTERVAL;
-                            nanosleep(&timeout, 0);
-                        }
-
-                        // try again
-                        continue;
-                    }
-
-                    // check for multi-character escape sequences
-                    if (outbox_std[1] == '[')
-                    {
-                        // find the last character in the sequence
-                        int pos = -1;
-                        for (int i = 2; i < outbox_std.size(); i++)
-                        {
-                            if (outbox_std[i] >= 64 && outbox_std[i] <= 126)
-                            {
-                                pos = i;
-                                break;
-                            }
-                        }
-
-                        // if we don't have enouch characters, try again later
-                        if (pos == -1)
-                        {
-                            // unlock the mutex
-                            pthread_mutex_unlock(&session_mutex);
-
-                            // if we didn't get any new data from julia, wait before trying again
-                            if (new_data == "")
-                            {
-                                timespec timeout;
-                                timeout.tv_sec = 0;
-                                timeout.tv_nsec = OUTBOX_INTERVAL;
-                                nanosleep(&timeout, 0);
-                            }
-
-                            // try again
-                            continue;
-                        }
-                        else
-                        {
-                            // eat the control sequence and output nothing
-                            outbox_std = outbox_std.substr(pos+1, outbox_std.size()-(pos+1));
-                            
-                            // unlock the mutex
-                            pthread_mutex_unlock(&session_mutex);
-
-                            // keep going
-                            continue;
-                        }
-                    }
-                    else
-                    {
-                        // eat the two-character control sequence and output nothing
-                        outbox_std = outbox_std.substr(2, outbox_std.size()-2);
-                        
-                        // unlock the mutex
-                        pthread_mutex_unlock(&session_mutex);
-
-                        // keep going
-                        continue;
-                    }
-                }
-
-                // just output the raw character
-                session_map[session_token].outbox_std += c;
-                outbox_std = outbox_std.substr(1, outbox_std.size()-1);
-            }
+            // just dump the output into the session
+            session_map[session_token].outbox_std += outbox_std;
+            outbox_std = "";
         }
 
         // get the port number
@@ -521,9 +434,12 @@ void* outbox_thread(void* arg)
             // try to read some data
             string data;
             if (sock->has_data())
+            {
                 data += sock->read();
+                new_formatted_data = true;
+            }
             
-            // unlock the mutex
+            // lock the mutex
             pthread_mutex_lock(&session_mutex);
 
             // add the data to the outbox
@@ -579,10 +495,13 @@ void* outbox_thread(void* arg)
         pthread_mutex_unlock(&session_mutex);
 
         // nothing from julia; wait before trying again
-        timespec timeout;
-        timeout.tv_sec = 0;
-        timeout.tv_nsec = OUTBOX_INTERVAL;
-        nanosleep(&timeout, 0);
+        if (!new_raw_data && !new_formatted_data)
+        {
+            timespec timeout;
+            timeout.tv_sec = 0;
+            timeout.tv_nsec = OUTBOX_INTERVAL;
+            nanosleep(&timeout, 0);
+        }
     }
 
     // lock the mutex
@@ -856,31 +775,27 @@ string get_response(request* req)
                 // pet the watchdog
                 session_map[session_token].update_time = time(0);
 
-                // make sure we don't get the port number
-                if (session_map[session_token].status == SESSION_NORMAL)
+                // catch any extra output from julia during normal operation
+                if (session_map[session_token].outbox_std != "" && session_map[session_token].status == SESSION_NORMAL)
                 {
-                    // catch any extra output from julia
-                    if (session_map[session_token].outbox_std != "")
-                    {
-                        message output_message;
-                        output_message.type = MSG_OUTPUT_OTHER;
-                        output_message.args.push_back(session_map[session_token].outbox_std);
-                        session_map[session_token].outbox_std = "";
-                        session_map[session_token].outbox.push_back(output_message);
-                    }
+                    message output_message;
+                    output_message.type = MSG_OUTPUT_OTHER;
+                    output_message.args.push_back(session_map[session_token].outbox_std);
+                    session_map[session_token].outbox_std = "";
+                    session_map[session_token].outbox.push_back(output_message);
+                }
 
-                    // merge MSG_OUTPUT_OTHER messages
-                    for (size_t i = 1; i < session_map[session_token].outbox.size(); i++)
+                // merge MSG_OUTPUT_OTHER messages
+                for (size_t i = 1; i < session_map[session_token].outbox.size(); i++)
+                {
+                    // MSG_OUTPUT_OTHER
+                    if (session_map[session_token].outbox[i].type == MSG_OUTPUT_OTHER)
                     {
-                        // MSG_OUTPUT_OTHER
-                        if (session_map[session_token].outbox[i].type == MSG_OUTPUT_OTHER)
+                        if (session_map[session_token].outbox[i-1].type == MSG_OUTPUT_OTHER)
                         {
-                            if (session_map[session_token].outbox[i-1].type == MSG_OUTPUT_OTHER)
-                            {
-                                session_map[session_token].outbox[i-1].args[0] += session_map[session_token].outbox[i].args[0];
-                                session_map[session_token].outbox.erase(session_map[session_token].outbox.begin()+i);
-                                i--;
-                            }
+                            session_map[session_token].outbox[i-1].args[0] += session_map[session_token].outbox[i].args[0];
+                            session_map[session_token].outbox.erase(session_map[session_token].outbox.begin()+i);
+                            i--;
                         }
                     }
                 }
