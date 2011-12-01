@@ -356,7 +356,7 @@ extern jl_sym_t *Any_sym;     extern jl_sym_t *method_sym;
 extern jl_sym_t *enter_sym;   extern jl_sym_t *leave_sym;
 extern jl_sym_t *exc_sym;     extern jl_sym_t *new_sym;
 extern jl_sym_t *static_typeof_sym;
-extern jl_sym_t *const_sym;
+extern jl_sym_t *const_sym;   extern jl_sym_t *thunk_sym;
 
 #ifdef __LP64__
 #define NWORDS(sz) (((sz)+7)>>3)

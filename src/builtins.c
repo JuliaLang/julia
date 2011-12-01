@@ -270,17 +270,9 @@ jl_value_t *jl_toplevel_eval_flex(jl_value_t *ex, int fast)
     //ios_printf(ios_stdout, "\n");
     jl_lambda_info_t *thk;
     int ewc = 0;
-    if (jl_typeof(ex) != (jl_type_t*)jl_lambda_info_type) {
-        if (jl_is_expr(ex) && eval_with_compiler_p((jl_expr_t*)ex, fast)) {
-            thk = jl_wrap_expr(ex);
-            ewc = 1;
-        }
-        else {
-            return jl_interpret_toplevel_expr(ex);
-        }
-    }
-    else {
-        thk = (jl_lambda_info_t*)ex;
+    if (jl_is_expr(ex) && ((jl_expr_t*)ex)->head == thunk_sym) {
+        thk = (jl_lambda_info_t*)jl_exprarg(ex,0);
+        assert(jl_is_lambda_info(thk));
         ewc = eval_with_compiler_p(jl_lam_body((jl_expr_t*)thk->ast), fast);
         if (!ewc) {
             jl_array_t *vinfos = jl_lam_vinfo((jl_expr_t*)thk->ast);
@@ -294,10 +286,18 @@ jl_value_t *jl_toplevel_eval_flex(jl_value_t *ex, int fast)
             }
         }
     }
+    else {
+        if (jl_is_expr(ex) && eval_with_compiler_p((jl_expr_t*)ex, fast)) {
+            thk = jl_wrap_expr(ex);
+            ewc = 1;
+        }
+        else {
+            return jl_interpret_toplevel_expr(ex);
+        }
+    }
     jl_value_t *thunk=NULL;
-    jl_function_t *gf=NULL;
     jl_value_t *result;
-    JL_GC_PUSH(&thunk, &gf, &thk);
+    JL_GC_PUSH(&thunk, &thk);
     if (ewc) {
         thunk = jl_new_closure_internal(thk, (jl_value_t*)jl_null);
         result = jl_apply((jl_function_t*)thunk, NULL, 0);
@@ -438,7 +438,7 @@ JL_CALLABLE(jl_f_top_eval)
     }
     jl_value_t *exex = NULL;
     JL_GC_PUSH(&exex);
-    if (ex->head == body_sym || ex->head == lambda_sym) {
+    if (ex->head == body_sym || ex->head == thunk_sym) {
         // already expanded
         exex = e;
     }
