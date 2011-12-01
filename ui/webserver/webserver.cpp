@@ -522,9 +522,9 @@ void* outbox_thread(void* arg)
             string data;
             if (sock->has_data())
                 data += sock->read();
-                            
+            
             // unlock the mutex
-            pthread_mutex_unlock(&session_mutex);
+            pthread_mutex_lock(&session_mutex);
 
             // add the data to the outbox
             session_map[session_token].outbox_raw += data;
