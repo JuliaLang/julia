@@ -91,7 +91,7 @@ end
 # number of points to plot for functions
 __PLOT_POINTS = 200
 
-# basic 2-D plotting function for arrays (window determined manually)
+# plot an array (window determined manually)
 function plot(x, y, xmin, xmax, ymin, ymax)
     # make sure there are the same number of x and y coordinates
     if length(x) != length(y)
@@ -115,7 +115,7 @@ function plot(x, y, xmin, xmax, ymin, ymax)
     }))
 end
 
-# basic 2-D plotting function for arrays (window determined automatically)
+# plot an array (window determined automatically)
 function plot(x, y)
     # make sure there are the same number of x and y coordinates
     if length(x) != length(y)
@@ -135,7 +135,20 @@ function plot(x, y)
     plot(x, y, xmin, xmax, ymin-(ymax-ymin)*0.05, ymax+(ymax-ymin)*0.05)
 end
 
-# basic 2-D plotting function for functions (vertical window determined automatically)
+# plot an array (window determined automatically)
+function plot(y)
+    # make sure there is enough data to plot
+    if length(y) < 1
+        return error("at least two data points required for plot")
+    end
+
+    # make the plot
+    ymin = min(y)
+    ymax = max(y)
+    plot([float64(i)/length(y) | i=1:length(y)], y, 0, 1, ymin-(ymax-ymin)*0.05, ymax+(ymax-ymin)*0.05)
+end
+
+# plot a function (vertical window determined automatically)
 function plot(f, xmin, xmax)
     # make the range
     x = [xmin+float64(i)*xmax/__PLOT_POINTS | i=1:__PLOT_POINTS]
@@ -145,7 +158,7 @@ function plot(f, xmin, xmax)
     plot(x, y)
 end
 
-# basic 2-D plotting function for functions (window determined manually)
+# plot a function (window determined manually)
 function plot(f, xmin, xmax, ymin, ymax)
     # make the range
     x = [xmin+float64(i)*xmax/__PLOT_POINTS | i=1:__PLOT_POINTS]
