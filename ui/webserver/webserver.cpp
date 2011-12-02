@@ -527,20 +527,8 @@ void* watchdog_thread(void* arg)
                 cout<<session_map.size()<<" open sessions.\n";
         }
 
-        // check if there are any idle sessions
-        bool found_idle_session = false;
-        for (map<string, session>::iterator iter = session_map.begin(); iter != session_map.end(); iter++)
-        {
-            // check if the session is idle
-            if ((iter->second).is_idle)
-            {
-                found_idle_session = true;
-                break;
-            }
-        }
-
-        // if there aren't any idle sessions, try creating one
-        if (!found_idle_session)
+        // if nobody is using this node, spawn an idle session
+        if (session_map.empty())
             create_session(true);
 
         // unlock the mutex
@@ -699,9 +687,19 @@ string get_response(request* req)
     // the session token
     string session_token;
 
+    // check for the session cookie
+    if (req->get_cookie_exists("SESSION_TOKEN"))
+        session_token = req->get_cookie_value("SESSION_TOKEN");
+
+    // check if the session is real
+    if (session_token != "")
+    {
+        if (session_map.find(session_token) == session_map.end())
+            session_token = "";
+    }
+
     // the response
-    message response_message;
-    response_message.type = MSG_OUTPUT_NULL;
+    vector <message> response_messages;
 
     // process input if there is any
     if (req->get_field_exists("request"))
@@ -711,130 +709,128 @@ string get_response(request* req)
         Json::Reader reader;
         if (reader.parse(req->get_field_value("request"), request_root))
         {
-            // extract the message from the request
-            message request_message;
-            request_message.type = request_root.get("message_type", -1).asInt();
-            while (true)
+            // iterate through the messages
+            for (int i = 0; i < request_root.size(); i++)
             {
-                string arg_name = "arg"+to_string(request_message.args.size());
-                if (!request_root.isMember(arg_name))
-                    break;
-                request_message.args.push_back(request_root.get(arg_name, "").asString());
-            }
-
-            // check for the session cookie
-            if (req->get_cookie_exists("SESSION_TOKEN"))
-                session_token = req->get_cookie_value("SESSION_TOKEN");
-
-            // check if the session is real
-            if (session_token != "")
-            {
-                if (session_map.find(session_token) == session_map.end())
-                    session_token = "";
-            }
-
-            // do some maintenance on the session if there is one
-            if (session_token != "")
-            {
-                // pet the watchdog
-                session_map[session_token].update_time = time(0);
-
-                // catch any extra output from julia during normal operation
-                if (session_map[session_token].outbox_std != "" && session_map[session_token].status == SESSION_NORMAL)
+                // make sure the message has at least a type
+                if (request_root[i].size() > 0)
                 {
-                    message output_message;
-                    output_message.type = MSG_OUTPUT_OTHER;
-                    output_message.args.push_back(session_map[session_token].outbox_std);
-                    session_map[session_token].outbox_std = "";
-                    if (session_map[session_token].outbox.size() > 0)
+                    // extract the message from the request
+                    message request_message;
+                    request_message.type = request_root[i][0].asInt();
+                    for (int j = 1; j < request_root[i].size(); j++)
+                        request_message.args.push_back(request_root[i][j].asString());
+
+                    // determine the type of request
+                    bool request_recognized = false;
+
+                    // MSG_INPUT_START
+                    if (request_message.type == MSG_INPUT_START)
                     {
-                        if (session_map[session_token].outbox[session_map[session_token].outbox.size()-1].type == MSG_OUTPUT_OTHER)
-                            session_map[session_token].outbox[session_map[session_token].outbox.size()-1].args[0] += session_map[session_token].outbox_std;
+                        // we recognize the request
+                        request_recognized = true;
+
+                        // kill the old session if there is one
+                        if (session_token != "")
+                            session_map[session_token].should_terminate = true;
+
+                        // look for an idle session to harvest
+                        bool found_idle_session = false;
+                        for (map<string, session>::iterator iter = session_map.begin(); iter != session_map.end(); iter++)
+                        {
+                            // check if the session is idle
+                            if ((iter->second).is_idle)
+                            {
+                                // the session is no longer idle
+                                session_token = iter->first;
+                                (iter->second).update_time = time(0);
+                                (iter->second).is_idle = false;
+                                found_idle_session = true;
+                                break;
+                            }
+                        }
+
+                        // no extra idle sessions -- try to create a new session
+                        if (!found_idle_session)
+                        {
+                            session_token = create_session(false);
+                            if (session_token == "")
+                            {
+                                // too many sessions
+                                message msg;
+                                msg.type = MSG_OUTPUT_FATAL_ERROR;
+                                msg.args.push_back("the server is currently at maximum capacity");
+                                response_messages.push_back(msg);
+                            }
+                        }
+                    }
+
+                    // other messages go straight to julia
+                    if (!request_recognized)
+                    {
+                        // make sure we have a valid session
+                        if (session_token == "")
+                        {
+                            message msg;
+                            msg.type = MSG_OUTPUT_FATAL_ERROR;
+                            msg.args.push_back("session expired");
+                            response_messages.push_back(msg);
+                        }
                         else
-                            session_map[session_token].outbox.push_back(output_message);
-                    }
-                    else
-                        session_map[session_token].outbox.push_back(output_message);
-                }
-            }
-
-            // determine the type of request
-            bool request_recognized = false;
-
-            // MSG_INPUT_START
-            if (request_message.type == MSG_INPUT_START)
-            {
-                // we recognize the request
-                request_recognized = true;
-
-                // kill the old session if there is one
-                if (session_token != "")
-                    session_map[session_token].should_terminate = true;
-
-                // look for an idle session to harvest
-                bool found_idle_session = false;
-                for (map<string, session>::iterator iter = session_map.begin(); iter != session_map.end(); iter++)
-                {
-                    // check if the session is idle
-                    if ((iter->second).is_idle)
-                    {
-                        // the session is no longer idle
-                        session_token = iter->first;
-                        (iter->second).update_time = time(0);
-                        (iter->second).is_idle = false;
-                        found_idle_session = true;
-                        break;
-                    }
-                }
-
-                // no extra idle sessions -- try to create a new session
-                if (!found_idle_session)
-                {
-                    session_token = create_session(false);
-                    if (session_token == "")
-                    {
-                        // too many sessions
-                        response_message.type = MSG_OUTPUT_FATAL_ERROR;
-                        response_message.args.push_back("the server is currently at maximum capacity");
-                    }
-                }
-            }
-
-            // other messages go straight to julia
-            if (!request_recognized)
-            {
-                // make sure we have a valid session
-                if (session_token == "")
-                {
-                    response_message.type = MSG_OUTPUT_FATAL_ERROR;
-                    response_message.args.push_back("session expired");
-                }
-                else
-                {
-                    // forward the message to julia
-
-                    if (request_message.type != MSG_INPUT_POLL)
-                        session_map[session_token].inbox.push_back(request_message);
-
-                    // send the first message on the queue
-                    if (!session_map[session_token].outbox.empty())
-                    {
-                        response_message = session_map[session_token].outbox[0];
-                        session_map[session_token].outbox.erase(session_map[session_token].outbox.begin());
+                        {
+                            // forward the message to julia
+                            if (request_message.type != MSG_INPUT_POLL)
+                                session_map[session_token].inbox.push_back(request_message);
+                        }
                     }
                 }
             }
         }
     }
 
+    // perform maintenance on the session if there is one
+    if (session_token != "")
+    {
+        // pet the watchdog
+        session_map[session_token].update_time = time(0);
+
+        // catch any extra output from julia during normal operation
+        if (session_map[session_token].outbox_std != "" && session_map[session_token].status == SESSION_NORMAL)
+        {
+            message output_message;
+            output_message.type = MSG_OUTPUT_OTHER;
+            output_message.args.push_back(session_map[session_token].outbox_std);
+            session_map[session_token].outbox_std = "";
+            if (session_map[session_token].outbox.size() > 0)
+            {
+                if (session_map[session_token].outbox[session_map[session_token].outbox.size()-1].type == MSG_OUTPUT_OTHER)
+                    session_map[session_token].outbox[session_map[session_token].outbox.size()-1].args[0] += session_map[session_token].outbox_std;
+                else
+                    session_map[session_token].outbox.push_back(output_message);
+            }
+            else
+                session_map[session_token].outbox.push_back(output_message);
+        }
+        
+        // get any output messages from julia
+        for (size_t i = 0; i < session_map[session_token].outbox.size(); i++)
+            response_messages.push_back(session_map[session_token].outbox[i]);
+        session_map[session_token].outbox.clear();
+    }
+
     // unlock the mutex
     pthread_mutex_unlock(&session_mutex);
 
     // convert the message to json
-    Json::Value response_root;
-    response_root["message_type"] = response_message.type;
-    for (size_t i = 0; i < response_message.args.size(); i++)
-        response_root["arg"+to_string(i)] = response_message.args[i];
+    Json::Value response_root(Json::arrayValue);
+    for (size_t i = 0; i < response_messages.size(); i++)
+    {
+        Json::Value message_root(Json::arrayValue);
+        message_root.append(response_messages[i].type);
+        for (size_t j = 0; j < response_messages[i].args.size(); j++)
+            message_root.append(response_messages[i].args[j]);
+        response_root.append(message_root);
+    }
 
     // return the header and response
     Json::StyledWriter writer;

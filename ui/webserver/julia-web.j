@@ -89,6 +89,7 @@ end
 ###########################################
 
 function line_plot(data)
+    __write_message(__Message(MSG_OUTPUT_PLOT, {"line", print_to_string(show, data)}))
 end
 
 ###########################################

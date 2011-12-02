@@ -3,12 +3,14 @@
     <head>
         <meta charset="utf-8" />
         <title>Julia - A fresh approach to technical computing.</title>
+        <link href="reset.css" rel="stylesheet" type="text/css" />
         <link href="styles.css" rel="stylesheet" type="text/css" />
         <link href="favicon.ico" rel="shortcut icon" />
         <link href="http://fonts.googleapis.com/css?family=Droid+Sans+Mono&v2" rel="stylesheet" type="text/css">
         <script type="text/javascript" src="jquery.js"></script>
         <script type="text/javascript" src="jquery.json.js"></script>
         <script type="text/javascript" src="jquery.autoresize.js"></script>
+        <script type="text/javascript" src="d3.js"></script>
         <script>
             /*
                 Some stuff to make the two columns extend to the footer.
@@ -85,11 +87,8 @@
                 REPL implementation.
             */
 
-            // how often we poll the server in ms
-            var poll_interval = 500;
-
-            // terminal content
-            var terminal_data = "";
+            // how long we delay in ms before polling the server again
+            var poll_interval = 100;
 
             // keep track of terminal history
             var input_history = [];
@@ -147,11 +146,8 @@
             // add to the terminal
             function add_to_terminal(data)
             {
-                // add the data
-                terminal_data += data;
-
                 // update the html
-                $("#terminal").html(terminal_data);
+                $("#terminal").append(data);
 
                 // resize the input box (the -1 is for Internet Explorer)
                 $("#terminal-input").width($("#terminal").width()-$("#prompt").width()-1);
@@ -163,25 +159,25 @@
             // the first request
             function init_session()
             {
-                // submit AJAX request via POST
-                outbox_queue.push({"message_type": MSG_INPUT_START});
+                // send a start message
+                outbox_queue.push([MSG_INPUT_START]);
                 process_outbox();
             }
 
             // check the server for data
             function poll()
             {
-                // submit AJAX request via POST
-                outbox_queue.push({"message_type": MSG_INPUT_POLL});
+                // send a poll message
+                outbox_queue.push([MSG_INPUT_POLL]);
                 process_outbox();
             }
 
-            // send the next line in the queue - return whether there is more data to process
+            // send the next line in the queue
             function process_outbox()
             {
                 if (outbox_queue.length > 0)
-                    $.post("/repl.scgi", {"request": $.toJSON(outbox_queue.shift())}, callback, "json");
-                return (outbox_queue.length > 0);
+                    $.post("/repl.scgi", {"request": $.toJSON(outbox_queue)}, callback, "json");
+                outbox_queue = [];
             }
             
             // called when the server has responded
@@ -191,154 +187,156 @@
                 if (dead)
                     return;
 
-                // MSG_OUTPUT_NULL
-                if (data.message_type == MSG_OUTPUT_NULL)
+                for (id in data)
                 {
-                    // do nothing
-                }
+                    // MSG_OUTPUT_NULL
+                    if (data[id][0] == MSG_OUTPUT_NULL)
+                    {
+                        // do nothing
+                    }
 
-                // MSG_OUTPUT_READY
-                if (data.message_type == MSG_OUTPUT_READY)
-                {
-                    // remove the initializing message
-                    $("#terminal").html("");
+                    // MSG_OUTPUT_READY
+                    if (data[id][0] == MSG_OUTPUT_READY)
+                    {
+                        // remove the initializing message
+                        $("#terminal").html("");
 
-                    // enable input
-                    $("#prompt").show();
-                    $("#terminal-input").removeAttr("disabled");
-                    $("#terminal-input").focus();
+                        // enable input
+                        $("#prompt").show();
+                        $("#terminal-input").removeAttr("disabled");
+                        $("#terminal-input").focus();
 
-                    // resize the input box (the -1 is for Internet Explorer)
-                    $("#terminal-input").width($("#terminal").width()-$("#prompt").width()-1);
-                }
+                        // resize the input box (the -1 is for Internet Explorer)
+                        $("#terminal-input").width($("#terminal").width()-$("#prompt").width()-1);
+                    }
 
-                // MSG_OUTPUT_MESSAGE
-                if (data.message_type == MSG_OUTPUT_MESSAGE)
-                {
-                    add_to_terminal("<span class=\"message\">"+escape_html(data.arg0)+"</span><br /><br />");
-                }
+                    // MSG_OUTPUT_MESSA1E
+                    if (data[id][0] == MSG_OUTPUT_MESSAGE)
+                    {
+                        add_to_terminal("<span class=\"message\">"+escape_html(data[id][1])+"</span><br /><br />");
+                    }
 
-                // MSG_OUTPUT_OTHER
-                if (data.message_type == MSG_OUTPUT_OTHER)
-                {
-                    add_to_terminal(escape_html(data.arg0));
-                }
+                    // MSG_OUTPUT_OTHER
+                    if (data[id][0] == MSG_OUTPUT_OTHER)
+                    {
+                        add_to_terminal(escape_html(data[id][1]));
+                    }
 
-                // MSG_OUTPUT_FATAL_ERROR
-                if (data.message_type == MSG_OUTPUT_FATAL_ERROR)
-                {
-                    add_to_terminal("<span class=\"error\">"+escape_html(data.arg0)+"</span><br /><br />");
-                    dead = true;
-                    return;
-                }
+                    // MSG_OUTPUT_FATAL_ERROR
+                    if (data[id][0] == MSG_OUTPUT_FATAL_ERROR)
+                    {
+                        add_to_terminal("<span class=\"error\">"+escape_html(data[id][1])+"</span><br /><br />");
+                        dead = true;
+                        return;
+                    }
 
-                // MSG_OUTPUT_PARSE_ERROR
-                if (data.message_type == MSG_OUTPUT_PARSE_ERROR)
-                {
-                    // print the error message
-                    add_to_terminal("<span class=\"error\">"+escape_html(data.arg0)+"</span><br /><br />");
+                    // MSG_OUTPUT_PARSE_ERROR
+                    if (data[id][0] == MSG_OUTPUT_PARSE_ERROR)
+                    {
+                        // print the error message
+                        add_to_terminal("<span class=\"error\">"+escape_html(data[id][1])+"</span><br /><br />");
 
-                    // get the input from form
-                    var input = $("#terminal-input").val();
+                        // get the input from form
+                        var input = $("#terminal-input").val();
 
-                    // input history
-                    if (input.replace(/^\s+|\s+$/g, '') != "")
-                        input_history.push(input);
-                    if (input_history.length > input_history_size)
-                        input_history = input_history.slice(input_history.length-input_history_size);
-                    input_history_current = input_history.slice(0);
-                    input_history_current.push("");
-                    input_history_id = input_history_current.length-1;
+                        // input history
+                        if (input.replace(/^\s+|\s+$/g, '') != "")
+                            input_history.push(input);
+                        if (input_history.length > input_history_size)
+                            input_history = input_history.slice(input_history.length-input_history_size);
+                        input_history_current = input_history.slice(0);
+                        input_history_current.push("");
+                        input_history_id = input_history_current.length-1;
 
-                    // add the julia prompt and the input to the log
-                    add_to_terminal("<span class=\"prompt\">julia&gt;&nbsp;</span>"+escape_html(input.replace(/\n/g, "\n       "))+"<br />");
-                    
-                    // clear the input field
-                    $("#terminal-input").val("");
+                        // add the julia prompt and the input to the log
+                        add_to_terminal("<span class=\"prompt\">julia&gt;&nbsp;</span>"+escape_html(input.replace(/\n/g, "\n       "))+"<br />");
+                        
+                        // clear the input field
+                        $("#terminal-input").val("");
 
-                    // re-enable the input field
-                    $("#terminal-input").removeAttr("disabled");
+                        // re-enable the input field
+                        $("#terminal-input").removeAttr("disabled");
 
-                    // focus the input field
-                    $("#terminal-input").focus();
-                }
+                        // focus the input field
+                        $("#terminal-input").focus();
+                    }
 
-                // MSG_OUTPUT_PARSE_INCOMPLETE
-                if (data.message_type == MSG_OUTPUT_PARSE_INCOMPLETE)
-                {
-                    // re-enable the input field
-                    $("#terminal-input").removeAttr("disabled");
+                    // MSG_OUTPUT_PARSE_INCOMPLETE
+                    if (data[id][0] == MSG_OUTPUT_PARSE_INCOMPLETE)
+                    {
+                        // re-enable the input field
+                        $("#terminal-input").removeAttr("disabled");
 
-                    // focus the input field
-                    $("#terminal-input").focus();
+                        // focus the input field
+                        $("#terminal-input").focus();
 
-                    // add a newline for the user
-                    $("#terminal-input").insertAtCaret("\n");
-                }
+                        // add a newline for the user
+                        $("#terminal-input").insertAtCaret("\n");
+                    }
 
-                // MSG_OUTPUT_PARSE_COMPLETE
-                if (data.message_type == MSG_OUTPUT_PARSE_COMPLETE)
-                {
-                    // get the input from form
-                    var input = $("#terminal-input").val();
+                    // MSG_OUTPUT_PARSE_COMPLETE
+                    if (data[id][0] == MSG_OUTPUT_PARSE_COMPLETE)
+                    {
+                        // get the input from form
+                        var input = $("#terminal-input").val();
 
-                    // input history
-                    if (input.replace(/^\s+|\s+$/g, '') != "")
-                        input_history.push(input);
-                    if (input_history.length > input_history_size)
-                        input_history = input_history.slice(input_history.length-input_history_size);
-                    input_history_current = input_history.slice(0);
-                    input_history_current.push("");
-                    input_history_id = input_history_current.length-1;
+                        // input history
+                        if (input.replace(/^\s+|\s+$/g, '') != "")
+                            input_history.push(input);
+                        if (input_history.length > input_history_size)
+                            input_history = input_history.slice(input_history.length-input_history_size);
+                        input_history_current = input_history.slice(0);
+                        input_history_current.push("");
+                        input_history_id = input_history_current.length-1;
 
-                    // add the julia prompt and the input to the log
-                    add_to_terminal("<span class=\"prompt\">julia&gt;&nbsp;</span>"+escape_html(input.replace(/\n/g, "\n       "))+"<br />");
-                    
-                    // clear the input field
-                    $("#terminal-input").val("");
+                        // add the julia prompt and the input to the log
+                        add_to_terminal("<span class=\"prompt\">julia&gt;&nbsp;</span>"+escape_html(input.replace(/\n/g, "\n       "))+"<br />");
+                        
+                        // clear the input field
+                        $("#terminal-input").val("");
 
-                    // hide the prompt until the result comes in
-                    $("#prompt").hide();
-                }
+                        // hide the prompt until the result comes in
+                        $("#prompt").hide();
+                    }
 
-                // MSG_OUTPUT_EVAL_RESULT
-                if (data.message_type == MSG_OUTPUT_EVAL_RESULT)
-                {
-                    // print the result
-                    if ($.trim(data.arg0) == "")
-                        add_to_terminal("<br />");
-                    else
-                        add_to_terminal(escape_html(data.arg0)+"<br /><br />");
+                    // MSG_OUTPUT_EVAL_RESULT
+                    if (data[id][0] == MSG_OUTPUT_EVAL_RESULT)
+                    {
+                        // print the result
+                        if ($.trim(data[id][1]) == "")
+                            add_to_terminal("<br />");
+                        else
+                            add_to_terminal(escape_html(data[id][1])+"<br /><br />");
 
-                    // show the prompt
-                    $("#prompt").show();
+                        // show the prompt
+                        $("#prompt").show();
 
-                    // re-enable the input field
-                    $("#terminal-input").removeAttr("disabled");
+                        // re-enable the input field
+                        $("#terminal-input").removeAttr("disabled");
 
-                    // focus the input field
-                    $("#terminal-input").focus();
-                }
+                        // focus the input field
+                        $("#terminal-input").focus();
+                    }
 
-                // MSG_OUTPUT_EVAL_ERROR
-                if (data.message_type == MSG_OUTPUT_EVAL_ERROR)
-                {
-                    // print the error
-                    add_to_terminal("<span class=\"error\">"+escape_html(data.arg0)+"</span><br /><br />");
+                    // MSG_OUTPUT_EVAL_ERROR
+                    if (data[id][0] == MSG_OUTPUT_EVAL_ERROR)
+                    {
+                        // print the error
+                        add_to_terminal("<span class=\"error\">"+escape_html(data[id][1])+"</span><br /><br />");
 
-                    // show the prompt
-                    $("#prompt").show();
+                        // show the prompt
+                        $("#prompt").show();
 
-                    // re-enable the input field
-                    $("#terminal-input").removeAttr("disabled");
+                        // re-enable the input field
+                        $("#terminal-input").removeAttr("disabled");
 
-                    // focus the input field
-                    $("#terminal-input").focus();
+                        // focus the input field
+                        $("#terminal-input").focus();
+                    }
                 }
 
                 // send any remaining messages if there are any
-                if (process_outbox())
-                    return;
+                process_outbox();
 
                 // poll the server again
                 setTimeout(poll, poll_interval);
@@ -393,7 +391,7 @@
                             $("#terminal-input").attr("disabled", "disabled");
                             
                             // send the input to the server via AJAX
-                            outbox_queue.push({"message_type": MSG_INPUT_EVAL, "arg0": input});
+                            outbox_queue.push([MSG_INPUT_EVAL, input]);
                             process_outbox();
 
                             // prevent the form from actually submitting
@@ -407,6 +405,82 @@
                 // start polling the server
                 init_session();
             });
+        </script>
+        <script>
+            // called on page load
+            $(document).ready(function()
+            {
+                var data = d3.range(20).map(function(i) {
+                    return {x: i / 19, y: (Math.sin(i / 3) + 1) / 2};
+                });
+
+                var w = 450,
+                h = 275,
+                p = 20,
+                x = d3.scale.linear().domain([0, 1]).range([0, w]),
+                y = d3.scale.linear().domain([0, 1]).range([h, 0]);
+
+                var vis = d3.select("#left-column")
+                .append("svg")
+                .data([data])
+                .attr("width", w + p * 2)
+                .attr("height", h + p * 2)
+                .append("g")
+                .attr("transform", "translate(" + p + "," + p + ")");
+
+                var rules = vis.selectAll("g.rule")
+                .data(x.ticks(10))
+                .enter().append("g")
+                .attr("class", "rule");
+
+                rules.append("line")
+                .attr("x1", x)
+                .attr("x2", x)
+                .attr("y1", 0)
+                .attr("y2", h - 1);
+
+                rules.append("line")
+                .attr("class", function(d) { return d ? null : "axis"; })
+                .attr("y1", y)
+                .attr("y2", y)
+                .attr("x1", 0)
+                .attr("x2", w + 1);
+
+                rules.append("text")
+                .attr("x", x)
+                .attr("y", h + 3)
+                .attr("dy", ".71em")
+                .attr("text-anchor", "middle")
+                .text(x.tickFormat(10));
+
+                rules.append("text")
+                .attr("y", y)
+                .attr("x", -3)
+                .attr("dy", ".35em")
+                .attr("text-anchor", "end")
+                .text(y.tickFormat(10));
+
+                vis.append("path")
+                .attr("class", "area")
+                .attr("d", d3.svg.area()
+                .x(function(d) { return x(d.x); })
+                .y0(h - 1)
+                .y1(function(d) { return y(d.y); }));
+
+                vis.append("path")
+                .attr("class", "line")
+                .attr("d", d3.svg.line()
+                .x(function(d) { return x(d.x); })
+                .y(function(d) { return y(d.y); }));
+
+                vis.selectAll("circle.area")
+                .data(data)
+                .enter().append("circle")
+                .attr("class", "area")
+                .attr("cx", function(d) { return x(d.x); })
+                .attr("cy", function(d) { return y(d.y); })
+                .attr("r", 3.5);
+            }
         </script>
     </head>
     <body>

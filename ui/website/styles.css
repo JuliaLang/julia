@@ -1,4 +1,6 @@
-﻿*
+﻿/* main styles */
+
+*
 {
     margin: 0px;
     padding: 0px;
@@ -225,6 +227,31 @@ span.error
 span.prompt
 {
     color: #00aa00;
+}
+
+/* for plotting */
+
+.rule line {
+  stroke: #eee;
+  shape-rendering: crispEdges;
+}
+
+.rule line.axis {
+  stroke: #000;
+}
+
+.area {
+  fill: lightsteelblue;
+}
+
+.line, circle.area {
+  fill: none;
+  stroke: steelblue;
+  stroke-width: 1.5px;
+}
+
+circle.area {
+  fill: #fff;
 }
 
 /* for Internet Explorer */
