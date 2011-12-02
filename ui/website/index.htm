@@ -62,20 +62,23 @@
             */
 
             // input messages (to julia)
-            var MSG_INPUT_NULL = 0;
-            var MSG_INPUT_START = 1;
-            var MSG_INPUT_POLL = 2;
-            var MSG_INPUT_EVAL = 3;
+            var MSG_INPUT_NULL              = 0;
+            var MSG_INPUT_START             = 1;
+            var MSG_INPUT_POLL              = 2;
+            var MSG_INPUT_EVAL              = 3;
 
             // output messages (to the browser)
-            var MSG_OUTPUT_NULL = 0;
-            var MSG_OUTPUT_MESSAGE = 1;
-            var MSG_OUTPUT_ERROR = 2;
-            var MSG_OUTPUT_FATAL_ERROR = 3;
-            var MSG_OUTPUT_EVAL_INCOMPLETE = 4;
-            var MSG_OUTPUT_EVAL_RESULT = 5;
-            var MSG_OUTPUT_OTHER = 6;
-            var MSG_OUTPUT_READY = 7;
+            var MSG_OUTPUT_NULL             = 0;
+            var MSG_OUTPUT_READY            = 1;
+            var MSG_OUTPUT_MESSAGE          = 2;
+            var MSG_OUTPUT_OTHER            = 3;
+            var MSG_OUTPUT_FATAL_ERROR      = 4;
+            var MSG_OUTPUT_PARSE_ERROR      = 5;
+            var MSG_OUTPUT_PARSE_INCOMPLETE = 6;
+            var MSG_OUTPUT_PARSE_COMPLETE   = 7;
+            var MSG_OUTPUT_EVAL_RESULT      = 8;
+            var MSG_OUTPUT_EVAL_ERROR       = 9;
+            var MSG_OUTPUT_PLOT             = 10;
         </script>
         <script>
             /*
@@ -93,9 +96,6 @@
             var input_history_current = [""];
             var input_history_id = 0;
             var input_history_size = 100;
-
-            // whether the terminal should clear the input on the next non-null response
-            var clear_input_on_response = false;
 
             // a queue of messages to be sent to the server
             var outbox_queue = [];
@@ -184,13 +184,52 @@
             // called when the server has responded
             function callback(data, textStatus, jqXHR)
             {
-                // reset the input if necessary
-                if (clear_input_on_response && (
-                    data.message_type == MSG_OUTPUT_MESSAGE || 
-                    data.message_type == MSG_OUTPUT_ERROR || 
-                    data.message_type == MSG_OUTPUT_FATAL_ERROR || 
-                    data.message_type == MSG_OUTPUT_EVAL_RESULT))
+                // MSG_OUTPUT_NULL
+                if (data.message_type == MSG_OUTPUT_NULL)
                 {
+                    // do nothing
+                }
+
+                // MSG_OUTPUT_READY
+                if (data.message_type == MSG_OUTPUT_READY)
+                {
+                    // remove the initializing message
+                    $("#terminal").html("");
+
+                    // enable input
+                    $("#prompt").show();
+                    $("#terminal-input").removeAttr("disabled");
+                    $("#terminal-input").focus();
+
+                    // resize the input box (the -1 is for Internet Explorer)
+                    $("#terminal-input").width($("#terminal").width()-$("#prompt").width()-1);
+                }
+
+                // MSG_OUTPUT_MESSAGE
+                if (data.message_type == MSG_OUTPUT_MESSAGE)
+                {
+                    add_to_terminal("<span class=\"message\">"+escape_html(data.arg0)+"</span><br /><br />");
+                }
+
+                // MSG_OUTPUT_OTHER
+                if (data.message_type == MSG_OUTPUT_OTHER)
+                {
+                    add_to_terminal(escape_html(data.arg0));
+                }
+
+                // MSG_OUTPUT_FATAL_ERROR
+                if (data.message_type == MSG_OUTPUT_FATAL_ERROR)
+                {
+                    add_to_terminal("<span class=\"error\">"+escape_html(data.arg0)+"</span><br /><br />");
+                    return;
+                }
+
+                // MSG_OUTPUT_PARSE_ERROR
+                if (data.message_type == MSG_OUTPUT_PARSE_ERROR)
+                {
+                    // print the error message
+                    add_to_terminal("<span class=\"error\">"+escape_html(data.arg0)+"</span><br /><br />");
+
                     // get the input from form
                     var input = $("#terminal-input").val();
 
@@ -214,38 +253,10 @@
 
                     // focus the input field
                     $("#terminal-input").focus();
-
-                    // clear the flag
-                    clear_input_on_response = false;
                 }
 
-                // MSG_OUTPUT_NULL
-                if (data.message_type == MSG_OUTPUT_NULL)
-                {
-                    // do nothing
-                }
-
-                // MSG_OUTPUT_MESSAGE
-                if (data.message_type == MSG_OUTPUT_MESSAGE)
-                {
-                    add_to_terminal("<span class=\"message\">"+escape_html(data.arg0)+"</span><br /><br />");
-                }
-
-                // MSG_OUTPUT_ERROR
-                if (data.message_type == MSG_OUTPUT_ERROR)
-                {
-                    add_to_terminal("<span class=\"error\">"+escape_html(data.arg0)+"</span><br /><br />");
-                }
-
-                // MSG_OUTPUT_FATAL_ERROR
-                if (data.message_type == MSG_OUTPUT_FATAL_ERROR)
-                {
-                    add_to_terminal("<span class=\"error\">"+escape_html(data.arg0)+"</span><br /><br />");
-                    return;
-                }
-
-                // MSG_OUTPUT_EVAL_INCOMPLETE
-                if (data.message_type == MSG_OUTPUT_EVAL_INCOMPLETE)
+                // MSG_OUTPUT_PARSE_INCOMPLETE
+                if (data.message_type == MSG_OUTPUT_PARSE_INCOMPLETE)
                 {
                     // re-enable the input field
                     $("#terminal-input").removeAttr("disabled");
@@ -255,39 +266,66 @@
 
                     // add a newline for the user
                     $("#terminal-input").insertAtCaret("\n");
+                }
 
-                    // clear the flag
-                    clear_input_on_response = false;
+                // MSG_OUTPUT_PARSE_COMPLETE
+                if (data.message_type == MSG_OUTPUT_PARSE_COMPLETE)
+                {
+                    // get the input from form
+                    var input = $("#terminal-input").val();
+
+                    // input history
+                    if (input.replace(/^\s+|\s+$/g, '') != "")
+                        input_history.push(input);
+                    if (input_history.length > input_history_size)
+                        input_history = input_history.slice(input_history.length-input_history_size);
+                    input_history_current = input_history.slice(0);
+                    input_history_current.push("");
+                    input_history_id = input_history_current.length-1;
+
+                    // add the julia prompt and the input to the log
+                    add_to_terminal("<span class=\"prompt\">julia&gt;&nbsp;</span>"+escape_html(input.replace(/\n/g, "\n       "))+"<br />");
+                    
+                    // clear the input field
+                    $("#terminal-input").val("");
+
+                    // hide the prompt until the result comes in
+                    $("#prompt").hide();
                 }
 
                 // MSG_OUTPUT_EVAL_RESULT
                 if (data.message_type == MSG_OUTPUT_EVAL_RESULT)
                 {
+                    // print the result
                     if ($.trim(data.arg0) == "")
                         add_to_terminal("<br />");
                     else
                         add_to_terminal(escape_html(data.arg0)+"<br /><br />");
-                }
 
-                // MSG_OUTPUT_OTHER
-                if (data.message_type == MSG_OUTPUT_OTHER)
-                {
-                    add_to_terminal(escape_html(data.arg0));
-                }
-
-                // MSG_OUTPUT_READY
-                if (data.message_type == MSG_OUTPUT_READY)
-                {
-                    // remove the initializing message
-                    $("#terminal").html("");
-
-                    // enable input
+                    // show the prompt
                     $("#prompt").show();
-                    $("#terminal-input").removeAttr("disabled");
-                    $("#terminal-input").focus();
 
-                    // resize the input box (the -1 is for Internet Explorer)
-                    $("#terminal-input").width($("#terminal").width()-$("#prompt").width()-1);
+                    // re-enable the input field
+                    $("#terminal-input").removeAttr("disabled");
+
+                    // focus the input field
+                    $("#terminal-input").focus();
+                }
+
+                // MSG_OUTPUT_EVAL_ERROR
+                if (data.message_type == MSG_OUTPUT_EVAL_ERROR)
+                {
+                    // print the error
+                    add_to_terminal("<span class=\"error\">"+escape_html(data.arg0)+"</span><br /><br />");
+
+                    // show the prompt
+                    $("#prompt").show();
+
+                    // re-enable the input field
+                    $("#terminal-input").removeAttr("disabled");
+
+                    // focus the input field
+                    $("#terminal-input").focus();
                 }
 
                 // send any remaining messages if there are any
@@ -342,14 +380,13 @@
                         case 13:
                             // user pressed the enter key
                             var input = $("#terminal-input").val();
+
+                            // disable the terminal input and clear the input field later
+                            $("#terminal-input").attr("disabled", "disabled");
                             
                             // send the input to the server via AJAX
                             outbox_queue.push({"message_type": MSG_INPUT_EVAL, "arg0": input});
                             process_outbox();
-
-                            // disable the terminal input and clear the input field later
-                            $("#terminal-input").attr("disabled", "disabled");
-                            clear_input_on_response = true;
 
                             // prevent the form from actually submitting
                             return false;

@@ -85,32 +85,10 @@ function __print_message(msg)
 end
 
 ###########################################
-# protocol helpers
+# plotting functions
 ###########################################
 
-# send a message
-function __send_message(msg)
-    __write_message(__Message(__MSG_OUTPUT_MESSAGE, {msg}))
-end
-
-# send an error message
-function __send_error(msg)
-    __write_message(__Message(__MSG_OUTPUT_ERROR, {msg}))
-end
-
-# send a fatal error message
-function __send_fatal_error(msg)
-    __write_message(__Message(__MSG_OUTPUT_FATAL_ERROR, {msg}))
-end
-
-# send an incomplete expression message
-function __send_eval_incomplete()
-    __write_message(__Message(__MSG_OUTPUT_EVAL_INCOMPLETE, {}))
-end
-
-# send an expression result message
-function __send_eval_result(msg)
-    __write_message(__Message(__MSG_OUTPUT_EVAL_RESULT, {msg}))
+function line_plot(data)
 end
 
 ###########################################
@@ -135,36 +113,40 @@ function __socket_callback(fd)
 
         # if there was nothing to parse, send nothing back
         if __expr == nothing
-            return __send_eval_result("")
+            __write_message(__Message(__MSG_OUTPUT_PARSE_COMPLETE, {}))
+            return __write_message(__Message(__MSG_OUTPUT_EVAL_RESULT, {""}))
         end
         
         # check if there was a parsing error
         if __expr.head == :error
-            return __send_error(__expr.args[1])
+            return __write_message(__Message(__MSG_OUTPUT_PARSE_ERROR, {__expr.args[1]}))
         end
 
         # check if the expression was incomplete
         if __expr.head == :continue
-            return __send_eval_incomplete()
+            return __write_message(__Message(__MSG_OUTPUT_PARSE_INCOMPLETE, {}))
         end
-
+        
+        # tell the browser that we're now evaluating the expression
+        __write_message(__Message(__MSG_OUTPUT_PARSE_COMPLETE, {}))
+        
         # evaluate the expression and print any exceptions that occurred
         local __result
         try
             __result = eval(__expr)
         catch __error
-            return __send_error(print_to_string(show, __error))
+            return __write_message(__Message(__MSG_OUTPUT_EVAL_ERROR, {__error}))
         end
 
         # if nothing was returned, send nothing back
         if __result == nothing
             ans = nothing
-            return __send_eval_result("")
+            return __write_message(__Message(__MSG_OUTPUT_EVAL_RESULT, {""}))
         end
 
         # otherwise, send back the result
         ans = __result
-        return __send_eval_result(print_to_string(show, __result))
+        return __write_message(__Message(__MSG_OUTPUT_EVAL_RESULT, {print_to_string(show, __result)}))
     end
 end
 
