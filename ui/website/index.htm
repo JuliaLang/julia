@@ -447,7 +447,7 @@
 
                 // focus the terminal input when the user clicks on the terminal (but not drags)
                 $("#terminal-form").click(function(evt) {
-                    if (mouse_x == evt.pageX && mouse_y == evt.pageY)
+                    if ((mouse_x-evt.pageX)*(mouse_x-evt.pageX)+(mouse_y == evt.pageY)*(mouse_y == evt.pageY) < 4)
                         $("#terminal-input").focus();
                 });
 
