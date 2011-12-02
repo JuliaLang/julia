@@ -205,6 +205,7 @@
                         // enable input
                         $("#prompt").show();
                         $("#terminal-input").removeAttr("disabled");
+                        $("#terminal-input").show();
                         $("#terminal-input").focus();
 
                         // resize the input box (the -1 is for Internet Explorer)
@@ -346,10 +347,10 @@
                             var y_data = $.parseJSON(data[id][3]);
 
                             // get the bounds on the data
-                            var x_min = Math.min.apply(Math, x_data);
-                            var x_max = Math.max.apply(Math, x_data);
-                            var y_min = Math.min.apply(Math, y_data);
-                            var y_max = Math.max.apply(Math, y_data);
+                            var x_min = $.parseJSON(data[id][4]);
+                            var x_max = $.parseJSON(data[id][5]);
+                            var y_min = $.parseJSON(data[id][6]);
+                            var y_max = $.parseJSON(data[id][7]);
 
                             // construct the data for D3
                             var data = d3.range(x_data.length).map(function(i) {
@@ -382,6 +383,7 @@
                                 .attr("y2", h - 1);
 
                             vrules.append("text")
+                                .attr("class", "ticktext")
                                 .attr("x", x)
                                 .attr("y", h + 10)
                                 .attr("dy", ".71em")
@@ -401,18 +403,12 @@
                                 .attr("x2", w + 1);
 
                             hrules.append("text")
+                                .attr("class", "ticktext")
                                 .attr("y", y)
                                 .attr("x", -5)
                                 .attr("dy", ".35em")
                                 .attr("text-anchor", "end")
                                 .text(y.tickFormat(10));
-
-                            vis.append("path")
-                                .attr("class", "area")
-                                .attr("d", d3.svg.area()
-                                .x(function(d) { return x(d.x); })
-                                .y0(h - 1)
-                                .y1(function(d) { return y(d.y); }));
 
                             vis.append("path")
                                 .attr("class", "line")
@@ -439,6 +435,9 @@
                 // apply the autoresize plugin to the textarea
                 $("#terminal-input").autoResize({ animate: false, maxHeight: 1000, onResize: function() { setTimeout(function() { $("#terminal-form").prop("scrollTop", $("#terminal-form").prop("scrollHeight")); }, 100); } });
                 
+                // hide the textarea in case the browser decides to pre-populate it
+                $("#terminal-input").hide();
+
                 // hook mouse click events
                 $("#terminal-form").click(function(evt) { $("#terminal-input").focus(); } );
 

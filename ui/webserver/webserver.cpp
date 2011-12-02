@@ -622,16 +622,6 @@ string create_session(bool idle)
         close(session_data.julia_out[0]);
         close(session_data.julia_out[1]);
 
-        // set a high nice value (so that one instance can't dominate the rest)
-        if (nice(20) == -1)
-            exit(1);
-
-        // limit memory usage
-        rlimit limits;
-        limits.rlim_max = 200000000;
-        limits.rlim_cur = limits.rlim_max;
-        setrlimit(RLIMIT_AS, &limits);
-
         // acutally spawn julia instance
         execl("./julia", "julia", "./ui/webserver/julia-web.j", (char*)0);
 

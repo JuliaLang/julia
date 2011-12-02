@@ -249,14 +249,14 @@ span.prompt
   stroke: #444;
 }
 
-.area {
-  fill: lightsteelblue;
-}
-
 .line {
   fill: none;
   stroke: steelblue;
   stroke-width: 1.5px;
+}
+
+.ticktext {
+    color: #444;
 }
 
 /* for Internet Explorer */
