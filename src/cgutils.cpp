@@ -29,7 +29,7 @@ static GlobalVariable *stringConst(const std::string &txt)
 
 // --- emitting pointers directly into code ---
 
-static Value *literal_pointer_val(void *p, const Type *t)
+static Value *literal_pointer_val(void *p, Type *t)
 {
 #ifdef __LP64__
     return ConstantExpr::getIntToPtr(ConstantInt::get(T_int64, (uint64_t)p),
@@ -52,7 +52,7 @@ static Value *literal_pointer_val(void *p)
 
 // --- generating various error checks ---
 
-static jl_value_t *llvm_type_to_julia(const Type *t, bool err=true);
+static jl_value_t *llvm_type_to_julia(Type *t, bool err=true);
 
 static Value *emit_typeof(Value *p)
 {
@@ -70,12 +70,11 @@ static Value *emit_typeof(Value *p)
 static void emit_error(const std::string &txt, jl_codectx_t *ctx)
 {
     std::string txt2 = "in " + ctx->funcName + ": " + txt;
-    std::vector<Value *> zeros(0);
-    zeros.push_back(ConstantInt::get(T_int32, 0));
-    zeros.push_back(ConstantInt::get(T_int32, 0));
+    Value *zeros[2] = { ConstantInt::get(T_int32, 0),
+                        ConstantInt::get(T_int32, 0) };
     builder.CreateCall(jlerror_func,
                        builder.CreateGEP(stringConst(txt2),
-                                         zeros.begin(), zeros.end()));
+                                         ArrayRef<Value*>(zeros)));
 }
 
 static void error_unless(Value *cond, const std::string &msg, jl_codectx_t *ctx)
@@ -114,13 +113,12 @@ static Value *boxed(Value *v);
 static void emit_type_error(Value *x, jl_value_t *type, const std::string &msg,
                             jl_codectx_t *ctx)
 {
-    std::vector<Value *> zeros(0);
-    zeros.push_back(ConstantInt::get(T_int32, 0));
-    zeros.push_back(ConstantInt::get(T_int32, 0));
+    Value *zeros[2] = { ConstantInt::get(T_int32, 0),
+                        ConstantInt::get(T_int32, 0) };
     Value *fname_val = builder.CreateGEP(stringConst(ctx->funcName),
-                                         zeros.begin(), zeros.end());
+                                         ArrayRef<Value*>(zeros));
     Value *msg_val = builder.CreateGEP(stringConst(msg),
-                                       zeros.begin(), zeros.end());
+                                       ArrayRef<Value*>(zeros));
     builder.CreateCall4(jltypeerror_func,
                         fname_val, msg_val,
                         literal_pointer_val(type), boxed(x));
@@ -385,8 +383,7 @@ static Value *mark_julia_type(Value *v, jl_value_t *jt)
     name[1] = (id/255)+1;
     name[2] = '\0';
     MDString *md = MDString::get(jl_LLVMContext, name);
-    Value *const vals[1] = {md};
-    MDNode *mdn = MDNode::get(jl_LLVMContext, vals, 1);
+    MDNode *mdn = MDNode::get(jl_LLVMContext, ArrayRef<Value*>(md));
     ((Instruction*)v)->setMetadata("julia_type", mdn);
     return v;
 }
@@ -407,14 +404,14 @@ static Value *tpropagate(Value *a, Value *b)
 
 // --- mapping between julia and llvm types ---
 
-static const Type *julia_type_to_llvm(jl_value_t *jt, jl_codectx_t *ctx)
+static Type *julia_type_to_llvm(jl_value_t *jt, jl_codectx_t *ctx)
 {
     if (jt == (jl_value_t*)jl_bool_type) return T_int1;
     if (jt == (jl_value_t*)jl_float32_type) return T_float32;
     if (jt == (jl_value_t*)jl_float64_type) return T_float64;
     //if (jt == (jl_value_t*)jl_null) return T_void;
     if (jl_is_bits_type(jt) && jl_is_cpointer_type(jt)) {
-        const Type *lt = julia_type_to_llvm(jl_tparam0(jt), ctx);
+        Type *lt = julia_type_to_llvm(jl_tparam0(jt), ctx);
         if (lt == NULL)
             return NULL;
         if (lt == T_void)
@@ -441,7 +438,7 @@ static const Type *julia_type_to_llvm(jl_value_t *jt, jl_codectx_t *ctx)
 // so this is an approximation. it's only correct if the associated LLVM
 // value is not tagged with our value name hack.
 // boxed(v) below gets the correct type.
-static jl_value_t *llvm_type_to_julia(const Type *t, bool throw_error)
+static jl_value_t *llvm_type_to_julia(Type *t, bool throw_error)
 {
     if (t == T_int1)  return (jl_value_t*)jl_bool_type;
     if (t == T_int8)  return (jl_value_t*)jl_int8_type;
@@ -462,8 +459,7 @@ static jl_value_t *llvm_type_to_julia(const Type *t, bool throw_error)
         }
     }
     if (throw_error) {
-        jl_errorf("cannot convert type %s to a julia type",
-                  t->getDescription().c_str());
+        jl_error("cannot convert type to a julia type");
     }
     return NULL;
 }
@@ -475,7 +471,7 @@ static jl_value_t *llvm_type_to_julia(const Type *t, bool throw_error)
 // if it's already a pointer it's left alone.
 static Value *boxed(Value *v)
 {
-    const Type *t = v->getType();
+    Type *t = v->getType();
     if (t == jl_pvalue_llvmt)
         return v;
     if (t == T_void)

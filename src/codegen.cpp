@@ -10,11 +10,10 @@
 #include "llvm/Analysis/DebugInfo.h"
 #include "llvm/Analysis/DIBuilder.h"
 #include "llvm/Target/TargetData.h"
-#include "llvm/Target/TargetSelect.h"
 #include "llvm/Target/TargetOptions.h"
 #include "llvm/Transforms/Scalar.h"
 #include "llvm/Support/IRBuilder.h"
-#include "llvm/Support/StandardPasses.h"
+#include "llvm/Support/TargetSelect.h"
 #include <setjmp.h>
 #include <cstdio>
 #include <string>
@@ -45,34 +44,34 @@ static std::map<int, std::string> argNumberStrings;
 static FunctionPassManager *FPM;
 
 // types
-static const Type *jl_value_llvmt;
-static const Type *jl_pvalue_llvmt;
-static const Type *jl_ppvalue_llvmt;
-static const FunctionType *jl_func_sig;
-static const Type *jl_fptr_llvmt;
-static const Type *T_int1;
-static const Type *T_int8;
-static const Type *T_pint8;
-static const Type *T_uint8;
-static const Type *T_int16;
-static const Type *T_pint16;
-static const Type *T_uint16;
-static const Type *T_int32;
-static const Type *T_pint32;
-static const Type *T_uint32;
-static const Type *T_int64;
-static const Type *T_pint64;
-static const Type *T_uint64;
-static const Type *T_char;
-static const Type *T_size;
-static const Type *T_psize;
-static const Type *T_float32;
-static const Type *T_pfloat32;
-static const Type *T_float64;
-static const Type *T_pfloat64;
-static const Type *T_void;
+static Type *jl_value_llvmt;
+static Type *jl_pvalue_llvmt;
+static Type *jl_ppvalue_llvmt;
+static FunctionType *jl_func_sig;
+static Type *jl_fptr_llvmt;
+static Type *T_int1;
+static Type *T_int8;
+static Type *T_pint8;
+static Type *T_uint8;
+static Type *T_int16;
+static Type *T_pint16;
+static Type *T_uint16;
+static Type *T_int32;
+static Type *T_pint32;
+static Type *T_uint32;
+static Type *T_int64;
+static Type *T_pint64;
+static Type *T_uint64;
+static Type *T_char;
+static Type *T_size;
+static Type *T_psize;
+static Type *T_float32;
+static Type *T_pfloat32;
+static Type *T_float64;
+static Type *T_pfloat64;
+static Type *T_void;
 #ifdef JL_GC_MARKSWEEP
-static const Type *T_gcframe;
+static Type *T_gcframe;
 #endif
 
 // constants
@@ -370,8 +369,8 @@ static Value *emit_lambda_closure(jl_value_t *expr, jl_codectx_t *ctx)
         return literal_pointer_val(fun);
     }
 
-    std::vector<Value *> captured(0);
-    captured.push_back(ConstantInt::get(T_size, capt->length));
+    Value *captured[1+capt->length];
+    captured[0] = ConstantInt::get(T_size, capt->length);
     for(i=0; i < capt->length; i++) {
         Value *val;
         jl_array_t *vi = (jl_array_t*)jl_cellref(capt, i);
@@ -388,11 +387,12 @@ static Value *emit_lambda_closure(jl_value_t *expr, jl_codectx_t *ctx)
             assert(l != NULL);
             val = builder.CreateLoad(l, false);
         }
-        captured.push_back(val);
+        captured[i+1] = val;
     }
     Value *env_tuple;
     env_tuple = builder.CreateCall(jlntuple_func,
-                                   captured.begin(), captured.end());
+                                   ArrayRef<Value*>(&captured[0],
+                                                    1+capt->length));
     //ctx->linfo->roots = jl_tuple2(expr, ctx->linfo->roots);
     return builder.CreateCall2(jlclosure_func,
                                literal_pointer_val(expr), env_tuple);
@@ -670,7 +670,7 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
                     ety = (jl_value_t*)jl_any_type;
                 }
                 Value *ary = emit_expr(args[1], ctx, true);
-                const Type *elty = julia_type_to_llvm(ety, ctx);
+                Type *elty = julia_type_to_llvm(ety, ctx);
                 assert(elty != NULL);
                 bool isbool=false;
                 if (elty==T_int1) { elty = T_int8; isbool=true; }
@@ -707,7 +707,7 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
                     ety = (jl_value_t*)jl_any_type;
                 }
                 Value *ary = emit_expr(args[1], ctx, true);
-                const Type *elty = julia_type_to_llvm(ety, ctx);
+                Type *elty = julia_type_to_llvm(ety, ctx);
                 assert(elty != NULL);
                 if (elty==T_int1) { elty = T_int8; }
                 Value *data =
@@ -1012,7 +1012,7 @@ static void emit_assignment(jl_value_t *l, jl_value_t *r, jl_codectx_t *ctx)
                             boxed(emit_expr(r, ctx, true)));
     }
     else {
-        const Type *vt = bp->getType();
+        Type *vt = bp->getType();
         if (vt->isPointerTy() && vt->getContainedType(0)!=jl_pvalue_llvmt)
             builder.CreateStore(emit_unbox(vt->getContainedType(0), vt,
                                            emit_unboxed(r, ctx)),
@@ -1300,7 +1300,7 @@ static bool store_unboxed_p(char *name, jl_codectx_t *ctx)
 static AllocaInst *alloc_local(char *name, jl_codectx_t *ctx)
 {
     jl_value_t *jt = (*ctx->declTypes)[name];
-    const Type *vtype=NULL;
+    Type *vtype=NULL;
     if (store_unboxed_p(name, ctx))
         vtype = julia_type_to_llvm(jt, ctx);
     if (vtype == NULL)
@@ -1383,7 +1383,7 @@ static void emit_function(jl_lambda_info_t *lam, Function *f)
     }
     
     dbuilder->createCompileUnit(0, filename, ".", "julia", true, "", 0);
-    llvm::DIArray EltTypeArray = dbuilder->getOrCreateArray(NULL,0);
+    llvm::DIArray EltTypeArray = dbuilder->getOrCreateArray(ArrayRef<Value*>());
     DIFile fil = dbuilder->createFile(filename, ".");
     DISubprogram SP =
         dbuilder->createFunction((DIDescriptor)dbuilder->getCU(),
@@ -1762,17 +1762,16 @@ static void init_julia_llvm_env(Module *m)
     T_void = Type::getVoidTy(jl_LLVMContext);
 
     // add needed base definitions to our LLVM environment
-    PATypeHolder tempTy = OpaqueType::get(getGlobalContext());
-    std::vector<const Type*> valueStructElts(0);
-    valueStructElts.push_back(PointerType::getUnqual(tempTy));
-    StructType *valueSt = StructType::get(getGlobalContext(),valueStructElts);
-    ((OpaqueType*)tempTy.get())->refineAbstractTypeTo(valueSt);
-    jl_value_llvmt = tempTy.get();
+    StructType *valueSt = StructType::create(getGlobalContext(), "jl_value_t");
+    Type *valueStructElts[1] = { PointerType::getUnqual(valueSt) };
+    ArrayRef<Type*> vselts(valueStructElts);
+    valueSt->setBody(vselts);
+    jl_value_llvmt = valueSt;
 
     jl_pvalue_llvmt = PointerType::get(jl_value_llvmt, 0);
     jl_ppvalue_llvmt = PointerType::get(jl_pvalue_llvmt, 0);
     V_null = Constant::getNullValue(jl_pvalue_llvmt);
-    std::vector<const Type*> ftargs(0);
+    std::vector<Type*> ftargs(0);
     ftargs.push_back(jl_pvalue_llvmt);
     ftargs.push_back(jl_ppvalue_llvmt);
     ftargs.push_back(T_int32);
@@ -1781,15 +1780,14 @@ static void init_julia_llvm_env(Module *m)
     jl_fptr_llvmt = PointerType::get(jl_func_sig, 0);
 
 #ifdef JL_GC_MARKSWEEP
-    std::vector<const Type*> gcframeStructElts(0);
-    gcframeStructElts.push_back(PointerType::get(jl_ppvalue_llvmt,0));
-    gcframeStructElts.push_back(T_size);
-    gcframeStructElts.push_back(T_int32);
-    PATypeHolder tempTy2 = OpaqueType::get(getGlobalContext());
-    gcframeStructElts.push_back(PointerType::getUnqual(tempTy2));
-    StructType *gcfSt = StructType::get(getGlobalContext(),gcframeStructElts);
-    ((OpaqueType*)tempTy2.get())->refineAbstractTypeTo(gcfSt);
-    T_gcframe = tempTy2.get();
+    StructType *gcfst = StructType::create(getGlobalContext(), "jl_gcframe_t");
+    Type *gcframeStructElts[4] = {
+        PointerType::get(jl_ppvalue_llvmt,0),
+        T_size,
+        T_int32,
+        PointerType::getUnqual(gcfst) };
+    gcfst->setBody(ArrayRef<Type*>(gcframeStructElts, 4));
+    T_gcframe = gcfst;
 
     jlpgcstack_var =
         new GlobalVariable(*jl_Module,
@@ -1810,7 +1808,7 @@ static void init_julia_llvm_env(Module *m)
                            false, GlobalVariable::PrivateLinkage,
                            ConstantFP::get(T_float32,0.0), "jl_float32_temp");
 
-    std::vector<const Type*> args1(0);
+    std::vector<Type*> args1(0);
     args1.push_back(T_pint8);
     jlerror_func =
         Function::Create(FunctionType::get(T_void, args1, false),
@@ -1819,7 +1817,7 @@ static void init_julia_llvm_env(Module *m)
     jlerror_func->setDoesNotReturn();
     jl_ExecutionEngine->addGlobalMapping(jlerror_func, (void*)&jl_error);
 
-    std::vector<const Type*> args1_(0);
+    std::vector<Type*> args1_(0);
     args1_.push_back(jl_pvalue_llvmt);
     jlraise_func =
         Function::Create(FunctionType::get(T_void, args1_, false),
@@ -1835,7 +1833,7 @@ static void init_julia_llvm_env(Module *m)
     jl_ExecutionEngine->addGlobalMapping(jlnew_func,
                                          (void*)&jl_new_struct_uninit);
 
-    std::vector<const Type*> empty_args(0);
+    std::vector<Type*> empty_args(0);
     jluniniterror_func =
         Function::Create(FunctionType::get(T_void, empty_args, false),
                          Function::ExternalLinkage,
@@ -1857,7 +1855,7 @@ static void init_julia_llvm_env(Module *m)
                          Function::ExternalLinkage, "_setjmp", jl_Module);
     jl_ExecutionEngine->addGlobalMapping(setjmp_func, (void*)&_setjmp);
 
-    std::vector<const Type*> te_args(0);
+    std::vector<Type*> te_args(0);
     te_args.push_back(T_pint8);
     te_args.push_back(T_pint8);
     te_args.push_back(jl_pvalue_llvmt);
@@ -1870,7 +1868,7 @@ static void init_julia_llvm_env(Module *m)
     jl_ExecutionEngine->addGlobalMapping(jltypeerror_func,
                                          (void*)&jl_type_error_rt);
 
-    std::vector<const Type *> args2(0);
+    std::vector<Type *> args2(0);
     args2.push_back(T_pint8);
     args2.push_back(T_pint8);
     jlgetbindingp_func =
@@ -1880,7 +1878,7 @@ static void init_julia_llvm_env(Module *m)
     jl_ExecutionEngine->addGlobalMapping(jlgetbindingp_func,
                                          (void*)&jl_get_bindingp);
 
-    std::vector<const Type *> args_2ptrs(0);
+    std::vector<Type *> args_2ptrs(0);
     args_2ptrs.push_back(T_pint8);
     args_2ptrs.push_back(jl_pvalue_llvmt);
     jlcheckassign_func =
@@ -1890,7 +1888,7 @@ static void init_julia_llvm_env(Module *m)
     jl_ExecutionEngine->addGlobalMapping(jlcheckassign_func,
                                          (void*)&jl_checked_assignment);
 
-    std::vector<const Type *> args_1ptr(0);
+    std::vector<Type *> args_1ptr(0);
     args_1ptr.push_back(T_pint8);
     jldeclareconst_func =
         Function::Create(FunctionType::get(T_void, args_1ptr, false),
@@ -1903,7 +1901,7 @@ static void init_julia_llvm_env(Module *m)
     jlapplygeneric_func =
         jlfunc_to_llvm("jl_apply_generic", (void*)*jl_apply_generic);
 
-    std::vector<const Type*> args3(0);
+    std::vector<Type*> args3(0);
     args3.push_back(jl_pvalue_llvmt);
     jlbox_func =
         Function::Create(FunctionType::get(jl_pvalue_llvmt, args3, false),
@@ -1911,7 +1909,7 @@ static void init_julia_llvm_env(Module *m)
                          "jl_new_box", jl_Module);
     jl_ExecutionEngine->addGlobalMapping(jlbox_func, (void*)&jl_new_box);
 
-    std::vector<const Type*> args4(0);
+    std::vector<Type*> args4(0);
     args4.push_back(jl_pvalue_llvmt);
     args4.push_back(jl_pvalue_llvmt);
     jlclosure_func =
@@ -1921,7 +1919,7 @@ static void init_julia_llvm_env(Module *m)
     jl_ExecutionEngine->addGlobalMapping(jlclosure_func,
                                          (void*)&jl_new_closure_internal);
 
-    std::vector<const Type*> args5(0);
+    std::vector<Type*> args5(0);
     args5.push_back(T_size);
     jlntuple_func =
         Function::Create(FunctionType::get(jl_pvalue_llvmt, args5, true),
@@ -1929,7 +1927,7 @@ static void init_julia_llvm_env(Module *m)
                          "jl_tuple", jl_Module);
     jl_ExecutionEngine->addGlobalMapping(jlntuple_func, (void*)&jl_tuple);
 
-    std::vector<const Type*> mdargs(0);
+    std::vector<Type*> mdargs(0);
     mdargs.push_back(jl_pvalue_llvmt);
     mdargs.push_back(jl_ppvalue_llvmt);
     mdargs.push_back(T_pint8);
@@ -1941,7 +1939,7 @@ static void init_julia_llvm_env(Module *m)
                          "jl_method_def", jl_Module);
     jl_ExecutionEngine->addGlobalMapping(jlmethod_func, (void*)&jl_method_def);
 
-    std::vector<const Type*> ehargs(0);
+    std::vector<Type*> ehargs(0);
     ehargs.push_back(T_pint8);
     ehargs.push_back(T_pint8);
     jlenter_func =
@@ -1950,7 +1948,7 @@ static void init_julia_llvm_env(Module *m)
                          "jl_enter_handler", jl_Module);
     jl_ExecutionEngine->addGlobalMapping(jlenter_func, (void*)&jl_enter_handler);
 
-    std::vector<const Type*> lhargs(0);
+    std::vector<Type*> lhargs(0);
     lhargs.push_back(T_int32);
     jlleave_func =
         Function::Create(FunctionType::get(T_void, lhargs, false),
@@ -1958,7 +1956,7 @@ static void init_julia_llvm_env(Module *m)
                          "jl_pop_handler", jl_Module);
     jl_ExecutionEngine->addGlobalMapping(jlleave_func, (void*)&jl_pop_handler);
 
-    std::vector<const Type*> aoargs(0);
+    std::vector<Type*> aoargs(0);
     aoargs.push_back(T_size);
     jlallocobj_func =
         Function::Create(FunctionType::get(T_pint8, aoargs, false),
