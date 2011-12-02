@@ -387,8 +387,8 @@
                                 .attr("y", h + 10)
                                 .attr("dy", ".71em")
                                 .attr("text-anchor", "middle")
+                                .attr("fill", "#444444");
                                 .text(x.tickFormat(10))
-                                .style("color", "#444444");
 
                             var hrules = vis.selectAll("g.hrule")
                                 .data(y.ticks(8))
@@ -407,8 +407,8 @@
                                 .attr("x", -5)
                                 .attr("dy", ".35em")
                                 .attr("text-anchor", "end")
+                                .attr("fill", "#444444");
                                 .text(y.tickFormat(10))
-                                .style("color", "#444444");
 
                             vis.append("path")
                                 .attr("class", "line")
