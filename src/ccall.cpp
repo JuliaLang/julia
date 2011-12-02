@@ -103,10 +103,10 @@ extern "C" void *jl_value_to_pointer(jl_value_t *jt, jl_value_t *v, int argn)
     return (jl_value_t*)jl_null;
 }
 
-static Value *julia_to_native(const Type *ty, jl_value_t *jt, Value *jv,
+static Value *julia_to_native(Type *ty, jl_value_t *jt, Value *jv,
                               jl_value_t *argex, int argn, jl_codectx_t *ctx)
 {
-    const Type *vt = jv->getType();
+    Type *vt = jv->getType();
     if (ty == jl_pvalue_llvmt) {
         return boxed(jv);
     }
@@ -196,9 +196,9 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
     JL_TYPECHK(ccall, tuple, at);
     JL_TYPECHK(ccall, type, at);
     jl_tuple_t *tt = (jl_tuple_t*)at;
-    std::vector<const Type *> fargt(0);
-    std::vector<const Type *> fargt_sig(0);
-    const Type *lrt = julia_type_to_llvm(rt, ctx);
+    std::vector<Type *> fargt(0);
+    std::vector<Type *> fargt_sig(0);
+    Type *lrt = julia_type_to_llvm(rt, ctx);
     if (lrt == NULL) {
         JL_GC_POP();
         return literal_pointer_val(jl_nothing);
@@ -212,7 +212,7 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
             isVa = true;
             tti = jl_tparam0(tti);
         }
-        const Type *t = julia_type_to_llvm(tti, ctx);
+        Type *t = julia_type_to_llvm(tti, ctx);
         if (t == NULL) {
             JL_GC_POP();
             return literal_pointer_val(jl_nothing);
@@ -253,12 +253,12 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
     }
 
     // emit arguments
-    std::vector<Value*> argvals(0);
+    Value *argvals[nargs+1-4];
     int last_depth = ctx->argDepth;
     int nargty = tt->length;
     for(i=4; i < nargs+1; i++) {
         Value *arg = emit_expr(args[i], ctx, true);
-        const Type *largty;
+        Type *largty;
         jl_value_t *jargty;
         if (isVa && (int)(i-4) >= nargty-1) {
             largty = fargt[nargty-1];
@@ -276,10 +276,11 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
             make_gcroot(boxed(arg), ctx);
         }
 #endif
-        argvals.push_back(julia_to_native(largty,jargty,arg,args[i],i-3,ctx));
+        argvals[i-4] = julia_to_native(largty,jargty,arg,args[i],i-3,ctx);
     }
     // the actual call
-    Value *result = builder.CreateCall(llvmf, argvals.begin(), argvals.end());
+    Value *result = builder.CreateCall(llvmf,
+                                       ArrayRef<Value*>(&argvals[0],nargs-3));
 
     // restore temp argument area stack pointer
     if (haspointers) {

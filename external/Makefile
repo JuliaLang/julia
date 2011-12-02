@@ -1,11 +1,11 @@
 ## library versions ##
 
-LLVM_VER = 2.9
+LLVM_VER = 3.0
 READLINE_VER = 6.2
 PCRE_VER = 8.12
 DSFMT_VER = 2.1
 OPENBLAS_VER = v0.1alpha2.4
-LAPACK_VER = 3.3.1
+LAPACK_VER = 3.4.0
 ARPACK_VER = 96
 FFTW_VER = 3.3
 UNWIND_VER = 0.99
@@ -40,10 +40,11 @@ LLVM_OBJ_SOURCE = llvm-$(LLVM_VER)/Release/lib/libLLVM-$(LLVM_VER).$(SHLIB_EXT)
 compile-llvm: $(LLVM_OBJ_SOURCE)
 install-llvm: $(LLVM_OBJ_TARGET)
 
-llvm-$(LLVM_VER).tgz:
+llvm-$(LLVM_VER).tar.gz:
 	curl -O http://llvm.org/releases/$(LLVM_VER)/$@
-llvm-$(LLVM_VER)/configure: llvm-$(LLVM_VER).tgz
-	tar zxf $<
+llvm-$(LLVM_VER)/configure: llvm-$(LLVM_VER).tar.gz
+	mkdir -p llvm-$(LLVM_VER) && \
+	tar -C llvm-$(LLVM_VER) --strip-components 1 -xf $<
 	touch $@
 $(LLVM_OBJ_SOURCE): llvm-$(LLVM_VER)/configure
 	cd llvm-$(LLVM_VER) && \
@@ -57,7 +58,7 @@ clean-llvm:
 	$(MAKE) -C llvm-$(LLVM_VER) clean
 	rm -f $(LLVM_OBJ_TARGET)
 distclean-llvm:
-	rm -rf llvm-$(LLVM_VER).tgz llvm-$(LLVM_VER)
+	rm -rf llvm-$(LLVM_VER).tar.gz llvm-$(LLVM_VER)
 
 ## GNU readline ##
 
