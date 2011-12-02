@@ -89,9 +89,9 @@ end
 hash(s::Symbol) = ccall(:jl_hash_symbol, Ulong, (Any,), s)
 
 function hash(t::Tuple)
-    h = int64(0)
+    h = long(0)
     for i=1:length(t)
-        h = bitmix(h,hash(t[i]))
+        h = bitmix(h,long(hash(t[i])))
     end
     return h
 end
@@ -99,7 +99,7 @@ end
 function hash(a::Array)
     h = hash(size(a))+1
     for i=1:length(a)
-        h = bitmix(h,hash(a[i]))
+        h = bitmix(h,long(hash(a[i])))
     end
     return h
 end
