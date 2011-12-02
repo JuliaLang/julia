@@ -60,7 +60,7 @@
                 Network Protol
 
                 This needs to match the message
-                types listed in message_types.h.
+                types listed in ui/webserver/message_types.h.
             */
 
             // input messages (to julia)
@@ -383,12 +383,12 @@
                                 .attr("y2", h - 1);
 
                             vrules.append("text")
-                                .attr("class", "ticktext")
                                 .attr("x", x)
                                 .attr("y", h + 10)
                                 .attr("dy", ".71em")
                                 .attr("text-anchor", "middle")
-                                .text(x.tickFormat(10));
+                                .text(x.tickFormat(10))
+                                .style("color", "#444444");
 
                             var hrules = vis.selectAll("g.hrule")
                                 .data(y.ticks(8))
@@ -403,12 +403,12 @@
                                 .attr("x2", w + 1);
 
                             hrules.append("text")
-                                .attr("class", "ticktext")
                                 .attr("y", y)
                                 .attr("x", -5)
                                 .attr("dy", ".35em")
                                 .attr("text-anchor", "end")
-                                .text(y.tickFormat(10));
+                                .text(y.tickFormat(10))
+                                .style("color", "#444444");
 
                             vis.append("path")
                                 .attr("class", "line")
