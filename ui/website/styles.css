@@ -231,12 +231,21 @@ span.prompt
 
 /* for plotting */
 
-.rule line {
+.hrule line {
   stroke: #eee;
   shape-rendering: crispEdges;
 }
 
-.rule line.axis {
+.hrule line.axis {
+  stroke: #444;
+}
+
+.vrule line {
+  stroke: #eee;
+  shape-rendering: crispEdges;
+}
+
+.vrule line.axis {
   stroke: #444;
 }
 

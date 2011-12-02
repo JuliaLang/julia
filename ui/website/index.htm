@@ -359,45 +359,50 @@
                             var w = 450,
                                 h = 275,
                                 p = 40,
-                                x = d3.scale.linear().domain([0, x_max]).range([0, w]),
-                                y = d3.scale.linear().domain([0, y_max]).range([h, 0]);
+                                x = d3.scale.linear().domain([x_min, x_max]).range([0, w]),
+                                y = d3.scale.linear().domain([y_min-(y_max-y_min)*0.1, y_max+(y_max-y_min)*0.1]).range([h, 0]);
 
                             var vis = d3.select("#terminal")
                               .append("svg")
                                 .data([data])
-                                .attr("width", w + p * 2)
-                                .attr("height", h + p * 2)
+                                .attr("width", w+p*2)
+                                .attr("height", h+p*2)
                               .append("g")
-                                .attr("transform", "translate(" + p + "," + p + ")");
+                                .attr("transform", "translate("+String(p)+","+String(p)+")");
 
-                            var rules = vis.selectAll("g.rule")
+                            var vrules = vis.selectAll("g.vrule")
                                 .data(x.ticks(10))
                               .enter().append("g")
-                                .attr("class", "rule");
+                                .attr("class", "vrule");
 
-                            rules.append("line")
+                            vrules.append("line")
                                 .attr("x1", x)
                                 .attr("x2", x)
                                 .attr("y1", 0)
                                 .attr("y2", h - 1);
 
-                            rules.append("line")
+                            vrules.append("text")
+                                .attr("x", x)
+                                .attr("y", h + 10)
+                                .attr("dy", ".71em")
+                                .attr("text-anchor", "middle")
+                                .text(x.tickFormat(10));
+
+                            var hrules = vis.selectAll("g.hrule")
+                                .data(y.ticks(8))
+                              .enter().append("g")
+                                .attr("class", "hrule");
+
+                            hrules.append("line")
                                 .attr("class", function(d) { return d ? null : "axis"; })
                                 .attr("y1", y)
                                 .attr("y2", y)
                                 .attr("x1", 0)
                                 .attr("x2", w + 1);
 
-                            rules.append("text")
-                                .attr("x", x)
-                                .attr("y", h + 3)
-                                .attr("dy", ".71em")
-                                .attr("text-anchor", "middle")
-                                .text(x.tickFormat(10));
-
-                            rules.append("text")
+                            hrules.append("text")
                                 .attr("y", y)
-                                .attr("x", -3)
+                                .attr("x", -5)
                                 .attr("dy", ".35em")
                                 .attr("text-anchor", "end")
                                 .text(y.tickFormat(10));
