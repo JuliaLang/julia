@@ -129,13 +129,13 @@ function __socket_callback(fd)
         
         # tell the browser that we're now evaluating the expression
         __write_message(__Message(__MSG_OUTPUT_PARSE_COMPLETE, {}))
-        
+
         # evaluate the expression and print any exceptions that occurred
         local __result
         try
             __result = eval(__expr)
         catch __error
-            return __write_message(__Message(__MSG_OUTPUT_EVAL_ERROR, {__error}))
+            return __write_message(__Message(__MSG_OUTPUT_EVAL_ERROR, {print_to_string(show, __error)}))
         end
 
         # if nothing was returned, send nothing back

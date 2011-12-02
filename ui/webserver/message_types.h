@@ -79,9 +79,9 @@ __MSG_OUTPUT_EVAL_RESULT = uint8(8) # {result}, expression result
 #endif
 
 #ifndef notdefined
-#define MSG_OUTPUT_EVAL_ERROR 6
+#define MSG_OUTPUT_EVAL_ERROR 9
 #else
-__MSG_OUTPUT_EVAL_ERROR = uint8(6) # {message}, error evaluating expression
+__MSG_OUTPUT_EVAL_ERROR = uint8(9) # {message}, error evaluating expression
 #endif
 
 #ifndef notdefined
