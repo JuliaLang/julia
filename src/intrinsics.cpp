@@ -56,7 +56,7 @@ using namespace JL_I;
 */
 
 // convert int type to same-size float type
-static const Type *FT(const Type *t)
+static Type *FT(Type *t)
 {
     if (t->isFloatingPointTy())
         return t;
@@ -74,7 +74,7 @@ static Value *FP(Value *v)
 }
 
 // convert float type to same-size int type
-static const Type *INTT(const Type *t)
+static Type *INTT(Type *t)
 {
     if (t->isIntegerTy())
         return t;
@@ -93,16 +93,16 @@ static Value *INT(Value *v)
     return builder.CreateBitCast(v, INTT(v->getType()));
 }
 
-static Value *uint_cnvt(const Type *to, Value *x)
+static Value *uint_cnvt(Type *to, Value *x)
 {
-    const Type *t = x->getType();
+    Type *t = x->getType();
     if (t == to) return x;
     if (to->getPrimitiveSizeInBits() < x->getType()->getPrimitiveSizeInBits())
         return builder.CreateTrunc(x, to);
     return builder.CreateZExt(x, to);
 }
 
-static Value *emit_unbox(const Type *to, const Type *pto, Value *x)
+static Value *emit_unbox(Type *to, Type *pto, Value *x)
 {
     if (x->getType() != jl_pvalue_llvmt) {
         // bools are stored internally as int8 (for now), so we need to make
@@ -182,7 +182,7 @@ static Value *generic_box(jl_value_t *targ, jl_value_t *x, jl_codectx_t *ctx)
     Value *vx = emit_unboxed(x, ctx);
     if (vx->getType()->getPrimitiveSizeInBits() != nb)
         jl_errorf("box: expected argument with %d bits", nb);
-    const Type *llvmt = julia_type_to_llvm(bt, ctx);
+    Type *llvmt = julia_type_to_llvm(bt, ctx);
     if (llvmt == NULL) {
         return literal_pointer_val(jl_nothing);
     }
@@ -212,7 +212,7 @@ static Value *generic_unbox(jl_value_t *targ, jl_value_t *x, jl_codectx_t *ctx)
     if (!jl_is_bits_type(bt))
         jl_error("unbox: expected bits type as first argument");
     unsigned int nb = jl_bitstype_nbits(bt);
-    const Type *to = IntegerType::get(jl_LLVMContext, nb);
+    Type *to = IntegerType::get(jl_LLVMContext, nb);
     return emit_unbox(to, PointerType::get(to, 0), emit_unboxed(x, ctx));
 }
 
@@ -225,7 +225,7 @@ static Value *generic_trunc(jl_value_t *targ, jl_value_t *x, jl_codectx_t *ctx)
     if (!jl_is_bits_type(bt))
         jl_error("trunc_int: expected bits type as first argument");
     unsigned int nb = jl_bitstype_nbits(bt);
-    const Type *to = IntegerType::get(jl_LLVMContext, nb);
+    Type *to = IntegerType::get(jl_LLVMContext, nb);
     return builder.CreateTrunc(INT(emit_unboxed(x,ctx)), to);
 }
 
@@ -238,7 +238,7 @@ static Value *generic_zext(jl_value_t *targ, jl_value_t *x, jl_codectx_t *ctx)
     if (!jl_is_bits_type(bt))
         jl_error("zext_int: expected bits type as first argument");
     unsigned int nb = jl_bitstype_nbits(bt);
-    const Type *to = IntegerType::get(jl_LLVMContext, nb);
+    Type *to = IntegerType::get(jl_LLVMContext, nb);
     return builder.CreateZExt(INT(emit_unboxed(x,ctx)), to);
 }
 
@@ -271,9 +271,9 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
     }
     if (nargs < 1) jl_error("invalid intrinsic call");
     Value *x = emit_unboxed(args[1], ctx);
-    const Type *t = x->getType();
-    const Type *fxt;
-    const Type *fxts[2];
+    Type *t = x->getType();
+    Type *fxt;
+    Type *fxts[2];
     Value *fx, *fy;
     Value *den;
     ConstantInt *ci=NULL;
@@ -500,28 +500,32 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
         x = INT(x);
         fxt = x->getType();
         return builder.CreateCall(
-            Intrinsic::getDeclaration(jl_Module, Intrinsic::bswap, &fxt, 1),
+            Intrinsic::getDeclaration(jl_Module, Intrinsic::bswap,
+                                      ArrayRef<Type*>(fxt)),
             x
         );
     HANDLE(ctpop_int,1)
         x = INT(x);
         fxt = x->getType();
         return builder.CreateCall(
-            Intrinsic::getDeclaration(jl_Module, Intrinsic::ctpop, &fxt, 1),
+            Intrinsic::getDeclaration(jl_Module, Intrinsic::ctpop,
+                                      ArrayRef<Type*>(fxt)),
             x
         );
     HANDLE(ctlz_int,1)
         x = INT(x);
         fxt = x->getType();
         return builder.CreateCall(
-            Intrinsic::getDeclaration(jl_Module, Intrinsic::ctlz, &fxt, 1),
+            Intrinsic::getDeclaration(jl_Module, Intrinsic::ctlz,
+                                      ArrayRef<Type*>(fxt)),
             x
         );
     HANDLE(cttz_int,1)
         x = INT(x);
         fxt = x->getType();
         return builder.CreateCall(
-            Intrinsic::getDeclaration(jl_Module, Intrinsic::cttz, &fxt, 1),
+            Intrinsic::getDeclaration(jl_Module, Intrinsic::cttz,
+                                      ArrayRef<Type*>(fxt)),
             x
         );
 
@@ -628,10 +632,11 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
     HANDLE(sqrt_float,1)
         fx = FP(x);
         fxt = fx->getType();
-        return builder.CreateCall(Intrinsic::getDeclaration(jl_Module,
-                                                            Intrinsic::sqrt,
-                                                            &fxt, 1),
-                                  fx);
+        return builder.
+            CreateCall(Intrinsic::getDeclaration(jl_Module,
+                                                 Intrinsic::sqrt,
+                                                 ArrayRef<Type*>(fxt)),
+                       fx);
     HANDLE(pow_float,2)
         fx = FP(x);
         fy = FP(emit_expr(args[2],ctx,true));
@@ -639,20 +644,22 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
         if (fxts[0] != fxts[1] ||
             !fxts[0]->isFloatingPointTy() || !fxts[1]->isFloatingPointTy())
             jl_error("invalid arguments to pow_float");
-        return builder.CreateCall2(Intrinsic::getDeclaration(jl_Module,
-                                                             Intrinsic::pow,
-                                                             fxts, 2),
-                                   fx, fy);
+        return builder.
+            CreateCall2(Intrinsic::getDeclaration(jl_Module,
+                                                  Intrinsic::pow,
+                                                  ArrayRef<Type*>(fxts)),
+                        fx, fy);
     HANDLE(powi_float,2)
         fx = FP(x);
         fy = emit_expr(args[2],ctx,true);
         fxts[0] = fx->getType(); fxts[1] = fy->getType();
         if (!fxts[0]->isFloatingPointTy() || fxts[1] != T_int32)
             jl_error("invalid arguments to powi_float");
-        return builder.CreateCall2(Intrinsic::getDeclaration(jl_Module,
-                                                             Intrinsic::powi,
-                                                             fxts, 1),
-                                   fx, fy);
+        return builder.
+            CreateCall2(Intrinsic::getDeclaration(jl_Module,
+                                                  Intrinsic::powi,
+                                                  ArrayRef<Type*>(fxt)),
+                        fx, fy);
     HANDLE(abs_float32,1)
     {
         Value *bits = builder.CreateBitCast(x, T_int32);
@@ -713,17 +720,16 @@ static Function *boxfunc_llvm(FunctionType *ft, const std::string &cname,
     return f;
 }
 
-static FunctionType *ft1arg(const Type *ret, const Type *arg)
+static FunctionType *ft1arg(Type *ret, Type *arg)
 {
-    std::vector<const Type*> args1(0);
+    std::vector<Type*> args1(0);
     args1.push_back(arg);
     return FunctionType::get(ret, args1, false);
 }
 
-static FunctionType *ft2arg(const Type *ret, const Type *arg1,
-                            const Type *arg2)
+static FunctionType *ft2arg(Type *ret, Type *arg1, Type *arg2)
 {
-    std::vector<const Type*> args2(0);
+    std::vector<Type*> args2(0);
     args2.push_back(arg1);
     args2.push_back(arg2);
     return FunctionType::get(ret, args2, false);
@@ -796,7 +802,7 @@ extern "C" void jl_init_intrinsic_functions()
     box64_func = boxfunc_llvm(ft2arg(jl_pvalue_llvmt, jl_pvalue_llvmt, T_int64),
                               "jl_box64", (void*)*jl_box64);
 
-    std::vector<const Type*> toptrargs(0);
+    std::vector<Type*> toptrargs(0);
     toptrargs.push_back(jl_pvalue_llvmt);
     toptrargs.push_back(jl_pvalue_llvmt);
     toptrargs.push_back(T_int32);
@@ -810,7 +816,7 @@ extern "C" void jl_init_intrinsic_functions()
     temp_arg_area = (char*)allocb_permanent(arg_area_sz);
     arg_area_loc = 0;
 
-    std::vector<const Type*> noargs(0);
+    std::vector<Type*> noargs(0);
     save_arg_area_loc_func =
         Function::Create(FunctionType::get(T_uint64, noargs, false),
                          Function::ExternalLinkage, "save_arg_area_loc",
