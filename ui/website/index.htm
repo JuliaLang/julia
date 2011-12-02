@@ -195,7 +195,8 @@
                     var input = $("#terminal-input").val();
 
                     // input history
-                    input_history.push(input);
+                    if (input.replace(/^\s+|\s+$/g, '') != "")
+                        input_history.push(input);
                     if (input_history.length > input_history_size)
                         input_history = input_history.slice(input_history.length-input_history_size);
                     input_history_current = input_history.slice(0);

@@ -749,19 +749,23 @@ string get_response(request* req)
                     session_map[session_token].outbox.push_back(output_message);
                 }
 
-                // merge MSG_OUTPUT_OTHER messages
-                for (size_t i = 1; i < session_map[session_token].outbox.size(); i++)
+                // merge MSG_OUTPUT_OTHER messages and put them at the end
+                string output_other;
+                for (size_t i = 0; i < session_map[session_token].outbox.size(); i++)
                 {
-                    // MSG_OUTPUT_OTHER
                     if (session_map[session_token].outbox[i].type == MSG_OUTPUT_OTHER)
                     {
-                        if (session_map[session_token].outbox[i-1].type == MSG_OUTPUT_OTHER)
-                        {
-                            session_map[session_token].outbox[i-1].args[0] += session_map[session_token].outbox[i].args[0];
-                            session_map[session_token].outbox.erase(session_map[session_token].outbox.begin()+i);
-                            i--;
-                        }
+                        output_other += session_map[session_token].outbox[i].args[0];
+                        session_map[session_token].outbox.erase(session_map[session_token].outbox.begin()+i);
+                        i--;
                     }
+                }
+                if (output_other != "")
+                {
+                    message output_message;
+                    output_message.type = MSG_OUTPUT_OTHER;
+                    output_message.args.push_back(output_other);
+                    session_map[session_token].outbox.push_back(output_message);
                 }
             }
 
