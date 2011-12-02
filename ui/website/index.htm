@@ -150,6 +150,7 @@
                 $("#terminal").append(data);
 
                 // resize the input box (the -1 is for Internet Explorer)
+                // we do this here because a scrollbar might have appeared (which reduces the width of the terminal)
                 $("#terminal-input").width($("#terminal").width()-$("#prompt").width()-1);
 
                 // scroll to the new data
@@ -333,6 +334,91 @@
                         // focus the input field
                         $("#terminal-input").focus();
                     }
+
+                    // MSG_OUTPUT_PLOT
+                    if (data[id][0] == MSG_OUTPUT_PLOT)
+                    {
+                        // line plot
+                        if (data[id][1] == "line")
+                        {
+                            // get the data
+                            var x_data = $.parseJSON(data[id][2]);
+                            var y_data = $.parseJSON(data[id][3]);
+
+                            // get the bounds on the data
+                            var x_min = Math.min.apply(Math, x_data);
+                            var x_max = Math.max.apply(Math, x_data);
+                            var y_min = Math.min.apply(Math, y_data);
+                            var y_max = Math.max.apply(Math, y_data);
+
+                            // construct the data for D3
+                            var data = d3.range(x_data.length).map(function(i) {
+                                return {x: x_data[i], y: y_data[i]};
+                            });
+
+                            var w = 450,
+                                h = 275,
+                                p = 40,
+                                x = d3.scale.linear().domain([0, x_max]).range([0, w]),
+                                y = d3.scale.linear().domain([0, y_max]).range([h, 0]);
+
+                            var vis = d3.select("#terminal")
+                              .append("svg")
+                                .data([data])
+                                .attr("width", w + p * 2)
+                                .attr("height", h + p * 2)
+                              .append("g")
+                                .attr("transform", "translate(" + p + "," + p + ")");
+
+                            var rules = vis.selectAll("g.rule")
+                                .data(x.ticks(10))
+                              .enter().append("g")
+                                .attr("class", "rule");
+
+                            rules.append("line")
+                                .attr("x1", x)
+                                .attr("x2", x)
+                                .attr("y1", 0)
+                                .attr("y2", h - 1);
+
+                            rules.append("line")
+                                .attr("class", function(d) { return d ? null : "axis"; })
+                                .attr("y1", y)
+                                .attr("y2", y)
+                                .attr("x1", 0)
+                                .attr("x2", w + 1);
+
+                            rules.append("text")
+                                .attr("x", x)
+                                .attr("y", h + 3)
+                                .attr("dy", ".71em")
+                                .attr("text-anchor", "middle")
+                                .text(x.tickFormat(10));
+
+                            rules.append("text")
+                                .attr("y", y)
+                                .attr("x", -3)
+                                .attr("dy", ".35em")
+                                .attr("text-anchor", "end")
+                                .text(y.tickFormat(10));
+
+                            vis.append("path")
+                                .attr("class", "area")
+                                .attr("d", d3.svg.area()
+                                .x(function(d) { return x(d.x); })
+                                .y0(h - 1)
+                                .y1(function(d) { return y(d.y); }));
+
+                            vis.append("path")
+                                .attr("class", "line")
+                                .attr("d", d3.svg.line()
+                                .x(function(d) { return x(d.x); })
+                                .y(function(d) { return y(d.y); }));
+                            
+                            // scroll to the new plot
+                            $("#terminal-form").prop("scrollTop", $("#terminal-form").prop("scrollHeight"));
+                        }
+                    }
                 }
 
                 // send any remaining messages if there are any
@@ -405,82 +491,6 @@
                 // start polling the server
                 init_session();
             });
-        </script>
-        <script>
-            // called on page load
-            $(document).ready(function()
-            {
-                var data = d3.range(20).map(function(i) {
-                    return {x: i / 19, y: (Math.sin(i / 3) + 1) / 2};
-                });
-
-                var w = 450,
-                h = 275,
-                p = 20,
-                x = d3.scale.linear().domain([0, 1]).range([0, w]),
-                y = d3.scale.linear().domain([0, 1]).range([h, 0]);
-
-                var vis = d3.select("#left-column")
-                .append("svg")
-                .data([data])
-                .attr("width", w + p * 2)
-                .attr("height", h + p * 2)
-                .append("g")
-                .attr("transform", "translate(" + p + "," + p + ")");
-
-                var rules = vis.selectAll("g.rule")
-                .data(x.ticks(10))
-                .enter().append("g")
-                .attr("class", "rule");
-
-                rules.append("line")
-                .attr("x1", x)
-                .attr("x2", x)
-                .attr("y1", 0)
-                .attr("y2", h - 1);
-
-                rules.append("line")
-                .attr("class", function(d) { return d ? null : "axis"; })
-                .attr("y1", y)
-                .attr("y2", y)
-                .attr("x1", 0)
-                .attr("x2", w + 1);
-
-                rules.append("text")
-                .attr("x", x)
-                .attr("y", h + 3)
-                .attr("dy", ".71em")
-                .attr("text-anchor", "middle")
-                .text(x.tickFormat(10));
-
-                rules.append("text")
-                .attr("y", y)
-                .attr("x", -3)
-                .attr("dy", ".35em")
-                .attr("text-anchor", "end")
-                .text(y.tickFormat(10));
-
-                vis.append("path")
-                .attr("class", "area")
-                .attr("d", d3.svg.area()
-                .x(function(d) { return x(d.x); })
-                .y0(h - 1)
-                .y1(function(d) { return y(d.y); }));
-
-                vis.append("path")
-                .attr("class", "line")
-                .attr("d", d3.svg.line()
-                .x(function(d) { return x(d.x); })
-                .y(function(d) { return y(d.y); }));
-
-                vis.selectAll("circle.area")
-                .data(data)
-                .enter().append("circle")
-                .attr("class", "area")
-                .attr("cx", function(d) { return x(d.x); })
-                .attr("cy", function(d) { return y(d.y); })
-                .attr("r", 3.5);
-            }
         </script>
     </head>
     <body>

@@ -237,21 +237,17 @@ span.prompt
 }
 
 .rule line.axis {
-  stroke: #000;
+  stroke: #444;
 }
 
 .area {
   fill: lightsteelblue;
 }
 
-.line, circle.area {
+.line {
   fill: none;
   stroke: steelblue;
   stroke-width: 1.5px;
-}
-
-circle.area {
-  fill: #fff;
 }
 
 /* for Internet Explorer */

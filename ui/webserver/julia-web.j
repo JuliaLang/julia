@@ -88,8 +88,15 @@ end
 # plotting functions
 ###########################################
 
-function line_plot(data)
-    __write_message(__Message(MSG_OUTPUT_PLOT, {"line", print_to_string(show, data)}))
+# basic 2-D plotting function
+function line_plot(x::Array{Float64, 1}, y::Array{Float64, 1})
+    # make sure there are the same number of x and y coordinates
+    if length(x) != length(y)
+        return error("size of x and y arrays must be equal")
+    end
+
+    # make the plot
+    __write_message(__Message(__MSG_OUTPUT_PLOT, {"line", print_to_string(show, x), print_to_string(show, y)}))
 end
 
 ###########################################
