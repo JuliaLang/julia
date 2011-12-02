@@ -100,6 +100,9 @@
             // a queue of messages to be sent to the server
             var outbox_queue = [];
 
+            // keep track of whether we have received a fatal message
+            var dead = false;
+
             // jQuery extension to insert text into an input/textarea at the cursor position
             // (used to indent when the user presses the tab key)
             jQuery.fn.extend({
@@ -184,6 +187,10 @@
             // called when the server has responded
             function callback(data, textStatus, jqXHR)
             {
+                // if we are dead, don't keep polling the server
+                if (dead)
+                    return;
+
                 // MSG_OUTPUT_NULL
                 if (data.message_type == MSG_OUTPUT_NULL)
                 {
@@ -221,6 +228,7 @@
                 if (data.message_type == MSG_OUTPUT_FATAL_ERROR)
                 {
                     add_to_terminal("<span class=\"error\">"+escape_html(data.arg0)+"</span><br /><br />");
+                    dead = true;
                     return;
                 }
 
