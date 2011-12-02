@@ -89,7 +89,7 @@ end
 ###########################################
 
 # number of points to plot for functions
-__PLOT_POINTS = 100
+__PLOT_POINTS = 200
 
 # basic 2-D plotting function for arrays (window determined manually)
 function plot(x, y, xmin, xmax, ymin, ymax)
