@@ -12,7 +12,8 @@ FLISP = $(FLISPDIR)/libflisp.a
 
 FLAGS = -Wall -Wno-strict-aliasing -fno-omit-frame-pointer \
 	-I$(FLISPDIR) -I$(SUPPORTDIR) -fvisibility=hidden -fno-common \
-	-I$(shell $(LLVMROOT)/bin/llvm-config --includedir)
+	-I$(shell $(LLVMROOT)/bin/llvm-config --includedir) \
+	-I$(EXTROOT)/include
 DEBUGFLAGS += $(FLAGS)
 SHIPFLAGS += $(FLAGS)
 
