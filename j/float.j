@@ -164,7 +164,4 @@ sizeof(::Type{Float64}) = 8
 
 ## mathematical constants ##
 
-pi() = 3.14159265358979323846
-pi(x) = pi()
-pi(::Union(Float64, Type{Float64})) = 3.14159265358979323846
-pi(::Union(Float32, Type{Float32})) = float32(3.14159265358979323846)
+const pi = 3.14159265358979323846

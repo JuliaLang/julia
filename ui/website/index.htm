@@ -60,7 +60,7 @@
                 Network Protol
 
                 This needs to match the message
-                types listed in message_types.h.
+                types listed in ui/webserver/message_types.h.
             */
 
             // input messages (to julia)
@@ -383,11 +383,11 @@
                                 .attr("y2", h - 1);
 
                             vrules.append("text")
-                                .attr("class", "ticktext")
                                 .attr("x", x)
                                 .attr("y", h + 10)
                                 .attr("dy", ".71em")
                                 .attr("text-anchor", "middle")
+                                .attr("fill", "#444444")
                                 .text(x.tickFormat(10));
 
                             var hrules = vis.selectAll("g.hrule")
@@ -403,11 +403,11 @@
                                 .attr("x2", w + 1);
 
                             hrules.append("text")
-                                .attr("class", "ticktext")
                                 .attr("y", y)
                                 .attr("x", -5)
                                 .attr("dy", ".35em")
                                 .attr("text-anchor", "end")
+                                .attr("fill", "#444444")
                                 .text(y.tickFormat(10));
 
                             vis.append("path")
@@ -438,8 +438,18 @@
                 // hide the textarea in case the browser decides to pre-populate it
                 $("#terminal-input").hide();
 
-                // hook mouse click events
-                $("#terminal-form").click(function(evt) { $("#terminal-input").focus(); } );
+                // record the cursor position when the user clicks anywhere
+                var mouse_x, mouse_y;
+                $(window).mousedown(function(evt) {
+                    mouse_x = evt.pageX;
+                    mouse_y = evt.pageY;
+                });
+
+                // focus the terminal input when the user clicks on the terminal (but not drags)
+                $("#terminal-form").click(function(evt) {
+                    if ((mouse_x-evt.pageX)*(mouse_x-evt.pageX)+(mouse_y == evt.pageY)*(mouse_y == evt.pageY) < 4)
+                        $("#terminal-input").focus();
+                });
 
                 // hook keyboard events for the input field
                 $("#terminal-input").keydown(function(evt)
@@ -501,7 +511,7 @@
         <div id="header-bar">
             <header>
                 <a href="/"><img id="logo" src="images/logo.png" alt="Julia" /></a>
-                <img id="slogan" src="images/slogan.png" alt="A fresh approach to technical computing" />
+                <img id="slogan" src="images/slogan.png" alt="Julia - A fresh approach to technical computing" />
                 <div class="float-clear"> </div>
             </header>
         </div>
@@ -525,7 +535,6 @@
                 <a href="http://web.mit.edu/"><img id="mit-logo" src="images/mit_logo.png" alt="MIT Logo" /></a>
                 <div style="text-align: center">
                     <p style="margin-top: 15px;">A <span class="strong">fresh</span> approach to <span class="strong">technical computing.</span></p>
-                    <p>Copyright &copy; 2011 Alan Edelman, Jeff Bezanson, et al.</p>
                 </div>
                 <div class="float-clear"> </div>
             </footer>

@@ -145,13 +145,13 @@ function plot(y)
     # make the plot
     ymin = min(y)
     ymax = max(y)
-    plot([float64(i)/length(y) | i=1:length(y)], y, 0, 1, ymin-(ymax-ymin)*0.05, ymax+(ymax-ymin)*0.05)
+    plot([float64(i-1)/(length(y)-1) | i=1:length(y)], y, 0, 1, ymin-(ymax-ymin)*0.05, ymax+(ymax-ymin)*0.05)
 end
 
 # plot a function (vertical window determined automatically)
 function plot(f, xmin, xmax)
     # make the range
-    x = [xmin+float64(i)*xmax/__PLOT_POINTS | i=1:__PLOT_POINTS]
+    x = [xmin+float64(i-1)*xmax/(__PLOT_POINTS-1) | i=1:__PLOT_POINTS]
     y = [f(i) | i=x]
 
     # make the plot
@@ -161,7 +161,7 @@ end
 # plot a function (window determined manually)
 function plot(f, xmin, xmax, ymin, ymax)
     # make the range
-    x = [xmin+float64(i)*xmax/__PLOT_POINTS | i=1:__PLOT_POINTS]
+    x = [xmin+float64(i-1)*xmax/(__PLOT_POINTS-1) | i=1:__PLOT_POINTS]
     y = [f(i) | i=x]
 
     # make the plot
