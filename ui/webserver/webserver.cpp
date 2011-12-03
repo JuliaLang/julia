@@ -44,7 +44,7 @@ template <class T> T from_string(const std::string& t)
 class message
 {
 public:
-    // see julia-web.j for documentation
+    // see ui/webserver/julia_web_base.j for documentation
     uint8_t type;
     vector<string> args;
 };
@@ -623,7 +623,7 @@ string create_session(bool idle)
         close(session_data.julia_out[1]);
 
         // acutally spawn julia instance
-        execl("./julia", "julia", "./ui/webserver/julia-web.j", (char*)0);
+        execl("./julia", "julia", "./ui/webserver/julia_web_base.j", (char*)0);
 
         // if exec failed, terminate with an error
         exit(1);
