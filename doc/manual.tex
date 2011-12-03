@@ -1735,8 +1735,8 @@ The behavior is found in most imperative programming languages having the \verb|
 in a series of boolean expressions connected by these operators, only the minimum number of expressions are evaluated as are necessary to determine the final boolean value of the entire chain.
 Explicitly, this means that:
 \begin{itemize}
-  \item In the expression \emph{a} \verb|&&| \emph{b}, the subexpression \emph{b} is only evaluated if \emph{a} evaluates to \verb|false|.
-  \item In the expression \emph{a} \texttt{||} \emph{b}, the subexpression \emph{b} is only evaluated if \emph{a} evaluates to \verb|true|.
+  \item In the expression \emph{a} \verb|&&| \emph{b}, the subexpression \emph{b} is only evaluated if \emph{a} evaluates to \verb|true|.
+  \item In the expression \emph{a} \texttt{||} \emph{b}, the subexpression \emph{b} is only evaluated if \emph{a} evaluates to \verb|false|.
 \end{itemize}
 The reasoning is that \emph{a} \verb|&&| \emph{b} must be \verb|false| if \emph{a} is \verb|false|, regardless of the value of \emph{b}, and likewise, the value of \emph{a} \texttt{||} \emph{b} must be true if \emph{a} is \verb|true|, regardless of the value of \emph{b}.
 Both \verb|&&| and \texttt{||} associate to the right, but \verb|&&| has higher precedence than than \texttt{||} does.
