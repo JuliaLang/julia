@@ -658,7 +658,7 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
         return builder.
             CreateCall2(Intrinsic::getDeclaration(jl_Module,
                                                   Intrinsic::powi,
-                                                  ArrayRef<Type*>(fxt)),
+                                                  ArrayRef<Type*>(fxts)),
                         fx, fy);
     HANDLE(abs_float32,1)
     {
