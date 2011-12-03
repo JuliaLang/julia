@@ -58,9 +58,6 @@ complex128(r::Real, i::Real) = complex128(float64(r),float64(i))
 real(c::Complex128) = boxf64(trunc64(unbox(Complex128,c)))
 imag(c::Complex128) = boxf64(trunc64(ashr_int(unbox(Complex128,c), 64)))
 
-pi(z::Complex128) = pi(Float64)
-pi(::Type{Complex128}) = pi(Float64)
-
 convert(::Type{Complex128}, x::Real) = complex128(x,zero(x))
 convert(::Type{Complex128}, z::Complex) = complex128(real(z),imag(z))
 
@@ -94,9 +91,6 @@ complex64(r::Real, i::Real) = complex64(float32(r),float32(i))
 
 real(c::Complex64) = boxf32(trunc32(unbox(Complex64,c)))
 imag(c::Complex64) = boxf32(trunc32(ashr_int(unbox(Complex64,c), 32)))
-
-pi(z::Complex64) = pi(Float32)
-pi(::Type{Complex64}) = pi(Float32)
 
 convert(::Type{Complex64}, x::Real) = complex64(x,zero(x))
 convert(::Type{Complex64}, z::Complex) = complex64(real(z),imag(z))
@@ -163,9 +157,6 @@ promote_rule{T<:Real}(::Type{ComplexPair{T}}, ::Type{Complex64}) =
 
 complex(x, y) = ComplexPair(x, y)
 complex(x) = ComplexPair(x)
-
-pi{T}(z::ComplexPair{T}) = pi(T)
-pi{T}(::Type{ComplexPair{T}}) = pi(T)
 
 
 ## singleton type for imaginary unit constant ##
