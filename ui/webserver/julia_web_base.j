@@ -10,8 +10,10 @@
 
 ###### the server<-->browser protocol #####
 
-# messages are sent as json arrays
-# [message_type:number, arg0:string, arg1:string, ...]
+# messages are sent as arrays of arrays (json)
+# the outer array is an "array of messages"
+# each message is itself an array:
+# [message_type::number, arg0::string, arg1::string, ...]
 
 # import the message types
 load("./ui/webserver/message_types.h")
@@ -85,88 +87,11 @@ function __print_message(msg)
 end
 
 ###########################################
-# plotting functions
+# standard web library
 ###########################################
 
-# number of points to plot for functions
-__PLOT_POINTS = 200
-
-# plot an array (window determined manually)
-function plot(x, y, xmin, xmax, ymin, ymax)
-    # make sure there are the same number of x and y coordinates
-    if length(x) != length(y)
-        return error("size of x and y arrays must be equal")
-    end
-
-    # make sure there is enough data to plot
-    if length(x) < 1
-        return error("at least two data points required for plot")
-    end
-
-    # make the plot
-    __write_message(__Message(__MSG_OUTPUT_PLOT, {
-        "line",
-        strcat("[", join([string(float64(i)) | i=x], ","), "]"),
-        strcat("[", join([string(float64(i)) | i=y], ","), "]"),
-        string(float64(xmin)),
-        string(float64(xmax)),
-        string(float64(ymin)),
-        string(float64(ymax))
-    }))
-end
-
-# plot an array (window determined automatically)
-function plot(x, y)
-    # make sure there are the same number of x and y coordinates
-    if length(x) != length(y)
-        return error("size of x and y arrays must be equal")
-    end
-
-    # make sure there is enough data to plot
-    if length(x) < 1
-        return error("at least two data points required for plot")
-    end
-
-    # make the plot
-    xmin = min(x)
-    xmax = max(x)
-    ymin = min(y)
-    ymax = max(y)
-    plot(x, y, xmin, xmax, ymin-(ymax-ymin)*0.05, ymax+(ymax-ymin)*0.05)
-end
-
-# plot an array (window determined automatically)
-function plot(y)
-    # make sure there is enough data to plot
-    if length(y) < 1
-        return error("at least two data points required for plot")
-    end
-
-    # make the plot
-    ymin = min(y)
-    ymax = max(y)
-    plot([float64(i-1)/(length(y)-1) | i=1:length(y)], y, 0, 1, ymin-(ymax-ymin)*0.05, ymax+(ymax-ymin)*0.05)
-end
-
-# plot a function (vertical window determined automatically)
-function plot(f, xmin, xmax)
-    # make the range
-    x = [xmin+float64(i-1)*xmax/(__PLOT_POINTS-1) | i=1:__PLOT_POINTS]
-    y = [f(i) | i=x]
-
-    # make the plot
-    plot(x, y)
-end
-
-# plot a function (window determined manually)
-function plot(f, xmin, xmax, ymin, ymax)
-    # make the range
-    x = [xmin+float64(i-1)*xmax/(__PLOT_POINTS-1) | i=1:__PLOT_POINTS]
-    y = [f(i) | i=x]
-
-    # make the plot
-    plot(x, y, xmin, xmax, ymin, ymax)
-end
+# load the special functions available to the web repl
+load("./ui/webserver/julia_web.j")
 
 ###########################################
 # input event handler

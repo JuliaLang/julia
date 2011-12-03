@@ -37,30 +37,6 @@ div#main
     margin-right: auto;
 }
 
-div#footer-bar
-{
-    position: relative; /* make this appear above everything */
-    width: 100%;
-    min-width: 960px;
-    height: 80px;
-    bottom: 0px;
-    border-top: 1px solid #3e3e3e;
-    border-bottom: 1px solid #090909;
-    font-size: 80%;
-    color: #bbbbbb;
-    background: #1c1c1c url('images/footer.png') repeat-x left top;
-    -moz-box-shadow: 0px 0px 20px #888888;
-    -webkit-box-shadow: 0px 0px 20px #888888;
-    box-shadow: 0px 0px 20px #888888;
-}
-
-footer
-{
-    width: 960px;
-    margin-left: auto;
-    margin-right: auto;
-}
-
 div#left-column
 {
     width: 189px;
@@ -237,7 +213,7 @@ span.prompt
 }
 
 .hrule line.axis {
-  stroke: #444;
+  stroke: #aaa;
 }
 
 .vrule line {
@@ -246,7 +222,7 @@ span.prompt
 }
 
 .vrule line.axis {
-  stroke: #444;
+  stroke: #aaa;
 }
 
 .line {
