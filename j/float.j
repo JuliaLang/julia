@@ -116,8 +116,8 @@ isequal{T<:Float}(x::T, y::T) = (x == y) || (isnan(x) && isnan(y))
 
 ## floating point traits ##
 
-const Inf32 = boxf32(unbox32(0x7f800000))
-const NaN32 = boxf32(unbox32(0x7fc00000))
+const Inf32 = boxf32(unbox32(uint32(0x7f800000)))
+const NaN32 = boxf32(unbox32(uint32(0x7fc00000)))
 const Inf = boxf64(unbox64(0x7ff0000000000000))
 const NaN = boxf64(unbox64(0x7ff8000000000000))
 
