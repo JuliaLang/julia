@@ -32,7 +32,7 @@ namespace JL_I {
         uitofp32, sitofp32, uitofp64, sitofp64,
         fptrunc32, fpext64,
         // functions
-        sqrt_float, powi_float, pow_float, abs_float32, abs_float64,
+        sqrt_float, abs_float32, abs_float64,
         copysign_float32, copysign_float64,
         // c interface
         ccall,
@@ -273,7 +273,6 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
     Value *x = emit_unboxed(args[1], ctx);
     Type *t = x->getType();
     Type *fxt;
-    Type *fxts[2];
     Value *fx, *fy;
     Value *den;
     ConstantInt *ci=NULL;
@@ -637,29 +636,6 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
                                                  Intrinsic::sqrt,
                                                  ArrayRef<Type*>(fxt)),
                        fx);
-    HANDLE(pow_float,2)
-        fx = FP(x);
-        fy = FP(emit_expr(args[2],ctx,true));
-        fxts[0] = fx->getType(); fxts[1] = fy->getType();
-        if (fxts[0] != fxts[1] ||
-            !fxts[0]->isFloatingPointTy() || !fxts[1]->isFloatingPointTy())
-            jl_error("invalid arguments to pow_float");
-        return builder.
-            CreateCall2(Intrinsic::getDeclaration(jl_Module,
-                                                  Intrinsic::pow,
-                                                  ArrayRef<Type*>(fxts)),
-                        fx, fy);
-    HANDLE(powi_float,2)
-        fx = FP(x);
-        fy = emit_expr(args[2],ctx,true);
-        fxts[0] = fx->getType(); fxts[1] = fy->getType();
-        if (!fxts[0]->isFloatingPointTy() || fxts[1] != T_int32)
-            jl_error("invalid arguments to powi_float");
-        return builder.
-            CreateCall2(Intrinsic::getDeclaration(jl_Module,
-                                                  Intrinsic::powi,
-                                                  ArrayRef<Type*>(fxts)),
-                        fx, fy);
     HANDLE(abs_float32,1)
     {
         Value *bits = builder.CreateBitCast(x, T_int32);
@@ -781,7 +757,7 @@ extern "C" void jl_init_intrinsic_functions()
     ADD_I(fpuiround32); ADD_I(fpuiround64);
     ADD_I(uitofp32); ADD_I(sitofp32); ADD_I(uitofp64); ADD_I(sitofp64);
     ADD_I(fptrunc32); ADD_I(fpext64);
-    ADD_I(sqrt_float); ADD_I(powi_float); ADD_I(pow_float);
+    ADD_I(sqrt_float);
     ADD_I(abs_float32); ADD_I(abs_float64);
     ADD_I(copysign_float32); ADD_I(copysign_float64);
     ADD_I(ccall);

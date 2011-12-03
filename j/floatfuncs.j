@@ -40,8 +40,6 @@ cmp(x::Float, y::Float) = sign(x-y)
 
 #sqrt(x::Float64) = boxf64(sqrt_float(unbox64(x)))
 #sqrt(x::Float32) = boxf32(sqrt_float(unbox32(x)))
-^(x::Float64, p::Int32) = boxf64(powi_float(unbox64(x),unbox32(p)))
-^(x::Float32, p::Int32) = boxf32(powi_float(unbox32(x),unbox32(p)))
 
 sqrt(x::Real) = sqrt(float(x))
 sin(x::Real) = sin(float(x))
