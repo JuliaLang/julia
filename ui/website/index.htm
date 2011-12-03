@@ -41,6 +41,10 @@
                 set_outer_height("#right-column", min_content_height+padding);
                 set_outer_height("#main", min_content_height+padding);
                 set_outer_height("#terminal-form", min_content_height+padding-40);
+
+                // resize the input box (the -1 is for Internet Explorer)
+                // we do this here because a scrollbar might have appeared (which reduces the width of the terminal)
+                $("#terminal-input").width($("#terminal").width()-$("#prompt").width()-1);
             }
             
             // called on page load
@@ -188,7 +192,7 @@
                 if (dead)
                     return;
 
-                for (id in data)
+                for (var id in data)
                 {
                     // MSG_OUTPUT_NULL
                     if (data[id][0] == MSG_OUTPUT_NULL)
@@ -376,11 +380,22 @@
                               .enter().append("g")
                                 .attr("class", "vrule");
 
+                            var hrules = vis.selectAll("g.hrule")
+                                .data(y.ticks(8))
+                              .enter().append("g")
+                                .attr("class", "hrule");
+
                             vrules.append("line")
                                 .attr("x1", x)
                                 .attr("x2", x)
                                 .attr("y1", 0)
                                 .attr("y2", h - 1);
+
+                            hrules.append("line")
+                                .attr("y1", y)
+                                .attr("y2", y)
+                                .attr("x1", 0)
+                                .attr("x2", w + 1);
 
                             vrules.append("text")
                                 .attr("x", x)
@@ -390,18 +405,6 @@
                                 .attr("fill", "#444444")
                                 .text(x.tickFormat(10));
 
-                            var hrules = vis.selectAll("g.hrule")
-                                .data(y.ticks(8))
-                              .enter().append("g")
-                                .attr("class", "hrule");
-
-                            hrules.append("line")
-                                .attr("class", function(d) { return d ? null : "axis"; })
-                                .attr("y1", y)
-                                .attr("y2", y)
-                                .attr("x1", 0)
-                                .attr("x2", w + 1);
-
                             hrules.append("text")
                                 .attr("y", y)
                                 .attr("x", -5)
@@ -409,6 +412,20 @@
                                 .attr("text-anchor", "end")
                                 .attr("fill", "#444444")
                                 .text(y.tickFormat(10));
+                            
+                            vrules.filter(function(d) { return (d == 0); }).append("line")
+                                .attr("class", "axis")
+                                .attr("x1", x)
+                                .attr("x2", x)
+                                .attr("y1", 0)
+                                .attr("y2", h - 1);
+                            
+                            hrules.filter(function(d) { return (d == 0); }).append("line")
+                                .attr("class", "axis")
+                                .attr("y1", y)
+                                .attr("y2", y)
+                                .attr("x1", 0)
+                                .attr("x2", w + 1);
 
                             vis.append("path")
                                 .attr("class", "line")

@@ -237,7 +237,7 @@ span.prompt
 }
 
 .hrule line.axis {
-  stroke: #444;
+  stroke: #aaa;
 }
 
 .vrule line {
@@ -246,7 +246,7 @@ span.prompt
 }
 
 .vrule line.axis {
-  stroke: #444;
+  stroke: #aaa;
 }
 
 .line {

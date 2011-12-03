@@ -89,7 +89,10 @@ end
 ###########################################
 
 # number of points to plot for functions
-__PLOT_POINTS = 200
+__PLOT_POINTS = 450
+
+# the aspect ratio of plots
+__PLOT_ASPECT_RATIO = 1.95
 
 # plot an array (window determined manually)
 function plot(x, y, xmin, xmax, ymin, ymax)
@@ -132,7 +135,14 @@ function plot(x, y)
     xmax = max(x)
     ymin = min(y)
     ymax = max(y)
-    plot(x, y, xmin, xmax, ymin-(ymax-ymin)*0.05, ymax+(ymax-ymin)*0.05)
+    if abs((ymax-ymin)/(xmax-xmin)-1) < 0.05
+        cx = (xmax+xmin)/2.0
+        cy = (ymax+ymin)/2.0
+        w = (ymax-ymin)/1.95
+        plot(x, y, cx-w*__PLOT_ASPECT_RATIO, cx+w*__PLOT_ASPECT_RATIO, cy-w, cy+w)
+    else
+        plot(x, y, xmin, xmax, ymin-(ymax-ymin)*0.05, ymax+(ymax-ymin)*0.05)
+    end
 end
 
 # plot an array (window determined automatically)
@@ -143,9 +153,20 @@ function plot(y)
     end
 
     # make the plot
+    x = [float64(i-1)/(length(y)-1) | i=1:length(y)]
+    xmin = 0.0
+    xmax = 1.0
     ymin = min(y)
     ymax = max(y)
-    plot([float64(i-1)/(length(y)-1) | i=1:length(y)], y, 0, 1, ymin-(ymax-ymin)*0.05, ymax+(ymax-ymin)*0.05)
+    plot(x, y, 0, 1, ymin-(ymax-ymin)*0.05, ymax+(ymax-ymin)*0.05)
+    if abs((ymax-ymin)/(xmax-xmin)-1) < 0.05
+        cx = (xmax+xmin)/2.0
+        cy = (ymax+ymin)/2.0
+        w = (ymax-ymin)/1.95
+        plot(x, y, cx-w*__PLOT_ASPECT_RATIO, cx+w*__PLOT_ASPECT_RATIO, cy-w, cy+w)
+    else
+        plot(x, y, xmin, xmax, ymin-(ymax-ymin)*0.05, ymax+(ymax-ymin)*0.05)
+    end
 end
 
 # plot a function (vertical window determined automatically)
