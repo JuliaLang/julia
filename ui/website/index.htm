@@ -13,11 +13,8 @@
         <script type="text/javascript" src="d3.js"></script>
         <script>
             /*
-                Some stuff to make the two columns extend to the footer.
+                Some stuff to make the two columns extend to the bottom of the page.
             */
-
-            // keep track of the minimum height of the content (the height of the longest column)
-            var min_content_height;
 
             // set the outer height of an element or group of elements
             function set_outer_height(selector, height)
@@ -29,32 +26,18 @@
             // this function makes all of the columns the same height
             function set_column_heights() {
                 // set the height of all the columns to the height of the longest one
-                set_outer_height("#left-column", min_content_height);
-                set_outer_height("#right-column", min_content_height);
-                set_outer_height("#main", min_content_height);
+                set_outer_height("#left-column", $(window).height()-$("#left-column").offset().top);
+                set_outer_height("#right-column", $(window).height()-$("#right-column").offset().top);
+                set_outer_height("#main", $(window).height()-$("#main").offset().top);
+                set_outer_height("#terminal-form", $(window).height()-$("#terminal-form").offset().top-20);
                 
-                // calculate how much taller the columns should be so the footer is at the bottom of the window
-                var padding = Math.max($(window).height()-($("#footer-bar").offset().top+$("#footer-bar").outerHeight(true)), 0);
-                
-                // make the columns taller so the footer is on the bottom of the page
-                set_outer_height("#left-column", min_content_height+padding);
-                set_outer_height("#right-column", min_content_height+padding);
-                set_outer_height("#main", min_content_height+padding);
-                set_outer_height("#terminal-form", min_content_height+padding-40);
-
                 // resize the input box (the -1 is for Internet Explorer)
                 // we do this here because a scrollbar might have appeared (which reduces the width of the terminal)
                 $("#terminal-input").width($("#terminal").width()-$("#prompt").width()-1);
             }
             
             // called on page load
-            window.onload = function() {
-                // calculate the height of the longest column
-                min_content_height = Math.max($("div#left-column").outerHeight(true), $("div#right-column").outerHeight(true));
-                
-                // set the height of the columns appropriately
-                set_column_heights();
-            };
+            window.onload = set_column_heights;
             
             // set the window resize callback
             window.onresize = set_column_heights;
@@ -546,15 +529,6 @@
                 </form>
             </div>
             <div class="float-clear"> </div>
-        </div>
-        <div id="footer-bar">
-            <footer>
-                <a href="http://web.mit.edu/"><img id="mit-logo" src="images/mit_logo.png" alt="MIT Logo" /></a>
-                <div style="text-align: center">
-                    <p style="margin-top: 15px;">A <span class="strong">fresh</span> approach to <span class="strong">technical computing.</span></p>
-                </div>
-                <div class="float-clear"> </div>
-            </footer>
         </div>
     </body>
 </html>
