@@ -330,14 +330,14 @@
                         if (data[id][1] == "line")
                         {
                             // get the data
-                            var x_data = $.parseJSON(data[id][2]);
-                            var y_data = $.parseJSON(data[id][3]);
+                            var x_data = eval(data[id][2]);
+                            var y_data = eval(data[id][3]);
 
                             // get the bounds on the data
-                            var x_min = $.parseJSON(data[id][4]);
-                            var x_max = $.parseJSON(data[id][5]);
-                            var y_min = $.parseJSON(data[id][6]);
-                            var y_max = $.parseJSON(data[id][7]);
+                            var x_min = eval(data[id][4]);
+                            var x_max = eval(data[id][5]);
+                            var y_min = eval(data[id][6]);
+                            var y_max = eval(data[id][7]);
 
                             // construct the data for D3
                             var data = d3.range(x_data.length).map(function(i) {
@@ -348,7 +348,9 @@
                                 h = 275,
                                 p = 40,
                                 x = d3.scale.linear().domain([x_min, x_max]).range([0, w]),
-                                y = d3.scale.linear().domain([y_min-(y_max-y_min)*0.1, y_max+(y_max-y_min)*0.1]).range([h, 0]);
+                                y = d3.scale.linear().domain([y_min-(y_max-y_min)*0.1, y_max+(y_max-y_min)*0.1]).range([h, 0]),
+                                xticks = x.ticks(8),
+                                yticks = y.ticks(8);
 
                             var vis = d3.select("#terminal")
                               .append("svg")
@@ -359,22 +361,22 @@
                                 .attr("transform", "translate("+String(p)+","+String(p)+")");
 
                             var vrules = vis.selectAll("g.vrule")
-                                .data(x.ticks(10))
+                                .data(xticks)
                               .enter().append("g")
                                 .attr("class", "vrule");
 
                             var hrules = vis.selectAll("g.hrule")
-                                .data(y.ticks(8))
+                                .data(yticks)
                               .enter().append("g")
                                 .attr("class", "hrule");
 
-                            vrules.append("line")
+                            vrules.filter(function(d) { return (d != 0); }).append("line")
                                 .attr("x1", x)
                                 .attr("x2", x)
                                 .attr("y1", 0)
                                 .attr("y2", h - 1);
 
-                            hrules.append("line")
+                            hrules.filter(function(d) { return (d != 0); }).append("line")
                                 .attr("y1", y)
                                 .attr("y2", y)
                                 .attr("x1", 0)
@@ -395,15 +397,25 @@
                                 .attr("text-anchor", "end")
                                 .attr("fill", "#444444")
                                 .text(y.tickFormat(10));
+
+                            var vrules2 = vis.selectAll("g.vrule2")
+                                .data(xticks)
+                              .enter().append("g")
+                                .attr("class", "vrule2");
+
+                            var hrules2 = vis.selectAll("g.hrule2")
+                                .data(yticks)
+                              .enter().append("g")
+                                .attr("class", "hrule2");
                             
-                            vrules.filter(function(d) { return (d == 0); }).append("line")
+                            vrules2.filter(function(d) { return (d == 0); }).append("line")
                                 .attr("class", "axis")
                                 .attr("x1", x)
                                 .attr("x2", x)
                                 .attr("y1", 0)
                                 .attr("y2", h - 1);
                             
-                            hrules.filter(function(d) { return (d == 0); }).append("line")
+                            hrules2.filter(function(d) { return (d == 0); }).append("line")
                                 .attr("class", "axis")
                                 .attr("y1", y)
                                 .attr("y2", y)

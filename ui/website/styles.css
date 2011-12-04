@@ -212,8 +212,9 @@ span.prompt
   shape-rendering: crispEdges;
 }
 
-.hrule line.axis {
+.hrule2 line.axis {
   stroke: #aaa;
+  shape-rendering: crispEdges;
 }
 
 .vrule line {
@@ -221,8 +222,9 @@ span.prompt
   shape-rendering: crispEdges;
 }
 
-.vrule line.axis {
+.vrule2 line.axis {
   stroke: #aaa;
+  shape-rendering: crispEdges;
 }
 
 .line {
