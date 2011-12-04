@@ -242,6 +242,12 @@ darray(T::Type, args...)     = darray((T,lsz,da)->Array(T,lsz), T, args...)
 darray(dims::Dims, args...)  = darray((T,lsz,da)->Array(T,lsz), dims, args...)
 darray(dims::Size...)        = darray((T,lsz,da)->Array(T,lsz), dims)
 
+# construct a DArray as a function of each block of another
+function darray(f::Function, A::SubOrDArray)
+    darray((T,lsz,da)->f(localize(A, da)),
+           eltype(A), size(A), distdim(A), procs(A))
+end
+
 similar(d::DArray, T::Type, dims::Dims) =
     darray((T,lsz,da)->Array(T,lsz), T, dims,
            d.distdim>length(dims) ? maxdim(dims) : d.distdim, d.pmap)
@@ -758,18 +764,9 @@ end # macro
 @binary_darray_op (|)
 @binary_darray_op ($)
 
-macro unary_darray_op(f)
-    quote
-        function ($f){T}(A::SubOrDArray{T})
-            darray((T,lsz,da)->($f)(localize(A, da)),
-                   T, size(A), distdim(A), procs(A))
-        end
-    end # quote
-end # macro
-
-@unary_darray_op (-)
-@unary_darray_op (~)
-@unary_darray_op (conj)
+-(A::SubOrDArray) = darray(-, A)
+~(A::SubOrDArray) = darray(~, A)
+conj(A::SubOrDArray) = darray(conj, A)
 
 macro unary_darray_c2r_op(f)
     quote

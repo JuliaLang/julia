@@ -911,3 +911,5 @@ julia> @benchmark 2 begin
                 fetch(b)[1:1000,:] + c
               end Any;
 elapsed time: 0.15899491310119629 seconds
+
+#assign{K,V}(h::HashTable{K,V}, v, k) = assign(h, convert(V,v), convert(K,k))
