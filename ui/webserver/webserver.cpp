@@ -660,7 +660,12 @@ string create_session(bool idle)
 
     // print the number of open sessions
     if (session_map.size() == 1)
-        cout<<session_map.size()<<" open session.\n";
+    {
+        if (idle)
+            cout<<"1 open session [idle].\n";
+        else
+            cout<<"1 open session.\n";
+    }
     else
         cout<<session_map.size()<<" open sessions.\n";
     
@@ -736,6 +741,7 @@ string get_response(request* req)
                                 (iter->second).update_time = time(0);
                                 (iter->second).is_idle = false;
                                 found_idle_session = true;
+                                cout<<"1 open session.\n";
                                 break;
                             }
                         }
