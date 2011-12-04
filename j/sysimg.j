@@ -114,8 +114,9 @@ load("signal.j")
 # random number generation
 load("random.j")
 
-# utilities - timing, help, edit
+# utilities - timing, help, edit, import/export
 load("util.j")
+load("datafmt.j")
 
 # version information
 load("version.j")

@@ -350,17 +350,3 @@ function readlines(s, fx::Function...)
     end
     return a
 end
-
-## file formats ##
-
-load_ascii_array(f::String, nr, nc) = load_ascii_array(open(f), nr, nc)
-function load_ascii_array(f, nr, nc)
-    a = Array(Float64, (long(nr), long(nc)))
-    for i=1:nr
-        row = split(readline(f), (' ','\t'), false)
-        for j=1:nc
-            a[i,j] = float64(row[j])
-        end
-    end
-    return a
-end
