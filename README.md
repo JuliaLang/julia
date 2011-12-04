@@ -183,7 +183,6 @@ On Ubuntu, you may also need to install the package `libncurses5-dev`.
 
     attic/         old, now-unused code
     contrib/       emacs and textmate support for julia
-    doc/           miscellaneous documentation and notes
     examples/      example julia programs
     external/      external dependencies
     install/       used for creating binary installs
