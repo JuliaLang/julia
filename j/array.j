@@ -54,11 +54,15 @@ jl_comprehension_zeros{T,n}(oneresult::AbstractArray{T,n}, dims...) = Array(T, d
 jl_comprehension_zeros{T}(oneresult::T, dims...) = Array(T, dims...)
 jl_comprehension_zeros(oneresult::(), dims...) = Array(None, dims...)
 
-similar(a::Array, T::Type, dims::Dims) = Array(T, dims)
-similar{T}(a::Array{T,1}) = Array(T, size(a,1))
-similar{T}(a::Array{T,2}) = Array(T, size(a,1), size(a,2))
-similar{T}(a::Array{T,1}, S::Type) = Array(S, size(a,1))
-similar{T}(a::Array{T,2}, S::Type) = Array(S, size(a,1), size(a,2))
+similar(a::Array, T, dims::Dims)      = Array(T, dims)
+similar{T}(a::Array{T,1})             = Array(T, size(a,1))
+similar{T}(a::Array{T,2})             = Array(T, size(a,1), size(a,2))
+similar{T}(a::Array{T,1}, dims::Dims) = Array(T, dims)
+similar{T}(a::Array{T,1}, m::Size)    = Array(T, m)
+similar{T}(a::Array{T,1}, S)          = Array(S, size(a,1))
+similar{T}(a::Array{T,2}, dims::Dims) = Array(T, dims)
+similar{T}(a::Array{T,2}, m::Size)    = Array(T, m)
+similar{T}(a::Array{T,2}, S)          = Array(S, size(a,1), size(a,2))
 
 empty(T) = Array(T, 0)
 

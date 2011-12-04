@@ -43,10 +43,10 @@ iscomplex(::AbstractArray) = false
 
 # default arguments to similar()
 similar{T}(a::AbstractArray{T})                      = similar(a, T, size(a))
-similar   (a::AbstractArray, T::Type)                = similar(a, T, size(a))
+similar   (a::AbstractArray, T)                      = similar(a, T, size(a))
 similar{T}(a::AbstractArray{T}, dims::Dims)          = similar(a, T, dims)
 similar{T}(a::AbstractArray{T}, dims::Size...)       = similar(a, T, dims)
-similar   (a::AbstractArray, T::Type, dims::Size...) = similar(a, T, dims)
+similar   (a::AbstractArray, T, dims::Size...)       = similar(a, T, dims)
 
 empty(a::AbstractArray) = similar(a, 0)
 
@@ -1672,7 +1672,7 @@ size(s::SubArray) = s.dims
 ndims{T,N}(s::SubArray{T,N}) = N
 
 copy(s::SubArray) = copy_to(similar(s.parent, size(s)), s)
-similar(s::SubArray, T::Type, dims::Dims) = similar(s.parent, T, dims)
+similar(s::SubArray, T, dims::Dims) = similar(s.parent, T, dims)
 
 ref{T}(s::SubArray{T,0,AbstractArray{T,0}}) = s.parent[]
 ref{T}(s::SubArray{T,0}) = s.parent[s.first_index]
