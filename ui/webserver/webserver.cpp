@@ -833,9 +833,19 @@ string get_response(request* req)
     return respond(session_token, writer.write(response_root));
 }
 
+void sigproc(int)
+{
+    if (system("killall julia") == -1)
+        cout<<"terminating julia processes failed.";
+    exit(0);
+}
+
 // program entrypoint
 int main(int argc, char* argv[])
 {
+    // set the Ctrl+C handler
+    signal(SIGINT, sigproc);
+
     // get the command line arguments
     int port_num = 1441;
     for (int i = 1; i < argc-1; i++)
