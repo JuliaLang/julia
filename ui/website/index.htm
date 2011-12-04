@@ -296,9 +296,6 @@
                     // MSG_OUTPUT_PARSE_ERROR
                     if (inbox_queue[id][0] == MSG_OUTPUT_PARSE_ERROR)
                     {
-                        // print the error message
-                        add_to_terminal("<span class=\"error\">"+escape_html(inbox_queue[id][1])+"</span><br /><br />");
-
                         // get the input from form
                         var input = $("#terminal-input").val();
 
@@ -313,6 +310,9 @@
 
                         // add the julia prompt and the input to the log
                         add_to_terminal("<span class=\"prompt\">julia&gt;&nbsp;</span>"+escape_html(input.replace(/\n/g, "\n       "))+"<br />");
+                        
+                        // print the error message
+                        add_to_terminal("<span class=\"error\">"+escape_html(inbox_queue[id][1])+"</span><br /><br />");
                         
                         // clear the input field
                         $("#terminal-input").val("");
