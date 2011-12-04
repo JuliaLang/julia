@@ -77,6 +77,9 @@
             // how long we delay in ms before polling the server again
             var poll_interval = 100;
 
+            // keep track of whether we are waiting for a message (and don't send more if we are)
+            var waiting_for_response = false;
+
             // keep track of terminal history
             var input_history = [];
             var input_history_current = [""];
@@ -85,6 +88,9 @@
 
             // a queue of messages to be sent to the server
             var outbox_queue = [];
+
+            // a queue of messages from julia to be processed
+            var inbox_queue = [];
 
             // keep track of whether we have received a fatal message
             var dead = false;
@@ -160,31 +166,41 @@
                 process_outbox();
             }
 
-            // send the next line in the queue
+            // send the messages in the outbox
             function process_outbox()
             {
-                if (outbox_queue.length > 0)
-                    $.post("/repl.scgi", {"request": $.toJSON(outbox_queue)}, callback, "json");
-                outbox_queue = [];
-            }
-            
-            // called when the server has responded
-            function callback(data, textStatus, jqXHR)
-            {
-                // if we are dead, don't keep polling the server
-                if (dead)
-                    return;
+                // don't make new requests if we're waiting for old ones
+                if (!waiting_for_response)
+                {
+                    // don't send a request if there are no messages
+                    if (outbox_queue.length > 0)
+                    {
+                        // don't send any more requests while we're waiting for this one
+                        waiting_for_response = true;
 
-                for (var id in data)
+                        // send the messages
+                        $.post("/repl.scgi", {"request": $.toJSON(outbox_queue)}, callback, "json");
+                    }
+
+                    // we sent all the messages at once so clear the outbox
+                    outbox_queue = [];
+                }
+            }
+
+            // process the messages in the inbox
+            function process_inbox()
+            {
+                // iterate through the messages
+                for (var id in inbox_queue)
                 {
                     // MSG_OUTPUT_NULL
-                    if (data[id][0] == MSG_OUTPUT_NULL)
+                    if (inbox_queue[id][0] == MSG_OUTPUT_NULL)
                     {
                         // do nothing
                     }
 
                     // MSG_OUTPUT_READY
-                    if (data[id][0] == MSG_OUTPUT_READY)
+                    if (inbox_queue[id][0] == MSG_OUTPUT_READY)
                     {
                         // remove the initializing message
                         $("#terminal").html("");
@@ -199,31 +215,33 @@
                         $("#terminal-input").width($("#terminal").width()-$("#prompt").width()-1);
                     }
 
-                    // MSG_OUTPUT_MESSA1E
-                    if (data[id][0] == MSG_OUTPUT_MESSAGE)
+                    // MSG_OUTPUT_MESSAGE
+                    if (inbox_queue[id][0] == MSG_OUTPUT_MESSAGE)
                     {
-                        add_to_terminal("<span class=\"message\">"+escape_html(data[id][1])+"</span><br /><br />");
+                        add_to_terminal("<span class=\"message\">"+escape_html(inbox_queue[id][1])+"</span><br /><br />");
                     }
 
                     // MSG_OUTPUT_OTHER
-                    if (data[id][0] == MSG_OUTPUT_OTHER)
+                    if (inbox_queue[id][0] == MSG_OUTPUT_OTHER)
                     {
-                        add_to_terminal(escape_html(data[id][1]));
+                        add_to_terminal(escape_html(inbox_queue[id][1]));
                     }
 
                     // MSG_OUTPUT_FATAL_ERROR
-                    if (data[id][0] == MSG_OUTPUT_FATAL_ERROR)
+                    if (inbox_queue[id][0] == MSG_OUTPUT_FATAL_ERROR)
                     {
-                        add_to_terminal("<span class=\"error\">"+escape_html(data[id][1])+"</span><br /><br />");
+                        add_to_terminal("<span class=\"error\">"+escape_html(inbox_queue[id][1])+"</span><br /><br />");
                         dead = true;
-                        return;
+                        inbox_queue = [];
+                        outbox_queue = [];
+                        break;
                     }
 
                     // MSG_OUTPUT_PARSE_ERROR
-                    if (data[id][0] == MSG_OUTPUT_PARSE_ERROR)
+                    if (inbox_queue[id][0] == MSG_OUTPUT_PARSE_ERROR)
                     {
                         // print the error message
-                        add_to_terminal("<span class=\"error\">"+escape_html(data[id][1])+"</span><br /><br />");
+                        add_to_terminal("<span class=\"error\">"+escape_html(inbox_queue[id][1])+"</span><br /><br />");
 
                         // get the input from form
                         var input = $("#terminal-input").val();
@@ -251,7 +269,7 @@
                     }
 
                     // MSG_OUTPUT_PARSE_INCOMPLETE
-                    if (data[id][0] == MSG_OUTPUT_PARSE_INCOMPLETE)
+                    if (inbox_queue[id][0] == MSG_OUTPUT_PARSE_INCOMPLETE)
                     {
                         // re-enable the input field
                         $("#terminal-input").removeAttr("disabled");
@@ -264,7 +282,7 @@
                     }
 
                     // MSG_OUTPUT_PARSE_COMPLETE
-                    if (data[id][0] == MSG_OUTPUT_PARSE_COMPLETE)
+                    if (inbox_queue[id][0] == MSG_OUTPUT_PARSE_COMPLETE)
                     {
                         // get the input from form
                         var input = $("#terminal-input").val();
@@ -289,13 +307,13 @@
                     }
 
                     // MSG_OUTPUT_EVAL_RESULT
-                    if (data[id][0] == MSG_OUTPUT_EVAL_RESULT)
+                    if (inbox_queue[id][0] == MSG_OUTPUT_EVAL_RESULT)
                     {
                         // print the result
-                        if ($.trim(data[id][1]) == "")
+                        if ($.trim(inbox_queue[id][1]) == "")
                             add_to_terminal("<br />");
                         else
-                            add_to_terminal(escape_html(data[id][1])+"<br /><br />");
+                            add_to_terminal(escape_html(inbox_queue[id][1])+"<br /><br />");
 
                         // show the prompt
                         $("#prompt").show();
@@ -308,10 +326,10 @@
                     }
 
                     // MSG_OUTPUT_EVAL_ERROR
-                    if (data[id][0] == MSG_OUTPUT_EVAL_ERROR)
+                    if (inbox_queue[id][0] == MSG_OUTPUT_EVAL_ERROR)
                     {
                         // print the error
-                        add_to_terminal("<span class=\"error\">"+escape_html(data[id][1])+"</span><br /><br />");
+                        add_to_terminal("<span class=\"error\">"+escape_html(inbox_queue[id][1])+"</span><br /><br />");
 
                         // show the prompt
                         $("#prompt").show();
@@ -324,20 +342,20 @@
                     }
 
                     // MSG_OUTPUT_PLOT
-                    if (data[id][0] == MSG_OUTPUT_PLOT)
+                    if (inbox_queue[id][0] == MSG_OUTPUT_PLOT)
                     {
                         // line plot
-                        if (data[id][1] == "line")
+                        if (inbox_queue[id][1] == "line")
                         {
                             // get the data
-                            var x_data = eval(data[id][2]);
-                            var y_data = eval(data[id][3]);
+                            var x_data = eval(inbox_queue[id][2]);
+                            var y_data = eval(inbox_queue[id][3]);
 
                             // get the bounds on the data
-                            var x_min = eval(data[id][4]);
-                            var x_max = eval(data[id][5]);
-                            var y_min = eval(data[id][6]);
-                            var y_max = eval(data[id][7]);
+                            var x_min = eval(inbox_queue[id][4]);
+                            var x_max = eval(inbox_queue[id][5]);
+                            var y_min = eval(inbox_queue[id][6]);
+                            var y_max = eval(inbox_queue[id][7]);
 
                             // construct the data for D3
                             var data = d3.range(x_data.length).map(function(i) {
@@ -434,10 +452,30 @@
                     }
                 }
 
-                // send any remaining messages if there are any
+                // we handled all the messages so clear the inbox
+                inbox_queue = [];
+            }
+            
+            // called when the server has responded
+            function callback(data, textStatus, jqXHR)
+            {
+                // if we are dead, don't keep polling the server
+                if (dead)
+                    return;
+
+                // allow sending new messages
+                waiting_for_response = false;
+
+                // add the messages to the inbox
+                inbox_queue = inbox_queue.concat(data);
+
+                // process the inbox
+                process_inbox();
+
+                // send any new messages
                 process_outbox();
 
-                // poll the server again
+                // poll the server again shortly
                 setTimeout(poll, poll_interval);
             }
 
@@ -470,41 +508,57 @@
                     switch (evt.keyCode)
                     {
                         case 9:
-                            // user pressed the tab key
-                            $("#terminal-input").insertAtCaret("    ");
-                            $("#terminal-form").prop("scrollTop", $("#terminal-form").prop("scrollHeight"));
+                            // user pressed the tab key -- make sure the terminal input was enabled
+                            if (!$("#terminal-input").attr("disabled"))
+                            {
+                                // indent
+                                $("#terminal-input").insertAtCaret("    ");
+                                $("#terminal-form").prop("scrollTop", $("#terminal-form").prop("scrollHeight"));
+                            }
                             return false;
 
                         case 38:
-                            // user pressed the up key
-                            input_history_current[input_history_id] = $("#terminal-input").val();
-                            input_history_id -= 1;
-                            if (input_history_id < 0)
-                                input_history_id = 0;
-                            $("#terminal-input").val(input_history_current[input_history_id]);
-                            $("#terminal-form").prop("scrollTop", $("#terminal-form").prop("scrollHeight"));
+                            // user pressed the up key -- make sure the terminal input was enabled
+                            if (!$("#terminal-input").attr("disabled"))
+                            {
+                                // terminal input history
+                                input_history_current[input_history_id] = $("#terminal-input").val();
+                                input_history_id -= 1;
+                                if (input_history_id < 0)
+                                    input_history_id = 0;
+                                $("#terminal-input").val(input_history_current[input_history_id]);
+                                $("#terminal-form").prop("scrollTop", $("#terminal-form").prop("scrollHeight"));
+                            }
                             return false;
 
                         case 40:
-                            // user pressed the down key
-                            input_history_current[input_history_id] = $("#terminal-input").val();
-                            input_history_id += 1;
-                            if (input_history_id > input_history_current.length-1)
-                                input_history_id = input_history_current.length-1;
-                            $("#terminal-input").val(input_history_current[input_history_id]);
-                            $("#terminal-form").prop("scrollTop", $("#terminal-form").prop("scrollHeight"));
+                            // user pressed the down key -- make sure the terminal input was enabled
+                            if (!$("#terminal-input").attr("disabled"))
+                            {
+                                // terminal input history
+                                input_history_current[input_history_id] = $("#terminal-input").val();
+                                input_history_id += 1;
+                                if (input_history_id > input_history_current.length-1)
+                                    input_history_id = input_history_current.length-1;
+                                $("#terminal-input").val(input_history_current[input_history_id]);
+                                $("#terminal-form").prop("scrollTop", $("#terminal-form").prop("scrollHeight"));
+                            }
                             return false;
 
                         case 13:
-                            // user pressed the enter key
-                            var input = $("#terminal-input").val();
+                            // user pressed the enter key -- make sure the terminal input was enabled
+                            if (!$("#terminal-input").attr("disabled"))
+                            {
+                                // disable the terminal input
+                                $("#terminal-input").attr("disabled", "disabled");
 
-                            // disable the terminal input and clear the input field later
-                            $("#terminal-input").attr("disabled", "disabled");
-                            
-                            // send the input to the server via AJAX
-                            outbox_queue.push([MSG_INPUT_EVAL, input]);
-                            process_outbox();
+                                // get the input
+                                var input = $("#terminal-input").val();
+                                
+                                // send the input to the server via AJAX
+                                outbox_queue.push([MSG_INPUT_EVAL, input]);
+                                process_outbox();
+                            }
 
                             // prevent the form from actually submitting
                             return false;
