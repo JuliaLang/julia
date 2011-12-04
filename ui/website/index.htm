@@ -485,8 +485,8 @@
                 // apply the autoresize plugin to the textarea
                 $("#terminal-input").autoResize({ animate: false, maxHeight: 1000, onResize: function() { setTimeout(function() { $("#terminal-form").prop("scrollTop", $("#terminal-form").prop("scrollHeight")); }, 100); } });
                 
-                // hide the textarea in case the browser decides to pre-populate it
-                $("#terminal-input").hide();
+                // clear the textarea in case the browser decides to pre-populate it
+                $("#terminal-input").val("");
 
                 // record the cursor position when the user clicks anywhere
                 var mouse_x, mouse_y;
