@@ -74,6 +74,9 @@
                 REPL implementation.
             */
 
+            // indent string
+            var indent_str = "    ";
+
             // how long we delay in ms before polling the server again
             var poll_interval = 100;
 
@@ -95,10 +98,9 @@
             // keep track of whether we have received a fatal message
             var dead = false;
 
-            // jQuery extension to insert text into an input/textarea at the cursor position
-            // (used to indent when the user presses the tab key)
+            // jQuery extension to indent at cursor position
             jQuery.fn.extend({
-                insertAtCaret: function(myValue)
+                indent_at_caret: function(str)
                 {
                     return this.each(function(i)
                     {
@@ -106,24 +108,78 @@
                         {
                             this.focus();
                             sel = document.selection.createRange();
-                            sel.text = myValue;
+                            sel.text = str;
                             this.focus();
                         }
                         else if (this.selectionStart || this.selectionStart == "0")
                         {
-                            var startPos = this.selectionStart;
-                            var endPos = this.selectionEnd;
-                            var scrollTop = this.scrollTop;
-                            this.value = this.value.substring(0, startPos)+myValue+this.value.substring(endPos, this.value.length);
+                            var start_pos = this.selectionStart;
+                            var end_pos = this.selectionEnd;
+                            var scroll_top = this.scrollTop;
+                            this.value = this.value.substring(0, start_pos)+str+this.value.substring(end_pos, this.value.length);
                             this.focus();
-                            this.selectionStart = startPos+myValue.length;
-                            this.selectionEnd = startPos+myValue.length;
-                            this.scrollTop = scrollTop;
+                            this.selectionStart = start_pos+str.length;
+                            this.selectionEnd = start_pos+str.length;
+                            this.scrollTop = scroll_top;
                         }
                         else
                         {
-                            this.value += myValue;
+                            this.value += str;
                             this.focus();
+                        }
+                    })
+                },
+                backspace_at_caret: function()
+                {
+                    return this.each(function(i)
+                    {
+                        if (document.selection)
+                        {
+                            this.focus();
+                            sel = document.selection.createRange();
+                            sel.text = "";
+                            this.focus();
+                        }
+                        else if (this.selectionStart || this.selectionStart == "0")
+                        {
+                            var start_pos = this.selectionStart;
+                            var end_pos = this.selectionEnd;
+                            var scroll_top = this.scrollTop;
+                            if (start_pos == end_pos)
+                            {
+                                if (start_pos > 0)
+                                {
+                                    if (start_pos > indent_str.length-1)
+                                    {
+                                        if (this.value.substring(start_pos-indent_str.length, start_pos) == indent_str)
+                                        {
+                                            this.value = this.value.substring(0, start_pos-indent_str.length)+this.value.substring(end_pos, this.value.length);
+                                            this.selectionStart = start_pos-indent_str.length;
+                                            this.selectionEnd = start_pos-indent_str.length;
+                                        }
+                                        else
+                                        {
+                                            this.value = this.value.substring(0, start_pos-1)+this.value.substring(end_pos, this.value.length);
+                                            this.selectionStart = start_pos-1;
+                                            this.selectionEnd = start_pos-1;
+                                        }
+                                    }
+                                    else
+                                    {
+                                        this.value = this.value.substring(0, start_pos-1)+this.value.substring(end_pos, this.value.length);
+                                        this.selectionStart = start_pos-1;
+                                        this.selectionEnd = start_pos-1;
+                                    }
+                                }
+                            }
+                            else
+                            {
+                                this.value = this.value.substring(0, start_pos)+this.value.substring(end_pos, this.value.length);
+                                this.selectionStart = start_pos;
+                                this.selectionEnd = start_pos;
+                            }
+                            this.focus();
+                            this.scrollTop = scroll_top;
                         }
                     })
                 }
@@ -278,7 +334,7 @@
                         $("#terminal-input").focus();
 
                         // add a newline for the user
-                        $("#terminal-input").insertAtCaret("\n");
+                        $("#terminal-input").indent_at_caret("\n");
                     }
 
                     // MSG_OUTPUT_PARSE_COMPLETE
@@ -523,12 +579,22 @@
                     // determine which key was pressed
                     switch (evt.keyCode)
                     {
+                        case 8:
+                            // user pressed the backspace key -- make sure the terminal input was enabled
+                            if (!$("#terminal-input").attr("disabled"))
+                            {
+                                // backspace
+                                $("#terminal-input").backspace_at_caret();
+                                $("#terminal-form").prop("scrollTop", $("#terminal-form").prop("scrollHeight"));
+                            }
+                            return false;
+
                         case 9:
                             // user pressed the tab key -- make sure the terminal input was enabled
                             if (!$("#terminal-input").attr("disabled"))
                             {
                                 // indent
-                                $("#terminal-input").insertAtCaret("    ");
+                                $("#terminal-input").indent_at_caret(indent_str);
                                 $("#terminal-form").prop("scrollTop", $("#terminal-form").prop("scrollHeight"));
                             }
                             return false;
