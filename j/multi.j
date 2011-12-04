@@ -1389,6 +1389,7 @@ function spawnlocal(thunk)
     global Workqueue
     global PGRP
     rr = RemoteRef(myid())
+    sync_add(rr)
     rid = rr2id(rr)
     wi = WorkItem(thunk)
     (PGRP::ProcessGroup).refs[rid] = wi
