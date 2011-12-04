@@ -1411,13 +1411,15 @@ end
 
 function at_each(f, args...)
     for i=1:nprocs()
-        remote_do(i, f, args...)
+        sync_add(remote_call(i, f, args...))
     end
 end
 
 macro bcast(ex)
     quote
-        at_each(()->eval($expr(:quote,ex)))
+        @sync begin
+            at_each(()->eval($expr(:quote,ex)))
+        end
     end
 end
 
