@@ -110,45 +110,71 @@ function __socket_callback(fd)
 
     # MSG_INPUT_EVAL
     if __msg.msg_type == __MSG_INPUT_EVAL
-        # try to parse it
-        __expr = parse_input_line(__msg.args[1])
+        # split the input into lines
+        __lines = split(__msg.args[1], '\n')
 
-        # if there was nothing to parse, send nothing back
-        if __expr == nothing
+        # try to parse each line incrementally
+        __parsed_exprs = {}
+        __input_so_far = ""
+        __all_nothing = true
+        for i=1:length(__lines)
+            # add the next line of input
+            __input_so_far = strcat(__input_so_far, __lines[i], "\n")
+
+            # try to parse it
+            __expr = parse_input_line(__input_so_far)
+            
+            # if there was nothing to parse, just keep going
+            if __expr == nothing
+                continue
+            end
+            __all_nothing = false
+
+            # stop now if there was a parsing error
+            if __expr.head == :error
+                return __write_message(__Message(__MSG_OUTPUT_PARSE_ERROR, {__expr.args[1]}))
+            end
+            
+            # if the expression was incomplete, just keep going
+            if __expr.head == :continue
+                continue
+            end
+
+            # add the parsed expression to the list
+            __input_so_far = ""
+            __parsed_exprs = [__parsed_exprs, {__expr}]
+        end
+
+        # if the input was empty, stop early
+        if __all_nothing
             __write_message(__Message(__MSG_OUTPUT_PARSE_COMPLETE, {}))
             return __write_message(__Message(__MSG_OUTPUT_EVAL_RESULT, {""}))
         end
-        
-        # check if there was a parsing error
-        if __expr.head == :error
-            return __write_message(__Message(__MSG_OUTPUT_PARSE_ERROR, {__expr.args[1]}))
-        end
 
-        # check if the expression was incomplete
-        if __expr.head == :continue
+        # tell the browser if we didn't get a complete expression
+        if length(__parsed_exprs) == 0
             return __write_message(__Message(__MSG_OUTPUT_PARSE_INCOMPLETE, {}))
         end
-        
-        # tell the browser that we're now evaluating the expression
+
+        # tell the browser all the lines were parsed
         __write_message(__Message(__MSG_OUTPUT_PARSE_COMPLETE, {}))
 
-        # evaluate the expression and print any exceptions that occurred
-        local __result
-        try
-            __result = eval(__expr)
-        catch __error
-            return __write_message(__Message(__MSG_OUTPUT_EVAL_ERROR, {print_to_string(show, __error)}))
+        # try to evaluate the expressions
+        for i=1:length(__parsed_exprs)
+            # evaluate the expression and stop if any exceptions happen
+            try
+                ans = eval(__parsed_exprs[i])
+            catch __error
+                return __write_message(__Message(__MSG_OUTPUT_EVAL_ERROR, {print_to_string(show, __error)}))
+            end
         end
 
-        # if nothing was returned, send nothing back
-        if __result == nothing
-            ans = nothing
+        # send the result of the last expression
+        if ans == nothing
             return __write_message(__Message(__MSG_OUTPUT_EVAL_RESULT, {""}))
+        else
+            return __write_message(__Message(__MSG_OUTPUT_EVAL_RESULT, {print_to_string(show, ans)}))
         end
-
-        # otherwise, send back the result
-        ans = __result
-        return __write_message(__Message(__MSG_OUTPUT_EVAL_RESULT, {print_to_string(show, __result)}))
     end
 end
 
