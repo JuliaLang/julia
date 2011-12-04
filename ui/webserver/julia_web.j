@@ -35,17 +35,23 @@ function plot(x::Array, y::Array, xmin::Number, xmax::Number, ymin::Number, ymax
     if xmin >= xmax return error("xmax must be greater than xmin") end
     if ymin >= ymax return error("ymax must be greater than ymin") end
 
-    # JSON doesn't allow for +/-Inf or NaN
+    # remove points with infinite or NaN components
+    pairs = {}
     for i=1:length(x_safe)
-        if x_safe[i] == Inf || x_safe[i] == -Inf || isequal(x_safe[i], NaN) x_safe[i] = 0.0 end
-        if y_safe[i] == Inf || y_safe[i] == -Inf || isequal(y_safe[i], NaN) y_safe[i] = 0.0 end
+        if x_safe[i] != Inf && x_safe[i] != -Inf && !isequal(x_safe[i], NaN)
+            if y_safe[i] != Inf && y_safe[i] != -Inf && !isequal(y_safe[i], NaN)
+                pairs = [pairs, {(x_safe[i], y_safe[i])}]
+            end
+        end
     end
+    x_safe = [pairs[i][1] | i=1:length(pairs)]
+    y_safe = [pairs[i][2] | i=1:length(pairs)]
 
     # send the message to the browser
     __write_message(__Message(__MSG_OUTPUT_PLOT, {
         "line",
-        strcat("[", join([string(float64(i)) | i=x_safe], ","), "]"),
-        strcat("[", join([string(float64(i)) | i=y_safe], ","), "]"),
+        strcat("[", join([string(i) | i=x_safe], ","), "]"),
+        strcat("[", join([string(i) | i=y_safe], ","), "]"),
         string(float64(xmin)),
         string(float64(xmax)),
         string(float64(ymin)),
@@ -65,17 +71,39 @@ function plot(x::Array, y::Array)
     # make sure there are enough data to plot
     if length(x_safe) < 1 return error("at least two data points required for line plot") end
 
-    # JSON doesn't allow for +/-Inf or NaN
-    for i=1:length(x_safe)
-        if x_safe[i] == Inf || x_safe[i] == -Inf || isequal(x_safe[i], NaN) x_safe[i] = 0.0 end
-        if y_safe[i] == Inf || y_safe[i] == -Inf || isequal(y_safe[i], NaN) y_safe[i] = 0.0 end
-    end
-
     # determine the window
-    xmin = min(x_safe)
-    xmax = max(x_safe)
-    ymin = min(y_safe)
-    ymax = max(y_safe)
+    function safe_min(x::Array{Float64, 1})
+        m = NaN
+        for i=1:length(x)
+            if x[i] != Inf && x[i] != -Inf && !isequal(x[i], NaN)
+                if isequal(m, NaN) || x[i] < m
+                    m =x[i]
+                end
+            end
+        end
+        if isequal(m, NaN)
+            return error("unable to determine window dimensions")
+        end
+        return m
+    end
+    function safe_max(x::Array{Float64, 1})
+        m = NaN
+        for i=1:length(x)
+            if x[i] != Inf && x[i] != -Inf && !isequal(x[i], NaN)
+                if isequal(m, NaN) || x[i] > m
+                    m =x[i]
+                end
+            end
+        end
+        if isequal(m, NaN)
+            return error("unable to determine window dimensions")
+        end
+        return m
+    end
+    xmin = safe_min(x_safe)
+    xmax = safe_max(x_safe)
+    ymin = safe_min(y_safe)
+    ymax = safe_max(y_safe)
     if xmin == xmax
         xmin -= 0.5
         xmax += 0.5
@@ -124,11 +152,39 @@ function plot(y::Array)
     end
 
     # determine the window
+    function safe_min(x::Array{Float64, 1})
+        m = NaN
+        for i=1:length(x)
+            if x[i] != Inf && x[i] != -Inf && !isequal(x[i], NaN)
+                if isequal(m, NaN) || x[i] < m
+                    m =x[i]
+                end
+            end
+        end
+        if isequal(m, NaN)
+            return error("unable to determine window dimensions")
+        end
+        return m
+    end
+    function safe_max(x::Array{Float64, 1})
+        m = NaN
+        for i=1:length(x)
+            if x[i] != Inf && x[i] != -Inf && !isequal(x[i], NaN)
+                if isequal(m, NaN) || x[i] > m
+                    m =x[i]
+                end
+            end
+        end
+        if isequal(m, NaN)
+            return error("unable to determine window dimensions")
+        end
+        return m
+    end
     x_safe = [i-1 | i=1:length(y_safe)]
     xmin = 0
     xmax = length(y)-1
-    ymin = min(y_safe)
-    ymax = max(y_safe)
+    ymin = safe_min(y_safe)
+    ymax = safe_max(y_safe)
     if ymin == ymax
         ymin -= 0.5
         ymax += 0.5
@@ -159,6 +215,11 @@ end
 
 # plot a function (vertical window determined automatically)
 function plot(f::Function, xmin::Number, xmax::Number)
+    # make sure the window is okay
+    if xmin == Inf || xmin == -Inf || isequal(xmin, NaN) return error(strcat("invalid xmin: ", string(xmin))) end
+    if xmax == Inf || xmax == -Inf || isequal(xmax, NaN) return error(strcat("invalid xmax: ", string(xmax))) end
+    if xmin >= xmax return error("xmax must be greater than xmin") end
+
     # make the range
     x = [xmin+float64(i-1)*(xmax-xmin)/(__PLOT_POINTS-1) | i=1:__PLOT_POINTS]
     y = [try float64(f(i)) catch 0 end | i=x]
@@ -169,6 +230,14 @@ end
 
 # plot a function (window determined manually)
 function plot(f::Function, xmin::Number, xmax::Number, ymin::Number, ymax::Number)
+    # make sure the window is okay
+    if xmin == Inf || xmin == -Inf || isequal(xmin, NaN) return error(strcat("invalid xmin: ", string(xmin))) end
+    if xmax == Inf || xmax == -Inf || isequal(xmax, NaN) return error(strcat("invalid xmax: ", string(xmax))) end
+    if ymin == Inf || ymin == -Inf || isequal(ymin, NaN) return error(strcat("invalid ymin: ", string(ymin))) end
+    if ymax == Inf || ymax == -Inf || isequal(ymax, NaN) return error(strcat("invalid ymax: ", string(ymax))) end
+    if xmin >= xmax return error("xmax must be greater than xmin") end
+    if ymin >= ymax return error("ymax must be greater than ymin") end
+
     # make the range
     x = [xmin+float64(i-1)*(xmax-xmin)/(__PLOT_POINTS-1) | i=1:__PLOT_POINTS]
     y = [try float64(f(i)) catch 0 end | i=x]
