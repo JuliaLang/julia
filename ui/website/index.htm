@@ -614,7 +614,10 @@
             $(document).ready(function()
             {
                 // apply the autoresize plugin to the textarea
-                $("#terminal-input").autoResize({ animate: false, maxHeight: 1000, onResize: function() { setTimeout(function() { $("#terminal-form").prop("scrollTop", $("#terminal-form").prop("scrollHeight")); }, 100); } });
+                $("#terminal-input").autoResize({ animate: false, maxHeight: 1000, onResize: function() {
+                    setTimeout(function() { $("#terminal-form").prop("scrollTop", $("#terminal-form").prop("scrollHeight")); }, 100);
+                    $("#terminal-input").width($("#terminal").width()-$("#prompt").width()-1);
+                } });
                 
                 // clear the textarea in case the browser decides to pre-populate it
                 $("#terminal-input").val("");
