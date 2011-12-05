@@ -331,8 +331,8 @@ distclean-unwind:
 
 ## GNU LIGHTTPD ##
 
-LIGHTTPD_OBJ_TARGET = $(EXTROOT)/sbin/lighttpd
-LIGHTTPD_OBJ_SOURCE = lighttpd-$(LIGHTTPD_VER)/src/lighttpd
+LIGHTTPD_OBJ_TARGET = lighttpd-$(LIGHTTPD_VER)/src/lighttpd
+LIGHTTPD_OBJ_SOURCE = $(EXTROOT)/sbin/lighttpd
 
 compile-lighttpd: $(LIGHTTPD_OBJ_SOURCE)
 install-lighttpd: $(LIGHTTPD_OBJ_TARGET)
